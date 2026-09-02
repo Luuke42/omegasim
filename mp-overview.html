@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OmegaSim &middot; Überblick</title>
+<!--
+  DER ÜBERBLICKSSCHIRM für Multiplayer Version A. Läuft auf dem PC, der auch
+  tools/omegasim_host.py ausführt, und fragt dort zweimal je Sekunde die Rangliste ab.
+
+  ER BRAUCHT KEIN BLUETOOTH und deshalb keine Ausnahme von der secure-context-Regel: auf
+  http://localhost ist er ohnehin ein secure context. Das ist der Teil von Version A, der
+  sofort trägt — die Telefone sind der Teil, der eine Einrichtung braucht.
+
+  EIGENE DATEI und nicht im Host-Programm als Zeichenkette: eine HTML-Seite, die in einem
+  Python-String steckt, kann man nicht bearbeiten, ohne das Programm anzufassen. Der Host
+  liefert das Verzeichnis ohnehin aus.
+
+  BEWUSST NICHT im Stil der App: das hier wird auf einen Fernseher oder ein zweites Notebook
+  gelegt und aus zwei Metern gelesen. Also große Schrift, viel Kontrast und keine Bedienung
+  außer einem Knopf — ein Überblicksschirm, den man antippen muss, ist keiner.
+-->
+<style>
+  :root {
+    --bg: #05070c; --ink: #f4f6fb; --dim: #8b99b4; --line: rgba(255,255,255,.22);
+    --good: #3ddc84; --warn: #ffb02e; --bad: #ff5c5c;
+    --font: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed",
+            "Arial Narrow", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font);
+    padding: clamp(10px, 2vw, 28px); }
+  header { display: flex; align-items: baseline; gap: clamp(10px, 2vw, 26px);
+    flex-wrap: wrap; border-bottom: 2px solid var(--line);
+    padding-bottom: clamp(6px, 1vw, 12px); }
+  h1 { font-size: clamp(18px, 3vw, 34px); margin: 0; letter-spacing: .06em;
+    text-transform: uppercase; }
+  .lbl { font-size: clamp(9px, 1.1vw, 13px); letter-spacing: .18em; color: var(--dim);
+    text-transform: uppercase; }
+  .gross { font-size: clamp(22px, 4.5vw, 60px); font-variant-numeric: tabular-nums;
+    line-height: 1.05; }
+  .kopfwert { display: grid; }
+  table { width: 100%; border-collapse: collapse; margin-top: clamp(8px, 1.5vw, 20px); }
+  th { text-align: left; font-size: clamp(9px, 1.1vw, 13px); letter-spacing: .18em;
+    color: var(--dim); text-transform: uppercase; font-weight: 400;
+    padding: 0 clamp(4px, 1vw, 14px) 6px 0; }
+  td { font-size: clamp(15px, 2.6vw, 34px); font-variant-numeric: tabular-nums;
+    padding: clamp(4px, .8vw, 10px) clamp(4px, 1vw, 14px) clamp(4px, .8vw, 10px) 0;
+    border-top: 1px solid var(--line); }
+  td.pos { width: 1%; color: var(--dim); }
+  /* Der Führende hebt sich ab. Nicht durch Farbe allein: wer aus zwei Metern schaut, sieht
+     eine hellere ZEILE schneller als eine grüne Ziffer. */
+  tr.fuehrt td { color: var(--good); }
+  tr.alt td { opacity: .45; }
+  .zahl-dim { color: var(--dim); font-size: clamp(12px, 1.8vw, 22px); }
+  footer { margin-top: clamp(10px, 2vw, 24px); color: var(--dim);
+    font-size: clamp(10px, 1.2vw, 14px); line-height: 1.6; }
+  button { font-family: inherit; font-size: clamp(11px, 1.4vw, 16px); padding: 8px 16px;
+    background: #1f2a3d; color: var(--ink); border: 0; cursor: pointer;
+    letter-spacing: .06em; }
+  button:hover { background: #2b3a55; }
+  .warnbox { border-left: 3px solid var(--warn); padding-left: 10px; margin-top: 12px; }
+  .leer { color: var(--dim); font-size: clamp(13px, 2vw, 22px); margin-top: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>OmegaSim</h1>
+  <div class="kopfwert"><span class="lbl">Fahrer</span>
+    <span class="gross" id="anzahl">0</span></div>
+  <div class="kopfwert"><span class="lbl" id="restlabel">Laufzeit</span>
+    <span class="gross" id="rest">–</span></div>
+  <div class="kopfwert"><span class="lbl">Rennlänge</span>
+    <span class="gross" id="laenge">–</span></div>
+  <div style="margin-left:auto; align-self:center">
+    <button id="reset">Rangliste zurücksetzen</button>
+  </div>
+</header>
+
+<table>
+  <thead><tr>
+    <th></th><th>Fahrer</th><th>Runden</th><th>Letzte</th><th>Beste</th><th>Abgänge</th>
+  </tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<div class="leer" id="leer">Noch kein Fahrer angemeldet.</div>
+
+<footer>
+  <div id="status">verbinde …</div>
+  <div class="warnbox">
+    Die Telefone brauchen einmalig eine Freigabe: Web Bluetooth verlangt einen secure
+    context, und <code>http://&lt;IP&gt;:Port</code> ist keiner. In Chrome auf dem Telefon
+    <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code> öffnen, die Adresse
+    des Hosts eintragen, Chrome neu starten. Ohne das lädt die App, aber „Auto verbinden"
+    bleibt ohne Wirkung. Dieser Schirm hier braucht nichts davon.
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+
+  // Zwei Abfragen je Sekunde. Reichlich für eine Rangliste, die sich alle paar Sekunden
+  // ändert - und wenig genug, dass vier Telefone plus dieser Schirm den kleinen
+  // Python-Server nicht beschäftigen.
+  const INTERVALL_MS = 500;
+  // Ab wann eine Zeile als abgemeldet gilt. Zehn Sekunden ohne Bericht heißt: das Telefon
+  // ist weg oder der Browser hat den Tab schlafen gelegt. Die Zeile wird blass und
+  // verschwindet NICHT - wer gerade noch fuhr, gehört in die Liste, und ein Verschwinden
+  // mitten im Rennen liest sich als Fehler.
+  const ALT_S = 10;
+
+  function zeit(s) {
+    if (s === null || s === undefined) return '–';
+    return s.toFixed(2) + 's';
+  }
+
+  function uhr(s) {
+    if (s === null || s === undefined) return '–';
+    const m = Math.floor(s / 60), r = Math.floor(s % 60);
+    return m + ':' + String(r).padStart(2, '0');
+  }
+
+  function zeichnen(d) {
+    const leute = d.fahrer || [];
+    $('anzahl').textContent = leute.length;
+    $('leer').style.display = leute.length ? 'none' : '';
+
+    const r = d.rennen || {};
+    if (r.restSekunden !== undefined) {
+      $('restlabel').textContent = 'Restzeit';
+      $('rest').textContent = uhr(r.restSekunden);
+      $('rest').style.color = r.restSekunden <= 30 ? 'var(--bad)' : '';
+    } else {
+      $('restlabel').textContent = 'Laufzeit';
+      $('rest').textContent = uhr(r.laufzeit);
+      $('rest').style.color = '';
+    }
+    // Rennlänge: Runden ODER Minuten, je nachdem womit der Host gestartet wurde. Bei Runden
+    // die RESTLICHEN des Führenden, denn das ist die Zahl, die jemand wissen will.
+    if (r.laps) {
+      const fuehrend = leute.length ? leute[0].laps : 0;
+      $('laenge').textContent = Math.max(0, r.laps - fuehrend) + ' / ' + r.laps;
+    } else if (r.minutes) {
+      $('laenge').textContent = r.minutes + ' min';
+    } else {
+      $('laenge').textContent = 'offen';
+    }
+
+    const zeilen = leute.map((f, i) => {
+      const alt = f.alter > ALT_S;
+      const klassen = [];
+      if (i === 0 && f.laps > 0) klassen.push('fuehrt');
+      if (alt) klassen.push('alt');
+      return '<tr class="' + klassen.join(' ') + '">'
+        + '<td class="pos">' + (i + 1) + '</td>'
+        + '<td>' + escape(f.name) + (alt ? ' <span class="zahl-dim">(still)</span>' : '')
+        + '</td>'
+        + '<td>' + f.laps + '</td>'
+        + '<td>' + zeit(f.letzte) + '</td>'
+        + '<td>' + zeit(f.beste) + '</td>'
+        + '<td class="zahl-dim">' + (f.abgaenge || 0) + '</td>'
+        + '</tr>';
+    });
+    $('rows').innerHTML = zeilen.join('');
+  }
+
+  function escape(t) {
+    return String(t).replace(/[&<>"]/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+
+  let fehler = 0;
+  async function holen() {
+    try {
+      const r = await fetch('mp/state', { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      zeichnen(await r.json());
+      fehler = 0;
+      $('status').textContent = 'verbunden, Abfrage alle ' + (INTERVALL_MS / 1000) + ' s';
+      $('status').style.color = '';
+    } catch (e) {
+      fehler++;
+      // Erst nach drei Fehlschlägen meckern: eine einzelne verlorene Abfrage im WLAN ist
+      // normal, und eine Fehlermeldung, die jede Sekunde aufblitzt, liest niemand mehr.
+      if (fehler >= 3) {
+        $('status').textContent = 'kein Kontakt zum Host (' + e.message
+          + ') – läuft tools/omegasim_host.py noch?';
+        $('status').style.color = 'var(--bad)';
+      }
+    }
+  }
+
+  $('reset').addEventListener('click', async () => {
+    if (!window.confirm('Rangliste wirklich zurücksetzen? Alle Runden und Zeiten sind weg.')) {
+      return;
+    }
+    try { await fetch('mp/reset', { cache: 'no-store' }); } catch (e) { /* Anzeige zeigt es */ }
+    holen();
+  });
+
+  holen();
+  setInterval(holen, INTERVALL_MS);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+/* OmegaSim Service Worker.
+ *
+ * DIE WICHTIGSTE ENTSCHEIDUNG STEHT ZUERST, weil sie fast falsch herum gemacht wird:
+ *
+ *   index.html wird NETZ-ZUERST geholt, nicht Cache-zuerst.
+ *
+ * Der uebliche Rat fuer eine PWA ist "cache first, das ist schneller". Fuer dieses Projekt
+ * waere das die schlimmste Wahl: es wird mehrmals am Tag neu gebaut und gepusht, und ein
+ * Cache-zuerst-Arbeiter liefert dann eine alte Fassung aus, waehrend die neue schon da ist.
+ * Der Fehlerbericht heisst dann "die Behebung ist nicht drin", und man sucht im Code statt im
+ * Cache. Eine App, die 1,4 MB in einer Datei ist, laedt ohnehin in einem Rutsch.
+ *
+ * Netz zuerst heisst: online immer aktuell, offline die letzte gesehene Fassung. Genau das
+ * will man hier, und es ist der einzige Grund, warum dieser Arbeiter ueberhaupt existiert -
+ * ohne ihn ist die App im Startmenue installierbar, aber ohne Netz leer.
+ *
+ * ZWEITE ENTSCHEIDUNG: der Cachename traegt die Programmversion, und die wird von
+ * tools/build.py hier eingesetzt. Zwei Orte fuer eine Zahl laufen auseinander - in diesem
+ * Projekt schon mehrfach nachgewiesen -, also gibt es nur einen: index.html.
+ *
+ * In dieser Vorlage steht in der Zeile mit VERSION eine Marke, die build.py ersetzt. Dieser
+ * Satz nennt sie ABSICHTLICH nicht wortwoertlich: taete er es, wuerde die Ersetzung ihn
+ * mittreffen (der Kommentar bekaeme die Versionsnummer eingesetzt und ergaebe Unsinn), und
+ * der Waechter im Build koennte nie ausloesen - er fand die Marke ja noch im Kommentar.
+ * Genau so ist es beim ersten Anlauf passiert.
+ *
+ * WAS NICHT GECACHT WIRD, und das ist Absicht:
+ *   - alles, was nicht GET ist. Die Mehrspieler-Meldungen sind POST und muessen scheitern
+ *     duerfen, wenn der Host weg ist - eine gecachte Rangliste waere eine Luege.
+ *   - alles, was nicht zur eigenen Herkunft gehoert. Der Mehrspieler-Host ist ein anderer
+ *     Ursprung; ihn zu cachen hiesse, alte Rundenzahlen als neue auszugeben.
+ */
+
+const VERSION = 'SW_VERSION_PLATZHALTER';
+const CACHE = 'omegasim-' + VERSION;
+
+// Nur die Huelle. Die Tonschleifen (1,8 MB) werden NICHT vorab geladen: wer die App nur
+// aufmacht, um eine Strecke zu bauen, soll nicht 1,8 MB Motorgeraeusch herunterladen. Sie
+// landen beim ersten Hoeren im Cache und sind ab dann auch offline da.
+const HUELLE = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './favicon.svg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
+];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    // Einzeln und fehlertolerant statt addAll: addAll bricht KOMPLETT ab, wenn eine Datei
+    // fehlt, und dann ist gar nichts gecacht. Eine fehlende Datei darf die Installation
+    // nicht kippen.
+    await Promise.all(HUELLE.map(u => c.add(new Request(u, { cache: 'reload' }))
+      .catch(() => {})));
+    // Sofort uebernehmen: der Arbeiter ist neu, weil die Version neu ist, und auf die alte
+    // zu warten hiesse, eine Fassung auszuliefern, die gerade ersetzt wurde.
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil((async () => {
+    // Alte Versionen wegwerfen. Ohne das waechst der Cache mit jedem Build.
+    for (const name of await caches.keys()) {
+      if (name.startsWith('omegasim-') && name !== CACHE) await caches.delete(name);
+    }
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  if (req.method !== 'GET') return;                      // POST an den Host: nie cachen
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;        // fremder Ursprung: nie cachen
+
+  e.respondWith((async () => {
+    try {
+      const antwort = await fetch(req);
+      // Nur brauchbare Antworten ablegen. Eine 404 zu cachen heisst, den Fehler zu
+      // konservieren, bis der Cache abgeraeumt wird.
+      if (antwort && antwort.ok && antwort.type === 'basic') {
+        const c = await caches.open(CACHE);
+        c.put(req, antwort.clone());
+      }
+      return antwort;
+    } catch (err) {
+      // Kein Netz. Jetzt aus dem Cache, und wenn die Anfrage eine Seite war, notfalls die
+      // Startseite - sonst zeigt der Browser seine eigene Fehlerseite, obwohl die App da ist.
+      const treffer = await caches.match(req);
+      if (treffer) return treffer;
+      if (req.mode === 'navigate') {
+        const start = await caches.match('./index.html');
+        if (start) return start;
+      }
+      throw err;
+    }
+  })());
+});

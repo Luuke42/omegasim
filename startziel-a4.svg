@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="297.01mm" height="210.02mm" viewBox="0 0 297.01 210.02">
+  <!--
+    Start/Ziel-Muster. DIN A4 QUER, 1 SVG-Einheit = 1 mm.
+
+    ERZEUGT AUS DEM ORIGINAL, nicht nachgemessen: alle Koordinaten stammen direkt aus
+    target_finish.pdf (Vektor, aus Excel, 9 Rechtecke), umgerechnet mit 1 pt = 25,4/72 mm.
+    Erzeuger: tools/make_pattern.py — bei Zweifeln neu erzeugen statt hier editieren.
+
+    Die vorherige Fassung war eine Rekonstruktion aus einem Foto und durchgehend 10 bis
+    22 Prozent zu breit (duenner Balken 4,4 statt 3.598 mm). Sie hat ausserdem nur die
+    Lueckenfolge nachgebildet — Balken UND Luecken tragen aber beide Information.
+
+    Gemessen aus dem Original:
+      duenner Balken 3.598 mm      dicker Balken 6.604 mm
+      duenne Luecke  3.514 mm      dicke Luecke  6.530 mm
+      Balkenbreite quer 275.9 mm (x = 6.5 bis 282.4)
+      Musterlaenge in Fahrtrichtung 75.5 mm
+      Balken in Leserichtung 000010010   (1 = dick)
+      Luecken in Leserichtung  00010110
+
+    DRUCKEN: A4 quer, 100 % / "Tatsaechliche Groesse". NICHT "an Seite anpassen" — das
+    verkleinert um mehrere Prozent und macht das Muster unlesbar. Zur Kontrolle ist unten
+    eine 100-mm-Strecke aufgedruckt: nachmessen, bevor das Blatt ausgelegt wird.
+
+    Der Pfeil zeigt in die Fahrtrichtung; gelesen wird von der Pfeilseite her. Ein
+    rueckwaerts ueberfahrenes Muster ist eine andere Folge und damit ein anderer Code.
+  -->
+
+  <rect x="0" y="0" width="297.01" height="210.02" fill="#ffffff"/>
+
+  <g fill="#000000">
+    <rect x="6.519" y="49.960" width="275.929" height="3.598"/>
+    <rect x="6.519" y="57.072" width="275.929" height="6.604"/>
+    <rect x="6.519" y="70.206" width="275.929" height="3.598"/>
+    <rect x="6.519" y="80.324" width="275.929" height="3.598"/>
+    <rect x="6.519" y="87.436" width="275.929" height="6.604"/>
+    <rect x="6.519" y="100.558" width="275.929" height="3.607"/>
+    <rect x="6.519" y="107.678" width="275.929" height="3.598"/>
+    <rect x="6.519" y="114.790" width="275.929" height="3.598"/>
+    <rect x="6.519" y="121.902" width="275.929" height="3.598"/>
+  </g>
+
+  <path d="M 132.55 143.81 L 144.48 131.87 L 156.42 143.81 L 150.45 143.81 L 150.45 156.63 L 138.51 156.63 L 138.51 143.81 Z" fill="#000000" stroke="#000000" stroke-width="0.353"/>
+
+  <!-- Maßstabsprobe: exakt 100 mm zwischen den Innenkanten der beiden Striche -->
+  <g stroke="#000000" stroke-width="0.25" fill="none">
+    <path d="M 98.51 167.50 L 98.51 171.50"/>
+    <path d="M 198.51 167.50 L 198.51 171.50"/>
+    <path d="M 98.51 169.50 L 198.51 169.50"/>
+  </g>
+  <text x="148.51" y="176.50" text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="3.2" fill="#000000"
+        >100 mm — nachmessen: stimmt es nicht, ist der Ausdruck skaliert und unbrauchbar</text>
+</svg>

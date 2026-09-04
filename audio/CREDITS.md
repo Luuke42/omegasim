@@ -5,11 +5,12 @@ Gruppe fremdes Aufnahmematerial enthaelt.
 
 ## Vollstaendig synthetisch — kein Aufnahmematerial
 
-Zehn Motoren, und jeder gehoert zu einem wirklichen Auto: die acht Rennmotoren nach
+Vierzehn Motoren, und jeder gehoert zu einem wirklichen Auto: die acht Rennmotoren nach
 technischen Angaben (Corvette C6.R, Corvette Z06 GT3.R, Mercedes-AMG GT3, Ferrari 296 GT3,
 BMW M4 GT3, Huracan GT3 / R8 LMS, Aston Martin Vantage GT3, Porsche 911 GT3 R), der Ford
-Mustang GT3 (V8 Cross-Plane) und ein Formel 1 nach dem Reglement 2026 (1,6-l-V6
-Turbo-Hybrid) — sowie alle
+Mustang GT3 (V8 Cross-Plane), ein Formel 1 nach dem Reglement 2026 (1,6-l-V6 Turbo-Hybrid)
+und vier historische Rennwagen (Ford GT40 Mk I, Lola T70 Mk3B, Ferrari 330 P4 / 412P,
+Maserati MC12) — sowie alle
 Effekte (Bremsenquietschen, Reifenquietschen, Crash-Varianten, Schlagschrauber,
 Tankgeraeusch, Karosseriereparatur, Motorstart) sind von Grund auf gerechnet. Es wird nichts aus einer
 Aufnahme abgespielt.
@@ -25,6 +26,41 @@ bestimmt die Resonanz physikalisch als `c / (4 L)`, und die Zylinderzahlen, Dreh
 und Kurbelwellenwinkel stammen aus den Motordefinitionen von engine-sim. Die drei
 urspruenglichen Motoren behielten ihren Klang: fuer sie wurde die Rohrlaenge so gesetzt,
 dass sie die vorher von Hand eingestellten Resonanzen (148 / 150 / 95 Hz) genau trifft.
+
+### Was in v0.4.54 dazugekommen ist — vier historische Rennwagen, als WIP
+
+| Schluessel | Motor | Was Angabe ist | Zuendfolge, Bankaufteilung |
+|---|---|---|---|
+| `gt40` | Ford GT40 Mk I | 4,7-l-V8 (289), 90 Grad, Cross-Plane, ~6500/min | 1-5-4-2-6-3-7-8, Haelften (Ford zaehlt 1–4 rechts) |
+| `lolat70` | Lola T70 Mk3B | Chevrolet 5,0-l-V8, Cross-Plane, ~7000/min | 1-8-4-3-6-5-7-2, ungerade/gerade (GM) |
+| `f330p4` | Ferrari 330 P4 / 412P | 4,0-l-V12, 60 Grad, ~8200/min | 1-7-5-11-3-9-6-12-2-8-4-10, Haelften |
+| `mc12` | Maserati MC12 | 6,0-l-V12, 65 Grad, ~7800/min | 1-12-5-8-3-10-6-7-2-11-4-9, Haelften |
+
+**Alle vier sind als WIP gekennzeichnet, und zwar aus zwei verschiedenen Gruenden.**
+
+Der erste gilt fuer alle: nach Gehoer geprueft ist keiner. Die Geometrie stimmt — die
+Bankaufteilung ist nachgerechnet, die zwei V12 zuenden je Bank gleichmaessig alle 120 Grad
+mit 60 Grad Bankversatz, die drei Cross-Plane-V8 lumpig mit 90/180/270 —, aber die sieben
+Klangregler (Rohrlaenge, Guete, Impulsbreite, Helligkeit, Rauschen, Klappern, Saettigung)
+sind gesetzt und nicht gemessen.
+
+Der zweite gilt fuer den Maserati und ist der ehrlichere. `banks_from_order()` legt
+Zuendereignis *i* immer auf `i · 720/n`, **unabhaengig vom Bankwinkel**. Die 65 Grad des
+MC12 gegen die 60 Grad des Ferrari sind also genau das, was dieses Modell nicht darstellen
+kann; die beiden V12 unterscheiden sich hier nur in Drehzahl, Rohrlaenge und den
+Klangreglern. Abgeschwaecht gilt dasselbe fuer die zwei neuen Cross-Plane-V8: bei einem
+90-Grad-V8 mit gerader Nummerierung hat jede Bank zwangslaeufig dieselbe Folge von
+Zuendabstaenden, nur anders gedreht — was sie unterscheidet, ist welche Zylinder sich einen
+Kruemmer teilen, also die Phase der beiden Baenke gegeneinander, dazu Rohrlaenge und
+Drehzahl. Sie werden sich untereinander und zur Corvette C6.R aehneln.
+
+Gemessen an den erzeugten Dateien: alle sechzehn Schleifen sind nahtlos (Zyklusbindung
+unter 2 %), ohne Gleichanteil und ohne Kodierungsdrift. Bei den V12 liegt im Leerlauf 43
+bzw. 64 Prozent der Energie auf der Zuendrate, bei den V8 auf der Rohrresonanz — die
+Rollenverteilung, die lange Rohre gegen einen hochdrehenden V12 erwarten lassen.
+
+Damit sind es 86 statt 70 `.ogg`-Dateien, und mit der gerechneten Baenderleiter aus
+v0.4.55 (ein Zwischenband je Motor, beim Formel 1 zwei) sind es 101.
 
 ### Was in v0.4.52 herausgefallen ist
 
@@ -43,7 +79,7 @@ Datei standen, und drei `*_demo.ogg`, die nur ein `accel`-Block in `fx.json` nan
 kein Code las. Gefunden bei der Durchsicht auf nicht verdrahtete Teile, nicht beim Aufraeumen
 der Motoren.
 
-Damit sind es 70 statt 106 `.ogg`-Dateien.
+Damit waren es 70 statt 106 `.ogg`-Dateien. Mit den vier historischen Motoren oben waren es 86, mit der Baenderleiter sind es 101.
 
 ### Die zwei Quietschtoene, und warum es zwei sind
 

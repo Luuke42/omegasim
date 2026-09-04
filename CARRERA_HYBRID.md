@@ -220,6 +220,41 @@ Vorderachse verbraucht, fehlt der Lenkung. Er hat einen Boden von 0,12, damit da
 voellig hilflos ist - im Regen wird dieser Boden weggeskaliert, weil dort wirklich nichts mehr
 uebrig ist.
 
+### Wann das Auto selbst faehrt
+
+Zwei Lagen, in denen die Eingabe des Fahrers **ersetzt** und nicht nur geformt wird - der
+einzige Aktor in der Tabelle oben, der das tut:
+
+| Lage | Ziel | Lenkung |
+|---|---|---|
+| Gelbe Flagge | 80 km/h, mittig | null, damit die Spur vorhersagbar bleibt |
+| Einfuehrungsrunde (fliegender Start) | Boxentempo | Schlaengeln plus die Seite des Startplatzes |
+
+Beides laeuft ueber `autopilotGrund()` in `src/50-drive.js`, das den GRUND zurueckgibt und
+nicht nur ein Ja: die Flaggenanzeige braucht ihn auch, und sie hatte die Bedingung bis
+v0.4.54 ein zweites Mal abgeschrieben.
+
+**Warum ueber die Eingaben und nicht mit einem Ghost-Gehirn.** `sendControlValue()` schreibt
+ausschliesslich an `playerCar`, die Ghosts senden ueber ihren eigenen Pfad in `ghostTick()`.
+Ein `startGhost()` auf das Auto des Fahrers haette zwei Sender auf derselben Charakteristik
+ergeben, die sich um den 45-ms-Takt streiten. Also bekommt `physicsStep()` synthetische
+Eingaben, und es bleibt bei einem Sender, einer Physik und einer Anzeige.
+
+**Nur in der Bahn-Stellung, und das ist keine Vorsicht, sondern eine Tatsache.** Im
+Ausdruck-Modus haelt sich das Auto nicht selbst auf der Bahn; ein Autopilot ohne
+Querregelung wuerde es geradeaus in die Bande fahren. Deshalb steigt `autopilotGrund()` bei
+`trackMode !== 'on'` aus, in beiden Lagen.
+
+**Die Bremse des Fahrers gewinnt - in der Einfuehrungsrunde.** Dort rollt das Feld in zwei
+Kolonnen dicht hintereinander, und ein Auto, das man nicht anhalten kann, ist ein Auto, das
+rammt. Bei Gelb bleibt es absichtlich beim vollen Eingriff: dort ist der Sinn, dass die
+Haende ganz frei sind, waehrend man abgeflogene Autos aufsammelt.
+
+Bis v0.4.54 kannte diese Stelle nur die gelbe Flagge. Der fliegende Start war damit halb
+umgesetzt: die Ghosts rollten von selbst im Boxentempo, das Auto des Fahrers wurde nur
+GEDROSSELT (`limitFormation` -> `speedLimitFactor`) und musste weiter von Hand gelenkt und
+gegast werden. `raceFormationLap` kam in `50-drive.js` an keiner Stelle vor.
+
 ### Fahrzeuglayout: fuenf Bauformen
 
 Bis v0.5 hatten alle Autos DASSELBE Fahrwerk. Unterschiedlich war nur der Klang; die statische
@@ -271,6 +306,63 @@ Lastempfindlichkeit eines Rennreifens als Exponent 0,85 - physikalisch begruende
 unbrauchbar: der Reibkreis ist eine Wurzel aus einer Differenz von Quadraten und saettigt
 schon bei zehn Prozent Absenkung. Drei von fuenf Layouts klebten am Notboden von 0,12, also bei
 5 Grad Einschlag. Linear mit Staerke 0,15 ergibt die geordnete Spreizung oben.
+
+### Getriebearten: drei Uebersetzungssaetze
+
+Bis v0.4.53 hatte jedes Auto dasselbe Getriebe: sechs Gaenge, `GT3_GEARS`. Seit v0.4.54 gibt
+es drei, und sie sind **senkrecht zu den Voreinstellungen** - dieselbe Trennung wie beim
+Layout, mit demselben `data-preset-skip`. Ein Klick auf die Voreinstellung "F1" ist eine
+Abstimmung; das Getriebe "Formel 1" ist ein Auto.
+
+| Getriebe | Gaenge | Schaltzeit | Rueckschaltschwelle |
+|---|---|---|---|
+| GT3, sequenziell *(Vorgabe)* | 6 | 120 ms | 4200/min |
+| Formel 1 | 8 | 40 ms | 5600/min |
+| Ferrari 412P, Transaxle | 5 | 350 ms | 3400/min |
+
+**Die Uebersetzungen sind gerechnet, nicht getippt.** In der GT3-Tabelle, die gegen eine echte
+Beschleunigungstabelle gefittet wurde, ist das Produkt `ratio x topFrac` fuer die Gaenge 1 bis
+5 konstant 0,9507 und faellt beim sechsten auf 0,88 - der ist luftwiderstandsbegrenzt und
+erreicht den Begrenzer nicht. Diese Unsymmetrie ist echt und wird uebernommen:
+
+    ratio_i = 0,9507 / topFrac_i    fuer alle ausser dem letzten Gang
+    ratio_n = 0,88                  bei topFrac_n = 1,0
+
+Weil der letzte Gang in jedem Getriebe `0,88 / 1,0` traegt, bleibt `ratioRef` - der Bezug, auf
+den `thrustAt()` normiert - ueberall 0,88, und der Anker der Beschleunigungskalibrierung ist
+unberuehrt. Gewaehlt ist nur die **Spreizung**, und dort sitzt der Charakter: acht enge Gaenge
+oben (84 / 92 / 100 Prozent der Spitze) gegen fuenf weite (30 / 45 / 62 / 81 / 100).
+
+**Was das Getriebe aendert, ist die Form und nicht die Schlagzeilenzahl.** `calibrateAccel()`
+laeuft nach jedem Wechsel neu und loest gegen die eingestellte Zeit von null auf
+Hoechstgeschwindigkeit. Was sich also verschiebt, ist wo die Stufen sitzen und welcher Gang
+zieht - genau wie das Layout die Balance aendert und nicht die Geradeausleistung.
+
+**Die Drehzahlgrenze bleibt bei 9000.** Sie ist eine Eigenschaft des Motors und nicht des
+Getriebes; ein Getriebe, das die Drehzahlgrenze mitbringt, waere ein Motor mit Zahnraedern.
+
+Drei Fallen stecken in der Umsetzung, und alle drei sind Voraussetzungen, die vorher galten:
+
+* **Das Uebersetzungs-Array wird an der Stelle geaendert, nicht ersetzt.** Die Ghosts teilen
+  es per Verweis, damit `accelScale()` nicht zweimal kalibriert. Ein Splice erreicht damit
+  jeden Teilhaber auf einmal, auch einen schon fahrenden Ghost; ein neues Array haette den
+  Verweis gekappt, und das Feld waere still im alten Getriebe weitergefahren.
+* **Die Tabelle darf nicht das eigene Array sein.** `config.gears` zeigte bis v0.4.53 direkt
+  auf `GT3_GEARS`. Ein Splice darauf haette die Tabelle zerstoert, aus der er die Werte nimmt -
+  zurueck auf GT3 haette dann acht Gaenge gehabt. Seit v0.4.54 ist es eine Kopie.
+* **Der Kalibrierbezug braucht eine eigene Kopie.** `calibRef` ist eine flache Kopie der
+  Konfiguration, und sein Kommentar behauptete ausdruecklich, `gears` werde nie geaendert.
+  Ohne eigene Kopie waere der Bezug mitgewandert: die Messaufbauten stellen mit
+  `Object.assign(cfg, calibRef)` den gefitteten Zustand her, und dort snappen `ratioRef`,
+  `rpmScale`, `upshiftRpm` und `shiftMs` als Skalare zurueck - die Uebersetzungen aber nicht.
+  Das Ergebnis waeren GT3-Schaltpunkte auf F1-Zahnraedern, also eine Messung, die still falsch
+  ist statt offen anders.
+
+Und eine Zusicherung, die kein Getriebe verletzen darf: **die Automatik darf nicht pendeln.**
+Nach einem Hochschalten faellt die Drehzahl auf `upshiftRpm x ratio[i+1] / ratio[i]`; liegt die
+Rueckschaltschwelle darueber, schaltet sie hoch und sofort wieder herunter. Gemessene Reserve
+ueber den engsten Gangsprung: GT3 1385, Formel 1 915 (enge Gaenge, also knapper), 412P 2324
+Umdrehungen. Ein Selbsttest rechnet das nach, statt es zu glauben.
 
 ### Das Einspurmodell
 

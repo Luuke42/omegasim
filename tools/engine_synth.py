@@ -128,6 +128,55 @@ def cross_plane_v8():
 #
 # The three original engines keep the sound they had: their primary_in is set to whatever
 # reproduces the res_hz that was tuned by ear, so nothing regresses.
+# Die Drehzahl, unter die der Drehzahlmesser der App nie faellt (IDLE_RPM in 30-input.js).
+# Sie gehoert hierher, weil sie bestimmt, wie TIEF die Baenderleiter reichen muss: der F1
+# hat Leerlauf 4200 - physikalisch richtig -, aber die App zeigt trotzdem 1500, und dort
+# braucht auch er eine Schleife.
+APP_IDLE_RPM = 1500
+
+# Wie weit zwei Nachbarbaender auseinanderliegen DUERFEN. Die App klemmt die Abspielrate auf
+# eine Oktave nach jeder Seite, also waere 2,0 die harte Grenze. 2,2 laesst einen Rest von
+# vier Prozent zu, und der ist unhoerbar: er tritt nur am Rand eines Abschnitts auf, wo das
+# betroffene Band unter zehn Prozent Gewicht hat. Mit 2,0 als Grenze wuerde die Leiter
+# ausserdem bei jedem Rundungsschritt ein weiteres Band verlangen.
+BAND_MAX_RATIO = 2.2
+
+
+def band_ladder(rpms):
+    """Leistungsbaender als [(name, rpm)], aufsteigend, mit Nachbarabstand <= BAND_MAX_RATIO.
+
+    Die drei angegebenen Drehzahlen sind ANKER und behalten ihre Namen; dazu kommt ein Anker
+    bei APP_IDLE_RPM, falls der Motor darueber leerlaeuft. Dann werden geometrische Mitten
+    eingefuegt, bis kein Abstand mehr zu gross ist - geometrisch, weil die Abspielrate ein
+    VERHAELTNIS ist und die Verhaeltnisse gleich gross werden muessen.
+
+    Die eingefuegten Baender heissen low, low2, low3 ... in aufsteigender Reihenfolge. Namen
+    und nicht Nummern, damit die Dateinamen stabil bleiben, solange die Anker es sind.
+    """
+    rp = dict(rpms)
+    werte = sorted(set([min(rp['idle'], APP_IDLE_RPM), rp['idle'],
+                        rp['mid'], rp['high']]))
+    while True:
+        for i in range(len(werte) - 1):
+            if werte[i + 1] / float(werte[i]) > BAND_MAX_RATIO:
+                werte.insert(i + 1, int(round((werte[i] * werte[i + 1]) ** 0.5)))
+                break
+        else:
+            break
+    # Namen: der tiefste ist 'idle', rp['mid'] ist 'mid', der hoechste 'high'. Alles
+    # dazwischen heisst low, low2, low3 ... in aufsteigender Reihenfolge. Namen und keine
+    # Nummern, damit die Dateinamen stabil bleiben, solange die Anker es sind.
+    fest = {werte[0]: 'idle', rp['mid']: 'mid', werte[-1]: 'high'}
+    out, n = [], 0
+    for v in werte:
+        if v in fest:
+            out.append((fest[v], v))
+        else:
+            n += 1
+            out.append(('low' if n == 1 else 'low%d' % n, v))
+    return out
+
+
 CARS = {
     'mustang': {
         'label': 'Ford Mustang GT3 (V8, Cross-Plane)',
@@ -186,6 +235,10 @@ CARS = {
         'scatter_t': 0.007, 'scatter_g': 0.055, 'crackle': 0.50,
     },
     'f296gt3': {
+        # Aufgeladen: der 296 GT3 ist ein Twin-Turbo-V6. Das MODELL hat keinen Lader
+        # (siehe 'ohne Lader' im Namen), aber die App legt seit v0.5.6 ein Pfeifen und
+        # ein Abblasen darueber - und das darf nur, wo wirklich einer sitzt.
+        'turbo': True,
         'label': 'Ferrari 296 GT3 (F163CE 3.0 V6 120 Grad, ohne Lader)',
         'banks': banks_from_order([1, 2, 3, 4, 5, 6], 6, 'oddeven'), 'cylinders': 6,
         'rpms': {'idle': 1400, 'mid': 5000, 'high': 8000},
@@ -195,6 +248,8 @@ CARS = {
         'scatter_t': 0.005, 'scatter_g': 0.04, 'crackle': 0.55,
     },
     'm4gt3': {
+        # Aufgeladen: P58 Twin-Turbo. Siehe f296gt3.
+        'turbo': True,
         'label': 'BMW M4 GT3 (P58 3.0 Reihen-6, ohne Lader)',
         'banks': inline_from_order([1, 5, 3, 6, 2, 4], 6), 'cylinders': 6,
         'rpms': {'idle': 1300, 'mid': 4300, 'high': 7200},
@@ -290,6 +345,9 @@ CARS = {
     #   crackle 0,12 ist der niedrigste Wert im ganzen Satz. Ein Turbo daempft die
     #   Schubknaller, und ab 2026 gibt es ausserdem keinen Ueberschuss zu verknallen.
     'f1_2026': {
+        # Aufgeladen: 1,6-l-V6 mit Turbo, und bei diesem Motor ist der Lader das
+        # Merkmal und nicht ein Nebengeraeusch.
+        'turbo': True,
         'label': 'Formel 1 2026 (1.6 V6 Turbo-Hybrid, 90 Grad)',
         'banks': banks_from_order([1, 4, 2, 5, 3, 6], 6, 'half'), 'cylinders': 6,
         'rpms': {'idle': 4200, 'mid': 8500, 'high': 12500},
@@ -297,6 +355,76 @@ CARS = {
         'pulse_ms': 1.3, 'bright': 0.58, 'noise': 0.2, 'noise_hz': 4200.0,
         'clatter': 0.07, 'clatter_hz': 5200.0, 'drive': 1.8,
         'scatter_t': 0.002, 'scatter_g': 0.02, 'crackle': 0.12,
+    },
+    # ---- Vier historische Rennwagen [WIP] -------------------------------------------
+    #
+    # WIP FUER ALLE VIER, und der Grund ist nicht Bescheidenheit: nach Gehoer geprueft ist
+    # keiner. Die Geometrie stimmt, die sieben Klangregler sind geraten.
+    #
+    # Beim mc12 kommt ein zweiter, ehrlicherer Grund dazu. banks_from_order() legt
+    # Zuendereignis i immer auf i * 720/n - UNABHAENGIG VOM BANKWINKEL. Die 65 Grad des
+    # Maserati gegen die 60 Grad des Ferrari sind also genau das, was dieses Modell nicht
+    # darstellen kann; die beiden V12 unterscheiden sich hier nur in Drehzahl, Rohrlaenge
+    # und Bankaufteilung. Dasselbe gilt abgeschwaecht fuer die zwei Cross-Plane-V8, die
+    # untereinander und zur Corvette C6.R aehneln werden - unterschieden allein durch die
+    # Zuendfolge, die Nummerierungskonvention und die Rohrlaenge.
+    'gt40': {
+        'label': 'Ford GT40 Mk I (4.7 V8, Cross-Plane)',
+        # Zuendfolge des Ford-289: 1-5-4-2-6-3-7-8. NICHT cross_plane_v8() - das ist die
+        # GM-Folge 1-5-4-8-6-3-7-2 und ergibt eine andere Bankaufteilung. Ford zaehlt
+        # 1 bis 4 auf der rechten und 5 bis 8 auf der linken Bank, also 'half'.
+        'banks': banks_from_order([1, 5, 4, 2, 6, 3, 7, 8], 8, 'half'), 'cylinders': 8,
+        'rpms': {'idle': 900, 'mid': 4200, 'high': 6500},
+        # Lange Seitenrohre ohne Daempfer, vier Weber-Doppelvergaser: das tiefste und
+        # rauheste Rohr im ganzen Satz, mit hoerbarem Ventiltrieb (Stossstangen, starre
+        # Stoessel) und viel Ansauggeraeusch.
+        'primary_in': 34.0, 'res_q': 5.8, 'partials': 6, 'ir_ms': 64.0,
+        'pulse_ms': 4.6, 'bright': 0.50, 'noise': 0.09, 'noise_hz': 1300.0,
+        'clatter': 0.24, 'clatter_hz': 2000.0, 'drive': 3.5,
+        'scatter_t': 0.009, 'scatter_g': 0.075, 'crackle': 0.40,
+    },
+    'lolat70': {
+        'label': 'Lola T70 Mk3B (Chevrolet 5.0 V8, Cross-Plane)',
+        # Small-Block-Folge 1-8-4-3-6-5-7-2 unter GM-Nummerierung (ungerade links). Die
+        # Corvette C6.R teilt die Konvention, hat aber die LS-Folge 1-8-7-2-6-5-4-3 - daran
+        # und an der kuerzeren Rohrlaenge unterscheiden sich die beiden.
+        'banks': banks_from_order([1, 8, 4, 3, 6, 5, 7, 2], 8, 'oddeven'), 'cylinders': 8,
+        'rpms': {'idle': 1000, 'mid': 4600, 'high': 7000},
+        # Kurze Stummelrohre seitlich am Heck: weniger Bass als der GT40, mehr Kante.
+        'primary_in': 26.0, 'res_q': 6.2, 'partials': 6, 'ir_ms': 56.0,
+        'pulse_ms': 4.0, 'bright': 0.56, 'noise': 0.08, 'noise_hz': 1600.0,
+        'clatter': 0.22, 'clatter_hz': 2200.0, 'drive': 3.3,
+        'scatter_t': 0.008, 'scatter_g': 0.07, 'crackle': 0.48,
+    },
+    'f330p4': {
+        'label': 'Ferrari 330 P4 / 412P (4.0 V12, 60 Grad)',
+        # Am P4 verankert: Einspritzung, drei Ventile. Der 412P war die Kundenfassung mit
+        # Vergasern und zwei Ventilen und drehte etwas weniger williger obenaus - eine
+        # Unterscheidung, die dieses Modell nicht traegt, weshalb ein Eintrag fuer beide
+        # steht und der Name das sagt.
+        'banks': banks_from_order([1, 7, 5, 11, 3, 9, 6, 12, 2, 8, 4, 10], 12, 'half'),
+        'cylinders': 12,
+        'rpms': {'idle': 1400, 'mid': 5800, 'high': 8200},
+        # 20 Zoll ist die Laenge, die engine-sim fuer den Ferrari-V12 ansetzt. Ein 60-Grad-V12
+        # zuendet alle 60 Grad, bei 8200 also 820 Hz - der hoechste Zuendtakt im Satz, und
+        # genau daraus kommt das Kreischen. Sechs Weber-Doppelvergaser: hoerbares Ansaugen.
+        'primary_in': 20.0, 'res_q': 7.0, 'partials': 7, 'ir_ms': 34.0,
+        'pulse_ms': 1.5, 'bright': 0.74, 'noise': 0.11, 'noise_hz': 3000.0,
+        'clatter': 0.12, 'clatter_hz': 3600.0, 'drive': 2.4,
+        'scatter_t': 0.0045, 'scatter_g': 0.035, 'crackle': 0.50,
+    },
+    'mc12': {
+        'label': 'Maserati MC12 (6.0 V12, 65 Grad)',
+        'banks': banks_from_order([1, 12, 5, 8, 3, 10, 6, 7, 2, 11, 4, 9], 12, 'half'),
+        'cylinders': 12,
+        'rpms': {'idle': 1300, 'mid': 5500, 'high': 7800},
+        # Mehr Hubraum, laengere Rohre, tiefer und satter als der 330 P4 - und weniger
+        # Schubknaller, weil eine Einspritzung von 2004 im Schub abschaltet, wo sechs
+        # Vergaser weiter nachliefern.
+        'primary_in': 22.0, 'res_q': 6.6, 'partials': 7, 'ir_ms': 38.0,
+        'pulse_ms': 1.9, 'bright': 0.68, 'noise': 0.10, 'noise_hz': 2800.0,
+        'clatter': 0.10, 'clatter_hz': 3400.0, 'drive': 2.6,
+        'scatter_t': 0.005, 'scatter_g': 0.04, 'crackle': 0.44,
     },
 }
 
@@ -622,11 +750,27 @@ def main(nur=None):
     for key, cfg in auswahl:
         manifest[key] = {'label': cfg['label'], 'cylinders': cfg['cylinders'],
                          'source': 'vollständig synthetisiert (Modell nach engine-sim, MIT)',
+                         # ZWEI ANGABEN FUER DIE APP, seit v0.5.6. Sie beschreiben nicht die
+                         # Datei, sondern den Motor - aber die App braucht genau sie, und CARS
+                         # ist die Quelle fuer Motorkunde. Eine Abschrift in 80-sound.js waere
+                         # der naechste Ort, an dem etwas auseinanderlaeuft.
+                         #
+                         #   crackle  wieviel dieser Motor im Schub knallt (0,12 beim F1 mit
+                         #            Turbo bis 0,62 beim Flat-Plane-V8 ohne)
+                         #   turbo    ob ein Lader draufsitzt, fuer Pfeifen und Abblasen
+                         'crackle': cfg.get('crackle', 0.0),
+                         'turbo': bool(cfg.get('turbo')),
                          'loops': {}}
         # One extra loop per engine for the closed throttle, at the mid band. The app
         # scales it by rpm like any other, and crossfades it in as load drops — one file per
         # engine instead of a whole parallel set, which is enough to hear the difference.
-        bands = list(cfg['rpms'].items()) + [('over', cfg['rpms']['mid'])]
+        #
+        # UND EINE GERECHNETE BAENDERLEITER, seit v0.4.55 - siehe band_ladder() oben. Der
+        # Grund ist gemessen und stand vorher als Fehler in der App: die Abspielrate ist auf
+        # [0,5 .. 2,0] geklemmt, also eine Oktave nach jeder Seite, und beim Porsche lagen
+        # Leerlauf und Mitte 2,2 Oktaven auseinander. Im unteren ersten Gang klebte damit
+        # immer eine HOERBARE Schleife am Anschlag.
+        bands = band_ladder(cfg['rpms']) + [('over', cfg['rpms']['mid'])]
         for band, rpm in bands:
             load = 0.0 if band == 'over' else 1.0
             # zlib.crc32, NOT hash(). Python randomises hash() for strings once per

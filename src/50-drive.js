@@ -194,6 +194,100 @@
     anwenden(false);
   }
 
+  // ---- Cockpit-Ansicht ---------------------------------------------------------------
+  //
+  // Sie setzt ein Attribut am body und sonst nichts. Kein Neuaufbau, keine Klasse an
+  // einzelnen Kacheln: die drei Ansichten unterscheiden sich ausschliesslich in den acht
+  // --gt3-Variablen, und das Umsetzen einer Variable faerbt jede Regel mit, die sie liest.
+  //
+  // EIGENE ABLAGE, wie beim Layout und beim Getriebe: der Waehler traegt data-preset-skip,
+  // weil eine Voreinstellung eine Abstimmung ist und das Aussehen keine.
+  const COCKPIT_STORE = 'chc.cockpit.v1';
+  if ($('setting-cockpit')) {
+    const ansichtAnwenden = (melden) => {
+      const v = $('setting-cockpit').value;
+      // 'gt3' ist die Vorgabe und setzt KEIN Attribut: so stehen die Werte aus :root, und
+      // die Vorgabe ist damit nicht eine dritte Kopie derselben Zahlen.
+      if (v === 'gt3') document.body.removeAttribute('data-cockpit');
+      else document.body.setAttribute('data-cockpit', v);
+      if (melden) {
+        const opt = $('setting-cockpit').selectedOptions[0];
+        log('Cockpit-Ansicht: ' + (opt ? opt.textContent : v) + '.', 'info');
+      }
+      try { localStorage.setItem(COCKPIT_STORE, v); } catch (e) { /* privater Modus */ }
+    };
+    try {
+      const gespeichert = localStorage.getItem(COCKPIT_STORE);
+      if (gespeichert) $('setting-cockpit').value = gespeichert;
+    } catch (e) { /* privater Modus */ }
+    $('setting-cockpit').addEventListener('change', () => ansichtAnwenden(true));
+    ansichtAnwenden(false);
+  }
+
+  // ---- Getriebeart -------------------------------------------------------------------
+  //
+  // Dieselbe Bauform wie das Layout darueber, und aus demselben Grund eine EIGENE Ablage:
+  // der Waehler traegt data-preset-skip, also fasst ihn presetControls() nicht an - und
+  // ohne eigene Ablage faellt er bei jedem Neuladen auf GT3 zurueck.
+  const GEARBOX_STORE = 'chc.gearbox.v1';
+  if ($('setting-gearbox')) {
+    const zeigeGetriebeDaten = () => {
+      const el = $('gearbox-info');
+      if (!el) return;
+      const cfg = physEngine.config;
+      // Dieselbe Rechnung, die die Doku fuer ihre Gangtabelle benutzt: topFrac mal
+      // Hoechstgeschwindigkeit, hier in Tacho-Kilometern, also mit REAL_SCALE.
+      const gaenge = cfg.gears.map((g, i) => (i + 1) + '. '
+        + Math.round(g.topFrac * cfg.topSpeedKmh * REAL_SCALE)).join(' \u00b7 ');
+      el.textContent = cfg.gears.length + ' ' + t('G\u00e4nge') + ' \u00b7 '
+        + gaenge + ' km/h \u00b7 ' + t('Schaltzeit') + ' ' + cfg.shiftMs + ' ms';
+    };
+    // ZWEI ARGUMENTE UND NICHT EINES, und der Grund ist die Ladereihenfolge: `garage` ist
+    // ein const in 90-ghosts.js, also in einer SPAETEREN Quelldatei. Beim ersten Aufruf hier
+    // ist es noch in seiner temporalen Todeszone, und dort wirft schon `typeof garage` -
+    // was die ganze IIFE mitnimmt und OMEGA_TEST verschwinden laesst. Beim Laden gibt es
+    // ausserdem keine Ghosts, also ist der Verzicht nicht nur sicher, sondern richtig.
+    const getriebeAnwenden = (melden, mitGhosts) => {
+      const name = physEngine.applyGearbox($('setting-gearbox').value);
+      // Wie beim Layout: war der abgelegte Name unbekannt, faellt applyGearbox auf gt3
+      // zurueck, und dann muss die Auswahl mitkommen.
+      if ($('setting-gearbox').value !== name) $('setting-gearbox').value = name;
+      if (mitGhosts) {
+        // Die Ghosts teilen das UEBERSETZUNGS-ARRAY per Verweis, sind also schon umgestellt.
+        // Ihre SKALARE - Schaltpunkte, Schaltzeit, rpmScale, ratioRef - sind aber Kopien aus
+        // dem Augenblick ihrer Einrichtung. Ohne diese Schleife schaltet ein fahrender Ghost
+        // weiter nach den alten Punkten, und von aussen sieht das aus wie "der Ghost
+        // schaltet falsch".
+        garage.forEach(c => {
+          if (!c.ghost || !c.ghost.engine || c.ghost.engine === physEngine) return;
+          const gc = c.ghost.engine.config, pc = physEngine.config;
+          gc.ratioRef = pc.ratioRef;
+          gc.upshiftRpm = pc.upshiftRpm;
+          gc.downshiftRpm = pc.downshiftRpm;
+          gc.shiftMs = pc.shiftMs;
+          gc.rpmScale = pc.rpmScale;
+          c.ghost.engine.state.currentGear =
+            Math.min(c.ghost.engine.state.currentGear, gc.gears.length - 1);
+        });
+      }
+      zeigeGetriebeDaten();
+      markDrivetrainChartsDirty();
+      if (melden) {
+        const opt = $('setting-gearbox').selectedOptions[0];
+        log('Getriebe: ' + (opt ? opt.textContent : name) + '.', 'info');
+        showHudToast((opt ? opt.textContent : name).toUpperCase());
+      }
+      try { localStorage.setItem(GEARBOX_STORE, name); } catch (e) { /* privater Modus */ }
+    };
+    try {
+      const gespeichert = localStorage.getItem(GEARBOX_STORE);
+      if (gespeichert) $('setting-gearbox').value = gespeichert;
+    } catch (e) { /* privater Modus */ }
+    $('setting-gearbox').addEventListener('change', () => getriebeAnwenden(true, true));
+    if (typeof i18nOnLangChange === 'function') i18nOnLangChange(zeigeGetriebeDaten);
+    getriebeAnwenden(false, false);
+  }
+
   $('phys-enable').addEventListener('change', (e) => {
     physicsEnabled = e.target.checked;
     physLastTime = null;
@@ -968,17 +1062,63 @@
   //
   // Nicht waehrend der Anfahrt: sobald die Ampel laeuft, gehoert das Auto wieder dem
   // Fahrer, denn genau dann faengt das Rennen wieder an.
-  function autopilotYellow() {
-    if (flagState !== 'yellow') return null;
-    // Ausdruck-Stellung: nicht lenkfaehig, siehe oben. trackMode ist ein STRING
-    // ('on'/'off') und kein Boolean - ein !trackMode waere hier immer falsch gewesen.
+  // ZWEI GRUENDE, aus denen das Auto des Fahrers selbst faehrt, und beide sagen dasselbe:
+  // die Haende sollen frei sein. Bei Gelb, um abgeflogene Ghosts zurueckzustellen; in der
+  // Einfuehrungsrunde, weil das die Runde VOR dem Fahren ist.
+  //
+  // BIS v0.4.54 KANNTE DIESE STELLE NUR GELB, und das war eine halbe Umsetzung des
+  // fliegenden Starts: die Ghosts rollten im Boxentempo von selbst, das Auto des Fahrers
+  // wurde nur GEDROSSELT (limitFormation -> speedLimitFactor) und musste weiter von Hand
+  // gelenkt und gegast werden. raceFormationLap kam in dieser Datei gar nicht vor.
+  //
+  // DER GRUND WIRD ZURUECKGEGEBEN und nicht nur ein Boolean: die Flaggenanzeige in
+  // 90-ghosts.js braucht ihn auch, und dort stand die Bedingung bisher ein zweites Mal
+  // abgeschrieben - mit dem Vermerk, dass bei einer dritten Stelle eine Funktion daraus
+  // gehoert. Das hier ist die dritte Stelle.
+  //
+  // raceFormationLap und flagState werden ohne typeof gelesen: sie stehen in SPAETEREN
+  // Quelldateien, aber diese Funktion laeuft erst zur Laufzeit - physicsStep() haengt am
+  // 45-ms-Takt, und updateFlagUi() ruft sie nach dem Laden. Genau das galt fuer flagState
+  // schon vorher.
+  function autopilotGrund() {
+    // Ausdruck-Stellung: nicht lenkfaehig. Ohne Leitplanken haelt sich das Auto nicht selbst
+    // auf der Bahn, und ein Autopilot ohne Querregelung faehrt es geradeaus in die Bande.
+    // trackMode ist ein STRING ('on'/'off') und kein Boolean - ein !trackMode waere hier
+    // immer falsch gewesen.
     if (trackMode !== 'on') return null;
+    if (raceFormationLap) {
+      // Beides kann gelten: wenn in der Einfuehrungsrunde jemand abfliegt. Dann gewinnt der
+      // LANGSAMERE, und das ist keine Rangfolge, sondern eine Rechnung.
+      return (flagState === 'yellow' && yellowFactor() < formationPace())
+        ? 'yellow' : 'formation';
+    }
+    return flagState === 'yellow' ? 'yellow' : null;
+  }
+
+  function autopilot(fahrerBremse) {
+    const grund = autopilotGrund();
+    if (!grund) return null;
     const st = physEngine.state;
-    const ziel = yellowFactor();
+    // DASSELBE Tempo wie die Ghosts, siehe formationPace(): sonst rollt das Feld mit 0,35
+    // und der Fahrer mit 0,271, und die Kolonne faellt beim Anrollen auseinander.
+    const ziel = grund === 'formation' ? formationPace() : yellowFactor();
     const v = Math.abs(st.speedKmh) / physEngine.config.topSpeedKmh;
     const err = ziel - v;
-    return { throttle: Math.max(0, Math.min(1, err * 4)),
-             brake: Math.max(0, Math.min(1, -err * 3)) };
+    let throttle = Math.max(0, Math.min(1, err * 4));
+    let brake = Math.max(0, Math.min(1, -err * 3));
+    // DIE BREMSE DES FAHRERS GEWINNT, aber nur in der Einfuehrungsrunde. Dort rollt das Feld
+    // in zwei Kolonnen dicht hintereinander, und ein Auto, das man nicht anhalten kann, ist
+    // ein Auto, das rammt. Bei Gelb bleibt es absichtlich beim vollen Eingriff: dort ist der
+    // Sinn, dass die Haende ganz frei sind, waehrend man Autos aufsammelt.
+    if (grund === 'formation' && fahrerBremse > 0.05) {
+      brake = Math.max(brake, fahrerBremse);
+      throttle = 0;
+    }
+    return { grund, throttle, brake,
+             // Bei Gelb geradeaus - eine vorhersagbare Spur, damit man ein Auto von Hand
+             // dazwischenstellen kann. In der Einfuehrungsrunde wie die Ghosts.
+             steer: grund === 'formation' && typeof formationDriverOffset === 'function'
+               ? formationDriverOffset() : 0 };
   }
 
   // ---- Abseits der Fahrbahn ----------------------------------------------------------
@@ -1041,8 +1181,20 @@
   // (gemessen 0 Lesungen in 551 Fahrmeldungen), Byte 12 steht dort praktisch immer auf
   // 0x00 - die Drosselung wuerde also IMMER greifen, und man wuerde den Fehler beim Motor
   // suchen.
+  // ZWEI FRAGEN, die vorher eine waren:
+  //
+  //   abseitsJetzt()  - liegt das Auto neben der Bahn? Eine Tatsache, kein Schalter.
+  //   offtrackGilt()  - soll die DROSSELUNG greifen? Die Tatsache plus ihr eigener Schalter.
+  //
+  // Getrennt, weil das Brummen bis v0.4.55 in derselben Klammer sass: wer die Drosselung
+  // abschaltete, verlor auch die Rueckmeldung, obwohl er sie nicht abgeschaltet hatte. Das
+  // Brummen haengt jetzt allein am Vibrationsschalter, die Drosselung allein am eigenen.
+  function abseitsJetzt() {
+    return offtrackAktiv && trackMode === 'on';
+  }
+
   function offtrackGilt() {
-    return offtrackEffekt && offtrackAktiv && trackMode === 'on';
+    return offtrackEffekt && abseitsJetzt();
   }
 
   function offtrackAnzeige() {
@@ -1086,6 +1238,9 @@
     });
   }
 
+  // Der laufende Wert des Tankdeckels, siehe fuelCutTarget() in 70-race.js. 1 = offen.
+  let fuelCut = 1;
+
   function physicsStep() {
     if (!physicsEnabled) { physLastTime = null; return; }
     const now = performance.now();
@@ -1093,18 +1248,31 @@
     physLastTime = now;
     // Derated, not raw. Braking is left alone: brakes do not care how much fuel is left,
     // and a damaged car that cannot slow down would be the opposite of a limp mode.
-    let rawThrottle = fuelDamageDerate(Math.max(0, throttleY));
+    //
+    // DIE RAMPE DES LEEREN TANKS laeuft hier, weil dies die einzige Stelle mit einem
+    // verlaesslichen dt ist - dasselbe Argument, das weiter unten fuer die gefahrene Strecke
+    // steht. Ein Tank, der leer wird, nimmt das Gas damit ueber knapp zwei Sekunden weg
+    // statt in einem Takt, und die Simulation rollt aus.
+    const cutZiel = fuelCutTarget();
+    if (cutZiel > fuelCut) fuelCut = cutZiel;   // Tanken wirkt sofort
+    else fuelCut += (cutZiel - fuelCut) * (1 - Math.exp(-dt / FUEL_CUT_TAU));
+    let rawThrottle = fuelDamageDerate(Math.max(0, throttleY), fuelCut);
     let rawBrake = Math.max(0, -throttleY);
     let steer = steerX;
-    // Waehrend der gelben Flagge faehrt das Auto selbst, damit man die Haende frei hat, um
-    // abgeflogene Ghosts zurueckzustellen. Siehe autopilotYellow().
-    const ap = autopilotYellow();
-    if (ap) { rawThrottle = ap.throttle; rawBrake = ap.brake; steer = 0; }
+    // Bei gelber Flagge und in der Einfuehrungsrunde faehrt das Auto selbst. Siehe
+    // autopilotGrund() fuer die zwei Gruende und autopilot() fuer die Regelung.
+    const ap = autopilot(rawBrake);
+    if (ap) { rawThrottle = ap.throttle; rawBrake = ap.brake; steer = ap.steer; }
     // Abseits der Bahn gedeckelt, und zwar VOR der Physik. Genau das war der Fehler beim
     // Gasfaktor: er wirkte nach der Physik auf die Ausgabe, der Tacho zeigte volles Tempo
     // und das Auto fuhr langsamer. Hier sagen Anzeige und Auto dasselbe.
+    // Die Drosselung an ihrem Schalter ...
     if (offtrackGilt()) {
       rawThrottle = Math.min(rawThrottle, OFFTRACK_GAS);
+    }
+    // ... und das Brummen an seinem. padRumble() prueft rumbleOn selbst, also steht hier nur
+    // die Frage, OB gebrummt werden soll - nicht, ob der Nutzer Vibration will.
+    if (abseitsJetzt()) {
       const jetzt = Date.now();
       if (jetzt - offtrackRumbleAt >= OFFTRACK_RUMBLE_MS - 40) {
         offtrackRumbleAt = jetzt;

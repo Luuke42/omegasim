@@ -96,7 +96,7 @@
            'setting-brake-fade-strength': 1.0,
            'setting-dirtyair': false,
            'setting-dirtyair-strength': 1.0,
-           'setting-tyre-asym': false,
+           'setting-tyre-asym': true,   // Vorgabe im Markup seit v0.4.55, und die Vorgabe IST Pro
            'setting-tyre-pressure': 1.8,
            // Gasfaktor: wie frueh das Auto volle Motorleistung bekommt. 1,0 ist
            // das Byte genau proportional zum Tacho, also die kalibrierte Fassung.

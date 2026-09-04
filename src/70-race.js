@@ -148,11 +148,12 @@
     if (!raceFormationLap) return;
     raceFormationLap = false;
     limitFormation = 1; applySpeedLimit();
+    updateFlagUi();
     raceLapStart = Date.now();
     garage.forEach(c => { if (c.race) c.race.lapStart = Date.now(); });
     setRaceLights('go');
     playTone(1046, 0.30, 'square', 0.22);
-    showHudToast('Frei, volle Fahrt!');
+    showHudToast(t('Frei, volle Fahrt!'));
     log('Einführungsrunde beendet, Rennen freigegeben.', 'info');
     $('race-status').textContent = `${RACE_MODES[raceMode].label} läuft`;
     setTimeout(() => setRaceLights(0), 900);
@@ -186,6 +187,7 @@
     if (raceState !== 'racing' && raceState !== 'finishing') { r.lapStart = now; return; }
     // During the formation lap this crossing is the START of the race, not a lap.
     if (raceFormationLap) { endFormationLap(); return; }
+    const warFinishing = raceState === 'finishing';
     if (r.lapStart !== null) {
       const ms = now - r.lapStart, offs = r.offLap || 0;
       r.laps.push({ lap: r.laps.length + 1, ms, off: offs });
@@ -195,6 +197,19 @@
     }
     r.offLap = 0;
     r.lapStart = now;
+    // DIE ZIELFLAGGE, wenn kein Fahrer im Feld ist.
+    //
+    // raceClockTick() setzt bei erreichtem Limit 'finishing', aber finishRace() rief bis
+    // v0.4.55 nur playerLapCrossed(). Fahren NUR Ghosts, gibt es niemanden, der die Flagge
+    // holt - das Rennen blieb fuer immer in 'finishing' stehen, mit "Letzte Runde" im HUD.
+    // Gemeldet als "wenn nur Ghosts ein Rennen fahren, hoeren sie nach den max Runden nicht
+    // auf".
+    //
+    // NUR OHNE FAHRER, und das ist die Bedingung und keine Vorsicht: ist ein Auto auf
+    // "Steuern", darf die Flagge nicht fallen, weil ein Ghost zuerst ueber die Linie kommt -
+    // dann waere die angefangene Runde des Fahrers abgeschnitten. Mit Fahrer gilt weiter
+    // dessen Ueberfahrt, genau wie vorher.
+    if (warFinishing && !garage.some(c => c.role === 'player')) finishRace();
   }
 
   // ---- Testtaste Q: eine Runde zaehlen, ohne sie zu fahren ----
@@ -718,8 +733,13 @@
     raceLapStart = Date.now();
     launchGhosts();   // green means green for everyone
     if (raceFormationLap) {
-      limitFormation = PIT_SPEED_FACTOR; applySpeedLimit();
-      showHudToast('Einführungsrunde');
+      // formationPace() und nicht PIT_SPEED_FACTOR: der Deckel muss zum Ziel des
+      // Autopiloten passen, sonst regelt der gegen eine Wand.
+      limitFormation = formationPace(); applySpeedLimit();
+      // Der Flaggenstreifen haengt sonst nur an Flaggenwechseln, und die Einfuehrungsrunde
+      // ist keiner - ohne diesen Aufruf faehrt das Auto von selbst und nichts sagt es.
+      updateFlagUi();
+      showHudToast(t('Einführungsrunde'));
     }
     raceStartedAt = Date.now();
     if (raceClockTimer) clearInterval(raceClockTimer);
@@ -1625,7 +1645,11 @@
       raceLapStart = now;
       // Die erste Runde ist nicht "die beste" - sie ist die einzige, und ein Bestzeit-Ton
       // beim ersten Mal nimmt ihm die Bedeutung fuer alle weiteren.
-      playLapChime(raceLapTimes.length > 1 && rundeMs < besteBisher);
+      const istBest = raceLapTimes.length > 1 && rundeMs < besteBisher;
+      playLapChime(istBest);
+      // Die Ansage NEBEN dem Ton und nicht statt ihm: der Ton kommt sofort, die Stimme
+      // braucht eine Sekunde. Wer sie abschaltet, hoert weiter, dass eine Runde voll ist.
+      speakLap(rundeMs, istBest);
       if (wasFinishing) finishRace();
       // Runde 0, nicht 1: das Feld steht auf der Startgeraden und ueberfaehrt Start/Ziel
       // erst am Ende der ersten Runde. Vor der ersten Ueberfahrt ist also noch keine Runde
@@ -2874,7 +2898,24 @@
   // Two beeps at ten per cent, one at twenty: the count carries the urgency, so the driver
   // does not have to look away from the track to learn which mark went by.
   const FUEL_WARNINGS = [{ pct: 20, beeps: 1 }, { pct: 10, beeps: 2 }];
-  function applyFuelAndDamage(throttle) {
+  // NUR NOCH DER VERBRAUCH, keine Drosselung mehr. Bis v0.4.55 gab diese Funktion am Ende
+  // fuelDamageDerate(throttle) zurueck, und der Aufrufer in sendControlValue schrieb das
+  // Ergebnis auf das AUSGEHENDE BYTE - nach der Physik.
+  //
+  // Der Kommentar bei fuelDamageDerate begruendete die Aufspaltung damit, dass die
+  // Drosselung "zweimal je Takt gefragt werden kann, ohne den Tank zweimal zu leeren".
+  // Genau das war der Fehler: zweimal gefragt heisst zweimal gedrosselt. physOutThrottle ist
+  // motorPWM, also simulierte Geschwindigkeit durch Hoechstgeschwindigkeit - wird der noch
+  // multipliziert, sagt das Byte etwas anderes als der Tacho. Dieselbe Fehlerklasse, die beim
+  // Gasfaktor schon aufgeschrieben ist.
+  //
+  // Jetzt drosselt nur physicsStep(), also VOR der Physik. Damit fallen Tempo, Drehzahl,
+  // Gang und Motorton von selbst mit - sie haengen alle an der simulierten Geschwindigkeit -
+  // und das Byte bleibt der Anteil, den der Tacho zeigt.
+  //
+  // Der Verbrauch bleibt unveraendert an derselben Groesse wie vorher: eine andere Bezugsgroesse
+  // haette die Tankreichweite still verschoben, und die ist gegen das Fahren eingestellt.
+  function fuelTankTick(throttle) {
     const now = Date.now();
     if (fuelLastTickTime !== null && pitState !== 'servicing') {
       const dt = Math.min(0.5, (now - fuelLastTickTime) / 1000);
@@ -2903,8 +2944,6 @@
     // Hand the tank level to the physics: the engine must not reach out for globals.
     physEngine.state.fuelLoad = Math.max(0, Math.min(1, fuel / 100));
     fuelLastTickTime = now;
-
-    return fuelDamageDerate(throttle);
   }
 
   // The derate ALONE, with no side effects, so it can be asked twice per tick without
@@ -2912,9 +2951,30 @@
   // RAW stick value into the simulation while this reduction only ever reached the car, so
   // an empty tank still read 200 km/h on the display and still set lap times as if nothing
   // were wrong. The car crawled, the simulation did not know.
-  function fuelDamageDerate(throttle) {
+  // Der Deckel, den ein leerer Tank aufs Gas legt, und die Zeitkonstante, mit der er
+  // zugeht. Ohne sie faellt die Gaseingabe in EINEM Takt von 1,0 auf 0,15 - das war der
+  // Sprung, der als "abrupt abbremsen" gemeldet war. Mit ihr geht das Gas ueber knapp zwei
+  // Sekunden zurueck: der Motor laeuft trocken, statt abgeschaltet zu werden, und die
+  // Simulation rollt von selbst aus.
+  //
+  // NUR IN EINE RICHTUNG langsam. Zugehen darf Zeit brauchen, Aufgehen nicht: nach dem
+  // Tanken muss das Gas sofort da sein, sonst faehrt man zwei Sekunden lang aus der Box,
+  // ohne zu wissen warum.
+  const FUEL_CUT_EMPTY = 0.15;
+  const FUEL_CUT_TAU = 0.6;
+  function fuelCutTarget() { return fuel <= 0 ? FUEL_CUT_EMPTY : 1; }
+
+  // `cut` ist ein ARGUMENT und kein Zustand hier drin: diese Funktion ist
+  // seitenwirkungsfrei, und das soll sie bleiben. Die Rampe laeuft in physicsStep(), also an
+  // der einzigen Stelle mit einem verlaesslichen dt. Waere sie hier, haette sie der
+  // Notlauf-Test verbogen - der ruft zweimal synchron hintereinander, und dort ist dt null.
+  //
+  // Ohne Argument gilt der Sofortwert. Damit sagt fuelDamageDerate(1) bei leerem Tank
+  // weiterhin genau FUEL_CUT_EMPTY, und der vorhandene Test prueft unveraendert weiter.
+  function fuelDamageDerate(throttle, cut) {
     let out = throttle;
-    if (fuel <= 0) out = Math.max(-0.15, Math.min(0.15, out));
+    const c = cut === undefined ? fuelCutTarget() : cut;
+    if (c < 1) out = Math.max(-c, Math.min(c, out));
     out *= 1 - (damage / 100) * 0.3;
     // Totalled: limp home. Deliberately still drivable so the car never strands itself
     // out on the track — a pit stop clears it.

@@ -20,6 +20,22 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="OmegaSim">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
+<!-- AUFRUFZAEHLER (GoatCounter). Ohne Cookies, ohne personenbezogene Daten; ein Satz
+     darueber steht im Lizenzblock auf der Startseite, denn ein stiller Zaehler neben
+     "unabhaengig, offen, ohne Gewaehr" waere der falsche Ton.
+
+     https:// UND NICHT //, obwohl die Vorlage von GoatCounter es protokollrelativ schreibt.
+     Diese App laeuft ausdruecklich auch von der Platte - "Start OmegaSim.bat", und
+     91-pwa.js prueft location.protocol darauf -, und dort loest // zu
+     file://gc.zgo.at/count.js auf. Das ist kein Ausfall des Zaehlers, sondern ein Zugriff
+     auf einen Ordner, den es nicht gibt. Und auffallen wuerde es nicht: der Verweispruefer
+     in build.py ueberspringt beide Formen.
+
+     Am Service Worker ist nichts zu tun. sw.js steigt bei fremder Herkunft aus, BEVOR es
+     antwortet, also faellt ohne Netz nur der Zaehler aus und die App startet weiter aus
+     dem Cache. async, damit er sich nie in den Aufbau des Cockpits einreiht. -->
+<script data-goatcounter="https://omegasim.goatcounter.com/count"
+        async src="https://gc.zgo.at/count.js"></script>
 <style>
   /* Palette inspired by the NART Ferrari 412P Le Mans livery: white body, deep navy
      stripe/roundel, thin pinstripe linework. Red is reserved for danger/stop states only. */
@@ -329,9 +345,6 @@
   .wip-tag { display: inline-block; font-size: 9.5px; letter-spacing: .1em;
     padding: 1px 5px; border-radius: 3px; vertical-align: 2px;
     background: #4a3c00; color: #ffd83d; font-weight: 700; }
-  /* Ausgegraut heisst hier wirklich gesperrt: der fliegende Start ist nicht umgesetzt. */
-  .opt-row.opt-off { opacity: .5 }
-  .opt-row.opt-off input, .row.opt-off input { pointer-events: none }
   /* Die Voraussetzungsliste auf der Startseite. Zwei Gruppen, unterschiedlich markiert:
      ein Haken heisst "muss stimmen", ein Plus heisst "Zugabe". Die Unterscheidung ist der
      ganze Zweck der Liste - eine einheitliche Aufzaehlung haette wieder nicht gesagt, was
@@ -616,7 +629,209 @@
        Untergrund derselbe, auch im Vollbild mit gedrehtem Schirm. */
     --gt3-line: rgba(255, 255, 255, .34);
     --gt3-line-soft: rgba(255, 255, 255, .16);
+    /* DIE ACHT GROESSEN, aus denen eine Cockpit-Ansicht besteht. Hier stehen die Werte der
+       Vorgabe ("GT3"); eine andere Ansicht setzt sie unter body[data-cockpit] um.
+       Nur diese acht, und das ist gemessen begruendet: der Cockpit-Teil hat 111 Regeln mit
+       50 verschiedenen Farbliteralen, aber die Ansicht erkennt man an der Blende, am
+       Schirmgrund, an der Tinte und am Deckglas - nicht an der Farbe des Tankbalkens. */
+    --gt3-ink: #eef2fa;
+    --gt3-screen: linear-gradient(180deg, #090d15 0%, #05070c 46%,
+                                          #04060a 74%, #070a12 100%);
+    --gt3-radius: 2px;
+    /* NONE als Vorgabe, obwohl der Kommentar bei den Ziffern vom Leuchten einer
+       selbstleuchtenden Anzeige spricht: eine Regel dafuer gab es nie, es ist bei der Absicht
+       geblieben. Der Token ist jetzt verdrahtet, aber die Vorgabe bleibt unveraendert - eine
+       Aenderung, die nach den ANSICHTEN gefragt war, soll das Aussehen der Vorgabe nicht
+       mitverschieben. Die beiden neuen Ansichten bringen ihr Leuchten selbst mit. */
+    --gt3-glow: none;
+    --gt3-scan: repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 1px,
+                                                rgba(0,0,0,0) 1px 3px);
+    --gt3-vignette: inset 0 0 clamp(14px, 5vw, 54px) rgba(0,0,0,.55);
+    /* DIE FLAECHEN, auf denen Text steht - je Flaeche ihre eigene Tinte. Ohne dieses Paar
+       geht eine helle Ansicht nicht: wird der Schirm weiss, muss die Tinte darauf dunkel
+       werden, waehrend die Tinte auf einem schwarzen Knopf weiss BLEIBEN muss. Eine einzige
+       Tintenfarbe kann beides nicht. */
+    --gt3-tile: linear-gradient(#101623, #0a0e17);
+    --gt3-tile-ink: #eef2fa;
+    --gt3-btn: #1f2a3d;
+    --gt3-btn-ink: #dce7fb;
+    --gt3-btn-hover: #2b3a55;
+    --gt3-lbl: #78849c;
+    --gt3-rpm-ink: #cfe0ff;
+    --gt3-ok: #46d17f;
+    --gt3-warn: #ffb02e;
+    --gt3-bad: #ff5252;
+    /* Der Fussstreifen und die Markenzeile: eigene Flaeche, weil sie in JEDER Ansicht dunkel
+       bleiben duerfen - ein Statusstreifen darf sich vom Schirm abheben. */
+    --gt3-strip: #0b0f18;
+    --gt3-strip-ink: #8b97ad;
+
+    /* DIESE VIER STANDEN BIS v0.5.4 IN DER .gt3-REGEL SELBST, und genau deshalb sahen die
+       Cockpit-Ansichten fast gleich aus. Ein Wert, den body[data-cockpit] setzt, wird nur
+       GEERBT - und Erben verliert gegen eine Deklaration am Element selbst. Gemessen war
+       --gt3-carbon in allen drei Ansichten bitgleich und die Blende ueberall 11/20 px, also
+       aenderte sich von neun Hintergrundschichten genau eine: die dunkelste.
+
+       Hier oben kann eine Ansicht sie umsetzen. Ueber hoehere Spezifitaet (body[data-cockpit]
+       .gt3) haette es auch funktioniert, aber die Falle waere stehen geblieben. */
+    /* Die Blende muss BREITER sein als eine Webeinheit. Bei 8 px war sie schmaler als
+       eine, und dann sieht man einen Verlaufsausschnitt und liest gebuerstetes Grau statt
+       Gewebe. Die Webeinheit ist die halbe Kachel, also 7 px - bei 11 bis 20 px Blende
+       passen ein-einhalb bis drei darueber, und ab etwa zwei liest man Stoff. */
+    --gt3-blende: clamp(11px, 2.8vw, 20px);
+    /* Die Webung. Eine Zeile weniger und die Blende ist wieder eine Farbflaeche. */
+    --gt3-carbon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='h' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%231a1a1a'/%3E%3Cstop offset='.25' stop-color='%23404040'/%3E%3Cstop offset='.5' stop-color='%231e1e1e'/%3E%3Cstop offset='.75' stop-color='%23454545'/%3E%3Cstop offset='1' stop-color='%23141414'/%3E%3C/linearGradient%3E%3ClinearGradient id='v' x1='0' y1='0' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23161616'/%3E%3Cstop offset='.25' stop-color='%233b3b3b'/%3E%3Cstop offset='.5' stop-color='%231a1a1a'/%3E%3Cstop offset='.75' stop-color='%23404040'/%3E%3Cstop offset='1' stop-color='%23101010'/%3E%3C/linearGradient%3E%3Cpattern id='w' width='12' height='12' patternUnits='userSpaceOnUse'%3E%3Crect width='12' height='12' fill='%23121212'/%3E%3Cpath d='M0 0h6v6H0zM6 6h6v6H6z' fill='url(%23h)'/%3E%3Cpath d='M6 0h6v6H6zM0 6h6v6H0z' fill='url(%23v)'/%3E%3Cpath d='M0 1h12M0 3h12M0 5h12M0 7h12M0 9h12M0 11h12' stroke='%23000' stroke-width='.4' opacity='.4'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='24' height='24' fill='url(%23w)'/%3E%3C/svg%3E");
+    /* Die vier Schrauben in den Blendenecken: heller Kopf, dunkler Sitz, aussen nichts.
+       Diese Zeile auf none gesetzt nimmt sie weg, ohne sonst etwas zu ruehren. */
+    --gt3-schraube: radial-gradient(circle at 50% 50%,
+      #7c8798 0 13%, #464f5e 13% 19%, #14181f 19% 25%, rgba(0,0,0,0) 25%);
   }
+  /* ============================ COCKPIT-ANSICHTEN ============================
+     Zwei Alternativen zur Vorgabe, ueber body[data-cockpit]. Sie setzen ausschliesslich die
+     acht Groessen aus :root um - keine Regel unten kennt die Ansicht, und keine Funktion
+     haengt daran. Der Umschalter traegt deshalb auch data-preset-skip: eine Voreinstellung
+     ist eine ABSTIMMUNG, und wie der Schirm aussieht, ist keine.
+
+     OLDSCHOOL, 1980er. Bernstein auf fast schwarz, wie eine Vakuumfluoreszenzanzeige: das
+     ist die Farbe, die Armaturen dieser Jahre wirklich hatten, weil gruene und bernsteinerne
+     Leuchtstoffe die haltbarsten waren. Dazu grobe Pixelzeilen mit 2 px Teilung statt 3 -
+     eine Roehre hatte sichtbare Zeilen -, ein deutliches Leuchten um die Ziffern, eine
+     staerkere Randabschattung (eine Roehre ist an den Ecken dunkler, nicht nur optisch) und
+     runde Ecken: Kunststoffblenden dieser Zeit waren gegossen und nicht gefraest.
+     Die Blende bekommt eine grobe Narbung statt Carbon - Carbon gab es an einem Serienauto
+     von 1985 nicht. */
+  body[data-cockpit="retro"] {
+    --gt3-ink: #ffb64a;
+    --gt3-screen: linear-gradient(180deg, #120b02 0%, #0a0600 50%, #080500 78%, #140c02 100%);
+    --gt3-radius: 10px;
+    --gt3-line: rgba(255, 182, 74, .38);
+    --gt3-line-soft: rgba(255, 182, 74, .17);
+    --gt3-glow: 0 0 8px rgba(255, 150, 40, .38);
+    --gt3-scan: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px,
+                                                rgba(0,0,0,0) 1px 2px);
+    --gt3-vignette: inset 0 0 clamp(18px, 7vw, 70px) rgba(0,0,0,.72);
+    --gt3-font: "Consolas", "DejaVu Sans Mono", "Courier New", monospace;
+    /* BREITER als die Vorgabe. Kunststoffblenden der 1980er waren dick und gegossen, nicht
+       gefraest - und die Blendenbreite ist die Groesse, an der man eine Ansicht am
+       schnellsten erkennt: sie ist rund vierzig Prozent der sichtbaren Flaeche. */
+    --gt3-blende: clamp(18px, 4.4vw, 30px);
+    /* Genarbter Kunststoff statt Gewebe: Carbon gab es an einem Serienauto von 1985 nicht.
+       Zwei Narbungen ueber Kreuz auf warmem Braunschwarz. */
+    --gt3-carbon:
+      repeating-linear-gradient(48deg, rgba(255,238,210,.05) 0 2px,
+                                       rgba(0,0,0,.11) 2px 5px),
+      repeating-linear-gradient(-40deg, rgba(255,238,210,.035) 0 3px,
+                                        rgba(0,0,0,.09) 3px 7px),
+      linear-gradient(180deg, #2a1e12, #16110b);
+    /* Messingfarbene Schraube auf braunem Kunststoff, statt Stahl auf Carbon. */
+    --gt3-schraube: radial-gradient(circle at 50% 50%,
+      #b39152 0 13%, #6b552c 13% 19%, #1a1409 19% 25%, rgba(0,0,0,0) 25%);
+  }
+
+  /* MODERN, 2000er - WEISSER SCHIRM. Die Generation, in der die Anzeige aufhoerte, eine
+     Roehre nachzumachen: heller Grund, schwarze Bedienflaechen, scharfe Kanten.
+
+     DAS PAAR TINTE/FLAECHE ist hier der ganze Punkt. Auf dem weissen Schirm muss die Tinte
+     DUNKEL sein, auf einem schwarzen Knopf muss sie WEISS bleiben - eine einzige Tintenfarbe
+     kann das nicht, und deshalb gibt es --gt3-ink fuer den Schirm und --gt3-tile-ink bzw.
+     --gt3-btn-ink fuer die Flaechen darauf.
+
+     DIE ZWEI INSTRUMENTE BEHALTEN IHREN DUNKLEN GRUND, und das ist keine Ausnahme, sondern
+     eine Entscheidung: das Regenradar und der G-Plot ZEICHNEN hell auf dunkel. Auf weiss
+     waeren sie unsichtbar, und sie umzufaerben hiesse, zwei Zeichenroutinen zu aendern - dann
+     waere es keine Ansicht mehr. Ein dunkler Instrumenteneinsatz in einem hellen Armaturen-
+     brett ist ausserdem gaengige Praxis, kein Notbehelf.
+
+     DIE FUNKTIONSFARBEN bleiben: Tank gruen, Schaden rot, gelbe Flagge gelb. Sie tragen eine
+     Bedeutung, und eine Ansicht darf das Aussehen aendern und nicht die Bedeutung. Auf weiss
+     sind sie ohnehin gut lesbar. */
+  body[data-cockpit="modern"] {
+    --gt3-ink: #12161d;
+    --gt3-screen: linear-gradient(180deg, #ffffff 0%, #f4f6f9 46%, #eef1f5 74%, #f8fafc 100%);
+    --gt3-radius: 0px;
+    /* Dunkle Linien: die weissen der Vorgabe sind auf weissem Grund unsichtbar. */
+    --gt3-line: rgba(18, 22, 29, .30);
+    --gt3-line-soft: rgba(18, 22, 29, .14);
+    --gt3-lbl: #5a6675;
+    /* Kein Leuchten. Ein Schein um dunkle Ziffern auf weiss liest sich als Unschaerfe. */
+    --gt3-glow: none;
+    --gt3-scan: repeating-linear-gradient(0deg, rgba(0,0,0,.018) 0 1px,
+                                                rgba(0,0,0,0) 1px 4px);
+    --gt3-vignette: inset 0 0 clamp(10px, 4vw, 34px) rgba(0,0,0,.10);
+    --gt3-blende: clamp(6px, 1.5vw, 10px);
+    --gt3-carbon:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.17) 0 1px,
+                                       rgba(0,0,0,.11) 1px 3px),
+      linear-gradient(180deg, #bcc4d0 0%, #909aa8 48%, #adb6c3 100%);
+    --gt3-schraube: radial-gradient(circle at 50% 50%,
+      #2a2f38 0 13%, #4b525e 13% 19%, rgba(0,0,0,.4) 19% 25%, rgba(0,0,0,0) 25%);
+    /* Schwarze Flaechen, weisse Schrift darauf. */
+    --gt3-tile: linear-gradient(#15191f, #0d1014);
+    --gt3-tile-ink: #ffffff;
+    --gt3-btn: #15191f;
+    --gt3-btn-ink: #ffffff;
+    --gt3-btn-hover: #262c35;
+    /* Gemessen und nachgezogen: hellblau auf weiss hatte Kontrast 1,33, das Bestzeit-Gruen
+       1,96. Gleicher Ton, dunklere Helligkeit. */
+    --gt3-rpm-ink: #24486e;
+    --gt3-ok: #0d7a41;
+    --gt3-warn: #8a5c00;
+    --gt3-bad: #c0272d;
+  }
+  /* Die zwei zeichnenden Instrumente: dunkler Einsatz, damit ihre hellen Linien stehen -
+     UND helle Tinte darin. Ohne die zweite Zeile erbt der Text die dunkle Schirmtinte und
+     steht dunkel auf dunkel: gemessen Kontrast 1,05 bei der Gierrate, also unsichtbar. */
+  body[data-cockpit="modern"] .gt3-gplot,
+  body[data-cockpit="modern"] .wx-radar {
+    background: #0d1014; border-radius: 2px; color: var(--gt3-tile-ink); }
+  body[data-cockpit="modern"] .gt3-gplot .gt3-lbl,
+  body[data-cockpit="modern"] .gt3-gplot .gt3-val { color: var(--gt3-tile-ink); }
+  body[data-cockpit="modern"] .gt3-gplot { padding: 3px; }
+
+  /* KLASSIKER - Walnuss und Chrom. Die vierte Ansicht, und die einzige, die nicht aus dem
+     Rennsport kommt: das Armaturenbrett eines Gran Turismo der Sechziger, wie es Jaguar,
+     Aston oder Maserati gebaut haben. Furnier, verchromte Ringe, cremefarbene Zifferblaetter
+     auf tiefem Schwarzbraun.
+
+     Warum sie hier steht: die anderen drei sprechen dieselbe Sprache - dunkler Schirm,
+     technische Schrift, Metall oder Kunststoff. Holz ist der eine Werkstoff, den keine davon
+     hat, und Creme auf Schwarzbraun ist warm, wo die anderen kuehl sind. Sie ist damit auf
+     einen Blick von allen dreien zu unterscheiden, und das war bei "Modern" gegen die Vorgabe
+     zuerst nicht so.
+
+     Das Furnier sind drei Schichten: eine grobe Faser laengs, eine feine quer dazu fuer den
+     Flader, und darunter der Farbverlauf des Holzes. Chrom ist ein harter Hell-Dunkel-Wechsel
+     mit einem hellen Kern - eine Politur hat KEINEN weichen Verlauf, sondern spiegelt. */
+  body[data-cockpit="klassiker"] {
+    --gt3-ink: #f3e7c6;
+    --gt3-screen: linear-gradient(180deg, #16110c 0%, #0d0a07 48%, #0a0806 76%, #14100b 100%);
+    --gt3-radius: 14px;
+    --gt3-line: rgba(243, 231, 198, .34);
+    --gt3-line-soft: rgba(243, 231, 198, .15);
+    --gt3-lbl: #a2947a;
+    --gt3-glow: 0 0 7px rgba(255, 226, 150, .26);
+    --gt3-scan: repeating-linear-gradient(0deg, rgba(0,0,0,.05) 0 1px,
+                                                rgba(0,0,0,0) 1px 4px);
+    --gt3-vignette: inset 0 0 clamp(16px, 6vw, 60px) rgba(0,0,0,.62);
+    --gt3-font: "Georgia", "Times New Roman", "Iowan Old Style", serif;
+    --gt3-blende: clamp(14px, 3.6vw, 26px);
+    --gt3-carbon:
+      repeating-linear-gradient(88deg, rgba(255,226,170,.10) 0 1px,
+                                       rgba(60,28,10,.24) 1px 4px),
+      repeating-linear-gradient(4deg, rgba(255,214,150,.055) 0 6px,
+                                      rgba(46,20,8,.20) 6px 15px),
+      linear-gradient(180deg, #6b3a17 0%, #43230d 52%, #5c3013 100%);
+    --gt3-schraube: radial-gradient(circle at 50% 50%,
+      #f2f5f8 0 9%, #9aa3ad 9% 15%, #d8dee6 15% 19%, #3a4048 19% 25%, rgba(0,0,0,0) 25%);
+    --gt3-tile: linear-gradient(#1b1409, #0e0a05);
+    --gt3-tile-ink: #f3e7c6;
+    --gt3-btn: #2b1d0c;
+    --gt3-btn-ink: #f3e7c6;
+    --gt3-btn-hover: #3d2a13;
+    --gt3-strip: #120d07;
+    --gt3-strip-ink: #a2947a;
+  }
+
   #tab-race { position: relative; }
   /* CARBON-BLENDE UND GLASSCHIRM.
 
@@ -641,30 +856,30 @@
      Webung. Der Schirm ist auf die padding-box beschnitten, also zeigen sich Lack und
      Schrauben nur im Ring. */
   .gt3 {
-    /* Die Blende muss BREITER sein als eine Webeinheit. Bei 8 px war sie schmaler als
-       eine, und dann sieht man einen Verlaufsausschnitt und liest gebuerstetes Grau statt
-       Gewebe. Die Webeinheit ist die halbe Kachel, also 7 px - bei 11 bis 20 px Blende
-       passen ein-einhalb bis drei darueber, und ab etwa zwei liest man Stoff. */
-    --gt3-blende: clamp(11px, 2.8vw, 20px);
     /* UNTEN breiter. Ein echtes Gehaeuse ist nicht rundum gleich stark: unten sitzt die
        Befestigung, und dort ist Material. 1,9-fach, nicht 1,5 - bei 1,5 sieht es nach einem
-       Messfehler aus statt nach Absicht. */
+       Messfehler aus statt nach Absicht.
+
+       UND SIE STEHT HIER UND NICHT IN :root, obwohl die Blendenbreite selbst dort steht.
+       Eine eigene Eigenschaft wird an dem Element AUSGERECHNET, an dem sie deklariert ist,
+       und der fertige Wert wird geerbt: in :root waere var(--gt3-blende) darin schon der
+       :root-Wert gewesen, bevor body[data-cockpit] ueberhaupt ins Spiel kommt. Gemessen war
+       die untere Blende dann in allen drei Ansichten 20 px, waehrend die obere 11 / 18 / 6
+       folgte.
+
+       Die Regel dahinter, fuer jedes weitere abgeleitete Token: ein STELLRAD gehoert nach
+       :root, damit eine Ansicht es umsetzen kann - ein ABGELEITETER Wert dorthin, wo sein
+       Eingang endgueltig ist. */
     --gt3-blende-u: calc(var(--gt3-blende) * 1.9);
-    /* Die Webung. Eine Zeile weniger und die Blende ist wieder eine Farbflaeche. */
-    --gt3-carbon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='h' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%231a1a1a'/%3E%3Cstop offset='.25' stop-color='%23404040'/%3E%3Cstop offset='.5' stop-color='%231e1e1e'/%3E%3Cstop offset='.75' stop-color='%23454545'/%3E%3Cstop offset='1' stop-color='%23141414'/%3E%3C/linearGradient%3E%3ClinearGradient id='v' x1='0' y1='0' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23161616'/%3E%3Cstop offset='.25' stop-color='%233b3b3b'/%3E%3Cstop offset='.5' stop-color='%231a1a1a'/%3E%3Cstop offset='.75' stop-color='%23404040'/%3E%3Cstop offset='1' stop-color='%23101010'/%3E%3C/linearGradient%3E%3Cpattern id='w' width='12' height='12' patternUnits='userSpaceOnUse'%3E%3Crect width='12' height='12' fill='%23121212'/%3E%3Cpath d='M0 0h6v6H0zM6 6h6v6H6z' fill='url(%23h)'/%3E%3Cpath d='M6 0h6v6H6zM0 6h6v6H0z' fill='url(%23v)'/%3E%3Cpath d='M0 1h12M0 3h12M0 5h12M0 7h12M0 9h12M0 11h12' stroke='%23000' stroke-width='.4' opacity='.4'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='24' height='24' fill='url(%23w)'/%3E%3C/svg%3E");
-    /* Die vier Schrauben in den Blendenecken: heller Kopf, dunkler Sitz, aussen nichts.
-       Diese Zeile auf none gesetzt nimmt sie weg, ohne sonst etwas zu ruehren. */
-    --gt3-schraube: radial-gradient(circle at 50% 50%,
-      #7c8798 0 13%, #464f5e 13% 19%, #14181f 19% 25%, rgba(0,0,0,0) 25%);
     position: relative;
     border-style: solid; border-color: transparent;
     border-width: var(--gt3-blende) var(--gt3-blende) var(--gt3-blende-u);
-    border-radius: 2px; overflow: hidden;
+    border-radius: var(--gt3-radius); overflow: hidden;
     background-image:
       /* 1. Der Schirm. Kein flaches Schwarz: ein TFT wird von der Kante beleuchtet und ist
             dort eine Spur heller, und genau das unterscheidet eine Anzeige von einer
             Farbflaeche. */
-      linear-gradient(180deg, #090d15 0%, #05070c 46%, #04060a 74%, #070a12 100%),
+      var(--gt3-screen),
       /* 2. Der Klarlack ueber der Blende, ungetaktet, mit dunklem Gegenfeld - eine
             Spiegelung ohne Gegenlicht sieht nach Aufhellung aus und nicht nach Lack. */
       linear-gradient(118deg, rgba(255,255,255,.10) 0%, rgba(255,255,255,.015) 34%,
@@ -697,12 +912,12 @@
                      var(--gt3-blende) var(--gt3-blende-u),
                      100% var(--gt3-blende-u), auto, 14px 14px;
     background-position: 0 0, 0 0, 0 0, 100% 0, 0 100%, 100% 100%, 0 100%, 0 0, 0 0;
-    padding: clamp(5px, 1vw, 11px); color: #eef2fa; display: grid;
+    padding: clamp(5px, 1vw, 11px); color: var(--gt3-ink); display: grid;
     gap: clamp(4px, .8vw, 9px);
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1.15fr);
     grid-template-areas: "flag flag flag" "shift shift shift" "left gear right"
                          "strip strip strip" "banner banner banner"
-                         "foot foot foot" "toast toast toast"; }
+                         "foot foot foot" "toast toast toast" "marke marke marke"; }
 
   /* DAS DECKGLAS. Drei Dinge, die eine Anzeige von einer Farbflaeche unterscheiden, und
      alle drei sind Aussehen und keine Aussage:
@@ -739,8 +954,8 @@
       linear-gradient(122deg, rgba(255,255,255,.045) 0%, rgba(255,255,255,.008) 30%,
                               rgba(255,255,255,0) 52%, rgba(0,0,0,.10) 78%,
                               rgba(255,255,255,.022) 100%),
-      repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 1px, rgba(0,0,0,0) 1px 3px);
-    box-shadow: inset 0 0 clamp(14px, 5vw, 54px) rgba(0,0,0,.55),
+      var(--gt3-scan);
+    box-shadow: var(--gt3-vignette),
                 inset 0 1px 0 rgba(255,255,255,.05); }
   /* Eine selbstleuchtende Anzeige blueht. Eine Ziffer mit vollkommen scharfer Kante liest
      sich als Text auf Papier - das Leuchten ist der Unterschied, und es ist so schwach
@@ -867,14 +1082,14 @@
      stehen bleiben. Die antippbare Kachel bekommt ihre Oberkante jetzt ueber denselben
      Schatten, nur eine Spur heller als eine gewoehnliche Kachel. */
   .gt3-box.gt3-click, .gt3-box.pit-tile {
-    background: linear-gradient(#101623, #0a0e17);
+    background: var(--gt3-tile); color: var(--gt3-tile-ink);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16),
                 inset 0 -1px 0 rgba(0, 0, 0, .5); }
   /* Weiter gesperrt und etwas blasser: auf dem Vorbild ist die Beschriftung fast eine
      Unterschrift, die Zahl traegt die Aufmerksamkeit. .16em statt .1em, und die Farbe von
      #8b99b4 auf #78849c. */
   .gt3-lbl { font-size: clamp(7px, 1vw, 9.5px); letter-spacing: .16em;
-    text-transform: uppercase; color: #78849c; line-height: 1.3;
+    text-transform: uppercase; color: var(--gt3-lbl); line-height: 1.3;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* tabular-nums ist der Teil, der im Fahrbetrieb zaehlt: ohne ihn haben die Ziffern
      verschiedene Breiten, und eine Rundenzeit, deren Doppelpunkt bei jedem Zehntel wandert,
@@ -883,6 +1098,7 @@
      tiefer, weil darunter Raum bleibt. Bei 1.05 kleben Zahl und Balken aneinander. */
   .gt3-val { font-family: var(--gt3-font); font-weight: 700; line-height: 1.12;
     font-variant-numeric: tabular-nums; letter-spacing: .01em;
+    text-shadow: var(--gt3-glow);
     font-size: clamp(14px, 2.6vw, 27px); }
   .gt3-val.sm { font-size: clamp(11px, 1.8vw, 18px); }
   .gt3-val.big { font-size: clamp(20px, 4.2vw, 44px); }
@@ -898,7 +1114,7 @@
     line-height: .92; font-size: clamp(46px, 12vw, 118px); }
   .gt3-rpm { font-family: var(--gt3-font); font-weight: 700; text-align: center;
     font-variant-numeric: tabular-nums;
-    font-size: clamp(13px, 2.2vw, 24px); color: #cfe0ff; }
+    font-size: clamp(13px, 2.2vw, 24px); color: var(--gt3-rpm-ink); }
 
   /* Die drei Zeiten als Raster in einem Feld. Auf schmalen Schirmen untereinander mit
      Haarlinien, ab 560 px in einer Reihe - dort ist Breite da, und drei Zahlen neben-
@@ -1044,18 +1260,47 @@
   .gt3-foot {
     grid-area: foot; display: flex; flex-wrap: wrap; gap: clamp(6px, 1.6vw, 18px);
     align-items: baseline; padding: clamp(3px, .7vw, 7px) clamp(4px, 1vw, 10px);
-    background: #0b0f18; font-size: clamp(8px, 1.15vw, 11px); color: #8b97ad;
+    background: var(--gt3-strip); font-size: clamp(8px, 1.15vw, 11px);
+    color: var(--gt3-strip-ink);
     letter-spacing: .04em;
   }
   .gt3-foot b { font-family: monospace; color: #dbe3f0; font-weight: 700; }
   .gt3-foot i { font-style: normal; opacity: .75; }
   .gt3-foot-name { margin-left: auto; }
+  /* DIE MARKENZEILE, ganz unten am Schirm.
+     WARUM NICHT AUF DER ECHTEN BLENDE, denn dort gehoerte sie hin: .gt3 hat
+     overflow: hidden, und das schneidet Kinder an der INNENKANTE ab - die vier
+     Eckschrauben sind genau deshalb Hintergrundschichten und keine Elemente. Ein
+     Hintergrundbild kann man aber nicht anklicken, und ein Link, den man nicht treffen
+     kann, ist kein Link. Also die unterste Rasterzeile, mit derselben Carbonstruktur und
+     demselben Glanzrand, den die untere Blende benutzt: sie liest sich als Fortsetzung des
+     Gehaeuses und ist trotzdem erreichbar.
+     Wer es doch auf die Blende will, braucht overflow: clip mit
+     overflow-clip-margin: border-box - nur Chrome, was hier nichts kostet, weil Web
+     Bluetooth die App ohnehin auf Chrome festlegt. */
+  .gt3-marke {
+    grid-area: marke; display: flex; align-items: center; gap: 7px;
+    padding: clamp(3px, .7vw, 6px) clamp(4px, 1vw, 10px);
+    background: var(--gt3-carbon) 0 0 / 14px 14px repeat, var(--gt3-strip);
+    border-top: 1px solid rgba(255, 255, 255, .07);
+    font-size: clamp(8px, 1.1vw, 10.5px); letter-spacing: .06em;
+  }
+  .gt3-marke svg { width: 14px; height: 14px; flex: none; opacity: .85; }
+  .gt3-marke a { color: var(--info); text-decoration: none; font-weight: 600;
+    border-bottom: 1px solid rgba(90, 169, 255, .35); }
+  .gt3-marke a:hover { border-bottom-color: var(--info); }
+  .gt3-marke span { color: #6b7688; margin-left: auto; }
   #hud-toast-wrap {
     grid-area: toast; min-height: 0; padding: 0 clamp(4px, 1vw, 10px);
     color: #ffcf6e; font-family: monospace; font-size: clamp(9px, 1.3vw, 13px);
   }
   #hud-toast-wrap:empty, #hud-toast:empty { padding: 0; }
-  .gt3-ok { color: #46d17f; } .gt3-warn { color: #ffb02e; } .gt3-bad { color: #ff5252; }
+  /* FUNKTIONSFARBEN. Ihre Bedeutung ist fest - gruen gut, gelb Vorsicht, rot schlecht -,
+     ihre HELLIGKEIT nicht: auf weissem Grund ist ein helles Gruen unlesbar (gemessen
+     Kontrast 1,96). Eine Ansicht darf den Ton behalten und die Helligkeit anpassen; sie darf
+     nicht die Bedeutung anpassen. */
+  .gt3-ok { color: var(--gt3-ok); } .gt3-warn { color: var(--gt3-warn); }
+  .gt3-bad { color: var(--gt3-bad); }
   /* ABS as letters under the speed, not a number in a side box: grey means available-
      but-idle, red means it is intervening right now: a glance, not a reading. */
   .gt3-abs { font-family: monospace; font-weight: 800; letter-spacing: .14em;
@@ -1086,13 +1331,14 @@
   /* Touch controls on the dash. Big enough for a thumb, and they sit in the columns
      rather than floating, so nothing covers a reading. */
   .gt3-act { width: 100%; margin-top: 4px; padding: 9px 6px; border: 0; border-radius: 0;
-    background: #1f2a3d; color: #dce7fb; font-weight: 700; font-family: inherit;
+    background: var(--gt3-btn); color: var(--gt3-btn-ink); font-weight: 700;
+    font-family: inherit;
     font-size: clamp(10px, 1.6vw, 14px); letter-spacing: .04em; cursor: pointer;
     /* 44 statt 40: das sind die zwei Knoepfe, die man waehrend der Fahrt trifft, also
        gehoeren sie auf die volle Beruehrflaeche. Gilt fuer Boxenstopp UND gelbe Flagge,
        damit die beiden nicht unterschiedlich hoch nebeneinander stehen. */
     min-height: 44px; }
-  .gt3-act:hover { background: #2b3a55; }
+  .gt3-act:hover { background: var(--gt3-btn-hover); }
   .gt3-act.armed { background: #1c7a4d; color: #eafff1; }
   .gt3-act.warn { background: #b8860b; color: #100c02; }
   /* Eigene Klasse statt .warn: die trug ein dunkles Goldbraun (#b8860b), und eine gelbe
@@ -2054,6 +2300,7 @@
       <p>Dieses Projekt ist unabh&auml;ngig von Carrera und geh&ouml;rt zu keinem Hersteller. Der vollst&auml;ndige Quellcode steht unter der MIT-Lizenz auf GitHub.</p>
       <p>Jeder darf ihn nutzen, kopieren, ver&auml;ndern und auch in kommerzieller Software verwenden, solange der urspr&uuml;ngliche Urheberrechtsvermerk und der Lizenztext in der Kopie erhalten bleiben.</p>
       <p>Dieselbe Lizenz sagt aber auch: die Software kommt ohne Garantie und ohne Gew&auml;hrleistung. Du steuerst deine Autos auf eigene Gefahr. Es ist ein Freizeitprojekt, motiviert durch die Option, eine Pups-Hupe einzubauen &ndash; und m&ouml;glicherweise funktioniert es nach einem k&uuml;nftigen Firmware-Update nicht mehr.</p>
+      <p>Diese Seite z&auml;hlt Aufrufe mit GoatCounter, damit ich wei&szlig;, ob das Projekt jemand benutzt. Ohne Cookies, ohne Werbung und ohne personenbezogene Daten; wer den Z&auml;hler blockiert, verliert keine Funktion. Alles andere &ndash; Abstimmungen, Rundenzeiten, Streckenpl&auml;ne &ndash; bleibt im Browser und wird nirgends hingeschickt.</p>
       <p>F&uuml;r konstruktives Feedback oder Feature-W&uuml;nsche schreib mir gern im Thema &bdquo;Omega Sim&ldquo; im Carrera Hybrid Players Discord, unter &bdquo;weitere Themen&ldquo;.</p>
       <div class="home-legal-links">
         <a href="https://github.com/luuke42/omegasim" target="_blank"
@@ -2328,6 +2575,12 @@
         <span id="dash-offtrack">&ndash;</span>
         <span id="dash-vehicle-name" class="gt3-foot-name">nicht verbunden</span>
         <span id="dash-light-dmg" style="color:#ff5252"></span>
+      </div>
+      <div class="gt3-marke">
+        <svg viewBox="0 0 512 512" aria-hidden="true"><use href="#om" fill="#e6ecf7"/></svg>
+        <a href="https://t1p.de/omegasim" target="_blank" rel="noopener noreferrer"
+           data-i18n-skip>t1p.de/omegasim</a>
+        <span data-i18n-skip>OmegaSim</span>
       </div>
       <div class="gt3-banner" id="hud-toast-wrap"><span id="hud-toast"></span></div>
     </div>
@@ -3766,10 +4019,13 @@
         schluckt, kein splitterndes Glas.
       </p>
       <p class="muted" style="font-size:11.5px">
-        <b>Nicht jeder Klang in der App ist das.</b> Der Corvette-Motor und die Strecken-Ambience sind
+        <b>Nicht jeder Klang in der App ist das.</b> Die Strecken-Ambience und die sechs Hupen sind
         aus lizenzfreien Pixabay-Aufnahmen geschnitten, nicht gerechnet: die Pixabay-Lizenz
         erlaubt das, und es gab keinen Grund, nachzubauen, was eine gute Aufnahme schon liefert. Die
         unbearbeiteten Quelldateien sind nicht Teil des Repos, nur die geschnittenen Ableitungen.
+        Bei den Motoren gilt das seit v0.4.53 nicht mehr: dort sind inzwischen alle vierzehn
+        gerechnet, die zwei aufgenommenen sind mit dem Aufräumen herausgefallen. Dieser Absatz
+        nannte den Corvette-Motor bis v0.4.54 weiter eine Aufnahme.
         Vollständige Aufschlüsselung, Datei für Datei: <code>audio/CREDITS.md</code>.
       </p>
     </div>
@@ -3845,51 +4101,90 @@
 
       <h3 style="font-size:14px; margin:18px 0 6px 0">Motoren</h3>
       <p class="muted" style="font-size:11.5px">
-        Je Motor drei Drehzahlb&auml;nder, die nach Drehzahl &uuml;berblendet werden, und
+        Je Motor vier Drehzahlb&auml;nder, die nach Drehzahl &uuml;berblendet werden, und
         eine Schubschleife, die parallel dazu nach <em>Last</em> eingeblendet wird. Die
         Drehzahl in Klammern ist die Basis: dort klingt die Schleife unverstimmt.
+        Das untere Band ist in v0.4.55 dazugekommen, und der Grund ist gemessen: die
+        Abspielrate ist auf eine Oktave nach jeder Seite begrenzt, Leerlauf und Mittelband
+        lagen aber 2,2 Oktaven auseinander. Im unteren ersten Gang war deshalb immer
+        mindestens eine h&ouml;rbare Schleife am Anschlag und damit verstimmt &ndash; bei
+        5000/min trug das Leerlaufband noch 12 Prozent Gewicht bei einer Rate, die auf ein
+        Drittel des Verlangten geklemmt war. Das neue Band liegt beim geometrischen Mittel,
+        damit beide Spr&uuml;nge gleich gro&szlig; werden; gemessen ist danach kein h&ouml;rbares
+        Band mehr geklemmt.
       </p>
       <div class="snd-grid">
         <div class="snd-row"><audio controls preload="none" src="audio/p992gt3r_idle.ogg"></audio><div><b>Porsche 911 GT3 R (4.2 Boxer-6, Einzeldrosseln), Leerlauf (1200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/p992gt3r_low.ogg"></audio><div><b>Porsche 911 GT3 R (4.2 Boxer-6, Einzeldrosseln), Zwischenband (2569/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/p992gt3r_mid.ogg"></audio><div><b>Porsche 911 GT3 R (4.2 Boxer-6, Einzeldrosseln), Mittelband (5500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/p992gt3r_high.ogg"></audio><div><b>Porsche 911 GT3 R (4.2 Boxer-6, Einzeldrosseln), oberes Band (8800/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/p992gt3r_over.ogg"></audio><div><b>Porsche 911 GT3 R (4.2 Boxer-6, Einzeldrosseln), Schub (5500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/m4gt3_idle.ogg"></audio><div><b>BMW M4 GT3 (P58 3.0 Reihen-6, ohne Lader), Leerlauf (1300/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/m4gt3_low.ogg"></audio><div><b>BMW M4 GT3 (P58 3.0 Reihen-6, ohne Lader), Zwischenband (2364/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/m4gt3_mid.ogg"></audio><div><b>BMW M4 GT3 (P58 3.0 Reihen-6, ohne Lader), Mittelband (4300/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/m4gt3_high.ogg"></audio><div><b>BMW M4 GT3 (P58 3.0 Reihen-6, ohne Lader), oberes Band (7200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/m4gt3_over.ogg"></audio><div><b>BMW M4 GT3 (P58 3.0 Reihen-6, ohne Lader), Schub (4300/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/amggt3_idle.ogg"></audio><div><b>Mercedes-AMG GT3 (M159 6.2 V8, Cross-Plane), Leerlauf (1200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/amggt3_low.ogg"></audio><div><b>Mercedes-AMG GT3 (M159 6.2 V8, Cross-Plane), Zwischenband (2298/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/amggt3_mid.ogg"></audio><div><b>Mercedes-AMG GT3 (M159 6.2 V8, Cross-Plane), Mittelband (4400/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/amggt3_high.ogg"></audio><div><b>Mercedes-AMG GT3 (M159 6.2 V8, Cross-Plane), oberes Band (7700/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/amggt3_over.ogg"></audio><div><b>Mercedes-AMG GT3 (M159 6.2 V8, Cross-Plane), Schub (4400/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/f296gt3_idle.ogg"></audio><div><b>Ferrari 296 GT3 (F163CE 3.0 V6 120 Grad, ohne Lader), Leerlauf (1400/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/f296gt3_low.ogg"></audio><div><b>Ferrari 296 GT3 (F163CE 3.0 V6 120 Grad, ohne Lader), Zwischenband (2646/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/f296gt3_mid.ogg"></audio><div><b>Ferrari 296 GT3 (F163CE 3.0 V6 120 Grad, ohne Lader), Mittelband (5000/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/f296gt3_high.ogg"></audio><div><b>Ferrari 296 GT3 (F163CE 3.0 V6 120 Grad, ohne Lader), oberes Band (8000/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/f296gt3_over.ogg"></audio><div><b>Ferrari 296 GT3 (F163CE 3.0 V6 120 Grad, ohne Lader), Schub (5000/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/huracan_idle.ogg"></audio><div><b>Huracan GT3 EVO2 / R8 LMS (5.2 V10, Split-Pin), Leerlauf (1400/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/huracan_low.ogg"></audio><div><b>Huracan GT3 EVO2 / R8 LMS (5.2 V10, Split-Pin), Zwischenband (2750/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/huracan_mid.ogg"></audio><div><b>Huracan GT3 EVO2 / R8 LMS (5.2 V10, Split-Pin), Mittelband (5400/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/huracan_high.ogg"></audio><div><b>Huracan GT3 EVO2 / R8 LMS (5.2 V10, Split-Pin), oberes Band (8700/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/huracan_over.ogg"></audio><div><b>Huracan GT3 EVO2 / R8 LMS (5.2 V10, Split-Pin), Schub (5400/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/vantagegt3_idle.ogg"></audio><div><b>Aston Martin Vantage GT3 (M177 4.0 V8, ohne Lader), Leerlauf (1200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/vantagegt3_low.ogg"></audio><div><b>Aston Martin Vantage GT3 (M177 4.0 V8, ohne Lader), Zwischenband (2245/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/vantagegt3_mid.ogg"></audio><div><b>Aston Martin Vantage GT3 (M177 4.0 V8, ohne Lader), Mittelband (4200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/vantagegt3_high.ogg"></audio><div><b>Aston Martin Vantage GT3 (M177 4.0 V8, ohne Lader), oberes Band (7200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/vantagegt3_over.ogg"></audio><div><b>Aston Martin Vantage GT3 (M177 4.0 V8, ohne Lader), Schub (4200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/c6r_idle.ogg"></audio><div><b>Corvette C6.R (LS7.R 7.0 V8, Cross-Plane), Leerlauf (1100/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/c6r_low.ogg"></audio><div><b>Corvette C6.R (LS7.R 7.0 V8, Cross-Plane), Zwischenband (2098/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/c6r_mid.ogg"></audio><div><b>Corvette C6.R (LS7.R 7.0 V8, Cross-Plane), Mittelband (4000/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/c6r_high.ogg"></audio><div><b>Corvette C6.R (LS7.R 7.0 V8, Cross-Plane), oberes Band (7200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/c6r_over.ogg"></audio><div><b>Corvette C6.R (LS7.R 7.0 V8, Cross-Plane), Schub (4000/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/z06gt3r_idle.ogg"></audio><div><b>Corvette Z06 GT3.R (LT6.R 5.5 V8, Flat-Plane), Leerlauf (1300/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/z06gt3r_low.ogg"></audio><div><b>Corvette Z06 GT3.R (LT6.R 5.5 V8, Flat-Plane), Zwischenband (2600/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/z06gt3r_mid.ogg"></audio><div><b>Corvette Z06 GT3.R (LT6.R 5.5 V8, Flat-Plane), Mittelband (5200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/z06gt3r_high.ogg"></audio><div><b>Corvette Z06 GT3.R (LT6.R 5.5 V8, Flat-Plane), oberes Band (8600/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/z06gt3r_over.ogg"></audio><div><b>Corvette Z06 GT3.R (LT6.R 5.5 V8, Flat-Plane), Schub (5200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/mustang_idle.ogg"></audio><div><b>Ford Mustang GT3 (V8, Cross-Plane), Leerlauf (1200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/mustang_low.ogg"></audio><div><b>Ford Mustang GT3 (V8, Cross-Plane), Zwischenband (2163/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/mustang_mid.ogg"></audio><div><b>Ford Mustang GT3 (V8, Cross-Plane), Mittelband (3900/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/mustang_high.ogg"></audio><div><b>Ford Mustang GT3 (V8, Cross-Plane), oberes Band (7000/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/mustang_over.ogg"></audio><div><b>Ford Mustang GT3 (V8, Cross-Plane), Schub (3900/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/f1_2026_idle.ogg"></audio><div><b>Formel 1 2026 (1.6 V6 Turbo-Hybrid, 90 Grad), Leerlauf (4200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/f1_2026_low.ogg"></audio><div><b>Formel 1 2026 (1.6 V6 Turbo-Hybrid, 90 Grad), Zwischenband (2510/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/f1_2026_low2.ogg"></audio><div><b>Formel 1 2026 (1.6 V6 Turbo-Hybrid, 90 Grad), Zwischenband (4200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/f1_2026_mid.ogg"></audio><div><b>Formel 1 2026 (1.6 V6 Turbo-Hybrid, 90 Grad), Mittelband (8500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/f1_2026_high.ogg"></audio><div><b>Formel 1 2026 (1.6 V6 Turbo-Hybrid, 90 Grad), oberes Band (12500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/f1_2026_over.ogg"></audio><div><b>Formel 1 2026 (1.6 V6 Turbo-Hybrid, 90 Grad), Schub (8500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/gt40_idle.ogg"></audio><div><b>Ford GT40 Mk I (4.7 V8, Cross-Plane), Leerlauf (900/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/gt40_low.ogg"></audio><div><b>Ford GT40 Mk I (4.7 V8, Cross-Plane), Zwischenband (1944/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/gt40_mid.ogg"></audio><div><b>Ford GT40 Mk I (4.7 V8, Cross-Plane), Mittelband (4200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/gt40_high.ogg"></audio><div><b>Ford GT40 Mk I (4.7 V8, Cross-Plane), oberes Band (6500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/gt40_over.ogg"></audio><div><b>Ford GT40 Mk I (4.7 V8, Cross-Plane), Schub (4200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/lolat70_idle.ogg"></audio><div><b>Lola T70 Mk3B (Chevrolet 5.0 V8, Cross-Plane), Leerlauf (1000/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/lolat70_low.ogg"></audio><div><b>Lola T70 Mk3B (Chevrolet 5.0 V8, Cross-Plane), Zwischenband (2145/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/lolat70_mid.ogg"></audio><div><b>Lola T70 Mk3B (Chevrolet 5.0 V8, Cross-Plane), Mittelband (4600/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/lolat70_high.ogg"></audio><div><b>Lola T70 Mk3B (Chevrolet 5.0 V8, Cross-Plane), oberes Band (7000/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/lolat70_over.ogg"></audio><div><b>Lola T70 Mk3B (Chevrolet 5.0 V8, Cross-Plane), Schub (4600/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/f330p4_idle.ogg"></audio><div><b>Ferrari 330 P4 / 412P (4.0 V12, 60 Grad), Leerlauf (1400/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/f330p4_low.ogg"></audio><div><b>Ferrari 330 P4 / 412P (4.0 V12, 60 Grad), Zwischenband (2850/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/f330p4_mid.ogg"></audio><div><b>Ferrari 330 P4 / 412P (4.0 V12, 60 Grad), Mittelband (5800/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/f330p4_high.ogg"></audio><div><b>Ferrari 330 P4 / 412P (4.0 V12, 60 Grad), oberes Band (8200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/f330p4_over.ogg"></audio><div><b>Ferrari 330 P4 / 412P (4.0 V12, 60 Grad), Schub (5800/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/mc12_idle.ogg"></audio><div><b>Maserati MC12 (6.0 V12, 65 Grad), Leerlauf (1300/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/mc12_low.ogg"></audio><div><b>Maserati MC12 (6.0 V12, 65 Grad), Zwischenband (2674/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/mc12_mid.ogg"></audio><div><b>Maserati MC12 (6.0 V12, 65 Grad), Mittelband (5500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/mc12_high.ogg"></audio><div><b>Maserati MC12 (6.0 V12, 65 Grad), oberes Band (7800/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/mc12_over.ogg"></audio><div><b>Maserati MC12 (6.0 V12, 65 Grad), Schub (5500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
       </div>
       <p class="muted" style="font-size:11.5px">
         Vollst&auml;ndige Herkunftsangaben in <code>audio/CREDITS.md</code>.
@@ -4666,7 +4961,7 @@
                Eintrag und bleibt daher beim Sprachwechsel stehen, bis er sich das naechste
                Mal neu bildet - dann steht er richtig da. Veraltet, nicht falsch. -->
           <div class="muted">Status: <b data-i18n-skip id="race-status">Bereit</b></div>
-          <div class="muted" style="font-size:11.5px">L1: Bahn oder Ausdruck · R1: Automatik oder von Hand · Kreuz: gelbe Flagge (1 s halten) · Select: Rennen starten</div>
+          <div class="muted" style="font-size:11.5px">L1: Bahn oder Ausdruck · R1: Automatik oder von Hand · Kreuz: gelbe Flagge (1 s halten) · Select: Wetter umschalten</div>
           <div class="muted" id="race-lap-current-row" style="display:none">Aktuelle Runde: <b id="race-lap-current">-</b></div>
         </div>
       </div>
@@ -4725,23 +5020,38 @@
           <option value="3">3</option>
           <option value="4">4</option>
         </select></div>
-      <!-- Ausgegraut: nicht umgesetzt. Ein Ankreuzfeld, das man setzen kann und das
-           nichts bewirkt, ist eine Falschaussage der Oberflaeche - und dieses hier
-           versprach eine Einfuehrungsrunde, die es nicht gibt. -->
-      <div class="opt-row opt-off"><div class="opt-label">Fliegender Start
-          <span class="wip-tag">nicht umgesetzt</span>
-          <small>Einf&uuml;hrungsrunde mit Boxengassen-Tempo, frei beim ersten
-          &Uuml;berfahren von Start/Ziel. <b>Noch nicht gebaut</b> &ndash; der Schalter ist
-          deshalb gesperrt statt wirkungslos.</small></div>
-        <label class="tgl"><input type="checkbox" id="race-flying" disabled><span></span></label></div>
+      <!-- ENTSPERRT in v0.4.54. Die Sperre war laenger falsch als richtig: die
+           Einfuehrungsrunde stand vollstaendig im Code - Boxentempo ueber limitFormation,
+           das Schlaengeln der Ghosts, die Ampel am Rundenende, das Aufraeumen am Ziel -,
+           und nur das Ankreuzfeld sagte "nicht umgesetzt". Gefehlt hat genau eine Sache,
+           und die ist jetzt da: die Startaufstellung hatte keine Wirkung.
+           "experimentell" statt "nicht umgesetzt", weil es am Tisch mit mehreren Autos
+           noch nicht gefahren ist. -->
+      <div class="opt-row"><div class="opt-label">Fliegender Start
+          <span class="wip-tag">experimentell</span>
+          <small>Einf&uuml;hrungsrunde mit Boxengassen-Tempo. Dein Auto f&auml;hrt sie
+          selbst, genau wie die Ghosts: es rollt mit an, schl&auml;ngelt zum Reifenw&auml;rmen
+          und h&auml;lt die Seite seines Startplatzes, ohne dass du etwas anfassen musst
+          &ndash; die Bremse gilt trotzdem, damit du anhalten kannst, wenn vor dir jemand
+          steht. Im Cockpit steht dann &bdquo;Einf&uuml;hrungsrunde &middot;
+          Autopilot&ldquo;. Frei ist es beim ersten &Uuml;berfahren von Start/Ziel, von wem
+          auch immer &ndash; ein Ghost darf es sein. Danach f&auml;hrt jeder nach seinen
+          Einstellungen, und die Lenkung ist wieder deine. Nur in der Stellung
+          &bdquo;Auf der Bahn&ldquo;: im Ausdruck-Modus h&auml;lt sich das Auto nicht selbst
+          auf der Bahn, und ein Autopilot ohne Querregelung w&uuml;rde es in die
+          Bande fahren.</small></div>
+        <label class="tgl"><input type="checkbox" id="race-flying"><span></span></label></div>
 
       <div id="race-grid-wrap" style="display:none; margin-top:12px">
         <label class="small">Startaufstellung, ziehen oder mit den Pfeilen sortieren</label>
         <div id="race-grid"></div>
         <p class="muted" style="font-size:11.5px; margin:6px 0 0 0">
-          Die Autos fahren in dieser Reihenfolge los. Die Einf&uuml;hrungsrunde l&auml;uft mit
-          Boxengassen-Tempo; sobald das erste Auto Start/Ziel &uuml;berf&auml;hrt, ist das
-          Limit weg.
+          Zwei benachbarte Pl&auml;tze fahren in der Einf&uuml;hrungsrunde versetzt, also als
+          Zweierkolonne. Die Runde l&auml;uft mit Boxengassen-Tempo; sobald das erste Auto
+          Start/Ziel &uuml;berf&auml;hrt, ist das Limit weg. Aufstellen musst du von Hand
+          &ndash; ein Auto auf die Bahn setzen kann die App nicht. Dein eigenes Auto steht
+          mit in der Liste und verschiebt damit, auf welche Seite die Ghosts hinter dir
+          gehen.
         </p>
       </div>
 
@@ -4891,6 +5201,27 @@
       <button class="misc-back subpage-back" data-sub="">&larr; Einstellungen</button>
       <h2>Allgemein</h2>
 <div class="opt-head">Allgemein</div>
+      <div class="opt-row"><div class="opt-label">Cockpit-Ansicht<small>Nur das Aussehen des
+          Cockpit-Schirms &ndash; Anzeigen, Tasten und Physik bleiben, wie sie sind.
+          &bdquo;GT3&ldquo; ist die Vorgabe: Carbon und wei&szlig;e Schrift auf
+          Schwarz. &bdquo;Oldschool&ldquo; ist Bernstein auf Schwarz mit sichtbaren
+          Pixelzeilen, breiter Kunststoffblende und Messingschrauben, wie die
+          Vakuumfluoreszenz-Armaturen der 1980er. &bdquo;Modern&ldquo; ist ein wei&szlig;er
+          Schirm mit schwarzen Bedienfl&auml;chen und schmaler Alublende, wie die ersten
+          Farb-TFT der 2000er &ndash; Regenradar und G-Plot behalten dort ihren dunklen
+          Einsatz, weil sie hell auf dunkel zeichnen und auf Wei&szlig; unsichtbar w&auml;ren.
+          &bdquo;Klassiker&ldquo; ist Walnussfurnier mit Chromschrauben und cremefarbener
+          Schrift auf Schwarzbraun, wie das Armaturenbrett eines Gran Turismo der Sechziger.
+          Die Bedeutungsfarben bleiben in allen vier gleich: der Tankbalken ist gr&uuml;n und
+          der Schaden rot, auch in der Retro-Ansicht &ndash; eine Ansicht darf &auml;ndern,
+          wie es aussieht, nicht was eine Farbe sagt. Die Voreinstellungen fassen die Ansicht
+          nicht an.</small></div>
+        <select id="setting-cockpit" data-preset-skip>
+          <option value="gt3" selected>GT3 (Vorgabe)</option>
+          <option value="retro">Oldschool, 1980er</option>
+          <option value="modern">Modern, 2000er (hell)</option>
+          <option value="klassiker">Klassiker: Walnuss und Chrom</option>
+        </select></div>
       <div class="opt-row"><div class="opt-label">Scheinwerfer
           </div>
         <label class="tgl"><input type="checkbox" id="dash-head-toggle" checked><span></span></label></div>
@@ -4904,26 +5235,29 @@
       <div class="opt-row"><div class="opt-label">Physik-Modus aktivieren<small>Aus: rohe Stickstellung, ohne Gänge.</small></div><label class="tgl"><input type="checkbox" id="phys-enable" checked><span></span></label></div>
       
       <div class="opt-row"><div class="opt-label">Vibration
-          <small>R&uuml;ckmeldung im Controller bei Gangwechsel, ABS, Aufprall und im
-          Boxenstopp. Das Handy vibriert nicht mit, das Protokoll kennt daf&uuml;r
+          <small>R&uuml;ckmeldung im Controller bei Gangwechsel, ABS, Aufprall, im
+          Boxenstopp und neben der Bahn. Standard aus, weil nicht jeder Controller es kann und
+          ein Dauerbrummen im Gel&auml;nde Geschmackssache ist. Unabh&auml;ngig von der
+          Drosselung darunter. Das Handy vibriert nicht mit, das Protokoll kennt daf&uuml;r
           nichts.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-vibration" checked><span></span></label></div>
-      <!-- Direkt unter der Vibration, weil die eine Haelfte dieser Option daran haengt -
+        <label class="tgl"><input type="checkbox" id="setting-vibration"><span></span></label></div>
+      <!-- Direkt unter der Vibration, weil beide dieselbe Lage beschreiben - gekoppelt sind
+           sie seit v0.4.55 aber nicht mehr -
            und das steht auch im Kleintext. Ohne den Hinweis waere es die naechste
            Stellschraube, die scheinbar nichts tut. -->
-      <div class="opt-row"><div class="opt-label">Controllervibration und Drosselung
-          jenseits Fahrbahn
+      <div class="opt-row"><div class="opt-label">Drosselung jenseits der Fahrbahn
           <!-- Absichtlich OHNE <code> und <b> im Inneren: jedes davon teilt den Satz in
                einen eigenen Textknoten, und das Woerterbuch schlaegt Textknoten nach. Mit
                Auszeichnung zerfiel dieser Satz in fuenf Bruchstuecke, und jede spaetere
                Umformulierung haette alle fuenf Schluessel gleichzeitig gebrochen - sichtbar
                nur daran, dass im englischen Modus mitten im Satz Deutsch steht. -->
-          <small>Meldet Byte 12 den Wert 0x00, ist das Auto neben der Bahn: dann brummt
-          der Controller leicht und das Gas wird auf 45 % gedeckelt. Wirkt nur in der
-          Stellung &bdquo;Auf der
-          Bahn&ldquo;: im Ausdruck-Modus ist der Streckensensor aus und Byte 12 st&auml;nde
-          dauernd auf 0x00. Der Brummteil braucht zus&auml;tzlich den Schalter
-          &bdquo;Vibration&ldquo; dar&uuml;ber.</small></div>
+          <small>Meldet Byte 12 den Wert 0x00, ist das Auto neben der Bahn: dann wird das
+          Gas auf 45 % gedeckelt. Das leichte Brummen dazu h&auml;ngt allein am Schalter
+          &bdquo;Vibration&ldquo; dar&uuml;ber, dieser hier allein an der Drosselung
+          &ndash; bis v0.4.55 war es eine Option mit zwei H&auml;lften, und wer die
+          Drosselung abschaltete, verlor auch die R&uuml;ckmeldung. Wirkt nur in der Stellung
+          &bdquo;Auf der Bahn&ldquo;: im Ausdruck-Modus ist der Streckensensor aus und Byte 12
+          st&auml;nde dauernd auf 0x00.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-offtrack" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Drosselung abseits beginnt nach
           <small>So lange muss das Auto DURCHGEHEND abseits melden, bevor gedrosselt wird.
@@ -5066,6 +5400,27 @@
         </select></div>
       <div class="opt-row"><div class="opt-label">Daten des Layouts<small>Gerechnet und nicht eingetippt: die Nickgrenzen folgen aus der statischen Achslast und dem Verlagerungsanteil.</small></div>
         <div class="opt-val" id="layout-info" style="text-align:right;font-size:11.5px;line-height:1.5">&nbsp;</div></div>
+      <div class="opt-row"><div class="opt-label">Getriebe<small>Wieviele G&auml;nge und wie
+          weit sie auseinanderliegen. Steht hier und nicht unter &bdquo;Getriebe und
+          Fahrleistung&ldquo;, weil es dieselbe Art Aussage ist wie das Layout dar&uuml;ber:
+          welches Auto du f&auml;hrst. Wie du damit f&auml;hrst &ndash; von Hand oder
+          automatisch &ndash; steht weiter unten. Die Voreinstellungen fassen beides
+          absichtlich nicht an. Die Drehzahlgrenze bleibt, wo sie ist: die geh&ouml;rt zum
+          Motor und nicht zum Getriebe. Ge&auml;ndert werden Anzahl, Spreizung und
+          Schaltpunkte &ndash; und die Schaltzeit, und die ist der gr&ouml;&szlig;ere
+          Unterschied: 40 ms nahtlos gegen 350 ms Kulisse mit Kupplung. Acht G&auml;nge sind
+          F1-Reglement, sechs sequenzielle GT3-Standard, f&uuml;nf hatte das Transaxle des
+          412P. Welche Geschwindigkeit im dritten Gang liegt, ist eine Sch&auml;tzung aus der
+          Klasse.</small></div>
+        <select id="setting-gearbox" data-preset-skip>
+          <option value="gt3" selected>GT3, 6-Gang sequenziell</option>
+          <option value="f1">Formel 1, 8-Gang</option>
+          <option value="p412">Ferrari 412P, 5-Gang Transaxle</option>
+        </select></div>
+      <div class="opt-row"><div class="opt-label">Daten des Getriebes<small>Bis zu welchem
+          Tempo jeder Gang reicht. Gerechnet aus den &Uuml;bersetzungen und der
+          H&ouml;chstgeschwindigkeit, nicht eingetippt.</small></div>
+        <div class="opt-val" id="gearbox-info" style="text-align:right;font-size:11.5px;line-height:1.5">&nbsp;</div></div>
 
 <div class="opt-head">Fahrwerk</div>
       <div class="opt-row"><div class="opt-label">Gasfaktor
@@ -5151,7 +5506,7 @@
           zur stärker abgenutzten Seite, weil die weniger Querkraft erzeugt. Der
           Mittelwert bleibt derselbe: der Schalter macht nicht mehr Verschleiß, sondern
           ungleichen.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-tyre-asym"><span></span></label></div>
+        <label class="tgl"><input type="checkbox" id="setting-tyre-asym" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Reifendruck (bar)
           <small>Wenig Druck hei&szlig;t mehr Walkarbeit: schnellere Erw&auml;rmung, mehr
           Verschlei&szlig;, besserer Kaltgriff. Viel Druck umgekehrt. Jede Abweichung von
@@ -5247,6 +5602,34 @@
       <h2>Ton</h2>
 <div class="opt-head">Ton</div>
       <div class="opt-row"><div class="opt-label">Motorsound</div><label class="tgl"><input type="checkbox" id="sound-enable" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Motorton-Zus&auml;tze
+          <span class="wip-tag">WIP</span>
+          <small>Sechs mechanische Ger&auml;usche &uuml;ber dem Motorton, alle an diesem
+          einen Schalter &ndash; zum Vergleichen einfach ausschalten. Nichts davon ist eine
+          Aufnahme, alle sechs sind gerechnet und h&auml;ngen an Werten, die die Simulation
+          ohnehin f&uuml;hrt: die H&ouml;hen laufen mit der Last (ein Motor im Schub ist
+          dunkler und nicht nur leiser), am Begrenzer stottert die Z&uuml;ndung mit 28 Hz,
+          beim Gaswegnehmen knallt es im Auspuff, beim Hochschalten unter Last einmal
+          kr&auml;ftig, das Getriebe heult mit der Raddrehzahl statt mit der Motordrehzahl,
+          und die drei aufgeladenen Motoren bekommen ein Laderpfeifen samt Abblasen.
+          Wie stark ein Motor knallt, steht je Motor in den Tondaten &ndash; der Formel 1
+          mit Turbo knallt kaum, der Flat-Plane-V8 ohne Lader am meisten. Was hier
+          absichtlich NICHT drin ist: eine H&ouml;rposition. Cockpit gegen
+          Verfolgerkamera &auml;ndert nicht den Klang, sondern das Mischungsverh&auml;ltnis
+          von Auspuff, Ansaugung und Mechanik, und die stecken heute alle drei in einer
+          Schleife.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-engine-extras" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Rundenzeiten ansagen
+          <span class="wip-tag">experimentell</span>
+          <small>Nach jeder Runde die Zeit, und bei einer eigenen Bestzeit ein Wort dazu.
+          Gesprochen von der eingebauten Stimme des Browsers &ndash; kein Dienst, kein Netz,
+          nichts verl&auml;sst das Ger&auml;t. Absichtlich kurz gehalten, damit die Ansage
+          vor der n&auml;chsten Kurve fertig ist. Kommt eine zweite Runde herein, w&auml;hrend
+          noch geredet wird, bricht die alte Ansage ab: die Zeit der Gegenwart ist
+          wichtiger. Ob es &uuml;berhaupt spricht, h&auml;ngt an den Stimmen des Systems
+          &ndash; unter Windows sind sie lokal vorhanden, auf Android k&ouml;nnen sie fehlen.
+          Fehlt eine, steht das einmal im Protokoll und nicht bei jeder Runde.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Regen<small>Select oder W. Reifen kommen beim Boxenstopp passend.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-rain"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Strecken-Ambience<small>Vorbeifahrten, Regen, Donner.</small></div>
@@ -5265,7 +5648,7 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="rain-volume-val">25%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Reifenquietschen<small>Am Grenzbereich, im Stil von Gran Turismo: Lautst&auml;rke und Tonh&ouml;he laufen stetig mit der Querausnutzung des Reibkreises, Einsatz ab 85 Prozent. Es setzt absichtlich sp&auml;t ein &ndash; ein Quietschen, das bei jeder Kurve mitl&auml;uft, ist ein Dauerger&auml;usch und keine R&uuml;ckmeldung.</small></div>
+      <div class="opt-row"><div class="opt-label">Reifenquietschen<small>Am Grenzbereich, im Stil von Gran Turismo: Lautst&auml;rke und Tonh&ouml;he laufen stetig mit der Querausnutzung des Reibkreises, Einsatz ab 60 Prozent &ndash; also ab etwa 98 km/h bei vollem Lenkausschlag, ab 197 km/h bei halbem, und bei einem Viertel Ausschlag nie. Eine Haarnadel quietscht, eine lange schnelle Kurve nicht. Bis v0.4.55 stand die Schwelle bei 85 Prozent und war damit unerreichbar: gemessen kommt die Querausnutzung erst bei 265 km/h dorthin, weil der Lenkausschlag mit dem Tempo beschnitten wird. Es hat deshalb nie gequietscht.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="tyre-volume" min="0" max="1" step="0.05" value="0.35">
@@ -5281,9 +5664,12 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="brake-volume-val">30%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Motorsound-Profil<small>Die acht
-          oben sind aus Zylinderzahl, Kurbelwelle und Z&uuml;ndfolge gerechnet. Bei den
-          aufgeladenen Originalen fehlt der Lader.</small></div>
+      <div class="opt-row"><div class="opt-label">Motorsound-Profil<small>Alle sind aus
+          Zylinderzahl, Kurbelwelle, Bankaufteilung und Z&uuml;ndfolge gerechnet &ndash;
+          keiner ist eine Aufnahme. Bei den aufgeladenen Originalen fehlt der Lader. Die vier
+          historischen sind noch nicht nach Geh&ouml;r gepr&uuml;ft; beim Maserati kommt
+          dazu, dass dieses Modell den Bankwinkel gar nicht darstellt, weshalb er sich vom
+          Ferrari-V12 nur in Drehzahl und Rohrl&auml;nge unterscheidet.</small></div>
         <select id="sound-profile">
           <optgroup label="GT3 und GT-Rennmotoren">
           <option value="amggt3">Mercedes-AMG GT3: V8, Cross-Plane</option>
@@ -5298,6 +5684,12 @@
           </optgroup>
           <optgroup label="Formel 1">
           <option value="f1_2026">Formel 1 2026: V6 Turbo-Hybrid, 1,6 l</option>
+          </optgroup>
+          <optgroup label="Historische Rennwagen (WIP)">
+          <option value="gt40">Ford GT40 Mk I: V8, Cross-Plane, 4,7 l</option>
+          <option value="lolat70">Lola T70 Mk3B: Chevrolet-V8, Cross-Plane</option>
+          <option value="f330p4">Ferrari 330 P4 / 412P: V12, 60 Grad</option>
+          <option value="mc12">Maserati MC12: V12, 65 Grad</option>
           </optgroup>
         </select></div>
       <div class="opt-row"><div class="opt-label">Motorlautstärke</div>
@@ -5484,7 +5876,7 @@
 <div class="opt-head">Autonome Gegner</div>
       <div class="opt-row"><div class="opt-label">Ghost: Leitplanken-Modus<small>Das Auto hält sich selbst auf der Bahn, der Ghost gibt nur Gas.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-rail" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost-Tempo<small><span class="wip-tag">NEU</span> Rundentempo der autonomen Autos. Gefahren brauchbar zwischen 40 und 60 Prozent. Der Regler beginnt bei 35 und nicht tiefer: darunter f&auml;hrt das Auto so langsam, dass es die gedruckte Strecke nicht mehr zuverl&auml;ssig &bdquo;liest&ldquo; &ndash; und dann fallen Vorausblick, Ideallinie und Kurvendrosselung alle drei aus.</small></div>
+      <div class="opt-row"><div class="opt-label">Ghost-Tempo<small>Rundentempo der autonomen Autos. Gefahren brauchbar zwischen 40 und 60 Prozent. Der Regler beginnt bei 35 und nicht tiefer: darunter f&auml;hrt das Auto so langsam, dass es die gedruckte Strecke nicht mehr zuverl&auml;ssig &bdquo;liest&ldquo; &ndash; und dann fallen Vorausblick, Ideallinie und Kurvendrosselung alle drei aus.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-speed" min="0.35" max="1" step="0.05" value="0.45">
@@ -5499,7 +5891,7 @@
           <span class="opt-val" id="ghost-curve-val">15%</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Rennw&uuml;rze
-          <small><span class="wip-tag">NEU</span> Tagesform, Fehler, Windschatten, &Uuml;berholen, Gummiband und Abstand halten &ndash; ein Regler f&uuml;r alle sechs. Ein &Uuml;berholvorgang l&auml;uft als Sequenz: erst zur Seite, dann Schub, dann vorne wieder einordnen, und wenn es nach 5&nbsp;s nicht geklappt hat, Abbruch mit 6&nbsp;s Sperre. Ohne diesen Abbruch klebte der Verfolger neben dem anderen, bis die Uhr ablief, und genau dort ber&uuml;hren sie sich. Der Mindestabstand rechnet ausserdem mit der Ann&auml;herungsrate statt mit einem festen Kachelabstand. Auf 0 ist jeder der sechs Bausteine wirkungslos.</small></div>
+          <small>Tagesform, Fehler, Windschatten, &Uuml;berholen, Gummiband und Abstand halten &ndash; ein Regler f&uuml;r alle sechs. Ein &Uuml;berholvorgang l&auml;uft als Sequenz: erst zur Seite, dann Schub, dann vorne wieder einordnen, und wenn es nach 5&nbsp;s nicht geklappt hat, Abbruch mit 6&nbsp;s Sperre. Ohne diesen Abbruch klebte der Verfolger neben dem anderen, bis die Uhr ablief, und genau dort ber&uuml;hren sie sich. Der Mindestabstand rechnet ausserdem mit der Ann&auml;herungsrate statt mit einem festen Kachelabstand. Auf 0 ist jeder der sechs Bausteine wirkungslos.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-spice" min="0" max="1" step="0.05" value="0.4">
@@ -5527,14 +5919,14 @@
           beh&auml;lt sie nur, wenn die Runde schneller war <b>und</b> kein Abgang dabei.
           Nach einem Abgang wird zur&uuml;ckgenommen und vorsichtiger weiterprobiert.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-learn-pace"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: seitlicher Versatz <span class="wip-tag">WIP</span><small><span class="wip-tag">NEU</span> Zwei Autos nebeneinander gehen auseinander, und beim &Uuml;berholen weicht auch der Vorausfahrende aus, zur anderen Seite. Zwei Autos auf 25&nbsp;cm Bahnbreite brauchen beide H&auml;lften. Dieser Regler bestimmt auch, wie weit der Angreifer zur Seite geht: das ist ein Ausweichen und keine Linienwahl, h&auml;ngt also nicht an der Ideallinie.</small></div>
+      <div class="opt-row"><div class="opt-label">Ghost: seitlicher Versatz <span class="wip-tag">WIP</span><small>Zwei Autos nebeneinander gehen auseinander, und beim &Uuml;berholen weicht auch der Vorausfahrende aus, zur anderen Seite. Zwei Autos auf 25&nbsp;cm Bahnbreite brauchen beide H&auml;lften. Dieser Regler bestimmt auch, wie weit der Angreifer zur Seite geht: das ist ein Ausweichen und keine Linienwahl, h&auml;ngt also nicht an der Ideallinie.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-lateral" min="0" max="1" step="0.1" value="0.5">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-lateral-val">50%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: eigene Spuren <span class="wip-tag">experimentell</span><small><span class="wip-tag">NEU</span> Jeder Ghost h&auml;lt eine eigene, feste Linie &uuml;ber die Bahnbreite. Auf der Geraden gilt die Spur, in der Kurve die Ideallinie &ndash; so f&auml;hrt das Feld hintereinander, aber auf verschiedenen Linien, und sucht im Bogen trotzdem den Scheitel. Der &Uuml;bergang l&auml;uft mit 350&nbsp;ms nach, damit an der Kachelgrenze kein Ruck entsteht. In der Kurve bleibt die halbe Spur stehen: alle auf denselben Scheitel zu schicken w&auml;re realistisch, w&uuml;rde sie aber zusammenf&uuml;hren, und Ber&uuml;hrungen sind ohne R&uuml;ckmeldung zur Querlage nicht zur&uuml;ckzuregeln.</small></div>
+      <div class="opt-row"><div class="opt-label">Ghost: eigene Spuren <span class="wip-tag">experimentell</span><small>Jeder Ghost h&auml;lt eine eigene, feste Linie &uuml;ber die Bahnbreite. Auf der Geraden gilt die Spur, in der Kurve die Ideallinie &ndash; so f&auml;hrt das Feld hintereinander, aber auf verschiedenen Linien, und sucht im Bogen trotzdem den Scheitel. Der &Uuml;bergang l&auml;uft mit 350&nbsp;ms nach, damit an der Kachelgrenze kein Ruck entsteht. In der Kurve bleibt die halbe Spur stehen: alle auf denselben Scheitel zu schicken w&auml;re realistisch, w&uuml;rde sie aber zusammenf&uuml;hren, und Ber&uuml;hrungen sind ohne R&uuml;ckmeldung zur Querlage nicht zur&uuml;ckzuregeln.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-lanes" min="0" max="1" step="0.05" value="0.5">
@@ -6021,7 +6413,7 @@
      kosten. Im Vollbild ist sie ausgeblendet. -->
 <footer id="app-footer">
   <span class="foot-left">
-    <span class="foot-ver">v<span id="app-version">0.4.53</span></span>
+    <span class="foot-ver">v<span id="app-version">0.5.7</span></span>
     <span class="foot-dim foot-brand" data-i18n-skip>OmegaSim &middot; MIT</span>
     <!-- Zur Klarstellung, und weil "Carrera" im ganzen Projekt vorkommt: das hier ist ein
          unabhaengiges Hobbyprojekt. Kein Firmenzeichen, keine Genehmigung, keine

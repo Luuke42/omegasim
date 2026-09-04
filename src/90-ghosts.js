@@ -1176,6 +1176,74 @@
   // Amplitude of the formation-lap weave, as a fraction of full lock. Small on purpose:
   // it should read as warming tyres, not as a car out of control.
   const GHOST_WEAVE = 0.22;
+  // Der Versatz der Zweierkolonne, in derselben Einheit wie das Schlaengeln: ein Anteil des
+  // vollen Lenkeinschlags. Etwas kleiner als die Schlaengelamplitude, damit die beiden
+  // Bewegungen sich nicht aufheben - zusammen bleiben sie unter 0,4, also weit vom Anschlag.
+  //
+  // Er darf deutlicher ausfallen als der Versatz gegen das Rammen bei voller Fahrt: in der
+  // Einfuehrungsrunde geht es mit Boxentempo zu, und dort verzeiht ein seitlicher Versatz
+  // mehr.
+  const GHOST_GRID_OFFSET = 0.16;
+  // DIE LESESCHWELLE. Unter diesem Anteil der Hoechstgeschwindigkeit faehrt das Auto so
+  // langsam, dass es die gedruckte Strecke nicht mehr zuverlaessig liest - dann meldet Byte
+  // 12 nur noch 0x00, der Vorausblick faellt aus, und der Abgangsmelder haelt das fuer "Bahn
+  // verlassen". Genau darum beginnt der Temporegler bei 0,35 und nicht tiefer.
+  //
+  // Als Konstante, weil sie jetzt an ZWEI Stellen gilt: beim Regler (dessen min im Markup
+  // steht) und beim Formationstempo. Dort fehlte sie, und das war der Fehler.
+  const GHOST_READ_MIN = 0.35;
+  // Das Tempo der Einfuehrungsrunde. NICHT einfach das Boxentempo: 80 km/h sind 0,271 von
+  // 295, also unter der Leseschwelle. Ein Feld, das dort rollt, liest nichts mehr, parkt sich
+  // selbst - gemeldet als "sie fahren nicht richtig los und fangen an zu blinken" - und die
+  // Runde koennte gar nicht enden, denn ihr Ende ist eine Ueberfahrt von Start/Ziel, und die
+  // muss gelesen werden.
+  //
+  // Das Maximum von beiden ist damit keine Bequemlichkeit, sondern die Bedingung dafuer, dass
+  // die Einfuehrungsrunde ueberhaupt zu Ende geht.
+  function formationPace() {
+    return Math.max(PIT_SPEED_FACTOR, GHOST_READ_MIN);
+  }
+
+  // Der Startplatz eines Autos, oder -1 fuer "steht nicht in der Aufstellung". Als Funktion,
+  // weil ihn jetzt zwei Stellen brauchen: startGhost() und das Auto des Fahrers. Zwei
+  // Abschriften von indexOf(String(car.device.id)) waeren die naechste Abweichung.
+  function gridPosOf(car) {
+    if (!car || !car.device || typeof raceGridOrder === 'undefined') return -1;
+    return raceGridOrder.indexOf(String(car.device.id));
+  }
+
+  // Der Querversatz in der Einfuehrungsrunde: Schlaengeln zum Reifenwaermen plus die Seite
+  // der Zweierkolonne.
+  //
+  // EINE DEFINITION FUER BEIDE. Seit v0.4.54 faehrt auch das Auto des Fahrers diese Runde
+  // selbst, und die zwei Konstanten duerfen nicht an zwei Orten stehen - sonst schlaengelt
+  // das Feld anders als der Fahrer, und niemand sieht, warum.
+  //
+  // `halter` traegt nur die Phase, damit das Feld nicht als ein Block schwingt: fuer einen
+  // Ghost ist das sein Ghost-Zustand, fuer den Fahrer ein eigenes Objekt. Er wird beim
+  // ersten Aufruf gesetzt und nicht im Konstruktor - ein Auto, das nie in einer
+  // Einfuehrungsrunde faehrt, braucht keine Phase.
+  function formationOffset(halter, gridPos, now) {
+    if (halter.weavePhase === undefined) halter.weavePhase = Math.random() * 6.283;
+    let v = Math.sin(now / 700 + halter.weavePhase) * GHOST_WEAVE;
+    if (gridPos >= 0) v += (gridPos % 2 ? -1 : 1) * GHOST_GRID_OFFSET;
+    return v;
+  }
+
+  // Was das Auto des Fahrers quer tut, waehrend es die Einfuehrungsrunde selbst faehrt.
+  // Gerufen aus physicsStep() in 50-drive.js.
+  //
+  // NUR SCHLAENGELN UND KOLONNE, keine Ideallinie. Das ist kein Nachlassen, sondern
+  // dieselbe Wahl, die ein Ghost trifft: er sendet Lenkung null und laesst das Auto die
+  // Arbeit machen, weil es sich in der Leitplanken-Stellung selbst auf der Bahn haelt. Der
+  // Versatz ist ein kleiner Anstoss auf diese Null. Das Linienmodell der Ghosts haengt an
+  // ihrem Kachelzustand in car.ghost, den das Fahrerauto nicht hat - und in einer
+  // Einfuehrungsrunde geht es ohnehin ums Rollen in Formation und nicht um die Ideallinie.
+  const formationFahrer = {};
+  function formationDriverOffset() {
+    const car = garage.find(c => c.role === 'player');
+    return formationOffset(formationFahrer, gridPosOf(car), Date.now());
+  }
   const GHOST_OFFTRACK_MS = 1500;   // measured: tiles last 0.4-2.7 s with no 0xff between
   // Wie lange 0x00 stehen muss, bevor der Ghost anhaelt. Vorher hielt ein EINZIGES 0x00-Paket
   // ihn sofort an, und das war die Ursache dafuer, dass Ghosts unterwegs stehen blieben.
@@ -1772,13 +1840,21 @@
       // ein Auto, das von selbst Gas gibt, ohne dass das irgendwo steht, sieht beim ersten
       // Mal wie ein durchgehendes Auto aus.
       //
-      // Die Bedingung ist dieselbe wie in autopilotYellow(), und dass sie zweimal steht,
-      // ist der Preis dafuer, dass die Anzeige in einer anderen Datei liegt als die
-      // Regelung. Waeren es drei Stellen, gehoerte eine Funktion daraus.
-      const apAn = flagState === 'yellow' && trackMode === 'on';
-      el.textContent = flagState === 'yellow' ? (apAn ? 'GELB · AUTOPILOT' : 'GELB')
-                     : flagState === 'restart' ? 'ANFAHRT' : '';
-      el.style.display = flagState === 'green' ? 'none' : '';
+      // DIE BEDINGUNG STAND HIER ABGESCHRIEBEN, mit dem Vermerk: waeren es drei Stellen,
+      // gehoerte eine Funktion daraus. Mit der Einfuehrungsrunde sind es drei, also fragt
+      // die Anzeige jetzt die Regelung - autopilotGrund() in 50-drive.js, direkt gerufen,
+      // weil Funktionsdeklarationen ueber den einen Skriptblock hinweg hochgezogen werden
+      // und 50 ohnehin vor 90 gebaut wird.
+      //
+      // Und die Einfuehrungsrunde steht MIT DRIN, aus demselben Grund, der schon fuer Gelb
+      // aufgeschrieben war: ein Auto, das von selbst Gas gibt, ohne dass das irgendwo steht,
+      // sieht beim ersten Mal wie ein durchgehendes Auto aus.
+      const grund = autopilotGrund();
+      el.textContent = flagState === 'yellow' ? (grund === 'yellow' ? 'GELB · AUTOPILOT' : 'GELB')
+                     : flagState === 'restart' ? 'ANFAHRT'
+                     : grund === 'formation' ? 'EINFÜHRUNGSRUNDE · AUTOPILOT'
+                     : raceFormationLap ? 'EINFÜHRUNGSRUNDE' : '';
+      el.style.display = el.textContent ? '' : 'none';
     }
   }
 
@@ -1840,6 +1916,26 @@
   const SPICE_ATTACK_MS = 2600;
   const SPICE_ATTACK_ARM_MS = 900;  // so lange muss man kleben, bevor es losgeht
   const SPICE_ATTACK_P = 0.45;      // und dann wird gewuerfelt, sonst ist es kein Rennen
+  // WIE NAH "in Reichweite" ist, und das MUSS ueber SPICE_GAP_MIN liegen.
+  //
+  // Vorher stand hier 0,9 als Zahl im Code, waehrend der Abstandhalter ab 0,7 lupft (plus
+  // Zuschlag beim Annaehern). Das Angriffsfenster war damit 0,2 Kacheln breit, und der
+  // Abstandhalter druckte den Verfolger genau daraus heraus - er pendelte um 0,8, wurde
+  // gelupft, fiel zurueck, und eine Attacke kam fast nie zustande. Zwei Regeln, die
+  // dasselbe Band bestreiten.
+  //
+  // 1,3 loest es an der richtigen Stelle: der Abstandhalter sagt weiter "nicht kleben", die
+  // Attacke sagt "du bist in Reichweite". Waehrend einer Attacke ist der Abstandhalter aus,
+  // der Verfolger darf also heran - genau dafuer ist die Ausnahme dort.
+  const SPICE_ATTACK_RANGE = 1.3;
+  // WIE OFT gewuerfelt wird. Vorher alle 4000 ms: bei Wuerze 0,4 ist die
+  // Wahrscheinlichkeit 0,18 je Versuch, also eine Attacke pro 22 Sekunden durchgehenden
+  // Klebens. Das liest sich nicht als Rennen, sondern als Kolonne.
+  //
+  // 1200 ms ergeben bei Wuerze 0,4 eine Wartezeit von 6,7 Sekunden und bei voller Wuerze
+  // 2,7 - oft genug, um es zu sehen, selten genug, dass es nicht im Sekundentakt zerrt. Die
+  // Wahrscheinlichkeit selbst bleibt, damit die Wuerze weiter der eine Regler ist.
+  const SPICE_ATTACK_RETRY_MS = 1200;
   const SPICE_ATTACK_GAIN = 0.07;
   // ERST AUSWEICHEN, DANN BESCHLEUNIGEN. Vorher kamen Seitenversatz und Temposchub
   // gleichzeitig, also schob der Angreifer, solange er noch genau hinter dem anderen lag -
@@ -2008,7 +2104,7 @@
     }
 
     // 4. Attacke
-    if (ah && ah.gap <= 0.9) {
+    if (ah && ah.gap <= SPICE_ATTACK_RANGE) {
       if (!g.closeSince) g.closeSince = now;
     } else {
       g.closeSince = 0;
@@ -2045,7 +2141,7 @@
         // keine Karte und schliesst genau diesen Fall.
         && ghostTileInfo(car.tileCode).curve === 0
         && now > (g.passBlockUntil || 0)
-        && now - (g.attackTriedAt || 0) > 4000) {
+        && now - (g.attackTriedAt || 0) > SPICE_ATTACK_RETRY_MS) {
       g.attackTriedAt = now;
       if (Math.random() < SPICE_ATTACK_P * ghostCfg.spice) {
         // attackUntil bleibt als "eine Sequenz laeuft"-Marke; die Phasen entscheiden.
@@ -2554,6 +2650,11 @@
                   // Ueberholsequenz und Spurmischung.
                   passPhase: null, passZiel: null, passSince: 0, passBlockUntil: 0,
                   kurveMix: 0, naehern: 0,
+                  // Der Startplatz, EINMAL nachgesehen und nicht je Takt: indexOf ueber die
+                  // Aufstellung laeuft sonst 22 Mal je Sekunde je Auto. -1 heisst "steht
+                  // nicht in der Liste", und dann gibt es keinen Versatz - eine Paritaet aus
+                  // -1 waere geraten und keine Aufstellung.
+                  gridPos: gridPosOf(car),
                   running: true };
     // Den ersten Versuch ziehen, wenn gelernt werden soll. Ohne ihn steht tryPace auf null,
     // und learnSettle() kehrt in genau diesem Fall frueh zurueck, OHNE einen zu ziehen - das
@@ -2860,8 +2961,32 @@
     // Faehrt es noch ueber Kacheln? Dann ist es auf der Bahn. g.tileStart wird bei jedem
     // Kachelwechsel gesetzt, ist also der Zeitpunkt des letzten bewiesenen Kontakts.
     const zaehlerLaeuft = g.tileStart && (now - g.tileStart) < GHOST_OFFTRACK_CONFIRM_MS;
-    if ((ghostCfg.needCode ? (offConfirmed || noCode) : (offConfirmed && !noCode))
-        && !zaehlerLaeuft && !car.parked) {
+    // DIE BEWEISLAGE ENTSCHEIDET, und bis v0.4.55 tat sie es nicht - der Ghost blieb neben
+    // der Bahn nicht stehen. Zwei Vetos konnten den Halt verhindern, und mindestens eines
+    // griff immer:
+    //
+    //   noCode wird nach GHOST_OFFTRACK_MS ohne GUELTIGEN Code wahr, und car.lastCodeAt wird
+    //   bei 0x00 ausdruecklich NICHT gesetzt (siehe recNotify). Ein Auto, das lange genug
+    //   neben der Bahn liegt, erfuellt "!noCode" also nie mehr - und mit needCode AUS lautete
+    //   die Bedingung (offConfirmed && !noCode). Nach 1,5 s war der Halt unerreichbar.
+    //
+    //   zaehlerLaeuft schaut auf den KACHELZAEHLER. Zaehlt der neben der Bahn weiter, ist das
+    //   Veto dauerhaft aktiv. Ob er das tut, kann diese App nicht entscheiden: es haengt an
+    //   der Firmware, und ich habe es nicht gemessen.
+    //
+    // Also nach der Beweislage getrennt, statt die Vetos zu raten:
+    //
+    //   offConfirmed ist ein POSITIVES ZEUGNIS - 0x00 steht 900 ms, und einzelne 0x00-Pakete
+    //   zwischen zwei Kacheln dauern im Median 32 ms. Das genuegt allein.
+    //   noCode ist das FEHLEN eines Zeugnisses und behaelt beide Gegenproben: nur mit
+    //   needCode, und nur wenn der Kachelzaehler auch steht.
+    // NICHT WAEHREND DER EINFUEHRUNGSRUNDE. Auch im Formationstempo ist das Lesen
+    // grenzwertig, und ein Feld, das sich beim Anrollen selbst abstellt, ist schlimmer als
+    // eines, das eine verlorene Kachel uebersieht - es rollt ohnehin nur, und die Leitplanke
+    // haelt es. Der Melder ist fuer eine Runde gebaut, in der gefahren wird.
+    const parken = (offConfirmed || (ghostCfg.needCode && noCode && !zaehlerLaeuft))
+                   && !raceFormationLap;
+    if (parken && !car.parked) {
       parkCar(car, 'Bahn verlassen');
     }
     const offTrack = !!car.parked;
@@ -2970,8 +3095,10 @@
       if (ghostCfg.leaderBrake && feldGross && ghostLeader() === car) {
         target *= (1 - ghostCfg.leaderBrakePct);
       }
-      // Formation lap: everyone rolls at pit-lane pace, whatever their speed setting says.
-      if (raceFormationLap) target = Math.min(target, PIT_SPEED_FACTOR);
+      // Einfuehrungsrunde: alle rollen im Formationstempo, was ihr eigener Regler auch
+      // sagt. Das ist NICHT das Boxentempo - siehe formationPace(): darunter liest das Auto
+      // die Bahn nicht mehr.
+      if (raceFormationLap) target = Math.min(target, formationPace());
 
       // Die Anfahrrampe: sie greift NUR nach einem Entparken und laeuft von selbst aus.
       if (g.unparkAt) {
@@ -3039,10 +3166,13 @@
       // Warming the tyres on the formation lap: a slow weave, phase-shifted per car so the
       // field does not swing as one block. Purely cosmetic — the car holds the track by
       // itself in guard-rail mode, so this is a small offset on top of zero, not steering.
-      if (raceFormationLap) {
-        const phase = (g.weavePhase !== undefined ? g.weavePhase : (g.weavePhase = Math.random() * 6.283));
-        weave = Math.sin(now / 700 + phase) * GHOST_WEAVE;
-      }
+      // ZWEIERKOLONNE plus Schlaengeln, aus formationOffset() - derselbe Satz, den seit
+      // v0.4.54 auch das Auto des Fahrers benutzt. Zwei benachbarte Startplaetze gehen auf
+      // entgegengesetzte Seiten, also Pole links, Zweiter rechts, Dritter links.
+      //
+      // Auf die Bahn stellen muss man von Hand - das kann die App nicht -, aber wer fahrend
+      // nebeneinander liegt, ist damit gesagt.
+      if (raceFormationLap) weave = formationOffset(g, g.gridPos, now);
       if (ghostCfg.railMode) {
         // Zero steering plus the anti-ramming offset. There is no lateral feedback to close
         // a loop with, so this is deliberately the conservative choice rather than a guess.
@@ -3468,7 +3598,11 @@
     // Markup-Wert zeigt - bis jemand den Regler einmal anfasst, und dann springt das
     // Verhalten. So war es bei topSpeedScale und beim Tankgewicht.
     //
-    // gears wird uebersprungen: geteilte Referenz, nie geaendert.
+    // gears wird uebersprungen, aber nicht mehr aus dem alten Grund: seit es
+    // Getriebearten gibt, WIRD das Array geaendert. Uebersprungen wird es, weil ein
+    // Wertevergleich hier ein Tiefenvergleich waere - und weil das Getriebe wie das Layout
+    // eine Aussage darueber ist, WELCHES Auto man hat, nicht eine Reglervorgabe, die von
+    // ihrem Modellwert abweichen koennte. Dafuer hat es einen eigenen Selbsttest.
     physConfigDiff() {
       const cfg = physEngine.config, ref = physEngine.calibRef, out = {};
       for (const k of Object.keys(ref)) {
@@ -3626,6 +3760,106 @@
     },
     padDefaults() {
       return JSON.parse(JSON.stringify(DEFAULT_BINDINGS));
+    },
+
+    // Die Getriebearten: was drinsteht, was daraus gerechnet wird, und die Pendelreserve.
+    //
+    // MITGEGEBEN WIRD AUCH DAS GERECHNETE - ratioRef und rpmScale -, genau darum: der Test
+    // soll pruefen koennen, dass sie es sind und nicht doch irgendwo als Feld herumliegen.
+    //
+    // `reserve` ist die Zahl, die ein Pendeln ausschliesst: nach einem Hochschalten faellt
+    // die Drehzahl auf upshiftRpm * ratio[i+1] / ratio[i], und liegt downshiftRpm darueber,
+    // schaltet die Automatik hoch und sofort wieder herunter. Der kleinste Abstand ueber
+    // alle Gaenge ist das, was zaehlt.
+    physGearboxes() {
+      const c = physEngine.config;
+      const merk = physEngine.gearboxName || 'gt3';
+      const out = {};
+      try {
+        for (const name of Object.keys(GEARBOXES)) {
+          physEngine.applyGearbox(name);
+          const r = c.gears.map(g => g.ratio);
+          const nach = [];
+          for (let i = 0; i < r.length - 1; i++) nach.push(c.upshiftRpm * r[i + 1] / r[i]);
+          out[name] = { label: GEARBOXES[name].label,
+                        gaenge: r.length,
+                        ratios: r.slice(),
+                        topFracs: c.gears.map(g => g.topFrac),
+                        ratioRef: c.ratioRef,
+                        rpmScale: Math.round(c.rpmScale),
+                        upshiftRpm: c.upshiftRpm,
+                        downshiftRpm: c.downshiftRpm,
+                        shiftMs: c.shiftMs,
+                        // Das Produkt, aus dem die Uebersetzungen gerechnet sind: fuer alle
+                        // ausser dem letzten Gang muss es GEAR_PRODUCT treffen.
+                        produkte: c.gears.map(g => +(g.ratio * g.topFrac).toFixed(3)),
+                        reserve: nach.length ? Math.round(Math.min.apply(null, nach) - c.downshiftRpm) : null,
+                        // Erreicht der letzte Gang die Drehzahlgrenze bei Vmax?
+                        drehzahlOben: Math.round(physEngine.rpmRawAt(c.topSpeedKmh, r.length - 1)) };
+        }
+        out._produkt = GEAR_PRODUCT;
+        out._redline = REDLINE_RPM;
+      } finally {
+        physEngine.applyGearbox(merk);
+      }
+      return out;
+    },
+
+    // Ein Getriebe setzen und nachsehen, wer davon etwas mitbekommt. Getrennt von
+    // physGearboxes, weil diese Probe die GHOSTS anfasst und die Tabelle oben nur abliest.
+    //
+    // Die Frage, die sie beantwortet: teilen die Ghosts nach einem Wechsel noch dasselbe
+    // Uebersetzungs-Array? Ein Splice erreicht jeden Teilhaber, ein neues Array haette den
+    // Verweis gekappt - und ein Ghost waere still im alten Getriebe weitergefahren.
+    physGearboxShare(name) {
+      const merk = physEngine.gearboxName || 'gt3';
+      try {
+        physEngine.applyGearbox(name || 'f1');
+        const ghosts = [];
+        garage.forEach(c => {
+          if (!c.ghost || !c.ghost.engine) return;
+          ghosts.push({ alias: garageLabel(c),
+                        geteilt: c.ghost.engine.config.gears === physEngine.config.gears,
+                        gaenge: c.ghost.engine.config.gears.length,
+                        gang: c.ghost.engine.state.currentGear });
+        });
+        return { getriebe: physEngine.gearboxName,
+                 gaenge: physEngine.config.gears.length,
+                 // Der Kalibrierbezug darf NICHT mitgewandert sein.
+                 bezugGaenge: physEngine.calibRef.gears.length,
+                 bezugGeteilt: physEngine.calibRef.gears === physEngine.config.gears,
+                 ghosts };
+      } finally {
+        physEngine.applyGearbox(merk);
+      }
+    },
+
+    // Der Startplatz-Versatz der Zweierkolonne. Gefragt wird nach dem VORZEICHEN je Platz,
+    // denn genau das ist die Zusicherung: zwei benachbarte Plaetze gehen auf
+    // entgegengesetzte Seiten.
+    gridOffsets(n) {
+      const wieviele = n || 6;
+      const out = [];
+      for (let i = 0; i < wieviele; i++) {
+        out.push(+((i % 2 ? -1 : 1) * GHOST_GRID_OFFSET).toFixed(4));
+      }
+      return { betrag: GHOST_GRID_OFFSET, weave: GHOST_WEAVE, versatz: out,
+               // Zusammen duerfen sie nicht an den Anschlag kommen.
+               zusammen: +(GHOST_GRID_OFFSET + GHOST_WEAVE).toFixed(4),
+               // Und was ein Ghost wirklich gemerkt hat, falls einer faehrt.
+               gemerkt: garage.filter(c => c.ghost).map(c => ({ alias: garageLabel(c),
+                                                                platz: c.ghost.gridPos })) };
+    },
+
+    // Die Ansage, ohne zu sprechen: der TEXT und die Zaehler. Der Text ist die eine Sache,
+    // die man ohne Lautsprecher pruefen kann, und die Zaehler beantworten die zweite Frage -
+    // bricht jede Aeusserung die vorherige ab? announceCancels muss mit announceCalls
+    // mitlaufen, sonst stapeln sich zwei Runden.
+    ansage(ms, best) {
+      return { text: lapSpeechText(ms === undefined ? 62430 : ms, !!best),
+               an: announceOn,
+               calls: announceCalls,
+               cancels: announceCancels };
     },
 
     // Das Fahrzeuglayout: welche es gibt, was sie setzen, und was daraus gerechnet wird.
@@ -4424,6 +4658,126 @@
     // "kommt nicht vorbei" - der Abbruchfall, und der ist der wichtigere: ohne Abbruch klebt
     // ein Verfolger neben dem anderen, bis die Uhr ablaeuft, und genau dort beruehren sie
     // sich.
+    // Die Groessen, aus denen folgt, ob ueberhaupt ueberholt wird. Herausgegeben und nicht
+    // im Test abgeschrieben: es sind Konstanten, und eine Abschrift laeuft auseinander.
+    // Die Ueberblendung der Motorschleifen, und die eine Frage, die zaehlt: klebt bei
+    // irgendeiner Drehzahl eine HOERBARE Schleife am Ratenanschlag? Genau das war der
+    // Fehler, und genau das sieht man an den Zahlen nicht, wenn man sie einzeln ansieht.
+    // `basen` als ARGUMENT und nicht aus den geladenen Puffern: die kommen erst nach einer
+    // Nutzergeste, und ein Test, der ohne Klick immer ueberspringt, prueft nie. Der Aufrufer
+    // holt sie aus loops.json und kann damit ALLE Motoren durchgehen statt nur den gewaehlten.
+    sndBandCheck(basenRein) {
+      const basen = (basenRein || []).slice().sort((a, b) => a - b);
+      if (basen.length < 2) return { fehlt: 'weniger als zwei Baender' };
+      // DAS MASS IST DIE GEWICHTETE VERSTIMMUNG, nicht "am Anschlag oder nicht". Eine
+      // Schleife, die 2,04 statt 2,00 spielen soll, ist zwei Prozent daneben - das hoert
+      // niemand. Eine, die 0,36 spielen soll und auf 0,50 geklemmt wird, ist eine halbe
+      // Oktave daneben, und DAS war der gemeldete Fehler. Gewichtet mit der Lautstaerke des
+      // Bandes, denn eine Verstimmung bei neun Prozent Gewicht ist eine andere Sache als
+      // dieselbe bei hundert.
+      //
+      //   verlangte Rate / geklemmte Rate, in Oktaven, mal Gewicht
+      let schlimmst = 0, wo = null;
+      for (let rpm = IDLE_RPM; rpm <= REDLINE_RPM; rpm += 50) {
+        const w = sampleWeights(rpm, basen);
+        for (let i = 0; i < basen.length; i++) {
+          if (w[i] <= 0.02) continue;
+          const will = rpm / basen[i];
+          const kann = Math.max(0.5, Math.min(2.0, will));
+          const fehler = w[i] * Math.abs(Math.log2(kann / will));
+          if (fehler > schlimmst) {
+            schlimmst = fehler;
+            wo = { rpm, band: i, gewicht: +w[i].toFixed(2), will: +will.toFixed(2),
+                   kann: +kann.toFixed(2), oktaven: +Math.abs(Math.log2(kann / will)).toFixed(2) };
+          }
+        }
+      }
+      return { basen, verstimmung: +schlimmst.toFixed(4), schlimmste: wo,
+               // Der groesste Sprung zwischen zwei Nachbarn, in Oktaven.
+               oktaven: +Math.max.apply(null, basen.slice(1).map(
+                 (b, i) => Math.log2(b / basen[i]))).toFixed(2) };
+    },
+
+    // Die Autopunkte auf der Streckenkarte. Gefragt wird mit KUENSTLICHEN Autos, denn ohne
+    // verbundenes Auto gibt es keine echten - und genau dann soll die Karte trotzdem stimmen.
+    //
+    // Zurueck kommen die gezeichneten Mittelpunkte, damit der Test den VERSATZ pruefen kann:
+    // die alte Fassung rechnete (index + 1) * Abtastpunkte und setzte den Punkt damit an das
+    // ENDE der Kachel, auf der das Auto steht - eine ganze Kachel zu weit.
+    trackMarks(code, cars) {
+      const p = codeToTrack(code || 'SG2H2G2R2G2H2G2R2');
+      const html = renderTrackPreview(p.tiles, null, { detailed: true, cars: cars || [] }).html;
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const punkte = [...doc.querySelectorAll('circle')].map(c => ({
+        x: +c.getAttribute('cx'), y: +c.getAttribute('cy'), fill: c.getAttribute('fill') }));
+      const kuerzel = [...doc.querySelectorAll('text')].map(t => t.textContent);
+      return { kacheln: p.tiles.length, punkte, kuerzel,
+               echte: trackCarMarks ? trackCarMarks().length : null };
+    },
+
+    // Die sechs Motorton-Zusaetze, ohne einen Ton zu erzeugen: extrasWerte() rechnet nur.
+    // `folge` ist eine Liste von Fahrzustaenden, die HINTEREINANDER durchgerechnet werden -
+    // das muss sie sein, weil drei der sechs von der VORGESCHICHTE leben: der Knaller vom
+    // Lastabfall, der Schaltknall von der Flanke, der Ladedruck von seiner Verzoegerung.
+    //
+    // dt wird mitgegeben und nicht aus der Uhr genommen: in einer synchronen Schleife ist
+    // die Uhrdifferenz null, und dann kaeme der Ladedruck nie an.
+    // Die BAUART der Zusatzquellen, soweit sie schon stehen. Ein Pfeifen aus einem
+    // Oszillator ist ein Piepsen - genau das war es bis v0.5.7 -, also gehoert die Bauart
+    // festgenagelt und nicht nur ihr Klang beschrieben.
+    sndExtrasBau() {
+      return { gebaut: !!xs.gebaut,
+               pfeif: xs.pfeif ? xs.pfeif.constructor.name : null,
+               pfeifQuelle: xs.pfeifQuelle ? xs.pfeifQuelle.constructor.name : null,
+               heulen: xs.whine ? xs.whine.constructor.name : null,
+               guete: xs.pfeif && xs.pfeif.Q ? xs.pfeif.Q.value : null };
+    },
+
+    sndExtras(folge, o) {
+      const opt = o || {};
+      const merk = { crackle: xs.crackle, turbo: xs.turbo, ein: extrasOn,
+                     last: xs.letzteLast, schalt: xs.schaltAn, druck: xs.ladedruck };
+      try {
+        if (opt.crackle !== undefined) xs.crackle = opt.crackle;
+        if (opt.turbo !== undefined) xs.turbo = !!opt.turbo;
+        if (opt.ein !== undefined) extrasOn = !!opt.ein;
+        xs.letzteLast = opt.startLast === undefined ? 0 : opt.startLast;
+        xs.schaltAn = false;
+        xs.ladedruck = 0;
+        const dt = opt.dt === undefined ? 0.045 : opt.dt;
+        return (folge || []).map(z => {
+          const st = { rpmFrac: z.rpmFrac || 0, onLimiter: !!z.onLimiter,
+                       isShifting: !!z.isShifting, speedKmh: z.speedKmh || 0,
+                       currentGear: z.gear || 0 };
+          const w = extrasWerte(st, z.load === undefined ? 0 : z.load, dt);
+          return { tonHz: Math.round(w.tonHz), cut: w.cutTiefe,
+                   whineHz: Math.round(w.whineHz), whineGain: +w.whineGain.toFixed(4),
+                   pfeifHz: Math.round(w.pfeifHz), pfeifGain: +w.pfeifGain.toFixed(4),
+                   knaller: w.knaller, schaltKnall: +(w.schaltKnall || 0).toFixed(3),
+                   abblasen: +(w.abblasen || 0).toFixed(3),
+                   druck: +(w.ladedruck || 0).toFixed(3), aus: !!w.aus };
+        });
+      } finally {
+        xs.crackle = merk.crackle; xs.turbo = merk.turbo; extrasOn = merk.ein;
+        xs.letzteLast = merk.last; xs.schaltAn = merk.schalt; xs.ladedruck = merk.druck;
+      }
+    },
+
+    ghostPassRates() {
+      const p = SPICE_ATTACK_P * ghostCfg.spice;
+      return { reichweite: SPICE_ATTACK_RANGE,
+               abstandMin: SPICE_GAP_MIN,
+               // Das Fenster, in dem der Verfolger in Reichweite ist, ohne gelupft zu werden.
+               fenster: +(SPICE_ATTACK_RANGE - SPICE_GAP_MIN).toFixed(3),
+               klebenMs: SPICE_ATTACK_ARM_MS,
+               wurfMs: SPICE_ATTACK_RETRY_MS,
+               wuerze: ghostCfg.spice,
+               p: +p.toFixed(4),
+               // Erwartete Wartezeit in Sekunden, sobald der Verfolger in Reichweite ist.
+               wartenS: p > 0 ? +(SPICE_ATTACK_RETRY_MS / 1000 / p).toFixed(1) : null,
+               sperreMs: SPICE_PASS_BLOCK_MS };
+    },
+
     ghostPassProbe(o) {
       const opt = o || {};
       const merkGarage = garage.splice(0, garage.length);

@@ -431,6 +431,72 @@
     { ratio: 0.88, topFrac: 1.0000 }, // 325/325
   ];
 
+  // ============================== GETRIEBEARTEN ==============================
+  //
+  // Drei Getriebe, und GT3 ist nicht nur die Vorgabe, sondern IDENTISCH mit vorher: der
+  // Eintrag zeigt auf dasselbe Array, nicht auf eine Kopie davon.
+  //
+  // DIE UEBERSETZUNGEN SIND GERECHNET UND NICHT GETIPPT. In der GT3-Tabelle darueber ist
+  // das Produkt ratio * topFrac fuer die Gaenge 1 bis 5 konstant 0,9507 und faellt beim
+  // sechsten auf 0,88 - der ist luftwiderstandsbegrenzt und erreicht den Begrenzer nicht
+  // (siehe rebuildGearModel). Diese Unsymmetrie ist echt und wird uebernommen:
+  //
+  //     ratio_i = 0,9507 / topFrac_i   fuer alle ausser dem letzten
+  //     ratio_n = 0,88   bei topFrac_n = 1,0
+  //
+  // Damit bleibt ratioRef in jedem Getriebe 0,88, und der Anker der
+  // Beschleunigungskalibrierung ist unberuehrt. Gewaehlt ist nur die SPREIZUNG, und dort
+  // sitzt der Charakter: acht enge Gaenge oben gegen fuenf weite.
+  //
+  // WAS ANGABE IST: acht Vorwaertsgaenge sind seit 2014 F1-Reglement, sechs sequenzielle
+  // sind GT3-Standard, fuenf hatte das Transaxle des 412P. WAS SCHAETZUNG IST: bei welchem
+  // Anteil der Hoechstgeschwindigkeit der dritte Gang endet. Das ist eine Wahl aus der
+  // Klasse und keine Messung.
+  //
+  // shiftMs ist der zweite fuehlbare Unterschied und der groessere: 40 ms nahtlos, 120 ms
+  // sequenziell, 350 ms Kulisse mit Kupplung und Zwischengas.
+  //
+  // DIE DREHZAHLGRENZE BLEIBT BEI REDLINE_RPM. Sie ist eine Eigenschaft des MOTORS und
+  // nicht des Getriebes; ein Getriebe, das die Drehzahlgrenze mitbringt, waere ein Motor
+  // mit Zahnraedern. Das Getriebe aendert Anzahl, Spreizung und Schaltpunkte.
+  const F1_GEARS = [
+    { ratio: 3.07, topFrac: 0.3100 }, // 1. bis 31% von Vmax - hoch uebersetzt, nur zum Start
+    { ratio: 2.26, topFrac: 0.4200 },
+    { ratio: 1.83, topFrac: 0.5200 },
+    { ratio: 1.51, topFrac: 0.6300 },
+    { ratio: 1.28, topFrac: 0.7400 },
+    { ratio: 1.13, topFrac: 0.8400 },
+    { ratio: 1.03, topFrac: 0.9200 }, // die oberen drei liegen eng: 84, 92, 100
+    { ratio: 0.88, topFrac: 1.0000 },
+  ];
+  const P412_GEARS = [
+    { ratio: 3.17, topFrac: 0.3000 }, // 1. bis 30% - und dann ein weiter Sprung
+    { ratio: 2.11, topFrac: 0.4500 },
+    { ratio: 1.53, topFrac: 0.6200 },
+    { ratio: 1.17, topFrac: 0.8100 },
+    { ratio: 0.88, topFrac: 1.0000 },
+  ];
+  // downshiftRpm ist nicht frei: nach einem Hochschalten faellt die Drehzahl auf
+  // upshiftRpm * ratio[i+1] / ratio[i], und liegt die Rueckschaltschwelle darueber, schaltet
+  // die Automatik hoch und sofort wieder herunter. Gemessen bleibt Reserve: GT3 1385,
+  // F1 915 (enge Gaenge, also knapper), 412P 2324 Umdrehungen. Ein Selbsttest haelt das fest.
+  const GEARBOXES = {
+    gt3: { label: 'GT3, 6-Gang sequenziell', gears: GT3_GEARS,
+           upshiftRpm: 8800, downshiftRpm: 4200, shiftMs: 120 },
+    // 40 ms sind die Angabe eines nahtlosen Getriebes. Angekommen ist davon nichts: das
+    // sind 0,89 Sendetakte, und eine Schaltpause unter einem Paket faellt zwischen zwei
+    // Takte. applyGearbox() deckelt deshalb auf den Sendetakt - die Angabe bleibt hier
+    // stehen, damit man sieht, dass die Grenze beim Programm liegt und nicht beim Getriebe.
+    f1: { label: 'Formel 1, 8-Gang', gears: F1_GEARS,
+          upshiftRpm: 8850, downshiftRpm: 5600, shiftMs: 40 },
+    p412: { label: 'Ferrari 412P, 5-Gang Transaxle', gears: P412_GEARS,
+            upshiftRpm: 8600, downshiftRpm: 3400, shiftMs: 350 },
+  };
+  // Das Produkt, aus dem die Uebersetzungen kommen. Steht hier als Konstante, damit der
+  // Selbsttest gegen dieselbe Zahl prueft, aus der sie gerechnet sind - und nicht gegen
+  // eine zweite Abschrift davon.
+  const GEAR_PRODUCT = 0.9507;
+
   // Normalised engine torque, 1.0 = peak. Deliberately a TABLE rather than a formula:
   // update(), calibrateAccel() AND the Doku charts all read it, so there must be exactly
   // one definition that cannot drift. Weak low down, peak arriving late (~6200), then

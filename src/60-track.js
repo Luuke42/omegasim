@@ -920,10 +920,36 @@
     body += o.detailed
       ? `<path d="M ${P2(sA)} L ${P2(sB)}" stroke="#3ddc84" stroke-width="4"/>`
       : `<circle cx="${(first.x + ox).toFixed(1)}" cy="${(first.y + oy).toFixed(1)}" r="5" fill="#1c7a4d"/>`;
-    if (currentIndex != null) {
-      const i = Math.max(0, Math.min((currentIndex + 1) * (o.detailed ? TRACK_SAMPLES_PER_TILE : 1), pts.length - 1));
+    // ---- Die Autos ----------------------------------------------------------------
+    //
+    // `currentIndex` zeichnet EIN Auto und bleibt fuer alte Aufrufer; `o.cars` zeichnet
+    // beliebig viele, mit Farbe und Kuerzel. Ein Eintrag ist
+    // { index, phase, farbe, kuerzel } - phase ist die Lage INNERHALB der Kachel, 0 bis 1.
+    //
+    // DER VERSATZ: die alte Zeile rechnete (index + 1) * Abtastpunkte, also das ENDE der
+    // Kachel, auf der das Auto steht - eine ganze Kachel zu weit. Richtig ist der Anfang
+    // plus die Phase. Genauer geht es nicht: das Auto ortet sich nicht, es zaehlt Kacheln.
+    const proSchritt = o.detailed ? TRACK_SAMPLES_PER_TILE : 1;
+    const autoPunkt = (index, phase, farbe, kuerzel) => {
+      if (index === null || index === undefined) return '';
+      const roh = (index + Math.max(0, Math.min(1, phase || 0))) * proSchritt;
+      const i = Math.max(0, Math.min(Math.round(roh), pts.length - 1));
       const p = pts[i];
-      body += `<circle cx="${(p.x + ox).toFixed(1)}" cy="${(p.y + oy).toFixed(1)}" r="6" fill="#ff5c5c" stroke="#fff" stroke-width="2"/>`;
+      const x = (p.x + ox).toFixed(1), y = (p.y + oy).toFixed(1);
+      // Weisser Ring, damit der Punkt auf der grauen Bahn UND auf dem dunklen Grund steht.
+      let t = `<circle cx="${x}" cy="${y}" r="6" fill="${farbe || '#ff5c5c'}" `
+            + `stroke="#fff" stroke-width="2"/>`;
+      if (kuerzel) {
+        t += `<text x="${x}" y="${(p.y + oy - 10).toFixed(1)}" text-anchor="middle" `
+           + `font-size="11" font-weight="700" fill="#fff" `
+           + `stroke="#0b0c0f" stroke-width="3" paint-order="stroke"`
+           + `>${kuerzel}</text>`;
+      }
+      return t;
+    };
+    if (currentIndex != null) body += autoPunkt(currentIndex, 0, '#ff5c5c', null);
+    if (o.cars) {
+      for (const c of o.cars) body += autoPunkt(c.index, c.phase, c.farbe, c.kuerzel);
     }
 
     const style = o.detailed
@@ -1012,12 +1038,66 @@
     showHudToast('Strecke übernommen');
   };
 
+  // Wo die Autos gerade stehen, fuer die Karte. Eine Kachelnummer und eine Phase je Auto.
+  //
+  // ZWEI QUELLEN, und beide zaehlen dasselbe Byte: der Ghost fuehrt tileIndex und tileStart
+  // in seinem Zustand mit, das gesteuerte Auto laeuft ueber dashMinimapIndex. Die Phase ist
+  // geschaetzt - Zeit seit dem Kachelwechsel durch die erwartete Kacheldauer -, denn das Auto
+  // ortet sich nicht. Genau das steht auch in der Doku unter "keine echte Ortung".
+  //
+  // Defensiv gegen die Ladereihenfolge: 90-ghosts.js wird SPAETER gebaut, garage und ghostCfg
+  // sind zur Ladezeit in ihrer temporalen Todeszone. refreshTrackPreview() laeuft aber auch
+  // beim Laden, also darf hier nichts davon ungeschuetzt stehen.
+  function trackCarMarks() {
+    const out = [];
+    // Der typeof-Test steht INNEN: bei einem noch nicht ausgewerteten const wirft schon
+    // typeof, und diese Funktion laeuft beim Laden mit. Ein Wurf hier nimmt die ganze IIFE
+    // mit - genau die Falle, die in diesem Projekt schon OMEGA_TEST verschwinden liess.
+    try {
+      if (typeof garage === 'undefined') return out;
+      const now = Date.now();
+      garage.forEach(c => {
+        const g = c.ghost;
+        if (g && g.tileIndex !== null && g.tileIndex !== undefined) {
+          const dauer = (g.tileMs || 800)
+            * (typeof ghostTileLenFactor === 'function' ? ghostTileLenFactor(g.tileIndex) : 1);
+          const ph = g.tileStart ? Math.min(1, (now - g.tileStart) / Math.max(1, dauer)) : 0;
+          out.push({ index: g.tileIndex, phase: ph, farbe: c.farbe || '#ffb02e',
+                     kuerzel: (c.name || '?').slice(0, 3) });
+        } else if (c.role === 'player' && typeof dashMinimapIndex === 'number') {
+          out.push({ index: dashMinimapIndex, phase: 0.5, farbe: c.farbe || '#5aa9ff',
+                     kuerzel: (c.name || 'Ich').slice(0, 3) });
+        }
+      });
+    } catch (e) { return out; }
+    return out;
+  }
+
+  // Die Karte auffrischen, WAEHREND gefahren wird - sonst kleben die Autopunkte dort, wo
+  // sie beim letzten Streckenwechsel standen.
+  //
+  // NUR WENN DER STRECKENREITER SICHTBAR IST, und das ist der ganze Trick: der Aufbau der
+  // Karte ist ein innerHTML mit gut zwanzig Pfaden, und er laeuft auf demselben Faden wie der
+  // 45-ms-Sendetakt. Wer im Cockpit fahrt, soll ihn nicht bezahlen. Vier Mal je Sekunde
+  // reicht: schneller kann man einen Punkt auf einer 220-px-Karte nicht unterscheiden.
+  setInterval(() => {
+    const tab = document.getElementById('tab-track');
+    if (!tab || !tab.offsetParent) return;
+    if (!currentTrackTiles.length) return;
+    if (!trackCarMarks().length) return;
+    refreshTrackPreview();
+  }, 250);
+
   function refreshTrackPreview() {
     // Die Kachelzahl entscheidet, ob der Windschatten ueberhaupt rechnen kann. Hier gerufen
     // und nicht in 50-drive.js beim Laden: dort ist currentTrackTiles noch in der temporalen
     // Todeszone, siehe den Kommentar bei dirtyAirVerfuegbar().
     if (typeof dirtyAirVerfuegbar === 'function') dirtyAirVerfuegbar();
-    const result = renderTrackPreview(currentTrackTiles, null, { detailed: true });
+    // MIT den Autos, seit v0.5.1. Vorher stand hier ausdruecklich null, also gar kein
+    // Auto - und der gruene Strich auf der Startgeraden, den man dafuer hielt, ist die
+    // Start/Ziel-Linie.
+    const result = renderTrackPreview(currentTrackTiles, null,
+      { detailed: true, cars: trackCarMarks() });
     $('track-preview-svg').innerHTML = result.html;
     renderTrackPalette();
     updateTrackSpace();

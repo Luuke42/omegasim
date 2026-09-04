@@ -278,7 +278,11 @@
         // car down rather than standing it on its nose.
         pitLimiterDecel: 0.35,
 
-        gears: GT3_GEARS,
+        // EINE EIGENE KOPIE und nicht GT3_GEARS selbst. applyGearbox() aendert dieses
+        // Array an der Stelle - das muss es, weil die Ghosts es per Verweis teilen -, und
+        // stuende hier die Tabelle, wuerde der erste Wechsel auf Formel 1 die GT3-Tabelle
+        // ueberschreiben. Zurueck auf GT3 haette dann acht Gaenge gehabt.
+        gears: GT3_GEARS.map(g => ({ ratio: g.ratio, topFrac: g.topFrac })),
         rpmScale: 0,      // derived in rebuildGearModel()
         ratioRef: 0.88,   // top gear's ratio, so 6th has a force factor of exactly 1.0
         // Fitted numerically against the user's real GT3 acceleration table (0-50km/h
@@ -636,8 +640,16 @@
       //
       // Er wird GANZ kopiert und nicht aufgezaehlt: eine Liste von Feldern ist bei einem
       // Konfigurationsobjekt immer unvollstaendig, und die fehlende Zeile faellt erst auf,
-      // wenn eine Messung nicht mehr reproduzierbar ist. gears ist geteilt und wird nie
-      // geaendert.
+      // wenn eine Messung nicht mehr reproduzierbar ist.
+      //
+      // gears braucht dabei eine EIGENE Kopie, seit es Getriebearten gibt. Object.assign
+      // ist flach, also traegt der Bezug sonst denselben Verweis wie die Konfiguration und
+      // wandert bei jedem Getriebewechsel mit. Die Folge wuesste man erst spaeter: die
+      // Messaufbauten stellen mit Object.assign(cfg, calibRef) den gefitteten Zustand her,
+      // und dort snappen ratioRef, rpmScale, upshiftRpm und shiftMs als Skalare
+      // automatisch auf die GT3-Werte zurueck. Ohne eigene Kopie blieben die
+      // UEBERSETZUNGEN dabei die des gewaehlten Getriebes - GT3-Schaltpunkte auf
+      // F1-Zahnraedern, und die Messung waere still falsch statt offen anders.
       //
       // Und er steht HIER, am Ende des Konstruktors, nicht vor rebuildGearModel(): rpmScale
       // und accelCalibration sind ABGELEITETE Groessen, die erst dort entstehen. Weiter oben
@@ -646,6 +658,7 @@
       // eine streng lineare Beschleunigung (1,38 / 2,70 / 4,02 / 5,36 s), also wie ein Auto
       // ohne Luftwiderstand. Am Ende aufgenommen braucht der Aufbau keine Ausnahmeliste.
       this.calibRef = Object.assign({}, this.config);
+      this.calibRef.gears = this.config.gears.map(g => ({ ratio: g.ratio, topFrac: g.topFrac }));
       // Das Layout ZULETZT anwenden, nach calibRef: die Vorgabe ist neutral und aendert
       // nichts, aber ein Layout, das vor dem Kalibrierbezug gesetzt wuerde, waere danach
       // nicht mehr davon zu unterscheiden - und physConfigDiff() koennte es nicht melden.
@@ -798,6 +811,55 @@
       this.state.loadFront = L.vorn;
       this.layoutName = LAYOUTS[name] ? name : 'neutral';
       return this.layoutName;
+    }
+
+    // Ein Getriebe anwenden. Vier Dinge daran sind keine Geschmacksfrage:
+    //
+    // 1. DAS ARRAY WIRD AN DER STELLE GEAENDERT, nicht ersetzt. Die Ghosts teilen
+    //    config.gears mit dieser Maschine per Verweis - absichtlich, siehe die Begruendung
+    //    in 90-ghosts.js: eine Kopie laesst accelScale() zweimal kalibrieren. Ein Splice
+    //    erreicht damit jeden Teilhaber auf einmal, auch einen schon fahrenden Ghost. Ein
+    //    neues Array haette den Verweis gekappt, und das Feld waere still im alten
+    //    Getriebe weitergefahren.
+    // 2. NICHT DEN KALIBRIERBEZUG MITVERBIEGEN. Die Messaufbauten stellen den gefitteten
+    //    Zustand mit Object.assign(cfg, calibRef) her, und danach zeigen beide auf
+    //    dasselbe Array. Ein Splice waere dann eine Aenderung am Bezug selbst - also erst
+    //    loesen, dann aendern.
+    // 3. ratioRef wird GERECHNET und nicht gehalten. Es ist die Uebersetzung des letzten
+    //    Gangs, an der thrustAt() normiert; zwei Orte fuer dieselbe Zahl waren in diesem
+    //    Projekt schon oft genug eine Abweichung. Dass sie bei allen drei Getrieben 0,88
+    //    ist, macht die Rechnung nicht ueberfluessig, sondern nur unauffaellig.
+    // 4. rebuildGearModel() VOR calibrateAccel(). Die Kalibrierung braucht rpmScale, und
+    //    rpmScale kommt aus den Uebersetzungen - dieselbe Reihenfolge, die der Konstruktor
+    //    einhaelt.
+    //
+    // Was das Getriebe damit aendert, ist die FORM der Beschleunigung: wo die Stufen sitzen
+    // und welcher Gang zieht. Nicht die Schlagzeilenzahl - calibrateAccel() loest gegen die
+    // eingestellte Zeit von null auf Hoechstgeschwindigkeit, und die bleibt. Genau wie das
+    // Layout die Balance aendert und nicht die Geradeausleistung.
+    applyGearbox(name) {
+      const G = GEARBOXES[name] || GEARBOXES.gt3;
+      const cfg = this.config;
+      if (this.calibRef && cfg.gears === this.calibRef.gears) {
+        cfg.gears = cfg.gears.map(g => ({ ratio: g.ratio, topFrac: g.topFrac }));
+      }
+      cfg.gears.splice(0, cfg.gears.length,
+        ...G.gears.map(g => ({ ratio: g.ratio, topFrac: g.topFrac })));
+      cfg.ratioRef = cfg.gears[cfg.gears.length - 1].ratio;
+      cfg.upshiftRpm = G.upshiftRpm;
+      cfg.downshiftRpm = G.downshiftRpm;
+      // MINDESTENS EIN SENDETAKT. Gemessen sind die 40 ms des F1-Getriebes 0,89 Takte bei
+      // 45 ms Sendeintervall - eine Schaltpause, die kuerzer ist als ein Paket, kann zwischen
+      // zwei Takten komplett verschwinden, und dann sieht weder die Simulation noch das Auto
+      // etwas davon. Die Tabelle behaelt die Angabe; hier steht die Grenze des Programms.
+      cfg.shiftMs = Math.max(CONTROL_SEND_INTERVAL_MS, G.shiftMs);
+      // Von acht auf fuenf Gaenge zeigt der eingelegte Gang sonst ins Leere, und
+      // gearRatio() liest undefined.ratio.
+      this.state.currentGear = Math.min(this.state.currentGear, cfg.gears.length - 1);
+      this.rebuildGearModel();
+      this.calibrateAccel();
+      this.gearboxName = GEARBOXES[name] ? name : 'gt3';
+      return this.gearboxName;
     }
 
     // Central reset shared by the E-stop and the pit stop, so the two

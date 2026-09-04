@@ -19,6 +19,24 @@
 
   function stAdd(name, fn) { ST_TESTS.push({ name, fn }); }
 
+  // Einmal dem Browser Luft lassen, ohne einen Zeitgeber zu benutzen. Der Kanal wird EINMAL
+  // angelegt und nicht je Test: hundert MessageChannel hintereinander sind hundert Paare von
+  // Ports, die der Sammler wieder einholen muss.
+  //
+  // scheduler.yield() waere das Gleiche mit Namen, gibt es aber erst ab Chrome 129 - also
+  // wird es benutzt, wenn es da ist, und sonst der Kanal.
+  const stKanal = typeof MessageChannel === 'function' ? new MessageChannel() : null;
+  function stLuft() {
+    if (typeof scheduler === 'object' && scheduler && typeof scheduler.yield === 'function') {
+      return scheduler.yield();
+    }
+    if (!stKanal) return new Promise(res => setTimeout(res, 0));
+    return new Promise((res) => {
+      stKanal.port1.onmessage = () => { stKanal.port1.onmessage = null; res(); };
+      stKanal.port2.postMessage(0);
+    });
+  }
+
   // ---- 1. Ist der Aufbau durchgelaufen? ----
   // Wenn diese Zeile ueberhaupt laeuft, ist die IIFE nicht abgebrochen. Interessant ist
   // deshalb nicht das Ob, sondern wieviel: ein abgebrochener Aufbau hinterlaesst leere
@@ -262,7 +280,12 @@
     }
     let schlimmsterDc = 0, schlimmsteNaht = 0, geprueft = 0;
     const kaputt = [];
-    for (const name of dateien.slice(0, 40)) {
+    // ALLE, nicht die ersten vierzig. Bis v0.4.53 waren es genau vierzig Schleifen, also
+    // traf slice(0, 40) zufaellig alles; mit vierzehn Motoren sind es 56 und sechzehn waeren
+    // stumm ungeprueft geblieben - waehrend die Zahl darunter weiter "geprueft" sagt. Ein
+    // Abschneiden wuerde ausserdem immer die ERSTEN Eintraege der Manifestdatei begruenstigen
+    // und die neuen nie treffen, also genau die, an denen ein Fehler wahrscheinlich ist.
+    for (const name of dateien) {
       try {
         const buf = await ctx.decodeAudioData(
           await (await fetch('audio/' + name)).arrayBuffer());
@@ -787,8 +810,15 @@
     if (!window.OMEGA_TEST || !OMEGA_TEST.physSteerGrip) {
       return { skip: true, mass: 'physSteerGrip nicht vorhanden' };
     }
+    // tyreAsymEffect AUS, und das schwaecht die Pruefung nicht ab: der Reifenzug bei
+    // ungleichem Verschleiss ist ein absichtlicher Lenkoffset mit eigenem Regler und eigenem
+    // Messaufbau (physTyreAsym). Er liegt auf dem uebertragenen Winkel, und dieser Test
+    // vergleicht ihn mit dem Wunsch OHNE ihn - seit der Verschleiss standardmaessig ungleich
+    // ist, meldete das "1,0 NICHT NEUTRAL". Wahr, aber nicht die Frage dieses Tests, und die
+    // ist: legt die KALIBRIERUNG bei 1,0 etwas drauf?
     const messe = (kalib, lenk) => OMEGA_TEST.physSteerGrip({
-      kmh: 60, throttle: 0, brake: 1, steering: lenk, patch: { steerCalib: kalib } });
+      kmh: 60, throttle: 0, brake: 1, steering: lenk,
+      patch: { steerCalib: kalib, tyreAsymEffect: 0 } });
     const proben = [1, 1.5, 2, 2.5, 3].map(k => messe(k, 1));
     if (proben[0].winkel === undefined) return { skip: true, mass: 'winkel nicht herausgegeben' };
     let gedeckelt = true, monoton = true;
@@ -1232,6 +1262,1156 @@
                    + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
   });
 
+
+  // ---- Getriebe: GT3 ist die Vorgabe und bleibt der Kalibrierbezug ----
+  //
+  // Die Aenderung soll rein additiv sein. Geprueft wird an zwei Stellen: der Bezug traegt
+  // weiter sechs Gaenge (er darf beim Wechsel NICHT mitwandern), und mit GT3 stimmen die
+  // Skalare mit ihm ueberein.
+  //
+  // Der Bezug ist der wunde Punkt: calibRef ist eine FLACHE Kopie der Konfiguration, also
+  // trug er bis v0.4.53 denselben Verweis auf das Uebersetzungs-Array. Ohne eigene Kopie
+  // waeren nach einem Wechsel die GT3-Schaltpunkte auf F1-Zahnraedern gestanden - eine
+  // Messung, die still falsch ist statt offen anders.
+  stAdd('Getriebe: GT3 ist der Kalibrierbezug', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.physGearboxShare) {
+      return { skip: true, mass: 'Messaufbau nicht vorhanden' };
+    }
+    const p = OMEGA_TEST.physGearboxShare('f1');
+    const merk = physEngine.gearboxName || 'gt3';
+    let gleich = null;
+    try {
+      physEngine.applyGearbox('gt3');
+      const c = physEngine.config, r = physEngine.calibRef;
+      gleich = ['ratioRef', 'upshiftRpm', 'downshiftRpm', 'shiftMs', 'rpmScale']
+        .filter(k => Math.abs(c[k] - r[k]) > 1e-9);
+    } finally {
+      physEngine.applyGearbox(merk);
+    }
+    const ok = p.bezugGaenge === 6 && !p.bezugGeteilt && gleich.length === 0;
+    return { ok, mass: 'Bezug ' + p.bezugGaenge + ' Gaenge, '
+                       + (p.bezugGeteilt ? 'TEILT das Array' : 'eigene Kopie')
+                       + ' | mit GT3 abweichend: '
+                       + (gleich.length ? gleich.join(', ') : 'nichts') };
+  });
+
+  // ---- Getriebe: die Uebersetzungen sind gerechnet, nicht getippt ----
+  //
+  // DIE STAERKSTE der Getriebepruefungen, weil sie gegen eine Regel prueft und nicht gegen
+  // eine Abschrift: ratio mal topFrac ist fuer jeden Gang ausser dem letzten das
+  // Produkt GEAR_PRODUCT, und der letzte traegt ratioRef. Eine einzeln verstellte Zahl
+  // faellt damit auf, egal in welchem Getriebe sie steht.
+  stAdd('Getriebe: Uebersetzungen folgen der Regel', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.physGearboxes) {
+      return { skip: true, mass: 'Messaufbau nicht vorhanden' };
+    }
+    const t = OMEGA_TEST.physGearboxes();
+    const P = t._produkt;
+    const schlecht = [], teile = [];
+    for (const name of Object.keys(t)) {
+      if (name.charAt(0) === '_') continue;
+      const g = t[name];
+      teile.push(name + ': ' + g.gaenge + ' Gaenge, Ref ' + g.ratioRef);
+      // 1. Der letzte Gang IST der Bezug - gerechnet und nicht gehalten.
+      if (Math.abs(g.ratioRef - g.ratios[g.ratios.length - 1]) > 1e-9) {
+        schlecht.push(name + ': ratioRef ' + g.ratioRef + ' statt '
+                      + g.ratios[g.ratios.length - 1]);
+      }
+      // 2. Alle ausser dem letzten treffen das Produkt. 0,006 Toleranz, weil die
+      //    Uebersetzungen auf zwei Stellen gerundet im Quelltext stehen.
+      for (let i = 0; i < g.produkte.length - 1; i++) {
+        if (Math.abs(g.produkte[i] - P) > 0.006) {
+          schlecht.push(name + ': Gang ' + (i + 1) + ' Produkt ' + g.produkte[i]);
+        }
+      }
+      // 3. Der letzte Gang erreicht die Spitze, und nur dort.
+      if (Math.abs(g.topFracs[g.topFracs.length - 1] - 1) > 1e-9) {
+        schlecht.push(name + ': letzter topFrac ' + g.topFracs[g.topFracs.length - 1]);
+      }
+      // 4. Fallend, ohne Ausnahme. Ein Gang, der laenger ist als der darunter, waere ein
+      //    Getriebe, in dem Hochschalten die Drehzahl hebt.
+      for (let i = 0; i < g.ratios.length - 1; i++) {
+        if (g.ratios[i] <= g.ratios[i + 1]) schlecht.push(name + ': Gang ' + (i + 2) + ' nicht kuerzer');
+      }
+    }
+    return { ok: schlecht.length === 0,
+             mass: 'Produkt ' + P + ' | ' + teile.join(' | ')
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Getriebe: die Automatik pendelt nicht ----
+  //
+  // Nach einem Hochschalten faellt die Drehzahl auf upshiftRpm * ratio[i+1] / ratio[i].
+  // Liegt die Rueckschaltschwelle darueber, schaltet die Automatik hoch und sofort wieder
+  // herunter - und man sucht das im Fahrgefuehl statt in einer Zahl. Der kleinste Abstand
+  // ueber alle Gaenge ist das, was zaehlt.
+  stAdd('Getriebe: kein Schaltpendeln', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.physGearboxes) {
+      return { skip: true, mass: 'Messaufbau nicht vorhanden' };
+    }
+    const t = OMEGA_TEST.physGearboxes();
+    const schlecht = [], teile = [];
+    for (const name of Object.keys(t)) {
+      if (name.charAt(0) === '_') continue;
+      const g = t[name];
+      teile.push(name + ': ' + g.reserve + '/min');
+      if (!(g.reserve > 300)) schlecht.push(name + ': nur ' + g.reserve);
+      // Und die Schaltschwelle darf nicht ueber der Drehzahlgrenze liegen: dann wuerde
+      // NIE hochgeschaltet und das Auto haenge im ersten Gang am Begrenzer.
+      if (g.upshiftRpm >= t._redline) schlecht.push(name + ': Schaltpunkt ueber der Grenze');
+    }
+    return { ok: schlecht.length === 0,
+             mass: 'Pendelreserve ' + teile.join(' | ')
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Getriebe: die Ghosts fahren dasselbe ----
+  //
+  // Die Ghosts teilen das Uebersetzungs-Array per Verweis, damit accelScale() nicht zweimal
+  // kalibriert. Deshalb aendert applyGearbox es AN DER STELLE: ein Splice erreicht jeden
+  // Teilhaber, ein neues Array haette den Verweis gekappt - und ein fahrender Ghost waere
+  // still im alten Getriebe geblieben. Ohne Ghost im Feld prueft der Test nur, dass der
+  // Aufbau laeuft, und sagt das.
+  stAdd('Getriebe: Ghosts teilen die Uebersetzungen', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.physGearboxShare) {
+      return { skip: true, mass: 'Messaufbau nicht vorhanden' };
+    }
+    const p = OMEGA_TEST.physGearboxShare('p412');
+    if (!p.ghosts.length) {
+      return { ok: p.gaenge === 5,
+               mass: 'kein Ghost verbunden, Wechsel selbst ok: ' + p.gaenge + ' Gaenge' };
+    }
+    const lose = p.ghosts.filter(g => !g.geteilt);
+    const zuHoch = p.ghosts.filter(g => g.gang >= g.gaenge);
+    return { ok: lose.length === 0 && zuHoch.length === 0,
+             mass: p.ghosts.length + ' Ghosts, ' + p.gaenge + ' Gaenge'
+                   + (lose.length ? ' || NICHT GETEILT: ' + lose.map(g => g.alias).join(', ') : '')
+                   + (zuHoch.length ? ' || Gang ausserhalb: ' + zuHoch.map(g => g.alias).join(', ') : '') };
+  });
+
+  // ---- Getriebe: KEIN Preset-Schluessel ----
+  //
+  // Dieselben zwei Achsen wie beim Layout: welches Auto gegen wie abgestimmt. Ohne die
+  // Ausnahme wuerde ein Klick auf "GT3" das GETRIEBE wechseln. Geprueft wird der Vertrag
+  // und nicht die Wirkung - eine Voreinstellung anzuwenden wuerde die Einstellungen des
+  // Nutzers veraendern, nur um etwas zu pruefen, das strukturell entschieden ist.
+  stAdd('Getriebe: nicht in den Voreinstellungen', () => {
+    const el = $('setting-gearbox');
+    if (!el) return { ok: false, mass: 'setting-gearbox fehlt' };
+    if (typeof presetControls !== 'function') {
+      return { skip: true, mass: 'presetControls nicht erreichbar' };
+    }
+    const ids = presetControls().map(x => x.id);
+    const drin = ids.includes('setting-gearbox');
+    const genug = ids.length > 30;
+    const markiert = el.hasAttribute('data-preset-skip');
+    return { ok: !drin && genug && markiert,
+             mass: ids.length + ' Bedienelemente in den Voreinstellungen, Getriebe '
+                   + (drin ? 'IST DABEI' : 'nicht dabei')
+                   + ', Attribut ' + (markiert ? 'gesetzt' : 'FEHLT') };
+  });
+
+  // ---- Getriebe: das Menue und die Tabelle sind derselbe Satz ----
+  //
+  // Dieselbe Fehlerklasse wie beim Motormenue: ein Eintrag ohne Tabelleneintrag laesst
+  // applyGearbox still auf GT3 zurueckfallen, und der Waehler zeigt dann etwas anderes als
+  // das Modell. Beide Richtungen, denn ein Getriebe, das man nicht waehlen kann, ist ein
+  // toter Eintrag.
+  stAdd('Getriebe: Menue und Tabelle deckungsgleich', () => {
+    const sel = $('setting-gearbox');
+    if (!sel) return { ok: false, mass: 'kein #setting-gearbox' };
+    if (!window.OMEGA_TEST || !OMEGA_TEST.physGearboxes) {
+      return { skip: true, mass: 'Messaufbau nicht vorhanden' };
+    }
+    const t = OMEGA_TEST.physGearboxes();
+    const tabelle = Object.keys(t).filter(k => k.charAt(0) !== '_');
+    const menue = Array.prototype.map.call(sel.options, o => o.value);
+    const ohne = menue.filter(v => tabelle.indexOf(v) < 0);
+    const unerreichbar = tabelle.filter(v => menue.indexOf(v) < 0);
+    return { ok: ohne.length === 0 && unerreichbar.length === 0,
+             mass: menue.length + ' Eintraege, ' + tabelle.length + ' Getriebe'
+                   + (ohne.length ? ' | OHNE TABELLE: ' + ohne.join(', ') : '')
+                   + (unerreichbar.length ? ' | nicht waehlbar: ' + unerreichbar.join(', ') : '') };
+  });
+
+  // ---- Getriebe: der eingelegte Gang bleibt im Getriebe ----
+  //
+  // Von acht auf fuenf Gaenge zeigt der alte Index ins Leere, und gearRatio() liest
+  // undefined.ratio. Der Weg dorthin ist ganz normal: im achten Gang fahren, umschalten.
+  stAdd('Getriebe: Gang wird beim Wechsel gedeckelt', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.physGearboxes) {
+      return { skip: true, mass: 'Messaufbau nicht vorhanden' };
+    }
+    const merk = physEngine.gearboxName || 'gt3';
+    const merkGang = physEngine.state.currentGear;
+    try {
+      physEngine.applyGearbox('f1');
+      physEngine.state.currentGear = physEngine.config.gears.length - 1;   // achter Gang
+      const vor = physEngine.state.currentGear;
+      physEngine.applyGearbox('p412');
+      const nach = physEngine.state.currentGear;
+      // Und die Gegenprobe, dass danach ueberhaupt gerechnet werden kann.
+      const r = physEngine.gearRatio(nach);
+      const ok = vor === 7 && nach === 4 && typeof r === 'number' && isFinite(r);
+      return { ok, mass: 'im ' + (vor + 1) + '. Gang umgeschaltet, danach '
+                         + (nach + 1) + '. von ' + physEngine.config.gears.length
+                         + ', Uebersetzung ' + r };
+    } finally {
+      physEngine.applyGearbox(merk);
+      physEngine.state.currentGear = Math.min(merkGang, physEngine.config.gears.length - 1);
+    }
+  });
+
+
+
+  // ---- Flaggenstreifen: jeder Text, den er zeigen kann, ist uebersetzt ----
+  //
+  // DIE LUECKE, DIE DIESEN TEST NOETIG MACHT: der Sprachtest laeuft ueber die SICHTBAREN
+  // Textknoten, und dieser Streifen ist im Ruhezustand leer - er wird erst befuellt, wenn
+  // eine Flagge weht. "GELB" und "ANFAHRT" standen deshalb seit v0.4 ohne Eintrag da, ohne
+  // dass etwas es meldete, waehrend "GELB · AUTOPILOT" daneben einen hatte.
+  //
+  // Geprueft wird mit den Zeichenketten DES CODES und nicht mit abgetippten: der Test
+  // stellt jeden Zustand her, ruft updateFlagUi() und liest, was dasteht. Ein zweites Mal
+  // hingeschriebene Texte wuerden auseinanderlaufen, sobald einer sich aendert - genau die
+  // Fehlerklasse, die dieser Test finden soll.
+  stAdd('Flaggenstreifen: jeder Text ist uebersetzt', () => {
+    const el = $('race-flag');
+    if (!el) return { ok: false, mass: 'race-flag fehlt' };
+    if (typeof updateFlagUi !== 'function') {
+      return { skip: true, mass: 'updateFlagUi nicht erreichbar' };
+    }
+    const merk = { flag: flagState, tm: trackMode, form: raceFormationLap };
+    const gesehen = [], ohne = [];
+    // Dieselbe Regel wie im Sprachtest: Umlaute oder deutsche Funktionswoerter.
+    const DE = /[\u00e4\u00f6\u00fc\u00df\u00c4\u00d6\u00dc]|\b(GELB|ANFAHRT)\b/;
+    try {
+      const ZUSTAENDE = [
+        ['yellow', 'on', false], ['yellow', 'off', false],
+        ['restart', 'on', false],
+        ['green', 'on', true], ['green', 'off', true],
+      ];
+      for (const [f, tm, form] of ZUSTAENDE) {
+        flagState = f; trackMode = tm; raceFormationLap = form;
+        updateFlagUi();
+        const t0 = (el.textContent || '').trim();
+        if (!t0) continue;
+        gesehen.push(t0);
+        // Im deutschen Modus muss es einen Eintrag geben, im englischen darf kein Deutsch
+        // stehen bleiben. Beide Richtungen aus derselben Zeichenkette.
+        if (lang === 'de') {
+          if (i18nLookup(t0) === null) ohne.push(t0);
+        } else if (DE.test(t0)) {
+          ohne.push(t0);
+        }
+      }
+      return { ok: ohne.length === 0,
+               mass: gesehen.length + ' Zustaende mit Text: ' + gesehen.join(' / ')
+                     + (ohne.length ? ' || OHNE EINTRAG: ' + ohne.join(', ') : '') };
+    } finally {
+      flagState = merk.flag; trackMode = merk.tm; raceFormationLap = merk.form;
+      updateFlagUi();
+    }
+  });
+
+
+
+  // ---- Motorschleifen: keine hoerbare Schleife am Ratenanschlag ----
+  //
+  // DER BEFUND, der diesen Test noetig gemacht hat, und er war an den einzelnen Zahlen nicht
+  // zu sehen: die Abspielrate ist auf [0,5 .. 2,0] geklemmt, also eine Oktave nach jeder
+  // Seite. Leerlauf und Mittelband lagen beim Porsche aber 2,2 Oktaven auseinander (1200 auf
+  // 5500). Von 1500 bis 2750 klebte damit immer mindestens ein HOERBARES Band am Anschlag,
+  // und bei 5000 trug das Leerlaufband noch 12 Prozent Gewicht bei einer Rate, die auf ein
+  // Drittel des Verlangten geklemmt war. Gemeldet als "am Anfang des Anfahrens klingt der Ton
+  // komisch, das sind zwei Toene, die nicht zusammenpassen".
+  //
+  // Geprueft wird das ganze Drehzahlband in 50er-Schritten, und die Aussage ist absolut:
+  // NULL geklemmte hoerbare Baender. Dazu der groesste Abstand zwischen zwei Nachbarn, denn
+  // das ist die Groesse, die man beim naechsten neuen Motor im Auge behalten muss.
+  stAdd('Motorschleifen: kein Band am Ratenanschlag', async () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.sndBandCheck) {
+      return { skip: true, mass: 'sndBandCheck nicht vorhanden' };
+    }
+    if (location.protocol === 'file:') {
+      return { skip: true, mass: 'file://, der Browser verbietet das Laden' };
+    }
+    let manifest;
+    try { manifest = await (await fetch('audio/loops.json')).json(); }
+    catch (e) { return { skip: true, mass: 'audio/loops.json nicht ladbar' }; }
+    // Die Schranke: 0,02 Oktaven gewichtet. Zum Vergleich die gemeldeten Faelle vor der
+    // Berichtigung - f1_2026 bei 1500/min lag bei 0,47, das Leerlaufband des Porsche bei
+    // 5000/min bei 0,13. Der heutige Rest liegt bei 0,003, also um mehr als das Sechsfache
+    // darunter: zwei Prozent Verstimmung bei neun Prozent Gewicht.
+    const GRENZE = 0.02;
+    const schlecht = [];
+    let weit = 0, geprueft = 0, aergste = 0;
+    for (const key of Object.keys(manifest)) {
+      // 'over' laeuft PARALLEL nach Last und nicht in der Drehzahl-Ueberblendung - es
+      // gehoert nicht in diese Rechnung.
+      const basen = Object.keys(manifest[key].loops || {})
+        .filter(b => b !== 'over')
+        .map(b => manifest[key].loops[b].baseRpm);
+      const r = OMEGA_TEST.sndBandCheck(basen);
+      if (r.fehlt !== undefined) { schlecht.push(key + ': ' + r.fehlt); continue; }
+      geprueft++;
+      weit = Math.max(weit, r.oktaven);
+      aergste = Math.max(aergste, r.verstimmung);
+      if (r.verstimmung > GRENZE) {
+        schlecht.push(key + ': Verstimmung ' + r.verstimmung + ' bei '
+                      + JSON.stringify(r.schlimmste));
+      }
+      if (r.oktaven > 1.2) schlecht.push(key + ': Bandabstand ' + r.oktaven + ' Oktaven');
+    }
+    return { ok: schlecht.length === 0,
+             mass: geprueft + ' Motoren, groesster Bandabstand ' + weit.toFixed(2)
+                   + ' Oktaven, schlimmste gewichtete Verstimmung ' + aergste.toFixed(4)
+                   + ' (Grenze ' + GRENZE + ')'
+                   + (schlecht.length ? ' || ' + schlecht.slice(0, 2).join('; ') : '') };
+  });
+
+  // ---- Tank und Schaden drosseln GENAU EINMAL ----
+  //
+  // Bis v0.4.55 zweimal: fuelDamageDerate() vor der Physik, und applyFuelAndDamage() noch
+  // einmal auf das ausgehende Byte. physOutThrottle ist motorPWM, also der Anteil simulierte
+  // Geschwindigkeit durch Hoechstgeschwindigkeit - wird der noch multipliziert, sagt das Byte
+  // etwas anderes als der Tacho. Gemeldet als "da steht 200 km/h, aber das Auto faehrt
+  // langsam", und die Gaenge und der Ton hingen mit, weil die Drehzahl aus der simulierten
+  // Geschwindigkeit kommt.
+  //
+  // Der zweite Griff ist weg, und der Beweis dafuer ist strukturell: die Funktion, die den
+  // Verbrauch zaehlt, gibt keinen Wert mehr zurueck. Gaebe sie einen, koennte ihn jemand
+  // wieder aufs Byte schreiben.
+  stAdd('Tank: drosselt genau einmal, vor der Physik', () => {
+    if (typeof fuelTankTick !== 'function' || typeof fuelDamageDerate !== 'function') {
+      return { skip: true, mass: 'Tankfunktionen nicht erreichbar' };
+    }
+    const schlecht = [];
+    const gemerkt = fuel;
+    try {
+      // 1. Der Verbrauchszaehler gibt NICHTS zurueck.
+      fuel = 100;
+      const rueck = fuelTankTick(0);
+      if (rueck !== undefined) schlecht.push('fuelTankTick gibt ' + rueck + ' zurueck');
+      // 2. Die Drosselung selbst wirkt weiter, und zwar mit dem Deckel als Argument.
+      fuel = 0;
+      const leer = fuelDamageDerate(1);
+      const halb = fuelDamageDerate(1, 0.6);
+      fuel = 100;
+      const voll = fuelDamageDerate(1);
+      if (!(leer < voll * 0.5)) schlecht.push('leerer Tank drosselt nicht');
+      if (!(halb > leer && halb < voll)) {
+        schlecht.push('der Deckel als Argument wirkt nicht: ' + halb);
+      }
+      // 3. Und die Rampe hat ein Ziel, das vom Tank abhaengt.
+      if (typeof fuelCutTarget === 'function') {
+        fuel = 0;
+        const zLeer = fuelCutTarget();
+        fuel = 100;
+        const zVoll = fuelCutTarget();
+        if (!(zLeer < zVoll)) schlecht.push('Rampenziel haengt nicht am Tank');
+      }
+      return { ok: schlecht.length === 0,
+               mass: 'Rueckgabe ' + rueck + ' | Gas leer ' + leer.toFixed(2)
+                     + ', bei Deckel 0,6 ' + halb.toFixed(2) + ', voll ' + voll.toFixed(2)
+                     + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+    } finally { fuel = gemerkt; }
+  });
+
+
+
+  // ---- Cockpit-Ansicht: sichtbar verschieden, funktional gleich ----
+  //
+  // ZWEI AUSSAGEN, und die erste hat die erste Fassung dieses Tests durchgelassen.
+  //
+  // Er verglich color und border-radius mit !== - sechs von 255 Unterschied in der Tinte
+  // gelten dabei als "verschieden", und genau so viel lagen Standard und Modern auseinander.
+  // Die BLENDE hat er gar nicht angesehen, und die war in allen drei bitgleich, weil ihre
+  // Tokens in der .gt3-Regel selbst standen und eine Ueberschreibung auf body nur geerbt
+  // wird - Erben verliert gegen eine Deklaration am Element. Gemeldet als "sehen irgendwie
+  // alle identisch aus", und der Test war gruen.
+  //
+  // Er zaehlt jetzt MERKMALE statt Ungleichheiten: Tinte (mit Abstand, nicht mit !==),
+  // Blende oben, Blende unten, Eckenrundung, Blendenmaterial, Pixelzeilen. Drei davon
+  // muessen sich je PAAR unterscheiden, und das Material immer - es ist die groesste Flaeche.
+  //
+  // Die zweite Aussage ist die Zusicherung der Aufgabe: nur das Aussehen. Kein Physikwert,
+  // kein Element, keine Voreinstellung darf sich bewegen.
+  stAdd('Cockpit-Ansicht: sichtbar verschieden, funktional gleich', () => {
+    const sel = $('setting-cockpit');
+    const dash = $('race-dash');
+    if (!sel || !dash) return { ok: false, mass: 'Waehler oder Cockpit fehlt' };
+    const merk = sel.value;
+    const schlecht = [];
+    try {
+      const messe = (v) => {
+        sel.value = v;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        const cs = getComputedStyle(dash);
+        return { v,
+                 attr: document.body.getAttribute('data-cockpit'),
+                 tinte: cs.color,
+                 oben: cs.borderTopWidth,
+                 unten: cs.borderBottomWidth,
+                 radius: cs.borderTopLeftRadius,
+                 material: cs.getPropertyValue('--gt3-carbon').trim(),
+                 zeilen: cs.getPropertyValue('--gt3-scan').trim(),
+                 ids: document.querySelectorAll('[id]').length,
+                 diff: (window.OMEGA_TEST && OMEGA_TEST.physConfigDiff)
+                   ? Object.keys(OMEGA_TEST.physConfigDiff()).length : 0 };
+      };
+      // Farbabstand statt Ungleichheit: rgb(238,242,250) gegen rgb(244,248,255) ist
+      // rechnerisch verschieden und mit dem Auge dasselbe.
+      const rgb = (t) => (t.match(/\d+/g) || []).map(Number);
+      const abstand = (x, y) => {
+        const A = rgb(x), B = rgb(y);
+        if (A.length < 3 || B.length < 3) return 0;
+        return Math.abs(A[0] - B[0]) + Math.abs(A[1] - B[1]) + Math.abs(A[2] - B[2]);
+      };
+
+      const werte = Array.prototype.map.call(sel.options, o => o.value);
+      if (werte.length < 3) schlecht.push('nur ' + werte.length + ' Ansichten');
+      const proben = werte.map(messe);
+
+      // 1. Die Vorgabe setzt KEIN Attribut: sonst waeren ihre Werte eine zweite Abschrift
+      //    dessen, was in :root steht.
+      if (proben[0].attr !== null) schlecht.push('Vorgabe setzt ' + proben[0].attr);
+
+      // 2. Sichtbar verschieden, Paar fuer Paar.
+      const paare = [];
+      for (let i = 0; i < proben.length; i++) {
+        for (let j = i + 1; j < proben.length; j++) {
+          const A = proben[i], B = proben[j];
+          const merkmale = [
+            abstand(A.tinte, B.tinte) >= 30,
+            A.oben !== B.oben,
+            A.unten !== B.unten,
+            A.radius !== B.radius,
+            A.material !== B.material,
+            A.zeilen !== B.zeilen,
+          ].filter(Boolean).length;
+          paare.push(A.v + '/' + B.v + ': ' + merkmale);
+          if (merkmale < 3) {
+            schlecht.push(A.v + ' und ' + B.v + ' unterscheiden sich in nur '
+                          + merkmale + ' von 6 Merkmalen');
+          }
+          // Das Material ausdruecklich: es ist die groesste Flaeche, und genau es war
+          // bitgleich, waehrend der alte Test gruen blieb.
+          if (A.material === B.material) {
+            schlecht.push(A.v + ' und ' + B.v + ' haben dieselbe Blende');
+          }
+        }
+      }
+
+      // 3. Und NICHTS Funktionales bewegt sich.
+      const ids = new Set(proben.map(p => p.ids));
+      if (ids.size !== 1) schlecht.push('Elementzahl schwankt: ' + [...ids].join('/'));
+      const diffs = proben.map(p => p.diff);
+      if (diffs.some(d => d !== diffs[0])) schlecht.push('Physik weicht ab: ' + diffs.join('/'));
+
+      // 4. Kein Preset-Schluessel: eine Voreinstellung ist eine Abstimmung.
+      if (typeof presetControls === 'function') {
+        if (presetControls().map(x => x.id).includes('setting-cockpit')) {
+          schlecht.push('in den Voreinstellungen');
+        }
+        if (!sel.hasAttribute('data-preset-skip')) schlecht.push('data-preset-skip fehlt');
+      }
+
+      return { ok: schlecht.length === 0,
+               mass: proben.map(p => p.v + ' ' + p.oben + '/' + p.unten + ' r' + p.radius)
+                       .join(' | ')
+                     + ' | Merkmale je Paar ' + paare.join(', ')
+                     + ' | ' + proben[0].ids + ' Elemente unveraendert'
+                     + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+    } finally {
+      sel.value = merk;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+
+
+
+  // ---- Motorton-Zusaetze: jeder haengt an seiner Groesse, und der Schalter stellt alle ab ----
+  //
+  // Sechs Zusaetze, und jeder soll genau von EINER Groesse abhaengen. Der Test prueft
+  // deshalb nicht "es klingt anders", sondern fuer jeden einzeln, dass er kommt, wenn seine
+  // Bedingung gilt, und AUSBLEIBT, wenn sie nicht gilt. Ohne die zweite Haelfte waere ein
+  // Zusatz, der dauernd feuert, ebenfalls gruen.
+  //
+  // Geprueft wird an der Rechnung und nicht am Ton: extrasWerte() braucht keinen
+  // AudioContext, und den gibt es erst nach einer Nutzergeste - ein Test, der ohne Klick
+  // ueberspringt, prueft nie.
+  stAdd('Motorton-Zusaetze: sechs Groessen, ein Schalter', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.sndExtras) {
+      return { skip: true, mass: 'sndExtras nicht vorhanden' };
+    }
+    const schlecht = [], teile = [];
+    const eins = (folge, o) => OMEGA_TEST.sndExtras(folge, o)[folge.length - 1];
+
+    // 1. Helligkeit folgt der Last.
+    const dunkel = eins([{ load: 0 }]).tonHz;
+    const hell = eins([{ load: 1 }]).tonHz;
+    teile.push('Helligkeit ' + dunkel + '/' + hell + ' Hz');
+    if (!(hell > dunkel * 2)) schlecht.push('Helligkeit folgt der Last nicht');
+
+    // 2. Stottern NUR am Begrenzer. Wie STARK es wird, prueft 6c - hier nur, dass es
+    //    ohne Begrenzer bei null bleibt und mit ihm ueberhaupt anfaengt.
+    const ohne = eins([{ load: 1, rpmFrac: 0.9 }]).cut;
+    const mit = eins([{ load: 1, rpmFrac: 1, onLimiter: true }]).cut;
+    teile.push('Stottern ' + ohne.toFixed(2) + '/' + mit.toFixed(2));
+    if (!(ohne === 0 && mit > 0)) schlecht.push('Stottern haengt nicht am Begrenzer');
+
+    // 3. Knaller NUR beim Lastabfall bei Drehzahl. Drei Faelle, und die letzten zwei sind
+    //    die Gegenproben.
+    const abfall = eins([{ load: 1, rpmFrac: 0.8 }, { load: 0, rpmFrac: 0.8 }]).knaller;
+    const konstant = eins([{ load: 1, rpmFrac: 0.8 }, { load: 1, rpmFrac: 0.8 }]).knaller;
+    const langsam = eins([{ load: 1, rpmFrac: 0.2 }, { load: 0, rpmFrac: 0.2 }]).knaller;
+    teile.push('Knaller ' + abfall + '/' + konstant + '/' + langsam);
+    if (!(abfall > 0)) schlecht.push('kein Knaller beim Lastabfall');
+    if (konstant !== 0) schlecht.push('Knaller bei konstantem Gas');
+    if (langsam !== 0) schlecht.push('Knaller bei niedriger Drehzahl');
+    // Und die Staerke haengt am Motor: ein Turbo knallt kaum, ein Sauger viel.
+    const viel = eins([{ load: 1, rpmFrac: 0.9 }, { load: 0, rpmFrac: 0.9 }],
+                      { crackle: 0.62 }).knaller;
+    const kaum = eins([{ load: 1, rpmFrac: 0.9 }, { load: 0, rpmFrac: 0.9 }],
+                      { crackle: 0.12 }).knaller;
+    teile.push('je Motor ' + viel + '/' + kaum);
+    if (!(viel > kaum)) schlecht.push('Knallstaerke haengt nicht am Motor');
+
+    // 3b. UND KEIN KNALLER WAEHREND EINES GANGWECHSELS. Das war die Ursache des
+    //     gemeldeten Klickens: in 40-physics.js steht engineLoad = isShifting ? 0 : throttle,
+    //     also faellt die Last bei JEDEM Gangwechsel auf null - und ein bis vier
+    //     Rauschstoesse kurz hintereinander sind ein Klicken. Beim Runterschalten mit hoher
+    //     Drehzahl waren es die meisten, weil ihre Zahl mit rpmFrac waechst.
+    const beimSchalten = eins([{ load: 1, rpmFrac: 0.9 },
+                                { load: 0, rpmFrac: 0.9, isShifting: true }]).knaller;
+    teile.push('beim Schalten ' + beimSchalten);
+    if (beimSchalten !== 0) schlecht.push('Knaller waehrend des Gangwechsels');
+
+    // 4. Schaltknall an der FLANKE und nur unter Last.
+    const flanke = eins([{ load: 0.9 }, { load: 0.9, isShifting: true }]).schaltKnall;
+    const gehalten = eins([{ load: 0.9, isShifting: true },
+                           { load: 0.9, isShifting: true }]).schaltKnall;
+    const ohneLast = eins([{ load: 0.1 }, { load: 0.1, isShifting: true }]).schaltKnall;
+    teile.push('Schaltknall ' + flanke + '/' + gehalten + '/' + ohneLast);
+    if (!(flanke > 0)) schlecht.push('kein Schaltknall');
+    if (gehalten !== 0) schlecht.push('Schaltknall dauert an statt an der Flanke');
+    if (ohneLast !== 0) schlecht.push('Schaltknall ohne Last');
+
+    // 5. Getriebeheulen: mit dem TEMPO, und im kurzen Gang hoeher als im langen. Das ist
+    //    der Punkt - es haengt an der Raddrehzahl mal Uebersetzung, nicht an der Drehzahl.
+    const top = physEngine.config.topSpeedKmh;
+    const steht = eins([{ speedKmh: 0, load: 1 }]).whineGain;
+    const rollt = eins([{ speedKmh: top * 0.6, load: 1 }]).whineGain;
+    const kurz = eins([{ speedKmh: top * 0.3, load: 1, gear: 0 }]).whineHz;
+    const lang = eins([{ speedKmh: top * 0.3, load: 1,
+                         gear: physEngine.config.gears.length - 1 }]).whineHz;
+    teile.push('Heulen ' + kurz + '/' + lang + ' Hz');
+    if (steht !== 0) schlecht.push('Heulen im Stand');
+    if (!(rollt > 0)) schlecht.push('kein Heulen beim Rollen');
+    if (!(kurz > lang * 1.5)) schlecht.push('Heulen haengt nicht am Gang');
+
+    // 6. Der Lader: NUR bei aufgeladenen Motoren, und mit Verzoegerung. Der Ladedruck darf
+    //    nicht im ersten Takt stehen - genau diese Verzoegerung ist das Turboloch.
+    const sauger = eins([{ load: 1, rpmFrac: 0.9 }], { turbo: false }).pfeifGain;
+    const reihe = OMEGA_TEST.sndExtras(
+      [{ load: 1, rpmFrac: 0.9 }, { load: 1, rpmFrac: 0.9 }, { load: 1, rpmFrac: 0.9 }],
+      { turbo: true, dt: 0.2 });
+    teile.push('Ladedruck ' + reihe.map(r => r.druck).join('->'));
+    if (sauger !== 0) schlecht.push('Sauger pfeift');
+    if (!(reihe[0].druck < reihe[2].druck)) schlecht.push('Ladedruck baut sich nicht auf');
+    if (!(reihe[0].druck < 0.5)) schlecht.push('Ladedruck ohne Verzoegerung');
+    const bo = OMEGA_TEST.sndExtras(
+      [{ load: 1, rpmFrac: 0.9 }, { load: 1, rpmFrac: 0.9 }, { load: 0, rpmFrac: 0.9 }],
+      { turbo: true, dt: 0.6 })[2].abblasen;
+    if (!(bo > 0)) schlecht.push('kein Abblasen beim Lastwegnehmen');
+    // 6b. Und auch das Abblasen NICHT beim Gangwechsel - derselbe falsche Ausloeser wie beim
+    //     Knaller, dazu mit 34 Hz Rechteck moduliert. Der zweite Teil des Klickens.
+    const boSchalt = OMEGA_TEST.sndExtras(
+      [{ load: 1, rpmFrac: 0.9 }, { load: 1, rpmFrac: 0.9 },
+       { load: 0, rpmFrac: 0.9, isShifting: true }],
+      { turbo: true, dt: 0.6 })[2].abblasen;
+    if (boSchalt !== 0) schlecht.push('Abblasen waehrend des Gangwechsels');
+
+    // 6c. DAS STOTTERN GEHT MIT ZEITKONSTANTE AUF. Ein Runterschalten mit zu hoher Drehzahl
+    //     schiebt die Drehzahl fuer einen oder zwei Takte ueber den Begrenzer; eine
+    //     Torschaltung, die dabei voll aufgeht, ist ein Klick und kein Stottern. Also: ein
+    //     Aufblitzen bleibt leise, ein Anstehen wird voll.
+    const blitz = OMEGA_TEST.sndExtras([{ load: 1, rpmFrac: 1, onLimiter: true }],
+                                       { dt: 0.045 })[0].cut;
+    const steht2 = OMEGA_TEST.sndExtras(
+      [1, 2, 3, 4, 5, 6, 7, 8].map(() => ({ load: 1, rpmFrac: 1, onLimiter: true })),
+      { dt: 0.045 });
+    teile.push('Stottern Blitz ' + blitz.toFixed(2) + ' -> steht '
+               + steht2[7].cut.toFixed(2));
+    if (!(blitz < 0.15)) schlecht.push('Stottern klickt beim Aufblitzen: ' + blitz.toFixed(2));
+    if (!(steht2[7].cut > 0.3)) schlecht.push('Stottern kommt am Begrenzer nicht an');
+
+    // 7. DER SCHALTER stellt alle sechs ab, und zwar NEUTRAL: der Tiefpass geht auf 20 kHz
+    //    und nicht auf irgendeinen Wert, die Zusatzquellen auf null.
+    const aus = eins([{ load: 1, rpmFrac: 1, onLimiter: true, isShifting: true,
+                        speedKmh: top * 0.8 }], { ein: false, turbo: true });
+    teile.push('aus: Ton ' + aus.tonHz + ' Hz');
+    const reste = [];
+    if (aus.tonHz !== 20000) reste.push('Tiefpass ' + aus.tonHz);
+    if (aus.cut !== 0) reste.push('Stottern');
+    if (aus.whineGain !== 0) reste.push('Heulen');
+    if (aus.pfeifGain !== 0) reste.push('Pfeifen');
+    if (aus.knaller !== 0) reste.push('Knaller');
+    if (!aus.aus) reste.push('Kennzeichnung');
+    if (reste.length) schlecht.push('ausgeschaltet bleibt: ' + reste.join(', '));
+
+    // 8. DIE BAUART DES PFEIFENS. Ein reiner Ton zwischen 1,7 und 7 kHz IST ein Piepsen,
+    //    und genau so war es gemeldet: beim Formel 1 und beim M4 GT3, also zwei der drei
+    //    aufgeladenen Motoren. Ein Verdichterpfeifen ist ein Ton IN breitbandigem Rauschen,
+    //    also Rauschen durch einen schmalen Bandpass - und kein Oszillator.
+    //
+    //    Geprueft wird die Bauart und nicht der Klang, denn den kann dieser Test nicht
+    //    hoeren. Ohne die Zeile kaeme beim naechsten Aufraeumen jemand auf die naheliegende
+    //    Idee, dafuer wieder einen Sinus zu nehmen. Steht der Bus noch nicht - es gibt ihn
+    //    erst nach einer Nutzergeste -, sagt der Test das statt zu schweigen.
+    if (OMEGA_TEST.sndExtrasBau) {
+      const bau = OMEGA_TEST.sndExtrasBau();
+      if (!bau.gebaut) {
+        teile.push('Bauart: Bus noch nicht gebaut (kein Ton angefordert)');
+      } else {
+        teile.push('Pfeifen ' + bau.pfeif + ' Q' + bau.guete);
+        if (/Oscillator/.test(bau.pfeif || '')) {
+          schlecht.push('Pfeifen ist ein Oszillator, das piepst');
+        }
+        if (!/Biquad/.test(bau.pfeif || '')) {
+          schlecht.push('Pfeifen ist kein Bandpass: ' + bau.pfeif);
+        }
+        if (!/BufferSource/.test(bau.pfeifQuelle || '')) {
+          schlecht.push('Pfeifen wird nicht von Rauschen gespeist: ' + bau.pfeifQuelle);
+        }
+        // Zu hohe Guete macht aus dem Bandpass wieder einen Oszillator - dann ist das
+        // Piepsen zurueck, ohne dass ein Oszillator im Code steht.
+        if (bau.guete !== null && bau.guete > 25) {
+          schlecht.push('Guete ' + bau.guete + ' zu hoch, der Bandpass klingelt');
+        }
+      }
+    }
+
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Jede Ansicht bleibt lesbar ----
+  //
+  // DIESER TEST HAT DREI ECHTE FEHLER GEFUNDEN, als die helle Ansicht dazukam, und keinen
+  // davon haette man am Bildschirm sicher gesehen:
+  //
+  //     #race-rpm       hellblau auf weiss                        Kontrast 1,33
+  //     #race-lap-best  helles Gruen auf weiss                    Kontrast 1,96
+  //     #race-yaw       dunkle Tinte auf dunklem G-Plot-Einsatz    Kontrast 1,05
+  //
+  // Der dritte ist der lehrreiche: eine helle Ansicht braucht dunkle Einsaetze fuer die zwei
+  // Instrumente, die hell auf dunkel ZEICHNEN - und dann muss die Tinte DARIN wieder hell
+  // sein. Eine einzige Tintenfarbe kann das nicht, und genau daran ist es aufgefallen.
+  //
+  // Gerechnet wird der Kontrast nach WCAG (relative Leuchtdichte, (L1+0,05)/(L2+0,05)) und
+  // gegen 3 geprueft - das ist die Grenze fuer grossen Text, und Cockpitziffern sind gross.
+  //
+  // WAS DIESER TEST NICHT KANN, und das gehoert dazu: den Hintergrund findet er, indem er
+  // nach oben laeuft, bis eine deckende Farbe kommt. Ein Verlauf oder ein Bild wird als
+  // dunkel bzw. hell EINGESCHAETZT, je nach Ansicht. Er kann also falschen Alarm geben; dann
+  // ist die Antwort, die wirkliche Farbe an der Stelle ausdruecklich zu setzen, und nicht,
+  // den Test nachsichtiger zu machen.
+  stAdd('Cockpit-Ansichten: alles lesbar', () => {
+    const sel = $('setting-cockpit');
+    if (!sel) return { ok: false, mass: 'setting-cockpit fehlt' };
+    const merk = sel.value;
+    const schlecht = [];
+    const teile = [];
+    try {
+      const lum = (c) => {
+        const m = (c || '').match(/\d+(\.\d+)?/g);
+        if (!m || m.length < 3) return null;
+        const [r, g, b] = m.slice(0, 3).map(Number).map(v => {
+          const x = v / 255;
+          return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const kontrast = (a, b) => {
+        const A = lum(a), B = lum(b);
+        if (A === null || B === null) return 21;
+        return (Math.max(A, B) + 0.05) / (Math.min(A, B) + 0.05);
+      };
+      // Der Grund unter einem Element: die erste deckende Farbe nach oben. Trifft er statt
+      // dessen ein Bild oder einen Verlauf, wird er eingeschaetzt - hell im hellen Schirm,
+      // sonst dunkel.
+      const hell = () => document.body.dataset.cockpit === 'modern';
+      const grund = (el) => {
+        let n = el;
+        while (n && n !== document.body) {
+          const cs = getComputedStyle(n);
+          if (cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+            return cs.backgroundColor;
+          }
+          if (cs.backgroundImage !== 'none') {
+            return (n.id === 'race-dash' && hell()) ? 'rgb(248,250,252)' : 'rgb(14,18,24)';
+          }
+          n = n.parentElement;
+        }
+        return hell() ? 'rgb(255,255,255)' : 'rgb(10,14,22)';
+      };
+      for (const v of Array.prototype.map.call(sel.options, o => o.value)) {
+        sel.value = v;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        let schlimmst = 21, wo = '';
+        let geprueft = 0;
+        document.querySelectorAll('#race-dash *').forEach(el => {
+          // Nur Elemente mit EIGENEM Text und sichtbar: ein Container erbt seine Farbe und
+          // zaehlt sonst doppelt.
+          const eigen = [...el.childNodes].some(x => x.nodeType === 3 && x.nodeValue.trim());
+          // NICHT offsetParent: der Test laeuft aus dem Selbsttest-Reiter, und dort ist das
+          // Cockpit nicht angezeigt - dann waere offsetParent ueberall null und der Test
+          // wuerde nichts messen. Die Farbe eines Elements haengt nicht daran, welcher Reiter
+          // offen ist; gefiltert wird deshalb nach der EIGENEN Anzeigeart.
+          if (!eigen || el.hidden || getComputedStyle(el).display === 'none') return;
+          geprueft++;
+          const k = kontrast(getComputedStyle(el).color, grund(el));
+          if (k < schlimmst) { schlimmst = k; wo = el.id || el.className; }
+        });
+        teile.push(v + ' ' + schlimmst.toFixed(2));
+        if (geprueft < 5) schlecht.push(v + ': nur ' + geprueft + ' Texte gefunden');
+        if (schlimmst < 3) {
+          schlecht.push(v + ': ' + wo + ' hat Kontrast ' + schlimmst.toFixed(2));
+        }
+      }
+      return { ok: schlecht.length === 0,
+               mass: 'schlechtester Kontrast je Ansicht: ' + teile.join(' | ')
+                     + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+    } finally {
+      sel.value = merk;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+
+  // ---- Streckenkarte: die Autos stehen dort, wo sie sind ----
+  //
+  // DER BEFUND: die Karte zeichnete GAR KEIN Auto. Der einzige Aufrufer, der eine Position
+  // mitgab, war die Cockpit-Minikarte, und die ist entfernt worden - der Editor gab
+  // ausdruecklich null. Der Punkt, den man auf der Startgeraden sah und fuer ein Auto hielt,
+  // ist die Start/Ziel-Linie: ein 4 px breiter gruener Strich quer zur Bahn.
+  //
+  // Und der Versatz war falsch: (index + 1) * Abtastpunkte setzte den Punkt an das ENDE der
+  // Kachel, auf der das Auto steht - eine ganze Kachel zu weit.
+  stAdd('Streckenkarte: Autopunkte an der richtigen Kachel', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.trackMarks) {
+      return { skip: true, mass: 'trackMarks nicht vorhanden' };
+    }
+    const schlecht = [];
+    // Ohne Autos KEIN Punkt - sonst waere der gruene Strich wieder als Auto zu lesen.
+    const leer = OMEGA_TEST.trackMarks(null, []);
+    if (leer.punkte.length !== 0) schlecht.push(leer.punkte.length + ' Punkte ohne Autos');
+    // Zwei Autos auf verschiedenen Kacheln: zwei Punkte, verschiedene Orte, beide Kuerzel.
+    const zwei = OMEGA_TEST.trackMarks(null, [
+      { index: 0, phase: 0, farbe: '#5aa9ff', kuerzel: 'ICH' },
+      { index: 4, phase: 0.5, farbe: '#ffb02e', kuerzel: 'GH1' },
+    ]);
+    if (zwei.punkte.length !== 2) schlecht.push(zwei.punkte.length + ' Punkte statt 2');
+    if (zwei.kuerzel.join(',') !== 'ICH,GH1') {
+      schlecht.push('Kuerzel: ' + zwei.kuerzel.join(','));
+    }
+    if (zwei.punkte.length === 2) {
+      const d = Math.hypot(zwei.punkte[0].x - zwei.punkte[1].x,
+                           zwei.punkte[0].y - zwei.punkte[1].y);
+      if (!(d > 20)) schlecht.push('beide Punkte am selben Ort (' + d.toFixed(0) + ')');
+    }
+    // DER VERSATZ: Kachel 0 mit Phase 0 muss WEITER VORN liegen als Kachel 0 mit Phase 1,
+    // und Phase 1 auf Kachel 0 muss dort liegen, wo Phase 0 auf Kachel 1 liegt. Das ist die
+    // Zusicherung, die die alte Rechnung gebrochen hat.
+    const a = OMEGA_TEST.trackMarks(null, [{ index: 0, phase: 0, farbe: '#fff' }]);
+    const b = OMEGA_TEST.trackMarks(null, [{ index: 0, phase: 1, farbe: '#fff' }]);
+    const c = OMEGA_TEST.trackMarks(null, [{ index: 1, phase: 0, farbe: '#fff' }]);
+    if (a.punkte.length && b.punkte.length && c.punkte.length) {
+      const dAB = Math.hypot(a.punkte[0].x - b.punkte[0].x, a.punkte[0].y - b.punkte[0].y);
+      const dBC = Math.hypot(b.punkte[0].x - c.punkte[0].x, b.punkte[0].y - c.punkte[0].y);
+      if (!(dAB > 10)) schlecht.push('Phase wirkt nicht (' + dAB.toFixed(0) + ')');
+      if (!(dBC < 2)) schlecht.push('Kachelende trifft nicht den naechsten Anfang ('
+                                    + dBC.toFixed(0) + ')');
+    }
+    return { ok: schlecht.length === 0,
+             mass: zwei.kacheln + ' Kacheln, ' + zwei.punkte.length + ' Autopunkte, '
+                   + leer.punkte.length + ' ohne Autos, ' + zwei.echte + ' echte verbunden'
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Ueberholen: die zwei Regeln duerfen sich nicht bestreiten ----
+  //
+  // DER BEFUND, der diesen Test noetig gemacht hat, und er war nur zu sehen, wenn man beide
+  // Zahlen NEBENEINANDER legt: angesetzt wurde bei einem Abstand unter 0,9 Kacheln, das
+  // Abstandhalten lupfte das Gas aber schon ab 0,7 - plus Zuschlag beim Annaehern. Das
+  // Angriffsfenster war 0,2 Kacheln breit, und der Abstandhalter druckte den Verfolger genau
+  // daraus heraus. Gemeldet als "sie ueberholen sich nicht richtig, da ist der Wurm drin".
+  //
+  // Dazu die Wuerfelrate: alle 4 Sekunden ein Versuch mit 0,45 x Wuerze. Bei der
+  // eingestellten Wuerze 0,4 ist das eine Attacke pro 22 Sekunden durchgehenden Klebens.
+  //
+  // Geprueft wird beides, und keine der beiden Aussagen laesst sich durch Hinsehen pruefen -
+  // dafuer sind es Konstanten in verschiedenen Abschnitten.
+  stAdd('Ueberholen: Reichweite ueber dem Mindestabstand, Wartezeit brauchbar', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostPassRates) {
+      return { skip: true, mass: 'ghostPassRates nicht vorhanden' };
+    }
+    const merk = ghostCfg.spice;
+    const schlecht = [];
+    let r;
+    try {
+      ghostCfg.spice = 0.4;          // die Vorgabe, gefahren ermittelt
+      r = OMEGA_TEST.ghostPassRates();
+      // 1. Die Reichweite MUSS ueber dem Mindestabstand liegen. Sonst bestreiten die zwei
+      //    Regeln dasselbe Band, und der Abstandhalter gewinnt - er wirkt jeden Takt, die
+      //    Attacke nur beim Wuerfeln.
+      if (!(r.reichweite > r.abstandMin)) {
+        schlecht.push('Reichweite ' + r.reichweite + ' nicht ueber Mindestabstand '
+                      + r.abstandMin);
+      }
+      // 2. Und das Fenster muss BREIT genug sein, um es durchgehend zu halten. 0,2 Kacheln
+      //    waren es vorher, und das hat nicht gereicht.
+      if (!(r.fenster >= 0.4)) {
+        schlecht.push('Fenster nur ' + r.fenster + ' Kacheln breit');
+      }
+      // 3. Die Wartezeit bei der VORGABE-Wuerze muss im Bereich einer Runde liegen. Ohne
+      //    diese Zahl ist "wird ueberholt" eine Hoffnung.
+      if (!(r.wartenS <= 10)) {
+        schlecht.push('Wartezeit ' + r.wartenS + ' s bei Wuerze ' + r.wuerze);
+      }
+      // 4. Gegenprobe: bei Wuerze null darf NIE angesetzt werden, sonst ist der Regler
+      //    keiner.
+      ghostCfg.spice = 0;
+      const aus = OMEGA_TEST.ghostPassRates();
+      if (aus.p !== 0) schlecht.push('Wuerze 0 wuerfelt trotzdem');
+    } finally {
+      ghostCfg.spice = merk;
+    }
+    return { ok: schlecht.length === 0,
+             mass: 'Reichweite ' + r.reichweite + ' gegen Mindestabstand ' + r.abstandMin
+                   + ' (Fenster ' + r.fenster + ') | Wurf alle ' + r.wurfMs + ' ms mit p='
+                   + r.p + ' -> ' + r.wartenS + ' s bei Wuerze ' + r.wuerze
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Autopilot in der Einfuehrungsrunde ----
+  //
+  // DER BEFUND, der diesen Test noetig gemacht hat: raceFormationLap kam in 50-drive.js -
+  // dem Eingabepfad des Fahrers - an keiner Stelle vor. Die Ghosts rollten von selbst im
+  // Boxentempo, das Auto des Fahrers wurde nur GEDROSSELT und musste weiter von Hand
+  // gelenkt und gegast werden. Der fliegende Start war damit halb umgesetzt.
+  //
+  // Geprueft wird die Regelung und nicht die Anzeige, in sechs Punkten. Der vierte ist der,
+  // ohne den es rammt: in zwei Kolonnen dicht hintereinander muss man anhalten koennen.
+  stAdd('Autopilot: Einfuehrungsrunde faehrt das Auto selbst', () => {
+    if (typeof autopilot !== 'function' || typeof autopilotGrund !== 'function') {
+      return { skip: true, mass: 'Autopilot nicht erreichbar' };
+    }
+    const merk = { flag: flagState, tm: trackMode, v: physEngine.state.speedKmh,
+                   form: raceFormationLap };
+    const schlecht = [];
+    try {
+      flagState = 'green'; trackMode = 'on';
+      const bei = (frac, bremse) => {
+        physEngine.state.speedKmh = frac * physEngine.config.topSpeedKmh;
+        return autopilot(bremse || 0);
+      };
+      // 1. Ohne Einfuehrungsrunde kein Eingriff.
+      raceFormationLap = false;
+      if (bei(0.1) !== null) schlecht.push('greift ohne Einfuehrungsrunde');
+      // 2. In der Einfuehrungsrunde greift sie, und der Grund ist der richtige.
+      raceFormationLap = true;
+      // formationPace() und nicht PIT_SPEED_FACTOR: das Boxentempo liegt UNTER der
+      // Leseschwelle der Ghosts, und deshalb ist es seit v0.5.1 nur noch der Boden des
+      // Formationstempos. Ein Test, der gegen den Boden prueft, misst nicht das Ziel.
+      const ziel = formationPace();
+      const langsam = bei(ziel * 0.4);
+      const schnell = bei(ziel * 2.5);
+      const passend = bei(ziel);
+      if (!langsam || !schnell || !passend) {
+        return { ok: false, mass: 'greift in der Einfuehrungsrunde nicht' };
+      }
+      if (langsam.grund !== 'formation') schlecht.push('Grund ' + langsam.grund);
+      if (!(langsam.throttle > 0.2 && langsam.brake === 0)) schlecht.push('zu langsam: kein Gas');
+      if (!(schnell.brake > 0.2 && schnell.throttle === 0)) schlecht.push('zu schnell: keine Bremse');
+      if (!(passend.throttle < 0.15 && passend.brake < 0.15)) schlecht.push('am Ziel nicht ruhig');
+      // 3. Das Ziel ist das FORMATIONSTEMPO. Gegenprobe ueber den Nulldurchgang des
+      //    Reglers: knapp darunter muss Gas kommen, knapp darueber Bremse.
+      const unter = bei(ziel * 0.9), ueber = bei(ziel * 1.1);
+      if (!(unter.throttle > 0 && ueber.brake > 0)) schlecht.push('Ziel nicht das Formationstempo');
+      // 3b. UND DAS FORMATIONSTEMPO MUSS UEBER DER LESESCHWELLE LIEGEN. Das ist der
+      //     Widerspruch, der die Einfuehrungsrunde kaputt gemacht hat: gedeckelt war sie auf
+      //     das Boxentempo (0,271), waehrend der Ghost-Temporegler bei 0,35 beginnt, weil das
+      //     Auto darunter die gedruckte Strecke nicht mehr LIEST. Die Ghosts lasen also
+      //     nichts, wurden als "Bahn verlassen" geparkt und blinkten - und die Runde konnte
+      //     gar nicht enden, denn ihr Ende ist eine Ueberfahrt von Start/Ziel.
+      if (typeof GHOST_READ_MIN === 'number' && !(ziel >= GHOST_READ_MIN)) {
+        schlecht.push('Formationstempo ' + ziel.toFixed(3) + ' unter der Leseschwelle '
+                      + GHOST_READ_MIN);
+      }
+      // 4. Die Bremse des Fahrers gewinnt - in der Einfuehrungsrunde.
+      const mitBremse = bei(ziel * 0.4, 0.8);
+      if (!(mitBremse.brake >= 0.8 && mitBremse.throttle === 0)) {
+        schlecht.push('Bremse des Fahrers verliert');
+      }
+      // 5. Und bei Gelb gewinnt sie NICHT: dort ist der Sinn, dass die Haende ganz frei
+      //    sind. Ohne diese Gegenprobe waere Punkt 4 auch gruen, wenn er ueberall gilt.
+      raceFormationLap = false; flagState = 'yellow';
+      const gelbBremse = bei(0.1, 0.8);
+      if (gelbBremse && gelbBremse.brake > 0.5) schlecht.push('bei Gelb greift die Bremse doch');
+      // 6. Ausdruck-Stellung: kein Eingriff, auch nicht in der Einfuehrungsrunde. Ohne
+      //    Leitplanken faehrt ein Autopilot ohne Querregelung in die Bande.
+      raceFormationLap = true; flagState = 'green'; trackMode = 'off';
+      if (bei(0.1) !== null) schlecht.push('greift in der Ausdruck-Stellung');
+      return { ok: schlecht.length === 0,
+               mass: 'Ziel ' + ziel.toFixed(3) + ' (Boxentempo '
+                     + PIT_SPEED_FACTOR.toFixed(3) + ', Leseschwelle '
+                     + (typeof GHOST_READ_MIN === 'number' ? GHOST_READ_MIN : '?')
+                     + ') | bei 40 % Gas '
+                     + langsam.throttle.toFixed(2) + ', bei 250 % Bremse '
+                     + schnell.brake.toFixed(2) + ', am Ziel '
+                     + passend.throttle.toFixed(2) + '/' + passend.brake.toFixed(2)
+                     + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+    } finally {
+      flagState = merk.flag; trackMode = merk.tm;
+      physEngine.state.speedKmh = merk.v; raceFormationLap = merk.form;
+    }
+  });
+
+  // ---- Der Querversatz gilt fuer Ghosts UND das Fahrerauto ----
+  //
+  // "so wie Ghosts" heisst auch quer: Schlaengeln zum Reifenwaermen plus die Seite der
+  // Zweierkolonne. Geprueft wird, dass es EINE Definition ist - zwei Abschriften derselben
+  // zwei Konstanten waeren die naechste Abweichung, und sie faellt erst auf, wenn das Feld
+  // anders schlaengelt als der Fahrer.
+  stAdd('Einfuehrungsrunde: Fahrer und Ghosts teilen den Versatz', () => {
+    if (typeof formationOffset !== 'function' || typeof formationDriverOffset !== 'function') {
+      return { skip: true, mass: 'formationOffset nicht erreichbar' };
+    }
+    const schlecht = [];
+    // Gleiche Phase, gleicher Platz, gleiche Zeit -> gleicher Wert. Das ist die Zusicherung.
+    const a = {}, b = {};
+    a.weavePhase = b.weavePhase = 1.234;
+    const t = 1000000;
+    for (const platz of [0, 1, 2, 3, -1]) {
+      const va = formationOffset(a, platz, t), vb = formationOffset(b, platz, t);
+      if (Math.abs(va - vb) > 1e-12) schlecht.push('Platz ' + platz + ' unterschiedlich');
+    }
+    // Zwei benachbarte Plaetze gehen auseinander, ohne Platz gibt es keinen Kolonnenanteil.
+    const p0 = formationOffset(a, 0, t), p1 = formationOffset(a, 1, t);
+    const ohne = formationOffset(a, -1, t);
+    if (!(p0 > ohne && p1 < ohne)) schlecht.push('Kolonne ohne Vorzeichenwechsel');
+    // Und der Fahrer bekommt einen Wert im gleichen Rahmen.
+    const f = formationDriverOffset();
+    if (!(Math.abs(f) <= GHOST_WEAVE + GHOST_GRID_OFFSET + 1e-9)) {
+      schlecht.push('Fahrerversatz ausserhalb des Rahmens: ' + f);
+    }
+    return { ok: schlecht.length === 0,
+             mass: 'Platz 0 ' + p0.toFixed(3) + ', Platz 1 ' + p1.toFixed(3)
+                   + ', ohne Platz ' + ohne.toFixed(3) + ' | Fahrer ' + f.toFixed(3)
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Fliegender Start: der Schalter ist nicht mehr gesperrt ----
+  //
+  // Bis v0.4.53 trug er `disabled` und die Beschriftung "nicht umgesetzt", waehrend die
+  // Einfuehrungsrunde vollstaendig im Code stand. Der Test haelt beides fest: der Schalter
+  // muss bedienbar sein, und die alte Sperrklasse darf nirgends mehr stehen - eine Regel
+  // ohne Nutzer sieht wie eine Moeglichkeit aus.
+  stAdd('Fliegender Start: entsperrt', () => {
+    const el = $('race-flying');
+    if (!el) return { ok: false, mass: 'race-flying fehlt' };
+    const zeile = el.closest('.opt-row');
+    const gesperrt = el.disabled || (zeile && zeile.classList.contains('opt-off'));
+    const reste = document.querySelectorAll('.opt-off').length;
+    // Und das Etikett muss "experimentell" sagen und nicht mehr "nicht umgesetzt".
+    const tag = zeile ? zeile.querySelector('.wip-tag') : null;
+    const text = tag ? tag.textContent.trim() : '';
+    const ok = !gesperrt && reste === 0
+               && (text === 'experimentell' || text === 'experimental');
+    return { ok, mass: (gesperrt ? 'GESPERRT' : 'bedienbar') + ', Etikett "' + text
+                       + '", ' + reste + ' Reste von .opt-off' };
+  });
+
+  // ---- Fliegender Start: die Einfuehrungsrunde von der Ampel bis zur Freigabe ----
+  //
+  // Der ganze Ablauf in einer Probe, weil er nur als Ablauf etwas zusichert. Gefahren wird
+  // er ohne Auto: raceFormationLap und das Tempolimit sind Zustand der Rennleitung, und
+  // genau der ist die Zusicherung.
+  //
+  // Vier Dinge muessen danach stimmen: das Limit ist weg, die Einfuehrungsrunde ist
+  // beendet, die Rundenuhr ist NEU gestempelt, und gezaehlt wurde nichts. Der vierte ist
+  // der wichtigste - eine Einfuehrungsrunde, die als Runde zaehlt, waere eine geschenkte
+  // schnelle Runde.
+  stAdd('Fliegender Start: Einfuehrungsrunde und Freigabe', () => {
+    if (typeof raceFormationLap === 'undefined' || typeof endFormationLap !== 'function') {
+      return { skip: true, mass: 'Rennleitung nicht erreichbar' };
+    }
+    const merk = { state: raceState, form: raceFormationLap, lim: limitFormation,
+                   lapStart: raceLapStart, zeiten: raceLapTimes.slice(),
+                   part: racePartialMs };
+    try {
+      raceState = 'racing';
+      raceLapTimes = [];
+      raceFormationLap = true;
+      limitFormation = PIT_SPEED_FACTOR;
+      applySpeedLimit();
+      raceLapStart = Date.now() - 5000;
+      const limVor = physEngine.config.speedLimitFactor;
+      const startVor = raceLapStart;
+      // Die erste Ueberfahrt von Start/Ziel, egal von wem.
+      endFormationLap();
+      const limNach = physEngine.config.speedLimitFactor;
+      const ok = limVor < 0.9 && Math.abs(limNach - 1) < 1e-9
+                 && raceFormationLap === false
+                 && raceLapStart > startVor
+                 && raceLapTimes.length === 0;
+      return { ok, mass: 'Limit ' + limVor.toFixed(3) + ' -> ' + limNach.toFixed(3)
+                         + ', Einfuehrungsrunde ' + (raceFormationLap ? 'LAEUFT NOCH' : 'beendet')
+                         + ', Uhr ' + (raceLapStart > startVor ? 'neu gestempelt' : 'ALT')
+                         + ', gezaehlte Runden ' + raceLapTimes.length };
+    } finally {
+      raceFormationLap = merk.form;
+      limitFormation = merk.lim;
+      applySpeedLimit();
+      raceState = merk.state;
+      raceLapStart = merk.lapStart;
+      raceLapTimes = merk.zeiten;
+      racePartialMs = merk.part;
+    }
+  });
+
+  // ---- Startaufstellung: zwei benachbarte Plaetze gehen auseinander ----
+  //
+  // Die Wirkung, die die Aufstellung bis v0.4.53 nicht hatte: sie speiste nur die Liste.
+  // Geprueft wird das VORZEICHEN je Platz - Pole links, Zweiter rechts - und dass Versatz
+  // und Schlaengeln zusammen nicht an den Anschlag kommen.
+  stAdd('Startaufstellung: Zweierkolonne', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.gridOffsets) {
+      return { skip: true, mass: 'Messaufbau nicht vorhanden' };
+    }
+    const g = OMEGA_TEST.gridOffsets(6);
+    const schlecht = [];
+    for (let i = 0; i < g.versatz.length - 1; i++) {
+      if (g.versatz[i] * g.versatz[i + 1] >= 0) {
+        schlecht.push('Platz ' + (i + 1) + ' und ' + (i + 2) + ' auf derselben Seite');
+      }
+    }
+    if (!(g.betrag > 0.05)) schlecht.push('Versatz zu klein, unsichtbar');
+    if (!(g.zusammen < 0.5)) schlecht.push('mit dem Schlaengeln zu nah am Anschlag');
+    return { ok: schlecht.length === 0,
+             mass: 'Versatz ' + g.betrag + ', mit Schlaengeln ' + g.zusammen
+                   + ' | Vorzeichen ' + g.versatz.map(v => v > 0 ? '+' : '-').join('')
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Ansage: der gesprochene Text ----
+  //
+  // formatLapTime() liefert "62.43s", und vorgelesen ist das falsch: eine Stimme sagt
+  // daraus "zweiundsechzig Punkt vier drei Sekunden". Geprueft werden die drei Faelle, an
+  // denen es auseinandergeht - unter einer Minute, darueber, und die Bestzeit -, und dass
+  // das Dezimalzeichen zur SPRACHE passt: eine deutsche Stimme liest "58.3" als
+  // "achtundfuenfzig Punkt drei".
+  stAdd('Ansage: gesprochener Text', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ansage) {
+      return { skip: true, mass: 'Messaufbau nicht vorhanden' };
+    }
+    const kurz = OMEGA_TEST.ansage(58300, false).text;
+    const lang1 = OMEGA_TEST.ansage(62430, false).text;
+    const lang2 = OMEGA_TEST.ansage(143200, false).text;
+    const best = OMEGA_TEST.ansage(58300, true).text;
+    const schlecht = [];
+    // Keine Einheit unter einer Minute: auf einer Rennstrecke braucht eine Zeit keine.
+    if (!/^58[.,]3$/.test(kurz)) schlecht.push('kurz: ' + kurz);
+    // Ueber einer Minute: Minute und Rest getrennt, und der Rest ist NICHT die Gesamtzeit.
+    if (lang1.indexOf('2') < 0 || lang1.indexOf('62') >= 0) schlecht.push('eine Minute: ' + lang1);
+    if (lang2.indexOf('23') < 0) schlecht.push('zwei Minuten: ' + lang2);
+    // Der Plural, denn "2 Minute" ist der Fehler, den man erst hoert.
+    if (lang1 === lang2) schlecht.push('Singular und Plural gleich');
+    // Und die Bestzeit sagt etwas dazu.
+    if (best.length <= kurz.length) schlecht.push('Bestzeit ohne Zusatz: ' + best);
+    // Das Dezimalzeichen folgt der Sprache.
+    const deutsch = kurz.indexOf(',') >= 0;
+    if (lang === 'de' && !deutsch) schlecht.push('deutscher Modus mit Punkt');
+    if (lang === 'en' && deutsch) schlecht.push('englischer Modus mit Komma');
+    return { ok: schlecht.length === 0,
+             mass: [kurz, lang1, lang2, best].join(' | ')
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Ansage: jede Aeusserung bricht die vorherige ab ----
+  //
+  // Zwei Runden kurz hintereinander duerfen sich nicht stapeln, sonst laeuft die Stimme
+  // nach und sagt die vorletzte Zeit, waehrend man schon in der naechsten Runde ist.
+  // Geprueft wird an den Zaehlern und nicht am Lautsprecher: ob wirklich Ton kommt, haengt
+  // an den Stimmen des Systems, aber DASS vor jeder Aeusserung abgebrochen wird, ist eine
+  // Eigenschaft des Codes.
+  stAdd('Ansage: stapelt sich nicht', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ansage || typeof speakLap !== 'function') {
+      return { skip: true, mass: 'Messaufbau nicht vorhanden' };
+    }
+    if (!('speechSynthesis' in window)) return { skip: true, mass: 'keine Sprachausgabe' };
+    const el = $('setting-announce');
+    const merk = el ? el.checked : null;
+    try {
+      if (el && !el.checked) { el.checked = true; el.dispatchEvent(new Event('change', { bubbles: true })); }
+      const vor = OMEGA_TEST.ansage();
+      speakLap(58300, false);
+      speakLap(59100, true);
+      const nach = OMEGA_TEST.ansage();
+      const rufe = nach.calls - vor.calls;
+      const abbr = nach.cancels - vor.cancels;
+      // Und die Gegenprobe: ausgeschaltet darf gar nichts passieren.
+      if (el) { el.checked = false; el.dispatchEvent(new Event('change', { bubbles: true })); }
+      speakLap(60000, false);
+      const aus = OMEGA_TEST.ansage();
+      const stillRufe = aus.calls - nach.calls;
+      const ok = rufe === 2 && abbr === 2 && stillRufe === 0;
+      return { ok, mass: rufe + ' Aeusserungen, ' + abbr + ' Abbrueche, ausgeschaltet '
+                         + stillRufe + ' Aeusserungen' };
+    } finally {
+      if (el && merk !== null) {
+        el.checked = merk;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    }
+  });
+
+  // ---- Marke und Zaehler: die zwei aussenwirksamen Zeilen ----
+  //
+  // Beide haben denselben wunden Punkt, und der Verweispruefer im Build sieht ihn NICHT: er
+  // ueberspringt alles mit :// und alles, was mit // beginnt. Eine protokollrelative
+  // Adresse loest von der Platte zu file://gc.zgo.at/count.js auf - kein Ausfall des
+  // Zaehlers, sondern ein Zugriff auf einen Ordner, den es nicht gibt. Deshalb prueft das
+  // hier ein Test und nicht der Build.
+  stAdd('Marke und Zaehler: https, einmal, mit rel', () => {
+    const schlecht = [];
+    const a = document.querySelectorAll('.gt3-marke a[href]');
+    if (a.length !== 1) schlecht.push(a.length + ' Kurzlinks im Cockpit');
+    if (a.length) {
+      const h = a[0].getAttribute('href');
+      if (h.indexOf('https://') !== 0) schlecht.push('Kurzlink nicht https: ' + h);
+      if (h.indexOf('t1p.de') < 0) schlecht.push('Kurzlink zeigt woanders: ' + h);
+      if ((a[0].getAttribute('rel') || '').indexOf('noopener') < 0) schlecht.push('rel ohne noopener');
+      if (a[0].getAttribute('target') !== '_blank') schlecht.push('kein target=_blank');
+      // Das Omega kommt per <use> aus dem Kopfzeilen-Logo. Fehlt der Pfad, bleibt ein
+      // leeres Kaestchen stehen, und das faellt auf einem Bildschirmfoto nicht auf.
+      if (!document.getElementById('om')) schlecht.push('Logopfad #om fehlt');
+    }
+    const z = document.querySelectorAll('script[data-goatcounter]');
+    if (z.length !== 1) schlecht.push(z.length + ' Zaehlskripte');
+    if (z.length) {
+      const src = z[0].getAttribute('src') || '';
+      if (src.indexOf('https://') !== 0) schlecht.push('Zaehler nicht https: ' + src);
+      if (!z[0].hasAttribute('async')) schlecht.push('Zaehler nicht async');
+    }
+    return { ok: schlecht.length === 0,
+             mass: a.length + ' Kurzlink, ' + z.length + ' Zaehlskript'
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : ', beide https') };
+  });
+
   // ---- Layout: Neutral laesst die Kalibrierung unberuehrt ----
   //
   // Die Aenderung soll rein additiv sein: wer nichts umstellt, merkt nichts. Geprueft wird es
@@ -1520,13 +2700,30 @@
                       + ', Markup ' + el.defaultValue);
       }
     }
-    // Und die Schwelle: sie muss SPAET liegen. Ein Quietschen ab 30 Prozent ist ein
-    // Dauergeraeusch und keine Rueckmeldung.
-    if (OMEGA_TEST.sndTyreSquealCurve) {
+    // Und die Schwelle. ZWEI Forderungen, und die erste ist die, deren Fehlen das
+    // Quietschen bis v0.4.55 nie hat eintreten lassen:
+    //
+    //   ERREICHBAR. Der Test forderte vorher nur "Schwelle >= 0,7". Das war erfuellt - sie
+    //   stand auf 0,85 - und trotzdem quietschte es nie: gemessen erreicht die
+    //   Querausnutzung 0,85 erst bei 265 km/h mit VOLLEM Ausschlag. "Spaet" ist eine Aussage
+    //   ueber die Zahl und nicht darueber, ob sie jemals vorkommt. Gemessen wird deshalb an
+    //   einem Betriebspunkt, den es auf einer Hausstrecke gibt: 170 km/h, voller Ausschlag.
+    //
+    //   NICHT ZU TIEF. Ein Quietschen, das bei jeder Kurve mitlaeuft, ist ein
+    //   Dauergeraeusch und keine Rueckmeldung.
+    if (OMEGA_TEST.sndTyreSquealCurve && OMEGA_TEST.physSteerGrip) {
       const k = OMEGA_TEST.sndTyreSquealCurve();
-      teile.push('Schwelle ' + k.schwelle);
-      if (!(k.schwelle >= 0.7 && k.schwelle < 1)) {
-        schlecht.push('Schwelle ' + k.schwelle + ' liegt nicht spaet');
+      const p = OMEGA_TEST.physSteerGrip({ kmh: 170, throttle: 0.2, brake: 0, steering: 1 });
+      // latUse aus gripLong zurueckgerechnet: gripLong = sqrt(1 - latUse^2).
+      const erreicht = Math.sqrt(Math.max(0, 1 - p.gripLong * p.gripLong));
+      teile.push('Schwelle ' + k.schwelle + ', bei 170 km/h voll erreicht '
+                 + erreicht.toFixed(2));
+      if (!(k.schwelle < erreicht)) {
+        schlecht.push('Schwelle ' + k.schwelle + ' unerreichbar: eine schnelle Kurve kommt '
+                      + 'nur auf ' + erreicht.toFixed(2));
+      }
+      if (!(k.schwelle >= 0.3)) {
+        schlecht.push('Schwelle ' + k.schwelle + ' zu tief, das wird ein Dauergeraeusch');
       }
     }
     return { ok: !schlecht.length,
@@ -3622,14 +4819,18 @@
   // sein, bei zu schnell Bremse, und bei richtigem Tempo beides nahe null. Ohne den letzten
   // Punkt waere ein Regler, der dauerhaft Vollgas gibt, ebenfalls "gruen".
   stAdd('Autopilot nur auf der Bahn, und er regelt', () => {
-    if (typeof autopilotYellow !== 'function') {
-      return { skip: true, mass: 'autopilotYellow nicht vorhanden' };
+    if (typeof autopilot !== 'function') {
+      return { skip: true, mass: 'autopilot nicht vorhanden' };
     }
-    const merk = { flag: flagState, tm: trackMode, v: physEngine.state.speedKmh };
+    const merk = { flag: flagState, tm: trackMode, v: physEngine.state.speedKmh,
+                   form: raceFormationLap };
     try {
+      // Ausdruecklich aus: dieser Test prueft den Grund "gelb", und ein von einem
+      // vorherigen Test stehengelassenes true haette ihn auf den anderen Zweig geschickt.
+      raceFormationLap = false;
       const bei = (kmh) => {
         physEngine.state.speedKmh = kmh / REAL_SCALE;
-        return autopilotYellow();
+        return autopilot(0);
       };
       // 1. Gruen: gar kein Eingriff, egal wie schnell.
       flagState = 'green'; trackMode = 'on';
@@ -3662,6 +4863,7 @@
       flagState = merk.flag;
       trackMode = merk.tm;
       physEngine.state.speedKmh = merk.v;
+      raceFormationLap = merk.form;
     }
   });
 
@@ -4001,12 +5203,20 @@
       // Nach jedem Test dem Browser Luft lassen, sonst steht die Tabelle bis zum Ende leer
       // und man weiss nicht, ob noch etwas passiert.
       //
-      // setTimeout und NICHT requestAnimationFrame: rAF feuert nur, wenn die Seite
-      // tatsaechlich gezeichnet wird. In einem Hintergrundtab oder einem nicht angezeigten
-      // Fenster kommt es nie, und der Testlauf bleibt nach der ersten Zeile stehen - genau
-      // das ist mir beim Pruefen passiert, und es traefe jeden, der waehrend des Laufs den
-      // Tab wechselt.
-      await new Promise(res => setTimeout(res, 0));
+      // WEDER requestAnimationFrame NOCH setTimeout, und beide Male aus demselben Grund -
+      // ein Lauf soll auch dann durchkommen, wenn niemand hinsieht:
+      //
+      //   rAF feuert nur, wenn die Seite gezeichnet wird. In einem Hintergrundtab kommt es
+      //   NIE, und der Lauf bleibt nach der ersten Zeile stehen.
+      //   setTimeout kommt, aber zu spaet. Chrome drosselt Zeitgeber im Hintergrund auf
+      //   einen Takt pro Sekunde und nach fuenf Minuten auf einen pro Minute. Gemessen mit
+      //   nicht angezeigtem Fenster: 19 von 104 Tests in 192 Sekunden, und die letzten 98
+      //   Sekunden brachten genau einen. Ein Lauf ueber hundert Tests kommt so nie zu Ende.
+      //
+      // Ein MessagePort-Takt ist keine Zeitgeber-Aufgabe und wird gar nicht gedrosselt. Er
+      // laesst dem Browser genauso Luft wie setTimeout(0) - die Tabelle fuellt sich weiter
+      // Zeile fuer Zeile -, haengt aber nicht daran, ob das Fenster vorne liegt.
+      await stLuft();
     }
     $('st-run').disabled = false;
     $('st-status').textContent = gut + ' ok, ' + schlecht + ' Fehler'

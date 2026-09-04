@@ -90,10 +90,32 @@
     // Unterschied, den CREDITS.md aufmacht, betrifft nur noch die Umgebungsgeraeusche.
     'amggt3', 'c6r', 'z06gt3r', 'vantagegt3', 'm4gt3', 'f296gt3', 'huracan', 'p992gt3r',
     'mustang', 'f1_2026',
+    // Vier historische Rennwagen, dazugekommen in v0.4.54 und als WIP gekennzeichnet: nach
+    // Gehoer geprueft ist keiner von ihnen. Damit sind es vierzehn Motoren und 56 Schleifen.
+    'gt40', 'lolat70', 'f330p4', 'mc12',
   ];
-  const BANDS = ['idle', 'mid', 'high'];
+  // KEINE FESTE LISTE MEHR. Bis v0.4.55 stand hier ['idle','mid','high'], und genau diese
+  // Liste war die Annahme, die den Ton kaputt gemacht hat: sie kannte drei Namen, also konnte
+  // es kein viertes Band geben - waehrend die Rate nur eine Oktave erlaubt und die drei
+  // Baender 2,2 Oktaven auseinanderlagen.
+  //
+  // Jetzt sagt loops.json, welche Leistungsbaender ein Motor hat, und der Generator rechnet
+  // die Leiter so, dass kein Nachbarabstand zu gross wird. Verschiedene Motoren duerfen
+  // damit verschieden VIELE Baender haben - der F1 braucht eines mehr, weil er bei 4200
+  // leerlaeuft und der Drehzahlmesser trotzdem auf 1500 faellt.
+  //
+  // 'over' ist das einzige, was hier NICHT dazugehoert: es laeuft parallel nach Last und
+  // nicht in der Drehzahl-Ueberblendung.
+  const OVER_BAND = 'over';
+  function powerBands(car) {
+    const b = sampleEngine.buffers[car];
+    if (!b) return [];
+    return Object.keys(b).filter(k => k !== OVER_BAND)
+      .sort((x, y) => b[x].baseRpm - b[y].baseRpm);
+  }
   let engineVolume = 0.7;
-  const sampleEngine = { buffers: {}, rpmScale: {}, nodes: null, over: null, car: null,
+  const sampleEngine = { buffers: {}, rpmScale: {}, crackle: {}, turbo: {},
+                         nodes: null, over: null, car: null,
                          master: null, ready: false, loading: false };
 
   async function loadEngineSamples() {
@@ -116,10 +138,19 @@
         // whole engine sounded an octave too high. A synthesised engine does not need this
         // because its loops are generated at whatever rpm is asked for.
         sampleEngine.rpmScale[car] = manifest[car].rpmScale || 1;
+        // Wieviel dieser Motor knallt und ob er einen Lader hat - beides steht seit v0.5.6
+        // im Manifest, weil CARS in engine_synth.py die Quelle fuer Motorkunde ist. Eine
+        // Liste in dieser Datei waere der naechste Ort, an dem etwas auseinanderlaeuft.
+        sampleEngine.crackle[car] = manifest[car].crackle;
+        sampleEngine.turbo[car] = !!manifest[car].turbo;
         // 'over' is the closed-throttle loop and is OPTIONAL: the Corvette profile is cut
         // from a recording that has no overrun material, so its absence must not fail the
         // load. Everything the generator makes has one.
-        for (const band of BANDS.concat(['over'])) {
+        // AUS DEM MANIFEST, nicht aus einer festen Liste: welche Baender ein Motor hat,
+        // sagt loops.json. Ein Motor mit einem Band mehr - der F1 braucht eines, weil er bei
+        // 4200 leerlaeuft und der Drehzahlmesser trotzdem auf 1500 faellt - wurde von der
+        // festen Liste sonst stillschweigend beschnitten.
+        for (const band of Object.keys(manifest[car].loops || {})) {
           const loop = manifest[car].loops[band];
           if (!loop) continue;
           const r = await fetch('audio/' + loop.file);
@@ -258,6 +289,84 @@
   // Pneumatic paddle shift. Up and down are distinct samples because they really do
   // sound different — the downshift carries a longer air release. If the samples are
   // missing, a two-tone stands in rather than nothing happening at all.
+  // ============================== RUNDENZEIT ANSAGEN ==============================
+  //
+  // Die erste Sprachausgabe im Projekt. Eingebaute Stimme des Browsers: kein Dienst, kein
+  // Netz, nichts verlaesst das Geraet.
+  //
+  // WARUM EIN EIGENER FORMATIERER und nicht formatLapTime(). Das liefert "62.43s", und
+  // vorgelesen ist das falsch - eine Stimme sagt daraus "zweiundsechzig Punkt vier drei
+  // Sekunden", und ueber einer Minute ist eine Sekundenzahl ohnehin keine Rundenzeit mehr.
+  // Also Minute und Rest getrennt, und eine Nachkommastelle statt zwei: die zweite hoert
+  // im Fahren niemand, kostet aber eine halbe Sekunde Ansage.
+  //
+  // KUERZE IST HIER DIE EIGENTLICHE ANFORDERUNG. Die Ansage muss vor der naechsten Kurve
+  // fertig sein, sonst redet sie in die Stelle hinein, an der man sie gebrauchen koennte.
+  // Deshalb kein "deine Rundenzeit betraegt", kein Einheitenwort unter einer Minute - auf
+  // einer Rennstrecke braucht eine Zeit keine Einheit - und rate 1,15.
+  let announceOn = true;
+  let announceCalls = 0, announceCancels = 0, announceFailLogged = false;
+
+  function lapSpeechText(ms, istBest) {
+    const s = ms / 1000;
+    const m = Math.floor(s / 60);
+    const rest = s - m * 60;
+    const de = lang === 'de';
+    // Das Dezimalzeichen gehoert zur Sprache und nicht zur Zahl: eine deutsche Stimme
+    // liest "58.3" als "achtundfuenfzig Punkt drei".
+    const zahl = de ? rest.toFixed(1).replace('.', ',') : rest.toFixed(1);
+    let text;
+    if (m <= 0) {
+      text = zahl;
+    } else if (de) {
+      text = m + (m === 1 ? ' Minute ' : ' Minuten ') + zahl;
+    } else {
+      text = m + (m === 1 ? ' minute ' : ' minutes ') + zahl;
+    }
+    if (istBest) text += de ? ', Bestzeit' : ', best lap';
+    return text;
+  }
+
+  function speakLap(ms, istBest) {
+    if (!announceOn) return;
+    if (!('speechSynthesis' in window)) return;
+    // ABBRECHEN VOR DEM SPRECHEN. Zwei Runden kurz hintereinander duerfen sich nicht
+    // stapeln - sonst laeuft die Stimme der Gegenwart nach und sagt die vorletzte Zeit,
+    // waehrend man schon in der naechsten Runde ist.
+    try {
+      window.speechSynthesis.cancel();
+      announceCancels++;
+      const u = new SpeechSynthesisUtterance(lapSpeechText(ms, istBest));
+      u.lang = lang === 'de' ? 'de-DE' : 'en-US';
+      u.rate = 1.15;
+      // EINMAL melden und nicht je Runde. Ein Geraet ohne passende Stimme wuerde sonst bei
+      // jeder Runde eine Zeile ins Protokoll schreiben, und das Protokoll ist der Ort, an
+      // dem man echte Fehler sucht.
+      u.onerror = (ev) => {
+        if (announceFailLogged) return;
+        announceFailLogged = true;
+        log('Rundenansage: keine Stimme verfuegbar (' + (ev && ev.error ? ev.error : '?')
+            + '). Die Ansage bleibt aus, alles andere laeuft weiter.', 'info');
+      };
+      window.speechSynthesis.speak(u);
+      announceCalls++;
+    } catch (e) {
+      if (!announceFailLogged) {
+        announceFailLogged = true;
+        log('Rundenansage nicht moeglich: ' + e.message, 'info');
+      }
+    }
+  }
+
+  if ($('setting-announce')) {
+    announceOn = $('setting-announce').checked;
+    $('setting-announce').addEventListener('change', (e) => {
+      announceOn = e.target.checked;
+      // Beim Ausschalten sofort still sein und nicht den Satz noch beenden.
+      if (!announceOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+    });
+  }
+
   function playShiftSound(direction) {
     const buf = direction >= 0 ? fxBuffers.shift.up : fxBuffers.shift.down;
     if (playFx(buf, 0.35)) return;   // quieter: the shift should be felt, not announced
@@ -306,7 +415,25 @@
   //    Kurve mitlaeuft, ist ein Dauergeraeusch und keine Rueckmeldung - und die Aussage
   //    "du bist am Limit" ist nur etwas wert, wenn sie nicht immer gilt.
   let tyreNode = null, tyreGain = null;
-  const TYRE_SQUEAL_START = 0.85;
+  // DAS GESETZ, analytisch und gemessen deckungsgleich. latUse ist |Lenkung| mal
+  // Tempoanteil mal corneringLoad, und corneringLoad ist 1,8 - gerade so gewaehlt, dass
+  // Vollausschlag bei Hoechstgeschwindigkeit das Reibkreisbudget saettigt. Bei vollem
+  // Ausschlag gilt damit
+  //
+  //     latUse = kmh / 295 * 1,8 = kmh * 0,0061
+  //
+  // und die Messung trifft das genau: 80 km/h 0,49 | 120 0,73 | ab 164 gesaettigt bei 1,0.
+  //
+  // DIE SCHWELLE STAND AUF 0,85. Das heisst 139 km/h bei vollem Ausschlag - klingt
+  // erreichbar, ist es aber nicht: speedSteerReduction schneidet den Ausschlag mit dem Tempo,
+  // sodass oben gar kein Vollausschlag mehr ankommt. Gemessen wurde 0,85 erst bei 265 km/h.
+  // Deshalb hat es nie gequietscht.
+  //
+  // 0,6 heisst: ab etwa 98 km/h bei vollem Ausschlag, ab 197 km/h bei halbem, und bei einem
+  // Viertel Ausschlag nie (dort ist das Maximum 0,45). Eine Haarnadel quietscht, eine lange
+  // schnelle Kurve nicht. Ein Selbsttest haelt fest, dass die Schwelle ERREICHBAR bleibt -
+  // das Fehlen genau dieser Pruefung war der eigentliche Fehler.
+  const TYRE_SQUEAL_START = 0.6;
   function setTyreSqueal(nutzung) {
     if (!fxBuffers.tyre || !audioCtx || !soundEnabled) return;
     // Unterhalb der Schwelle auf null abbilden, statt die Schwelle im Nenner zu vergessen:
@@ -550,15 +677,24 @@
 
   function startSampleEngine(car) {
     if (!sampleEngine.ready || !sampleEngine.buffers[car]) return false;
+    // Die Motorkunde in den Zusatzzustand: der Takt liest sie jeden Frame und soll dafuer
+    // nicht ins Manifest greifen.
+    xs.crackle = sampleEngine.crackle[car];
+    xs.turbo = !!sampleEngine.turbo[car];
     stopSampleEngine();
     if (!sampleEngine.master) {
       sampleEngine.master = audioCtx.createGain();
       sampleEngine.master.gain.value = 0;
-      sampleEngine.master.connect(audioCtx.destination);
+      // DURCH DIE ZUSATZKETTE, nicht direkt zum Ausgang: dort sitzen der lastabhaengige
+      // Tiefpass und die getaktete Verstaerkung des Begrenzers. Ist der Schalter aus, stehen
+      // beide neutral - derselbe Weg, keine Wirkung.
+      sampleEngine.master.connect(xBus());
     }
-    // All three start together so they stay phase-consistent for the whole session.
+    // ALLE Leistungsbaender starten zusammen, damit sie die ganze Sitzung phasengleich
+    // bleiben - wieviele es sind, sagt der Motor selbst. Aufsteigend nach Basisdrehzahl,
+    // weil sampleWeights genau das voraussetzt.
     const t0 = audioCtx.currentTime + 0.04;
-    sampleEngine.nodes = BANDS.map(band => {
+    sampleEngine.nodes = powerBands(car).map(band => {
       const info = sampleEngine.buffers[car][band];
       const src = audioCtx.createBufferSource();
       src.buffer = info.buffer;
@@ -590,12 +726,28 @@
 
   // Triangular crossfade between the three anchors. The weights always sum to exactly 1,
   // so moving through the rev range can never produce a hole or a bulge in loudness.
+  // BELIEBIG VIELE BAENDER, nicht mehr genau drei. Seit v0.4.55 gibt es vier, und die
+  // Zahl fest zu verdrahten war der Grund, warum ein viertes vorher nicht ging.
+  //
+  // Die Regel bleibt dieselbe: unterhalb des ersten und oberhalb des letzten Bandes gilt
+  // dieses allein, dazwischen ueberblenden genau die zwei Nachbarn linear. Damit hat in
+  // jedem Abschnitt nur ein Paar Gewicht - und an den Raendern, wo die Abspielrate an ihren
+  // Anschlag kommt, ist das Gewicht des fernen Bandes null.
+  //
+  // `b` MUSS aufsteigend sein. Die Reihenfolge kommt aus loops.json, also aus der
+  // Reihenfolge im Generator; verlassen wird sich darauf nicht - der Aufrufer sortiert.
   function sampleWeights(rpm, b) {
-    const w = [0, 0, 0];
-    if (rpm <= b[0]) w[0] = 1;
-    else if (rpm >= b[2]) w[2] = 1;
-    else if (rpm <= b[1]) { const t = (rpm - b[0]) / (b[1] - b[0]); w[0] = 1 - t; w[1] = t; }
-    else { const t = (rpm - b[1]) / (b[2] - b[1]); w[1] = 1 - t; w[2] = t; }
+    const w = b.map(() => 0);
+    if (!b.length) return w;
+    if (rpm <= b[0]) { w[0] = 1; return w; }
+    if (rpm >= b[b.length - 1]) { w[b.length - 1] = 1; return w; }
+    for (let i = 1; i < b.length; i++) {
+      if (rpm <= b[i]) {
+        const t = (rpm - b[i - 1]) / (b[i] - b[i - 1]);
+        w[i - 1] = 1 - t; w[i] = t;
+        return w;
+      }
+    }
     return w;
   }
 
@@ -838,6 +990,314 @@
   // same tick — so the note audibly falls at each upshift and climbs again, instead of
   // rising monotonically with road speed as it used to.
   let engineIdleSince = null;
+  // ============================== MOTORTON-ZUSAETZE [WIP] ==============================
+  //
+  // SECHS ZUSAETZE, und alle sechs haengen an Zustandsfeldern, die es schon gibt - keiner
+  // braucht eine neue Tondatei:
+  //
+  //   1. Lastabhaengige Helligkeit   engineLoad    -> Tiefpass auf dem Motorbus
+  //   2. Begrenzer-Stottern          onLimiter     -> getaktete Verstaerkung
+  //   3. Schubknaller                Lastabfall    -> Rauschstoesse durch ein Rohr
+  //   4. Schaltknall                 isShifting    -> ein lauterer Knaller
+  //   5. Getriebeheulen              Tempo x Gang  -> Saegezahn, RADdrehzahl
+  //   6. Lader: Pfeifen und Abblasen Ladedruck     -> Sinus und Rauschflattern
+  //
+  // ALLE AN EINEM SCHALTER, damit man den Unterschied hoeren kann. "Aus" heisst dabei
+  // NEUTRAL und nicht umgangen: der Tiefpass geht auf 20 kHz, die Zusatzquellen auf Null.
+  // Ein zweiter Signalweg, der nur beim Umschalten benutzt wird, waere ein zweiter Weg, auf
+  // dem etwas anders klingen kann.
+  //
+  // WAS DIESE SECHS ABSICHTLICH NICHT SIND: eine Hoerposition. Cockpit gegen Verfolgerkamera
+  // aendert nicht den Klang, sondern die BALANCE zwischen Auspuff, Ansaugung und Mechanik -
+  // und die stecken beim Generator alle drei in einer Schleife. Dafuer braucht es zwei Stems
+  // je Band, also 71 weitere Dateien. Das ist die naechste Entscheidung, nicht diese.
+  let extrasOn = true;
+  const xs = { gebaut: false, ein: null, ton: null, cut: null, add: null,
+               lfo: null, lfoTiefe: null, rausch: null,
+               whine: null, whineGain: null, whineFilter: null,
+               pfeif: null, pfeifGain: null,
+               pfeifQuelle: null,
+               letzteLast: 0, schaltAn: false, ladedruck: 0, letzterTakt: 0,
+               cutTiefe: 0,
+               knaller: 0, boGezaehlt: 0 };
+
+  // Ein Rauschpuffer, EINMAL. Jeder Knaller ist derselbe Puffer mit anderem Ausschnitt und
+  // anderer Huellkurve - hundert Puffer je Runde waeren hundert Zuteilungen im Fahrtakt.
+  function xRausch() {
+    if (xs.rausch) return xs.rausch;
+    const n = Math.floor(audioCtx.sampleRate * 0.5);
+    const b = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    xs.rausch = b;
+    return b;
+  }
+
+  // Der Bus. EINMAL gebaut und danach nur noch in seinen Parametern verstellt: Web Audio
+  // rechnet auf eigenem Faden, ein Filter kostet den 45-ms-Sendetakt also nichts - Knoten
+  // anzulegen und wegzuwerfen kostet ihn etwas.
+  function xBus() {
+    if (xs.gebaut) return xs.ein;
+    xs.ton = audioCtx.createBiquadFilter();
+    xs.ton.type = 'lowpass';
+    xs.ton.frequency.value = 20000;
+    xs.cut = audioCtx.createGain();
+    xs.cut.gain.value = 1;
+    xs.ton.connect(xs.cut).connect(audioCtx.destination);
+    // Die getaktete Verstaerkung des Begrenzers. Ein Rechteck bei 28 Hz ist die
+    // Zuendunterbrechung - der wiedererkennbarste Motorklang ueberhaupt, und er kostet einen
+    // Oszillator. Die Tiefe steht auf 0, solange der Begrenzer nicht anliegt.
+    xs.lfo = audioCtx.createOscillator();
+    xs.lfo.type = 'square';
+    xs.lfo.frequency.value = 28;
+    xs.lfoTiefe = audioCtx.createGain();
+    xs.lfoTiefe.gain.value = 0;
+    xs.lfo.connect(xs.lfoTiefe).connect(xs.cut.gain);
+    xs.lfo.start();
+    // Der Bus fuer die Zusatzquellen: Knaller, Heulen, Pfeifen. Ein Punkt, an dem der
+    // Schalter sie alle stumm stellt.
+    xs.add = audioCtx.createGain();
+    xs.add.gain.value = 1;
+    xs.add.connect(audioCtx.destination);
+    // Getriebeheulen: ein Saegezahn durch einen schmalen Bandpass. Ein geradverzahntes
+    // Renngetriebe heult mit der RADdrehzahl mal der Zahnzahl, nicht mit der Motordrehzahl -
+    // deshalb Tempo mal Uebersetzung und nicht rpm. Die Zahnzahl kennt dieses Modell nicht,
+    // also ist der Faktor gewaehlt: bei Hoechstgeschwindigkeit im letzten Gang knapp 2 kHz.
+    xs.whine = audioCtx.createOscillator();
+    xs.whine.type = 'sawtooth';
+    xs.whine.frequency.value = 400;
+    xs.whineFilter = audioCtx.createBiquadFilter();
+    xs.whineFilter.type = 'bandpass';
+    xs.whineFilter.Q.value = 6;
+    xs.whineFilter.frequency.value = 400;
+    xs.whineGain = audioCtx.createGain();
+    xs.whineGain.gain.value = 0;
+    xs.whine.connect(xs.whineFilter).connect(xs.whineGain).connect(xs.add);
+    xs.whine.start();
+    // LADERPFEIFEN: RAUSCHEN DURCH EINEN SCHMALEN BANDPASS, kein Oszillator.
+    //
+    // Hier stand bis v0.5.7 ein einzelner Sinus, und der Kommentar daneben behauptete "zwei
+    // Sinus, leicht verstimmt, damit es lebt statt zu piepen" - gebaut war einer. Ein reiner
+    // Sinus zwischen 1,7 und 7 kHz IST ein Piepsen, und genau so wurde es gemeldet: beim
+    // Formel 1 und beim M4 GT3, also zwei der drei aufgeladenen Motoren.
+    //
+    // Ein Verdichterpfeifen ist auch in Wirklichkeit kein Sinus. Es ist ein Ton, der in
+    // breitbandigem Rauschen sitzt und dessen Amplitude staendig schwankt - die Schaufeln
+    // schlagen nicht gleichmaessig, und der Ansaugtrakt rauscht dazu. Rauschen durch einen
+    // Bandpass mit hoher Guete gibt genau das: dieselbe Tonhoehe, aber ein GERAEUSCH.
+    //
+    // Q = 14 und nicht hoeher: darueber wird aus dem Bandpass wieder ein Oszillator, und
+    // dann ist das Piepsen zurueck.
+    xs.pfeifQuelle = audioCtx.createBufferSource();
+    xs.pfeifQuelle.buffer = xRausch();
+    xs.pfeifQuelle.loop = true;
+    xs.pfeif = audioCtx.createBiquadFilter();
+    xs.pfeif.type = 'bandpass';
+    xs.pfeif.Q.value = 14;
+    xs.pfeif.frequency.value = 2000;
+    xs.pfeifGain = audioCtx.createGain();
+    xs.pfeifGain.gain.value = 0;
+    xs.pfeifQuelle.connect(xs.pfeif).connect(xs.pfeifGain).connect(xs.add);
+    xs.pfeifQuelle.start();
+    xs.gebaut = true;
+    xs.ein = xs.ton;
+    return xs.ein;
+  }
+
+  // Ein Knaller: ein kurzer Rauschstoss durch ein Rohr. Breitbandig mit Tiefmittenbetonung,
+  // wie ein Auspuffschlag - kein Klick und kein Zischen.
+  function xKnall(staerke, verzoegerung) {
+    if (!audioCtx || !extrasOn) return;
+    xBus();
+    const t = audioCtx.currentTime + (verzoegerung || 0);
+    const src = audioCtx.createBufferSource();
+    src.buffer = xRausch();
+    // Zufaelliger Ausschnitt: derselbe Puffer klingt sonst bei jedem Knaller gleich.
+    const off = Math.random() * 0.4;
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 170 + Math.random() * 130;
+    bp.Q.value = 1.1;
+    const g = audioCtx.createGain();
+    const dauer = 0.035 + Math.random() * 0.045;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(staerke, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + dauer);
+    src.connect(bp).connect(g).connect(xs.add);
+    src.start(t, off, dauer + 0.02);
+    src.stop(t + dauer + 0.03);
+    xs.knaller++;
+  }
+
+  // Abblasen: Rauschen, mit etwa 35 Hz flatternd, wie ein Wastegate.
+  function xAbblasen(staerke) {
+    if (!audioCtx || !extrasOn) return;
+    xBus();
+    const t = audioCtx.currentTime;
+    const src = audioCtx.createBufferSource();
+    src.buffer = xRausch();
+    src.loop = true;
+    const hp = audioCtx.createBiquadFilter();
+    hp.type = 'bandpass';
+    hp.frequency.value = 3200;
+    hp.Q.value = 0.8;
+    const g = audioCtx.createGain();
+    const flat = audioCtx.createOscillator();
+    flat.type = 'square';
+    flat.frequency.value = 34;
+    const flatG = audioCtx.createGain();
+    flatG.gain.value = staerke * 0.5;
+    flat.connect(flatG).connect(g.gain);
+    g.gain.setValueAtTime(staerke, t);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + 0.22);
+    src.connect(hp).connect(g).connect(xs.add);
+    src.start(t);
+    flat.start(t);
+    src.stop(t + 0.24);
+    flat.stop(t + 0.24);
+    xs.boGezaehlt++;
+  }
+
+  // DIE WERTE, ohne einen einzigen Tonknoten. Sie haengen an nichts als am Fahrzustand,
+  // also lassen sie sich ohne AudioContext pruefen - und den gibt es erst nach einer
+  // Nutzergeste. Ein Test, der ohne Klick immer ueberspringt, prueft nie.
+  //
+  // `dt` kommt herein statt aus Date.now(): in einer synchronen Testschleife ist die
+  // Uhrdifferenz null, und dann kaeme der Ladedruck nie an - dieselbe Falle, die in diesem
+  // Projekt schon beim Schaltvorgang zu einem falschen Schluss gefuehrt hat.
+  function extrasWerte(st, load, dt) {
+    const rpmFrac = Math.max(0, Math.min(1, st.rpmFrac || 0));
+    const dLast = load - xs.letzteLast;
+    xs.letzteLast = load;
+    const knallStark = xs.crackle === undefined ? 0.4 : xs.crackle;
+
+    if (!extrasOn) {
+      xs.ladedruck = 0;
+      xs.cutTiefe = 0;
+      // NEUTRAL, nicht umgangen: derselbe Signalweg, nur ohne Wirkung.
+      return { aus: true, tonHz: 20000, cutTiefe: 0, addGain: 0,
+               whineHz: 140, whineGain: 0, pfeifHz: 1700, pfeifGain: 0,
+               knaller: 0, knallStaerke: 0, abblasen: 0, ladedruck: 0 };
+    }
+
+    // 1. Lastabhaengige Helligkeit. Ein Motor im Schub ist dunkler als einer am Gas, und
+    //    zwar nicht nur leiser: die hohen Teiltoene kommen aus der Verbrennung.
+    const tonHz = 2200 + 9000 * Math.max(0, Math.min(1, load));
+
+    // 2. Begrenzer-Stottern: die Zuendunterbrechung, 28 Hz, siehe xBus().
+    //
+    //    MIT ZEITKONSTANTE, und das ist der dritte Teil des gemeldeten Klickens. Ein
+    //    Runterschalten mit zu hoher Drehzahl schiebt die Drehzahl ueber REDLINE - 60, also
+    //    greift onLimiter fuer ein bis zwei Takte. Eine Rechteck-Torschaltung, die innerhalb
+    //    eines Taktes auf volle Tiefe geht, ist dann ein Klick und kein Stottern.
+    //
+    //    90 ms sind rund zwei Takte: ein Aufblitzen von einem Takt erreicht damit unter ein
+    //    Drittel der Tiefe und bleibt unhoerbar, waehrend ein echtes Anstehen am Begrenzer
+    //    nach einer Zehntelsekunde voll da ist. Und beim Verschwinden gilt dieselbe
+    //    Zeitkonstante - ein hart abgeschnittenes Stottern klickt genauso.
+    const cutZiel = st.onLimiter ? 0.34 : 0;
+    xs.cutTiefe += (cutZiel - xs.cutTiefe) * (1 - Math.exp(-Math.max(0, dt) / 0.09));
+    const cutTiefe = xs.cutTiefe;
+
+    // 3. Schubknaller beim Lastwechsel. Nicht bei konstantem Gas: ein Knaller ist ein
+    //    EREIGNIS, und das Ereignis ist das Gaswegnehmen bei Drehzahl.
+    //
+    //    NICHT WAEHREND EINES GANGWECHSELS, und das war der Fehler hinter dem gemeldeten
+    //    Klicken: in 40-physics.js steht engineLoad = isShifting ? 0 : throttle, also faellt
+    //    die Last bei JEDEM Gangwechsel auf null. Ein bis vier Rauschstoesse kurz
+    //    hintereinander sind ein Klicken - und beim Runterschalten mit hoher Drehzahl waren
+    //    es die meisten, weil ihre Zahl mit rpmFrac waechst.
+    //
+    //    Der Lastabfall beim Schalten ist die Zuendunterbrechung und kein Gaswegnehmen. Fuer
+    //    den Schaltvorgang gibt es den Schaltknall darunter, und der ist EINER.
+    let knaller = 0, knallStaerke = 0;
+    if (dLast < -0.15 && rpmFrac > 0.4 && knallStark > 0.02 && !st.isShifting) {
+      knaller = 1 + Math.floor(3 * knallStark * rpmFrac);
+      knallStaerke = 0.05 + 0.16 * knallStark * rpmFrac;
+    }
+
+    // 4. Schaltknall: die FLANKE von isShifting, und nur unter Last. Ein sequenzielles
+    //    Getriebe knallt beim Hochschalten unter Vollgas - beim Ausrollen nicht.
+    const schaltKnall = (st.isShifting && !xs.schaltAn && load > 0.45)
+      ? 0.13 + 0.1 * knallStark : 0;
+    xs.schaltAn = !!st.isShifting;
+
+    // 5. Getriebeheulen. RADdrehzahl mal Uebersetzung und nicht rpm: ein geradverzahntes
+    //    Renngetriebe heult mit der Zahneingriffsfrequenz. Die Zahnzahl kennt dieses Modell
+    //    nicht, also ist der Faktor GEWAEHLT - bei Vmax im letzten Gang knapp 2 kHz.
+    const cfg = physEngine.config;
+    const vAnteil = Math.min(1, Math.abs(st.speedKmh || 0) / Math.max(0.01, cfg.topSpeedKmh));
+    const gang = Math.max(0, Math.min(cfg.gears.length - 1, st.currentGear || 0));
+    const uebs = cfg.gears[gang] ? cfg.gears[gang].ratio / Math.max(0.01, cfg.ratioRef) : 1;
+    const whineHz = 140 + 1850 * vAnteil * Math.min(2.2, uebs);
+    // Leise: es soll UNTER dem Motor liegen und nicht neben ihm.
+    const whineGain = vAnteil > 0.03 ? 0.028 * (0.4 + 0.6 * load) : 0;
+
+    // 6. Der Lader. Ein Ladedruck baut sich AUF und faellt nicht mit dem Gas zusammen -
+    //    genau diese Verzoegerung ist das Turboloch, und ohne sie klingt es nach Sirene.
+    let pfeifHz = 1700, pfeifGain = 0, abblasen = 0;
+    if (xs.turbo) {
+      // DER DRUCK VOR DEM ABBAU entscheidet ueber das Abblasen. Ein Wastegate laesst den
+      // Druck heraus, der beim Gaswegnehmen NOCH DA WAR - nicht den Rest, der nach einem
+      // Takt Abbau uebrig ist. Bei 0,45 s Zeitkonstante und einem groben Takt ist der Rest
+      // schon zu klein, und dann blaest nichts ab: genau so hat der Test es gefunden.
+      const bVor = xs.ladedruck;
+      const ziel = Math.max(0, Math.min(1, load * (0.35 + 0.65 * rpmFrac)));
+      xs.ladedruck += (ziel - xs.ladedruck) * (1 - Math.exp(-Math.max(0, dt) / 0.45));
+      const b = xs.ladedruck;
+      pfeifHz = 1700 + 5300 * b;
+      // Leiser als der frueher hier stehende Sinus: Bandpass-Rauschen traegt Energie
+      // ueber eine Bandbreite und nicht auf einer Linie, klingt bei gleicher Verstaerkung
+      // also lauter.
+      pfeifGain = 0.032 * b * b;
+      // Und auch das Abblasen nicht beim Schalten: derselbe falsche Ausloeser wie beim
+      // Knaller, dazu mit 34 Hz Rechteck moduliert - das war der zweite Teil des Klickens.
+      if (dLast < -0.2 && bVor > 0.25 && !st.isShifting) abblasen = 0.05 + 0.09 * bVor;
+    } else {
+      xs.ladedruck = 0;
+    }
+
+    return { aus: false, tonHz, cutTiefe, addGain: 1, whineHz, whineGain,
+             pfeifHz, pfeifGain, knaller, knallStaerke, schaltKnall, abblasen,
+             ladedruck: xs.ladedruck, dLast };
+  }
+
+  // Der Takt: er LEGT die Werte an die Knoten und rechnet keinen einzigen selbst.
+  // Gerufen aus updateEngineSound(), also VOR dem fruehen Ausstieg des Schleifenzweigs -
+  // die sechs gelten in beiden Tonarten.
+  function extrasTick(st, load) {
+    if (!audioCtx) return;
+    xBus();
+    const now = Date.now();
+    const dt = xs.letzterTakt ? Math.min(0.25, (now - xs.letzterTakt) / 1000) : 0.045;
+    xs.letzterTakt = now;
+    const w = extrasWerte(st, load, dt);
+    const t = audioCtx.currentTime;
+    xs.ton.frequency.setTargetAtTime(w.tonHz, t, 0.08);
+    xs.lfoTiefe.gain.setTargetAtTime(w.cutTiefe, t, 0.02);
+    xs.add.gain.setTargetAtTime(w.addGain, t, 0.05);
+    xs.whine.frequency.setTargetAtTime(w.whineHz, t, 0.05);
+    xs.whineFilter.frequency.setTargetAtTime(w.whineHz, t, 0.05);
+    xs.whineGain.gain.setTargetAtTime(w.whineGain, t, 0.08);
+    xs.pfeif.frequency.setTargetAtTime(w.pfeifHz, t, 0.06);
+    xs.pfeifGain.gain.setTargetAtTime(w.pfeifGain, t, 0.08);
+    if (w.aus) return;
+    for (let i = 0; i < w.knaller; i++) xKnall(w.knallStaerke, Math.random() * 0.22);
+    if (w.schaltKnall) xKnall(w.schaltKnall, 0.012);
+    if (w.abblasen) xAbblasen(w.abblasen);
+  }
+
+  // DER SCHALTER STEHT HIER und nicht oben bei den anderen Tonschaltern, und das ist keine
+  // Ordnungsfrage: extrasOn ist ein let in diesem Abschnitt, und eine Zuweisung von weiter
+  // OBEN in derselben Datei laeuft in seine temporale Todeszone. Der Wurf nimmt die ganze
+  // IIFE mit - danach fehlt OMEGA_TEST, der Selbsttest zeigt null Zeilen, und der Sendetakt
+  // spammt die Konsole mit einem ANDEREN Todeszonenfehler zu, weil auch 30-input.js nie
+  // durchgelaufen ist. Genau so ist es mir hier passiert.
+  if ($('setting-engine-extras')) {
+    extrasOn = $('setting-engine-extras').checked;
+    $('setting-engine-extras').addEventListener('change', (e) => { extrasOn = e.target.checked; });
+  }
+
   function updateEngineSound(throttleMagnitude) {
     if (!soundEnabled || !engineOsc) return;
     const st = physEngine.state, p = soundProfile;
@@ -864,6 +1324,10 @@
     setBrakeSqueal(brakeAmt);
     // Der Reibkreis-Querbedarf treibt es. Er steht im Zustand, weil er hier gebraucht wird.
     setTyreSqueal(physEngine.state.latUse || 0);
+
+    // VOR dem fruehen Ausstieg: die Zusaetze gelten in beiden Tonarten, nicht nur im
+    // Schleifenzweig.
+    if (physicsEnabled) extrasTick(st, load);
 
     if (sampleEngine.nodes && physicsEnabled) { updateSampleEngine(st.rpm, load, silent); return; }
 

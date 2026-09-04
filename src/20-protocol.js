@@ -154,7 +154,9 @@
     // ihm etwas nicht - was es auch tat, nur nicht in der Richtung.
     if (throttle > 0) throttle *= topSpeedScale;
     throttle *= batteryCompensationScale();
-    throttle = applyFuelAndDamage(throttle);
+    // NUR den Verbrauch zaehlen. Die Drosselung sitzt in physicsStep(), also vor der
+    // Physik - sonst zeigt der Tacho die Simulation und das Auto bekommt weniger.
+    fuelTankTick(throttle);
     updateEngineSound(throttle);
     const payload = buildCommandPacket(steer, throttle);
     recWrite(payload);

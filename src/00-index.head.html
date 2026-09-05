@@ -90,6 +90,21 @@
     margin: 0; padding: 0; height: 100%; max-width: 100%; overflow-x: hidden;
     background: var(--bg); color: var(--text);
     font-family: Calibri, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    /* DEUTSCHE KOMPOSITA BRECHEN NICHT VON SELBST. Gemessen auf einem 320-px-Schirm ragte
+       die Ueberschrift "Vollstaendige Gestaltungsfreiheit fuer deine Carrera Hybrid Bahn"
+       7 px ueber ihren Kasten - "Gestaltungsfreiheit" sind 19 Zeichen bei 21 px, und in
+       233 px passt das nicht. Der Kasten war nicht zu schmal, das Wort war zu lang.
+
+       break-word statt break-all: es bricht NUR ein Wort, das sonst gar nicht passt, und
+       laesst alles andere in Ruhe. Ohne diese Regel faellt derselbe Fehler beim naechsten
+       deutschen Substantiv wieder an, und zwar in einem Text, den noch niemand geschrieben
+       hat - eine einzelne Ueberschrift zu kuerzen waere die Behandlung des Symptoms.
+
+       hyphens dazu: html lang wird beim Sprachwechsel mitgefuehrt (10-ble-explorer.js),
+       die Trennregeln folgen also der Sprache. Wo der Browser keine Trennmuster hat,
+       greift break-word als Rueckfall. */
+    overflow-wrap: break-word;
+    hyphens: auto;
   }
   /* Kept as a class because other places still use it as a section divider; the one under
      the header is gone. */
@@ -1053,6 +1068,32 @@
     .gt3-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
 
+  /* ---- FLACHE SCHIRME: ein Handy quer ------------------------------------------------
+     Gemeldet als "auf einem Handy sehe ich oben die Lichter nicht". Gemessen in 844 x 390,
+     also genau der Haltung, in der man faehrt:
+
+         Kopfzeile      62 px
+         Cockpit       531 px
+         Fenster       390 px
+
+     Bisher gab es nur eine Regel nach BREITE (max-width: 560px). Ein Handy quer ist aber
+     breit und flach - die Breitenregel greift nicht, und die Hoehe war nie begrenzt.
+
+     Weggenommen wird das Zierwerk und nicht die Instrumente: die Blende schrumpft auf ein
+     Viertel, Fussleiste und Markenzeile verschwinden. Beide tragen keine Information, die
+     nicht anderswo steht, und zusammen sind sie 51 px - bei 390 px Fensterhoehe ist das
+     ein Achtel des Platzes.
+
+     Die Feineinpassung macht danach cockpitPassung() in 50-drive.js, die MISST statt zu
+     rechnen. Diese Regel verkleinert nur, was sie ohne Verlust verkleinern kann, damit
+     dort weniger zu skalieren bleibt. */
+  @media (max-height: 560px) {
+    .gt3 { --gt3-blende: 5px; }
+    .gt3-marke, .gt3-foot { display: none; }
+    /* Die Kacheln des Streifens niedriger: ihre Beschriftung bleibt, der Luftraum geht. */
+    .gt3-strip { gap: 3px; }
+  }
+
   /* The captioned tile. Square and borderless: the reference dashes separate cells by
      contrast and spacing alone, and an outline around every cell turns a dash into a
      spreadsheet. The tile ground is lifted a little instead, so the gap reads as the
@@ -1290,9 +1331,15 @@
     border-bottom: 1px solid rgba(90, 169, 255, .35); }
   .gt3-marke a:hover { border-bottom-color: var(--info); }
   .gt3-marke span { color: #6b7688; margin-left: auto; }
+  /* ZWEI REGELN STRITTEN HIER, und die id gewann mit der falschen Farbe. Das Element ist
+     zugleich .gt3-banner (Hintergrund #b8860b, Tinte #100c02) und #hud-toast-wrap - und
+     eine id sticht eine Klasse. Die Tinte #ffcf6e stammt aus der Zeit, als der Streifen
+     keinen Hintergrund hatte; auf dem goldenen Band ergibt sie Kontrast 2,23.
+     Gefunden hat es der Kontrasttest, sobald ein Prueflauf den Streifen einmal sichtbar
+     stehen liess - vorher war er waehrend des Tests immer leer und damit unsichtbar. */
   #hud-toast-wrap {
     grid-area: toast; min-height: 0; padding: 0 clamp(4px, 1vw, 10px);
-    color: #ffcf6e; font-family: monospace; font-size: clamp(9px, 1.3vw, 13px);
+    color: #100c02; font-family: monospace; font-size: clamp(9px, 1.3vw, 13px);
   }
   #hud-toast-wrap:empty, #hud-toast:empty { padding: 0; }
   /* FUNKTIONSFARBEN. Ihre Bedeutung ist fest - gruen gut, gelb Vorsicht, rot schlecht -,
@@ -4946,7 +4993,7 @@
 
   <section class="tabpage" id="tab-control">
     <div class="card" id="race-card">
-      <h2>Rennmodus</h2>
+      <h2>Rennmodus <span class="wip-tag">WIP</span></h2>
       <div class="row" style="align-items:center; gap:18px; flex-wrap:wrap">
         <div style="display:flex; gap:8px">
           <span class="race-light" id="race-light-1"></span>
@@ -5234,17 +5281,10 @@
         <label class="tgl"><input type="checkbox" id="setting-ontrack" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Physik-Modus aktivieren<small>Aus: rohe Stickstellung, ohne Gänge.</small></div><label class="tgl"><input type="checkbox" id="phys-enable" checked><span></span></label></div>
       
-      <div class="opt-row"><div class="opt-label">Vibration
-          <small>R&uuml;ckmeldung im Controller bei Gangwechsel, ABS, Aufprall, im
-          Boxenstopp und neben der Bahn. Standard aus, weil nicht jeder Controller es kann und
-          ein Dauerbrummen im Gel&auml;nde Geschmackssache ist. Unabh&auml;ngig von der
-          Drosselung darunter. Das Handy vibriert nicht mit, das Protokoll kennt daf&uuml;r
-          nichts.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-vibration"><span></span></label></div>
-      <!-- Direkt unter der Vibration, weil beide dieselbe Lage beschreiben - gekoppelt sind
-           sie seit v0.4.55 aber nicht mehr -
-           und das steht auch im Kleintext. Ohne den Hinweis waere es die naechste
-           Stellschraube, die scheinbar nichts tut. -->
+      <!-- Die Vibration stand hier und hat seit v0.5.15 eine eigene Kategorie weiter
+           unten - sie ist ein Kapitel und keine Zeile, seit jeder Ausloeser seinen
+           eigenen Schalter hat. Gekoppelt ist sie mit der Drosselung darunter seit
+           v0.4.55 nicht mehr, und das steht auch in deren Kleintext. -->
       <div class="opt-row"><div class="opt-label">Drosselung jenseits der Fahrbahn
           <!-- Absichtlich OHNE <code> und <b> im Inneren: jedes davon teilt den Satz in
                einen eigenen Textknoten, und das Woerterbuch schlaegt Textknoten nach. Mit
@@ -5253,7 +5293,7 @@
                nur daran, dass im englischen Modus mitten im Satz Deutsch steht. -->
           <small>Meldet Byte 12 den Wert 0x00, ist das Auto neben der Bahn: dann wird das
           Gas auf 45 % gedeckelt. Das leichte Brummen dazu h&auml;ngt allein am Schalter
-          &bdquo;Vibration&ldquo; dar&uuml;ber, dieser hier allein an der Drosselung
+          &bdquo;Neben der Bahn&ldquo; unter Controller-Vibration, dieser hier allein an der Drosselung
           &ndash; bis v0.4.55 war es eine Option mit zwei H&auml;lften, und wer die
           Drosselung abschaltete, verlor auch die R&uuml;ckmeldung. Wirkt nur in der Stellung
           &bdquo;Auf der Bahn&ldquo;: im Ausdruck-Modus ist der Streckensensor aus und Byte 12
@@ -5270,6 +5310,43 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-offtrack-delay-val">1.0 s</span>
         </div></div>
+<div class="opt-head">Controller-Vibration <span class="wip-tag">WIP</span></div>
+      <div class="opt-row"><div class="opt-label">Vibration &uuml;berhaupt
+          <small>Der Hauptschalter. Steht er aus, brummt nichts, egal was darunter
+          angekreuzt ist. Standard aus, weil nicht jeder Controller einen R&uuml;ttler hat.
+          Das Handy vibriert nicht mit, das Protokoll kennt daf&uuml;r nichts.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-vibration"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Gangwechsel
+          <small>Kurz und leicht bei jedem Schalten, beim Leerlauf und beim
+          R&uuml;ckw&auml;rtsgang. Sechs Gangwechsel in drei Sekunden mit einem langen
+          Muster w&auml;ren ein Presslufthammer in der Hand, deshalb 40&nbsp;ms.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-schalt" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">ABS
+          <small>Ein Puls alle 140&nbsp;ms, solange das ABS regelt &ndash; das ist die
+          R&uuml;ckmeldung, an der man merkt, dass die Bremse an der Grenze
+          arbeitet.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-abs" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Aufprall
+          <small>Der st&auml;rkste Sto&szlig;, und er h&auml;ngt seit v0.5.15 an der WUCHT:
+          gerechnet wird mit dem Tempo im Moment des Einschlags. Ein Einschlag bei
+          H&ouml;chstgeschwindigkeit soll sich nicht anf&uuml;hlen wie ein Anstupsen in der
+          Boxengasse. Auch der schw&auml;chste Aufprall brummt jetzt kr&auml;ftiger als
+          bisher.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-crash" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Neben der Bahn
+          <small>Ein schwaches Dauerbrummen, solange das Auto neben der Bahn meldet
+          &ndash; nach Schotter, nicht nach Aufprall. Standard aus: es ist ein ZUSTAND und
+          kein Ereignis, und nach f&uuml;nf Sekunden nervt es. Unabh&auml;ngig von der
+          Drosselung unter Allgemein.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-abseits"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Boxenstopp
+          <small>Einfahrt, Beginn der Arbeit, fertig, und ein leiser Puls, solange man in
+          der Gasse rollt.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-box" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Meldungen
+          <small>Wetterwechsel und leerer Tank. Standard aus: das sind Nachrichten und
+          keine Kr&auml;fte am Auto &ndash; wer sie will, bekommt sie hier.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-meldung"><span></span></label></div>
 <div class="opt-head">Akku <span class="wip-tag">WIP</span></div>
       <div class="opt-row"><div class="opt-label">Leistung über Akkulaufzeit konstant halten<small>Drosselt bei vollem Akku. Der Akkuwert ist eine unkalibrierte Schätzung.</small></div><label class="tgl"><input type="checkbox" id="setting-battery-comp"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Referenz-Akkustand</div>
@@ -5526,9 +5603,12 @@
           Bremsbalance. Ab etwa 520&nbsp;&deg;C sinkt die Bremswirkung, bei 780&nbsp;&deg;C um
           h&ouml;chstens 35&nbsp;% &ndash; der Bremsweg wird dann wirklich l&auml;nger. Eine
           einzelne Vollbremsung aus 250&nbsp;km/h erreicht aus kalten Scheiben gemessen
-          183&nbsp;&deg;C vorn und fadet nicht; nach acht Bremsungen sind es 806&nbsp;&deg;C
-          und der Bremsweg ist 23&nbsp;% l&auml;nger.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-brake-fade"><span></span></label></div>
+          241&nbsp;&deg;C vorn und fadet nicht; nach acht Bremsungen sind es 710&nbsp;&deg;C,
+          das Fading liegt bei 16&nbsp;% und der Bremsweg ist 9&nbsp;% l&auml;nger. Die
+          alten Zahlen an dieser Stelle (183&nbsp;&deg;C und 806&nbsp;&deg;C) stammten aus
+          einem Pr&uuml;flauf, der eine Bremsung im Dauer-Schaltzustand ma&szlig; &ndash;
+          siehe v0.5.13.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-brake-fade" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">St&auml;rke des Fadings
           <small>&Uuml;ber 100&nbsp;% steigt die Heizrate, nicht der maximale Verlust.</small></div>
         <div class="opt-slider">
@@ -5584,6 +5664,22 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="phys-accel-val">1.00</span>
         </div></div>
+      <div class="opt-row"><div class="opt-label">Gaskennlinie <span class="wip-tag">WIP</span>
+          <small>Wie der Gasweg des Controllers auf die Beschleunigung abgebildet wird. Die Enden liegen immer fest: kein Gas hei&szlig;t keine Beschleunigung, Vollgas hei&szlig;t volle Beschleunigung &ndash; ge&auml;ndert wird nur, was dazwischen passiert. 1,0 ist die Gerade und &auml;ndert nichts. &Uuml;ber 1,0 streckt den unteren Bereich: ein Viertel Gasweg gibt bei 1,8 nur noch 8&nbsp;% statt 25&nbsp;%. Genau das braucht ein Trigger mit gro&szlig;er Totzone &ndash; ein DualShock&nbsp;4 oder DualSense gibt schon bei leichtem Druck viel ab, und dann l&auml;sst sich kein Tempo halten. Unter 1,0 macht es umgekehrt spitzer, f&uuml;r Pedale mit langem Weg.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-throttle-gamma" min="0.6" max="3" step="0.05" value="1">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-throttle-gamma-val">1.00 linear</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Anfahrschub <span class="wip-tag">WIP</span>
+          <small>Der St&ouml;&szlig;er, mit dem das Auto aus dem Stand losbricht. Ohne ihn bekommt es beim Anfahren ein Gasbyte, das zu klein ist, um es zu bewegen &ndash; es zuckt und steht. Mit ihm springt es daf&uuml;r an: 16&nbsp;% sind im Ma&szlig;stab rund 47&nbsp;km/h, und das ist der Sprung von null auf gef&uuml;hlt 30, den man beim ersten Gasgeben sp&uuml;rt. Wieviel n&ouml;tig ist, h&auml;ngt am Untergrund: auf Teppich mehr als auf Laminat. Runter drehen, bis das Auto gerade noch sauber anf&auml;hrt.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-minmove" min="0" max="0.35" step="0.01" value="0.16">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-minmove-val">16%</span>
+        </div></div>
       <div class="opt-row"><div class="opt-label">Bremsbalance
           <small>Wieviel der Bremse an der Vorderachse ankommt. <b>Nach vorn</b>: das Auto
           schiebt beim Anbremsen geradeaus. <b>Nach hinten</b>: mehr Lenkung beim Anbremsen,
@@ -5630,6 +5726,17 @@
           &ndash; unter Windows sind sie lokal vorhanden, auf Android k&ouml;nnen sie fehlen.
           Fehlt eine, steht das einmal im Protokoll und nicht bei jeder Runde.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Schaden ansagen <span class="wip-tag">WIP</span><small>Einmal, wenn der Schadensbalken auf 10&nbsp;% gefallen ist. Erst nach einer Reparatur wieder scharf.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-damage"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Tank ansagen <span class="wip-tag">WIP</span><small>Einmal, wenn noch 10&nbsp;% im Tank sind. Erst nach dem Tanken wieder scharf.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-fuel"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Reifen ansagen <span class="wip-tag">WIP</span><small>Einmal, wenn der schlechteste der vier Reifen nur noch 10&nbsp;% hat. Der schlechteste z&auml;hlt: ein Auto mit drei guten Reifen und einem abgefahrenen f&auml;hrt nicht drei Viertel gut.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-tyre"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Regen ansagen <span class="wip-tag">WIP</span><small>Wenn es anf&auml;ngt zu regnen und wenn es aufh&ouml;rt. Beim Laden wird nichts gesagt, erst beim Wechsel.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-rain"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Funkfilter <span class="wip-tag">WIP</span>
+          <small>L&auml;sst die Ansage nach Rennfunk klingen: ein Knacken beim Aufschalten, ein Rauschteppich darunter, ein Knacken beim Loslassen, und die Stimme spricht schneller und flacher. Was NICHT geht, und das sei gesagt: die Stimme selbst bandbegrenzen. Die Sprachausgabe des Browsers liefert keinen Audioknoten, es gibt also nichts, wo ein Filter dazwischen k&ouml;nnte. Der Funkeindruck kommt vom Drumherum.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-radio"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Regen<small>Select oder W. Reifen kommen beim Boxenstopp passend.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-rain"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Strecken-Ambience<small>Vorbeifahrten, Regen, Donner.</small></div>
@@ -5899,6 +6006,9 @@
           <span class="opt-val" id="ghost-spice-val">40%</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Ghost: Ideallinie <span class="wip-tag">WIP</span>
+          <!-- Seit v0.5.9 wirkt dieser Regler deutlich staerker: der Deckel aus
+               learnSteerCap() ging von 0,55 auf 1,0, gemessen an dem, was die Original-App
+               ihren eigenen Ghosts schickt. Am Auto ist das nicht geprueft. -->
           <small>Au&szlig;en anstellen, innen scheiteln, au&szlig;en heraus. Gemessener Einschlag: 70 Prozent ergeben 13,5 Grad, 100 Prozent 20,9 Grad von den 45 des Autos. Ohne gebaute oder gelernte Strecke f&auml;llt sie auf eine gr&ouml;bere Regel je Kachel zur&uuml;ck &ndash; halb so stark und ohne Blick auf die n&auml;chste Kurve. Ganz ohne gelesene Streckencodes wirkt sie nicht, weil niemand wei&szlig;, wo das Auto ist. Ob es hilft, sagen Rundenzeit und Abg&auml;nge.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
@@ -6172,9 +6282,15 @@
         weil kein Byte die Querlage meldet.
       </p>
       <div class="row" style="align-items:center; gap:10px; margin-top:10px">
-        <span class="muted">Status: <b id="track-closed-badge">-</b></span>
+        <!-- data-i18n-skip, wie #log und #hud-toast: diese drei Texte werden zur LAUFZEIT
+             geschrieben und gehen dabei durch t(). Der Uebersetzer laeuft ueber Textknoten
+             des Dokuments und wuerde hier nur das Ergebnis sehen - bei der Ideallinie ein
+             Satz MIT ZAHLEN darin, der als Woerterbuchschluessel genau eine einzige
+             Streckenlage traefe. Im Woerterbuch steht deshalb die VORLAGE mit
+             Platzhaltern, und nachgeschlagen wird sie im Code. -->
+        <span class="muted">Status: <b id="track-closed-badge" data-i18n-skip>-</b></span>
         <span class="muted">Ausrichtung: <b id="track-rotation-val">0&deg;</b></span>
-        <span class="muted" id="track-line-info"></span>
+        <span class="muted" id="track-line-info" data-i18n-skip></span>
       </div>
 
       <h3 style="font-size:14px; margin:16px 0 6px 0">Wo steht das Auto?</h3>
@@ -6413,7 +6529,7 @@
      kosten. Im Vollbild ist sie ausgeblendet. -->
 <footer id="app-footer">
   <span class="foot-left">
-    <span class="foot-ver">v<span id="app-version">0.5.7</span></span>
+    <span class="foot-ver">v<span id="app-version">0.5.15</span></span>
     <span class="foot-dim foot-brand" data-i18n-skip>OmegaSim &middot; MIT</span>
     <!-- Zur Klarstellung, und weil "Carrera" im ganzen Projekt vorkommt: das hier ist ein
          unabhaengiges Hobbyprojekt. Kein Firmenzeichen, keine Genehmigung, keine

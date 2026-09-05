@@ -13,6 +13,21 @@
   // ist die Bedeutung von servoAngle = 1 und nichts, woran man dreht.
   const STEER_MAX_DEG = 45;
 
+  // ---- Die Gaskennlinie -----------------------------------------------------------
+  //
+  // x hoch gamma, und die Familie ist mit Absicht gewaehlt: die Enden liegen fuer JEDES
+  // gamma fest - 0 hoch g ist 0, 1 hoch g ist 1 -, es braucht also keine Klemme und keine
+  // Pruefung. Eine Kurve mit Stuetzpunkten koennte die Zusicherung "0 bleibt 0, Vollgas
+  // bleibt Vollgas" verletzen, diese kann es nicht.
+  //
+  // gamma > 1 streckt den unteren Bereich (mehr Weg fuer wenig Gas), gamma < 1 macht ihn
+  // spitzer. 1 ist die Gerade und bitgleich zum Verhalten vor v0.5.10.
+  function gasKennlinie(x, gamma) {
+    const v = Math.max(0, Math.min(1, x));
+    if (!(gamma > 0) || gamma === 1) return v;
+    return Math.pow(v, gamma);
+  }
+
   // Die Nickgrenzen, GERECHNET aus der statischen Achslast und dem Verlagerungsanteil.
   //
   // Als Funktionen und nicht als Konfigurationsfelder: ein Feld muesste nach jeder Aenderung
@@ -208,7 +223,17 @@
         // noch, wieviel davon am Boden ankommt.
         launchSoftFloor: 0.95, // thrust multiplier at a dead stop
         launchSoftKmh: 0.6,    // ... rising linearly to 1.0 by this road speed
+        // DER ANFAHRSCHUB, und er ist jetzt ein Regler. 0,16 vom Gasbyte sind im
+        // Massstab rund 47 km/h - gemeldet als "das Auto springt von 0 auf gefuehlt
+        // 30 km/h und beschleunigt erst danach realistisch". Es ist das Losbrechmoment
+        // und keine Erfindung, aber wie gross es sein muss, haengt am Untergrund: auf
+        // Teppich braucht es mehr als auf Laminat.
         minMoveThrottle: 0.16, // smallest byte that actually breaks the car away from rest
+        // GASKENNLINIE, Ausgang x hoch throttleGamma. 1 = linear und bitgleich zu vorher.
+        // Ueber 1 streckt den unteren Bereich: mehr Weg fuer wenig Gas, und genau das
+        // braucht ein Trigger mit grosser Totzone, um ein Tempo zu HALTEN.
+        // Die Enden liegen fuer jedes Gamma fest - 0 bleibt 0, 1 bleibt 1.
+        throttleGamma: 1.0,
         // 10 km/h on the racing display, which reads speedKmh * REAL_SCALE (71.25).
         // Below this the car is walking pace and should simply stop.
         crawlCutoffKmh: 10 / REAL_SCALE,
@@ -422,7 +447,39 @@
         // die Simulation tiefer, sondern die Kalibrierung kaputt.
         brakeFadeEffect: 1.0,   // 0 = aus, 1 = Modell, bis 2 = schnellere Raten
         brakeAmbientC: 25,
-        brakeHeatRate: 62,      // °C/s bei voller Bremsung und voller Fahrt
+        // 85 STATT 62, und der Grund ist ein Prueflauf-Artefakt, das erst v0.5.13
+        // sichtbar gemacht hat.
+        //
+        // Bis dahin loeschte ein setTimeout die Schaltunterbrechung. In einer synchronen
+        // Messschleife kommt ein Zeitgeber nie dran: st.isShifting blieb nach dem ersten
+        // Herunterschalten fuer immer wahr, und weil die Automatik "nicht waehrend eines
+        // Gangwechsels" schaltet, fand ueberhaupt nur EIN Herunterschalten statt. Der
+        // Prueflauf mass also eine Bremsung im Dauer-Schaltzustand - etwas, das im
+        // Fahrbetrieb nie vorkam, weil dort der Zeitgeber feuerte.
+        //
+        // Mit der Unterbrechung ueber dt zeigt derselbe Prueflauf, was das Auto WIRKLICH
+        // tat, und das war ernuechternd (250 km/h, acht Bremsungen):
+        //
+        //                       eine Bremsung      acht Bremsungen
+        //     Artefakt            183 °C            806 °C, 21,7 % Fading, 252,7 m
+        //     Wirklichkeit        183 °C            505 °C,  0,0 % Fading, 207,3 m
+        //
+        // 505 °C ist der PLATEAUWERT - Kuehlung und Heizung halten sich dort die Waage,
+        // auch nach sechzehn Bremsungen waren es nur 528. Das Fading beginnt bei 520.
+        // Es war also im Fahrbetrieb praktisch unerreichbar, und der Test, der es
+        // bestaetigte, mass das Artefakt.
+        //
+        // Die Rate wird deshalb an der Aussage kalibriert, die zwei Zeilen darueber schon
+        // steht: eine Vollbremsung aus 250 km/h soll rund 250 °C erreichen. Mit 62 waren
+        // es 183, mit 85 sind es 241. Gemessen bei 85:
+        //
+        //     eine Bremsung   241 °C, 0,0 % Fading, 205,8 m   (Bremsweg unveraendert)
+        //     acht           710 °C, 15,9 % Fading, 224,4 m   (9 % laenger)
+        //
+        // Damit gilt beides, was der Absatz darueber verlangt: eine Einzelbremsung fadet
+        // nicht und laesst die gefittete Bremstabelle unangetastet, mehrere Bremszonen
+        // hintereinander kommen ins Fading.
+        brakeHeatRate: 85,      // °C/s bei voller Bremsung und voller Fahrt
         // DIREKT die Kuehlkoeffizienten in 1/s, nicht normiert. Hier stand erst eine
         // Normierung ueber eine Spanne, und die machte den Koeffizienten 0,59/s - eine
         // Zeitkonstante von 1,7 s, mit der die Scheiben gar nicht warm werden konnten:
@@ -627,6 +684,9 @@
         // eine Groesse, die nur in einer verworfenen Anzeige Sinn hatte, gehoert nicht in den
         // Zustand.
         isShifting: false,
+        // Restzeit der Schaltunterbrechung in Sekunden. Sie laeuft ueber dt und nicht
+        // ueber einen Zeitgeber - siehe die Herleitung an triggerShift().
+        shiftLeft: 0,
         absActive: false,
         lastAbsRumble: 0,
       };
@@ -979,6 +1039,22 @@
       let isBraking = false;
       st.absActive = false;
       st.onLimiter = false;
+
+      // ---- Die Schaltunterbrechung, ueber dt statt ueber einen Zeitgeber --------------
+      //
+      // Hier hing ein setTimeout OHNE GRIFF, und das hatte drei Folgen. Der erste
+      // Zeitgeber beendete den zweiten Schaltvorgang (beim Herunterschalten unter Bremsen
+      // die Regel, und beim 412P mit 350 ms deutlich); im verborgenen Fenster ist
+      // setTimeout auf 1 Hz gedrosselt, die Unterbrechung dauerte dort bis zu einer
+      // Sekunde; und drei Prueflaeufe mussten sie von Hand nachbauen, weil ein Zeitgeber
+      // in einer synchronen Schleife nie dran kommt.
+      //
+      // Ueber dt gilt: der LETZTE Schaltvorgang bestimmt die Dauer, es gibt nichts zu
+      // drosseln, und eine gefaelschte Uhr treibt sie von selbst.
+      if (st.shiftLeft > 0) {
+        st.shiftLeft = Math.max(0, st.shiftLeft - Math.max(0, dt));
+        st.isShifting = st.shiftLeft > 0;
+      }
 
       // Speed is simulated in real km/h and the throttle byte is DERIVED from it, rather
       // than being the driver's pedal position. That is the key point: the car reaches top
@@ -1420,7 +1496,7 @@
           if (inputs.brake > 0.8 && st.speedKmh > cfg.topSpeedKmh * 0.15) {
             st.absActive = true;
             const now = Date.now();
-            if (now - st.lastAbsRumble > 140) { st.lastAbsRumble = now; padRumble(0.18, 0.1, 60); }
+            if (now - st.lastAbsRumble > 140) { st.lastAbsRumble = now; padRumble(0.18, 0.1, 60, 'abs'); }
           }
         } else if (inNeutral) {
           // Out of gear the engine is disconnected from the wheels: revving it does nothing
@@ -1713,7 +1789,7 @@
           if (direction > 0) {
             st.driveMode = 'forward'; st.currentGear = 0;
             st.speedKmh = 0; st.neutralRpm = 0;
-            showHudToast('Vorw\u00e4rts'); padRumble(0.3, 0.2, 90);
+            showHudToast('Vorw\u00e4rts'); padRumble(0.3, 0.2, 90, 'schalt');
             playShiftSound(1);
           }
           return;
@@ -1722,7 +1798,7 @@
           if (langsam) {
             st.driveMode = 'reverse'; st.currentGear = 0;
             st.speedKmh = 0; st.neutralRpm = 0;
-            showHudToast('R\u00fcckw\u00e4rtsgang'); padRumble(0.3, 0.2, 90);
+            showHudToast('R\u00fcckw\u00e4rtsgang'); padRumble(0.3, 0.2, 90, 'schalt');
             playShiftSound(-1);
           } else {
             // Sagen, WARUM nichts passiert. Ein Knopf, der schweigend nichts tut, sieht
@@ -1736,7 +1812,7 @@
       if (st.driveMode === 'reverse') {
         if (direction > 0 && stopped) {
           st.driveMode = 'neutral'; st.speedKmh = 0; st.neutralRpm = 0;
-          showHudToast('Leerlauf'); padRumble(0.3, 0.2, 90);
+          showHudToast('Leerlauf'); padRumble(0.3, 0.2, 90, 'schalt');
           playShiftSound(1);
         }
         return;
@@ -1746,12 +1822,12 @@
         if (direction > 0) {
           st.driveMode = 'forward'; st.currentGear = 0; st.neutralRpm = 0;
           st.isShifting = true;
-          showHudToast('1. Gang'); padRumble(0.15, 0.1, 40);
+          st.shiftLeft = cfg.shiftMs / 1000;
+          showHudToast('1. Gang'); padRumble(0.15, 0.1, 40, 'schalt');
           playShiftSound(1);
-          setTimeout(() => { st.isShifting = false; }, cfg.shiftMs);
         } else if (stopped) {
           st.driveMode = 'reverse'; st.speedKmh = 0; st.neutralRpm = 0;
-          showHudToast('Rückwärtsgang'); padRumble(0.3, 0.2, 90);
+          showHudToast('Rückwärtsgang'); padRumble(0.3, 0.2, 90, 'schalt');
           playShiftSound(-1);
         }
         return;
@@ -1759,7 +1835,7 @@
 
       if (direction < 0 && st.currentGear === 0) {
         st.driveMode = 'neutral'; st.neutralRpm = 0;
-        showHudToast('Leerlauf'); padRumble(0.2, 0.12, 60);
+        showHudToast('Leerlauf'); padRumble(0.2, 0.12, 60, 'schalt');
         playShiftSound(-1);
         return;
       }
@@ -1767,12 +1843,15 @@
       const next = st.currentGear + direction;
       if (next < 0 || next >= cfg.gears.length) return;
       st.isShifting = true;
+      // DER LETZTE SCHALTVORGANG GEWINNT. Genau das konnte die alte Fassung nicht: ihr
+      // Zeitgeber lief weiter und beendete die naechste Unterbrechung vorzeitig - beim
+      // Herunterschalten unter Bremsen die Regel, und beim 412P mit 350 ms deutlich.
+      st.shiftLeft = cfg.shiftMs / 1000;
       st.currentGear = next;
       // Short and light: six shifts inside three seconds with a long pattern is a
       // pneumatic drill in the hand.
-      padRumble(0.15, 0.1, 40);
+      padRumble(0.15, 0.1, 40, 'schalt');
       playShiftSound(direction);
-      setTimeout(() => { st.isShifting = false; }, cfg.shiftMs);
     }
   }
 
@@ -1794,8 +1873,28 @@
   // beim Lesen dasselbe sagen.
   let rumbleOn = true;
 
-  function padRumble(strong, weak, ms) {
-    if (!rumbleOn) return;
+  // ---- Ein Schalter je Ausloeser ---------------------------------------------------
+  //
+  // Die sechs Arten sind an den siebzehn Aufrufstellen von padRumble abgelesen, nicht
+  // erfunden. Sie stehen hier und nicht bei den Kaestchen, weil padRumble sie liest -
+  // und die Abfrage gehoert an DIE eine Stelle und nicht an siebzehn.
+  //
+  // Vorgaben: Schalten, ABS, Crash und Boxenstopp an; neben der Bahn und Meldungen aus.
+  // "Neben der Bahn" und "Meldungen" sind die zwei, die nicht auf ein Ereignis am Auto
+  // zeigen, sondern auf einen Zustand bzw. eine Nachricht - ein Dauerbrummen im Gelaende
+  // ist Geschmackssache, und ein Wetterwechsel ist keine Kraft.
+  const RUMBLE_ARTEN = { schalt: true, abs: true, crash: true,
+                         abseits: false, box: true, meldung: false };
+
+  // Der Rueckgabewert sagt, ob die Schalter den Stoss DURCHGELASSEN haben - nicht, ob ein
+  // Controller ihn ausgefuehrt hat. Damit ist die Schalterlogik ohne Hardware pruefbar, und
+  // genau die ist bei siebzehn Aufrufstellen die Stelle, an der man sich vertut.
+  function padRumble(strong, weak, ms, art) {
+    if (!rumbleOn) return false;
+    // Eine unbekannte Art brummt - das ist Absicht. Wer eine neue Stelle einbaut und das
+    // Etikett vergisst, bekommt ein Brummen und merkt es; ein stilles Verschlucken waere
+    // ein Feature, das niemand vermisst, bis es fehlt.
+    if (art && RUMBLE_ARTEN[art] === false) return false;
     try {
       const pads = navigator.getGamepads ? navigator.getGamepads() : [];
       // DENSELBEN PAD NEHMEN WIE DIE EINGABE. Windows zeigt denselben Controller oft zweimal
@@ -1817,4 +1916,5 @@
         }
       }
     } catch { /* pad vanished mid-call — nothing to do */ }
+    return true;
   }

@@ -1106,12 +1106,24 @@
     if (info) {
       // Residual in millimetres: a bare number in drawing units means nothing to a reader.
       const li = result.lineInfo;
+      // UEBER EINE VORLAGE, nicht ueber den fertigen Satz. Im Woerterbuch stand die Zeile
+      // mit EINGEBACKENEN ZAHLEN ("0.0 cm von 9.3 cm"), sie traf also genau eine einzige
+      // Streckenlage und sonst nie - im englischen Modus stand dort deutscher Text, sobald
+      // die Ideallinie irgendeinen anderen Wert hatte. Gefunden hat es der Sprachtest.
+      //
+      // Die Vorlage traegt Platzhalter und ist damit fuer jede Zahl dieselbe.
       info.textContent = li
-        ? `Ideallinie nutzt ${(li.span / TRACK_UNITS_PER_CM).toFixed(1)} cm `
-          + `von ${(li.limit / TRACK_UNITS_PER_CM).toFixed(1)} cm möglichem Versatz`
+        ? t('Ideallinie nutzt {a} cm von {b} cm möglichem Versatz')
+            .replace('{a}', (li.span / TRACK_UNITS_PER_CM).toFixed(1))
+            .replace('{b}', (li.limit / TRACK_UNITS_PER_CM).toFixed(1))
         : '';
     }
-    $('track-closed-badge').textContent = currentTrackTiles.length === 0 ? '-' : (result.closed ? 'Geschlossen ✓' : 'Offen');
+    // Auch hier durch t(): "Geschlossen" stand im Woerterbuch, "Offen" fehlte, und keines
+    // von beiden wurde je nachgeschlagen, weil der Text per textContent hineingeschrieben
+    // wird. Der Sprachtest sieht "Offen" nicht - es hat weder Umlaut noch deutsches
+    // Funktionswort -, falsch ist es trotzdem.
+    $('track-closed-badge').textContent = currentTrackTiles.length === 0 ? '-'
+      : t(result.closed ? 'Geschlossen ✓' : 'Offen');
     const list = $('track-tile-list');
     // The first tile is the Start/Finish anchor and is not deletable.
     list.innerHTML = currentTrackTiles.map((t, i) =>
@@ -1584,10 +1596,28 @@
     learn.car = null;
     learn.seq = []; learn.votes = {}; learn.lastCount = null;
     learn.started = false; learn.laps = 0;
+    // Der Vorlauf und der Sperrzustand gehoeren mit zurueckgesetzt: bleiben sie stehen,
+    // meldet der naechste Lauf keinen Fortschritt mehr, und eine haengende Sperrflanke
+    // wuerde ihn an der falschen Kachel ankern.
+    learn.vorlauf = 0; learn.sperreVor = false; learn.sperreFlanke = false;
+  }
+
+  // Die Start/Ziel-Sperre des Autos, Byte 15 Bit 3 - dieselbe, aus der 70-race.js die
+  // Runde zaehlt. Sie wird hier als ZWEITER ANKER gelesen: der Byte-12-Startcode ist auf
+  // manchen Bahnen nie zu sehen, und dann fing der Scan gar nicht erst an.
+  //
+  // Gemerkt wird die steigende Flanke ueber den ganzen Kacheldurchlauf, weil die Sperre
+  // rund eine Sekunde haelt und in dieser Zeit mehrere Meldungen kommen - ein Blick auf
+  // den Momentanwert an der Kachelgrenze wuerde sie je nach Takt verpassen.
+  function learnSperre(bytes) {
+    const jetzt = (bytes[15] & 0x08) !== 0;
+    if (jetzt && !learn.sperreVor) learn.sperreFlanke = true;
+    learn.sperreVor = jetzt;
   }
 
   function learnTick(bytes) {
     if (!ghostCfg.learn) return;
+    learnSperre(bytes);
     const counter = bytes[11], type = bytes[12];
     if (learn.lastCount === null) { learn.lastCount = counter; learn.votes = {}; return; }
     if (counter === learn.lastCount) {
@@ -1604,17 +1634,49 @@
     }
     learn.lastCount = counter;
     learn.votes = {};
+    // Die Flanke der Sperre gilt fuer DIESE Kachelgrenze und wird danach zurueckgesetzt -
+    // sonst wuerde sie an der uebernaechsten Grenze ein zweites Mal ankern.
+    const sperre = learn.sperreFlanke;
+    learn.sperreFlanke = false;
     if (best === null) return;
-    // Erst ab der ersten Start/Ziel-Kachel mitschreiben, sonst faengt die Folge irgendwo in
-    // der Runde an und die gelernte Strecke ist gegen die echte verdreht.
+    // ZWEI ANKER, und der Ring beginnt an dem, der zuerst kommt. Der Byte-12-Startcode ist
+    // der alte; die Sperre des Autos ist der zuverlaessigere, weil sie auch dort kommt, wo
+    // der Code nie erkannt wird.
+    const anker = sperre || isStartCode(best);
+    // ---- Vor dem Anker: mitzaehlen, aber nicht mitschreiben --------------------------
+    //
+    // Die Teile vor dem Anker sind eine angefangene Runde; sie koennen den Ring nicht
+    // schliessen und werden verworfen. Gezaehlt werden sie trotzdem, denn sie sind der
+    // Beweis, dass ueberhaupt gelesen wird. Vorher war dieser Zustand STILL, und von
+    // aussen sah ein Scan, der auf einen nie kommenden Startcode wartet, genauso aus wie
+    // ein Scan, der gar nichts empfaengt.
     if (!learn.started) {
-      // Gemeldeter Code, nicht Kacheltyp: hier kommt an, was das Auto sendet.
-      if (!isStartCode(best)) return;
+      if (!anker) {
+        learn.vorlauf = (learn.vorlauf || 0) + 1;
+        if (learn.vorlauf === 8 || learn.vorlauf === 25) {
+          log('Streckenlernen: ' + learn.vorlauf + ' Teile gelesen, Start/Ziel noch nicht '
+              + 'gesehen. Der Ring beginnt erst dort - einmal ueber die Start/Ziel-Gerade '
+              + 'fahren.', 'info');
+        }
+        return;
+      }
       learn.started = true;
+      learn.vorlauf = 0;
       learn.seq = [{ type: TILE_TYPE.START }];
       return;
     }
-    if (isStartCode(best)) {
+    if (anker) {
+      // DIE ZWEI ANKER MEINEN VERSCHIEDENE KACHELN, und das ist ein Kachelversatz wert.
+      //
+      //   isStartCode(best) sagt: die Kachel, die GERADE ZU ENDE ist, war Start/Ziel.
+      //     Sie gehoert nicht mehr in die alte Runde, sie ist der Anfang der neuen.
+      //
+      //   Die Sperre steigt beim LESEN des Startmusters, also an der Kachelgrenze davor.
+      //     Die Kachel, die gerade zu Ende ist, ist eine ganz normale und gehoert noch in
+      //     die alte Runde - sonst fehlt sie im Ring.
+      //
+      // Gemessen: ohne diese Unterscheidung lernte eine Runde aus sechs Teilen nur fuenf.
+      if (sperre && !isStartCode(best)) learn.seq.push({ type: best });
       learn.laps++;
       if (learn.seq.length >= 3) learnCommit();
       learn.seq = [{ type: TILE_TYPE.START }];
@@ -1623,7 +1685,12 @@
     learn.seq.push({ type: best });
     // Eine Runde kann nicht beliebig lang sein. Laeuft es davon, ist die Start/Ziel-Kachel
     // nicht erkannt worden, und weiterzuzaehlen wuerde nur Unsinn ansammeln.
-    if (learn.seq.length > 60) { learnReset(); }
+    if (learn.seq.length > 60) {
+      log('Streckenlernen: 60 Teile ohne zweite Start/Ziel-Ueberfahrt, Lauf verworfen. '
+          + 'Auf sehr langen Bahnen oder bei nicht gelesenem Startmuster kommt das vor.',
+          'info');
+      learnReset();
+    }
   }
 
   function learnCommit() {

@@ -360,6 +360,135 @@
   rumbleOn = $('setting-vibration').checked;
   $('setting-vibration').addEventListener('change', (e) => { rumbleOn = e.target.checked; });
 
+  // Ein Kaestchen je Ausloeser. Dieselbe Bauform wie oben: AUS DEM MARKUP lesen und danach
+  // auf 'change' hoeren - der fehlende Anfangsabgleich hat hier schon einmal einen toten
+  // Schalter ergeben, und mit sechs Kaestchen waeren es sechs.
+  const VIB_KAESTCHEN = { 'vib-schalt': 'schalt', 'vib-abs': 'abs', 'vib-crash': 'crash',
+                          'vib-abseits': 'abseits', 'vib-box': 'box',
+                          'vib-meldung': 'meldung' };
+  Object.keys(VIB_KAESTCHEN).forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    const art = VIB_KAESTCHEN[id];
+    RUMBLE_ARTEN[art] = el.checked;
+    el.addEventListener('change', (e) => { RUMBLE_ARTEN[art] = e.target.checked; });
+  });
+
+  // GASKENNLINIE und ANFAHRSCHUB. Beide lesen ihren Anfangswert AUS DEM MARKUP und
+  // haengen sich danach an 'input' - dasselbe Muster wie bei setting-vibration, wo der
+  // fehlende Anfangsabgleich schon einmal einen toten Schalter ergeben hat.
+  function gasKennlinieAnwenden() {
+    const el = $('setting-throttle-gamma');
+    if (!el) return;
+    const g = parseFloat(el.value);
+    physEngine.config.throttleGamma = g;
+    const nah = Math.abs(g - 1) < 0.001;
+    // Ein Beispiel statt einer nackten Zahl: was gibt ein Viertel Gasweg? Das ist die
+    // Groesse, um die es beim Halten eines Tempos geht.
+    const viertel = Math.round(100 * Math.pow(0.25, g));
+    $('setting-throttle-gamma-val').textContent =
+      g.toFixed(2) + (nah ? ' linear' : ' \u00b7 \u00bc Weg = ' + viertel + '%');
+  }
+  function anfahrschubAnwenden() {
+    const el = $('setting-minmove');
+    if (!el) return;
+    const v = parseFloat(el.value);
+    physEngine.config.minMoveThrottle = v;
+    // Im Massstab, nicht als Anteil: 0,16 sagt niemandem etwas, 47 km/h schon.
+    const kmh = Math.round(v * physEngine.config.topSpeedKmh * REAL_SCALE);
+    $('setting-minmove-val').textContent = Math.round(v * 100) + '% \u00b7 ' + kmh + ' km/h';
+  }
+  if ($('setting-throttle-gamma')) {
+    gasKennlinieAnwenden();
+    $('setting-throttle-gamma').addEventListener('input', gasKennlinieAnwenden);
+  }
+  if ($('setting-minmove')) {
+    anfahrschubAnwenden();
+    $('setting-minmove').addEventListener('input', anfahrschubAnwenden);
+  }
+
+  // ---- Das Cockpit auf die Bildschirmhoehe einpassen ---------------------------------
+  //
+  // GEMELDET: "auf einem Handy sehe ich oben die Lichter nicht." Gemessen in 844 x 390,
+  // also einem Handy quer: Kopfzeile 62 px, Cockpit 531 px hoch ab y = 86 - Fensterhoehe
+  // 390, und die Seite scrollt dort nicht. 227 px liegen ausserhalb.
+  //
+  // Verkleinert wird das GANZE Instrumentenbrett und nicht seine Zeilenaufteilung: die
+  // Anordnung ist der Sinn der Sache, und wer sie auf kleinen Schirmen umbaut, hat zwei
+  // Cockpits zu pflegen.
+  //
+  // zoom und nicht transform: scale() - zoom aendert die Lage im Layout mit, es entsteht
+  // also kein Loch darunter, und Treffer- wie Scrollrechnung stimmen von selbst. Der
+  // uebliche Einwand ist die Browserunterstuetzung; hier belanglos, weil Web Bluetooth die
+  // App ohnehin auf Chrome festlegt.
+  // UNTERGRENZE 0,45, und sie ist gemessen und nicht geschaetzt. zoom verkleinert den
+  // gezeichneten Kasten, aber der Inhalt braucht dabei relativ MEHR Zeilen - clamp()-
+  // Mindestwerte und vw-Anteile schrumpfen nicht mit. Gemessen an einem Cockpit von
+  // 495 px in einem Fenster von 390 px:
+  //
+  //      zoom   1     0,8   0,65  0,55  0,45  0,35
+  //      hoch  495   418   362   323   286   247
+  //
+  // Fuer die verfuegbaren 298 px braucht es rund 0,47 - mit der frueheren Grenze von 0,55
+  // blieb ein Ueberstand von 19 px stehen, und genau der ist der gemeldete Fehler.
+  // Tiefer als 0,45 geht es nicht: darunter ist der Tacho nicht mehr zu entziffern, und
+  // dann ist Scrollen ehrlicher als eine Anzeige, die man nicht lesen kann.
+  const COCKPIT_MIN_ZOOM = 0.45;
+  const COCKPIT_LUFT = 6;          // px, damit die untere Blende nicht am Rand klebt
+
+  // `hoeheFuerTest` gibt eine Fensterhoehe vor. Ohne sie gilt die echte; mit ihr laesst
+  // sich "passt es auf einem Handy quer" auf JEDEM Schirm pruefen - und ein Test, der nur
+  // auf einem kleinen Fenster etwas aussagt, wird nie gefahren.
+  function cockpitPassung(hoeheFuerTest) {
+    const el = $('race-dash');
+    if (!el || !el.offsetParent) return null;
+    const fensterH = hoeheFuerTest || window.innerHeight;
+    // ERST ZURUECKSETZEN, DANN MESSEN. Mit gesetztem zoom liefert getBoundingClientRect
+    // bereits verkleinerte Werte, und die Rechnung liefe sich selbst nach - bei jedem
+    // Aufruf ein Stueck kleiner.
+    el.style.zoom = '';
+    const oben = el.getBoundingClientRect().top;
+    const noetig = el.offsetHeight;
+    const platz = fensterH - oben - COCKPIT_LUFT;
+    if (!(noetig > 0) || !(platz > 0)) return null;
+
+    // NACHMESSEN STATT AUSRECHNEN, und das ist eine Berichtigung an meinem ersten Versuch:
+    // der setzte platz/noetig als Faktor und war fertig. Gemessen kam damit ein Cockpit
+    // heraus, das immer noch 44 px ueberstand - das Raster schrumpft nicht rein
+    // proportional, weil einzelne Zeilen Mindesthoehen und in vh gerechnete Anteile haben.
+    //
+    // Also: Faktor setzen, WIRKLICHE Unterkante messen, nachbessern. Vier Durchgaenge
+    // genuegen (jeder halbiert den Fehler); der Deckel ist dabei kein Schoenheitsfehler,
+    // sondern die Zusicherung, dass diese Schleife endet.
+    let f = Math.min(1, platz / noetig);
+    for (let i = 0; i < 4; i++) {
+      f = Math.min(1, Math.max(COCKPIT_MIN_ZOOM, f));
+      el.style.zoom = f < 0.999 ? f.toFixed(4) : '';
+      const unten = el.getBoundingClientRect().bottom;
+      const rest = fensterH - COCKPIT_LUFT - unten;
+      if (rest >= -1) break;                       // passt
+      if (f <= COCKPIT_MIN_ZOOM + 1e-6) break;     // kleiner wird es nicht, siehe Konstante
+      const hoehe = unten - oben;
+      if (!(hoehe > 0)) break;
+      f *= (hoehe + rest) / hoehe;
+    }
+    const unten = el.getBoundingClientRect().bottom;
+    return { noetig, platz: Math.round(platz), faktor: +f.toFixed(3),
+             fensterH, amBoden: f <= COCKPIT_MIN_ZOOM + 1e-6,
+             passt: unten <= fensterH + 1,
+             ueberstand: Math.max(0, Math.round(unten - fensterH)) };
+  }
+
+  // Bei jeder Groessenaenderung, bei jedem Drehen des Geraets, und beim Wechsel auf den
+  // Reiter - vorher ist das Cockpit unsichtbar und hat die Hoehe 0.
+  window.addEventListener('resize', cockpitPassung);
+  window.addEventListener('orientationchange', () => setTimeout(cockpitPassung, 120));
+  document.querySelectorAll('[data-tab="race"]').forEach((b) => {
+    b.addEventListener('click', () => setTimeout(cockpitPassung, 60));
+  });
+  // Und einmal beim Laden, falls der Reiter schon offen ist.
+  setTimeout(cockpitPassung, 300);
+
   // Der Regler steht in PROZENT vorn, die Physik rechnet mit einem Anteil.
   $('setting-brakebias').addEventListener('input', (e) => {
     const pct = parseInt(e.target.value, 10);
@@ -1039,10 +1168,26 @@
   // Advances the simulation and publishes its shaped output into physOutSteer/
   // physOutThrottle for controlHeartbeat() to transmit. Driven by the heartbeat itself
   // (NOT requestAnimationFrame) on purpose: rAF is paused by the browser whenever the
-  // page isn't being composited (hidden/minimised/background tab). With rAF, physics
-  // would freeze while the heartbeat happily kept re-sending the last throttle value —
-  // i.e. the car would keep driving at whatever speed it had when you looked away.
-  // Timer-driven, physics keeps decelerating normally instead.
+  // page isn't being composited (hidden/minimised/background tab).
+  //
+  // WAS DIESER ABSATZ FRUEHER BEHAUPTETE, war zu viel: "Timer-driven, physics keeps
+  // decelerating normally instead." Gemessen stimmt das nur mit Ton. Ein verborgenes
+  // Fenster drosselt ALLE Zeitgeber auf 1 Hz - der Herzschlag lieferte dort 1,1 statt
+  // 22,2 Pakete je Sekunde, und zwar samt wxTick, pitBoard und dem Tastaturtakt.
+  //
+  // ES SEI DENN, DIE SEITE TOENT. Mit laufendem Ton fielen in derselben verborgenen Lage
+  // 133 Pakete in 6 Sekunden, also volle 22,2 Hz: eine hoerbare Seite ist von der
+  // Drosselung ausgenommen. Der Motorton ist standardmaessig an, im Fahrbetrieb ist der
+  // Takt also da - aber wer den Ton ausschaltet und das Fenster in den Hintergrund legt,
+  // faehrt mit einem Steuertakt von einer Sekunde.
+  //
+  // Das ist trotzdem sicher, und zwar nicht durch Zufall: rAF steht in dieser Lage ganz,
+  // die Gamepad-Abtastung damit auch, und die Wache im Herzschlag gibt nach PAD_STALE_MS
+  // das Gas des Controllers frei. Die Tastatur wird beim blur-Ereignis geleert. Es bleibt
+  // also kein Gas stehen - das Auto rollt aus, nur langsamer geregelt.
+  //
+  // Gegen rAF bleibt der Zeitgeber die bessere Wahl: rAF steht IMMER still, wenn die Seite
+  // nicht gezeichnet wird, der Zeitgeber nur ohne Ton.
   // Autopilot fuer das FAHRERAUTO waehrend der gelben Flagge.
   //
   // Der Anlass: waehrend Gelb stellt man abgeflogene Ghosts von Hand zurueck auf die Bahn,
@@ -1256,7 +1401,14 @@
     const cutZiel = fuelCutTarget();
     if (cutZiel > fuelCut) fuelCut = cutZiel;   // Tanken wirkt sofort
     else fuelCut += (cutZiel - fuelCut) * (1 - Math.exp(-dt / FUEL_CUT_TAU));
-    let rawThrottle = fuelDamageDerate(Math.max(0, throttleY), fuelCut);
+    // DIE KENNLINIE ZUERST, vor Tank und Schaden. Sie beschreibt, was der Daumen
+    // MEINT; Tank und Schaden beschreiben, was das Auto daraus machen kann. Andersherum
+    // wuerde die Kennlinie einen halbleeren Tank mitkruemmen.
+    //
+    // Nur nach vorn: die Bremse hat ihre eigene Kennlinie, und ein Bremspedal, das sich
+    // je nach Gaseinstellung anders anfuehlt, waere eine Falle.
+    const gasKurve = gasKennlinie(Math.max(0, throttleY), physEngine.config.throttleGamma);
+    let rawThrottle = fuelDamageDerate(gasKurve, fuelCut);
     let rawBrake = Math.max(0, -throttleY);
     let steer = steerX;
     // Bei gelber Flagge und in der Einfuehrungsrunde faehrt das Auto selbst. Siehe
@@ -1279,7 +1431,7 @@
         // Dauerhaft und schwach, nicht ein Stoss wie beim Crash: ein Dauerrumble in
         // Crash-Staerke ist nach fuenf Sekunden nur noch nervig. Der schwache Motor traegt
         // mehr, das fuehlt sich nach Schotter an und nicht nach Aufprall.
-        padRumble(0.12, 0.34, OFFTRACK_RUMBLE_MS);
+        padRumble(0.12, 0.34, OFFTRACK_RUMBLE_MS, 'abseits');
       }
     }
     // Windschatten: gemessen wird in 90-ghosts.js (nur dort ist bekannt, wo die anderen

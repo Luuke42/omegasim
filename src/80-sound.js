@@ -327,44 +327,197 @@
     return text;
   }
 
-  function speakLap(ms, istBest) {
-    if (!announceOn) return;
-    if (!('speechSynthesis' in window)) return;
-    // ABBRECHEN VOR DEM SPRECHEN. Zwei Runden kurz hintereinander duerfen sich nicht
-    // stapeln - sonst laeuft die Stimme der Gegenwart nach und sagt die vorletzte Zeit,
-    // waehrend man schon in der naechsten Runde ist.
+
+  // ============================ ANSAGEN =============================================
+  //
+  // FUENF MELDUNGEN AN FUENF SCHALTERN, dazu ein Funkfilter. Sie teilen sich einen Kern:
+  // eine Stimme, eine Abbruchregel, eine Fehlerzeile. Fuenf eigene Sprechfunktionen waeren
+  // fuenf Orte, an denen der naechste Schalter vergessen wird.
+  //
+  // JEDE MELDUNG IST EINE FLANKE, kein Zustand. Ein Tank unter 10 % bleibt minutenlang
+  // unter 10 %, und eine Ansage je Takt waere unbenutzbar. Gemeldet wird deshalb der
+  // UEBERGANG, und die Sperre faellt erst, wenn der Wert wieder ueber die Hysterese
+  // steigt - beim Tank also nach dem Tanken, beim Schaden nach der Reparatur.
+  const ANSAGE_SCHWELLE = 0.10;   // 10 %, wie in der Aufgabe
+  const ANSAGE_HYSTERESE = 0.18;  // erst darueber ist die Meldung wieder scharf
+  const ansageAn = { lap: true, damage: false, fuel: false, tyre: false, rain: false };
+  let funkFilter = false;
+  const ansageLatch = { damage: false, fuel: false, tyre: false, rain: null };
+
+  // ---- Der Funkfilter: Knacken, Rauschen, Knacken ---------------------------------
+  //
+  // Die Stimme selbst kann nicht bandbegrenzt werden - speechSynthesis liefert keinen
+  // Audioknoten. Gebaut wird das, was einen Funkspruch wirklich kennzeichnet: das
+  // Aufschalten, der Rauschteppich darunter und das Loslassen.
+  function funkKnacken(t0, staerke) {
+    if (!audioCtx) return;
+    const n = Math.floor(audioCtx.sampleRate * 0.05);
+    const b = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (n * 0.18));
+    const src = audioCtx.createBufferSource();
+    src.buffer = b;
+    // Bandpass um 1,6 kHz: das ist die Lage, in der ein Sprechfunkgeraet knackt.
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 1600; bp.Q.value = 1.4;
+    const g = audioCtx.createGain();
+    g.gain.value = staerke;
+    src.connect(bp).connect(g).connect(audioCtx.destination);
+    src.start(t0);
+    src.stop(t0 + 0.06);
+  }
+
+  // Der Rauschteppich unter der Stimme. Er laeuft ueber eine geschaetzte Sprechdauer -
+  // speechSynthesis sagt nicht, wie lange es dauert, und onend kommt zu spaet, um daraus
+  // eine Huellkurve zu bauen. 55 ms je Zeichen ist an den eigenen Ansagen abgelesen.
+  function funkRauschen(t0, dauer) {
+    if (!audioCtx) return;
+    const n = Math.floor(audioCtx.sampleRate * Math.max(0.2, dauer));
+    const b = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const src = audioCtx.createBufferSource();
+    src.buffer = b;
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 0.7;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.018, t0 + 0.04);
+    g.gain.setValueAtTime(0.018, t0 + dauer - 0.06);
+    g.gain.linearRampToValueAtTime(0, t0 + dauer);
+    src.connect(bp).connect(g).connect(audioCtx.destination);
+    src.start(t0);
+    src.stop(t0 + dauer + 0.02);
+  }
+
+  // ---- Der gemeinsame Kern ---------------------------------------------------------
+  function ansage(art, text) {
+    if (!ansageAn[art]) return false;
+    if (!('speechSynthesis' in window)) return false;
     try {
+      // ABBRECHEN VOR DEM SPRECHEN. Zwei Meldungen kurz hintereinander duerfen sich nicht
+      // stapeln - sonst laeuft die Stimme der Gegenwart nach und meldet den Tank, waehrend
+      // man schon in der naechsten Runde ist.
       window.speechSynthesis.cancel();
       announceCancels++;
-      const u = new SpeechSynthesisUtterance(lapSpeechText(ms, istBest));
+      const u = new SpeechSynthesisUtterance(text);
       u.lang = lang === 'de' ? 'de-DE' : 'en-US';
-      u.rate = 1.15;
-      // EINMAL melden und nicht je Runde. Ein Geraet ohne passende Stimme wuerde sonst bei
-      // jeder Runde eine Zeile ins Protokoll schreiben, und das Protokoll ist der Ort, an
-      // dem man echte Fehler sucht.
+      // Funk spricht schneller und flacher. Beides ist an der Stimme einstellbar, und mehr
+      // gibt die Schnittstelle nicht her.
+      u.rate = funkFilter ? 1.35 : 1.15;
+      if (funkFilter) u.pitch = 0.85;
       u.onerror = (ev) => {
         if (announceFailLogged) return;
         announceFailLogged = true;
-        log('Rundenansage: keine Stimme verfuegbar (' + (ev && ev.error ? ev.error : '?')
+        log('Ansage: keine Stimme verfuegbar (' + (ev && ev.error ? ev.error : '?')
             + '). Die Ansage bleibt aus, alles andere laeuft weiter.', 'info');
       };
+      if (funkFilter && audioCtx) {
+        const t0 = audioCtx.currentTime + 0.02;
+        // 55 ms je Zeichen, gedeckelt: eine Schaetzung, und sie ist als solche benannt.
+        const dauer = Math.min(6, Math.max(0.6, text.length * 0.055 / u.rate));
+        funkKnacken(t0, 0.09);
+        funkRauschen(t0 + 0.06, dauer);
+        funkKnacken(t0 + 0.06 + dauer, 0.06);
+      }
       window.speechSynthesis.speak(u);
       announceCalls++;
+      return true;
     } catch (e) {
       if (!announceFailLogged) {
         announceFailLogged = true;
-        log('Rundenansage nicht moeglich: ' + e.message, 'info');
+        log('Ansage nicht moeglich: ' + e.message, 'info');
       }
+      return false;
     }
   }
 
-  if ($('setting-announce')) {
-    announceOn = $('setting-announce').checked;
-    $('setting-announce').addEventListener('change', (e) => {
-      announceOn = e.target.checked;
+  // ---- Die vier Zustandsmeldungen --------------------------------------------------
+  //
+  // EINE Stelle, die alle vier prueft, und sie haengt am Fahrtakt. Vier eigene Zeitgeber
+  // waeren vier Orte fuer denselben Fehler - und der Fahrtakt hat die Werte ohnehin.
+  //
+  // Die Argumente kommen herein statt aus dem Zustand gelesen zu werden: so ist die
+  // Funktion ohne laufendes Rennen pruefbar, und der Test muss nicht fuenf Variablen in
+  // einer fremden Datei stellen.
+  function ansagenPruefen(w) {
+    const raus = [];
+    const de = lang === 'de';
+    // Schaden: der Balken zeigt GESUNDHEIT, gemeldet wird also, wenn nur noch 10 % steht.
+    if (w.health !== null && w.health !== undefined) {
+      if (w.health <= ANSAGE_SCHWELLE && !ansageLatch.damage) {
+        ansageLatch.damage = true;
+        if (ansage('damage', de ? 'Achtung, Schaden kritisch' : 'Warning, damage critical')) {
+          raus.push('damage');
+        }
+      } else if (w.health > ANSAGE_HYSTERESE) {
+        ansageLatch.damage = false;
+      }
+    }
+    if (w.fuel !== null && w.fuel !== undefined) {
+      if (w.fuel <= ANSAGE_SCHWELLE && !ansageLatch.fuel) {
+        ansageLatch.fuel = true;
+        if (ansage('fuel', de ? 'Tank fast leer' : 'Fuel almost empty')) raus.push('fuel');
+      } else if (w.fuel > ANSAGE_HYSTERESE) {
+        ansageLatch.fuel = false;
+      }
+    }
+    // Reifen: der SCHLECHTESTE zaehlt. Ein Auto mit drei guten und einem abgefahrenen
+    // Reifen faehrt nicht drei Viertel gut, sondern schlecht.
+    if (w.tyre !== null && w.tyre !== undefined) {
+      if (w.tyre <= ANSAGE_SCHWELLE && !ansageLatch.tyre) {
+        ansageLatch.tyre = true;
+        if (ansage('tyre', de ? 'Reifen abgefahren' : 'Tyres worn out')) raus.push('tyre');
+      } else if (w.tyre > ANSAGE_HYSTERESE) {
+        ansageLatch.tyre = false;
+      }
+    }
+    // Regen: eine FLANKE in beide Richtungen. null heisst "noch nie gesehen", und der
+    // erste Blick darf nicht melden - sonst sagt die App beim Laden "es regnet nicht".
+    if (w.rain !== null && w.rain !== undefined) {
+      if (ansageLatch.rain === null) {
+        ansageLatch.rain = !!w.rain;
+      } else if (!!w.rain !== ansageLatch.rain) {
+        ansageLatch.rain = !!w.rain;
+        // ECHTE UMLAUTE, und das ist kein Stilbruch: in Kommentaren schreibt dieses
+        // Projekt ASCII, aber dieser Satz wird VORGELESEN. Eine deutsche Stimme spricht
+        // "hoert" nicht wie "hört".
+        const t = w.rain ? (de ? 'Es regnet' : 'Rain has started')
+                         : (de ? 'Der Regen hört auf' : 'The rain is stopping');
+        if (ansage('rain', t)) raus.push('rain');
+      }
+    }
+    return raus;
+  }
+
+  function speakLap(ms, istBest) {
+    ansage('lap', lapSpeechText(ms, istBest));
+  }
+
+  // Die fuenf Schalter und der Funkfilter. Alle lesen ihren Anfangswert AUS DEM MARKUP -
+  // dasselbe Muster wie bei setting-vibration, wo der fehlende Abgleich schon einmal einen
+  // toten Schalter ergeben hat.
+  const ANSAGE_KAESTCHEN = { 'setting-announce': 'lap', 'setting-announce-damage': 'damage',
+                             'setting-announce-fuel': 'fuel', 'setting-announce-tyre': 'tyre',
+                             'setting-announce-rain': 'rain' };
+  Object.keys(ANSAGE_KAESTCHEN).forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    const art = ANSAGE_KAESTCHEN[id];
+    ansageAn[art] = el.checked;
+    // announceOn bleibt der Spiegel des Rundenschalters: der Selbsttest und die
+    // Zusammenfassung lesen ihn, und zwei Wahrheiten waeren eine zuviel.
+    if (art === 'lap') announceOn = el.checked;
+    el.addEventListener('change', (e) => {
+      ansageAn[art] = e.target.checked;
+      if (art === 'lap') announceOn = e.target.checked;
       // Beim Ausschalten sofort still sein und nicht den Satz noch beenden.
-      if (!announceOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (!e.target.checked && 'speechSynthesis' in window) window.speechSynthesis.cancel();
     });
+  });
+  if ($('setting-announce-radio')) {
+    funkFilter = $('setting-announce-radio').checked;
+    $('setting-announce-radio').addEventListener('change', (e) => { funkFilter = e.target.checked; });
   }
 
   function playShiftSound(direction) {

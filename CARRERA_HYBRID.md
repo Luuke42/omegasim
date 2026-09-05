@@ -255,6 +255,61 @@ umgesetzt: die Ghosts rollten von selbst im Boxentempo, das Auto des Fahrers wur
 GEDROSSELT (`limitFormation` -> `speedLimitFactor`) und musste weiter von Hand gelenkt und
 gegast werden. `raceFormationLap` kam in `50-drive.js` an keiner Stelle vor.
 
+### Der Steuerweg: wo die Eingabeverzögerung wirklich sitzt
+
+Gemeldet als „mit zwei Ghosts gibt es eine leichte Eingabeverzögerung, lässt sich die
+Berechnung beschleunigen?“ — gemessen ist die Antwort **nein, die Rechnung ist es nicht**.
+`OMEGA_TEST.taktKosten()` misst den ganzen Takt an den echten Funktionen des Herzschlags
+(`physicsStep`, `pitLaneTick`, `sendControlValue` samt Motorton, dazu `ghostTick` je Ghost):
+
+| | Median | 95. Perzentil |
+|---|---|---|
+| ohne Ghosts | 0,3 ms | 0,5 ms |
+| mit zwei Ghosts | 0,4 ms | 0,9 ms |
+
+Das sind **unter zwei Prozent** des 45-ms-Budgets. Ein Ghost kostet 0,05 ms, ein
+hereinkommendes Meldepaket 0,002 ms. Es gibt in dieser Rechnung nichts zu holen; wer sie
+optimiert, gewinnt Mikrosekunden und verliert Lesbarkeit.
+
+**Die Verzögerung sass im Schreibweg.** Bis v0.5.8 stand in `sendControlValue()` an zwei
+Stellen `if (writeInFlight) return;` — läuft noch ein Schreibvorgang, fällt dieser Takt
+ersatzlos aus. Gemessen mit einem Ziel, dessen Schreibvorgang eine einstellbare Zeit braucht
+(`OMEGA_TEST.sendeUnterLast()`):
+
+| Schreibdauer | vorher | seit v0.5.8 | Obergrenze |
+|---|---|---|---|
+| 5 ms | 22,4 Hz | 22,3 Hz | 22,2 Hz |
+| 30 ms | 22,4 Hz | 22,3 Hz | 22,2 Hz |
+| **46 ms** | **11,2 Hz** | **22,0 Hz** | 21,7 Hz |
+| 60 ms | 11,2 Hz | 17,0 Hz | 16,7 Hz |
+| 100 ms | 7,6 Hz | 10,3 Hz | 10,0 Hz |
+
+**Eine Millisekunde über dem Takt halbierte die Befehlsrate.** Keine sanfte
+Verschlechterung, sondern eine Stufe — und genau so fällt sie an, sobald ein zweites und
+drittes Auto denselben Funkadapter benutzen. Statt zu verwerfen wird das neueste Paket jetzt
+gemerkt und abgesetzt, sobald der Funk frei ist; die Tiefe ist **eins**, ein zweites
+wartendes Paket überschreibt das erste. Eine Warteschlange würde alte Daumenstellungen
+nachliefern, und ein verspäteter Lenkbefehl ist schlimmer als gar keiner. Die Senderate
+bleibt dabei von selbst begrenzt: es geht nie ein zweiter Schreibvorgang los, bevor der
+erste fertig ist. Alle fünf Zeilen liegen jetzt an ihrer physikalischen Obergrenze.
+
+**Wie lange ein Schreibvorgang auf dieser Hardware wirklich dauert, ist nicht gemessen** —
+dafür bräuchte es die Autos. Die Tabelle sagt nur, was die App tut, wenn er lange dauert.
+
+Zwei Nebenbefunde aus derselben Durchsicht, beide behoben:
+
+* Der Versatz der Ghost-Sendezeitpunkte wurde vom **Klick** aus gemessen, obwohl der
+  Kommentar „Stagger against the player's heartbeat“ versprach. Über vier Sekunden mit zwei
+  Ghosts lag einer im Mittel **0,7 ms** vom Sendezeitpunkt des Spielers entfernt (58 von 88
+  Paketen unter 5 ms), der andere bei 15,1 ms — Soll sind 45/3 = 15 ms. Welcher es trifft,
+  hing am Zufall des Klickzeitpunkts. Ob gleichzeitiges Senden auf dem Funk etwas kostet,
+  ist **nicht** gemessen; behoben wurde es, weil der Kommentar eine Zusicherung gab, die der
+  Code nicht einhielt.
+* Der wartende `setTimeout`, der den Ghost-Zeitgeber anlegt, hatte **keinen Griff**.
+  `stopGhost()` löschte `car.timer`, der in diesem Fenster noch `null` ist. Ein Durchlauf
+  der Selbsttests hinterliess dadurch **35 Phantom-Zeitgeber**, die bis zum Neuladen
+  weitertickten und weiter an ihr Auto schrieben. Jetzt sind es null.
+
 ### Fahrzeuglayout: fuenf Bauformen
 
 Bis v0.5 hatten alle Autos DASSELBE Fahrwerk. Unterschiedlich war nur der Klang; die statische

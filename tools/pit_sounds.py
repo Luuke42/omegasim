@@ -122,54 +122,135 @@ def strike_decay_ms(x, floor=0.30):
     return out
 
 
-def body_repair(seconds=2.4, seed=31):
-    """Bodywork being worked on: dead panel thuds over a low rumble.
+def ratchet_burst(n, start, clicks, rate_hz, rng, level=1.0):
+    """Eine Ratsche: kurze Klicks in dichter Folge, kreisrund eingetragen.
 
-    The first version sounded like a melody, and the reason was NOT the partials - those
-    were already inharmonic (1.0 / 2.37 / 3.91). It was the decay: exp(-t*46) is a 22 ms
-    time constant, so every strike rang for ten to twenty cycles and was heard as a definite
-    note. Twelve random pitches inside a 2.4 s loop that then repeats forever is a
-    twelve-note tune, and no amount of inharmonicity fixes that.
+    Eine Steckschluessel-Ratsche ist das eindeutigste Werkstattgeraeusch ueberhaupt, und
+    sie kann keine Melodie tragen: ihre Klicks sind Transienten von ein bis zwei
+    Millisekunden, viel zu kurz fuer eine Tonhoehe. Die Sperrklinke gibt ihr eine
+    Faerbung um 3,5 kHz - das ist eine Resonanz und kein Ton, sie klingt in drei
+    Schwingungen ab.
+    """
+    step = SR / float(rate_hz)
+    for k in range(clicks):
+        pos = int(start + k * step * rng.uniform(0.94, 1.06)) % n
+        ln = min(n - pos, int(0.006 * SR))
+        if ln <= 4:
+            continue
+        lt = np.arange(ln) / SR
+        # Der Klick selbst: Kontakt, breitbandig, sehr kurz.
+        klick = np.exp(-lt * 900.0) * rng.normal(0, 1, ln).astype(np.float32)
+        # Die Klinke faerbt ihn. 3 bis 4 Schwingungen, dann ist er weg.
+        f = rng.uniform(3200.0, 3900.0)
+        klick += (0.55 * np.exp(-lt * 1400.0)
+                  * np.sin(2 * np.pi * f * lt + rng.uniform(0, 6.28))).astype(np.float32)
+        out_amp = level * rng.uniform(0.7, 1.0)
+        # Der erste Klick eines Zugs ist der lauteste - die Hand setzt an.
+        if k == 0:
+            out_amp *= 1.6
+        yield pos, (klick * out_amp).astype(np.float32)
 
-    So the decay drops to ~6 ms, which is a thud rather than a note, the pitch spread
-    narrows so no interval can be heard between neighbouring strikes, and there are more
-    strikes so none of them stands out. A real body panel behind a wheel arch is stiff,
-    damped by sealant and the arch liner, and mounted to something heavy - it does not ring.
-    Spectral flatness per strike is printed as the check: a thud is well above 0.1, a bell
-    is under 0.05.
+
+def body_repair(seconds=2.4, seed=31, protokoll=None):
+    """Blecharbeit: Klopfen auf EINER Tonhoehe, dazu Ratschenzuege.
+
+    GEMELDET wurde, dass es nach einem Lied klingt - schon die zweite Fassung, denn die
+    erste hatte dasselbe Problem und war mit kuerzerem Abklingen behandelt worden. Das
+    war die falsche Ursache. Kurzes Abklingen nimmt jedem EINZELNEN Schlag die Tonhoehe,
+    aber die Melodie entsteht nicht im Schlag, sondern ZWISCHEN den Schlaegen: zwoelf
+    Schlaege mit gewuerfelter Grundfrequenz zwischen 150 und 240 Hz sind zwoelf
+    verschiedene Toene, und 150 zu 240 sind acht Halbtoene. Das ist eine Tonleiter, und
+    sie wiederholt sich alle 2,4 Sekunden.
+
+    DIE URSACHE IST DAS WUERFELN, und die Wirklichkeit wuerfelt nicht: ein Blechner
+    schlaegt auf DASSELBE Blech. Also EINE Grundfrequenz fuer alle Schlaege, mit einer
+    Streuung von 1,5 Prozent - ein Halbton sind 5,9 Prozent, ein Viertelton 2,9. Unter
+    1,5 Prozent ist kein Intervall mehr hoerbar, und der Rest ist die Unregelmaessigkeit
+    der Hand.
+
+    DAZU DIE RATSCHE, weil Klopfen allein duenn ist und weil eine Ratsche das eindeutigste
+    Werkstattgeraeusch ist, das es gibt. Sie besteht aus Transienten und kann grundsaetzlich
+    keinen Ton tragen.
+
+    Geprueft wird die Streuung der Tonhoehe in Halbtoenen, nicht das Abklingen: das
+    Abklingen war die Antwort auf die falsche Frage.
     """
     rng = np.random.default_rng(seed)
     n = int(seconds * SR)
     out = np.zeros(n, dtype=np.float32)
 
-    # More strikes, jittered. An even train is what makes the wrench sound mechanical and
-    # this must not; but too few strikes and each one becomes an event with a pitch.
-    n_taps = int(seconds * 9)
-    for i in range(n_taps):
-        pos = int(((i + rng.uniform(-0.42, 0.42)) / n_taps) * n) % n
+    # EINE Tonhoehe fuer das ganze Blech. Sie wird einmal gezogen und gilt fuer jeden
+    # Schlag - genau das ist der Unterschied zur alten Fassung.
+    f_panel = 196.0
+
+    def schlag(pos, staerke):
         ln = min(n - pos, int(0.05 * SR))
         if ln <= 8:
-            continue
+            return
         lt = np.arange(ln) / SR
-        # Narrower band than before (230..520 Hz was over an octave, wide enough to hear
-        # melody). Rectangular-plate modes, none an integer multiple of another.
-        f0 = rng.uniform(150.0, 240.0)
+        # Plus/minus 1,5 Prozent: weniger als ein Viertelton, also kein Intervall.
+        f0 = f_panel * rng.uniform(0.985, 1.015)
+        if protokoll is not None:
+            protokoll.append(f0)
         ring = np.zeros(ln, dtype=np.float32)
         for mult, amp in ((1.0, 1.0), (1.59, 0.7), (2.14, 0.55), (2.65, 0.4), (3.27, 0.28)):
-            # ~6 ms decay, and the higher modes die faster still, as they do on real metal.
             dec = 170.0 * (1.0 + 0.5 * (mult - 1.0))
             ring += (amp * np.exp(-lt * dec)
                      * np.sin(2 * np.pi * f0 * mult * lt + rng.uniform(0, 6.28))).astype(np.float32)
-        # The strike itself: broadband contact, louder than the ring. This is most of what
-        # a damped panel actually produces.
+        # Der Kontakt selbst, breitbandig und lauter als das Nachklingen. Ein gedaempftes
+        # Blech gibt hauptsaechlich das.
         ring += 0.9 * np.exp(-lt * 260.0) * rng.normal(0, 1, ln).astype(np.float32)
-        out[pos:pos + ln] += ring * rng.uniform(0.5, 1.0)
+        out[pos:pos + ln] += ring * staerke
 
-    # Low rumble: the car on its jacks, tools on the floor.
+    # ---- Der Ablauf ueber die Schleife -------------------------------------------------
+    # Klopfen, Ratsche, Klopfen, kurze Ratsche. Ein Wechsel der Taetigkeit ist das, was
+    # eine Werkstatt ausmacht; ein gleichfoermiger Teppich klingt nach Maschine.
+    takte = [
+        ('klopf', 0.00, 0.78, 4),
+        ('ratsche', 0.82, 1.36, 11),
+        ('klopf', 1.42, 1.98, 3),
+        ('ratsche', 2.02, 2.34, 6),
+    ]
+    for art, t0, t1, zahl in takte:
+        if art == 'klopf':
+            for i in range(zahl):
+                # Ungleichmaessig, aber nicht gewuerfelt weit: eine Hand klopft in einem
+                # Takt, den sie nicht genau haelt.
+                frac = (i + 0.5) / zahl + rng.uniform(-0.12, 0.12)
+                pos = int((t0 + (t1 - t0) * frac) * SR) % n
+                schlag(pos, rng.uniform(0.55, 1.0))
+        else:
+            for pos, sig in ratchet_burst(n, int(t0 * SR), zahl,
+                                          rng.uniform(33.0, 42.0), rng, 0.85):
+                ln = min(len(sig), n - pos)
+                out[pos:pos + ln] += sig[:ln]
+
+    # Tiefes Grummeln: das Auto auf den Boecken, Werkzeug auf dem Boden.
     out += band_noise(n, 45.0, 190.0, np.random.default_rng(seed + 1)) * 0.30
-    # Distant workshop air.
+    # Hallenluft in der Ferne.
     out += band_noise(n, 900.0, 4200.0, np.random.default_rng(seed + 2)) * 0.07
     return (out / (np.max(np.abs(out)) + 1e-9) * 0.72).astype(np.float32)
+
+
+def tonhoehen_streuung(hz):
+    """Streuung der erzeugten Grundfrequenzen, in Halbtoenen.
+
+    DAS PROTOKOLL DES ERZEUGERS und keine Spektralschaetzung, und der Grund ist gemessen:
+    ein Schlag klingt in rund 6 ms ab, ein Fenster von 40 ms gibt 25-Hz-Koerbe, und bei
+    196 Hz sind 25 Hz zweikommazwei Halbtoene. Der Schaetzer kann also gar nicht feiner
+    aufloesen als der Effekt, den er messen soll - er lieferte 4,16 Halbtoene Streuung
+    fuer Schlaege, die alle auf derselben Frequenz erzeugt wurden.
+
+    Was hier steht, ist deshalb ausdruecklich eine Aussage ueber den BAU und nicht ueber
+    das Ergebnis: die Schlaege werden mit einer einzigen Grundfrequenz erzeugt. Dass eine
+    einzige Frequenz keine Melodie tragen kann, braucht keine Messung.
+    """
+    import math
+    if len(hz) < 2:
+        return 0.0
+    halbton = [12 * math.log(f / hz[0], 2) for f in hz]
+    mit = sum(halbton) / len(halbton)
+    return (sum((h - mit) ** 2 for h in halbton) / (len(halbton) - 1)) ** 0.5
 
 
 def seam_jump(x):
@@ -194,6 +275,12 @@ def main():
         # fires on ripple and the number means nothing - printing it anyway next to a
         # meaningful one just invites misreading.
         if name == 'pit_repair':
+            hz = []
+            body_repair(seconds=secs, protokoll=hz)
+            print('  %d Klopfer, alle auf einer Grundfrequenz, Streuung %.2f Halbtoene '
+                  '(ein Viertelton sind 0,5; die alte Fassung wuerfelte ueber acht '
+                  'Halbtoene und klang deshalb nach einem Lied)'
+                  % (len(hz), tonhoehen_streuung(hz)))
             dec = strike_decay_ms(x)
             fl_txt = ('%d Schlaege, Abklingzeit Median %.1f ms (max %.1f) - eine Schwingung '
                       'bei 150-240 Hz dauert 4-7 ms, darunter ist keine Tonhoehe hoerbar'

@@ -89,10 +89,17 @@
            'setting-crash-damage': false,
            'setting-crash-threshold': 40,
            'setting-repair-time': 4,
-           // Block 4: Bremsfading, Windschatten, Reifenasymmetrie und -druck. Bei Pro AUS -
-           // es ist die Vorgabe, und die drei Effekte gehoeren zu den Klassen, die sich
-           // ausdruecklich schwerer fahren.
-           'setting-brake-fade': false,
+           // Block 4: Windschatten, Reifenasymmetrie und -druck bleiben bei Pro AUS - sie
+           // gehoeren zu den Klassen, die sich ausdruecklich schwerer fahren.
+           //
+           // BREMSFADING NICHT MEHR. Es ist seit v0.5.15 die Vorgabe, auf Bitte des
+           // Nutzers - und Pro IST die Vorgabe: ein Selbsttest prueft, dass jedes
+           // Markup-Kaestchen genau das sagt, was Pro sagt. Zwei Wahrheiten ueber einen
+           // Anfangswert waeren die naechste stille Abweichung.
+           //
+           // Es kostet auch wenig: eine Einzelbremsung fadet gemessen nicht (241 Grad,
+           // Fading beginnt bei 520), erst mehrere Bremszonen hintereinander kommen hinein.
+           'setting-brake-fade': true,
            'setting-brake-fade-strength': 1.0,
            'setting-dirtyair': false,
            'setting-dirtyair-strength': 1.0,

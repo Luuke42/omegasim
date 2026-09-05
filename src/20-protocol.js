@@ -138,6 +138,64 @@
   // controlHeartbeat() below is what actually transmits, at the car's expected cadence.
   let writeInFlight = false;
 
+  // ---- EIN Schreibvorgang, aber der NEUESTE Wert --------------------------------------
+  //
+  // Hier stand an zwei Stellen "if (writeInFlight) return;", und das ist der teuerste Satz
+  // im ganzen Steuerweg gewesen. GEMESSEN an einem Ziel, dessen Schreibvorgang eine
+  // einstellbare Zeit braucht (OMEGA_TEST.sendeUnterLast, 2,5 s je Zeile):
+  //
+  //       Schreibdauer     Pakete/s     Abstand
+  //             5 ms         22,4        47 ms
+  //            30 ms         22,4        48 ms
+  //            46 ms         11,2        95 ms
+  //           100 ms          7,6       142 ms
+  //
+  // EINE Millisekunde ueber dem Takt halbiert die Befehlsrate. Das ist keine sanfte
+  // Verschlechterung, sondern eine Stufe: bei 45 ms kommt jeder Daumenbefehl durch, bei
+  // 46 ms wartet jeder zweite einen ganzen Takt laenger. Genau so faellt eine gemeldete
+  // "leichte Eingabeverzoegerung" an, sobald ein zweites und drittes Auto denselben
+  // Funkadapter benutzen - die Rechnung hat damit nichts zu tun, die kostet 0,3 ms von 45.
+  //
+  // Statt zu verwerfen wird das neueste Paket GEMERKT und abgesetzt, sobald der Funk frei
+  // ist. TIEFE EINS, und das ist der Punkt: ein zweites wartendes Paket ueberschreibt das
+  // erste und wird nicht angehaengt. Eine Warteschlange wuerde alte Daumenstellungen
+  // nachliefern, und ein verspaeteter Lenkbefehl ist schlimmer als gar keiner.
+  //
+  // DIE SENDERATE BLEIBT DAMIT BEGRENZT, und zwar von selbst: es geht nie ein zweiter
+  // Schreibvorgang los, bevor der erste fertig ist. Mehr als 1/Schreibdauer kann also nicht
+  // hinaus, und mehr als ein Paket je Takt entsteht ohnehin nicht. Was wegfaellt, ist nur
+  // das Aufrunden auf ganze Takte - die Leerzeit zwischen "Funk wieder frei" und "naechster
+  // Takt", und genau die war die Verzoegerung.
+  //
+  // GEMERKT WIRD DAS FERTIGE PAKET. Alles, was am Bauen haengt - Verbrauch, Motorton,
+  // Aufnahme - ist beim Bauen schon gelaufen und darf nicht ein zweites Mal laufen.
+  let wartendes = null;
+
+  async function funkSchreiben(ziel, payload, notiz) {
+    if (writeInFlight) { wartendes = { ziel, payload, notiz }; return; }
+    writeInFlight = true;
+    try {
+      let auf = { ziel, payload, notiz };
+      while (auf) {
+        try {
+          if (auf.ziel.properties.writeWithoutResponse) await auf.ziel.writeValueWithoutResponse(auf.payload);
+          else await auf.ziel.writeValueWithResponse(auf.payload);
+          if (auf.notiz) log(`WRITE ${auf.notiz}: ${bufToHex(auf.payload)}`, 'write');
+        } catch (err) {
+          // Abbrechen und nicht weiterschleifen: wenn die Verbindung weg ist, wirft jeder
+          // Versuch, und das Wartende ist in 45 ms ohnehin durch ein frisches ersetzt.
+          log('Steuer-Schreibfehler: ' + err.message, 'err');
+          break;
+        }
+        auf = wartendes;
+        wartendes = null;
+      }
+    } finally {
+      writeInFlight = false;
+      wartendes = null;
+    }
+  }
+
   async function sendControlValue(overrideSteer, overrideThrottle) {
     const steer = overrideSteer !== undefined ? overrideSteer : steerX;
     let throttle = overrideThrottle !== undefined ? overrideThrottle : throttleY;
@@ -163,14 +221,7 @@
     // A car given the "Steuern" role in the garage becomes the write target. Falls back to
     // the BLE explorer's selection so the developer workflow keeps working untouched.
     if (typeof playerCar !== 'undefined' && playerCar && playerCar.rx) {
-      if (writeInFlight) return;
-      writeInFlight = true;
-      try {
-        if (playerCar.rx.properties.writeWithoutResponse) await playerCar.rx.writeValueWithoutResponse(payload);
-        else await playerCar.rx.writeValueWithResponse(payload);
-      } catch (err) {
-        log('Steuer-Schreibfehler: ' + err.message, 'err');
-      } finally { writeInFlight = false; }
+      await funkSchreiben(playerCar.rx, payload, null);
       return;
     }
     const uuid = controlSelect.value;
@@ -180,17 +231,9 @@
     }
     const entry = charByUuid.get(uuid);
     if (!entry) return;
-    if (writeInFlight) return; // drop this tick rather than pile a second write onto the queue
-    writeInFlight = true;
-    try {
-      if (entry.char.properties.writeWithoutResponse) await entry.char.writeValueWithoutResponse(payload);
-      else await entry.char.writeValueWithResponse(payload);
-      log(`WRITE ${uuid}: ${bufToHex(payload)}`, 'write');
-    } catch (err) {
-      log('Steuer-Schreibfehler: ' + err.message, 'err');
-    } finally {
-      writeInFlight = false;
-    }
+    // Die Notiz reist MIT dem Paket, nicht mit dem Aufruf: ein gemerktes Paket wird spaeter
+    // geschrieben, und dann muss im Protokoll stehen, was wirklich hinausging.
+    await funkSchreiben(entry.char, payload, uuid);
   }
 
   // Physics mode is on by default now; the loop writes its shaped output into these
@@ -200,7 +243,14 @@
 
   const CONTROL_SEND_INTERVAL_MS = 45; // matches the real app's observed command cadence
 
+  // Wann hat der Herzschlag zuletzt gefeuert? Die Ghosts richten ihre Sendezeitpunkte
+  // daran aus (siehe ghostTaktSetzen in 90-ghosts.js). Hier und nicht dort, weil nur hier
+  // bekannt ist, wann es war - und der Versatz wurde bis v0.5.8 vom KLICK aus gemessen,
+  // was mit dieser Phase nichts zu tun hat.
+  let herzschlagAt = 0;
+
   function controlHeartbeat() {
+    herzschlagAt = performance.now();
     // The calibration runner drives its own carefully-timed sequence; stay out of its way.
     if (typeof calibRunning !== 'undefined' && calibRunning) return;
     // Safety watchdog: gamepad sampling runs on rAF, which the browser suspends while the

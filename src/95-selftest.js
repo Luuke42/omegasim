@@ -1731,6 +1731,576 @@
 
 
 
+
+
+
+
+
+
+  // ---- Streckenlernen: der Ring braucht nicht den Startcode ----
+  //
+  // GEMELDET: der automatische Scan soll nicht auf die Start/Ziel-Gerade warten muessen.
+  // Der Grund, warum er es tat, ist echt - ohne Anker faengt der Ring irgendwo in der
+  // Runde an und ist gegen die Bahn verdreht. Der Anker muss also bleiben, aber es gibt
+  // seit v0.5.9 einen zweiten und besseren: die Sperre, die das Auto selbst setzt.
+  //
+  // Der Test faehrt eine Runde, deren Byte 12 NIE einen Startcode meldet. Vorher wurde
+  // dabei nichts gelernt, und zwar still. Die Gegenprobe ist der zweite Fall: ohne beide
+  // Anker darf weiterhin nichts uebernommen werden - ein Ring an falscher Stelle waere
+  // schlimmer als keiner.
+  stAdd('Streckenlernen: die Sperre des Autos ankert den Ring', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.lernProbe) {
+      return { skip: true, mass: 'lernProbe nicht vorhanden' };
+    }
+    const schlecht = [], teile = [];
+    // Eine Runde aus sechs Kacheln, kein einziger Startcode: Gerade, Kurven.
+    const runde = [0x02, 0x04, 0x04, 0x02, 0x03, 0x04];
+
+    const mitSperre = OMEGA_TEST.lernProbe(runde, { sperreBei: 0, runden: 3 });
+    teile.push('mit Sperre: ' + mitSperre.teile + ' Teile');
+    if (mitSperre.teile !== runde.length) {
+      schlecht.push('mit Sperre ' + mitSperre.teile + ' Teile statt ' + runde.length);
+    }
+    // Und die erste Kachel muss die Start/Ziel-Kachel sein, sonst ist der Ring verdreht.
+    if (mitSperre.typen[0] !== OMEGA_TEST.TILE_TYPE.START) {
+      schlecht.push('der Ring beginnt nicht an Start/Ziel');
+    }
+
+    // GEGENPROBE: kein Startcode UND keine Sperre - es darf nichts uebernommen werden.
+    const ohne = OMEGA_TEST.lernProbe(runde, { runden: 3 });
+    teile.push('ohne Anker: ' + ohne.teile + ' Teile, Vorlauf ' + ohne.vorlauf);
+    if (ohne.teile !== 0) schlecht.push('ohne Anker wurden ' + ohne.teile + ' Teile uebernommen');
+    // Aber es muss GEZAEHLT haben - sonst ist der Zustand wieder still, und genau das
+    // war das eigentliche Aergernis.
+    if (!(ohne.vorlauf > 5)) schlecht.push('der Vorlauf zaehlt nicht mit (' + ohne.vorlauf + ')');
+
+    // Und der alte Weg muss weiter gehen: Startcode ohne Sperre.
+    const mitCode = OMEGA_TEST.lernProbe([0x01, 0x04, 0x04, 0x02, 0x03, 0x04], { runden: 3 });
+    teile.push('mit Startcode: ' + mitCode.teile + ' Teile');
+    if (mitCode.teile !== 6) schlecht.push('mit Startcode ' + mitCode.teile + ' Teile statt 6');
+
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+
+
+  // ---- Das Cockpit passt auf ein Handy ----
+  //
+  // GEMELDET: "auf einem Handy sehe ich oben die Lichter nicht." Gemessen in 844 x 390,
+  // also einem Handy quer: das Cockpit war 531 px hoch und der Platz darunter 298.
+  //
+  // Geprueft wird mit einer VORGEGEBENEN Fensterhoehe, nicht mit der echten - sonst
+  // sagte der Test nur etwas aus, wenn er zufaellig auf einem kleinen Schirm laeuft, und
+  // dann wird er nie gefahren. cockpitPassung() misst die wirkliche Unterkante nach,
+  // statt einen Faktor auszurechnen: das Raster schrumpft nicht rein proportional
+  // (clamp()-Mindestwerte und vw-Anteile schrumpfen nicht mit), und ein gerechneter
+  // Faktor liess 19 px stehen.
+  //
+  // Die Gegenprobe steht am Ende: auf einem hohen Fenster darf NICHT verkleinert werden.
+  stAdd('Cockpit passt in die Bildschirmhoehe', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.cockpitPassung) {
+      return { skip: true, mass: 'cockpitPassung nicht vorhanden' };
+    }
+    // Der Reiter muss offen sein, sonst hat das Cockpit die Hoehe 0.
+    const btn = document.querySelector('[data-tab="race"]');
+    if (!btn) return { ok: false, mass: 'Cockpit-Reiter fehlt' };
+    btn.click();
+    const schlecht = [], teile = [];
+    // Drei Handyhoehen: quer, quer mit Adressleiste, hochkant.
+    for (const h of [390, 330, 812]) {
+      const r = OMEGA_TEST.cockpitPassung(h);
+      if (!r) { schlecht.push(h + ': keine Messung'); continue; }
+      teile.push(h + 'px: Faktor ' + r.faktor + (r.passt ? ' passt' : ' UEBER ' + r.ueberstand));
+      // Passen muss es - es sei denn, die Untergrenze ist erreicht. Dann ist Scrollen die
+      // ehrliche Antwort, und der Test sagt das statt zu schweigen.
+      if (!r.passt && !r.amBoden) {
+        schlecht.push(h + 'px: ' + r.ueberstand + ' px Ueberstand ohne an der Grenze zu sein');
+      }
+    }
+    // GEGENPROBE: viel Platz, also kein Zoom. Ohne sie waere "immer verkleinern" gruen.
+    const gross = OMEGA_TEST.cockpitPassung(2000);
+    teile.push('2000px: Faktor ' + gross.faktor);
+    if (gross.faktor < 0.999) schlecht.push('verkleinert auch bei 2000 px Hoehe');
+    // Und danach der echte Zustand zurueck.
+    OMEGA_TEST.cockpitPassung();
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Controller-Vibration: ein Schalter je Ausloeser ----
+  //
+  // Siebzehn Aufrufstellen, sechs Arten, ein Hauptschalter. Geprueft wird die
+  // SCHALTERLOGIK - padRumble meldet, ob ein Stoss die Schalter passiert hat -, denn ohne
+  // Controller waere sie sonst gar nicht pruefbar, und mit siebzehn Stellen ist sie genau
+  // die Stelle, an der man sich vertut.
+  //
+  // Drei Aussagen, und die dritte ist die, die man leicht vergisst: eine UNBEKANNTE Art
+  // muss durchkommen. Wer eine neue Aufrufstelle einbaut und das Etikett vergisst, soll
+  // ein Brummen bekommen und es merken - ein stilles Verschlucken waere ein Fehler, den
+  // niemand sieht.
+  stAdd('Controller-Vibration: jeder Ausloeser an seinem Schalter', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.vibProbe) {
+      return { skip: true, mass: 'vibProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.vibProbe();
+    const schlecht = [];
+    if (r.hauptAus.length) {
+      schlecht.push('Hauptschalter aus, aber ' + r.hauptAus.join('/') + ' brummt');
+    }
+    for (const an of r.arten) {
+      const durch = r.einzeln[an];
+      if (durch.length !== 1 || durch[0] !== an) {
+        schlecht.push('nur ' + an + ' an, durch kam: ' + (durch.join('/') || 'nichts'));
+      }
+    }
+    if (!r.unbekannt) schlecht.push('eine unbekannte Art wird still verschluckt');
+    return { ok: schlecht.length === 0,
+             mass: r.arten.length + ' Arten, Hauptschalter aus laesst '
+                   + r.hauptAus.length + ' durch, unbekannte Art '
+                   + (r.unbekannt ? 'brummt' : 'still')
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- RC-Fernbedienung: Achsen, die nicht bei null ruhen ----
+  //
+  // GEMELDET an einer CH Control Box: unter Windows liess sich in Chrome und Edge gar
+  // nichts zuordnen, auf einem MacBook nur Gas und Bremse. Die Ursache stand in der
+  // Erfassung: sie nahm die erste Achse, deren BETRAG ueber 0,6 lag - und setzte damit
+  // voraus, dass Achsen in Ruhe bei null liegen. Ein rastender RC-Gaskanal meldet
+  // dauerhaft -1, nicht belegte Achsen vieler HID-Adapter ebenfalls.
+  //
+  // Der Test baut genau das nach. Die GEGENPROBE ist der zweite Fall: eine Achse, die
+  // sich gar nicht bewegt, darf nie erfasst werden, egal wie weit weg von null sie ruht.
+  stAdd('Controller: RC-Fernbedienung mit Achsen abseits der Null', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.padBelegungProbe) {
+      return { skip: true, mass: 'padBelegungProbe nicht vorhanden' };
+    }
+    const schlecht = [], teile = [];
+
+    // 1. Lenkung. Achse 0 ruht bei 0 und wird bewegt; Achse 1 und 2 rasten bei -1.
+    //    Die alte Regel haette sofort Achse 1 genommen, ohne dass jemand etwas anfasst.
+    const lenk = OMEGA_TEST.padBelegungProbe('steering', [
+      { achsen: [0, -1, -1, 0] },
+      { achsen: [0.85, -1, -1, 0] },
+    ]);
+    teile.push('Lenkung -> ' + (lenk.belegt ? 'Achse ' + lenk.belegt.index : 'nichts'));
+    if (!lenk.belegt || lenk.belegt.index !== 0) {
+      schlecht.push('Lenkung landete auf ' + JSON.stringify(lenk.belegt));
+    }
+
+    // 2. Gas: ein rastender Kanal von -1 nach +1. Er muss auf Achse 1 landen, NICHT
+    //    invertiert sein, und die volle Bewegung muss 0 bis 1 ergeben - nicht die obere
+    //    Haelfte, was das gemeldete "geht, aber nur halb" war.
+    const gas = OMEGA_TEST.padBelegungProbe('throttle', [
+      { achsen: [0, -1, -1, 0] },
+      { achsen: [0, 1, -1, 0] },
+    ], { lesen: [[0, -1, -1, 0], [0, 0, -1, 0], [0, 1, -1, 0]] });
+    teile.push('Gas -> ' + (gas.belegt ? 'Achse ' + gas.belegt.index : 'nichts')
+               + ', gelesen ' + gas.gelesen.join('/'));
+    if (!gas.belegt || gas.belegt.index !== 1) {
+      schlecht.push('Gas landete auf ' + JSON.stringify(gas.belegt));
+    } else {
+      if (gas.belegt.invert) schlecht.push('Gas wurde faelschlich invertiert');
+      const [unten, mitte, oben] = gas.gelesen;
+      if (Math.abs(unten) > 0.02) schlecht.push('Ruhe gibt ' + unten + ' statt 0');
+      if (Math.abs(oben - 1) > 0.02) schlecht.push('Vollausschlag gibt ' + oben + ' statt 1');
+      if (Math.abs(mitte - 0.5) > 0.08) schlecht.push('Mitte gibt ' + mitte + ' statt 0,5');
+    }
+
+    // 3. GEGENPROBE: nichts bewegt sich. Dann darf auch nichts erfasst werden, und die
+    //    Zuordnung muss offen bleiben. Ohne diese Probe waere eine Erfassung, die immer
+    //    zugreift, ebenfalls gruen.
+    const still = OMEGA_TEST.padBelegungProbe('steering', [
+      { achsen: [0, -1, -1, 1] },
+      { achsen: [0, -1, -1, 1] },
+      { achsen: [0, -1, -1, 1] },
+    ]);
+    teile.push('nichts bewegt: ' + (still.offen ? 'bleibt offen' : 'hat zugegriffen'));
+    if (!still.offen) schlecht.push('erfasst, obwohl sich nichts bewegt hat');
+
+    // 4. Ein Knopf schlaegt eine Achse bei gleichem Ausschlag - sonst faengt an manchen
+    //    Pads die Hat-Achse den Knopfdruck ab.
+    const knopf = OMEGA_TEST.padBelegungProbe('downshift', [
+      { achsen: [0, -1], knoepfe: [0, 0, 0] },
+      { achsen: [0, -1], knoepfe: [0, 0, 1] },
+    ]);
+    teile.push('Knopf -> ' + (knopf.belegt ? knopf.belegt.type + ' ' + knopf.belegt.index : 'nichts'));
+    if (!knopf.belegt || knopf.belegt.type !== 'button' || knopf.belegt.index !== 2) {
+      schlecht.push('Knopf landete auf ' + JSON.stringify(knopf.belegt));
+    }
+
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Ansagen: jede einmal, und erst nach der Erholung wieder ----
+  //
+  // FUENF MELDUNGEN an fuenf Schaltern. Der Fehler, der hier lauert, ist nicht "sie sagt
+  // nichts", sondern "sie sagt es dauernd": ein Tank unter 10 % bleibt minutenlang unter
+  // 10 %. Geprueft wird deshalb eine FOLGE von Zustaenden, und die Gegenproben sind die
+  // Wiederholungen, bei denen nichts kommen darf.
+  //
+  // Ohne Stimme im System kaeme nichts zurueck; der Aufbau haengt deshalb eine Attrappe
+  // ein. Geprueft wird die Regel, nicht das Betriebssystem.
+  stAdd('Ansagen: jede Meldung einmal, und erst nach Erholung wieder', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ansagenFolge) {
+      return { skip: true, mass: 'ansagenFolge nicht vorhanden' };
+    }
+    const voll = { health: 1, fuel: 1, tyre: 1, rain: false };
+    const folge = [
+      voll,
+      { health: 0.5, fuel: 0.5, tyre: 0.5, rain: false },
+      { health: 0.08, fuel: 1, tyre: 1, rain: false },   // Schaden faellt
+      { health: 0.05, fuel: 1, tyre: 1, rain: false },   // Gegenprobe: nicht nochmal
+      { health: 0.03, fuel: 0.09, tyre: 1, rain: false },// Tank faellt
+      { health: 1, fuel: 0.05, tyre: 0.07, rain: true }, // Reifen und Regen
+      { health: 1, fuel: 1, tyre: 1, rain: true },       // Gegenprobe: Regen steht
+      voll,                                              // Regen hoert auf
+      { health: 0.05, fuel: 1, tyre: 1, rain: false },   // Schaden wieder scharf
+    ];
+    const r = OMEGA_TEST.ansagenFolge(folge);
+    const fiel = r.folge.map(x => x.fiel.join(','));
+    const soll = ['', '', 'damage', '', 'fuel', 'tyre,rain', '', 'rain', 'damage'];
+    const schlecht = [];
+    for (let i = 0; i < soll.length; i++) {
+      if (fiel[i] !== soll[i]) {
+        schlecht.push('Schritt ' + i + ': "' + fiel[i] + '" statt "' + soll[i] + '"');
+      }
+    }
+    // Und die Texte muessen wirklich gesprochen worden sein - eine Regel, die richtig
+    // entscheidet und nichts sagt, waere sonst gruen.
+    if (r.gesagt.length !== 6) schlecht.push(r.gesagt.length + ' gesprochene Saetze statt 6');
+    return { ok: schlecht.length === 0,
+             mass: fiel.map(x => x || '-').join(' ') + ' | ' + r.gesagt.length + ' Saetze'
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Und die fuenf Schalter schalten wirklich ab ----
+  //
+  // Die Gegenprobe zum Test darueber: mit allen Kaestchen AUS darf keine einzige Meldung
+  // fallen. Ohne sie waere ein Kern, der die Schalter gar nicht liest, ebenfalls gruen.
+  stAdd('Ansagen: ausgeschaltet ist wirklich aus', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ansagenFolge) {
+      return { skip: true, mass: 'ansagenFolge nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.ansagenFolge([
+      { health: 1, fuel: 1, tyre: 1, rain: false },
+      { health: 0.02, fuel: 0.02, tyre: 0.02, rain: true },
+    ], { aus: true });
+    const gefallen = r.folge.reduce((a, x) => a + x.fiel.length, 0);
+    return { ok: gefallen === 0 && r.gesagt.length === 0,
+             mass: gefallen + ' Meldungen, ' + r.gesagt.length + ' Saetze (soll 0 und 0)' };
+  });
+
+  // ---- Gaskennlinie und Anfahrschub ----
+  //
+  // DIE ZUSICHERUNG DER AUFGABE war woertlich: "0 % input -> 0 % Beschleunigung und
+  // 100 % -> 100 %, aber dazwischen neben einem linearen auch einen nicht-linearen
+  // Verlauf". Beide Enden werden deshalb fuer JEDES Gamma geprueft, nicht nur fuer das
+  // voreingestellte - eine Kennlinie, die nur bei 1,0 die Enden trifft, waere wertlos.
+  //
+  // Und die VERDRAHTUNG wird mitgeprueft. Eine Formel, die stimmt, waehrend der Regler
+  // nichts setzt, ist der haeufigste tote Schalter in diesem Projekt gewesen.
+  stAdd('Gaskennlinie: Enden fest, Mitte einstellbar, Regler verdrahtet', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.gasKennlinie || !OMEGA_TEST.fahrgefuehlWerte) {
+      return { skip: true, mass: 'gasKennlinie nicht vorhanden' };
+    }
+    const f = OMEGA_TEST.gasKennlinie;
+    const schlecht = [], teile = [];
+    for (const g of [0.6, 1, 1.4, 1.8, 2.5, 3]) {
+      if (f(0, g) !== 0) schlecht.push('g=' + g + ': f(0) = ' + f(0, g));
+      if (Math.abs(f(1, g) - 1) > 1e-12) schlecht.push('g=' + g + ': f(1) = ' + f(1, g));
+      // Streng steigend, sonst gaebe es Gaswege, die nichts aendern.
+      let vor = -1;
+      for (let x = 0; x <= 1.0001; x += 0.05) {
+        const y = f(x, g);
+        if (y <= vor) { schlecht.push('g=' + g + ' nicht steigend bei x=' + x.toFixed(2)); break; }
+        vor = y;
+      }
+    }
+    // Die Richtung: ueber 1 muss ein Viertel Gasweg WENIGER als ein Viertel geben, sonst
+    // hilft der Regler dem Trigger mit Totzone nicht.
+    const v1 = f(0.25, 1), v18 = f(0.25, 1.8), v06 = f(0.25, 0.6);
+    teile.push('\u00bc Weg bei 1,0/1,8/0,6: ' + (v1 * 100).toFixed(0) + '/'
+               + (v18 * 100).toFixed(0) + '/' + (v06 * 100).toFixed(0) + '%');
+    if (!(v18 < v1)) schlecht.push('Gamma ueber 1 streckt den unteren Bereich nicht');
+    if (!(v06 > v1)) schlecht.push('Gamma unter 1 macht ihn nicht spitzer');
+    // 1,0 muss bitgleich sein, sonst aendert die Vorgabe still das Fahrgefuehl.
+    for (const x of [0.1, 0.37, 0.5, 0.9]) {
+      if (f(x, 1) !== x) schlecht.push('1,0 ist nicht die Gerade bei ' + x);
+    }
+
+    // ---- Verdrahtung: der Regler setzt die Physik, und die Anzeige sagt dasselbe ----
+    const el = $('setting-throttle-gamma'), val = $('setting-throttle-gamma-val');
+    const mm = $('setting-minmove'), mmv = $('setting-minmove-val');
+    if (!el || !mm) return { ok: false, mass: 'Regler fehlen im Markup' };
+    const merkG = el.value, merkM = mm.value;
+    try {
+      el.value = '2.2'; el.dispatchEvent(new Event('input', { bubbles: true }));
+      const w = OMEGA_TEST.fahrgefuehlWerte();
+      teile.push('Regler 2,2 -> Physik ' + w.throttleGamma);
+      if (Math.abs(w.throttleGamma - 2.2) > 1e-9) {
+        schlecht.push('der Regler setzt throttleGamma nicht (' + w.throttleGamma + ')');
+      }
+      if (!/2\.20/.test(val.textContent)) schlecht.push('Anzeige: ' + val.textContent);
+
+      mm.value = '0.05'; mm.dispatchEvent(new Event('input', { bubbles: true }));
+      const w2 = OMEGA_TEST.fahrgefuehlWerte();
+      teile.push('Anfahrschub 0,05 -> ' + w2.minMoveThrottle);
+      if (Math.abs(w2.minMoveThrottle - 0.05) > 1e-9) {
+        schlecht.push('der Anfahrschub kommt nicht an (' + w2.minMoveThrottle + ')');
+      }
+      // Die Anzeige nennt km/h im Massstab - das ist die Zahl, an der man ihn einstellt.
+      const kmh = Math.round(0.05 * w2.topSpeedKmh * w2.massstab);
+      if (mmv.textContent.indexOf(String(kmh)) < 0) {
+        schlecht.push('Anzeige nennt nicht ' + kmh + ' km/h: ' + mmv.textContent);
+      }
+      teile.push('Anzeige "' + mmv.textContent + '"');
+    } finally {
+      el.value = merkG; el.dispatchEvent(new Event('input', { bubbles: true }));
+      mm.value = merkM; mm.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Ghosts: anhalten nur, wenn es wirklich vorbei ist ----
+  //
+  // GEMELDET: "sie fahren stumpf ihre Spur, keine Querlage. Und nach einer Weile bleiben
+  // sie einfach stehen und blinken. Neustart des Rennens, Zuruecksetzen, usw. funktioniert
+  // nicht." Alle drei Teile sind an den Mitschnitten entschieden worden.
+  //
+  // DIE SECHS FAELLE hier sind keine erfundenen Zahlen, sondern jede 0x00-Strecke ab 300 ms,
+  // die in den Aufzeichnungen ueberhaupt vorkommt - mit der Kachelrate, die dabei gemessen
+  // wurde. Der Zaehler lief in 6 von 6 Faellen weiter, das blosse Zaehlen taugt also nicht
+  // als Unterscheider; die RATE taugt.
+  stAdd('Ghost haelt nur an, wenn es wirklich vorbei ist', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostParkProbe) {
+      return { skip: true, mass: 'ghostParkProbe nicht vorhanden' };
+    }
+    // nullMs, kachelMs, soll geparkt sein
+    const faelle = [
+      [840, 420, false, 'faehrt, 420 ms je Kachel'],
+      [5845, 490, false, 'faehrt, 490 ms je Kachel'],
+      [13580, 438, false, 'faehrt, 438 ms je Kachel'],
+      [1013, 92, true, 'Abflug, Zaehler rast mit 92 ms'],
+      [12806, 12806, true, 'steht, eine Kachel in 12,8 s'],
+    ];
+    const schlecht = [], teile = [];
+    for (const [nullMs, kachelMs, soll, was] of faelle) {
+      const r = OMEGA_TEST.ghostParkProbe({ nullMs, kachelMs });
+      teile.push(nullMs + '/' + kachelMs + (r.geparkt ? ' steht' : ' faehrt'));
+      if (r.vorher) { schlecht.push(was + ': stand schon vor der Messung'); continue; }
+      if (!!r.geparkt !== soll) {
+        schlecht.push(was + ': ' + (r.geparkt ? 'haelt an' : 'faehrt weiter')
+                      + ', erwartet ' + (soll ? 'anhalten' : 'weiterfahren'));
+      }
+    }
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Ghosts: ein Neustart kommt aus dem Kreis heraus ----
+  //
+  // Geparkt heisst Gas 0, also keine Fahrt, also kein gelesenes Muster, also parkt der
+  // Neustart sofort wieder ein. Die Startgnade ist der Ausweg - und sie ist eine FRIST,
+  // kein Loch: danach muss das Auto wieder stehen, sonst faehrt es neben der Bahn weiter.
+  // Beide Haelften werden geprueft; ohne die zweite waere "nie anhalten" auch gruen.
+  stAdd('Ghost: Neustart hebt den Halt, aber nur auf Zeit', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostNeustartProbe) {
+      return { skip: true, mass: 'ghostNeustartProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.ghostNeustartProbe({});
+    const schlecht = [];
+    if (!r.inGnade) schlecht.push('parkt schon waehrend der Gnadenzeit wieder ein');
+    if (!r.nachGnade) schlecht.push('parkt nach der Gnadenzeit NICHT - die Frist ist ein Loch');
+    const wechsel = r.schritte.find(x => x.geparkt);
+    return { ok: schlecht.length === 0,
+             mass: 'Gnade ' + r.gnadeMs + ' ms, haelt an bei '
+                   + (wechsel ? wechsel.ms + ' ms' : 'nie')
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Die Ziellinie liegt am Zielstreifen ----
+  //
+  // Byte 15 Bit 3 im MELDEkanal ist eine Sperre, die das Auto selbst setzt, wenn es das
+  // Startmuster liest, und rund eine Sekunde haelt. Gemessen: 17 Bloecke gegen 16 Runden,
+  // Dauer im Median 981 bis 1050 ms, steigende Flanke 420 ms NACH unserer alten Regel -
+  // und in 0 % der Schreibbefehle an dieses Auto gesetzt, also kein Echo.
+  //
+  // Vier Aussagen, und die letzten zwei sind die Gegenproben: eine stehende Sperre darf
+  // nicht mehrfach zaehlen, und der alte Rueckfall darf danach nicht ein zweites Mal
+  // zaehlen - sonst laege jede Runde doppelt.
+  stAdd('Ziellinie: die Sperre des Autos schlaegt den Startcode', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.zielSperreProbe) {
+      return { skip: true, mass: 'zielSperreProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.zielSperreProbe({});
+    const schlecht = [];
+    if (r.nurCode < 1) schlecht.push('ohne Sperre zaehlt der Rueckfall nicht');
+    if (r.mitSperre !== r.nurCode + 1) schlecht.push('die Sperrflanke zaehlt keine Runde');
+    if (r.wahrendSperre !== r.mitSperre) schlecht.push('die stehende Sperre zaehlt mehrfach');
+    if (r.ende !== r.mitSperre) {
+      schlecht.push('der Rueckfall zaehlt nach der Sperre weiter (' + r.ende + ')');
+    }
+    return { ok: schlecht.length === 0,
+             mass: r.folge.map(x => x.lage + ' ' + x.runden).join(' | ')
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Ghost-Querlage im Mass der Original-App ----
+  //
+  // Der Vergleichswert ist gemessen und nicht gewaehlt: die Original-App schickte ihren
+  // zwei Ghosts ueber 16 Runden ein Lenkbyte mit |Mittel| 32,2 und 47,3 von 127, Spitze
+  // jeweils 127. Unsere lagen bei 18,3 mit Spitze 44 - gemeldet als "stumpf ihre Spur,
+  // keine Querlage". Ursache war der Deckel von 0,55 mal line 0,7.
+  //
+  // Die Schranke steht bei 25 und 70, also unter dem schwaecheren der zwei Originalwerte:
+  // getroffen werden soll die Groessenordnung, nicht eine Nachkommastelle.
+  stAdd('Ghost-Querlage: im Mass der Original-App', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostDriveProbe) {
+      return { skip: true, mass: 'ghostDriveProbe nicht vorhanden' };
+    }
+    return OMEGA_TEST.ghostDriveProbe({ takte: 300, lage: 'karte' }).then((p) => {
+      const abs = p.lenk.map(Math.abs);
+      const mittel = abs.reduce((a, b) => a + b, 0) / abs.length;
+      const spitze = Math.max.apply(null, abs);
+      const schlecht = [];
+      if (mittel < 25) schlecht.push('|Mittel| nur ' + mittel.toFixed(1) + ', Original 32 bis 47');
+      if (spitze < 70) schlecht.push('Spitze nur ' + spitze + ', Original 127');
+      return { ok: schlecht.length === 0,
+               mass: '|Mittel| ' + mittel.toFixed(1) + ', Spitze ' + spitze
+                     + ' (Original 32,2 / 47,3, Spitze 127)'
+                     + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+    });
+  });
+
+  // ---- Der Steuerweg: kostet die Rechnung etwas, und kommt der Befehl an? ----
+  //
+  // ANLASS: "mit 2 Ghosts gibt es eine leichte Eingabeverzoegerung, laesst sich die
+  // Berechnung beschleunigen?" Die Antwort war nein - und diese drei Tests halten fest,
+  // warum, damit die Frage nicht in einem Jahr noch einmal geraten werden muss.
+
+  // 1. Das RECHENBUDGET. Gemessen an den echten Funktionen des Herzschlags.
+  //
+  // Die Grenze steht bei 5 ms von 45 und nicht bei den gemessenen 0,3: das ist keine
+  // Zielmarke, sondern eine Reissleine. Sie soll anschlagen, wenn jemand etwas wirklich
+  // Teures in den Takt legt - eine Abfrage der Karte, einen Zugriff auf localStorage, eine
+  // Schleife ueber alle Kacheln. Enger gezogen wuerde sie auf einem langsamen Rechner
+  // grundlos rot, und ein Test, der ohne Fehler rot wird, wird abgeschaltet.
+  stAdd('Steuertakt: die Rechnung passt in ihr Budget', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.taktKosten) {
+      return { skip: true, mass: 'taktKosten nicht vorhanden' };
+    }
+    const schlecht = [], teile = [];
+    let ohne = null;
+    for (const n of [0, 2]) {
+      const r = OMEGA_TEST.taktKosten({ ghosts: n, takte: 150 });
+      teile.push(n + ' Ghosts: ' + r.ganzerTakt.med + ' ms (p95 ' + r.ganzerTakt.p95 + ')');
+      if (n === 0) ohne = r.ganzerTakt.med;
+      if (r.ganzerTakt.p95 > 5) {
+        schlecht.push(n + ' Ghosts brauchen ' + r.ganzerTakt.p95 + ' ms von 45');
+      }
+      if (n > 0 && r.ghostAnteil.p95 > 2) {
+        schlecht.push('ein Ghost kostet ' + r.ghostAnteil.p95 + ' ms');
+      }
+    }
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + ' von 45 ms'
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // 2. LANGSAMER FUNK DARF NICHT EINEN GANZEN TAKT KOSTEN.
+  //
+  // Bis v0.5.8 stand in sendControlValue "if (writeInFlight) return;", und damit wurde ein
+  // Takt verworfen, solange ein Schreibvorgang lief. Gemessen mit einem Ziel, dessen
+  // Schreibvorgang eine einstellbare Zeit braucht:
+  //
+  //       Schreibdauer     vorher        Obergrenze
+  //             5 ms       22,4 Hz         22,2 Hz
+  //            46 ms       11,2 Hz         21,7 Hz
+  //            60 ms       11,2 Hz         16,7 Hz
+  //
+  // Eine Millisekunde ueber dem Takt HALBIERTE die Befehlsrate - eine Stufe, keine sanfte
+  // Verschlechterung. Genau so faellt eine Eingabeverzoegerung an, sobald mehrere Autos
+  // sich einen Funkadapter teilen.
+  //
+  // Geprueft wird gegen die OBERGRENZE und nicht gegen eine feste Zahl: schneller als der
+  // Funk geht nicht, und diese Grenze ist Physik. Verlangt werden 80 Prozent davon.
+  stAdd('Steuerweg: langsamer Funk kostet keinen ganzen Takt', async () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.sendeUnterLast) {
+      return { skip: true, mass: 'sendeUnterLast nicht vorhanden' };
+    }
+    const schlecht = [], teile = [];
+    for (const w of [5, 60]) {
+      // 3000 ms GEFAELSCHTE Zeit, also rund 66 Takte - und keine echte Sekunde.
+      const r = await OMEGA_TEST.sendeUnterLast({ schreibMs: w, ms: 3000 });
+      if (r.echtesAuto) return { skip: true, mass: 'echtes Auto verbunden' };
+      teile.push(w + ' ms Funk: ' + r.rateHz + ' Hz von ' + r.obergrenzeHz);
+      if (r.rateHz < r.obergrenzeHz * 0.8) {
+        schlecht.push('bei ' + w + ' ms Funk nur ' + r.rateHz + ' statt ' + r.obergrenzeHz + ' Hz');
+      }
+    }
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // 3. ZWEI ZUSICHERUNGEN UEBER DEN GHOST-TAKT, und beide waren vorher nicht eingehalten.
+  //
+  //   a) Die Sendezeitpunkte liegen auseinander. Der Kommentar in startGhost versprach
+  //      einen Versatz gegen den Herzschlag des Spielers, gemessen wurde aber vom KLICK
+  //      aus - ein Ghost lag mit 0,7 ms Mittel dauerhaft auf dem Spielerpaket.
+  //   b) Ein angehaltener Ghost tickt nicht weiter. Wer in den ersten Millisekunden nach
+  //      dem Start anhielt, liess einen Zeitgeber zurueck, den niemand mehr kannte -
+  //      ein Selbsttestlauf hinterliess 35 davon.
+  //
+  // Beide mit Gegenprobe: ohne sie waere ein Takt, der GAR nicht laeuft, ebenfalls gruen.
+  stAdd('Ghost-Takt: versetzt gesendet, und ein Halt haelt', async () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostTaktVersatz || !OMEGA_TEST.ghostHaltProbe) {
+      return { skip: true, mass: 'Ghost-Takt-Aufbauten nicht vorhanden' };
+    }
+    const schlecht = [], teile = [];
+    const T = 45, ziel = OMEGA_TEST.ghostTaktVersatz;
+
+    // (a) DIE PHASE, und zwar UNABHAENGIG davon, wo sie beim Klick gerade steht. Das ist
+    //     der ganze Fehler gewesen: die alte Zeile gab einen festen Versatz vom Klick aus,
+    //     und wo der landete, hing am Zufall. Geprueft ueber die ganze Taktbreite.
+    //
+    //     Die Gegenprobe steckt in der Variation von seitHerz: eine Formel, die den
+    //     Herzschlag ignoriert, ist fuer genau einen Wert richtig und fuer alle anderen
+    //     falsch. Mit nur einem seitHerz waere auch die alte Zeile gruen geworden.
+    const phasen = [];
+    for (const seitHerz of [0, 7, 15.5, 22, 33, 44.9]) {
+      for (let platz = 1; platz <= 2; platz++) {
+        const v = ziel(platz, 3, seitHerz);
+        const lage = (seitHerz + v) % T;
+        const soll = T * platz / 3;
+        if (v < 0 || v >= T) schlecht.push('Versatz ' + v.toFixed(1) + ' liegt ausserhalb des Taktes');
+        if (Math.abs(lage - soll) > 0.01) {
+          schlecht.push('bei ' + seitHerz + ' ms landet Platz ' + platz
+                        + ' auf ' + lage.toFixed(1) + ' statt ' + soll.toFixed(1));
+        }
+        if (platz === 1) phasen.push(lage);
+      }
+    }
+    teile.push('Phase Platz 1: ' + phasen.map(x => x.toFixed(1)).join('/') + ' ms');
+    // Und die zwei Ghosts liegen auseinander, nicht uebereinander.
+    const d = Math.abs(ziel(2, 3, 12) - ziel(1, 3, 12));
+    teile.push('Ghosts ' + d.toFixed(1) + ' ms auseinander');
+    if (Math.abs(d - T / 3) > 0.01) schlecht.push('Ghosts liegen ' + d.toFixed(1) + ' ms auseinander');
+
+    // (b) EIN HALT HAELT. Anhalten, BEVOR der wartende setTimeout den Zeitgeber angelegt
+    //     hat - der Fall, der 35 Phantom-Zeitgeber je Selbsttestlauf hinterliess.
+    const h = await OMEGA_TEST.ghostHaltProbe({});
+    teile.push('nach Halt ' + h.nachHalt + ' Pakete, laufend ' + h.laufend);
+    if (h.nachHalt !== 0) schlecht.push('angehaltener Ghost sendet weiter (' + h.nachHalt + ')');
+    // Gegenprobe: ohne sie waere ein Ghost-Takt, der GAR nicht laeuft, ebenfalls gruen.
+    if (h.laufend < 1) schlecht.push('laufender Ghost sendet nicht');
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
   // ---- Motorton-Zusaetze: jeder haengt an seiner Groesse, und der Schalter stellt alle ab ----
   //
   // Sechs Zusaetze, und jeder soll genau von EINER Groesse abhaengen. Der Test prueft
@@ -3542,8 +4112,12 @@
                   { steer: 0.6, ok: false }];
       const gekippt = learnSteerCap();
       const fehler = [];
-      // 1. Ohne Messung die dokumentierte Schaetzung.
-      if (Math.abs(ohne - 0.55) > 1e-9) fehler.push('ohne Messung ' + ohne);
+      // 1. Ohne eigene Messung der volle Ausschlag - seit v0.5.9, und die Begruendung
+      //    steht in learnSteerCap(): die Original-App schickt ihren Ghosts gemessen bis
+      //    zu 127 von 127, ein selbst gesetzter Deckel von 0,55 war strenger als die App
+      //    des Herstellers. Ein EIGENER Kippwert sticht ihn weiterhin, und genau das
+      //    pruefen die drei Faelle darunter.
+      if (Math.abs(ohne - 1.0) > 1e-9) fehler.push('ohne Messung ' + ohne);
       // 2. Nie gekippt: der hoechste gehaltene Wert selbst, nicht die Haelfte - wir wissen
       //    nur, dass es BIS dahin haelt.
       if (Math.abs(nurGehalten - 0.45) > 1e-9) fehler.push('nur gehalten ' + nurGehalten);

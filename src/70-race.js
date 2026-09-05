@@ -159,20 +159,57 @@
     setTimeout(() => setRaceLights(0), 900);
   }
 
+  // ---- Die Start/Ziel-Sperre des AUTOS: Byte 15, Bit 3 im Meldekanal ------------------
+  //
+  // Das Auto setzt sie selbst, sobald es das Startmuster liest, und haelt sie rund eine
+  // Sekunde. Ihre STEIGENDE FLANKE ist damit ein Punkt auf der Bahn - der Zielstreifen.
+  //
+  // Gemessen an den Mitschnitten:
+  //   Blockdauer     Median 981 bis 1050 ms
+  //   Haeufigkeit    17 Bloecke gegen 16 gezaehlte Runden
+  //   Lage           420 ms NACH der alten Regel (Bereich 315 bis 980 ms)
+  //   Herkunft       Verbindung 0x200: Bit 3 in 0 % der Schreibbefehle, 0,4 % der Meldungen
+  //                  Verbindung 0x202: 100 % geschrieben, 12 % gemeldet
+  //                  Also kein Echo unseres eigenen Bytes, sondern eine Meldung des Autos.
+  const ZIEL_SPERRE_BIT = 0x08;   // Byte 15
+  function zielSperreFlanke(r, b) {
+    const jetzt = (b[15] & ZIEL_SPERRE_BIT) !== 0;
+    const flanke = jetzt && !r.sperreVor;
+    r.sperreVor = jetzt;
+    return flanke;
+  }
+
   function carRaceNotify(car, b) {
     if (!car.race) car.race = { laps: [], lapStart: null, pending: null, seen: 0,
                                 lastActed: 0, lastCount: null };
     const r = car.race;
+    const now = Date.now();
+
+    // DIE SPERRE HAT VORRANG, und sobald ein Auto sie einmal gezeigt hat, gilt nur noch
+    // sie. Die alte Regel bleibt fuer Autos, die sie nie melden - sie einfach zu loeschen
+    // hiesse, ein Verhalten wegzunehmen, das auf anderen Bahnen vielleicht das einzige ist.
+    if (zielSperreFlanke(r, b)) {
+      r.sperreGesehen = true;
+      if (now - r.lastActed >= TILE_REPEAT_BLOCK_MS) {
+        r.lastActed = now;
+        carLapCrossed(car);
+      }
+      return;
+    }
+
     const code = b[12], count = b[11];
     if (code !== r.pending) { r.pending = code; r.seen = 1; return; }
     if (++r.seen < 2) return;
     if (r.lastCount === null) { r.lastCount = count; return; }
     if (count === r.lastCount) return;
     r.lastCount = count;
+    // Der Rueckfall zaehlt nur, solange dieses Auto die Sperre noch nie gemeldet hat.
+    // Sonst laege die Runde zweimal: einmal am Anfang des Startbereichs und einmal am
+    // Streifen, und die Rundenzeiten wuerden abwechselnd zu kurz und zu lang.
+    if (r.sperreGesehen) return;
     // isStartCode und nicht der Vergleich mit einem Wert: das Originalblatt meldet 0x0a,
     // die frueher angenommene 0x01 bleibt daneben gueltig.
     if (!isStartCode(code)) return;
-    const now = Date.now();
     if (now - r.lastActed < TILE_REPEAT_BLOCK_MS) return;
     r.lastActed = now;
     carLapCrossed(car);
@@ -1980,6 +2017,38 @@
   }
   setInterval(wxTick, 80);
 
+  // ---- Die vier Zustandsansagen ------------------------------------------------------
+  //
+  // EIN Zeitgeber fuer alle vier, und er laeuft auch ohne Rennen: ein leerer Tank und ein
+  // abgefahrener Reifen sind beim freien Fahren genauso wichtig. Der Takt ist bewusst
+  // langsam - gemeldet werden Flanken, und eine Flanke ein halbe Sekunde spaeter zu hoeren
+  // faellt niemandem auf, waehrend ein schneller Takt Rechenzeit im Fahrtakt kostet.
+  //
+  // DIE WERTE WERDEN HIER ZUSAMMENGESUCHT und nicht im Ton gelesen: hier liegen sie, und
+  // 80-sound.js soll nicht wissen muessen, dass es Tank, Schaden und Wetter gibt.
+  function ansagenZustand() {
+    const st = physEngine.state;
+    // Der SCHLECHTESTE Reifen. tyreWear4 zaehlt die Abnutzung (1 = hin), gemeldet wird der
+    // REST - der Balken im Cockpit zeigt auch den Rest, und zwei Leserichtungen fuer
+    // dieselbe Groesse waeren die Gelegenheit fuer einen Vorzeichenfehler.
+    let reifen = null;
+    if (st.tyreWear4 && st.tyreWear4.length === 4) {
+      reifen = 1 - Math.max.apply(null, st.tyreWear4);
+    } else if (typeof st.tyreWear === 'number') {
+      reifen = 1 - st.tyreWear;
+    }
+    return { health: Math.max(0, Math.min(100, 100 - damage)) / 100,
+             fuel: Math.max(0, Math.min(100, fuel)) / 100,
+             tyre: reifen,
+             // Es gibt genau zwei Wetter, 'dry' und 'rain'. Ein drittes hier zu erlauben
+             // waere ein Zustand, den niemand setzt, und beim naechsten Lesen eine Frage.
+             rain: weather === 'rain' };
+  }
+  setInterval(() => {
+    if (typeof ansagenPruefen !== 'function') return;
+    ansagenPruefen(ansagenZustand());
+  }, 500);
+
   const GRIP_MATRIX = {
     'dry|slick': 1.00,
     'dry|wet':   0.88,
@@ -2057,7 +2126,7 @@
     log('Wetter: ' + (weather === 'rain' ? 'Regen' : 'trocken') + ': Reifen: '
         + (tyres === 'wet' ? 'Regen' : 'Slicks')
         + (need ? ' (Boxenstopp für passende Reifen)' : ''), 'info');
-    padRumble(0.2, 0.15, 120);
+    padRumble(0.2, 0.15, 120, 'meldung');
   }
 
   function fitTyresForWeather() {
@@ -2172,7 +2241,7 @@
       }
       if (pitPlan.refuel) setPitLoop('fuel', true);
       if (pitPlan.repair) setPitLoop('repair', true);
-      padRumble(0.25, 0.15, 120);
+      padRumble(0.25, 0.15, 120, 'box');
       log(`Boxenstopp: ${describePitPlan(pitPlan)}.`, 'info');
     } else if (next === 'limited') {
       // Arm the plan HERE, not at the service: the quick menu is meant to be used while
@@ -2189,7 +2258,7 @@
       if (pitServiceStart !== null) {
         playTone(440, 0.12, 'sine', 0.18);
         setTimeout(() => playTone(660, 0.22, 'sine', 0.18), 120); // rising: throttle released
-        padRumble(0.25, 0.15, 120);
+        padRumble(0.25, 0.15, 120, 'box');
       }
       // A mandatory stop counts after PIT_MANDATORY_STAND_S of standing time. Requiring the
       // whole service to finish would have punished the legitimate choice to take fuel only
@@ -2346,7 +2415,7 @@
         lapEventAkku.pit += 1;
         stopAllPitLoops();
         pitChimeReady();
-        padRumble(0.35, 0.2, 200);
+        padRumble(0.35, 0.2, 200, 'box');
         showHudToast('Fertig, losfahren!');
         log('Boxenstopp fertig.', 'info');
       }
@@ -2594,12 +2663,24 @@
       showHudToast(end === 'front' ? 'SCHEINWERFER AUS' : 'RUECKLEUCHTEN AUS');
       updateLightTellTales();
     }
+    // DIE WUCHT, und sie wird VOR der naechsten Zeile genommen: die kuerzt das Tempo auf
+    // 30 Prozent, und danach waere jeder Aufprall gleich schwach.
+    //
+    // Hier stand ein fester Wert mit dem Vermerk "medium, per user spec". Eine Groesse fuer
+    // die Staerke gibt es aber: mit welchem Tempo man einschlaegt. Ein Einschlag bei
+    // Hoechstgeschwindigkeit soll sich nicht anfuehlen wie ein Anstupsen in der Boxengasse.
+    const wucht = Math.max(0, Math.min(1, Math.abs(physEngine.state.speedKmh)
+                                          / Math.max(0.01, physEngine.config.topSpeedKmh)));
     // An impact scrubs off most of the speed at once — the one case where the car should
     // NOT roll out gently. Everything else decays via the coast drag in the engine.
     physEngine.state.speedKmh *= 0.3;
     updateDamageFuelUI();
     if (!playCrashFx()) playCrashSound(); // sample variants first, synth burst as fallback
-    padRumble(0.6, 0.4, 220); // medium, per user spec
+    // Der untere Wert liegt ueber dem alten festen (0,6 / 0,4 / 220 ms): auch ein
+    // langsamer Aufprall soll deutlicher sein als bisher. Oben laeuft es auf den vollen
+    // Ausschlag hinaus.
+    padRumble(0.65 + 0.35 * wucht, 0.45 + 0.35 * wucht,
+              Math.round(240 + 160 * wucht), 'crash');
     // Hier stand ein Crash-Indikator, dessen Element es nicht mehr gibt: #crash-indicator
     // kam im gebauten Dokument genau einmal vor, naemlich hier. Die Stelle prueft zwar mit
     // if (ind), griff im Zeitgeber danach aber UNGESCHUETZT auf ind.style zu - der Fehler kam
@@ -2923,7 +3004,7 @@
       fuel = Math.max(0, fuel - Math.abs(throttle) * dt * fuelDrainPerSec);
       // Edge-triggered: without this it would rumble again on every 45ms heartbeat.
       if (fuelBefore > 0 && fuel <= 0) {
-        padRumble(0.2, 0.12, 160);
+        padRumble(0.2, 0.12, 160, 'meldung');
         log('Tank leer.', 'err');
       }
       // Once per tank, each. Falling PAST the mark triggers; rising back above it re-arms,
@@ -3146,7 +3227,7 @@
     const now = Date.now();
     if (now - pitRumbleAt < 180) return;
     pitRumbleAt = now;
-    padRumble(0.16, 0.10, 200);
+    padRumble(0.16, 0.10, 200, 'box');
   }
 
   // Wheels off means the car cannot move, whatever the driver asks for. Once they are back

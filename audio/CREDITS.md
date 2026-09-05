@@ -223,8 +223,24 @@ Naht bei jedem Durchlauf; das Skript gibt den gemessenen Nahtsprung mit aus
 
 Reparatur und Schlagschrauber laufen absichtlich gleichzeitig und wurden deshalb
 unterscheidbar angelegt: der Schrauber ist ein schneller, gleichmaessiger
-Hammerzug (~26 Hz), die Reparatur sind langsame, ungleichmaessige Blechschlaege mit
-wechselnder Tonhoehe.
+Hammerzug (~26 Hz), die Reparatur wechselt zwischen Klopfen und Ratschenzuegen.
+
+**Die Reparatur klang zweimal nach einem Lied**, und zweimal war die Ursache dieselbe:
+jeder Schlag bekam eine gewuerfelte Grundfrequenz zwischen 150 und 240 Hz, und das sind
+acht Halbtoene. Zwoelf Schlaege in einer Schleife von 2,4 s, die sich ewig wiederholt,
+sind damit eine zwoelftoenige Melodie. Der erste Versuch behandelte das Abklingen - das
+nimmt dem EINZELNEN Schlag die Tonhoehe, aber die Melodie steckt zwischen den Schlaegen.
+
+Jetzt schlagen alle Klopfer auf **eine** Grundfrequenz (196 Hz, Streuung 0,18 Halbtoene;
+ein Viertelton sind 0,5), weil ein Blechner auf dasselbe Blech schlaegt. Dazu kommen
+Ratschenzuege: Transienten von ein bis zwei Millisekunden, die grundsaetzlich keine
+Tonhoehe tragen koennen.
+
+Der ausgegebene Pruefwert ist ausdruecklich das **Protokoll des Erzeugers** und keine
+Spektralschaetzung. Der Grund ist gemessen: ein Schlag klingt in rund 6 ms ab, ein
+Fenster von 40 ms gibt 25-Hz-Koerbe, und bei 196 Hz sind das 2,2 Halbtoene. Ein
+Schaetzer, der groeber aufloest als der Effekt, den er messen soll, lieferte 4,16
+Halbtoene Streuung fuer Schlaege, die alle auf derselben Frequenz erzeugt wurden.
 
 
 ## Nachpruefbarkeit der synthetischen Motoren

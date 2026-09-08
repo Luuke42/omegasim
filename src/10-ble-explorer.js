@@ -117,10 +117,67 @@
     if (bc) bc.disabled = isConnected;
   }
 
+  // ---- Woran liegt es, wenn keine Autos auftauchen? ----------------------------------
+  //
+  // VIER FAELLE, und sie brauchen vier verschiedene Antworten. Bis v0.5.16 bekamen alle
+  // dieselbe - "Web Bluetooth wird hier nicht unterstuetzt, bitte in Chrome/Edge oeffnen" -,
+  // und auf einem Telefon, auf dem Chrome laeuft, schickt dieser Satz einen ans falsche
+  // Ende.
+  //
+  // Der Fall, der wirklich vorkam: die App vom Host-Programm ueber das WLAN geladen. Web
+  // Bluetooth verlangt einen SICHEREN KONTEXT, und http://192.168.x.x ist keiner - das
+  // steht so im Kopf von tools/omegasim_host.py, nur eben nicht in der App. Ein Telefon
+  // holt die App vom PC und hat kein navigator.bluetooth; das andere oeffnet sie ueber
+  // https oder file:// und merkt nichts.
+  //
+  // 'aus' kann nur ASYNCHRON bestimmt werden (getAvailability liefert ein Versprechen),
+  // deshalb gibt es die schnelle Fassung fuer die Anzeige und die genaue fuer den Klick.
+  function bluetoothLage() {
+    if (!window.isSecureContext) return 'unsicher';
+    if (!navigator.bluetooth) return 'kein-api';
+    return 'ok';
+  }
+
+  async function bluetoothLageGenau() {
+    const l = bluetoothLage();
+    if (l !== 'ok') return l;
+    try {
+      if (typeof navigator.bluetooth.getAvailability === 'function') {
+        const da = await navigator.bluetooth.getAvailability();
+        if (!da) return 'aus';
+      }
+    } catch (e) { /* manche Browser kennen die Abfrage nicht - dann eben nicht */ }
+    return 'ok';
+  }
+
+  // Der Text zur Lage, einmal fuer Protokoll und Anzeige. Er nennt den URSPRUNG, denn
+  // genau der ist im haeufigsten Fall die Ursache, und ohne ihn sucht man woanders.
+  function bluetoothLageText(lage) {
+    if (lage === 'unsicher') {
+      return 'Bluetooth ist hier abgeschaltet, weil die Seite ueber einen unsicheren '
+           + 'Ursprung geladen wurde (' + location.origin + '). Web Bluetooth erlaubt nur '
+           + 'https://, http://localhost und file://. Wer die App vom Host-Programm im WLAN '
+           + 'holt, hat genau diesen Fall: entweder die App direkt vom Telefon aus oeffnen '
+           + '(GitHub Pages oder gespeicherte Datei), oder in chrome://flags den Eintrag '
+           + '"unsafely-treat-insecure-origin-as-secure" um ' + location.origin + ' '
+           + 'ergaenzen und Chrome neu starten.';
+    }
+    if (lage === 'kein-api') {
+      return 'Dieser Browser kennt Web Bluetooth nicht. Chrome oder Edge auf Windows, '
+           + 'Android oder ChromeOS - Safari und Firefox koennen es nicht.';
+    }
+    if (lage === 'aus') {
+      return 'Der Bluetooth-Adapter ist aus oder nicht verfuegbar. Auf Android ausserdem '
+           + 'pruefen, ob Chrome die Berechtigung "Geraete in der Naehe" hat.';
+    }
+    return '';
+  }
+
   async function connect() {
-    if (!navigator.bluetooth) {
-      log('Web Bluetooth wird von diesem Browser nicht unterstützt. Bitte Chrome oder Edge auf Windows/Android/ChromeOS verwenden.', 'err');
-      alert('Web Bluetooth wird hier nicht unterstützt. Bitte in Chrome/Edge öffnen.');
+    const lage = await bluetoothLageGenau();
+    if (lage !== 'ok') {
+      log(bluetoothLageText(lage), 'err');
+      alert(bluetoothLageText(lage));
       return;
     }
     try {
@@ -336,6 +393,20 @@
   const I18N_EN = {
     "Offen": "Open",
     "Vibration überhaupt": "Vibration at all",
+    "Der Hauptschalter. Steht er aus, brummt nichts, egal was darunter angekreuzt ist. Seit v0.5.18 ist er standardmäßig an. Vorher stand er aus, und damit kamen auch die Vorgaben darunter nie zum Tragen – gemeldet wurde das als „Vibration geht nicht“. Wer keinen Rüttler hat, merkt von einem angeschalteten Hauptschalter nichts. Das Handy vibriert nicht mit, das Protokoll kennt dafür nichts.":
+      "The master switch. With it off nothing rumbles, whatever is ticked below. Since v0.5.18 it is on by default. Before that it was off, so the defaults below never took effect either – which was reported as “vibration does not work”. If your controller has no rumble motor, an enabled master switch changes nothing. The phone does not vibrate along; the protocol has nothing for that.",
+    "Rütteln testen":
+      "Test the rumble",
+    "Löst einen Stoß aus und schreibt daneben, was dabei vorgefunden wurde: wieviele Controller das System meldet, welche davon einen Rüttler haben, welche Zuordnung sie tragen und ob der Stoß angenommen oder abgelehnt wurde. Aus „geht nicht“ wird damit eine Messung.":
+      "Fires one jolt and writes down beside it what it found: how many controllers the system reports, which of them have a rumble motor, what mapping they carry and whether the jolt was accepted or refused. That turns “does not work” into a measurement.",
+    "Trigger-Vibration":
+      "Trigger vibration",
+    "Zusätzlich zu den Griffmotoren: regelt das ABS, brummt der linke Trigger – das ist die Bremse. Beim Schalten der rechte. Standard an. Warum experimentell: die adaptiven Trigger eines DualSense sind über die Gamepad-Schnittstelle gar nicht erreichbar, und die Effektart „trigger-rumble“ stellt Chrome vor allem für Xbox-Controller bereit. Die Zeile darunter liest aus, was dein Controller wirklich annimmt. Kann er es nicht, passiert nichts, und zwar ausdrücklich ohne ersatzweises Brummen in den Griffen – das würde vortäuschen, die Trigger hätten reagiert.":
+      "On top of the grip motors: when the ABS is working the left trigger rumbles – that is the brake. When shifting, the right one. On by default. Why experimental: the adaptive triggers of a DualSense are not reachable through the gamepad interface at all, and Chrome offers the “trigger-rumble” effect type mainly for Xbox controllers. The line below reads out what your controller really accepts. If it cannot, nothing happens – deliberately with no substitute rumble in the grips, because that would pretend the triggers had responded.",
+    "Was dein Controller kann":
+      "What your controller can do",
+    "Ausgelesen, nicht angenommen. Leer, solange kein Controller gemeldet ist – einmal eine Taste drücken.":
+      "Read out, not assumed. Empty as long as no controller is reported – press a button once.",
     "Gangwechsel": "Gear change",
     "Aufprall": "Impact",
     "Neben der Bahn": "Off the track",
@@ -358,8 +429,6 @@
     "Einmal, wenn der schlechteste der vier Reifen nur noch 10 % hat. Der schlechteste zählt: ein Auto mit drei guten Reifen und einem abgefahrenen fährt nicht drei Viertel gut.": "Once, when the worst of the four tyres is down to 10 %. The worst one counts: a car with three good tyres and one worn out does not drive three quarters well.",
     "Regen ansagen": "Announce rain",
     "Wenn es anfängt zu regnen und wenn es aufhört. Beim Laden wird nichts gesagt, erst beim Wechsel.": "When it starts raining and when it stops. Nothing is said on load, only on a change.",
-    "Funkfilter": "Radio filter",
-    "Lässt die Ansage nach Rennfunk klingen: ein Knacken beim Aufschalten, ein Rauschteppich darunter, ein Knacken beim Loslassen, und die Stimme spricht schneller und flacher. Was NICHT geht, und das sei gesagt: die Stimme selbst bandbegrenzen. Die Sprachausgabe des Browsers liefert keinen Audioknoten, es gibt also nichts, wo ein Filter dazwischen könnte. Der Funkeindruck kommt vom Drumherum.": "Makes the announcement sound like race radio: a click when the transmitter keys, a bed of static underneath, a click when it unkeys, and the voice speaks faster and flatter. What is NOT possible, and it should be said: band-limiting the voice itself. The browser’s speech output provides no audio node, so there is nowhere for a filter to sit. The radio impression comes from everything around it.",
     "Gaskennlinie": "Throttle curve",
     "Anfahrschub": "Launch shove",
     "Wie der Gasweg des Controllers auf die Beschleunigung abgebildet wird. Die Enden liegen immer fest: kein Gas heißt keine Beschleunigung, Vollgas heißt volle Beschleunigung – geändert wird nur, was dazwischen passiert. 1,0 ist die Gerade und ändert nichts. Über 1,0 streckt den unteren Bereich: ein Viertel Gasweg gibt bei 1,8 nur noch 8 % statt 25 %. Genau das braucht ein Trigger mit großer Totzone – ein DualShock 4 oder DualSense gibt schon bei leichtem Druck viel ab, und dann lässt sich kein Tempo halten. Unter 1,0 macht es umgekehrt spitzer, für Pedale mit langem Weg.": "How the controller’s throttle travel maps to acceleration. The ends are always fixed: no throttle means no acceleration, full throttle means full acceleration – only what happens in between changes. 1.0 is the straight line and changes nothing. Above 1.0 stretches the lower range: a quarter of the travel gives only 8 % instead of 25 % at 1.8. That is exactly what a trigger with a large dead zone needs – a DualShock 4 or DualSense already gives away a lot under light pressure, and then no speed can be held. Below 1.0 does the opposite and makes it sharper, for pedals with long travel.",
@@ -1013,12 +1082,17 @@
     "Bremsbalance": "Brake bias",
     "Furz 2": "Fart 2",
     "Porsche 911 GT3 R: Boxer-6, Einzeldrosseln": "Porsche 911 GT3 R: flat-6, individual throttle bodies",
+    "Stra\u00dfen- und Rallyeklassiker (WIP)": "Road and rally classics (WIP)",
+    "Lamborghini Countach LP500: V12, 60 Grad, sechs Weber":
+      "Lamborghini Countach LP500: V12, 60 degrees, six Webers",
+    "Subaru Impreza WRX STI 1999: Boxer-4, Turbo":
+      "Subaru Impreza WRX STI 1999: flat-4, turbo",
     "Bremsenquietschen": "Brake squeal",
     "Eigener Regler. Es hing vorher am Motorregler und war deshalb nicht getrennt leiser zu bekommen.":
       "Its own slider. It used to hang on the engine volume, so it could not be turned down on its own.",
     "Balance / Lenkung": "Bias / steering",
-    "Auch auf dem Steuerkreuz links/rechts. Der volle Lenkeinschlag ist mechanisch 45 Grad; bei 100 % fordert voller Stick genau ihn an.":
-      "Also on the D-pad, left/right. Full steering lock is mechanically 45 degrees; at 100% a full stick asks for exactly that.",
+    "Auch auf dem Steuerkreuz hoch/runter – links/rechts blättert seit v0.5.18 die Cockpit-Schirme. Der volle Lenkeinschlag ist mechanisch 45 Grad; bei 100 % fordert voller Stick genau ihn an.":
+      "Also on the D-pad, up/down – left/right pages through the cockpit screens since v0.5.18. Full steering lock is mechanically 45 degrees; at 100% a full stick asks for exactly that.",
     "GELB · AUTOPILOT": "YELLOW · AUTOPILOT",
     "Wieviel der Bremse an der Vorderachse ankommt.": "How much of the brake reaches the front axle.",
     "Nach vorn": "Forward",
@@ -1035,7 +1109,7 @@
     "Verbinden": "Connect",
     "Verbindung": "Connection",
     "Vergeben sind 2 Gerade, 3 Linkskurve, 4 Rechtskurve, 5 und 6 Haarnadel, 10 Start/Ziel. 14 lässt Luft für die Kurven und die Schikane, die noch nie überfahren wurden. Sollte 14 doch belegt sein, liegen 18 und 22 daneben.": "Taken are 2 straight, 3 left curve, 4 right curve, 5 and 6 hairpin, 10 start/finish. 14 leaves room for the curves and the chicane that have never been driven over. Should 14 turn out to be taken after all, 18 and 22 sit next to it.",
-    "Vollbild verlassen": "Leave fullscreen",
+    "Vollbild umschalten": "Toggle fullscreen",
     "Vollbild": "Fullscreen",
     "Voller Tank macht träger. Links = aus.": "A full tank makes it sluggish. Left = off.",
     "Vollständige Gestaltungsfreiheit für deine Carrera Hybrid Bahn": "Complete creative freedom for your Carrera Hybrid track",
@@ -1287,7 +1361,7 @@
     "Reifenverschleiß, Reifentemperatur, Bremstemperatur": "Tyre wear, tyre temperature, brake temperature",
     "Wettersimulation": "Weather simulation",
     "Alles hier schreibt rohe Bytes zum Auto und liest rohe Bytes zurück. Das ist Werkbank und kein Merkmal: die Pakete tragen gültige Prüfsummen, aber was das Auto mit einem selbst zusammengesetzten Paket macht, ist nicht vorhersagbar. Zum Fahren wird nichts davon gebraucht.": "Everything here writes raw bytes to the car and reads raw bytes back. This is a workbench, not a feature: the packets carry valid checksums, but what the car does with a hand-assembled packet is not predictable. None of it is needed for driving.",
-    "Automatik, 2,6 s auf 100, voller Grip, kein Reifenverschleiß und kein Tankgewicht. Lenkkalibrierung 200 Prozent, damit auch enge Strecken gehen – der volle Einschlag liegt bei etwa einem Drittel Stick an. Fading und Windschatten sind aus; sie stehen ab GT4 zur Verfügung.": "Automatic, 2.6 s to 100, full grip, no tyre wear and no fuel weight. Steering calibration 200 percent so that tight tracks work too – full lock arrives at about a third of stick travel. Fade and dirty air are off; they are available from GT4 upwards.",
+    "Automatik, 2,6 s auf 100, voller Grip, Reifenmodell an und kein Tankgewicht. Lenkkalibrierung 200 Prozent, damit auch enge Strecken gehen – der volle Einschlag liegt bei etwa einem Drittel Stick an. Fading und Windschatten sind aus; sie stehen ab GT4 zur Verfügung.": "Automatic, 2.6 s to 100, full grip, tyre model on and no fuel weight. Steering calibration 200 percent so that tight tracks work too – full lock arrives at about a third of stick travel. Fade and dirty air are off; they are available from GT4 upwards.",
     "Crash-Schwelle": "Crash threshold",
     "Wie weit die Bewegungsbytes 1 und 3 vom gleitenden Mittel abweichen müssen, damit ein Stoß als Crash gilt. Niedriger heißt empfindlicher: schon ein Rempler zählt. Höher heißt, dass nur ein echter Einschlag zählt. 40 ist der Wert, mit dem die Erkennung gebaut und geprüft wurde – stand bis v0.5 als Konstante im Code, war also eine Einstellung, die niemand einstellen konnte.": "How far the motion bytes 1 and 3 must deviate from the running mean for a jolt to count as a crash. Lower means more sensitive: even a nudge counts. Higher means only a real impact counts. 40 is the value the detection was built and tested with – it was a constant in the code until v0.5, so it was a setting nobody could set.",
     "R3 (rechten Stick drücken)": "R3 (press right stick)",
@@ -1374,7 +1448,6 @@
     "Gerechnet und nicht eingetippt: die Nickgrenzen folgen aus der statischen Achslast und dem Verlagerungsanteil.": "Computed, not typed in: the pitch limits follow from the static axle load and the transfer share.",
     "vorn bei Gas": "front on throttle",
     "bei Bremse": "on the brake",
-    "Lenkrate": "steering rate",
     "Reifenquietschen": "Tyre squeal",
     "Am Grenzbereich, im Stil von Gran Turismo: Lautstärke und Tonhöhe laufen stetig mit der Querausnutzung des Reibkreises, Einsatz ab 60 Prozent – also ab etwa 98 km/h bei vollem Lenkausschlag, ab 197 km/h bei halbem, und bei einem Viertel Ausschlag nie. Eine Haarnadel quietscht, eine lange schnelle Kurve nicht. Bis v0.4.55 stand die Schwelle bei 85 Prozent und war damit unerreichbar: gemessen kommt die Querausnutzung erst bei 265 km/h dorthin, weil der Lenkausschlag mit dem Tempo beschnitten wird. Es hat deshalb nie gequietscht.": "At the limit, in the style of Gran Turismo: volume and pitch run continuously with the lateral use of the friction circle, starting at 60 per cent – so from about 98 km/h at full lock, from 197 km/h at half, and at a quarter of lock never. A hairpin squeals, a long fast corner does not. Up to v0.4.55 the threshold sat at 85 per cent and was therefore unreachable: measured, the lateral use only gets there at 265 km/h, because the steering lock is cut back with speed. It therefore never squealed.",
     "Mehrspieler": "Multiplayer",
@@ -1391,7 +1464,7 @@
     "So lange muss das Auto DURCHGEHEND abseits melden, bevor gedrosselt wird. Eine Sekunde ist die Vorgabe, damit leichtes Schneiden noch durchgeht – ein einzelnes Paket von der Bahn setzt die Uhr zurück. Gilt nur in der Stellung „Auf der Bahn“, weil der Streckensensor nur dort liest.": "This is how long the car must report off track CONTINUOUSLY before the throttle is capped. One second is the default so that cutting a corner slightly still gets through – a single packet from the track resets the clock. Applies only in the „On the track“ position, because that is the only place the track sensor reads.",
     ": der Stopp wird von Hand angefordert und beginnt erst, wenn das Auto neben der Bahn steht (Byte 12 = 0x00). Der Knopf sagt also, DASS ein Stopp kommt, die Bahnkante sagt, WO er anfängt. Nur auf der CH-Schiene sinnvoll – ohne Schiene meldet das Auto ständig „abseits“.": ": the stop is requested by hand and only begins once the car is standing beside the track (byte 12 = 0x00). So the button says THAT a stop is coming, the track edge says WHERE it begins. Only useful on the CH rail – without the rail the car reports „off track“ all the time.",
     "Neben der Strecke (von Hand, Start erst abseits)": "Beside the track (by hand, starts only off track)",
-    "Außen anstellen, innen scheiteln, außen heraus. Gemessener Einschlag: 70 Prozent ergeben 13,5 Grad, 100 Prozent 20,9 Grad von den 45 des Autos. Ohne gebaute oder gelernte Strecke fällt sie auf eine gröbere Regel je Kachel zurück – halb so stark und ohne Blick auf die nächste Kurve. Ganz ohne gelesene Streckencodes wirkt sie nicht, weil niemand weiß, wo das Auto ist. Ob es hilft, sagen Rundenzeit und Abgänge.": "Set up wide, clip the apex, run wide again. Measured lock: 70 percent gives 13.5 degrees, 100 percent 20.9 of the car’s 45. Without a built or learnt track it falls back to a coarser per-tile rule – half as strong and blind to the next corner. With no track codes read at all it does nothing, because nobody knows where the car is. Whether it helps is told by lap times and departures.",
+    "Außen anstellen, innen scheiteln, außen heraus. Gemessen am mittleren Lenkbyte über 600 Takte: die Vorgabe ergibt 36 von 127, 100 Prozent ergeben 50, 200 Prozent ergeben 81 mit Spitzen am vollen Anschlag. Zum Vergleich schickt die Original-App ihren eigenen Ghosts im Mittel 32 und 47. Über 100 Prozent wirkt die Linie zusätzlich auch auf der Geraden voll statt nur zu einem Drittel – das Anbremsen von außen ist die Hälfte einer Ideallinie, und genau dort sieht man sie. Ohne gebaute oder gelernte Strecke fällt sie auf eine gröbere Regel je Kachel zurück. Ganz ohne gelesene Streckencodes wirkt sie nicht, weil niemand weiß, wo das Auto ist. Ob es hilft, sagen Rundenzeit und Abgänge.": "Set up wide, clip the apex, run out wide. Measured as the mean steering byte over 600 ticks: the default gives 36 of 127, 100 per cent gives 50, 200 per cent gives 81 with peaks at full lock. For comparison the original app sends its own ghosts 32 and 47 on average. Above 100 per cent the line also acts fully on the straights instead of only a third – braking in from the outside is half of a racing line, and that is where you see it. Without a built or learned track it falls back to a coarser per-tile rule. With no track codes read at all it does nothing, because nobody knows where the car is. Whether it helps is answered by lap times and excursions.",
     "Rundentempo der autonomen Autos. Gefahren brauchbar zwischen 40 und 60 Prozent. Der Regler beginnt bei 35 und nicht tiefer: darunter fährt das Auto so langsam, dass es die gedruckte Strecke nicht mehr zuverlässig „liest“ – und dann fallen Vorausblick, Ideallinie und Kurvendrosselung alle drei aus.": "Lap pace of the autonomous cars. Driven, 40 to 60 percent works well. The slider starts at 35 and no lower: below that the car drives so slowly that it no longer „reads“ the printed track reliably – and then lookahead, racing line and corner braking all three fall away.",
     "Der Erstplatzierte fährt etwas langsamer, damit das Feld zusammenbleibt. Wirkt auch ohne Rennen, also beim freien Fahren – aber erst ab zwei Ghosts: mit einem einzigen ist dieser eine der Führende, und ihn zu bremsen hieße nur, ihn langsamer zu machen.": "The car in front runs slightly slower so the field stays together. Works without a race too, i.e. in free practice – but only from two ghosts upwards: with a single one that one is the leader, and holding it back would just mean making it slower.",
     "Ablauf: Auto in der Garage verbinden, unten auf „Messung starten“ drücken. Das Auto fährt mit festem, langsamem Gas und hält jede Stufe so lange, wie unten eingestellt ist. Verlässt es die Bahn, wird die Stufe festgehalten und die Messung endet. Wenn du es siehst, bevor die App es merkt: „runtergefahren“ drücken.": "How it runs: connect a car in the garage, then press “Start measurement” below. The car drives at a fixed, slow throttle and holds each step for as long as set below. If it leaves the track, the step is recorded and the measurement ends. If you see it before the app does, press “went off”.",
@@ -1408,21 +1481,21 @@
     "Der gemessene Kippwert ersetzt den geschätzten Deckel für alle Querbewegungen: Ideallinie, Überholversatz und Ausweichen. Du musst nichts übertragen.": "The measured tipping value replaces the estimated cap for every lateral movement: racing line, overtaking offset and avoidance. You do not have to transfer anything.",
     "Aktueller Deckel:": "Current cap:",
     "Tagesform, Fehler, Windschatten, Überholen, Gummiband und Abstand halten – ein Regler für alle sechs. Ein Überholvorgang läuft als Sequenz: erst zur Seite, dann Schub, dann vorne wieder einordnen, und wenn es nach 5 s nicht geklappt hat, Abbruch mit 6 s Sperre. Ohne diesen Abbruch klebte der Verfolger neben dem anderen, bis die Uhr ablief, und genau dort berühren sie sich. Der Mindestabstand rechnet ausserdem mit der Annäherungsrate statt mit einem festen Kachelabstand. Auf 0 ist jeder der sechs Bausteine wirkungslos.": "Form, mistakes, slipstream, overtaking, rubber band and keeping distance – one slider for all six. An overtake runs as a sequence: move aside, then the boost, then tuck back in ahead, and if it has not worked after 5 s, abort with a 6 s lockout. Without that abort the follower stuck alongside the other until the clock ran out, and that is exactly where they touch. The minimum gap also reckons with the closing rate rather than a fixed tile distance. At 0 every one of the six parts is inert.",
-    "Zwei Autos nebeneinander gehen auseinander, und beim Überholen weicht auch der Vorausfahrende aus, zur anderen Seite. Zwei Autos auf 25 cm Bahnbreite brauchen beide Hälften. Dieser Regler bestimmt auch, wie weit der Angreifer zur Seite geht: das ist ein Ausweichen und keine Linienwahl, hängt also nicht an der Ideallinie.": "Two cars side by side move apart, and when overtaking the car in front gives way too, to the other side. Two cars on 25 cm of track width need both halves. This slider also sets how far the attacker moves over: that is an avoidance and not a choice of line, so it does not depend on the racing line.",
-    "Jeder Ghost hält eine eigene, feste Linie über die Bahnbreite. Auf der Geraden gilt die Spur, in der Kurve die Ideallinie – so fährt das Feld hintereinander, aber auf verschiedenen Linien, und sucht im Bogen trotzdem den Scheitel. Der Übergang läuft mit 350 ms nach, damit an der Kachelgrenze kein Ruck entsteht. In der Kurve bleibt die halbe Spur stehen: alle auf denselben Scheitel zu schicken wäre realistisch, würde sie aber zusammenführen, und Berührungen sind ohne Rückmeldung zur Querlage nicht zurückzuregeln.": "Every ghost holds its own fixed line across the track width. On the straight the lane rules, in the corner the racing line – so the field runs in file but on different lines, and still seeks the apex through the bend. The transition follows with a 350 ms lag so that no jolt appears at the tile boundary. Half the lane stays in the corner: sending everyone to the same apex would be realistic but would bring them together, and contact cannot be regulated away without feedback on lateral position.",
+    "Zwei Autos nebeneinander gehen auseinander, und beim Überholen weicht auch der Vorausfahrende aus, zur anderen Seite. Zwei Autos auf 25 cm Bahnbreite brauchen beide Hälften. Dieser Regler bestimmt auch, wie weit der Angreifer zur Seite geht: das ist ein Ausweichen und keine Linienwahl, hängt also nicht an der Ideallinie. Über 100 Prozent geht die Anforderung bis an den vollen Anschlag – die Mitschnitte zeigen, dass das Auto die Schiene auch dort noch liest.": "Two cars side by side move apart, and when being overtaken the car ahead also gives way, to the other side. Two cars on 25 cm of track width need both halves. This slider also sets how far the attacker moves across: that is an evasion and not a line choice, so it does not depend on the racing line. Above 100 per cent the request goes all the way to full lock – the recordings show the car still reads the rail there.",
+    "Jeder Ghost hält eine eigene, feste Linie über die Bahnbreite. Auf der Geraden gilt die Spur, in der Kurve die Ideallinie – so fährt das Feld hintereinander, aber auf verschiedenen Linien, und sucht im Bogen trotzdem den Scheitel. Der Übergang läuft mit 350 ms nach, damit an der Kachelgrenze kein Ruck entsteht. Bis 100 Prozent bleibt in der Kurve die halbe Spur stehen: alle auf denselben Scheitel zu schicken wäre realistisch, würde sie aber zusammenführen, und Berührungen sind ohne Rückmeldung zur Querlage nicht zurückzuregeln. Über 100 Prozent gilt die eigene Spur auch in der Kurve ganz – auf eigene Gefahr, denn dann bleiben sie sich auch im Bogen im Weg.": "Every ghost holds its own fixed line across the track width. On the straight the lane applies, in a corner the racing line – so the field runs in single file but on different lines, and still hunts the apex through the bend. The transition eases over 350 ms so there is no jolt at a tile boundary. Up to 100 per cent half of the lane survives through a corner: sending everyone to the same apex would be realistic but would bring them together, and contact cannot be corrected without any feedback on lateral position. Above 100 per cent the lane applies fully in corners too – at your own risk, because then they stay in each other's way through the bend as well.",
     "Dieses Projekt ist unabhängig von Carrera und gehört zu keinem Hersteller. Der vollständige Quellcode steht unter der MIT-Lizenz auf GitHub.": "This project is independent of Carrera and belongs to no manufacturer. The complete source code is available under the MIT licence on GitHub.",
     "Jeder darf ihn nutzen, kopieren, verändern und auch in kommerzieller Software verwenden, solange der ursprüngliche Urheberrechtsvermerk und der Lizenztext in der Kopie erhalten bleiben.": "Anyone may use, copy and modify it, including in commercial software, as long as the original copyright notice and the licence text are kept in the copy.",
     "Dieselbe Lizenz sagt aber auch: die Software kommt ohne Garantie und ohne Gewährleistung. Du steuerst deine Autos auf eigene Gefahr. Es ist ein Freizeitprojekt, motiviert durch die Option, eine Pups-Hupe einzubauen – und möglicherweise funktioniert es nach einem künftigen Firmware-Update nicht mehr.": "The same licence also says: the software comes with no warranty and no guarantee. You drive your cars at your own risk. This is a hobby project, motivated by the option of building in a whoopee horn – and it may well stop working after a future firmware update.",
     "Für konstruktives Feedback oder Feature-Wünsche schreib mir gern im Thema „Omega Sim“ im Carrera Hybrid Players Discord, unter „weitere Themen“.": "For constructive feedback or feature requests, do write to me in the “Omega Sim” topic of the Carrera Hybrid Players Discord, under “weitere Themen”.",
     "Unabhängig, offen, ohne Gewähr": "Independent, open, without warranty",
     "Quellcode auf GitHub": "Source code on GitHub",
-    "Bremsbalance nach vorn": "Brake bias forward",
-    "Bremsbalance nach hinten": "Brake bias rearward",
     "Lenkansprechen kleiner": "Steering response lower",
     "Lenkansprechen größer": "Steering response higher",
+    "Schirm zurück": "Previous screen",
+    "Schirm vor": "Next screen",
     "Controller-Belegung": "Controller mapping",
     "Was gerade auf welcher Taste liegt. Zuweisen lässt sich das in den Optionen unter „Gamepad“; die Grafik zieht sofort nach.": "What currently sits on which button. It can be reassigned in the options under “Gamepad”; the diagram follows immediately.",
-    "Weiß ist zuweisbar, gedecktes Grau ist festverdrahtet und nicht zuweisbar (das Steuerkreuz), kursives Grau heißt „nicht belegt“. Touchpad und PS-Taste bleiben ab Werk frei, weil das System beide selbst abgreift: ein Tippen aufs Touchpad löst zugleich einen Klick in der Seite aus. Im Streckeneditor und bei scharfem Boxenstopp bedient das Steuerkreuz erst diese, danach gilt wieder das Gezeigte.": "White is assignable, muted grey is hard-wired and not assignable (the D-pad), italic grey means “not assigned”. Touchpad and PS button stay free out of the box because the system claims both itself: a tap on the touchpad also fires a click somewhere in the page. In the track editor and with an armed pit stop the D-pad serves those first, after which what is shown here applies again.",
+    "Weiß ist zuweisbar, gedecktes Grau ist festverdrahtet und nicht zuweisbar (das Steuerkreuz), kursives Grau heißt „nicht belegt“. Touchpad und PS-Taste bleiben ab Werk frei, weil das System beide selbst abgreift: ein Tippen aufs Touchpad löst zugleich einen Klick in der Seite aus. Im Streckeneditor und auf dem Boxenschirm bedient das Steuerkreuz erst diese, danach gilt wieder das Gezeigte. Dasselbe gilt für die Flaggentaste: auf dem Boxenschirm wählt sie dort aus, und die gelbe Flagge gibt es nach dem Zurückblättern.": "White is assignable, muted grey is hard-wired and not assignable (the D-pad), italic grey means “not assigned”. Touchpad and PS button stay free out of the box because the system claims both itself: a tap on the touchpad also fires a click somewhere in the page. In the track editor and on the pit screen the D-pad serves those first, after which what is shown here applies again. The same goes for the flag button: on the pit screen it selects there, and the yellow flag is available once you page back.",
     "L3 · Stick drücken": "L3 · press the stick",
     "R3 · Stick drücken": "R3 · press the stick",
     "Linker Stick": "Left stick",
@@ -1463,8 +1536,8 @@
     "Bis zu welchem Tempo jeder Gang reicht. Gerechnet aus den Übersetzungen und der Höchstgeschwindigkeit, nicht eingetippt.": "How fast each gear reaches. Calculated from the ratios and the top speed, not typed in.",
     "Rundenzeiten ansagen": "Announce lap times",
     "Nach jeder Runde die Zeit, und bei einer eigenen Bestzeit ein Wort dazu. Gesprochen von der eingebauten Stimme des Browsers – kein Dienst, kein Netz, nichts verlässt das Gerät. Absichtlich kurz gehalten, damit die Ansage vor der nächsten Kurve fertig ist. Kommt eine zweite Runde herein, während noch geredet wird, bricht die alte Ansage ab: die Zeit der Gegenwart ist wichtiger. Ob es überhaupt spricht, hängt an den Stimmen des Systems – unter Windows sind sie lokal vorhanden, auf Android können sie fehlen. Fehlt eine, steht das einmal im Protokoll und nicht bei jeder Runde.": "The time after every lap, and a word with it on a personal best. Spoken by the browser’s built-in voice – no service, no network, nothing leaves the device. Deliberately kept short so the announcement is finished before the next corner. If a second lap comes in while it is still talking, the old announcement is cut off: the time of the present matters more. Whether it speaks at all depends on the voices of the system – under Windows they are installed locally, on Android they can be missing. If one is missing, that goes into the log once and not on every lap.",
-    "Alle sind aus Zylinderzahl, Kurbelwelle, Bankaufteilung und Zündfolge gerechnet – keiner ist eine Aufnahme. Bei den aufgeladenen Originalen fehlt der Lader. Die vier historischen sind noch nicht nach Gehör geprüft; beim Maserati kommt dazu, dass dieses Modell den Bankwinkel gar nicht darstellt, weshalb er sich vom Ferrari-V12 nur in Drehzahl und Rohrlänge unterscheidet.": "All of them are calculated from cylinder count, crankshaft, bank split and firing order – none is a recording. The forced-induction originals are missing their blower. The four historic ones have not been checked by ear yet; with the Maserati there is more to it, because this model does not represent the bank angle at all, which is why it differs from the Ferrari V12 only in revs and pipe length.",
-    "Zwei benachbarte Plätze fahren in der Einführungsrunde versetzt, also als Zweierkolonne. Die Runde läuft mit Boxengassen-Tempo; sobald das erste Auto Start/Ziel überfährt, ist das Limit weg. Aufstellen musst du von Hand – ein Auto auf die Bahn setzen kann die App nicht. Dein eigenes Auto steht mit in der Liste und verschiebt damit, auf welche Seite die Ghosts hinter dir gehen.": "Two adjacent grid slots drive offset from each other on the formation lap, so as a double column. The lap runs at pit-lane pace; as soon as the first car crosses start/finish the limit is gone. Lining up is your job – the app cannot place a car on the track. Your own car is in the list too and therefore shifts which side the ghosts behind you take.",
+    "Alle sind aus Zylinderzahl, Kurbelwelle, Bankaufteilung und Zündfolge gerechnet – keiner ist eine Aufnahme. Bei den aufgeladenen Originalen fehlt der Lader. Die sechs mit WIP sind noch nicht nach Gehör geprüft; beim Maserati kommt dazu, dass dieses Modell den Bankwinkel gar nicht darstellt, weshalb er sich vom Ferrari-V12 nur in Drehzahl und Rohrlänge unterscheidet. Der Boxer-Rumpel des Subaru kommt aus ungleich langen Krümmerrohren; das Modell trägt feste Zeitversätze je Zylinder und damit die richtige Art von Unregelmäßigkeit, aber ihr genaues Muster ist gewählt und nicht aus Rohrlängen gerechnet.": "All of them are computed from cylinder count, crankshaft, bank split and firing order – none is a recording. The forced-induction originals are missing their turbo. The six marked WIP have not been judged by ear; with the Maserati there is the added point that this model cannot represent bank angle at all, so it differs from the Ferrari V12 only in revs and pipe length. The Subaru boxer rumble comes from unequal-length headers; the model carries fixed per-cylinder timing offsets and therefore the right KIND of irregularity, but their exact pattern is chosen, not computed from pipe lengths.",
+    "Zwei benachbarte Plätze fahren in der Einführungsrunde versetzt, also als Zweierkolonne. Die Runde läuft mit Boxengassen-Tempo; sobald das erste Auto Start/Ziel zum zweiten Mal überfährt, ist das Limit weg. Aufstellen musst du von Hand – ein Auto auf die Bahn setzen kann die App nicht. Dein eigenes Auto steht mit in der Liste und verschiebt damit, auf welche Seite die Ghosts hinter dir gehen.": "Two adjacent grid slots drive offset from each other on the formation lap, so as a double column. The lap runs at pit-lane pace; as soon as the first car crosses start/finish for the SECOND time the limit is gone. Lining up is your job – the app cannot place a car on the track. Your own car is in the list too and therefore shifts which side the ghosts behind you take.",
     "Diese Seite zählt Aufrufe mit GoatCounter, damit ich weiß, ob das Projekt jemand benutzt. Ohne Cookies, ohne Werbung und ohne personenbezogene Daten; wer den Zähler blockiert, verliert keine Funktion. Alles andere – Abstimmungen, Rundenzeiten, Streckenpläne – bleibt im Browser und wird nirgends hingeschickt.": "This page counts visits with GoatCounter so I know whether anyone uses the project. No cookies, no advertising and no personal data; blocking the counter costs you no function. Everything else – setups, lap times, track plans – stays in the browser and is not sent anywhere.",
     "Gänge": "gears",
     "Schaltzeit": "shift time",
@@ -1473,8 +1546,237 @@
     "GELB": "YELLOW",
     "ANFAHRT": "ROLLING UP",
     "Einführungsrunde": "Formation lap",
+    "Ghost: Querlage festhalten": "Ghost: hold a lateral offset",
+    "Alle Ghosts halten einen festen Versatz, statt zu fahren, was Ideallinie, Spur und Ausweichen sagen. Links ist links, rechts ist rechts, Mitte ist aus – und in der Mitte läuft alles wie sonst. Wozu das gut ist: Byte 7 trägt einen Lenkwinkel und keine Position. Dass daraus eine gehaltene Lage neben der Mitte wird, leistet allein die Schienenführung des Autos – und ob das stimmt und bis zu welchem Wert, ist nie gemessen worden. Mit einem festen Versatz siehst du es: bleibt das Auto neben der Mitte, oder zieht es zurück? Ab welchem Wert reißt es ab? Ist links wie rechts? Der Wert daneben geht ungefiltert auf Byte 7, also ist er genau das, was am Auto ankommt.":
+      "All ghosts hold a fixed offset instead of driving what the racing line, the lane and the evasion say. Left is left, right is right, centre is off – and in the centre everything runs as usual. What it is for: byte 7 carries a steering ANGLE and not a position. That a held position beside the centre comes out of it is done by the car's own rail following alone – and whether that holds, and up to which value, has never been measured. With a fixed offset you can see it: does the car stay beside the centre, or does it pull back? At which value does it come off? Is left the same as right? The value beside it goes to byte 7 unfiltered, so it is exactly what arrives at the car.",
+    "Prüfstand": "test rig",
+    "Physik":
+      "Physics",
+    "Aus, rohe Stickstellung":
+      "Off, raw stick position",
+    "Drift (experimentell)":
+      "Drift (experimental)",
+    "Gegensteuern im Drift":
+      "Countersteer in drift",
+    "Drift-Probe (4 s)":
+      "Drift probe (4 s)",
+    "Ghosts fahren die Runde zu Ende":
+      "Ghosts are finishing the lap",
+    "Alle im Ziel":
+      "Everyone home",
+    "Physik: Drehmoment, Gänge, Reibkreis – die Vorgabe. Aus: rohe Stickstellung ohne Gänge, wie ein Fernsteuerungsauto. Drift: rohes Gas wie bei „Aus“, dazu ein automatisches Gegensteuern gegen das gemessene Drehsignal des Autos und eine weichere Lenkung. Der Drift-Modus ist experimentell, und die Zeile darunter sagt, warum.":
+      "Physics: torque, gears, friction circle – the default. Off: raw stick position with no gears, like a radio-controlled car. Drift: raw throttle as with “Off”, plus automatic countersteer against the car's measured rotation signal and softer steering. Drift mode is experimental, and the line below says why.",
+    "Wie stark gegen das Ausbrechen gelenkt wird, gemessen am Drehsignal aus Byte 3 der Meldungen. 50 Prozent entspricht der Vorgabe, nach der gefragt wurde. Was daran unsicher ist, und zwar beides zugleich: das Signal ist unbestätigt – es schwankt erst, wenn das Auto fährt, und wechselte in genau einer Aufnahme das Vorzeichen mit der Kurvenrichtung. Und es ist unkalibriert: sein Maßstab wird selbst nachgeführt, weil die wirkliche Amplitude unbekannt ist. Deshalb hängt die Stärke davon ab, welchen größten Gierwert die Sitzung bisher gesehen hat. Der Knopf „Drift-Probe“ unter „Querablage messen“ misst, ob das Signal bei gerader Vollgasfahrt überhaupt ausschlägt.":
+      "How hard the car steers against a slide, measured from the rotation signal in byte 3 of the notifications. 50 per cent is the default that was asked for. What is uncertain about it, and it is two things at once: the signal is unconfirmed – it only varies once the car is moving, and flipped sign with cornering direction in exactly one recording. And it is uncalibrated: its scale is self-adjusting because the real amplitude is unknown. So the strength depends on the largest yaw value the session has seen so far. The “Drift probe” button under “Measure lateral offset” measures whether the signal moves at all under straight full throttle.",
+    "Rennen":
+      "Race",
+    "Regenreifen: setzt Regen ein, kommt jeder Ghost so früh wie möglich herein und rüstet um – und beim Wechsel zurück auf trocken genauso. Solange die falschen Reifen drauf sind, fährt er langsamer: 0,64 gegen 0,85 mit Regenreifen im Regen, abgeleitet aus derselben Grifftabelle, die dein Auto benutzt. Bei leichtem Regen ist der Slick noch vorn – der Nachteil kommt mit dem Wasser, nicht mit der Meldung. Ist dieser Schalter aus, können Ghosts keine falschen Reifen haben, sonst kröchen sie nach dem ersten Regen ohne Ausweg.":
+      "Rain tyres: when rain sets in, every ghost comes in as early as it can and changes – and the same on a change back to dry. While it is on the wrong tyres it drives slower: 0.64 against 0.85 on rain tyres in the rain, derived from the same grip table your own car uses. In light rain the slick is still ahead – the penalty arrives with the water, not with the announcement. With this switch off ghosts cannot have the wrong tyres, because otherwise they would crawl after the first shower with no way out.",
+    "Ein Ghost fährt auf der Start/Ziel-Kachel rechts an den Rand, bleibt ein paar Sekunden stehen und fährt wieder los. Die Anfahrt beginnt schon auf der Kachel davor, im Formationstempo – ein Auto, das mit Renntempo über die Linie kommt, braucht eine Kachel zum Verzögern. Es gibt vier Boxen hintereinander: Platz 1 auf der Start/Ziel-Kachel, Platz 2 eine Kachel später und so weiter. Wer gleichzeitig fällig ist, nimmt den nächsten freien und hält eine Kachel dahinter; wer als Fünfter kommt, wartet, bis eine frei wird. Auf dem Weg zur eigenen Box fährt er am Gegenrand vorbei – sonst würde er dem Stehenden ins Heck fahren. Gemessen bei einem Wetterwechsel mit sechs Ghosts: vier stehen gleichzeitig, keine Doppelbelegung, und in 555 Takten Vorbeifahrt kein einziger Takt mit rechter Anforderung. Vier Kacheln sind 1,72 m – mehr Boxen würden auf einem kleinen Layout einen merklichen Teil der Bahn füllen.":
+      "A ghost pulls over to the right-hand edge on the start/finish tile, stands there for a few seconds and drives off again. The approach begins on the tile before it, at formation pace – a car crossing the line at racing speed needs a tile to slow down. There are four boxes in a row: box 1 on the start/finish tile, box 2 one tile later and so on. Whoever is due at the same moment takes the next free one and stops a tile further along; a fifth car waits until one frees up. On the way to its own box it passes along the far edge – otherwise it would drive into the back of the car standing there. Measured on a weather change with six ghosts: four stand at once, no box taken twice, and in 555 ticks of passing not one tick asked for the right-hand edge. Four tiles are 1.72 m – more boxes would fill a noticeable part of a small layout.",
+    "Ghost: Boxenstopp":
+      "Ghost: pit stop",
+    "Ghost: Boxenstopp im freien Fahren":
+      "Ghost: pit stop when free running",
+    "Ghost: Boxenstopp-Länge":
+      "Ghost: pit stop length",
+    "Ghost: Boxenstopp frühestens nach":
+      "Ghost: pit stop no sooner than",
+    "Ghost: Boxenstopp spätestens nach":
+      "Ghost: pit stop no later than",
+    "Die anderen weichen auf der Boxenkachel nach links aus, und ihre Querlage ist dort nach rechts gesperrt – das Ausweichen allein wäre nur die weiche Hälfte, die Sperre ist die Zusage. Dein eigenes Auto ist nicht steuerbar; es gibt eine Meldung und den Punkt auf der Karte, mehr geht nicht.":
+      "On the pit tile the others move to the left, and their lateral position is barred from going right there – the yielding alone would only be the soft half, the bar is the guarantee. Your own car cannot be steered; there is a message and the dot on the map, and that is all there is.",
+    "Was der Stopp nicht kann: wissen, wo der Rand ist. Das Auto meldet seine Querlage nicht, voller Ausschlag ist ein Befehl und keine Messung. Die Zusage ist nicht die Randlage, sondern dass die anderen auf der anderen Seite sind.":
+      "What the stop cannot do: know where the edge is. The car does not report its lateral position, and full lock is a command, not a measurement. The guarantee is not the edge itself but that the others are on the other side.",
+    "Ob auch außerhalb eines Rennens gepittet wird. Beim Losfahren aus der Garage stellt man meist Regler ein, und ein Auto, das dabei zehn Sekunden steht, sieht nach einem Fehler aus – deshalb getrennt abschaltbar. Im Rennen und in der Rennsimulation gilt der Schalter darüber.":
+      "Whether pit stops also happen outside a race. When you set cars off from the garage you are usually adjusting sliders, and a car that stands still for ten seconds while you do looks like a fault – hence a separate switch. In a race and in the race simulation the switch above applies.",
+    "Wie lange ein Ghost steht. 5 s ist die Mitte des Bandes und keine Messung – wie lang ein Boxenstopp aussehen soll, ist Geschmack. Der eigene Boxenstopp braucht zum Vergleich 4 s für die Reifen und mindestens 3 s Standzeit, wenn er vorgeschrieben ist.":
+      "How long a ghost stands still. 5 s is the middle of the range and not a measurement – how long a pit stop should look is a matter of taste. For comparison, your own pit stop needs 4 s for the tyres and at least 3 s of standing time when it is mandatory.",
+    "Die untere Grenze des Bandes, aus dem jeder Ghost seine nächste Fälligkeit zieht – in Runden, nach jedem Stopp neu gezogen. Dieselbe Bauform wie der Wetterwechsel, damit nicht alle im Gleichschritt pitten. Schiebt man diesen Regler über den nächsten, geht der mit.":
+      "The lower bound of the range each ghost draws its next due date from – in laps, drawn afresh after every stop. The same shape as the weather change, so that they do not all pit in lockstep. Push this slider past the next one and that one moves with it.",
+    "Die obere Grenze desselben Bandes, in Runden. Bei gleichen Werten pittet jeder Ghost genau nach dieser Rundenzahl – dann ist nichts mehr zufällig, und das ist eine gültige Einstellung. Nicht an den Reifenverschleiß gebunden: Ghosts haben keinen, ihre Motoren werden ohne Reifen- und Tankmodell gebaut.":
+      "The upper bound of the same range, in laps. With both set alike every ghost pits after exactly that many laps – nothing is random then, and that is a valid setting. Not tied to tyre wear: ghosts have none, their engines are built without a tyre or fuel model.",
+    "Ein Verfolger, der 0,9 s dicht dran hängt, setzt an: erst zur Seite, dann Schub, dann vorne wieder einordnen. Der Vorausfahrende weicht zur anderen Seite aus – zwei Autos auf 25 cm Bahnbreite brauchen beide Hälften. Klappt es nach 5 s nicht, bricht er ab und wartet 6 s; ohne diesen Abbruch klebte der Verfolger neben dem anderen, bis die Uhr ablief, und genau dort berühren sie sich.":
+      "A chaser hanging on within 0.9 s has a go: first out to the side, then the extra push, then tuck back in ahead. The car in front moves the other way – two cars on 25 cm of track width need both halves. If it has not worked after 5 s he backs out and waits 6 s; without that exit the chaser stuck alongside until the clock ran out, and that is exactly where they touch.",
+    "Seit v0.5.44 auch in Kurven, und die Erlaubnis hängt nicht an der Kachelart, sondern am freien Platz: 1 minus dem Anteil des Anschlags, den die Ideallinie hier schon belegt. Unter 30 % passt kein zweites Auto daneben, und die Wahrscheinlichkeit wächst mit dem Platz. Gemessen in 1500 Takten: bei 0,70 Platz 34 Versuche, bei 0,14 keiner – egal ob Gerade oder Haarnadel. Auf deiner Vorgabestrecke haben 11 von 13 Kacheln genug Platz. Nur in eine Haarnadel hinein wird nicht angesetzt: ein Versuch dauert bis zu 5 s, eine Kachel rund 0,7 – wer davor ausholt, ist beim Einlenken noch daneben.":
+      "Since v0.5.44 in corners too, and permission does not depend on the kind of tile but on the free room: 1 minus the share of full lock the racing line already uses here. Below 30% no second car fits alongside, and the probability grows with the room. Measured over 1500 ticks: at 0.70 of room 34 attempts, at 0.14 none – straight or hairpin alike. On your default track 11 of 13 tiles have enough room. Only into a hairpin is nothing attempted: an attempt lasts up to 5 s and a tile about 0.7 – whoever pulls out before one is still alongside at the turn-in.",
+    "Die Seite ist die, auf der der andere nicht ist. Vorher war es die andere Seite als die eigene Linie; auf einer Geraden ist das dasselbe, in einer Kurve nicht. Wer viel Bahnbreite für die Ideallinie ausgibt (Regler „Kurven öffnen“), lässt weniger für Überholmanöver übrig – das ist derselbe Platz.":
+      "The side is the one the other car is not on. Before it was the side opposite one's own line; on a straight that is the same thing, in a corner it is not. Spend a lot of track width on the racing line (the „open up the corners“ slider) and less is left for overtaking – it is the same room.",
+    "Wie weit außen eine Kurve angefahren und verlassen wird und wie tief der Scheitel innen liegt, als Anteil des Weges zum Rand. Seit v0.5.43 ist das eine Schranke für die Optimierung und kein Nachlauf mehr: die Suche darf alles, was diese Form einhält, und findet darin das schnellste. Vorher wurde die fertige Linie hinterher nach außen geschoben – das kostete gemessen rund vier Sekunden Modellzeit, ohne dass die Zielfunktion davon wusste.":
+      "How far out a corner is entered and left, and how deep the apex sits on the inside, as a fraction of the way to the edge. Since v0.5.43 this is a constraint on the optimisation and no longer a post-pass: the search may do anything that keeps this shape, and finds the fastest within it. Before, the finished line was pushed outward afterwards – measured, that cost about four seconds of model time without the objective knowing about it.",
+    "Bei 0 entscheidet die Zielfunktion allein, und dann kommt fast die Mittellinie heraus. Das ist kein Fehler, sondern die Geometrie einer Carrera-Kurve: sie ist ein Bogen mit festem Radius von 37 cm. Nachgemessen an einer reinen Rechtskurve, mittlerer Bahnradius bei konstantem Versatz: Mittellinie 34,7 Einheiten, 4 nach außen gibt 38,8, 4 nach innen nur 30,7. Auf einer echten Strecke wählt man mit dem Scheitel den Radius – hier ist er vorgegeben, und Eintauchen macht ihn kleiner. Die zeitschnellste Linie hat deshalb gar keinen Scheitel.":
+      "At 0 the objective decides alone, and what comes out is almost the centreline. That is not a fault but the geometry of a Carrera corner: it is an arc of fixed 37 cm radius. Measured on a pure right-hander, mean path radius at a constant offset: centreline 34.7 units, 4 to the outside gives 38.8, 4 to the inside only 30.7. On a real circuit you choose the radius by picking the apex – here it is given, and diving in makes it smaller. The quickest line therefore has no apex at all.",
+    "Der Preis, gemessen für Late Apex gegen die Mittellinie: bei 0 ist die Linie 1,0 bis 1,5 % schneller und nutzt 7 % der Breite; bei 0,4 kostet sie 0,7 bis 1,9 % und nutzt 33 bis 48 %; bei 0,8 kostet sie 4,9 bis 5,3 % und nutzt 68 bis 91 %. Wer eine Linie sehen will, die aussieht wie eine Ideallinie, bezahlt sie hier – und die Modellzeit in der Vorschau nennt den Betrag.":
+      "The price, measured for late apex against the centreline: at 0 the line is 1.0 to 1.5% faster and uses 7% of the width; at 0.4 it costs 0.7 to 1.9% and uses 33 to 48%; at 0.8 it costs 4.9 to 5.3% and uses 68 to 91%. If you want a line that looks like a racing line, this is where you pay for it – and the model time in the preview names the amount.",
+    "Die Wirkung skaliert mit der Bogenlänge des Kurvenzuges: eine einzelne 60-Grad-Kachel hat 36 von 80 Einheiten Bezugslänge und bekommt 45 % davon, eine Haarnadel den ganzen Wert. Ohne das verlangte der Regler auf einer einzelnen Kachel über 12 cm Querbewegung innerhalb von 43 cm Weg. An einer Schikane fällt die Schranke ganz weg: dort sind Ausgang und Eingang derselbe Punkt, und der kann nicht für beide Kurven außen sein.":
+      "The effect scales with the arc length of the run of corner tiles: a single 60-degree tile has 36 of 80 units of reference length and gets 45% of it, a hairpin the full value. Without that, on a single tile the slider demanded over 12 cm of lateral movement within 43 cm of travel. At a chicane the constraint drops entirely: there the exit and the entry are the same point, and it cannot be on the outside for both corners.",
+    "Alle drei benutzen seit v0.5.43 dieselbe Form – vier Zahlen je Kurve: Eingang, Scheitel, Ausgang und Scheitellage, dazwischen eine Kubik in der Weglänge, auf Geraden eine Gerade. Die Wahl ist damit eine Wahl der Zielfunktion und nicht eine zwischen zwei Verfahren mit unterschiedlicher Glattheit.":
+      "Since v0.5.43 all three use the same shape – four numbers per corner: entry, apex, exit and apex position, with a cubic in arc length between them and a straight line on straights. The choice is therefore a choice of objective, and not one between two methods of differing smoothness.",
+    "Krümmung minimiert die Krümmungsenergie und braucht keine Annahme über Beschleunigungen. Rundenzeit minimiert die Modellzeit, Scheitel frei. Late Apex minimiert dieselbe Zeit, hält den Scheitel aber hinter 55 % des Kurvenwegs – eine engere Suche kann eine Zeit nur verfehlen, nie verbessern, der Unterschied ist also der Preis der späten Linie.":
+      "Curvature minimises curvature energy and needs no assumption about accelerations. Lap time minimises the model time with a free apex. Late apex minimises the same time but keeps the apex beyond 55% of the corner's length – a narrower search can only miss a time, never improve on it, so the difference is the price of the late line.",
+    "Vorher optimierten die ersten zwei jeden der rund 180 Abtastpunkte frei und legten dabei Ausschläge hin, die ein Fahrer nie fährt: gemessen sprang die Querlage in Kurven um bis zu 16,0 Einheiten von 8,6 möglichen zwischen zwei benachbarten Punkten. Jetzt sind es höchstens 2,4.":
+      "Before, the first two optimised each of the roughly 180 sample points freely and put in excursions no driver would ever take: measured, the lateral position jumped by up to 16.0 units of 8.6 possible between two neighbouring points in corners. Now it is at most 2.4.",
+    "Die Zeiten kommen aus den eingestellten Fahrwerten – Spitze, Zug und Bremse aus der aktiven Simulationsklasse; nur die Querbeschleunigung bleibt eine Annahme, weil kein Byte sie meldet. Ob es auf dem Teppich stimmt, sagen Rundenzeit und Abgänge.":
+      "The times come from the driving figures in force – top speed, traction and braking from the active simulation class; only lateral acceleration stays an assumption, because no byte reports it. Whether it holds on the carpet is answered by lap times and departures.",
+    "{m} ist gewählt. Modellzeit und genutzter Versatz:":
+      "{m} is selected. Model time and offset used:",
+    "Die Zeiten kommen aus den eingestellten Fahrwerten; die Querbeschleunigung ist darin eine Annahme.":
+      "The times come from the driving figures in force; lateral acceleration is an assumption within them.",
+    "Lenkdämpfung":
+      "Steering damping",
+    "sofort":
+      "instant",
+    "Wie lange das Servo von der Mittelstellung bis zum vollen aktuell möglichen Ausschlag braucht. Das ist nicht die Lenkwinkelbegrenzung darüber – die sagt, wie weit; diese sagt, wie schnell.":
+      "How long the servo takes from centre to the full deflection currently available. This is not the steering-angle limit above it – that one says how far, this one says how fast.",
+    "0 heißt sofort. Am Lenkrad und an der RC-Funke ist das richtig: dort gibt die Hand die Rate vor, und eine zweite Begrenzung dahinter fühlt sich wie Verzögerung an. Am Gamepad ist ein Daumen in etwa 150 ms von der Mitte am Anschlag, und ohne Dämpfung wird daraus ein Sprung am Servo.":
+      "0 means instant. On a wheel or an RC transmitter that is right: there the hand sets the rate, and a second limit behind it feels like lag. On a gamepad a thumb goes from centre to the stop in about 150 ms, and without damping that becomes a jump at the servo.",
+    "83 ms ist die Vorgabe und nicht gewählt, sondern der bisherige Wert nachgerechnet: 6,0 Anschläge je Sekunde mal dem kalibrierten Lenkansprechen von 200 % sind 12 je Sekunde. Bis v0.5.40 hing die Zeit zusätzlich am Lenkansprechen – wer es auf 240 % stellte, machte unangekündigt auch die Lenkung schneller, 69 statt 83 ms. Jetzt macht jeder der beiden Regler genau eine Sache.":
+      "83 ms is the default, and it is not chosen but the previous value worked out: 6.0 full locks per second times the calibrated steering response of 200% is 12 per second. Up to v0.5.40 the time also depended on the steering response – setting it to 240% silently made the steering faster too, 69 instead of 83 ms. Now each of the two sliders does exactly one thing.",
+    "Ein Fahrzeugwechsel weiter oben setzt diesen Regler mit: das Trägheitsmoment ist die einzige Stelle, an der sich ein leichteres Auto zeigen kann, und es ergibt 56 ms beim Formelwagen bis 125 ms beim Frontmotor-GT3. Danach kannst du frei darüber verfügen.":
+      "Changing the vehicle above sets this slider too: the moment of inertia is the only place a lighter car can show itself, and it gives 56 ms for the formula car up to 125 ms for the front-engined GT3. After that it is yours to set.",
+    "Ghost: Kurven öffnen":
+      "Ghost: open up the corners",
+    "Die Vorgabe stand bis v0.5.39 auf 1,2 – das war für die alte Linie kalibriert, die an einer Bahnseite klebte. Seit die Linie von außen anfährt und nach außen ausfährt, verlangt sie bis zu 2,9 Bahnbreiten je Sekunde; gemessen kappte 1,2 die Spitze des Lenkbytes auf 67 von 127, während 2,0 auf 95 kommt. Weniger sieht ruhiger aus und folgt der gezeichneten Linie schlechter – hier liegt der Tausch.":
+      "Up to v0.5.39 the default was 1.2 – calibrated for the old line, which clung to one side of the track. Now that the line enters and leaves corners from the outside it asks for up to 2.9 track widths per second; measured, 1.2 clipped the peak of the steering byte to 67 of 127, whereas 2.0 reaches 95. Less looks calmer and follows the drawn line less well – that is the trade.",
+    "Ghost: so fährt das gewählte Modell":
+      "Ghost: how the chosen model drives",
+    "Die Linie, die aus der Wahl darüber folgt, mit der Bremsampel: grün freie Fahrt, rot voll anbremsen. Es ist dieselbe Linie, die der Streckeneditor zeichnet und die die Ghosts fahren – alle drei gehen durch denselben Aufruf.":
+      "The line that follows from the choice above, with the braking colours: green means clear, red means brake hard. It is the same line the track editor draws and the ghosts drive – all three go through the same call.",
+    "Ohne eingetragene Strecke wird auf SR3GLR2GR2G2 gefahren – geliehen, der Streckeneditor bleibt leer.":
+      "With no track entered, the race runs on SR3GLR2GR2G2 – borrowed, the track editor stays empty.",
+    "Keine Strecke eingetragen.":
+      "No track entered.",
+    "Gezeigt ist die Vorgabestrecke; im Editor steht noch keine.":
+      "Shown is the default track; the editor has none yet.",
+    "Ghost: Kurvenausgang öffnen":
+      "Ghost: open up the corner exit",
+    "Wie weit sich ein Ghost am Kurvenausgang nach außen tragen lässt. Die Krümmungsminimierung kennt das nicht: sie sucht den kürzesten glatten Weg, und bei zwei gleichsinnigen Kurven auf 25 cm Bahnbreite liegt der innen. Gemessen blieb die Linie hinter einer Haarnadel bei 68 % nach innen stehen. Ein Fahrer fährt weit heraus, weil er beschleunigt und dafür Breite braucht – das ist eine Längsgröße, und die kennt der Glätter nicht.":
+      "How far a ghost lets itself be carried out on corner exit. Minimum-curvature smoothing knows nothing of this: it looks for the shortest smooth path, and with two same-handed corners on 25 cm of track width that path runs on the inside. Measured, the line stayed 68% toward the inside after a hairpin. A driver runs wide because he is accelerating and needs the width for it – that is a longitudinal quantity, and the smoother does not know about it.",
+    "Scheitel und Ausgang kommen aus dem Layout: der Scheitel ist der Punkt größter Linienkrümmung im Kurvenlauf, der Ausgang seine letzte Kachelgrenze. Nur die Stärke und die Auslauflänge von einer Kachel sind gewählt – deshalb dieser Regler.":
+      "Apex and exit come from the layout: the apex is the point of greatest line curvature within the run of corner tiles, the exit its last tile boundary. Only the strength and the run-out length of one tile are chosen – hence this slider.",
+    "Ghost: Querträgheit":
+      "Ghost: lateral inertia",
+    "Wie schnell ein Ghost seine Querlage ändern darf, in Bahnbreiten je Sekunde. Die Ideallinie ist eine Funktion des Ortes und nicht der Zeit – beim Wechsel des Kacheltyps ändert sich der Sollwert in einem Takt um bis zu 0,4 der Bahnbreite, und ein Servo, der das in einem Takt nachführt, sieht aus wie ein Ruck.":
+      "How fast a ghost may change its lateral position, in track widths per second. The racing line is a function of place and not of time – at a change of tile type the target shifts by up to 0.4 of the track width in a single tick, and a servo that follows that in one tick looks like a jerk.",
+    "Eine Ratenbegrenzung und kein Tiefpass: sie hat eine feste Höchstgeschwindigkeit und erreicht den Sollwert exakt, während ein Tiefpass sich ihm nur nähert und dabei umso schneller läuft, je weiter er weg ist. 2,0 sind bei 25 cm Bahnbreite 50 cm/s.":
+      "A rate limit and not a low-pass: it has a fixed top speed and reaches the target exactly, whereas a low-pass only approaches it and runs faster the further away it is. On 25 cm of track width 2.0 is 50 cm/s.",
+    "Ghost: Brems- und Gasverhalten":
+      "Ghost: braking and throttle behaviour",
+    "Wie entschlossen ein Ghost Gas gibt und bremst. Ghost und Fahrer gehen durch dasselbe Fahrzeugmodell, bekommen ihr Gas aber aus verschiedenen Quellen: der Fahrer drückt einen Trigger und ist sofort am Anschlag, der Ghost hat einen Regler auf ein Zieltempo, dessen Ausgang ratenbegrenzt ist.":
+      "How decisively a ghost applies throttle and brake. Ghost and driver go through the same vehicle model but get their throttle from different sources: the driver pulls a trigger and is at full lock at once, the ghost has a controller on a target speed whose output is rate-limited.",
+    "Nachrechenbar: bei 1,0 braucht voller Gasbefehl 0,63 s, ein Trigger etwa 0,15 s – der Ghost ist also rund viermal langsamer im Aufbau, und genau das sieht man am Kurvenausgang. Bei 4,0 liegt er bei 0,16 s und damit dort, wo ein Trigger liegt.":
+      "Checkable: at 1.0 a full throttle command takes 0.63 s, a trigger about 0.15 s – so the ghost builds up roughly four times slower, and that is exactly what you see on corner exit. At 4.0 it is at 0.16 s and thus where a trigger is.",
+    "1,0 ist der gemessene, stabile Zustand: alle Tempoprüfungen dieser App sind damit gefahren. Die Ratenbegrenzung ist auch der Schutz davor, dass ein zurückgestelltes Auto aus der Hand gerissen wird – wer sie hochdreht, nimmt diesen Schutz zurück.":
+      "1.0 is the measured, stable state: every pace test in this app was run with it. The rate limit is also what stops a car you have just put back from being ripped out of your hand – turning it up gives that protection away.",
+    "Rennen simulieren":
+      "Simulate a race",
+    "Was hier passiert":
+      "What happens here",
+    "Die eingestellten Ghosts fahren die eingetragene Strecke – mit derselben Logik, die sie am echten Auto benutzen: Ideallinie, Kurvendrosselung, Querversatz, Staffel und die zugeschalteten Zutaten. Statt Funkbefehle bekommt ein Fahrzeugmodell das Gas, und aus seinem Tempo wird die Position auf der Bahn. Man sieht das Rennen laufen, nicht sein Ergebnis.":
+      "The ghosts as configured drive the track you have entered – with the same logic they use on the real car: racing line, corner throttling, lateral offset, field grading and whichever ingredients are switched on. Instead of radio commands a vehicle model gets the throttle, and its speed becomes the position on the track. You watch the race run, not its result.",
+    "Was das nicht ersetzt: Reibung, Staub, ein Auto, das aus der Kurve fliegt. Wer hier vorne ist, ist es im Modell – nicht auf dem Teppich.":
+      "What it does not replace: friction, dust, a car flying out of a corner. Whoever leads here leads in the model – not on the carpet.",
+    "Anzahl Ghosts":
+      "Number of ghosts",
+    "Anzahl Runden":
+      "Number of laps",
+    "Doppelte Geschwindigkeit":
+      "Double speed",
+    "Spielt die Simulation doppelt so schnell ab. Die Rundenzeiten bleiben die des Rennens – abgespielt wird schneller, gefahren nicht.":
+      "Plays the simulation back at twice the speed. The lap times stay those of the race – the playback is faster, the driving is not.",
+    "Simulation starten":
+      "Start simulation",
+    "Rennwürze: einzeln zuschaltbar":
+      "Race spice: switchable one by one",
+    "Fünf Zutaten, die aus gleichmäßigem Fahren ein Rennen machen sollen. Jede einzeln, damit man sieht, welche was tut – als ein Regler für alle war nicht zu unterscheiden, woran eine Beobachtung lag. Alle experimentell: keine ist am Auto gemessen, alle sind gewählt.":
+      "Five ingredients meant to turn even lapping into a race. Each one separately, so you can see which does what – as a single slider for all of them there was no telling what an observation was down to. All experimental: none is measured on the car, all are chosen.",
+    "Überholmanöver":
+      "Overtaking manoeuvre",
+    "Abstand halten":
+      "Keeping a gap",
+    "Ein Ghost lupft das Gas, wenn er zu schnell auflaufen würde. Gerechnet als Zeitlücke und nicht als fester Abstand: eine Kachel bei gleichem Tempo ist unbegrenzt viel Zeit, eine Kachel bei schneller Annäherung ist eine Sekunde bis zur Berührung. Ohne das fahren sie Stoßstange an Stoßstange. Während eines eigenen Überholmanövers gilt es nicht, sonst käme niemand vorbei.":
+      "A ghost lifts off when it would run up too fast. Reckoned as a time gap and not as a fixed distance: one tile at matched pace is unlimited time, one tile while closing fast is one second to contact. Without it they run bumper to bumper. It does not apply during a move of their own, otherwise nobody would ever get past.",
+    "Jedes Auto fährt ein etwas anderes Dauertempo, und das verschiebt sich langsam – ein Zufallslauf im Band von ±7,5 %, alle 2,6 s einen Schritt weiter. Damit ist nicht jede Runde gleich, und das Feld sortiert sich von selbst um.":
+      "Each car holds a slightly different steady pace, and it drifts slowly – a random walk within a band of ±7.5%, one step every 2.6 s. That way no two laps are alike, and the field reorders itself.",
+    "Fahrfehler":
+      "Driving errors",
+    "Beim Anbremsen einer Kurve verbremst sich ein Ghost gelegentlich: 5,5 % Wahrscheinlichkeit je angebremster Kurve, dann 0,4 bis 0,9 s mit 45 % weniger Tempo. Gewürfelt wird einmal je Kurve und nicht je Takt – sonst hängt die Fehlerrate an der Rechenfrequenz statt am Rennen.":
+      "Braking into a corner, a ghost occasionally locks up: 5.5% chance per corner braked for, then 0.4 to 0.9 s at 45% less pace. The dice are rolled once per corner and not per tick – otherwise the error rate would depend on the compute frequency rather than on the race.",
+    "Windschatten":
+      "Slipstream",
+    "Wer auf einer Geraden dicht hinter einem anderen hängt, fährt bis zu 11 % schneller, linear abnehmend bis 1,3 Kacheln Abstand. Nur auf der Geraden: in der Kurve wäre es Abtriebsverlust, also das Gegenteil, und das bildet die Physik der Ghosts nicht ab.":
+      "Sitting close behind another car on a straight is worth up to 11% more pace, falling off linearly to 1.3 tiles of gap. On straights only: in a corner it would be a loss of downforce, so the opposite, and the ghosts' physics does not model that.",
+    "Autos nebeneinander gehen auseinander, gleichmäßig über die Bahnbreite: bei zwei nach links und rechts, bei drei bleibt das mittlere mittig, bei vier auf Viertel. Vorher gab es nur zwei Seiten, und dann standen sich bei vier Autos zwei Paare weiter im Weg. Beim Überholen weicht auch der Vorausfahrende aus, zur anderen Seite. Zwei Autos auf 25 cm Bahnbreite brauchen beide Hälften. Dieser Regler bestimmt auch, wie weit der Angreifer zur Seite geht: das ist ein Ausweichen und keine Linienwahl, hängt also nicht an der Ideallinie. Über 100 Prozent geht die Anforderung bis an den vollen Anschlag – die Mitschnitte zeigen, dass das Auto die Schiene auch dort noch liest.":
+      "Cars alongside each other move apart, spread evenly across the track width: with two, to the left and right; with three, the middle one stays centred; with four, onto quarters. Before there were only two sides, and then with four cars two pairs still stood in each other's way. When overtaking, the car in front also moves aside, to the other side. Two cars on 25 cm of track width need both halves. This slider also sets how far the attacker moves aside: that is an evasion and not a choice of line, so it does not depend on the racing line. Above 100 per cent the request goes to the full lock – the recordings show the car still reads the rail even there.",
+    "Trocken, Regen – oder wechselhaft: dann beginnt es trocken, und alle 2 bis 6 Minuten fällt ein Schauer von 1 bis 3 Minuten. Beide Zeiten werden je Phase neu gezogen. Bei einem kurzen Rennen kann es sein, dass man keinen Schauer sieht – ein Schauer hängt nicht daran, wie viele Runden gefahren werden.":
+      "Dry, rain – or changeable: it then starts dry, and every 2 to 6 minutes a shower falls for 1 to 3 minutes. Both durations are drawn afresh each phase. In a short race you may well see no shower at all – a shower does not depend on how many laps are run.",
+    "Wechselt einmal zu einem zufälligen Zeitpunkt. Bei „wechselhaft“ bleibt dieser Schalter ohne Wirkung: dort wechselt es ohnehin laufend, und ein zusätzlicher Wechsel mitten im Schauer würde die Phasen durcheinander bringen.":
+      "Changes once at a random moment. With “changeable” this switch has no effect: it changes constantly there anyway, and an extra change in the middle of a shower would confuse the phases.",
+    "Wechselhaft":
+      "Changeable",
+    "Es trocknet ab":
+      "It is drying out",
+    "Es fängt an zu regnen":
+      "It is starting to rain",
+    "Ghost: Feld zusammenhalten":
+      "Ghost: keep the field together",
+    "Gestaffelt über den ganzen Platz: der Erste fährt um den Abschlag langsamer, der Letzte um denselben Betrag schneller, die Feldmitte unverändert. Damit bleibt das mittlere Tempo gleich – würde nur gebremst, wäre dies in Wahrheit ein Schalter, der alle langsamer macht. Vorher wirkte es nur auf den Erstplatzierten, und dann waren die ersten beiden beieinander und der Rest blieb, wo er war. Wirkt auch ohne Rennen, aber erst ab zwei Ghosts: mit einem einzigen ist dieser eine gleichzeitig Erster und Letzter.":
+      "Graded across the whole order: the leader drives slower by the margin, the last car faster by the same amount, the middle of the field unchanged. That keeps the average pace the same \u2013 if it only braked, this would in truth be a switch that makes everyone slower. Before, it acted on the leader alone, and then the front two were together and the rest stayed where they were. Works outside a race too, but only from two ghosts up: with a single one, that one is first and last at once.",
+    "Ghost: Stärke der Staffel":
+      "Ghost: strength of the grading",
+    "Um wie viel der Erste langsamer und der Letzte schneller fährt.":
+      "By how much the first drives slower and the last faster.",
+    "Ab Werk aus. Sie greift an sechs Stellen gleichzeitig ins Tempo ein, und solange Ortung und Überholen nicht sauber sind, ist sie die Zutat, die jede Beobachtung verrauscht – wer sie einschaltet, weiß danach nicht, ob das Gesehene an ihr lag.":
+      "Off by default. It acts on pace in six places at once, and while localisation and overtaking are not clean, it is the ingredient that adds noise to every observation \u2013 switch it on and you will not know afterwards whether what you saw was down to it.",
+    "Boxenstopp einleiten":
+      "Call a pit stop",
+    "Reifen wechseln":
+      "Change tyres",
+    "Reifenwahl":
+      "Tyre choice",
+    "Tanken":
+      "Refuel",
+    "Reparieren":
+      "Repair",
+    "Arbeit":
+      "working",
+    "Arbeit läuft":
+      "work in progress",
+    "fertig":
+      "done",
+    "Sim aus":
+      "sim off",
+    "ja":
+      "yes",
+    "nein":
+      "no",
+    "weich":
+      "soft",
+    "mittel":
+      "medium",
+    "hart":
+      "hard",
+    "Reifen montiert":
+      "Tyres fitted",
+    "kein Rennen":
+      "no race",
+    "Start":
+      "start",
+    "letzte Runde":
+      "final lap",
+    "läuft":
+      "running",
+    "Noch keine Runde gefahren":
+      "No lap driven yet",
+    "Wie stark sich weich, mittel, hart und Regen unterscheiden. Der Regler bewegt alle Werte zugleich – Grip und Verschleiß – und zwar als Abstand zum Mittelreifen. Bei 0 rechnen alle drei Slicks wie mittel, bei 100 Prozent gilt die Tabelle, darüber ist der Unterschied größer als im Rennsport. Steht die Reifensimulation darüber auf aus, fahren ohnehin alle den Mittelreifen, egal was hier steht.":
+      "How far apart soft, medium, hard and wet are. The slider moves every value at once – grip and wear – as a distance from the medium tyre. At 0 all three slicks compute as medium, at 100 per cent the table applies, above that the spread is wider than in real racing. With the tyre simulation above switched off everyone runs the medium tyre anyway, whatever this says.",
+    "Mischungsunterschied":
+      "Compound spread",
+    "Kalt nach Start und Boxenstopp, abgenutzt nach hartem Stint. Links = aus. Bis v0.5.17 stand der Regler beim Laden auf 0 und das Modell trotzdem auf 200 Prozent – ein einziges Antippen ließ das Fahrverhalten springen. Beide sagen jetzt dasselbe, und die Vorgabe ist das volle Modell.":
+      "Cold after a start and a pit stop, worn after a hard stint. Left = off. Up to v0.5.17 the slider read 0 on load while the model still ran at 200 per cent – a single nudge made the handling jump. Both now say the same thing, and the default is the full model.",
+    "Einführungsrunde: noch eine Runde": "Formation lap: one more lap",
     "Frei, volle Fahrt!": "Clear, full speed!",
-    "Einführungsrunde mit Boxengassen-Tempo. Dein Auto fährt sie selbst, genau wie die Ghosts: es rollt mit an, schlängelt zum Reifenwärmen und hält die Seite seines Startplatzes, ohne dass du etwas anfassen musst – die Bremse gilt trotzdem, damit du anhalten kannst, wenn vor dir jemand steht. Im Cockpit steht dann „Einführungsrunde · Autopilot“. Frei ist es beim ersten Überfahren von Start/Ziel, von wem auch immer – ein Ghost darf es sein. Danach fährt jeder nach seinen Einstellungen, und die Lenkung ist wieder deine. Nur in der Stellung „Auf der Bahn“: im Ausdruck-Modus hält sich das Auto nicht selbst auf der Bahn, und ein Autopilot ohne Querregelung würde es in die Bande fahren.": "Formation lap at pit-lane pace. Your car drives it itself, exactly like the ghosts: it rolls away with the field, weaves to warm the tyres and holds the side of its grid slot without you touching anything – the brake still works, so you can stop if someone is stranded ahead of you. The cockpit then reads “Formation lap · Autopilot”. It is released the first time anyone crosses start/finish – a ghost may do it. After that everyone drives to their own settings and the steering is yours again. Only in the “On the track” position: in printout mode the car does not hold the track by itself, and an autopilot without lateral control would drive it into the barrier.",
+    "Einführungsrunde mit Boxengassen-Tempo. Dein Auto fährt sie selbst, genau wie die Ghosts: es rollt mit an, schlängelt zum Reifenwärmen und hält die Seite seines Startplatzes, ohne dass du etwas anfassen musst – die Bremse gilt trotzdem, damit du anhalten kannst, wenn vor dir jemand steht. Im Cockpit steht dann „Einführungsrunde · Autopilot“. Frei ist es, wenn das erste Auto Start/Ziel zum zweiten Mal überfährt – ein Ghost darf es sein. Warum zweimal: zwischen der ersten und der zweiten Überfahrt desselben Autos liegt immer eine volle Runde, egal wo es gestanden hat. Bei einer einzigen Überfahrt war die Einführungsrunde vorbei, bevor sie anfing, wenn ein Auto auf oder kurz vor dem Zielstreifen stand. Danach fährt jeder nach seinen Einstellungen, und die Lenkung ist wieder deine. Nur in der Stellung „Auf der Bahn“: im Ausdruck-Modus hält sich das Auto nicht selbst auf der Bahn, und ein Autopilot ohne Querregelung würde es in die Bande fahren.": "Formation lap at pit-lane pace. Your car drives it itself, exactly like the ghosts: it rolls away with the field, weaves to warm the tyres and holds the side of its grid slot without you touching anything – the brake still works, so you can stop if someone is stranded ahead of you. The cockpit then reads “Formation lap · Autopilot”. It is released when the first car crosses start/finish for the SECOND time – a ghost may do it. Why twice: between the first and the second crossing by the same car there is always a full lap, wherever it was standing. With a single crossing the formation lap was over before it began whenever a car sat on or just before the finish stripe. After that everyone drives to their own settings and the steering is yours again. Only in the “On the track” position: in printout mode the car does not hold the track by itself, and an autopilot without lateral control would drive it into the barrier.",
     "L1: Bahn oder Ausdruck · R1: Automatik oder von Hand · Kreuz: gelbe Flagge (1 s halten) · Select: Wetter umschalten": "L1: track or printout · R1: automatic or manual · Cross: yellow flag (hold for 1 s) · Select: switch the weather",
     "Drosselung jenseits der Fahrbahn": "Throttling off the track",
     "Meldet Byte 12 den Wert 0x00, ist das Auto neben der Bahn: dann wird das Gas auf 45 % gedeckelt. Das leichte Brummen dazu hängt allein am Schalter „Vibration“ darüber, dieser hier allein an der Drosselung – bis v0.4.55 war es eine Option mit zwei Hälften, und wer die Drosselung abschaltete, verlor auch die Rückmeldung. Wirkt nur in der Stellung „Auf der Bahn“: im Ausdruck-Modus ist der Streckensensor aus und Byte 12 stände dauernd auf 0x00.": "If byte 12 reports 0x00 the car is off the track: the throttle is then capped at 45 %. The gentle rumble that goes with it hangs on the “Vibration” switch above and this one only on the throttling – up to v0.4.55 it was one option with two halves, and switching the throttling off also cost you the feedback. Only takes effect in the “On the track” position: in printout mode the track sensor is off and byte 12 would sit at 0x00 permanently.",
@@ -1732,6 +2034,16 @@
     if (key) {
       const p = $('sub-' + key);
       if (p) p.classList.add('on');
+    }
+    // Die Linienvorschau auf der Ghost-Seite wird erst hier gezeichnet. Sie kostet rund
+    // 94 ms; sie beim Laden oder bei jedem Streckenklick mitzurechnen waere Aufwand fuer
+    // eine Karte, die niemand ansieht. HIER ist der Moment, in dem sie sichtbar wird.
+    //
+    // Ueber typeof gewaechtert und nicht ueber try: linemodellKarteZeichnen ist eine
+    // FUNKTIONSDEKLARATION in 90-ghosts.js, wird also in der gemeinsamen IIFE gehoben - der
+    // Waechter faengt nur den Fall, dass die Datei gar nicht mitgebaut wurde.
+    if (key === 'opt-ghosts' && typeof linemodellKarteZeichnen === 'function') {
+      try { linemodellKarteZeichnen(); } catch (e) { /* keine Strecke, kein Bild */ }
     }
     window.scrollTo(0, 0);
   }

@@ -167,13 +167,17 @@
         + ' m \u00b7 ' + c.yawInertia + ' kg\u00b7m\u00b2'
         + ' \u00b7 ' + t('vorn bei Gas') + ' ' + gas + '% / ' + t('bei Bremse') + ' '
         + bremse + '%'
-        + ' \u00b7 ' + t('Lenkrate') + ' ' + physEngine.config.steerRatePerS.toFixed(1);
+        + ' \u00b7 ' + t('Lenkd\u00e4mpfung') + ' ' + physEngine.config.steerDaempfungMs + ' ms';
     };
     const anwenden = (melden) => {
       const name = physEngine.applyLayout($('setting-layout').value);
       // Falls der gespeicherte Name unbekannt war, faellt applyLayout auf neutral zurueck -
       // dann muss die Auswahl mitkommen, sonst zeigt sie etwas anderes als das Modell.
       if ($('setting-layout').value !== name) $('setting-layout').value = name;
+      // applyLayout() hat gerade steerDaempfungMs aus dem Traegheitsmoment gesetzt. Der
+      // Regler muss mitkommen, sonst zeigt er einen Wert, der nicht mehr gilt - dieselbe
+      // Falle, gegen die drei Zeilen darueber die Auswahlliste nachgezogen wird.
+      steerDaempfungSetzen(physEngine.config.steerDaempfungMs, true);
       zeigeLayoutDaten();
       markDrivetrainChartsDirty();
       if (melden) {
@@ -206,9 +210,11 @@
   if ($('setting-cockpit')) {
     const ansichtAnwenden = (melden) => {
       const v = $('setting-cockpit').value;
-      // 'gt3' ist die Vorgabe und setzt KEIN Attribut: so stehen die Werte aus :root, und
-      // die Vorgabe ist damit nicht eine dritte Kopie derselben Zahlen.
-      if (v === 'gt3') document.body.removeAttribute('data-cockpit');
+      // 'omega' ist die Vorgabe und setzt KEIN Attribut: so stehen die Werte aus :root, und
+      // die Vorgabe ist damit nicht eine zweite Kopie derselben Zahlen. Sie hiess bis
+      // v0.5.16 'gt3'; unter diesem Namen steht jetzt eine ANDERE Ansicht, siehe die
+      // Ueberleitung darunter.
+      if (v === 'omega') document.body.removeAttribute('data-cockpit');
       else document.body.setAttribute('data-cockpit', v);
       if (melden) {
         const opt = $('setting-cockpit').selectedOptions[0];
@@ -216,6 +222,26 @@
       }
       try { localStorage.setItem(COCKPIT_STORE, v); } catch (e) { /* privater Modus */ }
     };
+    // ---- Ueberleitung: aus dem alten 'gt3' wird 'omega' -----------------------------
+    //
+    // Der gespeicherte Wert 'gt3' meinte bis v0.5.16 die VORGABE. Ab jetzt ist 'gt3' eine
+    // eigene Ansicht mit schwarzen Kacheln - wer die App vorher benutzt hat, bekaeme also
+    // beim naechsten Start still ein anderes Cockpit.
+    //
+    // Der Merker ist noetig und nicht Zierde: OHNE ihn liesse sich nicht unterscheiden, ob
+    // ein gespeichertes 'gt3' von frueher stammt oder eine frische Wahl der neuen Ansicht
+    // ist - und die Ueberleitung wuerde die neue Ansicht bei jedem Start wieder wegnehmen.
+    const COCKPIT_UMBENANNT = 'chc.cockpit.omega.v1';
+    try {
+      if (!localStorage.getItem(COCKPIT_UMBENANNT)) {
+        if (localStorage.getItem(COCKPIT_STORE) === 'gt3') {
+          localStorage.setItem(COCKPIT_STORE, 'omega');
+          log('Cockpit-Ansicht: die bisherige Vorgabe heisst jetzt "Omega". Unter "GT3" '
+              + 'steht seit v0.5.16 eine neue Ansicht mit schwarzen Kacheln.', 'info');
+        }
+        localStorage.setItem(COCKPIT_UMBENANNT, '1');
+      }
+    } catch (e) { /* privater Modus */ }
     try {
       const gespeichert = localStorage.getItem(COCKPIT_STORE);
       if (gespeichert) $('setting-cockpit').value = gespeichert;
@@ -288,10 +314,68 @@
     getriebeAnwenden(false, false);
   }
 
-  $('phys-enable').addEventListener('change', (e) => {
-    physicsEnabled = e.target.checked;
+  // ---- Drei Stellungen, ein abgeleiteter Schalter ------------------------------------
+  //
+  // physicsEnabled BLEIBT und wird abgeleitet: neun Stellen im Projekt verzweigen darauf
+  // (Sendeweg, Fahrschleife, Schalttasten, Motorton), und sie alle auf eine dritte
+  // Moeglichkeit umzuschreiben waere neun Gelegenheiten, eine zu vergessen.
+  //
+  // Der Drift-Modus faehrt wie "Aus" - rohe Stickstellung, keine Gaenge -, deshalb ist
+  // physicsEnabled dort false. Was ihn unterscheidet, sitzt im Sendeweg: das Gegensteuern.
+  function physModusAnwenden(melden) {
+    const v = $('phys-mode') ? $('phys-mode').value : 'physik';
+    driftModus = (v === 'drift');
+    physicsEnabled = (v === 'physik');
     physLastTime = null;
-  });
+    if (melden) {
+      log('Fahrgefuehl: ' + (v === 'physik' ? 'Physik'
+                             : v === 'drift' ? 'Drift (experimentell)'
+                             : 'Aus, rohe Stickstellung'), 'info');
+    }
+  }
+  if ($('phys-mode')) {
+    $('phys-mode').addEventListener('change', () => physModusAnwenden(true));
+    physModusAnwenden(false);
+  }
+
+  // Der Knopf ruft DIESELBE Funktion, die auch der Selbsttest benutzt: zwei Wege zu
+  // einer Messung waeren zwei Messungen.
+  if ($('drift-probe')) {
+    $('drift-probe').addEventListener('click', async () => {
+      const out = $('drift-probe-out');
+      if (!window.OMEGA_TEST || !OMEGA_TEST.driftProbe) {
+        out.textContent = 'Messstand nicht vorhanden.';
+        return;
+      }
+      out.textContent = 'Vollgas geradeaus, ohne zu lenken \u2026';
+      const r = await OMEGA_TEST.driftProbe(4000);
+      if (!r.mitTempo) {
+        out.textContent = 'Das Auto ist nicht gefahren \u2013 ohne Fahrt gibt es kein '
+                        + 'Drehsignal, Byte 3 schwankt erst dann.';
+        return;
+      }
+      const teile = [
+        r.mitTempo + ' von ' + r.punkte + ' Messpunkten mit Tempo',
+        r.geradeaus + ' davon ohne Lenkeingabe',
+        'Drehsignal geradeaus: ' + (r.gyroGeradeaus === null ? '\u2013' : r.gyroGeradeaus),
+        'insgesamt: ' + (r.gyroInsgesamt === null ? '\u2013' : r.gyroInsgesamt),
+        'Massstab: ' + (r.spanEnde === null ? '\u2013' : Math.round(r.spanEnde)),
+      ];
+      // KEIN URTEIL. Ob 0,3 viel ist, entscheidet das Auto auf dem Teppich; diese Zeile
+      // sagt nur, was gemessen wurde.
+      out.textContent = teile.join(' \u00b7 ');
+      log('Drift-Probe: ' + teile.join(' | '), 'info');
+    });
+  }
+
+  if ($('setting-countersteer')) {
+    const gegen = (v) => {
+      gegenlenkStaerke = v;
+      $('setting-countersteer-val').textContent = Math.round(v * 100) + '%';
+    };
+    $('setting-countersteer').addEventListener('input', (e) => gegen(parseFloat(e.target.value)));
+    gegen(parseFloat($('setting-countersteer').value));
+  }
 
   $('dash-head-toggle').addEventListener('change', (e) => {
     headlightsOn = e.target.checked;
@@ -360,6 +444,42 @@
   rumbleOn = $('setting-vibration').checked;
   $('setting-vibration').addEventListener('change', (e) => { rumbleOn = e.target.checked; });
 
+  // DER PRUEFKNOPF. Er ist die Antwort auf "Vibration geht nicht", und er antwortet mit
+  // einer Messung statt mit einer Vermutung: er loest einen Stoss aus und schreibt daneben,
+  // was dabei vorgefunden wurde.
+  //
+  // Warum das noetig ist: zwischen "der Nutzer spuert nichts" und "der Code hat nichts
+  // getan" liegen vier Moeglichkeiten, und sie sehen von aussen alle gleich aus - kein
+  // Controller, ein Controller ohne Ruettler, der falsche von zwei gemeldeten Zwillingen,
+  // oder ein abgeschalteter Hauptschalter. Ohne diese Zeile raet man zwischen ihnen.
+  if ($('vib-test')) {
+    $('vib-test').addEventListener('click', () => {
+      const out = $('vib-test-out');
+      const lage = vibrationLage();
+      // AUSDRUECKLICH AN padRumble VORBEI, mit einer Art, die es nicht gibt: der Test soll
+      // den WEG pruefen und nicht die Schalter. Wer den Hauptschalter aus hat, soll das als
+      // Satz lesen und nicht als Schweigen.
+      const stoss = rumbleOn ? ruettle({ duration: 260, startDelay: 0,
+                                         strongMagnitude: 0.6, weakMagnitude: 0.4 }) : 0;
+      const teile = [];
+      if (!lage.pads.length) {
+        teile.push('Kein Controller gemeldet. Eine Taste dr\u00fccken \u2013 der Browser '
+                   + 'zeigt einen Controller erst, wenn er einmal benutzt wurde.');
+      } else {
+        for (const p of lage.pads) {
+          teile.push(p.name + ' \u00b7 ' + p.mapping + ' \u00b7 '
+                     + (p.ruettler ? 'R\u00fcttler: ' + (p.arten.length ? p.arten.join(', ')
+                                                                        : 'ohne Angabe')
+                                   : 'kein R\u00fcttler'));
+        }
+      }
+      if (!lage.hauptschalter) teile.push('Hauptschalter steht AUS \u2013 nichts gesendet.');
+      else teile.push('Stoss an ' + stoss + ' von ' + lage.pads.length + ' gesendet.');
+      out.textContent = teile.join(' | ');
+      log('R\u00fcttelprobe: ' + teile.join(' | '), 'info');
+    });
+  }
+
   // Ein Kaestchen je Ausloeser. Dieselbe Bauform wie oben: AUS DEM MARKUP lesen und danach
   // auf 'change' hoeren - der fehlende Anfangsabgleich hat hier schon einmal einen toten
   // Schalter ergeben, und mit sechs Kaestchen waeren es sechs.
@@ -373,6 +493,37 @@
     RUMBLE_ARTEN[art] = el.checked;
     el.addEventListener('change', (e) => { RUMBLE_ARTEN[art] = e.target.checked; });
   });
+
+  // Die Trigger-Vibration, dieselbe Bauform: AUS DEM MARKUP lesen, dann auf 'change'.
+  if ($('vib-trigger')) {
+    triggerRumbleOn = $('vib-trigger').checked;
+    $('vib-trigger').addEventListener('change', (e) => { triggerRumbleOn = e.target.checked; });
+  }
+
+  // ---- Was kann der angeschlossene Controller wirklich? -------------------------------
+  //
+  // AUSGELESEN UND NICHT ANGENOMMEN. `vibrationActuator.effects` ist die Liste der
+  // Effektarten, die dieser Pad annimmt. Ohne diese Zeile ist "die Trigger tun nichts"
+  // nicht von "die Option ist kaputt" zu unterscheiden - und der haeufigste Fall ist, dass
+  // der Pad die Art schlicht nicht kennt.
+  //
+  // Sie zieht bei jedem An- und Abstecken nach, denn vorher gibt es nichts auszulesen: der
+  // Browser meldet einen Controller erst, wenn er einmal benutzt wurde.
+  function triggerLageZeigen() {
+    const el = $('vib-trigger-lage');
+    if (!el) return;
+    const lage = vibrationLage();
+    if (!lage.pads.length) { el.textContent = 'noch kein Controller gemeldet'; return; }
+    el.textContent = lage.pads.map((p) => {
+      if (!p.ruettler) return p.name + ': kein R\u00fcttler';
+      const kann = p.arten.indexOf('trigger-rumble') >= 0;
+      return p.name + ': ' + (kann ? 'Trigger m\u00f6glich'
+                                   : 'keine Trigger (' + (p.arten.join(', ') || 'ohne Angabe') + ')');
+    }).join(' | ');
+  }
+  triggerLageZeigen();
+  window.addEventListener('gamepadconnected', triggerLageZeigen);
+  window.addEventListener('gamepaddisconnected', triggerLageZeigen);
 
   // GASKENNLINIE und ANFAHRSCHUB. Beide lesen ihren Anfangswert AUS DEM MARKUP und
   // haengen sich danach an 'input' - dasselbe Muster wie bei setting-vibration, wo der
@@ -407,6 +558,122 @@
     $('setting-minmove').addEventListener('input', anfahrschubAnwenden);
   }
 
+  // ---- Die Reifenfarbe: blau kalt, gruen im Fenster, rot zu heiss --------------------
+  //
+  // EINE FUNKTION FUER ZWEI ANZEIGEN. Sie stand bis v0.5.18 als lokaler Ausdruck in
+  // updateRaceScreen(); seit der Boxenschirm dieselben vier Reifen ein zweites Mal zeichnet,
+  // waere das eine Kopie - und eine Farbskala, die an zwei Orten steht, laeuft beim naechsten
+  // Feinschliff auseinander.
+  //
+  // Als function-DEKLARATION und nicht als const: 70-race.js ist eine spaetere Datei im
+  // zusammengefuegten Modul, und nur Deklarationen werden ueber Dateigrenzen hochgezogen.
+  function reifenFarbe(T) {
+    const cfgT = physEngine.config;
+    if (cfgT.tyreEffect === 0) return '#4a5568';
+    const warm = Math.max(0, Math.min(1, (T - cfgT.tyreAmbientC)
+                                         / (cfgT.tyreOptimalC - cfgT.tyreAmbientC)));
+    if (T > cfgT.tyreOptimalC) {
+      const over = Math.min(1, (T - cfgT.tyreOptimalC)
+                               / (cfgT.tyreOverheatC - cfgT.tyreOptimalC));
+      return 'rgb(' + Math.round(70 + 185 * over) + ', ' + Math.round(209 - 130 * over)
+           + ', ' + Math.round(127 - 100 * over) + ')';
+    }
+    return 'rgb(' + Math.round(60 + 10 * warm) + ', ' + Math.round(140 + 69 * warm)
+         + ', ' + Math.round(230 - 103 * warm) + ')';
+  }
+
+  // ---- Die Cockpit-Schirme -----------------------------------------------------------
+  //
+  // Drei Schirme, geblaettert mit dem Steuerkreuz links/rechts. Die WAHRHEIT ist die
+  // Variable; das Attribut auf #race-dash gibt es nur, damit CSS auswaehlen kann - dieselbe
+  // Bauform wie pitState und updatePitTiles().
+  //
+  // Ein vierter Schirm ist ein Eintrag in dieser Liste, eine CSS-Regel und ein Block im
+  // Markup. Sonst nichts, und genau dafuer ist es eine Liste und keine Kette von if.
+  //
+  // Die Handlungen stehen als Pfeilfunktionen und nicht als blosse Verweise: die Ziele
+  // liegen in 70-race.js, also einer SPAETEREN Datei. Bei function-Deklarationen greift die
+  // Hochziehung zwar ohnehin, aber ein Verweis im Array wuerde beim Aufbau ausgewertet, und
+  // diese Datei hat schon fuenf Ladeabbrueche an genau dieser Falle gekostet.
+  const COCKPIT_SCREENS = [
+    { id: 'main', name: 'Cockpit' },
+    { id: 'pit', name: 'Box',
+      pad: (d) => pitScreenPad(d),
+      waehlen: () => pitScreenSelect(),
+      malen: () => pitScreenRender() },
+    { id: 'uebersicht', name: 'Rennen',
+      malen: () => ovScreenRender() },
+  ];
+  let cockpitScreen = 0;
+
+  function cockpitScreenIst() { return COCKPIT_SCREENS[cockpitScreen]; }
+
+  function cockpitScreenSet(i) {
+    const n = COCKPIT_SCREENS.length;
+    const next = ((i % n) + n) % n;
+    if (next === cockpitScreen) return;
+    cockpitScreen = next;
+    const s = COCKPIT_SCREENS[next];
+    const el = $('race-dash');
+    if (el) el.dataset.screen = s.id;
+
+    // EINEN LAUFENDEN FLAGGEN-LADEBALKEN ABBRECHEN, und das ist kein Feinschliff.
+    // flagHoldPaint() laeuft an SEINER EIGENEN Uhr und loest bei voller Ladung aus,
+    // unabhaengig davon, was pollGamepad gerade sieht. Wer X haelt und dabei blaettert,
+    // bekaeme sonst eine Sekunde spaeter eine gelbe Flagge, waehrend er in ein Menue sieht.
+    // Diese Stelle ist die einzige, die beide Richtungen abfaengt.
+    if (typeof flagHoldRelease === 'function') flagHoldRelease(false);
+
+    cockpitPunkteMalen();
+    if (s.malen) s.malen();
+    if (typeof showHudToast === 'function') showHudToast(t(s.name));
+
+    // AUSDRUECKLICH KEIN cockpitPassung(): die Schirme sind Ueberlagerungen und aendern
+    // grid-template-rows nicht. Ein Nachmessen waere Arbeit ohne Wirkung - und im Vollbild
+    // sechs Layoutlaeufe auf einen Tastendruck waehrend der Fahrt.
+  }
+
+  function cockpitScreenStep(d) { cockpitScreenSet(cockpitScreen + d); }
+
+  // Was die Waehltaste auf DIESEM Schirm tut. Rueckgabe true heisst "verbraucht".
+  //
+  // DER SCHIRM ENTSCHEIDET, und zwar hier und an einer Stelle. Bis v0.5.28 stand die
+  // Entscheidung im Gamepad-Zweig und hing an einem Merker, der nur auf der naechsten
+  // steigenden Flanke fiel - die der Boxenschirm aber selbst verbraucht. Ein Schirm ohne
+  // waehlen-Eintrag verbraucht die Taste nicht: auf der Rennuebersicht gibt es nichts zu
+  // waehlen, und dort etwas zu erfinden waere schlimmer als nichts zu tun.
+  function cockpitScreenWaehlen() {
+    const s = cockpitScreenIst();
+    return !!(s && s.waehlen && s.waehlen());
+  }
+
+  // Die Punkte AUS DER LISTE erzeugen, nicht aus dem Markup: ein vierter Schirm soll an
+  // genau einer Stelle nachgetragen werden.
+  function cockpitPunkteMalen() {
+    const host = $('race-screen-dots');
+    if (!host) return;
+    if (host.children.length !== COCKPIT_SCREENS.length) {
+      host.innerHTML = COCKPIT_SCREENS.map(() => '<i></i>').join('');
+    }
+    for (let i = 0; i < host.children.length; i++) {
+      host.children[i].classList.toggle('an', i === cockpitScreen);
+    }
+  }
+
+  // NUR VORWAERTS mit dem Finger. cockpitScreenStep() rechnet modulo, der letzte Schirm
+  // fuehrt also zum ersten zurueck - eine zweite Richtung waere ein zweiter Knopf fuer eine
+  // Bewegung, die man mit zwei Tipps ohnehin hat. Auf dem Steuerkreuz bleiben beide.
+  if ($('race-screen-next')) {
+    $('race-screen-next').addEventListener('click', () => cockpitScreenStep(+1));
+  }
+  cockpitPunkteMalen();
+
+  // Zu einem bestimmten Schirm springen, wenn er existiert. Gerufen beim Rennstart.
+  function cockpitScreenZu(id) {
+    const i = COCKPIT_SCREENS.findIndex((s) => s.id === id);
+    if (i >= 0) cockpitScreenSet(i);
+  }
+
   // ---- Das Cockpit auf die Bildschirmhoehe einpassen ---------------------------------
   //
   // GEMELDET: "auf einem Handy sehe ich oben die Lichter nicht." Gemessen in 844 x 390,
@@ -439,9 +706,139 @@
   // `hoeheFuerTest` gibt eine Fensterhoehe vor. Ohne sie gilt die echte; mit ihr laesst
   // sich "passt es auf einem Handy quer" auf JEDEM Schirm pruefen - und ein Test, der nur
   // auf einem kleinen Fenster etwas aussagt, wird nie gefahren.
-  function cockpitPassung(hoeheFuerTest) {
+  // ---- Das Vollbild ist ein eigener Fall, und bis v0.5.16 gab es fuer ihn gar nichts --
+  //
+  // #race-dash ist im Vollbild position: fixed, und `offsetParent` ist dort NULL - die
+  // Zeile unten stieg also sofort aus. Im Vollbild hat nie eine Einpassung stattgefunden.
+  //
+  // GEMESSEN auf 412 x 915 mit race-fs race-turn: Kasten ungedreht 915 x 412, davon 380
+  // nutzbar, Inhalt 652. align-content: center legt den Ueberstand HALB nach oben, also
+  // 136 px - und dort sitzen die Drehzahllampen. .gt3 schneidet mit overflow: hidden ab.
+  // Genau das ist die Meldung "die Lampen oben sind abgeschnitten".
+  //
+  // UNTERGRENZE 0,5, aus demselben Grund wie COCKPIT_MIN_ZOOM: darunter ist der Tacho
+  // nicht mehr zu entziffern, und dann ist ein abgeschnittener Rand ehrlicher.
+  const RACE_FS_MIN_SCALE = 0.5;
+
+  // WIE HOCH IST DER INHALT WIRKLICH? Zwei Antworten waren falsch, bevor die dritte
+  // stimmte - beide Male lag der Fehler in der Messung und nicht in der Einpassung.
+  //
+  // NICHT scrollHeight: .race-rain ist position: absolute, 1134 px hoch und liegt bei
+  // top: -162. Der Regenschleier liegt UEBER dem Cockpit und ist kein Inhalt, scrollHeight
+  // zaehlt ihn aber mit und meldete 972 statt 528. Damit lief der Faktor bis an die
+  // Untergrenze, obwohl laengst alles passte.
+  //
+  // UND AUCH NICHT die Ausdehnung der sichtbaren Kinder: .gt3 hat ACHT Rasterzeilen, von
+  // denen im gedrehten Vollbild fuenf 0 hoch sind (Flagge, Banner, Toast, Fussleiste,
+  // Marke). Ihre sieben Zwischenraeume zu je 4 px bleiben trotzdem stehen, und
+  // align-content zentriert die ZEILEN samt Zwischenraeumen. Eine Messung vom ersten bis
+  // zum letzten sichtbaren Kind laesst rund 20 px davon weg - der Test meldete daraufhin
+  // "passt" und gleichzeitig "Lampen 3 px ueber der Kante", und beides war richtig.
+  //
+  // Gemessen wird deshalb, was das RASTER belegt.
+  function cockpitInhaltHoehe(el) {
+    const cs = getComputedStyle(el);
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const zeilen = (cs.gridTemplateRows || '').split(' ')
+      .map((z) => parseFloat(z)).filter((z) => !isNaN(z));
+    if (zeilen.length) {
+      const luecke = parseFloat(cs.rowGap) || 0;
+      return zeilen.reduce((a, b) => a + b, 0) + (zeilen.length - 1) * luecke + pad;
+    }
+    // RUECKFALL, falls das Cockpit einmal kein Raster ist: die Ausdehnung dessen, was im
+    // Fluss liegt. Ueberlagerungen zaehlen auch hier nicht.
+    let oben = Infinity, unten = -Infinity;
+    for (const k of el.children) {
+      if (!(k.offsetHeight > 0)) continue;
+      const pos = getComputedStyle(k).position;
+      if (pos === 'absolute' || pos === 'fixed') continue;
+      oben = Math.min(oben, k.offsetTop);
+      unten = Math.max(unten, k.offsetTop + k.offsetHeight);
+    }
+    if (!(unten > oben)) return 0;
+    // offsetTop misst ab dem RANDKASTEN, die Polsterung gehoert also noch dazu.
+    return (unten - oben) + pad;
+  }
+
+  function cockpitVollbildMasse(el, schirmB, schirmH, s) {
+    // Der Kasten GROSS, die Darstellung klein. Unter zoom waere das sinnlos, weil die
+    // vw-Anteile mitwachsen; unter scale() bleiben sie, wo sie sind, und der Inhalt
+    // bekommt wirklich mehr Platz.
+    el.style.width = Math.round(schirmB / s) + 'px';
+    el.style.height = Math.round(schirmH / s) + 'px';
+    el.style.setProperty('--race-scale', s.toFixed(4));
+  }
+
+  // BEIDE MASSE sind vorgebbar, und die Breite ist es aus einem Grund: die acht Kacheln
+  // des Streifens haben ein Seitenverhaeltnis, ihre Hoehe waechst also mit der Kastenbreite
+  // (gemessen 528 px Inhalt bei 1830 Breite, 841 bei 2560). Ein Test, der nur die Hoehe
+  // vorgibt, prueft auf einem breiten Fenster eine Lage, in die ein Handy nie geraet.
+  function cockpitVollbildPassung(el, hoeheFuerTest, breiteFuerTest) {
+    const gedreht = document.body.classList.contains('race-turn');
+    // UNGEDREHT GEDACHT: im gedrehten Vollbild liegt die Breite des Cockpits auf der Hoehe
+    // des Schirms und umgekehrt.
+    const schirmB = breiteFuerTest || (gedreht ? window.innerHeight : window.innerWidth);
+    const schirmH = hoeheFuerTest || (gedreht ? window.innerWidth : window.innerHeight);
+    if (!(schirmB > 0) || !(schirmH > 0)) return null;
+    // EINE Einpassung, nicht zwei: der Weg in der Seite arbeitet mit zoom, dieser mit
+    // Groesse und Skalierung. Beide zugleich waeren zwei Faktoren auf einer Zahl.
+    el.style.zoom = '';
+
+    let s = 1, braucht = 0, da = 0;
+    for (let i = 0; i < 6; i++) {
+      cockpitVollbildMasse(el, schirmB, schirmH, s);
+      da = el.clientHeight;
+      braucht = cockpitInhaltHoehe(el);
+      if (!(da > 0) || !(braucht > 0)) break;
+      // DIE SCHLEIFE LAEUFT WEITER, auch wenn es schon passt. Mit dem Faktor waechst der
+      // Kasten, mit dem Kasten waechst der Streifen - seine Kacheln haben ein Seiten-
+      // verhaeltnis. Wer beim ersten Treffer abbricht, laesst das Cockpit auf 76 % stehen,
+      // wo 92 % gepasst haetten; das ist eine Fixpunktiteration und keine Suche nach dem
+      // erstbesten Wert.
+      const naechst = Math.min(1, Math.max(RACE_FS_MIN_SCALE, s * (da / braucht)));
+      const fertig = Math.abs(naechst - s) < 0.002;
+      s = naechst;
+      if (fertig) break;
+    }
+    // Der letzte Schritt kann knapp ueber das Ziel gegangen sein. Dann lieber eine Spur
+    // kleiner als ein abgeschnittener Rand - abgeschnitten war der gemeldete Fehler.
+    cockpitVollbildMasse(el, schirmB, schirmH, s);
+    da = el.clientHeight;
+    braucht = cockpitInhaltHoehe(el);
+    // OHNE TOLERANZ: ein einziger Pixel Ueberstand wird von align-content: center
+    // halbiert und landet OBEN, wo die Lampen sitzen. Gemessen kam die Reihe mit einer
+    // Toleranz von 1 px auf offsetTop -2.
+    if (braucht > da && da > 0 && braucht > 0) {
+      s = Math.max(RACE_FS_MIN_SCALE, s * (da / braucht));
+      cockpitVollbildMasse(el, schirmB, schirmH, s);
+      da = el.clientHeight;
+      braucht = cockpitInhaltHoehe(el);
+    }
+    return { vollbild: true, gedreht, schirmB, schirmH, faktor: +s.toFixed(3),
+             braucht: Math.round(braucht), da,
+             amBoden: s <= RACE_FS_MIN_SCALE + 1e-6,
+             passt: braucht <= da + 1,
+             ueberstand: Math.max(0, Math.round(braucht - da)) };
+  }
+
+  // Die Vollbildmasse wieder abraeumen. Bleiben sie stehen, sitzt in der Seite ein Cockpit
+  // von 915 px Breite in einer Spalte von 412.
+  function cockpitFreigeben(el) {
+    el.style.width = '';
+    el.style.height = '';
+    el.style.removeProperty('--race-scale');
+  }
+
+  // `breiteFuerTest` gilt nur im Vollbild: in der Seite steht die Breite des Cockpits in
+  // der Spalte fest, und eine vorgegebene waere eine Zahl ohne Wirkung.
+  function cockpitPassung(hoeheFuerTest, breiteFuerTest) {
     const el = $('race-dash');
-    if (!el || !el.offsetParent) return null;
+    if (!el) return null;
+    if (document.body.classList.contains('race-fs')) {
+      return cockpitVollbildPassung(el, hoeheFuerTest, breiteFuerTest);
+    }
+    cockpitFreigeben(el);
+    if (!el.offsetParent) return null;
     const fensterH = hoeheFuerTest || window.innerHeight;
     // ERST ZURUECKSETZEN, DANN MESSEN. Mit gesetztem zoom liefert getBoundingClientRect
     // bereits verkleinerte Werte, und die Rechnung liefe sich selbst nach - bei jedem
@@ -481,7 +878,11 @@
 
   // Bei jeder Groessenaenderung, bei jedem Drehen des Geraets, und beim Wechsel auf den
   // Reiter - vorher ist das Cockpit unsichtbar und hat die Hoehe 0.
-  window.addEventListener('resize', cockpitPassung);
+  // OHNE DIE HUELLE reicht der Zuhoerer das EREIGNIS als erstes Argument durch, und das
+  // ist `hoeheFuerTest`. `fensterH` war dann ein Event, `platz` NaN, und die Funktion stieg
+  // ueber `!(platz > 0)` still aus - die Einpassung bei Groessenaenderung hat nie
+  // stattgefunden.
+  window.addEventListener('resize', () => cockpitPassung());
   window.addEventListener('orientationchange', () => setTimeout(cockpitPassung, 120));
   document.querySelectorAll('[data-tab="race"]').forEach((b) => {
     b.addEventListener('click', () => setTimeout(cockpitPassung, 60));
@@ -575,6 +976,10 @@
     druckAnwenden(parseFloat($('setting-tyre-pressure').value));
   }
 
+  // NUR DER ZUHOERER. Der Anfangsabgleich steht bei der Deklaration von fuelDrainPerSec in
+  // 70-race.js - von hier aus waere er eine Zuweisung an ein let einer SPAETEREN Datei, also
+  // temporale Todeszone, und die nimmt den ganzen Aufbau mit. Genau das ist mir beim Bauen
+  // passiert, und zwei Zeilen darueber stand die Warnung schon.
   $('setting-fuel-drain').addEventListener('input', (e) => {
     fuelDrainPerSec = parseFloat(e.target.value);
     $('setting-fuel-drain-val').textContent = fuelDrainPerSec.toFixed(1);
@@ -616,10 +1021,6 @@
     $('setting-repair-time-val').textContent = pitFullRepairS + ' s';
   });
 
-  // Die kalibrierte Vorgabe fuer das Lenkansprechen. Sie ist der Bezug fuer die Anzeige,
-  // damit dort 100 % steht, wo der Wert hingehoert - und nicht 200 %.
-  const STEER_RESP_REF = 2.0;
-
   // Die EINE Stelle, an der aus steerResponse eine Prozentzahl wird. Vorher gab es drei, in
   // zwei Maszstaeben: die Optionen teilten durch den kalibrierten Bezug 2,0 und zeigten
   // 100 %, das Steuerkreuz und die Cockpitkachel nahmen den Rohwert und zeigten 200 %. Wer
@@ -632,6 +1033,30 @@
   // Todeszone, die in diesem Projekt schon fuenf Ladeabbrueche gekostet hat. In einer
   // zusammengefuegten IIFE ist das Ende einer Datei nicht das Ende des Moduls.
   function steerRespPct(v) { return Math.round(v / STEER_RESP_REF * 100); }
+  // Den Regler und das Modell an EINER Stelle zusammenbringen. steerDaempfungSetzen wird
+  // von drei Seiten gebraucht - vom Regler, vom Fahrzeugwechsel und vom Aufbau -, und drei
+  // Kopien derselben zwei Zeilen sind der Weg zu einem Regler, der irgendwann etwas anderes
+  // anzeigt als das Modell rechnet.
+  function steerDaempfungAnzeige(ms) {
+    return ms <= 0 ? t('sofort') : ms + ' ms';
+  }
+  function steerDaempfungSetzen(ms, auchRegler) {
+    const v = Math.max(0, Math.min(500, Math.round(ms)));
+    physEngine.config.steerDaempfungMs = v;
+    if (auchRegler && $('phys-steerdamp')) $('phys-steerdamp').value = String(v);
+    if ($('phys-steerdamp-val')) $('phys-steerdamp-val').textContent = steerDaempfungAnzeige(v);
+    return v;
+  }
+  if ($('phys-steerdamp')) {
+    $('phys-steerdamp').addEventListener('input', (e) => {
+      steerDaempfungSetzen(parseFloat(e.target.value), false);
+    });
+    // Beim Aufbau aus dem MARKUP lesen und nicht aus dem Modell: so ist der Regler die
+    // Wahrheit, und die Pruefung "Regler und Modell sagen beim Laden dasselbe" hat einen
+    // Gegenstand. Stimmen die zwei nicht, faellt sie - genau dafuer ist sie da.
+    steerDaempfungSetzen(parseFloat($('phys-steerdamp').value), false);
+  }
+
   ['phys-steerresp', 'phys-accel', 'setting-steer-calib', 'setting-brake-steal'].forEach(id => {
     const input = $(id);
     const readout = $(id + '-val');
@@ -753,6 +1178,10 @@
   function syncRaceRotation() {
     const fs = document.body.classList.contains('race-fs');
     document.body.classList.toggle('race-turn', fs && raceIsPortrait());
+    // Die Einpassung haengt an DIESER Entscheidung: gedreht liegt die Cockpithoehe auf der
+    // Schirmbreite. Sie hier zu rufen und nicht nur am resize-Zuhoerer stellt sicher, dass
+    // sie die neue Klasse schon sieht.
+    cockpitPassung();
   }
 
   async function enterRaceFullscreen() {
@@ -766,6 +1195,8 @@
     } catch (e) { /* refused on iOS and desktop; the CSS rotation covers it */ }
     document.body.classList.add('race-fs');
     syncRaceRotation();
+    // Das Vollbild braucht einen Takt, bis der Browser die neue Fenstergroesse meldet.
+    setTimeout(() => cockpitPassung(), 120);
     $('race-fs').hidden = true; $('race-fs-exit').hidden = false;
   }
 
@@ -778,6 +1209,8 @@
     catch (e) { /* never locked */ }
     document.body.classList.remove('race-fs', 'race-turn');
     $('race-fs').hidden = false; $('race-fs-exit').hidden = true;
+    cockpitPassung();
+    setTimeout(() => cockpitPassung(), 120);
   }
 
   $('race-fs').addEventListener('click', enterRaceFullscreen);
@@ -981,21 +1414,9 @@
       const REIFEN = ['race-tyre-fl', 'race-tyre-fr', 'race-tyre-rl', 'race-tyre-rr'];
       const SCHEIBEN = ['race-disc-fl', 'race-disc-fr', 'race-disc-rl', 'race-disc-rr'];
 
-      // Reifenfarbe aus der Temperatur DIESES Rades: blau kalt, gruen im Fenster, rot zu
-      // heiss. Dieselbe Rechnung wie bisher, nur je Rad statt einmal.
-      const reifenFarbe = (T) => {
-        if (aus) return '#4a5568';
-        const warm = Math.max(0, Math.min(1, (T - cfgT.tyreAmbientC)
-                                             / (cfgT.tyreOptimalC - cfgT.tyreAmbientC)));
-        if (T > cfgT.tyreOptimalC) {
-          const over = Math.min(1, (T - cfgT.tyreOptimalC)
-                                   / (cfgT.tyreOverheatC - cfgT.tyreOptimalC));
-          return 'rgb(' + Math.round(70 + 185 * over) + ', ' + Math.round(209 - 130 * over)
-               + ', ' + Math.round(127 - 100 * over) + ')';
-        }
-        return 'rgb(' + Math.round(60 + 10 * warm) + ', ' + Math.round(140 + 69 * warm)
-             + ', ' + Math.round(230 - 103 * warm) + ')';
-      };
+      // Die Reifenfarbe steht seit v0.5.18 als eigene Funktion weiter unten: der Boxenschirm
+      // zeichnet dieselben vier Reifen ein zweites Mal, und zwei Kopien derselben Rechnung
+      // waeren zwei Orte, an denen die Skala auseinanderlaeuft.
 
       // SCHEIBENFARBE, auf die gemessenen Temperaturen gelegt und nicht geraten.
       //
@@ -1080,10 +1501,15 @@
     // nicht auseinanderlaufen.
     const tankAus = fuelDrainPerSec <= 0;
     const schadenAus = !crashDetectionEnabled;
-    const tankKachel = document.querySelector('[data-pit="refuel"]');
-    const schadenKachel = document.querySelector('[data-pit="repair"]');
-    if (tankKachel) tankKachel.classList.toggle('sim-off', tankAus);
-    if (schadenKachel) schadenKachel.classList.toggle('sim-off', schadenAus);
+    // ALLE Treffer und nicht der erste: seit v0.5.18 tragen die Zeilen des Boxenschirms
+    // dieselben data-pit-Werte, und ein einzahliges querySelector haette dort nie sim-off
+    // gesetzt - die Kachel im Streifen waere grau gewesen, die Zeile daneben nicht.
+    for (const el of document.querySelectorAll('[data-pit="refuel"]')) {
+      el.classList.toggle('sim-off', tankAus);
+    }
+    for (const el of document.querySelectorAll('[data-pit="repair"]')) {
+      el.classList.toggle('sim-off', schadenAus);
+    }
     const reifenKachel = $('race-tyre-box');
     if (reifenKachel) reifenKachel.classList.toggle('sim-off',
       physEngine.config.tyreEffect <= 0);

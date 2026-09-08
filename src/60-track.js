@@ -259,6 +259,125 @@
   const TRACK_HAIRPIN_DEG = 180;
   const TRACK_SAMPLES_PER_TILE = 14;
 
+  // ---- Welche Abtastpunkte gehoeren zu welcher Kachel? -------------------------------
+  //
+  // AUS DEN PUNKTEN SELBST, und das ist die Behebung eines Fehlers, der drei Dinge auf
+  // einmal kaputt gemacht hat.
+  //
+  // Es stand an mehreren Stellen `kachel * TRACK_SAMPLES_PER_TILE` - die Annahme, jede
+  // Kachel liefere gleich viele Abtastpunkte. Sie tut es nicht: trackCenterline() vergibt
+  // die Punkte nach DREHWINKEL, und gemessen auf SG2H2G2R2G2H2G2R2 sind das
+  //
+  //     Gerade      14 Punkte
+  //     60-Grad     14 Punkte
+  //     Haarnadel   49 Punkte
+  //
+  // 17 Kacheln ergaben so 379 Punkte, waehrend 17 x 14 = 238 gerechnet wurde. Folgen, alle
+  // drei gemeldet:
+  //
+  //   Die weissen Stossfugen zwischen den Kacheln lagen falsch und HOERTEN nach 63 Prozent
+  //   der Runde auf - dahinter klemmte Math.min sie alle auf den letzten Punkt.
+  //   ("Da fehlen die Uebergaenge zwischen den Schienen")
+  //
+  //   Die Autopunkte lagen falsch und sprangen am Rundenende auf die Ziellinie, weil
+  //   dieselbe Multiplikation ueber das Ende hinauslief.
+  //   ("die Ghosts huepfen direkt von der ersten Rechtskurve unten zum Ziel")
+  //
+  // Die richtige Zuordnung war die ganze Zeit da: jeder Abtastpunkt traegt sein `tile`.
+  // Der Pit-Zweig dieser Datei benutzt es schon (`q.p.tile === idx`) - nur die drei anderen
+  // Stellen rechneten daran vorbei.
+  function trackKachelTabelle(pts, anzahlKacheln) {
+    const start = new Array(anzahlKacheln).fill(-1);
+    const zahl = new Array(anzahlKacheln).fill(0);
+    for (let i = 0; i < pts.length; i++) {
+      const t = pts[i].tile;
+      if (t === undefined || t === null || t < 0 || t >= anzahlKacheln) continue;
+      if (start[t] < 0) start[t] = i;
+      zahl[t]++;
+    }
+    // Kacheln ohne eigene Punkte gibt es nicht, aber ein Rueckfall kostet nichts und
+    // verhindert, dass ein kuenftiger Kacheltyp ohne Abtastung hier NaN erzeugt.
+    for (let t = 0; t < anzahlKacheln; t++) {
+      if (start[t] < 0) {
+        start[t] = t > 0 ? start[t - 1] + zahl[t - 1] : 0;
+        zahl[t] = 1;
+      }
+    }
+    return { start, zahl };
+  }
+
+  // Der Abtastpunkt fuer (Kachel, Phase). Die EINE Stelle, an der diese Rechnung steht.
+  function trackPunktIndex(tab, pts, index, phase) {
+    if (index === null || index === undefined || !tab) return 0;
+    const n = tab.start.length;
+    const k = ((Math.floor(index) % n) + n) % n;
+    const ph = Math.max(0, Math.min(1, phase || 0));
+    // zahl[k] UND NICHT zahl[k]-1, und das ist eine Berichtigung: mit -1 zeigte Phase 1 auf
+    // den letzten Punkt DIESER Kachel, waehrend Phase 0 der naechsten auf deren ersten
+    // zeigte - zwei benachbarte Abtastpunkte, gemessen 2,9 Einheiten auseinander. Die
+    // Kachelgrenze war damit zwei Orte, und der Selbsttest "Autopunkte an der richtigen
+    // Kachel" hat es sofort gemeldet: er verlangt, dass Kachel k bei Phase 1 dort liegt, wo
+    // Kachel k+1 bei Phase 0 liegt. Zu Recht - ein Auto ueberquert eine Grenze und haelt
+    // nicht davor.
+    //
+    // Mit zahl[k] landet Phase 1 auf start[k] + zahl[k], also genau auf dem ersten Punkt der
+    // naechsten Kachel. Fuer jede Phase UNTER 1 bleibt der Punkt auf seiner eigenen Kachel.
+    const roh = tab.start[k] + ph * tab.zahl[k];
+    return Math.max(0, Math.min(Math.round(roh), pts.length - 1));
+  }
+
+  // ---- IST DIE STRECKE GESCHLOSSEN? --------------------------------------------------
+  //
+  // WARUM DAS SO WICHTIG IST, und das war vorher nicht aufgeschrieben: an dieser einen
+  // Wahrheit haengt die Ideallinie. idealLine() klemmt bei `closed: false` die beiden
+  // ENDPUNKTE fest und entspannt nur das Dazwischen - auf einer Bahn, die in Wahrheit ein
+  // Ring ist, zieht die Kruemmungsminimierung die Linie dann zur Sehne, und `alpha` laeuft
+  // ueber lange Stuecke an den Anschlag. Gemessen auf einer 17-Kachel-Strecke: 25 Prozent
+  // aller Abtastpunkte am Rand.
+  //
+  // Genau so wurde es gemeldet: "bei einer laengeren Strecke passen die Schienen am Ende
+  // nicht perfekt zusammen. Wenn ich dann Simulation starte, gehen alle Punkte nur an den
+  // Rand." Die Punkte sind die Folge, die Schlusspruefung die Ursache.
+  //
+  // ZWEI BEDINGUNGEN, nicht eine.
+  //
+  //   LAGE     Wie weit liegen Anfang und Ende auseinander? Bisher die einzige Bedingung,
+  //            mit 2 cm Toleranz - das laesst nur Rundungsfehler durch. Ein echtes Layout
+  //            hat aber MODELLFEHLER: der angenommene Kurvenradius und die Kachellaenge
+  //            stimmen nicht auf den Millimeter, und ueber zwanzig Teile summiert sich das.
+  //            Ein Prozent Laengenfehler auf 20 Kacheln sind schon 8,6 cm.
+  //
+  //   WINKEL   Zeigt das Ende in dieselbe Richtung wie der Anfang? Ohne diese Frage waere
+  //            eine groessere Lagetoleranz gefaehrlich: gemessen endet SR2G2R2G2R2G2R2G2
+  //            um 120 Grad verdreht, und eine Strecke, die quer zu sich selbst ankommt, ist
+  //            kein Ring, auch wenn der Abstand klein waere.
+  //
+  // DIE ZAHLEN SIND GEWAEHLT, und der Rahmen dafuer ist gemessen: eine FEHLENDE KACHEL sind
+  // genau 43 cm - das ist die Luecke, die SR6, SL6 und SG2R3G2R3 zeigen. Die Toleranz muss
+  // deutlich darunter bleiben, sonst gilt eine unfertige Strecke als Ring. 15 cm sind ein
+  // Drittel davon und lassen den Modellfehler von zwanzig Teilen durch.
+  //
+  // 12 Grad beim Winkel: gemessen liefert SR6 schon -2,1 Grad allein aus der Abtastung (die
+  // Richtung kommt aus den letzten zwei Punkten INNERHALB des Bogens), und der naechste
+  // vorkommende Fall sind 120 Grad. Dazwischen ist viel Platz.
+  const TRACK_SCHLUSS_CM = 15;
+  const TRACK_SCHLUSS_GRAD = 12;
+
+  function trackSchluss(pts) {
+    if (!pts || pts.length < 3) return { closed: false, lueckeCm: null, winkel: null };
+    const a = pts[0], b = pts[pts.length - 1];
+    const lueckeCm = Math.hypot(b.x - a.x, b.y - a.y) / TRACK_UNITS_PER_CM;
+    const w = (p1, p2) => Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    const wA = w(pts[0], pts[1]);
+    const wE = w(pts[pts.length - 2], pts[pts.length - 1]);
+    let dw = (wE - wA) * 180 / Math.PI;
+    dw = ((dw % 360) + 540) % 360 - 180;
+    return {
+      closed: lueckeCm <= TRACK_SCHLUSS_CM && Math.abs(dw) <= TRACK_SCHLUSS_GRAD,
+      lueckeCm, winkel: dw,
+    };
+  }
+
   function trackCenterline(tiles) {
     const out = [];
     let x = 0, y = 0, heading = trackRotationDeg;
@@ -431,11 +550,57 @@
   const LT_A_BRK = 1.10;    // Bremse, etwas stark
   const LT_V_MAX = 12.0;    // Deckel, damit eine Gerade nicht unbegrenzt schnell wird
 
+  // ---- DIE FAHRGRENZEN AUS DEN EINGESTELLTEN WERTEN ---------------------------------
+  //
+  // Die vier Zahlen darueber sind GT-Verhaeltnisse und ausdruecklich eine Annahme. Zwei von
+  // ihnen muessen keine sein: Hoechstgeschwindigkeit und Bremsverzoegerung stehen in der
+  // Physikkonfiguration, und die Zugbeschleunigung ist ueber simulateLaunch() ausrechenbar -
+  // dieselbe Funktion, gegen die calibrateAccel() den Schubfaktor loest. Damit rechnet das
+  // Zeitmodell mit den Werten, die auch gefahren werden, also mit "Pro", "Realismus-GT3"
+  // oder was sonst eingestellt ist.
+  //
+  // GEMESSEN unter Pro: 0 auf 100 angezeigte km/h in 2,295 s bei einem Anker von
+  // 1,356 internen km/h, also 0,591 km/h je Sekunde im Mittel. Bremse 0,72, Spitze 4,0.
+  // Das Verhaeltnis Zug zu Bremse ist damit 0,82 - die GT-Annahme sagte 0,45/1,10 = 0,41,
+  // also die Haelfte. Das ist kein Detail: wie viel ein spaeter Scheitel bringt, haengt
+  // genau an diesem Verhaeltnis.
+  //
+  // WAS ANNAHME BLEIBT, und das gehoert dazugesagt: die QUERbeschleunigung. Kein Byte meldet
+  // sie, und das Auto haengt auf einer Schiene - es gibt also nichts zu messen. Sie wird
+  // deshalb im bisherigen Verhaeltnis zur Bremse gefuehrt (1,0 zu 1,10), damit die einzige
+  // Annahme, die uebrig ist, auch die einzige Aenderung an ihr ist.
+  //
+  // Einheiten: intern rechnet die Physik in km/h, die Linie in Zeichnungseinheiten.
+  // 1 km/h = 27,778 cm/s, und TRACK_UNITS_PER_CM macht daraus Zeichnungseinheiten.
+  const KMH_TO_UNITS = (100000 / 3600) * TRACK_UNITS_PER_CM;
+  const LT_LAT_ZU_BREMSE = LT_A_LAT / LT_A_BRK;
+
+  function fahrGrenzen() {
+    // physEngine steht in 50-drive.js, also in der VORHERIGEN Datei - der Zugriff ist damit
+    // in Ordnung. Die umgekehrte Richtung waere die temporale Todeszone.
+    const cfg = physEngine.config;
+    const aBrk = Math.max(1e-6, cfg.brakeDecelBase + cfg.brakeDecelAero) * KMH_TO_UNITS;
+    // simulateLaunch() ist REIN: es liest die Konfiguration und ruehrt den Zustand nicht an.
+    // accelerationFactor gehoert dazu, obwohl simulateLaunch ihn fuer die Kalibrierung
+    // ausdruecklich auslaesst - hier geht es um das, was gefahren wird, und dort um den
+    // Bezug, gegen den kalibriert wird.
+    const lauf = physEngine.simulateLaunch(
+      cfg.accelCalibration * (cfg.accelerationFactor || 1), false);
+    const aAcc = cfg.launchAnchorKmh / Math.max(0.05, lauf.time) * KMH_TO_UNITS;
+    return { vMax: cfg.topSpeedKmh * KMH_TO_UNITS, aAcc, aBrk,
+             aLat: LT_LAT_ZU_BREMSE * aBrk, t100: lauf.time };
+  }
+
   // Zeit fuer eine gegebene Linie. Gibt auch das Profil zurueck, damit der Editor es
   // zeichnen kann - dieselbe Zahl, die optimiert wurde, ist dann auch die angezeigte.
   function lapTimeOf(path, closed, o) {
     const n = path.length;
     const k = pathCurvature(path, closed);
+    // Die Grenzen kommen VON AUSSEN und werden nicht hier geholt: fahrGrenzen() integriert
+    // einen Start und kostet damit etwas, und diese Funktion laeuft in der Suche hunderte
+    // Male. buildLine() rechnet sie einmal je Linie und legt sie in o. Fehlen sie - etwa
+    // wenn ein Prueflauf direkt hierher greift -, gelten die GT-Annahmen von oben, und das
+    // ist dann auch die richtige Antwort: ohne Kontext keine Werte aus dem Kontext.
     const aLat = (o && o.aLat) || LT_A_LAT;
     const aAcc = (o && o.aAcc) || LT_A_ACC;
     const aBrk = (o && o.aBrk) || LT_A_BRK;
@@ -550,6 +715,388 @@
              evals: auswertungen, accepted: angenommen };
   }
 
+  // ====================================================================================
+  // DRITTES MODELL: MINIMUM-TIME MIT LATE-APEX-SCHRANKE
+  // ====================================================================================
+  //
+  // BESTELLT: "Baue eine dritte Ideallinie ein, bei der du Minimum Time Optimization mit
+  // Late-Apex Einschraenkung anwendest (gegeben der Pro Simulationseinstellungen). In den
+  // aktuellen Ideallinien sind diese komischen Kurven - selbst bei einer Gerade sagst du dem
+  // Auto, es solle eine Kurve fahren."
+  //
+  // WAS DIESES MODELL ANDERS MACHT, und es ist nicht die Zielfunktion - die ist dieselbe
+  // Rundenzeit wie in 'laptime'. Anders ist der SUCHRAUM.
+  //
+  //   'laptime'   optimiert alpha fuer JEDEN der rund 180 Abtastpunkte frei. Damit kann die
+  //               Suche auf einer Geraden Zeitgewinne im Mikrometerbereich einsammeln, und
+  //               das tut sie: gemessen 16 Vorzeichenwechsel der zweiten Differenz auf
+  //               Geraden, groesste 0,557. Das sind die gemeldeten "komischen Kurven".
+  //
+  //   hier        optimiert VIER Zahlen je Kurve - Eingang, Scheitelversatz, Ausgang,
+  //               Scheitellage - und nichts sonst. Die Geraden folgen daraus, sie sind keine
+  //               Freiheit. Eine Gerade KANN in diesem Modell keine Kurve werden, weil es
+  //               dafuer keinen Parameter gibt.
+  //
+  // Auf einer Strecke mit vier Kurvenzuegen sind das 16 Zahlen gegen 180 - und der
+  // Unterschied ist genau die Glaettung, die man sonst hinterher aufsetzen muesste.
+  //
+  // DIE LATE-APEX-SCHRANKE ist die Lage des Scheitels in Weganteil des Kurvenzuges, und sie
+  // ist eine SCHRANKE und kein Zuschlag: die Suche darf den Scheitel frei waehlen, aber
+  // nicht vor 55 Prozent. Warum gefordert und nicht gehofft: die freie Suche in 'laptime'
+  // verschiebt den Scheitel gemessen um +0,045 der Kurvenlaenge im Mittel, zwei von zwoelf
+  // spaeter und zwei frueher - das ist kein Effekt, und der Grund steht beim Modellvergleich
+  // darunter. Auf 25 cm Breite und 43 cm Kachellaenge ist kaum Platz.
+  //
+  // 0,55 bis 0,85 sind GEWAEHLT. Die untere Grenze ist die Bedeutung von "late apex" (hinter
+  // der Mitte), die obere laesst dem Ausgang noch ein Sechstel des Zuges - ohne sie legt die
+  // Suche den Scheitel an den Ausgang und die Ausfahrt verschwindet. Genau dieser Fall ist
+  // in v0.5.40 schon einmal gemessen worden.
+  const LATE_APEX_MIN = 0.55;
+  const LATE_APEX_MAX = 0.85;
+
+  // Weichgang statt linear: alpha soll am Scheitel und an den Kachelgrenzen waagerecht
+  // ankommen. Sonst hat die Querlage dort einen Knick, und ein Knick in der Querlage ist
+  // ein Ruck am Lenkservo.
+  function glattStufe(u) {
+    const x = Math.max(0, Math.min(1, u));
+    return x * x * (3 - 2 * x);
+  }
+
+  // Die Abtastpunkte eines Kurvenzuges, samt Weganteil jedes Punktes im Zug. Der WEG und
+  // nicht der Index, weil die Punktdichte je Kacheltyp verschieden ist (14 gegen 49).
+  function lateApexZug(lauf, pts, tiles, tab, at) {
+    const idx = [];
+    let haarnadel = false;
+    for (let kk = lauf.von; kk <= lauf.bis; kk++) {
+      const t = ((kk % tiles.length) + tiles.length) % tiles.length;
+      if (istHaarnadel(tiles[t].type)) haarnadel = true;
+      for (let d = 0; d < tab.zahl[t]; d++) idx.push(at(tab.start[t] + d));
+    }
+    const weg = [0];
+    for (let q = 1; q < idx.length; q++) {
+      const a = pts[idx[q - 1]], b = pts[idx[q]];
+      weg.push(weg[q - 1] + Math.hypot(b.x - a.x, b.y - a.y));
+    }
+    const gesamt = weg[weg.length - 1] || 1;
+    return { idx, f: weg.map(function (w) { return w / gesamt; }), haarnadel: haarnadel };
+  }
+
+  // ====================================================================================
+  // EINE FORMFAMILIE FUER ALLE DREI MODELLE
+  // ====================================================================================
+  //
+  // GEMELDET: "Die Kruemmung und Rundenzeit Ideallinien sehen immernoch komisch aus, willst
+  // du da nichts fixen?" - mit einem Bild, auf dem der Zickzack IN den Kurven sitzt.
+  //
+  // NACHGEMESSEN, zweite Differenz von alpha innerhalb der Kurvenkacheln:
+  //
+  //     Strecke          Kruemmung        Rundenzeit      Late Apex
+  //     SR3GLR2GR2G2   54 Wechsel 16,03  30 / 8,94       11 / 0,23
+  //     SHG4HG3        54 /  1,83        16 / 1,00       12 / 0,14
+  //     SG4R4G4L4      61 /  1,22        20 / 0,89        4 / 0,23
+  //
+  // 16,03 bei einem Deckel von 8,63 ist ein Sprung von fast ZWEI Bahnbreiten zwischen zwei
+  // benachbarten Abtastpunkten. Die Ursache ist dieselbe wie bei den Geraden und schon dort
+  // beschrieben: beide alten Modelle optimieren alpha punktweise. Die geraden Geraden aus
+  // v0.5.42 haben nur die Haelfte des Problems behoben.
+  //
+  // DIE LOESUNG IST NICHT EINE WEITERE GLAETTUNG, sondern derselbe Suchraum fuer alle drei.
+  // Ein Nachlauf, der eine zackige Linie glaettet, optimiert etwas anderes als er ausgibt;
+  // genau das hat sich bei line.lapTime schon einmal gezeigt. Also: EINE Form, DREI
+  // Zielfunktionen.
+  //
+  //     'curvature'   kleinste groesste Kruemmung   Scheitel frei (0,15 bis 0,85)
+  //     'laptime'     kleinste Rundenzeit           Scheitel frei
+  //     'lateapex'    kleinste Rundenzeit           Scheitel hinter 0,55
+  //
+  // Damit ist die Wahl endlich eine Wahl der ZIELFUNKTION und nicht eine zwischen zwei
+  // Verfahren mit unterschiedlicher Glattheit.
+
+  // ---- Die Kurvenform: eine KUBIK in der Weglaenge ----------------------------------
+  //
+  // Vier Bedingungen, vier Koeffizienten:
+  //
+  //     alpha(0) = ein      an der Kachelgrenze hinein
+  //     alpha(p) = sch      am Scheitel
+  //     alpha'(p) = 0       und dort waagerecht, das ist die Bedeutung von "Scheitel"
+  //     alpha(1) = aus      an der Kachelgrenze hinaus
+  //
+  // WARUM EINE KUBIK UND NICHT ZWEI WEICHGAENGE, und das ist der Kern: der Beitrag der
+  // Querlage zur Kruemmung des GEFAHRENEN Wegs ist ihre zweite Ableitung. Bei einer Kubik
+  // ist die linear in s, also ohne Spitze. Der Sonderfall zeigt es am besten: mit ein = aus
+  // und Scheitel in der Mitte kommt eine PARABEL heraus, deren zweite Ableitung konstant
+  // ist - und eine konstante Kruemmungsminderung ueber die ganze Kurve IST der Bogen mit
+  // groesserem Radius, den eine Ideallinie sucht. Zwei aneinandergesetzte Weichgaenge haben
+  // dagegen in der Mitte jedes Halbstuecks ein Maximum der zweiten Ableitung und am Scheitel
+  // eine Null - also genau die Beulen, die es nicht geben soll.
+  //
+  // Determinante p^2 (1-p)^2, also nur an den Raendern null - dort greift die Klemme auf
+  // den Scheitelbereich.
+  function kurvenKubik(ein, sch, aus, p) {
+    const S = sch - ein, E = aus - ein;
+    const det = p * p * (1 - p) * (1 - p);
+    if (!(Math.abs(det) > 1e-12)) return [ein, E, 0, 0];
+    const B = (S * p * (2 - 3 * p) + p * p * p * p * E) / det;
+    const C = (3 * p * p * S - S - 2 * p * p * p * E) / det;
+    const D = (p * p * E + S * (1 - 2 * p)) / det;
+    return [ein, B, C, D];
+  }
+
+  // ---- Der Aussenboden aus dem Regler "Kurven oeffnen" -------------------------------
+  //
+  // lineExitStaerke war bis v0.5.42 die Staerke eines NACHLAUFS. Jetzt ist sie eine
+  // SCHRANKE im Suchraum: Eingang und Ausgang muessen mindestens so weit aussen liegen.
+  //
+  // Das ist dieselbe Zusage wie vorher - "Haarnadel von aussen anfahren und aussen
+  // verlassen" - nur an der richtigen Stelle. Ein Nachlauf schiebt die Linie hinterher nach
+  // aussen und macht sie dabei langsamer, ohne dass die Suche davon weiss; eine Schranke
+  // laesst die Suche das Beste finden, was mit dieser Vorgabe moeglich ist. Bei 0 entscheidet
+  // die Suche allein.
+  // Und der Boden kennt den PLATZ. Ohne das verlangt er auf einer einzelnen 60-Grad-Kachel
+  // dasselbe wie in einer Haarnadel - und dort ist kein Platz dafuer.
+  //
+  // GEMESSEN, zweite Differenz von alpha innerhalb der Kurven, nur wo alle drei Punkte in
+  // Kurvenkacheln liegen: auf SHG4HG3 und SG4R4G4L4 (Kurvenzuege von einer Haarnadel bzw.
+  // vier Kacheln) 0,010 bis 0,055 - auf SR3GLR2GR2G2 mit seiner EINZELNEN Linkskachel
+  // dagegen 9,46. Der Zwang forderte dort ueber 12 cm Querbewegung innerhalb von 43 cm Weg,
+  // und das ist kein Zickzack des Optimierers, sondern eine Vorgabe ohne Platz.
+  //
+  // Der Bezug ist die BOGENLAENGE des Kurvenzuges gegen zwei Kachellaengen, und das ist
+  // Geometrie und keine Abstimmung: eine 60-Grad-Kachel hat 34,4 mal pi/3 = 36 Einheiten
+  // Bogen und bekommt damit 45 Prozent des Bodens, eine Haarnadel mit 108 Einheiten den
+  // ganzen. Die Kachelzahl waere der falsche Bezug - sie sagt nichts ueber den Winkel.
+  //
+  // DAS VORZEICHEN, und es war falsch. trackNormals() zeigt nach LINKS in Fahrtrichtung,
+  // positives alpha bewegt also nach links. Der Mittelpunkt einer Rechtskurve liegt rechts,
+  // ihre INNENSEITE ist damit negatives alpha und ihre Aussenseite positives - also
+  // aussen = +dreht und nicht -dreht.
+  //
+  // Mit dem falschen Vorzeichen zwang der Boden Eingang und Ausgang nach INNEN, und in einer
+  // Schikane trafen sich dann der nach innen gezwungene Ausgang der Rechtskurve und der nach
+  // innen gezwungene Eingang der Linkskurve auf entgegengesetzten Seiten: gemessen an
+  // SRRRLLL sprang alpha zwischen zwei benachbarten Abtastpunkten von -0,48 auf +0,48, also
+  // um eine ganze Bahnbreite. Das war der letzte verbliebene Zickzack.
+  function aussenBoden(dreht, haarnadel, limit, bogen) {
+    const f = haarnadel ? LINE_OEFFNUNG_HAARNADEL : LINE_OEFFNUNG_KURVE;
+    const platz = Math.max(0, Math.min(1, (bogen || 0) / (2 * TRACK_STEP)));
+    return dreht * lineExitStaerke * f * platz * limit;
+  }
+
+  // Eine Zahl auf die Seite von `boden` klemmen: mindestens so weit aussen, hoechstens am
+  // Rand. boden = 0 heisst keine Schranke.
+  function bodenKlemme(v, boden, limit) {
+    if (!boden) return Math.max(-limit, Math.min(limit, v));
+    return boden > 0 ? Math.max(boden, Math.min(limit, v))
+                     : Math.min(boden, Math.max(-limit, v));
+  }
+
+  function formLine(pts, nrm, o, ziel, apexMin, apexMax) {
+    const limit = (o.limit !== undefined ? o.limit : TRACK_HALF_W - 3);
+    const closed = !!o.closed;
+    const tiles = o.tiles;
+    const n = pts.length;
+    const at = (i) => closed ? ((i % n) + n) % n : Math.max(0, Math.min(n - 1, i));
+    const laeufe = lineKurvenLaeufe(tiles, closed);
+    // ---- EIN LAYOUT OHNE KURVEN ------------------------------------------------------
+    //
+    // Dann IST die Mittellinie die schnellste und die kruemmungsaermste Linie, und das ist
+    // kein Rueckfall, sondern das richtige Ergebnis. Dieser Zweig stand in lateApexLine();
+    // beim Zusammenlegen der drei Modelle ist er mir verlorengegangen, und die Folge war
+    // kein stiller Fehler, sondern ein Ladeabbruch: alphaAus() greift auf zuege[0].idx zu,
+    // und "Cannot read properties of undefined (reading 'idx')" beim Aufbau nimmt die ganze
+    // IIFE mit. Eine gerade Strecke im Editor genuegt dafuer.
+    if (!laeufe.length) {
+      const alpha = new Array(n).fill(0);
+      const prof = lapTimeOf(pts.map((p) => [p.x, p.y]), closed, o);
+      return { alpha, limit, span: 0, lapTime: prof.time, startLapTime: prof.time,
+               gain: 0, v: prof.v, apex: [], par: [], evals: 0, accepted: 0 };
+    }
+    const tab = trackKachelTabelle(pts, tiles.length);
+    const zuege = laeufe.map((l) => lateApexZug(l, pts, tiles, tab, at));
+    // EINMAL geplant, dann nur noch angewandt - siehe lineGeradenPlan().
+    const gPlan = lineGeradenPlan(pts, closed, tiles);
+    const dreht = laeufe.map((l) => l.dreht);
+    // Die Bogenlaenge je Zug: lateApexZug gibt Weganteile zurueck, die Laenge selbst wird
+    // hier aus den Punkten geholt.
+    const bogen = zuege.map((z) => {
+      let L = 0;
+      for (let q = 1; q < z.idx.length; q++) {
+        const a1 = pts[z.idx[q - 1]], b1 = pts[z.idx[q]];
+        L += Math.hypot(b1.x - a1.x, b1.y - a1.y);
+      }
+      return L;
+    });
+    const bodenVoll = zuege.map((z, c) => aussenBoden(dreht[c], z.haarnadel, limit, bogen[c]));
+    // ---- SCHIKANEN: ZWEI KURVEN, EIN UEBERGANGSPUNKT --------------------------------
+    //
+    // Liegt zwischen zwei Kurvenzuegen KEINE Kachel, dann sind der Ausgang des einen und der
+    // Eingang des anderen derselbe Abtastpunkt. Ein Aussenboden auf beiden verlangt dort
+    // zwei entgegengesetzte Werte an einer Stelle - und weil der Boden fuer eine Rechtskurve
+    // links und fuer eine Linkskurve rechts liegt, ist die Forderung bei einer Schikane
+    // genau der Sprung um eine ganze Bahnbreite.
+    //
+    // GEMESSEN, zweite Differenz von alpha, nur innerhalb von Kurven:
+    //
+    //     Strecke         mit Boden auf beiden   Kurvenzuege
+    //     SHG4HG3               0,056            Haarnadeln, keine Schikane
+    //     SG4R4G4L4             0,102            Kurven mit Geraden dazwischen
+    //     SRRRLLL              10,552            RRR direkt auf LLL
+    //     SR3GLR2GR2G2          5,419            L direkt auf RR
+    //
+    // Die zwei Layouts mit einer Schikane sind genau die zwei mit dem Ausschlag.
+    //
+    // In einer Schikane faehrt niemand zweimal aussen-innen-aussen; es gibt EINE durchgehende
+    // Linie. Also: an einem direkten Uebergang kein Boden, und die zwei Anker sind EIN Wert.
+    const direkt = laeufe.map((l, c) => {
+      const nx = laeufe[(c + 1) % laeufe.length];
+      if (!nx || laeufe.length < 2) return false;
+      // bis kann ueber die Naht hinauszaehlen (siehe lineKurvenLaeufe), also modulo.
+      const ende = ((l.bis % tiles.length) + tiles.length) % tiles.length;
+      const anfang = ((nx.von % tiles.length) + tiles.length) % tiles.length;
+      return anfang === (ende + 1) % tiles.length;
+    });
+    const bodenEin = bodenVoll.slice();
+    const bodenAus = bodenVoll.slice();
+    for (let c = 0; c < laeufe.length; c++) {
+      if (!direkt[c]) continue;
+      bodenAus[c] = 0;
+      bodenEin[(c + 1) % laeufe.length] = 0;
+    }
+    // ---- UND DER SCHEITEL NACH INNEN, gleich weit ------------------------------------
+    //
+    // Ohne diese Schranke gibt es GAR KEINEN Scheitel, und das ist gemessen und kein
+    // Versehen des Optimierers. Alpha je Kurvenzug, auf den Deckel normiert:
+    //
+    //     Oeffnung 0     R5-8 min -0,11 max 0,00     also die Mittellinie
+    //     Oeffnung 0,3   R5-8 min +0,18 max +0,18    also flach aussen, ueber die ganze Kurve
+    //
+    // Der Grund ist die Geometrie einer Carrera-Kurve: sie ist ein Bogen mit FESTEM Radius
+    // von 37 cm. Nachgemessen an einer reinen Rechtskurve, mittlerer Radius der Bahn bei
+    // konstantem Versatz: Mittellinie 34,7 Einheiten, alpha +4 gibt 38,8 (aussen, weiter),
+    // alpha -4 gibt 30,7 (innen, enger). Nach innen zu tauchen macht den Radius also KLEINER
+    // und kostet Kurventempo - auf einer echten Strecke waehlt man mit dem Scheitel den
+    // Radius, hier ist er vorgegeben. Die zeitschnellste Linie hat deshalb keinen Scheitel.
+    //
+    // Wer eine Linie sehen will, die aussieht wie eine Ideallinie, muss die FORM fordern -
+    // aussen hinein, innen am Scheitel, aussen hinaus - und den Preis lesen. Genau dafuer
+    // ist der Regler da, und die Modellzeit daneben nennt die Kosten. Bei 0 entscheidet die
+    // Zielfunktion allein, und dann kommt die Mittellinie heraus.
+    const bodenSch = zuege.map((z, c) => -bodenVoll[c]);
+
+    // ---- Der Parametervektor: [Eingang, Scheitel, Ausgang, Scheitellage] je Kurve ----
+    //
+    // Die ersten drei in Zeichnungseinheiten, die vierte in Weganteil. DREI STARTPUNKTE,
+    // und der Grund ist gemessen: mit nur der Lehrbuchlinie blieb der Abstieg auf
+    // SR3GLR2GR2G2 bei einer Zeit 4,1 Prozent UEBER der Mittellinie haengen. Von einer weit
+    // aussen liegenden Linie aus ist jeder EINZELNE Parameter Richtung Mitte erst einmal
+    // schlechter, weil die anderen noch aussen stehen - ein Koordinatenabstieg kann da nicht
+    // heraus.
+    const starts = [0.8, 0.0, 0.4].map((s) => zuege.map((z, c) => {
+      // aussen = +dreht, siehe aussenBoden(): positives alpha ist links, und links ist
+      // aussen in einer Rechtskurve.
+      const aussen = dreht[c];
+      const mitte = (apexMin + apexMax) / 2;
+      return [bodenKlemme(aussen * s * limit, bodenEin[c], limit),
+              bodenKlemme(-aussen * (s > 0 ? 1 : 0) * limit, bodenSch[c], limit),
+              bodenKlemme(aussen * s * limit, bodenAus[c], limit),
+              Math.max(apexMin, Math.min(apexMax, s > 0 ? 0.6 : mitte))];
+    }));
+
+    const alphaAus = (par) => {
+      const alpha = new Array(n).fill(0);
+      for (let c = 0; c < zuege.length; c++) {
+        const z = zuege[c];
+        const p = Math.max(apexMin, Math.min(apexMax, par[c][3]));
+        // An einem direkten Uebergang gilt der Ausgang der VORHERIGEN Kurve auch als
+        // Eingang dieser - ein Punkt, ein Wert. Der eigene Parameter ist dort wirkungslos;
+        // der Abstieg merkt das von selbst, weil seine Aenderung nichts bewirkt.
+        const vor = (c - 1 + zuege.length) % zuege.length;
+        const ein = (zuege.length > 1 && direkt[vor]) ? par[vor][2] : par[c][0];
+        const k = kurvenKubik(ein, par[c][1], par[c][2], p);
+        for (let q = 0; q < z.idx.length; q++) {
+          const s = z.f[q];
+          const v = k[0] + k[1] * s + k[2] * s * s + k[3] * s * s * s;
+          alpha[z.idx[q]] = Math.max(-limit, Math.min(limit, v));
+        }
+      }
+      if (!closed) {
+        const erst = zuege[0].idx[0];
+        const zl = zuege[zuege.length - 1].idx;
+        const letzt = zl[zl.length - 1];
+        for (let i = 0; i < erst; i++) alpha[i] = alpha[erst];
+        for (let i = letzt + 1; i < n; i++) alpha[i] = alpha[letzt];
+      }
+      return lineGeradenAnwenden(alpha, gPlan);
+    };
+    const bahnAus = (alpha) => pts.map((p, i) => [p.x + nrm[i].x * alpha[i],
+                                                  p.y + nrm[i].y * alpha[i]]);
+    let auswertungen = 0;
+    const wertVon = (par) => {
+      auswertungen++;
+      const bahn = bahnAus(alphaAus(par));
+      if (ziel === 'kurve') {
+        // ---- KRUEMMUNGSENERGIE, NICHT DAS MAXIMUM -----------------------------------
+        //
+        // Der erste Versuch nahm Math.max(...k), also die engste Stelle. Das klingt richtig
+        // - sie bestimmt ja das Kurventempo - und ist als Zielfunktion fuer einen
+        // Koordinatenabstieg untauglich: der Wert haengt an EINEM Punkt, jede Aenderung
+        // irgendwo sonst laesst ihn unveraendert, und der Abstieg nimmt nichts an. Gemessen
+        // blieben auf SR3GLR2GR2G2 alle vier Scheitel auf ihrem Startwert 0,600 stehen, und
+        // die zweite Differenz lag bei 19,67 - schlechter als vor dem Umbau.
+        //
+        // Die Summe der Quadrate ist die uebliche Groesse fuer "kruemmungsaermste Linie",
+        // und sie ist das, was die Relaxation in idealLine() ohnehin naeherungsweise
+        // minimiert. Jede Verbesserung an jeder Stelle senkt sie, also findet ein Abstieg
+        // darauf auch etwas.
+        const k = pathCurvature(bahn, closed);
+        let summe = 0;
+        for (let i = 0; i < k.length; i++) summe += k[i] * k[i];
+        return summe;
+      }
+      return lapTimeOf(bahn, closed, o).time;
+    };
+
+    // ---- Koordinatenabstieg, von jedem Startpunkt ------------------------------------
+    const absteigen = (P) => {
+      let best = wertVon(P);
+      let schritt = [0.35 * limit, 0.35 * limit, 0.35 * limit, 0.12];
+      const runden = o.runden === undefined ? 5 : o.runden;
+      for (let runde = 0; runde < runden; runde++) {
+        for (let c = 0; c < P.length; c++) {
+          for (let k = 0; k < 4; k++) {
+            for (const richtung of [1, -1]) {
+              const alt = P[c][k];
+              let neu = alt + richtung * schritt[k];
+              if (k === 3) neu = Math.max(apexMin, Math.min(apexMax, neu));
+              else neu = bodenKlemme(neu, k === 0 ? bodenEin[c]
+                                        : k === 1 ? bodenSch[c] : bodenAus[c], limit);
+              if (neu === alt) continue;
+              P[c][k] = neu;
+              const t = wertVon(P);
+              if (t < best - 1e-12) best = t; else P[c][k] = alt;
+            }
+          }
+        }
+        schritt = schritt.map((s) => s * 0.5);
+      }
+      return { P, wert: best };
+    };
+    let bestLauf = null, startWert = null;
+    for (const S of starts) {
+      const r = absteigen(S);
+      if (startWert === null) startWert = r.wert;
+      if (!bestLauf || r.wert < bestLauf.wert) bestLauf = r;
+    }
+    const alpha = alphaAus(bestLauf.P);
+    const prof = lapTimeOf(bahnAus(alpha), closed, o);
+    return { alpha, limit, span: Math.max.apply(null, alpha.map(Math.abs)),
+             lapTime: prof.time, startLapTime: startWert, v: prof.v,
+             gain: ziel === 'zeit' ? (startWert - prof.time) / Math.max(1e-9, startWert) : 0,
+             apex: bestLauf.P.map((p) => +p[3].toFixed(3)),
+             par: bestLauf.P.map((p) => p.map((x) => +(x / limit).toFixed(3))),
+             evals: auswertungen, accepted: 0 };
+  }
+
   // ---------------------------------------------------------------- Modellwahl
   //
   // 'curvature' ist das bisherige Modell, minimale Kruemmung, also der groesste moegliche
@@ -582,19 +1129,314 @@
   // Kommentar darueber schon.
   let lineModel = 'laptime';
 
+  // Die gueltigen Modellnamen an EINER Stelle. Vorher stand die Liste als zwei
+  // Vergleiche in setLineModel und ein weiteres Mal als Bedingung in buildLine - beim
+  // dritten Modell waeren das drei Orte fuer eine Liste gewesen.
+  const LINE_MODELLE = ['curvature', 'laptime', 'lateapex'];
+
   function setLineModel(m) {
-    if (m !== 'curvature' && m !== 'laptime') return;
+    if (LINE_MODELLE.indexOf(m) < 0) return;
     lineModel = m;
   }
   function getLineModel() { return lineModel; }
 
+  // ---- KURVENAUSGANG OEFFNEN ---------------------------------------------------------
+  //
+  // GEMELDET: "nach der Haarnadelkurve sollten die Autos sich nach aussen tragen lassen und
+  // nicht ganz innen wieder losbeschleunigen."
+  //
+  // NACHGEMESSEN an SHG4HG3 (geschlossen, zwei Haarnadeln), alpha in Anteilen des Deckels,
+  // negativ heisst innen:
+  //
+  //     Haarnadel     -0,75 -0,98 -1,00 -1,00 -1,00 -1,00
+  //     Gerade danach -0,90 -0,84 -0,78 -0,70 -0,65 -0,60
+  //     dann          -0,54 ... -0,37  und dort bleibt sie
+  //
+  // Die Linie kommt also NIE auf die Aussenseite. Das ist keine Fehlfunktion der
+  // Kruemmungsminimierung, sondern ihre Eigenschaft: sie sucht den kuerzesten glatten Weg,
+  // und bei zwei gleichsinnigen Kurven auf 25 cm Bahnbreite liegt der innen. Ein Fahrer
+  // faehrt trotzdem weit heraus, weil er BESCHLEUNIGT und dafuer Breite braucht - das ist
+  // eine Laengsgroesse, und die kennt der Glaetter nicht.
+  //
+  // WARUM ALS NACHLAUF UND NICHT IN DER RELAXATION: es gab schon einmal zwei Versuche, das
+  // in die Relaxation zu ziehen, und beide sind gescheitert - der Kommentar bei idealLine()
+  // haelt sie fest. Der zweite gab eine Zielvorgabe auf der Geraden und erzeugte damit ein
+  // S: raus am Ausgang, zurueck zur Mitte, wieder raus. Eine Feder auf ein festes Ziel
+  // DECKELT ausserdem den Ausschlag, den der Glaetter sonst weiter treiben wuerde. Deshalb
+  // hier: der Glaetter laeuft unveraendert, und danach wird nur der Ausgang geoeffnet.
+  //
+  // DIE FORM IST GEWAEHLT, nicht abgeleitet - deshalb der Regler daneben. Was gemessen ist:
+  // wo der Scheitel liegt (dort ist die Kruemmung der Linie am groessten) und wie lang eine
+  // Kachel ist. Die Oeffnung laeuft vom Scheitel ueber eine Kachellaenge aus.
+  // 0,8 UND NICHT MEHR 0,5, weil der Regler jetzt eine LAGE angibt und keinen Zuschlag:
+  // "am Kurvenein- und -ausgang so viel Prozent des Weges zum Aussenrand". Bei 0,5 stand die
+  // Linie hinter einer Haarnadel gemessen noch bei -0,10 des Deckels, also auf der
+  // Innenseite - bestellt war "von aussen anfahren und aussen verlassen". Mit 0,8 liegt sie
+  // dort bei +0,02 und die Anfahrt bei +0,09.
+  let lineExitStaerke = 0.8;
+  function setLineExit(v) { lineExitStaerke = Math.max(0, Math.min(1, v || 0)); }
+  function getLineExit() { return lineExitStaerke; }
+
+  // Scheitel finden, KURVENAUSGANG finden, und von dort nach aussen blenden.
+  //
+  // BEIDE PUNKTE KOMMEN AUS DEM LAYOUT und nicht aus einer Kruemmungsschwelle. Eine Kurve
+  // besteht aus einer oder mehreren aufeinanderfolgenden Kurvenkacheln - das steht in
+  // tiles[i].type, und ihre Grenze ist eine Tatsache und keine Schaetzung. Der Scheitel ist
+  // dann der Punkt groesster Linienkruemmung INNERHALB dieses Laufs, der Ausgang seine
+  // letzte Kachelgrenze.
+  //
+  // ERSTER VERSUCH SUCHTE LOKALE MAXIMA MIT SCHWELLE `k > 0.3 * kMax`, und das ist an einem
+  // Artefakt gescheitert: auf einer geschlossenen Runde faellt der letzte Abtastpunkt mit
+  // dem ersten zusammen, und die Kruemmungsformel lieferte dort 0,6999 gegen 0,13 der
+  // Haarnadeln. kMax war also der doppelte Punkt, die Schwelle lag bei 0,21, und keine
+  // Haarnadel kam darueber - gemessen wurde GENAU EIN Scheitel gefunden, und der war das
+  // Artefakt. Die Schranke in pathCurvature() behebt die Ursache; diese Verankerung macht
+  // die Suche ausserdem unabhaengig davon.
+  //
+  // GEWAEHLT ist nur die Auslauflaenge nach dem Ausgang (eine Kachellaenge) und die Staerke.
+  // Deshalb der Regler.
+  const LINE_EXIT_AUSLAUF = TRACK_STEP;      // eine Kachellaenge, in Zeichnungseinheiten
+
+  // ---- DIE VORGABESTRECKE -------------------------------------------------------------
+  //
+  // Bestellt: "Standard Streckenlayout fuer Simulation (wenn nichts eingetragen): Nimm das,
+  // was ich dir geschrieben hatte." Dreizehn Kacheln, acht Rechtskurven, eine Linkskurve;
+  // gemessen geschlossen mit 0,48 cm Luecke und 0 Grad Winkelfehler.
+  //
+  // HIER UND NICHT IN 90b-sim.js, obwohl die Simulation der Anlass war: die Linienvorschau
+  // in den Ghost-Einstellungen braucht sie auch, und die steht in 90-ghosts.js - also VOR
+  // der Simulationsdatei. Ein const in der gemeinsamen IIFE, das von einer frueheren Datei
+  // gelesen wird, liegt in seiner temporalen Todeszone; an dieser Falle hat dieses Projekt
+  // schon eine ganze IIFE verloren. 60-track.js liest niemand von weiter vorn.
+  const TRACK_VORGABE_CODE = 'SR3GLR2GR2G2';
+
+  function istKurvenTyp(t) {
+    return t === TILE_TYPE.CURVE_LEFT || t === TILE_TYPE.CURVE_RIGHT
+        || t === TILE_TYPE.HAIRPIN || t === TILE_TYPE.HAIRPIN_LEFT;
+  }
+
+  function istHaarnadel(t) {
+    return t === TILE_TYPE.HAIRPIN || t === TILE_TYPE.HAIRPIN_LEFT;
+  }
+
+  // Die Drehrichtung einer Kachel: +1 rechts, -1 links, 0 keine Kurve.
+  function kurvenDrehung(t) {
+    if (t === TILE_TYPE.CURVE_RIGHT || t === TILE_TYPE.HAIRPIN) return 1;
+    if (t === TILE_TYPE.CURVE_LEFT || t === TILE_TYPE.HAIRPIN_LEFT) return -1;
+    return 0;
+  }
+
+  // Wie weit eine Kurve geoeffnet wird, als Anteil der Staerke. GEWAEHLT, und der Grund ist
+  // die Bahnbreite: eine 60-Grad-Kurve laesst sich mit 25 cm Breite noch rund fahren, eine
+  // Haarnadel nicht - dort ist der Unterschied zwischen aussen und innen der ganze Radius.
+  // Gemeldet: "nach der Haarnadelkurve sollten die Autos sich nach aussen tragen lassen",
+  // und in derselben Nachricht "Haarnadel von aussen anfahren und aussen verlassen".
+  const LINE_OEFFNUNG_HAARNADEL = 1.0;
+  const LINE_OEFFNUNG_KURVE = 0.6;
+
+  // Die Kurvenlaeufe eines Layouts: zusammenhaengende Ketten von Kurvenkacheln, ueber das
+  // Rundenende hinweg zusammengefasst, wenn die Runde geschlossen ist.
+  function lineKurvenLaeufe(tiles, closed) {
+    const n = tiles.length;
+    const laeufe = [];
+    let i = 0;
+    while (i < n) {
+      const d = kurvenDrehung(tiles[i].type);
+      if (!d) { i++; continue; }
+      let j = i;
+      // ---- NUR GLEICHSINNIGE KACHELN, und das ist eine Berichtigung ------------------
+      //
+      // Hier stand `istKurvenTyp(tiles[j + 1].type)` ohne Ruecksicht auf die Richtung. Damit
+      // wurde aus einer Schikane EINE Kurve: auf SR3GLR2GR2G2 verschmolzen die Kacheln
+      // 5 (links) und 6-7 (rechts) zu einem Zug, und das Layout hat dann drei Kurven statt
+      // vier. Gefunden hat es das dritte Linienmodell, weil es je Kurve einen Scheitel
+      // vergibt und deshalb ZAEHLT - die Oeffnung davor nahm ihr Vorzeichen aus dem
+      // Scheitel und funktionierte mit dem falschen Zug halbwegs weiter, also fiel es nicht
+      // auf.
+      //
+      // Eine Links-Rechts-Kombination ist zwei Kurven mit zwei Scheiteln. Dass zwischen
+      // ihnen keine Gerade liegt, macht sie nicht zu einer.
+      while (j + 1 < n && kurvenDrehung(tiles[j + 1].type) === d) j++;
+      laeufe.push({ von: i, bis: j, dreht: d });
+      i = j + 1;
+    }
+    // Ueber die Naht: laeuft die Kette am Ende weiter und beginnt am Anfang wieder, ist es
+    // EINE Kurve - aber nur bei GLEICHER Drehrichtung, aus demselben Grund wie oben. Ohne
+    // das bekaeme eine Kurve, die auf der Start/Ziel-Kachel liegt, zwei Scheitel und zwei
+    // Ausgaenge.
+    if (closed && laeufe.length > 1) {
+      const erst = laeufe[0], letzt = laeufe[laeufe.length - 1];
+      if (erst.von === 0 && letzt.bis === n - 1 && erst.dreht === letzt.dreht) {
+        letzt.bis = erst.bis + n;      // ueber die Naht hinaus zaehlen
+        laeufe.shift();
+      }
+    }
+    return laeufe;
+  }
+
+  // ---- AUF EINER GERADEN WIRD NICHT GELENKT ------------------------------------------
+  //
+  // GEMELDET: "In den aktuellen Ideallinien sind diese komischen Kurven - selbst bei einer
+  // Gerade sagst du dem Auto, es solle eine Kurve fahren. Mach ausserdem, dass bei einer
+  // oder mehreren Geraden zwischen zwei Kurven bezueglich der Querlage der Ausgangspunkt der
+  // einen mit dem Eingangspunkt der anderen verbunden wird (auf der Zielgeraden fahren alle
+  // Autos nach ganz rechts). Das macht keinen Sinn."
+  //
+  // NACHGEMESSEN an SR3GLR2GR2G2, alpha auf den Deckel normiert:
+  //
+  //   Kruemmung   Zielgerade: +0,38 -> -0,83, dann -0,81 bis -0,83 die GANZE letzte Kachel.
+  //               Auf Geraden 10 Vorzeichenwechsel der zweiten Differenz, groesste 1,16.
+  //   Rundenzeit  16 Wechsel, groesste 0,557.
+  //
+  // Beides ist derselbe Befund: die Glaetter behandeln alpha als freie Funktion des Ortes
+  // und haben keinen Begriff von "hier ist gerade". Die Kruemmungsminimierung darf auf einer
+  // Geraden alles tun, was den Radius der GESAMTLINIE nicht verschlechtert, und die
+  // oertliche Suche findet dort Zeitgewinne im Mikrometerbereich - beides ergibt Ausschlaege,
+  // die ein Fahrer nie fahren wuerde und ein Lenkservo als Ruck ausfuehrt.
+  //
+  // DIE REGEL IST GEOMETRIE UND KEINE ABSTIMMUNG: auf einer Geraden ist der kuerzeste Weg
+  // zwischen zwei Querlagen die Verbindungslinie. Sie wird nach WEGLAENGE interpoliert und
+  // nicht nach Punktzahl - die Punkte liegen ungleich dicht (gemessen 14 je Gerade, 49 je
+  // Haarnadel), und eine Interpolation nach Index waere auf einer Kachelgrenze knickig.
+  //
+  // DIE ANKER SIND DIE KURVENWERTE an den Kachelgrenzen. Seit v0.5.43 wird diese Funktion
+  // INNERHALB von formLine() gerufen, also fuer jede Kandidatenlinie der Suche: die Geraden
+  // sind damit nicht mehr ein Nachlauf, sondern Teil dessen, was bewertet wird.
+  // ---- IN PLAN UND ANWENDUNG GETEILT, und das ist eine Messung wert ------------------
+  //
+  // Diese Verbindung laeuft INNERHALB der Optimierung, also einmal je Kandidatenlinie -
+  // gemessen 683 Mal auf einer 33-Kachel-Strecke. Sie rechnete dabei jedes Mal dieselbe
+  // Geometrie neu: die Kurvenlaeufe, die Kacheltabelle ueber alle Abtastpunkte, die Grenzen
+  // je Lauf und die Weglaengen der Geradenstuecke. Nichts davon haengt an alpha.
+  //
+  // Gemessen kostete ein Editor-Neuaufbau auf 33 Kacheln 549 ms, und der Editor rechnet ihn
+  // bei JEDEM Klick auf eine Kachel. Der Plan wird deshalb einmal gebaut und dann nur noch
+  // angewandt - dieselbe Linie, weniger Arbeit.
+  function lineGeradenPlan(pts, closed, tiles) {
+    const n = pts.length;
+    if (!tiles || !tiles.length || n < 4) return null;
+    const laeufe = lineKurvenLaeufe(tiles, closed);
+    if (!laeufe.length) return null;          // keine Kurve, kein Anker
+    const tab = trackKachelTabelle(pts, tiles.length);
+    const at = (i) => closed ? ((i % n) + n) % n : Math.max(0, Math.min(n - 1, i));
+    // Die Abtastpunkte eines Kurvenlaufs, ueber die Naht hinweg - dieselbe Rechnung wie in
+    // lateApexZug(), und sie steht hier ein zweites Mal, weil beide Funktionen sonst ein
+    // Datenpaket austauschen muessten, das nur aus zwei Zahlen je Lauf besteht.
+    const grenzen = laeufe.map((lauf) => {
+      let erst = null, letzt = null;
+      for (let kk = lauf.von; kk <= lauf.bis; kk++) {
+        const t = ((kk % tiles.length) + tiles.length) % tiles.length;
+        for (let d = 0; d < tab.zahl[t]; d++) {
+          const i = at(tab.start[t] + d);
+          if (erst === null) erst = i;
+          letzt = i;
+        }
+      }
+      return { ein: erst, aus: letzt };
+    }).filter((g) => g.ein !== null);
+    if (!grenzen.length) return null;
+    const abst = (i, j) => Math.hypot(pts[j].x - pts[i].x, pts[j].y - pts[i].y);
+    // Je Paar aufeinanderfolgender Kurven das Stueck dazwischen. Bei einer geschlossenen
+    // Runde auch das Paar (letzte, erste) - sonst bliebe genau die Zielgerade uebrig, und
+    // die ist der gemeldete Fall.
+    const paare = [];
+    for (let g = 0; g + 1 < grenzen.length; g++) {
+      paare.push([grenzen[g].aus, grenzen[g + 1].ein]);
+    }
+    if (closed) paare.push([grenzen[grenzen.length - 1].aus, grenzen[0].ein]);
+    const stuecke = [];
+    for (const [von, bis] of paare) {
+      const weg = [0];
+      const idx = [];
+      let i = von, sicher = 0;
+      while (sicher++ <= n) {
+        const j = at(i + 1);
+        if (j === bis) break;
+        idx.push(j);
+        weg.push(weg[weg.length - 1] + abst(i, j));
+        i = j;
+      }
+      if (!idx.length) continue;                 // Kurven stossen direkt aneinander
+      const gesamt = weg[weg.length - 1] + abst(i, bis);
+      if (!(gesamt > 1e-9)) continue;
+      // Der Anteil je Punkt, fertig gerechnet. Danach ist die Anwendung eine Multiplikation.
+      stuecke.push({ von, bis, idx, f: idx.map((unused, q) => weg[q + 1] / gesamt) });
+    }
+    return stuecke.length ? stuecke : null;
+  }
+
+  // Anwenden, AN DER STELLE und ohne Kopie: der Aufrufer in formLine() baut alpha ohnehin je
+  // Auswertung neu, und eine Kopie je Auswertung war messbar - 683 Mal ein Array von 463
+  // Zahlen.
+  function lineGeradenAnwenden(alpha, plan) {
+    if (!plan) return alpha;
+    for (const st of plan) {
+      const a0 = alpha[st.von], d = alpha[st.bis] - a0;
+      for (let q = 0; q < st.idx.length; q++) alpha[st.idx[q]] = a0 + d * st.f[q];
+    }
+    return alpha;
+  }
+
+  // Die alte Signatur bleibt fuer Aufrufer, die keinen Plan halten - sie kopiert, damit sie
+  // das Eingabearray nicht veraendert.
+  function lineGeradenVerbinden(alpha, pts, closed, tiles) {
+    const plan = lineGeradenPlan(pts, closed, tiles);
+    return plan ? lineGeradenAnwenden(alpha.slice(), plan) : alpha;
+  }
+
   // Beide Modelle hinter einem Aufruf. Editor und Ghosts gehen hier durch, damit die
   // gezeichnete und die gefahrene Linie nicht auseinanderlaufen koennen.
   function buildLine(pts, nrm, opts) {
-    const o = opts || {};
-    const m = o.model || lineModel;
-    const line = m === 'laptime' ? lapTimeLine(pts, nrm, o) : idealLine(pts, nrm, o);
+    const o0 = opts || {};
+    const m = o0.model || lineModel;
+    // DIE FAHRGRENZEN EINMAL JE LINIE, und dann fuer jede Zeitauswertung dieselben.
+    // fahrGrenzen() integriert einen Start; in lapTimeOf zu stehen hiesse, das ein paar
+    // hundert Mal je Linie zu tun. Ein vom Aufrufer gesetzter Wert gewinnt - so kann eine
+    // Pruefung ein bekanntes Fahrzeug vorgeben, statt das eingestellte zu erwischen.
+    const g = fahrGrenzen();
+    const o = Object.assign({ aLat: g.aLat, aAcc: g.aAcc, aBrk: g.aBrk, vMax: g.vMax }, o0);
+    // ---- EINE FORM, DREI ZIELFUNKTIONEN ---------------------------------------------
+    //
+    // Der Scheitelbereich ist bei den zwei freien Modellen 0,15 bis 0,85 und nicht 0 bis 1:
+    // ein Scheitel AUF der Kachelgrenze ist keiner, und was daraus folgt, ist in v0.5.40
+    // gemessen worden - dort faellt eine der beiden Rampen ganz aus.
+    //
+    // OHNE LAYOUT gibt es keine Kurven, und dann gibt es auch nichts je Kurve zu
+    // parametrisieren. Dort bleiben die alten punktweisen Verfahren: sie brauchen kein
+    // Layout, und ihre Zackigkeit ist ohne Kacheln auch nicht zu beheben.
+    const mitLayout = !!(o.tiles && o.tiles.length);
+    const line = !mitLayout
+        ? (m === 'curvature' ? idealLine(pts, nrm, o) : lapTimeLine(pts, nrm, o))
+      : m === 'curvature' ? formLine(pts, nrm, o, 'kurve', 0.15, 0.85)
+      : m === 'lateapex' ? formLine(pts, nrm, o, 'zeit', LATE_APEX_MIN, LATE_APEX_MAX)
+      : formLine(pts, nrm, o, 'zeit', 0.15, 0.85);
     line.model = m;
+    line.grenzen = g;
+    // ---- KEINE NACHLAEUFE MEHR IM LAYOUT-FALL ---------------------------------------
+    //
+    // Hier standen die Kurvenoeffnung und die geraden Geraden als Nachlauf hinter den zwei
+    // punktweisen Modellen. Beide sind jetzt im Suchraum von formLine(): die Kurvenform IST
+    // Eingang, Scheitel und Ausgang, die Geraden entstehen als Teil der Konstruktion, und der
+    // Regler "Kurven oeffnen" ist eine Schranke darauf statt einer Verschiebung danach.
+    //
+    // WARUM DAS BESSER IST ALS EIN NACHLAUF: ein Nachlauf veraendert die Linie, NACHDEM die
+    // Zielfunktion sie bewertet hat. Das Ergebnis ist dann weder das Optimum noch bewertet -
+    // gemessen kostete die Kurvenoeffnung das Rundenzeitmodell rund 4 Sekunden, ohne dass
+    // irgendwo stand, dass sie es tut. Eine Schranke im Suchraum ist dieselbe Zusage,
+    // nachgerechnet.
+    //
+    // Ohne Layout bleiben die alten Verfahren, und dort ist die Zeit noch nachzurechnen:
+    // lineGeradenVerbinden braucht Kacheln, also aendert es dort nichts, aber die Zeit aus
+    // dem Optimierer beschreibt die ausgegebene Linie.
+    if (!mitLayout) {
+      const prof = lapTimeOf(
+        pts.map((p, i) => [p.x + nrm[i].x * line.alpha[i], p.y + nrm[i].y * line.alpha[i]]),
+        !!o.closed, o);
+      line.lapTime = prof.time;
+      line.v = prof.v;
+    }
+    line.span = Math.max(...line.alpha.map(Math.abs));
+    line.exit = lineExitStaerke;
     return line;
   }
 
@@ -627,8 +1469,22 @@
       paths += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2}"`
              + `${s.dash ? ` stroke-dasharray="${s.dash}"` : ''} stroke-linejoin="round"/>`;
       if (s.label) {
+        // DIE BESCHRIFTUNG KIPPT NACH INNEN, wenn sie sonst aus dem Bild laeuft. Sie sitzt am
+        // LETZTEN Punkt der Kurve, und der liegt am rechten Rand der Zeichenflaeche - rechts
+        // daneben sind nur noch R = 16 Einheiten. Gemessen ragten "1000/min" und "km/h"
+        // damit ueber den viewBox-Rand und wurden abgeschnitten; auf einem 320-px-Schirm
+        // waren das 11 sichtbare Pixel.
+        //
+        // Die Textbreite wird GESCHAETZT, mit 0,54 em je Zeichen. Das ist keine Messung -
+        // im SVG-Text gibt es zur Bauzeit keine -, aber eine Ueberschaetzung fuer diese
+        // Schrift, und Ueberschaetzen ist hier die richtige Richtung: im Zweifel kippt die
+        // Beschriftung nach innen, und dort steht sie immer richtig.
         const last = s.points[s.points.length - 1];
-        paths += `<text x="${(sx(last[0]) + 4).toFixed(1)}" y="${(sy(last[1]) + 3).toFixed(1)}"`
+        const bx = sx(last[0]);
+        const breit = String(s.label).length * 0.54 * 10;
+        const innen = bx + 4 + breit > W - 2;
+        paths += `<text x="${(innen ? bx - 4 : bx + 4).toFixed(1)}" y="${(sy(last[1]) + 3).toFixed(1)}"`
+               + ` text-anchor="${innen ? 'end' : 'start'}"`
                + ` font-size="10" font-weight="700" fill="${s.color}">${s.label}</text>`;
       }
     }
@@ -750,11 +1606,37 @@
     const n = pathPts.length;
     const at = (i) => pathPts[closed ? ((i % n) + n) % n : Math.max(0, Math.min(n - 1, i))];
     const out = new Array(n).fill(0);
+    // ---- ENTARTETE ABSTAENDE ZAEHLEN NICHT ------------------------------------------
+    //
+    // Auf einer GESCHLOSSENEN Runde ist der letzte Abtastpunkt derselbe wie der erste -
+    // gemessen ein Abstand von 0,0000 bei einem mittleren Abstand von 2,857 Einheiten. Der
+    // Kreis durch drei Punkte, von denen zwei zusammenfallen, hat den Radius null, und die
+    // Formel unten liefert dort einen riesigen Wert.
+    //
+    // GEMESSEN, bevor diese Schranke stand: auf SHG4HG3 kam an dieser einen Stelle eine
+    // Kruemmung von 0,6999 heraus, waehrend die beiden Haarnadeln bei 0,12 und 0,13 liegen.
+    // Das FUENFFACHE einer Haarnadel, an einer Geraden, allein aus einem doppelten Punkt.
+    //
+    // Zwei Verbraucher haben das geglaubt: brakeProfile() zeichnete an Start/Ziel eine
+    // Bremsung, die es nicht gibt, und die Scheitelsuche des Kurvenausgangs fand nur diesen
+    // einen "Scheitel" - ihre Schwelle war ein Anteil von kMax, und kMax war das Artefakt.
+    //
+    // Die alte Schranke (a*b*c < 1e-6) greift nicht: bei a = 0 und b = c = 2,857 ist das
+    // Produkt null, aber bei a = 0,001 ist es 8e-3 und damit darueber. Gebraucht wird eine
+    // RELATIVE Schranke, und der Bezug ist der mittlere Abstand dieses Pfades.
+    let summe = 0;
+    for (let i = 0; i + 1 < n; i++) {
+      summe += Math.hypot(pathPts[i + 1][0] - pathPts[i][0],
+                          pathPts[i + 1][1] - pathPts[i][1]);
+    }
+    const mittel = n > 1 ? summe / (n - 1) : 0;
+    const klein = Math.max(1e-9, mittel * 0.05);
     for (let i = 0; i < n; i++) {
       const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1);
       const a = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
       const b = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
       const c = Math.hypot(p2[0] - p0[0], p2[1] - p0[1]);
+      if (a < klein || b < klein) continue;      // bleibt 0: hier ist nichts zu messen
       const area2 = Math.abs((p1[0] - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (p1[1] - p0[1]));
       out[i] = (a * b * c) < 1e-6 ? 0 : (2 * area2) / (a * b * c);
     }
@@ -798,6 +1680,55 @@
     return `rgb(${mix(1)},${mix(2)},${mix(3)})`;
   }
 
+  // ====================================================================================
+  // DIE KAROSSERIE, MASSSTABSGETREU
+  // ====================================================================================
+  //
+  // Gemessen am Fahrzeug: 95 mm lang mit Spoiler, 38 mm breit. Alles andere folgt aus den
+  // Bahnmassen, die schon hier stehen - TRACK_UNITS_PER_CM = 40/43 rechnet Zentimeter in
+  // Zeichnungseinheiten:
+  //
+  //     Auto            9,5 cm  ->  8,84 Einheiten lang
+  //                     3,8 cm  ->  3,54 Einheiten breit
+  //     Bahn           25,0 cm  ->  23,26 Einheiten
+  //     Kachel         43,0 cm  ->  40,00 Einheiten
+  //
+  // Zwei Zahlen daraus sind der eigentliche Gewinn, und beide waren vorher nicht sichtbar:
+  //
+  //   ZWEI AUTOS NEBENEINANDER brauchen 30,4 Prozent der Bahnbreite. Es ist also reichlich
+  //   Platz - wer sich rammt, tut es nicht aus Enge.
+  //
+  //   EIN AUTO IST 22 PROZENT EINER KACHEL lang. Der Abstandshalter rechnete in Kacheln
+  //   (SPICE_GAP_MIN = 0,7), das sind also gut drei Fahrzeuglaengen. Jetzt ist die
+  //   Fahrzeuglaenge eine Zahl und kein Gefuehl.
+  //
+  // DER BISHERIGE PUNKT WAR IRREFUEHREND: Radius 3,2 sind 6,9 cm Durchmesser - breiter als
+  // das Auto ist (3,8) und kuerzer als es lang ist (9,5). Er behauptete also ein rundes
+  // Fahrzeug, das quer zu dick und laengs zu kurz war, und verschwieg die Fahrtrichtung.
+  const AUTO_LANG_CM = 9.5;
+  const AUTO_BREIT_CM = 3.8;
+  const AUTO_LANG = AUTO_LANG_CM * TRACK_UNITS_PER_CM;
+  const AUTO_BREIT = AUTO_BREIT_CM * TRACK_UNITS_PER_CM;
+  // Der Spoiler ist in den 95 mm ENTHALTEN und keine Zugabe. Er wird als Balken am Heck
+  // gezeichnet, damit man die Fahrtrichtung sieht - bei 8,8 Einheiten Laenge auf einer
+  // Karte von 200 Einheiten Breite ist das der einzige Weg, sie zu erkennen.
+  const AUTO_SPOILER = 1.4;
+
+  // Die Fahrtrichtung an einem Abtastpunkt, in Grad. AUS DEN PUNKTEN und nicht aus der
+  // Normalen: die Normale hat eine Vorzeichenkonvention, die in diesem Projekt schon zwei
+  // Fehler gekostet hat. Zwei aufeinanderfolgende Punkte haben keine.
+  function trackWinkelBei(pts, i) {
+    const n = pts.length;
+    const a = pts[Math.max(0, Math.min(n - 2, i))];
+    const b = pts[Math.max(1, Math.min(n - 1, i + 1))];
+    return Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+  }
+
+  // KLEINER ALS BIS v0.5.17: 6 px Radius deckten auf einer 30 px breiten Bahn die halbe
+  // Fahrbahn, und darin ist keine Querlage zu zeigen. 3,2 lassen Platz fuer beides.
+  // Als Modulkonstante, weil karteAutosSetzen() denselben Wert braucht.
+  const PUNKT_R = 3.2;
+
   function renderTrackPreview(tiles, currentIndex, opts) {
     const o = opts || {};
     if (!tiles || tiles.length === 0) {
@@ -808,16 +1739,15 @@
       return { html: '<p class="muted">Keine Streckenteile.</p>', closed: false };
     }
     const nrm = trackNormals(pts);
+    // Welche Punkte zu welcher Kachel gehoeren - einmal je Zeichnung, danach nur gelesen.
+    const kachelTab = trackKachelTabelle(pts, tiles.length);
     const first = pts[0], last = pts[pts.length - 1];
-    // 2 cm statt 60 Zeichnungseinheiten.
-     //
-     // 60 Einheiten sind 64,5 cm, und eine Kachel ist 43 cm lang: sie passte in die
-     // Toleranz. Der Editor meldete deshalb SR6, SL6 und SHGHG als "Geschlossen", obwohl
-     // bei allen dreien genau eine Kachel fehlt - eine Anzeige, die bei einer Luecke von
-     // einer Kachelbreite noch gruen sagt, ist keine Anzeige. 2 cm lassen Rundungsfehler
-     // durch und nichts sonst. Gefunden hat es der Selbsttest.
-    const closed = Math.hypot(last.x - first.x, last.y - first.y)
-                   < 2 * TRACK_UNITS_PER_CM;
+    // Lage UND Winkel, mit Toleranz - die Begruendung und die Zahlen stehen bei
+    // trackSchluss(). Hier stand eine Toleranz von 2 cm auf die Lage allein; die liess nur
+    // Rundungsfehler durch, nicht aber den Modellfehler einer langen Strecke, und dann
+    // rechnete die Ideallinie auf einer offenen Bahn.
+    const schluss = trackSchluss(pts);
+    const closed = schluss.closed;
 
     const half = TRACK_HALF_W;
     const pad = o.detailed ? half + 14 : 30;
@@ -863,9 +1793,11 @@
 
       // 3) Joints: a white tick across the roadway at every element boundary, so the
       //    individual pieces are visible instead of one continuous ribbon.
-      const perTile = TRACK_SAMPLES_PER_TILE;
-      for (let k = 0; k <= tiles.length; k++) {
-        const i = Math.min(pts.length - 1, k * perTile);
+      // JE KACHEL IHR ERSTER PUNKT, aus der Tabelle - nicht k * 14. Begruendung bei
+      // trackKachelTabelle(): eine Haarnadel hat 49 Abtastpunkte, eine Gerade 14, und mit
+      // der Multiplikation lagen die Fugen falsch und fehlten im letzten Drittel ganz.
+      for (let k = 0; k < tiles.length; k++) {
+        const i = kachelTab.start[k];
         const A = [pts[i].x + nrm[i].x * half, pts[i].y + nrm[i].y * half];
         const B = [pts[i].x - nrm[i].x * half, pts[i].y - nrm[i].y * half];
         body += `<path d="M ${P2(A)} L ${P2(B)}" stroke="#ffffff" stroke-width="1.6" opacity=".85"/>`;
@@ -896,7 +1828,9 @@
       //    is about to rise. Curvature is read from the ideal line itself, not the
       //    centreline — the whole point of the line is that it changes the radius, so using
       //    the centreline would colour a corner the car no longer takes that tightly.
-      const line = buildLine(pts, nrm, { closed });
+      // tiles MIT: der Kurvenausgang braucht die Kacheltypen, um Scheitel und Ausgang
+      // zu finden - siehe formLine().
+      const line = buildLine(pts, nrm, { closed, tiles });
       const ideal = pts.map((p, i) => [p.x + nrm[i].x * line.alpha[i],
                                        p.y + nrm[i].y * line.alpha[i]]);
       const brake = brakeProfile(ideal, closed);
@@ -929,36 +1863,187 @@
     // DER VERSATZ: die alte Zeile rechnete (index + 1) * Abtastpunkte, also das ENDE der
     // Kachel, auf der das Auto steht - eine ganze Kachel zu weit. Richtig ist der Anfang
     // plus die Phase. Genauer geht es nicht: das Auto ortet sich nicht, es zaehlt Kacheln.
-    const proSchritt = o.detailed ? TRACK_SAMPLES_PER_TILE : 1;
-    const autoPunkt = (index, phase, farbe, kuerzel) => {
+    // (PUNKT_R steht als Modulkonstante weiter oben - karteAutosSetzen() braucht denselben
+    //  Wert, und zwei Zahlen fuer eine Punktgroesse waeren zwei Punktgroessen.)
+    const autoPunkt = (index, phase, farbe, kuerzel, quer) => {
       if (index === null || index === undefined) return '';
-      const roh = (index + Math.max(0, Math.min(1, phase || 0))) * proSchritt;
-      const i = Math.max(0, Math.min(Math.round(roh), pts.length - 1));
+      const i = trackPunktIndex(kachelTab, pts, index, phase);
       const p = pts[i];
-      const x = (p.x + ox).toFixed(1), y = (p.y + oy).toFixed(1);
-      // Weisser Ring, damit der Punkt auf der grauen Bahn UND auf dem dunklen Grund steht.
-      let t = `<circle cx="${x}" cy="${y}" r="6" fill="${farbe || '#ff5c5c'}" `
-            + `stroke="#fff" stroke-width="2"/>`;
+      // DIE QUERLAGE als Versatz laengs der Normalen. Auf 85 Prozent der halben Breite
+      // begrenzt: ein Punkt auf dem Randstein saehe aus, als laege das Auto daneben, und
+      // genau das soll die Karte NICHT behaupten.
+      const q = Math.max(-0.85, Math.min(0.85, quer || 0));
+      const n = nrm[i] || { x: 0, y: 0 };
+      const px = p.x + n.x * q * half, py = p.y + n.y * q * half;
+      const x = (px + ox).toFixed(1), y = (py + oy).toFixed(1);
+      // ---- DIE KAROSSERIE, gedreht in Fahrtrichtung -------------------------------
+      //
+      // Ein Rechteck von 8,84 x 3,54 Einheiten, also 95 x 38 mm im Massstab der Bahn, plus
+      // ein Balken am Heck fuer den Spoiler. Der weisse Rand bleibt: er traegt das Auto auf
+      // der schwarzen Bahn UND auf dem hellen Grund daneben.
+      const w = trackWinkelBei(pts, i).toFixed(1);
+      const L = AUTO_LANG, B = AUTO_BREIT;
+      let t = `<g transform="translate(${x} ${y}) rotate(${w})">`
+            + `<rect x="${(-L / 2).toFixed(2)}" y="${(-B / 2).toFixed(2)}" `
+            + `width="${L.toFixed(2)}" height="${B.toFixed(2)}" rx="0.8" `
+            + `fill="${farbe || '#ff5c5c'}" stroke="#fff" stroke-width="0.5"/>`
+            + `<rect x="${(-L / 2).toFixed(2)}" y="${(-B / 2).toFixed(2)}" `
+            + `width="${AUTO_SPOILER.toFixed(2)}" height="${B.toFixed(2)}" `
+            + `fill="#0b0c0f" opacity="0.55"/>`
+            + `</g>`;
       if (kuerzel) {
-        t += `<text x="${x}" y="${(p.y + oy - 10).toFixed(1)}" text-anchor="middle" `
-           + `font-size="11" font-weight="700" fill="#fff" `
-           + `stroke="#0b0c0f" stroke-width="3" paint-order="stroke"`
+        t += `<text x="${x}" y="${(py + oy - 6).toFixed(1)}" text-anchor="middle" `
+           + `font-size="9" font-weight="700" fill="#fff" `
+           + `stroke="#0b0c0f" stroke-width="2.5" paint-order="stroke"`
            + `>${kuerzel}</text>`;
       }
       return t;
     };
-    if (currentIndex != null) body += autoPunkt(currentIndex, 0, '#ff5c5c', null);
+    if (currentIndex != null) body += autoPunkt(currentIndex, 0, '#ff5c5c', null, 0);
     if (o.cars) {
-      for (const c of o.cars) body += autoPunkt(c.index, c.phase, c.farbe, c.kuerzel);
+      for (const c of o.cars) body += autoPunkt(c.index, c.phase, c.farbe, c.kuerzel, c.quer);
     }
 
-    const style = o.detailed
-      ? 'width:100%;max-width:520px;height:auto;background:var(--panel-2);border:1px solid var(--border);border-radius:6px'
-      : 'width:220px;height:auto;background:var(--panel-2);border:1px solid var(--border);border-radius:4px';
-    const html = `<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" style="${style}">${body}</svg>`;
-    return { html, closed, lineInfo: o.lineInfo };
+    // KEIN style-ATTRIBUT MEHR, nur eine Klasse. Groesse, Grund und Rahmen entscheidet
+    // der ORT, an dem das Bild haengt - und dieser Zeichner kennt den Ort nicht. Er hat
+    // dreien gleichzeitig gedient (Editor, Minikarte, Uebersichtsschirm) und allen dieselbe
+    // Breitendeckelung von 520 px aufgeschrieben.
+    //
+    // Ein Inline-Stil schlaegt jede Regel eines Stylesheets, also blieb den Orten nur
+    // !important: der Uebersichtsschirm arbeitete gegen Grund und Rahmen an, das
+    // Editor-Vollbild gegen die Deckelung. Beide Behelfe fallen mit dieser Zeile weg.
+    //
+    // Die zweite Haelfte des Ternaers, das hier stand - `width:220px` fuer den einfachen
+    // Fall -, hatte ohnehin keinen Aufrufer mehr: alle fuenf Aufrufe uebergeben
+    // detailed: true. Sie sah aus wie eine Zusicherung und war keine. `o.detailed` bleibt
+    // fuer die GEOMETRIE zustaendig - Fahrbahn statt Linie -, dort ist der Unterschied echt.
+    const html = `<svg class="tp-karte" viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}">${body}</svg>`;
+    // DIE GEOMETRIE MIT HERAUS, damit ein Aufrufer Punkte setzen kann, ohne die Strecke neu
+    // zu rechnen. Gemessen kostet ein Aufruf dieser Funktion rund 94 ms - sie rechnet
+    // Mittellinie, Normalen UND die Ideallinie, und die ist eine Optimierung. Das gehoert
+    // nicht in einen Anzeigetakt.
+    //
+    // Es ist DIESELBE Geometrie, mit der oben gezeichnet wurde, kein zweiter Rechenweg.
+    return { html, closed, schluss, lineInfo: o.lineInfo,
+             // kachelTab statt proSchritt: die Zuordnung Kachel -> Abtastpunkt ist keine
+             // Multiplikation, siehe trackKachelTabelle(). proSchritt ist damit weg - eine
+             // Zahl, die eine falsche Annahme trug, laesst man nicht "fuer alte Aufrufer"
+             // stehen.
+             geo: { ox, oy, kachelTab, half, pts, nrm, punktR: PUNKT_R } };
   }
 
+
+  // ---- Autopunkte in ein fertiges Streckenbild setzen ---------------------------------
+  //
+  // Sie ZEICHNET die Strecke nicht, sie legt nur Punkte darauf. Gebraucht wird sie vom
+  // Uebersichtsschirm, der zehnmal je Sekunde nachzieht - und dort waere ein neuer
+  // Streckenaufbau (gemessen 94 ms) der Faden, an dem der Sendetakt haengt.
+  //
+  // Die Knoten werden WIEDERVERWENDET und nicht neu erzeugt: eine Gruppe je Aufruf zu
+  // ersetzen erzeugt zehn Verwerfungen je Sekunde im Layout, und der Browser zeichnet dann
+  // den ganzen Baum neu statt zweier Attribute.
+  const NS_SVG = 'http://www.w3.org/2000/svg';
+  // ---- Von der LENKANFORDERUNG zur QUERLAGE auf der Karte ----------------------------
+  //
+  // ZWEI GEGENLAEUFIGE KONVENTIONEN, und beide sind fuer sich richtig - nur nicht dieselbe:
+  //
+  //   g.querSoll   ist eine LENKANFORDERUNG. Positiv heisst RECHTS, so wie Byte 7 und so wie
+  //                der Stick, dessen Anzeige `left = 75 + nx * R` nach rechts wandert, wenn
+  //                der Wert steigt.
+  //   diese Karte  zeichnet entlang der NORMALEN, und trackNormals() zeigt nach LINKS. Das
+  //                steht seit der Randstein-Berichtigung auch bei den Kerbs.
+  //
+  // Wer die eine Zahl als die andere benutzt, spiegelt jedes Auto an der Mittellinie. Genau
+  // das ist passiert. Gemeldet wurde es so: "Die simulierten Ghosts fahren keine Ideallinie
+  // sondern immer aussen in der Kurve. Da ist eine Ideallinie in der Strecke eingezeichnet,
+  // die sollen sie fahren."
+  //
+  // NACHGEMESSEN, im Modell und ohne jede Hardware-Frage: in einer Rechtskurve liegt die
+  // gezeichnete Ideallinie bei alpha = -8,35 Zeichnungseinheiten (negative Normale = rechts
+  // = innen), der Autopunkt bei querSoll = +0,97 (positive Normale = links = aussen). Zwei
+  // gegenueberliegende Seiten derselben Mittellinie.
+  //
+  // Dass die LINIE die richtige ist, ist ebenfalls gemessen und nicht gesetzt: der Weg
+  // entlang alpha ist 607 Zeichnungseinheiten lang, die Mittellinie 648 - alpha ist also die
+  // innere Linie. Und ghostLineOffset() dreht ihr Vorzeichen bewusst, um daraus einen
+  // Lenkbefehl zum Scheitel zu machen. Beides bleibt, wie es ist; falsch war nur, den
+  // Lenkbefehl ungedreht als Ort zu zeichnen.
+  //
+  // EINE STELLE FUER DIE UMRECHNUNG. Zwei Zeichner benutzen sie (die Karte hier und die
+  // Rennsimulation), und eine zweite Kopie waere die naechste Gelegenheit, das Vorzeichen
+  // nur an einem der beiden Orte zu berichtigen.
+  function querSollAlsLage(v) { return -(v || 0); }
+
+  function karteAutosSetzen(svg, geo, cars) {
+    if (!svg || !geo) return 0;
+    let g = svg.querySelector('g.karte-autos');
+    if (!g) {
+      g = document.createElementNS(NS_SVG, 'g');
+      g.setAttribute('class', 'karte-autos');
+      svg.appendChild(g);
+    }
+    const liste = cars || [];
+    // Fehlende Knoten anlegen, ueberzaehlige verbergen. Nicht loeschen: die Zahl der Autos
+    // wechselt selten, und ein verborgener Knoten kostet nichts.
+    while (g.childNodes.length < liste.length * 2) {
+      // EINE GRUPPE JE AUTO, gedreht, mit Karosserie und Spoiler darin - und die
+      // Beschriftung DANEBEN und nicht darin: sie darf sich nicht mitdrehen, sonst steht
+      // das Kuerzel in einer Linkskurve auf dem Kopf.
+      const c = document.createElementNS(NS_SVG, 'g');
+      const body = document.createElementNS(NS_SVG, 'rect');
+      body.setAttribute('x', (-AUTO_LANG / 2).toFixed(2));
+      body.setAttribute('y', (-AUTO_BREIT / 2).toFixed(2));
+      body.setAttribute('width', AUTO_LANG.toFixed(2));
+      body.setAttribute('height', AUTO_BREIT.toFixed(2));
+      body.setAttribute('rx', '0.8');
+      body.setAttribute('stroke', '#fff');
+      body.setAttribute('stroke-width', '0.5');
+      const spoiler = document.createElementNS(NS_SVG, 'rect');
+      spoiler.setAttribute('x', (-AUTO_LANG / 2).toFixed(2));
+      spoiler.setAttribute('y', (-AUTO_BREIT / 2).toFixed(2));
+      spoiler.setAttribute('width', AUTO_SPOILER.toFixed(2));
+      spoiler.setAttribute('height', AUTO_BREIT.toFixed(2));
+      spoiler.setAttribute('fill', '#0b0c0f');
+      spoiler.setAttribute('opacity', '0.55');
+      c.appendChild(body);
+      c.appendChild(spoiler);
+      const t = document.createElementNS(NS_SVG, 'text');
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('font-size', '9');
+      t.setAttribute('font-weight', '700');
+      t.setAttribute('fill', '#fff');
+      t.setAttribute('stroke', '#0b0c0f');
+      t.setAttribute('stroke-width', '2.5');
+      t.setAttribute('paint-order', 'stroke');
+      g.appendChild(c);
+      g.appendChild(t);
+    }
+    for (let k = 0; k < g.childNodes.length / 2; k++) {
+      const c = g.childNodes[k * 2], t = g.childNodes[k * 2 + 1];
+      const a = liste[k];
+      if (!a || a.index === null || a.index === undefined) {
+        // VERBERGEN und nicht auf Groesse null setzen: eine Gruppe hat kein r, und ein
+        // rect mit width 0 waere ein Strich. hidden ist die Aussage, die gemeint ist.
+        c.setAttribute('visibility', 'hidden');
+        t.textContent = '';
+        continue;
+      }
+      c.setAttribute('visibility', 'visible');
+      const i = trackPunktIndex(geo.kachelTab, geo.pts, a.index, a.phase);
+      const p = geo.pts[i], n = geo.nrm[i] || { x: 0, y: 0 };
+      const q = Math.max(-0.85, Math.min(0.85, a.quer || 0));
+      const x = p.x + n.x * q * geo.half + geo.ox;
+      const y = p.y + n.y * q * geo.half + geo.oy;
+      const w = trackWinkelBei(geo.pts, i);
+      c.setAttribute('transform',
+        'translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') rotate(' + w.toFixed(1) + ')');
+      if (c.firstChild) c.firstChild.setAttribute('fill', a.farbe || '#ff5c5c');
+      t.setAttribute('x', x.toFixed(1));
+      t.setAttribute('y', (y - 6).toFixed(1));
+      t.textContent = a.kuerzel || '';
+    }
+    return liste.length;
+  }
 
   // ---- Short track code ----
   // One letter per element with a run-length count, plus the orientation. Short enough to
@@ -1055,18 +2140,46 @@
     // mit - genau die Falle, die in diesem Projekt schon OMEGA_TEST verschwinden liess.
     try {
       if (typeof garage === 'undefined') return out;
-      const now = Date.now();
       garage.forEach(c => {
         const g = c.ghost;
-        if (g && g.tileIndex !== null && g.tileIndex !== undefined) {
-          const dauer = (g.tileMs || 800)
-            * (typeof ghostTileLenFactor === 'function' ? ghostTileLenFactor(g.tileIndex) : 1);
-          const ph = g.tileStart ? Math.min(1, (now - g.tileStart) / Math.max(1, dauer)) : 0;
-          out.push({ index: g.tileIndex, phase: ph, farbe: c.farbe || '#ffb02e',
-                     kuerzel: (c.name || '?').slice(0, 3) });
+        // DER ORT KOMMT AUS ghostOrt(), und das ist die Behebung des gemeldeten Huepfens.
+        // Hier stand eine EIGENE Phasenrechnung, und sie war die von vor v0.5.18: global
+        // gemitteltes tileMs mal geometrischem Laengenverhaeltnis, mit g.tileStart als Uhr.
+        // Seit v0.5.18 misst die App die Dauer je KACHELTYP, und die Karte zog nicht mit.
+        //
+        // Fuer eine Haarnadel ist die geometrische Vorhersage gemessen 1,43 mal zu kurz: die
+        // Karte hielt ihre Phase also nach 70 Prozent der Haarnadel fuer voll, deckelte auf
+        // 1 - und der Punkt stand den Rest der Kurve still und sprang dann. Dazu lief sie an
+        // einer zweiten Uhr: g.tileStart wird im ghostTick gesetzt, car.tileAt schon beim
+        // Eintreffen des Pakets, und dazwischen liegt bis zu ein Takt (45 ms).
+        const ort = (typeof ghostOrt === 'function') ? ghostOrt(c) : null;
+        if (ort !== null) {
+          const kachel = Math.floor(ort);
+          // DIE RICHTIGEN ZUGRIFFE. Hier stand c.farbe und c.name - beides gibt es an
+          // einem Auto nicht, also fiel jeder Punkt auf Orange und jedes Kuerzel auf '?'
+          // zurueck. Gemeldet als "alle orange mit Fragezeichen daneben". Die Zuordnung war
+          // nie unklar: jeder Ghost hat seine eigene Verbindung und seinen eigenen
+          // Kachelzaehler - sie wurde nur nicht hingeschrieben.
+          out.push({ index: kachel, phase: ort - kachel, farbe: carColor(c).hex,
+                     kuerzel: garageLabel(c).slice(0, 3),
+                     // Die ANGEFORDERTE Querlage. Das Auto meldet keine; was hier steht,
+                     // ist die Summe aus eigener Spur und Ideallinie, also die Lage, die
+                     // die App gerade will. Mehr ist ehrlich nicht zu haben.
+                     //
+                     // UMGEDREHT, weil querSoll ein Lenkbefehl ist und diese Karte entlang
+                     // der Normalen zeichnet - siehe querSollAlsLage().
+                     quer: querSollAlsLage(g.querSoll) });
         } else if (c.role === 'player' && typeof dashMinimapIndex === 'number') {
-          out.push({ index: dashMinimapIndex, phase: 0.5, farbe: c.farbe || '#5aa9ff',
-                     kuerzel: (c.name || 'Ich').slice(0, 3) });
+          // Das eigene Auto lenkt die App nicht, es gibt also keine angeforderte QUERLAGE -
+          // quer bleibt 0, statt eine zu erfinden.
+          //
+          // Die PHASE dagegen gibt es, und sie stand hier fest auf 0,5: der eigene Punkt sass
+          // immer in der Mitte seiner Kachel und sprang bei jedem Wechsel eine ganze Kachel
+          // weit. dashTilePhase() war die ganze Zeit da und wurde nur nicht gefragt.
+          out.push({ index: dashMinimapIndex,
+                     phase: (typeof dashTilePhase === 'function') ? dashTilePhase() : 0.5,
+                     farbe: carColor(c).hex,
+                     kuerzel: garageLabel(c).slice(0, 3), quer: 0 });
         }
       });
     } catch (e) { return out; }
@@ -1122,8 +2235,23 @@
     // von beiden wurde je nachgeschlagen, weil der Text per textContent hineingeschrieben
     // wird. Der Sprachtest sieht "Offen" nicht - es hat weder Umlaut noch deutsches
     // Funktionswort -, falsch ist es trotzdem.
-    $('track-closed-badge').textContent = currentTrackTiles.length === 0 ? '-'
-      : t(result.closed ? 'Geschlossen ✓' : 'Offen');
+    // DIE LUECKE MIT ANSCHREIBEN, in Zentimetern. "Offen" allein sagt nicht, ob ein Teil
+    // fehlt oder ob es zwei Millimeter sind - und genau das ist die Frage, die man beim
+    // Bauen hat. Gemeldet als "bei einer laengeren Strecke passen die Schienen am Ende
+    // nicht perfekt zusammen": mit der Zahl daneben sieht man sofort, ob das noch in der
+    // Toleranz liegt.
+    const badge = $('track-closed-badge');
+    if (currentTrackTiles.length === 0) {
+      badge.textContent = '-';
+    } else if (result.closed) {
+      badge.textContent = t('Geschlossen ✓');
+    } else if (result.schluss && result.schluss.lueckeCm !== null) {
+      const l = result.schluss.lueckeCm.toFixed(0);
+      const w = Math.abs(result.schluss.winkel).toFixed(0);
+      badge.textContent = t('Offen') + ' (' + l + ' cm, ' + w + '°)';
+    } else {
+      badge.textContent = t('Offen');
+    }
     const list = $('track-tile-list');
     // The first tile is the Start/Finish anchor and is not deletable.
     list.innerHTML = currentTrackTiles.map((t, i) =>
@@ -1244,7 +2372,9 @@
       else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
     } catch (e) { /* refused: the CSS layout still applies */ }
     document.body.classList.add('track-fs');
-    $('track-fs').hidden = true; $('track-fs-exit').hidden = false;
+    // Nur noch der Textknopf in der Seite wird geschaltet. Der Umschalter in der Leiste
+    // wechselt sein Symbol per CSS an derselben Klasse - eine Wahrheit, ein Ort.
+    $('track-fs').hidden = true;
     refreshTrackPreview();
   }
   async function exitTrackFullscreen() {
@@ -1253,11 +2383,12 @@
       else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
     } catch (e) { /* already out */ }
     document.body.classList.remove('track-fs');
-    $('track-fs').hidden = false; $('track-fs-exit').hidden = true;
+    $('track-fs').hidden = false;
     refreshTrackPreview();
   }
   $('track-fs').onclick = enterTrackFullscreen;
-  $('track-fs-exit').onclick = exitTrackFullscreen;
+  $('track-fs-toggle').onclick = () => (document.body.classList.contains('track-fs')
+    ? exitTrackFullscreen() : enterTrackFullscreen());
   // Leaving by Escape or a system gesture must put the buttons back too.
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement && document.body.classList.contains('track-fs')) {
@@ -1272,11 +2403,14 @@
   // Zwei Reihen, so wie sie auf dem Schirm liegen: oben die Aktionen, unten die Teile.
   // Hoch und runter wechselt die Reihe, links und rechts waehlt darin, X loest aus. Vorher
   // sprang hoch/runter auf das erste bzw. letzte Teil, was niemand erraten kann.
+  // NUR DIE ids. Hier stand bei jedem Eintrag noch eine Aufschrift, und die hat NIEMAND
+  // gelesen - renderTrackPadFocus und trackEditorPad nehmen beide ausschliesslich `id`.
+  // Fuer den Umschalter waere sie ausserdem falsch geworden: er traegt jetzt zwei.
   const TRACK_ACTIONS = [
-    { id: 'track-undo', cap: 'Zurueck' },
-    { id: 'track-rotate-right', cap: 'Drehen' },
-    { id: 'track-clear', cap: 'Leeren' },
-    { id: 'track-fs-exit', cap: 'Schliessen' },
+    { id: 'track-undo' },
+    { id: 'track-rotate-right' },
+    { id: 'track-clear' },
+    { id: 'track-fs-toggle' },
   ];
   let trackPadRow = 1;      // 0 = Aktionen oben, 1 = Teile unten
   let trackActionSel = 0;

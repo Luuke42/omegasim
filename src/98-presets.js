@@ -57,7 +57,7 @@
     pro: {
       label: 'Pro',
       kurz: 'Halb so weit zwischen Arcade und Realismus GT3',
-      text: 'Automatik, 2,6 s auf 100, voller Grip, kein Reifenverschleiß und kein '
+      text: 'Automatik, 2,6 s auf 100, voller Grip, Reifenmodell an und kein '
           + 'Tankgewicht. Lenkkalibrierung 200 Prozent, damit auch enge Strecken gehen '
           + '– der volle Einschlag liegt bei etwa einem Drittel Stick an. Fading und '
           + 'Windschatten sind aus; sie stehen ab GT4 zur Verfügung.',
@@ -70,7 +70,20 @@
            // Vollgas bis 90 %. Pro ist die Vorgabe und muss sich wie ein Auto anfuehlen,
            // nicht wie ein Anfahrversuch.
            'setting-zero-to-top': 2.6, 'setting-coast-drag': 0.6, 'setting-fuelweight': 0,
-           'setting-tyres': 0, 'phys-steerresp': 2.4, 'setting-brakebias': 58,
+           // REIFENMODELL AN, seit v0.5.18. Pro ist die Vorgabe, und mit 0 waeren die
+           // vier Mischungen ab Werk wirkungslos - ein Merkmal, das man erst durch einen
+           // Regler freischalten muss, ist nicht geliefert. 1,0 ist das volle Modell und
+           // nicht die doppelte Rate; der Kommentar bei tyreEffect nennt 2,0 selbst eine
+           // Uebertreibung.
+           // 62 UND NICHT 58, und das aendert nichts am Fahren - es macht die Anzeige
+           // wahr. Gefunden vom Spiegeltest fuer Regler: der Regler stand auf 58, das
+           // Modell auf 0,62, und GEFAHREN wurde 62, bis jemand den Regler einmal
+           // anfasste. 0,62 ist ausserdem der Bezugswert der Kalibrierung
+           // (brakeBiasRef): bei genau diesem Wert ist der Regler ein Nichts-Tun,
+           // und ein kalibriertes Modell soll in seiner Vorgabe auf seiner
+           // Kalibrierung stehen. Die anderen Voreinstellungen behalten ihre Werte -
+           // dort ist die Abweichung eine Abstimmung und keine Unstimmigkeit.
+           'setting-tyres': 1, 'phys-steerresp': 2.4, 'setting-brakebias': 62,
            // Lenkkalibrierung 200 Prozent: der Reibkreis beschneidet den Einschlag beim
            // Anbremsen auf etwa 60 Prozent, und das holt ihn zurueck. Gemessen bei 60 km/h
            // unter Bremsen: 35 Grad ohne, volle 45 Grad ab einem Drittel Stick mit.

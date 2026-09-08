@@ -328,7 +328,13 @@
     // ausgeloest wird er, wenn die Sekunde voll ist. !e.repeat ist dabei wichtig: eine
     // gehaltene Taste feuert keydown wiederholt, und jeder Wiederholer wuerde den Balken
     // neu starten.
-    if (k === 'x' && !e.repeat) flagHoldPress();
+    // DIESELBE REGEL WIE AM CONTROLLER: der Schirm entscheidet. Stuende hier nur
+    // flagHoldPress(), gaebe die Tastatur im Boxenmenue Gelb, waehrend der Controller dort
+    // waehlt - zwei Bedeutungen fuer eine Taste, unterschieden durch das Eingabegeraet.
+    if (k === 'x' && !e.repeat) {
+      if (cockpitScreenIst().id !== 'main') cockpitScreenWaehlen();
+      else flagHoldPress();
+    }
     if (k === 'q' && !e.repeat) debugCountLap(e.shiftKey);
     if (k === 'm' && !e.repeat) {
       // Next unused section, so one key walks the whole protocol in order.

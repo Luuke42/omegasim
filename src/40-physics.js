@@ -62,23 +62,39 @@
     f1: { label: 'Formel-1-Monoposto', vorn: 0.45, radstand: 3.60, iz: 1000 },
   };
   // Der Bezug, an dem die Lenkgeschwindigkeit haengt: bei diesem Traegheitsmoment gilt genau
-  // der kalibrierte Wert von steerRatePerS.
+  // der kalibrierte Wert.
   const IZ_REF = 2000;
   const STEER_RATE_REF = 6.0;
 
-  // Wie schnell das Auto auf einen Lenkbefehl antwortet, aus dem Traegheitsmoment.
+  // Die kalibrierte Vorgabe fuer das Lenkansprechen. Sie ist der Bezug fuer die Anzeige,
+  // damit dort 100 % steht, wo der Wert hingehoert - und nicht 200 %.
   //
-  // EINE ABSICHTLICHE ABKUERZUNG, und sie gehoert benannt: steerRatePerS ist eigentlich die
-  // Geschwindigkeit des SERVOS und keine Eigenschaft der Fahrzeugmasse. Das Auto rutscht in
-  // echt nicht, also gibt es keinen anderen Kanal, ueber den "antwortet schneller" ueberhaupt
-  // ausdrueckbar waere. Das ist keine Aussage ueber die Servohardware, sondern die einzige
-  // Stelle, an der ein kleines Traegheitsmoment sich zeigen kann.
+  // SIE STEHT HIER UND NICHT MEHR IN 50-drive.js, und das ist eine Zusammenlegung: dort war
+  // sie ein zweites Mal deklariert, und seit die Lenkdaempfung sie ebenfalls braucht, waeren
+  // es zwei Orte fuer eine Zahl gewesen. Diese Datei ist die FRUEHERE, ein const hier ist
+  // also aus 50-drive.js zur Aufbauzeit lesbar - die umgekehrte Richtung ist die temporale
+  // Todeszone, gegen die der Kommentar dort argumentiert, und sie bleibt gemieden.
+  const STEER_RESP_REF = 2.0;
+
+  // ---- LENKDAEMPFUNG: WIE LANGE VON NULL BIS ZUM VOLLEN AUSSCHLAG ---------------------
   //
-  // GEDECKELT auf 4 bis 9: ohne Deckel gaebe ein F1-Traegheitsmoment von 1000 den doppelten
-  // Wert, und eine Lenkung, die in einem Achtel Sekunde am Anschlag ist, ist kein
-  // Fahrzeugverhalten mehr, sondern ein Sprung.
-  function steerRateFor(iz) {
-    return Math.max(4, Math.min(9, STEER_RATE_REF * (IZ_REF / Math.max(1, iz))));
+  // In Millisekunden, weil das die Groesse ist, die man ausprobieren und vergleichen kann.
+  // Vorher hiess sie steerRatePerS und war "Anschlag je Sekunde" - eine Zahl, die kein
+  // Regler zeigte und die zusaetzlich mit steerResponse multipliziert wurde. Damit hing die
+  // Zeit an zwei Reglern, und keiner von beiden sagte sie.
+  //
+  // EINE ABSICHTLICHE ABKUERZUNG, und sie gehoert benannt: das ist die Geschwindigkeit des
+  // SERVOS und keine Eigenschaft der Fahrzeugmasse. Das Auto rutscht in echt nicht, also
+  // gibt es keinen anderen Kanal, ueber den "antwortet schneller" ueberhaupt ausdrueckbar
+  // waere. Das ist keine Aussage ueber die Servohardware, sondern die einzige Stelle, an der
+  // ein kleines Traegheitsmoment sich zeigen kann.
+  //
+  // GEDECKELT auf 56 bis 125 ms (das sind die alten 9 bis 4 je Sekunde): ohne Deckel gaebe
+  // ein F1-Traegheitsmoment von 1000 den doppelten Wert, und eine Lenkung, die in einem
+  // Achtel Sekunde am Anschlag ist, ist kein Fahrzeugverhalten mehr, sondern ein Sprung.
+  function steerDaempfungFor(iz) {
+    const rate = Math.max(4, Math.min(9, STEER_RATE_REF * (IZ_REF / Math.max(1, iz))));
+    return Math.round(1000 / (rate * STEER_RESP_REF));
   }
 
   // Der Bezug fuer den absoluten Achslastanteil: bei dieser statischen Achslast ist der
@@ -92,7 +108,11 @@
     constructor() {
       this.config = {
         accelerationFactor: 1.0, // fine-tune multiplier on top of the calibrated scale
-        steerRatePerS: 6.0,      // full lock in ~1/6 s; the servo's speed, not its lag
+        // Von null bis zum vollen Ausschlag, in Millisekunden. 83 ist NICHT gewaehlt,
+        // sondern der bisherige Wert nachgerechnet: 6,0 Anschlag/s mal dem kalibrierten
+        // Lenkansprechen 2,0 sind 12 Anschlaege je Sekunde, also 83 ms. Damit faehrt die
+        // App mit der Vorgabe genauso wie vorher.
+        steerDaempfungMs: Math.round(1000 / (STEER_RATE_REF * STEER_RESP_REF)),
         steerExpo: 1.15,         // near-linear: 1.5 made the car feel unwilling to turn
         // Der volle Lenkausschlag ist MECHANISCH 45 Grad. Das stand nirgends, und damit
         // war steerResponse eine Zahl ohne Einheit: der Regler ging von 0,5 bis 3,0, und
@@ -228,7 +248,11 @@
         // 30 km/h und beschleunigt erst danach realistisch". Es ist das Losbrechmoment
         // und keine Erfindung, aber wie gross es sein muss, haengt am Untergrund: auf
         // Teppich braucht es mehr als auf Laminat.
-        minMoveThrottle: 0.16, // smallest byte that actually breaks the car away from rest
+        // 0,05 STATT 0,16, auf Bitte des Nutzers. 0,16 sind im Massstab rund 47 km/h -
+        // das war der gemeldete "Sprung von 0 auf gefuehlt 30". 0,05 sind 15 km/h, also
+        // ein Anschieben statt eines Satzes. Wieviel noetig ist, haengt am Untergrund;
+        // der Regler steht in den Optionen unter Anfahrschub.
+        minMoveThrottle: 0.05, // smallest byte that actually breaks the car away from rest
         // GASKENNLINIE, Ausgang x hoch throttleGamma. 1 = linear und bitgleich zu vorher.
         // Ueber 1 streckt den unteren Bereich: mehr Weg fuer wenig Gas, und genau das
         // braucht ein Trigger mit grosser Totzone, um ein Tempo zu HALTEN.
@@ -294,6 +318,10 @@
         // v0.4 von 0,0018 herauf: bei 100 % war der Verschleiss ueber eine Rennlaenge
         // kaum zu merken. Jetzt abgefahren nach gut vier Minuten voller Attacke.
         tyreWearRate: 0.0032,
+        // Faktor der REIFENMISCHUNG auf den Verschleiss, gesetzt von applySurface() in
+        // 70-race.js. Eigenes Feld und nicht tyreWearRate selbst: zwei Orte fuer dieselbe
+        // Zahl waren in diesem Projekt schon siebzehnmal eine Abweichung.
+        tyreWearMix: 1.0,
         tyreWearPenalty: 0.35, // Griffverlust auf voellig abgefahrenen Reifen (v0.4: von 0,30)
         shiftDragFactor: 0.25, // drag during a shift: a slight lull, not a full coast-down
         accelCalibration: 1,   // solved for in calibrateAccel(), see there
@@ -727,11 +755,21 @@
 
     // ---- EINSPURMODELL, ein Schritt ---------------------------------------------------
     //
-    // INSTRUMENT UND KEIN AKTOR. Nichts hiervon stellt die Lenkung, und der Grund ist keine
-    // Vorsicht, sondern eine Tatsache: das Modellauto rutscht nicht. Ein Modell, das eine
-    // Bewegung rechnet, die das Fahrzeug nicht ausfuehren kann, wuerde die Vorgabe von der
-    // Wirklichkeit wegdrehen - das Auto faehrt geradeaus, die Simulation meldet eine Drift,
-    // und die App korrigiert eine Bewegung, die es nicht gibt.
+    // INSTRUMENT UND KEIN AKTOR. Nichts hiervon stellt die Lenkung.
+    //
+    // DIE BEGRUENDUNG IST BERICHTIGT, und zwar vom Nutzer am Fahrzeug. Hier stand "das
+    // Modellauto rutscht nicht". Das stimmt nicht: auf rutschigem Boden bricht es aus, wenn
+    // man aus dem Stand direkt Vollgas gibt.
+    //
+    // Was trotzdem gilt, und darauf kommt es an: DIESES Modell rechnet den
+    // KURVENSCHRAEGLAUF, also das Wegdriften aus Seitenkraft bei Kurvenfahrt. Beobachtet ist
+    // etwas anderes, naemlich durchdrehende Raeder aus dem Stand. Ein Gegensteuern aus dem
+    // Kurvenmodell waere weiterhin die Korrektur einer Bewegung, die in dem Moment nicht
+    // stattfindet - das Auto faehrt geradeaus und dreht durch, die Simulation meldete eine
+    // Kurvendrift.
+    //
+    // Der Drift-Modus (v0.5.18) regelt deshalb gegen das GEMESSENE Drehsignal aus Byte 3
+    // und nicht gegen dieses Modell. Siehe driftGegenlenken() in 20-protocol.js.
     //
     // HALBIMPLIZIT und nicht explizit. Die Doku nennt das als den besseren der zwei Wege, und
     // die Begruendung ist nachrechenbar: die Zeitkonstante der Gierdynamik liegt bei 0,2 bis
@@ -867,7 +905,7 @@
       this.config.loadFrontStatic = L.vorn;
       this.config.wheelbaseM = L.radstand;
       this.config.yawInertia = L.iz;
-      this.config.steerRatePerS = steerRateFor(L.iz);
+      this.config.steerDaempfungMs = steerDaempfungFor(L.iz);
       this.state.loadFront = L.vorn;
       this.layoutName = LAYOUTS[name] ? name : 'neutral';
       return this.layoutName;
@@ -1344,7 +1382,11 @@
       // VIER Verschleisswerte, jeder mit seiner Radlast. Vorher waren es zwei
       // (links/rechts) aus der Lenkrichtung allein - vorne und hinten waren verklebt,
       // obwohl das Bremsen die Vorderachse laengst belastet.
-      const zuwachs = cfg.tyreWearRate * pWear * cfg.tyreEffect * work * hotFactor * dt;
+      // Der Mischungsfaktor multipliziert HIER und nicht in tyreWearRate: weich frisst
+      // sich schneller ab als hart, und das ist eine Eigenschaft des Gummis und keine
+      // der Grundrate.
+      const zuwachs = cfg.tyreWearRate * (cfg.tyreWearMix || 1) * pWear
+                      * cfg.tyreEffect * work * hotFactor * dt;
       const asym = Math.max(0, Math.min(2, cfg.tyreAsymEffect));
       for (let i = 0; i < 4; i++) {
         const last = asym > 0 ? st.load4[i] : 1;
@@ -1609,7 +1651,48 @@
       // start of a movement — precisely the moment that has to feel immediate. A rate limit
       // moves at full speed from the first tick and only caps how quickly full lock is
       // reached, which separates "how fast does it answer" from "how far does it go".
-      const maxStep = cfg.steerRatePerS * cfg.steerResponse * dt;
+      // OHNE steerResponse, und das ist eine Berichtigung. Hier stand
+      //
+      //     const maxStep = cfg.steerRatePerS * cfg.steerResponse * dt;
+      //
+      // und damit hing die Zeit bis zum vollen Ausschlag an ZWEI Reglern: an der Lenkrate,
+      // die keiner sah, und am Lenkansprechen, das laut seinem Namen und seinem Hilfetext
+      // den WINKEL bestimmt. Wer das Lenkansprechen von 200 auf 240 Prozent stellte, machte
+      // damit unangekuendigt auch die Lenkung schneller (83 ms auf 69 ms).
+      //
+      // Jetzt macht jeder Regler genau eine Sache: steerResponse skaliert den Zielwinkel,
+      // steerDaempfungMs die Zeit dorthin. Die Zahl auf dem Regler ist damit die Zahl, die
+      // gilt.
+      //
+      // 0 ms heisst SOFORT und ist kein Sonderfall im Modell, sondern ein Schritt, der
+      // groesser ist als jede moegliche Differenz - fuer Lenkrad und RC-Funke, wie bestellt.
+      //
+      // ---- BIS ZUM AKTUELL MOEGLICHEN ANSCHLAG, nicht bis zum Kommandowert 1,0 ----------
+      //
+      // Bestellt war "von 0 zum vollen AKTUELL MOEGLICHEN Lenkausschlag", und das ist nicht
+      // dasselbe. Der uebertragene Winkel ist dampedSteering mal steerCalib mal Aquaplaning
+      // mal Reibkreis, gedeckelt auf 1,0. Bei der Kalibrierung von 200 Prozent schlaegt er
+      // also schon bei einem halben Kommandowert an.
+      //
+      // GEMESSEN, bevor diese Zeilen da waren: eingestellte 83 ms ergaben 65, 200 ergaben
+      // 155, 500 ergaben 385 - durchweg 78 Prozent. Der Regler haette also gelogen, und
+      // zwar um einen Faktor, der an einem ganz anderen Regler haengt.
+      //
+      // `weg` ist die Strecke, die das Kommando wirklich zuruecklegen muss. Bei k > 1 ist
+      // sie kuerzer als 1, bei k <= 1 ist der Anschlag ohnehin erst bei vollem Kommando
+      // erreicht - in beiden Faellen kommt am Ende dieselbe ZEIT heraus, und genau das ist
+      // die Zusage des Reglers.
+      //
+      // aquaFactor und steerGrip stammen aus dem VORHERIGEN Takt (sie werden weiter unten
+      // gesetzt). Bei 20 ms Takt ist das belanglos, und die Alternative waere, die
+      // Reihenfolge des ganzen Blocks umzustellen, um eine Groesse zu gewinnen, die sich
+      // zwischen zwei Takten kaum aendert.
+      const k = Math.max(0.05, cfg.steerCalib * (st.aquaFactor === undefined ? 1 : st.aquaFactor)
+                               * (st.steerGrip === undefined ? 1 : st.steerGrip));
+      const weg = Math.min(1, 1 / k);
+      const maxStep = cfg.steerDaempfungMs > 0
+        ? dt * 1000 / cfg.steerDaempfungMs * weg
+        : Infinity;
       const dS = targetSteer - this.state.dampedSteering;
       this.state.dampedSteering += Math.max(-maxStep, Math.min(maxStep, dS));
       this.state.dampedSteering = Math.max(-1, Math.min(1, this.state.dampedSteering));
@@ -1855,22 +1938,14 @@
     }
   }
 
-  // Real CONTROLLER rumble via the Gamepad API, ONLY. This used to also fire
-  // navigator.vibrate() — the PHONE's own vibration motor — on every call, so a session
-  // played on a phone buzzed the phone itself on every shift, crash and ABS pulse even
-  // though nothing was asked to vibrate but the gamepad. Removed outright, along with
-  // rumbleHaptic(), the older phone-only helper it had already fully replaced and which
-  // had no remaining callers.
-  // Standardmaessig AUS. Ein Controller, der bei jedem Gangwechsel brummt, ohne dass
-  // jemand danach gefragt hat, ist die Art Voreinstellung, die man einmal sucht und dann
-  // nicht findet - und der Schalter sass bisher nirgends.
+  // DER STARTWERT GILT NUR, BIS DAS DOKUMENT DA IST. 50-drive.js liest ihn beim Aufbau aus
+  // dem Kaestchen; was hier steht, entscheidet also nur ueber die ersten Millisekunden.
   //
-  // Die Abfrage steht hier und nicht an den 18 Aufrufstellen: eine Stelle kann nicht
-  // vergessen werden, achtzehn schon.
-  // Der Startwert steht hier UND im Markup. Damit sie nicht auseinanderlaufen koennen,
-  // liest 50-drive.js ihn beim Aufbau aus dem Kaestchen - dieser Wert gilt also nur, bis das
-  // Dokument da ist. Er ist trotzdem auf den Markup-Wert gesetzt, damit die zwei Orte auch
-  // beim Lesen dasselbe sagen.
+  // Er steht trotzdem auf dem Markup-Wert, und seit v0.5.18 stimmt das auch: bis dahin
+  // behauptete diese Zeile "an", waehrend das Kaestchen kein checked trug. Gemessen kam
+  // rumbleOn = false heraus, padRumble() stieg in seiner ersten Zeile aus, und die in
+  // v0.5.15 bestellten Vorgaben je Ausloeser kamen nie zum Tragen. Genau das war
+  // "Vibration ging bei 5.15 und 5.16 nicht".
   let rumbleOn = true;
 
   // ---- Ein Schalter je Ausloeser ---------------------------------------------------
@@ -1886,6 +1961,17 @@
   const RUMBLE_ARTEN = { schalt: true, abs: true, crash: true,
                          abseits: false, box: true, meldung: false };
 
+  // ---- Trigger-Vibration, und WELCHER Trigger zu welcher Art gehoert -----------------
+  //
+  // Die Zuordnung ist die Aussage: das ABS regelt die BREMSE, also brummt der linke
+  // Trigger; geschaltet wird mit der rechten Hand, also der rechte. Eine Tabelle und nicht
+  // zwei Sonderfaelle an zwei Aufrufstellen - dieselbe Ueberlegung wie bei RUMBLE_ARTEN.
+  //
+  // Nur diese zwei Arten. Ein Aufprall auf einem Trigger waere ein Stoss am falschen Ort,
+  // und ein Dauerbrummen im Gelaende macht die Bremse schwergaengig.
+  const TRIGGER_ARTEN = { abs: [0.30, 0], schalt: [0, 0.45] };
+  let triggerRumbleOn = true;
+
   // Der Rueckgabewert sagt, ob die Schalter den Stoss DURCHGELASSEN haben - nicht, ob ein
   // Controller ihn ausgefuehrt hat. Damit ist die Schalterlogik ohne Hardware pruefbar, und
   // genau die ist bei siebzehn Aufrufstellen die Stelle, an der man sich vertut.
@@ -1895,26 +1981,102 @@
     // Etikett vergisst, bekommt ein Brummen und merkt es; ein stilles Verschlucken waere
     // ein Feature, das niemand vermisst, bis es fehlt.
     if (art && RUMBLE_ARTEN[art] === false) return false;
+    ruettle({
+      duration: ms, startDelay: 0,
+      strongMagnitude: Math.max(0, Math.min(1, strong)),
+      weakMagnitude: Math.max(0, Math.min(1, weak)),
+    });
+    // EIN ZWEITER WEG, KEIN ZWEITER AUFRUF. Die achtzehn Aufrufstellen bleiben unberuehrt;
+    // ob eine Art auch die Trigger bewegt, steht in TRIGGER_ARTEN und nicht bei ihnen.
+    if (triggerRumbleOn && art && TRIGGER_ARTEN[art]) {
+      const [li, re] = TRIGGER_ARTEN[art];
+      triggerRuettle(li, re, ms);
+    }
+    return true;
+  }
+
+  // ---- Der Trigger-Effekt, und warum er still bleiben darf ---------------------------
+  //
+  // 'trigger-rumble' ist eine ANDERE Effektart als 'dual-rumble', und nicht jeder Pad kann
+  // sie. Chrome stellt sie vor allem fuer Xbox-Pads bereit; die adaptiven Trigger eines
+  // DualSense sind ueber die Gamepad-API ueberhaupt nicht erreichbar.
+  //
+  // Deshalb wird GEFRAGT und nicht versucht: `vibrationActuator.effects` ist die Liste der
+  // Arten, die dieser Pad annimmt (nachgesehen in Chromium 148 - `canPlayEffectType()` gibt
+  // es dort nicht, das waere der naechste Griff ins Leere gewesen). Steht die Art nicht
+  // darin, passiert nichts.
+  //
+  // UND AUSDRUECKLICH KEIN RUECKFALL auf 'dual-rumble': das wuerde vortaeuschen, die Trigger
+  // haetten reagiert. Der Nutzer soll in den Optionen lesen koennen, dass sein Pad es nicht
+  // kann - und nicht ein Brummen in den Griffen dafuer halten.
+  function triggerRuettle(links, rechts, ms) {
+    let erreicht = 0;
     try {
       const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-      // DENSELBEN PAD NEHMEN WIE DIE EINGABE. Windows zeigt denselben Controller oft zweimal
-      // (ein DualSense ueber Bluetooth erscheint als zugeordnetes UND als rohes HID-Geraet),
-      // und pollGamepad() bevorzugt darum ausdruecklich mapping === 'standard'. Hier wurde
-      // stattdessen der erste Pad mit einem Ruettler genommen - das kann der rohe Zwilling
-      // sein, an dem nichts haengt. Zwei verschiedene Auswahlregeln fuer dasselbe Geraet
-      // sind eine Falle, und sie kostet genau das Ruetteln.
-      const liste = Array.from(pads).filter(p => p);
-      const bevorzugt = liste.find(p => p.mapping === 'standard') || liste[0];
-      for (const p of (bevorzugt ? [bevorzugt, ...liste.filter(x => x !== bevorzugt)] : [])) {
-        if (p && p.vibrationActuator && typeof p.vibrationActuator.playEffect === 'function') {
-          p.vibrationActuator.playEffect('dual-rumble', {
-            duration: ms, startDelay: 0,
-            strongMagnitude: Math.max(0, Math.min(1, strong)),
-            weakMagnitude: Math.max(0, Math.min(1, weak)),
-          }).catch(() => {}); // some browsers reject while the pad is busy; harmless
-          break;
-        }
+      for (const p of Array.from(pads)) {
+        const akt = p && p.vibrationActuator;
+        if (!akt || typeof akt.playEffect !== 'function') continue;
+        if (!Array.isArray(akt.effects) || akt.effects.indexOf('trigger-rumble') < 0) continue;
+        erreicht++;
+        akt.playEffect('trigger-rumble', {
+          duration: ms, startDelay: 0,
+          // Die Griffmotoren bleiben hier auf null: der Stoss in den Griffen kommt schon
+          // aus ruettle(). Beides doppelt zu senden waere doppelte Staerke.
+          strongMagnitude: 0, weakMagnitude: 0,
+          leftTrigger: Math.max(0, Math.min(1, links)),
+          rightTrigger: Math.max(0, Math.min(1, rechts)),
+        }).catch(() => {});
       }
-    } catch { /* pad vanished mid-call — nothing to do */ }
-    return true;
+    } catch (e) { /* Pad mitten im Aufruf verschwunden */ }
+    return erreicht;
+  }
+
+  // ---- Der eigentliche Stoss, und er geht an ALLE Pads mit Ruettler ------------------
+  //
+  // BIS v0.5.17 BRACH DIE SCHLEIFE beim ersten Pad ab, der einen Ruettler hatte, und der
+  // bevorzugte war der mit mapping === 'standard' - dieselbe Regel wie in pollGamepad().
+  // Fuer die EINGABE ist das richtig: dort muss man sich fuer eine Quelle entscheiden.
+  // Fuers Ruetteln ist es eine Wette. Windows meldet denselben DualSense ueber Bluetooth
+  // zweimal, und welcher der beiden Zwillinge den Motor wirklich bedient, steht nirgends.
+  // Traf die Wette daneben, passierte gar nichts, und zwar still.
+  //
+  // Also alle. Zwei Aufrufe auf dasselbe Geraet sind harmlos - der zweite ueberschreibt den
+  // ersten -, ein stiller Fehlgriff ist es nicht.
+  function ruettle(effekt) {
+    let erreicht = 0;
+    try {
+      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (const p of Array.from(pads)) {
+        if (!p || !p.vibrationActuator) continue;
+        if (typeof p.vibrationActuator.playEffect !== 'function') continue;
+        erreicht++;
+        p.vibrationActuator.playEffect('dual-rumble', effekt)
+          .catch(() => {}); // manche Browser lehnen ab, solange der Pad beschaeftigt ist
+      }
+    } catch (e) { /* Pad mitten im Aufruf verschwunden - dann eben nicht */ }
+    return erreicht;
+  }
+
+  // ---- Was ist ueberhaupt da? --------------------------------------------------------
+  //
+  // Die Antwort auf "Vibration geht nicht" ist eine MESSUNG und keine Vermutung. Diese
+  // Funktion loest einen Stoss aus und gibt zurueck, was sie dabei vorgefunden hat; der
+  // Knopf in den Optionen schreibt es hin. Dieselbe Bauform wie bluetoothLageGenau() in
+  // der Garage, und aus demselben Grund: der Nutzer soll nicht raten muessen, an welchem
+  // Ende er suchen soll.
+  function vibrationLage() {
+    const roh = navigator.getGamepads ? Array.from(navigator.getGamepads()) : [];
+    const pads = roh.filter(p => p);
+    const zeilen = pads.map((p) => {
+      const akt = p.vibrationActuator;
+      const arten = akt && Array.isArray(akt.effects) ? akt.effects.slice()
+                  : (akt && akt.type ? [akt.type] : []);
+      return {
+        name: String(p.id || '').slice(0, 40),
+        mapping: p.mapping || '(keine Zuordnung)',
+        ruettler: !!(akt && typeof akt.playEffect === 'function'),
+        arten,
+      };
+    });
+    return { hauptschalter: rumbleOn, pads: zeilen };
   }

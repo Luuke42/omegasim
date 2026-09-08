@@ -320,11 +320,16 @@
   // Frei zuweisbar sind sie nicht, deshalb stehen sie hier und nicht in DEFAULT_BINDINGS.
   // Und sie sind nicht ausschliesslich: im Streckeneditor und bei scharfem Boxenstopp
   // greifen erst diese zwei ab (siehe pollGamepad), danach gilt wieder das hier.
+  // DIE TABELLE, AUS DER DAS SCHAUBILD LIEST. Sie muss mit der Kette in pollGamepad
+  // uebereinstimmen. Der bestehende Selbsttest prueft nur, dass das Steuerkreuz nicht
+  // als FREI erscheint - eine falsche Beschriftung bliebe also gruen, und genau das
+  // waere beim Umbelegen in v0.5.18 beinahe passiert. Deshalb steht die
+  // Uebereinstimmung ab jetzt zusaetzlich als eigene Pruefung.
   const PAD_FIXED = {
-    dup: 'Bremsbalance nach vorn',
-    ddown: 'Bremsbalance nach hinten',
-    dleft: 'Lenkansprechen kleiner',
-    dright: 'Lenkansprechen größer',
+    dup: 'Lenkansprechen größer',
+    ddown: 'Lenkansprechen kleiner',
+    dleft: 'Schirm zurück',
+    dright: 'Schirm vor',
   };
 
   function padDiagramRender() {
@@ -604,22 +609,16 @@
     return false;
   }
 
-  // Hoch/runter auf dem Steuerkreuz ist die BREMSBALANCE. Vorher war es der
-  // Beschleunigungsfaktor, und der ist eine Feinabstimmung, die man einmal setzt und stehen
-  // laesst. Die Balance ist die Groesse, die ein Fahrer WAEHREND der Fahrt nachzieht - dafuer
-  // hat ein GT3 einen Drehregler am Lenkrad.
+  // HIER STAND nudgeBrakeBias(), und die Funktion ist mit ihren zwei Aufrufern gegangen.
+  // Bis v0.5.17 lag die Bremsbalance auf hoch/runter, mit der Begruendung, sie sei die
+  // Groesse, die ein Fahrer WAEHREND der Fahrt nachzieht. Das stimmt weiter - sie hat
+  // dafuer den Regler in den Optionen und die Zieh-Skala im Cockpit. Was das Steuerkreuz
+  // konnte und die zwei nicht koennen, ist Blaettern, und dafuer werden links und rechts
+  // gebraucht.
   //
-  // Der Weg geht ueber das Bedienelement und sein Ereignis, nicht direkt in die
-  // Konfiguration: dann zieht die Anzeige in den Optionen von selbst nach, und es gibt
-  // keinen zweiten Zustand.
-  function nudgeBrakeBias(delta) {
-    const input = $('setting-brakebias');
-    if (!input) return;
-    const v = Math.max(+input.min, Math.min(+input.max, parseInt(input.value, 10) + delta));
-    input.value = v;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    showHudToast(`Bremsbalance ${v}% vorn`);
-  }
+  // Ebenso ausgebaut: pitQuickMenu(). Bliebe es stehen, verschluckte es hoch/runter, sobald
+  // ein Stopp scharf ist - der Lenktrimm hoerte also mitten im Rennen ohne sichtbaren Grund
+  // auf zu wirken. Was es konnte, kann der Boxenschirm vollstaendig und sichtbar.
 
   function nudgeSteerResponse(delta) {
     // Keep the options slider in step, otherwise menu and controller drift apart.
@@ -838,6 +837,14 @@
   }
 
   async function writeToCar(car, steer, throttle, lightBits, modeBytes) {
+    // EINE SENKE FUER DEN PRUEFLAUF. Ohne sie ist nicht pruefbar, WAS hinausgeht - nur, was
+    // eine Funktion sich vorgenommen hat. Genau dort lag der Fehler beim Zieleinlauf: die
+    // Seite war zugeteilt und landete im Gas-Platz. Ein Prueflauf, der die Zuteilung liest,
+    // haette das nicht gesehen.
+    if (car.testSenke) {
+      car.testSenke.push({ steer, throttle, lightBits });
+      return;
+    }
     if (!car.rx || car.writeInFlight) return;
     car.writeInFlight = true;
     try {
@@ -896,11 +903,19 @@
     // Vor dem Zeichnen: die Buchstaben folgen der Reihenfolge, und die aendert sich, wenn
     // ein Auto aus der Mitte getrennt wird.
     carRetag();
-    $('gar-count').textContent = garage.length
-      ? `${garage.length} Auto${garage.length === 1 ? '' : 's'} verbunden`
+    // ---- SIMULATIONSAUTOS ZAEHLEN HIER NICHT MIT ------------------------------------
+    //
+    // Die Rennsimulation stellt ihre Autos in die GARAGE, und sie muss es: ghostLane(),
+    // ghostFeldStaffel() und ghostAhead() finden ihre Nachbarn nur dort. Ein Auto, das in
+    // dieser Liste steht, ist aber eine Aussage ueber die Bluetooth-Lage - "vier Autos
+    // verbunden", waehrend keines verbunden ist, ist einfach falsch. Also raus aus der
+    // Anzeige, drin in der Rechnung.
+    const echte = garage.filter((c) => !c.sim);
+    $('gar-count').textContent = echte.length
+      ? `${echte.length} Auto${echte.length === 1 ? '' : 's'} verbunden`
       : 'keine Autos verbunden';
     list.innerHTML = '';
-    garage.forEach((car, i) => {
+    echte.forEach((car, i) => {
       const row = document.createElement('div');
       row.className = 'gar-row' + (car.role === 'player' ? ' is-player'
                                  : car.role === 'ghost' ? ' is-ghost' : '');
@@ -1108,14 +1123,44 @@
     refreshGarageGo();
   };
 
+  // Die Lage EINMAL anzeigen, sobald sie bekannt ist - und nicht erst als Fehlermeldung
+  // nach dem dritten vergeblichen Klick. bluetoothLageGenau() steht in 10-ble-explorer.js
+  // und ist zur Laufzeit erreichbar; die Datei wird vorher gebaut.
+  async function garageLageZeigen() {
+    const el = $('gar-bt-lage');
+    if (!el) return;
+    const lage = await bluetoothLageGenau();
+    if (lage === 'ok') { el.hidden = true; el.textContent = ''; return; }
+    el.textContent = bluetoothLageText(lage);
+    el.hidden = false;
+  }
+  garageLageZeigen();
+  // Der Adapter kann waehrend der Sitzung an- und ausgehen. Chrome meldet das, wenn es die
+  // Abfrage kennt - und wenn nicht, bleibt es bei der Anzeige vom Start.
+  if (navigator.bluetooth && navigator.bluetooth.addEventListener) {
+    try {
+      navigator.bluetooth.addEventListener('availabilitychanged', garageLageZeigen);
+    } catch (e) { /* kennt das Ereignis nicht */ }
+  }
+
+  // HIER STAND EIN NOTAUSGANG "alle Geraete zeigen" (acceptAllDevices), und er ist auf
+  // Bitte des Nutzers wieder heraus. Der eigentliche Fund von v0.5.16 bleibt: der Filter
+  // darunter ist ODER-verknuepft und nimmt ersatzweise den Nordic-UART-Dienst, ein Auto
+  // ohne Namen in der Werbung faellt damit nicht mehr durch.
   async function garageConnect() {
-    if (!navigator.bluetooth) {
-      alert('Web Bluetooth wird hier nicht unterstützt. Bitte in Chrome/Edge öffnen.');
+    const lage = await bluetoothLageGenau();
+    if (lage !== 'ok') {
+      garageLageZeigen();
+      alert(bluetoothLageText(lage));
       return;
     }
     try {
+      // ZWEI FILTER, ODER-verknuepft: der Name UND ersatzweise der Nordic-UART-Dienst.
+      // Web Bluetooth zeigt ein Geraet, wenn es IRGENDEINEN der Filter erfuellt - ein Auto,
+      // das seinen Namen nur in der Scan-Antwort fuehrt und nicht in der Werbung, faellt
+      // damit nicht mehr durch.
       const dev = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: 'HYBRID' }],
+        filters: [{ namePrefix: 'HYBRID' }, { services: [NUS_SERVICE] }],
         optionalServices: [NUS_SERVICE],
       });
       if (garage.some(c => c.device.id === dev.id)) {
@@ -1214,7 +1259,22 @@
     // ghostTaktLoeschen(). Ein Halt in den ersten Millisekunden nach dem Start liess sonst
     // einen Zeitgeber zurueck, den niemand mehr kannte.
     ghostTaktLoeschen(car);
-    if (car.ghost) { car.ghost.running = false; car.ghost.finish = null; }
+    // DEN BOXENSTOPP MIT AUFRAEUMEN, und das ist ein Fehler, der ohne Messung teuer
+    // geworden waere. Hier stand nur running und finish. g.pit blieb stehen, und weil
+    // pitInhaberGueltig() einen Anspruch nur dann verwirft, wenn das Auto keinen Stopp mehr
+    // hat ODER nicht mehr in der Garage steht, blieb der Boxenplatz besetzt: im Rennen
+    // bleibt das Auto in der Garage.
+    //
+    // Folge waere gewesen: wer ein Rennen beendet, waehrend ein Ghost in der Box steht,
+    // haette danach nie wieder einen Boxenstopp gesehen - und die Ursache staende nirgends.
+    // In der Simulation faellt es nicht auf, weil die dort neue Autos baut und die Heilung
+    // ueber die Garage greift.
+    if (car.ghost) {
+      car.ghost.running = false;
+      car.ghost.finish = null;
+      car.ghost.pit = null;
+      pitPlatzRaeumen(car);
+    }
     if (car.rx) writeToCar(car, 0, 0, trackModeBit() | LIGHT_HEAD);
     // Der Knopf "Ghosts anhalten" haengt daran. Hier und nicht an den sieben Aufrufstellen:
     // eine davon wird sonst vergessen, und dann steht ein scharfer Knopf ohne Ghost.
@@ -1235,7 +1295,7 @@
     removeCar(car);
   }
 
-  $('gar-connect').onclick = garageConnect;
+  $('gar-connect').onclick = () => garageConnect();
   $('gar-disconnect-all').onclick = () => { [...garage].forEach(disconnectCar); };
   renderGarage();
 
@@ -1364,33 +1424,152 @@
     // beginnt jetzt bei 0,35 und nicht bei 0,30 - darunter faehrt das Auto so langsam, dass
     // es die gedruckte Strecke nicht mehr zuverlaessig LIEST, und dann faellt der ganze
     // Vorausblick aus. Ein Regler, der eine kaputte Einstellung zulaesst, ist eine Falle.
-    speed: 0.45,        // fraction of top speed on a straight
+    // 0,50 auf Wunsch (war 0,45).
+    speed: 0.50,        // fraction of top speed on a straight
     // 0,15, gefahren ermittelt. 0,35 war zu viel: mit der berichtigten Ratenbegrenzung wirkt
     // der Abschlag jetzt wirklich, und die Haarnadel bekommt ohnehin das Doppelte.
-    curveSlow: 0.15,    // how much of that is given up in a curve
+    // 0,20 auf Wunsch (war 0,15). Die Haarnadel bekommt davon das Doppelte, also 40
+    // Prozent - "in der Haarnadelkurve muss die Drosselung staerker sein" ist die
+    // Kachelregel, nicht ein zweiter Regler.
+    curveSlow: 0.20,    // how much of that is given up in a curve
     // 0.5 statt 0. Die Naeherungslogik in ghostAssignBias gab es laengst - gleiche Runde
     // und Kachelindex hoechstens eins auseinander ergibt gegenlaeufige Versaetze - aber sie
     // wurde mit diesem Faktor multipliziert, und der stand auf Null. Das Feature war da und
     // konnte nie wirken.
-    lateral: 0.5,
+    // 0,80 auf Wunsch (war 0,50). Der Querversatz ist gefahren bestaetigt - "funktioniert
+    // perfekt in beide Richtungen, fuer 4 Ghosts gleichzeitig".
+    lateral: 0.80,
     // Ideallinie, 0,7 statt 0,35. Gefahren war von 0,35 nichts zu merken, und die Rechnung
     // sagt warum: der Deckel begrenzt den Versatz auf 0,55, danach kam x 0,35 x 0,5 - also
     // 0,096 von 1, ein Sechstel dessen, was die Messung als sicher annimmt. Mit
     // GHOST_LINE_STEER = 1,0 und 0,7 sind es 0,385, viermal so viel; auf 100 Prozent genau
     // der Deckel. 0 = gerade Lenkung und nur der Anti-Ramm-Versatz.
-    line: 0.7,
+    // 1,00 auf Wunsch (war 0,70) - genau der gemessene Deckel. Darueber wird die Linie
+    // gemessen FLACHER und nicht besser, weil sie am Scheitel saettigt.
+    line: 1.0,
     // EIGENE SPUREN. Jeder Ghost haelt eine feste, ihm eigene Linie ueber die Bahnbreite -
     // unabhaengig von Abstand, Strecke und Kachelzahl. Das ist der Unterschied zu den zwei
     // anderen Linieneinstellungen: ghost-lateral wirkt nur bei zwei Autos nebeneinander,
     // ghost-line erst ab drei Streckenteilen. Beides null heisst "alle stumpf in der Mitte",
     // und genau so wurde es gemeldet.
-    lanes: 0.5,
+    // 0 auf Wunsch (war 0,50). Die eigenen Spuren bleiben gebaut und einschaltbar; ab
+    // Werk fahren alle die Ideallinie, und der Querversatz haelt sie auseinander.
+    lanes: 0,
     // Rennwuerze. Ein Regler, fuenf Bausteine - siehe ghostSpice() weiter unten.
-    spice: 0.4,
+    // 0 auf Wunsch (war 0,40), und die Rennwuerze ist jetzt als experimentell
+    // gekennzeichnet. Sie greift an sechs Stellen gleichzeitig ins Tempo ein, und solange
+    // Ortung und Ueberholen nicht sauber sind, ist sie die Zutat, die jede Messung
+    // verrauscht.
+    // ---- DIE RENNWUERZE, IN EINZELNE SCHALTER ZERLEGT ------------------------------
+    //
+    // Bis v0.5.33 war das EIN Regler fuer sechs Bausteine. Wer ihn aufdrehte, bekam alle
+    // sechs und wusste danach nicht, welcher davon das Gesehene erklaert - deshalb stand er
+    // ab Werk auf 0 und war damit praktisch tot. Jetzt je Baustein ein Schalter, alle
+    // ausdruecklich experimentell.
+    //
+    // DIE STAERKEN SIND JETZT DIE KONSTANTEN SELBST. Vorher wurde jeder Baustein mit dem
+    // Reglerwert multipliziert; die SPICE_*-Konstanten tragen im Kommentar "volle Wuerze",
+    // sind also genau die Werte bei 1. Ein Schalter, der auf 40 Prozent einschaltet, waere
+    // eine versteckte zweite Einstellung.
+    //
+    // DAS GUMMIBAND FEHLT HIER, und das ist Absicht: es ist seit v0.5.32 "Feld
+    // zusammenhalten" (ghostFeldStaffel) und dort besser - gestaffelt ueber das ganze Feld
+    // statt nur auf den Fuehrenden. Zwei Regeln, die beide den Fuehrenden bremsen, waeren
+    // zwei Abschlaege auf dieselbe Groesse.
+    // ---- QUERTRAEGHEIT ------------------------------------------------------------
+    //
+    // Wie schnell ein Ghost seine Querlage aendern DARF, in Anteilen der Bahnbreite je
+    // Sekunde. Gemeldet: "sie sollten nicht abrupt nach aussen wechseln, sondern das ganze
+    // sollte etwas smoother aussehen. Bau vielleicht sowas wie Traegheit oder Smoothness
+    // fuer Aenderung der Querlage im Fahren ein."
+    //
+    // WARUM ES DAS BRAUCHT: die Ideallinie ist eine Funktion des ORTES, nicht der Zeit. Beim
+    // Kachelwechsel springt der gelesene Ort um einen Abtastpunkt, und bei einem Wechsel des
+    // Kacheltyps aendert sich der Sollwert dort in einem Takt um bis zu 0,4 der Bahnbreite -
+    // gemessen an SHG4HG3 zwischen Haarnadelausgang und Gerade. Ein Servo, der das in einem
+    // Takt nachfuehrt, sieht aus wie ein Ruck, und ein Auto auf einer Schiene faehrt es auch
+    // so.
+    //
+    // 2,0 JE SEKUNDE, UND NICHT MEHR 1,2 - eine Berichtigung, und der Grund ist
+    // nachgemessen. 1,2 war fuer die ALTE Linie kalibriert, die auf einer Runde voller
+    // gleichsinniger Kurven an einer Bahnseite klebte und sich deshalb kaum quer bewegte.
+    // Seit die Linie von aussen anfaehrt und nach aussen ausfaehrt, verlangt sie ein
+    // Vielfaches davon: der Weg von der Anfahrt (0,8 nach aussen) zum Scheitel (1,0 nach
+    // innen) sind 1,8 Bahnbreiten, und bei halbem Gas (34 cm/s, gemessen) dauert eine halbe
+    // Kachel rund 0,63 s - also bis zu 2,9 Bahnbreiten je Sekunde.
+    //
+    // Was 1,2 damit anrichtete, gemessen am Lenkbyte ueber 300 Takte:
+    //
+    //     Quertempo   min   max   Spanne   Spitze
+    //        1,2      -67    46     113      67
+    //        2,0      -95    73     168      95
+    //        3,0      -96    96     192      96
+    //
+    // Die Ratenbegrenzung war also der BINDENDE Zwang und nicht die Linie: der Ghost kam
+    // nicht mehr dorthin, wo die gezeichnete Linie lag.
+    //
+    // UND DER GRUND, WARUM SIE JETZT LOCKERER DARF, ist derselbe Umbau. 1,2 war die Antwort
+    // auf einen Sollwert, der am Kacheltypwechsel SPRANG; die Rampen ueber eine Kachellaenge
+    // machen ihn stetig, und eine Ratenbegrenzung gegen einen stetigen Sollwert muss nicht
+    // mehr so eng sein. Sie bleibt trotzdem drin - als Schutz davor, dass ein
+    // zurueckgestelltes Auto aus der Hand gerissen wird.
+    querTempo: 2.0,
+    // ---- BREMS- UND GASVERHALTEN ---------------------------------------------------
+    //
+    // Gemeldet: "Bremsverhalten vor und Beschleunigungsverhalten nach Kurven der Ghosts soll
+    // so aehnlich aussehen wie das in den Standardeinstellungen. Wenn Kalibrierung hier
+    // schwierig ist, gib mir einen Slider."
+    //
+    // SIE IST SCHWIERIG, und der Grund ist nicht Faulheit: der Ghost und der Fahrer bekommen
+    // ihr Gas aus verschiedenen Quellen. Beide gehen durch DASSELBE Fahrzeugmodell -
+    // e.update({throttle, brake}) -, aber der Fahrer drueckt einen Trigger und ist damit
+    // sofort am Anschlag, waehrend der Ghost einen PI-Regler auf ein Zieltempo hat, dessen
+    // Ausgang zusaetzlich ratenbegrenzt ist.
+    //
+    // WAS DARAN NACHRECHENBAR IST: GHOST_SLEW_GAS = 1,6 je Sekunde heisst, dass voller
+    // Gasbefehl 1/1,6 = 0,63 s braucht. Ein Fahrer am Trigger ist in etwa 0,15 s dort. Der
+    // Ghost ist also rund viermal langsamer im Aufbau - und genau das sieht man am
+    // Kurvenausgang.
+    //
+    // 1,0 IST DER GEMESSENE, STABILE ZUSTAND und bleibt deshalb die Vorgabe: alle
+    // Tempopruefungen dieser App sind damit gefahren. Wer es fahrerhafter will, dreht auf;
+    // bei 4,0 liegt der Aufbau bei 0,16 s und damit dort, wo ein Trigger liegt. Die
+    // Ratenbegrenzung ist der Schutz davor, dass ein zurueckgestelltes Auto aus der Hand
+    // gerissen wird - wer sie hochdreht, nimmt diesen Schutz zurueck, und der Hilfetext
+    // sagt das.
+    gasDynamik: 1.0,
+    // ---- GHOST-BOXENSTOPP ----------------------------------------------------------
+    //
+    // pitAn steht auf AN, obwohl es neu und experimentell ist: bestellt war ein Feature, das
+    // man sieht, und ein Schalter, der ab Werk aus ist, wird beim ersten Rennen nicht
+    // gefunden. Abschaltbar ist er trotzdem, und das Etikett sagt, woran man ist.
+    pitAn: true,
+    // Getrennt fuer das freie Fahren, und zwar auf Wunsch: dort stellt man Regler ein und
+    // probiert aus, und ein Auto, das dabei ploetzlich zehn Sekunden steht, sieht nach einem
+    // Fehler aus. Vorgabe an, damit es nicht versteckt ist.
+    pitFrei: true,
+    // Die Standzeit. 5 s ist die Mitte des bestellten Bandes von 3 bis 10 und keine Messung -
+    // wie lange ein Boxenstopp aussehen soll, ist Geschmack, deshalb der Regler.
+    pitSek: 5,
+    // Alle 5 bis 9 Runden, je Ghost gezogen. Dieselbe Bauform wie der Wetterwechsel (alle
+    // 2 bis 6 Minuten, zufaellig gezogen): eine Zahl aus einem Band, bei jedem Stopp neu.
+    // Sie braucht nur g.laps, und das ist der Zaehler, den ghostOrtGes ohnehin fuehrt.
+    //
+    // WARUM NICHT AM REIFENVERSCHLEISS: Ghosts haben keinen. Ihre Motoren werden mit
+    // tyreEffect = 0 und fuelWeightEffect = 0 gebaut - "ghosts carry no fuel and take no
+    // damage for now". Ein Stopp am Verschleiss des SPIELERS waere ein Ghost-Stopp aus einer
+    // fremden Groesse, und mit abgeschalteter Reifensimulation feuerte er nie.
+    pitRundenMin: 5,
+    pitRundenMax: 9,
+    wuerzeUeberholen: true,   // bestellt: an
+    wuerzeAbstand: true,      // bestellt: an, "sodass sie sich nicht rammen"
+    wuerzeForm: false,
+    wuerzeFehler: false,
+    wuerzeWindschatten: false,
     // Lernen von Runde zu Runde, standardmaessig aus: es aendert das Fahrverhalten ueber
     // ein Rennen hinweg, und das soll niemand ungefragt bekommen.
     learnPace: false,
-    leaderBrake: false, // hold the leader back for a while
+    leaderBrake: true,  // gestaffelt ueber das ganze Feld, siehe ghostFeldStaffel()
     leaderBrakePct: 0.10,
     // Default ON: the measurement says this is the mode in which the car holds the track by
     // itself, which is the only configuration in which a ghost works at all today.
@@ -1409,6 +1588,23 @@
     needCode: false,
   };
 
+  // ---- Der Anfangsabgleich der fuenf Wuerz-Kaestchen ---------------------------------
+  //
+  // HIER UND NICHT BEI DEN ZUHOERERN in 80-sound.js. Ein Kaestchen im Markup und sein Feld
+  // in ghostCfg sind zwei Orte fuer einen Zustand, und der change-Zuhoerer feuert beim Laden
+  // NICHT - ohne diesen Abgleich zeigte die Oberflaeche das eine und der Ghost taete das
+  // andere, bis jemand den Schalter zweimal umlegt. Zwei Regler dieser App standen schon
+  // einmal so da.
+  //
+  // Und warum nicht in 80-sound.js, wo die Zuhoerer stehen: ghostCfg ist ein const in DIESER
+  // Datei, und 80-sound.js laeuft vorher. Ein Schreibzugriff von dort trifft die temporale
+  // Todeszone, wirft, und nimmt den Rest der IIFE mit - gemeldet dann als ein Fehler an
+  // ganz anderer Stelle. Genau so ist es mir beim Bauen passiert.
+  for (const [id, feld] of (typeof WUERZE_SCHALTER === 'undefined' ? [] : WUERZE_SCHALTER)) {
+    const el = document.getElementById(id);
+    if (el) ghostCfg[feld] = el.checked;
+  }
+
   // Per-tile behaviour, data-driven on purpose: the hairpin and left-curve codes are not
   // known yet, and adding them must not require touching code.
   // curve: 0 = gerade, 1 = 60-Grad-Kurve, 2 = Haarnadel. Die Zahl ist keine Kennung,
@@ -1423,6 +1619,148 @@
   };
 
   function ghostTileInfo(code) { return GHOST_TILE[code] || { curve: 0 }; }
+
+  // ---- Die Ortung gegen die GEMELDETE Schiene ausrichten ------------------------------
+  //
+  // WORUM ES GEHT, und es ist die Wurzel von drei gemeldeten Fehlern auf einmal.
+  //
+  // Der Kachelzaehler (Byte 11) zaehlt zuverlaessig, sagt aber nicht, WELCHE Kachel. Die App
+  // setzt beim ersten beobachteten Wechsel g.tileIndex = 0 - sie NIMMT ALSO AN, das Auto
+  // stehe an Start/Ziel. Wer seine Autos irgendwo auf die Bahn stellt und startet, hat damit
+  // einen Versatz, und der bleibt das ganze Rennen ueber stehen.
+  //
+  // Folgen, alle drei gemeldet:
+  //   "die Punkte sind nicht da, wo sie sein sollten"     - der Versatz IST der Fehler
+  //   "Ideallinie klappt nicht, wahrscheinlich deswegen"  - sie liest die falsche Kachel
+  //   "Kurvendrosselung hat nicht geklappt"               - sie bremst auf der Geraden
+  //
+  // WAS ES ZU MESSEN GIBT. Byte 12 ist der Code der Kachel, auf der das Auto STEHT - eine
+  // Messung, keine Rechnung. Und die Kacheltypen des Editors SIND diese Codes:
+  // TILE_TYPE.STRAIGHT ist 0x02, CURVE_LEFT 0x03, HAIRPIN 0x06. Gemeldeter Code und Layout
+  // sind also unmittelbar vergleichbar, und der richtige Versatz ist der, unter dem sie
+  // uebereinstimmen.
+  //
+  // WIE, UND WAS ES KOSTET. Je moeglicher Versatz eine Stimme, aufgesammelt ueber die
+  // Kachelwechsel - bei 17 Kacheln also 17 Vergleiche einmal je Kachel, nicht je Sendetakt.
+  // Der Versatz ist konstant, deshalb duerfen die Stimmen sich ueber die ganze Fahrt
+  // summieren: eine einzelne Kachel unterscheidet kaum (halbe Bahn ist Gerade), eine
+  // Folge von acht ist eindeutig.
+  //
+  // Angewandt wird EINMAL und nur, solange keine Runde gezaehlt ist. Danach waere eine
+  // Verschiebung eine Faelschung der Rundenzaehlung, und die Zaehlung ist das, was ein
+  // Rennen entscheidet.
+
+  // Passt ein Layout-Typ zu einem gemeldeten Code? Start/Ziel hat zwei Codes (0x0a und der
+  // alte 0x01), Boxengassen-Kacheln (0x100) melden nie einen und stimmen deshalb mit nichts.
+  function ortPasst(typ, code) {
+    if (typ === undefined || typ === null || code === undefined || code === null) return false;
+    if (isStartCode(code)) return isStartCode(typ) || typ === TILE_TYPE.START;
+    return typ === code;
+  }
+
+  // Die Start/Ziel-Kachel im Layout. Es gibt genau eine; gaebe es mehrere, gilt die erste,
+  // und dann ist die Rundenzaehlung ohnehin nicht eindeutig.
+  function ortStartIndex(tiles) {
+    for (let i = 0; i < tiles.length; i++) {
+      const t = tiles[i];
+      if (t && (t.type === TILE_TYPE.START || isStartCode(t.type))) return i;
+    }
+    return -1;
+  }
+
+  // Mindestens so viele Stimmen, und mindestens so viel Vorsprung vor JEDEM anderen Versatz.
+  const ORT_STIMMEN_MIN = 4;
+  const ORT_VORSPRUNG = 3;
+
+  function ortAbgleich(car) {
+    const g = car.ghost;
+    const tiles = currentTrackTiles;
+    if (!g || !tiles || tiles.length < 3) return;
+    if (g.tileIndex === null || g.tileIndex === undefined) return;
+    const code = car.tileCode;
+    // Nur GUELTIGE Codes zaehlen. 0x00 heisst "neben der Bahn", 0xff "nichts gelesen" -
+    // beide sagen nichts ueber die Kachel und wuerden nur Rauschen beitragen.
+    if (code === TILE_OFFTRACK || code === 0xff || code === undefined) return;
+    const n = tiles.length;
+
+    // ---- 1. START/ZIEL IST EINDEUTIG, und das ist der starke Teil -------------------
+    //
+    // Es gibt genau eine Start/Ziel-Kachel. Meldet das Auto ihren Code, ist der Ort nicht
+    // zu schaetzen, sondern BEKANNT - keine Abstimmung, keine Schwelle, kein Verdacht. Und
+    // es gilt jede Runde neu: verliert der Zaehler unterwegs eine Kachel, ist es beim
+    // naechsten Zieldurchgang wieder in Ordnung.
+    if (isStartCode(code)) {
+      const ziel = ortStartIndex(tiles);
+      if (ziel >= 0 && g.tileIndex !== ziel) {
+        const vor = g.tileIndex;
+        g.tileIndex = ziel;
+        // DIE RUNDENZAEHLUNG haengt am Index 0 (siehe die Ueberfahrt in ghostTick). Wurde
+        // gerade dorthin ausgerichtet, dann IST das die Ueberfahrt, die der falsche Index
+        // verschlafen hat. Ohne diese Zeile zaehlte weiterhin irgendeine Kachel mitten auf
+        // der Bahn als Rundenschluss - also genau der Fehler, der die Ortung erst schief
+        // gemacht hat, nur eine Ebene hoeher.
+        if (ziel === 0 && vor !== 0) g.laps++;
+        g.ortAngewandt = true;
+        log(garageLabel(car) + ': Ortung an Start/Ziel gesetzt (war Kachel ' + vor
+            + ', ist ' + ziel + ').', 'info');
+      }
+      return;
+    }
+
+    // ---- 2. Die Abstimmung, als VORSCHAU bis zum ersten Zieldurchgang ---------------
+    //
+    // Sie ist nicht so gut wie Start/Ziel und soll es nicht sein: sie holt die Punkte in der
+    // ERSTEN Runde an die richtige Stelle, bevor das Auto die Linie erreicht.
+    if (!g.ortStimmen || g.ortStimmen.length !== n) g.ortStimmen = new Array(n).fill(0);
+    for (let o = 0; o < n; o++) {
+      const t = tiles[(g.tileIndex + o) % n];
+      if (t && ortPasst(t.type, code)) g.ortStimmen[o]++;
+    }
+    if (g.ortAngewandt || g.laps > 0) return;
+    let best = 0;
+    for (let o = 1; o < n; o++) if (g.ortStimmen[o] > g.ortStimmen[best]) best = o;
+    if (best === 0) return;
+    if (g.ortStimmen[best] < ORT_STIMMEN_MIN) return;
+    // EINDEUTIGKEIT gegen JEDEN anderen Versatz, nicht nur gegen die jetzige Annahme.
+    //
+    // GEMESSEN, und es war ein Fehler in meinem ersten Entwurf: auf einer symmetrischen
+    // Strecke liefern zwei Versaetze dieselben Treffer bis auf die eine Start/Ziel-Kachel.
+    // Die Testfolge SG2H2G2R2G2H2G2R2 ist so eine - zweimal G2H2G2R2 -, und der Vergleich
+    // nur gegen die Annahme verschob dort FUENF von 17 Versaetzen um genau die halbe Runde.
+    // Auf einer solchen Strecke ist die Abstimmung ehrlich unentscheidbar, und warten ist
+    // besser als raten: der Zieldurchgang oben klaert es exakt.
+    let zweit = -1;
+    for (let o = 0; o < n; o++) if (o !== best && g.ortStimmen[o] > zweit) zweit = g.ortStimmen[o];
+    if (g.ortStimmen[best] - zweit < ORT_VORSPRUNG) return;
+    // Anwenden. Die Stimmen wandern mit, sonst zeigte die 0 weiter auf die widerlegte
+    // Annahme.
+    const roh = g.tileIndex + best;
+    g.tileIndex = roh % n;
+    // Verschiebt sich der Index ueber das Rundenende, ist das Auto weiter als angenommen und
+    // hat die Linie in Wahrheit schon ueberfahren.
+    g.laps += Math.floor(roh / n);
+    const alt = g.ortStimmen;
+    g.ortStimmen = new Array(n);
+    for (let i = 0; i < n; i++) g.ortStimmen[i] = alt[(i + best) % n];
+    g.ortAngewandt = true;
+    log(garageLabel(car) + ': Ortung um ' + best + ' Kacheln nachgezogen ('
+        + g.ortStimmen[0] + ' zu ' + alt[0] + ' Stimmen). Die Startannahme '
+        + '"steht an Start/Ziel" war falsch.', 'info');
+  }
+
+  // Stimmen gemeldete Kachel und Layout an DIESER Stelle ueberein? Das ist die Auskunft
+  // darueber, ob dem gerechneten Ort gerade zu glauben ist - und damit dem Vorausblick, der
+  // ohne sie ins Leere bremst. null heisst "nicht entscheidbar" (kein Layout, kein Code).
+  function ortStimmt(car) {
+    const g = car.ghost;
+    const tiles = currentTrackTiles;
+    if (!g || !tiles || tiles.length < 2) return null;
+    if (g.tileIndex === null || g.tileIndex === undefined) return null;
+    const code = car.tileCode;
+    if (code === TILE_OFFTRACK || code === 0xff || code === undefined) return null;
+    const t = tiles[g.tileIndex % tiles.length];
+    return t ? ortPasst(t.type, code) : null;
+  }
 
   // Wie eng ist ein Kachel-TYP aus der Karte? Dieselbe Skala wie GHOST_TILE.curve, nur aus
   // dem Layout statt aus dem gemeldeten Code - der Vorausblick kennt nur das Layout.
@@ -1466,8 +1804,143 @@
     // Testfolge SGHGH waren das 0.39 quer ueber die Bahn, gegen 0.12 auf einer Strecke ohne
     // Haarnadel. Die relative Laenge kommt aus der Abtastdichte der Mittellinie, die
     // trackCenterline() ohnehin nach Drehwinkel vergibt.
-    const dur = (g.tileMs || 800) * ghostTileLenFactor(g.tileIndex);
-    return Math.max(0, Math.min(1, (Date.now() - car.tileAt) / dur));
+    return Math.max(0, Math.min(1, (Date.now() - car.tileAt) / ghostTileDauer(g)));
+  }
+
+  // ---- WARUM DIE PHASE HART BEI 1 ENDET, und zwar mit Absicht ------------------------
+  //
+  // Hier stand kurzzeitig eine Glaettung: die letzten zehn Prozent gestaucht, sodass der Wert
+  // die 1 nur asymptotisch erreicht. Der Gedanke war, dass der Punkt auf der Karte am
+  // Kachelende nicht stehenbleibt, wenn die Dauerschaetzung zu kurz war.
+  //
+  // DAS WAR EIN FEHLKAUF, und gefunden hat es die Pruefung "Ideallinie stetig". Die Phase ist
+  // naemlich nicht nur eine Anzeigegroesse - sie ist der INDEX IN DIE IDEALLINIE. Erreicht
+  // sie das Kachelende nicht, fehlt der Linie das letzte Stueck JEDER Kachel, und beim
+  // Wechsel springt der Versatz. Gemessen auf SG2H2G2J2: 2,48 mal der Eigenschritt der
+  // Linie.
+  //
+  // Dagegen stand ein kleiner Gewinn. Seit v0.5.18 wird die Kacheldauer je KACHELTYP
+  // gemessen, und damit steht die Phase nur noch 3 bis 10 Prozent einer Kachel am Deckel -
+  // bei 800 ms also 24 bis 80 ms. Eine raeumliche Luecke an jeder Kachelgrenze fuer 24 bis
+  // 80 ms Punktbewegung ist kein Handel, den man machen sollte.
+  //
+  // Das gemeldete Huepfen kam ohnehin von anderswo: die Kartenpunkte rechneten mit der
+  // Formel von vor v0.5.18 und lagen auf einer Haarnadel um 43 Prozent daneben. Das behebt
+  // ghostOrt() weiter unten, und zwar an der Ursache.
+
+  // ---- Der ORT eines Ghosts auf der Schiene ------------------------------------------
+  //
+  // EINE DEFINITION, und das ist der ganze Punkt. Dieselbe Groesse - "wo auf der Runde" -
+  // wurde an vier Stellen einzeln gerechnet, und sie waren sich nicht einig:
+  //
+  //   trackCarMarks()    Kartenpunkte    eigene Formel, eigene Uhr (g.tileStart)
+  //   dirtyAir()         Windschatten    ghostTilePhase(), Uhr car.tileAt
+  //   ghostAssignBias()  Spurvergabe     ganzzahlig, |Delta tilesTotal| <= 1
+  //   ghostLeader()      Fuehrender      Runden, dann tileIndex
+  //
+  // Die Kartenpunkte rechneten dabei noch mit der Formel von vor v0.5.18 - global
+  // gemitteltes tileMs mal geometrischem Laengenverhaeltnis, statt der je Kacheltyp
+  // GEMESSENEN Dauer. Fuer eine Haarnadel ist die geometrische Vorhersage gemessen 1,43 mal
+  // zu kurz: die Karte hielt ihre Phase also nach 70 Prozent der Haarnadel fuer voll, und
+  // der Punkt stand den Rest still. Dazu zwei Uhren, die bis zu einen Takt (45 ms)
+  // auseinanderliegen - car.tileAt wird gesetzt, sobald das Paket ankommt, g.tileStart erst
+  // im naechsten ghostTick.
+  //
+  // ALS FUNKTION UND NICHT ALS FELD. Ein Feld, das ghostTick einmal je Takt schreibt, waere
+  // beim Lesen bis zu 45 ms alt - dieselbe Groessenordnung wie der Fehler, der hier behoben
+  // wird - und es waere ein zweiter Ort fuer dieselbe Zahl. Die Rechnung kostet eine
+  // Subtraktion, eine Division und einen Tabellenzugriff; teuer war an dieser Ecke nie die
+  // Arithmetik, sondern renderTrackPreview() mit 94 ms.
+  //
+  // WAS ES BLEIBT: eine ERSCHLIESSUNG. Das Auto meldet nur, DASS der Kachelzaehler
+  // gewechselt hat (Byte 11) - es ortet sich nicht. Zwischen zwei Wechseln ist die Phase
+  // eine Zeitschaetzung, und ihre Guete ist die von ghostTileDauer(). Das aendert sich mit
+  // dieser Funktion nicht; es hoert nur auf, an vier Stellen verschieden geschaetzt zu
+  // werden.
+
+  // 0 bis n: Kachel und Phase in einer Zahl. null, solange keine Kachel gemeldet wurde -
+  // und ausdruecklich nicht 0, denn 0 ist die Start-Ziel-Kachel und waere eine Behauptung.
+  //
+  // DIE PHASE WIRD HIER KNAPP UNTER 1 GEHALTEN, und das ist kein Widerspruch zum Deckel in
+  // ghostTilePhase(): die beiden haben verschiedene Aufgaben, und das ist der Grund, warum
+  // eine gemeinsame Messung zwei Abschluesse braucht.
+  //
+  //   ghostTilePhase()  ist ein INDEX in die Ideallinie. Er MUSS das Kachelende erreichen,
+  //                     sonst fehlt der Linie das letzte Stueck jeder Kachel.
+  //   ghostOrt()        ist eine POSITION. Sie muss auf ihrer Kachel BLEIBEN, damit floor()
+  //                     die Kachel zurueckgibt - und damit ein Auto auf der letzten Kachel
+  //                     nicht auf den Index n zeigt, den es nicht gibt.
+  //
+  // Gefunden hat das der eigene Test: ohne diese Zeile gab ghostOrt() am Kachelende glatt
+  // i+1 zurueck, und floor() zeigte auf die naechste Kachel.
+  const ORT_RAND = 1e-6;
+  function ghostOrt(car) {
+    const g = car && car.ghost;
+    if (!g || g.tileIndex === null || g.tileIndex === undefined) return null;
+    return g.tileIndex + Math.min(ghostTilePhase(car), 1 - ORT_RAND);
+  }
+
+  // Monoton, ueber Runden hinweg, laeuft nie zurueck. Damit ist ein Abstand eine Subtraktion
+  // und ein Ueberholmanoever ein Vorzeichenwechsel.
+  function ghostOrtGes(car) {
+    const o = ghostOrt(car);
+    if (o === null) return null;
+    const n = currentTrackTiles.length;
+    return (car.ghost.laps || 0) * (n || 1) + o;
+  }
+
+  // Kacheln je Sekunde. Aus der gemessenen Kacheldauer, also ohne zweites Tempomodell - und
+  // damit wird aus einem Abstand in Kacheln einer in SEKUNDEN. Das ist die Einheit, in der
+  // "nah" ueberhaupt eine Bedeutung hat: eine ganze Kachel sind auf der Geraden rund 0,4 s
+  // und auf der Haarnadel 1,4 s.
+  function ghostOrtRate(car) {
+    const g = car && car.ghost;
+    if (!g) return 0;
+    const ms = g.tileMs || 0;
+    return ms > 0 ? 1000 / ms : 0;
+  }
+
+  // Der Abstand zwischen zwei Autos in Sekunden, vorzeichenbehaftet: positiv heisst, a ist
+  // vorn. null, wenn einer der beiden noch keine Kachel gemeldet hat oder kein Tempo bekannt
+  // ist - geraten wird hier nicht.
+  function ghostAbstandSek(a, b) {
+    const oa = ghostOrtGes(a), ob = ghostOrtGes(b);
+    if (oa === null || ob === null) return null;
+    // BEIDE muessen ein Tempo haben. Die erste Fassung mittelte ueber beide, und damit ergab
+    // ein bekanntes Tempo von 800 ms je Kachel zusammen mit einem unbekannten (0) glatte
+    // 0,625 Kacheln je Sekunde - also genau das Raten, das dieser Kommentar ausschliesst.
+    // Gefunden hat es der eigene Test.
+    const ra = ghostOrtRate(a), rb = ghostOrtRate(b);
+    if (!(ra > 0) || !(rb > 0)) return null;
+    return (oa - ob) / ((ra + rb) / 2);
+  }
+
+  // ---- Wie lange dauert DIESE Kachel? ------------------------------------------------
+  //
+  // JE TYP GEMESSEN, nicht global geschaetzt. Bis v0.5.18 stand hier ein gleitender
+  // Mittelwert ueber ALLE Kacheln, multipliziert mit dem geometrischen Laengenverhaeltnis -
+  // und das ist zu kurz fuer Kurven, weil der Ghost darin abbremst (curveSlow). Eine
+  // 60-Grad-Kurve dauert dadurch rund 1,18 mal so lang wie ihre Laenge vorhersagt, eine
+  // Haarnadel 1,43 mal.
+  //
+  // ghostTilePhase() deckelt auf 1, also kam die Phase zu frueh am Ende an und blieb dort:
+  // der Linienversatz fror auf dem Ausgangswert ein und der Rest der Kurve wurde mit
+  // KONSTANTER Schraeglage gefahren. Gemessen 12 Prozent einer Kurve, 20 Prozent einer
+  // Haarnadel - und zwar der Ausgang, also die Haelfte, an der man "aussen heraus" saehe.
+  //
+  // Eine gemessene Dauer JE TYP enthaelt Laenge UND Tempo. Kein zweites Tempomodell, keine
+  // zweite Zahl - dieselbe Messung, nur getrennt gefuehrt.
+  const GHOST_DAUER_MIN_N = 2;   // aus EINER Messung ist ein Mittelwert kein Mittelwert
+
+  function ghostTileDauer(g) {
+    const tiles = currentTrackTiles;
+    const i = g.tileIndex;
+    const typ = (tiles && i !== null && i !== undefined && tiles[i]) ? tiles[i].type : null;
+    const eig = (typ !== null && g.tileMsTyp && g.tileMsTyp[typ]);
+    if (eig && g.tileMsTypN[typ] >= GHOST_DAUER_MIN_N) return eig;
+    // RUECKFALL, solange dieser Typ noch nicht zweimal gemessen ist: der alte Weg. In der
+    // ersten Runde gibt es je Typ hoechstens eine Messung.
+    return (g.tileMs || 800) * ghostTileLenFactor(i);
   }
 
   // Wie lang ist diese Kachel WIRKLICH? In Zeichnungseinheiten, entlang der Mittellinie.
@@ -1507,10 +1980,18 @@
   // Beim Kachelwechsel die gemessene Dauer gleitend nachziehen. Ausreisser werden verworfen
   // statt eingerechnet: ein verlorenes Paket sieht wie eine doppelt lange Kachel aus, und
   // genau dieser Fehler hat bei der Geschwindigkeitsmessung schon einmal 14 km/h ergeben.
-  function ghostNoteTileTime(car, ms) {
+  function ghostNoteTileTime(car, ms, typ) {
     const g = car.ghost;
     if (!g || !(ms >= GHOST_TILE_MS_MIN && ms <= GHOST_TILE_MS_MAX)) return;
     g.tileMs = g.tileMs ? g.tileMs * 0.7 + ms * 0.3 : ms;
+    // UND GETRENNT JE TYP. Derselbe Messwert, zweimal abgelegt: der globale Mittelwert
+    // bleibt der Rueckfall und wird auch anderswo gebraucht (Vorausblick, Parkregel), der
+    // typeigene traegt die Phase.
+    if (typ === null || typ === undefined) return;
+    g.tileMsTyp = g.tileMsTyp || {};
+    g.tileMsTypN = g.tileMsTypN || {};
+    g.tileMsTyp[typ] = g.tileMsTyp[typ] ? g.tileMsTyp[typ] * 0.7 + ms * 0.3 : ms;
+    g.tileMsTypN[typ] = (g.tileMsTypN[typ] || 0) + 1;
   }
 
   // VOLLER LINIENVERSATZ = VOLLER LENKAUSSCHLAG, vorher der halbe.
@@ -1650,7 +2131,15 @@
     if (car.parked === reason) return;
     car.parked = reason;
     if (car.shake) { car.shake.parkedAt = 0; car.shake.quiet = []; car.shake.base = null; }
-    if (car.ghost) { car.ghost.cutOut = true; car.ghost.attackUntil = 0; }
+    if (car.ghost) {
+      car.ghost.cutOut = true;
+      car.ghost.attackUntil = 0;
+      // Den Boxenstopp mit abbrechen und den Platz freigeben. Ohne das haelt ein
+      // abgeflogenes Auto den Boxenplatz fuer alle anderen besetzt, und niemand pittet mehr.
+      car.ghost.pit = null;
+      car.ghost.yieldSide = 0; car.ghost.yieldUntil = 0;
+      pitPlatzRaeumen(car);
+    }
     if (car.rx) writeToCar(car, 0, 0, trackModeBit() | LIGHT_HEAD);
     log(garageLabel(car) + ': steht (' + reason + '). Auto anheben, zur\u00fcckstellen und '
         + 'kurz sch\u00fctteln, dann f\u00e4hrt es weiter.', 'err');
@@ -1668,6 +2157,13 @@
   // Die Rampe liegt auf dem ZIEL und nicht auf dem Gas. Das Gas ist die Antwort des
   // Reglers; eine Rampe darauf waere ein zweiter Regler, der gegen den ersten arbeitet.
   const GHOST_UNPARK_RAMP_MS = 2500;
+
+  // Ab welchem Anteil der Hoechstgeschwindigkeit das Auto die gedruckte Strecke zuverlaessig
+  // LIEST. Das ist keine neue Zahl: es ist die Untergrenze des Reglers ghost-speed, und die
+  // steht dort mit genau dieser Begruendung. Hier hat sie einen zweiten Leser bekommen - die
+  // Anfahrrampe darf nicht darunter bleiben, sonst kann ein zurueckgestelltes Auto nicht
+  // merken, dass es wieder auf der Bahn ist.
+  const GHOST_LESE_TEMPO = 0.35;
 
   // Der Tempo-Regler der Ghosts. Vorher standen die Verstaerkungen 4 und 3 hart im Code und
   // waren nirgends benannt - man konnte sie nicht diskutieren, ohne die Zeile zu suchen.
@@ -1733,12 +2229,16 @@
     // den Zielwert beenden, nicht das Gas abstellen. Vorher fiel das Auto im Totband auf
     // null Gas, verlor Tempo, bis die Abweichung das Totband verliess, gab Gas, kam ins
     // Totband, fiel auf null - ein Saegezahn genau um den Zielwert.
+    // Die Entschlossenheit wirkt auf BEIDE Verstaerkungen und BEIDE Ratengrenzen. Nur die
+    // Rate zu skalieren wuerde einen Regler ergeben, der schnell greift und trotzdem traege
+    // zielt; nur die Verstaerkung einen, der will und nicht darf.
+    const dyn = Math.max(0.1, ghostCfg.gasDynamik || 1);
     const iAlt = g.iTerm || 0;
     let iNeu = Math.max(0, Math.min(1, iAlt + err * GHOST_KI_GAS * dtG));
     const roh = Math.abs(err) < GHOST_DEADBAND
       ? { t: Math.max(0, Math.min(1, iNeu)), b: 0 }
-      : { t: Math.max(0, Math.min(1, iNeu + err * GHOST_KP_GAS)),
-          b: Math.max(0, Math.min(1, -err * GHOST_KP_BREMSE)) };
+      : { t: Math.max(0, Math.min(1, iNeu + err * GHOST_KP_GAS * dyn)),
+          b: Math.max(0, Math.min(1, -err * GHOST_KP_BREMSE * dyn)) };
     // ANTI-WINDUP, zwei Faelle, und beide sind hier notwendig:
     //
     // 1. Wird gebremst, wird der I-Anteil ABGEBAUT und nicht nur nicht weiter geladen. Er
@@ -1754,8 +2254,8 @@
       const max = rate * dtG;
       return soll > ist ? Math.min(soll, ist + max) : Math.max(soll, ist - max);
     };
-    const throttle = zieh(g.lastThrottle || 0, roh.t, GHOST_SLEW_GAS);
-    const brake = zieh(g.lastBrake || 0, roh.b, GHOST_SLEW_BREMSE);
+    const throttle = zieh(g.lastThrottle || 0, roh.t, GHOST_SLEW_GAS * dyn);
+    const brake = zieh(g.lastBrake || 0, roh.b, GHOST_SLEW_BREMSE * dyn);
     g.lastThrottle = throttle;
     g.lastBrake = brake;
     return { throttle, brake };
@@ -1766,25 +2266,451 @@
   // Vorher endete ein Rennen fuer die Ghosts mit stopGhost(): Zeitgeber weg, Nullen
   // geschrieben, Auto stand mit dunklem Licht da. Jetzt rollt es aus und meldet sich.
   //
-  // KEINE RECHTSKURVE MEHR. Ein Anlauf hat versucht, sie an den rechten Rand zu fahren -
-  // das ist wieder heraus. Ohne Rueckmeldung zur Querlage ist "an den Rand" eine offene
-  // Steuerung: das Auto weiss nicht, wo der Rand ist, es weiss nur, dass es rechts
-  // einschlaegt. Auf der Bahn sah das nicht nach Herausfahren aus, sondern danach, dass am
-  // Ende jedes Rennens alle Autos gleichzeitig eine Rechtskurve fahren. Geradeaus
-  // anzuhalten ist ehrlicher und war auch das, was gewuenscht wurde.
+  // ---- ABWECHSELND LINKS UND RECHTS AN DEN RAND -------------------------------------
   //
-  // Die Sequenz schreibt weiter KEINE Modus-Bytes und kein Modus-Bit: der
-  // Leitplanken-Modus soll das stehende Auto nicht weiter fuehren wollen.
-  const FINISH_ROLL_MS = 700;       // ausrollen, Gas schon auf null
+  // GEMELDET: "Nach dem Rennen rammen die Ghosts alle ineinander hinein. Mache es so, dass
+  // sie abwechselnd links und rechts am Rand stehen bleiben."
+  //
+  // HIER STAND, DASS DAS NICHT GEHT, und der Einwand war halb richtig. Ein frueherer Anlauf
+  // liess alle Autos nach rechts einschlagen; das sah nicht nach Herausfahren aus, sondern
+  // danach, dass am Ende jedes Rennens alle gleichzeitig eine Rechtskurve fahren, und der
+  // Kommentar schloss daraus: ohne Rueckmeldung zur Querlage ist "an den Rand" eine offene
+  // Steuerung.
+  //
+  // DAS BLEIBT WAHR und ist auch jetzt nicht behoben - das Auto meldet seine Querlage nicht,
+  // niemand weiss, wo der Rand ist. Aber der bestellte Zweck braucht das gar nicht: gegen
+  // Auffahren hilft nicht, den Rand zu TREFFEN, sondern auf VERSCHIEDENEN Seiten zu stehen.
+  // Zwei Autos, die entgegengesetzt einschlagen, gehen auseinander, egal wie weit sie
+  // kommen. Und "alle fahren dieselbe Kurve" - der eigentliche Einwand von damals - ist
+  // gerade das, was ein Wechsel verhindert.
+  //
+  // Die Seite kommt aus der Reihenfolge des Zieleinlaufs, nicht aus der Startnummer: wer
+  // hinter wem einlaeuft, ist die Frage, um die es geht. Der Zaehler beginnt bei jedem
+  // Rennen von vorn, sonst haengt die Seite an der Zahl der Rennen davor.
+  //
+  // ---- UND EIN ZEITVERSATZ, MIT DEM FUEHRENDEN AM LAENGSTEN ------------------------
+  //
+  // Der Wechsel allein deckt zwei Autos ab; bei vier stehen zwei auf jeder Seite, und die
+  // zwei auf derselben Seite koennen sich noch treffen. Also zusaetzlich ein Versatz in der
+  // Rollzeit - und seine RICHTUNG ist der Punkt.
+  //
+  // Vorgeschlagen: "Auto 1 faehrt 2s, Auto 2 faehrt 1.5s, usw." Genau so, und mein erster
+  // Anlauf hatte es UMGEKEHRT: dort rollte der Fuehrende 700 ms und der Verfolger 960, also
+  // rollte der Hintere laenger. Die Rechnung dazu - beim Zielstrich liegt Auto 1 mit dem
+  // Abstand g vorn, und wenn beide ausrollen, ist der Abstand danach
+  //
+  //     g + (Weg von Auto 1) - (Weg von Auto 2)
+  //
+  // Rollt der Hintere laenger, wird der zweite Term groesser und der Abstand SCHRUMPFT.
+  // Meine Staffelung hat das Auffahren also verschlimmert statt es zu verhindern. Richtig
+  // ist: wer vorn ist, rollt am laengsten, dann wachsen die Abstaende.
+  //
+  // finishGhost() wird je Auto beim Ueberfahren der Ziellinie gerufen (70-race.js:263), die
+  // Aufrufreihenfolge IST also die Zielreihenfolge - Platz 0 ist der Fuehrende.
+  const FINISH_ROLL_MAX = 2000;     // der Fuehrende rollt so lange
+  const FINISH_ROLL_MIN = 400;      // Boden, damit auch der Sechste noch ausrollt
   const FINISH_BRAKE_MS = 450;
   const FINISH_BLINKS = 3;
   const FINISH_BLINK_MS = 260;
+  const FINISH_RAND = 1.0;          // voller Versatz zur Seite, mehr kann Byte 7 nicht
+  const FINISH_STAFFEL_MS = 500;    // jeder Platz dahinter rollt so viel kuerzer
+
+  // ====================================================================================
+  // GHOST-BOXENSTOPP (experimentell)
+  // ====================================================================================
+  //
+  // BESTELLT: ein Ghost haelt auf der Start/Ziel-Kachel am RECHTEN Rand der Bahn, bleibt ein
+  // paar Sekunden stehen, und die anderen passen ihre Linie an, damit es keinen Crash gibt.
+  // Es pittet immer nur einer.
+  //
+  // ---- DER BEFUND, AN DEM DIESES FEATURE HAENGT ---------------------------------------
+  //
+  // GHOST_READ_MIN = 0,35 ist die LESESCHWELLE: unter etwa 35 Prozent der
+  // Hoechstgeschwindigkeit liest das Auto das gedruckte Muster nicht mehr und meldet 0x00.
+  // Der Abgangsmelder weiter unten parkt es daraufhin, und zwar nach
+  //
+  //     max(900 ms mit 0x00, 4000 ms seit dem letzten Kachelwechsel)
+  //
+  // also rund vier Sekunden nach dem Stillstand. Ein Ghost, der 3 bis 10 s steht, trifft das
+  // garantiert. Das einzige Veto ist g.gnadeBis, und das dauert 3 s und wurde nie verlaengert.
+  //
+  // DESHALB WIRD DIE GNADE WAEHREND DES GANZEN STOPPS LAUFEND ERNEUERT. Das ist die
+  // eigentliche Arbeit an diesem Feature, nicht die Zustandsmaschine.
+  //
+  // ---- WARUM DER STOPP DURCH DIE PHYSIK LAEUFT UND NICHT DANEBEN ----------------------
+  //
+  // Der Zieleinlauf (ghostFinishTick) umgeht alles: er steigt am Anfang von ghostTick aus und
+  // schreibt die Bytes direkt. Fuer einen Boxenstopp waere das falsch, und der Grund ist die
+  // Rennsimulation: 90b-sim.js bewegt seine Autos aus g.engine.state.speedKmh. Ein Zweig ohne
+  // e.update() ergaebe dort ein Auto, das mit unveraendertem Tempo weiterfaehrt, waehrend die
+  // Bytes einen Halt behaupten.
+  //
+  // Der Boxenstopp ist deshalb ein UEBERSCHREIBEN VON ZIEL UND QUERLAGE im normalen Pfad:
+  // Zieltempo 0, Querlage +1. Damit stimmt er in der Simulation und auf dem Teppich, und die
+  // Quertraegheit blendet den Versatz von selbst weich ein - bei querTempo 2,0 in rund 0,5 s.
+  const PIT_RAND = 1.0;          // voller Versatz nach RECHTS (Byte 7 positiv = rechts)
+  // ---- DIE BREMSPHASE IST EINE ZEIT UND KEINE SCHWELLE -------------------------------
+  //
+  // ZWEI ANLAEUFE HABEN DAS FALSCH GEMACHT, und die Messung sagt warum. Erst stand hier
+  // "steht, wenn das Tempo unter 0,05 interne km/h liegt", dann "unter dem doppelten Totband
+  // des Reglers". Beide warten auf etwas, das nicht kommt.
+  //
+  // GEMESSEN in der Rennsimulation, ein Halt aus dem Formationstempo:
+  //
+  //     km/h    1,385   1,359   1,313   ...   0,143   0,139   0,134
+  //     Bremse  0,36    0,72    1,00          0,109   0,106   0,102
+  //
+  // Der Bremsbefehl ist PROPORTIONAL zum Fehler - er faellt mit dem Tempo. Damit klingt das
+  // Tempo exponentiell ab und erreicht jede Schwelle nur asymptotisch; gemessen blieb es bei
+  // 0,0319 des normierten Tempos gegen eine Schwelle von 0,03 haengen. Eine Schwelle, die ein
+  // P-Regler nur im Grenzwert erreicht, ist keine Schwelle, sondern eine Wartezeit.
+  //
+  // Der Zieleinlauf hat dasselbe Problem laengst geloest: FINISH_BRAKE_MS = 450 ist eine
+  // ZEIT. Dasselbe hier, nur laenger - gerechnet aus derselben Messung: mit einer
+  // Zeitkonstante von 1/(0,72 * 3,0) = 0,46 s braucht der Weg von 35 Prozent auf 3 Prozent
+  // rund 1,1 s. 1500 ms lassen Luft und sind beschraenkt, was eine Schwelle nicht ist.
+  //
+  // Dass das Auto beim Beginn der Standzeit noch minimal kriecht, ist damit gesagt und kein
+  // stiller Rest: das Ziel bleibt 0, und gemessen erreicht es in der Standzeit die Null.
+  const PIT_BREMS_MS = 1500;
+  const PIT_GNADE_MS = 1500;     // laufend erneuert, deckt die 900-ms-Bestaetigung doppelt
+  const PIT_RAUS_MS = 1200;      // Querlage von +1 zurueck auf die Linie
+  const PIT_AUSWEICH_MS = 400;   // yieldUntil der anderen, laufend erneuert
+
+  // ====================================================================================
+  // DIE BOXENGASSE: MEHRERE PLAETZE HINTEREINANDER
+  // ====================================================================================
+  //
+  // BESTELLT: "Mach, dass mehrere Autos Boxenstopp machen koennen. Wenn ein Auto schon
+  // einen Stopp macht, soll das naechste ab der Kachel eins spaeter anfangen (und das
+  // andere nicht rammen)."
+  //
+  // Bis v0.5.46 war das EIN Platz und ein modulweiter Inhaber. Jetzt ist es eine Gasse:
+  // Platz 0 auf der Start/Ziel-Kachel, Platz 1 auf der naechsten, Platz 2 auf der danach.
+  // Genau die Bauform einer echten Boxengasse - eine Reihe von Boxen an derselben Geraden.
+  //
+  // WIEVIELE, UND WARUM NICHT MEHR: PIT_PLAETZE_MAX = 4 bei bis zu sechs Ghosts. Die Zahl
+  // ist nicht die Zahl der Autos, sondern die Laenge der Gasse, und die Gasse liegt auf der
+  // Strecke. Vier Kacheln sind 1,72 m; auf dem gemeldeten Layout SR3GLR2GR2G2 mit 33
+  // Kacheln ist das ein Achtel der Runde. Bei sechs waere es ein Fuenftel, und dann steht
+  // auf einem kleinen Layout ein merklicher Teil der Bahn voll. Wer als Fuenfter faellig
+  // wird, wartet - dieselbe Antwort wie vorher, nur ab dem fuenften statt ab dem zweiten.
+  //
+  // Zusaetzlich gedeckelt auf n-2: eine Gasse, die laenger ist als das Layout, waere ein
+  // Ring aus stehenden Autos.
+  const PIT_PLAETZE_MAX = 4;
+  // Wieviel Querlage ein Auto benutzt, das noch an einem stehenden vorbei muss. Der
+  // Gegenrand, also NEGATIV - der Stopp haelt rechts.
+  const PIT_VORBEI = -1.0;
+
+  // Die Plaetze. Index = Platznummer, Wert = das Auto oder null.
+  let pitPlaetze = [null, null, null, null];
+
+  // ---- DIE PLAETZE HEILEN SICH SELBST ------------------------------------------------
+  //
+  // Eine Sperre, die nur an einer Stelle freigegeben wird, bleibt irgendwann haengen. Genau
+  // das ist beim Bauen von v0.5.45 passiert: ein Prueflauf raeumte seine Attrappen aus der
+  // Garage, liess den Inhaber aber stehen - und danach pittete in einer 41-Runden-Simulation
+  // kein einziges Auto mehr, weil der Platz einem Auto gehoerte, das es nicht mehr gab.
+  // Gesucht habe ich es zuerst beim Ausloeser.
+  //
+  // Die Antwort ist keine weitere Freigabestelle, sondern eine PRUEFUNG des Anspruchs: wer
+  // keinen Stopp mehr laufen hat oder nicht mehr in der Garage steht, haelt keinen Platz.
+  // Mit mehreren Plaetzen ist das noch wichtiger als mit einem - es gibt jetzt vier Sperren,
+  // die haengen bleiben koennen.
+  function pitPlaetzeAufraeumen() {
+    for (let i = 0; i < pitPlaetze.length; i++) {
+      const c = pitPlaetze[i];
+      if (!c) continue;
+      if (!c.ghost || !c.ghost.pit || garage.indexOf(c) < 0) pitPlaetze[i] = null;
+    }
+  }
+
+  // Wieviele Plaetze das aktuelle Layout hergibt.
+  function pitPlaetzeZahl() {
+    const n = currentTrackTiles ? currentTrackTiles.length : 0;
+    if (n < 3) return 0;
+    return Math.max(1, Math.min(PIT_PLAETZE_MAX, n - 2));
+  }
+
+  // Der niedrigste freie Platz, oder -1. NIEDRIGSTE ZUERST, und das ist die Bestellung:
+  // "ab der Kachel eins spaeter" heisst, dass der zweite direkt hinter dem ersten haelt und
+  // nicht irgendwo.
+  function pitPlatzSuchen(car) {
+    pitPlaetzeAufraeumen();
+    const zahl = pitPlaetzeZahl();
+    for (let i = 0; i < zahl; i++) {
+      if (pitPlaetze[i] === car) return i;
+      if (!pitPlaetze[i]) return i;
+    }
+    return -1;
+  }
+
+  function pitPlatzFrei(car) { return pitPlatzSuchen(car) >= 0; }
+
+  function pitPlatzRaeumen(car) {
+    for (let i = 0; i < pitPlaetze.length; i++) {
+      if (pitPlaetze[i] === car) pitPlaetze[i] = null;
+    }
+  }
+
+  function pitPlatzBelegen(car, platz) { pitPlaetze[platz] = car; }
+
+  // Nur fuer den Prueflauf: alle Plaetze raeumen. Ein Lauf, der einen liegen laesst,
+  // blockiert jeden spaeteren Stopp - siehe oben.
+  function pitInhaberSetzen(car) {
+    pitPlaetze = [null, null, null, null];
+    if (car) pitPlaetze[0] = car;
+  }
+  function pitPlaetzeLesen() {
+    return pitPlaetze.map((c) => (c ? (c.alias || 'x') : null));
+  }
+
+  // Die Boxenkachel von Platz 0: die Start/Ziel-Kachel des Layouts. NICHT 0 annehmen -
+  // ortStartIndex() sucht sie, und auf einem gescannten Layout kann sie irgendwo liegen.
+  function pitKachel() {
+    if (!currentTrackTiles || currentTrackTiles.length < 3) return -1;
+    return ortStartIndex(currentTrackTiles);
+  }
+
+  // Und die Kachel eines beliebigen Platzes. Platz 1 liegt eine Kachel SPAETER, also in
+  // Fahrtrichtung hinter der Linie.
+  function pitKachelFuer(platz) {
+    const pk = pitKachel();
+    if (pk < 0) return -1;
+    const n = currentTrackTiles.length;
+    return (pk + (platz || 0)) % n;
+  }
+
+  // ---- MUSS ICH NOCH AN EINEM STEHENDEN VORBEI? -------------------------------------
+  //
+  // DAS IST DER TEIL DER BESTELLUNG, DER "das andere nicht rammen" HEISST, und ohne ihn
+  // waere die Gasse ein Auffahrunfall: das Auto fuer Platz 2 faehrt auf demselben rechten
+  // Rand an, auf dem auf Platz 0 und 1 schon zwei stehen - es wuerde dem ersten ins Heck
+  // fahren.
+  //
+  // Die Loesung ist die einer echten Boxengasse: man faehrt die Gasse NEBEN den Boxen
+  // hinunter und zieht erst am eigenen Platz herein. Hier also: links bleiben, bis die
+  // eigene Kachel erreicht ist, und beim Herausfahren genauso, solange hinter mir noch
+  // einer steht.
+  //
+  // Nur STEHENDE Autos zaehlen ('halt' und 'stand'). Eines, das selbst noch anfaehrt, ist
+  // in Bewegung und in derselben Gasse - vor dem muss man nicht ausweichen, sondern hinter
+  // ihm bleiben, und dafuer sorgt der Abstandhalter.
+  function pitVorbeiNoetig(car) {
+    const p = car.ghost && car.ghost.pit;
+    if (!p) return false;
+    const meins = p.platz || 0;
+    for (let i = 0; i < pitPlaetze.length; i++) {
+      const c = pitPlaetze[i];
+      if (!c || c === car) continue;
+      const o = c.ghost && c.ghost.pit;
+      if (!o) continue;
+      if (o.phase !== 'halt' && o.phase !== 'stand') continue;
+      // Anfahrt: alles VOR meinem Platz muss ich passieren.
+      // Ausfahrt: alles NACH meinem Platz.
+      if (p.phase === 'raus' ? i > meins : i < meins) return true;
+    }
+    return false;
+  }
+
+  // Die Querlage, die der Boxenstopp verlangt, oder null wenn keiner laeuft. Positiv ist
+  // RECHTS (Byte 7), geometrisch bestaetigt: bei konstantem Versatz gibt +4 einen Bahnradius
+  // von 38,8 Einheiten gegen 30,7 bei -4 - der groessere Radius ist der aeussere.
+  function pitQuer(car) {
+    const p = car.ghost && car.ghost.pit;
+    if (!p) return null;
+    // ---- DIE GASSE HINUNTER, DANN HEREIN ------------------------------------------
+    //
+    // Steht vor mir noch einer, halte ich den GEGENRAND - sonst faehre ich ihm ins Heck.
+    // Das gilt in der Anfahrt (an ihm vorbei zu meinem Platz) und beim Herausfahren (an
+    // einem vorbei, der hinter mir haelt), und pitVorbeiNoetig() unterscheidet die
+    // Richtung.
+    //
+    // AM EIGENEN PLATZ GILT ES NICHT MEHR: dort ist niemand, sonst haette ich den Platz
+    // nicht bekommen. Ohne diese Ausnahme wuerde ein Auto die Gasse hinunterfahren und
+    // links stehen bleiben.
+    const amPlatz = car.ghost.tileIndex === pitKachelFuer(p.platz);
+    if (!amPlatz && pitVorbeiNoetig(car)) return PIT_VORBEI;
+    if (p.phase === 'raus') {
+      const f = Math.max(0, 1 - (Date.now() - p.at) / PIT_RAUS_MS);
+      return PIT_RAND * f;
+    }
+    return PIT_RAND;
+  }
+
+  // Das Zieltempo, das der Boxenstopp verlangt, oder null. formationPace() ist genau der
+  // richtige Wert fuer die Anfahrt: er ist der kleinste, bei dem das Auto die Bahn noch
+  // liest - darunter parkt es sich selbst, und dafuer gibt es dort schon eine Pruefung.
+  function pitZiel(car) {
+    const p = car.ghost && car.ghost.pit;
+    if (!p) return null;
+    if (p.phase === 'anfahrt') return formationPace();
+    if (p.phase === 'halt' || p.phase === 'stand') return 0;
+    return null;               // 'raus' laeuft ueber die Anfahrrampe
+  }
+
+  // Auf welchem Platz steht dieses Auto gerade still? -1, wenn es nicht steht. Fuer die
+  // Messung und fuer die Anzeige - der Fahrbetrieb liest p.platz direkt.
+  function pitPlatzVon(car) {
+    const p = car.ghost && car.ghost.pit;
+    if (!p) return -1;
+    return p.platz === undefined ? 0 : p.platz;
+  }
+
+  // Steht auf einer Boxenkachel ein Auto? Dann darf dort niemand anders nach rechts.
+  //
+  // MIT DER GASSE SIND ES MEHRERE KACHELN, und das ist der Punkt: die Sperre deckte vorher
+  // die Start/Ziel-Kachel und die davor. Jetzt deckt sie die Kachel jedes BESETZTEN Platzes
+  // und die davor - eine Sperre, die nur den ersten Platz kennt, waere fuer die Autos auf
+  // Platz 1 bis 3 keine.
+  function pitSperreRechts(car) {
+    pitPlaetzeAufraeumen();
+    const pk = pitKachel();
+    if (pk < 0) return false;
+    const ort = ghostOrt(car);
+    if (ort === null) return false;
+    const n = currentTrackTiles.length;
+    const meine = Math.floor(ort);
+    for (let i = 0; i < pitPlaetze.length; i++) {
+      const c = pitPlaetze[i];
+      if (!c || c === car) continue;
+      const kachel = pitKachelFuer(i);
+      // Die Boxenkachel und die davor: dort wird schon ausgewichen, nicht erst daneben.
+      const d = ((meine - kachel) % n + n) % n;
+      if (d === 0 || d === n - 1) return true;
+    }
+    return false;
+  }
+
+  // Den anderen sagen, dass sie nach LINKS sollen. Push und nicht Poll - dieselbe Bauform und
+  // dieselbe Begruendung wie beim Ueberholen: der Vorausfahrende weiss nicht, dass hinter ihm
+  // einer ansetzt, und ein Ghost, der jeden Takt selbst nachsieht, waere dieselbe Rechnung
+  // n-mal.
+  function pitAusweichenSetzen(pitCar) {
+    const now = Date.now();
+    for (const c of garage) {
+      if (c === pitCar || !c.ghost || c.role !== 'ghost') continue;
+      if (!pitSperreRechts(c)) continue;
+      c.ghost.yieldSide = -1;                    // links, weg vom stehenden Auto
+      c.ghost.yieldUntil = now + PIT_AUSWEICH_MS;
+    }
+  }
+
+  // Die naechste Faelligkeit ziehen. Dieselbe Bauform wie der Wetterwechsel: eine Zahl aus
+  // einem Band, bei jedem Stopp neu - damit nicht alle Ghosts im Gleichschritt pitten.
+  function pitFaelligZiehen(g) {
+    const lo = Math.max(1, Math.round(ghostCfg.pitRundenMin));
+    const hi = Math.max(lo, Math.round(ghostCfg.pitRundenMax));
+    g.pitFaellig = (g.laps || 0) + lo + Math.floor(Math.random() * (hi - lo + 1));
+  }
+
+  // Darf dieses Auto jetzt pitten? Die Geltung steht hier und nicht verstreut.
+  function pitErlaubt(car) {
+    const g = car.ghost;
+    if (!ghostCfg.pitAn || !g || g.pit || g.finish || car.parked) return false;
+    if (raceFormationLap || flagState !== 'green') return false;
+    if (pitKachel() < 0) return false;
+    const imRennen = raceState === 'racing' || raceState === 'finishing';
+    if (!imRennen && !(g.freeRun && ghostCfg.pitFrei)) return false;
+    return pitPlatzFrei(car);
+  }
+
+  // Ein Takt der Boxenstopp-Maschine. Gibt zurueck, ob ein Stopp laeuft - der Aufrufer
+  // braucht das fuer die Gnade und fuer die Ausweichmeldung an die anderen.
+  function pitTick(car) {
+    const g = car.ghost, p = g && g.pit;
+    if (!p) return false;
+    const now = Date.now();
+    // DIE GNADE, JEDEN TAKT NEU. Ohne diese Zeile parkt sich der Ghost nach vier Sekunden
+    // selbst - siehe den Befund oben. Sie steht als ERSTES, damit kein Ausstieg darunter sie
+    // ueberspringen kann.
+    g.gnadeBis = now + PIT_GNADE_MS;
+    pitAusweichenSetzen(car);
+    // DIE EIGENE Boxenkachel, nicht die von Platz 0. Bis v0.5.46 gab es nur eine, und
+    // pitKachel() war beides - jetzt ist das ein Unterschied, und ein Auto fuer Platz 2, das
+    // auf Kachel 0 anhaelt, waere ein Auffahrunfall mit dem, der dort steht.
+    const pk = pitKachelFuer(p.platz);
+
+    if (p.phase === 'anfahrt') {
+      // Am eigenen Platz angekommen?
+      if (g.tileIndex === pk) { p.phase = 'halt'; p.at = now; }
+      return true;
+    }
+    if (p.phase === 'halt') {
+      // Eine ZEIT, keine Schwelle - siehe PIT_BREMS_MS. Damit ist die Phase beschraenkt, und
+      // ein Ghost kann den Boxenplatz nicht dadurch blockieren, dass er nicht ganz stillsteht.
+      if (now - p.at >= PIT_BREMS_MS) {
+        p.phase = 'stand'; p.at = now;
+        log(garageLabel(car) + ': steht in der Box, ' + (p.laenge / 1000).toFixed(1)
+            + ' s.', 'info');
+      }
+      return true;
+    }
+    if (p.phase === 'stand') {
+      if (now - p.at >= p.laenge) {
+        p.phase = 'raus'; p.at = now;
+        // ---- DIE REIFEN KOMMEN AM ENDE DER STANDZEIT DRAUF -------------------------
+        //
+        // Am ENDE und nicht am Anfang: die Standzeit IST die Arbeit, und ein Auto, das mit
+        // den neuen Reifen schon dasteht, waehrend die Uhr noch laeuft, haette den Stopp
+        // umsonst gemacht.
+        //
+        // Und NACH DEM AKTUELLEN WETTER, nicht nach dem Grund des Stopps: wer bei Regen
+        // planmaessig hereinkommt, faehrt trotzdem auf Regenreifen hinaus - eine Mannschaft,
+        // die bei laufendem Regen Slicks aufzieht, weil der Stopp anders begruendet war,
+        // gibt es nicht. Damit erledigt ein Planstopp den Reifenwechsel gleich mit, und der
+        // Ghost braucht nicht zweimal herein.
+        const will = reifenPassend();
+        if (g.reifen !== will) {
+          log(garageLabel(car) + ': ' + reifenName(will) + 'reifen aufgezogen.', 'info');
+          g.reifen = will;
+          // Die Oberflaeche gleich mit, nicht erst im naechsten Takt: der Regler liest sie
+          // im selben Durchlauf weiter unten.
+          ghostOberflaecheSetzen(car);
+        }
+        // Die vorhandene Anfahrrampe uebernimmt: sie faehrt das Ziel ueber 2,5 s hoch und hat
+        // den Leseschwellen-Boden schon eingebaut. Ein eigener Hochlauf waere ein zweiter Ort
+        // fuer dieselbe Rampe.
+        g.unparkAt = now;
+        g.iTerm = 0;
+        log(garageLabel(car) + ': f\u00e4hrt aus der Box.', 'info');
+      }
+      return true;
+    }
+    // 'raus': fertig, sobald die Querlage zurueck ist.
+    if (now - p.at >= PIT_RAUS_MS) {
+      g.pit = null;
+      pitPlatzRaeumen(car);
+      pitFaelligZiehen(g);
+    }
+    return true;
+  }
+
+  let finishSeiteZaehler = 0;
+  function finishSeitenZaehlerZuruecksetzen() { finishSeiteZaehler = 0; }
 
   function finishGhost(car) {
     const g = car.ghost;
     if (!g) { stopGhost(car); return; }
     if (g.finish) return;           // laeuft schon, nicht neu anstossen
-    g.finish = { phase: 'roll', at: Date.now() };
+    // Wer einlaeuft, pittet nicht mehr. ghostTick() steigt bei g.finish frueh aus, pitTick()
+    // laeuft also nie wieder - ein Stopp, der hier stehen bleibt, wird nie beendet und haelt
+    // den Boxenplatz fuer alle folgenden Rennen besetzt.
+    if (g.pit) {
+      g.pit = null;
+      pitPlatzRaeumen(car);
+    }
+    const platz = finishSeiteZaehler++;
+    g.finish = { phase: 'roll', at: Date.now(),
+                 seite: platz % 2 === 0 ? 1 : -1,
+                 rollMs: Math.max(FINISH_ROLL_MIN,
+                                  FINISH_ROLL_MAX - platz * FINISH_STAFFEL_MS) };
+    log(garageLabel(car) + ': rollt ' + g.finish.rollMs + ' ms aus und h\u00e4lt '
+        // RECHTS bei positivem Vorzeichen. Hier stand es umgekehrt: Byte 7 positiv ist
+        // rechts (bestaetigt im Protokolltab und geometrisch nachgemessen), die Autos hielten
+        // also richtig und das Protokoll log.
+        + (g.finish.seite > 0 ? 'rechts' : 'links') + ' am Rand.', 'info');
   }
 
   // Ein Takt der Sequenz. Laeuft im gewohnten Zeitgeber des Ghosts und schreibt die Bytes
@@ -1794,16 +2720,26 @@
     const g = car.ghost, f = g.finish, now = Date.now();
     const seit = now - f.at;
     const bit = trackModeBit();
+    // Die Seite gilt in BEIDEN Fahrphasen. Nur in der Rollphase zu lenken waere ein
+    // halber Versatz: die Bremsphase ist die, in der das Auto noch rund einen halben Meter
+    // zurueckliegt, und ein Sprung der Lenkung auf null mitten im Bremsen ist der Ruck, den
+    // die Ratenbegrenzung sonst ueberall vermeidet.
+    const seiteAus = (f.seite || 0) * FINISH_RAND;
     if (f.phase === 'roll') {
-      if (seit >= FINISH_ROLL_MS) { f.phase = 'brake'; f.at = now; return; }
-      // Gas aus, Lenkung GERADE. Ausrollen und nicht hart abschneiden: das Auto rollt sonst
-      // mit einem Ruck aus, und die Bremsphase danach setzt den Punkt sowieso.
-      writeToCar(car, 0, 0, bit | LIGHT_HEAD);
+      if (seit >= (f.rollMs || FINISH_ROLL_MAX)) { f.phase = 'brake'; f.at = now; return; }
+      // Gas aus, Lenkung zur zugeteilten Seite. Ausrollen und nicht hart abschneiden: das
+      // Auto rollt sonst mit einem Ruck aus, und die Bremsphase danach setzt den Punkt
+      // sowieso.
+      // ACHTUNG AUF DIE REIHENFOLGE: writeToCar(car, STEER, THROTTLE, ...). Beim ersten
+      // Anlauf stand die Seite im Gas-Platz - die Autos waeren am Rennende losgefahren
+      // statt zur Seite zu ziehen. Die alte Zeile schrieb zwei Nullen und verriet die
+      // Reihenfolge deshalb nicht.
+      writeToCar(car, seiteAus, 0, bit | LIGHT_HEAD);
       return;
     }
     if (f.phase === 'brake') {
       if (seit >= FINISH_BRAKE_MS) { f.phase = 'blink'; f.at = now; return; }
-      writeToCar(car, 0, 0, bit | LIGHT_HEAD | LIGHT_BRAKE);
+      writeToCar(car, seiteAus, 0, bit | LIGHT_HEAD | LIGHT_BRAKE);
       return;
     }
     // Dreimal blinken. Ein Blinken ist AN und AUS, also zaehlt der Schritt Halbphasen und
@@ -1827,6 +2763,23 @@
     if (car.ghost) {
       car.ghost.cutOut = false; car.ghost.offSince = 0;
       car.ghost.unparkAt = Date.now();
+      // ---- DIE GNADE GILT AUCH HIER, und das war die gemeldete Luecke ------------------
+      //
+      // Sie wurde bisher NUR beim Start eines Ghosts erteilt. Wer ein abgeflogenes Auto
+      // zuruecksetzt und schuettelt, bekam sie nicht - und damit lief genau der Kreis, gegen
+      // den sie gebaut ist:
+      //
+      //   entparkt  ->  Anfahrrampe von 0  ->  nach 900 ms noch fast im Stand
+      //             ->  kein Muster gelesen, 0x00 steht, Kachelzaehler steht
+      //             ->  Abgang bestaetigt  ->  parkt wieder
+      //
+      // Gemeldet mit genau diesem Verlauf: "Ich habe es zurueckgestellt, es hat kurz gelenkt
+      // und dann wieder geblinkt." Die Bestaetigung braucht 900 ms, die Rampe 2500 - der
+      // Halt kam also immer, bevor das Auto eine Gelegenheit hatte, sich zu widerlegen.
+      //
+      // DIESELBE Zahl wie beim Start, weil es dieselbe Lage ist: das Auto ist gerade von
+      // Hand hingestellt worden.
+      car.ghost.gnadeBis = Date.now() + GHOST_START_GNADE_MS;
       // Den I-Anteil loeschen. Er ist waehrend des Stillstands nicht gewachsen (geparkt wird
       // ghostSpeedControl nicht gerufen), aber der Wert VOR dem Abflug steht noch da - und
       // der gehoert zu einem Tempo, das dieses Auto gerade nicht hat. Mit ihm wuerde die
@@ -1888,6 +2841,52 @@
     if (!ausgeloest) return;
     if (flagState === 'green') setFlag('yellow');
     else if (flagState === 'yellow') yellowRestart();
+  }
+
+  // ---- Was die Waehltaste bedeutet, entscheidet der SCHIRM ---------------------------
+  //
+  // Auf dem Cockpitschirm laedt sie die gelbe Flagge, auf jedem anderen waehlt sie dort und
+  // die Flagge gibt es nicht. Eine Regel, die man in einem Satz sagen kann - und ablesbar an
+  // dem Schirm, in den man ohnehin sieht.
+  //
+  // ALS EIGENE FUNKTION und nicht als Block in pollGamepad, damit eine Pruefung genau diese
+  // Logik fahren kann statt einer nachgebauten zweiten Fassung. Die Vorlaeufer-Fassung stand
+  // im Gamepad-Zweig, und der Test aus dem Plan ("X waehlt, und die Flagge laedt dabei
+  // nicht") ist deshalb nie gebaut worden: es gab nichts, was man haette aufrufen koennen.
+  // Der Prueffstand rief stattdessen pitScreenSelect() direkt - also am Entscheidungsweg
+  // vorbei, und damit haette er den gemeldeten Fehler auch dann nicht gesehen, wenn es ihn
+  // gegeben haette. Es gab ihn.
+  //
+  // Sie liest die GEBUNDENE Flaggenaktion und nicht fest Knopf 0. Wer die Flagge auf Dreieck
+  // legt, waehlt dann mit Dreieck - ein fest verdrahteter Knopf 0 waere eine zweite
+  // Bedeutung auf einer Taste, die das Schaubild als "nicht belegt" zeigt.
+  //
+  // UND AUSDRUECKLICH KEINE UNTERSCHEIDUNG NACH HALTEDAUER. Genau das war bis v0.5.1 gebaut
+  // - Quadrat trug Runterschalten UND die Flagge - und ist als Fehler zurueckgenommen
+  // worden. Der Ladebalken startet auf den anderen Schirmen gar nicht erst, statt bei 40
+  // Prozent stehenzubleiben.
+  function flagTasteTick(flagNow) {
+    if (cockpitScreenIst().id !== 'main') {
+      if (flagNow && !prevYellowFlag) cockpitScreenWaehlen();
+    } else {
+      if (flagNow && !prevYellowFlag) { padFlagFired = false; flagHoldPress(); }
+      if (flagNow && !padFlagFired && flagHoldStart !== null
+          && Date.now() - flagHoldStart >= FLAG_HOLD_MS) {
+        padFlagFired = true;
+        flagHoldRelease(true);
+      }
+      if (!flagNow && prevYellowFlag) flagHoldRelease(false);
+    }
+    // DIE SPERRE FAELLT BEIM LOSLASSEN, und das ist die Behebung eines gemeldeten Fehlers.
+    // padFlagFired heisst "in DIESEM Druck ist die Sekunde schon voll gewesen", also endet
+    // sie mit dem Druck. Vorher fiel sie nur auf der naechsten STEIGENDEN Flanke - und die
+    // konnte der Boxenschirm verbrauchen, bevor diese Zeile sie sah. Ein einziger Druck im
+    // Boxenmenue liess den Merker also stehen, und jeder weitere Druck auf dem Cockpitschirm
+    // lief in eine Bedingung, die ihn nicht mehr durchliess: X war fuer die gelbe Flagge
+    // dauerhaft taub, im Boxenmenue aber weiter in Ordnung. Genau so gemeldet, und genau
+    // daran zu erkennen.
+    if (!flagNow) padFlagFired = false;
+    prevYellowFlag = flagNow;
   }
 
   // ---- Gelbe Flagge ----
@@ -2004,6 +3003,16 @@
   //
   // Alles skaliert mit EINEM Regler, und auf 0 ist jeder Baustein wirkungslos - das ist
   // die Einstellung, in der die Ideallinie und die Querablage gemessen werden koennen.
+  // Alle Bausteine aus, als Objekt zum Ueberschreiben. Ein Prueffstand, der das
+  // Fahrverhalten OHNE Zutaten messen will, nimmt das - und ein sechster Baustein laesst
+  // dann nicht neun Prueffstaende still durchfallen, weil jeder seine eigene Liste haette.
+  const WUERZE_AUS = { wuerzeUeberholen: false, wuerzeAbstand: false, wuerzeForm: false,
+                       wuerzeFehler: false, wuerzeWindschatten: false };
+  function wuerzeAn() {
+    return !!(ghostCfg.wuerzeUeberholen || ghostCfg.wuerzeAbstand || ghostCfg.wuerzeForm
+              || ghostCfg.wuerzeFehler || ghostCfg.wuerzeWindschatten);
+  }
+
   const SPICE_FORM_MS = 2600;      // wie oft die Tagesform fortgeschrieben wird
   const SPICE_FORM_AMP = 0.075;    // volle Wuerze: +/- 7.5 % Dauertempo
   const SPICE_FORM_STEP = 0.03;    // Schrittweite des Zufallslaufs
@@ -2026,7 +3035,11 @@
   // 1,3 loest es an der richtigen Stelle: der Abstandhalter sagt weiter "nicht kleben", die
   // Attacke sagt "du bist in Reichweite". Waehrend einer Attacke ist der Abstandhalter aus,
   // der Verfolger darf also heran - genau dafuer ist die Ausnahme dort.
-  const SPICE_ATTACK_RANGE = 1.3;
+  // let und nicht const, damit ein Prueflauf sie sweepen kann - sie und SPICE_GAP_MIN
+  // bestreiten dasselbe Band, und welches Paar taugt, ist eine Messung und keine Meinung.
+  let SPICE_ATTACK_RANGE = 1.3;
+  function attackRangeSetzen(v) { SPICE_ATTACK_RANGE = v; }
+  function attackRangeLesen() { return SPICE_ATTACK_RANGE; }
   // WIE OFT gewuerfelt wird. Vorher alle 4000 ms: bei Wuerze 0,4 ist die
   // Wahrscheinlichkeit 0,18 je Versuch, also eine Attacke pro 22 Sekunden durchgehenden
   // Klebens. Das liest sich nicht als Rennen, sondern als Kolonne.
@@ -2068,6 +3081,38 @@
   const SPICE_PASS_CLEAR = 0.45;       // Kacheln VOR dem anderen = geschafft
   const SPICE_PASS_BLOCK_MS = 6000;    // Sperre nach einem Abbruch
 
+  // ---- UEBERHOLEN AUCH IN KURVEN ----------------------------------------------------
+  //
+  // BESTELLT: "Ueberarbeite nun die Ueberholmanoever, sodass Autos auch in Kurven ueberholen
+  // koennen."
+  //
+  // Bis v0.5.43 war es zweifach gesperrt: der Vorausblick musste frei sein (onStraight) UND
+  // die gemeldete Kachel unter dem Auto durfte keine Kurve sein. Der Grund dafuer war echt
+  // und steht in den Mitschnitten: alle drei Abgaenge im Leitplanken-Modus geschahen bei
+  // nahezu vollem Lenkanschlag (mittleres |steer| 119,7 von 127), keiner ohne Lenkung. In
+  // einer Kurve liegt die Ideallinie schon weit aussen oder innen - ein Ueberholversatz
+  // obendrauf ist genau der volle Anschlag.
+  //
+  // DIE ANTWORT IST NICHT DIE KACHELART, SONDERN DER PLATZ. Was ein Versuch braucht, ist
+  // Bahnbreite, die nicht schon von der Linie verbraucht ist:
+  //
+  //     platz = 1 - |Linienversatz des Angreifers|
+  //
+  // Damit regelt sich die Kachelart von selbst: auf einer Geraden zieht die Linie kaum
+  // (Spurgewicht), in einer 60-Grad-Kurve bleibt Platz, in einer Haarnadel saettigt sie und
+  // es bleibt keiner. Das ist gemessen und keine Tabelle, die ich waehle - und es erlaubt
+  // genau dort, wo es geht.
+  //
+  // Die Wahrscheinlichkeit skaliert MIT dem Platz, statt eine Schwelle zu sein: ein Versuch
+  // bei 0,35 Platz ist ein anderer als einer bei 0,9, und ein Sprung dazwischen waere eine
+  // Behauptung.
+  const SPICE_PASS_PLATZ_MIN = 0.30;   // darunter passt kein zweites Auto daneben
+  // Nicht in eine HAARNADEL hinein ansetzen. Das bleibt gesperrt, und zwar nicht wegen der
+  // Kachelart, sondern weil der Versuch dort zwangslaeufig IN der Haarnadel endet: eine
+  // Attacke dauert bis zu 5 s, eine Kachel bei Ghost-Tempo rund 0,7 s. Wer 60 cm vor einer
+  // Haarnadel ausholt, ist beim Einlenken noch daneben.
+  const SPICE_PASS_KEIN_HAARNADEL_VORAUS = 1;   // Kacheln Vorausblick
+
   // ---- 2. ZEITLUECKE STATT KACHELABSTAND -------------------------------------------
   //
   // Der Mindestabstand rechnete in Kacheln. Das ist die falsche Groesse: wer mit hohem
@@ -2095,8 +3140,51 @@
   const GHOST_MIX_TAU = 0.35;          // s
   const GHOST_LANE_DROP = 0.5;         // in der Kurve bleibt die halbe Spur
   const GHOST_LINE_STRAIGHT = 0.35;    // auf der Geraden wirkt ein Drittel der Linie
-  const SPICE_BAND_PER_TILE = 0.022;
-  const SPICE_BAND_MAX = 0.13;
+
+  // ---- Was ein Regler ueber 100 Prozent bedeutet -------------------------------------
+  //
+  // Die zwei Zahlen darueber sind Abschwaechungen mit gutem Grund: alle auf denselben
+  // Scheitel zu schicken fuehrt sie zusammen, und Beruehrungen sind nicht zurueckzuregeln,
+  // weil das Auto keine Querlage meldet.
+  //
+  // Ab 100 Prozent ist das aber eine ausdrueckliche Bitte. Der Anteil waechst deshalb linear
+  // bis auf voll bei 200 Prozent: dort wirkt die Linie auch auf der Geraden ganz und die
+  // eigene Spur auch in der Kurve. Gemeldet war "es sah nicht aus, als fuehren sie die
+  // Ideallinie" - und das Anbremsen von aussen, also die Gerade, ist die Haelfte davon.
+  //
+  // Unter 100 Prozent aendert sich nichts: `ueber` ist dort 0, und die zwei Ausdruecke sind
+  // Zeichen fuer Zeichen die alten.
+  function ghostUeber(v) { return Math.max(0, Math.min(1, (v || 0) - 1)); }
+
+  // ---- Der Querlage-Pruefstand -------------------------------------------------------
+  //
+  // Ein FESTER Versatz statt der gerechneten Querlage. Er ueberschreibt und addiert nicht:
+  // ein Pruefstand, dessen Wert sich mit Ideallinie, Spur und Ausweichen mischt, misst
+  // nicht den Wert, den man eingestellt hat. Bei 0 ist er aus.
+  //
+  // Er beantwortet die Frage, die die ganze Querlage-Rechnung voraussetzt und die nie
+  // gemessen wurde: Byte 7 traegt einen Lenk-WINKEL, keine Position. Dass daraus eine
+  // gehaltene Lage neben der Mitte wird, leistet allein die Schienenfuehrung des Autos.
+  // (ghostQuerTest steht in 20-protocol.js - der FRUEHESTEN Datei, die es braucht. Der
+  //  Regler in 80-sound.js schreibt beim Aufbau darauf, und 80 kommt vor 90: eine
+  //  let-Deklaration hier waere zu spaet, und ein Zugriff davor nimmt in einer
+  //  zusammengefuegten IIFE die GANZE Datei mit. Genau das ist beim ersten Versuch
+  //  passiert - gemeldet als "Cannot access 'padConnected' before initialization", also
+  //  an einer ganz anderen Stelle.)
+  function ghostQuerTestAn() { return Math.abs(ghostQuerTest) > 0.001; }
+
+  function ghostLinieGewicht(mix) {
+    const gerade = GHOST_LINE_STRAIGHT
+                 + (1 - GHOST_LINE_STRAIGHT) * ghostUeber(ghostCfg.line);
+    return gerade + (1 - gerade) * (mix || 0);
+  }
+
+  function ghostSpurGewicht(mix) {
+    const drop = GHOST_LANE_DROP * (1 - ghostUeber(ghostCfg.lanes));
+    return 1 - drop * (mix || 0);
+  }
+  // SPICE_BAND_PER_TILE und SPICE_BAND_MAX standen hier und trugen das Gummiband. Es ist
+  // seit v0.5.32 "Feld zusammenhalten" (ghostFeldStaffel) - siehe die Begruendung dort.
   // 6. ABSTAND. Es gab keinen Baustein, der Autos auseinander haelt: Windschatten und
   // Attacke ziehen sie zusammen, das Gummiband bremst nur den Fuehrenden. Zwei Ghosts
   // konnten also Stossstange an Stossstange fahren, und genau so wurde es gemeldet.
@@ -2107,7 +3195,49 @@
   // WAEHREND EINER ATTACKE GILT ER NICHT. Sonst waere das Ueberholen weg, und das
   // funktioniert gerade - der Verfolger muss dichter heran duerfen als der, der nur
   // mitfaehrt. Das ist der ganze Unterschied zwischen Hinterherfahren und Angreifen.
-  const SPICE_GAP_MIN = 0.7;    // Kacheln, ab hier wird gelupft
+  // ---- DIE AUFLOESUNG SETZT DEN MINDESTABSTAND, NICHT DER GESCHMACK -----------------
+  //
+  // 0,7 Kacheln stand hier, und das war unerreichbar. Der Ghost kennt seinen Ort nur aus dem
+  // Kachelzaehler und einer GESCHAETZTEN Kachelphase; unter einer Kachel hat diese Angabe
+  // keine Auflaesung. Gemessen in der Rennsimulation gegen die wahre Bogenlaenge, 3512
+  // Abtastungen:
+  //
+  //     mittlerer Fehler   +0,368 Kacheln  (16 cm zu optimistisch)
+  //     Streuung            0,55 Kacheln   (23,6 cm)
+  //     und wenn der WAHRE Abstand unter einer Fahrzeuglaenge lag (276 Faelle):
+  //     gemeldet            1,000          - in JEDEM einzelnen Fall
+  //
+  // Zwei Autos hintereinander bei gleichem Tempo haben dieselbe Kachelphase. Der gemeldete
+  // Abstand ist dann die Differenz der KACHELZAEHLER, also eine ganze Zahl - waehrend der
+  // wahre Abstand irgendwo zwischen 0 und 43 cm liegt. Ein Mindestabstand von 0,7 Kacheln
+  // konnte deshalb nie greifen: gemeldet wurde 1,0, und 1,0 ist nicht kleiner als 0,7.
+  //
+  // Der Wert muss also UEBER der Auflaesung liegen, und das ist eine Ableitung und keine
+  // Vorliebe. 1,2 Kacheln sind 52 cm, also gut fuenf Fahrzeuglaengen - und bleiben unter der
+  // Angriffsreichweite von 1,3, damit ueberhaupt noch ueberholt wird.
+  // Als let und nicht const, damit eine Messreihe ihn durchfahren kann - der Wert ist eine
+  // Abwaegung zwischen Beruehrungen und dichtem Fahren, und die entscheidet eine Reihe und
+  // nicht ein Kommentar. Der Fahrbetrieb aendert ihn nicht.
+  let SPICE_GAP_MIN = 1.2;      // Kacheln, ab hier wird gelupft (nur noch Rueckfall)
+  // ---- DIE ZEITLUECKE IN SEKUNDEN --------------------------------------------------
+  //
+  // ABGELEITET UND NICHT GEWAEHLT, aus der Fahrzeuglaenge und dem Tempo. Ein Auto ist 9,5 cm
+  // lang (siehe AUTO_LANG_CM in 60-track.js), eine Kachel 43 cm. Ein Ghost bei Vorgabetempo
+  // braucht rund 400 ms je Kachel, also rund 90 ms je Autolaenge.
+  //
+  // 0,35 s sind damit knapp VIER Autolaengen - der Abstand, bei dem ein Auffahren noch
+  // abzufangen ist und bei dem zwei Autos auf dem Tisch erkennbar getrennt aussehen. Zwei
+  // Autolaengen waeren zu spaet: der Tempo-Regler braucht selbst rund 0,3 s, bis ein
+  // geaenderter Gaswunsch als Tempo ankommt.
+  //
+  // Der Zuschlag je Annaeherungsrate hat dieselbe Bauform wie vorher, nur in Sekunden: wer
+  // mit einer Kachel je Sekunde aufholt, braucht 0,3 s mehr Vorwarnung.
+  let SPICE_LUECKE_MIN_S = 0.35;
+  const SPICE_LUECKE_PER_CLOSING = 0.30;
+  function lueckeMinSetzen(v) { SPICE_LUECKE_MIN_S = v; }
+  function lueckeMinLesen() { return SPICE_LUECKE_MIN_S; }
+  function gapMinSetzen(v) { SPICE_GAP_MIN = v; }
+  function gapMinLesen() { return SPICE_GAP_MIN; }
   const SPICE_GAP_LIFT = 0.26;  // hoechster Tempoabzug bei Beruehrung
 
   // Fortschritt in Kacheln seit dem Start, mit Bruchteil. Absichtlich NICHT ueber den
@@ -2157,32 +3287,106 @@
     return g.naehern;
   }
 
+  // ====================================================================================
+  // DIE ZEITLUECKE: EIN ABSTAND MIT AUFLOESUNG
+  // ====================================================================================
+  //
+  // GEMELDET: "Die Simulation sollte verhindern, dass die Autos sich dauernd rammen." Der
+  // Abstandhalter dafuer war da und wirkte nicht, und der Grund ist gemessen:
+  //
+  //     DER KACHELABSTAND HAT UNTERHALB EINER KACHEL KEINE WERTE. In 1517 Stichproben, in
+  //     denen der wahre Abstand unter einer Kachel lag - darunter 155, in denen er unter
+  //     einer AUTOLAENGE lag -, meldete ghostAhead() jedes Mal genau 1,00. Nicht 0, nicht
+  //     gebrochen: 1,00.
+  //
+  // Der Grund steht bei ghostProgress(): der Abstand ist die Differenz der Kachelzaehler
+  // plus eine geschaetzte Kachelphase, und zwei Autos mit gleichem Tempo haben dieselbe
+  // Phase - sie faellt heraus. Uebrig bleibt eine ganze Zahl, und die 0 verwirft
+  // ghostAhead().
+  //
+  // FOLGE: der Abstandhalter hob bei 43 cm genauso stark ab wie bei 0 cm. Er konnte den
+  // Unterschied nicht sehen. Der Sweep zeigt das auch von aussen - sechs Ghosts, 180 s:
+  //
+  //     Mindestabstand 0,7 (feuert nie)   80,6 Beruehrungen   56,7 Ueberholer je min
+  //     Mindestabstand 1,2                78,3               43,7
+  //     Mindestabstand 1,2 / Reichw. 2,2  65,3               33,0
+  //
+  // Beruehrungen und Ueberholmanoever bewegen sich ZUSAMMEN, und je Ueberholmanoever wird
+  // es sogar schlechter (1,42 -> 1,79 -> 1,98 Beruehrungen). Mit dieser Groesse ist das
+  // Rammen also nicht zu beheben, egal wie man die Schwelle stellt.
+  //
+  // ---- WAS AM TEPPICH WIRKLICH ZU MESSEN IST ----------------------------------------
+  //
+  // Das Auto meldet zwei Dinge: DASS es eine neue Kachel betreten hat (Byte 11 zaehlt) und
+  // WANN das war (der Zeitpunkt des Pakets). Damit gibt es eine Groesse mit echter
+  // Aufloesung, und es ist dieselbe, mit der im Rennsport gemessen wird:
+  //
+  //     Der Vorausfahrende hat Kachel T zum Zeitpunkt t1 betreten.
+  //     Ich betrete Kachel T zum Zeitpunkt t2.
+  //     Die Zeitluecke ist t2 - t1.
+  //
+  // Das ist eine Zeitnahme an einer Schleife, kein Schaetzwert - Millisekunden statt
+  // Kacheln, also Zentimeter statt halber Meter. Und sie braucht nichts, was nur die
+  // Simulation weiss: auf dem Teppich stehen beide Zeitpunkte genauso zur Verfuegung.
+  //
+  // Sie aktualisiert sich einmal je Kachel, also rund alle 400 ms. Das ist derselbe Takt,
+  // in dem sich der Kachelabstand auch aendert - es wird nichts langsamer, nur genauer.
+  function ghostKachelZeitNotieren(car) {
+    const g = car.ghost;
+    if (!g || g.tileIndex === null || g.tileIndex === undefined) return;
+    if (!g.kachelZeit) g.kachelZeit = [];
+    g.kachelZeit[g.tileIndex] = Date.now();
+  }
+
+  // Die Zeitluecke zum Vorausfahrenden, in Sekunden. null heisst "nicht messbar" - und das
+  // ist ein ehrliches Ergebnis und kein Fehler: in der ersten Runde hat der Vorausfahrende
+  // meine Kachel noch nicht mit einem Stempel versehen, und ohne zwei Zeitpunkte gibt es
+  // keine Differenz.
+  const LUECKE_MAX_S = 5;
+  function ghostZeitLuecke(car, ah) {
+    const g = car.ghost;
+    if (!ah || !ah.car || !ah.car.ghost || !g) return null;
+    const t = g.tileIndex;
+    if (t === null || t === undefined) return null;
+    const meine = g.kachelZeit ? g.kachelZeit[t] : undefined;
+    const seine = ah.car.ghost.kachelZeit ? ah.car.ghost.kachelZeit[t] : undefined;
+    if (meine === undefined || seine === undefined) return null;
+    const d = (meine - seine) / 1000;
+    // Nicht positiv heisst: sein Stempel ist neuer als meiner. Das kann vorkommen, wenn er
+    // eine ganze Runde vor mir liegt und die Kachel schon wieder betreten hat - dann ist die
+    // Differenz keine Luecke, sondern ein Rundenrest, und eine Zahl daraus zu machen waere
+    // geraten.
+    if (!(d > 0)) return null;
+    return d > LUECKE_MAX_S ? null : d;
+  }
+
   // Tagesform fortschreiben. Begrenzter Zufallslauf: er haelt an, laeuft aber nicht weg.
   function ghostFormTick(car) {
     const g = car.ghost, now = Date.now();
     if (!g.formAt) { g.formAt = now; g.form = 0; return; }
     if (now - g.formAt < SPICE_FORM_MS) return;
     g.formAt = now;
-    const amp = SPICE_FORM_AMP * ghostCfg.spice;
+    if (!ghostCfg.wuerzeForm) { g.form = 0; return; }
+    const amp = SPICE_FORM_AMP;
     g.form = Math.max(-amp, Math.min(amp,
-      (g.form || 0) + (Math.random() * 2 - 1) * SPICE_FORM_STEP * ghostCfg.spice));
+      (g.form || 0) + (Math.random() * 2 - 1) * SPICE_FORM_STEP));
   }
 
   // Alle fuenf Bausteine auf das Zieltempo. Rueckgabe: der Faktor, und ob gerade attackiert
   // wird (das braucht die Linie, nicht das Tempo).
   function ghostSpice(car, aheadTight) {
     const g = car.ghost, now = Date.now();
-    if (!ghostCfg.spice) { g.attackUntil = 0; return { factor: 1, attack: 0 }; }
+    if (!wuerzeAn()) { g.attackUntil = 0; return { factor: 1, attack: 0 }; }
 
     ghostFormTick(car);
     let f = 1 + (g.form || 0);
 
     // 2. Fehler: gewuerfelt wird EINMAL je angebremster Kurve, nicht je Takt - sonst
     // haengt die Fehlerrate an der Taktfrequenz und nicht am Rennen.
-    if (aheadTight.tight > 0 && aheadTight.dist <= 1) {
+    if (ghostCfg.wuerzeFehler && aheadTight.tight > 0 && aheadTight.dist <= 1) {
       if (g.mistakeArmed !== aheadTight.key) {
         g.mistakeArmed = aheadTight.key;
-        if (Math.random() < SPICE_MISTAKE_P * ghostCfg.spice) {
+        if (Math.random() < SPICE_MISTAKE_P) {
           const d = SPICE_MISTAKE_MS[0]
                   + Math.random() * (SPICE_MISTAKE_MS[1] - SPICE_MISTAKE_MS[0]);
           g.mistakeUntil = now + d;
@@ -2192,14 +3396,14 @@
     } else if (aheadTight.tight === 0) {
       g.mistakeArmed = null;
     }
-    if (g.mistakeUntil && now < g.mistakeUntil) f *= (1 - SPICE_MISTAKE_CUT * ghostCfg.spice);
+    if (g.mistakeUntil && now < g.mistakeUntil) f *= (1 - SPICE_MISTAKE_CUT);
 
     const ah = ghostAhead(car);
     const onStraight = aheadTight.tight === 0;
 
     // 3. Windschatten
-    if (ah && ah.gap <= SPICE_SLIP_TILES && onStraight) {
-      f *= 1 + SPICE_SLIP_GAIN * ghostCfg.spice * (1 - ah.gap / SPICE_SLIP_TILES);
+    if (ghostCfg.wuerzeWindschatten && ah && ah.gap <= SPICE_SLIP_TILES && onStraight) {
+      f *= 1 + SPICE_SLIP_GAIN * (1 - ah.gap / SPICE_SLIP_TILES);
     }
 
     // 4. Attacke
@@ -2232,26 +3436,47 @@
         log(garageLabel(car) + ': kommt nicht vorbei, ordnet sich wieder ein.', 'info');
       }
     }
-    if (!g.attackUntil && g.closeSince && now - g.closeSince > SPICE_ATTACK_ARM_MS
-        && onStraight
-        // 4. KEIN ANGRIFF IN EINE KURVE HINEIN. onStraight prueft den Vorausblick, und den
-        // gibt es nur mit Karte - ohne Karte ist er immer "frei", und dann wurde auch mitten
-        // in einer Haarnadel angesetzt. Der gemeldete Code der Kachel UNTER dem Auto braucht
-        // keine Karte und schliesst genau diesen Fall.
-        && ghostTileInfo(car.tileCode).curve === 0
+    // ---- 4. DER PLATZ ENTSCHEIDET, NICHT DIE KACHELART ----------------------------
+    //
+    // Begruendung und Messung stehen bei SPICE_PASS_PLATZ_MIN. Der Linienversatz ist der
+    // Anteil des Anschlags, den die Ideallinie hier schon belegt; was uebrig bleibt, ist der
+    // Platz fuer einen Versatz daneben.
+    const linieHier = Math.abs(ghostLineOffset(car) * ghostCfg.line * GHOST_LINE_STEER
+                               * ghostLinieGewicht(g.kurveMix || 0));
+    const platz = Math.max(0, 1 - linieHier);
+    // In eine Haarnadel hinein wird nicht angesetzt - siehe die Konstante. aheadTight kommt
+    // aus dem Layout; ohne Layout ist tight 0 und die Bedingung faellt weg, und das ist
+    // richtig: ohne Karte weiss niemand, was kommt.
+    const haarnadelVoraus = aheadTight.tight >= 2
+                            && aheadTight.dist <= SPICE_PASS_KEIN_HAARNADEL_VORAUS;
+    if (ghostCfg.wuerzeUeberholen
+        && !g.attackUntil && g.closeSince && now - g.closeSince > SPICE_ATTACK_ARM_MS
+        && platz >= SPICE_PASS_PLATZ_MIN
+        && !haarnadelVoraus
         && now > (g.passBlockUntil || 0)
         && now - (g.attackTriedAt || 0) > SPICE_ATTACK_RETRY_MS) {
       g.attackTriedAt = now;
-      if (Math.random() < SPICE_ATTACK_P * ghostCfg.spice) {
+      if (Math.random() < SPICE_ATTACK_P * platz) {
         // attackUntil bleibt als "eine Sequenz laeuft"-Marke; die Phasen entscheiden.
         // Die Obergrenze steht jetzt bei SPICE_PASS_MAX_MS, nicht bei SPICE_ATTACK_MS.
         g.attackUntil = now + SPICE_PASS_MAX_MS + SPICE_PASS_TUCK_MS;
         g.passSince = now;
         g.passPhase = 'raus';
-        // Die andere Seite als die, auf der die Linie gerade liegt. Genau dafuer ist die
-        // Linie da: ohne sie waere "die andere Seite" nicht definiert.
+        // ---- DIE SEITE IST DIE, AUF DER DER ANDERE NICHT IST -------------------------
+        //
+        // Hier stand "die andere Seite als die, auf der die eigene Linie liegt". Auf einer
+        // Geraden ist das dasselbe - beide fahren dieselbe Linie -, in einer Kurve nicht:
+        // dort weicht der Vorausfahrende gerade aus, hat eine eigene Spur oder liegt sonst
+        // irgendwo, und die eigene Linie sagt darueber nichts.
+        //
+        // g.querSoll des ANDEREN ist die Groesse, die es dazu gibt: seine angeforderte
+        // Querlage, traege nachgefuehrt. Sie ist keine Messung - das Auto meldet seine
+        // Querlage nicht -, aber sie ist das, was die App ihm geschickt hat, und damit die
+        // beste verfuegbare Aussage. Ohne Vorausfahrenden bleibt die alte Regel.
+        const qAnder = (ah.car && ah.car.ghost) ? (ah.car.ghost.querSoll || 0) : null;
         const lo = ghostLineOffset(car);
-        g.attackSide = lo >= 0 ? -1 : 1;
+        g.attackSide = qAnder !== null ? (qAnder >= 0 ? -1 : 1)
+                                       : (lo >= 0 ? -1 : 1);
         // UND DER VORAUSFAHRENDE WEICHT MIT AUS, zur anderen Seite. Vorher wich nur einer
         // aus, und zwei Autos auf 25 cm Bahnbreite brauchen beide Haelften - gemeldet als
         // "beim Ueberholen beruehren sie sich stark".
@@ -2271,7 +3496,7 @@
     // Der Schub gilt NUR in der Phase 'vorbei': in 'raus' baut sich erst der Versatz auf,
     // in 'rein' ist das Manoever gelaufen und ein Schub waere nur noch Draengeln.
     if (g.attackUntil && g.passPhase === 'vorbei') {
-      f *= 1 + SPICE_ATTACK_GAIN * ghostCfg.spice;
+      f *= 1 + SPICE_ATTACK_GAIN;
     }
 
     // 6. Abstand halten, mit ZEITLUECKE statt festem Kachelabstand. Der noetige Abstand
@@ -2280,27 +3505,46 @@
     // unbegrenzt. Nicht waehrend einer Attacke: wer angreift, darf dichter heran, sonst gibt
     // es kein Ueberholen.
     const naehern = ghostClosing(car, ah ? ah.gap : null);
-    const noetig = SPICE_GAP_MIN + SPICE_GAP_PER_CLOSING * Math.max(0, naehern);
-    if (ah && !g.attackUntil && ah.gap < noetig) {
-      f *= 1 - SPICE_GAP_LIFT * ghostCfg.spice * (1 - ah.gap / noetig);
+    let haeltAbstand = false;
+    // ---- ZUERST DIE ZEITLUECKE, DANN DER KACHELABSTAND ALS RUECKFALL ---------------
+    //
+    // Die Zeitluecke ist die Groesse mit Aufloesung (siehe ghostZeitLuecke). Sie ist aber
+    // nicht immer messbar - in der ersten Runde fehlt der Stempel des Vorausfahrenden -, und
+    // dann bleibt der Kachelabstand. Er ist grob, aber er ist besser als nichts, und "in der
+    // ersten Runde gilt kein Abstand" waere genau die stille Ausnahme, die man spaeter sucht.
+    const luecke = ghostZeitLuecke(car, ah);
+    g.zeitLuecke = luecke;                 // fuer die Messung und die Anzeige
+    if (ghostCfg.wuerzeAbstand && ah && !g.attackUntil && luecke !== null) {
+      // Die noetige Luecke waechst mit der Annaeherung: wer schnell aufholt, braucht mehr
+      // Vorwarnung. naehern ist in Kacheln je Sekunde; der Beitrag wird in Sekunden
+      // gerechnet, indem er mit derselben Kachelzeit skaliert, die die Luecke misst.
+      const noetigS = SPICE_LUECKE_MIN_S
+                    + SPICE_LUECKE_PER_CLOSING * Math.max(0, naehern);
+      if (luecke < noetigS) {
+        // DER ABHUB WAECHST JETZT WIRKLICH MIT DER NAEHE. Vorher war ah.gap immer 1,00 und
+        // noetig 1,2 - der Abhub also eine Konstante von 0,167 mal LIFT, bei 43 cm wie bei
+        // 0 cm. Mit der Zeitluecke geht er gegen den vollen Wert, wenn es eng wird.
+        f *= 1 - SPICE_GAP_LIFT * (1 - luecke / noetigS);
+        haeltAbstand = true;
+      }
+    } else if (ghostCfg.wuerzeAbstand && ah && !g.attackUntil) {
+      const noetig = SPICE_GAP_MIN + SPICE_GAP_PER_CLOSING * Math.max(0, naehern);
+      if (ah.gap < noetig) {
+        f *= 1 - SPICE_GAP_LIFT * (1 - ah.gap / noetig);
+        haeltAbstand = true;
+      }
     }
 
-    // 5. Gummiband: nur den Fuehrenden, und nur wenn es einen Zweiten gibt.
-    const field = ghostFieldRacing();
-    if (field.length > 1) {
-      const mine = ghostProgress(car);
-      let leader = true, second = -Infinity;
-      for (const o of field) {
-        if (o === car) continue;
-        const p = ghostProgress(o);
-        if (p > mine) leader = false;
-        if (p > second) second = p;
-      }
-      if (leader && second > -Infinity) {
-        const lead = Math.max(0, mine - second);
-        f *= 1 - Math.min(SPICE_BAND_MAX, lead * SPICE_BAND_PER_TILE) * ghostCfg.spice;
-      }
-    }
+    // ---- 5. DAS GUMMIBAND IST HIER ENTFALLEN ---------------------------------------
+    //
+    // Es bremste den Fuehrenden proportional zu seinem Vorsprung. Seit v0.5.32 tut "Feld
+    // zusammenhalten" (ghostFeldStaffel) dasselbe besser: gestaffelt ueber das GANZE Feld
+    // und symmetrisch um die Mitte, also ohne das mittlere Tempo zu senken.
+    //
+    // Beides zugleich waeren zwei Abschlaege auf dieselbe Groesse - der Fuehrende bekaeme
+    // sie addiert und faellt zurueck, statt gehalten zu werden. Deshalb weg und nicht als
+    // sechster Schalter: ein Schalter, dessen Einschalten eine andere Einstellung kaputt
+    // macht, ist keine Wahl.
 
     // Der Seitenversatz faehrt beim Einordnen ZURUECK statt abzuschalten. Ein Sprung von
     // vollem Versatz auf null ist ein Ruck am Lenkservo und sieht aus wie ein Fehler.
@@ -2308,7 +3552,9 @@
       : g.passPhase === 'rein'
         ? (g.attackSide || 0) * Math.max(0, 1 - (now - g.passAt) / SPICE_PASS_TUCK_MS)
         : (g.attackSide || 0);
-    return { factor: f, attack: versatz, phase: g.passPhase || null };
+    // haeltAbstand geht mit hinaus, weil der Aufrufer den Vorrang entscheiden muss - siehe
+    // dort. Hier waere er falsch: das Feld zusammenzuhalten ist keine Wuerze.
+    return { factor: f, attack: versatz, phase: g.passPhase || null, haeltAbstand };
   }
 
   // ---- Die Ideallinie ----
@@ -2386,6 +3632,13 @@
   // Die Handregel bleibt als Rueckfall fuer den Fall, dass die Relaxation nichts findet
   // (zu wenige Kacheln), und weil sie ohne Layout-Geometrie auskommt.
   let lineCache = null;
+
+  // Der Zwischenspeicher der Ideallinie, von aussen leerbar. Eine Funktion und keine
+  // direkte Zuweisung, weil die Aufrufer in FRUEHEREN Dateien stehen (der Regler fuer
+  // den Kurvenausgang in 80-sound.js): ein direkter Schreibzugriff auf dieses let traefe
+  // von dort aus die temporale Todeszone. Eine Funktion wird hochgezogen und laeuft erst,
+  // wenn jemand klickt.
+  function ghostLineCacheLeeren() { lineCache = null; }
   function ghostLine() {
     const tiles = currentTrackTiles;
     if (!tiles || tiles.length < 3) return null;
@@ -2396,13 +3649,20 @@
     const pts = trackCenterline(tiles);
     if (pts.length < 8) return null;
     const nrm = trackNormals(pts);
-    const first = pts[0], last = pts[pts.length - 1];
-    // 2 cm, nicht 60 Zeichnungseinheiten. Die 60 sind 64,5 cm, und eine Kachel ist
-    // 43 cm lang: eine Strecke, bei der genau ein Teil fehlt, galt damit als geschlossen.
-    // Im Editor war dieselbe Zahl schon berichtigt, hier stand sie noch - und hier ist sie
-    // folgenreicher, weil die Ghosts danach im Kreis herum vorausschauen.
-    const closed = Math.hypot(last.x - first.x, last.y - first.y) < 2 * TRACK_UNITS_PER_CM;
-    const line = buildLine(pts, nrm, { closed });
+    // ---- DIE ZWEITE SCHLUSSPRUEFUNG, und sie war die folgenreichere -----------------
+    //
+    // Hier stand dieselbe Rechnung wie in 60-track.js, mit derselben Toleranz von 2 cm -
+    // zwei Orte fuer eine Wahrheit, und dieser ist der, an dem GEFAHREN wird. Der Editor
+    // zeigt bei einer nicht geschlossenen Strecke wenigstens "Offen"; hier hatte es keine
+    // Anzeige und die volle Wirkung: bei `closed: false` klemmt idealLine() die Endpunkte
+    // fest, und die Kruemmungsminimierung zieht `alpha` ueber lange Stuecke an den Anschlag.
+    // Gemessen 25 Prozent aller Abtastpunkte am Rand - und dann faehrt der Ghost am Rand,
+    // egal welchen Modus man waehlt.
+    //
+    // Jetzt EINE Funktion mit Lage UND Winkel; Begruendung und Zahlen stehen bei
+    // trackSchluss() in 60-track.js.
+    const closed = trackSchluss(pts).closed;
+    const line = buildLine(pts, nrm, { closed, tiles });
     const path = pts.map((p, i) => [p.x + nrm[i].x * line.alpha[i],
                                     p.y + nrm[i].y * line.alpha[i]]);
     const brake = brakeProfile(path, closed);
@@ -2422,6 +3682,77 @@
                   model: line.model, lapTime: line.lapTime || null,
                   gain: line.gain || 0 };
     return lineCache;
+  }
+
+  // ---- Faehrt das Auto die Strecke ANDERSHERUM, als sie eingetragen ist? --------------
+  //
+  // WOZU. Gemeldet: "Ghosts fahren komisch: in jeder Kurve ganz aussen und nicht
+  // Ideallinie, egal welchen Modus ich waehle." In JEDER Kurve, in beiden Richtungen - und
+  // das kann nur eine Ursache haben, die die Kurvenrichtung insgesamt umdreht.
+  //
+  // Nachgemessen ist die Ideallinie in Ordnung: sie ist mit 607 gegen 648 Zeichnungseinheiten
+  // kuerzer als die Mittellinie, also die innere, und ghostLineOffset() dreht ihr Vorzeichen
+  // in einen Lenkbefehl zum Scheitel - auf einer Rechtsstrecke gemessen +59 von 127, also
+  // nach rechts. Positives Byte 7 ist rechts; das bestaetigt der Stick, dessen Anzeige
+  // `left = 75 + nx * R` nach rechts wandert, wenn der Wert steigt.
+  //
+  // Bleibt eine Erklaerung, die alles umdreht: die Strecke ist SPIEGELBILDLICH eingetragen,
+  // oder das Auto faehrt sie in der anderen Richtung. Dann ist jede Kurve, die das Layout
+  // als rechts fuehrt, fuer das Auto eine Linkskurve - und die Linie zieht in jeder Kurve
+  // nach aussen. Genau das gemeldete Bild.
+  //
+  // DAS IST MESSBAR, und zwar ohne jede Ausrichtung: Byte 12 unterscheidet links von rechts
+  // (0x03 gegen 0x04, 0x05 gegen 0x06). Man zaehlt also, was das AUTO an Kurvenrichtungen
+  // meldet, und vergleicht es mit dem, was im Layout steht. Kein Vorausblick, keine Phase,
+  // keine Annahme ueber die Ausrichtung - nur zwei Zaehlerstaende.
+  //
+  // ES WIRD NUR GEMELDET UND NICHTS UMGESTELLT. Ob die Strecke falsch eingetragen ist oder
+  // das Auto andersherum fahren soll, kann diese App nicht wissen - beides ist eine
+  // Entscheidung des Menschen, der die Bahn gelegt hat. Eine App, die das Layout
+  // stillschweigend spiegelt, macht aus einem sichtbaren Fehler einen unsichtbaren.
+  const RICHTUNG_MIN = 6;      // so viele gemeldete Kurven, bevor geurteilt wird
+  const RICHTUNG_KLAR = 0.8;   // so eindeutig muss es sein
+
+  function kurvenSeite(code) {
+    if (code === TILE_TYPE.CURVE_RIGHT || code === TILE_TYPE.HAIRPIN) return 1;
+    if (code === TILE_TYPE.CURVE_LEFT || code === TILE_TYPE.HAIRPIN_LEFT) return -1;
+    return 0;
+  }
+
+  function richtungPruefen(car) {
+    const g = car.ghost;
+    const tiles = currentTrackTiles;
+    if (!g || !tiles || tiles.length < 3 || g.richtungGemeldet) return;
+    const seite = kurvenSeite(car.tileCode);
+    if (!seite) return;
+    g.kurvenRechts = (g.kurvenRechts || 0) + (seite > 0 ? 1 : 0);
+    g.kurvenLinks = (g.kurvenLinks || 0) + (seite < 0 ? 1 : 0);
+    const gesamt = g.kurvenRechts + g.kurvenLinks;
+    if (gesamt < RICHTUNG_MIN) return;
+    // Was das LAYOUT hergibt.
+    let lR = 0, lL = 0;
+    for (const t of tiles) {
+      const s = kurvenSeite(t.type);
+      if (s > 0) lR++; else if (s < 0) lL++;
+    }
+    if (lR + lL < 2) { g.richtungGemeldet = true; return; }   // fast nur Geraden, nichts zu sagen
+    const autoRechts = g.kurvenRechts / gesamt;
+    const layoutRechts = lR / (lR + lL);
+    // Beide klar, aber gegenlaeufig.
+    const klar = (x) => x >= RICHTUNG_KLAR || x <= 1 - RICHTUNG_KLAR;
+    if (klar(autoRechts) && klar(layoutRechts)
+        && (autoRechts >= RICHTUNG_KLAR) !== (layoutRechts >= RICHTUNG_KLAR)) {
+      g.richtungGemeldet = true;
+      log(garageLabel(car) + ': Das Auto meldet ' + g.kurvenRechts + ' Rechts- und '
+          + g.kurvenLinks + ' Linkskurven, das eingetragene Layout hat ' + lR + ' und ' + lL
+          + '. Die Strecke ist also spiegelbildlich eingetragen oder wird andersherum '
+          + 'gefahren - dann zieht die Ideallinie in JEDER Kurve nach aussen statt zum '
+          + 'Scheitel. Strecke neu einlesen oder in der anderen Richtung starten.', 'err');
+      showHudToast('STRECKE ANDERSHERUM');
+    } else if (gesamt >= RICHTUNG_MIN * 3) {
+      // Genug gesehen und kein Widerspruch: nicht weiter zaehlen.
+      g.richtungGemeldet = true;
+    }
   }
 
   // Abtastindex fuer (Kachel, Phase). null, wenn es zu dieser Kachel keine Punkte gibt.
@@ -2596,10 +3927,31 @@
     const i = ghostLineIndex(lc, g.tileIndex, ghostTilePhase(car));
     if (i === null) return ghostLineMitDeckel(car, ghostLineHeuristic(car)
                                              || ghostLineFromCode(car));
-    // span statt limit als Bezug: die Relaxation nutzt die Bahnbreite nicht immer voll aus,
-    // und dann waere der Ausschlag der Ghost-Lenkung kuenstlich klein. Der Regler
-    // "Ideallinie" soll die ganze gefundene Linie bedeuten, nicht einen Bruchteil davon.
-    const ref = Math.max(1e-6, lc.span || lc.limit);
+    // ---- DER BEZUG IST DIE BAHNBREITE UND NICHT DIE SPANNE DER LINIE ----------------
+    //
+    // Hier stand `lc.span || lc.limit` mit der Begruendung, die Relaxation nutze die
+    // Bahnbreite nicht immer voll aus und der Ausschlag waere sonst kuenstlich klein. Das
+    // war ein Denkfehler mit einer messbaren Folge: eine Normierung auf die eigene Spanne
+    // STRECKT jede Linie auf den vollen Anschlag und wirft damit genau die Information weg,
+    // die eine Linie ausmacht - wie weit sie sich vom Mittelstreifen entfernt.
+    //
+    // Aufgefallen ist es erst mit dem dritten Modell, und das erklaert, warum es so lange
+    // unbemerkt blieb:
+    //
+    //     Modell        Spanne   Deckel   Verstaerkung
+    //     Kruemmung      9,28     8,63       1,00
+    //     Rundenzeit     9,28     8,63       1,00
+    //     Late Apex      4,06     8,63       2,29
+    //
+    // Die alten zwei Modelle legen die Linie ohnehin an den Rand, span und limit sind dort
+    // dasselbe, und die Zeile war wirkungslos. Late Apex nutzt 4 cm von 9,3 - und wurde
+    // damit auf mehr als das Doppelte gestreckt. Gemeldet als "wenn ich Late Apex waehle und
+    // simuliere, fahren die Autos nicht auf der Ideallinie sondern steuern Kurven mal innen
+    // und mal aussen an": genau das ist eine um 2,29 verstaerkte Linie.
+    //
+    // limit ist die halbe nutzbare Bahnbreite und damit die Groesse, in der alpha gemessen
+    // ist. Der Regler "Ideallinie" skaliert davon - dafuer ist er da.
+    const ref = Math.max(1e-6, lc.limit || lc.span);
     // DAS VORZEICHEN IST GEDREHT, und das war ein echter Fehler, kein Feinschliff.
     //
     // trackNormals() zeigt nach LINKS in Fahrtrichtung. Gemessen: auf der ersten Geraden
@@ -2746,6 +4098,12 @@
     e.config.steerCalib = 1;
     e.config.fuelWeightEffect = 0;   // ghosts carry no fuel and take no damage for now
     e.config.tyreEffect = 0;
+    // UND DIE OBERFLAECHE, die bis hierher in dieser Liste gefehlt hat. Object.assign hat
+    // gripScale und aquaplaning des Spielers gerade mitkopiert, also die REIFENWAHL DES
+    // SPIELERS - siehe ghostOberflaecheSetzen(). Hier auf trocken; der erste Takt setzt sie
+    // dann aus dem eigenen Reifen des Ghosts.
+    e.config.gripScale = 1;
+    e.config.aquaplaning = 0;
     // Nach dem Kopieren neu kalibrieren: accelScale() haengt an topSpeedKmh, an der
     // Anfahrzeit und an den Gaengen, und die kommen jetzt vom Fahrer.
     if (typeof e.calibrateAccel === 'function') e.calibrateAccel();
@@ -2765,7 +4123,24 @@
                   lapStart: 0, offAtLapStart: 0,
                   // Ueberholsequenz und Spurmischung.
                   passPhase: null, passZiel: null, passSince: 0, passBlockUntil: 0,
+                  // Zeitluecke: je Kachelindex der Zeitpunkt des Uebertritts, und die
+                  // daraus gerechnete Luecke zum Vorausfahrenden in Sekunden.
+                  kachelZeit: [], zeitLuecke: null,
                   kurveMix: 0, naehern: 0,
+                  // Ausweichen: wird vom Angreifer und vom pittenden Auto von AUSSEN
+                  // geschrieben. Hier angelegt, weil beide Felder bisher nirgends angelegt
+                  // waren - sie entstanden erst beim ersten Ueberholversuch und verfielen nur
+                  // ueber die Uhr. Ein Feld, das es manchmal gibt, ist schwerer zu lesen als
+                  // eines, das immer da ist.
+                  yieldSide: 0, yieldUntil: 0,
+                  // Boxenstopp: { phase, at, laenge, grund } waehrend eines Stopps, sonst null.
+                  pit: null, pitFaellig: 0,
+                  // Die aufgezogenen Reifen. Ein Ghost kommt auf dem Reifen heraus, der zum
+                  // Wetter passt - genau wie das Rennen des Spielers das Wetter vor der Ampel
+                  // setzt und dann resetTyres() ruft. Wer mitten im Regen aus der Garage
+                  // losfaehrt, faengt also nicht mit einem Nachteil an, den er nicht gewaehlt
+                  // hat.
+                  reifen: reifenPassend(),
                   // Der Startplatz, EINMAL nachgesehen und nicht je Takt: indexOf ueber die
                   // Aufstellung laeuft sonst 22 Mal je Sekunde je Auto. -1 heisst "steht
                   // nicht in der Liste", und dann gibt es keinen Versatz - eine Paritaet aus
@@ -2779,6 +4154,9 @@
                   // gelesen haben muesste.
                   gnadeBis: Date.now() + GHOST_START_GNADE_MS,
                   running: true };
+    // Die erste Faelligkeit ziehen. Ohne sie steht pitFaellig auf 0 und der Ghost pittet in
+    // der ersten Runde - ein Boxenstopp, bevor jemand eine Runde gefahren ist.
+    pitFaelligZiehen(car.ghost);
     // Den ersten Versuch ziehen, wenn gelernt werden soll. Ohne ihn steht tryPace auf null,
     // und learnSettle() kehrt in genau diesem Fall frueh zurueck, OHNE einen zu ziehen - das
     // Lernen kaeme also auch mit der neuen Rundenbilanz nie in Gang. Der Schalter selbst ruft
@@ -2897,8 +4275,9 @@
     const meine = dashMinimapIndex + dashTilePhase();
     let naechster = Infinity;
     for (const c of garage) {
-      if (c.role !== 'ghost' || !c.ghost || c.ghost.tileIndex === null) continue;
-      const seine = c.ghost.tileIndex + ghostTilePhase(c);
+      if (c.role !== 'ghost' || !c.ghost) continue;
+      const seine = ghostOrt(c);
+      if (seine === null) continue;
       // Nur nach VORN, und modulo Rundenlaenge: wer vorn faehrt, hat freie Luft.
       let d = seine - meine;
       while (d < 0) d += n;
@@ -3096,12 +4475,22 @@
     // Leitplanken-Modus. Steht die Sequenz, gilt nur noch sie.
     if (g.finish) { ghostFinishTick(car); return; }
     const e = g.engine, cfg = e.config;
+    // Die Oberflaeche aus Wetter und aufgezogenem Reifen, JEDEN TAKT. Nicht nur beim
+    // Wetterwechsel: wxRainLevel() ist eine Rampe ueber fuenf Sekunden, ein einmaliges
+    // Setzen wuerde also einen von hundert Zwischenwerten festhalten. Kostet zwei
+    // Multiplikationen.
+    ghostOberflaecheSetzen(car);
 
     // Follow the tile counter so we know where on the layout we are.
     if (car.tileCount !== null && car.tileCount !== g.lastCount) {
       // Die Dauer der gerade verlassenen Kachel, fuer die Phasenschaetzung der Linie.
       if (g.tileStart) {
-        ghostNoteTileTime(car, now - g.tileStart);
+        // DER TYP DER GERADE VERLASSENEN Kachel, also der von g.tileIndex - er wird erst
+        // weiter unten hochgezaehlt. Den neuen zu nehmen waere die Dauer der alten Kachel
+        // unter dem Namen der neuen.
+        const verlassen = (currentTrackTiles && currentTrackTiles[g.tileIndex])
+          ? currentTrackTiles[g.tileIndex].type : null;
+        ghostNoteTileTime(car, now - g.tileStart, verlassen);
         // Die letzten Abstaende getrennt mitfuehren: ghostNoteTileTime mittelt fuer den
         // Vorausblick, hier wird die RATE gebraucht, und ein Mittel verschleift genau den
         // Ausschlag, an dem ein Abflug zu erkennen ist.
@@ -3135,10 +4524,78 @@
           g.lapStart = now;
         }
       }
+      // DIE ORTUNG ABGLEICHEN, an derselben Stelle wie alles andere je Kachel. Byte 11
+      // und Byte 12 kommen aus DEMSELBEN Paket, sind hier also synchron - und eine Kachel
+      // dauert mindestens 250 ms, waehrend dieser Takt alle 45 ms laeuft: zwei Wechsel
+      // zwischen zwei Takten kann es nicht geben.
+      ortAbgleich(car);
+      // Und die Richtungsprobe: sie braucht nur den gemeldeten Code und das Layout, also
+      // dieselbe Gelegenheit. Begruendung bei richtungPruefen().
+      richtungPruefen(car);
+      // Den Zeitstempel dieser Kachel setzen - die Grundlage der Zeitluecke. NACH
+      // ortAbgleich(), damit g.tileIndex schon die neue Kachel ist: mit der alten waere
+      // jeder Stempel eine Kachel zu frueh, und der Abstand systematisch falsch.
+      ghostKachelZeitNotieren(car);
       // Die Lenkmessung zaehlt hier mit, wo Kachelwechsel und Rundenschluss ohnehin
       // durchlaufen. Ein eigener Zeitgeber waere ein zweiter Ort fuer dieselbe Zaehlung.
       lmTick(car, lmRundeVoll);
+      // ---- BOXENSTOPP ANSETZEN, auf der letzten Kachel vor Start/Ziel ----------------
+      //
+      // HIER und nicht in einem Zeitgeber: die Frage "bin ich auf der Kachel vor der Box"
+      // kann nur beim Kachelwechsel neu beantwortet werden, und dieser Block laeuft genau
+      // dann. ortAbgleich() ist einen Aufruf vorher gelaufen, der Kachelindex ist also so
+      // gut wie er wird.
+      //
+      // Die Anfahrt beginnt VOR der Linie, nicht auf ihr. Ein Auto, das mit Renntempo ueber
+      // Start/Ziel kommt und dann anhalten soll, braucht eine Kachel zum Verzoegern - genau
+      // so ist eine Boxeneinfahrt gebaut.
+      const pk0 = pitKachel();
+      // ---- WARUM GEPITTET WIRD, und die Reifen schlagen den Plan --------------------
+      //
+      // Zwei Gruende, und der Unterschied ist nicht Kosmetik: der Plan wartet auf seine
+      // gezogene Runde, die falschen Reifen warten nicht. "Sobald wie moeglich" heisst hier
+      // die naechste Gelegenheit, und eine Gelegenheit ist die Kachel vor der Box - mehr
+      // gibt es nicht, denn die Box IST die Start/Ziel-Kachel.
+      //
+      // DIE WARTESCHLANGE IST GEWOLLT, nicht hingenommen. Bei einem Wetterwechsel haben
+      // ALLE Ghosts die falschen Reifen und wollen alle sofort herein, aber es pittet immer
+      // nur einer - so bestellt, und so ist auch eine Box gebaut: eine Mannschaft bedient
+      // ein Auto. Der Platz ist rund 7 s besetzt (1,5 s Bremsen + 5 s Standzeit + 1,2 s
+      // Ausfahrt), eine Runde dauert mehr - es kommt also im Schnitt einer je Runde herein,
+      // und ein Feld von vier ist nach vier Runden umgeruestet. Genau das Bild, das ein
+      // Regenschauer im Rennsport macht.
+      const reifenNot = !reifenPassen(car);
+      const planFaellig = (g.laps || 0) >= (g.pitFaellig || 0);
+      if (pk0 >= 0 && g.tileIndex !== null
+          && (g.tileIndex + 1) % currentTrackTiles.length === pk0
+          && (planFaellig || reifenNot)
+          && pitErlaubt(car)) {
+        // EINEN PLATZ NEHMEN, den niedrigsten freien. pitErlaubt() hat gerade geprueft, dass
+        // einer da ist - der Aufruf hier ist derselbe und liefert deshalb keine -1.
+        const platz = pitPlatzSuchen(car);
+        pitPlatzBelegen(car, platz);
+        g.pit = { phase: 'anfahrt', at: now, laenge: Math.max(1, ghostCfg.pitSek) * 1000,
+                  // Der Platz, und damit die Kachel, auf der dieses Auto haelt.
+                  platz: platz,
+                  // Der Grund wird MITGEFUEHRT und nicht am Ende neu erfragt: bis der Stopp
+                  // vorbei ist, kann das Wetter schon wieder gewechselt haben, und dann
+                  // haette ein Reifenstopp rueckblickend keinen Grund gehabt.
+                  grund: reifenNot ? 'reifen' : 'plan' };
+        log(garageLabel(car) + ': f\u00e4hrt in die Box, Platz ' + (platz + 1)
+            + ' (Kachel ' + pitKachelFuer(platz) + '), h\u00e4lt rechts am Rand'
+            + (reifenNot ? ' \u2013 ' + reifenName(reifenPassend()) + 'reifen.' : '.'),
+            'info');
+        showHudToast(garageLabel(car).toUpperCase()
+                     + (reifenNot ? ' HOLT ' + reifenName(reifenPassend()).toUpperCase()
+                                    + 'REIFEN'
+                                  : ' IN DIE BOX'));
+      }
     }
+
+    // DER BOXENSTOPP LAEUFT VOR DEM ABGANGSMELDER, und das ist die ganze Pointe: pitTick()
+    // erneuert g.gnadeBis, und der Melder darunter fragt genau danach. Andersherum waere die
+    // Gnade einen Takt zu spaet.
+    const pitLaeuft = pitTick(car);
 
     // Cut-out. Two detectors, and the first one is new: code 0x00 IS the off-track report,
     // so there is no need to wait for a timeout. The timeout stays as a backstop for the case
@@ -3243,7 +4700,11 @@
       parkCar(car, 'Bahn verlassen');
     }
     const offTrack = !!car.parked;
-    const armed = (raceState === 'racing' || raceState === 'finishing' || g.freeRun)
+    // g.auslauf: das Rennen ist gewertet, dieses Auto faehrt aber seine angefangene Runde
+    // noch zu Ende. Ohne diesen Zweig steht es in dem Moment still, in dem die Flagge
+    // faellt - und genau das war der Bericht.
+    const armed = (raceState === 'racing' || raceState === 'finishing'
+                   || g.freeRun || g.auslauf)
                   && !car.parked;
     // Abgaenge zaehlen, nicht nur melden. Ohne eine Zahl je Runde ist "die Linie hilft"
     // oder "die Linie schmeisst ihn raus" nicht entscheidbar, und dann wird der Regler nach
@@ -3329,37 +4790,114 @@
       // Addiert werden sie NICHT: zwei Abschlaege auf dieselbe Groesse, die beide dasselbe
       // meinen, ergeben zusammen einen stehenden Ghost. Das Maximum ist die Aussage
       // "so langsam mindestens".
-      const bd = ghostBrakeDemand(car);
+      // ---- DIE GEMELDETE SCHIENE HAT DAS LETZTE WORT --------------------------------
+      //
+      // Bremsprofil und Vorausblick kommen aus dem GERECHNETEN Ort auf dem Layout. Stimmt
+      // der nicht, drosselt der Ghost auf der Geraden und laesst die Haarnadel aus - und
+      // weil unten das MAXIMUM der beiden Abschlaege gilt, gewinnt der falsche.
+      //
+      // Gemeldet: "auch die Kurvendrosselung hat nicht geklappt, wahrscheinlich weil sie an
+      // den simulierten Ort gebunden ist. Binde sie stattdessen an die gemeldete Schiene."
+      //
+      // Der Ausrichter oben behebt die Ursache. Diese Zeilen sind die Absicherung dagegen,
+      // dass sie wieder auftritt: solange gemeldete Kachel und Layout NICHT uebereinstimmen,
+      // zaehlt nur die Messung - der Vorausblick weiss dann nicht, wovon er redet.
+      //
+      //   stimmt ueberein   Profil und Kachelregel wie bisher, also mit Vorausblick
+      //   weicht ab         nur die gemeldete Kachel unter dem Auto
+      //   nicht entscheidbar (kein Layout / kein Code)   wie bisher, sonst faellt alles aus
+      const ortOk = ortStimmt(car);
+      const bd = ortOk === false ? null : ghostBrakeDemand(car);
       const reach = ahead.tight >= 2 ? 2 : 1;
-      const tight = Math.max(here, ahead.dist <= reach ? ahead.tight : 0);
+      const tight = ortOk === false
+        ? here
+        : Math.max(here, ahead.dist <= reach ? ahead.tight : 0);
       // Bremsprofil: voller Bremsbedarf kostet das Doppelte dessen, was der Regler fuer eine
       // normale Kurve sagt.
       const abzugProfil = bd === null ? 0 : Math.min(0.85, 2 * ghostCfg.curveSlow * bd);
       // Kachelregel: curveSlow beschreibt die 60-Grad-Kurve, die Haarnadel bekommt das
-      // Doppelte (tileTightness = 2), gedeckelt damit ein hoher Regler den Ghost nicht
-      // zum Stehen bringt.
+      // Doppelte (GHOST_TILE[0x05].curve = 2), gedeckelt damit ein hoher Regler den Ghost
+      // nicht zum Stehen bringt. Mit dem Standardregler von 20 Prozent sind das 20 Prozent
+      // in der Kurve und 40 in der Haarnadel.
       const abzugKachel = tight > 0 ? Math.min(0.85, ghostCfg.curveSlow * tight) : 0;
       target *= 1 - Math.max(abzugProfil, abzugKachel);
-      // ERST AB ZWEI GHOSTS, wie beim Gummiband. Mit einem einzigen Ghost ist dieser eine
-      // der Fuehrende und wurde gebremst, ohne dass es jemanden gibt, den er einholen soll -
-      // von aussen sah das aus wie "der Ghost ist zu langsam". Ein Rennen ist NICHT
-      // Bedingung: auch im freien Fahren gibt es einen Fuehrenden.
-      const feldGross = garage.filter(c => c.role === 'ghost' && c.ghost).length > 1;
-      if (ghostCfg.leaderBrake && feldGross && ghostLeader() === car) {
-        target *= (1 - ghostCfg.leaderBrakePct);
-      }
+      // GESTAFFELT UEBER DAS GANZE FELD, nicht nur der Erste. Begruendung und Formel
+      // stehen bei ghostFeldStaffel(); ein Rennen ist ausdruecklich nicht Bedingung, auch im
+      // freien Fahren gibt es einen Ersten und einen Letzten.
+      // ---- ABSTAND HALTEN SCHLAEGT FELD ZUSAMMENHALTEN --------------------------------
+      //
+      // GEMELDET: "die Autos rammen sich dauernd." Gemessen in der Rennsimulation, mit der
+      // Karosserie als Mass (8,84 x 3,54 Einheiten, also 95 x 38 mm): 7,7 Beruehrungen je
+      // Minute, unabhaengig von der Zahl der Autos, und der engste Laengsabstand exakt 0 cm -
+      // sie ueberlappten vollstaendig.
+      //
+      // DIE URSACHE IST EINE VORRANGFRAGE UND KEINE ZAHL. Zwei Bausteine zogen gegeneinander:
+      //
+      //   Abstand halten       lupft das Gas, wenn der Vorausfahrende zu nah ist
+      //   Feld zusammenhalten  beschleunigt den Letzten, damit das Feld nicht auseinanderfaellt
+      //
+      // Und die Reihenfolge entschied: die Staffel stand HINTER der Wuerze und multiplizierte
+      // ihren Abschlag einfach weg. Ein Auto, das gerade Abstand hielt, wurde also
+      // hochgezogen, weil es Letzter war - und fuhr auf.
+      //
+      // Wer Abstand haelt, darf nicht gleichzeitig aufholen muessen. Die Staffel wird deshalb
+      // auf 1 gedeckelt, solange der Abstandshalter greift: bremsen darf sie weiter (der
+      // Fuehrende soll warten), nur schieben nicht.
+      const staffel = ghostFeldStaffel(car);
+      target *= spice.haeltAbstand ? Math.min(1, staffel) : staffel;
+
+      // ---- Regen und die aufgezogenen Reifen kosten Tempo -----------------------------
+      //
+      // Hier stand `if (weather === 'rain') target *= GHOST_REGEN_TEMPO` - ein Schalter mit
+      // einer gewaehlten Zahl, weil ein Ghost kein Reifenmodell hatte. Jetzt hat er eines,
+      // und die Zahl kommt aus derselben Tabelle wie beim Spieler; die Ableitung steht bei
+      // REIFEN_GRIFF. Die zwei bekannten Faelle bleiben dabei bitgleich.
+      //
+      // Ausdruecklich MULTIPLIKATIV zum Kurvenabzug und nicht als zweiter Deckel: nass ist
+      // eine Kurve langsamer als trocken, und beides zusammen ist mehr als jedes einzeln.
+      target *= ghostReifenTempo(car);
       // Einfuehrungsrunde: alle rollen im Formationstempo, was ihr eigener Regler auch
       // sagt. Das ist NICHT das Boxentempo - siehe formationPace(): darunter liest das Auto
       // die Bahn nicht mehr.
       if (raceFormationLap) target = Math.min(target, formationPace());
 
-      // Die Anfahrrampe: sie greift NUR nach einem Entparken und laeuft von selbst aus.
+      // ---- Die Anfahrrampe, MIT BODEN ------------------------------------------------
+      //
+      // Sie greift nur nach einem Entparken und laeuft von selbst aus. Neu ist ihr Boden,
+      // und er ist nicht gewaehlt, sondern abgeleitet:
+      //
+      // Der Regler ghost-speed beginnt bei 0,35 und nicht tiefer, und die Begruendung steht
+      // seit jeher daneben - darunter faehrt das Auto so langsam, dass es die GEDRUCKTE
+      // STRECKE nicht mehr zuverlaessig liest. Genau das braucht ein zurueckgestelltes Auto
+      // aber: es muss lesen, um zu merken, dass es wieder auf der Bahn ist.
+      //
+      // Eine Rampe, die bei 0 beginnt, haelt es also fuer die erste Sekunde unter der
+      // Leseschwelle - und in dieser Sekunde faellt die Abgangsbestaetigung (900 ms). Das
+      // ist der gemeldete Fehler, und er war nicht die Gnade allein: ohne Boden waere das
+      // Auto auch mit Gnade drei Sekunden lang zu langsam zum Lesen gewesen und danach
+      // sofort wieder gestanden.
+      //
+      // Der Boden ueberschreitet das Ziel nie: ist das Ziel selbst niedriger als die
+      // Leseschwelle, gilt das Ziel. Sonst waere die Rampe eine Beschleunigung ueber den
+      // Wunsch hinaus.
       if (g.unparkAt) {
         const seit = now - g.unparkAt;
-        if (seit >= GHOST_UNPARK_RAMP_MS) g.unparkAt = 0;
-        else target *= seit / GHOST_UNPARK_RAMP_MS;
+        if (seit >= GHOST_UNPARK_RAMP_MS) {
+          g.unparkAt = 0;
+        } else {
+          const rampe = seit / GHOST_UNPARK_RAMP_MS;
+          target = Math.max(target * rampe, Math.min(target, GHOST_LESE_TEMPO));
+        }
       }
 
+      // ---- DER BOXENSTOPP UEBERSCHREIBT DAS ZIEL ------------------------------------
+      //
+      // NACH allen Abschlaegen und NACH der Anfahrrampe: ein Halt ist keine Drosselung, die
+      // sich mit Kurvenabzug und Staffel verrechnen laesst, sondern eine Ansage. Vor der
+      // Rampe zu stehen waere falsch - die Rampe ist genau das, was den Ghost nach dem Stopp
+      // wieder hochfaehrt.
+      const pz = pitZiel(car);
+      if (pz !== null) target = pz;
       const v = Math.abs(e.state.speedKmh) / cfg.topSpeedKmh;
       // DAS dt VON OBEN, und das ist eine Berichtigung. Hier stand
       //
@@ -3397,7 +4935,38 @@
       //
       // Sie greift nur, wo es ein Bremsprofil gibt, also mit gelernter oder gebauter
       // Strecke - deshalb traegt die Kurvendrosselung ihr WIP-Zeichen.
-      if (bd !== null && bd > 0) {
+      // ---- UND NUR, WENN DAS AUTO ZU SCHNELL IST -------------------------------------
+      //
+      // bd sagt "vor dir steigt die Kruemmung". Ob daraus ein Bremsbefehl folgt, entscheidet
+      // erst der Vergleich mit dem Ziel - und das Ziel enthaelt den Abzug aus DEMSELBEN bd
+      // schon (abzugProfil weiter oben). Ohne den Vergleich bremst die Vorsteuerung auch ein
+      // Auto, das noch gar nicht faehrt.
+      //
+      // GEMESSEN an SR3GLR2GR2G2 aus dem Stand, Takt fuer Takt:
+      //
+      //     Takt   Gas     Bremse   km/h
+      //       0    0,072   0        0,0014
+      //       4    0,360   0,0171   0,0234     Bremse noch unter 0,02
+      //       5    0       0,0208   0,0230     Schwelle ueberschritten, Gas weg
+      //      13    0       0,0267   0,0189     und es kommt nicht wieder
+      //
+      // Die Vorsteuerung ist hier bd * curveSlow * 1,5 = 0,0736 * 0,2 * 1,5 = 0,0221 und
+      // liegt damit GENAU auf der Schwelle von 0,02, unter der die Zeile "nicht gleichzeitig
+      // Gas und Bremse" das Gas ganz wegnimmt. Bis v0.5.37 blieb sie darunter, weil
+      // brakeProfile seinen kMax auf dem verdoppelten Schlusspunkt einer geschlossenen Runde
+      // fand (0,6999 statt 0,0581) und deshalb jeden Bremsbedarf elffach zu klein machte.
+      // Die Berichtigung machte die Zahlen richtig, und die richtigen Zahlen kippten die
+      // Schwelle - gemeldet als "alle Ghosts bleiben am Anfang haengen".
+      //
+      // DIE SCHWELLE ANZUHEBEN WAERE DIE FALSCHE ANTWORT: sie stand nur zufaellig richtig,
+      // und der naechste richtige Bremsbedarf kippt sie wieder. Falsch ist, ein Auto unter
+      // seinem Ziel zu bremsen, und das ist von jeder Schwelle unabhaengig.
+      //
+      // GHOST_DEADBAND ist der Abstand, den der Regler selbst fuer "nah genug" haelt. Ein
+      // eigener zweiter Wert waere ein zweiter Ort fuer dieselbe Frage - und beim Anfahren
+      // aus dem Stand ist der Abstand ohnehin riesig (Ziel 0,36 gegen v = 0,006).
+      const zuSchnell = v > target + GHOST_DEADBAND;
+      if (bd !== null && bd > 0 && zuSchnell) {
         brake = Math.max(brake, Math.min(1, bd * ghostCfg.curveSlow * 1.5));
         if (brake > 0.02) throttle = 0;   // nicht gleichzeitig Gas und Bremse
         g.lastBrake = brake;
@@ -3459,20 +5028,64 @@
         // denselben Scheitel zu schicken waere realistisch und wuerde sie zusammenfuehren -
         // und Beruehrungen sind hier nicht zurueckzuregeln, weil keine Querlage gemeldet wird.
         const mix = g.kurveMix || 0;
-        const spurGewicht = 1 - GHOST_LANE_DROP * mix;
-        const linieGewicht = GHOST_LINE_STRAIGHT + (1 - GHOST_LINE_STRAIGHT) * mix;
+        const spurGewicht = ghostSpurGewicht(mix);
+        const linieGewicht = ghostLinieGewicht(mix);
         // UEBERKREUZBLENDE zwischen Ueberholversatz und Linie statt einer harten Umschaltung:
         // beim Einordnen faehrt der Versatz zurueck, und ein "attack ? A : B" wuerde am Ende
         // sprunghaft auf die Linie zurueckfallen.
         const anteilA = Math.min(1, Math.abs(spice.attack || 0));
-        const quer = underYellow ? 0
+        // DER BOXENSTOPP HAT VORRANG, wie die gelbe Flagge einen Zeilenumbruch weiter. Waehrend
+        // eines Stopps gibt es keine Linie, keine Wuerze und keine Spur - nur den Rand.
+        const pq = pitQuer(car);
+        const quer = pq !== null ? pq
+          : underYellow ? 0
           : (spice.attack || 0) * ghostCfg.lateral * GHOST_PASS_STEER
             + (1 - anteilA) * ghostLineOffset(car) * ghostCfg.line * GHOST_LINE_STEER
               * linieGewicht
             + weiche * ghostCfg.lateral * GHOST_PASS_STEER;
-        steer = quer
+        const querRohSumme = quer
               + g.bias * ghostCfg.lateral * 0.25
               + ghostLane(car) * ghostCfg.lanes * GHOST_LANE_STEER * spurGewicht;
+        // ---- QUERTRAEGHEIT: eine RATENBEGRENZUNG und kein Tiefpass ------------------
+        //
+        // Der Unterschied ist wichtig. Ein Tiefpass (neu = alt + (soll-alt) * k) naehert sich
+        // dem Sollwert asymptotisch: er kommt nie ganz an, und wie schnell er sich bewegt,
+        // haengt davon ab, WIE WEIT er weg ist. Eine Ratenbegrenzung hat eine feste
+        // Hoechstgeschwindigkeit und erreicht den Sollwert exakt - das ist, was ein Servo
+        // und ein Reifen tun, und es ist die Groesse, die man in cm/s angeben kann.
+        //
+        // Auf der Ideallinie selbst wirkt sie fast nicht: die aendert sich ueber eine Kachel
+        // hinweg langsam. Sie greift genau dort, wo es gemeldet wurde - am Kacheltypwechsel,
+        // am Beginn und Ende einer Attacke, und wenn die Ortung sich neu ausrichtet.
+        const querMax = Math.max(0, ghostCfg.querTempo) * dt;
+        const querAlt = g.querIst === undefined ? querRohSumme : g.querIst;
+        const querDiff = querRohSumme - querAlt;
+        g.querIst = Math.abs(querDiff) <= querMax
+          ? querRohSumme
+          : querAlt + Math.sign(querDiff) * querMax;
+        steer = g.querIst;
+        // FUER DIE KARTE. Im Leitplanken-Modus IST diese Summe die Querlage, die die App
+        // will - sie besteht ausschliesslich aus Versaetzen quer zur Bahn und enthaelt
+        // keinen Lenkwinkel. Im Rueckfallzweig darunter waere dieselbe Zeile falsch: dort
+        // beginnt steer mit dir * GHOST_STEER_CURVE, also mit einem WINKEL.
+        //
+        // Und es bleibt eine ANFORDERUNG: das Auto meldet seine Querlage nicht. Traege
+        // nachgefuehrt, damit der Punkt auf der Karte nicht zittert.
+        // AUF DEN BEREICH DES BEFEHLS GEKLEMMT. Die Summe aus Linie, Ausweichversatz und
+        // Spur kann ueber 1 hinauslaufen - gemessen 1,16 bei Ideallinie 100 Prozent und
+        // seitlichem Versatz 80 Prozent. Byte 7 kann das nicht: buildCommandPacket() klemmt
+        // auf +/-127. Eine aufgeschriebene Anforderung, die groesser ist als das, was das
+        // Auto bekommen kann, ist keine Anforderung, sondern eine Zwischensumme - und die
+        // Karte hat sie als Querlage gezeichnet und jeden Punkt auf den Randstein gesetzt.
+        // ---- DIE GARANTIE: AUF DER BOXENKACHEL NIEMAND NACH RECHTS -------------------
+        //
+        // Das Ausweichen ueber yieldSide ist die weiche Haelfte - es hat 0,64 Autoritaet
+        // gegen die 0,55 der Linie, gewinnt also meistens, aber nicht sicher. Diese Klemme
+        // ist die Zusage. Sie steht NACH der Ratenbegrenzung, damit sie nicht wegen der
+        // Traegheit einen Takt zu spaet greift.
+        if (pitSperreRechts(car)) steer = Math.min(steer, 0);
+        const querRoh = Math.max(-1, Math.min(1, steer));
+        g.querSoll = (g.querSoll || 0) + (querRoh - (g.querSoll || 0)) * 0.25;
       } else {
         // Fallback for cars not in guard-rail mode: the old layout-plus-yaw controller.
         const dir = ghostTurnDir(car, 0);
@@ -3483,15 +5096,26 @@
         const weiche2 = (g.yieldUntil && now < g.yieldUntil) ? (g.yieldSide || 0) : 0;
         const mix2 = g.kurveMix || 0;
         const anteilA2 = Math.min(1, Math.abs(spice.attack || 0));
-        steer += (spice.attack || 0) * ghostCfg.lateral * GHOST_PASS_STEER
-               + (1 - anteilA2) * ghostLineOffset(car) * ghostCfg.line * GHOST_LINE_STEER
-                 * (GHOST_LINE_STRAIGHT + (1 - GHOST_LINE_STRAIGHT) * mix2)
-               + weiche2 * ghostCfg.lateral * GHOST_PASS_STEER
-               + g.bias * ghostCfg.lateral * 0.25
-               + ghostLane(car) * ghostCfg.lanes * GHOST_LANE_STEER
-                 * (1 - GHOST_LANE_DROP * mix2);
+        // Auch hier hat der Boxenstopp Vorrang - siehe die Rail-Verzweigung darueber.
+        const pq2 = pitQuer(car);
+        if (pq2 !== null) {
+          // Im Boxenstopp ERSETZT der Randversatz alles - auch den Lenkwinkel, mit dem
+          // dieser Zweig beginnt. Ein Boxenstopp ist kein Zuschlag auf eine Kurvenfahrt.
+          steer = pq2;
+        } else {
+          steer += (spice.attack || 0) * ghostCfg.lateral * GHOST_PASS_STEER
+                 + (1 - anteilA2) * ghostLineOffset(car) * ghostCfg.line * GHOST_LINE_STEER
+                   * ghostLinieGewicht(mix2)
+                 + weiche2 * ghostCfg.lateral * GHOST_PASS_STEER
+                 + g.bias * ghostCfg.lateral * 0.25
+                 + ghostLane(car) * ghostCfg.lanes * GHOST_LANE_STEER
+                   * ghostSpurGewicht(mix2);
+        }
       }
-      steer = Math.max(-1, Math.min(1, steer + weave));
+      // DER PRUEFSTAND UEBERSCHREIBT ALLES, auch das Schlaengeln: ein fester Versatz, der
+      // sich bewegt, ist kein fester Versatz.
+      steer = ghostQuerTestAn() ? ghostQuerTest
+            : Math.max(-1, Math.min(1, steer + weave));
     }
 
     const out = e.update({ steering: steer, throttle, brake, headlights: true }, dt);
@@ -3530,20 +5154,28 @@
       const on = Math.floor(Date.now() / period) % 2 === 0;
       lights = trackModeBit() | (on ? LIGHT_HEAD : 0) | (on ? 0 : LIGHT_BRAKE);
     }
-    writeToCar(car, (armed && !offTrack) ? out.servoAngle : 0, drive, lights, car.modeBytes);
+    // DER PRUEFSTAND SENDET AM SERVOWEG VORBEI, und das ist der Unterschied zwischen einer
+    // Anzeige und einer Messung. out.servoAngle ist die Anforderung NACH Expo,
+    // Tempobeschneidung, Ratenbegrenzung und Reibkreis - gemessen kamen bei "rechts 76"
+    // dadurch 70 plus/minus 9 an, weil die Beschneidung mit dem Tempo schwankt.
+    //
+    // Ein Pruefstand, dessen Etikett um zehn Prozent danebenliegt, beantwortet die Frage
+    // nicht, fuer die er da ist: welcher BYTEWERT bewegt das Auto wie weit. Also geht der
+    // feste Versatz direkt auf Byte 7, und die Anzeige daneben ist dann wirklich das, was
+    // ankommt. Das Gas laeuft weiter durch die Physik - gemessen wird die Querlage, nicht
+    // die Beschleunigung.
+    const lenkAus = ghostQuerTestAn() ? ghostQuerTest
+                  : ((armed && !offTrack) ? out.servoAngle : 0);
+    writeToCar(car, (armed && !offTrack) ? lenkAus : 0, drive, lights, car.modeBytes);
   }
 
-  // The leader among the ghosts, by laps then tile index. Used for the hold-back setting.
-  function ghostLeader() {
-    let best = null;
-    garage.forEach(c => {
-      if (c.role !== 'ghost' || !c.ghost) return;
-      if (!best) { best = c; return; }
-      const a = c.ghost, b = best.ghost;
-      if (a.laps > b.laps || (a.laps === b.laps && (a.tileIndex || 0) > (b.tileIndex || 0))) best = c;
-    });
-    return best;
-  }
+  // ---- ghostLeader() ist ENTFALLEN ---------------------------------------------------
+  //
+  // Sie war "wer ist vorn" als eigene Rechnung, und ihr einziger Aufrufer war die alte
+  // Bremse fuer den Fuehrenden. ghostFeldStaffel() braucht die ganze Reihenfolge und
+  // ermittelt sie selbst - der Fuehrende ist deren erstes Element. Eine zweite Funktion, die
+  // dieselbe Frage anders beantwortet, ist genau das, was in dieser Ecke schon einmal
+  // fuenf Antworten auf "wo bin ich" hervorgebracht hat.
 
   // Side by side? Then split them: one a little left, the other a little right. This is a
   // guess, not a measurement — nothing reports where on the track width a car is — so it
@@ -3574,6 +5206,246 @@
   // GHOST_LINE_STEER: es ist ein Halten neben der Mitte und kein Ausweichmanoever, und mehr
   // waere auf der Schiene ohnehin nur ein Kampf gegen die Firmware.
   const GHOST_LANE_STEER = 0.16;
+  // Wieviel Tempo ein Ghost im Regen abgibt, MIT DEN RICHTIGEN REIFEN. Gewaehlt und
+  // abgenommen - deshalb bleibt die Zahl unberuehrt, siehe ghostReifenTempo().
+  const GHOST_REGEN_TEMPO = 0.85;
+
+  // ====================================================================================
+  // REGENREIFEN FUER GHOSTS
+  // ====================================================================================
+  //
+  // BESTELLT: wenn es regnet, sollen Ghosts sobald wie moeglich pitten (und genauso beim
+  // Wechsel zurueck auf trocken), und solange sie die falschen Reifen haben, sollen sie
+  // staerker gedrosselt werden - wie das Spieler-Auto.
+  //
+  // ZWEI ZAHLEN, KEINE WAHL: der Kommentar an GHOST_REGEN_TEMPO stand bis hierher auf
+  // "Ein Ghost faehrt ohne Reifenmodell, also gibt es hier nichts zu rechnen". Mit Reifen
+  // gibt es das doch, und zwar aus der Tabelle, die das Spieler-Auto ohnehin benutzt
+  // (TYRE_MIX in 70-race.js):
+  //
+  //     trocken auf Slicks    griff 1.00     die Grundlinie
+  //     nass auf Regenreifen  nass  0.80
+  //     nass auf Slicks       nass  0.45     die falschen Reifen im Regen
+  //     trocken auf Regen     griff 0.88     die falschen Reifen im Trockenen
+  //
+  // Kurventempo geht mit der WURZEL des Griffs, nicht linear: v^2 = a*r, und a haengt am
+  // Griff. Also ist der Abzug fuer die falsche Wahl sqrt(falsch/richtig).
+  //
+  // WARUM ALS VERHAELTNIS UND NICHT ALS ABSOLUTER FAKTOR: sqrt(0.80) = 0,894 waere der
+  // abgeleitete Regenfaktor, und er liegt erfreulich nah an den abgenommenen 0,85 - aber
+  // nicht darauf. Wer die Ableitung absolut einsetzt, aendert damit still das Regentempo,
+  // das schon abgestimmt ist. Als Verhaeltnis angewandt bleiben die zwei bekannten Faelle
+  // (trocken/trocken und nass/Regen) BITGLEICH zu vorher, und neu ist nur der Fall, um den
+  // es geht. Ein Selbsttest rechnet genau das nach.
+  //
+  //     trocken + trocken    1.000            unveraendert
+  //     nass    + regen      0.850            unveraendert
+  //     nass    + trocken    0.850 * 0.750 = 0.637
+  //     trocken + regen      1.000 * 0.938 = 0.938
+  //
+  // DASS DER TROCKENFALL MILDE AUSFAELLT, ist keine Nachlaessigkeit, sondern die Aussage der
+  // Tabelle: sie kennt keine ueberhitzenden Regenreifen. In Wirklichkeit koernen Regenreifen
+  // auf trockener Bahn in wenigen Runden ab, und dann waere der Abzug groesser. Sichtbar
+  // wird der Fall hier trotzdem, aber ueber den Boxenstopp und nicht ueber die Rundenzeit -
+  // und der Stopp kostet 5 s, also mehr als eine halbe Runde auf einer kleinen Strecke.
+  //
+  // EIN UMSCHLAGPUNKT STECKT DARIN, und er ist gemessen und nicht gewollt: der Slick
+  // verliert mit der Naesse steil (1,00 -> 0,45), der Regenreifen flach (0,88 -> 0,80). Bei
+  // wenig Wasser ist der Slick also NOCH schneller. Gleichstand bei
+  //
+  //     1,00 - 0,55n = 0,88 - 0,08n   ->   n = 0,255   ->   Front bei 0,505
+  //
+  // also bei fast genau halber Regenfront (n ist das Quadrat der Front). Gemessen liefert
+  // die Sonde dort 0,9639 fuer Slicks gegen 0,9625 fuer Regenreifen - der Slick ist um 0,1
+  // Prozent vorn.
+  //
+  // DAS IST KEIN FEHLER, sondern der Grund, warum ein Reifenwechsel im Rennsport eine
+  // Entscheidung ist und keine Rechenaufgabe. Die Folge fuer den Ausloeser: die ersten
+  // Sekunden nach dem Wetterwechsel kostet der falsche Reifen praktisch nichts, und das
+  // erste Auto in der Warteschlange ist deshalb nicht so stark bevorzugt, wie die
+  // Endwerte vermuten lassen.
+  const REIFEN_GRIFF = { trocken: { dry: 1.00, rain: 0.45 },
+                         regen:   { dry: 0.88, rain: 0.80 } };
+
+  // Welche Reifen gehoeren zum aktuellen Wetter? EINE Stelle, weil die Frage an vier
+  // gestellt wird - Start, Ausloeser, Boxenausgang und Anzeige.
+  function reifenPassend() {
+    // OHNE typeof-WAECHTER auf `weather`: es ist ein let in 70-race.js, und typeof in der
+    // temporalen Todeszone WIRFT. Der Waechter half also genau im Fall nicht, fuer den man
+    // ihn hinschreibt. Gebraucht wird er nicht - alles hier laeuft aus Zeitgebern.
+    return weather === 'rain' ? 'regen' : 'trocken';
+  }
+
+  // ---- DARF DIESER GHOST UEBERHAUPT WECHSELN? --------------------------------------
+  //
+  // DER FALLSTRICK, DEN DAS ZUMACHT: wer die Ghost-Boxenstopps abschaltet und dann Regen
+  // bekommt, haette ein Feld, das dauerhaft mit 0,637 herumkriecht - ohne Ausweg, denn der
+  // einzige Weg zurueck ist ein Stopp, und den hat er gerade verboten. Ein Schalter, der
+  // eine Sache abschaltet und dabei eine zweite dauerhaft verschlechtert, ist eine Falle.
+  //
+  // Also: wo nicht gewechselt werden KANN, gibt es keine falschen Reifen. Damit faellt das
+  // Verhalten bei ausgeschaltetem Boxenstopp genau auf das zurueck, was vor diesem Feature
+  // da war - der flache Regenabzug von 0,85 -, und zwar bitgleich. Ein Selbsttest rechnet
+  // das nach.
+  //
+  // GEPRUEFT WERDEN NUR DIE DAUERHAFTEN SPERREN, nicht die vorübergehenden: eine gelbe
+  // Flagge oder ein belegter Boxenplatz gehen vorbei, und in der Zeit SOLL der Nachteil
+  // wirken - das ist der Sinn der Warteschlange. Dauerhaft sind die zwei Schalter.
+  function reifenWechselMoeglich(car) {
+    if (!ghostCfg.pitAn) return false;
+    const g = car && car.ghost;
+    const imRennen = raceState === 'racing' || raceState === 'finishing';
+    if (!imRennen && g && g.freeRun && !ghostCfg.pitFrei) return false;
+    return true;
+  }
+
+  // Der Reifen, der fuer die Rechnung GILT. Normalerweise der aufgezogene; wo nicht
+  // gewechselt werden kann, gilt der passende - siehe oben.
+  function reifenGefahren(car) {
+    const g = car && car.ghost;
+    if (!g) return 'trocken';
+    if (!reifenWechselMoeglich(car)) return reifenPassend();
+    return g.reifen || 'trocken';
+  }
+
+  function reifenPassen(car) {
+    return reifenGefahren(car) === reifenPassend();
+  }
+
+  // Der Anzeigename. Gross am Wortanfang, damit "Regenreifen aufgezogen" und "HOLT
+  // REGENREIFEN" beide aus einem Baustein kommen.
+  function reifenName(r) { return r === 'regen' ? 'Regen' : 'Trocken'; }
+
+  // Der Tempofaktor aus Wetter und Reifen. Er ERSETZT die alte Zeile
+  // `if (weather === 'rain') target *= GHOST_REGEN_TEMPO`.
+  //
+  // GEMISCHT UND NICHT GESCHALTET, und das ist der Punkt an "wie das Spieler-Auto": dort
+  // wandert der Griff ueber wxRainLevel() quadratisch zwischen der trockenen und der nassen
+  // Zeile (70-race.js, applyGrip). Ein Ghost, der im Moment des Wetterwechsels springt,
+  // waehrend der Spieler fuenf Sekunden lang nass wird, faehrt in einer anderen Welt.
+  // Dieselbe Rampe und dieselbe Quadratur - Wasser braucht Zeit, sich zu sammeln.
+  function ghostNassAnteil() {
+    const lvl = typeof wxRainLevel === 'function' ? wxRainLevel()
+              : (weather === 'rain' ? 1 : 0);
+    return lvl * lvl;
+  }
+
+  // NIMMT DAS AUTO, nicht den Ghost: der gefahrene Reifen haengt an den Schaltern und an
+  // g.freeRun, und beides liegt am Auto. Ein Ghost-Objekt allein reichte nicht.
+  function ghostReifenTempo(car) {
+    const reifen = reifenGefahren(car);
+    const z = REIFEN_GRIFF[reifen] || REIFEN_GRIFF.trocken;
+    const nass = ghostNassAnteil();
+    // Der Griff, den DIESER Reifen gerade hat, und der Griff, den der richtige haette.
+    const griff = z.dry + (z.rain - z.dry) * nass;
+    const soll = REIFEN_GRIFF[reifenPassend()] || REIFEN_GRIFF.trocken;
+    const griffSoll = soll.dry + (soll.rain - soll.dry) * nass;
+    // Die abgenommene Grundlinie: nass kostet 0,85, trocken nichts. Ueber dieselbe Rampe,
+    // damit auch dieser Teil nicht springt.
+    const basis = 1 + (GHOST_REGEN_TEMPO - 1) * nass;
+    // Und darauf das Verhaeltnis der Griffe. Bei passenden Reifen ist es genau 1, der
+    // bekannte Fall bleibt also unberuehrt.
+    return basis * Math.sqrt(Math.max(0.05, griff) / Math.max(1e-6, griffSoll));
+  }
+
+  // Die Oberflaeche im MOTOR des Ghosts, damit Bremsweg und Anfahren zur Reifenwahl passen.
+  //
+  // DAS BEHEBT AUCH EINEN STILLEN FEHLER, der vor dieser Bestellung schon da war:
+  // startGhost() kopiert mit Object.assign das ganze Konfigurationsobjekt des Spielers, und
+  // darin stehen gripScale und aquaplaning. Ein Ghost erbte also die REIFENWAHL DES SPIELERS
+  // im Moment seines Starts - wer mit Regenreifen im Trockenen losfuhr, gab den Ghosts
+  // seinen Nachteil mit -, und danach aenderte sie niemand mehr: ein Wetterwechsel im Rennen
+  // liess die Oberflaeche der Ghosts stehen, wo sie beim Start war.
+  //
+  // Ohne mischungWert(): das ist die Interpolation gegen den Mittelreifen, und sie liefert
+  // Staerke 0, wenn die Reifensimulation des SPIELERS aus ist. Nasser Asphalt ist aber
+  // Wetter und kein Verschleissmodell - dass ein Ghost im Regen laenger bremst, haengt nicht
+  // daran, ob der Spieler seine Reifen simuliert. Der Ausschalter fuer dieses Verhalten ist
+  // der Ghost-Boxenstopp-Schalter, nicht der Reifenregler des Spielers.
+  function ghostOberflaecheSetzen(car) {
+    const g = car && car.ghost;
+    if (!g || !g.engine) return;
+    const reifen = reifenGefahren(car);
+    const z = REIFEN_GRIFF[reifen] || REIFEN_GRIFF.trocken;
+    const nass = ghostNassAnteil();
+    g.engine.config.gripScale = z.dry + (z.rain - z.dry) * nass;
+    // Nur Slicks schwimmen auf; Regenreifen sind geschnitten, um Wasser wegzufuehren -
+    // dieselbe Aussage wie beim Spieler (TYRE_MIX .aqua).
+    g.engine.config.aquaplaning = reifen === 'regen' ? 0 : nass;
+  }
+
+  // ---- Nah heisst in SEKUNDEN und nicht in Kacheln --------------------------------
+  //
+  // Hier stand |Delta tilesTotal| <= 1, also "eine ganze Kachel". Eine Kachel ist auf der
+  // Geraden rund 0,4 s und auf der Haarnadel rund 1,4 s: dieselbe Zahl mit dreifacher
+  // Bedeutung, und ausgerechnet in der Haarnadel - wo es eng wird - war sie am
+  // grosszuegigsten.
+  //
+  // 0,6 s ist GEWAEHLT und nicht abgeleitet: etwas mehr als eine Gerade, deutlich weniger
+  // als eine Haarnadel. Der Gewinn liegt nicht in der Zahl, sondern darin, dass es jetzt
+  // EINE ist.
+  //
+  // RUECKFALL auf das alte Kachelmass, solange kein Tempo bekannt ist - in der ersten Runde
+  // ist tileMs noch leer. Eine Regel, die ohne Messwert gar nicht greift, waere schlechter
+  // als eine groebere.
+  const GHOST_NAH_SEK = 0.6;
+  function ghostNahe(a, b) {
+    const d = ghostAbstandSek(a, b);
+    if (d !== null) return Math.abs(d) <= GHOST_NAH_SEK;
+    return a.ghost.laps === b.ghost.laps
+      && Math.abs((a.ghost.tilesTotal || 0) - (b.ghost.tilesTotal || 0)) <= 1;
+  }
+
+  // ---- Die Feldstaffel: gebremst wird nach PLATZ, nicht nur der Erste ---------------
+  //
+  // Hier stand "wenn ghostLeader() === car, dann Abschlag". Das zog genau EIN Auto an das
+  // Feld heran - gemeldet: "damit nicht nur die ersten beiden beieinander sind". Der Zweite
+  // fuhr voll und lief dem gebremsten Ersten auf, alle dahinter blieben, wo sie waren.
+  //
+  // Jetzt linear ueber den Platz, SYMMETRISCH um die Feldmitte:
+  //
+  //     Erster        1 - pct
+  //     Mitte         1
+  //     Letzter       1 + pct
+  //
+  // Die Symmetrie ist der Punkt und nicht Zierde: das MITTLERE Tempo bleibt unveraendert.
+  // Waere nur gebremst, wuerde das Einschalten dieser Option das ganze Feld langsamer
+  // machen, und "Fuehrenden bremsen" waere in Wahrheit "alle bremsen". Der Letzte wird
+  // schneller, wie bestellt.
+  //
+  // ERST AB ZWEI GHOSTS. Mit einem einzigen ist dieser eine der Fuehrende UND der Letzte,
+  // und beides zugleich ergibt keinen Faktor - er faehrt sein eigenes Tempo.
+  //
+  // Der Platz kommt aus ghostOrtGes(), also aus derselben Zahl wie alles andere. Autos ohne
+  // gemeldete Kachel stehen hinten: sie sind noch nicht losgefahren, und sie vorn
+  // einzusortieren wuerde dem Feld einen Fuehrenden geben, der nicht faehrt.
+  function ghostFeldStaffel(car) {
+    if (!ghostCfg.leaderBrake) return 1;
+    // NUR FAHRENDE, und das ist gemessen und nicht vorsichtshalber. Ohne `running` zaehlten
+    // auch Ghosts mit, die einmal gestartet und dann gestoppt wurden - `c.ghost` bleibt bei
+    // ihnen stehen. Ein einzeln fahrendes Auto war damit "der Fuehrende" eines Feldes aus
+    // Stehern und bekam den vollen Abschlag: der Selbsttest "Ghost erreicht sein
+    // eingestelltes Tempo" fiel von 98,5 auf 86 Prozent, sobald diese Option ab Werk an war.
+    //
+    // GEPARKTE zaehlen dagegen MIT: sie sind im Feld, nur gerade nicht in Fahrt, und sie
+    // stehen hinten. Wenn sie wieder anfahren, bekommen sie damit den Zuschlag des Letzten -
+    // das ist richtig und nicht Zufall.
+    const gs = garage.filter(c => c.role === 'ghost' && c.ghost && c.ghost.running);
+    if (gs.length < 2) return 1;
+    const ort = new Map(gs.map(c => [c, ghostOrtGes(c)]));
+    const sortiert = gs.slice().sort((a, b) => {
+      const oa = ort.get(a), ob = ort.get(b);
+      if (oa === null && ob === null) return 0;
+      if (oa === null) return 1;
+      if (ob === null) return -1;
+      return ob - oa;                     // vorn zuerst
+    });
+    const platz = sortiert.indexOf(car);
+    if (platz < 0) return 1;
+    // -1 fuer den Ersten, +1 fuer den Letzten, 0 in der Mitte.
+    const lage = 2 * platz / (sortiert.length - 1) - 1;
+    return 1 + ghostCfg.leaderBrakePct * lage;
+  }
 
   function ghostLane(car) {
     const gs = garage.filter(c => c.role === 'ghost' && c.ghost);
@@ -3581,6 +5453,32 @@
     const k = gs.indexOf(car);
     if (k < 0) return 0;
     return (2 * k) / (gs.length - 1) - 1;
+  }
+
+  // ---- Die Seiten einer Gruppe --------------------------------------------------------
+  //
+  // GLEICHMAESSIG UEBER DIE BAHNBREITE und symmetrisch um die Mitte. Hier stand `k % 2`,
+  // also genau zwei Seiten - und bei VIER Autos nebeneinander bekamen damit Rang 0 und 2
+  // beide -1 und Rang 1 und 3 beide +1. Zwei Paare auf derselben Linie, die sich weiter im
+  // Weg standen. Gemeldet als "Ueberholen und eigene Spuren klappt auch nicht - die Autos
+  // haben sich viel geschoben", und zwar mit vier Ghosts.
+  //
+  //     2 Autos   -1, +1
+  //     3 Autos   -1,  0, +1      das mittlere bleibt mittig - es hat nach beiden Seiten
+  //                               gleich viel Platz, und ein Versatz waere eine Erfindung
+  //     4 Autos   -1, -1/3, +1/3, +1
+  //
+  // WAS DAS NICHT KANN: die Bahn ist 25 cm breit, ein Auto knapp 6. Vier Autos nebeneinander
+  // sind physisch die Grenze, und die Verteilung schafft keinen Platz - sie nutzt nur den
+  // vorhandenen ganz statt zur Haelfte.
+  //
+  // Als eigene Funktion, damit die Verteilung ohne Garage und ohne Zeitgeber pruefbar ist.
+  function ghostSeiten(n) {
+    if (n <= 0) return [];
+    if (n === 1) return [0];
+    const out = new Array(n);
+    for (let k = 0; k < n; k++) out[k] = 2 * k / (n - 1) - 1;
+    return out;
   }
 
   function ghostAssignBias() {
@@ -3595,14 +5493,15 @@
     // tileIndex, und der ist beim Start null: das Feld fuhr die ersten Sekunden auf einer
     // Spur, genau dort, wo es am dichtesten ist.
     const fresh = raceStartedAt && (Date.now() - raceStartedAt) < GHOST_GRID_MS;
-    const near = fresh ? gs : gs.filter(c => gs.some(o => o !== c
-      && o.ghost.laps === c.ghost.laps
-      && Math.abs((o.ghost.tilesTotal || 0) - (c.ghost.tilesTotal || 0)) <= 1));
-    // Nach Kachelindex sortiert, damit die Seiten stabil bleiben, solange sie
-    // nebeneinander fahren, und nicht bei jedem Aufruf tauschen.
-    near.sort((a, b) => (a.ghost.tileIndex || 0) - (b.ghost.tileIndex || 0)
+    const near = fresh ? gs : gs.filter(c => gs.some(o => o !== c && ghostNahe(c, o)));
+    // Nach dem Ort sortiert, damit die Seiten stabil bleiben, solange sie nebeneinander
+    // fahren, und nicht bei jedem Aufruf tauschen. Der Ort statt der Kachelnummer: auf
+    // derselben Kachel gab die Kachelnummer keine Ordnung her, und dann entschied der
+    // Namensvergleich darunter - also die Gerätekennung und nicht, wer vorn ist.
+    near.sort((a, b) => (ghostOrtGes(a) || 0) - (ghostOrtGes(b) || 0)
                         || String(a.device && a.device.id).localeCompare(String(b.device && b.device.id)));
-    near.forEach((c, k) => want.set(c, k % 2 === 0 ? -1 : 1));
+    const seiten = ghostSeiten(near.length);
+    near.forEach((c, k) => want.set(c, seiten[k]));
     // Nachgezogen statt gesetzt. Ein Sprung von 0 auf den vollen Versatz ist ein Ruck am
     // Lenkservo, und der sieht aus wie ein Fehler statt wie ein Ausweichen.
     for (const c of gs) {
@@ -3629,6 +5528,80 @@
   //
   // Nur REINE Funktionen, kein Zustand, kein Schreibzugriff. Was hier steht, kann eine
   // Pruefung aufrufen, ohne ein Auto zu verbinden oder auf eine Zeitmessung zu warten.
+  // Die drei Modellnamen fuer die Oberflaeche. Als EINE Tabelle, weil sie an drei Stellen
+  // gebraucht werden - Meldung, Vorschau und Selbsttest - und drei Kopien einer Zuordnung
+  // der Weg zu drei verschiedenen Namen fuer dasselbe Modell sind.
+  const LINIENMODELL_NAME = {
+    curvature: 'Kr\u00fcmmung', laptime: 'Rundenzeit', lateapex: 'Late Apex',
+  };
+
+  // ---- Die gewaehlte Linie zeigen, direkt neben der Wahl ----
+  //
+  // GEMELDET: "Ich habe 2 Ideallinie Modi, aber wenn ich dazwischen waehle, aendert sich die
+  // eingezeichnete Linie nicht und gefuehlt auch nicht die der Autos - das muss alles
+  // zusammenpassen."
+  //
+  // SIE AENDERT SICH, und das ist nachgemessen: auf SR3GLR2GR2G2 sitzt der Startpunkt der
+  // gezeichneten Linie bei Rundenzeit auf x = 45,9 und bei Kruemmung auf x = 50,5, und die
+  // Linien unterscheiden sich um bis zu 7,65 von 8,63 Einheiten Deckel - also um 89 Prozent
+  // der nutzbaren halben Bahnbreite. Nicht zu sehen war sie: die Knoepfe stehen in
+  // #tab-options (Zeile 7028 des Markups), die einzige gezeichnete Linie in #tab-track
+  // (Zeile 7332). Ein Umschalter, dessen Wirkung einen Tab weiter liegt, ist von aussen ein
+  // Umschalter ohne Wirkung.
+  //
+  // ES IST DIESELBE LINIE und keine zweite Rechnung: renderTrackPreview() geht durch
+  // buildLine(), genau wie der Editor und wie ghostLine(). Damit kann die gezeigte nicht von
+  // der gefahrenen abweichen - was der Kommentar bei buildLine() ausdruecklich zusichert.
+  //
+  // NUR AUF ANFORDERUNG gezeichnet: renderTrackPreview() kostet gemessen rund 94 ms, weil es
+  // Mittellinie, Normalen und die Linie rechnet. Beim Umschalten und beim Oeffnen der Seite
+  // ist das nicht zu merken; in refreshTrackPreview() mitzulaufen hiesse, es bei jedem
+  // Klick im Streckeneditor zu zahlen.
+  function linemodellKarteZeichnen() {
+    const halter = $('linemodel-karte');
+    if (!halter) return;
+    const info = $('linemodel-info');
+    // OHNE eigene Strecke die Vorgabe zeigen - dieselbe, auf der die Simulation dann fährt.
+    // Ein leeres Feld hier und eine gefahrene Strecke dort waeren zwei Aussagen ueber
+    // dasselbe.
+    const eigene = currentTrackTiles && currentTrackTiles.length >= 3;
+    const tiles = eigene ? currentTrackTiles : (codeToTrack(TRACK_VORGABE_CODE) || {}).tiles;
+    if (!tiles || tiles.length < 3) {
+      halter.innerHTML = '';
+      if (info) info.textContent = t('Keine Strecke eingetragen.');
+      return;
+    }
+    // detailed: true, denn NUR dort zeichnet renderTrackPreview() die Ideallinie - ohne
+    // das Flag kommt ein grauer Umriss und sonst nichts, und die Karte waere leer an der
+    // Stelle, um die es hier geht. Gemessen: 0 gefaerbte Segmente ohne, 182 mit.
+    const r = renderTrackPreview(tiles, null, { detailed: true });
+    halter.innerHTML = r.html;
+    if (!info) return;
+    // BEIDE Modelle beziffern, nicht nur das gewaehlte. Die Frage beim Umschalten ist ja
+    // "was gewinne ich" - und die ist ohne den Vergleichswert nicht zu beantworten.
+    const pts = trackCenterline(tiles);
+    const nrm = trackNormals(pts, true);
+    const closed = trackSchluss(pts).closed;
+    const o = { closed, tiles };
+    // ALLE DREI ZEITEN NEBENEINANDER und in derselben Einheit - das ist die Frage beim
+    // Umschalten, und sie ist ohne die Vergleichswerte nicht zu beantworten. Vorher stand
+    // hier ein einzelner Prozentwert aus lc.gain, der bei jedem Modell etwas anderes
+    // bedeutet.
+    const cm = (v) => (v / TRACK_UNITS_PER_CM).toFixed(1);
+    const teile = [];
+    for (const m of ['curvature', 'laptime', 'lateapex']) {
+      const L = buildLine(pts, nrm, Object.assign({ model: m }, o));
+      teile.push(LINIENMODELL_NAME[m] + ' ' + (L.lapTime ? L.lapTime.toFixed(1) + ' s' : '?')
+                 + ' / ' + cm(L.span) + ' cm');
+    }
+    info.textContent = t('{m} ist gewählt. Modellzeit und genutzter Versatz:')
+        .replace('{m}', LINIENMODELL_NAME[getLineModel()])
+      + ' ' + teile.join(' \u00b7 ') + '. '
+      + t('Die Zeiten kommen aus den eingestellten Fahrwerten; die Querbeschleunigung ist '
+          + 'darin eine Annahme.')
+      + (eigene ? '' : ' ' + t('Gezeigt ist die Vorgabestrecke; im Editor steht noch keine.'));
+  }
+
   // ---- Linienmodell und Lernen bedienen ----
   //
   // Die Modellwahl geht durch setLineModel(), damit der Editor dieselbe Linie zeichnet, die
@@ -3648,10 +5621,16 @@
       // Editor neu zeichnen: die Linie hat sich gerade geaendert, und die gezeichnete muss
       // die gefahrene sein.
       try { refreshTrackPreview(); } catch (e) { /* Editor nicht im Dokument */ }
+      // Und die Vorschau neben der Wahl - das ist die Karte, auf die man dabei sieht.
+      try { linemodellKarteZeichnen(); } catch (e) { /* Karte nicht im Dokument */ }
       const lc = ghostLine();
-      log('Linienmodell: ' + (m === 'laptime' ? 'Rundenzeit' : 'Kr\u00fcmmung')
-          + (lc && lc.lapTime ? ', Modellzeit ' + lc.lapTime.toFixed(2)
-             + ' (' + (lc.gain * 100).toFixed(1) + ' % schneller als Kr\u00fcmmung)' : ''),
+      // Der Prozentwert ist WEG, und das ist eine Berichtigung: lc.gain heisst bei jedem
+      // Modell etwas anderes - bei 'laptime' der Gewinn gegen die Kruemmungslinie, bei
+      // 'lateapex' der gegen den besten Startpunkt -, und derselbe Satz fuer beide war
+      // eine Falschaussage. Verglichen wird in der Vorschau, wo alle drei Zahlen
+      // nebeneinander stehen.
+      log('Linienmodell: ' + LINIENMODELL_NAME[m]
+          + (lc && lc.lapTime ? ', Modellzeit ' + lc.lapTime.toFixed(2) + ' s' : ''),
           'info');
     });
   }
@@ -3688,6 +5667,10 @@
 
   // Ghosts launch on green, not before.
   function launchGhosts() {
+    // Die Seiten des Zieleinlaufs von vorn. Bisher geschah das nur beim Rennstart - wer
+    // zweimal "Ghosts losfahren" und "anhalten" drueckt, lief den Zaehler hoch, und ab dem
+    // fuenften Einlauf steht die Rollzeit auf ihrem Boden. Dann staffelt nichts mehr.
+    finishSeitenZaehlerZuruecksetzen();
     garage.forEach(c => { if (c.role === 'ghost') startGhost(c); });
     const n = garage.filter(c => c.role === 'ghost').length;
     // Die haeufigste Ursache fuer "ich starte das Rennen und es passiert nichts": ohne
@@ -3824,15 +5807,7 @@
       // zweite Fassung der Logik: flagHoldPress startet den Ladebalken, flagHoldRelease(true)
       // loest aus. Zu frueh losgelassen passiert nichts - ein halber Druck darf keine halbe
       // Wirkung haben.
-      const flagNow = readBindingValue(pad, bindings.yellowflag) > BUTTON_CAPTURE_THRESHOLD;
-      if (flagNow && !prevYellowFlag) { padFlagFired = false; flagHoldPress(); }
-      if (flagNow && !padFlagFired && flagHoldStart !== null
-          && Date.now() - flagHoldStart >= FLAG_HOLD_MS) {
-        padFlagFired = true;
-        flagHoldRelease(true);
-      }
-      if (!flagNow && prevYellowFlag && !padFlagFired) flagHoldRelease(false);
-      prevYellowFlag = flagNow;
+      flagTasteTick(readBindingValue(pad, bindings.yellowflag) > BUTTON_CAPTURE_THRESHOLD);
 
       const resetNow = readBindingValue(pad, bindings.resetcar) > BUTTON_CAPTURE_THRESHOLD;
       if (resetNow && !prevResetCar) resetCarState();
@@ -3869,10 +5844,20 @@
       // Fehlbedienungen: ein Druck aufs Steuerkreuz verstellte irgendeinen Regler, den man
       // gerade nicht im Blick hatte. Die Programmierschule hing an derselben Kette und ist
       // mit ausgebaut; sie laesst sich weiterhin mit Maus und Finger bedienen.
-      if (dUp && !prevDpad.up && !trackEditorPad('up') && !pitQuickMenu('up')) nudgeBrakeBias(+1);
-      if (dDown && !prevDpad.down && !trackEditorPad('down') && !pitQuickMenu('down')) nudgeBrakeBias(-1);
-      if (dLeft && !prevDpad.left && !trackEditorPad('left') && !pitQuickMenu('left')) nudgeSteerResponse(-0.1);
-      if (dRight && !prevDpad.right && !trackEditorPad('right') && !pitQuickMenu('right')) nudgeSteerResponse(+0.1);
+      // NEUE BELEGUNG seit v0.5.18, auf Wunsch:
+      //
+      //   hoch/runter    Lenkansprechen (vorher: Bremsbalance)
+      //   links/rechts   Cockpit-Schirm blaettern (vorher: Lenkansprechen)
+      //
+      // Die Bremsbalance behaelt zwei Wege - den Regler in den Optionen und die Zieh-Skala
+      // im Cockpit -, und das genuegt fuer eine Groesse, die man einmal je Stint nachzieht.
+      //
+      // LINKS/RECHTS wird dem Boxenschirm ausdruecklich NICHT angeboten: ein Schirm, der die
+      // Taste frisst, mit der man ihn verlaesst, ist eine Sackgasse.
+      if (dUp && !prevDpad.up && !trackEditorPad('up') && !pitScreenPad('up')) nudgeSteerResponse(+0.1);
+      if (dDown && !prevDpad.down && !trackEditorPad('down') && !pitScreenPad('down')) nudgeSteerResponse(-0.1);
+      if (dLeft && !prevDpad.left && !trackEditorPad('left')) cockpitScreenStep(-1);
+      if (dRight && !prevDpad.right && !trackEditorPad('right')) cockpitScreenStep(+1);
       prevDpad.up = dUp; prevDpad.down = dDown; prevDpad.left = dLeft; prevDpad.right = dRight;
 
     }

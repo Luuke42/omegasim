@@ -88,11 +88,20 @@
     // gerechnet, siehe audio/CREDITS.md - und neu ein Formel 1 nach dem Reglement 2026.
     // Die zwei Aufnahmen sind mit heraus; damit ist ALLES hier synthetisch, und der
     // Unterschied, den CREDITS.md aufmacht, betrifft nur noch die Umgebungsgeraeusche.
-    'amggt3', 'c6r', 'z06gt3r', 'vantagegt3', 'm4gt3', 'f296gt3', 'huracan', 'p992gt3r',
-    'mustang', 'f1_2026',
+    // DIESELBE REIHENFOLGE WIE IM MENUE. Fuer die Funktion ist sie belanglos - diese Liste
+    // ist nur eine Mitgliedschaftspruefung -, aber zwei Listen derselben Sache in
+    // unterschiedlicher Ordnung sind die naechste Verwechslung.
+    'p992gt3r', 'm4gt3', 'mustang', 'f296gt3',
+    'amggt3', 'c6r', 'z06gt3r', 'vantagegt3', 'huracan', 'f1_2026',
     // Vier historische Rennwagen, dazugekommen in v0.4.54 und als WIP gekennzeichnet: nach
-    // Gehoer geprueft ist keiner von ihnen. Damit sind es vierzehn Motoren und 56 Schleifen.
+    // Gehoer geprueft ist keiner von ihnen.
     'gt40', 'lolat70', 'f330p4', 'mc12',
+    // Zwei Strassen- und Rallyeklassiker, dazugekommen in v0.5.18, ebenfalls WIP und
+    // ebenfalls nicht nach Gehoer geprueft. Damit sind es sechzehn Motoren und 85 Schleifen -
+    // die zwei neuen haben SIEBEN Baender statt fuenf, weil zwischen ihrem Leerlauf und
+    // ihrem Mittelband mehr als der Faktor 2,2 liegt und band_ladder() dann Zwischenstufen
+    // einzieht.
+    'countach', 'impreza99',
   ];
   // KEINE FESTE LISTE MEHR. Bis v0.4.55 stand hier ['idle','mid','high'], und genau diese
   // Liste war die Annahme, die den Ton kaputt gemacht hat: sie kannte drei Namen, also konnte
@@ -341,54 +350,13 @@
   const ANSAGE_SCHWELLE = 0.10;   // 10 %, wie in der Aufgabe
   const ANSAGE_HYSTERESE = 0.18;  // erst darueber ist die Meldung wieder scharf
   const ansageAn = { lap: true, damage: false, fuel: false, tyre: false, rain: false };
-  let funkFilter = false;
   const ansageLatch = { damage: false, fuel: false, tyre: false, rain: null };
 
-  // ---- Der Funkfilter: Knacken, Rauschen, Knacken ---------------------------------
-  //
-  // Die Stimme selbst kann nicht bandbegrenzt werden - speechSynthesis liefert keinen
-  // Audioknoten. Gebaut wird das, was einen Funkspruch wirklich kennzeichnet: das
-  // Aufschalten, der Rauschteppich darunter und das Loslassen.
-  function funkKnacken(t0, staerke) {
-    if (!audioCtx) return;
-    const n = Math.floor(audioCtx.sampleRate * 0.05);
-    const b = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
-    const d = b.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (n * 0.18));
-    const src = audioCtx.createBufferSource();
-    src.buffer = b;
-    // Bandpass um 1,6 kHz: das ist die Lage, in der ein Sprechfunkgeraet knackt.
-    const bp = audioCtx.createBiquadFilter();
-    bp.type = 'bandpass'; bp.frequency.value = 1600; bp.Q.value = 1.4;
-    const g = audioCtx.createGain();
-    g.gain.value = staerke;
-    src.connect(bp).connect(g).connect(audioCtx.destination);
-    src.start(t0);
-    src.stop(t0 + 0.06);
-  }
-
-  // Der Rauschteppich unter der Stimme. Er laeuft ueber eine geschaetzte Sprechdauer -
-  // speechSynthesis sagt nicht, wie lange es dauert, und onend kommt zu spaet, um daraus
-  // eine Huellkurve zu bauen. 55 ms je Zeichen ist an den eigenen Ansagen abgelesen.
-  function funkRauschen(t0, dauer) {
-    if (!audioCtx) return;
-    const n = Math.floor(audioCtx.sampleRate * Math.max(0.2, dauer));
-    const b = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
-    const d = b.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
-    const src = audioCtx.createBufferSource();
-    src.buffer = b;
-    const bp = audioCtx.createBiquadFilter();
-    bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 0.7;
-    const g = audioCtx.createGain();
-    g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(0.018, t0 + 0.04);
-    g.gain.setValueAtTime(0.018, t0 + dauer - 0.06);
-    g.gain.linearRampToValueAtTime(0, t0 + dauer);
-    src.connect(bp).connect(g).connect(audioCtx.destination);
-    src.start(t0);
-    src.stop(t0 + dauer + 0.02);
-  }
+  // HIER STAND DER FUNKFILTER, und er ist auf Bitte des Nutzers wieder heraus. Was er
+  // konnte: Knacken beim Aufschalten, ein Rauschteppich darunter, Knacken beim Loslassen,
+  // und eine Stimme, die schneller und flacher spricht. Was er NICHT konnte, und was ihn
+  // am Ende halbherzig machte: die Stimme selbst bandbegrenzen - speechSynthesis liefert
+  // keinen Audioknoten, es gibt also nichts, wo ein Filter dazwischen koennte.
 
   // ---- Der gemeinsame Kern ---------------------------------------------------------
   function ansage(art, text) {
@@ -404,22 +372,13 @@
       u.lang = lang === 'de' ? 'de-DE' : 'en-US';
       // Funk spricht schneller und flacher. Beides ist an der Stimme einstellbar, und mehr
       // gibt die Schnittstelle nicht her.
-      u.rate = funkFilter ? 1.35 : 1.15;
-      if (funkFilter) u.pitch = 0.85;
+      u.rate = 1.15;
       u.onerror = (ev) => {
         if (announceFailLogged) return;
         announceFailLogged = true;
         log('Ansage: keine Stimme verfuegbar (' + (ev && ev.error ? ev.error : '?')
             + '). Die Ansage bleibt aus, alles andere laeuft weiter.', 'info');
       };
-      if (funkFilter && audioCtx) {
-        const t0 = audioCtx.currentTime + 0.02;
-        // 55 ms je Zeichen, gedeckelt: eine Schaetzung, und sie ist als solche benannt.
-        const dauer = Math.min(6, Math.max(0.6, text.length * 0.055 / u.rate));
-        funkKnacken(t0, 0.09);
-        funkRauschen(t0 + 0.06, dauer);
-        funkKnacken(t0 + 0.06 + dauer, 0.06);
-      }
       window.speechSynthesis.speak(u);
       announceCalls++;
       return true;
@@ -515,10 +474,6 @@
       if (!e.target.checked && 'speechSynthesis' in window) window.speechSynthesis.cancel();
     });
   });
-  if ($('setting-announce-radio')) {
-    funkFilter = $('setting-announce-radio').checked;
-    $('setting-announce-radio').addEventListener('change', (e) => { funkFilter = e.target.checked; });
-  }
 
   function playShiftSound(direction) {
     const buf = direction >= 0 ? fxBuffers.shift.up : fxBuffers.shift.down;
@@ -1020,11 +975,105 @@
   $('lat-hold-here').addEventListener('click', () => { lat.stepAt = Date.now(); latRender(); });
   $('lat-reset').addEventListener('click', () => { lat.rows = []; lat.tiles = 0; latRender(); });
 
-  $('ghost-spice').addEventListener('input', (e) => {
-    ghostCfg.spice = parseFloat(e.target.value);
-    $('ghost-spice-val').textContent = ghostCfg.spice === 0
-      ? 'aus' : Math.round(ghostCfg.spice * 100) + '%';
-  });
+  // ---- Die fuenf Wuerz-Schalter -------------------------------------------------------
+  //
+  // Aus einem Regler sind fuenf Kaestchen geworden. Die Liste steht hier und nicht als fuenf
+  // gleiche Bloecke: ein sechster Baustein ist dann eine Zeile, und die Zuordnung
+  // Element-id zu Modellfeld ist an einer Stelle nachzulesen.
+  //
+  // DER ANFANGSABGLEICH STEHT NICHT HIER, und das ist eine Berichtigung mit Blutspur:
+  // `ghostCfg` ist ein const in 90-ghosts.js, also in einer SPAETEREN Datei derselben IIFE.
+  // Zur Aufbauzeit dieser Zeilen liegt es in seiner temporalen Todeszone - ein Schreibzugriff
+  // darauf wirft, und der Wurf nimmt den ganzen Rest der IIFE mit. Gemeldet wird er an
+  // voelig anderer Stelle ("Cannot access 'padConnected' before initialization"), weil dort
+  // der erste Zeitgeber auf eine Variable trifft, die nie angelegt wurde. Genau diese Falle
+  // hat in diesem Projekt schon einmal einen Regler gekostet.
+  //
+  // Die Zuhoerer sind unbedenklich: sie laufen erst, wenn jemand klickt. Der Abgleich steht
+  // bei ghostCfg selbst, siehe dort.
+  const WUERZE_SCHALTER = [
+    ['ghost-w-pass', 'wuerzeUeberholen'],
+    ['ghost-w-gap', 'wuerzeAbstand'],
+    ['ghost-w-form', 'wuerzeForm'],
+    ['ghost-w-fehler', 'wuerzeFehler'],
+    ['ghost-w-slip', 'wuerzeWindschatten'],
+    // Die zwei Boxenstopp-Schalter. Sie gehoeren in dieselbe Liste, weil sie dieselbe Form
+    // haben - Kaestchen an, Feld true - und nicht, weil sie mit der Wuerze zu tun haetten.
+    ['ghost-pit', 'pitAn'],
+    ['ghost-pit-free', 'pitFrei'],
+  ];
+  for (const [id, feld] of WUERZE_SCHALTER) {
+    const el = $(id);
+    if (el) el.addEventListener('change', (e) => { ghostCfg[feld] = e.target.checked; });
+  }
+
+  // Der Kurvenausgang liegt in 60-track.js (setLineExit), nicht in ghostCfg: gezeichnete
+  // und gefahrene Linie muessen dieselbe sein, und beide gehen durch buildLine(). Ein
+  // zweiter Wert in ghostCfg waere ein zweiter Ort fuer eine Zahl, die beide brauchen.
+  if ($('ghost-exit')) {
+    const exitSetzen = (v) => {
+      setLineExit(v);
+      // DEN ZWISCHENSPEICHER DER GHOSTS FALLEN LASSEN, sonst fahren sie die alte Linie
+      // weiter. lineCache ist ein let in 90-ghosts.js, also in einer SPAETEREN Datei
+      // derselben IIFE - deshalb ueber ghostLineCacheLeeren() und nicht direkt. Ein
+      // Schreibzugriff von hier aus traf die temporale Todeszone und nahm den Rest der IIFE
+      // mit; genau das ist mir beim Bauen der Wuerz-Schalter schon passiert.
+      ghostLineCacheLeeren();
+      refreshTrackPreview();            // und der Editor zeigt sie sofort
+      $('ghost-exit-val').textContent = Math.round(v * 100) + '%';
+    };
+    $('ghost-exit').addEventListener('input', (e) => exitSetzen(parseFloat(e.target.value)));
+    // KEIN Aufruf beim Aufbau. Markup und 60-track.js tragen beide 0,5, und der Selbsttest
+    // "Regler und Modell sagen beim Laden dasselbe" prueft das nach - ein Aufruf hier waere
+    // ein Schreibzugriff in eine noch nicht angelegte Variable.
+  }
+
+  // ---- Die drei Boxenstopp-Regler ---------------------------------------------------
+  //
+  // Die zwei Rundengrenzen SCHIEBEN SICH GEGENSEITIG, statt ein ungueltiges Paar zuzulassen.
+  // min ueber max waere ein leeres Band, und pitFaelligZiehen() muesste es abfangen - zwei
+  // Orte fuer eine Regel. Hier ist es sichtbar: der andere Regler wandert mit.
+  if ($('ghost-pit-sec')) {
+    const ps = (v) => {
+      ghostCfg.pitSek = v;
+      $('ghost-pit-sec-val').textContent = v.toFixed(1) + ' s';
+    };
+    $('ghost-pit-sec').addEventListener('input', (e) => ps(parseFloat(e.target.value)));
+  }
+  if ($('ghost-pit-min') && $('ghost-pit-max')) {
+    const grenzen = (welches) => {
+      const lo = $('ghost-pit-min'), hi = $('ghost-pit-max');
+      let a = parseInt(lo.value, 10), b = parseInt(hi.value, 10);
+      if (a > b) {
+        if (welches === 'min') { b = a; hi.value = String(b); }
+        else { a = b; lo.value = String(a); }
+      }
+      ghostCfg.pitRundenMin = a;
+      ghostCfg.pitRundenMax = b;
+      $('ghost-pit-min-val').textContent = String(a);
+      $('ghost-pit-max-val').textContent = String(b);
+    };
+    $('ghost-pit-min').addEventListener('input', () => grenzen('min'));
+    $('ghost-pit-max').addEventListener('input', () => grenzen('max'));
+  }
+
+  if ($('ghost-quertempo')) {
+    const qt = (v) => {
+      ghostCfg.querTempo = v;
+      $('ghost-quertempo-val').textContent = v.toFixed(1);
+    };
+    $('ghost-quertempo').addEventListener('input', (e) => qt(parseFloat(e.target.value)));
+  }
+
+  if ($('ghost-gasdyn')) {
+    const gd = (v) => {
+      ghostCfg.gasDynamik = v;
+      // Die Aufbauzeit dazu, denn die ist die Groesse, die man vergleichen kann: bei 1,0
+      // sind es 0,63 s, ein Trigger liegt bei etwa 0,15 s.
+      $('ghost-gasdyn-val').textContent = v.toFixed(1) + ' \u00b7 ' + (1 / (1.6 * v)).toFixed(2) + ' s';
+    };
+    $('ghost-gasdyn').addEventListener('input', (e) => gd(parseFloat(e.target.value)));
+  }
 
   $('ghost-line').addEventListener('input', (e) => {
     ghostCfg.line = parseFloat(e.target.value);
@@ -1109,18 +1158,61 @@
     $('ghost-leader-pct-val').textContent = Math.round(ghostCfg.leaderBrakePct * 100) + '%';
   });
 
-  $('setting-fuelweight').addEventListener('input', (e) => {
-    const v = parseFloat(e.target.value);
+  // AUS DEM MARKUP LESEN, dasselbe Muster wie nebenan. GEFUNDEN vom Spiegeltest fuer
+  // Regler in v0.5.18: der Regler stand auf 0 ("aus"), das Modell auf 1,0 - das Tankgewicht
+  // wirkte also voll, waehrend die Oberflaeche "aus" zeigte, und ein einziges Antippen
+  // haette es abgeschaltet statt eingeschaltet.
+  function tankgewichtAnwenden(v) {
     physEngine.config.fuelWeightEffect = v;
     $('setting-fuelweight-val').textContent = v === 0 ? 'aus' : Math.round(v * 100) + '%';
+  }
+  $('setting-fuelweight').addEventListener('input', (e) => {
+    tankgewichtAnwenden(parseFloat(e.target.value));
   });
+  tankgewichtAnwenden(parseFloat($('setting-fuelweight').value));
 
-  $('setting-tyres').addEventListener('input', (e) => {
-    const v = parseFloat(e.target.value);
+  // AUS DEM MARKUP LESEN, nicht nur auf Aenderungen hoeren - dasselbe Muster wie bei
+  // setting-vibration. GEMESSEN am 0.5.17: der Regler stand auf 0 ("aus"), das Modell auf
+  // 2,0, und die Anzeige daneben behauptete "200 %". Ein einziges Antippen liess das
+  // Fahrverhalten von 200 auf 0 Prozent springen. Der Spiegel-Selbsttest hat es nicht
+  // gefunden, weil er nur Kaestchen verglich und dieser hier ein Schieberegler ist.
+  function reifenReglerAnwenden(v) {
     physEngine.config.tyreEffect = v;
     $('setting-tyres-val').textContent = v === 0 ? 'aus' : Math.round(v * 100) + '%';
     if (v === 0) resetTyres();   // leave nothing stale behind when switching off
+    // Die Mischungsstaerke haengt an dieser Zahl (ohne Reifensimulation fahren alle den
+    // Mittelreifen), also muss der Untergrund neu gerechnet werden.
+    if (typeof applySurface === 'function') applySurface();
+  }
+  if ($('ghost-quer-test')) {
+    const quer = (v) => {
+      ghostQuerTest = v;
+      // DER GESENDETE WERT und nicht der Reglerstand: gefragt ist, was am Auto ankommt.
+      // Byte 7 ist round(anteil * 127) und vorzeichenbehaftet, also -127 bis +127.
+      const byte = Math.round(v * 127);
+      $('ghost-quer-test-val').textContent = Math.abs(v) < 0.001 ? 'aus'
+        : (byte > 0 ? 'rechts ' : 'links ') + Math.abs(byte) + ' von 127';
+    };
+    $('ghost-quer-test').addEventListener('input', (e) => quer(parseFloat(e.target.value)));
+    quer(parseFloat($('ghost-quer-test').value));
+  }
+
+  $('setting-tyres').addEventListener('input', (e) => {
+    reifenReglerAnwenden(parseFloat(e.target.value));
   });
+  reifenReglerAnwenden(parseFloat($('setting-tyres').value));
+
+  if ($('setting-tyre-mix')) {
+    const mixAnwenden = (v) => {
+      tyreMixStaerke = v;
+      $('setting-tyre-mix-val').textContent = v === 0 ? 'gleich' : Math.round(v * 100) + '%';
+      if (typeof applySurface === 'function') applySurface();
+    };
+    $('setting-tyre-mix').addEventListener('input', (e) => {
+      mixAnwenden(parseFloat(e.target.value));
+    });
+    mixAnwenden(parseFloat($('setting-tyre-mix').value));
+  }
 
   $('brake-volume').addEventListener('input', (e) => {
     brakeVolume = parseFloat(e.target.value);

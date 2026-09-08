@@ -357,6 +357,13 @@
   .home-legal-links a { color: var(--info); font-weight: 600; text-decoration: none;
     border-bottom: 1px solid rgba(90,169,255,.4); }
   .home-legal-links a:hover { border-bottom-color: var(--info); }
+  /* Die Lagemeldung der Garage. Rot umrandet, aber kein Alarmton: sie erklaert etwas,
+     das der Nutzer nicht falsch gemacht hat. */
+  .gar-warnung {
+    margin: 0 0 12px; padding: 9px 12px; border-radius: 6px;
+    border: 1px solid var(--bad); background: rgba(200, 60, 60, .08);
+    color: var(--text); font-size: 12.5px; line-height: 1.45;
+  }
   .wip-tag { display: inline-block; font-size: 9.5px; letter-spacing: .1em;
     padding: 1px 5px; border-radius: 3px; vertical-align: 2px;
     background: #4a3c00; color: #ffd83d; font-weight: 700; }
@@ -483,6 +490,21 @@
   #lang-toggle b { font-weight: 700; opacity: .45; }
   #lang-toggle b.on { opacity: 1; color: var(--ink);
     text-shadow: 1px 0 0 var(--glitch-r), -1px 0 0 var(--glitch-c); }
+  /* DAS hidden-ATTRIBUT WIRKT WIEDER. Die Vorgabe des Browsers dafuer ist
+     `[hidden] { display: none }`, und die verliert gegen JEDE Autoren-Regel, die display
+     setzt - hier gegen `.tp-btn { display: grid }`. Der Schliessknopf des Streckeneditors
+     stand deshalb dauerhaft in der Leiste, auch ausserhalb des Vollbilds, mit dem
+     Vollbild-Symbol und der Aufschrift "Schliessen": genau so gemeldet.
+
+     GEMESSEN, bevor diese Zeile hier stand: 11 Elemente tragen hidden, 10 gehorchten
+     zufaellig, eines nicht. Der Code setzt hidden aber an allen 11 Stellen und verlaesst
+     sich darauf. Die Regel schreibt also auf, was ohnehin vorausgesetzt wird - und nimmt
+     der naechsten display-Regel die Gelegenheit, dasselbe noch einmal zu brechen.
+
+     Weiter unten steht `.race-corner button[hidden]` mit demselben Zweck. Sie bleibt
+     stehen: sie ist harmlos, und sie ist der Beleg dafuer, dass diese Falle in diesem
+     Projekt schon einmal zugeschnappt hat. */
+  [hidden] { display: none !important; }
   body.race-fs #app-footer, body.track-fs #app-footer { display: none; }
   .tabpage { display: none; }
   .tabpage.active { display: block; }
@@ -680,6 +702,14 @@
        bleiben duerfen - ein Statusstreifen darf sich vom Schirm abheben. */
     --gt3-strip: #0b0f18;
     --gt3-strip-ink: #8b97ad;
+    /* DAS REGENRADAR zeichnet auf eine Leinwand, und Leinwandfarben kann kein Stylesheet
+       umsetzen. Es liest sie deshalb hier - dieselbe Mechanik wie bei allem anderen, und
+       eine Ansicht kann sie mitziehen, ohne dass jemand die Zeichenroutine anfasst.
+       Wolke und Regen stehen als KOMPONENTEN, weil die Routine ihre Deckkraft je Ballen
+       selbst rechnet und deshalb rgba() zusammensetzt. */
+    --wx-grund: #0d1219;
+    --wx-wolke: 226, 236, 246;
+    --wx-regen: 104, 166, 186;
 
     /* DIESE VIER STANDEN BIS v0.5.4 IN DER .gt3-REGEL SELBST, und genau deshalb sahen die
        Cockpit-Ansichten fast gleich aus. Ein Wert, den body[data-cockpit] setzt, wird nur
@@ -760,6 +790,100 @@
      DIE FUNKTIONSFARBEN bleiben: Tank gruen, Schaden rot, gelbe Flagge gelb. Sie tragen eine
      Bedeutung, und eine Ansicht darf das Aussehen aendern und nicht die Bedeutung. Auf weiss
      sind sie ohnehin gut lesbar. */
+  /* GT3 - schwarze Kacheln, weisse Schrift. Die nuechternste der Ansichten: kein Verlauf
+     auf den Kacheln, kein Blauschimmer, nur Schwarz und Weiss. Ein echtes GT3-Display ist
+     genau das - es soll bei Sonne durch ein Visier lesbar sein, und dafuer ist maximaler
+     Kontrast das einzige, was zaehlt.
+
+     DIE FUNKTIONSFARBEN BLEIBEN. Sie tragen eine Bedeutung - gruen gut, gelb Vorsicht, rot
+     schlecht -, und eine Ansicht aendert das Aussehen und nicht die Bedeutung. Auf Schwarz
+     sind die Werte aus :root ohnehin gut lesbar, sie brauchen anders als bei "modern" keine
+     Nachfuehrung.
+
+     DER RADARGRUND ZIEHT MIT auf Schwarz, sonst saesse ein blaeulicher Kasten zwischen
+     schwarzen Kacheln. Die Wolken bleiben weiss - auf Schwarz ist das der beste Kontrast,
+     den es gibt -, und der Regen wird etwas heller, weil er sonst im Grund verschwindet. */
+  body[data-cockpit="gt3"] {
+    /* EIN VERLAUF AUS ZWEI GLEICHEN FARBEN und nicht #000000 - gerendert dasselbe
+       Schwarz, aber ueberlagerbar. Eine reine Farbe in einer background-image-Liste macht
+       die GANZE Deklaration ungueltig; wer diese Variable also mit einer zweiten Ebene
+       ueberlagert (die Zeilenaufhellung im Boxenschirm tut das), bekaeme in genau DIESER
+       Ansicht gar keinen Hintergrund. Dieselbe Falle hat in 0.5.17 den GT3-Schirm
+       durchsichtig gemacht, und dort war sie nach der Ansicht verschieden - also die Art
+       Fehler, die man an vier von fuenf Staenden nicht sieht. */
+    --gt3-tile: linear-gradient(#000000, #000000);
+    --gt3-tile-ink: #ffffff;
+    /* Auch die SCHIRMtinte auf reines Weiss, nicht nur die der Kacheln: sonst stuende
+       weisser Text in schwarzen Kacheln und blaeulicher daneben, und die Ansicht waere
+       zur Haelfte die Vorgabe. */
+    --gt3-ink: #ffffff;
+    /* Rechteckiges Gehaeuse. Ein GT3-Display ist ein gefraester Kasten und keine Kachel
+       mit weichen Ecken; zusammen mit der matten Blende darunter ist das der Unterschied,
+       den man auf einen Blick sieht. */
+    --gt3-radius: 0px;
+    /* MATTE Blende statt der glaenzenden Webung: ein Kohlefaserteil mit Mattlack streut,
+       es spiegelt nicht. Zwei feine Richtungen bleiben, damit es Gewebe bleibt und keine
+       Farbflaeche wird - dieselbe Ueberlegung wie bei der Vorgabe, nur ohne Glanz. */
+    --gt3-carbon:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.045) 0 1px,
+                                       rgba(0,0,0,.55) 1px 3px),
+      repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px,
+                                      rgba(0,0,0,.5) 1px 3px),
+      /* ALS VERLAUF und nicht als Farbe, aus demselben Grund wie beim Schirm darueber:
+         auch --gt3-carbon wird als Ebene in background-image eingesetzt, und eine reine
+         Farbe macht dort die ganze Deklaration ungueltig. Denselben Fehler habe ich in
+         dieser Ansicht zweimal gemacht - er faellt nicht auf, solange nichts hinter dem
+         Cockpit steht, und im gedrehten Vollbild stand dort die Seite. */
+      linear-gradient(#0a0a0a, #0a0a0a);
+    --gt3-btn: #000000;
+    --gt3-btn-ink: #ffffff;
+    --gt3-btn-hover: #1c1c1c;
+    --gt3-lbl: #9aa0a8;
+    --gt3-rpm-ink: #ffffff;
+    /* ALS VERLAUF, nicht als Farbe: --gt3-screen ist die erste Ebene von
+       background-image, und dort ist eine reine Farbe ungueltig - sie macht die ganze
+       Deklaration ungueltig, und das Cockpit hat dann GAR keinen Hintergrund. Gemessen
+       kam mit "#050505" background-image: none heraus.
+
+       Und nicht schwarz, sondern ein dunkles Gehaeusegrau: die Kacheln sind schwarz, und
+       schwarz auf schwarz waere wieder unsichtbar. Der Unterschied traegt hier die
+       Trennung, die in der Vorgabe die Linien tragen. */
+    --gt3-screen: linear-gradient(180deg, #1a1a1a 0%, #121212 46%, #0e0e0e 74%, #171717 100%);
+    --gt3-line: rgba(255, 255, 255, .34);
+    --gt3-line-soft: rgba(255, 255, 255, .16);
+    /* Kein Leuchten und kein Zeilenraster: beides weicht den Kontrast auf, und der ist bei
+       dieser Ansicht der ganze Zweck. */
+    --gt3-glow: none;
+    --gt3-scan: none;
+    --wx-grund: #000000;
+    --wx-regen: 138, 198, 218;
+  }
+  /* Die zwei zeichnenden Instrumente auf denselben Grund wie die Kacheln - sonst stehen
+     zwei blaeuliche Kaesten in einer schwarzen Flaeche. Dieselbe Stelle wie bei "modern",
+     nur andersherum. */
+  /* ALLE Kacheln bekommen den schwarzen Grund, nicht nur die antippbaren. In der Vorgabe
+     sind die uebrigen absichtlich flaechenlos und werden nur durch Linien getrennt; hier
+     ist die Flaeche selbst die Aussage. Die feine helle Kante ist noetig, weil sonst
+     schwarze Kacheln auf dunklem Schirm wieder ineinanderlaufen - genau so las sich die
+     erste Fassung, und der gemeldete Eindruck war "der Text ueberlagert sich". */
+  body[data-cockpit="gt3"] .gt3-box,
+  body[data-cockpit="gt3"] .gt3-half,
+  body[data-cockpit="gt3"] .gt3-gear {
+    background: var(--gt3-tile);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+  /* Die antippbaren behalten ihre hellere Oberkante - sie sagt "hier kann man druecken",
+     und das soll die Ansicht nicht wegnehmen. */
+  body[data-cockpit="gt3"] .gt3-box.gt3-click,
+  body[data-cockpit="gt3"] .gt3-box.pit-tile {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28),
+                inset 0 0 0 1px rgba(255, 255, 255, .14); }
+  body[data-cockpit="gt3"] .gt3-gplot,
+  body[data-cockpit="gt3"] .wx-radar {
+    background: #000000; border-radius: 2px; color: var(--gt3-tile-ink);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+  body[data-cockpit="gt3"] .gt3-gplot .gt3-lbl,
+  body[data-cockpit="gt3"] .gt3-gplot .gt3-val { color: var(--gt3-tile-ink); }
+
   body[data-cockpit="modern"] {
     --gt3-ink: #12161d;
     --gt3-screen: linear-gradient(180deg, #ffffff 0%, #f4f6f9 46%, #eef1f5 74%, #f8fafc 100%);
@@ -1003,7 +1127,21 @@
        er in die erste Kachel der rechten Spalte und stand ueber "Aktuelle Runde". Die
        seitliche Aussparung oben hielt nur die LICHTER frei, nicht die Zeile darunter.
        40 px ist aus den beiden Zahlen des Knopfes gerechnet und nicht geraten. */
-    min-height: 40px; align-content: center; }
+    /* 46 STATT 40, und align-ITEMS statt align-CONTENT. Zwei Aenderungen, eine Ursache.
+       GEMESSEN lagen die inneren Lampen 0,3 px unter der Innenkante des Cockpits - sie
+       klebten an der Blende, und weil .gt3 mit overflow: hidden abschneidet, sahen sie
+       abgeschnitten aus. Unter der Hoeheneinpassung (zoom 0,49 auf einem Handy quer) wird
+       aus 0,3 px gar nichts mehr.
+
+       align-content zentriert die ZEILEN eines Rasters im Container. Hier gibt es genau
+       eine Zeile, und die wird gestreckt; die Lampen darin haben durch aspect-ratio eine
+       feste Hoehe und richten sich mangels align-self am ANFANG aus - also oben. Der
+       Regler sah nach Zentrierung aus und war keine. align-items zentriert die Elemente,
+       und das ist, was hier gemeint war.
+
+       Die 40 px stammten aus dem Vollbildknopf (6 px unter der Oberkante, 34 px hoch).
+       Diese Zusicherung gilt weiter; die zusaetzlichen 6 px sind Luft fuer die Lampen. */
+    min-height: 46px; align-items: center; }
   /* EIN BOGEN, keine Reihe. Auf einem GT3-Lenkrad sitzen die Schaltlichter in der
      Kruemmung des Kranzes, und die aeusseren stehen tiefer. Symmetrisch aus der Mitte
      heraus: 0 fuer die vier innersten, dann 1, 2, 3 px. Mehr waere auf 375 px ein Sprung
@@ -1066,32 +1204,6 @@
     grid-template-columns: repeat(8, minmax(0, 1fr)); }
   @media (max-width: 560px) {
     .gt3-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  }
-
-  /* ---- FLACHE SCHIRME: ein Handy quer ------------------------------------------------
-     Gemeldet als "auf einem Handy sehe ich oben die Lichter nicht". Gemessen in 844 x 390,
-     also genau der Haltung, in der man faehrt:
-
-         Kopfzeile      62 px
-         Cockpit       531 px
-         Fenster       390 px
-
-     Bisher gab es nur eine Regel nach BREITE (max-width: 560px). Ein Handy quer ist aber
-     breit und flach - die Breitenregel greift nicht, und die Hoehe war nie begrenzt.
-
-     Weggenommen wird das Zierwerk und nicht die Instrumente: die Blende schrumpft auf ein
-     Viertel, Fussleiste und Markenzeile verschwinden. Beide tragen keine Information, die
-     nicht anderswo steht, und zusammen sind sie 51 px - bei 390 px Fensterhoehe ist das
-     ein Achtel des Platzes.
-
-     Die Feineinpassung macht danach cockpitPassung() in 50-drive.js, die MISST statt zu
-     rechnen. Diese Regel verkleinert nur, was sie ohne Verlust verkleinern kann, damit
-     dort weniger zu skalieren bleibt. */
-  @media (max-height: 560px) {
-    .gt3 { --gt3-blende: 5px; }
-    .gt3-marke, .gt3-foot { display: none; }
-    /* Die Kacheln des Streifens niedriger: ihre Beschriftung bleibt, der Luftraum geht. */
-    .gt3-strip { gap: 3px; }
   }
 
   /* The captioned tile. Square and borderless: the reference dashes separate cells by
@@ -1215,10 +1327,38 @@
      ein dunkler Rand und ein Schatten nach innen. Die Fuellung selbst wird gedaempft
      (opacity .82) - bei 100 % Restprofil ist sie sonst der groesste Farbblock im ganzen
      Cockpit, und der gehoert dem Tacho. */
+  /* DER RAHMEN IST DIE MISCHUNG, die Fuellung die Temperatur, die Fuellhoehe das
+     Restprofil. Drei Aussagen auf einer 77-px-Kachel, und sie sind unterscheidbar, weil sie
+     verschiedene GEOMETRIEN benutzen: eine Linie aussen, eine Flaeche innen, eine Hoehe.
+
+     Die Farben nach Pirelli (rot weich, gelb mittel, weiss hart, blau Regen). Die Fuellung
+     benutzt blau-gruen-rot fuer die Temperatur, es gibt also eine Ueberschneidung - deshalb
+     die 2 px Linie und nicht eine getoente Flaeche, und deshalb steht die Mischung
+     zusaetzlich ausgeschrieben in der Zeile darunter. Zwei Traeger fuer eine Aussage. */
+  /* DER RAHMEN IST EIN ECHTER border UND KEIN inset-SCHATTEN, und das ist die Behebung
+     eines gemeldeten Fehlers: "Reifenrahmen groesser machen, er wird von etwas ueberlagert
+     und ich erkenne ihn mit blossem Auge nicht gut."
+
+     Ueberlagert hat ihn die FUELLUNG. Sie ist ein absolut positioniertes Kind (.gt3-t4 > b),
+     und ein positioniertes Kind malt UEBER den box-shadow seines Elternteils. Bei 100
+     Prozent Restprofil deckte sie den 2-px-Ring also fast vollstaendig zu - sichtbar blieb
+     der obere Rand, und der lag zusaetzlich unter dem dunklen Innenschatten.
+
+     Ein border liegt dagegen AUSSERHALB des Bezugsrahmens fuer absolute Kinder: der ist der
+     Polsterkasten, nicht der Rahmenkasten. Die Fuellung kann ihn damit nicht erreichen -
+     nicht durch Zutun, sondern von der Bauart her.
+
+     3 px statt 2, auf Bitte. Ueber eine Variable, weil derselbe Reifen im Boxenschirm
+     20 px breit ist und dort 3 px ein Drittel der Flaeche waeren. */
   .gt3-t4 { display: block; position: relative; aspect-ratio: 1 / 1.6;
-    background: #04060b; border-radius: 2px / 4px; overflow: hidden;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12),
-                inset 0 2px 4px rgba(0, 0, 0, .55); }
+    background: #04060b; border-radius: 3px / 5px; overflow: hidden;
+    --mix-farbe: #f7d117; --mix-linie: 3px;
+    border: var(--mix-linie) solid var(--mix-farbe);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, .55); }
+  body[data-tyre-mix="weich"] .gt3-t4 { --mix-farbe: #e5261e; }
+  body[data-tyre-mix="mittel"] .gt3-t4 { --mix-farbe: #f7d117; }
+  body[data-tyre-mix="hart"] .gt3-t4 { --mix-farbe: #f2f4f8; }
+  body[data-tyre-mix="regen"] .gt3-t4 { --mix-farbe: #2f6fd0; }
   /* Die Fuellung waechst von UNTEN, wie ein Vorrat. Dieselbe Richtung wie Tank und Schaden:
      drei Anzeigen, die gleich leerlaufen, liest man mit einem Blick. */
   .gt3-t4 > b { position: absolute; left: 0; right: 0; bottom: 0; height: 0;
@@ -1250,9 +1390,12 @@
      verschwindet fast, und die Nabe wird noch dunkler als der leere Reifen. Ein leerer
      Reifen und ein fehlender Reifen sehen sonst gleich aus, und dann sieht der Wechsel wie
      vier Mal Verschleiss auf null aus. */
+  /* Rad AB: der Mischungsrahmen weicht einer gedeckten Linie. Ein Reifen, der nicht am
+     Auto ist, hat keine Mischung - ihn weiter in Rot oder Weiss zu umranden waere eine
+     Aussage ueber etwas, das gerade in der Hand liegt. */
   .gt3-t4.t4-ab { background: #010204;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .04),
-                inset 0 2px 6px rgba(0, 0, 0, .8); }
+    border-color: rgba(255, 255, 255, .10);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, .8); }
   .gt3-bias { cursor: ns-resize; touch-action: none; }
   /* Zwei Zahlen in einer Zeile, deshalb schmaler als die anderen Trimmwerte. Der Trenner
      ist gedaempft, damit die Zahlen die Aufmerksamkeit haben und nicht der Schraegstrich. */
@@ -1331,12 +1474,261 @@
     border-bottom: 1px solid rgba(90, 169, 255, .35); }
   .gt3-marke a:hover { border-bottom-color: var(--info); }
   .gt3-marke span { color: #6b7688; margin-left: auto; }
+  /* ---- FLACHE SCHIRME: ein Handy quer ------------------------------------------------
+     Gemeldet als "auf einem Handy sehe ich oben die Lichter nicht". Gemessen in 844 x 390,
+     also genau der Haltung, in der man faehrt:
+
+         Kopfzeile      62 px
+         Cockpit       531 px
+         Fenster       390 px
+
+     Bisher gab es nur eine Regel nach BREITE (max-width: 560px). Ein Handy quer ist aber
+     breit und flach - die Breitenregel greift nicht, und die Hoehe war nie begrenzt.
+
+     Weggenommen wird das Zierwerk und nicht die Instrumente: die Blende schrumpft auf ein
+     Viertel, Fussleiste und Markenzeile verschwinden. Beide tragen keine Information, die
+     nicht anderswo steht, und zusammen sind sie 53 px - bei 390 px Fensterhoehe ist das
+     ein Achtel des Platzes.
+
+     DIESER BLOCK STEHT HIER UNTEN, UND ZWAR ZWINGEND. Er stand bis v0.5.16 bei den
+     Rasterregeln - also VOR .gt3-foot und .gt3-marke. Eine Medienabfrage erhoeht die
+     Spezifitaet nicht; bei Gleichstand gewinnt die spaetere Regel, und das waren die
+     Grunddefinitionen mit ihrem display: flex. GEMESSEN im Vollbild quer (915 x 412):
+     matchMedia meldet true, und .gt3-foot steht trotzdem auf flex. Die Blende und der
+     Zwischenraum im Streifen haben gegriffen (ihre Grunddefinitionen stehen davor), das
+     Ausblenden nie.
+
+     Was es ausmacht: ohne die zwei Zeilen passt das Cockpit auf einem Handy quer bei
+     Faktor 1. Mit ihnen musste cockpitPassung() auf 0,70 herunter - alles auf 70 %, damit
+     zwei Zierzeilen bleiben duerfen.
+
+     Die Feineinpassung macht danach cockpitPassung() in 50-drive.js, die MISST statt zu
+     rechnen. Diese Regel verkleinert nur, was sie ohne Verlust verkleinern kann, damit
+     dort weniger zu skalieren bleibt. */
+  @media (max-height: 560px) {
+    .gt3 { --gt3-blende: 5px; }
+    .gt3-marke, .gt3-foot { display: none; }
+    /* Die Kacheln des Streifens niedriger: ihre Beschriftung bleibt, der Luftraum geht. */
+    .gt3-strip { gap: 3px; }
+  }
+
   /* ZWEI REGELN STRITTEN HIER, und die id gewann mit der falschen Farbe. Das Element ist
      zugleich .gt3-banner (Hintergrund #b8860b, Tinte #100c02) und #hud-toast-wrap - und
      eine id sticht eine Klasse. Die Tinte #ffcf6e stammt aus der Zeit, als der Streifen
      keinen Hintergrund hatte; auf dem goldenen Band ergibt sie Kontrast 2,23.
      Gefunden hat es der Kontrasttest, sobald ein Prueflauf den Streifen einmal sichtbar
      stehen liess - vorher war er waehrend des Tests immer leer und damit unsichtbar. */
+  /* ---- Die zwei zusaetzlichen Cockpit-Schirme -----------------------------------------
+     Blaettern mit dem Steuerkreuz links/rechts. Sie liegen UEBER den Kacheln und decken
+     genau deren Rasterflaeche - Schaltlichter, Flaggenband, Boxenband und Meldezeile
+     bleiben sichtbar.
+
+     KEIN PIXELWERT, nur Rasterlinien: wer das Raster oben umbaut, zieht hier von selbst
+     nach. Und absolut gesetzt zaehlen sie in cockpitInhaltHoehe() nicht mit, also aendert
+     ein Schirmwechsel die Einpassung nicht und cockpitPassung() muss nicht neu laufen. */
+  .gt3-schirm {
+    position: absolute;
+    grid-row: left-start / strip-end;
+    grid-column: left-start / right-end;
+    inset: 0;
+    /* ueber den Kacheln, UNTER Regen, Deckglas, Einschaltrampe und den Eckknoepfen: aus dem
+       Schirm heraus muss man das Vollbild verlassen koennen. */
+    z-index: 2;
+    display: none;
+    /* DAS FARBPAAR DES STREIFENS, und das ist eine Entscheidung mit Begruendung.
+       --gt3-strip / --gt3-strip-ink fuehrt jede der fuenf Ansichten fuer genau das hier:
+       eine deckende Instrumentenflaeche mit lesbarer Tinte. Gemessen ist es in allen fuenf
+       eine REINE FARBE (#0b0f18, beim Klassiker #120d07) - kein Verlauf.
+
+       Das loest drei Dinge auf einmal. Erstens ist der Schirm deckend, ohne dass eine
+       Verlaufsebene traegt (die Falle aus v0.5.17: eine reine Farbe als erste
+       background-image-Ebene macht die ganze Deklaration ungueltig). Zweitens findet ein
+       Kontrastpruefer eine wirkliche Farbe statt ein Bild schaetzen zu muessen. Und
+       drittens - der eigentliche Befund - ist --gt3-ink in der hellen Ansicht "modern"
+       DUNKEL (#12161d), weil dort der Schirm hell ist. Auf einer dunklen Kachel war das
+       gemessen Kontrast 1,04, also unlesbar. --gt3-strip-ink ist in jeder Ansicht die
+       Tinte, die zu diesem Grund gehoert. */
+    background: var(--gt3-strip);
+    color: var(--gt3-strip-ink);
+    padding: clamp(4px, .8vw, 9px);
+    gap: clamp(3px, .6vw, 7px);
+    overflow: hidden;
+  }
+  #race-dash[data-screen="pit"] #race-pitscreen,
+  #race-dash[data-screen="uebersicht"] #race-ovscreen { display: grid; }
+
+  .schirm-kopf { display: flex; align-items: baseline; gap: 10px;
+    font-size: clamp(8px, 1.1vw, 11px); letter-spacing: .12em;
+    color: var(--gt3-strip-ink); text-transform: uppercase; }
+  .schirm-kopf b { color: var(--gt3-tile-ink); letter-spacing: .06em; }
+  .schirm-fuss { font-size: clamp(8.5px, 1.15vw, 12px); color: var(--gt3-strip-ink);
+    letter-spacing: .06em; }
+  /* Der Kopf des Boxenschirms traegt links das grosse P. Eine eigene Zeile im Raster
+     braucht es nicht: das Zeichen ist so hoch wie zwei Textzeilen und zieht den Kopf mit. */
+  .pit-kopf { align-items: center; gap: clamp(8px, 1.6vw, 16px); }
+  .pit-kopf-text { display: flex; align-items: baseline; gap: 8px; }
+  /* DAS P WIE AN EINER BOXENEINFAHRT: weiss auf einem Kasten, und der Kasten faerbt sich
+     nach dem Zustand. Quadratisch ueber aspect-ratio statt ueber feste Pixel, damit es mit
+     der Schrift mitwaechst - dasselbe Muster wie bei den Schaltlichtern. */
+  .pit-zeichen {
+    display: grid; place-items: center;
+    width: clamp(26px, 5.5vw, 48px); aspect-ratio: 1;
+    border-radius: var(--gt3-radius);
+    font-size: clamp(17px, 3.6vw, 32px); font-weight: 800; line-height: 1;
+    background: var(--gt3-tile); color: var(--gt3-strip-ink);
+    box-shadow: inset 0 0 0 2px currentColor;
+    transition: color .25s linear, background .25s linear;
+  }
+  .pit-zeichen.pz-gasse { color: #ffd83d; background: rgba(255, 216, 61, .12); }
+  .pit-zeichen.pz-arbeit { color: #ffd83d; background: rgba(255, 216, 61, .22); }
+  .pit-zeichen.pz-fertig { color: var(--good); background: rgba(70, 209, 127, .18); }
+
+  /* ---- Der Boxenschirm ---------------------------------------------------------------- */
+  #race-pitscreen { grid-template-rows: auto repeat(5, minmax(0, 1fr)) auto; }
+  .pit-row { display: grid; align-items: center;
+    grid-template-columns: 18px minmax(0, 1.15fr) minmax(0, 1.15fr);
+    gap: clamp(4px, 1vw, 12px);
+    padding: 0 clamp(4px, 1vw, 10px);
+    background: var(--gt3-tile); color: var(--gt3-tile-ink);
+    border-radius: var(--gt3-radius); }
+  .pit-row > .pr-pfeil { font-size: clamp(13px, 2vw, 18px); color: var(--gt3-tile-ink);
+    opacity: 0; }
+  /* GROESSER, auf Bitte. Ein Boxenmenue liest man im Vorbeifahren, und die alten 15 px
+     waren die Groesse einer Kachelbeschriftung - dort steht aber eine Zahl, hier ein Satz,
+     den man treffen muss. */
+  .pit-row > .pr-name { font-size: clamp(12px, 2vw, 20px); font-weight: 700;
+    letter-spacing: .03em; }
+  .pr-wert { font-size: clamp(10px, 1.6vw, 17px); font-family: monospace;
+    text-align: right; color: var(--gt3-strip-ink); }
+  /* Die rechte Spalte traegt jetzt ein BILD und eine Zahl. Das Bild links davon, die Zahl
+     rechtsbuendig - so stehen die Zahlen aller fuenf Zeilen untereinander, und das Auge
+     findet sie ohne zu suchen. */
+  /* DREI FESTE SPALTEN, und das ist die Behebung des gemeldeten Huepfens.
+     `auto` macht eine Spalte so breit wie ihr Text, und "mittel" ist breiter als "weich" -
+     also verschob jeder Wortwechsel die Nachbarspalten, und dort stehen die Farbfelder und
+     die Reifen.
+
+     Aufgeteilt entlang dessen, was die Teile SIND: die Zahl (Prozent, Liter), das Bild
+     (Reifen, Mischungsfelder, Balken) und das Zustandswort. Alle drei in `ch` - eine ch ist
+     die Breite der Ziffer Null, und beide Textspalten sind Schreibmaschinenschrift. Damit
+     haengt die Breite an der Schriftgroesse und nicht am Inhalt.
+
+     8 ch fuer die Zahl (laengster Wert "110 l"), 13 ch fuer den Zustand ("wird gemacht"). */
+  .pr-bild { display: grid; grid-template-columns: 8ch minmax(0, 1fr) 13ch;
+    align-items: center; gap: clamp(4px, .9vw, 10px); min-width: 0; }
+  .pr-zahl { font-size: clamp(10px, 1.6vw, 17px); font-family: monospace;
+    text-align: right; color: var(--gt3-tile-ink); white-space: nowrap; }
+  .pr-bild > .pr-wert { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pit-bar { margin-top: 0; width: 100%; }
+  /* Die vier Reifen in Fahrzeuganordnung, klein: zwei Spalten, zwei Zeilen. Kein Spalt in
+     der Mitte wie im Streifen - hier ist die Zeile 20 px hoch, und ein Spalt darin waere
+     ein Strich und keine Spur. */
+  .pit-t4-feld { display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 2px; width: clamp(20px, 4vw, 30px); justify-self: end; }
+  /* Im Boxenschirm ist ein Reifenfeld rund 20 px breit - 3 px Rahmen waeren dort ein
+     Drittel der Flaeche und die Fuellung nicht mehr zu lesen. */
+  .pit-t4-feld .gt3-t4 { aspect-ratio: 1 / 1.5; --mix-linie: 2px; }
+  /* Die vier Mischungen. Gleich breit, die geltende umrahmt - ein Rahmen und keine
+     Aufhellung, weil weiss und gelb sich nicht aufhellen lassen. */
+  .pit-mix-feld { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px;
+    width: clamp(48px, 11vw, 84px); justify-self: end; }
+  .pit-mix-feld > i { display: block; height: clamp(9px, 1.8vw, 14px); border-radius: 2px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .5); }
+  .pit-mix-feld > i[data-mix="weich"] { background: #e5261e; }
+  .pit-mix-feld > i[data-mix="mittel"] { background: #f7d117; }
+  .pit-mix-feld > i[data-mix="hart"] { background: #f2f4f8; }
+  .pit-mix-feld > i[data-mix="regen"] { background: #2f6fd0; }
+  .pit-mix-feld > i.an { outline: 2px solid var(--gt3-tile-ink); outline-offset: 1px; }
+  /* DIE MARKIERUNG ALS OUTLINE, nicht als Rahmen: sie malt AUSSERHALB des Innenrings, den
+     pit-on/pit-off schon tragen, und kostet kein Layout. Dazu ein Zeichen, weil Farbe
+     allein keine Kennung ist - dieselbe Ueberlegung wie bei den Autofarben. */
+  /* "JA" HELLT DIE GANZE ZEILE AUF, auf Bitte. Der Ring aus pit-on/pit-off sagt
+     dasselbe, aber erst waehrend eines Stopps und nur als 2-px-Linie - die Aufhellung
+     traegt die Antwort auch davor und ist aus dem Augenwinkel zu lesen.
+
+     ALS ZWEITE HINTERGRUNDEBENE und nicht als inset-box-shadow: den traegt pit-on/pit-off
+     schon als Ring, und zwei box-shadow-Deklarationen stapeln sich nicht - die spaetere
+     loescht die fruehere, und der gruene Ring waere weg.
+
+     Die Ebene ist ein Verlauf aus zwei gleichen Farben und keine blosse Farbe, aus dem
+     Grund, der eine Bildschirmhoehe weiter oben bei --gt3-tile steht.
+
+     WEISS UND NICHT SCHWARZ: --gt3-tile ist in allen fuenf Ansichten dunkel und
+     --gt3-tile-ink in allen fuenf hell. Aufhellen entfernt sich also vom Grund und
+     naehert sich nicht der Schrift; der Kontrastlauf misst es nach. */
+  .pit-row.pr-ja {
+    background-image: linear-gradient(rgba(255, 255, 255, .11), rgba(255, 255, 255, .11)),
+                      var(--gt3-tile);
+  }
+  .pit-row.pr-sel { outline: 2px solid var(--gt3-tile-ink); outline-offset: -2px; }
+  .pit-row.pr-sel > .pr-pfeil { opacity: 1; }
+
+  /* ---- Der Rennuebersichts-Schirm ----------------------------------------------------- */
+  /* ZWEI SPALTEN: Tabelle links, Strecke rechts. Das Cockpit ist breit und flach -
+     untereinander bliebe fuer beides zu wenig Hoehe, und die Tabelle waere dann die, die
+     abgeschnitten wird.
+
+     Liegt keine Strecke, faellt die rechte Spalte auf null zusammen (siehe .ov-karte:empty)
+     und die Tabelle nimmt die ganze Breite. Ein leerer Kasten daneben saehe wie ein Fehler
+     aus. */
+  #race-ovscreen {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "kopf kopf" "tab karte" "fuss fuss"; }
+  #race-ovscreen > .schirm-kopf { grid-area: kopf; }
+  #race-ovscreen > .ov-tab { grid-area: tab; }
+  #race-ovscreen > .ov-karte { grid-area: karte; }
+  #race-ovscreen > .schirm-fuss { grid-area: fuss; }
+  .ov-karte { display: grid; place-items: center; min-width: 0; min-height: 0;
+    overflow: hidden; }
+  /* HIER IST DIE HOEHE DIE KNAPPE GROESSE, nicht die Breite - also wird sie gedeckelt und
+     die Breite folgt. Sonst waechst das Bild ueber die Zeile hinaus und wird von
+     .gt3-schirm abgeschnitten.
+
+     EIN STRECKENBILD LIEST SICH NUR, WENN DIE STRASSE DUNKLER IST ALS IHRE UMGEBUNG. Die
+     Fahrbahn ist #14181f, der Schirmgrund #0b0f18 - vier Prozent Unterschied, und gesehen
+     blieb ein Drahtgitter aus Randsteinen ohne Strasse dazwischen. Im Editor faellt das
+     nicht auf, weil dort ein hellerer Panelgrund dahinterliegt. Ein durchscheinendes Weiss
+     statt einer festen Farbe: so hebt es sich in jeder der fuenf Ansichten gleich weit ab,
+     auch in der hellen.
+
+     OHNE !important, seit der Zeichner keinen Inline-Stil mehr schreibt. Hier standen zwei
+     davon, und sie waren keine Vorliebe, sondern die einzige Moeglichkeit gegen einen
+     Inline-Stil. */
+  .ov-karte .tp-karte { max-width: 100%; max-height: 100%; width: auto; height: auto;
+    background: rgba(255, 255, 255, .07); border: 0; border-radius: 4px; }
+  .ov-karte:empty { display: none; }
+  #race-ovscreen:has(.ov-karte:empty) { grid-template-columns: minmax(0, 1fr) 0; }
+  .ov-tab { display: grid; align-content: start; gap: 2px; overflow: hidden;
+    font-family: monospace; font-size: clamp(9px, 1.35vw, 14px); }
+  .ov-zeile { display: grid; align-items: center;
+    grid-template-columns: 1.5em 1.1em minmax(0, 1fr) 2.2em 2.2em 1.4em 4.4em 4.4em 3.8em;
+    gap: clamp(2px, .55vw, 7px);
+    padding: clamp(1px, .35vw, 4px) clamp(3px, .8vw, 8px);
+    background: var(--gt3-tile); color: var(--gt3-tile-ink);
+    border-radius: var(--gt3-radius); }
+  .ov-zeile.ov-ich { outline: 1px solid var(--gt3-tile-ink); outline-offset: -1px; }
+  .ov-pos { color: var(--gt3-strip-ink); }
+  /* Der Farbklecks des Autos, dieselbe Kennung wie in der Garage. */
+  .ov-farbe { width: 1em; height: 1em; border-radius: 50%; align-self: center;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
+  .ov-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ov-runden { text-align: right; }
+  /* Das gelbe P fuer Boxenstopps. Gelb wie im Rennsport, und mit Anzahl statt mehrfach. */
+  .ov-pit { text-align: center; color: #ffd83d; font-weight: 700; }
+  /* Nur die FARBE der Mischung, wie gewuenscht - kein Buchstabe, keine Flaeche. Ein Balken
+     an der Kante, damit er neben einer Ziffernspalte nicht wie ein Wert aussieht. */
+  .ov-mix { width: 100%; height: .82em; border-radius: 2px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.45); }
+  .ov-luecke { text-align: right; }
+  .ov-zeit { text-align: right; color: var(--gt3-strip-ink); }
+  /* Die schnellste Runde des Feldes violett, wie auf einer Zeittafel. */
+  .ov-feldbeste { color: #c77dff; font-weight: 700; }
+  /* Ein Ghost hat kein Reifenmodell: das Feld bleibt leer statt eine Farbe zu erfinden. */
+  .ov-mix-leer { background: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+  /* Die Anzahl der Stopps klein neben dem P. */
+  .ov-pit b { font-size: .78em; font-weight: 700; }
+
   #hud-toast-wrap {
     grid-area: toast; min-height: 0; padding: 0 clamp(4px, 1vw, 10px);
     color: #100c02; font-family: monospace; font-size: clamp(9px, 1.3vw, 13px);
@@ -1564,8 +1956,31 @@
   @media (max-width: 560px) {
     /* Narrow screens: the control drops under its label, but stays inside the same shaded
        band, so the pairing survives the reflow. */
-    .opt-row { grid-template-columns: 1fr; gap: 8px; }
+    /* minmax(0, 1fr) UND NICHT 1fr, und der Unterschied ist der gemeldete Ueberlauf:
+       `1fr` bedeutet `minmax(auto, 1fr)`, und `auto` laesst die Spalte nicht unter den
+       min-content-Bedarf ihres Inhalts fallen. Der ist bei einer Reglerzeile 264 px - ein
+       Schiebeelement von mindestens 90 px, zwei Knoepfe und eine Wertspalte von 58 px -,
+       waehrend die Zeile auf einem 320-px-Schirm nur 230 px breit ist. Die Spalte blieb
+       also 264 px, und der Regler lief 3 px ueber den Bildschirmrand hinaus.
+       Die Regel eine Bildschirmhoehe weiter oben macht es fuer breite Schirme schon richtig;
+       hier war sie ueberschrieben. */
+    .opt-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
     .opt-row > :last-child { justify-self: start; }
+    /* Und der Inhalt muss dann auch WIRKLICH schrumpfen. Ein Flex-Element schrumpft nicht
+       unter seine eigene Mindestbreite, also bekommen die drei Teile hier die Erlaubnis:
+       das Schiebeelement gibt nach (es ist der einzige Teil, der Breite ohne Bedeutung
+       hat), die Wertspalte begnuegt sich mit vier Zeichen statt 58 px. */
+    /* UND DER REGLER MUSS SICH STRECKEN. Die Zeile darueber gibt dem letzten Kind
+       `justify-self: start`, damit ein Schiebeschalter links steht und nicht ueber die
+       halbe Zeile gezogen wird. Fuer eine Reglergruppe heisst `start` aber: nimm deine
+       max-content-Breite und richte sie links aus - die Spaltenbreite gilt dann NICHT
+       mehr, und genau deshalb blieb der Regler bei 233 px in einer 202 px breiten Spalte
+       und lief 3 px ueber den Bildschirmrand. Gemessen, nachdem minmax(0, 1fr) die Spalte
+       schon richtig geschrumpft hatte: die Spalte war schmal, das Kind hielt seine Breite.
+       Also stretch nur fuer die Reglergruppe, start bleibt fuer alles andere. */
+    .opt-row > .opt-slider { justify-self: stretch; min-width: 0; }
+    .opt-slider input[type=range] { min-width: 0; flex: 1 1 auto; }
+    .opt-val { min-width: 4ch; }
   }
 
   /* Touch sizing. Keyed on the POINTER, not on the viewport width: a small window on a
@@ -1706,6 +2121,35 @@
      both are visible at once: the point of the mode is to build while seeing the result.
      Deliberately NOT reusing the racing screen's .race-fs rules: that one rotates the dash
      on a portrait phone, which would rotate the palette out from under the map. */
+  /* ---- Das Streckenbild ---------------------------------------------------------------
+     renderTrackPreview() zeichnet nur noch: viewBox, Fahrbahn, Stossfugen, Randsteine,
+     Punkte. Alles Aeussere steht hier, weil es vom ORT abhaengt und nicht vom Bild.
+
+     DREI ORTE ZEIGEN DASSELBE BILD, und jeder hat andere Randbedingungen:
+       #track-preview-svg   Editor: 520 px breit in der Seite, im Vollbild ohne Deckel
+       #dash-minimap        Streckenreiter: schmal, unter einem Absatz Text
+       .ov-karte            Uebersichtsschirm: die HOEHE ist knapp, nicht die Breite
+
+     Der Grund ist hier --panel-2, weil das Bild in der Seite auf einer Karte liegt. Der
+     Uebersichtsschirm ueberschreibt ihn: dort liegt es auf schwarzem Cockpitgrund, und eine
+     Fahrbahn von #14181f auf #0b0f18 sind vier Prozent Unterschied - gesehen blieb ein
+     Drahtgitter aus Randsteinen ohne Strasse dazwischen. */
+  .tp-karte { background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 6px; }
+  /* Der Streckenreiter: so breit wie die Spalte, gedeckelt. Diese Regel hat vorher gefehlt -
+     #dash-minimap hatte KEIN CSS und hing vollstaendig am Inline-Stil des Zeichners. */
+  #dash-minimap .tp-karte { width: 100%; max-width: 520px; height: auto; }
+  /* Die Vorschau neben der Modellwahl. Gedeckelt in der HOEHE und nicht in der Breite: ein
+     hochkantiges Layout wuerde sonst die halbe Seite fuellen. */
+  /* EINE SPALTE, und das ist keine Kosmetik. .opt-row ist ein Raster
+     `minmax(0,1fr) auto`: die zweite Spalte nimmt ihre max-content-Breite, und eine Karte
+     mit max-width 420px hat davon reichlich. Gemessen brach die Beschriftung daneben auf
+     EIN ZEICHEN pro Zeile um - die 1fr-Spalte kann unter minmax(0,...) beliebig schmal
+     werden, also tat sie es. Eine Karte gehoert unter ihren Text, nicht daneben. */
+  .opt-row.opt-breit { grid-template-columns: minmax(0, 1fr); }
+  .lm-vorschau { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .tp-karte-halter { min-width: 0; }
+  #linemodel-karte .tp-karte { width: 100%; max-width: 420px; max-height: 36vh; height: auto; }
   #track-fs-host { position: relative; }
   /* Feste Hoehe. Vorher wuchs und schrumpfte der Kasten mit dem Streckenumriss: jedes
      hinzugefuegte Teil aenderte die viewBox, damit das Seitenverhaeltnis und damit die
@@ -1715,13 +2159,88 @@
     height: clamp(240px, 42vh, 460px);
     display: grid; place-items: center; overflow: hidden;
   }
-  #track-preview-svg svg { max-height: 100%; max-width: 100%; width: auto; height: auto; }
+  /* Die Deckelung auf 520 px stand bis v0.5.30 im Zeichner. Sie gehoert hierher: sie
+     beschreibt diese Spalte und nicht dieses Bild. */
+  #track-preview-svg .tp-karte { width: 100%; max-width: 520px; height: auto;
+    max-height: 100%; }
+  /* ---- DIE HOEHE IST 100dvh UND NICHT inset: 0 ---------------------------------------
+     Gemeldet: "Streckeneditor im Vollbild auf dem Handy zeigt nicht die Symbole zum
+     Strecke bauen". Die Symbole sind die unterste Rasterzeile, und genau die verschwand.
+
+     DER GRUND: `inset: 0` auf einem position:fixed-Element bemisst sich am LAYOUT-Viewport.
+     Auf einem Telefon ist der hoeher als der sichtbare Bereich, solange die Adresszeile
+     steht - der Host reichte also unter den Bildschirmrand, und die unterste Zeile lag
+     dahinter. Am Rechner faellt das nie auf: dort sind Layout- und sichtbarer Viewport
+     gleich, und gemessen war die Palette bei jeder Fensterhoehe von 340 bis 760 px da.
+
+     Warum die Adresszeile ueberhaupt steht, obwohl requestFullscreen() gerufen wird:
+     enterTrackFullscreen() faengt eine Ablehnung ab und legt die CSS-Klasse TROTZDEM an -
+     mit Absicht, damit das Layout auch ohne echtes Vollbild gilt. Auf iOS gibt es
+     Fullscreen fuer ein div gar nicht, und auf Android kann die Geste abgelehnt werden.
+     Genau in diesen Faellen zaehlt die Adresszeile mit.
+
+     100dvh ist der dynamische Viewport - die Hoehe, die WIRKLICH zu sehen ist. `inset: 0`
+     bleibt als Rueckfall darueber stehen: kennt ein Browser dvh nicht, faellt die
+     height-Zeile weg und bottom: 0 gilt weiter. Steht beides, ist die Lage
+     ueberbestimmt und bottom wird ignoriert - genau die gewuenschte Rangfolge.
+
+     Dazu die untere Sicherheitszone: auf einem iPhone liegt sonst die Bedienleiste des
+     Systems ueber der Palette. */
   body.track-fs #track-fs-host { position: fixed; inset: 0; z-index: 200;
+    height: 100dvh;
     background: var(--bg); display: grid; grid-template-rows: 1fr auto;
-    align-items: center; padding: 8px; gap: 6px; }
-  body.track-fs #track-fs-host > #track-preview-svg { min-height: 0; overflow: hidden;
-    display: grid; place-items: center; }
-  body.track-fs #track-fs-host > #track-preview-svg svg { max-height: 100%; width: auto; }
+    align-items: center; padding: 8px; gap: 6px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  /* HOEHE ZURUECK AUF auto, und das war der zweite Fehler. Der Kasten traegt in der
+     Seite `height: clamp(240px, 42vh, 460px)` - eine feste Hoehe gegen das Springen beim
+     Bauen -, und das Vollbild hat sie nie aufgehoben. Gemessen auf einem 720 px hohen
+     Schirm: die Rasterzeile bot 538 px, die Karte nahm 302 davon (42vh), und
+     `align-items: center` verteilte die restlichen 236 px als Leerraum ueber und unter ihr.
+     Das Vollbild zeigte die Karte also KLEINER als noetig - bei einem Modus, dessen ganzer
+     Zweck es ist, sie gross zu zeigen.
+
+     UND align-self: stretch DAZU. Der Host setzt `align-items: center`, damit die Leisten
+     ueber und unter der Karte mittig sitzen. Fuer die Karte selbst heisst das aber: sie
+     bekommt ihre Inhaltshoehe und nicht die Zeilenhoehe - gemessen blieben so noch 52 der
+     596 px unbenutzt, nachdem die feste Hoehe weg war. Der Ausnahmefall gehoert an die
+     Karte und nicht an den Host: die Leisten sollen mittig bleiben. */
+  body.track-fs #track-fs-host > #track-preview-svg { height: auto; min-height: 0;
+    align-self: stretch; overflow: hidden; display: grid; place-items: center; }
+  /* DER WARNABSATZ GEHOERT NICHT INS VOLLBILD, und das ist der dritte Fehler. Er nahm dort
+     eine eigene Rasterzeile von 52 px - vier Zeilen Prosa ueber fehlende Kacheltypen, die
+     man beim Bauen nicht liest und die der Karte Platz wegnimmt. In der Seite bleibt er
+     stehen, dort ist er richtig.
+
+     Nebenwirkung, und eine erwuenschte: `grid-template-rows: auto 1fr auto` nennt drei
+     Zeilen, in Flusslage waren aber vier Kinder da - die vierte Zeile entstand implizit.
+     Jetzt stimmen Erklaerung und Wirklichkeit ueberein. */
+  body.track-fs #track-fs-host > p { display: none; }
+  /* EIN KNOPF, ZWEI ZUSTAENDE. Die Wahrheit ist die Klasse auf dem body - dieselbe, die
+     das ganze Vollbild-Layout schaltet. Ausdruecklich ohne JS: waere der Zustand hier ein
+     zweites Mal in JavaScript gefuehrt, gaebe es zwei Orte fuer eine Aussage, und einer
+     von beiden wuerde irgendwann nicht mitgezogen. Genau das war der Zustand vorher.
+
+     `revert` heisst "als stuende diese Regel nicht hier" - fuer svg und span also inline,
+     was beide ohne die Regel auch sind. Ein fester Wert waere hier eine zweite Behauptung
+     ueber die Darstellung dieser Elemente. */
+  .tp-fs-aus { display: none; }
+  body.track-fs .tp-fs-ein { display: none; }
+  body.track-fs .tp-fs-aus { display: revert; }
+  /* IM VOLLBILD KEIN DECKEL. Die 520 px sind in der Seite richtig - dort steht die Karte
+     in einer Spalte neben Text - und im Vollbild falsch, wo der Kasten 1264 px breit ist.
+     Gemessen mit einer fast quadratischen Strecke (viewBox 87x91) kostete die Deckelung 520
+     statt 570 px Breite; bei einem breiten Layout ist es mehr als das Doppelte, weil dann
+     die Breite und nicht die Hoehe die bindende Grenze ist.
+
+     UND WARUM 100/100 UND NICHT auto/100: bei `width:auto; height:100%` bestimmt die Hoehe
+     die Groesse, und eine BREITE Strecke laeuft dann waagerecht ueber den Kasten hinaus -
+     der schneidet ab (overflow:hidden), und man sieht die Runde nicht mehr ganz. Mein
+     erster Versuch stand genau so hier und war mit der fast quadratischen Teststrecke nicht
+     zu sehen. Mit 100/100 ist der svg-KASTEN so gross wie die Zeile, und das Einpassen
+     macht preserveAspectRatio - Vorgabe `xMidYMid meet`, also hineinpassen und zentrieren.
+     Das ist bei einem viewBox-svg der Weg, der in beide Richtungen stimmt. */
+  body.track-fs #track-fs-host > #track-preview-svg .tp-karte {
+    max-width: none; width: 100%; height: 100%; }
   /* Everything outside the editor host is irrelevant while building. */
   body.track-fs > header, body.track-fs > nav.tabs { display: none; }
 
@@ -1780,13 +2299,52 @@
   .cm-new { color: var(--warn); font-weight: 700; }
 
   /* ---- Toene in der Doku ---- */
-  .snd-grid { display: grid; gap: 8px; grid-template-columns: 1fr; }
-  @media (min-width: 780px) { .snd-grid { grid-template-columns: 1fr 1fr; } }
-  .snd-row { display: flex; gap: 10px; align-items: center;
+  /* DIESELBE FALLE WIE BEI .opt-row: `1fr` ist `minmax(auto, 1fr)` und schrumpft nicht
+     unter den min-content-Bedarf. Der ist hier 311 px - ein Abspieler von festen 178 px
+     plus das laengste Wort der Beschreibung -, und die Spalte war auf einem 320-px-Schirm
+     nur 230 px breit. Die Zeile lief 81 px aus ihrem Kasten, und 26 davon ueber den
+     Bildschirmrand. Gemeldet als "manche Texte gehen immer noch ueber den Bildschirm
+     hinaus". */
+  .snd-grid { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 780px) {
+    .snd-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  }
+  /* UMBRECHEN statt ueberlaufen. Der Abspieler hat feste 178 px und `flex: none`, kann also
+     nicht nachgeben - dann muss die Beschreibung unter ihn. min-width: 0 dazu, sonst haelt
+     der Textkasten seinerseits sein laengstes Wort als Mindestbreite fest und der Umbruch
+     hilft nichts. */
+  .snd-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
     background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
     padding: 7px 9px; }
-  .snd-row audio { height: 30px; flex: none; width: 178px; }
+  .snd-row audio { height: 30px; flex: none; width: 178px; max-width: 100%; }
+  .snd-row > div { min-width: 0; flex: 1 1 14ch; }
   .snd-row b { font-size: 12.5px; }
+
+  /* ---- Die Buehne der Rennsimulation --------------------------------------------------
+     Karte und Zeittafel nebeneinander, sobald Platz ist. Die Karte ist das Wichtigere -
+     man schaut ein Rennen an -, deshalb bekommt sie die groessere Spalte. */
+  .sim-buehne { display: grid; gap: 10px; padding: 0 14px 14px 14px;
+    grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 760px) {
+    .sim-buehne { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; }
+  }
+  .sim-karte { display: grid; place-items: center; min-width: 0; overflow: hidden; }
+  .sim-karte:empty { display: none; }
+  .sim-karte .tp-karte { width: 100%; height: auto; max-width: 520px; }
+  .sim-tafel { min-width: 0; font-family: monospace; font-size: 12px; }
+  .sim-tafel:empty { display: none; }
+  .sim-tafel table { width: 100%; border-collapse: collapse; }
+  .sim-tafel th, .sim-tafel td { padding: 3px 6px; text-align: right;
+    border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .sim-tafel th:nth-child(2), .sim-tafel td:nth-child(2) { text-align: left; }
+  .sim-tafel th { color: var(--muted); font-weight: 700; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .06em; }
+  /* Der Farbtupfer identifiziert das Auto auf der Karte. Dieselbe Farbe wie sein Punkt -
+     eine Tabelle mit Namen, deren Punkte man nicht zuordnen kann, ist eine Liste. */
+  .sim-tafel i { display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+    margin-right: 6px; vertical-align: -1px; }
+  .sim-tafel tr.sim-fuehrt td { color: var(--text); font-weight: 700; }
+  .sim-tafel .sim-best { color: var(--good); }
 
   /* ---- Home ---- */
   #tab-home { padding: 0; }
@@ -1807,6 +2365,24 @@
     font-size: clamp(21px, 4.4vw, 40px); line-height: 1.14; font-weight: 800;
     letter-spacing: .01em; max-width: 20ch;
     text-shadow: 2px 0 0 var(--glitch-r), -2px 0 0 var(--glitch-c);
+    /* KEINE AUTOMATISCHE TRENNUNG IN DER UEBERSCHRIFT. Global steht hyphens: auto, und fuer
+       Fliesstext ist das richtig - hier zerlegte es "Ge-staltungsfreiheit" und "Bah-n", weil
+       der Browser die erste Silbe noch auf die vorige Zeile zwang. Eine Ueberschrift wird
+       ueberflogen und nicht gelesen; ein Trennstrich darin kostet mehr als eine kuerzere
+       Zeile.
+
+       DIE ZEILEN ERGEBEN SICH AUS DEN WORTGRENZEN, nicht aus <br>: 20ch Breite und ein
+       zusammengehaltenes "Hybrid Bahn" schneiden genau dort, wo es bestellt war -
+       Vollstaendige / Gestaltungsfreiheit / fuer deine Carrera / Hybrid Bahn.
+
+       Warum kein <br>: es zerlegt den Textknoten, und ein zerlegter Textknoten ist nicht
+       mehr uebersetzbar - der englische Satz hat andere Wortgrenzen und braeuchte andere
+       Umbrueche. So bricht jede Sprache an ihren eigenen.
+
+       break-word bleibt als Rueckfall aus der globalen Regel: ein Wort, das auch alleine
+       nicht passt, wird weiter umgebrochen statt ueber den Rand zu laufen. Bei 20ch fuer 19
+       Zeichen tritt der Fall nicht ein, aber die Zusicherung kostet nichts. */
+    hyphens: manual;
   }
   .home-sub {
     position: relative; z-index: 2; margin: 12px 0 0 0; max-width: 46ch;
@@ -2018,10 +2594,20 @@
      something and hear it immediately. */
   .mw-grid { display: grid; gap: 10px 16px; grid-template-columns: 1fr; margin-top: 10px; }
   @media (min-width: 720px) { .mw-grid { grid-template-columns: 1fr 1fr; } }
-  .mw-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
-  .mw-row > label { font-size: 12.5px; }
-  .mw-row .mw-ctl { display: flex; align-items: center; gap: 6px; }
-  .mw-row input[type=range] { width: 116px; }
+  /* minmax(0, ...) IN BEIDEN SPALTEN, und aus demselben Grund wie bei .opt-row und
+     .snd-grid: `1fr` ist `minmax(auto, 1fr)` und `auto` schrumpft nicht unter den
+     min-content-Bedarf, und eine `auto`-Spalte tut es ueberhaupt nicht. Die Reglergruppe
+     dieser Zeile braucht 188 px - 116 fuer das Schiebeelement, 62 fuer den Wert, dazu
+     Abstaende -, und auf einem 320-px-Schirm ragte sie 3 px ueber den Rand.
+     Dieselbe Falle an der dritten Stelle in dieser Datei; wer eine vierte Rasterzeile baut,
+     findet sie hoffentlich hier. */
+  .mw-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+    align-items: center; gap: 8px; }
+  .mw-row > label { font-size: 12.5px; min-width: 0; }
+  .mw-row .mw-ctl { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  /* Das Schiebeelement gibt nach - es ist der einzige Teil der Zeile, dessen Breite keine
+     Bedeutung traegt. */
+  .mw-row input[type=range] { width: 116px; min-width: 0; flex: 1 1 auto; }
   .mw-row select { max-width: 132px; }
   .mw-val { font-family: monospace; font-size: 12px; min-width: 62px; text-align: right;
     color: var(--muted); }
@@ -2095,6 +2681,21 @@
      kept reserving 40px and pushed the fullscreen icon away from the corner. */
   .race-corner button[hidden] { display: none; }
   .race-corner svg { width: 18px; height: 18px; }
+  /* Die linke Ecke traegt das Blaettern. Dieselbe Hoehe wie rechts, damit die zwei Ecken
+     auf einer Linie liegen. */
+  .race-corner-links { left: 6px; right: auto; }
+  /* SCHMALER UND GEDECKTER als die Vollbildknoepfe: eine Nebenbedienung. Sie werden erst
+     beim Zeigen deutlich, damit sie im Fahren nicht ablenken. */
+  .race-corner button.schirm-pfeil { width: 26px; height: 34px;
+    background: rgba(10, 14, 22, .45); opacity: .55; }
+  .race-corner button.schirm-pfeil:hover { opacity: 1; }
+  .race-corner button.schirm-pfeil svg { width: 15px; height: 15px; }
+  /* Ein Punkt je Schirm, der aktive gefuellt. Aus der Schirmliste erzeugt und nicht fest
+     im Markup: ein vierter Schirm soll nicht an zwei Orten nachgetragen werden muessen. */
+  .schirm-punkte { display: flex; align-items: center; gap: 3px; padding: 0 2px; }
+  .schirm-punkte i { width: 4px; height: 4px; border-radius: 50%;
+    background: var(--ink-2); opacity: .35; }
+  .schirm-punkte i.an { opacity: 1; }
 
   /* Recorder. The badge has to be visible while DRIVING, including on the racing
      screen, otherwise it is far too easy to do a whole run with the recorder off. */
@@ -2155,12 +2756,64 @@
      rule below never actually applied and the racing screen just sat inside <main> at its
      normal in-flow size, padding, max-width, the tab bar and a scrollbar all still visible.
      The base rule now lives here instead, so the cascade decides normally. */
+  /* --race-scale wird von cockpitPassung() gesetzt und ist ohne sie 1. Der Kasten wird
+     dabei GROSS gerechnet (Schirmmass geteilt durch den Faktor) und hier heruntergezogen -
+     gerendert kommt genau das Schirmmass heraus, der Inhalt hat aber mehr Platz.
+
+     scale() UND NICHT zoom: unter zoom loesen die vw-Anteile im Cockpit gegen den Schirm
+     auf und wachsen im Rahmen des Elements mit 1/f mit. Gemessen Bedarf zu Platz: 1,36 bei
+     Faktor 1 und 1,20 bei Faktor 0,5 - das konvergiert nicht. */
   body.race-fs #race-dash { position: fixed; inset: 0; z-index: 200; border-radius: 0;
-    display: grid; align-content: center; }
+    display: grid; align-content: center;
+    transform-origin: top left;
+    transform: scale(var(--race-scale, 1)); }
+  /* DIE KURZSCHREIBWEISE STAND HINTER DEN LANGFORMEN, und damit hat sie sie geloescht.
+     Hier stand
+         top: 50%; left: 50%; inset: auto;
+     und inset ist die Kurzform fuer genau diese vier Eigenschaften - was danach kommt,
+     gewinnt. Das Cockpit hatte also top: auto und left: auto und stand an seiner
+     statischen Stelle statt in der Mitte.
+
+     GEMESSEN auf einem Telefon hochkant (412 x 915): das gedrehte Cockpit sass bei
+     x = -182, y = -331, seine Drehzahllampen bei y = -246 - also OBERHALB des Bildrands.
+     Genau das ist "die Lampen oben sind abgeschnitten", und weil das Cockpit dabei quer
+     ueber der Seite lag, ist es auch "ueberlagert sich mit Text in der Mitte". Zwei
+     Meldungen, eine Ursache, und sie sitzt in der Reihenfolge zweier CSS-Zeilen.
+
+     inset: auto steht jetzt VORN: es raeumt die Vorgaben der Regel darueber weg
+     (position: fixed; inset: 0), und danach setzen top und left die Mitte. */
   body.race-fs.race-turn #race-dash {
+    inset: auto;
+    /* Nur der Anfangswert: cockpitPassung() setzt gleich darauf Breite und Hoehe in px,
+       weil 100vh/100vw unter der Skalierung mitschrumpfen wuerden. */
     width: 100vh; height: 100vw;
-    top: 50%; left: 50%; inset: auto;
-    transform: translate(-50%, -50%) rotate(90deg); transform-origin: center; }
+    top: 50%; left: 50%;
+    transform-origin: center;
+    transform: translate(-50%, -50%) rotate(90deg) scale(var(--race-scale, 1)); }
+
+  /* IM GEDREHTEN VOLLBILD FRAGEN DIE MEDIENABFRAGEN DIE FALSCHE ACHSE.
+     Das Cockpit ist dort 915 px breit und 412 px hoch - der SCHIRM aber ist 412 breit und
+     915 hoch, und genau ihn misst @media. Also greift die Schmalregel (max-width: 560px,
+     Streifen zweireihig) und die Flachregel (max-height: 560px, Blende und Fussleisten
+     weg) greift NICHT. Beides andersherum, als es die Lage verlangt.
+
+     GEMESSEN, natuerliche Hoehe des Cockpits ueber seiner Kastenbreite:
+
+         mit den falschen Regeln    415 + 0,294 * B   ->  bei 915 px: 684
+         mit den richtigen Regeln   293 + 0,147 * B   ->  bei 915 px: 428
+
+     Erst mit diesen drei Zeilen gibt es einen Faktor, bei dem der gedrehte Kasten den
+     Schirm fuellt (gemessen 0,95). Ohne sie waeren 0,35 noetig - und darunter ist der
+     Tacho nicht mehr zu entziffern.
+
+     Der richtige Weg dafuer waeren Container-Abfragen; sie wuerden aber jede Regel im
+     Cockpit betreffen, und das ist eine eigene Arbeit. Hier stehen die drei Regeln, die
+     die Flachregel ohnehin schon kennt - ausdruecklich als das, was sie sind. */
+  body.race-fs.race-turn #race-dash { --gt3-blende: 5px; }
+  body.race-fs.race-turn #race-dash .gt3-marke,
+  body.race-fs.race-turn #race-dash .gt3-foot { display: none; }
+  body.race-fs.race-turn #race-dash .gt3-strip {
+    grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
   body.race-fs .race-bar { position: fixed; z-index: 201; top: 8px; left: 8px; }
   body.race-fs.race-turn .race-bar { top: auto; bottom: 8px; left: 8px; }
 
@@ -2294,7 +2947,9 @@
       </svg>
       <div class="home-rain"></div>
       <div class="home-flash" id="home-flash"></div>
-      <h2>Vollst&auml;ndige Gestaltungsfreiheit f&uuml;r deine Carrera&nbsp;Hybrid&nbsp;Bahn</h2>
+      <!-- Die geschuetzten Leerzeichen setzen die Umbrueche: "Hybrid Bahn" bleibt zusammen,
+           "Carrera" darf zu "fuer deine". Siehe die Begruendung bei .home-hero h2. -->
+      <h2>Vollst&auml;ndige Gestaltungsfreiheit f&uuml;r deine Carrera Hybrid&nbsp;Bahn</h2>
       <p class="home-sub">Fahren, abstimmen, Rennen fahren. Im Browser, ohne Installation,
         mit deinem eigenen Streckenaufbau.</p>
       <div class="home-cta">
@@ -2365,7 +3020,15 @@
         <div><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3"/></svg><span>Reifenverschlei&szlig;, Reifentemperatur, Bremstemperatur</span></div>
         <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v5"/></svg><span>Crash-Erkennung mit Vibration und Folgen fürs Handling</span></div>
         <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4a4 4 0 1 0 4 5l-2 2-3-3 2-2a4 4 0 0 0-1-2z"/><path d="M13 11 4 20"/></svg><span>Boxenstopp auf Knopfdruck</span></div>
-        <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10a7 7 0 0 1 14 0v10l-3-2-2 2-2-2-2 2z"/><circle cx="9.5" cy="10" r="1"/><circle cx="14.5" cy="10" r="1"/></svg><span>Autonome Gegner</span></div>
+        <!-- Derselbe Geist wie auf der Einstellungskachel, im 24er Raster. Der alte Pfad
+             hatte rechts vier Bodenzacken und links eine flache Strecke von fuenf Einheiten -
+             die Asymmetrie, die gemeldet wurde. Drei Zacken von je 2,333 statt vier
+             ungleicher: bei 17 px Darstellungsgroesse sind weniger, groessere Formen zu
+             erkennen, vier waren Matsch. Die Augen sind GEFUELLT (die Regel .home-feat svg
+             setzt fill: none, ein Attribut am Kreis selbst schlaegt die Vererbung) - als
+             Ringe von 1 px Durchmesser waren sie bei dieser Groesse nicht zu sehen.
+             linejoin/linecap round, damit die Zacken keine Nadelspitzen bekommen. -->
+        <div><svg viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M5 20V11a7 7 0 0 1 14 0v9l-2.33-2.5-2.34 2.5-2.33-2.5-2.33 2.5-2.34-2.5z"/><circle cx="9.6" cy="11.5" r="1.1" fill="var(--info)" stroke="none"/><circle cx="14.4" cy="11.5" r="1.1" fill="var(--info)" stroke="none"/></svg><span>Autonome Gegner</span></div>
         <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h3l2-6 3 12 3-9 2 5 2-2h3"/></svg><span>Simulierte Motoren und eigene Sounds über Engine-Sim</span></div>
         <div><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="8" width="20" height="10" rx="4"/><path d="M7 13h2M8 12v2M16 13h.01"/></svg><span>Gamepad-Vibration</span></div>
         <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 9-3"/><rect x="5" y="11" width="14" height="9" rx="2"/></svg><span>Open Source, offene Lizenz</span></div>
@@ -2399,6 +3062,22 @@
     </svg>
     <div class="gt3" id="race-dash">
       <div class="race-rain" aria-hidden="true"><i></i><i></i><i></i></div>
+      <!-- BLAETTERN OHNE GAMEPAD, oben LINKS und gegenueber den Vollbildknoepfen: so
+           liegt in jeder Ecke eine Sache, und man greift nicht daneben.
+
+           EIN Pfeil, nicht zwei. Die Schirmliste laeuft ohnehin um - wer beim letzten
+           weiterdrueckt, ist wieder beim ersten -, also ist die zweite Richtung mit dem
+           Finger entbehrlich. Auf dem Steuerkreuz bleiben beide, dort kostet sie nichts.
+           Absichtlich klein und gedeckt: eine Nebenbedienung, kein Instrument. Die Punkte
+           sagen, wo man ist; eine Beschriftung waere breiter als der Knopf. -->
+      <div class="race-corner race-corner-links">
+        <button type="button" class="schirm-pfeil" id="race-screen-next"
+                title="N&auml;chster Schirm" aria-label="N&auml;chster Schirm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5 16 12l-6.5 7"/>
+          </svg></button>
+        <span class="schirm-punkte" id="race-screen-dots" aria-hidden="true"></span>
+      </div>
       <div class="race-corner">
         <button type="button" id="race-fs" title="Vollbild" aria-label="Vollbild">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -2566,10 +3245,13 @@
                schiebt. Letzteres entspricht der Geste auf dem Steuerkreuz, man muss die
                Belegung also nicht wissen, sondern sieht sie.
 
-               OBEN ist VORN, weil "hoch" auf dem Kreuz die Balance nach vorn nimmt. Eine
-               Skala, deren Richtung der Geste widerspricht, waere schlimmer als keine. -->
+               OBEN IST VORN. Die Begruendung dafuer war "hoch auf dem Kreuz nimmt die
+               Balance nach vorn", und seit v0.5.18 liegt die Balance nicht mehr auf dem
+               Kreuz. Die Richtung bleibt trotzdem, und zwar aus einem staerkeren Grund: sie
+               ist dieselbe wie beim Regler in den Optionen, dessen rechtes Ende "mehr vorn"
+               heisst, und dieselbe wie die Fahrzeugachse, an der man sie denkt. -->
           <div class="gt3-trim-row gt3-bias" id="race-bias-row"
-               title="Bremsbalance, Anteil vorn. Ziehen oder Steuerkreuz hoch/runter">
+               title="Bremsbalance, Anteil vorn. Ziehen oder Regler in den Optionen">
             <svg viewBox="0 0 14 24" aria-label="Bremsbalance, Anteil vorn"
                  preserveAspectRatio="none">
               <path d="M7 2.5V21.5" stroke="rgba(255,255,255,.30)" stroke-width="2.2"
@@ -2585,7 +3267,7 @@
                Reifen: eine Scheibe steckt in der Felge, und die Zuordnung vorn/hinten
                ist dort dieselbe wie beim Reifen. Zweimal dasselbe waere in einer
                77-px-Kachel Platzverschwendung. -->
-          <div class="gt3-trim-row" title="Lenkansprechen (Steuerkreuz links/rechts)">
+          <div class="gt3-trim-row" title="Lenkansprechen (Steuerkreuz hoch/runter)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
                  stroke-linecap="round" aria-label="Lenkansprechen"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.4"/><path d="M12 3.5v6M6.2 17.4l4.2-3.1M17.8 17.4l-4.2-3.1" stroke="var(--bad)"/></svg>
             <b id="race-trim-steer">100%</b>
@@ -2629,6 +3311,82 @@
            data-i18n-skip>t1p.de/omegasim</a>
         <span data-i18n-skip>OmegaSim</span>
       </div>
+      <!-- ZWEI ZUSAETZLICHE SCHIRME, im Markup und NICHT zur Malzeit erzeugt: der
+           Selbsttest "Cockpit-Ansicht: sichtbar verschieden, funktional gleich" verlangt,
+           dass die Zahl der Elemente mit id ueber alle Ansichten konstant ist. Gefuellt
+           werden nur die Werte. -->
+      <div class="gt3-schirm" id="race-pitscreen">
+        <!-- DAS P IST DIE ZUSTANDSANZEIGE, nicht nur ein Zeichen: grau wenn nichts
+             laeuft, gelb in der Boxengasse, gruen wenn fertig. Damit steht die Farbe dort,
+             wo das Auge ohnehin zuerst hinsieht, und nicht nur im Wort daneben. -->
+        <div class="schirm-kopf pit-kopf">
+          <span class="pit-zeichen" id="pit-zeichen" aria-hidden="true">P</span>
+          <span class="pit-kopf-text"><b>Box</b><span class="wip-tag">WIP</span>
+            <span id="pit-kopf-lage" data-i18n-skip>aus</span></span>
+          <span style="margin-left:auto" id="pit-kopf-zeit" data-i18n-skip></span></div>
+        <div class="pit-row" id="pit-row-go">
+          <span class="pr-pfeil" aria-hidden="true">&#9656;</span>
+          <span class="pr-name">Boxenstopp einleiten</span>
+          <span class="pr-bild">
+            <span class="pr-zahl" id="pit-zahl-go" data-i18n-skip></span>
+            <span></span>
+            <span class="pr-wert" id="pit-wert-go" data-i18n-skip>&ndash;</span></span></div>
+        <div class="pit-row pit-tile" id="pit-row-tyres" data-pit="tyres">
+          <span class="pr-pfeil" aria-hidden="true">&#9656;</span>
+          <span class="pr-name">Reifen wechseln</span>
+          <span class="pr-bild">
+            <span class="pr-zahl" id="pit-zahl-tyres" data-i18n-skip></span>
+            <!-- DASSELBE BILD wie die Kachel im Streifen: Fuellhoehe ist Restprofil, Farbe
+                 die Temperatur, Rahmen die Mischung. Eigene ids, weil ein Dokument keine
+                 doppelten tragen darf - die Werte schreibt derselbe Takt. -->
+            <span class="pit-t4-feld">
+              <i class="gt3-t4" id="pit-tyre-fl"><b></b></i>
+              <i class="gt3-t4" id="pit-tyre-fr"><b></b></i>
+              <i class="gt3-t4" id="pit-tyre-rl"><b></b></i>
+              <i class="gt3-t4" id="pit-tyre-rr"><b></b></i>
+            </span>
+            <span class="pr-wert" id="pit-wert-tyres" data-i18n-skip>&ndash;</span></span></div>
+        <div class="pit-row" id="pit-row-mix">
+          <span class="pr-pfeil" aria-hidden="true">&#9656;</span>
+          <span class="pr-name">Reifenwahl</span>
+          <span class="pr-bild">
+            <span class="pr-zahl" id="pit-zahl-mix" data-i18n-skip></span>
+            <!-- ALLE VIER, damit man den Vorrat sieht und nicht nur die Wahl. Die geltende
+                 ist umrahmt; mit der Waehltaste schaltet man durch. -->
+            <span class="pit-mix-feld">
+              <i data-mix="weich"></i><i data-mix="mittel"></i>
+              <i data-mix="hart"></i><i data-mix="regen"></i>
+            </span>
+            <span class="pr-wert" id="pit-wert-mix" data-i18n-skip>&ndash;</span></span></div>
+        <div class="pit-row pit-tile" id="pit-row-refuel" data-pit="refuel">
+          <span class="pr-pfeil" aria-hidden="true">&#9656;</span>
+          <span class="pr-name">Tanken</span>
+          <span class="pr-bild">
+            <span class="pr-zahl" id="pit-zahl-refuel" data-i18n-skip></span>
+            <span class="gt3-bar pit-bar"><i id="pit-bar-refuel"></i></span>
+            <span class="pr-wert" id="pit-wert-refuel" data-i18n-skip>&ndash;</span></span></div>
+        <div class="pit-row pit-tile" id="pit-row-repair" data-pit="repair">
+          <span class="pr-pfeil" aria-hidden="true">&#9656;</span>
+          <span class="pr-name">Reparieren</span>
+          <span class="pr-bild">
+            <span class="pr-zahl" id="pit-zahl-repair" data-i18n-skip></span>
+            <span class="gt3-bar pit-bar"><i id="pit-bar-repair"></i></span>
+            <span class="pr-wert" id="pit-wert-repair" data-i18n-skip>&ndash;</span></span></div>
+        <div class="schirm-fuss" id="pit-fuss" data-i18n-skip></div>
+      </div>
+
+      <div class="gt3-schirm" id="race-ovscreen">
+        <div class="schirm-kopf"><b>Rennen</b><span class="wip-tag">WIP</span><span id="ov-kopf-lage" data-i18n-skip>&ndash;</span>
+          <span style="margin-left:auto" id="ov-kopf-runde" data-i18n-skip></span></div>
+        <div class="ov-tab" id="ov-tab"></div>
+        <!-- DIE STRECKE NEBEN DER TABELLE, nicht darunter: das Cockpit ist breit und flach,
+             und untereinander bliebe fuer beides zu wenig Hoehe. Leer und verborgen, solange
+             keine Strecke liegt - ein leerer Kasten neben der Tabelle saehe wie ein Fehler
+             aus. -->
+        <div class="ov-karte" id="ov-karte" data-i18n-skip></div>
+        <div class="schirm-fuss" id="ov-fuss" data-i18n-skip></div>
+      </div>
+
       <div class="gt3-banner" id="hud-toast-wrap"><span id="hud-toast"></span></div>
     </div>
 
@@ -2650,8 +3408,10 @@
         (das Steuerkreuz), kursives Grau hei&szlig;t &bdquo;nicht belegt&ldquo;. Touchpad
         und PS-Taste bleiben ab Werk frei, weil das System beide selbst abgreift: ein
         Tippen aufs Touchpad l&ouml;st zugleich einen Klick in der Seite aus. Im
-        Streckeneditor und bei scharfem Boxenstopp bedient das Steuerkreuz erst diese,
-        danach gilt wieder das Gezeigte.
+        Streckeneditor und auf dem Boxenschirm bedient das Steuerkreuz erst diese, danach
+        gilt wieder das Gezeigte. Dasselbe gilt f&uuml;r die Flaggentaste: auf dem
+        Boxenschirm w&auml;hlt sie dort aus, und die gelbe Flagge gibt es nach dem
+        Zur&uuml;ckbl&auml;ttern.
       </p>
       <div class="pad-wrap">
       <svg viewBox="0 0 1000 660" class="pad-svg" role="img"
@@ -4232,6 +4992,20 @@
         <div class="snd-row"><audio controls preload="none" src="audio/mc12_mid.ogg"></audio><div><b>Maserati MC12 (6.0 V12, 65 Grad), Mittelband (5500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/mc12_high.ogg"></audio><div><b>Maserati MC12 (6.0 V12, 65 Grad), oberes Band (7800/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/mc12_over.ogg"></audio><div><b>Maserati MC12 (6.0 V12, 65 Grad), Schub (5500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/countach_idle.ogg"></audio><div><b>Lamborghini Countach LP500 (5.0 V12, 60 Grad, sechs Weber), Leerlauf (900/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/countach_low.ogg"></audio><div><b>Lamborghini Countach LP500 (5.0 V12, 60 Grad, sechs Weber), Zwischenband (1353/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/countach_low2.ogg"></audio><div><b>Lamborghini Countach LP500 (5.0 V12, 60 Grad, sechs Weber), Zwischenband (2035/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/countach_low3.ogg"></audio><div><b>Lamborghini Countach LP500 (5.0 V12, 60 Grad, sechs Weber), Zwischenband (3060/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/countach_mid.ogg"></audio><div><b>Lamborghini Countach LP500 (5.0 V12, 60 Grad, sechs Weber), Mittelband (4600/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/countach_high.ogg"></audio><div><b>Lamborghini Countach LP500 (5.0 V12, 60 Grad, sechs Weber), oberes Band (7500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/countach_over.ogg"></audio><div><b>Lamborghini Countach LP500 (5.0 V12, 60 Grad, sechs Weber), Schub (4600/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/impreza99_idle.ogg"></audio><div><b>Subaru Impreza WRX STI 1999 (EJ20 2.0 Boxer-4, Turbo), Leerlauf (850/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/impreza99_low.ogg"></audio><div><b>Subaru Impreza WRX STI 1999 (EJ20 2.0 Boxer-4, Turbo), Zwischenband (1267/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/impreza99_low2.ogg"></audio><div><b>Subaru Impreza WRX STI 1999 (EJ20 2.0 Boxer-4, Turbo), Zwischenband (1889/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/impreza99_low3.ogg"></audio><div><b>Subaru Impreza WRX STI 1999 (EJ20 2.0 Boxer-4, Turbo), Zwischenband (2817/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/impreza99_mid.ogg"></audio><div><b>Subaru Impreza WRX STI 1999 (EJ20 2.0 Boxer-4, Turbo), Mittelband (4200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/impreza99_high.ogg"></audio><div><b>Subaru Impreza WRX STI 1999 (EJ20 2.0 Boxer-4, Turbo), oberes Band (7500/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/impreza99_over.ogg"></audio><div><b>Subaru Impreza WRX STI 1999 (EJ20 2.0 Boxer-4, Turbo), Schub (4200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
       </div>
       <p class="muted" style="font-size:11.5px">
         Vollst&auml;ndige Herkunftsangaben in <code>audio/CREDITS.md</code>.
@@ -4323,12 +5097,15 @@
         nicht Aktor</h3>
       <p class="muted">
         Das Einspurmodell rechnet Schwimmwinkel, Gierrate und Achsschraeglaufwinkel aus
-        Lenkwinkel und Tempo. Sein Ergebnis darf die Lenkung nicht stellen, und der Grund ist
-        keine Vorsicht, sondern eine Tatsache: das Modellauto rutscht nicht. Ein Modell, das
-        eine Bewegung berechnet, die das Fahrzeug nicht ausfuehren kann, wuerde die
-        Lenkvorgabe von der Wirklichkeit wegdrehen &ndash; das Auto faehrt geradeaus, waehrend
-        die Simulation eine Drift meldet, und die App korrigiert eine Bewegung, die es nicht
-        gibt.
+        Lenkwinkel und Tempo. Sein Ergebnis darf die Lenkung nicht stellen. Hier stand als
+        Begruendung &bdquo;das Modellauto rutscht nicht&ldquo;, und das ist seit v0.5.18
+        berichtigt: auf rutschigem Boden bricht es aus, wenn man aus dem Stand direkt Vollgas
+        gibt. Was gilt, ist eine feinere Aussage &ndash; dieses Modell rechnet den
+        Kurvenschraeglauf, also das Wegdriften aus Seitenkraft bei Kurvenfahrt, und beobachtet
+        sind durchdrehende Raeder aus dem Stand. Das sind zwei verschiedene Bewegungen, und
+        die eine gegen die andere zu regeln waere die Korrektur von etwas, das gerade nicht
+        stattfindet. Der Drift-Modus regelt deshalb gegen das gemessene Drehsignal des Autos
+        und nicht gegen dieses Modell.
       </p>
       <p class="muted">
         Es darf zeigen und begrenzen. Beides ist ehrlich, und beides ist neu: ein
@@ -4630,6 +5407,14 @@
           <div style="margin-top:6px">Aktueller Deckel:
             <b id="lat-cap">&ndash;</b> <span class="muted" id="lat-cap-src"></span></div>
         </div>
+        <!-- DIE PROBE VOR DEM REGLER. Sie faehrt NICHT selbst: der Nutzer gibt Gas, sie
+             schaut vier Sekunden zu. Alles andere waere eine Fahrbewegung, die jemand
+             ausloest, der nicht am Tisch sitzt. -->
+        <div class="row" style="gap:10px; margin:10px 0; align-items:center; flex-wrap:wrap">
+          <button type="button" id="drift-probe">Drift-Probe (4&nbsp;s)</button>
+          <span class="muted" id="drift-probe-out" data-i18n-skip
+                style="font-size:11.5px; max-width:52ch"></span>
+        </div>
         <div class="row" style="gap:14px; align-items:baseline; flex-wrap:wrap">
           <div><span class="hud-label">Lenkanteil</span><br>
             <span class="cm-now" id="lat-now">0.00</span></div>
@@ -4913,6 +5698,11 @@
         <strong>Klick auf eine Zeile l&auml;sst die Lichter dieses Autos blinken</strong>, damit du
         siehst, welches Auto in der Liste welches auf dem Tisch ist.
       </p>
+      <!-- Der Hinweis steht VOR dem Knopf und nicht in einer Fehlermeldung danach: wer
+           die App ueber das WLAN vom Host-Programm holt, hat gar kein Web Bluetooth, und
+           das soll er sehen, bevor er dreimal auf "Auto verbinden" drueckt. Leer und
+           unsichtbar, solange alles in Ordnung ist. -->
+      <p id="gar-bt-lage" class="gar-warnung" hidden data-i18n-skip></p>
       <div class="row" style="gap:8px; margin-bottom:14px">
         <button class="primary" id="gar-connect">Auto verbinden</button>
         <button id="gar-disconnect-all">Alle trennen</button>
@@ -5081,9 +5871,13 @@
           und h&auml;lt die Seite seines Startplatzes, ohne dass du etwas anfassen musst
           &ndash; die Bremse gilt trotzdem, damit du anhalten kannst, wenn vor dir jemand
           steht. Im Cockpit steht dann &bdquo;Einf&uuml;hrungsrunde &middot;
-          Autopilot&ldquo;. Frei ist es beim ersten &Uuml;berfahren von Start/Ziel, von wem
-          auch immer &ndash; ein Ghost darf es sein. Danach f&auml;hrt jeder nach seinen
-          Einstellungen, und die Lenkung ist wieder deine. Nur in der Stellung
+          Autopilot&ldquo;. Frei ist es, wenn das erste Auto Start/Ziel zum zweiten
+          Mal &uuml;berf&auml;hrt &ndash; ein Ghost darf es sein. Warum zweimal: zwischen
+          der ersten und der zweiten &Uuml;berfahrt desselben Autos liegt immer eine
+          volle Runde, egal wo es gestanden hat. Bei einer einzigen &Uuml;berfahrt war die
+          Einf&uuml;hrungsrunde vorbei, bevor sie anfing, wenn ein Auto auf oder kurz vor dem
+          Zielstreifen stand. Danach f&auml;hrt jeder nach seinen Einstellungen, und die
+          Lenkung ist wieder deine. Nur in der Stellung
           &bdquo;Auf der Bahn&ldquo;: im Ausdruck-Modus h&auml;lt sich das Auto nicht selbst
           auf der Bahn, und ein Autopilot ohne Querregelung w&uuml;rde es in die
           Bande fahren.</small></div>
@@ -5095,14 +5889,19 @@
         <p class="muted" style="font-size:11.5px; margin:6px 0 0 0">
           Zwei benachbarte Pl&auml;tze fahren in der Einf&uuml;hrungsrunde versetzt, also als
           Zweierkolonne. Die Runde l&auml;uft mit Boxengassen-Tempo; sobald das erste Auto
-          Start/Ziel &uuml;berf&auml;hrt, ist das Limit weg. Aufstellen musst du von Hand
+          Start/Ziel zum zweiten Mal &uuml;berf&auml;hrt, ist das Limit weg. Aufstellen musst du von Hand
           &ndash; ein Auto auf die Bahn setzen kann die App nicht. Dein eigenes Auto steht
           mit in der Liste und verschiebt damit, auf welche Seite die Ghosts hinter dir
           gehen.
         </p>
       </div>
 
-      <div class="opt-row"><div class="opt-label">Wetter zu Beginn</div>
+      <div class="opt-row"><div class="opt-label">Wetter zu Beginn
+          <small>Trocken, Regen &ndash; oder wechselhaft: dann beginnt es trocken, und alle
+          2 bis 6 Minuten f&auml;llt ein Schauer von 1 bis 3 Minuten. Beide Zeiten werden je
+          Phase neu gezogen. Bei einem kurzen Rennen kann es sein, dass man keinen Schauer
+          sieht &ndash; ein Schauer h&auml;ngt nicht daran, wie viele Runden gefahren
+          werden.</small></div>
         <div class="wx-pick" id="race-wx-pick">
           <button type="button" data-wx="dry" title="Trocken" aria-label="Trocken">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
@@ -5115,13 +5914,28 @@
               <path d="M6.5 14a4 4 0 0 1 .4-8 5.5 5.5 0 0 1 10.5 1.4A3.6 3.6 0 0 1 17.5 14z"/>
               <path d="M8 17.5l-1 2.5M12 17.5l-1 2.5M16 17.5l-1 2.5"/>
             </svg></button>
+          <!-- WECHSELHAFT: Sonne HINTER der Wolke und ein einzelner Tropfen. Das Symbol muss
+               "mal so, mal so" sagen und nicht "ein bisschen Regen" - deshalb sind beide
+               Zeichen der anderen zwei Knoepfe darin zu erkennen. -->
+          <button type="button" data-wx="wechsel" title="Wechselhaft" aria-label="Wechselhaft">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                 stroke-linecap="round" aria-hidden="true">
+              <circle cx="16.5" cy="7" r="2.8"/>
+              <path d="M16.5 1.6v1.6M21.9 7h-1.6M20.3 2.9l-1.1 1.1M20.3 11.1l-1.1-1.1"/>
+              <path d="M5.5 17a3.6 3.6 0 0 1 .4-7.2 5 5 0 0 1 9.5 1.3A3.2 3.2 0 0 1 15 17z"/>
+              <path d="M8 19.5l-.8 2.2M13 19.5l-.8 2.2"/>
+            </svg></button>
         </div>
         <select id="race-wx-start" hidden style="display:none">
           <option value="dry" selected>Trocken</option>
           <option value="rain">Regen</option>
+          <option value="wechsel">Wechselhaft</option>
         </select></div>
       <div class="opt-row"><div class="opt-label">Wetter &auml;ndert sich
-          <small>Wechselt einmal zu einem zuf&auml;lligen Zeitpunkt.</small></div>
+          <small>Wechselt einmal zu einem zuf&auml;lligen Zeitpunkt. Bei &bdquo;wechselhaft&ldquo;
+          bleibt dieser Schalter ohne Wirkung: dort wechselt es ohnehin laufend, und ein
+          zus&auml;tzlicher Wechsel mitten im Schauer w&uuml;rde die Phasen durcheinander
+          bringen.</small></div>
         <label class="tgl"><input type="checkbox" id="race-wx-change"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Pflichtboxenstopps</div>
         <select id="race-pit-required">
@@ -5231,8 +6045,25 @@
           <span>Motorsound, Ambience, Lautst&auml;rken &ndash; und die Motorwerkstatt.</span>
         </button>
         <button class="misc-tile subpage-open" data-sub="opt-ghosts">
+          <!-- SYMMETRISCH NEU GEZEICHNET. Der alte Pfad war an drei Stellen schief, und
+               eine davon war ein Fehler und keine Geschmacksfrage:
+
+                 M24 6 c-8 0 -13 6 -13 14   linke Schulter
+                       ... c0-8 -1-14 -9-14  rechte Schulter, ANDERE Kurve
+                 ... 4 4 5 4                der letzte Bodenzacken ging nach UNTEN
+                                            (auf y=44) statt auf die Grundlinie y=40 -
+                                            die rechte untere Ecke hing also 4 Einheiten
+                                            unter der Figur.
+
+               Jetzt: die Kuppel ist ein echter Halbkreis (a13 13 0 0 1 26 0, Mittelpunkt
+               24/18), also spiegelsymmetrisch von selbst statt aus zwei Kurven
+               zusammengesetzt. Der Boden hat drei Zacken von je 4,333 Einheiten, deren
+               Taeler bei 32,67 / 24 / 15,33 und deren Spitzen bei 37 / 28,33 / 19,67 / 11
+               liegen - beide Folgen spiegeln sich um die Mitte 24. Die sechs Schritte
+               summieren sich auf genau 26, sonst schliesst der Pfad nicht auf der
+               Grundlinie. -->
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M24 6c-8 0-13 6-13 14v20l5-4 4 4 4-4 4 4 5 4V20c0-8-1-14-9-14z"/><circle cx="19" cy="21" r="2.2" fill="currentColor"/><circle cx="29" cy="21" r="2.2" fill="currentColor"/></svg>
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 42V18a13 13 0 0 1 26 0v24l-4.33-4-4.34 4-4.33-4-4.33 4-4.34-4z"/><circle cx="19.5" cy="19" r="2.4" fill="currentColor"/><circle cx="28.5" cy="19" r="2.4" fill="currentColor"/></svg>
           <b>Autonome Gegner</b>
           <span>Ghosts: Tempo, Linie, Rennw&uuml;rze, Lernen. Teilweise noch im Aufbau.</span>
         </button>
@@ -5264,7 +6095,8 @@
           wie es aussieht, nicht was eine Farbe sagt. Die Voreinstellungen fassen die Ansicht
           nicht an.</small></div>
         <select id="setting-cockpit" data-preset-skip>
-          <option value="gt3" selected>GT3 (Vorgabe)</option>
+          <option value="omega" selected>Omega (Vorgabe)</option>
+          <option value="gt3">GT3: schwarze Kacheln (WIP)</option>
           <option value="retro">Oldschool, 1980er</option>
           <option value="modern">Modern, 2000er (hell)</option>
           <option value="klassiker">Klassiker: Walnuss und Chrom</option>
@@ -5279,7 +6111,35 @@
           Am 26.08. mit der Original-App gemessen: ein Ausdruck wird nur in der Stellung Aus
           erkannt. Beides zugleich gibt es nicht.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-ontrack" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Physik-Modus aktivieren<small>Aus: rohe Stickstellung, ohne Gänge.</small></div><label class="tgl"><input type="checkbox" id="phys-enable" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Fahrgef&uuml;hl
+          <small>Physik: Drehmoment, G&auml;nge, Reibkreis &ndash; die Vorgabe. Aus: rohe
+          Stickstellung ohne G&auml;nge, wie ein Fernsteuerungsauto. Drift: rohes Gas wie
+          bei &bdquo;Aus&ldquo;, dazu ein automatisches Gegensteuern gegen das gemessene
+          Drehsignal des Autos und eine weichere Lenkung. Der Drift-Modus ist experimentell,
+          und die Zeile darunter sagt, warum.</small></div>
+        <select id="phys-mode">
+          <option value="physik" selected>Physik</option>
+          <option value="aus">Aus, rohe Stickstellung</option>
+          <option value="drift">Drift (experimentell)</option>
+        </select></div>
+      <div class="opt-row"><div class="opt-label">Gegensteuern im Drift
+          <span class="wip-tag">experimentell</span>
+          <small>Wie stark gegen das Ausbrechen gelenkt wird, gemessen am Drehsignal aus
+          Byte 3 der Meldungen. 50 Prozent entspricht der Vorgabe, nach der gefragt wurde.
+          Was daran unsicher ist, und zwar beides zugleich: das Signal ist unbest&auml;tigt
+          &ndash; es schwankt erst, wenn das Auto f&auml;hrt, und wechselte in genau einer
+          Aufnahme das Vorzeichen mit der Kurvenrichtung. Und es ist unkalibriert: sein
+          Ma&szlig;stab wird selbst nachgef&uuml;hrt, weil die wirkliche Amplitude unbekannt
+          ist. Deshalb h&auml;ngt die St&auml;rke davon ab, welchen gr&ouml;&szlig;ten
+          Gierwert die Sitzung bisher gesehen hat. Der Knopf &bdquo;Drift-Probe&ldquo; unter
+          &bdquo;Querablage messen&ldquo; misst, ob das Signal bei gerader Vollgasfahrt
+          &uuml;berhaupt ausschl&auml;gt.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-countersteer" min="0" max="1" step="0.05" value="0.5">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-countersteer-val">50%</span>
+        </div></div>
       
       <!-- Die Vibration stand hier und hat seit v0.5.15 eine eigene Kategorie weiter
            unten - sie ist ein Kapitel und keine Zeile, seit jeder Ausloeser seinen
@@ -5313,9 +6173,22 @@
 <div class="opt-head">Controller-Vibration <span class="wip-tag">WIP</span></div>
       <div class="opt-row"><div class="opt-label">Vibration &uuml;berhaupt
           <small>Der Hauptschalter. Steht er aus, brummt nichts, egal was darunter
-          angekreuzt ist. Standard aus, weil nicht jeder Controller einen R&uuml;ttler hat.
-          Das Handy vibriert nicht mit, das Protokoll kennt daf&uuml;r nichts.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-vibration"><span></span></label></div>
+          angekreuzt ist. Seit v0.5.18 ist er standardm&auml;&szlig;ig an. Vorher stand er
+          aus, und damit kamen auch die Vorgaben darunter nie zum Tragen &ndash; gemeldet
+          wurde das als &bdquo;Vibration geht nicht&ldquo;. Wer keinen R&uuml;ttler hat,
+          merkt von einem angeschalteten Hauptschalter nichts. Das Handy vibriert nicht mit,
+          das Protokoll kennt daf&uuml;r nichts.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-vibration" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">R&uuml;tteln testen
+          <small>L&ouml;st einen Sto&szlig; aus und schreibt daneben, was dabei vorgefunden
+          wurde: wieviele Controller das System meldet, welche davon einen R&uuml;ttler
+          haben, welche Zuordnung sie tragen und ob der Sto&szlig; angenommen oder abgelehnt
+          wurde. Aus &bdquo;geht nicht&ldquo; wird damit eine Messung.</small></div>
+        <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end">
+          <button type="button" id="vib-test">Testen</button>
+          <span class="muted" id="vib-test-out" data-i18n-skip
+                style="font-size:11px; text-align:right; max-width:34ch"></span>
+        </div></div>
       <div class="opt-row"><div class="opt-label">Gangwechsel
           <small>Kurz und leicht bei jedem Schalten, beim Leerlauf und beim
           R&uuml;ckw&auml;rtsgang. Sechs Gangwechsel in drei Sekunden mit einem langen
@@ -5347,6 +6220,23 @@
           <small>Wetterwechsel und leerer Tank. Standard aus: das sind Nachrichten und
           keine Kr&auml;fte am Auto &ndash; wer sie will, bekommt sie hier.</small></div>
         <label class="tgl"><input type="checkbox" id="vib-meldung"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Trigger-Vibration
+          <span class="wip-tag">experimentell</span>
+          <small>Zus&auml;tzlich zu den Griffmotoren: regelt das ABS, brummt der linke
+          Trigger &ndash; das ist die Bremse. Beim Schalten der rechte. Standard an. Warum
+          experimentell: die adaptiven Trigger eines DualSense sind &uuml;ber die
+          Gamepad-Schnittstelle gar nicht erreichbar, und die Effektart
+          &bdquo;trigger-rumble&ldquo; stellt Chrome vor allem f&uuml;r Xbox-Controller
+          bereit. Die Zeile darunter liest aus, was dein Controller wirklich annimmt. Kann
+          er es nicht, passiert nichts, und zwar ausdr&uuml;cklich ohne ersatzweises Brummen
+          in den Griffen &ndash; das w&uuml;rde vort&auml;uschen, die Trigger h&auml;tten
+          reagiert.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-trigger" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Was dein Controller kann
+          <small>Ausgelesen, nicht angenommen. Leer, solange kein Controller gemeldet
+          ist &ndash; einmal eine Taste dr&uuml;cken.</small></div>
+        <span class="muted" id="vib-trigger-lage" data-i18n-skip
+              style="font-size:11px; text-align:right; max-width:34ch"></span></div>
 <div class="opt-head">Akku <span class="wip-tag">WIP</span></div>
       <div class="opt-row"><div class="opt-label">Leistung über Akkulaufzeit konstant halten<small>Drosselt bei vollem Akku. Der Akkuwert ist eine unkalibrierte Schätzung.</small></div><label class="tgl"><input type="checkbox" id="setting-battery-comp"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Referenz-Akkustand</div>
@@ -5564,12 +6454,26 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-fuelweight-val">100%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Reifen: Temperatur &amp; Verschlei&szlig;<small>Kalt nach Start und Boxenstopp, abgenutzt nach hartem Stint. Links = aus.</small></div>
+      <div class="opt-row"><div class="opt-label">Reifen: Temperatur &amp; Verschlei&szlig;<small>Kalt nach Start und Boxenstopp, abgenutzt nach hartem Stint. Links = aus. Bis v0.5.17 stand der Regler beim Laden auf 0 und das Modell trotzdem auf 200 Prozent &ndash; ein einziges Antippen lie&szlig; das Fahrverhalten springen. Beide sagen jetzt dasselbe, und die Vorgabe ist das volle Modell.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="setting-tyres" min="0" max="2" step="0.05" value="0">
+          <input type="range" id="setting-tyres" min="0" max="2" step="0.05" value="1">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="setting-tyres-val">200%</span>
+          <span class="opt-val" id="setting-tyres-val">100%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Mischungsunterschied
+          <span class="wip-tag">WIP</span>
+          <small>Wie stark sich weich, mittel, hart und Regen unterscheiden. Der Regler bewegt
+          alle Werte zugleich &ndash; Grip und Verschlei&szlig; &ndash; und zwar als
+          Abstand zum Mittelreifen. Bei 0 rechnen alle drei Slicks wie mittel, bei 100 Prozent
+          gilt die Tabelle, dar&uuml;ber ist der Unterschied gr&ouml;&szlig;er als im
+          Rennsport. Steht die Reifensimulation dar&uuml;ber auf aus, fahren ohnehin alle den
+          Mittelreifen, egal was hier steht.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-tyre-mix" min="0" max="2" step="0.05" value="1">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-tyre-mix-val">100%</span>
         </div></div>
       
 
@@ -5636,12 +6540,37 @@
         </div></div>
 
 <div class="opt-head">Lenkung &amp; Feinabstimmung</div>
-      <div class="opt-row"><div class="opt-label">Lenkansprechen<small>Auch auf dem Steuerkreuz links/rechts. Der volle Lenkeinschlag ist mechanisch 45&nbsp;Grad; bei 100&nbsp;% fordert voller Stick genau ihn an.</small></div>
+      <div class="opt-row"><div class="opt-label">Lenkansprechen<small>Auch auf dem Steuerkreuz hoch/runter &ndash; links/rechts bl&auml;ttert seit v0.5.18 die Cockpit-Schirme. Der volle Lenkeinschlag ist mechanisch 45&nbsp;Grad; bei 100&nbsp;% fordert voller Stick genau ihn an.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="phys-steerresp" min="0.5" max="3" step="0.05" value="2.4">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="phys-steerresp-val">100%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Lenkd&auml;mpfung
+          <span class="wip-tag">WIP</span>
+          <small>Wie lange das Servo von der Mittelstellung bis zum vollen aktuell
+          m&ouml;glichen Ausschlag braucht. Das ist nicht die Lenkwinkelbegrenzung
+          dar&uuml;ber &ndash; die sagt, wie weit; diese sagt, wie schnell.
+          <br>0 hei&szlig;t sofort. Am Lenkrad und an der RC-Funke ist das richtig: dort gibt
+          die Hand die Rate vor, und eine zweite Begrenzung dahinter f&uuml;hlt sich wie
+          Verz&ouml;gerung an. Am Gamepad ist ein Daumen in etwa 150&nbsp;ms von der Mitte am
+          Anschlag, und ohne D&auml;mpfung wird daraus ein Sprung am Servo.
+          <br>83&nbsp;ms ist die Vorgabe und nicht gew&auml;hlt, sondern der bisherige Wert
+          nachgerechnet: 6,0&nbsp;Anschl&auml;ge je Sekunde mal dem kalibrierten
+          Lenkansprechen von 200&nbsp;% sind 12 je Sekunde. Bis v0.5.40 hing die Zeit
+          zus&auml;tzlich am Lenkansprechen &ndash; wer es auf 240&nbsp;% stellte, machte
+          unangek&uuml;ndigt auch die Lenkung schneller, 69 statt 83&nbsp;ms. Jetzt macht
+          jeder der beiden Regler genau eine Sache.
+          <br>Ein Fahrzeugwechsel weiter oben setzt diesen Regler mit: das
+          Tr&auml;gheitsmoment ist die einzige Stelle, an der sich ein leichteres Auto zeigen
+          kann, und es ergibt 56&nbsp;ms beim Formelwagen bis 125&nbsp;ms beim
+          Frontmotor-GT3. Danach kannst du frei dar&uuml;ber verf&uuml;gen.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="phys-steerdamp" min="0" max="500" step="1" value="83">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="phys-steerdamp-val">83 ms</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Bremsen nimmt Lenkung<small>Der Reibkreis: was die Bremse an der Vorderachse verbraucht, fehlt der Lenkung. 0 hei&szlig;t, Bremsen und Lenken behindern sich nicht; h&ouml;here Werte lassen das Auto beim Anbremsen deutlich schlechter einlenken. Zu beachten: die Lenkwinkel-Kalibrierung darunter holt genau das wieder zur&uuml;ck, also wirkt ein starker Wert erst, wenn die Kalibrierung ihn nicht mehr ausgleichen kann.</small></div>
         <div class="opt-slider">
@@ -5676,9 +6605,9 @@
           <small>Der St&ouml;&szlig;er, mit dem das Auto aus dem Stand losbricht. Ohne ihn bekommt es beim Anfahren ein Gasbyte, das zu klein ist, um es zu bewegen &ndash; es zuckt und steht. Mit ihm springt es daf&uuml;r an: 16&nbsp;% sind im Ma&szlig;stab rund 47&nbsp;km/h, und das ist der Sprung von null auf gef&uuml;hlt 30, den man beim ersten Gasgeben sp&uuml;rt. Wieviel n&ouml;tig ist, h&auml;ngt am Untergrund: auf Teppich mehr als auf Laminat. Runter drehen, bis das Auto gerade noch sauber anf&auml;hrt.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="setting-minmove" min="0" max="0.35" step="0.01" value="0.16">
+          <input type="range" id="setting-minmove" min="0" max="0.35" step="0.01" value="0.05">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="setting-minmove-val">16%</span>
+          <span class="opt-val" id="setting-minmove-val">5%</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Bremsbalance
           <small>Wieviel der Bremse an der Vorderachse ankommt. <b>Nach vorn</b>: das Auto
@@ -5687,7 +6616,7 @@
           Mittelstellung und &auml;ndert nichts.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="setting-brakebias" min="50" max="80" step="1" value="58">
+          <input type="range" id="setting-brakebias" min="50" max="80" step="1" value="62">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-brakebias-val">62% vorn</span>
         </div></div>
@@ -5734,9 +6663,6 @@
         <label class="tgl"><input type="checkbox" id="setting-announce-tyre"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Regen ansagen <span class="wip-tag">WIP</span><small>Wenn es anf&auml;ngt zu regnen und wenn es aufh&ouml;rt. Beim Laden wird nichts gesagt, erst beim Wechsel.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce-rain"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Funkfilter <span class="wip-tag">WIP</span>
-          <small>L&auml;sst die Ansage nach Rennfunk klingen: ein Knacken beim Aufschalten, ein Rauschteppich darunter, ein Knacken beim Loslassen, und die Stimme spricht schneller und flacher. Was NICHT geht, und das sei gesagt: die Stimme selbst bandbegrenzen. Die Sprachausgabe des Browsers liefert keinen Audioknoten, es gibt also nichts, wo ein Filter dazwischen k&ouml;nnte. Der Funkeindruck kommt vom Drumherum.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce-radio"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Regen<small>Select oder W. Reifen kommen beim Boxenstopp passend.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-rain"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Strecken-Ambience<small>Vorbeifahrten, Regen, Donner.</small></div>
@@ -5773,21 +6699,28 @@
         </div></div>
       <div class="opt-row"><div class="opt-label">Motorsound-Profil<small>Alle sind aus
           Zylinderzahl, Kurbelwelle, Bankaufteilung und Z&uuml;ndfolge gerechnet &ndash;
-          keiner ist eine Aufnahme. Bei den aufgeladenen Originalen fehlt der Lader. Die vier
-          historischen sind noch nicht nach Geh&ouml;r gepr&uuml;ft; beim Maserati kommt
+          keiner ist eine Aufnahme. Bei den aufgeladenen Originalen fehlt der Lader. Die
+          sechs mit WIP sind noch nicht nach Geh&ouml;r gepr&uuml;ft; beim Maserati kommt
           dazu, dass dieses Modell den Bankwinkel gar nicht darstellt, weshalb er sich vom
-          Ferrari-V12 nur in Drehzahl und Rohrl&auml;nge unterscheidet.</small></div>
+          Ferrari-V12 nur in Drehzahl und Rohrl&auml;nge unterscheidet. Der Boxer-Rumpel des
+          Subaru kommt aus ungleich langen Kr&uuml;mmerrohren; das Modell tr&auml;gt feste
+          Zeitversätze je Zylinder und damit die richtige Art von Unregelm&auml;&szlig;igkeit,
+          aber ihr genaues Muster ist gew&auml;hlt und nicht aus Rohrl&auml;ngen
+          gerechnet.</small></div>
         <select id="sound-profile">
+          <!-- REIHENFOLGE AUF WUNSCH: die Vorgabe zuerst, dann die drei meistgefahrenen,
+               dann der Rest. Alphabetisch waere ordentlicher und beim Fahren nutzlos - man
+               sucht hier den Motor, den man oft nimmt, und nicht den mit A. -->
           <optgroup label="GT3 und GT-Rennmotoren">
+          <option value="p992gt3r" selected>Porsche 911 GT3 R: Boxer-6, Einzeldrosseln</option>
+          <option value="m4gt3">BMW M4 GT3: Reihen-6</option>
+          <option value="mustang">Ford Mustang GT3: V8, Cross-Plane</option>
+          <option value="f296gt3">Ferrari 296 GT3: V6, 120 Grad</option>
           <option value="amggt3">Mercedes-AMG GT3: V8, Cross-Plane</option>
           <option value="c6r">Corvette C6.R: V8, Cross-Plane, OHV</option>
           <option value="z06gt3r">Corvette Z06 GT3.R: V8, Flat-Plane</option>
           <option value="vantagegt3">Aston Martin Vantage GT3: V8, Cross-Plane</option>
-          <option value="m4gt3">BMW M4 GT3: Reihen-6</option>
-          <option value="f296gt3">Ferrari 296 GT3: V6, 120 Grad</option>
           <option value="huracan">Huracan GT3 / R8 LMS: V10, Split-Pin</option>
-          <option value="p992gt3r" selected>Porsche 911 GT3 R: Boxer-6, Einzeldrosseln</option>
-          <option value="mustang">Ford Mustang GT3: V8, Cross-Plane</option>
           </optgroup>
           <optgroup label="Formel 1">
           <option value="f1_2026">Formel 1 2026: V6 Turbo-Hybrid, 1,6 l</option>
@@ -5797,6 +6730,13 @@
           <option value="lolat70">Lola T70 Mk3B: Chevrolet-V8, Cross-Plane</option>
           <option value="f330p4">Ferrari 330 P4 / 412P: V12, 60 Grad</option>
           <option value="mc12">Maserati MC12: V12, 65 Grad</option>
+          </optgroup>
+          <!-- EIGENE GRUPPE, und das ist keine Ordnungsfrage: beide sind Strassenmotoren
+               mit Schalldaempfer, laengeren Rohren und niedrigeren Drehzahlen. Neben einem
+               GT3 hoert man den Unterschied sonst als "leiser" statt als "anders". -->
+          <optgroup label="Stra&szlig;en- und Rallyeklassiker (WIP)">
+          <option value="countach">Lamborghini Countach LP500: V12, 60 Grad, sechs Weber</option>
+          <option value="impreza99">Subaru Impreza WRX STI 1999: Boxer-4, Turbo</option>
           </optgroup>
         </select></div>
       <div class="opt-row"><div class="opt-label">Motorlautstärke</div>
@@ -5986,62 +6926,313 @@
       <div class="opt-row"><div class="opt-label">Ghost-Tempo<small>Rundentempo der autonomen Autos. Gefahren brauchbar zwischen 40 und 60 Prozent. Der Regler beginnt bei 35 und nicht tiefer: darunter f&auml;hrt das Auto so langsam, dass es die gedruckte Strecke nicht mehr zuverl&auml;ssig &bdquo;liest&ldquo; &ndash; und dann fallen Vorausblick, Ideallinie und Kurvendrosselung alle drei aus.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="ghost-speed" min="0.35" max="1" step="0.05" value="0.45">
+          <input type="range" id="ghost-speed" min="0.35" max="1" step="0.05" value="0.5">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="ghost-speed-val">45%</span>
+          <span class="opt-val" id="ghost-speed-val">50%</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Ghost: Kurvendrosselung <span class="wip-tag">WIP</span><small>Wie viel Tempo in Kurven abgegeben wird. <b>Braucht ein Streckenlayout</b>: ohne gelesene oder gebaute Kacheln wei&szlig; der Ghost nicht, wo eine Kurve ist, und der Regler multipliziert eine Null.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="ghost-curve" min="0" max="0.6" step="0.05" value="0.15">
+          <input type="range" id="ghost-curve" min="0" max="0.6" step="0.05" value="0.2">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="ghost-curve-val">15%</span>
+          <span class="opt-val" id="ghost-curve-val">20%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Rennw&uuml;rze
-          <small>Tagesform, Fehler, Windschatten, &Uuml;berholen, Gummiband und Abstand halten &ndash; ein Regler f&uuml;r alle sechs. Ein &Uuml;berholvorgang l&auml;uft als Sequenz: erst zur Seite, dann Schub, dann vorne wieder einordnen, und wenn es nach 5&nbsp;s nicht geklappt hat, Abbruch mit 6&nbsp;s Sperre. Ohne diesen Abbruch klebte der Verfolger neben dem anderen, bis die Uhr ablief, und genau dort ber&uuml;hren sie sich. Der Mindestabstand rechnet ausserdem mit der Ann&auml;herungsrate statt mit einem festen Kachelabstand. Auf 0 ist jeder der sechs Bausteine wirkungslos.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="ghost-spice" min="0" max="1" step="0.05" value="0.4">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="ghost-spice-val">40%</span>
-        </div></div>
+      <!-- DIE RENNWUERZE, IN EINZELNE SCHALTER ZERLEGT. Vorher ein Regler fuer sechs
+           Bausteine: wer ihn aufdrehte, bekam alle sechs und wusste danach nicht, welcher
+           davon das Gesehene erklaert. Das Gummiband ist nicht mehr dabei - es ist
+           "Feld zusammenhalten" weiter unten, und dort gestaffelt ueber das ganze Feld. -->
+      <div class="opt-row"><div class="opt-label">Rennw&uuml;rze: einzeln zuschaltbar
+          <small>F&uuml;nf Zutaten, die aus gleichm&auml;&szlig;igem Fahren ein Rennen machen
+          sollen. Jede einzeln, damit man sieht, welche was tut &ndash; als ein Regler f&uuml;r
+          alle war nicht zu unterscheiden, woran eine Beobachtung lag. Alle experimentell:
+          keine ist am Auto gemessen, alle sind gew&auml;hlt.</small></div>
+        <span class="muted" style="font-size:11px">&#9660;</span></div>
+      <div class="opt-row"><div class="opt-label">&Uuml;berholman&ouml;ver
+          <span class="wip-tag">experimentell</span>
+          <small>Ein Verfolger, der 0,9&nbsp;s dicht dran h&auml;ngt, setzt an: erst zur
+          Seite, dann Schub, dann vorne wieder einordnen. Der Vorausfahrende weicht zur
+          anderen Seite aus &ndash; zwei Autos auf 25&nbsp;cm Bahnbreite brauchen beide
+          H&auml;lften. Klappt es nach 5&nbsp;s nicht, bricht er ab und wartet 6&nbsp;s; ohne
+          diesen Abbruch klebte der Verfolger neben dem anderen, bis die Uhr ablief, und
+          genau dort ber&uuml;hren sie sich.
+          <br>Seit v0.5.44 auch in Kurven, und die Erlaubnis h&auml;ngt nicht an der
+          Kachelart, sondern am freien Platz: 1 minus dem Anteil des Anschlags, den die
+          Ideallinie hier schon belegt. Unter 30&nbsp;% passt kein zweites Auto daneben, und
+          die Wahrscheinlichkeit w&auml;chst mit dem Platz. Gemessen in 1500&nbsp;Takten:
+          bei 0,70&nbsp;Platz 34&nbsp;Versuche, bei 0,14 keiner &ndash; egal ob Gerade oder
+          Haarnadel. Auf deiner Vorgabestrecke haben 11 von 13&nbsp;Kacheln genug Platz.
+          Nur in eine Haarnadel hinein wird nicht angesetzt: ein Versuch dauert bis
+          zu 5&nbsp;s, eine Kachel rund 0,7 &ndash; wer davor ausholt, ist beim Einlenken
+          noch daneben.
+          <br>Die Seite ist die, auf der der andere nicht ist. Vorher war es die andere Seite
+          als die eigene Linie; auf einer Geraden ist das dasselbe, in einer Kurve nicht.
+          Wer viel Bahnbreite f&uuml;r die Ideallinie ausgibt (Regler &bdquo;Kurven
+          &ouml;ffnen&ldquo;), l&auml;sst weniger f&uuml;r &Uuml;berholman&ouml;ver &uuml;brig
+          &ndash; das ist derselbe Platz.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-w-pass" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Abstand halten
+          <span class="wip-tag">experimentell</span>
+          <small>Ein Ghost lupft das Gas, wenn er zu schnell auflaufen w&uuml;rde. Gerechnet
+          als Zeitl&uuml;cke und nicht als fester Abstand: eine Kachel bei gleichem Tempo ist
+          unbegrenzt viel Zeit, eine Kachel bei schneller Ann&auml;herung ist eine Sekunde bis
+          zur Ber&uuml;hrung. Ohne das fahren sie Sto&szlig;stange an Sto&szlig;stange.
+          W&auml;hrend eines eigenen &Uuml;berholman&ouml;vers gilt es nicht, sonst k&auml;me
+          niemand vorbei.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-w-gap" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Tagesform
+          <span class="wip-tag">experimentell</span>
+          <small>Jedes Auto f&auml;hrt ein etwas anderes Dauertempo, und das verschiebt sich
+          langsam &ndash; ein Zufallslauf im Band von &plusmn;7,5&nbsp;%, alle 2,6&nbsp;s
+          einen Schritt weiter. Damit ist nicht jede Runde gleich, und das Feld sortiert sich
+          von selbst um.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-w-form"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Fahrfehler
+          <span class="wip-tag">experimentell</span>
+          <small>Beim Anbremsen einer Kurve verbremst sich ein Ghost gelegentlich: 5,5&nbsp;%
+          Wahrscheinlichkeit je angebremster Kurve, dann 0,4 bis 0,9&nbsp;s mit 45&nbsp;%
+          weniger Tempo. Gew&uuml;rfelt wird einmal je Kurve und nicht je Takt &ndash; sonst
+          h&auml;ngt die Fehlerrate an der Rechenfrequenz statt am Rennen.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-w-fehler"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Windschatten
+          <span class="wip-tag">experimentell</span>
+          <small>Wer auf einer Geraden dicht hinter einem anderen h&auml;ngt, f&auml;hrt bis
+          zu 11&nbsp;% schneller, linear abnehmend bis 1,3 Kacheln Abstand. Nur auf der
+          Geraden: in der Kurve w&auml;re es Abtriebsverlust, also das Gegenteil, und das
+          bildet die Physik der Ghosts nicht ab.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-w-slip"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Ghost: Ideallinie <span class="wip-tag">WIP</span>
           <!-- Seit v0.5.9 wirkt dieser Regler deutlich staerker: der Deckel aus
                learnSteerCap() ging von 0,55 auf 1,0, gemessen an dem, was die Original-App
                ihren eigenen Ghosts schickt. Am Auto ist das nicht geprueft. -->
-          <small>Au&szlig;en anstellen, innen scheiteln, au&szlig;en heraus. Gemessener Einschlag: 70 Prozent ergeben 13,5 Grad, 100 Prozent 20,9 Grad von den 45 des Autos. Ohne gebaute oder gelernte Strecke f&auml;llt sie auf eine gr&ouml;bere Regel je Kachel zur&uuml;ck &ndash; halb so stark und ohne Blick auf die n&auml;chste Kurve. Ganz ohne gelesene Streckencodes wirkt sie nicht, weil niemand wei&szlig;, wo das Auto ist. Ob es hilft, sagen Rundenzeit und Abg&auml;nge.</small></div>
+          <small>Au&szlig;en anstellen, innen scheiteln, au&szlig;en heraus. Gemessen am mittleren Lenkbyte &uuml;ber 600 Takte: die Vorgabe ergibt 36 von 127, 100 Prozent ergeben 50, 200 Prozent ergeben 81 mit Spitzen am vollen Anschlag. Zum Vergleich schickt die Original-App ihren eigenen Ghosts im Mittel 32 und 47. &Uuml;ber 100 Prozent wirkt die Linie zus&auml;tzlich auch auf der Geraden voll statt nur zu einem Drittel &ndash; das Anbremsen von au&szlig;en ist die H&auml;lfte einer Ideallinie, und genau dort sieht man sie. Ohne gebaute oder gelernte Strecke f&auml;llt sie auf eine gr&ouml;bere Regel je Kachel zur&uuml;ck. Ganz ohne gelesene Streckencodes wirkt sie nicht, weil niemand wei&szlig;, wo das Auto ist. Ob es hilft, sagen Rundenzeit und Abg&auml;nge.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="ghost-line" min="0" max="1" step="0.05" value="0.7">
+          <input type="range" id="ghost-line" min="0" max="2" step="0.05" value="1">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="ghost-line-val">70%</span>
+          <span class="opt-val" id="ghost-line-val">100%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Kurven &ouml;ffnen
+          <span class="wip-tag">experimentell</span>
+          <small>Wie weit au&szlig;en eine Kurve angefahren und verlassen wird und wie
+          tief der Scheitel innen liegt, als Anteil des Weges zum Rand. Seit v0.5.43 ist das
+          eine Schranke f&uuml;r die Optimierung und kein Nachlauf mehr: die Suche darf
+          alles, was diese Form einh&auml;lt, und findet darin das schnellste. Vorher wurde
+          die fertige Linie hinterher nach au&szlig;en geschoben &ndash; das kostete
+          gemessen rund vier Sekunden Modellzeit, ohne dass die Zielfunktion davon wusste.
+          <br>Bei 0 entscheidet die Zielfunktion allein, und dann kommt fast die Mittellinie
+          heraus. Das ist kein Fehler, sondern die Geometrie einer Carrera-Kurve: sie ist ein
+          Bogen mit festem Radius von 37&nbsp;cm. Nachgemessen an einer reinen
+          Rechtskurve, mittlerer Bahnradius bei konstantem Versatz: Mittellinie
+          34,7&nbsp;Einheiten, 4 nach au&szlig;en gibt 38,8, 4 nach innen nur 30,7. Auf einer
+          echten Strecke w&auml;hlt man mit dem Scheitel den Radius &ndash; hier ist er
+          vorgegeben, und Eintauchen macht ihn kleiner. Die zeitschnellste Linie hat deshalb
+          gar keinen Scheitel.
+          <br>Der Preis, gemessen f&uuml;r Late Apex gegen die Mittellinie: bei 0 ist die
+          Linie 1,0 bis 1,5&nbsp;% schneller und nutzt 7&nbsp;% der Breite; bei 0,4 kostet
+          sie 0,7 bis 1,9&nbsp;% und nutzt 33 bis 48&nbsp;%; bei 0,8 kostet sie 4,9 bis
+          5,3&nbsp;% und nutzt 68 bis 91&nbsp;%. Wer eine Linie sehen will, die aussieht wie
+          eine Ideallinie, bezahlt sie hier &ndash; und die Modellzeit in der Vorschau nennt
+          den Betrag.
+          <br>Die Wirkung skaliert mit der Bogenl&auml;nge des Kurvenzuges: eine
+          einzelne 60-Grad-Kachel hat 36 von 80&nbsp;Einheiten Bezugsl&auml;nge und bekommt
+          45&nbsp;% davon, eine Haarnadel den ganzen Wert. Ohne das verlangte der Regler auf
+          einer einzelnen Kachel &uuml;ber 12&nbsp;cm Querbewegung innerhalb von 43&nbsp;cm
+          Weg. An einer Schikane f&auml;llt die Schranke ganz weg: dort sind Ausgang und
+          Eingang derselbe Punkt, und der kann nicht f&uuml;r beide Kurven au&szlig;en
+          sein.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-exit" min="0" max="1" step="0.05" value="0.8">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-exit-val">80%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Quertr&auml;gheit
+          <span class="wip-tag">experimentell</span>
+          <small>Wie schnell ein Ghost seine Querlage &auml;ndern darf, in Bahnbreiten je
+          Sekunde. Die Ideallinie ist eine Funktion des Ortes und nicht der Zeit
+          &ndash; beim Wechsel des Kacheltyps &auml;ndert sich der Sollwert in einem Takt um
+          bis zu 0,4 der Bahnbreite, und ein Servo, der das in einem Takt nachf&uuml;hrt,
+          sieht aus wie ein Ruck.
+          <br>Eine Ratenbegrenzung und kein Tiefpass: sie hat eine feste
+          H&ouml;chstgeschwindigkeit und erreicht den Sollwert exakt, w&auml;hrend ein
+          Tiefpass sich ihm nur n&auml;hert und dabei umso schneller l&auml;uft, je weiter er
+          weg ist. 2,0 sind bei 25&nbsp;cm Bahnbreite 50&nbsp;cm/s.
+          <br>Die Vorgabe stand bis v0.5.39 auf 1,2 &ndash; das war f&uuml;r die alte Linie
+          kalibriert, die an einer Bahnseite klebte. Seit die Linie von au&szlig;en anf&auml;hrt
+          und nach au&szlig;en ausf&auml;hrt, verlangt sie bis zu 2,9&nbsp;Bahnbreiten je
+          Sekunde; gemessen kappte 1,2 die Spitze des Lenkbytes auf 67 von 127, w&auml;hrend
+          2,0 auf 95 kommt. Weniger sieht ruhiger aus und folgt der gezeichneten Linie
+          schlechter &ndash; hier liegt der Tausch.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-quertempo" min="0.2" max="4" step="0.1" value="2">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-quertempo-val">2.0</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Brems- und Gasverhalten
+          <span class="wip-tag">experimentell</span>
+          <small>Wie entschlossen ein Ghost Gas gibt und bremst. Ghost und Fahrer gehen durch
+          dasselbe Fahrzeugmodell, bekommen ihr Gas aber aus verschiedenen Quellen:
+          der Fahrer dr&uuml;ckt einen Trigger und ist sofort am Anschlag, der Ghost hat einen
+          Regler auf ein Zieltempo, dessen Ausgang ratenbegrenzt ist.
+          <br>Nachrechenbar: bei 1,0 braucht voller Gasbefehl 0,63&nbsp;s, ein Trigger etwa
+          0,15&nbsp;s &ndash; der Ghost ist also rund viermal langsamer im Aufbau, und genau
+          das sieht man am Kurvenausgang. Bei 4,0 liegt er bei 0,16&nbsp;s und damit dort, wo
+          ein Trigger liegt.
+          <br>1,0 ist der gemessene, stabile Zustand: alle Tempopr&uuml;fungen dieser App sind
+          damit gefahren. Die Ratenbegrenzung ist auch der Schutz davor, dass ein
+          zur&uuml;ckgestelltes Auto aus der Hand gerissen wird &ndash; wer sie hochdreht,
+          nimmt diesen Schutz zur&uuml;ck.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-gasdyn" min="0.3" max="4" step="0.1" value="1">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-gasdyn-val">1.0</span>
+        </div></div>
+
+      <div class="opt-row"><div class="opt-label">Ghost: Boxenstopp
+          <span class="wip-tag">experimentell</span>
+          <small>Ein Ghost f&auml;hrt auf der Start/Ziel-Kachel rechts an den Rand, bleibt
+          ein paar Sekunden stehen und f&auml;hrt wieder los. Die Anfahrt beginnt schon auf
+          der Kachel davor, im Formationstempo &ndash; ein Auto, das mit Renntempo &uuml;ber
+          die Linie kommt, braucht eine Kachel zum Verz&ouml;gern. Es gibt vier Boxen hintereinander:
+          Platz 1 auf der Start/Ziel-Kachel, Platz 2 eine Kachel sp&auml;ter und so
+          weiter. Wer gleichzeitig f&auml;llig ist, nimmt den n&auml;chsten freien und h&auml;lt
+          eine Kachel dahinter; wer als F&uuml;nfter kommt, wartet, bis eine frei wird.
+          Auf dem Weg zur eigenen Box f&auml;hrt er am Gegenrand vorbei &ndash; sonst
+          w&uuml;rde er dem Stehenden ins Heck fahren. Gemessen bei einem Wetterwechsel
+          mit sechs Ghosts: vier stehen gleichzeitig, keine Doppelbelegung, und in
+          555 Takten Vorbeifahrt kein einziger Takt mit rechter Anforderung. Vier
+          Kacheln sind 1,72&nbsp;m &ndash; mehr Boxen w&uuml;rden auf einem kleinen Layout
+          einen merklichen Teil der Bahn f&uuml;llen.
+          <br>Die anderen weichen auf der Boxenkachel nach links aus, und ihre Querlage ist
+          dort nach rechts gesperrt &ndash; das Ausweichen allein w&auml;re nur die weiche
+          H&auml;lfte, die Sperre ist die Zusage. Dein eigenes Auto ist nicht steuerbar; es
+          gibt eine Meldung und den Punkt auf der Karte, mehr geht nicht.
+          <br>Was der Stopp nicht kann: wissen, wo der Rand ist. Das Auto meldet seine
+          Querlage nicht, voller Ausschlag ist ein Befehl und keine Messung. Die Zusage ist
+          nicht die Randlage, sondern dass die anderen auf der anderen Seite
+          sind.
+          <br>Regenreifen: setzt Regen ein, kommt jeder Ghost so früh wie möglich herein und rüstet um &ndash; und beim Wechsel zurück auf trocken genauso. Solange die falschen Reifen drauf sind, fährt er langsamer: 0,64 gegen 0,85 mit Regenreifen im Regen, abgeleitet aus derselben Grifftabelle, die dein Auto benutzt. Bei leichtem Regen ist der Slick noch vorn &ndash; der Nachteil kommt mit dem Wasser, nicht mit der Meldung. Ist dieser Schalter aus, können Ghosts keine falschen Reifen haben, sonst kröchen sie nach dem ersten Regen ohne Ausweg.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-pit" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Boxenstopp im freien Fahren
+          <span class="wip-tag">experimentell</span>
+          <small>Ob auch au&szlig;erhalb eines Rennens gepittet wird. Beim Losfahren aus der
+          Garage stellt man meist Regler ein, und ein Auto, das dabei zehn Sekunden steht,
+          sieht nach einem Fehler aus &ndash; deshalb getrennt abschaltbar. Im Rennen und in
+          der Rennsimulation gilt der Schalter dar&uuml;ber.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-pit-free" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Boxenstopp-L&auml;nge
+          <span class="wip-tag">experimentell</span>
+          <small>Wie lange ein Ghost steht. 5&nbsp;s ist die Mitte des Bandes und keine
+          Messung &ndash; wie lang ein Boxenstopp aussehen soll, ist Geschmack. Der eigene
+          Boxenstopp braucht zum Vergleich 4&nbsp;s f&uuml;r die Reifen und mindestens
+          3&nbsp;s Standzeit, wenn er vorgeschrieben ist.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-pit-sec" min="3" max="10" step="0.5" value="5">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-pit-sec-val">5.0 s</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Boxenstopp fr&uuml;hestens nach
+          <span class="wip-tag">experimentell</span>
+          <small>Die untere Grenze des Bandes, aus dem jeder Ghost seine n&auml;chste
+          F&auml;lligkeit zieht &ndash; in Runden, nach jedem Stopp neu gezogen. Dieselbe
+          Bauform wie der Wetterwechsel, damit nicht alle im Gleichschritt pitten. Schiebt
+          man diesen Regler &uuml;ber den n&auml;chsten, geht der mit.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-pit-min" min="2" max="20" step="1" value="5">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-pit-min-val">5</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Boxenstopp sp&auml;testens nach
+          <span class="wip-tag">experimentell</span>
+          <small>Die obere Grenze desselben Bandes, in Runden. Bei gleichen Werten pittet
+          jeder Ghost genau nach dieser Rundenzahl &ndash; dann ist nichts mehr zuf&auml;llig,
+          und das ist eine g&uuml;ltige Einstellung. Nicht an den Reifenverschlei&szlig;
+          gebunden: Ghosts haben keinen, ihre Motoren werden ohne Reifen- und Tankmodell
+          gebaut.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-pit-max" min="2" max="20" step="1" value="9">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-pit-max-val">9</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Ghost: Linienmodell
-          <small>Kr&uuml;mmung nimmt den gr&ouml;&szlig;ten Radius. Rundenzeit rechnet ein
-          Geschwindigkeitsprofil und ist im Modell 1&ndash;8&nbsp;% schneller; ob auch auf
-          dem Teppich, sagen Rundenzeit und Abg&auml;nge.</small></div>
+          <span class="wip-tag">WIP</span>
+          <small>Alle drei benutzen seit v0.5.43 dieselbe Form &ndash; vier Zahlen
+          je Kurve: Eingang, Scheitel, Ausgang und Scheitellage, dazwischen eine Kubik in der
+          Wegl&auml;nge, auf Geraden eine Gerade. Die Wahl ist damit eine Wahl der
+          Zielfunktion und nicht eine zwischen zwei Verfahren mit
+          unterschiedlicher Glattheit.
+          <br>Kr&uuml;mmung minimiert die Kr&uuml;mmungsenergie und braucht keine Annahme
+          &uuml;ber Beschleunigungen. Rundenzeit minimiert die Modellzeit, Scheitel frei.
+          Late Apex minimiert dieselbe Zeit, h&auml;lt den Scheitel aber hinter 55&nbsp;% des
+          Kurvenwegs &ndash; eine engere Suche kann eine Zeit nur verfehlen, nie verbessern,
+          der Unterschied ist also der Preis der sp&auml;ten Linie.
+          <br>Vorher optimierten die ersten zwei jeden der rund 180&nbsp;Abtastpunkte frei und
+          legten dabei Ausschl&auml;ge hin, die ein Fahrer nie f&auml;hrt: gemessen sprang die
+          Querlage in Kurven um bis zu 16,0&nbsp;Einheiten von 8,6&nbsp;m&ouml;glichen
+          zwischen zwei benachbarten Punkten. Jetzt sind es h&ouml;chstens 2,4.
+          <br>Die Zeiten kommen aus den eingestellten Fahrwerten &ndash; Spitze, Zug und
+          Bremse aus der aktiven Simulationsklasse; nur die Querbeschleunigung bleibt eine
+          Annahme, weil kein Byte sie meldet. Ob es auf dem Teppich stimmt, sagen Rundenzeit
+          und Abg&auml;nge.</small></div>
         <div class="row" style="gap:6px; flex-wrap:wrap">
           <button type="button" class="mw-preset" data-linemodel="curvature">Kr&uuml;mmung</button>
           <button type="button" class="mw-preset sel" data-linemodel="laptime">Rundenzeit</button>
+          <button type="button" class="mw-preset" data-linemodel="lateapex">Late Apex</button>
+        </div></div>
+      <!-- DIE LINIE DIREKT NEBEN DER WAHL. Gemeldet: "ich habe 2 Ideallinie Modi, aber wenn
+           ich dazwischen waehle, aendert sich die eingezeichnete Linie nicht." Sie aendert
+           sich - gemessen wandert der Start/Ziel-Punkt der Linie von x=45,9 auf x=50,5 -,
+           nur war sie nirgends zu sehen: die Knoepfe stehen in #tab-options, die einzige
+           gezeichnete Linie in #tab-track, also einen Tab weiter. -->
+      <div class="opt-row opt-breit"><div class="opt-label">Ghost: so f&auml;hrt das gew&auml;hlte Modell
+          <small>Die Linie, die aus der Wahl dar&uuml;ber folgt, mit der Bremsampel: gr&uuml;n
+          freie Fahrt, rot voll anbremsen. Es ist dieselbe Linie, die der Streckeneditor
+          zeichnet und die die Ghosts fahren &ndash; alle drei gehen durch denselben
+          Aufruf.</small></div>
+        <div class="lm-vorschau">
+          <div id="linemodel-karte" class="tp-karte-halter"></div>
+          <span class="muted" id="linemodel-info" data-i18n-skip></span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Ghost: lernt von Runde zu Runde
           <small>Probiert jede Runde eine kleine &Auml;nderung an Tempo und Linie und
           beh&auml;lt sie nur, wenn die Runde schneller war <b>und</b> kein Abgang dabei.
           Nach einem Abgang wird zur&uuml;ckgenommen und vorsichtiger weiterprobiert.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-learn-pace"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: seitlicher Versatz <span class="wip-tag">WIP</span><small>Zwei Autos nebeneinander gehen auseinander, und beim &Uuml;berholen weicht auch der Vorausfahrende aus, zur anderen Seite. Zwei Autos auf 25&nbsp;cm Bahnbreite brauchen beide H&auml;lften. Dieser Regler bestimmt auch, wie weit der Angreifer zur Seite geht: das ist ein Ausweichen und keine Linienwahl, h&auml;ngt also nicht an der Ideallinie.</small></div>
+      <div class="opt-row"><div class="opt-label">Ghost: seitlicher Versatz <span class="wip-tag">WIP</span><small>Autos nebeneinander gehen auseinander, gleichm&auml;&szlig;ig &uuml;ber die Bahnbreite: bei zwei nach links und rechts, bei drei bleibt das mittlere mittig, bei vier auf Viertel. Vorher gab es nur zwei Seiten, und dann standen sich bei vier Autos zwei Paare weiter im Weg. Beim &Uuml;berholen weicht auch der Vorausfahrende aus, zur anderen Seite. Zwei Autos auf 25&nbsp;cm Bahnbreite brauchen beide H&auml;lften. Dieser Regler bestimmt auch, wie weit der Angreifer zur Seite geht: das ist ein Ausweichen und keine Linienwahl, h&auml;ngt also nicht an der Ideallinie. &Uuml;ber 100 Prozent geht die Anforderung bis an den vollen Anschlag &ndash; die Mitschnitte zeigen, dass das Auto die Schiene auch dort noch liest.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="ghost-lateral" min="0" max="1" step="0.1" value="0.5">
+          <input type="range" id="ghost-lateral" min="0" max="2" step="0.05" value="0.8">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="ghost-lateral-val">50%</span>
+          <span class="opt-val" id="ghost-lateral-val">80%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: eigene Spuren <span class="wip-tag">experimentell</span><small>Jeder Ghost h&auml;lt eine eigene, feste Linie &uuml;ber die Bahnbreite. Auf der Geraden gilt die Spur, in der Kurve die Ideallinie &ndash; so f&auml;hrt das Feld hintereinander, aber auf verschiedenen Linien, und sucht im Bogen trotzdem den Scheitel. Der &Uuml;bergang l&auml;uft mit 350&nbsp;ms nach, damit an der Kachelgrenze kein Ruck entsteht. In der Kurve bleibt die halbe Spur stehen: alle auf denselben Scheitel zu schicken w&auml;re realistisch, w&uuml;rde sie aber zusammenf&uuml;hren, und Ber&uuml;hrungen sind ohne R&uuml;ckmeldung zur Querlage nicht zur&uuml;ckzuregeln.</small></div>
+      <div class="opt-row"><div class="opt-label">Ghost: eigene Spuren <span class="wip-tag">experimentell</span><small>Jeder Ghost h&auml;lt eine eigene, feste Linie &uuml;ber die Bahnbreite. Auf der Geraden gilt die Spur, in der Kurve die Ideallinie &ndash; so f&auml;hrt das Feld hintereinander, aber auf verschiedenen Linien, und sucht im Bogen trotzdem den Scheitel. Der &Uuml;bergang l&auml;uft mit 350&nbsp;ms nach, damit an der Kachelgrenze kein Ruck entsteht. Bis 100 Prozent bleibt in der Kurve die halbe Spur stehen: alle auf denselben Scheitel zu schicken w&auml;re realistisch, w&uuml;rde sie aber zusammenf&uuml;hren, und Ber&uuml;hrungen sind ohne R&uuml;ckmeldung zur Querlage nicht zur&uuml;ckzuregeln. &Uuml;ber 100 Prozent gilt die eigene Spur auch in der Kurve ganz &ndash; auf eigene Gefahr, denn dann bleiben sie sich auch im Bogen im Weg.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="ghost-lanes" min="0" max="1" step="0.05" value="0.5">
+          <input type="range" id="ghost-lanes" min="0" max="2" step="0.05" value="0">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="ghost-lanes-val">50%</span>
+          <span class="opt-val" id="ghost-lanes-val">aus</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Querlage festhalten
+          <span class="wip-tag">Pr&uuml;fstand</span>
+          <small>Alle Ghosts halten einen festen Versatz, statt zu fahren, was Ideallinie,
+          Spur und Ausweichen sagen. Links ist links, rechts ist rechts, Mitte ist aus &ndash;
+          und in der Mitte l&auml;uft alles wie sonst. Wozu das gut ist: Byte&nbsp;7
+          tr&auml;gt einen Lenkwinkel und keine Position. Dass daraus eine gehaltene Lage
+          neben der Mitte wird, leistet allein die Schienenf&uuml;hrung des Autos &ndash; und
+          ob das stimmt und bis zu welchem Wert, ist nie gemessen worden. Mit einem festen
+          Versatz siehst du es: bleibt das Auto neben der Mitte, oder zieht es zur&uuml;ck? Ab
+          welchem Wert rei&szlig;t es ab? Ist links wie rechts? Der Wert daneben geht
+          ungefiltert auf Byte&nbsp;7, also ist er genau das, was am Auto ankommt.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weiter links">&minus;</button>
+          <input type="range" id="ghost-quer-test" min="-1" max="1" step="0.05" value="0">
+          <button type="button" data-step="1" aria-label="weiter rechts">+</button>
+          <span class="opt-val" id="ghost-quer-test-val">aus</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Strecke beim Fahren lernen
           <small>Setzt das Layout aus den gemeldeten Kacheln zusammen und &uuml;bernimmt es
@@ -6051,10 +7242,10 @@
           <small>Aus: f&auml;hrt auch ohne gedruckte Strecke. An: nur mit gelesenem
           Muster.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-needcode"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: F&uuml;hrenden bremsen<small>Der Erstplatzierte f&auml;hrt etwas langsamer, damit das Feld zusammenbleibt. Wirkt auch ohne Rennen, also beim freien Fahren &ndash; aber erst ab zwei Ghosts: mit einem einzigen ist dieser eine der F&uuml;hrende, und ihn zu bremsen hie&szlig;e nur, ihn langsamer zu machen.</small></div>
-        <label class="tgl"><input type="checkbox" id="ghost-leader"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Abschlag f&uuml;r den F&uuml;hrenden
-          <small>Um wie viel langsamer.</small></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Feld zusammenhalten<small>Gestaffelt &uuml;ber den ganzen Platz: der Erste f&auml;hrt um den Abschlag langsamer, der Letzte um denselben Betrag schneller, die Feldmitte unver&auml;ndert. Damit bleibt das mittlere Tempo gleich &ndash; w&uuml;rde nur gebremst, w&auml;re dies in Wahrheit ein Schalter, der alle langsamer macht. Vorher wirkte es nur auf den Erstplatzierten, und dann waren die ersten beiden beieinander und der Rest blieb, wo er war. Wirkt auch ohne Rennen, aber erst ab zwei Ghosts: mit einem einzigen ist dieser eine gleichzeitig Erster und Letzter.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-leader" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Ghost: St&auml;rke der Staffel
+          <small>Um wie viel der Erste langsamer und der Letzte schneller f&auml;hrt.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-leader-pct" min="0" max="0.3" step="0.01" value="0.1">
@@ -6062,6 +7253,55 @@
           <span class="opt-val" id="ghost-leader-pct-val">10%</span>
         </div></div>
       
+      <!-- ================================================================================
+           RENNEN SIMULIEREN
+           Ein Rennen, das ABLAEUFT und das man sich ansieht - kein gerechnetes Ergebnis.
+           Die Autos fahren mit der echten Ghost-Logik und dem Fahrzeugmodell dieser App;
+           was hier fehlt, ist nur das Auto aus Plastik. Begruendung und Grenzen stehen bei
+           simStart() in 90b-sim.js.
+           ============================================================================== -->
+      <div class="opt-head">Rennen simulieren <span class="wip-tag">experimentell</span></div>
+      <div class="opt-row"><div class="opt-label">Was hier passiert
+          <small>Die eingestellten Ghosts fahren die eingetragene Strecke &ndash; mit
+          derselben Logik, die sie am echten Auto benutzen: Ideallinie, Kurvendrosselung,
+          Querversatz, Staffel und die zugeschalteten Zutaten. Statt Funkbefehle bekommt ein
+          Fahrzeugmodell das Gas, und aus seinem Tempo wird die Position auf der Bahn. Man
+          sieht das Rennen laufen, nicht sein Ergebnis.
+          <br>Was das nicht ersetzt: Reibung, Staub, ein Auto, das aus der Kurve fliegt. Wer
+          hier vorne ist, ist es im Modell &ndash; nicht auf dem Teppich.</small></div>
+        <span class="muted" style="font-size:11px">&#9660;</span></div>
+      <div class="opt-row"><div class="opt-label">Anzahl Ghosts</div>
+        <select id="sim-ghosts">
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+        </select></div>
+      <div class="opt-row"><div class="opt-label">Anzahl Runden</div>
+        <select id="sim-laps">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3" selected>3</option>
+          <option value="5">5</option>
+          <option value="10">10</option>
+        </select></div>
+      <div class="opt-row"><div class="opt-label">Doppelte Geschwindigkeit
+          <small>Spielt die Simulation doppelt so schnell ab. Die Rundenzeiten bleiben die
+          des Rennens &ndash; abgespielt wird schneller, gefahren nicht.</small></div>
+        <label class="tgl"><input type="checkbox" id="sim-fast"><span></span></label></div>
+      <div class="row" style="margin:12px 14px; align-items:center; gap:10px">
+        <button class="primary" id="sim-start">Simulation starten</button>
+        <span class="muted" id="sim-vorgabe-hinweis">Ohne eingetragene Strecke wird auf
+        SR3GLR2GR2G2 gefahren &ndash; geliehen, der Streckeneditor bleibt leer.</span>
+        <button id="sim-stop" hidden>Abbrechen</button>
+        <span class="muted" id="sim-lage" data-i18n-skip>bereit</span>
+      </div>
+      <div class="sim-buehne">
+        <div class="sim-karte" id="sim-karte"></div>
+        <div class="sim-tafel" id="sim-tafel" data-i18n-skip></div>
+      </div>
+
     </div>
     <div class="card subpage" id="sub-opt-pad">
       <button class="misc-back subpage-back" data-sub="">&larr; Einstellungen</button>
@@ -6245,12 +7485,21 @@
                  stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3"/>
               <path d="M7 7l1 13h8l1-13"/></svg>
             <span class="tp-cap">Leeren</span></button>
-          <button class="tp-btn" id="track-fs-exit" hidden title="Vollbild verlassen"
-                  aria-label="Vollbild verlassen">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                 stroke-linecap="round" aria-hidden="true">
+          <!-- EIN UMSCHALTER statt eines Schliessknopfs. Hier stand ein Knopf mit dem
+               Vollbild-Symbol und der Aufschrift "Schliessen", der ausserhalb des Vollbilds
+               sichtbar war - das hidden griff nicht - und dort nichts tat. Wer an dieser
+               Stelle das Vollbild erwartet, bekommt es jetzt auch: die Ecken zeigen nach
+               aussen, solange man hinein kann, und nach innen, wenn man heraus kann. -->
+          <button class="tp-btn" id="track-fs-toggle" title="Vollbild umschalten"
+                  aria-label="Vollbild umschalten">
+            <svg class="tp-fs-ein" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
               <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg>
-            <span class="tp-cap">Schlie&szlig;en</span></button>
+            <svg class="tp-fs-aus" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+              <path d="M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5"/></svg>
+            <span class="tp-cap tp-fs-ein">Vollbild</span>
+            <span class="tp-cap tp-fs-aus">Schlie&szlig;en</span></button>
         </div>
         <div id="track-preview-svg"></div>
         <p class="muted" style="border-left:3px solid var(--warn); padding-left:9px;
@@ -6529,7 +7778,7 @@
      kosten. Im Vollbild ist sie ausgeblendet. -->
 <footer id="app-footer">
   <span class="foot-left">
-    <span class="foot-ver">v<span id="app-version">0.5.15</span></span>
+    <span class="foot-ver">v<span id="app-version">0.5.48</span></span>
     <span class="foot-dim foot-brand" data-i18n-skip>OmegaSim &middot; MIT</span>
     <!-- Zur Klarstellung, und weil "Carrera" im ganzen Projekt vorkommt: das hier ist ein
          unabhaengiges Hobbyprojekt. Kein Firmenzeichen, keine Genehmigung, keine

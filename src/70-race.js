@@ -117,6 +117,7 @@
   function raceClockTick() {
     if (raceState !== 'racing') return;
     maybeSwitchRaceWeather();
+    wxWechselTick();
     const el = $('race-clock');
     if (el) {
       if (!RACE_MODES[raceMode].timed) {
@@ -141,9 +142,37 @@
   // Same two guards as the dashboard: a code must be seen twice before it is believed, and
   // an immediate repeat of start/finish is ignored. Without them a stuttering counter
   // produces phantom laps, and here it would corrupt the results table of every car.
-  // The formation lap ends the moment ANY car crosses start/finish. Called from both lap
-  // detectors (the player's dashboard and the per-car one) so it does not matter who gets
-  // there first — including a ghost, which is the usual case.
+  // ---- Wieviele Ueberfahrten die Einfuehrungsrunde braucht ---------------------------
+  //
+  // ZWEI, auf Wunsch - und es ist nicht nur eine Zahl. Bei EINER Ueberfahrt endete die
+  // Einfuehrungsrunde, sobald irgendein Auto den Zielstreifen meldete, und das kann der
+  // Moment des Gruen selbst sein: ein Auto, das auf oder kurz vor dem Streifen steht, setzt
+  // die Start/Ziel-Sperre sofort. Die Einfuehrungsrunde war dann vorbei, bevor sie
+  // angefangen hatte - "fliegender Start klappt nicht".
+  //
+  // Zwischen der ersten und der zweiten Ueberfahrt EINES Autos liegt dagegen immer eine
+  // volle Runde, egal wo es gestanden hat. Die Regel braucht dafuer weder eine
+  // Positionsbestimmung noch die Aufstellung; sie folgt aus der Bahn.
+  const FORMATION_UEBERFAHRTEN = 2;
+
+  // Je Auto gezaehlt, und "der Erste" ist deshalb kein eigener Begriff: wer als Erster bei
+  // zwei ankommt, IST der Erste. Eine Rangliste waere ein zweiter Ort fuer dieselbe Aussage.
+  // Der Schluessel ist die Geraete-id, fuer das eigene Auto der feste String 'spieler'.
+  let formationZaehler = new Map();
+
+  function formationUeberfahrt(schluessel) {
+    if (!raceFormationLap) return;
+    const n = (formationZaehler.get(schluessel) || 0) + 1;
+    formationZaehler.set(schluessel, n);
+    if (n < FORMATION_UEBERFAHRTEN) {
+      // Ein Zwischenstand, kein Ereignis: die Meldung sagt, dass es noch eine Runde ist,
+      // sonst haelt man die stille Vorbeifahrt fuer einen Fehler.
+      showHudToast(t('Einführungsrunde: noch eine Runde'));
+      return;
+    }
+    endFormationLap();
+  }
+
   function endFormationLap() {
     if (!raceFormationLap) return;
     raceFormationLap = false;
@@ -221,9 +250,23 @@
     if (!car.race) car.race = { laps: [], lapStart: null, pending: null, seen: 0,
                                 lastActed: 0, lastCount: null };
     const r = car.race, now = Date.now();
+    // DIE AUSLAUFRUNDE endet hier, und nur hier: dieses Auto hat Start/Ziel ueberfahren,
+    // also gilt die Zielflagge fuer es. Die Runde wird noch GEWERTET - sie ist gefahren
+    // worden, und eine gefahrene Runde zu verschweigen waere die zweite Unwahrheit nach der
+    // ersten (dem Stehenbleiben mitten auf der Bahn).
+    if (raceState === 'finished' && car.ghost && car.ghost.auslauf) {
+      car.ghost.auslauf = false;
+      if (r.lapStart !== null) {
+        r.laps.push({ lap: r.laps.length + 1, ms: now - r.lapStart, off: r.offLap || 0 });
+      }
+      r.lapStart = null;
+      finishGhost(car);
+      ghostAuslaufFertig();
+      return;
+    }
     if (raceState !== 'racing' && raceState !== 'finishing') { r.lapStart = now; return; }
     // During the formation lap this crossing is the START of the race, not a lap.
-    if (raceFormationLap) { endFormationLap(); return; }
+    if (raceFormationLap) { formationUeberfahrt(String(car.device.id)); return; }
     const warFinishing = raceState === 'finishing';
     if (r.lapStart !== null) {
       const ms = now - r.lapStart, offs = r.offLap || 0;
@@ -280,8 +323,16 @@
   }
 
   function raceAllCars() {
+    // `ort` MIT HERAUS: der Ort auf der Schiene, monoton ueber Runden. Er entscheidet die
+    // Reihenfolge, solange noch keine Runde abgeschlossen ist - bis hierher war sie in der
+    // ersten Runde die Reihenfolge der GARAGE, weil alle Rundenzahlen und Summen null waren
+    // und die Sortierung stabil ist. Eine Uebersicht, die eine ganze Runde lang eine
+    // erfundene Reihenfolge zeigt, ist schlechter als keine.
     const out = garage.map(c => ({ name: garageLabel(c), role: c.role,
                                    farbe: carColor(c).hex, kennung: c.tag,
+                                   ort: (c.role === 'player'
+                                     ? spielerOrtGes()
+                                     : (typeof ghostOrtGes === 'function' ? ghostOrtGes(c) : null)),
                                    laps: (c.race && c.race.laps) || [] }));
     if (!garage.some(c => c === playerCar) && raceLapTimes.length) {
       // Ohne Garage gibt es kein Geraet und damit keine Farbe: dann bleibt das Feld leer,
@@ -340,6 +391,77 @@
   //
   // Der Teilton ist LEISER als der Grundton, nicht lauter. Die Bestzeit soll heller klingen,
   // nicht lauter - lauter waere die naheliegende Wahl und die falsche.
+  // ---- Der Rundenzaehler am Rennende -------------------------------------------------
+  //
+  // Die Lautmalerei aus dem Wunsch IST die Partitur:
+  //
+  //     du-di-di   drei kurze, steigende Toene
+  //     dueue      ein langer, hoher
+  //     dumm       einer kurz und tief darunter
+  //     daaaa      am Ende einer, der stehenbleibt
+  //
+  // Drei Takte: zweimal derselbe, dann ein dritter mit doppeltem Lauf und Schlusston.
+  //
+  // ALS TABELLE und nicht als Folge von Aufrufen: so laesst sich die Melodie aendern, ohne
+  // die Wiedergabe anzufassen, und man sieht sie beim Lesen. [Startzeit s, Frequenz Hz,
+  // Dauer s, Lautstaerke].
+  //
+  // Die Frequenzen sind eine C-Dur-Dreiklangsfolge - C5 E5 G5 hinauf, C6 als Spitze, G3 als
+  // "dumm" darunter, C4 als Schluss. Gewaehlt und nicht gemessen: ein Rundenzaehler von
+  // 1978 spielt keine bestimmte Tonart, er spielt, was sein Teiler hergibt.
+  const ZAEHLER_TON = { C4: 261.6, G3: 196.0, C5: 523.3, E5: 659.3, G5: 784.0, C6: 1046.5 };
+  function zaehlerTakt(t0, mitLauf) {
+    const T = ZAEHLER_TON, n = [];
+    const lauf = (t) => {
+      n.push([t + 0.00, T.C5, 0.075, 0.16]);
+      n.push([t + 0.09, T.E5, 0.075, 0.16]);
+      n.push([t + 0.18, T.G5, 0.075, 0.16]);
+    };
+    lauf(t0);
+    lauf(t0 + 0.27);
+    if (mitLauf) { lauf(t0 + 0.54); lauf(t0 + 0.81); }
+    const nach = t0 + (mitLauf ? 1.08 : 0.54);
+    n.push([nach, T.C6, mitLauf ? 0.26 : 0.30, 0.20]);       // dueue
+    n.push([nach + (mitLauf ? 0.30 : 0.34), T.G3, 0.20, 0.22]); // dumm
+    return { noten: n, ende: nach + (mitLauf ? 0.50 : 0.54) };
+  }
+
+  function playRaceEndFanfare() {
+    if (!soundEnabled || !audioCtx) return null;
+    const t0 = audioCtx.currentTime + 0.05;
+    const a = zaehlerTakt(t0, false);
+    const b = zaehlerTakt(a.ende, false);
+    const c = zaehlerTakt(b.ende, true);
+    const noten = a.noten.concat(b.noten, c.noten);
+    // "daaaa": der Schluss bleibt stehen, tief und lang. Er ist der einzige Ton, der nicht
+    // aus dem Takt kommt - deshalb steht er hier und nicht in der Tabelle.
+    noten.push([c.ende + 0.06, ZAEHLER_TON.C4, 1.10, 0.24]);
+
+    // EIN Tiefpass fuer alles: der Rundenzaehler ist ein Piezosummer an einer einfachen
+    // Schaltung, also ein gefiltertes Rechteck. Ein Sinus waere zu weich und traefe das
+    // Vorbild nicht; ein ungefiltertes Rechteck waere zu scharf.
+    const lp = audioCtx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 2400;
+    lp.Q.value = 0.7;
+    lp.connect(audioCtx.destination);
+
+    for (const [t, f, d, v] of noten) {
+      const osc = audioCtx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.value = f;
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(v, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0008, t + d);
+      osc.connect(g).connect(lp);
+      osc.start(t);
+      osc.stop(t + d + 0.02);
+    }
+    // Zurueck kommt die Partitur, damit ein Test sie nachrechnen kann, ohne zu hoeren.
+    return { noten: noten.length, dauer: +(noten[noten.length - 1][0] + noten[noten.length - 1][2] - t0).toFixed(2) };
+  }
+
   function playLapChime(beste) {
     if (!soundEnabled || !audioCtx) return;
     const t = audioCtx.currentTime;
@@ -495,11 +617,52 @@
   // there is no known end time, so a fixed window from the start is used instead.
   function scheduleRaceWeatherChange() {
     raceWxSwitchAt = null;
+    wxWechselAt = null;
+    // WECHSELHAFT GEWINNT. Der einmalige Wechsel bleibt aus, siehe die Begruendung bei
+    // wxWechselPlanen().
+    if (raceWxStart === 'wechsel') { wxWechselPlanen(false); return; }
     if (!raceWxChange) return;
     const total = RACE_MODES[raceMode].timed && raceMode !== 'laps'
       ? raceLimit * 60000
       : 5 * 60000;   // practice / lap races: assume a five-minute window
     raceWxSwitchAt = Date.now() + total * (0.35 + Math.random() * 0.3);
+  }
+
+  // ---- WECHSELHAFT ------------------------------------------------------------------
+  //
+  // Eine dritte Kategorie neben trocken und Regen, wie bestellt: alle 2 bis 6 Minuten faengt
+  // es an zu regnen, der Schauer dauert 1 bis 3 Minuten, dann trocknet es ab. Beide Zeiten
+  // werden je Phase neu GEZOGEN - ein fester Takt waere ein Metronom und kein Wetter.
+  //
+  // SIE SCHLIESST DEN EINMALIGEN WECHSEL AUS. "Wetter aendert sich" macht genau einen
+  // Wechsel zu einem zufaelligen Zeitpunkt; beides zugleich hiesse, dass mitten in einem
+  // Schauer noch ein Wechsel dazwischenfaehrt und die Phasenrechnung nicht mehr sagt, was
+  // gerade gilt. Wechselhaft gewinnt, und der Hilfetext sagt das.
+  //
+  // WARUM MINUTEN UND NICHT RUNDEN: ein Schauer haengt nicht daran, wie schnell jemand
+  // faehrt. Bei einem Rennen ueber drei Runden wird man ihn moeglicherweise nie sehen - das
+  // ist richtig so und keine Fehlfunktion.
+  const WX_TROCKEN_MIN_MS = 2 * 60000;
+  const WX_TROCKEN_MAX_MS = 6 * 60000;
+  const WX_REGEN_MIN_MS = 1 * 60000;
+  const WX_REGEN_MAX_MS = 3 * 60000;
+  let wxWechselAt = null;
+
+  function wxWechselPlanen(nass) {
+    const min = nass ? WX_REGEN_MIN_MS : WX_TROCKEN_MIN_MS;
+    const max = nass ? WX_REGEN_MAX_MS : WX_TROCKEN_MAX_MS;
+    wxWechselAt = Date.now() + min + Math.random() * (max - min);
+  }
+
+  function wxWechselTick() {
+    if (raceWxStart !== 'wechsel' || wxWechselAt === null) return;
+    if (Date.now() < wxWechselAt) return;
+    const warNass = weather === 'rain';
+    setWeather(warNass ? 'dry' : 'rain');
+    showHudToast(warNass ? t('Es trocknet ab') : t('Es fängt an zu regnen'));
+    log('Wechselhaft: ' + (warNass ? 'es trocknet ab' : 'Schauer'), 'info');
+    // Die naechste Phase ist die andere - also die Dauer der NEUEN Lage ziehen.
+    wxWechselPlanen(!warNass);
   }
 
   function maybeSwitchRaceWeather() {
@@ -697,7 +860,9 @@
     }
     // Starting conditions, applied before the lights: weather first, because the tyre
     // choice follows from it, then the tank, then the pit-stop counter.
-    setWeather(raceWxStart);
+    // 'wechsel' ist keine Lage, sondern ein Verlauf: er beginnt trocken. setWeather() mit
+    // 'wechsel' zu rufen waere ein Wetter, das es nicht gibt.
+    setWeather(raceWxStart === 'rain' ? 'rain' : 'dry');
     fuel = Math.max(0, Math.min(100, raceFuelStartL / FUEL_TANK_LITERS * 100));
     updateDamageFuelUI();
     racePitDone = 0;
@@ -735,6 +900,12 @@
     // starten", waehrend das Rennen schon lief - ein Druck darauf hat es dann gestoppt. Ein
     // Knopf, der luegt, was er tun wird, ist schlimmer als einer, der langsam ist.
     setTimeout(updateRaceActButtons, 0);
+    // Die Seiten des Zieleinlaufs beginnen bei jedem Rennen von vorn - sonst haengt die
+    // Seite eines Autos an der Zahl der Rennen davor, und dieselbe Aufstellung endete beim
+    // zweiten Mal anders als beim ersten.
+    if (typeof finishSeitenZaehlerZuruecksetzen === 'function') {
+      finishSeitenZaehlerZuruecksetzen();
+    }
     raceState = 'countdown';
     $('race-start-btn').disabled = true;
     // Abbrechen muss schon im Countdown gehen: requestRaceStop() raeumt den Zaehler mit
@@ -766,6 +937,9 @@
     // A flying start goes to the formation lap first: the cars roll at pit-lane speed
     // and no laps count until the field crosses the line.
     raceFormationLap = raceFlying;
+    // FRISCH ZAEHLEN. Ohne das traegt ein zweites Rennen die Ueberfahrten des ersten mit
+    // sich, und dann ist die Einfuehrungsrunde beim naechsten Start sofort vorbei.
+    formationZaehler = new Map();
     raceState = 'racing';
     raceLapStart = Date.now();
     launchGhosts();   // green means green for everyone
@@ -778,6 +952,12 @@
       updateFlagUi();
       showHudToast(t('Einführungsrunde'));
     }
+    // AUF WUNSCH SOFORT ZUR UEBERSICHT, und zwar im Vollbild genauso: der Schirm ist eine
+    // Ueberlagerung im Cockpit, also gilt derselbe Zustand in beiden Lagen. Wer lieber das
+    // Cockpit sieht, blaettert mit links zurueck - der Sprung nimmt nichts weg, er waehlt
+    // nur den Anfang.
+    if (typeof cockpitScreenZu === 'function') cockpitScreenZu('uebersicht');
+
     raceStartedAt = Date.now();
     if (raceClockTimer) clearInterval(raceClockTimer);
     raceClockTimer = setInterval(raceClockTick, 250);
@@ -797,7 +977,10 @@
     if (raceState !== 'racing' && raceState !== 'countdown' && raceState !== 'finishing') return;
     if (raceCountdownTimer) { clearInterval(raceCountdownTimer); raceCountdownTimer = null; }
     setRaceLights(0);
-    finishRace();
+    // KEIN AUSLAUFEN bei einem Abbruch von Hand. Wer abbricht, will, dass es aufhoert -
+    // eine Extrarunde saehe aus, als haette der Knopf nichts getan. Dieselbe Ueberlegung,
+    // mit der die laufende Runde hier verworfen und nicht gewertet wird.
+    finishRace(false);
     showHudToast('Rennen abgebrochen');
     updateRaceActButtons();
   }
@@ -810,7 +993,16 @@
     return missed * racePitPenaltyS * 1000;
   }
 
-  function finishRace() {
+  // Wie lange ein Ghost hoechstens noch faehrt, um seine Runde zu beenden. 90 s ist
+  // grosszuegig - eine Runde auf einer Wohnzimmerbahn dauert gemessen unter 20 s -, und die
+  // Grenze ist nicht fuer den Normalfall da, sondern fuer den Ghost, der neben der Bahn
+  // liegt und nie ankommt.
+  const GHOST_AUSLAUF_MAX_MS = 90000;
+  let ghostAuslaufBis = 0;
+
+  // `auslaufen` = die Ghosts duerfen ihre angefangene Runde zu Ende fahren. Vorgabe ja;
+  // requestRaceStop() uebergibt ausdruecklich false.
+  function finishRace(auslaufen) {
     raceState = 'finished';
     // Die laufende Runde festhalten und die Uhr anhalten. Ohne das Nullsetzen von
     // raceLapStart rechnet die Anzeige weiter gegen Date.now() und die Runde waechst nach
@@ -834,7 +1026,28 @@
     // Diese Stelle ist die richtige und die einzige: alle Endbedingungen laufen durch
     // finishRace() (Rundenzahl erreicht, Zeit abgelaufen und letzte Runde beendet, Stopp von
     // Hand), also wird die Sequenz von jeder ausgeloest, ohne sie einzeln zu verdrahten.
-    garage.forEach(c => { if (c.role === 'ghost') finishGhost(c); });
+    // ---- Die Zielflagge gilt JE AUTO beim Ueberfahren -------------------------------
+    //
+    // Bis v0.5.17 stand hier finishGhost() fuer jeden, und das ganze Feld blieb mitten auf
+    // der Bahn stehen, sobald der Fahrer ueber die Linie kam. Auf einer echten Bahn faehrt
+    // jeder seine angefangene Runde zu Ende.
+    //
+    // Wer schon steht oder gar nicht faehrt, laeuft nicht aus - fuer den gilt die Flagge
+    // sofort, sonst wartete das Rennen auf ein Auto, das sich nicht bewegt.
+    const willAuslaufen = auslaufen !== false;
+    ghostAuslaufBis = willAuslaufen ? now + GHOST_AUSLAUF_MAX_MS : 0;
+    garage.forEach(c => {
+      if (c.role !== 'ghost') return;
+      const faehrt = willAuslaufen && c.ghost && !c.parked && !c.ghost.finish;
+      if (faehrt) {
+        c.ghost.auslauf = true;
+        return;
+      }
+      finishGhost(c);
+    });
+    if (willAuslaufen && garage.some(c => c.role === 'ghost' && c.ghost && c.ghost.auslauf)) {
+      showHudToast(t('Ghosts fahren die Runde zu Ende'));
+    }
     const missed = Math.max(0, racePitRequired - racePitDone);
     $('race-status').textContent =
       `Beendet (${raceLapTimes.length} Runde${raceLapTimes.length === 1 ? '' : 'n'})`
@@ -842,6 +1055,10 @@
          ? `, letzte Runde unvollendet nach ${formatLapTime(racePartialMs)}` : '')
       + (missed > 0 ? `, ${missed} Pflichtstopp${missed === 1 ? '' : 's'} verpasst, `
                       + `+${missed * racePitPenaltyS} s Strafe` : '');
+    // DER RUNDENZAEHLER, aber nur bei einer echten Zielflagge. Wer von Hand abbricht,
+    // bekommt keine Fanfare - dieselbe Ueberlegung, mit der die Ghosts dann auch nicht
+    // auslaufen: ein Abbruch ist kein Zieleinlauf.
+    if (willAuslaufen) playRaceEndFanfare();
     $('race-start-btn').disabled = false;
     $('race-lap-current-row').style.display = 'none';
     $('race-results').style.display = '';
@@ -859,6 +1076,37 @@
       if (typeof renderSessions === 'function') renderSessions();
     }
   }
+
+  // Wenn der letzte Ghost angekommen ist, steht das Ergebnis fest - also neu zeichnen.
+  // Die Tabelle war beim Fallen der Flagge schon gemalt, und die Auslaufrunden kommen erst
+  // danach dazu; ohne diesen Aufruf fehlten sie darin.
+  function ghostAuslaufFertig() {
+    if (garage.some(c => c.role === 'ghost' && c.ghost && c.ghost.auslauf)) return;
+    ghostAuslaufBis = 0;
+    renderRaceResults();
+    renderPositionPlot();
+    showHudToast(t('Alle im Ziel'));
+  }
+
+  // Die Grenze. Ein eigener, langsamer Takt reicht: hier wird auf Sekunden gewartet und
+  // nicht auf Millisekunden.
+  setInterval(() => {
+    if (!ghostAuslaufBis || Date.now() < ghostAuslaufBis) return;
+    ghostAuslaufBis = 0;
+    let n = 0;
+    garage.forEach(c => {
+      if (c.role === 'ghost' && c.ghost && c.ghost.auslauf) {
+        c.ghost.auslauf = false;
+        finishGhost(c);
+        n++;
+      }
+    });
+    if (n) {
+      log('Auslaufrunde abgebrochen: ' + n + ' Auto(s) kamen nicht ans Ziel.', 'info');
+      renderRaceResults();
+      renderPositionPlot();
+    }
+  }, 1000);
 
   // ---- Ergebnisfenster ----
   // Eigener, kleiner Aufbau statt eines Klons der grossen Tabelle: die traegt IDs, und
@@ -1055,7 +1303,11 @@
 
   // Tank und Zustand sind nur WAEHREND eines Boxenstopps Schalter. Ausserhalb bleibt ein
   // Tipp wirkungslos, statt versehentlich etwas zu verstellen.
-  for (const el of document.querySelectorAll('.pit-tile[data-pit="refuel"], .pit-tile[data-pit="repair"]')) {
+  // AUF DEN STREIFEN EINGEENGT. Seit v0.5.18 tragen die Zeilen des Boxenschirms dieselben
+  // data-pit-Werte, und dieser Zuhoerer haette sich mit an sie gehaengt - dort wuerde ein
+  // Tipp ausserhalb eines Stopps die SIMULATION umschalten statt das zu tun, was die Taste
+  // X tut. Der Boxenschirm hat seinen eigenen Weg, und beide laufen durch pitScreenSelect().
+  for (const el of document.querySelectorAll('.gt3-strip .pit-tile[data-pit="refuel"], .gt3-strip .pit-tile[data-pit="repair"]')) {
     el.addEventListener('click', () => {
       // Zwei Bedeutungen nach Zustand, wie bei der Reifenkachel: im Boxenstopp der Plan,
       // sonst die Simulation. Der vorhandene Zuhoerer wird ERWEITERT und nicht ein zweiter
@@ -1225,8 +1477,12 @@
     lines.push('');
     lines.push('Rennbedingungen;Wert');
     lines.push(`Modus;${RACE_MODES[raceMode].label}`);
-    lines.push(`Wetter zu Beginn;${raceWxStart === 'rain' ? 'Regen' : 'trocken'}`);
-    lines.push(`Wetterwechsel;${raceWxChange ? 'ja' : 'nein'}`);
+    // Die dritte Kategorie MIT: eine Ausfuhr, die "wechselhaft" als "trocken" auffuehrt,
+    // behauptet ueber das gefahrene Rennen etwas Falsches.
+    lines.push(`Wetter zu Beginn;${raceWxStart === 'rain' ? 'Regen'
+      : raceWxStart === 'wechsel' ? 'wechselhaft' : 'trocken'}`);
+    lines.push(`Wetterwechsel;${raceWxStart === 'wechsel' ? 'laufend'
+      : raceWxChange ? 'ja' : 'nein'}`);
     lines.push(`Tank beim Start (l);${raceFuelStartL}`);
     // On/off track goes into the export because it is the one figure that says whether the
     // lap times above describe driving on a track at all.
@@ -1666,7 +1922,7 @@
 
     // Race mode: only count laps while a race is armed. "finishing" means RB/R1 was
     // pressed already — this crossing completes the last lap, then the race ends.
-    if (raceFormationLap) { endFormationLap(); return true; }
+    if (raceFormationLap) { formationUeberfahrt('spieler'); return true; }
     if ((raceState === 'racing' || raceState === 'finishing') && raceLapStart !== null) {
       const wasFinishing = raceState === 'finishing';
       const rundeMs = now - raceLapStart;
@@ -1705,11 +1961,36 @@
   // Position innerhalb der aktuellen Kachel, 0..1. Wie ghostTilePhase(), mit derselben
   // Laengenkorrektur: eine Haarnadel ist dreimal so lang wie eine Gerade, und ohne die
   // Korrektur stuende die Phase dort nach einem Drittel auf 1.
+  // Die Phase des EIGENEN Autos. Sie hat dieselbe Aufgabe wie ghostTilePhase(), aber eine
+  // schlechtere Grundlage, und das gehoert hingeschrieben:
+  //
+  // Ein Ghost fuehrt seit v0.5.18 eine GEMESSENE Dauer je Kacheltyp mit (g.tileMsTyp) - die
+  // enthaelt Laenge UND Tempo. Fuer das eigene Auto gibt es nur dashTileMs, ein Mittel ueber
+  // alle Kacheln, multipliziert mit dem GEOMETRISCHEN Laengenverhaeltnis. Das ist zu kurz
+  // fuer Kurven, weil auch ein Mensch darin abbremst; gemessen an den Ghosts sind es 1,18
+  // mal bei einer 60-Grad-Kurve und 1,43 mal bei einer Haarnadel.
+  //
+  // Die Phase steht deshalb hier laenger am Deckel als bei einem Ghost. Eine Tabelle je Typ
+  // waere die Behebung - dafuer muesste dieses Auto seine Kacheldauern je Typ mitfuehren, so
+  // wie ein Ghost. Ein eigener Schritt, und keiner, den man nebenbei richtig hinbekommt: das
+  // eigene Auto faehrt nicht nach Plan, also streuen seine Zeiten mehr.
+  //
+  // Gedeckelt wird trotzdem, und aus demselben Grund wie bei ghostTilePhase(): die Phase ist
+  // der Index in die Ideallinie, und eine Phase, die die 1 nicht erreicht, reisst dort an
+  // jeder Kachelgrenze eine Luecke. Der Grund steht ausfuehrlich bei ghostTilePhase().
   function dashTilePhase() {
     if (!dashTileAt || !dashTileMs) return 0;
     const f = (typeof ghostTileLenFactor === 'function' && dashMinimapIndex !== null)
       ? ghostTileLenFactor(dashMinimapIndex) : 1;
     return Math.max(0, Math.min(1, (Date.now() - dashTileAt) / (dashTileMs * f)));
+  }
+
+  // Der Ort des eigenen Autos, in derselben Einheit wie ghostOrtGes(): monoton, ueber
+  // Runden hinweg. null, solange keine Kachel bekannt ist.
+  function spielerOrtGes() {
+    if (dashMinimapIndex === null || dashMinimapIndex === undefined) return null;
+    const n = currentTrackTiles.length || 1;
+    return raceLapTimes.length * n + dashMinimapIndex + dashTilePhase();
   }
 
   function refreshMinimap() {
@@ -1721,7 +2002,12 @@
     if (!el) return;
     el.innerHTML = (currentTrackTiles.length === 0)
       ? '<p class="muted" style="width:220px">kein Streckenlayout geladen</p>'
-      : renderTrackPreview(currentTrackTiles, dashMinimapIndex).html;
+      // DETAILED, wie im Editor: schwarze Fahrbahn, weisse Stossfugen, rot-weisse
+      // Randsteine links und blau-weisse rechts. Den Aufbau gab es laengst, hier wurde
+      // aber die einfache Fassung gezeichnet - eine graue Linie. Und `cars` statt
+      // `currentIndex`: nur so bekommen die Punkte Farbe, Kuerzel und Querlage.
+      : renderTrackPreview(currentTrackTiles, null,
+                           { detailed: true, cars: trackCarMarks() }).html;
   }
 
   async function ensureDashboardStatusSubscribed() {
@@ -1921,7 +2207,14 @@
     const g = cv.getContext('2d');
     const W = cv.width, H = cv.height, S = Math.max(W, H);
     g.clearRect(0, 0, W, H);
-    g.fillStyle = '#0d1219';
+    // DIE FARBEN AUS DER ANSICHT, nicht aus dem Code. Eine Leinwand kennt kein CSS, also
+    // holt sie sich die drei Werte hier ab - einmal je Bild, und das sind bei 80 ms Takt
+    // zwoelf Abfragen je Sekunde, gemessen belanglos neben den 0,5 % Gesamtlast.
+    const wxCss = getComputedStyle(document.body);
+    const wxGrund = (wxCss.getPropertyValue('--wx-grund') || '#0d1219').trim();
+    const wxWolke = (wxCss.getPropertyValue('--wx-wolke') || '226, 236, 246').trim();
+    const wxRegen = (wxCss.getPropertyValue('--wx-regen') || '104, 166, 186').trim();
+    g.fillStyle = wxGrund;
     g.fillRect(0, 0, W, H);
 
     // Gitter: fein und dunkel, damit die Formen davor stehen.
@@ -1945,7 +2238,7 @@
     // gleichmaessiger blauer Kasten oder ein Schauermuster.
     const stk = wxRainLevel();
     if (stk > 0.01) {
-      g.fillStyle = 'rgba(104,166,186,' + (0.3 * stk).toFixed(3) + ')';
+      g.fillStyle = 'rgba(' + wxRegen + ',' + (0.3 * stk).toFixed(3) + ')';
       g.fillRect(0, 0, W, H);
     }
 
@@ -1980,8 +2273,8 @@
         }
         g.closePath();
         const a2 = (deck * af).toFixed(3);
-        g.fillStyle = b.regen ? 'rgba(104,166,186,' + a2 + ')'
-                              : 'rgba(226,236,246,' + a2 + ')';
+        g.fillStyle = b.regen ? 'rgba(' + wxRegen + ',' + a2 + ')'
+                              : 'rgba(' + wxWolke + ',' + a2 + ')';
         g.fill();
       }
     }
@@ -2049,21 +2342,92 @@
     ansagenPruefen(ansagenZustand());
   }, 500);
 
-  const GRIP_MATRIX = {
-    'dry|slick': 1.00,
-    'dry|wet':   0.88,
-    'rain|wet':  0.80,
-    'rain|slick': 0.45,
+  // ---- Vier Mischungen statt zweier Reifenarten --------------------------------------
+  //
+  // Bis v0.5.17 war `tyres` zweiwertig ('slick' | 'wet') und GRIP_MATRIX hatte vier Felder.
+  // Daraus werden vier Mischungen, und zwei davon sind BITGLEICH zu vorher:
+  //
+  //     mittel  ==  der alte slick
+  //     regen   ==  der alte wet
+  //
+  // Damit ist die Vorgabe nicht nur gleichwertig, sondern identisch, und ein Selbsttest
+  // rechnet das nach. Die zwei neuen sind gewaehlt - deshalb der Regler darunter.
+  //
+  // Die Farben nach Pirelli, also nach der Formel 1: rot weich, gelb mittel, weiss hart,
+  // blau Regen. Wer Rennsport sieht, liest sie ohne Legende.
+  //
+  // WARUM NICHT weiss/grau/schwarz/dunkelblau, was auch vorgeschlagen war: .gt3-t4 hat den
+  // Grund #04060b, und ein schwarzer Rahmen auf fast schwarzem Feld ist unsichtbar - "hart"
+  // waere ausgerechnet die Mischung, die man nicht erkennt. Das ist ein gemessener Grund und
+  // keine Vorliebe.
+  const TYRE_MIX = {
+    weich:  { griff: 1.12, nass: 0.45, verschleiss: 1.8, aqua: true,
+              farbe: '#e5261e', name: 'weich' },
+    mittel: { griff: 1.00, nass: 0.45, verschleiss: 1.0, aqua: true,
+              farbe: '#f7d117', name: 'mittel' },
+    hart:   { griff: 0.92, nass: 0.45, verschleiss: 0.6, aqua: true,
+              farbe: '#f2f4f8', name: 'hart' },
+    regen:  { griff: 0.88, nass: 0.80, verschleiss: 1.0, aqua: false,
+              farbe: '#2f6fd0', name: 'Regen' },
   };
+  const MISCHUNG_FOLGE = ['weich', 'mittel', 'hart', 'regen'];
+
+  // Wie stark sich die Mischungen unterscheiden. 0 = alle rechnen wie mittel, 1 = die
+  // Tabelle, 2 = doppelt. EINE Interpolation gegen mittel bewegt alle Werte zugleich -
+  // deshalb ist "alle gleich" hier eine Zeile und kein Sonderfall.
+  let tyreMixStaerke = 1;
+
+  function mischungStaerke() {
+    // OHNE REIFENSIMULATION FAHREN ALLE DEN MITTEL-REIFEN, wie bestellt. Das steht hier und
+    // nicht an drei Rechenstellen: eine Bedingung, die dreimal abgefragt wird, wird zweimal
+    // richtig und einmal vergessen.
+    if (!(physEngine.config.tyreEffect > 0)) return 0;
+    return tyreMixStaerke;
+  }
+
+  function mischungWert(m, feld) {
+    const e = TYRE_MIX[m] || TYRE_MIX.mittel;
+    return 1 + (e[feld] - 1) * mischungStaerke();
+  }
+
+  function mischungFarbe(m) { return (TYRE_MIX[m] || TYRE_MIX.mittel).farbe; }
+  function mischungName(m) { return t((TYRE_MIX[m] || TYRE_MIX.mittel).name); }
+
   let weather = 'dry';
-  let tyres = 'slick';
+  let tyres = 'mittel';
+
+  // ---- Die Mischung als Attribut am Koerper -----------------------------------------
+  //
+  // CSS zieht daraus die Rahmenfarbe der vier Reifenfelder (body[data-tyre-mix="hart"]
+  // .gt3-t4 und die drei Geschwister).
+  //
+  // EIGENE FUNKTION UND EIN AUFRUF BEIM AUFBAU, und das ist die Behebung eines gemeldeten
+  // Fehlers. Die Zuweisung stand nur in applySurface(), und applySurface() laeuft erst bei
+  // einem Wetterwechsel, einem Boxenstopp oder an einem Reifenregler. Beim Laden lief sie
+  // NIE: das Attribut fehlte am Koerper, alle vier CSS-Regeln hatten keinen Treffer, und der
+  // Rahmen zeigte dauerhaft den Rueckfallwert aus .gt3-t4 - Gelb, also "mittel". Gemeldet
+  // als "die Umrandung der Reifen im Cockpit entspricht nicht dem Reifentyp", und das war
+  // genau richtig beobachtet: sie entsprach nie einem, sie stand nur zufaellig auf dem
+  // Anfangswert.
+  //
+  // Warum nicht einfach applySurface() beim Aufbau rufen: die Funktion greift auch in den
+  // Tongraphen (setAmbienceRainLevel) und in die Regensicht, und beides ist zum Ladezeitpunkt
+  // noch nicht aufgebaut. Diese eine Zeile hat keine Nebenwirkung.
+  function tyreMixAttribut() {
+    document.body.dataset.tyreMix = tyres;
+  }
+  tyreMixAttribut();
 
   function applySurface() {
     // DAS PIKTOGRAMM ZEIGT DIE MISCHUNG. Hier und nicht bei fitTyresForWeather(): das ist
     // nur EIN Weg zu einem Reifenwechsel, applySurface() laeuft bei jedem - Boxenstopp,
     // Wetterwechsel, Aufbau. Eine Klasse je Weg zu setzen ist die Gelegenheit, einen zu
     // vergessen, und dann zeigt der Reifen die Mischung von vorletzter Runde.
-    document.body.classList.toggle('tyres-wet', tyres === 'wet');
+    document.body.classList.toggle('tyres-wet', tyres === 'regen');
+    // Die Mischung als Attribut am Koerper. Hier und nicht bei fitTyres(): das ist nur EIN
+    // Weg zu einem Wechsel, applySurface() laeuft bei jedem - und zusaetzlich einmal beim
+    // Aufbau, siehe die Begruendung bei tyreMixAttribut().
+    tyreMixAttribut();
     // GEMISCHT statt geschaltet. Der Griff wandert zwischen der trockenen und der nassen
     // Zeile der Matrix - dieselben Endwerte wie vorher, nur nicht mehr in einem Sprung.
     //
@@ -2074,12 +2438,18 @@
     // soll das Handling reagieren".
     const lvl = wxRainLevel();
     const griff = lvl * lvl;
-    const trocken = GRIP_MATRIX['dry|' + tyres] ?? 1.0;
-    const nass = GRIP_MATRIX['rain|' + tyres] ?? 1.0;
-    physEngine.config.gripScale = trocken + (nass - trocken) * griff;
-    // Only slicks aquaplane; wets are cut to move water. Der Faktor darf gebrochen sein:
-    // die Physik rechnet 1 - aquaplaning * ueber^2, also multipliziert er ohnehin.
-    physEngine.config.aquaplaning = tyres === 'slick' ? griff : 0;
+    const e = TYRE_MIX[tyres] || TYRE_MIX.mittel;
+    // Beide Zeilen der Tabelle laufen durch dieselbe Interpolation gegen mittel: bei
+    // Staerke 0 sind alle drei Slicks rechnerisch der Mittelreifen.
+    const trocken = mischungWert(tyres, 'griff');
+    const nass = 1 + (e.nass - 1) * mischungStaerke() + (e.nass - 1) * 0;
+    physEngine.config.gripScale = trocken + (e.nass - trocken) * griff;
+    // Nur Slicks schwimmen auf; Regenreifen sind geschnitten, um Wasser wegzufuehren.
+    physEngine.config.aquaplaning = e.aqua ? griff : 0;
+    // Der Verschleissfaktor der Mischung. Ein EIGENES Feld und nicht tyreWearRate selbst:
+    // sonst gaebe es zwei Orte fuer dieselbe Zahl, und der zweite gewaenne beim naechsten
+    // Reglerklick.
+    physEngine.config.tyreWearMix = mischungWert(tyres, 'verschleiss');
     setAmbienceRainLevel(lvl);
     // Das Regenlicht und die Tropfen haengen an der SICHTBAREN Front und nicht am
     // quadratischen Griff: man sieht Regen, bevor man ihn faehrt.
@@ -2129,13 +2499,34 @@
     padRumble(0.2, 0.15, 120, 'meldung');
   }
 
+  // ---- Was beim Boxenstopp montiert wird ---------------------------------------------
+  //
+  // OHNE AUSDRUECKLICHE WAHL bleibt es beim bisherigen Verhalten: Regen -> Regenreifen,
+  // sonst Slicks (jetzt: der Mittelreifen). Das erhaelt die Zusicherung, dass ein Stopp im
+  // Regen von selbst das Richtige tut.
+  //
+  // MIT einer Wahl aus dem Boxenschirm wird diese montiert - auch die vermeintlich falsche.
+  // Wer im Trockenen Regenreifen aufziehen will, darf das; die Matrix bestraft es schon.
+  let mischungWunsch = null;
+
+  function pitMischungWahl() {
+    return mischungWunsch || (weather === 'rain' ? 'regen' : 'mittel');
+  }
+
+  function pitMischungWeiter() {
+    const i = MISCHUNG_FOLGE.indexOf(pitMischungWahl());
+    mischungWunsch = MISCHUNG_FOLGE[(i + 1) % MISCHUNG_FOLGE.length];
+    showHudToast(t('Reifenwahl') + ': ' + mischungName(mischungWunsch));
+    return mischungWunsch;
+  }
+
   function fitTyresForWeather() {
-    const want = weather === 'rain' ? 'wet' : 'slick';
+    const want = pitMischungWahl();
     if (tyres === want) return false;
     tyres = want;
     applySurface();
-    showHudToast(want === 'wet' ? 'Regenreifen montiert' : 'Slicks montiert');
-    log('Boxenstopp: ' + (want === 'wet' ? 'Regenreifen' : 'Slicks') + ' montiert.', 'info');
+    showHudToast(t('Reifen montiert') + ': ' + mischungName(want));
+    log('Boxenstopp: ' + TYRE_MIX[want].name + ' montiert.', 'info');
     return true;
   }
 
@@ -2575,6 +2966,24 @@
   const CRASH_ROLLING_ALPHA = 0.15;
   const CRASH_REFRACTORY_MS = 1000; // avoid re-triggering repeatedly off one jolt
   let fuelDrainPerSec = 3;       // % per second at full throttle magnitude (slider)
+  // ---- AUS DEM MARKUP LESEN, hier neben der Deklaration ----------------------------
+  //
+  // DER FEHLER, DEN DAS BEHEBT: es gab nur einen Zuhoerer in 50-drive.js. Das Markup traegt
+  // value="0", die Beschriftung daneben sagt 3.0, und diese Variable behielt ihre 3 - bis
+  // jemand den Regler anfasste. fuelSimOn() war beim Start also WAHR, obwohl der Regler 0
+  // zeigte: der Tank lief mit 3 % je Sekunde leer, und ein Boxenstopp bot Tanken an, das
+  // niemand bestellt hatte.
+  //
+  // Dieselbe Fehlerklasse wie bei setting-tyres (0 gegen 2,0) und setting-vibration, und
+  // dieselbe Loesung wie bei crashDetectionEnabled ein paar Zeilen weiter: der Abgleich
+  // gehoert neben die Deklaration. Von 50-drive.js aus waere er eine Zuweisung an ein let
+  // einer spaeteren Datei - temporale Todeszone, ganzer Aufbau weg.
+  if ($('setting-fuel-drain')) {
+    fuelDrainPerSec = parseFloat($('setting-fuel-drain').value);
+    if ($('setting-fuel-drain-val')) {
+      $('setting-fuel-drain-val').textContent = fuelDrainPerSec.toFixed(1);
+    }
+  }
   let crashesToTotal = 10;       // Crashs bis der Schadensbalken voll ist (Regler, Index in CRASH_STEPS)
   // Der Startwert stand auf true, das Kaestchen im Markup auf AUS (Pro und Arcade setzen
   // 'setting-crash-damage': false). Crashs wurden also gezaehlt, obwohl der Schalter aus
@@ -2624,6 +3033,12 @@
     anwenden();
   }
 
+  // NACH DEM ABSEITS NOCH EINEN MOMENT TAUB. Im Augenblick des Aufsetzens liest der Sensor
+  // wieder, aber die Hand ist noch am Auto - der Ruck beim Loslassen waere sonst genau der
+  // Crash, den man sich beim Zurueckstellen einhandelt.
+  const OFFTRACK_GNADE_MS = 1200;
+  let abseitsBis = 0;
+
   function detectCrash(bytes) {
     if (!crashDetectionEnabled) return;
     const v1 = s8signed(bytes[1]), v3 = s8signed(bytes[3]);
@@ -2632,6 +3047,31 @@
     crashRollingAvg1 += (v1 - crashRollingAvg1) * CRASH_ROLLING_ALPHA;
     crashRollingAvg3 += (v3 - crashRollingAvg3) * CRASH_ROLLING_ALPHA;
     const now = Date.now();
+
+    // ---- Ein Auto neben der Bahn wird AUFGEHOBEN, und das ist kein Crash ---------------
+    //
+    // GEMELDET: "wenn das Auto einmal von der Strecke gekommen ist, schuettele ich es, dann
+    // faehrt es ganz kurz und dann blinkt es wieder."
+    //
+    // NACHGERECHNET: ein geschutteltes Auto liefert auf den Bytes 1 und 3 genau die
+    // Abweichung, auf die diese Funktion wartet - und zwar dauernd. Die Sperrzeit laesst
+    // einen Crash je Sekunde durch, und jeder nimmt 10 % Schaden und 70 % Tempo. Nach fuenf
+    // Sekunden Zurechtruecken steht der Schaden bei 50 %, das ist LIGHT_DEAD_DAMAGE, und ab
+    // da maskiert buildCommandPacket() das Licht ueber lampFlicker heraus. Von aussen ist
+    // das ein Blinken, und zwischen zwei Crashs faehrt das Auto genau "ganz kurz".
+    //
+    // Die Schwelle heraufzusetzen waere dieselbe Falle einen Schritt weiter: ein Aufprall
+    // auf der Bahn soll weiter zaehlen. Was hier fehlt, ist der Unterschied zwischen einer
+    // Kollision und einer Hand.
+    if (typeof abseitsJetzt === 'function' && abseitsJetzt()) {
+      abseitsBis = now + OFFTRACK_GNADE_MS;
+      // Das gleitende Mittel laeuft weiter (siehe oben), es kommt also nach dem Aufsetzen
+      // nicht aus einem kalten Zustand zurueck - sonst waere die erste echte Beruehrung
+      // danach unsichtbar.
+      return;
+    }
+    if (now < abseitsBis) return;
+
     if (dev > crashThreshold && now - lastCrashTime > CRASH_REFRACTORY_MS) {
       lastCrashTime = now;
       lapEventAkku.crash += 1;
@@ -3172,12 +3612,20 @@
   function fuelSimOn() { return fuelDrainPerSec > 0; }
   function tyreSimOn() { return physEngine.config.tyreEffect > 0; }
 
+  // DIE EINE STELLE, an der aus der Vorwahl ein Plan wird. Was in pitVorwahl auf null
+  // steht, entscheidet weiter die Lage - wer nichts vorwaehlt, bekommt genau den Plan von
+  // vorher.
   function makePitPlan() {
-    return {
+    const auto = {
       refuel: fuelSimOn() && fuel < 99.5,
       tyres: tyreSimOn(),
       repair: damage > 0.5,
     };
+    if (typeof pitVorwahl !== 'object' || !pitVorwahl) return auto;
+    for (const k of ['refuel', 'tyres', 'repair']) {
+      if (pitVorwahl[k] !== null && pitVorwahl[k] !== undefined) auto[k] = !!pitVorwahl[k];
+    }
+    return auto;
   }
 
   function pitPlanEmpty(p) { return !p || (!p.refuel && !p.tyres && !p.repair); }
@@ -3266,6 +3714,414 @@
                       && !!pitDone && !pitDone.tyres;
   }
 
+
+  // =====================================================================================
+  // Der Boxenschirm und der Rennuebersichts-Schirm
+  // =====================================================================================
+  //
+  // Beide malen auf einem EIGENEN Takt und nicht aus updateRaceScreen(). Der Grund ist eine
+  // Zeile: physicsStep() kehrt sofort zurueck, wenn der Physik-Modus aus ist, und damit
+  // laeuft auch updateRaceScreen() nicht. Ein Boxenschirm, der ohne Simulation leer bleibt,
+  // waere genau dann unlesbar, wenn man ihn am ehesten braucht.
+  //
+  // 120 ms, wie pitBoard(): schneller als das Auge Zahlen liest und langsam genug, dass es
+  // dem Sendetakt nichts wegnimmt.
+
+  // ---- Boxenschirm ------------------------------------------------------------------
+
+  const PIT_SCREEN_ROWS = [
+    { id: 'go',      art: 'aktion',   el: 'pit-row-go',     wert: 'pit-wert-go' },
+    { id: 'tyres',   art: 'schalter', el: 'pit-row-tyres',  wert: 'pit-wert-tyres' },
+    { id: 'mix',     art: 'wahl',     el: 'pit-row-mix',    wert: 'pit-wert-mix' },
+    { id: 'refuel',  art: 'schalter', el: 'pit-row-refuel', wert: 'pit-wert-refuel' },
+    { id: 'repair',  art: 'schalter', el: 'pit-row-repair', wert: 'pit-wert-repair' },
+  ];
+  let pitScreenSel = 0;
+
+  function pitScreenOffen() {
+    return typeof cockpitScreenIst === 'function' && cockpitScreenIst().id === 'pit';
+  }
+
+  // Hoch/runter bewegt die Auswahl. Links/rechts wird AUSDRUECKLICH nicht verbraucht: ein
+  // Schirm, der die Taste frisst, mit der man ihn verlaesst, ist eine Sackgasse.
+  function pitScreenPad(dir) {
+    if (!pitScreenOffen()) return false;
+    if (dir !== 'up' && dir !== 'down') return false;
+    const n = PIT_SCREEN_ROWS.length;
+    pitScreenSel = ((pitScreenSel + (dir === 'up' ? -1 : 1)) % n + n) % n;
+    pitScreenRender();
+    return true;
+  }
+
+  // X waehlt. Rueckgabe true heisst "verbraucht", damit der Aufrufer die gelbe Flagge nicht
+  // zusaetzlich laedt.
+  function pitScreenSelect(idVorgabe) {
+    if (!pitScreenOffen() && idVorgabe === undefined) return false;
+    const zeile = idVorgabe !== undefined
+      ? PIT_SCREEN_ROWS.find((z) => z.id === idVorgabe)
+      : PIT_SCREEN_ROWS[pitScreenSel];
+    if (!zeile) return false;
+
+    if (zeile.art === 'aktion') {
+      // requestPitStop() IST schon eine Druck/Doppeldruck-Maschine: erster Druck scharf,
+      // zweiter innerhalb des Fensters bricht ab. Ein "Abwaehlen" muss hier also nicht
+      // erfunden werden - es ist der zweite Druck.
+      requestPitStop();
+      updateRaceActButtons();
+    } else if (zeile.art === 'wahl') {
+      pitMischungWeiter();
+    } else if (pitState === 'servicing' && pitPlan) {
+      pitToggle(zeile.id);
+    } else {
+      // pitToggle() steigt aus, solange kein Plan existiert - und ohne Plan gaebe es hier
+      // nichts zu tun. Statt zu schweigen wird VORGEWAEHLT: was hier gesetzt wird, uebernimmt
+      // makePitPlan() beim Scharfstellen. Genau dafuer ist der Schirm waehrend der Fahrt da.
+      const jetzt = pitVorwahlIst(zeile.id);
+      pitVorwahl[zeile.id] = !jetzt;
+      // DIESELBEN ZWEI WOERTER wie in der Zeile. Eine Meldung, die "AN" sagt, waehrend
+      // die Zeile darunter "ja" zeigt, ist ein drittes Vokabular fuer dieselbe Frage.
+      showHudToast(t(zeile.id === 'refuel' ? 'Tanken'
+                     : zeile.id === 'tyres' ? 'Reifen wechseln'
+                     : 'Reparieren') + ': ' + t(!jetzt ? 'ja' : 'nein'));
+    }
+    pitScreenRender();
+    return true;
+  }
+
+  // ---- Vorwahl: was beim naechsten Stopp passieren soll -------------------------------
+  //
+  // null heisst "wie bisher automatisch". makePitPlan() uebernimmt daraus, was nicht null
+  // ist - EINE Anwendungsstelle, damit die Vorwahl nicht zu einem zweiten Plan wird.
+  let pitVorwahl = { refuel: null, tyres: null, repair: null };
+
+  function pitVorwahlIst(which) {
+    if (pitVorwahl[which] !== null) return pitVorwahl[which];
+    // Der Vorgabewert ist das, was makePitPlan() ohne Vorwahl entscheiden wuerde.
+    if (which === 'refuel') return fuelSimOn() && fuel < 99.5;
+    if (which === 'tyres') return tyreSimOn();
+    if (which === 'repair') return damage > 0.5;
+    return false;
+  }
+
+  function pitScreenRender() {
+    if (!$('race-pitscreen')) return;
+    const lage = pitState === 'off' ? 'aus'
+               : pitState === 'limited' ? 'Boxengasse'
+               : pitReady ? 'fertig' : 'Arbeit';
+    schreibeWert($('pit-kopf-lage'), t(lage));
+    // Das grosse P traegt denselben Zustand wie das Wort daneben - eine Quelle, zwei
+    // Traeger: Farbe fuer den Blick im Vorbeifahren, Wort fuer die Gewissheit.
+    const pz = $('pit-zeichen');
+    if (pz) {
+      pz.classList.toggle('pz-gasse', pitState === 'limited');
+      pz.classList.toggle('pz-arbeit', pitState === 'servicing' && !pitReady);
+      pz.classList.toggle('pz-fertig', pitState === 'servicing' && !!pitReady);
+    }
+    // Der Kopf traegt die Rundenzahl statt der Standzeit: die steht jetzt in der Zeile
+    // "Boxenstopp einleiten", wo sie hingehoert - dort ist sie der Messwert.
+    schreibeWert($('pit-kopf-zeit'), raceLapTimes.length
+      ? t('Runde') + ' ' + raceLapTimes.length : '');
+
+    for (let i = 0; i < PIT_SCREEN_ROWS.length; i++) {
+      const z = PIT_SCREEN_ROWS[i];
+      const el = $(z.el);
+      if (el) el.classList.toggle('pr-sel', i === pitScreenSel);
+      const w = $(z.wert);
+      if (!w) continue;
+      // ZAHL UND ZUSTAND GETRENNT. Sie standen bis v0.5.18 in einer Zeichenkette, und mit
+      // der groesseren Schrift passte die nicht mehr in eine Spalte - abgeschnitten wurde
+      // ausgerechnet das Wort am Ende, also der Zustand.
+      const teil = pitZeilenWert(z);
+      // JA HELLT DIE GANZE ZEILE AUF, auf Bitte. Der Ring aus pit-on/pit-off sagt dasselbe,
+      // aber erst waehrend eines Stopps und nur als 2-px-Linie; die Aufhellung traegt die
+      // Antwort auch davor und ist aus dem Augenwinkel zu lesen - und das ist die Lage, in
+      // der man einen Boxenschirm liest.
+      if (el) el.classList.toggle('pr-ja', teil.ja === true);
+      schreibeWert($('pit-zahl-' + z.id), teil.zahl);
+      schreibeWert(w, teil.wort);
+    }
+    pitScreenBilder();
+    // Die Fusszeile nennt die Taste, mit der gewaehlt wird - und zwar die WIRKLICH belegte.
+    // Ist die Flaggenaktion nicht belegt, steht das da, statt dass man raet.
+    const fuss = $('pit-fuss');
+    if (fuss) {
+      const b = (typeof bindings === 'object' && bindings && bindings.yellowflag)
+        ? bindingDescription(bindings.yellowflag) : 'nicht belegt';
+      fuss.textContent = 'Steuerkreuz hoch/runter waehlt \u00b7 ' + b + ' schaltet';
+    }
+  }
+
+  // ---- Die Bilder in den Zeilen ------------------------------------------------------
+  //
+  // DIESELBEN QUELLEN wie im Streifen, nur ein zweites Mal gezeichnet. Kein eigener
+  // Zustand: der Boxenschirm liest st.tyreWear4 und st.tyreTemp4 genau wie die Kachel, und
+  // reifenFarbe() ist dieselbe Funktion. Zwei Bilder, eine Wahrheit.
+  const PIT_T4 = ['pit-tyre-fl', 'pit-tyre-fr', 'pit-tyre-rl', 'pit-tyre-rr'];
+
+  function pitScreenBilder() {
+    const st = physEngine.state;
+    const aus = !(physEngine.config.tyreEffect > 0);
+    const abIdx = typeof pitWheelOff === 'function' ? pitWheelOff() : -1;
+    for (let i = 0; i < 4; i++) {
+      const el = $(PIT_T4[i]);
+      if (!el || !el.firstChild) continue;
+      const ab = i === abIdx;
+      el.classList.toggle('t4-ab', ab);
+      const w = aus ? 0 : (st.tyreWear4 ? st.tyreWear4[i] : st.tyreWear);
+      const rest = ab ? 0 : Math.max(0, Math.min(100, 100 - w * 100));
+      el.firstChild.style.height = rest + '%';
+      el.firstChild.style.background =
+        reifenFarbe(st.tyreTemp4 ? st.tyreTemp4[i] : st.tyreTempC);
+    }
+
+    // Die vier Mischungen: die GELTENDE ist umrahmt. Waehrend eines Stopps ist das die
+    // montierte, sonst die vorgewaehlte - man soll sehen, was gilt, und nicht, was man
+    // einmal angetippt hat.
+    const wahl = pitState === 'servicing' ? tyres : pitMischungWahl();
+    const feld = document.querySelector('#pit-row-mix .pit-mix-feld');
+    if (feld) {
+      for (const i of feld.children) i.classList.toggle('an', i.dataset.mix === wahl);
+    }
+
+    const tank = $('pit-bar-refuel');
+    if (tank) {
+      tank.style.width = Math.max(0, Math.min(100, fuel)) + '%';
+      // Dieselbe Ampel wie am Streifen: unter 20 Prozent gelb, unter 10 rot.
+      tank.style.background = fuel < 10 ? 'var(--bad)' : fuel < 20 ? 'var(--warn)' : 'var(--good)';
+    }
+    const rep = $('pit-bar-repair');
+    if (rep) {
+      const heil = Math.max(0, Math.min(100, 100 - damage));
+      rep.style.width = heil + '%';
+      rep.style.background = heil < 25 ? 'var(--bad)' : heil < 60 ? 'var(--warn)' : 'var(--good)';
+    }
+  }
+
+  // Zurueck kommen ZWEI Teile: die Zahl und das Zustandswort. Sie stehen in getrennten
+  // Spalten fester Breite, damit kein Wortwechsel die Bilder daneben verschiebt.
+  function pitZeilenWert(z) {
+    if (z.art === 'aktion') {
+      const wort = pitState === 'off' ? t('bereit')
+                 : pitState === 'limited' ? t('Boxengasse')
+                 : pitReady ? t('fertig') : t('Arbeit läuft');
+      // Die Standzeit gehoert hier hin und nicht in den Kopf: sie IST der Messwert dieser
+      // Zeile, so wie Prozent der Messwert der anderen ist.
+      const zahl = (pitState === 'servicing' && pitServiceStart)
+        ? ((Date.now() - pitServiceStart) / 1000).toFixed(1) + ' s' : '';
+      return { zahl, wort };
+    }
+    if (z.art === 'wahl') {
+      // Waehrend eines Stopps steht hier, was MONTIERT ist; sonst, was vorgewaehlt wurde.
+      // Der Name steht neben den Farbfeldern und sagt dasselbe zweimal - und das ist
+      // gewollt: eine Farbe ohne Namen ist bei vier Feldern eine Ratefrage.
+      return { zahl: '', wort: mischungName(pitState === 'servicing' ? tyres : pitMischungWahl()) };
+    }
+    // Die drei Arbeiten: die Zahl ist der Messwert, das Wort der Plan.
+    let zahl = '';
+    if (z.id === 'refuel') zahl = fuelLiters(fuel) + ' l';
+    else if (z.id === 'repair') zahl = Math.round(100 - damage) + '%';
+    else if (z.id === 'tyres') {
+      const st = physEngine.state;
+      const w = st.tyreWear4 ? Math.max.apply(null, st.tyreWear4) : st.tyreWear;
+      zahl = Math.round(100 - w * 100) + '%';
+    }
+    if (!pitJobAvailable(z.id)) return { zahl, wort: t('Sim aus'), ja: false };
+    // JA ODER NEIN auf die Frage, die die Zeile stellt - und dieselben zwei Woerter
+    // waehrend eines Stopps wie davor. Hier standen vier: "vorgewaehlt"/"aus" davor,
+    // "wird gemacht"/"abgewaehlt" waehrenddessen. Gemeldet als "verstehe ich nicht", und
+    // das war keine Geschmacksfrage: "aus" hiess an dieser Stelle etwas anderes als das
+    // "aus" der Reifensimulation zwei Zeilen weiter, und der Leser musste raten, welches.
+    //
+    // Der Unterschied zwischen Plan und Ausfuehrung geht dabei nicht verloren - er steht
+    // eine Zeile hoeher, wo "Boxenstopp einleiten" bereit, Boxengasse, Arbeit laeuft oder
+    // fertig sagt. Ihn hier ein zweites Mal zu tragen hiess, ihn zweimal lesen zu muessen,
+    // um einmal zu wissen, ob getankt wird.
+    const ja = (pitState === 'servicing' && pitPlan) ? !!pitPlan[z.id] : pitVorwahlIst(z.id);
+    return { zahl, wort: ja ? t('ja') : t('nein'), ja };
+  }
+
+  // ---- Rennuebersicht ----------------------------------------------------------------
+  //
+  // WAS HIER GEMESSEN IST UND WAS NICHT, und das gehoert an den Anfang: Runden, Zeiten und
+  // Position kommen aus den gezaehlten Runden jedes Autos, also aus Messwerten. Die
+  // Reifenmischung und die Boxenstopps gibt es nur fuer das EIGENE Auto - Ghosts haben
+  // weder Reifenmodell noch Boxenstopp. Ihre Felder bleiben deshalb leer, statt dass eine
+  // Farbe erfunden wird, die nichts bedeutet.
+
+  function ovDaten() {
+    const cars = raceAllCars();
+    // Die Position: mehr Runden zuerst, bei gleicher Rundenzahl die kleinere Gesamtzeit.
+    // Dasselbe Kriterium wie in der Ergebnistabelle, damit die Uebersicht waehrend des
+    // Rennens und das Ergebnis danach nicht verschiedene Sieger nennen.
+    const mit = cars.map((c) => {
+      const ms = c.laps.map((l) => l.ms);
+      return { c, n: ms.length, summe: ms.reduce((a, b) => a + b, 0),
+               letzte: ms.length ? ms[ms.length - 1] : null,
+               beste: ms.length ? Math.min.apply(null, ms) : null };
+    });
+    // DRITTES KRITERIUM: der Ort auf der Schiene, weiter vorn zuerst. Die ersten beiden
+    // bleiben unangetastet, damit Uebersicht und Ergebnistabelle nicht verschiedene Sieger
+    // nennen - sie greifen aber erst, wenn eine Runde abgeschlossen ist. Davor entschied die
+    // Garagenreihenfolge.
+    const ortVon = (x) => (typeof x.c.ort === 'number' ? x.c.ort : -Infinity);
+    mit.sort((a, b) => (b.n - a.n) || (a.summe - b.summe) || (ortVon(b) - ortVon(a)));
+    const fuehrer = mit.length ? mit[0] : null;
+    return mit.map((x, i) => {
+      let luecke = '';
+      if (fuehrer && x !== fuehrer) {
+        const zurueck = fuehrer.n - x.n;
+        if (zurueck > 0) {
+          // UEBERRUNDET: eine Sekundenzahl waere hier sinnlos, weil sie eine andere Runde
+          // meint. Also die Anzahl Runden, wie auf einer Zeittafel.
+          luecke = '+' + zurueck + (zurueck === 1 ? ' Rd' : ' Rd');
+        } else {
+          // Gemessen an der Zeit bis zur ABGESCHLOSSENEN Runde, wie gewuenscht: beide
+          // Summen laufen ueber dieselbe Rundenzahl, also ist der Unterschied ein echter
+          // Rueckstand und kein Artefakt verschieden vieler Runden.
+          const d = (x.summe - fuehrer.summe) / 1000;
+          luecke = (d >= 0 ? '+' : '') + d.toFixed(1);
+        }
+      } else if (fuehrer && x === fuehrer) {
+        luecke = '\u2014';
+      }
+      return { pos: i + 1, name: x.c.name, farbe: x.c.farbe, rolle: x.c.role,
+               runden: x.n, luecke, letzte: x.letzte, beste: x.beste,
+               // Die schnellste Runde des ganzen Feldes wird hervorgehoben, wie auf einer
+               // Zeittafel. Verglichen wird SPAETER, wenn alle Zeilen vorliegen.
+               istBeste: false };
+    });
+  }
+
+  // ---- Die Karte im Uebersichtsschirm ------------------------------------------------
+  //
+  // EINMAL ZEICHNEN, DANN NUR PUNKTE BEWEGEN. Gemessen kostet renderTrackPreview rund
+  // 94 ms - es rechnet Mittellinie, Normalen und die Ideallinie, und die ist eine
+  // Optimierung. Zehnmal je Sekunde waere das der Faden, an dem der 45-ms-Sendetakt haengt.
+  //
+  // Neu gezeichnet wird nur, wenn sich das LAYOUT aendert. Erkannt an Kachelzahl und
+  // Kurzcode: beides zusammen ist eindeutig, und der Kurzcode ist ohnehin da.
+  let ovKarteSchluessel = null;
+  let ovKarteGeo = null;
+
+  function ovKarteMalen() {
+    const host = $('ov-karte');
+    if (!host) return;
+    const tiles = currentTrackTiles;
+    if (!tiles || tiles.length < 2) {
+      if (host.firstChild) { host.innerHTML = ''; ovKarteSchluessel = null; ovKarteGeo = null; }
+      return;
+    }
+    const schluessel = tiles.length + ':' + (typeof trackToCode === 'function'
+      ? trackToCode(tiles) : String(tiles.map(t => t.type)));
+    if (schluessel !== ovKarteSchluessel) {
+      const r = renderTrackPreview(tiles, null, { detailed: true, cars: [] });
+      host.innerHTML = r.html;
+      ovKarteGeo = r.geo;
+      ovKarteSchluessel = schluessel;
+    }
+    const svg = host.firstElementChild;
+    if (svg && ovKarteGeo && typeof karteAutosSetzen === 'function') {
+      karteAutosSetzen(svg, ovKarteGeo, trackCarMarks());
+    }
+  }
+
+  function ovScreenRender() {
+    const tab = $('ov-tab');
+    if (!tab) return;
+    ovKarteMalen();
+    const zeilen = ovDaten();
+    // Die schnellste Runde des FELDES, violett wie in der Formel 1. Hier und nicht in
+    // ovDaten(): dort ist die Zeile noch allein, und "die schnellste" ist ein Vergleich.
+    const bestenListe = zeilen.map((z) => z.beste).filter((v) => v !== null);
+    const feldBeste = bestenListe.length ? Math.min.apply(null, bestenListe) : null;
+    for (const z of zeilen) z.istBeste = feldBeste !== null && z.beste === feldBeste;
+    schreibeWert($('ov-kopf-lage'), t(raceState === 'idle' ? 'kein Rennen'
+      : raceState === 'countdown' ? 'Start'
+      : raceFormationLap ? 'Einführungsrunde'
+      : raceState === 'finishing' ? 'letzte Runde' : 'läuft'));
+    schreibeWert($('ov-kopf-runde'), zeilen.length ? zeilen[0].runden + '' : '');
+
+    if (!zeilen.length) {
+      if (tab.dataset.leer !== '1') {
+        tab.dataset.leer = '1';
+        tab.innerHTML = '<div class="ov-zeile"><span class="ov-pos"></span>'
+          + '<span></span><span class="ov-name" data-i18n-skip>'
+          + t('Noch keine Runde gefahren') + '</span>'
+          + '<span></span><span></span><span></span><span></span><span></span>'
+          + '<span></span></div>';
+      }
+      return;
+    }
+    tab.dataset.leer = '0';
+
+    // NEU AUFGEBAUT statt eingesetzt: die Zeilen wechseln ihre Reihenfolge, und ein
+    // Umsortieren vorhandener Knoten waere mehr Buchhaltung als ein neuer Aufbau von
+    // hoechstens acht Zeilen. Element-ids gibt es hier keine, der Zaehltest bleibt heil.
+    const html = zeilen.map((z) => {
+      const eigen = z.rolle === 'player';
+      const stops = eigen ? racePitDone : 0;
+      // EIN P UND EINE ZAHL, wie gewuenscht: das P sagt "war drin", die Zahl wie oft. Bei
+      // genau einem Stopp bleibt die 1 weg - eine 1 neben einem P liest man als Platz.
+      const p = stops > 0 ? 'P' + (stops > 1 ? '<b>' + stops + '</b>' : '') : '';
+      // NUR DAS EIGENE AUTO hat eine Mischung: Ghosts haben kein Reifenmodell. Ein Feld,
+      // das fuer sie eine Farbe zeigte, waere eine Erfindung - es bleibt leer.
+      const mix = eigen
+        ? '<span class="ov-mix" style="background:' + mischungFarbe(tyres) + '"></span>'
+        : '<span class="ov-mix ov-mix-leer"></span>';
+      return '<div class="ov-zeile' + (eigen ? ' ov-ich' : '') + '">'
+        + '<span class="ov-pos">' + z.pos + '</span>'
+        + '<span class="ov-farbe" style="background:' + (z.farbe || 'transparent') + '"></span>'
+        + '<span class="ov-name" data-i18n-skip>' + z.name + '</span>'
+        + '<span class="ov-runden">' + z.runden + '</span>'
+        + '<span class="ov-pit">' + p + '</span>'
+        + mix
+        + '<span class="ov-zeit">' + (z.letzte === null ? '&ndash;' : formatLapTime(z.letzte)) + '</span>'
+        + '<span class="ov-zeit' + (z.istBeste ? ' ov-feldbeste' : '') + '">'
+        + (z.beste === null ? '&ndash;' : formatLapTime(z.beste)) + '</span>'
+        + '<span class="ov-luecke">' + z.luecke + '</span>'
+        + '</div>';
+    }).join('');
+    // Die Mischungsfarbe steht als eigener Balken NEBEN der Zeile, weil sie eine Farbe und
+    // keine Zahl ist. Sie wird hier eingesetzt, damit die Spaltenbreiten fest bleiben.
+    if (tab.innerHTML !== html) tab.innerHTML = html;
+    const fuss = $('ov-fuss');
+    if (fuss) {
+      fuss.textContent = 'Platz \u00b7 Runden \u00b7 Stopps \u00b7 Mischung \u00b7 letzte'
+        + ' \u00b7 beste \u00b7 R\u00fcckstand \u2014 Reifen und Stopps nur f\u00fcr das'
+        + ' eigene Auto simuliert';
+    }
+  }
+
+  // FINGER UND PAD AUF EINEM WEG. Ein Tipp auf eine Zeile waehlt sie an und schaltet sie -
+  // dieselbe Funktion, die die Taste ruft. Zwei Wege mit eigener Logik waeren zwei Wege, die
+  // auseinanderlaufen, und pitToggle() sagt in seinem Kommentar schon, warum das nicht sein
+  // soll.
+  if ($('race-pitscreen')) {
+    $('race-pitscreen').addEventListener('click', (ev) => {
+      const zeile = ev.target.closest ? ev.target.closest('.pit-row') : null;
+      if (!zeile) return;
+      const i = PIT_SCREEN_ROWS.findIndex((z) => z.el === zeile.id);
+      if (i < 0) return;
+      pitScreenSel = i;
+      pitScreenSelect(PIT_SCREEN_ROWS[i].id);
+    });
+  }
+
+  // BEI EINEM SPRACHWECHSEL BEIDE NEU MALEN, nicht nur den sichtbaren. Ihre Werte gehen
+  // durch t(), werden aber zur Laufzeit geschrieben - der verborgene Schirm behielte sonst
+  // seinen alten Text bis zum naechsten Blaettern, und die Uebersetzungspruefung liest auch
+  // verborgene Elemente.
+  if (typeof i18nOnLangChange === 'function') {
+    i18nOnLangChange(() => { pitScreenRender(); ovScreenRender(); });
+  }
+
+  // Beide Schirme auf einem eigenen Takt, aus dem oben genannten Grund.
+  setInterval(() => {
+    if (typeof cockpitScreenIst !== 'function') return;
+    const s = cockpitScreenIst();
+    if (s && s.malen) s.malen();
+  }, 120);
+
   // Three distinguishable confirmations, so the ear alone tells you which job finished.
   function pitChimeFuel()   { playTone(520, 0.10, 'sine', 0.16);
                               setTimeout(() => playTone(780, 0.16, 'sine', 0.16), 90); }
@@ -3328,14 +4184,6 @@
     return true;
   }
 
-  function pitQuickMenu(dir) {
-    if (pitState === 'off' || !pitPlan) return false;
-    if (dir === 'up') return pitToggle('refuel', true);
-    if (dir === 'down') return pitToggle('refuel', false);
-    if (dir === 'right') return pitToggle('tyres', true);
-    if (dir === 'left') return pitToggle('tyres', false);
-    return false;
-  }
 
   // Die drei Kacheln faerben. Gruen = wird gemacht, rot = abgewaehlt, grau = nicht
   // simuliert. Ausserhalb eines Boxenstopps traegt keine Kachel eine dieser Klassen: die

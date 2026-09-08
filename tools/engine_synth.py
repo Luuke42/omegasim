@@ -426,6 +426,66 @@ CARS = {
         'clatter': 0.10, 'clatter_hz': 3400.0, 'drive': 2.6,
         'scatter_t': 0.005, 'scatter_g': 0.04, 'crackle': 0.44,
     },
+    # ---- Zwei Strassen- und Rallyeklassiker (v0.5.18) ----
+    #
+    # Sie stehen ausserhalb der Rennmotoren, und das ist keine Ordnungsfrage: beide sind
+    # Strassenmotoren mit Schalldaempfer, laengeren Rohren und niedrigeren Drehzahlen. Wer
+    # sie neben einen GT3 stellt, hoert den Unterschied als "leiser" statt als "anders".
+    'countach': {
+        'label': 'Lamborghini Countach LP500 (5.0 V12, 60 Grad, sechs Weber)',
+        # Zuendfolge des Lamborghini-V12, mit half-Bankteilung: 1-6 links, 7-12 rechts.
+        # Damit wechseln die Zuendungen sauber die Bank, also alle 120 Grad eine je Seite -
+        # das ist die Bauart eines 60-Grad-V12 und derselbe Aufbau wie beim 330 P4.
+        'banks': banks_from_order([1, 7, 4, 10, 2, 8, 6, 12, 3, 9, 5, 11], 12, 'half'),
+        'cylinders': 12,
+        # Der LP500-Prototyp von 1971 hatte 4971 cm3 und drehte weniger williger obenaus als
+        # ein Rennmotor. 7500 statt der 8200 des P4 - und genau diese 700 Umdrehungen sind
+        # der Unterschied, den man hoert.
+        'rpms': {'idle': 900, 'mid': 4600, 'high': 7500},
+        # GEWAEHLT und nicht abgeleitet: 26 Zoll gegen die 20 des P4. Ein Strassenauspuff hat
+        # laengere Rohre und einen Daempfer, und laenger heisst tiefer - 26 Zoll ergeben rund
+        # 130 Hz gegen 169 beim Rennmotor. Der Countach soll satt klingen und nicht kreischen.
+        'primary_in': 26.0, 'res_q': 6.2, 'partials': 7, 'ir_ms': 42.0,
+        'pulse_ms': 2.1, 'bright': 0.64,
+        # 0,14: sechs Weber-Doppelvergaser ohne gemeinsamen Sammler, also hoerbares Ansaugen -
+        # derselbe Grund wie bei den Einzeldrosseln des Porsche, nur eine Stufe tiefer, weil
+        # ein Vergaser weniger zischt als eine Drosselklappe.
+        'noise': 0.14, 'noise_hz': 2400.0,
+        'clatter': 0.14, 'clatter_hz': 3200.0, 'drive': 2.5,
+        'scatter_t': 0.006, 'scatter_g': 0.05, 'crackle': 0.40,
+    },
+    'impreza99': {
+        'label': 'Subaru Impreza WRX STI 1999 (EJ20 2.0 Boxer-4, Turbo)',
+        'turbo': True,
+        # Zuendfolge 1-3-2-4, ungerade/gerade auf die Baenke: 1 und 3 links, 2 und 4 rechts.
+        # Daraus folgt, was dieser Motor ausmacht - je Bank zwei Zuendungen im Abstand von
+        # 180 Grad, dann 540 Grad Pause. Eine Bank redet, dann die andere.
+        'banks': banks_from_order([1, 3, 2, 4], 4, 'oddeven'), 'cylinders': 4,
+        'rpms': {'idle': 850, 'mid': 4200, 'high': 7500},
+        # DER BOXER-RUMPEL, und hier gehoert gesagt, was das Modell davon kann und was nicht.
+        #
+        # Er kommt beim Vorbild aus UNGLEICH LANGEN Kruemmerrohren: das Rohr von Zylinder 1
+        # laeuft um den Motor herum zum Sammler, das von Zylinder 2 nicht, und deshalb kommen
+        # zwei gleich weit auseinanderliegende Zuendungen ungleich am Sammler an.
+        #
+        # cylinder_scatter() traegt genau diese Art von Versatz - fest je Zylinder, nicht
+        # zufaellig je Ereignis, also lernbar fuers Ohr. 0,030 sind drei Prozent eines
+        # 720-Grad-Zyklus, also gut 21 Grad Kurbelwinkel; das Ereignisraster ist hier 180
+        # Grad, der Versatz also rund ein Achtel davon.
+        #
+        # WAS ES NICHT IST: das Modell WUERFELT diesen Versatz (fest verankert am Seed), es
+        # rechnet ihn nicht aus Rohrlaengen. Die Art der Unregelmaessigkeit stimmt, ihr
+        # genaues Muster ist gewaehlt. Genau derselbe Vorbehalt wie beim Bankwinkel der V12.
+        'scatter_t': 0.030, 'scatter_g': 0.06,
+        # Kurze Rohre bis zum Turbolader, dahinter ein Daempfer: hoehere Resonanz als die
+        # V12, aber gedeckt. 17 Zoll ergeben rund 199 Hz.
+        'primary_in': 17.0, 'res_q': 4.2, 'partials': 4, 'ir_ms': 52.0,
+        # Breiter Puls und wenig Helligkeit: ein Turbo daempft die Druckspitze, das ist der
+        # Grund, warum ein aufgeladener Motor dumpfer klingt als ein Sauger gleicher Groesse.
+        'pulse_ms': 4.6, 'bright': 0.38, 'noise': 0.09, 'noise_hz': 1600.0,
+        'clatter': 0.10, 'clatter_hz': 2400.0, 'drive': 2.8,
+        'crackle': 0.55,
+    },
 }
 
 

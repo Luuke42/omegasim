@@ -135,9 +135,20 @@
       const lc = window.OMEGA_TEST.lineOf(p.tiles);
       const rows = window.OMEGA_TEST.compareLines(p.tiles, 96);
       const a = rows.map(r => r.calc);
+      // UEBER DIE NAHT NUR AUF EINER GESCHLOSSENEN RUNDE. Auf einer offenen sind der letzte
+      // und der erste Abtastpunkt keine Nachbarn - sie liegen an zwei Enden der Bahn, und
+      // ihr Unterschied ist kein Sprung der Linie, sondern die Luecke der Strecke.
+      //
+      // Der Vergleichswert lc.maxStep wickelt ebenfalls nur bei closed um (siehe lineOf).
+      // Hier stand `% a.length` ohne diese Bedingung, und damit verglich der Test einen
+      // Schritt, den seine eigene Referenz ausschliesst. Aufgefallen ist es, als der
+      // Kurvenausgang das Ende der offenen Teststrecke nach aussen zog: gemessen 0,487 an
+      // der Naht von SG2H2G2J2 gegen eine Grenze, in der diese Stelle nicht vorkommt.
       let sprung = 0;
       for (let i = 0; i < a.length; i++) {
-        sprung = Math.max(sprung, Math.abs(a[(i + 1) % a.length] - a[i]));
+        if (i + 1 >= a.length && !lc.closed) break;
+        const j = (i + 1) % a.length;
+        sprung = Math.max(sprung, Math.abs(a[j] - a[i]));
       }
       // Kleine Toleranz auf den Eigenschritt der Linie: die Abtastung liegt nicht genau auf
       // ihren Punkten, also darf sie ihn um ein paar Prozent verfehlen.
@@ -349,6 +360,82 @@
     return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2];
   }
 
+  // VERLAEUFE ZAEHLEN MIT, und dass sie es bisher nicht taten, war eine echte Luecke:
+  // gelesen wurde nur backgroundColor. #race-dash traegt in der Ansicht "modern" NEUN
+  // Hintergrundebenen, und die vorderste ist ein deckendes Weiss - der Schirm ist dort hell
+  // und die Schrift dunkel. Der Pruefer lief daran vorbei bis hinunter zum schwarzen body
+  // und meldete 1,16:1 fuer dunkle Schrift auf hellem Grund. Ein Fehlalarm, und zwar einer,
+  // der in der Fassung 0.5.18 genauso steht - nachgemessen, nicht vermutet.
+  //
+  // EBENENWEISE UND VON VORN. Ein background-image ist ein Stapel: die erste Ebene liegt
+  // OBEN. Ueber alle Farbwerte des ganzen Stapels zu mitteln war der erste Versuch und war
+  // falsch - er verrechnete die verdeckten Ebenen mit und kam auf 1,49:1, also einen
+  // Fehlalarm mit anderer Zahl. Gelesen wird deshalb Ebene fuer Ebene, ueberlagert wie der
+  // Browser malt, und hinter der ersten deckenden Ebene wird nicht weitergesucht.
+  //
+  // WAS DIESE MESSUNG NICHT KANN, und das gehoert dazu: innerhalb EINER Ebene wird ueber die
+  // Farbstopps gemittelt. Fuer die Flaechen dieser App stimmt das - sie sind Verlaeufe aus
+  // zwei fast gleichen Farben. Fuer einen Verlauf von Schwarz nach Weiss waere der
+  // Mittelwert eine Beruhigung und keine Messung, und fuer die vier Schraubenkoepfe
+  // (radial-gradient) wiegt der Mittelwert einen kleinen Kreis so schwer wie die ganze
+  // Flaeche. Hier liegen sie hinter der deckenden Ebene und zaehlen deshalb gar nicht.
+
+  // "over" mit Deckkraft. stMix() kann das nicht: es gibt drei Kanaele zurueck und setzt
+  // voraus, dass der Grund deckend ist - hier ist er es unterwegs gerade nicht.
+  function stUeber(vorn, hinten) {
+    const av = vorn[3] === undefined ? 1 : vorn[3];
+    const ah = hinten[3] === undefined ? 1 : hinten[3];
+    const a = av + ah * (1 - av);
+    if (a <= 0) return [0, 0, 0, 0];
+    return [0, 1, 2].map((i) => (vorn[i] * av + hinten[i] * ah * (1 - av)) / a).concat([a]);
+  }
+
+  // Die Ebenen trennen. Nicht mit split(','): jeder Verlauf enthaelt selbst Kommata, und
+  // "linear-gradient(rgb(255, 255, 255)" waere die erste "Ebene".
+  function stLagen(bild) {
+    const s = String(bild), out = [];
+    let tiefe = 0, start = 0;
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === '(') tiefe++;
+      else if (c === ')') tiefe--;
+      else if (c === ',' && tiefe === 0) { out.push(s.slice(start, i)); start = i + 1; }
+    }
+    out.push(s.slice(start));
+    return out;
+  }
+
+  function stLageFarbe(lage) {
+    const stopps = String(lage).match(/rgba?\([^)]+\)/g);
+    if (!stopps || !stopps.length) return null;
+    const su = [0, 0, 0, 0];
+    let n = 0;
+    for (const st of stopps) {
+      const q = stParse(st);
+      if (!q) continue;
+      su[0] += q[0]; su[1] += q[1]; su[2] += q[2]; su[3] += q[3];
+      n++;
+    }
+    return n ? [su[0] / n, su[1] / n, su[2] / n, su[3] / n] : null;
+  }
+
+  function stBildFarbe(bild) {
+    if (!bild || bild === 'none' || bild.indexOf('gradient') < 0) return null;
+    // Von vorn sammeln, hinter der ersten deckenden Ebene aufhoeren.
+    const lagen = [];
+    for (const lage of stLagen(bild)) {
+      const f = stLageFarbe(lage);
+      if (!f) continue;
+      lagen.push(f);
+      if (f[3] >= 0.999) break;
+    }
+    if (!lagen.length) return null;
+    // Von hinten nach vorn ueberlagern, genau wie der Browser malt.
+    let unten = lagen[lagen.length - 1];
+    for (let i = lagen.length - 2; i >= 0; i--) unten = stUeber(lagen[i], unten);
+    return unten;
+  }
+
   function stBackdrop(el) {
     // Von unten nach oben ueberlagern, bis eine deckende Flaeche kommt. Der erste
     // nicht-transparente Hintergrund allein genuegt nicht: eine halbdurchsichtige Flaeche
@@ -360,9 +447,16 @@
     // die Karte hinter ihm statt gegen sein eigenes Gruen.
     const kette = [];
     for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
-      const bg = stParse(getComputedStyle(n).backgroundColor);
+      const cs = getComputedStyle(n);
+      const bild = stBildFarbe(cs.backgroundImage);
+      const bg = stParse(cs.backgroundColor);
+      // BILD VOR FARBE in die Kette. Sie wird weiter unten von HINTEN nach vorn ueberlagert,
+      // ein hoeherer Index liegt also weiter hinten - und der Browser malt das
+      // Hintergrundbild ueber die Hintergrundfarbe. Andersherum eingereiht waere die
+      // Reihenfolge genau verkehrt, und bei einer halbdurchsichtigen Ebene faellt das auf.
+      if (bild && bild[3] > 0) kette.push(bild);
       if (bg && bg[3] > 0) kette.push(bg);
-      if (bg && bg[3] >= 0.999) break;
+      if ((bild && bild[3] >= 0.999) || (bg && bg[3] >= 0.999)) break;
     }
     let unten = [0, 0, 0];
     for (let i = kette.length - 1; i >= 0; i--) unten = stMix(kette[i], unten);
@@ -378,6 +472,16 @@
       // Unsichtbares und Abgeschaltetes ist ausgenommen: 1.4.3 gilt nicht fuer
       // deaktivierte Bedienelemente, und was niemand sieht, muss nichts erfuellen.
       if (el.disabled || el.closest('[hidden]') || el.closest('.tabpage:not(.active)')) continue;
+      // LOGOTYPEN SIND AUSGENOMMEN, und das steht so in der Norm: WCAG 1.4.3 nennt Text,
+      // der Teil eines Logos oder Markennamens ist, ausdruecklich als Ausnahme vom
+      // Mindestkontrast. Die Marke auf dem Armaturenbrett ist eingeaetzt und soll leise
+      // sein - sie ist Zierde und traegt keine Auskunft.
+      //
+      // Aufgefallen ist sie erst mit dem Ebenenleser weiter oben. Vorher mass der Pruefer
+      // an dieser Stelle gegen den schwarzen body statt gegen den hellen Schirm und kam auf
+      // einen Wert, der zufaellig durchging - die Ausnahme ist also neu aufgeschrieben und
+      // nicht neu erfunden.
+      if (el.closest('.gt3-marke')) continue;
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) continue;
       const vg = stParse(cs.color);
@@ -1802,6 +1906,14 @@
     if (!window.OMEGA_TEST || !OMEGA_TEST.cockpitPassung) {
       return { skip: true, mass: 'cockpitPassung nicht vorhanden' };
     }
+    // NICHT PRUEFBAR OHNE FENSTER. Ein verborgener Browser-Bereich meldet innerWidth = 0,
+    // und daran haengen die Medienabfragen des Cockpits: bei Breite 0 greift
+    // @media (max-width: 560px), der Kachelstreifen geht auf vier Spalten, und seine Kacheln
+    // werden ueber ihr Seitenverhaeltnis mehr als doppelt so hoch (gemessen 619 statt 275 px).
+    // Der Test meldete dann einen Ueberstand, den es auf keinem Geraet gibt.
+    if (!(window.innerWidth > 0) || !(window.innerHeight > 0)) {
+      return { skip: true, mass: 'Fenster ist 0 x 0 - im verborgenen Bereich nicht messbar' };
+    }
     // Der Reiter muss offen sein, sonst hat das Cockpit die Hoehe 0.
     const btn = document.querySelector('[data-tab="race"]');
     if (!btn) return { ok: false, mass: 'Cockpit-Reiter fehlt' };
@@ -1826,6 +1938,2209 @@
     OMEGA_TEST.cockpitPassung();
     return { ok: schlecht.length === 0,
              mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Und dasselbe im Vollbild, wo es bisher gar nicht geprueft wurde ----
+  //
+  // GEMELDET zu v0.5.16: "Drehzahllampen sind noch immer abgeschnitten." Die Ursache war
+  // nicht die Einpassung, sondern ihr Fehlen: #race-dash ist im Vollbild position: fixed,
+  // `offsetParent` ist dort null, und cockpitPassung() stieg in der ersten Zeile aus.
+  //
+  // Der Test faelscht die zwei Klassen, statt das Vollbild wirklich zu betreten - dafuer
+  // braeuchte es eine Nutzergeste, und ein Test, der eine Geste braucht, wird nie
+  // gefahren. Gerechnet wird ohnehin nur aus den Klassen und den uebergebenen Massen.
+  //
+  // DIE OBERE KANTE IST DIE AUSSAGE. align-content: center legt einen Ueberstand HALB
+  // nach oben, und oben sitzen die Drehzahllampen; .gt3 schneidet mit overflow: hidden ab.
+  // Ein Test, der nur "passt insgesamt" prueft, uebersieht genau das - deshalb steht die
+  // Lampenreihe hier ausdruecklich als eigene Bedingung.
+  stAdd('Cockpit passt im Vollbild, quer wie gedreht', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.cockpitPassung) {
+      return { skip: true, mass: 'cockpitPassung nicht vorhanden' };
+    }
+    // NICHT PRUEFBAR OHNE FENSTER. Ein verborgener Browser-Bereich meldet innerWidth = 0,
+    // und daran haengen die Medienabfragen des Cockpits: bei Breite 0 greift
+    // @media (max-width: 560px), der Kachelstreifen geht auf vier Spalten, und seine Kacheln
+    // werden ueber ihr Seitenverhaeltnis mehr als doppelt so hoch (gemessen 619 statt 275 px).
+    // Der Test meldete dann einen Ueberstand, den es auf keinem Geraet gibt.
+    if (!(window.innerWidth > 0) || !(window.innerHeight > 0)) {
+      return { skip: true, mass: 'Fenster ist 0 x 0 - im verborgenen Bereich nicht messbar' };
+    }
+    const btn = document.querySelector('[data-tab="race"]');
+    if (!btn) return { ok: false, mass: 'Cockpit-Reiter fehlt' };
+    btn.click();
+    const dash = document.getElementById('race-dash');
+    const shift = document.getElementById('race-shift');
+    if (!dash || !shift) return { ok: false, mass: 'Cockpit oder Lampenreihe fehlt' };
+
+    const warFs = document.body.classList.contains('race-fs');
+    const warTurn = document.body.classList.contains('race-turn');
+    const schlecht = [], teile = [];
+    try {
+      for (const gedreht of [false, true]) {
+        document.body.classList.add('race-fs');
+        document.body.classList.toggle('race-turn', gedreht);
+        const name = gedreht ? 'gedreht' : 'quer';
+        // Drei WIRKLICHE Handymasse, quer gehalten, als Kasten des Cockpits gedacht -
+        // im gedrehten Vollbild liegt dieser Kasten quer ueber einem hochkant gehaltenen
+        // Telefon, und das ist derselbe Kasten.
+        for (const [b, h] of [[915, 412], [844, 390], [740, 330]]) {
+          const r = OMEGA_TEST.cockpitPassung(h, b);
+          if (!r || !r.vollbild) { schlecht.push(name + ' ' + h + ': keine Vollbildmessung'); continue; }
+          // Die Lampenreihe MISST sich selbst nach: offsetTop ist ihr Abstand zur
+          // Oberkante des Kastens, und negativ heisst abgeschnitten.
+          const lampenOben = shift.offsetTop;
+          teile.push(name + ' ' + b + 'x' + h + ': Faktor ' + r.faktor
+                     + (r.passt ? '' : ' UEBER ' + r.ueberstand)
+                     + ', Lampen bei ' + Math.round(lampenOben));
+          if (!r.passt && !r.amBoden) {
+            schlecht.push(name + ' ' + b + 'x' + h + ': ' + r.ueberstand + ' px Ueberstand');
+          }
+          // -1 und nicht 0: die Kastenmasse werden auf ganze Pixel gerundet, und ein
+          // halber Pixel Rundung ist kein abgeschnittener Rand.
+          if (lampenOben < -1) {
+            schlecht.push(name + ' ' + b + 'x' + h + ': Lampen '
+                          + Math.round(-lampenOben) + ' px ueber der Kante');
+          }
+        }
+        // GEGENPROBE je Lage: auf einem hohen Schirm darf nicht verkleinert werden.
+        const gross = OMEGA_TEST.cockpitPassung(1400, 915);
+        teile.push((gedreht ? 'gedreht' : 'quer') + ' 1400: Faktor ' + gross.faktor);
+        if (gross.faktor < 0.999) {
+          schlecht.push((gedreht ? 'gedreht' : 'quer') + ': verkleinert auch bei 1400 px');
+        }
+      }
+    } finally {
+      // Die Klassen ZURUECK, und erst danach neu einpassen - sonst bleibt ein Kasten von
+      // 915 px Breite in einer Spalte von 412 stehen.
+      document.body.classList.toggle('race-fs', warFs);
+      document.body.classList.toggle('race-turn', warTurn);
+      OMEGA_TEST.cockpitPassung();
+    }
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+
+  // ---- Ein Schirmwechsel aendert die Einpassung nicht ----
+  //
+  // DIE ZUSICHERUNG, AUF DER DIE GANZE BAUFORM STEHT. Die zwei zusaetzlichen Schirme sind
+  // absolut positionierte Ueberlagerungen, damit cockpitInhaltHoehe() sie nicht mitzaehlt -
+  // waeren sie ein zweites Raster, bekaemen beide Schirme verschiedene Einpassungsfaktoren,
+  // und das Cockpit wuerde beim BLAETTERN seine Groesse aendern.
+  //
+  // Geprueft wird deshalb ZEICHENGLEICH und nicht "ungefaehr": eine Zeilenhoehe, die sich um
+  // ein Zehntel Pixel aendert, ist schon ein zweites Raster.
+  stAdd('Schirmwechsel aendert die Einpassung nicht', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.schirmListe) {
+      return { skip: true, mass: 'Schirmliste nicht vorhanden' };
+    }
+    if (!(window.innerWidth > 0) || !(window.innerHeight > 0)) {
+      return { skip: true, mass: 'Fenster ist 0 x 0 - im verborgenen Bereich nicht messbar' };
+    }
+    const btn = document.querySelector('[data-tab="race"]');
+    if (btn) btn.click();
+    const dash = document.getElementById('race-dash');
+    const merk = OMEGA_TEST.schirmIst();
+    const teile = [], schlecht = [];
+    try {
+      const liste = OMEGA_TEST.schirmListe();
+      OMEGA_TEST.schirmZu(liste[0]);
+      const rows0 = getComputedStyle(dash).gridTemplateRows;
+      const f0 = OMEGA_TEST.cockpitPassung().faktor;
+      for (let i = 1; i < liste.length; i++) {
+        OMEGA_TEST.schirmZu(liste[i]);
+        const rows = getComputedStyle(dash).gridTemplateRows;
+        const f = OMEGA_TEST.cockpitPassung().faktor;
+        teile.push(liste[i] + (rows === rows0 ? ' gleich' : ' ANDERS'));
+        if (rows !== rows0) schlecht.push(liste[i] + ': Rasterzeilen aendern sich');
+        if (Math.abs(f - f0) > 1e-9) schlecht.push(liste[i] + ': Faktor ' + f + ' statt ' + f0);
+      }
+      // Und er laeuft im Kreis: nach so vielen Schritten wie Schirme ist man wieder da.
+      OMEGA_TEST.schirmZu(liste[0]);
+      for (let i = 0; i < liste.length; i++) OMEGA_TEST.schirmStep(+1);
+      if (OMEGA_TEST.schirmIst() !== liste[0]) schlecht.push('laeuft nicht im Kreis');
+      teile.push(liste.length + ' Schirme, Umlauf ok');
+    } finally {
+      OMEGA_TEST.schirmZu(merk);
+    }
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Der Boxenschirm deckt die Instrumente und nicht die Lichter ----
+  //
+  // Er liegt ueber den Kacheln, aber Schaltlichter, Flaggenband, Boxenband und die
+  // MELDEZEILE muessen sichtbar bleiben. Das letzte ist keine Feinheit: pitToggle()
+  // bestaetigt jede Aenderung ueber showHudToast(), und ein Schirm mit inset: 0 haette das
+  // Pit-Menue stumm gemacht.
+  //
+  // Zugleich ist das die Probe, ob die Rasterlage im Browser wirklich greift. Fiele sie auf
+  // den Polsterkasten zurueck, deckte der Schirm alles - und die Schaltlichter-Bedingung
+  // schlaegt an.
+  stAdd('Boxenschirm deckt die Kacheln, nicht die Lichter', () => {
+    const btn = document.querySelector('[data-tab="race"]');
+    if (btn) btn.click();
+    const s = document.getElementById('race-pitscreen');
+    if (!s || !OMEGA_TEST || !OMEGA_TEST.schirmZu) return { skip: true, mass: 'kein Boxenschirm' };
+    const merk = OMEGA_TEST.schirmIst();
+    const schlecht = [], teile = [];
+    try {
+      OMEGA_TEST.schirmZu('pit');
+      const r = s.getBoundingClientRect();
+      if (!(r.width > 0 && r.height > 0)) {
+        return { skip: true, mass: 'Schirm hat keine Ausdehnung - Reiter nicht sichtbar' };
+      }
+      const drin = (el) => {
+        const q = el.getBoundingClientRect();
+        return q.left >= r.left - 1 && q.right <= r.right + 1
+            && q.top >= r.top - 1 && q.bottom <= r.bottom + 1;
+      };
+      const schneidet = (el) => {
+        const q = el.getBoundingClientRect();
+        if (!(q.width > 0 && q.height > 0)) return false;
+        return !(q.right <= r.left || q.left >= r.right
+                 || q.bottom <= r.top || q.top >= r.bottom);
+      };
+      for (const sel of ['.gt3-left', '.gt3-gear', '.gt3-right', '.gt3-strip']) {
+        const el = document.querySelector('#race-dash ' + sel);
+        if (!el) continue;
+        teile.push(sel + (drin(el) ? ' gedeckt' : ' NICHT gedeckt'));
+        if (!drin(el)) schlecht.push(sel + ' wird nicht gedeckt');
+      }
+      for (const id of ['race-shift', 'hud-toast-wrap']) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if (schneidet(el)) schlecht.push(id + ' wird verdeckt');
+      }
+      teile.push('Lichter und Meldezeile frei');
+    } finally {
+      OMEGA_TEST.schirmZu(merk);
+    }
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Die Mischungen: mittel ist bitgleich zum alten Reifen ----
+  //
+  // DIE WICHTIGSTE der vier Aussagen. 'mittel' hiess bis v0.5.17 'slick' und 'regen' hiess
+  // 'wet'; wenn die Vorgabe dabei auch nur im fuenften Nachkommastellen abweicht, hat der
+  // Umbau das Fahrverhalten geaendert, ohne dass es jemand bestellt hat.
+  stAdd('Reifenmischungen: mittel ist die alte Vorgabe', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.tyreMixProbe) {
+      return { skip: true, mass: 'tyreMixProbe nicht vorhanden' };
+    }
+    const schlecht = [], teile = [];
+    const bei1 = OMEGA_TEST.tyreMixProbe(1);
+    if (!bei1) return { skip: true, mass: 'keine Mischungstabelle' };
+    // 1. mittel == der alte slick: Griff 1,0 im Trockenen, Aquaplaning wie ein Slick.
+    teile.push('mittel Griff ' + bei1.mittel.grip);
+    if (Math.abs(bei1.mittel.grip - 1) > 1e-9) schlecht.push('mittel hat Griff ' + bei1.mittel.grip);
+    if (Math.abs(bei1.mittel.verschleiss - 1) > 1e-9) {
+      schlecht.push('mittel verschleisst ' + bei1.mittel.verschleiss + 'x');
+    }
+    // 2. Die Rangfolge stimmt: weich mehr Griff und mehr Verschleiss als hart.
+    teile.push('weich ' + bei1.weich.grip + '/' + bei1.weich.verschleiss
+               + ' hart ' + bei1.hart.grip + '/' + bei1.hart.verschleiss);
+    if (!(bei1.weich.grip > bei1.mittel.grip && bei1.mittel.grip > bei1.hart.grip)) {
+      schlecht.push('Griffrangfolge weich > mittel > hart stimmt nicht');
+    }
+    if (!(bei1.weich.verschleiss > bei1.hart.verschleiss)) {
+      schlecht.push('weich verschleisst nicht schneller als hart');
+    }
+    // 3. Bei Staerke 0 sind alle drei Slicks derselbe Reifen.
+    const bei0 = OMEGA_TEST.tyreMixProbe(0);
+    const gleich = Math.abs(bei0.weich.grip - bei0.mittel.grip) < 1e-9
+                && Math.abs(bei0.hart.grip - bei0.mittel.grip) < 1e-9
+                && Math.abs(bei0.weich.verschleiss - bei0.mittel.verschleiss) < 1e-9;
+    teile.push('bei Staerke 0: ' + (gleich ? 'alle gleich' : 'VERSCHIEDEN'));
+    if (!gleich) schlecht.push('bei Staerke 0 unterscheiden sich die Slicks noch');
+    // 4. Regen im Trockenen ist schlechter als ein Slick - die bestehende Zusicherung.
+    if (!(bei1.regen.grip < bei1.mittel.grip)) {
+      schlecht.push('Regenreifen greifen im Trockenen nicht schlechter');
+    }
+    // 5. Nur Slicks schwimmen auf.
+    if (bei1.regen.aqua !== 0) schlecht.push('Regenreifen aquaplanen');
+    OMEGA_TEST.tyreMixProbe(1);
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Die Autos auf der Karte tragen ihre Farbe, ihr Kuerzel und ihre Querlage ----
+  //
+  // GEMELDET: "aktuell sind alle orange mit Fragezeichen daneben". Die Ursache war ein
+  // falscher Feldname - c.farbe und c.name gibt es an einem Auto nicht. Genau das prueft
+  // dieser Test: eine gegebene Farbe muss im Punkt ankommen, und ein Querversatz muss den
+  // Punkt bewegen.
+  stAdd('Streckenkarte: Farbe, Kuerzel und Querlage kommen an', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.trackMarks) {
+      return { skip: true, mass: 'trackMarks nicht vorhanden' };
+    }
+    const schlecht = [], teile = [];
+    const mk = (quer) => OMEGA_TEST.trackMarks(null,
+      [{ index: 4, phase: 0.5, farbe: '#e23b3b', kuerzel: 'Alp', quer }]);
+    const mitte = mk(0), links = mk(-0.8), rechts = mk(0.8);
+    const letzt = (r) => r.punkte[r.punkte.length - 1];
+    // 1. Die Farbe kommt an und ist NICHT der Rueckfall.
+    teile.push('Farbe ' + letzt(mitte).fill);
+    if (letzt(mitte).fill !== '#e23b3b') schlecht.push('Farbe kommt nicht an');
+    // 2. Das Kuerzel steht daneben.
+    if (mitte.kuerzel.indexOf('Alp') < 0) schlecht.push('Kuerzel fehlt');
+    // 3. Der Querversatz bewegt den Punkt, und zwar in ENTGEGENGESETZTE Richtungen.
+    const dL = Math.hypot(letzt(links).x - letzt(mitte).x, letzt(links).y - letzt(mitte).y);
+    const dR = Math.hypot(letzt(rechts).x - letzt(mitte).x, letzt(rechts).y - letzt(mitte).y);
+    teile.push('Versatz ' + dL.toFixed(1) + ' / ' + dR.toFixed(1));
+    if (!(dL > 3 && dR > 3)) schlecht.push('Querlage bewegt den Punkt nicht');
+    const dLR = Math.hypot(letzt(links).x - letzt(rechts).x, letzt(links).y - letzt(rechts).y);
+    if (!(dLR > dL && dLR > dR)) schlecht.push('links und rechts liegen nicht auf zwei Seiten');
+    // 4. Das CH-Aussehen: schwarze Fahrbahn, rot links, blau rechts.
+    const f = mitte.farben || [];
+    for (const [farbe, was] of [['#14181f', 'Fahrbahn'], ['#ff5c5c', 'roter Randstein'],
+                                ['#5aa9ff', 'blauer Randstein'], ['#ffffff', 'Stossfugen']]) {
+      if (f.indexOf(farbe) < 0) schlecht.push(was + ' fehlt (' + farbe + ')');
+    }
+    teile.push(f.length + ' Farben im Bild');
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Das Gegensteuern im Drift-Modus ----
+  //
+  // Geprueft wird die FUNKTION und nicht die Fahrt: driftZuschlag() setzt Drehsignal, Tempo
+  // und Lenkwert und fragt, was herauskommt. Fuenf Aussagen, und die ersten zwei sind die,
+  // an denen ein Regler ohne Signal gefaehrlich wuerde.
+  stAdd('Drift: Gegensteuern regelt gegen das Drehsignal', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.driftZuschlag) {
+      return { skip: true, mass: 'driftZuschlag nicht vorhanden' };
+    }
+    const z = (g, span, kmh, steer, st) => OMEGA_TEST.driftZuschlag(g, span, kmh, steer, st);
+    const schlecht = [], teile = [];
+    // 1. OHNE SIGNAL kein Zuschlag - nicht raten.
+    if (Math.abs(z(0, 8, 60, 0.2, 0.5) - 0.2) > 1e-6) schlecht.push('ohne Signal wird zugeschlagen');
+    // 2. IM STAND kein Zuschlag: dort gibt es keine Drift, nur Wackeln.
+    if (Math.abs(z(8, 8, 2, 0.2, 0.5) - 0.2) > 1e-6) schlecht.push('im Stand wird zugeschlagen');
+    // 3. Die Richtung ist GEGEN die Drehung.
+    const rechtsDreh = z(8, 8, 60, 0.2, 0.5);
+    const linksDreh = z(-8, 8, 60, 0.2, 0.5);
+    teile.push('rechts ' + rechtsDreh + ' links ' + linksDreh);
+    if (!(rechtsDreh < 0.2 && linksDreh > 0.2)) schlecht.push('Richtung stimmt nicht');
+    // 4. Der Regler wirkt, und bei 0 passiert nichts.
+    if (Math.abs(z(8, 8, 60, 0.2, 0) - 0.2) > 1e-6) schlecht.push('Staerke 0 wirkt trotzdem');
+    if (!(z(8, 8, 60, 0.2, 1) < z(8, 8, 60, 0.2, 0.5))) schlecht.push('Staerke wirkt nicht');
+    // 5. DER DECKEL. Ein Wert ueber 1 waere nicht wirkungslos, sondern schaedlich: Byte 7
+    //    ist vorzeichenbehaftet und braeche in die andere Richtung um.
+    const voll = z(-8, 8, 60, 0.9, 1);
+    teile.push('Deckel ' + voll);
+    if (voll > 1 + 1e-9 || voll < -1 - 1e-9) schlecht.push('Deckel haelt nicht: ' + voll);
+    return { ok: schlecht.length === 0,
+             mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Die Rundenzaehler-Fanfare ----
+  //
+  // Ihr Klang ist eine Sache fuers Ohr, ihre LAENGE nicht: eine Fanfare, die zehn Sekunden
+  // dauert, haelt das Ergebnis auf. Geprueft wird, dass sie spielt und wie lange.
+  stAdd('Rundenzaehler-Fanfare spielt und ist kurz genug', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.fanfareProbe) {
+      return { skip: true, mass: 'fanfareProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.fanfareProbe();
+    if (!r) return { skip: true, mass: 'kein Audiokontext - braucht eine Nutzergeste' };
+    const schlecht = [];
+    if (!(r.noten >= 20)) schlecht.push('nur ' + r.noten + ' Toene');
+    if (!(r.dauer > 2 && r.dauer < 7)) schlecht.push('Dauer ' + r.dauer + ' s');
+    return { ok: schlecht.length === 0,
+             mass: r.noten + ' Toene, ' + r.dauer + ' s'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Die Karte im Uebersichtsschirm kostet einen Takt fast nichts ----
+  //
+  // DIE ZUSICHERUNG, AUF DER DIE TRENNUNG STEHT. renderTrackPreview rechnet Mittellinie,
+  // Normalen UND die Ideallinie - letztere ist eine Optimierung, und gemessen kostet ein
+  // Aufruf rund 94 ms. Der Uebersichtsschirm malt zehnmal je Sekunde nach; laege der ganze
+  // Aufbau in diesem Takt, waere das der Faden, an dem der 45-ms-Sendetakt haengt.
+  //
+  // Deshalb wird die Strecke EINMAL gezeichnet und danach werden nur die Punkte gesetzt.
+  // Wenn dieser Weg auch nur ein paar Millisekunden kostet, ist die Trennung wertlos - also
+  // wird sie hier nachgemessen und nicht geglaubt.
+  stAdd('Kartenpunkte kosten fast nichts', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ovKarteProbe) {
+      return { skip: true, mass: 'ovKarteProbe nicht vorhanden' };
+    }
+    const btn = document.querySelector('[data-tab="race"]');
+    if (btn) btn.click();
+    const merk = OMEGA_TEST.schirmIst ? OMEGA_TEST.schirmIst() : null;
+    try {
+      if (OMEGA_TEST.schirmZu) OMEGA_TEST.schirmZu('uebersicht');
+      const autos = [
+        { index: 2, phase: 0.4, farbe: '#e23b3b', kuerzel: 'Alp', quer: -0.6 },
+        { index: 5, phase: 0.7, farbe: '#3b7fe2', kuerzel: 'Bet', quer: 0.5 },
+      ];
+      const r = OMEGA_TEST.ovKarteProbe(autos, 50);
+      if (!r) return { skip: true, mass: 'keine Strecke geladen - nichts zu zeichnen' };
+      const schlecht = [];
+      // 2 ms je Takt waeren bei 8 Takten je Sekunde schon 1,6 Prozent des Fadens. Die
+      // Grenze ist grosszuegig; gemessen liegt der Weg bei 0,06 ms.
+      if (!(r.jeAufrufMs < 2)) schlecht.push('ein Takt kostet ' + r.jeAufrufMs + ' ms');
+      if (r.punkte.length !== 2) schlecht.push(r.punkte.length + ' Punkte statt 2');
+      if (r.punkte[0] && r.punkte[0].fill !== '#e23b3b') schlecht.push('Farbe kommt nicht an');
+      if (r.kuerzel.indexOf('Alp') < 0) schlecht.push('Kuerzel fehlt');
+      return { ok: schlecht.length === 0,
+               mass: r.jeAufrufMs + ' ms je Takt, ' + r.punkte.length + ' Punkte'
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+    } finally {
+      if (merk && OMEGA_TEST.schirmZu) OMEGA_TEST.schirmZu(merk);
+    }
+  });
+
+  // ---- Im Boxenschirm huepft nichts, wenn das Wort seine Laenge aendert ----
+  //
+  // GEMELDET: "Symbole (zB Reifenfarbe) sollte mit unterschiedlich langem Text 'mittel'
+  // 'weich' nicht hin und her huepfen." Die Ursache war eine Rasterspalte auf `auto`: sie
+  // ist so breit wie ihr Text, und damit verschiebt jeder Wortwechsel die Spalte DAVOR.
+  //
+  // Geprueft wird an der Stelle, an der man es sieht: die Farbfelder duerfen sich nicht
+  // bewegen, waehrend die vier Mischungen durchgeschaltet werden.
+  stAdd('Boxenschirm: die Bilder stehen still', () => {
+    const btn = document.querySelector('[data-tab="race"]');
+    if (btn) btn.click();
+    const feld = document.querySelector('#pit-row-mix .pit-mix-feld');
+    const reifen = document.querySelector('#pit-row-tyres .pit-t4-feld');
+    const wert = document.getElementById('pit-wert-mix');
+    if (!feld || !reifen || !wert || !OMEGA_TEST || !OMEGA_TEST.schirmZu) {
+      return { skip: true, mass: 'Boxenschirm nicht vorhanden' };
+    }
+    const merk = OMEGA_TEST.schirmIst();
+    try {
+      OMEGA_TEST.schirmZu('pit');
+      if (!(feld.getBoundingClientRect().width > 0)) {
+        return { skip: true, mass: 'Schirm nicht sichtbar' };
+      }
+      const worte = [], mixL = new Set(), reifenL = new Set();
+      for (let i = 0; i < 5; i++) {
+        // Ueber die Zeile selbst, also denselben Weg wie ein Fingertipp.
+        document.getElementById('pit-row-mix').click();
+        worte.push(wert.textContent);
+        mixL.add(+feld.getBoundingClientRect().left.toFixed(1));
+        reifenL.add(+reifen.getBoundingClientRect().left.toFixed(1));
+      }
+      const schlecht = [];
+      if (mixL.size > 1) schlecht.push('Mischungsfelder wandern: ' + [...mixL].join(', '));
+      if (reifenL.size > 1) schlecht.push('Reifenbild wandert: ' + [...reifenL].join(', '));
+      // Und die Gegenprobe: die Woerter mussten sich WIRKLICH geaendert haben, sonst
+      // beweist die Messung nichts.
+      if (new Set(worte).size < 2) schlecht.push('die Mischung hat gar nicht gewechselt');
+      return { ok: schlecht.length === 0,
+               mass: new Set(worte).size + ' verschiedene Woerter, Bilder stehen'
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+    } finally {
+      OMEGA_TEST.schirmZu(merk);
+    }
+  });
+
+
+  // ---- Regler und Modell sagen beim Laden dasselbe ----
+  //
+  // DIESELBE FEHLERKLASSE wie bei den Kaestchen darueber, und die andere Haelfte davon: ein
+  // Schieberegler im Markup und seine Zahl im Modell sind zwei Orte fuer einen Zustand, und
+  // geschrieben wird das Modell nur im input-Zuhoerer. Der feuert beim Laden NICHT.
+  //
+  // GEMESSEN am 0.5.17, und deshalb gibt es diese Pruefung: setting-tyres stand auf 0
+  // ("aus"), das Modell auf 2,0, und die Anzeige daneben behauptete "200 %". Ein einziges
+  // Antippen liess das Fahrverhalten von 200 auf 0 Prozent springen. Der Spiegeltest
+  // darueber hat es nicht gefunden, weil er `el.checked` vergleicht - und ein Regler hat
+  // kein checked.
+  //
+  // Die Liste ist GEPFLEGT, und das ist hier richtig: sie IST die Zusicherung. Ein neuer
+  // Regler, dessen Wert im Modell landet, gehoert hinein.
+  stAdd('Regler und Modell sagen beim Laden dasselbe', () => {
+    const PAARE = [
+      ['setting-tyres', () => physEngine.config.tyreEffect],
+      ['setting-tyre-mix', () => (typeof tyreMixStaerke === 'number' ? tyreMixStaerke : null)],
+      ['setting-tyre-pressure', () => physEngine.config.tyrePressureBar],
+      ['setting-brakebias', () => physEngine.config.brakeBias * 100],
+      ['phys-steerresp', () => physEngine.config.steerResponse],
+      ['setting-steer-calib', () => physEngine.config.steerCalib],
+      ['setting-brake-steal', () => physEngine.config.brakeUseGain],
+      ['setting-minmove', () => physEngine.config.minMoveThrottle],
+      ['setting-fuelweight', () => physEngine.config.fuelWeightEffect],
+      // Der Tankverbrauch. Er FEHLTE hier, und deshalb blieb ein Jahr lang unbemerkt, dass
+      // der Regler 0 zeigte und das Modell 3 rechnete.
+      ['setting-fuel-drain', () => OMEGA_TEST.fuelDrain()],
+      ['setting-countersteer', () => (typeof gegenlenkStaerke === 'number' ? gegenlenkStaerke : null)],
+      ['ghost-line', () => ghostCfg.line],
+      // Die drei Verfeinerungsregler. ghost-exit spiegelt nach 60-track.js und nicht
+      // nach ghostCfg - dort muss der Wert liegen, damit gezeichnete und gefahrene
+      // Linie durch dieselbe Zahl gehen.
+      ['ghost-exit', () => OMEGA_TEST.getLineExit()],
+      ['ghost-quertempo', () => ghostCfg.querTempo],
+      ['ghost-gasdyn', () => ghostCfg.gasDynamik],
+      ['ghost-lanes', () => ghostCfg.lanes],
+      ['ghost-lateral', () => ghostCfg.lateral],
+      ['ghost-speed', () => ghostCfg.speed],
+      // Die drei Boxenstopp-Regler. Die zwei Rundengrenzen schieben sich gegenseitig, also
+      // muss das Markup ein GUELTIGES Paar tragen - min <= max -, sonst zeigt der eine beim
+      // Laden etwas anderes als das Modell.
+      ['ghost-pit-sec', () => ghostCfg.pitSek],
+      ['ghost-pit-min', () => ghostCfg.pitRundenMin],
+      ['ghost-pit-max', () => ghostCfg.pitRundenMax],
+    ];
+    const schlecht = [], fehlt = [];
+    let geprueft = 0;
+    for (const [id, lies] of PAARE) {
+      const el = $(id);
+      if (!el) { fehlt.push(id); continue; }
+      let spiegel;
+      try { spiegel = lies(); } catch (e) { fehlt.push(id + ' (' + e.message + ')'); continue; }
+      if (spiegel === null || spiegel === undefined) { fehlt.push(id + ' (kein Spiegel)'); continue; }
+      geprueft++;
+      // Auf vier Nachkommastellen: die Regler sind Zehntel und Hundertstel, und ein
+      // Gleitkommavergleich auf Bitgleichheit waere hier eine Falle ohne Aussage.
+      const a = Math.round(parseFloat(el.value) * 1e4) / 1e4;
+      const b = Math.round(spiegel * 1e4) / 1e4;
+      if (a !== b) schlecht.push(id + ': Regler ' + a + ', Modell ' + b);
+    }
+    return { ok: !schlecht.length && !fehlt.length,
+             mass: geprueft + ' Regler geprueft'
+                 + (schlecht.length ? ' | WEICHEN AB: ' + schlecht.join(', ') : ' | alle gleich')
+                 + (fehlt.length ? ' | nicht erreichbar: ' + fehlt.join(', ') : '') };
+  });
+
+  // ---- Die Motorliste, das Manifest und die Doku sagen dasselbe ----
+  //
+  // DREI ORTE FUER EINE LISTE: die Auswahl im Menue, SAMPLE_CARS im Code und loops.json auf
+  // der Platte. Dazu die Dokutabelle, die von Hand gepflegt ist. Ein Motor, der in einem
+  // davon fehlt, faellt nicht auf: die Auswahl zeigt ihn, der Lader findet ihn nicht, und
+  // gehoert wird der vorige weiter.
+  stAdd('Motorliste, Manifest und Doku stimmen ueberein', async () => {
+    if (location.protocol === 'file:') {
+      return { skip: true, mass: 'ohne Server kein Manifest' };
+    }
+    const sel = $('sound-profile');
+    if (!sel) return { ok: false, mass: 'sound-profile fehlt' };
+    const menue = Array.prototype.map.call(sel.options, (o) => o.value);
+    let man;
+    try {
+      man = await fetch('audio/loops.json', { cache: 'reload' }).then((r) => r.json());
+    } catch (e) { return { skip: true, mass: 'Manifest nicht ladbar: ' + e.message }; }
+    const imManifest = Object.keys(man);
+    const schlecht = [];
+    for (const k of menue) if (imManifest.indexOf(k) < 0) schlecht.push(k + ' fehlt im Manifest');
+    for (const k of imManifest) if (menue.indexOf(k) < 0) schlecht.push(k + ' fehlt im Menue');
+    if (typeof SAMPLE_CARS !== 'undefined') {
+      for (const k of menue) if (SAMPLE_CARS.indexOf(k) < 0) schlecht.push(k + ' fehlt in SAMPLE_CARS');
+      for (const k of SAMPLE_CARS) if (menue.indexOf(k) < 0) schlecht.push(k + ' steht nur in SAMPLE_CARS');
+    }
+    // Und die Dokutabelle: so viele Motorzeilen wie Schleifen. Sie ist von Hand gepflegt,
+    // also ist das die einzige Stelle, an der ein Vergessen auffaellt.
+    const schleifen = imManifest.reduce((a, k) => a + Object.keys(man[k].loops).length, 0);
+    const zeilen = document.querySelectorAll('.snd-row audio[src*="_idle.ogg"], '
+      + '.snd-row audio[src*="_low.ogg"], .snd-row audio[src*="_low2.ogg"], '
+      + '.snd-row audio[src*="_low3.ogg"], .snd-row audio[src*="_mid.ogg"], '
+      + '.snd-row audio[src*="_high.ogg"], .snd-row audio[src*="_over.ogg"]').length;
+    if (zeilen !== schleifen) {
+      schlecht.push('Doku hat ' + zeilen + ' Motorzeilen, das Manifest ' + schleifen + ' Schleifen');
+    }
+    return { ok: schlecht.length === 0,
+             mass: menue.length + ' Motoren, ' + schleifen + ' Schleifen, ' + zeilen + ' Dokuzeilen'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Die Ideallinie ueberlebt den Weg bis zum Servo ----
+  //
+  // DIE ZUSICHERUNG, AUF DER DIE GANZE GHOST-LINIE STEHT, und sie ist nicht der Betrag,
+  // sondern die FORM. Zwischen dem Linienversatz aus der Karte und dem gesendeten Byte
+  // liegen Expo, die Tempobeschneidung, die Ratenbegrenzung und der Reibkreis; jede davon
+  // kann eine Form flachdruecken, ohne den Mittelwert zu senken.
+  //
+  // Gemessen wird deshalb die SPANNE des Bytes innerhalb einer Kurve. Eine Ideallinie hat
+  // dort eine grosse Spanne (aussen - innen - aussen); eine konstante Schraeglage hat null,
+  // egal wie gross ihr Betrag ist. Genau dieser Unterschied war der Bericht "sie fahren
+  // stumpf ihre Spur".
+  stAdd('Ideallinie: die Form ueberlebt bis zum Servo', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostLinieTrace) {
+      return { skip: true, mass: 'ghostLinieTrace nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.ghostLinieTrace({ takte: 400, kurvenFaktor: 1.2,
+                                           cfg: { line: 1, lanes: 0.5, lateral: 0.5 } });
+    if (!r) return { skip: true, mass: 'keine Strecke geladen' };
+    if (r.fehler) return { ok: false, mass: 'Messung warf: ' + r.fehler };
+    const kurven = r.kacheln.filter((k) => k.typ !== 2);
+    if (!kurven.length) return { skip: true, mass: 'Strecke ohne Kurven' };
+    const spanne = kurven.reduce((a, k) => a + k.spanne, 0) / kurven.length;
+    const schlecht = [];
+    // 1. Die Karte liefert ueberhaupt eine Form.
+    if (!(r.linieSpanne > 0.5)) schlecht.push('Linienversatz spannt nur ' + r.linieSpanne);
+    // 2. Der Wunsch traegt sie weiter.
+    if (!(r.wunschSpanne > 0.3)) schlecht.push('Wunsch spannt nur ' + r.wunschSpanne);
+    // 3. UND DIE PHYSIK LAESST SIE DURCH. Gemessen 0,93 bei der Vorgabe; unter 0,75 wird
+    //    am Anschlag abgeschnitten, und abgeschnitten wird der Scheitel.
+    if (!(r.anteilServoVomWunsch > 0.75)) {
+      schlecht.push('nur ' + r.anteilServoVomWunsch + ' des Wunsches kommt am Servo an');
+    }
+    // 4. Und am Ende steht eine SPANNE im gesendeten Byte, nicht nur ein Betrag. Gemessen
+    //    55 bei 100 Prozent; 25 ist grosszuegig und faengt eine konstante Schraeglage.
+    if (!(spanne > 25)) schlecht.push('Kurvenspanne nur ' + Math.round(spanne) + ' von 127');
+    return { ok: schlecht.length === 0,
+             mass: 'Linie ' + r.linieSpanne + ' -> Wunsch ' + r.wunschSpanne
+                 + ' -> Servo ' + r.servoSpanne + ' (' + r.anteilServoVomWunsch + ')'
+                 + ' | Kurvenspanne ' + Math.round(spanne) + ' von 127'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Der Querlage-Pruefstand sendet genau das, was daneben steht ----
+  //
+  // SEIN GANZER ZWECK IST, dass das Etikett stimmt: er beantwortet die Frage, welcher
+  // BYTEWERT das Auto wie weit bewegt, und dafuer muss der eingestellte Wert unveraendert
+  // an Byte 7 ankommen.
+  //
+  // Er geht deshalb am Servoweg vorbei. Ginge er durch, kaemen Expo, Tempobeschneidung,
+  // Ratenbegrenzung und Reibkreis dazwischen - gemessen wurden bei "rechts 76" so 70 plus
+  // minus 9, weil die Beschneidung mit dem Tempo schwankt. Ein Pruefstand, dessen Etikett
+  // um zehn Prozent danebenliegt, misst nichts.
+  stAdd('Querlage-Pruefstand: das Etikett ist das Byte', () => {
+    const reg = $('ghost-quer-test');
+    if (!reg || !window.OMEGA_TEST || !OMEGA_TEST.ghostLinieTrace) {
+      return { skip: true, mass: 'Pruefstand oder Messstand nicht vorhanden' };
+    }
+    const merk = reg.value;
+    const schlecht = [], teile = [];
+    try {
+      const setz = (v) => { reg.value = v; reg.dispatchEvent(new Event('input', { bubbles: true })); };
+      for (const v of [0.3, 0.6, 1, -0.6, -1]) {
+        setz(v);
+        const r = OMEGA_TEST.ghostLinieTrace({ takte: 200, cfg: { line: 1, lanes: 0.5, lateral: 0.5 } });
+        if (!r) return { skip: true, mass: 'keine Strecke geladen' };
+        if (r.fehler) return { ok: false, mass: 'Messung warf: ' + r.fehler };
+        const soll = Math.round(v * 127);
+        const ist = Math.round(r.kacheln.reduce((a, k) => a + k.mittel, 0) / r.kacheln.length)
+                  * (v < 0 ? -1 : 1);
+        const spanne = Math.max.apply(null, r.kacheln.map((k) => k.spanne));
+        teile.push(soll + '->' + ist);
+        // 1. Der Wert kommt unveraendert an.
+        if (Math.abs(ist - soll) > 1) schlecht.push(soll + ' gesendet als ' + ist);
+        // 2. UND ER STEHT STILL. Ein Pruefstand, dessen Wert schwankt, ist keiner - und
+        //    genau das war der Grund, am Servoweg vorbeizugehen.
+        if (spanne > 1) schlecht.push('bei ' + soll + ' schwankt es um ' + spanne);
+      }
+      // 3. Bei 0 ist er AUS und alles laeuft wie sonst: die Linie muss ihre Form haben.
+      setz(0);
+      const r0 = OMEGA_TEST.ghostLinieTrace({ takte: 400, kurvenFaktor: 1.2,
+                                              cfg: { line: 1, lanes: 0.5, lateral: 0.5 } });
+      const kurven = r0.kacheln.filter((k) => k.typ !== 2);
+      const sp = kurven.length ? kurven.reduce((a, k) => a + k.spanne, 0) / kurven.length : 0;
+      teile.push('aus: Kurvenspanne ' + Math.round(sp));
+      if (!(sp > 25)) schlecht.push('bei 0 ist die Linie weg (Spanne ' + Math.round(sp) + ')');
+      return { ok: schlecht.length === 0,
+               mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+    } finally {
+      reg.value = merk;
+      reg.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+
+  // ---- Die Kacheldauer wird JE TYP gemessen, nicht global geschaetzt ----
+  //
+  // GEGEN DAS EINFRIEREN DES KURVENAUSGANGS. ghostTilePhase() deckelt auf 1; ist die
+  // erwartete Dauer zu kurz, kommt die Phase zu frueh am Ende an und bleibt dort - der
+  // Linienversatz friert ein und der Rest der Kurve wird mit konstanter Schraeglage
+  // gefahren.
+  //
+  // Zu kurz WAR sie systematisch: die Schaetzung war ein Mittel ueber alle Kacheln mal dem
+  // GEOMETRISCHEN Laengenverhaeltnis, und der Ghost bremst in Kurven ab (curveSlow). Eine
+  // 60-Grad-Kurve dauert dadurch rund 1,18 mal so lang wie ihre Laenge vorhersagt, eine
+  // Haarnadel 1,43 mal.
+  //
+  // Geprueft wird an der Wirkung: wieviel einer Kurve klebt am Deckel, wenn sie laenger
+  // dauert als vorhergesagt? Gemessen vorher 12 / 20 / 29 Prozent bei 1,2 / 1,4 / 1,8 mal.
+  stAdd('Kacheldauer je Typ: der Kurvenausgang friert nicht ein', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostLinieTrace) {
+      return { skip: true, mass: 'ghostLinieTrace nicht vorhanden' };
+    }
+    const schlecht = [], teile = [];
+    for (const kf of [1.2, 1.4, 1.8]) {
+      const r = OMEGA_TEST.ghostLinieTrace({ takte: 900, kurvenFaktor: kf,
+                                             cfg: { line: 1, lanes: 0.5, lateral: 0.5 } });
+      if (!r) return { skip: true, mass: 'keine Strecke geladen' };
+      if (r.fehler) return { ok: false, mass: 'Messung warf: ' + r.fehler };
+      const klebt = r.phaseGeklebtInKurven;
+      teile.push(kf + 'x: ' + Math.round(klebt * 100) + '%');
+      // 15 Prozent ist grosszuegig: gemessen sind es 2,6 / 5 / 10, und vor der Behebung
+      // waren es 12 / 20 / 29. Die Grenze faengt eine Rueckkehr zum alten Verhalten.
+      if (!(klebt < 0.15)) schlecht.push(kf + 'x klebt zu ' + Math.round(klebt * 100) + '%');
+    }
+    return { ok: schlecht.length === 0,
+             mass: 'Anteil am Phasendeckel in Kurven: ' + teile.join(', ')
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Die Waehltaste, in einer FOLGE gefahren ----
+  //
+  // DER GEMELDETE FEHLER WAR EINE FOLGE und kein Einzelzustand: einmal X im Boxenmenue,
+  // danach war X auf dem Cockpitschirm dauerhaft taub. Jeder Test, der die zwei Schirme
+  // einzeln prueft und dazwischen zuruecksetzt, sieht davon nichts - beide Haelften waren
+  // ja fuer sich in Ordnung. Gemeldet mit genau dieser Beobachtung: "X funktioniert im Pit
+  // Menue wie er soll."
+  //
+  // Die Ursache war ein Merker, der "in diesem Druck ist die Sekunde schon voll gewesen"
+  // heisst und nur auf der naechsten STEIGENDEN Flanke fiel. Der Boxenschirm verbrauchte
+  // diese Flanke, also fiel er nie mehr.
+  //
+  // Gefahren wird die WIRKLICHE Logik ueber OMEGA_TEST.flagTaste, nicht eine zweite Fassung
+  // davon. Und ausdruecklich ohne die Sekunde vollzumachen: geprueft wird, ob der Druck
+  // ANGENOMMEN wird - eine ausgeloeste gelbe Flagge braemste jedes Auto im Feld auf 40 km/h
+  // und liesse einen Zustand zurueck, den der naechste Test vorfaende.
+  stAdd('Waehltaste: nach dem Boxenmenue nimmt der Cockpitschirm sie wieder', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.flagTaste || !OMEGA_TEST.schirmZu) {
+      return { skip: true, mass: 'Waehltaste nicht erreichbar' };
+    }
+    const merk = OMEGA_TEST.schirmIst();
+    const schlecht = [];
+    let schritte = 0;
+    try {
+      // (a) Auf dem Cockpitschirm nimmt sie den Druck an und laedt.
+      OMEGA_TEST.schirmZu('main');
+      OMEGA_TEST.flagTaste(false);
+      OMEGA_TEST.flagTaste(true);
+      schritte++;
+      if (!OMEGA_TEST.flagLage().haelt) schlecht.push('a: laedt auf main nicht');
+      OMEGA_TEST.flagTaste(false);
+      schritte++;
+      if (OMEGA_TEST.flagLage().haelt) schlecht.push('a: laedt nach dem Loslassen weiter');
+
+      // (b) Auf dem Boxenschirm waehlt sie und laedt AUSDRUECKLICH nicht.
+      //
+      // AUF DER MISCHUNGSZEILE und nicht auf der obersten: die oberste ruft den Boxenstopp,
+      // und ein Selbsttest, der einen Stopp scharfstellt, hinterlaesst einen Zustand, den
+      // der naechste Test vorfindet. Die Mischung ist die einzige Zeile, deren Wirkung sich
+      // vollstaendig zuruecknehmen laesst - vier Mischungen, viermal weiter ist daheim.
+      // HINGEZAEHLT UND NICHT ANGENOMMEN. Erste Fassung tippte zweimal nach unten und
+      // rechnete mit Zeile 0 als Ausgangspunkt - die Auswahl stand aber auf 4, weil ein
+      // frueherer Test sie dort gelassen hatte. Der Test schlug dann mit "hat gar nichts
+      // gewaehlt" fehl, und das war wahr: er hatte auf der Reparaturzeile gedrueckt.
+      // Ein Test, der den Zustand seiner Vorgaenger voraussetzt, misst die Reihenfolge.
+      OMEGA_TEST.schirmZu('pit');
+      const selMerk = OMEGA_TEST.schirmAuswahl();
+      const zielSel = PIT_SCREEN_ROWS.findIndex((z) => z.art === 'wahl');
+      for (let k = 0; k < PIT_SCREEN_ROWS.length
+                      && OMEGA_TEST.schirmAuswahl() !== zielSel; k++) {
+        OMEGA_TEST.schirmPad('down');
+      }
+      if (OMEGA_TEST.schirmAuswahl() !== zielSel) schlecht.push('b: Mischungszeile nicht erreicht');
+      const heim = pitMischungWahl();
+      OMEGA_TEST.flagTaste(true);
+      schritte++;
+      if (OMEGA_TEST.flagLage().haelt) schlecht.push('b: laedt im Boxenmenue');
+      OMEGA_TEST.flagTaste(false);
+      schritte++;
+      // Dass sie ueberhaupt gewaehlt hat. Ohne diese Gegenprobe koennte der Schirm die
+      // Taste schlicht verschlafen, und (c) waere trivial gruen.
+      if (pitMischungWahl() === heim) schlecht.push('b: hat gar nichts gewaehlt');
+      for (let k = 0; k < 4 && pitMischungWahl() !== heim; k++) {
+        OMEGA_TEST.flagTaste(true); OMEGA_TEST.flagTaste(false); schritte += 2;
+      }
+      if (pitMischungWahl() !== heim) schlecht.push('b: Mischung nicht zurueckgestellt');
+      for (let k = 0; k < PIT_SCREEN_ROWS.length
+                      && OMEGA_TEST.schirmAuswahl() !== selMerk; k++) {
+        OMEGA_TEST.schirmPad('up');
+      }
+
+      // (c) DIE FOLGE. Zurueckblaettern, wieder druecken - und sie muss wieder laden.
+      OMEGA_TEST.schirmZu('main');
+      OMEGA_TEST.flagTaste(true);
+      schritte++;
+      if (!OMEGA_TEST.flagLage().haelt) {
+        schlecht.push('c: taub nach einem Druck im Boxenmenue - GENAU DER GEMELDETE FEHLER');
+      }
+      if (OMEGA_TEST.flagLage().gesperrt) schlecht.push('c: Sperre steht noch');
+      OMEGA_TEST.flagTaste(false);
+      schritte++;
+    } catch (e) {
+      schlecht.push('Ausnahme: ' + e.message);
+    } finally {
+      OMEGA_TEST.flagTaste(false);
+      OMEGA_TEST.schirmZu(merk);
+    }
+    return { ok: !schlecht.length,
+             mass: schritte + ' Tastenflanken gefahren'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : ' | Folge sauber') };
+  });
+
+  // ---- Die Boxenzeilen sagen ja oder nein, und ein Ja hellt die Zeile auf ----
+  //
+  // EIN VOKABULAR FUER EINE FRAGE. Hier standen vier Woerter - "vorgewaehlt"/"aus" vor dem
+  // Stopp, "wird gemacht"/"abgewaehlt" waehrenddessen -, und "aus" hiess an dieser Stelle
+  // etwas anderes als das "aus" der Reifensimulation zwei Zeilen weiter.
+  stAdd('Boxenzeilen: ja oder nein, und ja ist heller', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.schirmZu) return { skip: true, mass: 'kein Boxenschirm' };
+    const merk = OMEGA_TEST.schirmIst();
+    const schlecht = [];
+    const erlaubt = [t('ja'), t('nein'), t('Sim aus')];
+    let geprueft = 0, hell = 0;
+    try {
+      OMEGA_TEST.schirmZu('pit');
+      for (const z of PIT_SCREEN_ROWS) {
+        if (z.art === 'aktion' || z.art === 'wahl') continue;
+        const w = document.getElementById(z.wert);
+        const zeile = document.getElementById(z.el);
+        if (!w || !zeile) { schlecht.push(z.id + ': Zeile fehlt'); continue; }
+        geprueft++;
+        const wort = (w.textContent || '').trim();
+        if (erlaubt.indexOf(wort) < 0) schlecht.push(z.id + ': sagt "' + wort + '"');
+        // Und die Aufhellung sagt dasselbe wie das Wort. Zwei Traeger einer Aussage duerfen
+        // sich nicht widersprechen - sonst ist der, den man aus dem Augenwinkel liest, der
+        // falsche.
+        const ja = zeile.classList.contains('pr-ja');
+        if (ja) hell++;
+        if (ja !== (wort === t('ja'))) schlecht.push(z.id + ': Aufhellung und Wort uneins');
+      }
+      // Die Aufhellung muss auch WIRKEN: ein Hintergrund, den eine ungueltige Deklaration
+      // verschluckt hat, ist keine Aufhellung. Geprueft am gerechneten Wert, nicht am
+      // Regelwerk - genau die Falle, die in 0.5.17 den GT3-Schirm durchsichtig liess.
+      const probe = document.getElementById(PIT_SCREEN_ROWS.find((z) => z.id === 'tyres').el);
+      if (probe) {
+        const hatte = probe.classList.contains('pr-ja');
+        probe.classList.remove('pr-ja');
+        const roh = getComputedStyle(probe).backgroundImage;
+        probe.classList.add('pr-ja');
+        const mit = getComputedStyle(probe).backgroundImage;
+        probe.classList.toggle('pr-ja', hatte);
+        if (mit === 'none') schlecht.push('pr-ja loescht den Hintergrund (ungueltige Deklaration)');
+        else if (mit === roh) schlecht.push('pr-ja aendert den Hintergrund nicht');
+      }
+    } catch (e) {
+      schlecht.push('Ausnahme: ' + e.message);
+    } finally {
+      OMEGA_TEST.schirmZu(merk);
+      pitScreenRender();
+    }
+    return { ok: !schlecht.length,
+             mass: geprueft + ' Arbeitszeilen, ' + hell + ' davon hell'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : ' | ein Vokabular') };
+  });
+
+  // ---- Das hidden-Attribut wirkt ----
+  //
+  // DIE FALLE: die Browser-Vorgabe ist `[hidden] { display: none }`, und die verliert gegen
+  // JEDE Autoren-Regel, die display setzt. Im Streckeneditor traf sie auf
+  // `.tp-btn { display: grid }`, und der Schliessknopf stand dauerhaft in der Leiste - mit
+  // dem Vollbild-Symbol und der Aufschrift "Schliessen", ausserhalb des Vollbilds, wo er
+  // nichts tat. Genau so gemeldet.
+  //
+  // Geprueft wird die REGEL und nicht die eine Stelle: ein frisch gebauter Knopf mit
+  // display:grid und hidden muss verschwinden. Dazu die Bestandsaufnahme - kein Element im
+  // Dokument darf hidden tragen und trotzdem gezeichnet werden.
+  stAdd('Das hidden-Attribut wirkt, auch gegen display-Regeln', () => {
+    const probe = document.createElement('button');
+    probe.className = 'tp-btn';
+    probe.hidden = true;
+    probe.textContent = 'x';
+    document.body.appendChild(probe);
+    const eigen = getComputedStyle(probe).display;
+    probe.remove();
+
+    const trotzdemDa = [];
+    for (const el of document.querySelectorAll('[hidden]')) {
+      if (getComputedStyle(el).display !== 'none') {
+        trotzdemDa.push(el.tagName.toLowerCase() + (el.id ? '#' + el.id : ''));
+      }
+    }
+    const gesamt = document.querySelectorAll('[hidden]').length;
+    return { ok: eigen === 'none' && !trotzdemDa.length,
+             mass: gesamt + ' Elemente mit hidden, Probe mit display:grid -> ' + eigen
+                 + (trotzdemDa.length ? ' || TROTZDEM GEZEICHNET: ' + trotzdemDa.join(', ')
+                                      : ' | keines wird gezeichnet') };
+  });
+
+  // ---- Das Vollbild des Streckeneditors ----
+  //
+  // ES HATTE GAR KEINE PRUEFUNG, und darin sassen drei Fehler gleichzeitig: der
+  // Schliessknopf war immer sichtbar (siehe oben), der Kartenkasten behielt seine feste
+  // Hoehe aus der Seite (`clamp(240px, 42vh, 460px)` - gemessen 302 von 596 verfuegbaren
+  // px), und der Warnabsatz ueber die unvollstaendige Palette nahm eine eigene Rasterzeile.
+  //
+  // GESCHALTET WIRD DIE KLASSE, nicht enterTrackFullscreen(). Das ist Absicht: die Klasse
+  // IST die Wahrheit, an der das ganze Layout haengt, und ein Aufruf der echten Funktion
+  // wuerde requestFullscreen() ausloesen - der Selbsttest laeuft nach einem Klick, also mit
+  // einer gueltigen Nutzergeste, und wuerde den Browser wirklich ins Vollbild werfen. Eine
+  // Pruefung, die die Arbeitsumgebung umbaut, ist keine.
+  stAdd('Editor-Vollbild: Karte fuellt den Schirm, Knopf schaltet um', () => {
+    if (!(window.innerWidth > 0) || !(window.innerHeight > 0)) {
+      return { skip: true, mass: 'Fenster ist 0 x 0 - im verborgenen Bereich nicht messbar' };
+    }
+    const host = document.getElementById('track-fs-host');
+    const knopf = document.getElementById('track-fs-toggle');
+    if (!host || !knopf) return { ok: false, mass: 'Vollbild-Host oder Umschalter fehlt' };
+
+    const aktiverTab = document.querySelector('nav.tabs [data-tab].active')
+                    || document.querySelector('[data-tab="selftest"]');
+    const warKlasse = document.body.classList.contains('track-fs');
+    const schlecht = [];
+    const gemessen = {};
+    try {
+      const tabKnopf = document.querySelector('[data-tab="track"]');
+      const subKnopf = document.querySelector('[data-sub="edit"]');
+      if (tabKnopf) tabKnopf.click();
+      if (subKnopf) subKnopf.click();
+
+      // Die Aufschrift AUSSERHALB des Vollbilds: sie muss zum Hineingehen einladen.
+      const kappe = () => [...knopf.querySelectorAll('.tp-cap')]
+        .filter((x) => getComputedStyle(x).display !== 'none')
+        .map((x) => x.textContent.trim());
+      document.body.classList.remove('track-fs');
+      const draussen = kappe();
+      if (draussen.length !== 1) schlecht.push('draussen ' + draussen.length + ' Aufschriften');
+      else if (draussen[0] !== t('Vollbild')) schlecht.push('draussen steht "' + draussen[0] + '"');
+      gemessen.draussen = draussen[0];
+
+      document.body.classList.add('track-fs');
+      const drinnen = kappe();
+      if (drinnen.length !== 1) schlecht.push('drinnen ' + drinnen.length + ' Aufschriften');
+      else if (drinnen[0] !== t('Schließen')) schlecht.push('drinnen steht "' + drinnen[0] + '"');
+      gemessen.drinnen = drinnen[0];
+      if (!knopf.onclick) schlecht.push('Umschalter hat keinen Klickzuhoerer');
+
+      // Der Host deckt den Schirm.
+      const hb = host.getBoundingClientRect();
+      if (Math.abs(hb.width - window.innerWidth) > 2
+          || Math.abs(hb.height - window.innerHeight) > 2) {
+        schlecht.push('Host ' + Math.round(hb.width) + 'x' + Math.round(hb.height)
+                      + ' statt ' + window.innerWidth + 'x' + window.innerHeight);
+      }
+
+      // Der Warnabsatz ist weg - er ist Prosa und nahm eine Rasterzeile.
+      for (const p of host.children) {
+        if (p.tagName === 'P' && getComputedStyle(p).display !== 'none') {
+          schlecht.push('Warnabsatz nimmt im Vollbild noch Platz');
+        }
+      }
+
+      // Der Kartenkasten fuellt seine Rasterzeile. Gemessen gegen die aufgeloeste Zeile
+      // selbst, nicht gegen eine Zahl - wer das Raster umbaut, zieht hier von selbst nach.
+      const kasten = document.getElementById('track-preview-svg');
+      const zeilen = getComputedStyle(host).gridTemplateRows.split(' ').map(parseFloat);
+      const groesste = Math.max.apply(null, zeilen.filter((z) => isFinite(z)));
+      const kb = kasten.getBoundingClientRect();
+      gemessen.kasten = Math.round(kb.width) + 'x' + Math.round(kb.height);
+      gemessen.zeile = Math.round(groesste);
+      if (Math.abs(kb.height - groesste) > 2) {
+        schlecht.push('Kartenkasten ' + Math.round(kb.height) + ' px in einer Zeile von '
+                      + Math.round(groesste) + ' px');
+      }
+
+      // Und die Karte darin: kein Ueberlauf, und eine Richtung voll ausgenutzt. Geprueft
+      // ueber DREI Seitenverhaeltnisse, weil der erste Versuch (`width:auto;height:100%`)
+      // mit der fast quadratischen Teststrecke unauffaellig war und eine breite Strecke
+      // waagerecht aus dem Kasten geschoben haette - der schneidet ab.
+      const svg = kasten.querySelector('svg');
+      if (!svg) {
+        gemessen.karte = 'keine Strecke geladen';
+      } else {
+        const merkVb = svg.getAttribute('viewBox');
+        const faelle = [];
+        for (const vb of ['0 0 200 60', '0 0 60 200', '0 0 90 90']) {
+          svg.setAttribute('viewBox', vb);
+          const sb = svg.getBoundingClientRect();
+          const v = svg.viewBox.baseVal;
+          if (sb.width > kb.width + 2 || sb.height > kb.height + 2) {
+            schlecht.push(vb + ': svg laeuft aus dem Kasten');
+          }
+          const sk = Math.min(sb.width / v.width, sb.height / v.height);
+          const bw = Math.round(v.width * sk), bh = Math.round(v.height * sk);
+          const voll = Math.abs(bw - kb.width) <= 2 || Math.abs(bh - kb.height) <= 2;
+          if (!voll) schlecht.push(vb + ': gezeichnet ' + bw + 'x' + bh + ', nichts voll');
+          faelle.push(vb.slice(4) + '->' + bw + 'x' + bh);
+        }
+        if (merkVb) svg.setAttribute('viewBox', merkVb);
+        gemessen.karte = faelle.join(' ');
+      }
+    } catch (e) {
+      schlecht.push('Ausnahme: ' + e.message);
+    } finally {
+      document.body.classList.toggle('track-fs', warKlasse);
+      if (aktiverTab) aktiverTab.click();
+      if (typeof refreshTrackPreview === 'function') refreshTrackPreview();
+    }
+    return { ok: !schlecht.length,
+             mass: 'draussen "' + gemessen.draussen + '", drinnen "' + gemessen.drinnen
+                 + '", Kasten ' + gemessen.kasten + ' in Zeile ' + gemessen.zeile
+                 + ' | ' + gemessen.karte
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Der Streckenzeichner zeichnet nur, das Aeussere kommt vom Ort ----
+  //
+  // renderTrackPreview() schrieb bis v0.5.30 Groesse, Grund und Rahmen als INLINE-Stil aufs
+  // svg - und ein Inline-Stil schlaegt jede Regel eines Stylesheets. Drei Orte zeigen
+  // dasselbe Bild und brauchen verschiedene Kleidung; zwei von ihnen mussten deshalb mit
+  // !important dagegen anarbeiten, und das Editor-Vollbild konnte die Breitendeckelung von
+  // 520 px ueberhaupt nicht loswerden.
+  //
+  // GEPRUEFT WIRD BEIDES: dass der Zeichner nichts mehr anzieht, UND dass die drei Orte
+  // wirklich verschieden kleiden. Nur das erste zu pruefen liesse offen, ob der Umbau die
+  // Unterschiede nicht einfach eingeebnet hat.
+  stAdd('Streckenzeichner: kein Inline-Stil, drei Orte kleiden verschieden', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.trackMarks) {
+      return { skip: true, mass: 'trackMarks nicht erreichbar' };
+    }
+    const html = OMEGA_TEST.trackMarks(undefined, []).html;
+    const schlecht = [];
+    if (html.indexOf('class="tp-karte"') < 0) schlecht.push('svg traegt keine Klasse tp-karte');
+    // Das svg selbst darf kein style tragen. Die Kacheln und Punkte DARIN duerfen es (dort
+    // ist es Zeichnung und keine Kleidung), also wird nur die oeffnende Marke geprueft.
+    const marke = html.slice(0, html.indexOf('>') + 1);
+    if (/style\s*=/.test(marke)) schlecht.push('svg-Marke traegt wieder style: ' + marke.slice(0, 80));
+
+    // Und im laufenden Dokument auch nicht.
+    for (const el of document.querySelectorAll('.tp-karte[style]')) {
+      if (el.getAttribute('style').trim()) {
+        schlecht.push('gezeichnete Karte traegt style: ' + el.getAttribute('style').slice(0, 60));
+      }
+    }
+
+    // Die drei Orte, jeder mit demselben Bild. Gemessen wird der GERECHNETE Grund: er ist
+    // der Unterschied, um den es geht - Panelgrund im Editor, durchscheinendes Weiss auf dem
+    // schwarzen Cockpitgrund des Uebersichtsschirms.
+    const ORTE = ['#track-preview-svg', '#dash-minimap', '.ov-karte'];
+    const gruende = {};
+    for (const sel of ORTE) {
+      const host = document.querySelector(sel);
+      if (!host) { schlecht.push(sel + ' fehlt'); continue; }
+      const merk = host.innerHTML;
+      try {
+        host.innerHTML = html;
+        const svg = host.querySelector('svg');
+        if (!svg) { schlecht.push(sel + ': kein svg nach dem Einsetzen'); continue; }
+        const cs = getComputedStyle(svg);
+        gruende[sel] = cs.backgroundColor;
+        // Ein Bild ohne Groesse ist ein Bild, das den Ort sprengt oder verschwindet - aber
+        // gepruefen laesst sich das nur, wenn der ORT selbst gerade gelegt ist. Von diesem
+        // Reiter aus liegen die anderen auf display:none, und dann ist alles darin 0 breit;
+        // meine erste Fassung meldete deshalb alle drei Orte als fehlerhaft. Die Farben
+        // darueber sind davon unberuehrt - getComputedStyle rechnet auch in einem
+        // verborgenen Reiter.
+        const hb = host.getBoundingClientRect();
+        if (hb.width > 0 && !(svg.getBoundingClientRect().width > 0)) {
+          schlecht.push(sel + ': Bild ist 0 breit in einem ' + Math.round(hb.width)
+                        + ' px breiten Ort');
+        }
+      } finally {
+        host.innerHTML = merk;
+      }
+    }
+    // Der Uebersichtsschirm MUSS sich vom Editor unterscheiden - das war der Grund fuer
+    // seine zwei !important.
+    if (gruende['#track-preview-svg'] && gruende['.ov-karte']
+        && gruende['#track-preview-svg'] === gruende['.ov-karte']) {
+      schlecht.push('Editor und Uebersichtsschirm haben denselben Grund - der Unterschied '
+                    + 'ist beim Umbau verlorengegangen');
+    }
+    return { ok: !schlecht.length,
+             mass: 'Editor ' + gruende['#track-preview-svg']
+                 + ' | Uebersicht ' + gruende['.ov-karte']
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : ' | kein Inline-Stil') };
+  });
+
+  // ---- Die Phase erreicht das Kachelende ----
+  //
+  // GEGEN MEINEN EIGENEN ERSTEN ENTWURF gemessen. Ich hatte hier eine Glaettung eingebaut,
+  // die die 1 nur asymptotisch erreicht, damit der Punkt auf der Karte am Kachelende nicht
+  // stehenbleibt - und "Ideallinie stetig" ist daran sofort rot geworden: die Phase ist der
+  // INDEX IN DIE IDEALLINIE, und erreicht sie das Kachelende nicht, fehlt der Linie das
+  // letzte Stueck jeder Kachel. Gemessen 2,48 mal ihr Eigenschritt auf SG2H2G2J2.
+  //
+  // Diese Pruefung haelt die Entscheidung fest, damit sie nicht ein zweites Mal getroffen
+  // werden muss: am Ende der geschaetzten Dauer ist die Phase 1, und darueber bleibt sie 1.
+  stAdd('Kachelphase erreicht am Kachelende genau 1', () => {
+    const car = { tileAt: 0, ghost: { tileIndex: 0, laps: 0, tileMs: 800 } };
+    const bei = (alterMs) => {
+      car.tileAt = Date.now() - alterMs;
+      return ghostTilePhase(car);
+    };
+    const dauer = ghostTileDauer(car.ghost);
+    const schlecht = [];
+    if (Math.abs(bei(dauer) - 1) > 1e-6) schlecht.push('am Ende ' + bei(dauer).toFixed(6) + ', nicht 1');
+    for (const f of [1.5, 3, 10]) {
+      if (bei(dauer * f) !== 1) schlecht.push('bei ' + f + 'facher Dauer ' + bei(dauer * f));
+    }
+    if (Math.abs(bei(dauer / 2) - 0.5) > 1e-6) schlecht.push('auf halber Kachel ' + bei(dauer / 2));
+    if (bei(-100) !== 0) schlecht.push('vor dem Beginn ' + bei(-100));
+    return { ok: !schlecht.length,
+             mass: 'Dauer ' + Math.round(dauer) + ' ms, halb ' + bei(dauer / 2).toFixed(3)
+                 + ', voll ' + bei(dauer).toFixed(3) + ', dreifach ' + bei(dauer * 3).toFixed(3)
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Der Ort auf der Schiene ----
+  //
+  // EINE DEFINITION statt fuenf. Dieselbe Groesse wurde an fuenf Stellen einzeln gerechnet -
+  // Kartenpunkte, Windschatten, Spurvergabe, Fuehrender, eigenes Auto - und sie waren sich
+  // nicht einig: die Kartenpunkte rechneten noch mit der Formel von vor v0.5.18 und liefen
+  // an einer zweiten Uhr.
+  //
+  // Gepruefte Invariante: der Ort liegt IMMER in [Kachel, Kachel+1) - nie auf der naechsten
+  // Kachel und nie hinter der eigenen. Daran haengt, dass floor() die Kachel zurueckgibt und
+  // dass ein Abstand nicht das Vorzeichen wechselt, weil eine Schaetzung uebergelaufen ist.
+  stAdd('Ort auf der Schiene: bleibt auf seiner Kachel, steigt monoton', () => {
+    if (typeof ghostOrt !== 'function' || typeof ghostOrtGes !== 'function') {
+      return { ok: false, mass: 'ghostOrt/ghostOrtGes fehlen' };
+    }
+    const schlecht = [];
+    const mk = (i, alterMs, laps) => ({
+      tileAt: Date.now() - alterMs,
+      ghost: { tileIndex: i, laps: laps || 0, tileMs: 800 },
+    });
+    // Ohne gemeldete Kachel gibt es keinen Ort - und ausdruecklich nicht 0, denn 0 ist die
+    // Start-Ziel-Kachel und waere eine Behauptung.
+    if (ghostOrt({ ghost: { tileIndex: null } }) !== null) schlecht.push('ohne Kachel nicht null');
+    if (ghostOrt({}) !== null) schlecht.push('ohne Ghost nicht null');
+
+    // AUF DER KACHEL BLEIBEN, auch wenn die geschaetzte Dauer weit ueberschritten ist. Die
+    // Phase deckelt bei 1 - das braucht die Ideallinie -, also SAETTIGT der Ort am
+    // Kachelende. Gefordert ist deshalb "nicht fallend" und nicht "streng steigend": ein
+    // Auto, dessen Kachel laenger dauert als geschaetzt, steht am Ende der Kachel, und das
+    // ist ehrlicher als ein Weiterkriechen ueber die Grenze hinaus.
+    let geprueft = 0;
+    for (const i of [0, 1, 7]) {
+      let vor = -Infinity;
+      for (const alter of [0, 100, 400, 800, 1600, 8000, 80000]) {
+        const o = ghostOrt(mk(i, alter));
+        geprueft++;
+        if (!(o >= i && o < i + 1)) schlecht.push('Kachel ' + i + ', ' + alter + ' ms: ' + o);
+        if (o < vor) schlecht.push('Kachel ' + i + ' bei ' + alter + ' ms zurueckgelaufen');
+        if (Math.floor(o) !== i) schlecht.push('floor(' + o + ') ist nicht ' + i);
+        vor = o;
+      }
+    }
+    // Und in der Mitte der Kachel steht er auch in der Mitte - sonst waere "bleibt auf der
+    // Kachel" auch von einer Funktion erfuellt, die immer i zurueckgibt.
+    const mitte = ghostOrt(mk(3, ghostTileDauer({ tileIndex: 3, tileMs: 800 }) / 2));
+    if (Math.abs(mitte - 3.5) > 0.01) schlecht.push('halbe Kachel gibt ' + mitte + ', nicht 3,5');
+
+    // MONOTON UEBER DIE RUNDENGRENZE: die letzte Kachel der Runde 0 muss VOR der ersten
+    // Kachel der Runde 1 liegen. Das ist die Eigenschaft, an der alles haengt - sie macht
+    // aus einem Abstand eine Subtraktion und aus einem Ueberholmanoever einen
+    // Vorzeichenwechsel.
+    //
+    // MIT EIGENER STRECKE, nach dem Verfahren von compareLines(): ohne geladenes Layout ist
+    // die Rundenlaenge 1, und dann ist die Pruefung entartet. Meine erste Fassung uebersprang
+    // sie in diesem Fall stillschweigend - also genau dann, wenn der Selbsttest ohne
+    // Streckendatei laeuft, und das ist der Normalfall.
+    const keep = currentTrackTiles;
+    let n = 0;
+    try {
+      currentTrackTiles = codeToTrack('SG2H2G2R2G2H2G2R2').tiles;
+      n = currentTrackTiles.length;
+      // Eine ganze Runde durchlaufen und die Kette pruefen, nicht nur die Naht.
+      let vor = -Infinity;
+      for (let runde = 0; runde < 3; runde++) {
+        for (let i = 0; i < n; i++) {
+          for (const ph of [0, 0.5, 0.95]) {
+            const o = ghostOrtGes(mk(i, 800 * ph * ghostTileLenFactor(i), runde));
+            if (o < vor) {
+              schlecht.push('zurueckgelaufen bei Runde ' + runde + ', Kachel ' + i
+                            + ': ' + o.toFixed(3) + ' nach ' + vor.toFixed(3));
+            }
+            vor = o;
+          }
+        }
+      }
+      // Und die Naht ausdruecklich: letzte Kachel der Runde 0 vor erster der Runde 1.
+      const ende = ghostOrtGes(mk(n - 1, 700, 0));
+      const anfang = ghostOrtGes(mk(0, 10, 1));
+      if (!(anfang > ende)) {
+        schlecht.push('Rundengrenze: ' + anfang.toFixed(3) + ' nicht nach ' + ende.toFixed(3));
+      }
+    } finally {
+      currentTrackTiles = keep;
+      lineCache = null;
+    }
+
+    // Der Abstand in Sekunden: Vorzeichen, Gegenprobe, und der Rueckfall ohne Tempo.
+    if (typeof ghostAbstandSek === 'function') {
+      const vorn = mk(4, 400), hinten = mk(2, 400);
+      const d = ghostAbstandSek(vorn, hinten);
+      if (!(d > 0)) schlecht.push('vorn/hinten gibt ' + d + ', nicht positiv');
+      const rueck = ghostAbstandSek(hinten, vorn);
+      if (Math.abs(d + rueck) > 1e-9) schlecht.push('nicht antisymmetrisch: ' + d + ' / ' + rueck);
+      // Zwei Kacheln bei 800 ms je Kachel sind 1,6 s.
+      if (Math.abs(d - 1.6) > 0.05) schlecht.push('zwei Kacheln sind ' + d.toFixed(3) + ' s, nicht 1,6');
+      // Ohne Tempo wird nicht geraten.
+      const ohne = { tileAt: Date.now(), ghost: { tileIndex: 1, laps: 0, tileMs: 0 } };
+      if (ghostAbstandSek(ohne, hinten) !== null) schlecht.push('ohne Tempo kein null');
+      if (typeof ghostNahe === 'function') {
+        // Der Rueckfall auf das Kachelmass muss greifen, wenn kein Tempo bekannt ist.
+        const a = { ghost: { tileIndex: 3, laps: 0, tileMs: 0, tilesTotal: 3 }, tileAt: Date.now() };
+        const b = { ghost: { tileIndex: 4, laps: 0, tileMs: 0, tilesTotal: 4 }, tileAt: Date.now() };
+        if (!ghostNahe(a, b)) schlecht.push('Rueckfall aufs Kachelmass greift nicht');
+      }
+    }
+    return { ok: !schlecht.length,
+             mass: geprueft + ' Orte geprueft, zwei Kacheln = '
+                 + (typeof ghostAbstandSek === 'function'
+                    ? ghostAbstandSek(mk(4, 400), mk(2, 400)).toFixed(2) + ' s' : '?')
+                 + ', ' + (n * 3 * 3) + ' Orte ueber drei Runden auf ' + n + ' Kacheln'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : ' | Invarianten halten') };
+  });
+
+  // ---- Die Ortung richtet sich an der gemeldeten Schiene aus ----
+  //
+  // DIE WURZEL VON DREI GEMELDETEN FEHLERN. Die App setzte beim ersten Kachelwechsel
+  // g.tileIndex = 0, nahm also an, das Auto stehe an Start/Ziel. Wer seine Autos irgendwo
+  // auf die Bahn stellt, hatte damit einen Versatz fuer das ganze Rennen - und mit ihm
+  // Punkte an der falschen Stelle, eine Ideallinie fuer die falsche Kachel und eine
+  // Kurvendrosselung, die auf der Geraden bremst.
+  //
+  // Geprueft wird JEDER moegliche Versatz, nicht einer: bei 17 Kacheln sind das 17 Faelle,
+  // und der Fall 0 ist die Gegenprobe - eine richtige Annahme darf nicht verschoben werden.
+  stAdd('Ortung: findet den Versatz zur gemeldeten Schiene', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ortProbe) {
+      return { skip: true, mass: 'ortProbe nicht erreichbar' };
+    }
+    // DREI LAYOUTS, und das erste ist mit Absicht SYMMETRISCH: SG2H2G2R2G2H2G2R2 ist
+    // zweimal G2H2G2R2, und dort liefern zwei Versaetze dieselben Treffer bis auf die eine
+    // Start/Ziel-Kachel. Mein erster Entwurf verglich nur gegen die jetzige Annahme und
+    // verschob dort FUENF von 17 Versaetzen um genau die halbe Runde. Eine Pruefung mit nur
+    // einer asymmetrischen Strecke haette das nie gesehen.
+    const LAYOUTS = ['SG2H2G2R2G2H2G2R2', 'SG2RG2L', 'SRRRLLL'];
+    const schlecht = [];
+    let faelle = 0, langsamster = 0;
+    for (const code of LAYOUTS) {
+      const n = OMEGA_TEST.ortProbe(code, 0, 1).kacheln;
+      for (let v = 0; v < n; v++) {
+        const r = OMEGA_TEST.ortProbe(code, v, n * 3);
+        faelle++;
+        if (!r.stimmt) {
+          schlecht.push(code + ' Versatz ' + v + ': Index ' + r.index + ' statt ' + r.echt);
+        }
+        if (v === 0 && r.angewandt) schlecht.push(code + ': Versatz 0 wurde verschoben');
+        if (v !== 0) {
+          if (!r.angewandt) schlecht.push(code + ' Versatz ' + v + ': nicht ausgerichtet');
+          else langsamster = Math.max(langsamster, r.korrigiertNach);
+        }
+      }
+      // Die Rundenzaehlung: wer beim Ausrichten ueber das Rundenende springt, hat die Linie
+      // in Wahrheit schon ueberfahren. Bleibt laps auf 0, zaehlte die naechste Ueberfahrt
+      // als erste Runde, obwohl es die zweite waere.
+      const spaet = OMEGA_TEST.ortProbe(code, n - 1, n * 2);
+      if (!(spaet.runden >= 1)) {
+        schlecht.push(code + ' Versatz ' + (n - 1) + ': Runde nicht mitgezogen');
+      }
+    }
+    return { ok: !schlecht.length,
+             mass: faelle + ' Versaetze auf ' + LAYOUTS.length
+                 + ' Layouts, spätestens nach ' + langsamster + ' Kacheln richtig'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Und die Auskunft, ob dem gerechneten Ort zu glauben ist ----
+  //
+  // Sie ist das Tor fuer die Kurvendrosselung: stimmen gemeldete Kachel und Layout nicht
+  // ueberein, darf der Vorausblick nicht drosseln - er weiss dann nicht, wovon er redet.
+  stAdd('Ortung: die Auskunft "stimmt" trennt Messung und Rechnung', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ortStimmtProbe) {
+      return { skip: true, mass: 'ortStimmtProbe nicht erreichbar' };
+    }
+    const tiles = codeToTrack('SG2H2G2R2G2H2G2R2').tiles;
+    const schlecht = [];
+    // Richtig gemeldet: stimmt.
+    for (let i = 0; i < tiles.length; i++) {
+      if (OMEGA_TEST.ortStimmtProbe(undefined, i, tiles[i].type) !== true) {
+        schlecht.push('Kachel ' + i + ' (Typ ' + tiles[i].type + ') gilt als falsch');
+      }
+    }
+    // Eine Gerade gemeldet, wo eine Haarnadel liegt: stimmt nicht.
+    const hp = tiles.findIndex((t) => t.type === 0x05 || t.type === 0x06);
+    if (hp >= 0 && OMEGA_TEST.ortStimmtProbe(undefined, hp, 0x02) !== false) {
+      schlecht.push('Gerade auf einer Haarnadel gilt als richtig');
+    }
+    // Kein Code und abseits der Bahn: nicht entscheidbar, und ausdruecklich nicht "falsch" -
+    // sonst fiele der Vorausblick jedes Mal aus, wenn ein Paket kein Muster trug.
+    if (OMEGA_TEST.ortStimmtProbe(undefined, 0, 0xff) !== null) {
+      schlecht.push('ohne gelesenen Code nicht null');
+    }
+    if (OMEGA_TEST.ortStimmtProbe(undefined, 0, 0x00) !== null) {
+      schlecht.push('abseits der Bahn nicht null');
+    }
+    return { ok: !schlecht.length,
+             mass: tiles.length + ' Kacheln richtig erkannt, Haarnadel/Gerade getrennt, '
+                 + 'ohne Code null'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Wechselhaftes Wetter ----
+  //
+  // Bestellt: "alle 2-6 Minuten (genaue Zeit zufaellig gezogen) fuer 1-3 Minuten regnen und
+  // dann wieder trocken werden". Geprueft wird genau das - die Folge wechselt, die Dauern
+  // liegen in ihren Fenstern, und sie sind GEZOGEN und nicht fest. Ein Metronom waere kein
+  // Wetter, und ein Test, der nur "es wechselt" prueft, wuerde es durchlassen.
+  stAdd('Wetter wechselhaft: Phasen, Fenster, und wirklich gezogen', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.wxWechselProbe) {
+      return { skip: true, mass: 'wxWechselProbe nicht erreichbar' };
+    }
+    const p = OMEGA_TEST.wxWechselProbe(12);
+    const schlecht = [];
+    if (!p.length) return { ok: false, mass: 'keine Phasen' };
+    if (p[0].nass) schlecht.push('beginnt nass, soll trocken beginnen');
+    const trocken = [], regen = [];
+    for (let i = 0; i < p.length; i++) {
+      // Jede Phase muss in die andere umschlagen.
+      if (p[i].danachNass === p[i].nass) schlecht.push('Phase ' + i + ' schlug nicht um');
+      // Und die Folge muss alternieren.
+      if (i > 0 && p[i].nass === p[i - 1].nass) schlecht.push('Phase ' + i + ' wiederholt sich');
+      (p[i].nass ? regen : trocken).push(p[i].dauerMs);
+    }
+    const im = (arr, min, max, name) => {
+      for (const d of arr) {
+        if (d < min - 50 || d > max + 50) {
+          schlecht.push(name + ' ' + Math.round(d / 1000) + ' s liegt nicht in '
+                        + (min / 60000) + '-' + (max / 60000) + ' min');
+        }
+      }
+    };
+    im(trocken, 2 * 60000, 6 * 60000, 'trockene Phase');
+    im(regen, 1 * 60000, 3 * 60000, 'Regenphase');
+    // GEZOGEN und nicht fest: bei sechs trockenen Phasen aus einem Fenster von vier Minuten
+    // sind sechs identische Werte praktisch unmoeglich. Das ist die Pruefung, die ein
+    // Metronom von Wetter unterscheidet.
+    const verschieden = new Set(trocken.map((d) => Math.round(d / 1000))).size;
+    if (trocken.length >= 3 && verschieden < 2) {
+      schlecht.push('alle trockenen Phasen gleich lang - da wird nicht gezogen');
+    }
+    const spanne = (a) => a.length
+      ? Math.round(Math.min.apply(null, a) / 1000) + '-' + Math.round(Math.max.apply(null, a) / 1000) + ' s'
+      : '-';
+    return { ok: !schlecht.length,
+             mass: p.length + ' Phasen, trocken ' + spanne(trocken) + ', Regen '
+                 + spanne(regen) + ', ' + verschieden + ' verschiedene Trockenzeiten'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Regen kostet die Ghosts Tempo ----
+  //
+  // Bestellt: "bei Regen soll die Geschwindigkeit der KI-Gegner gedrosselt sein". Geprueft
+  // am gefahrenen Tempo und nicht an der Existenz einer Konstante.
+  stAdd('Ghosts fahren im Regen langsamer', async () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostDriveProbe) {
+      return { skip: true, mass: 'ghostDriveProbe nicht vorhanden' };
+    }
+    const merk = weather;
+    const mittel = async () => {
+      const g = await OMEGA_TEST.ghostDriveProbe({ lage: 'codes', takte: 500, code: 'SG8',
+        tileMs: 900, cfg: Object.assign({}, WUERZE_AUS, { speed: 0.5, leaderBrake: false }) });
+      const f = g.tempo.filter((x) => isFinite(x)).slice(-30);
+      return f.reduce((s, x) => s + x, 0) / Math.max(1, f.length);
+    };
+    const merkF = typeof wxFront === 'undefined' ? null : wxFront;
+    let trocken = 0, nass = 0, nassGleich = 0;
+    try {
+      // ---- DIE FRONT MUSS DURCHGEZOGEN WERDEN ------------------------------------
+      //
+      // WARUM DAS SEIT v0.5.47 NOETIG IST: der Regenabzug hing an `weather === 'rain'`,
+      // einem Schalter. Jetzt haengt er an wxRainLevel(), der Rampe - genau wie der Griff
+      // des Spieler-Autos, und das war der Sinn der Aenderung: ein Ghost, der im Moment der
+      // Meldung springt, waehrend der Spieler fuenf Sekunden lang nass wird, faehrt in einer
+      // anderen Welt.
+      //
+      // setWeather() setzt aber nur das ZIEL der Rampe; den Weg macht wxTick in
+      // 80-ms-Schritten. Dieser Test misst sofort danach, sah also Naesse 0 und meldete
+      // Anteil 0,989 - "der Regen kostet nichts". Der Befund war echt und die Ursache war
+      // dieser Test.
+      //
+      // wxSet zieht sie durch. Damit ist zugleich die RAMPE geprueft: unten steht, dass es
+      // bei Ziel gesetzt und Front noch draussen NICHT langsamer sein darf.
+      setWeather('dry');
+      if (OMEGA_TEST.wxSet) OMEGA_TEST.wxSet(-1);
+      trocken = await mittel();
+      setWeather('rain');
+      // Erst OHNE die Front: das Wetter ist gemeldet, das Wasser noch nicht da.
+      if (OMEGA_TEST.wxSet) OMEGA_TEST.wxSet(-1);
+      nassGleich = await mittel();
+      // Und dann mit ihr.
+      if (OMEGA_TEST.wxSet) OMEGA_TEST.wxSet(0);
+      nass = await mittel();
+    } finally {
+      setWeather(merk);
+      if (merkF !== null && OMEGA_TEST.wxSet) OMEGA_TEST.wxSet(merkF);
+    }
+    const anteil = trocken > 0 ? nass / trocken : 0;
+    const anteilGleich = trocken > 0 ? nassGleich / trocken : 0;
+    const schlecht = [];
+    // Der Faktor ist 0,85; die Toleranz laesst dem Tempo-Regler Luft, verlangt aber einen
+    // deutlichen Unterschied - "irgendwie langsamer" wuerde auch ein Rauschen erfuellen.
+    if (!(anteil > 0.75 && anteil < 0.95)) {
+      schlecht.push('mit Wasser Anteil ' + anteil.toFixed(3)
+                    + ', erwartet zwischen 0,75 und 0,95');
+    }
+    // UND DIE RAMPE: gemeldet, aber noch trocken heisst noch kein Abzug. Ohne diese Zeile
+    // waere der Test auch mit dem alten Schalter gruen, und die Aenderung ungeprueft.
+    if (!(anteilGleich > 0.95)) {
+      schlecht.push('vor dem Wasser schon ' + anteilGleich.toFixed(3) + ' - die Rampe fehlt');
+    }
+    return { ok: !schlecht.length,
+             mass: 'trocken ' + (trocken * 100).toFixed(1) + ' %, gemeldet aber trocken '
+                 + (nassGleich * 100).toFixed(1) + ' % (' + anteilGleich.toFixed(3)
+                 + '), mit Wasser ' + (nass * 100).toFixed(1) + ' % ('
+                 + anteil.toFixed(3) + ')'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Vier Autos nebeneinander brauchen vier Spuren ----
+  //
+  // GEMELDET: "Ueberholen und eigene Spuren klappt auch nicht - die Autos haben sich viel
+  // geschoben", mit vier Ghosts. Die Seitenverteilung kannte genau zwei Seiten (k % 2), also
+  // bekamen Rang 0 und 2 beide -1 und Rang 1 und 3 beide +1 - zwei Paare auf derselben
+  // Linie.
+  //
+  // Geprueft werden EIGENSCHAFTEN: paarweise verschieden, symmetrisch um die Mitte, und die
+  // Aussenspuren voll genutzt. Feste Zahlen abzufragen wuerde bei jeder Nachjustierung rot,
+  // ohne dass etwas kaputt waere - "paarweise verschieden" ist dagegen genau die
+  // Zusicherung, die vorher fehlte.
+  stAdd('Seitenverteilung: jedes Auto der Gruppe bekommt eine eigene Spur', () => {
+    if (typeof ghostSeiten !== 'function') return { ok: false, mass: 'ghostSeiten fehlt' };
+    const schlecht = [];
+    const zeilen = [];
+    if (ghostSeiten(0).length !== 0) schlecht.push('0 Autos gibt keine leere Liste');
+    if (ghostSeiten(1).length !== 1 || ghostSeiten(1)[0] !== 0) {
+      schlecht.push('ein Auto soll mittig bleiben, gibt ' + ghostSeiten(1));
+    }
+    for (let n = 2; n <= 6; n++) {
+      const s = ghostSeiten(n);
+      zeilen.push(n + ': ' + s.map((x) => x.toFixed(2)).join(' '));
+      if (s.length !== n) { schlecht.push(n + ' Autos geben ' + s.length + ' Spuren'); continue; }
+      // Paarweise verschieden - das ist der behobene Fehler.
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          if (Math.abs(s[i] - s[j]) < 1e-9) {
+            schlecht.push(n + ' Autos: Rang ' + i + ' und ' + j + ' auf derselben Spur');
+          }
+        }
+      }
+      // Die Aussenspuren voll ausgenutzt, sonst bleibt Bahnbreite liegen.
+      if (Math.abs(s[0] + 1) > 1e-9 || Math.abs(s[n - 1] - 1) > 1e-9) {
+        schlecht.push(n + ' Autos: Raender ' + s[0].toFixed(2) + '/' + s[n - 1].toFixed(2));
+      }
+      // Symmetrisch, sonst wandert das Feld insgesamt zur Seite.
+      const summe = s.reduce((a, b) => a + b, 0);
+      if (Math.abs(summe) > 1e-9) schlecht.push(n + ' Autos: Summe ' + summe.toFixed(3));
+      // Aufsteigend, damit die Ordnung der Gruppe die Ordnung der Spuren ist.
+      for (let i = 1; i < n; i++) {
+        if (!(s[i] > s[i - 1])) schlecht.push(n + ' Autos: nicht aufsteigend bei ' + i);
+      }
+    }
+    // Bei drei Autos bleibt das mittlere mittig - es hat nach beiden Seiten gleich viel Platz.
+    if (Math.abs(ghostSeiten(3)[1]) > 1e-9) schlecht.push('bei drei Autos steht das mittlere nicht mittig');
+    return { ok: !schlecht.length,
+             mass: zeilen.join(' | ')
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Der Reifenrahmen zeigt die montierte Mischung ----
+  //
+  // GEMELDET: "die Umrandung der Reifen im Cockpit entspricht nicht dem Reifentyp". Sie
+  // entsprach nie einem: die CSS-Regeln lesen body[data-tyre-mix="..."], und dieses Attribut
+  // wurde nur in applySurface() geschrieben - einer Funktion, die erst bei einem
+  // Wetterwechsel, einem Boxenstopp oder an einem Reifenregler laeuft. Beim Laden lief sie
+  // nie, das Attribut fehlte, alle vier Regeln hatten keinen Treffer, und der Rahmen blieb
+  // auf dem Rueckfallwert Gelb stehen.
+  //
+  // Geprueft wird die ganze Kette und nicht die Zuweisung: Attribut vorhanden, Attribut
+  // gleich dem Modell, und die vier Werte ergeben vier UNTERSCHEIDBARE Ringfarben. Der
+  // letzte Teil faengt den Fall, dass jemand zwei Mischungen dieselbe Farbe gibt - dann
+  // waere die Anzeige da und trotzdem nutzlos.
+  stAdd('Reifenrahmen: Attribut da, gleich dem Modell, vier Farben', () => {
+    const t4 = document.querySelector('.gt3-t4');
+    if (!t4) return { ok: false, mass: '.gt3-t4 fehlt' };
+    const schlecht = [];
+    const attr = document.body.dataset.tyreMix;
+    if (!attr) {
+      schlecht.push('body traegt kein data-tyre-mix - die CSS-Regeln haben keinen Treffer');
+    } else if (attr !== tyres) {
+      schlecht.push('Attribut "' + attr + '" gegen Modell "' + tyres + '"');
+    }
+    // Die vier Ringfarben, ueber das Attribut durchgeschaltet.
+    const merk = document.body.dataset.tyreMix;
+    const farben = {};
+    try {
+      for (const m of MISCHUNG_FOLGE) {
+        document.body.dataset.tyreMix = m;
+        farben[m] = getComputedStyle(t4).getPropertyValue('--mix-farbe').trim();
+      }
+    } finally {
+      if (merk === undefined) delete document.body.dataset.tyreMix;
+      else document.body.dataset.tyreMix = merk;
+    }
+    const werte = Object.keys(farben).map((m) => farben[m]);
+    for (let i = 0; i < werte.length; i++) {
+      if (!werte[i]) schlecht.push(MISCHUNG_FOLGE[i] + ' hat keine Rahmenfarbe');
+      for (let j = i + 1; j < werte.length; j++) {
+        if (werte[i] && werte[i] === werte[j]) {
+          schlecht.push(MISCHUNG_FOLGE[i] + ' und ' + MISCHUNG_FOLGE[j] + ' gleich gefaerbt');
+        }
+      }
+    }
+    return { ok: !schlecht.length,
+             mass: 'Attribut "' + attr + '", Modell "' + tyres + '", Farben '
+                 + MISCHUNG_FOLGE.map((m) => m + '=' + farben[m]).join(' ')
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Die Geist-Piktogramme sind spiegelsymmetrisch ----
+  //
+  // GEMELDET: "Geist sollte symmetrisch sein". Er war es an beiden Stellen nicht, und die
+  // Kachel in den Einstellungen hatte einen echten Zeichenfehler - ihr letzter Bodenzacken
+  // ging nach UNTEN (auf y=44 statt auf die Grundlinie y=40), die rechte untere Ecke hing
+  // also unter der Figur. Dazu zwei verschieden geformte Schultern.
+  //
+  // Gemessen wird der PFAD und nicht die Zeichenkette: 400 Punkte abtasten, jeden an der
+  // Mittelachse spiegeln und den naechsten Nachbarn auf gleicher Hoehe suchen. Ein Pfad, der
+  // dieselbe Figur mit anderen Befehlen beschreibt, besteht damit auch - geprueft ist die
+  // Form und nicht ihre Schreibweise.
+  stAdd('Geist-Piktogramme sind spiegelsymmetrisch', () => {
+    const FAELLE = [
+      ['#tab-options [data-sub="opt-ghosts"] svg path', 24, 'Einstellungskachel'],
+      ['.home-feat svg path[d^="M5 20V11"]', 12, 'Merkmalsliste'],
+    ];
+    const schlecht = [], masse = [];
+    for (const [sel, mitte, name] of FAELLE) {
+      const el = document.querySelector(sel);
+      if (!el) { schlecht.push(name + ': Pfad nicht gefunden (' + sel + ')'); continue; }
+      let L;
+      try { L = el.getTotalLength(); } catch (e) {
+        schlecht.push(name + ': nicht messbar (' + e.message + ')'); continue;
+      }
+      if (!(L > 0)) { schlecht.push(name + ': Pfadlaenge 0'); continue; }
+      const pts = [];
+      for (let i = 0; i <= 400; i++) pts.push(el.getPointAtLength(L * i / 400));
+      let maxAbw = 0;
+      for (const p of pts) {
+        const sx = 2 * mitte - p.x;
+        let best = Infinity;
+        for (const q of pts) {
+          const d = Math.hypot(q.x - sx, q.y - p.y);
+          if (d < best) best = d;
+        }
+        if (best > maxAbw) maxAbw = best;
+      }
+      masse.push(name + ' ' + maxAbw.toFixed(3));
+      // 0,25 Einheiten bei 24 bzw. 48 Rastereinheiten - das ist ein Prozent der Figur und
+      // liegt ueber der Abtastauflaesung, aber weit unter allem, was man sehen kann.
+      if (maxAbw > 0.25) schlecht.push(name + ': weicht um ' + maxAbw.toFixed(2) + ' ab');
+    }
+    return { ok: !schlecht.length,
+             mass: masse.join(' | ')
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : ' | beide symmetrisch') };
+  });
+
+  // ---- Die Simulationsbedienung merken und zurueckgeben ----
+  //
+  // DAS LECK, DAS DAS BEHEBT: zwei Pruefungen stellten sim-ghosts, sim-laps und sim-fast um
+  // und gaben sie nicht zurueck. sim-fast blieb danach gesetzt, und JEDE spaetere Simulation
+  // lief mit doppelter Geschwindigkeit - unsichtbar, weil die Rundenzeiten dieselben bleiben
+  // (die kommen aus der eigenen Uhr der Simulation).
+  //
+  // Gekostet hat es eine Messung: Beruehrungen je Minute kamen um den Faktor zwei zu niedrig
+  // heraus, und ich habe die Zahl zuerst geglaubt. Ein Prueflauf, der Bedienelemente
+  // umstellt und liegen laesst, verfaelscht alles, was danach kommt - auch von Hand.
+  //
+  // Als Helfer und nicht als zwei Abschriften: eine dritte Pruefung wird es sonst auch
+  // vergessen.
+  const SIM_UI = ['sim-ghosts', 'sim-laps', 'sim-fast'];
+  function simUiMerken() {
+    const m = {};
+    for (const id of SIM_UI) {
+      const e = $(id);
+      if (e) m[id] = e.type === 'checkbox' ? e.checked : e.value;
+    }
+    return m;
+  }
+  function simUiZurueck(m) {
+    if (!m) return;
+    for (const id of SIM_UI) {
+      const e = $(id);
+      if (e && m[id] !== undefined) {
+        if (e.type === 'checkbox') e.checked = m[id]; else e.value = m[id];
+      }
+    }
+  }
+
+  // ---- Die Rennsimulation faehrt wirklich ----
+  //
+  // BESTELLT WAR EIN RENNEN, DAS ABLAEUFT - "keine Ergebnisse simulieren, sondern das Rennen,
+  // wie es stattfindet". Genau das ist hier zu pruefen, und "die Funktion wirft nicht" waere
+  // dafuer keine Pruefung. Gemessen werden deshalb Bewegung, Rundenzeiten und Plausibilitaet
+  // der Tempi:
+  //
+  //   die Autos legen Weg zurueck                    sonst ist es eine Uhr, kein Rennen
+  //   sie schliessen Runden ab, mit Zeiten           sonst gibt es nichts anzusehen
+  //   die erste Runde ist die langsamste             stehender Start, sonst stimmt die Uhr
+  //   das Tempo liegt im Bereich des Modells         sonst ist die Umrechnung falsch
+  //   doppelte Geschwindigkeit verdoppelt die Zeit   sonst ist der Schalter Zierde
+  //   die Garage kommt vollstaendig zurueck          sie wird fuer die Dauer ausgeraeumt
+  //   Date.now ist danach wieder echt                die Uhr wird fuer die Ticks gefaelscht
+  //
+  // OHNE ZEITGEBER, mit festen Schritten. Ein Browser drosselt Zeitgeber in einem verborgenen
+  // Fenster auf 1 Hz - eine Pruefung am Zeitgeber wuerde die Fensterlage messen.
+  stAdd('Rennsimulation: die Autos fahren, und die Zeiten stimmen', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.simSchritte) {
+      return { skip: true, mass: 'simSchritte nicht erreichbar' };
+    }
+    const schlecht = [];
+    const merkTiles = currentTrackTiles;
+    const merkGarage = garage.slice();
+    let merkUi = null;
+    // Eine ATTRAPPE in der Garage: nur so ist pruefbar, dass die Simulation sie ausraeumt
+    // UND vollstaendig zurueckgibt. Ohne einen Eintrag darin waere das Wiederherstellen
+    // trivialerweise richtig.
+    const zeuge = { role: 'none', alias: 'Zeuge', device: { name: 'Zeuge', id: 'zeuge' } };
+    const echtNowVorher = Date.now;
+    let z = null, zDoppelt = null;
+    try {
+      currentTrackTiles = codeToTrack('SG2H2G2R2G2H2G2R2').tiles;
+      garage.push(zeuge);
+      const setzen = (id, v) => { const e = $(id); if (e) { if (e.type === 'checkbox') e.checked = v; else e.value = v; } };
+      merkUi = simUiMerken();
+      setzen('sim-ghosts', '4'); setzen('sim-laps', '5'); setzen('sim-fast', false);
+      simStart();
+      if (!simAn()) return { ok: false, mass: 'Simulation startete nicht' };
+      // Die Attrappe darf waehrend der Simulation NICHT in der Garage stehen - dort stehen
+      // jetzt die Simulationsautos.
+      if (garage.indexOf(zeuge) >= 0) schlecht.push('die echte Garage wurde nicht ausgeraeumt');
+      if (garage.length !== 4) schlecht.push('Garage hat ' + garage.length + ' statt 4 Simulationsautos');
+      // 90 Sekunden Rennzeit in festen 45-ms-Schritten.
+      z = OMEGA_TEST.simSchritte(2000, 45);
+      if (Math.abs(z.uhrMs - 90000) > 100) schlecht.push('Uhr bei ' + z.uhrMs + ' statt 90000 ms');
+      for (const a of z.autos) {
+        if (!(a.s > 0)) schlecht.push(a.name + ' hat keinen Weg zurueckgelegt');
+        if (a.geparkt) schlecht.push(a.name + ' steht (geparkt)');
+        if (!(a.laps >= 1)) schlecht.push(a.name + ' hat in 90 s keine Runde geschafft');
+        if (a.zeiten.length !== a.laps) {
+          schlecht.push(a.name + ': ' + a.laps + ' Runden, aber ' + a.zeiten.length + ' Zeiten');
+        }
+        // STEHENDER START: die erste Runde muss die langsamste sein. Waere sie es nicht,
+        // liefe die Uhr nicht mit dem Weg - der haeufigste Fehler bei so einer Schleife.
+        if (a.zeiten.length >= 2 && !(a.zeiten[0] > a.zeiten[1])) {
+          schlecht.push(a.name + ': erste Runde nicht die langsamste ('
+                        + a.zeiten.map((t) => Math.round(t)).join('/') + ')');
+        }
+        // Das Tempo im Bereich des Modells: der Ghost-Regler steht auf einem Bruchteil der
+        // Modellhoechstgeschwindigkeit, und Kurven kosten davon. Zwischen 5 und 100 Prozent
+        // ist weit gefasst - gefangen wird eine Umrechnung, die um Zehnerpotenzen irrt.
+        const top = physEngine.config.topSpeedKmh || 4;
+        const anteil = (a.kmh || 0) / top;
+        if (!(anteil > 0.05 && anteil < 1.05)) {
+          schlecht.push(a.name + ': ' + (a.kmh || 0).toFixed(2) + ' km/h sind '
+                        + (anteil * 100).toFixed(0) + ' % der Modellspitze');
+        }
+      }
+      // Die Karte und die Tafel muessen bestueckt sein - man soll ja zusehen.
+      const karte = $('sim-karte');
+      // SEIT v0.5.47 EINE GRUPPE JE AUTO, kein Kreis mehr: das Auto ist ein Rechteck mit
+      // Spoiler, gedreht in Fahrtrichtung. Diese Zeile suchte weiter nach <circle> und
+      // meldete "nur 0 Punkte auf der Karte", obwohl die Karte voll war.
+      const punkte = karte
+        ? [...karte.querySelectorAll('g.karte-autos > g')]
+            .filter((g) => g.getAttribute('visibility') !== 'hidden').length
+        : 0;
+      if (punkte < 4) schlecht.push('nur ' + punkte + ' Autos auf der Karte');
+      const zeilen = $('sim-tafel') ? $('sim-tafel').querySelectorAll('tbody tr').length : 0;
+      if (zeilen !== 4) schlecht.push(zeilen + ' Zeilen in der Zeittafel statt 4');
+      simStop('Pruefung');
+      if (simAn()) schlecht.push('Simulation liess sich nicht beenden');
+
+      // ---- Doppelte Geschwindigkeit ------------------------------------------------
+      setzen('sim-fast', true);
+      simStart();
+      zDoppelt = OMEGA_TEST.simSchritte(200, 45);
+      simStop('Pruefung');
+      // Gleiche Zahl Schritte, gleiche Schrittweite - aber doppelte Rennzeit.
+      if (Math.abs(zDoppelt.uhrMs - 2 * 9000) > 200) {
+        schlecht.push('doppelt gibt ' + zDoppelt.uhrMs + ' ms statt 18000');
+      }
+    } catch (e) {
+      schlecht.push('Ausnahme: ' + e.message);
+    } finally {
+      if (simAn()) simStop('Pruefung, Notausstieg');
+      // DIE UHR MUSS ECHT SEIN. Sie wird fuer die Ticks gefaelscht; blieb die Faelschung
+      // stehen, ginge der ganzen Seite die Zeit verloren - und der Fehler traete irgendwo
+      // sonst auf.
+      if (Date.now !== echtNowVorher) {
+        schlecht.push('Date.now ist noch gefaelscht');
+        Date.now = echtNowVorher;
+      }
+      simUiZurueck(merkUi);
+      const i = garage.indexOf(zeuge);
+      if (i < 0) schlecht.push('die Garage kam nicht zurueck');
+      else garage.splice(i, 1);
+      // Und exakt der alte Stand.
+      garage.splice(0, garage.length);
+      for (const c of merkGarage) garage.push(c);
+      currentTrackTiles = merkTiles;
+      lineCache = null;
+      if (typeof renderGarage === 'function') renderGarage();
+    }
+    const rd = z ? z.autos.map((a) => a.laps).join('/') : '-';
+    const zt = (z && z.autos[0] && z.autos[0].zeiten.length)
+      ? z.autos[0].zeiten.map((t) => (t / 1000).toFixed(1)).join(' ') : '-';
+    return { ok: !schlecht.length,
+             mass: (z ? 'Runde ' + (z.runde / 0.93).toFixed(0) + ' cm, 90 s ergeben '
+                        + rd + ' Runden, S1 ' + zt + ' s' : 'kein Lauf')
+                 + (zDoppelt ? ' | doppelt: ' + zDoppelt.uhrMs + ' ms aus 200 Schritten' : '')
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Kurve direkt hinter dem Start: das Feld faehrt trotzdem los ----
+  //
+  // DER FEHLER, DEN DIESE PRUEFUNG FESTHAELT, und warum die Pruefung darueber ihn NICHT
+  // gefunden hat: sie fuhr auf SG2H2G2R2G2H2G2R2, also mit zwei Geraden hinter dem Start.
+  // Dort ist der Bremsbedarf am Startplatz nahe null. Gemeldet wurde SR3GLR2GR2G2 - Kurve
+  // ab Kachel eins -, und dort stand das ganze Feld:
+  //
+  //     Takt   Gas     Bremse   km/h
+  //       4    0,360   0,0171   0,0234
+  //       5    0       0,0208   0,0230     Schwelle 0,02 ueberschritten
+  //      13    0       0,0267   0,0189     Gas kommt nicht wieder
+  //
+  // Die Vorsteuerung aus dem Bremsprofil bremste ein STEHENDES Auto, und die Zeile "nicht
+  // gleichzeitig Gas und Bremse" nahm ihm daraufhin das Gas, mit dem es losfahren wuerde.
+  //
+  // GEPRUEFT WIRD DIE INVARIANTE UND NICHT EINE SCHWELLE: kein Auto darf Gas 0 haben,
+  // solange es unter seinem Ziel liegt. Eine Pruefung auf "km/h nach zwei Sekunden groesser
+  // als X" waere schwaecher - sie haengt an X, und X haengt am Regler. Die Invariante haengt
+  // an nichts: ein Auto unter seinem Ziel ohne Gas ist immer ein Widerspruch.
+  //
+  // Beides zusammen, weil die Invariante allein auch von einem Auto erfuellt wird, das gar
+  // nicht erst startet: also zusaetzlich die Bewegung.
+  stAdd('Rennsimulation: Kurve hinter dem Start haelt das Feld nicht auf', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.simGas) {
+      return { skip: true, mass: 'simGas nicht erreichbar' };
+    }
+    const schlecht = [];
+    const merkTiles = currentTrackTiles;
+    const merkGarage = garage.slice();
+    const echtNowVorher = Date.now;
+    let merkUi = null;
+    let letzte = null, wider = 0, minKmh = null;
+    try {
+      // Die gemeldete Strecke, unveraendert.
+      currentTrackTiles = codeToTrack('SR3GLR2GR2G2').tiles;
+      lineCache = null;
+      const setzen = (id, v) => { const e = $(id); if (e) { if (e.type === 'checkbox') e.checked = v; else e.value = v; } };
+      merkUi = simUiMerken();
+      setzen('sim-ghosts', '4'); setzen('sim-laps', '5'); setzen('sim-fast', false);
+      simStart();
+      if (!simAn()) return { ok: false, mass: 'Simulation startete nicht' };
+      const top = physEngine.config.topSpeedKmh || 4;
+      // 90 Takte, also gut vier Sekunden - lange genug, dass die Ratenbegrenzung der Bremse
+      // ihren Endwert erreicht hat, und kurz genug fuer eine Pruefung.
+      for (let i = 0; i < 90; i++) {
+        letzte = OMEGA_TEST.simSchritte(1, 45);
+        if (!letzte) break;
+        for (const g of OMEGA_TEST.simGas()) {
+          if (g.zielAnteil === null || g.gas === null || g.kmh === null) continue;
+          const v = Math.abs(g.kmh) / top;
+          // GHOST_DEADBAND ist derselbe Abstand, den der Regler fuer "nah genug" haelt.
+          if (g.gas === 0 && v < g.zielAnteil - GHOST_DEADBAND && !g.geparkt) wider++;
+        }
+      }
+      for (const a of (letzte ? letzte.autos : [])) {
+        if (a.geparkt) schlecht.push(a.name + ' steht (geparkt)');
+        const anteil = (a.kmh || 0) / top;
+        if (minKmh === null || anteil < minKmh) minKmh = anteil;
+        // Nach vier Sekunden muss das Auto FAHREN. 20 Prozent der Modellspitze sind grob
+        // die Haelfte des Ghost-Ziels von 36 Prozent - der Wert faengt "steht" und nicht
+        // "faehrt etwas langsamer als erwartet".
+        if (!(anteil > 0.2)) {
+          schlecht.push(a.name + ' bei ' + (anteil * 100).toFixed(0) + ' % der Spitze');
+        }
+        if (!(a.s > 0)) schlecht.push(a.name + ' hat keinen Weg zurueckgelegt');
+      }
+      if (wider > 0) schlecht.push(wider + 'x Gas 0 unter dem Ziel');
+    } catch (e) {
+      schlecht.push('Ausnahme: ' + e.message);
+    } finally {
+      if (simAn()) simStop('Pruefung');
+      if (Date.now !== echtNowVorher) {
+        schlecht.push('Date.now ist noch gefaelscht');
+        Date.now = echtNowVorher;
+      }
+      simUiZurueck(merkUi);
+      garage.splice(0, garage.length);
+      for (const c of merkGarage) garage.push(c);
+      currentTrackTiles = merkTiles;
+      lineCache = null;
+      if (typeof renderGarage === 'function') renderGarage();
+    }
+    return { ok: !schlecht.length,
+             mass: 'SR3GLR2GR2G2, nach 4 s langsamstes Auto bei '
+                   + (minKmh === null ? '-' : (minKmh * 100).toFixed(0) + ' %')
+                   + ', ' + wider + ' Widersprueche (Gas 0 unter Ziel)'
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Kachel zu Abtastpunkt: keine Multiplikation ----
+  //
+  // DER FEHLER, DEN DIESE PRUEFUNG FESTHAELT: es stand `kachel * TRACK_SAMPLES_PER_TILE` an
+  // drei Stellen - die Annahme, jede Kachel liefere gleich viele Abtastpunkte.
+  // trackCenterline() vergibt sie aber nach DREHWINKEL: gemessen 14 fuer eine Gerade und
+  // 49 fuer eine Haarnadel. Auf einer Strecke mit 17 Kacheln ergab das 379 Punkte, waehrend
+  // 17 x 14 = 238 gerechnet wurde.
+  //
+  // Zwei gemeldete Folgen: die weissen Stossfugen lagen falsch und fehlten im letzten
+  // Drittel ("da fehlen die Uebergaenge zwischen den Schienen"), und die Autopunkte lagen
+  // falsch und sprangen am Rundenende auf die Ziellinie ("die Ghosts huepfen direkt von der
+  // ersten Rechtskurve unten zum Ziel").
+  //
+  // Geprueft wird die EIGENSCHAFT, nicht die Formel: zu jeder Kachel gehoert ein Punkt, der
+  // wirklich auf ihr liegt. Damit besteht auch eine kuenftige andere Rechnung, solange sie
+  // richtig ist.
+  stAdd('Kachel zu Abtastpunkt: jede Kachel trifft sich selbst', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.trackMarks) {
+      return { skip: true, mass: 'trackMarks nicht erreichbar' };
+    }
+    const LAYOUTS = ['SG2H2G2R2G2H2G2R2', 'SHJ', 'SG2RG2L', 'SH2G4J2G4'];
+    const schlecht = [];
+    let geprueft = 0, fugen = 0;
+    for (const code of LAYOUTS) {
+      const p = codeToTrack(code);
+      const pts = trackCenterline(p.tiles);
+      const tab = trackKachelTabelle(pts, p.tiles.length);
+      // 1. Jede Kachel hat Punkte, und ihr erster gehoert ihr.
+      for (let k = 0; k < p.tiles.length; k++) {
+        geprueft++;
+        if (!(tab.zahl[k] > 0)) { schlecht.push(code + ' K' + k + ': keine Punkte'); continue; }
+        if (pts[tab.start[k]].tile !== k) {
+          schlecht.push(code + ' K' + k + ': Startpunkt gehoert Kachel ' + pts[tab.start[k]].tile);
+        }
+        // 2. Und der Punkt fuer (k, phase) liegt fuer JEDE Phase auf Kachel k. Das ist die
+        //    Eigenschaft, die die Multiplikation verletzte.
+        // Phase UNTER 1 muss auf der eigenen Kachel bleiben. Phase 1 ist die GRENZE und
+        // darf auf der naechsten liegen - sie ist ein Ort, nicht zwei, und der bestehende
+        // Test "Autopunkte an der richtigen Kachel" verlangt genau das.
+        for (const ph of [0, 0.25, 0.5, 0.75, 0.95]) {
+          const i = trackPunktIndex(tab, pts, k, ph);
+          if (pts[i].tile !== k) {
+            schlecht.push(code + ' K' + k + ' Phase ' + ph + ': liegt auf Kachel ' + pts[i].tile);
+          }
+        }
+        const iGrenze = trackPunktIndex(tab, pts, k, 1);
+        const naechste = (k + 1) % p.tiles.length;
+        if (pts[iGrenze].tile !== k && pts[iGrenze].tile !== naechste) {
+          schlecht.push(code + ' K' + k + ' Phase 1: liegt auf Kachel ' + pts[iGrenze].tile);
+        }
+      }
+      // 3. Die Summe der Kachelpunkte ist die Zahl der Punkte (bis auf den Schlusspunkt,
+      //    der zu keiner Kachel gehoert - tile === -1).
+      const summe = tab.zahl.reduce((a, b) => a + b, 0);
+      const ohneKachel = pts.filter((q) => q.tile === undefined || q.tile < 0).length;
+      if (summe + ohneKachel !== pts.length) {
+        schlecht.push(code + ': ' + summe + ' + ' + ohneKachel + ' statt ' + pts.length);
+      }
+      // 4. Und die gezeichneten Stossfugen: genau eine je Kachel.
+      const html = OMEGA_TEST.trackMarks(code).html;
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const n = [...doc.querySelectorAll('path')].filter((x) =>
+        x.getAttribute('stroke') === '#ffffff' && x.getAttribute('stroke-width') === '1.6').length;
+      fugen += n;
+      if (n !== p.tiles.length) {
+        schlecht.push(code + ': ' + n + ' Stossfugen fuer ' + p.tiles.length + ' Kacheln');
+      }
+    }
+    return { ok: !schlecht.length,
+             mass: geprueft + ' Kacheln auf ' + LAYOUTS.length + ' Layouts, ' + fugen
+                 + ' Stossfugen'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : ' | jede trifft sich selbst') };
+  });
+
+  // ---- Der Autopunkt laeuft die Runde entlang und springt nicht ----
+  //
+  // DIE GEGENPROBE zur Tabelle, und sie prueft das, was man SIEHT: ein Punkt, der die Runde
+  // abfaehrt, macht lauter kleine Schritte und einen einzigen grossen - den ueber Start und
+  // Ziel. Mit der alten Multiplikation lagen die Punkte gedraengt im ersten Drittel und
+  // sprangen am Ende auf die Ziellinie.
+  stAdd('Autopunkt: laeuft die Runde entlang, ein Sprung am Ziel', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.trackMarks) {
+      return { skip: true, mass: 'trackMarks nicht erreichbar' };
+    }
+    const code = 'SG2H2G2R2G2H2G2R2';
+    const p = codeToTrack(code);
+    const schritte = [];
+    let vor = null;
+    for (let k = 0; k < p.tiles.length; k++) {
+      for (const ph of [0, 0.5]) {
+        const m = OMEGA_TEST.trackMarks(code, [{ index: k, phase: ph, farbe: '#f00', kuerzel: '' }]);
+        const q = m.punkte[0];
+        if (!q) return { ok: false, mass: 'kein Punkt bei K' + k };
+        if (vor) schritte.push(Math.hypot(q.x - vor.x, q.y - vor.y));
+        vor = q;
+      }
+    }
+    const groesste = Math.max.apply(null, schritte);
+    const kleinste = Math.min.apply(null, schritte);
+    const schlecht = [];
+    // Eine halbe Gerade sind rund 20 Zeichnungseinheiten. Ein Schritt ueber 70 waere ein
+    // Sprung ueber mehr als eine ganze Kachel - und genau das war der Fehler.
+    if (groesste > 70) schlecht.push('groesster Schritt ' + groesste.toFixed(0) + ' Einheiten');
+    if (!(kleinste > 1)) schlecht.push('kleinster Schritt ' + kleinste.toFixed(1)
+                                       + ' - Punkte liegen uebereinander');
+    return { ok: !schlecht.length,
+             mass: schritte.length + ' Schritte, ' + kleinste.toFixed(0) + ' bis '
+                 + groesste.toFixed(0) + ' Einheiten je halbe Kachel'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Die Richtungsprobe erkennt eine spiegelbildlich eingetragene Strecke ----
+  //
+  // Sie ist die Antwort auf "Ghosts fahren in jeder Kurve ganz aussen". Nachgemessen ist die
+  // Ideallinie in Ordnung (607 gegen 648 Einheiten, also die innere) und ihr Lenkbefehl
+  // zeigt zum Scheitel. Was ALLE Kurven umdreht, ist eine Strecke, die andersherum
+  // eingetragen ist als sie gefahren wird - und das ist an den gemeldeten Codes zu sehen.
+  stAdd('Richtungsprobe: erkennt eine andersherum eingetragene Strecke', () => {
+    const merkTiles = currentTrackTiles;
+    const schlecht = [];
+    const meldung = [];
+    const echtLog = typeof log === 'function' ? log : null;
+    try {
+      // Ein Layout aus Rechtskurven.
+      currentTrackTiles = codeToTrack('SG2R2G2R2G2R2G2R2').tiles;
+      const mk = () => ({ tag: 'P', device: { name: 'Probe', id: 'probe' },
+                          tileCode: 0xff, ghost: { tileIndex: 0, laps: 0 } });
+      // Fall 1: das Auto meldet LINKSkurven - Widerspruch, es muss gemeldet werden.
+      const a = mk();
+      for (let i = 0; i < 20 && !a.ghost.richtungGemeldet; i++) {
+        a.tileCode = TILE_TYPE.CURVE_LEFT;
+        richtungPruefen(a);
+      }
+      if (!a.ghost.richtungGemeldet) schlecht.push('Widerspruch nicht erkannt');
+      else if (!(a.ghost.kurvenLinks >= 6)) schlecht.push('zu frueh geurteilt');
+      meldung.push('Widerspruch nach ' + (a.ghost.kurvenLinks + a.ghost.kurvenRechts) + ' Kurven');
+
+      // Fall 2: das Auto meldet RECHTSkurven - passt, es darf NICHT gemeldet werden.
+      // Geprueft ueber den Zaehler: er laeuft weiter, bis genug gesehen ist, und schaltet
+      // dann still ab.
+      const b = mk();
+      for (let i = 0; i < 30; i++) { b.tileCode = TILE_TYPE.CURVE_RIGHT; richtungPruefen(b); }
+      if (b.ghost.kurvenRechts < 6) schlecht.push('richtige Richtung: gar nicht gezaehlt');
+
+      // Fall 3: eine Strecke fast ohne Kurven sagt nichts - kein Fehlalarm.
+      currentTrackTiles = codeToTrack('SG8').tiles;
+      const c = mk();
+      for (let i = 0; i < 20; i++) { c.tileCode = TILE_TYPE.CURVE_LEFT; richtungPruefen(c); }
+      // Bei unter zwei Kurven im Layout wird abgeschaltet, ohne zu urteilen.
+      if (!c.ghost.richtungGemeldet) schlecht.push('ohne Kurven im Layout nicht abgeschaltet');
+    } catch (e) {
+      schlecht.push('Ausnahme: ' + e.message);
+    } finally {
+      currentTrackTiles = merkTiles;
+      lineCache = null;
+    }
+    return { ok: !schlecht.length,
+             mass: meldung.join(', ')
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : ' | drei Faelle richtig') };
+  });
+
+  // ---- Die Schlusspruefung toleriert Bautoleranz und nicht ein fehlendes Teil ----
+  //
+  // GEMELDET: "Bei einer laengeren Strecke passen die Schienen am Ende auch nicht perfekt
+  // zusammen. Wenn ich dann Simulation starte, gehen alle Punkte nur an den Rand. Du
+  // brauchst etwas, um zu erkennen, dass die Strecke geschlossen ist und musst dabei etwas
+  // Ungenauigkeit tolerieren."
+  //
+  // Die Kette dahinter: gilt eine Bahn als offen, klemmt idealLine() ihre Endpunkte fest und
+  // die Kruemmungsminimierung zieht alpha ueber lange Stuecke an den Anschlag - gemessen
+  // 25 Prozent aller Abtastpunkte am Rand. Dann faehrt jeder Ghost am Rand.
+  //
+  // DIE PRUEFUNG HAELT BEIDE SEITEN FEST, denn eine Toleranz ist nur so gut wie ihre
+  // Obergrenze: eine wirklich geschlossene Runde muss durchkommen, und eine, bei der ein
+  // TEIL FEHLT (gemessen genau 43 cm Luecke), darf es nicht.
+  stAdd('Streckenschluss: Bautoleranz ja, fehlendes Teil nein', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.trackSchluss) {
+      return { skip: true, mass: 'trackSchluss nicht erreichbar' };
+    }
+    const schlecht = [];
+    const zeilen = [];
+    const FAELLE = [
+      ['SR3G2R3G', true, 'geschlossene Runde'],
+      ['SR3G2R3G2', false, 'ein Teil zu viel (43 cm Luecke)'],
+      ['SR6', false, 'ein Teil fehlt (43 cm Luecke)'],
+      ['SR6G', false, '86 cm Luecke'],
+      ['SR2G2R2G2R2G2R2G2', false, 'endet 120 Grad verdreht'],
+    ];
+    for (const [code, soll, was] of FAELLE) {
+      const r = OMEGA_TEST.trackSchluss(code);
+      zeilen.push(code + ': ' + r.lueckeCm.toFixed(0) + ' cm / '
+                  + Math.abs(r.winkel).toFixed(0) + '° -> '
+                  + (r.closed ? 'zu' : 'offen'));
+      if (r.closed !== soll) {
+        schlecht.push(code + ' (' + was + ') gilt als ' + (r.closed ? 'geschlossen' : 'offen'));
+      }
+    }
+    // Und die Toleranz selbst: sie muss deutlich unter einer Kachellaenge liegen, sonst
+    // gilt eine unfertige Strecke als Ring. 43 cm ist die gemessene Luecke eines fehlenden
+    // Teils; mehr als die Haelfte davon waere fahrlaessig.
+    const ausser = OMEGA_TEST.trackSchluss('SR6');
+    if (!(ausser.lueckeCm > 21)) {
+      schlecht.push('die Referenzluecke eines fehlenden Teils ist nur '
+                    + ausser.lueckeCm.toFixed(0) + ' cm - Annahme pruefen');
+    }
+    return { ok: !schlecht.length,
+             mass: zeilen.join(' | ')
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Der Ghost landet auf der INNENSEITE der Kurve ----
+  //
+  // GEMELDET: "Die simulierten Ghosts fahren keine Ideallinie sondern immer aussen in der
+  // Kurve. Da ist eine Ideallinie in der Strecke eingezeichnet, die sollen sie fahren."
+  //
+  // Die Ursache waren zwei gegenlaeufige Konventionen, die aufeinandertrafen: g.querSoll ist
+  // eine LENKANFORDERUNG (positiv rechts, wie Byte 7 und wie der Stick), die Karte zeichnet
+  // aber entlang der NORMALEN, und die zeigt nach links. Wer die eine Zahl als die andere
+  // benutzt, spiegelt jedes Auto an der Mittellinie.
+  //
+  // DIESE PRUEFUNG RECHNET GEOMETRIE, keine Vorzeichen: sie legt den Kreismittelpunkt der
+  // Kurve durch drei Punkte der Mittellinie und vergleicht die Radien. Ein Vorzeichentest
+  // waere hier wertlos - er waere algebraisch immer wahr, weil beide Groessen aus demselben
+  // alpha kommen. Der Radius ist die Frage, die der Nutzer stellt.
+  stAdd('Ghost in der Kurve: innen und nicht aussen', () => {
+    const merkTiles = currentTrackTiles;
+    const schlecht = [];
+    const zeilen = [];
+    try {
+      // Geschlossene Strecke - auf einer offenen saettigt die Linie, und dann prueft man
+      // die Saettigung statt der Linie.
+      const p = codeToTrack('SR3G2R3G');
+      currentTrackTiles = p.tiles;
+      lineCache = null;
+      const pts = trackCenterline(p.tiles);
+      const nrm = trackNormals(pts);
+      const rows = OMEGA_TEST.compareLines(p.tiles, 10);
+      if (!rows.meta || !rows.meta.closed) {
+        return { ok: false, mass: 'die Teststrecke gilt nicht als geschlossen' };
+      }
+      const mitte = (i) => {
+        const a = pts[i - 4], b = pts[i], c = pts[i + 4];
+        if (!a || !c) return null;
+        const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+        if (Math.abs(d) < 1e-9) return null;
+        return {
+          x: ((a.x * a.x + a.y * a.y) * (b.y - c.y) + (b.x * b.x + b.y * b.y) * (c.y - a.y)
+              + (c.x * c.x + c.y * c.y) * (a.y - b.y)) / d,
+          y: ((a.x * a.x + a.y * a.y) * (c.x - b.x) + (b.x * b.x + b.y * b.y) * (a.x - c.x)
+              + (c.x * c.x + c.y * c.y) * (b.x - a.x)) / d,
+        };
+      };
+      const halb = TRACK_HALF_W;
+      let geprueft = 0;
+      // ---- JE KURVENZUG DER SCHEITEL, NICHT JE KACHEL DIE MITTE --------------------
+      //
+      // Hier stand eine Schleife ueber alle KURVENKACHELN, die jeweils den Punkt bei
+      // Phase 0,5 nahm und von ihm verlangte, innerhalb der Mittellinie zu liegen. Das war
+      // richtig, solange die Linie ueber die ganze Kurve innen klebte. Seit sie von aussen
+      // anfaehrt und nach aussen ausfaehrt, ist die Mitte der LETZTEN Kachel eines
+      // dreikacheligen Zuges die Ausfahrt - und dort MUSS sie aussen liegen. Gemessen fiel
+      // die Pruefung genau so: K3 r=35,3 und K6 r=36,4 gegen eine Mittellinie von 34,4.
+      //
+      // Geprueft wird deshalb der Scheitel des ZUGES, und zwar der Punkt mit dem kleinsten
+      // Radius - das ist die Definition und braucht keine Phasenannahme. Zusaetzlich, und
+      // das ist neu: der Scheitel muss auch WEITER INNEN liegen als Anfang und Ende des
+      // Zuges. Damit prueft dieselbe Stelle beide Aussagen.
+      const istKurve = (typ) => typ === TILE_TYPE.CURVE_LEFT || typ === TILE_TYPE.CURVE_RIGHT
+                             || typ === TILE_TYPE.HAIRPIN || typ === TILE_TYPE.HAIRPIN_LEFT;
+      // Zusammenhaengende Kurvenkacheln zu Zuegen buendeln.
+      const zuege = [];
+      for (let k = 0; k < p.tiles.length; k++) {
+        if (!istKurve(p.tiles[k].type)) continue;
+        const letzt = zuege[zuege.length - 1];
+        if (letzt && letzt[letzt.length - 1] === k - 1) letzt.push(k);
+        else zuege.push([k]);
+      }
+      for (const zug of zuege) {
+        // Alle Proben des Zuges, in Fahrtrichtung.
+        const proben = [];
+        for (const k of zug) {
+          for (const r of rows.filter((x) => x.tile === k).sort((a, b) => a.phase - b.phase)) {
+            const idx = [];
+            for (let i = 0; i < pts.length; i++) if (pts[i].tile === k) idx.push(i);
+            const i = idx[Math.min(idx.length - 1, Math.round(r.phase * idx.length))];
+            const c = mitte(i);
+            if (!c) continue;
+            // Die Lage, die die Karte zeichnet: querSollAlsLage(Lenkwert), mal 85 Prozent
+            // der halben Breite - genau die Rechnung aus karteAutosSetzen().
+            const lage = querSollAlsLage(r.calc);
+            const px = pts[i].x + nrm[i].x * lage * 0.85 * halb;
+            const py = pts[i].y + nrm[i].y * lage * 0.85 * halb;
+            proben.push({ k, rM: Math.hypot(pts[i].x - c.x, pts[i].y - c.y),
+                          rA: Math.hypot(px - c.x, py - c.y) });
+          }
+        }
+        if (proben.length < 3) continue;
+        geprueft++;
+        // Der Scheitel: kleinster Radius des Autos im ganzen Zug.
+        const sch = proben.reduce((a, b) => (b.rA < a.rA ? b : a));
+        const ein = proben[0], aus = proben[proben.length - 1];
+        zeilen.push('K' + zug[0] + (zug.length > 1 ? '-' + zug[zug.length - 1] : '')
+                    + ' ' + ein.rA.toFixed(0) + '/' + sch.rA.toFixed(0) + '/'
+                    + aus.rA.toFixed(0) + ' Mitte ' + sch.rM.toFixed(0));
+        if (!(sch.rA < sch.rM)) {
+          schlecht.push('K' + zug[0] + ': Scheitel r=' + sch.rA.toFixed(1)
+                        + ' nicht innerhalb der Mittellinie r=' + sch.rM.toFixed(1));
+        }
+        // Und die Form, nur wo Platz dafuer ist: ein einkacheliger Zug hat keinen.
+        if (zug.length > 1 && !(sch.rA < ein.rA && sch.rA < aus.rA)) {
+          schlecht.push('K' + zug[0] + ': keine Form, ein ' + ein.rA.toFixed(1)
+                        + ' Scheitel ' + sch.rA.toFixed(1) + ' aus ' + aus.rA.toFixed(1));
+        }
+      }
+      if (!geprueft) schlecht.push('keine Kurve gefunden');
+    } catch (e) {
+      schlecht.push('Ausnahme: ' + e.message);
+    } finally {
+      currentTrackTiles = merkTiles;
+      lineCache = null;
+    }
+    return { ok: !schlecht.length,
+             mass: 'Radius Auto/Mittellinie: ' + zeilen.join(' ')
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : ' | alle innen') };
+  });
+
+  // ---- Der Kurvenausgang oeffnet sich, und zwar nach der Kurve ----
+  //
+  // GEMELDET: "nach der Haarnadelkurve sollten die Autos sich nach aussen tragen lassen und
+  // nicht ganz innen wieder losbeschleunigen."
+  //
+  // ZWEI FEHLVERSUCHE STECKEN IN DIESER PRUEFUNG, und beide waren nur durch Messung zu
+  // sehen:
+  //
+  //   1. Die Reichweite war in ABTASTPUNKTEN gerechnet ("eine mittlere Kacheldichte"). Eine
+  //      Haarnadel hat 49 Punkte, eine Gerade 14 - die Oeffnung lag damit noch INNERHALB der
+  //      Haarnadel, und auf der Geraden danach war sie nicht messbar.
+  //   2. Der Scheitel wurde als lokales Kruemmungsmaximum ueber einer Schwelle von 30
+  //      Prozent des Maximums gesucht. Das Maximum war ein Artefakt: auf einer geschlossenen
+  //      Runde faellt der letzte Abtastpunkt mit dem ersten zusammen, und die
+  //      Kruemmungsformel lieferte dort 0,6999 gegen 0,13 der Haarnadeln. Gefunden wurde
+  //      genau EIN Scheitel, und der war der doppelte Punkt.
+  //
+  // Geprueft wird deshalb GENAU DAS, was beide Versuche verfehlt haben: die Linie muss auf
+  // der Geraden HINTER einer Kurve weiter aussen liegen als ohne Oeffnung.
+  stAdd('Kurvenausgang: die Linie traegt nach der Kurve nach aussen', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.setLineExit) {
+      return { skip: true, mass: 'setLineExit nicht erreichbar' };
+    }
+    const merkTiles = currentTrackTiles;
+    const merkExit = OMEGA_TEST.getLineExit();
+    const schlecht = [];
+    const zeilen = [];
+    try {
+      // Geschlossene Runde mit zwei Haarnadeln.
+      const p = codeToTrack('SHG4HG3');
+      currentTrackTiles = p.tiles;
+      const schl = trackSchluss(trackCenterline(p.tiles));
+      if (!schl.closed) return { ok: false, mass: 'Teststrecke gilt nicht als geschlossen' };
+      const holen = (st) => {
+        OMEGA_TEST.setLineExit(st);
+        const rows = OMEGA_TEST.compareLines(p.tiles, 6);
+        const je = {};
+        rows.forEach((r) => { (je[r.tile] = je[r.tile] || []).push(-r.calc); });
+        return je;
+      };
+      const aus = holen(0);
+      const an = holen(0.5);
+      // Fuer jede Haarnadel: die Kachel DANACH muss weiter aussen liegen. "Weiter aussen"
+      // heisst naeher an 0 oder darueber - die Werte sind negativ (innen).
+      let geprueft = 0;
+      for (let k = 0; k < p.tiles.length; k++) {
+        if (p.tiles[k].type !== TILE_TYPE.HAIRPIN
+            && p.tiles[k].type !== TILE_TYPE.HAIRPIN_LEFT) continue;
+        const nach = (k + 1) % p.tiles.length;
+        if (!aus[nach] || !an[nach]) continue;
+        geprueft++;
+        const vorher = aus[nach][0];
+        const nachher = an[nach][0];
+        zeilen.push('nach H' + k + ': ' + vorher.toFixed(2) + ' -> ' + nachher.toFixed(2));
+        // ---- MIT VORZEICHEN UND NICHT MIT BETRAG, seit v0.5.43 ----------------------
+        //
+        // Hier stand |nachher| < |vorher| - 0,15, also "naeher an null". Das war richtig,
+        // solange die Linie ohne Oeffnung tief INNEN lag: dann heisst weiter aussen
+        // zwangslaeufig naeher an null. Seit die Oeffnung eine Schranke im Suchraum ist,
+        // liegt die Linie ohne sie auf der MITTELLINIE - gemessen vorher -0,00 - und mit
+        // ihr bei +0,58, also jenseits von null. Der Betrag waechst dabei, und der alte
+        // Vergleich schlug an, obwohl genau das Gewuenschte passiert war.
+        //
+        // aussen ist fuer eine Rechtshaarnadel das positive alpha (nachgemessen: bei
+        // konstantem Versatz gibt alpha +4 einen Radius von 38,8 Einheiten, alpha -4 nur
+        // 30,7 - der groessere Radius ist der aeussere). Die Werte hier sind alpha/ref.
+        const aussenVz = (p.tiles[k].type === TILE_TYPE.HAIRPIN) ? 1 : -1;
+        if (!(aussenVz * (nachher - vorher) > 0.15)) {
+          schlecht.push('nach H' + k + ' nur ' + vorher.toFixed(2) + ' -> ' + nachher.toFixed(2));
+        }
+      }
+      if (!geprueft) schlecht.push('keine Haarnadel gefunden');
+      // Und die Gegenprobe: bei 0 darf sich nichts aendern.
+      const aus2 = holen(0);
+      for (let k = 0; k < p.tiles.length; k++) {
+        if (!aus[k] || !aus2[k]) continue;
+        if (Math.abs(aus[k][0] - aus2[k][0]) > 1e-9) {
+          schlecht.push('K' + k + ': bei 0 nicht reproduzierbar');
+          break;
+        }
+      }
+    } catch (e) {
+      schlecht.push('Ausnahme: ' + e.message);
+    } finally {
+      OMEGA_TEST.setLineExit(merkExit);
+      currentTrackTiles = merkTiles;
+      ghostLineCacheLeeren();
+    }
+    return { ok: !schlecht.length,
+             mass: zeilen.join(' | ')
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Die Kruemmung glaubt keinem doppelten Punkt ----
+  //
+  // Auf einer geschlossenen Runde ist der letzte Abtastpunkt derselbe wie der erste -
+  // gemessen ein Abstand von 0,0000 bei einem mittleren Abstand von 2,857 Einheiten. Der
+  // Kreis durch drei Punkte, von denen zwei zusammenfallen, hat den Radius null.
+  //
+  // GEMESSEN, bevor die Schranke stand: 0,6999 an dieser Stelle gegen 0,12 und 0,13 der
+  // beiden Haarnadeln - das Fuenffache einer Haarnadel, auf einer Geraden. Zwei Verbraucher
+  // haben das geglaubt: das Bremsprofil zeichnete an Start/Ziel eine Bremsung, die es nicht
+  // gibt, und die Scheitelsuche fand nur diesen einen Punkt.
+  stAdd('Kruemmung: ein doppelter Abtastpunkt ist keine Kurve', () => {
+    const p = codeToTrack('SHG4HG3');
+    const pts = trackCenterline(p.tiles);
+    const nrm = trackNormals(pts);
+    const n = pts.length;
+    const luecke = Math.hypot(pts[n - 1].x - pts[0].x, pts[n - 1].y - pts[0].y);
+    if (!(luecke < 0.01)) {
+      return { skip: true, mass: 'diese Strecke hat keinen doppelten Endpunkt ('
+                                 + luecke.toFixed(3) + ')' };
+    }
+    const bahn = pts.map((q, i) => [q.x + nrm[i].x * 0, q.y + nrm[i].y * 0]);
+    const k = pathCurvature(bahn, true);
+    const kMax = Math.max.apply(null, k);
+    // Die groesste Kruemmung muss auf einer KURVENkachel liegen. Lag sie auf einer Geraden,
+    // war es das Artefakt.
+    let wo = 0;
+    for (let i = 0; i < n; i++) if (k[i] === kMax) { wo = i; break; }
+    const typ = pts[wo].tile >= 0 ? p.tiles[pts[wo].tile].type : null;
+    const istKurve = typ === TILE_TYPE.CURVE_LEFT || typ === TILE_TYPE.CURVE_RIGHT
+                  || typ === TILE_TYPE.HAIRPIN || typ === TILE_TYPE.HAIRPIN_LEFT;
+    const schlecht = [];
+    if (!istKurve) {
+      schlecht.push('groesste Kruemmung ' + kMax.toFixed(4) + ' liegt auf Kachel '
+                    + pts[wo].tile + ' (Typ ' + typ + '), keiner Kurve');
+    }
+    // Und der doppelte Punkt selbst traegt keine Kruemmung.
+    if (!(k[n - 1] === 0)) {
+      schlecht.push('der doppelte Endpunkt traegt Kruemmung ' + k[n - 1].toFixed(4));
+    }
+    return { ok: !schlecht.length,
+             mass: 'kMax ' + kMax.toFixed(4) + ' auf Kachel ' + pts[wo].tile
+                 + ' (Typ ' + typ + '), doppelter Punkt ' + k[n - 1].toFixed(4)
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
   });
 
   // ---- Controller-Vibration: ein Schalter je Ausloeser ----
@@ -2156,8 +4471,25 @@
   // jeweils 127. Unsere lagen bei 18,3 mit Spitze 44 - gemeldet als "stumpf ihre Spur,
   // keine Querlage". Ursache war der Deckel von 0,55 mal line 0,7.
   //
-  // Die Schranke steht bei 25 und 70, also unter dem schwaecheren der zwei Originalwerte:
-  // getroffen werden soll die Groessenordnung, nicht eine Nachkommastelle.
+  // NICHT MEHR DER MITTELWERT, seit v0.5.40 - und das ist die Berichtigung eines Masses,
+  // das den Fehler belohnt, den es fangen soll. |Mittel| ist am GROESSTEN, wenn ein Auto
+  // dauerhaft auf einer Bahnseite klebt, und genau das war der gemeldete Fehler: "auf der
+  // Start/Ziel-Geraden fahren die Autos immer ganz rechts - warum?".
+  //
+  // Gemessen ueber 300 Takte, je nach Staerke der Kurvenoeffnung:
+  //
+  //     Oeffnung   min   max   Spanne   |Mittel|
+  //        aus       0   124     124      55,9
+  //        0,8     -95    73     168      19,8
+  //
+  // Bei ausgeschalteter Oeffnung ist das MINIMUM exakt null: die Linie geht ueber die ganze
+  // Runde kein einziges Mal auf die andere Seite. Sie nutzt eine halbe Bahn und bekommt
+  // dafuer den doppelten Mittelwert. Ein Test auf |Mittel| haette diesen Zustand als den
+  // besseren ausgewiesen.
+  //
+  // Geprueft wird deshalb, was die Original-App wirklich belegt: dass die Bahnbreite
+  // GENUTZT wird. Spanne und beide Vorzeichen - und die Spitze bleibt, unveraendert bei 70
+  // von 127 gegen die gemessenen 127 des Originals.
   stAdd('Ghost-Querlage: im Mass der Original-App', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostDriveProbe) {
       return { skip: true, mass: 'ghostDriveProbe nicht vorhanden' };
@@ -2166,12 +4498,19 @@
       const abs = p.lenk.map(Math.abs);
       const mittel = abs.reduce((a, b) => a + b, 0) / abs.length;
       const spitze = Math.max.apply(null, abs);
+      const min = Math.min.apply(null, p.lenk);
+      const max = Math.max.apply(null, p.lenk);
       const schlecht = [];
-      if (mittel < 25) schlecht.push('|Mittel| nur ' + mittel.toFixed(1) + ', Original 32 bis 47');
       if (spitze < 70) schlecht.push('Spitze nur ' + spitze + ', Original 127');
+      if (max - min < 90) schlecht.push('Spanne nur ' + (max - min) + ' von 254');
+      // BEIDE SEITEN. Das ist die Bedingung, die den gemeldeten Fehler faengt: ohne
+      // Kurvenoeffnung lag das Minimum bei exakt 0, die Linie ging also nie nach links.
+      if (!(min <= -20 && max >= 20)) {
+        schlecht.push('nur eine Seite benutzt (' + min + ' bis ' + max + ')');
+      }
       return { ok: schlecht.length === 0,
-               mass: '|Mittel| ' + mittel.toFixed(1) + ', Spitze ' + spitze
-                     + ' (Original 32,2 / 47,3, Spitze 127)'
+               mass: min + ' bis ' + max + ', Spanne ' + (max - min) + ', Spitze ' + spitze
+                     + ', |Mittel| ' + mittel.toFixed(1) + ' (Original Spitze 127)'
                      + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
     });
   });
@@ -2513,11 +4852,26 @@
       // dessen ein Bild oder einen Verlauf, wird er eingeschaetzt - hell im hellen Schirm,
       // sonst dunkel.
       const hell = () => document.body.dataset.cockpit === 'modern';
+      // EINE DURCHSCHEINENDE FARBE IST KEIN GRUND. lum() liest die ersten drei Zahlen und
+      // uebergeht das Alpha - rgba(255,255,255,.07) kam damit als WEISS heraus, und ein
+      // grauer Text darauf meldete Kontrast 2,95, obwohl er in Wirklichkeit auf einem
+      // dunklen Schirm steht. Aufgefallen an der Streckenkarte im Uebersichtsschirm, die
+      // genau so einen Schleier benutzt, damit die schwarze Fahrbahn sich abhebt.
+      //
+      // Deckende Farben beenden die Suche, durchscheinende nicht: was darunter liegt,
+      // bestimmt die Helligkeit weiterhin mit.
+      const deckend = (c) => {
+        const m = (c || '').match(/rgba?\(([^)]+)\)/);
+        if (!m) return false;
+        const teile = m[1].split(',');
+        return teile.length < 4 || parseFloat(teile[3]) >= 0.999;
+      };
       const grund = (el) => {
         let n = el;
         while (n && n !== document.body) {
           const cs = getComputedStyle(n);
-          if (cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+          if (cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)'
+              && deckend(cs.backgroundColor)) {
             return cs.backgroundColor;
           }
           if (cs.backgroundImage !== 'none') {
@@ -2543,7 +4897,13 @@
           if (!eigen || el.hidden || getComputedStyle(el).display === 'none') return;
           geprueft++;
           const k = kontrast(getComputedStyle(el).color, grund(el));
-          if (k < schlimmst) { schlimmst = k; wo = el.id || el.className; }
+          // BEI SVG IST className EIN SVGAnimatedString und kein Text - im Bericht stand
+          // dann "[object SVGAnimatedString]" statt eines Namens.
+          if (k < schlimmst) {
+            schlimmst = k;
+            wo = el.id || (typeof el.className === 'string' ? el.className
+                           : (el.className && el.className.baseVal) || el.tagName);
+          }
         });
         teile.push(v + ' ' + schlimmst.toFixed(2));
         if (geprueft < 5) schlecht.push(v + ': nur ' + geprueft + ' Texte gefunden');
@@ -2627,36 +4987,76 @@
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostPassRates) {
       return { skip: true, mass: 'ghostPassRates nicht vorhanden' };
     }
-    const merk = ghostCfg.spice;
+    const merk = ghostCfg.wuerzeUeberholen;
     const schlecht = [];
     let r;
     try {
-      ghostCfg.spice = 0.4;          // die Vorgabe, gefahren ermittelt
+      ghostCfg.wuerzeUeberholen = true;   // ab Werk an, auf Wunsch
       r = OMEGA_TEST.ghostPassRates();
-      // 1. Die Reichweite MUSS ueber dem Mindestabstand liegen. Sonst bestreiten die zwei
-      //    Regeln dasselbe Band, und der Abstandhalter gewinnt - er wirkt jeden Takt, die
-      //    Attacke nur beim Wuerfeln.
-      if (!(r.reichweite > r.abstandMin)) {
-        schlecht.push('Reichweite ' + r.reichweite + ' nicht ueber Mindestabstand '
-                      + r.abstandMin);
+      // ---- DAS ALTE KRITERIUM WAR EIN FENSTER IN KACHELN, UND DAS IST MESSBAR LEER --
+      //
+      // Hier stand: die Reichweite muss ueber dem Mindestabstand liegen, und das Fenster
+      // dazwischen mindestens 0,4 Kacheln breit sein - sonst bestritten beide Regeln
+      // dasselbe Band. Der Gedanke ist richtig, das Mass ist es nicht, und das ist gemessen:
+      //
+      //     Der GEMELDETE Abstand hat unterhalb einer Kachel keine Zwischenwerte. In 1517
+      //     Stichproben, in denen der wahre Abstand unter einer Kachel lag - darunter 155,
+      //     in denen er unter einer Autolaenge lag -, war der gemeldete Abstand JEDES MAL
+      //     genau 1,00. Nicht 0, nicht gebrochen: 1,00.
+      //
+      // Der Grund steht bei ghostProgress(): der Abstand ist die Differenz der
+      // Kachelzaehler plus eine GESCHAETZTE Kachelphase, und zwei Autos mit gleichem Tempo
+      // haben dieselbe Phase - sie faellt heraus. Uebrig bleibt eine ganze Zahl, und
+      // ghostAhead() verwirft die 0.
+      //
+      // Ein Fenster von 0,1 oder 0,4 Kacheln macht deshalb KEINEN Unterschied: es liegt
+      // zwischen 1,00 und 2,00, und dort landet nie ein Wert. Was zaehlt, ist allein, welche
+      // ganzen Zahlen jede Schwelle einfaengt.
+      //
+      // Und das Sweep-Ergebnis widerspricht dem alten Kriterium direkt (vier Ghosts,
+      // 120 s, Beruehrungen und Ueberholmanoever je Minute):
+      //
+      //     Mindestabstand 0,7 / Reichweite 1,3     40,1 Kontakte    16,0 Ueberholer
+      //     Mindestabstand 1,0 / Reichweite 1,3     33,1             16,5
+      //     Mindestabstand 1,2 / Reichweite 1,3     29,1             19,0   <- beides best
+      //     Mindestabstand 1,2 / Reichweite 2,2     34,6             23,6
+      //     Mindestabstand 1,6 / Reichweite 2,2     36,1             19,5
+      //
+      // Das gewaehlte Paar bestreitet dasselbe Band (Fenster 0,1) und ist trotzdem auf
+      // BEIDEN Achsen das beste. Ein Fenster zu erzwingen wuerde also messbar
+      // verschlechtern, um ein Kriterium zu erfuellen, das die Messung widerlegt hat.
+      //
+      // Geprueft wird jetzt das, was wirken kann:
+      //
+      // 1. BEIDE Schwellen muessen ueber 1,0 liegen. Darunter feuern sie nie, weil der
+      //    gemeldete Abstand bei nahen Autos nicht unter 1,00 geht. Genau das war der
+      //    Fehler des alten Mindestabstands 0,7: ein Regler, der nie greift.
+      if (!(r.abstandMin > 1.0)) {
+        schlecht.push('Mindestabstand ' + r.abstandMin
+                      + ' liegt nicht ueber 1,0 und kann damit nie greifen');
       }
-      // 2. Und das Fenster muss BREIT genug sein, um es durchgehend zu halten. 0,2 Kacheln
-      //    waren es vorher, und das hat nicht gereicht.
-      if (!(r.fenster >= 0.4)) {
-        schlecht.push('Fenster nur ' + r.fenster + ' Kacheln breit');
+      if (!(r.reichweite > 1.0)) {
+        schlecht.push('Reichweite ' + r.reichweite + ' liegt nicht ueber 1,0');
+      }
+      // 2. Und die Reichweite darf nicht UNTER dem Mindestabstand liegen: dann waere der
+      //    Abstandhalter aktiv, bevor eine Attacke ueberhaupt angesetzt werden kann, und
+      //    das Ueberholen haette kein Band mehr. Gleichstand ist erlaubt - siehe oben.
+      if (!(r.reichweite >= r.abstandMin)) {
+        schlecht.push('Reichweite ' + r.reichweite + ' unter dem Mindestabstand '
+                      + r.abstandMin);
       }
       // 3. Die Wartezeit bei der VORGABE-Wuerze muss im Bereich einer Runde liegen. Ohne
       //    diese Zahl ist "wird ueberholt" eine Hoffnung.
       if (!(r.wartenS <= 10)) {
         schlecht.push('Wartezeit ' + r.wartenS + ' s bei Wuerze ' + r.wuerze);
       }
-      // 4. Gegenprobe: bei Wuerze null darf NIE angesetzt werden, sonst ist der Regler
-      //    keiner.
-      ghostCfg.spice = 0;
+      // 4. Gegenprobe: mit abgeschaltetem Ueberholmanoever darf NIE angesetzt werden,
+      //    sonst ist der Schalter keiner.
+      ghostCfg.wuerzeUeberholen = false;
       const aus = OMEGA_TEST.ghostPassRates();
-      if (aus.p !== 0) schlecht.push('Wuerze 0 wuerfelt trotzdem');
+      if (aus.p !== 0) schlecht.push('abgeschaltet wuerfelt trotzdem');
     } finally {
-      ghostCfg.spice = merk;
+      ghostCfg.wuerzeUeberholen = merk;
     }
     return { ok: schlecht.length === 0,
              mass: 'Reichweite ' + r.reichweite + ' gegen Mindestabstand ' + r.abstandMin
@@ -2982,6 +5382,69 @@
                    + (schlecht.length ? ' || ' + schlecht.join('; ') : ', beide https') };
   });
 
+  // ---- Lenkdaempfung: die Zahl auf dem Regler ist die Zahl, die gilt ----
+  //
+  // DER FEHLER, GEGEN DEN SIE STEHT, war da und ist gemessen. Die Zeit bis zum Anschlag hing
+  // an DREI Groessen, von denen der Regler keine nannte:
+  //
+  //   steerRatePerS      unsichtbar, aus dem Traegheitsmoment, ohne Regler
+  //   steerResponse      hiess "Lenkansprechen" und bestimmt laut Hilfetext den WINKEL
+  //   steerCalib         die Lenkwinkel-Kalibrierung, ein ganz anderer Regler
+  //
+  // Die letzte war die stillste: der uebertragene Winkel ist dampedSteering mal steerCalib,
+  // gedeckelt auf 1,0 - bei 200 Prozent Kalibrierung schlaegt er also bei halbem Kommando
+  // an. Gemessen ergaben eingestellte 83 ms 65, 200 ergaben 155 und 500 ergaben 385: durchweg
+  // 78 Prozent, und der Faktor sass an einem Regler zwei Zeilen weiter unten.
+  //
+  // Geprueft wird deshalb nicht "der Wert kommt an", sondern die ZUSAGE: die eingestellte
+  // Zeit ist die gemessene, und zwar unabhaengig von den zwei anderen Reglern. Toleranz ist
+  // ein Zeitschritt des Messaufbaus (5 ms) plus ein Prozent.
+  stAdd('Lenkdämpfung: die eingestellte Zeit ist die gemessene', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.steerZeitProbe) {
+      return { skip: true, mass: 'steerZeitProbe nicht vorhanden' };
+    }
+    const schlecht = [], zeilen = [];
+    const nah = (ist, soll) => Math.abs(ist - soll) <= 5 + soll * 0.01;
+    for (const ms of [40, 83, 200, 500]) {
+      const r = OMEGA_TEST.steerZeitProbe({ ms });
+      zeilen.push(ms + '→' + r.ms);
+      if (!nah(r.ms, ms)) schlecht.push('soll ' + ms + ' ms, gemessen ' + r.ms);
+    }
+    // 0 heisst sofort: ein einziger Zeitschritt, nicht mehr.
+    const sofort = OMEGA_TEST.steerZeitProbe({ ms: 0 });
+    zeilen.push('0→' + sofort.ms);
+    if (!(sofort.ms <= 10)) schlecht.push('0 ms braucht ' + sofort.ms + ' ms');
+    // ---- UND DIE UNABHAENGIGKEIT, der eigentliche Punkt --------------------------
+    const calib = $('setting-steer-calib');
+    const merk = calib ? calib.value : null;
+    try {
+      for (const resp of [1.0, 2.0, 3.0]) {
+        const r = OMEGA_TEST.steerZeitProbe({ ms: 200, resp });
+        if (!nah(r.ms, 200)) {
+          schlecht.push('Lenkansprechen ' + resp + ' aendert die Zeit auf ' + r.ms);
+        }
+      }
+      if (calib) {
+        for (const cal of [0.5, 1.0, 2.0, 3.0]) {
+          calib.value = String(cal);
+          calib.dispatchEvent(new Event('input', { bubbles: true }));
+          const r = OMEGA_TEST.steerZeitProbe({ ms: 200 });
+          if (!nah(r.ms, 200)) {
+            schlecht.push('Kalibrierung ' + cal + ' aendert die Zeit auf ' + r.ms);
+          }
+        }
+      }
+    } finally {
+      if (calib && merk !== null) {
+        calib.value = merk;
+        calib.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+    return { ok: !schlecht.length,
+             mass: zeilen.join(' ') + ' ms, unabhängig von Ansprechen und Kalibrierung'
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
   // ---- Layout: Neutral laesst die Kalibrierung unberuehrt ----
   //
   // Die Aenderung soll rein additiv sein: wer nichts umstellt, merkt nichts. Geprueft wird es
@@ -2992,7 +5455,7 @@
       return { skip: true, mass: 'Messaufbau nicht vorhanden' };
     }
     const merk = physEngine.layoutName || 'neutral';
-    const FELDER = ['loadFrontStatic', 'wheelbaseM', 'yawInertia', 'steerRatePerS'];
+    const FELDER = ['loadFrontStatic', 'wheelbaseM', 'yawInertia', 'steerDaempfungMs'];
     try {
       physEngine.applyLayout('neutral');
       const diff = OMEGA_TEST.physConfigDiff() || {};
@@ -3025,7 +5488,7 @@
       const r = OMEGA_TEST.physLayoutDrive(n, { kmh: 140, throttle: 0, brake: 1,
                                                 steering: 1, patch: { steerCalib: 2.0 } });
       const v = OMEGA_TEST.physLayouts()[n];
-      return { n, grad: r.grad, sg: r.steerGrip, vorn: v.vorn, rate: v.rate, iz: v.iz };
+      return { n, grad: r.grad, sg: r.steerGrip, vorn: v.vorn, ms: v.daempfungMs, iz: v.iz };
     });
     const schlecht = [];
     // 1. Keiner am Notboden. 0,12 ist die Trockenreserve; wer dort liegt, lenkt nicht mehr.
@@ -3045,15 +5508,19 @@
     const spanne = Math.max.apply(null, werte.map(w => w.grad))
                  - Math.min.apply(null, werte.map(w => w.grad));
     if (spanne < 5) schlecht.push('Spanne nur ' + spanne + ' Grad, die Layouts wirken kaum');
-    // 4. Die Lenkrate folgt dem Traegheitsmoment, gegenlaeufig.
+    // 4. Die Lenkdaempfung folgt dem Traegheitsmoment, GLEICHLAEUFIG - und das ist eine
+    //    Umkehrung des Vergleichs, nicht seine Abschwaechung: bis v0.5.40 stand hier die
+    //    Lenkrate in Anschlaegen je Sekunde, die mit steigender Traegheit FIEL. Dieselbe
+    //    Aussage in Millisekunden heisst, dass die Zeit STEIGT. Wer nur den Feldnamen tauscht
+    //    und den Vergleich stehen laesst, dreht die Zusicherung um, ohne dass es auffaellt.
     const nachIz = werte.slice().sort((a, b) => a.iz - b.iz);
     for (let i = 1; i < nachIz.length; i++) {
-      if (nachIz[i].rate > nachIz[i - 1].rate + 1e-9) {
-        schlecht.push('Lenkrate steigt mit dem Traegheitsmoment (' + nachIz[i].n + ')');
+      if (nachIz[i].ms < nachIz[i - 1].ms - 1e-9) {
+        schlecht.push('Lenkdaempfung faellt mit dem Traegheitsmoment (' + nachIz[i].n + ')');
       }
     }
     return { ok: !schlecht.length,
-             mass: werte.map(w => w.n + ' ' + w.grad + '\u00b0/' + w.rate.toFixed(1)).join('  ')
+             mass: werte.map(w => w.n + ' ' + w.grad + '\u00b0/' + w.ms + 'ms').join('  ')
                    + ' | Spanne ' + spanne + '\u00b0'
                    + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
   });
@@ -3232,8 +5699,22 @@
       const l0 = physEngine.state.latUse;
       teile.push('latUse ' + (l0 === undefined ? 'FEHLT' : 'vorhanden'));
       if (l0 === undefined) schlecht.push('latUse nicht im Zustand');
-      if (!(gerade.steerGrip >= kurve.steerGrip)) {
-        schlecht.push('Kurvenfahrt nimmt keinen Griff');
+      // HIER STAND steerGrip, UND DAS WAR DIE FALSCHE GROESSE. steerGrip haengt an
+      // frontCap und frontUse, also am BREMSEN - der Lenkeinschlag kommt darin gar nicht
+      // vor. Bei brake: 0 sind beide Proben rechnerisch gleich, und der Unterschied kam
+      // allein daher, dass die Kurvenprobe die Reifen ein wenig aufheizt.
+      //
+      // Gemessen mit dem Reifenmodell auf 1,0: 0,85650939 gegen 0,85656252, also 5e-5 in
+      // der FALSCHEN Richtung - der Test war gruen, solange das Modell auf 2,0 stand und
+      // die schnellere Erwaermung das Vorzeichen zufaellig andersherum drehte. Eine
+      // Zusicherung, die an der Aufheizrate haengt, sichert nichts zu.
+      //
+      // Was der Reibkreis WIRKLICH sagt: wer lenkt, hat weniger LAENGS uebrig. Das steht in
+      // gripLong, und dort ist der Unterschied kein Rauschen (gemessen 1,00 gegen 0,52).
+      teile.push('gripLong gerade ' + gerade.gripLong.toFixed(2)
+                 + ' / Kurve ' + kurve.gripLong.toFixed(2));
+      if (!(gerade.gripLong > kurve.gripLong + 0.05)) {
+        schlecht.push('Kurvenfahrt nimmt keinen Laengsgriff');
       }
     }
 
@@ -3416,6 +5897,215 @@
                    + (fehlt.length ? ' || fehlt: ' + fehlt.join(', ') : '') };
   });
 
+  // ---- Auf einer Geraden wird nicht gelenkt ----
+  //
+  // GEMELDET: "In den aktuellen Ideallinien sind diese komischen Kurven - selbst bei einer
+  // Gerade sagst du dem Auto, es solle eine Kurve fahren. Mach ausserdem, dass bei einer
+  // oder mehreren Geraden zwischen zwei Kurven der Ausgangspunkt der einen mit dem
+  // Eingangspunkt der anderen verbunden wird (auf der Zielgeraden fahren alle Autos nach
+  // ganz rechts)."
+  //
+  // GEMESSEN, vorher, auf SR3GLR2GR2G2 mit alpha auf den Deckel normiert:
+  //
+  //   Kruemmung   Zielgerade +0,38 -> -0,83, dann -0,81 bis -0,83 die GANZE letzte Kachel.
+  //               Auf Geraden 10 Vorzeichenwechsel der zweiten Differenz, groesste 1,16.
+  //   Rundenzeit  16 Wechsel, groesste 0,557.
+  //
+  // Geprueft wird die GEOMETRIE und nicht ein Aussehen: auf einem Geradenstueck zwischen
+  // zwei Kurven muss alpha eine Gerade sein, also die zweite Differenz null. Toleranz ist
+  // die ungleiche Punktdichte an Kachelgrenzen, ein Promille des Deckels.
+  //
+  // UND DIE GEGENPROBE: die Endwerte muessen die Kurvenanker sein. Ohne sie waere der Test
+  // auch mit einer Linie gruen, die auf allen Geraden bei null steht - das wuerde die Regel
+  // erfuellen und die Kurven verlieren.
+  stAdd('Ideallinie: auf Geraden eine Gerade', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.buildLine) {
+      return { skip: true, mass: 'buildLine nicht erreichbar' };
+    }
+    const proben = ['SR3GLR2GR2G2', 'SHG4HG3', 'SG4R4G4L4'];
+    const schlecht = [], zeilen = [];
+    for (const code of proben) {
+      const p = codeToTrack(code);
+      const pts = trackCenterline(p.tiles);
+      const nrm = trackNormals(pts, true);
+      for (const m of ['curvature', 'laptime', 'lateapex']) {
+        const L = OMEGA_TEST.buildLine(pts, nrm, { closed: true, tiles: p.tiles, model: m });
+        const grenze = L.limit * 0.001;
+        let maxD2 = 0, wo = -1;
+        for (let i = 2; i < pts.length - 1; i++) {
+          // Nur INNEN in einem Geradenstueck: an der Grenze zur Kurve darf ein Knick sein,
+          // dort beginnt die Kurvenform.
+          const t0 = p.tiles[pts[i - 1].tile], t1 = p.tiles[pts[i].tile];
+          const t2 = p.tiles[pts[i + 1].tile];
+          if (!t0 || !t1 || !t2) continue;
+          if (kurvenDrehung(t0.type) || kurvenDrehung(t1.type) || kurvenDrehung(t2.type)) continue;
+          const d2 = Math.abs(L.alpha[i + 1] - 2 * L.alpha[i] + L.alpha[i - 1]);
+          if (d2 > maxD2) { maxD2 = d2; wo = i; }
+        }
+        zeilen.push(code.slice(0, 8) + '/' + m.slice(0, 4) + ' ' + maxD2.toFixed(4));
+        if (maxD2 > grenze) {
+          schlecht.push(code + '/' + m + ': zweite Differenz ' + maxD2.toFixed(3)
+                        + ' bei Punkt ' + wo);
+        }
+        // Gegenprobe: die Linie muss die Bahnbreite ueberhaupt benutzen.
+        if (!(L.span > L.limit * 0.15)) {
+          schlecht.push(code + '/' + m + ': Spanne nur ' + (L.span / L.limit).toFixed(2));
+        }
+      }
+    }
+    return { ok: !schlecht.length,
+             mass: zeilen.join(' ')
+                 + (schlecht.length ? ' || ' + schlecht.join('; ') : ' | alle gerade') };
+  });
+
+  // ---- Kurvenzuege brechen bei einem Richtungswechsel ----
+  //
+  // DER FEHLER, DEN DIESE PRUEFUNG FESTHAELT: lineKurvenLaeufe() fragte nur, OB eine Kachel
+  // eine Kurve ist, nicht wohin sie dreht. Auf SR3GLR2GR2G2 verschmolzen damit Kachel 5
+  // (links) und die Kacheln 6-7 (rechts) zu EINEM Zug - das Layout hatte drei Kurven statt
+  // vier, mit einem Scheitel fuer eine Links-Rechts-Kombination.
+  //
+  // Gefunden hat es das dritte Linienmodell, weil es je Kurve einen Scheitel vergibt und
+  // deshalb zaehlt. Die Kurvenoeffnung davor nahm ihr Vorzeichen aus dem Scheitel und
+  // funktionierte mit dem falschen Zug halbwegs weiter - deshalb fiel es nie auf.
+  stAdd('Kurvenzuege: eine Schikane ist zwei Kurven', () => {
+    if (typeof lineKurvenLaeufe !== 'function') {
+      return { skip: true, mass: 'lineKurvenLaeufe nicht erreichbar' };
+    }
+    const faelle = [
+      { code: 'SR3GLR2GR2G2', zuege: 4 },   // R3 | L | R2 | R2 - die gemeldete Strecke
+      { code: 'SRRRLLL', zuege: 2 },        // drei rechts, drei links
+      { code: 'SG4R4G4L4', zuege: 2 },
+      { code: 'SHG4HG3', zuege: 2 },
+    ];
+    const schlecht = [], zeilen = [];
+    for (const f of faelle) {
+      const p = codeToTrack(f.code);
+      const l = lineKurvenLaeufe(p.tiles, true);
+      zeilen.push(f.code.slice(0, 8) + ' ' + l.length);
+      if (l.length !== f.zuege) {
+        schlecht.push(f.code + ': ' + l.length + ' Zuege statt ' + f.zuege);
+      }
+      // Und in jedem Zug dreht jede Kachel gleich - das ist die Zusicherung selbst.
+      for (const z of l) {
+        for (let kk = z.von; kk <= z.bis; kk++) {
+          const t = p.tiles[((kk % p.tiles.length) + p.tiles.length) % p.tiles.length];
+          if (kurvenDrehung(t.type) !== z.dreht) {
+            schlecht.push(f.code + ': Zug ' + z.von + '-' + z.bis + ' mischt Richtungen');
+          }
+        }
+      }
+    }
+    return { ok: !schlecht.length,
+             mass: zeilen.join('  ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Drittes Modell: schneller, spaeter Scheitel, und die Schranke haelt ----
+  //
+  // Drei Aussagen, und jede ist nachrechenbar:
+  //
+  //   1. Der Scheitel liegt hinter 55 Prozent des Kurvenwegs. Das ist die Schranke, und sie
+  //      ist der Grund, warum das Modell existiert - die freie Suche in 'laptime' verschiebt
+  //      ihn gemessen um +0,045 der Kurvenlaenge, also gar nicht.
+  //   2. Es ist im eigenen Mass schneller als die anderen zwei. Gemessen auf vier Layouts
+  //      15 bis 35 Prozent.
+  //   3. Es ist schneller als die MITTELLINIE - aber nur, wenn man es frei laesst, und das
+  //      ist der ehrliche Teil dieser Pruefung.
+  //
+  //      Eine Carrera-Kurve ist ein Bogen mit FESTEM Radius. Nachgemessen an einer reinen
+  //      Rechtskurve, mittlerer Bahnradius bei konstantem Versatz: Mittellinie 34,7
+  //      Einheiten, alpha +4 gibt 38,8, alpha -4 gibt 30,7. Nach innen zu tauchen macht den
+  //      Radius also KLEINER, und die zeitschnellste Linie hat deshalb gar keinen Scheitel -
+  //      bei Oeffnung 0 legt der Optimierer sie auf +-0,11 der Bahnbreite, also praktisch
+  //      auf die Mitte.
+  //
+  //      Wer eine Linie will, die aussieht wie eine Ideallinie, fordert die FORM ueber den
+  //      Regler und zahlt Zeit dafuer. Gemessen, Late Apex gegen die Mittellinie:
+  //
+  //          Oeffnung   Spanne        Zeit gegen Mittellinie
+  //             0       0,07 - 0,09     +1,0 bis +1,5 %
+  //             0,4     0,33 - 0,48     -0,7 bis -1,9 %
+  //             0,8     0,68 - 0,91     -4,9 bis -5,3 %
+  //
+  //      Geprueft wird deshalb BEIDES getrennt: bei Oeffnung 0 muss die freie Optimierung
+  //      die Mittellinie schlagen (sonst ist die Suche kaputt - genau das war sie einmal,
+  //      mit 4,1 Prozent SCHLECHTER, und es war ein lokales Minimum), und bei der Vorgabe
+  //      muss die FORM stimmen. Eine Pruefung, die beides in einem Satz verlangt, wuerde
+  //      eine Zusicherung fordern, die die Geometrie nicht hergibt.
+  stAdd('Late Apex: spaeter Scheitel und schneller als die Mittellinie', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.buildLine || !OMEGA_TEST.lapTimeOf) {
+      return { skip: true, mass: 'buildLine/lapTimeOf nicht erreichbar' };
+    }
+    const proben = ['SR3GLR2GR2G2', 'SHG4HG3', 'SG4R4G4L4', 'SRRRLLL'];
+    const schlecht = [], zeilen = [];
+    for (const code of proben) {
+      const p = codeToTrack(code);
+      const pts = trackCenterline(p.tiles);
+      const nrm = trackNormals(pts, true);
+      const o = { closed: true, tiles: p.tiles };
+      const LA = OMEGA_TEST.buildLine(pts, nrm, Object.assign({ model: 'lateapex' }, o));
+      const LT = OMEGA_TEST.buildLine(pts, nrm, Object.assign({ model: 'laptime' }, o));
+      const g = LA.grenzen;
+      const mitte = OMEGA_TEST.lapTimeOf(pts.map((q) => [q.x, q.y]), true,
+        { closed: true, aLat: g.aLat, aAcc: g.aAcc, aBrk: g.aBrk, vMax: g.vMax }).time;
+      zeilen.push(code.slice(0, 8) + ' ' + LA.lapTime.toFixed(1) + '/' + LT.lapTime.toFixed(1)
+                  + '/' + mitte.toFixed(1) + ' Scheitel ' + LA.apex.join(','));
+      // 1. Die Schranke
+      for (const a of LA.apex) {
+        if (a < 0.55 - 1e-9 || a > 0.85 + 1e-9) {
+          schlecht.push(code + ': Scheitel bei ' + a + ' ausserhalb 0,55 bis 0,85');
+        }
+      }
+      // 2. NICHT SCHNELLER als das Rundenzeitmodell, und das ist eine Berichtigung an mir
+      //    selbst. Hier stand `LA.lapTime < LT.lapTime`, also die Forderung, das
+      //    eingeschraenkte Modell sei schneller als das freie. Das kann nicht sein: beide
+      //    minimieren DIESELBE Zielfunktion ueber demselben Suchraum, und 'lateapex' hat
+      //    zusaetzlich die Scheitelschranke. Ein kleinerer Suchraum kann ein Minimum nur
+      //    verfehlen, nie verbessern. Gemessen liegen die zwei auf zwei von vier Layouts
+      //    gleich (15,30 gegen 15,30), weil die Oeffnungsschranke dort ohnehin bindet.
+      //
+      //    Und auch die UMKEHRUNG ist nicht behauptbar, was ich beim ersten Anlauf ebenfalls
+      //    falsch hatte: gemessen kam 'lateapex' auf SR3GLR2GR2G2 mit 19,77 s vor dem freien
+      //    19,90 s heraus. Beide sind LOKALE Optima eines nicht konvexen Problems, gestartet
+      //    von drei festen Punkten - und die Startpunkte der beiden unterscheiden sich, weil
+      //    der Scheitelbereich verschieden ist. Ein lokaler Abstieg mit anderem Start darf im
+      //    Einzelfall besser landen; das ist eine Eigenschaft des Verfahrens und kein
+      //    Widerspruch.
+      //
+      //    Als ZUSICHERUNG bleibt damit nur eine grobe Bandbreite, die eine echte Entgleisung
+      //    faengt und keine Ordnung behauptet, die es nicht gibt. Der Vergleich selbst steht
+      //    im Messwert und ist dort ablesbar.
+      if (!(LA.lapTime < LT.lapTime * 1.15)) {
+        schlecht.push(code + ': ' + LA.lapTime.toFixed(2) + ' s liegt mehr als 15 % ueber '
+                      + 'dem freien ' + LT.lapTime.toFixed(2));
+      }
+      // 3. FREI GELASSEN schneller als gar kein Versatz. Die Oeffnung wird dafuer auf 0
+      //    gestellt und danach zurueckgegeben.
+      const merkExit = OMEGA_TEST.getLineExit();
+      let frei = null;
+      try {
+        OMEGA_TEST.setLineExit(0);
+        frei = OMEGA_TEST.buildLine(pts, nrm, Object.assign({ model: 'lateapex' }, o));
+      } finally {
+        OMEGA_TEST.setLineExit(merkExit);
+      }
+      zeilen[zeilen.length - 1] += ' frei ' + frei.lapTime.toFixed(1);
+      if (!(frei.lapTime < mitte)) {
+        schlecht.push(code + ': frei optimiert ' + frei.lapTime.toFixed(2)
+                      + ' s nicht schneller als die Mittellinie mit ' + mitte.toFixed(2));
+      }
+      // 4. Und mit der Vorgabe stimmt die FORM: Ein- und Ausgang aussen, Scheitel innen.
+      for (const z of (OMEGA_TEST.lineShape(code, 'lateapex') || [])) {
+        if (Math.sign(z.scheitel) !== z.dir) {
+          schlecht.push(code + ': Scheitel ' + z.scheitel.toFixed(2) + ' auf der falschen '
+                        + 'Seite bei Kachel ' + z.von + '-' + z.bis);
+        }
+      }
+    }
+    return { ok: !schlecht.length,
+             mass: zeilen.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
   // ---- Ideallinie: Richtung ----
   //
   // DER FEHLER, GEGEN DEN ER STEHT, war da und ist gemessen: trackNormals() zeigt nach
@@ -3427,6 +6117,24 @@
   // Geprueft wird das VORZEICHEN gegen die Drehrichtung der Kurve, denn genau das ist die
   // Zusicherung: in einer Rechtskurve liegt die schnelle Linie rechts (innen), in einer
   // Linkskurve links. Kein Betrag, keine Zentimeter - eine Seite.
+  //
+  // AM SCHEITEL UND NICHT IM MITTEL, seit v0.5.40 - und das ist keine Abschwaechung, sondern
+  // die Berichtigung einer Groesse, die ihre Aussage verloren hat. Bis dahin klebte die Linie
+  // ueber die ganze Kurve auf der Innenseite, da war das Mittel dasselbe wie der Scheitel.
+  // Seit sie von aussen anfaehrt und nach aussen ausfaehrt, DURCHQUERT sie die Bahn, und ihr
+  // Mittelwert sagt darueber nichts mehr: gemessen an SG2H2G2J2 liegt das Mittel eines
+  // Haarnadelzugs bei +0,05, waehrend die Spanne 1,89 betraegt.
+  //
+  // Dafuer wird jetzt MEHR geprueft als vorher, naemlich die ganze Form:
+  //
+  //   der Scheitel liegt innen, mit Betrag           sonst gibt es keinen Scheitel
+  //   Ein- und Ausgang liegen weiter aussen als er   sonst ist es keine Kurvenlinie
+  //
+  // Die zweite Bedingung nur fuer Zuege ueber MEHRERE Kacheln, und das ist Geometrie und
+  // keine Nachsicht: eine einzelne 60-Grad-Kachel inmitten gegensinniger Kurven hat keinen
+  // Platz fuer Anfahrt, Scheitel und Ausfahrt. Gemessen liegt der schlechteste
+  // Mehrkachelzug bei 0,27, der schlechteste Einkachelzug bei 0,03 - die Schranke von 0,15
+  // trennt die beiden Faelle sauber.
   stAdd('Ideallinie liegt auf der Innenseite', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.lineShape) {
       return { skip: true, mass: 'lineShape nicht vorhanden' };
@@ -3439,19 +6147,56 @@
       for (const m of ['curvature', 'laptime']) {
         const zuege = OMEGA_TEST.lineShape(code, m);
         if (!zuege || !zuege.length) { schlecht.push(code + '/' + m + ': keine Kurve'); continue; }
-        for (const z of zuege) {
+        for (let zi = 0; zi < zuege.length; zi++) {
+          const z = zuege[zi];
           n++;
-          // Das Mittel muss das Vorzeichen der Drehrichtung haben. Ein Mittel um Null
-          // waere "haelt die Mitte", ein umgekehrtes ist der Fehler von oben.
-          if (Math.sign(z.mittel) !== z.dir || Math.abs(z.mittel) < 0.05) {
-            schlecht.push(code + '/' + m + ' Kachel ' + z.von + '-' + z.bis
-                          + ' dreht ' + (z.dir > 0 ? 'rechts' : 'links')
-                          + ', Linie ' + z.mittel.toFixed(2));
+          const wo = code + '/' + m + ' Kachel ' + z.von + '-' + z.bis
+                     + ' dreht ' + (z.dir > 0 ? 'rechts' : 'links');
+          // 1. Der Scheitel liegt innen, und zwar mit Betrag.
+          //
+          // ZWEI SCHRANKEN, UND DER GRUND IST PLATZ. Die Tiefe des Scheitels haengt am
+          // Regler "Kurven oeffnen", und dessen Wirkung skaliert mit der BOGENLAENGE des
+          // Kurvenzuges: eine einzelne 60-Grad-Kachel hat 36 von 80 Einheiten Bezugslaenge,
+          // bekommt also 45 Prozent. Bei der Vorgabe 0,8 und dem Kurvenfaktor 0,6 sind das
+          // 0,8 * 0,6 * 0,45 = 0,216 - gemessen kam auf SG2RG2L genau 0,20 heraus, mit
+          // richtigem Vorzeichen. Eine Schranke von 0,25 fuer alle wuerde also die Geometrie
+          // bestrafen und nicht einen Fehler.
+          const tief = z.bis > z.von ? 0.25 : 0.15;
+          if (Math.sign(z.scheitel) !== z.dir || Math.abs(z.scheitel) < tief) {
+            schlecht.push(wo + ', Scheitel ' + z.scheitel.toFixed(2));
+            continue;
+          }
+          // 2. Und die Form: Ein- und Ausgang liegen WEITER AUSSEN als der Scheitel.
+          //
+          // NICHT AN EINER SCHIKANE, und das ist Geometrie und keine Nachsicht: liegt
+          // zwischen zwei Kurven keine Kachel, dann sind der Ausgang der einen und der
+          // Eingang der anderen DERSELBE Abtastpunkt - und der kann nicht gleichzeitig
+          // aussen fuer eine Rechts- und eine Linkskurve sein. Gemessen an SRRRLLL: dort
+          // liegt der Uebergang bei calc +0,335, also aussen fuer die folgende Linkskurve
+          // und damit innen fuer die vorhergehende Rechtskurve. Beides ist wahr.
+          //
+          // Dieselbe Ausnahme macht auch die Konstruktion in formLine() - dort faellt an
+          // einem direkten Uebergang der Aussenboden weg und die zwei Anker werden zu einem
+          // Wert. Eine Pruefung, die sie nicht kennt, prueft ein anderes Bauwerk.
+          const nx = zuege[(zi + 1) % zuege.length];
+          const pv = zuege[(zi - 1 + zuege.length) % zuege.length];
+          const nachSchikane = zuege.length > 1 && nx && nx.von === z.bis + 1;
+          const vorSchikane = zuege.length > 1 && pv && z.von === pv.bis + 1;
+          if (z.bis > z.von) {
+            const fEin = z.dir * (z.scheitel - z.eingang);
+            const fAus = z.dir * (z.scheitel - z.ausgang);
+            const teile = [];
+            if (!vorSchikane) teile.push(fEin);
+            if (!nachSchikane) teile.push(fAus);
+            if (teile.length && Math.min.apply(null, teile) < 0.15) {
+              schlecht.push(wo + ', Form ein ' + fEin.toFixed(2) + ' aus ' + fAus.toFixed(2));
+            }
           }
         }
         if (m === 'laptime') {
           zeilen.push(code + ' ' + zuege.map(z => (z.dir > 0 ? 'R' : 'L')
-                      + (z.mittel >= 0 ? '+' : '') + z.mittel.toFixed(2)).join(' '));
+                      + z.eingang.toFixed(2) + '/' + z.scheitel.toFixed(2)
+                      + '/' + z.ausgang.toFixed(2)).join(' '));
         }
       }
     }
@@ -3505,17 +6250,29 @@
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostGapFactor) {
       return { skip: true, mass: 'ghostGapFactor nicht vorhanden' };
     }
-    const r = OMEGA_TEST.ghostGapFactor([0.05, 0.35, 0.7, 1.5]);
+    // ---- DIE PROBEPUNKTE HAENGEN AN DER SCHWELLE, NICHT AN FESTEN ZAHLEN ---------
+    //
+    // Hier standen 0,05 / 0,35 / 0,7 / 1,5 mit der Erwartung, dass ab 0,7 nichts mehr
+    // passiert - das war der Mindestabstand von damals. Er steht jetzt bei 1,2, gewaehlt aus
+    // dem Sweep bei "Ueberholen: Reichweite ueber dem Mindestabstand" (29,1 Beruehrungen je
+    // Minute gegen 40,1 beim alten Wert, bei mehr Ueberholmanoevern).
+    //
+    // Die Punkte werden deshalb AUS der Schwelle gerechnet. Feste Zahlen wuerden bei der
+    // naechsten Abstimmung wieder rot, ohne dass etwas kaputt ist - und genau das ist hier
+    // passiert.
+    const S = OMEGA_TEST.gapMinLesen ? OMEGA_TEST.gapMinLesen() : 1.2;
+    const punkte = [S * 0.04, S * 0.3, S, S * 1.25];
+    const r = OMEGA_TEST.ghostGapFactor(punkte);
     if (r.length < 4) return { skip: true, mass: 'Prueflauf leer' };
     const f = r.map(x => x.faktor);
-    // Monoton steigend mit dem Abstand, und ab der Schwelle wirkungslos.
+    // Monoton steigend mit dem Abstand, und AB der Schwelle wirkungslos.
     const monoton = f[0] < f[1] && f[1] < f[2] && Math.abs(f[3] - 1) < 1e-9
                     && Math.abs(f[2] - 1) < 1e-9;
     // Und er muss ueberhaupt etwas KOSTEN. Ein Baustein, der 0,2 Prozent bewegt, ist auf
     // dem Tisch nicht zu sehen - dieselbe Klasse wie ein Regler mit Faktor null.
     const wirkt = 1 - f[0] > 0.15;
     return { ok: monoton && wirkt,
-             mass: r.map(x => x.gap + ': x' + x.faktor).join('  ')
+             mass: 'Schwelle ' + S + ' | ' + r.map(x => x.gap + ': x' + x.faktor).join('  ')
                  + (monoton ? '' : ' | NICHT MONOTON')
                  + (wirkt ? '' : ' | ZU SCHWACH') };
   });
@@ -3536,17 +6293,615 @@
                      + ', Ghost neu ' + r.ghostNeu + ', cutOut ' + r.cutOut };
   });
 
+  // ---- Ghost-Boxenstopp ----
+  //
+  // DIE PRUEFUNG, DIE DIESES FEATURE UEBERHAUPT BRAUCHT, ist die erste: der Ghost darf
+  // waehrend des Stopps nicht geparkt werden.
+  //
+  // GHOST_READ_MIN = 0,35 ist die Leseschwelle - unter etwa 35 Prozent der
+  // Hoechstgeschwindigkeit liest das Auto das gedruckte Muster nicht mehr und meldet 0x00.
+  // Der Abgangsmelder parkt daraufhin nach max(900 ms mit 0x00, 4000 ms seit dem letzten
+  // Kachelwechsel), also rund vier Sekunden nach dem Stillstand. Ein Stopp von 3 bis 10 s
+  // trifft das garantiert, und das einzige Veto (g.gnadeBis) dauert 3 s und wurde vor diesem
+  // Feature nie verlaengert.
+  //
+  // Der Messaufbau faehrt deshalb durch den ECHTEN ghostTick() mit gefaelschter Uhr und
+  // meldet 0x00, sobald das Auto steht - genau wie ein Auto, das nichts mehr liest. Eine
+  // Nachbildung der Zustandsmaschine wuerde den Melder nicht enthalten und waere gruen,
+  // waehrend das Auto auf dem Teppich blinkt.
+  stAdd('Ghost-Boxenstopp: Phasen, rechter Rand, und kein Parken', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostPitProbe) {
+      return { skip: true, mass: 'ghostPitProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.ghostPitProbe({ laenge: 10, takte: 600, autos: 1 });
+    const fehler = [];
+    // 1. NICHT GEPARKT. Zehn Sekunden Stillstand, also weit ueber der Bestaetigung.
+    if (r.geparkt) fehler.push('waehrend des Stopps geparkt');
+    // 2. Die Phasen in der Reihenfolge, und die Sequenz ENDET.
+    const soll = [null, 'anfahrt', 'halt', 'stand', 'raus', null];
+    if (r.folge.join('>') !== soll.join('>')) {
+      fehler.push('Folge ' + r.folge.join('>') + ' statt ' + soll.join('>'));
+    }
+    // 3. RECHTS, nicht links. Am ENDE jeder Phase, nicht im Minimum: g.querSoll ist ein
+    //    nachlaufender Filter, sein Minimum ist der Startwert der Phase.
+    //
+    //    Byte 7 positiv ist rechts, und das ist nicht Konvention, sondern nachgemessen: bei
+    //    konstantem Versatz gibt +4 einen mittleren Bahnradius von 38,8 Einheiten, -4 nur
+    //    30,7 - der groessere Radius ist der aeussere.
+    for (const ph of ['halt', 'stand']) {
+      const q = r.querEnde ? r.querEnde[ph] : null;
+      if (!(q >= 0.9)) fehler.push(ph + ': Querlage ' + q + ' statt am rechten Rand');
+    }
+    if (!(r.querEnde && r.querEnde.anfahrt > 0)) {
+      fehler.push('Anfahrt endet nicht rechts der Mitte');
+    }
+    return { ok: !fehler.length,
+             mass: r.folge.join(' > ') + ' | Querlage am Phasenende '
+                 + JSON.stringify(r.querEnde) + ' | geparkt ' + r.geparkt
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Einer pittet, die anderen weichen aus ----
+  //
+  // DIE ZUSAGE HAT SICH GEAENDERT, und das gehoert hierhin und nicht in ein Nebenprotokoll:
+  // bis v0.5.46 pittete immer nur EINER, und dieser Test prueft das mit `r.mehrfach === 0`.
+  // Seit der Boxengasse ist "mehrere gleichzeitig" ausdruecklich bestellt - jeder auf seiner
+  // eigenen Kachel. Die Zusage ist jetzt nicht mehr "nur einer", sondern "nie zwei auf
+  // demselben Platz, und wer vorbei muss, faehrt nicht rechts". Sie steht im Test darunter.
+  //
+  // Was HIER bleibt, ist die andere Haelfte: dass die Autos, die NICHT pitten, ausweichen.
+  // Sie hat zwei Teile - yieldSide (weich, Autoritaet 0,64) und eine KLEMME auf der
+  // Boxenkachel (hart). Geprueft wird die Klemme, denn die weiche Haelfte kann von der
+  // Ideallinie ueberstimmt werden.
+  //
+  // Und zwar WAEHREND die Sperre gilt, nicht am Ende: gemessen steht ein anderes Auto nach
+  // dem Stopp wieder bei +0,999 auf seiner Linie, und dieser Wert sagt ueber die Sperre
+  // nichts. Der Messaufbau fuehrt deshalb je Auto die groesste Querlage in den Takten mit,
+  // in denen pitSperreRechts() fuer es wahr war.
+  //
+  // nurEiner: die zwei anderen sind NICHT faellig. Ohne das nehmen sie sich seit der
+  // Boxengasse selbst einen Platz, und dann gibt es keine Umstehenden mehr - der Test waere
+  // gruen, weil er nichts mehr prueft.
+  stAdd('Ghost-Boxenstopp: einer pittet, die anderen gehen links', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostPitProbe) {
+      return { skip: true, mass: 'ghostPitProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.ghostPitProbe({ laenge: 4, takte: 500, autos: 3, nurEiner: true });
+    const fehler = [];
+    // Bei nurEiner MUSS es einer bleiben - nicht weil die Gasse es verbietet, sondern weil
+    // die anderen nicht faellig sind. Bricht das, ist der Ausloeser undicht.
+    if (r.mehrfach) fehler.push(r.mehrfach + ' Takte mit zwei Stopps, obwohl nur einer '
+                                + 'faellig war');
+    if (r.geparkt) fehler.push('waehrend des Stopps geparkt');
+    if (!r.andere.length) fehler.push('keine anderen Autos im Aufbau');
+    for (let i = 0; i < r.andere.length; i++) {
+      const a = r.andere[i];
+      if (a.yieldSide !== -1) fehler.push('Auto ' + (i + 1) + ': yieldSide ' + a.yieldSide);
+      // Die Gegenprobe, dass die Sperre ueberhaupt gegolten hat - ohne sie waere die
+      // Aussage darunter leer.
+      if (!(a.sperreTakte > 0)) fehler.push('Auto ' + (i + 1) + ': Sperre nie aktiv');
+      else if (!(a.sperreMax <= 0)) {
+        fehler.push('Auto ' + (i + 1) + ': Querlage ' + a.sperreMax + ' rechts der Mitte, '
+                    + 'obwohl dort einer steht');
+      }
+    }
+    return { ok: !fehler.length,
+             mass: r.andere.map((a, i) => 'A' + (i + 1) + ' yield ' + a.yieldSide
+                                 + ', ' + a.sperreTakte + ' Takte gesperrt, max '
+                                 + a.sperreMax).join(' | ')
+                 + ' | ' + r.mehrfach + ' Doppelstopps'
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Die Boxengasse: mehrere gleichzeitig, jeder auf seiner Kachel ----
+  //
+  // BESTELLT: "Mach, dass mehrere Autos Boxenstopp machen koennen. Wenn ein Auto schon einen
+  // Stopp macht, soll das naechste ab der Kachel eins spaeter anfangen (und das andere nicht
+  // rammen)." Drei Zusagen, und alle drei stehen hier.
+  //
+  // DER AUFBAU ERZWINGT DEN FALL: ein Wetterwechsel macht ALLE Ghosts gleichzeitig faellig -
+  // das ist der Moment, in dem eine Boxengasse unter Druck steht, und der Grund, warum
+  // dieser Test am Reifenwechsel haengt und nicht an einem Planstopp.
+  //
+  // Der DRITTE Punkt braucht eine Unterscheidung, die zwei Messfehler gekostet hat:
+  // g.querSoll ist ein nachlaufender Filter (rund 0,5 s fuer die volle Breite), nicht der
+  // Befehl. Ein Auto, das mit rechter Ideallinie in die Gasse einfaehrt, steht dort einige
+  // Takte lang noch rechts, obwohl der Befehl schon links lautet. Gemessen wird deshalb der
+  // BEFEHL - er ist die Zusage, der Filter ihre Physik.
+  stAdd('Ghost-Boxengasse: mehrere Plaetze, und keiner faehrt dem anderen ins Heck', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostReifenProbe) {
+      return { skip: true, mass: 'ghostReifenProbe nicht vorhanden' };
+    }
+    const fehler = [], zeilen = [];
+    // Zwei Feldgroessen: vier passen genau in die Gasse, sechs muessen anstehen.
+    for (const autos of [4, 6]) {
+      const r = OMEGA_TEST.ghostReifenProbe({ autos, takte: 2500,
+                                              wechselBei: 100, laenge: 5 });
+      if (!r) return { skip: true, mass: 'kein Lauf' };
+      const plaetze = r.plaetze.map((p) => p.join('+')).join('/');
+      zeilen.push(autos + ' Autos: Plaetze ' + plaetze + ', hoechstens '
+                  + r.hoechstGleich + ' gleichzeitig, ' + r.vorbeiTakte
+                  + ' Takte Vorbeifahrt');
+      // 1. MEHRERE GLEICHZEITIG. Das ist die Bestellung, und mit einem Platz waere es 1.
+      if (!(r.hoechstGleich >= 2)) {
+        fehler.push(autos + ' Autos: nur ' + r.hoechstGleich + ' gleichzeitig in der Box');
+      }
+      // 2. NIE ZWEI AUF DEMSELBEN PLATZ. Das ist die Zusage, die "nicht rammen" laengs
+      //    bedeutet: zwei Autos auf einer Kachel stehen ineinander.
+      if (r.doppeltBelegt) {
+        fehler.push(autos + ' Autos: ' + r.doppeltBelegt
+                    + ' Takte mit zwei Autos auf demselben Platz');
+      }
+      // 3. WER VORBEI MUSS, FAEHRT NICHT RECHTS. Das ist dieselbe Zusage quer.
+      if (r.vorbeiBefehlRechts) {
+        fehler.push(autos + ' Autos: ' + r.vorbeiBefehlRechts
+                    + ' Takte mit rechtem Befehl, obwohl dort einer steht');
+      }
+      // Die Gegenprobe: es muss ueberhaupt vorbeigefahren worden sein, sonst ist Punkt 3
+      // eine leere Aussage.
+      if (!(r.vorbeiTakte > 0)) {
+        fehler.push(autos + ' Autos: niemand musste vorbei - der Aufbau prueft nichts');
+      }
+      // 4. Und keiner parkt sich waehrend des Stopps. Mit mehreren Stehenden ist das
+      //    schwerer als mit einem: die Gnade muss fuer jeden einzeln laufen.
+      if (r.geparkt) fehler.push(autos + ' Autos: ein Auto wurde geparkt');
+      // 5. Die Gasse ist gedeckelt. Bei sechs Autos duerfen nicht sechs Plaetze entstehen -
+      //    sonst steht ein Fuenftel der Runde voll.
+      if (r.hoechstGleich > 4) {
+        fehler.push(autos + ' Autos: ' + r.hoechstGleich + ' Plaetze, mehr als der Deckel');
+      }
+    }
+    return { ok: !fehler.length,
+             mass: zeilen.join(' | ') + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Der Boxenplatz bleibt nach einem Abbruch nicht besetzt ----
+  //
+  // DER FEHLER, DEN DIESE PRUEFUNG FESTHAELT: stopGhost() raeumte running und finish auf,
+  // aber nicht g.pit - und finishGhost() setzte g.finish, worauf ghostTick() frueh aussteigt
+  // und pitTick() nie wieder laeuft. Der Stopp blieb also fuer immer offen und der
+  // modulweite Boxenplatz besetzt.
+  //
+  // WARUM DIE SELBSTHEILUNG DAS NICHT DECKT: pitInhaberGueltig() verwirft einen Anspruch,
+  // wenn das Auto keinen Stopp mehr hat ODER nicht mehr in der Garage steht. Im Rennen
+  // BLEIBT das Auto in der Garage, und g.pit stand noch - beide Bedingungen erfuellt, der
+  // Anspruch galt weiter. In der Rennsimulation faellt es nicht auf, weil die neue Autos
+  // baut; gemessen pittete dort auch nach einem Abbruch mitten im Stopp weiter (503 Takte).
+  //
+  // Folge waere gewesen: wer ein Rennen beendet, waehrend ein Ghost in der Box steht, sieht
+  // danach nie wieder einen Boxenstopp - und die Ursache steht nirgends.
+  stAdd('Ghost-Boxenstopp: der Platz wird nach einem Abbruch frei', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.pitAbbruchProbe) {
+      return { skip: true, mass: 'pitAbbruchProbe nicht vorhanden' };
+    }
+    const fehler = [], zeilen = [];
+    for (const wie of ['finish', 'stop']) {
+      const r = OMEGA_TEST.pitAbbruchProbe(wie);
+      zeilen.push(wie + ': belegt ' + r.vor + ' -> ' + r.nach + ', pit ' + r.pit
+                  + ', in Garage ' + r.inGarage);
+      // Die Gegenprobe zuerst: ohne einen belegten Platz prueft der Rest nichts.
+      if (!r.vor) fehler.push(wie + ': der Platz war nicht belegt');
+      if (r.nach) fehler.push(wie + ': der Platz bleibt belegt');
+      if (r.pit) fehler.push(wie + ': g.pit steht noch');
+      // Und der Fall MUSS der schwierige sein: das Auto bleibt in der Garage, sonst haette
+      // die Selbstheilung ueber die Garage gegriffen und die Pruefung waere leer.
+      if (!r.inGarage) fehler.push(wie + ': das Auto war nicht mehr in der Garage');
+    }
+    return { ok: !fehler.length,
+             mass: zeilen.join(' | ') + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Die Faelligkeit liegt im eingestellten Band ----
+  //
+  // Zwei Regler, ein Band, und die Ziehung muss beide Grenzen erreichen - eine Ziehung, die
+  // nur die Mitte trifft, waere ein Band ohne Wirkung.
+  stAdd('Ghost-Boxenstopp: die Faelligkeit liegt im Band', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.pitFaelligProbe) {
+      return { skip: true, mass: 'pitFaelligProbe nicht vorhanden' };
+    }
+    const fehler = [];
+    const r = OMEGA_TEST.pitFaelligProbe(5, 9, 300);
+    const lo = Math.min.apply(null, r), hi = Math.max.apply(null, r);
+    if (lo < 5) fehler.push('Ziehung ' + lo + ' unter der Untergrenze');
+    if (hi > 9) fehler.push('Ziehung ' + hi + ' ueber der Obergrenze');
+    // Beide Enden muessen vorkommen. Bei 300 Ziehungen aus fuenf Werten ist die
+    // Wahrscheinlichkeit, ein Ende zu verpassen, (4/5)^300 - also praktisch null.
+    if (lo !== 5) fehler.push('die Untergrenze 5 kommt nicht vor');
+    if (hi !== 9) fehler.push('die Obergrenze 9 kommt nicht vor');
+    // Und ein entartetes Band ist gueltig: gleiche Werte heissen "immer nach so vielen".
+    const g = OMEGA_TEST.pitFaelligProbe(7, 7, 20);
+    if (g.some((x) => x !== 7)) fehler.push('bei 7/7 kommt nicht immer 7 heraus');
+    return { ok: !fehler.length,
+             mass: '300 Ziehungen aus 5..9: ' + lo + ' bis ' + hi + ', bei 7/7 immer '
+                 + g[0] + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Regenreifen fuer Ghosts ----
+  //
+  // VIER FAELLE, UND ZWEI DAVON MUESSEN UNVERAENDERT SEIN. Das ist die wichtigste Zusage
+  // dieses Features: das Regentempo (0,85) und das Trockentempo (1,0) waren abgestimmt und
+  // abgenommen, bevor es Reifen gab. Eine Ableitung, die sie still verschiebt, waere eine
+  // Verschlechterung, die niemand bestellt hat - deshalb wird der abgeleitete Griff als
+  // VERHAELTNIS angewandt und nicht absolut, und deshalb steht hier ein Gleichheitstest auf
+  // GHOST_REGEN_TEMPO und nicht ein Band.
+  stAdd('Ghost-Regenreifen: der Tempofaktor, und die zwei bekannten Faelle bleiben', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.reifenTempoProbe) {
+      return { skip: true, mass: 'reifenTempoProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.reifenTempoProbe(undefined, { pitAn: true });
+    if (!r) return { skip: true, mass: 'kein Faktor' };
+    const f = r.faktor, fehler = [];
+    const nah = (a, b) => Math.abs(a - b) < 1e-3;
+    // 1. Die zwei bekannten Faelle, auf Gleichheit.
+    if (!nah(f['dry/trocken'], 1)) {
+      fehler.push('trocken auf trocken ' + f['dry/trocken'] + ' statt 1');
+    }
+    if (!nah(f['rain/regen'], 0.85)) {
+      fehler.push('nass auf Regen ' + f['rain/regen'] + ' statt 0,85 (GHOST_REGEN_TEMPO)');
+    }
+    // 2. Die falschen Reifen kosten, und im Regen deutlich mehr als im Trockenen. Die
+    //    Richtung ist die Aussage, die Zahlen stehen als Mass daneben - ein Gleichheitstest
+    //    auf 0,6375 wuerde bei jedem Griffwert in TYRE_MIX rot, und das waere eine
+    //    Abstimmung und kein Fehler.
+    if (!(f['rain/trocken'] < f['rain/regen'] - 0.1)) {
+      fehler.push('Slicks im Regen ' + f['rain/trocken'] + ' nicht deutlich langsamer');
+    }
+    if (!(f['dry/regen'] < 1 && f['dry/regen'] > f['rain/trocken'])) {
+      fehler.push('Regenreifen im Trockenen ' + f['dry/regen'] + ' unplausibel');
+    }
+    return { ok: !fehler.length,
+             mass: Object.keys(f).map((k) => k + ' ' + f[k]).join(', ')
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Ohne Boxenstopp gibt es keine falschen Reifen ----
+  //
+  // DIE FALLE, DIE DAS PRUEFT: wer die Ghost-Boxenstopps abschaltet, koennte ein Feld
+  // bekommen, das nach dem ersten Regen dauerhaft mit 0,64 kriecht - denn der einzige Weg
+  // zurueck ist ein Stopp, und den hat er gerade verboten. Also gilt bei ausgeschaltetem
+  // Stopp ueberall der passende Reifen, und das Verhalten faellt BITGLEICH auf das zurueck,
+  // was vor diesem Feature da war.
+  stAdd('Ghost-Regenreifen: ohne Boxenstopp genau das alte Verhalten', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.reifenTempoProbe) {
+      return { skip: true, mass: 'reifenTempoProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.reifenTempoProbe(undefined, { pitAn: false });
+    if (!r) return { skip: true, mass: 'kein Faktor' };
+    const f = r.faktor, fehler = [];
+    const nah = (a, b) => Math.abs(a - b) < 1e-3;
+    // Beide Reifen, dasselbe Ergebnis: im Trockenen 1, im Regen 0,85 - der flache Abzug,
+    // der vor diesem Feature die einzige Regenregel war.
+    for (const reifen of ['trocken', 'regen']) {
+      if (!nah(f['dry/' + reifen], 1)) {
+        fehler.push('trocken/' + reifen + ' ' + f['dry/' + reifen] + ' statt 1');
+      }
+      if (!nah(f['rain/' + reifen], 0.85)) {
+        fehler.push('nass/' + reifen + ' ' + f['rain/' + reifen] + ' statt 0,85');
+      }
+    }
+    return { ok: !fehler.length,
+             mass: 'pitAn aus: ' + Object.keys(f).map((k) => k + ' ' + f[k]).join(', ')
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Die Oberflaeche im Ghost-Motor kommt aus der Spielertabelle ----
+  //
+  // ZWEI AUSSAGEN, NICHT EINE: der Tempofaktor oben ist das ZIEL des Reglers, gripScale ist
+  // das, womit der Motor bremst und anfaehrt. Ein Fehler in einem waere im anderen nicht zu
+  // sehen - ein Ghost mit richtigem Ziel und trockenem Griff faehrt im Regen mit
+  // Trockenbremsweg, und das sieht man erst in der Kurve.
+  //
+  // Und es prueft einen STILLEN FEHLER mit, der vor diesem Feature da war: startGhost()
+  // kopiert das ganze Konfigurationsobjekt des Spielers, gripScale eingeschlossen - ein
+  // Ghost erbte also die Reifenwahl des Spielers und behielt sie ueber jeden
+  // Wetterwechsel.
+  stAdd('Ghost-Regenreifen: Griff und Aquaplaning wie beim Spieler-Auto', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.reifenGriffProbe) {
+      return { skip: true, mass: 'reifenGriffProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.reifenGriffProbe();
+    if (!r) return { skip: true, mass: 'kein Griff' };
+    const fehler = [];
+    const nah = (a, b) => Math.abs(a - b) < 1e-3;
+    // Die vier Werte aus TYRE_MIX in 70-race.js.
+    const soll = { 'dry/trocken': 1.00, 'dry/regen': 0.88,
+                   'rain/trocken': 0.45, 'rain/regen': 0.80 };
+    for (const k of Object.keys(soll)) {
+      if (!r[k]) { fehler.push(k + ' fehlt'); continue; }
+      if (!nah(r[k].grip, soll[k])) {
+        fehler.push(k + ': Griff ' + r[k].grip + ' statt ' + soll[k]);
+      }
+    }
+    // Aufschwimmen NUR auf Slicks im Regen. Regenreifen sind geschnitten - dieselbe Aussage
+    // wie TYRE_MIX .aqua beim Spieler.
+    if (r['rain/trocken'] && !(r['rain/trocken'].aqua > 0.9)) {
+      fehler.push('Slicks im Regen schwimmen nicht auf (' + r['rain/trocken'].aqua + ')');
+    }
+    if (r['rain/regen'] && !(r['rain/regen'].aqua === 0)) {
+      fehler.push('Regenreifen schwimmen auf (' + r['rain/regen'].aqua + ')');
+    }
+    if (r['dry/trocken'] && !(r['dry/trocken'].aqua === 0)) {
+      fehler.push('trocken schwimmt auf (' + r['dry/trocken'].aqua + ')');
+    }
+    return { ok: !fehler.length,
+             mass: Object.keys(r).map((k) => k + ' Griff ' + r[k].grip
+                                    + '/Aqua ' + r[k].aqua).join(', ')
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Der Umschlagpunkt ----
+  //
+  // Bei WENIG Wasser ist der Slick noch schneller als der Regenreifen: er verliert steil
+  // (1,00 -> 0,45), der Regenreifen flach (0,88 -> 0,80), und der Gleichstand liegt bei
+  // n = 0,255, also bei halber Regenfront. Das ist keine Absicht, sondern die Aussage der
+  // Tabelle - und es ist der Grund, warum ein Reifenwechsel im Rennsport eine Entscheidung
+  // ist.
+  //
+  // WARUM DAS EINE PRUEFUNG WERT IST: wer den Faktor spaeter "aufraeumt" und den falschen
+  // Reifen pauschal langsamer macht, loescht diese Eigenschaft, ohne es zu merken. Sie steht
+  // hier als Zusicherung, nicht als Kuriositaet.
+  stAdd('Ghost-Regenreifen: bei leichtem Regen sind Slicks noch vorn', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.reifenTempoProbe) {
+      return { skip: true, mass: 'reifenTempoProbe nicht vorhanden' };
+    }
+    const leicht = OMEGA_TEST.reifenTempoProbe(-0.5, { pitAn: true });
+    const voll = OMEGA_TEST.reifenTempoProbe(0, { pitAn: true });
+    if (!leicht || !voll) return { skip: true, mass: 'kein Faktor' };
+    const fehler = [];
+    // Bei halber Front: der Slick mindestens gleichwertig.
+    if (!(leicht.faktor['rain/trocken'] >= leicht.faktor['rain/regen'] - 1e-4)) {
+      fehler.push('bei halber Front ist der Slick schon im Nachteil ('
+                  + leicht.faktor['rain/trocken'] + ' gegen '
+                  + leicht.faktor['rain/regen'] + ')');
+    }
+    // Bei voller Front deutlich im Nachteil - sonst waere die Rampe wirkungslos.
+    if (!(voll.faktor['rain/trocken'] < voll.faktor['rain/regen'] - 0.1)) {
+      fehler.push('bei voller Front kein deutlicher Nachteil');
+    }
+    // Und die Naesse muss sich zwischen den beiden Messungen ueberhaupt geaendert haben,
+    // sonst prueft der Test zwei identische Laeufe.
+    if (!(voll.nass > leicht.nass + 0.5)) {
+      fehler.push('die Rampe bewegt sich nicht (' + leicht.nass + ' -> ' + voll.nass + ')');
+    }
+    return { ok: !fehler.length,
+             mass: 'halbe Front (Naesse ' + leicht.nass + '): Slick '
+                 + leicht.faktor['rain/trocken'] + ' gegen Regen '
+                 + leicht.faktor['rain/regen'] + ' | volle Front (' + voll.nass + '): '
+                 + voll.faktor['rain/trocken'] + ' gegen ' + voll.faktor['rain/regen']
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Der ganze Ablauf: Wetterwechsel, Warteschlange, Umruestung ----
+  //
+  // Die Pruefung, die das Feature als GANZES nachrechnet, und der Aufbau ist so gebaut, dass
+  // nur die Reifen es erklaeren koennen: kein Ghost ist planmaessig faellig (die Grenzen
+  // stehen auf 200 Runden), und das Wetter wechselt mitten im Lauf.
+  //
+  // Die Autos stehen auf VERSCHIEDENEN Kacheln. Auf dieselbe gestellt kaeme die
+  // Warteschlange nicht zustande: alle waeren im selben Takt an der Einfahrt, einer bekaeme
+  // den Platz, und die anderen haetten ihre Gelegenheit fuer diese Runde verpasst, ohne je
+  // eine gehabt zu haben.
+  stAdd('Ghost-Regenreifen: alle ruesten um, einer nach dem anderen', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostReifenProbe) {
+      return { skip: true, mass: 'ghostReifenProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.ghostReifenProbe({ autos: 4, takte: 2500,
+                                            wechselBei: 100, laenge: 5 });
+    if (!r) return { skip: true, mass: 'kein Lauf' };
+    const fehler = [];
+    // 1. JEDER hat am Ende die Regenreifen drauf.
+    for (let i = 0; i < r.umbauBei.length; i++) {
+      if (r.umbauBei[i] === null) fehler.push('Auto ' + (i + 1) + ' ruestete nie um');
+    }
+    // 2. UND ZWAR WEGEN DER REIFEN. 'plan' waere hier ein Fehler im Aufbau - dann waere
+    //    nicht gezeigt, dass der Wetterwechsel den Stopp ausgeloest hat.
+    for (let i = 0; i < r.stoppGrund.length; i++) {
+      const g = r.stoppGrund[i];
+      if (!g.length) fehler.push('Auto ' + (i + 1) + ' hielt nie');
+      else if (g.some((x) => x !== 'reifen')) {
+        fehler.push('Auto ' + (i + 1) + ': Grund ' + g.join('+') + ' statt reifen');
+      }
+    }
+    // 3. MEHRERE GLEICHZEITIG SIND HIER RICHTIG, und diese Zeile hat es zuerst als
+    //    Fehler gemeldet: sie stand auf `mehrfach === 0`, der Zusage aus v0.5.45. Mit der
+    //    Boxengasse ist "mehrere zugleich, jeder auf seiner Kachel" ausdruecklich bestellt,
+    //    und ein Wetterwechsel ist genau der Fall, fuer den sie gebaut wurde. Was NICHT
+    //    passieren darf - zwei auf demselben Platz, oder einer der rechts vorbeifaehrt -
+    //    prueft "Ghost-Boxengasse"; hier wird nur festgehalten, dass die Gasse benutzt wird.
+    if (!(r.hoechstGleich >= 2)) {
+      fehler.push('nur ' + r.hoechstGleich + ' gleichzeitig in der Box - die Gasse wird '
+                  + 'nicht benutzt, obwohl alle vier faellig sind');
+    }
+    if (r.doppeltBelegt) {
+      fehler.push(r.doppeltBelegt + ' Takte mit zwei Autos auf demselben Platz');
+    }
+    // 4. UND KEINER PARKT SICH. Die Leseschwelle greift bei jedem Stillstand, auch bei
+    //    einem Reifenstopp - die erneuerte Gnade muss also auch hier tragen.
+    if (r.geparkt) fehler.push('ein Auto wurde waehrend des Stopps geparkt');
+    // 5. Die Drosselung war da, und danach ist sie weg.
+    for (let i = 0; i < r.faktorMin.length; i++) {
+      if (!(r.faktorMin[i] < 0.7)) {
+        fehler.push('Auto ' + (i + 1) + ' war nie gedrosselt (min ' + r.faktorMin[i] + ')');
+      }
+      if (Math.abs(r.faktorEnde[i] - 0.85) > 1e-3) {
+        fehler.push('Auto ' + (i + 1) + ' faehrt am Ende mit ' + r.faktorEnde[i]);
+      }
+      if (Math.abs(r.gripEnde[i] - 0.80) > 1e-3) {
+        fehler.push('Auto ' + (i + 1) + ': Griff am Ende ' + r.gripEnde[i] + ' statt 0,8');
+      }
+    }
+    // 6. UND SIE STEHEN NICHT ALLE GLEICHZEITIG WIEDER DA. Eine Schlange, in der alle
+    //    denselben Takt bekommen, waere keine - der Abstand ist der Beleg, dass der
+    //    Boxenplatz nacheinander vergeben wurde.
+    const bei = r.umbauBei.filter((x) => x !== null).slice().sort((a, b) => a - b);
+    if (bei.length > 1 && !(bei[bei.length - 1] - bei[0] > 100)) {
+      fehler.push('alle ruesteten praktisch gleichzeitig um');
+    }
+    return { ok: !fehler.length,
+             mass: 'Wechsel bei Takt ' + r.gewechselt + ', umgeruestet bei '
+                 + r.umbauBei.join('/') + ' (falsche Reifen ' + r.falschSek.join('/')
+                 + ' s), Drosselung bis ' + r.faktorMin.join('/')
+                 + ', danach ' + r.faktorEnde.join('/')
+                 + ', hoechstens ' + r.hoechstGleich + ' gleichzeitig in der Box'
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Und wieder zurueck auf trocken ----
+  //
+  // "genau so mit Wetterwechsel zu sonnig" - bestellt, also geprueft. Nicht dasselbe wie der
+  // Test darueber: der Rueckweg braucht ZWEI Stopps je Auto, und beim zweiten ist der
+  // gezogene Planstopp langst nicht faellig - er kann also nur an den Reifen liegen.
+  stAdd('Ghost-Regenreifen: der Rueckweg auf trocken zaehlt genauso', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostReifenProbe) {
+      return { skip: true, mass: 'ghostReifenProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.ghostReifenProbe({ autos: 3, takte: 3200, wechselBei: 60,
+                                            zurueckBei: 1400, laenge: 5 });
+    if (!r) return { skip: true, mass: 'kein Lauf' };
+    const fehler = [];
+    for (let i = 0; i < r.stoppGrund.length; i++) {
+      // ZWEI Stopps: einmal auf Regen, einmal zurueck.
+      if (r.stoppGrund[i].length < 2) {
+        fehler.push('Auto ' + (i + 1) + ': nur ' + r.stoppGrund[i].length + ' Stopp(s)');
+      }
+      if (r.stoppGrund[i].some((x) => x !== 'reifen')) {
+        fehler.push('Auto ' + (i + 1) + ': Grund ' + r.stoppGrund[i].join('+'));
+      }
+      // Und am Ende wieder trocken: Faktor 1, Griff 1.
+      if (Math.abs(r.faktorEnde[i] - 1) > 1e-3) {
+        fehler.push('Auto ' + (i + 1) + ' faehrt am Ende mit ' + r.faktorEnde[i]
+                    + ' statt 1');
+      }
+      if (Math.abs(r.gripEnde[i] - 1) > 1e-3) {
+        fehler.push('Auto ' + (i + 1) + ': Griff am Ende ' + r.gripEnde[i] + ' statt 1');
+      }
+    }
+    // Auch hier: gleichzeitig ist erlaubt, doppelt belegt nicht. Siehe oben.
+    if (r.doppeltBelegt) {
+      fehler.push(r.doppeltBelegt + ' Takte mit zwei Autos auf demselben Platz');
+    }
+    if (r.geparkt) fehler.push('ein Auto wurde waehrend des Stopps geparkt');
+    return { ok: !fehler.length,
+             mass: r.stoppGrund.map((g, i) => 'A' + (i + 1) + ' ' + g.length + ' Stopps')
+                     .join(', ')
+                 + ' | am Ende Faktor ' + r.faktorEnde.join('/')
+                 + ', Griff ' + r.gripEnde.join('/')
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Der Abstandhalter braucht eine Groesse mit Aufloesung ----
+  //
+  // DER BEFUND, DER DIESE PRUEFUNG NOETIG MACHT, ist die Antwort auf "die Autos rammen sich
+  // dauernd": der Abstandhalter war da, wirkte aber nicht, weil die Groesse, die er liest,
+  // unterhalb einer Kachel keine Werte hat.
+  //
+  //     Gemessen: in 1517 Stichproben mit wahrem Abstand unter einer Kachel - darunter 155
+  //     unter einer AUTOLAENGE - meldete ghostAhead() jedes Mal genau 1,00.
+  //
+  // Der Abhub war damit eine Konstante: bei 43 cm derselbe wie bei 0 cm. Und von aussen
+  // gesehen liess sich das mit der Schwelle nicht heilen - sechs Ghosts, 180 s, je zwei
+  // Laeufe:
+  //
+  //     Zeitluecke aus (nur Kachelregel)   132,9 Beruehrungen   66,2 Ueberholer je min
+  //     Zeitluecke 0,35 s                  100,4 (-24 %)        61,1 (-8 %)
+  //     Zeitluecke 0,70 s                   91,2 (-31 %)        50,0 (-24 %)
+  //
+  // 0,35 s ist deshalb gesetzt: der beste Tausch, und der einzige, bei dem die Beruehrungen
+  // deutlich staerker fallen als das Ueberholen. Mit der alten Kachelschwelle war es
+  // umgekehrt - 0,7 auf 1,2 kostete 23 Prozent Ueberholmanoever und brachte 3 Prozent.
+  //
+  // GEPRUEFT WIRD DIE AUFLOESUNG und nicht die Wirkung: die Wirkung haengt an fuenf
+  // Reglern und schwankt je Lauf um dreissig Prozent, die Aufloesung ist eine Eigenschaft
+  // der Groesse. Sie ist der Grund, warum das eine funktioniert und das andere nicht - und
+  // wenn sie verlorengeht, faellt der Abstandhalter still auf seinen alten Zustand zurueck.
+  stAdd('Abstand: die Zeitluecke hat Aufloesung, der Kachelabstand nicht', async () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.simAufloesung) {
+      return { skip: true, mass: 'simAufloesung nicht vorhanden' };
+    }
+    // Ein eigener kleiner Setzer: `setzen` aus der Rennsimulationspruefung ist dort lokal
+    // und hier nicht in Reichweite - der erste Anlauf warf "setzen is not defined". Und
+    // GUELTIGKEIT wird geprueft: ein Wert, den ein Auswahlfeld nicht hat, laesst es auf ""
+    // stehen, und die Simulation faellt still auf ihre Vorgabe zurueck. Genau so ist mir
+    // eine Messung mit 3 statt 10 Runden gelaufen, ohne dass etwas auffiel.
+    const stell = (id, v) => {
+      const e = $(id);
+      if (!e) return;
+      if (e.type === 'checkbox') { e.checked = !!v; }
+      else {
+        if (e.tagName === 'SELECT'
+            && ![...e.options].some((o) => o.value === String(v))) {
+          throw new Error(id + ': "' + v + '" ist keine Option');
+        }
+        e.value = String(v);
+      }
+      e.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const merk = { g: $('sim-ghosts').value, l: $('sim-laps').value,
+                   f: $('sim-fast').checked, p: ghostCfg.pitAn };
+    let r = null;
+    try {
+      stell('sim-ghosts', '4');
+      stell('sim-laps', '10');
+      stell('sim-fast', false);
+      ghostCfg.pitAn = false;         // Boxenstopps stoeren die Abstandsmessung
+      simStart();
+      r = OMEGA_TEST.simAufloesung(1400);
+      simStop('Pruefung');
+    } finally {
+      stell('sim-ghosts', merk.g); stell('sim-laps', merk.l);
+      stell('sim-fast', merk.f); ghostCfg.pitAn = merk.p;
+      if (simAn()) simStop('Pruefung');
+    }
+    if (!r || !r.proben) return { skip: true, mass: 'keine nahen Proben im Lauf' };
+    const fehler = [];
+    // 1. DER BEFUND SELBST: der Kachelabstand hat bei nahen Autos genau einen Wert. Faellt
+    //    diese Zeile eines Tages, ist der Kachelabstand besser geworden - dann gehoert die
+    //    Begruendung oben ueberprueft, und deshalb ist es eine Pruefung und keine Notiz.
+    if (r.kachelWerte.length > 2) {
+      fehler.push('der Kachelabstand hat ' + r.kachelWerte.length
+                  + ' Werte (' + r.kachelWerte.join(',') + ') - die Begruendung oben pruefen');
+    }
+    // 2. UND DIE ZEITLUECKE HAT VIELE. Zehn verschiedene Werte sind eine niedrige Huerde und
+    //    absichtlich so: gemessen waren es 21, und der Test soll nicht bei jedem
+    //    Reglerdreh rot werden, sondern wenn die Aufloesung VERSCHWINDET.
+    if (!(r.lueckeVerschieden >= 10)) {
+      fehler.push('die Zeitluecke hat nur ' + r.lueckeVerschieden
+                  + ' verschiedene Werte - die Aufloesung ist weg');
+    }
+    // 3. Und sie muss ueberhaupt messbar sein. Ein Abstandhalter, der in der Haelfte der
+    //    Faelle null bekommt, faellt in der Haelfte der Faelle auf die Kachelregel zurueck.
+    const anteil = r.lueckeMessbar / Math.max(1, r.proben);
+    if (!(anteil > 0.5)) {
+      fehler.push('nur ' + (anteil * 100).toFixed(0) + ' % der nahen Proben messbar');
+    }
+    return { ok: !fehler.length,
+             mass: r.proben + ' nahe Proben | Kachelabstand: ' + r.kachelWerte.join(',')
+                 + ' | Zeitluecke: ' + r.lueckeVerschieden + ' Werte von '
+                 + r.lueckeMin + ' bis ' + r.lueckeMax + ' s, '
+                 + (anteil * 100).toFixed(0) + ' % messbar'
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
   // ---- Zieleinlauf ----
   //
   // Vorher endete ein Rennen fuer die Ghosts mit stopGhost(): Nullen schreiben und
   // stehenbleiben, wo man gerade ist - mitten auf der Linie, wenn es dumm laeuft.
   //
-  // Geprueft werden die GESENDETEN BYTES, nicht die Absicht: Lenkung GERADE (die
-  // Rechtskurve eines frueheren Anlaufs ist heraus und soll nicht zurueckkommen), kein Gas,
-  // Bremslicht in der Bremsphase, und genau DREI sichtbare Blitze. Die Drei ist der Punkt, an dem man um den Faktor zwei danebenliegt - ein
-  // Blinken ist an UND aus -, und beim Entwurf dieses Tests ist genau das aufgefallen: das
-  // Blinken begann mit AN, waehrend das Standlicht schon an war, also waren zwei sichtbar.
-  stAdd('Zieleinlauf: gerade ausrollen, anhalten, dreimal blinken', async () => {
+  // Geprueft werden die GESENDETEN BYTES, nicht die Absicht: ein VOLLER Lenkausschlag zur
+  // zugeteilten Seite in beiden Fahrphasen, kein Gas, Bremslicht in der Bremsphase, und
+  // genau DREI sichtbare Blitze. Die Drei ist der Punkt, an dem man um den Faktor zwei
+  // danebenliegt - ein Blinken ist an UND aus -, und beim Entwurf dieses Tests ist genau das
+  // aufgefallen: das Blinken begann mit AN, waehrend das Standlicht schon an war, also waren
+  // zwei sichtbar.
+  //
+  // DIE LENKUNG WAR HIER BIS v0.5.44 AUF GERADE FESTGENAGELT, mit der Begruendung, ein
+  // frueherer Anlauf habe alle Autos gleichzeitig eine Rechtskurve fahren lassen. Bestellt
+  // ist jetzt das Gegenteil, und der Unterschied ist der Wechsel: "alle nach rechts" war der
+  // Fehler, "abwechselnd links und rechts" ist der Zweck - zwei Autos, die entgegengesetzt
+  // einschlagen, gehen auseinander. Welche Seite welches Auto bekommt, prueft die Nachbarin
+  // "Zieleinlauf: abwechselnd links und rechts an den Rand"; hier geht es nur darum, dass
+  // ueberhaupt ein Ausschlag hinausgeht und in beiden Fahrphasen derselbe.
+  stAdd('Zieleinlauf: zur Seite ausrollen, anhalten, dreimal blinken', async () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostFinishTimeline) {
       return { skip: true, mass: 'ghostFinishTimeline nicht vorhanden' };
     }
@@ -3558,14 +6913,27 @@
     const brems = r.reihe.filter(x => x.phase === 'brake');
     const blink = r.reihe.filter(x => x.phase === 'blink');
     const fehler = [];
-    // 1. LENKUNG GERADE, in jeder Phase. Ein Anlauf liess sie nach rechts an den Rand
-    // fahren; das ist heraus, weil ohne Rueckmeldung zur Querlage niemand weiss, wo der
-    // Rand ist - am Ende fuhren nur alle Autos gleichzeitig eine Rechtskurve. Der Test
-    // haelt das Gegenteil fest, damit es nicht zurueckkommt.
-    const krumm = r.reihe.filter(x => x.lenk !== 0);
-    if (krumm.length) {
-      fehler.push(krumm.length + ' Pakete mit Lenkung (max '
-                  + Math.max(...krumm.map(x => Math.abs(x.lenk))) + ')');
+    // 1. VOLLER AUSSCHLAG ZU EINER SEITE, in beiden Fahrphasen, und in beiden derselbe.
+    //    Ein Vorzeichenwechsel mitten im Anhalten waere ein Schlenker statt eines
+    //    Herausfahrens.
+    const fahrend = pull.concat(brems);
+    const lenke = fahrend.map(x => x.lenk);
+    if (!lenke.length) fehler.push('keine Fahrphase');
+    else {
+      const erst = lenke[0];
+      if (Math.abs(erst) < 100) {
+        fehler.push('Lenkung nur ' + erst + ' von 127 - kein Ausschlag zur Seite');
+      }
+      if (lenke.some(l => l !== erst)) {
+        fehler.push('Lenkung wechselt innerhalb des Anhaltens: '
+                    + Array.from(new Set(lenke)).join('/'));
+      }
+    }
+    // Und in der Blinkphase steht das Auto: dort gehoert die Lenkung auf null, sonst
+    // arbeitet das Servo gegen den Anschlag, solange die Sequenz laeuft.
+    const blinkKrumm = blink.filter(x => x.lenk !== 0);
+    if (blinkKrumm.length) {
+      fehler.push(blinkKrumm.length + ' Blinkpakete mit Lenkung');
     }
     // 2. Kein Gas, in keiner Phase: es wird ausgerollt, nicht gefahren.
     const gas = r.reihe.map(x => x.gas);
@@ -3588,7 +6956,7 @@
     return { ok: !fehler.length,
              mass: pull.length + ' Takte ausrollen, ' + brems.length + ' bremsen, '
                  + blink.length + ' blinken, ' + flanken + ' Blitze, Lenkung '
-                 + (krumm.length ? 'KRUMM' : 'gerade')
+                 + (pull.length ? pull[0].lenk : '?') + ' von 127'
                  + (fehler.length ? ' || ' + fehler.join('; ') : '') };
   });
 
@@ -3617,11 +6985,21 @@
       ['amb-enable', () => ambienceEnabled],
       ['dash-head-toggle', () => headlightsOn],
       ['ghost-leader', () => ghostCfg.leaderBrake],
+      // Die fuenf Wuerz-Schalter. Sie sind der Grund, warum diese Liste gepflegt ist: aus
+      // einem Regler wurden fuenf Kaestchen, und fuenf Kaestchen sind fuenf Gelegenheiten,
+      // Markup und Modell auseinanderlaufen zu lassen.
+      ['ghost-w-pass', () => ghostCfg.wuerzeUeberholen],
+      ['ghost-w-gap', () => ghostCfg.wuerzeAbstand],
+      ['ghost-w-form', () => ghostCfg.wuerzeForm],
+      ['ghost-w-fehler', () => ghostCfg.wuerzeFehler],
+      ['ghost-w-slip', () => ghostCfg.wuerzeWindschatten],
       ['ghost-learn', () => ghostCfg.learn],
       ['ghost-learn-pace', () => ghostCfg.learnPace],
       ['ghost-needcode', () => ghostCfg.needCode],
       ['ghost-rail', () => ghostCfg.railMode],
-      ['phys-enable', () => physicsEnabled],
+      // Die zwei Boxenstopp-Schalter.
+      ['ghost-pit', () => ghostCfg.pitAn],
+      ['ghost-pit-free', () => ghostCfg.pitFrei],
       ['pit-double-lap', () => pitDoubleCountsLap],
       ['pit-enable', () => pitLaneEnabled],
       ['race-flying', () => raceFlying],
@@ -3664,7 +7042,17 @@
   // Zwei Pads im Stummel, und das ist der Punkt: Windows zeigt denselben Controller oft
   // zweimal, und padRumble nahm den ERSTEN mit einem Ruettler - das kann der rohe Zwilling
   // ohne Zuordnung sein. Geprueft wird, dass der Ruettler des ZUGEORDNETEN Pads laeuft.
-  stAdd('Controller-Vibration erreicht den richtigen Pad', () => {
+  // BIS v0.5.17 HIESS DIESE PRUEFUNG "erreicht den richtigen Pad", und sie verlangte, dass
+  // genau der Zwilling mit mapping === 'standard' geruettelt wird. Die Zusicherung ist
+  // umgedreht worden, und das ist der Grund:
+  //
+  // Fuer die EINGABE muss man sich fuer eine Quelle entscheiden - zwei Pads, die beide Gas
+  // geben, waeren ein Fehler. Fuers RUETTELN ist dieselbe Wahl eine Wette: welcher der
+  // beiden von Windows gemeldeten Zwillinge den Motor wirklich bedient, steht nirgends, und
+  // ging die Wette daneben, passierte gar nichts - still.
+  //
+  // Zwei Aufrufe auf dasselbe Geraet sind harmlos, ein stiller Fehlgriff nicht.
+  stAdd('Controller-Vibration erreicht JEDEN Pad mit Ruettler', () => {
     if (typeof padRumble !== 'function') return { skip: true, mass: 'padRumble nicht da' };
     const echt = navigator.getGamepads;
     const sw = $('setting-vibration');
@@ -3677,19 +7065,27 @@
     });
     try {
       // Der ROHE zuerst in der Liste - so wie Windows es liefert, wenn es schiefgeht.
-      navigator.getGamepads = () => [mk('', 'roh'), mk('standard', 'zugeordnet')];
+      // Drei Eintraege: die zwei Zwillinge und ein Pad OHNE Ruettler. Der dritte ist die
+      // Gegenprobe - er darf nicht in der Liste der Getroffenen auftauchen.
+      const ohne = { mapping: 'standard', id: 'stumm', connected: true,
+                     axes: [0, 0, 0, 0], buttons: [] };
+      navigator.getGamepads = () => [mk('', 'roh'), mk('standard', 'zugeordnet'), ohne];
       if (sw && !sw.checked) { sw.checked = true; sw.dispatchEvent(new Event('change', { bubbles: true })); }
       padRumble(0.6, 0.3, 90);
-      const anGetroffen = rufe.length === 1 && rufe[0].name === 'zugeordnet'
-                          && rufe[0].art === 'dual-rumble';
+      // BEIDE, und beide mit 'dual-rumble'. Ein Pad OHNE Ruettler steht mit in der Liste und
+      // darf nicht mitgezaehlt werden - sonst waere "alle" nur eine Schleife und keine
+      // Auswahl.
+      const namen = rufe.map(r => r.name).sort().join(',');
+      const anGetroffen = namen === 'roh,zugeordnet'
+                          && rufe.every(r => r.art === 'dual-rumble');
       // Und aus muss aus sein.
       rufe.length = 0;
       if (sw) { sw.checked = false; sw.dispatchEvent(new Event('change', { bubbles: true })); }
       padRumble(0.6, 0.3, 90);
       const ausStill = rufe.length === 0;
       return { ok: anGetroffen && ausStill,
-               mass: (anGetroffen ? 'an: zugeordneter Pad geruettelt'
-                                  : 'an: FALSCH, ' + JSON.stringify(rufe.map(r => r.name)))
+               mass: (anGetroffen ? 'an: beide Pads geruettelt'
+                                  : 'an: FALSCH, ' + JSON.stringify(namen))
                    + ' | ' + (ausStill ? 'aus: still' : 'aus: RUETTELT TROTZDEM') };
     } finally {
       navigator.getGamepads = echt;
@@ -3778,7 +7174,7 @@
     const zeilen = [], schlecht = [];
     for (const soll of [0.2, 0.35, 0.7]) {
       const g = await OMEGA_TEST.ghostDriveProbe({ lage: 'codes', takte: 500, code: 'SG8',
-                                                   tileMs: 900, cfg: { spice: 0, speed: soll } });
+                                                   tileMs: 900, cfg: Object.assign({}, WUERZE_AUS, { speed: soll }) });
       const f = g.tempo.filter(x => isFinite(x)).slice(-30);
       const ist = f.reduce((s, x) => s + x, 0) / Math.max(1, f.length);
       const treffer = ist / soll;
@@ -3826,7 +7222,7 @@
       // unter der Schwelle, und die naechste Vorgabenaenderung haette den Test rot gemacht,
       // obwohl nichts kaputt ist.
       const g = await OMEGA_TEST.ghostDriveProbe({ lage, takte: 900, code: 'SG3H2G3R2',
-        tileMs: 900, cfg: { spice: 0, curveSlow: 0.35 } });
+        tileMs: 900, cfg: Object.assign({}, WUERZE_AUS, { curveSlow: 0.35 }) });
       const mittel = (codes) => {
         const v = [];
         g.kachel.forEach((k, i) => {
@@ -3873,15 +7269,23 @@
       for (let i = 0; i < n; i++) d.push(a[i] - b[i]);
       return rms(d);
     };
+    // BEIDE ENDEN AUSDRUECKLICH GESETZT, und das ist eine Berichtigung. Vorher lief der
+    // Vergleich "Vorgabe gegen 0" - der Test las also den Standardwert als sein "an". Als
+    // `lanes` auf Wunsch ab Werk 0 wurde, verglich er 0 gegen 0, fand null Unterschied und
+    // meldete den Regler als stumm. Er war es nicht; der Test hatte keine Eingabe mehr.
+    //
+    // Dieselbe Fehlerklasse wie zweimal vorher in dieser Sitzung: eine Pruefung, die ihre
+    // Eingabe aus dem Zustand nimmt statt sie zu stellen, prueft den Zustand.
     const zeilen = [], stumm = [];
     for (const lage of ['codes', 'karte']) {
-      const grund = await OMEGA_TEST.ghostDriveProbe({ lage, takte: 500, code: 'SG3H2G3R2',
-                                                       tileMs: 900, cfg: { spice: 0 } });
       for (const feld of ['line', 'lanes']) {
-        const cfg = { spice: 0 }; cfg[feld] = 0;
+        const an = Object.assign({}, WUERZE_AUS); an[feld] = 1;
+        const aus = Object.assign({}, WUERZE_AUS); aus[feld] = 0;
+        const mit = await OMEGA_TEST.ghostDriveProbe({ lage, takte: 500, code: 'SG3H2G3R2',
+                                                       tileMs: 900, cfg: an });
         const ohne = await OMEGA_TEST.ghostDriveProbe({ lage, takte: 500, code: 'SG3H2G3R2',
-                                                        tileMs: 900, cfg });
-        const d = unterschied(grund.lenk, ohne.lenk);
+                                                        tileMs: 900, cfg: aus });
+        const d = unterschied(mit.lenk, ohne.lenk);
         zeilen.push(lage + '/' + feld + ' ' + d.toFixed(1));
         // 3 von 127 ist die Schwelle. Darunter ist es kein Regler, sondern eine Zierde -
         // und "Ideallinie ohne Karte" lag vor der Rueckfalllinie bei 0,3.
@@ -3910,9 +7314,9 @@
       return { skip: true, mass: 'ghostDriveProbe nicht vorhanden' };
     }
     const an = await OMEGA_TEST.ghostDriveProbe({ lage: 'karte', takte: 1000,
-      code: 'SG3H2G3R2', tileMs: 500, cfg: { spice: 0, learnPace: true } });
+      code: 'SG3H2G3R2', tileMs: 500, cfg: Object.assign({}, WUERZE_AUS, { learnPace: true }) });
     const aus = await OMEGA_TEST.ghostDriveProbe({ lage: 'karte', takte: 1000,
-      code: 'SG3H2G3R2', tileMs: 500, cfg: { spice: 0, learnPace: false } });
+      code: 'SG3H2G3R2', tileMs: 500, cfg: Object.assign({}, WUERZE_AUS, { learnPace: false }) });
     const L = an.lernen;
     const fehler = [];
     if (!L) fehler.push('kein Lernzustand angelegt');
@@ -3951,7 +7355,7 @@
     const rms = (a) => Math.sqrt(a.reduce((s, x) => s + x * x, 0) / Math.max(1, a.length));
     const P = (o) => OMEGA_TEST.ghostDriveProbe(Object.assign(
       { lage: 'karte', takte: 400, code: 'SG3H2G3R2', tileMs: 900,
-        cfg: { spice: 0, line: 0 } }, o));
+        cfg: Object.assign({}, WUERZE_AUS, { line: 0 }) }, o));
     // line auf 0, damit nur das Ausweichen uebrig bleibt - und das ist genau der Fall, in
     // dem es vorher gar nichts tat.
     const ohne = await P({});
@@ -4020,34 +7424,120 @@
                  + (fehler.length ? ' || ' + fehler.join('; ') : '') };
   });
 
-  // ---- 4. Kein Ueberholversuch in eine Kurve hinein ----
+  // ---- Ueberholen: der PLATZ entscheidet, nicht die Kachelart ----
   //
-  // Der Vorausblick verbietet es schon - aber den gibt es nur mit Karte. Ohne Karte war er
-  // immer "frei", und dann wurde mitten in einer Haarnadel angesetzt. Die Kachel UNTER dem
-  // Auto kommt aus dem gemeldeten Code und braucht keine Karte.
-  stAdd('Kein Ueberholversuch auf einer Kurvenkachel', () => {
+  // BESTELLT: "Ueberarbeite nun die Ueberholmanoever, sodass Autos auch in Kurven ueberholen
+  // koennen." Hier stand vorher die Umkehrung - "Kein Ueberholversuch auf einer
+  // Kurvenkachel" -, und sie war mit einer Messung begruendet: alle drei Abgaenge im
+  // Leitplanken-Modus geschahen bei nahezu vollem Lenkanschlag (mittleres |steer| 119,7 von
+  // 127). Was daran richtig bleibt, ist nicht die Kachelart, sondern der Anschlag: ein
+  // Ueberholversatz oben auf eine Linie, die schon voll zieht, IST der volle Anschlag.
+  //
+  // Also haengt die Erlaubnis jetzt am freien Platz, 1 minus dem Linienversatz. Gemessen,
+  // 1500 Takte je Lage:
+  //
+  //     Lage                                Platz   Versuche
+  //     Gerade, Linie zieht kaum             0,70      34
+  //     Gerade, Linie zieht voll             0,14       0
+  //     Haarnadelkachel, Linie zieht voll    0,15       0
+  //     Haarnadelkachel, Linie zieht kaum    0,70      35
+  //     Gerade, Haarnadel 1 Kachel voraus    0,70       0
+  //     Gerade, Haarnadel 3 Kacheln voraus   0,70      25
+  //
+  // Geprueft werden genau diese vier Aussagen. Die dritte und vierte Zeile sind die
+  // eigentliche Aenderung: die Kachelart allein sperrt nicht mehr.
+  stAdd('Ueberholen: der Platz entscheidet, nicht die Kachelart', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostPassArming) {
       return { skip: true, mass: 'ghostPassArming nicht vorhanden' };
     }
-    // 1500 Takte und nicht 400, und das ist eine Berichtigung an DIESEM Test: bei 400
-    // Takten a 60 ms sind es 24 s gefaelschter Zeit, also etwa sechs Wuerfe mit P = 0,45 -
-    // in gut drei Prozent der Laeufe faellt keiner, und dann meldet er rot, obwohl nichts
-    // kaputt ist. Genau so entstehen Tests, die man irgendwann wegklickt. Mit 1500 Takten
-    // sind es rund zweiundzwanzig Wuerfe und die Wahrscheinlichkeit liegt bei 1 zu 100.000.
-    //
-    // Die Gegenrichtung braucht die Laenge auch: "auf der Kurve NIE" ist mit sechs
-    // Gelegenheiten kaum eine Aussage.
-    const gerade = OMEGA_TEST.ghostPassArming(0x02, 1500);
-    const kurve = OMEGA_TEST.ghostPassArming(0x04, 1500);
-    const haarnadel = OMEGA_TEST.ghostPassArming(0x06, 1500);
-    const fehler = [];
-    // Auf der Geraden MUSS es ueberhaupt vorkommen, sonst prueft der Test nichts.
-    if (!(gerade.gestartet > 0)) fehler.push('auf der Geraden gar kein Versuch');
-    if (kurve.gestartet) fehler.push('Kurve: ' + kurve.gestartet + ' Versuche');
-    if (haarnadel.gestartet) fehler.push('Haarnadel: ' + haarnadel.gestartet + ' Versuche');
+    const merkTiles = currentTrackTiles;
+    const fehler = [], zeilen = [];
+    try {
+      // Eine Strecke mit Haarnadeln, damit ein Kachelindex in einer liegt.
+      currentTrackTiles = codeToTrack('SHG4HG3').tiles;
+      lineCache = null;
+      // 1500 Takte und nicht 400: bei 400 Takten a 60 ms sind es etwa sechs Wuerfe, und in
+      // gut drei Prozent der Laeufe faellt keiner - so entstehen Tests, die man wegklickt.
+      const lauf = (o) => OMEGA_TEST.ghostPassArming(o.code, 1500, o);
+      const viel = lauf({ code: 0x02, tileIndex: 3, kurveMix: 0 });
+      const wenig = lauf({ code: 0x02, tileIndex: 3, kurveMix: 1 });
+      const hnFrei = lauf({ code: 0x06, tileIndex: 1, kurveMix: 0 });
+      const hnVoll = lauf({ code: 0x06, tileIndex: 1, kurveMix: 1 });
+      const vorHn = lauf({ code: 0x02, tileIndex: 3, kurveMix: 0, tight: 2, dist: 1 });
+      const fernHn = lauf({ code: 0x02, tileIndex: 3, kurveMix: 0, tight: 2, dist: 3 });
+      for (const [nm, r] of [['viel Platz', viel], ['wenig Platz', wenig],
+                             ['Haarnadel frei', hnFrei], ['Haarnadel voll', hnVoll],
+                             ['vor Haarnadel', vorHn], ['fern Haarnadel', fernHn]]) {
+        zeilen.push(nm + ' ' + r.platz + '/' + r.gestartet);
+      }
+      // 1. Mit Platz MUSS es vorkommen, sonst prueft der Test nichts.
+      if (!(viel.gestartet > 0)) fehler.push('mit Platz gar kein Versuch');
+      // 2. Ohne Platz nie - das ist der Schutz, der von der alten Regel uebrig bleibt.
+      if (wenig.gestartet) fehler.push('ohne Platz ' + wenig.gestartet + ' Versuche');
+      if (hnVoll.gestartet) fehler.push('Haarnadel voll ' + hnVoll.gestartet + ' Versuche');
+      // 3. DIE KACHELART SPERRT NICHT MEHR. Das ist die bestellte Aenderung, und ohne diese
+      //    Zeile waere der Test auch mit der alten Sperre gruen.
+      if (!(hnFrei.gestartet > 0)) {
+        fehler.push('auf einer Kurvenkachel mit Platz kein Versuch - die Kachelart sperrt');
+      }
+      // 4. In eine Haarnadel hinein nicht, eine Kachel weiter weg schon.
+      if (vorHn.gestartet) fehler.push('vor der Haarnadel ' + vorHn.gestartet + ' Versuche');
+      if (!(fernHn.gestartet > 0)) fehler.push('drei Kacheln vor der Haarnadel keiner');
+    } finally {
+      currentTrackTiles = merkTiles;
+      lineCache = null;
+    }
     return { ok: !fehler.length,
-             mass: 'Gerade ' + gerade.gestartet + ', Kurve ' + kurve.gestartet
-                 + ', Haarnadel ' + haarnadel.gestartet + ' Versuche in je 1500 Takten'
+             mass: zeilen.join(' | ') + ' (Platz/Versuche in 1500 Takten)'
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Zieleinlauf: abwechselnd links und rechts ----
+  //
+  // GEMELDET: "Nach dem Rennen rammen die Ghosts alle ineinander hinein. Mache es so, dass
+  // sie abwechselnd links und rechts am Rand stehen bleiben."
+  //
+  // Geprueft wird die Zuteilung und der ausgehende Lenkwert, nicht das Ergebnis auf der
+  // Bahn: wo ein Auto wirklich stehen bleibt, kann diese App nicht wissen - es meldet seine
+  // Querlage nicht. Was sie zusichern kann, ist, dass zwei aufeinanderfolgende Autos
+  // ENTGEGENGESETZT einschlagen und dass die Hinteren laenger rollen.
+  stAdd('Zieleinlauf: abwechselnd links und rechts an den Rand', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.finishSeiten) {
+      return { skip: true, mass: 'finishSeiten nicht vorhanden' };
+    }
+    // SECHS und nicht vier: bei vier greift der Boden FINISH_ROLL_MIN nicht, und dann
+    // prueft der Lauf den Fall nicht, in dem zwei Autos dieselbe Rollzeit bekommen.
+    const r = OMEGA_TEST.finishSeiten(6);
+    const fehler = [];
+    if (!r || r.length !== 6) return { ok: false, mass: 'kein Lauf' };
+    for (let i = 1; i < r.length; i++) {
+      if (Math.sign(r[i].seite) === Math.sign(r[i - 1].seite)) {
+        fehler.push('Auto ' + i + ' auf derselben Seite wie ' + (i - 1));
+      }
+      // DER FUEHRENDE ROLLT AM LAENGSTEN, nicht am kuerzesten - und diese Zeile ist die
+      // Berichtigung eines Fehlers, den ich selbst eingebaut hatte. Rollt der Hintere
+      // laenger, schrumpft der Abstand beim Anhalten, und das Auffahren wird schlimmer statt
+      // besser. Die Rechnung steht bei FINISH_ROLL_MAX.
+      // NICHT STRENG KLEINER, sondern nicht groesser - und das ist kein Aufweichen: ab
+      // dem fuenften Auto greift FINISH_ROLL_MIN, und dann sind zwei Rollzeiten gleich.
+      // Dort trennt der Seitenwechsel, und den prueft die Zeile darueber. Eine Forderung
+      // nach streng kleiner waere bei sechs Ghosts rot, ohne dass etwas kaputt ist.
+      if (r[i].rollMs > r[i - 1].rollMs) {
+        fehler.push('Auto ' + i + ' rollt laenger als ' + (i - 1) + ' - dann schiebt es auf');
+      }
+    }
+    // Und der Lenkwert muss wirklich hinausgehen, mit dem Vorzeichen der Seite.
+    for (const x of r) {
+      if (Math.sign(x.steerRoll) !== Math.sign(x.seite) || Math.abs(x.steerRoll) < 0.9) {
+        fehler.push('Lenkwert ' + x.steerRoll + ' passt nicht zur Seite ' + x.seite);
+      }
+      if (x.steerBrake !== x.steerRoll) {
+        fehler.push('Bremsphase lenkt anders als die Rollphase');
+      }
+    }
+    return { ok: !fehler.length,
+             mass: r.map(x => (x.seite > 0 ? 'L' : 'R') + ' ' + x.rollMs + 'ms '
+                              + x.steerRoll.toFixed(1)).join(' | ')
                  + (fehler.length ? ' || ' + fehler.join('; ') : '') };
   });
 
@@ -4062,7 +7552,7 @@
       return { skip: true, mass: 'ghostDriveProbe nicht vorhanden' };
     }
     const g = await OMEGA_TEST.ghostDriveProbe({ lage: 'karte', takte: 700,
-      code: 'SG3H2G3R2', tileMs: 900, cfg: { spice: 0 } });
+      code: 'SG3H2G3R2', tileMs: 900, cfg: Object.assign({}, WUERZE_AUS) });
     const KURVEN = [0x03, 0x04, 0x05, 0x06];
     const mittel = (pred) => {
       const v = [];
@@ -4410,9 +7900,40 @@
       }
       // Der Griff muss mitgehen - sonst ist es eine Anzeige ohne Sache dahinter.
       if (!(s2.grip < s1.grip)) fehler.push('Regenreifen ohne Griffnachteil im Trockenen');
+      // ---- Seit v0.5.18 sind es VIER Mischungen, nicht zwei -------------------------
+      //
+      // Die Mischung steht als RAHMENFARBE an jedem der vier Reifenfelder. Geprueft wird,
+      // dass alle vier eine EIGENE Farbe bekommen: eine Kennung, die zwei Zustaende gleich
+      // faerbt, ist keine Kennung. Und dass sie sich vom Kachelgrund #04060b abhebt - genau
+      // daran waere "hart = schwarz" gescheitert, das als Palette vorgeschlagen war.
+      const rahmen = {};
+      for (const m of ['weich', 'mittel', 'hart', 'regen']) {
+        OMEGA_TEST.tyreSet(m);
+        rahmen[m] = getComputedStyle(el).getPropertyValue('--mix-farbe').trim();
+      }
+      const werte = Object.keys(rahmen).map(k => rahmen[k]);
+      if (new Set(werte).size !== 4) {
+        fehler.push('Rahmenfarben nicht paarweise verschieden: ' + werte.join(' '));
+      }
+      // Gegen den Kachelgrund. Kein voller Kontrastlauf - eine 2-px-Linie muss sich
+      // unterscheiden, nicht lesbar sein -, aber ein Schwarz auf Schwarz faellt hier durch.
+      const hell = (hx) => {
+        const m = /^#([0-9a-f]{6})$/i.exec(hx || '');
+        if (!m) return null;
+        const n = parseInt(m[1], 16);
+        return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+      };
+      const grund = hell('#04060b');
+      for (const m of Object.keys(rahmen)) {
+        const h = hell(rahmen[m]);
+        if (h === null) { fehler.push(m + ': Rahmenfarbe unlesbar (' + rahmen[m] + ')'); continue; }
+        if (Math.abs(h - grund) < 0.12) fehler.push(m + ': Rahmen hebt sich nicht vom Feld ab');
+      }
+      OMEGA_TEST.tyreSet('slick');
       return { ok: !fehler.length,
                mass: 'Slick: Profil ' + s1.profil + ', Grip ' + s1.grip
                    + ' | Regen: Profil ' + s2.profil + ', Grip ' + s2.grip
+                   + ' | 4 Rahmenfarben'
                    + ', ' + ((r2 || '').match(/repeating-linear-gradient/g) || []).length
                    + ' Rillenscharen'
                    + (fehler.length ? ' || ' + fehler.join('; ') : '') };

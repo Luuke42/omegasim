@@ -239,6 +239,18 @@
   // Physics mode is on by default now; the loop writes its shaped output into these
   // vars and the heartbeat transmits them, instead of the loop writing to BLE itself.
   let physicsEnabled = true;
+  // Der Drift-Modus faehrt wie "Aus" (physicsEnabled false), unterscheidet sich davon aber
+  // im Sendeweg: dort kommt das Gegensteuern dazu. Zwei getrennte Groessen und kein
+  // dreiwertiger Zustand, damit die neun bestehenden Verzweigungen auf physicsEnabled
+  // unveraendert bleiben.
+  let driftModus = false;
+  let gegenlenkStaerke = 0.5;
+  // DER QUERLAGE-PRUEFSTAND. Er wird in 90-ghosts.js gelesen und von einem Regler in
+  // 80-sound.js geschrieben - und 80 kommt VOR 90. Eine Deklaration bei der Leseseite waere
+  // deshalb zu spaet: der Regler schreibt beim Aufbau, und ein Zugriff vor der Deklaration
+  // nimmt in einer zusammengefuegten IIFE die ganze Datei mit. Hier, in der fruehesten
+  // Datei, die ihn braucht, kann das nicht passieren.
+  let ghostQuerTest = 0;
   let physOutSteer = 0, physOutThrottle = 0;
 
   const CONTROL_SEND_INTERVAL_MS = 45; // matches the real app's observed command cadence
@@ -248,6 +260,38 @@
   // bekannt ist, wann es war - und der Versatz wurde bis v0.5.8 vom KLICK aus gemessen,
   // was mit dieser Phase nichts zu tun hat.
   let herzschlagAt = 0;
+
+  // ---- Gegensteuern im Drift-Modus ---------------------------------------------------
+  //
+  // GEREGELT WIRD GEGEN DAS GEMESSENE Drehsignal (gyroRaw.x aus Byte 3 der Meldungen) und
+  // NICHT gegen das Einspurmodell. Der Unterschied ist der ganze Punkt: das Modell rechnet
+  // Kurvenschraeglauf, beobachtet ist aber ein Ausbrechen aus dem Stand bei Vollgas - zwei
+  // verschiedene Bewegungen, und die eine gegen die andere zu regeln waere die Korrektur
+  // von etwas, das gerade nicht stattfindet.
+  //
+  // DER NORMIERTE WERT, nicht der rohe: gyroRaw.span wird selbst nachgefuehrt, weil die
+  // wirkliche Amplitude des Bytes unbekannt ist. Folge, die man aussprechen muss - die
+  // Staerke des Gegensteuerns haengt davon ab, welchen groessten Gierwert die Sitzung
+  // bisher gesehen hat.
+  //
+  // NULL, WENN ES NICHTS ZU REGELN GIBT: ohne Signal, im Stand oder ohne Verbindung wird
+  // nichts zugeschlagen. Ein geschaetzter Zuschlag waere schlimmer als keiner.
+  const DRIFT_STAND_KMH = 6;         // darunter gibt es keine Drift, nur Wackeln
+  function driftGegenlenken(steer) {
+    let g = 0, v = 0;
+    try {
+      if (typeof gyroRaw === 'object' && gyroRaw && gyroRaw.span > 0) {
+        g = Math.max(-1, Math.min(1, gyroRaw.x / gyroRaw.span));
+      }
+      v = Math.abs(physEngine.state.speedKmh) * REAL_SCALE;
+    } catch (e) { return steer; }
+    if (!g || v < DRIFT_STAND_KMH) return steer;
+    // Der Zuschlag ist ADDITIV und gedeckelt. Ein Wert ueber 1 waere nicht wirkungslos,
+    // sondern schaedlich: Byte 7 ist vorzeichenbehaftet und braeche in die ANDERE Richtung
+    // um - siehe CARRERA_HYBRID.md, "Die Lenkgrenze".
+    const zu = -g * gegenlenkStaerke;
+    return Math.max(-1, Math.min(1, steer + zu));
+  }
 
   function controlHeartbeat() {
     herzschlagAt = performance.now();
@@ -266,6 +310,7 @@
     pitLaneTick();
     let steer = physicsEnabled ? physOutSteer : steerX;
     let throttle = physicsEnabled ? physOutThrottle : throttleY;
+    if (driftModus) steer = driftGegenlenken(steer);
     sendControlValue(steer, throttle);
   }
   setInterval(controlHeartbeat, CONTROL_SEND_INTERVAL_MS);

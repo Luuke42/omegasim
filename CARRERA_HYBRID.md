@@ -519,17 +519,38 @@ PlayStation-Namen zuerst:
 | Options / Start | Boxenstopp |
 | Select / Share | Rennen starten oder abbrechen |
 | L3 (linken Stick druecken) | nichts |
+| Steuerkreuz hoch / runter | Lenkansprechen groesser / kleiner |
+| Steuerkreuz links / rechts | Cockpit-Schirm vor / zurueck |
 
-Zwei Punkte dazu, beide aus Fehlern gelernt:
+**Das Steuerkreuz stand bis v0.5.17 gar nicht in dieser Tabelle**, obwohl es belegt war — es
+ist fest verdrahtet und nicht zuweisbar, und deshalb ist es durch die Belegungsliste
+gerutscht. Bis dahin lag hoch/runter auf der Bremsbalance und links/rechts auf dem
+Lenkansprechen; seit v0.5.18 blaettert links/rechts die Cockpit-Schirme, und die Bremsbalance
+hat den Regler in den Optionen und die Zieh-Skala im Cockpit.
+
+Drei Punkte dazu, alle drei aus Fehlern gelernt:
 
 - **Die Beschriftungen nennen den PlayStation-Namen zuerst.** "X / Quadrat" war mehrdeutig:
   auf einer Xbox ist Knopf 2 das X, auf einer PlayStation das Quadrat - und "X" bedeutet auf
   einer PlayStation den Knopf 0. Eine Beschriftung, die zwei Tasten bedeuten kann, ist der
   Fehler und nicht der Leser.
-- **Jede Taste traegt genau eine Bedeutung.** Der linke Stick loest ausdruecklich nichts aus,
-  weil man ihn beim Lenken drueckt. Beim Laden wird auf Kollisionen geprueft: liegen zwei
-  Aktionen auf demselben Eingang, geht die zweite auf ihre Vorgabe zurueck, und es wird
-  gemeldet statt still behoben.
+- **Jede Taste traegt genau eine Bedeutung** — mit einer Einschraenkung, die seit v0.5.18
+  gilt und ausgesprochen gehoert. Der linke Stick loest ausdruecklich nichts aus, weil man ihn
+  beim Lenken drueckt. Beim Laden wird auf Kollisionen geprueft: liegen zwei Aktionen auf
+  demselben Eingang, geht die zweite auf ihre Vorgabe zurueck, und es wird gemeldet statt
+  still behoben.
+
+  **Die Einschraenkung sind KONTEXTVERBRAUCHER, und es gibt genau drei.** Streckeneditor,
+  Boxenschirm und ein Rennstart nehmen einzelne Tasten vorruebergehend an sich; danach gilt
+  wieder die Tabelle. Das ist etwas anderes als eine Doppelbelegung: die Bedeutung wechselt
+  nicht heimlich mit einem Zustand, den man nicht sieht, sondern mit einem Schirm, den man
+  gerade ansieht.
+
+  Auf dem Boxenschirm waehlt die Flaggentaste dort aus statt die gelbe Flagge zu laden — und
+  zwar GANZ, ohne Unterscheidung nach Haltedauer. Genau die war bis v0.5.1 gebaut (Quadrat
+  trug Runterschalten *und* die Flagge) und ist als Fehler zurueckgenommen worden: zwei
+  Bedeutungen, die sich nur in Millisekunden unterscheiden, sind fuer die Hand nicht zwei
+  Bedeutungen. Wer auf dem Boxenschirm Gelb geben will, blaettert zurueck.
 
 ### Als App installieren
 
@@ -591,3 +612,214 @@ Manche Details lassen sich nur aus dem beobachteten Verhalten ableiten, nicht mi
 - die genaue Bedeutung aller Bytes im Bluetooth-Protokoll
 
 Diese Lücken ändern nichts am Grundprinzip: Ein Sensor liest die Strecke, ein Funkchip verbindet Auto und Handy, und die eigentliche Fahrphysik läuft im Auto selbst.
+
+### Wieviel Querversatz vertraegt die Bahn? Gemessen — und die Antwort ist: keine Grenze
+
+Gefragt war, wie hoch der Lenkwert werden darf, bevor der Streckensensor abreisst — also
+welche Breite fuer Ideallinie und Ueberholmanoever zu haben ist. `tools/querlage_messen.py`
+legt Schreibbefehle und Meldungen aller Mitschnitte in eine Zeitleiste und haelt Byte 7 (den
+angeforderten Lenkwinkel) gegen Byte 12 (den gelesenen Streckencode).
+
+Ueber **67 830 Meldungen mit gelesenem Code**:
+
+| | Median | P90 | P99 | max |
+|---|---|---|---|---|
+| anhaltender Lenkbetrag MIT Code | 0 | **127** | 127 | 127 |
+| anhaltender Lenkbetrag OHNE Code | 127 | 127 | 127 | 127 (n = 147) |
+| anhaltende Spitze vor einem Abriss | 45 | 77 | 77 | 77 (n = **4**) |
+
+**Das Auto liest die Schiene bei vollem Anschlag.** In 68 000 Meldungen gibt es vier
+Abrisse, und ihre Vorgeschichte liegt bei 45 bis 77 — also *unter* dem Wert, der die
+uebrigen 99,8 Prozent der Zeit ohne jeden Abriss gefahren wurde. Lenkbetrag und Abriss sind
+unkorreliert; die vier Abrisse haben eine andere Ursache.
+
+Zwei Folgerungen, und beide aendern etwas:
+
+- **Es gibt keine Querlage-Grenze, die man einhalten muesste.** Der Rueckfallwert 1,0 in
+  `learnSteerCap()` ist damit nicht vorsichtig, sondern richtig, und ein Ghost, der stumpf
+  seine Spur faehrt, tut das nicht wegen eines Deckels.
+- **Gemessen wird bang-bang.** Der Median ist 0 und das 90er-Perzentil 127: die Original-App
+  sendet fast nur die zwei Endwerte. Das ist auch der Grund, warum hier zeitgewichtet
+  gemittelt wird und nicht ueber die Pakete — ein Paketmittel haette an der Senderate
+  gehangen statt daran, wie schraeg das Auto wirklich stand.
+
+### Wie stark die Ghosts wirklich lenken — gemessen, drei Einstellungen
+
+`OMEGA_TEST.ghostDriveProbe({ lage: 'karte', takte: 600 })` fährt einen Ghost auf einer
+gebauten Strecke und gibt die gesendeten Lenkbytes zurück. Der Betrag über 600 Takte:
+
+| Einstellung (Linie / Spuren / Versatz) | Mittel \|Byte\| | Spitze | über 60 |
+|---|---|---|---|
+| Vorgabe 70 / 50 / 50 % | 35,9 | 83 | 33 % |
+| 100 / 100 / 100 % | 50,3 | 116 | 46 % |
+| 200 / 200 / 200 % | **80,9** | **127** | 64 % |
+
+Zum Vergleich die **Original-App**, aufgezeichnet am 21.08. über 16 Runden mit zwei Ghosts:
+Mittel 32,2 bzw. 47,3 von 127, Spitze bei beiden 127.
+
+Damit liegt die Vorgabe auf dem ruhigeren der beiden Original-Ghosts, 100 Prozent auf dem
+lebhafteren, und 200 Prozent darüber. Das ist keine Übertreibung ohne Beleg: die
+Abrissmessung im Abschnitt darüber zeigt, dass die Schiene auch bei vollem Anschlag gelesen
+wird.
+
+**Was „über 100 Prozent" außerdem ändert.** Zwei Abschwächungen wachsen mit: auf der Geraden
+wirkte die Ideallinie nur zu 35 Prozent (`GHOST_LINE_STRAIGHT`) und in der Kurve blieb die
+halbe eigene Spur stehen (`GHOST_LANE_DROP`). Beides hat einen Grund — alle auf denselben
+Scheitel zu schicken führt sie zusammen, und Berührungen sind ohne Rückmeldung zur Querlage
+nicht zurückzuregeln. Ab 100 Prozent ist das aber eine ausdrückliche Bitte, und der Anteil
+wächst linear bis auf voll bei 200 Prozent. **Unter 100 Prozent ändert sich nichts:** die
+Ausdrücke sind dort Zeichen für Zeichen die alten.
+
+### Drift-Modus — und eine Voraussetzung, die nicht stimmte
+
+Das Fahrgefühl hat seit v0.5.18 drei Stellungen statt zweier: **Physik** (Drehmoment, Gänge,
+Reibkreis — die Vorgabe), **Aus** (rohe Stickstellung, wie ein Fernsteuerungsauto) und
+**Drift** (experimentell).
+
+**Die Begründung im Code war falsch, und der Nutzer hat sie berichtigt.**
+`40-physics.js` verbot dem Einspurmodell, die Lenkung zu stellen, mit dem Satz „das
+Modellauto rutscht nicht". Beobachtet am Fahrzeug: **auf rutschigem Boden bricht es aus,
+wenn man aus dem Stand direkt Vollgas gibt.**
+
+Was trotzdem gilt, ist eine feinere Aussage, und sie trägt den ganzen Aufbau: das
+Einspurmodell rechnet den **Kurvenschräglauf**, also das Wegdriften aus Seitenkraft bei
+Kurvenfahrt. Beobachtet ist **durchdrehende Räder aus dem Stand**. Zwei verschiedene
+Bewegungen — die eine gegen die andere zu regeln wäre die Korrektur von etwas, das gerade
+nicht stattfindet.
+
+Geregelt wird deshalb gegen das **gemessene** Drehsignal: `gyroRaw.x`, geglättet aus Byte 3
+der Meldungen. Der Zuschlag ist additiv, gedeckelt auf ±1 (Byte 7 ist vorzeichenbehaftet und
+bricht darüber in die andere Richtung um) und **null**, wenn es nichts zu regeln gibt — ohne
+Signal, unter 6 km/h oder ohne Verbindung.
+
+| Drehsignal (normiert) | Tempo | Lenkwert hinein | heraus, bei 50 % |
+|---|---|---|---|
+| 0 | 60 | 0,20 | 0,20 *(kein Zuschlag)* |
+| 1,0 | 2 | 0,20 | 0,20 *(Stand)* |
+| 0,5 | 60 | 0,20 | −0,05 |
+| 1,0 | 60 | 0,20 | −0,30 |
+| −1,0 | 60 | 0,20 | +0,70 |
+| −1,0 | 60 | 0,90 | +1,00 *(Deckel)* |
+
+**Zwei Einschränkungen, beide aus dem Code selbst und beide in der Oberfläche:**
+
+1. **Unbestätigt.** `70-race.js` sagt es wörtlich: Byte 3 schwankt erst, wenn das Auto fährt,
+   und wechselte *in einer Aufnahme* das Vorzeichen mit der Kurvenrichtung — „hence
+   motion-ish. **Unconfirmed.**" Eine Aufnahme ist keine Messreihe.
+2. **Unkalibriert, und der Maßstab läuft mit.** `gyroRaw.span` wird selbstnachgeführt, weil
+   die wirkliche Amplitude unbekannt ist. Folge: die Stärke des Gegensteuerns hängt davon ab,
+   welchen größten Gierwert die Sitzung bisher gesehen hat.
+
+**Deshalb steht eine Messung vor dem Regler.** Der Knopf *Drift-Probe* unter „Querablage
+messen" zeichnet vier Sekunden auf, was das Signal bei **gerader** Vollgasfahrt tut — also
+genau im beobachteten Fall. Schlägt es dabei nicht aus, taugt es nicht zum Gegensteuern; die
+Probe urteilt aber nicht, sie schreibt hin, was sie gemessen hat.
+
+### Fährt der Ghost die Ideallinie? Die Kette Stufe für Stufe gemessen
+
+„Es sieht nicht aus, als führen sie die Ideallinie" ist mit einem Mittelwert nicht zu
+beantworten: ein großer mittlerer Lenkbetrag kann auch eine konstante Schräglage sein. Was
+eine Ideallinie ausmacht, ist die **Form** — außen, Scheitel, außen — und ob sie den Weg bis
+zum gesendeten Byte überlebt. `OMEGA_TEST.ghostLinieTrace()` zeichnet je Takt vier Größen
+auf und macht sichtbar, wo sie verlorengeht:
+
+| | |
+|---|---|
+| `linie` | der rohe Linienversatz aus der Karte |
+| `wunsch` | die Summe aller Querversätze, die der Ghost will |
+| `servo` | `out.servoAngle` nach Expo, Tempobeschneidung, Ratenbegrenzung und Reibkreis |
+| `byte` | `round(servo × 127)` — was gesendet wird |
+
+**Die Kette verliert die Form nicht.** Über 500 Takte auf `SG2H2G2R2G2H2G2R2`:
+
+| Einstellung Linie | Kurvenspanne des Bytes | Kurvenmittel | Anteil Servo vom Wunsch |
+|---|---|---|---|
+| 70 % *(Vorgabe)* | 39 von 127 | 62 | **0,93** |
+| 100 % | **55** | 89 | 0,93 |
+| 200 % | **36** | 106 | **0,61** |
+
+**Und hier steht das Gegenteil dessen, was „stärker" verspricht.** Über 100 Prozent wird der
+Ghost schräger (Mittel 62 → 106), aber die Linie wird *flacher* (Spanne 55 → 36): 39 Prozent
+der Anforderung werden am Anschlag abgeschnitten, und abgeschnitten wird dort, wo sie am
+größten ist — **im Scheitel**. In den Haarnadeln bleibt bei 200 Prozent eine Spanne von 0 bis
+3 bei einem Mittel von 127 übrig, also konstanter Vollausschlag.
+
+**Für die Form ist 100 Prozent das Optimum, nicht 200.** Die 200 sind für Querlage da, nicht
+für Linie.
+
+Zwei weitere Befunde aus derselben Messung:
+
+- **Die Kachelphase kommt aus einer Messung plus einer Schätzung.** `car.tileAt` wird gesetzt,
+  wenn Byte 11 (der Kachelzähler) wechselt — ein echtes Ereignis. Die Dauer ist ein gleitender
+  Mittelwert über alle Kacheln, korrigiert um das geometrische Längenverhältnis. Der Ghost
+  bremst in Kurven aber ab, also dauern sie länger, als ihre Länge vorhersagt, und
+  `ghostTilePhase()` deckelt auf 1: der Rest der Kachel wird mit **konstanter** Schräglage
+  gefahren. Gemessen, Anteil der Takte am Deckel in Kurven:
+
+  | Kurve dauert länger als erwartet | 1,0× | 1,2× | 1,4× | 1,8× |
+  |---|---|---|---|---|
+  | Anteil bei Phase 1 | 5 % | 12 % | 20 % | **29 %** |
+
+  Die Amplitude bleibt dabei (Spanne 38–39 in allen vier Fällen); verloren geht der
+  **Kurvenausgang**.
+
+- **„Eigene Spuren" tut bei EINEM Ghost gar nichts**, und das ist so gebaut:
+  `ghostLane()` gibt bei weniger als zwei Ghosts null zurück — „verschiedene Linien" hat bei
+  einem Auto keine Bedeutung. Ab zwei Ghosts sind es ±1 × `GHOST_LANE_STEER` (0,16), bei
+  100 Prozent also ±20 von 127.
+
+### Der Querlage-Prüfstand, und warum es ihn braucht
+
+Die ganze Querlage-Rechnung setzt etwas voraus, das nie gemessen wurde: **Byte 7 trägt einen
+Lenk*winkel*, keine Position.** Ein konstanter Winkel lässt ein freies Auto im Kreis fahren;
+dass daraus eine *gehaltene* Lage neben der Mitte wird, leistet allein die Schienenführung
+des Autos.
+
+*Ghost: Querlage festhalten* (unter Ghosts, mit `Prüfstand` gekennzeichnet) hält deshalb
+einen **festen** Versatz statt Ideallinie, Spur und Ausweichen. Links ist links, rechts ist
+rechts, Mitte ist aus.
+
+**Er geht am Servoweg vorbei**, und das ist der Unterschied zwischen einer Anzeige und einer
+Messung. Ginge er durch, kämen Expo, Tempobeschneidung, Ratenbegrenzung und Reibkreis
+dazwischen — gemessen wurden bei „rechts 76" so **70 ± 9**, weil die Beschneidung mit dem
+Tempo schwankt. Ein Prüfstand, dessen Etikett um zehn Prozent danebenliegt, misst nichts.
+Direkt auf Byte 7 stimmt es auf den Punkt: 38 → 38, 76 → 76, 127 → 127, −127 → −127, Spanne
+null.
+
+Damit sind drei Fragen am Tisch entscheidbar, die es vorher nicht waren: bleibt das Auto
+neben der Mitte oder zieht es zurück; ab welchem Wert reißt der Streckensensor ab; und ist
+links wie rechts.
+
+### Die Kacheldauer wird je Typ gemessen
+
+Das Auto meldet nur, **dass** es auf einer neuen Kachel ist (Byte 11), nicht wo darauf. Die
+Phase für die Ideallinie — 0 am Eingang, 1 am Ausgang — kommt deshalb aus
+`(jetzt − Kachelbeginn) ÷ erwartete Dauer`.
+
+Der Beginn ist exakt. Die **erwartete Dauer** war bis v0.5.18 ein gleitender Mittelwert über
+*alle* Kacheln, multipliziert mit dem **geometrischen** Längenverhältnis — und `tileLength()`
+rechnet Bogenlänge aus Radius und Drehwinkel, ohne Tempo. Der Ghost bremst in Kurven aber ab:
+
+| | Tempoabzug | reale Dauer gegen Vorhersage |
+|---|---|---|
+| 60°-Kurve | `curveSlow × 1` = 15 % | 1,18× |
+| Haarnadel | `curveSlow × 2` = 30 % | 1,43× |
+
+`ghostTilePhase()` deckelt auf 1 — die Phase kam also zu früh am Ende an und blieb dort. Der
+Linienversatz fror auf dem Ausgangswert ein, und den Rest der Kurve fuhr der Ghost mit
+**konstanter** Schräglage. Das trifft den **Kurvenausgang**, also genau die Hälfte, an der man
+„außen heraus" sähe.
+
+Jetzt führt jeder Kacheltyp seinen eigenen gleitenden Mittelwert. Eine gemessene Dauer je Typ
+enthält Länge **und** Tempo — kein zweites Tempomodell, dieselbe Messung, nur getrennt
+geführt. Der alte Weg bleibt Rückfall, solange ein Typ noch keine zwei Messungen hat.
+
+Gemessen, Anteil der Takte am Phasendeckel in Kurven:
+
+| Kurve dauert länger | 1,2× | 1,4× | 1,8× |
+|---|---|---|---|
+| vorher | 12 % | 20 % | 29 % |
+| **nachher** | **3 %** | **5 %** | **10 %** |
+
+Und die Kurvenspanne des gesendeten Bytes steigt dabei von 55 auf **58–61 von 127** — der
+Ausgang ist zurück.

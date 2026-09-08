@@ -62,11 +62,15 @@ def main():
               file=sys.stderr)
         return 1
     new = pat.sub(lambda m: m.group(1) + v + m.group(2), s, count=1)
+    # OHNE frueher Ausstieg, und das ist eine Berichtigung. Hier stand `return 0`, sobald die
+    # Nummer schon stimmte - dann wurde auch nicht gebaut. Genau in dem Fall kann aber sw.js
+    # hinterherhaengen (siehe unten), und ein Werkzeug, das die Lage nicht herstellt, weil sie
+    # halb schon da ist, ist ein Werkzeug, dem man nicht ansehen kann, ob es gelaufen ist.
     if new == s:
         print('Version unveraendert: %s' % v)
-        return 0
-    io.open(TARGET, 'w', encoding='utf-8', newline='').write(new)
-    print('Version %s  (Projektbeginn %s, Block ab %s)' % (v, start, block))
+    else:
+        io.open(TARGET, 'w', encoding='utf-8', newline='').write(new)
+        print('Version %s  (Projektbeginn %s, Block ab %s)' % (v, start, block))
     # Gleich mitbauen. Wer nur stempelt und das Bauen vergisst, hinterlaesst eine Quelle und
     # ein Ergebnis, die auseinanderliegen - und merkt es erst beim naechsten --check.
     #
@@ -76,9 +80,33 @@ def main():
     if HERE not in sys.path:
         sys.path.insert(0, HERE)
     import build
+    gebaut = build.build()
     io.open(os.path.join(REPO, 'index.html'), 'w', encoding='utf-8',
-            newline='').write(build.build())
+            newline='').write(gebaut)
     print('index.html neu gebaut')
+    # UND sw.js, denn dessen Cachename traegt dieselbe Version. Diese Zeile fehlte, und der
+    # Schaden stand die ganze Zeit im Kommentar von build_sw(): "der Cachename MUSS sich mit
+    # jedem Build aendern, sonst liefert der Service Worker nach einem Push die alte Fassung
+    # aus". Genau das ist passiert - in jedem Commit von 0.5.34 bis 0.5.38 stand in sw.js
+    # die VORHERIGE Version:
+    #
+    #     index=0.5.34  sw=0.5.33
+    #     index=0.5.35  sw=0.5.34
+    #     ...
+    #     index=0.5.38  sw=0.5.37
+    #
+    # Bemerkt hat es niemand, weil die Selbstpruefung "Cacheversion in sw.js passt" VOR dem
+    # Stempeln lief - da passte sie, und danach sah niemand mehr hin. Ein Aufruf mehr hier
+    # ist die Behebung; die Reihenfolge (erst stempeln, dann beides bauen) ist der Grund,
+    # warum sie hier steht und nicht in build.build().
+    # NICHT `version` als Name: das ist hier oben die Funktion, die die Nummer bildet, und
+    # eine lokale Zuweisung macht sie in der GANZEN Funktion lokal - der Aufruf in Zeile 57
+    # fiel damit auf eine noch nicht belegte Variable.
+    swver, meldung = build.build_sw(gebaut)
+    print('  ' + meldung)
+    if swver is None:
+        print('FEHLER: sw.js nicht geschrieben', file=sys.stderr)
+        return 1
     return 0
 
 

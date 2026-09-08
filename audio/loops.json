@@ -621,5 +621,121 @@
     "load": 1.0
    }
   }
+ },
+ "countach": {
+  "label": "Lamborghini Countach LP500 (5.0 V12, 60 Grad, sechs Weber)",
+  "cylinders": 12,
+  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.4,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "countach_idle.ogg",
+    "baseRpm": 900,
+    "firingHz": 90.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "low": {
+    "file": "countach_low.ogg",
+    "baseRpm": 1353,
+    "firingHz": 135.3,
+    "seconds": 2.0399,
+    "load": 1.0
+   },
+   "low2": {
+    "file": "countach_low2.ogg",
+    "baseRpm": 2035,
+    "firingHz": 203.5,
+    "seconds": 2.0049,
+    "load": 1.0
+   },
+   "low3": {
+    "file": "countach_low3.ogg",
+    "baseRpm": 3060,
+    "firingHz": 306.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "countach_mid.ogg",
+    "baseRpm": 4600,
+    "firingHz": 460.0,
+    "seconds": 2.0087,
+    "load": 1.0
+   },
+   "high": {
+    "file": "countach_high.ogg",
+    "baseRpm": 7500,
+    "firingHz": 750.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "over": {
+    "file": "countach_over.ogg",
+    "baseRpm": 4600,
+    "firingHz": 460.0,
+    "seconds": 2.0087,
+    "load": 0.0
+   }
+  }
+ },
+ "impreza99": {
+  "label": "Subaru Impreza WRX STI 1999 (EJ20 2.0 Boxer-4, Turbo)",
+  "cylinders": 4,
+  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.55,
+  "turbo": true,
+  "loops": {
+   "idle": {
+    "file": "impreza99_idle.ogg",
+    "baseRpm": 850,
+    "firingHz": 28.3,
+    "seconds": 1.9765,
+    "load": 1.0
+   },
+   "low": {
+    "file": "impreza99_low.ogg",
+    "baseRpm": 1267,
+    "firingHz": 42.2,
+    "seconds": 1.989,
+    "load": 1.0
+   },
+   "low2": {
+    "file": "impreza99_low2.ogg",
+    "baseRpm": 1889,
+    "firingHz": 63.0,
+    "seconds": 1.9693,
+    "load": 1.0
+   },
+   "low3": {
+    "file": "impreza99_low3.ogg",
+    "baseRpm": 2817,
+    "firingHz": 93.9,
+    "seconds": 2.0021,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "impreza99_mid.ogg",
+    "baseRpm": 4200,
+    "firingHz": 140.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "high": {
+    "file": "impreza99_high.ogg",
+    "baseRpm": 7500,
+    "firingHz": 250.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "over": {
+    "file": "impreza99_over.ogg",
+    "baseRpm": 4200,
+    "firingHz": 140.0,
+    "seconds": 2.0,
+    "load": 0.0
+   }
+  }
  }
 }

@@ -9,14 +9,19 @@ Vierzehn Motoren, und jeder gehoert zu einem wirklichen Auto: die acht Rennmotor
 technischen Angaben (Corvette C6.R, Corvette Z06 GT3.R, Mercedes-AMG GT3, Ferrari 296 GT3,
 BMW M4 GT3, Huracan GT3 / R8 LMS, Aston Martin Vantage GT3, Porsche 911 GT3 R), der Ford
 Mustang GT3 (V8 Cross-Plane), ein Formel 1 nach dem Reglement 2026 (1,6-l-V6 Turbo-Hybrid)
-und vier historische Rennwagen (Ford GT40 Mk I, Lola T70 Mk3B, Ferrari 330 P4 / 412P,
-Maserati MC12) — sowie alle
+vier historische Rennwagen (Ford GT40 Mk I, Lola T70 Mk3B, Ferrari 330 P4 / 412P,
+Maserati MC12) und zwei Strassen- und Rallyeklassiker (Lamborghini Countach LP500,
+Subaru Impreza WRX STI 1999) — sowie alle
 Effekte (Bremsenquietschen, Reifenquietschen, Crash-Varianten, Schlagschrauber,
 Tankgeraeusch, Karosseriereparatur, Motorstart) sind von Grund auf gerechnet. Es wird nichts aus einer
 Aufnahme abgespielt.
 
-Jeder dieser Motoren hat vier Schleifen: drei Drehzahlbaender (`idle`, `mid`, `high`), die
-nach Drehzahl ueberblendet werden, und eine Schubschleife (`over`) am mittleren Band, die
+Jeder dieser Motoren hat **fuenf bis sieben** Schleifen: die drei verankerten Drehzahlbaender
+(`idle`, `mid`, `high`), dazu so viele Zwischenbaender, wie `band_ladder()` noetig findet —
+zwischen zwei Nachbarn darf hoechstens der Faktor 2,2 liegen, sonst hoert man den Sprung.
+Beim Formel 1 sind das zwei Zwischenbaender, bei Countach und Impreza je drei, sonst eines.
+Sie werden nach Drehzahl ueberblendet. Dazu kommt eine Schubschleife (`over`) am mittleren
+Band, die
 parallel dazu nach **Last** eingeblendet wird. Voll auf Zug ab 36 % Gas, voller Schub unter
 6 %, dazwischen linear; die Summe aller Stimmen ist immer genau 1, damit im Uebergang kein
 Loch und keine Beule entsteht.
@@ -59,8 +64,48 @@ unter 2 %), ohne Gleichanteil und ohne Kodierungsdrift. Bei den V12 liegt im Lee
 bzw. 64 Prozent der Energie auf der Zuendrate, bei den V8 auf der Rohrresonanz — die
 Rollenverteilung, die lange Rohre gegen einen hochdrehenden V12 erwarten lassen.
 
-Damit sind es 86 statt 70 `.ogg`-Dateien, und mit der gerechneten Baenderleiter aus
-v0.4.55 (ein Zwischenband je Motor, beim Formel 1 zwei) sind es 101.
+Damit waren es 86 statt 70 `.ogg`-Dateien. Die Zahl, die frueher hier stand ("sind es
+101"), war schon damals falsch und ist seither nicht mitgewachsen; nachgezaehlt aus
+`audio/loops.json` sind es heute **85 Motorschleifen bei 16 Motoren**. Die Zahl steht ab
+jetzt nur noch an EINER Stelle, im Abschnitt zu v0.5.18 — zwei Orte fuer eine Zahl waren
+genau der Grund, warum sie auseinanderliefen.
+
+### Was in v0.5.18 dazugekommen ist — zwei Strassen- und Rallyeklassiker, als WIP
+
+| Schluessel | Motor | Was Angabe ist | Zuendfolge, Bankaufteilung |
+|---|---|---|---|
+| `countach` | Lamborghini Countach LP500 | 5,0-l-V12, 60 Grad, sechs Weber-Doppelvergaser, ~7500/min | 1-7-4-10-2-8-6-12-3-9-5-11, Haelften |
+| `impreza99` | Subaru Impreza WRX STI 1999 | EJ20 2,0-l-Boxer-4, Turbo, ~7500/min | 1-3-2-4, ungerade/gerade |
+
+**Beide sind als WIP gekennzeichnet: nach Gehoer geprueft ist keiner.**
+
+**Was am Subaru gerechnet ist und was gewaehlt.** Der Boxer-Rumpel kommt beim Vorbild aus
+UNGLEICH LANGEN Kruemmerrohren — das Rohr von Zylinder 1 laeuft um den Motor herum zum
+Sammler, das von Zylinder 2 nicht, und deshalb kommen zwei gleich weit auseinanderliegende
+Zuendungen ungleich am Sammler an. `cylinder_scatter()` traegt genau diese Art von Versatz:
+fest je Zylinder statt zufaellig je Ereignis, also lernbar fuers Ohr. Gewaehlt ist die
+Streuung — `scatter_t` 0,030, das sind drei Prozent eines 720-Grad-Zyklus oder gut 21 Grad
+Kurbelwinkel bei einem Ereignisraster von 180 Grad. **Das Modell wuerfelt dieses Muster (fest
+verankert am Seed), es rechnet es nicht aus Rohrlaengen.** Die Art der Unregelmaessigkeit
+stimmt, ihr genaues Muster nicht.
+
+Die Bankaufteilung dagegen ist Angabe und keine Wahl: 1 und 3 auf der einen Seite, 2 und 4
+auf der anderen ergibt je Bank zwei Zuendungen im Abstand von 180 Grad und dann 540 Grad
+Pause. Eine Bank redet, dann die andere — nachgerechnet als `[[0, 180], [360, 540]]`.
+
+**Und beim Countach gilt derselbe Vorbehalt wie beim Maserati:** `banks_from_order()` legt
+Zuendereignis *i* immer auf *i* · 720/n, unabhaengig vom Bankwinkel. Die 60 Grad des Countach
+und die 60 Grad des 330 P4 sind fuer dieses Modell dieselbe Zahl; die beiden V12
+unterscheiden sich in Drehzahl (7500 gegen 8200), Rohrlaenge (26 gegen 20 Zoll, also 130
+gegen 169 Hz Resonanz) und Saettigung — nicht im Bankwinkel.
+
+Gewaehlt und als solches benannt: `primary_in` (26 Zoll fuer einen Strassenauspuff mit
+Daempfer gegen 20 Zoll fuer einen Rennkruemmer), `noise` 0,14 fuer sechs Weber ohne
+gemeinsamen Sammler, `pulse_ms` 4,6 und `bright` 0,38 beim Turbo — ein Lader daempft die
+Druckspitze, und genau darum klingt ein aufgeladener Motor dumpfer als ein Sauger gleicher
+Groesse.
+
+Damit sind es **16 Motoren mit 85 Schleifendateien**.
 
 ### Was in v0.4.52 herausgefallen ist
 
@@ -245,7 +290,8 @@ Halbtoene Streuung fuer Schlaege, die alle auf derselben Frequenz erzeugt wurden
 
 ## Nachpruefbarkeit der synthetischen Motoren
 
-`tools/engine_synth.py` gibt fuer jede der 28 Schleifen vier Messwerte aus, und jeder
+`tools/engine_synth.py` gibt fuer jede erzeugte Schleife vier Messwerte aus — ohne Zahl im
+Text, weil eben diese Zahl schon dreimal veraltet ist. Jeder
 einzelne pruefte eine Behauptung, die ohne ihn nur eine Absicht gewesen waere:
 
 - **Zyklus-Verriegelung** — die Schleife ist per Konstruktion ueber ganze 720-Grad-Zyklen

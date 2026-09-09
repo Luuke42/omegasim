@@ -1934,6 +1934,44 @@
                lueckeMax: luecke.length ? Math.max.apply(null, luecke) : null };
     },
 
+    // ---- DAS DREHZAHLBAND JE MOTOR ------------------------------------------------
+    //
+    // Zwei Fragen in einer Sonde, und beide sind der Zweck der Aenderung:
+    //
+    //   1. Bekommt jeder Motor sein eigenes Band, und stimmt es mit loops.json?
+    //   2. Wie weit wird sein oberstes Band bei Vollgas noch gestreckt? Das ist die Zahl,
+    //      die "der Ton klingt zu hoch" misst - vorher 1,25 beim M4 GT3, 1,38 beim GT40.
+    //
+    // OHNE TON: gerechnet wird nur mit den Zahlen aus dem Manifest, es wird nichts
+    // abgespielt. Eine Sonde, die dafuer einen AudioContext braucht, laeuft im verborgenen
+    // Browser-Bereich nicht.
+    motorBandProbe() {
+      if (!sampleEngine || !sampleEngine.band) return null;
+      const aus = {};
+      for (const car of SAMPLE_CARS) {
+        const b = sampleEngine.band[car];
+        const bnd = sampleEngine.buffers[car] || {};
+        const oben = Object.keys(bnd).filter((k) => k !== 'over')
+          .map((k) => bnd[k].baseRpm).sort((x, y) => y - x)[0];
+        aus[car] = { idle: b ? b.idle : null, limiter: b ? b.limiter : null,
+                     obenBand: oben === undefined ? null : oben,
+                     // Die Abspielrate am Begrenzer. 1,0 heisst: gar keine Streckung.
+                     rate: (b && oben) ? +(b.limiter / oben).toFixed(3) : null };
+      }
+      return aus;
+    },
+
+    // Und die Abbildung selbst: welche Drehzahl zeigt die App bei welchem rpmFrac?
+    motorDrehzahlProbe(car, fracs) {
+      if (typeof motorDrehzahl !== 'function') return null;
+      const merk = sampleEngine.car;
+      try {
+        sampleEngine.car = car;
+        return (fracs || [0, 0.5, 1]).map((f) =>
+          +motorDrehzahl({ rpm: 1500 + f * 7500, rpmFrac: f }).toFixed(1));
+      } finally { sampleEngine.car = merk; }
+    },
+
     simGas() {
       if (!simAn()) return null;
       return simState.autos.map((a) => {
@@ -2157,9 +2195,21 @@
     // `basen` als ARGUMENT und nicht aus den geladenen Puffern: die kommen erst nach einer
     // Nutzergeste, und ein Test, der ohne Klick immer ueberspringt, prueft nie. Der Aufrufer
     // holt sie aus loops.json und kann damit ALLE Motoren durchgehen statt nur den gewaehlten.
-    sndBandCheck(basenRein) {
+    // DER DREHZAHLBEREICH KOMMT MIT, seit jeder Motor seinen eigenen hat (v0.5.49,
+    // motorDrehzahl() in 80-sound.js). Vorher fegte diese Sonde fest IDLE_RPM bis
+    // REDLINE_RPM ab, also 1500 bis 9000 - den Bereich der PHYSIK.
+    //
+    // Gemessen hat sie damit einen Fall geprueft, den es nicht mehr gibt: der Blazer wird
+    // nur bis 5000 gefragt, die Sonde verlangte bei 9000 aber eine Rate von 2,09 und meldete
+    // ihn als Anschlagsfehler. Die Zahl war richtig, die Frage war es nicht.
+    //
+    // Vorgabe bleibt der Physikbereich - fuer einen Motor ohne eigenes Band ist das nach wie
+    // vor die Wahrheit.
+    sndBandCheck(basenRein, von, bis) {
       const basen = (basenRein || []).slice().sort((a, b) => a - b);
       if (basen.length < 2) return { fehlt: 'weniger als zwei Baender' };
+      const rpmVon = von || IDLE_RPM;
+      const rpmBis = bis || REDLINE_RPM;
       // DAS MASS IST DIE GEWICHTETE VERSTIMMUNG, nicht "am Anschlag oder nicht". Eine
       // Schleife, die 2,04 statt 2,00 spielen soll, ist zwei Prozent daneben - das hoert
       // niemand. Eine, die 0,36 spielen soll und auf 0,50 geklemmt wird, ist eine halbe
@@ -2169,7 +2219,7 @@
       //
       //   verlangte Rate / geklemmte Rate, in Oktaven, mal Gewicht
       let schlimmst = 0, wo = null;
-      for (let rpm = IDLE_RPM; rpm <= REDLINE_RPM; rpm += 50) {
+      for (let rpm = rpmVon; rpm <= rpmBis; rpm += 50) {
         const w = sampleWeights(rpm, basen);
         for (let i = 0; i < basen.length; i++) {
           if (w[i] <= 0.02) continue;
@@ -2183,7 +2233,8 @@
           }
         }
       }
-      return { basen, verstimmung: +schlimmst.toFixed(4), schlimmste: wo,
+      return { basen, von: rpmVon, bis: rpmBis,
+               verstimmung: +schlimmst.toFixed(4), schlimmste: wo,
                // Der groesste Sprung zwischen zwei Nachbarn, in Oktaven.
                oktaven: +Math.max.apply(null, basen.slice(1).map(
                  (b, i) => Math.log2(b / basen[i]))).toFixed(2) };

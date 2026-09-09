@@ -1273,7 +1273,11 @@
     else schreibeWert(gearEl, gearLabel(st));
     const mEl = $('race-gear-m');
     if (mEl) mEl.textContent = physEngine.config.autoShift ? '' : 'M';
-    $('race-rpm').textContent = Math.round(st.rpm);
+    // DIESELBE ZAHL, DIE DER TON BEKOMMT. Die Begruendung steht bei motorDrehzahl() in
+    // 80-sound.js: die Physik rechnet fuer alle Motoren von 1500 bis 9000, das Vorbild
+    // dreht aber bis 5000 (Blazer) oder 12500 (Formel 1). Zwei Zahlen fuer dieselbe Sache
+    // waeren eine Anzeige, die dem Ton widerspricht.
+    $('race-rpm').textContent = Math.round(motorDrehzahl(st));
     // Shown as the real-world equivalent, at the cars' actual 1:50 scale. This comment used
     // to argue the opposite - "the scale is NOT 1/50" - on the grounds that the acceleration
     // and braking models were calibrated against a GT3 topping out at 285 km/h, so the factor

@@ -1570,6 +1570,30 @@
       "How hard the car steers against a slide, measured from the rotation signal in byte 3 of the notifications. 50 per cent is the default that was asked for. What is uncertain about it, and it is two things at once: the signal is unconfirmed – it only varies once the car is moving, and flipped sign with cornering direction in exactly one recording. And it is uncalibrated: its scale is self-adjusting because the real amplitude is unknown. So the strength depends on the largest yaw value the session has seen so far. The “Drift probe” button under “Measure lateral offset” measures whether the signal moves at all under straight full throttle.",
     "Rennen":
       "Race",
+    "Langstrecken-Prototypen (WIP)":
+      "Endurance prototypes (WIP)",
+    "Tourenwagen, DTM und NASCAR (WIP)":
+      "Touring cars, DTM and NASCAR (WIP)",
+    "Amerikanische Straßenmotoren (WIP)":
+      "American road engines (WIP)",
+    "Corvette C5-R: V8, Cross-Plane, OHV, 7,0 l":
+      "Corvette C5-R: V8, cross-plane, OHV, 7.0 l",
+    "Lister Storm LMP: Jaguar-V12, 60 Grad, 7,0 l":
+      "Lister Storm LMP: Jaguar V12, 60 degrees, 7.0 l",
+    "Audi RS5 DTM 2019: Reihen-4 Turbo, 2,0 l":
+      "Audi RS5 DTM 2019: turbo inline-4, 2.0 l",
+    "Chevrolet Impala SS NASCAR: V8, OHV, 9000/min":
+      "Chevrolet Impala SS NASCAR: V8, OHV, 9000 rpm",
+    "Ford Capri Zakspeed Turbo 1981: Reihen-4, 1,7 l":
+      "Ford Capri Zakspeed Turbo 1981: inline-4, 1.7 l",
+    "Porsche 935 K4 Kremer 1981: Flat-6, Twin-Turbo":
+      "Porsche 935 K4 Kremer 1981: flat-6, twin-turbo",
+    "Dodge Challenger SRT Demon: HEMI-V8, Kompressor, 6,2 l":
+      "Dodge Challenger SRT Demon: HEMI V8, supercharged, 6.2 l",
+    "Ford Mustang 390 GT 1968: FE-V8, Cross-Plane, 6,4 l":
+      "Ford Mustang 390 GT 1968: FE V8, cross-plane, 6.4 l",
+    "Chevrolet Blazer 1990: Small-Block-V8, TBI, 5,7 l":
+      "Chevrolet Blazer 1990: small-block V8, TBI, 5.7 l",
     "Regenreifen: setzt Regen ein, kommt jeder Ghost so früh wie möglich herein und rüstet um – und beim Wechsel zurück auf trocken genauso. Solange die falschen Reifen drauf sind, fährt er langsamer: 0,64 gegen 0,85 mit Regenreifen im Regen, abgeleitet aus derselben Grifftabelle, die dein Auto benutzt. Bei leichtem Regen ist der Slick noch vorn – der Nachteil kommt mit dem Wasser, nicht mit der Meldung. Ist dieser Schalter aus, können Ghosts keine falschen Reifen haben, sonst kröchen sie nach dem ersten Regen ohne Ausweg.":
       "Rain tyres: when rain sets in, every ghost comes in as early as it can and changes – and the same on a change back to dry. While it is on the wrong tyres it drives slower: 0.64 against 0.85 on rain tyres in the rain, derived from the same grip table your own car uses. In light rain the slick is still ahead – the penalty arrives with the water, not with the announcement. With this switch off ghosts cannot have the wrong tyres, because otherwise they would crawl after the first shower with no way out.",
     "Ein Ghost fährt auf der Start/Ziel-Kachel rechts an den Rand, bleibt ein paar Sekunden stehen und fährt wieder los. Die Anfahrt beginnt schon auf der Kachel davor, im Formationstempo – ein Auto, das mit Renntempo über die Linie kommt, braucht eine Kachel zum Verzögern. Es gibt vier Boxen hintereinander: Platz 1 auf der Start/Ziel-Kachel, Platz 2 eine Kachel später und so weiter. Wer gleichzeitig fällig ist, nimmt den nächsten freien und hält eine Kachel dahinter; wer als Fünfter kommt, wartet, bis eine frei wird. Auf dem Weg zur eigenen Box fährt er am Gegenrand vorbei – sonst würde er dem Stehenden ins Heck fahren. Gemessen bei einem Wetterwechsel mit sechs Ghosts: vier stehen gleichzeitig, keine Doppelbelegung, und in 555 Takten Vorbeifahrt kein einziger Takt mit rechter Anforderung. Vier Kacheln sind 1,72 m – mehr Boxen würden auf einem kleinen Layout einen merklichen Teil der Bahn füllen.":

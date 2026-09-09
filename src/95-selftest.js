@@ -1656,7 +1656,12 @@
       const basen = Object.keys(manifest[key].loops || {})
         .filter(b => b !== 'over')
         .map(b => manifest[key].loops[b].baseRpm);
-      const r = OMEGA_TEST.sndBandCheck(basen);
+      // MIT DEM DREHZAHLBAND DES MOTORS. Ohne es fegte der Prueflauf 1500 bis 9000 ab,
+      // also den Bereich der Physik - und der Blazer, der nur bis 5000 gefragt wird, fiel
+      // dabei mit einer verlangten Rate von 2,09 durch. Die Rechnung war richtig, die Frage
+      // war es nicht. Fehlt das Band im Manifest, gilt weiter der Physikbereich.
+      const r = OMEGA_TEST.sndBandCheck(basen, manifest[key].idleRpm,
+                                        manifest[key].limiterRpm);
       if (r.fehlt !== undefined) { schlecht.push(key + ': ' + r.fehlt); continue; }
       geprueft++;
       weit = Math.max(weit, r.oktaven);
@@ -6880,6 +6885,104 @@
                  + r.lueckeMin + ' bis ' + r.lueckeMax + ' s, '
                  + (anteil * 100).toFixed(0) + ' % messbar'
                  + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Jeder Motor dreht in seinem eigenen Band ----
+  //
+  // GEMELDET: "Der Ton klingt etwas zu hoch" zum BMW M4 GT3. Der Befund war nachrechenbar
+  // und betraf nicht nur ihn: die Physik rechnet fuer ALLE Motoren von 1500 bis 9000
+  // (IDLE_RPM/REDLINE_RPM in 30-input.js), und eine Schleife, die bei baseRpm gerechnet
+  // wurde, wird mit rpm/baseRpm abgespielt. Bei Vollgas also mit 9000/high:
+  //
+  //     Porsche 911 GT3 R    oberstes Band 8800   ->  1,02 x   unhoerbar
+  //     BMW M4 GT3                         7200   ->  1,25 x   knapp vier Halbtoene
+  //     Ford GT40                          6500   ->  1,38 x
+  //     Formel 1 2026                     12500   ->  0,72 x   und der klingt zu TIEF
+  //
+  // Seit v0.5.49 fuehrt jeder Motor sein Band mit (idleRpm/limiterRpm in loops.json), und
+  // Anzeige UND Ton benutzen dieselbe abgebildete Zahl - siehe motorDrehzahl() in
+  // 80-sound.js. Geprueft werden drei Dinge, und das erste ist das, was der Nutzer hoert.
+  stAdd('Motorton: jeder Motor dreht in seinem eigenen Drehzahlband', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.motorBandProbe) {
+      return { skip: true, mass: 'motorBandProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.motorBandProbe();
+    if (!r) return { skip: true, mass: 'kein Band' };
+    const geladen = Object.keys(r).filter((k) => r[k].obenBand !== null);
+    if (!geladen.length) {
+      // Ohne audio/ gibt es keine Schleifen - per file:// der Normalfall.
+      return { skip: true, mass: 'keine Motorsamples geladen' };
+    }
+    const fehler = [];
+    let schlimmste = null;
+    for (const car of geladen) {
+      const b = r[car];
+      // 1. JEDER geladene Motor braucht ein Band. Fehlt es, faellt er still auf die
+      //    Drehzahl der Physik zurueck - also genau auf den alten Fehler, und zwar
+      //    unsichtbar.
+      if (!b.limiter || !b.idle) {
+        fehler.push(car + ': kein Drehzahlband in loops.json');
+        continue;
+      }
+      // 2. Der Begrenzer muss UEBER dem obersten Band liegen, aber nicht weit: das obere
+      //    Band gehoert knapp unter den Anschlag, damit der Anschlag selbst noch Platz hat
+      //    (die Begruendung steht bei p992gt3r in engine_synth.py). 1,25 war der gemeldete
+      //    Fehler, 1,20 ist die Grenze - darueber hoert man die Streckung.
+      if (!(b.rate >= 1.0 && b.rate <= 1.20)) {
+        fehler.push(car + ': Abspielrate am Begrenzer ' + b.rate);
+      }
+      if (schlimmste === null || b.rate > r[schlimmste].rate) schlimmste = car;
+      // 3. Und das Band muss ein Band sein.
+      if (!(b.limiter > b.idle)) {
+        fehler.push(car + ': Begrenzer ' + b.limiter + ' nicht ueber Leerlauf ' + b.idle);
+      }
+    }
+    return { ok: !fehler.length,
+             mass: geladen.length + ' Motoren mit Band, schlechteste Streckung '
+                 + (schlimmste ? schlimmste + ' ' + r[schlimmste].rate : '-')
+                 + ' (M4 GT3 ' + (r.m4gt3 ? r.m4gt3.rate : '-')
+                 + ', Formel 1 ' + (r.f1_2026 ? r.f1_2026.rate : '-') + ')'
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Anzeige und Ton bekommen dieselbe Zahl ----
+  //
+  // DIE EIGENTLICHE ZUSAGE der Aenderung, und sie ist nur als Gleichheit pruefbar: es gibt
+  // eine Quelle (motorDrehzahl), und beide Verbraucher rufen sie. Ein Test auf die Anzeige
+  // allein wuerde gruen bleiben, wenn der Ton wieder st.rpm nimmt.
+  //
+  // Geprueft wird an den Enden UND in der Mitte: die Abbildung ist linear in rpmFrac, also
+  // sagen drei Punkte alles - und der mittlere faellt auf, wenn jemand sie durch eine Kurve
+  // ersetzt.
+  stAdd('Motorton: Anzeige und Ton benutzen dieselbe Drehzahl', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.motorDrehzahlProbe) {
+      return { skip: true, mass: 'motorDrehzahlProbe nicht vorhanden' };
+    }
+    const bands = OMEGA_TEST.motorBandProbe();
+    // Zwei Motoren mit weit auseinanderliegenden Baendern - an gleichen Zahlen waere
+    // nichts zu sehen.
+    const paare = [['blazer90', 5000], ['f1_2026', 12500]];
+    const fehler = [], zeilen = [];
+    for (const [car, lim] of paare) {
+      const b = bands ? bands[car] : null;
+      if (!b || !b.limiter) { zeilen.push(car + ': nicht geladen'); continue; }
+      const w = OMEGA_TEST.motorDrehzahlProbe(car, [0, 0.5, 1]);
+      if (!w) return { skip: true, mass: 'keine Abbildung' };
+      zeilen.push(car + ': ' + w.join(' / '));
+      // Bei rpmFrac 0 der Leerlauf, bei 1 der Begrenzer, in der Mitte genau dazwischen.
+      if (Math.abs(w[0] - b.idle) > 1) fehler.push(car + ': bei 0 kommt ' + w[0]);
+      if (Math.abs(w[2] - b.limiter) > 1) fehler.push(car + ': bei 1 kommt ' + w[2]);
+      const mitte = (b.idle + b.limiter) / 2;
+      if (Math.abs(w[1] - mitte) > 1) fehler.push(car + ': bei 0,5 kommt ' + w[1]);
+      // Und die Angabe muss zu dem passen, was oben in diesem Test als bekannt steht -
+      // sonst prueft er eine Zahl gegen sich selbst.
+      if (b.limiter !== lim) {
+        fehler.push(car + ': Begrenzer ' + b.limiter + ' statt der erwarteten ' + lim);
+      }
+    }
+    if (!zeilen.length) return { skip: true, mass: 'keine Motorsamples geladen' };
+    return { ok: !fehler.length,
+             mass: zeilen.join(' | ') + (fehler.length ? ' || ' + fehler.join('; ') : '') };
   });
 
   // ---- Zieleinlauf ----

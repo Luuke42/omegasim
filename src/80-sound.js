@@ -92,7 +92,7 @@
     // ist nur eine Mitgliedschaftspruefung -, aber zwei Listen derselben Sache in
     // unterschiedlicher Ordnung sind die naechste Verwechslung.
     'p992gt3r', 'm4gt3', 'mustang', 'f296gt3',
-    'amggt3', 'c6r', 'z06gt3r', 'vantagegt3', 'huracan', 'f1_2026',
+    'amggt3', 'c6r', 'c5r', 'z06gt3r', 'vantagegt3', 'huracan', 'f1_2026',
     // Vier historische Rennwagen, dazugekommen in v0.4.54 und als WIP gekennzeichnet: nach
     // Gehoer geprueft ist keiner von ihnen.
     'gt40', 'lolat70', 'f330p4', 'mc12',
@@ -102,6 +102,17 @@
     // ihrem Mittelband mehr als der Faktor 2,2 liegt und band_ladder() dann Zwischenstufen
     // einzieht.
     'countach', 'impreza99',
+    // ---- NEUN NEUE, v0.5.49, alle WIP ------------------------------------------------
+    //
+    // Nach denselben technischen Angaben gerechnet wie die uebrigen: Zylinderzahl, Bauart,
+    // Zuendfolge, Bankaufteilung und Drehzahl kommen aus den Daten, die sieben Klangregler
+    // sind gesetzt. Nach Gehoer geprueft ist keiner - deshalb WIP.
+    //
+    // Ein Prototyp, zwei Tourenwagen, zwei Gruppe-5-Wagen von 1981 und drei amerikanische
+    // Strassenmotoren. Der C5-R steht oben bei den GT-Motoren, wo er hingehoert.
+    'listerstorm', 'rs5dtm', 'impalanascar',
+    'capri_zakspeed', 'p935k4',
+    'demon', 'mustang68', 'blazer90',
   ];
   // KEINE FESTE LISTE MEHR. Bis v0.4.55 stand hier ['idle','mid','high'], und genau diese
   // Liste war die Annahme, die den Ton kaputt gemacht hat: sie kannte drei Namen, also konnte
@@ -124,8 +135,71 @@
   }
   let engineVolume = 0.7;
   const sampleEngine = { buffers: {}, rpmScale: {}, crackle: {}, turbo: {},
+                         // Das DREHZAHLBAND des Vorbilds, je Motor: { idle, limiter }.
+                         // Siehe motorDrehzahl() - es ist die Skala, auf der Anzeige und
+                         // Ton gemeinsam laufen.
+                         band: {},
                          nodes: null, over: null, car: null,
                          master: null, ready: false, loading: false };
+
+  // ====================================================================================
+  // DIE DREHZAHL DES GEWAEHLTEN MOTORS
+  // ====================================================================================
+  //
+  // GEMELDET: "Der Ton klingt etwas zu hoch" zum BMW M4 GT3. Der Befund ist nachrechenbar.
+  //
+  // Die Physik hat EIN Drehzahlband fuer alle Motoren: IDLE_RPM 1500 bis REDLINE_RPM 9000
+  // (30-input.js). Eine Schleife, die bei baseRpm gerechnet wurde, wird mit rpm/baseRpm
+  // abgespielt - bei Vollgas also mit 9000/high. Fuer die hochdrehenden Motoren ist das
+  // nichts, fuer die anderen viel:
+  //
+  //     Porsche 911 GT3 R    oberstes Band 8800   ->  1,02 x   unhoerbar
+  //     Corvette Z06 GT3.R                 8600   ->  1,05 x
+  //     BMW M4 GT3                         7200   ->  1,25 x   knapp vier Halbtoene
+  //     Ford GT40                          6500   ->  1,38 x
+  //     Formel 1 2026                     12500   ->  0,72 x   und der klingt zu TIEF
+  //
+  // Der M4 GT3 ist der tiefstdrehende Motor der GT3-Gruppe, also faellt er dort am meisten
+  // auf: wer zwischen ihm und dem Porsche umschaltet, hoert bei gleicher Nadelstellung eine
+  // andere Tonhoehe.
+  //
+  // ---- WARUM NICHT AN GETRIEBE UND HANDLING ---------------------------------------
+  //
+  // Naheliegend waere, REDLINE_RPM vom gewaehlten Motor abhaengig zu machen. Das ist die
+  // schlechtere Loesung, und der Grund steckt in rpmFrac: es ist (rpm - idle)/(redline -
+  // idle) und geht in den Drehmomentverlauf ein. Ein motorabhaengiger Begrenzer wuerde also
+  // Beschleunigung, Schaltpunkte und Rundenzeiten aendern - die Wahl eines KLANGS bestimmte
+  // dann, wie schnell das Auto ist. Genau die Sorte stiller Verbindung, die bei steerCalib
+  // schon einmal dafuer gesorgt hat, dass ein Regler fuer das Spielerauto heimlich die
+  // Ghosts verstellte.
+  //
+  // ---- WAS STATTDESSEN GEHT: DIE SKALA MITFUEHREN ---------------------------------
+  //
+  // Genau ZWEI Stellen lesen die absolute Drehzahl - diese Anzeige (50-drive.js) und der
+  // Ton hier. Alles andere rechnet mit rpmFrac, also dimensionslos. Also bekommen beide
+  // dieselbe abgebildete Zahl:
+  //
+  //     Drehzahl = idleRpm + rpmFrac * (limiterRpm - idleRpm)
+  //
+  // Damit stimmen Anzeige und Ton immer ueberein, weil es EINE Quelle ist; die Physik bleibt
+  // unberuehrt, also keine Neukalibrierung und keine anderen Rundenzeiten; die Abspielrate
+  // liegt oben bei 1,03 bis 1,16 statt bei 1,25 bis 1,80; und der Drehzahlmesser zeigt beim
+  // Blazer 5000 und beim NASCAR 9800, also das, was dort wirklich steht.
+  //
+  // Die Nadel erreicht die rote Linie im selben Moment wie vorher, weil rpmFrac und die
+  // Schaltpunkte unveraendert sind. Es aendert sich eine SKALA und kein Fahrverhalten.
+  //
+  // NUR AUS EINER SCHLEIFE ODER EINEM ZEITGEBER RUFEN. Diese Funktion liest sampleEngine,
+  // ein const in DIESER Datei, und 50-drive.js ist eine frueher gebaute - ein Aufruf zur
+  // Aufbauzeit von dort traefe die temporale Todeszone und nimmt die ganze IIFE mit. Die
+  // Funktionsdeklaration selbst ist hochgezogen und damit von ueberall erreichbar; der
+  // Rumpf braucht nur, dass der Aufbau durch ist. Aus einer Anzeigeschleife ist er das.
+  function motorDrehzahl(st) {
+    const b = sampleEngine.band[sampleEngine.car || $('sound-profile').value];
+    if (!b || !(b.limiter > b.idle)) return st.rpm;
+    const f = Math.max(0, Math.min(1, st.rpmFrac || 0));
+    return b.idle + f * (b.limiter - b.idle);
+  }
 
   async function loadEngineSamples() {
     if (sampleEngine.ready || sampleEngine.loading || !audioCtx) return;
@@ -152,6 +226,13 @@
         // Liste in dieser Datei waere der naechste Ort, an dem etwas auseinanderlaeuft.
         sampleEngine.crackle[car] = manifest[car].crackle;
         sampleEngine.turbo[car] = !!manifest[car].turbo;
+        // Das Drehzahlband des Vorbilds. NUR wenn beide Angaben da sind: ein aelteres
+        // audio/ hat sie nicht, und dann bleibt es bei der Drehzahl der Physik - dieselbe
+        // Duldsamkeit wie bei den Schubschleifen und den Hupen.
+        if (manifest[car].idleRpm && manifest[car].limiterRpm) {
+          sampleEngine.band[car] = { idle: manifest[car].idleRpm,
+                                     limiter: manifest[car].limiterRpm };
+        }
         // 'over' is the closed-throttle loop and is OPTIONAL: the Corvette profile is cut
         // from a recording that has no overrun material, so its absence must not fail the
         // load. Everything the generator makes has one.
@@ -1574,7 +1655,11 @@
     // Schleifenzweig.
     if (physicsEnabled) extrasTick(st, load);
 
-    if (sampleEngine.nodes && physicsEnabled) { updateSampleEngine(st.rpm, load, silent); return; }
+    // DIE DREHZAHL DES MOTORS, nicht die der Physik - siehe motorDrehzahl().
+    if (sampleEngine.nodes && physicsEnabled) {
+      updateSampleEngine(motorDrehzahl(st), load, silent);
+      return;
+    }
 
     const freq = p.baseFreq + Math.max(0, Math.min(1, pitchNorm)) * p.freqSpan;
     let gain = p.gainBase * (0.35 + 0.65 * pitchNorm) + load * p.gainSpan;

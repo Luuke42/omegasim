@@ -134,6 +134,72 @@ def cross_plane_v8():
 # braucht auch er eine Schleife.
 APP_IDLE_RPM = 1500
 
+# Und die Drehzahl, bei der der Drehzahlmesser der App anschlaegt (REDLINE_RPM in
+# 30-input.js). Sie gehoert hierher, weil sie bestimmt, wie WEIT die App eine Schleife
+# streckt.
+APP_REDLINE_RPM = 9000
+
+
+# =====================================================================================
+# JEDER MOTOR HAT SEIN EIGENES DREHZAHLBAND
+# =====================================================================================
+#
+# GEMELDET: "Der Ton klingt etwas zu hoch" zum BMW M4 GT3. Der Befund ist nachrechenbar
+# und betrifft nicht nur diesen Motor.
+#
+# Die App hat EINEN Drehzahlbereich fuer alle Motoren: IDLE_RPM 1500 bis REDLINE_RPM 9000
+# (30-input.js). Eine Schleife, die bei baseRpm gerechnet wurde, wird mit rpm/baseRpm
+# abgespielt - bei Vollgas also mit 9000/high. Fuer die hochdrehenden Motoren ist das
+# nichts, fuer die anderen viel:
+#
+#     Porsche 911 GT3 R    high 8800   ->  1,02 x   unhoerbar
+#     Huracan GT3          high 8700   ->  1,03 x
+#     Corvette Z06 GT3.R   high 8600   ->  1,05 x
+#     BMW M4 GT3           high 7200   ->  1,25 x   knapp vier Halbtoene zu hoch
+#     Ford GT40            high 6500   ->  1,38 x
+#     Formel 1 2026        high 12500  ->  0,72 x   und der klingt zu TIEF
+#
+# Der M4 GT3 ist der am tiefsten drehende Motor der GT3-Gruppe, also faellt er dort am
+# meisten auf - und wer zwischen ihm und dem Porsche umschaltet, hoert bei gleicher
+# Nadelstellung eine andere Tonhoehe. Das ist der gemeldete Eindruck.
+#
+# ---- DER ERSTE ANLAUF WAR EIN FAKTOR, UND DAS WAR DIE SCHLECHTERE LOESUNG ----------
+#
+# Naheliegend ist rpmScale (steckt schon in der App, eingebaut fuer die eine gesampelte
+# Corvette): die App-Drehzahl mit Begrenzer/9000 multiplizieren, bevor Ueberblendung und
+# Abspielrate sie sehen. Der Ton stimmt damit - aber der Drehzahlmesser zeigt weiter 9000,
+# waehrend der Motor bei 7200 dreht. Anzeige und Ton gehen auseinander.
+#
+# Auf die Frage "waere es sinnvoller, den Ton an Getriebe und Handling zu knuepfen?" ist die
+# Antwort NEIN, und zwar aus einem Grund, der in diesem Projekt schon einmal Geld gekostet
+# hat: REDLINE_RPM steckt in rpmFrac, und rpmFrac ist der Drehmomentverlauf. Ein
+# motorabhaengiger Begrenzer wuerde also die Beschleunigung, die Schaltpunkte und die
+# Rundenzeiten aendern - die Wahl eines KLANGS wuerde bestimmen, wie schnell das Auto ist.
+# Genau die Sorte stiller Verbindung, die bei steerCalib schon einmal dafuer gesorgt hat,
+# dass ein Regler fuer das Spielerauto heimlich die Ghosts verstellt.
+#
+# ---- WAS STATTDESSEN GEHT: DAS BAND MITFUEHREN ------------------------------------
+#
+# Gemessen liest genau ZWEI Stellen die absolute Drehzahl - die Anzeige (50-drive.js) und
+# der Ton (80-sound.js). Alles andere rechnet mit rpmFrac, also dimensionslos. Also:
+#
+#     Anzeige-Drehzahl = idleRpm + rpmFrac * (limiterRpm - idleRpm)
+#
+# und dieselbe Zahl geht an den Ton. Damit
+#
+#   * stimmen Anzeige und Ton immer ueberein, weil es eine Quelle ist,
+#   * bleibt die Physik unberuehrt: keine Neukalibrierung, keine anderen Rundenzeiten,
+#   * ist die Abspielrate oben rund 1,0 - der Motor wird gar nicht mehr gestreckt,
+#   * und der Drehzahlmesser zeigt beim Blazer 5000 und beim NASCAR 9800, also das, was
+#     dort wirklich steht.
+#
+# Die Nadel erreicht die rote Linie in demselben Moment wie vorher, weil rpmFrac und die
+# Schaltpunkte unveraendert sind. Es ist eine SKALA, die sich aendert, kein Fahrverhalten.
+#
+# Zwei Angaben gehen dafuer ins Manifest, und beide sind Motorkunde und damit hier zu Hause:
+# idleRpm ist der Leerlauf des Vorbilds, limiterRpm seine Abregeldrehzahl. Wo keine Angabe
+# zum Begrenzer vorliegt, gilt das obere Band - es ist ohnehin knapp darunter gewaehlt.
+
 # Wie weit zwei Nachbarbaender auseinanderliegen DUERFEN. Die App klemmt die Abspielrate auf
 # eine Oktave nach jeder Seite, also waere 2,0 die harte Grenze. 2,2 laesst einen Rest von
 # vier Prozent zu, und der ist unhoerbar: er tritt nur am Rand eines Abschnitts auf, wo das
@@ -154,7 +220,22 @@ def band_ladder(rpms):
     und nicht Nummern, damit die Dateinamen stabil bleiben, solange die Anker es sind.
     """
     rp = dict(rpms)
-    werte = sorted(set([min(rp['idle'], APP_IDLE_RPM), rp['idle'],
+    # ---- DER ANKER BEI 1500 IST MIT DEM EIGENEN DREHZAHLBAND ENTFALLEN --------------
+    #
+    # Er war noetig, solange die App JEDEN Motor von 1500 bis 9000 abspielte: ein Motor mit
+    # Leerlauf 4200 brauchte trotzdem eine Schleife bei 1500, weil der Drehzahlmesser dort
+    # anfing. Seit die Anzeige das Band des Motors benutzt (siehe oben), fragt die App nie
+    # unter dessen Leerlauf - und ein Band darunter waere nicht nur unnoetig, sondern
+    # irrefuehrend.
+    #
+    # Gemessen hat er ausserdem Unsinn erzeugt: der RS5 DTM leerlaeuft bei 1600 und bekam
+    # damit Baender bei 1500 UND 1600, also zwei Schleifen im Abstand von sieben Prozent.
+    #
+    # `unten` bleibt als Angabe, damit ein Aufrufer den alten Fall noch bauen kann - die
+    # vorhandenen Schleifen im Repo sind mit ihm gerechnet, und band_ladder() ist die
+    # Stelle, an der sich das nachvollziehen laesst.
+    unten = rp.get('unten', rp['idle'])
+    werte = sorted(set([min(rp['idle'], unten), rp['idle'],
                         rp['mid'], rp['high']]))
     while True:
         for i in range(len(werte) - 1):
@@ -208,6 +289,26 @@ CARS = {
         'clatter': 0.23, 'clatter_hz': 2100.0, 'drive': 3.2,
         'scatter_t': 0.008, 'scatter_g': 0.07, 'crackle': 0.45,
     },
+    'c5r': {
+        'label': 'Corvette C5-R (LS1.R 7.0 V8, Cross-Plane)',
+        # DIESELBE ZUENDFOLGE WIE DER C6.R (1-8-7-2-6-5-4-3, LS-Familie, GM-Zaehlung), also
+        # DASSELBE BANKMUSTER. Das gehoert gesagt und nicht versteckt: die beiden werden sich
+        # aehneln, und zwar zu Recht - es ist zweimal derselbe Motor in zwei Baujahren.
+        # Unterschieden sind sie hier in drei Groessen, und alle drei kommen aus den Angaben:
+        #
+        #   Drehzahl     Begrenzer 6800 gegen 7200 beim spaeteren LS7.R
+        #   Verdichtung  12,2:1 - der haerteste Impuls der drei Corvettes
+        #   Ansaugung    Einzeldrosseln, also hoerbares Ansaugen (noise 0,11)
+        'banks': banks_from_order([1, 8, 7, 2, 6, 5, 4, 3], 8, 'oddeven'), 'cylinders': 8,
+        'limiter': 6800,
+        'rpms': {'idle': 1050, 'mid': 3800, 'high': 6400},
+        # 30 Zoll gegen 32 beim C6.R: die Seitenrohre des C5-R sind kuerzer, weil sie vor der
+        # Hinterachse austreten. 113 Hz gegen 106.
+        'primary_in': 30.0, 'res_q': 6.4, 'partials': 6, 'ir_ms': 58.0,
+        'pulse_ms': 4.0, 'bright': 0.55, 'noise': 0.11, 'noise_hz': 2000.0,
+        'clatter': 0.22, 'clatter_hz': 2100.0, 'drive': 3.1,
+        'scatter_t': 0.008, 'scatter_g': 0.07, 'crackle': 0.48,
+    },
     'z06gt3r': {
         'label': 'Corvette Z06 GT3.R (LT6.R 5.5 V8, Flat-Plane)',
         # Nach der ANGEGEBENEN Kurbelwelle (Flat-Plane, 180 Grad), nicht nach der
@@ -252,7 +353,24 @@ CARS = {
         'turbo': True,
         'label': 'BMW M4 GT3 (P58 3.0 Reihen-6, ohne Lader)',
         'banks': inline_from_order([1, 5, 3, 6, 2, 4], 6), 'cylinders': 6,
-        'rpms': {'idle': 1300, 'mid': 4300, 'high': 7200},
+        # ---- UEBERARBEITET, weil er zu hoch klang ---------------------------------
+        #
+        # Zwei Aenderungen, und die erste ist die, die man hoert:
+        #
+        # 1. rpm_scale aus dem Begrenzer (7200), siehe scale_from_limiter() oben. Das obere
+        #    Band lag bei 7200 und wurde bei App-Vollgas mit 9000/7200 = 1,25 abgespielt -
+        #    knapp vier Halbtoene zu hoch, und der tiefstdrehende Motor der GT3-Gruppe war
+        #    damit der am staerksten gestreckte.
+        #
+        # 2. high von 7200 auf 6800. 7200 IST der Begrenzer, und eine Schleife genau dort
+        #    laesst keinen Platz fuer den Anschlag selbst - dieselbe Begruendung wie beim
+        #    Porsche 911 GT3 R, wo sie schon steht. Mit dem Faktor spielt das Band bei
+        #    App-Vollgas mit 7200/6800 = 1,06, also gerade in den Begrenzer hinein.
+        #
+        # Die Angaben dazu: Rote Linie 7000, Begrenzer 7200, DOHC 4 Ventile, Bohrung 84,0,
+        # Hub 90,0 - ein langhubiger Reihensechser, also ausdruecklich kein Dreher.
+        'limiter': 7200,
+        'rpms': {'idle': 1300, 'mid': 4300, 'high': 6800},
         'primary_in': 23.5, 'res_q': 4.8, 'partials': 5, 'ir_ms': 46.0,
         'pulse_ms': 3.1, 'bright': 0.48, 'noise': 0.13, 'noise_hz': 2200.0,
         'clatter': 0.08, 'clatter_hz': 2700.0, 'drive': 2.1,
@@ -453,6 +571,213 @@ CARS = {
         'noise': 0.14, 'noise_hz': 2400.0,
         'clatter': 0.14, 'clatter_hz': 3200.0, 'drive': 2.5,
         'scatter_t': 0.006, 'scatter_g': 0.05, 'crackle': 0.40,
+    },
+    # ---- Ein Langstrecken-Prototyp [WIP] ------------------------------------------
+    'listerstorm': {
+        'label': 'Lister Storm LMP (Jaguar 7.0 V12, 60 Grad)',
+        # Die angegebene Zuendfolge 1-12-5-8-3-10-6-7-2-11-4-9 mit Jaguar-Zaehlung (1-6 auf
+        # der einen Bank) ergibt genau 120 Grad je Bank - nachgerechnet, beide Baenke
+        # vollkommen gleichmaessig. Das ist die Bauart eines 60-Grad-V12 und derselbe
+        # Aufbau wie beim 330 P4 und beim Countach.
+        'banks': banks_from_order([1, 12, 5, 8, 3, 10, 6, 7, 2, 11, 4, 9], 12, 'half'),
+        'cylinders': 12,
+        'limiter': 8000,
+        'rpms': {'idle': 1100, 'mid': 4800, 'high': 7300},
+        # 22 Zoll ergibt 154 Hz - zwischen dem Rennkruemmer des P4 (20 Zoll, 169 Hz) und dem
+        # Strassenauspuff des Countach (26 Zoll, 130 Hz). Ein LMP hat gleich lange
+        # Rennkruemmer, aber laengere Wege zum Heck als ein Sportwagen von 1967.
+        'primary_in': 22.0, 'res_q': 6.0, 'partials': 7, 'ir_ms': 40.0,
+        'pulse_ms': 2.2, 'bright': 0.68,
+        # 0,15: Einzeldrosseln UND Luftmengenbegrenzer. Der Begrenzer ist der Grund, warum es
+        # nicht mehr ist - er sitzt vor den Drosseln und daempft das Ansauggeraeusch, das die
+        # Drosseln erzeugen. Zwei Dinge, die in verschiedene Richtungen ziehen.
+        'noise': 0.15, 'noise_hz': 2600.0,
+        'clatter': 0.12, 'clatter_hz': 3300.0, 'drive': 2.4,
+        'scatter_t': 0.005, 'scatter_g': 0.045, 'crackle': 0.50,
+    },
+    # ---- Tourenwagen, DTM und NASCAR [WIP] ----------------------------------------
+    'rs5dtm': {
+        'label': 'Audi RS5 DTM 2019 (2.0 Reihen-4 Turbo, Class 1)',
+        'turbo': True,
+        # Reihenmotor, also EIN Sammler und ein vollkommen gleichmaessiges Raster von
+        # 180 Grad. Die Zuendfolge 1-3-4-2 aendert daran nichts - siehe
+        # inline_from_order(). Was diesen Motor ausmacht, steckt deshalb nicht in der
+        # Geometrie, sondern in Drehzahl, Rohrlaenge und dem Knallen.
+        'banks': inline_from_order([1, 3, 4, 2], 4), 'cylinders': 4,
+        'limiter': 9500,
+        'rpms': {'idle': 1600, 'mid': 6200, 'high': 9200},
+        # 13 Zoll: der kuerzeste Weg im ganzen Satz, weil dahinter sofort der Lader sitzt.
+        # 260 Hz Resonanz - und bei 6200/min liegt die Zuendrate bei 207 Hz, die Resonanz
+        # also knapp darueber. Das ist gewollt: dieser Motor soll oben nicht droehnen.
+        'primary_in': 13.0, 'res_q': 3.4, 'partials': 6, 'ir_ms': 23.0,
+        'pulse_ms': 1.5, 'bright': 0.46,
+        # 0,22 ist der hoechste Rauschanteil im ganzen Satz, und das ist begruendet: 2,5 bis
+        # 3,5 bar Ladedruck durch einen einzigen Garrett, dazu die Antilag-Anlage. Was man
+        # bei einem Class-1-Wagen hoert, ist zur Haelfte Luft.
+        'noise': 0.22, 'noise_hz': 3600.0,
+        'clatter': 0.09, 'clatter_hz': 4200.0, 'drive': 2.5,
+        'scatter_t': 0.003, 'scatter_g': 0.025,
+        # 0,75 - hoeher als alles andere hier (bisher hoechstens 0,62 beim Flat-Plane-V8).
+        # ANTILAG IST GENAU DAS, was crackle modelliert: bei geschlossener Drosselklappe
+        # wird weiter eingespritzt und gezuendet, damit der Lader auf Druck bleibt, und die
+        # Verbrennung findet im Abgasstrang statt. Es ist hier also kein Effekt, sondern der
+        # Betriebszustand.
+        'crackle': 0.75,
+    },
+    'impalanascar': {
+        'label': 'Chevrolet Impala SS NASCAR 2010 (R07 5.8 V8, Cross-Plane)',
+        # Die ALTERNATIVE der zwei angegebenen Folgen, 1-8-7-3-6-5-4-2, und die Wahl hat
+        # einen Grund: die andere (1-8-4-3-6-5-7-2) ist die Serienfolge des Small Block und
+        # steckt hier schon dreimal (Lola T70, Demon, Blazer). Die NASCAR-Folge ergibt ein
+        # anderes Bankmuster - nachgerechnet 180/90/180/270 gegen 270/180/90/180 -, und
+        # damit unterscheidet sich dieser Motor wirklich und nicht nur im Namen.
+        #
+        # EHRLICH DAZU: dasselbe Muster kommt beim Ford Mustang 1968 heraus, obwohl Ford eine
+        # voellig andere Folge und eine andere Zaehlung hat. Zwei Wege, ein Ergebnis - die
+        # beiden werden sich in der Zeichnung gleichen und nur in Drehzahl, Rohr und
+        # Helligkeit unterscheiden.
+        'banks': banks_from_order([1, 8, 7, 3, 6, 5, 4, 2], 8, 'oddeven'), 'cylinders': 8,
+        'limiter': 9800,
+        # 8800 unter der roten Linie von 9000. Ein Stossstangenmotor, der 9000 dreht, ist
+        # das Aussergewoehnliche an diesem Aggregat: 12,0:1 Verdichtung, 82,8 mm Hub.
+        'rpms': {'idle': 1000, 'mid': 5500, 'high': 8800},
+        # 30 Zoll, also 113 Hz. Lange Tri-Y-Kruemmer und ein Rohr ohne Daempfer bis unter die
+        # Tuer - die Laenge macht den Bass, die fehlende Daempfung die Helligkeit.
+        'primary_in': 30.0, 'res_q': 6.8, 'partials': 6, 'ir_ms': 52.0,
+        'pulse_ms': 3.4, 'bright': 0.62, 'noise': 0.09, 'noise_hz': 1500.0,
+        # 0,26 Klappern: Rollenstoessel, sehr steile Nocken und ein Ventiltrieb, der bei
+        # 9000/min an der Grenze arbeitet. Der lauteste Ventiltrieb im Satz.
+        'clatter': 0.26, 'clatter_hz': 2000.0, 'drive': 3.6,
+        'scatter_t': 0.007, 'scatter_g': 0.06, 'crackle': 0.55,
+    },
+    # ---- Zwei Gruppe-5-Wagen von 1981 [WIP] ---------------------------------------
+    'capri_zakspeed': {
+        'label': 'Ford Capri Zakspeed Turbo 1981 (BDA 1.7 Reihen-4, Turbo)',
+        'turbo': True,
+        'banks': inline_from_order([1, 3, 4, 2], 4), 'cylinders': 4,
+        'limiter': 9500,
+        # Ein Rennmotor leerlaeuft nicht bei 850: 1800 ist hier der ehrliche Wert, und die
+        # Baenderleiter greift trotzdem bis 1500 hinunter, weil die App dort ihren
+        # Drehzahlmesser hat (APP_IDLE_RPM).
+        'rpms': {'idle': 1800, 'mid': 5800, 'high': 9000},
+        # 14 Zoll bis zum KKK-K37: 241 Hz. Etwas laenger als beim RS5, weil der Lader hier
+        # neben dem Motor sitzt und nicht direkt am Kruemmerflansch.
+        'primary_in': 14.0, 'res_q': 3.6, 'partials': 5, 'ir_ms': 24.0,
+        'pulse_ms': 1.6, 'bright': 0.42,
+        # Verdichtung 7,2:1 - die niedrigste hier, und der Grund fuer die geringe Helligkeit:
+        # ein so niedrig verdichteter Motor hat einen weicheren Druckanstieg, und dahinter
+        # sitzt ein Lader mit 2,2 bar, der als Daempfer wirkt.
+        'noise': 0.20, 'noise_hz': 3000.0,
+        'clatter': 0.10, 'clatter_hz': 3800.0, 'drive': 2.6,
+        'scatter_t': 0.004, 'scatter_g': 0.03, 'crackle': 0.30,
+    },
+    'p935k4': {
+        'label': 'Porsche 935 K4 Kremer 1981 (3.2 Flat-6, Twin-Turbo)',
+        'turbo': True,
+        # DIESELBE ZUENDFOLGE WIE DER 992 GT3 R (1-6-2-4-3-5), also dasselbe Bankmuster:
+        # je Bank drei Zuendungen im gleichmaessigen Abstand von 240 Grad. Das ist die
+        # Bauart eines Boxer-6 und bei allen Porsche-Sechszylindern gleich.
+        #
+        # Unterschieden sind die beiden hier in dem, was 40 Jahre ausmachen: 7,0:1
+        # Verdichtung gegen die eines Saugmotors, zwei Lader im Abgasweg, und ein kurzes
+        # Rohr statt eines langen Rennkruemmers.
+        'banks': banks_from_order([1, 6, 2, 4, 3, 5], 6, 'half'), 'cylinders': 6,
+        'limiter': 8500,
+        'rpms': {'idle': 1200, 'mid': 5200, 'high': 8000},
+        # 16 Zoll: 211 Hz gegen die 165 des 992 GT3 R. Kuerzer, weil der Weg nur bis zu den
+        # zwei KKK-Ladern geht.
+        'primary_in': 16.0, 'res_q': 4.4, 'partials': 6, 'ir_ms': 30.0,
+        'pulse_ms': 2.0, 'bright': 0.44,
+        # 0,19: zwei Lader mit 1,7 bar und die Abblaseventile. Fast so viel wie beim 992 GT3 R
+        # mit seinen Einzeldrosseln (0,17), aber aus dem entgegengesetzten Grund - dort ist es
+        # das Ansaugen, hier der Ladedruck.
+        'noise': 0.19, 'noise_hz': 3400.0,
+        'clatter': 0.13, 'clatter_hz': 3400.0, 'drive': 2.7,
+        'scatter_t': 0.005, 'scatter_g': 0.04, 'crackle': 0.35,
+    },
+    # ---- Drei amerikanische Strassenmotoren [WIP] ---------------------------------
+    #
+    # ALLE DREI SIND STOSSSTANGENMOTOREN MIT SCHALLDAEMPFER, und das ist der Grund fuer eine
+    # eigene Gruppe: ihre Rohrlaengen liegen bei 38 bis 40 Zoll, also bei 84 bis 90 Hz
+    # Resonanz. Neben einem GT3 mit 165 Hz hoert man das nicht als "anderer Motor", sondern
+    # als "dumpf" - deshalb stehen sie im Menue zusammen und nicht dazwischen.
+    #
+    # Und die Rohrlaenge ist bei ihnen NICHT die Laenge eines Kruemmerprimaerrohrs. Ein
+    # Serien-V8 hat gegossene Sammelrohre von acht bis zehn Zoll; was hier steht, ist die
+    # Ersatzlaenge fuer die GANZE Anlage samt Daempfer, und die bestimmt, was man hoert.
+    # Das ist die groesste Modellierungsfreiheit in dieser Datei, und sie gehoert benannt.
+    'demon': {
+        'label': 'Dodge Challenger SRT Demon 2018 (6.2 HEMI V8, Kompressor)',
+        # KEIN turbo-Merker, und das ist eine Entscheidung und kein Versehen.
+        #
+        # Der Ladermodell der App (80-sound.js, extrasWerte) baut Druck mit 0,45 s
+        # Zeitkonstante auf und blaest beim Gaswegnehmen ab. Genau das tut ein
+        # Schraubenlader NICHT: er haengt mechanisch an der Kurbelwelle, hat kein Loch und
+        # kein Wastegate. Der Merker wuerde diesem Motor also eine Verzoegerung und ein
+        # Abblasen andichten, die es nicht gibt.
+        #
+        # WAS DAMIT FEHLT: das Heulen des Laders, das man beim Demon deutlich hoert. Es ist
+        # drehzahl- und nicht lastgebunden, und dafuer gibt es hier keinen Baustein. Was
+        # bleibt, ist das Ansauggeraeusch (noise 0,11 bei 1200 Hz - tief, weil ein
+        # 2,7-l-Lader Luft in grossen Mengen bewegt und nicht zischt).
+        'banks': banks_from_order([1, 8, 4, 3, 6, 5, 7, 2], 8, 'oddeven'), 'cylinders': 8,
+        'limiter': 6500,
+        'rpms': {'idle': 750, 'mid': 3600, 'high': 6200},
+        # 38 Zoll: 89 Hz, der tiefste Motor im Satz bis auf den Blazer. 840 PS aus 6,2 l mit
+        # 1,0 bar Ladedruck geben den haertesten Druckanstieg hier, deshalb drive 3,6.
+        'primary_in': 38.0, 'res_q': 6.6, 'partials': 6, 'ir_ms': 66.0,
+        'pulse_ms': 4.4, 'bright': 0.42, 'noise': 0.11, 'noise_hz': 1200.0,
+        'clatter': 0.20, 'clatter_hz': 1900.0, 'drive': 3.6,
+        'scatter_t': 0.009, 'scatter_g': 0.075,
+        # 0,30: ein Strassenauto mit Katalysatoren und Daempfern knallt wenig. Der Demon hat
+        # allerdings eine Abgasklappe, also nicht null.
+        'crackle': 0.30,
+    },
+    'mustang68': {
+        'label': 'Ford Mustang 390 GT 1968 (6.4 FE V8, Cross-Plane)',
+        # Ford-Folge 1-5-4-2-6-3-7-8 mit Ford-Zaehlung (1-4 rechts, 5-8 links) - dieselbe
+        # Angabe wie beim GT40, der denselben Motorstamm hat. Nachgerechnet ergibt das
+        # ZEICHENGLEICH dasselbe Bankmuster wie die NASCAR-Folge oben; zwei verschiedene
+        # Folgen unter zwei verschiedenen Zaehlungen treffen sich hier. Was die beiden
+        # trennt, ist alles andere: 8800 gegen 5200 Umdrehungen und ein Daempfer.
+        'banks': banks_from_order([1, 5, 4, 2, 6, 3, 7, 8], 8, 'half'), 'cylinders': 8,
+        'limiter': 6000,
+        'rpms': {'idle': 700, 'mid': 2600, 'high': 5200},
+        # 39 Zoll gegen die 34 des GT40. Der Rennwagen hat kurze Seitenrohre ohne Daempfer,
+        # das Strassenauto eine Anlage bis zum Heck - 86 Hz gegen 99.
+        'primary_in': 39.0, 'res_q': 6.0, 'partials': 6, 'ir_ms': 68.0,
+        'pulse_ms': 4.5, 'bright': 0.40,
+        # Holley-Vierfachvergaser: hoerbares Ansaugen, aber tief und ohne Zischen.
+        'noise': 0.07, 'noise_hz': 1100.0,
+        'clatter': 0.21, 'clatter_hz': 1900.0, 'drive': 3.4,
+        'scatter_t': 0.009, 'scatter_g': 0.075, 'crackle': 0.28,
+    },
+    'blazer90': {
+        'label': 'Chevrolet Blazer 1990 (5.7 Small Block V8, TBI)',
+        # Serienfolge des Small Block, GM-Zaehlung. Dasselbe Bankmuster wie Lola T70 und
+        # Demon - es ist dreimal derselbe Motorstamm, und das ist keine Nachlaessigkeit,
+        # sondern die Wahrheit ueber diese drei Fahrzeuge.
+        'banks': banks_from_order([1, 8, 4, 3, 6, 5, 7, 2], 8, 'oddeven'), 'cylinders': 8,
+        'limiter': 5000,
+        # DER TIEFSTDREHENDE MOTOR IM SATZ: rote Linie 4500, Begrenzer 5000. 210 PS aus
+        # 5,7 l - er ist auf Drehmoment bei 2400/min gebaut und nicht auf Drehzahl, und
+        # genau das soll man hoeren.
+        'rpms': {'idle': 650, 'mid': 2200, 'high': 4300},
+        # 40 Zoll: 84 Hz, der tiefste hier. Ein Serien-Gelaendewagen von 1990 hat einen
+        # grossen Daempfer und ein langes Rohr - siehe den Vorbehalt am Gruppenkopf.
+        'primary_in': 40.0, 'res_q': 5.6, 'partials': 5, 'ir_ms': 72.0,
+        'pulse_ms': 4.8, 'bright': 0.34,
+        # Einspritzung in den Drosselkoerper, ein einziges Ventil: das leiseste Ansaugen im
+        # Satz. Ein Vergaser rauscht mehr, Einzeldrosseln viel mehr.
+        'noise': 0.06, 'noise_hz': 900.0,
+        # Gusseisenkopf, Stossstangen, hydraulische Stoessel: hoerbar, aber weicher als bei
+        # den Rennmotoren mit starren Stoesseln.
+        'clatter': 0.20, 'clatter_hz': 1800.0, 'drive': 3.4,
+        'scatter_t': 0.010, 'scatter_g': 0.08,
+        # 0,15, das niedrigste hier ausser dem Formel 1: 9,1:1 Verdichtung, Katalysator und
+        # ein Steuergeraet von 1990, das im Schub die Einspritzung abschaltet. Da knallt
+        # nichts.
+        'crackle': 0.15,
     },
     'impreza99': {
         'label': 'Subaru Impreza WRX STI 1999 (EJ20 2.0 Boxer-4, Turbo)',
@@ -821,6 +1146,12 @@ def main(nur=None):
                          'crackle': cfg.get('crackle', 0.0),
                          'turbo': bool(cfg.get('turbo')),
                          'loops': {}}
+        # DAS DREHZAHLBAND MUSS HIER MIT HINEIN. Die Zusammenfuehrung unten haelt nur die
+        # LOOPS eines nicht gerechneten Motors fest, der Rest des Eintrags wird ersetzt -
+        # Angaben, die nur von Hand in loops.json stuenden, waeren beim naechsten Lauf dieses
+        # Motors still verschwunden, und die Anzeige waere ohne Codeaenderung wieder falsch.
+        manifest[key]['idleRpm'] = cfg['rpms']['idle']
+        manifest[key]['limiterRpm'] = cfg.get('limiter', cfg['rpms']['high'])
         # One extra loop per engine for the closed throttle, at the mid band. The app
         # scales it by rpm like any other, and crossfades it in as load drops — one file per
         # engine instead of a whole parallel set, which is enough to hear the difference.

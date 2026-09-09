@@ -2,7 +2,7 @@
  "mustang": {
   "label": "Ford Mustang GT3 (V8, Cross-Plane)",
   "cylinders": 8,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.45,
   "turbo": false,
   "loops": {
@@ -41,12 +41,14 @@
     "seconds": 1.9972,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1200,
+  "limiterRpm": 7000
  },
  "c6r": {
   "label": "Corvette C6.R (LS7.R 7.0 V8, Cross-Plane)",
   "cylinders": 8,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.45,
   "turbo": false,
   "loops": {
@@ -85,12 +87,14 @@
     "seconds": 2.0019,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1100,
+  "limiterRpm": 7200
  },
  "z06gt3r": {
   "label": "Corvette Z06 GT3.R (LT6.R 5.5 V8, Flat-Plane)",
   "cylinders": 8,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.62,
   "turbo": false,
   "loops": {
@@ -129,12 +133,14 @@
     "seconds": 1.9846,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1300,
+  "limiterRpm": 8600
  },
  "amggt3": {
   "label": "Mercedes-AMG GT3 (M159 6.2 V8, Cross-Plane)",
   "cylinders": 8,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.5,
   "turbo": false,
   "loops": {
@@ -173,12 +179,14 @@
     "seconds": 1.9843,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1200,
+  "limiterRpm": 7700
  },
  "f296gt3": {
   "label": "Ferrari 296 GT3 (F163CE 3.0 V6 120 Grad, ohne Lader)",
   "cylinders": 6,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.55,
   "turbo": true,
   "loops": {
@@ -217,12 +225,14 @@
     "seconds": 1.9955,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1400,
+  "limiterRpm": 8000
  },
  "m4gt3": {
   "label": "BMW M4 GT3 (P58 3.0 Reihen-6, ohne Lader)",
   "cylinders": 6,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.52,
   "turbo": true,
   "loops": {
@@ -242,9 +252,9 @@
    },
    "high": {
     "file": "m4gt3_high.ogg",
-    "baseRpm": 7200,
-    "firingHz": 360.0,
-    "seconds": 2.0,
+    "baseRpm": 6800,
+    "firingHz": 340.0,
+    "seconds": 1.9941,
     "load": 1.0
    },
    "over": {
@@ -261,12 +271,14 @@
     "seconds": 1.9797,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1300,
+  "limiterRpm": 7200
  },
  "huracan": {
   "label": "Huracan GT3 EVO2 / R8 LMS (5.2 V10, Split-Pin)",
   "cylinders": 10,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.48,
   "turbo": false,
   "loops": {
@@ -305,12 +317,14 @@
     "seconds": 2.0073,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1400,
+  "limiterRpm": 8700
  },
  "vantagegt3": {
   "label": "Aston Martin Vantage GT3 (M177 4.0 V8, ohne Lader)",
   "cylinders": 8,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.58,
   "turbo": false,
   "loops": {
@@ -349,12 +363,14 @@
     "seconds": 1.9777,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1200,
+  "limiterRpm": 7200
  },
  "p992gt3r": {
   "label": "Porsche 911 GT3 R (4.2 Boxer-6, Einzeldrosseln)",
   "cylinders": 6,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.42,
   "turbo": false,
   "loops": {
@@ -393,12 +409,14 @@
     "seconds": 2.0086,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1200,
+  "limiterRpm": 8800
  },
  "f1_2026": {
   "label": "Formel 1 2026 (1.6 V6 Turbo-Hybrid, 90 Grad)",
   "cylinders": 6,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.12,
   "turbo": true,
   "loops": {
@@ -444,12 +462,14 @@
     "seconds": 2.0,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 4200,
+  "limiterRpm": 12500
  },
  "gt40": {
   "label": "Ford GT40 Mk I (4.7 V8, Cross-Plane)",
   "cylinders": 8,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.4,
   "turbo": false,
   "loops": {
@@ -488,12 +508,14 @@
     "seconds": 1.9753,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 900,
+  "limiterRpm": 6500
  },
  "lolat70": {
   "label": "Lola T70 Mk3B (Chevrolet 5.0 V8, Cross-Plane)",
   "cylinders": 8,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.48,
   "turbo": false,
   "loops": {
@@ -532,12 +554,14 @@
     "seconds": 2.014,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1000,
+  "limiterRpm": 7000
  },
  "f330p4": {
   "label": "Ferrari 330 P4 / 412P (4.0 V12, 60 Grad)",
   "cylinders": 12,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.5,
   "turbo": false,
   "loops": {
@@ -576,12 +600,14 @@
     "seconds": 2.0211,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1400,
+  "limiterRpm": 8200
  },
  "mc12": {
   "label": "Maserati MC12 (6.0 V12, 65 Grad)",
   "cylinders": 12,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.44,
   "turbo": false,
   "loops": {
@@ -620,12 +646,14 @@
     "seconds": 2.0194,
     "load": 1.0
    }
-  }
+  },
+  "idleRpm": 1300,
+  "limiterRpm": 7800
  },
  "countach": {
   "label": "Lamborghini Countach LP500 (5.0 V12, 60 Grad, sechs Weber)",
   "cylinders": 12,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.4,
   "turbo": false,
   "loops": {
@@ -678,12 +706,14 @@
     "seconds": 2.0087,
     "load": 0.0
    }
-  }
+  },
+  "idleRpm": 900,
+  "limiterRpm": 7500
  },
  "impreza99": {
   "label": "Subaru Impreza WRX STI 1999 (EJ20 2.0 Boxer-4, Turbo)",
   "cylinders": 4,
-  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
   "crackle": 0.55,
   "turbo": true,
   "loops": {
@@ -736,6 +766,436 @@
     "seconds": 2.0,
     "load": 0.0
    }
-  }
+  },
+  "idleRpm": 850,
+  "limiterRpm": 7500
+ },
+ "c5r": {
+  "label": "Corvette C5-R (LS1.R 7.0 V8, Cross-Plane)",
+  "cylinders": 8,
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.48,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "c5r_idle.ogg",
+    "baseRpm": 1050,
+    "firingHz": 70.0,
+    "seconds": 2.0571,
+    "load": 1.0
+   },
+   "low": {
+    "file": "c5r_low.ogg",
+    "baseRpm": 1997,
+    "firingHz": 133.1,
+    "seconds": 1.983,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "c5r_mid.ogg",
+    "baseRpm": 3800,
+    "firingHz": 253.3,
+    "seconds": 1.9895,
+    "load": 1.0
+   },
+   "high": {
+    "file": "c5r_high.ogg",
+    "baseRpm": 6400,
+    "firingHz": 426.7,
+    "seconds": 2.0063,
+    "load": 1.0
+   },
+   "over": {
+    "file": "c5r_over.ogg",
+    "baseRpm": 3800,
+    "firingHz": 253.3,
+    "seconds": 1.9895,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1050,
+  "limiterRpm": 6800
+ },
+ "listerstorm": {
+  "label": "Lister Storm LMP (Jaguar 7.0 V12, 60 Grad)",
+  "cylinders": 12,
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.5,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "listerstorm_idle.ogg",
+    "baseRpm": 1100,
+    "firingHz": 110.0,
+    "seconds": 1.9636,
+    "load": 1.0
+   },
+   "low": {
+    "file": "listerstorm_low.ogg",
+    "baseRpm": 2298,
+    "firingHz": 229.8,
+    "seconds": 1.9843,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "listerstorm_mid.ogg",
+    "baseRpm": 4800,
+    "firingHz": 480.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "high": {
+    "file": "listerstorm_high.ogg",
+    "baseRpm": 7300,
+    "firingHz": 730.0,
+    "seconds": 2.0055,
+    "load": 1.0
+   },
+   "over": {
+    "file": "listerstorm_over.ogg",
+    "baseRpm": 4800,
+    "firingHz": 480.0,
+    "seconds": 2.0,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1100,
+  "limiterRpm": 8000
+ },
+ "rs5dtm": {
+  "label": "Audi RS5 DTM 2019 (2.0 Reihen-4 Turbo, Class 1)",
+  "cylinders": 4,
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.75,
+  "turbo": true,
+  "loops": {
+   "idle": {
+    "file": "rs5dtm_idle.ogg",
+    "baseRpm": 1600,
+    "firingHz": 53.3,
+    "seconds": 2.025,
+    "load": 1.0
+   },
+   "low": {
+    "file": "rs5dtm_low.ogg",
+    "baseRpm": 3150,
+    "firingHz": 105.0,
+    "seconds": 1.981,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "rs5dtm_mid.ogg",
+    "baseRpm": 6200,
+    "firingHz": 206.7,
+    "seconds": 1.9935,
+    "load": 1.0
+   },
+   "high": {
+    "file": "rs5dtm_high.ogg",
+    "baseRpm": 9200,
+    "firingHz": 306.7,
+    "seconds": 1.9957,
+    "load": 1.0
+   },
+   "over": {
+    "file": "rs5dtm_over.ogg",
+    "baseRpm": 6200,
+    "firingHz": 206.7,
+    "seconds": 1.9935,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1600,
+  "limiterRpm": 9500
+ },
+ "impalanascar": {
+  "label": "Chevrolet Impala SS NASCAR 2010 (R07 5.8 V8, Cross-Plane)",
+  "cylinders": 8,
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.55,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "impalanascar_idle.ogg",
+    "baseRpm": 1000,
+    "firingHz": 66.7,
+    "seconds": 2.04,
+    "load": 1.0
+   },
+   "low": {
+    "file": "impalanascar_low.ogg",
+    "baseRpm": 1531,
+    "firingHz": 102.1,
+    "seconds": 2.0379,
+    "load": 1.0
+   },
+   "low2": {
+    "file": "impalanascar_low2.ogg",
+    "baseRpm": 2345,
+    "firingHz": 156.3,
+    "seconds": 1.9957,
+    "load": 1.0
+   },
+   "low3": {
+    "file": "impalanascar_low3.ogg",
+    "baseRpm": 3591,
+    "firingHz": 239.4,
+    "seconds": 2.005,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "impalanascar_mid.ogg",
+    "baseRpm": 5500,
+    "firingHz": 366.7,
+    "seconds": 2.0073,
+    "load": 1.0
+   },
+   "high": {
+    "file": "impalanascar_high.ogg",
+    "baseRpm": 8800,
+    "firingHz": 586.7,
+    "seconds": 2.0045,
+    "load": 1.0
+   },
+   "over": {
+    "file": "impalanascar_over.ogg",
+    "baseRpm": 5500,
+    "firingHz": 366.7,
+    "seconds": 2.0073,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1000,
+  "limiterRpm": 9800
+ },
+ "capri_zakspeed": {
+  "label": "Ford Capri Zakspeed Turbo 1981 (BDA 1.7 Reihen-4, Turbo)",
+  "cylinders": 4,
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.3,
+  "turbo": true,
+  "loops": {
+   "idle": {
+    "file": "capri_zakspeed_idle.ogg",
+    "baseRpm": 1800,
+    "firingHz": 60.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "low": {
+    "file": "capri_zakspeed_low.ogg",
+    "baseRpm": 3231,
+    "firingHz": 107.7,
+    "seconds": 2.0056,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "capri_zakspeed_mid.ogg",
+    "baseRpm": 5800,
+    "firingHz": 193.3,
+    "seconds": 2.0069,
+    "load": 1.0
+   },
+   "high": {
+    "file": "capri_zakspeed_high.ogg",
+    "baseRpm": 9000,
+    "firingHz": 300.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "over": {
+    "file": "capri_zakspeed_over.ogg",
+    "baseRpm": 5800,
+    "firingHz": 193.3,
+    "seconds": 2.0069,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1800,
+  "limiterRpm": 9500
+ },
+ "p935k4": {
+  "label": "Porsche 935 K4 Kremer 1981 (3.2 Flat-6, Twin-Turbo)",
+  "cylinders": 6,
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.35,
+  "turbo": true,
+  "loops": {
+   "idle": {
+    "file": "p935k4_idle.ogg",
+    "baseRpm": 1200,
+    "firingHz": 60.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "low": {
+    "file": "p935k4_low.ogg",
+    "baseRpm": 2498,
+    "firingHz": 124.9,
+    "seconds": 2.0176,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "p935k4_mid.ogg",
+    "baseRpm": 5200,
+    "firingHz": 260.0,
+    "seconds": 2.0077,
+    "load": 1.0
+   },
+   "high": {
+    "file": "p935k4_high.ogg",
+    "baseRpm": 8000,
+    "firingHz": 400.0,
+    "seconds": 1.995,
+    "load": 1.0
+   },
+   "over": {
+    "file": "p935k4_over.ogg",
+    "baseRpm": 5200,
+    "firingHz": 260.0,
+    "seconds": 2.0077,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1200,
+  "limiterRpm": 8500
+ },
+ "demon": {
+  "label": "Dodge Challenger SRT Demon 2018 (6.2 HEMI V8, Kompressor)",
+  "cylinders": 8,
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.3,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "demon_idle.ogg",
+    "baseRpm": 750,
+    "firingHz": 50.0,
+    "seconds": 1.92,
+    "load": 1.0
+   },
+   "low": {
+    "file": "demon_low.ogg",
+    "baseRpm": 1643,
+    "firingHz": 109.5,
+    "seconds": 1.972,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "demon_mid.ogg",
+    "baseRpm": 3600,
+    "firingHz": 240.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "high": {
+    "file": "demon_high.ogg",
+    "baseRpm": 6200,
+    "firingHz": 413.3,
+    "seconds": 1.9935,
+    "load": 1.0
+   },
+   "over": {
+    "file": "demon_over.ogg",
+    "baseRpm": 3600,
+    "firingHz": 240.0,
+    "seconds": 2.0,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 750,
+  "limiterRpm": 6500
+ },
+ "mustang68": {
+  "label": "Ford Mustang 390 GT 1968 (6.4 FE V8, Cross-Plane)",
+  "cylinders": 8,
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.28,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "mustang68_idle.ogg",
+    "baseRpm": 700,
+    "firingHz": 46.7,
+    "seconds": 2.0571,
+    "load": 1.0
+   },
+   "low": {
+    "file": "mustang68_low.ogg",
+    "baseRpm": 1349,
+    "firingHz": 89.9,
+    "seconds": 1.957,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "mustang68_mid.ogg",
+    "baseRpm": 2600,
+    "firingHz": 173.3,
+    "seconds": 1.9846,
+    "load": 1.0
+   },
+   "high": {
+    "file": "mustang68_high.ogg",
+    "baseRpm": 5200,
+    "firingHz": 346.7,
+    "seconds": 2.0077,
+    "load": 1.0
+   },
+   "over": {
+    "file": "mustang68_over.ogg",
+    "baseRpm": 2600,
+    "firingHz": 173.3,
+    "seconds": 1.9846,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 700,
+  "limiterRpm": 6000
+ },
+ "blazer90": {
+  "label": "Chevrolet Blazer 1990 (5.7 Small Block V8, TBI)",
+  "cylinders": 8,
+  "source": "vollständig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.15,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "blazer90_idle.ogg",
+    "baseRpm": 650,
+    "firingHz": 43.3,
+    "seconds": 2.0308,
+    "load": 1.0
+   },
+   "low": {
+    "file": "blazer90_low.ogg",
+    "baseRpm": 1196,
+    "firingHz": 79.7,
+    "seconds": 2.0067,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "blazer90_mid.ogg",
+    "baseRpm": 2200,
+    "firingHz": 146.7,
+    "seconds": 2.0182,
+    "load": 1.0
+   },
+   "high": {
+    "file": "blazer90_high.ogg",
+    "baseRpm": 4300,
+    "firingHz": 286.7,
+    "seconds": 2.0093,
+    "load": 1.0
+   },
+   "over": {
+    "file": "blazer90_over.ogg",
+    "baseRpm": 2200,
+    "firingHz": 146.7,
+    "seconds": 2.0182,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 650,
+  "limiterRpm": 5000
  }
 }

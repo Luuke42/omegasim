@@ -5,13 +5,22 @@ Gruppe fremdes Aufnahmematerial enthaelt.
 
 ## Vollstaendig synthetisch — kein Aufnahmematerial
 
-Vierzehn Motoren, und jeder gehoert zu einem wirklichen Auto: die acht Rennmotoren nach
-technischen Angaben (Corvette C6.R, Corvette Z06 GT3.R, Mercedes-AMG GT3, Ferrari 296 GT3,
-BMW M4 GT3, Huracan GT3 / R8 LMS, Aston Martin Vantage GT3, Porsche 911 GT3 R), der Ford
-Mustang GT3 (V8 Cross-Plane), ein Formel 1 nach dem Reglement 2026 (1,6-l-V6 Turbo-Hybrid)
-vier historische Rennwagen (Ford GT40 Mk I, Lola T70 Mk3B, Ferrari 330 P4 / 412P,
-Maserati MC12) und zwei Strassen- und Rallyeklassiker (Lamborghini Countach LP500,
-Subaru Impreza WRX STI 1999) — sowie alle
+Fuenfundzwanzig Motoren, und jeder gehoert zu einem wirklichen Auto:
+
+* **GT- und GT3-Rennmotoren:** Porsche 911 GT3 R, BMW M4 GT3, Ford Mustang GT3,
+  Ferrari 296 GT3, Mercedes-AMG GT3, Corvette C6.R, Corvette C5-R,
+  Corvette Z06 GT3.R, Aston Martin Vantage GT3, Huracan GT3 / R8 LMS
+* **Formel 1:** ein Motor nach dem Reglement 2026 (1,6-l-V6 Turbo-Hybrid)
+* **Langstrecken-Prototyp:** Lister Storm LMP (Jaguar-V12)
+* **Tourenwagen, DTM und NASCAR:** Audi RS5 DTM 2019, Chevrolet Impala SS NASCAR 2010
+* **Historische Rennwagen:** Ford GT40 Mk I, Lola T70 Mk3B, Ferrari 330 P4 / 412P,
+  Maserati MC12, Ford Capri Zakspeed Turbo 1981, Porsche 935 K4 Kremer 1981
+* **Strassen- und Rallyeklassiker:** Lamborghini Countach LP500,
+  Subaru Impreza WRX STI 1999
+* **Amerikanische Strassenmotoren:** Dodge Challenger SRT Demon 2018,
+  Ford Mustang 390 GT 1968, Chevrolet Blazer 1990
+
+Sie und alle
 Effekte (Bremsenquietschen, Reifenquietschen, Crash-Varianten, Schlagschrauber,
 Tankgeraeusch, Karosseriereparatur, Motorstart) sind von Grund auf gerechnet. Es wird nichts aus einer
 Aufnahme abgespielt.
@@ -19,12 +28,22 @@ Aufnahme abgespielt.
 Jeder dieser Motoren hat **fuenf bis sieben** Schleifen: die drei verankerten Drehzahlbaender
 (`idle`, `mid`, `high`), dazu so viele Zwischenbaender, wie `band_ladder()` noetig findet —
 zwischen zwei Nachbarn darf hoechstens der Faktor 2,2 liegen, sonst hoert man den Sprung.
-Beim Formel 1 sind das zwei Zwischenbaender, bei Countach und Impreza je drei, sonst eines.
+Beim Formel 1 sind das zwei Zwischenbaender, bei Countach, Impreza und der NASCAR-Impala je
+drei, sonst eines. Zusammen sind es 132 Schleifen.
 Sie werden nach Drehzahl ueberblendet. Dazu kommt eine Schubschleife (`over`) am mittleren
 Band, die
 parallel dazu nach **Last** eingeblendet wird. Voll auf Zug ab 36 % Gas, voller Schub unter
 6 %, dazwischen linear; die Summe aller Stimmen ist immer genau 1, damit im Uebergang kein
 Loch und keine Beule entsteht.
+
+Jeder Motor fuehrt sein eigenes **Drehzahlband** mit (`idleRpm` und `limiterRpm` in
+`loops.json`). Die Physik der App rechnet fuer alle Autos von 1500 bis 9000 Umdrehungen;
+das Vorbild dreht aber bis 5000 (Blazer) oder bis 12500 (Formel 1). Ohne dieses Band wurde
+jede Schleife auf 9000 gestreckt — beim BMW M4 GT3 um den Faktor 1,25, also knapp vier
+Halbtoene zu hoch, und beim Formel 1 um 0,72 nach unten. Anzeige und Ton benutzen jetzt
+dieselbe abgebildete Zahl, die Abspielrate liegt oben bei 1,03 bis 1,16, und der
+Drehzahlmesser zeigt, was beim Vorbild wirklich dort steht. Die Fahrphysik ist davon
+unberuehrt: es aendert sich eine Skala und kein Fahrverhalten.
 
 Die Hubraum- und Auspuffdaten sind nicht geraten: die Laenge des Kruemmerprimaerrohrs
 bestimmt die Resonanz physikalisch als `c / (4 L)`, und die Zylinderzahlen, Drehzahlgrenzen

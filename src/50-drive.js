@@ -174,10 +174,25 @@
       // Falls der gespeicherte Name unbekannt war, faellt applyLayout auf neutral zurueck -
       // dann muss die Auswahl mitkommen, sonst zeigt sie etwas anderes als das Modell.
       if ($('setting-layout').value !== name) $('setting-layout').value = name;
-      // applyLayout() hat gerade steerDaempfungMs aus dem Traegheitsmoment gesetzt. Der
-      // Regler muss mitkommen, sonst zeigt er einen Wert, der nicht mehr gilt - dieselbe
-      // Falle, gegen die drei Zeilen darueber die Auswahlliste nachgezogen wird.
-      steerDaempfungSetzen(physEngine.config.steerDaempfungMs, true);
+      // ---- DER REGLER IST DIE AUTORITAET, NICHT DAS LAYOUT ----------------------
+      //
+      // Hier stand `steerDaempfungSetzen(physEngine.config.steerDaempfungMs, true)`: das
+      // Layout hatte die Daempfung gerade aus dem Traegheitsmoment gesetzt, und der Regler
+      // kam mit. Das war richtig, solange die Vorgabe ohnehin der abgeleitete Wert war.
+      //
+      // Seit v0.5.54 steht die Vorgabe auf SOFORT (0 ms, vom Nutzer bestellt). Mit der alten
+      // Zeile waere sie nach dem ersten Fahrzeugwechsel wieder weg - man waehlt ein Layout
+      // und die Lenkung ist plötzlich wieder traege, ohne dass irgendwo steht, warum. Genau
+      // die Sorte stiller Ruecknahme, die man dem Geraet zuschreibt und nicht der App.
+      //
+      // Also umgekehrt: der Regler wird auf das Modell geschrieben und nicht das Modell auf
+      // den Regler. Die Ableitung aus dem Traegheitsmoment (steerDaempfungFor) bleibt im
+      // Modell und bleibt richtig - sie ist jetzt ein Vorschlag und keine Vorschrift.
+      // Anzeige und Modell stimmen weiter ueberein, und die Pruefung "Regler und Modell
+      // sagen beim Laden dasselbe" behaelt ihren Gegenstand.
+      if ($('phys-steerdamp')) {
+        steerDaempfungSetzen(parseFloat($('phys-steerdamp').value), false);
+      }
       zeigeLayoutDaten();
       markDrivetrainChartsDirty();
       if (melden) {
@@ -1655,6 +1670,88 @@
   // Quelldateien, aber diese Funktion laeuft erst zur Laufzeit - physicsStep() haengt am
   // 45-ms-Takt, und updateFlagUi() ruft sie nach dem Laden. Genau das galt fuer flagState
   // schon vorher.
+  // Der Zustand des Autopilot-Reglers. MODULWEIT, weil ghostSpeedControl() einen I-Anteil
+  // fuehrt - ein Zustand, der je Takt neu entsteht, ist keiner. Zuruecksetzen tut ihn
+  // autopilotZuruecksetzen(), gerufen wenn der Autopilot aussetzt: ein I-Anteil, der aus
+  // einer alten gelben Phase stehen bleibt, gibt beim naechsten Mal sofort Gas.
+  const autopilotRegler = {};
+  function autopilotZuruecksetzen() {
+    autopilotRegler.iTerm = 0;
+    autopilotRegler.lastThrottle = 0;
+    autopilotRegler.lastBrake = 0;
+    autopilotRegler.at = 0;
+  }
+
+  // ====================================================================================
+  // DIE FAHRHILFE: EIN SCHALTER STATT ZWEIER SLIDER
+  // ====================================================================================
+  //
+  // GEMELDET: "Wenn ich jetzt fahre, kann ich gar nicht mehr lenken und das Auto lenkt
+  // von alleine." Und dazu die Anweisung: "Gib mir einen Schalter, bei dem ich zwischen
+  // Fahrhilfemodus hin und her schalten kann. Wenn er aus ist, will ich ganz normal
+  // steuern koennen so wie sonst. Wenn er an ist, soll das Auto alleine lenken. In dem
+  // Modus bestimme ich mit dem Lenk-Input nur die Querlage. Vergiss die beiden Slider."
+  //
+  // ---- DER BEFUND: DIE ORTUNG AUS v0.5.54 HAT ZU WEIT GEGRIFFEN ------------------
+  //
+  // spielerOrtTick() (90-ghosts.js) haengte dem Fahrerauto seinen Vorausblick
+  // (car.modeBytes: Byte 10/15 plus die drei Kacheln in Byte 16-18) an genau EINE
+  // Bedingung: trackMode === 'on'. Das ist die "Bahn"/"Ausdruck"-Stellung - die normale
+  // Stellung beim Fahren auf der echten Bahn, nicht eine Alles-oder-nichts-Frage der
+  // Rennsituation. modeBytes gingen also bei JEDER normalen Fahrt hinaus, nicht nur unter
+  // Gelb.
+  //
+  // Diese Bytes sind aber keine Kleinigkeit: sie sind dieselben, mit denen ein Ghost sich
+  // selbst auf der Bahn haelt (AUTO_MODE, gemessen an den eigenen Ghosts der App). Ein
+  // echtes Auto, das sie bekommt, faehrt nach seiner eigenen Sensorik und dem Vorausblick -
+  // die Lenkung des Fahrers wird dann nicht mehr als Winkel gelesen, sondern (wie beim
+  // Ghost) als Querversatz obenauf. Ohne dass der Fahrer das je eingeschaltet haette, war
+  // sein Auto damit dauerhaft im selben Modus wie ein autonomer Ghost.
+  //
+  // ---- DIE LOESUNG: EIN SCHALTER, DEN DER FAHRER SELBST BEDIENT ------------------
+  //
+  // driverAssistOn ersetzt die Bedingung "trackMode === 'on'" fuer das Fahrerauto. Ab Werk
+  // AUS - das stellt "ganz normal steuern koennen so wie sonst" wieder her, unabhaengig
+  // von der Bahn/Ausdruck-Stellung, die weiterhin nur bedeutet, ob die Strecke gerade
+  // gelesen wird.
+  //
+  // Ist er AN, gilt fuer das Fahrerauto exakt dasselbe Verfahren wie fuer einen Ghost im
+  // Leitplanken-Modus: das Auto haelt sich selbst auf der Bahn, und was im Lenkbyte
+  // ankommt, ist keine Radstellung mehr, sondern die Querlage, die der Fahrer haben will.
+  // Der Lenk-Input (steerX) geht dafuer UNVERAENDERT durch - nicht die Zahl aendert sich,
+  // sondern die Bedeutung, die das Auto ihr gibt, sobald modeBytes dabei sind.
+  //
+  // AUTOPILOT BLEIBT UNABHAENGIG davon: unter Gelb oder in der Einfuehrungsrunde muss das
+  // Auto sich selbst halten, damit die Regelung dort ueberhaupt funktioniert - das war die
+  // eigentliche Bestellung hinter v0.5.53. Also ist die Bedingung eine ODER-Verknuepfung:
+  // von Hand eingeschaltet, oder der Autopilot ist gerade aktiv. Faehrt man selbst mit
+  // ausgeschalteter Fahrhilfe, aendert eine gelbe Flagge daran nichts - sie regelt weiter,
+  // wie bestellt.
+  //
+  // DIE ZWEI SLIDER SIND WEG, wie angewiesen. Die Korrektur-zur-Mitte-Rechnung (lenkHilfe)
+  // loeste ein anderes Problem - der Lenkbefehl blieb ein Winkel, nur weicher zur Mitte
+  // gezogen - und war eine Software-Kruecke fuer genau das, was die Hardware selbst
+  // besser kann, sobald sie den Vorausblick hat. Mit dem Schalter braucht es sie nicht
+  // mehr.
+  let driverAssistOn = false;
+
+  // AN, wenn von Hand eingeschaltet ODER der Autopilot gerade greift (Gelb/Formation).
+  // autopilotGrund() steht weiter unten in dieser Datei; als Funktionsdeklaration ist sie
+  // bereits vorhanden, wenn diese Funktion tatsaechlich zum ersten Mal LAEUFT - das
+  // geschieht erst aus einem Zeitgeber, lange nach dem vollstaendigen Laden.
+  function driverAssistAktiv() {
+    return driverAssistOn || !!autopilotGrund();
+  }
+
+  if ($('driver-assist')) {
+    $('driver-assist').addEventListener('change', (e) => {
+      driverAssistOn = e.target.checked;
+    });
+    // Und einmal beim Laden aus dem Markup - dieselbe Regel wie bei jedem anderen Schalter:
+    // der Regler ist die Wahrheit, das Modell folgt ihm.
+    driverAssistOn = $('driver-assist').checked;
+  }
+
   function autopilotGrund() {
     // Ausdruck-Stellung: nicht lenkfaehig. Ohne Leitplanken haelt sich das Auto nicht selbst
     // auf der Bahn, und ein Autopilot ohne Querregelung faehrt es geradeaus in die Bande.
@@ -1672,15 +1769,45 @@
 
   function autopilot(fahrerBremse) {
     const grund = autopilotGrund();
-    if (!grund) return null;
+    // AUSSETZER RAEUMEN DEN REGLER AUF. Ohne das traegt der I-Anteil ueber das Ende der
+    // gelben Phase hinaus und gibt beim naechsten Mal aus dem Stand Gas.
+    if (!grund) { autopilotZuruecksetzen(); return null; }
     const st = physEngine.state;
-    // DASSELBE Tempo wie die Ghosts, siehe formationPace(): sonst rollt das Feld mit 0,35
-    // und der Fahrer mit 0,271, und die Kolonne faellt beim Anrollen auseinander.
-    const ziel = grund === 'formation' ? formationPace() : yellowFactor();
+    // ---- WIE EIN GHOST, UND DAS IST DER BESTELLTE UNTERSCHIED ---------------------
+    //
+    // GEMELDET: "gelbe Flagge fuer mein Auto auf der Bahn fixen: es gibt nur Gas, sollte
+    // stattdessen aber wie ein Ghost und entsprechend gedrosselt weiterfahren."
+    //
+    // Hier stand ein roher P-Regler: throttle = err * 4, brake = -err * 3. Ein reiner
+    // P-Regler hat eine Beharrungsabweichung - er braucht eine Abweichung, um ueberhaupt Gas
+    // zu erzeugen -, und ohne Totband kippt er um den Zielwert. Auf dem Tisch liest sich das
+    // als "es gibt nur Gas": das Auto bekommt Gas, laeuft ueber das Ziel, bekommt Bremse,
+    // faellt darunter, und so weiter.
+    //
+    // Ein Ghost hat fuer genau dieses Problem ghostSpeedControl(): PI mit Totband und
+    // Ratengrenzen, und die Begruendung dafuer steht dort ausgeschrieben ("Ziel 35 Prozent,
+    // erreicht 24" war die gemessene Beharrungsabweichung des alten P-Reglers). Der Fahrer
+    // bekommt jetzt DENSELBEN Regler - "wie ein Ghost" ist wortwoertlich gemeint.
+    //
+    // Der Zustand liegt modulweit: der Regler hat einen I-Anteil, und ein Zustand, der bei
+    // jedem Takt neu angelegt wird, ist kein I-Anteil.
+    //
+    // UND DER LESEBODEN. yellowFactor() ist YELLOW_KMH/Hoechstgeschwindigkeit = 80/327 =
+    // 0,244, GHOST_READ_MIN ist 0,35: das Gelb-Tempo liegt unter der Drehzahl, bei der das
+    // Auto das gedruckte Muster noch liest. Im Leitplanken-Modus - und nur dort greift
+    // dieser Autopilot ueberhaupt - braucht das Auto genau diese Lesung, um sich auf der
+    // Bahn zu halten. Ohne den Boden waere der Autopilot also die Ursache dafuer, dass das
+    // Auto abfliegt. Dieselbe Zeile steht seit v0.5.51 auch bei den Ghosts.
+    const ziel = grund === 'formation'
+      ? formationPace()
+      : Math.max(yellowFactor(), GHOST_READ_MIN);
     const v = Math.abs(st.speedKmh) / physEngine.config.topSpeedKmh;
-    const err = ziel - v;
-    let throttle = Math.max(0, Math.min(1, err * 4));
-    let brake = Math.max(0, Math.min(1, -err * 3));
+    const dtA = Math.max(0.01, Math.min(0.25,
+      (Date.now() - (autopilotRegler.at || Date.now())) / 1000));
+    autopilotRegler.at = Date.now();
+    const geregelt = ghostSpeedControl(autopilotRegler, ziel, v, dtA);
+    let throttle = geregelt.throttle;
+    let brake = geregelt.brake;
     // DIE BREMSE DES FAHRERS GEWINNT, aber nur in der Einfuehrungsrunde. Dort rollt das Feld
     // in zwei Kolonnen dicht hintereinander, und ein Auto, das man nicht anhalten kann, ist
     // ein Auto, das rammt. Bei Gelb bleibt es absichtlich beim vollen Eingriff: dort ist der
@@ -1840,6 +1967,10 @@
     const gasKurve = gasKennlinie(Math.max(0, throttleY), physEngine.config.throttleGamma);
     let rawThrottle = fuelDamageDerate(gasKurve, fuelCut);
     let rawBrake = Math.max(0, -throttleY);
+    // Der rohe Lenk-Input geht unveraendert durch. Ist die Fahrhilfe an (siehe
+    // driverAssistAktiv() oben), aendert das NICHT diese Zahl, sondern nur, wie das Auto
+    // sie versteht: modeBytes gehen dann mit hinaus (spielerOrtTick in 90-ghosts.js), und
+    // dieselbe Zahl wird zur Querlage statt zum Lenkwinkel.
     let steer = steerX;
     // Bei gelber Flagge und in der Einfuehrungsrunde faehrt das Auto selbst. Siehe
     // autopilotGrund() fuer die zwei Gruende und autopilot() fuer die Regelung.

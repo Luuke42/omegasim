@@ -1972,6 +1972,114 @@
       } finally { sampleEngine.car = merk; }
     },
 
+    // ---- Die Fahrhilfe: der Schalter, ueber das Bedienelement gestellt -------------
+    //
+    // UEBER DEN SCHALTER und nicht ueber die Variable: driverAssistOn entsteht aus dem
+    // Bedienelement #driver-assist, und ein Prueflauf, der die Variable direkt setzt,
+    // prueft nicht, ob der Schalter selbst noch etwas bewirkt.
+    //
+    // GEPRUEFT WIRD driverAssistAktiv(), nicht driverAssistOn allein - sie ist die
+    // tatsaechlich verwendete Groesse (spielerOrtTick fragt sie), und sie ist eine ODER-
+    // Verknuepfung mit dem Autopiloten. flagState und raceFormationLap werden dafuer auf
+    // 'green'/false gezwungen: sonst haengt das Ergebnis vom Rennzustand ab, in dem der
+    // Prueflauf zufaellig laeuft, und ist nicht wiederholbar.
+    driverAssistToggleProbe() {
+      if (typeof driverAssistAktiv !== 'function') return null;
+      const el = $('driver-assist');
+      if (!el) return null;
+      const merk = { checked: el.checked, on: (typeof driverAssistOn !== 'undefined')
+                     ? driverAssistOn : null,
+                     flag: flagState, formation: raceFormationLap };
+      try {
+        flagState = 'green';
+        raceFormationLap = false;
+        el.checked = false;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        const aus = driverAssistAktiv();
+        el.checked = true;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        const an = driverAssistAktiv();
+        // Und mit dem Schalter wieder aus: der Autopilot muss trotzdem greifen koennen,
+        // wenn eine gelbe Flagge das verlangt - das ist die ODER-Haelfte der Bedingung.
+        el.checked = false;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        flagState = 'yellow';
+        const trotzAus = driverAssistAktiv();
+        return { aus, an, trotzAus };
+      } finally {
+        el.checked = merk.checked;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        flagState = merk.flag;
+        raceFormationLap = merk.formation;
+      }
+    },
+
+    // ---- DIE ORTUNG DES FAHRERAUTOS, mit einer Attrappe ---------------------------
+    //
+    // Das Fahrerauto bekommt seit v0.5.54 dieselbe Ortung wie ein Ghost und daraus den
+    // Drei-Kachel-Vorausblick (Bytes 16-18). Ohne ihn faehrt es im Leitplanken-Modus
+    // geradeaus - das war die Meldung "gelbe Flagge klappt noch nicht".
+    //
+    // MIT EINER ATTRAPPE und nicht mit einem echten Auto: ein verbundenes Fahrzeug gibt es
+    // am Schreibtisch nicht, und die Ortung braucht keines - sie braucht einen Kachelzaehler
+    // und einen Kachelcode, also genau das, was eine Meldung liefert.
+    //
+    // MIT `assistAn` STEUERBAR seit der Fahrhilfe (v0.5.55): der Vorausblick geht seither
+    // nur hinaus, wenn driverAssistAktiv() wahr ist - von Hand eingeschaltet oder der
+    // Autopilot greift. Vorgabe true, damit dieser Prueflauf weiter genau das zeigt, was
+    // er zeigen soll (den Vorausblick selbst); false ist die Gegenprobe fuer den gemeldeten
+    // Fehler "kann gar nicht mehr lenken, das Auto lenkt von alleine" - trackMode 'on'
+    // ALLEIN darf keinen Vorausblick mehr ausloesen.
+    spielerOrtProbe(schritte, code, assistAn) {
+      const merkPlayer = playerCar;
+      const merkTiles = currentTrackTiles;
+      const merkMode = trackMode;
+      const merkAssist = (typeof driverAssistOn !== 'undefined') ? driverAssistOn : null;
+      const merkFlag = flagState;
+      const merkFormation = raceFormationLap;
+      try {
+        currentTrackTiles = codeToTrack(code || 'SR3GLR2GR2G2').tiles;
+        lineCache = null;
+        trackMode = 'on';
+        // Autopilot ausdruecklich AUS, sonst haengt das Ergebnis am Rennzustand des
+        // Prueflaufs und nicht an assistAn - dieselbe Vorsicht wie in
+        // driverAssistToggleProbe().
+        flagState = 'green';
+        raceFormationLap = false;
+        driverAssistOn = assistAn === undefined ? true : !!assistAn;
+        playerCar = { role: 'steuern', alias: 'Fahrer', tileCount: 0, tileCode: 0x02,
+                      modeBytes: null, ghost: null };
+        const reihe = [];
+        for (let k = 0; k < (schritte || 6); k++) {
+          playerCar.tileCount = (playerCar.tileCount + 1) & 0xff;
+          const idxVor = playerCar.ghost ? playerCar.ghost.tileIndex : null;
+          const naechste = ((idxVor === null ? 0 : idxVor + 1) % currentTrackTiles.length);
+          playerCar.tileCode = currentTrackTiles[naechste].type & 0xff;
+          spielerOrtTick();
+          reihe.push({ tile: playerCar.ghost ? playerCar.ghost.tileIndex : null,
+                       bytes: playerCar.modeBytes
+                         ? Object.keys(playerCar.modeBytes).map(Number).sort((a, b) => a - b)
+                         : null,
+                       vorausblick: playerCar.modeBytes
+                         ? [16, 17, 18].map((b) => playerCar.modeBytes[b]) : null });
+        }
+        // Und die Gegenprobe: OHNE Leitplanken-Modus gibt es keinen Vorausblick, auch
+        // nicht mit eingeschalteter Fahrhilfe.
+        trackMode = 'off';
+        spielerOrtTick();
+        return { reihe, nurOrt: !!(playerCar.ghost && playerCar.ghost.nurOrt),
+                 ohneRail: playerCar.modeBytes };
+      } finally {
+        playerCar = merkPlayer;
+        currentTrackTiles = merkTiles;
+        trackMode = merkMode;
+        if (merkAssist !== null) driverAssistOn = merkAssist;
+        flagState = merkFlag;
+        raceFormationLap = merkFormation;
+        lineCache = null;
+      }
+    },
+
     simGas() {
       if (!simAn()) return null;
       return simState.autos.map((a) => {
@@ -2078,8 +2186,33 @@
         rx: { properties: { writeWithoutResponse: true },
               writeValueWithoutResponse(p) { pakete.push(Array.from(p)); return Promise.resolve(); } },
         ghost: { running: true },
+        // Der Kachelzaehler: die Rollphase endet an ihm und nicht an der Uhr.
+        tileCount: 0, tileCode: 0x02,
       };
+      // ---- EIN FELD IN DER GARAGE, damit dieses Auto ueberhaupt ausrollt -------------
+      //
+      // Seit v0.5.51 staffelt finishGhost() in KACHELN und liest dazu die Feldgroesse:
+      // der Letzte kommt auf null Kacheln heraus, damit die Reihe hinter der Linie dicht
+      // aufschliesst. Mit nur einem Auto in der Garage IST dieses Auto der Letzte - es
+      // bremst also sofort, und diese Sonde meldete "keine Ausrollphase".
+      //
+      // Die Meldung war richtig und die Frage falsch: gemessen werden soll die SEQUENZ,
+      // also braucht das Auto einen Platz weiter vorn. Drei Attrappen dahinter geben ihm
+      // drei Kacheln.
+      const merkGarage = garage.splice(0, garage.length);
+      const attrappen = [];
+      for (let i = 0; i < 3; i++) {
+        attrappen.push({ role: 'ghost', alias: 'X' + i, ghost: { running: false } });
+      }
+      garage.push(car);
+      for (const a of attrappen) garage.push(a);
+      finishSeitenZaehlerZuruecksetzen();
       finishGhost(car);
+      // Die Kacheln, die es rollen soll, gleich mitzaehlen - die Sonde dreht nur die Uhr
+      // zurueck und faehrt nicht wirklich.
+      if (car.ghost.finish) {
+        car.tileCount = (car.tileCount + (car.ghost.finish.kacheln || 0)) & 0xff;
+      }
       // Die Phase gehoert an das PAKET und nicht an den Takt: ein Takt, in dem die Phase
       // wechselt, schreibt kein Paket. Zwei Listen verschiedener Laenge nebeneinander zu
       // fuehren und mit demselben Index zu lesen war der Fehler - die Bremsphase sah dadurch
@@ -2111,9 +2244,12 @@
         gas: gasVon(b[6]),
         licht: b[14],
       }));
+      garage.splice(0, garage.length);
+      for (const c of merkGarage) garage.push(c);
       return { reihe, phasen, takte, schritt,
                kopf: LIGHT_HEAD, bremse: LIGHT_BRAKE,
-               blinks: FINISH_BLINKS, rollMs: FINISH_ROLL_MAX };
+               kacheln: car.ghost.finish ? car.ghost.finish.kacheln : null,
+               blinks: FINISH_BLINKS, rollMsMax: FINISH_ROLL_MS_MAX };
     },
 
     // ---- Hebt ein Start das Parkschild? -----------------------------------------
@@ -2337,7 +2473,11 @@
                p: +p.toFixed(4),
                // Erwartete Wartezeit in Sekunden, sobald der Verfolger in Reichweite ist.
                wartenS: p > 0 ? +(SPICE_ATTACK_RETRY_MS / 1000 / p).toFixed(1) : null,
-               sperreMs: SPICE_PASS_BLOCK_MS };
+               sperreMs: SPICE_PASS_BLOCK_MS,
+               // Die Schwelle bleibt herausgegeben, obwohl der Platz jetzt immer 1 ist:
+               // damit eine Pruefung nachrechnen kann, dass 1 sie ueberschreitet - und
+               // damit auffaellt, wenn jemand sie ueber 1 setzt.
+               platzMin: SPICE_PASS_PLATZ_MIN };
     },
 
     ghostPassProbe(o) {
@@ -2359,7 +2499,15 @@
         // Den Zustand setzen, den ein gewuerfelter Angriff erzeugt.
         g.attackUntil = uhr + 1e9;   // wird von der Sequenz selbst beendet
         g.passSince = uhr;
-        g.passPhase = 'raus';
+        // MIT ODER OHNE ANSAGE. Ohne sie steigt der Lauf bei 'raus' ein, wie bisher - so
+        // bleiben die vorhandenen Pruefungen unberuehrt. Mit ihr faengt er dort an, wo ein
+        // gewuerfelter Angriff wirklich anfaengt, und damit ist die Lichthupe pruefbar.
+        if (opt.mitAnsage) {
+          g.passPhase = 'ansage';
+          g.ansageSeit = uhr;
+        } else {
+          g.passPhase = 'raus';
+        }
         g.attackSide = 1;
         g.passZiel = vorne;
         vorne.ghost.yieldSide = -1;
@@ -2374,12 +2522,31 @@
             hinten.ghost.tilesTotal = vorne.ghost.tilesTotal + 1.0;
           }
           const r = ghostSpice(hinten, { tight: 0, dist: 99, key: 'p' });
+          // DEN LICHTMERKER SETZEN. Diese Sonde ruft ghostSpice() direkt und nicht
+          // ghostTick(), und gesetzt wird er dort - also hier von Hand, mit der gefaelschten
+          // Uhr dieses Laufs. Ohne diese Zeile blieb g.hupt falsch und die Sonde meldete
+          // null Impulse, obwohl die Ansage lief.
+          if (typeof ghostHupeSetzen === 'function') ghostHupeSetzen(g, uhr);
           reihe.push({ t, phase: g.passPhase || '-', versatz: +(r.attack || 0).toFixed(3),
-                       faktor: +r.factor.toFixed(4), laeuft: !!g.attackUntil });
+                       faktor: +r.factor.toFixed(4), laeuft: !!g.attackUntil,
+                       // Ist das Licht in diesem Takt AUS? Das IST die Lichthupe - ein
+                       // Scheinwerfer-Bit, Licht an im Normalfall, also ein kurzes Aus.
+                       dunkel: typeof ghostHupt === 'function' ? ghostHupt(hinten) : null });
           if (!g.attackUntil && t > (opt.ueberholtNach || 0)) break;
         }
         return { reihe, gesperrtBis: g.passBlockUntil ? g.passBlockUntil - uhr : 0,
-                 phasen: [...new Set(reihe.map(x => x.phase))] };
+                 phasen: [...new Set(reihe.map(x => x.phase))],
+                 // Die Phasenfolge in ihrer Reihenfolge - 'phasen' ist eine Menge und sagt
+                 // ueber die Ordnung nichts, und bei einer Ansage VOR dem Ausschwenken ist
+                 // genau die Ordnung die Zusage.
+                 folge: reihe.reduce((a, x) =>
+                   (a[a.length - 1] === x.phase ? a : a.concat(x.phase)), []),
+                 // Die Impulse der Lichthupe: Flanken von hell auf dunkel.
+                 impulse: reihe.reduce((n, x, i) =>
+                   n + ((x.dunkel && !(reihe[i - 1] || {}).dunkel) ? 1 : 0), 0),
+                 dunkelTakte: reihe.filter((x) => x.dunkel).length,
+                 // Und wann die Ansage endete, damit ein Test die Dauer nachrechnen kann.
+                 ansageMs: typeof SPICE_ANSAGE_MS === 'number' ? SPICE_ANSAGE_MS : null };
       } finally {
         Date.now = echtNow;
         garage.splice(0, garage.length);
@@ -2428,12 +2595,24 @@
       try {
         finishSeitenZaehlerZuruecksetzen();
         const raus = [];
-        for (let i = 0; i < (n || 4); i++) {
+        // ---- ERST DAS GANZE FELD AUFSTELLEN, DANN EINLAUFEN LASSEN ------------------
+        //
+        // Seit die Staffel in Kacheln rechnet, liest finishGhost() die FELDGROESSE aus der
+        // Garage: der Letzte soll auf null Kacheln herauskommen. Der erste Anlauf dieser
+        // Sonde schob die Autos einzeln hinein und rief finishGhost() gleich danach - die
+        // Garage hatte dann bei jedem Auto genau ein Auto mehr, und jedes bekam null
+        // Kacheln. Die Sonde haette damit die Staffel geprueft, die sie selbst kaputt macht.
+        const zahl = n || 4;
+        const autos = [];
+        for (let i = 0; i < zahl; i++) {
           const gesendet = [];
-          const car = { role: 'ghost', alias: 'F' + i, tileCode: 0x02,
-                        testSenke: gesendet,
-                        ghost: { tileIndex: 0, engine: null } };
-          garage.push(car);
+          autos.push({ role: 'ghost', alias: 'F' + i, tileCode: 0x02,
+                       tileCount: 0, testSenke: gesendet,
+                       ghost: { tileIndex: 0, engine: null } });
+        }
+        for (const c of autos) garage.push(c);
+        for (const car of autos) {
+          const gesendet = car.testSenke;
           finishGhost(car);
           const f = car.ghost.finish;
           let uhr = echtNow();
@@ -2444,11 +2623,19 @@
             return gesendet.length ? gesendet[gesendet.length - 1].steer : null;
           };
           const steerRoll = holen();
-          uhr += (f.rollMs || 0) + 10;
+          // DIE KACHELN WEITERZAEHLEN, wie es die Meldungen taeten - die Rollphase endet
+          // an einem Zaehlerstand UND an einer Mindestzeit.
+          car.tileCount = (car.tileCount + (f.kacheln || 0)) & 0xff;
+          // UND DIE UHR UEBER DIE MINDESTROLLZEIT. FINISH_ROLL_MS_MIN gibt dem Ausschwenken
+          // seine Dauer - ohne sie haelt das Auto in der Mitte, und das war die Meldung
+          // "die Autos parken mitten auf der Bahn". Eine Sonde, die nur 50 ms weiterdreht,
+          // prueft die Staffel in einer Phase, die noch laeuft.
+          uhr += FINISH_ROLL_MS_MIN + 50;
           ghostFinishTick(car);                  // Phasenwechsel auf 'brake'
           const steerBrake = holen();
           Date.now = echtNow;
-          raus.push({ seite: f.seite, rollMs: f.rollMs, steerRoll, steerBrake });
+          raus.push({ seite: f.seite, kacheln: f.kacheln, steerRoll, steerBrake,
+                      phase: car.ghost.finish ? car.ghost.finish.phase : null });
         }
         return raus;
       } finally {
@@ -3149,7 +3336,7 @@
           car.ghost.yieldUntil = uhr + 1e9;
         }
         const tempo = [], ziel = [], vorsteuer = [], gang = [], drehzahl = [];
-        const phase = [], mix = [], naehern = [];
+        const phase = [], mix = [], naehern = [], linie = [];
         // Die Pakete VOR der Schleife wegzaehlen: startGhost() ruft stopGhost(), und das
         // schreibt eine Null-Nachricht. Sie hat keinen Takt und damit keinen Kanalwert.
         const vorLauf = bytes.length;
@@ -3238,6 +3425,11 @@
             drehzahl.push(e3 && e3.rpmRawAt
               ? Math.round(e3.rpmRawAt(e3.state.speedKmh, e3.state.currentGear)) : null);
             tempo.push(e3 ? +(e3.state.speedKmh / e3.config.topSpeedKmh).toFixed(4) : 0);
+            // Der LINIENVERSATZ im echten Fahrbetrieb. ghostLinieTrace() faelscht die
+            // Kacheluhr und bekommt deshalb saubere Phasen; hier faehrt das Auto wirklich,
+            // und die Phase ist eine Schaetzung. Der Unterschied zwischen den zwei Sonden
+            // ist genau die Frage, ob die Linie am Servo ankommt.
+            linie.push(+ghostLineOffset(car).toFixed(3));
           }
         }
         stopGhost(car);
@@ -3245,7 +3437,7 @@
         const roh = bytes.slice(vorLauf);
         return { lenk: roh.map(b => b[0]), gas: roh.map(b => b[1]),
                  kachel: roh.map(b => b[2]), tempo, ziel, vorsteuer, gang, drehzahl,
-                 phase, mix, naehern,
+                 phase, mix, naehern, linie,
                  // Die KRAEFTE an genau der Stelle, an der es klebt. Sagt thrust > resist
                  // und faehrt das Auto trotzdem nicht schneller, sitzt die Grenze nicht im
                  // Antrieb, sondern in e.update().

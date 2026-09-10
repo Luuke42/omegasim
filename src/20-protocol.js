@@ -216,7 +216,24 @@
     // Physik - sonst zeigt der Tacho die Simulation und das Auto bekommt weniger.
     fuelTankTick(throttle);
     updateEngineSound(throttle);
-    const payload = buildCommandPacket(steer, throttle);
+    // ---- MIT VORAUSBLICK, seit v0.5.54 -------------------------------------------
+    //
+    // Hier standen zwei Argumente, und damit ging das Paket des Fahrerautos OHNE die Bytes
+    // 16-18 hinaus - ohne den Drei-Kachel-Vorausblick, den jeder Ghost bekommt. Im
+    // Leitplanken-Modus braucht das Auto ihn, um zu wissen, was kommt; ohne ihn faehrt es
+    // geradeaus. Genau das war die Meldung "gelbe Flagge klappt noch nicht, mein Auto
+    // faehrt nur geradeaus".
+    //
+    // Gesetzt wird playerCar.modeBytes von spielerOrtTick() in 90-ghosts.js, im selben
+    // Takt wie dieses Paket. Ist keine Strecke eingescannt oder der Leitplanken-Modus aus,
+    // ist es null - und dann ist das Paket wieder genau das von vorher.
+    //
+    // lightOverride bleibt undefined, damit buildCommandPacket() wie bisher das modulweite
+    // lightBits nimmt. Ein durchgereichtes null waere hier NICHT dasselbe: die Funktion
+    // prueft auf undefined.
+    const modeBytes = (typeof playerCar !== 'undefined' && playerCar)
+      ? playerCar.modeBytes : null;
+    const payload = buildCommandPacket(steer, throttle, undefined, modeBytes);
     recWrite(payload);
     // A car given the "Steuern" role in the garage becomes the write target. Falls back to
     // the BLE explorer's selection so the developer workflow keeps working untouched.

@@ -495,6 +495,17 @@
         // setzt. Sie gehoert in den Prueffzustand, weil "alle Punkte gehen an den Rand"
         // genau ueber sie zu messen ist.
         quer: a.car.ghost ? (a.car.ghost.querSoll || 0) : 0,
+        // Die Ueberholphase und die Lichthupe. IN DEN ZUSTAND und nicht nur auf die Karte:
+        // simSchritt() rechnet, ohne zu zeichnen - simZeichnen() haengt am Zeitgeber, und
+        // der ist im verborgenen Browser-Bereich auf 1 Hz gedrosselt. Ein Prueflauf, der
+        // die Lichthupe an der Karosseriefarbe messen will, findet deshalb nichts, obwohl
+        // sie laeuft. Genau dieser Irrtum hat hier eine Messung gekostet.
+        // passPhase UND NICHT phase: `phase` steht in diesem Objekt schon - es ist die
+        // Kachelphase, also der Ort INNERHALB der Kachel. Ein zweites Feld gleichen Namens
+        // haette sie im Literal stillschweigend ueberschrieben, und die Ideallinien-
+        // Pruefungen haetten ab da einen Phasenwert von 'raus' gelesen.
+        passPhase: a.car.ghost ? (a.car.ghost.passPhase || null) : null,
+        hupt: ghostHupt(a.car),
         zeiten: a.zeiten.slice(),
         geparkt: !!a.car.parked,
         tileIndex: a.car.ghost ? a.car.ghost.tileIndex : null,
@@ -529,7 +540,17 @@
         karteAutosSetzen(svg, st.karteGeo, st.autos.map((a) => ({
           index: a.kachel || 0,
           phase: a.phase || 0,
-          farbe: carColor(a.car).hex,
+          // ---- DIE LICHTHUPE IST HIER ZU SEHEN ------------------------------------
+          //
+          // Am Teppung blitzen die Scheinwerfer; auf der Karte gibt es keine, also blitzt
+          // die Karosserie. Ohne das waere die Ansage vor einem Ueberholmanoever nur mit
+          // echten Autos zu beurteilen - und der Zweck dieser Simulation ist, dass man das
+          // Verhalten am Schreibtisch sieht.
+          //
+          // WEISS und nicht heller: die Wagenfarben sind gesaettigt, ein aufgehelltes Rot
+          // waere Rosa und liesse sich von einer anderen Wagenfarbe nicht unterscheiden.
+          // Weiss kommt in der Farbtabelle nicht vor.
+          farbe: ghostHupt(a.car) ? '#ffffff' : carColor(a.car).hex,
           kuerzel: a.car.alias,
           // Die ANGEFORDERTE Querlage, wie auf der echten Karte: die Schiene haelt das Auto,
           // gemessen wird sie nicht. Damit sieht man Spuren und Ueberholmanoever.

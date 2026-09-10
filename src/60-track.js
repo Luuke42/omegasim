@@ -1097,6 +1097,173 @@
              evals: auswertungen, accepted: 0 };
   }
 
+  // =====================================================================================
+  // DIE 3-STUFEN-LINIE
+  // =====================================================================================
+  //
+  // BESTELLT: "3 Spuren: links, mitte, aussen. Zusaetzliche Ideallinie '3-stufig', bei der
+  // ein Auto immer auf genau einer der Spuren faehrt. Die anderen funktionieren nicht. Bei
+  // Links-Rechts-Kombi soll er dann rechts anfahren und zwischen den Kurven nach links
+  // wechseln, dann faehrt der Ghost eine gute Linie."
+  //
+  // ---- WARUM DIE ANDEREN DREI "NICHT FUNKTIONIEREN", GEMESSEN ----------------------
+  //
+  // Die Vermutung war, dass der Linienversatz gar nicht am Servo ankommt. Das ist NICHT
+  // der Fall - gemessen auf SR3GLR2GR2G2 mit dem Rundenzeitmodell:
+  //
+  //     Linienversatz        Spanne 1,745  (also rund -0,87 bis +0,87)
+  //     Wunsch (Summe)       Spanne 1,134
+  //     am Servo             Spanne 1,404, also 96 % des Wunsches
+  //     je Kachel            Spannen von 16 bis 130 BYTE, von 127 moeglichen
+  //
+  // Der Befehl ist also gross. Was fehlt, ist etwas anderes, und die Kachelzahlen sagen es:
+  // Kachel 2 hat eine Spanne von 130 bei einem MITTELWERT von 41. Der Befehl schwingt - er
+  // laeuft in einer Kurve von aussen durch den Scheitel nach aussen und ist im Mittel
+  // fast null.
+  //
+  // Ein Auto auf einer Schiene folgt so etwas nicht. Der Schlitz haelt es, das Servo hat
+  // eine Stellzeit, und die Ratenbegrenzung des Ghosts hat noch eine - ein Befehl, der
+  // sich staendig aendert, bewegt es kaum. Was es bewegt, ist ein GEHALTENER Befehl, und
+  // genau das ist die Beobachtung des Nutzers: "nur wenn ich bei Fahrt die Querlage
+  // verschiebe, tut sich was, und beim Ueberholen". Beides sind gehaltene Befehle
+  // (ein fester Versatz, und attackSide = +/-1 ueber Sekunden).
+  //
+  // ---- ALSO: DREI SPUREN, GEHALTEN ------------------------------------------------
+  //
+  // Diese Linie nimmt nur drei Werte an - links, Mitte, rechts - und haelt jeden ueber ein
+  // ganzes Stueck Strecke. Sie ist damit KEINE Optimierung: sie hat keine Zielfunktion und
+  // sucht nichts. Sie ist eine Vorschrift, und ihre Begruendung ist nicht die Rundenzeit,
+  // sondern dass das Auto ihr folgen KANN.
+  //
+  // Die Vorschrift je Kurve, in Anteilen des Kurvenstuecks:
+  //
+  //     erste 35 %    AUSSEN      anfahren
+  //     mitte 30 %    INNEN       einlenken
+  //     letzte 35 %   AUSSEN      herauskommen
+  //
+  // Und auf der Geraden zwischen zwei Kurven: die Aussenseite der NAECHSTEN Kurve, ab der
+  // Mitte des geraden Stuecks. Bei einer Links-Rechts-Kombination ergibt das genau das
+  // bestellte Bild - rechts anfahren (aussen an der Linkskurve), zwischen den Kurven nach
+  // links wechseln (aussen an der Rechtskurve).
+  //
+  // DIE 35 PROZENT SIND DIE SCHIKANE. Gemeldet: "Schikane ist zB so eng, dass Ghosts am
+  // besten 500 ms aussen anfahren und dann voll nach innen einlenken, um aussen
+  // rauszukommen." Eine Kachel dauert bei Ghost-Vorgabetempo rund 700 ms; 35 Prozent eines
+  // zweikacheligen Kurvenstuecks sind 0,7 Kacheln, also rund 500 ms. Die Zahl ist damit
+  // nicht gewaehlt, sondern die Uebersetzung der Beobachtung.
+  //
+  // AUSSEN IST +dreht. Das ist nachgemessen und nicht Konvention: bei konstantem Versatz
+  // gibt +4 einen mittleren Bahnradius von 38,8 Einheiten, -4 nur 30,7 - der groessere
+  // Radius ist der aeussere. dreht ist +1 fuer eine Rechtskurve.
+  const SPUR_EIN = 0.35;      // Anteil des Kurvenstuecks, der aussen angefahren wird
+  const SPUR_MITTE = 0.30;    // Anteil, der innen gefahren wird
+  // Wie weit ein voller Spurwechsel geht. 1,0 heisst: bis an die Schranke, die "Kurven
+  // oeffnen" setzt - dieselbe Schranke wie bei den anderen Modellen, damit der Regler auch
+  // hier gilt und nicht nur bei drei von vier Linien.
+  const SPUR_VOLL = 1.0;
+  // Der Anteil einer Geraden, der schon zum Anfahren der naechsten Kurve gehoert. Der Rest
+  // ist Mitte. Begruendung an der Anwendungsstelle.
+  const SPUR_GERADE_ANFAHRT = 0.40;
+
+  function dreiStufenLine(pts, nrm, o) {
+    const n = pts.length;
+    const tiles = o.tiles || [];
+    const closed = o.closed !== false;
+    // Dieselbe Schranke wie bei den anderen Modellen - siehe formLine.
+    const limit = (o.limit !== undefined ? o.limit : TRACK_HALF_W - 3);
+    const alpha = new Array(n).fill(0);
+    const laeufe = lineKurvenLaeufe(tiles, closed);
+    // OHNE KURVEN GIBT ES NICHTS ZU STAFFELN, und dann ist die Mitte richtig - nicht eine
+    // willkuerliche Seite. Derselbe Zweig, dessen Fehlen in v0.5.43 die ganze IIFE
+    // umgebracht hat, als ich lateApexLine geloescht habe.
+    if (!laeufe.length || !tiles.length) {
+      return { alpha, limit, span: 0, lapTime: null, startLapTime: null,
+               v: null, gain: 0, apex: [], par: [], evals: 0, accepted: 0 };
+    }
+    const tab = trackKachelTabelle(pts, tiles.length);
+    const at = (i) => closed ? ((i % n) + n) % n : Math.max(0, Math.min(n - 1, i));
+    // Je Kurvenlauf die Punktindizes, in Fahrtrichtung.
+    const stuecke = laeufe.map((lauf) => {
+      const idx = [];
+      for (let kk = lauf.von; kk <= lauf.bis; kk++) {
+        const t = ((kk % tiles.length) + tiles.length) % tiles.length;
+        for (let d = 0; d < tab.zahl[t]; d++) idx.push(at(tab.start[t] + d));
+      }
+      return { idx, dreht: lauf.dreht };
+    }).filter((s) => s.idx.length);
+    if (!stuecke.length) {
+      return { alpha, limit, span: 0, lapTime: null, startLapTime: null,
+               v: null, gain: 0, apex: [], par: [], evals: 0, accepted: 0 };
+    }
+    // ---- 1. Die Kurven selbst: aussen, innen, aussen ------------------------------
+    for (const st of stuecke) {
+      const m = st.idx.length;
+      const aussen = st.dreht * SPUR_VOLL * limit;
+      const innen = -st.dreht * SPUR_VOLL * limit;
+      const bisEin = Math.max(1, Math.round(m * SPUR_EIN));
+      const bisMitte = Math.min(m, bisEin + Math.max(1, Math.round(m * SPUR_MITTE)));
+      for (let q = 0; q < m; q++) {
+        alpha[st.idx[q]] = q < bisEin ? aussen : (q < bisMitte ? innen : aussen);
+      }
+    }
+    // ---- 2. Die Geraden: MITTE, dann die Aussenseite der naechsten Kurve ----------
+    //
+    // DIE MITTE GEHOERT DAZU, und das ist eine Berichtigung. Der erste Anlauf liess die
+    // erste Haelfte der Geraden auf der Aussenseite der VORIGEN Kurve stehen und wechselte
+    // dann. Gemessen nahm die Linie damit auf drei geprueften Layouts genau ZWEI Werte an -
+    // +/-8,63, die Mitte kam nie vor. Eine "3-stufige" Linie, die nur zwei Stufen benutzt,
+    // ist keine, und schlimmer: der Unterschied zum 2-Stufen-Ausweichen beim Ueberholen
+    // (SPUR_PASS_AUSSEN in 90-ghosts.js) waere damit leer gewesen. Dort ist die Mitte
+    // ausdruecklich verboten, damit sich zwei Autos die Bahn teilen koennen - ein Verbot,
+    // das nichts verbietet, ist keine Zusage.
+    //
+    // Also drei Stufen mit drei Aufgaben:
+    //
+    //     Kurve     aussen - innen - aussen        die Kurve selbst
+    //     Gerade    MITTE                          bis kurz vor der naechsten Kurve
+    //     Gerade    aussen der naechsten Kurve     das letzte Stueck, zum Anfahren
+    //
+    // Und die Mitte auf der Geraden ist nicht nur Kosmetik: dort ist zu beiden Seiten Platz,
+    // also kann ein Verfolger vorbei - egal auf welcher Seite. Ein Auto, das die Gerade am
+    // Rand entlangfaehrt, macht genau eine Seite auf.
+    //
+    // SPUR_GERADE_ANFAHRT ist der Anteil der Geraden, der schon zum Anfahren gehoert. 40
+    // Prozent: bei querTempo 4,0 dauert ein voller Spurwechsel 250 ms, eine Kachel bei
+    // Vorgabetempo rund 700 ms - 40 Prozent einer einkacheligen Geraden sind 280 ms und
+    // damit gerade genug. Kuerzer waere ein Anfahren, das erst am Kurveneingang ankommt.
+    const paare = [];
+    for (let s = 0; s + 1 < stuecke.length; s++) paare.push([s, s + 1]);
+    if (closed && stuecke.length > 1) paare.push([stuecke.length - 1, 0]);
+    for (const [a, b] of paare) {
+      const vonIdx = stuecke[a].idx[stuecke[a].idx.length - 1];
+      const bisIdx = stuecke[b].idx[0];
+      // Die Punkte dazwischen, zyklisch.
+      const zwischen = [];
+      let i = at(vonIdx + 1), sicher = 0;
+      while (i !== bisIdx && sicher++ <= n) { zwischen.push(i); i = at(i + 1); }
+      if (!zwischen.length) continue;     // Kurven stossen direkt aneinander
+      const neu = stuecke[b].dreht * SPUR_VOLL * limit;    // aussen der naechsten
+      // Ab hier gehoert die Gerade zum Anfahren der naechsten Kurve. Mindestens ein Punkt,
+      // damit auch eine sehr kurze Gerade noch vorpositioniert - sonst faehrt das Auto den
+      // Kurveneingang aus der Mitte an, und das ist genau der Fall, den SPUR_EIN vermeidet.
+      const abAnfahrt = Math.max(0, zwischen.length
+                                    - Math.max(1, Math.round(zwischen.length
+                                                             * SPUR_GERADE_ANFAHRT)));
+      for (let q = 0; q < zwischen.length; q++) {
+        alpha[zwischen[q]] = q < abAnfahrt ? 0 : neu;
+      }
+    }
+    // Dieselbe Bahn-aus-alpha-Rechnung wie in formLine: Punkt plus Normale mal alpha.
+    const bahn = pts.map((p, i) => [p.x + nrm[i].x * alpha[i],
+                                    p.y + nrm[i].y * alpha[i]]);
+    const prof = lapTimeOf(bahn, closed, o);
+    return { alpha, limit, span: Math.max.apply(null, alpha.map(Math.abs)),
+             lapTime: prof.time, startLapTime: prof.time, v: prof.v, gain: 0,
+             // Kein Scheitel und keine Parameter: dieses Modell sucht nichts. Die Felder
+             // bleiben leer statt zu behaupten, es haette welche.
+             apex: [], par: [], evals: 0, accepted: 0 };
+  }
+
   // ---------------------------------------------------------------- Modellwahl
   //
   // 'curvature' ist das bisherige Modell, minimale Kruemmung, also der groesste moegliche
@@ -1127,12 +1294,24 @@
   // Annahmen ueber Quer-, Zug- und Bremsbeschleunigung. Auf DIESER Bahnbreite (25 cm) und
   // Kachellaenge (43 cm) hat es aber keinen Platz fuer einen Scheitel, und das steht im
   // Kommentar darueber schon.
-  let lineModel = 'laptime';
+  // ---- 3-STUFIG IST JETZT DIE VORGABE ---------------------------------------------
+  //
+  // Vom Nutzer gesetzt, und der Grund ist gemessen (siehe dreiStufenLine): die drei
+  // optimierenden Modelle erzeugen einen Befehl, der SCHWINGT - Kachelspanne 130 Byte bei
+  // einem Mittelwert von 41. Ein Auto auf einer Schiene folgt so etwas nicht; was es bewegt,
+  // ist ein gehaltener Befehl. Die 3-Stufen-Linie haelt, gemessen Kachelmittelwerte von 80
+  // bis 93.
+  //
+  // Die drei anderen bleiben waehlbar - sie sind als OPTIMIERUNG richtig und zeigen, wo eine
+  // schnellste Linie laege. Sie sind nur nicht das, was dieses Fahrzeug fahren kann.
+  let lineModel = 'dreistufig';
 
   // Die gueltigen Modellnamen an EINER Stelle. Vorher stand die Liste als zwei
   // Vergleiche in setLineModel und ein weiteres Mal als Bedingung in buildLine - beim
   // dritten Modell waeren das drei Orte fuer eine Liste gewesen.
-  const LINE_MODELLE = ['curvature', 'laptime', 'lateapex'];
+  // 'dreistufig' ist KEINE Optimierung und steht deshalb am Ende: die drei davor suchen
+  // ein Optimum, dieses folgt einer Vorschrift. Die Begruendung steht bei dreiStufenLine().
+  const LINE_MODELLE = ['curvature', 'laptime', 'lateapex', 'dreistufig'];
 
   function setLineModel(m) {
     if (LINE_MODELLE.indexOf(m) < 0) return;
@@ -1173,7 +1352,12 @@
   // Linie hinter einer Haarnadel gemessen noch bei -0,10 des Deckels, also auf der
   // Innenseite - bestellt war "von aussen anfahren und aussen verlassen". Mit 0,8 liegt sie
   // dort bei +0,02 und die Anfahrt bei +0,09.
-  let lineExitStaerke = 0.8;
+  // 0 statt 0,8 - vom Nutzer gesetzt. Und es passt zur 3-Stufen-Linie: die Kurvenoeffnung
+  // ist eine Schranke auf den Ein- und Ausgangspunkten, die 3-Stufen-Linie setzt sie aber
+  // ohnehin auf den Anschlag. Gemessen kostete die Oeffnung dem Rundenzeitmodell 4,9 bis
+  // 5,3 Prozent Rundenzeit gegenueber der Mittellinie - sie kauft das AUSSEHEN einer
+  // Ideallinie und keine Zeit.
+  let lineExitStaerke = 0;
   function setLineExit(v) { lineExitStaerke = Math.max(0, Math.min(1, v || 0)); }
   function getLineExit() { return lineExitStaerke; }
 
@@ -1405,10 +1589,14 @@
     // parametrisieren. Dort bleiben die alten punktweisen Verfahren: sie brauchen kein
     // Layout, und ihre Zackigkeit ist ohne Kacheln auch nicht zu beheben.
     const mitLayout = !!(o.tiles && o.tiles.length);
+    // 'dreistufig' BRAUCHT das Layout: seine ganze Vorschrift ist "aussen an der naechsten
+    // Kurve", und ohne Kacheln gibt es keine naechste Kurve. Ohne Layout faellt es deshalb
+    // auf das punktweise Rundenzeitmodell zurueck - wie die anderen zwei layoutgebundenen.
     const line = !mitLayout
         ? (m === 'curvature' ? idealLine(pts, nrm, o) : lapTimeLine(pts, nrm, o))
       : m === 'curvature' ? formLine(pts, nrm, o, 'kurve', 0.15, 0.85)
       : m === 'lateapex' ? formLine(pts, nrm, o, 'zeit', LATE_APEX_MIN, LATE_APEX_MAX)
+      : m === 'dreistufig' ? dreiStufenLine(pts, nrm, o)
       : formLine(pts, nrm, o, 'zeit', 0.15, 0.85);
     line.model = m;
     line.grenzen = g;

@@ -4035,14 +4035,57 @@
     }
     const merkTiles = currentTrackTiles;
     const merkExit = OMEGA_TEST.getLineExit();
+    // ---- VOR DEM try, und das ist kein Stil, sondern der Unterschied zwischen einem
+    //      Aufraeumen und keinem ---------------------------------------------------------
+    //
+    // Der erste Anlauf deklarierte merkModell INNERHALB des try. Ein const im try-Block ist
+    // im finally NICHT sichtbar, und der Waechter `typeof merkModell !== 'undefined'` war
+    // dort deshalb immer falsch: das Modell wurde gesetzt und nie zurueckgelegt.
+    //
+    // Die Folge war teuer und irrefuehrend: alle spaeteren Linientests liefen mit 'laptime'
+    // statt der 3-stufigen Vorgabe, und weil "Kurven oeffnen" auf 0 steht, ist laptime
+    // praktisch die Mittellinie. Der Querlagen-Test meldete daraufhin einen Lenkwert von
+    // -17 bis 23 statt -127 bis 123, und ich habe eine halbe Stunde nach einem Deckel
+    // gesucht, den es nicht gibt.
+    const merkModell = OMEGA_TEST.getLineModel();
     const schlecht = [];
     const zeilen = [];
     try {
+      // ---- DIE KURVENOEFFNUNG GEHOERT ZUR BEHAUPTUNG, also setzt der Test sie ------
+      //
+      // Seit v0.5.54 steht "Kurven oeffnen" ab Werk auf 0 (vom Nutzer gesetzt), und die
+      // Vorgabelinie ist die 3-stufige. Beides zusammen laesst diese Behauptung ins Leere
+      // laufen, und zwar aus einem gemessenen Grund:
+      //
+      //     Eine Carrera-Kurve ist ein Bogen mit FESTEM Radius. Ein Scheitel verkleinert
+      //     ihn, statt ihn zu vergroessern - gemessen: Mittellinie 34,7 Einheiten, +4
+      //     Versatz 38,8, -4 nur 30,7. Die zeitoptimale Linie hat deshalb KEINEN Scheitel,
+      //     und die Kurvenoeffnung ist das, was ihr einen aufzwingt.
+      //
+      // Mit Oeffnung 0 gibt das Rundenzeitmodell einen Scheitel von 0,09 statt 1,0 - also
+      // praktisch die Mittellinie. Das ist richtig und keine Panne.
+      //
+      // Ein Test, der eine Form behauptet, muss die Bedingung herstellen, unter der sie
+      // gilt. Also setzt er die Oeffnung selbst und legt sie danach zurueck - sonst prueft
+      // er die Voreinstellung des Nutzers und nicht das Modell.
+      OMEGA_TEST.setLineExit(0.8);
       // Geschlossene Runde mit zwei Haarnadeln.
       const p = codeToTrack('SHG4HG3');
       currentTrackTiles = p.tiles;
       const schl = trackSchluss(trackCenterline(p.tiles));
       if (!schl.closed) return { ok: false, mass: 'Teststrecke gilt nicht als geschlossen' };
+      // ---- UND DAS MODELL GEHOERT ZUR BEHAUPTUNG -------------------------------
+      //
+      // "Die Linie traegt nach der Kurve nach aussen" ist eine Aussage ueber die
+      // KURVENOEFFNUNG, und die wirkt nur in formLine() - also in den drei optimierenden
+      // Modellen. Die 3-Stufen-Linie kennt sie nicht: sie setzt ihre Spuren auf den
+      // Anschlag, und hinter einer Kurve faehrt sie in die Mitte, weil dort zu beiden
+      // Seiten Platz ist. Gemessen gab der Test deshalb 0,00 -> 0,00, seit die 3-stufige
+      // ab Werk gewaehlt ist.
+      //
+      // Also stellt der Test das Modell selbst, wie er die Oeffnung selbst stellt. Sonst
+      // prueft er die Voreinstellung des Nutzers und nicht die Wirkung der Oeffnung.
+      OMEGA_TEST.setLineModel('laptime');
       const holen = (st) => {
         OMEGA_TEST.setLineExit(st);
         const rows = OMEGA_TEST.compareLines(p.tiles, 6);
@@ -4095,6 +4138,9 @@
       schlecht.push('Ausnahme: ' + e.message);
     } finally {
       OMEGA_TEST.setLineExit(merkExit);
+      // Und das Modell zurueck - ein Prueflauf, der es verstellt liegen laesst, aendert
+      // jede Linie, die danach gebaut wird, und die Vorgabe des Nutzers dazu.
+      OMEGA_TEST.setLineModel(merkModell);
       currentTrackTiles = merkTiles;
       ghostLineCacheLeeren();
     }
@@ -4499,7 +4545,35 @@
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostDriveProbe) {
       return { skip: true, mass: 'ghostDriveProbe nicht vorhanden' };
     }
-    return OMEGA_TEST.ghostDriveProbe({ takte: 300, lage: 'karte' }).then((p) => {
+    // ---- OHNE WUERZE, und das ist eine Berichtigung ------------------------------
+    //
+    // Dieser Prueflauf stellt ein ZWEITES, STEHENDES Auto dazu (damit ghostLane() etwas zu
+    // verteilen hat). Das gemessene Auto faehrt damit dauernd auf ein Hindernis zu, setzt
+    // dauernd zum Ueberholen an - und seit dem 2-Stufen-Ausweichen in v0.5.54 ERSETZT ein
+    // laufendes Manoever die Ideallinie durch eine feste aeussere Spur.
+    //
+    // Gemessen: der gesendete Wert lag bei -126 bis 0, also nur auf einer Seite, und der
+    // Test meldete "nur eine Seite benutzt". Die Zahl war richtig, die Frage falsch - er
+    // hat ein Auto gemessen, das gerade nicht der Linie folgt.
+    //
+    // Die Wuerze aus: dann misst er, was er messen will. Die Linie selbst ist nachgeprueft
+    // und nimmt auf dieser Strecke alle drei Stufen an (-1 / 0 / +1).
+    // ---- UND EINE STRECKE MIT BEIDEN DREHRICHTUNGEN ----------------------------
+    //
+    // Die Vorgabestrecke dieser Sonde ist SG2H2G2R2 - Haarnadel und Kurve, BEIDE nach
+    // rechts. Bei den frueheren, stetigen Linienmodellen war das gleichgueltig: sie
+    // schwangen innerhalb jeder Kurve von aussen zum Scheitel und zurueck, also ueber beide
+    // Seiten.
+    //
+    // Die 3-Stufen-Linie tut das nicht. Sie haelt Spuren, und auf einer Strecke, die nur
+    // nach rechts dreht, ist die Aussenseite immer dieselbe - die andere Seite kommt nur im
+    // Scheiteldrittel vor. Gemessen: der gesendete Wert lag bei -126 bis 0.
+    //
+    // Die Forderung "beide Seiten" ist also nur auf einer Strecke sinnvoll, die beide
+    // Richtungen hat. SR3GLR2GR2G2 ist die vom Nutzer gemeldete Strecke und hat sie.
+    return OMEGA_TEST.ghostDriveProbe({ takte: 400, lage: 'karte',
+      code: 'SR3GLR2GR2G2',
+      cfg: Object.assign({}, WUERZE_AUS) }).then((p) => {
       const abs = p.lenk.map(Math.abs);
       const mittel = abs.reduce((a, b) => a + b, 0) / abs.length;
       const spitze = Math.max.apply(null, abs);
@@ -5088,9 +5162,15 @@
     const schlecht = [];
     try {
       flagState = 'green'; trackMode = 'on';
+      // EINGESCHWUNGEN, nicht im ersten Takt: der Autopilot regelt seit v0.5.53 mit
+      // ghostSpeedControl(), und der ist ratenbegrenzt. Die Begruendung in ganzer Laenge
+      // steht beim Test "Autopilot nur auf der Bahn, und er regelt".
       const bei = (frac, bremse) => {
         physEngine.state.speedKmh = frac * physEngine.config.topSpeedKmh;
-        return autopilot(bremse || 0);
+        let r = autopilot(bremse || 0);
+        if (!r) return r;
+        for (let i = 0; i < 25; i++) r = autopilot(bremse || 0) || r;
+        return r;
       };
       // 1. Ohne Einfuehrungsrunde kein Eingriff.
       raceFormationLap = false;
@@ -5929,6 +6009,11 @@
     }
     const proben = ['SR3GLR2GR2G2', 'SHG4HG3', 'SG4R4G4L4'];
     const schlecht = [], zeilen = [];
+    // Die Oeffnung gehoert zur zweiten Haelfte dieser Pruefung: dass eine Kurve UEBERHAUPT
+    // eine Spanne hat. Ohne sie ist die zeitoptimale Linie die Mittellinie, und dann ist die
+    // Spanne zu Recht klein. Die Begruendung in ganzer Laenge steht beim Kurvenausgang-Test.
+    const merkExit3 = OMEGA_TEST.getLineExit ? OMEGA_TEST.getLineExit() : null;
+    if (OMEGA_TEST.setLineExit) OMEGA_TEST.setLineExit(0.8);
     for (const code of proben) {
       const p = codeToTrack(code);
       const pts = trackCenterline(p.tiles);
@@ -5954,10 +6039,14 @@
         }
         // Gegenprobe: die Linie muss die Bahnbreite ueberhaupt benutzen.
         if (!(L.span > L.limit * 0.15)) {
-          schlecht.push(code + '/' + m + ': Spanne nur ' + (L.span / L.limit).toFixed(2));
+          schlecht.push(code + '/' + m + ': Spanne nur ' + (L.span / L.limit).toFixed(2)
+                        + ' (Kurvenoeffnung 0,8)');
         }
       }
     }
+    // ZURUECKLEGEN. Ein Prueflauf, der die Kurvenoeffnung verstellt und liegen laesst,
+    // verfaelscht jede spaetere Linie - und in dieser Datei laufen danach noch ein Dutzend.
+    if (merkExit3 !== null && OMEGA_TEST.setLineExit) OMEGA_TEST.setLineExit(merkExit3);
     return { ok: !schlecht.length,
              mass: zeilen.join(' ')
                  + (schlecht.length ? ' || ' + schlecht.join('; ') : ' | alle gerade') };
@@ -6148,6 +6237,14 @@
     const schlecht = [];
     const zeilen = [];
     let n = 0;
+    // ---- MIT KURVENOEFFNUNG, sonst gibt es keinen Scheitel zu pruefen -------------
+    //
+    // Gemessen mit Oeffnung 0: Kruemmungsmodell -0,68 und +0,33, Rundenzeitmodell 0,09 und
+    // -0,02 - also kein Scheitel und ein zufaelliges Vorzeichen. Mit 0,8: +0,48/-0,48 und
+    // +1/-1, saubere Vorzeichen. Der Grund ist der feste Kurvenradius, und er steht beim
+    // Kurvenausgang-Test in ganzer Laenge.
+    const merkExit4 = OMEGA_TEST.getLineExit ? OMEGA_TEST.getLineExit() : null;
+    if (OMEGA_TEST.setLineExit) OMEGA_TEST.setLineExit(0.8);
     for (const code of proben) {
       for (const m of ['curvature', 'laptime']) {
         const zuege = OMEGA_TEST.lineShape(code, m);
@@ -6205,8 +6302,12 @@
         }
       }
     }
+    // ZURUECKLEGEN, wie beim Geradentest - eine liegengelassene Kurvenoeffnung verfaelscht
+    // jede Linie, die danach gebaut wird.
+    if (merkExit4 !== null && OMEGA_TEST.setLineExit) OMEGA_TEST.setLineExit(merkExit4);
     return { ok: !schlecht.length,
              mass: n + ' Kurvenzuege in ' + proben.length + ' Strecken x 2 Modelle'
+                 + ' (Kurvenoeffnung 0,8 gesetzt)'
                  + (schlecht.length ? ' | FALSCHE SEITE: ' + schlecht.join(', ')
                                     : ' | ' + zeilen.join(' | ')) };
   });
@@ -6985,6 +7086,410 @@
              mass: zeilen.join(' | ') + (fehler.length ? ' || ' + fehler.join('; ') : '') };
   });
 
+  // ---- Die Lichthupe vor dem Ueberholmanoever ----
+  //
+  // BESTELLT: "Bevor Ghosts zum Ueberholen ansetzen, sollen sie Lichthupe machen." Drei
+  // Zusagen stecken darin, und alle drei stehen hier.
+  //
+  // DAS PROTOKOLL HAT EIN SCHEINWERFER-BIT, also kein Fernlicht - und ein Ghost faehrt mit
+  // Licht an. Die Lichthupe ist deshalb ein kurzes AUS, genau wie die des Fahrers
+  // (resolveLights in 70-race.js, wo die Begruendung steht). Geprueft wird entsprechend
+  // nicht "Licht an", sondern die Zahl der DUNKELFLANKEN.
+  stAdd('Ueberholen: erst Lichthupe, dann ausschwenken', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostPassProbe) {
+      return { skip: true, mass: 'ghostPassProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.ghostPassProbe({ mitAnsage: true, ueberholtNach: 3000,
+                                          dauerMs: 8000 });
+    if (!r || !r.reihe.length) return { skip: true, mass: 'kein Lauf' };
+    const fehler = [];
+    // 1. DIE ANSAGE KOMMT ZUERST. Eine Menge sagt darueber nichts - die REIHENFOLGE ist
+    //    die Zusage, deshalb prueft der Test 'folge' und nicht 'phasen'.
+    if (r.folge[0] !== 'ansage') {
+      fehler.push('die Folge beginnt mit ' + r.folge[0] + ' statt mit der Ansage');
+    }
+    if (r.folge.indexOf('raus') !== 1) {
+      fehler.push('nach der Ansage kommt nicht raus: ' + r.folge.join('>'));
+    }
+    // 2. UND WAEHREND IHR BEWEGT SICH NICHTS ZUR SEITE. Das ist der Unterschied zwischen
+    //    "kuendigt an" und "schwenkt aus und blinkt dabei".
+    const inAnsage = r.reihe.filter((x) => x.phase === 'ansage');
+    if (!inAnsage.length) fehler.push('keine Takte in der Ansage');
+    const querMax = Math.max.apply(null, inAnsage.map((x) => Math.abs(x.versatz)));
+    if (inAnsage.length && !(querMax === 0)) {
+      fehler.push('Seitenversatz ' + querMax + ' schon waehrend der Ansage');
+    }
+    // 3. ZWEI IMPULSE, und sie liegen IN der Ansage. Ein Blitzen, das in die Ausschwenkphase
+    //    hineinlaeuft, waere wieder eine Begleitung und keine Ankuendigung.
+    if (r.impulse !== 2) fehler.push(r.impulse + ' Lichtimpulse statt zwei');
+    const dunkelSpaeter = r.reihe.filter((x) => x.dunkel && x.phase !== 'ansage').length;
+    if (dunkelSpaeter) {
+      fehler.push(dunkelSpaeter + ' dunkle Takte nach der Ansage');
+    }
+    // 4. Die Gegenprobe: OHNE Ansage gibt es keine Lichthupe. Ohne sie waere nicht gezeigt,
+    //    dass die Dunkelflanken von der Ansage kommen und nicht von irgendetwas sonst.
+    const ohne = OMEGA_TEST.ghostPassProbe({ ueberholtNach: 3000, dauerMs: 8000 });
+    if (ohne && ohne.impulse) {
+      fehler.push('ohne Ansage ' + ohne.impulse + ' Lichtimpulse');
+    }
+    return { ok: !fehler.length,
+             mass: r.folge.join(' > ') + ' | ' + r.impulse + ' Impulse in '
+                 + r.ansageMs + ' ms, ' + r.dunkelTakte + ' dunkle Takte'
+                 + ', Versatz in der Ansage ' + querMax
+                 + ' | ohne Ansage ' + (ohne ? ohne.impulse : '?') + ' Impulse'
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Die Ansage darf das Manoever nicht verkuerzen ----
+  //
+  // DER FEHLER, DEN DAS FESTHAELT: SPICE_PASS_MAX_MS ist die Zeit, die ein Versuch dauern
+  // darf, gemessen ab passSince. Setzte man passSince bei der ANSAGE, haette jeder Versuch
+  // 570 ms weniger Zeit zum Ueberholen - die Ankuendigung wuerde das Manoever verkuerzen,
+  // das sie ankuendigt, und ein Teil der Versuche wuerde am Zeitlimit scheitern statt am
+  // Platz.
+  //
+  // Gemessen wird das an der Abbruchzeit: ein Versuch, der nicht durchkommt, muss nach der
+  // Ansage PLUS der vollen Versuchszeit aufgeben und nicht vorher.
+  stAdd('Ueberholen: die Lichthupe kostet den Versuch keine Zeit', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostPassProbe) {
+      return { skip: true, mass: 'ghostPassProbe nicht vorhanden' };
+    }
+    // ueberholtNach null heisst "kommt nicht vorbei" - der Abbruchfall.
+    const mit = OMEGA_TEST.ghostPassProbe({ mitAnsage: true, ueberholtNach: null,
+                                            dauerMs: 12000 });
+    const ohne = OMEGA_TEST.ghostPassProbe({ ueberholtNach: null, dauerMs: 12000 });
+    if (!mit || !ohne) return { skip: true, mass: 'kein Lauf' };
+    const ende = (r) => {
+      const i = r.reihe.findIndex((x) => !x.laeuft);
+      return i < 0 ? null : r.reihe[i].t;
+    };
+    const eMit = ende(mit), eOhne = ende(ohne);
+    const fehler = [];
+    if (eMit === null || eOhne === null) {
+      fehler.push('ein Lauf brach nicht ab (' + eMit + '/' + eOhne + ')');
+    } else {
+      // Der Unterschied MUSS die Ansage sein, und zwar sie ganz. Ein Takt Schlupf ist die
+      // Schrittweite der Sonde (60 ms), zwei sind Luft.
+      const diff = eMit - eOhne;
+      if (Math.abs(diff - mit.ansageMs) > 130) {
+        fehler.push('Abbruch ' + diff + ' ms spaeter, erwartet ' + mit.ansageMs
+                    + ' - die Ansage frisst Versuchszeit');
+      }
+    }
+    return { ok: !fehler.length,
+             mass: 'Abbruch mit Ansage ' + eMit + ' ms, ohne ' + eOhne + ' ms, Ansage '
+                 + mit.ansageMs + ' ms'
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Und die Lichthupe kommt auch in der Simulation an ----
+  //
+  // DER FEHLER, DEN DIESE PRUEFUNG FESTHAELT, ist der subtilste an dieser Funktion und war
+  // nur durch Messen zu finden: die erste Fassung von ghostHupt() rechnete
+  // hupeDunkel(Date.now() - g.ansageSeit). In der Rennsimulation ist Date.now aber
+  // GEFAELSCHT - simSchritt() setzt es auf seine eigene Uhr und stellt es im finally
+  // zurueck. ghostTick() laeuft innerhalb dieses Fensters, simZeichnen() und simZustand()
+  // laufen ausserhalb.
+  //
+  // Eine Funktion, die die Uhr selbst fragt, gab damit je nach Aufrufer eine andere
+  // Antwort. Gemessen: 650 Takte in der Ansage und NULL dunkle - auf der Karte haette es
+  // nie geblitzt, und in der App waere nur aufgefallen, dass "nichts passiert".
+  //
+  // Geprueft wird deshalb der ANTEIL der dunklen Takte an den Ansagetakten, und zwar
+  // durch die Simulation hindurch. Er ist nachrechenbar: zwei Impulse von 220 ms in einer
+  // Ansage von 570 ms sind 440/570 = 77 Prozent.
+  stAdd('Ueberholen: die Lichthupe kommt durch die Simulation', async () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.simSchritte) {
+      return { skip: true, mass: 'simSchritte nicht vorhanden' };
+    }
+    const stell = (id, v) => {
+      const e = $(id);
+      if (!e) return;
+      if (e.type === 'checkbox') e.checked = !!v;
+      else {
+        if (e.tagName === 'SELECT'
+            && ![...e.options].some((o) => o.value === String(v))) {
+          throw new Error(id + ': "' + v + '" ist keine Option');
+        }
+        e.value = String(v);
+      }
+      e.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const merk = { g: $('sim-ghosts').value, l: $('sim-laps').value,
+                   f: $('sim-fast').checked, p: ghostCfg.pitAn };
+    let ansage = 0, dunkel = 0;
+    try {
+      // Sechs Autos, damit ueberhaupt oft angesetzt wird; ohne Boxenstopps, weil ein
+      // stehendes Auto keine Ueberholmanoever faehrt.
+      stell('sim-ghosts', '6');
+      stell('sim-laps', '10');
+      stell('sim-fast', false);
+      ghostCfg.pitAn = false;
+      simStart();
+      for (let k = 0; k < 2600; k++) {
+        const z = OMEGA_TEST.simSchritte(1, 45);
+        if (!z) break;
+        for (const a of z.autos) {
+          if (a.passPhase === 'ansage') ansage++;
+          if (a.hupt) dunkel++;
+        }
+      }
+      simStop('Pruefung');
+    } finally {
+      stell('sim-ghosts', merk.g); stell('sim-laps', merk.l);
+      stell('sim-fast', merk.f); ghostCfg.pitAn = merk.p;
+      if (simAn()) simStop('Pruefung');
+    }
+    if (!ansage) return { skip: true, mass: 'in diesem Lauf wurde nicht angesetzt' };
+    const anteil = dunkel / ansage;
+    const fehler = [];
+    // 1. UEBERHAUPT DUNKEL. Das ist die Zeile, die den gemeldeten Fehler faengt.
+    if (!dunkel) {
+      fehler.push('kein einziger dunkler Takt in ' + ansage
+                  + ' Ansagetakten - die Uhr passt nicht zum Aufrufer');
+    }
+    // 2. Und der Anteil muss zur Impulsform passen: 440 von 570 ms. Das Band ist weit, weil
+    //    die Ansage an Taktgrenzen anfaengt und aufhoert - eng waere eine Pruefung der
+    //    Rundung und nicht der Sache.
+    else if (!(anteil > 0.6 && anteil < 0.9)) {
+      fehler.push('Anteil dunkler Takte ' + anteil.toFixed(2) + ', erwartet um 0,77');
+    }
+    return { ok: !fehler.length,
+             mass: ansage + ' Ansagetakte, ' + dunkel + ' davon dunkel ('
+                 + anteil.toFixed(2) + ', erwartet 440/570 = 0,77)'
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Die 3-Stufen-Linie hat drei Stufen, und benutzt alle ----
+  //
+  // BESTELLT: "3 Spuren: links, mitte, aussen. Zusaetzliche Ideallinie '3-stufig', bei der
+  // ein Auto immer auf genau einer der Spuren faehrt."
+  //
+  // ZWEI ZUSAGEN, und die zweite ist die, die beim Bauen gefehlt hat. Der erste Anlauf liess
+  // die erste Haelfte einer Geraden auf der Aussenseite der VORIGEN Kurve stehen - gemessen
+  // nahm die Linie damit auf drei Layouts genau ZWEI Werte an, die Mitte kam nie vor. Eine
+  // 3-stufige Linie mit zwei Stufen ist keine, und schlimmer: sie macht die Zusage des
+  // 2-Stufen-Ausweichens beim Ueberholen leer, denn dort ist die Mitte ausdruecklich
+  // verboten. Ein Verbot, das nichts verbietet, ist keine Zusage.
+  stAdd('Ideallinie 3-stufig: genau drei Spuren, und alle drei benutzt', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.buildLine) {
+      return { skip: true, mass: 'buildLine nicht erreichbar' };
+    }
+    const proben = ['SR3GLR2GR2G2', 'SG4R4G4L4', 'SR3GLR2G'];
+    const fehler = [], zeilen = [];
+    for (const code of proben) {
+      const p = codeToTrack(code);
+      const pts = trackCenterline(p.tiles);
+      const nrm = trackNormals(pts, true);
+      const L = OMEGA_TEST.buildLine(pts, nrm,
+        { closed: true, tiles: p.tiles, model: 'dreistufig' });
+      // Auf drei Stellen gerundet, damit Fliesskomma-Reste nicht als vierte Stufe zaehlen.
+      const stufen = [...new Set(L.alpha.map((x) => +x.toFixed(3)))].sort((a, b) => a - b);
+      const zahl = {};
+      for (const x of L.alpha) {
+        const k = (+x.toFixed(3));
+        zahl[k] = (zahl[k] || 0) + 1;
+      }
+      zeilen.push(code + ' ' + stufen.map((s) => s + 'x' + zahl[s]).join(' '));
+      // 1. GENAU DREI WERTE. Vier waeren eine stetige Linie mit Stufen, keine Stufenlinie.
+      if (stufen.length !== 3) {
+        fehler.push(code + ': ' + stufen.length + ' Stufen (' + stufen.join(',') + ')');
+        continue;
+      }
+      // 2. UND SIE SIND SYMMETRISCH UM DIE MITTE: -limit, 0, +limit. Eine Linie mit den
+      //    Stufen -1, -0,5, 0 waere auch dreistufig und trotzdem falsch.
+      if (!(Math.abs(stufen[0] + stufen[2]) < 1e-6 && Math.abs(stufen[1]) < 1e-6)) {
+        fehler.push(code + ': Stufen nicht symmetrisch (' + stufen.join(',') + ')');
+      }
+      // 3. JEDE STUFE KOMMT VOR, und zwar nicht nur an einem Punkt. Ein Zehntel der
+      //    Abtastpunkte ist eine niedrige Huerde und absichtlich so: geprueft wird, dass
+      //    eine Stufe BENUTZT wird, nicht wie oft.
+      const mind = Math.max(2, Math.round(L.alpha.length * 0.05));
+      for (const s of stufen) {
+        if (zahl[s] < mind) {
+          fehler.push(code + ': Stufe ' + s + ' nur ' + zahl[s] + ' Punkte von '
+                      + L.alpha.length);
+        }
+      }
+    }
+    return { ok: !fehler.length,
+             mass: zeilen.join(' | ') + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Beim Ueberholen entscheidet das Manoever, nicht die Linie ----
+  //
+  // BESTELLT: "Beim Ueberholen auf ein 2-stufiges Modell (nur die beiden aeusseren Spuren
+  // benutzen) ausweichen - das hat diesmal gar nicht geklappt und die Autos haben sich ewig
+  // gegenseitig angeschoben."
+  //
+  // WARUM SIE SICH GESCHOBEN HABEN: die alte Summe addierte den Ueberholversatz, die
+  // Ideallinie und das Ausweichen. Fuer den Angreifer ging das auf, fuer den
+  // VORAUSFAHRENDEN nicht - er greift nicht an, also stand seine Linie mit vollem Gewicht
+  // neben dem Ausweichen. Mit "Ideallinie 200 %" und einer Spurlinie heben sich die zwei
+  // auf, und beide Autos bleiben auf derselben Spur.
+  //
+  // Geprueft wird deshalb die EIGENSCHAFT, nicht die Zahl: waehrend eines Manoevers ist der
+  // Querbefehl unabhaengig von der Ideallinie. Zwei Laeufe mit sehr verschiedenen
+  // Linieneinstellungen muessen denselben Versatz ergeben.
+  stAdd('Ueberholen: der Versatz haengt nicht an der Ideallinie', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostPassProbe) {
+      return { skip: true, mass: 'ghostPassProbe nicht vorhanden' };
+    }
+    const merkLine = ghostCfg.line;
+    const fehler = [], zeilen = [];
+    let a = null, b = null;
+    try {
+      // Zwei Extreme: Linie aus und Linie am Anschlag.
+      ghostCfg.line = 0;
+      a = OMEGA_TEST.ghostPassProbe({ ueberholtNach: 3000, dauerMs: 6000 });
+      ghostCfg.line = 2;
+      b = OMEGA_TEST.ghostPassProbe({ ueberholtNach: 3000, dauerMs: 6000 });
+    } finally { ghostCfg.line = merkLine; }
+    if (!a || !b) return { skip: true, mass: 'kein Lauf' };
+    const vorbei = (r) => r.reihe.filter((x) => x.phase === 'vorbei').map((x) => x.versatz);
+    const va = vorbei(a), vb = vorbei(b);
+    zeilen.push('Linie 0: ' + [...new Set(va)].join(',')
+                + ' | Linie 2: ' + [...new Set(vb)].join(','));
+    if (!va.length || !vb.length) {
+      fehler.push('keine Vorbeifahrt-Phase');
+    } else {
+      // 1. UNABHAENGIG VON DER LINIE. Das ist die Zusage.
+      if (Math.abs(va[0] - vb[0]) > 1e-6) {
+        fehler.push('Versatz haengt an der Linie: ' + va[0] + ' gegen ' + vb[0]);
+      }
+      // 2. UND ER IST EINE AEUSSERE SPUR, kein Zwischenwert. Der Betrag ist 1, gedeckelt
+      //    durch Byte 7 - mehr kann das Auto nicht.
+      if (Math.abs(Math.abs(va[0]) - 1) > 1e-6) {
+        fehler.push('Versatz ' + va[0] + ' ist keine volle aeussere Spur');
+      }
+    }
+    return { ok: !fehler.length,
+             mass: zeilen.join(' ') + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Das Fahrerauto wird geortet, und bekommt den Vorausblick ----
+  //
+  // GEMELDET: "Gelbe Flagge klappt noch nicht, mein Auto fährt nur geradeaus."
+  //
+  // Der Befund war eine Asymmetrie und kein Rechenfehler: der Autopilot setzt die Lenkung
+  // unter Gelb auf 0 - absichtlich, denn im Leitplanken-Modus haelt sich das Auto selbst.
+  // Ghosts fahren genauso und bei ihnen geht es. Der Unterschied stand NEBEN dem Lenkwert:
+  //
+  //     Ghost         writeToCar(..., car.modeBytes) mit dem Vorausblick in Byte 16-18
+  //     Fahrerauto    buildCommandPacket(steer, throttle) - zwei Argumente, kein Vorausblick
+  //
+  // Und der Grund, warum es ihn nie bekam: es hatte keine ORTUNG. Ein ghost-Objekt mit
+  // tileIndex legt nur startGhost() an, und das laeuft fuer Ghosts.
+  //
+  // MIT `assistAn: true`, seit v0.5.55: der Vorausblick geht nur noch hinaus, wenn die
+  // Fahrhilfe aktiv ist (von Hand oder ueber den Autopiloten) - siehe den Test direkt
+  // darunter fuer die Gegenprobe, die den NEUEN gemeldeten Fehler faengt.
+  stAdd('Fahrerauto: wird geortet und bekommt den Vorausblick', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.spielerOrtProbe) {
+      return { skip: true, mass: 'spielerOrtProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.spielerOrtProbe(8, 'SR3GLR2GR2G2', true);
+    if (!r) return { skip: true, mass: 'kein Lauf' };
+    const fehler = [];
+    // 1. DER ORT LAEUFT MIT. Der erste Takt hat noch keinen - er setzt den Bezugsstand des
+    //    Kachelzaehlers; ohne einen vorigen Wert gibt es keine Aenderung zu erkennen. Genau
+    //    so arbeitet die Ortung eines Ghosts auch.
+    const mitOrt = r.reihe.filter((x) => x.tile !== null);
+    if (mitOrt.length < r.reihe.length - 1) {
+      fehler.push(mitOrt.length + ' von ' + r.reihe.length + ' Takten mit Ort');
+    }
+    // Und er ZAEHLT WEITER, statt stehenzubleiben.
+    for (let i = 1; i < mitOrt.length; i++) {
+      if (mitOrt[i].tile === mitOrt[i - 1].tile) {
+        fehler.push('Kachelindex bleibt bei ' + mitOrt[i].tile + ' stehen');
+        break;
+      }
+    }
+    // 2. DER VORAUSBLICK GEHT MIT HINAUS, in den Bytes 16 bis 18. Das ist die Zeile, die
+    //    den gemeldeten Fehler behebt.
+    const ohneBlick = mitOrt.filter((x) => !x.bytes || x.bytes.indexOf(16) < 0);
+    if (ohneBlick.length) {
+      fehler.push(ohneBlick.length + ' Takte ohne Vorausblick in Byte 16');
+    }
+    // Und er zeigt WAS KOMMT und nicht immer dasselbe - sonst waere es eine Konstante.
+    const blicke = new Set(mitOrt.map((x) => (x.vorausblick || []).join(',')));
+    if (blicke.size < 2) fehler.push('der Vorausblick aendert sich nicht (' + blicke.size + ')');
+    // 3. NUR IM LEITPLANKEN-MODUS. Ausserhalb hat er keine Bedeutung, und ein Byte an eine
+    //    Funktion, die nicht laeuft, ist eine Angabe ins Leere.
+    if (r.ohneRail !== null) fehler.push('ohne Leitplanken-Modus trotzdem Modusbytes');
+    // 4. UND DER SATZ IST ALS ORTUNG MARKIERT. Zwei Stellen lesen car.ghost ohne die Rolle
+    //    zu pruefen, und eine wuerde dem Fahrerauto eine Tempo-Lernkurve anlegen.
+    if (!r.nurOrt) fehler.push('der Ortungssatz ist nicht als nurOrt markiert');
+    return { ok: !fehler.length,
+             mass: mitOrt.length + ' Takte geortet, Kacheln '
+                 + mitOrt.map((x) => x.tile).join('/')
+                 + ', Vorausblick ' + (mitOrt[0] ? (mitOrt[0].vorausblick || []).join(',') : '?')
+                 + ' -> ' + (mitOrt[mitOrt.length - 1]
+                     ? (mitOrt[mitOrt.length - 1].vorausblick || []).join(',') : '?')
+                 + ', ohne Rail ' + JSON.stringify(r.ohneRail)
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Fahrhilfe aus: ganz normal lenken, trotz Bahn-Modus ----
+  //
+  // GEMELDET: "Wenn ich jetzt fahre, kann ich gar nicht mehr lenken und das Auto lenkt
+  // von alleine." Die Ursache war die Bedingung fuer den Vorausblick: sie fragte nur
+  // trackMode === 'on' ab - die normale Bahn/Ausdruck-Stellung, die beim Fahren so gut wie
+  // immer 'on' ist, und keine Frage der Rennsituation. Damit bekam das Fahrerauto bei
+  // JEDER gewoehnlichen Fahrt dieselben Modusbytes wie ein autonomer Ghost.
+  //
+  // Diese Pruefung ist die direkte Gegenprobe: Bahn-Modus an, aber die Fahrhilfe AUS und
+  // kein Autopilot - dann darf ueberhaupt kein Vorausblick hinausgehen, auf keiner Kachel.
+  stAdd('Fahrhilfe aus: Fahrerauto lenkt ganz normal trotz Bahn-Modus', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.spielerOrtProbe) {
+      return { skip: true, mass: 'spielerOrtProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.spielerOrtProbe(8, 'SR3GLR2GR2G2', false);
+    if (!r) return { skip: true, mass: 'kein Lauf' };
+    const fehler = [];
+    const mitOrt = r.reihe.filter((x) => x.tile !== null);
+    // DIE ORTUNG selbst laeuft weiter - sie ist harmlos und wird fuer die Streckenkarte
+    // und den Abstandhalter gebraucht, unabhaengig von der Fahrhilfe.
+    if (!mitOrt.length) fehler.push('keine Ortung, obwohl sie unabhaengig laufen sollte');
+    // ABER KEIN VORAUSBLICK, auf keiner einzigen Kachel - genau das war die Meldung.
+    const mitBlick = mitOrt.filter((x) => x.bytes && x.bytes.indexOf(16) >= 0);
+    if (mitBlick.length) {
+      fehler.push(mitBlick.length + ' von ' + mitOrt.length
+                  + ' Takten mit Vorausblick, obwohl die Fahrhilfe aus ist');
+    }
+    return { ok: !fehler.length,
+             mass: mitOrt.length + ' Takte geortet, ' + mitBlick.length
+                 + ' davon mit Vorausblick (muss 0 sein)'
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Fahrhilfe: der Schalter greift, der Autopilot bleibt unabhaengig ----
+  //
+  // BESTELLT: "Gib mir einen Schalter, bei dem ich zwischen Fahrhilfemodus hin und her
+  // schalten kann. Wenn er aus ist, will ich ganz normal steuern koennen so wie sonst.
+  // Wenn er an ist, soll das Auto alleine lenken."
+  //
+  // Drei Zustaende, und der dritte ist die Garantie, die schon v0.5.53 versprochen hat:
+  // eine gelbe Flagge haelt das Auto selbst, EGAL wie der Schalter steht - sonst wuerde
+  // dieser Schalter die Gelbphasen-Regelung wieder abschalten koennen, was niemand
+  // bestellt hat.
+  stAdd('Fahrhilfe: Schalter steuert, Autopilot bleibt unabhaengig', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.driverAssistToggleProbe) {
+      return { skip: true, mass: 'driverAssistToggleProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.driverAssistToggleProbe();
+    if (!r) return { skip: true, mass: 'driver-assist nicht im Dokument' };
+    const fehler = [];
+    if (r.aus !== false) fehler.push('Schalter aus, aber aktiv: ' + r.aus);
+    if (r.an !== true) fehler.push('Schalter an, aber nicht aktiv: ' + r.an);
+    if (r.trotzAus !== true) {
+      fehler.push('Schalter aus + gelbe Flagge: nicht aktiv (' + r.trotzAus + ')');
+    }
+    return { ok: !fehler.length,
+             mass: 'aus=' + r.aus + ', an=' + r.an + ', aus+gelb=' + r.trotzAus
+                 + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
   // ---- Zieleinlauf ----
   //
   // Vorher endete ein Rennen fuer die Ghosts mit stopGhost(): Nullen schreiben und
@@ -7536,8 +8041,8 @@
   // 127). Was daran richtig bleibt, ist nicht die Kachelart, sondern der Anschlag: ein
   // Ueberholversatz oben auf eine Linie, die schon voll zieht, IST der volle Anschlag.
   //
-  // Also haengt die Erlaubnis jetzt am freien Platz, 1 minus dem Linienversatz. Gemessen,
-  // 1500 Takte je Lage:
+  // Die Erlaubnis hing dann am freien Platz, 1 minus dem Linienversatz. Gemessen war das
+  // damals so, 1500 Takte je Lage:
   //
   //     Lage                                Platz   Versuche
   //     Gerade, Linie zieht kaum             0,70      34
@@ -7547,9 +8052,26 @@
   //     Gerade, Haarnadel 1 Kachel voraus    0,70       0
   //     Gerade, Haarnadel 3 Kacheln voraus   0,70      25
   //
-  // Geprueft werden genau diese vier Aussagen. Die dritte und vierte Zeile sind die
-  // eigentliche Aenderung: die Kachelart allein sperrt nicht mehr.
-  stAdd('Ueberholen: der Platz entscheidet, nicht die Kachelart', () => {
+  // ---- UND SEIT v0.5.54 IST DIESE RECHNUNG WEG, aus einem gemessenen Grund ----------
+  //
+  // Der freie Platz war 1 minus dem Linienversatz - eine Rechnung fuer eine ADDITIVE Summe,
+  // in der der Ueberholversatz NEBEN der Linie sitzt. Mit der 3-Stufen-Linie stimmt die
+  // Voraussetzung nicht mehr: die belegt immer eine ganze Spur, der Anteil ist also 1 und
+  // der Platz 0. Mit "Ideallinie 200 %" wird er sogar 2, der Platz durch das max() genau 0.
+  //
+  // Gemessen: in 120 s mit sechs Ghosts wurde NULL Mal angesetzt (passTakte 0). Der Nutzer
+  // hat es als "das hat diesmal gar nicht geklappt" gemeldet - es hat nicht schlecht
+  // funktioniert, es hat gar nicht stattgefunden.
+  //
+  // Seit dem 2-Stufen-Ausweichen (SPUR_PASS_AUSSEN) ERSETZT der Versatz die Linie, statt zu
+  // ihr zu addieren. Angreifer voll auf eine Seite, Vorausfahrender voll auf die andere,
+  // Mitte leer. Der Platz haengt damit nicht mehr an der Linie - und die physische Frage
+  // ist beantwortet: zwei Autos brauchen 30,4 Prozent der Bahnbreite (2 x 3,8 cm auf 25),
+  // das ist auf JEDER Kachel so.
+  //
+  // Was bleibt, ist die Haarnadelsperre. Genau die prueft dieser Test jetzt - und dazu, dass
+  // die Kachelart allein nicht mehr sperrt.
+  stAdd('Ueberholen: die Haarnadel sperrt, die Kachelart nicht', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostPassArming) {
       return { skip: true, mass: 'ghostPassArming nicht vorhanden' };
     }
@@ -7573,17 +8095,27 @@
                              ['vor Haarnadel', vorHn], ['fern Haarnadel', fernHn]]) {
         zeilen.push(nm + ' ' + r.platz + '/' + r.gestartet);
       }
-      // 1. Mit Platz MUSS es vorkommen, sonst prueft der Test nichts.
-      if (!(viel.gestartet > 0)) fehler.push('mit Platz gar kein Versuch');
-      // 2. Ohne Platz nie - das ist der Schutz, der von der alten Regel uebrig bleibt.
-      if (wenig.gestartet) fehler.push('ohne Platz ' + wenig.gestartet + ' Versuche');
-      if (hnVoll.gestartet) fehler.push('Haarnadel voll ' + hnVoll.gestartet + ' Versuche');
-      // 3. DIE KACHELART SPERRT NICHT MEHR. Das ist die bestellte Aenderung, und ohne diese
-      //    Zeile waere der Test auch mit der alten Sperre gruen.
-      if (!(hnFrei.gestartet > 0)) {
-        fehler.push('auf einer Kurvenkachel mit Platz kein Versuch - die Kachelart sperrt');
+      // 1. ES MUSS UEBERHAUPT ANGESETZT WERDEN. Das ist die Zeile, die den gemeldeten
+      //    Fehler faengt: mit der alten Platzrechnung und der 3-Stufen-Linie war sie null.
+      if (!(viel.gestartet > 0)) fehler.push('gar kein Versuch');
+      // 2. UND ZWAR UNABHAENGIG VOM LINIENVERSATZ. Vorher sperrte eine voll ziehende Linie;
+      //    seit der Versatz sie ERSETZT statt zu ihr zu addieren, ist das kein Grund mehr.
+      //    Ohne diese Zeile waere der Test auch mit der alten, blockierenden Rechnung gruen.
+      if (!(wenig.gestartet > 0)) {
+        fehler.push('bei voll ziehender Linie kein Versuch - die alte Platzrechnung lebt');
       }
-      // 4. In eine Haarnadel hinein nicht, eine Kachel weiter weg schon.
+      // 3. DIE KACHELART SPERRT NICHT. Auch auf einer Haarnadelkachel wird angesetzt,
+      //    solange die Haarnadel nicht VORAUS liegt - eine Kurve, in der man schon ist, ist
+      //    kein Grund, nicht zu ueberholen.
+      if (!(hnFrei.gestartet > 0)) {
+        fehler.push('auf einer Kurvenkachel kein Versuch - die Kachelart sperrt');
+      }
+      if (!(hnVoll.gestartet > 0)) {
+        fehler.push('Haarnadelkachel mit voller Linie: kein Versuch');
+      }
+      // 4. WAS SPERRT, IST DIE HAARNADEL VORAUS. Sie ist der einzige Ort, an dem zwei Autos
+      //    nebeneinander wirklich nicht passen, und sie ist die Sperre, die von der alten
+      //    Regel uebrig bleibt.
       if (vorHn.gestartet) fehler.push('vor der Haarnadel ' + vorHn.gestartet + ' Versuche');
       if (!(fernHn.gestartet > 0)) fehler.push('drei Kacheln vor der Haarnadel keiner');
     } finally {
@@ -7604,32 +8136,44 @@
   // Bahn: wo ein Auto wirklich stehen bleibt, kann diese App nicht wissen - es meldet seine
   // Querlage nicht. Was sie zusichern kann, ist, dass zwei aufeinanderfolgende Autos
   // ENTGEGENGESETZT einschlagen und dass die Hinteren laenger rollen.
-  stAdd('Zieleinlauf: abwechselnd links und rechts an den Rand', () => {
+  stAdd('Zieleinlauf: in Kacheln gestaffelt, alle links an den Rand', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.finishSeiten) {
       return { skip: true, mass: 'finishSeiten nicht vorhanden' };
     }
-    // SECHS und nicht vier: bei vier greift der Boden FINISH_ROLL_MIN nicht, und dann
-    // prueft der Lauf den Fall nicht, in dem zwei Autos dieselbe Rollzeit bekommen.
+    // ---- DIE ZUSAGE HAT SICH GEAENDERT, und das gehoert hierhin -------------------
+    //
+    // Bis v0.5.50 wechselten die Seiten ab (rechts, links, rechts ...) und die Staffel war
+    // eine ZEIT: der Fuehrende rollte 2000 ms, jeder dahinter 500 ms weniger. Gemeldet
+    // wurde: "aktuell rammen sie ineinander rein".
+    //
+    // Der Fehler ist, dass Zeit kein Abstand ist. Wie weit ein Auto in 500 ms rollt, haengt
+    // davon ab, wie schnell es ueber die Linie kam - und am Rennende sind die Tempi
+    // verschieden (einer greift gerade an, einer haelt Abstand, einer kommt aus der Box).
+    // Zwei Autos konnten dieselbe Stelle treffen.
+    //
+    // Jetzt zaehlt jedes Auto KACHELWECHSEL, und eine Kachel ist 43 cm bei 9,5 cm
+    // Fahrzeuglaenge - mehr als vier Fahrzeuglaengen Abstand, unabhaengig vom Tempo. Damit
+    // braucht es keine wechselnden Seiten mehr, und alle stehen links, wie bestellt: das
+    // Feld in einer Reihe, die andere Bahnhaelfte frei fuer das Auto des Fahrers.
     const r = OMEGA_TEST.finishSeiten(6);
     const fehler = [];
     if (!r || r.length !== 6) return { ok: false, mass: 'kein Lauf' };
+    // 1. ALLE LINKS. Byte 7 negativ ist links.
+    for (let i = 0; i < r.length; i++) {
+      if (!(r[i].seite < 0)) fehler.push('Auto ' + i + ': Seite ' + r[i].seite);
+    }
+    // 2. STRENG ABNEHMEND, und jetzt darf es streng sein: die Kachelstaffel hat keinen
+    //    Boden, der zwei Autos denselben Wert gibt. Der Letzte kommt auf null heraus.
     for (let i = 1; i < r.length; i++) {
-      if (Math.sign(r[i].seite) === Math.sign(r[i - 1].seite)) {
-        fehler.push('Auto ' + i + ' auf derselben Seite wie ' + (i - 1));
-      }
-      // DER FUEHRENDE ROLLT AM LAENGSTEN, nicht am kuerzesten - und diese Zeile ist die
-      // Berichtigung eines Fehlers, den ich selbst eingebaut hatte. Rollt der Hintere
-      // laenger, schrumpft der Abstand beim Anhalten, und das Auffahren wird schlimmer statt
-      // besser. Die Rechnung steht bei FINISH_ROLL_MAX.
-      // NICHT STRENG KLEINER, sondern nicht groesser - und das ist kein Aufweichen: ab
-      // dem fuenften Auto greift FINISH_ROLL_MIN, und dann sind zwei Rollzeiten gleich.
-      // Dort trennt der Seitenwechsel, und den prueft die Zeile darueber. Eine Forderung
-      // nach streng kleiner waere bei sechs Ghosts rot, ohne dass etwas kaputt ist.
-      if (r[i].rollMs > r[i - 1].rollMs) {
-        fehler.push('Auto ' + i + ' rollt laenger als ' + (i - 1) + ' - dann schiebt es auf');
+      if (!(r[i].kacheln < r[i - 1].kacheln)) {
+        fehler.push('Auto ' + i + ' rollt ' + r[i].kacheln + ' Kacheln, Auto ' + (i - 1)
+                    + ' nur ' + r[i - 1].kacheln + ' - dann schiebt es auf');
       }
     }
-    // Und der Lenkwert muss wirklich hinausgehen, mit dem Vorzeichen der Seite.
+    if (r[r.length - 1].kacheln !== 0) {
+      fehler.push('der Letzte rollt ' + r[r.length - 1].kacheln + ' statt 0 Kacheln');
+    }
+    // 3. Und der Lenkwert muss wirklich hinausgehen, mit dem Vorzeichen der Seite.
     for (const x of r) {
       if (Math.sign(x.steerRoll) !== Math.sign(x.seite) || Math.abs(x.steerRoll) < 0.9) {
         fehler.push('Lenkwert ' + x.steerRoll + ' passt nicht zur Seite ' + x.seite);
@@ -7638,8 +8182,18 @@
         fehler.push('Bremsphase lenkt anders als die Rollphase');
       }
     }
+    // 4. Und die Rollphase muss ENDEN, wenn die Kacheln gezaehlt sind - sonst rollt das
+    //    Auto weiter, und die Staffel waere eine Absichtserklaerung.
+    for (let i = 0; i < r.length; i++) {
+      if (r[i].phase !== 'brake') {
+        fehler.push('Auto ' + i + ' ist nach ' + r[i].kacheln + ' Kacheln in Phase '
+                    + r[i].phase + ' statt brake');
+      }
+    }
     return { ok: !fehler.length,
-             mass: r.map(x => (x.seite > 0 ? 'L' : 'R') + ' ' + x.rollMs + 'ms '
+             mass: r.map((x, i) => 'P' + (i + 1) + ' '
+                              + (x.seite > 0 ? 'rechts' : 'links') + ' '
+                              + x.kacheln + ' Kacheln, Lenk '
                               + x.steerRoll.toFixed(1)).join(' | ')
                  + (fehler.length ? ' || ' + fehler.join('; ') : '') };
   });
@@ -9026,9 +9580,49 @@
       // Ausdruecklich aus: dieser Test prueft den Grund "gelb", und ein von einem
       // vorherigen Test stehengelassenes true haette ihn auf den anderen Zweig geschickt.
       raceFormationLap = false;
+      // ---- EINGESCHWUNGEN MESSEN, NICHT IM ERSTEN TAKT -------------------------
+      //
+      // Seit v0.5.53 regelt der Autopilot mit ghostSpeedControl() - PI mit Totband und
+      // Ratengrenzen, derselbe Regler, den die Ghosts haben. Bestellt war "wie ein Ghost",
+      // und das ist der Unterschied: der alte rohe P-Regler (throttle = err * 4) hatte eine
+      // Beharrungsabweichung und kippte um den Zielwert, was sich auf dem Tisch als "es gibt
+      // nur Gas" liest.
+      //
+      // Ein ratenbegrenzter Regler gibt im ERSTEN Takt naturgemaess wenig - gemessen 0,06.
+      // Dieser Test las genau einen Takt und meldete "kein Gas". Die Zahl war richtig und
+      // die Frage falsch: das Auto faehrt nicht einen Takt, sondern im 45-ms-Takt weiter.
+      //
+      // Also 25 Takte, also gut eine Sekunde - dieselbe Zahl, die der Ghost-Reglertest
+      // schon benutzt ("nach 1,1 s ist es voll da").
       const bei = (kmh) => {
+        // ---- JEDER FALL AUS DEM STAND, und das ist Pruefhygiene ------------------
+        //
+        // Der Regler fuehrt einen I-Anteil, und der liegt modulweit - er ueberlebt also den
+        // Wechsel von einem Messpunkt zum naechsten. Ohne Ruecksetzen las dieser Test bei
+        // 80 km/h (dem Ziel) ein Gas von 0,72: das war der Arbeitspunkt, den die Messung bei
+        // 32 km/h davor aufgeladen hatte, und kein Fehler.
+        //
+        // Zurueckgesetzt wird ueber den vorgesehenen Weg: gruene Flagge heisst kein
+        // Autopilot, und autopilot() raeumt den Regler dann selbst auf. Eine eigene
+        // Ruecksetzfunktion von aussen zu rufen waere ein zweiter Weg in denselben Zustand.
+        const merkFlag = flagState;
+        flagState = 'green';
+        autopilot(0);
+        flagState = merkFlag;
         physEngine.state.speedKmh = kmh / REAL_SCALE;
-        return autopilot(0);
+        // EINGESCHWUNGEN, nicht im ersten Takt: seit v0.5.53 regelt der Autopilot mit
+        // ghostSpeedControl() - PI mit Totband und Ratengrenzen, derselbe Regler, den die
+        // Ghosts haben. Bestellt war "wie ein Ghost", und das ist der Unterschied: der alte
+        // rohe P-Regler (throttle = err * 4) brauchte eine Abweichung, um Gas zu erzeugen,
+        // und kippte um den Zielwert - auf dem Tisch liest sich das als "es gibt nur Gas".
+        //
+        // Ein ratenbegrenzter Regler gibt im ersten Takt naturgemaess wenig, gemessen 0,06.
+        // Dieser Test las genau einen Takt und meldete "kein Gas". 25 Takte sind gut eine
+        // Sekunde - dieselbe Zahl, die der Ghost-Reglertest benutzt.
+        let r = autopilot(0);
+        if (!r) return r;
+        for (let i = 0; i < 25; i++) r = autopilot(0) || r;
+        return r;
       };
       // 1. Gruen: gar kein Eingriff, egal wie schnell.
       flagState = 'green'; trackMode = 'on';
@@ -9036,11 +9630,28 @@
       // 2. Gelb, aber Ausdruck-Stellung: ebenfalls kein Eingriff.
       flagState = 'yellow'; trackMode = 'off';
       const ausdruck = bei(20);
-      // 3. Gelb auf der Bahn: regeln. YELLOW_KMH ist das Ziel.
+      // ---- 3. Gelb auf der Bahn: regeln. UND DAS ZIEL IST NICHT MEHR YELLOW_KMH ----
+      //
+      // Hier stand YELLOW_KMH = 80 als Zieltempo, und der Test las bei 80 km/h ein Gas von
+      // 0,72 statt des erwarteten Totbands. Die Zahl war richtig: seit v0.5.51 hat das
+      // Gelb-Tempo einen LESEBODEN.
+      //
+      // yellowFactor() ist YELLOW_KMH/Hoechstgeschwindigkeit = 80/327 = 0,244.
+      // GHOST_READ_MIN ist 0,35 - darunter liest das Auto das gedruckte Muster nicht mehr.
+      // Im Leitplanken-Modus, und nur dort greift dieser Autopilot, braucht das Auto genau
+      // diese Lesung, um sich auf der Bahn zu halten: ein Gelb-Tempo unter der Leseschwelle
+      // waere ein Autopilot, der das Auto von der Bahn faehrt.
+      //
+      // Das wirksame Gelb-Tempo ist deshalb 0,35 der Spitze, also rund 103 km/h angezeigt
+      // und nicht 80. Der Test rechnet es aus derselben Formel wie der Autopilot, damit die
+      // zwei nicht auseinanderlaufen - eine abgeschriebene 103 waere die naechste Zahl, die
+      // beim naechsten Reglerdreh falsch wird.
       trackMode = 'on';
-      const langsam = bei(YELLOW_KMH * 0.4);
-      const schnell = bei(YELLOW_KMH * 2.5);
-      const passend = bei(YELLOW_KMH);
+      const zielAnteil = Math.max(yellowFactor(), GHOST_READ_MIN);
+      const zielKmh = zielAnteil * physEngine.config.topSpeedKmh * REAL_SCALE;
+      const langsam = bei(zielKmh * 0.4);
+      const schnell = bei(zielKmh * 2.5);
+      const passend = bei(zielKmh);
       if (!langsam || !schnell || !passend) {
         return { ok: false, mass: 'greift auf der Bahn nicht' };
       }
@@ -9051,11 +9662,13 @@
       return { ok,
                mass: 'gruen ' + (gruen === null ? 'aus' : 'AN')
                      + ', Ausdruck ' + (ausdruck === null ? 'aus' : 'AN')
-                     + ' | bei ' + Math.round(YELLOW_KMH * 0.4) + ' km/h Gas '
+                     + ' | Ziel ' + Math.round(zielKmh) + ' km/h (Gelb ' + YELLOW_KMH
+                     + ', Leseboden hebt es)'
+                     + ' | bei ' + Math.round(zielKmh * 0.4) + ' km/h Gas '
                      + langsam.throttle.toFixed(2)
-                     + ', bei ' + Math.round(YELLOW_KMH * 2.5) + ' km/h Bremse '
+                     + ', bei ' + Math.round(zielKmh * 2.5) + ' km/h Bremse '
                      + schnell.brake.toFixed(2)
-                     + ', bei ' + YELLOW_KMH + ' km/h Gas ' + passend.throttle.toFixed(2)
+                     + ', bei ' + Math.round(zielKmh) + ' km/h Gas ' + passend.throttle.toFixed(2)
                      + ' Bremse ' + passend.brake.toFixed(2) };
     } finally {
       flagState = merk.flag;
@@ -9077,12 +9690,30 @@
     const C = OMEGA_TEST.ghostSpeedControl;
     const teile = [], schlecht = [];
 
-    // 1. Erster Takt aus dem Stand: kein Vollgas. Die Ratenbegrenzung allein garantiert
-    //    das, unabhaengig von der Rampe - deshalb ist es hier pruefbar.
+    // 1. Erster Takt aus dem Stand: KEIN VOLLGAS. Die Ratenbegrenzung garantiert das,
+    //    unabhaengig von der Rampe - deshalb ist es hier pruefbar.
+    //
+    // ---- DIE SCHRANKE HAENGT AN DER ENTSCHLOSSENHEIT, und das ist eine Berichtigung ---
+    //
+    // Hier stand `t1 < 0.15`, eine feste Zahl. Sie war richtig, solange gasDynamik ab Werk
+    // auf 1,0 stand. Seit v0.5.52 steht es auf 4,0 - "Traegheit standardmaessig aus, auch
+    // zum Beschleunigen" war ausdruecklich bestellt -, und der Regler gibt im ersten Takt
+    // 0,29 statt 0,07.
+    //
+    // Der Test hat damit die BESTELLUNG als Fehler gemeldet, nicht einen Fehler. Was er
+    // sichern soll, ist die Rampe an sich: der erste Takt darf nicht schon voll sein.
+    // gasDynamik skaliert beide Verstaerkungen und beide Ratengrenzen linear, also skaliert
+    // die Schranke mit - 0,15 bei Entschlossenheit 1, 0,60 bei 4. Und ein Deckel bei 0,8
+    // bleibt: auch der entschlossenste Regler darf im ersten Takt nicht durchtreten.
+    const dyn = typeof ghostCfg !== 'undefined' ? Math.max(0.1, ghostCfg.gasDynamik || 1) : 1;
+    const grenze = Math.min(0.8, 0.15 * dyn);
     const g1 = {};
     const t1 = C(g1, 0.5, 0, 0.045).throttle;
-    teile.push('erster Takt Gas ' + t1.toFixed(2));
-    if (!(t1 < 0.15)) schlecht.push('erster Takt gibt ' + t1.toFixed(2) + ' Gas');
+    teile.push('erster Takt Gas ' + t1.toFixed(2) + ' (Grenze ' + grenze.toFixed(2)
+               + ' bei Entschlossenheit ' + dyn + ')');
+    if (!(t1 < grenze)) {
+      schlecht.push('erster Takt gibt ' + t1.toFixed(2) + ' Gas, Grenze ' + grenze.toFixed(2));
+    }
 
     // 2. Und nach einer Sekunde Takten ist es voll da - eine Begrenzung, die das Gas
     //    dauerhaft klein haelt, waere ein lahmes Auto und kein sanftes.

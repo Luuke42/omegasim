@@ -254,6 +254,19 @@
     }
     st.wandZuvor = wand;
     const gesamt = Math.max(1, Math.min(SIM_SPRUNG_MAX_MS, roh)) * (st.doppelt ? 2 : 1);
+    // ---- DER QUERVERSATZ GEGEN RAMMEN, EINMAL JE SCHRITT UND NICHT JE TEILSCHRITT ----
+    //
+    // Frueher stand dieser Aufruf in simTeilschritt() und lief damit bis zu fuenfmal fuer
+    // denselben simSchritt()-Aufruf (Teilschritte von bis zu 60 ms bei bis zu 250 ms
+    // Gesamtschritt). ghostAssignBias() traegt aber einen FESTEN Schritt je Aufruf
+    // (GHOST_BIAS_STEP, kalibriert auf den echten 200-ms-Zeitgeber) - je Teilschritt
+    // gerufen wuchs der Versatz also mit der Zahl der Teilschritte, nicht mit der
+    // vergangenen Zeit, und lief in der Simulation deutlich schneller auf als am echten
+    // Auto.
+    //
+    // Jetzt EINMAL je simSchritt(), mit der GESAMTEN vergangenen Zeit dieses Aufrufs als
+    // dtSek - ghostAssignBias() skaliert seinen Schritt selbst darauf (siehe dort).
+    ghostAssignBias(gesamt / 1000);
     let rest = gesamt;
     while (rest > 0.5) {
       const schritt = Math.min(SIM_TEIL_MAX_MS, rest);
@@ -283,17 +296,34 @@
         a.car.lastCodeAt = st.uhr;
         ghostTick(a.car);
       }
-      // Der Querversatz gegen Rammen laeuft am echten Auto auf einem eigenen Zeitgeber. Der
-      // greift hier nicht (er laeuft an der Wandzeit und sieht die Simulationsautos nur
-      // zufaellig), also wird er hier ausdruecklich mitgetaktet - sonst faehrt das ganze
-      // Feld auf einer Spur, und das waere ein anderes Rennen als das eingestellte.
-      ghostAssignBias();
+      // ghostAssignBias() laeuft jetzt in simSchritt() - einmal je Aufruf, mit der
+      // gesamten vergangenen Zeit, nicht mehr hier je Teilschritt. Siehe dort.
       // ---- Vom Gas zum Weg -----------------------------------------------------------
       for (const a of st.autos) {
         const g = a.car.ghost;
         if (!g || !g.engine) continue;
-        const v = Math.abs(g.engine.state.speedKmh || 0);
+        // ---- GEPARKT BEWEGT SICH NICHT, wie bestellt -----------------------------
+        //
+        // BESTELLT: "Autos [...] sollen [...] nur die Querlage wechseln, wenn sie sich
+        // vorwaerts bewegen" - und ein geparktes Auto bewegt sich gar nicht. Hier fehlte
+        // die Pruefung ganz: ein geparktes Auto rollte in der Simulation weiter, bis das
+        // Fahrzeugmodell es von selbst ausrollen liess (Gas 0, Bremse 0, Motorbremse) -
+        // es stand also nicht schlagartig, sondern schlich langsam aus.
+        if (a.car.parked) continue;
+        // ---- VORZEICHEN ERHALTEN, statt IMMER vorwaerts zu zaehlen ----------------
+        //
+        // Hier stand Math.abs(...): ein rueckwaerts rollendes Auto (Anfahrruck, Abstossen
+        // aus der Box, ein zurueckgesetzter Ghost) fuhr damit in der Simulation trotzdem
+        // VORWAERTS. speedKmh ist vorzeichenbehaftet (siehe virtualSpeed in 40-physics.js,
+        // "deliberately UNSIGNED" steht dort genau deshalb als Gegensatz dazu) - das
+        // Vorzeichen bleibt jetzt erhalten.
+        const v = g.engine.state.speedKmh || 0;
         a.s += simEinheitenProSek(v) * dt;
+        // Rueckwaerts ueber die Ziellinie: KEINE Runde abziehen, nur den Weg im Kreis
+        // halten. Eine "negative Runde" ist keine Groesse, die diese App irgendwo
+        // fuehrt - eine Rueckwaertsfahrt ueber die Linie waere ohnehin ein Sonderfall,
+        // den die Rundenzeitmessung am echten Auto genausowenig auffaengt.
+        if (a.s < 0) a.s += st.bahn.runde;
         // Runde voll? Der Weg wird gekuerzt, und die Zeit dieser Runde festgehalten.
         while (a.s >= st.bahn.runde) {
           a.s -= st.bahn.runde;

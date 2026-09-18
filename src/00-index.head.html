@@ -279,6 +279,9 @@
     text-transform: uppercase; letter-spacing: .06em; }
   .st-tab td:last-child { font-family: monospace; font-size: 12px; color: var(--muted); }
   .st-ok { color: var(--good); font-weight: 700; }
+  /* Rueckmeldung der Sicherung. Zwei Farben genuegen: es hat geklappt, oder nicht. */
+  .sich-ok { color: var(--good) !important; }
+  .sich-bad { color: var(--bad) !important; }
   .st-bad { color: var(--bad); font-weight: 700; }
   .st-skip { color: var(--warn); font-weight: 700; }
   .st-run td { opacity: .5; }
@@ -319,6 +322,10 @@
      was das Wetter TUT, steht im Radar. */
   .wx-ico { position: absolute; top: 5px; left: 6px; z-index: 2; line-height: 0; }
   .wx-ico .gt3-ico { width: 15px; height: 15px; }
+  /* Das Zeichen fuer "wechselhaft". Klein und neben dem Lagesymbol, nicht an seiner
+     Stelle: die Lage bleibt die Hauptaussage, der Verlauf ist der Zusatz. */
+  .wx-wechsel { display: inline-block; margin-left: 2px; font-size: 11px; line-height: 1;
+    vertical-align: top; color: var(--accent, #5aa9ff); }
   /* Controller-Grafik. Die Farben kommen aus dem Vorbild-SVG, sind aber auf die
      Projektvariablen gezogen, damit sie bei einer Themenaenderung mitgehen. */
   .pad-wrap { overflow-x: auto; margin-top: 10px; }
@@ -441,11 +448,67 @@
 
   main { padding: 24px; max-width: 1100px; margin: 0 auto; }
   /* ---- Fusszeile ---- */
+  /* ---- DER FUSS: ganz schwarz, mit einer Glitchlinie nach oben ------------------
+     Bestellt: "footer aufraeumen: ganz schwarzer hintergrund, glitchlinie als abgrenzung
+     zu dem darueber".
+
+     Das Schwarz muss DECKEN, und dafuer braucht der Fuss eine Ebene. #glitch-bands liegt
+     als position:fixed mit z-index 0 ueber dem ganzen Fenster; ein Fuss ohne eigene Ebene
+     steht darunter, und die Streifen liefen quer durch ihn hindurch. main und header haben
+     ihre Ebene aus genau diesem Grund - der Fuss fehlte in der Regel.
+
+     Die Breite geht ueber das Fenster, die INHALTE bleiben bei 1100 px. Ein Balken, der auf
+     Inhaltsbreite endet, ist kein Abschluss der Seite, sondern ein Kasten darin. */
   #app-footer {
+    position: relative; z-index: 1;
+    background: #000; width: 100%;
     display: flex; justify-content: space-between; align-items: center;
-    gap: 14px; padding: 12px 24px 20px 24px; max-width: 1100px; margin: 0 auto;
+    gap: 14px; padding: 18px 24px 20px 24px;
     font-size: 11.5px; color: var(--muted); letter-spacing: .04em;
   }
+  /* Die Glitchlinie. Kein durchgehender Strich, sondern versetzte Stuecke in denselben
+     zwei Kanalfarben, die auch die Ueberschriften versetzen (--glitch-r / --glitch-c) -
+     so gehoert die Kante zur Bildsprache der App und ist nicht nur ein Rahmen.
+     Zwei Lagen uebereinander, um 1 px versetzt: das ist derselbe Kniff wie beim
+     text-shadow der Ueberschriften, nur waagerecht. */
+  #app-footer::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    background:
+      linear-gradient(90deg, var(--glitch-c) 0 14%, transparent 14% 17%,
+                      var(--border-strong) 17% 52%, transparent 52% 55%,
+                      var(--glitch-r) 55% 63%, transparent 63% 68%,
+                      var(--border-strong) 68% 91%, transparent 91% 94%,
+                      var(--glitch-c) 94% 100%);
+  }
+  #app-footer::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 2px; height: 1px;
+    background:
+      linear-gradient(90deg, transparent 0 9%, var(--glitch-r) 9% 13%,
+                      transparent 13% 58%, var(--glitch-c) 58% 61%,
+                      transparent 61% 100%);
+    opacity: .7;
+  }
+  /* Die Inhalte bleiben auf Lesebreite, auch wenn der Balken durchlaeuft. */
+  #app-footer > .foot-left, #app-footer > .foot-right { max-width: 1100px; }
+  /* Danksagungen: Name und Satz untereinander, Quelldateien klein und einfarbig.
+     Die Quellzeile ist bewusst ein eigenes Element und kein <code> im Satz - siehe die
+     Begruendung im Markup. */
+  .dank-liste { list-style: none; padding: 0; margin: 8px 0 0 0; }
+  .dank-liste > li {
+    padding: 8px 0 8px 12px; border-left: 2px solid var(--border);
+    margin-bottom: 8px; line-height: 1.55;
+  }
+  .dank-wer { display: block; color: var(--ink); font-weight: 600; letter-spacing: .03em; }
+  .dank-quelle {
+    display: block; margin-top: 4px;
+    font-family: monospace; font-size: 11px; color: var(--muted);
+    opacity: .7; word-break: break-all;
+  }
+  #app-footer .foot-code {
+    color: var(--muted); text-decoration: none;
+    border-bottom: 1px solid var(--border-strong);
+  }
+  #app-footer .foot-code:hover { color: var(--ink); border-bottom-color: var(--ink); }
   #app-footer .foot-left { display: flex; align-items: center; gap: 10px; }
   #app-footer .foot-ver { font-family: monospace; color: var(--ink); }
   #app-footer .foot-dim { opacity: .55; }
@@ -1190,6 +1253,17 @@
     gap: clamp(4px, 1vw, 9px); }
   .gt3-act-ico svg { width: clamp(14px, 3vw, 19px); height: clamp(14px, 3vw, 19px);
     flex: none; }
+  /* Die zwei Haelften des Klangknopfes. Die Pfeile liegen ABSOLUT an den Raendern, damit
+     Symbol und Name genau dort bleiben, wo sie vorher standen - ein zusaetzliches Flexkind
+     haette sie aus der Mitte geschoben, und geaendert werden sollte nur der Rand.
+     Gedaempft, weil sie eine Bedienhilfe sind und keine Anzeige: wer den Knopf kennt,
+     soll sie nicht mehr lesen muessen. */
+  .gt3-act-zwei { position: relative; }
+  .gt3-act-zwei .act-pfeil { position: absolute; top: 50%; transform: translateY(-50%);
+    font-size: clamp(12px, 2.4vw, 16px); line-height: 1; opacity: .42;
+    pointer-events: none; }
+  .gt3-act-zwei .act-pfeil.links { left: clamp(4px, 1vw, 9px); }
+  .gt3-act-zwei .act-pfeil.rechts { right: clamp(4px, 1vw, 9px); }
   .gt3-half .gt3-act { display: grid; justify-items: center; gap: 2px;
     padding: clamp(4px, .8vw, 8px) 2px; line-height: 1.15; }
   .gt3-half .gt3-act svg { width: clamp(15px, 3.4vw, 21px); height: clamp(15px, 3.4vw, 21px); }
@@ -1402,6 +1476,13 @@
   .gt3-brakeT b { font-size: clamp(9px, 1.9vw, 12px); letter-spacing: 0; }
   .gt3-dim { opacity: .35; padding: 0 1px; }
   .gt3-bias svg { width: clamp(10px, 2vw, 14px); height: clamp(20px, 4vw, 30px); }
+  /* Die Reifenzeile wird angeschrieben, wenn die Wahl nicht zum Wetter passt. Kein
+     Blinken und kein Ausrufezeichen: die Zahl daneben bleibt lesbar, und die Farbe sagt
+     genug - sie ist dieselbe, mit der die App ueberall "das kostet dich was" meint. */
+  .gt3-trim-row.wx-warn b { color: var(--bad); }
+  /* "nein" beim Tanken ist kein Fehler, sondern eine Wahl - also gedimmt und nicht rot.
+     Dieselbe Abstufung, mit der die App ueberall "gilt gerade nicht" meint. */
+  .gt3-trim-row.aus b, .gt3-trim-row.aus svg { opacity: .45; }
   .gt3-trim-row b { font-family: var(--gt3-font); font-weight: 700;
     font-variant-numeric: tabular-nums;
     font-size: clamp(11px, 1.8vw, 17px); }
@@ -1555,7 +1636,87 @@
     overflow: hidden;
   }
   #race-dash[data-screen="pit"] #race-pitscreen,
+  #race-dash[data-screen="auto2"] #race-p2screen,
   #race-dash[data-screen="uebersicht"] #race-ovscreen { display: grid; }
+  /* ---- DER VERGLEICHSSCHIRM ------------------------------------------------------
+     ZWEI SPALTEN NEBENEINANDER, auch auf dem Telefon. Untereinander waere es kein
+     Vergleich mehr, sondern zweimal dieselbe Liste - und der ganze Zweck dieses Schirms
+     ist, dass das Auge waagerecht springen kann.
+
+     Deshalb 1fr/1fr und nicht auto: beide Spalten sind exakt gleich breit, damit
+     gleichnamige Werte auf derselben Hoehe stehen. Eine Trennlinie in der Mitte statt
+     eines Rahmens um jede Spalte - ein Rahmen macht aus zwei Spalten zwei Kaesten. */
+  /* GESTRECKT und nicht oben zusammengeschoben: der Schirm ist hoch, und mit
+     align-content: start blieb die untere Haelfte leer, waehrend die Zahlen klein blieben.
+     Die Spalte verteilt ihre fuenf Bloecke ueber die Hoehe - Kopf, Lampen, Tacho, Werte,
+     Boxenknopf -, und der Knopf landet damit von selbst unten, wo man ihn sucht. */
+  .vgl-grid { display: grid; grid-template-columns: 1fr 1fr;
+    gap: clamp(8px, 1.8vw, 20px); align-content: stretch; min-width: 0; }
+  .vgl-spalte { display: flex; flex-direction: column; justify-content: space-between;
+    gap: clamp(4px, .9vw, 9px); min-width: 0; }
+  /* ---- DIE GROSSE LAMPENLEISTE DES COCKPITS BLEIBT HIER DUNKEL ---------------------
+     Sie gehoert zum Rahmen und zeigt immer Auto 1. Auf diesem Schirm hat jede Spalte ihre
+     eigene Leiste, und zwei Leisten fuer dasselbe Auto uebereinander sind die Frage
+     "welche gilt jetzt?" - genau die soll ein Vergleichsschirm nicht stellen. Verborgen
+     und nicht entfernt: sie ist ein Rasterfeld des Cockpits, und ein fehlendes Feld
+     verschoebe die Einpassung (cockpitInhaltHoehe liest grid-template-rows). */
+  #race-dash[data-screen="auto2"] #race-shift { visibility: hidden; }
+  .vgl-spalte + .vgl-spalte { border-left: 1px solid #262e3d;
+    padding-left: clamp(8px, 1.8vw, 20px); }
+  .vgl-kopf { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+  .vgl-marke { font: 700 clamp(9px, 1.5vw, 12px)/1.1 var(--mono, ui-monospace, monospace);
+    letter-spacing: .08em; text-transform: uppercase; color: var(--good); flex: none; }
+  .vgl-marke.zwei { color: #3d8bff; }
+  .vgl-name { font-size: clamp(9px, 1.4vw, 12px); color: var(--gt3-strip-ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Die Lampenleiste je Spalte: dieselbe Klasse wie oben, nur flacher - sie steht hier
+     neben einer zweiten und soll den Tacho nicht ueberragen. */
+  .vgl-shift { height: clamp(6px, 1.1vw, 10px); }
+  .vgl-tempo { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .vgl-tempo .gt3-val.big { font-size: clamp(26px, 5.2vw, 48px); line-height: 1; }
+  .vgl-einheit { font-size: clamp(8px, 1.2vw, 11px); letter-spacing: .1em;
+    text-transform: uppercase; color: var(--gt3-strip-ink); }
+  .vgl-gang { margin-left: auto; font: 700 clamp(15px, 2.6vw, 26px)/1 var(--mono, ui-monospace, monospace);
+    color: var(--gt3-tile-ink); }
+  /* Fuenf Werte je Spalte, also zwei Reihen zu drei und zwei. Auf dem Telefon bleiben es
+     drei Spalten - die Kaesten sind schmal, aber die Zahlen darin kurz. */
+  .vgl-werte { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(3px, .7vw, 8px); }
+  .vgl-werte .gt3-val.sm { font-size: clamp(12px, 2.1vw, 18px); }
+  .vgl-werte .gt3-box { padding: clamp(2px, .5vw, 5px) clamp(3px, .6vw, 6px); }
+  .vgl-box { margin-top: auto; }
+  .vgl-fuss { display: flex; align-items: center; gap: clamp(8px, 1.6vw, 14px);
+    min-width: 0; }
+  .vgl-fuss .gt3-act { flex: none; }
+  /* ---- EINE ZEILE, UND SIE MUSS ES AUCH BLEIBEN -----------------------------------
+     Hier stand `min-width: 0; overflow: hidden; text-overflow: ellipsis` OHNE
+     `white-space: nowrap`, und damit tut das Ellipsis nichts: der Text bricht weiter um.
+     Gemessen wurde die Fusszeile dadurch 440 px hoch - der Satz brach bei wenigen Pixeln
+     Breite in rund 45 Zeilen und schob den ganzen Vergleich aus dem Schirm.
+     `flex: 1` gibt ihr die Breite, `nowrap` haelt sie auf einer Zeile, und erst dann
+     greift das Ellipsis. Die drei gehoeren zusammen. */
+  .vgl-fuss .schirm-fuss { flex: 1 1 auto; min-width: 0; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 560px) {
+    .vgl-grid { gap: 6px; }
+    .vgl-spalte + .vgl-spalte { padding-left: 6px; }
+    .vgl-werte { gap: 3px; }
+  }
+  /* ---- DIESER SCHIRM IST EINE FLEX-SPALTE UND KEIN RASTER --------------------------
+     Hier stand `grid-template-rows: auto minmax(0, 1fr) auto`, und gemessen kam
+     "13,8px 0px 660px" heraus: das mittlere Feld bekam NULL Hoehe, die Spalten liefen
+     ueber, und der untere Teil des Schirms blieb leer. Mit drei Kindern, von denen das
+     mittlere den Rest nehmen soll, ist eine Flex-Spalte die Form, die das ohne Umweg
+     sagt - und `min-height: 0` ist dabei der Teil, den man vergisst: ohne ihn darf ein
+     Flex-Kind nicht kleiner werden als sein Inhalt, und dann laeuft es wieder ueber.
+
+     Die Regel ueberschreibt `display: grid` aus .gt3-schirm und muss deshalb dieselbe
+     Bedingung tragen wie die Einblendung, sonst gilt sie auch fuer den verborgenen
+     Schirm - das waere folgenlos, aber es waere auch nicht wahr. */
+  #race-dash[data-screen="auto2"] #race-p2screen {
+    display: flex; flex-direction: column; gap: clamp(4px, .8vw, 9px); }
+  #race-dash[data-screen="auto2"] #race-p2screen > .vgl-grid {
+    flex: 1 1 auto; min-height: 0; }
 
   .schirm-kopf { display: flex; align-items: baseline; gap: 10px;
     font-size: clamp(8px, 1.1vw, 11px); letter-spacing: .12em;
@@ -1778,6 +1939,10 @@
        damit die beiden nicht unterschiedlich hoch nebeneinander stehen. */
     min-height: 44px; }
   .gt3-act:hover { background: var(--gt3-btn-hover); }
+  /* Abgeblendet: der Knopf ist da und bleibt druckbar (er gibt dann den Grund aus), aber
+     er sieht nicht mehr nach "hier geht es los" aus. Kein disabled - ein Knopf, der auf
+     einen Druck gar nicht reagiert, erklaert sich nicht. */
+  .gt3-act.gedimmt { opacity: .45; }
   .gt3-act.armed { background: #1c7a4d; color: #eafff1; }
   .gt3-act.warn { background: #b8860b; color: #100c02; }
   /* Eigene Klasse statt .warn: die trug ein dunkles Goldbraun (#b8860b), und eine gelbe
@@ -2125,10 +2290,12 @@
      renderTrackPreview() zeichnet nur noch: viewBox, Fahrbahn, Stossfugen, Randsteine,
      Punkte. Alles Aeussere steht hier, weil es vom ORT abhaengt und nicht vom Bild.
 
-     DREI ORTE ZEIGEN DASSELBE BILD, und jeder hat andere Randbedingungen:
+     ZWEI ORTE ZEIGEN DASSELBE BILD, und jeder hat andere Randbedingungen:
        #track-preview-svg   Editor: 520 px breit in der Seite, im Vollbild ohne Deckel
-       #dash-minimap        Streckenreiter: schmal, unter einem Absatz Text
        .ov-karte            Uebersichtsschirm: die HOEHE ist knapp, nicht die Breite
+
+     Der dritte war #dash-minimap im Streckenreiter, entfernt in v0.6.26: dieselbe
+     Karte stand daneben schon im Uebersichtsschirm des Cockpits.
 
      Der Grund ist hier --panel-2, weil das Bild in der Seite auf einer Karte liegt. Der
      Uebersichtsschirm ueberschreibt ihn: dort liegt es auf schwarzem Cockpitgrund, und eine
@@ -2136,9 +2303,6 @@
      Drahtgitter aus Randsteinen ohne Strasse dazwischen. */
   .tp-karte { background: var(--panel-2); border: 1px solid var(--border);
     border-radius: 6px; }
-  /* Der Streckenreiter: so breit wie die Spalte, gedeckelt. Diese Regel hat vorher gefehlt -
-     #dash-minimap hatte KEIN CSS und hing vollstaendig am Inline-Stil des Zeichners. */
-  #dash-minimap .tp-karte { width: 100%; max-width: 520px; height: auto; }
   /* Die Vorschau neben der Modellwahl. Gedeckelt in der HOEHE und nicht in der Breite: ein
      hochkantiges Layout wuerde sonst die halbe Seite fuellen. */
   /* EINE SPALTE, und das ist keine Kosmetik. .opt-row ist ein Raster
@@ -2186,8 +2350,16 @@
 
      Dazu die untere Sicherheitszone: auf einem iPhone liegt sonst die Bedienleiste des
      Systems ueber der Palette. */
+  /* ---- KEINE HOEHE NEBEN inset: 0, und das ist der Kern ---------------------------
+     Hier stand zusaetzlich `height: 100dvh`. Bei `position: fixed; inset: 0` ist die Hoehe
+     aber SCHON bestimmt - der Kasten reicht von oben bis unten am Sichtfenster. Eine
+     zweite Angabe daneben kann nur eines: widersprechen. Und `height` gewinnt gegen den
+     unteren Versatz, also wird der Kasten genau so hoch, wie dvh gerade meldet.
+     Meldet ein Einbettungsrahmen dort die Fenster- statt der Vollbildhoehe - und das tun
+     welche -, ragt der Kasten unten hinaus, und was in der letzten Rasterzeile steht
+     (die Teile) liegt ausserhalb des Bildes. Genau die gemeldete Gestalt.
+     inset: 0 allein ist per Definition das Sichtfenster und kann nicht danebenliegen. */
   body.track-fs #track-fs-host { position: fixed; inset: 0; z-index: 200;
-    height: 100dvh;
     background: var(--bg); display: grid; grid-template-rows: 1fr auto;
     align-items: center; padding: 8px; gap: 6px;
     padding-bottom: max(8px, env(safe-area-inset-bottom)); }
@@ -2206,14 +2378,13 @@
      Karte und nicht an den Host: die Leisten sollen mittig bleiben. */
   body.track-fs #track-fs-host > #track-preview-svg { height: auto; min-height: 0;
     align-self: stretch; overflow: hidden; display: grid; place-items: center; }
-  /* DER WARNABSATZ GEHOERT NICHT INS VOLLBILD, und das ist der dritte Fehler. Er nahm dort
-     eine eigene Rasterzeile von 52 px - vier Zeilen Prosa ueber fehlende Kacheltypen, die
-     man beim Bauen nicht liest und die der Karte Platz wegnimmt. In der Seite bleibt er
-     stehen, dort ist er richtig.
-
-     Nebenwirkung, und eine erwuenschte: `grid-template-rows: auto 1fr auto` nennt drei
-     Zeilen, in Flusslage waren aber vier Kinder da - die vierte Zeile entstand implizit.
-     Jetzt stimmen Erklaerung und Wirklichkeit ueberein. */
+  /* Der Warnabsatz ueber die unvollstaendige Palette ist mit v0.6.18 ganz entfallen - die
+     fehlenden Kacheltypen sind vermessen und eingebaut. Die Regel bleibt trotzdem stehen:
+     sie sagt, dass in diesen Kasten keine Prosa gehoert. Ein Absatz nimmt hier eine eigene
+     Rasterzeile, und `grid-template-rows: auto 1fr auto` nennt genau drei - Aktionen,
+     Karte, Teile. Wer hier einen Satz einfuegt, schiebt die Teile in eine vierte,
+     implizite Zeile und damit aus dem Bild. Genau das war der gemeldete Fehler in seiner
+     zweiten Gestalt. */
   body.track-fs #track-fs-host > p { display: none; }
   /* EIN KNOPF, ZWEI ZUSTAENDE. Die Wahrheit ist die Klasse auf dem body - dieselbe, die
      das ganze Vollbild-Layout schaltet. Ausdruecklich ohne JS: waere der Zustand hier ein
@@ -2244,6 +2415,21 @@
   /* Everything outside the editor host is irrelevant while building. */
   body.track-fs > header, body.track-fs > nav.tabs { display: none; }
 
+  /* Die Mehrspieler-Anleitung: nummeriert, mit Luft, und die Befehle als eigene Zeile.
+     Sie stehen NICHT im Fliesstext - ein <code> mitten im Satz zerlegt den Textknoten,
+     und die Uebersetzung arbeitet je Textknoten. */
+  .mp-schritte { margin: 12px 0 14px 0; padding-left: 20px; font-size: 12.5px;
+    color: var(--muted); line-height: 1.55; }
+  .mp-schritte li { margin-bottom: 9px; }
+  .mp-schritte b { color: var(--ink); }
+  .mp-befehl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    margin: 5px 0 4px 0; }
+  .mp-befehl code { background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 9px; font-size: 12px; color: var(--ink);
+    user-select: all; }
+  .mp-kopier { font-size: 11px; padding: 4px 9px; }
+  .mp-datei { display: inline-block; margin-top: 3px; font-size: 11.5px; }
+
   .tp-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
     justify-content: center; }
   .tp-btn { width: 54px; height: 54px; padding: 0; display: grid; place-items: center;
@@ -2259,7 +2445,15 @@
   .tp-actions .tp-btn { border-color: var(--border); }
   /* Aktionen oben, Karte in der Mitte, Teile unten - so liegt das Steuerkreuz auf dem
      Bildschirm genauso wie in der Hand: hoch zu den Aktionen, runter zu den Teilen. */
-  body.track-fs #track-fs-host { grid-template-rows: auto 1fr auto; }
+  /* minmax(0, 1fr) UND NICHT 1fr. `1fr` ist `minmax(auto, 1fr)`, und dieses `auto` ist
+     eine UNTERGRENZE aus dem Inhalt: die Kartenzeile weigert sich dann, unter die
+     Mindesthoehe ihres Inhalts zu schrumpfen. Passt die Karte bei einem bestimmten
+     Seitenverhaeltnis nicht, waechst die Zeile ueber das Sichtfenster hinaus und schiebt
+     die Teile darunter heraus. Mit einer Untergrenze von 0 schrumpft sie, und die Teile
+     behalten ihre Zeile.
+     (Die Regel an der Karte setzt schon min-height: 0 und overflow: hidden - das deckt
+     den Fall fuer das Rasterkind ab, nicht aber die Spurberechnung selbst.) */
+  body.track-fs #track-fs-host { grid-template-rows: auto minmax(0, 1fr) auto; }
   body.track-fs .tp-btn { width: 46px; height: 46px; }
   /* Space usage, subtle, in a corner as asked. */
   /* The gamepad moves the REAL focus rather than a painted marker of its own, so keyboard,
@@ -2634,6 +2828,25 @@
     font-size: 11px; color: var(--muted); pointer-events: none; }
   body.track-fs .tp-space { right: 14px; bottom: 68px; }
   .gar-row.is-player { border-color: var(--good); }
+  .gar-row.is-zwei { border-color: #3d8bff; }
+  /* Die Bestandszeile der Sicherung. Ein Kasten mit linker Kante, wie die Hinweise
+     darunter - sie ist eine AUSSAGE ueber den Zustand und kein Bedienelement, und die
+     Kante sagt das, ohne einen zweiten Knopf zu erfinden.
+
+     Die Kante ist gruen, wenn etwas liegt, und gedeckt, wenn nichts liegt: "nichts
+     gespeichert" ist keine Warnung - beim ersten Start ist es der richtige Zustand. */
+  .sich-lage { font-size: 12px; line-height: 1.5; color: var(--text);
+    background: var(--panel-2); border-left: 3px solid var(--good);
+    border-radius: 0 7px 7px 0; padding: 8px 11px; margin-bottom: 10px; }
+  .sich-lage.leer { border-left-color: var(--border); color: var(--muted); }
+  .sich-lage b { color: var(--text); }
+  .sich-lage .sich-punkte { display: flex; flex-wrap: wrap; gap: 4px 12px;
+    margin-top: 5px; }
+  .sich-lage .sich-punkt { white-space: nowrap; }
+  /* Die Farbpunkte der gemerkten Autos, damit "weiss" nicht nur ein Wort ist. */
+  .sich-lage .sich-auto { display: inline-flex; align-items: center; gap: 5px; }
+  .sich-lage .sich-farbe { width: 9px; height: 9px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.35); flex: none; }
   .gar-row.is-ghost { border-color: #7a6bd0; }
   .gar-id { font-size: 11px; color: var(--muted); font-family: monospace; }
   /* Ein Segmentschalter statt drei einzelner Knoepfe: die drei Rollen schliessen sich
@@ -2649,6 +2862,23 @@
   .gar-roles button:first-child { border-left: 0; }
   .gar-roles button:hover { background: var(--tint-2); color: var(--text); }
   .gar-roles button.on { background: var(--good); color: #04170c; font-weight: 700; }
+  /* Spieler 2 in seiner eigenen Farbe - blau, weil Gruen (Auto 1) und Violett (Ghost)
+     schon belegt sind und ein zweiter gruener Knopf in derselben Reihe nicht
+     unterscheidbar waere. Kontrast gegen #06121f: 8,4. */
+  .gar-roles button.on.zwei { background: #3d8bff; color: #06121f; font-weight: 700; }
+  /* DER EINZIGE ROLLENKNOPF MIT KENNZEICHNUNG, und er traegt sie zweizeilig: "Spieler 2
+     experimentell" nebeneinander waere breiter als die drei anderen Knoepfe zusammen.
+     Die Leiste waechst dadurch von 38 auf rund 46 px - das ist der Preis dafuer, dass man
+     die Kennzeichnung dort liest, wo man den Modus einschaltet, und nicht erst in den
+     Optionen. */
+  .gar-roles button.gar-rolle-zwei {
+    display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
+    line-height: 1.15; padding-top: 5px; padding-bottom: 5px; }
+  .gar-roles button.gar-rolle-zwei .wip-tag {
+    font-size: 8.5px; letter-spacing: .06em; opacity: .85; }
+  /* Auf dem gelben Grund des eingeschalteten Knopfes braucht die Kennzeichnung eine
+     dunkle Tinte - der wip-tag bringt seine eigene mit, und die ist hell. */
+  .gar-roles button.on.zwei .wip-tag { background: rgba(6,18,31,.22); color: #06121f; }
   .gar-roles button.on.ghost { background: #7a6bd0; color: #f2eeff; }
   .gar-roles button.on.off { background: var(--panel-3); color: var(--text); }
   /* Tempo je Ghost, direkt in der Zeile. Eine eigene Rasterzeile, damit der Regler die
@@ -2895,6 +3125,7 @@
   <button class="tab-btn" data-tab="school" data-parent="misc" hidden style="display:none">Programmierschule</button>
   <button class="tab-btn" data-tab="dev" data-parent="misc" hidden style="display:none">Entwickler</button>
   <button class="tab-btn" data-tab="selftest" data-parent="misc" hidden style="display:none">Selbsttest</button>
+  <button class="tab-btn" data-tab="probe" data-parent="misc" hidden style="display:none">Code-Sonde</button>
   </nav>
   </div>
   </div>
@@ -3164,9 +3395,19 @@
         <!-- Der Motorklang gehoert ins Cockpit, weil man ihn im Fahren wechselt: das ist
              kein Einrichten, sondern Ausprobieren. MIT Namen und nicht nur mit dem Symbol -
              ein Knopf, der durch zehn Eintraege schaltet, muss sagen wo er steht, sonst
-             drueckt man blind und hoert erst beim Gasgeben, was passiert ist. -->
-        <button type="button" class="gt3-act gt3-act-ico" id="race-act-sound"
-                title="Motorklang durchschalten">
+             drueckt man blind und hoert erst beim Gasgeben, was passiert ist.
+
+             ---- ZWEI HAELFTEN, UND DIE PFEILE SAGEN ES ----------------------------
+             Bestellt: links zurueck, rechts vor. Bei 26 Eintraegen ist eine Richtung zu
+             wenig - wer einen Motor um eins verpasst, muss sonst 25 mal druecken.
+
+             Die Pfeile stehen ABSOLUT an den Raendern und nicht im Flexfluss. Das ist
+             Absicht: "am Button soll sich nichts aendern ausser den Pfeilen", und ein
+             zusaetzliches Flexkind haette Symbol und Name aus der Mitte geschoben. -->
+        <button type="button" class="gt3-act gt3-act-ico gt3-act-zwei" id="race-act-sound"
+                title="Motorklang: rechte H&auml;lfte weiter, linke zur&uuml;ck">
+          <span class="act-pfeil links" aria-hidden="true" data-i18n-skip>&lsaquo;</span>
+          <span class="act-pfeil rechts" aria-hidden="true" data-i18n-skip>&rsaquo;</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M16 9a4.2 4.2 0 0 1 0 6" stroke="var(--bad)"/><path d="M18.6 6.4a7.8 7.8 0 0 1 0 11.2" stroke="var(--bad)"/></svg>
           <span id="race-act-sound-txt">Motor</span></button>
@@ -3223,54 +3464,53 @@
           <div class="gt3-val sm" id="race-batt">&ndash;</div></div>
         <div class="gt3-box gt3-click" id="race-light-box" title="Licht an/aus" style="display:flex;align-items:center;justify-content:center">
           <div class="gt3-tell" style="width:100%"><svg class="gt3-lamp" id="race-light" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" aria-label="Scheinwerfer"><path d="M 107 43 C 145 43 182 68 182 100 C 182 132 145 157 107 157 Z"/><path d="M28 71 89 52M28 96 89 77M28 121 89 102M28 146 89 127M28 171 89 152"/></svg></div></div>
-        <div class="gt3-box gt3-click gt3-wx" id="race-wx-box" title="Wetter umschalten">
+        <!-- ---- DREI LAGEN, UND DIE ANZEIGE ZEIGT BEIDE DINGE ----------------------
+             Sonne oder Regen sagen, was JETZT gilt - das ist die griffrelevante Tatsache.
+             Bei "wechselhaft" kommt ein kleines Zeichen dazu, statt die Lage durch ein
+             drittes Symbol zu ersetzen: waehrend des Verlaufs ist es trocken ODER nass, und
+             wer nur "wechselhaft" sieht, weiss nicht, worauf er gerade faehrt. -->
+        <div class="gt3-box gt3-click gt3-wx" id="race-wx-box"
+             title="Wetter umschalten: sonnig, Regen, wechselhaft">
           <canvas id="race-wx-radar" class="wx-radar" width="200" height="150"
                   aria-hidden="true"></canvas>
-          <div class="wx-ico"><svg class="gt3-ico" id="race-wx-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-label="Trocken"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg><svg class="gt3-ico" id="race-wx-rain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-label="Regen" style="display:none"><path d="M6.5 14a4 4 0 0 1 .4-8 5.5 5.5 0 0 1 10.5 1.4A3.6 3.6 0 0 1 17.5 14z"/><path d="M8 17.5l-1 2.5M12 17.5l-1 2.5M16 17.5l-1 2.5"/></svg></div></div>
-        <!-- Was auf dem Steuerkreuz liegt: hoch/runter Bremsbalance, links/rechts
-             Lenkansprechen. Die Kachel und das Kreuz zeigen dieselben zwei Groessen.
+          <div class="wx-ico"><svg class="gt3-ico" id="race-wx-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-label="Trocken"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg><svg class="gt3-ico" id="race-wx-rain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-label="Regen" style="display:none"><path d="M6.5 14a4 4 0 0 1 .4-8 5.5 5.5 0 0 1 10.5 1.4A3.6 3.6 0 0 1 17.5 14z"/><path d="M8 17.5l-1 2.5M12 17.5l-1 2.5M16 17.5l-1 2.5"/></svg><span class="wx-wechsel" id="race-wx-wechsel" aria-label="wechselhaft" style="display:none" data-i18n-skip>&#8646;</span></div></div>
+        <!-- Was auf dem Steuerkreuz liegt: hoch die Reifenwahl, runter die Tankmenge.
+             Die Kachel und das Kreuz zeigen dieselben zwei Groessen.
 
-             Je Zahl ein eigenes Symbol: vorher stand "100% . 100%" unter einer
-             Beschriftung, in der beide Groessen im Text steckten, und man musste wissen,
-             welche Zahl welche ist. Zwei ZEILEN und nicht zwei Spalten, weil die Kachel auf
-             375 px nur rund 85 px breit ist - zwei Spalten waeren 40 px, und darin steht
-             keine dreistellige Prozentzahl.
+             HIER STANDEN BREMSBALANCE UND LENKANSPRECHEN. Bestellt war der Tausch
+             ausdruecklich ("die neuen Anzeigen ersetzen die alten"), und er kostet nichts:
+             beide Groessen bleiben an ihren Reglern in den Optionen erreichbar. Was sie im
+             Cockpit verlieren, ist der schnelle Weg im Fahrbetrieb - und den brauchen
+             Reifenwahl und Tankmenge dringender, weil sie zu einer Entscheidung gehoeren,
+             die man WAEHREND der Fahrt trifft.
 
-             Das Lenkrad ist dasselbe wie auf der Optionen-Kachel "Fahrgefuehl": ein neues
-             Symbol fuer eine bekannte Sache waere eine zweite Vokabel. -->
+             Je Zahl ein eigenes Symbol, wie vorher: zwei ZEILEN und nicht zwei Spalten,
+             weil die Kachel auf 375 px nur rund 85 px breit ist.
+
+             Die Symbole sind die BEKANNTEN: der Reifen ist derselbe Ring, der auch in den
+             vier Reifenfeldern steckt, die Zapfsaeule dieselbe wie auf der Tankkachel
+             daneben. Ein neues Symbol fuer eine bekannte Sache waere eine zweite Vokabel. -->
         <div class="gt3-box gt3-trim">
-          <!-- Eine senkrechte Skala und kein zweiter Kreis: Bremsscheibe und Lenkrad
-               sahen als Kreis mit Speichen gleich aus. Die Skala sagt dreierlei auf einmal -
-               dass es eine Balance zwischen zwei Enden ist, wo sie steht, und dass man sie
-               schiebt. Letzteres entspricht der Geste auf dem Steuerkreuz, man muss die
-               Belegung also nicht wissen, sondern sieht sie.
+          <!-- Die Reifenwahl fuer den naechsten Stopp. Der Ring traegt die Mischungsfarbe
+               (weich rot, mittel gelb, hart weiss, Regen blau) - dieselbe Zuordnung wie in
+               der Reifenkachel und im Boxenschirm, aus mischungFarbe().
 
-               OBEN IST VORN. Die Begruendung dafuer war "hoch auf dem Kreuz nimmt die
-               Balance nach vorn", und seit v0.5.18 liegt die Balance nicht mehr auf dem
-               Kreuz. Die Richtung bleibt trotzdem, und zwar aus einem staerkeren Grund: sie
-               ist dieselbe wie beim Regler in den Optionen, dessen rechtes Ende "mehr vorn"
-               heisst, und dieselbe wie die Fahrzeugachse, an der man sie denkt. -->
-          <div class="gt3-trim-row gt3-bias" id="race-bias-row"
-               title="Bremsbalance, Anteil vorn. Ziehen oder Regler in den Optionen">
-            <svg viewBox="0 0 14 24" aria-label="Bremsbalance, Anteil vorn"
-                 preserveAspectRatio="none">
-              <path d="M7 2.5V21.5" stroke="rgba(255,255,255,.30)" stroke-width="2.2"
-                    stroke-linecap="round" fill="none"/>
-              <path d="M3.6 4.5h6.8M3.6 12h6.8M3.6 19.5h6.8" stroke="rgba(255,255,255,.22)"
-                    stroke-width="1.1" stroke-linecap="round" fill="none"/>
-              <rect id="race-bias-mark" x="1.4" y="10.6" width="11.2" height="2.8" rx="1.4"
-                    fill="var(--bad)"/>
-            </svg>
-            <b id="race-trim-accel">62%</b>
-          </div>
-          <!-- Hier standen die Scheibentemperaturen. Sie sitzen jetzt als Ring IN den
-               Reifen: eine Scheibe steckt in der Felge, und die Zuordnung vorn/hinten
-               ist dort dieselbe wie beim Reifen. Zweimal dasselbe waere in einer
-               77-px-Kachel Platzverschwendung. -->
-          <div class="gt3-trim-row" title="Lenkansprechen (Steuerkreuz hoch/runter)">
+               Die Rillen erscheinen nur beim Regenreifen, und auch das ist die vorhandene
+               Vokabel: der Tooltip der Reifenkachel sagt seit v0.5 "Rillen bedeuten
+               Regenreifen". -->
+          <div class="gt3-trim-row" id="race-pit-tyre-row"
+               title="Reifen f&uuml;r den n&auml;chsten Boxenstopp (Steuerkreuz hoch). Vorgabe sind die aufgezogenen Reifen; passt die Wahl nicht zum Wetter, wird die Zeile angeschrieben.">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
-                 stroke-linecap="round" aria-label="Lenkansprechen"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.4"/><path d="M12 3.5v6M6.2 17.4l4.2-3.1M17.8 17.4l-4.2-3.1" stroke="var(--bad)"/></svg>
-            <b id="race-trim-steer">100%</b>
+                 stroke-linecap="round" aria-label="Reifenwahl"><circle id="race-pit-tyre-ring" cx="12" cy="12" r="8.6" stroke="var(--muted)" stroke-width="3.4"/><circle cx="12" cy="12" r="3.4"/><g id="race-pit-tyre-rillen" style="display:none"><path d="M12 3.4v3.1M12 17.5v3.1M3.4 12h3.1M17.5 12h3.1"/></g></svg>
+            <b id="race-pit-tyre" data-i18n-skip>&ndash;</b>
+          </div>
+          <!-- Die Tankmenge: nein, 55 l oder voll. Dasselbe Wort wie im Boxenschirm, aus
+               tankZielWort() - drei Stufen, eine Vokabel. -->
+          <div class="gt3-trim-row" id="race-pit-fuel-row"
+               title="Tankmenge f&uuml;r den n&auml;chsten Boxenstopp (Steuerkreuz runter): nein, halb oder voll.">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                 stroke-linecap="round" stroke-linejoin="round" aria-label="Tankmenge"><path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M3 21h13"/><path d="M4 10h10"/><path d="M18 21v-9a3 3 0 0 0-3-3"/><path d="M18 12h2a1 1 0 0 0 1-1V8l-3-3"/></svg>
+            <b id="race-pit-fuel" data-i18n-skip>&ndash;</b>
           </div></div>
         <div class="gt3-box gt3-gplot" id="race-gplot">
           <div class="gt3-lbl"><span style="color:#ff4d4d">Sim</span> &middot; <span style="color:#2ee06a">Roh</span></div>
@@ -3385,6 +3625,110 @@
              aus. -->
         <div class="ov-karte" id="ov-karte" data-i18n-skip></div>
         <div class="schirm-fuss" id="ov-fuss" data-i18n-skip></div>
+      </div>
+
+      <!-- DER SCHIRM VON AUTO 2. Er traegt alles, was der zweiten Zeile im Hauptschirm
+           nicht passt: Tank, Schaden, Reifen- und Bremsentemperatur, Rundenzeiten.
+
+           So bestellt: "Drehzahl und Geschwindigkeit fuer beide Autos; alle weiteren
+           Einstellungen auf weiteren Screens." Die zweite Zeile im Hauptschirm zeigt die
+           zwei Werte, die man im Fahren braucht - der Rest steht hier, einen Tastendruck
+           entfernt.
+
+           Die Werte werden von p2ScreenRender() in 50-drive.js geschrieben und sind
+           deshalb data-i18n-skip: es sind Messwerte, keine Oberflaeche. -->
+      <!-- ---- DER VERGLEICHSSCHIRM: BEIDE AUTOS NEBENEINANDER -----------------------
+           BESTELLT: "Statt nur Player 2 soll er das Nötigste von Player 1 und 2 haben:
+           Geschwindigkeit, Drehzahllichter, schaden, reifen, tank, bremse, akku,
+           motorsound."
+
+           ZWEI SPALTEN UND NICHT ZWEI SCHIRME. Der Sinn dieses Schirms ist der VERGLEICH -
+           wer hat mehr Sprit, wessen Reifen sind kaelter, wer hat mehr Schaden. Zwei
+           Schirme, zwischen denen man blaettert, beantworten genau diese Frage nicht.
+
+           Die Reihenfolge der Werte ist in beiden Spalten dieselbe, und das ist keine
+           Symmetrie um ihrer selbst willen: beim Vergleichen springt das Auge waagerecht,
+           und eine Spalte mit anderer Reihenfolge macht daraus ein Suchen.
+
+           Der Motorklang steht UNTEN und EINMAL: beide Autos fahren dasselbe Modell. Ein
+           zweiter Klangknopf waere ein Bedienelement, das nichts anderes tut als der
+           erste. -->
+      <div class="gt3-schirm" id="race-p2screen">
+        <div class="schirm-kopf"><b>Beide Autos</b><span class="wip-tag">experimentell</span>
+          <span id="p2s-kopf-lage" data-i18n-skip>&ndash;</span>
+          <span style="margin-left:auto" id="p2s-kopf-runde" data-i18n-skip></span></div>
+
+        <div class="vgl-grid">
+          <!-- ---- AUTO 1 ---- -->
+          <div class="vgl-spalte">
+            <div class="vgl-kopf"><span class="vgl-marke">Spieler 1</span>
+              <span class="vgl-name" id="vgl1-name" data-i18n-skip>&ndash;</span></div>
+            <div class="gt3-shift vgl-shift" id="vgl1-shift">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="vgl-tempo"><span class="gt3-val big" id="vgl1-speed"
+                 data-i18n-skip>0</span><span class="vgl-einheit">km/h</span>
+              <span class="vgl-gang" id="vgl1-gear" data-i18n-skip>N</span></div>
+            <div class="vgl-werte">
+              <div class="gt3-box"><div class="gt3-lbl">Tank</div>
+                <div class="gt3-val sm" id="vgl1-fuel" data-i18n-skip>110 l</div>
+                <div class="gt3-bar"><i id="vgl1-fuel-bar"></i></div></div>
+              <div class="gt3-box"><div class="gt3-lbl">Zustand</div>
+                <div class="gt3-val sm" id="vgl1-cond" data-i18n-skip>100&nbsp;%</div>
+                <div class="gt3-bar"><i id="vgl1-cond-bar"></i></div></div>
+              <div class="gt3-box"><div class="gt3-lbl">Reifen</div>
+                <div class="gt3-val sm" id="vgl1-tyre" data-i18n-skip>20&deg;</div></div>
+              <div class="gt3-box"><div class="gt3-lbl">Bremse</div>
+                <div class="gt3-val sm" id="vgl1-brake" data-i18n-skip>20&deg;</div></div>
+              <div class="gt3-box"><div class="gt3-lbl">Akku</div>
+                <div class="gt3-val sm" id="vgl1-batt" data-i18n-skip>&ndash;</div></div>
+            </div>
+            <button type="button" class="gt3-act vgl-box" id="vgl1-act-pit">Boxenstopp</button>
+          </div>
+
+          <!-- ---- AUTO 2 ---- -->
+          <div class="vgl-spalte">
+            <div class="vgl-kopf"><span class="vgl-marke zwei">Spieler 2</span>
+              <span class="vgl-name" id="vgl2-name" data-i18n-skip>&ndash;</span></div>
+            <div class="gt3-shift vgl-shift" id="vgl2-shift">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="vgl-tempo"><span class="gt3-val big" id="vgl2-speed"
+                 data-i18n-skip>0</span><span class="vgl-einheit">km/h</span>
+              <span class="vgl-gang" id="vgl2-gear" data-i18n-skip>N</span></div>
+            <div class="vgl-werte">
+              <div class="gt3-box"><div class="gt3-lbl">Tank</div>
+                <div class="gt3-val sm" id="vgl2-fuel" data-i18n-skip>110 l</div>
+                <div class="gt3-bar"><i id="vgl2-fuel-bar"></i></div></div>
+              <div class="gt3-box"><div class="gt3-lbl">Zustand</div>
+                <div class="gt3-val sm" id="vgl2-cond" data-i18n-skip>100&nbsp;%</div>
+                <div class="gt3-bar"><i id="vgl2-cond-bar"></i></div></div>
+              <div class="gt3-box"><div class="gt3-lbl">Reifen</div>
+                <div class="gt3-val sm" id="vgl2-tyre" data-i18n-skip>20&deg;</div></div>
+              <div class="gt3-box"><div class="gt3-lbl">Bremse</div>
+                <div class="gt3-val sm" id="vgl2-brake" data-i18n-skip>20&deg;</div></div>
+              <div class="gt3-box"><div class="gt3-lbl">Akku</div>
+                <div class="gt3-val sm" id="vgl2-batt" data-i18n-skip>&ndash;</div></div>
+            </div>
+            <button type="button" class="gt3-act vgl-box" id="p2s-act-pit">Boxenstopp</button>
+          </div>
+        </div>
+
+        <div class="vgl-fuss">
+          <!-- Der Motorklang gilt fuer beide: dasselbe Modell, zwei Stimmen auf zwei
+               Stereoseiten. Derselbe Knopf wie im Hauptschirm, damit man ihn auch hier
+               erreicht - wer vergleicht, probiert. -->
+          <button type="button" class="gt3-act gt3-act-ico gt3-act-zwei" id="vgl-act-sound"
+                  title="Motorklang f&uuml;r beide Autos: rechte H&auml;lfte weiter, linke zur&uuml;ck">
+            <span class="act-pfeil links" aria-hidden="true" data-i18n-skip>&lsaquo;</span>
+            <span class="act-pfeil rechts" aria-hidden="true" data-i18n-skip>&rsaquo;</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M16 9a4.2 4.2 0 0 1 0 6" stroke="var(--bad)"/><path d="M18.6 6.4a7.8 7.8 0 0 1 0 11.2" stroke="var(--bad)"/></svg>
+            <span id="vgl-act-sound-txt" data-i18n-skip>Motor</span></button>
+          <div class="schirm-fuss" id="p2s-fuss" data-i18n-skip></div>
+        </div>
       </div>
 
       <div class="gt3-banner" id="hud-toast-wrap"><span id="hud-toast"></span></div>
@@ -3568,6 +3912,43 @@
       <p class="muted">&bdquo;Ada &amp; Zangemann&ldquo; von Matthias Kirschner und Sandra Brandst&auml;tter ist ein Kinderbuch dar&uuml;ber, wem die Software auf einem Ger&auml;t eigentlich geh&ouml;rt. Es erkl&auml;rt in einer Geschichte, worum es oben in drei Abs&auml;tzen ging.</p>
       <p class="muted">Und praktisch: die Programmierschule unter Entwicklertools l&auml;sst dich Beschleunigungs- und Lenkkurven mit der Hand ziehen und sofort sehen, was das Auto daraus macht. Das ist der k&uuml;rzeste Weg von &bdquo;Programmieren ist abstrakt&ldquo; zu &bdquo;eine eckige Kurve f&auml;hrt schlechter als eine geschmeidige&ldquo;.</p>
     </div>
+
+    <div class="card">
+      <h2>Danksagungen</h2>
+      <!-- ---- KEINE AUSZEICHNUNG MITTEN IM SATZ ----------------------------------
+           Ein <b> oder <code> innerhalb eines Satzes ZERLEGT den Textknoten, und die
+           Uebersetzung arbeitet je Textknoten. Eine erste Fassung dieser Sektion machte
+           genau das und hinterliess unuebersetzbare Bruchstuecke wie "(Autohupe)," und
+           "- sechs Aufnahmen:".
+           Deshalb hier durchgehend: EIN Satz ist EIN Knoten, und alles, was nicht
+           uebersetzt werden soll - Eigennamen und Dateinamen - steht daneben in einem
+           eigenen Element mit data-i18n-skip. -->
+      <p class="muted">Dieses Projekt steckt voller Dinge, die jemand anders herausgefunden, ausprobiert oder geduldig zur&uuml;ckgemeldet hat. Namentlich:</p>
+      <ul class="dank-liste">
+        <li><span class="dank-wer" data-i18n-skip>KaiGS</span>
+          <span class="muted">F&uuml;r das Feedback zum Steuern per RC-Funke &uuml;ber CH&nbsp;Control.</span></li>
+        <li><span class="dank-wer" data-i18n-skip>seVen</span>
+          <span class="muted">F&uuml;rs Teilen seines Wissens zu den Bluetooth-Protokollen.</span></li>
+        <li><span class="dank-wer" data-i18n-skip>Carrera Hybrid Players Discord</span>
+          <span class="muted">Den Testern dort, f&uuml;r R&uuml;ckmeldungen aus echten Rennen, die keine Simulation liefert.</span></li>
+      </ul>
+
+      <h3 style="font-size:14px; margin:18px 0 6px 0">Woher die Kl&auml;nge kommen</h3>
+      <p class="muted">Der allergr&ouml;&szlig;te Teil der Kl&auml;nge ist gerechnet und nicht aufgenommen: alle f&uuml;nfundzwanzig Motoren mit ihren 132 Schleifen, dazu Bremsen- und Reifenquietschen, die Crash-Varianten, Schlagschrauber, Tankger&auml;usch, Karosseriereparatur und der Motorstart. Dort wird nichts abgespielt, sondern aus Zylinderzahl, Z&uuml;ndfolge und Kr&uuml;mmerl&auml;nge erzeugt.</p>
+      <p class="muted">Die folgenden Kl&auml;nge sind die Ausnahme: sie stammen aus echten Aufnahmen. Alle von Pixabay und unter der Pixabay-Lizenz. Die unbearbeiteten Quelldateien sind nicht Teil dieses Projekts.</p>
+      <ul class="dank-liste">
+        <li><span class="muted">Hupen f&uuml;r die Lichthupe &ndash; sechs Aufnahmen, in dieser Reihenfolge Autohupe, Schiffshupe, Esel, Ziege und zwei Furzt&ouml;ne. Der letzte stammt von freesound&nbsp;community &uuml;ber Pixabay.</span>
+          <span class="dank-quelle" data-i18n-skip>universfield-car-horn-02-153260 &middot; universfield-cargo-ship-horn-352063 &middot; stu9-donkey-1-352697 &middot; playdown-suara-goat-berteriak-367222 &middot; apebble-fart-4-228244 &middot; freesound_community-fart-83471</span></li>
+        <li><span class="muted">Regen und Donner.</span>
+          <span class="dank-quelle" data-i18n-skip>pwlpl-heavy-thunderstorm-sound-effect-473418</span></li>
+        <li><span class="muted">Strecken-Ambience, also der Teppich und die Vorbeifahrten.</span>
+          <span class="dank-quelle" data-i18n-skip>fjc_media-sounds-of-nuerburgring-engines-of-classic-race-cars-234929</span></li>
+        <li><span class="muted">Der Motorklang der Corvette C6.</span>
+          <span class="dank-quelle" data-i18n-skip>astonmartinvantagev12-chevrolet-corvette-c6-sound-effect-360531</span></li>
+      </ul>
+      <p class="muted">Das Motormodell folgt dem Ansatz von engine-sim unter der MIT-Lizenz; Zylinderzahlen, Drehzahlgrenzen und Kurbelwellenwinkel stammen aus dessen Motordefinitionen. Die vollst&auml;ndige Aufstellung mit allen Messwerten steht in der Datei CREDITS im Audio-Ordner.</p>
+      <p class="dank-quelle" data-i18n-skip>ange-yaghi/engine-sim &middot; audio/CREDITS.md</p>
+    </div>
   </section>
 
   <section class="tabpage" id="tab-misc">
@@ -3627,6 +4008,13 @@
           <b>Selbsttest</b>
           <span>Ein Knopf, viele Messungen: l&auml;dt alles, rechnet die Physik
             richtig, passt die Linie, sind die T&ouml;ne heil.</span>
+        </button>
+        <button class="misc-tile goto-tab" data-tab="probe">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="21" cy="21" r="12" stroke-width="2.8"/><path d="M30 30l10 10" stroke="var(--bad)"/><path d="M21 15v12M15 21h12"/></svg>
+          <b>Code-Sonde</b>
+          <span>Was das Auto gerade unter sich liest, ungefiltert &ndash; mit Zeitleiste
+            der Codewechsel.</span>
         </button>
       </div>
     </div>
@@ -4139,7 +4527,9 @@
         <tr><td><strong>14</strong></td><td>Bitfeld</td><td><strong>Licht und Betriebsart.</strong> Bit&nbsp;1 (<code>0x02</code>) = Standlicht, Bit&nbsp;0 (<code>0x01</code>) = Bremslicht</td><td class="doc-sure">belegt</td></tr>
         <tr><td></td><td>Bit&nbsp;5 <code>0x20</code></td><td><strong>Auf der Bahn</strong>: Streckensensor an, Auto h&auml;lt sich selbst auf der Bahn. 87&nbsp;% Kachelwechsel gegen 7&nbsp;% ohne</td><td class="doc-sure">belegt</td></tr>
         <tr><td></td><td>Bit&nbsp;7 <code>0x80</code></td><td><strong>Ohne Bahn</strong>: Sensor AUS, Byte&nbsp;12 bleibt <code>0xff</code>. 0 Lesungen in 551 Fahrmeldungen</td><td class="doc-sure">belegt</td></tr>
-        <tr><td></td><td>Bit&nbsp;6 <code>0x40</code></td><td>kommt in beiden Betriebsarten vor, Bedeutung offen. Wir lassen es auf&nbsp;0</td><td class="doc-unknown">unbekannt</td></tr>
+        <tr><td></td><td>Bit&nbsp;2 <code>0x04</code></td><td><strong>Blinklicht.</strong> Am Auto erprobt (Paketvarianten-Pr&uuml;fstand, Entwicklertools): mit gesetztem Standlicht-Bit l&auml;sst dieses Bit den Scheinwerfer BLINKEN statt dauerhaft zu leuchten. Keine Helligkeitsstufe &ndash; eine eigene Betriebsart des Lichts</td><td class="doc-sure">belegt</td></tr>
+        <tr><td></td><td>Bit&nbsp;3 <code>0x08</code>, Bit&nbsp;4 <code>0x10</code></td><td>am Auto erprobt: kein sichtbarer Unterschied zum normal leuchtenden Licht. Keine zweite Helligkeitsstufe gefunden</td><td class="doc-sure">erprobt, ohne sichtbare Wirkung</td></tr>
+        <tr><td></td><td>Bit&nbsp;6 <code>0x40</code></td><td>kommt in beiden Betriebsarten vor. Am Auto erprobt: kein sichtbarer Unterschied zum normal leuchtenden Licht. Wir lassen es auf&nbsp;0</td><td class="doc-sure">erprobt, ohne sichtbare Wirkung</td></tr>
         <tr><td>15</td><td><code>0x04</code></td><td>konstant</td><td class="doc-sure">belegt</td></tr>
         <tr><td>16&ndash;18</td><td><code>0x00</code></td><td>ungenutzt</td><td class="doc-sure">belegt</td></tr>
         <tr><td>19</td><td>CRC-8</td><td>Polynom <code>0x31</code>, Startwert <code>0xFF</code>, &uuml;ber Byte&nbsp;0&ndash;18</td><td class="doc-sure">belegt</td></tr>
@@ -4208,6 +4598,38 @@
         Ebenso gibt es <em>eine</em> Eingabeschlichtung: jede Quelle meldet sich pro Achse an und darf nur
         schreiben, solange sie ausgelenkt ist, plus genau einmal beim Loslassen. Sonst &uuml;berschreibt ein
         mit 60&nbsp;Hz laufendes Gamepad st&auml;ndig die Tastatur mit Nullen.
+      </p>
+
+      <h3 style="font-size:14px; margin:16px 0 6px 0">Zwei Spieler auf demselben Takt</h3>
+      <p class="muted">
+        Der 2-Spieler-Modus ist der Beweis daf&uuml;r, dass die Regel tr&auml;gt: das zweite Auto bekommt
+        <em>keinen</em> eigenen Takt, sondern wird im selben 45-ms-Herzschlag direkt nach dem ersten
+        beschickt. Jedes Auto hat seine eigene Sperre (<code>writeInFlight</code>), ein langsamer Funkweg
+        l&auml;sst also nur beim eigenen Auto einen Takt aus und h&auml;lt das andere nicht auf &ndash;
+        genau das Verhalten, das die Ghosts schon haben.
+      </p>
+      <p class="muted">
+        Der Eingang von Spieler&nbsp;2 geht bewusst <em>nicht</em> durch die Eingabeschlichtung. Sie
+        verteilt <em>ein</em> Wertepaar unter mehreren Quellen &ndash; Spieler&nbsp;2 h&auml;tte darin
+        keine zweite Achse, sondern w&uuml;rde Spieler&nbsp;1 &uuml;berschreiben. Er schreibt deshalb auf
+        sein eigenes Wertepaar, und die Tastenbelegung teilen beide Controller.
+      </p>
+      <p class="muted">
+        Auto&nbsp;2 hat inzwischen fast alles, was Auto&nbsp;1 hat: eine eigene Fahrphysik samt
+        eigener G&auml;nge und Temperaturen, eine eigene Ortung auf der Strecke (davon h&auml;ngen
+        das Ausweichen der Ghosts, die Fahrhilfe und der Leitplanken-Modus ab), eigenen Schaden,
+        eigenen Tank, eine eigene Motorstimme auf der anderen Stereoseite, die Rundenz&auml;hlung
+        und einen eigenen Cockpit-Schirm. Die Gangtabelle wird beim Anschalten <em>kopiert</em>
+        und nicht geteilt, sonst schriebe ein Schaltvorgang von Auto&nbsp;2 in die G&auml;nge von
+        Auto&nbsp;1.
+      </p>
+      <p class="muted">
+        Dazu die Rennleitung &ndash; gelbe Flagge und Einf&uuml;hrungsrunde gelten f&uuml;r
+        beide &ndash; und ein schmaler Boxenstopp, der voll tankt und ganz repariert. Was
+        fehlt: die Vorwahl und der Reifenwechsel in der Box (die Reifenwahl ist eine globale
+        Einstellung), die Zusatzkette am Motorklang (Turbopfeifen, Knaller, Begrenzer-Takt
+        &ndash; 75&nbsp;Fundstellen auf einem gemeinsamen Bus) und der Makro-Mitschnitt. Die
+        Liste samt Messwerten und Aufwandszahlen steht in CARRERA_HYBRID.md.
       </p>
     </div>
 
@@ -4792,10 +5214,73 @@
         werden <em>sollte</em>; ob es geschieht, wei&szlig; niemand.
       </p>
       <p class="muted">
+        <strong>Welche Stelle der Linie gilt gerade?</strong> Das Auto meldet nur, <em>dass</em>
+        es eine neue Kachel betreten hat &ndash; nicht, wo darauf. Die Phase darin kam deshalb
+        aus der verstrichenen <em>Zeit</em>, geteilt durch die gemessene mittlere Dauer dieses
+        Kacheltyps. Eine Dauer vermischt aber L&auml;nge und Tempo: beim Anbremsen dauert die
+        Kachel l&auml;nger als ihr Mittel, die Phase l&auml;uft voraus &ndash; genau am
+        Kurveneingang, wo sie Ideallinie und Bremsprofil indexiert.
+      </p>
+      <p class="muted">
+        Jetzt kommt sie aus dem <strong>Weg</strong>: das Tempo wird &uuml;ber die Kachel
+        aufintegriert und durch den gleitenden Mittelwert des wirklich gefahrenen Wegs dieses
+        Kacheltyps geteilt. Der Weg zwischen zwei Z&auml;hlerspr&uuml;ngen ist eine geometrische
+        Konstante und h&auml;ngt nicht am Gas. Gegen die wahre Phase der Rennsimulation
+        gemessen: mittlerer Betragsfehler <b>0,097 &rarr; 0,073</b>, Anteil der Takte am
+        Phasendeckel <b>6,2 &rarr; 0&nbsp;Prozent</b>, je Kachel erreichte H&ouml;chstphase
+        <b>0,86 &rarr; 0,95</b>. Solange ein Kacheltyp noch keine zwei Messungen hat, gilt
+        weiter die Uhr; das Fahrerauto bleibt dauerhaft bei ihr, weil es keinen gerechneten
+        Motor hat.
+      </p>
+      <p class="muted">
         Der <strong>Streckencode</strong> (z.&nbsp;B. <code>SG2R3G2R3B@90</code>) ist ein Buchstabe
         je Element mit Wiederholungszahl, dazu die Ausrichtung: S&nbsp;Start, G&nbsp;Gerade,
         R&nbsp;rechts, L&nbsp;links, B&nbsp;Boxengasse. Absichtlich kein Base64: einen Code,
         den man nicht lesen kann, kann man auch nicht pr&uuml;fen.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Wie ein Ghost &uuml;berholt</h2>
+      <p class="muted">
+        Vier Phasen: <b>ansage</b> (570&nbsp;ms, zwei Lichthupenimpulse, das Auto bewegt sich
+        noch nicht) &rarr; <b>raus</b> (400&nbsp;ms zur Seite) &rarr; <b>vorbei</b> (volle Seite,
+        mit Schub) &rarr; <b>rein</b> (700&nbsp;ms zur&uuml;ck auf die Linie). Ein Verfolger, der
+        1,3&nbsp;Kacheln oder n&auml;her heranr&uuml;ckt, klebt 900&nbsp;ms und w&uuml;rfelt dann
+        alle 1200&nbsp;ms mit 45&nbsp;Prozent &ndash; im Mittel ein Versuch alle 2,7&nbsp;s.
+      </p>
+      <p class="muted">
+        <b>Erfolg misst der Fortschritt, nicht die Uhr:</b> vorbei ist, wer den anderen um
+        0,45&nbsp;Kacheln Streckenfortschritt &uuml;berholt hat &ndash; nicht nach einer festen
+        Zeit. Klappt es in 5&nbsp;s nicht, bricht das Man&ouml;ver ab und sperrt sich selbst
+        f&uuml;r 6&nbsp;s. Die Seite ist die, auf der der andere nicht ist, gelesen aus dessen
+        gemeldeter Querlage.
+      </p>
+      <p class="muted">
+        <b>W&auml;hrend eines Man&ouml;vers ersetzt der Versatz die Ideallinie, er addiert
+        nicht.</b> Vorher stand der Versatz des Angreifers gegen die volle Linie des
+        Vorausfahrenden, beide hoben sich auf &ndash; die gemeldete Folge war &bdquo;die Autos
+        haben sich ewig gegenseitig angeschoben&ldquo;. Jetzt: Angreifer voll auf seine Seite,
+        Vorausfahrender voll auf die andere, die Mitte bleibt leer, die Ideallinie ist
+        w&auml;hrenddessen nicht abgeschw&auml;cht, sondern <em>gar nicht zust&auml;ndig</em>.
+        Gesperrt ist eine Attacke in eine Haarnadel oder Engstelle hinein sowie unter gelber
+        Flagge.
+      </p>
+      <p class="muted">
+        <b>Warum die Abstandsregel in Zeit rechnet und nicht in Kacheln:</b> der
+        Kachelabstand hat unterhalb einer Fahrzeugl&auml;nge praktisch keine Aufl&ouml;sung
+        &ndash; in 276 gemessenen F&auml;llen darunter meldete er jedes Mal genau 1,0 Kacheln.
+        Ein Sweep der Zeitl&uuml;cke (90&nbsp;s, vier Autos):
+      </p>
+      <div class="doc-table-wrap"><table class="doc-table">
+        <tr><th>Zeitl&uuml;cke</th><th>&Uuml;berholt/min</th><th>Ber&uuml;hrt/min</th><th>Zeit in Ber&uuml;hrung</th></tr>
+        <tr><td>0,35&nbsp;s</td><td>25,8</td><td>53,5</td><td><b>86&nbsp;%</b></td></tr>
+        <tr><td>1,2&nbsp;s (heute)</td><td>22,5</td><td>32,5</td><td>61&nbsp;%</td></tr>
+      </table></div>
+      <p class="muted" style="font-size:11.5px">
+        Alle Zahlen aus der Rennsimulation, nicht vom Teppich &ndash; kein Byte meldet die
+        wirkliche Querlage eines echten Autos. Ausf&uuml;hrlich mit allen Konstanten in
+        CARRERA_HYBRID.md.
       </p>
     </div>
 
@@ -5281,6 +5766,15 @@
         Zahl gr&ouml;&szlig;er null steht, ist die Ursache gefunden. Jede Variante beh&auml;lt eine
         g&uuml;ltige Pr&uuml;fsumme, ein Fehlschlag ist also ein echtes Ergebnis und kein
         verworfenes Paket.
+      </p>
+      <p class="muted" style="font-size:11.5px; border-left:3px solid var(--info);
+         padding-left:9px">
+        <b>Die vier Varianten &bdquo;Licht an + Bit &hellip;&ldquo; sind anders zu pr&uuml;fen:
+        nicht mit Byte&nbsp;12, sondern mit dem Auge.</b> Scheinwerfer einschalten, eine
+        Variante w&auml;hlen, aufs Auto schauen &ndash; wird das Vorderlicht heller, dunkler,
+        oder &auml;ndert sich nichts? Byte&nbsp;14 hat nach heutigem Stand genau ein
+        Scheinwerfer-Bit; diese vier probieren aus, ob eines der bisher unbeobachteten Bits
+        eine zweite Helligkeitsstufe ausl&ouml;st. Ohne Auto ist hier nichts zu sehen.
       </p>
     </div>
 
@@ -5770,6 +6264,68 @@
         <div class="row" style="gap:8px; flex-wrap:wrap" id="gar-preset-buttons"></div>
       </div>
     </div>
+
+    <!-- ---- SICHERUNG -------------------------------------------------------------
+         Gefragt: "Wo ist in der Garage die Speichermoeglichkeit?" Sie war nirgends -
+         es gab nur die Abstimmung als Text zum Kopieren, und die deckt 97 der 105
+         Regler und keine einzige Ablage.
+
+         EIGENE KARTE UND NICHT ZU DEN PRESETS DAZU, weil es zwei verschiedene Dinge
+         sind: eine Abstimmung ist ein Satz Reglerwerte, den man weitergibt; eine
+         Sicherung ist der Stand dieses Geraets, einschliesslich Rundenzeiten,
+         Streckenlayouts und Tastenbelegung. Wer das eine will, will selten das andere.
+
+         IMMER SICHTBAR, anders als #gar-preset: eine Sicherung will man gerade dann
+         anlegen, wenn kein Auto verbunden ist. -->
+    <div class="card">
+      <h2>Sicherung</h2>
+      <p class="muted" style="font-size:12px">
+        Alles, was diese App sich merkt, in einer Datei: Fahreinstellungen und
+        Renneinstellungen, Autonamen und Farben, Streckenlayouts, die vollst&auml;ndige
+        Rundenzeit-Historie, Motorwerkstatt, Aufnahmen und die Tastenbelegung des
+        Gamepads.
+      </p>
+      <!-- ---- WAS GERADE IM BROWSER LIEGT -------------------------------------------
+           BESTELLT: "Zeige bei der Sicherung noch an, ob irgendetwas geladen ist, sodass
+           ich es weiss, bevor dann das Auto wieder als generisches weisses 'alpha'
+           verbunden wird."
+
+           Der Kern der Meldung sind die gemerkten AUTOS: carAssign() holt Name und Farbe
+           aus chc.cars.v1 anhand der Geraete-Kennung. Liegt dort nichts, bekommt das
+           naechste Auto den naechsten freien Namen und die naechste freie Farbe - und
+           genau das ist der Moment, den man VORHER wissen will, weil er sich nach dem
+           Verbinden nur noch von Hand richten laesst.
+
+           Die Zeile steht VOR den Knoepfen und nicht darunter: sie ist die Lage, die
+           Knoepfe sind die Handlung. Und sie steht in der GARAGE, also dort, wo man
+           verbindet. -->
+      <div class="sich-lage" id="sich-lage" data-i18n-skip>&nbsp;</div>
+      <div class="row" style="gap:8px; flex-wrap:wrap">
+        <button class="primary" id="sich-export">Sicherung speichern</button>
+        <button id="sich-import">Sicherung laden</button>
+        <input type="file" id="sich-datei" accept=".json,application/json" hidden>
+      </div>
+      <div class="muted" id="sich-status" style="margin-top:8px; font-size:12px"
+           data-i18n-skip>&nbsp;</div>
+      <p class="muted" style="font-size:11.5px; border-left:3px solid var(--info);
+         padding-left:9px; margin-top:12px">
+        <b>Warum es diese Datei braucht.</b>
+        Die App legt alles im Browser ab, und ein Browser darf diesen Speicher
+        aufr&auml;umen &ndash; beim L&ouml;schen von Websitedaten, im privaten Fenster,
+        auf einem iPhone auch nach l&auml;ngerer Zeit ohne Besuch. Eine Abstimmung ist
+        danach schnell wieder eingestellt, eine Rundenzeit-Historie nicht.
+      </p>
+      <p class="muted" style="font-size:11.5px">
+        Eine Sicherung l&auml;dt auch dann, wenn sie aus einer &auml;lteren Fassung
+        stammt. Einstellungen, die es damals noch nicht gab, bleiben stehen und werden
+        genannt &ndash; sie verschwinden nicht stillschweigend.
+      </p>
+      <p class="muted" style="font-size:11.5px">
+        Laden f&uuml;hrt zusammen und ersetzt nicht: was in der Sicherung steht, wird
+        gesetzt, und was seither dazugekommen ist, bleibt. Eine Strecke von gestern
+        &uuml;berlebt also eine Sicherung von vorletzter Woche.
+      </p>
+    </div>
   </section>
 
   <!-- MEHRSPIELER. Eigener Reiter, weil er etwas anderes sagt als die
@@ -5780,8 +6336,89 @@
     <div class="card">
       <h2>Mehrspieler im WLAN <span class="wip-tag">experimentell</span></h2>
       <p class="muted">
-        Mehrere Telefone, jedes mit eigenem Auto, eine gemeinsame Rangliste. Auf dem PC laeuft
-        dazu ein kleines Programm: python tools/omegasim_host.py
+        Mehrere Telefone, jedes mit eigenem Auto, eine gemeinsame Rangliste. Auf dem PC
+        l&auml;uft dazu ein kleines Programm.
+      </p>
+
+      <!-- ---- DIE ANLEITUNG, UND WARUM SIE HIER STEHT --------------------------------
+           Das Skript war bisher nur als Fliesstext erwaehnt: kein Link, nichts zum
+           Kopieren, keine Reihenfolge. Wer es zum ersten Mal aufsetzt, braucht genau drei
+           Dinge - den Befehl, die Adresse und die Reihenfolge -, und alle drei standen
+           nirgends zusammen.
+
+           Die Befehle stehen in <code>, damit sie sich als Block markieren lassen; der
+           Knopf daneben legt sie in die Zwischenablage. Auszeichnung MITTEN im Satz wird
+           dabei vermieden (sie zerlegt den Textknoten und macht ihn unuebersetzbar) - die
+           Befehle stehen deshalb je in einer eigenen Zeile und nicht im Fliesstext. -->
+      <!-- ---- KEINE AUSZEICHNUNG MITTEN IM SATZ ----------------------------------
+           Ein <span> oder <code> INNERHALB eines Satzes zerlegt den Textknoten, und die
+           Uebersetzung arbeitet je Textknoten. Der erste Anlauf dieser Anleitung machte
+           genau das und hinterliess Bruchstuecke wie "Wird die App ueber" und "geladen -
+           etwa von der Projektseite -," - dieselbe Falle, vor der schon die Danksagungen
+           warnen, und ich bin hineingelaufen.
+
+           Deshalb hier durchgehend: EIN Satz ist EIN Knoten. Die fettgesetzte
+           Schrittueberschrift steht VOR dem Satz und ist selbst ein ganzer Satz; alles,
+           was nicht uebersetzt wird - Befehle und Adressen -, steht in einer eigenen
+           Zeile darunter und nicht im Fliesstext. -->
+      <ol class="mp-schritte">
+        <li><b>Auf dem PC starten.</b>
+          Am einfachsten mit einem Doppelklick auf die Startdatei. Sie sucht Python, startet
+          den Host und schreibt die Adresse hin, unter der er erreichbar ist.
+          <a href="Mehrspieler-Host starten.bat" download
+             class="mp-datei" data-i18n-skip>Mehrspieler-Host starten.bat</a>
+          Wer lieber selbst tippt, &ouml;ffnet im Projektordner ein Fenster f&uuml;r die
+          Eingabeaufforderung oder das Terminal und f&uuml;hrt diesen Befehl aus:
+          <span class="mp-befehl"><code id="mp-cmd" data-i18n-skip>python tools/omegasim_host.py --port 8080</code><button type="button" class="mp-kopier" id="mp-cmd-copy">Kopieren</button></span>
+          Das Programm selbst liegt im Projekt und ist von hier aus direkt zu &ouml;ffnen.
+          <a href="tools/omegasim_host.py" target="_blank" rel="noopener noreferrer"
+             class="mp-datei" data-i18n-skip>tools/omegasim_host.py</a></li>
+        <li><b>Die Adresse an die Telefone geben.</b>
+          Sie geh&ouml;rt oben in das Feld &bdquo;Host-Adresse&ldquo; und hat die Form, die
+          dort als Beispiel steht. Alle Ger&auml;te m&uuml;ssen im selben WLAN sein.</li>
+        <li><b>Namen eintragen und auf Mitmachen dr&uuml;cken.</b>
+          Der Name steht danach in der Rangliste. Jedes Telefon beh&auml;lt seinen eigenen
+          Namen und seine eigene Kennung, auch nach einem Neuladen.</li>
+        <li><b>Die &Uuml;bersicht auf den Fernseher.</b>
+          Der Host liefert daf&uuml;r eine eigene Seite in gro&szlig;er Schrift:
+          <span class="mp-befehl"><code id="mp-ov" data-i18n-skip>http://192.168.1.50:8080/mp-overview.html</code><button type="button" class="mp-kopier" id="mp-ov-copy">Kopieren</button></span>
+          Sie zeigt die Rangliste und hat einen Knopf zum Zur&uuml;cksetzen. Sonst nichts:
+          sie ist zum Ansehen aus zwei Metern gedacht und nicht zum Bedienen.</li>
+      </ol>
+
+      <!-- ---- WARUM ES KEINEN KNOPF GIBT -----------------------------------------
+           Gefragt: "Gibt es nicht eine Moeglichkeit, das von dort zu starten? Reicht
+           dafuer nicht, die App zu installieren?"
+
+           Nein, und das ist keine fehlende Schnittstelle. Eine Webseite darf kein
+           Programm auf dem Rechner starten - darauf steht die ganze Sicherheit des
+           Browsers. Eine installierte PWA bekommt zwar mehr (Dateizugriff,
+           Benachrichtigungen, Offline-Betrieb), aber nie "beliebiges Programm
+           ausfuehren"; es gibt dafuer keine Schnittstelle, auch keine, die man
+           freischalten koennte.
+
+           Das Naechste, was man dem Knopf bringen kann, ist eine Datei, die man einmal
+           herunterlaedt und danach doppelklickt. Deshalb steht sie oben an erster Stelle. -->
+      <p class="muted" style="font-size:11.5px; border-left:3px solid var(--muted);
+         padding-left:9px">
+        <b>Warum es daf&uuml;r keinen Knopf in der App gibt.</b>
+        Eine Webseite darf kein Programm auf dem Rechner starten. Das ist keine fehlende
+        Schnittstelle, sondern die Grenze, auf der die Sicherheit des Browsers beruht, und
+        sie f&auml;llt auch dann nicht, wenn man die App installiert: eine installierte App
+        bekommt Dateizugriff und Offline-Betrieb, aber niemals das Recht, ein beliebiges
+        Programm auszuf&uuml;hren. Die Startdatei oben ist das N&auml;chste, was daran
+        herankommt &ndash; einmal herunterladen, danach gen&uuml;gt ein Doppelklick.
+      </p>
+
+      <p class="muted" style="font-size:11.5px; border-left:3px solid var(--info);
+         padding-left:9px">
+        <b>Zwei Dinge, an denen es scheitern kann, und beide liegen nicht an der App.</b>
+        Wird die App &uuml;ber eine verschl&uuml;sselte Verbindung geladen &ndash; etwa von
+        der Projektseite &ndash;, blockiert der Browser jede Verbindung zu einer
+        unverschl&uuml;sselten Adresse im WLAN; dann muss die App vom Host selbst geladen
+        werden. Und bis Fassung 0.6.19 fehlten dem Host die Kopfzeilen f&uuml;r fremde
+        Herkunft: Mitmachen ging nur, wenn die App vom Host kam. Wer eine &auml;ltere
+        Fassung des Programms laufen hat, holt sie neu.
       </p>
       <p class="muted" style="font-size:11.5px">
         Ueber die Leitung gehen Rundenzahl, Rundenzeiten und Abgaenge. Keine Physik, keine
@@ -6083,7 +6720,7 @@
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="24" cy="24" r="16"/><circle cx="24" cy="24" r="5"/><path d="M24 8v11M13 33l8-6M35 33l-8-6" stroke="var(--bad)"/></svg>
           <b>Fahrgef&uuml;hl</b>
-          <span>Fahrwerk, Getriebe, Masse und Reifen, Lenkung.</span>
+          <span>Fahrhilfe, Fahrwerk, Getriebe, Masse und Reifen, Lenkung.</span>
         </button>
         <button class="misc-tile subpage-open" data-sub="opt-sound">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
@@ -6119,6 +6756,15 @@
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="16" width="38" height="18" rx="9"/><path d="M14 22v6M11 25h6"/><circle cx="32" cy="23" r="2"/><circle cx="36" cy="27" r="2"/></svg>
           <b>Controller</b>
           <span>Erkennung, Tastenbelegung, eigene Zuordnung.</span>
+        </button>
+        <!-- ZWEI CONTROLLER, zwei Autos. Das Symbol ist absichtlich der Controller aus der
+             Kachel darueber, zweimal und versetzt - nicht zwei Autos: was man verbindet,
+             sind Controller, und wer hier landet, sucht den Modus fuer den zweiten. -->
+        <button class="misc-tile subpage-open" data-sub="opt-zwei">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="9" width="28" height="14" rx="7"/><path d="M11 14v4M9 16h4"/><circle cx="24" cy="16" r="1.8"/><rect x="17" y="25" width="28" height="14" rx="7" stroke="var(--bad)"/><path d="M25 30v4M23 32h4" stroke="var(--bad)"/><circle cx="38" cy="32" r="1.8" stroke="var(--bad)"/></svg>
+          <b>2&nbsp;Spieler</b>
+          <span>Zwei Autos, zwei Controller, beide Drehzahlen im Cockpit. Im Aufbau.</span>
         </button>
       </div>
     </div>
@@ -6158,7 +6804,7 @@
           Am 26.08. mit der Original-App gemessen: ein Ausdruck wird nur in der Stellung Aus
           erkannt. Beides zugleich gibt es nicht.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-ontrack" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Fahrgef&uuml;hl
+      <div class="opt-row"><div class="opt-label">Steuerungsmodus
           <small>Physik: Drehmoment, G&auml;nge, Reibkreis &ndash; die Vorgabe. Aus: rohe
           Stickstellung ohne G&auml;nge, wie ein Fernsteuerungsauto. Drift: rohes Gas wie
           bei &bdquo;Aus&ldquo;, dazu ein automatisches Gegensteuern gegen das gemessene
@@ -6300,9 +6946,9 @@
       <div class="opt-row"><div class="opt-label">Tankverbrauch (%/s bei Vollgas)</div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="setting-fuel-drain" min="0" max="10" step="0.1" value="0">
+          <input type="range" id="setting-fuel-drain" min="0" max="10" step="0.1" value="1">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="setting-fuel-drain-val">3.0</span>
+          <span class="opt-val" id="setting-fuel-drain-val">1.0</span>
         </div></div>
       <!-- Boxengasse. Sie steht HIER und nicht im Streckentab, obwohl dort die
            Musterangaben liegen: die Frage "woran erkennt die App eine Boxengasse" ist eine
@@ -6346,7 +6992,7 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-crash-count-val">10</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Schaden</div><label class="tgl"><input type="checkbox" id="setting-crash-damage"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Schaden</div><label class="tgl"><input type="checkbox" id="setting-crash-damage" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Crash-Schwelle
           <small>Wie weit die Bewegungsbytes 1 und 3 vom gleitenden Mittel abweichen
           m&uuml;ssen, damit ein Sto&szlig; als Crash gilt. Niedriger hei&szlig;t
@@ -6376,15 +7022,30 @@
       <div class="opt-row"><div class="opt-label">Fahrhilfe: Auto lenkt selbst
           <small>Aus (Vorgabe): du steuerst ganz normal, dein Lenk-Input ist der
           Lenkwinkel &ndash; wie ohne diese App.
-          <br>An: das Auto h&auml;lt sich selbst auf der Bahn, so wie ein autonomer
-          Ghost. Dein Lenk-Input bestimmt dabei nur noch die Querlage &ndash; nach rechts
-          hei&szlig;t weiter rechts auf der Bahn, nicht &bdquo;mehr einschlagen&ldquo;.
-          Braucht eine eingescannte Strecke und die Bahn-Stellung (nicht Ausdruck); ohne
-          beides &auml;ndert der Schalter nichts.
+          <br>Querlage: das Auto h&auml;lt sich selbst auf der Bahn, so wie ein autonomer
+          Ghost. Dein Lenk-Input bestimmt dabei nur noch, wo auf der Bahn &ndash; nach
+          rechts hei&szlig;t weiter rechts, nicht &bdquo;mehr einschlagen&ldquo;.
+          <br>Voll: wie Querlage, aber das Auto bestimmt auch die Querlage selbst. Lenken
+          tut dann nichts mehr, Gas und Bremse bleiben bei dir.
+          <br>Beide brauchen eine eingescannte Strecke und die Bahn-Stellung (nicht
+          Ausdruck). Ohne beides steuerst du normal weiter &ndash; auch in Voll, denn ohne
+          die Streckendaten w&uuml;rde ein Auto mit gerade gestellten R&auml;dern in die
+          Bande fahren.
+          <br>Und sobald das Auto keinen Streckencode mehr liest &ndash; weil es neben der
+          Bahn liegt &ndash;, bekommst du die volle Kontrolle zur&uuml;ck, damit du selbst
+          zur&uuml;ckfahren kannst. Das gilt auch bei gelber Flagge: dort bleibt nur das
+          Tempo gedrosselt, gelenkt wird von dir. Die Umschaltung braucht die
+          Entprellzeit aus &bdquo;Abseits: Verz&ouml;gerung&ldquo; (ab Werk eine Sekunde),
+          weil ein einzelner Aussetzer beim &Uuml;berfahren einer Kachelkante sonst als
+          Abflug gelesen w&uuml;rde.
           <br>Bei gelber Flagge oder in der Einf&uuml;hrungsrunde h&auml;lt sich das Auto
-          unabh&auml;ngig von diesem Schalter selbst &ndash; das braucht die Regelung
+          unabh&auml;ngig von dieser Einstellung selbst &ndash; das braucht die Regelung
           dort, damit sie greifen kann.</small></div>
-        <label class="tgl"><input type="checkbox" id="driver-assist"><span></span></label></div>
+        <select id="driver-assist">
+          <option value="aus" selected>aus</option>
+          <option value="quer">Querlage</option>
+          <option value="voll">voll</option>
+        </select></div>
       <div class="opt-head">Voreinstellungen</div>
       
       <div class="row" style="gap:8px; flex-wrap:wrap" id="preset-buttons"></div>
@@ -6511,7 +7172,7 @@
       <div class="opt-row"><div class="opt-label">Tankgewicht<small>Voller Tank macht träger. Links = aus.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="setting-fuelweight" min="0" max="1" step="0.05" value="0">
+          <input type="range" id="setting-fuelweight" min="0" max="1" step="0.05" value="1">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-fuelweight-val">100%</span>
         </div></div>
@@ -6539,7 +7200,7 @@
       
 
       <div class="opt-row"><div class="opt-label">Reifenw&auml;rmer<small>Start und Reifenwechsel auf Betriebstemperatur statt kalt. Aus hei&szlig;t: die ersten Runden fehlt Grip, bis die Reifen warm gefahren sind. An hei&szlig;t: sofort im Griff-Fenster, also 85 Grad. In der Formel 1 waren W&auml;rmedecken bis 2024 erlaubt und sind seit 2025 verboten; im GT-Sport sind sie meist untersagt. Hier ist es eine Einstellung und keine Regel.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-tyre-blankets" checked><span></span></label></div>
+        <label class="tgl"><input type="checkbox" id="setting-tyre-blankets"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Jedes Rad einzeln
           <small>Aus Nick- und Querverlagerung bekommt jedes der vier Räder seine eigene
           Last, und daraus folgen vier Temperaturen, vier Verschleißwerte und vier
@@ -6578,9 +7239,9 @@
           <small>&Uuml;ber 100&nbsp;% steigt die Heizrate, nicht der maximale Verlust.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="setting-brake-fade-strength" min="0" max="2" step="0.05" value="1">
+          <input type="range" id="setting-brake-fade-strength" min="0" max="2" step="0.05" value="1.5">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="setting-brake-fade-strength-val">100%</span>
+          <span class="opt-val" id="setting-brake-fade-strength-val">150%</span>
         </div></div>
 
 <div class="opt-head">Aerodynamik</div>
@@ -6604,9 +7265,9 @@
       <div class="opt-row"><div class="opt-label">Lenkansprechen<small>Auch auf dem Steuerkreuz hoch/runter &ndash; links/rechts bl&auml;ttert seit v0.5.18 die Cockpit-Schirme. Der volle Lenkeinschlag ist mechanisch 45&nbsp;Grad; bei 100&nbsp;% fordert voller Stick genau ihn an.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="phys-steerresp" min="0.5" max="3" step="0.05" value="2.4">
+          <input type="range" id="phys-steerresp" min="0.5" max="3" step="0.05" value="3">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="phys-steerresp-val">100%</span>
+          <span class="opt-val" id="phys-steerresp-val">150%</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Lenkd&auml;mpfung
           <span class="wip-tag">WIP</span>
@@ -6643,9 +7304,9 @@
       <div class="opt-row"><div class="opt-label">Lenkwinkel-Kalibrierung<small>Für enge Strecken. Der Regler sitzt hinter dem Reibkreis: beim Anbremsen einer Kurve beschneidet der die Lenkung auf etwa 60 Prozent, und bei 200 Prozent erreicht dieser beschnittene Wunsch wieder den vollen Anschlag. Weiter als 45 Grad kann kein Wert lenken, das ist die Mechanik des Autos und nicht die App. Der Preis ist Feingefühl: je höher, desto früher liegt der Anschlag an und desto weniger sagt der letzte Teil des Sticks.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="setting-steer-calib" min="1" max="3" step="0.05" value="2">
+          <input type="range" id="setting-steer-calib" min="1" max="3" step="0.05" value="2.5">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="setting-steer-calib-val">200%</span>
+          <span class="opt-val" id="setting-steer-calib-val">250%</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Beschleunigungsfaktor<small>Feinabstimmung, 1.0 = die eingestellte Zeit.</small></div>
         <div class="opt-slider">
@@ -6689,7 +7350,6 @@
 <div class="opt-head">Ton</div>
       <div class="opt-row"><div class="opt-label">Motorsound</div><label class="tgl"><input type="checkbox" id="sound-enable" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Motorton-Zus&auml;tze
-          <span class="wip-tag">WIP</span>
           <small>Sechs mechanische Ger&auml;usche &uuml;ber dem Motorton, alle an diesem
           einen Schalter &ndash; zum Vergleichen einfach ausschalten. Nichts davon ist eine
           Aufnahme, alle sechs sind gerechnet und h&auml;ngen an Werten, die die Simulation
@@ -6706,7 +7366,6 @@
           Schleife.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-engine-extras" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Rundenzeiten ansagen
-          <span class="wip-tag">experimentell</span>
           <small>Nach jeder Runde die Zeit, und bei einer eigenen Bestzeit ein Wort dazu.
           Gesprochen von der eingebauten Stimme des Browsers &ndash; kein Dienst, kein Netz,
           nichts verl&auml;sst das Ger&auml;t. Absichtlich kurz gehalten, damit die Ansage
@@ -6716,14 +7375,14 @@
           &ndash; unter Windows sind sie lokal vorhanden, auf Android k&ouml;nnen sie fehlen.
           Fehlt eine, steht das einmal im Protokoll und nicht bei jeder Runde.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Schaden ansagen <span class="wip-tag">WIP</span><small>Einmal, wenn der Schadensbalken auf 10&nbsp;% gefallen ist. Erst nach einer Reparatur wieder scharf.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce-damage"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Tank ansagen <span class="wip-tag">WIP</span><small>Einmal, wenn noch 10&nbsp;% im Tank sind. Erst nach dem Tanken wieder scharf.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce-fuel"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Reifen ansagen <span class="wip-tag">WIP</span><small>Einmal, wenn der schlechteste der vier Reifen nur noch 10&nbsp;% hat. Der schlechteste z&auml;hlt: ein Auto mit drei guten Reifen und einem abgefahrenen f&auml;hrt nicht drei Viertel gut.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce-tyre"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Regen ansagen <span class="wip-tag">WIP</span><small>Wenn es anf&auml;ngt zu regnen und wenn es aufh&ouml;rt. Beim Laden wird nichts gesagt, erst beim Wechsel.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce-rain"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Schaden ansagen<small>Einmal, wenn der Schadensbalken auf 10&nbsp;% gefallen ist. Erst nach einer Reparatur wieder scharf.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-damage" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Tank ansagen<small>Einmal, wenn noch 10&nbsp;% im Tank sind. Erst nach dem Tanken wieder scharf.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-fuel" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Reifen ansagen<small>Einmal, wenn der schlechteste der vier Reifen nur noch 10&nbsp;% hat. Der schlechteste z&auml;hlt: ein Auto mit drei guten Reifen und einem abgefahrenen f&auml;hrt nicht drei Viertel gut.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-tyre" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Regen ansagen<small>Wenn es anf&auml;ngt zu regnen und wenn es aufh&ouml;rt. Beim Laden wird nichts gesagt, erst beim Wechsel.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-rain" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Regen<small>Select oder W. Reifen kommen beim Boxenstopp passend.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-rain"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Strecken-Ambience<small>Vorbeifahrten, Regen, Donner.</small></div>
@@ -6769,9 +7428,13 @@
           aber ihr genaues Muster ist gew&auml;hlt und nicht aus Rohrl&auml;ngen
           gerechnet.</small></div>
         <select id="sound-profile">
-          <!-- REIHENFOLGE AUF WUNSCH: die Vorgabe zuerst, dann die drei meistgefahrenen,
-               dann der Rest. Alphabetisch waere ordentlicher und beim Fahren nutzlos - man
-               sucht hier den Motor, den man oft nimmt, und nicht den mit A. -->
+          <!-- REIHENFOLGE AUF WUNSCH: die drei meistgefahrenen zuerst, dann der Rest.
+               Alphabetisch waere ordentlicher und beim Fahren nutzlos - man sucht hier
+               den Motor, den man oft nimmt, und nicht den mit A.
+
+               Die Reihenfolge aendert sich deshalb NICHT mit: SAMPLE_CARS (80-sound.js)
+               nennt ausdruecklich "DIESELBE REIHENFOLGE WIE IM MENUE" als Grund, warum
+               zwei Listen zusammengehalten werden muessen. -->
           <optgroup label="GT3 und GT-Rennmotoren">
           <option value="p992gt3r" selected>Porsche 911 GT3 R: Boxer-6, Einzeldrosseln</option>
           <option value="m4gt3">BMW M4 GT3: Reihen-6</option>
@@ -7080,6 +7743,46 @@
           Geraden: in der Kurve w&auml;re es Abtriebsverlust, also das Gegenteil, und das
           bildet die Physik der Ghosts nicht ab.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-w-slip"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Verteidigen
+          <span class="wip-tag">experimentell</span>
+          <small>Bisher gibt der Vorausfahrende immer nach. Mit dieser Einstellung deckt er
+          die angegriffene Seite in der H&auml;lfte der F&auml;lle ab, statt zu weichen; der
+          Angreifer wechselt dann einmal die Seite oder bricht ab. Nur EINMAL decken und kein
+          Hin und Her &ndash; die Bahn ist 25&nbsp;cm breit, zwei Autos brauchen 30&nbsp;%
+          davon, und Wedeln w&auml;re auf dieser Breite ein Rammen mit Ansage.
+          <br>Nachgeben bleibt Pflicht unter gelber Flagge, in der Boxengasse und beim
+          &Uuml;berrundet-Werden. Das Fahrerauto verteidigt nie: es l&auml;sst sich nicht
+          steuern, das entscheidest du selbst.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-w-defend"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Blaue Flagge
+          <span class="wip-tag">experimentell</span>
+          <small>Wer eine ganze Runde zur&uuml;ck ist und einen Schnelleren im Nacken hat,
+          geht von selbst nach au&szlig;en und lupft leicht &ndash; statt sich f&uuml;nf
+          Sekunden zu wehren und danach sechs Sekunden gesperrt zu sein. Der Schnellere
+          bekommt die Ideallinie, kein Vier-Phasen-Man&ouml;ver n&ouml;tig.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-w-blau"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Fahrercharakter
+          <span class="wip-tag">experimentell</span>
+          <small>Bisher sind alle Ghosts derselbe Fahrer: ein globaler Satz Regler f&uuml;r
+          jeden. Mit dieser Einstellung w&uuml;rfelt jedes Auto zu Rennbeginn vier Faktoren
+          in einer Spanne von &plusmn;25&nbsp;% &ndash; Angriffslust, Verteidigung,
+          Fehlerneigung und Kurvenabzug &ndash; und ein eigenes Boxenfenster von bis zu zwei
+          Runden Versatz.
+          <br>Es ist kein neues Verhalten, sondern das vorhandene unterschiedlich
+          eingestellt. Das Tempo bleibt ausdr&uuml;cklich drau&szlig;en: daf&uuml;r gibt es
+          den Regler je Auto in der Garage. Angezeigt wird der Charakter dort ebenfalls,
+          sobald das Rennen l&auml;uft.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-charakter"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Startreaktion
+          <span class="wip-tag">experimentell</span>
+          <small>Bisher l&ouml;sen alle im selben Takt aus. Jetzt hat jedes Auto eine eigene
+          Reaktionszeit zwischen 80 und 300&nbsp;ms &ndash; die Spanne, die ein Mensch am
+          Startknopf auch hat &ndash; und f&auml;hrt die ersten 2,5&nbsp;Sekunden mit
+          85&nbsp;% Tempo, weil die erste Kurve die ist, in der sich ein Feld selbst
+          aufr&auml;umt. Gemessen ist der Start ohnehin die dichteste Phase: 82
+          Ber&uuml;hrungen je Minute in den ersten zehn Sekunden gegen 34 im Dauerbetrieb,
+          und dabei 2 statt 24 &Uuml;berholman&ouml;ver.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-w-start"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Ghost: Ideallinie <span class="wip-tag">WIP</span>
           <!-- Seit v0.5.9 wirkt dieser Regler deutlich staerker: der Deckel aus
                learnSteerCap() ging von 0,55 auf 1,0, gemessen an dem, was die Original-App
@@ -7443,7 +8146,7 @@
     <div class="opt-head">Tastatur: Test und Fehlersuche am PC</div>
     <div class="help-grid">
       <kbd>W</kbd><span>Wetter umschalten (Regen / trocken)</span>
-      <kbd>P</kbd><span>Boxenstopp, erneut zweimal kurz dr&uuml;cken bricht ab</span>
+      <kbd>P</kbd><span>Boxenstopp an, erneut dr&uuml;cken bricht ab. Bei der Ausl&ouml;sung &bdquo;doppelter Ausdruck&ldquo; l&ouml;st die Taste nicht aus &ndash; dort z&auml;hlt nur das zweimalige &Uuml;berfahren.</span>
       <kbd>C</kbd><span>Crash ausl&ouml;sen: Schaden, Ger&auml;usch und Rumble wie im Betrieb</span>
       <kbd>F</kbd><span>Tank auf 5&nbsp;% setzen, um den Notlauf zu pr&uuml;fen</span>
       <kbd>R</kbd><span>Tank und Zustand zur&uuml;cksetzen</span>
@@ -7462,6 +8165,114 @@
          Sie war doppelt: die zuweisbare Tabelle weiter oben in derselben Karte zeigt
          dieselben Angaben UND laesst sie aendern. Die zwei Tastatur-Abschnitte darueber
          bleiben - die betrifft die Tabelle nicht, Tasten sind fest. -->
+    </div>
+
+    <div class="card subpage" id="sub-opt-zwei">
+      <button class="misc-back subpage-back" data-sub="">&larr; Einstellungen</button>
+      <h2>2&nbsp;Spieler</h2>
+      <div class="opt-head">Der Modus</div>
+      <div class="opt-row"><div class="opt-label">2-Spieler-Modus<span
+          class="wip-tag">experimentell</span><small>Zwei Autos, zwei Controller, ein
+          Rennen auf derselben Strecke. Angeschaltet bekommt jede Zeile in der Garage einen
+          vierten Knopf &bdquo;Spieler&nbsp;2&ldquo;, und im Cockpit kommt ein vierter Schirm
+          &bdquo;Beide&ldquo; dazu, der Tempo, Drehzahl, Tank, Zustand, Reifen, Bremse und
+          Akku beider Autos nebeneinander zeigt. Der Hauptschirm bleibt Auto&nbsp;1
+          vorbehalten. Beide Autos werden aus demselben 45-ms-Sendetakt bedient &ndash;
+          getrennte Takte waren die Ursache des Stotterns mit echtem Controller, und dieser
+          Modus wiederholt den Fehler nicht.</small></div>
+        <label class="tgl"><input type="checkbox" id="opt-zwei-an"></label></div>
+      <div class="opt-row"><div class="opt-label">Controller tauschen<small>Welcher der
+          beiden erkannten Controller Auto&nbsp;1 f&auml;hrt. Die Reihenfolge kommt vom
+          Browser und ist nicht w&auml;hlbar: hier ist der Schalter daf&uuml;r.</small></div>
+        <label class="tgl"><input type="checkbox" id="opt-zwei-tausch"></label></div>
+
+      <div class="opt-head">Was gerade erkannt ist</div>
+      <!-- data-i18n-skip, wie bei jeder Zustandsmeldung in dieser App: der Inhalt wird
+           zur Laufzeit geschrieben (zweiSpielerKachelZeichnen in 90-ghosts.js) und
+           enthaelt Controller-Namen und Autobezeichnungen. Ein Woerterbucheintrag kann
+           darauf nicht passen, und ohne das Merkmal meldet der Sprachtest zu Recht
+           deutschen Text im englischen Modus. -->
+      <p class="muted" id="zwei-pads" data-i18n-skip>&ndash;</p>
+      <p class="muted" id="zwei-autos" data-i18n-skip>&ndash;</p>
+      <p class="muted">Dr&uuml;cke an jedem Controller einmal einen Knopf &ndash; der
+        Browser meldet ein Pad erst nach der ersten Eingabe. Beide Controller benutzen
+        dieselbe Tastenbelegung aus der Kachel &bdquo;Controller&ldquo;.</p>
+
+      <div class="opt-head">Was Auto&nbsp;2 in dieser Fassung nicht hat</div>
+      <p class="muted">Ehrlicher als es zu verschweigen &ndash; jeder Punkt h&auml;ngt an
+        einem Z&auml;hler oder einer Ortung, die es nur einmal gibt:</p>
+      <div class="help-grid">
+        <kbd>Box</kbd><span>Der Boxenstopp von Auto&nbsp;2 ist schmal: er tankt voll und
+          repariert ganz, ohne Vorwahl und ohne Reifenwechsel. Die Reifenwahl ist eine
+          globale Einstellung &ndash; &bdquo;auf weich&ldquo; f&uuml;r ein einzelnes Auto
+          ist eine Aussage, die das Modell nicht trennen kann.</span>
+        <kbd>Ton</kbd><span>Auto&nbsp;2 hat keine Zusatzkette am Motorklang: kein
+          Turbopfeifen, keine Knaller, kein Begrenzer-Takt &ndash; die h&auml;ngen an
+          einem Bus. Und keinen Doppler, der geh&ouml;rt zur Runde von Auto&nbsp;1.</span>
+        <kbd>Aufnahme</kbd><span>Der Makro-Mitschnitt zeichnet Auto&nbsp;1 auf. Zwei
+          Spuren in einer Aufnahme w&auml;ren ein anderes Dateiformat.</span>
+        <kbd>Zeiten</kbd><span>Die drei Rundenzeiten im Cockpit &ndash; aktuelle, letzte,
+          beste &ndash; und die Aufnahme geh&ouml;ren Auto&nbsp;1. Seine eigenen Zeiten
+          stehen in der Rundenübersicht.</span>
+      </div>
+      <p class="muted">Was Auto&nbsp;2 <b>hat</b>: eine eigene Fahrphysik mit eigenen
+        G&auml;ngen, eigener Drehzahl, eigenem Tempo und eigenen Temperaturen. Die
+        Einstellungen aus &bdquo;Fahrgef&uuml;hl&ldquo; werden bei jedem Anschalten
+        &uuml;bernommen, damit beide Autos gleich fahren.</p>
+      <p class="muted">Und ein Vergleichsschirm: bl&auml;ttere im Cockpit mit dem Pfeil
+        oben links oder dem Steuerkreuz auf &bdquo;Beide&ldquo;. Dort stehen beide Autos
+        <em>nebeneinander</em> &ndash; Tempo, Schaltlichter, Gang, Tank, Zustand, Reifen-
+        und Bremsentemperatur und Akku, in beiden Spalten in derselben Reihenfolge, damit
+        das Auge waagerecht springen kann. Dazu die Boxenkn&ouml;pfe beider Autos und der
+        Motorklang, der f&uuml;r beide gilt. Ist der Modus aus, wird der Schirm beim
+        Bl&auml;ttern &uuml;bersprungen.</p>
+      <p class="muted">Und ein Boxenstopp, unabh&auml;ngig vom anderen Auto: w&auml;hrend
+        eines in der Box steht, verbraucht das andere weiter. Beide Kn&ouml;pfe stehen auf
+        dem Vergleichsschirm &bdquo;Beide&ldquo;, links f&uuml;r Auto&nbsp;1 und rechts
+        f&uuml;r Auto&nbsp;2. Anfordern, <b>bremsen und anhalten</b>, warten, losfahren;
+        nochmal dr&uuml;cken bricht ab. Der Service beginnt erst im Stillstand &ndash; das
+        Auto rollt mit &uuml;ber 200&nbsp;km/h aus, deshalb steht in der Fu&szlig;zeile, wie
+        weit es noch ist. Getankt wird mit denselben 22&nbsp;%/s wie bei Auto&nbsp;1 und
+        repariert mit derselben Rate; ungleiche Raten w&auml;ren schlimmer als kein
+        Stopp.</p>
+      <p class="muted">Und die Rennleitung gilt f&uuml;r beide: bei gelber Flagge regelt
+        Auto&nbsp;2 auf dasselbe Tempo herunter wie das ganze Feld &ndash; gemessen 100 von
+        103&nbsp;km/h Zieltempo, gegen einen Daumen auf Vollgas &ndash;, und in der
+        Einf&uuml;hrungsrunde rollt es in der Kolonne mit, auf seiner eigenen Seite und mit
+        eigener Schl&auml;ngelphase. Jedes Auto hat dabei seinen eigenen Regler: der hat
+        einen I-Anteil, und ein geteilter w&uuml;rde die Abweichung des einen Autos in das
+        Gas des anderen tragen.</p>
+      <p class="muted">Dazu z&auml;hlt Auto&nbsp;2 seine Runden mit: es steht in der
+        Rundenübersicht, in der Rangliste w&auml;hrend des Rennens und im Ergebnis samt
+        CSV. Das war keine Arbeit, sondern ein Irrtum in meiner Sch&auml;tzung &ndash; die
+        Rundenz&auml;hlung lief schon immer je Auto, f&uuml;r jedes verbundene, egal welche
+        Rolle. Die Zielflagge wartet jetzt auf beide Fahrer statt nur auf einen.</p>
+      <p class="muted">Dazu eine eigene Motorstimme, und die sitzt auf der anderen
+        Stereoseite &ndash; links Auto&nbsp;1, rechts Auto&nbsp;2. Das ist keine Kosmetik:
+        zwei Motoren im selben Drehzahlband aus einem Lautsprecher klingen wie ein
+        verstimmter Motor und nicht wie zwei Autos. Auch der Schaltklang kommt von der
+        Seite des Autos, das geschaltet hat. Beide fahren dasselbe Motormodell, das aus dem
+        Cockpit gew&auml;hlte.</p>
+      <p class="muted">Dazu einen eigenen Tank: Verbrauch nach Gas und Zeit mit demselben
+        Regler wie Auto&nbsp;1, das Tankgewicht in seiner Fahrphysik, die Warnstufen als
+        Meldung und den Notlauf des leeren Tanks &ndash; und der geht &uuml;ber eine Rampe
+        zu, nicht in einem Takt.</p>
+      <p class="muted">Alle globalen Einstellungen gelten f&uuml;r beide Autos: die
+        Abstimmung aus &bdquo;Fahrgef&uuml;hl&ldquo; wandert bei jeder &Auml;nderung
+        sofort her&uuml;ber, und Tank, Schaden, Reifenverschlei&szlig;, Wetter, die
+        H&ouml;chstgeschwindigkeit und die Batteriekompensation wirken auf beide
+        gleicherma&szlig;en. Zwei Autos mit verschiedener Abstimmung w&auml;ren kein
+        faires Rennen.</p>
+      <p class="muted">Dazu einen eigenen Schaden: Crasherkennung aus seinen eigenen
+        Sensorbytes, Leistungsverlust mit dem Schaden, Notlauf im Totalschaden und
+        ausgefallene Lampen &ndash; und die Kontrollleuchten des einen sagen nichts mehr
+        &uuml;ber das andere Auto.</p>
+      <p class="muted">Dazu eine eigene Ortung auf der Strecke, und daran h&auml;ngt mehr,
+        als es klingt: die Ghosts weichen Auto&nbsp;2 aus und w&auml;hlen ihre
+        &Uuml;berholseite nach seiner Querlage, es erscheint auf der Streckenkarte, die
+        Fahrhilfe und der Leitplanken-Modus gelten auch f&uuml;r ihn, und neben der Bahn
+        wird sein Gas gedrosselt und sein Controller brummt &ndash; sein eigener,
+        nicht der von Auto&nbsp;1.</p>
     </div>
 
   </section>
@@ -7504,21 +8315,14 @@
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 40 40 8l6 6L14 46H8z"/><path d="M34 14l6 6" stroke="var(--bad)"/></svg>
           <b>Editor <span class="wip-tag">WIP</span></b>
-          <span>Strecke aus Teilen bauen, drehen, als Code weitergeben. Zwei Kurventypen
-            der Original-App fehlen noch &ndash; ihre Ma&szlig;e sind nicht bekannt.</span>
+          <span>Strecke aus Teilen bauen, drehen, als Code weitergeben. Alle elf
+            Teiletypen der Original-App sind dabei, auch die Engstelle.</span>
         </button>
         <button class="misc-tile subpage-open" data-sub="print">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V8h20v10"/><rect x="8" y="18" width="32" height="14" rx="2"/><path d="M14 32h20v10H14z" stroke="var(--bad)"/></svg>
           <b>Druckvorlagen</b>
           <span>Start/Ziel und Boxengasse maßhaltig als SVG zum Ausdrucken.</span>
-        </button>
-        <button class="misc-tile subpage-open" data-sub="probe">
-          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="21" cy="21" r="12" stroke-width="2.8"/><path d="M30 30l10 10" stroke="var(--bad)"/><path d="M21 15v12M15 21h12"/></svg>
-          <b>Code-Sonde</b>
-          <span>Was das Auto gerade unter sich liest, ungefiltert &ndash; mit Zeitleiste
-            der Codewechsel.</span>
         </button>
       </div>
     </div>
@@ -7589,16 +8393,6 @@
             <span class="tp-cap tp-fs-aus">Schlie&szlig;en</span></button>
         </div>
         <div id="track-preview-svg"></div>
-        <p class="muted" style="border-left:3px solid var(--warn); padding-left:9px;
-           font-size:12px">
-          <b>Die Palette ist nicht vollst&auml;ndig.</b> Die Original-App hat neun
-          Kacheltypen, hier sind es sechs: es fehlen eine lange flache Kurve und eine
-          Keilkurve. Ihre Ma&szlig;e stehen nirgends &ndash; die Angabe oben im
-          Original-Editor ist der Umriss des <em>ganzen</em> Layouts und nicht der Kachel.
-          Sie kommen dazu, sobald eine Schlie&szlig;messung vorliegt: eine kleine
-          geschlossene Runde mit der neuen Kachel, und dann fallen Radius und Winkel
-          eindeutig heraus &ndash; so wie bei der Haarnadel.
-        </p>
         <div class="tp-bar" id="track-palette"></div>
         <span class="tp-space" id="track-space"></span>
       </div>
@@ -7629,15 +8423,19 @@
         <span class="muted" id="track-line-info" data-i18n-skip></span>
       </div>
 
-      <h3 style="font-size:14px; margin:16px 0 6px 0">Wo steht das Auto?</h3>
-      <p class="muted" style="font-size:11.5px">
-        Aus dem Cockpit hierher: dort war unter dem Schirm alles doppelt, die Position
-        aber nicht: und sie geh&ouml;rt neben die Strecke, auf die sie sich bezieht.
-        Die Lage ist eine Sch&auml;tzung aus Kachelz&auml;hler und Zeit, keine
-        Positionsmessung vom Auto.
-      </p>
-      <div id="dash-minimap"></div>
+      <!-- ---- HIER STAND "WO STEHT DAS AUTO" ---------------------------------
+           Entfernt, wie bestellt: "das ist ja schon im Cockpit screen eingebaut."
 
+           Das war die dritte Fassung derselben Anzeige. Sie sass einmal im Cockpit,
+           zog von dort hierher ("dort war unter dem Schirm alles doppelt"), und ist
+           inzwischen im Uebersichtsschirm des Cockpits wieder da - mit derselben
+           Karte, denselben Punkten und mehr Platz. Die Begruendung von damals gilt
+           also nicht mehr.
+
+           Die ORTUNG dahinter bleibt vollstaendig: dashMinimapIndex speist den
+           Vorausblick der Ghosts und die Rundenzaehlung. Der Name klingt nach
+           Anzeige, die Sache ist keine - deshalb steht das hier und nicht im
+           Loeschprotokoll. -->
       <div class="row" style="align-items:center; gap:8px; margin-top:14px">
         <label class="small" style="white-space:nowrap">Streckencode</label>
         <input type="text" id="track-code" readonly style="flex:1; min-width:120px; font-family:monospace">
@@ -7815,15 +8613,32 @@
            - Hinweise auf die Musterblaetter, die es nicht mehr gibt
 
          Die Muster-Sonde und die Code-Zeitleiste sind NICHT mit weg: sie sind eine
-         allgemeine Streckendiagnose und stehen jetzt unter "Code-Sonde". An ihnen hingen
+         allgemeine Streckendiagnose und stehen unter "Code-Sonde" - seit v0.6.27 nicht
+         mehr hier, sondern als eigener Reiter in den Entwicklertools. An ihnen hingen
          drei Element-ids, und die haetten den Build gebrochen.
 
          Absichtlich ohne src= und href= aufgeschrieben: der Selbsttest sucht solche
          Verweise mit Zeichensuche, auch in Kommentaren.
     -->
 
-    <div class="card subpage" id="sub-probe">
-      <button class="misc-back subpage-back" data-sub="">&larr; Strecke</button>
+  </section>
+
+  <!-- ---- CODE-SONDE, eigener Reiter --------------------------------------------
+       Bestellt: "Code-Sonde in die Entwicklertools verschieben (aktuell unter
+       Strecke)."
+
+       EIGENER REITER UND KEINE UNTERSEITE, und der Grund ist die Bauart des
+       Zielreiters: "Entwicklertools" (tab-misc) ist eine Kachelseite, deren Kacheln
+       auf REITER zeigen (goto-tab), so wie Doku, Programmierschule, Entwickler und
+       Selbsttest. Eine Unterseite waere dort ein Fremdkoerper - und der Reiter
+       "Entwickler" (tab-dev), der Unterseiten haette, heisst in der Leiste anders.
+
+       Der Leistenknopf dazu ist versteckt und traegt data-parent="misc", damit die
+       Leiste waehrend der Anzeige "Entwicklertools" markiert laesst. Dasselbe Muster
+       wie bei den vier anderen. -->
+  <section class="tabpage" id="tab-probe">
+    <button class="misc-back goto-tab" data-tab="misc">&larr; Entwicklertools</button>
+    <div class="card">
       <h2>Code-Sonde</h2>
       <p class="muted" style="font-size:11.5px">
         Was das Auto gerade unter sich liest, ungefiltert. Die Anzeige zeigt den ROHEN
@@ -7851,9 +8666,9 @@
             <tbody data-i18n-skip id="tile-timeline"><tr><td colspan="4" class="muted">noch nichts</td></tr></tbody>
           </table>
           <button id="tile-timeline-clear" style="margin-top:7px">Zeitleiste leeren</button>
+        </div>
       </div>
     </div>
-
   </section>
 
 
@@ -7865,12 +8680,16 @@
      kosten. Im Vollbild ist sie ausgeblendet. -->
 <footer id="app-footer">
   <span class="foot-left">
-    <span class="foot-ver">v<span id="app-version">0.5.55</span></span>
+    <span class="foot-ver">v<span id="app-version">0.6.60</span></span>
     <span class="foot-dim foot-brand" data-i18n-skip>OmegaSim &middot; MIT</span>
     <!-- Zur Klarstellung, und weil "Carrera" im ganzen Projekt vorkommt: das hier ist ein
          unabhaengiges Hobbyprojekt. Kein Firmenzeichen, keine Genehmigung, keine
          Verbindung. Steht data-i18n-skip, weil der Satz auf Englisch stehen bleibt - er
          richtet sich an jeden, nicht nur an deutsche Leser. -->
+    <!-- Der Quelltext. data-i18n-skip steht NICHT dran: "Code auf GitHub" ist ein Satz
+         und gehoert uebersetzt, die Adresse selbst nicht. -->
+    <a class="foot-code" href="https://github.com/Luuke42/omegasim"
+       target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
     <span class="foot-dim foot-legal" data-i18n-skip>Independent project, not affiliated
       with, endorsed by or connected to Carrera.</span>
   </span>

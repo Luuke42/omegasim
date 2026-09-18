@@ -29,8 +29,21 @@
   let gyroRaw = { x: 0, y: 0, span: 8 };
   function formatLapTime(ms) { return (ms / 1000).toFixed(2) + 's'; }
 
+  // ---- DIE AKKUSKALA, nach seVens Angabe --------------------------------------------
+  //
+  // Hier stand 111 als untere Grenze. seVen nennt fuer dieselbe Groesse 131 bis 155, und
+  // der Unterschied ist keine Kosmetik: bei Rohwert 131 zeigte die App 45 PROZENT, wo der
+  // Akku leer ist. Wer sich darauf verlaesst, bleibt mitten im Rennen stehen.
+  //
+  // BEIDE ZAHLEN SIND SCHAETZUNGEN, unsere war nur aelter. Nachmessen heisst: ein Auto
+  // leerfahren und den kleinsten je gemeldeten Rohwert festhalten. Bis dahin ist die
+  // vorsichtigere Skala die richtige - eine Anzeige, die zu wenig verspricht, kostet
+  // nichts, eine die zu viel verspricht kostet das Rennen.
+  const AKKU_LEER = 131, AKKU_VOLL = 155;
+
   function batteryPercent(raw) {
-    return Math.max(0, Math.min(100, Math.round((raw - 111) / (155 - 111) * 100)));
+    return Math.max(0, Math.min(100,
+      Math.round((raw - AKKU_LEER) / (AKKU_VOLL - AKKU_LEER) * 100)));
   }
 
   // Hier stand renderLapList(), und es tat nichts: es schrieb in #dash-lap-list und
@@ -289,7 +302,15 @@
     // "Steuern", darf die Flagge nicht fallen, weil ein Ghost zuerst ueber die Linie kommt -
     // dann waere die angefangene Runde des Fahrers abgeschnitten. Mit Fahrer gilt weiter
     // dessen Ueberfahrt, genau wie vorher.
-    if (warFinishing && !garage.some(c => c.role === 'player')) finishRace();
+    // ---- UND AUF AUTO 2 EBENSO -----------------------------------------------------
+    //
+    // Die Bedingung war "nur ohne Fahrer": ist ein Auto auf "Steuern", darf die Flagge
+    // nicht fallen, weil ein Ghost zuerst ueber die Linie kommt - sonst waere die
+    // angefangene Runde des Fahrers abgeschnitten. Mit zwei Fahrern gilt dasselbe zweimal,
+    // und ohne diese Zeile waere die abgeschnittene Runde die von Auto 2.
+    const fahrer = (c) => c.role === 'player'
+                          || (zweiSpieler && c.role === 'player2');
+    if (warFinishing && !garage.some(fahrer)) finishRace();
   }
 
   // ---- Testtaste Q: eine Runde zaehlen, ohne sie zu fahren ----
@@ -300,7 +321,10 @@
   //   Shift+Q    eine Runde fuer JEDES Auto im Rennen, damit die Tabelle mehrspaltig wird
   function debugCountLap(all) {
     if (all) {
-      const cars = garage.filter(c => c.role === 'player' || c.role === 'ghost');
+      // Auto 2 gehoert dazu, sonst macht Shift+Q die Tabelle mehrspaltig OHNE es - und
+      // genau dafuer ist die Taste da.
+      const cars = garage.filter(c => c.role === 'player' || c.role === 'ghost'
+                                      || (zweiSpieler && c.role === 'player2'));
       cars.forEach(c => { if (c !== playerCar) carLapCrossed(c); });
       if (playerCar) carLapCrossed(playerCar);
       playerLapCrossed();
@@ -330,6 +354,11 @@
     // erfundene Reihenfolge zeigt, ist schlechter als keine.
     const out = garage.map(c => ({ name: garageLabel(c), role: c.role,
                                    farbe: carColor(c).hex, kennung: c.tag,
+                                   // Der Ort auf der Schiene. Auto 2 geht ueber
+                                   // ghostOrtGes(): es hat seit v0.6.46 einen eigenen
+                                   // Ortungssatz, und der ist genau der, aus dem ein Ghost
+                                   // seinen Ort rechnet. spielerOrtGes() ist die Fassung
+                                   // ohne Argument und gilt nur fuer Auto 1.
                                    ort: (c.role === 'player'
                                      ? spielerOrtGes()
                                      : (typeof ghostOrtGes === 'function' ? ghostOrtGes(c) : null)),
@@ -510,10 +539,16 @@
   // zurueck, ohne zu wissen, dass gerade Gelb ist. Jetzt gewinnt immer das strengste
   // Limit, und es gibt nur einen Schreiber.
   const YELLOW_KMH = 80;
-  // Wie lange der Pit-Limiter hoechstens an bleibt, wenn das Ausfahrtmuster nicht gelesen
-  // wird. Fuenf Sekunden sind bei Boxengassentempo etwa zwei Kacheln - lang genug, um
-  // wirklich hinauszufahren, kurz genug, dass es kein verlorenes Rennen ist.
-  const PIT_LIMITER_MAX_MS = 5000;
+  // Hier standen PIT_LIMITER_MAX_MS (5000) und ein Zeitgeber, der den Pit-Limiter nach
+  // fuenf Sekunden von selbst abschaltete. Beide sind in v0.6.57 entfallen: die Frist traf
+  // nicht die Ausfahrt, fuer die sie gedacht war, sondern die ANFAHRT - wer nach dem
+  // Druecken nicht binnen fuenf Sekunden anhielt, verlor seinen Boxenstopp lautlos. Die
+  // ganze Begruendung steht bei setPitState().
+  //
+  // `pitLimiterTimer` bleibt als Groesse stehen und wird beim Zustandswechsel geraeumt:
+  // ein Zeitgeber, den eine spaetere Fassung wieder stellt, soll nicht ueber einen
+  // Zustandswechsel hinweg feuern. Die Zeile kostet nichts und schliesst eine Luecke, die
+  // man sonst erst im Betrieb findet.
   let pitLimiterTimer = null;
   let limitPit = 1, limitYellow = 1, limitFormation = 1;
   function applySpeedLimit() {
@@ -600,12 +635,53 @@
     const detail = $('race-results-laps');
     if (detail) {
       const maxLaps = Math.max(...cars.map(c => c.laps.length));
+      // ---- DIE SEKTORZEITEN JE RUNDE, wenn es mehrere Sektoren gibt ----------------
+      //
+      // BESTELLT: "Bei mehreren Sektoren die Sub-Zeiten (also Zeit je Sektor) im
+      // Zeiten-Screen anzeigen."
+      //
+      // NUR FUER DAS FAHRERAUTO, und das ist keine Sparmassnahme: sectorCrossed() haengt an
+      // playerLapCrossed(), die Sektorzeiten existieren also ausschliesslich fuer den
+      // Fahrer. Fuer einen Ghost eine Spalte zu zeichnen, die immer leer bliebe, waere eine
+      // Zusage, die die Messung nicht deckt.
+      //
+      // Die beste je gefahrene Zeit JE SEKTOR wird mitgerechnet und hervorgehoben - das ist
+      // die Zahl, wegen der man Sektorzeiten ueberhaupt ansieht: sie sagt, WO eine Runde
+      // verloren ging, und nicht nur dass sie es tat.
+      const mehrere = typeof sectorCount === 'number' && sectorCount > 1
+                      && sectorHistory.length > 0;
+      const besteS = [];
+      if (mehrere) {
+        for (let i = 0; i < sectorCount; i++) {
+          const werte = sectorHistory.map((r) => r[i]).filter((v) => v !== undefined);
+          besteS.push(werte.length ? Math.min.apply(null, werte) : null);
+        }
+      }
+      // Welche Spalte ist der Fahrer? Ueber die Rolle und nicht ueber den Namen - ein Auto
+      // mit dem Namen "Fahrer" waere sonst genug, um die Zeiten der falschen Spalte
+      // unterzuschieben.
+      const spielerIdx = cars.findIndex((c) => c.role !== 'ghost');
+      const sektorZeile = (k) => {
+        if (!mehrere || spielerIdx < 0) return '';
+        const r = sectorHistory[k];
+        if (!r || !r.length) return '';
+        const stuecke = r.map((ms, i) => {
+          const best = besteS[i] !== null && ms === besteS[i];
+          return '<span style="' + (best ? 'color:var(--good); font-weight:700' : '')
+               + '">S' + (i + 1) + ' ' + formatLapTime(ms) + '</span>';
+        }).join(' · ');
+        return '<div class="muted" style="font-size:11px; margin-top:2px">'
+             + stuecke + '</div>';
+      };
       const head = '<tr style="background:var(--panel-2)"><th style="' + td + '">Runde</th>'
         + cars.map(c => `<th style="${tdr}">${ergDot(c)}${c.name}</th>`).join('') + '</tr>';
       let body = '';
       for (let k = 0; k < maxLaps; k++) {
         body += `<tr><td style="${td}">${k + 1}</td>`
-          + cars.map(c => `<td style="${tdr}">${c.laps[k] ? formatLapTime(c.laps[k].ms) : '–'}</td>`).join('')
+          + cars.map((c, ci) => `<td style="${tdr}">`
+              + (c.laps[k] ? formatLapTime(c.laps[k].ms) : '–')
+              + (ci === spielerIdx ? sektorZeile(k) : '')
+              + '</td>').join('')
           + '</tr>';
       }
       detail.innerHTML = head + body;
@@ -691,7 +767,9 @@
     const cars = raceAllCars().filter(c => c.laps.length);
     const maxLap = Math.max(0, ...cars.map(c => c.laps.length));
     if (cars.length < 1 || maxLap < 2) {
-      host.innerHTML = '<p class="muted" style="margin:0">Zu wenige Runden f\u00fcr einen Verlauf '
+      // Der Punkt nach "Verlauf" fehlte - die beiden Bruchstuecke wurden ohne
+      // Satzzeichen aneinandergehaengt, und im Dokument stand "Verlauf Ab der zweiten".
+      host.innerHTML = '<p class="muted" style="margin:0">Zu wenige Runden f\u00fcr einen Verlauf. '
                      + 'Ab der zweiten Runde wird hier gezeichnet.</p>';
       return;
     }
@@ -731,14 +809,49 @@
       svg += `<text x="${x(k).toFixed(1)}" y="${H - 10}" text-anchor="middle" `
            + `font-family="monospace" font-size="11" fill="var(--muted)">${k + 1}</text>`;
     }
-    // One polyline per car, plus a dot on every lap it actually completed.
-    cars.forEach((c, i) => {
+    // ---- EIN HELLER SAUM UNTER JEDER LINIE -----------------------------------------
+    //
+    // GEMELDET: "Hier sehe ich die schwarze Linie auf schwarzem Hintergrund nicht - ggf
+    // weissen Schatten hinzufuegen zu allen Linien."
+    //
+    // Die Linienfarbe ist die AUTOFARBE, und die darf schwarz sein - der Hintergrund ist
+    // es auch (--bg: #000000, und die App hat nur dieses eine Thema). Ein schwarzes Auto
+    // war damit unsichtbar, und zwar nicht schlecht lesbar, sondern gar nicht da.
+    //
+    // ALLE Linien bekommen den Saum und nicht nur die dunklen. Eine Ausnahmeregel braeuchte
+    // eine Helligkeitsschwelle, und die waere bei jeder Farbe am Rand Geschmackssache;
+    // ausserdem trennt der Saum auch zwei bunte Linien, die sich kreuzen.
+    //
+    // IN ZWEI DURCHGAENGEN, und das ist der Punkt: erst alle Saeume, dann alle Linien.
+    // Zeichnete man je Auto Saum und Linie zusammen, deckte der Saum des zuletzt
+    // gezeichneten Autos die Linie der frueheren zu - aus einem Lesbarkeitsmittel waere ein
+    // Verdecker geworden.
+    const spuren = cars.map((c, i) => {
       const col = c.farbe || RACE_PLOT_COLORS[i % RACE_PLOT_COLORS.length];
       const pts = [];
       for (let k = 0; k < maxLap; k++) {
         if (pos[i][k] === undefined) continue;
         pts.push(`${x(k).toFixed(1)},${y(pos[i][k]).toFixed(1)}`);
       }
+      return { col, pts };
+    });
+
+    // Durchgang 1: die Saeume. Breiter als die Linie, damit links und rechts etwas
+    // stehenbleibt, und halbdurchsichtig - ein deckendes Weiss waere ein zweiter Strich.
+    const SAUM = 'rgba(255,255,255,0.55)';
+    spuren.forEach(({ pts }) => {
+      if (pts.length > 1) {
+        svg += `<polyline points="${pts.join(' ')}" fill="none" stroke="${SAUM}" `
+             + `stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>`;
+      }
+      pts.forEach(pt => {
+        const [px, py] = pt.split(',');
+        svg += `<circle cx="${px}" cy="${py}" r="4.6" fill="${SAUM}"/>`;
+      });
+    });
+
+    // Durchgang 2: die Linien selbst, in der Autofarbe.
+    spuren.forEach(({ col, pts }) => {
       if (pts.length > 1) {
         svg += `<polyline points="${pts.join(' ')}" fill="none" stroke="${col}" `
              + `stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
@@ -753,7 +866,10 @@
     // Legend underneath rather than inside: names can be long and would overlap the lines.
     const legend = cars.map((c, i) =>
       `<span style="display:inline-flex; align-items:center; gap:5px; margin-right:14px">`
-      + `<span style="width:12px; height:3px; background:${cars[i].farbe
+      // Derselbe Saum wie bei den Linien - ein schwarzes Kaestchen auf schwarzem Grund
+      // waere genauso unsichtbar gewesen wie die Linie, zu der es gehoert.
+      + `<span style="width:12px; height:3px; box-shadow:0 0 0 1px rgba(255,255,255,0.55); `
+      + `background:${cars[i].farbe
            || RACE_PLOT_COLORS[i % RACE_PLOT_COLORS.length]}"></span>`
       + `<span class="muted" style="font-size:12px">${c.name}</span></span>`).join('');
     host.innerHTML = svg + `<div style="margin-top:6px">${legend}</div>`;
@@ -863,7 +979,17 @@
     // 'wechsel' ist keine Lage, sondern ein Verlauf: er beginnt trocken. setWeather() mit
     // 'wechsel' zu rufen waere ein Wetter, das es nicht gibt.
     setWeather(raceWxStart === 'rain' ? 'rain' : 'dry');
+    // NEUE WINDRICHTUNG FUER DIESES RENNEN, wie bestellt - je Rennstart neu gewuerfelt,
+    // danach unveraendert bis zum naechsten Start. Vor setWeather() waere auch gegangen;
+    // hier direkt danach steht es, weil beides zur selben "was fuer ein Rennen wird das"-
+    // Ansage am Start gehoert.
+    wxWindWuerfeln();
     fuel = Math.max(0, Math.min(100, raceFuelStartL / FUEL_TANK_LITERS * 100));
+    // BEIDE Autos mit derselben Startmenge und beide schadenfrei. Ein Rennen, in dem das
+    // eine Auto voll und das andere halb leer startet, waere kein Rennen - das ist die
+    // Zusage, unter der der Zwei-Spieler-Modus gebaut ist.
+    tankZweiFuellen(fuel);
+    schadenZweiZuruecksetzen();
     updateDamageFuelUI();
     racePitDone = 0;
     syncRaceGridOrder();
@@ -876,6 +1002,17 @@
     garage.forEach(c => { c.race = { laps: [], lapStart: null, pending: null, seen: 0,
                                      lastActed: 0, lastCount: null }; });
     raceLapTimes = [];
+    // ---- UND DIE COCKPIT-RUNDEN AUCH, und das ist ein gemeldeter Fehler ------------
+    //
+    // dashLapTimes wurde beim Rennstart NIE zurueckgesetzt. Es ist die Liste der
+    // Ueberfahrten seit dem Laden der Seite - und genau diese Zahl meldet die App als
+    // "Runden" an den Mehrspieler-Host (mpEigenerStand in 97-sessions.js). Wer vor dem
+    // Rennen ein paar Runden frei gefahren ist, stand damit schon vor dem Start vorn.
+    //
+    // Der Kachelzaehler wird mitgenommen: ohne ihn zaehlt die erste Ueberfahrt nach dem
+    // Start als Rundenschluss einer Runde, die es nicht gab.
+    dashLapTimes = [];
+    dashLapStart = null;
     racePartialMs = null;
     // Same moment as the lap times: on/off-track is a statistic about THIS race, and
     // carrying a previous session's minutes into it would make the share meaningless.
@@ -1036,6 +1173,16 @@
     // sofort, sonst wartete das Rennen auf ein Auto, das sich nicht bewegt.
     const willAuslaufen = auslaufen !== false;
     ghostAuslaufBis = willAuslaufen ? now + GHOST_AUSLAUF_MAX_MS : 0;
+    // ---- WIE VIELE LAUFEN AUS? Das ist der Nenner der Ausroll-Staffel -------------
+    //
+    // VOR der Schleife gezaehlt und nicht darin: die Schleife ruft finishGhost() bereits,
+    // und die Funktion braucht die Zahl schon beim ersten Aufruf. Dieselbe Bedingung wie
+    // unten, damit die beiden nicht auseinanderlaufen koennen.
+    const rollende = garage.filter(c => c.role === 'ghost'
+      && willAuslaufen && c.ghost && !c.parked && !c.ghost.finish).length;
+    if (typeof finishSeitenZaehlerZuruecksetzen === 'function') {
+      finishSeitenZaehlerZuruecksetzen(rollende);
+    }
     garage.forEach(c => {
       if (c.role !== 'ghost') return;
       const faehrt = willAuslaufen && c.ghost && !c.parked && !c.ghost.finish;
@@ -1299,7 +1446,60 @@
     showHudToast(headlightsOn ? 'Licht an' : 'Licht aus');
   };
 
-  $('race-wx-box').onclick = () => setWeather(weather === 'rain' ? 'dry' : 'rain');
+  // ====================================================================================
+  // DREI WETTERLAGEN AUF EINER KACHEL
+  // ====================================================================================
+  //
+  // BESTELLT: "Lass mich mit der Regenumschalttaste im Cockpitview bzw. durch
+  // Tippen/Klicken auf das Symbol auch noch zwischen sonnig, Regen und wechselhaft hin und
+  // herschalten (default: Sonne)."
+  //
+  // ---- "WECHSELHAFT" IST KEINE LAGE, SONDERN EIN VERLAUF -------------------------
+  //
+  // Das stand schon vor dieser Aenderung im Code, bei der Rennvorbereitung: setWeather()
+  // mit 'wechsel' zu rufen waere ein Wetter, das es nicht gibt. Der Verlauf lebt in
+  // raceWxStart und wird von wxWechselTick() gefahren, der alle 1-6 Minuten umschaltet.
+  //
+  // Deshalb schaltet diese Kachel den MODUS und nicht nur die Lage - und sie tut es ueber
+  // das Bedienelement race-wx-start samt seinem change-Ereignis, wie jede andere
+  // Cockpit-Kachel in dieser App. Ein zweiter Zustand daneben waere die naechste Stelle,
+  // an der Kachel und Renneinstellung auseinanderlaufen.
+  //
+  // BEIM WECHSEL IN 'wechsel' WIRD SOFORT GEPLANT. Ohne das stuende wxWechselAt auf dem
+  // Wert der letzten Rennvorbereitung - im freien Fahren also auf null, und dann passiert
+  // nie etwas: man waehlt "wechselhaft" und bekommt trocken, fuer immer.
+  const WX_MODI = ['dry', 'rain', 'wechsel'];
+
+  function wxModusSetzen(modus) {
+    const sel = $('race-wx-start');
+    if (sel) {
+      sel.value = modus;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    } else {
+      raceWxStart = modus;
+    }
+    if (modus === 'wechsel') {
+      // Der Verlauf beginnt trocken - dieselbe Entscheidung wie bei der Rennvorbereitung.
+      setWeather('dry');
+      wxWechselPlanen(false);
+      showHudToast(t('Wechselhaft'));
+    } else {
+      wxWechselAt = null;
+      setWeather(modus);
+    }
+    // SOFORT und nicht erst im naechsten Fahrtakt: wer auf die Kachel tippt, will die
+    // Antwort sehen. Und wenn das Cockpit nicht der aktive Schirm ist, kommt der Fahrtakt
+    // fuer diese Anzeige ohnehin nicht.
+    if (typeof wxZeichenSetzen === 'function') wxZeichenSetzen();
+    return modus;
+  }
+
+  function wxModusWeiter() {
+    const i = WX_MODI.indexOf(raceWxStart);
+    return wxModusSetzen(WX_MODI[(i < 0 ? 0 : i + 1) % WX_MODI.length]);
+  }
+
+  $('race-wx-box').onclick = () => wxModusWeiter();
 
   // Tank und Zustand sind nur WAEHREND eines Boxenstopps Schalter. Ausserhalb bleibt ein
   // Tipp wirkungslos, statt versehentlich etwas zu verstellen.
@@ -1342,47 +1542,15 @@
     showHudToast(sw.checked ? 'SCHADENSSIMULATION AN' : 'SCHADENSSIMULATION AUS');
   }
 
-  // Die Bremsbalance-Skala im Cockpit ziehen.
+  // ---- DIE ZIEH-SKALA DER BREMSBALANCE IST HIER HERAUS ---------------------------
   //
-  // Ein Ding, das wie ein Regler aussieht und keiner ist, ist schlimmer als ein Symbol: man
-  // zieht daran, nichts passiert, und danach traut man auch dem Rest nicht.
+  // Sie sass in der Kachel .gt3-trim, und die traegt seit v0.6.13 die Reifenwahl und die
+  // Tankmenge - "die neuen Anzeigen ersetzen die alten". Ohne ihren Wirt haette
+  // bindeBiasSkala() beim Aufbau still mit `return` aufgehoert: eine Funktion, die nichts
+  // tut und danach aussieht, als taete sie etwas.
   //
-  // Der Weg geht ueber das Bedienelement in den Optionen und dessen 'input'-Ereignis, wie
-  // bei allen anderen Cockpit-Kacheln - dadurch ist die Synchronitaet da, ohne dass ein
-  // zweiter Zustand entsteht.
-  (function bindeBiasSkala() {
-    const row = $('race-bias-row');
-    const inp = $('setting-brakebias');
-    if (!row || !inp) return;
-    const lo = +inp.min, hi = +inp.max;
-    let zieht = false;
-
-    const setzen = (clientY) => {
-      const svg = row.querySelector('svg');
-      if (!svg) return;
-      const r = svg.getBoundingClientRect();
-      if (r.height < 4) return;
-      // Oben ist vorn, also von unten gerechnet.
-      const t = Math.max(0, Math.min(1, 1 - (clientY - r.top) / r.height));
-      const wert = Math.round(lo + t * (hi - lo));
-      if (String(wert) === inp.value) return;
-      inp.value = wert;
-      inp.dispatchEvent(new Event('input', { bubbles: true }));
-    };
-
-    row.addEventListener('pointerdown', (e) => {
-      zieht = true;
-      // Der Zeiger wird eingefangen, damit das Ziehen auch weitergeht, wenn der Finger die
-      // schmale Skala verlaesst - sie ist 14 px breit, und ohne das reisst jeder Zug ab.
-      try { row.setPointerCapture(e.pointerId); } catch (err) { /* alter Browser */ }
-      setzen(e.clientY);
-      e.preventDefault();
-    });
-    row.addEventListener('pointermove', (e) => { if (zieht) setzen(e.clientY); });
-    for (const ev of ['pointerup', 'pointercancel']) {
-      row.addEventListener(ev, () => { zieht = false; });
-    }
-  })();
+  // Die Bremsbalance bleibt erreichbar. Der Regler setting-brakebias in den Optionen war
+  // ohnehin der zweite Weg dorthin und ist jetzt der einzige.
 
   $('race-tyre-box').onclick = () => {
     // Waehrend eines Boxenstopps bedeutet ein Tipp auf diese Kachel "Reifenwechsel an/aus",
@@ -1424,6 +1592,11 @@
   // times or the race state — it is a "get me driving again" button, not a restart.
   function resetCarState() {
     damage = 0;
+    // Auto 2 mit. Es hat keine Boxenreparatur (siehe schadenZwei), also ist dieser Knopf
+    // der einzige Weg zurueck - und ein Knopf, der nur das halbe Feld zuruecksetzt, waere
+    // schlimmer als keiner.
+    schadenZweiZuruecksetzen();
+    tankZweiFuellen(100);
     fuel = 100;
     resetTyres();
     updateDamageFuelUI();
@@ -1445,10 +1618,25 @@
     }
     const p = $('race-act-pit');
     if (p) {
-      p.textContent = pitState === 'off' ? 'Boxenstopp'
-                    : pitState === 'limited' ? 'Limiter aktiv \u00b7 2\u00d7 = Abbruch'
-                    : 'Service \u00b7 2\u00d7 = Abbruch';
+      // ---- DER KNOPF SAGT, WAS ER GERADE TUT -------------------------------------
+      //
+      // "2x = Abbruch" stand hier und stimmt seit v0.6.57 nicht mehr: ein Druck genuegt.
+      // Und im Doppelausdruck-Modus loest er gar nichts aus - das steht dann AUF dem
+      // Knopf, statt dass ein Druck nur eine Meldung erzeugt. Ein Knopf, der aussieht wie
+      // immer und nichts tut, ist die Bedienung, die man fuer kaputt haelt.
+      const nurDoppelt = pitTrigger === 'double' && pitState === 'off';
+      p.textContent = nurDoppelt ? 'Box: 2\u00d7 Ausdruck'
+                    : pitState === 'off' ? 'Boxenstopp'
+                    : pitState === 'limited' ? 'Limiter aktiv \u00b7 Abbruch'
+                    : 'Service \u00b7 Abbruch';
       p.classList.toggle('armed', pitState !== 'off');
+      // Abgeblendet und nicht disabled: ein disabled-Knopf gibt keine Rueckmeldung mehr,
+      // und wer ihn trotzdem drueckt, soll den Grund erfahren (requestPitStop meldet ihn).
+      p.classList.toggle('gedimmt', nurDoppelt);
+      p.title = nurDoppelt
+        ? 'Die Ausloesung steht auf "doppelter Ausdruck": zweimal ueber den '
+          + 'Start-Ausdruck fahren, innerhalb von ' + (PIT_DOUBLE_WINDOW_MS / 1000) + ' s.'
+        : '';
     }
   }
   setInterval(updateRaceActButtons, 400);
@@ -1623,7 +1811,21 @@
         dashLastActedCode = code; dashLastActedAt = jetzt;
         log('Start/Ziel im Ausdruck-Modus: Musterkontakt gesetzt, Code 0x'
             + code.toString(16).padStart(2, '0') + '.', 'info');
-        if (playerLapCrossed()) { refreshMinimap(); }
+        // ---- DIESER AUFRUF IST KEINE ABFRAGE, und ich habe ihn genau deswegen einmal
+        //      versehentlich mitgeloescht -------------------------------------------
+        //
+        // Hier stand `if (playerLapCrossed()) { refreshMinimap(); }`. Beim Entfernen der
+        // Minikarte sah die Zeile wie eine Anzeigeaktualisierung aus und ging mit. Sie
+        // ist aber der einzige Weg, auf dem im Ausdruck-Modus eine Runde gezaehlt wird:
+        // playerLapCrossed() schiebt die Rundenzeit, meldet an den Mehrspieler-Host,
+        // loest den Doppler aus und zaehlt die Rennrunde. Der Rueckgabewert war nur die
+        // Frage, ob sich die Karte lohnt.
+        //
+        // Zwei Selbsttests haben es gemeldet ("Ausdruck-Modus zaehlt jede Ueberfahrt" und
+        // "Boxengasse: doppelter Ausdruck nimmt die Runde zurueck", beide 0 Runden). Der
+        // Aufruf steht deshalb jetzt fuer sich, ohne if - damit die naechste
+        // Anzeigenaufraeumung ihn nicht wieder mitnimmt.
+        playerLapCrossed();
         // Und DANACH die Doppelpruefung: die Runde ist gezaehlt, mit richtiger Zeit, und
         // wird zurueckgenommen falls sich der Kontakt als zweiter eines Paares erweist.
         pitDoubleCheck(jetzt);
@@ -1773,9 +1975,8 @@
       // VOR dem return, nicht danach: das return war die Stelle, an der die Pruefung
       // uebersprungen wurde.
       pitDoubleCheck(nowCode);
-      if (gezaehlt) { refreshMinimap(); return; }
+      if (gezaehlt) return;
     }
-    refreshMinimap();
   }
 
   // Was beim Ueberfahren von Start/Ziel fuer den FAHRER passiert. Herausgezogen, damit die
@@ -1800,6 +2001,15 @@
     if (dashLapTimes.length) {
       const d = dashLapTimes.pop();
       if (dashLapStart !== null) dashLapStart -= d;
+      // ---- DIE RUECKNAHME GEHT AUCH AN DEN HOST ---------------------------------
+      //
+      // Ohne diese Zeile zeigte die Rangliste eine zurueckgenommene Runde weiter, bis das
+      // naechste Lebenszeichen sie ueberschrieb - bis zu fuenf Sekunden lang stand dort
+      // eine Runde, die die App selbst schon verworfen hatte.
+      //
+      // Defensiv gerufen, weil mpRundeGefahren in 97-sessions.js steht, einer SPAETEREN
+      // Datei - dieselbe Vorsicht wie an der Stelle, die eine gefahrene Runde meldet.
+      if (typeof mpRundeGefahren === 'function') mpRundeGefahren();
     }
     $('race-status').textContent = t('Rennen läuft, Runde') + ' ' + raceLapTimes.length;
     log('Runde zurueckgenommen (' + formatLapTime(weg.ms) + '): ' + warum, 'info');
@@ -1951,6 +2161,30 @@
       // koennte diesen Satz nie treffen.
       else $('race-status').textContent =
         t('Rennen läuft, Runde') + ' ' + raceLapTimes.length;
+    } else if (dashLapTimes.length) {
+      // ---- FREIE FAHRT: dieselbe Rueckmeldung wie im Rennen -----------------------
+      //
+      // BESTELLT: "Ansagen fuer Rundenzeiten auch machen, wenn ich im Cockpit-Modus freie
+      // Fahrt mache."
+      //
+      // DIE ZEIT GAB ES HIER LAENGST: dashLapTimes wird bei JEDER Ueberfahrt gefuellt, ein
+      // paar Zeilen weiter oben, auch ohne Rennen. Nur Ton und Stimme hingen am
+      // Rennzustand - das Cockpit zeigte die Rundenzeit an und sagte nichts dazu.
+      //
+      // DER TON KOMMT MIT, nicht nur die Stimme. Im Rennen sind die zwei ein Paar, und der
+      // Grund steht dort: der Ton ist sofort da, die Stimme braucht eine Sekunde. Nur die
+      // Stimme zu geben hiesse, in der freien Fahrt auf die langsamere der beiden
+      // Rueckmeldungen zu warten.
+      //
+      // BESTZEIT WIRD GEGEN DIE FRUEHEREN gemessen, nicht gegen alle: die gerade gefahrene
+      // Runde steht schon in dashLapTimes, und ein Vergleich mit sich selbst macht jede
+      // Runde zur besten. Genau dieser Fehler ist im Rennzweig darueber ausdruecklich
+      // vermieden, und hier gilt er genauso.
+      const rundeMs = dashLapTimes[dashLapTimes.length - 1];
+      const frueher = dashLapTimes.slice(0, -1);
+      const istBest = frueher.length > 0 && rundeMs < Math.min.apply(null, frueher);
+      playLapChime(istBest);
+      speakLap(rundeMs, istBest);
     }
     return false;
   }
@@ -1993,22 +2227,22 @@
     return raceLapTimes.length * n + dashMinimapIndex + dashTilePhase();
   }
 
-  function refreshMinimap() {
-    // Die Minikarte ist entfernt worden. Die Positionsverfolgung dahinter bleibt: sie
-    // speist den Vorausblick der Ghosts und die Rundenzaehlung, und nur die Anzeige war
-    // doppelt. Der Aufruf bleibt deshalb stehen und tut nichts, wenn es kein Element gibt -
-    // ein blinder Zugriff darauf wuerde den Fahrtakt abbrechen.
-    const el = $('dash-minimap');
-    if (!el) return;
-    el.innerHTML = (currentTrackTiles.length === 0)
-      ? '<p class="muted" style="width:220px">kein Streckenlayout geladen</p>'
-      // DETAILED, wie im Editor: schwarze Fahrbahn, weisse Stossfugen, rot-weisse
-      // Randsteine links und blau-weisse rechts. Den Aufbau gab es laengst, hier wurde
-      // aber die einfache Fassung gezeichnet - eine graue Linie. Und `cars` statt
-      // `currentIndex`: nur so bekommen die Punkte Farbe, Kuerzel und Querlage.
-      : renderTrackPreview(currentTrackTiles, null,
-                           { detailed: true, cars: trackCarMarks() }).html;
-  }
+  // ---- HIER STAND refreshMinimap() -----------------------------------------------
+  //
+  // Entfernt mit der Anzeige, die es gezeichnet hat ("Wo steht das Auto" im
+  // Streckeneditor), und ZWINGEND mitentfernt: ein Element-Zugriff auf eine id, die es
+  // nicht mehr gibt, ist genau, was check_ids() in tools/build.py meldet. Eine Funktion,
+  // die nur noch mit einem Rueckfall auf ein fehlendes Element dastuende, waere kein
+  // Rest, sondern ein Fehler, der beim naechsten Build anschlaegt.
+  //
+  // NEBENBEI GELERNT: der Pruefer liest auch Kommentare. Die Aufrufform der Kennung in
+  // diesem Text hat ihn ausgeloest - und das ist richtig so, denn ein Pruefer, der
+  // Kommentare auslaesst, muesste JavaScript zerlegen koennen.
+  //
+  // WAS BLEIBT, und der Name verfuehrt zum Gegenteil: dashMinimapIndex ist keine
+  // Anzeige. Er ist die Ortung des Fahrerautos und speist den Vorausblick der Ghosts,
+  // dashTilePhase() und spielerOrtGes(). Er heisst nur so, weil die Minikarte sein
+  // erster Leser war.
 
   async function ensureDashboardStatusSubscribed() {
     const entry = charByUuid.get(NUS_TX);
@@ -2075,7 +2309,28 @@
   // und mit dem Tempo der weissen Wolken braeuchten sie dafuer vierzehn Sekunden. Auf einem
   // echten Radar ist das ebenso - die Niederschlagsechos ziehen mit der Front, die hohe
   // Wolkendecke steht fast. Die Richtung ist dieselbe.
-  const WX_WIND = { x: 0.86, y: -0.51 };     // Zugrichtung, normiert
+  //
+  // ---- DIE RICHTUNG IST ZUFAELLIG, ABER NICHT WAEHREND DER FAHRT -----------------
+  //
+  // BESTELLT: "Wind im Regenradar aus zufaelliger Richtung kommen lassen (je Rennstart
+  // oder Reload - nicht wechseln waehrend der Simulation)."
+  //
+  // WX_WIND ist ein Einheitsvektor (cos, sin) eines zufaelligen Winkels - wxRadarDraw()
+  // benutzt ihn weiter unten als Drehmatrix, um die Laengs-/Querlage jeder Form (b.l,
+  // b.quer) auf Bildkoordinaten zu drehen. Ihn zu aendern heisst also nur, den Winkel neu
+  // zu wuerfeln; die Formen selbst wissen nichts von "Wind" und brauchen es auch nicht.
+  //
+  // GEWUERFELT WIRD AN GENAU ZWEI STELLEN: einmal hier, beim Laden des Skripts (deckt
+  // "bei Reload"), und ein zweites Mal in startRaceCountdown() (deckt "je Rennstart").
+  // Dazwischen, WAEHREND ein Rennen laeuft, schreibt kein Aufrufer WX_WIND - die Formen
+  // ziehen fuer die gesamte Dauer eines Rennens aus derselben Richtung, wie verlangt.
+  const WX_WIND = { x: 0.86, y: -0.51 };     // Zugrichtung, normiert - Vorgabe vor dem ersten Wurf
+  function wxWindWuerfeln() {
+    const winkel = Math.random() * 2 * Math.PI;
+    WX_WIND.x = Math.cos(winkel);
+    WX_WIND.y = Math.sin(winkel);
+  }
+  wxWindWuerfeln();
   const WX_AUS = 1.25;                        // ab hier ist eine Form aus dem Bild
   const WX_REGEN_V = WX_AUS / WX_RAMP_S;      // damit die erste nach der Rampe in der Mitte ist
   // 0,18 statt 0,34: die Formen sollen sich UEBERLAPPEN. Mit Luecken dazwischen sieht ein
@@ -2509,8 +2764,42 @@
   // Wer im Trockenen Regenreifen aufziehen will, darf das; die Matrix bestraft es schon.
   let mischungWunsch = null;
 
+  // ---- DIE VORGABE IST, WAS DRAUF IST -------------------------------------------
+  //
+  // BESTELLT: "D-Pad oben schaltet Reifentypen durch und bestimmt, was beim naechsten
+  // Boxenstopp aufgezogen wird (default: aktuelle Reifen)."
+  //
+  // Hier stand `mischungWunsch || (weather === 'rain' ? 'regen' : 'mittel')`, also
+  // wetterpassend. Jetzt die aktuell montierte Mischung.
+  //
+  // DAS HAT EINE FOLGE, und sie steht hier und nicht im Verborgenen: ein geplanter Stopp
+  // im Regen zieht damit NICHT MEHR VON SELBST Regenreifen auf. Der Ausgleich ist keine
+  // zweite Automatik, sondern eine Anzeige - pitKachelStand() meldet mixWarnung, wenn die
+  // Wahl nicht zum Wetter passt, und die Kachel schreibt es an. Sichtbar ist besser als
+  // klug: wer im Regen auf Slicks bleibt, hat es dann selbst entschieden.
   function pitMischungWahl() {
-    return mischungWunsch || (weather === 'rain' ? 'regen' : 'mittel');
+    return mischungWunsch || tyres;
+  }
+
+  // Was die Abstimmungskachel im Cockpit zeigt: die Reifenwahl fuer den naechsten Stopp und
+  // die Tankmenge. EINE Funktion dafuer, weil die Kachel in einer FRUEHEREN Datei
+  // aktualisiert wird (50-drive.js) und sonst fuenf Groessen von hier lesen muesste - fuenf
+  // Zugriffe ueber eine Dateigrenze sind fuenf Stellen, an denen jemand eine vergisst.
+  function pitKachelStand() {
+    const mix = pitMischungWahl();
+    const tank = (pitState === 'servicing' && pitPlan)
+      ? pitPlan.refuel : pitVorwahlIst('refuel');
+    return {
+      mix,
+      mixName: mischungName(mix),
+      mixFarbe: mischungFarbe(mix),
+      mixRegen: mix === 'regen',
+      // Beide Richtungen sind ein Missverhaeltnis: Slicks im Regen und Regenreifen auf
+      // trockener Bahn kosten gleichermassen.
+      mixWarnung: (weather === 'rain') !== (mix === 'regen'),
+      tankWort: tankZielWort(tank),
+      tankAn: !!tankZielNorm(tank),
+    };
   }
 
   function pitMischungWeiter() {
@@ -2603,20 +2892,28 @@
     limitPit = (next === 'off') ? 1
              : (pitTrigger === 'double' ? PIT_DOUBLE_SPEED_FACTOR : PIT_SPEED_FACTOR);
     applySpeedLimit();
-    // Nachlauf-Wecker. Das Ausfahrtmuster wird nicht immer gelesen - ein Muster, das
-    // nicht gelesen wird, laesst den Limiter sonst bis zum Rundenende an, und das ist der
-    // Unterschied zwischen "Boxenstopp" und "Rennen gelaufen". Fuenf Sekunden nach dem
-    // Ende der Arbeit geht er von selbst aus.
+    // ---- DER NACHLAUF-WECKER IST WEG, UND ZWAR WEIL ER DEN FALSCHEN FALL TRAF ------
+    //
+    // GEMELDET: "Boxenstoppknopf: Wenn ich ihn aktiviere, ist er dann nicht solange aktiv,
+    // bis ich ihn deaktiviere oder bis ich stehen bleibe? So sollte es sein."
+    //
+    // Hier stand ein Zeitgeber ueber PIT_LIMITER_MAX_MS (5 s) mit der Begruendung, das
+    // AUSFAHRTMUSTER werde nicht immer gelesen und der Limiter bliebe sonst bis zum
+    // Rundenende an. Die Begruendung war richtig - fuer einen Uebergang, den es nicht mehr
+    // gibt: 'limited' wird heute an genau drei Stellen gesetzt, und alle drei sind
+    // ANFAHRTEN (Knopf, Boxenmarker, doppelter Ausdruck). Die Ausfahrt laeuft ueber
+    // setPitState('off') in pitLaneTick, sobald das Auto nach dem Service wieder rollt.
+    //
+    // Der Wecker beendete damit ausschliesslich die ANFAHRT: wer nach dem Druecken nicht
+    // binnen fuenf Sekunden zum Stehen kam, verlor seinen Boxenstopp lautlos. Genau das
+    // war die Meldung.
+    //
+    // Der Limiter bleibt jetzt an, bis eines von drei Dingen passiert: anhalten (der
+    // Service beginnt), abbrechen (ein Druck auf den Knopf), oder - nur im
+    // Doppelausdruck-Modus - das Fenster PIT_DOUBLE_LIMIT_MS laeuft ab. Das prueft
+    // pitLaneTick selbst, und dort ist die Frist Teil der Bedienung und kein
+    // Sicherheitsnetz.
     if (pitLimiterTimer) { clearTimeout(pitLimiterTimer); pitLimiterTimer = null; }
-    if (next === 'limited') {
-      pitLimiterTimer = setTimeout(() => {
-        pitLimiterTimer = null;
-        if (pitState !== 'limited') return;
-        log('Pit-Limiter nach ' + (PIT_LIMITER_MAX_MS / 1000) + ' s von selbst aus: '
-            + 'das Ausfahrtmuster wurde nicht gelesen.', 'info');
-        setPitState('off');
-      }, PIT_LIMITER_MAX_MS);
-    }
     if (next === 'servicing') {
       pitServiceStart = Date.now();
       pitFuelGained = 0; pitDamageRepaired = 0;
@@ -2765,13 +3062,25 @@
       const p = pitPlan || {};
       pitStandElapsed += dt;
 
-      // --- refuel ---
+      // --- refuel --- auf das GEWAEHLTE Ziel, nicht bis voll
       if (p.refuel && !pitDone.refuel) {
-        const addFuel = Math.min(100 - fuel, PIT_FUEL_PER_SEC * dt);
-        fuel += addFuel; pitFuelGained += addFuel;
-        if (fuel >= 99.95) { fuel = 100; pitDone.refuel = true;
-                             setPitLoop('fuel', false); pitChimeFuel();
-                             showHudToast(`Tank voll, ${fuelLiters(100)} l`); }
+        const ziel = tankZielNorm(p.refuel);
+        if (fuel >= ziel - 0.05) {
+          // ABTANKEN GIBT ES NICHT. Steht der Tank schon ueber dem Ziel, ist die Arbeit
+          // erledigt - ein negatives addFuel waere eine Pumpe, die absaugt, und die hat
+          // kein Boxenstopp. Ohne diesen Zweig liefe der Stand rueckwaerts.
+          pitDone.refuel = true;
+          setPitLoop('fuel', false);
+        } else {
+          const addFuel = Math.min(ziel - fuel, PIT_FUEL_PER_SEC * dt);
+          fuel += addFuel; pitFuelGained += addFuel;
+          if (fuel >= ziel - 0.05) {
+            fuel = ziel; pitDone.refuel = true;
+            setPitLoop('fuel', false); pitChimeFuel();
+            showHudToast(ziel >= 100 ? `Tank voll, ${fuelLiters(100)} l`
+                                     : `Getankt auf ${fuelLiters(ziel)} l`);
+          }
+        }
       }
       // --- repair --- non-linear, see repairRateAt()
       if (p.repair && !pitDone.repair) {
@@ -2940,8 +3249,22 @@
   // not a validated impact reading.
   let fuel = 100;
   let damage = 0;
-  let crashRollingAvg1 = null, crashRollingAvg3 = null;
-  let lastCrashTime = 0;
+  // ---- DER ERKENNUNGSZUSTAND, JE AUTO ------------------------------------------------
+  //
+  // Hier standen vier Modulgroessen: crashRollingAvg1/3, lastCrashTime und abseitsBis.
+  // Gepruefft habe ich, wer sie ausser detectCrash() liest - niemand im Betrieb, nur ein
+  // Selbsttest, der sie sichert und zuruecklegt. Damit war der Umbau auf einen Satz je Auto
+  // billig, und er ist die richtige Form: die Alternative waere ein zweiter Detektor
+  // gewesen, und zwei Kopien derselben Schwellenlogik laufen auseinander.
+  //
+  // Der Schluessel ist die Spielernummer und nicht das Auto selbst: die Erkennung haengt am
+  // SPIELER (Auto 1 ist immer playerCar), und ein Auto, das die Rolle wechselt, soll nicht
+  // seinen halb gefuellten Mittelwert mitnehmen.
+  const crashLage = {
+    1: { avg1: null, avg3: null, letzter: 0, gnadeBis: 0 },
+    2: { avg1: null, avg3: null, letzter: 0, gnadeBis: 0 },
+  };
+  function crashLageVon(wer) { return crashLage[wer === 2 ? 2 : 1]; }
   // Ereignisse JE RUNDE, fuer den Rundenzeit-Plot. raceLapEvents[i] gehoert zu
   // raceLapTimes[i] - die Rundennummer ist der Index, genau wie dort, und sie zweimal zu
   // fuehren waere die Gelegenheit, dass sie auseinanderlaufen.
@@ -2959,13 +3282,256 @@
   // car really stops switching that light rather than only the display pretending.
   const LIGHT_DEAD_DAMAGE = 50;
   const lightDamage = { front: false, rear: false };
+
+  // ---- UND DER SCHADEN VON AUTO 2 ----------------------------------------------------
+  //
+  // `damage` und `lightDamage` bleiben Auto 1: 68 bzw. 16 Fundstellen, daran haengen die
+  // Anzeige, der Schadensbalken, die Boxenreparatur, die Ansagen und das Rennergebnis.
+  // Auto 2 bekommt einen eigenen Satz derselben zwei Groessen - dieselbe Bauform wie beim
+  // Abseits in 50-drive.js und mit derselben Begruendung: ein dritter Spieler waere der
+  // Moment, in dem daraus ein Datensatz je Auto wird.
+  //
+  // Was Auto 2 damit HAT: Crasherkennung, Schadensfortschritt, Tempoverlust beim Aufprall,
+  // Leistungsverlust mit dem Schaden, Notlauf ab 100 Prozent, ausgefallene Lampen.
+  // Was es NICHT hat: eine Reparatur, denn die gibt es nur in der Boxengasse, und die
+  // Boxen-Zustandsmaschine hat 27 Groessen und 633 Fundstellen. Zuruecksetzen geht ueber
+  // den Rennstart und ueber die Taste R.
+  const schadenZwei = { wert: 0, licht: { front: false, rear: false } };
+
+  // ---- UND DER TANK VON AUTO 2 -------------------------------------------------------
+  //
+  // Dieselbe Bauform wie beim Schaden und beim Abseits. `stand` ist Prozent wie `fuel`,
+  // damit die Zahlen vergleichbar sind und nicht nur gleich heissen.
+  //
+  // Was Auto 2 damit HAT: Verbrauch nach Gas und Zeit, Tankgewicht in der Fahrphysik, die
+  // Warnstufen als Meldung, den Deckel des leeren Tanks und dessen Rampe.
+  // Was es NICHT hat: das Nachtanken. Das gibt es nur in der Boxengasse, und deren
+  // Zustandsmaschine hat 27 Groessen und 633 Fundstellen - ein zweites Nachtanken ist ein
+  // eigenes Vorhaben und kein Anhang. Vollgetankt wird ueber den Ruecksetzknopf, die
+  // Taste R und den Rennstart.
+  const tankZwei = { stand: 100, cut: 1, letzterTick: null };
+
+  function tankZweiFuellen(prozent) {
+    tankZwei.stand = Math.max(0, Math.min(100, prozent === undefined ? 100 : prozent));
+    tankZwei.cut = 1;
+  }
+
+  // Wessen Lampenschaden gilt fuer die Pakete DIESES Autos?
+  //
+  // ---- EIN ECHTER FEHLER, BEIM ZWEI-SPIELER-UMBAU GEFUNDEN --------------------------
+  //
+  // buildCommandPacket() maskiert kaputte Lampen "an der einen Stelle, durch die jedes
+  // Paket geht" - und las dabei das globale lightDamage. Folge, unabhaengig vom
+  // Zwei-Spieler-Modus: sobald das FAHRERAUTO ueber 50 Prozent Schaden hatte, flackerten
+  // die Scheinwerfer ALLER Ghosts mit. Das ist nicht erwuenscht, es war nur nie aufgefallen,
+  // weil Schaden und Ghosts selten zusammen gefahren wurden.
+  //
+  // Die Maske bleibt, wo sie ist - das Argument dort ist richtig. Sie fragt nur nicht mehr
+  // eine globale Groesse, sondern das Auto.
+  const KEIN_LICHTSCHADEN = { front: false, rear: false };
+  function lichtSchadenVon(car) {
+    if (!car) return KEIN_LICHTSCHADEN;
+    if (typeof playerCar !== 'undefined' && car === playerCar) return lightDamage;
+    if (typeof playerCar2 !== 'undefined' && car === playerCar2) return schadenZwei.licht;
+    return KEIN_LICHTSCHADEN;
+  }
+
+  // Der Schadenswert je Spieler, fuer alles, was ihn nur LIEST.
+  function schadenVon(wer) { return wer === 2 ? schadenZwei.wert : damage; }
+
+  // ====================================================================================
+  // DER BOXENSTOPP VON AUTO 2
+  // ====================================================================================
+  //
+  // ABSICHTLICH SCHMAL, und diesmal ist die Begruendung eine gezaehlte: die
+  // Zustandsmaschine von Auto 1 hat 27 modulweite Groessen und 633 Fundstellen. Sie traegt
+  // die Vorwahl im Boxenschirm, drei Ausloesearten, das Ausfahrtmuster, den
+  // Nachlauf-Wecker, vier Tonschleifen, den Reifenwechsel mit gewuerfelter Dauer, das
+  // Rad-Abnehmen, die Doppelrunden-Regel und die Rennstatistik. Sie zu verdoppeln waere
+  // ein eigenes Vorhaben - und eine halb verdoppelte Zustandsmaschine ist schlimmer als
+  // eine schmale eigene, weil man ihr ansieht, dass sie vollstaendig sein wollte.
+  //
+  // WAS AUTO 2 BEKOMMT, und es ist genau das, was den Modus fair macht: es kann tanken
+  // und sich reparieren lassen. Mit denselben Raten wie Auto 1 (PIT_FUEL_PER_SEC,
+  // repairRateAt) - ungleiche Raten waeren schlimmer als kein Stopp.
+  //
+  // WAS ES NICHT BEKOMMT:
+  //   keine Vorwahl        es tankt voll und repariert ganz. Die Vorwahl ist ein
+  //                        Bedienvorgang auf dem Boxenschirm, und den gibt es nur einmal.
+  //   keinen Reifenwechsel die Reifenwahl (`tyres`) ist eine globale Einstellung - ein
+  //                        Wechsel "auf weich" fuer EIN Auto waere eine Aussage, die das
+  //                        Modell nicht trennen kann. Die Temperaturen kuehlen im Stand
+  //                        ohnehin von selbst, und die sind je Auto.
+  //   keine Ausloesung     durch ein Streckenmuster; es geht ueber den Knopf auf seinem
+  //                        Schirm. Das Ausfahrtmuster gehoert der Boxengasse von Auto 1.
+  //
+  // DER TEMPODECKEL MUSS EIN EIGENER SEIN: der von Auto 1 laeuft ueber topSpeedScale in
+  // sendControlValue(), und diesen Weg nimmt Auto 2 gar nicht (es geht ueber writeToCar,
+  // wie ein Ghost). Das ist kein Mangel, sondern die Folge des einen Sendetakts - und es
+  // heisst umgekehrt auch, dass das Boxenlimit von Auto 1 Auto 2 nicht ausbremst.
+  const boxZwei = { lage: 'aus', standS: 0, getankt: 0, repariert: 0,
+                    fertig: false, letzterTick: null, gemeldet: false };
+
+  function boxZweiLage() { return boxZwei.lage; }
+  function boxZweiFertig() { return boxZwei.fertig; }
+
+  // Der Tempodeckel, den der Stopp auf Auto 2 legt. Dieselbe Zahl wie bei Auto 1, damit
+  // beide mit demselben Limit durch die Gasse rollen.
+  function boxZweiDeckel() {
+    return boxZwei.lage === 'aus' ? 1 : PIT_SPEED_FACTOR;
+  }
+
+  function boxZweiAnfordern() {
+    if (!zweiSpieler || !playerCar2) {
+      showHudToast('P2: KEIN AUTO ZUGETEILT');
+      return false;
+    }
+    if (boxZwei.lage !== 'aus') {
+      // Nochmal druecken bricht ab - dieselbe Bedienung wie bei Auto 1 (dort zweimal kurz).
+      boxZweiEnde('abgebrochen');
+      return false;
+    }
+    boxZwei.lage = 'angefordert';
+    boxZwei.standS = 0;
+    boxZwei.getankt = 0;
+    boxZwei.repariert = 0;
+    boxZwei.fertig = false;
+    boxZwei.gemeldet = false;
+    boxZwei.letzterTick = null;
+    showHudToast('P2: BOXENSTOPP \u2013 ANHALTEN');
+    log('P2: Boxenstopp angefordert, Tempolimit '
+        + Math.round(PIT_SPEED_FACTOR * 100) + ' %. Zum Beginnen anhalten.', 'info');
+    return true;
+  }
+
+  function boxZweiEnde(warum) {
+    if (boxZwei.lage === 'aus') return;
+    const getankt = boxZwei.getankt, rep = boxZwei.repariert, stand = boxZwei.standS;
+    boxZwei.lage = 'aus';
+    boxZwei.fertig = false;
+    boxZwei.letzterTick = null;
+    if (warum === 'abgebrochen') {
+      showHudToast('P2: BOXENSTOPP ABGEBROCHEN');
+      log('P2: Boxenstopp abgebrochen.', 'info');
+      return;
+    }
+    log('P2: Boxenstopp beendet nach ' + stand.toFixed(1) + ' s, '
+        + fuelLiters(getankt) + ' l getankt, ' + Math.round(rep) + ' % repariert.', 'info');
+  }
+
+  // Gerufen aus physicsStep2(), also im 45-ms-Takt von Auto 2 - dort gibt es ein
+  // verlaessliches dt, und dieselbe Begruendung steht bei fuelTankTick().
+  function boxZweiTick() {
+    if (boxZwei.lage === 'aus') { boxZwei.letzterTick = null; return; }
+    const now = Date.now();
+    const dt = boxZwei.letzterTick !== null
+      ? Math.max(0, Math.min(0.5, (now - boxZwei.letzterTick) / 1000)) : 0;
+    boxZwei.letzterTick = now;
+
+    // Steht das Auto? Absolutwert, sonst erfuellt Rueckwaertsfahren die Bedingung - genau
+    // diese Falle steht bei Auto 1 schon beschrieben.
+    const steht = Math.abs(physEngine2.state.speedKmh) < PIT_STANDSTILL_KMH
+                  && Math.abs(p2Throttle) < 0.1;
+
+    if (boxZwei.lage === 'angefordert') {
+      if (steht) {
+        boxZwei.lage = 'service';
+        showHudToast('P2: SERVICE LAEUFT');
+      }
+      return;
+    }
+
+    // lage === 'service'
+    if (!steht) {
+      // Losgefahren. Fertig oder nicht - ein Stopp, den man abbricht, ist ein Abbruch.
+      boxZweiEnde(boxZwei.fertig ? 'fertig' : 'abgebrochen');
+      return;
+    }
+    boxZwei.standS += dt;
+
+    // --- Tanken, auf VOLL. Dieselbe Rate wie bei Auto 1.
+    const tank = tankZweiStand();
+    if (tank < 100 - 0.05) {
+      const dazu = Math.min(100 - tank, PIT_FUEL_PER_SEC * dt);
+      tankZweiFuellen(tank + dazu);
+      boxZwei.getankt += dazu;
+    }
+    // --- Reparieren, mit derselben nichtlinearen Rate.
+    const schaden = schadenVon(2);
+    if (schaden > 0.05) {
+      const weg = Math.min(schaden, repairRateAt(schaden) * dt);
+      schadenZweiSetzenIntern(schaden - weg);
+      boxZwei.repariert += weg;
+    }
+
+    const fertig = tankZweiStand() >= 100 - 0.05 && schadenVon(2) <= 0.05;
+    // Und ein FLACHER MINDESTAUFENTHALT, wenn es nichts zu tun gab: sonst ist ein
+    // Boxenstopp bei vollem Tank und heilem Auto kostenlos. Dieselbe Zahl wie bei Auto 1.
+    const genug = boxZwei.standS >= PIT_EMPTY_STOP_S;
+    if (fertig && genug && !boxZwei.fertig) {
+      boxZwei.fertig = true;
+      showHudToast('P2: FERTIG, LOSFAHREN!');
+      padRumble(0.35, 0.2, 200, 'box', 2);
+      log('P2: Boxenstopp fertig nach ' + boxZwei.standS.toFixed(1) + ' s.', 'info');
+    } else if (!fertig) {
+      // Brummen, solange gearbeitet wird - an SEINEN Pad.
+      if (!boxZwei.gemeldet || now % 1000 < 60) {
+        boxZwei.gemeldet = true;
+        padRumble(0.16, 0.10, 200, 'box', 2);
+      }
+    }
+  }
+
+  // Der Schaden von Auto 2 von innen gesetzt. Eine eigene Funktion, weil
+  // schadenZweiZuruecksetzen() auf null setzt und die Lampen mitnimmt - beim Reparieren
+  // soll der Wert SINKEN, und die Lampen gehen erst bei null wieder an.
+  function schadenZweiSetzenIntern(wert) {
+    schadenZwei.wert = Math.max(0, Math.min(100, wert));
+    if (schadenZwei.wert <= 0.05) {
+      schadenZwei.wert = 0;
+      schadenZwei.licht.front = false;
+      schadenZwei.licht.rear = false;
+    }
+  }
+
+  // Zuruecksetzen. Eine eigene Funktion und kein Griff in die Felder von aussen: der
+  // Satz hat drei Bestandteile, und wer nur `wert` auf null setzt, laesst ausgefallene
+  // Lampen stehen - genau die Falle, die bei lightDamage schon einmal zugeschlagen hat
+  // (siehe die Notiz bei updateDamageFuelUI).
+  function schadenZweiZuruecksetzen() {
+    schadenZwei.wert = 0;
+    schadenZwei.licht.front = false;
+    schadenZwei.licht.rear = false;
+  }
   // Einstellbar seit v0.5. Sie stand als Konstante hier - dieselbe Fehlerklasse wie
   // leaderBrakePct und ghostCfg.lineModel: eine Einstellung, die niemand einstellen konnte.
   // Die 40 bleibt die Vorgabe, denn mit ihr ist die Erkennung gebaut und geprueft.
   let crashThreshold = 40;
   const CRASH_ROLLING_ALPHA = 0.15;
   const CRASH_REFRACTORY_MS = 1000; // avoid re-triggering repeatedly off one jolt
-  let fuelDrainPerSec = 3;       // % per second at full throttle magnitude (slider)
+  // ---- 1,0 %/s, UND DAS IST GEMESSEN -----------------------------------------------
+  //
+  // BESTELLT: "Tank und Schaden standardmaessig einschalten. Tankverbrauch wieder etwas
+  // weniger (so wie vorher)." Vorher stand der Regler auf 3, seit v0.5 auf 0 (also aus).
+  //
+  // Gemessen mit reifenStintProbe bei Gas 0,85 und der Verschleissrate 0,0096, die seit
+  // v0.6.2 gilt - Zeit bis der Tank leer ist gegen die Zeit bis weiche Reifen durch sind:
+  //
+  //     Verbrauch   Tank leer   weich durch   Reifen zuerst?
+  //       3,0 %/s      39 s        92 s        nein  (-53 s)
+  //       1,5 %/s      78 s        92 s        nein  (-13 s)
+  //       1,3 %/s      90,5 s      92 s        nein  (-1 s)
+  //       1,0 %/s     118 s        92 s        JA    (+26 s)
+  //
+  // 1,0 ist die erste Stufe, bei der die ursprueengliche Bestellung aufgeht: "simuliere mal,
+  // sodass weiche Reifen kaputt sind, lange bevor der Tank leer ist". Bei 1,3 - dem Wert,
+  // den das GT3-Preset seit Langem traegt - verfehlt sie es um EINE Sekunde.
+  //
+  // UND DIE WAHL WIRD ECHT: weiche Reifen sind bei 1,0 reifenbegrenzt (92 s), mittlere
+  // tankbegrenzt (145 s gegen 118 s Tank). Wer weich faehrt, holt Zeit und muss wegen der
+  // Reifen herein; wer mittel faehrt, faehrt laenger und muss wegen des Tanks herein. Das
+  // ist der Unterschied, wegen dessen es zwei Mischungen gibt.
+  let fuelDrainPerSec = 1;       // % per second at full throttle magnitude (slider)
   // ---- AUS DEM MARKUP LESEN, hier neben der Deklaration ----------------------------
   //
   // DER FEHLER, DEN DAS BEHEBT: es gab nur einen Zuhoerer in 50-drive.js. Das Markup traegt
@@ -2993,7 +3559,10 @@
   //
   // Gelesen wird jetzt aus dem Kaestchen (siehe die Verdrahtung weiter unten); dieser Wert
   // gilt nur, bis das Dokument da ist, und steht deshalb auf dem Markup-Wert.
-  let crashDetectionEnabled = false;
+  // Ab Werk AN, wie bestellt. Der Wert wird beim Laden ohnehin aus dem Schalter gelesen
+  // (ein paar Zeilen weiter); er steht hier trotzdem richtig, weil eine Vorgabe, die etwas
+  // anderes sagt als das Bedienelement, die naechste halbe Stunde Suche ist.
+  let crashDetectionEnabled = true;
   // AUS DEM MARKUP LESEN, und zwar HIER neben der Deklaration und nicht bei der Verdrahtung
   // in 50-drive.js: von dort waere es eine Zuweisung an ein let einer spaeteren Datei, also
   // temporale Todeszone. Genau das hat einen Anlauf lang den ganzen Aufbau abgebrochen.
@@ -3039,13 +3608,17 @@
   const OFFTRACK_GNADE_MS = 1200;
   let abseitsBis = 0;
 
-  function detectCrash(bytes) {
+  // `wer` ist 1, wenn nichts dasteht - die vorhandene Aufrufstelle in
+  // handleDashboardBytes() bleibt damit unveraendert. Auto 2 meldet sich aus dem Meldestrom
+  // je Auto in 90-ghosts.js.
+  function detectCrash(bytes, wer) {
     if (!crashDetectionEnabled) return;
+    const L = crashLageVon(wer);
     const v1 = s8signed(bytes[1]), v3 = s8signed(bytes[3]);
-    if (crashRollingAvg1 === null) { crashRollingAvg1 = v1; crashRollingAvg3 = v3; return; }
-    const dev = Math.abs(v1 - crashRollingAvg1) + Math.abs(v3 - crashRollingAvg3);
-    crashRollingAvg1 += (v1 - crashRollingAvg1) * CRASH_ROLLING_ALPHA;
-    crashRollingAvg3 += (v3 - crashRollingAvg3) * CRASH_ROLLING_ALPHA;
+    if (L.avg1 === null) { L.avg1 = v1; L.avg3 = v3; return; }
+    const dev = Math.abs(v1 - L.avg1) + Math.abs(v3 - L.avg3);
+    L.avg1 += (v1 - L.avg1) * CRASH_ROLLING_ALPHA;
+    L.avg3 += (v3 - L.avg3) * CRASH_ROLLING_ALPHA;
     const now = Date.now();
 
     // ---- Ein Auto neben der Bahn wird AUFGEHOBEN, und das ist kein Crash ---------------
@@ -3063,19 +3636,20 @@
     // Die Schwelle heraufzusetzen waere dieselbe Falle einen Schritt weiter: ein Aufprall
     // auf der Bahn soll weiter zaehlen. Was hier fehlt, ist der Unterschied zwischen einer
     // Kollision und einer Hand.
-    if (typeof abseitsJetzt === 'function' && abseitsJetzt()) {
-      abseitsBis = now + OFFTRACK_GNADE_MS;
+    if (typeof abseitsJetztFuer === 'function' && abseitsJetztFuer(wer === 2 ? 2 : 1)) {
+      L.gnadeBis = now + OFFTRACK_GNADE_MS;
       // Das gleitende Mittel laeuft weiter (siehe oben), es kommt also nach dem Aufsetzen
       // nicht aus einem kalten Zustand zurueck - sonst waere die erste echte Beruehrung
       // danach unsichtbar.
       return;
     }
-    if (now < abseitsBis) return;
+    if (now < L.gnadeBis) return;
 
-    if (dev > crashThreshold && now - lastCrashTime > CRASH_REFRACTORY_MS) {
-      lastCrashTime = now;
-      lapEventAkku.crash += 1;
-      registerCrash();
+    if (dev > crashThreshold && now - L.letzter > CRASH_REFRACTORY_MS) {
+      L.letzter = now;
+      // Der Rundenzaehler der Ereignisse gehoert dem Rennen, und das Rennen faehrt Auto 1.
+      if (wer !== 2) lapEventAkku.crash += 1;
+      registerCrash(wer);
     }
   }
 
@@ -3086,22 +3660,33 @@
   //   reversing                 -> rear    (you backed into something)
   //   essentially stationary    -> rear    (something ran into you)
   //   moving forward            -> front
-  function crashEnd() {
-    const st = physEngine.state;
+  function crashEnd(wer) {
+    const st = (wer === 2 ? physEngine2 : physEngine).state;
     if (st.currentGear < 0) return 'rear';
     if (Math.abs(st.speedKmh) * REAL_SCALE < 12) return 'rear';
     return 'front';
   }
 
-  function registerCrash() {
-    damage = Math.min(100, damage + 100 / crashesToTotal);
-    const end = crashEnd();
-    if (damage >= LIGHT_DEAD_DAMAGE && !lightDamage[end]) {
-      lightDamage[end] = true;
-      log(end === 'front' ? 'Frontschaden: Scheinwerfer ausgefallen.'
-                          : 'Heckschaden: Rueckleuchten ausgefallen.', 'err');
-      showHudToast(end === 'front' ? 'SCHEINWERFER AUS' : 'RUECKLEUCHTEN AUS');
-      updateLightTellTales();
+  function registerCrash(wer) {
+    const zwei = wer === 2;
+    // EINE Funktion fuer beide Autos und nicht zwei: die Schadensrechnung ist dieselbe, nur
+    // der Ablageort und der Adressat der Rueckmeldungen unterscheiden sich. Zwei Kopien
+    // waeren zwei Orte, an denen der naechste Schadensmechanismus vergessen wird.
+    const motor = zwei ? physEngine2 : physEngine;
+    const licht = zwei ? schadenZwei.licht : lightDamage;
+    const pre = zwei ? 'P2: ' : '';
+    if (zwei) schadenZwei.wert = Math.min(100, schadenZwei.wert + 100 / crashesToTotal);
+    else damage = Math.min(100, damage + 100 / crashesToTotal);
+    const stand = zwei ? schadenZwei.wert : damage;
+    const end = crashEnd(wer);
+    if (stand >= LIGHT_DEAD_DAMAGE && !licht[end]) {
+      licht[end] = true;
+      log(pre + (end === 'front' ? 'Frontschaden: Scheinwerfer ausgefallen.'
+                                 : 'Heckschaden: Rueckleuchten ausgefallen.'), 'err');
+      showHudToast(pre + (end === 'front' ? 'SCHEINWERFER AUS' : 'RUECKLEUCHTEN AUS'));
+      // Die Kontrollleuchten im Cockpit gehoeren Auto 1. Fuer Auto 2 steht der Zustand auf
+      // seinem eigenen Schirm.
+      if (!zwei) updateLightTellTales();
     }
     // DIE WUCHT, und sie wird VOR der naechsten Zeile genommen: die kuerzt das Tempo auf
     // 30 Prozent, und danach waere jeder Aufprall gleich schwach.
@@ -3109,18 +3694,20 @@
     // Hier stand ein fester Wert mit dem Vermerk "medium, per user spec". Eine Groesse fuer
     // die Staerke gibt es aber: mit welchem Tempo man einschlaegt. Ein Einschlag bei
     // Hoechstgeschwindigkeit soll sich nicht anfuehlen wie ein Anstupsen in der Boxengasse.
-    const wucht = Math.max(0, Math.min(1, Math.abs(physEngine.state.speedKmh)
-                                          / Math.max(0.01, physEngine.config.topSpeedKmh)));
+    const wucht = Math.max(0, Math.min(1, Math.abs(motor.state.speedKmh)
+                                          / Math.max(0.01, motor.config.topSpeedKmh)));
     // An impact scrubs off most of the speed at once — the one case where the car should
     // NOT roll out gently. Everything else decays via the coast drag in the engine.
-    physEngine.state.speedKmh *= 0.3;
-    updateDamageFuelUI();
+    motor.state.speedKmh *= 0.3;
+    if (!zwei) updateDamageFuelUI();
     if (!playCrashFx()) playCrashSound(); // sample variants first, synth burst as fallback
     // Der untere Wert liegt ueber dem alten festen (0,6 / 0,4 / 220 ms): auch ein
     // langsamer Aufprall soll deutlicher sein als bisher. Oben laeuft es auf den vollen
     // Ausschlag hinaus.
+    // AN SEINEN EIGENEN PAD. Bis v0.6.45 ging jeder Stoss an alle - ein Aufprall von Auto 2
+    // war damit im Pad von Spieler 1 zu spueren, und das liest sich als eigener Crash.
     padRumble(0.65 + 0.35 * wucht, 0.45 + 0.35 * wucht,
-              Math.round(240 + 160 * wucht), 'crash');
+              Math.round(240 + 160 * wucht), 'crash', zwei ? 2 : 1);
     // Hier stand ein Crash-Indikator, dessen Element es nicht mehr gibt: #crash-indicator
     // kam im gebauten Dokument genau einmal vor, naemlich hier. Die Stelle prueft zwar mit
     // if (ind), griff im Zeitgeber danach aber UNGESCHUETZT auf ind.style zu - der Fehler kam
@@ -3130,8 +3717,8 @@
     //
     // Rueckmeldung gibt es genug - Schadensbalken, Geraeusch, Rumble, Protokoll -, nur nicht
     // auf dem Rennschirm. Also dort eine Meldung.
-    showHudToast('CRASH · SCHADEN ' + Math.round(damage) + ' %');
-    log(`Crash erkannt, Schaden +${Math.round(100 / crashesToTotal)}%.`, 'err');
+    showHudToast(pre + 'CRASH · SCHADEN ' + Math.round(stand) + ' %');
+    log(pre + `Crash erkannt, Schaden +${Math.round(100 / crashesToTotal)}%.`, 'err');
   }
 
   // PLACEHOLDER: the real BLE command for the car's headlights/brake light is still
@@ -3179,6 +3766,31 @@
       head = Math.floor(now / 90) % 2 === 0;    // fast, agitated flicker
     } else if (lightFx.fuel) {
       head = Math.floor(now / 350) % 2 === 0;   // slow, deliberate blink
+    } else if (pitState !== 'off') {
+      // ---- BOXENMODUS: DASSELBE BLINKEN WIE BEI EINEM GHOST -----------------------
+      //
+      // BESTELLT: "Beim Pit-Modus sowohl bei gesteuertem Auto als auch NPC Lichter passend
+      // blinken lassen."
+      //
+      // "Passend" heisst hier woertlich: DERSELBE Rhythmus, den ein Ghost in der Box
+      // zeigt. pitBlinkMuster() steht in 90-ghosts.js und wird von dort mitbenutzt - ein
+      // zweiter Doppelblitz mit eigenen Zahlen waere ein zweites Zeichen fuer dieselbe
+      // Sache, und spaetestens beim ersten Nachjustieren saehen die beiden verschieden aus.
+      //
+      // ZUR LADEZEIT gaebe es die Funktion noch nicht (90-ghosts.js ist eine SPAETERE
+      // Datei), zur Laufzeit schon: resolveLights() haengt am Fahrtakt. Die typeof-Pruefung
+      // ist trotzdem da, und sie ist sicher - bei einer function-Deklaration greift die
+      // Hochziehung, anders als bei einem let in der temporalen Todeszone.
+      //
+      // BEZUG IST DIE UHR und nicht der Beginn des Boxenmodus: der Fahrer faehrt selbst
+      // herein, es gibt also keinen Moment, ab dem gezaehlt wuerde. Das Muster ist ohnehin
+      // periodisch, die Phase ist damit beliebig.
+      //
+      // NACH Schaden und Tank, VOR nichts: eine leuchtende Warnung schlaegt eine Anzeige.
+      // Und die Lichthupe schlaegt alles, weil sie eine Absicht des Fahrers ist.
+      if (typeof pitBlinkMuster === 'function') {
+        head = pitBlinkMuster(now % 100000) ? !baseHead : baseHead;
+      }
     }
     // Rain light: the FIA-style double pulse on the rear lamp. An actual brake application
     // takes precedence — a rain light must never be mistaken for braking, or the other way
@@ -3196,6 +3808,34 @@
     lightFx.flashUntil = Date.now() + FLASH_MS;
     showHudToast('Lichthupe');
     playFlashSound();
+  }
+
+  // ---- DIESELBE LICHTHUPE FUER AUTO 2 -----------------------------------------------
+  //
+  // BESTELLT: "Spieler 2 soll auch funktionierende Knoepfe haben fuer: ... Lichthupe."
+  //
+  // EIN EIGENER ZUSTAND, keine Erweiterung von lightFx.flashUntil: die Lichthupe ist die
+  // Absicht EINES Fahrers an das Auto vor ihm. Ein gemeinsamer Zustand liesse Spieler 1s
+  // Knopf auch Auto 2 blitzen lassen und umgekehrt - zwei Fahrer, ein Blinklicht waere
+  // keine Lichthupe mehr, sondern ein Zufall.
+  let flash2Until = 0;
+  function triggerHeadlightFlash2() {
+    if (Date.now() < flash2Until) return;
+    flash2Until = Date.now() + FLASH_MS;
+    showHudToast('P2: Lichthupe');
+    playFlashSound();
+  }
+
+  // Der Kopfblitz von Auto 2, gerufen aus spielerZweiSenden() in 20-protocol.js. Dieselbe
+  // Rechnung wie im Blitzteil von resolveLights() oben (FLASH_MS/FLASH_PERIOD_MS/
+  // FLASH_ON_MS sind gemeinsame Konstanten), aber OHNE Schaden-, Tank- oder Regenlicht -
+  // die haengen an Zaehlern, die es fuer Auto 2 in dieser schmalen Fassung nicht gibt.
+  function headlichtZwei(baseHead) {
+    const now = Date.now();
+    if (now >= flash2Until) return baseHead;
+    const elapsed = FLASH_MS - (flash2Until - now);
+    const on = (elapsed % FLASH_PERIOD_MS) < FLASH_ON_MS;
+    return on ? !baseHead : baseHead;
   }
 
   // Drei Toene zur Wahl, alle gerechnet und keine Aufnahme. Pixabay-Material haette ich
@@ -3436,10 +4076,28 @@
   //
   // Der Verbrauch bleibt unveraendert an derselben Groesse wie vorher: eine andere Bezugsgroesse
   // haette die Tankreichweite still verschoben, und die ist gegen das Fahren eingestellt.
-  function fuelTankTick(throttle) {
+  // `wer` ist 1, wenn nichts dasteht - die Aufrufstelle in sendControlValue() bleibt
+  // unveraendert. Auto 2 ruft es aus physicsStep2().
+  //
+  // ZWEI DINGE SIND FUER AUTO 2 ABSICHTLICH ANDERS, und beide sind Anzeige und nicht
+  // Regel: der Balken im Cockpit gehoert Auto 1 (fuer Auto 2 steht der Stand auf seinem
+  // eigenen Schirm), und die Boxen-Ausnahme `pitState !== 'servicing'` gilt nur fuer
+  // Auto 1, weil nur Auto 1 in die Box fahren kann.
+  function fuelTankTick(throttle, wer) {
+    if (wer === 2) return tankZweiTick(throttle);
     const now = Date.now();
     if (fuelLastTickTime !== null && pitState !== 'servicing') {
-      const dt = Math.min(0.5, (now - fuelLastTickTime) / 1000);
+      // ---- NIE NEGATIV, und das ist keine Vorsicht, sondern ein gefundener Fehler ----
+      //
+      // Ein negatives dt laesst den Tank STEIGEN: stand - gas * dt * rate wird mit dt < 0
+      // zu einer Addition. Gefunden hat es ein Prueflauf, der die Uhr faelscht und dabei
+      // ZURUECK stellte - der Tank ging von 1,5 auf 5,5 Prozent.
+      //
+      // Im Betrieb laeuft Date.now() monoton, der Fall kam also nie vor. "Kam nie vor" ist
+      // aber kein Schutz, sondern Glueck: eine Zeitumstellung des Systems, eine
+      // Zeitsynchronisierung im Hintergrund oder der naechste Prueflauf genuegen. Und ein
+      // Tank, der voller wird, ist ein Fehler, den man niemandem erklaeren kann.
+      const dt = Math.max(0, Math.min(0.5, (now - fuelLastTickTime) / 1000));
       const fuelBefore = fuel;
       fuel = Math.max(0, fuel - Math.abs(throttle) * dt * fuelDrainPerSec);
       // Edge-triggered: without this it would rumble again on every 45ms heartbeat.
@@ -3467,6 +4125,36 @@
     fuelLastTickTime = now;
   }
 
+  function tankZweiTick(throttle) {
+    const now = Date.now();
+    if (tankZwei.letzterTick !== null) {
+      const dt = Math.max(0, Math.min(0.5, (now - tankZwei.letzterTick) / 1000));
+      const vorher = tankZwei.stand;
+      // DERSELBE Verbrauchsregler wie bei Auto 1. Zwei Regler waeren zwei Zahlen fuer
+      // dieselbe Sache - und ungleiche Regeln waeren schlimmer als keine, das ist die
+      // Zusage, unter der dieser Modus gebaut ist.
+      tankZwei.stand = Math.max(0, tankZwei.stand
+                                   - Math.abs(throttle) * dt * fuelDrainPerSec);
+      // Flankengetriggert, wie bei Auto 1: ohne das brummte es in jedem 45-ms-Takt neu.
+      if (vorher > 0 && tankZwei.stand <= 0) {
+        padRumble(0.2, 0.12, 160, 'meldung', 2);
+        log('P2: Tank leer.', 'err');
+      }
+      for (const w of FUEL_WARNINGS) {
+        if (vorher > w.pct && tankZwei.stand <= w.pct) {
+          // OHNE Tonfolge: playFuelWarning() ist eine Stimme, und zwei Warnfolgen
+          // uebereinander sind fuer beide Fahrer nicht mehr zuzuordnen. Der Stoss geht an
+          // seinen Pad, die Meldung ins Band - beides hat eine Adresse.
+          padRumble(0.2, 0.12, 160, 'meldung', 2);
+          showHudToast('P2: Tank ' + fuelLiters(tankZwei.stand) + ' l');
+          log('P2: Tankwarnung bei ' + w.pct + ' %.', 'warn');
+        }
+      }
+    }
+    physEngine2.state.fuelLoad = Math.max(0, Math.min(1, tankZwei.stand / 100));
+    tankZwei.letzterTick = now;
+  }
+
   // The derate ALONE, with no side effects, so it can be asked twice per tick without
   // draining the tank twice. That split is the whole point: physicsStep() was feeding the
   // RAW stick value into the simulation while this reduction only ever reached the car, so
@@ -3483,7 +4171,26 @@
   // ohne zu wissen warum.
   const FUEL_CUT_EMPTY = 0.15;
   const FUEL_CUT_TAU = 0.6;
-  function fuelCutTarget() { return fuel <= 0 ? FUEL_CUT_EMPTY : 1; }
+  function fuelCutTarget(wer) {
+    const stand = wer === 2 ? tankZwei.stand : fuel;
+    return stand <= 0 ? FUEL_CUT_EMPTY : 1;
+  }
+
+  // Die Rampe von Auto 2. Sie laeuft in physicsStep2(), also dort, wo es ein verlaessliches
+  // dt gibt - genau wie bei Auto 1, und aus demselben Grund: ein Tank, der leer wird, soll
+  // das Gas ueber knapp zwei Sekunden wegnehmen und nicht in einem Takt.
+  function tankZweiCutRampe(dt) {
+    const ziel = fuelCutTarget(2);
+    if (ziel > tankZwei.cut) tankZwei.cut = ziel;          // Tanken wirkt sofort
+    else tankZwei.cut += (ziel - tankZwei.cut) * (1 - Math.exp(-dt / FUEL_CUT_TAU));
+    return tankZwei.cut;
+  }
+
+  function tankZweiStand() { return tankZwei.stand; }
+
+  // Den Verbrauchstakt vergessen. Gebraucht von Prueflaeufen mit eigener Zeitbasis:
+  // ohne das rechnet der erste Takt ein dt zwischen zwei verschiedenen Uhren.
+  function tankZweiTaktVergessen() { tankZwei.letzterTick = null; }
 
   // `cut` ist ein ARGUMENT und kein Zustand hier drin: diese Funktion ist
   // seitenwirkungsfrei, und das soll sie bleiben. Die Rampe laeuft in physicsStep(), also an
@@ -3492,21 +4199,25 @@
   //
   // Ohne Argument gilt der Sofortwert. Damit sagt fuelDamageDerate(1) bei leerem Tank
   // weiterhin genau FUEL_CUT_EMPTY, und der vorhandene Test prueft unveraendert weiter.
-  function fuelDamageDerate(throttle, cut) {
+  // `wer` waehlt den Schadenswert und den Motor. Ohne Angabe ist es Auto 1, die vorhandene
+  // Aufrufstelle in physicsStep() bleibt also unveraendert.
+  function fuelDamageDerate(throttle, cut, wer) {
     let out = throttle;
-    const c = cut === undefined ? fuelCutTarget() : cut;
+    const schaden = schadenVon(wer);
+    const motor = wer === 2 ? physEngine2 : physEngine;
+    const c = cut === undefined ? fuelCutTarget(wer) : cut;
     if (c < 1) out = Math.max(-c, Math.min(c, out));
-    out *= 1 - (damage / 100) * 0.3;
+    out *= 1 - (schaden / 100) * 0.3;
     // Totalled: limp home. Deliberately still drivable so the car never strands itself
     // out on the track — a pit stop clears it.
-    if (damage >= 100) out *= 0.5;
+    if (schaden >= 100) out *= 0.5;
     // ...except it did not. Empty tank AND total damage multiplied down to 0.0525, well
     // below minMoveThrottle (0.16), which is the byte range where the car twitches instead
     // of moving: the same dead band that caused the crawling near standstill, reached by a
     // different path. So while the driver is actually asking for throttle, the limp value
     // gets a FLOOR rather than only a series of reductions. It stays humiliatingly slow,
     // but it moves, which is the entire point of a limp mode.
-    const floor = physEngine.config.minMoveThrottle * 1.05;
+    const floor = motor.config.minMoveThrottle * 1.05;
     if (throttle > 0.02 && out > 0 && out < floor) out = floor;
     if (throttle < -0.02 && out < 0 && out > -floor) out = -floor;
     return out;
@@ -3561,7 +4272,9 @@
   // Aborting takes TWO presses in quick succession. A single press used to cancel, which
   // is the wrong default for a button you reach for while driving: one stray press in the
   // pit lane threw away the stop. Two presses inside the window is a deliberate act.
-  const PIT_CANCEL_WINDOW_MS = 700;
+  // PIT_CANCEL_WINDOW_MS (700 ms) ist mit dem Doppeltippen entfallen - siehe
+  // requestPitStop(). `pitLastPress` bleibt: es haelt fest, wann zuletzt gedrueckt wurde,
+  // und der Pruefstand liest es.
   // After an abort the pit marker must stay quiet for a moment, or cancelling while still
   // standing on the marker would immediately re-arm the limiter.
   const PIT_REARM_BLOCK_MS = 2500;
@@ -3612,18 +4325,75 @@
   function fuelSimOn() { return fuelDrainPerSec > 0; }
   function tyreSimOn() { return physEngine.config.tyreEffect > 0; }
 
+  // ====================================================================================
+  // DIE TANKMENGE: DREI STUFEN STATT JA/NEIN
+  // ====================================================================================
+  //
+  // BESTELLT: "Lass mich beim Tanken nicht zwischen ja und nein, sondern zwischen nein,
+  // 55 l (50 %) und voll (100 % / 110 l) waehlen."
+  //
+  // ---- WARUM DER PLAN TROTZDEM EIN WAHRHEITSWERT BLEIBEN DARF ---------------------
+  //
+  // pitPlan.refuel traegt jetzt eine ZAHL - 0, 50 oder 100. Und das ist der Grund, warum
+  // diese Aenderung so klein ausfaellt: 0 ist falsch, 50 und 100 sind wahr. Jede
+  // vorhandene Abfrage der Form `if (p.refuel)`, `!p.refuel` oder `pitPlanEmpty()` bleibt
+  // damit unveraendert richtig, ohne angefasst zu werden. Nur die Stellen, die den WERT
+  // brauchen - Ziel, Wort, Durchschalten -, muessen ihn lesen.
+  //
+  // Der Tank selbst bleibt intern 0..100; Liter sind seit v0.4 nur Anzeige
+  // (FUEL_TANK_LITERS und fuelLiters() in 50-drive.js).
+  const TANK_STUFEN = [0, 50, 100];
+
+  // ---- EIN WAHRHEITSWERT HEISST WEITER, WAS ER HIESS ----------------------------
+  //
+  // In einer gespeicherten Sicherung oder einer aelteren Voreinstellung steht `true`. Das
+  // muss weiter "voll" bedeuten und nicht 1 - sonst tankt ein geladener Plan einen Liter.
+  // EINE Stelle dafuer, damit nicht jeder Leser selbst raten muss, was true heisst.
+  //
+  // Und ein Wert, der auf keiner Stufe liegt (aus einer Datei, von Hand geaendert), wird
+  // auf die naechste gezogen statt verworfen: 60 ist erkennbar "halb gemeint".
+  function tankZielNorm(v) {
+    if (v === true) return 100;
+    if (v === false || v === null || v === undefined) return 0;
+    const n = Number(v);
+    if (!isFinite(n)) return 0;
+    let best = TANK_STUFEN[0];
+    for (const st of TANK_STUFEN) {
+      if (Math.abs(st - n) < Math.abs(best - n)) best = st;
+    }
+    return best;
+  }
+
+  function tankZielWeiter(v) {
+    const i = TANK_STUFEN.indexOf(tankZielNorm(v));
+    return TANK_STUFEN[(i + 1) % TANK_STUFEN.length];
+  }
+
+  // Das Wort in der Zeile. Die Liter werden GERECHNET und nicht geschrieben: 55 steht
+  // nirgends als Zahl, es ist die Haelfte von FUEL_TANK_LITERS. Wer den Tank aendert,
+  // aendert eine Zahl.
+  function tankZielWort(v) {
+    const z = tankZielNorm(v);
+    if (z <= 0) return t('nein');
+    if (z >= 100) return t('voll');
+    return fuelLiters(z) + ' l';
+  }
+
   // DIE EINE STELLE, an der aus der Vorwahl ein Plan wird. Was in pitVorwahl auf null
   // steht, entscheidet weiter die Lage - wer nichts vorwaehlt, bekommt genau den Plan von
   // vorher.
   function makePitPlan() {
     const auto = {
-      refuel: fuelSimOn() && fuel < 99.5,
+      refuel: (fuelSimOn() && fuel < 99.5) ? 100 : 0,
       tyres: tyreSimOn(),
       repair: damage > 0.5,
     };
     if (typeof pitVorwahl !== 'object' || !pitVorwahl) return auto;
     for (const k of ['refuel', 'tyres', 'repair']) {
-      if (pitVorwahl[k] !== null && pitVorwahl[k] !== undefined) auto[k] = !!pitVorwahl[k];
+      if (pitVorwahl[k] !== null && pitVorwahl[k] !== undefined) {
+        // Der Tank traegt eine Stufe, die beiden anderen einen Wahrheitswert.
+        auto[k] = k === 'refuel' ? tankZielNorm(pitVorwahl[k]) : !!pitVorwahl[k];
+      }
     }
     return auto;
   }
@@ -3776,13 +4546,7 @@
       // pitToggle() steigt aus, solange kein Plan existiert - und ohne Plan gaebe es hier
       // nichts zu tun. Statt zu schweigen wird VORGEWAEHLT: was hier gesetzt wird, uebernimmt
       // makePitPlan() beim Scharfstellen. Genau dafuer ist der Schirm waehrend der Fahrt da.
-      const jetzt = pitVorwahlIst(zeile.id);
-      pitVorwahl[zeile.id] = !jetzt;
-      // DIESELBEN ZWEI WOERTER wie in der Zeile. Eine Meldung, die "AN" sagt, waehrend
-      // die Zeile darunter "ja" zeigt, ist ein drittes Vokabular fuer dieselbe Frage.
-      showHudToast(t(zeile.id === 'refuel' ? 'Tanken'
-                     : zeile.id === 'tyres' ? 'Reifen wechseln'
-                     : 'Reparieren') + ': ' + t(!jetzt ? 'ja' : 'nein'));
+      pitVorwahlSchalten(zeile.id);
     }
     pitScreenRender();
     return true;
@@ -3795,12 +4559,49 @@
   let pitVorwahl = { refuel: null, tyres: null, repair: null };
 
   function pitVorwahlIst(which) {
-    if (pitVorwahl[which] !== null) return pitVorwahl[which];
+    if (pitVorwahl[which] !== null) {
+      return which === 'refuel' ? tankZielNorm(pitVorwahl[which]) : pitVorwahl[which];
+    }
     // Der Vorgabewert ist das, was makePitPlan() ohne Vorwahl entscheiden wuerde.
-    if (which === 'refuel') return fuelSimOn() && fuel < 99.5;
+    if (which === 'refuel') return (fuelSimOn() && fuel < 99.5) ? 100 : 0;
     if (which === 'tyres') return tyreSimOn();
     if (which === 'repair') return damage > 0.5;
     return false;
+  }
+
+  // ---- EINEN EINTRAG DER VORWAHL WEITERSCHALTEN ---------------------------------
+  //
+  // HERAUSGEZOGEN, weil es seit v0.6.13 zwei Bedienwege dorthin gibt: die Waehltaste im
+  // Boxenschirm und das Steuerkreuz nach unten. Zwei Kopien derselben Stufenfolge waeren
+  // die erste Stelle, an der Kachel und Menue auseinanderlaufen.
+  function pitVorwahlSchalten(which) {
+    // ---- LAEUFT SCHON EIN STOPP, GILT DER PLAN UND NICHT DIE VORWAHL -------------
+    //
+    // Dasselbe, was die Waehltaste im Boxenschirm tut (siehe pitScreenSelect). Ohne diese
+    // Weiche wuerde das Steuerkreuz mitten im Stopp die Vorwahl fuer den NAECHSTEN aendern,
+    // waehrend die Kachel daneben den LAUFENDEN zeigt - man drueckt, die Anzeige bleibt
+    // stehen, und beides ist richtig. Genau so entstehen zwei Wahrheiten.
+    if (pitState === 'servicing' && pitPlan) {
+      pitToggle(which);
+      return pitPlan[which];
+    }
+    const jetzt = pitVorwahlIst(which);
+    // DIESELBEN WOERTER wie in der Zeile. Eine Meldung, die "AN" sagt, waehrend die Zeile
+    // darunter "ja" zeigt, ist ein drittes Vokabular fuer dieselbe Frage.
+    if (which === 'refuel') {
+      // DREI STUFEN, also durchschalten und nicht umschalten.
+      const naechste = tankZielWeiter(jetzt);
+      pitVorwahl.refuel = naechste;
+      showHudToast(t('Tanken') + ': ' + tankZielWort(naechste));
+    } else {
+      pitVorwahl[which] = !jetzt;
+      showHudToast(t(which === 'tyres' ? 'Reifen wechseln' : 'Reparieren')
+                   + ': ' + t(!jetzt ? 'ja' : 'nein'));
+    }
+    // Der Boxenschirm zeigt dieselbe Vorwahl; wer sie vom Kreuz aus aendert, soll sie dort
+    // nicht veraltet vorfinden.
+    pitScreenRender();
+    return pitVorwahl[which];
   }
 
   function pitScreenRender() {
@@ -3936,8 +4737,11 @@
     // eine Zeile hoeher, wo "Boxenstopp einleiten" bereit, Boxengasse, Arbeit laeuft oder
     // fertig sagt. Ihn hier ein zweites Mal zu tragen hiess, ihn zweimal lesen zu muessen,
     // um einmal zu wissen, ob getankt wird.
-    const ja = (pitState === 'servicing' && pitPlan) ? !!pitPlan[z.id] : pitVorwahlIst(z.id);
-    return { zahl, wort: ja ? t('ja') : t('nein'), ja };
+    const roh = (pitState === 'servicing' && pitPlan) ? pitPlan[z.id] : pitVorwahlIst(z.id);
+    // Der Tank hat drei Stufen und braucht deshalb sein eigenes Wort; `ja` bleibt fuer die
+    // Faerbung ein Wahrheitswert, und 0 ist falsch - das genuegt.
+    if (z.id === 'refuel') return { zahl, wort: tankZielWort(roh), ja: !!roh };
+    return { zahl, wort: roh ? t('ja') : t('nein'), ja: !!roh };
   }
 
   // ---- Rennuebersicht ----------------------------------------------------------------
@@ -4137,7 +4941,12 @@
   function describePitPlan(p) {
     if (pitPlanEmpty(p)) return `nur ${PIT_EMPTY_STOP_S.toFixed(0)} s Standzeit`;
     const parts = [];
-    if (p.refuel) parts.push('tanken');
+    // Wieviel getankt wird, gehoert in die Meldung: "tanken" allein laesst offen, ob der
+    // Stopp vier oder zwei Sekunden dauert, und genau das ist die Entscheidung dahinter.
+    if (p.refuel) {
+      const z = tankZielNorm(p.refuel);
+      parts.push(z >= 100 ? 'tanken' : 'tanken auf ' + fuelLiters(z) + ' l');
+    }
     if (p.tyres) parts.push('Reifen');
     if (p.repair) parts.push('reparieren');
     return parts.join(' + ');
@@ -4167,7 +4976,9 @@
       return true;
     }
     const before = describePitPlan(pitPlan);
-    const next = force === undefined ? !pitPlan[which] : !!force;
+    const next = which === 'refuel'
+      ? (force === undefined ? tankZielWeiter(pitPlan[which]) : tankZielNorm(force))
+      : (force === undefined ? !pitPlan[which] : !!force);
     pitPlan[which] = next;
     // Einen laufenden Reifenwechsel abwaehlen heisst: die alten Reifen bleiben drauf. Was
     // schon montiert ist, wird nicht abmontiert, die Uhr hoert nur auf zu zaehlen.
@@ -4176,7 +4987,16 @@
       pitTyreElapsed = 0;
       refreshPitThrottleLock();
     }
-    if (which === 'refuel' && !next) setPitLoop('fuel', false);
+    // ---- EIN NEUES ZIEL KANN DIE ARBEIT WIEDER OEFFNEN ODER SCHLIESSEN -----------
+    //
+    // Wer mitten im Stopp von "voll" auf "halb" schaltet und schon darueber steht, ist
+    // fertig - und wer von "nein" auf "voll" schaltet, ist es nicht mehr. Ohne diese Zeile
+    // bliebe pitDone stehen, wie es beim Einfahren gesetzt wurde, und der Tank wuerde
+    // entweder nie oder ewig laufen.
+    if (which === 'refuel') {
+      pitDone.refuel = !(tankZielNorm(next) > fuel + 0.05);
+      if (pitDone.refuel) setPitLoop('fuel', false);
+    }
     if (which === 'repair' && !next) setPitLoop('repair', false);
     const after = describePitPlan(pitPlan);
     if (after !== before) showHudToast(`Boxenstopp: ${after}`);
@@ -4199,23 +5019,53 @@
     }
   }
 
+  // ---- EIN DRUCK AN, EIN DRUCK AUS ---------------------------------------------------
+  //
+  // GEMELDET: "Und zum Deaktivieren nur 1x drücken statt 2x."
+  //
+  // Hier verlangte der Abbruch ein Doppeltippen binnen PIT_CANCEL_WINDOW_MS (700 ms), und
+  // der erste Druck meldete nur "Nochmal druecken zum Abbrechen". Das war als Schutz gegen
+  // versehentliches Abbrechen gedacht; der Preis ist, dass der haeufige Fall (ich will
+  // wieder raus) zwei Handlungen kostet und der seltene (ich habe mich vertippt) keine.
+  //
+  // DIE SPERRE BLEIBT: pitRearmBlockedUntil verhindert, dass der Boxenmarker das Auto
+  // sofort wieder hineinzieht, waehrend es noch auf dem Muster steht. Das ist ein anderer
+  // Schutz als das Doppeltippen und hat mit der Bedienung nichts zu tun.
+  //
+  // ---- UND IM DOPPELAUSDRUCK-MODUS LOEST DER KNOPF NICHTS AUS -----------------------
+  //
+  // BESTELLT: "Wenn dieser Modus aktiviert ist, sollte Pitten per Knopfdruck deaktiviert
+  // sein - nur Pitten durch Ueberfahren von 2 Ausdrucken innerhalb von X Sekunden sollte
+  // den Pit-Modus aktivieren."
+  //
+  // ABBRECHEN bleibt trotzdem moeglich, und das ist Absicht: eine Ausloesung wegzunehmen
+  // ist eine Regel, einen laufenden Vorgang nicht beenden zu koennen waere eine Falle.
+  // Sichtbar gemacht wird es am Knopf: er ist im Doppelausdruck-Modus abgeblendet, solange
+  // nichts laeuft (updateRaceActButtons).
   function requestPitStop() {
     const now = Date.now();
-    const doubleTap = now - pitLastPress <= PIT_CANCEL_WINDOW_MS;
     pitLastPress = now;
 
     if (pitState === 'off') {
+      if (pitTrigger === 'double') {
+        showHudToast('NUR ÜBER DEN DOPPELTEN AUSDRUCK');
+        log('Boxenstopp per Knopf abgelehnt: die Ausloesung steht auf "doppelter '
+            + 'Ausdruck". Zweimal ueber den Start-Ausdruck fahren, innerhalb von '
+            + (PIT_DOUBLE_WINDOW_MS / 1000) + ' s.', 'info');
+        return;
+      }
       setPitState('limited');
-      return;
-    }
-    if (!doubleTap) {
-      showHudToast('Nochmal drücken zum Abbrechen');
       return;
     }
     // Abort. Whatever the crew had started is discarded: no fuel, no repair, and stopping
     // afterwards does nothing, because the state machine is back to off.
     const wasServicing = pitState === 'servicing';
     pitRearmBlockedUntil = now + PIT_REARM_BLOCK_MS;
+    // Das Fenster des doppelten Ausdrucks mit schliessen: sonst haelt pitLaneTick es fuer
+    // offen und meldet gleich darauf "BOXENGASSE VORBEI" fuer einen Stopp, den es nicht
+    // mehr gibt.
+    pitDoubleArmedUntil = 0;
+    pitDoubleFirstAt = 0;
     setPitState('off');
     showHudToast(wasServicing ? 'Boxenstopp abgebrochen' : 'Boxengasse abgebrochen');
     log('Boxenstopp abgebrochen, kein Sprit, keine Reparatur.', 'info');

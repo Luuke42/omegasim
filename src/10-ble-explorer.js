@@ -508,7 +508,6 @@
     "Aufnahme": "Recording",
     "Aufnahme: nächsten Abschnitt markieren": "Recording: mark the next section",
     "Aus dem Cockpit hierher gezogen. Am Telefon wird geneigt oder ein Pad benutzt, am Rechner reichen die Pfeiltasten: aber ohne Pad und ohne Tastatur ist das hier die einzige Mausbedienung, deshalb ist sie nicht gelöscht.": "Moved here from the cockpit. On a phone you tilt or use a pad, on a computer the arrow keys are enough: but without a pad and without a keyboard this is the only mouse control, which is why it was not deleted.",
-    "Aus dem Cockpit hierher: dort war unter dem Schirm alles doppelt, die Position aber nicht: und sie gehört neben die Strecke, auf die sie sich bezieht. Die Lage ist eine Schätzung aus Kachelzähler und Zeit, keine Positionsmessung vom Auto.": "Moved here from the cockpit: everything below the dash was duplicated there, but the position was not: and it belongs next to the track it refers to. The position is an estimate from the tile counter and time, not a measurement from the car.",
     "Aus": "Off",
     "Aus: fährt auch ohne gedruckte Strecke. An: nur mit gelesenem Muster.": "Off: drives even without a printed track. On: only with a pattern read.",
     "Aus: rohe Stickstellung, ohne Gänge.": "Off: raw stick position, no gears.",
@@ -549,7 +548,8 @@
     "Boxengasse, Katalognummer 14": "Pit lane, catalogue number 14",
     "Boxenstopp auf Knopfdruck": "Pit stop at the touch of a button",
     "Boxenstopp": "Pit stop",
-    "Boxenstopp, erneut zweimal kurz drücken bricht ab": "Pit stop, two more short presses abort it",
+    "Boxenstopp an, erneut drücken bricht ab. Bei der Auslösung „doppelter Ausdruck“ löst die Taste nicht aus – dort zählt nur das zweimalige Überfahren.":
+      "Pit stop on, press again to abort. With the trigger set to \"double print\" the key does not arm it – there only driving over the print twice counts.",
     "Boxer": "Flat",
     "Bremse": "Brake",
     "Bremse:": "Brake:",
@@ -611,14 +611,11 @@
     "Einstellungen": "Settings",
     "\u2190 Einstellungen": "\u2190 Settings",
     "F\u00fcnf Bereiche. Was das Auto": "Five areas. What the car",
-    ", steht unter Fahrgef\u00fchl; was es": "is under Handling; what it",
     "fährt": "drives",
     "hat": "has",
     ", unter Allgemein.": "is under General.",
     "Licht, Betriebsart, Akku, Tank, Schaden, Vibration.":
       "Lights, mode, battery, fuel, damage, vibration.",
-    "Fahrwerk, Getriebe, Masse und Reifen, Lenkung.":
-      "Chassis, gearbox, mass and tyres, steering.",
     "Motorsound, Ambience, Lautst\u00e4rken \u2013 und die Motorwerkstatt.":
       "Engine sound, ambience, volumes \u2013 and the engine workshop.",
     "Ghosts: Tempo, Linie, Rennw\u00fcrze, Lernen. Teilweise noch im Aufbau.":
@@ -696,6 +693,74 @@
     "Ghost: Führenden bremsen": "Ghost: hold the leader back",
     "Ghost: Ideallinie": "Ghost: racing line",
     "Ghost: Kurvendrosselung": "Ghost: corner slowdown",
+    "Verteidigen": "Defending",
+    "Fahrercharakter": "Driver character",
+    "Bisher sind alle Ghosts derselbe Fahrer: ein globaler Satz Regler für jeden. Mit dieser Einstellung würfelt jedes Auto zu Rennbeginn vier Faktoren in einer Spanne von ±25 % – Angriffslust, Verteidigung, Fehlerneigung und Kurvenabzug – und ein eigenes Boxenfenster von bis zu zwei Runden Versatz.":
+      "Until now every ghost was the same driver: one global set of sliders for all of them. With this setting each car rolls four factors at the start of a race, within a range of ±25 % – attacking appetite, defending, mistake tendency and corner slowdown – plus a pit window of its own, offset by up to two laps.",
+    "Es ist kein neues Verhalten, sondern das vorhandene unterschiedlich eingestellt. Das Tempo bleibt ausdrücklich draußen: dafür gibt es den Regler je Auto in der Garage. Angezeigt wird der Charakter dort ebenfalls, sobald das Rennen läuft.":
+      "It is not new behaviour, just the existing behaviour set differently per car. Pace is deliberately left out: that is what the per-car slider in the garage is for. The character is shown there too, once the race is running.",
+    "Startreaktion": "Start reaction",
+    "Bisher lösen alle im selben Takt aus. Jetzt hat jedes Auto eine eigene Reaktionszeit zwischen 80 und 300 ms – die Spanne, die ein Mensch am Startknopf auch hat – und fährt die ersten 2,5 Sekunden mit 85 % Tempo, weil die erste Kurve die ist, in der sich ein Feld selbst aufräumt. Gemessen ist der Start ohnehin die dichteste Phase: 82 Berührungen je Minute in den ersten zehn Sekunden gegen 34 im Dauerbetrieb, und dabei 2 statt 24 Überholmanöver.":
+      "Until now they all launched on the same tick. Now each car has its own reaction time between 80 and 300 ms – the range a human at the start button has too – and runs the first 2.5 seconds at 85 % pace, because the first corner is where a field either sorts itself out or does not. The start is the densest phase anyway, measured: 82 contacts per minute in the first ten seconds against 34 in steady running, with 2 overtakes instead of 24.",
+    "Bisher gibt der Vorausfahrende immer nach. Mit dieser Einstellung deckt er die angegriffene Seite in der Hälfte der Fälle ab, statt zu weichen; der Angreifer wechselt dann einmal die Seite oder bricht ab. Nur EINMAL decken und kein Hin und Her – die Bahn ist 25 cm breit, zwei Autos brauchen 30 % davon, und Wedeln wäre auf dieser Breite ein Rammen mit Ansage.":
+      "Until now the car ahead always gave way. With this setting it covers the attacked side in half the cases instead of yielding; the attacker then switches sides once or aborts. Covering happens ONCE, with no weaving – the track is 25 cm wide, two cars need 30 % of it, and weaving at that width would be ramming with advance notice.",
+    "Nachgeben bleibt Pflicht unter gelber Flagge, in der Boxengasse und beim Überrundet-Werden. Das Fahrerauto verteidigt nie: es lässt sich nicht steuern, das entscheidest du selbst.":
+      "Yielding stays mandatory under a yellow flag, in the pit lane and when being lapped. The driver's car never defends: it cannot be steered by the app – that is your call.",
+    "Blaue Flagge": "Blue flag",
+    "Wer eine ganze Runde zurück ist und einen Schnelleren im Nacken hat, geht von selbst nach außen und lupft leicht – statt sich fünf Sekunden zu wehren und danach sechs Sekunden gesperrt zu sein. Der Schnellere bekommt die Ideallinie, kein Vier-Phasen-Manöver nötig.":
+      "A car a full lap down with a faster one behind moves aside by itself and lifts slightly – instead of fighting for five seconds and then being blocked for six. The faster car gets the racing line, no four-phase manoeuvre needed.",
+    // ---- Die Kachel "2 Spieler" ------------------------------------------------------
+    "2 Spieler": "2 players",
+    "Auto 2": "Car 2",
+    "Und ein Vergleichsschirm: blättere im Cockpit mit dem Pfeil oben links oder dem Steuerkreuz auf „Beide“. Dort stehen beide Autos":
+      "And a comparison screen: page through the cockpit with the arrow at the top left or the D-pad to “Both”. It shows both cars",
+    "– Tempo, Schaltlichter, Gang, Tank, Zustand, Reifen- und Bremsentemperatur und Akku, in beiden Spalten in derselben Reihenfolge, damit das Auge waagerecht springen kann. Dazu die Boxenknöpfe beider Autos und der Motorklang, der für beide gilt. Ist der Modus aus, wird der Schirm beim Blättern übersprungen.":
+      "– speed, shift lights, gear, fuel, condition, tyre and brake temperature and battery, in the same order in both columns so the eye can move sideways. Plus the pit buttons of both cars and the engine sound, which applies to both. With the mode off, the screen is skipped while paging.",
+    "Und ein Boxenstopp, unabhängig vom anderen Auto: während eines in der Box steht, verbraucht das andere weiter. Beide Knöpfe stehen auf dem Vergleichsschirm „Beide“, links für Auto 1 und rechts für Auto 2. Anfordern,":
+      "And a pit stop, independent of the other car: while one is stopped, the other keeps burning fuel. Both buttons sit on the “Both” comparison screen, left for car 1 and right for car 2. Request,",
+    ", warten, losfahren; nochmal drücken bricht ab. Der Service beginnt erst im Stillstand – das Auto rollt mit über 200 km/h aus, deshalb steht in der Fußzeile, wie weit es noch ist. Getankt wird mit denselben 22 %/s wie bei Auto 1 und repariert mit derselben Rate; ungleiche Raten wären schlimmer als kein Stopp.":
+      ", wait, drive off; pressing again aborts. The service only starts at a standstill – the car coasts from over 200 km/h, so the footer says how far it still is. Refuelling runs at the same 22 %/s as car 1 and repairs at the same rate; unequal rates would be worse than no stop.",
+    "Alle globalen Einstellungen gelten für beide Autos: die Abstimmung aus „Fahrgefühl“ wandert bei jeder Änderung sofort herüber, und Tank, Schaden, Reifenverschleiß, Wetter, die Höchstgeschwindigkeit und die Batteriekompensation wirken auf beide gleichermaßen. Zwei Autos mit verschiedener Abstimmung wären kein faires Rennen.":
+      "All global settings apply to both cars: the setup from “Driving feel” carries over on every change, and fuel, damage, tyre wear, weather, the top-speed cap and the battery compensation affect both alike. Two cars with different setups would not be a fair race.",
+    "bremsen und anhalten": "brake and stop",
+    "Zwei Autos, zwei Controller, beide Drehzahlen im Cockpit. Im Aufbau.":
+      "Two cars, two controllers, both rev counters in the cockpit. Work in progress.",
+    "Der Modus": "The mode",
+    "2-Spieler-Modus": "Two-player mode",
+    "Zwei Autos, zwei Controller, ein Rennen auf derselben Strecke. Angeschaltet bekommt jede Zeile in der Garage einen vierten Knopf „Spieler 2“, und im Cockpit kommt ein vierter Schirm „Beide“ dazu, der Tempo, Drehzahl, Tank, Zustand, Reifen, Bremse und Akku beider Autos nebeneinander zeigt. Der Hauptschirm bleibt Auto 1 vorbehalten. Beide Autos werden aus demselben 45-ms-Sendetakt bedient – getrennte Takte waren die Ursache des Stotterns mit echtem Controller, und dieser Modus wiederholt den Fehler nicht.":
+      "Two cars, two controllers, one race on the same track. Switched on, every garage row gets a fourth button “Player 2”, and the cockpit gains a fourth screen “Both” showing speed, revs, fuel, condition, tyres, brakes and battery of both cars side by side. The main screen stays car 1's alone. Both cars are served from the same 45 ms send heartbeat – separate heartbeats were the cause of the stutter with a real controller, and this mode does not repeat that mistake.",
+
+    "Controller tauschen": "Swap controllers",
+    "Welcher der beiden erkannten Controller Auto 1 fährt. Die Reihenfolge kommt vom Browser und ist nicht wählbar: hier ist der Schalter dafür.":
+      "Which of the two detected controllers drives car 1. The order comes from the browser and cannot be chosen: this is the switch for it.",
+    "Was gerade erkannt ist": "What is detected right now",
+    "Der Makro-Mitschnitt zeichnet Auto 1 auf. Zwei Spuren in einer Aufnahme wären ein anderes Dateiformat.":
+      "The macro recorder records car 1. Two tracks in one recording would be a different file format.",
+    "Und die Rennleitung gilt für beide: bei gelber Flagge regelt Auto 2 auf dasselbe Tempo herunter wie das ganze Feld – gemessen 100 von 103 km/h Zieltempo, gegen einen Daumen auf Vollgas –, und in der Einführungsrunde rollt es in der Kolonne mit, auf seiner eigenen Seite und mit eigener Schlängelphase. Jedes Auto hat dabei seinen eigenen Regler: der hat einen I-Anteil, und ein geteilter würde die Abweichung des einen Autos in das Gas des anderen tragen.":
+      "And race control applies to both: under a yellow flag car 2 slows to the same pace as the rest of the field – measured 100 of a 103 km/h target, against a thumb held at full throttle – and on the formation lap it rolls along in the column, on its own side and with its own weave phase. Each car has its own controller: it has an integral term, and a shared one would carry one car's error into the other car's throttle.",
+    "Dazu eine eigene Ortung auf der Strecke, und daran hängt mehr, als es klingt: die Ghosts weichen Auto 2 aus und wählen ihre Überholseite nach seiner Querlage, es erscheint auf der Streckenkarte, die Fahrhilfe und der Leitplanken-Modus gelten auch für ihn, und neben der Bahn wird sein Gas gedrosselt und sein Controller brummt – sein eigener, nicht der von Auto 1.":
+      "Plus a track position of its own, and more hangs off that than it sounds: the ghosts avoid car 2 and pick their passing side from its lateral offset, it shows up on the track map, the driver aid and guard-rail mode apply to it too, and off the track its throttle is capped and its controller rumbles – its own, not car 1's.",
+    "Drücke an jedem Controller einmal einen Knopf – der Browser meldet ein Pad erst nach der ersten Eingabe. Beide Controller benutzen dieselbe Tastenbelegung aus der Kachel „Controller“.":
+      "Press one button on each controller – the browser only reports a pad after its first input. Both controllers use the same button mapping from the “Controller” tile.",
+    "Was Auto 2 in dieser Fassung nicht hat": "What car 2 does not have in this version",
+    "Ehrlicher als es zu verschweigen – jeder Punkt hängt an einem Zähler oder einer Ortung, die es nur einmal gibt:":
+      "More honest than leaving it out – every item hangs off a counter or a position estimate that exists only once:",
+    "Der Boxenstopp von Auto 2 ist schmal: er tankt voll und repariert ganz, ohne Vorwahl und ohne Reifenwechsel. Die Reifenwahl ist eine globale Einstellung – „auf weich“ für ein einzelnes Auto ist eine Aussage, die das Modell nicht trennen kann.":
+      "Car 2's pit stop is a narrow one: it fills the tank and repairs fully, with no pre-selection and no tyre change. The tyre compound is a global setting – \"switch to softs\" for a single car is a statement the model cannot separate.",
+    "Dazu einen eigenen Tank: Verbrauch nach Gas und Zeit mit demselben Regler wie Auto 1, das Tankgewicht in seiner Fahrphysik, die Warnstufen als Meldung und den Notlauf des leeren Tanks – und der geht über eine Rampe zu, nicht in einem Takt.":
+      "Plus a fuel tank of its own: consumption by throttle and time on the same slider as car 1, the fuel weight in its driving model, the warning levels as a message, and the limp mode of an empty tank – which closes over a ramp, not in one tick.",
+    "Dazu einen eigenen Schaden: Crasherkennung aus seinen eigenen Sensorbytes, Leistungsverlust mit dem Schaden, Notlauf im Totalschaden und ausgefallene Lampen – und die Kontrollleuchten des einen sagen nichts mehr über das andere Auto.":
+      "Plus damage of its own: crash detection from its own sensor bytes, power lost with damage, limp mode when totalled, and lamps that fail – and one car's tell-tales no longer say anything about the other.",
+    "Auto 2 hat keine Zusatzkette am Motorklang: kein Turbopfeifen, keine Knaller, kein Begrenzer-Takt – die hängen an einem Bus. Und keinen Doppler, der gehört zur Runde von Auto 1.":
+      "Car 2 has no extras chain on its engine sound: no turbo whistle, no pops, no limiter pulsing – those hang off one bus. And no doppler, which belongs to car 1's lap.",
+    "Dazu eine eigene Motorstimme, und die sitzt auf der anderen Stereoseite – links Auto 1, rechts Auto 2. Das ist keine Kosmetik: zwei Motoren im selben Drehzahlband aus einem Lautsprecher klingen wie ein verstimmter Motor und nicht wie zwei Autos. Auch der Schaltklang kommt von der Seite des Autos, das geschaltet hat. Beide fahren dasselbe Motormodell, das aus dem Cockpit gewählte.":
+      "Plus an engine voice of its own, and it sits on the other stereo side – car 1 left, car 2 right. That is not decoration: two engines in the same rev band from one speaker sound like one out-of-tune engine, not like two cars. The shift sound comes from the side of the car that shifted, too. Both run the same engine model, the one chosen in the cockpit.",
+    "Die drei Rundenzeiten im Cockpit – aktuelle, letzte, beste – und die Aufnahme gehören Auto 1. Seine eigenen Zeiten stehen in der Rundenübersicht.":
+      "The three lap times in the cockpit – current, last, best – and the recording belong to car 1. Its own times are in the lap overview.",
+    "Dazu zählt Auto 2 seine Runden mit: es steht in der Rundenübersicht, in der Rangliste während des Rennens und im Ergebnis samt CSV. Das war keine Arbeit, sondern ein Irrtum in meiner Schätzung – die Rundenzählung lief schon immer je Auto, für jedes verbundene, egal welche Rolle. Die Zielflagge wartet jetzt auf beide Fahrer statt nur auf einen.":
+      "Car 2 counts its laps too: it appears in the lap overview, in the running order during the race, and in the result including the CSV. That took no work, it corrected a mistake in my estimate – lap counting always ran per car, for every connected one, whatever its role. The chequered flag now waits for both drivers instead of just one.",
+    ": eine eigene Fahrphysik mit eigenen Gängen, eigener Drehzahl, eigenem Tempo und eigenen Temperaturen. Die Einstellungen aus „Fahrgefühl“ werden bei jedem Anschalten übernommen, damit beide Autos gleich fahren.":
+      ": a driving model of its own, with its own gears, revs, speed and temperatures. The settings from “Driving feel” are copied over every time the mode is switched on, so that both cars drive alike.",
     "Ghost: Leitplanken-Modus": "Ghost: guard-rail mode",
     "Ghost: Linienmodell": "Ghost: line model",
     "Ghost: lernt von Runde zu Runde": "Ghost: learns lap by lap",
@@ -704,6 +769,16 @@
     "Gummiband": "Rubber band",
     "Haarnadel L": "Hairpin L",
     "Haarnadel R": "Hairpin R",
+    "30° L": "30° L",
+    "30° R": "30° R",
+    "Weit L": "Wide L",
+    "Weit R": "Wide R",
+    "Enge": "Narrow",
+    "Weite Kurve links": "Wide curve left",
+    "Weite Kurve rechts": "Wide curve right",
+    "Kleine Kurve links": "Small curve left",
+    "Kleine Kurve rechts": "Small curve right",
+    "Engstelle": "Narrow section",
     "Haarnadel links und": "hairpin left and",
     "Haarnadel rechts; alles andere ist unbestätigt. Trag hier den Code ein, den dein gedrucktes Boxen-Muster tatsächlich auslöst,": "hairpin right; everything else is unconfirmed. Enter here the code your printed pit pattern actually triggers, ",
     "Haltezeit": "Hold time",
@@ -907,13 +982,54 @@
     "Steht": "Stopped",
     "Steuerkreuz:": "D-pad:",
     "Steuern": "Drive",
+    "Sicherung":
+      "Backup",
+    "Alles, was diese App sich merkt, in einer Datei: Fahreinstellungen und Renneinstellungen, Autonamen und Farben, Streckenlayouts, die vollständige Rundenzeit-Historie, Motorwerkstatt, Aufnahmen und die Tastenbelegung des Gamepads.":
+      "Everything this app remembers, in one file: driving and race settings, car names and colours, track layouts, the complete lap time history, engine workshop, recordings and the gamepad button mapping.",
+    "Sicherung speichern":
+      "Save a backup",
+    "Laden führt zusammen und ersetzt nicht: was in der Sicherung steht, wird gesetzt, und was seither dazugekommen ist, bleibt. Eine Strecke von gestern überlebt also eine Sicherung von vorletzter Woche.":
+      "Loading merges rather than replaces: what the backup contains is applied, and whatever has been added since stays. So a track built yesterday survives a backup from the week before last.",
+    "Sicherung laden":
+      "Load a backup",
+    "Warum es diese Datei braucht.":
+      "Why this file is needed.",
+    "Die App legt alles im Browser ab, und ein Browser darf diesen Speicher aufräumen – beim Löschen von Websitedaten, im privaten Fenster, auf einem iPhone auch nach längerer Zeit ohne Besuch. Eine Abstimmung ist danach schnell wieder eingestellt, eine Rundenzeit-Historie nicht.":
+      "The app keeps everything in the browser, and a browser is allowed to clear that storage – when site data is deleted, in a private window, on an iPhone even after a longer time without a visit. A setup is quickly dialled in again afterwards, a lap time history is not.",
+    "Eine Sicherung lädt auch dann, wenn sie aus einer älteren Fassung stammt. Einstellungen, die es damals noch nicht gab, bleiben stehen und werden genannt – sie verschwinden nicht stillschweigend.":
+      "A backup loads even when it comes from an older version. Settings that did not exist back then keep their value and are named – they do not disappear silently.",
+    "Querlage: das Auto hält sich selbst auf der Bahn, so wie ein autonomer Ghost. Dein Lenk-Input bestimmt dabei nur noch, wo auf der Bahn – nach rechts heißt weiter rechts, nicht „mehr einschlagen“.":
+      "Lateral position: the car keeps itself on the track, like an autonomous ghost. Your steering input then only sets where on the track – right means further right, not “turn in more”.",
+    "Voll: wie Querlage, aber das Auto bestimmt auch die Querlage selbst. Lenken tut dann nichts mehr, Gas und Bremse bleiben bei dir.":
+      "Full: like lateral position, but the car sets the lateral position itself too. Steering then does nothing; throttle and brake stay with you.",
+    "Beide brauchen eine eingescannte Strecke und die Bahn-Stellung (nicht Ausdruck). Ohne beides steuerst du normal weiter – auch in Voll, denn ohne die Streckendaten würde ein Auto mit gerade gestellten Rädern in die Bande fahren.":
+      "Both need a scanned track and the rail setting (not printout). Without those you keep steering normally – in Full as well, because without the track data a car with its wheels held straight would drive into the barrier.",
+    "Bei gelber Flagge oder in der Einführungsrunde hält sich das Auto unabhängig von dieser Einstellung selbst – das braucht die Regelung dort, damit sie greifen kann.":
+      "Under a yellow flag or during the formation lap the car keeps itself on track regardless of this setting – the control there needs that in order to work.",
+    "Querlage":
+      "Lateral position",
+    "Steuerungsmodus":
+      "Control mode",
+    "Fahrhilfe, Fahrwerk, Getriebe, Masse und Reifen, Lenkung.":
+      "Driver aid, suspension, gearbox, mass and tyres, steering.",
+    "Und sobald das Auto keinen Streckencode mehr liest – weil es neben der Bahn liegt –, bekommst du die volle Kontrolle zurück, damit du selbst zurückfahren kannst. Das gilt auch bei gelber Flagge: dort bleibt nur das Tempo gedrosselt, gelenkt wird von dir. Die Umschaltung braucht die Entprellzeit aus „Abseits: Verzögerung“ (ab Werk eine Sekunde), weil ein einzelner Aussetzer beim Überfahren einer Kachelkante sonst als Abflug gelesen würde.":
+      "And as soon as the car stops reading a track code – because it is off the track – you get full control back, so you can drive it back yourself. This applies under a yellow flag too: there only the speed stays limited, the steering is yours. The handover needs the debounce time from “Off-track: delay” (one second by default), because otherwise a single dropout while crossing a tile edge would read as leaving the track.",
+    "Die vier Varianten „Licht an + Bit …“ sind anders zu prüfen: nicht mit Byte 12, sondern mit dem Auge.":
+      "The four “Light on + bit …” variants are checked differently: not with byte 12, but with your eyes.",
+    "Scheinwerfer einschalten, eine Variante wählen, aufs Auto schauen – wird das Vorderlicht heller, dunkler, oder ändert sich nichts? Byte 14 hat nach heutigem Stand genau ein Scheinwerfer-Bit; diese vier probieren aus, ob eines der bisher unbeobachteten Bits eine zweite Helligkeitsstufe auslöst. Ohne Auto ist hier nichts zu sehen.":
+      "Turn the headlights on, pick a variant, watch the car – does the headlight get brighter, dimmer, or does nothing change? As things stand, byte 14 has exactly one headlight bit; these four try whether one of the bits nobody has observed yet triggers a second brightness level. Without a car there is nothing to see here.",
+    "Licht an + Bit 2 (0x04)":
+      "Light on + bit 2 (0x04)",
+    "Licht an + Bit 3 (0x08)":
+      "Light on + bit 3 (0x08)",
+    "Licht an + Bit 4 (0x10)":
+      "Light on + bit 4 (0x10)",
+    "Licht an + Bit 6 (0x40)":
+      "Light on + bit 6 (0x40)",
     "Stoppen": "Stop",
+    "Strecke aus Teilen bauen, drehen, als Code weitergeben. Alle elf Teiletypen der Original-App sind dabei, auch die Engstelle.":
+      "Build a track from pieces, rotate it, pass it on as a code. All eleven piece types from the original app are included, the narrow section too.",
     "Strafe je verpasstem Stopp (s)": "Penalty per missed stop (s)",
-    "Strecke aus Teilen bauen, drehen, als Code weitergeben. Zwei Kurventypen der Original-App fehlen noch – ihre Maße sind nicht bekannt.":
-      "Build a track from pieces, rotate it, pass it on as a code. Two curve types from the original app are still missing – their dimensions are not known.",
-    "Die Palette ist nicht vollständig.": "The palette is incomplete.",
-    "Die Original-App hat neun Kacheltypen, hier sind es sechs: es fehlen eine lange flache Kurve und eine Keilkurve. Ihre Maße stehen nirgends – die Angabe oben im Original-Editor ist der Umriss des":
-      "The original app has nine tile types, this one has six: a long shallow curve and a wedge curve are missing. Their dimensions are written down nowhere – the figure at the top of the original editor is the bounding box of the",
     "ganzen": "whole",
     "Layouts und nicht der Kachel. Sie kommen dazu, sobald eine Schließmessung vorliegt: eine kleine geschlossene Runde mit der neuen Kachel, und dann fallen Radius und Winkel eindeutig heraus – so wie bei der Haarnadel.":
       "layout, not of the tile. They will be added once a closing measurement exists: a small closed loop with the new tile, and radius and angle fall out uniquely – the same way the hairpin was solved.",
@@ -1150,7 +1266,6 @@
     "Wiedergabe-Log": "Replay log",
     "Wieviel": "How much",
     "Wird nach dem ersten Lauf gezeichnet: Geschwindigkeit und der": "Drawn after the first run: speed and the",
-    "Wo steht das Auto?": "Where is the car?",
     "Womit dieses Werkzeug die Haarnadel gefunden hat.": "How this tool found the hairpin.",
     "Wähle die Characteristic, an die Lenk-/Gas-Kommandos geschrieben werden sollen (wird beim Verbinden automatisch auf NUS RX gesetzt).": "Choose the characteristic the steering and throttle commands are written to (set to NUS RX automatically on connecting).",
     "ZU SCHNELL FÜR R": "TOO FAST FOR R",
@@ -1386,8 +1501,6 @@
     // Mehrspieler Version A (v0.5). Alle GANZE Textknoten, kein Fragment - die
     // Erklaerabsaetze sind ohne inneres Markup geschrieben.
     "Mehrspieler im WLAN": "Multiplayer over Wi-Fi",
-    "Mehrere Telefone, jedes mit eigenem Auto, eine gemeinsame Rangliste. Auf dem PC laeuft dazu ein kleines Programm: python tools/omegasim_host.py": "Several phones, each with its own car, one shared leaderboard. A small program runs on the PC for it: python tools/omegasim_host.py",
-    "Ueber die Leitung gehen Rundenzahl, Rundenzeiten und Abgaenge. Keine Physik, keine Lenkwerte: jedes Telefon rechnet seine eigene Physik und haelt seine eigene Bluetooth-Verbindung. Reisst das WLAN ab, faehrt jeder weiter, nur die Rangliste steht still.": "What goes over the wire: lap count, lap times and departures. No physics, no steering values – each phone computes its own physics and holds its own Bluetooth connection. If the Wi-Fi drops, everyone keeps driving; only the leaderboard stands still.",
     "Gezaehlt werden GEMESSENE Runden, genau wie in der Rundenliste im Cockpit: die erste Ueberfahrt startet die Uhr, erst die zweite ergibt eine Zeit. Nach drei Ueberfahrten stehen also zwei Runden da. Bei Gleichstand fuehrt, wer zuerst dort war.": "Counted are MEASURED laps, exactly as in the cockpit lap list: the first crossing starts the clock, only the second yields a time. After three crossings the count shows two laps. On a tie, whoever got there first leads.",
     "Warum es experimentell ist, und der Grund ist eine Browserregel und kein Wackeln im Code: Web Bluetooth verlangt einen secure context. Das sind https, http://localhost und file. Eine Adresse wie http://192.168.1.50:8080 ist keiner – die App laedt dort, aber „Auto verbinden“ bleibt ohne Wirkung. Einmal je Telefon muss man in Chrome unter chrome://flags/#unsafely-treat-insecure-origin-as-secure die Adresse des Hosts eintragen und Chrome neu starten. Damit erklaert man diesen einen Ursprung fuer vertrauenswuerdig; im eigenen WLAN mit dem eigenen PC ist das vertretbar, aber es ist eine Ausnahme von einer Sicherheitsregel und keine Einstellung.": "Why it is experimental – and the reason is a browser rule, not shaky code: Web Bluetooth requires a secure context. Those are https, http://localhost and file. An address like http://192.168.1.50:8080 is not one – the app loads there, but “Connect car” has no effect. Once per phone you have to enter the host address in Chrome under chrome://flags/#unsafely-treat-insecure-origin-as-secure and restart Chrome. Doing so declares that one origin trustworthy; on your own Wi-Fi with your own PC that is defensible, but it is an exception to a security rule and not a setting.",
     "Der Ueberblicksschirm fuer den PC liegt beim Host unter /mp-overview.html. Er braucht kein Bluetooth und deshalb auch keine Freigabe: auf http://localhost ist er ohnehin ein secure context.": "The overview screen for the PC sits on the host at /mp-overview.html. It needs no Bluetooth and therefore no exemption: on http://localhost it is a secure context anyway.",
@@ -1570,12 +1683,36 @@
       "How hard the car steers against a slide, measured from the rotation signal in byte 3 of the notifications. 50 per cent is the default that was asked for. What is uncertain about it, and it is two things at once: the signal is unconfirmed – it only varies once the car is moving, and flipped sign with cornering direction in exactly one recording. And it is uncalibrated: its scale is self-adjusting because the real amplitude is unknown. So the strength depends on the largest yaw value the session has seen so far. The “Drift probe” button under “Measure lateral offset” measures whether the signal moves at all under straight full throttle.",
     "Rennen":
       "Race",
+    "Danksagungen":
+      "Acknowledgements",
+    "Dieses Projekt steckt voller Dinge, die jemand anders herausgefunden, ausprobiert oder geduldig zurückgemeldet hat. Namentlich:":
+      "This project is full of things somebody else worked out, tried out or patiently reported back. By name:",
+    "Für das Feedback zum Steuern per RC-Funke über CH Control.":
+      "For the feedback on driving by RC transmitter through CH Control.",
+    "Fürs Teilen seines Wissens zu den Bluetooth-Protokollen.":
+      "For sharing his knowledge of the Bluetooth protocols.",
+    "Den Testern dort, für Rückmeldungen aus echten Rennen, die keine Simulation liefert.":
+      "To the testers there, for reports from real races that no simulation provides.",
+    "Woher die Klänge kommen":
+      "Where the sounds come from",
+    "Der allergrößte Teil der Klänge ist gerechnet und nicht aufgenommen: alle fünfundzwanzig Motoren mit ihren 132 Schleifen, dazu Bremsen- und Reifenquietschen, die Crash-Varianten, Schlagschrauber, Tankgeräusch, Karosseriereparatur und der Motorstart. Dort wird nichts abgespielt, sondern aus Zylinderzahl, Zündfolge und Krümmerlänge erzeugt.":
+      "The vast majority of the sounds are computed, not recorded: all twenty-five engines with their 132 loops, plus brake and tyre squeal, the crash variants, the impact wrench, the refuelling sound, the bodywork repair and the engine start. Nothing is played back there; it is generated from cylinder count, firing order and header length.",
+    "Hupen für die Lichthupe – sechs Aufnahmen, in dieser Reihenfolge Autohupe, Schiffshupe, Esel, Ziege und zwei Furztöne. Der letzte stammt von freesound community über Pixabay.":
+      "Horns for the headlight flash – six recordings, in this order car horn, ship horn, donkey, goat and two fart sounds. The last one is from freesound community via Pixabay.",
+    "Regen und Donner.":
+      "Rain and thunder.",
+    "Strecken-Ambience, also der Teppich und die Vorbeifahrten.":
+      "Track ambience, meaning the bed and the passing cars.",
+    "Der Motorklang der Corvette C6.":
+      "The engine sound of the Corvette C6.",
+    "Das Motormodell folgt dem Ansatz von engine-sim unter der MIT-Lizenz; Zylinderzahlen, Drehzahlgrenzen und Kurbelwellenwinkel stammen aus dessen Motordefinitionen. Die vollständige Aufstellung mit allen Messwerten steht in der Datei CREDITS im Audio-Ordner.":
+      "The engine model follows the approach of engine-sim under the MIT licence; cylinder counts, rev limits and crankshaft angles come from its engine definitions. The full listing with all measurements is in the CREDITS file in the audio folder.",
+    "Code auf GitHub":
+      "Source on GitHub",
+    "Zu wenige Runden für einen Verlauf. Ab der zweiten Runde wird hier gezeichnet.":
+      "Too few laps for a chart. From the second lap on it is drawn here.",
     "Aus (Vorgabe): du steuerst ganz normal, dein Lenk-Input ist der Lenkwinkel – wie ohne diese App.":
       "Off (default): you steer completely normally, your steering input is the steering angle – same as without this app.",
-    "An: das Auto hält sich selbst auf der Bahn, so wie ein autonomer Ghost. Dein Lenk-Input bestimmt dabei nur noch die Querlage – nach rechts heißt weiter rechts auf der Bahn, nicht „mehr einschlagen“. Braucht eine eingescannte Strecke und die Bahn-Stellung (nicht Ausdruck); ohne beides ändert der Schalter nichts.":
-      "On: the car holds itself on the track, the same way an autonomous ghost does. Your steering input then only sets the lateral position – turning right means further right on the track, not “more lock”. Needs a scanned layout and the track setting (not printout); without both, this switch changes nothing.",
-    "Bei gelber Flagge oder in der Einführungsrunde hält sich das Auto unabhängig von diesem Schalter selbst – das braucht die Regelung dort, damit sie greifen kann.":
-      "Under a yellow flag or on the formation lap the car holds itself regardless of this switch – that control loop needs it to work at all.",
     "Cockpit-Schirm zurück":
       "Cockpit screen back",
     "Cockpit-Schirm vor":
@@ -1790,6 +1927,51 @@
       "yes",
     "nein":
       "no",
+    "voll":
+      "full",
+    "Am einfachsten mit einem Doppelklick auf die Startdatei. Sie sucht Python, startet den Host und schreibt die Adresse hin, unter der er erreichbar ist.":
+      "The easiest way is a double-click on the launcher file. It finds Python, starts the host and prints the address it can be reached at.",
+    "Wer lieber selbst tippt, öffnet im Projektordner ein Fenster für die Eingabeaufforderung oder das Terminal und führt diesen Befehl aus:":
+      "If you would rather type it yourself, open a command prompt or terminal window in the project folder and run this command:",
+    "Das Programm selbst liegt im Projekt und ist von hier aus direkt zu öffnen.":
+      "The program itself is part of the project and can be opened directly from here.",
+    "Warum es dafür keinen Knopf in der App gibt.":
+      "Why there is no button for this in the app.",
+    "Eine Webseite darf kein Programm auf dem Rechner starten. Das ist keine fehlende Schnittstelle, sondern die Grenze, auf der die Sicherheit des Browsers beruht, und sie fällt auch dann nicht, wenn man die App installiert: eine installierte App bekommt Dateizugriff und Offline-Betrieb, aber niemals das Recht, ein beliebiges Programm auszuführen. Die Startdatei oben ist das Nächste, was daran herankommt – einmal herunterladen, danach genügt ein Doppelklick.":
+      "A web page may not start a program on the computer. This is not a missing interface but the boundary the browser's security rests on, and it does not fall when the app is installed either: an installed app gets file access and offline operation, but never the right to run an arbitrary program. The launcher file above is the closest thing to it – download it once, after that a double-click is enough.",
+    "Ueber die Leitung gehen Rundenzahl, Rundenzeiten und Abgaenge. Keine Physik, keine Lenkwerte: jedes Telefon rechnet seine eigene Physik und haelt seine eigene Bluetooth-Verbindung. Reisst das WLAN ab, faehrt jeder weiter, nur die Rangliste steht still.": "What goes over the wire: lap count, lap times and departures. No physics, no steering values – each phone computes its own physics and holds its own Bluetooth connection. If the Wi-Fi drops, everyone keeps driving; only the leaderboard stands still.",
+    "Mehrere Telefone, jedes mit eigenem Auto, eine gemeinsame Rangliste. Auf dem PC läuft dazu ein kleines Programm.":
+      "Several phones, each with its own car, one shared leaderboard. A small program runs on the PC for this.",
+    "Auf dem PC starten.":
+      "Start it on the PC.",
+    "Die Adresse an die Telefone geben.":
+      "Give the address to the phones.",
+    "Sie gehört oben in das Feld „Host-Adresse“ und hat die Form, die dort als Beispiel steht. Alle Geräte müssen im selben WLAN sein.":
+      "It goes into the “Host address” field above and has the form shown there as an example. All devices must be on the same Wi-Fi.",
+    "Namen eintragen und auf Mitmachen drücken.":
+      "Enter a name and press Join.",
+    "Der Name steht danach in der Rangliste. Jedes Telefon behält seinen eigenen Namen und seine eigene Kennung, auch nach einem Neuladen.":
+      "The name then appears in the leaderboard. Each phone keeps its own name and its own id, even after a reload.",
+    "Die Übersicht auf den Fernseher.":
+      "The overview on the TV.",
+    "Der Host liefert dafür eine eigene Seite in großer Schrift:":
+      "The host serves a dedicated page for this, in large type:",
+    "Sie zeigt die Rangliste und hat einen Knopf zum Zurücksetzen. Sonst nichts: sie ist zum Ansehen aus zwei Metern gedacht und nicht zum Bedienen.":
+      "It shows the leaderboard and has one button to reset it. Nothing else: it is meant to be read from two metres away, not operated.",
+    "Zwei Dinge, an denen es scheitern kann, und beide liegen nicht an der App.":
+      "Two things it can fail on, and neither is the app's doing.",
+    "Wird die App über eine verschlüsselte Verbindung geladen – etwa von der Projektseite –, blockiert der Browser jede Verbindung zu einer unverschlüsselten Adresse im WLAN; dann muss die App vom Host selbst geladen werden. Und bis Fassung 0.6.19 fehlten dem Host die Kopfzeilen für fremde Herkunft: Mitmachen ging nur, wenn die App vom Host kam. Wer eine ältere Fassung des Programms laufen hat, holt sie neu.":
+      "If the app is loaded over an encrypted connection – from the project page, say – the browser blocks every connection to an unencrypted address on the Wi-Fi; the app then has to be loaded from the host itself. And until release 0.6.19 the host was missing the cross-origin headers: joining only worked when the app came from the host. Anyone running an older copy of the program should fetch it again.",
+    "Motorklang: rechte Hälfte weiter, linke zurück":
+      "Engine sound: right half forward, left half back",
+    "Die folgenden Klänge sind die Ausnahme: sie stammen aus echten Aufnahmen. Alle von Pixabay und unter der Pixabay-Lizenz. Die unbearbeiteten Quelldateien sind nicht Teil dieses Projekts.":
+      "The following sounds are the exception: they come from real recordings. All from Pixabay and under the Pixabay licence. The unedited source files are not part of this project.",
+    "Tankmenge":
+      "Fuel amount",
+    "Reifen für den nächsten Boxenstopp (Steuerkreuz hoch). Vorgabe sind die aufgezogenen Reifen; passt die Wahl nicht zum Wetter, wird die Zeile angeschrieben.":
+      "Tyres for the next pit stop (D-pad up). The default is whatever is fitted; if the choice does not match the weather, the row is marked.",
+    "Tankmenge für den nächsten Boxenstopp (Steuerkreuz runter): nein, halb oder voll.":
+      "Fuel amount for the next pit stop (D-pad down): none, half or full.",
     "weich":
       "soft",
     "mittel":
@@ -2085,6 +2267,12 @@
     if (key === 'opt-ghosts' && typeof linemodellKarteZeichnen === 'function') {
       try { linemodellKarteZeichnen(); } catch (e) { /* keine Strecke, kein Bild */ }
     }
+    // Dasselbe fuer die Pad- und Autoliste auf der Zwei-Spieler-Seite: sie wird im Sekunden-
+    // takt aufgefrischt, aber erst wenn die Seite offen ist - ohne diesen Ruf stuende beim
+    // Aufschlagen bis zu eine Sekunde lang ein Gedankenstrich.
+    if (key === 'opt-zwei' && typeof zweiSpielerKachelZeichnen === 'function') {
+      zweiSpielerKachelZeichnen();
+    }
     window.scrollTo(0, 0);
   }
   document.querySelectorAll('.subpage-open').forEach(el => {
@@ -2177,6 +2365,34 @@
 
   // ---- Control tab: virtual stick + throttle ----
   let steerX = 0, throttleY = 0;
+
+  // ====================================================================================
+  // ZWEI SPIELER AN EINEM RECHNER
+  // ====================================================================================
+  //
+  // BESTELLT: "Wenn ich ihn anschalte, will ich 2 Autos und 2 Gamepads verbinden und beide
+  // fahren koennen."
+  //
+  // Die App war an vier Stellen ausdruecklich einspielerig, und die stehen weit
+  // auseinander: EIN Pad wird gewaehlt (pollGamepad in 90-ghosts.js), EIN Paar
+  // steerX/throttleY nimmt jede Eingabequelle auf (die Schiedsstelle in 30-input.js), EIN
+  // physEngine gehoert dem Spieler (50-drive.js), und EIN playerCar ist das Ziel jedes
+  // Pakets (sendControlValue in 20-protocol.js).
+  //
+  // ---- WARUM SPIELER 2 EINEN EIGENEN, SCHMALEN WEG BEKOMMT -----------------------
+  //
+  // Nicht die Schiedsstelle zu verdoppeln, sondern sie zu umgehen: Spieler 2 fahrt
+  // ausschliesslich mit dem GAMEPAD. Damit braucht er keine Quellenverwaltung - es gibt
+  // nichts, worueber Tastatur, Maus und Pad sich einigen muessten -, und diese zwei Zahlen
+  // sind sein ganzer Eingang. Tastatur, Bildschirmknueppel und alle Sonderknoepfe des Pads
+  // (Wetter, Boxenstopp, Rennstart, Streckeneditor) bleiben bei Spieler 1, und das ist
+  // Absicht: zwei Leute, die sich gegenseitig das Wetter umstellen, sind kein Rennen.
+  //
+  // HIER DEKLARIERT, weil die Leser in SPAETEREN Dateien stehen (Fahrphysik in 50, Pad in
+  // 90) und der Schreiber der Kachel ebenfalls. Ein let in 90 waere fuer 50 die temporale
+  // Todeszone - genau die Falle, die in diesem Projekt schon einen Regler gekostet hat.
+  let zweiSpieler = false;
+  let p2Steer = 0, p2Throttle = 0;
 
   // Real CH command-packet protocol, reverse-engineered from a genuine
   // Android Bluetooth HCI snoop log of the official app (2026-08-13) and cross-checked

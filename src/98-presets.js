@@ -69,7 +69,7 @@
            // 2,6 statt 3,2 s: gemessen brauchte das Motorbyte mit den alten Werten 24,9 s
            // Vollgas bis 90 %. Pro ist die Vorgabe und muss sich wie ein Auto anfuehlen,
            // nicht wie ein Anfahrversuch.
-           'setting-zero-to-top': 2.6, 'setting-coast-drag': 0.6, 'setting-fuelweight': 0,
+           'setting-zero-to-top': 2.6, 'setting-coast-drag': 0.6, 'setting-fuelweight': 1,
            // REIFENMODELL AN, seit v0.5.18. Pro ist die Vorgabe, und mit 0 waeren die
            // vier Mischungen ab Werk wirkungslos - ein Merkmal, das man erst durch einen
            // Regler freischalten muss, ist nicht geliefert. 1,0 ist das volle Modell und
@@ -83,11 +83,11 @@
            // und ein kalibriertes Modell soll in seiner Vorgabe auf seiner
            // Kalibrierung stehen. Die anderen Voreinstellungen behalten ihre Werte -
            // dort ist die Abweichung eine Abstimmung und keine Unstimmigkeit.
-           'setting-tyres': 1, 'phys-steerresp': 2.4, 'setting-brakebias': 62,
+           'setting-tyres': 1, 'phys-steerresp': 3, 'setting-brakebias': 62,
            // Lenkkalibrierung 200 Prozent: der Reibkreis beschneidet den Einschlag beim
            // Anbremsen auf etwa 60 Prozent, und das holt ihn zurueck. Gemessen bei 60 km/h
            // unter Bremsen: 35 Grad ohne, volle 45 Grad ab einem Drittel Stick mit.
-           'setting-steer-calib': 2.0,
+           'setting-steer-calib': 2.5,
            // Reibkreis 1,15, GEMESSEN. Bei Kalibrierung 200 Prozent waren 0,85 und 1,00 beide
            // unsichtbar (45 Grad rollend wie bremsend); 1,15 nimmt bei 80 km/h und
            // darueber 45 auf 26 Grad und laesst 40 bis 60 km/h unberuehrt. Ueber
@@ -96,10 +96,10 @@
            'setting-brake-steal': 1.15,
            // Waermer an, weil Pro die Vorgabe ist: wer zum ersten Mal faehrt, soll nicht drei
            // Runden auf Grip warten und das fuer das Fahrverhalten halten.
-           'setting-tyre-blankets': true,
+           'setting-tyre-blankets': false,
            'phys-accel': 1.0,
-           'setting-fuel-drain': 0, 'setting-crash-count': 4,
-           'setting-crash-damage': false,
+           'setting-fuel-drain': 1, 'setting-crash-count': 4,
+           'setting-crash-damage': true,
            'setting-crash-threshold': 40,
            'setting-repair-time': 4,
            // Block 4: Windschatten, Reifenasymmetrie und -druck bleiben bei Pro AUS - sie
@@ -113,7 +113,7 @@
            // Es kostet auch wenig: eine Einzelbremsung fadet gemessen nicht (241 Grad,
            // Fading beginnt bei 520), erst mehrere Bremszonen hintereinander kommen hinein.
            'setting-brake-fade': true,
-           'setting-brake-fade-strength': 1.0,
+           'setting-brake-fade-strength': 1.5,
            'setting-dirtyair': false,
            'setting-dirtyair-strength': 1.0,
            'setting-tyre-asym': true,   // Vorgabe im Markup seit v0.4.55, und die Vorgabe IST Pro
@@ -429,22 +429,24 @@
     presetSay(presetControls().length + ' Regler hineingeschrieben, jetzt kopieren.');
   });
 
-  $('preset-import').addEventListener('click', () => {
-    const raw = $('preset-json').value.trim();
-    if (!raw) { presetSay('Da steht nichts.'); return; }
-    let cfg;
-    try { cfg = JSON.parse(raw); } catch (e) { presetSay('Das ist kein JSON.'); return; }
-    if (!cfg || typeof cfg !== 'object') { presetSay('Das ist keine Abstimmung.'); return; }
-    // Checked against the controls, not trusted: this arrives by copy and paste, and a value
-    // outside a slider's range sets the slider to its limit without saying so - which reads
-    // as "it worked" when it did not.
+  // ---- DIE PRUEFUNG EINGEHENDER REGLERWERTE, FUER ALLE AUFRUFER ------------------
+  //
+  // Herausgezogen, weil die Sicherung in 98b-sicherung.js dieselbe Pruefung braucht. Sie
+  // NACHZUBAUEN waere der schlechtere Weg: dann gibt es zwei Vorstellungen davon, was ein
+  // brauchbarer Wert ist, und die eine erfaehrt nicht, wenn die andere sich aendert.
+  //
+  // GEPRUEFT UND NICHT GEGLAUBT: die Werte kommen aus einer Datei oder aus der
+  // Zwischenablage, und ein Wert ausserhalb des Reglerbereichs setzt den Regler still auf
+  // seine Grenze - was sich wie "hat geklappt" liest, obwohl es das nicht hat.
+  //
+  // Unbekannte Kennungen sind KEIN Fehler, sondern eine Meldung: phys-trailbrake gab es bis
+  // v0.3. Es wird bewusst NICHT auf setting-brakebias umgerechnet - ein Bonus auf die
+  // Lenkgrenze und ein Anteil der Bremskraft sind verschiedene Groessen, und eine erfundene
+  // Umrechnung waere schlimmer als ein ehrliches "uebergangen".
+  function presetPruefen(cfg) {
     const bad = [], unknown = [];
     for (const [id, val] of Object.entries(cfg)) {
       const el = document.getElementById(id);
-      // phys-trailbrake gab es bis v0.3. Es wird bewusst NICHT auf setting-brakebias
-      // umgerechnet: ein Bonus auf die Lenkgrenze und ein Anteil der Bremskraft sind
-      // verschiedene Groessen, und eine erfundene Umrechnung waere schlimmer als ein
-      // ehrliches "uebergangen".
       if (!el) { unknown.push(id); continue; }
       if (el.type === 'checkbox') continue;
       if (el.tagName === 'SELECT') {
@@ -454,6 +456,16 @@
         if (!isFinite(v) || v < +el.min || v > +el.max) bad.push(id + '=' + val);
       }
     }
+    return { bad, unknown };
+  }
+
+  $('preset-import').addEventListener('click', () => {
+    const raw = $('preset-json').value.trim();
+    if (!raw) { presetSay('Da steht nichts.'); return; }
+    let cfg;
+    try { cfg = JSON.parse(raw); } catch (e) { presetSay('Das ist kein JSON.'); return; }
+    if (!cfg || typeof cfg !== 'object') { presetSay('Das ist keine Abstimmung.'); return; }
+    const { bad, unknown } = presetPruefen(cfg);
     if (bad.length) { presetSay('Unbrauchbare Werte: ' + bad.join(', ')); return; }
     let n = 0;
     for (const [id, val] of Object.entries(cfg)) if (presetSet(id, val)) n++;
@@ -563,5 +575,3 @@
       });
     }
   }
-
-})();

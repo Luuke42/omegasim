@@ -7,6 +7,23 @@
 
   const physEngine = new CarreraPhysicsEngine();
   let physLastTime = null;
+  // ---- DIE ZWEITE INSTANZ, fuer Spieler 2 ----------------------------------------
+  //
+  // Dieselbe Klasse, ein zweites Mal gebaut - genau wie jeder Ghost eine eigene bekommt
+  // (startGhost in 90-ghosts.js). Die Klasse ist also nicht nur mehrfach instanziierbar,
+  // sie wird es seit Langem auch. Einspielerig war allein DIESER Griff hier.
+  //
+  // Die Einstellungen werden bei jedem Umschalten uebernommen (siehe zweiSpielerSetzen):
+  // beide Autos sollen sich gleich anfuehlen, sonst ist das Rennen entschieden, bevor es
+  // losgeht. Die rund sechzig Regler im Optionentab schreiben weiterhin nur auf
+  // physEngine.config - sie zu verdoppeln waere ein zweiter Ort fuer jede Zahl.
+  const physEngine2 = new CarreraPhysicsEngine();
+  let offtrack2RumbleAt = 0;
+  // Den Physiktakt von Auto 2 vergessen. Dasselbe Bedürfnis wie beim Tank: ein
+  // Prueflauf mit eigener Zeitbasis darf nicht ein dt zwischen zwei Uhren rechnen.
+  function phys2TaktVergessen() { phys2LastTime = null; }
+  physEngine2.spieler = 2;   // siehe den Konstruktor: Meldung, Ruck und Ton gehen dorthin
+  let phys2LastTime = null;
   // AN als Standard, weil die Original-App es praktisch immer an hat und ein beleuchtetes
   // Auto auf dem Tisch besser zu sehen ist.
   //
@@ -110,6 +127,26 @@
     return kurz;
   }
 
+  // ---- DAS ZEICHEN FUER "WECHSELHAFT" ----------------------------------------------
+  //
+  // NEBEN der Lage und nicht an ihrer Stelle: waehrend des Verlaufs ist es trocken ODER
+  // nass, und wer nur "wechselhaft" sieht, weiss nicht, worauf er gerade faehrt. Sonne und
+  // Regen bleiben also die Hauptaussage, das Zeichen ist der Zusatz.
+  //
+  // EINE EIGENE FUNKTION, weil es zwei Aufrufer hat: die Fahrschleife (fuer den Fall, dass
+  // der Modus aus den Renneinstellungen kommt) und die Wetterkachel beim Klick. Ohne den
+  // zweiten erschien das Zeichen erst im naechsten Fahrtakt - und wenn das Cockpit gar
+  // nicht der aktive Schirm ist, nie.
+  //
+  // raceWxStart steht in einer SPAETEREN Datei. Zur Laufzeit ist es da; die typeof-Pruefung
+  // deckt nur den Fall ab, dass jemand diese Funktion beim Aufbau ruft.
+  function wxZeichenSetzen() {
+    const el = $('race-wx-wechsel');
+    if (!el) return;
+    el.style.display = (typeof raceWxStart === 'string' && raceWxStart === 'wechsel')
+      ? '' : 'none';
+  }
+
   function motorAnzeige() {
     const sel = $('sound-profile'), txt = $('race-act-sound-txt');
     if (!sel || !txt) return;
@@ -118,13 +155,31 @@
   }
 
   if ($('race-act-sound')) {
-    $('race-act-sound').addEventListener('click', () => {
+    $('race-act-sound').addEventListener('click', (e) => {
       const sel = $('sound-profile');
       if (!sel) return;
       const brauchbar = Array.prototype.filter.call(sel.options, o => !o.disabled && !o.hidden);
       if (!brauchbar.length) return;
+      // ---- LINKE HAELFTE ZURUECK, RECHTE VOR -------------------------------------
+      //
+      // BESTELLT: "Wenn ich auf die rechte Haelfte des Buttons klicke, geht es zum
+      // naechsten und bei der linken Haelfte zum vorherigen Ton."
+      //
+      // Bei 26 Eintraegen ist eine Richtung zu wenig: wer einen Motor um eins verpasst,
+      // muesste sonst 25 mal druecken.
+      //
+      // EIN KLICK OHNE ORT GILT ALS VORWAERTS. Tastaturbedienung (Enter, Leertaste) und
+      // knopf.click() aus einem Prueflauf liefern clientX = 0 - das ist kein Klick auf die
+      // linke Haelfte, sondern gar keine Ortsangabe. Ohne diese Unterscheidung waere der
+      // Knopf per Tastatur rueckwaerts, und der vorhandene Selbsttest haette still die
+      // Gegenrichtung gemessen.
+      const kasten = e.currentTarget.getBoundingClientRect();
+      const hatOrt = typeof e.clientX === 'number' && (e.clientX > 0 || e.clientY > 0);
+      const richtung = (hatOrt && e.clientX < kasten.left + kasten.width / 2) ? -1 : 1;
       const jetzt = brauchbar.findIndex(o => o.value === sel.value);
-      const naechste = brauchbar[(jetzt + 1) % brauchbar.length];
+      const n = brauchbar.length;
+      // Modulo mit Vorzeichen: (-1 % n) ist in JavaScript -1 und nicht n-1.
+      const naechste = brauchbar[(((jetzt + richtung) % n) + n) % n];
       sel.value = naechste.value;
       sel.dispatchEvent(new Event('change', { bubbles: true }));
       motorAnzeige();
@@ -343,7 +398,7 @@
     physicsEnabled = (v === 'physik');
     physLastTime = null;
     if (melden) {
-      log('Fahrgefuehl: ' + (v === 'physik' ? 'Physik'
+      log('Steuerungsmodus: ' + (v === 'physik' ? 'Physik'
                              : v === 'drift' ? 'Drift (experimentell)'
                              : 'Aus, rohe Stickstellung'), 'info');
     }
@@ -618,6 +673,18 @@
       malen: () => pitScreenRender() },
     { id: 'uebersicht', name: 'Rennen',
       malen: () => ovScreenRender() },
+    // ---- NUR IM ZWEI-SPIELER-MODUS BLAETTERBAR ---------------------------------------
+    //
+    // Der Eintrag steht IMMER in der Liste und wird beim Blaettern uebersprungen, solange
+    // der Modus aus ist. Die Alternative waere eine Liste, deren LAENGE sich aendert - und
+    // an ihr haengen der Schirmzaehler, die Punkte unter dem Pfeil und zwei Selbsttests.
+    // Eine Liste, die beim Umschalten kuerzer wird, verschiebt den gerade gezeigten Schirm.
+    // Der Name ist "Beide" und nicht mehr "Auto 2": der Schirm zeigt seit v0.6.56 beide
+    // Autos nebeneinander. Die id bleibt `auto2` - sie steht in gespeicherten Zustaenden
+    // und in Prueflaeufen, und ein Name im Menue ist kein Grund, eine Kennung zu aendern.
+    { id: 'auto2', name: 'Beide',
+      nurZweiSpieler: true,
+      malen: () => p2ScreenRender() },
   ];
   let cockpitScreen = 0;
 
@@ -648,7 +715,26 @@
     // sechs Layoutlaeufe auf einen Tastendruck waehrend der Fahrt.
   }
 
-  function cockpitScreenStep(d) { cockpitScreenSet(cockpitScreen + d); }
+  // Ist dieser Schirm gerade blaetterbar? Nur der Schirm von Auto 2 kennt eine Sperre,
+  // und ohne sie waere im Einzelspiel ein vierter Schirm zu durchblaettern, auf dem alle
+  // Zahlen stehen bleiben - schlimmer als ein Schirm, den es nicht gibt.
+  function cockpitScreenGilt(s) {
+    if (!s) return false;
+    if (s.nurZweiSpieler) return typeof zweiSpieler !== 'undefined' && !!zweiSpieler;
+    return true;
+  }
+
+  // SCHRITTWEISE UND MIT ABBRUCH. Die Schleife laeuft hoechstens so oft, wie es Schirme
+  // gibt: sonst dreht sie sich ewig, wenn einmal jeder Schirm gesperrt waere.
+  function cockpitScreenStep(d) {
+    const n = COCKPIT_SCREENS.length;
+    const richtung = d >= 0 ? 1 : -1;
+    let i = cockpitScreen;
+    for (let k = 0; k < n; k++) {
+      i = ((i + richtung) % n + n) % n;
+      if (cockpitScreenGilt(COCKPIT_SCREENS[i])) { cockpitScreenSet(i); return; }
+    }
+  }
 
   // Was die Waehltaste auf DIESEM Schirm tut. Rueckgabe true heisst "verbraucht".
   //
@@ -678,8 +764,30 @@
   // NUR VORWAERTS mit dem Finger. cockpitScreenStep() rechnet modulo, der letzte Schirm
   // fuehrt also zum ersten zurueck - eine zweite Richtung waere ein zweiter Knopf fuer eine
   // Bewegung, die man mit zwei Tipps ohnehin hat. Auf dem Steuerkreuz bleiben beide.
+  //
+  // ---- ENTPRELLT, seit v0.6.58 ------------------------------------------------------
+  //
+  // GEMELDET: "der vierte Screen ist manchmal nicht ansteuerbar" - und nachgestellt:
+  // zwei schnelle Klicks auf DIESEN Knopf, von "Rennen" aus, ueberspringen "Beide" und
+  // landen auf "Cockpit". cockpitScreenStep() selbst ist zustandslos richtig (jeder
+  // einzelne Schritt geht genau einen Schirm weiter) - das Problem ist die FOLGE zweier
+  // Schritte in kurzer Zeit, sei es durch einen ungeduldigen Doppel-Tipp (das Umschalten
+  // gibt sofort ein Toast und einen neuen Punkt, aber auf einem ausgelasteten Bild kann
+  // das einen Wimpernschlag brauchen) oder durch eine doppelt ausgeloeste Click-Meldung
+  // des Browsers auf Touch-Geraeten.
+  //
+  // Eine Sperre von 220 ms nach jedem ERFOLGREICHEN Schritt filtert beides, ohne
+  // absichtliches schnelles Weiterblaettern spuerbar zu bremsen - vier Schirme in einer
+  // Sekunde bleiben moeglich. Das Steuerkreuz braucht das nicht: es hat seine eigene
+  // Flankenerkennung (prevDpad), die pro Poll-Takt (45 ms) hoechstens einmal ausloest.
+  let schirmKlickSperreBis = 0;
   if ($('race-screen-next')) {
-    $('race-screen-next').addEventListener('click', () => cockpitScreenStep(+1));
+    $('race-screen-next').addEventListener('click', () => {
+      const jetzt = Date.now();
+      if (jetzt < schirmKlickSperreBis) return;
+      schirmKlickSperreBis = jetzt + 220;
+      cockpitScreenStep(+1);
+    });
   }
   cockpitPunkteMalen();
 
@@ -1250,7 +1358,183 @@
   }
 
 
-  // Einen Wert schreiben UND, wenn er sich geaendert hat, die Anzeige 1 px nach unten
+  // ---- DER SCHIRM VON AUTO 2 ---------------------------------------------------------
+  //
+  // Alles, was der zweiten Zeile im Hauptschirm nicht passt: Tank, Schaden, Reifen- und
+  // Bremsentemperatur, Rundenzeiten. So bestellt - "Drehzahl und Geschwindigkeit fuer
+  // beide Autos; alle weiteren Einstellungen auf weiteren Screens."
+  //
+  // GEZEICHNET WIRD NUR, WENN ER VORNE LIEGT (cockpitScreenSet ruft malen(), und der Takt
+  // unten prueft es): neun Werte je 45 ms auf einen unsichtbaren Schirm zu schreiben waere
+  // Arbeit fuer niemanden, und der Sendetakt hat Vorrang.
+  // ---- DER VERGLEICHSSCHIRM: BEIDE AUTOS NEBENEINANDER ------------------------------
+  //
+  // BESTELLT: "Statt nur Player 2 soll er das Nötigste von Player 1 und 2 haben:
+  // Geschwindigkeit, Drehzahllichter, schaden, reifen, tank, bremse, akku, motorsound."
+  //
+  // EINE Funktion fuer beide Spalten, mit einem Praefix als Argument. Zwei Kopien waeren
+  // zwei Orte, an denen die naechste Groesse nur in einer Spalte landet - und in einem
+  // Vergleich ist genau das der Fehler, den man am spaetesten bemerkt, weil die Spalte
+  // ja etwas anzeigt.
+  //
+  // GEZEICHNET WIRD NUR, WENN ER VORNE LIEGT: der Takt in 70-race.js ruft malen() des
+  // vorderen Schirms, alle 120 ms. Vierzehn Werte je 45 ms auf einen unsichtbaren Schirm
+  // zu schreiben waere Arbeit fuer niemanden, und der Sendetakt hat Vorrang.
+  function vglSpalte(pre, car, motor, tank, schaden) {
+    const st = motor.state;
+    // Die Schaltlichter aus SEINER Drehzahl. Dieselbe Funktion wie die grosse Leiste im
+    // Cockpit - siehe schaltLampen(), dort steht auch die Farbregel.
+    schaltLampen($(pre + '-shift'), st.rpmFrac, st.onLimiter);
+    schreibeWert($(pre + '-speed'), Math.round(Math.abs(st.speedKmh) * REAL_SCALE));
+    schreibeWert($(pre + '-gear'), gearLabel(st));
+    schreibeWert($(pre + '-name'), car ? garageLabel(car) : 'kein Auto');
+    // Tank in Litern, wie ueberall sonst in dieser App.
+    schreibeWert($(pre + '-fuel'), fuelLiters(tank) + ' l');
+    const tb = $(pre + '-fuel-bar');
+    if (tb) {
+      tb.style.width = Math.max(0, Math.min(100, tank)) + '%';
+      tb.style.background = tank < 20 ? '#ffb02e' : '#2ee06a';
+    }
+    // ZUSTAND und nicht Schaden: voll gruen am Anfang, und jeder Crash nimmt ein Stueck
+    // heraus. Ein Balken, der WAECHST, wenn etwas schlechter wird, liest sich rueckwaerts -
+    // dieselbe Entscheidung wie beim Schadensbalken von Auto 1.
+    const zustand = Math.max(0, 100 - schaden);
+    schreibeWert($(pre + '-cond'), Math.round(zustand) + ' %');
+    const zb = $(pre + '-cond-bar');
+    if (zb) {
+      zb.style.width = zustand + '%';
+      zb.style.background = zustand < 50 ? '#ff5252' : zustand < 80 ? '#ffb02e' : '#2ee06a';
+    }
+    // VIER RAEDER, EIN WERT. Das Modell fuehrt tyreTemp4[] und brakeTemp4[] (Rueckfall
+    // tyreTempC bzw. brakeTempF/R). Hier steht das Mittel: eine Zahl je Groesse hat Platz,
+    // und die Frage "sind die Reifen warm" ist damit beantwortet.
+    //
+    // `brakeTempC` GIBT ES NICHT - der Name stand hier einen Anlauf lang und ergab 0 Grad,
+    // waehrend der Reifen 20 zeigte.
+    const mittel = (a) => (a && a.length) ? a.reduce((x, y) => x + y, 0) / a.length : null;
+    const reifen = mittel(st.tyreTemp4) !== null ? mittel(st.tyreTemp4) : (st.tyreTempC || 0);
+    const bremse = mittel(st.brakeTemp4) !== null ? mittel(st.brakeTemp4)
+      : ((st.brakeTempF || 0) + (st.brakeTempR || 0)) / 2;
+    schreibeWert($(pre + '-tyre'), Math.round(reifen) + '\u00b0');
+    schreibeWert($(pre + '-brake'), Math.round(bremse) + '\u00b0');
+    // Der Akku kommt aus Byte 10 des Autos (car.battery, in 90-ghosts.js je Auto gesetzt) -
+    // eine gemessene Groesse und keine gerechnete. Ohne Auto oder ohne Meldung: ein Strich,
+    // und keine erfundene Zahl.
+    const roh = car && car.battery !== undefined && car.battery !== null ? car.battery : null;
+    schreibeWert($(pre + '-batt'), roh === null ? '\u2013' : batteryPercent(roh) + ' %');
+  }
+
+  function p2ScreenRender() {
+    vglSpalte('vgl1', typeof playerCar !== 'undefined' ? playerCar : null,
+              physEngine, typeof fuel === 'number' ? fuel : 0,
+              typeof damage === 'number' ? damage : 0);
+    vglSpalte('vgl2', typeof playerCar2 !== 'undefined' ? playerCar2 : null,
+              physEngine2,
+              typeof tankZweiStand === 'function' ? tankZweiStand() : 0,
+              typeof schadenVon === 'function' ? schadenVon(2) : 0);
+
+    // ---- DER KOPF: die Lage von Auto 2, weil sie die veraenderliche ist ---------------
+    const car2 = typeof playerCar2 !== 'undefined' ? playerCar2 : null;
+    const lage = typeof boxZweiLage === 'function' ? boxZweiLage() : 'aus';
+    const kopf = $('p2s-kopf-lage');
+    if (kopf) {
+      kopf.textContent = !zweiSpieler ? 'Modus aus'
+        : (!car2 ? 'Auto 2 nicht zugeteilt'
+           : (abseitsJetztFuer(2) ? 'Auto 2 neben der Bahn' : 'beide auf der Bahn'));
+    }
+    const rundeK = $('p2s-kopf-runde');
+    if (rundeK) {
+      const r1 = ((typeof playerCar !== 'undefined' && playerCar && playerCar.race
+                   && playerCar.race.laps) || []).length;
+      const r2 = ((car2 && car2.race && car2.race.laps) || []).length;
+      rundeK.textContent = 'Runden ' + r1 + ' : ' + r2;
+    }
+
+    // ---- DIE FUSSZEILE SAGT, WAS DER BOXENSTOPP GERADE BRAUCHT -----------------------
+    //
+    // GEMELDET: "Tanken soll unabhängig bei beiden klappen." Gemessen tut es das - beide
+    // Autos tanken gleichzeitig und unabhaengig. Was fehlte, war die RUECKMELDUNG: der
+    // Service beginnt erst im Stillstand, und das Auto rollt mit ueber 200 km/h aus. Der
+    // Coast-Drag allein bringt es in acht Sekunden nur auf 174 - wer den Knopf drueckt und
+    // wartet, sieht nichts passieren und haelt es fuer kaputt.
+    //
+    // Also steht hier jetzt, WIE WEIT es noch ist: Tempo gegen Schwelle. Und der zweite
+    // Teil der Bedingung steht mit dabei, weil er nicht zu erraten ist - waehrend man auf
+    // der Bremse steht, beginnt der Service nicht (Math.abs(p2Throttle) < 0.1, dieselbe
+    // Regel wie bei Auto 1).
+    const fuss = $('p2s-fuss');
+    if (fuss) {
+      if (!zweiSpieler) {
+        fuss.textContent = 'Der 2-Spieler-Modus ist aus \u2013 rechts steht nichts.';
+      } else if (!car2) {
+        fuss.textContent = 'In der Garage einem Auto die Rolle "Spieler 2" geben.';
+      } else if (lage === 'angefordert') {
+        const kmh = Math.abs(physEngine2.state.speedKmh) * REAL_SCALE;
+        const schwelle = PIT_STANDSTILL_KMH * REAL_SCALE;
+        fuss.textContent = 'P2 Boxenstopp: bremsen und anhalten \u2013 '
+          + Math.round(kmh) + ' km/h, nötig unter ' + Math.round(schwelle)
+          + ', dann Finger vom Gas.';
+      } else if (lage === 'service') {
+        const offen = [];
+        if (tankZweiStand() < 100 - 0.05) offen.push('tankt');
+        if (schadenVon(2) > 0.05) offen.push('repariert');
+        fuss.textContent = boxZweiFertig()
+          ? 'P2 Boxenstopp: fertig, losfahren!'
+          : 'P2 Boxenstopp: ' + (offen.join(', ') || 'Standzeit laeuft');
+      } else {
+        fuss.textContent = 'Boxenstopp: links f\u00fcr Auto 1, rechts f\u00fcr Auto 2.';
+      }
+    }
+    const knopf2 = $('p2s-act-pit');
+    if (knopf2) {
+      knopf2.classList.toggle('warn', lage !== 'aus');
+      knopf2.disabled = !zweiSpieler || !car2;
+    }
+    const knopf1 = $('vgl1-act-pit');
+    if (knopf1) {
+      knopf1.classList.toggle('warn',
+        typeof pitState !== 'undefined' && pitState !== 'off');
+    }
+    const ton = $('vgl-act-sound-txt');
+    if (ton) {
+      const q = $('race-act-sound-txt');
+      ton.textContent = q ? q.textContent : 'Motor';
+    }
+  }
+
+  if ($('p2s-act-pit')) {
+    $('p2s-act-pit').addEventListener('click', () => {
+      // Defensiv gerufen: 70-race.js wird SPAETER gebaut. Zur Laufzeit ist die Funktion da.
+      if (typeof boxZweiAnfordern === 'function') boxZweiAnfordern();
+      p2ScreenRender();
+    });
+  }
+  // Die zwei Knoepfe fuer Auto 1 leiten auf die vorhandenen weiter, statt ihre Wirkung zu
+  // verdoppeln: ein zweiter Weg in den Boxenstopp waere ein zweiter Ort, an dem die
+  // Vorwahl entsteht - und die Vorwahl gibt es genau einmal, auf dem Boxenschirm.
+  if ($('vgl1-act-pit')) {
+    $('vgl1-act-pit').addEventListener('click', () => {
+      const q = $('race-act-pit');
+      if (q) q.click();
+      p2ScreenRender();
+    });
+  }
+  if ($('vgl-act-sound')) {
+    $('vgl-act-sound').addEventListener('click', (e) => {
+      // Die Haelfte des Knopfes entscheidet ueber die Richtung - dieselbe Bedienung wie im
+      // Hauptschirm. Weitergereicht wird an den dortigen Knopf, damit es EINEN Weg durch
+      // die Motorliste gibt.
+      const q = $('race-act-sound');
+      if (!q) return;
+      const r = e.currentTarget.getBoundingClientRect();
+      const links = (e.clientX - r.left) < r.width / 2;
+      const ev = new MouseEvent('click', { bubbles: true, clientX:
+        links ? q.getBoundingClientRect().left + 4
+              : q.getBoundingClientRect().right - 4 });
+      q.dispatchEvent(ev);
+      p2ScreenRender();
+    });
+  }
   // setzen. 80 ms, dann zurueck: eine Anzeige mit Masse setzt sich kurz, ein Textfeld nicht.
   //
   // DER VERGLEICH IST DER GANZE PUNKT. Der Schirm wird jeden Takt neu geschrieben; ohne ihn
@@ -1272,6 +1556,43 @@
     el.classList.remove('gt3-tick');
     void el.offsetWidth;
     el.classList.add('gt3-tick');
+  }
+
+  // ---- DIE SCHALTLICHTER, EINE WAHRHEIT FUER JEDE LEISTE ------------------------------
+  //
+  // Herausgeloest, weil es seit v0.6.56 ZWEI Leisten gibt: die grosse im Cockpit und je
+  // eine je Auto auf dem Vergleichsschirm. Zwei Kopien dieser Farbregel waeren zwei Orte,
+  // an denen jemand die blauen Lampen verschiebt.
+  //
+  // Gruen, dann rot, dann BLAU fuer die letzten zwei. Das blaue Paar UEBER dem roten und
+  // nicht darunter ist das, was echte GT3-Lenkraeder benutzen, und es macht den Streifen
+  // lesbar, ohne Lampen zu zaehlen.
+  function schaltLampen(host, frac, amBegrenzer) {
+    if (!host) return;
+    const lamps = host.children;
+    const n = lamps.length;
+    const f = Math.max(0, Math.min(1, frac || 0));
+    for (let i = 0; i < n; i++) {
+      const lit = f >= (i + 1) / n;
+      let col = '#12161f';
+      if (lit) {
+        if (i >= n - 2) col = '#3d8bff';
+        else if (i >= n - 5) col = '#ff3b3b';
+        else col = '#2ee06a';
+      }
+      lamps[i].style.background = col;
+      lamps[i].style.boxShadow = lit
+        ? 'inset 0 0 0 1px rgba(255,255,255,.25), 0 0 6px ' + col
+        : 'inset 0 0 0 1px #262e3d';
+    }
+    // On the limiter the whole strip flashes blue, which no steady pattern can be mistaken
+    // for.
+    if (amBegrenzer && Math.floor(Date.now() / 90) % 2 === 0) {
+      for (let i = 0; i < n; i++) {
+        lamps[i].style.background = '#3d8bff';
+        lamps[i].style.boxShadow = '0 0 8px #3d8bff';
+      }
+    }
   }
 
   // out ist HERAUS, und zwar weil es nicht benutzt wurde: die Anzeige liest alles aus dem
@@ -1306,29 +1627,7 @@
     // not below it, is what real GT3 wheels use for "shift now", and it makes the strip
     // readable without counting lamps.
     const frac = Math.max(0, Math.min(1, st.rpmFrac));
-    const lamps = $('race-shift').children;
-    const n = lamps.length;
-    for (let i = 0; i < n; i++) {
-      const lit = frac >= (i + 1) / n;
-      let col = '#12161f';
-      if (lit) {
-        if (i >= n - 2) col = '#3d8bff';
-        else if (i >= n - 5) col = '#ff3b3b';
-        else col = '#2ee06a';
-      }
-      lamps[i].style.background = col;
-      lamps[i].style.boxShadow = lit
-        ? 'inset 0 0 0 1px rgba(255,255,255,.25), 0 0 6px ' + col
-        : 'inset 0 0 0 1px #262e3d';
-    }
-    // On the limiter the whole strip flashes blue, which no steady pattern can be mistaken
-    // for.
-    if (st.onLimiter && Math.floor(Date.now() / 90) % 2 === 0) {
-      for (let i = 0; i < n; i++) {
-        lamps[i].style.background = '#3d8bff';
-        lamps[i].style.boxShadow = '0 0 8px #3d8bff';
-      }
-    }
+    schaltLampen($('race-shift'), frac, st.onLimiter);
 
     // ABS is a real flag in the model, so it earns a cell. Traction control does not exist
     // in this drivetrain and therefore gets no cell, rather than a permanent zero.
@@ -1364,6 +1663,10 @@
     $('race-wx-sun').style.display = wet ? 'none' : '';
     $('race-wx-rain').style.display = wet ? '' : 'none';
     $('race-wx-rain').style.color = wet ? '#5aa9ff' : '';
+    // Das Zeichen fuer "wechselhaft". Siehe wxZeichenSetzen() - es steht als eigene
+    // Funktion, weil die Wetterkachel es beim Klick SOFORT braucht und nicht erst im
+    // naechsten Fahrtakt.
+    wxZeichenSetzen();
     // G plot. Red is the simulation, green the car's own raw motion bytes — the two are
     // scaled independently on purpose: the real numbers are far noisier and much larger
     // relative to their range, so a shared scale would push one of them off the dial.
@@ -1533,21 +1836,32 @@
     if (reifenKachel) reifenKachel.classList.toggle('sim-off',
       physEngine.config.tyreEffect <= 0);
 
-    // Dieselben zwei Groessen, die auf dem Steuerkreuz liegen - hoch/runter und
-    // links/rechts. Die Kachel zeigt, was das Kreuz verstellt, und nichts anderes.
-    $('race-trim-accel').textContent = Math.round(physEngine.config.brakeBias * 100) + '%';
-    // Die Marke auf der Skala. Der Bereich kommt aus dem Bedienelement und nicht aus
-    // Konstanten hier: eine zweite Kopie von min und max liefe beim naechsten Nachziehen
-    // auseinander.
-    const bm = $('race-bias-mark'), bi = $('setting-brakebias');
-    if (bm && bi) {
-      const lo = +bi.min, hi = +bi.max;
-      const t = Math.max(0, Math.min(1,
-        (physEngine.config.brakeBias * 100 - lo) / Math.max(1e-6, hi - lo)));
-      // Oben ist VORN, also wird t umgedreht: viel Balance vorn heisst kleine y-Koordinate.
-      bm.setAttribute('y', (2.5 + (1 - t) * 16.2).toFixed(2));
+    // ---- DIE ZWEI GROESSEN AUF DEM STEUERKREUZ: REIFENWAHL UND TANKMENGE --------
+    //
+    // Die Kachel zeigt, was das Kreuz verstellt, und nichts anderes - derselbe Satz wie
+    // vorher, nur sind es jetzt andere zwei Groessen. Bremsbalance und Lenkansprechen
+    // standen hier bis v0.6.13; beide sind an ihren Reglern in den Optionen geblieben.
+    //
+    // EINE Abfrage ueber die Dateigrenze: pitKachelStand() steht in 70-race.js und liefert
+    // alles Gebrauchte auf einmal. Fuenf einzelne Zugriffe waeren fuenf Stellen, an denen
+    // jemand eine vergisst - und die Funktion ist zur Laufzeit da, auch wenn sie in einer
+    // spaeteren Datei steht (Funktionsdeklarationen werden hochgezogen).
+    if (typeof pitKachelStand === 'function') {
+      const ps = pitKachelStand();
+      const tn = $('race-pit-tyre');
+      if (tn) tn.textContent = ps.mixName;
+      const ring = $('race-pit-tyre-ring');
+      if (ring) ring.setAttribute('stroke', ps.mixFarbe);
+      const rillen = $('race-pit-tyre-rillen');
+      if (rillen) rillen.style.display = ps.mixRegen ? '' : 'none';
+      const trow = $('race-pit-tyre-row');
+      if (trow) trow.classList.toggle('wx-warn', ps.mixWarnung);
+      const fn = $('race-pit-fuel');
+      if (fn) fn.textContent = ps.tankWort;
+      const frow = $('race-pit-fuel-row');
+      // "nein" ist kein Fehler, sondern eine Wahl - deshalb keine Warnfarbe, nur gedimmt.
+      if (frow) frow.classList.toggle('aus', !ps.tankAn);
     }
-    $('race-trim-steer').textContent = steerRespPct(physEngine.config.steerResponse) + '%';
 
     // Pit banner replaces the shift bar while the pit lane is active — impossible to miss,
     // which the old small field was not.
@@ -1674,12 +1988,25 @@
   // fuehrt - ein Zustand, der je Takt neu entsteht, ist keiner. Zuruecksetzen tut ihn
   // autopilotZuruecksetzen(), gerufen wenn der Autopilot aussetzt: ein I-Anteil, der aus
   // einer alten gelben Phase stehen bleibt, gibt beim naechsten Mal sofort Gas.
+  // EIN REGLER JE AUTO, und das ist keine Symmetrie um ihrer selbst willen: der Regler hat
+  // einen I-Anteil. Ein gemeinsamer Zustand hiesse, dass die Abweichung von Auto 1 das Gas
+  // von Auto 2 mitbestimmt - und umgekehrt. Genau davor warnt der Kommentar in autopilot()
+  // schon fuer den Fall "Zustand je Takt neu angelegt": ein Zustand, den man teilt, ist
+  // ebenso wenig ein I-Anteil wie einer, den man wegwirft.
   const autopilotRegler = {};
-  function autopilotZuruecksetzen() {
-    autopilotRegler.iTerm = 0;
-    autopilotRegler.lastThrottle = 0;
-    autopilotRegler.lastBrake = 0;
-    autopilotRegler.at = 0;
+  const autopilotRegler2 = {};
+  // `wer` waehlt den Regler. OHNE Angabe werden BEIDE geraeumt, und das ist die richtige
+  // Vorgabe: die vorhandenen Aufrufstellen raeumen auf, wenn die gelbe Phase endet oder ein
+  // Rennen beginnt - das gilt fuer das ganze Feld und nicht fuer ein Auto.
+  function autopilotZuruecksetzen(wer) {
+    const leeren = (r) => {
+      r.iTerm = 0;
+      r.lastThrottle = 0;
+      r.lastBrake = 0;
+      r.at = 0;
+    };
+    if (wer === undefined) { leeren(autopilotRegler); leeren(autopilotRegler2); return; }
+    leeren(wer === 2 ? autopilotRegler2 : autopilotRegler);
   }
 
   // ====================================================================================
@@ -1733,23 +2060,70 @@
   // gezogen - und war eine Software-Kruecke fuer genau das, was die Hardware selbst
   // besser kann, sobald sie den Vorausblick hat. Mit dem Schalter braucht es sie nicht
   // mehr.
-  let driverAssistOn = false;
+  // ---- DREI MODI STATT ZWEI, wie bestellt ---------------------------------------
+  //
+  // BESTELLT: "Bei Einstellungen -> Fahrgefuehl -> Fahrhilfe: mach 3 Modi draus: aus
+  // (standard), voll (auto lenkt komplett selbst), und Querlage (auto lenkt selbst, aber
+  // mit nach links und rechts lenken bestimmt man die Querlage). Pass auf, dass du nicht
+  // wieder den Standard-Modus kaputt machst."
+  //
+  //     aus   - Vorgabe. Der Lenk-Input IST der Lenkwinkel, keine modeBytes. Genau der
+  //             Zustand, der vorher mit dem ausgeschalteten Schalter galt.
+  //     quer  - was vorher der eingeschaltete Schalter war: modeBytes gehen hinaus, und
+  //             derselbe Lenk-Input bedeutet fuer das Auto die Querlage.
+  //     voll  - neu. Wie 'quer', aber der Lenk-Input wird NICHT weitergegeben: das Auto
+  //             bestimmt auch die Querlage selbst.
+  //
+  // ---- WARUM 'aus' DER ERSTE EINTRAG UND DER VORGABEWERT IST --------------------
+  //
+  // Weil er genau das bedeuten muss, was er bisher bedeutet hat. Die Warnung war
+  // ausdruecklich, und sie hat eine Vorgeschichte: die Fahrhilfe ist ueberhaupt nur
+  // entstanden, weil die modeBytes ohne Zutun des Fahrers hinausgingen und er "gar nicht
+  // mehr lenken" konnte. Der Vorgabewert ist deshalb nicht Geschmack, sondern der
+  // eigentliche Zweck der ganzen Einstellung.
+  const FAHRHILFE_MODI = ['aus', 'quer', 'voll'];
+  let fahrhilfeModus = 'aus';
 
-  // AN, wenn von Hand eingeschaltet ODER der Autopilot gerade greift (Gelb/Formation).
-  // autopilotGrund() steht weiter unten in dieser Datei; als Funktionsdeklaration ist sie
-  // bereits vorhanden, wenn diese Funktion tatsaechlich zum ersten Mal LAEUFT - das
-  // geschieht erst aus einem Zeitgeber, lange nach dem vollstaendigen Laden.
+  // AN, wenn ein Fahrhilfe-Modus gewaehlt ist ODER der Autopilot gerade greift
+  // (Gelb/Formation). autopilotGrund() steht weiter unten in dieser Datei; als
+  // Funktionsdeklaration ist sie bereits vorhanden, wenn diese Funktion tatsaechlich zum
+  // ersten Mal LAEUFT - das geschieht erst aus einem Zeitgeber, lange nach dem Laden.
+  //
+  // DER NAME BLEIBT, obwohl es jetzt drei Modi gibt: die Frage, die diese Funktion
+  // beantwortet, ist unveraendert "gehen die modeBytes hinaus", und daran haengt genau ein
+  // Aufrufer (spielerOrtTick in 90-ghosts.js). 'voll' und 'quer' unterscheiden sich NICHT
+  // darin, ob das Auto sich selbst haelt - nur darin, ob der Fahrer die Querlage mitredet.
   function driverAssistAktiv() {
-    return driverAssistOn || !!autopilotGrund();
+    return fahrhilfeModus !== 'aus' || !!autopilotGrund();
+  }
+
+  // ---- UND HIER LIEGT DIE FALLE, IN DIE ICH NICHT GETRETEN BIN ------------------
+  //
+  // 'voll' heisst: der Lenk-Input geht nicht mit hinaus. Das darf aber NUR gelten, wenn
+  // die modeBytes tatsaechlich hinausgehen - denn nur dann liest das Auto die Null als
+  // "Mitte der Bahn". Ohne modeBytes liest es sie als RADSTELLUNG, und dann faehrt es mit
+  // gerade gestellten Raedern in die naechste Bande, ohne dass der Fahrer eingreifen kann.
+  //
+  // Die modeBytes haengen an drei Dingen (spielerOrtTick, 90-ghosts.js:3936): Bahn-Stellung,
+  // driverAssistAktiv(), und einem Vorausblick, den es nur mit eingescannter Strecke gibt.
+  // Diese Funktion rechnet das NICHT nach, sondern liest das ERGEBNIS: playerCar.modeBytes.
+  // Eine nachgerechnete Bedingung waere eine zweite Fassung derselben Regel - und wenn die
+  // beiden auseinanderlaufen, faehrt das Auto in die Bande.
+  function fahrhilfeVollGilt() {
+    return fahrhilfeModus === 'voll'
+        && !!(typeof playerCar !== 'undefined' && playerCar && playerCar.modeBytes);
   }
 
   if ($('driver-assist')) {
     $('driver-assist').addEventListener('change', (e) => {
-      driverAssistOn = e.target.checked;
+      fahrhilfeModus = FAHRHILFE_MODI.indexOf(e.target.value) >= 0 ? e.target.value : 'aus';
     });
-    // Und einmal beim Laden aus dem Markup - dieselbe Regel wie bei jedem anderen Schalter:
-    // der Regler ist die Wahrheit, das Modell folgt ihm.
-    driverAssistOn = $('driver-assist').checked;
+    // Und einmal beim Laden aus dem Markup - dieselbe Regel wie bei jedem anderen Regler:
+    // das Bedienelement ist die Wahrheit, das Modell folgt ihm. Ein unbekannter Wert faellt
+    // auf 'aus' zurueck und nicht auf den ersten Eintrag: eine Fahrhilfe, die sich aus einer
+    // kaputten Sicherung heraus selbst einschaltet, ist genau der gemeldete Fehler.
+    const v = $('driver-assist').value;
+    fahrhilfeModus = FAHRHILFE_MODI.indexOf(v) >= 0 ? v : 'aus';
   }
 
   function autopilotGrund() {
@@ -1767,12 +2141,24 @@
     return flagState === 'yellow' ? 'yellow' : null;
   }
 
-  function autopilot(fahrerBremse) {
+  // ---- UND ER GILT SEIT v0.6.53 FUER BEIDE AUTOS -------------------------------------
+  //
+  // Der Grund, warum das der wertvollste der offenen Punkte war: ohne ihn faehrt Auto 2
+  // bei gelber Flagge mit Vollgas in eine Kolonne, die alle anderen gerade einhalten. Eine
+  // gelbe Flagge, die fuer ein Auto im Feld nicht gilt, ist keine gelbe Flagge.
+  //
+  // Moeglich wurde es durch die Ortung aus v0.6.46: autopilotGrund() ist global (Flagge,
+  // Einfuehrungsrunde, Bahn/Ausdruck-Stellung), der Rest haengt am Auto - Motor, Regler,
+  // Kolonnenversatz, Abseits-Antwort. `wer` ist 1, wenn nichts dasteht.
+  function autopilot(fahrerBremse, wer) {
+    const zwei = wer === 2;
     const grund = autopilotGrund();
     // AUSSETZER RAEUMEN DEN REGLER AUF. Ohne das traegt der I-Anteil ueber das Ende der
     // gelben Phase hinaus und gibt beim naechsten Mal aus dem Stand Gas.
-    if (!grund) { autopilotZuruecksetzen(); return null; }
-    const st = physEngine.state;
+    if (!grund) { autopilotZuruecksetzen(wer); return null; }
+    const motor = zwei ? physEngine2 : physEngine;
+    const regler = zwei ? autopilotRegler2 : autopilotRegler;
+    const st = motor.state;
     // ---- WIE EIN GHOST, UND DAS IST DER BESTELLTE UNTERSCHIED ---------------------
     //
     // GEMELDET: "gelbe Flagge fuer mein Auto auf der Bahn fixen: es gibt nur Gas, sollte
@@ -1801,11 +2187,11 @@
     const ziel = grund === 'formation'
       ? formationPace()
       : Math.max(yellowFactor(), GHOST_READ_MIN);
-    const v = Math.abs(st.speedKmh) / physEngine.config.topSpeedKmh;
+    const v = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
     const dtA = Math.max(0.01, Math.min(0.25,
-      (Date.now() - (autopilotRegler.at || Date.now())) / 1000));
-    autopilotRegler.at = Date.now();
-    const geregelt = ghostSpeedControl(autopilotRegler, ziel, v, dtA);
+      (Date.now() - (regler.at || Date.now())) / 1000));
+    regler.at = Date.now();
+    const geregelt = ghostSpeedControl(regler, ziel, v, dtA);
     let throttle = geregelt.throttle;
     let brake = geregelt.brake;
     // DIE BREMSE DES FAHRERS GEWINNT, aber nur in der Einfuehrungsrunde. Dort rollt das Feld
@@ -1819,8 +2205,29 @@
     return { grund, throttle, brake,
              // Bei Gelb geradeaus - eine vorhersagbare Spur, damit man ein Auto von Hand
              // dazwischenstellen kann. In der Einfuehrungsrunde wie die Ghosts.
+             // Der Kolonnenversatz SEINES Autos: er haengt am Startplatz
+             // (gridPosOf) und an einer eigenen Schlaengelphase - zwei Autos in
+             // einer Zweierkolonne sollen nicht auf derselben Spur rollen.
              steer: grund === 'formation' && typeof formationDriverOffset === 'function'
-               ? formationDriverOffset() : 0 };
+               ? formationDriverOffset(zwei ? playerCar2 : playerCar) : 0,
+             // ---- OB ER UEBERHAUPT LENKEN DARF -------------------------------------
+             //
+             // Neben der Bahn nicht. Beide Werte, die er liefert - 0 bei Gelb und der
+             // Kolonnenversatz in der Einfuehrungsrunde -, sind QUERLAGEN und setzen
+             // voraus, dass das Auto sich selbst auf der Bahn haelt. Ohne Streckenlesung
+             // gehen die modeBytes nicht hinaus (spielerOrtTick, 90-ghosts.js), und dann
+             // liest das Auto dieselbe Null als RADSTELLUNG: es faehrt mit geraden Raedern
+             // weiter, und der Fahrer kann nichts dagegen tun.
+             //
+             // Genau das steht als Argument schon in der Doku ("ein Autopilot ohne
+             // Querregelung wuerde es geradeaus in die Bande fahren") - dort als Grund
+             // dafuer, dass der Autopilot im Ausdruck-Modus gar nicht anlaeuft. Neben der
+             // Bahn gilt es genauso, nur voruebergehend.
+             //
+             // GAS UND BREMSE BLEIBEN BEI IHM. Eine gelbe Flagge bleibt eine gelbe
+             // Flagge; hergegeben wird die Lenkung, damit man zurueckfahren kann, nicht
+             // die Tempobegrenzung.
+             lenkt: !abseitsJetztFuer(zwei ? 2 : 1) };
   }
 
   // ---- Abseits der Fahrbahn ----------------------------------------------------------
@@ -1861,9 +2268,38 @@
   // stand schon in der Fusszeile, die ANZAHL nicht.
   let offtrackZaehler = 0;
 
-  // Gerufen aus dem Meldekanal in 70-race.js, also je Paket.
-  function offtrackMelden(abseits) {
+  // ---- UND DASSELBE FUER AUTO 2 ------------------------------------------------------
+  //
+  // Die drei Groessen darueber gelten fuer Auto 1 und bleiben, was sie sind: acht Stellen
+  // lesen sie, der Pruefstand SCHREIBT sie (offtrackAktiv = true in 93-testbench.js), und
+  // vier Selbsttests haengen daran. Sie in Zugriffsfunktionen zu verwandeln waere ein
+  // Umbau, der mit dem Zwei-Spieler-Modus nichts zu tun hat.
+  //
+  // Auto 2 bekommt deshalb einen eigenen Satz derselben drei Zahlen, und `abseitsSatz()`
+  // versteckt die Asymmetrie an EINER Stelle. Das ist bewusst die kleine Fassung, und der
+  // Grund steht hier, damit niemand sie fuer Schlamperei haelt: ein dritter Spieler waere
+  // der Moment, in dem daraus ein Datensatz je Auto werden muss.
+  const abseitsZwei = { seit: null, wiederSeit: null, aktiv: false, zaehler: 0 };
+
+  // Gerufen aus dem Meldekanal in 70-race.js (Auto 1) und aus dem Meldestrom je Auto in
+  // 90-ghosts.js (Auto 2), also je Paket. `wer` ist 1, wenn nichts dasteht.
+  function offtrackMelden(abseits, wer) {
     const jetzt = Date.now();
+    if (wer === 2) {
+      const a = abseitsZwei;
+      if (abseits) {
+        a.wiederSeit = null;
+        if (a.seit === null) a.seit = jetzt;
+        if (!a.aktiv && jetzt - a.seit >= offtrackEinMs) { a.aktiv = true; a.zaehler++; }
+      } else {
+        a.seit = null;
+        if (a.wiederSeit === null) a.wiederSeit = jetzt;
+        if (a.aktiv && jetzt - a.wiederSeit >= OFFTRACK_AUS_MS) a.aktiv = false;
+      }
+      // KEINE Anzeige: das Abseits-Schild im Cockpit gehoert Auto 1. Fuer Auto 2 steht es
+      // auf dessen eigenem Schirm (siehe den Cockpit-Schirm "Auto 2").
+      return;
+    }
     if (abseits) {
       offtrackWiederSeit = null;
       if (offtrackSeit === null) offtrackSeit = jetzt;
@@ -1877,6 +2313,22 @@
       if (offtrackAktiv && jetzt - offtrackWiederSeit >= OFFTRACK_AUS_MS) offtrackAktiv = false;
     }
     offtrackAnzeige();
+  }
+
+  // Die zwei Fragen von oben, jetzt mit Adressat. Fuer `wer === 1` ist es Wort fuer Wort
+  // dieselbe Antwort wie vorher - deshalb rufen die acht vorhandenen Stellen weiter
+  // abseitsJetzt() und offtrackGilt() und muessen nicht angefasst werden.
+  function abseitsJetztFuer(wer) {
+    if (wer === 2) return abseitsZwei.aktiv && trackMode === 'on';
+    return abseitsJetzt();
+  }
+
+  function offtrackGiltFuer(wer) {
+    return offtrackEffekt && abseitsJetztFuer(wer);
+  }
+
+  function abseitsZaehlerFuer(wer) {
+    return wer === 2 ? abseitsZwei.zaehler : offtrackZaehler;
   }
 
   // Wirkt nur im Bahn-Modus. Im Ausdruck-Modus ist der Streckensensor abgeschaltet
@@ -1967,15 +2419,24 @@
     const gasKurve = gasKennlinie(Math.max(0, throttleY), physEngine.config.throttleGamma);
     let rawThrottle = fuelDamageDerate(gasKurve, fuelCut);
     let rawBrake = Math.max(0, -throttleY);
-    // Der rohe Lenk-Input geht unveraendert durch. Ist die Fahrhilfe an (siehe
+    // Der rohe Lenk-Input geht unveraendert durch. Steht die Fahrhilfe auf 'quer' (siehe
     // driverAssistAktiv() oben), aendert das NICHT diese Zahl, sondern nur, wie das Auto
     // sie versteht: modeBytes gehen dann mit hinaus (spielerOrtTick in 90-ghosts.js), und
     // dieselbe Zahl wird zur Querlage statt zum Lenkwinkel.
-    let steer = steerX;
+    //
+    // NUR 'voll' greift in die Zahl ein, und nur dann, wenn die modeBytes wirklich
+    // hinausgehen - die Begruendung steht bei fahrhilfeVollGilt(). In 'aus' und 'quer' ist
+    // diese Zeile dieselbe wie vorher.
+    let steer = fahrhilfeVollGilt() ? 0 : steerX;
     // Bei gelber Flagge und in der Einfuehrungsrunde faehrt das Auto selbst. Siehe
     // autopilotGrund() fuer die zwei Gruende und autopilot() fuer die Regelung.
     const ap = autopilot(rawBrake);
-    if (ap) { rawThrottle = ap.throttle; rawBrake = ap.brake; steer = ap.steer; }
+    if (ap) {
+      rawThrottle = ap.throttle;
+      rawBrake = ap.brake;
+      // Die Lenkung nur, wenn er sie fuehren DARF - siehe `lenkt` in autopilot().
+      if (ap.lenkt) steer = ap.steer;
+    }
     // Abseits der Bahn gedeckelt, und zwar VOR der Physik. Genau das war der Fehler beim
     // Gasfaktor: er wirkte nach der Physik auf die Ausgabe, der Tacho zeigte volles Tempo
     // und das Auto fuhr langsamer. Hier sagen Anzeige und Auto dasselbe.
@@ -2013,6 +2474,208 @@
     trackDistance(physEngine.state.speedKmh * REAL_SCALE, dt);
     physOutSteer = out.servoAngle;
     physOutThrottle = out.motorPWM;
+  }
+
+  // ====================================================================================
+  // DIE FAHRPHYSIK VON SPIELER 2
+  // ====================================================================================
+  //
+  // ABSICHTLICH SCHMAL. physicsStep() darueber ist gewachsen, weil es alles traegt, was am
+  // Fahrerauto haengt: Tank und Schaden, den Autopiloten unter Gelb, die Drosselung abseits
+  // der Bahn, das Rumpeln im Controller, den Windschatten und die gefahrene Strecke. Jede
+  // dieser Groessen haengt an der ORTUNG des Fahrerautos (spielerOrt in 90-ghosts.js) oder
+  // an einem Zaehler, den es nur einmal gibt.
+  //
+  // Diese Funktion rechnet deshalb genau das, was "beide koennen fahren" braucht:
+  // Gaskennlinie, Fahrphysik, Anzeige. Was Spieler 2 in dieser Fassung NICHT hat, steht
+  // wortwoertlich im Hilfetext der Kachel, damit es niemand sucht:
+  //
+  //   kein Sprit und kein Schaden   sie sind globale Zaehler (70-race.js) und waeren fuer
+  //                                zwei Autos zwei Zaehler. Ungleiche Regeln waeren
+  //                                schlimmer als keine: der Modus soll fair sein.
+  //   kein Autopilot unter Gelb     er greift auf die Ortung des Fahrerautos zu
+  //   keine Abseits-Drosselung      dieselbe Ortung
+  //   kein Windschatten            dito
+  //
+  // Was er HAT: eine eigene Physikinstanz, also eigene Gaenge, eigene Drehzahl, eigenes
+  // Tempo, eigene Reifen- und Bremsentemperatur - alles, was den Wagen fahren laesst.
+  function physicsStep2() {
+    if (!physicsEnabled) { phys2LastTime = null; return; }
+    const now = performance.now();
+    const dt = phys2LastTime ? Math.min(0.25, (now - phys2LastTime) / 1000)
+                             : CONTROL_SEND_INTERVAL_MS / 1000;
+    phys2LastTime = now;
+    // Dieselbe Kennlinie und derselbe Regler wie bei Spieler 1: der Daumen soll sich auf
+    // beiden Pads gleich anfuehlen.
+    const gasKurve = gasKennlinie(Math.max(0, p2Throttle), physEngine2.config.throttleGamma);
+    // ---- ABSEITS DER BAHN AUCH FUER AUTO 2 --------------------------------------------
+    //
+    // VOR der Physik, genau wie bei Auto 1 - und die Begruendung dort ist es wert,
+    // wiederholt zu werden: ein Gasfaktor NACH der Physik zeigte im Tacho volles Tempo,
+    // waehrend das Auto langsamer fuhr. Hier sagen Anzeige und Auto dasselbe.
+    let gas = gasKurve;
+    // ---- SCHADEN KOSTET LEISTUNG, AUCH BEI AUTO 2 ---------------------------------
+    //
+    // Dieselbe Kennlinie wie bei Auto 1: bis zu 30 Prozent weniger Gas mit dem Schaden,
+    // halbe Leistung im Totalschaden, und darunter ein BODEN - sonst liegt der Notlauf
+    // unter minMoveThrottle, und dort zuckt das Auto statt zu fahren.
+    //
+    // ---- UND DER EIGENE TANK, seit v0.6.48 ----------------------------------------
+    //
+    // Hier stand als zweites Argument eine feste 1 mit dem Vermerk "der eigene Tank kommt
+    // im naechsten Schritt". Jetzt ist er da: der Verbrauch laeuft in tankZweiTick(), die
+    // Rampe des leeren Tanks in tankZweiCutRampe() - hier, weil dies die einzige Stelle mit
+    // einem verlaesslichen dt ist, dasselbe Argument wie bei Auto 1.
+    //
+    // REIHENFOLGE WIE BEI AUTO 1: erst die Kennlinie (sie beschreibt, was der Daumen
+    // MEINT), dann Tank und Schaden (sie beschreiben, was das Auto daraus machen kann).
+    // Andersherum wuerde die Kennlinie einen halbleeren Tank mitkruemmen.
+    fuelTankTick(p2Throttle, 2);
+    gas = fuelDamageDerate(gas, tankZweiCutRampe(dt), 2);
+    // ---- BOXENSTOPP, seit v0.6.54 -------------------------------------------------
+    //
+    // Der Takt zuerst, der Deckel danach: der Takt entscheidet ueber die Lage (angefordert,
+    // Service, aus), und der Deckel liest sie. Umgekehrt haette der Deckel einen Takt lang
+    // die alte Lage.
+    //
+    // EIN EIGENER DECKEL, weil der von Auto 1 ueber topSpeedScale in sendControlValue()
+    // laeuft - und diesen Weg nimmt Auto 2 nicht (es geht ueber writeToCar, wie ein Ghost).
+    boxZweiTick();
+    gas = Math.min(gas, boxZweiDeckel());
+    // ---- GELBE FLAGGE UND EINFUEHRUNGSRUNDE, seit v0.6.53 -------------------------
+    //
+    // Der wertvollste der offenen Punkte, und der Grund ist einfach: ohne ihn faehrt
+    // Auto 2 bei Gelb mit Vollgas in eine Kolonne, die alle anderen gerade einhalten.
+    // Eine gelbe Flagge, die fuer ein Auto im Feld nicht gilt, ist keine.
+    //
+    // DIESELBE Reihenfolge wie bei Auto 1: der Autopilot setzt Gas und Bremse NACH Tank
+    // und Schaden. Ein Notlauf bleibt ein Notlauf, auch unter Gelb.
+    let lenkung = p2Steer;
+    let bremse = Math.max(0, -p2Throttle);
+    const ap2 = autopilot(bremse, 2);
+    if (ap2) {
+      gas = ap2.throttle;
+      bremse = ap2.brake;
+      // Die Lenkung nur, wenn er sie fuehren DARF - siehe `lenkt` in autopilot().
+      if (ap2.lenkt) lenkung = ap2.steer;
+    }
+    if (offtrackGiltFuer(2)) gas = Math.min(gas, OFFTRACK_GAS);
+    // Und das Rumpeln, an seinen eigenen Pad. Bis v0.6.45 waere es der Pad von Spieler 1
+    // gewesen; jetzt hat jeder Stoss eine Adresse.
+    if (abseitsJetztFuer(2)) {
+      const jetzt = Date.now();
+      if (jetzt - offtrack2RumbleAt >= OFFTRACK_RUMBLE_MS - 40) {
+        offtrack2RumbleAt = jetzt;
+        padRumble(0.12, 0.34, OFFTRACK_RUMBLE_MS, 'abseits', 2);
+      }
+    }
+    const out = physEngine2.update({ steering: lenkung, throttle: gas,
+                                     brake: bremse,
+                                     headlights: headlightsOn }, dt);
+    // Der Motorton von Auto 2, aus SEINER Drehzahl - dieselbe Zahl, die seine Anzeige
+    // bekommt. Defensiv gerufen, weil 80-sound.js SPAETER gebaut wird: zur Laufzeit ist die
+    // Funktion da, zur Ladezeit waere ein Zugriff die temporale Todeszone.
+    if (typeof updateEngineSound2 === 'function') updateEngineSound2();
+    physOut2Steer = out.servoAngle;
+    physOut2Throttle = out.motorPWM;
+  }
+
+  // Beim Umschalten die Einstellungen uebernehmen. Die rund sechzig Regler im Optionentab
+  // schreiben nur auf physEngine.config; sie zu verdoppeln waere ein zweiter Ort fuer jede
+  // Zahl. Also wird hier kopiert, und zwar bei JEDEM Einschalten - wer zwischendurch am
+  // Fahrgefuehl gedreht hat, bekommt es fuer beide Autos.
+  //
+  // Die Gangtabelle wird MIT kopiert, aber als eigene Objekte: derselbe Satz Zahlen, nicht
+  // dieselben Objekte. Sonst schriebe ein Schaltvorgang von Spieler 2 in die Gaenge von
+  // Spieler 1 (genau diese Falle steht bei den Ghosts schon einmal beschrieben).
+  function physEngine2Abgleichen() {
+    Object.assign(physEngine2.config, physEngine.config);
+    if (Array.isArray(physEngine.config.gears)) {
+      physEngine2.config.gears = physEngine.config.gears.map(g => Object.assign({}, g));
+    }
+  }
+
+  // ---- GLOBALE EINSTELLUNGEN GELTEN FUER BEIDE AUTOS ---------------------------------
+  //
+  // BESTELLT: "Globale einstellungen gelten für beide autos gleichermaßen: fahrgefühl
+  // optionen, ob tank etc. an/aus".
+  //
+  // Bis v0.6.55 kopierte physEngine2Abgleichen() die Abstimmung nur BEIM ANSCHALTEN des
+  // Modus. Wer danach am Fahrgefuehl drehte, verstellte nur Auto 1 - und zwei Autos mit
+  // verschiedener Abstimmung sind kein faires Rennen, sondern ein Fehler, den man erst im
+  // Fahren merkt.
+  //
+  // EIN ZUHOERER STATT SECHSUNDZWANZIG. Die Abstimmung wird an 26 einzelnen Stellen
+  // geschrieben (accelerationFactor, brakeBias, steerResponse, tyreEffect, ...). Jede
+  // davon um eine Kopierzeile zu ergaenzen waeren 26 Gelegenheiten, die 27. zu vergessen -
+  // dieselbe Ueberlegung, die in 98b-sicherung.js zu EINEM Zuhoerer fuer alle Regler
+  // gefuehrt hat ("ein Zuhoerer statt einer je Regler").
+  //
+  // 'input' UND 'change': Schieber melden beides, Auswahlfelder und Ankreuzfelder nur
+  // 'change'. Beide zu nehmen kostet nichts, weil das Kopieren billig ist und nur bei
+  // eingeschaltetem Modus ueberhaupt laeuft.
+  //
+  // WAS NICHT UEBER config LAEUFT, steht weiter unten in spielerZweiSenden(): die
+  // Hoechstgeschwindigkeit und die Batteriekompensation sitzen im Sendeweg von Auto 1, den
+  // Auto 2 gar nicht nimmt.
+  for (const art of ['input', 'change']) {
+    document.addEventListener(art, (e) => {
+      if (!zweiSpieler) return;
+      const el = e.target;
+      if (!el || !el.closest || !el.closest('#tab-options, #tab-race')) return;
+      physEngine2Abgleichen();
+    }, true);
+  }
+
+  function zweiSpielerSetzen(an) {
+    zweiSpieler = !!an;
+    if (zweiSpieler) physEngine2Abgleichen();
+    // Die zweite Motorstimme. Sie teilt die Schleifenpuffer mit Auto 1 (sie liegen je
+    // Motormodell, nicht je Auto), bekommt aber eine eigene Stereoseite - zwei Motoren im
+    // selben Drehzahlband aus einem Lautsprecher klingen wie ein verstimmter Motor.
+    if (typeof stimmeZweiSetzen === 'function') stimmeZweiSetzen(zweiSpieler);
+    else {
+      p2Steer = 0; p2Throttle = 0; physOut2Steer = 0; physOut2Throttle = 0;
+      // AUSSCHALTEN IST EIN HALTEBEFEHL, und zwar aus einem Grund, der beim Bauen leicht
+      // untergeht: writeToCar() schickt nur, was es bekommt. Wird der Modus WAEHREND der
+      // Fahrt abgeschaltet, hoert der Herzschlag einfach auf zu senden - und das Auto
+      // behaelt das letzte Gas und faehrt allein weiter. Genau dieser Fehler ist in diesem
+      // Projekt schon einmal passiert (Pad abgezogen, Auto fuhr weiter), deshalb geht die
+      // Rolle zurueck: setCarRole('none') schickt dabei die Null.
+      //
+      // Die Rolle ZURUECKZUNEHMEN und nicht nur stillzulegen ist ausserdem das, was man in
+      // der Garage sieht: ohne den Modus gibt es den vierten Knopf nicht, und eine Zeile
+      // mit einer Rolle, die kein Knopf anzeigt, waere ein Zustand ohne Bedienung.
+      if (typeof playerCar2 !== 'undefined' && playerCar2
+          && typeof setCarRole === 'function') {
+        setCarRole(playerCar2, 'none');
+      }
+    }
+    // Liegt der Schirm von Auto 2 vorne, wenn der Modus ausgeht, muss er verlassen werden -
+    // sonst starrt man auf neun Zahlen, die niemand mehr nachfuehrt, und der Pfeil kommt
+    // nicht zurueck (cockpitScreenStep ueberspringt ihn dann ja gerade).
+    if (!zweiSpieler && cockpitScreenIst() && cockpitScreenIst().nurZweiSpieler) {
+      cockpitScreenZu('main');
+    }
+    // DAS KAESTCHEN GEHT MIT. Der Modus laesst sich seit v0.6.45 auch aus der Garage
+    // einschalten (siehe setCarRole in 90-ghosts.js), und ein Schalter, der "aus" zeigt,
+    // waehrend zwei Autos fahren, ist genau die Luege, die der Selbsttest "Schalter und
+    // Spiegel sagen beim Laden dasselbe" sucht.
+    //
+    // OHNE Ereignis: .checked zu setzen loest kein 'change' aus, der Zuhoerer laeuft also
+    // nicht zurueck in diese Funktion. Die Selbstsicherung schreibt gebuendelt auf
+    // 'change'/'input' - deshalb wird sie hier von Hand angestossen, sonst ist der Modus
+    // nach dem Neuladen wieder aus.
+    const kaestchen = $('opt-zwei-an');
+    if (kaestchen && kaestchen.checked !== zweiSpieler) {
+      kaestchen.checked = zweiSpieler;
+      if (typeof autoSicherungPlanen === 'function') autoSicherungPlanen();
+    }
+    if (typeof renderGarage === 'function') renderGarage();
+    if (typeof zweiSpielerKachelZeichnen === 'function') zweiSpielerKachelZeichnen();
+    // Die Hoehe des Cockpits aendert sich mit der neuen Zeile, im Vollbild also auch der
+    // Skalierungsfaktor. Ohne diesen Ruf steht die Zeile im Vollbild unter dem Rand.
+    cockpitPassung();
   }
 
   // Hier stand die Lenkung ueber den Neigungssensor des Telefons. Sie ist entfernt: mit

@@ -308,13 +308,25 @@
     }
   }
 
-  function playFx(buffer, gainVal) {
+  // `seite` ist -1..1 und optional. Sie dient EINEM Zweck: einen Einmalklang dem Auto
+  // zuzuordnen, das ihn erzeugt hat. Ohne Angabe bleibt er mittig, also genau wie bisher.
+  function playFx(buffer, gainVal, seite) {
     if (!buffer || !audioCtx || !soundEnabled) return false;
     const src = audioCtx.createBufferSource();
     src.buffer = buffer;
     const g = audioCtx.createGain();
     g.gain.value = gainVal === undefined ? 0.9 : gainVal;
-    src.connect(g).connect(audioCtx.destination);
+    // Der Panner wird je Klang angelegt und mit ihm weggeworfen - bei einem Einmalklang ist
+    // das richtig: er lebt ein paar Zehntelsekunden, und ein dauerhafter Knoten je Seite
+    // waere Buchfuehrung fuer nichts. Beim MOTOR ist es umgekehrt, deshalb hat der einen
+    // festen (siehe stimmeZweiAusgang).
+    if (seite && audioCtx.createStereoPanner) {
+      const pan = audioCtx.createStereoPanner();
+      pan.pan.value = Math.max(-1, Math.min(1, seite));
+      src.connect(g).connect(pan).connect(audioCtx.destination);
+    } else {
+      src.connect(g).connect(audioCtx.destination);
+    }
     src.start();
     return true;
   }
@@ -556,9 +568,14 @@
     });
   });
 
-  function playShiftSound(direction) {
+  // `spieler` kommt aus der Physikinstanz (siehe schaltTon() in 40-physics.js). Er
+  // entscheidet nur ueber die Stereoseite: ein Schaltvorgang, den man nicht ausgeloest hat,
+  // soll von der anderen Seite kommen, sonst haelt man ihn fuer den eigenen.
+  function playShiftSound(direction, spieler) {
     const buf = direction >= 0 ? fxBuffers.shift.up : fxBuffers.shift.down;
-    if (playFx(buf, 0.35)) return;   // quieter: the shift should be felt, not announced
+    const seite = (typeof zweiSpieler !== 'undefined' && zweiSpieler)
+      ? (spieler === 2 ? PAN_ZWEI : -PAN_ZWEI) : 0;
+    if (playFx(buf, 0.35, seite)) return;   // quieter: the shift should be felt, not announced
     const f = direction >= 0 ? 900 : 620;
     playTone(f, 0.05, 'square', 0.06);
     setTimeout(() => playTone(f * 0.6, 0.05, 'triangle', 0.05), 35);
@@ -855,13 +872,103 @@
   }
 
   function stopSampleEngine() {
-    if (!sampleEngine.nodes) return;
-    for (const n of sampleEngine.nodes) { try { n.src.stop(); } catch (e) { /* already stopped */ } }
-    if (sampleEngine.over) { try { sampleEngine.over.src.stop(); } catch (e) { /* already stopped */ } }
-    sampleEngine.nodes = null;
-    sampleEngine.over = null;
-    sampleEngine.car = null;
-    if (sampleEngine.master) sampleEngine.master.gain.setTargetAtTime(0, audioCtx.currentTime, 0.03);
+    stopSampleEngineIn(sampleEngine);
+    stopSampleEngineIn(stimmeZwei);
+  }
+
+  // ---- DIE ZWEITE MOTORSTIMME, fuer Auto 2 -------------------------------------------
+  //
+  // EIN ABLAGEORT DERSELBEN FORM, und die PUFFER WERDEN GETEILT: sie liegen in
+  // sampleEngine.buffers und sind je MOTORMODELL, nicht je Auto - derselbe Satz Schleifen
+  // zweimal zu laden waere die Verdopplung von 132 Dateien fuer nichts.
+  //
+  // Was die zweite Stimme NICHT hat, und beides steht im Hilfetext der Kachel:
+  //
+  //   keine Zusatzkette   Turbopfeifen, Knaller, Begrenzer-Takt und der lastabhaengige
+  //                       Tiefpass haengen an EINEM Bus (xs, 15 Felder). Ein zweiter Bus
+  //                       waere ein eigenes Vorhaben; die Stimme geht deshalb direkt auf
+  //                       den Ausgang.
+  //   keinen Doppler      dopplerFactor() haengt an der Runde des Fahrerautos.
+  //
+  // Was sie HAT, und das ist der Punkt: eine eigene STEREOSEITE. Zwei Motoren im selben
+  // Drehzahlband aus einem Lautsprecher klingen wie ein verstimmter Motor, nicht wie zwei
+  // Autos - das ist keine Programmier-, sondern eine Mischungsfrage, und die Trennung ist
+  // ihre Antwort. Auto 1 sitzt links, Auto 2 rechts, und nur solange es zwei gibt.
+  const stimmeZwei = { master: null, pan: null, nodes: null, over: null, car: null };
+  const PAN_ZWEI = 0.55;          // nicht 1,0: ganz aussen klingt es abgeschnitten
+  let panEins = null;
+
+  // Der Ausgang von Auto 1. Ohne Zwei-Spieler-Modus geht er wie immer durch die
+  // Zusatzkette und bleibt mittig; mit Modus kommt ein Panner dazwischen.
+  function stimmeEinsAusgang() {
+    const bus = xBus();
+    if (typeof zweiSpieler === 'undefined' || !zweiSpieler) return bus;
+    if (!audioCtx.createStereoPanner) return bus;
+    if (!panEins) {
+      panEins = audioCtx.createStereoPanner();
+      panEins.connect(bus);
+    }
+    panEins.pan.value = -PAN_ZWEI;
+    return panEins;
+  }
+
+  function stopSampleEngineIn(store) {
+    if (!store.nodes) return;
+    for (const n of store.nodes) { try { n.src.stop(); } catch (e) { /* already stopped */ } }
+    if (store.over) { try { store.over.src.stop(); } catch (e) { /* already stopped */ } }
+    store.nodes = null;
+    store.over = null;
+    store.car = null;
+    if (store.master) store.master.gain.setTargetAtTime(0, audioCtx.currentTime, 0.03);
+  }
+
+  // `modell` ist der Motorname aus dem Menue (die Schluessel von loops.json), NICHT ein
+  // Auto aus der Garage. Der Parameter hiess schon immer `car`; beim Verallgemeinern waere
+  // genau das die Verwechslung, die man einbaut.
+  function startSampleEngineIn(store, modell, ausgang) {
+    if (!sampleEngine.ready || !sampleEngine.buffers[modell]) return false;
+    stopSampleEngineIn(store);
+    if (!store.master) {
+      store.master = audioCtx.createGain();
+      store.master.gain.value = 0;
+      store.master.connect(ausgang());
+    } else {
+      // Der Ausgang kann sich geaendert haben - der Panner von Auto 1 entsteht erst, wenn
+      // es zwei Spieler gibt. Neu verbinden statt eine zweite Kette aufzubauen.
+      try { store.master.disconnect(); } catch (e) { /* war nicht verbunden */ }
+      store.master.connect(ausgang());
+    }
+    // ALLE Leistungsbaender starten zusammen, damit sie die ganze Sitzung phasengleich
+    // bleiben - wieviele es sind, sagt der Motor selbst. Aufsteigend nach Basisdrehzahl,
+    // weil sampleWeights genau das voraussetzt.
+    const t0 = audioCtx.currentTime + 0.04;
+    store.nodes = powerBands(modell).map(band => {
+      const info = sampleEngine.buffers[modell][band];
+      const src = audioCtx.createBufferSource();
+      src.buffer = info.buffer;
+      src.loop = true;
+      const g = audioCtx.createGain();
+      g.gain.value = 0;
+      src.connect(g).connect(store.master);
+      src.start(t0);
+      return { src, gain: g, baseRpm: info.baseRpm };
+    });
+    // The overrun voice runs in PARALLEL to the three power bands, not as a fourth rpm
+    // anchor: it is a different operating state, not a different engine speed. One file per
+    // engine is enough because it is pitched by rpm exactly like the others.
+    const ov = sampleEngine.buffers[modell].over;
+    if (ov) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = ov.buffer;
+      src.loop = true;
+      const g = audioCtx.createGain();
+      g.gain.value = 0;
+      src.connect(g).connect(store.master);
+      src.start(t0);
+      store.over = { src, gain: g, baseRpm: ov.baseRpm };
+    }
+    store.car = modell;
+    return true;
   }
 
   function startSampleEngine(car) {
@@ -870,48 +977,56 @@
     // nicht ins Manifest greifen.
     xs.crackle = sampleEngine.crackle[car];
     xs.turbo = !!sampleEngine.turbo[car];
-    stopSampleEngine();
-    if (!sampleEngine.master) {
-      sampleEngine.master = audioCtx.createGain();
-      sampleEngine.master.gain.value = 0;
-      // DURCH DIE ZUSATZKETTE, nicht direkt zum Ausgang: dort sitzen der lastabhaengige
-      // Tiefpass und die getaktete Verstaerkung des Begrenzers. Ist der Schalter aus, stehen
-      // beide neutral - derselbe Weg, keine Wirkung.
-      sampleEngine.master.connect(xBus());
-    }
-    // ALLE Leistungsbaender starten zusammen, damit sie die ganze Sitzung phasengleich
-    // bleiben - wieviele es sind, sagt der Motor selbst. Aufsteigend nach Basisdrehzahl,
-    // weil sampleWeights genau das voraussetzt.
-    const t0 = audioCtx.currentTime + 0.04;
-    sampleEngine.nodes = powerBands(car).map(band => {
-      const info = sampleEngine.buffers[car][band];
-      const src = audioCtx.createBufferSource();
-      src.buffer = info.buffer;
-      src.loop = true;
-      const g = audioCtx.createGain();
-      g.gain.value = 0;
-      src.connect(g).connect(sampleEngine.master);
-      src.start(t0);
-      return { src, gain: g, baseRpm: info.baseRpm };
-    });
-    // The overrun voice runs in PARALLEL to the three power bands, not as a fourth rpm
-    // anchor: it is a different operating state, not a different engine speed. One file per
-    // engine is enough because it is pitched by rpm exactly like the others.
-    const ov = sampleEngine.buffers[car].over;
-    if (ov) {
-      const src = audioCtx.createBufferSource();
-      src.buffer = ov.buffer;
-      src.loop = true;
-      const g = audioCtx.createGain();
-      g.gain.value = 0;
-      src.connect(g).connect(sampleEngine.master);
-      src.start(t0);
-      sampleEngine.over = { src, gain: g, baseRpm: ov.baseRpm };
-    }
-    sampleEngine.car = car;
+    // DURCH DIE ZUSATZKETTE, nicht direkt zum Ausgang: dort sitzen der lastabhaengige
+    // Tiefpass und die getaktete Verstaerkung des Begrenzers. Ist der Schalter aus, stehen
+    // beide neutral - derselbe Weg, keine Wirkung.
+    if (!startSampleEngineIn(sampleEngine, car, stimmeEinsAusgang)) return false;
     if (engineGain) engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); // hush the oscillator
+    // Auto 2 faehrt dasselbe Motormodell: die Wahl steht im Cockpit und gilt fuer das
+    // Rennen. Ein eigenes Menue fuer Auto 2 waere ein zweiter Regler und eine zweite
+    // Ablage - und zwei verschiedene Motoren zugleich sind aus einem Lautsprecher ohnehin
+    // schwer zu trennen.
+    if (typeof zweiSpieler !== 'undefined' && zweiSpieler) stimmeZweiStarten();
     return true;
   }
+
+  function stimmeZweiAusgang() {
+    if (!audioCtx.createStereoPanner) return audioCtx.destination;
+    if (!stimmeZwei.pan) {
+      stimmeZwei.pan = audioCtx.createStereoPanner();
+      stimmeZwei.pan.connect(audioCtx.destination);
+    }
+    stimmeZwei.pan.pan.value = PAN_ZWEI;
+    return stimmeZwei.pan;
+  }
+
+  function stimmeZweiStarten() {
+    if (!audioCtx || !sampleEngine.car) return false;
+    return startSampleEngineIn(stimmeZwei, sampleEngine.car, stimmeZweiAusgang);
+  }
+
+  function stimmeZweiStoppen() { if (audioCtx) stopSampleEngineIn(stimmeZwei); }
+
+  // ---- Was die Knoten gerade tun, fuer den Pruefstand ------------------------------
+  //
+  // Herausgegeben werden ZAHLEN und keine Knoten: ein Prueflauf, der einen GainNode in die
+  // Hand bekommt, kann ihn verstellen, und dann misst der naechste Lauf den Schaden des
+  // vorigen. `puffer` ist die IDENTITAET des ersten Puffers - damit ist pruefbar, dass die
+  // beiden Stimmen wirklich dieselben Schleifen benutzen und nicht zwei Kopien.
+  function stimmeLage(store, pan) {
+    const n = store.nodes || [];
+    return {
+      baender: n.length,
+      modell: store.car,
+      raten: n.map((x) => +x.src.playbackRate.value.toFixed(4)),
+      verst: n.map((x) => +x.gain.gain.value.toFixed(4)),
+      master: store.master ? +store.master.gain.value.toFixed(4) : null,
+      seite: pan ? +pan.pan.value.toFixed(3) : 0,
+      puffer: n.length ? n[0].src.buffer : null,
+    };
+  }
+  function stimmeZweiLage() { return stimmeLage(stimmeZwei, stimmeZwei.pan); }
+  function stimmeEinsLage() { return stimmeLage(sampleEngine, panEins); }
 
   // Triangular crossfade between the three anchors. The weights always sum to exactly 1,
   // so moving through the rev range can never produce a hole or a bulge in loudness.
@@ -962,8 +1077,17 @@
   }
 
   function updateSampleEngine(rpm, load, silent) {
-    const nodes = sampleEngine.nodes;
-    const scale = sampleEngine.rpmScale[sampleEngine.car] || 1;
+    updateSampleEngineIn(sampleEngine, rpm, load, silent, physEngine, dopplerFactor());
+  }
+
+  // `store` ist die Stimme, `motor` die Physikinstanz (nur fuer den Begrenzer-Flacker),
+  // `dop` der Dopplerfaktor. Auto 2 bekommt 1: dopplerFactor() haengt an der Runde des
+  // Fahrerautos, und ein Doppler, der zur falschen Runde gehoert, ist schlechter als
+  // keiner.
+  function updateSampleEngineIn(store, rpm, load, silent, motor, dop) {
+    const nodes = store.nodes;
+    if (!nodes) return;
+    const scale = sampleEngine.rpmScale[store.car] || 1;
     // The crossfade has to see the same scaled rpm as the playback rate does, otherwise the
     // band boundaries and the pitch disagree and you hear the wrong loop at the wrong speed.
     const w = sampleWeights(rpm * scale, nodes.map(n => n.baseRpm));
@@ -972,9 +1096,8 @@
     // rather than at exactly zero, because a real engine is back on the gas well before the
     // pedal is fully down, and a crossfade that only completes at load = 0 spends most of
     // its travel doing nothing audible.
-    const over = sampleEngine.over;
+    const over = store.over;
     const powerMix = over ? Math.min(1, Math.max(0, (load - 0.06) / 0.30)) : 1;
-    const dop = dopplerFactor();
     nodes.forEach((n, i) => {
       // A loop generated at baseRpm played back at rpm/baseRpm IS that engine speed.
       // Clamped because resampling much beyond an octave stops sounding like an engine —
@@ -992,8 +1115,46 @@
     // down — the quieter, crackling sound does that itself. Ducking it as hard as before
     // would just hide the loop that was made for this.
     let vol = engineVolume * (over ? 0.55 + 0.45 * load : 0.25 + 0.75 * load);
-    if (physEngine.state.onLimiter) vol *= 0.8 + 0.2 * Math.sign(Math.sin(Date.now() / 18));
-    sampleEngine.master.gain.setTargetAtTime(silent ? 0 : vol, t, 0.05);
+    if (motor.state.onLimiter) vol *= 0.8 + 0.2 * Math.sign(Math.sin(Date.now() / 18));
+    store.master.gain.setTargetAtTime(silent ? 0 : vol, t, 0.05);
+  }
+
+  // ---- Der Takt der zweiten Stimme ---------------------------------------------------
+  //
+  // Gerufen aus physicsStep2() in 50-drive.js, also im selben 45-ms-Takt wie das Paket von
+  // Auto 2. Absichtlich schmal: Drehzahl und Last, sonst nichts. Der Begrenzer-Flacker
+  // kommt aus SEINEM Motor, der Doppler ist 1 (siehe oben).
+  //
+  // motorDrehzahl() ist DIESELBE Zahl, die die Anzeige bekommt - die Begruendung steht
+  // dort: die Physik rechnet fuer alle Motoren von 1500 bis 9000, das Vorbild dreht aber
+  // bis 5000 oder 12500. Zwei Zahlen fuer dieselbe Sache waeren ein Ton, der der Anzeige
+  // widerspricht.
+  function updateEngineSound2() {
+    if (!soundEnabled || !audioCtx || !stimmeZwei.nodes) return;
+    const st = physEngine2.state;
+    const load = Math.max(0, Math.min(1, st.engineLoad || 0));
+    const leise = load <= 0.01 && (st.virtualSpeed || 0) <= 0.01
+                  && Math.abs(st.speedKmh || 0) < 0.05;
+    updateSampleEngineIn(stimmeZwei, motorDrehzahl(st), load, leise, physEngine2, 1);
+  }
+
+  // An- und abschalten, gerufen aus zweiSpielerSetzen(). Zwei Wege und nicht einer mit
+  // Schalter: beim Anschalten muss die Stimme STARTEN (und dabei den Ausgang von Auto 1
+  // auf die linke Seite umhaengen), beim Abschalten nur aufhoeren.
+  function stimmeZweiSetzen(an) {
+    if (!audioCtx) return false;
+    if (an) {
+      // Auto 1 zuerst: sein Panner entsteht hier, und danach muss seine Stimme neu
+      // verbunden werden - sonst sitzt sie weiter mittig und die Trennung fehlt.
+      if (sampleEngine.car) startSampleEngine(sampleEngine.car);
+      return !!stimmeZwei.nodes;
+    }
+    stimmeZweiStoppen();
+    // Und Auto 1 zurueck in die Mitte.
+    if (panEins) { try { panEins.disconnect(); } catch (e) { /* war nicht verbunden */ } }
+    panEins = null;
+    if (sampleEngine.car) startSampleEngine(sampleEngine.car);
+    return false;
   }
 
   $('sound-profile').addEventListener('change', (e) => {
@@ -1078,6 +1239,10 @@
     ['ghost-w-form', 'wuerzeForm'],
     ['ghost-w-fehler', 'wuerzeFehler'],
     ['ghost-w-slip', 'wuerzeWindschatten'],
+    ['ghost-w-defend', 'wuerzeVerteidigen'],
+    ['ghost-w-blau', 'wuerzeBlau'],
+    ['ghost-charakter', 'charakter'],
+    ['ghost-w-start', 'wuerzeStart'],
     // Die zwei Boxenstopp-Schalter. Sie gehoeren in dieselbe Liste, weil sie dieselbe Form
     // haben - Kaestchen an, Feld true - und nicht, weil sie mit der Wuerze zu tun haetten.
     ['ghost-pit', 'pitAn'],

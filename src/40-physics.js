@@ -106,6 +106,21 @@
 
   class CarreraPhysicsEngine {
     constructor() {
+      // ---- WEM GEHOERT DIESE INSTANZ? --------------------------------------------------
+      //
+      // GEMELDET: "Gamepad 2 hat nichts zu tun, vibriert aber mit, wenn Gamepad 1
+      // vibriert." Der Befund liegt hier: seit es physEngine2 gibt, laufen die Meldungen
+      // des Getriebes fuer BEIDE Autos durch dieselben drei globalen Wege - showHudToast
+      // (ein Band), padRumble (bis v0.6.44 alle Pads) und playShiftSound (eine Stimme).
+      // Ein Schaltvorgang von Auto 2 schrieb damit "1. Gang" in das Band von Spieler 1 und
+      // ruettelte dessen Pad.
+      //
+      // Die Nummer steht auf der INSTANZ und ausdruecklich nicht in config: config wird
+      // beim Anschalten des Modus von Auto 1 nach Auto 2 KOPIERT
+      // (physEngine2Abgleichen in 50-drive.js), und die Besitzernummer mitzukopieren waere
+      // genau der Fehler, den dieses Feld behebt. Ausserhalb von config kann das nicht
+      // passieren.
+      this.spieler = 1;
       this.config = {
         accelerationFactor: 1.0, // fine-tune multiplier on top of the calibrated scale
         // Von null bis zum vollen Ausschlag, in Millisekunden. 83 ist NICHT gewaehlt,
@@ -127,10 +142,18 @@
         // servoAngle bleibt normiert (-1 .. 1) - das Protokoll kennt nur Byte 7 als
         // int8, und eine Umrechnung in Grad und zurueck waere ein Rundungsfehler ohne
         // Gegenwert. Die 45 Grad sind die BEDEUTUNG von 1,0, nicht seine Einheit.
-        steerResponse: 2.0,      // live trim on the D-pad, 0.5 .. 3.0 in 10% steps.
-                                 // 200 % is the calibrated default: measured on the real
-                                 // car, that is what answers properly. The ceiling was
-                                 // raised from 2.0 so the default is not also the limit.
+        // ---- 3,0 = 150 PROZENT, und die zwei Zahlen sind nicht dieselbe Groesse ----
+        //
+        // Der Regler zeigt PROZENT, das Modell fuehrt einen FAKTOR: steerRespPct() rechnet
+        // v / STEER_RESP_REF * 100 mit REF = 2,0. Die bestellten 150 Prozent sind also 3,0
+        // und nicht 1,5 - hier stand eine Fassung lang 2,5 mit einem Kommentar, der 150
+        // Prozent behauptete. Das waren 125.
+        //
+        // Gelesen wird ohnehin der Regler: die Schleife in 50-drive.js ruft apply() schon
+        // beim Aufbau, das Markup gewinnt. Dieses Literal steht trotzdem richtig da, weil
+        // ein Vorgabewert, der etwas anderes sagt als das Bedienelement, die naechste
+        // halbe Stunde Suche ist.
+        steerResponse: 3.0,      // live trim on the D-pad, 0.5 .. 3.0 in 10% steps.
         speedSteerReduction: 0.35, // and only weighted by gear, see update()
         autoShift: true,  // Automatik als Standard
 
@@ -225,6 +248,16 @@
         // Jetzt: der ganze Zustand wird kopiert, tyreEffect stillgelegt, und der
         // Bezugszustand ist ein Rennstart - voller Tank, nominale Reifen, trockene Bahn.
         // Vor und nach einem kompletten Selbsttest messt derselbe Aufruf dasselbe.
+        // ---- 0,72 UND NICHT 1,08, und das ist eine Ruecknahme ----------------------
+        //
+        // Hier stand 1,08. Der Wert kam aus einer fremden Aenderung am Repo, die "Fading
+        // plus 50 Prozent" umsetzen wollte - aber das ist NICHT das Fading. brakeDecelBase
+        // ist die GRUNDVERZOEGERUNG der Bremse, und BASE_BRAKE in 50-drive.js nimmt genau
+        // dieses Literal als Bezug fuer jede spaetere Skalierung. Ein Fuenfzigstel mehr
+        // hier heisst: die Bremse packt ueberall um die Haelfte staerker zu.
+        //
+        // Das Fading sitzt an einem eigenen Regler (setting-brake-fade-strength), und der
+        // steht jetzt auf 150 Prozent - dort, wo die Bestellung hingehoerte.
         brakeDecelBase: 0.72,
         // 0, und das ist eine Entscheidung gegen den Fitter: der wollte -0,10, also eine
         // Bremse, die mit der Fahrt schwaecher wird. Der Luftanteil steckt schon im
@@ -316,8 +349,37 @@
         tyreColdPenalty: 0.35, // Griffverlust auf eiskalten Reifen
         tyreHotPenalty: 0.38,  // Griffverlust bei durchgeheizten Reifen (v0.4: von 0,30)
         // v0.4 von 0,0018 herauf: bei 100 % war der Verschleiss ueber eine Rennlaenge
-        // kaum zu merken. Jetzt abgefahren nach gut vier Minuten voller Attacke.
-        tyreWearRate: 0.0032,
+        // kaum zu merken.
+        //
+        // ---- UND JETZT AUF DAS DREIFACHE VON 0,0032, wie bestellt -------------------
+        //
+        // "Reifenverschleiss erhoehen auf die doppelte oder dreifache Geschwindigkeit
+        // (simuliere mal, sodass weiche Reifen kaputt sind, lange bevor der Tank leer
+        // ist)." Gemessen mit reifenStintProbe (93-testbench.js), Gas 0,85 und wechselndem
+        // Lenkeinschlag, Zeit bis der Satz durch ist:
+        //
+        //     Rate              weich     mittel     hart
+        //     0,0032 (1x)       213 s      365 s     595 s
+        //     0,0064 (2x)       118 s      194 s     308 s
+        //     0,0096 (3x)        86 s      137 s     213 s
+        //
+        // Das Dreifache, weil erst dort ein Satz weicher Reifen ueber eine uebliche
+        // Renndistanz UEBERHAUPT zur Entscheidung wird: 86 Sekunden sind rund zwoelf Runden.
+        //
+        // ---- WAS DABEI NICHT AUFGEHT, und es gehoert hierher ------------------------
+        //
+        // Die Klammer der Bestellung geht nicht auf, und zwar in keiner der beiden
+        // angebotenen Stufen. Derselbe Prueflauf misst den Tank bei einem Verbrauch von
+        // 3 %/s auf 39 Sekunden - der Tank ist also FRUEHER leer als jeder Reifensatz,
+        // auch bei 3x. Damit weiche Reifen "lange vor" dem Tank durch waeren, muesste die
+        // Rate bei rund 0,021 liegen, dem 6,6-fachen.
+        //
+        // GEAENDERT WIRD DAS HIER NICHT, aus einem Grund: der Tankverbrauch steht ab Werk
+        // auf 0, die Tanksimulation ist also aus, und dann sind die Reifen ohnehin das
+        // einzige, was zur Neige geht. Wer den Tank einschaltet, entscheidet mit dem
+        // Verbrauchsregler selbst, welche der beiden Groessen zuerst leer ist - unter
+        // etwa 1,4 %/s sind es die Reifen.
+        tyreWearRate: 0.0096,
         // Faktor der REIFENMISCHUNG auf den Verschleiss, gesetzt von applySurface() in
         // 70-race.js. Eigenes Feld und nicht tyreWearRate selbst: zwei Orte fuer dieselbe
         // Zahl waren in diesem Projekt schon siebzehnmal eine Abweichung.
@@ -1538,7 +1600,7 @@
           if (inputs.brake > 0.8 && st.speedKmh > cfg.topSpeedKmh * 0.15) {
             st.absActive = true;
             const now = Date.now();
-            if (now - st.lastAbsRumble > 140) { st.lastAbsRumble = now; padRumble(0.18, 0.1, 60, 'abs'); }
+            if (now - st.lastAbsRumble > 140) { st.lastAbsRumble = now; this.ruck(0.18, 0.1, 60, 'abs'); }
           }
         } else if (inNeutral) {
           // Out of gear the engine is disconnected from the wheels: revving it does nothing
@@ -1849,6 +1911,27 @@
     //
     // Also werden die zwei Bedeutungen getrennt. Vorgabe ist 'knopf', damit alle vorhandenen
     // Aufrufe von aussen - Tastatur, Pad, Ghosts, Programmierschule - unveraendert bleiben.
+    // ---- Die drei Wege nach draussen, je Instanz --------------------------------------
+    //
+    // SECHZEHN AUFRUFSTELLEN IM GETRIEBE, EINE ADRESSE. Die Alternative waere gewesen, an
+    // jeder der sechzehn Stellen `this.spieler` mitzugeben - und die siebzehnte, die
+    // jemand spaeter einbaut, haette es vergessen. Dieselbe Ueberlegung wie bei
+    // RUMBLE_ARTEN weiter unten: die Frage gehoert an DIE eine Stelle.
+    meldung(txt) {
+      // MIT KENNZEICHNUNG, nicht verschwiegen: das Meldungsband ist EINES, und "1. Gang"
+      // ohne Absender ist im Zwei-Spieler-Modus eine Nachricht, die man auf sein eigenes
+      // Auto bezieht. Ein eigenes Band fuer Auto 2 waere der naechste Schritt; das Praefix
+      // ist der ehrliche Zwischenstand und kostet keine Flaeche.
+      showHudToast(this.spieler === 2 ? 'P2: ' + txt : txt);
+    }
+
+    ruck(strong, weak, ms, art) { padRumble(strong, weak, ms, art, this.spieler); }
+
+    // Der Schaltton bekommt den Spieler MIT, obwohl 80-sound.js ihn heute noch nicht
+    // auswertet: der Motorton von Auto 2 kommt in einem eigenen Schritt, und dann soll
+    // nicht noch einmal die Physikklasse angefasst werden muessen.
+    schaltTon(dir) { playShiftSound(dir, this.spieler); }
+
     triggerShift(direction, quelle) {
       const st = this.state, cfg = this.config;
       const stopped = Math.abs(st.speedKmh) < cfg.reverseStandstillKmh;
@@ -1872,8 +1955,8 @@
           if (direction > 0) {
             st.driveMode = 'forward'; st.currentGear = 0;
             st.speedKmh = 0; st.neutralRpm = 0;
-            showHudToast('Vorw\u00e4rts'); padRumble(0.3, 0.2, 90, 'schalt');
-            playShiftSound(1);
+            this.meldung('Vorw\u00e4rts'); this.ruck(0.3, 0.2, 90, 'schalt');
+            this.schaltTon(1);
           }
           return;
         }
@@ -1881,12 +1964,12 @@
           if (langsam) {
             st.driveMode = 'reverse'; st.currentGear = 0;
             st.speedKmh = 0; st.neutralRpm = 0;
-            showHudToast('R\u00fcckw\u00e4rtsgang'); padRumble(0.3, 0.2, 90, 'schalt');
-            playShiftSound(-1);
+            this.meldung('R\u00fcckw\u00e4rtsgang'); this.ruck(0.3, 0.2, 90, 'schalt');
+            this.schaltTon(-1);
           } else {
             // Sagen, WARUM nichts passiert. Ein Knopf, der schweigend nichts tut, sieht
             // kaputt aus - und genau so ist dieser Fehler gemeldet worden.
-            showHudToast('ZU SCHNELL F\u00dcR R');
+            this.meldung('ZU SCHNELL F\u00dcR R');
           }
         }
         return;
@@ -1895,8 +1978,8 @@
       if (st.driveMode === 'reverse') {
         if (direction > 0 && stopped) {
           st.driveMode = 'neutral'; st.speedKmh = 0; st.neutralRpm = 0;
-          showHudToast('Leerlauf'); padRumble(0.3, 0.2, 90, 'schalt');
-          playShiftSound(1);
+          this.meldung('Leerlauf'); this.ruck(0.3, 0.2, 90, 'schalt');
+          this.schaltTon(1);
         }
         return;
       }
@@ -1906,20 +1989,20 @@
           st.driveMode = 'forward'; st.currentGear = 0; st.neutralRpm = 0;
           st.isShifting = true;
           st.shiftLeft = cfg.shiftMs / 1000;
-          showHudToast('1. Gang'); padRumble(0.15, 0.1, 40, 'schalt');
-          playShiftSound(1);
+          this.meldung('1. Gang'); this.ruck(0.15, 0.1, 40, 'schalt');
+          this.schaltTon(1);
         } else if (stopped) {
           st.driveMode = 'reverse'; st.speedKmh = 0; st.neutralRpm = 0;
-          showHudToast('Rückwärtsgang'); padRumble(0.3, 0.2, 90, 'schalt');
-          playShiftSound(-1);
+          this.meldung('Rückwärtsgang'); this.ruck(0.3, 0.2, 90, 'schalt');
+          this.schaltTon(-1);
         }
         return;
       }
 
       if (direction < 0 && st.currentGear === 0) {
         st.driveMode = 'neutral'; st.neutralRpm = 0;
-        showHudToast('Leerlauf'); padRumble(0.2, 0.12, 60, 'schalt');
-        playShiftSound(-1);
+        this.meldung('Leerlauf'); this.ruck(0.2, 0.12, 60, 'schalt');
+        this.schaltTon(-1);
         return;
       }
 
@@ -1933,8 +2016,8 @@
       st.currentGear = next;
       // Short and light: six shifts inside three seconds with a long pattern is a
       // pneumatic drill in the hand.
-      padRumble(0.15, 0.1, 40, 'schalt');
-      playShiftSound(direction);
+      this.ruck(0.15, 0.1, 40, 'schalt');
+      this.schaltTon(direction);
     }
   }
 
@@ -1975,22 +2058,50 @@
   // Der Rueckgabewert sagt, ob die Schalter den Stoss DURCHGELASSEN haben - nicht, ob ein
   // Controller ihn ausgefuehrt hat. Damit ist die Schalterlogik ohne Hardware pruefbar, und
   // genau die ist bei siebzehn Aufrufstellen die Stelle, an der man sich vertut.
-  function padRumble(strong, weak, ms, art) {
+  // ---- WER SOLL ES SPUEREN? ----------------------------------------------------------
+  //
+  // GEMELDET: "Gamepad 2 hat nichts zu tun, vibriert aber mit, wenn Gamepad 1 vibriert."
+  //
+  // NACHGESEHEN, und der Befund ist eindeutig: ruettle() lief durch navigator.getGamepads()
+  // und stiess JEDEN Pad an, der einen Motor hat. Mit einem Spieler war das richtig und
+  // ungeprueft zugleich - es gab nur einen Pad, also traf "alle" immer den richtigen.
+  //
+  // Schlimmer noch: die vier Schaltstoesse stehen INNERHALB der Physikklasse, und seit es
+  // physEngine2 gibt, laufen sie fuer beide Autos. Ein Schaltvorgang von Auto 2 ruettelte
+  // damit den Pad von Spieler 1 - und umgekehrt. Das ist keine Kosmetik: ein Stoss, der zu
+  // einem Vorgang gehoert, den man nicht ausgeloest hat, liest sich als Fehlfunktion.
+  //
+  // `wer` ist deshalb ab jetzt Teil des Aufrufs, mit 1 als Vorgabe: die dreiundzwanzig
+  // vorhandenen Aufrufstellen bleiben unveraendert und meinen weiterhin Spieler 1.
+  //
+  // UND OHNE ZWEI-SPIELER-MODUS BLEIBT ES, WIE ES WAR - alle Pads. Das ist Absicht und
+  // keine Faulheit: wer mit Lenkrad UND Pad am selben Auto sitzt, hat heute Vibration in
+  // beiden, und diese Aenderung soll ihm nichts wegnehmen. Erst wenn es wirklich zwei
+  // Spieler gibt, gibt es auch zwei Adressen.
+  function rumblePad(wer) {
+    if (typeof zweiSpieler === 'undefined' || !zweiSpieler) return null;   // alle
+    if (typeof padsFuerSpieler !== 'function') return null;
+    const sp = padsFuerSpieler();
+    return (wer === 2 ? sp.p2 : sp.p1) || undefined;   // undefined = niemand
+  }
+
+  function padRumble(strong, weak, ms, art, wer) {
     if (!rumbleOn) return false;
     // Eine unbekannte Art brummt - das ist Absicht. Wer eine neue Stelle einbaut und das
     // Etikett vergisst, bekommt ein Brummen und merkt es; ein stilles Verschlucken waere
     // ein Feature, das niemand vermisst, bis es fehlt.
     if (art && RUMBLE_ARTEN[art] === false) return false;
+    const ziel = rumblePad(wer);
     ruettle({
       duration: ms, startDelay: 0,
       strongMagnitude: Math.max(0, Math.min(1, strong)),
       weakMagnitude: Math.max(0, Math.min(1, weak)),
-    });
+    }, ziel);
     // EIN ZWEITER WEG, KEIN ZWEITER AUFRUF. Die achtzehn Aufrufstellen bleiben unberuehrt;
     // ob eine Art auch die Trigger bewegt, steht in TRIGGER_ARTEN und nicht bei ihnen.
     if (triggerRumbleOn && art && TRIGGER_ARTEN[art]) {
       const [li, re] = TRIGGER_ARTEN[art];
-      triggerRuettle(li, re, ms);
+      triggerRuettle(li, re, ms, ziel);
     }
     return true;
   }
@@ -2009,11 +2120,25 @@
   // UND AUSDRUECKLICH KEIN RUECKFALL auf 'dual-rumble': das wuerde vortaeuschen, die Trigger
   // haetten reagiert. Der Nutzer soll in den Optionen lesen koennen, dass sein Pad es nicht
   // kann - und nicht ein Brummen in den Griffen dafuer halten.
-  function triggerRuettle(links, rechts, ms) {
-    let erreicht = 0;
+  // `ziel` ist DREIWERTIG, und das ist die ganze Bauform:
+  //   null       -> alle Pads (ein Spieler, wie bisher)
+  //   ein Pad    -> genau dieser
+  //   undefined  -> keiner (der Spieler hat gerade keinen Pad)
+  // Eine leere Liste und "alle" auseinanderhalten zu koennen ist der Grund, warum hier
+  // nicht einfach ein Array steht.
+  function zielPads(ziel) {
+    if (ziel === undefined) return [];
+    if (ziel) return [ziel];
     try {
       const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-      for (const p of Array.from(pads)) {
+      return Array.from(pads);
+    } catch (e) { return []; }
+  }
+
+  function triggerRuettle(links, rechts, ms, ziel) {
+    let erreicht = 0;
+    try {
+      for (const p of zielPads(ziel)) {
         const akt = p && p.vibrationActuator;
         if (!akt || typeof akt.playEffect !== 'function') continue;
         if (!Array.isArray(akt.effects) || akt.effects.indexOf('trigger-rumble') < 0) continue;
@@ -2042,11 +2167,10 @@
   //
   // Also alle. Zwei Aufrufe auf dasselbe Geraet sind harmlos - der zweite ueberschreibt den
   // ersten -, ein stiller Fehlgriff ist es nicht.
-  function ruettle(effekt) {
+  function ruettle(effekt, ziel) {
     let erreicht = 0;
     try {
-      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-      for (const p of Array.from(pads)) {
+      for (const p of zielPads(ziel)) {
         if (!p || !p.vibrationActuator) continue;
         if (typeof p.vibrationActuator.playEffect !== 'function') continue;
         erreicht++;

@@ -44,9 +44,24 @@
   // dieser Leseart erkannt wird. Was die Kunststoffschiene im Bahn-Modus sendet, ist damit
   // NICHT gemessen, und es koennen zwei Codesaetze sein - einer je Untergrund.
   //
-  // Genau deshalb bleibt 0x01 in START_CODES: es war die alte Annahme, und seit dem 26.08.
-  // hat es eine plausible Rolle als Code der Schiene. Auch das ist nicht gemessen, aber ein
-  // akzeptierter Wert kostet nichts und ein fehlender kostet die Rundenzaehlung.
+  // Genau deshalb blieb 0x01 lange in START_CODES: es war die alte Annahme, und seit dem
+  // 26.08. hat es eine plausible Rolle als Code der Schiene.
+  //
+  // ---- UND SEIT v0.6.14 IST DAS BESTAETIGT, von aussen -------------------------------
+  //
+  // seVen hat eine byteweise Protokollbeschreibung geteilt, und auf Rueckfrage bestaetigt,
+  // dass seine Codetabelle fuer den BAHN-MODUS gilt. Dort steht:
+  //
+  //     0x01  Start/Ziel        0x0A  Engstelle (NarrowSection)
+  //
+  // Das passt genau zu dem, was hier gemessen wurde - sobald man die Spalten richtig
+  // zuordnet: 0x0a ist am GEDRUCKTEN Blatt im Ausdruck-Modus gemessen, ueber die
+  // Kunststoffschiene war nie eine Messung da. (Die Tabelle in CARRERA_HYBRID.md hatte die
+  // beiden Spalten vertauscht; sie ist mit dieser Fassung berichtigt.)
+  //
+  // FOLGE, und sie ist der Grund fuer die Aenderung: eine Liste aus BEIDEN Codes ist
+  // modus-blind. Auf der Schiene wuerde damit jede ueberfahrene ENGSTELLE als Ziellinie
+  // gelten - eine Phantomrunde je Ueberfahrt, und das Streckenlernen faengt dort neu an.
   //
   // Vorher stand hier 0x01, und das war eine Annahme aus einem Foto - die Doku hat sie auch
   // als solche gekennzeichnet. Die Folgen der falschen Zahl waren erheblich und beide unsichtbar: die
@@ -57,13 +72,58 @@
   // ausgeschlossen, dass eine Kunststoffschiene etwas anderes meldet als das gedruckte
   // Blatt, und einen Wert wegzunehmen, von dem wir nicht wissen ob er vorkommt, waere ein
   // Risiko ohne Gegenwert. Sobald eine Messung ihn ausschliesst, kann er weg.
+  // ---- DIE SECHS TEILE AUS seVens BAHN-TABELLE, seit v0.6.19 ----------------------
+  //
+  // Er hat auf Rueckfrage bestaetigt, dass seine Codetabelle fuer den BAHN-Modus gilt.
+  // Damit sind sechs Codes benannt, die hier bisher fehlten:
+  //
+  //     0x07  Boxengasse / lange Gerade      0x0B / 0x0C  kleine 30-Grad-Kurve L / R
+  //     0x08 / 0x09  grosse 30-Grad-Kurve L / R    0x0A  Engstelle
+  //
+  // ZWEI DAVON BEKOMMEN EINEN KUENSTLICHEN TYP, und zwar aus einem Grund, der sich nicht
+  // umgehen laesst: die KARTE fuehrt Start/Ziel seit jeher als 0x0a, und auf der Schiene
+  // ist 0x0a die Engstelle. Dieselbe Zahl, zwei Bedeutungen. Den Kartentyp zu aendern
+  // hiesse, jede gespeicherte Strecke zu wandern; also bekommt die Engstelle einen Wert
+  // ausserhalb des Bytebereichs - genau wie die Boxengasse ihn seit jeher hat.
+  //
+  // Die Uebersetzung zwischen GEMELDETEM CODE und KARTENTYP macht codeZuTyp() weiter unten,
+  // an einer Stelle.
   const TILE_TYPE = { START: 0x0a, STRAIGHT: 0x02, CURVE_RIGHT: 0x04, CURVE_LEFT: 0x03,
                       HAIRPIN_LEFT: 0x05, HAIRPIN: 0x06,
-                      PIT: 0x100 };
+                      // Grosse 30-Grad-Kurve ("Radius 2"): gemeldet als 0x08 / 0x09.
+                      WEIT_LEFT: 0x08, WEIT_RIGHT: 0x09,
+                      // Kleine 30-Grad-Kurve: gemeldet als 0x0B / 0x0C. Zwei davon ergeben
+                      // eine 60-Grad-Kurve - vom Nutzer so angegeben und hier nachgerechnet.
+                      KLEIN_LEFT: 0x0b, KLEIN_RIGHT: 0x0c,
+                      // Kuenstlich, siehe oben. PIT wird als 0x07 gemeldet, ENGE als 0x0a.
+                      PIT: 0x100, ENGE: 0x101 };
+
+  // Was das Auto meldet, ist nicht immer, was die Karte fuehrt. EINE Stelle dafuer.
+  const CODE_PIT = 0x07;
+  const CODE_ENGE = 0x0a;
+
+  function codeZuTyp(code) {
+    if (code === undefined || code === null) return code;
+    // Start/Ziel haengt an der Leseart - siehe isStartCode().
+    if (isStartCode(code)) return TILE_TYPE.START;
+    if (code === CODE_PIT) return TILE_TYPE.PIT;
+    // NUR AUF DER SCHIENE. Im Ausdruck-Modus IST 0x0a der Startcode, und der ist schon
+    // oben abgefangen - diese Zeile kann dort also gar nicht greifen. Sie steht trotzdem
+    // mit Bedingung da, weil eine Uebersetzung, die den Modus nicht nennt, die naechste
+    // Stelle ist, an der jemand die beiden verwechselt.
+    if (typeof trackMode === 'string' && trackMode === 'on' && code === CODE_ENGE) {
+      return TILE_TYPE.ENGE;
+    }
+    return code;
+  }
   // Alles, was als Start/Ziel gilt, wenn das AUTO einen Code meldet. Fuer Kacheltypen im
   // Editor gilt weiter TILE_TYPE.START allein.
   const START_CODES = [0x0a, 0x01];
   const START_CODE_LEGACY = 0x01;
+  // Je Leseart einer, benannt statt aufgezaehlt: wer das liest, sieht sofort, welcher wo
+  // gilt. Die Liste darueber bleibt als Rueckfall und fuer isStartCode() ohne Leseart.
+  const START_CODE_RAIL = 0x01;    // Kunststoffschiene, Bahn-Modus (seVen, bestaetigt)
+  const START_CODE_PRINT = 0x0a;   // gedrucktes Blatt, Ausdruck-Modus (gemessen 25.08.)
   // AUS DER LISTE GELESEN und nicht daneben aufgezaehlt. Vorher stand hier
   // "c === 0x0a || c === START_CODE_LEGACY", und damit gab es die Tatsache "was gilt als
   // Start/Ziel" an ZWEI Orten - die Liste hatte keinen einzigen Leser und war die
@@ -71,7 +131,18 @@
   // sie als einzige Konstante ohne Leser gefunden.
   //
   // Wer einen dritten Code aufnimmt, aendert jetzt eine Stelle.
-  function isStartCode(c) { return START_CODES.indexOf(c) >= 0; }
+  // DIE LESEART ENTSCHEIDET. trackMode steht in 20-protocol.js ('on' = Bahn, 'off' =
+  // Ausdruck) und ist zur Laufzeit da; diese Funktion laeuft nie zur Aufbauzeit.
+  //
+  // Der Rueckfall auf die Liste bleibt fuer den Fall, dass trackMode (noch) nicht gesetzt
+  // ist - lieber ein Code zu viel akzeptiert als die Rundenzaehlung verloren, und genau so
+  // stand es hier vorher schon.
+  function isStartCode(c) {
+    if (typeof trackMode === 'string') {
+      return trackMode === 'on' ? c === START_CODE_RAIL : c === START_CODE_PRINT;
+    }
+    return START_CODES.indexOf(c) >= 0;
+  }
   // Code 0x00 means the sensor is reading NOTHING VALID, i.e. the car has left the track.
   // From the guard-rail capture of 20.08: every departure showed up as 0x00 together with the
   // tile counter racing (6 -> 8 -> 9 -> 15 -> 18 within three seconds), and 16 of 38
@@ -129,6 +200,11 @@
     [TILE_TYPE.PIT]: 'Boxengasse',
     [TILE_TYPE.HAIRPIN]: 'Haarnadel rechts',
     [TILE_TYPE.HAIRPIN_LEFT]: 'Haarnadel links',
+    [TILE_TYPE.WEIT_LEFT]: 'Weite Kurve links',
+    [TILE_TYPE.WEIT_RIGHT]: 'Weite Kurve rechts',
+    [TILE_TYPE.KLEIN_LEFT]: 'Kleine Kurve links',
+    [TILE_TYPE.KLEIN_RIGHT]: 'Kleine Kurve rechts',
+    [TILE_TYPE.ENGE]: 'Engstelle',
     [TILE_OFFTRACK]: 'abseits der Bahn',
   };
 
@@ -201,7 +277,15 @@
   const TRACK_UNITS_PER_CM = TRACK_STEP / TRACK_TILE_CM;   // 0.930
   const TRACK_HAIRPIN_LEAD = TRACK_HAIRPIN_LEAD_CM * TRACK_UNITS_PER_CM;
   const TRACK_RADIUS = TRACK_RADIUS_CM * TRACK_UNITS_PER_CM;
+  // "Radius 2": die weite 30-Grad-Kurve. Herleitung bei tileRadius().
+  // Wieviel die Engstelle je Seite hereinnimmt, als Anteil der halben Bahnbreite. Eine
+  // DARSTELLUNG und keine Messung - siehe die Begruendung an der Zeichenstelle.
+  const ENGE_ANTEIL = 0.34;
+  const TRACK_R2_CM = 112;
+  const TRACK_R2 = TRACK_R2_CM * TRACK_UNITS_PER_CM;
   const TRACK_TURN_DEG = 60;
+  // Die halbe Kurve. Zwei davon ergeben eine 60-Grad-Kurve, zwoelf einen Kreis.
+  const TRACK_30_DEG = 30;
 
   // One place decides how far a curved piece turns and how tight it is, so
   // trackCenterline() can never disagree about the geometry — they used to hardcode the same
@@ -211,15 +295,38 @@
     if (type === TILE_TYPE.CURVE_LEFT) return -TRACK_TURN_DEG;
     if (type === TILE_TYPE.HAIRPIN) return TRACK_HAIRPIN_DEG;
     if (type === TILE_TYPE.HAIRPIN_LEFT) return -TRACK_HAIRPIN_DEG;
+    // Beide 30-Grad-Teile drehen gleich WEIT; sie unterscheiden sich im RADIUS.
+    if (type === TILE_TYPE.WEIT_RIGHT || type === TILE_TYPE.KLEIN_RIGHT) return TRACK_30_DEG;
+    if (type === TILE_TYPE.WEIT_LEFT || type === TILE_TYPE.KLEIN_LEFT) return -TRACK_30_DEG;
     return 0;
   }
   function tileRadius(type) {
-    return (type === TILE_TYPE.HAIRPIN || type === TILE_TYPE.HAIRPIN_LEFT)
-      ? TRACK_HAIRPIN_RADIUS : TRACK_RADIUS;
+    if (type === TILE_TYPE.HAIRPIN || type === TILE_TYPE.HAIRPIN_LEFT) {
+      return TRACK_HAIRPIN_RADIUS;
+    }
+    // ---- DIE WEITE KURVE, AUSGEMESSEN ---------------------------------------------
+    //
+    // Aus einem Bild des Original-Editors: zwoelf dieser Teile plus zwei Geraden bilden ein
+    // geschlossenes Oval von 2,49 m x 2,93 m. Die Differenz der beiden Masse ist 0,44 m -
+    // also eine Kachellaenge, was TRACK_TILE_CM = 43 bestaetigt und zeigt, dass die Masse
+    // Aussenkanten sind. Aus 2R + Bahnbreite = 2,49 folgt R = 1,12 m.
+    //
+    // GEGENGEPRUEFT an einem Einzelteil: Start-Kachel plus eine Kurve misst im Editor
+    // 0,38 x 1,05 m. Gerechnet ergibt der Radius 40 cm Breite (gemessen 38), und die
+    // Laengendifferenz zwischen weiter und kleiner Kurve 38 cm (gemessen 37). Die Breite
+    // und die Differenz stimmen also; in der absoluten Laenge bleibt ein Versatz von rund
+    // 12 cm, der darauf deutet, dass die Start-Kachel kuerzer ist als eine volle Gerade.
+    // Das ist NICHT nachgemessen und gehoert auf den Teppich.
+    if (type === TILE_TYPE.WEIT_LEFT || type === TILE_TYPE.WEIT_RIGHT) return TRACK_R2;
+    // Die kleine 30-Grad-Kurve hat denselben Radius wie die 60-Grad-Kurve: zwei von ihnen
+    // ergeben eine. Vom Nutzer so angegeben, und die Zahl faellt damit ohne Messung heraus.
+    return TRACK_RADIUS;
   }
   function tileIsCurve(type) {
     return type === TILE_TYPE.CURVE_RIGHT || type === TILE_TYPE.CURVE_LEFT
-        || type === TILE_TYPE.HAIRPIN || type === TILE_TYPE.HAIRPIN_LEFT;
+        || type === TILE_TYPE.HAIRPIN || type === TILE_TYPE.HAIRPIN_LEFT
+        || type === TILE_TYPE.WEIT_LEFT || type === TILE_TYPE.WEIT_RIGHT
+        || type === TILE_TYPE.KLEIN_LEFT || type === TILE_TYPE.KLEIN_RIGHT;
   }
 
   // walkTrack() ist hier entfernt. Sie lief NIE - nichts rief sie auf - und sie war der
@@ -421,6 +528,18 @@
         heading += turn;
         x = out[out.length - 1].x; y = out[out.length - 1].y;
       } else {
+        // ---- DIE ENGSTELLE IST HIER EINE NORMALE GERADE, und das ist eine Luecke ----
+        //
+        // Sie ist SCHMALER als die uebrige Bahn - daher der Name. Wieviel schmaler, ist
+        // nicht gemessen: aus den Bildern des Original-Editors laesst sich ihre Breite
+        // nicht ablesen, und eine geratene Zahl waere eine Bahn, die an einer Stelle
+        // falsch eng gezeichnet ist. Die Breite steckt ausserdem als Konstante
+        // TRACK_HALF_W im Zeichner und nicht je Kachel; eine Breite je Punkt ist eine
+        // eigene Aenderung.
+        //
+        // WAS TROTZDEM SCHON WIRKT, und darum geht es zuerst: der Code 0x0a gilt auf der
+        // Schiene nicht mehr als Ziellinie (siehe isStartCode), die Kachel wird benannt und
+        // gezaehlt, und eine Ueberfahrt kostet keine Phantomrunde mehr.
         const len = tile.type === TILE_TYPE.PIT ? TRACK_STEP * 2 : TRACK_STEP;
         const rad = heading * Math.PI / 180;
         for (let i = 1; i <= n; i++) {
@@ -1623,6 +1742,59 @@
       line.lapTime = prof.time;
       line.v = prof.v;
     }
+    // ---- DIE ENGSTELLE SCHREIBT IHRE EIGENE LINIE ---------------------------------
+    //
+    // BESTELLT: "Engstelle: [...] am Anfang ganz rechts fahren, dann ganz links."
+    //
+    // UEBER ALLEN MODELLEN, und das ist Absicht: das ist keine Geschmacksfrage der
+    // Ideallinie, sondern die Form des Teils. Ein Modell, das hier etwas anderes moechte,
+    // moechte durch die Absperrung. Deshalb steht der Griff hier, NACH der Modellwahl, und
+    // gilt fuer alle vier - so wie die Kachelart auch nicht vom Modell abhaengt.
+    //
+    // ---- VORSICHT MIT DEM VORZEICHEN, ich bin gerade selbst darauf hereingefallen ----
+    //
+    // Im LENKBEFEHL (Byte 7) ist rechts positiv. In alpha NICHT: alpha misst entlang der
+    // Normale, und trackNormals() dreht die Tangente um -90 Grad, zeigt also nach LINKS.
+    // Deshalb zeichnet die Boxenausbuchtung mit SIDE = -1 auf die rechte Seite, und deshalb
+    // steht in ghostLineOffset ein Minus vor alpha.
+    //
+    // "Ganz rechts" heisst hier also alpha = -gr, "ganz links" alpha = +gr. Wer die beiden
+    // Vorzeichenwelten verwechselt, bekommt eine Engstelle, die genau falsch herum faehrt -
+    // und sie sieht auf dem Bild plausibel aus, weil sie immer noch von einer Seite zur
+    // anderen geht.
+    //
+    // Der Wechsel laeuft ueber die mittleren 40 Prozent der Kachel und nicht sprunghaft in
+    // der Mitte: ein Sprung in der Linie ist ein Sprung im Lenkbefehl, und die Querfuehrung
+    // (die Ratenbegrenzung in ghostTick) braucht Weg, um ihm zu folgen.
+    //
+    // ---- 40 PROZENT SIND KNAPP, UND ZWAR NACHGEMESSEN -----------------------------
+    //
+    // In der laufenden Simulation braucht ein Ghost 990 ms fuer die Engstelle. Zwei
+    // Einheiten Querlage in 40 Prozent davon sind rund 5 Einheiten je Sekunde verlangt;
+    // ghostCfg.querTempo erlaubt ab Werk 4,0. Gemessen kam die Fuehrung auf 3,82 - sie
+    // laeuft also AM ANSCHLAG, und deshalb erreicht die Lage +0,93 / -0,90 statt genau
+    // +1 / -1. Das sieht man nicht, und weich ist es dadurch auch.
+    //
+    // WAS DARAUS FOLGT, und es steht hier, weil es sonst niemand merkt: wer das Quertempo
+    // herunterstellt, bekommt eine flachere Engstelle. Bei 2,0 - dem alten Vorgabewert -
+    // waere es noch etwa die halbe Breite. Eine breitere Rampe waere dagegen die falsche
+    // Antwort: sie wuerde die Zeit verkuerzen, in der das Auto wirklich ganz aussen steht,
+    // und genau die war bestellt.
+    if (o.tiles && o.tiles.length) {
+      const gr = (o.limit !== undefined ? o.limit : TRACK_HALF_W - 3);
+      for (let idx = 0; idx < o.tiles.length; idx++) {
+        if (!o.tiles[idx] || o.tiles[idx].type !== TILE_TYPE.ENGE) continue;
+        const treffer = [];
+        for (let i = 0; i < pts.length; i++) if (pts[i].tile === idx) treffer.push(i);
+        if (treffer.length < 2) continue;
+        for (let k = 0; k < treffer.length; k++) {
+          const u = k / (treffer.length - 1);        // 0 am Anfang, 1 am Ende
+          // Rampe: bis 0,30 ganz rechts, ab 0,70 ganz links, dazwischen linear.
+          const f = Math.max(0, Math.min(1, (u - 0.30) / 0.40));
+          line.alpha[treffer[k]] = gr * (2 * f - 1);   // -gr = rechts  ->  +gr = links
+        }
+      }
+    }
     line.span = Math.max(...line.alpha.map(Math.abs));
     line.exit = lineExitStaerke;
     return line;
@@ -1979,6 +2151,44 @@
         body += `<text x="${(mid[0] + ox).toFixed(1)}" y="${(mid[1] + oy).toFixed(1)}" fill="#ffb02e" font-size="9" font-weight="700" text-anchor="middle">BOX</text>`;
       });
 
+      // 2b) Die Engstelle: zwei Sperren, die von beiden Seiten hereinragen.
+      //
+      // BESTELLT: "grafisch hervorheben wie die Original-Engstelle."
+      //
+      // DIESELBE BAUFORM wie die Boxenausbuchtung darueber - je Kachel ueber p.tile und die
+      // Normalen -, nur nach INNEN statt nach aussen. Eine schmalere Fahrbahn zu zeichnen
+      // ginge nicht: die Strasse ist EIN breiter Strich entlang der Mittellinie, und eine
+      // Breite je Kachel hat ein Strich nicht.
+      //
+      // WIE SCHMAL SIE WIRKLICH IST, WEISS ICH NICHT. Die Breite ist nicht gemessen - aus
+      // den Bildern des Original-Editors laesst sie sich nicht ablesen. Was hier steht, ist
+      // also eine DARSTELLUNG und keine Massangabe: sie sagt "hier wird es eng", und die
+      // Zahl daneben ist ein Drittel je Seite, weil das sichtbar ist, ohne die Bahn
+      // zuzumauern. Sobald ein Mass vorliegt, gehoert es hierher.
+      tiles.forEach((tk, idx) => {
+        if (tk.type !== TILE_TYPE.ENGE) return;
+        const seg = pts.map((p, i) => ({ p, i })).filter(q => q.p.tile === idx);
+        if (seg.length < 3) return;
+        for (const SIDE of [1, -1]) {
+          const aussen = seg.map(q => [q.p.x + nrm[q.i].x * half * SIDE,
+                                       q.p.y + nrm[q.i].y * half * SIDE]);
+          const innen = seg.map((q, k) => {
+            // Null an beiden Enden, am tiefsten in der Mitte - wie die Boxenausbuchtung,
+            // nur mit umgekehrtem Vorzeichen. Eine Sperre mit Kante waere ein Teil, das
+            // man nicht anfahren kann.
+            const u = k / (seg.length - 1);
+            const tief = Math.sin(u * Math.PI) * half * ENGE_ANTEIL;
+            return [q.p.x + nrm[q.i].x * (half - tief) * SIDE,
+                    q.p.y + nrm[q.i].y * (half - tief) * SIDE];
+          });
+          body += `<path d="${poly(aussen)} L ${innen.slice().reverse().map(P2).join(' L ')} Z" `
+               + `fill="#3a2a12" stroke="#ffb02e" stroke-width="0.8" stroke-linejoin="round"/>`;
+        }
+        const m = seg[Math.floor(seg.length / 2)];
+        body += `<text x="${(m.p.x + ox).toFixed(1)}" y="${(m.p.y + oy + 3).toFixed(1)}" `
+             + `fill="#ffb02e" font-size="8" font-weight="700" text-anchor="middle">ENG</text>`;
+      });
+
       // 3) Joints: a white tick across the roadway at every element boundary, so the
       //    individual pieces are visible instead of one continuous ribbon.
       // JE KACHEL IHR ERSTER PUNKT, aus der Tabelle - nicht k * 14. Begruendung bei
@@ -2243,7 +2453,14 @@
   const TRACK_CODE_LETTER = { [TILE_TYPE.START]: 'S', [TILE_TYPE.STRAIGHT]: 'G',
                               [TILE_TYPE.CURVE_RIGHT]: 'R', [TILE_TYPE.CURVE_LEFT]: 'L',
                               [TILE_TYPE.PIT]: 'B', [TILE_TYPE.HAIRPIN]: 'H',
-                              [TILE_TYPE.HAIRPIN_LEFT]: 'J' };
+                              [TILE_TYPE.HAIRPIN_LEFT]: 'J',
+                              // W/Q = Weite Kurve rechts/links, K/M = Kleine rechts/links,
+                              // E = Engstelle. Ausdruecklich KEIN I: es ist von einer 1 im
+                              // Code nicht zu unterscheiden, und der Leser nimmt Ziffern
+                              // als Wiederholungszahl.
+                              [TILE_TYPE.WEIT_RIGHT]: 'W', [TILE_TYPE.WEIT_LEFT]: 'Q',
+                              [TILE_TYPE.KLEIN_RIGHT]: 'K', [TILE_TYPE.KLEIN_LEFT]: 'M',
+                              [TILE_TYPE.ENGE]: 'E' };
   const TRACK_CODE_TYPE = Object.fromEntries(
     Object.entries(TRACK_CODE_LETTER).map(([k, v]) => [v, Number(k)]));
 
@@ -2458,7 +2675,6 @@
       };
     });
     $('track-rotation-val').textContent = trackRotationDeg + '°';
-    if (typeof refreshMinimap === 'function') refreshMinimap();
   }
 
   // Genau eine Start/Ziel-Kachel, und sie liegt auf Index 0. freshTrackTiles() legt sie
@@ -2488,11 +2704,27 @@
           + '<path d="M16 22 L16 19" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>' },
     { key: 'left',  type: () => TILE_TYPE.CURVE_LEFT,  cap: 'Links',
       icon: '<path d="M18 22 L18 13 A7 7 0 0 0 11 6 L4 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' },
+    // Die kleine 30-Grad-Kurve: derselbe Radius wie die 60-Grad-Kurve, halber Winkel. Das
+    // Symbol zeigt deshalb denselben Bogen, nur frueher abgebrochen.
+    { key: 'klein-left', type: () => TILE_TYPE.KLEIN_LEFT, cap: '30\u00b0 L',
+      icon: '<path d="M16 22 L16 13 A7 7 0 0 0 12.2 6.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' },
+    // Die weite Kurve: gleicher Winkel, dreifacher Radius - also eine viel flachere Linie.
+    { key: 'weit-left', type: () => TILE_TYPE.WEIT_LEFT, cap: 'Weit L',
+      icon: '<path d="M15 22 L15 12 A20 20 0 0 0 9.5 3.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' },
     { key: 'straight', type: () => TILE_TYPE.STRAIGHT, cap: 'Gerade',
       icon: '<path d="M12 22 L12 2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' },
+    // Die Engstelle: eine Gerade, die in der Mitte einspringt. Das Symbol sagt genau das,
+    // was die Kachel ist - die Breite selbst ist noch nicht gemessen (siehe trackCenterline).
+    { key: 'enge', type: () => TILE_TYPE.ENGE, cap: 'Enge',
+      icon: '<path d="M7 2 L7 8 L10 12 L10 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
+          + '<path d="M17 2 L17 8 L14 12 L14 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' },
     { key: 'pit', type: () => TILE_TYPE.PIT, cap: 'Box',
       icon: '<path d="M8 22 L8 2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'
           + '<path d="M16 20 L16 9 A5 5 0 0 1 21 4" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5" stroke-linecap="round"/>' },
+    { key: 'weit-right', type: () => TILE_TYPE.WEIT_RIGHT, cap: 'Weit R',
+      icon: '<path d="M9 22 L9 12 A20 20 0 0 1 14.5 3.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' },
+    { key: 'klein-right', type: () => TILE_TYPE.KLEIN_RIGHT, cap: '30\u00b0 R',
+      icon: '<path d="M8 22 L8 13 A7 7 0 0 1 11.8 6.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' },
     { key: 'right', type: () => TILE_TYPE.CURVE_RIGHT, cap: 'Rechts',
       icon: '<path d="M6 22 L6 13 A7 7 0 0 1 13 6 L20 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' },
     { key: 'hairpin', type: () => TILE_TYPE.HAIRPIN, cap: 'Haarnadel R',
@@ -2552,20 +2784,64 @@
     el.textContent = `${Math.round(wCm)} × ${Math.round(hCm)} cm · ${currentTrackTiles.length} Teile`;
   }
 
-  // ---- Fullscreen for the editor ----
+  // ====================================================================================
+  // VOLLBILD FUER DEN EDITOR
+  // ====================================================================================
+  //
+  // GEMELDET: "Du musst noch den Vollbildmodus des Streckeneditors fixen, aktuell sehe ich
+  // die Streckenteile unten dann nicht."
+  //
+  // ---- DER BEFUND, und er war ein Widerspruch im eigenen Code --------------------
+  //
+  // Hier stand, richtig gedacht: `catch (e) { /* refused: the CSS layout still applies */ }`
+  // - verweigert der Browser das echte Vollbild, gilt die CSS-Lage trotzdem, und die ordnet
+  // Aktionen oben, Karte in der Mitte, Teile unten.
+  //
+  // Und drei Zeilen weiter nahm ein Horcher ihm das sofort wieder weg:
+  //
+  //     document.addEventListener('fullscreenchange', () => {
+  //       if (!document.fullscreenElement && body.classList.contains('track-fs')) exit...
+  //     });
+  //
+  // Ein VERWEIGERTER Wunsch loest dieses Ereignis ebenfalls aus (und ein fremdes Vollbild,
+  // das jemand verlaesst, auch). Die Bedingung fragte nur, ob die Klasse gesetzt ist - und
+  // die war sie gerade eben selbst. Also: Klasse an, Ereignis, Klasse aus. Der Knopf tat
+  // sichtbar nichts, die Seite blieb in ihrer normalen Lage, und dort steht die Palette
+  // unter dem Falz. GEMESSEN in einem Browser, der das Vollbild verweigert: nach dem Klick
+  // war die Klasse nicht gesetzt, die Palette lag bei y = 774 auf einem 768 px hohen
+  // Fenster.
+  //
+  // ---- DIE BEHEBUNG ------------------------------------------------------------
+  //
+  // Ein eigener Merker "waren wir WIRKLICH drin". Nur dann ist ein fullscreenchange ohne
+  // Element ein Verlassen; sonst ist es ein verweigerter Wunsch oder fremdes Rauschen, und
+  // die Lage bleibt.
+  //
+  // UND DIE KLASSE KOMMT ZUERST, vor der Anfrage. Sie ist das, was der Nutzer sieht; das
+  // echte Vollbild ist die Zugabe. Vorher wurde erst gewartet und dann geschaltet - bei
+  // einer Anfrage, die haengt oder einen Dialog zeigt, blieb der Editor bis dahin in der
+  // Seitenlage.
+  let trackFsDrin = false;
+
   async function enterTrackFullscreen() {
-    try {
-      const el = document.documentElement;
-      if (el.requestFullscreen) await el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    } catch (e) { /* refused: the CSS layout still applies */ }
     document.body.classList.add('track-fs');
     // Nur noch der Textknopf in der Seite wird geschaltet. Der Umschalter in der Leiste
     // wechselt sein Symbol per CSS an derselben Klasse - eine Wahrheit, ein Ort.
     $('track-fs').hidden = true;
     refreshTrackPreview();
+    try {
+      const el = document.documentElement;
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    } catch (e) { /* refused: the CSS layout still applies */ }
+    // NACH der Anfrage gefragt und nicht vorher: erst jetzt steht fest, ob es geklappt hat.
+    trackFsDrin = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    // Die Karte noch einmal, weil das echte Vollbild die Fenstergroesse aendert.
+    if (trackFsDrin) refreshTrackPreview();
   }
+
   async function exitTrackFullscreen() {
+    trackFsDrin = false;
     try {
       if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
       else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
@@ -2574,14 +2850,14 @@
     $('track-fs').hidden = false;
     refreshTrackPreview();
   }
+
   $('track-fs').onclick = enterTrackFullscreen;
   $('track-fs-toggle').onclick = () => (document.body.classList.contains('track-fs')
     ? exitTrackFullscreen() : enterTrackFullscreen());
-  // Leaving by Escape or a system gesture must put the buttons back too.
+  // Verlassen per Escape oder Systemgeste muss die Knoepfe zurueckstellen - aber NUR, wenn
+  // wir wirklich drin waren. Siehe den Befund oben.
   document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement && document.body.classList.contains('track-fs')) {
-      exitTrackFullscreen();
-    }
+    if (!document.fullscreenElement && trackFsDrin) exitTrackFullscreen();
   });
 
   // ---- Gamepad, only while the editor is in fullscreen ----
@@ -2998,7 +3274,11 @@
       //     die alte Runde - sonst fehlt sie im Ring.
       //
       // Gemessen: ohne diese Unterscheidung lernte eine Runde aus sechs Teilen nur fuenf.
-      if (sperre && !isStartCode(best)) learn.seq.push({ type: best });
+      // UEBERSETZT und nicht roh: der Scanner schrieb bisher den gemeldeten Code direkt
+      // als Kachelart. Fuer Gerade und Kurven ist das dasselbe, fuer Boxengasse (0x07) und
+      // Engstelle (0x0a auf der Schiene) nicht - die Karte fuehrt dafuer eigene Typen,
+      // weil 0x0a dort schon Start/Ziel bedeutet.
+      if (sperre && !isStartCode(best)) learn.seq.push({ type: codeZuTyp(best) });
       learn.laps++;
       if (learn.seq.length >= 3) learnCommit();
       learn.seq = [{ type: TILE_TYPE.START }];

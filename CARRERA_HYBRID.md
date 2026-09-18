@@ -43,15 +43,24 @@ Maßstab, Strichbreite, Schwärze, Papier. Er lag am Modus.
 
 | Bahn-Modus (Byte 14, Bit 5) | Ausdruck-Modus (Byte 14, Bit 7) |
 |---|---|
-| `0x02` Gerade | `0x01` Start/Ziel |
+| `0x01` Start/Ziel | `0x0a` Start/Ziel |
+| `0x02` Gerade | |
 | `0x03` Linkskurve | |
 | `0x04` Rechtskurve | |
 | `0x05` / `0x06` Haarnadel | |
-| `0x0a` Start/Ziel | |
+| `0x0a` **Engstelle** | |
 | `0x00` abseits der Bahn | |
 
 Die beiden Bits schließen sich aus. Wer Codes vergleicht, muss also den Modus mitnennen —
-`0x01` heißt auf Papier Start/Ziel, und auf der Schiene ist `0x0a` dasselbe.
+`0x0a` heißt auf Papier Start/Ziel, und auf der Schiene ist es eine **Engstelle**.
+
+> **Diese Tabelle stand bis v0.6.14 mit vertauschten Spalten hier.** Der Code-Kommentar in
+> `src/60-track.js` sagte das Richtige: `0x0a` ist am *gedruckten Blatt* im Ausdruck-Modus
+> gemessen (25.08.), über die Kunststoffschiene lag keine Messung vor. seVen hat auf
+> Rückfrage bestätigt, dass seine Tabelle für den Bahn-Modus gilt — damit ist `0x01` der
+> Schienencode, und beide Quellen stimmen überein. Die falsche Zuordnung in dieser Tabelle
+> war folgenreich: `isStartCode()` akzeptierte beide Codes modus-blind, also hätte jede
+> überfahrene Engstelle auf der Schiene eine Phantomrunde gezählt.
 
 Offen ist damit nur noch, welche Balkenfolgen `0x02` (Gerade) und `0x04` (Rechtskurve)
 tragen. Die Folge für `0x01` liegt vektorgenau vor, weil sie aus der Original-Druckvorlage
@@ -229,6 +238,7 @@ einzige Aktor in der Tabelle oben, der das tut:
 |---|---|---|
 | Gelbe Flagge | 80 km/h, mittig | null, damit die Spur vorhersagbar bleibt |
 | Einfuehrungsrunde (fliegender Start) | Boxentempo | Schlaengeln plus die Seite des Startplatzes |
+| … dabei neben der Bahn | unveraendert | **beim Fahrer** – siehe unten |
 
 Beides laeuft ueber `autopilotGrund()` in `src/50-drive.js`, das den GRUND zurueckgibt und
 nicht nur ein Ja: die Flaggenanzeige braucht ihn auch, und sie hatte die Bedingung bis
@@ -244,6 +254,18 @@ Eingaben, und es bleibt bei einem Sender, einer Physik und einer Anzeige.
 Ausdruck-Modus haelt sich das Auto nicht selbst auf der Bahn; ein Autopilot ohne
 Querregelung wuerde es geradeaus in die Bande fahren. Deshalb steigt `autopilotGrund()` bei
 `trackMode !== 'on'` aus, in beiden Lagen.
+
+**Und nur, solange das Auto die Bahn wirklich liest.** Dasselbe Argument gilt naemlich auch
+voruebergehend: liegt das Auto neben der Bahn, meldet Byte 12 keinen Code mehr, die
+modeBytes gehen nicht hinaus, und das Auto liest den Lenkwert wieder als Radstellung statt
+als Querlage. Ein Autopilot, der dann weiter „geradeaus" vorgibt, stellt die Raeder gerade –
+und der Fahrer kann nicht zurueckfahren. Seit v0.6.28 gibt der Autopilot in diesem Fall die
+LENKUNG her und behaelt Gas und Bremse: eine gelbe Flagge bleibt eine gelbe Flagge, aber
+lenken darf, wer es kann. Dieselbe Bedingung schaltet die drei Fahrhilfe-Modi zurueck.
+
+Gemessen wird das ueber `abseitsJetzt()` in `src/50-drive.js`, also entprellt: Byte 12
+flattert, und ein einzelnes 0x00 zwischen guten Lesungen ist Rauschen. Die Uebergabe braucht
+deshalb `offtrackEinMs`, ab Werk eine Sekunde.
 
 **Die Bremse des Fahrers gewinnt - in der Einfuehrungsrunde.** Dort rollt das Feld in zwei
 Kolonnen dicht hintereinander, und ein Auto, das man nicht anhalten kann, ist ein Auto, das
@@ -597,11 +619,331 @@ Das ergibt zwei getrennte Funkverbindungen:
 1. Bluetooth: Handy zu seinem eigenen Auto (Steuerung).
 2. WLAN: Handy zu Handy (Rennorganisation).
 
+### Zwei Spieler auf einem Handy
+
+OmegaSim macht es anders als die Original-App: **ein** Gerät verbindet sich mit **beiden**
+Autos und bedient sie aus **einem** 45-ms-Sendetakt. Das ist kein Sparen, sondern die einzige
+Bauform, die in diesem Projekt gemessen funktioniert hat — getrennte Sendewege für zwei
+Ziele waren die Ursache des Stotterns mit echtem Controller (v0.5.8, siehe "Ein einziger
+Schreiber" im Doku-Reiter). Jedes Auto hat seine eigene Schreibsperre, ein langsamer Funkweg
+lässt also nur beim eigenen Auto einen Takt aus.
+
+Gemessen mit dem Prüfstand `OMEGA_TEST.zweiSpielerFahrtProbe`, 60 Takte Vollgas aus dem
+Stand, eigene Physikinstanz für Auto 2:
+
+| Zeit | Drehzahl | Tempo | Gang |
+|---|---|---|---|
+| 0,45 s | 1500 | 13,1 km/h | 1 |
+| 0,90 s | 3052 | 26,8 km/h | 1 |
+| 1,35 s | 4723 | 40,7 km/h | 1 |
+| 1,80 s | 6422 | 54,9 km/h | 1 |
+| 2,25 s | 8095 | 68,8 km/h | 1 |
+| 2,65 s | 5771 | 76,5 km/h | 2 |
+
+60 Takte, 60 Pakete — kein Ausfall. Die zweite Cockpit-Zeile stimmte in jedem Abtastpunkt mit
+dem Zustand überein.
+
+#### Was Auto 2 hat, und was es kostete
+
+Die erste Fassung (v0.6.44) war bewusst schmal: eigene Fahrphysik, nichts weiter. Die Liste
+der Grenzen ist in v0.6.45 bis v0.6.50 abgearbeitet worden, und dabei sind fünf Dinge
+herausgekommen, die ohne den Modus nicht aufgefallen wären.
+
+| Baustein | Stand | Was es wirklich kostete |
+|---|---|---|
+| Fahrphysik | ja | eine zweite Instanz, sonst nichts |
+| Ortung auf der Strecke | ja | **ein Argument.** `spielerOrt()` legte den Satz immer schon auf das Auto, las aber `playerCar` fest |
+| Ghosts weichen aus | ja | folgt aus der Ortung: Auto 2 steht im Feld, `ghostAhead()` findet es |
+| Fahrhilfe, Leitplanken-Modus | ja | folgt aus der Ortung |
+| Abseits-Drosselung, Rumpeln | ja | ein entprellter Satz je Auto |
+| Schaden, Lampenausfall | ja | ein Satz je Auto; der Detektor wurde verallgemeinert, nicht verdoppelt |
+| Tank, Verbrauch, Notlauf | ja | ein Satz je Auto, derselbe Verbrauchsregler |
+| Motorstimme | ja | ein zweiter Ablageort, **geteilte** Puffer, eigene Stereoseite |
+| Rundenzählung, Rangliste, CSV | ja | **nichts.** Lief schon je Auto, für jedes verbundene |
+| eigener Cockpit-Schirm | ja | ein Registry-Eintrag plus Malfunktion |
+| gelbe Flagge, Einführungsrunde | ja | `autopilotGrund()` war schon global; ein Regler und ein Kolonnen-Halter je Auto |
+| Boxenstopp: tanken, reparieren | ja | eine **schmale** eigene Maschine, gut 120 Zeilen |
+| Boxenstopp: Vorwahl, Reifenwechsel | nein | Vorwahl ist der Boxenschirm; die Reifenwahl ist global |
+| Motorton-Zusatzkette | nein | 75 Fundstellen auf einem Bus mit 15 Feldern — siehe unten |
+| Doppler | nein | gehört zur Runde von Auto 1 |
+| Aufnahme | nein | zwei Spuren in einer Datei wären ein anderes Dateiformat |
+| die drei Rundenzeiten im Cockpit | nein | gehören Auto 1; Auto 2 hat seine auf seinem Schirm |
+
+**Zwei Fehler in meiner Aufwandsschätzung, und beide in dieselbe Richtung.** Die Ortung galt
+als klein und war es; die *Rundenzählung* galt als der größte Posten und kostete gar nichts.
+Der Grund ist derselbe: ich hatte auf die 27 modulweiten Rennzustandsgrößen geschaut
+(`raceState`, Ampel, Flaggen) und `carRaceNotify()` übersehen, das `car.race` für **jedes**
+verbundene Auto führt, "whatever its role". Die 27 Größen betreffen das Rennen, nicht die
+Zählung. Wer den nächsten Posten schätzt: erst nachsehen, wo die Größe wirklich liegt.
+
+#### Drei Fehler, die erst der zweite Spieler sichtbar gemacht hat
+
+Alle drei betrafen den Einzelspielbetrieb und waren nur nie aufgefallen.
+
+1. **Der Vibrationsstoß hatte keine Adresse.** `ruettle()` lief durch
+   `navigator.getGamepads()` und stieß jeden Pad mit Motor an. Mit einem Spieler war das
+   richtig und ungeprüft zugleich. Dazu: die vier Schaltstöße stehen *in* der Physikklasse
+   und liefen damit für beide Autos — ein Schaltvorgang von Auto 2 rüttelte den Pad von
+   Spieler 1 und schrieb "1. Gang" in dessen Meldungsband.
+2. **Die Lampenmaske war global.** `buildCommandPacket()` maskiert kaputte Lampen "an der
+   einen Stelle, durch die jedes Paket geht" — und las dabei das globale `lightDamage`. Folge:
+   sobald das Fahrerauto über 50 % Schaden hatte, flackerten die Scheinwerfer **aller Ghosts**
+   mit. Gemessen: von 40 Zeitpunkten war der Scheinwerfer eines Ghosts vorher in 5 hell, jetzt
+   in 40.
+3. **Ein negatives `dt` ließ den Tank steigen.** `stand - gas * dt * rate` ist mit `dt < 0`
+   eine Addition. Gefunden hat es ein Prüflauf, der die Uhr fälschte und dabei zurückstellte:
+   der Tank ging von 1,5 auf 5,5 Prozent. Im Betrieb läuft `Date.now()` monoton, der Fall kam
+   also nie vor — "kam nie vor" ist aber Glück und kein Schutz. `dt` ist jetzt bei beiden
+   Autos auf nicht-negativ geklemmt.
+
+#### Die Kosten im Cockpit, gemessen
+
+Die zweite Zeile (Drehzahl, Gang, Tempo von Auto 2) kostet in der Seite 86 px:
+Bedarf 511 → 597 px. Bei abgeschaltetem Modus bleibt er **unverändert** bei 511 — die
+Rasterzeile entsteht erst mit der Klasse am `body`; ein verborgenes Kind hätte auch leer noch
+Zeile plus Lücke gekostet.
+
+Im Vollbild reichte das nicht. Gemessen mit dem Test "Cockpit passt im Vollbild, quer wie
+gedreht":
+
+| Schirm | ohne Modus | Zeile voll | kompakt | kompakt + Notabschaltung |
+|---|---|---|---|---|
+| 915 × 412 | passt | 21 px darüber | passt | passt |
+| 844 × 390 | passt | 3 px darüber | passt | passt |
+| 740 × 330 | am Boden | 92 px darüber | 72 px | passt |
+
+Drei Stufen: im Vollbild fallen Beschriftung, Marke und Kastenpolsterung weg; reicht das nicht
+und steht der Skalierungsfaktor schon auf seinem Boden von 0,5, wird die Zeile ganz
+ausgeblendet — **mit** ihrer Rasterzeile, denn ein verborgenes Kind lässt Zeile samt Lücke in
+`cockpitInhaltHoehe()` stehen (davon blieben genau 9 px übrig). Die Entscheidung steht in JS
+und nicht in einer Media Query: die Einpassung bekommt ihre Maße *vorgegeben*, eine Media
+Query sähe die echte Fensterhöhe und der Test wäre grün, ohne dass auf dem Gerät etwas besser
+ist.
+
+#### Bleibt ein Auto mit Ghosts, was es war? Gemessen: ja, Zahl für Zahl
+
+Die Frage ist die wichtigste am ganzen Umbau, und sie lässt sich nicht durch Hinsehen
+beantworten: der Zwei-Spieler-Modus hat `padRumble`, `buildCommandPacket`, `detectCrash`,
+`fuelTankTick`, `fuelDamageDerate`, `spielerOrt`, `ghostFieldRacing`, `startSampleEngine`,
+`cockpitVollbildPassung` und ein Dutzend weitere gemeinsame Stellen angefasst.
+
+Ein Mittelwertvergleich reicht dafür nicht. Drei Läufe à 60 s ergaben zwischen v0.6.43 und
+HEAD (Modus aus) Unterschiede von +28 % bei den Berührungen und +24 % bei den
+Überholmanövern — beides innerhalb oder nahe am gemessenen Rauschpegel, aber eben nicht
+*belegbar* gleich.
+
+Deshalb **deterministisch**: `Math.random` durch einen gesetzten xorshift-Generator ersetzt,
+derselbe Lauf auf dem Stand vor dem Umbau (als Datei neben der laufenden Fassung
+ausgeliefert) und auf jetzt.
+
+| Saat | Würfe | Berührungen | Überholt | Rundenspanne | beste | mittlere |
+|---|---|---|---|---|---|---|
+| 20260915 | 81 | 13 | 15 | 0,304 | 11,07 s | 12,33 s |
+| 4711 | 72 | 15 | 8 | 0,480 | 11,34 s | 12,29 s |
+| 99991 | 79 | 11 | 9 | 0,255 | 11,56 s | 12,13 s |
+
+**Auf beiden Ständen identisch**, jede Zahl. Und bei eingeschaltetem Modus ohne zugeteiltes
+Auto 2 ebenfalls — der Schalter allein ändert die Ghost-Rechnung nicht.
+
+Nachgemessen nach **allen** Etappen (v0.6.54, also inklusive gelber Flagge und Boxenstopp):
+dieselben drei Saaten, dieselben Zahlen, dieselbe Zahl der Würfe. Eine Warnung aus eigener
+Erfahrung dabei: beim zweiten Durchgang schien Saat 4711 abzuweichen (85 Würfe statt 72), und
+das war ein Fehler in **meiner** Messung, nicht im Code — ich hatte 60 statt 45 Sekunden
+gefahren. Wer diesen Vergleich wiederholt, muss jede Option gleich setzen; ein Parameter
+daneben sieht genauso aus wie eine Regression.
+
+Die **Zahl der Würfe** ist dabei die scharfste Aussage: hätte der Umbau irgendwo einen
+zusätzlichen `Math.random()`-Aufruf eingebaut, wäre die ganze Folge verschoben und jede Zahl
+danach anders. 81 gegen 81 heißt: kein einziger dazugekommen.
+
+Der Vergleichsstand ist naturgemäß nicht dauerhaft prüfbar. Was der Selbsttest "Ghosts: bei
+gesetztem Zufall rechnet die Simulation reproduzierbar" festhält, ist die Eigenschaft, auf der
+der Vergleich beruht — dass die Rechnung bei gesetztem Generator reproduzierbar ist. Ein
+versehentlicher Nichtdeterminismus (eine echte Uhr im Rechenweg, eine Reihenfolge aus einem
+Objekt) macht sie kaputt, und dann ist der nächste Vergleich dieser Art nicht mehr möglich.
+Absichtlich **kein** Golden Master: die Zahlen oben stehen als Beleg im Kommentar, nicht als
+Zusicherung im Code — ein Test, der bei jeder gewollten Ghost-Änderung rot wird, wird
+abgeschaltet.
+
+**Und ein Befund fiel dabei ab, der nichts mit zwei Spielern zu tun hat.** Der Test
+"Schirmwechsel ändert die Einpassung nicht" rechnete den Umlauf mit der *Gesamtzahl* der
+Cockpit-Schirme nach. Das war richtig, solange jeder blätterbar war; mit dem übersprungenen
+Schirm von Auto 2 landet man einen daneben. Aufgefallen ist es erst, als der Modus bei einem
+Prüflauf **aus** war — vorher stand er in diesem Browserprofil auf "an", und der Test hat nur
+die eine Lage geprüft. Er fährt jetzt beide.
+
+#### Der Ton ist eine Mischungs- und keine Programmierfrage
+
+Zwei Motoren im selben Drehzahlband aus einem Lautsprecher klingen wie *ein* verstimmter
+Motor. Die zweite Stimme sitzt deshalb auf der anderen Stereoseite (Auto 1 links, Auto 2
+rechts, ±0,55 — nicht ±1, ganz außen klingt es abgeschnitten), und der Schaltklang kommt von
+der Seite des Autos, das geschaltet hat. Die Schleifenpuffer werden **geteilt**: sie liegen je
+Motormodell, nicht je Auto.
+
+Gemessen an den Web-Audio-Knoten, Motor `p992gt3r` mit vier Leistungsbändern:
+
+| Drehzahl | Gewichte der vier Bänder | Summe | Meister |
+|---|---|---|---|
+| 2200 | 0,269 / 0,730 / 0 / 0 | 0,999 | 0,636 |
+| 7000 | 0,000 / 0,001 / 0,545 / 0,454 | 1,000 | 0,637 |
+| still | | | 0,0002 |
+
+Die Überblendung wandert also mit der Drehzahl, und die Gewichte summieren auf 1 — sonst hätte
+die Lautstärke ein Loch oder eine Beule im Band. **Wie es klingt, entscheidet der Teppich**;
+das ist keine Zusicherung dieser Messung.
+
+**Was Auto 2 am Ton noch fehlt, und was es kosten würde.** Die Zusatzkette — Turbopfeifen,
+Knaller beim Schalten, das Pulsen am Begrenzer und der lastabhängige Tiefpass — hängt an
+*einem* Bus: `xs` mit 15 Feldern, ein Knotenbaum von acht Web-Audio-Knoten, und **75
+Fundstellen** von `xs.` über die Datei verteilt. Die Rechnung selbst (`extrasWerte`) ist schon
+knotenfrei und ließe sich auf einen Halter parametrisieren; der Bus, `xKnall()` und
+`xAbblasen()` müssten es ebenfalls.
+
+Das ist vom Umfang der Sample-Motor-Umbau noch einmal, nur breiter gestreut — und der Nutzen
+ist der kleinste aller offenen Punkte: Auto 2 hat seinen Motorton mit Stereotrennung, es
+fehlen die Verzierungen. Das Risiko trifft dabei den Ton von **Auto 1**. Solange die Vorgabe
+"ein Auto mit Ghosts muss bleiben, was es war" gilt, ist das der falsche Tausch; hier steht
+die Zahl, damit die Entscheidung nicht neu geschätzt werden muss.
+
+**Beim Messen von Web Audio: warten.** Alle Verstellungen laufen über `setTargetAtTime()`,
+also über eine Rampe. `AudioParam.value` gleich danach gelesen ist noch der *alte* Wert — der
+erste Anlauf ergab vier Abspielraten von genau 1 und vier Gewichte von genau 0, was nach einer
+stummen Stimme aussah. Gewartet wird auf der Uhr des Tonkontexts, nicht auf `setTimeout`: bei
+verborgenem Vorschaubereich drosselt der Browser Zeitgeber auf einen Takt je Sekunde.
+
 ## Firmware-Updates
 
 Das Auto unterstützt Updates seiner eigenen Software über Bluetooth. Das nennt man "Over-the-Air-Update" oder kurz OTA-Update. Dafür wird ein Standardverfahren von Nordic Semiconductor genutzt, das bei sehr vielen Bluetooth-Geräten zum Einsatz kommt.
 
 Das bedeutet: Der Hersteller kann über die App neue Firmware auf das Auto spielen, zum Beispiel um Fehler zu beheben oder das Fahrverhalten zu verbessern.
+
+## Abgleich mit der Protokollbeschreibung von seVen
+
+seVen hat eine byteweise Beschreibung des HYBRID-Protokolls geteilt. Sie stimmt in den
+tragenden Teilen mit dem überein, was hier unabhängig gemessen wurde — Rahmenlänge, Header
+`0xAF`, Byte 6 Tempo um die Neutrale `0xDF`, Byte 7 Servo, Byte 11 Zähler, Byte 12
+Kachelcode. Interessant sind die Stellen, an denen die beiden Quellen **auseinandergehen**.
+Jede davon ist entweder ein Gewinn für uns oder ein Hinweis für seVen.
+
+### 1. Die Rückwärtsgrenze — seVen erklärt eine offene Beobachtung
+
+In `10-ble-explorer.js` steht seit Langem ein Rätsel: volle Rückwärtsfahrt (Delta −127,
+Byte `0x60`) fährt **vorwärts**, halbe (Delta −64, Byte `0x9F`) fährt korrekt rückwärts.
+Deshalb ist `MIN_THROTTLE_DELTA` auf −64 geklemmt, mit dem Vermerk „bis die genaue Grenze
+gemessen ist".
+
+seVens Tabelle liefert die Grenze:
+
+| Bereich | Bedeutung |
+|---|---|
+| `0xE0`–`0xFF`, dann `0x00`–`0x6F` | vorwärts, 144 Stufen |
+| `0x80`–`0xDE` | rückwärts, 95 Stufen |
+
+`0x60` liegt damit **im Vorwärtsbereich** — genau die beobachtete Anomalie, und damit
+erklärt. Die sichere Rückwärtsgrenze ist Byte `0x80`, also Delta **−95** statt −64.
+
+**Vorschlag:** `MIN_THROTTLE_DELTA` auf −95. Das sind 48 % mehr Rückwärtsweg. Nicht
+ungeprüft übernehmen — am Auto nachfahren, weil die Klemme aus einer echten Beobachtung
+stammt und nicht aus einer Annahme.
+
+### 2. Drei Befehlsbytes, die wir konstant senden
+
+Unser Paket setzt sie fest; seVen beschreibt sie als Wahlmöglichkeiten:
+
+| Byte | wir senden | seVen |
+|---|---|---|
+| 8 | `0x80` | Fahrstil: `0x64` Arcade, `0x78` Realistisch |
+| 10 | `0x60` (Ghost: `0x20` / `0x30`) | Fahrassistent: `0x22` hoch, `0x42` mittel, `0x52` niedrig, `0x62` aus |
+| 12 | `0x01` | Hersteller: `0x01` Porsche, `0x02` BMW, `0x03` Ford |
+
+Unsere `0x80` und `0x60` kommen aus Mitschnitten der Original-App und funktionieren — sie
+stehen also nicht im Widerspruch, sondern sind vermutlich weitere gültige Werte oder eine
+andere Firmware-Fassung.
+
+**Vorschlag, in dieser Reihenfolge:** Byte 12 ist das risikoärmste und interessanteste —
+die App hat BMW- und Ford-Profile im Klang, und wenn das Auto seine eigene Fahrcharakteristik
+danach richtet, ließe sich das erstmals ausprobieren. Byte 8 (Arcade/Realistisch) wäre ein
+Fahrhilfe-Schalter in der **Hardware** statt in unserem Modell. Beides über den vorhandenen
+Byte-Prüfstand im Entwicklertab, der die Prüfsumme korrekt neu rechnet.
+
+### 3. Ein gemessenes Tempo, das wir nicht lesen
+
+seVen nennt **Byte 14 der Meldung** `speedFeedBack`, in derselben Kodierung wie das
+Befehlstempo (`0xDF` neutral). Wir lesen aus der Meldung heute Byte 3 (Gier), 10 (Akku),
+11 (Zähler) und 12 (Code) — **kein Tempo**. Die gesamte Geschwindigkeit der App ist
+gerechnet: Tacho, Ghost-Regelung, Rundenschätzung.
+
+**Das wäre die größte einzelne Verbesserung in dieser Liste.** Ein gemessenes Tempo würde
+den Tempo-Regler der Ghosts von einer Steuerung zu einer echten Regelung machen und die
+Leseschwellen-Diagnose (`GHOST_READ_MIN`) direkt beantworten, statt sie aus dem
+Kachelzähler zu erschließen.
+
+Zu prüfen ist es ohne Auto nicht. Der Weg: Byte 14 im Monitor mitschreiben, einmal langsam
+und einmal schnell fahren, und sehen, ob es sich mit dem Tacho bewegt.
+
+### 4. Sechs Kachelcodes, die wir nicht kennen
+
+| Code | seVen | wir |
+|---|---|---|
+| `0x01` | Start/Ziel | Start/Ziel (Ausdruck-Modus) |
+| `0x02` | Gerade 43,2 | Gerade |
+| `0x03` | Linkskurve 60 | Linkskurve |
+| `0x04` | Rechtskurve 60 | Rechtskurve |
+| `0x05` / `0x06` | Haarnadel links / rechts | dito |
+| `0x07` | **Boxengasse / lange Gerade** | — |
+| `0x08` / `0x09` | **große Kurve 30 links / rechts** | — |
+| `0x0A` | **NarrowSection** | **Start/Ziel (Bahn-Modus)** |
+| `0x0B` / `0x0C` | **kleine Kurve 30 links / rechts** | — |
+
+**Und hier haben WIR etwas, das seVens Beschreibung fehlt:** der Sensor hat **zwei
+Codetabellen**, eine je Betriebsart (Bahn-Modus über Byte 14 Bit 5, Ausdruck-Modus über
+Bit 7) — siehe oben. Dasselbe gedruckte Blatt meldet je nach Modus `0x01` oder `0x0a`. Eine
+flache Tabelle kann das nicht abbilden, und genau daran ist die Musterentzifferung hier
+monatelang falsch gelaufen.
+
+**Der Konflikt bei `0x0A` ist deshalb offen und praktisch wichtig:** Gilt seVens Tabelle im
+Bahn-Modus, dann ist `0x0A` eine **Engstelle** und keine Ziellinie — und wer ein solches
+Teil verbaut, bekäme bei jeder Überfahrt eine Phantomrunde gezählt. Gilt sie im
+Ausdruck-Modus, passt `0x01` zu unserer Tabelle und `0x0A` ist ein Papiercode, den wir
+nicht kennen.
+
+**Vorschlag:** seVen nach dem Modus fragen, in dem seine Tabelle gilt. Das ist die eine
+Frage, deren Antwort am meisten klärt.
+
+### 5. Die Akkuskala weicht ab
+
+| | untere Grenze | obere Grenze |
+|---|---|---|
+| wir (`batteryPercent`) | 111 | 155 |
+| seVen | 131 | 155 |
+
+Bei Rohwert 131 zeigen wir **45 %**, seVen sagt **0 %**. Das ist keine Kosmetik: wer sich
+auf die Anzeige verlässt, bliebe mitten im Rennen stehen.
+
+**Vorschlag:** nachmessen statt raten — ein Auto leerfahren und den kleinsten je gemeldeten
+Rohwert festhalten. Beide Zahlen sind Schätzungen, unsere ist nur älter.
+
+### 6. Wo unsere Messung stärker ist als die Beschreibung
+
+**Die Prüfsumme.** seVen nennt sie „XOR über Bytes 0…18". Wir rechnen **CRC-8 mit Polynom
+`0x31` und Startwert `0xFF`**, und das ist nicht theoretisch: `crc8()` reproduziert drei
+aufgezeichnete Prüfsummen aus echten Mitschnitten exakt (`0xA4`, `0x33`, `0x83`). Ein XOR
+täte das nicht. Die App fährt damit seit Monaten echte Autos — hier ist die Beschreibung
+vermutlich ungenau oder beschreibt eine andere Fassung.
+
+**Die Ziellinie in Byte 15.** seVen beschreibt eine Flanke von `0x00` auf `0x08`. Das deckt
+sich mit unserem `ZIEL_SPERRE_BIT = 0x08`, und wir haben es zusätzlich belegt: Bit 3 wird zu
+100 % geschrieben, aber nur zu 12 % gemeldet — also **kein Echo unseres eigenen Bytes,
+sondern eine Meldung des Autos**. Unabhängige Bestätigung in beide Richtungen.
+
+### 7. Was wir nicht zurückschicken
+
+seVen beschreibt für das manuelle Profil, dass die Bytes 16–18 die zuletzt bekannten
+`trackPosition` / `currentTile` / `previousTile` **an das Auto zurückgespiegelt** werden.
+Wir senden dort Nullen und füllen sie nur im Leitplanken-Modus mit dem Vorausblick.
+
+Ob das Auto die Rückspiegelung braucht, ist unbekannt. Es wäre aber die einfachste
+Erklärung, falls der Bahn-Modus ohne sie schlechter liest, als er könnte.
 
 ## Was noch nicht sicher bekannt ist
 
@@ -612,6 +954,31 @@ Manche Details lassen sich nur aus dem beobachteten Verhalten ableiten, nicht mi
 - die genaue Bedeutung aller Bytes im Bluetooth-Protokoll
 
 Diese Lücken ändern nichts am Grundprinzip: Ein Sensor liest die Strecke, ein Funkchip verbindet Auto und Handy, und die eigentliche Fahrphysik läuft im Auto selbst.
+
+### Byte 14, die restlichen Bits — erprobt am Auto, und die Antwort ist: kein Fernlicht
+
+Gefragt war, ob sich zwei Helligkeitsstufen (Abblend- und Fernlicht) bauen lassen. Byte 14
+hat ein einziges bestätigtes Scheinwerfer-Bit (Bit 1); vier weitere Bits waren nie gesetzt
+worden und standen offen — Bit 6 als "kommt in beiden Betriebsarten vor, Bedeutung offen",
+Bits 2 bis 4 als komplett unerprobt.
+
+Vier Paketvarianten im Mustererkennungs-Prüfstand (Entwicklertools) haben sie einzeln
+durchprobiert, jede mit gesetztem Scheinwerfer-Bit, am echten Auto:
+
+| Bit | Ergebnis |
+|---|---|
+| 2 (`0x04`) | **Das Licht blinkt.** Reproduzierbar — zweimal am selben Abend getestet, beide Male dasselbe Ergebnis. Keine Helligkeitsstufe, eine eigene Betriebsart. |
+| 3 (`0x08`) | Kein sichtbarer Unterschied zum normal leuchtenden Licht. |
+| 4 (`0x10`) | Kein sichtbarer Unterschied zum normal leuchtenden Licht. |
+| 6 (`0x40`) | Kein sichtbarer Unterschied zum normal leuchtenden Licht. |
+
+**Ergebnis: keine zwei Helligkeitsstufen gefunden.** Abblend-/Fernlicht ist mit diesem
+Protokoll nicht zu bauen — dafür wäre ein Bit nötig, das die Helligkeit sichtbar ändert statt
+zwischen "an", "aus" und "blinkt" zu wählen, und keines der vier unbekannten Bits tut das.
+
+Das **Blinklicht** (Bit 2) ist dagegen eine echte, bisher ungenutzte Fähigkeit — ein
+möglicher Baustein für eine Warnblinker- oder Notlicht-Funktion, sollte sie einmal bestellt
+werden. Bis dahin bleibt es unbenutzt, dokumentiert und nachgewiesen.
 
 ### Wieviel Querversatz vertraegt die Bahn? Gemessen — und die Antwort ist: keine Grenze
 
@@ -669,6 +1036,92 @@ Scheitel zu schicken führt sie zusammen, und Berührungen sind ohne Rückmeldun
 nicht zurückzuregeln. Ab 100 Prozent ist das aber eine ausdrückliche Bitte, und der Anteil
 wächst linear bis auf voll bei 200 Prozent. **Unter 100 Prozent ändert sich nichts:** die
 Ausdrücke sind dort Zeichen für Zeichen die alten.
+
+### Das Überholmodell: wie ein Ghost ansetzt, ausweicht und sich wieder einordnet
+
+Gefragt: wie funktioniert das Überholen der Ghosts, wie es heute implementiert ist. Es
+steht nirgends zusammenhängend aufgeschrieben — die vollständigste Prosa dazu waren
+bisher die Hilfetexte der beiden Optionen „Überholmanöver" und „Abstand halten". Hier der
+Ablauf, Schritt für Schritt, mit den nachgemessenen Zahlen dazu.
+
+**Vier Phasen: `ansage → raus → vorbei → rein`.** Ein Verfolger, der `SPICE_ATTACK_RANGE`
+(1,3 Kacheln) oder näher heranrückt, sammelt Klebezeit (`g.closeSince`). Nach
+`SPICE_ATTACK_ARM_MS` (900 ms) würfelt er alle `SPICE_ATTACK_RETRY_MS` (1200 ms) mit
+Wahrscheinlichkeit `SPICE_ATTACK_P` (0,45) — erwartete Wartezeit bis zum nächsten Versuch
+rund 2,7 s. Fällt der Wurf, läuft:
+
+| Phase | Dauer / Ende | Versatz |
+|---|---|---|
+| `ansage` | `SPICE_ANSAGE_MS` (570 ms, zwei Lichthupenimpulse) | keiner — das Auto bewegt sich noch nicht zur Seite |
+| `raus` | `SPICE_ATTACK_SIDE_MS` (400 ms) | volle Seite |
+| `vorbei` | bis „durch" oder Abbruch | volle Seite, plus `SPICE_ATTACK_GAIN` Schub |
+| `rein` | `SPICE_PASS_TUCK_MS` (700 ms) | rampt linear auf 0 zurück |
+
+Die Lichthupe *vor* dem Ausschwenken ist Absicht: der Ablauf ist Ankündigung, dann erst
+Bewegung, nie beides gleichzeitig — ein Blitzen während des Ausschwenkens wäre eine
+Begleitung und keine Ankündigung.
+
+**Erfolg misst der Fortschritt, nicht die Uhr.** Vorbei ist ein Angreifer, wenn sein
+Streckenfortschritt den des Ziels um `SPICE_PASS_CLEAR` (0,45 Kacheln) übersteigt — nicht
+nach einer festen Zeit. Klappt es innerhalb von `SPICE_PASS_MAX_MS` (5 s) nicht, bricht er
+ab und ordnet sich ein, plus `SPICE_PASS_BLOCK_MS` (6 s) Sperre gegen den nächsten Versuch.
+Ohne diesen Abbruch klebte der Verfolger neben dem Vorausfahrenden, bis die Uhr ablief —
+und genau dort berühren sich zwei Autos am ehesten.
+
+**Die Seite ist die, auf der der andere nicht ist.** Gelesen aus der *gemeldeten Querlage
+des Vorausfahrenden* (`g.querSoll` des anderen Autos), nicht aus der eigenen Ideallinie —
+auf der Geraden ist das dasselbe, in der Kurve nicht.
+
+**Ausweichen ist ein Auftrag, kein Reflex.** Der Angreifer schreibt `yieldSide` /
+`yieldUntil` (`SPICE_ATTACK_MS`, 2600 ms) in das *andere* Auto — der Vorausfahrende weiß
+zu diesem Zeitpunkt noch nicht, dass hinter ihm einer ansetzt. Dieselbe Bauform wie beim
+Boxen-Ausweichen (`pitAusweichenSetzen()`).
+
+**Während eines Manövers ersetzt der Versatz die Ideallinie, er addiert nicht.** Das ist
+die tragende Eigenschaft, und sie ist eine Korrektur: vorher stand der Versatz des
+Angreifers gegen die volle Ideallinie des Vorausfahrenden — dessen `anteilA` war 0, seine
+Linie hatte also VOLLES Gewicht neben dem Ausweichen, und beide Kräfte hoben sich auf.
+Ergebnis: „die Autos haben sich ewig gegenseitig angeschoben." Jetzt gilt bei einer Attacke
+ein Zwei-Stufen-Modell — Angreifer voll auf seine Seite, Vorausfahrender voll auf die
+andere, die MITTE bleibt ausdrücklich leer (zwei Autos auf 25 cm Bahnbreite brauchen beide
+Hälften), und die Ideallinie ist währenddessen nicht abgeschwächt, sondern **gar nicht
+zuständig**.
+
+**Gesperrt ist eine Attacke in eine Haarnadel oder Engstelle hinein**
+(`SPICE_PASS_KEIN_HAARNADEL_VORAUS`, Reichweite 1 Kachel voraus) — ein Versuch dauert bis
+zu 5 s, eine Kachel bei Renntempo rund 0,7 s, wer davor ausholt ist beim Einlenken noch
+daneben. Die Engstelle zählt hier absichtlich wie eine Haarnadel (`tileTightness()`): eng
+ist sie nicht im Radius, sondern in der Breite, und genau dort will man nicht nebeneinander
+liegen. Zusätzlich gesperrt: unter gelber Flagge, und solange man selbst Abstand halten
+muss (`ghostCfg.wuerzeAbstand`, außer während der eigenen Attacke).
+
+**Die Abstandsregel rechnet in Zeit, nicht in Kacheln — und der Grund ist gemessen.** Der
+Kachelabstand hat unterhalb einer Fahrzeuglänge praktisch keine Auflösung: in 276
+Stichproben unter einer Autolänge meldete er in jedem einzelnen Fall genau 1,000. Ein
+Zeitlücken-Sweep (90 s, vier Autos, jeder Wert dreimal gefahren) zeigt, warum das wichtig
+ist:
+
+| Zeitlücke | Überholt/min | Berührungen/min | Anteil Zeit in Berührung |
+|---|---|---|---|
+| 0,35 s | 25,8 | 53,5 | **86 %** |
+| 1,2 s | 22,5 | 32,5 | 61 % |
+
+Bei 0,35 s waren die Autos 86 Prozent der Zeit in Berührung — „kein Rennen mehr, das ist
+ein Schiebehaufen." 1,2 s (der heutige Wert, `SPICE_LUECKE_MIN_S`) senkt die Berührungen
+fast auf die Hälfte und kostet dafür 13 Prozent der Überholmanöver — der Tausch, der
+gewählt wurde.
+
+Zwei Autos brauchen auf jeder Kachel 30,4 Prozent der Bahnbreite (2 × 3,8 cm auf 25 cm).
+Der Ausgangsbefund vor alledem: 7,7 Berührungen pro Minute, engster gemessener
+Längsabstand exakt 0 cm — die Autos überlappten vollständig.
+
+**Wichtig für die Einordnung dieser Zahlen:** sie stammen aus der Rennsimulation
+(„Rennen simulieren" im Entwicklertab), und die ist ausdrücklich „eine Aussage über das
+MODELL, nicht über den Teppich" — kein Byte meldet die wirkliche Querlage eines echten
+Autos. Gemessen wurde vor den Änderungen aus v0.6.31 (Querlage nur in Fahrt); eine erneute
+Messung mit dem aktuellen Stand steht noch aus, dürfte die Größenordnungen aber nicht
+verschieben — die Überholmechanik selbst (`ghostSpice()`) ist von jenem Umbau unberührt
+geblieben.
 
 ### Drift-Modus — und eine Voraussetzung, die nicht stimmte
 
@@ -823,3 +1276,151 @@ Gemessen, Anteil der Takte am Phasendeckel in Kurven:
 
 Und die Kurvenspanne des gesendeten Bytes steigt dabei von 55 auf **58–61 von 127** — der
 Ausgang ist zurück.
+
+### Und ab v0.6.37 kommt die Phase aus dem Weg, nicht aus der Uhr
+
+Die Dauer je Typ hat den Deckel entschärft, aber die Größe selbst bleibt falsch gewählt: eine
+**Dauer** vermischt Länge und Tempo. Beim Anbremsen dauert die Kachel länger als ihr Mittel,
+die Phase läuft also voraus — und zwar genau am Kurveneingang, wo sie Ideallinie *und*
+Bremsprofil indexiert. Der Ghost hält sich für weiter am Scheitel, als er ist.
+
+Der **Weg** zwischen zwei Zählersprüngen hat diesen Fehler nicht: er ist eine geometrische
+Konstante und hängt nicht am Gas. Ein langsam gefahrenes Stück dauert länger, ist aber nicht
+länger. Also wird jetzt das Tempo des Ghosts über die Kachel aufintegriert und durch einen
+gleitenden Mittelwert des **tatsächlich** gefahrenen Wegs je Kacheltyp geteilt.
+
+Das ist **selbstkalibrierend**, und das ist der Punkt: das Tempo eines Ghosts ist kein
+Messwert, sondern der Zustand seines eigenen gerechneten Motors. Jeder konstante Skalenfehler
+darin kürzt sich in `Weg ÷ erwarteter Weg` heraus, ebenso die bis zu einen Takt (45 ms) späte
+Sprungerkennung — sie steckt in Zähler und Nenner.
+
+Gemessen gegen die **wahre** Phase der Rennsimulation (die aus der wirklichen Bogenlänge
+kommt), vier Autos, 1600 Takte, beide Schätzer im selben Lauf:
+
+| Kennzahl | Uhr | Weg | |
+|---|---|---|---|
+| mittlerer Betragsfehler | 0,097 | **0,073** | −25 % |
+| klebt bei ≥ 0,995 | 6,2 % | **0,0 %** | der Linienversatz friert nicht mehr ein |
+| Höchstphase je Kachel | 0,861 | **0,949** | das letzte Stück wird indexiert |
+| Kacheln nie über 0,95 | 63 % | **48 %** | |
+
+**Was der Weg nicht behebt:** sein Vorzeichenfehler ist größer (−0,073 gegen −0,029), er läuft
+also systematisch etwas hinterher. Das ist die Meldeverzögerung des Kachelzählers, die beide
+Schätzer haben — die Uhr versteckt sie nur, weil ihr Deckel bei 1 die Schätzung am Kachelende
+nach oben drückt. Ein ehrliches Hinterherlaufen ist einem versteckten vorzuziehen, vor allem
+weil genau dieses Kleben den Linienversatz einfror.
+
+Das **Fahrerauto** bleibt bei der Uhr, ohne Sonderfall: sein `ghost`-Satz ist `nurOrt` und hat
+keinen Motor, also gibt es dort kein Tempo zu integrieren, und der Rückfall greift von selbst.
+
+### Ein Nebenbefund, der eine alte Begründung umdreht
+
+Der **gemeldete Kachelabstand** hatte unterhalb einer Kachel keine Auflösung: in 1517 nahen
+Stichproben meldete er jedes Mal genau 1,00. Grund war die Phase — zwei Autos mit gleichem
+Tempo hatten dieselbe, und sie fiel aus der Differenz heraus. Genau deshalb rechnet der
+Abstandhalter seit v0.5.47 mit der **Zeitlücke** aus Kachelstempeln, und genau deshalb steht
+`SPICE_GAP_MIN` auf 1,2 Kacheln: eine Schwelle von 0,7 konnte nie auslösen.
+
+Mit der Wegphase hängt die Phase am eigenen aufintegrierten Weg jedes Autos, also bleibt die
+Differenz stehen. Gemessen, nahe Abtastungen mit wahrem Abstand unter einer Kachel:
+
+| | vorher | nachher |
+|---|---|---|
+| verschiedene gemeldete Werte | 1 (immer 1,00) | **490** |
+| mittlere Abweichung vom wahren Abstand | ~0,5 Kacheln (21 cm) | **0,07 Kacheln (3 cm)** |
+
+Der Kachelabstand ist damit brauchbar geworden. Die Zeitlücke bleibt die Größe, mit der der
+Abstandhalter arbeitet — geändert wird daran hier nichts, aber die Begründung für `1,2` ist
+nicht mehr die Auflösung, sondern nur noch die gemessene Reihe dahinter.
+
+### Zwei naheliegende Verbesserungen, gemessen und verworfen
+
+Beide sahen nach einer Lücke aus, beide sind gebaut, gemessen und wieder entfernt worden.
+Die Zahlen stehen hier, damit sie niemand ein zweites Mal baut.
+
+**1. Das Tempoprofil der Ideallinie als Tempogrenze.** `lapTimeOf()` rechnet für jede Linie
+ein vollständiges Profil `v[]` je Abtastpunkt — Kurvengrenze, Vorwärts- und
+Rückwärtsdurchlauf, Bremszonen an der richtigen Stelle. Es lag ungenutzt da, und der
+naheliegende Griff wäre, es als Obergrenze auf das Ghost-Tempo zu legen. Gemessen auf zwei
+Haarnadeln (`SG2H2G2J2`), vier Autos, 90 s, je drei Läufe:
+
+| | Rundenzeit | Berührungen/min | Überholmanöver/min |
+|---|---|---|---|
+| Deckel aus | **16,32 s** | **15,3** | **9,8** |
+| Deckel an | 25,56 s | 78,9 | 1,5 |
+
+57 Prozent langsamer, und die Autos schieben statt zu überholen. Der Grund ist grundsätzlich
+und keine Abstimmungsfrage: die Kurvengrenze im Profil ist `sqrt(aLat / Krümmung)`, also die
+Grenze eines **freien** Fahrzeugs. Ein Auto auf der Schiene bekommt seine Querkraft von der
+Schiene; seine Grenze liegt weit darüber. Das Profil ist gebaut, um **Linien zu vergleichen**
+— dafür ist die Annahme richtig, und dort bleibt es.
+
+**2. Ein Bremspunkt statt der reaktiven Bremse.** Gebremst wird nur, wenn das Auto schon zu
+schnell *ist*. Ein Bremspunkt — „ab dieser Entfernung muss ich bremsen, um die Kurve zu
+treffen" — wäre die Lehrbuchform: `a = (v² − vZiel²) / (2s)`, Bremsbefehl `a / aBrk`,
+Zieltempo aus der Kachelregel, Entfernung aus `tileLength()` minus dem auf der Kachel schon
+gefahrenen Weg. Gemessen mit `ghostDriveProbe`:
+
+| Ghost-Tempo | nötiger Bremsweg | höchster Bremsbefehl |
+|---|---|---|
+| 55 % | 1,7 cm | 0,032 |
+| 80 % | 2,0 cm | 0,032 |
+| 100 % | 1,4 cm | 0,140 |
+
+**Eine Kachel ist 43 cm lang.** Der Bremsweg beträgt also rund vier Prozent einer Kachel: das
+Auto legt die Tempodifferenz zur Kurve in zwei Zentimetern ab. Ein Bremspunkt beschreibt
+damit nichts — er liegt immer innerhalb des Takts, in dem der reaktive Regler ohnehin schon
+bremst. In der Rennsimulation entsprechend: 16,227 gegen 16,240 s Rundenzeit, 16,2 gegen 16,0
+Berührungen je Minute, beides innerhalb der Streuung von drei Läufen.
+
+Das liegt **nicht** an `aBrk` — beim Bremsen hilft die Schiene nicht, die Größe ist richtig.
+Es liegt an `v²`: Verzögerung skaliert nicht mit der Fahrzeuggröße, Bremswege aber mit dem
+Quadrat des Tempos. Ein Modellauto bei 4 km/h Modelltempo braucht Zentimeter, wo ein
+wirkliches Auto bei 200 km/h hundert Meter braucht. Selbst am Anschlag des
+Spitzentempo-Reglers bleibt es unter einem Sechstel einer Kachel.
+
+**Was aus dem Versuch geblieben ist:** ein stiller Fehler im Zwischenspeicher der Linie. Sein
+Schlüssel waren Layout und Linienmodell — die **Fahrgrenzen** fehlten, obwohl `lapTime` an
+ihnen hängt. Wer in der Werkstatt Antrieb, Reifen oder Masse wechselte, bekam weiter die
+Rundenzeit des alten Fahrzeugs angezeigt. Eine Kennung der vier Werte im Schlüssel heilt das
+von selbst.
+
+### Wie genau die Kennzahlensonde ist — und was daraus folgt
+
+Die Rennsimulation zählt Berührungen und Überholmanöver, und seit v0.6.36 holt eine Sonde
+diese Zahlen ab. Bevor man Abstimmungen darauf stützt, muss man wissen, wie genau sie sind.
+Gemessen wurde das direkt: **drei identische Einstellungen**, je vier Läufe von 90 s, fünf
+Autos.
+
+| Variante | Ber./min | Überh./min | Ber. je Überh. | Feld-Spanne | Runde |
+|---|---|---|---|---|---|
+| A (Vorgabe) | 29,3 | 17,3 | 1,67 | 0,356 s | 12,26 s |
+| B (Vorgabe) | 21,5 | 17,4 | 1,39 | 0,327 s | 12,23 s |
+| C (Vorgabe) | 20,8 | 20,2 | 1,05 | 0,310 s | 12,21 s |
+| **Spanne** | **8,5 (41 %)** | **2,9 (17 %)** | **0,62 (48 %)** | **0,046 (13 %)** | **0,055 (0,4 %)** |
+
+Das ist unbequem und wichtig:
+
+* **Rundenzeit** rauscht mit 0,4 %. Das ist die einzige Zahl, mit der man einen Unterschied
+  von wenigen Prozent belegen kann.
+* **Feld-Spanne** (Streuung der mittleren Rundenzeit *zwischen* den Autos) rauscht mit 13 %
+  — brauchbar für Unterschiede ab etwa einem Drittel.
+* **Überholmanöver** rauschen mit 17 %, **Berührungen** mit 41 %, und **Berührungen je
+  Überholmanöver** mit 48 % — als Quotient zweier rauschender Zahlen am meisten, obwohl sie
+  sich am klügsten liest.
+
+**Einmal selbst darauf hereingefallen:** mit drei Läufen sah der Windschatten wie +35 %
+Überholmanöver bei gleichen Berührungen aus (14,0 → 18,9). Mit **sechs** Läufen war der
+Unterschied exakt null (17,25 gegen 17,22). Fast wäre daraus eine geänderte Vorgabe geworden.
+
+Die Regel, die daraus folgt: eine Aussage über Berührungen oder Überholmanöver braucht
+entweder einen **Faktor** — wie der Abstandhalter mit 9,7 oder das Tempoprofil mit +57 %
+Rundenzeit — oder viel mehr Läufe, als sich bezahlen lassen. Für alles Feinere ist die
+Rundenzeit die Zahl, und wo die nichts sagt, sagt die Sonde nichts.
+
+Deshalb ist **keine** Vorgabe der Ghost-Schalter geändert worden. Gemessen wurden alle neun
+einzeln; keiner zeigte einen Vorteil außerhalb des Rauschens, und eine Vorgabe nach Gefühl
+zu ändern wäre genau das, was diese Sonde verhindern soll. Was bleibt, sind Schalter mit
+ehrlichen Hilfetexten — und drei Befunde, die groß genug waren, um zu zählen: der
+Abstandhalter (Faktor 9,7 auf die Berührungen), das Tempoprofil als Tempogrenze (+57 %
+Rundenzeit, deshalb verworfen) und der Fahrercharakter (Feld-Spanne 0,12 → 0,27 s).

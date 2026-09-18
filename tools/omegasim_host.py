@@ -193,6 +193,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         super().log_message(fmt, *args)
 
+    def _cors(self):
+        """Die Kopfzeilen, ohne die Mehrspieler nur vom Host selbst aus geht.
+
+        WARUM DAS NOETIG IST, und es war der Grund, warum "Mitmachen" von anderswo
+        scheiterte: die App meldet mit Content-Type: application/json. Das ist KEINE
+        einfache Anfrage im Sinne der Gleiche-Herkunft-Regel, der Browser schickt also
+        zuerst einen Vorabflug (OPTIONS) - und SimpleHTTPRequestHandler beantwortet den mit
+        501. Der POST kam nie an.
+
+        Sichtbar war davon nichts: der Meldeaufruf faengt seine Fehler ab (catch(e){}), und
+        das Abholen meldete nur "kein Kontakt zum Host". Wer die App vom Host selbst geladen
+        hatte, merkte nichts - gleiche Herkunft, kein Vorabflug.
+
+        Ein Stern als erlaubte Herkunft ist hier richtig und keine Nachlaessigkeit: der
+        Dienst hat keine Anmeldung, keine Sitzung und keine Geheimnisse. Er traegt eine
+        Rangliste, die ohnehin jeder im Netz sehen soll.
+        """
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        # Damit der Browser den Vorabflug nicht vor jedem Bericht wiederholt. Zehn Minuten
+        # sind mehr als ein Rennen dauert.
+        self.send_header('Access-Control-Max-Age', '600')
+
     def _json(self, obj, code=200):
         roh = json.dumps(obj, ensure_ascii=False).encode('utf-8')
         self.send_response(code)
@@ -200,8 +224,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Content-Length', str(len(roh)))
         # Kein Zwischenspeichern: eine gecachte Rangliste ist keine Rangliste.
         self.send_header('Cache-Control', 'no-store')
+        self._cors()
         self.end_headers()
         self.wfile.write(roh)
+
+    def do_OPTIONS(self):
+        """Der Vorabflug. Ohne ihn antwortet die Grundklasse mit 501."""
+        self.send_response(204)
+        self.send_header('Content-Length', '0')
+        self._cors()
+        self.end_headers()
 
     def do_GET(self):
         if self.path.startswith('/mp/state'):

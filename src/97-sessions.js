@@ -502,10 +502,19 @@
     el.style.color = schlecht ? 'var(--bad)' : '';
   }
 
-  function mpUrl(pfad) {
-    let h = mp.host.trim().replace(/\/+$/, '');
+  // Die Adresse aufraeumen: Schraegstriche hinten weg, Schema davor, wenn keines da ist.
+  // HERAUSGEZOGEN, weil es zwei Aufrufer gibt - den Meldeweg (aus mp.host, also dem
+  // GESPEICHERTEN Wert) und die Anleitung (aus dem Eingabefeld, das schon etwas enthaelt,
+  // bevor jemand auf Mitmachen gedrueckt hat). Genau diese Verwechslung hat die
+  // Uebersichtsadresse zuerst als blosses "/mp-overview.html" ausgegeben.
+  function mpBasis(roh) {
+    let h = String(roh || '').trim().replace(/\/+$/, '');
     if (h && !/^https?:\/\//.test(h)) h = 'http://' + h;
-    return h + pfad;
+    return h;
+  }
+
+  function mpUrl(pfad) {
+    return mpBasis(mp.host) + pfad;
   }
 
   // Der eigene Stand. Er kommt aus DENSELBEN Variablen, aus denen das Cockpit liest -
@@ -595,3 +604,57 @@
   if ($('mp-name')) $('mp-name').value = mp.name;
   if ($('mp-join')) $('mp-join').addEventListener('click', mpJoin);
   if ($('mp-leave')) $('mp-leave').addEventListener('click', mpLeave);
+
+  // ---- DIE ZWEI KOPIERKNOEPFE DER ANLEITUNG ---------------------------------------
+  //
+  // Der Befehl und die Uebersichtsadresse werden abgetippt, wenn man sie nicht kopieren
+  // kann - und beide enthalten Zeichen, die man auf einem Telefon einzeln suchen muss.
+  //
+  // DIE ADRESSE WIRD ERGAENZT, sobald eine bekannt ist: im Feld steht nach dem ersten
+  // Mitmachen der echte Host, und dann ist eine Beispieladresse im Kopierpuffer ein
+  // Rueckschritt. Ohne Feld bleibt der Platzhalter stehen - er zeigt die FORM, und die ist
+  // das, was man beim ersten Mal braucht.
+  function mpUebersichtAdresse() {
+    // AUS DEM FELD und nicht aus mp.host: das Feld traegt die Adresse schon, bevor jemand
+    // auf Mitmachen gedrueckt hat - und genau dann liest man die Anleitung.
+    const basis = mpBasis($('mp-host') ? $('mp-host').value : '');
+    if (!basis) return 'http://192.168.1.50:8080/mp-overview.html';
+    return basis + '/mp-overview.html';
+  }
+
+  function mpKopieren(el, text) {
+    if (!el) return;
+    el.addEventListener('click', async () => {
+      const wert = typeof text === 'function' ? text() : text;
+      try {
+        await navigator.clipboard.writeText(wert);
+        showHudToast('Kopiert');
+      } catch (e) {
+        // Kein Zugriff auf die Zwischenablage (kein sicherer Kontext, oder verweigert):
+        // dann wird wenigstens markiert, damit ein Griff genuegt. Schweigen waere hier
+        // das Schlechteste - der Knopf saehe aus, als haette er gewirkt.
+        const code = el.parentElement && el.parentElement.querySelector('code');
+        if (code && window.getSelection) {
+          const r = document.createRange();
+          r.selectNodeContents(code);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+        showHudToast('Bitte von Hand kopieren');
+      }
+    });
+  }
+
+  mpKopieren($('mp-cmd-copy'), () => ($('mp-cmd') ? $('mp-cmd').textContent.trim() : ''));
+  mpKopieren($('mp-ov-copy'), mpUebersichtAdresse);
+  // Und die angezeigte Uebersichtsadresse mitziehen, sobald ein Host eingetragen ist.
+  if ($('mp-host') && $('mp-ov')) {
+    const zeigen = () => {
+      const a = mpUebersichtAdresse();
+      if ($('mp-ov').textContent.trim() !== a) $('mp-ov').textContent = a;
+    };
+    $('mp-host').addEventListener('input', zeigen);
+    $('mp-host').addEventListener('change', zeigen);
+    zeigen();
+  }

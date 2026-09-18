@@ -29,6 +29,1145 @@
     // Kastenhoehe misst, wuerde die Verkleinerung mitmessen und immer gruen sein.
     // `b` ist die Kastenbreite und gilt nur im Vollbild - ohne sie prueft ein breites
     // Testfenster eine Lage, in die ein Handy nie geraet.
+    // Den Modus von aussen lesen und stellen. Ein Prueflauf, der ihn voraussetzt, ist auf
+    // Sand gebaut: er steht in der Selbstsicherung und kann beim Start schon an sein.
+    // Gestellt wird OHNE zweiSpielerSetzen() - der Prueflauf will die Weiche, nicht die
+    // Nebenwirkungen (Garage neu zeichnen, Cockpit neu einpassen, Rolle zuruecknehmen).
+    zweiSpielerLage() { return zweiSpieler; },
+    zweiSpielerStellen(an) { zweiSpieler = !!an; return zweiSpieler; },
+
+    // Der Erkennungszustand eines Spielers, zum Sichern und Zuruecklegen in Prueflaeufen.
+    // Herausgegeben wird das OBJEKT und keine Kopie: ein Prueflauf muss ihn setzen koennen.
+    crashLage(wer) { return crashLageVon(wer); },
+
+    // Der Schadensstand von Auto 2, lesbar und setzbar. Zwei getrennte Wege, weil das
+    // Setzen im Prueflauf eine andere Sache ist als das Lesen einer Messung.
+    schadenZweiLesen() {
+      return { wert: schadenZwei.wert,
+               licht: { front: schadenZwei.licht.front, rear: schadenZwei.licht.rear } };
+    },
+    schadenZweiSetzen(wert, front, rear) {
+      schadenZwei.wert = wert;
+      schadenZwei.licht.front = !!front;
+      schadenZwei.licht.rear = !!rear;
+      return this.schadenZweiLesen();
+    },
+
+    // ---- DER BOXENKNOPF: an, aus, und wie lange er haelt -----------------------------
+    //
+    // DREI BESTELLUNGEN AUF EINMAL, und alle drei sind Bedienung:
+    //
+    //   1. "Wenn ich ihn aktiviere, ist er dann nicht solange aktiv, bis ich ihn
+    //      deaktiviere oder bis ich stehen bleibe?" - bis v0.6.56 beendete ein Zeitgeber
+    //      die ANFAHRT nach fuenf Sekunden, lautlos.
+    //   2. "Zum Deaktivieren nur 1x drücken statt 2x."
+    //   3. Im Doppelausdruck-Modus loest der Knopf gar nichts aus.
+    //
+    // DIE UHR WIRD GEFAELSCHT, weil Aussage 1 eine Aussage ueber ZEIT ist: der Prueflauf
+    // laesst zwanzig Sekunden vergehen, ohne zwanzig Sekunden zu warten. Der Zeitgeber
+    // selbst lief ueber setTimeout und laesst sich so nicht ueberspringen - deshalb wird
+    // zusaetzlich geprueft, dass ueberhaupt KEINER mehr gestellt wird (pitLimiterOffen).
+    pitKnopfProbe(o) {
+      const opt = o || {};
+      const echtNow = Date.now;
+      const merk = { state: pitState, trigger: pitTrigger, an: pitLaneEnabled,
+                     plan: pitPlan, doppeltBis: pitDoubleArmedUntil,
+                     ersterAt: pitDoubleFirstAt, sperre: pitRearmBlockedUntil,
+                     letzter: pitLastPress };
+      let uhr = 6000000;
+      try {
+        Date.now = () => uhr;
+        pitLaneEnabled = true;
+        pitTrigger = opt.trigger || 'button';
+        pitRearmBlockedUntil = 0;
+        pitLastPress = 0;
+        setPitState('off');
+
+        // ---- Ein Druck: an ------------------------------------------------------
+        requestPitStop();
+        const nachEins = pitState;
+        // Ein Zeitgeber, der die Anfahrt beendet, darf gar nicht erst gestellt sein.
+        const weckerGestellt = !!pitLimiterTimer;
+
+        // ---- Zeit vergeht: der Limiter muss BLEIBEN -----------------------------
+        // Zwanzig Sekunden, also das Vierfache der alten Frist von fuenf.
+        uhr += (opt.sekunden === undefined ? 20 : opt.sekunden) * 1000;
+        const nachWarten = pitState;
+
+        // ---- Noch ein Druck: aus, mit EINEM Druck -------------------------------
+        // Bewusst weit nach dem alten Doppeltipp-Fenster von 700 ms: frueher haette
+        // genau das nur die Meldung "Nochmal druecken" erzeugt.
+        requestPitStop();
+        const nachZwei = pitState;
+
+        // ---- Und der Doppelausdruck-Modus: der Knopf loest nicht aus ------------
+        pitTrigger = 'double';
+        pitRearmBlockedUntil = 0;
+        setPitState('off');
+        uhr += 5000;
+        requestPitStop();
+        const doppeltNachDruck = pitState;
+        // Abbrechen muss trotzdem gehen: dafuer von Hand hineinsetzen.
+        setPitState('limited');
+        uhr += 1000;
+        requestPitStop();
+        const doppeltNachAbbruch = pitState;
+
+        return { nachEins, weckerGestellt, nachWarten, nachZwei,
+                 doppeltNachDruck, doppeltNachAbbruch,
+                 gewartetS: opt.sekunden === undefined ? 20 : opt.sekunden,
+                 // Die alte Frist als Literal: PIT_LIMITER_MAX_MS gibt es nicht mehr.
+                 // Sie steht hier, damit der Testkopf sagen kann, wogegen gemessen wird.
+                 alteFristS: 5 };
+      } finally {
+        Date.now = echtNow;
+        if (pitLimiterTimer) { clearTimeout(pitLimiterTimer); pitLimiterTimer = null; }
+        pitTrigger = merk.trigger;
+        setPitState(merk.state);
+        pitLaneEnabled = merk.an;
+        pitPlan = merk.plan;
+        pitDoubleArmedUntil = merk.doppeltBis;
+        pitDoubleFirstAt = merk.ersterAt;
+        pitRearmBlockedUntil = merk.sperre;
+        pitLastPress = merk.letzter;
+      }
+    },
+
+    // ---- TANKEN BEIDE UNABHAENGIG? ---------------------------------------------------
+    //
+    // BESTELLT: "Tanken soll unabhängig bei beiden klappen."
+    //
+    // Der Prueflauf laesst BEIDE gleichzeitig tanken - Auto 1 ueber seinen Boxenstopp,
+    // Auto 2 ueber seinen - und misst, ob sich die zwei stoeren. Die Falle, auf die es
+    // ankommt: fuelTankTick() von Auto 1 hat die Ausnahme `pitState !== 'servicing'`, damit
+    // der Tank nicht sinkt, waehrend gepumpt wird. Gilt diese Ausnahme versehentlich auch
+    // fuer Auto 2, verbraucht es waehrend eines fremden Boxenstopps nichts - und umgekehrt
+    // waere ein Boxenstopp von Auto 2, der Auto 1 den Verbrauch abstellt, ebenso falsch.
+    //
+    // Gemessen wird deshalb an BEIDEN Staenden gleichzeitig, mit Gas auf beiden.
+    async tankenBeideProbe(o) {
+      const opt = o || {};
+      const uhrEcht = Date.now, perfEcht = performance.now;
+      const merk = { zwei: zweiSpieler, p1: playerCar, p2: playerCar2,
+                     gas: p2Throttle, steer: p2Steer, phys: physicsEnabled,
+                     fuel1: fuel, tank2: tankZweiStand(), pit: pitState,
+                     plan: pitPlan, drain: fuelDrainPerSec, gasEins: throttleY };
+      const a1 = { device: { id: 'probe-t1' }, role: 'player', alias: 'P1', rx: null,
+                   testSenke: [] };
+      const a2 = { device: { id: 'probe-t2' }, role: 'player2', alias: 'P2', rx: null,
+                   testSenke: [] };
+      const reihe = [];
+      try {
+        let t = 5000000;
+        Date.now = () => t;
+        performance.now = () => t;
+        zweiSpieler = true;
+        physicsEnabled = true;
+        playerCar = a1;
+        playerCar2 = a2;
+        fuelDrainPerSec = opt.drain === undefined ? 1 : opt.drain;
+        fuel = opt.start === undefined ? 40 : opt.start;
+        tankZweiFuellen(opt.start === undefined ? 40 : opt.start);
+        tankZweiTaktVergessen();
+        phys2TaktVergessen();
+        physEngine2.reset();
+        physEngine2Abgleichen();
+        p2Steer = 0;
+
+        // ---- Abschnitt 1: BEIDE fahren. Beide Staende muessen sinken. -------------
+        p2Throttle = 1;
+        throttleY = 1;
+        const takte = Math.round((opt.sekunden === undefined ? 4 : opt.sekunden)
+                                 * 1000 / CONTROL_SEND_INTERVAL_MS);
+        for (let i = 0; i < takte; i++) {
+          fuelTankTick(1);          // der Weg von Auto 1, wie in sendControlValue()
+          spielerZweiSenden();      // darin steckt fuelTankTick(p2Throttle, 2)
+          if (i % 20 === 0 || i === takte - 1) {
+            reihe.push({ abschnitt: 'fahren', s: +(i * 0.045).toFixed(2),
+                         t1: +fuel.toFixed(2), t2: +tankZweiStand().toFixed(2) });
+          }
+          t += CONTROL_SEND_INTERVAL_MS;
+        }
+        const nachFahren = { t1: +fuel.toFixed(2), t2: +tankZweiStand().toFixed(2) };
+
+        // ---- Abschnitt 2: Auto 1 IN DER BOX, Auto 2 faehrt weiter ----------------
+        // Auto 1 steht und wird betankt; Auto 2 gibt Gas. Der Stand von Auto 1 muss
+        // STEIGEN, der von Auto 2 weiter SINKEN.
+        throttleY = 0;
+        pitPlan = { refuel: 100, tyres: false, repair: false };
+        pitState = 'servicing';
+        const takte2 = Math.round((opt.sekunden === undefined ? 4 : opt.sekunden)
+                                  * 1000 / CONTROL_SEND_INTERVAL_MS);
+        for (let i = 0; i < takte2; i++) {
+          // Die Boxenpumpe von Auto 1, so wie pitLaneTick() sie rechnet.
+          const dt = CONTROL_SEND_INTERVAL_MS / 1000;
+          if (fuel < 100) fuel = Math.min(100, fuel + PIT_FUEL_PER_SEC * dt);
+          fuelTankTick(0);
+          spielerZweiSenden();
+          if (i % 20 === 0 || i === takte2 - 1) {
+            reihe.push({ abschnitt: 'box1', s: +(i * 0.045).toFixed(2),
+                         t1: +fuel.toFixed(2), t2: +tankZweiStand().toFixed(2) });
+          }
+          t += CONTROL_SEND_INTERVAL_MS;
+        }
+        const nachBox1 = { t1: +fuel.toFixed(2), t2: +tankZweiStand().toFixed(2) };
+
+        // ---- Abschnitt 3: Auto 2 IN DER BOX, Auto 1 faehrt weiter ----------------
+        pitState = 'off';
+        pitPlan = null;
+        throttleY = 1;
+        // BREMSEN, nicht nur Gas weg: das Auto rollt mit ueber 200 km/h, und der
+        // Coast-Drag allein bringt es in acht Sekunden nur auf 174. Genau das ist der
+        // gemeldete Fall - der Knopf war gedrueckt, und "nichts passierte".
+        p2Throttle = opt.bremsen === false ? 0 : -1;
+        boxZweiAnfordern();
+        const takte3 = Math.round((opt.sekunden === undefined ? 4 : opt.sekunden)
+                                  * 1000 / CONTROL_SEND_INTERVAL_MS);
+        for (let i = 0; i < takte3; i++) {
+          fuelTankTick(1);
+          // Bremsen, bis es fast steht - dann den Finger weg. Der Service verlangt beides:
+          // langsam UND kein Eingang (Math.abs(p2Throttle) < 0.1), sonst begaenne er,
+          // waehrend man noch auf der Bremse steht.
+          if (opt.bremsen !== false
+              && Math.abs(physEngine2.state.speedKmh) * REAL_SCALE < 8) p2Throttle = 0;
+          spielerZweiSenden();
+          if (i % 20 === 0 || i === takte3 - 1) {
+            reihe.push({ abschnitt: 'box2', s: +(i * 0.045).toFixed(2),
+                         t1: +fuel.toFixed(2), t2: +tankZweiStand().toFixed(2),
+                         lage: boxZweiLage(),
+                         kmh: +(Math.abs(physEngine2.state.speedKmh) * REAL_SCALE).toFixed(1),
+                         schwelle: +(PIT_STANDSTILL_KMH * REAL_SCALE).toFixed(1) });
+          }
+          t += CONTROL_SEND_INTERVAL_MS;
+        }
+        const nachBox2 = { t1: +fuel.toFixed(2), t2: +tankZweiStand().toFixed(2) };
+        return { start: opt.start === undefined ? 40 : opt.start,
+                 nachFahren, nachBox1, nachBox2, reihe,
+                 drain: fuelDrainPerSec, pumpe: PIT_FUEL_PER_SEC };
+      } finally {
+        Date.now = uhrEcht;
+        performance.now = perfEcht;
+        if (typeof boxZweiAnfordern === 'function' && boxZweiLage() !== 'aus') {
+          boxZweiAnfordern();
+        }
+        zweiSpieler = merk.zwei;
+        playerCar = merk.p1;
+        playerCar2 = merk.p2;
+        p2Throttle = merk.gas;
+        p2Steer = merk.steer;
+        throttleY = merk.gasEins;
+        physicsEnabled = merk.phys;
+        fuel = merk.fuel1;
+        fuelDrainPerSec = merk.drain;
+        pitState = merk.pit;
+        pitPlan = merk.plan;
+        tankZweiFuellen(merk.tank2);
+        physEngine2.reset();
+      }
+    },
+
+    // ---- TANKT UND REPARIERT DER BOXENSTOPP VON AUTO 2? ------------------------------
+    //
+    // DREI FRAGEN, und die dritte ist die, die den Modus fair macht:
+    //   1. Laeuft die Folge? angefordert -> (anhalten) -> Service -> fertig -> (losfahren)
+    //   2. Steigt der Tank und sinkt der Schaden, mit DENSELBEN Raten wie bei Auto 1?
+    //   3. Deckelt der Stopp das Tempo, und zwar mit dem eigenen Deckel - der von Auto 1
+    //      laeuft ueber topSpeedScale in sendControlValue(), und diesen Weg nimmt Auto 2
+    //      gar nicht.
+    //
+    // Der Prueflauf faelscht die Uhr und stellt p2Throttle selbst: der Stopp beginnt erst
+    // im Stillstand, und "Stillstand" heisst hier auch "Daumen weg".
+    async boxZweiProbe(o) {
+      const opt = o || {};
+      const uhrEcht = Date.now, perfEcht = performance.now;
+      const merk = { zwei: zweiSpieler, p2: playerCar2, gas: p2Throttle, steer: p2Steer,
+                     phys: physicsEnabled, tank: tankZweiStand(),
+                     schaden: this.schadenZweiLesen() };
+      const a2 = { device: { id: 'probe-box' }, role: 'player2', alias: 'P2',
+                   rx: null, testSenke: [] };
+      const reihe = [];
+      try {
+        let t = 4000000;
+        Date.now = () => t;
+        performance.now = () => t;
+        zweiSpieler = true;
+        physicsEnabled = true;
+        playerCar2 = a2;
+        physEngine2.reset();
+        physEngine2Abgleichen();
+        tankZweiFuellen(opt.tank === undefined ? 30 : opt.tank);
+        this.schadenZweiSetzen(opt.schaden === undefined ? 40 : opt.schaden, true, true);
+        tankZweiTaktVergessen();
+        phys2TaktVergessen();
+        p2Steer = 0;
+        p2Throttle = 0;                 // steht, Daumen weg
+        const lagen = [];
+        const anfordern = boxZweiAnfordern();
+        lagen.push(boxZweiLage());
+        const takte = Math.round((opt.sekunden === undefined ? 12 : opt.sekunden)
+                                 * 1000 / CONTROL_SEND_INTERVAL_MS);
+        for (let i = 0; i < takte; i++) {
+          spielerZweiSenden();
+          const l = boxZweiLage();
+          if (lagen[lagen.length - 1] !== l) lagen.push(l);
+          if (i % 20 === 0 || i === takte - 1) {
+            reihe.push({
+              s: +(i * CONTROL_SEND_INTERVAL_MS / 1000).toFixed(2),
+              lage: l, tank: +tankZweiStand().toFixed(2),
+              schaden: +schadenVon(2).toFixed(2),
+              deckel: boxZweiDeckel(), fertig: boxZweiFertig(),
+            });
+          }
+          t += CONTROL_SEND_INTERVAL_MS;
+        }
+        const fertigNach = reihe.find((x) => x.fertig);
+        // Und das Losfahren beendet den Stopp.
+        p2Throttle = 1;
+        for (let i = 0; i < 6; i++) { spielerZweiSenden(); t += CONTROL_SEND_INTERVAL_MS; }
+        lagen.push(boxZweiLage());
+        return {
+          anfordern, lagen, reihe,
+          tankAnfang: opt.tank === undefined ? 30 : opt.tank,
+          schadenAnfang: opt.schaden === undefined ? 40 : opt.schaden,
+          tankEnde: +tankZweiStand().toFixed(2),
+          schadenEnde: +schadenVon(2).toFixed(2),
+          lichtEnde: this.schadenZweiLesen().licht,
+          fertigNachS: fertigNach ? fertigNach.s : null,
+          // Die Raten, mit denen Auto 1 arbeitet - zum Vergleich in einem Zug.
+          rateTank: PIT_FUEL_PER_SEC, mindestStandS: PIT_EMPTY_STOP_S,
+          deckelSoll: PIT_SPEED_FACTOR,
+        };
+      } finally {
+        Date.now = uhrEcht;
+        performance.now = perfEcht;
+        if (typeof boxZweiAnfordern === 'function' && boxZweiLage() !== 'aus') {
+          boxZweiAnfordern();     // bricht ab
+        }
+        zweiSpieler = merk.zwei;
+        playerCar2 = merk.p2;
+        p2Throttle = merk.gas;
+        p2Steer = merk.steer;
+        physicsEnabled = merk.phys;
+        tankZweiFuellen(merk.tank);
+        this.schadenZweiSetzen(merk.schaden.wert, merk.schaden.licht.front,
+                          merk.schaden.licht.rear);
+        physEngine2.reset();
+      }
+    },
+
+    // ---- GILT DIE GELBE FLAGGE AUCH FUER AUTO 2? -------------------------------------
+    //
+    // DIE FRAGE, die diesen Punkt zum wertvollsten der offenen gemacht hat: ohne den
+    // Autopiloten faehrt Auto 2 bei Gelb mit VOLLGAS in eine Kolonne, die alle anderen
+    // gerade einhalten. Eine gelbe Flagge, die fuer ein Auto im Feld nicht gilt, ist keine.
+    //
+    // Gemessen wird am GAS, das hinausgeht, und am erreichten Tempo - nicht daran, ob eine
+    // Funktion gerufen wurde. Vollgas bleibt dabei die ganze Zeit anliegen: der Autopilot
+    // muss GEGEN den Daumen regeln, das ist sein Sinn.
+    //
+    // Die Bahn/Ausdruck-Stellung muss auf 'on' stehen, sonst laeuft der Autopilot
+    // ueberhaupt nicht (autopilotGrund: ohne Leitplanken haelt sich das Auto nicht selbst
+    // auf der Bahn, und ein Autopilot ohne Querregelung faehrt es in die Bande).
+    async gelbZweiProbe(o) {
+      const opt = o || {};
+      const uhrEcht = Date.now, perfEcht = performance.now;
+      const merk = { zwei: zweiSpieler, p2: playerCar2, gas: p2Throttle, steer: p2Steer,
+                     phys: physicsEnabled, flagge: flagState, bahn: trackMode,
+                     formation: typeof raceFormationLap !== 'undefined'
+                       ? raceFormationLap : null };
+      const a2 = { device: { id: 'probe-gelb' }, role: 'player2', alias: 'P2',
+                   rx: null, testSenke: [] };
+      const reihe = [];
+      try {
+        let t = 3000000;
+        Date.now = () => t;
+        performance.now = () => t;
+        zweiSpieler = true;
+        physicsEnabled = true;
+        playerCar2 = a2;
+        trackMode = 'on';
+        if (typeof raceFormationLap !== 'undefined') raceFormationLap = false;
+        physEngine2.reset();
+        physEngine2Abgleichen();
+        tankZweiFuellen(100);
+        tankZweiTaktVergessen();
+        phys2TaktVergessen();
+        autopilotZuruecksetzen(2);
+        p2Steer = 0;
+        p2Throttle = 1;          // Vollgas, die ganze Zeit
+        flagState = opt.flagge || 'yellow';
+        const takte = Math.round((opt.sekunden === undefined ? 8 : opt.sekunden)
+                                 * 1000 / CONTROL_SEND_INTERVAL_MS);
+        for (let i = 0; i < takte; i++) {
+          spielerZweiSenden();
+          if (i % 20 === 0 || i === takte - 1) {
+            reihe.push({
+              s: +(i * CONTROL_SEND_INTERVAL_MS / 1000).toFixed(2),
+              gas: +(physOut2Throttle || 0).toFixed(3),
+              anteil: +(Math.abs(physEngine2.state.speedKmh)
+                        / physEngine2.config.topSpeedKmh).toFixed(3),
+              kmh: +(Math.abs(physEngine2.state.speedKmh) * REAL_SCALE).toFixed(1),
+            });
+          }
+          t += CONTROL_SEND_INTERVAL_MS;
+        }
+        const letzte = reihe.slice(-3);
+        return {
+          flagge: flagState,
+          ziel: Math.max(yellowFactor(), GHOST_READ_MIN),
+          zielKmh: +(Math.max(yellowFactor(), GHOST_READ_MIN)
+                     * physEngine2.config.topSpeedKmh * REAL_SCALE).toFixed(1),
+          reihe,
+          // Der Mittelwert der letzten drei Abtastpunkte: dort ist der Regler eingelaufen.
+          endAnteil: +(letzte.reduce((a, x) => a + x.anteil, 0) / letzte.length).toFixed(3),
+          endKmh: +(letzte.reduce((a, x) => a + x.kmh, 0) / letzte.length).toFixed(1),
+          daumen: p2Throttle,
+        };
+      } finally {
+        Date.now = uhrEcht;
+        performance.now = perfEcht;
+        flagState = merk.flagge;
+        trackMode = merk.bahn;
+        if (typeof raceFormationLap !== 'undefined') raceFormationLap = merk.formation;
+        zweiSpieler = merk.zwei;
+        playerCar2 = merk.p2;
+        p2Throttle = merk.gas;
+        p2Steer = merk.steer;
+        physicsEnabled = merk.phys;
+        autopilotZuruecksetzen();
+        physEngine2.reset();
+        tankZweiFuellen(100);
+      }
+    },
+
+    // ---- SAGT DIE SICHERUNG, WAS IM BROWSER LIEGT? -----------------------------------
+    //
+    // BESTELLT: "Zeige bei der Sicherung noch an, ob irgendetwas geladen ist, sodass ich es
+    // weiss, bevor dann das Auto wieder als generisches weisses 'alpha' verbunden wird."
+    //
+    // Der Prueflauf setzt einen Bestand in die Ablage, laesst zeichnen, liest die Zeile und
+    // legt den Bestand zurueck. DIE ABLAGE WIRD WIRKLICH ANGEFASST, und das ist der Grund
+    // fuer das ausfuehrliche finally: eine Messung, die dem Nutzer seine gemerkten Autos
+    // wegnimmt, waere schlimmer als keine Messung.
+    sicherungLageProbe(o) {
+      const opt = o || {};
+      const schluessel = 'chc.cars.v1';
+      let merk = null, hatte = false;
+      try { merk = localStorage.getItem(schluessel); hatte = merk !== null; }
+      catch (e) { return { keinSpeicher: true }; }
+      try {
+        if (opt.autos === null) {
+          try { localStorage.removeItem(schluessel); } catch (e) { /* privat */ }
+        } else if (opt.autos) {
+          try { localStorage.setItem(schluessel, JSON.stringify(opt.autos)); }
+          catch (e) { /* privat */ }
+        }
+        const l = lageZeichnen();
+        const el = $('sich-lage');
+        return {
+          lage: l,
+          leer: el ? el.classList.contains('leer') : null,
+          text: el ? el.textContent.replace(/\s+/g, ' ').trim() : null,
+          // Die Farbpunkte: sie kommen aus derselben Tabelle wie carAssign(), damit die
+          // Zeile nicht eine andere Farbe zeigt als das Auto nachher hat.
+          farbpunkte: el ? el.querySelectorAll('.sich-farbe').length : 0,
+          autoNamen: el ? Array.from(el.querySelectorAll('.sich-auto'))
+            .map((x) => x.textContent.trim()) : [],
+        };
+      } finally {
+        try {
+          if (hatte) localStorage.setItem(schluessel, merk);
+          else localStorage.removeItem(schluessel);
+        } catch (e) { /* privat */ }
+        lageZeichnen();
+      }
+    },
+
+    // ---- DER SCHIRM VON AUTO 2: blaetterbar, und zeigt er etwas? ---------------------
+    //
+    // Zwei Dinge, die auseinanderfallen koennen: die REGISTRY (ist der Schirm erreichbar,
+    // und nur im Modus?) und die MALFUNKTION (stehen dort Zahlen, und die richtigen?).
+    //
+    // Der Schirm wird beim Blaettern uebersprungen, solange der Modus aus ist. Die
+    // Alternative waere eine Liste gewesen, deren LAENGE sich aendert - und an ihr haengen
+    // der Schirmzaehler, die Punkte unter dem Pfeil und zwei Selbsttests.
+    schirmZweiProbe() {
+      const vorher = { zwei: zweiSpieler, schirm: cockpitScreenIst().id,
+                       p2: playerCar2, tank: tankZweiStand(), fuel };
+      const merkGarage = garage.slice();
+      try {
+        // ---- Erst die Registry, ohne Modus --------------------------------------
+        if (typeof zweiSpielerSetzen === 'function') zweiSpielerSetzen(false);
+        cockpitScreenZu('main');
+        const ohne = [];
+        for (let i = 0; i < 5; i++) { cockpitScreenStep(1); ohne.push(cockpitScreenIst().id); }
+        // ---- Dann mit Modus ------------------------------------------------------
+        if (typeof zweiSpielerSetzen === 'function') zweiSpielerSetzen(true);
+        cockpitScreenZu('main');
+        const mit = [];
+        for (let i = 0; i < 5; i++) { cockpitScreenStep(1); mit.push(cockpitScreenIst().id); }
+        // ---- Und die Zahlen -----------------------------------------------------
+        const a2 = { device: { id: 'probe-schirm' }, role: 'player2', alias: 'P2',
+                     rx: null, testSenke: [], colorId: null, battery: 200,
+                     race: { laps: [{ lap: 1, ms: 21500 }, { lap: 2, ms: 20900 }] } };
+        garage.push(a2);
+        playerCar2 = a2;
+        // ZWEI VERSCHIEDENE Tankstaende: nur so faellt auf, wenn eine Spalte das falsche
+        // Auto zeigt. Bei gleichen Zahlen saehe der Fehler wie ein Erfolg aus.
+        const merkFuel = fuel;
+        fuel = 80;
+        tankZweiFuellen(40);
+        cockpitScreenZu('auto2');
+        p2ScreenRender();
+        const lies = (id) => { const e = $(id); return e ? e.textContent : null; };
+        // Seit v0.6.56 zeigt der Schirm BEIDE Autos - also werden beide Spalten gelesen.
+        // Die Gegenprobe steckt darin: Spalte 1 muss den Tank von Auto 1 zeigen und nicht
+        // den von Auto 2. Eine Spalte, die zweimal dasselbe Auto zeigt, sieht auf den
+        // ersten Blick richtig aus.
+        const werte = {
+          tempo1: lies('vgl1-speed'), tempo2: lies('vgl2-speed'),
+          gang1: lies('vgl1-gear'), gang2: lies('vgl2-gear'),
+          name1: lies('vgl1-name'), name2: lies('vgl2-name'),
+          tank1: lies('vgl1-fuel'), tank: lies('vgl2-fuel'),
+          zustand1: lies('vgl1-cond'), zustand: lies('vgl2-cond'),
+          reifen: lies('vgl2-tyre'), bremse: lies('vgl2-brake'),
+          akku1: lies('vgl1-batt'), akku2: lies('vgl2-batt'),
+          lampen1: ($('vgl1-shift') || { children: [] }).children.length,
+          lampen2: ($('vgl2-shift') || { children: [] }).children.length,
+          lage: lies('p2s-kopf-lage'), runden: lies('p2s-kopf-runde'),
+          fuss: lies('p2s-fuss'),
+        };
+        // Und dass der Schirm beim Abschalten verlassen wird.
+        if (typeof zweiSpielerSetzen === 'function') zweiSpielerSetzen(false);
+        const nachAus = cockpitScreenIst().id;
+        return { liste: COCKPIT_SCREENS.map((x) => x.id), ohne, mit, werte, nachAus };
+      } finally {
+        const i = garage.indexOf(garage.find((c) => c.device
+                                            && c.device.id === 'probe-schirm'));
+        if (i >= 0) garage.splice(i, 1);
+        garage.splice(0, garage.length);
+        merkGarage.forEach((c) => garage.push(c));
+        playerCar2 = vorher.p2;
+        tankZweiFuellen(vorher.tank);
+        if (typeof vorher.fuel === 'number') fuel = vorher.fuel;
+        if (typeof zweiSpielerSetzen === 'function') zweiSpielerSetzen(vorher.zwei);
+        cockpitScreenZu(vorher.schirm);
+      }
+    },
+
+    // ---- STEHT AUTO 2 IN DER RUNDENUEBERSICHT? ---------------------------------------
+    //
+    // DIE AUFWANDSSCHAETZUNG WAR HIER FALSCH, und das gehoert aufgeschrieben: die
+    // Rundenzaehlung galt als der groesste offene Posten - 27 modulweite Rennzustands-
+    // groessen, Sektorlogik, Ergebnistabelle, CSV. Nachgesehen habe ich dann
+    // carRaceNotify(): es fuehrt `car.race` mit Rundenliste, Rundenuhr und Sperrflanke
+    // fuer JEDES verbundene Auto, "whatever its role", und raceAllCars() liest die ganze
+    // Garage. Auto 2 zaehlte seine Runden also schon; die 27 Groessen betreffen das
+    // Rennen von Auto 1 (Ampel, Flaggen, Einfuehrungsrunde), nicht die Zaehlung.
+    //
+    // Geprueft wird deshalb genau das: Auto 2 steht in der Uebersicht, mit seinen Runden
+    // UND mit einem Ort - ohne Ort waere seine Position in der ersten Runde die
+    // Reihenfolge der Garage, also erfunden.
+    rundenZweiProbe() {
+      const merkGarage = garage.slice();
+      const vorher = { zwei: zweiSpieler, p1: playerCar, p2: playerCar2 };
+      try {
+        garage.splice(0, garage.length);
+        const mk = (rolle, name, runden) => ({
+          role: rolle, alias: name, device: { id: 'probe-' + name }, colorId: null,
+          tileCode: 0x02, tileCount: 3,
+          ghost: { nurOrt: rolle !== 'ghost', tileIndex: 2, tilesTotal: 2.5,
+                   tileMs: 500, tileStart: Date.now(), tileRing: [], laps: runden.length },
+          race: { laps: runden.map((ms, i) => ({ lap: i + 1, ms, off: 0 })),
+                  lapStart: null, pending: null, seen: 0, lastActed: 0, lastCount: null },
+        });
+        const a1 = mk('player', 'P1', [21000, 20500]);
+        const a2 = mk('player2', 'P2', [20800]);
+        const g = mk('ghost', 'G', [21500, 21200, 21100]);
+        garage.push(a1, a2, g);
+        playerCar = a1;
+        playerCar2 = a2;
+        zweiSpieler = true;
+        const alle = raceAllCars();
+        const zeile = alle.find((c) => c.name === 'P2');
+        return {
+          autos: alle.length,
+          rollen: alle.map((c) => c.role),
+          hatAutoZwei: !!zeile,
+          rundenAutoZwei: zeile ? zeile.laps.length : null,
+          ortAutoZwei: zeile ? zeile.ort : null,
+          ortAutoEins: (alle.find((c) => c.name === 'P1') || {}).ort,
+          // Und die Rangliste: wer steht wo? Sortiert wird nach Runden, dann Gesamtzeit.
+          // ovDaten() gibt die fertige Rangliste zurueck: Position, Name, Rolle, Luecke.
+          reihenfolge: ovDaten().map((x) => x.pos + ':' + x.name + '/' + x.rolle),
+        };
+      } finally {
+        garage.splice(0, garage.length);
+        merkGarage.forEach((c) => garage.push(c));
+        zweiSpieler = vorher.zwei;
+        playerCar = vorher.p1;
+        playerCar2 = vorher.p2;
+      }
+    },
+
+    // ---- KLINGT DIE ZWEITE MOTORSTIMME, UND AUF DER RICHTIGEN SEITE? -----------------
+    //
+    // GEMESSEN WIRD AN DEN WEB-AUDIO-KNOTEN, nicht am Ohr. Was sich pruefen laesst, ist,
+    // ob die Stimme ueberhaupt existiert, ob ihre Baender Verstaerkung bekommen, ob die
+    // Abspielrate mit der Drehzahl geht und wo sie im Stereobild sitzt. Wie es KLINGT,
+    // entscheidet der Teppich - das steht so im Commit und nicht als Zusicherung hier.
+    //
+    // Die Puffer werden geteilt (je Motormodell, nicht je Auto), und genau das wird
+    // mitgeprueft: zwei Stimmen, dieselben Puffer, verschiedene Verstaerkungen.
+    async stimmeZweiProbe(o) {
+      const opt = o || {};
+      // Ohne Tonkontext gibt es keine Knoten. Der Browser legt ihn erst nach einer
+      // Nutzerhandlung an, ein Prueflauf ohne Klick kommt also hier heraus - und das
+      // ist ein SKIP und kein Fehler. Gesagt wird, WAS fehlt: sonst sucht man am
+      // falschen Ende.
+      if (!audioCtx || !sampleEngine.ready) {
+        return { keinKontext: true, kontext: !!audioCtx,
+                 zustand: audioCtx ? audioCtx.state : null,
+                 schleifen: !!sampleEngine.ready, laedt: !!sampleEngine.loading,
+                 motoren: Object.keys(sampleEngine.buffers || {}).length };
+      }
+      // ---- WARTEN IST HIER PFLICHT, und das war beim ersten Anlauf der Fehler ---------
+      //
+      // Alle Verstellungen im Tonzweig laufen ueber setTargetAtTime(), also ueber eine
+      // RAMPE mit Zeitkonstante. `AudioParam.value` gleich danach gelesen ist noch der
+      // ALTE Wert - gemessen kamen vier Abspielraten von genau 1 und vier Verstaerkungen
+      // von genau 0 heraus, und das sah nach einer stummen Stimme aus, obwohl nur die
+      // Rampe noch nicht gelaufen war.
+      //
+      // Gewartet wird auf der UHR DES TONKONTEXTS und nicht auf setTimeout: der
+      // Vorschaubereich kann verborgen sein, und dort drosselt der Browser Zeitgeber auf
+      // einen Takt je Sekunde. Die Audiouhr laeuft weiter, sie haengt an der Soundkarte.
+      const warte = async (sek) => {
+        const bis = audioCtx.currentTime + sek;
+        while (audioCtx.currentTime < bis) {
+          await new Promise((r) => {
+            const c = new MessageChannel();
+            c.port1.onmessage = r;
+            c.port2.postMessage(0);
+          });
+        }
+      };
+      const vorher = { zwei: zweiSpieler, gas: p2Throttle, phys: physicsEnabled };
+      try {
+        zweiSpieler = true;
+        if (typeof stimmeZweiSetzen === 'function') stimmeZweiSetzen(true);
+        if (!stimmeZwei.nodes) return { keineStimme: true };
+        const z0 = stimmeZweiLage(), e0 = stimmeEinsLage();
+        const aufbau = {
+          zweiBaender: z0.baender, einsBaender: e0.baender,
+          zweiSeite: z0.seite, einsSeite: e0.seite,
+          // Dieselben Puffer, nicht zwei Kopien: sie liegen je MOTORMODELL.
+          gleichePuffer: z0.puffer === e0.puffer && z0.puffer !== null,
+          modell: z0.modell,
+        };
+        // Zwei Drehzahlen, je mit Wartezeit. Die Abspielraten muessen sich unterscheiden -
+        // eine Stimme, deren Rate mit der Drehzahl nicht geht, spielt eine Schleife und
+        // keinen Motor.
+        const bei = async (rpm) => {
+          updateSampleEngineIn(stimmeZwei, rpm, 0.8, false, physEngine2, 1);
+          await warte(0.35);
+          const z = stimmeZweiLage();
+          return { raten: z.raten, verst: z.verst, master: z.master,
+                   summe: +z.verst.reduce((a, b) => a + b, 0).toFixed(3) };
+        };
+        const tief = await bei(opt.tief === undefined ? 2200 : opt.tief);
+        const hoch = await bei(opt.hoch === undefined ? 7000 : opt.hoch);
+        // Und still: bei `silent` muss der Meister zurueck auf null.
+        updateSampleEngineIn(stimmeZwei, 2200, 0, true, physEngine2, 1);
+        await warte(0.4);
+        const still = stimmeZweiLage().master;
+        return Object.assign(aufbau, { tief, hoch, still });
+      } finally {
+        zweiSpieler = vorher.zwei;
+        p2Throttle = vorher.gas;
+        physicsEnabled = vorher.phys;
+        if (typeof stimmeZweiSetzen === 'function') stimmeZweiSetzen(vorher.zwei);
+      }
+    },
+
+    // ---- VERBRAUCHT AUTO 2, UND WAS KOSTET IHN DER LEERE TANK? ----------------------
+    //
+    // Drei Fragen in einem Lauf, und die dritte ist die, an der man sich vertut:
+    //
+    //   1. Sinkt der Stand nach Gas und Zeit, mit DEMSELBEN Regler wie bei Auto 1?
+    //   2. Traegt das Tankgewicht in seiner Fahrphysik (st.fuelLoad -> massFactor)?
+    //   3. Nimmt ein leerer Tank das Gas ueber die RAMPE weg und nicht in einem Takt?
+    //      Der Sprung von 1,0 auf 0,15 war bei Auto 1 als "abrupt abbremsen" gemeldet,
+    //      und eine zweite Rampe, die es nicht tut, waere derselbe Fehler noch einmal.
+    //
+    // Und die Gegenprobe: der Tank von Auto 1 darf nicht mitsinken.
+    tankZweiProbe(o) {
+      const opt = o || {};
+      const sekunden = opt.sekunden === undefined ? 4 : opt.sekunden;
+      const start = opt.start === undefined ? 100 : opt.start;
+      const uhrEcht = Date.now;
+      const perfEcht = performance.now;
+      const vorher = { zwei: zweiSpieler, p2: playerCar2, gas: p2Throttle,
+                       steer: p2Steer, phys: physicsEnabled, fuel1: fuel,
+                       tank2: tankZweiStand() };
+      const a2 = { device: { id: 'probe-tank' }, role: 'player2', rx: null,
+                   testSenke: [], alias: 'P2' };
+      const reihe = [];
+      try {
+        let t = 1000000;
+        Date.now = () => t;
+        performance.now = () => t;
+        zweiSpieler = true;
+        physicsEnabled = true;
+        playerCar2 = a2;
+        p2Steer = 0;
+        p2Throttle = 1;
+        fuel = 100;
+        physEngine2.reset();
+        physEngine2Abgleichen();
+        tankZweiFuellen(start);
+        // DEN VERBRAUCHSTAKT VERGESSEN, sonst rechnet der erste Takt ein dt zwischen der
+        // echten Uhr (oder der gefaelschten des vorigen Laufs) und dieser hier. Genau daran
+        // ist dieser Prueflauf beim ersten Mal gescheitert: der Tank ging von 1,5 auf 5,5
+        // Prozent nach oben. Der Befund war echt und steckte im Verbrauch, nicht in der
+        // Sonde - siehe die Klemme bei dt in fuelTankTick().
+        tankZweiTaktVergessen();
+        phys2TaktVergessen();
+        const takte = Math.round(sekunden * 1000 / CONTROL_SEND_INTERVAL_MS);
+        for (let i = 0; i < takte; i++) {
+          spielerZweiSenden();
+          if (i % 10 === 0 || i === takte - 1) {
+            reihe.push({
+              s: +(i * CONTROL_SEND_INTERVAL_MS / 1000).toFixed(2),
+              tank: +tankZweiStand().toFixed(2),
+              last: +(physEngine2.state.fuelLoad || 0).toFixed(3),
+              masse: +(physEngine2.state.massFactor || 0).toFixed(4),
+              gas: +(physOut2Throttle || 0).toFixed(3),
+              kmh: +(Math.abs(physEngine2.state.speedKmh) * REAL_SCALE).toFixed(1),
+            });
+          }
+          t += CONTROL_SEND_INTERVAL_MS;
+        }
+        return {
+          takte, verbrauchRegler: fuelDrainPerSec,
+          reihe,
+          tankAnfang: start, tankEnde: +tankZweiStand().toFixed(2),
+          tankAutoEins: fuel,
+          // Der Deckel, wie er gerade steht. Bei leerem Tank laeuft er auf FUEL_CUT_EMPTY
+          // zu, und die Rampe ist daran zu erkennen, dass er unterwegs ZWISCHEN den beiden
+          // Werten liegt.
+          cutJetzt: +tankZweiCutRampe(0).toFixed(4),
+          cutLeer: FUEL_CUT_EMPTY,
+        };
+      } finally {
+        Date.now = uhrEcht;
+        performance.now = perfEcht;
+        zweiSpieler = vorher.zwei;
+        playerCar2 = vorher.p2;
+        p2Throttle = vorher.gas;
+        p2Steer = vorher.steer;
+        physicsEnabled = vorher.phys;
+        fuel = vorher.fuel1;
+        tankZweiFuellen(vorher.tank2);
+        physEngine2.reset();
+      }
+    },
+
+    // ---- NIMMT AUTO 2 SCHADEN, UND TRIFFT ER NUR IHN? --------------------------------
+    //
+    // DER GANZE WEG, nicht die Funktion. Das ist in diesem Projekt einmal teuer geworden:
+    // detectCrash() war definiert, hatte eine Schwelle, hatte einen Schalter - und wurde
+    // nie aufgerufen. Ein Prueflauf, der die Funktion ruft, haette gruen gemeldet.
+    //
+    // Gemessen wird deshalb ab den BYTES: sie gehen durch denselben Meldestrom, durch den
+    // ein echtes Auto meldet, und heraus kommt der Schadensstand.
+    //
+    // Und die zweite Haelfte ist die wichtigere: der Schaden von Auto 2 darf den von
+    // Auto 1 NICHT beruehren, und umgekehrt. Drei Zahlen dazu - Schadensstand, und je eine
+    // Lampenmaske aus einem wirklich gebauten Paket.
+    schadenZweiProbe(o) {
+      const opt = o || {};
+      const merkGarage = garage.slice();
+      const vorher = { zwei: zweiSpieler, p1: playerCar, p2: playerCar2,
+                       dmg: damage, an: crashDetectionEnabled,
+                       schwelle: crashThreshold };
+      const L1 = crashLageVon(1), L2 = crashLageVon(2);
+      const merkL = { a: { ...L1 }, b: { ...L2 } };
+      const merkZwei = this.schadenZweiLesen();
+      const echtNow = Date.now;
+      let uhr = 2000000;
+      try {
+        Date.now = () => uhr;
+        crashDetectionEnabled = true;
+        damage = 0;
+        this.schadenZweiSetzen(0, false, false);
+        for (const L of [L1, L2]) { L.avg1 = null; L.avg3 = null; L.letzter = 0; L.gnadeBis = 0; }
+        garage.splice(0, garage.length);
+        const auto2 = { device: { id: 'probe-schaden2' }, role: 'player2', rx: null,
+                        tileCode: 0x02, tileCount: 0, lastCodeAt: 0, yaw: 0, ghost: null,
+                        testSenke: [], alias: 'P2' };
+        const ghost = { device: { id: 'probe-ghost' }, role: 'ghost', rx: null,
+                        tileCode: 0x02, tileCount: 0, lastCodeAt: 0, yaw: 0,
+                        ghost: { tilesTotal: 0, tileIndex: 0 }, testSenke: [], alias: 'G' };
+        garage.push(auto2, ghost);
+        playerCar = null;
+        playerCar2 = auto2;
+        zweiSpieler = true;
+
+        // Ein ruhiger Strom setzt das gleitende Mittel, dann ein Stoss. Genau wie beim
+        // Test fuer Auto 1: erst Ruhe, dann die Abweichung, sonst gibt es kein Mittel,
+        // von dem etwas abweichen koennte.
+        // ueber feedNotify(), also durch onCarNotify() - genau den Weg, den ein echtes
+        // Auto nimmt. Ein Prueflauf, der detectCrash() direkt ruft, haette den toten
+        // Aufruf von damals nicht gesehen.
+        const stoss = (v1, v3) => {
+          const b = new Uint8Array(19);
+          b[1] = v1 & 0xff; b[3] = v3 & 0xff; b[11] = 0; b[12] = 0x02;
+          this.feedNotify(b, { car: auto2 });
+        };
+        const wieOft = opt.stoesse === undefined ? 1 : opt.stoesse;
+        for (let i = 0; i < 12; i++) { uhr += 45; stoss(0, 0); }
+        for (let k = 0; k < wieOft; k++) {
+          uhr += 2000;   // ueber die Sperrzeit hinaus
+          stoss(120, 120);
+          uhr += 45;
+          stoss(0, 0);
+        }
+        const nachStoss = this.schadenZweiLesen();
+
+        // Die Lampenmaske, aus wirklich gebauten Paketen. Auto 2 auf Totalschaden setzen
+        // und dann fragen: welches Bit geht bei wem hinaus?
+        this.schadenZweiSetzen(100, true, true);
+        const maske = (car) => {
+          car.testSenke.length = 0;
+          // Ueber lichtSchadenVon(), also genau den Weg, den writeToCar() nimmt.
+          const pkt = buildCommandPacket(0, 0, LIGHT_HEAD | LIGHT_BRAKE, null,
+                                         lichtSchadenVon(car));
+          return { kopf: !!(pkt[14] & LIGHT_HEAD), brems: !!(pkt[14] & LIGHT_BRAKE) };
+        };
+        // lampFlicker() hat einen Zeitanteil: ueberwiegend dunkel mit kurzen Zuckungen.
+        // Ueber mehrere Zeitpunkte gemessen, sonst faengt man zufaellig einen Zucker.
+        const ueberZeit = (car) => {
+          let hell = 0;
+          for (let i = 0; i < 40; i++) { uhr += 70; if (maske(car).kopf) hell++; }
+          return hell;
+        };
+        const hellAuto2 = ueberZeit(auto2);
+        const hellGhost = ueberZeit(ghost);
+
+        return {
+          schadenNachStoss: +nachStoss.wert.toFixed(2),
+          schrittSoll: +(100 / crashesToTotal).toFixed(2),
+          lichtAuto2: nachStoss.licht,
+          schadenAutoEins: damage,
+          // Von 40 Zeitpunkten: wie oft war der Scheinwerfer AN? Bei Totalschaden muss das
+          // selten sein, beim Ghost immer.
+          hellAuto2, hellGhost, zeitpunkte: 40,
+        };
+      } finally {
+        Date.now = echtNow;
+        garage.splice(0, garage.length);
+        merkGarage.forEach((c) => garage.push(c));
+        zweiSpieler = vorher.zwei;
+        playerCar = vorher.p1;
+        playerCar2 = vorher.p2;
+        damage = vorher.dmg;
+        crashDetectionEnabled = vorher.an;
+        crashThreshold = vorher.schwelle;
+        Object.assign(L1, merkL.a);
+        Object.assign(L2, merkL.b);
+        this.schadenZweiSetzen(merkZwei.wert, merkZwei.licht.front, merkZwei.licht.rear);
+      }
+    },
+
+    // ---- SEHEN DIE GHOSTS AUTO 2? ---------------------------------------------------
+    //
+    // Die Frage laesst sich nicht aus der Zuteilung ableiten, und sie hat genau eine
+    // richtige Antwort: Auto 2 muss im FELD stehen. Daran haengt alles Weitere - ghostAhead
+    // findet den Vorausfahrenden nur dort, der Abstandhalter zaehlt nur das Feld, und die
+    // Seitenwahl beim Ueberholen fragt die Querlage eines Autos, das im Feld steht.
+    //
+    // Gemessen wird deshalb an ghostFieldRacing() UND an ghostAhead(): das zweite ist der
+    // Weg, den ein Ghost wirklich nimmt. Ein Test, der nur die Liste prueft, haette den
+    // Fehler "im Feld, aber ohne Ortungssatz" nicht gesehen.
+    //
+    // Und die Gegenprobe gehoert dazu: mit abgeschaltetem Modus darf Auto 2 NICHT im Feld
+    // stehen. Sonst wichen die Ghosts im Einzelspiel einem Auto aus, das niemand fuehrt.
+    zweiSpielerFeldProbe() {
+      const merkGarage = garage.slice();
+      const vorher = { zwei: zweiSpieler, p2: playerCar2, p1: playerCar };
+      const echtNow = Date.now;
+      let uhr = 1000000;
+      try {
+        Date.now = () => uhr;
+        garage.splice(0, garage.length);
+        // Ein Ghost hinten, Auto 2 eine halbe Kachel voraus. Der Ortungssatz von Auto 2 ist
+        // der, den spielerOrt() anlegt - `nurOrt`, ohne Motor.
+        const ghost = { role: 'ghost', alias: 'G', tileAt: uhr, tileCode: 0x02,
+                        ghost: { tilesTotal: 0, tileIndex: 0, tileMs: 500, tileStart: uhr,
+                                 tileRing: [], form: 0, naehern: 0 } };
+        const auto2 = { role: 'player2', alias: 'P2', tileAt: uhr, tileCode: 0x02,
+                        device: { id: 'probe-feld' },
+                        ghost: { nurOrt: true, tilesTotal: 0.5, tileIndex: 0, tileMs: 500,
+                                 tileStart: uhr, tileRing: [], querSoll: 0.4 } };
+        garage.push(ghost, auto2);
+        playerCar = null;      // damit nur Auto 2 im Feld stehen kann
+        playerCar2 = auto2;
+
+        zweiSpieler = false;
+        const ausFeld = ghostFieldRacing().length;
+        const ausVoraus = ghostAhead(ghost);
+
+        zweiSpieler = true;
+        const anFeld = ghostFieldRacing();
+        const anVoraus = ghostAhead(ghost);
+
+        return {
+          ausFeld, ausVoraus: ausVoraus ? (ausVoraus.car.alias || '?') : null,
+          anFeld: anFeld.length,
+          anEnthaeltAuto2: anFeld.indexOf(auto2) >= 0,
+          anVoraus: anVoraus ? (anVoraus.car.alias || '?') : null,
+          anAbstand: anVoraus ? +anVoraus.gap.toFixed(3) : null,
+          // Die Querlage ist die Zahl, aus der der Angreifer seine Seite waehlt. Ueber
+          // ghostQuerLage() gelesen, also genau so, wie der Angreifer es tut.
+          querLage: typeof ghostQuerLage === 'function' ? ghostQuerLage(auto2) : null,
+        };
+      } finally {
+        Date.now = echtNow;
+        garage.splice(0, garage.length);
+        merkGarage.forEach((c) => garage.push(c));
+        zweiSpieler = vorher.zwei;
+        playerCar2 = vorher.p2;
+        playerCar = vorher.p1;
+      }
+    },
+
+    // ---- Wohin geht der Vibrationsstoss? --------------------------------------------
+    //
+    // Ohne Hardware ist die WAHL pruefbar, die Ausfuehrung nicht - und die Wahl war der
+    // Fehler. rumblePad() gibt dreiwertig zurueck: null heisst "alle Pads" (ein Spieler,
+    // Verhalten wie vor v0.6.45), ein Pad heisst genau dieser, undefined heisst niemand.
+    rumbleZielProbe() {
+      const vorher = zweiSpieler;
+      try {
+        zweiSpieler = false;
+        const aus = [rumblePad(1), rumblePad(2)].map(nenn);
+        zweiSpieler = true;
+        const an = [rumblePad(1), rumblePad(2)].map(nenn);
+        return { aus, an, pads: padsSortiert().length };
+      } finally { zweiSpieler = vorher; }
+      function nenn(z) {
+        return z === null ? 'alle' : z === undefined ? 'niemand'
+             : String(z.id || 'pad').slice(0, 24);
+      }
+    },
+
+    // ---- Die Rollenknoepfe in der Garage --------------------------------------------
+    //
+    // WARUM DAS EINE SONDE BRAUCHT. Die Garagenzeile wird von renderGarage() aus einem
+    // Textbaustein erzeugt, und ihre Knoepfe existieren nur, wenn ein Auto verbunden ist.
+    // Genau deshalb ist der gemeldete Fehler durch alle 220 Selbsttests gekommen: der
+    // vierte Knopf fehlte, und kein Test hatte je eine Garagenzeile gesehen.
+    //
+    // Die Sonde stellt ein Auto in die Garage, laesst zeichnen, liest die Knoepfe und
+    // raeumt auf. Eine Attrappe genuegt: renderGarage() liest von einem Auto nur tag,
+    // device.id, role, alias, colorId und ghostSpeed.
+    garagenZeileProbe(o) {
+      const opt = o || {};
+      const vorherZwei = zweiSpieler;
+      const attrappe = { role: opt.role || 'none', device: { id: 'probe-garage' },
+                         alias: '', colorId: null, sim: false };
+      garage.push(attrappe);
+      try {
+        if (opt.zwei !== undefined) zweiSpieler = !!opt.zwei;
+        renderGarage();
+        const zeilen = Array.from(($('gar-list') || { children: [] }).children);
+        const meine = zeilen[zeilen.length - 1];
+        const knoepfe = meine
+          ? Array.from(meine.querySelectorAll('button[data-role]')).map((b) => ({
+              rolle: b.dataset.role,
+              text: b.textContent.replace(/\s+/g, ' ').trim(),
+              an: b.classList.contains('on'),
+            }))
+          : [];
+        return { zeilen: zeilen.length, knoepfe,
+                 rollen: knoepfe.map((k) => k.rolle),
+                 randklasse: meine ? meine.className : null };
+      } finally {
+        const i = garage.indexOf(attrappe);
+        if (i >= 0) garage.splice(i, 1);
+        zweiSpieler = vorherZwei;
+        renderGarage();
+      }
+    },
+
+    // Und der Weg, den der gemeldete Fehler genommen haette: Knopf druecken, obwohl der
+    // Modus aus ist. Danach muss der Modus an sein UND das Auto zugeteilt.
+    garagenRolleProbe() {
+      const vorher = { zwei: zweiSpieler, p2: playerCar2,
+                       kaestchen: ($('opt-zwei-an') || {}).checked };
+      const attrappe = { role: 'none', device: { id: 'probe-rolle' },
+                         alias: '', colorId: null, sim: false, testSenke: [] };
+      garage.push(attrappe);
+      try {
+        if (typeof zweiSpielerSetzen === 'function') zweiSpielerSetzen(false);
+        const vorZwei = zweiSpieler;
+        setCarRole(attrappe, 'player2');
+        return {
+          vorherAus: vorZwei === false,
+          danachAn: zweiSpieler === true,
+          rolle: attrappe.role,
+          istAuto2: playerCar2 === attrappe,
+          kaestchenAn: !!($('opt-zwei-an') || {}).checked,
+        };
+      } finally {
+        if (playerCar2 === attrappe) playerCar2 = null;
+        const i = garage.indexOf(attrappe);
+        if (i >= 0) garage.splice(i, 1);
+        if (typeof zweiSpielerSetzen === 'function') zweiSpielerSetzen(vorher.zwei);
+        playerCar2 = vorher.p2;
+        const k = $('opt-zwei-an');
+        if (k) k.checked = !!vorher.kaestchen;
+        renderGarage();
+      }
+    },
+
+    // ---- Der Zwei-Spieler-Modus, am Sendeweg gemessen -------------------------------
+    //
+    // GEMESSEN WIRD, WAS HINAUSGEHT, und nicht, was eine Funktion sich vornimmt. Genau
+    // dieser Unterschied hat beim Zieleinlauf einen Fehler verdeckt: die Seite war
+    // zugeteilt und landete im Gas-Platz. car.testSenke ist deshalb schon da; hier wird
+    // sie fuer zwei Autos gleichzeitig benutzt.
+    //
+    // Der Prueflauf stellt sich seine eigene Lage her - zwei Attrappen, kein Funk - und
+    // gibt im finally jeden angefassten Zustand zurueck. Ohne das bliebe der Modus nach
+    // einem Selbsttest an, und das naechste Rennen haette ein zweites Auto, das niemand
+    // bestellt hat.
+    zweiSpielerProbe(o) {
+      const opt = o || {};
+      const vorher = {
+        zwei: zweiSpieler, p1: playerCar, p2: playerCar2,
+        phys: physicsEnabled, steer: p2Steer, gas: p2Throttle,
+      };
+      const mach = (tag) => ({
+        tag, role: 'none', device: { id: 'probe-' + tag }, testSenke: [],
+        ghost: null, modeBytes: null,
+      });
+      const a1 = mach('P1'), a2 = mach('P2');
+      try {
+        playerCar = a1;
+        playerCar2 = a2;
+        // OHNE PHYSIK, absichtlich: mit ihr haengt das Gas an einer Motordrehzahl, die
+        // sich zwischen zwei Aufrufen aendert, und der Prueflauf wuerde messen, wie schnell
+        // ein Motor anspringt. Ohne sie geht p2Throttle unveraendert hinaus, und das ist
+        // die Frage - kommt die Zahl beim richtigen Auto an?
+        physicsEnabled = false;
+        p2Steer = opt.steer === undefined ? 0.4 : opt.steer;
+        p2Throttle = opt.gas === undefined ? 0.7 : opt.gas;
+        // Erst AUS: es darf nichts hinausgehen.
+        zweiSpieler = false;
+        spielerZweiSenden();
+        const ausPakete = a2.testSenke.length;
+        // Dann AN.
+        zweiSpieler = true;
+        spielerZweiSenden();
+        const anPakete = a2.testSenke.slice(ausPakete);
+        // Und ohne zugeteiltes Auto 2: auch dann nichts. anAutoEins ist dabei die zweite
+        // Zusicherung und die wichtigere - dieser Weg darf Auto 1 NIE anfassen. Taete er
+        // es, bekaeme Auto 1 im selben Takt zwei Pakete mit verschiedenem Gas, und genau
+        // das ist das Stottern, das der eine Herzschlag beseitigt hat.
+        playerCar2 = null;
+        spielerZweiSenden();
+        return {
+          ausPakete,
+          anPakete: anPakete.length,
+          ohneAuto: a2.testSenke.length - ausPakete - anPakete.length,
+          letztes: anPakete.length ? anPakete[anPakete.length - 1] : null,
+          anAutoEins: a1.testSenke.length,
+          gewuenscht: { steer: p2Steer, gas: p2Throttle },
+          // Die zwei globalen Faktoren, die im Sendeweg liegen - der Test rechnet damit
+          // die Zusage nach, statt eine Zahl abzuschreiben.
+          topSpeedScale, battScale: batteryCompensationScale(),
+        };
+      } finally {
+        zweiSpieler = vorher.zwei;
+        playerCar = vorher.p1;
+        playerCar2 = vorher.p2;
+        physicsEnabled = vorher.phys;
+        p2Steer = vorher.steer;
+        p2Throttle = vorher.gas;
+      }
+    },
+
+    // ---- Und faehrt Auto 2 wirklich? ------------------------------------------------
+    //
+    // Die Sonde darueber prueft den WEG. Diese prueft die FAHRT: dass eine eigene
+    // Physikinstanz Gas annimmt, dreht, schaltet und dass die zweite Anzeige im Cockpit
+    // dabei mitgeht. Das ist die Aussage, die bestellt war ("beide fahren koennen"), und
+    // sie laesst sich nicht aus der Zuteilung ableiten.
+    //
+    // DIE UHR WIRD GEFAELSCHT, und zwar performance.now(): physicsStep2() holt sein dt
+    // daraus, und zwei Aufrufe in derselben Millisekunde haetten dt = 0 - gemessen waere
+    // dann ein Motor, der nicht anspringt, obwohl er es tut. Dieselbe Bauform wie bei den
+    // Ghost-Sonden, die Date.now faelschen, und mit derselben Pflicht: im finally zurueck.
+    //
+    // Der Prueflauf laeuft SYNCHRON durch. Das ist kein Zufall: der echte Herzschlag feuert
+    // alle 45 ms und wuerde die gefaelschte Uhr sehen. Ohne ein einziges await kann er
+    // nicht dazwischenkommen.
+    zweiSpielerFahrtProbe(o) {
+      const opt = o || {};
+      const schritte = opt.schritte || 60;      // 60 x 45 ms = 2,7 s
+      const uhrEcht = performance.now;
+      const vorher = {
+        zwei: zweiSpieler, p2: playerCar2, steer: p2Steer, gas: p2Throttle,
+        phys: physicsEnabled,
+      };
+      const a2 = { tag: 'P2', role: 'player2', device: { id: 'probe-fahrt' }, testSenke: [] };
+      const verlauf = [];
+      try {
+        physEngine2.reset();
+        physEngine2Abgleichen();
+        zweiSpieler = true;
+        physicsEnabled = true;
+        playerCar2 = a2;
+        p2Steer = 0;
+        p2Throttle = opt.gas === undefined ? 1 : opt.gas;
+        let t = uhrEcht.call(performance);
+        performance.now = () => t;
+        // Der erste Schritt setzt nur phys2LastTime; ab dem zweiten ist dt echt.
+        for (let i = 0; i < schritte; i++) {
+          spielerZweiSenden();
+          if (i % 10 === 0 || i === schritte - 1) {
+            verlauf.push({
+              s: +(i * 0.045).toFixed(2),
+              rpm: Math.round(motorDrehzahl(physEngine2.state)),
+              kmh: +(Math.abs(physEngine2.state.speedKmh) * REAL_SCALE).toFixed(1),
+              gang: gearLabel(physEngine2.state),
+            });
+          }
+          t += CONTROL_SEND_INTERVAL_MS;
+        }
+        const letzt = verlauf[verlauf.length - 1];
+        return {
+          schritte, pakete: a2.testSenke.length, verlauf,
+          // Und die Gegenprobe, dass Auto 1 unberuehrt blieb: seine Physik darf von
+          // diesem Weg nichts gesehen haben.
+          eigenerMotor: physEngine2.state !== physEngine.state,
+          eigeneGaenge: physEngine2.config.gears !== physEngine.config.gears,
+          endeRpm: letzt.rpm, endeKmh: letzt.kmh, endeGang: letzt.gang,
+          letztesPaket: a2.testSenke[a2.testSenke.length - 1] || null,
+        };
+      } finally {
+        performance.now = uhrEcht;
+        zweiSpieler = vorher.zwei;
+        playerCar2 = vorher.p2;
+        p2Steer = vorher.steer;
+        p2Throttle = vorher.gas;
+        physicsEnabled = vorher.phys;
+        physEngine2.reset();
+      }
+    },
+
     cockpitPassung(h, b) { return cockpitPassung(h, b); },
 
     // ---- Die Cockpit-Schirme, von aussen bedienbar ----------------------------------
@@ -38,11 +1177,67 @@
     // Tastendruck neu messen - und beide Schirme haetten verschiedene Faktoren, das Cockpit
     // wuerde also beim Blaettern seine Groesse aendern.
     schirmListe() { return COCKPIT_SCREENS.map((s) => s.id); },
+    // Und welche davon gerade BLAETTERBAR sind. Seit es den Schirm von Auto 2 gibt, sind
+    // das nicht mehr zwangslaeufig alle: er wird uebersprungen, solange der
+    // Zwei-Spieler-Modus aus ist. Ein Prueflauf, der den Umlauf mit der Gesamtzahl
+    // nachrechnet, landet dann einen Schirm daneben - genau das ist passiert.
+    schirmListeBlaetterbar() {
+      return COCKPIT_SCREENS.filter((s) => cockpitScreenGilt(s)).map((s) => s.id);
+    },
     schirmIst() { return cockpitScreenIst().id; },
     schirmStep(d) { cockpitScreenStep(d); return cockpitScreenIst().id; },
     schirmZu(id) { cockpitScreenZu(id); return cockpitScreenIst().id; },
     // Und der Weg, den das Steuerkreuz wirklich nimmt - nicht nur die Registry.
     schirmPad(dir) { return pitScreenPad(dir); },
+    // ---- HAT SPIELER 2 DIESELBEN KNOEPFE WIE SPIELER 1? -----------------------------
+    //
+    // BESTELLT: "Spieler 2 soll auch funktionierende Knoepfe haben fuer: Licht,
+    // Boxenstopp, Lichthupe (Belegung auf Gamepad wie Spieler 1)."
+    //
+    // Ein Pad mit genau den drei Standard-Knoepfen gedrueckt (Index 3/9/11, siehe
+    // BINDING_DEFAULTS), einmal durch pollPad2() geschickt - derselbe Weg, den ein echter
+    // Controller nimmt. Geprueft wird die WIRKUNG: headlightsOn kippt, boxZweiLage()
+    // wechselt aus 'aus', und die Lichthupe von Auto 2 sperrt sich selbst gegen einen
+    // zweiten Aufruf, solange sie noch blitzt.
+    p2KnopfProbe() {
+      const merk = { head: headlightsOn, zwei: zweiSpieler, p2: playerCar2 };
+      const a2 = { device: { id: 'probe-p2knopf' }, role: 'player2', rx: null, testSenke: [] };
+      try {
+        zweiSpieler = true;
+        playerCar2 = a2;
+        const knopf = (i) => ({ pressed: true, value: 1 });
+        const los = () => ({ pressed: false, value: 0 });
+        const pad = { axes: [0, 0, 0, 0], buttons: Array(20).fill(0).map(() => los()) };
+        pad.buttons[3] = knopf();   // headlights
+        pad.buttons[9] = knopf();   // pitstop
+        pad.buttons[11] = knopf();  // lightflash
+        const vorLage = (typeof boxZweiLage === 'function') ? boxZweiLage() : null;
+        pollPad2(pad);
+        return {
+          lichtKippte: headlightsOn !== merk.head,
+          // Ein zweiter Aufruf, solange die erste Lichthupe noch blitzt, darf
+          // flash2Until NICHT verlaengern - sonst haette man eine Dauerlichthupe statt
+          // drei Impulsen. flash2Until steht in 70-race.js, einer FRUEHEREN Datei, ist
+          // also zur Laufzeit direkt lesbar.
+          lichthupeSperrt: (() => {
+            const vorher = flash2Until;
+            triggerHeadlightFlash2();
+            return flash2Until === vorher;
+          })(),
+          boxLageVorher: vorLage,
+          boxLageNachher: (typeof boxZweiLage === 'function') ? boxZweiLage() : null,
+        };
+      } finally {
+        headlightsOn = merk.head;
+        const cb = $('dash-head-toggle');
+        if (cb) cb.checked = merk.head;
+        zweiSpieler = merk.zwei;
+        playerCar2 = merk.p2;
+        if (typeof boxZweiAnfordern === 'function' && boxZweiLage() !== 'aus') {
+          boxZweiAnfordern();
+        }
+      }
+    },
     // UEBER DEN VERTEILER und nicht direkt auf pitScreenSelect(): gefragt ist, was die
     // Taste auf dem GERADE offenen Schirm tut, und genau diese Entscheidung war der Ort
     // des gemeldeten Fehlers. Ein Zugang, der sie ueberspringt, prueft die falsche Sache.
@@ -1909,6 +3104,12 @@
     simAufloesung(takte) {
       if (!simAn()) return null;
       const kachel = [], luecke = [];
+      // Und der WAHRE Abstand daneben, fuer dieselben Abtastungen. Er beantwortet die
+      // Frage, die "wieviele verschiedene Werte" offen laesst: FOLGT der gemeldete Abstand
+      // dem wirklichen, oder hat er nur viele Werte? Seit die Kachelphase aus dem Weg kommt
+      // (ghostTilePhaseWeg) hat er Zwischenwerte - ohne diesen Vergleich waere nicht zu
+      // sagen, ob sie etwas bedeuten.
+      let abwSumme = 0, abwN = 0;
       const n = takte || 1200;
       for (let k = 0; k < n; k++) {
         // simSchritt() gibt NICHTS zurueck - der erste Anlauf stand hier auf
@@ -1922,16 +3123,808 @@
         if (!z) break;
         for (const a of (z.abstand || [])) {
           if (a.wahr === null || a.wahr === undefined || a.wahr >= 1.0) continue;
-          if (a.gemeldet !== null) kachel.push(a.gemeldet);
+          if (a.gemeldet !== null) {
+            kachel.push(a.gemeldet);
+            abwSumme += Math.abs(a.gemeldet - a.wahr);
+            abwN++;
+          }
           if (a.luecke !== null) luecke.push(a.luecke);
         }
       }
       return { proben: kachel.length,
                kachelWerte: [...new Set(kachel)].sort((x, y) => x - y),
+               kachelVerschieden: new Set(kachel).size,
+               // Mittlere Abweichung des GEMELDETEN vom WAHREN Abstand, in Kacheln, fuer
+               // die nahen Abtastungen.
+               kachelAbweichung: abwN ? +(abwSumme / abwN).toFixed(3) : null,
                lueckeVerschieden: new Set(luecke).size,
                lueckeMessbar: luecke.length,
                lueckeMin: luecke.length ? Math.min.apply(null, luecke) : null,
                lueckeMax: luecke.length ? Math.max.apply(null, luecke) : null };
+    },
+
+    // ---- EIN STEHENDES AUTO AUF DER STRECKE: WEICHEN DIE ANDEREN AUS? -------------
+    //
+    // Zwei Attrappen: A steht (car.parked), B kommt eine Kachel dahinter. Gefragt wird, ob
+    // hindernisSetzen() B einen Ausweichbefehl WEG von A gibt - und ob die Seite an A's
+    // Querlage haengt und nicht fest ist.
+    hindernisProbe(opt) {
+      const o = opt || {};
+      const merkGarage = garage.splice(0, garage.length);
+      const merkTiles = currentTrackTiles;
+      const merkFlag = flagState;
+      const autos = [];
+      try {
+        currentTrackTiles = codeToTrack('SG2R3G2R3').tiles;
+        lineCache = null;
+        flagState = 'green';
+        const a = OMEGA_TEST.attrappeGhost('A');   // der Steher
+        const b = OMEGA_TEST.attrappeGhost('B');   // kommt heran
+        garage.push(a); garage.push(b);
+        autos.push(a, b);
+        a.ghost.tileIndex = 2; a.ghost.tilesTotal = 2; a.ghost.tileMs = 700;
+        b.ghost.tileIndex = 1; b.ghost.tilesTotal = 1; b.ghost.tileMs = 700;
+        a.ghost.querSoll = o.querLage === undefined ? 0.6 : o.querLage;
+        a.parked = 'Prueflauf';
+        b.ghost.yieldSide = 0; b.ghost.yieldUntil = 0;
+        hindernisSetzen(a);
+        const nah = { yieldSide: b.ghost.yieldSide || 0,
+                      gilt: !!(b.ghost.yieldUntil && b.ghost.yieldUntil > Date.now()) };
+        // Gegenprobe: dasselbe Auto WEIT weg - dann darf nichts gesetzt werden.
+        b.ghost.yieldSide = 0; b.ghost.yieldUntil = 0;
+        b.ghost.tileIndex = 6; b.ghost.tilesTotal = 6;
+        hindernisSetzen(a);
+        const weit = { yieldSide: b.ghost.yieldSide || 0,
+                       gilt: !!(b.ghost.yieldUntil && b.ghost.yieldUntil > Date.now()) };
+        return { nah, weit, stehtBei: o.querLage === undefined ? 0.6 : o.querLage };
+      } finally {
+        flagState = merkFlag;
+        garage.splice(0, garage.length);
+        for (const c of autos) { c.parked = null; stopGhost(c); }
+        for (const c of merkGarage) garage.push(c);
+        currentTrackTiles = merkTiles;
+        lineCache = null;
+      }
+    },
+
+    // ---- KOSTET EIN FEHLER AUCH DIE LINIE? ----------------------------------------
+    //
+    // Der Verbremser zog bisher nur Tempo ab. Diese Sonde erzwingt einen (Math.random auf
+    // 0, eine enge Kachel voraus) und liest, was ghostSpice() zurueckgibt: Tempofaktor UND
+    // Querausschlag.
+    fehlerProbe() {
+      const merkGarage = garage.splice(0, garage.length);
+      const merkTiles = currentTrackTiles;
+      const merkCfg = Object.assign({}, ghostCfg);
+      const echtRandom = Math.random;
+      const autos = [];
+      try {
+        currentTrackTiles = codeToTrack('SG2R3G2R3').tiles;
+        lineCache = null;
+        Object.assign(ghostCfg, WUERZE_AUS);
+        ghostCfg.wuerzeFehler = true;
+        Math.random = () => 0;
+        const a = OMEGA_TEST.attrappeGhost('F');
+        garage.push(a);
+        autos.push(a);
+        // DIE KACHEL DAVOR SUCHEN, statt eine zu raten: gewuerfelt wird nur, wenn eine
+        // enge Kachel in DIST <= 1 liegt (ghostSpice), und wo die liegt, haengt am Layout.
+        const tiles = currentTrackTiles;
+        let start = 0;
+        for (let i = 0; i < tiles.length; i++) {
+          if (tileTightness(tiles[(i + 1) % tiles.length].type) > 0) { start = i; break; }
+        }
+        a.ghost.tileIndex = start; a.ghost.tilesTotal = start; a.ghost.tileMs = 700;
+        const eng = ghostAheadTightest(a, 2);
+        // DIE KENNUNG SETZT SONST ghostTick(), nicht ghostAheadTightest(): ohne sie ist
+        // aheadTight.key undefined, und `g.mistakeArmed !== aheadTight.key` ist beim ersten
+        // Aufruf falsch - es wird also NIE gewuerfelt. Genau darauf ist diese Sonde beim
+        // ersten Anlauf hereingefallen: sie meldete "kein Fehler" und meinte "kein Wurf".
+        eng.key = a.ghost.tileIndex + ':' + eng.dist;
+        const spice = ghostSpice(a, eng);
+        return { faktor: +(spice.factor || 1).toFixed(4),
+                 fehlerQuer: +(spice.fehlerQuer || 0).toFixed(4),
+                 engVoraus: { tight: eng.tight, dist: eng.dist },
+                 fehlerLaeuft: !!(a.ghost.mistakeUntil
+                                  && a.ghost.mistakeUntil > Date.now()) };
+      } finally {
+        Math.random = echtRandom;
+        garage.splice(0, garage.length);
+        for (const c of autos) stopGhost(c);
+        for (const c of merkGarage) garage.push(c);
+        Object.assign(ghostCfg, merkCfg);
+        currentTrackTiles = merkTiles;
+        lineCache = null;
+      }
+    },
+
+    // ---- FAHRERCHARAKTER: GEZOGEN, IN DER SPANNE, UND VERSCHIEDEN -----------------
+    //
+    // Geprueft wird das ZIEHEN, nicht die Wirkung: die Wirkung haengt an fuenf Groessen und
+    // ist in der Kennzahlensonde zu sehen (die Rundenzeit-Spanne im Feld verdoppelt sich).
+    // Hier geht es um die Zusicherungen, die man an einer Zufallszahl ueberhaupt pruefen
+    // kann: liegt sie im dokumentierten Band, und sind die Autos verschieden?
+    //
+    // attrappeGhost() ruft startGhost(), und dort wird gezogen - die Sonde muss also nichts
+    // weiter tun als Autos anzulegen und hinzusehen.
+    charakterProbe(n) {
+      const zahl = Math.max(2, Math.min(8, n || 6));
+      const autos = [];
+      try {
+        for (let i = 0; i < zahl; i++) autos.push(OMEGA_TEST.attrappeGhost('C' + i));
+        const werte = autos.map((c) => c.ghost.charakter);
+        const reaktionen = autos.map((c) => c.ghost.startReaktion);
+        const felder = ['angriff', 'verteidigung', 'fehler', 'kurvenAbzug'];
+        const spanne = {};
+        for (const f of felder) {
+          const w = werte.map((x) => x && x[f]).filter((x) => typeof x === 'number');
+          spanne[f] = w.length ? { min: Math.min.apply(null, w), max: Math.max.apply(null, w),
+                                   verschieden: new Set(w).size } : null;
+        }
+        return {
+          autos: zahl,
+          spanne,
+          pitVersatz: werte.map((x) => x && x.pitVersatz),
+          reaktionMin: Math.min.apply(null, reaktionen),
+          reaktionMax: Math.max.apply(null, reaktionen),
+          reaktionVerschieden: new Set(reaktionen).size,
+        };
+      } finally {
+        for (const c of autos) stopGhost(c);
+      }
+    },
+
+    // ---- VERTEIDIGEN: DECKT DER VORAUSFAHRENDE DIE SEITE AB? ----------------------
+    //
+    // Zwei Attrappen, der Angreifer dicht hinter dem Vorausfahrenden und lange genug
+    // klebend. Math.random wird auf 0 gestellt - der Wurf gelingt dann immer, und zwar
+    // BEIDE: das Ansetzen und die Verteidigungsentscheidung. Was geprueft werden soll, ist
+    // nicht der Zufall, sondern das Vorzeichen.
+    //
+    //   ohne Verteidigen   der Vorausfahrende weicht zur GEGENSEITE des Angreifers
+    //   mit Verteidigen    er geht auf DESSEN Seite und deckt sie ab
+    verteidigenProbe(opt) {
+      const o = opt || {};
+      const merkGarage = garage.splice(0, garage.length);
+      const merkTiles = currentTrackTiles;
+      const merkCfg = Object.assign({}, ghostCfg);
+      const merkFlag = flagState;
+      const echtRandom = Math.random;
+      const autos = [];
+      try {
+        currentTrackTiles = codeToTrack(o.code || 'SG2R3G2R3').tiles;
+        lineCache = null;
+        Object.assign(ghostCfg, WUERZE_AUS);
+        ghostCfg.wuerzeUeberholen = true;
+        ghostCfg.wuerzeVerteidigen = !!o.verteidigen;
+        flagState = 'green';
+        Math.random = () => 0;
+        const a = OMEGA_TEST.attrappeGhost('A');   // vorne
+        const b = OMEGA_TEST.attrappeGhost('B');   // hinten, greift an
+        garage.push(a); garage.push(b);
+        autos.push(a, b);
+        a.ghost.tileIndex = 2; a.ghost.tilesTotal = 2; a.ghost.laps = 1; a.ghost.tileMs = 700;
+        b.ghost.tileIndex = 1; b.ghost.tilesTotal = 1; b.ghost.laps = 1; b.ghost.tileMs = 700;
+        // Der Vorausfahrende liegt rechts. NACHGEMESSEN entscheidet das die Seite hier
+        // trotzdem nicht: die beiden liegen 0,7 s auseinander, also ausserhalb von
+        // GHOST_NAH_SEK, und damit sieht ghostSeitenFrei() keinen Nachbarn - beide Seiten
+        // sind frei, und dann gewinnt die Innenseite der naechsten Kurve (rechts auf
+        // dieser Strecke). Die Sonde prueft deshalb das VORZEICHENVERHAELTNIS von
+        // attackSide und yieldSide und nicht eine bestimmte Seite.
+        a.ghost.querSoll = 0.5; b.ghost.querSoll = 0;
+        // Lange genug geklebt, damit die Scharfstellung vorbei ist.
+        b.ghost.closeSince = Date.now() - (SPICE_ATTACK_ARM_MS + 500);
+        ghostSpice(b, ghostAheadTightest(b, 2));
+        return {
+          attackSide: b.ghost.attackSide || 0,
+          yieldSide: a.ghost.yieldSide || 0,
+          verteidigt: !!a.ghost.verteidigt,
+          phase: b.ghost.passPhase || null,
+          // Deckt er die Seite ab, auf der der Angreifer vorbei will?
+          deckt: (b.ghost.attackSide || 0) !== 0
+                 && Math.sign(a.ghost.yieldSide || 0) === Math.sign(b.ghost.attackSide || 0),
+        };
+      } finally {
+        Math.random = echtRandom;
+        flagState = merkFlag;
+        garage.splice(0, garage.length);
+        for (const c of autos) stopGhost(c);
+        for (const c of merkGarage) garage.push(c);
+        Object.assign(ghostCfg, merkCfg);
+        currentTrackTiles = merkTiles;
+        lineCache = null;
+      }
+    },
+
+    // ---- BLAUE FLAGGE: MACHT DER UEBERRUNDETE PLATZ? ------------------------------
+    //
+    // Die Lage von Hand hergestellt, weil sie in einem Lauf selten ist und weil sie an einer
+    // Stelle haengt, die leicht falsch herum gedacht wird: wer ueberrundet, hat MEHR
+    // Fortschritt (Runden mal Kachelzahl plus Ort) und steht damit in der Wertung vorn,
+    // waehrend er auf der Runde HINTER dem Ueberrundeten faehrt. Die Sonde prueft genau
+    // diese Unterscheidung mit.
+    //
+    // Zwei Attrappen: A liegt eine Kachel voraus und hat eine Runde WENIGER, B kommt dicht
+    // hinter ihm. Gefragt wird, was ghostSpice() fuer A daraus macht - Querversatz und
+    // Tempofaktor.
+    blaueFlaggeProbe(opt) {
+      const o = opt || {};
+      const merkGarage = garage.splice(0, garage.length);
+      const merkTiles = currentTrackTiles;
+      const merkCfg = Object.assign({}, ghostCfg);
+      const autos = [];
+      try {
+        currentTrackTiles = codeToTrack(o.code || 'SG2R3G2R3').tiles;
+        lineCache = null;
+        Object.assign(ghostCfg, WUERZE_AUS);
+        ghostCfg.wuerzeBlau = o.aus ? false : true;
+        const a = OMEGA_TEST.attrappeGhost('A');   // der Ueberrundete
+        const b = OMEGA_TEST.attrappeGhost('B');   // der Ueberrunder
+        garage.push(a); garage.push(b);
+        autos.push(a, b);
+        // A eine Kachel voraus AUF DER RUNDE, aber eine Runde zurueck in der Wertung.
+        a.ghost.tileIndex = 2; a.ghost.tilesTotal = 2; a.ghost.laps = 1; a.ghost.tileMs = 700;
+        b.ghost.tileIndex = 1; b.ghost.tilesTotal = 1; b.ghost.laps = 2; b.ghost.tileMs = 700;
+        a.ghost.querSoll = 0; b.ghost.querSoll = 0;
+        const vorher = { yieldSide: a.ghost.yieldSide || 0, yieldUntil: a.ghost.yieldUntil || 0 };
+        // aheadTight wie im Fahrbetrieb: ghostSpice() erwartet das Ergebnis von
+        // ghostAheadTightest() und liest daraus tight/dist/key.
+        const spice = ghostSpice(a, ghostAheadTightest(a, 2));
+        return {
+          vorher,
+          yieldSide: a.ghost.yieldSide || 0,
+          weichtAus: !!(a.ghost.yieldUntil && a.ghost.yieldUntil > Date.now()),
+          faktor: +(spice.factor || 1).toFixed(4),
+          // Und die Gegenrichtung: sieht A den Ueberrunder ueberhaupt als Hintermann?
+          hinterMir: (() => {
+            const h = ghostHinterMir(a);
+            return h ? { name: h.car.alias, gap: +h.gap.toFixed(3) } : null;
+          })(),
+        };
+      } finally {
+        garage.splice(0, garage.length);
+        for (const c of autos) stopGhost(c);
+        for (const c of merkGarage) garage.push(c);
+        Object.assign(ghostCfg, merkCfg);
+        currentTrackTiles = merkTiles;
+        lineCache = null;
+      }
+    },
+
+    // ---- WELCHE SEITE IST BELEGT? -------------------------------------------------
+    //
+    // ghostSeitenFrei() ist der Wachhund, der ein Ueberholmanoever nicht in ein drittes
+    // Auto hinein ansetzen laesst. Er liest die Querlagen aller Autos in Reichweite - eine
+    // Groesse, die sonst nur im Fahrbetrieb entsteht -, deshalb stellt diese Sonde die Lage
+    // von Hand her: drei Attrappen auf derselben Kachel, Querlagen wie bestellt.
+    //
+    // Die Garage wird ausgetauscht und im finally zurueckgegeben, wie bei jeder Sonde hier.
+    seitenFreiProbe(lagen) {
+      const merkGarage = garage.splice(0, garage.length);
+      const merkTiles = currentTrackTiles;
+      const autos = [];
+      try {
+        currentTrackTiles = codeToTrack('SG2R3G2R3').tiles;
+        lineCache = null;
+        const liste = lagen || [0.5, -0.5];
+        // Das erste Auto ist das PRUEFENDE, die weiteren sind die Nachbarn.
+        for (let i = 0; i <= liste.length; i++) {
+          const car = OMEGA_TEST.attrappeGhost('S' + i);
+          garage.push(car);
+          autos.push(car);
+          car.ghost.tileIndex = 0;
+          car.ghost.tilesTotal = 0;
+          car.ghost.laps = 0;
+          // Der Prueflauf selbst liegt mittig, die Nachbarn dort, wo bestellt.
+          car.ghost.querSoll = i === 0 ? 0 : liste[i - 1];
+          // Ohne Kacheldauer gibt ghostAbstandSek() null zurueck, und ghostNahe() faellt
+          // auf den Kachelvergleich zurueck - genau das ist hier gewollt: alle auf einer
+          // Kachel heisst nebeneinander, ohne dass eine Uhr mitspielen muss.
+          car.ghost.tileMs = 0;
+        }
+        return ghostSeitenFrei(autos[0]);
+      } finally {
+        garage.splice(0, garage.length);
+        for (const c of autos) stopGhost(c);
+        for (const c of merkGarage) garage.push(c);
+        currentTrackTiles = merkTiles;
+        lineCache = null;
+      }
+    },
+
+    // ====================================================================================
+    // DIE KACHELPHASE GEGEN DIE WAHRHEIT
+    // ====================================================================================
+    //
+    // Die Phase innerhalb einer Kachel ist eine ERSCHLIESSUNG: das Auto meldet nur, DASS
+    // der Kachelzaehler gewechselt hat. Sie indexiert aber die Ideallinie und das
+    // Bremsprofil, ist also die Groesse, auf der das ganze Fahrmodell steht.
+    //
+    // IN DER SIMULATION IST DIE WAHRHEIT BEKANNT: simOrt() rechnet die Phase aus der
+    // wirklichen Bogenlaenge (90b-sim.js), und simZustand() gibt sie als autos[].phase
+    // heraus. Diese Sonde stellt beide Schaetzer daneben - die Uhr
+    // (ghostTilePhaseZeit) und den Weg (ghostTilePhaseWeg) - und zwar im SELBEN Lauf,
+    // damit der Vergleich nicht zwei verschiedene Rennen vergleicht.
+    //
+    // Ausgegeben werden nicht nur mittlere Fehler, sondern die zwei RAENDER, weil dort die
+    // Fehler sitzen, die man sieht:
+    //
+    //   klebt      Anteil der Abtastungen mit Schaetzung >= 0,995. Die Zeitphase deckelt
+    //              bei 1 und bleibt dort stehen; gemessen waren das 3 bis 10 Prozent jeder
+    //              Kachel, und in dieser Zeit friert der Linienversatz ein.
+    //   kurz       Anteil der Kacheln, auf denen die Schaetzung NIE ueber 0,95 kam. Das ist
+    //              der NEUE Fehler, den der Weg einfuehren kann: fehlt der Linie das letzte
+    //              Stueck jeder Kachel, springt der Versatz an der Naht - genau das, was der
+    //              Selbsttest "Ideallinie stetig" einmal mit 2,48 Eigenschritten gefangen
+    //              hat.
+    //
+    // `kurz` wird ausdruecklich als HOECHSTE auf einer Kachel erreichte Phase gemessen und
+    // nicht als Wert im Takt des Wechsels. Der erste Anlauf tat Letzteres und verglich
+    // damit Ungleiches: die Simulation setzt car.tileAt im Bewegungsteil DESSELBEN Takts
+    // zurueck (die Zeitphase steht dort also schon auf 0), waehrend der Ghost seinen
+    // Wegzaehler erst im naechsten Takt zurueckstellt (die Wegphase steht noch auf 1).
+    // Gemessen ergab das kurz = 1,00 gegen 0,51 - eine Zahl, die nur die Reihenfolge
+    // innerhalb von simSchritt() beschreibt. Die Hoechstphase je Kachel ist von dieser
+    // Reihenfolge unabhaengig.
+    //
+    // WAS DIESE MESSUNG NICHT ZEIGT, und das gehoert dazu: in der Simulation reiten
+    // Schaetzung und Wahrheit auf DEMSELBEN Temposignal - der Motor, der den Weg liefert,
+    // treibt auch a.s. Der Vergleich zeigt also Konvergenz und nicht Teppichtreue. Wer
+    // Letztere prueft, verstellt zusaetzlich das Verhaeltnis von Modell zu Wirklichkeit;
+    // dafuer gibt es ghostLinieTrace mit `kurvenFaktor`.
+    //
+    // ---- ZWEI FALLEN, IN DIE DIESE SONDE BEIM ERSTEN ANLAUF BEIDE GETRETEN IST -------
+    //
+    // 1. DIE UHR. ghostTilePhaseZeit() rechnet Date.now() - car.tileAt, und die
+    //    Simulation setzt car.tileAt auf IHRE Uhr (st.uhr), die 100 Mal schneller laeuft
+    //    als die Wanduhr. Wer die Schaetzer NACH simSchritt() liest, vergleicht also eine
+    //    Wandzeit mit einem Zeitstempel weit in der Zukunft: die Differenz ist negativ, der
+    //    Deckel macht 0 daraus, und die Zeitphase meldete glatte 0 mit einem mittleren
+    //    Fehler von -0,49 - also genau den Mittelwert einer gleichverteilten Phase. Die
+    //    Auswertung steht deshalb in derselben Uhrfaelschung wie die Ticks, synchron
+    //    eingeklammert und im finally zurueckgestellt.
+    //
+    // 2. DER TAKT AM KACHELRAND. simSchritt() ruft erst ghostTick(), bewegt DANN die Autos
+    //    und setzt erst danach den Kachelzaehler. Im Takt eines Kachelwechsels liegt das
+    //    Auto fuer die Simulation also schon auf der neuen Kachel (wahre Phase ~0,02),
+    //    waehrend der Ghost seinen Wechsel erst im naechsten Takt sieht und noch auf der
+    //    alten schaetzt (~0,98). Ein Fehlervergleich in diesem Takt misst die Reihenfolge
+    //    innerhalb von simSchritt() und nicht die Schaetzung - er waere ein Fehler von
+    //    fast 1,0, und zwar bei JEDEM Kachelwechsel. Gezaehlt wird deshalb nur, wo Ghost
+    //    und Simulation dieselbe Kachel meinen (g.tileIndex === a.kachel); die Zahl der
+    //    uebersprungenen Takte geht als `randTakte` mit hinaus, damit niemand glaubt, hier
+    //    werde etwas versteckt.
+    async phaseWahrheitProbe(opt) {
+      if (typeof simStart !== 'function' || typeof simZustand !== 'function') return null;
+      const o = opt || {};
+      const takte = o.takte || 1600;
+      const autos = Math.max(2, Math.min(6, o.autos || 4));
+      const stell = (id, v) => {
+        const e = $(id);
+        if (!e) return;
+        if (e.type === 'checkbox') { e.checked = !!v; } else { e.value = String(v); }
+        e.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const merkFeld = { g: ($('sim-ghosts') || {}).value, l: ($('sim-laps') || {}).value,
+                         f: !!($('sim-fast') || {}).checked };
+      const merkCfg = Object.assign({}, ghostCfg);
+      // Je Schaetzer: Fehlersumme, Betragssumme, Zahl der Abtastungen, Klebeanteil und die
+      // Verteilung der je Kachel erreichten Hoechstphase.
+      const bau = () => ({ n: 0, summe: 0, betrag: 0, klebt: 0, kacheln: 0, kurz: 0,
+                           hoechstSumme: 0 });
+      const zeit = bau(), weg = bau();
+      let ohneWeg = 0, randTakte = 0;
+      try {
+        stell('sim-ghosts', String(autos));
+        stell('sim-laps', '10');
+        stell('sim-fast', false);
+        ghostCfg.pitAn = false;           // ein Boxenstopp ist keine Kachelfahrt
+        simStart();
+        if (!simAn()) return null;
+        // Je Auto: der Zaehlerstand, den der GHOST zuletzt gesehen hat (an ihm haengt sein
+        // eigener Kachelwechsel), und die bisher hoechste Schaetzung auf dieser Kachel.
+        const vorCount = [], hoch = [];
+        const kachelAbschluss = (i) => {
+          const h = hoch[i];
+          if (!h) return;
+          if (h.pz !== null) {
+            zeit.kacheln++; zeit.hoechstSumme += h.pz; if (h.pz < 0.95) zeit.kurz++;
+          }
+          if (h.pw !== null) {
+            weg.kacheln++; weg.hoechstSumme += h.pw; if (h.pw < 0.95) weg.kurz++;
+          }
+          hoch[i] = null;
+        };
+        for (let k = 0; k < takte; k++) {
+          simSchritt(SIM_TAKT_MS);
+          if (!simAn()) break;
+          const z = simZustand();
+          if (!z) break;
+          // DIE UHR DER SIMULATION, fuer die Dauer der Auswertung - siehe Falle 1 oben.
+          const echtNow = Date.now;
+          Date.now = () => simState.uhr;
+          try {
+            z.autos.forEach((a, i) => {
+              const car = (simState && simState.autos[i]) ? simState.autos[i].car : null;
+              if (!car || !car.ghost) return;
+              const g = car.ghost;
+              // Hat der GHOST seinen Kachelwechsel bemerkt? Dann ist die vorige Kachel
+              // abgeschlossen und ihre Hoechstphase steht fest.
+              if (vorCount[i] !== undefined && vorCount[i] !== g.lastCount) kachelAbschluss(i);
+              vorCount[i] = g.lastCount;
+              const pz = ghostTilePhaseZeit(car);
+              const pw = ghostTilePhaseWeg(car);
+              if (pw === null) ohneWeg++;
+              if (!hoch[i]) hoch[i] = { pz: null, pw: null };
+              if (pz !== null && pz !== undefined) {
+                hoch[i].pz = Math.max(hoch[i].pz === null ? -1 : hoch[i].pz, pz);
+              }
+              if (pw !== null && pw !== undefined) {
+                hoch[i].pw = Math.max(hoch[i].pw === null ? -1 : hoch[i].pw, pw);
+              }
+              // Der Fehlervergleich nur, wo beide dieselbe Kachel meinen - siehe Falle 2.
+              if (g.tileIndex !== a.kachel) { randTakte++; return; }
+              const wahr = a.phase;
+              const nimm = (s, p) => {
+                if (p === null || p === undefined) return;
+                s.n++; s.summe += (p - wahr); s.betrag += Math.abs(p - wahr);
+                if (p >= 0.995) s.klebt++;
+              };
+              nimm(zeit, pz);
+              nimm(weg, pw);
+            });
+          } finally {
+            Date.now = echtNow;
+          }
+        }
+      } finally {
+        Object.assign(ghostCfg, merkCfg);
+        if (simAn()) simStop('Phasenpruefung');
+        stell('sim-ghosts', merkFeld.g);
+        stell('sim-laps', merkFeld.l);
+        stell('sim-fast', merkFeld.f);
+      }
+      const fertig = (s) => (s.n ? {
+        proben: s.n,
+        mittelFehler: +(s.summe / s.n).toFixed(4),     // mit Vorzeichen: laeuft sie vor?
+        mittelBetrag: +(s.betrag / s.n).toFixed(4),
+        klebt: +(s.klebt / s.n).toFixed(4),
+        kacheln: s.kacheln,
+        hoechstMittel: s.kacheln ? +(s.hoechstSumme / s.kacheln).toFixed(4) : null,
+        kurz: s.kacheln ? +(s.kurz / s.kacheln).toFixed(4) : null,
+      } : null);
+      return { zeit: fertig(zeit), weg: fertig(weg),
+               ohneWegProben: ohneWeg, randTakte };
+    },
+
+    // ====================================================================================
+    // DIE KENNZAHLENSONDE: BERUEHRUNGEN UND UEBERHOLMANOEVER JE MINUTE
+    // ====================================================================================
+    //
+    // WOZU, und das ist ein Befund und keine Idee: die Simulation zaehlt `kontakte`,
+    // `kontaktMs`, `kontaktEngst` und `ueberholt` (90b-sim.js), und KEINE Zeile im ganzen
+    // Quelltext hat diese vier Zahlen je gelesen. Die Sweeps, auf denen
+    // SPICE_LUECKE_MIN_S = 1,2 und SPICE_ATTACK_RANGE = 1,3 stehen, sind von Hand aus der
+    // Konsole gefahren; ihre Tabellen stehen als Kommentar in 90-ghosts.js und sind nicht
+    // nachrechenbar. Jede weitere Aenderung am Fahrverhalten waere damit eine Behauptung
+    // gegen eine Erinnerung.
+    //
+    // Hinein geht eine Liste von Einstellungen, heraus kommt eine Tabelle:
+    //
+    //   await OMEGA_TEST.ghostSweep([
+    //     { name: 'heute' },
+    //     { name: 'enge Luecke', lueckeMinS: 0.35 },
+    //     { name: 'ohne Abstand', cfg: { wuerzeAbstand: false } },
+    //   ], { sekunden: 90, laeufe: 3 })
+    //
+    // Eine Variante verstellt `ghostCfg` (Feld `cfg`) und die drei Groessen, die als
+    // `let` mit Setzer liegen, weil sie fuer genau solche Reihen so gebaut wurden:
+    // `lueckeMinS`, `attackRange`, `gapMin`.
+    //
+    // ---- WAS DIE VIER ZAHLEN WIRKLICH BEDEUTEN, und zwei davon ueberraschen ----------
+    //
+    //   kontakte      FLANKEN je Paar, mit 1000 ms Sperre (simKontakteTick). Eine
+    //                 Beruehrung, die zwei Sekunden anhaelt, ist eine.
+    //   kontaktMs     Summe UEBER ALLE PAARE. Bei vier Autos gibt es sechs Paare, der Wert
+    //                 kann also groesser sein als die verstrichene Zeit - ein "Anteil der
+    //                 Zeit in Beruehrung" ist er erst geteilt durch die Zahl der Paare, und
+    //                 genau das tut `kontaktAnteil` unten.
+    //   kontaktEngst  wird NUR beim Zaehlen einer neuen Flanke fortgeschrieben, ist also
+    //                 der engste Laengsabstand IM MOMENT DES EINSETZENS und nicht das
+    //                 Minimum ueber den Lauf. Der Name in simZustand() sagt das nicht,
+    //                 deshalb steht es hier.
+    //   ueberholt     gesicherte Rangwechsel mit Hysterese ueber eine Autolaenge.
+    //
+    // ---- DER TAKT IST FEST, und das ist kein Detail ---------------------------------
+    //
+    // simKontakteTick() laeuft einmal je simSchritt() und schreibt pauschal SIM_TAKT_MS
+    // auf kontaktMs - unabhaengig davon, mit welcher Schrittweite simSchritt() gerufen
+    // wurde. Mit einer groesseren Schrittweite (simSchritt teilt intern bis
+    // SIM_TEIL_MAX_MS = 60) waere die Beruehrungsdauer untererfasst und die Abtastung der
+    // Beruehrungen zu grob. Diese Sonde ruft deshalb IMMER mit SIM_TAKT_MS und nimmt
+    // keine Schrittweite als Angabe an.
+    //
+    // ====================================================================================
+    // DAS RAUSCHEN DIESER SONDE - GEMESSEN, UND ES IST GROSS
+    // ====================================================================================
+    //
+    // Sieben Stellen in 90-ghosts.js wuerfeln (Tagesform, Fehler, Attacke, Boxenfenster,
+    // Lernen), und keine davon ist gesaet. Wie viel davon im Ergebnis landet, ist nicht
+    // geschaetzt, sondern gemessen: DREI IDENTISCHE Einstellungen, je vier Laeufe von 90 s,
+    // fuenf Autos.
+    //
+    //     Variante        Ber/min   Ueb/min   Ber je Ueb   Feld-Spanne   Runde
+    //     A (Vorgabe)      29,3      17,3       1,67         0,356      12,26 s
+    //     B (Vorgabe)      21,5      17,4       1,39         0,327      12,23 s
+    //     C (Vorgabe)      20,8      20,2       1,05         0,310      12,21 s
+    //     Spanne            8,5 (41%) 2,9 (17%) 0,62 (48%)   0,046 (13%) 0,055 (0,4%)
+    //
+    // WAS DARAUS FOLGT, und es ist unbequem:
+    //
+    //   Rundenzeit        0,4 Prozent Rauschen. Die einzige Zahl, mit der man einen
+    //                     Unterschied von wenigen Prozent belegen kann.
+    //   Feld-Spanne       13 Prozent. Brauchbar fuer Unterschiede ab etwa einem Drittel.
+    //   Ueberholmanoever  17 Prozent, und das ist der GUENSTIGE Fall dieser Reihe.
+    //   Beruehrungen      41 Prozent. Ein gemessener "Gewinn" von 20 Prozent ist hier
+    //                     nichts - er ist die halbe Spanne zweier gleicher Einstellungen.
+    //   Ber je Ueb        48 Prozent. Als Quotient zweier rauschender Zahlen rauscht sie
+    //                     am meisten, obwohl sie sich am klügsten liest.
+    //
+    // EINMAL SELBST DARAUF HEREINGEFALLEN, und das gehoert hierher: mit drei Laeufen sah
+    // der Windschatten wie +35 Prozent Ueberholmanoever bei gleichen Beruehrungen aus
+    // (14,0 -> 18,9). Mit SECHS Laeufen war der Unterschied exakt null (17,25 gegen 17,22).
+    // Fast waere daraus eine geaenderte Vorgabe geworden.
+    //
+    // DIE REGEL, die daraus folgt: eine Aussage ueber Beruehrungen oder Ueberholmanoever
+    // braucht entweder einen FAKTOR (wie der Abstandhalter mit 9,7) oder viel mehr Laeufe,
+    // als sich hier bezahlen lassen. Fuer alles Feinere ist die Rundenzeit die Zahl - und
+    // wo die nichts sagt, sagt diese Sonde nichts.
+    //
+    // `spanne` steht deshalb neben JEDEM Mittelwert, und sie ist nicht Zierde: eine
+    // Einstellung, deren Vorsprung kleiner ist als die Spanne ihrer eigenen Wiederholungen,
+    // ist nicht besser - sie ist einmal besser gelaufen.
+    //
+    // BOXENSTOPPS SIND AUS, solange eine Variante sie nicht ausdruecklich einschaltet: ein
+    // stehendes Auto in der Boxengasse erzeugt Beruehrungen und Rangwechsel, die nichts
+    // mit dem Fahren zu tun haben. Dieselbe Vorsichtsmassnahme trifft der vorhandene Test
+    // zur Zeitluecke, und aus demselben Grund.
+    //
+    // ---- DIE AUFWAERMZEIT, und sie ist nachgemessen und nicht vorsichtshalber -------
+    //
+    // Der Start ist ein Knaeuel: alle Autos stehen auf derselben Stelle, ghostAssignBias()
+    // verteilt sie erst ueber GHOST_GRID_MS = 6000 ms, und in diesen Sekunden fallen
+    // Beruehrungen an, die nichts ueber das Fahren sagen. Wie stark das wiegt, zeigt der
+    // Vergleich derselben zwei Einstellungen ueber verschiedene Laufzeiten (vier Autos):
+    //
+    //     Fenster                     Zeitluecke 0,35   Zeitluecke 1,2
+    //      20 s ohne Aufwaermen             51,1              48,0     kein Unterschied
+    //      90 s ohne Aufwaermen             43,6              26,0     der bekannte
+    //      20 s nach 10 s Aufwaermen        50,0              20,0     derselbe, in einem
+    //                                                                  Viertel der Zeit
+    //
+    // (Beruehrungen je Minute, vier Autos, je drei Laeufe.) Bei 20 s ohne Aufwaermen ist
+    // der Start der halbe Lauf und deckt den Unterschied vollstaendig zu. Die Sonde zaehlt
+    // deshalb erst nach `aufwaermSekunden` (Vorgabe 10): die vier Zaehler der Simulation
+    // laufen monoton, also wird ihr Stand nach dem Aufwaermen als GRUNDLINIE gemerkt und am
+    // Ende abgezogen. Damit ist das Fenster sauber, ohne dass die Simulation etwas
+    // zuruecksetzen muss - und kurze Laeufe werden brauchbar, was fuer jede Reihe zaehlt,
+    // die viele Einstellungen durchfahren soll.
+    //
+    // AUSNAHME: `engstCm` ist ein Minimum und kein Zaehler - es laesst sich nicht abziehen
+    // und gilt deshalb fuer den GANZEN Lauf, Aufwaermen eingeschlossen.
+    //
+    // ---- WAS DIE SONDE NICHT AUFLOEST, und das gehoert dazu ------------------------
+    //
+    // Gemessen ueber drei Laeufe von 90 s streuen die Ueberholmanoever um 8,6 bzw. 10,0 je
+    // Minute - also um so viel, wie der Unterschied zwischen den beiden Einstellungen
+    // betraegt (19,3 gegen 12,0). Fuer Beruehrungen reichen drei Laeufe (Streuung 4,7 und
+    // 8,7 bei einem Unterschied von 17,6), fuer Ueberholmanoever nicht. Wer eine Aussage
+    // ueber das Ueberholen braucht, nimmt mehr Laeufe - und liest in jedem Fall die
+    // Spanne neben dem Mittelwert, bevor er einen Unterschied behauptet.
+    async ghostSweep(varianten, opt) {
+      if (typeof simStart !== 'function' || typeof simZustand !== 'function') return null;
+      const o = opt || {};
+      const sekunden = Math.max(5, o.sekunden || 90);
+      const laeufe = Math.max(1, o.laeufe || 3);
+      const autos = Math.max(2, Math.min(6, o.autos || 4));
+      const aufwaerm = o.aufwaermSekunden === undefined ? 10 : Math.max(0, o.aufwaermSekunden);
+      const schritte = Math.round(sekunden * 1000 / SIM_TAKT_MS);
+      const aufwaermSchritte = Math.round(aufwaerm * 1000 / SIM_TAKT_MS);
+      const liste = (varianten && varianten.length) ? varianten : [{ name: 'heute' }];
+      const paare = autos * (autos - 1) / 2;
+      // Auswahlfelder werden ueber ein 'change' gestellt und auf GUELTIGKEIT geprueft: ein
+      // Wert, den ein Auswahlfeld nicht hat, laesst es auf seinem alten stehen, und die
+      // Simulation faellt still auf ihre Vorgabe zurueck.
+      const stell = (id, v) => {
+        const e = $(id);
+        if (!e) return;
+        if (e.type === 'checkbox') { e.checked = !!v; } else { e.value = String(v); }
+        e.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const merkFeld = { g: ($('sim-ghosts') || {}).value, l: ($('sim-laps') || {}).value,
+                         f: !!($('sim-fast') || {}).checked };
+      // ghostCfg traegt nur Zahlen und Wahrheitswerte - eine flache Kopie genuegt, und sie
+      // ist die Wahrheit, gegen die JEDER Lauf zurueckgesetzt wird. Ohne das Zuruecksetzen
+      // je Lauf traegt die dritte Variante die Einstellung der zweiten mit sich.
+      const merkCfg = Object.assign({}, ghostCfg);
+      // Die STRECKE als Angabe, im Muster der uebrigen Sonden. Ohne sie misst die Sonde
+      // immer die Vorgabestrecke der Simulation (SR3GLR2GR2G2, dreizehn Kacheln ohne
+      // Haarnadel) - und genau die Haarnadel ist der Fall, in dem ein Ghost abfliegt.
+      const merkTiles = currentTrackTiles;
+      const merkLuecke = lueckeMinLesen(), merkRange = attackRangeLesen();
+      const merkGap = gapMinLesen();
+      const zahl = (x, n) => (x === null || x === undefined || !isFinite(x)
+        ? null : +x.toFixed(n === undefined ? 2 : n));
+      // ABGAENGE zaehlen, und zwar als FLANKE. Sie stehen in keinem Zaehler der Simulation,
+      // sind aber die Zahl, die ueber eine Kurvenabstimmung entscheidet: ein Ghost, der
+      // schneller ist und dabei abfliegt, ist nicht schneller. `geparkt` je Auto kommt aus
+      // simZustand(), der Uebergang falsch -> wahr ist ein Abgang.
+      const abgangZaehler = (vor, z) => {
+        let neu = 0;
+        (z.autos || []).forEach((a, i) => {
+          if (a.geparkt && !vor[i]) neu++;
+          vor[i] = !!a.geparkt;
+        });
+        return neu;
+      };
+      // Der Stand der vier Zaehler nach dem Aufwaermen. Alle laufen monoton, also ist die
+      // Differenz das Messfenster - siehe der Kommentar oben.
+      const grundlinie = (z) => ({
+        uhrMs: z.uhrMs, kontakte: z.kontakte, ueberholt: z.ueberholt,
+        kontaktMs: z.kontaktMs,
+        // Je Auto die Zahl der bis hierher gefahrenen Runden: eine Rundenzeit aus dem
+        // Aufwaermfenster gehoert nicht ins Ergebnis.
+        runden: (z.autos || []).map((a) => (a.zeiten || []).length),
+      });
+      // Die Kennzahlen EINES Laufs, aus dem letzten gueltigen Zustand und der Grundlinie.
+      const kennzahlen = (z, basis, abgaenge) => {
+        const b = basis || { uhrMs: 0, kontakte: 0, ueberholt: 0, kontaktMs: 0, runden: [] };
+        const dauerMs = Math.max(1, z.uhrMs - b.uhrMs);
+        const min = dauerMs / 60000;
+        const kontakte = z.kontakte - b.kontakte;
+        const ueberholt = z.ueberholt - b.ueberholt;
+        const kontaktMs = z.kontaktMs - b.kontaktMs;
+        const runden = [];
+        // Und je Auto getrennt: die Spanne ZWISCHEN den Autos sagt, ob das Feld
+        // unterschiedlich schnell ist - die Frage, an der sich der Fahrercharakter
+        // entscheidet. Der Mittelwert ueber alle Autos kann dabei gleich bleiben.
+        const jeAuto = [];
+        (z.autos || []).forEach((a, i) => {
+          // Die erste Runde eines Autos faellt immer heraus: sie beginnt aus dem Stand, und
+          // der vorhandene Test "die Autos fahren, und die Zeiten stimmen" haelt
+          // ausdruecklich fest, dass sie deshalb die langsamste ist. Dazu faellt alles
+          // heraus, was vor der Grundlinie lag.
+          const ab = Math.max(1, (b.runden && b.runden[i]) || 0);
+          const meine = [];
+          for (let k = ab; k < (a.zeiten || []).length; k++) {
+            runden.push(a.zeiten[k] / 1000);
+            meine.push(a.zeiten[k] / 1000);
+          }
+          if (meine.length) jeAuto.push(meine.reduce((x, y) => x + y, 0) / meine.length);
+        });
+        return {
+          sekundenEcht: zahl(dauerMs / 1000, 1),
+          kontakte, ueberholt,
+          beruehrungenProMin: zahl(kontakte / min, 1),
+          ueberholtProMin: zahl(ueberholt / min, 1),
+          beruehrungJeUeberholen: ueberholt ? zahl(kontakte / ueberholt) : null,
+          // Anteil der Zeit, in der EIN Paar in Beruehrung ist - siehe der Kommentar oben.
+          kontaktAnteil: zahl(kontaktMs / Math.max(1, dauerMs * paare), 3),
+          // Kein Zaehler, sondern ein Minimum: gilt fuer den ganzen Lauf, Aufwaermen
+          // eingeschlossen.
+          engstCm: z.kontaktEngstCm,
+          abgaenge: abgaenge || 0,
+          abgaengeProMin: zahl((abgaenge || 0) / min, 2),
+          rundenZahl: runden.length,
+          // Spanne der mittleren Rundenzeit ZWISCHEN den Autos, in Sekunden.
+          rundeSpanneAutos: jeAuto.length > 1
+            ? zahl(Math.max.apply(null, jeAuto) - Math.min.apply(null, jeAuto), 3) : null,
+          besteRundeS: runden.length ? zahl(Math.min.apply(null, runden), 2) : null,
+          mittlereRundeS: runden.length
+            ? zahl(runden.reduce((s, x) => s + x, 0) / runden.length, 2) : null,
+        };
+      };
+      // Mittelwert und SPANNE ueber die Laeufe. Die Spanne ist die eigentliche Aussage:
+      // ohne sie liest man drei Nachkommastellen und haelt Rauschen fuer Fortschritt.
+      const mitteln = (arr) => {
+        const gut = arr.filter(Boolean);
+        if (!gut.length) return null;
+        const aus = { laeufe: gut.length };
+        for (const k of ['beruehrungenProMin', 'ueberholtProMin', 'beruehrungJeUeberholen',
+                         'kontaktAnteil', 'abgaengeProMin', 'mittlereRundeS', 'besteRundeS',
+                         'rundeSpanneAutos', 'sekundenEcht']) {
+          const w = gut.map((g) => g[k]).filter((x) => x !== null && x !== undefined);
+          if (!w.length) { aus[k] = null; aus[k + 'Spanne'] = null; continue; }
+          aus[k] = zahl(w.reduce((s, x) => s + x, 0) / w.length, 3);
+          aus[k + 'Spanne'] = zahl(Math.max.apply(null, w) - Math.min.apply(null, w), 3);
+        }
+        return aus;
+      };
+      const aus = [];
+      try {
+        if (o.code) { currentTrackTiles = codeToTrack(o.code).tiles; lineCache = null; }
+        stell('sim-ghosts', String(autos));
+        stell('sim-laps', '10');       // die groesste Option; siehe den Abbruch unten
+        stell('sim-fast', false);
+        for (const v of liste) {
+          const laeufeAus = [];
+          for (let r = 0; r < laeufe; r++) {
+            Object.assign(ghostCfg, merkCfg);
+            lueckeMinSetzen(merkLuecke);
+            attackRangeSetzen(merkRange);
+            gapMinSetzen(merkGap);
+            ghostCfg.pitAn = false;
+            if (v.cfg) Object.assign(ghostCfg, v.cfg);
+            if (v.lueckeMinS !== undefined) lueckeMinSetzen(v.lueckeMinS);
+            if (v.attackRange !== undefined) attackRangeSetzen(v.attackRange);
+            if (v.gapMin !== undefined) gapMinSetzen(v.gapMin);
+            simStart();
+            if (!simAn()) { laeufeAus.push(null); continue; }
+            // ---- UNTERSCHIEDLICH SCHNELLE AUTOS, wenn bestellt --------------------
+            //
+            // Mit gleicher Einstellung fahren alle gleich schnell, und dann gibt es kein
+            // Ueberrunden - die blaue Flagge waere nicht messbar. `tempoSpanne` verteilt
+            // car.ghostSpeed linear ueber das Feld, symmetrisch um ghostCfg.speed. Es geht
+            // NACH simStart(), weil erst dort die Autos existieren; ghostTick liest den
+            // Wert je Takt, also greift er sofort.
+            if (o.tempoSpanne > 0 && simState && simState.autos.length > 1) {
+              const n2 = simState.autos.length;
+              simState.autos.forEach((a, i) => {
+                const rel = n2 > 1 ? (i / (n2 - 1) - 0.5) : 0;    // -0,5 bis +0,5
+                a.car.ghostSpeed = Math.max(0.35, Math.min(1,
+                  (ghostCfg.speed || 0.55) + rel * o.tempoSpanne));
+              });
+            }
+            let letzter = simZustand();
+            // Aufwaermen: fahren, aber nicht zaehlen. Danach die Grundlinie merken.
+            for (let k = 0; k < aufwaermSchritte && simAn(); k++) {
+              simSchritt(SIM_TAKT_MS);
+              const z = simZustand();
+              if (z) letzter = z;
+              if ((k % 400) === 399 && typeof stLuft === 'function') await stLuft();
+            }
+            const basis = letzter ? grundlinie(letzter) : null;
+            // Der Parkzustand nach dem Aufwaermen ist der Anfangsstand: ein Auto, das
+            // schon vor dem Fenster lag, ist kein Abgang IN diesem Fenster.
+            const parkVor = (letzter && letzter.autos)
+              ? letzter.autos.map((a) => !!a.geparkt) : [];
+            let abgaenge = 0;
+            for (let k = 0; k < schritte; k++) {
+              simSchritt(SIM_TAKT_MS);
+              // ALLE DURCH heisst: die Simulation hat sich selbst beendet, und simZustand()
+              // gibt danach null. Der letzte gueltige Stand ist dann das Ergebnis, und
+              // `sekundenEcht` macht sichtbar, dass der Lauf kuerzer war als bestellt -
+              // die Kennzahlen sind Raten je Minute und bleiben damit vergleichbar.
+              if (!simAn()) break;
+              const z = simZustand();
+              if (z) { letzter = z; abgaenge += abgangZaehler(parkVor, z); }
+              // Dem Browser Luft lassen, ohne einen Zeitgeber zu benutzen: im verborgenen
+              // Fenster sind Zeitgeber auf 1 Hz gedrosselt, ein setTimeout(0) je Takt
+              // waere also eine halbe Stunde je Lauf.
+              if ((k % 400) === 399 && typeof stLuft === 'function') await stLuft();
+            }
+            laeufeAus.push(letzter ? kennzahlen(letzter, basis, abgaenge) : null);
+            if (simAn()) simStop('Kennzahlensonde');
+            if (typeof stLuft === 'function') await stLuft();
+          }
+          aus.push({ name: v.name || '?', einzeln: laeufeAus, mittel: mitteln(laeufeAus) });
+        }
+      } finally {
+        // Zuruecksetzen steht VORNE und das Riskanteste zuerst: eine Aufraeumzeile, die
+        // wirft, macht alle folgenden unerreichbar.
+        Object.assign(ghostCfg, merkCfg);
+        lueckeMinSetzen(merkLuecke);
+        attackRangeSetzen(merkRange);
+        gapMinSetzen(merkGap);
+        if (simAn()) simStop('Kennzahlensonde');
+        if (o.code) { currentTrackTiles = merkTiles; lineCache = null; }
+        stell('sim-ghosts', merkFeld.g);
+        stell('sim-laps', merkFeld.l);
+        stell('sim-fast', merkFeld.f);
+      }
+      return { sekunden, laeufe, autos, paare, aufwaermSekunden: aufwaerm,
+               code: o.code || null, tempoSpanne: o.tempoSpanne || 0,
+               takt: SIM_TAKT_MS, varianten: aus };
     },
 
     // ---- DAS DREHZAHLBAND JE MOTOR ------------------------------------------------
@@ -1972,45 +3965,120 @@
       } finally { sampleEngine.car = merk; }
     },
 
-    // ---- Die Fahrhilfe: der Schalter, ueber das Bedienelement gestellt -------------
+    // ---- Die Fahrhilfe: drei Modi, ueber das Bedienelement gestellt ----------------
     //
-    // UEBER DEN SCHALTER und nicht ueber die Variable: driverAssistOn entsteht aus dem
-    // Bedienelement #driver-assist, und ein Prueflauf, der die Variable direkt setzt,
-    // prueft nicht, ob der Schalter selbst noch etwas bewirkt.
+    // UEBER DAS BEDIENELEMENT und nicht ueber die Variable: fahrhilfeModus entsteht aus
+    // #driver-assist, und ein Prueflauf, der die Variable direkt setzt, prueft nicht, ob
+    // das Bedienelement selbst noch etwas bewirkt.
     //
-    // GEPRUEFT WIRD driverAssistAktiv(), nicht driverAssistOn allein - sie ist die
+    // GEPRUEFT WIRD driverAssistAktiv() und NICHT fahrhilfeModus allein - sie ist die
     // tatsaechlich verwendete Groesse (spielerOrtTick fragt sie), und sie ist eine ODER-
     // Verknuepfung mit dem Autopiloten. flagState und raceFormationLap werden dafuer auf
     // 'green'/false gezwungen: sonst haengt das Ergebnis vom Rennzustand ab, in dem der
     // Prueflauf zufaellig laeuft, und ist nicht wiederholbar.
+    //
+    // ---- UND WAS SEIT DEN DREI MODI DAZUKOMMT ------------------------------------
+    //
+    // Die Warnung war ausdruecklich: "Pass auf, dass du nicht wieder den Standard-Modus
+    // kaputt machst." Der Prueflauf misst deshalb nicht nur driverAssistAktiv(), sondern
+    // auch, was mit dem LENK-INPUT geschieht - und zwar in allen drei Modi, mit und ohne
+    // vorhandene modeBytes. Das ist die Stelle, an der 'voll' den Standard beschaedigen
+    // koennte, und eine Pruefung, die nur die Modus-Zeichenkette liest, sieht davon nichts.
     driverAssistToggleProbe() {
       if (typeof driverAssistAktiv !== 'function') return null;
       const el = $('driver-assist');
       if (!el) return null;
-      const merk = { checked: el.checked, on: (typeof driverAssistOn !== 'undefined')
-                     ? driverAssistOn : null,
-                     flag: flagState, formation: raceFormationLap };
+      const merk = { wert: el.value, flag: flagState, formation: raceFormationLap,
+                     auto: playerCar,
+                     abseits: offtrackAktiv,
+                     bytes: playerCar ? playerCar.modeBytes : undefined };
+      const stellen = (v) => {
+        el.value = v;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      };
       try {
         flagState = 'green';
         raceFormationLap = false;
-        el.checked = false;
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        const aus = driverAssistAktiv();
-        el.checked = true;
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        const an = driverAssistAktiv();
-        // Und mit dem Schalter wieder aus: der Autopilot muss trotzdem greifen koennen,
-        // wenn eine gelbe Flagge das verlangt - das ist die ODER-Haelfte der Bedingung.
-        el.checked = false;
-        el.dispatchEvent(new Event('change', { bubbles: true }));
+        // ---- EIN FAHRERAUTO MUSS DA SEIN, sonst misst diese Sonde nichts -------
+        //
+        // Beim ersten Lauf stand hier kein Ersatz, und 'voll' meldete vollGilt=false -
+        // richtig gemessen und trotzdem nichtssagend: fahrhilfeVollGilt() liest
+        // playerCar.modeBytes, und ohne verbundenes Auto ist playerCar null. Der Test
+        // waere in einem Browser ohne Auto immer gruen gewesen und haette genau den
+        // Fall nie geprueft, um den es geht.
+        //
+        // Dieselbe Attrappe wie in spielerOrtProbe, und aus demselben Grund.
+        if (!playerCar) {
+          playerCar = { role: 'steuern', alias: 'Pruefling', tileCount: 0,
+                        tileCode: 0x02, modeBytes: null, ghost: null };
+        }
+        const je = {};
+        for (const modus of ['aus', 'quer', 'voll']) {
+          stellen(modus);
+          // Mit modeBytes (also: das Auto haelt sich wirklich selbst) UND ohne. Der
+          // Unterschied ist der ganze Punkt von fahrhilfeVollGilt().
+          const messen = (bytes) => {
+            if (playerCar) playerCar.modeBytes = bytes;
+            return { aktiv: driverAssistAktiv(),
+                     vollGilt: typeof fahrhilfeVollGilt === 'function'
+                       ? fahrhilfeVollGilt() : null };
+          };
+          je[modus] = { mitBytes: messen({ 10: 1, 15: 1 }), ohneBytes: messen(null) };
+
+          // ---- UND DIE ZWEITE ACHSE: liest das Auto ueberhaupt? ------------------
+          //
+          // BESTELLT: "Wenn das Auto selbst keine Strecke liest und ein Fahrhilfe modus
+          // an ist, gib mir die volle Kontrolle."
+          //
+          // GESETZT WIRD offtrackAktiv DIREKT und nicht ueber offtrackMelden(): die
+          // Entprellung braucht offtrackEinMs (ab Werk eine Sekunde) echter Zeit, und ein
+          // Prueflauf, der eine Sekunde wartet, wird nicht mehr gestartet. Geprueft wird
+          // hier die WIRKUNG des Zustands, nicht die Entprellung - die hat ihren eigenen
+          // Test.
+          offtrackAktiv = true;
+          if (playerCar) playerCar.modeBytes = { 10: 1, 15: 1 };
+          je[modus].abseits = {
+            // Gehen die modeBytes jetzt noch hinaus? Gefragt wird die Bedingung, die
+            // spielerOrtTick stellt - nachgebaut, weil sie dort in einem Zeitgeber steht.
+            bytesGehenRaus: trackMode === 'on' && driverAssistAktiv() && !abseitsJetzt(),
+            // Und lenkt der Autopilot noch? Das ist die zweite Haelfte der Bestellung.
+            apLenkt: (() => {
+              const merkFlag = flagState;
+              flagState = 'yellow';
+              const ap = autopilot(0);
+              flagState = merkFlag;
+              return ap ? !!ap.lenkt : null;
+            })(),
+          };
+          offtrackAktiv = false;
+        }
+        // Und die ODER-Haelfte: auf 'aus' gestellt muss der Autopilot trotzdem greifen,
+        // wenn eine gelbe Flagge das verlangt.
+        stellen('aus');
+        if (playerCar) playerCar.modeBytes = null;
         flagState = 'yellow';
         const trotzAus = driverAssistAktiv();
-        return { aus, an, trotzAus };
+        // MIT Lesung muss er lenken - sonst prueft die Zeile darueber nur, dass er es
+        // nie tut, und die ganze Unterscheidung waere leer.
+        const apLenktMitLesung = (() => { const ap = autopilot(0);
+                                          return ap ? !!ap.lenkt : null; })();
+        return {
+          je,
+          trotzAus,
+          apLenktMitLesung,
+          modi: FAHRHILFE_MODI.slice(),
+          // Steht 'aus' im Markup vorgewaehlt? Das ist die Vorgabe, und sie stammt aus
+          // dem Bedienelement - nicht aus einer Zuweisung im Skript.
+          vorgabe: [...el.options].filter((o) => o.defaultSelected).map((o) => o.value),
+          auswahl: [...el.options].map((o) => o.value),
+        };
       } finally {
-        el.checked = merk.checked;
-        el.dispatchEvent(new Event('change', { bubbles: true }));
+        stellen(merk.wert);
+        if (merk.auto && merk.bytes !== undefined) merk.auto.modeBytes = merk.bytes;
+        playerCar = merk.auto;
         flagState = merk.flag;
         raceFormationLap = merk.formation;
+        offtrackAktiv = merk.abseits;
       }
     },
 
@@ -2034,7 +4102,7 @@
       const merkPlayer = playerCar;
       const merkTiles = currentTrackTiles;
       const merkMode = trackMode;
-      const merkAssist = (typeof driverAssistOn !== 'undefined') ? driverAssistOn : null;
+      const merkAssist = (typeof fahrhilfeModus !== 'undefined') ? fahrhilfeModus : null;
       const merkFlag = flagState;
       const merkFormation = raceFormationLap;
       try {
@@ -2046,7 +4114,10 @@
         // driverAssistToggleProbe().
         flagState = 'green';
         raceFormationLap = false;
-        driverAssistOn = assistAn === undefined ? true : !!assistAn;
+        // 'quer' und nicht 'voll': diese Sonde prueft den Vorausblick, und der haengt an
+        // driverAssistAktiv() - fuer beide gleich. 'quer' ist der Modus, der dem alten
+        // eingeschalteten Schalter entspricht, also bleibt die Messung vergleichbar.
+        fahrhilfeModus = (assistAn === undefined || assistAn) ? 'quer' : 'aus';
         playerCar = { role: 'steuern', alias: 'Fahrer', tileCount: 0, tileCode: 0x02,
                       modeBytes: null, ghost: null };
         const reihe = [];
@@ -2073,7 +4144,7 @@
         playerCar = merkPlayer;
         currentTrackTiles = merkTiles;
         trackMode = merkMode;
-        if (merkAssist !== null) driverAssistOn = merkAssist;
+        if (merkAssist !== null) fahrhilfeModus = merkAssist;
         flagState = merkFlag;
         raceFormationLap = merkFormation;
         lineCache = null;
@@ -2480,6 +4551,91 @@
                platzMin: SPICE_PASS_PLATZ_MIN };
     },
 
+    // ---- SETZT EIN GHOST AM FAHRERAUTO AN, UND AUF WELCHER SEITE? ---------------
+    //
+    // BESTELLT: "Ghosts sollen auch dem Fahrerauto ausweichen, wenn es langsamer faehrt."
+    //
+    // Zwei getrennte Fragen, und die Sonde beantwortet beide:
+    //
+    //   1. WIRD ANGESETZT? ghostAhead() sieht das Fahrerauto seit v0.5.54, weil
+    //      ghostFieldRacing() playerCar mitnimmt, sobald es einen Ortungssatz hat. Ob die
+    //      Attacke daran aber wirklich scharf wird, stand nie unter Pruefung.
+    //   2. AUF WELCHER SEITE? Die Seitenwahl liest querSoll des Vorausfahrenden. Das
+    //      Fahrerauto hatte keins - qAnder fiel auf 0 zurueck, und der Angreifer ging
+    //      IMMER nach links, auch wenn der Fahrer genau dort fuhr.
+    //
+    // DER ZUFALL WIRD STILLGELEGT: die Attacke wuerfelt mit SPICE_ATTACK_P. Geprueft wird
+    // die ENTSCHEIDUNG, nicht die Wahrscheinlichkeit - ein Prueflauf, der auf einen guten
+    // Wurf wartet, ist gelegentlich rot, ohne dass sich etwas geaendert haette.
+    spielerUeberholProbe(o) {
+      const opt = o || {};
+      const merkGarage = garage.splice(0, garage.length);
+      const merkSpice = ghostCfg.wuerzeUeberholen;
+      const merkPlayer = playerCar;
+      const echtNow = Date.now;
+      const echtRandom = Math.random;
+      try {
+        ghostCfg.wuerzeUeberholen = true;
+        Math.random = () => 0;          // der Wurf gelingt immer
+        let uhr = echtNow.call(Date);
+        Date.now = () => uhr;
+
+        // Das Fahrerauto: ein Ortungssatz wie aus spielerOrt(), plus die Querlage, die
+        // seit v0.6.7 aus dem Sendeweg kommt.
+        const spieler = { role: 'player', alias: 'Fahrer', tileAt: 0, tileCode: 0x02,
+          ghost: { nurOrt: true, tilesTotal: 0.5, tileIndex: 0,
+                   querSoll: opt.spielerQuer === undefined ? 0.8 : opt.spielerQuer } };
+        const jaeger = { role: 'ghost', alias: 'G1', tileAt: 0, tileCode: 0x02,
+          ghost: { tilesTotal: 0, tileIndex: 0, form: 0, formAt: uhr, attackUntil: 0,
+                   closeSince: 0, mistakeUntil: 0, passPhase: null, passZiel: null,
+                   passSince: 0, passBlockUntil: 0, naehern: 0 } };
+        playerCar = spieler;
+        garage.push(jaeger, spieler);
+
+        const g = jaeger.ghost;
+        const reihe = [];
+        const phasen = [];
+        let scharfBei = null;
+        // Lange genug kleben lassen: SPICE_ATTACK_ARM_MS ist 900 ms.
+        for (let t = 0; t < (opt.dauerMs || 3000); t += 60) {
+          uhr += 60;
+          // ---- DAS MANOEVER AUCH ZU ENDE FAHREN ---------------------------------
+          //
+          // Nach opt.vorbeiNach zieht der Jaeger am Fahrerauto vorbei - der Fortschritt
+          // ueberholt den des anderen. Genau daran haengt die Erfolgspruefung "durch",
+          // und ohne diesen Schritt liefe jedes Manoever in die Zeitsperre und die
+          // Sonde koennte den Unterschied gar nicht zeigen.
+          if (scharfBei !== null && opt.vorbeiNach !== undefined
+              && t - scharfBei >= opt.vorbeiNach) {
+            jaeger.ghost.tilesTotal = spieler.ghost.tilesTotal + 1.0;
+          }
+          ghostSpice(jaeger, { tight: 0, dist: 99, key: 's' });
+          if (g.attackUntil && !reihe.length) {
+            scharfBei = t;
+            reihe.push({ tMs: t, seite: g.attackSide, phase: g.passPhase,
+                         zielIstSpieler: g.passZiel === spieler });
+          }
+          if (scharfBei !== null) phasen.push(g.passPhase);
+        }
+        const gesehen = [];
+        for (const p of phasen) if (p && gesehen[gesehen.length - 1] !== p) gesehen.push(p);
+        return { angesetzt: !!reihe.length,
+                 phasenfolge: gesehen,
+                 ersterVersuch: reihe[0] || null,
+                 sieht: (function () {
+                   const ah = ghostAhead(jaeger);
+                   return ah ? { wer: ah.car.alias, abstand: +ah.gap.toFixed(3) } : null;
+                 }()) };
+      } finally {
+        Date.now = echtNow;
+        Math.random = echtRandom;
+        ghostCfg.wuerzeUeberholen = merkSpice;
+        playerCar = merkPlayer;
+        garage.splice(0, garage.length);
+        merkGarage.forEach((c) => garage.push(c));
+      }
+    },
+
     ghostPassProbe(o) {
       const opt = o || {};
       const merkGarage = garage.splice(0, garage.length);
@@ -2587,6 +4743,47 @@
       startGhost(car);
       if (car.timer) { clearInterval(car.timer); car.timer = null; }
       return car;
+    },
+
+    // ---- WER ROLLT WIE WEIT AUS? Die Reihenfolge der Ziellinie ------------------
+    //
+    // GEMELDET: "Ende des Rennens Ghosts anhalten: nicht der Platz soll bestimmen, wie weit
+    // die Autos vorm Anhalten am Rand rollen, sondern die Reihenfolge, mit der sie
+    // Start/Ziel passieren."
+    //
+    // Der Prueflauf stellt genau die Lage her, in der es schiefging: ein Feld, in dem
+    // EINIGE AUTOS STEHEN. Am Rennende laeuft garage.forEach in Garagenreihenfolge und ruft
+    // finishGhost fuer alle, die nicht auslaufen - die Stehenden also zuerst. Vorher nahmen
+    // sie damit die vorderen Staffelplaetze, und das erste wirklich ueberfahrende Auto fand
+    // sie belegt vor.
+    //
+    // Die Reihenfolge der Aufrufe hier ist deshalb dieselbe wie im Rennen: erst die
+    // Stehenden, dann die Fahrenden.
+    zieleinlaufFolgeProbe(o) {
+      const opt = o || {};
+      const merkGarage = garage.splice(0, garage.length);
+      try {
+        const geparkt = opt.geparkt || [true, false, false, true, false];
+        const autos = geparkt.map((p, i) => ({
+          role: 'ghost', alias: 'F' + i, tileCode: 0x02, tileCount: 0,
+          parked: p ? 'Prueflauf' : null, testSenke: [],
+          ghost: { tileIndex: 0, engine: null },
+        }));
+        for (const c of autos) garage.push(c);
+        const stehende = autos.filter((c) => c.parked);
+        const fahrende = autos.filter((c) => !c.parked);
+        finishSeitenZaehlerZuruecksetzen(fahrende.length);
+        for (const c of stehende) finishGhost(c);
+        for (const c of fahrende) finishGhost(c);
+        const lies = (c) => ({ alias: c.alias,
+                               kacheln: c.ghost.finish ? c.ghost.finish.kacheln : null });
+        return { rollende: fahrende.length,
+                 stehende: stehende.map(lies), fahrende: fahrende.map(lies) };
+      } finally {
+        garage.splice(0, garage.length);
+        merkGarage.forEach((c) => garage.push(c));
+        finishSeitenZaehlerZuruecksetzen();
+      }
     },
 
     finishSeiten(n) {
@@ -2971,6 +5168,62 @@
       }
     },
 
+    // ---- BLINKT DAS AUTO DES FAHRERS IM BOXENMODUS? -----------------------------
+    //
+    // BESTELLT: "Beim Pit-Modus sowohl bei gesteuertem Auto als auch NPC Lichter passend
+    // blinken lassen."
+    //
+    // Geprueft wird ueber resolveLights() - dieselbe Funktion, die im Fahrtakt die Lichter
+    // des Fahrerautos zusammensetzt. Ein Prueflauf, der das Muster selbst nachrechnet,
+    // prueefte seine eigene Kopie und nicht die Verdrahtung.
+    //
+    // MIT GEFAELSCHTER UHR ueber eine volle Periode des Doppelblitzes (2 x 90 an, 2 x 90
+    // aus, 420 Pause = 780 ms), damit "es blinkt" nicht vom zufaelligen Moment des Aufrufs
+    // abhaengt, in dem der Prueflauf gerade laeuft.
+    spielerPitLichtProbe(o) {
+      const opt = o || {};
+      if (typeof resolveLights !== 'function') return null;
+      const merk = { ps: pitState, fx: Object.assign({}, lightFx) };
+      const echteNow = Date.now;
+      let uhr = echteNow.call(Date);
+      try {
+        Date.now = () => uhr;
+        // Keine anderen Lichtgruende: Lichthupe, Schaden und Tank schlagen den Boxenmodus
+        // absichtlich - der Prueflauf soll aber den Boxenmodus sehen.
+        lightFx.flashUntil = 0; lightFx.damage = false;
+        lightFx.fuel = false; lightFx.rain = false;
+        const lauf = (zustand) => {
+          pitState = zustand;
+          const reihe = [];
+          for (let t = 0; t < (opt.dauerMs || 1600); t += 20) {
+            uhr += 20;
+            reihe.push(resolveLights(true, false).head);
+          }
+          return reihe;
+        };
+        const aus = lauf('off');
+        const limited = lauf('limited');
+        const servicing = lauf('servicing');
+        const wechsel = (r) => r.filter((v, i) => i && v !== r[i - 1]).length;
+        return {
+          aus: { wechsel: wechsel(aus), anAnteil: +(aus.filter(Boolean).length / aus.length).toFixed(3) },
+          limited: { wechsel: wechsel(limited),
+                     anAnteil: +(limited.filter(Boolean).length / limited.length).toFixed(3) },
+          servicing: { wechsel: wechsel(servicing),
+                       anAnteil: +(servicing.filter(Boolean).length / servicing.length).toFixed(3) },
+        };
+      } finally {
+        Date.now = echteNow;
+        pitState = merk.ps;
+        Object.assign(lightFx, merk.fx);
+      }
+    },
+
+    // Die Boxenbremse von aussen ablesbar machen - die Sonde zeichnet sie je Takt auf.
+    pitBremseLesen(car) {
+      return typeof pitBremse === 'function' ? pitBremse(car) : null;
+    },
+
     ghostPitProbe(opt) {
       const o = opt || {};
       const merkGarage = garage.splice(0, garage.length);
@@ -3051,6 +5304,16 @@
                       quer: +(g0.querSoll || 0).toFixed(3),
                       kmh: g0.engine ? +(g0.engine.state.speedKmh || 0).toFixed(3) : null,
                       geparkt: !!autos[0].parked,
+                      // Das Blinken und die Bremse MIT aufzeichnen: beides ist bestellt
+                      // ("Lichter waehrend der 1s und dem Stopp", "nicht direkt auf 0"),
+                      // und beides ist nur waehrend des Laufs sichtbar - am Ende steht
+                      // nichts mehr davon da.
+                      blink: !!g0.pitBlink,
+                      bremse: (function () {
+                        const b = OMEGA_TEST.pitBremseLesen
+                          ? OMEGA_TEST.pitBremseLesen(autos[0]) : null;
+                        return b === null ? null : +b.toFixed(3);
+                      }()),
                       inhaber: autos.findIndex((c) => c.ghost.pit) });
         }
         // Zusammenfassung: die Phasenfolge, die Querlage je Phase, und ob geparkt wurde.
@@ -3082,7 +5345,25 @@
           querMin[k] = +Math.min.apply(null, querJe[k]).toFixed(3);
           querEnde[k] = querJe[k][querJe[k].length - 1];
         }
-        return { folge, querMin, querEnde, geparkt, mehrfach,
+        // Je Phase: wie viele Takte, wie viele davon dunkel, und der Bremsverlauf.
+        const jePhase = {};
+        for (const x of spur) {
+          if (!x.phase) continue;
+          const e = jePhase[x.phase] || (jePhase[x.phase] = { takte: 0, dunkel: 0,
+                                                             bremse: [], kmh: [] });
+          e.takte++;
+          if (x.blink) e.dunkel++;
+          if (x.bremse !== null) e.bremse.push(x.bremse);
+          if (x.kmh !== null) e.kmh.push(x.kmh);
+        }
+        for (const k of Object.keys(jePhase)) {
+          const e = jePhase[k];
+          e.bremseVerlauf = e.bremse.slice(0, 12);
+          e.kmhAnfang = e.kmh.length ? e.kmh[0] : null;
+          e.kmhEnde = e.kmh.length ? e.kmh[e.kmh.length - 1] : null;
+          delete e.bremse; delete e.kmh;
+        }
+        return { folge, querMin, querEnde, geparkt, mehrfach, jePhase,
                  andere: autos.slice(1).map((c) => ({
                    yieldSide: c.ghost.yieldSide || 0,
                    quer: +(c.ghost.querSoll || 0).toFixed(3),
@@ -3513,6 +5794,109 @@
       }
     },
 
+    // ---- QUERLAGE BEI STILLSTAND: darf sich ein stehendes Auto seitlich verschieben? ----
+    //
+    // BESTELLT: "Autos koennen nicht quer hin und herrutschen [...] auch nur die Querlage
+    // wechseln, wenn sie sich vorwaerts bewegen."
+    //
+    // ---- WARUM DIESE SONDE DIE GESCHWINDIGKEIT SELBST FESTNAGELT --------------------
+    //
+    // ghostCfg.speed auf 0 zu stellen reicht NICHT: das Auto rollt trotzdem minimal aus
+    // (Motorbremse, Reibung), bevor es wirklich bei 0 km/h ankommt, und in dieser kurzen
+    // Restfahrt darf sich die Querlage ja tatsaechlich noch bewegen - das ist ja der Sinn
+    // der Kopplung. Ein Test, der das nicht abfaengt, misst also ein Gemisch aus "faehrt
+    // noch ein bisschen" und "steht wirklich", und ein spaeter kleiner Rest-Ausschlag waere
+    // nicht zu unterscheiden von einem echten Fehler.
+    //
+    // Deshalb wird engine.state.speedKmh nach JEDEM Tick auf exakt 0 zurueckgesetzt - das
+    // Auto steht dann ab dem ZWEITEN Tick garantiert, und jede Bewegung der Querlage ab da
+    // ist eindeutig die Kopplung, nicht ein Restauslauf.
+    //
+    // UND WARUM DIE KACHEL EINGEFROREN WIRD: ghostTilePhase() (90-ghosts.js) schaetzt "wie
+    // weit durch die Kachel" rein aus VERGANGENER ZEIT, nicht aus gefahrener Strecke - ein
+    // bekannter, dokumentierter Rest (siehe der Kommentar dort und im Aufrufer). Ohne
+    // Einfrieren der Kachel wuerde die IDEALLINIE selbst am stehenden Auto weiterwandern,
+    // und die Sonde koennte nicht mehr unterscheiden, ob die Querlage wegen der Kopplung
+    // steht oder weil sich zufaellig auch das Ziel gerade nicht bewegt. tileMs riesig haelt
+    // das Ziel fest, wie es ein wirklich unbewegtes Auto haette (Byte 11 zaehlt nur bei
+    // echter Ueberfahrt weiter).
+    //
+    // GEMESSEN WIRD AB DEM ZWEITEN TAKT. Der erste Takt darf springen: g.querIst ist dort
+    // noch undefined und wird bewusst OHNE Ratenbegrenzung auf sein erstes Ziel gesetzt
+    // (siehe der Kommentar in ghostTick) - ein Auto muss irgendwo anfangen, und das ist
+    // kein Rutschen, sondern ein einmaliges Platzieren.
+    async querlageStillstandProbe(o) {
+      const opt = o || {};
+      const takte = opt.takte || 150;
+      const keepTiles = currentTrackTiles;
+      const merkCfg = JSON.parse(JSON.stringify(ghostCfg));
+      const echtNow = Date.now;
+      let car = null, zweit = null;
+      try {
+        const p = codeToTrack(opt.code || 'SG2H2G2R2');
+        currentTrackTiles = p.tiles;
+        lineCache = null;
+        ghostCfg.leaderBrake = false;
+        ghostCfg.speed = opt.fahren ? 0.55 : 0;
+        if (opt.cfg) Object.assign(ghostCfg, opt.cfg);
+        let uhr = echtNow();
+        Date.now = () => uhr;
+        car = { role: 'ghost', alias: 'SondeStillstand', writeInFlight: false,
+                tileCode: 0x02, tileCount: 0, lastCodeAt: uhr, yaw: 0, rx: null };
+        zweit = { role: 'ghost', alias: 'SondeStillstand2', writeInFlight: false,
+                  tileCode: 0x02, tileCount: 0, lastCodeAt: uhr, yaw: 0, rx: null };
+        garage.push(car, zweit);
+        startGhost(car);
+        startGhost(zweit);
+        ghostTaktLoeschen(car);
+        ghostTaktLoeschen(zweit);
+        car.ghost.freeRun = true;
+        car.ghost.bias = 0;
+        const querIst = [], querSoll = [], tempo = [];
+        for (let i = 0; i < takte; i++) {
+          uhr += 45;
+          ghostTick(car);
+          // ERST NACH dem Tick auf 0 zwingen: der Tick selbst hat das Tempo schon fuer
+          // DIESEN Durchlauf gelesen (in `v`), das Zuruecksetzen betrifft nur den naechsten.
+          //
+          // opt.fahren UEBERSPRINGT DAS ERZWINGEN - die Gegenprobe: ohne sie waere nicht
+          // zu unterscheiden, ob eine gruene Messung an der Kopplung liegt oder daran, dass
+          // dieser Prueflauf nie etwas Bewegliches misst.
+          if (!opt.fahren && car.ghost.engine) car.ghost.engine.state.speedKmh = 0;
+          querIst.push(car.ghost.querIst === undefined ? null : +car.ghost.querIst.toFixed(5));
+          querSoll.push(+(car.ghost.querSoll || 0).toFixed(5));
+          tempo.push(car.ghost.engine
+            ? +(car.ghost.engine.state.speedKmh / car.ghost.engine.config.topSpeedKmh).toFixed(5)
+            : 0);
+        }
+        // Ab Takt 2 (Index 1): Spannweite ueber den Rest des Laufs.
+        const ab2Ist = querIst.slice(1).filter((x) => x !== null);
+        const ab2Soll = querSoll.slice(1);
+        return {
+          takte, tempoMax: Math.max(...tempo),
+          querIst, querSoll,
+          spanneIst: ab2Ist.length ? Math.max(...ab2Ist) - Math.min(...ab2Ist) : 0,
+          spanneSoll: ab2Soll.length ? Math.max(...ab2Soll) - Math.min(...ab2Soll) : 0,
+          ersterTakt: { querIst: querIst[0], querSoll: querSoll[0] },
+        };
+      } finally {
+        Date.now = echtNow;
+        currentTrackTiles = keepTiles;
+        lineCache = null;
+        Object.keys(merkCfg).forEach((x) => { ghostCfg[x] = merkCfg[x]; });
+        for (const c of [car, zweit]) {
+          if (!c) continue;
+          ghostTaktLoeschen(c);
+          if (c.ghost) c.ghost.running = false;
+        }
+        for (let i = garage.length - 1; i >= 0; i--) {
+          if (garage[i] && garage[i].alias && /^SondeStillstand/.test(garage[i].alias)) {
+            garage.splice(i, 1);
+          }
+        }
+      }
+    },
+
     // ---- Laengs-G: zeigt es das Ergebnis oder die Anforderung? -----------------
     //
     // Gemeldet als "warum geht das rote simulierte Gyro nach hinten, wenn ich im Stand
@@ -3543,6 +5927,1118 @@
         return { reihe, ende: reihe[reihe.length - 1],
                  gMax: Math.max.apply(null, reihe.map(x => Math.abs(x.gLong))) };
       } finally {
+        OMEGA_TEST.zustandZurueck(st, merk);
+      }
+    },
+
+    // ---- SAGT DIE FREIE FAHRT IHRE RUNDENZEITEN AN? -----------------------------
+    //
+    // BESTELLT: "Ansagen fuer Rundenzeiten auch machen, wenn ich im Cockpit-Modus freie
+    // Fahrt mache."
+    //
+    // Gefahren wird ueber playerLapCrossed(), also den ECHTEN Weg, den auch eine
+    // Ueberfahrt auf der Bahn nimmt. Ein Prueflauf, der speakLap() direkt riefe, prueefte
+    // die Stimme und nicht die Bedingung, an der es lag.
+    //
+    // Die Stimme wird durch eine Attrappe ersetzt (wie in ansagenFolge) und Date.now()
+    // gefaelscht, damit die Rundenzeiten genau die bestellten sind und nicht die
+    // Ausfuehrungsdauer dieses Prueflaufs.
+    freieRundeProbe(o) {
+      const opt = o || {};
+      const merk = { rs: raceState, rls: raceLapStart, dls: dashLapStart,
+                     dlt: dashLapTimes.slice(), form: raceFormationLap,
+                     sc: sectorCount, ss: sectorStart };
+      const echteNow = Date.now;
+      const echteStimme = window.speechSynthesis;
+      const gesagt = [];
+      let uhr = echteNow.call(Date);
+      try {
+        Object.defineProperty(window, 'speechSynthesis', {
+          configurable: true,
+          value: { cancel() {}, speak(u) { gesagt.push(u.text); } },
+        });
+        Date.now = () => uhr;
+        // KEIN Rennen - genau die Lage, in der bisher nichts gesagt wurde.
+        raceState = opt.raceState || 'idle';
+        raceFormationLap = false;
+        raceLapStart = null;
+        sectorCount = 1;          // keine Sektoren: jede Ueberfahrt ist eine Runde
+        sectorStart = null;
+        dashLapTimes.length = 0;
+        dashLapStart = null;
+
+        const zeiten = opt.zeiten || [9000, 8000, 8500];
+        const folge = [];
+        // Die erste Ueberfahrt setzt nur den Bezug: vorher gibt es keine Rundenzeit.
+        playerLapCrossed();
+        for (const ms of zeiten) {
+          uhr += ms;
+          const vorher = gesagt.length;
+          playerLapCrossed();
+          folge.push({ ms, gesagt: gesagt.length > vorher ? gesagt[gesagt.length - 1] : null });
+        }
+        return { folge, gesagt, runden: dashLapTimes.slice() };
+      } finally {
+        Date.now = echteNow;
+        if (echteStimme) {
+          Object.defineProperty(window, 'speechSynthesis',
+                                { configurable: true, value: echteStimme });
+        } else { delete window.speechSynthesis; }
+        raceState = merk.rs; raceLapStart = merk.rls; raceFormationLap = merk.form;
+        dashLapStart = merk.dls;
+        dashLapTimes.length = 0;
+        merk.dlt.forEach(x => dashLapTimes.push(x));
+        sectorCount = merk.sc; sectorStart = merk.ss;
+      }
+    },
+
+    // ---- WIE VIELE SPUREN BENUTZT DAS FELD? -------------------------------------
+    //
+    // BESTELLT: "max 2 Autos nebeneinander". Die Zusage ist eine Eigenschaft der
+    // Spuraufteilung: gibt ghostLane() nur zwei verschiedene Werte aus, koennen per
+    // Konstruktion nicht drei Autos auf einer Hoehe nebeneinander liegen, ohne dieselbe
+    // Spur zu teilen.
+    //
+    // GEPRUEFT WIRD MIT VIELEN AUTOS. Bei zwei oder drei waere auch die alte, verteilende
+    // Rechnung noch unauffaellig - erst ab vier faechert sie sichtbar auf.
+    spurenProbe(n) {
+      const merkGarage = garage.splice(0, garage.length);
+      try {
+        const autos = [];
+        for (let i = 0; i < (n || 6); i++) {
+          autos.push({ role: 'ghost', alias: 'S' + i, ghost: { tileIndex: 0 } });
+        }
+        for (const c of autos) garage.push(c);
+        const spuren = autos.map((c) => ghostLane(c));
+        const eindeutig = [...new Set(spuren.map((x) => +x.toFixed(6)))].sort((a, b) => a - b);
+        return { spuren, eindeutig, autos: autos.length };
+      } finally {
+        garage.splice(0, garage.length);
+        merkGarage.forEach((c) => garage.push(c));
+      }
+    },
+
+    // Die Wetterlage von aussen setzen, ueber denselben Weg wie die Kachel. Gebraucht vom
+    // Regenformen-Test, der vorher mit box.click() auf eine Lage zusteuerte - das ging,
+    // solange die Kachel ein Zwei-Wege-Schalter war, und haengt seit v0.6.17 am
+    // Anfangszustand.
+    wxModusSetzen(modus) {
+      return typeof wxModusSetzen === 'function' ? wxModusSetzen(modus) : null;
+    },
+
+    // ---- DER FLIEGENDE START, VON AUSSEN GEFAHREN -------------------------------
+    //
+    // GEMELDET: "Probier nochmal, den fliegenden Start zu reparieren: dabei fahren alle
+    // einmal ueber Start, und dann so lange, bis irgendeiner ueber Start faehrt, dann geben
+    // alle normal Gas. Das Ganze in 2 Spalten und mit gedrosselter Geschwindigkeit."
+    //
+    // Drei getrennte Zusagen, und diese Sonde misst alle drei einzeln:
+    //
+    //   1. WANN endet die Runde - bei der zweiten Ueberfahrt IRGENDEINES Autos.
+    //   2. WIE SCHNELL rollt das Feld dabei - gedrosselt auf das Formationstempo.
+    //   3. WIE STEHT es dabei - zwei Spalten, also benachbarte Startplaetze auf
+    //      verschiedenen Seiten.
+    //
+    // Ohne echte Autos: die Ueberfahrten werden gemeldet, wie es der Meldekanal taete.
+    fliegenderStartProbe(o) {
+      const opt = o || {};
+      const merk = { fs: raceFlying, zustand: raceState, formation: raceFormationLap,
+                     limit: limitFormation, gitter: raceGridOrder.slice(),
+                     zaehler: formationZaehler };
+      try {
+        raceFlying = true;
+        raceGridOrder = (opt.autos || ['a', 'b', 'c', 'd']).slice();
+        raceFormationLap = true;
+        formationZaehler = new Map();
+        limitFormation = formationPace();
+
+        // ---- DIE SPANNE JE SPALTE, ueber eine ganze Schlaengelperiode ------------
+        //
+        // Den Versatz bei Phase null abzulesen genuegt NICHT: formationOffset traegt
+        // Schlaengeln PLUS Kolonne, und die Frage ist, ob die beiden Spalten sich beim
+        // Schwingen ueberschneiden. Genau daran ist es gescheitert - der Versatz stand in
+        // der Formel, das Schlaengeln war groesser, und die Bereiche lagen uebereinander.
+        //
+        // Also wird eine volle Periode abgetastet (700 ms je Radiant, siehe
+        // formationOffset) und je Startplatz das Kleinste und Groesste festgehalten.
+        const spalten = raceGridOrder.map((id, i) => {
+          const halter = { weavePhase: 0 };
+          let min = Infinity, max = -Infinity;
+          for (let t = 0; t <= 4400; t += 25) {
+            const v = formationOffset(halter, i, t);
+            if (v < min) min = v;
+            if (v > max) max = v;
+          }
+          // GERADER PLATZ IST RECHTS. formationOffset rechnet (gridPos % 2 ? -1 : 1),
+          // ein gerader Platz bekommt also einen POSITIVEN Versatz - und positiv ist
+          // rechts (Byte 7, nachgemessen am Bahnradius). Ein erster Anlauf dieser Sonde
+          // hatte die Seiten vertauscht und meldete eine Trennung von -1,14: die Zahlen
+          // waren richtig, die Namen falsch, und das Vorzeichen machte aus einer sauberen
+          // Trennung eine Ueberschneidung.
+          return { id, platz: i, seite: i % 2 ? 'links' : 'rechts',
+                   min: +min.toFixed(3), max: +max.toFixed(3) };
+        });
+        // Ueberlappen die beiden Spalten? Das ist die eigentliche Zusage: positiv heisst,
+        // zwischen ihnen bleibt Bahn frei.
+        const links = spalten.filter((x) => x.seite === 'links');
+        const rechts = spalten.filter((x) => x.seite === 'rechts');
+        const trennung = (links.length && rechts.length)
+          ? +(Math.min.apply(null, rechts.map((x) => x.min))
+              - Math.max.apply(null, links.map((x) => x.max))).toFixed(3)
+          : null;
+
+        // Die Ueberfahrten der Reihe nach melden und festhalten, wann es gruen wird.
+        const verlauf = [];
+        const folge = opt.folge || ['a', 'b', 'c', 'd', 'a'];
+        for (const id of folge) {
+          const vorher = raceFormationLap;
+          formationUeberfahrt(id);
+          verlauf.push({ wer: id, nachher: raceFormationLap,
+                         beendet: vorher && !raceFormationLap });
+        }
+        return {
+          spalten,
+          // Positiv heisst: zwischen den Spalten bleibt Bahn frei. Null oder negativ
+          // heisst, sie ueberschneiden sich - und dann ist es kein Zweierzug.
+          trennung,
+          verlauf,
+          tempo: { formation: +formationPace().toFixed(3),
+                   limitNachher: +limitFormation.toFixed(3) },
+          nochFormation: raceFormationLap,
+        };
+      } finally {
+        raceFlying = merk.fs;
+        raceState = merk.zustand;
+        raceFormationLap = merk.formation;
+        limitFormation = merk.limit;
+        raceGridOrder = merk.gitter;
+        formationZaehler = merk.zaehler;
+        applySpeedLimit();
+      }
+    },
+
+    // ---- MEHRSPIELER, MIT EINEM FETCH-STUMMEL -----------------------------------
+    //
+    // Mehrspieler hatte bis v0.6.20 KEINE einzige Pruefung - weder hier noch im
+    // Selbsttest -, und der Code ist seit rund siebzig Fassungen unberuehrt. Das ist die
+    // groesste Luecke im ganzen Projekt gewesen.
+    //
+    // MIT EINEM STUMMEL statt eines echten Hosts: ein Prueflauf, der ein Programm auf dem
+    // PC voraussetzt, laeuft bei niemandem. Der Stummel zeichnet auf, WAS die App
+    // schicken wollte, und antwortet, was der Host antworten wuerde - damit ist beides
+    // pruefbar: der Bericht und das Zeichnen der Rangliste.
+    //
+    // Und der dritte Fall, der in der Praxis der haeufigste ist: die Leitung ist weg. Dann
+    // darf nichts werfen, und die Statuszeile muss es sagen.
+    // ASYNC, und das ist kein Schoenheitsfehler: der erste Anlauf gab aus dem try ein
+    // Promise zurueck und raeumte im finally auf. Das finally laeuft dann SOFORT - beim
+    // Zurueckgeben, nicht beim Fertigwerden -, also war mp.an schon wieder false, wenn
+    // mpHolen() lief. Gemessen: der Bericht ging raus, die Rangliste kam nie, und die
+    // Statuszeile sagte "nicht verbunden". Das sah nach einem Fehler in der App aus und
+    // war einer in der Messung.
+    async mpProbe(o) {
+      const opt = o || {};
+      const echtFetch = window.fetch;
+      const merk = { host: mp.host, name: mp.name, an: mp.an, timer: mp.timer,
+                     id: mp.id, letzter: mp.letzterBericht,
+                     runden: dashLapTimes.slice() };
+      const gesendet = [];
+      try {
+        // Kein Zeitgeber waehrend der Messung: mpJoin() startet einen, und ein Takt, der
+        // nach dem Prueflauf weiterlaeuft, meldet in fremde Laeufe hinein.
+        if (mp.timer) { clearInterval(mp.timer); mp.timer = null; }
+        mp.host = 'http://pruefhost:8080';
+        mp.name = opt.name || 'Pruefer';
+        mp.an = true;
+        dashLapTimes = (opt.runden || [11500, 11200, 11800]).slice();
+
+        window.fetch = (url, init) => {
+          gesendet.push({ url: String(url), methode: (init && init.method) || 'GET',
+                          rumpf: init && init.body ? JSON.parse(init.body) : null });
+          if (opt.leitungWeg) return Promise.reject(new Error('Netzwerk weg'));
+          if (String(url).indexOf('/mp/state') >= 0) {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({
+              // IN SEKUNDEN, wie das echte Protokoll: mpEigenerStand() teilt die
+              // Millisekunden der Rundenliste durch 1000, bevor es meldet. Der erste
+              // Anlauf dieses Stummels schickte Millisekunden, und die Rangliste zeigte
+              // brav "11200.00s" - kein Fehler der App, einer der Messung, und nur
+              // dadurch aufgefallen, dass die Zahl beim Lesen unsinnig aussah.
+              fahrer: opt.fahrer || [
+                { id: mp.id, name: mp.name, laps: 2, letzte: 11.2, beste: 11.2,
+                  abgaenge: 0, alter: 0.3 },
+                { id: 'x', name: 'Zweiter', laps: 2, letzte: 12.0, beste: 11.9,
+                  abgaenge: 1, alter: 14.0 },
+              ],
+              rennen: { start: 1, laps: 10, minutes: null, laufzeit: 42.0,
+                        restSekunden: null },
+              zeit: 1,
+            }) });
+          }
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
+        };
+
+        // 1. Eine gefahrene Runde meldet.
+        mpRundeGefahren();
+        await new Promise((r) => setTimeout(r, 30));
+        const nachRunde = gesendet.slice();
+        // 2. Und die Rangliste wird geholt und gezeichnet.
+        gesendet.length = 0;
+        await mpHolen();
+        const zeilen = $('mp-rows')
+          ? [...$('mp-rows').querySelectorAll('tr')].map((tr) =>
+              [...tr.children].map((td) => td.textContent.trim()).join('|'))
+          : null;
+        return {
+          bericht: nachRunde.map((g) => ({ methode: g.methode,
+            pfad: g.url.replace('http://pruefhost:8080', ''),
+            laps: g.rumpf ? g.rumpf.laps : null,
+            name: g.rumpf ? g.rumpf.name : null,
+            id: g.rumpf ? g.rumpf.id : null })),
+          geholt: gesendet.map((g) => g.url.replace('http://pruefhost:8080', '')),
+          zeilen,
+          status: $('mp-status') ? $('mp-status').textContent : null,
+        };
+      } finally {
+        window.fetch = echtFetch;
+        mp.host = merk.host; mp.name = merk.name; mp.an = merk.an;
+        mp.id = merk.id; mp.letzterBericht = merk.letzter;
+        if (mp.timer) { clearInterval(mp.timer); }
+        mp.timer = merk.timer;
+        dashLapTimes = merk.runden;
+      }
+    },
+
+    // ---- WAS WIRD AUS EINEM GEMELDETEN CODE? ------------------------------------
+    //
+    // codeZuTyp() ist die eine Stelle, an der aus einem Byte des Autos eine Kachelart der
+    // Karte wird. Sie muss die LESEART kennen: 0x0a ist auf der Schiene die Engstelle und
+    // im Ausdruck die Ziellinie.
+    codeTypProbe(codes) {
+      if (typeof codeZuTyp !== 'function') return null;
+      const merk = trackMode;
+      try {
+        const liste = codes || [0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
+                                0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c];
+        const aus = {};
+        for (const modus of ['on', 'off']) {
+          trackMode = modus;
+          aus[modus] = liste.map((c) => codeZuTyp(c));
+        }
+        return { codes: liste, bahn: aus.on, ausdruck: aus.off,
+                 typen: { START: TILE_TYPE.START, PIT: TILE_TYPE.PIT,
+                          ENGE: TILE_TYPE.ENGE } };
+      } finally { trackMode = merk; }
+    },
+
+    // ---- SAGEN DIE ANZEIGETEXTE DIE WAHRHEIT? -----------------------------------
+    //
+    // Gemessen, ungefragt: ZEHN Schieberegler zeigten beim Laden einen Text, der nicht zu
+    // ihrer Stellung passte - ghost-lanes stand auf 1 und zeigte "aus".
+    //
+    // ---- WIE MAN DAS UEBERHAUPT MESSEN KANN ------------------------------------
+    //
+    // Nicht durch Vergleich von Text und Zahl: der Text ist formatiert ("100%", "1.5 s",
+    // "aus", "rechts 64 von 127"), und ein Pruefer, der ihn zurueckrechnet, waere eine
+    // zweite Fassung jeder einzelnen Formatierung - und laege bei der naechsten Aenderung
+    // falsch.
+    //
+    // Gemessen wird stattdessen die EINZIGE Aussage, die formatunabhaengig gilt: der Text,
+    // den der Zuhoerer schreiben WUERDE, muss der Text sein, der schon dasteht. Also
+    // ablesen, ein 'input' ohne Nutzerhandlung feuern, wieder ablesen. Jede Abweichung ist
+    // ein Text, der nicht zu seinem Regler gehoert.
+    //
+    // Das taugt nur, weil die Zuhoerer idempotent sind - nachgemessen: ein zweiter
+    // Durchlauf aendert nichts. Waeren sie es nicht, wuerde diese Sonde selbst verstellen,
+    // was sie prueft.
+    reglerTexteProbe() {
+      const raus = [];
+      for (const el of document.querySelectorAll('input[type=range][id]')) {
+        const v = document.getElementById(el.id + '-val');
+        if (!v) continue;
+        const vorher = v.textContent.trim();
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        const nachher = v.textContent.trim();
+        raus.push({ id: el.id, stand: el.value, vorher, nachher,
+                    stimmt: vorher === nachher });
+      }
+      return { geprueft: raus.length,
+               falsch: raus.filter((x) => !x.stimmt),
+               alle: raus };
+    },
+
+    // ---- DIE SICHERUNG, EINMAL HIN UND EINMAL ZURUECK ---------------------------
+    //
+    // BESTELLT: "Die Fahreinstellungen und globale Einstellungen (Autonamen, Rundenzeiten,
+    // letzter eingestellter Rennmodus, ...) sollen alle als Datei gespeichert und
+    // importiert werden koennen."
+    //
+    // ---- WARUM DIESE SONDE WIRKLICH VERAENDERT UND NICHT NUR LIEST --------------
+    //
+    // Eine Sonde, die nur sicherungLesen() aufruft und das Ergebnis vorzeigt, prueft, dass
+    // JSON gebaut wird. Das war nie die Frage. Die Frage ist, ob ein SPAETERER Stand sich
+    // damit wieder auf den fruehreren bringen laesst - und das ist erst geprueft, wenn
+    // zwischen Sichern und Laden wirklich etwas anderes eingestellt war.
+    //
+    // Ablauf: sichern, einen Regler und eine Ablage VERSTELLEN, zurueckladen, vergleichen.
+    // Am Ende wird der Stand von vorher wiederhergestellt - eine Pruefung, die die
+    // Einstellungen des Nutzers umwirft, wird beim zweiten Mal nicht mehr gestartet.
+    sicherungProbe(o) {
+      const opt = o || {};
+      if (typeof sicherungLesen !== 'function') return null;
+      const vorher = sicherungLesen();
+      // Ein Regler, an dem sich messen laesst: ein Schieber mit Bereich, damit ein
+      // veraenderter Wert auch ein gueltiger ist.
+      const el = sicherungRegler().find((x) => x.type === 'range' && +x.max > +x.min);
+      if (!el) return null;
+      const alt = +el.value;
+      const schritt = +el.step || 1;
+      const anders = alt + schritt <= +el.max ? alt + schritt : alt - schritt;
+      const PROBE_KEY = 'chc.sicherungsprobe.v1';
+      try {
+        // ---- 1. VERSTELLEN, damit es etwas zurueckzuholen gibt --------------------
+        presetSet(el.id, anders);
+        localStorage.setItem(PROBE_KEY, 'verstellt');
+        const zwischen = sicherungLesen();
+
+        // ---- 2. ZURUECKLADEN -----------------------------------------------------
+        const r = sicherungAnwenden(vorher);
+        const nachher = sicherungLesen();
+
+        // ---- 3. UND DIE FAELLE, DIE SCHIEFGEHEN KOENNEN --------------------------
+        //
+        // Alle mit EINER echten Sicherung als Grundlage, nur an einer Stelle verbogen -
+        // eine von Hand gebaute Attrappe wuerde auch dann noch bestehen, wenn das echte
+        // Format sich aendert.
+        const kopie = (x) => JSON.parse(JSON.stringify(x));
+        const falsch = {};
+        const fremd = kopie(vorher);
+        fremd.typ = 'irgendwas';
+        falsch.fremderTyp = sicherungPruefen(fremd).fehler || null;
+        const zukunft = kopie(vorher);
+        zukunft.version = SICHERUNG_VERSION + 1;
+        falsch.neuereFassung = sicherungPruefen(zukunft).fehler || null;
+        const kaputt = kopie(vorher);
+        kaputt.regler[el.id] = +el.max + 1000;
+        falsch.wertAusserhalb = sicherungPruefen(kaputt).bad || null;
+        const veraltet = kopie(vorher);
+        Object.keys(veraltet.regler).slice(0, 3).forEach((k) => delete veraltet.regler[k]);
+        falsch.fehlendeRegler = sicherungPruefen(veraltet).neu || null;
+        const geschmuggelt = kopie(vorher);
+        geschmuggelt.ablagen['boeser.schluessel'] = 'x';
+        falsch.fremdeAblage = sicherungPruefen(geschmuggelt).fremd || null;
+
+        return {
+          // Hat das Verstellen ueberhaupt gewirkt? Ohne diese Zeile koennte der ganze
+          // Test gruen sein, weil sich nie etwas geaendert hat.
+          verstellt: zwischen.regler[el.id] !== vorher.regler[el.id],
+          reglerId: el.id,
+          werte: { vorher: vorher.regler[el.id], zwischen: zwischen.regler[el.id],
+                   nachher: nachher.regler[el.id] },
+          // ---- ZUSAMMENGEFUEHRT UND NICHT ERSETZT ------------------------------
+          //
+          // Diese Sonde erwartete zuerst, dass die zwischendurch angelegte Ablage nach
+          // dem Laden verschwunden ist. Sie war noch da - und die ERWARTUNG war falsch,
+          // nicht der Code: eine Sicherung von vorletzter Woche darf nicht die Strecke
+          // loeschen, die gestern gebaut wurde. Begruendet in sicherungAnwenden().
+          //
+          // Geprueft wird deshalb genau das: der neue Schluessel ueberlebt, und die
+          // gesicherten Werte sind trotzdem zurueck.
+          ablageBleibt: nachher.ablagen[PROBE_KEY] === 'verstellt',
+          bericht: r,
+          umschlag: { typ: vorher.typ, version: vorher.version, app: vorher.app,
+                      regler: Object.keys(vorher.regler).length,
+                      ablagen: Object.keys(vorher.ablagen).length },
+          falsch,
+          // ---- DIE PRAEFIXREGEL GEGEN ALLE BEKANNTEN SCHLUESSEL ------------------
+          //
+          // Der wichtigste Teil. Die Liste steht HIER und nicht im Modul: sie ist die
+          // UNABHAENGIGE Aufzaehlung dessen, was die App ablegt, und ein Test, der die
+          // Liste aus dem Modul nimmt, prueft die Regel gegen sich selbst.
+          //
+          // Zwoelf davon stehen als Konstante im Quelltext, der dreizehnte
+          // (Gamepad-Belegung) ist mir erst im laufenden Browser aufgefallen.
+          bekannt: ['chc.cars.v1', 'chc.cockpit.v1', 'chc.cockpit.omega.v1',
+                    'chc.gearbox.v1', 'chc.layout.v1', 'chc.mp.v1',
+                    'chc.motorwerkstatt.v1', 'chc.presets.v1', 'chc.sessions.v1',
+                    'carrera-hybrid-macros', 'carrera-hybrid-tracks',
+                    'carrera-hybrid-gamepad-bindings-v2', 'omegasim-lang']
+            .map((k) => ({ k, erfasst: SICHERUNG_PRAEFIXE.some((p) => k.indexOf(p) === 0) })),
+          // Und die Selbstsicherung darf NICHT im Buendel liegen.
+          autoDrin: Object.prototype.hasOwnProperty.call(vorher.ablagen, AUTO_STORE),
+          autoKey: AUTO_STORE,
+        };
+      } finally {
+        try { localStorage.removeItem(PROBE_KEY); } catch (e) { /* egal */ }
+        presetSet(el.id, alt);
+        if (!opt.behalten) sicherungAnwenden(vorher);
+      }
+    },
+
+    // Ueberlebt ein Regler das Neuladen? Gemessen wird die ABLAGE und das Zurueckholen
+    // daraus - einen zweiten echten Ladevorgang kann eine Sonde in derselben Seite nicht
+    // herstellen, und ein Test, der vorgibt es zu tun, prueft seine eigene Nachstellung.
+    autoSicherungProbe() {
+      if (typeof autoSicherungSchreiben !== 'function') return null;
+      const el = sicherungRegler().find((x) => x.type === 'range' && +x.max > +x.min);
+      if (!el) return null;
+      const alt = +el.value;
+      const schritt = +el.step || 1;
+      const anders = alt + schritt <= +el.max ? alt + schritt : alt - schritt;
+      let vorherRoh = null;
+      try { vorherRoh = localStorage.getItem(AUTO_STORE); } catch (e) { /* privat */ }
+      try {
+        presetSet(el.id, anders);
+        autoSicherungSchreiben();
+        const abgelegt = JSON.parse(localStorage.getItem(AUTO_STORE) || '{}');
+        // Zurueckstellen, dann laden - so wie es beim Neustart geschieht: die Regler
+        // stehen auf den Markup-Vorgaben, und autoSicherungLaden() holt sie zurueck.
+        presetSet(el.id, alt);
+        const vorLaden = +document.getElementById(el.id).value;
+        const n = autoSicherungLaden();
+        return {
+          reglerId: el.id,
+          abgelegt: abgelegt[el.id],
+          erwartet: anders,
+          vorLaden,
+          nachLaden: +document.getElementById(el.id).value,
+          gesetzt: n,
+          // Wieviele Regler deckt die Selbstsicherung ab? Bricht diese Zahl ein, deckt
+          // sie etwas nicht mehr ab.
+          umfang: Object.keys(abgelegt).length,
+        };
+      } finally {
+        presetSet(el.id, alt);
+        try {
+          if (vorherRoh === null) localStorage.removeItem(AUTO_STORE);
+          else localStorage.setItem(AUTO_STORE, vorherRoh);
+        } catch (e) { /* privat */ }
+      }
+    },
+
+    // ---- DIE ENGSTELLE, ABGEFAHREN -----------------------------------------------
+    //
+    // BESTELLT: "Engstelle: Tempo so drosseln wie in Haarnadelkurve und am Anfang ganz
+    // rechts fahren, dann ganz links."
+    //
+    // Drei Zusagen, drei Messungen - und zwei davon koennen sich WIDERSPRECHEN, weshalb
+    // beide hier stehen muessen:
+    //
+    //   1. DIE LINIE geht von rechts nach links. Gemessen wird sie NICHT als alpha,
+    //      sondern als das, was ghostLineOffset daraus macht - also als LENKBEFEHL, in dem
+    //      rechts positiv ist. Damit faellt der Vorzeichenfehler auf, den ich beim Einbau
+    //      gemacht habe (alpha zeigt nach links, Byte 7 nach rechts): eine Sonde, die alpha
+    //      direkt liest, haette die falsch herum fahrende Engstelle bestaetigt.
+    //   2. DIE DROSSELUNG ist die der Haarnadel. Nicht "groesser null" - GLEICH, denn
+    //      genau das war die Ansage.
+    //   3. DER SCHWENK IST FAHRBAR. Die Querfuehrung in ghostTick ist ratenbegrenzt; ein
+    //      Sollwertsprung, dem sie nicht folgen kann, ist eine Linie auf dem Papier. Die
+    //      Sonde gibt deshalb aus, wieviel Querlage je Kachelanteil verlangt wird - eine
+    //      Zahl, die gegen die Rate gehalten werden kann.
+    engstelleProbe(code, schritte) {
+      if (typeof codeToTrack !== 'function' || typeof ghostLineOffset !== 'function') {
+        return null;
+      }
+      const keepTiles = currentTrackTiles;
+      try {
+        // Eine geschlossene Bahn mit genau EINER Engstelle. Sie ersetzt eine Gerade, was
+        // sie geometrisch auch ist - dadurch bleibt der Schluss der Bahn unberuehrt.
+        const p = codeToTrack(code || 'SR3EGR3G2');
+        const tiles = p.tiles;
+        const idx = tiles.findIndex((t) => t.type === TILE_TYPE.ENGE);
+        if (idx < 0) return null;
+        currentTrackTiles = tiles;
+        lineCache = null;
+        const lc = ghostLine();
+        const n = schritte || 9;
+        const car = { ghost: { tileIndex: idx, tileMs: 1000 }, tileAt: 0 };
+        const bahn = [];
+        for (let k = 0; k < n; k++) {
+          const ph = k / (n - 1);
+          car.tileAt = Date.now() - ph * car.ghost.tileMs * ghostTileLenFactor(idx);
+          bahn.push({ anteil: +ph.toFixed(2),
+                      lenk: +ghostLineOffset(car).toFixed(3) });
+        }
+        // Wie schnell muss die Querlage sich bewegen? Groesster Schritt zwischen zwei
+        // Messpunkten, umgerechnet auf einen ganzen Kachelanteil.
+        let sprung = 0;
+        for (let k = 1; k < bahn.length; k++) {
+          sprung = Math.max(sprung, Math.abs(bahn[k].lenk - bahn[k - 1].lenk));
+        }
+        return {
+          code: trackToCode(tiles),
+          kachel: idx,
+          bahn,
+          start: bahn[0].lenk,
+          ende: bahn[bahn.length - 1].lenk,
+          spanne: +(bahn[bahn.length - 1].lenk - bahn[0].lenk).toFixed(3),
+          proAnteil: +(sprung * (n - 1)).toFixed(3),
+          tight: {
+            enge: tileTightness(TILE_TYPE.ENGE),
+            haarnadel: tileTightness(TILE_TYPE.HAIRPIN),
+            kurve: tileTightness(TILE_TYPE.CURVE_RIGHT),
+            klein: tileTightness(TILE_TYPE.KLEIN_RIGHT),
+            weit: tileTightness(TILE_TYPE.WEIT_RIGHT),
+            gerade: tileTightness(TILE_TYPE.STRAIGHT),
+          },
+          // Und dreht die Karte die neuen Kurven in die richtige Richtung?
+          dreh: {
+            weitR: ghostTurnOf(TILE_TYPE.WEIT_RIGHT),
+            weitL: ghostTurnOf(TILE_TYPE.WEIT_LEFT),
+            kleinR: ghostTurnOf(TILE_TYPE.KLEIN_RIGHT),
+            kleinL: ghostTurnOf(TILE_TYPE.KLEIN_LEFT),
+          },
+          // Steht die Engstelle auch im Bild? Gezaehlt wird im gezeichneten SVG.
+          gezeichnet: (() => {
+            if (typeof renderTrackPreview !== 'function') return null;
+            const html = renderTrackPreview(tiles, 0, { detailed: true }).html;
+            return { eng: (html.match(/>ENG</g) || []).length,
+                     sperren: (html.match(/#3a2a12/g) || []).length };
+          })(),
+        };
+      } finally {
+        currentTrackTiles = keepTiles;
+        lineCache = null;
+      }
+    },
+
+    // Die Palette des Editors von aussen lesbar - sie ist die Bedienseite der Kacheltypen.
+    palettenProbe() {
+      if (typeof TRACK_PALETTE === 'undefined') return null;
+      return TRACK_PALETTE.map((p) => ({ key: p.key, typ: p.type(), cap: p.cap }));
+    },
+
+    // ---- LIEGT IM EDITOR-VOLLBILD DIE PALETTE IM BILD? --------------------------
+    //
+    // GEMELDET: "Du musst noch den Vollbildmodus des Streckeneditors fixen, aktuell sehe ich
+    // die Streckenteile unten dann nicht."
+    //
+    // ---- WARUM DIESE SONDE DIE HOEHE VORGIBT --------------------------------------
+    //
+    // Nachgestellt werden konnte der Fehler nicht: bei 1024x768, 812x375 und 375x812 lag
+    // die Palette hier immer im Bild. Die Lage haengt aber an der Fensterhoehe und am
+    // Seitenverhaeltnis der Karte, und beides ist auf einem anderen Schirm anders. Eine
+    // Sonde, die nur die EIGENE Groesse misst, prueft also genau den Fall, der schon geht.
+    //
+    // Deshalb wird der Kasten fuer die Messung auf eine feste Hoehe gezwungen. Das ist
+    // nicht dasselbe wie ein echtes Fenster dieser Hoehe - Sicherheitszonen und
+    // Systemleisten fehlen -, aber es prueft die Rasterrechnung, und die ist der Teil, der
+    // kippen kann.
+    //
+    // GEMESSEN WIRD GEGEN DEN KASTEN und nicht gegen window.innerHeight: der Kasten IST im
+    // Vollbild das Sichtfenster (position: fixed; inset: 0), und nur so ist eine erzwungene
+    // Hoehe ueberhaupt aussagekraeftig.
+    editorVollbildProbe(hoehen) {
+      const host = $('track-fs-host');
+      const pal = $('track-palette');
+      const svg = $('track-preview-svg');
+      if (!host || !pal || !svg) return null;
+      const warFs = document.body.classList.contains('track-fs');
+      const merkH = host.style.height;
+      // ---- DEN REITER SICHTBAR MACHEN, sonst misst alles null ---------------------
+      //
+      // .tabpage ist display: none, solange der Reiter nicht aktiv ist - und ein Kind
+      // eines unsichtbaren Elements hat keine Groesse, auch nicht mit position: fixed.
+      // Der erste Anlauf dieser Sonde meldete deshalb bei JEDER Hoehe 0 px, und das sah
+      // wie ein Fehler im Raster aus. Es war einer in der Messung.
+      //
+      // UND DIE ZWEI EBENEN HABEN VERSCHIEDENE KLASSEN: ein Reiter wird mit `active`
+      // gezeigt (.tabpage.active), eine Unterseite mit `on` (.subpage.on). Der zweite
+      // Anlauf setzte beidemal `active` und maass weiter null - eine Klasse, die es an
+      // dieser Stelle nicht gibt, tut genau nichts.
+      const seite = host.closest('.tabpage');
+      const unter = host.closest('.subpage');
+      const warAktiv = seite ? seite.classList.contains('active') : true;
+      const warUnter = unter ? unter.classList.contains('on') : true;
+      try {
+        if (seite) seite.classList.add('active');
+        if (unter) unter.classList.add('on');
+        document.body.classList.add('track-fs');
+        const aus = [];
+        for (const h of (hoehen || [768, 480, 375, 320])) {
+          host.style.height = h + 'px';
+          // Ein Lesen erzwingen, damit das Raster neu gerechnet ist.
+          void host.offsetHeight;
+          const hk = host.getBoundingClientRect();
+          const pk = pal.getBoundingClientRect();
+          const sk = svg.getBoundingClientRect();
+          aus.push({
+            hoehe: h,
+            rows: getComputedStyle(host).gridTemplateRows,
+            // Der Abstand vom unteren Kastenrand: negativ heisst, die Palette ragt hinaus.
+            luft: +(hk.bottom - pk.bottom).toFixed(1),
+            paletteH: Math.round(pk.height),
+            karteH: Math.round(sk.height),
+            drin: pk.height > 0 && pk.bottom <= hk.bottom + 1,
+          });
+        }
+        return { messungen: aus, teile: pal.children.length };
+      } finally {
+        host.style.height = merkH;
+        if (!warFs) document.body.classList.remove('track-fs');
+        if (seite && !warAktiv) seite.classList.remove('active');
+        if (unter && !warUnter) unter.classList.remove('on');
+      }
+    },
+
+    // ---- DIE DREI WETTERLAGEN AUF DER KACHEL ------------------------------------
+    //
+    // BESTELLT: "Lass mich mit der Regenumschalttaste im Cockpitview [...] auch noch
+    // zwischen sonnig, Regen und wechselhaft hin und herschalten (default: Sonne)."
+    //
+    // Geklickt wird die ECHTE Kachel. Ein Prueflauf, der wxModusWeiter() direkt ruft,
+    // prueft die Stufenfolge ohne die Verdrahtung - und die Verdrahtung ist hier die halbe
+    // Aenderung (die Kachel hing an einem Zwei-Wege-Schalter).
+    //
+    // MIT GEFAELSCHTER UHR fuer den Verlaufsteil: wxWechselTick() fragt Date.now(), und
+    // zwei bis sechs Minuten zu warten ist kein Prueflauf.
+    wxModusProbe() {
+      if (typeof wxModusSetzen !== 'function') return null;
+      const box = $('race-wx-box');
+      if (!box) return null;
+      const merk = { modus: raceWxStart, wetter: weather, at: wxWechselAt };
+      const echtNow = Date.now;
+      try {
+        // Von einer bekannten Lage aus, sonst haengt die Folge am Anfangszustand.
+        wxModusSetzen('dry');
+        const folge = [];
+        for (let i = 0; i < 4; i++) {
+          folge.push({ modus: raceWxStart, wetter: weather,
+                       geplant: wxWechselAt !== null,
+                       zeichen: $('race-wx-wechsel')
+                         ? $('race-wx-wechsel').style.display !== 'none' : null });
+          box.click();
+        }
+        // ---- UND LAEUFT DER VERLAUF WIRKLICH? ------------------------------------
+        //
+        // "wechselhaft" hat genau dann einen Wert, wenn es auch umschaltet. Die Uhr wird
+        // vorgestellt, bis der geplante Zeitpunkt erreicht ist, und dann geprueft, ob
+        // wxWechselTick() die Lage wirklich dreht.
+        wxModusSetzen('wechsel');
+        const vorher = weather;
+        let uhr = echtNow.call(Date);
+        Date.now = () => uhr;
+        // Der Plan liegt 2 bis 6 Minuten voraus; sieben Minuten deckt das mit Reserve.
+        uhr += 7 * 60000;
+        wxWechselTick();
+        const nachher = weather;
+        return { folge, verlauf: { vorher, nachher, gedreht: vorher !== nachher,
+                                   neuGeplant: wxWechselAt !== null } };
+      } finally {
+        Date.now = echtNow;
+        wxModusSetzen(merk.modus === 'wechsel' ? 'wechsel' : merk.modus);
+        weather = merk.wetter;
+        wxWechselAt = merk.at;
+      }
+    },
+
+    // ---- DIE WINDRICHTUNG IM REGENRADAR ------------------------------------------
+    //
+    // BESTELLT: "Wind im Regenradar aus zufaelliger Richtung kommen lassen (je
+    // Rennstart oder Reload - nicht wechseln waehrend der Simulation)."
+    //
+    // ---- WARUM startRaceCountdown() HIER NICHT WIRKLICH GERUFEN WIRD ---------------
+    //
+    // Es raeumt Tank, Reifen, Rundenhistorie, Schadensanzeige und ein Dutzend anderer
+    // Dinge auf und setzt bei freiem Training sofort raceGreen() in Gang - eine Sonde,
+    // die das voll ausloest, muesste all das wieder herstellen, um einen laufenden
+    // Fahrbetrieb nicht zu verstellen. Kein anderer Prueflauf in dieser Datei ruft die
+    // Funktion direkt, aus genau diesem Grund.
+    //
+    // Gemessen wird deshalb ZWEIGETEILT: die eigentliche neue Logik (wxWindWuerfeln)
+    // direkt und vollstaendig, und die VERDRAHTUNG ("ruft startRaceCountdown sie auf")
+    // ueber den Quelltext der Funktion selbst - schwaecher als ein echter Aufruf, aber
+    // ohne das Risiko, den Zustand einer laufenden Sitzung zu verstellen.
+    windRichtungProbe() {
+      if (typeof wxWindWuerfeln !== 'function' || typeof WX_WIND === 'undefined') return null;
+      const merk = { x: WX_WIND.x, y: WX_WIND.y };
+      try {
+        // ---- 1. Einheitsvektor, ueber mehrere Wuerfe -----------------------------
+        const laengen = [], winkel = new Set();
+        for (let i = 0; i < 20; i++) {
+          wxWindWuerfeln();
+          laengen.push(+Math.hypot(WX_WIND.x, WX_WIND.y).toFixed(6));
+          winkel.add(WX_WIND.x.toFixed(4) + ',' + WX_WIND.y.toFixed(4));
+        }
+        // ---- 2. Verdrahtung: startRaceCountdown() ruft wxWindWuerfeln() ----------
+        const verdrahtet = typeof startRaceCountdown === 'function'
+          && /\bwxWindWuerfeln\s*\(\s*\)/.test(startRaceCountdown.toString());
+        return {
+          einheitsvektor: { min: Math.min(...laengen), max: Math.max(...laengen) },
+          gewuerfelt: laengen.length,
+          unterschiedlicheRichtungen: winkel.size,
+          rennstartRuftAuf: verdrahtet,
+        };
+      } finally {
+        WX_WIND.x = merk.x; WX_WIND.y = merk.y;
+      }
+    },
+
+    // ---- WAS DAS STEUERKREUZ IM COCKPIT SCHALTET --------------------------------
+    //
+    // BESTELLT: "D-Pad oben schaltet Reifentypen durch [...] D-Pad runter schaltet die
+    // Tankmenge durch."
+    //
+    // Geprueft werden die FUNKTIONEN, die der Kreuz-Zweig ruft - pitMischungWeiter() und
+    // pitVorwahlSchalten('refuel') -, und dazu, dass die Kachel danach dasselbe sagt.
+    // Die Gamepad-Flanken selbst nachzustellen hiesse, einen Pad-Stummel an
+    // navigator.getGamepads zu haengen; das prueft die Tastenabfrage und nicht die
+    // Wirkung, und die Tastenabfrage hat ihren eigenen Test.
+    //
+    // DER RENNZUSTAND WIRD GESETZT: pitKachelStand() liest pitState, und ohne feste Lage
+    // haengt das Ergebnis daran, ob gerade ein Stopp laeuft.
+    kreuzSchaltProbe(o) {
+      const opt = o || {};
+      if (typeof pitMischungWeiter !== 'function'
+          || typeof pitVorwahlSchalten !== 'function'
+          || typeof pitKachelStand !== 'function') return null;
+      const merk = { wunsch: mischungWunsch, vorwahl: pitVorwahl.refuel,
+                     ps: pitState, wetter: weather, reifen: tyres };
+      try {
+        pitState = 'off';
+        weather = opt.wetter || 'dry';
+        tyres = opt.reifen || 'mittel';
+        mischungWunsch = null;
+        pitVorwahl.refuel = null;
+
+        // Erst der Ausgangsstand: die Vorgabe muss das sein, was aufgezogen ist.
+        const start = pitKachelStand();
+
+        // Reifen durchschalten, einmal rundherum plus einen Schritt.
+        const mixFolge = [];
+        for (let i = 0; i < 5; i++) {
+          mixFolge.push(pitKachelStand().mix);
+          pitMischungWeiter();
+        }
+
+        // Tankmenge durchschalten.
+        pitVorwahl.refuel = null;
+        const tankFolge = [];
+        for (let i = 0; i < 4; i++) {
+          tankFolge.push(pitKachelStand().tankWort);
+          pitVorwahlSchalten('refuel');
+        }
+
+        // Und die Warnung: Regen auf der Bahn, Slicks gewaehlt.
+        mischungWunsch = 'mittel';
+        weather = 'rain';
+        const nassMitSlick = pitKachelStand();
+        mischungWunsch = 'regen';
+        const nassMitRegen = pitKachelStand();
+
+        return { startMix: start.mix, startTank: start.tankWort,
+                 mixFolge, tankFolge,
+                 warnung: { slickImRegen: nassMitSlick.mixWarnung,
+                            regenImRegen: nassMitRegen.mixWarnung } };
+      } finally {
+        mischungWunsch = merk.wunsch;
+        pitVorwahl.refuel = merk.vorwahl;
+        pitState = merk.ps;
+        weather = merk.wetter;
+        tyres = merk.reifen;
+      }
+    },
+
+    // ---- TANKT DER STOPP AUF DAS GEWAEHLTE ZIEL, ODER IMMER VOLL? ---------------
+    //
+    // BESTELLT: "nicht zwischen ja und nein, sondern zwischen nein, 55 l (50 %) und voll".
+    //
+    // Geprueft wird ueber pitLaneTick(), also die ECHTE Arbeitsschleife, und nicht ueber
+    // eine nachgerechnete Formel. Genau dort stand vorher das feste `100 - fuel`, und nur
+    // dort zeigt sich, ob das Ziel wirklich ankommt.
+    //
+    // Das Auto muss dafuer STEHEN (PIT_STANDSTILL_KMH), sonst verlaesst pitLaneTick() den
+    // Boxenstopp im ersten Takt - deshalb Tempo und Gas auf null.
+    tankZielProbe(o) {
+      const opt = o || {};
+      const st = physEngine.state;
+      const merk = { fuel, pitState, pitPlan, pitDone, pitLastTick, pitReady,
+                     pitStandElapsed, pitEmptyElapsed, pitFuelGained,
+                     kmh: st.speedKmh, gas: throttleY };
+      const echtNow = Date.now;
+      try {
+        let uhr = echtNow.call(Date);
+        Date.now = () => uhr;
+        st.speedKmh = 0;
+        throttleY = 0;
+        fuel = opt.start === undefined ? 10 : opt.start;
+        pitState = 'servicing';
+        pitPlan = { refuel: opt.ziel === undefined ? 50 : opt.ziel,
+                    tyres: false, repair: false };
+        pitDone = { refuel: false, tyres: false, repair: false };
+        pitReady = false;
+        pitStandElapsed = 0; pitEmptyElapsed = 0; pitFuelGained = 0;
+        pitLastTick = uhr;
+        const verlauf = [];
+        for (let i = 0; i < (opt.takte || 300); i++) {
+          uhr += 100;
+          pitLaneTick();
+          verlauf.push(+fuel.toFixed(2));
+          if (pitDone.refuel) break;
+        }
+        return { endstand: +fuel.toFixed(2), fertig: !!pitDone.refuel,
+                 takte: verlauf.length, getankt: +pitFuelGained.toFixed(2),
+                 verlauf: verlauf.slice(0, 6) };
+      } finally {
+        Date.now = echtNow;
+        fuel = merk.fuel; pitState = merk.pitState; pitPlan = merk.pitPlan;
+        pitDone = merk.pitDone; pitLastTick = merk.pitLastTick;
+        pitReady = merk.pitReady; pitStandElapsed = merk.pitStandElapsed;
+        pitEmptyElapsed = merk.pitEmptyElapsed; pitFuelGained = merk.pitFuelGained;
+        st.speedKmh = merk.kmh; throttleY = merk.gas;
+      }
+    },
+
+    // Die drei Stufen und ihre Woerter von aussen lesbar - dieselben Funktionen, die die
+    // Zeile im Boxenschirm benutzt.
+    tankStufenProbe() {
+      if (typeof tankZielNorm !== 'function') return null;
+      return {
+        stufen: TANK_STUFEN.slice(),
+        // Durchschalten, einmal rundherum plus einen Schritt: die Folge muss sich schliessen.
+        folge: (function () {
+          const out = [];
+          let v = 0;
+          for (let i = 0; i < 4; i++) { out.push(v); v = tankZielWeiter(v); }
+          return out;
+        }()),
+        // Und was aus Altwerten wird.
+        alt: { wahr: tankZielNorm(true), falsch: tankZielNorm(false),
+               nichts: tankZielNorm(null), daneben: tankZielNorm(60),
+               unsinn: tankZielNorm('x') },
+        worte: TANK_STUFEN.map((v) => tankZielWort(v)),
+      };
+    },
+
+    // ---- DIE SEKTORZEITEN IN DER RUNDENTABELLE ----------------------------------
+    //
+    // BESTELLT: "Bei mehreren Sektoren die Sub-Zeiten (also Zeit je Sektor) im Zeiten-Screen
+    // anzeigen."
+    //
+    // Wie beim Positionsdiagramm ueber den ECHTEN Zeichenweg: Attrappen in die Garage,
+    // sectorHistory gefuellt, renderRaceResults() schreibt die Tabelle ins Dokument. Und
+    // wie dort wird der vorige Inhalt zurueckgelegt und nicht neu gezeichnet - ein
+    // Messaufruf darf nichts hinterlassen.
+    sektorTabelleProbe(o) {
+      const opt = o || {};
+      const merkGarage = garage.slice();
+      const merkSc = sectorCount;
+      const merkSh = sectorHistory.slice();
+      const wirt = $('race-results-laps');
+      const wirt2 = $('race-results-body');
+      const merkHtml = wirt ? wirt.innerHTML : null;
+      const merkHtml2 = wirt2 ? wirt2.innerHTML : null;
+      try {
+        garage.length = 0;
+        // Ein Fahrerauto und ein Ghost - damit sich zeigt, dass die Splits NUR in der
+        // Fahrerspalte stehen.
+        const runden = opt.runden || [[3000, 4000, 5000], [3100, 3800, 5200]];
+        const mk = (rolle, alias, cid, ms) => ({
+          device: { id: 'sonde-' + alias, name: alias }, alias, role: rolle, colorId: cid,
+          race: { laps: ms.map((x, i) => ({ lap: i + 1, ms: x })) },
+        });
+        garage.push(mk('steuern', 'Fahrer', 'rot', runden.map((r) => r.reduce((a, b) => a + b, 0))));
+        garage.push(mk('ghost', 'G1', 'blau', [12100, 12300]));
+        sectorCount = opt.sektoren === undefined ? 3 : opt.sektoren;
+        sectorHistory.length = 0;
+        runden.forEach((r) => sectorHistory.push(r.slice()));
+        renderRaceResults();
+        const html = wirt ? wirt.innerHTML : '';
+        // Ausgezaehlt: wie viele Zellen tragen eine Sektorzeile, und wie viele Bestwerte
+        // sind hervorgehoben.
+        const zeilen = (html.match(/S1 /g) || []).length;
+        const beste = (html.match(/color:var\(--good\); font-weight:700">S/g) || []).length;
+        return { zeilen, beste, laenge: html.length,
+                 html: opt.html ? html : null };
+      } finally {
+        garage.length = 0;
+        merkGarage.forEach((c) => garage.push(c));
+        sectorCount = merkSc;
+        sectorHistory.length = 0;
+        merkSh.forEach((x) => sectorHistory.push(x));
+        if (wirt) wirt.innerHTML = merkHtml === null ? '' : merkHtml;
+        if (wirt2) wirt2.innerHTML = merkHtml2 === null ? '' : merkHtml2;
+      }
+    },
+
+    // ---- DAS POSITIONSDIAGRAMM, mit Attrappen in der Garage ----------------------
+    //
+    // GEMELDET: "Hier sehe ich die schwarze Linie auf schwarzem Hintergrund nicht."
+    //
+    // Geprueft wird der ECHTE Zeichenweg: die Attrappen gehen in die Garage, von der
+    // raceAllCars() liest, und renderPositionPlot() schreibt sein SVG in das Dokument. Ein
+    // Prueflauf, der das SVG selbst zusammensetzte, prueefte seine eigene Kopie.
+    //
+    // Die Garage wird im finally wiederhergestellt UND neu gezeichnet - ein Messaufruf, der
+    // ein Diagramm mit Sonden im Dokument stehen laesst, veraendert, was der Nutzer sieht.
+    positionsPlotProbe(o) {
+      const opt = o || {};
+      const merkGarage = garage.slice();
+      // Und der VORIGE Inhalt des Wirtes. Ihn am Ende neu zu ZEICHNEN waere nicht dasselbe:
+      // bei leerer Garage schreibt renderPositionPlot seinen Platzhaltertext hinein, und der
+      // stand dann im Dokument, obwohl der Nutzer nie ein Ergebnis geoeffnet hat. Genau
+      // daran sind zwei Sprachpruefungen haengengeblieben - ein Messaufruf darf nichts
+      // hinterlassen.
+      const wirt = $('race-position-plot');
+      const merkHtml = wirt ? wirt.innerHTML : null;
+      try {
+        garage.length = 0;
+        (opt.farben || ['schwarz', 'rot', 'weiss']).forEach((cid, i) => {
+          garage.push({ device: { id: 'sonde-plot-' + i, name: 'Sonde ' + i },
+                        alias: 'Sonde ' + i, role: 'ghost', colorId: cid, ghost: null,
+                        race: { laps: [{ ms: 7000 + i * 220 }, { ms: 7100 + i * 160 },
+                                       { ms: 6900 + i * 310 }, { ms: 7050 + i * 90 }] } });
+        });
+        renderPositionPlot();
+        const host = $('race-position-plot');
+        const html = host ? host.innerHTML : '';
+        // Ausgezaehlt statt nur "kommt vor": die Zusage ist, dass JEDE Linie einen Saum
+        // hat, und das ist eine Anzahl und kein Vorhandensein.
+        const saeume = (html.match(/<polyline[^>]*stroke="rgba\(255,255,255,0\.55\)"/g) || []).length;
+        const linien = (html.match(/<polyline[^>]*stroke="#/g) || []).length;
+        return { saeume, linien, laenge: html.length,
+                 saumVorLinie: html.indexOf('rgba(255,255,255,0.55)') < html.indexOf('stroke="#'),
+                 html: opt.html ? html : null };
+      } finally {
+        garage.length = 0;
+        merkGarage.forEach(c => garage.push(c));
+        if (wirt) wirt.innerHTML = merkHtml === null ? '' : merkHtml;
+      }
+    },
+
+    // ---- LAESST SICH EIN GEPARKTES AUTO WIEDER WACHRUETTELN? ---------------------
+    //
+    // GEMELDET: "Nach mehrmaligem Abfliegen blinken Ghosts nur noch. Warum? Wenn Gyro da
+    // ein paar Sekunden nichts meldet und ich sie dann kurz kopfueber halte oder schuettele,
+    // sollen sie immer weiterfahren koennen."
+    //
+    // DER PRUEFLAUF SPIELT GENAU DEN HERGANG NACH, in drei Abschnitten:
+    //
+    //     getragen     grosse, wechselnde Gyro-Werte - das Auto wird aufgehoben und
+    //                  zurueckgestellt, und zwar WAEHREND der Lernphase. Das ist der Fall,
+    //                  den man nach einem Abflug immer hat: man greift sofort zu.
+    //     ruhig        es liegt wieder
+    //     geschuettelt jemand ruettelt absichtlich
+    //
+    // Danach MUSS es fahren. Mit der alten Median-Lernphase tat es das nicht: sie lernte
+    // den Wert des Herumtragens als Ruhewert, und die Schwelle stand dauerhaft ausser
+    // Reichweite.
+    //
+    // MIT GEFAELSCHTER UHR, weil die Lernphase 1,2 Sekunden dauert und ein Prueflauf, der
+    // wirklich wartet, den ganzen Selbsttest aufhaelt. Date.now() wird nur fuer die Dauer
+    // des Laufs ersetzt und im finally zurueckgegeben.
+    schuettelProbe(o) {
+      const opt = o || {};
+      const echteNow = Date.now;
+      let uhr = echteNow.call(Date);
+      const car = { alias: 'Sonde-Ruettel', role: 'ghost', parked: null, shake: null,
+                    ghost: null, rx: null };
+      const paket = (v1, v3) => {
+        const b = new Uint8Array(19);
+        b[1] = v1 & 0xff; b[3] = v3 & 0xff;
+        return b;
+      };
+      const takt = (v1, v3, ms) => {
+        uhr += (ms === undefined ? 45 : ms);
+        shakeNotify(car, paket(v1, v3));
+      };
+      const stand = (phase) => ({ phase, geparkt: car.parked || null,
+                                  wert: car.shakeValue === undefined ? null : car.shakeValue,
+                                  schwelle: car.shakeThreshold === undefined
+                                            ? null : car.shakeThreshold });
+      try {
+        Date.now = () => uhr;
+        parkCar(car, opt.grund || 'Prueflauf');
+        const stufen = [];
+        // 1. GETRAGEN, und zwar die ganze Lernphase hindurch.
+        const tragenMs = opt.tragenMs === undefined ? 1400 : opt.tragenMs;
+        for (let t = 0; t < tragenMs; t += 45) {
+          const a = (Math.floor(t / 45) % 3) * 40 - 40;
+          takt(a, -a);
+        }
+        stufen.push(stand('getragen'));
+        // 1b. EINE LUECKE IM MELDESTROM, wenn bestellt: "wenn Gyro da ein paar Sekunden
+        //     nichts meldet". Ein einziger Takt mit grossem Zeitsprung - genau so sieht ein
+        //     Abriss von aussen aus.
+        if (opt.lueckeMs) {
+          takt(0, 0, opt.lueckeMs);
+          stufen.push(stand('nach der Luecke'));
+        }
+        // 2. HINGESTELLT: die Werte stehen still, das Fenster laeuft auf null.
+        if (opt.ohneRuhe !== true) {
+          for (let i = 0; i < 40; i++) takt(2, -2);
+          stufen.push(stand('ruhig'));
+        }
+        // 3. GESCHUETTELT.
+        for (let i = 0; i < 20; i++) { const a = (i % 2) ? 60 : -60; takt(a, -a); }
+        stufen.push(stand('geschuettelt'));
+        return { stufen, entparkt: !car.parked };
+      } finally {
+        Date.now = echteNow;
+      }
+    },
+
+    // ---- WIE LANGE HAELT EIN SATZ REIFEN, UND WIE LANGE DER TANK? -----------------
+    //
+    // BESTELLT: "Reifenverschleiss erhoehen auf die doppelte oder dreifache Geschwindigkeit
+    // (simuliere mal, sodass weiche Reifen kaputt sind, lange bevor der Tank leer ist)."
+    //
+    // Also wird genau das gemessen und nicht geschaetzt: ein Stint gefahren, bis der Satz
+    // durch ist, und DERSELBE Gasverlauf durch die Tankrechnung geschickt.
+    //
+    // DER GASVERLAUF IST DER GEMEINSAME BEZUG. Der Tank leert sich nach
+    // |gas| * dt * Verbrauch (fuelDrainPerSec in 70-race.js), der Verschleiss haengt an
+    // Walkarbeit und Temperatur - zwei Groessen mit ganz verschiedenen Treibern. Sie an
+    // DERSELBEN Fahrt zu messen ist der einzige ehrliche Weg zu ihrem Verhaeltnis.
+    //
+    // ES WIRD GELENKT, und zwar wechselnd. Verschleiss entsteht aus Arbeit, und geradeaus
+    // Vollgas ist der SCHWAECHSTE Fall - ein Stint ohne Kurven liesse die Reifen laenger
+    // halten als jede echte Runde und wuerde die Antwort schoenen.
+    reifenStintProbe(o) {
+      const opt = o || {};
+      const e = physEngine, st = e.state;
+      const merk = OMEGA_TEST.zustandKopie(st);
+      const merkCfg = { rate: e.config.tyreWearRate, mix: e.config.tyreWearMix,
+                        eff: e.config.tyreEffect };
+      try {
+        if (opt.rate !== undefined) e.config.tyreWearRate = opt.rate;
+        e.config.tyreWearMix = opt.mix === undefined ? 1 : opt.mix;
+        e.config.tyreEffect = opt.tyreEffect === undefined ? 1 : opt.tyreEffect;
+        // Frischer Satz, Umgebungstemperatur: ein Stint faengt kalt an. Ohne das Zuruecksetzen
+        // erbt die Messung die Reifen des vorigen Laufs.
+        for (let i = 0; i < 4; i++) {
+          st.tyreWear4[i] = 0;
+          st.tyreTemp4[i] = e.config.tyreAmbientC;
+        }
+        st.tyreWear = 0; st.tyreWearL = 0; st.tyreWearR = 0;
+        st.tyreTempC = e.config.tyreAmbientC;
+        st.speedKmh = 0; st.virtualSpeed = 0; st.driveMode = 'forward';
+
+        const dt = CONTROL_SEND_INTERVAL_MS / 1000;
+        const gas = opt.throttle === undefined ? 0.85 : opt.throttle;
+        const lenkAmp = opt.lenk === undefined ? 0.55 : opt.lenk;
+        const drain = opt.drain === undefined ? 3 : opt.drain;
+        const maxS = opt.maxSekunden || 900;
+        let tank = 100, tSec = 0;
+        let reifenSek = null, reifen80 = null, tankSek = null;
+        while (tSec < maxS) {
+          const lenk = Math.sin(tSec * 1.1) * lenkAmp;
+          e.update({ steering: lenk, throttle: gas, brake: 0, headlights: false }, dt);
+          tank = Math.max(0, tank - Math.abs(gas) * dt * drain);
+          tSec += dt;
+          if (reifen80 === null && st.tyreWear >= 0.8) reifen80 = +tSec.toFixed(2);
+          if (reifenSek === null && st.tyreWear >= 0.999) reifenSek = +tSec.toFixed(2);
+          if (tankSek === null && tank <= 0) tankSek = +tSec.toFixed(2);
+          if (reifenSek !== null && tankSek !== null) break;
+        }
+        return { reifenSek, reifen80, tankSek,
+                 wearEnde: +st.tyreWear.toFixed(4),
+                 tempEnde: +st.tyreTempC.toFixed(1),
+                 gas, drain,
+                 rate: e.config.tyreWearRate, mix: e.config.tyreWearMix };
+      } finally {
+        e.config.tyreWearRate = merkCfg.rate;
+        e.config.tyreWearMix = merkCfg.mix;
+        e.config.tyreEffect = merkCfg.eff;
         OMEGA_TEST.zustandZurueck(st, merk);
       }
     },

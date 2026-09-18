@@ -96,7 +96,10 @@
     return (((bucket * 2654435761) >>> 0) / 4294967296) > 0.86;
   }
 
-  function buildCommandPacket(steerFloat, throttleFloat, lightOverride, byteOverride) {
+  // `schadenLicht` ist der Lampenschaden DIESES Autos. Ohne Angabe gilt der globale - also
+  // der von Auto 1, und damit bleibt jeder vorhandene Aufruf Wort fuer Wort derselbe.
+  function buildCommandPacket(steerFloat, throttleFloat, lightOverride, byteOverride,
+                              schadenLicht) {
     // Full mechanical lock. The old "Maximaler Lenkausschlag" option scaled this down to
     // 85 of 127 steps by default, i.e. the car was never asked for more than two thirds
     // of the steering it has.
@@ -113,8 +116,20 @@
     // Zuckungen. Die Maskierung bleibt an dieser Stelle, und dadurch gilt weiterhin, was
     // eine UND-Verknuepfung ohnehin leistet - ist das Licht gar nicht eingeschaltet, aendert
     // das Flackern nichts, weil das Bit dann so oder so nicht gesetzt ist.
-    if (lightDamage.front && !lampFlicker(0)) lb &= ~LIGHT_HEAD & 0xff;
-    if (lightDamage.rear && !lampFlicker(1)) lb &= ~LIGHT_BRAKE & 0xff;
+    //
+    // ---- UND SIE FRAGT SEIT v0.6.47 DAS AUTO --------------------------------------
+    //
+    // Hier stand `lightDamage`, die globale Groesse - und die gehoert dem Fahrerauto. Folge,
+    // und sie ist ein echter Fehler unabhaengig vom Zwei-Spieler-Modus: sobald das
+    // Fahrerauto ueber 50 Prozent Schaden hatte, flackerten die Scheinwerfer ALLER Ghosts
+    // mit. Aufgefallen ist es erst, als Auto 2 seinen eigenen Schaden bekam.
+    //
+    // Die Maske bleibt an dieser Stelle, das Argument darueber ist richtig. Sie fragt nur
+    // nicht mehr eine globale Groesse, sondern das Auto - siehe lichtSchadenVon() in
+    // 70-race.js und den Aufruf in writeToCar().
+    const ls = schadenLicht || lightDamage;
+    if (ls.front && !lampFlicker(0)) lb &= ~LIGHT_HEAD & 0xff;
+    if (ls.rear && !lampFlicker(1)) lb &= ~LIGHT_BRAKE & 0xff;
     const body = [0xaf, 0x00, 0x00, 0x00, 0x00, 0x00, throttleByte, steerByte, 0x80, steerByte, 0x60, 0x00, 0x01, 0x00, lb, 0x04, 0x00, 0x00, 0x00];
     // The probe rewrites individual bytes BEFORE the checksum, so every variant still
     // carries a valid CRC — otherwise the car would simply drop the packet and the
@@ -233,6 +248,29 @@
     // prueft auf undefined.
     const modeBytes = (typeof playerCar !== 'undefined' && playerCar)
       ? playerCar.modeBytes : null;
+    // ---- DIE QUERLAGE DES FAHRERAUTOS, fuer die Ghosts -----------------------------
+    //
+    // BESTELLT: "Ghosts sollen auch dem Fahrerauto ausweichen, wenn es langsamer faehrt."
+    //
+    // Ein Ghost, der zum Ueberholen ansetzt, waehlt seine Seite aus g.querSoll des
+    // VORAUSFAHRENDEN - dessen angeforderter Querlage (90-ghosts.js, ghostSpice). Das
+    // Fahrerauto hatte keine: sein Ortungssatz aus spielerOrt() fuehrt nur den Ort, und
+    // querSoll entsteht sonst in der Ghost-Fahrschleife, die fuer ihn nie laeuft.
+    //
+    // Folge: qAnder fiel auf 0 zurueck, und der Angreifer ging IMMER nach links vorbei -
+    // auch wenn der Fahrer genau dort war. Die Seitenwahl war also nicht falsch berechnet,
+    // sie war gar nicht informiert.
+    //
+    // Hier steht dieselbe Groesse wie bei einem Ghost, und zwar aus demselben Grund: keine
+    // MESSUNG - das Auto meldet seine Querlage nicht -, sondern das, was die App ihm
+    // geschickt hat. Beim Ghost ist das der Lenkbefehl aus seiner Fahrschleife, hier der
+    // Lenkbefehl des Fahrers. Dieselbe Glaettung (0,25) und dieselbe Klemme (-1..1),
+    // damit die beiden Zahlen vergleichbar sind und nicht nur gleich heissen.
+    if (typeof playerCar !== 'undefined' && playerCar && playerCar.ghost) {
+      const pg = playerCar.ghost;
+      const roh = Math.max(-1, Math.min(1, steer));
+      pg.querSoll = (pg.querSoll || 0) + (roh - (pg.querSoll || 0)) * 0.25;
+    }
     const payload = buildCommandPacket(steer, throttle, undefined, modeBytes);
     recWrite(payload);
     // A car given the "Steuern" role in the garage becomes the write target. Falls back to
@@ -269,6 +307,9 @@
   // Datei, die ihn braucht, kann das nicht passieren.
   let ghostQuerTest = 0;
   let physOutSteer = 0, physOutThrottle = 0;
+  // Und dasselbe Paar fuer Spieler 2. Es steht neben dem ersten, weil es dieselbe Rolle
+  // hat: der geformte Ausgang der Physik, den der Herzschlag verschickt.
+  let physOut2Steer = 0, physOut2Throttle = 0;
 
   const CONTROL_SEND_INTERVAL_MS = 45; // matches the real app's observed command cadence
 
@@ -329,6 +370,93 @@
     let throttle = physicsEnabled ? physOutThrottle : throttleY;
     if (driftModus) steer = driftGegenlenken(steer);
     sendControlValue(steer, throttle);
+    spielerZweiSenden();
+  }
+
+  // ---- SPIELER 2 FAEHRT AUS DEM SELBEN HERZSCHLAG ------------------------------------
+  //
+  // UND DAS IST KEINE ORDNUNGSFRAGE. Vor v0.5.8 hatte das Fahrerauto einen eigenen
+  // Sendeweg, und das Ergebnis war das gemeldete Stottern mit echtem Controller: zwei
+  // Quellen schrieben ungetaktet in dieselbe BLE-Kennung, Pakete ueberholten sich, und der
+  // Wagen ruckelte. Ein eigener Takt fuer Spieler 2 waere genau derselbe Fehler noch
+  // einmal - nur diesmal mit zwei Autos, bei denen niemand sagen koennte, welches der
+  // beiden stottert.
+  //
+  // Zwei Autos, EIN Takt, zwei Kennungen: die Reihenfolge im Takt ist fest (erst 1, dann
+  // 2), und jedes Auto hat sein eigenes writeInFlight in writeToCar(). Damit kann ein
+  // langsamer Funkweg das andere Auto nicht aufhalten - er laesst nur beim eigenen Auto
+  // einen Takt aus, und das ist genau das Verhalten, das die Ghosts seit einem Jahr haben.
+  //
+  // NICHT ueber sendControlValue(): die Funktion ist der Weg des FAHRERAUTOS und tut auf
+  // dem Weg noch sechs Dinge, die es nur einmal gibt - Makro mitschneiden, Spritverbrauch
+  // zaehlen, den Motorton nachfuehren, die Hoechstgeschwindigkeit deckeln, die
+  // Batteriekompensation und die Querlage fuer die Ghosts. Jedes davon fuer zwei Autos
+  // hiesse: zwei Makros, zwei Tanks, zwei Toene. Spieler 2 nimmt deshalb writeToCar() -
+  // denselben Weg, den jeder Ghost nimmt.
+  //
+  // WAS ER DAMIT NICHT HAT, und es gehoert ausgesprochen statt versteckt: keinen
+  // Motorton (es gibt einen Tongenerator), keinen Spritverbrauch, keinen Makro-
+  // Mitschnitt und keinen Hoechstgeschwindigkeitsregler. Das steht so im Hilfetext der
+  // Kachel.
+  function spielerZweiSenden() {
+    if (!zweiSpieler) return;
+    if (typeof playerCar2 === 'undefined' || !playerCar2) return;
+    physicsStep2();
+    let steer = physicsEnabled ? physOut2Steer : p2Steer;
+    let throttle = physicsEnabled ? physOut2Throttle : p2Throttle;
+    // ---- DIE ZWEI GLOBALEN, DIE NICHT IN config STEHEN -----------------------------
+    //
+    // BESTELLT: "Globale einstellungen gelten für beide autos gleichermaßen."
+    //
+    // Die Abstimmung wandert ueber physEngine2Abgleichen() von selbst herueber (siehe den
+    // Zuhoerer in 50-drive.js). Diese zwei nicht: sie sitzen im Sendeweg von Auto 1, und
+    // den nimmt Auto 2 gar nicht - es geht ueber writeToCar(), wie ein Ghost.
+    //
+    //   topSpeedScale             der Regler "Geschwindigkeit". NUR nach vorn, aus
+    //                             demselben Grund wie bei Auto 1: er drosselte sonst auch
+    //                             die BREMSE und den Rueckwaertsgang, und bei 20 Prozent
+    //                             bremste das Auto mit einem Fuenftel.
+    //   batteryCompensationScale  gleicht den sinkenden Akku aus. Sie liest den Akkustand
+    //                             des FAHRERAUTOS; fuer Auto 2 ist das eine Naeherung, und
+    //                             eine gemeinsame Naeherung ist hier besser als gar keine -
+    //                             zwei Autos mit verschieden kompensierten Akkus waeren im
+    //                             Rennen ungleich schnell, ohne dass man den Grund sieht.
+    if (throttle > 0) throttle *= topSpeedScale;
+    throttle *= batteryCompensationScale();
+    if (driftModus) steer = driftGegenlenken(steer);
+    // ---- MIT VORAUSBLICK, seit v0.6.46 ---------------------------------------------
+    //
+    // Hier stand "KEIN VORAUSBLICK, und das ist eine Entscheidung und kein Vergessen" -
+    // mit der Begruendung, die Ortung haenge an playerCar. Das war richtig beschrieben und
+    // ist behoben: spielerOrtTick() nimmt jetzt ein Auto (90-ghosts.js) und laeuft im
+    // selben Takt fuer beide. Damit hat Auto 2 Fahrhilfe und Leitplanken-Modus.
+    //
+    // Gesetzt wird playerCar2.modeBytes dort, im selben 45-ms-Takt wie dieses Paket - und
+    // null, wenn keine Strecke eingescannt ist oder der Wagen neben der Bahn liegt. Dann
+    // ist das Paket genau das von vorher.
+    //
+    // ---- UND DIE QUERLAGE, damit die Ghosts ihn sehen ------------------------------
+    //
+    // Dieselben drei Zeilen wie fuer Auto 1 in sendControlValue(), aus demselben Grund:
+    // ein Ghost, der zum Ueberholen ansetzt, waehlt seine Seite aus g.querSoll des
+    // Vorausfahrenden. Ohne diese Zahl faellt sie auf 0 zurueck, und der Angreifer geht
+    // immer links vorbei - auch wenn Auto 2 genau dort faehrt. Keine MESSUNG, sondern das,
+    // was die App geschickt hat; dieselbe Glaettung (0,25) und dieselbe Klemme, damit die
+    // Zahlen der beiden Autos vergleichbar sind und nicht nur gleich heissen.
+    if (playerCar2.ghost) {
+      const pg = playerCar2.ghost;
+      const roh = Math.max(-1, Math.min(1, steer));
+      pg.querSoll = (pg.querSoll || 0) + (roh - (pg.querSoll || 0)) * 0.25;
+    }
+    // Die Lichthupe von Auto 2 legt sich UEBER headlightsOn, genau wie resolveLights()
+    // es fuer Auto 1 tut - defensiv gerufen, weil headlichtZwei() in 70-race.js steht,
+    // einer SPAETEREN Datei; zur Laufzeit (dieser Takt laeuft erst nach dem vollstaendigen
+    // Aufbau) ist sie da.
+    const kopflicht2 = typeof headlichtZwei === 'function'
+      ? headlichtZwei(headlightsOn) : headlightsOn;
+    writeToCar(playerCar2, steer, throttle,
+               trackModeBit() | (kopflicht2 ? LIGHT_HEAD : 0),
+               playerCar2.modeBytes || null);
   }
   setInterval(controlHeartbeat, CONTROL_SEND_INTERVAL_MS);
 

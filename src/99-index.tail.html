@@ -1,3 +1,23 @@
+
+  // ---- ENDE DES GEMEINSAMEN GUELTIGKEITSBEREICHS --------------------------------
+  //
+  // Geoeffnet wird er am Ende von 00-index.head.html, geschlossen HIER - in derselben
+  // Datei, die auch das Skript-Element schliesst.
+  //
+  // Er stand bis v0.6.22 als letzte Zeile von 98-presets.js, also in der Datei, die
+  // zufaellig die letzte war. Eine neu dazukommende Quelldatei landete damit AUSSERHALB,
+  // und dort ist nichts in Reichweite - kein $, kein log, kein presetSet. Passiert ist es
+  // mit 98b-sicherung.js, und die Meldung "$ is not defined" zeigt nicht, woran es liegt:
+  // die Kennung steht sichtbar 44000 Zeilen weiter oben im selben Skript.
+  //
+  // ---- UND EINE FALLE, IN DIE ICH DABEI GLEICH GETRETEN BIN ---------------------
+  //
+  // In diesem Kommentar stand zuerst die Zeichenfolge, die ein Skript-Element beendet.
+  // Ein Kommentar ist sie fuer JavaScript - fuer den HTML-Zerteiler nicht: er beendet das
+  // Element dort, mitten im Code, ohne Ruecksicht darauf, dass zwei Schrägstriche davor
+  // stehen. Der Klammerpruefer in build.py hat es gemeldet (er zerlegt das gebaute
+  // Dokument mit derselben Regel), und deshalb ist es nie in den Browser gekommen.
+})();
 </script>
 </body>
 </html>

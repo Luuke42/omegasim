@@ -25,11 +25,23 @@ Effekte (Bremsenquietschen, Reifenquietschen, Crash-Varianten, Schlagschrauber,
 Tankgeraeusch, Karosseriereparatur, Motorstart) sind von Grund auf gerechnet. Es wird nichts aus einer
 Aufnahme abgespielt.
 
+Jeder dieser 25 Motoren klingt seit v0.6.35 ungleichmaessiger und mechanischer als in
+seiner ersten Fassung: staerker gestreute Zuendungleichheit von Takt zu Takt
+(`gain_wobble`), ein Ventiltrieb-Klick, der bei JEDEM einzelnen Klicken neu berechnet
+wird statt denselben Abdruck nur unterschiedlich laut zu stempeln (`clatter_variiert`),
+dazu mehr Klappern, tieferes Klappern, mehr Saettigung, ungleichere Zuendung, weniger
+Glanz, breitere Resonanz und mehr Knallen im Schiebebetrieb - jeder Regler um einen
+festen Anteil des Abstands zu dem Rand verschoben, den alle 25 Motoren zusammen fuer
+diesen Regler aufspannen (siehe der Kommentar vor `CARS` in `tools/engine_synth.py`).
+Kein Wert verlaesst dabei den Bereich, den ein anderer wirklicher Motor in diesem Satz
+schon belegt. Auch das bleibt eine reine Rechnung ueber dieselbe Klangerzeugung - keine
+Aufnahme, keine neue Klangquelle.
+
 Jeder dieser Motoren hat **fuenf bis sieben** Schleifen: die drei verankerten Drehzahlbaender
 (`idle`, `mid`, `high`), dazu so viele Zwischenbaender, wie `band_ladder()` noetig findet —
 zwischen zwei Nachbarn darf hoechstens der Faktor 2,2 liegen, sonst hoert man den Sprung.
 Beim Formel 1 sind das zwei Zwischenbaender, bei Countach, Impreza und der NASCAR-Impala je
-drei, sonst eines. Zusammen sind es 132 Schleifen.
+drei, sonst eines. Zusammen sind es 132 Schleifen bei den fuenfundzwanzig Motoren.
 Sie werden nach Drehzahl ueberblendet. Dazu kommt eine Schubschleife (`over`) am mittleren
 Band, die
 parallel dazu nach **Last** eingeblendet wird. Voll auf Zug ab 36 % Gas, voller Schub unter

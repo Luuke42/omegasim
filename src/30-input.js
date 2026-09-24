@@ -342,6 +342,14 @@
     }
     if (k === 'l' && !e.repeat) triggerHeadlightFlash();
     if (k === 'w' && !e.repeat) setWeather(weather === 'rain' ? 'dry' : 'rain');
+    // Tastatur-Gegenstueck zu Dreieck ausserhalb des Cockpits (90-ghosts.js): oeffnet die
+    // Erklaerung der fokussierten Menuezeile. Noetig, seit der Info-Knopf (B2) keinen
+    // eigenen Navigationsschritt mehr hat - "alles, was das Pad kann, muss auch von der
+    // Tastatur aus erreichbar sein" (siehe der Kommentar bei den Testtasten unten), und
+    // dafuer gab es bisher gar keine Taste, nur den anwaehlbaren Knopf selbst.
+    if (k === 'o' && !e.repeat) {
+      if (optInfoOffen()) optInfoSchliessen(); else menuNavOpenInfo();
+    }
     // Test keys. Everything the pad can do should be reachable from a keyboard, otherwise
     // half the app can only be exercised with a controller plugged in.
     if (k === 'p' && !e.repeat) requestPitStop();
@@ -360,8 +368,14 @@
     // DIESELBE REGEL WIE AM CONTROLLER: der Schirm entscheidet. Stuende hier nur
     // flagHoldPress(), gaebe die Tastatur im Boxenmenue Gelb, waehrend der Controller dort
     // waehlt - zwei Bedeutungen fuer eine Taste, unterschieden durch das Eingabegeraet.
-    if (k === 'x' && !e.repeat) {
-      if (cockpitScreenIst().id !== 'main') cockpitScreenWaehlen();
+    // 'enter' spiegelt 'x' Taste fuer Taste (Phase 13: Menuenavigation ohne Gamepad
+    // pruefbar) - dieselbe Kette wie am Controller: Streckeneditor-Bestaetigen vor
+    // Menuenavigation vor Cockpit-Schirm vor gelber Flagge.
+    if ((k === 'x' || k === 'enter') && !e.repeat) {
+      if (optInfoOffen()) optInfoSchliessen();
+      else if (trackEditorPad('confirm')) { /* vom Editor verbraucht */ }
+      else if (menuNavActive()) menuNavActivate();
+      else if (cockpitScreenIst().id !== 'main') cockpitScreenWaehlen();
       else flagHoldPress();
     }
     if (k === 'q' && !e.repeat) debugCountLap(e.shiftKey);
@@ -372,17 +386,57 @@
       recMark(label);
     }
     if (k === '?' || (k === '/' && e.shiftKey)) { if (!e.repeat) toggleHelp(); }
-    if (k === 'escape') { toggleHelp(false); hideRaceSummary(); }
+    // optInfoSchliessen() ZUERST: toggleHelp() ist eine tote Referenz (keine solche
+    // Funktion existiert mehr im Projekt, siehe die Fundstelle) und wirft bei jedem
+    // Escape/? - stuende sie vorn, wuerde sie diese Zeile nie bis zum Popup kommen
+    // lassen. Unabhaengiger Fund, nicht Teil dieser Bestellung - dem Nutzer gemeldet,
+    // nicht stillschweigend "repariert".
+    if (k === 'escape') {
+      if (optInfoOffen()) optInfoSchliessen();
+      toggleHelp(false);
+    }
   });
   window.addEventListener('keydown', (e) => {
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+    // Phase 13: auf dem Optionen-Tab lenken die Pfeiltasten die Menuenavigation statt zu
+    // steuern - sonst wuerde ein Fokuswechsel gleichzeitig das (nicht sichtbare) Auto
+    // ansteuern. JEDES keydown zaehlt, auch die vom Betriebssystem wiederholten waehrend
+    // eine Taste gehalten wird - genau das ist die bestellte Wiederholung beim Halten,
+    // ohne einen eigenen Zeitgeber wie am Gamepad (dort gibt es kein natives Wiederholen).
+    // links/rechts auf einer ANGEWAEHLTEN Zeile geht ueber menuNavAdjustGehalten() - sie
+    // teilt sich den Beschleunigungszustand mit dem Gamepad (50b-menu-nav.js), das native
+    // Wiederholen des Betriebssystems ersetzt hier nur dessen eigenen Zeitgeber. Ohne
+    // Anwahl geht die Taste unveraendert an den Tabwechsel, wie am Gamepad auch.
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key) && menuNavActive()) {
+      if (e.key === 'ArrowUp') menuNavMove('up');
+      else if (e.key === 'ArrowDown') menuNavMove('down');
+      else if (e.key === 'ArrowLeft') {
+        if (menuNavArmed) menuNavAdjustGehalten('left', true); else menuNavTabWechsel(-1);
+      } else if (e.key === 'ArrowRight') {
+        if (menuNavArmed) menuNavAdjustGehalten('right', true); else menuNavTabWechsel(1);
+      }
+      return;
+    }
+    // Cockpit-Renneinstellungen: dort lenken die Pfeiltasten die Zeilenauswahl, nicht das
+    // Auto. raceScreenPad() prueft selbst, ob der Schirm offen ist, und verstellt bei der
+    // angewaehlten Dauer/Runden-Zeile - sonst bleibt links/rechts beim Schirmblaettern.
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)
+        && typeof raceScreenOffen === 'function' && raceScreenOffen()) {
+      const dir = e.key === 'ArrowUp' ? 'up' : e.key === 'ArrowDown' ? 'down'
+                : e.key === 'ArrowLeft' ? 'left' : 'right';
+      raceScreenPad(dir);
+      return;
+    }
     keys.add(e.key);
   });
   window.addEventListener('keyup', (e) => {
     keys.delete(e.key);
     // Loslassen der Halten-Geste. Zu frueh losgelassen heisst ausdruecklich: nichts
     // passiert - ein halber Druck darf keine halbe Wirkung haben.
-    if ((e.key || '').toLowerCase() === 'x') flagHoldRelease(false);
+    const kUp = (e.key || '').toLowerCase();
+    if (kUp === 'x' || kUp === 'enter') flagHoldRelease(false);
+    if (e.key === 'ArrowLeft') menuNavAdjustGehalten('left', false);
+    else if (e.key === 'ArrowRight') menuNavAdjustGehalten('right', false);
   });
   // Auch bei blur, sonst haengt der Balken, wenn das Fenster waehrend des Haltens den Fokus
   // verliert - und der naechste Druck waere wirkungslos, weil flagHoldStart noch belegt ist.
@@ -394,10 +448,16 @@
   // handled generically by applySteerInput/applyThrottleInput for every source.
   setInterval(() => {
     let sx = 0, ty = 0;
-    if (keys.has('ArrowLeft')) sx -= 1;
-    if (keys.has('ArrowRight')) sx += 1;
-    if (keys.has('ArrowUp')) ty += 1;
-    if (keys.has('ArrowDown')) ty -= 1;
+    // Phase 13 Sicherheitsnetz: waehrend die Pfeiltasten die Menuenavigation bedienen,
+    // duerfen sie nicht GLEICHZEITIG das Auto steuern - auch nicht aus einer Taste, die
+    // noch aus der Zeit VOR dem Wechsel auf den Optionen-Tab in `keys` haengt (z.B. ein
+    // Klick mit der Maus auf den Tab waehrend eine Pfeiltaste physisch gehalten wird).
+    if (!menuNavActive()) {
+      if (keys.has('ArrowLeft')) sx -= 1;
+      if (keys.has('ArrowRight')) sx += 1;
+      if (keys.has('ArrowUp')) ty += 1;
+      if (keys.has('ArrowDown')) ty -= 1;
+    }
     if (keys.has(' ')) { sx = 0; ty = 0; }
     applySteerInput(SRC.KEY, sx);
     applyThrottleInput(SRC.KEY, ty);

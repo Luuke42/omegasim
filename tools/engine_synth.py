@@ -888,6 +888,69 @@ CARS = {
         'crackle': 0.63,
         'gain_wobble': 0.05, 'clatter_variiert': True,
     },
+    # ---- ZWEI MOTOREN AUF WUNSCH: EIN FLATHEAD-V8 UND EIN LUFTGEKUEHLTER BOXER-4 ------
+    #
+    # BESTELLT: "motorsounds: ford tudor slantback 1937 und vw kaefer 1300 (herbie)."
+    #
+    # WAS HIER RECHERCHIERT UND NICHT GEMESSEN IST, anders als bei den Motoren oben: die
+    # Zylinderzahl, die Zuendfolge und die Bankaufteilung stammen aus allgemein bekannten
+    # technischen Angaben zu diesen Motorenfamilien (Ford-Flathead-V8 bzw. VW-Typ-1-Boxer),
+    # nicht aus einer mitgelieferten Tabelle wie beim GT3-Satz - hier gibt es keine Quelle,
+    # die eine Zeile im Kopf dieser Datei zitieren koennte. Alle uebrigen Zahlen (bright,
+    # noise, clatter, drive, scatter, crackle) sind wie beim ganzen restlichen Satz nach
+    # Gehoer gesetzt - nur eben noch nicht GEHOERT, weil diese Umgebung keinen Ton abspielen
+    # kann. Beide Eintraege sind deshalb ausdruecklich WIP und sollten nach dem ersten
+    # Anhoeren nachgezogen werden, bevor sie als fertig gelten.
+    'fordtudor37': {
+        'label': 'Ford Tudor Slantback 1937 (3,6 l Flathead-V8, Cross-Plane) [WIP]',
+        # Zuendfolge 1-5-4-8-6-3-7-2 - dieselbe Folge wie cross_plane_v8() oben, die genau
+        # diesen 90-Grad-Cross-Plane-V8 kodiert. Der Ford-Flathead ist ein Motor dieser
+        # Familie (Vorlaeufer der spaeteren SBC-Verwandtschaft in Bankmuster und Zuendfolge,
+        # nicht in Bauart - er hat seitliche statt obenliegender Ventile), deshalb wird
+        # dieselbe Funktion wiederverwendet statt eine eigene Bankliste zu erfinden.
+        'banks': cross_plane_v8(), 'cylinders': 8,
+        # Ein Motor von 1937: kein Leerlaufregler wie heute, Leerlauf lag oft bei 500-600.
+        # 221 Kubikzoll (3,6 l) mit rund 85 PS bei niedriger Verdichtung (ca. 6,3:1) drehte
+        # gemaechlich - "hoch" war fuer diesen Motor etwas ueber 3800.
+        'rpms': {'idle': 550, 'mid': 2000, 'high': 3800},
+        # LANGES ROHR UND WENIG HELLIGKEIT: der Flathead fuehrt beide Auspuffkanaele einer
+        # Zylinderbank DURCH DEN MOTORBLOCK zueinander (siamesische Ausgangsports) statt sie
+        # im Kopf zu trennen - das ist der bekannte Grund, warum ein Flathead gedaempft und
+        # nicht scharf klingt. Deshalb die niedrigste Helligkeit im ganzen Satz.
+        'primary_in': 42.0, 'res_q': 4.5, 'partials': 5, 'ir_ms': 70.0,
+        'pulse_ms': 5.0, 'bright': 0.26, 'noise': 0.05, 'noise_hz': 800.0,
+        # Mechanische (nicht hydraulische) Stoessel, groessere Toleranzen als ein
+        # Rennmotor: hoerbares, aber gemaechliches Klappern.
+        'clatter': 0.26, 'clatter_hz': 1700.0, 'drive': 2.6,
+        'scatter_t': 0.018, 'scatter_g': 0.08,
+        # Niedrige Verdichtung, lange Serienauspuffanlage: wenig Knallen im Schub.
+        'crackle': 0.30,
+        'gain_wobble': 0.05, 'clatter_variiert': True,
+    },
+    'kaefer1300': {
+        'label': 'VW Käfer 1300 (1,3 l Boxer-4, luftgekühlt) [WIP]',
+        # Zuendfolge 1-4-3-2, VW-eigene Zaehlung (1/2 eine Bank, 3/4 die andere) - anders
+        # numeriert als der Subaru oben, aber physikalisch derselbe Boxer-Charakter: je
+        # Bank zwei Zuendungen ungleich verteilt (180/540 Grad), weil auch hier die zwei
+        # Auspuffkruemmer ungleich lang zum Sammler laufen.
+        'banks': banks_from_order([1, 4, 3, 2], 4, 'half'), 'cylinders': 4,
+        # 1285 cm³, rund 40 PS, niedrige Verdichtung (ca. 7,3:1) - ein Alltagsmotor ohne
+        # Anspruch auf Drehzahl. Leerlauf um 850, "hoch" schon bei gut 4200.
+        'rpms': {'idle': 850, 'mid': 2800, 'high': 4200},
+        # Kurze, kompakte Anlage an einem kleinen Auto - kuerzeres Rohr als bei den
+        # amerikanischen Motoren oben.
+        'primary_in': 26.0, 'res_q': 4.0, 'partials': 5, 'ir_ms': 55.0,
+        'pulse_ms': 4.6, 'bright': 0.40, 'noise': 0.08, 'noise_hz': 1400.0,
+        # DAS BEKANNTE "KAEFER-KLAPPERN": Luftkuehlung ohne Wassermantel zum Daempfen,
+        # dazu das Luefterrad auf der Kurbelwelle - beides traegt zu einem mechanisch
+        # unruhigeren Eindruck bei als ein wassergekuehlter Motor gleicher Groesse. Hier
+        # nur als hoeherer Klatter-Wert angenaehert, das Luefterraeuschen selbst hat
+        # dieses Modell nicht.
+        'clatter': 0.30, 'clatter_hz': 2200.0, 'drive': 2.4,
+        'scatter_t': 0.018, 'scatter_g': 0.08,
+        'crackle': 0.25,
+        'gain_wobble': 0.05, 'clatter_variiert': True,
+    },
 }
 
 

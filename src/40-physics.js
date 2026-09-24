@@ -28,6 +28,19 @@
     return Math.pow(v, gamma);
   }
 
+  // ---- Die Lenkkennlinie: dieselbe Kurve, mit Vorzeichen -----------------------------
+  //
+  // BESTELLT: "wie beschleunigungskurve auch lenkkurve einbauen als option mit slider."
+  // x^gamma ist nur fuer x >= 0 definiert (ein negativer Betrag hoch einem nicht-ganzen
+  // Exponenten ist NaN) - deshalb Betrag und Vorzeichen getrennt, wie es der Fahrtakt
+  // vorher schon inline tat. Herausgezogen, damit Kurve und Visualisierung (siehe
+  // kennlinienPlotZeichnen in 50-drive.js) und der Fahrtakt dieselbe Rechnung teilen.
+  function lenkKennlinie(x, expo) {
+    const v = Math.max(-1, Math.min(1, x));
+    if (!(expo > 0) || expo === 1) return v;
+    return Math.sign(v) * Math.pow(Math.abs(v), expo);
+  }
+
   // Die Nickgrenzen, GERECHNET aus der statischen Achslast und dem Verlagerungsanteil.
   //
   // Als Funktionen und nicht als Konfigurationsfelder: ein Feld muesste nach jeder Aenderung
@@ -128,7 +141,15 @@
         // Lenkansprechen 2,0 sind 12 Anschlaege je Sekunde, also 83 ms. Damit faehrt die
         // App mit der Vorgabe genauso wie vorher.
         steerDaempfungMs: Math.round(1000 / (STEER_RATE_REF * STEER_RESP_REF)),
-        steerExpo: 1.15,         // near-linear: 1.5 made the car feel unwilling to turn
+        // v0.7.9 hatte dies BESTELLT: "Standard beim lenken etwas unempfindlicher bei
+        // wenig input", und hob die Vorgabe von 1.15 auf 1.3 an. GEMELDET danach:
+        // "beim gas geben ist die Lenkung jetzt extrem schwach... mach es so wie in
+        // v0.6.xx" - genau der Bereich, den ein hoeherer Exponent am staerksten trifft,
+        // ist KLEINER Lenkausschlag (bei x=0,2 kostet 1.3 statt 1.15 rund ein Viertel
+        // Ausschlag, bei vollem Lock 1 kein Unterschied), und kleine Korrekturen beim
+        // Herausbeschleunigen sind genau das. Zurueckgesetzt auf 1.15, wie vor v0.7.9 -
+        // der Regler #setting-steer-expo bleibt, wer will, stellt haerter selbst ein.
+        steerExpo: 1.15,
         // Der volle Lenkausschlag ist MECHANISCH 45 Grad. Das stand nirgends, und damit
         // war steerResponse eine Zahl ohne Einheit: der Regler ging von 0,5 bis 3,0, und
         // was 2,0 bedeutete, wusste nur die Kalibrierung. Jetzt ist die Groesse im Modell,
@@ -459,6 +480,12 @@
         // Sie ersetzt das lineare loadGain: eine hoeher belastete Achse gewinnt Haftung,
         // aber unterproportional, und genau diese Kruemmung fehlte vorher.
         tyreLoadSens: 0.25,
+        // BESTELLT: "bei gas lenkstärke noch besser machen und mir einen slider geben
+        // (minimal weniger abschwächen die Lenkung)." Lindert NUR die Gas-Seite von
+        // capRaw (siehe dort) - 0 ist unveraendert, 1 hebt die Abschwaechung unter Gas
+        // ganz auf. 0,25 als Vorgabe: eine kleine, spuerbare Verbesserung ("noch besser
+        // machen"), kein voller Wegfall.
+        throttleSteerRelief: 0.25,
         transferK: 0.30,      // share of the load that moves at 1g
         loadTau: 0.08,        // body pitch (squat and dive): fast
         useTau: 0.45,         // longitudinal tyre force build-up: distinctly slower
@@ -1319,6 +1346,18 @@
       // Autos. Genau das ist die Eigenart eines Heckmotors: er taucht relativ tiefer ein.
       const uF = st.loadFront / Math.max(0.05, cfg.loadFrontStatic);
       const capRaw = uF * (1 - cfg.tyreLoadSens * (uF - 1));
+      // BESTELLT (diese Runde): "bei gas lenkstärke noch besser machen und mir einen
+      // slider geben (minimal weniger abschwächen die Lenkung)." NUR die Gas-Seite
+      // (uF < 1, die Vorderachse entlaedt sich beim Beschleunigen) wird gelindert - die
+      // Brems-Seite (uF >= 1) bleibt unberuehrt, siehe die eigene, bereits gemessene
+      // Begruendung ("steerGrip 1,25 beim Anbremsen") zwei Absaetze weiter unten: dort
+      // deckelt der Deckel bei 1 ohnehin schon, ein Eingriff dort waere wirkungslos oder
+      // faelsche genau die Messung, die den Deckel begruendet.
+      //
+      // cfg.throttleSteerRelief (0..1) schiebt capRaw NUR im Gas-Fall von seinem Rohwert
+      // Richtung 1 (voller Ausschlag): 0 = unveraendert wie bisher, 1 = unter Gas keine
+      // Abschwaechung mehr, egal wie stark die Vorderachse entlastet ist.
+      const capRaw2 = uF < 1 ? capRaw + cfg.throttleSteerRelief * (1 - capRaw) : capRaw;
       // Der Deckel bei 1 bleibt, und er ist eine Aussage ueber das SERVO: steerGrip
       // skaliert den ausgegebenen Lenkwinkel, und ueber Vollausschlag hinaus gibt es dort
       // nichts zu holen. Ohne ihn waere der Reibkreis beim Bremsen groesser als im Rollen,
@@ -1347,7 +1386,7 @@
       // Bauform darf eine Messung nicht verschieben.
       const frontAxle = 1 - cfg.frontAxleEffect
                             * (1 - cfg.loadFrontStatic / FRONT_AXLE_REF);
-      const frontCap = Math.min(1, Math.max(0.15, capRaw)) * frontAxle * surfSteer * luft;
+      const frontCap = Math.min(1, Math.max(0.15, capRaw2)) * frontAxle * surfSteer * luft;
       // Die Anforderung skaliert mit der Fahrt, und zwar aus demselben Grund wie beim
       // Regen ein paar Zeilen weiter oben: bei 20 km/h braucht eine Vollbremsung einen
       // Bruchteil der verfuegbaren Haftung, das Auto steht nach zwei Metern; bei 250 km/h
@@ -1691,9 +1730,10 @@
       }
 
       // Expo curve for a softer centre. Kept mild: a strong expo is what made the car feel
-      // reluctant to turn, and more angle was explicitly wanted.
-      const expoSteer = Math.sign(inputs.steering)
-                      * Math.pow(Math.abs(inputs.steering), cfg.steerExpo);
+      // reluctant to turn, and more angle was explicitly wanted. lenkKennlinie() and not
+      // the formula inline: the settings slider's curve preview must compute exactly the
+      // same thing as the car actually drives.
+      const expoSteer = lenkKennlinie(inputs.steering, cfg.steerExpo);
 
       // Authority falls off with speed, but only in the higher gears. In 1st gear the car
       // keeps everything it has, because that is where the tight stuff gets driven.

@@ -65,6 +65,11 @@
   // bleibt, wo das Rennen aufgehoert hat.
   let racePartialMs = null;
   let raceLapStart = null;
+  // BESTELLT: "Zeit soll anfangen zu zaehlen, sobald das erste Auto sich in Bewegung
+  // setzt." true zwischen Gruen und der ersten erkannten Bewegung - siehe raceGreen()
+  // und raceMoveErkannt() weiter unten. raceLapStart/raceStartedAt bleiben in dieser
+  // Zeit null.
+  let raceAwaitingMove = false;
   let raceLapTimes = []; // [{lap, ms}], oldest first; rendered newest-first
   let raceCountdownTimer = null;
 
@@ -127,8 +132,38 @@
     return raceStartedAt !== null && (Date.now() - raceStartedAt) >= raceLimit * 60000;
   }
 
+  // ---- Die erste Bewegung nach Gruen -------------------------------------------------
+  //
+  // BESTELLT: "Zeit soll anfangen zu zaehlen, sobald das erste Auto sich in Bewegung
+  // setzt." Beobachtet wird das FAHRERAUTO (bzw. beide, im Zwei-Spieler-Modus) und nicht
+  // die Ghosts: die fahren beim Gruen ohnehin autonom los, waehrend ein Mensch eine echte
+  // Reaktionszeit hat - und genau die soll nicht in die erste Rundenzeit einfliessen.
+  //
+  // FAEHRT NIEMAND, WARTET NIEMAND: ohne ein Auto auf "Steuern" (auch nicht auf "Spieler
+  // 2") gibt es keine Reaktion, auf die zu warten waere - dieselbe Bedingung wie bei der
+  // Zielflagge weiter oben (finishRace() ohne Fahrer im Feld).
+  function raceMoveErkannt() {
+    const SCHWELLE_KMH = 3;   // etwas ueber dem Standrauschen des Sensors
+    const fahrer = (c) => c.role === 'player' || (zweiSpieler && c.role === 'player2');
+    if (!garage.some(fahrer)) return true;
+    if (playerCar && Math.abs(physEngine.state.speedKmh) > SCHWELLE_KMH) return true;
+    if (zweiSpieler && playerCar2
+        && Math.abs(physEngine2.state.speedKmh) > SCHWELLE_KMH) return true;
+    return false;
+  }
+
   function raceClockTick() {
     if (raceState !== 'racing') return;
+    if (raceAwaitingMove) {
+      if (!raceMoveErkannt()) {
+        const el = $('race-clock');
+        if (el) el.textContent = t('wartet auf die erste Bewegung');
+        return;
+      }
+      raceAwaitingMove = false;
+      raceLapStart = Date.now();
+      raceStartedAt = Date.now();
+    }
     maybeSwitchRaceWeather();
     wxWechselTick();
     const el = $('race-clock');
@@ -166,7 +201,17 @@
   // Zwischen der ersten und der zweiten Ueberfahrt EINES Autos liegt dagegen immer eine
   // volle Runde, egal wo es gestanden hat. Die Regel braucht dafuer weder eine
   // Positionsbestimmung noch die Aufstellung; sie folgt aus der Bahn.
-  const FORMATION_UEBERFAHRTEN = 2;
+  //
+  // BESTELLT (Phase 12, Punkt 1): "Startaufstellung soll laenger in zwei Spalten bleiben."
+  // GHOST_GRID_OFFSET/GHOST_WEAVE (90-ghosts.js) bleiben unveraendert - der Zweierzug
+  // selbst war schon richtig getrennt (siehe der Test "Fliegender Start: zwei getrennte
+  // Spalten..."), nur die Zeit, die das Feld darin verbringt, war mit EINER
+  // Einfuehrungsrunde knapp. formationOffset() wird ausschliesslich waehrend
+  // raceFormationLap angewendet (90-ghosts.js:6854, 50-drive.js:2239), also verlaengert
+  // dieselbe Zahl beides zugleich: die Zweierkolonne UND die gedrosselte Runde vor
+  // Gruen - genau wie bei einer echten Formationsrunde ueblich, wenn sie mehr als eine
+  // Runde dauert. Von 2 auf 3: eine zusaetzliche volle Runde im Zweierzug.
+  const FORMATION_UEBERFAHRTEN = 3;
 
   // Je Auto gezaehlt, und "der Erste" ist deshalb kein eigener Begriff: wer als Erster bei
   // zwei ankommt, IST der Erste. Eine Rangliste waere ein zweiter Ort fuer dieselbe Aussage.
@@ -352,6 +397,17 @@
     // ersten Runde die Reihenfolge der GARAGE, weil alle Rundenzahlen und Summen null waren
     // und die Sortierung stabil ist. Eine Uebersicht, die eine ganze Runde lang eine
     // erfundene Reihenfolge zeigt, ist schlechter als keine.
+    // BESTELLT (diese Runde): "renn ende wird nicht richtig getriggert, es geht für immer
+    // weiter bei Rundenrennen." raceLimitReached() (siehe dort) prueft im Rundenmodus
+    // c.laps.length gegen raceLimit fuer JEDES Auto aus dieser Liste - und fuer das
+    // Spielerauto stand hier immer c.race.laps, ein Zaehler, der von carLapCrossed()/
+    // carRaceNotify() gefuellt wird (byte-genaue Sperre/Kachel-Erkennung). Der TATSAECHLICH
+    // fahrende Rundenzaehler des Spielers ist aber raceLapTimes, gefuellt von
+    // playerLapCrossed() - dieselbe Zweiteilung, die weiter oben schon fuer `ort`
+    // beruecksichtigt wird (spielerOrtGes() statt ghostOrtGes() fuer den Spieler). Ohne
+    // diesen Fix blieb c.race.laps beim Spieler auf 0 stehen, raceLimitReached() konnte nur
+    // ueber einen GHOST ausloesen, und ein Rundenrennen ohne (oder mit zu langsamen) Ghosts
+    // endete nie.
     const out = garage.map(c => ({ name: garageLabel(c), role: c.role,
                                    farbe: carColor(c).hex, kennung: c.tag,
                                    // Der Ort auf der Schiene. Auto 2 geht ueber
@@ -362,7 +418,9 @@
                                    ort: (c.role === 'player'
                                      ? spielerOrtGes()
                                      : (typeof ghostOrtGes === 'function' ? ghostOrtGes(c) : null)),
-                                   laps: (c.race && c.race.laps) || [] }));
+                                   laps: (c.role === 'player' && raceLapTimes.length)
+                                     ? raceLapTimes
+                                     : (c.race && c.race.laps) || [] }));
     if (!garage.some(c => c === playerCar) && raceLapTimes.length) {
       // Ohne Garage gibt es kein Geraet und damit keine Farbe: dann bleibt das Feld leer,
       // statt eine zu erfinden.
@@ -1078,7 +1136,12 @@
     // sich, und dann ist die Einfuehrungsrunde beim naechsten Start sofort vorbei.
     formationZaehler = new Map();
     raceState = 'racing';
-    raceLapStart = Date.now();
+    // BESTELLT: "Zeit soll anfangen zu zaehlen, sobald das erste Auto sich in Bewegung
+    // setzt." Vorher liefen raceLapStart/raceStartedAt vom Moment des Gruen an - eine
+    // Reaktionszeit am Start ging damit von der ersten Rundenzeit ab. Beide bleiben jetzt
+    // null, bis raceClockTick() ueber raceMoveErkannt() die erste Bewegung sieht.
+    raceLapStart = null;
+    raceAwaitingMove = true;
     launchGhosts();   // green means green for everyone
     if (raceFormationLap) {
       // formationPace() und nicht PIT_SPEED_FACTOR: der Deckel muss zum Ziel des
@@ -1095,7 +1158,9 @@
     // nur den Anfang.
     if (typeof cockpitScreenZu === 'function') cockpitScreenZu('uebersicht');
 
-    raceStartedAt = Date.now();
+    // raceStartedAt bleibt null, bis raceClockTick() Bewegung sieht - siehe die
+    // Begruendung oben bei raceLapStart.
+    raceStartedAt = null;
     if (raceClockTimer) clearInterval(raceClockTimer);
     raceClockTimer = setInterval(raceClockTick, 250);
     $('race-status').textContent = raceFormationLap
@@ -1148,6 +1213,7 @@
     racePartialMs = raceLapStart !== null ? now - raceLapStart
                   : (dashLapStart !== null ? now - dashLapStart : null);
     raceLapStart = null;
+    raceAwaitingMove = false;
     dashLapStart = null;
     garage.forEach(c => { if (c.race) c.race.lapStart = null; });
     // Whatever happened, the formation lap is over and its speed limit goes with it.
@@ -1190,6 +1256,10 @@
         c.ghost.auslauf = true;
         return;
       }
+      // ABBRUCH VON HAND: sofort anhalten, wie der Knopf "Ghosts anhalten". Kein
+      // Ausrollen - wer abbricht, will, dass es aufhoert. Vorher stand hier finishGhost()
+      // auch fuer den Abbruch, und die Ghosts rollten noch ein paar Kacheln weiter.
+      if (!willAuslaufen) { stopGhost(c); return; }
       finishGhost(c);
     });
     if (willAuslaufen && garage.some(c => c.role === 'ghost' && c.ghost && c.ghost.auslauf)) {
@@ -1214,7 +1284,11 @@
     // Und einmal sichtbar dort, wo gerade gedrueckt wurde. Ohne das erschien das Ergebnis
     // nur im Tab "Renneinstellungen" - wer im Cockpit auf Stopp drueckt, sah nichts, und
     // beim freien Training sah es deshalb aus, als gebe es ueberhaupt keine Ergebnisse.
-    showRaceSummary();
+    // BESTELLT: kein eigenes Ueberlagerungsfenster mehr - stattdessen ins Cockpit zum
+    // Schirm "Rennen" springen, der die Tabelle ohnehin schon zeigt (ovScreenRender()
+    // laeuft im 120-ms-Takt weiter und malt die Endstaende sofort).
+    if (typeof showTab === 'function') showTab('race');
+    if (typeof cockpitScreenZu === 'function') cockpitScreenZu('uebersicht');
     // Und ablegen. Hier, weil dies die eine Stelle ist, an der ein Rennen wirklich vorbei
     // ist - und nach showRaceSummary(), damit ein Fehlschlag beim Speichern das Ergebnis
     // nicht verdeckt.
@@ -1254,87 +1328,6 @@
       renderPositionPlot();
     }
   }, 1000);
-
-  // ---- Ergebnisfenster ----
-  // Eigener, kleiner Aufbau statt eines Klons der grossen Tabelle: die traegt IDs, und
-  // dieselbe ID zweimal im Dokument bricht jeden Zugriff darauf. Gerechnet wird mit
-  // denselben Funktionen, raceAllCars() und raceStats(), damit hier keine zweite Wahrheit
-  // entsteht.
-  function showRaceSummary() {
-    const cars = raceAllCars().filter(c => c.laps.length);
-    const label = (RACE_MODES[raceMode] && RACE_MODES[raceMode].label) || 'Rennen';
-    $('sum-title').textContent = label + ' beendet';
-    const missed = Math.max(0, racePitRequired - racePitDone);
-    const teile = [];
-    if (racePartialMs !== null) {
-      teile.push('letzte Runde unvollendet nach ' + formatLapTime(racePartialMs)
-                 + ', z\u00e4hlt nicht');
-    }
-    if (missed > 0) {
-      teile.push(missed + ' Pflichtstopp' + (missed === 1 ? '' : 's') + ' verpasst, +'
-                 + (missed * racePitPenaltyS) + ' s Strafe');
-    }
-    $('sum-sub').textContent = teile.join(' \u00b7 ');
-
-    if (!cars.length) {
-      $('sum-body').innerHTML = '<p class="muted" style="margin-top:12px">Keine Runden '
-        + 'aufgezeichnet. Ohne Streckencode gibt es keine Rundenzeit, Schalter '
-        + '<b>Auf der Bahn</b> in den Optionen pr\u00fcfen, oder Runden mit <kbd>Q</kbd> '
-        + 'z\u00e4hlen, um die Anzeige zu pr\u00fcfen.</p>';
-      $('race-summary').classList.add('on');
-      return;
-    }
-
-    const scored = cars.map(c => ({ c, st: raceStats(c.laps) }));
-    scored.sort((a, b) => raceMode === 'qualifying'
-      ? a.st.best - b.st.best
-      : (b.st.n - a.st.n) || (a.st.total - b.st.total));
-    const fastest = Math.min(...scored.map(x => x.st.best));
-
-    // Abgaenge je Runde stehen NEBEN der Rundenzeit, nicht darin verrechnet. Eine schnelle
-    // Runde mit drei Abgaengen ist kein Fortschritt, und ein Mittelwert wuerde das verdecken.
-    const offOf = (c) => c.laps.reduce((a, l) => a + (l.off || 0), 0);
-    let html = '<table class="sum-tab"><tr><th>#</th><th>Auto</th><th>Runden</th>'
-      + '<th>Beste</th><th>Mittel</th><th>Abg&auml;nge</th></tr>';
-    scored.forEach((x, i) => {
-      html += '<tr><td>' + (i + 1) + '</td><td>' + ergDot(x.c) + x.c.name
-        + (x.c.role === 'ghost' ? ' <span class="muted">(Ghost)</span>' : '') + '</td>'
-        + '<td class="num">' + x.st.n + '</td>'
-        + '<td class="num' + (x.st.best === fastest ? ' sum-best' : '') + '">'
-        + formatLapTime(x.st.best) + '</td>'
-        + '<td class="num">' + formatLapTime(Math.round(x.st.mean)) + '</td>'
-        + '<td class="num">' + offOf(x.c) + '</td></tr>';
-    });
-    html += '</table>';
-
-    // Jede einzelne Runde darunter, damit nichts hinter einem Mittelwert verschwindet -
-    // beim freien Training ist das ohnehin das Einzige, was interessiert.
-    const maxLaps = Math.max(...cars.map(c => c.laps.length));
-    html += '<p class="muted" style="font-size:11px; margin:12px 0 0 0">Zahl in Klammern: '
-      + 'Abg\u00e4nge in dieser Runde.</p>';
-    html += '<table class="sum-tab" style="margin-top:6px"><tr><th>Runde</th>'
-      + cars.map(c => '<th style="text-align:right">' + c.name + '</th>').join('') + '</tr>';
-    for (let k = 0; k < maxLaps; k++) {
-      html += '<tr><td>' + (k + 1) + '</td>'
-        + cars.map(c => '<td class="num">'
-            + (c.laps[k] ? formatLapTime(c.laps[k].ms)
-                           + (c.laps[k].off ? ' <span class="muted">(' + c.laps[k].off + ')</span>' : '')
-                         : '\u2013') + '</td>').join('')
-        + '</tr>';
-    }
-    html += '</table>';
-    $('sum-body').innerHTML = html;
-    $('race-summary').classList.add('on');
-  }
-
-  function hideRaceSummary() { $('race-summary').classList.remove('on'); }
-  $('sum-close').onclick = hideRaceSummary;
-  // Der Knopf "Alle Rundenzeiten" traegt schon .goto-tab und wechselt den Tab; hier muss
-  // nur noch der Vorhang weg, sonst liegt er ueber dem Ziel.
-  $('sum-details').addEventListener('click', hideRaceSummary);
-  $('race-summary').addEventListener('click', (e) => {
-    if (e.target === $('race-summary')) hideRaceSummary();
-  });
 
   // ---- Race mode selector ----
   function applyRaceModeUi() {
@@ -3370,7 +3363,8 @@
   // wie ein Ghost). Das ist kein Mangel, sondern die Folge des einen Sendetakts - und es
   // heisst umgekehrt auch, dass das Boxenlimit von Auto 1 Auto 2 nicht ausbremst.
   const boxZwei = { lage: 'aus', standS: 0, getankt: 0, repariert: 0,
-                    fertig: false, letzterTick: null, gemeldet: false };
+                    fertig: false, tankFertig: false, reparaturFertig: false,
+                    letzterTick: null, gemeldet: false };
 
   function boxZweiLage() { return boxZwei.lage; }
   function boxZweiFertig() { return boxZwei.fertig; }
@@ -3396,6 +3390,8 @@
     boxZwei.getankt = 0;
     boxZwei.repariert = 0;
     boxZwei.fertig = false;
+    boxZwei.tankFertig = false;
+    boxZwei.reparaturFertig = false;
     boxZwei.gemeldet = false;
     boxZwei.letzterTick = null;
     showHudToast('P2: BOXENSTOPP \u2013 ANHALTEN');
@@ -3449,19 +3445,39 @@
     }
     boxZwei.standS += dt;
 
-    // --- Tanken, auf VOLL. Dieselbe Rate wie bei Auto 1.
-    const tank = tankZweiStand();
-    if (tank < 100 - 0.05) {
-      const dazu = Math.min(100 - tank, PIT_FUEL_PER_SEC * dt);
-      tankZweiFuellen(tank + dazu);
-      boxZwei.getankt += dazu;
+    // --- Tanken, auf VOLL. Dieselbe Rate wie bei Auto 1, und BESTELLT: "Boxensound
+    // fuer Player 2 soll da sein" - derselbe Chime wie Auto 1 (pitChimeFuel), Ton ist
+    // ohnehin nicht an eine Stereoseite gebunden. Kein Chime, wenn der Tank schon voll
+    // war, als der Stopp begann: dann ist nichts geschehen, das eine Meldung verdient -
+    // dieselbe Regel wie bei Auto 1s pitDone.refuel.
+    if (!boxZwei.tankFertig) {
+      const tank = tankZweiStand();
+      if (tank >= 100 - 0.05) {
+        boxZwei.tankFertig = true;
+      } else {
+        const dazu = Math.min(100 - tank, PIT_FUEL_PER_SEC * dt);
+        tankZweiFuellen(tank + dazu);
+        boxZwei.getankt += dazu;
+        if (tank + dazu >= 100 - 0.05) {
+          boxZwei.tankFertig = true;
+          pitChimeFuel();
+        }
+      }
     }
-    // --- Reparieren, mit derselben nichtlinearen Rate.
-    const schaden = schadenVon(2);
-    if (schaden > 0.05) {
-      const weg = Math.min(schaden, repairRateAt(schaden) * dt);
-      schadenZweiSetzenIntern(schaden - weg);
-      boxZwei.repariert += weg;
+    // --- Reparieren, mit derselben nichtlinearen Rate, derselben Regel fuer den Chime.
+    if (!boxZwei.reparaturFertig) {
+      const schaden = schadenVon(2);
+      if (schaden <= 0.05) {
+        boxZwei.reparaturFertig = true;
+      } else {
+        const weg = Math.min(schaden, repairRateAt(schaden) * dt);
+        schadenZweiSetzenIntern(schaden - weg);
+        boxZwei.repariert += weg;
+        if (schaden - weg <= 0.05) {
+          boxZwei.reparaturFertig = true;
+          pitChimeRepair();
+        }
+      }
     }
 
     const fertig = tankZweiStand() >= 100 - 0.05 && schadenVon(2) <= 0.05;
@@ -3471,6 +3487,7 @@
     if (fertig && genug && !boxZwei.fertig) {
       boxZwei.fertig = true;
       showHudToast('P2: FERTIG, LOSFAHREN!');
+      pitChimeReady();
       padRumble(0.35, 0.2, 200, 'box', 2);
       log('P2: Boxenstopp fertig nach ' + boxZwei.standS.toFixed(1) + ' s.', 'info');
     } else if (!fertig) {
@@ -4742,6 +4759,137 @@
     // Faerbung ein Wahrheitswert, und 0 ist falsch - das genuegt.
     if (z.id === 'refuel') return { zahl, wort: tankZielWort(roh), ja: !!roh };
     return { zahl, wort: roh ? t('ja') : t('nein'), ja: !!roh };
+  }
+
+  // ---- Renneinstellungen-Schirm -------------------------------------------------------
+  //
+  // BESTELLT: "cockpit: weiteren screen mit Renneinstellungen einfuegen (wie pit screen
+  // bedienbar, optionen: renntyp, dauer/runden, start/abbrechen; einstellungen sollten
+  // mit denen in renneinstellungen synchronisiert sein)." Dieselbe Bauform wie der
+  // Boxenschirm (RACE_SETTINGS_ROWS/raceScreenSel/raceScreenPad/raceScreenSelect/
+  // raceScreenRender).
+  //
+  // GESCHRIEBEN WIRD UEBER DIESELBEN ELEMENTE wie im Renneinstellungen-Tab (#race-mode,
+  // #race-limit) statt in eine eigene Kopie - value setzen und dasselbe Ereignis
+  // ausloesen, genau wie es die Mode-Kacheln und Wetterknoepfe dort schon tun (siehe
+  // syncRaceModeTiles). Eine zweite Kopie von raceMode/raceLimit waere die naechste
+  // Stelle, an der Schirm und Tab auseinanderlaufen.
+  const RACE_SETTINGS_ROWS = [
+    { id: 'mode', el: 'rs-row-mode', wert: 'rs-wert-mode' },
+    { id: 'limit', el: 'rs-row-limit', wert: 'rs-wert-limit' },
+    { id: 'go', el: 'rs-row-go', wert: 'rs-wert-go' },
+  ];
+  let raceScreenSel = 0;
+  // Dauer/Runden ist seit dieser Fassung anwaehlbar: erst die Waehltaste, dann stellt
+  // links/rechts exakt ein. So laesst sich die Rundenzahl auch verringern und nicht nur
+  // erhoehen - und links/rechts kann den Schirm weiterblaettern, solange nichts angewaehlt
+  // ist.
+  let raceScreenLimitArmed = false;
+  const RACE_MODE_ORDER = ['practice', 'endurance', 'qualifying', 'laps'];
+
+  function raceScreenOffen() {
+    return typeof cockpitScreenIst === 'function'
+           && cockpitScreenIst().id === 'renneinstellungen';
+  }
+
+  // Hoch/runter bewegt die Auswahl, wie beim Boxenschirm. Links/rechts verstellt nur die
+  // ANGEWAEHLTE Dauer/Runden-Zeile; ohne Anwahl bleibt die Taste frei, damit der Schirm
+  // sie nicht frisst, mit der man ihn verlaesst (Schirmblaettern).
+  function raceScreenPad(dir) {
+    if (!raceScreenOffen()) return false;
+    if (dir === 'up' || dir === 'down') {
+      const n = RACE_SETTINGS_ROWS.length;
+      raceScreenSel = ((raceScreenSel + (dir === 'up' ? -1 : 1)) % n + n) % n;
+      // Wegbewegen gibt die Anwahl auf - sonst verstellt links/rechts an einer Stelle,
+      // die man gar nicht mehr im Blick hat.
+      raceScreenLimitArmed = false;
+      raceScreenRender();
+      return true;
+    }
+    if (dir === 'left' || dir === 'right') {
+      if (!raceScreenLimitArmed) return false;
+      const zeile = RACE_SETTINGS_ROWS[raceScreenSel];
+      if (zeile.id !== 'limit') return false;
+      // Deaktiviert bei freiem Training, genau wie das Feld im Tab - eine Zahl, die dort
+      // ohne Bedeutung ist, soll es hier auch bleiben.
+      if ($('race-limit').disabled) return false;
+      const max = parseInt($('race-limit').max, 10) || 120;
+      const min = parseInt($('race-limit').min, 10) || 1;
+      let neu = raceLimit + (dir === 'right' ? 1 : -1);
+      if (neu > max) neu = min;
+      if (neu < min) neu = max;
+      $('race-limit').value = neu;
+      $('race-limit').dispatchEvent(new Event('input', { bubbles: true }));
+      raceScreenRender();
+      return true;
+    }
+    return false;
+  }
+
+  // idVorgabe: derselbe Kunstgriff wie bei pitScreenSelect(idVorgabe) - ein Pruefstand
+  // kann damit gezielt EINE Zeile ausloesen, ohne vorher per pad('down') dorthin zu
+  // navigieren.
+  function raceScreenSelect(idVorgabe) {
+    if (!raceScreenOffen() && idVorgabe === undefined) return false;
+    const zeile = idVorgabe !== undefined
+      ? RACE_SETTINGS_ROWS.find((z) => z.id === idVorgabe)
+      : RACE_SETTINGS_ROWS[raceScreenSel];
+    if (!zeile) return false;
+    if (zeile.id === 'mode') {
+      raceScreenLimitArmed = false;
+      const i = RACE_MODE_ORDER.indexOf(raceMode);
+      const naechster = RACE_MODE_ORDER[(i + 1) % RACE_MODE_ORDER.length];
+      $('race-mode').value = naechster;
+      $('race-mode').dispatchEvent(new Event('change', { bubbles: true }));
+    } else if (zeile.id === 'limit') {
+      // An- und abwaehlen statt "jeder Druck erhoeht um eins": erst anwaehlen, dann
+      // links/rechts verstellt exakt (siehe raceScreenPad). So laesst sich die Rundenzahl
+      // auch herunterstellen.
+      if (!$('race-limit').disabled) {
+        raceScreenLimitArmed = !raceScreenLimitArmed;
+        showHudToast(raceScreenLimitArmed
+          ? t('Rundenzahl: links/rechts einstellen')
+          : t('Rundenzahl: Anwahl beendet'));
+      }
+    } else if (zeile.id === 'go') {
+      raceScreenLimitArmed = false;
+      toggleRace();
+    }
+    raceScreenRender();
+    return true;
+  }
+
+  function raceScreenRender() {
+    if (!$('race-settingsscreen')) return;
+    const m = RACE_MODES[raceMode];
+    schreibeWert($('rs-kopf-lage'), ($('race-status') || {}).textContent || '');
+    for (let i = 0; i < RACE_SETTINGS_ROWS.length; i++) {
+      const z = RACE_SETTINGS_ROWS[i];
+      const el = $(z.el);
+      if (el) {
+        el.classList.toggle('pr-sel', i === raceScreenSel);
+        el.classList.toggle('pr-armed', i === raceScreenSel && raceScreenLimitArmed);
+      }
+      const w = $(z.wert);
+      if (!w) continue;
+      let text = '';
+      if (z.id === 'mode') text = m.label;
+      else if (z.id === 'limit') {
+        text = $('race-limit').disabled ? t('ohne Bedeutung') : (raceLimit + ' ' + m.unit);
+      } else if (z.id === 'go') {
+        const live = raceState === 'racing' || raceState === 'countdown'
+                     || raceState === 'finishing';
+        text = live ? t('abbrechen') : t('starten');
+      }
+      schreibeWert(w, text);
+    }
+    const fuss = $('rs-fuss');
+    if (fuss) {
+      const b = (typeof bindings === 'object' && bindings && bindings.yellowflag)
+        ? bindingDescription(bindings.yellowflag) : 'nicht belegt';
+      fuss.textContent = 'Steuerkreuz hoch/runter waehlt · ' + b + ' schaltet'
+        + (raceScreenLimitArmed ? ' · links/rechts einstellen' : '');
+    }
   }
 
   // ---- Rennuebersicht ----------------------------------------------------------------

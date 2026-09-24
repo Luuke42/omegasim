@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 """Generate every non-loop sound: brakes, crashes, pit stop, engine start, accel demos.
 
-All synthetic, no recorded material. Two synthesis styles are used:
+Mostly synthetic. Two synthesis styles are used:
 
   * Circular (as in engine_synth.py) for anything that must loop — the brake squeal.
   * Phase-accumulating for anything where RPM CHANGES over time: engine start and the
     acceleration demos. The circular trick cannot work there, so crank angle is integrated
     sample by sample and a pulse is placed each time a cylinder's firing angle is crossed.
+
+BESTELLT: an extra, directly comparable engine_start() variant for one car, using a REAL
+recorded starter/crank instead of the sine "whine" every other car uses (see
+real_crank_from_recording() and the '<key>_rec' companion entries in main()) — a real
+ignition sample from sounds/, layered under the SAME synthesized engine body every other
+car gets. It shipped for a time as its own selectable 'p992gt3r_rec' sound profile
+alongside the plain synthetic p992gt3r; the profile was later removed again (the two
+sounded alike to the user), so the generated '_rec' files are currently not wired to any
+shipped profile. Everything else here is still synthetic, no recorded material.
 
 Usage:  python engine_fx.py
 """
@@ -21,6 +30,10 @@ import numpy as np
 
 from engine_synth import (CARS, SR, OUT, WORK, exhaust_ir, circular_noise,
                           saturate, metal_tick)
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
+SOUNDS = os.path.join(REPO, 'sounds')
 
 REDLINE = 9000.0
 IDLE = 1500.0
@@ -49,6 +62,54 @@ def to_ogg(x, name, q='4'):
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', wav,
                     '-c:a', 'libvorbis', '-q:a', q, '-ac', '1', ogg], check=True)
     return os.path.getsize(ogg)
+
+
+def read_wav_mono(path):
+    """16-bit PCM back into a float32 array in -1..1 - the read side of write_wav()."""
+    with wave.open(path, 'rb') as w:
+        assert w.getsampwidth() == 2, 'erwartet 16-bit PCM, bekam %d Byte' % w.getsampwidth()
+        n = w.getnframes()
+        raw = w.readframes(n)
+    x = np.frombuffer(raw, dtype='<i2').astype(np.float32) / 32768.0
+    if w.getnchannels() == 2:
+        x = x.reshape(-1, 2).mean(axis=1)
+    return x
+
+
+def real_crank_from_recording(mp3_path, crank_end):
+    """A real starter/crank recording, cut down to the app's own cranking window.
+
+    ffmpeg resamples straight to the project's SR and to mono while decoding - one call,
+    no separate resampler needed (unlike voice_synth.py, which resamples numpy arrays
+    because System.Speech only ever gives it the OS's own rate).
+
+    GEMESSEN an freesound_community-car-engine-start-44357.mp3: seine RMS-Huelle (50-ms-
+    Fenster) steigt ab 0,15 s, erreicht ihr Maximum bei 0,85 s und faellt danach auf ein
+    niedrigeres, stetiges Niveau - der Motor faengt. Das deckt sich fast genau mit dieser
+    Datei eigenem crank_end (0,95 s): die ersten `crank_end` Sekunden der Aufnahme SIND
+    das Anlasser-Geraeusch, der Rest ist schon der laufende (aufgenommene) Motor und wird
+    hier nicht gebraucht - der synthetische Teil uebernimmt ab dem Fang.
+    """
+    raw = os.path.join(WORK, 'real_crank_raw.wav')
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', mp3_path,
+                    '-ar', str(SR), '-ac', '1', raw], check=True)
+    x = read_wav_mono(raw)
+    n = int(crank_end * SR)
+    if len(x) < n:
+        # Kuerzer als gebraucht: wiederholen statt abzuschneiden auf zu wenig - eine
+        # Anlasser-Aufnahme, die mittendrin aufhoert, klaenge nach einem Aussetzer.
+        reps = int(np.ceil(n / len(x)))
+        x = np.tile(x, reps)
+    x = x[:n].astype(np.float32)
+    # Kurzes Ein-/Ausblenden: ohne das knackt es am Anfang (Aufnahme beginnt nicht bei
+    # Stille) und am Uebergang zum synthetischen Fang (harter Schnitt waere hoerbar).
+    fade = min(int(0.06 * SR), n // 4)
+    if fade > 0:
+        ramp = np.linspace(0, 1, fade, dtype=np.float32)
+        x[:fade] *= ramp
+        x[-fade:] *= ramp[::-1]
+    peak = float(np.max(np.abs(x))) + 1e-9
+    return x / peak
 
 
 def resonant_noise(n, f0, q, rng):
@@ -339,8 +400,15 @@ def render_rpm_curve(cfg, rpm_of_t, dur, seed, load_of_t=None):
     return (out / (float(np.max(np.abs(out))) + 1e-9) * 0.9).astype(np.float32), rpm
 
 
-def engine_start(cfg, seed):
-    """Starter cranking, catch, a short flare, then settle to idle."""
+def engine_start(cfg, seed, real_crank=None):
+    """Starter cranking, catch, a short flare, then settle to idle.
+
+    `real_crank`: an optional pre-loaded, pre-trimmed real recording (see
+    real_crank_from_recording()) covering exactly the first `crank_end` seconds - used
+    INSTEAD of the synthetic sine whine below, for whichever car was ordered to get one.
+    Everything from the catch onward is the same synthesized engine body for every car,
+    real recording or not - only the cranking transient changes.
+    """
     dur = 2.6
     crank_end, catch, flare_top = 0.95, 1.15, 1.75
 
@@ -361,11 +429,20 @@ def engine_start(cfg, seed):
         return l.astype(np.float32)
 
     x, _ = render_rpm_curve(cfg, rpm_of_t, dur, seed, load_of_t)
-    # Starter motor whine only while cranking.
-    rng = np.random.default_rng(seed + 1)
     t = np.arange(len(x)) / SR
-    whine = np.sin(2 * np.pi * 1150.0 * t) * 0.16 * (t < crank_end) * (1 - np.exp(-t * 25.0))
-    x = x + whine.astype(np.float32)
+    if real_crank is not None:
+        # Die echte Aufnahme ERSETZT die Sinuswelle, deckt aber denselben Zeitraum
+        # (0 bis crank_end) und wird genauso leise gemischt wie die Sinuswelle vorher -
+        # sie liegt UNTER dem synthetischen Motorkoerper, nicht an seiner Stelle.
+        n = min(len(real_crank), int(crank_end * SR))
+        layer = np.zeros(len(x), dtype=np.float32)
+        layer[:n] = real_crank[:n] * 0.55
+        x = x + layer
+    else:
+        # Starter motor whine only while cranking - der Rueckfall fuer jedes andere Auto.
+        rng = np.random.default_rng(seed + 1)
+        whine = np.sin(2 * np.pi * 1150.0 * t) * 0.16 * (t < crank_end) * (1 - np.exp(-t * 25.0))
+        x = x + whine.astype(np.float32)
     return (x / (np.max(np.abs(x)) + 1e-9) * 0.9).astype(np.float32)
 
 
@@ -542,6 +619,12 @@ def main():
         meta['shift']['up' if up else 'down'] = {'file': name + '.ogg', 'seconds': secs}
         print('%-17s %d KB  %.2fs' % (name, sz // 1024, secs))
 
+    # BESTELLT: eine echte Aufnahme fuer die Zuendung, "ideally the porsche" - siehe
+    # real_crank_from_recording() und der Kommentar am Kopf dieser Datei.
+    real_start_recordings = {
+        'p992gt3r': 'freesound_community-car-engine-start-44357.mp3',
+    }
+
     meta['start'] = {}
     meta['accel'] = {}
     for key, cfg in CARS.items():
@@ -555,6 +638,21 @@ def main():
                               'upshifts': ups, 'downshifts': downs}
         print('%-8s demo      %d KB  %.1fs  %d hoch / %d runter  0-%.1f km/h  Drehzahl %d-%d'
               % (key, sz // 1024, ts[-1], ups, downs, vs.max(), rs.min(), rs.max()))
+
+    # '<key>_rec'-Begleiteintraege: dieselbe Motorkonfiguration wie ihr synthetisches
+    # Original, aber mit einer echten Aufnahme unter der Zuendung, als EIGENES, direkt daneben
+    # waehlbares Profil in #sound-profile (audio/loops.json traegt den passenden Loop-Eintrag
+    # von Hand nach, mit denselben .ogg-Dateien wie das Original - nur die Zuendung
+    # unterscheidet sich). Nicht als Ersatz des Originals, damit ein direkter A/B-Vergleich
+    # moeglich ist statt einer stillen, schwer nachpruefbaren Aenderung.
+    for key, fname in real_start_recordings.items():
+        real_crank = real_crank_from_recording(os.path.join(SOUNDS, fname), crank_end=0.95)
+        rec_key = key + '_rec'
+        sz = to_ogg(engine_start(CARS[key], seed=seed_for('start', key), real_crank=real_crank),
+                    '%s_start' % rec_key)
+        meta['start'][rec_key] = {'file': '%s_start.ogg' % rec_key, 'seconds': 2.6}
+        print('%-8s start     %d KB  (echte Zuendung, Vergleichseintrag neben %s)'
+              % (rec_key, sz // 1024, key))
 
     # The curve data the documentation charts are drawn from, so the picture and the audio
     # come from the same simulation run.

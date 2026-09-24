@@ -19,11 +19,14 @@
       label: 'Arcade',
       kurz: 'Der ursprüngliche Sim-Modus',
       text: 'Automatik, 2,0 s auf 100, voller Grip, kein Reifenverschleiß und kein '
-          + 'Tankgewicht. Die Bremse steht am Anschlag, also der kürzeste Bremsweg von '
-          + 'allen, und die Lenkkalibrierung auf 250 Prozent: der volle Einschlag liegt '
+          + 'Tankgewicht. Die Bremse ist die kräftigste von allen, also der kürzeste '
+          + 'Bremsweg, und die Lenkkalibrierung auf 250 Prozent: der volle Einschlag liegt '
           + 'schon bei einem Viertel Stick an. 50 Abgänge erlaubt, kein Schaden. Zum '
           + 'Fahren ohne Nachdenken.',
-      v: { 'setting-grip': 1.0, 'setting-brakepower': 1.5, 'setting-autoshift': true,
+      // BESTELLT: "bei arcade die bremskraft verstaerken um 50%" - von 1.5 (dem alten
+      // Deckel des Reglers) auf 2.25. Der Regler selbst hat jetzt Platz bis 2.5, siehe
+      // #setting-brakepower im Markup.
+      v: { 'setting-grip': 1.0, 'setting-brakepower': 2.25, 'setting-autoshift': true,
            'setting-zero-to-top': 2.0, 'setting-coast-drag': 0.4, 'setting-fuelweight': 0,
            'setting-tyres': 0, 'phys-steerresp': 2.6, 'setting-brakebias': 56,
            // Die engste Lenkung von allen: bei 250 Prozent liegt der volle Anschlag schon
@@ -54,13 +57,25 @@
            // das Byte genau proportional zum Tacho, also die kalibrierte Fassung.
            'setting-topspeed': 2.0 },
     },
+    // ---- GT7 / SPORT WURDE ENTFERNT ---------------------------------------------------
+    //
+    // War hier: ein "Sport"-Preset (Objektschluessel gt7), das mehr Gewichtsverlagerung
+    // (phys-transfer-k 30->40 %) und traegeres Einschwingen (phys-load-tau 80->160 ms)
+    // simulierte. BESTELLT (diese Runde): "sport modus wieder raus (seit dem ist die
+    // lenkung auch so extrem schwach beim gas geben)" - genau die zwei erhoehten Werte
+    // verstaerken den Lastwechsel unter Gas (st.loadFront faellt staerker und traeger, siehe
+    // 40-physics.js), und darueber haengt exakt derselbe Reibkreis-Mechanismus, der schon
+    // einmal (steerExpo) als "Lenkung schwach beim Gas geben" gemeldet wurde. Die zwei
+    // Regler phys-transfer-k/phys-load-tau bleiben im Markup (ihre Vorgabewerte entsprechen
+    // dem Basismodell, 30 %/80 ms, und beeinflussen nichts, solange niemand sie von Hand
+    // hochstellt) - nur das Preset, das sie automatisch hochzog, ist weg.
     pro: {
       label: 'Pro',
       kurz: 'Halb so weit zwischen Arcade und Realismus GT3',
       text: 'Automatik, 2,6 s auf 100, voller Grip, Reifenmodell an und kein '
           + 'Tankgewicht. Lenkkalibrierung 200 Prozent, damit auch enge Strecken gehen '
           + '– der volle Einschlag liegt bei etwa einem Drittel Stick an. Fading und '
-          + 'Windschatten sind aus; sie stehen ab GT4 zur Verfügung.',
+          + 'Windschatten sind aus; sie stehen ab GT3 zur Verfügung.',
       // AUTOMATIK, obwohl Pro sonst die Zwischenstufe zu GT3 ist. Pro ist seit v0.5 die
       // Vorgabe, und wer beim ersten Start von Hand schalten muss und es nicht weiss, bleibt
       // im 1. Gang haengen - dann ist das Auto genau so traege, wie gemeldet wurde. Von Hand
@@ -153,37 +168,6 @@
            // Gasfaktor: wie frueh das Auto volle Motorleistung bekommt. 1,0 ist
            // das Byte genau proportional zum Tacho, also die kalibrierte Fassung.
            'setting-topspeed': 1.45 },
-    },
-    gt4: {
-      label: 'GT4',
-      kurz: 'Weniger Leistung, mehr Reserve',
-      text: 'Automatik, 3,1 s auf 100, Reifenverschleiß und Tankgewicht knapp halb so stark wie im Realismus-GT3. Die Klasse direkt neben Pro: Bremsfading, Windschatten und ungleicher Verschleiß sind an, aber gutmütig eingestellt, und die Lenkkalibrierung liegt bei 175 Prozent.',
-      v: { 'setting-grip': 0.95, 'setting-brakepower': 1.3, 'setting-autoshift': true,
-           'setting-zero-to-top': 3.1, 'setting-coast-drag': 0.75, 'setting-fuelweight': 0.3,
-           'setting-tyres': 0.45, 'phys-steerresp': 2.15, 'setting-brakebias': 59,
-           // Lenkkalibrierung 1,0 heisst: der uebertragene Winkel ist genau der gerechnete.
-           // Die Klassen ab GT3 sind gegen gemessenes Verhalten abgestimmt, und eine
-           // Kalibrierung darauf waere ein Aufschlag auf eine Messung.
-           'setting-steer-calib': 1.75,
-           'phys-accel': 1.0,
-           'setting-crash-threshold': 40,
-           // Etwas gutmuetiger als GT3, wie die ganze Klasse.
-           'setting-brake-steal': 1.05,
-           // Waermer aus, wie GT3.
-           'setting-tyre-blankets': true,
-           'setting-fuel-drain': 0.7, 'setting-crash-count': 4,
-           'setting-crash-damage': false,
-           'setting-repair-time': 8,
-           // Block 4: Bremsfading, Windschatten, Reifenasymmetrie und -druck.
-           'setting-brake-fade': true,
-           'setting-brake-fade-strength': 0.95,
-           'setting-dirtyair': true,
-           'setting-dirtyair-strength': 0.95,
-           'setting-tyre-asym': true,
-           'setting-tyre-pressure': 1.8,
-           // Gasfaktor: wie frueh das Auto volle Motorleistung bekommt. 1,0 ist
-           // das Byte genau proportional zum Tacho, also die kalibrierte Fassung.
-           'setting-topspeed': 1.6 },
     },
     f1: {
       label: 'F1',
@@ -325,6 +309,30 @@
     presetSay(p.label + ': ' + n + ' Regler gesetzt'
               + (missing.length ? ', nicht gefunden: ' + missing.join(', ') : ''));
     $('preset-json').value = JSON.stringify(presetRead());
+  }
+
+  // ---- WERKSEINSTELLUNG, ohne eigenen Eintrag in PRESETS ---------------------------
+  //
+  // BESTELLT: "in garage weiterer button zum 'standard wiederherstellen' fuer die
+  // Einstellungen". Es gibt fuenf kuratierte Abstimmungen (Arcade..Realismus GT3), aber
+  // keine neutrale "Standard"-Abstimmung, und eine von Hand gepflegte sechste waere eine
+  // zweite Quelle fuer Zahlen, die bereits an EINER Stelle stehen: den Attributen im
+  // Markup. defaultValue/defaultChecked lesen genau die Werte, mit denen jeder Regler
+  // ausgeliefert wird - das ist die Werkseinstellung per Definition, nicht per Abschrift.
+  //
+  // Die Rueckmeldung bleibt unuebersetzt wie alle presetSay()-Meldungen (variable Zahl):
+  // "was hier fehlt, bleibt deutsch stehen", siehe die Begruendung ueber I18N_EN.
+  function restoreFactoryDefaults() {
+    let n = 0;
+    for (const el of presetControls()) {
+      const val = el.type === 'checkbox' ? el.defaultChecked : el.defaultValue;
+      if (presetSet(el.id, val)) n++;
+    }
+    presetSay('Werkseinstellung: ' + n + ' Regler zur\u00fcckgesetzt.');
+    $('preset-json').value = JSON.stringify(presetRead());
+  }
+  if ($('gar-restore-defaults')) {
+    $('gar-restore-defaults').addEventListener('click', restoreFactoryDefaults);
   }
 
   // Die Knoepfe werden aus PRESETS GEBAUT statt einzeln gebunden. Vorher standen drei
@@ -494,30 +502,44 @@
     try { localStorage.setItem(PRESET_STORE, JSON.stringify(o)); }
     catch (e) { presetSay('Konnte nicht ablegen: ' + e.message); }
   }
+  // MEHRERE BEDIENSTELLEN, EIN SPEICHER: BESTELLT: "auch in garage erlauben,
+  // standardeinstellungen zu machen" - die Ablage gibt es seit v0.7.x nur in den
+  // Optionen. presetStoreList() fuellt jetzt ALLE registrierten Auswahllisten
+  // (PRESET_STORE_SELECTS), und wirePresetStore() haengt dieselben drei Handlungen
+  // (ablegen/laden/loeschen) an ein beliebiges Set von Bedienelementen - beide Stellen
+  // lesen/schreiben denselben Schluessel PRESET_STORE, eine hier abgelegte Abstimmung
+  // erscheint also sofort auch drueben.
+  const PRESET_STORE_SELECTS = [];
+
   function presetStoreList() {
-    const sel = $('preset-store-list');
-    if (!sel) return;
     const namen = Object.keys(presetStoreRead()).sort();
-    sel.innerHTML = '<option value="">\u2013 abgelegt \u2013</option>'
+    const optionsHtml = '<option value="">\u2013 abgelegt \u2013</option>'
       + namen.map(n => '<option>' + n.replace(/</g, '&lt;') + '</option>').join('');
+    for (const selId of PRESET_STORE_SELECTS) {
+      const sel = $(selId);
+      if (sel) sel.innerHTML = optionsHtml;
+    }
   }
 
-  if ($('preset-store-save')) {
-    $('preset-store-save').addEventListener('click', () => {
-      const name = $('preset-store-name').value.trim();
+  function wirePresetStore(nameId, saveId, listId, loadId, delId) {
+    if (!$(saveId)) return;
+    PRESET_STORE_SELECTS.push(listId);
+
+    $(saveId).addEventListener('click', () => {
+      const name = $(nameId).value.trim();
       if (!name) { presetSay('Erst einen Namen eingeben.'); return; }
       const o = presetStoreRead();
       const neu = !(name in o);
       o[name] = presetRead();
       presetStoreWrite(o);
       presetStoreList();
-      $('preset-store-list').value = name;
+      $(listId).value = name;
       presetSay('"' + name + '" ' + (neu ? 'abgelegt' : 'überschrieben')
                 + ', ' + Object.keys(o[name]).length + ' Regler.');
     });
 
-    $('preset-store-load').addEventListener('click', () => {
-      const name = $('preset-store-list').value;
+    $(loadId).addEventListener('click', () => {
+      const name = $(listId).value;
       if (!name) { presetSay('Nichts ausgewählt.'); return; }
       const cfg = presetStoreRead()[name];
       if (!cfg) { presetSay('"' + name + '" ist nicht mehr da.'); return; }
@@ -527,11 +549,11 @@
       // Fall, fuer den die Pruefung gebaut wurde - sie hier zu umgehen waere absurd.
       $('preset-json').value = JSON.stringify(cfg);
       $('preset-import').click();
-      $('preset-store-name').value = name;
+      $(nameId).value = name;
     });
 
-    $('preset-store-del').addEventListener('click', () => {
-      const name = $('preset-store-list').value;
+    $(delId).addEventListener('click', () => {
+      const name = $(listId).value;
       if (!name) { presetSay('Nichts ausgewählt.'); return; }
       const o = presetStoreRead();
       delete o[name];
@@ -539,9 +561,13 @@
       presetStoreList();
       presetSay('"' + name + '" gelöscht.');
     });
-
-    presetStoreList();
   }
+
+  wirePresetStore('preset-store-name', 'preset-store-save', 'preset-store-list',
+                   'preset-store-load', 'preset-store-del');
+  wirePresetStore('gar-preset-store-name', 'gar-preset-store-save', 'gar-preset-store-list',
+                   'gar-preset-store-load', 'gar-preset-store-del');
+  presetStoreList();
 
   // ---- Die Knopfleiste in der Garage --------------------------------------------------
   // Sie ruft applyPreset(), also DIESELBE Funktion wie in den Optionen. presetSet() feuert

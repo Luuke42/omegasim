@@ -33,6 +33,16 @@
   // aus. Die Korrelation war echt, aber nicht ursaechlich - 422 Pakete sind rund 20 Sekunden
   // und lagen am Sitzungsanfang, bevor etwas ueberfahren wurde.
   let headlightsOn = true;
+  // ---- AUTO 2 BEKOMMT EIN EIGENES LICHT -----------------------------------------
+  //
+  // BESTELLT: "splitscreen: Lichter an/aus sollen unabhaengig voneinander klappen."
+  //
+  // Bis hierher war headlightsOn EINE gemeinsame Variable, siehe headlichtZwei() in
+  // 70-race.js: Auto 2 legte nur seine eigene Lichthupe darueber, das Dauerlicht war
+  // Auto 1s Schalter. Jetzt hat Auto 2 seinen eigenen - kein UI-Element dafuer noetig,
+  // die Gamepad-Taste in pollPad2() reicht (dieselbe Begruendung wie bei der Lichthupe:
+  // eine Absicht EINES Fahrers, kein gemeinsamer Zustand).
+  let headlightsOn2 = true;
   let raceLampHead = false;  // resolved headlight state, for the racing screen
 
   // Eine Stelle fuer die Leseart, zwei Bedienelemente darauf: der Schalter in den Optionen
@@ -595,6 +605,36 @@
   window.addEventListener('gamepadconnected', triggerLageZeigen);
   window.addEventListener('gamepaddisconnected', triggerLageZeigen);
 
+  // ---- DIE INPUT/OUTPUT-KURVE, fuer Gas- UND Lenkkennlinie -------------------------
+  //
+  // BESTELLT: "Bei beiden die input/output uebersetzungskurve anzeigen." Eine Funktion
+  // fuer beide Regler statt zwei fast identischer Zeichenroutinen: beide sind dieselbe
+  // Kurvenfamilie (x^gamma, mit oder ohne Vorzeichen), nur mit anderem Wertebereich -
+  // 0..1 fuers Gas, -1..1 fuer die Lenkung.
+  //
+  // GESAMPELT UND NICHT ANALYTISCH GEZEICHNET: eine SVG-Kurve durch 24 Stuetzpunkte
+  // sieht bei diesen glatten Potenzfunktionen von einer geraden Linie nicht zu
+  // unterscheiden aus, und ein Pfad aus Geradenstuecken bleibt bei jedem Exponenten
+  // gleich einfach zu bauen - keine Bezier-Naeherung noetig.
+  function kennlinienPlotZeichnen(pathId, fn, xMin, xMax) {
+    const el = $(pathId);
+    if (!el) return;
+    const N = 24;
+    const spanne = xMax - xMin;
+    const pts = [];
+    for (let i = 0; i <= N; i++) {
+      const x = xMin + spanne * i / N;
+      const y = fn(x);
+      // x waagerecht 0..100, y senkrecht 60..0 (oben = groesster Wert) - derselbe
+      // Wertebereich [xMin, xMax] fuer beide Achsen, weil Eingang und Ausgang bei
+      // beiden Kennlinien denselben Bereich teilen.
+      const px = (x - xMin) / spanne * 100;
+      const py = 60 - (y - xMin) / spanne * 60;
+      pts.push(px.toFixed(1) + ',' + py.toFixed(1));
+    }
+    el.setAttribute('d', 'M' + pts.join(' L'));
+  }
+
   // GASKENNLINIE und ANFAHRSCHUB. Beide lesen ihren Anfangswert AUS DEM MARKUP und
   // haengen sich danach an 'input' - dasselbe Muster wie bei setting-vibration, wo der
   // fehlende Anfangsabgleich schon einmal einen toten Schalter ergeben hat.
@@ -609,6 +649,22 @@
     const viertel = Math.round(100 * Math.pow(0.25, g));
     $('setting-throttle-gamma-val').textContent =
       g.toFixed(2) + (nah ? ' linear' : ' \u00b7 \u00bc Weg = ' + viertel + '%');
+    kennlinienPlotZeichnen('setting-throttle-gamma-plot', (x) => gasKennlinie(x, g), 0, 1);
+  }
+  // LENKKENNLINIE. BESTELLT: "wie beschleunigungskurve auch lenkkurve einbauen als
+  // option mit slider." Dieselbe Kurvenfamilie wie oben, bipolar - siehe expoSteer in
+  // 40-physics.js, das genau diese Rechnung (Vorzeichen mal Betrag hoch Exponent) im
+  // Fahrtakt schon ausfuehrt.
+  function lenkKennlinieAnwenden() {
+    const el = $('setting-steer-expo');
+    if (!el) return;
+    const e = parseFloat(el.value);
+    physEngine.config.steerExpo = e;
+    const nah = Math.abs(e - 1) < 0.001;
+    const viertel = Math.round(100 * Math.pow(0.25, e));
+    $('setting-steer-expo-val').textContent =
+      e.toFixed(2) + (nah ? ' linear' : ' \u00b7 \u00bc Weg = ' + viertel + '%');
+    kennlinienPlotZeichnen('setting-steer-expo-plot', (x) => lenkKennlinie(x, e), -1, 1);
   }
   function anfahrschubAnwenden() {
     const el = $('setting-minmove');
@@ -622,6 +678,10 @@
   if ($('setting-throttle-gamma')) {
     gasKennlinieAnwenden();
     $('setting-throttle-gamma').addEventListener('input', gasKennlinieAnwenden);
+  }
+  if ($('setting-steer-expo')) {
+    lenkKennlinieAnwenden();
+    $('setting-steer-expo').addEventListener('input', lenkKennlinieAnwenden);
   }
   if ($('setting-minmove')) {
     anfahrschubAnwenden();
@@ -673,6 +733,13 @@
       malen: () => pitScreenRender() },
     { id: 'uebersicht', name: 'Rennen',
       malen: () => ovScreenRender() },
+    // BESTELLT: "cockpit: weiteren screen mit Renneinstellungen einfuegen." waehlen()
+    // ist generisch verdrahtet (cockpitScreenWaehlen()), pad() ist es NICHT - siehe die
+    // Begruendung bei raceScreenPad() in 70-race.js und den Aufruf in pollGamepad()
+    // (90-ghosts.js), der ihn genau wie pitScreenPad() von Hand mit einbindet.
+    { id: 'renneinstellungen', name: 'Renneinstellungen',
+      waehlen: () => raceScreenSelect(),
+      malen: () => raceScreenRender() },
     // ---- NUR IM ZWEI-SPIELER-MODUS BLAETTERBAR ---------------------------------------
     //
     // Der Eintrag steht IMMER in der Liste und wird beim Blaettern uebersprungen, solange
@@ -1006,7 +1073,11 @@
   // ueber `!(platz > 0)` still aus - die Einpassung bei Groessenaenderung hat nie
   // stattgefunden.
   window.addEventListener('resize', () => cockpitPassung());
-  window.addEventListener('orientationchange', () => setTimeout(cockpitPassung, 120));
+  // syncRaceRotation() und nicht nur cockpitPassung(): eine Drehung des Geraets kann die
+  // Hochkant/Quer-Frage selbst aendern (race-turn), nicht nur die Einpassung darin. Vorher
+  // stand hier nur cockpitPassung() - die Einpassung zog nach, aber die race-turn-Klasse
+  // blieb auf dem Stand vor der Drehung stehen.
+  window.addEventListener('orientationchange', () => setTimeout(syncRaceRotation, 120));
   document.querySelectorAll('[data-tab="race"]').forEach((b) => {
     b.addEventListener('click', () => setTimeout(cockpitPassung, 60));
   });
@@ -1019,6 +1090,24 @@
     physEngine.config.brakeBias = pct / 100;
     $('setting-brakebias-val').textContent = pct + '% vorn';
   });
+
+  // BESTELLT (GT7-Fahrmodus): "mehr Traegheit/Gewichtsverlagerung." transferK/loadTau
+  // steuern st.loadFront schon im Fahrtakt (siehe 40-physics.js), hatten aber keinen
+  // Regler - beide braucht der neue GT7-Preset.
+  if ($('phys-transfer-k')) {
+    $('phys-transfer-k').addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      physEngine.config.transferK = v;
+      $('phys-transfer-k-val').textContent = Math.round(v * 100) + '%';
+    });
+  }
+  if ($('phys-load-tau')) {
+    $('phys-load-tau').addEventListener('input', (e) => {
+      const ms = parseInt(e.target.value, 10);
+      physEngine.config.loadTau = ms / 1000;
+      $('phys-load-tau-val').textContent = ms + ' ms';
+    });
+  }
 
   // ---- Block 4: Bremstemperatur, Windschatten, Reifen -------------------------------
   //
@@ -1106,6 +1195,11 @@
   $('setting-fuel-drain').addEventListener('input', (e) => {
     fuelDrainPerSec = parseFloat(e.target.value);
     $('setting-fuel-drain-val').textContent = fuelDrainPerSec.toFixed(1);
+    // BESTELLT: "Wenn ich Schaden, Reifen, etc. ausstelle, soll der Zustand auf das Ideal
+    // zurueckgesetzt werden." Sonst blieb ein leergefahrener Tank leer, obwohl die
+    // Simulation aus ist, bis zum naechsten Boxenstopp - ein abgeschaltetes Modell soll
+    // keine Spuren hinterlassen.
+    if (fuelDrainPerSec === 0) fuel = 100;
   });
 
   // Der Regler laeuft ueber den INDEX dieser Liste, nicht ueber den Wert: ein
@@ -1136,6 +1230,10 @@
     crashDetectionEnabled = e.target.checked;
     // Der Zaehler "Crashs bis Schadensbalken voll" ist ohne Schadensmodell bedeutungslos.
     $('setting-crash-count').disabled = !e.target.checked;
+    // BESTELLT: "Wenn ich Schaden, Reifen, etc. ausstelle, soll der Zustand auf das Ideal
+    // zurueckgesetzt werden." Sonst blieb ein kaputtes Auto kaputt, obwohl das Schadensmodell
+    // aus ist, bis zum naechsten Boxenstopp.
+    if (!e.target.checked) damage = 0;
     log('Schadensmodell ' + (e.target.checked ? 'an' : 'aus') + '.', 'info');
   });
 
@@ -1180,7 +1278,8 @@
     steerDaempfungSetzen(parseFloat($('phys-steerdamp').value), false);
   }
 
-  ['phys-steerresp', 'phys-accel', 'setting-steer-calib', 'setting-brake-steal'].forEach(id => {
+  ['phys-steerresp', 'phys-accel', 'setting-steer-calib', 'setting-brake-steal',
+   'setting-throttle-steer-relief'].forEach(id => {
     const input = $(id);
     const readout = $(id + '-val');
     const apply = () => {
@@ -1206,6 +1305,10 @@
         // Als Prozent, weil der Wert ein Faktor auf eine Anforderung ist und kein Winkel.
         // Ein Grad-Wert waere hier die falsche Einheit und die naechste Verwechslung: der
         // Winkel ist immer auf 45 Grad gedeckelt, egal was hier steht.
+        readout.textContent = Math.round(v * 100) + '%';
+      }
+      if (id === 'setting-throttle-steer-relief') {
+        physEngine.config.throttleSteerRelief = v;
         readout.textContent = Math.round(v * 100) + '%';
       }
       markDrivetrainChartsDirty();
@@ -1319,7 +1422,13 @@
     document.body.classList.add('race-fs');
     syncRaceRotation();
     // Das Vollbild braucht einen Takt, bis der Browser die neue Fenstergroesse meldet.
-    setTimeout(() => cockpitPassung(), 120);
+    // syncRaceRotation() und nicht nur cockpitPassung(): raceIsPortrait() liest
+    // window.innerWidth/innerHeight, und die koennen direkt nach requestFullscreen()/
+    // orientation.lock() noch die ALTEN Masse zeigen - der erste Aufruf oben setzt
+    // race-turn dann falsch, und cockpitPassung() allein haette daran nichts mehr
+    // geaendert, weil sie die Klasse nur LIEST statt neu zu entscheiden. GEMELDET: "Full
+    // screen im cockpit klappt manchmal nicht, vll wegen gleichzeitigem Drehen."
+    setTimeout(() => syncRaceRotation(), 120);
     $('race-fs').hidden = true; $('race-fs-exit').hidden = false;
   }
 
@@ -1332,6 +1441,12 @@
     catch (e) { /* never locked */ }
     document.body.classList.remove('race-fs', 'race-turn');
     $('race-fs').hidden = false; $('race-fs-exit').hidden = true;
+    // GEFUNDEN: cockpitScreen blieb sonst auf 'pit'/'renneinstellungen' stehen, auch nach
+    // dem Verlassen des Vollbilds. pitScreenOffen()/raceScreenOffen() (70-race.js) pruefen
+    // NUR cockpitScreenIst().id, nicht ob tab-race ueberhaupt noch aktiv/im Vollbild ist -
+    // ein Wechsel auf einen anderen Tab liess das D-Pad dort also weiter "essen", bevor
+    // menuNavMove() es je sah. cockpitScreenZu('main') hier behebt das an der Quelle.
+    cockpitScreenZu('main');
     cockpitPassung();
     setTimeout(() => cockpitPassung(), 120);
   }
@@ -1416,6 +1531,15 @@
     const bremse = mittel(st.brakeTemp4) !== null ? mittel(st.brakeTemp4)
       : ((st.brakeTempF || 0) + (st.brakeTempR || 0)) / 2;
     schreibeWert($(pre + '-tyre'), Math.round(reifen) + '\u00b0');
+    // BESTELLT: "Balken fuer die Reifensimulation, um zu sehen, ob die Reifen verschlissen
+    // sind." Restprofil und nicht Temperatur, dieselbe Groesse wie in den vier
+    // Reifenfeldern des Hauptcockpits (1 - tyreWear), 100 % heisst neu.
+    const tyb = $(pre + '-tyre-bar');
+    if (tyb) {
+      const rest = Math.max(0, Math.min(1, 1 - (typeof st.tyreWear === 'number' ? st.tyreWear : 0))) * 100;
+      tyb.style.width = rest + '%';
+      tyb.style.background = rest < 30 ? '#ff5252' : rest < 60 ? '#ffb02e' : '#2ee06a';
+    }
     schreibeWert($(pre + '-brake'), Math.round(bremse) + '\u00b0');
     // Der Akku kommt aus Byte 10 des Autos (car.battery, in 90-ghosts.js je Auto gesetzt) -
     // eine gemessene Groesse und keine gerechnete. Ohne Auto oder ohne Meldung: ein Strich,
@@ -1433,21 +1557,22 @@
               typeof tankZweiStand === 'function' ? tankZweiStand() : 0,
               typeof schadenVon === 'function' ? schadenVon(2) : 0);
 
-    // ---- DER KOPF: die Lage von Auto 2, weil sie die veraenderliche ist ---------------
+    // ---- DIE RUNDENZAHL, jetzt je Auto neben seinem eigenen Namen -------------------
+    // BESTELLT: vorher stand eine gemeinsame Kopfzeile ("Runden 3 : 5") ueber beiden
+    // Spalten; die ist mitsamt Titel und Lage-Meldung weg, die Zahl steht jetzt einzeln
+    // auf Hoehe von "Spieler 1"/"Spieler 2".
     const car2 = typeof playerCar2 !== 'undefined' ? playerCar2 : null;
     const lage = typeof boxZweiLage === 'function' ? boxZweiLage() : 'aus';
-    const kopf = $('p2s-kopf-lage');
-    if (kopf) {
-      kopf.textContent = !zweiSpieler ? 'Modus aus'
-        : (!car2 ? 'Auto 2 nicht zugeteilt'
-           : (abseitsJetztFuer(2) ? 'Auto 2 neben der Bahn' : 'beide auf der Bahn'));
-    }
-    const rundeK = $('p2s-kopf-runde');
-    if (rundeK) {
+    const r1z = $('vgl1-runde');
+    if (r1z) {
       const r1 = ((typeof playerCar !== 'undefined' && playerCar && playerCar.race
                    && playerCar.race.laps) || []).length;
+      r1z.textContent = 'Runde ' + r1;
+    }
+    const r2z = $('vgl2-runde');
+    if (r2z) {
       const r2 = ((car2 && car2.race && car2.race.laps) || []).length;
-      rundeK.textContent = 'Runden ' + r1 + ' : ' + r2;
+      r2z.textContent = 'Runde ' + r2;
     }
 
     // ---- DIE FUSSZEILE SAGT, WAS DER BOXENSTOPP GERADE BRAUCHT -----------------------
@@ -1495,10 +1620,19 @@
       knopf1.classList.toggle('warn',
         typeof pitState !== 'undefined' && pitState !== 'off');
     }
+    // BESTELLT: "Spieler 1 und Spieler 2 sollen verschiedene Motorsounds haben duerfen."
+    // Zwei Knoepfe statt einem - je einer zeigt SEIN EIGENES Auswahlfeld an.
+    const ton1 = $('vgl1-act-sound-txt');
+    if (ton1) {
+      const sel1 = $('sound-profile');
+      const opt1 = sel1 ? sel1.options[sel1.selectedIndex] : null;
+      ton1.textContent = opt1 ? motorNamen(opt1) : 'Motor';
+    }
     const ton = $('vgl-act-sound-txt');
     if (ton) {
-      const q = $('race-act-sound-txt');
-      ton.textContent = q ? q.textContent : 'Motor';
+      const sel2 = $('sound-profile-2');
+      const opt = sel2 ? sel2.options[sel2.selectedIndex] : null;
+      ton.textContent = opt ? motorNamen(opt) : 'Motor';
     }
   }
 
@@ -1519,11 +1653,12 @@
       p2ScreenRender();
     });
   }
-  if ($('vgl-act-sound')) {
-    $('vgl-act-sound').addEventListener('click', (e) => {
-      // Die Haelfte des Knopfes entscheidet ueber die Richtung - dieselbe Bedienung wie im
-      // Hauptschirm. Weitergereicht wird an den dortigen Knopf, damit es EINEN Weg durch
-      // die Motorliste gibt.
+  // BESTELLT: eigener Motor-Knopf fuer Auto 1 auf dem Vergleichsschirm, neben dem fuer
+  // Auto 2 - genau wie die zwei Boxenstopp-Knoepfe. Leitet weiter wie beim Boxenstopp-
+  // Knopf: derselbe Klick-Ort (links/rechts) geht an #race-act-sound, damit es EINEN Weg
+  // durch Auto 1s Motorliste gibt statt die Zaehllogik zweimal zu pflegen.
+  if ($('vgl1-act-sound')) {
+    $('vgl1-act-sound').addEventListener('click', (e) => {
       const q = $('race-act-sound');
       if (!q) return;
       const r = e.currentTarget.getBoundingClientRect();
@@ -1533,6 +1668,37 @@
               : q.getBoundingClientRect().right - 4 });
       q.dispatchEvent(ev);
       p2ScreenRender();
+    });
+  }
+  // BESTELLT: "Spieler 1 und Spieler 2 sollen verschiedene Motorsounds haben duerfen."
+  // Auto 1 hat seine Auswahl schon (#sound-profile, Kachel "Ton"/"Motorwerkstatt") -
+  // Auto 2 braucht eine EIGENE, ohne die Motorliste ein zweites Mal von Hand im Markup zu
+  // pflegen (drei Orte fuer eine Liste sind schon zwei zu viel, siehe 95-selftest.js).
+  // Ein Klon von #sound-profile ist deshalb die ganze Datenhaltung: unsichtbar im DOM,
+  // aber mit denselben <option>-Eintraegen und derselben Vorgabe wie Auto 1s Regler, bis
+  // der Nutzer hier zum ersten Mal etwas anderes waehlt.
+  if ($('sound-profile') && $('sound-profile-2') && !$('sound-profile-2').options.length) {
+    $('sound-profile-2').innerHTML = $('sound-profile').innerHTML;
+    $('sound-profile-2').value = $('sound-profile').value;
+  }
+  if ($('vgl-act-sound')) {
+    $('vgl-act-sound').addEventListener('click', (e) => {
+      // Dieselbe Bedienung wie beim Hauptschirm-Knopf (#race-act-sound): linke Haelfte
+      // zurueck, rechte vor - aber auf der EIGENEN Liste fuer Auto 2, nicht auf Auto 1s.
+      const sel = $('sound-profile-2');
+      if (!sel) return;
+      const brauchbar = Array.prototype.filter.call(sel.options, o => !o.disabled && !o.hidden);
+      if (!brauchbar.length) return;
+      const kasten = e.currentTarget.getBoundingClientRect();
+      const hatOrt = typeof e.clientX === 'number' && (e.clientX > 0 || e.clientY > 0);
+      const richtung = (hatOrt && e.clientX < kasten.left + kasten.width / 2) ? -1 : 1;
+      const jetzt = brauchbar.findIndex(o => o.value === sel.value);
+      const n = brauchbar.length;
+      const naechste = brauchbar[(((jetzt + richtung) % n) + n) % n];
+      sel.value = naechste.value;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      p2ScreenRender();
+      showHudToast('AUTO 2: ' + motorNamen(naechste).toUpperCase());
     });
   }
   // setzen. 80 ms, dann zurueck: eine Anzeige mit Masse setzt sich kurz, ein Textfeld nicht.
@@ -1641,7 +1807,10 @@
     $('race-light').classList.toggle('on', !!raceLampHead);
 
     $('race-fuel').textContent = fuelLiters(fuel) + ' l';
-    $('race-fuel-bar').style.width = Math.max(0, fuel) + '%';
+    // BESTELLT: "balken für tank und schaden breiter und vertikal (oben = voll)."
+    // .gt3-bar-v verankert die Fuellung unten (align-items:flex-end), height statt
+    // width laesst sie also nach OBEN wachsen.
+    $('race-fuel-bar').style.height = Math.max(0, fuel) + '%';
     $('race-fuel-bar').style.background = fuel < 20 ? '#ffb02e' : '#2ee06a';
     // Condition, not damage: full green at the start, and every crash takes a piece out.
     // A bar that GROWS as things get worse reads backwards at a glance. Every other bar on
@@ -1650,10 +1819,16 @@
     // no crash, repair or pit-stop arithmetic had to be touched.
     const health = Math.max(0, Math.min(100, 100 - damage));
     $('race-dmg').textContent = Math.round(health) + '%';
-    $('race-dmg-bar').style.width = health + '%';
+    $('race-dmg-bar').style.height = health + '%';
     $('race-dmg-bar').style.background = health <= 20 ? '#ff5252'
                                        : (health <= 55 ? '#ffb02e' : '#2ee06a');
-    $('race-batt').textContent = dashBattery === null ? '\u2013' : batteryPercent(dashBattery) + '%';
+    // BESTELLT: "f\u00fcr batterie ebenfalls balken machen" - vorher stand hier nur die
+    // Prozentzahl. null heisst "noch kein Dashboard-Byte gelesen" (siehe dashBattery in
+    // 60-track.js), der Balken bleibt dann leer statt eine falsche Zahl zu zeigen.
+    const battPct = dashBattery === null ? null : batteryPercent(dashBattery);
+    $('race-batt').textContent = battPct === null ? '\u2013' : battPct + '%';
+    $('race-batt-bar').style.height = (battPct === null ? 0 : battPct) + '%';
+    $('race-batt-bar').style.background = battPct !== null && battPct < 20 ? '#ffb02e' : '#2ee06a';
 
     const live = !!(device && device.gatt && device.gatt.connected);
     // race-conn und race-track sassen in der entfernten Kachel "Strecke". Der
@@ -2152,13 +2327,37 @@
   // Kolonnenversatz, Abseits-Antwort. `wer` ist 1, wenn nichts dasteht.
   function autopilot(fahrerBremse, wer) {
     const zwei = wer === 2;
+    const motor = zwei ? physEngine2 : physEngine;
+    const regler = zwei ? autopilotRegler2 : autopilotRegler;
+    const st = motor.state;
+    // ---- STRECKENSCAN: EIGENE, FRUEHE ABZWEIGUNG ----------------------------------
+    //
+    // BESTELLT: "Streckenscan ... mit querlage = 0 in mittlerem Tempo ueber die Strecke
+    // fahren und anhalten, wenn ein geschlossener Rundkurs gemessen wurde." Nicht ueber
+    // autopilotGrund(): die beantwortet eine GLOBALE Frage (Gelb/Einfuehrungsrunde gelten
+    // fuer beide Autos gleichermassen), ein Scan betrifft aber GENAU EIN Auto -
+    // garageScan.car in 60-track.js. Ein globales 'scan' wuerde das jeweils andere Auto
+    // mit hineinziehen, auch wenn nur eines tatsaechlich gescannt wird.
+    const meinAuto = zwei ? (typeof playerCar2 !== 'undefined' ? playerCar2 : null) : playerCar;
+    if (typeof garageScan !== 'undefined' && garageScan.aktiv && garageScan.car === meinAuto) {
+      const v = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
+      const dt = Math.max(0.01, Math.min(0.25, (Date.now() - (regler.at || Date.now())) / 1000));
+      regler.at = Date.now();
+      // formationPace(): dasselbe Mindesttempo wie die Einfuehrungsrunde - hoch genug,
+      // um die Streckencodes zuverlaessig zu lesen (siehe GHOST_READ_MIN dort).
+      // BESTELLT: "Scan-Modus [...] das Auto faehrt so schnell, dass es aus der
+      // Haarnadelkurve rausfaehrt -> drosseln." Insgesamt 85 % der Einfuehrungsrunde, in
+      // einer gemeldeten Haarnadel 65 %. Die Leseschwelle 0,35 (GHOST_READ_MIN) ist am
+      // GEDRUCKTEN Muster gemessen; der Scan laeuft auf der Bahn (trackMode 'on').
+      const ziel = formationPace() * (scanInHaarnadel(meinAuto) ? 0.65 : 0.85);
+      const geregelt = ghostSpeedControl(regler, ziel, v, dt);
+      return { grund: 'scan', throttle: geregelt.throttle, brake: geregelt.brake,
+               steer: 0, lenkt: !abseitsJetztFuer(zwei ? 2 : 1) };
+    }
     const grund = autopilotGrund();
     // AUSSETZER RAEUMEN DEN REGLER AUF. Ohne das traegt der I-Anteil ueber das Ende der
     // gelben Phase hinaus und gibt beim naechsten Mal aus dem Stand Gas.
     if (!grund) { autopilotZuruecksetzen(wer); return null; }
-    const motor = zwei ? physEngine2 : physEngine;
-    const regler = zwei ? autopilotRegler2 : autopilotRegler;
-    const st = motor.state;
     // ---- WIE EIN GHOST, UND DAS IST DER BESTELLTE UNTERSCHIED ---------------------
     //
     // GEMELDET: "gelbe Flagge fuer mein Auto auf der Bahn fixen: es gibt nur Gas, sollte
@@ -2673,6 +2872,11 @@
     }
     if (typeof renderGarage === 'function') renderGarage();
     if (typeof zweiSpielerKachelZeichnen === 'function') zweiSpielerKachelZeichnen();
+    // Der Spieler-Umschalter ueber der Bindungstabelle erscheint/verschwindet mit dem
+    // Modus (siehe bindPlayerRowZeichnen in 90-ghosts.js, ueber renderBindTable erreicht).
+    // Ohne diesen Ruf blieb er stehen, wie er beim Laden war, bis die naechste Zuordnung
+    // oder ein Neuladen ihn zufaellig nachzog.
+    if (typeof renderBindTable === 'function') renderBindTable();
     // Die Hoehe des Cockpits aendert sich mit der neuen Zeile, im Vollbild also auch der
     // Skalierungsfaktor. Ohne diesen Ruf steht die Zeile im Vollbild unter dem Rand.
     cockpitPassung();
@@ -2812,6 +3016,10 @@
   let macro = [];          // [{t, steer, throttle}]
   let recordStartTime = 0;
   let playTimers = [];
+  // Einmaliger Haken fuer "eine Wiedergabe ist fertig" - gesetzt von 90c-macro-track.js,
+  // hier nur aufgerufen und sofort wieder geloescht. Kein neuer Zustand fuer eine spaetere
+  // Datei, sondern derselbe Punkt, an dem stopPlayback() ohnehin schon "fertig" weiss.
+  let macroPlaybackDoneCallback = null;
 
   function loadMacroStore() {
     try { return JSON.parse(localStorage.getItem(MACRO_STORE_KEY) || '{}'); }
@@ -2887,6 +3095,11 @@
     $('btn-stop-play').disabled = true;
     releaseInput(SRC.MACRO);
     playLog(playLog.lastMsg = 'Wiedergabe beendet.');
+    if (macroPlaybackDoneCallback) {
+      const fn = macroPlaybackDoneCallback;
+      macroPlaybackDoneCallback = null;
+      fn();
+    }
   }
 
   $('btn-stop-play').onclick = stopPlayback;

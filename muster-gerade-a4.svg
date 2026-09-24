@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="297.01mm" height="210.02mm" viewBox="0 0 297.01 210.02">
+  <!--
+    GERADE, SENKRECHTE TRAPEZ-BALKEN + STRICHCODE-BAND. A4 QUER,
+    1 SVG-Einheit = 1 mm.
+
+    DIE TRAPEZE sind experimentell, zum Auslegen und Vergleichen mit einer
+    Infrarot-Aufnahme der echten Bahn: 12 Stueck nebeneinander, randlos bis
+    zum linken/rechten Blattrand, jedes oben 5 mm und unten 20 mm
+    breit - eine ERFUNDENE Folge, das echte Wort der Geraden (Byte 12 =
+    0x02) ist nicht entziffert (CARRERA_HYBRID.md, gescheiterter
+    Messversuch vom 31.08.). Balken + Luecke ist bei jeder Hoehe konstant
+    25 mm, die Luecke ist deshalb von selbst dieselbe Form kopfueber.
+
+    DAS STRICHCODE-BAND oben (60.2 mm hoch, volle Breite) traegt das
+    Start/Ziel-Wort aus make_track_sheets.py/startziel-a4.svg (Balken dDddDd,
+    Luecken LlLLl, 54.22 mm lang) - NACHGETRAGEN, weil genau dieser Code am Auto
+    die Start/Ziel-Sperre setzt (ZIEL_SPERRE_BIT, Byte 15 Bit 3), und die
+    treibt die Rundenzaehlung im Ausdruck-Modus an. Ohne ihn zaehlt eine
+    zusammengeklebte Ausdruck-Schleife keine Runde mehr - genau das war der
+    gemeldete Fehler ("Ausdruck zum runden zaehlen klappt nicht mehr").
+
+    DRUCKEN: 100 % / "Tatsaechliche Groesse", NICHT "an Seite anpassen".
+    Randlos: ein Drucker ohne echten Randlos-Druck schneidet aussen etwas ab.
+  -->
+  <rect x="0" y="0" width="297.01" height="210.02" fill="#ffffff"/>
+  <g fill="#000000">
+    <rect x="0.000" y="0.000" width="297.010" height="3.598"/>
+    <rect x="0.000" y="10.128" width="297.010" height="6.604"/>
+    <rect x="0.000" y="20.245" width="297.010" height="3.598"/>
+    <rect x="0.000" y="30.373" width="297.010" height="3.598"/>
+    <rect x="0.000" y="40.501" width="297.010" height="6.604"/>
+    <rect x="0.000" y="50.618" width="297.010" height="3.598"/>
+    <rect x="0.000" y="54.216" width="297.010" height="3.598"/>
+    <path d="M 8.505 60.216 L 13.505 60.216 L 21.005 210.020 L 1.005 210.020 Z"/>
+    <path d="M 33.505 60.216 L 38.505 60.216 L 46.005 210.020 L 26.005 210.020 Z"/>
+    <path d="M 58.505 60.216 L 63.505 60.216 L 71.005 210.020 L 51.005 210.020 Z"/>
+    <path d="M 83.505 60.216 L 88.505 60.216 L 96.005 210.020 L 76.005 210.020 Z"/>
+    <path d="M 108.505 60.216 L 113.505 60.216 L 121.005 210.020 L 101.005 210.020 Z"/>
+    <path d="M 133.505 60.216 L 138.505 60.216 L 146.005 210.020 L 126.005 210.020 Z"/>
+    <path d="M 158.505 60.216 L 163.505 60.216 L 171.005 210.020 L 151.005 210.020 Z"/>
+    <path d="M 183.505 60.216 L 188.505 60.216 L 196.005 210.020 L 176.005 210.020 Z"/>
+    <path d="M 208.505 60.216 L 213.505 60.216 L 221.005 210.020 L 201.005 210.020 Z"/>
+    <path d="M 233.505 60.216 L 238.505 60.216 L 246.005 210.020 L 226.005 210.020 Z"/>
+    <path d="M 258.505 60.216 L 263.505 60.216 L 271.005 210.020 L 251.005 210.020 Z"/>
+    <path d="M 283.505 60.216 L 288.505 60.216 L 296.005 210.020 L 276.005 210.020 Z"/>
+  </g>
+</svg>

@@ -33,6 +33,7 @@
       if (audioCtx.state === 'suspended') audioCtx.resume();
       loadEngineSamples(); // needs the AudioContext, so it can only start from here
       loadFxSamples();
+      loadVoiceSamples();
       loadAmbience();
     }
     document.removeEventListener('pointerdown', unlockAudioOnFirstGesture);
@@ -48,6 +49,7 @@
       if (audioCtx.state === 'suspended') audioCtx.resume();
       loadEngineSamples();
       loadFxSamples();
+      loadVoiceSamples();
       loadAmbience();
       refreshAmbienceGains();
     } else if (engineGain) {
@@ -91,7 +93,8 @@
     // DIESELBE REIHENFOLGE WIE IM MENUE. Fuer die Funktion ist sie belanglos - diese Liste
     // ist nur eine Mitgliedschaftspruefung -, aber zwei Listen derselben Sache in
     // unterschiedlicher Ordnung sind die naechste Verwechslung.
-    'p992gt3r', 'm4gt3', 'mustang', 'f296gt3',
+    'p992gt3r',
+    'm4gt3', 'mustang', 'f296gt3',
     'amggt3', 'c6r', 'c5r', 'z06gt3r', 'vantagegt3', 'huracan', 'f1_2026',
     // Vier historische Rennwagen, dazugekommen in v0.4.54 und als WIP gekennzeichnet: nach
     // Gehoer geprueft ist keiner von ihnen.
@@ -113,6 +116,13 @@
     'listerstorm', 'rs5dtm', 'impalanascar',
     'capri_zakspeed', 'p935k4',
     'demon', 'mustang68', 'blazer90',
+    // ---- ZWEI ALLTAGSKLASSIKER VOR 1970, WIP -----------------------------------------
+    //
+    // BESTELLT: "motorsounds: ford tudor slantback 1937 und vw käfer 1300 (herbie)."
+    // Anders als alle bisherigen WIP-Motoren ist hier nicht nur der Klang ungehoert,
+    // sondern auch die Geometrie (Zylinderzahl, Zuendfolge, Bankaufteilung) recherchiert
+    // statt einer mitgelieferten technischen Tabelle entnommen - siehe audio/CREDITS.md.
+    'fordtudor37', 'kaefer1300',
   ];
   // KEINE FESTE LISTE MEHR. Bis v0.4.55 stand hier ['idle','mid','high'], und genau diese
   // Liste war die Annahme, die den Ton kaputt gemacht hat: sie kannte drei Namen, also konnte
@@ -194,8 +204,12 @@
   // Aufbauzeit von dort traefe die temporale Todeszone und nimmt die ganze IIFE mit. Die
   // Funktionsdeklaration selbst ist hochgezogen und damit von ueberall erreichbar; der
   // Rumpf braucht nur, dass der Aufbau durch ist. Aus einer Anzeigeschleife ist er das.
-  function motorDrehzahl(st) {
-    const b = sampleEngine.band[sampleEngine.car || $('sound-profile').value];
+  // `modell` optional: ohne ihn gilt Auto 1s Motor, wie schon immer. Auto 2s eigener Ton
+  // (updateEngineSound2()) uebergibt stimmeZwei.car, seit Auto 2 einen ANDEREN Motor als
+  // Auto 1 spielen darf - sonst wuerde seine Drehzahl auf Auto 1s Leerlauf/Begrenzer-Band
+  // abgebildet und nicht auf ihr eigenes.
+  function motorDrehzahl(st, modell) {
+    const b = sampleEngine.band[modell || sampleEngine.car || $('sound-profile').value];
     if (!b || !(b.limiter > b.idle)) return st.rpm;
     const f = Math.max(0, Math.min(1, st.rpmFrac || 0));
     return b.idle + f * (b.limiter - b.idle);
@@ -213,7 +227,18 @@
       const res = await fetch('audio/loops.json', { cache: 'reload' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const manifest = await res.json();
-      for (const car of Object.keys(manifest)) {
+      // BESTELLT: "sounds brauchen sehr lange zum laden. Wenigstens den porsche sound
+      // irgendwie schneller verfuegbar machen." sampleEngine.ready war bisher EIN Schalter
+      // fuer alle ~27 Autos zusammen - er kippte erst, NACHDEM die letzte Schleife des
+      // letzten Autos geladen war, auch wenn das gewaehlte Auto (Vorgabe: Porsche) laengst
+      // fertig war. Jetzt zuerst das GEWAEHLTE Auto laden, und sampleEngine.ready faellt
+      // schon nach IHM, nicht erst nach allen 27 - der Rest laedt im selben Durchlauf
+      // weiter, nur eben im Hintergrund, waehrend das gewaehlte Auto schon spielt.
+      const vorrang = $('sound-profile') ? $('sound-profile').value : null;
+      const reihenfolge = vorrang && manifest[vorrang]
+        ? [vorrang, ...Object.keys(manifest).filter(c => c !== vorrang)]
+        : Object.keys(manifest);
+      for (const car of reihenfolge) {
         sampleEngine.buffers[car] = {};
         // Optional per-car transposition. Needed for the sampled cars: the Corvette
         // recording only reaches about 4500/min, while the app revs to 9000, so without a
@@ -250,11 +275,16 @@
             baseRpm: loop.baseRpm,
           };
         }
+        // Nach dem ERSTEN Auto (per reihenfolge das gewaehlte, siehe oben) faellt der
+        // Schalter schon - die uebrigen laden im selben Durchlauf weiter, aber niemand
+        // muss mehr auf sie warten, um ueberhaupt Sample-Ton zu hoeren.
+        if (!sampleEngine.ready) {
+          sampleEngine.ready = true;
+          const selFrueh = $('sound-profile').value;
+          if (SAMPLE_CARS.includes(selFrueh)) startSampleEngine(selFrueh);
+        }
       }
-      sampleEngine.ready = true;
       log('Motorsamples geladen: ' + Object.keys(manifest).join(', '), 'info');
-      const sel = $('sound-profile').value;
-      if (SAMPLE_CARS.includes(sel)) startSampleEngine(sel);
     } catch (err) {
       // Entirely expected wherever audio/ is not deployed. The synthesized engine keeps
       // working, so this must NOT surface as an error the user has to react to.
@@ -280,6 +310,15 @@
         if (!r.ok) throw new Error(file);
         return audioCtx.decodeAudioData(await r.arrayBuffer());
       };
+      // BESTELLT: "Wenigstens den porsche sound irgendwie schneller verfuegbar machen."
+      // Der Zuendton des gewaehlten Autos stand bisher HINTER Crash/Bremse/Reifen/Box/
+      // Hupen/Schaltton und ALLEN anderen ~27 Zuendtoenen in dieser einen sequenziellen
+      // Kette - das gewaehlte Auto wartete auf jede fremde Datei mit. Jetzt zuerst er,
+      // der Rest bleibt unveraendert (die spaetere Schleife ueberspringt ihn einfach).
+      const vorrangAuto = $('sound-profile') ? $('sound-profile').value : null;
+      if (fx.start && vorrangAuto && fx.start[vorrangAuto]) {
+        fxBuffers.start[vorrangAuto] = await grab(fx.start[vorrangAuto].file);
+      }
       fxBuffers.crash = await Promise.all(fx.crash.map(c => grab(c.file)));
       fxBuffers.brake = await grab(fx.brake.file);
       // Duldsam gegenueber einem aelteren audio/: fehlt der Eintrag, bleibt der Ton weg und
@@ -301,11 +340,57 @@
       if (fx.shift) {
         for (const dir of Object.keys(fx.shift)) fxBuffers.shift[dir] = await grab(fx.shift[dir].file);
       }
-      for (const car of Object.keys(fx.start)) fxBuffers.start[car] = await grab(fx.start[car].file);
+      for (const car of Object.keys(fx.start)) {
+        if (car === vorrangAuto) continue; // schon oben geladen, siehe dort
+        fxBuffers.start[car] = await grab(fx.start[car].file);
+      }
       log('Effektsounds geladen (' + fxBuffers.crash.length + ' Crash-Varianten).', 'info');
     } catch (err) {
       log('Keine Effektsounds gefunden, synthetische Töne bleiben aktiv.', 'info');
     }
+  }
+
+  // ---- Vorab aufgenommene Ansagen, fuer Browser ohne speechSynthesis ----------------
+  //
+  // BESTELLT: "die englischen und deutschen Ansagen zu Regen usw. aufnehmen und einen
+  // Funk-Filter draufsetzen, sodass es auch klappt, wenn ein Browser es nicht
+  // unterstuetzt." Aufgenommen im Sinn von tools/voice_synth.py: eine Windows-Stimme
+  // (nicht der Nutzer), gerendert und band-begrenzt VOR dem Ausliefern - siehe die
+  // Begruendung dort und den Kommentar ueber ansage() weiter unten. Fuenf Meldungen
+  // ('damage', 'fuel', 'tyre', 'rainstart', 'rainstop'), keine mit 'lap': Rundenzeiten
+  // tragen eine Zahl, die sich jede Runde aendert, eine feste Aufnahme kann sie nicht
+  // sagen - das bleibt live speechSynthesis und faellt ohne sie einfach aus, wie bisher.
+  const voiceBuffers = {};
+
+  async function loadVoiceSamples() {
+    if (!audioCtx) return;
+    try {
+      const res = await fetch('audio/voice.json', { cache: 'reload' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const manifest = await res.json();
+      for (const key of Object.keys(manifest)) {
+        voiceBuffers[key] = {};
+        for (const spr of Object.keys(manifest[key])) {
+          const r = await fetch('audio/' + manifest[key][spr]);
+          if (!r.ok) throw new Error(manifest[key][spr]);
+          voiceBuffers[key][spr] = await audioCtx.decodeAudioData(await r.arrayBuffer());
+        }
+      }
+    } catch (err) {
+      // Duldsam wie loadFxSamples(): ohne audio/voice.json bleibt der Funk-Ersatz einfach
+      // aus, und Browser MIT speechSynthesis sind davon ohnehin nicht betroffen.
+      log('Keine Ansage-Aufnahmen gefunden, Funk-Ersatz bleibt aus.', 'info');
+    }
+  }
+
+  // Die aufgenommene Ansage abspielen, wenn es sie gibt - sonst false, genau wie ein
+  // gescheiterter ansage()-Aufruf. `key` ist meist gleich `art` (siehe ansage()), nur
+  // 'rain' hat zwei Aufnahmen (an/aus) und braucht den spezifischeren Schluessel.
+  function playAnsageClip(key) {
+    const satz = voiceBuffers[key];
+    const puffer = satz && satz[lang];
+    if (!puffer) return false;
+    return playFx(puffer, 1.0);
   }
 
   // `seite` ist -1..1 und optional. Sie dient EINEM Zweck: einen Einmalklang dem Auto
@@ -445,15 +530,27 @@
   const ansageAn = { lap: true, damage: false, fuel: false, tyre: false, rain: false };
   const ansageLatch = { damage: false, fuel: false, tyre: false, rain: null };
 
-  // HIER STAND DER FUNKFILTER, und er ist auf Bitte des Nutzers wieder heraus. Was er
-  // konnte: Knacken beim Aufschalten, ein Rauschteppich darunter, Knacken beim Loslassen,
-  // und eine Stimme, die schneller und flacher spricht. Was er NICHT konnte, und was ihn
-  // am Ende halbherzig machte: die Stimme selbst bandbegrenzen - speechSynthesis liefert
-  // keinen Audioknoten, es gibt also nichts, wo ein Filter dazwischen koennte.
-
-  // ---- Der gemeinsame Kern ---------------------------------------------------------
-  function ansage(art, text) {
+  // HIER STAND DER FUNKFILTER als Live-Effekt auf der Browserstimme, und er ist auf Bitte
+  // des Nutzers wieder heraus. Was er konnte: Knacken beim Aufschalten, ein Rauschteppich
+  // darunter, Knacken beim Loslassen, eine Stimme, die schneller und flacher spricht. Was
+  // er NICHT konnte, und was ihn am Ende halbherzig machte: die Stimme selbst
+  // bandbegrenzen - speechSynthesis liefert keinen Audioknoten, es gibt also nichts, wo
+  // ein Filter dazwischen koennte.
+  //
+  // DESHALB VORAB GERENDERT statt live gefiltert (tools/voice_synth.py): eine Datei ist
+  // ein ganz normaler AudioBuffer, genau wie Motor- und Effektton, und der Funk-Filter
+  // wirkt dort direkt auf die Stimme.
+  //
+  // BESTELLT (Korrektur): zuerst nur als Fallback fuer Browser ohne speechSynthesis
+  // gedacht - "damit es auch klappt, wenn ein Browser es nicht unterstuetzt". Gemessen
+  // hat fast jeder Browser speechSynthesis, also waere der Funk-Klang praktisch nie zu
+  // hoeren gewesen. Die Aufnahme hat jetzt IMMER Vorrang vor der Live-Stimme, fuer die
+  // fuenf Meldungen, die eine besitzen; live bleibt nur 'lap' (die Rundenzeit aendert
+  // sich jede Runde, eine feste Aufnahme kann sie nicht sagen) und der seltene Fall, dass
+  // die Aufnahme selbst fehlt (Datei nicht geladen, Sprache ohne Aufnahme).
+  function ansage(art, text, klangSchluessel) {
     if (!ansageAn[art]) return false;
+    if (art !== 'lap' && playAnsageClip(klangSchluessel || art)) return true;
     if (!('speechSynthesis' in window)) return false;
     try {
       // ABBRECHEN VOR DEM SPRECHEN. Zwei Meldungen kurz hintereinander duerfen sich nicht
@@ -536,7 +633,9 @@
         // "hoert" nicht wie "hört".
         const t = w.rain ? (de ? 'Es regnet' : 'Rain has started')
                          : (de ? 'Der Regen hört auf' : 'The rain is stopping');
-        if (ansage('rain', t)) raus.push('rain');
+        // Zwei Aufnahmen fuer eine Meldung: 'rain' hat einen Text an und einen aus, der
+        // Fallback braucht den spezifischeren Schluessel, um die richtige zu waehlen.
+        if (ansage('rain', t, w.rain ? 'rainstart' : 'rainstop')) raus.push('rain');
       }
     }
     return raus;
@@ -982,10 +1081,11 @@
     // beide neutral - derselbe Weg, keine Wirkung.
     if (!startSampleEngineIn(sampleEngine, car, stimmeEinsAusgang)) return false;
     if (engineGain) engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); // hush the oscillator
-    // Auto 2 faehrt dasselbe Motormodell: die Wahl steht im Cockpit und gilt fuer das
-    // Rennen. Ein eigenes Menue fuer Auto 2 waere ein zweiter Regler und eine zweite
-    // Ablage - und zwei verschiedene Motoren zugleich sind aus einem Lautsprecher ohnehin
-    // schwer zu trennen.
+    // BESTELLT: "Spieler 1 und Spieler 2 sollen verschiedene Motorsounds haben duerfen."
+    // stimmeZweiStarten() liest seither #sound-profile-2 (ein Klon von #sound-profile,
+    // erzeugt in 50-drive.js) statt zwingend sampleEngine.car - Auto 2 DARF also
+    // abweichen, faehrt aber ohne eigene Wahl weiter denselben Motor wie Auto 1, weil der
+    // Klon mit derselben Vorgabe startet.
     if (typeof zweiSpieler !== 'undefined' && zweiSpieler) stimmeZweiStarten();
     return true;
   }
@@ -1002,7 +1102,11 @@
 
   function stimmeZweiStarten() {
     if (!audioCtx || !sampleEngine.car) return false;
-    return startSampleEngineIn(stimmeZwei, sampleEngine.car, stimmeZweiAusgang);
+    // #sound-profile-2, wenn vorhanden (siehe 50-drive.js), sonst Auto 1s Motor - so
+    // faehrt Auto 2 ohne eigene Wahl weiter denselben Motor, statt stumm zu bleiben.
+    const sel2 = typeof $ === 'function' ? $('sound-profile-2') : null;
+    const modell = (sel2 && sampleEngine.buffers[sel2.value]) ? sel2.value : sampleEngine.car;
+    return startSampleEngineIn(stimmeZwei, modell, stimmeZweiAusgang);
   }
 
   function stimmeZweiStoppen() { if (audioCtx) stopSampleEngineIn(stimmeZwei); }
@@ -1135,7 +1239,7 @@
     const load = Math.max(0, Math.min(1, st.engineLoad || 0));
     const leise = load <= 0.01 && (st.virtualSpeed || 0) <= 0.01
                   && Math.abs(st.speedKmh || 0) < 0.05;
-    updateSampleEngineIn(stimmeZwei, motorDrehzahl(st), load, leise, physEngine2, 1);
+    updateSampleEngineIn(stimmeZwei, motorDrehzahl(st, stimmeZwei.car), load, leise, physEngine2, 1);
   }
 
   // An- und abschalten, gerufen aus zweiSpielerSetzen(). Zwei Wege und nicht einer mit
@@ -1178,6 +1282,19 @@
     log('Motorprofil "' + v + '" hat keine Schleifen, Ersatzmotor laeuft. Das ist ein '
         + 'Fehler, wenn der Eintrag im Menue steht.', 'warn');
   });
+
+  // BESTELLT: "Spieler 1 und Spieler 2 sollen verschiedene Motorsounds haben duerfen."
+  // #sound-profile-2 existiert erst, sobald 50-drive.js ihn geklont hat - dieselbe
+  // Absicherung wie ueberall, wo eine Datei auf eine andere angewiesen ist.
+  if ($('sound-profile-2')) {
+    $('sound-profile-2').addEventListener('change', () => {
+      // Nur neu starten, wenn Auto 2 gerade wirklich spielt - sonst greift die naechste
+      // stimmeZweiStarten() (beim naechsten Motorwechsel oder Anschalten) von selbst zu.
+      if (typeof zweiSpieler !== 'undefined' && zweiSpieler && stimmeZwei.nodes) {
+        stimmeZweiStarten();
+      }
+    });
+  }
 
   $('cm-start').addEventListener('click', () => {
     cmOn = !cmOn;
@@ -1243,6 +1360,7 @@
     ['ghost-w-blau', 'wuerzeBlau'],
     ['ghost-charakter', 'charakter'],
     ['ghost-w-start', 'wuerzeStart'],
+    ['ghost-w-recovery', 'wuerzeRecovery'],
     // Die zwei Boxenstopp-Schalter. Sie gehoeren in dieselbe Liste, weil sie dieselbe Form
     // haben - Kaestchen an, Feld true - und nicht, weil sie mit der Wuerze zu tun haetten.
     ['ghost-pit', 'pitAn'],
@@ -1372,12 +1490,6 @@
     refreshAmbienceGains();
   });
 
-  // Both models fade to nothing at the left end, so "off" is genuinely the old behaviour
-  // rather than a very small amount of the new one.
-  $('ghost-rail').addEventListener('change', (e) => {
-    ghostCfg.railMode = e.target.checked;
-  });
-
   // renderGarage() wird mitgerufen: sonst zeigt die Garagenzeile weiter die alte Zahl,
   // obwohl die Vorgabe sich geaendert hat - und die Zeile ist genau die Stelle, an der man
   // nachsieht, ob es gewirkt hat.
@@ -1385,6 +1497,12 @@
     ghostCfg.speed = parseFloat(e.target.value);
     $('ghost-speed-val').textContent = Math.round(ghostCfg.speed * 100) + '%';
     if (typeof renderGarage === 'function') renderGarage();
+  });
+  // Ein Regler fuer fuenf Werte - siehe ghostRennhaerteAnwenden() in 90-ghosts.js fuer die
+  // Skalierung und die Begruendung, warum 50 % genau die bisherige Abstimmung ergibt.
+  $('ghost-hardness').addEventListener('input', (e) => {
+    ghostRennhaerteAnwenden(parseFloat(e.target.value) / 100);
+    $('ghost-hardness-val').textContent = e.target.value + '%';
   });
   $('ghost-curve').addEventListener('input', (e) => {
     ghostCfg.curveSlow = parseFloat(e.target.value);

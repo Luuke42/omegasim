@@ -22,6 +22,40 @@
   //      sie und stellt sie von Hand.
 
   window.OMEGA_TEST = {
+    // ---- Menuenavigation (Phase 13, 50b-menu-nav.js) --------------------------------
+    //
+    // Reine Durchreichen zu den modulinternen Funktionen - keine eigene Logik, damit ein
+    // Prueflauf genau das misst, was auch Gamepad und Tastatur aufrufen, nicht eine
+    // zweite, nachgebaute Fassung.
+    menuNavRowsLesen() {
+      return menuNavRows().map((r) => ({ kind: r.kind, text: (r.el.textContent || '').trim().slice(0, 40) }));
+    },
+    menuNavIndexLesen() { return menuNavIndex; },
+    menuNavArmedLesen() { return menuNavArmed; },
+    menuNavBewegen(dir) { menuNavMove(dir); },
+    menuNavAusloesen() { menuNavActivate(); },
+    menuNavVerstellen(dir) { return menuNavAdjust(dir); },
+    menuNavAktiv() { return menuNavActive(); },
+    // Durchreichen der gemeinsamen Halten/Beschleunigen-Zustandsmaschine (Gamepad UND
+    // Tastatur teilen sie sich, siehe 50b-menu-nav.js) - ein Prueflauf kann so echte
+    // Zeitspannen durchspielen statt die einzelnen Schritte direkt aufzurufen.
+    menuNavGehalten(dir, gehalten) { menuNavAdjustGehalten(dir, gehalten); },
+
+    // ---- Pfad aus der Aufnahme (Physik, ohne Bahn) - 90c-macro-track.js -------------
+    macroLesen() { return macro.map((s) => ({ ...s })); },
+    macroPfadRekonstruieren(macroArr) { return macroPfadRekonstruieren(macroArr); },
+    aufnahmeRundenLesen() { return aufnahmeRunden.map((r) => ({ ...r })); },
+    aufnahmeRundenTickAufrufen(bytes) { aufnahmeRundenTick(bytes); },
+    // Speichern/Zuruecksetzen fuer Pruefablaeufe, die den geteilten Rundenzustand nicht
+    // stehen lassen duerfen - ein echter, gerade laufender Aufnahmeversuch soll von einem
+    // Selbsttest nichts mitbekommen.
+    aufnahmeZustandSichern() {
+      return { runden: aufnahmeRunden, t0: aufnahmeRundenT0, r: aufnahmeRState };
+    },
+    aufnahmeZustandZuruecksetzen(stand) {
+      aufnahmeRunden = stand.runden; aufnahmeRundenT0 = stand.t0; aufnahmeRState = stand.r;
+    },
+
     // ---- Passt das Cockpit in die Bildschirmhoehe? ---------------------------------
     //
     // Gemessen wird an der EINPASSUNG selbst: sie gibt zurueck, wieviel Platz da ist,
@@ -534,7 +568,7 @@
           akku1: lies('vgl1-batt'), akku2: lies('vgl2-batt'),
           lampen1: ($('vgl1-shift') || { children: [] }).children.length,
           lampen2: ($('vgl2-shift') || { children: [] }).children.length,
-          lage: lies('p2s-kopf-lage'), runden: lies('p2s-kopf-runde'),
+          runden1: lies('vgl1-runde'), runden2: lies('vgl2-runde'),
           fuss: lies('p2s-fuss'),
         };
         // Und dass der Schirm beim Abschalten verlassen wird.
@@ -1192,15 +1226,18 @@
     // ---- HAT SPIELER 2 DIESELBEN KNOEPFE WIE SPIELER 1? -----------------------------
     //
     // BESTELLT: "Spieler 2 soll auch funktionierende Knoepfe haben fuer: Licht,
-    // Boxenstopp, Lichthupe (Belegung auf Gamepad wie Spieler 1)."
+    // Boxenstopp, Lichthupe (Belegung auf Gamepad wie Spieler 1)." Und spaeter: "Lichter
+    // an/aus sollen unabhaengig voneinander klappen" - deshalb prueft dieser Lauf jetzt
+    // headlightsOn2 und nicht mehr das gemeinsame headlightsOn.
     //
     // Ein Pad mit genau den drei Standard-Knoepfen gedrueckt (Index 3/9/11, siehe
     // BINDING_DEFAULTS), einmal durch pollPad2() geschickt - derselbe Weg, den ein echter
-    // Controller nimmt. Geprueft wird die WIRKUNG: headlightsOn kippt, boxZweiLage()
-    // wechselt aus 'aus', und die Lichthupe von Auto 2 sperrt sich selbst gegen einen
-    // zweiten Aufruf, solange sie noch blitzt.
+    // Controller nimmt. Geprueft wird die WIRKUNG: headlightsOn2 kippt (und headlightsOn,
+    // Auto 1s Licht, bleibt UNBERUEHRT), boxZweiLage() wechselt aus 'aus', und die
+    // Lichthupe von Auto 2 sperrt sich selbst gegen einen zweiten Aufruf, solange sie noch
+    // blitzt.
     p2KnopfProbe() {
-      const merk = { head: headlightsOn, zwei: zweiSpieler, p2: playerCar2 };
+      const merk = { head1: headlightsOn, head2: headlightsOn2, zwei: zweiSpieler, p2: playerCar2 };
       const a2 = { device: { id: 'probe-p2knopf' }, role: 'player2', rx: null, testSenke: [] };
       try {
         zweiSpieler = true;
@@ -1214,7 +1251,8 @@
         const vorLage = (typeof boxZweiLage === 'function') ? boxZweiLage() : null;
         pollPad2(pad);
         return {
-          lichtKippte: headlightsOn !== merk.head,
+          lichtKippte: headlightsOn2 !== merk.head2,
+          licht1Unberuehrt: headlightsOn === merk.head1,
           // Ein zweiter Aufruf, solange die erste Lichthupe noch blitzt, darf
           // flash2Until NICHT verlaengern - sonst haette man eine Dauerlichthupe statt
           // drei Impulsen. flash2Until steht in 70-race.js, einer FRUEHEREN Datei, ist
@@ -1228,20 +1266,94 @@
           boxLageNachher: (typeof boxZweiLage === 'function') ? boxZweiLage() : null,
         };
       } finally {
-        headlightsOn = merk.head;
-        const cb = $('dash-head-toggle');
-        if (cb) cb.checked = merk.head;
-        zweiSpieler = merk.zwei;
-        playerCar2 = merk.p2;
+        headlightsOn = merk.head1;
+        headlightsOn2 = merk.head2;
+        // REIHENFOLGE WICHTIG: boxZweiAnfordern() bricht nur ab, wenn zweiSpieler/
+        // playerCar2 noch die TESTWERTE tragen - es lehnt sonst sofort mit "KEIN AUTO
+        // ZUGETEILT" ab (siehe sein eigener Kopf) und boxZwei.lage bliebe auf
+        // 'angefordert' haengen. Genau das ist hier passiert: die Wiederherstellung
+        // stand VOR diesem Aufruf, der Abbruch griff nie, und jeder folgende Test sah
+        // Auto 2 unter dem Boxen-Tempodeckel - gemeldet an "eigene Physik" und "gelbe
+        // Flagge", die beide auf einmal viel zu langsam waren. Erst abbrechen, DANN
+        // zuruecksetzen, wie es boxZweiProbe() nebenan schon immer tut.
         if (typeof boxZweiAnfordern === 'function' && boxZweiLage() !== 'aus') {
           boxZweiAnfordern();
         }
+        zweiSpieler = merk.zwei;
+        playerCar2 = merk.p2;
       }
     },
     // UEBER DEN VERTEILER und nicht direkt auf pitScreenSelect(): gefragt ist, was die
     // Taste auf dem GERADE offenen Schirm tut, und genau diese Entscheidung war der Ort
     // des gemeldeten Fehlers. Ein Zugang, der sie ueberspringt, prueft die falsche Sache.
     schirmWaehlen() { return cockpitScreenWaehlen(); },
+
+    // ---- RENNEINSTELLUNGEN-SCHIRM: NAVIGATION UND SYNC MIT DEM TAB -------------------
+    //
+    // BESTELLT: "cockpit: weiteren screen mit Renneinstellungen einfuegen [...]
+    // einstellungen sollten mit denen in renneinstellungen synchronisiert sein." Geprueft
+    // wird die Auswahl (hoch/runter, mit Umlauf ueber drei Zeilen) und dass eine
+    // Aenderung ueber den Schirm dieselben Elemente schreibt wie der Tab (#race-mode/
+    // #race-limit) - keine zweite Kopie von raceMode/raceLimit. raceScreenSelect(id)
+    // loest gezielt EINE Zeile aus, ohne vorher zu ihr zu navigieren (derselbe
+    // Kunstgriff wie pitScreenSelect(idVorgabe)).
+    raceEinstellungenSchirmProbe() {
+      const merk = { screen: cockpitScreen, sel: raceScreenSel,
+                     mode: $('race-mode').value, limit: raceLimit };
+      const zeilen = ['rs-row-mode', 'rs-row-limit', 'rs-row-go'];
+      const wer = () => zeilen.findIndex((id) => document.getElementById(id).classList.contains('pr-sel'));
+      try {
+        cockpitScreenZu('renneinstellungen');
+        const start = wer();
+        raceScreenPad('down');
+        const nachEinem = wer();
+        raceScreenPad('down'); raceScreenPad('down');   // Umlauf: drei Zeilen, drei Schritte
+        const nachUmlauf = wer();
+        $('race-mode').value = 'practice';
+        $('race-mode').dispatchEvent(new Event('change', { bubbles: true }));
+        raceScreenSelect('mode');
+        const modeNachWahl = $('race-mode').value;
+        return {
+          screenErreichbar: cockpitScreenIst().id === 'renneinstellungen',
+          nurEineZeileVorher: [start].every((i) => i >= 0),
+          bewegtSich: nachEinem !== start,
+          umlaufKehrtZurueck: nachUmlauf === start,
+          modeVorWahl: 'practice', modeNachWahl,
+        };
+      } finally {
+        cockpitScreenSet(merk.screen);
+        raceScreenSel = merk.sel;
+        $('race-mode').value = merk.mode;
+        $('race-mode').dispatchEvent(new Event('change', { bubbles: true }));
+        $('race-limit').value = merk.limit;
+        $('race-limit').dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    },
+    // ---- ERSTE BEWEGUNG STATT GRUEN --------------------------------------------------
+    //
+    // BESTELLT: "Zeit soll anfangen zu zaehlen, sobald das erste Auto sich in Bewegung
+    // setzt." Ein Fahrerauto stehend (0 km/h) darf raceMoveErkannt() nicht ausloesen,
+    // dasselbe Auto bei Fahrt (25 km/h) muss es. garage.push()/pop() ist absichtlich
+    // synchron und ohne await dazwischen - kein Renderlauf sieht das Platzhalterauto.
+    raceBewegungsProbe() {
+      const merk = { playerCar, zweiSpieler, speed: physEngine.state.speedKmh };
+      const a1 = { device: { id: 'probe-bewegung' }, role: 'player', testSenke: [] };
+      try {
+        garage.push(a1);
+        playerCar = a1;
+        zweiSpieler = false;
+        physEngine.state.speedKmh = 0;
+        const ruhig = raceMoveErkannt();
+        physEngine.state.speedKmh = 25;
+        const bewegt = raceMoveErkannt();
+        return { ruhig, bewegt };
+      } finally {
+        garage.pop();
+        playerCar = merk.playerCar;
+        zweiSpieler = merk.zweiSpieler;
+        physEngine.state.speedKmh = merk.speed;
+      }
+    },
     // Die Waehltaste selbst, so wie pollGamepad sie sieht: true heisst gedrueckt. Damit
     // laesst sich eine FOLGE fahren - druecken, loslassen, blaettern, wieder druecken -,
     // und nur in einer Folge war der Fehler zu sehen.
@@ -1332,6 +1444,71 @@
       }
     },
 
+    // Die Versuchsgrenze aus 60-track.js, damit ein Test sie nicht als eigene Zahl
+    // abschreiben muss - zwei Orte fuer dieselbe Zahl laufen sonst auseinander.
+    garageScanVersucheMax: GARAGE_SCAN_VERSUCHE_MAX,
+    // Die rohe Ablage selbst, EIN const-Objekt (siehe dort) - Mutationen daran (z. B.
+    // .aktiv/.car von Hand setzen, ohne den echten garageScanStart() durchlaufen zu
+    // muessen) wirken direkt, weil hier keine Kopie herausgeht.
+    garageScan,
+
+    // ---- GARAGENSCAN: SCHLIESST DIE RUNDE, UND WENN NICHT, WIRD ES NOCHMAL VERSUCHT ---
+    //
+    // BESTELLT: "Wenn es dann wieder ueber start faehrt, muss die strecke geschlossen
+    // sein. Wenn nicht, dann miss noch eine runde, und pruefe wieder." Gefuettert wird
+    // garageScanTick() mit gebauten Meldepaketen, derselbe Aufbau wie lernProbe() daneben.
+    // `runde` ist EIN Runde-Abschnitt (ohne die Start/Ziel-Kachel, die kommt aus dem
+    // Anker); je `opt.laeufe` Wiederholungen simulieren so viele gefahrene Runden.
+    garageScanProbe(runde, o) {
+      const opt = o || {};
+      const merkTiles = currentTrackTiles;
+      const merkAktiv = garageScan.aktiv, merkCar = garageScan.car, merkSeq = garageScan.seq,
+            merkVersuch = garageScan.versuch;
+      const echtNow = Date.now;
+      const a1 = { device: { id: 'probe-garagenscan' }, role: 'player', testSenke: [] };
+      try {
+        currentTrackTiles = [];
+        garageScan.aktiv = true;
+        garageScan.car = a1;
+        garageScan.seq = [];
+        garageScan.started = false;
+        garageScan.sperreVor = false;
+        garageScan.sperreFlanke = false;
+        garageScan.versuch = 1;
+        garageScan.lastCount = null;
+        garageScan.votes = {};
+        let uhr = echtNow();
+        Date.now = () => uhr;
+        let zaehler = 0;
+        const paket = (code, sperre) => {
+          const b = new Array(16).fill(0);
+          b[11] = zaehler & 0xff; b[12] = code; b[15] = sperre ? 0x08 : 0x00;
+          return b;
+        };
+        const laeufe = opt.laeufe || 1;
+        for (let r = 0; r < laeufe && garageScan.aktiv; r++) {
+          for (let i = 0; i < runde.length; i++) {
+            const sperre = i === 0;   // dieselbe Konvention wie bei lernProbe: Anker am ersten Teil
+            for (let k = 0; k < 4; k++) {
+              uhr += 70;
+              garageScanTick(paket(runde[i], sperre && k < 3));
+            }
+            zaehler++;
+          }
+        }
+        return { aktiv: garageScan.aktiv, teile: currentTrackTiles.length,
+                 versuch: garageScan.versuch };
+      } finally {
+        Date.now = echtNow;
+        garageScan.aktiv = merkAktiv;
+        garageScan.car = merkCar;
+        garageScan.seq = merkSeq;
+        garageScan.versuch = merkVersuch;
+        currentTrackTiles = merkTiles;
+        lineCache = null;
+      }
+    },
+
     // ---- Eine RC-Fernbedienung belegen, ohne eine zu haben --------------------------
     //
     // Nachgebaut wird, was gemeldet wurde: Achsen, die NICHT bei null ruhen. Ein
@@ -1369,6 +1546,55 @@
         Object.keys(merkB).forEach((k) => { bindings[k] = merkB[k]; });
       }
     },
+
+    // ---- ZWEI BELEGUNGEN, UNABHAENGIG VONEINANDER ------------------------------------
+    //
+    // BESTELLT: "baue ein, dass sich Tasten von 2 Spielern unabhaengig zuweisen lassen."
+    // Dieselbe Aktion (headlights) einmal als Spieler 1 auf Knopf 6 legen, dann als
+    // Spieler 2 auf Knopf 10 - und pruefen, dass jede Zuweisung nur IHRE eigene Belegung
+    // aendert. bindEditSpieler entscheidet, welche Tabelle tryCaptureBinding() gerade
+    // beschreibt (siehe activeBindings() weiter oben in 90-ghosts.js).
+    bindSpielerProbe() {
+      const merkB = JSON.parse(JSON.stringify(bindings));
+      const merkB2 = JSON.parse(JSON.stringify(bindings2));
+      const merkL = listeningFor, merkS = bindEditSpieler;
+      try {
+        const pad = (knopfIndex) => ({
+          axes: [0, 0, 0, 0],
+          buttons: Array(12).fill(0).map((_, i) => ({ value: i === knopfIndex ? 1 : 0,
+                                                        pressed: i === knopfIndex })),
+        });
+        bindEditSpieler = 1;
+        listeningFor = 'headlights';
+        bindRuhe = null;
+        tryCaptureBinding(pad(-1));   // Ruhelage nehmen
+        tryCaptureBinding(pad(6));    // Druck: Knopf 6
+        const p1Danach = { ...bindings.headlights };
+        const p2UnberuehrtVorher = JSON.stringify(bindings2.headlights) === JSON.stringify(merkB2.headlights);
+
+        bindEditSpieler = 2;
+        listeningFor = 'headlights';
+        bindRuhe = null;
+        tryCaptureBinding(pad(-1));
+        tryCaptureBinding(pad(10));   // Druck: ANDERER Knopf
+        const p2Danach = { ...bindings2.headlights };
+
+        return {
+          p1Index: p1Danach.index, p2Index: p2Danach.index,
+          p2UnberuehrtVonP1: p2UnberuehrtVorher,
+          p1UnberuehrtVonP2: bindings.headlights && bindings.headlights.index === 6,
+          unabhaengig: p1Danach.index !== p2Danach.index,
+        };
+      } finally {
+        listeningFor = merkL;
+        bindRuhe = null;
+        bindEditSpieler = merkS;
+        Object.keys(bindings).forEach((k) => delete bindings[k]);
+        Object.keys(merkB).forEach((k) => { bindings[k] = merkB[k]; });
+        Object.keys(bindings2).forEach((k) => delete bindings2[k]);
+        Object.keys(merkB2).forEach((k) => { bindings2[k] = merkB2[k]; });
+      }
+    },
     // ---- Die Zustandsansagen, ohne Stimme und ohne Rennen -------------------------
     //
     // ansagenPruefen() nimmt die Werte als Argument, laesst sich also ohne laufendes
@@ -1395,6 +1621,22 @@
         // durch eine Attrappe - geprueft wird die REGEL, nicht das Betriebssystem.
         const echt = window.speechSynthesis;
         const gesagt = [];
+        // ansageLatch ist EIN geteiltes Objekt fuer die ganze Laufzeit, nicht je Probe
+        // neu. GEFUNDEN beim Bauen des Funk-Ersatz-Tests darunter: die Probe
+        // 'ausgeschaltet ist wirklich aus' setzt die Flanken auch bei ausgeschalteten
+        // Kaestchen (ansagenPruefen() haengt die Flanke nicht an ansage()s Erfolg),
+        // und der naechste Test in der Datei erbte ein bereits 'rain: true' geflanktes
+        // Latch - eine Meldung fiel, die zur eigenen Zustandsfolge gar nicht gehoerte.
+        const merkLatch = Object.assign({}, ansageLatch);
+        Object.assign(ansageLatch, { damage: false, fuel: false, tyre: false, rain: null });
+        // BESTELLT: die Aufnahme hat jetzt IMMER Vorrang vor der Live-Stimme (ansage()),
+        // nicht nur ohne speechSynthesis. Diese Probe will aber ausdruecklich den
+        // Live-Pfad beobachten (ueber die Attrappe unten) - ist der Browser, in dem der
+        // Selbsttest laeuft, schon einmal durch eine Nutzergeste gelaufen, waeren
+        // voiceBuffers echt gefuellt und playAnsageClip() wuerde zuerst greifen, bevor
+        // die Attrappe je einen Satz sieht. Fuer die Dauer der Probe deshalb leer.
+        const echtBuffers = Object.assign({}, voiceBuffers);
+        Object.keys(voiceBuffers).forEach((k) => delete voiceBuffers[k]);
         try {
           Object.defineProperty(window, 'speechSynthesis', {
             configurable: true,
@@ -1409,6 +1651,9 @@
           } else {
             delete window.speechSynthesis;
           }
+          Object.assign(ansageLatch, merkLatch);
+          Object.keys(voiceBuffers).forEach((k) => delete voiceBuffers[k]);
+          Object.assign(voiceBuffers, echtBuffers);
         }
       } finally {
         Object.keys(merk).forEach((art) => {
@@ -1419,14 +1664,115 @@
         });
       }
     },
+    // ---- Derselbe Ablauf, aber OHNE speechSynthesis: der Funk-Ersatz -------------
+    //
+    // GEMESSEN werden soll die REGEL (welcher Aufnahme-Schluessel bei welcher Meldung
+    // gezogen wird), nicht das Zuspielen selbst - dafuer braucht es weder ein echtes
+    // AudioContext noch echte Dateien. playFx() wird deshalb durch eine Attrappe
+    // ersetzt, die nur festhaelt, WELCHER voiceBuffers-Eintrag ankam; voiceBuffers
+    // selbst bekommt fuer die Dauer der Probe fuenf erfundene, eindeutig markierte
+    // Eintraege, damit die Attrappe den Schluessel zurueckverfolgen kann.
+    ansagenFunkProbe(schritte) {
+      const kaesten = { lap: 'setting-announce', damage: 'setting-announce-damage',
+                        fuel: 'setting-announce-fuel', tyre: 'setting-announce-tyre',
+                        rain: 'setting-announce-rain' };
+      const merk = {};
+      try {
+        Object.keys(kaesten).forEach((art) => {
+          const el = $(kaesten[art]);
+          if (!el) return;
+          merk[art] = el.checked;
+          el.checked = true;
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        const echtHatSpeech = 'speechSynthesis' in window;
+        const echtSpeech = echtHatSpeech ? window.speechSynthesis : undefined;
+        const echtPlayFx = playFx;
+        const echtBuffers = Object.assign({}, voiceBuffers);
+        Object.keys(voiceBuffers).forEach((k) => delete voiceBuffers[k]);
+        ['damage', 'fuel', 'tyre', 'rainstart', 'rainstop'].forEach((k) => {
+          voiceBuffers[k] = { de: { markiert: k + '/de' }, en: { markiert: k + '/en' } };
+        });
+        const abgespielt = [];
+        playFx = (puffer) => { abgespielt.push(puffer && puffer.markiert); return true; };
+        // Siehe der Kommentar bei ansagenFolge() weiter oben: ansageLatch ist geteilter
+        // Zustand, eine vorangegangene Probe kann eine Flanke hinterlassen haben, die
+        // zu DIESER Zustandsfolge nicht gehoert.
+        const merkLatch = Object.assign({}, ansageLatch);
+        Object.assign(ansageLatch, { damage: false, fuel: false, tyre: false, rain: null });
+        try {
+          delete window.speechSynthesis;
+          const folge = schritte.map((w) => ({ w, fiel: ansagenPruefen(w) }));
+          return { folge, abgespielt, hatteSpeechEcht: echtHatSpeech };
+        } finally {
+          playFx = echtPlayFx;
+          Object.keys(voiceBuffers).forEach((k) => delete voiceBuffers[k]);
+          Object.keys(echtBuffers).forEach((k) => { voiceBuffers[k] = echtBuffers[k]; });
+          if (echtHatSpeech) {
+            Object.defineProperty(window, 'speechSynthesis',
+                                  { configurable: true, value: echtSpeech });
+          }
+          Object.assign(ansageLatch, merkLatch);
+        }
+      } finally {
+        Object.keys(merk).forEach((art) => {
+          const el = $(kaesten[art]);
+          if (!el) return;
+          el.checked = merk[art];
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+    },
+    // ---- Die Aufnahme hat Vorrang, auch WENN es speechSynthesis gibt --------------
+    //
+    // BESTELLT (Korrektur): zuerst war die Aufnahme nur ein Fallback fuer Browser ohne
+    // speechSynthesis - das war aber praktisch nie zu hoeren, weil fast jeder Browser
+    // eines hat. Jetzt hat die Aufnahme IMMER Vorrang. Diese Probe laesst BEIDE Wege
+    // gleichzeitig verfuegbar (echte Attrappen-Buffer UND ein speechSynthesis-Double)
+    // und prueft, welcher tatsaechlich gezogen wird.
+    ansagenVorrangProbe() {
+      const echtHatSpeech = 'speechSynthesis' in window;
+      const echtSpeech = echtHatSpeech ? window.speechSynthesis : undefined;
+      const echtPlayFx = playFx;
+      const echtBuffers = Object.assign({}, voiceBuffers);
+      Object.keys(voiceBuffers).forEach((k) => delete voiceBuffers[k]);
+      voiceBuffers.damage = { de: { markiert: 'damage/de' }, en: { markiert: 'damage/en' } };
+      const abgespielt = [];
+      playFx = (puffer) => { abgespielt.push(puffer && puffer.markiert); return true; };
+      const gesagt = [];
+      const merkLatch = Object.assign({}, ansageLatch);
+      Object.assign(ansageLatch, { damage: false, fuel: false, tyre: false, rain: null });
+      try {
+        Object.defineProperty(window, 'speechSynthesis', {
+          configurable: true,
+          value: { cancel() {}, speak(u) { gesagt.push(u.text); } },
+        });
+        const fiel = ansagenPruefen({ health: 0.05 });
+        return { fiel, abgespielt, gesagt };
+      } finally {
+        playFx = echtPlayFx;
+        Object.keys(voiceBuffers).forEach((k) => delete voiceBuffers[k]);
+        Object.assign(voiceBuffers, echtBuffers);
+        if (echtHatSpeech) {
+          Object.defineProperty(window, 'speechSynthesis',
+                                { configurable: true, value: echtSpeech });
+        } else {
+          delete window.speechSynthesis;
+        }
+        Object.assign(ansageLatch, merkLatch);
+      }
+    },
     // Die Gaskennlinie als reine Rechnung, siehe gasKennlinie() in 40-physics.js.
     gasKennlinie,
+    // Dieselbe Rechnung, bipolar - siehe lenkKennlinie() in 40-physics.js.
+    lenkKennlinie,
     // Und der gelebte Zustand der zwei Regler, damit ein Test die VERDRAHTUNG prueft und
     // nicht nur die Formel: ein Regler, der rechnet und nichts setzt, waere sonst gruen.
     fahrgefuehlWerte() {
       return { throttleGamma: physEngine.config.throttleGamma,
                minMoveThrottle: physEngine.config.minMoveThrottle,
-               topSpeedKmh: physEngine.config.topSpeedKmh, massstab: REAL_SCALE };
+               topSpeedKmh: physEngine.config.topSpeedKmh, massstab: REAL_SCALE,
+               steerExpo: physEngine.config.steerExpo };
     },
 
     // ---- Haelt der Ghost an, wenn er anhalten soll - und nur dann? ------------------
@@ -2215,6 +2561,41 @@
       return JSON.parse(JSON.stringify(DEFAULT_BINDINGS));
     },
 
+    // ---- AUTO-VERWALTUNG: einzeln und gesammelt loeschen -----------------------------
+    //
+    // BESTELLT: "in garage weiterer button zum ... Auto-Verwaltung [...] nur eine
+    // manuelle Liste (ansehen, einzeln oder gesammelt loeschen)." Zwei gepflanzte
+    // Eintraege in chc.cars.v1, dann ueber die ECHTEN Knoepfe im DOM loeschen (nicht
+    // ueber carStore() direkt) - der Test soll die Bedienung pruefen, nicht nur die
+    // Datenschicht darunter.
+    carStoreLoeschProbe() {
+      const echt = localStorage.getItem(CAR_STORE);
+      const echtConfirm = window.confirm;
+      try {
+        localStorage.setItem(CAR_STORE, JSON.stringify({
+          a: { color: 'rot', alias: 'X' }, b: { color: 'blau', alias: 'Y' },
+        }));
+        carStoreListeZeichnen();
+        const vorEinzeln = Object.keys(carStore()).length;
+        const zeileA = document.querySelector('.car-store-zeile[data-id="a"]');
+        if (zeileA) zeileA.querySelector('.car-store-loeschen').click();
+        const nachEinzeln = Object.keys(carStore());
+        window.confirm = () => true;
+        const alleBtn = $('car-store-alle-loeschen');
+        if (alleBtn) alleBtn.click();
+        return {
+          vorEinzeln, nachEinzeln,
+          nachAlle: Object.keys(carStore()).length,
+          leerHinweis: ($('car-store-liste') || {}).textContent || '',
+        };
+      } finally {
+        window.confirm = echtConfirm;
+        if (echt === null) { try { localStorage.removeItem(CAR_STORE); } catch (e) { /* privat */ } }
+        else { try { localStorage.setItem(CAR_STORE, echt); } catch (e) { /* privat */ } }
+        carStoreListeZeichnen();
+      }
+    },
+
     // Die Getriebearten: was drinsteht, was daraus gerechnet wird, und die Pendelreserve.
     //
     // MITGEGEBEN WIRD AUCH DAS GERECHNETE - ratioRef und rpmScale -, genau darum: der Test
@@ -2864,6 +3245,10 @@
       }
     },
     setLineModel, getLineModel, buildLine, getLineExit, lapTimeOf, fahrGrenzen,
+    lineModelle: LINE_MODELLE, linienmodellName: LINIENMODELL_NAME,
+    // Die Luuke-Linie direkt auf den Ankern pruefbar, ohne den Umweg ueber Abtastpunkte
+    // und alpha - ein Selbsttest soll die -100..100-Skala der Beispiele direkt lesen.
+    luukeLinieAnker,
     // Die Sperre selbst herausgegeben: eine Pruefung soll fragen koennen, WANN sie gilt,
     // statt es aus Kachelindizes nachzubauen.
     pitSperreRechts, pitKachel, pitFaelligZiehen,
@@ -2877,6 +3262,8 @@
     gapMinSetzen, gapMinLesen,
     lueckeMinSetzen, lueckeMinLesen, ghostZeitLuecke,
     attackRangeSetzen, attackRangeLesen,
+    attackPSetzen, attackPLesen, attackArmMsSetzen, attackArmMsLesen,
+    ghostRennhaerteAnwenden,
     // Der Tankverbrauch, damit die Spiegelpruefung ihn vergleichen kann. Als Funktion und
     // nicht als Wert: ein let wird kopiert, eine Funktion liest.
     fuelDrain: () => fuelDrainPerSec,
@@ -3233,6 +3620,34 @@
         for (const c of autos) stopGhost(c);
         for (const c of merkGarage) garage.push(c);
         Object.assign(ghostCfg, merkCfg);
+        currentTrackTiles = merkTiles;
+        lineCache = null;
+      }
+    },
+
+    // ---- REICHWEITE DER HAARNADEL-UEBERHOLSPERRE ----------------------------------
+    //
+    // ghostHaarnadelInSicht() ist der eigene, laengere Vorausblick fuer die
+    // Ueberholsperre (SPICE_PASS_KEIN_HAARNADEL_VORAUS) - anders als
+    // ghostAheadTightest() (Bremskurve, kuerzere feste Reichweite) fragt er nur "liegt
+    // UEBERHAUPT eine Haarnadel in den naechsten N Kacheln", ohne die naeheste,
+    // weniger enge Kurve dabei zu verschlucken.
+    spicePassKeinHaarnadelVoraus: SPICE_PASS_KEIN_HAARNADEL_VORAUS,
+    haarnadelInSichtProbe(code, tileIndex, depth) {
+      const merkGarage = garage.splice(0, garage.length);
+      const merkTiles = currentTrackTiles;
+      const autos = [];
+      try {
+        currentTrackTiles = codeToTrack(code).tiles;
+        lineCache = null;
+        const a = OMEGA_TEST.attrappeGhost('N');
+        garage.push(a); autos.push(a);
+        a.ghost.tileIndex = tileIndex;
+        return ghostHaarnadelInSicht(a, depth);
+      } finally {
+        garage.splice(0, garage.length);
+        for (const c of autos) stopGhost(c);
+        for (const c of merkGarage) garage.push(c);
         currentTrackTiles = merkTiles;
         lineCache = null;
       }
@@ -4151,6 +4566,52 @@
       }
     },
 
+    // ---- STRECKENSCAN: modeBytes MUESSEN AUCH OHNE BEKANNTE STRECKE HINAUSGEHEN --------
+    //
+    // BESTELLT: "Wenn ich Strecke scannen druecke, muss sich mein Auto wie ein Ghost mit
+    // vorgeschriebener Querlage = 0 verhalten." garageScan.aktiv laeuft AUSSERHALB von
+    // driverAssistAktiv() (ein Scan betrifft nur ein Auto, siehe autopilot() in
+    // 50-drive.js) - spielerOrtProbe() daneben prueft genau DIESEN Pfad nicht, weil sie
+    // immer eine volle, bekannte Strecke einsetzt (ghostLookahead() faende dort also
+    // ohnehin einen Vorausblick, scan hin oder her). Diese Sonde testet den eigentlich
+    // kritischen Fall: waehrend eines Scans ist die Strecke per Definition NICHT bekannt
+    // (currentTrackTiles leer), und trotzdem muessen modeBytes hinausgehen (neutraler
+    // Vorausblick, siehe die Begruendung in spielerOrtTick()).
+    garageScanRailProbe() {
+      const merkPlayer = playerCar;
+      const merkTiles = currentTrackTiles;
+      const merkMode = trackMode;
+      const merkAssist = (typeof fahrhilfeModus !== 'undefined') ? fahrhilfeModus : null;
+      const merkAktiv = garageScan.aktiv, merkCar = garageScan.car;
+      try {
+        currentTrackTiles = [];   // UNBEKANNTE Strecke, wie waehrend eines echten Scans
+        lineCache = null;
+        trackMode = 'on';
+        fahrhilfeModus = 'aus';   // Fahrhilfe AUS - der Scan allein muss genuegen
+        playerCar = { role: 'steuern', alias: 'Fahrer', tileCount: 0, tileCode: 0x02,
+                      modeBytes: null, ghost: null };
+        garageScan.aktiv = true;
+        garageScan.car = playerCar;
+        playerCar.tileCount = 1;
+        playerCar.tileCode = 0x02;
+        spielerOrtTick();
+        const mitScan = playerCar.modeBytes ? Object.assign({}, playerCar.modeBytes) : null;
+        garageScan.aktiv = false;
+        garageScan.car = null;
+        spielerOrtTick();
+        const ohneScan = playerCar.modeBytes;
+        return { mitScan, ohneScan };
+      } finally {
+        playerCar = merkPlayer;
+        currentTrackTiles = merkTiles;
+        trackMode = merkMode;
+        if (merkAssist !== null) fahrhilfeModus = merkAssist;
+        garageScan.aktiv = merkAktiv;
+        garageScan.car = merkCar;
+        lineCache = null;
+      }
+    },
+
     simGas() {
       if (!simAn()) return null;
       return simState.autos.map((a) => {
@@ -4743,6 +5204,126 @@
       startGhost(car);
       if (car.timer) { clearInterval(car.timer); car.timer = null; }
       return car;
+    },
+
+    // ---- RECOVERY: erst der Rueckweg, dann erst parken -----------------------------
+    //
+    // Faehrt ghostTick() ueber eine gefaelschte Uhr, mit car.tileCode auf 0x00 gehalten -
+    // dieselbe Lage wie ein bestaetigter Abgang. o.speedFactor haelt g.engine.state.speed
+    // ueber der Steckenbleiben-Schwelle (ghostTick() selbst schreibt die Physik nicht
+    // fort, also bliebe sie sonst bei 0 stehen und jeder Versuch saehe wie ein Hindernis
+    // aus). o.erfolgBeiMs laesst den Code ab diesem Zeitpunkt wieder gueltig werden.
+    recoveryProbe(o) {
+      const opt = o || {};
+      const merkGarage = garage.splice(0, garage.length);
+      const merkTiles = currentTrackTiles;
+      const merkRecovery = ghostCfg.wuerzeRecovery;
+      const merkFlag = flagState;
+      const echtNow = Date.now;
+      try {
+        currentTrackTiles = codeToTrack(opt.code || 'SG4R4G4').tiles;
+        lineCache = null;
+        ghostCfg.wuerzeRecovery = opt.an !== false;
+        flagState = 'green';
+        const car = OMEGA_TEST.attrappeGhost('W');
+        garage.push(car);
+        car.ghost.freeRun = true;
+        // Die STARTGNADE (drei Sekunden nach jedem Start/Zuruecksetzen, siehe deren
+        // Begruendung bei parken()) ist ein ANDERER Mechanismus als diese Probe pruefen
+        // soll - ausdruecklich geloescht, sonst maskiert sie die ersten drei Sekunden
+        // jedes Laufs.
+        car.ghost.gnadeBis = 0;
+        car.ghost.tileIndex = 2;
+        car.tileCode = 0x02;
+        car.tileCount = 5;
+        // attrappeGhost() liefert die Physik unkalibriert (topSpeedKmh im einstelligen
+        // Bereich) - fuer diese Probe ohne Bedeutung, ausser fuer die Steckenbleiben-
+        // Schwelle, die ein GEMESSENES Vielfaches der Hoechstgeschwindigkeit ist. Auf
+        // einen realistischen Wert gesetzt, damit dieser Anteil etwas misst.
+        if (car.ghost.engine && car.ghost.engine.config) {
+          car.ghost.engine.config.topSpeedKmh = 300;
+        }
+        let uhr = echtNow();
+        Date.now = () => uhr;
+        const schritt = 60;
+        const gesamt = opt.dauerMs !== undefined ? opt.dauerMs : 5000;
+        const verlauf = [];
+        for (let t = 0; t < gesamt; t += schritt) {
+          uhr += schritt;
+          car.tileCode = (opt.erfolgBeiMs !== undefined && t >= opt.erfolgBeiMs) ? 0x02 : 0x00;
+          // steckenBleiben simuliert ein wirklich blockiertes Auto: ghostTick() rechnet
+          // die Physik selbst fort (Gas liegt an, das Tempo steigt sonst von selbst), ein
+          // einmaliges Setzen vor der Schleife wuerde also nach dem ersten Takt schon
+          // wieder ueberschrieben sein. Nur ein Hindernis haelt das Tempo Takt fuer Takt
+          // unten - deshalb hier und nicht einmalig vor der Schleife.
+          if (opt.steckenBleiben && car.ghost.engine && car.ghost.engine.state) {
+            car.ghost.engine.state.speedKmh = 0;
+          } else if (t === 0 && car.ghost.engine && car.ghost.engine.state) {
+            car.ghost.engine.state.speedKmh =
+              (opt.speedFactor === undefined ? 0.3 : opt.speedFactor)
+              * car.ghost.engine.config.topSpeedKmh;
+          }
+          ghostTick(car);
+          verlauf.push({ t, parked: car.parked, versucht: !!car.ghost.recoverUntil });
+          if (car.parked) break;
+        }
+        return { geparkt: car.parked, versuchLief: verlauf.some((v) => v.versucht),
+                 letztesT: verlauf.length ? verlauf[verlauf.length - 1].t : 0, verlauf };
+      } finally {
+        Date.now = echtNow;
+        garage.splice(0, garage.length);
+        for (const c of merkGarage) garage.push(c);
+        currentTrackTiles = merkTiles;
+        lineCache = null;
+        ghostCfg.wuerzeRecovery = merkRecovery;
+        flagState = merkFlag;
+      }
+    },
+
+    // ---- STRECKE AUS DER AUFNAHME LERNEN (90c-macro-track.js) -------------------
+    //
+    // Faehrt den echten Klickpfad ab statt macroLearnFertig() direkt aufzurufen: genau die
+    // Verdrahtung (Knopf sperrt sich waehrend der Wiedergabe, chk-loop wird erzwungen aus,
+    // macroPlaybackDoneCallback feuert genau einmal) ist der Teil, der neu ist - das Lernen
+    // selbst und die Wiedergabe sind anderswo schon gemessen.
+    async macroLearnProbe(o) {
+      const opt = o || {};
+      const merkMacro = macro, merkRecording = recording, merkPlaying = playing;
+      const merkLoop = $('chk-loop') ? $('chk-loop').checked : false;
+      const merkLearn = ghostCfg.learn;
+      const merkTiles = currentTrackTiles;
+      const merkCallback = macroPlaybackDoneCallback;
+      try {
+        macro = opt.macro || [{ t: 0, steer: 0, throttle: 0 }, { t: 0, steer: 0, throttle: 0 }];
+        recording = false; playing = false;
+        if ($('chk-loop')) $('chk-loop').checked = true; // muss der Knopf selbst ausschalten
+        macroLearnRefreshButton();
+        const vorKlick = { disabled: $('btn-macro-learn-track').disabled };
+        $('btn-macro-learn-track').click();
+        const waehrend = {
+          disabled: $('btn-macro-learn-track').disabled,
+          playing,
+          loopAus: $('chk-loop') ? !$('chk-loop').checked : null,
+        };
+        // t:0-Schritte feuern beim naechsten Tick - kurz warten reicht, ohne auf die echten
+        // Wiedergabe-Verzoegerungen angewiesen zu sein.
+        await new Promise((r) => setTimeout(r, 60));
+        const danach = {
+          disabled: $('btn-macro-learn-track').disabled,
+          playing,
+          status: $('macro-learn-status').textContent,
+          learnWiederhergestellt: ghostCfg.learn === merkLearn,
+        };
+        return { ok: true, mass: JSON.stringify({ vorKlick, waehrend, danach }),
+                 vorKlick, waehrend, danach };
+      } finally {
+        macro = merkMacro; recording = merkRecording; playing = merkPlaying;
+        if ($('chk-loop')) $('chk-loop').checked = merkLoop;
+        ghostCfg.learn = merkLearn;
+        currentTrackTiles = merkTiles;
+        macroPlaybackDoneCallback = merkCallback;
+        macroLearnRefreshButton();
+      }
     },
 
     // ---- WER ROLLT WIE WEIT AUS? Die Reihenfolge der Ziellinie ------------------
@@ -5437,9 +6018,13 @@
     ghostPassArming(tileCode, versuche, opt) {
       const merkGarage = garage.splice(0, garage.length);
       const merkSpice = ghostCfg.wuerzeUeberholen;
+      const merkFormation = raceFormationLap;
       const echtNow = Date.now;
       try {
         ghostCfg.wuerzeUeberholen = true;
+        // Ausdruecklich gesetzt statt dem Zufall des zuletzt gelaufenen Tests ueberlassen -
+        // raceFormationLap ist geteilter Zustand, siehe der Fund bei ansageLatch.
+        raceFormationLap = !!(opt && opt.formationLap);
         let uhr = echtNow();
         Date.now = () => uhr;
         const o = opt || {};
@@ -5456,7 +6041,8 @@
           // Kleben halten, damit die Zuendbedingung immer erfuellt ist.
           hinten.ghost.closeSince = uhr - 5000;
           ghostSpice(hinten, { tight: o.tight || 0,
-                               dist: o.dist === undefined ? 99 : o.dist, key: 'p' });
+                               dist: o.dist === undefined ? 99 : o.dist, key: 'p' },
+                     o.haarnadelNah);
           if (hinten.ghost.attackUntil) {
             gestartet++;
             // Zuruecksetzen und weiter wuerfeln.
@@ -5476,6 +6062,7 @@
         garage.splice(0, garage.length);
         merkGarage.forEach(c => garage.push(c));
         ghostCfg.wuerzeUeberholen = merkSpice;
+        raceFormationLap = merkFormation;
       }
     },
 
@@ -7396,6 +7983,117 @@
       if (wxFrontTo === 0) wxRegenLosschicken(); else wxRegenAbbestellen();
       applySurface();
       return this.wxProbe();
+    },
+
+    // ---- Phase E: der Regen-Griff wirklich GEMESSEN, nicht nur aus dem Code gelesen ----
+    //
+    // BESTELLT (Korrektur an einer frueheren Planfassung): "hier geht es explizit ums
+    // Handling, der Uebergang in der Animation und den Wolken ist ja schon perfekt da" -
+    // also der tatsaechlich gefahrene physEngine.config.gripScale ueber die Zeit, nicht die
+    // Regenformen/das Radarbild (die bleiben unangetastet, siehe wxSchritt/wxProbe daneben).
+    //
+    // GEFAELSCHTE UHR UND ECHTES wxTick(), nicht wxSet(): wxSet()/wetterSetzen() springen
+    // sofort zum Endwert und ueberspringen damit genau die Rampe, die hier geprueft werden
+    // soll - ein Test, der eine Schwelle ueberspringt, prueft sie nicht (derselbe Grundsatz
+    // wie bei wxSchritt() daneben). Das Muster (Date.now faelschen, echte Tick-Funktion
+    // manuell aufrufen) ist dasselbe wie bei pitKnopfProbe() und den anderen *Probe()
+    // weiter oben.
+    //
+    // DER SONDERFALL: setWeather() setzt bei einem ZWEITEN Regenbeginn, nachdem die vorige
+    // Regenfront schon komplett durchgezogen ist (wxFront >= 0,999), wxFront SPRUNGHAFT auf
+    // -1 zurueck (70-race.js:2699) - eine echte Ausnahme von "nur das Ziel aendert sich,
+    // wxTick macht den Weg". sprungSelbst misst genau diesen einen Schritt.
+    regenRampeProbe(o) {
+      if (typeof wxTick !== 'function' || typeof setWeather !== 'function') return null;
+      const opt = o || {};
+      const schrittMs = opt.schrittMs || 250;
+      // Eine Sekunde mehr als WX_RAMP_S (10 s), damit das Ende der Rampe sicher erfasst ist,
+      // nicht nur ihr Anfang.
+      const dauerS = opt.dauerS || 11;
+      const echtNow = Date.now;
+      const merk = { weather, wxFront, wxFrontTo, tyres, wxTickAt };
+      // GEFUNDEN BEIM BAUEN: setWeather() ruft nebenbei wxRegenLosschicken()/-Abbestellen()
+      // auf, die Formen im Radar starten/entlassen. Ohne diese Sicherung blieb nach dem
+      // Sonderfall-Durchlauf (dritter setWeather('rain')-Aufruf, nur elf statt zwanzig noch
+      // gebrauchten Sekunden bis zum Bildrand) mindestens eine Form "aktiv" haengen und liess
+      // den NAECHSTEN Test ("Regenformen: von aussen, mit Nachschub") mit einer Form im
+      // angeblich trockenen Bild fehlschlagen - eine Sonde darf nur MESSEN, nicht den
+      // Zustand fuer den naechsten Test veraendern. Volle Wiederherstellung statt eines
+      // einzelnen wxRegenAbbestellen()-Aufrufs, weil auch quer/wellen/weg je Form vom
+      // Durchlauf verstellt sein koennen.
+      const wxBlobsSnapshot = typeof wxBlobs !== 'undefined' ? JSON.parse(JSON.stringify(wxBlobs)) : null;
+      try {
+        let uhr = 8000000;
+        Date.now = () => uhr;
+        // wxTickAt SOFORT auf die gefaelschte Uhr, sonst rechnet der erste Tick mit der
+        // alten, echten Zeitmarke gegen die winzige gefaelschte - ein riesiger, negativer
+        // dt und ein Sprung in die falsche Richtung schon vor dem ersten Messpunkt.
+        wxTickAt = uhr;
+        tyres = 'mittel';           // derselbe bekannte, symmetrische Ausgangswert wie tyreSet()
+        weather = 'dry'; wxFront = -1; wxFrontTo = -1;
+        applySurface();
+
+        const lauf = () => {
+          const werte = [];
+          const n = Math.round(dauerS * 1000 / schrittMs);
+          for (let i = 0; i < n; i++) {
+            uhr += schrittMs;
+            wxTick();
+            werte.push(+physEngine.config.gripScale.toFixed(6));
+          }
+          return werte;
+        };
+        const maxSchrittIn = (folgen) => {
+          let max = 0, bei = null;
+          folgen.forEach((folge, fi) => {
+            for (let i = 1; i < folge.length; i++) {
+              const d = Math.abs(folge[i] - folge[i - 1]);
+              if (d > max) { max = d; bei = [fi, i]; }
+            }
+          });
+          return { max: +max.toFixed(6), bei };
+        };
+
+        // 1: Regen setzt ein, Front zieht von -1 auf 0.
+        setWeather('rain');
+        const rampeAn = lauf();
+
+        // 2: Regen hoert wieder auf, waehrend die Front noch unterwegs ist (bei 0).
+        setWeather('dry');
+        const rampeAus = lauf();
+
+        // 3: Von Hand an den Rand bringen (Front komplett durch, weather bleibt 'dry') -
+        // und dann der Sonderfall: Regen setzt ERNEUT ein.
+        wxFront = 0.9; wxFrontTo = 1;
+        for (let i = 0; i < 4; i++) { uhr += schrittMs; wxTick(); }
+        const frontVorSprung = +wxFront.toFixed(4);
+        const griffVorSprung = +physEngine.config.gripScale.toFixed(6);
+        setWeather('rain');                 // hier greift wxFront>=0.999 -> wxFront=-1
+        const griffNachSprung = +physEngine.config.gripScale.toFixed(6);
+        const rampeNachSprung = lauf();
+
+        const sonstwo = maxSchrittIn([rampeAn, rampeAus, rampeNachSprung]);
+        return {
+          schrittMs, dauerS,
+          frontVorSprung, griffVorSprung, griffNachSprung,
+          sprungSelbst: +Math.abs(griffNachSprung - griffVorSprung).toFixed(6),
+          maxSchrittSonstwo: sonstwo.max, maxSchrittSonstwoBei: sonstwo.bei,
+          endeAn: rampeAn[rampeAn.length - 1], endeAus: rampeAus[rampeAus.length - 1],
+          endeNachSprung: rampeNachSprung[rampeNachSprung.length - 1],
+        };
+      } finally {
+        Date.now = echtNow;
+        weather = merk.weather; wxFront = merk.wxFront; wxFrontTo = merk.wxFrontTo;
+        tyres = merk.tyres;
+        // ECHTE Zeit, nicht die alte Marke: der naechste reale wxTick() (setInterval laeuft
+        // unabhaengig weiter) rechnete sonst gegen die gefaelschte kleine Uhr von eben und
+        // saehe einen riesigen dt.
+        wxTickAt = Date.now();
+        // Formen ZURUECK auf den Stand vor der Messung, nicht nur "irgendwie beendet" -
+        // siehe die Begruendung bei wxBlobsSnapshot oben.
+        if (wxBlobsSnapshot) { wxBlobs.length = 0; wxBlobs.push(...wxBlobsSnapshot); }
+        applySurface();
+      }
     },
 
     sampleLine(tiles, steps) {

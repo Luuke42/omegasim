@@ -230,6 +230,34 @@
     let cfg;
     try { cfg = JSON.parse(roh); } catch (e) { return 0; }
     if (!cfg || typeof cfg !== 'object') return 0;
+    // ---- EINMALIGE UMSTELLUNG: DER ALTE VORGABEWERT STECKT NOCH IN DER SELBSTSICHERUNG --
+    //
+    // v0.7.9 hob steerExpo (Lenkkennlinie) von 1.15 auf 1.3 an. v0.7.52 hat das
+    // zurueckgenommen: "beim gas geben ist die Lenkung jetzt extrem schwach... mach es so
+    // wie in v0.6.xx". GEMELDET DANACH, mit v0.7.52 laengst installiert: "das mit dem
+    // Lenken beim Beschleunigen fuehlt sich noch nicht so gut an" - der neue Vorgabewert
+    // im Markup aendert NICHTS an einer bereits vorhandenen Selbstsicherung, und wer die
+    // App zwischen v0.7.9 und v0.7.51 irgendeine Einstellung geaendert hat (das genuegt,
+    // autoSicherungSchreiben() sichert dabei ALLE Regler auf einmal, nicht nur den
+    // beruehrten), hat 1.3 dort liegen - und die ueberschreibt seither lautlos jeden neuen
+    // Vorgabewert. Einmalig markiert (chc.migrate.steerexpo115.v1), damit ein SPAETER
+    // bewusst auf 1.3 gestellter Wert nicht ein zweites Mal zurueckgedreht wird.
+    if (cfg['setting-steer-expo'] === 1.3) {
+      let migriert = false;
+      try { migriert = localStorage.getItem('chc.migrate.steerexpo115.v1') === '1'; }
+      catch (e) { /* privater Modus: dann eben jedes Mal, schadet nicht */ }
+      if (!migriert) {
+        cfg['setting-steer-expo'] = 1.15;
+        try {
+          localStorage.setItem('chc.migrate.steerexpo115.v1', '1');
+          // ZURUECKGESCHRIEBEN und nicht nur im Speicher berichtigt: sonst stuende die 1.3
+          // beim naechsten Laden wieder roh in der Ablage, der Migrationsschalter wuerde
+          // eine zweite Korrektur verhindern (er ist ja schon gesetzt), und die Berichtigung
+          // waere genau einmal wirksam gewesen und dann nie wieder.
+          localStorage.setItem(AUTO_STORE, JSON.stringify(cfg));
+        } catch (e) { /* privater Modus oder voll - dann eben nur fuer diese Sitzung */ }
+      }
+    }
     // AUCH HIER GEPRUEFT. Die eigene Ablage ist nicht vertrauenswuerdiger als eine Datei:
     // sie kann aus einer aelteren Fassung stammen, in der ein Regler andere Grenzen hatte.
     const { bad } = presetPruefen(cfg);

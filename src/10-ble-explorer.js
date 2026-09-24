@@ -105,18 +105,6 @@
     return new Uint8Array(bytes);
   }
 
-  function setConnected(isConnected) {
-    // Jede Anzeige hier einzeln geprueft: der Punkt und der Trennen-Knopf in der Kopfzeile
-    // sind entfernt worden, und ein blinder Zugriff auf einen von beiden wuerde beim
-    // Verbinden eine Ausnahme werfen - also genau in dem Moment, in dem am wenigsten Zeit
-    // ist, sie zu suchen.
-    // Nur noch der Verbindungsknopf. Der Punkt und der Trennen-Knopf in der Kopfzeile sind
-    // entfallen, und der Verbindungszustand steht in der Fusszeile des Cockpits - eine
-    // zweite Anzeige dafuer waere ohnehin eine zweite Wahrheit.
-    const bc = $('btn-connect');
-    if (bc) bc.disabled = isConnected;
-  }
-
   // ---- Woran liegt es, wenn keine Autos auftauchen? ----------------------------------
   //
   // VIER FAELLE, und sie brauchen vier verschiedene Antworten. Bis v0.5.16 bekamen alle
@@ -189,9 +177,11 @@
       log(`Gerät ausgewählt: ${device.name} (${device.id})`, 'info');
       device.addEventListener('gattserverdisconnected', onDisconnected);
       server = await device.gatt.connect();
-      setConnected(true);
-      // Exactly one starter sound per successful connection.
-      playFx(fxBuffers.start[$('sound-profile').value] || fxBuffers.start.porsche, 0.85);
+      // Exactly one starter sound per successful connection. Fallback key updated to
+      // match fx.json's real car keys (p992gt3r, not the old 'porsche') - see
+      // tools/engine_fx.py, wo die Datei jetzt fuer alle Autos statt nur drei alte
+      // Namen erzeugt wird.
+      playFx(fxBuffers.start[$('sound-profile').value] || fxBuffers.start.p992gt3r, 0.85);
       log('GATT-Server verbunden.', 'info');
       await exploreServices();
     } catch (err) {
@@ -201,13 +191,11 @@
   }
 
   function onDisconnected() {
-    setConnected(false);
     log('Verbindung getrennt.', 'err');
   }
 
   async function disconnect() {
     if (device && device.gatt.connected) device.gatt.disconnect();
-    setConnected(false);
   }
 
   function propsToList(props) {
@@ -374,15 +362,9 @@
   };
 
   $('btn-clear-log').onclick = () => { logEl.innerHTML = ''; };
-  // Der gruene Knopf oben macht jetzt dasselbe wie der in der Garage. Vorher hing er am
-  // BLE-Explorer, der KEIN Auto in der Garage anlegt - wer ihn benutzte, war verbunden, hatte
-  // aber kein Auto, dem er eine Rolle geben konnte. Zwei Knoepfe mit demselben Wort und
-  // verschiedener Wirkung sind eine Falle, keine Auswahl.
-  $('btn-connect').onclick = () => garageConnect();
-  // Der Trennen-Knopf in der Kopfzeile ist entfernt: er rief disconnect() des BLE-Explorers
-  // auf und liess ein ueber die Garage verbundenes Auto unberuehrt - er tat also nichts, genau
-  // wie der Verbinden-Knopf daneben, bevor der umgehaengt wurde. Getrennt wird pro Auto in
-  // der Garage, und das funktioniert.
+  // BESTELLT: "auto verbinden soll nur in garage tab moeglich sein" - der globale
+  // Verbindungsknopf in der Kopfzeile ist damit ganz entfallen, nicht nur umgehaengt.
+  // Verbunden wird jetzt ausschliesslich ueber #gar-connect in der Garage.
   $('dev-explore').onclick = connect;
 
 
@@ -430,6 +412,18 @@
     "Regen ansagen": "Announce rain",
     "Wenn es anfängt zu regnen und wenn es aufhört. Beim Laden wird nichts gesagt, erst beim Wechsel.": "When it starts raining and when it stops. Nothing is said on load, only on a change.",
     "Gaskennlinie": "Throttle curve",
+    "Lenkkennlinie": "Steering curve",
+    "Lenkkraft unter Gas": "Steering force under throttle",
+    "Wie stark die Lastverlagerung beim Beschleunigen die Lenkung schwaecht. 0 % ist unveraendert (die Vorderachse entlastet sich normal), 100 % hebt die Abschwaechung unter Gas ganz auf - unabhaengig vom Bremsverhalten, das ruehrt dieser Regler nicht an.":
+      "How much weight transfer under acceleration weakens the steering. 0% is unchanged (the front axle unloads normally), 100% cancels the weakening under throttle entirely - independent of braking behaviour, which this slider does not touch.",
+    "Gewichtsverlagerung": "Weight transfer",
+    "Wieviel Radlast beim vollen Bremsen oder Beschleunigen von einer Achse zur anderen wandert. Mehr fühlt sich nach einem schwereren Auto an - mehr Last auf der Vorderachse beim Bremsen, mehr auf der Hinterachse beim Gas.":
+      "How much wheel load shifts from one axle to the other under full braking or acceleration. More feels like a heavier car - more load on the front axle under braking, more on the rear under throttle.",
+    "Trägheit der Gewichtsverlagerung": "Weight transfer inertia",
+    "Wie schnell die Karosserie beim Bremsen oder Gasgeben in die neue Radlast einschwingt. Kurz wirkt spritzig und direkt, lang wirkt schwer und träge - wie ein Auto, das erst noch merklich nach vorn oder hinten sackt.":
+      "How quickly the body settles into the new wheel load under braking or throttle. Short feels sharp and direct, long feels heavy and sluggish - like a car that visibly dips forward or aft first.",
+    "Wie der Lenkweg des Sticks auf den Lenkausschlag abgebildet wird - dieselbe Kurvenform wie die Gaskennlinie, nur mit Vorzeichen (Links/Rechts). 1,0 ist die Gerade. Über 1,0 macht kleine Ausschläge um die Mitte unempfindlicher: ein leicht angetippter Stick lenkt dann weniger ein als bisher, der volle Anschlag bleibt unverändert der volle Anschlag.":
+      "How the stick's travel maps to the steering angle - the same curve shape as the throttle curve, just signed (left/right). 1.0 is the straight line. Above 1.0 makes small deflections near the centre less sensitive: a lightly nudged stick then steers less than before, full lock stays full lock.",
     "Anfahrschub": "Launch shove",
     "Wie der Gasweg des Controllers auf die Beschleunigung abgebildet wird. Die Enden liegen immer fest: kein Gas heißt keine Beschleunigung, Vollgas heißt volle Beschleunigung – geändert wird nur, was dazwischen passiert. 1,0 ist die Gerade und ändert nichts. Über 1,0 streckt den unteren Bereich: ein Viertel Gasweg gibt bei 1,8 nur noch 8 % statt 25 %. Genau das braucht ein Trigger mit großer Totzone – ein DualShock 4 oder DualSense gibt schon bei leichtem Druck viel ab, und dann lässt sich kein Tempo halten. Unter 1,0 macht es umgekehrt spitzer, für Pedale mit langem Weg.": "How the controller’s throttle travel maps to acceleration. The ends are always fixed: no throttle means no acceleration, full throttle means full acceleration – only what happens in between changes. 1.0 is the straight line and changes nothing. Above 1.0 stretches the lower range: a quarter of the travel gives only 8 % instead of 25 % at 1.8. That is exactly what a trigger with a large dead zone needs – a DualShock 4 or DualSense already gives away a lot under light pressure, and then no speed can be held. Below 1.0 does the opposite and makes it sharper, for pedals with long travel.",
     "Der Stößer, mit dem das Auto aus dem Stand losbricht. Ohne ihn bekommt es beim Anfahren ein Gasbyte, das zu klein ist, um es zu bewegen – es zuckt und steht. Mit ihm springt es dafür an: 16 % sind im Maßstab rund 47 km/h, und das ist der Sprung von null auf gefühlt 30, den man beim ersten Gasgeben spürt. Wieviel nötig ist, hängt am Untergrund: auf Teppich mehr als auf Laminat. Runter drehen, bis das Auto gerade noch sauber anfährt.": "The shove that breaks the car away from standstill. Without it the car gets a throttle byte too small to move it – it twitches and stays put. With it the car jumps instead: 16 % is about 47 km/h to scale, and that is the jump from zero to a felt 30 you notice on the first squeeze. How much is needed depends on the surface: more on carpet than on laminate. Turn it down until the car only just still pulls away cleanly.",
@@ -501,6 +495,29 @@
     "Anzeigen wie auf einem echten GT3-HUD": "Readouts like a real GT3 dash",
     "Attacke": "Attack",
     "Auf Standard zurücksetzen": "Reset to defaults",
+    "Standard wiederherstellen": "Restore defaults",
+    "Spieler 1": "Player 1",
+    "Spieler 2": "Player 2",
+    "Alle löschen": "Delete all",
+    "ohne Bedeutung": "no effect",
+    "Rundenzahl: links/rechts einstellen": "Lap count: adjust with left/right",
+    "Rundenzahl: Anwahl beendet": "Lap count: selection ended",
+    "starten": "start",
+    "abbrechen": "cancel",
+    "wartet auf die erste Bewegung": "waiting for the first movement",
+    "Keine gemerkten Autos.": "No remembered cars.",
+    "Alle gemerkten Autos wirklich löschen?": "Really delete all remembered cars?",
+    "Karteileichen entstehen, weil der Browser Autos nicht dauerhaft stabil wiedererkennt (neues Profil, anderer Browser) – hier lassen sie sich einzeln oder alle auf einmal entfernen.":
+      "Stale entries happen because the browser doesn't recognize cars reliably long-term (new profile, different browser) – here they can be removed one by one or all at once.",
+    "Zur Garage": "To the garage",
+    "Zur Startseite": "To the home page",
+    "Zum Cockpit →": "To the cockpit →",
+    "Jedes Auto einzeln per Klick verbinden – Web Bluetooth verlangt das so.":
+      "Connect each car individually with its own click – Web Bluetooth requires it.",
+    "Klick auf eine Zeile lässt die Lichter blinken":
+      "Click a row to flash that car's lights",
+    "Der Browser darf diesen Speicher jederzeit leeren – diese Datei ist die Rückversicherung. Laden führt zusammen statt zu ersetzen: nichts Neueres geht verloren, auch eine ältere Sicherung lädt noch.":
+      "The browser may clear this storage at any time – this file is the fallback. Loading merges instead of replacing: nothing newer is lost, and an older backup still loads.",
     "Auf den neuen Blättern steht ein 100-mm-Kontrollmaß. Nachmessen ist der einzige Weg, den Druckmaßstab zu prüfen, denn eine Druckvorschau sagt dazu nichts.": "The new sheets carry a 100 mm check measure. Measuring it is the only way to verify the print scale, because a print preview says nothing about it.",
     "Auf der Bahn": "On track",
     "Aufgeladen, dieses Modell hat keinen Lader.": "Turbocharged, this model has no turbo.",
@@ -564,7 +581,6 @@
     "Crashs, bis Fahrzeug ruckelt": "Crashes until the car judders",
     "Cross-Plane (ungleiche Bänke)": "Cross-plane (uneven banks)",
     "Dann gilt keine der beiden Regeln, und es braucht mehr als ein bekanntes Paar. Die acht Probeblätter darunter sind dafür gebaut.": "Then neither rule holds, and more than one known pair is needed. The eight probe sheets below are built for that.",
-    "Das Auto hält sich selbst auf der Bahn, der Ghost gibt nur Gas.": "The car keeps itself on the track; the ghost only works the throttle.",
     "Das Frequenzbild des Rohrs. Die blaue Marke ist die Viertelwellenresonanz": "The frequency picture of the pipe. The blue mark is the quarter-wave resonance",
     "Das bekannte Muster beginnt in Fahrtrichtung mit vier dünnen Balken. Von einer Fassung ist berichtet, dass sie auch ohne drei davon erkannt wurde – der Vorlauf ist also kein Nutzdatum, sondern die Strecke, an der sich der Leser auf die schmale Modulbreite einstellt.": "In the driving direction, the known pattern begins with four thin bars. One version is reported to have been recognised without three of them, so the lead-in is not payload but the stretch over which the reader settles on the narrow module width.",
     "Das ist der ganze Trick: eine": "That is the whole trick: one",
@@ -602,7 +618,6 @@
     "An einem echten GT3 kalibriert": "Calibrated against a real GT3",
     "Von Hand schalten, 3,2 s auf 100 (die gemessene Reihe, gegen die die Physik gefittet ist), voller Reifenverschleiß und volles Tankgewicht. Wenig Grip, schwache Bremse, langes Ausrollen. Ein Fahrfehler kostet hier Zeit.":
       "Manual gearbox, 3.2 s to 100 (the measured series the physics was fitted against), full tyre wear and full fuel weight. Little grip, weak brakes, long coasting. A mistake costs time here.",
-    "Weniger Leistung, mehr Reserve": "Less power, more reserve",
     "Von Hand schalten, 4,4 s auf 100, Reifenverschleiß und Tankgewicht wie GT3, aber mehr Grip und eine gutmütigere Bremse. Die Klasse darunter fährt sich nicht leichter, weil sie mehr verzeiht, sondern weil sie langsamer ist.":
       "Manual gearbox, 4.4 s to 100, tyre wear and fuel weight as GT3, but more grip and gentler brakes. The class below is not easier because it forgives more, but because it is slower.",
     "Das schärfste, was das Modell hergibt": "The sharpest the model has",
@@ -629,6 +644,9 @@
       "Setup for the car you drive – the same five as in the options; the sliders there follow along.",
     "Oder auf diesem Gerät ablegen. Bleibt im Browser, wird nicht mitgeschickt.":
       "Or store it on this device. Stays in the browser, is not sent anywhere.",
+    "Eigene Abstimmung: aktuelle Reglerwerte unter einem Namen ablegen, später wieder laden. Bleibt im Browser, wird nicht mitgeschickt.":
+      "Custom setup: store the current slider values under a name, load them again later. Stays in the browser, is not sent anywhere.",
+    "Name der Abstimmung": "Setup name",
     "– abgelegt –": "– stored –",
     "Vibration": "Vibration",
     "R\u00fcckmeldung im Controller bei Gangwechsel, ABS, Aufprall und im Boxenstopp. Das Handy vibriert nicht mit, das Protokoll kennt daf\u00fcr nichts.":
@@ -693,6 +711,13 @@
     "Ghost: Führenden bremsen": "Ghost: hold the leader back",
     "Ghost: Ideallinie": "Ghost: racing line",
     "Ghost: Kurvendrosselung": "Ghost: corner slowdown",
+    "Ghost: Rennhärte": "Ghost: race hardness",
+    "Außen-Innen": "Outside-inside",
+    "Ghost: Rückweg nach einem Abgang": "Ghost: recovery after leaving the track",
+    "Statt sofort zu parken, versucht das Auto bis zu 3 Sekunden, selbst auf die Strecke zurückzufahren - anhand der zuletzt bekannten Stelle und der Ideallinie dort. Kommt es dabei nicht voran (vermutlich ein Hindernis), oder gelingt es in 3 Sekunden nicht, parkt es wie bisher. Es muss nicht an derselben Stelle wieder auffahren.":
+      "Instead of parking right away, the car tries for up to 3 seconds to steer itself back onto the track - based on the last known spot and the racing line there. If it makes no progress (likely an obstacle), or doesn't succeed within 3 seconds, it parks as before. It doesn't have to rejoin at the same spot.",
+    "Wie oft und wie schnell Ghosts einen Überholversuch starten. Weich: seltener, geduldiger, mehr Abstand - ein Feld, das sauber und leicht versetzt hintereinanderfährt. Hart: häufiger, schneller, eine kleinere Lücke reicht schon. 50% ist die bisherige, gemessene Abstimmung.":
+      "How often and how quickly ghosts start an overtaking attempt. Soft: rarer, more patient, more space - a field that runs cleanly and slightly staggered, nose to tail. Hard: more often, quicker, a smaller gap is already enough. 50% is the previous, measured tuning.",
     "Verteidigen": "Defending",
     "Fahrercharakter": "Driver character",
     "Bisher sind alle Ghosts derselbe Fahrer: ein globaler Satz Regler für jeden. Mit dieser Einstellung würfelt jedes Auto zu Rennbeginn vier Faktoren in einer Spanne von ±25 % – Angriffslust, Verteidigung, Fehlerneigung und Kurvenabzug – und ein eigenes Boxenfenster von bis zu zwei Runden Versatz.":
@@ -714,8 +739,8 @@
     "Auto 2": "Car 2",
     "Und ein Vergleichsschirm: blättere im Cockpit mit dem Pfeil oben links oder dem Steuerkreuz auf „Beide“. Dort stehen beide Autos":
       "And a comparison screen: page through the cockpit with the arrow at the top left or the D-pad to “Both”. It shows both cars",
-    "– Tempo, Schaltlichter, Gang, Tank, Zustand, Reifen- und Bremsentemperatur und Akku, in beiden Spalten in derselben Reihenfolge, damit das Auge waagerecht springen kann. Dazu die Boxenknöpfe beider Autos und der Motorklang, der für beide gilt. Ist der Modus aus, wird der Schirm beim Blättern übersprungen.":
-      "– speed, shift lights, gear, fuel, condition, tyre and brake temperature and battery, in the same order in both columns so the eye can move sideways. Plus the pit buttons of both cars and the engine sound, which applies to both. With the mode off, the screen is skipped while paging.",
+    "– Tempo, Schaltlichter, Gang, Tank, Zustand, Reifen- und Bremsentemperatur und Akku, in beiden Spalten in derselben Reihenfolge, damit das Auge waagerecht springen kann. Dazu die Boxenknöpfe beider Autos und je ein eigener Motor-Knopf – Auto 2 darf einen anderen Motor fahren als Auto 1, muss aber nicht. Ist der Modus aus, wird der Schirm beim Blättern übersprungen.":
+      "– speed, shift lights, gear, fuel, condition, tyre and brake temperature and battery, in the same order in both columns so the eye can move sideways. Plus the pit buttons of both cars and an engine-sound button each – car 2 may run a different engine than car 1, but does not have to. With the mode off, the screen is skipped while paging.",
     "Und ein Boxenstopp, unabhängig vom anderen Auto: während eines in der Box steht, verbraucht das andere weiter. Beide Knöpfe stehen auf dem Vergleichsschirm „Beide“, links für Auto 1 und rechts für Auto 2. Anfordern,":
       "And a pit stop, independent of the other car: while one is stopped, the other keeps burning fuel. Both buttons sit on the “Both” comparison screen, left for car 1 and right for car 2. Request,",
     ", warten, losfahren; nochmal drücken bricht ab. Der Service beginnt erst im Stillstand – das Auto rollt mit über 200 km/h aus, deshalb steht in der Fußzeile, wie weit es noch ist. Getankt wird mit denselben 22 %/s wie bei Auto 1 und repariert mit derselben Rate; ungleiche Raten wären schlimmer als kein Stopp.":
@@ -751,17 +776,16 @@
       "Plus a fuel tank of its own: consumption by throttle and time on the same slider as car 1, the fuel weight in its driving model, the warning levels as a message, and the limp mode of an empty tank – which closes over a ramp, not in one tick.",
     "Dazu einen eigenen Schaden: Crasherkennung aus seinen eigenen Sensorbytes, Leistungsverlust mit dem Schaden, Notlauf im Totalschaden und ausgefallene Lampen – und die Kontrollleuchten des einen sagen nichts mehr über das andere Auto.":
       "Plus damage of its own: crash detection from its own sensor bytes, power lost with damage, limp mode when totalled, and lamps that fail – and one car's tell-tales no longer say anything about the other.",
-    "Auto 2 hat keine Zusatzkette am Motorklang: kein Turbopfeifen, keine Knaller, kein Begrenzer-Takt – die hängen an einem Bus. Und keinen Doppler, der gehört zur Runde von Auto 1.":
-      "Car 2 has no extras chain on its engine sound: no turbo whistle, no pops, no limiter pulsing – those hang off one bus. And no doppler, which belongs to car 1's lap.",
-    "Dazu eine eigene Motorstimme, und die sitzt auf der anderen Stereoseite – links Auto 1, rechts Auto 2. Das ist keine Kosmetik: zwei Motoren im selben Drehzahlband aus einem Lautsprecher klingen wie ein verstimmter Motor und nicht wie zwei Autos. Auch der Schaltklang kommt von der Seite des Autos, das geschaltet hat. Beide fahren dasselbe Motormodell, das aus dem Cockpit gewählte.":
-      "Plus an engine voice of its own, and it sits on the other stereo side – car 1 left, car 2 right. That is not decoration: two engines in the same rev band from one speaker sound like one out-of-tune engine, not like two cars. The shift sound comes from the side of the car that shifted, too. Both run the same engine model, the one chosen in the cockpit.",
+    "Das Motormodell selbst darf Auto 2 seit Kurzem frei wählen (eigener Knopf auf dem Vergleichsschirm „Beide“). Was es weiterhin nicht hat, ist eine eigene Zusatzkette: kein Turbopfeifen, keine Knaller, kein Begrenzer-Takt – die hängen an einem Bus. Und keinen Doppler, der gehört zur Runde von Auto 1.":
+      "Car 2 has recently become free to choose its own engine model (a button of its own on the “Both” comparison screen). What it still does not have is extras of its own: no turbo whistle, no pops, no limiter pulsing – those hang off one bus. And no doppler, which belongs to car 1's lap.",
+    "Dazu eine eigene Motorstimme, und die sitzt auf der anderen Stereoseite – links Auto 1, rechts Auto 2. Das ist keine Kosmetik: zwei Motoren im selben Drehzahlband aus einem Lautsprecher klingen wie ein verstimmter Motor und nicht wie zwei Autos. Auch der Schaltklang kommt von der Seite des Autos, das geschaltet hat. Beide fahren mit derselben Vorgabe los, dürfen aber verschiedene Motoren spielen – je ein eigener Knopf auf dem Vergleichsschirm „Beide“.":
+      "Plus an engine voice of its own, and it sits on the other stereo side – car 1 left, car 2 right. That is not decoration: two engines in the same rev band from one speaker sound like one out-of-tune engine, not like two cars. The shift sound comes from the side of the car that shifted, too. Both start out with the same choice, but may play different engines – an engine-sound button of its own on the “Both” comparison screen.",
     "Die drei Rundenzeiten im Cockpit – aktuelle, letzte, beste – und die Aufnahme gehören Auto 1. Seine eigenen Zeiten stehen in der Rundenübersicht.":
       "The three lap times in the cockpit – current, last, best – and the recording belong to car 1. Its own times are in the lap overview.",
     "Dazu zählt Auto 2 seine Runden mit: es steht in der Rundenübersicht, in der Rangliste während des Rennens und im Ergebnis samt CSV. Das war keine Arbeit, sondern ein Irrtum in meiner Schätzung – die Rundenzählung lief schon immer je Auto, für jedes verbundene, egal welche Rolle. Die Zielflagge wartet jetzt auf beide Fahrer statt nur auf einen.":
       "Car 2 counts its laps too: it appears in the lap overview, in the running order during the race, and in the result including the CSV. That took no work, it corrected a mistake in my estimate – lap counting always ran per car, for every connected one, whatever its role. The chequered flag now waits for both drivers instead of just one.",
     ": eine eigene Fahrphysik mit eigenen Gängen, eigener Drehzahl, eigenem Tempo und eigenen Temperaturen. Die Einstellungen aus „Fahrgefühl“ werden bei jedem Anschalten übernommen, damit beide Autos gleich fahren.":
       ": a driving model of its own, with its own gears, revs, speed and temperatures. The settings from “Driving feel” are copied over every time the mode is switched on, so that both cars drive alike.",
-    "Ghost: Leitplanken-Modus": "Ghost: guard-rail mode",
     "Ghost: Linienmodell": "Ghost: line model",
     "Ghost: lernt von Runde zu Runde": "Ghost: learns lap by lap",
     "Ghost: seitlicher Versatz": "Ghost: lateral offset",
@@ -1090,6 +1114,8 @@
     "Um wie viel langsamer.": "By how much slower.",
     "nicht umgesetzt": "not implemented",
     "Teilweise im Aufbau.": "Partly under construction.",
+    "Kurvendrosselung, Ideallinie und Linienmodell wirken nur, wenn eine Strecke mit mindestens drei Teilen vorliegt – entweder im Editor gebaut oder beim Fahren gelernt. Ohne Streckenlayout rechnen sie mit einer Null.":
+      "Corner slowdown, racing line and line model only work once a track with at least three parts exists – either built in the editor or learned while driving. Without a track layout they compute with a zero.",
     "Drei der Regler hier wirken nur, wenn eine Strecke mit mindestens drei Teilen vorliegt – entweder im Editor gebaut oder beim Fahren gelernt. Ohne Streckenlayout rechnen sie mit einer Null. Sie sind unten mit":
       "Three of the sliders here only work once a track of at least three pieces exists – either built in the editor or learned while driving. Without a layout they multiply by zero. They are marked below with",
     "gekennzeichnet, samt dem, was ihnen fehlt.":
@@ -1358,7 +1384,7 @@
     "langsam": "slow",
     "lenken links": "steer left",
     "lenken rechts": "steer right",
-    "links rot-weiß": "left red-and-white",
+    "links blau-weiß": "left blue-and-white",
     "links": "left",
     "links, sie hat sehr wohl eigene Codes, und sie fügen sich in das Muster der anderen:": "left, it does have codes of its own, and they fit the pattern of the others:",
     "links/rechts für die 60-Grad-Kurve,": "left/right for the 60-degree curve,",
@@ -1377,7 +1403,7 @@
     "nur Byte 10 = 0x30": "byte 10 = 0x30 only",
     "oder": "or",
     "quer": "landscape",
-    "rechts blau-weiß": "right blue-and-white",
+    "rechts rot-weiß": "right red-and-white",
     "rechts und": "right and",
     "rechts": "right",
     "rot beim Bremsen": "red under braking",
@@ -1467,7 +1493,7 @@
     "Kurve, Blatt 1": "Curve, sheet 1",
     "Kurve, Blatt 2": "Curve, sheet 2",
     // Pro als Vorgabe (v0.5): geaenderte Preset-Texte, Gasfaktor, vier Reifen.
-    "Automatik, 2,0 s auf 100, voller Grip, kein Reifenverschleiß und kein Tankgewicht. Die Bremse steht am Anschlag, also der kürzeste Bremsweg von allen, und die Lenkkalibrierung auf 250 Prozent: der volle Einschlag liegt schon bei einem Viertel Stick an. 50 Abgänge erlaubt, kein Schaden. Zum Fahren ohne Nachdenken.": "Automatic, 2.0 s to 100, full grip, no tyre wear and no fuel weight. The brake is at its stop, so the shortest braking distance of them all, and steering calibration at 250 percent: full lock arrives at a quarter of stick travel. 50 departures allowed, no damage. For driving without thinking.",
+    "Automatik, 2,0 s auf 100, voller Grip, kein Reifenverschleiß und kein Tankgewicht. Die Bremse ist die kräftigste von allen, also der kürzeste Bremsweg, und die Lenkkalibrierung auf 250 Prozent: der volle Einschlag liegt schon bei einem Viertel Stick an. 50 Abgänge erlaubt, kein Schaden. Zum Fahren ohne Nachdenken.": "Automatic, 2.0 s to 100, full grip, no tyre wear and no fuel weight. The brake is the strongest of them all, so the shortest braking distance, and steering calibration at 250 percent: full lock arrives at a quarter of stick travel. 50 departures allowed, no damage. For driving without thinking.",
     "Von Hand schalten, 2,4 s auf 100, stärkster Reifenverschleiß, volles Tankgewicht, die am feinsten dosierbare Lenkung (52 % des Anschlags bei vollem Stick, man muss also weit ziehen) und die kürzeste Bremse. Das Ausrollen ist kurz, weil der Luftwiderstand hier die größte Einzelkraft ist.": "Manual shifting, 2.4 s to 100, the strongest tyre wear, full fuel weight, the most finely metered steering (52 % of the lock at full stick, so you have to pull a long way) and the shortest braking. The coast-down is short because drag is the largest single force here.",
     "Gasfaktor": "Throttle factor",
     "Faktor auf das Motorbyte, das zum Auto geht. Das Byte ist Tempo geteilt durch Simulations-Höchstgeschwindigkeit; bei 100 % bekommt das Auto also erst volle Leistung, wenn die Simulation ihre Höchstgeschwindigkeit erreicht hat, und das dauert gemessen fast 25 Sekunden Vollgas. Über 100 % erreicht es die volle Leistung früher, ohne dass der Tacho anders skaliert. Das ist auch ehrlicher als es klingt: das Modellauto fährt real 5,9 km/h, egal was die Simulation glaubt – dieser Faktor ist die Abbildung zwischen beidem, und dass er früher genau 1 war, war eine Annahme und keine Messung.": "Factor applied to the motor byte that goes to the car. The byte is speed divided by the simulated top speed, so at 100 % the car only gets full power once the simulation has reached its top speed – and that takes a measured 25 seconds of full throttle. Above 100 % it reaches full power sooner without the speedometer scaling differently. That is also more honest than it sounds: the model car really does 5.9 km/h whatever the simulation believes – this factor is the mapping between the two, and the fact that it used to be exactly 1 was an assumption, not a measurement.",
@@ -1476,7 +1502,7 @@
     "Reifenverschleiß, Reifentemperatur, Bremstemperatur": "Tyre wear, tyre temperature, brake temperature",
     "Wettersimulation": "Weather simulation",
     "Alles hier schreibt rohe Bytes zum Auto und liest rohe Bytes zurück. Das ist Werkbank und kein Merkmal: die Pakete tragen gültige Prüfsummen, aber was das Auto mit einem selbst zusammengesetzten Paket macht, ist nicht vorhersagbar. Zum Fahren wird nichts davon gebraucht.": "Everything here writes raw bytes to the car and reads raw bytes back. This is a workbench, not a feature: the packets carry valid checksums, but what the car does with a hand-assembled packet is not predictable. None of it is needed for driving.",
-    "Automatik, 2,6 s auf 100, voller Grip, Reifenmodell an und kein Tankgewicht. Lenkkalibrierung 200 Prozent, damit auch enge Strecken gehen – der volle Einschlag liegt bei etwa einem Drittel Stick an. Fading und Windschatten sind aus; sie stehen ab GT4 zur Verfügung.": "Automatic, 2.6 s to 100, full grip, tyre model on and no fuel weight. Steering calibration 200 percent so that tight tracks work too – full lock arrives at about a third of stick travel. Fade and dirty air are off; they are available from GT4 upwards.",
+    "Automatik, 2,6 s auf 100, voller Grip, Reifenmodell an und kein Tankgewicht. Lenkkalibrierung 200 Prozent, damit auch enge Strecken gehen – der volle Einschlag liegt bei etwa einem Drittel Stick an. Fading und Windschatten sind aus; sie stehen ab GT3 zur Verfügung.": "Automatic, 2.6 s to 100, full grip, tyre model on and no fuel weight. Steering calibration 200 percent so that tight tracks work too – full lock arrives at about a third of stick travel. Fade and dirty air are off; they are available from GT3 upwards.",
     "Crash-Schwelle": "Crash threshold",
     "Wie weit die Bewegungsbytes 1 und 3 vom gleitenden Mittel abweichen müssen, damit ein Stoß als Crash gilt. Niedriger heißt empfindlicher: schon ein Rempler zählt. Höher heißt, dass nur ein echter Einschlag zählt. 40 ist der Wert, mit dem die Erkennung gebaut und geprüft wurde – stand bis v0.5 als Konstante im Code, war also eine Einstellung, die niemand einstellen konnte.": "How far the motion bytes 1 and 3 must deviate from the running mean for a jolt to count as a crash. Lower means more sensitive: even a nudge counts. Higher means only a real impact counts. 40 is the value the detection was built and tested with – it was a constant in the code until v0.5, so it was a setting nobody could set.",
     "R3 (rechten Stick drücken)": "R3 (press right stick)",
@@ -1519,8 +1545,8 @@
     // geglaettet worden; diese Schluessel sind aus ihm gerechnet und nicht abgetippt.
     "Aufnahmen werden lokal im Browser gespeichert (localStorage).": "Recordings are stored locally in the browser (localStorage).",
     "Strecken werden lokal im Browser gespeichert (localStorage).": "Tracks are stored locally in the browser (localStorage).",
-    "Im Ausdruck-Modus meldet das Start/Ziel-Blatt 0x01. Im Bahn-Modus melden die Schienen 0x02 Gerade, 0x03 Linkskurve, 0x04 Rechtskurve, 0x05 und 0x06 Haarnadel, 0x0a Start/Ziel, 0x00 abseits der Bahn. Dieselbe Zahl bedeutet je Modus etwas anderes – wer Codes vergleicht, muss den Modus mitnennen.": "In printed-pattern mode the start/finish sheet reports 0x01. In rail mode the rails report 0x02 straight, 0x03 left-hand corner, 0x04 right-hand corner, 0x05 and 0x06 hairpin, 0x0a start/finish, 0x00 off the track. The same number means something different in each mode – whoever compares codes has to name the mode as well.",
-    "fahr über ein beliebiges ausgedrucktes Muster, hier steht sofort, welchen Code das Auto meldet. Achtung auf den Modus: ein Ausdruck meldet aus der Ausdruck-Tabelle, dort ist 0x01 Start/Ziel. Die Werte 0x0a Start/Ziel, 0x02 Gerade, 0x03 Linkskurve, 0x04 Rechtskurve, 0x05 und 0x06 Haarnadel gehören zur Bahn-Tabelle; alles andere ist unbestätigt. Trag hier den Code ein, den dein gedrucktes Boxen-Muster tatsächlich auslöst – 0x08 war nie ein reales Signal und ist deshalb nicht mehr die Vorgabe.": "drive over any printed pattern and it says right here which code the car reports. Mind the mode: a printout reports from the printed-pattern table, where 0x01 is start/finish. The values 0x0a start/finish, 0x02 straight, 0x03 left-hand corner, 0x04 right-hand corner, 0x05 and 0x06 hairpin belong to the rail table; everything else is unconfirmed. Enter the code your printed pit pattern actually triggers here – 0x08 was never a real signal and is therefore no longer the default.",
+    "Im Ausdruck-Modus meldet das Start/Ziel-Blatt je nach Vorlage 0x01 oder 0x0a. Im Bahn-Modus melden die Schienen 0x02 Gerade, 0x03 Linkskurve, 0x04 Rechtskurve, 0x05 und 0x06 Haarnadel, 0x01 Start/Ziel, 0x0a Engstelle, 0x00 abseits der Bahn. Dieselbe Zahl bedeutet je Modus etwas anderes – wer Codes vergleicht, muss den Modus mitnennen.": "In printed-pattern mode the start/finish sheet reports 0x01 or 0x0a depending on the template. In rail mode the rails report 0x02 straight, 0x03 left-hand corner, 0x04 right-hand corner, 0x05 and 0x06 hairpin, 0x01 start/finish, 0x0a narrow section, 0x00 off the track. The same number means something different in each mode – whoever compares codes has to name the mode as well.",
+    "fahr über ein beliebiges ausgedrucktes Muster, hier steht sofort, welchen Code das Auto meldet. Achtung auf den Modus: ein Ausdruck meldet aus der Ausdruck-Tabelle, dort sind 0x01 und 0x0a Start/Ziel. Die Werte 0x02 Gerade, 0x03 Linkskurve, 0x04 Rechtskurve, 0x05 und 0x06 Haarnadel gehören zur Bahn-Tabelle; alles andere ist unbestätigt. Trag hier den Code ein, den dein gedrucktes Boxen-Muster tatsächlich auslöst – 0x08 war nie ein reales Signal und ist deshalb nicht mehr die Vorgabe.": "drive over any printed pattern and it says right here which code the car reports. Mind the mode: a printout reports from the printed-pattern table, where 0x01 and 0x0a are start/finish. The values 0x02 straight, 0x03 left-hand corner, 0x04 right-hand corner, 0x05 and 0x06 hairpin belong to the rail table; everything else is unconfirmed. Enter the code your printed pit pattern actually triggers here – 0x08 was never a real signal and is therefore no longer the default.",
     "Lenkwinkel-Kalibrierung": "Steering angle calibration",
     "Für enge Strecken. Der Regler sitzt hinter dem Reibkreis: beim Anbremsen einer Kurve beschneidet der die Lenkung auf etwa 60 Prozent, und bei 200 Prozent erreicht dieser beschnittene Wunsch wieder den vollen Anschlag. Weiter als 45 Grad kann kein Wert lenken, das ist die Mechanik des Autos und nicht die App. Der Preis ist Feingefühl: je höher, desto früher liegt der Anschlag an und desto weniger sagt der letzte Teil des Sticks.": "For tight tracks. The slider sits behind the friction circle: braking into a corner cuts steering to about 60 percent, and at 200 percent that cut request reaches full lock again. No value can steer further than 45 degrees – that is the mechanics of the car, not the app. The price is finesse: the higher it goes, the earlier full lock is reached and the less the last part of the stick says.",
     "Ghost: eigene Spuren": "Ghosts: own lanes",
@@ -1566,7 +1592,6 @@
     "Mehrspieler": "Multiplayer",
     "Sportlich, mit Simulationstiefe": "Sporty, with simulation depth",
     "Von Hand schalten, 2,9 s auf 100, Reifenverschleiß und Tankgewicht knapp zur Hälfte. Bremsfading, Windschatten und ungleicher Verschleiß sind voll an. Die harte, gegen echte Werte kalibrierte Fassung steht daneben als Realismus GT3.": "Shift by hand, 2.9 s to 100, tyre wear and fuel weight at just under half. Brake fade, dirty air and uneven wear are fully on. The hard version, calibrated against real figures, sits next to it as Realism GT3.",
-    "Automatik, 3,1 s auf 100, Reifenverschleiß und Tankgewicht knapp halb so stark wie im Realismus-GT3. Die Klasse direkt neben Pro: Bremsfading, Windschatten und ungleicher Verschleiß sind an, aber gutmütig eingestellt, und die Lenkkalibrierung liegt bei 175 Prozent.": "Automatic, 3.1 s to 100, tyre wear and fuel weight just under half as strong as in the Realism GT3. The class right next to Pro: brake fade, dirty air and uneven wear are on, but set gently, and the steering calibration sits at 175 percent.",
     "Das schärfste der fahrbaren": "The sharpest of the driveable ones",
     "Von Hand schalten, 2,5 s auf 100, stärkster Reifenverschleiß der drei Klassen und die kürzeste Bremse. Die am feinsten dosierbare Lenkung, langes Ausrollen, und Windschatten wirkt am stärksten. Reifenwärmer an.": "Shift by hand, 2.5 s to 100, the strongest tyre wear of the three classes and the shortest brake. The most finely metered steering, long coasting, and dirty air bites hardest. Tyre blankets on.",
     "Realismus GT3": "Realism GT3",
@@ -1607,6 +1632,8 @@
     "Schirm zurück": "Previous screen",
     "Schirm vor": "Next screen",
     "Controller-Belegung": "Controller mapping",
+    "Antippen oder Klick schlie\u00dft die Ansicht.": "Tap or click to close the view.",
+    "\u2197 Vergr\u00f6\u00dfern": "\u2197 Enlarge",
     "Was gerade auf welcher Taste liegt. Zuweisen lässt sich das in den Optionen unter „Gamepad“; die Grafik zieht sofort nach.": "What currently sits on which button. It can be reassigned in the options under “Gamepad”; the diagram follows immediately.",
     "Weiß ist zuweisbar, gedecktes Grau ist festverdrahtet und nicht zuweisbar (das Steuerkreuz), kursives Grau heißt „nicht belegt“. Touchpad und PS-Taste bleiben ab Werk frei, weil das System beide selbst abgreift: ein Tippen aufs Touchpad löst zugleich einen Klick in der Seite aus. Im Streckeneditor und auf dem Boxenschirm bedient das Steuerkreuz erst diese, danach gilt wieder das Gezeigte. Dasselbe gilt für die Flaggentaste: auf dem Boxenschirm wählt sie dort aus, und die gelbe Flagge gibt es nach dem Zurückblättern.": "White is assignable, muted grey is hard-wired and not assignable (the D-pad), italic grey means “not assigned”. Touchpad and PS button stay free out of the box because the system claims both itself: a tap on the touchpad also fires a click somewhere in the page. In the track editor and on the pit screen the D-pad serves those first, after which what is shown here applies again. The same goes for the flag button: on the pit screen it selects there, and the yellow flag is available once you page back.",
     "L3 · Stick drücken": "L3 · press the stick",
@@ -1621,6 +1648,39 @@
     "Was das Auto gerade unter sich liest, ungefiltert – mit Zeitleiste der Codewechsel.": "What the car is reading beneath itself right now, unfiltered – with a timeline of the code changes.",
     "Was das Auto gerade unter sich liest, ungefiltert. Die Anzeige zeigt den ROHEN Code und nicht das, was die Rundenlogik daraus macht – genau darin liegt ihr Zweck: sie soll die Fehler sichtbar machen, die jene Logik verdeckt.": "What the car is reading beneath itself right now, unfiltered. The readout shows the RAW code and not what the lap logic makes of it – which is precisely its purpose: it is meant to show the errors that logic hides.",
     "Wozu dient dieses Projekt?": "What is this project for?",
+    "Wozu?": "What for?",
+    "Warum dieses Projekt existiert, und was offene Software damit zu tun hat.":
+      "Why this project exists, and what open software has to do with it.",
+    "Wer geholfen hat, und woher die Klänge kommen.":
+      "Who helped, and where the sounds come from.",
+    "Was sich je Wochenversion geändert hat, kurz zusammengefasst.":
+      "What changed in each weekly version, summarised briefly.",
+    "Navigation aufgeräumt (Startseite, feste Kopfzeile), Auto-Verwaltung in der Garage.":
+      "Navigation cleaned up (home page, fixed header), car management in the garage.",
+    "Zwei-Spieler-Modus: Licht, Boxensound und Tastenbelegung jetzt wirklich unabhängig.":
+      "Two-player mode: lights, pit sound and key bindings now genuinely independent.",
+    "Renneinstellungen als eigene Kachel mit eigenem Cockpit-Screen, dazu ein Regler für Rennhärte und eine Recovery-Funktion nach einem Abgang.":
+      "Race settings as their own tile with their own cockpit screen, plus a race-hardness slider and a recovery function after going off track.",
+    "Cockpit-Balken (Tank/Schaden/Akku) jetzt vertikal, Gyro-Anzeige verbessert.":
+      "Cockpit bars (fuel/damage/battery) now vertical, gyro display improved.",
+    "Lenkkennlinie einstellbar, neuer GT7-Fahrmodus, zwei neue Motoren (Ford Tudor 1937, VW Käfer 1300) und ein Vergleichsprofil mit echter Anlasser-Aufnahme für den Porsche.":
+      "Steering curve adjustable, new GT7 driving mode, two new engines (Ford Tudor 1937, VW Beetle 1300) and a comparison profile with a real starter recording for the Porsche.",
+    "Fünf neue Ghost-Ideallinien-Modi, dazu die Luuke-Linie: ein neuer Modus, von Hand aus Beispiel-Streckenverläufen hergeleitet. Ghost-Verhalten in der Einführungsrunde und beim Überholen verfeinert.":
+      "Five new ghost ideal-line modes, plus the Luuke line: a new mode derived by hand from example track layouts. Ghost behaviour on the formation lap and while overtaking refined.",
+    "Menüs komplett mit Gamepad/Tastatur navigierbar, inklusive Info-Popups und mehreren Feinschliffen an der Tastenbelegung (D-Pad-Fixes, Select schaltet jetzt den Bahn-Lesemodus).":
+      "Menus fully navigable with gamepad/keyboard, including info popups and several refinements to the key bindings (D-pad fixes, Select now toggles the track-read mode).",
+    "Info-Tab jetzt als Kacheln (Wozu, Danksagungen, Patchnotes).":
+      "Info tab now as tiles (What for, Acknowledgements, Patchnotes).",
+    "Regen-Übergang nachgemessen: kein Griff-Sprung, auch nicht beim erneuten Regenbeginn.":
+      "Rain transition measured: no grip jump, not even when rain starts again.",
+    "Gedruckte Streckenmuster zum Auslegen (Gerade, 60°-Kurve in zwei Größen) - rein visuell, ohne Strichcode-Anspruch.":
+      "Printed track patterns to lay out (straight, 60° curve in two sizes) - purely visual, no barcode claim.",
+    "Streckenscan überarbeitet, neu: Strecke aus einer Aufnahme lernen.":
+      "Track scan reworked, new: learn a track from a recording.",
+    "Motorsound ist jetzt pro Auto einzeln wählbar, Funk-Ansagen haben Vorrang vor der Live-Stimme.":
+      "Engine sound is now selectable per car, radio announcements now take priority over the live voice.",
+    "Neu in den Entwicklertools: Binär-/Hex-Trainer.":
+      "New in the developer tools: binary/hex trainer.",
     "Die Hardware ist gekauft, die Software bestimmt jemand anders. Dieses Projekt dreht das um: es steuert ein Carrera-Hybrid-Auto mit eigenem Code über dieselbe Bluetooth-Schnittstelle, die die Hersteller-App benutzt. Damit läuft auf der Hardware, was man selbst darauf laufen lassen will – unabhängig davon, ob ein Anbieter eine Funktion vorsieht, eine App weiter pflegt oder einen Server abschaltet.": "The hardware is bought and paid for; what runs on it is somebody else’s decision. This project turns that around: it drives a Carrera Hybrid car with its own code over the same Bluetooth interface the manufacturer’s app uses. What runs on the hardware is then what you want to run on it – regardless of whether a vendor provides a feature, keeps an app maintained, or switches off a server.",
     "Der zweite Punkt ist die Gemeinschaft. Ein offengelegtes Protokoll kann jeder weiterverwenden: für Funktionen, die der Hersteller nicht baut, für eine andere Bedienung, für Unterricht. Das hier ist bewusst als Beispiel gebaut und nicht als Produkt: alles, was herausgefunden wurde, steht in der Doku, samt der Stellen, an denen wir uns geirrt haben.": "The second point is the community. A documented protocol is something anyone can build on: for features the manufacturer does not build, for a different way of controlling things, for teaching. This is deliberately built as an example and not as a product: everything that was found out is written down in the documentation, including the places where we got it wrong.",
     "Offene Software als Teil offener Wissenschaft": "Open software as part of open science",
@@ -1649,7 +1709,22 @@
     "Bis zu welchem Tempo jeder Gang reicht. Gerechnet aus den Übersetzungen und der Höchstgeschwindigkeit, nicht eingetippt.": "How fast each gear reaches. Calculated from the ratios and the top speed, not typed in.",
     "Rundenzeiten ansagen": "Announce lap times",
     "Nach jeder Runde die Zeit, und bei einer eigenen Bestzeit ein Wort dazu. Gesprochen von der eingebauten Stimme des Browsers – kein Dienst, kein Netz, nichts verlässt das Gerät. Absichtlich kurz gehalten, damit die Ansage vor der nächsten Kurve fertig ist. Kommt eine zweite Runde herein, während noch geredet wird, bricht die alte Ansage ab: die Zeit der Gegenwart ist wichtiger. Ob es überhaupt spricht, hängt an den Stimmen des Systems – unter Windows sind sie lokal vorhanden, auf Android können sie fehlen. Fehlt eine, steht das einmal im Protokoll und nicht bei jeder Runde.": "The time after every lap, and a word with it on a personal best. Spoken by the browser’s built-in voice – no service, no network, nothing leaves the device. Deliberately kept short so the announcement is finished before the next corner. If a second lap comes in while it is still talking, the old announcement is cut off: the time of the present matters more. Whether it speaks at all depends on the voices of the system – under Windows they are installed locally, on Android they can be missing. If one is missing, that goes into the log once and not on every lap.",
-    "Alle sind aus Zylinderzahl, Kurbelwelle, Bankaufteilung und Zündfolge gerechnet – keiner ist eine Aufnahme. Bei den aufgeladenen Originalen fehlt der Lader. Die sechs mit WIP sind noch nicht nach Gehör geprüft; beim Maserati kommt dazu, dass dieses Modell den Bankwinkel gar nicht darstellt, weshalb er sich vom Ferrari-V12 nur in Drehzahl und Rohrlänge unterscheidet. Der Boxer-Rumpel des Subaru kommt aus ungleich langen Krümmerrohren; das Modell trägt feste Zeitversätze je Zylinder und damit die richtige Art von Unregelmäßigkeit, aber ihr genaues Muster ist gewählt und nicht aus Rohrlängen gerechnet.": "All of them are computed from cylinder count, crankshaft, bank split and firing order – none is a recording. The forced-induction originals are missing their turbo. The six marked WIP have not been judged by ear; with the Maserati there is the added point that this model cannot represent bank angle at all, so it differs from the Ferrari V12 only in revs and pipe length. The Subaru boxer rumble comes from unequal-length headers; the model carries fixed per-cylinder timing offsets and therefore the right KIND of irregularity, but their exact pattern is chosen, not computed from pipe lengths.",
+    "Alle sind aus Zylinderzahl, Kurbelwelle, Bankaufteilung und Zündfolge gerechnet – keine Aufnahme. Bei den aufgeladenen Originalen fehlt der Lader. Die sechs mit WIP sind noch nicht nach Gehör geprüft; beim Maserati kommt dazu, dass dieses Modell den Bankwinkel gar nicht darstellt, weshalb er sich vom Ferrari-V12 nur in Drehzahl und Rohrlänge unterscheidet. Der Boxer-Rumpel des Subaru kommt aus ungleich langen Krümmerrohren; das Modell trägt feste Zeitversätze je Zylinder und damit die richtige Art von Unregelmäßigkeit, aber ihr genaues Muster ist gewählt und nicht aus Rohrlängen gerechnet.": "All of them are computed from cylinder count, crankshaft, bank split and firing order – none is a recording. The forced-induction originals are missing their turbo. The six marked WIP have not been judged by ear; with the Maserati there is the added point that this model cannot represent bank angle at all, so it differs from the Ferrari V12 only in revs and pipe length. The Subaru boxer rumble comes from unequal-length headers; the model carries fixed per-cylinder timing offsets and therefore the right KIND of irregularity, but their exact pattern is chosen, not computed from pipe lengths.",
+    "Porsche 911 GT3 R: Anlasser als echte Aufnahme": "Porsche 911 GT3 R: starter as a real recording",
+    "Trapez-Muster, randlos, ohne Strichcode": "Trapezoid pattern, borderless, no barcode",
+    "Zum Auslegen und Fotografieren, ohne jede Behauptung, maschinenlesbar zu sein - anders als die Blätter oben, die trotz ihrer Warnung noch ein (falsches) Strichcode-Wort tragen. Senkrechte Trapez-Balken, randlos bis zum Blattrand: oben (bzw. innen in der Kurve) schmal, unten (aussen) breit, mit einer Lücke dazwischen, die genau dieselbe Form kopfueber hat. Die genaue Folge ist ERFUNDEN - das echte Wort ist weder für die Gerade (Byte 12 = 0x02) noch die Rechtskurve (0x04) entziffert, und ein bereits gemachter Messversuch an Infrarot-Fotos wie diesen ist dokumentiert gescheitert (CARRERA_HYBRID.md, Fluchtpunkt-Fit, 31.08.) - nur ein Flachbett-Scan gäbe echte Millimeter. Die Zahlen hier (5/20 mm) sind daher eine grobe Ausseneinschätzung, direkt übernommen, keine Messung.":
+      "For laying out and photographing, without any claim to be machine-readable - unlike the sheets above, which despite their warning still carry a (wrong) barcode word. Vertical trapezoid bars, borderless to the sheet edge: narrow at the top (or inner edge in the curve), wide at the bottom (outer edge), with a gap between them that has exactly the same shape upside down. The exact sequence is MADE UP - the real word is decoded for neither the straight (byte 12 = 0x02) nor the right curve (0x04), and a measurement attempt already made on infrared photos like these is documented to have failed (CARRERA_HYBRID.md, vanishing-point fit, 31 Aug) - only a flatbed scan would give real millimetres. The numbers here (5/20 mm) are therefore a rough estimate from looking at the photo, taken directly, not a measurement.",
+    "12 Trapeze nebeneinander, randlos über die ganze Seite, oben 5 mm und unten 20 mm breit.":
+      "12 trapezoids side by side, borderless across the whole sheet, 5 mm wide at the top and 20 mm at the bottom.",
+    "Gerade herunterladen (SVG)": "Download straight (SVG)",
+    "Rechtskurve, 60° – Version A": "Right curve, 60° – version A",
+    "8 radiale Trapez-Keile, randlos über die ganze Seite (Aussenradius so gewählt, dass der Sektor die Blattbreite genau ausfüllt, OHNE über sie hinauszugehen), innen 5 mm und aussen 20 mm breit.":
+      "8 radial trapezoid wedges, borderless across the whole sheet (outer radius chosen so the sector exactly fills the sheet width, WITHOUT going beyond it), 5 mm wide at the inner edge and 20 mm at the outer edge.",
+    "Kurve A herunterladen (SVG)": "Download curve A (SVG)",
+    "Rechtskurve, 60° – Version B (echte Größe)": "Right curve, 60° – version B (real size)",
+    "Echter Radius (370 mm) und echte Breite (250 mm) aus 60-track.js, unskaliert - deutlich größer als A4 quer. Das Blatt zeigt nur den Ausschnitt, der hineinpasst; der Rest ist absichtlich abgeschnitten, nicht verkleinert wie in Version A.":
+      "Real radius (370 mm) and real width (250 mm) from 60-track.js, unscaled - noticeably bigger than A4 landscape. The sheet shows only the section that fits; the rest is cut off on purpose, not shrunk down as in version A.",
+    "Kurve B herunterladen (SVG)": "Download curve B (SVG)",
     "Zwei benachbarte Plätze fahren in der Einführungsrunde versetzt, also als Zweierkolonne. Die Runde läuft mit Boxengassen-Tempo; sobald das erste Auto Start/Ziel zum zweiten Mal überfährt, ist das Limit weg. Aufstellen musst du von Hand – ein Auto auf die Bahn setzen kann die App nicht. Dein eigenes Auto steht mit in der Liste und verschiebt damit, auf welche Seite die Ghosts hinter dir gehen.": "Two adjacent grid slots drive offset from each other on the formation lap, so as a double column. The lap runs at pit-lane pace; as soon as the first car crosses start/finish for the SECOND time the limit is gone. Lining up is your job – the app cannot place a car on the track. Your own car is in the list too and therefore shifts which side the ghosts behind you take.",
     "Diese Seite zählt Aufrufe mit GoatCounter, damit ich weiß, ob das Projekt jemand benutzt. Ohne Cookies, ohne Werbung und ohne personenbezogene Daten; wer den Zähler blockiert, verliert keine Funktion. Alles andere – Abstimmungen, Rundenzeiten, Streckenpläne – bleibt im Browser und wird nirgends hingeschickt.": "This page counts visits with GoatCounter so I know whether anyone uses the project. No cookies, no advertising and no personal data; blocking the counter costs you no function. Everything else – setups, lap times, track plans – stays in the browser and is not sent anywhere.",
     "Gänge": "gears",
@@ -1693,6 +1768,8 @@
       "For sharing his knowledge of the Bluetooth protocols.",
     "Den Testern dort, für Rückmeldungen aus echten Rennen, die keine Simulation liefert.":
       "To the testers there, for reports from real races that no simulation provides.",
+    "Für das Finden und Berichten zahlreicher Bugs.":
+      "For finding and reporting numerous bugs.",
     "Woher die Klänge kommen":
       "Where the sounds come from",
     "Der allergrößte Teil der Klänge ist gerechnet und nicht aufgenommen: alle fünfundzwanzig Motoren mit ihren 132 Schleifen, dazu Bremsen- und Reifenquietschen, die Crash-Varianten, Schlagschrauber, Tankgeräusch, Karosseriereparatur und der Motorstart. Dort wird nichts abgespielt, sondern aus Zylinderzahl, Zündfolge und Krümmerlänge erzeugt.":
@@ -1747,6 +1824,13 @@
       "Ford Mustang 390 GT 1968: FE V8, cross-plane, 6.4 l",
     "Chevrolet Blazer 1990: Small-Block-V8, TBI, 5,7 l":
       "Chevrolet Blazer 1990: small-block V8, TBI, 5.7 l",
+    "Alltagsklassiker vor 1970 (WIP)": "Everyday classics before 1970 (WIP)",
+    "Streckenscan": "Track scan",
+    "Scan abbrechen": "Cancel scan",
+    "Ford Tudor Slantback 1937: Flathead-V8, 3,6 l":
+      "Ford Tudor Slantback 1937: flathead V8, 3.6 l",
+    "VW Käfer 1300: Boxer-4, luftgekühlt":
+      "VW Beetle 1300: flat-4, air-cooled",
     "Regenreifen: setzt Regen ein, kommt jeder Ghost so früh wie möglich herein und rüstet um – und beim Wechsel zurück auf trocken genauso. Solange die falschen Reifen drauf sind, fährt er langsamer: 0,64 gegen 0,85 mit Regenreifen im Regen, abgeleitet aus derselben Grifftabelle, die dein Auto benutzt. Bei leichtem Regen ist der Slick noch vorn – der Nachteil kommt mit dem Wasser, nicht mit der Meldung. Ist dieser Schalter aus, können Ghosts keine falschen Reifen haben, sonst kröchen sie nach dem ersten Regen ohne Ausweg.":
       "Rain tyres: when rain sets in, every ghost comes in as early as it can and changes – and the same on a change back to dry. While it is on the wrong tyres it drives slower: 0.64 against 0.85 on rain tyres in the rain, derived from the same grip table your own car uses. In light rain the slick is still ahead – the penalty arrives with the water, not with the announcement. With this switch off ghosts cannot have the wrong tyres, because otherwise they would crawl after the first shower with no way out.",
     "Ein Ghost fährt auf der Start/Ziel-Kachel rechts an den Rand, bleibt ein paar Sekunden stehen und fährt wieder los. Die Anfahrt beginnt schon auf der Kachel davor, im Formationstempo – ein Auto, das mit Renntempo über die Linie kommt, braucht eine Kachel zum Verzögern. Standardmäßig AUS: ein Auto, das mitten im Rennen stehen bleibt, liest man beim ersten Start als Fehler und nicht als Feature. Der Ablauf ist absichtlich hart – eine Sekunde am rechten Rand mit voller Bremse (am Tempo-Regler vorbei, der braucht für einen sauberen Halt 1,1 s), dann ruckartig heraus in 0,5 s, das ist die Grenze der Querführung, und dabei blinken die Lichter doppelt. Es gibt vier Boxen hintereinander: Platz 1 auf der Start/Ziel-Kachel, Platz 2 eine Kachel später und so weiter. Wer gleichzeitig fällig ist, nimmt den nächsten freien und hält eine Kachel dahinter; wer als Fünfter kommt, wartet, bis eine frei wird. Auf dem Weg zur eigenen Box fährt er am Gegenrand vorbei – sonst würde er dem Stehenden ins Heck fahren. Gemessen bei einem Wetterwechsel mit sechs Ghosts: vier stehen gleichzeitig, keine Doppelbelegung, und in 555 Takten Vorbeifahrt kein einziger Takt mit rechter Anforderung. Vier Kacheln sind 1,72 m – mehr Boxen würden auf einem kleinen Layout einen merklichen Teil der Bahn füllen.":
@@ -2012,6 +2096,41 @@
     "Klassiker: Walnuss und Chrom": "Classic: walnut and chrome",
     "Motorton-Zusätze": "Engine sound extras",
     "Sechs mechanische Geräusche über dem Motorton, alle an diesem einen Schalter – zum Vergleichen einfach ausschalten. Nichts davon ist eine Aufnahme, alle sechs sind gerechnet und hängen an Werten, die die Simulation ohnehin führt: die Höhen laufen mit der Last (ein Motor im Schub ist dunkler und nicht nur leiser), am Begrenzer stottert die Zündung mit 28 Hz, beim Gaswegnehmen knallt es im Auspuff, beim Hochschalten unter Last einmal kräftig, das Getriebe heult mit der Raddrehzahl statt mit der Motordrehzahl, und die drei aufgeladenen Motoren bekommen ein Laderpfeifen samt Abblasen. Wie stark ein Motor knallt, steht je Motor in den Tondaten – der Formel 1 mit Turbo knallt kaum, der Flat-Plane-V8 ohne Lader am meisten. Was hier absichtlich NICHT drin ist: eine Hörposition. Cockpit gegen Verfolgerkamera ändert nicht den Klang, sondern das Mischungsverhältnis von Auspuff, Ansaugung und Mechanik, und die stecken heute alle drei in einer Schleife.": "Six mechanical noises on top of the engine sound, all on this one switch – turn it off to compare. None of them is a recording; all six are calculated and hang on values the simulation keeps anyway: the highs follow the load (an engine on a closed throttle is darker, not just quieter), at the limiter the ignition stutters at 28 Hz, lifting off the throttle pops in the exhaust, an upshift under load bangs once, the gearbox whines with wheel speed rather than engine speed, and the three forced-induction engines get a turbo whistle with a blow-off. How much an engine pops is stored per engine in the sound data – the turbocharged Formula 1 barely pops, the naturally aspirated flat-plane V8 the most. What is deliberately NOT in here: a listening position. Cockpit versus chase camera does not change the sound but the balance between exhaust, intake and mechanics, and today all three sit in one loop.",
+    "Zahlensysteme": "Number systems",
+    "Binär- und Hex-Trainer: eine vierstellige Zahl, du übersetzt sie in Dezimal.": "Binary and hex trainer: a four-digit number, you translate it to decimal.",
+    "Zwei kurze Trainer, kein Zeitdruck: eine vierstellige Zahl im jeweiligen Zahlensystem, du tippst die passende Dezimalzahl ein und bekommst sofort Bescheid, dazu eine laufende Trefferquote.": "Two short trainers, no time pressure: a four-digit number in the respective number system, you type in the matching decimal number and get an immediate answer, plus a running score.",
+    "Binär-Trainer": "Binary trainer",
+    "Vier Stellen, nur 0 und 1 – also Werte von 0 bis 15.": "Four digits, only 0 and 1 – so values from 0 to 15.",
+    "Prüfen": "Check",
+    "Neue Zahl": "New number",
+    "Dezimal?": "Decimal?",
+    "Hex-Trainer": "Hex trainer",
+    "Vier Stellen, 0–9 und A–F – also Werte von 0 bis 65535.": "Four digits, 0–9 and A–F – so values from 0 to 65535.",
+    "Noch keine Antwort.": "No answer yet.",
+    "__R__ von __V__ richtig.": "__R__ of __V__ correct.",
+    "Richtig!": "Correct!",
+    "Leider nicht - richtig wäre __X__ gewesen.": "Not quite - __X__ would have been correct.",
+    "Strecke aus der Aufnahme lernen": "Learn track from the recording",
+    "Fährst du mehrere Runden in einer Aufnahme, kann die App daraus das Streckenlayout ableiten – derselbe Weg, den „Strecke beim Fahren lernen“ sonst live geht, nur diesmal aus der Wiedergabe statt aus der eigenen Hand. Braucht ein verbundenes Auto in der Rolle „Steuern“: die Wiedergabe fährt wirklich, das Auto meldet seine echten Streckencodes, und daraus entsteht die Karte unten. Ohne geschlossene Runde in der Aufnahme bleibt sie leer.": "If you drive several laps in one recording, the app can derive the track layout from it – the same path „learn while driving“ otherwise takes live, just from the replay this time instead of from your own hand. Needs a connected car in the „drive“ role: the replay really drives, the car reports its real track codes, and the map below is built from that. Without a closed lap in the recording it stays empty.",
+    "Strecke aus dieser Aufnahme lernen": "Learn track from this recording",
+    "lernt…": "learning…",
+    "__N__ Teile gelernt.": "__N__ pieces learned.",
+    "Keine geschlossene Runde erkannt - nochmal versuchen.": "No closed lap detected - try again.",
+    "Reifenwahl weiter": "Next tyre choice",
+    "Tankmenge weiter": "Next fuel amount",
+    "L3 (linken Stick drücken)": "L3 (press left stick)",
+    "Erklärung anzeigen": "Show explanation",
+    "Maus-Steuerung": "Mouse control",
+    "Aufnahme-Modus": "Recording mode",
+    "Eine echte Fahrt aufzeichnen, exakt nachfahren, und daraus eine Streckenzeichnung ableiten.": "Record a real drive, replay it exactly, and derive a track drawing from it.",
+    "Fahr die Strecke einmal manuell (Tab \"Fahren\", Joystick/Gas oder Pfeiltasten). Während der Aufnahme werden Lenk- und Gaswerte mit Zeitstempel mitgeschrieben. Bei der Wiedergabe sendet die App exakt dieselbe Sequenz erneut an die Ziel-Characteristic - egal ob dabei eine echte CH-Bahn oder nur ein Ausdruck unter dem Auto liegt.": "Drive the track once by hand (the \"Drive\" tab, joystick/throttle or arrow keys). During recording, steering and throttle values are written down with timestamps. On replay the app sends exactly the same sequence again to the target characteristic - whether a real CH track or just a printout is under the car.",
+    "Streckenzeichnung aus der Aufnahme": "Track drawing from the recording",
+    "Rechnet die gefahrene Linie rein rechnerisch aus – über dieselbe Physik, die auch ein Ghost bekommt, nicht aus echten Streckencodes. Funktioniert deshalb AUCH ohne CH-Bahn, nur mit einem Ausdruck darunter. Braucht trotzdem Start/Ziel- Überfahrten in der Aufnahme für Rundengrenzen und Rundenzeiten – ohne sie bleibt es bei einer einzigen offenen Linie. Eine Annäherung: ohne echte Ortsmessung kann die Linie über mehrere Runden hinweg abdriften, auch wenn das Auto real an dieselbe Stelle zurückkehrt.": "Computes the driven line purely by calculation – via the same physics a ghost gets, not from real track codes. So it ALSO works without a CH track, just with a printout underneath. It still needs start/finish crossings in the recording for lap boundaries and lap times – without them it stays a single open line. An approximation: without real position measurement the line can drift over several laps, even though the car really returns to the same spot.",
+    "Zeichnung erstellen": "Create drawing",
+    "Keine Aufnahme vorhanden.": "No recording available.",
+    "__N__ Punkte, rein rechnerisch (Koppelnavigation).": "__N__ points, purely computed (dead reckoning).",
+    "Runde __N__: __S__ s": "Lap __N__: __S__ s",
+    "Keine Start/Ziel-Überfahrt in dieser Aufnahme erkannt - keine Rundenzeiten.": "No start/finish crossing detected in this recording - no lap times.",
   };
 
   // ============================================================================
@@ -2064,7 +2183,6 @@
     // blinder Fleck, der sich selbst versteckt. Gefunden hat es ein Abzug ueber das ganze
     // body, nicht ueber diese Liste.
     return [document.querySelector('header'), document.querySelector('main'),
-            $('app-footer'), $('race-summary'),
             $('lb-wrap')].filter(Boolean);
   }
 

@@ -31,7 +31,7 @@
  *     Ursprung; ihn zu cachen hiesse, alte Rundenzahlen als neue auszugeben.
  */
 
-const VERSION = '0.6.60';
+const VERSION = '0.7.61';
 const CACHE = 'omegasim-' + VERSION;
 
 // Nur die Huelle. Die Tonschleifen (1,8 MB) werden NICHT vorab geladen: wer die App nur
@@ -78,6 +78,15 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;        // fremder Ursprung: nie cachen
 
   e.respondWith((async () => {
+    // TONDATEIEN (die .ogg) sind versioniert - der Cachename traegt die Version -, und
+    // innerhalb einer Version aendern sie sich nicht. Cache zuerst: eine installierte App
+    // soll die Megabyte Motorgeraeusch nicht bei jedem Start neu vom Netz holen. Die kleinen
+    // Verzeichnisse (loops.json, fx.json, voice.json) bleiben NETZ-zuerst, weil ein
+    // veraltetes Verzeichnis Funktionen still verschwinden laesst (siehe 80-sound.js).
+    if (url.pathname.endsWith('.ogg')) {
+      const imCache = await caches.match(req);
+      if (imCache) return imCache;
+    }
     try {
       const antwort = await fetch(req);
       // Nur brauchbare Antworten ablegen. Eine 404 zu cachen heisst, den Fehler zu

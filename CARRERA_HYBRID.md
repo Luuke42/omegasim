@@ -54,6 +54,12 @@ Maßstab, Strichbreite, Schwärze, Papier. Er lag am Modus.
 Die beiden Bits schließen sich aus. Wer Codes vergleicht, muss also den Modus mitnennen —
 `0x0a` heißt auf Papier Start/Ziel, und auf der Schiene ist es eine **Engstelle**.
 
+> **Im Ausdruck-Modus meldet je nach Vorlage auch `0x01` Start/Ziel.** Das Original-Blatt
+> liefert `0x0a` (gemessen 25.08.), die App-eigenen Blätter (`startziel-a4.svg`, `muster-*`,
+> `spur-*`) tragen das `0x01`-Wort — `isStartCode()` akzeptiert deshalb im Ausdruck-Modus
+> beide Werte, auf der Schiene bleibt es strikt `0x01` (sonst zählte die Engstelle eine
+> Phantomrunde).
+
 > **Diese Tabelle stand bis v0.6.14 mit vertauschten Spalten hier.** Der Code-Kommentar in
 > `src/60-track.js` sagte das Richtige: `0x0a` ist am *gedruckten Blatt* im Ausdruck-Modus
 > gemessen (25.08.), über die Kunststoffschiene lag keine Messung vor. seVen hat auf

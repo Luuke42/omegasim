@@ -144,7 +144,6 @@
     });
   });
 
-  $('btn-home').addEventListener('click', () => showTab('home'));
   // Der erste Knopf verbindet direkt, statt in die Garage zu schicken: von der Startseite
   // aus ist "Auto verbinden" das, was man als erstes will, und der Bluetooth-Dialog braucht
   // ohnehin einen Klick. Danach steht das Auto in der Garage und die Seite wechselt dorthin,
@@ -153,9 +152,10 @@
     showTab('garage');
     await garageConnect();
   });
-  // Cockpit, nicht Vollbild. Vollbild ist dort in der Ecke einen Klick entfernt, und wer von
-  // der Startseite kommt, will erst einmal sehen, wo er landet.
-  $('home-fs').addEventListener('click', () => showTab('race'));
+  // BESTELLT: "Landing page nur mit Link zur Garage und nicht Cockpit Button." Der Logo-Knopf
+  // (frueher der Weg zurueck zur Startseite) ist mit der Kopfzeile entfallen; die Startseite
+  // ist jetzt nur noch der Zustand beim ersten Laden.
+  $('home-garage').addEventListener('click', () => showTab('garage'));
 
   // It is the landing view, so it starts running.
   homeStart();

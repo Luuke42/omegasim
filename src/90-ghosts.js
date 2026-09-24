@@ -49,9 +49,14 @@
     //
     // Die rechte Schulter bleibt das Rennen, die Trigger bleiben Gas und Bremse.
     pitstop: { type: 'button', index: 9, label: 'Options (PS) / Start (Xbox)' },
-    // LB und RB machen jetzt die zwei Umschaltungen, die man WAEHREND der Fahrt braucht:
-    // welche Kodierung gelesen wird, und ob von Hand geschaltet wird. Beide sind
-    // Fahrentscheidungen und gehoeren unter die Zeigefinger.
+    // LB/RB machen seit Phase 13 (Controller-Umbau) die Reifen-/Tankvorwahl - dieselben
+    // zwei Funktionen, die vorher am Steuerkreuz hoch/runter hingen. Das Kreuz ist damit
+    // frei fuer die neue Menuenavigation (siehe D-Pad hoch/runter weiter unten).
+    //
+    // Leseart (Bahn/Ausdruck) und Getriebe (Automatik/von Hand), die vorher hier lagen,
+    // haben KEINE Gamepad-Belegung mehr - ersatzlos, wie bestellt ("kein Ersatzknopf,
+    // keine Einbindung in die neue Menue-Navigation noetig"). Beide bleiben reine
+    // Tipp-/Klick-Schalter in den Optionen.
     //
     // Rennen starten zieht dafuer um, und seit v0.5.1 auf Select: Kreuz traegt die gelbe
     // Flagge, weil "X" in PlayStation-Namen genau diese Taste ist - die alte Beschriftung
@@ -60,8 +65,8 @@
     // Die Streckenansicht ist ab Werk UNBELEGT. Sie lag auf L3, und der linke Stick soll
     // beim Lenken nichts ausloesen; ausserdem verlaesst sie das Cockpit. Das Touchpad bleibt
     // ebenfalls frei, weil das System es als Zeiger fuehrt.
-    scanmode: { type: 'button', index: 4, label: 'L1 (PS) / LB (Xbox)' },
-    gearmode: { type: 'button', index: 5, label: 'R1 (PS) / RB (Xbox)' },
+    tyreSelect: { type: 'button', index: 4, label: 'L1 (PS) / LB (Xbox)' },
+    fuelSelect: { type: 'button', index: 5, label: 'R1 (PS) / RB (Xbox)' },
     // X hat ZWEI Bedeutungen: kurz ist Runterschalten, eine Sekunde gehalten die gelbe
     // Flagge - genau wie die Taste X auf der Tastatur. Das Halten ist der Schutz: die gelbe
     // Flagge bremst jedes Auto auf 40 km/h, und ein Knopf, der das mit einem Antippen tut,
@@ -80,14 +85,23 @@
     // wo die Hand ihn im Vorbeigehen trifft. Ueber die Oberflaeche ist er zwei Klicks weit
     // weg, und frei zuweisbar bleibt er.
     racestart: { type: 'none', index: -1, label: 'nicht belegt' },
-    // Auf Select. Das Wetter umzuschalten ist harmlos und rueckgaengig machbar - genau die
-    // Sorte Sache, die auf eine Menuetaste gehoert, die man beim Fahren trifft. Es hat
-    // vorher der Rennstart getragen; siehe dort, warum er umgezogen ist.
-    weather: { type: 'button', index: 8, label: 'Select / Share (PS) / Back (Xbox)' },
+    // Auf Select. BESTELLT (v0.7): "Select Taste fuers Aendern des Bahn-Lesemodus statt
+    // des Wetters." Bis dahin lag hier "Wetter umschalten" - siehe audio/CREDITS.md-Stil
+    // Kommentar an der Handlerstelle (pollGamepad) fuer die Geschichte davor. Wetter
+    // schalten bleibt nur noch per Tipp/Klick auf #race-wx-box erreichbar, ohne
+    // Gamepad-Taste (ersatzlos, keine neue Zuweisungsmoeglichkeit).
+    trackReadMode: { type: 'button', index: 8, label: 'Select / Share (PS) / Back (Xbox)' },
     // UNBELEGT ab Werk, ausdruecklich: der linke Stick soll nichts ausloesen, wenn man ihn
     // beim Lenken drueckt. Und die Streckenansicht verlaesst das Cockpit - genau der
     // Grund, aus dem L1 sie nicht mehr traegt.
     trackview: { type: 'none', index: -1, label: 'nicht belegt' },
+    // L3 (linken Stick eindruecken) schaltet seit Phase 13 das Vollbild um - im Cockpit
+    // race-fs, im Streckeneditor track-fs (siehe pollGamepad()). BESTELLT. Dieselbe
+    // Sorge wie oben (ein versehentliches Eindruecken beim Lenken) gilt auch hier, ist
+    // aber bewusst in Kauf genommen: anders als eine Aktion WAEHREND der Fahrt ist ein
+    // Vollbildwechsel jederzeit folgenlos rueckgaengig zu machen (derselbe Knopf noch
+    // einmal), und ein Umschalten mitten im Rennen aendert nichts an Tempo oder Kurs.
+    fullscreenToggle: { type: 'button', index: 10, label: 'L3 (linken Stick drücken)' },
     // Nicht belegt. Das Touchpad wird vom System als Zeiger erkannt, also loest ein Tippen
     // gleichzeitig einen Klick irgendwo in der Seite aus - eine Belegung darauf kaempft mit
     // dem Cursor. Frei zuweisbar bleibt es, nur eben nicht ab Werk.
@@ -99,11 +113,12 @@
     headlights: 'Licht an/aus', lightflash: 'Lichthupe', pitstop: 'Boxenstopp',
     schirmZurueck: 'Cockpit-Schirm zurück', schirmVor: 'Cockpit-Schirm vor',
     racestart: 'Rennen starten / abbrechen',
-    scanmode: 'Leseart: Bahn oder Ausdruck',
-    gearmode: 'Getriebe: Automatik oder von Hand',
+    tyreSelect: 'Reifenwahl weiter',
+    fuelSelect: 'Tankmenge weiter',
     yellowflag: 'Gelbe Flagge (1 s halten)',
-    weather: 'Wetter umschalten',
+    trackReadMode: 'Bahn-Lesemodus umschalten',
     trackview: 'Streckenansicht',
+    fullscreenToggle: 'Vollbild umschalten',
     resetcar: 'Auto zurücksetzen',
   };
 
@@ -139,7 +154,7 @@
     // Verschoben wird nur, wer noch auf SEINER alten Vorgabe liegt. Wer selbst zugewiesen
     // hat, behaelt seine Zuweisung, und der Kollisionsaufloeser faengt, was dabei doppelt
     // liegen bleibt.
-    const ALT = { yellowflag: 2, racestart: 0, trackview: 10, weather: 8 };
+    const ALT = { yellowflag: 2, racestart: 0, trackview: 10 };
     for (const n of Object.keys(ALT)) {
       if (ist(b[n], ALT[n])) {
         b[n] = { ...DEFAULT_BINDINGS[n] };
@@ -150,17 +165,13 @@
     //
     // JE AKTION UNABHAENGIG, wie darueber, und aus demselben Grund: die gekoppelte Fassung
     // ist in diesem Projekt zweimal danebengegangen. Wer racestart noch auf Select hat, wird
-    // entlastet; wer weather selbst zugewiesen hat, behaelt es.
-    //
-    // Die Reihenfolge ist wichtig: ZUERST racestart raeumen, DANN weather setzen. Anders
-    // herum liegen beide einen Moment auf Knopf 8, und der Kollisionsaufloeser wuerde eines
-    // von beiden verschieben - ausgerechnet das, was gerade richtig gesetzt wurde.
+    // entlastet - Select traegt seit v0.7 den Bahn-Lesemodus (trackReadMode), nicht mehr
+    // das Wetter; ein gespeichertes altes "weather" bleibt als toter Schluessel liegen
+    // (die Aktion gibt es nicht mehr, resolveBindingCollisions() liest nur Namen aus
+    // DEFAULT_BINDINGS und sieht ihn deshalb gar nicht).
     if (ist(b.racestart, 8)) {
       b.racestart = { ...DEFAULT_BINDINGS.racestart };
       b.__migrated4 = true;
-    }
-    if (b.weather && b.weather.type === 'none' && b.__migrated4) {
-      b.weather = { ...DEFAULT_BINDINGS.weather };
     }
     return b;
   }
@@ -189,8 +200,13 @@
   //
   // Gemeldet wird sie, nicht still behoben: ein Knopf, der heimlich seine Bedeutung
   // wechselt, ist der naechste Fehlerbericht.
-  function resolveBindingCollisions(b) {
-    const namen = Object.keys(DEFAULT_BINDINGS);
+  // `defaults` als Parameter (Vorgabe: DEFAULT_BINDINGS) und nicht fest verdrahtet, seit
+  // es eine zweite Belegung gibt (bindings2 fuer Spieler 2, siehe dort): beide teilen sich
+  // dieselbe Werksbelegung, aber der Aufloeser muss gegen die Vorgaben DER Belegung pruefen,
+  // die er gerade aufraeumt, nicht immer gegen die von Spieler 1.
+  function resolveBindingCollisions(b, defaults) {
+    const VORGABE = defaults || DEFAULT_BINDINGS;
+    const namen = Object.keys(VORGABE);
     // Eingang -> Liste der Aktionen, die dort liegen.
     const belegt = new Map();
     const dazu = (k, n) => {
@@ -209,7 +225,7 @@
     // ist eine Entscheidung und kein Versehen.
     for (const n of namen) {
       const k = bindingKey(b[n]);
-      if (k && k === bindingKey(DEFAULT_BINDINGS[n])) dazu(k, n);
+      if (k && k === bindingKey(VORGABE[n])) dazu(k, n);
     }
 
     // ZWEITER DURCHGANG: alle anderen. Wer auf einen schon belegten Eingang zeigt, geht auf
@@ -223,7 +239,7 @@
       if (!dort.length) { dazu(k, n); continue; }
       const vorher = (b[n] && b[n].label) || k;
       const mit = dort.map(x => BIND_ACTION_LABELS[x] || x).join(' und ');
-      const vk = bindingKey(DEFAULT_BINDINGS[n]);
+      const vk = bindingKey(VORGABE[n]);
       if (vk && !(belegt.get(vk) || []).length) {
         b[n] = { ...DEFAULT_BINDINGS[n] };
         dazu(vk, n);
@@ -256,6 +272,42 @@
     delete bindings.__kollisionen;
     saveBindings();
   }
+
+  // ---- DIESELBE BELEGUNG, EIN ZWEITES MAL - FUER SPIELER 2 -------------------------
+  //
+  // BESTELLT: "baue ein, dass sich Tasten von 2 Spielern unabhaengig zuweisen lassen."
+  // Bis hierher lasen pollGamepad() und pollPad2() dasselbe `bindings`-Objekt; Spieler 2
+  // konnte seine Tasten also nur MITAENDERN, nie eigene setzen.
+  //
+  // KEINE MIGRATION noetig: migrateBindings() raeumt Layouts auf, die es nur fuer Spieler 1
+  // je gab (die alten Vorgaben vor v0.5/v0.5.1/v0.4.50) - eine frische zweite Belegung hat
+  // diese Geschichte nicht. Kollisionen INNERHALB von Spieler 2s eigener Belegung sind
+  // trotzdem moeglich (zwei Aktionen von Hand auf denselben Knopf gelegt), deshalb laeuft
+  // resolveBindingCollisions() genauso mit, nur gegen DEFAULT_BINDINGS2 statt DEFAULT_BINDINGS
+  // - und DEFAULT_BINDINGS2 ist bewusst dieselbe Werksbelegung wie Spieler 1s, weil beide auf
+  // ihrem EIGENEN Pad sitzen und ein gleiches Layout auf zwei Controllern keine Kollision ist.
+  const GAMEPAD_BINDINGS_KEY2 = 'carrera-hybrid-gamepad-bindings-v2-p2';
+  const DEFAULT_BINDINGS2 = DEFAULT_BINDINGS;
+  function loadBindings2() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(GAMEPAD_BINDINGS_KEY2) || 'null');
+      if (!saved) return { ...DEFAULT_BINDINGS2 };
+      return resolveBindingCollisions({ ...DEFAULT_BINDINGS2, ...saved }, DEFAULT_BINDINGS2);
+    } catch { return { ...DEFAULT_BINDINGS2 }; }
+  }
+  function saveBindings2() { localStorage.setItem(GAMEPAD_BINDINGS_KEY2, JSON.stringify(bindings2)); }
+  let bindings2 = loadBindings2();
+  if (bindings2.__kollisionen) {
+    for (const zeile of bindings2.__kollisionen) log('Controller (Spieler 2): ' + zeile, 'notify');
+    delete bindings2.__kollisionen;
+    saveBindings2();
+  }
+
+  // Welche Belegung die Tabelle/Grafik/Erfassung gerade bearbeitet. 1 ist die Vorgabe, weil
+  // die Kachel ohne Zwei-Spieler-Modus gar keine Wahl anzeigt (siehe bindPlayerRowZeichnen).
+  let bindEditSpieler = 1;
+  function activeBindings() { return bindEditSpieler === 2 ? bindings2 : bindings; }
+  function activeSaveBindings() { return bindEditSpieler === 2 ? saveBindings2() : saveBindings(); }
   if (bindings.__migrated3) {
     delete bindings.__migrated3;
     saveBindings();
@@ -281,7 +333,8 @@
   let prevDownshift = false, prevUpshift = false, prevHeadlights = false;
   // Die drei neuen Aktionen. padFlagFired merkt sich, dass die Sekunde in DIESEM Druck schon
   // voll war - ohne das wuerde die Flagge im Takt danach gleich wieder umgeschaltet.
-  let prevScanMode = false, prevGearMode = false, prevYellowFlag = false;
+  let prevTyreSelect = false, prevFuelSelect = false, prevYellowFlag = false;
+  let prevFsToggle = false;
   let padFlagFired = false;
 
   function bindingDescription(b) {
@@ -358,8 +411,9 @@
       if (!el) continue;
       // Alle Aktionen, die auf diesem Bedienelement liegen. Mehrzahl mit Absicht: eine
       // Doppelbelegung ist erlaubt und soll sichtbar sein, nicht verschwiegen.
+      const ab = activeBindings();
       const treffer = Object.keys(BIND_ACTION_LABELS).filter((a) => {
-        const b = bindings[a];
+        const b = ab[a];
         return b && b.type === c.typ && b.index === c.index;
       });
       // Durch t(), weil der Text hier ENTSTEHT und nicht im Markup steht - der
@@ -380,11 +434,62 @@
   // gebaut wurde.
   if (typeof i18nOnLangChange === 'function') i18nOnLangChange(padDiagramRender);
 
+  // ---- CONTROLLER-GRAFIK VERGROESSERN (Lightbox) -------------------------------------
+  //
+  // BESTELLT: "Erlaube mir, per Klick (oder auswaehlen mit X) auf das Controllerbild in der
+  // Garage, das Bild zu vergroessern (Vollbild auf Handy und PC)." Dieselbe Lightbox wie die
+  // grossen Diagramme (94-engine-workshop.js): der Knoten wird GEKLONT, nicht neu gezeichnet -
+  // was gross zu sehen ist, ist damit garantiert dasselbe wie klein.
+  function padZoomOpen() {
+    const svg = document.querySelector('.pad-wrap .pad-svg');
+    if (!svg) return;
+    $('lb-title').textContent = t('Controller-Belegung');
+    $('lb-note').textContent = t('Antippen oder Klick schließt die Ansicht.');
+    const body = $('lb-body');
+    body.innerHTML = '';
+    const gross = svg.cloneNode(true);
+    gross.removeAttribute('style');
+    gross.setAttribute('width', '100%');
+    body.appendChild(gross);
+    $('lb-wrap').classList.add('on');
+  }
+  const padZoomEl = $('pad-zoom');
+  if (padZoomEl) {
+    padZoomEl.addEventListener('click', padZoomOpen);
+    padZoomEl.addEventListener('keydown', (e) => {
+      // Enter, Leertaste oder X - die beiden ersten sind die uebliche Tastatur-Belegung fuer
+      // ein role="button", X ist die vom Nutzer gewuenschte Abkuerzung.
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'x' || e.key === 'X') {
+        e.preventDefault();
+        padZoomOpen();
+      }
+    });
+  }
+
+  // ---- DER SPIELER-UMSCHALTER UEBER DER TABELLE -------------------------------------
+  //
+  // Nur sichtbar, wenn der Zwei-Spieler-Modus an ist - ohne ihn gibt es nichts zum
+  // Umschalten, und ein Umschalter mit einer einzigen sinnvollen Stellung ist eine Frage
+  // ohne Antwort. Bleibt der Modus aus, editiert die Tabelle stillschweigend Spieler 1s
+  // Belegung weiter, wie vor dieser Aenderung.
+  function bindPlayerRowZeichnen() {
+    const row = $('bind-player-row');
+    if (!row) return;
+    const zeigen = typeof zweiSpieler !== 'undefined' && zweiSpieler;
+    row.hidden = !zeigen;
+    if (!zeigen) bindEditSpieler = 1;
+    row.querySelectorAll('.bind-player-btn').forEach(b => {
+      b.classList.toggle('sel', Number(b.dataset.spieler) === bindEditSpieler);
+    });
+  }
+
   function renderBindTable() {
     // Die Grafik zieht hier mit. renderBindTable() ist die EINE Stelle, die nach jeder
     // Zuweisung laeuft; sie an sieben Aufrufstellen einzeln nachzuziehen waere die
     // Gelegenheit, eine zu vergessen.
     padDiagramRender();
+    bindPlayerRowZeichnen();
+    const ab = activeBindings();
     const body = $('bind-table-body');
     body.innerHTML = '';
     Object.keys(BIND_ACTION_LABELS).forEach(action => {
@@ -392,9 +497,9 @@
       const listening = listeningFor === action;
       tr.innerHTML = `
         <td>${BIND_ACTION_LABELS[action]}</td>
-        <td><span class="bind-value${listening ? ' bind-listening' : ''}">${listening ? 'Eingabe erwartet…' : bindingDescription(bindings[action])}</span></td>
+        <td><span class="bind-value${listening ? ' bind-listening' : ''}">${listening ? 'Eingabe erwartet…' : bindingDescription(ab[action])}</span></td>
         <td><button data-action="${action}" ${listening ? 'disabled' : ''}>Neu zuweisen</button>
-        <button data-loeschen="${action}" ${listening || !bindings[action] ? 'disabled' : ''}
+        <button data-loeschen="${action}" ${listening || !ab[action] ? 'disabled' : ''}
           title="Belegung entfernen">&times;</button></td>
       `;
       body.appendChild(tr);
@@ -413,10 +518,11 @@
     body.querySelectorAll('button[data-loeschen]').forEach(btn => {
       btn.onclick = () => {
         const action = btn.dataset.loeschen;
-        bindings[action] = null;
-        saveBindings();
+        activeBindings()[action] = null;
+        activeSaveBindings();
         renderBindTable();
-        log('Belegung entfernt: ' + BIND_ACTION_LABELS[action], 'info');
+        log('Belegung entfernt (Spieler ' + bindEditSpieler + '): '
+            + BIND_ACTION_LABELS[action], 'info');
       };
     });
     body.querySelectorAll('button[data-action]').forEach(btn => {
@@ -429,6 +535,21 @@
       };
     });
   }
+  if ($('bind-player-row')) {
+    $('bind-player-row').querySelectorAll('.bind-player-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ziel = Number(btn.dataset.spieler);
+        if (ziel === bindEditSpieler) return;
+        // Ein Wechsel mitten in der Erfassung wuerde die Eingabe des naechsten
+        // Knopfdrucks der FALSCHEN Belegung zuschreiben - deshalb abbrechen statt
+        // umzuschalten.
+        listeningFor = null;
+        bindRuhe = null;
+        bindEditSpieler = ziel;
+        renderBindTable();
+      });
+    });
+  }
   renderBindTable();
   // Hier stand der Aufruf von renderHelpPad(): die Controller-Belegung ein zweites Mal, nur
   // lesbar. Sie war doppelt - die zuweisbare Tabelle in derselben Karte zeigt dasselbe und
@@ -436,10 +557,10 @@
   // Fehlerklasse wie eine tote Element-id.
 
   $('bind-reset').onclick = () => {
-    bindings = { ...DEFAULT_BINDINGS };
-    saveBindings();
+    if (bindEditSpieler === 2) { bindings2 = { ...DEFAULT_BINDINGS2 }; saveBindings2(); }
+    else { bindings = { ...DEFAULT_BINDINGS }; saveBindings(); }
     renderBindTable();
-    log('Tastenbelegung auf Standard zurückgesetzt.', 'info');
+    log('Tastenbelegung (Spieler ' + bindEditSpieler + ') auf Standard zurückgesetzt.', 'info');
   };
 
   const AXIS_CAPTURE_THRESHOLD = 0.6;
@@ -447,6 +568,11 @@
   const DEADZONE = 0.12;
 
   const TRIGGER_DEADZONE = 0.06; // a slightly drifting trigger shouldn't creep the car
+  // Rechter Stick als Bildlauf (Phase 13, BESTELLT). ~18px je Takt bei vollem Ausschlag,
+  // bei ueblichen ~60 Takten/s also rund 1000px/s - schnell genug, um eine lange
+  // Optionenseite zuegig zu durchqueren, aber nicht so schnell, dass ein kurzer Ausschlag
+  // gleich ueber das Ziel hinausschiesst.
+  const PAD_SCROLL_SPEED = 18;
 
   // Rescale rather than hard-cut, so leaving the deadzone eases in from 0 instead of
   // jumping straight to 0.12 — the hard cut made small steering corrections feel notchy.
@@ -483,6 +609,7 @@
   function tryCaptureBinding(pad) {
     if (!listeningFor) return;
     const action = listeningFor;
+    const ziel = activeBindings();
     if (!bindRuhe) { bindRuheNehmen(pad); return; }
     let bester = null;
     for (let i = 0; i < pad.axes.length; i++) {
@@ -508,7 +635,7 @@
       // Die Richtung: hat sich die Achse nach unten bewegt, ist sie invertiert. Gemessen
       // wird gegen die RUHELAGE und nicht gegen null.
       const invert = bester.jetzt < bester.ruhe;
-      bindings[action] = {
+      ziel[action] = {
         type: 'axis', index: bester.i, invert,
         // Die gelernte Spanne, siehe achsWert(). Sie startet an dem, was bisher gesehen
         // wurde, und waechst mit jeder Bewegung.
@@ -517,13 +644,15 @@
         max: Math.max(bester.ruhe, bester.jetzt),
         label: `Achse ${bester.i}${invert ? ' (invertiert)' : ''}`,
       };
-      log(`Zuordnung gesetzt: ${BIND_ACTION_LABELS[action]} -> Achse ${bester.i}`
-          + ` (Ruhe ${bester.ruhe.toFixed(2)}, Ausschlag ${bester.d.toFixed(2)})`, 'info');
+      log(`Zuordnung gesetzt (Spieler ${bindEditSpieler}): ${BIND_ACTION_LABELS[action]} `
+          + `-> Achse ${bester.i} (Ruhe ${bester.ruhe.toFixed(2)}, `
+          + `Ausschlag ${bester.d.toFixed(2)})`, 'info');
     } else {
-      bindings[action] = { type: 'button', index: bester.i, label: `Knopf ${bester.i}` };
-      log(`Zuordnung gesetzt: ${BIND_ACTION_LABELS[action]} -> Knopf ${bester.i}`, 'info');
+      ziel[action] = { type: 'button', index: bester.i, label: `Knopf ${bester.i}` };
+      log(`Zuordnung gesetzt (Spieler ${bindEditSpieler}): ${BIND_ACTION_LABELS[action]} `
+          + `-> Knopf ${bester.i}`, 'info');
     }
-    saveBindings();
+    activeSaveBindings();
     listeningFor = null;
     bindRuhe = null;
     renderBindTable();
@@ -620,7 +749,7 @@
   // left/right = steering damping (left = direct, right = sluggish).
   const DPAD = { up: 12, down: 13, left: 14, right: 15 };
   const prevDpad = { up: false, down: false, left: false, right: false };
-  let prevLightFlash = false, prevPitstop = false, prevWeather = false;
+  let prevLightFlash = false, prevPitstop = false, prevTrackReadMode = false;
   let prevRaceStart = false, prevTrackView = false, prevResetCar = false;
 
   function padButtonPressed(pad, index) {
@@ -729,7 +858,65 @@
     // sobald hier eines dazukommt oder seinen Namen aendert. Defensiv gerufen, weil
     // 98b-sicherung.js SPAETER gebaut wird: zur Laufzeit ist die Funktion da.
     if (typeof lageZeichnen === 'function') lageZeichnen();
+    carStoreListeZeichnen();
   }
+
+  // ---- AUTO-VERWALTUNG: die gemerkte Liste ansehen und aufraeumen ------------------
+  //
+  // BESTELLT: "in garage weiterer button zum Standard..." nein, das ist die Sicherung
+  // daneben - hier ist die eigentliche Bestellung: eine manuelle Liste fuer chc.cars.v1,
+  // "nur eine manuelle Liste (ansehen, einzeln oder gesammelt loeschen). Kein
+  // automatisches Aufraeumen nach Zeit." carStore()/carRemember()/carAssign() konnten
+  // bislang nur WACHSEN - kein Weg, eine Karteileiche wieder loszuwerden.
+  //
+  // Die Geraete-Kennung bleibt im data-id (verschluesselt fuer den Fall eines Doppel-
+  // punkts oder Anfuehrungszeichens darin - eine BluetoothDevice.id ist ein UUID-artiger
+  // String, aber ungeprueft von aussen), nie im sichtbaren Text: sie sagt niemandem etwas
+  // und ist lang genug, um jede Zeile zu sprengen.
+  function carStoreListeZeichnen() {
+    const host = $('car-store-liste');
+    if (!host) return;
+    const roh = carStore();
+    const ids = Object.keys(roh);
+    const alleBtn = $('car-store-alle-loeschen');
+    if (alleBtn) alleBtn.hidden = ids.length < 2;
+    if (!ids.length) {
+      host.innerHTML = '<span class="muted" style="font-size:12px">'
+                      + t('Keine gemerkten Autos.') + '</span>';
+      return;
+    }
+    host.innerHTML = ids.map((id) => {
+      const e = roh[id] || {};
+      const f = CAR_COLORS.find((c) => c.id === e.color) || CAR_COLORS[0];
+      const wie = (e.alias ? e.alias : f.name).replace(/</g, '&lt;');
+      return '<span class="car-store-zeile" data-id="' + encodeURIComponent(id) + '">'
+           + '<span class="car-store-farbe" style="background:' + f.hex + '"></span>'
+           + wie
+           + '<button type="button" class="car-store-loeschen" title="Löschen"'
+           + ' data-i18n-skip>&times;</button></span>';
+    }).join('');
+    host.querySelectorAll('.car-store-loeschen').forEach((btn) => {
+      btn.onclick = () => {
+        const id = decodeURIComponent(btn.closest('.car-store-zeile').dataset.id);
+        const roh2 = carStore();
+        delete roh2[id];
+        try { localStorage.setItem(CAR_STORE, JSON.stringify(roh2)); } catch (e) { /* privat */ }
+        carStoreListeZeichnen();
+        if (typeof lageZeichnen === 'function') lageZeichnen();
+        log('Gemerktes Auto entfernt.', 'info');
+      };
+    });
+  }
+  if ($('car-store-alle-loeschen')) {
+    $('car-store-alle-loeschen').addEventListener('click', () => {
+      if (!confirm(t('Alle gemerkten Autos wirklich löschen?'))) return;
+      try { localStorage.removeItem(CAR_STORE); } catch (e) { /* privat */ }
+      carStoreListeZeichnen();
+      if (typeof lageZeichnen === 'function') lageZeichnen();
+      log('Alle gemerkten Autos entfernt.', 'info');
+    });
+  }
+  carStoreListeZeichnen();
 
   // Farbe fuer ein neu verbundenes Auto. Gemerktes hat Vorrang, sonst die naechste noch
   // freie Farbe der Reihe - zwei Autos in derselben Farbe waeren keine Zuordnung.
@@ -974,8 +1161,9 @@
     } else if (playerCar2 === car) {
       playerCar2 = null;
       // Sonst faehrt das Auto mit dem letzten gesendeten Gas weiter: writeToCar() schickt
-      // nur, was es bekommt, und ohne Rolle bekommt es nichts mehr.
-      writeToCar(car, 0, 0, trackModeBit() | (headlightsOn ? LIGHT_HEAD : 0));
+      // nur, was es bekommt, und ohne Rolle bekommt es nichts mehr. headlightsOn2, weil es
+      // SEIN Licht ist, nicht Auto 1s.
+      writeToCar(car, 0, 0, trackModeBit() | (headlightsOn2 ? LIGHT_HEAD : 0));
     }
     car.role = role;
     if (role !== 'ghost') stopGhost(car);
@@ -1069,7 +1257,7 @@
         ${car.role === 'ghost' ? `
         <div class="gar-speed">
           <label>Tempo</label>
-          <input type="range" min="0.3" max="1" step="0.05"
+          <input type="range" min="${GHOST_READ_MIN}" max="1" step="0.05"
                  value="${car.ghostSpeed === undefined || car.ghostSpeed === null
                           ? ghostCfg.speed : car.ghostSpeed}">
           <b></b>
@@ -1232,7 +1420,9 @@
     const player = garage.find(c => c.role === 'player');
     const ghosts = garage.filter(c => c.role === 'ghost');
     if (!player && !ghosts.length) return;
-    showTab('race');
+    // KEIN showTab('race') mehr - BESTELLT: wer "Losfahren" drueckt, soll dort bleiben,
+    // wo er gerade ist (z.B. um noch weitere Autos einzurichten), nicht automatisch ins
+    // Cockpit springen. Wer fahren will, wechselt selbst in den Tab.
     // The ghosts are started here rather than left to the race start, because "Losfahren"
     // from the Garage is also the way to drive WITHOUT arming a race - free practice with
     // company. Pressing it again RESTARTS them: startGhost begins with stopGhost, so a
@@ -1314,14 +1504,15 @@
       });
       garage.push(car);
       carAssign(car);
-      // First car connected takes the wheel, as requested. Im Zwei-Spieler-Modus nimmt
-      // das ZWEITE Auto den zweiten Platz - sonst muesste man nach jedem Verbinden in die
-      // Garage, und der Modus soll "zwei Autos verbinden und losfahren" sein.
+      // First car connected takes the wheel, as requested. BESTELLT: "1. Verbundene auto =
+      // steuern, alle weiteren ghost (nicht player 2)" - jedes weitere Auto wird jetzt IMMER
+      // Ghost, unabhaengig vom Zwei-Spieler-Modus. Spieler 2 bleibt eine bewusste manuelle
+      // Zuweisung ueber den Rollen-Knopf in der Garage (setCarRole schaltet dabei weiterhin
+      // von selbst den Zwei-Spieler-Modus an, siehe dort).
       if (!playerCar) setCarRole(car, 'player');
-      else if (zweiSpieler && !playerCar2) setCarRole(car, 'player2');
-      else renderGarage();
+      else setCarRole(car, 'ghost');
       log(`${garageLabel(car)} verbunden (${garage.length} insgesamt).`, 'info');
-      playFx(fxBuffers.start[$('sound-profile').value] || fxBuffers.start.porsche, 0.85);
+      playFx(fxBuffers.start[$('sound-profile').value] || fxBuffers.start.p992gt3r, 0.85);
     } catch (err) {
       if (err && err.name === 'NotFoundError') log('Keine Auswahl getroffen.', 'info');
       else log('Verbinden fehlgeschlagen: ' + (err && err.message), 'err');
@@ -1349,6 +1540,11 @@
     // Garage alone had no telemetry at all, because the dashboard subscription hangs off
     // the BLE explorer's discovery, which the Garage does not use.
     if (car === playerCar) handleDashboardBytes(b);
+    // Aufnahme-Modus: Start/Ziel-Ueberfahrten waehrend einer laufenden Aufzeichnung
+    // mitschreiben (90c-macro-track.js) - EIGENER Zustand, nicht ueber car.race/
+    // raceState, die eine laufende Wertung voraussetzen und ausserhalb eines
+    // gestarteten Rennens gar nichts in car.race.laps ablegen wuerden.
+    if (recording && car === playerCar) aufnahmeRundenTick(b);
     const code = b[12];
     // Der Monitor bekommt JEDEN Wert, auch die, die alles andere hier verwirft - er ist
     // genau dafuer da, einen unbekannten Code zu finden.
@@ -1394,9 +1590,19 @@
     // gefunden" ab. Genau derselbe Fehler war beim Armaturenbrett schon einmal gefunden und
     // dort behoben worden (siehe den Kommentar oben), beim Scan blieb er stehen.
     if (trackScanning && trackScanCar === car) trackScanBytes(b);
-    // Lernen laeuft nur, wenn nicht gerade von Hand gescannt wird - beide gleichzeitig in
-    // dieselbe Karte schreiben zu lassen waere ein Wettlauf.
-    if (!trackScanning && (car === playerCar || car.role === 'ghost')) {
+    // BESTELLT: "Streckenscan ... button in der garage." Eigener Verbraucher, siehe die
+    // Begruendung bei garageScan in 60-track.js - laeuft nur fuer SEIN Auto und nur,
+    // solange nicht auch noch von Hand gescannt wird (derselbe Wettlauf-Grund wie unten).
+    if (typeof garageScan !== 'undefined' && garageScan.aktiv && garageScan.car === car
+        && !trackScanning) {
+      garageScanTick(b);
+    }
+    // Lernen laeuft nur, wenn nicht gerade von Hand ODER aus der Garage gescannt wird -
+    // alle drei gleichzeitig in dieselbe Karte schreiben zu lassen waere ein Wettlauf.
+    // Sonst haette der Garagenscan seine eigene, GEPRUEFTE Runde noch nicht fertig, waehrend
+    // learnTick() schon eine UNGEPRUEFTE committet - genau die Pruefung, die bestellt wurde.
+    const garagenscanLaeuft = typeof garageScan !== 'undefined' && garageScan.aktiv;
+    if (!trackScanning && !garagenscanLaeuft && (car === playerCar || car.role === 'ghost')) {
       // Das erste passende Auto bekommt das Lernen und behaelt es, bis zurueckgesetzt wird.
       // Der Fahrer hat Vorrang: er faehrt die Runde bewusst, ein Ghost faehrt, was er kann.
       if (!learn.car || (car === playerCar && learn.car !== playerCar)) {
@@ -1597,6 +1803,20 @@
   // was Byte 12 dazwischen meldet. Das unterscheidet, was Zeit allein nicht unterscheiden
   // kann, naemlich einen Ausfall der Lesung von einem Abflug.
   const GHOST_OFFTRACK_CONFIRM_MS = 900;
+  // BESTELLT (Phase 12, Punkt 8): "auf Basis der bekannten Strecke und des bekannten
+  // Ortes... zurueckfahren, zumindest fuer 3s versuchen - ausser es faehrt in der Zeit
+  // irgendwo gegen." Drei Sekunden ab dem bestaetigten Abgang (GHOST_OFFTRACK_CONFIRM_MS
+  // davor zaehlt nicht mit, das Auto haelt sich bis dahin noch fuer "auf der Bahn").
+  const GHOST_RECOVER_MS = 3000;
+  // "Faehrt irgendwo gegen": die vorhandene Kollisionserkennung (detectCrash() in
+  // 70-race.js) hilft hier NICHT - sie schaltet sich waehrend abseitsJetzt() bewusst ab,
+  // weil sie eine Bordsteinkante sonst staendig als Aufprall meldet (siehe deren eigene
+  // Begruendung). Ein Ghost hat ausserdem gar keine echten detectCrash()-Bytes, nur sein
+  // simuliertes Tempo. Der Ersatz hier ist gröber, aber robust: WER NICHT VORANKOMMT,
+  // OBWOHL GAS ANLIEGT, STEHT VOR ETWAS. Ungeprueft an einem echten Auto - deshalb der
+  // Schalter in den Optionen.
+  const GHOST_RECOVER_STUCK_V = 0.05;    // Anteil der Hoechstgeschwindigkeit
+  const GHOST_RECOVER_STUCK_MS = 500;    // so lange muss es anliegen, kein Fehlalarm
   // Wie frisch muss der letzte Kachelwechsel sein, damit der Zaehler als LAUFEND gilt?
   // GHOST_TILE_MS_MAX ist die laengste je gefahrene Kachel; wer darueber liegt, steht.
   const GHOST_ZAEHLER_FRISCH_MS = 4000;
@@ -1813,13 +2033,25 @@
     // der Streckenscan von Hand macht, nur nebenbei. Sobald eine Runde geschlossen ist, wird
     // sie als Strecke uebernommen, wenn noch keine da ist, und ab dann hat der Ghost seinen
     // Vorausblick und bremst vor Kurven.
-    learn: true,
-    // Standard AUS. Anders herum war es die haeufigste Ursache fuer "ich starte das Rennen
-    // und nichts passiert": ohne gedrucktes Muster meldet das Auto nie einen Code, und dann
-    // stand der Ghost. Vorsicht, die nichts faehrt, ist keine Vorsicht. Wer gedruckte
-    // Strecke liegen hat, kann es einschalten - dann haelt sich das Auto selbst auf der Bahn
-    // und faehrt nur dort, wo es weiss, wo es ist.
+    // BESTELLT: Standard jetzt AUS (vorher AN) - wer needCode nicht eigens einschaltet (siehe
+    // direkt darunter), hat ohnehin keinen Streckencode zum Lernen, und automatisches Lernen
+    // ohne dessen Wissen ueberraschte mit einer Strecke, die niemand angefordert hatte.
+    learn: false,
+    // BESTELLT, dann wieder zurueckgenommen: kurzzeitig stand hier AN. "Ich starte das
+    // Rennen und nichts passiert" - ein Ghost ohne Streckencode PARKTE einfach, statt
+    // ohne Karte weiterzufahren. Standard bleibt deshalb AUS: ohne Streckenwissen soll
+    // der Ghost fahren (die Ideallinien-Faelle fallen dann ohnehin auf 0 Lenkversatz
+    // zurueck, siehe ghostLineHeuristic()/ghostLineFromCode() - er faehrt also geradeaus/
+    // in der Bahnmitte statt zu parken), nicht stehen bleiben. Wer gedruckte Strecke
+    // liegen hat, kann es einschalten - dann haelt sich das Auto selbst auf der Bahn und
+    // faehrt nur dort, wo es weiss, wo es ist.
     needCode: false,
+    // BESTELLT (Phase 12, Punkt 8): "Recovery-Funktion... aber mach einen Schalter, wo
+    // ich es abschalten kann." Standard AUS, wie wuerzeVerteidigen/wuerzeBlau: ein
+    // missglueckter Rueckweg waere schlimmer als der bisherige, sichere Halt (siehe die
+    // Begruendung bei ghostRecoveryVersuchen()), und das ist ungeprueft an einem echten
+    // Auto - wer es einschaltet, tut es mit offenen Augen.
+    wuerzeRecovery: false,
   };
 
   // ---- Der Anfangsabgleich der fuenf Wuerz-Kaestchen ---------------------------------
@@ -2919,7 +3151,18 @@
   // steht. Genau das war "mitten auf der Strecke".
   //
   // Also eine eigene Phase, in der GEFAHREN wird - am Rand, mit Boxentempo.
+  //
+  // BESTELLT (diese Runde): "so weit wie es geht am rechten Streckenrand stehen." Die
+  // feste PIT_RAND_MS reicht nur, wenn das Auto die Bahnbreite in dieser Zeit schafft.
+  // Die Querbewegung laeuft ueber querMax * tempoAnteil (ghostTick): ein langsames Auto
+  // hat ein kleines tempoAnteil, also einen kleinen querMax - es schafft den Rand nicht in
+  // 1000 ms, und die Haltephase bremst es dann mitten auf der Strecke. Deshalb ist die
+  // Mindestzeit mit einer RAND-BEDINGUNG verknuepft: die Phase endet erst, wenn die
+  // Querlage wirklich am Rand steht (fruehestens nach PIT_RAND_MS), und notfalls nach
+  // PIT_RAND_MAX_MS, damit ein Auto, das nie an den Rand kommt, nicht ewig faehrt.
   const PIT_RAND_MS = 1000;
+  const PIT_RAND_MAX_MS = 2500;    // Sicherheitsgrenze, sonst fuehrt ein Hänger ewig
+  const PIT_RAND_TARGET = 0.95;    // Querlage, ab der "am Rand" gilt (Test verlangt 0.95)
   // Und die Bremse laeuft hoch statt zu schlagen. Bestellt: "relativ abrupt bremsen [...]
   // nicht direkt auf 0, dann rutscht es vll und steht zu schraeg." 350 ms sind rund ein
   // Drittel der Haltephase - deutlich kuerzer als die 460 ms Zeitkonstante des Reglers
@@ -2962,7 +3205,13 @@
   //
   // Zusaetzlich gedeckelt auf n-2: eine Gasse, die laenger ist als das Layout, waere ein
   // Ring aus stehenden Autos.
-  const PIT_PLAETZE_MAX = 4;
+  //
+  // ZURUECKGEDREHT (diese Runde): BESTELLT "ghost pit: immer nur 1 ghost auf einmal" -
+  // das Gegenteil der obigen Bestellung. pitPlaetzeZahl() (siehe unten) faengt das
+  // automatisch mit ab: Math.min(PIT_PLAETZE_MAX, n-2) wird bei 1 immer 1, die
+  // Gassen-Infrastruktur (Heilung, Warteschlange) bleibt unveraendert, sie serialisiert
+  // jetzt nur auf einen Platz statt vier.
+  const PIT_PLAETZE_MAX = 1;
   // Wieviel Querlage ein Auto benutzt, das noch an einem stehenden vorbei muss. Der
   // Gegenrand, also NEGATIV - der Stopp haelt rechts.
   const PIT_VORBEI = -1.0;
@@ -3317,7 +3566,12 @@
       return true;
     }
     if (p.phase === 'rand') {
-      if (now - p.at >= PIT_RAND_MS) {
+      // BIS AN DEN RAND, und erst dann abbremsen - nicht blind nach PIT_RAND_MS. Ein
+      // langsames Auto (kleines tempoAnteil) erreicht die Breite erst spaeter; ein
+      // schnelles faehrt nach dem Erreichen die restliche Mindestzeit am Rand weiter.
+      const seit = now - p.at;
+      const amRand = (g.querSoll || 0) >= PIT_RAND_TARGET;
+      if ((seit >= PIT_RAND_MS && amRand) || seit >= PIT_RAND_MAX_MS) {
         p.phase = 'halt'; p.at = now;
         log(garageLabel(car) + ': am Rand, bremst ab.', 'info');
       }
@@ -3525,6 +3779,7 @@
     car.parked = null;
     if (car.ghost) {
       car.ghost.cutOut = false; car.ghost.offSince = 0;
+      car.ghost.recoverUntil = 0; car.ghost.recoverStuckSince = 0;
       car.ghost.unparkAt = Date.now();
       // ---- DIE GNADE GILT AUCH HIER, und das war die gemeldete Luecke ------------------
       //
@@ -3629,7 +3884,20 @@
   // worden. Der Ladebalken startet auf den anderen Schirmen gar nicht erst, statt bei 40
   // Prozent stehenzubleiben.
   function flagTasteTick(flagNow) {
-    if (cockpitScreenIst().id !== 'main') {
+    // ALLERERSTE STUFE: ist das Info-Popup offen (98c-opt-info.js), schliesst dieselbe
+    // Taste nur IHN - alles dahinter (Menuenavigation, Cockpit-Schirm, gelbe Flagge)
+    // bleibt unberuehrt, waehrend ein Modal offen ist.
+    if (optInfoOffen()) {
+      if (flagNow && !prevYellowFlag) optInfoSchliessen();
+      prevYellowFlag = flagNow;
+      return;
+    }
+    // NEUE STUFE (Phase 13): auf dem Optionen-Tab bestaetigt/waehlt dieselbe
+    // Taste die fokussierte Zeile der Menuenavigation an - noch vor der Frage, welcher
+    // Cockpit-Schirm gerade offen ist (der ist dann ohnehin nicht der aktive Tab).
+    if (menuNavActive()) {
+      if (flagNow && !prevYellowFlag) menuNavActivate();
+    } else if (cockpitScreenIst().id !== 'main') {
       if (flagNow && !prevYellowFlag) cockpitScreenWaehlen();
     } else {
       if (flagNow && !prevYellowFlag) { padFlagFired = false; flagHoldPress(); }
@@ -3790,8 +4058,11 @@
   const SPICE_SLIP_TILES = 1.3;    // bis hierher wirkt Windschatten
   const SPICE_SLIP_GAIN = 0.11;
   const SPICE_ATTACK_MS = 2600;
-  const SPICE_ATTACK_ARM_MS = 900;  // so lange muss man kleben, bevor es losgeht
-  const SPICE_ATTACK_P = 0.45;      // und dann wird gewuerfelt, sonst ist es kein Rennen
+  // let statt const, aus demselben Grund wie SPICE_ATTACK_RANGE weiter unten: der neue
+  // Rennhaerte-Regler (siehe ghostRennhaerteAnwenden()) skaliert sie, und ein Pruefaufruf
+  // soll sie ausserdem gezielt setzen koennen.
+  let SPICE_ATTACK_ARM_MS = 900;  // so lange muss man kleben, bevor es losgeht
+  let SPICE_ATTACK_P = 0.45;      // und dann wird gewuerfelt, sonst ist es kein Rennen
   // WIE NAH "in Reichweite" ist, und das MUSS ueber SPICE_GAP_MIN liegen.
   //
   // Vorher stand hier 0,9 als Zahl im Code, waehrend der Abstandhalter ab 0,7 lupft (plus
@@ -3808,6 +4079,10 @@
   let SPICE_ATTACK_RANGE = 1.3;
   function attackRangeSetzen(v) { SPICE_ATTACK_RANGE = v; }
   function attackRangeLesen() { return SPICE_ATTACK_RANGE; }
+  function attackPSetzen(v) { SPICE_ATTACK_P = v; }
+  function attackPLesen() { return SPICE_ATTACK_P; }
+  function attackArmMsSetzen(v) { SPICE_ATTACK_ARM_MS = v; }
+  function attackArmMsLesen() { return SPICE_ATTACK_ARM_MS; }
   // WIE OFT gewuerfelt wird. Vorher alle 4000 ms: bei Wuerze 0,4 ist die
   // Wahrscheinlichkeit 0,18 je Versuch, also eine Attacke pro 22 Sekunden durchgehenden
   // Klebens. Das liest sich nicht als Rennen, sondern als Kolonne.
@@ -4137,9 +4412,14 @@
   const SPICE_PASS_PLATZ_MIN = 0.30;   // darunter passt kein zweites Auto daneben
   // Nicht in eine HAARNADEL hinein ansetzen. Das bleibt gesperrt, und zwar nicht wegen der
   // Kachelart, sondern weil der Versuch dort zwangslaeufig IN der Haarnadel endet: eine
-  // Attacke dauert bis zu 5 s, eine Kachel bei Ghost-Tempo rund 0,7 s. Wer 60 cm vor einer
-  // Haarnadel ausholt, ist beim Einlenken noch daneben.
-  const SPICE_PASS_KEIN_HAARNADEL_VORAUS = 1;   // Kacheln Vorausblick
+  // Attacke dauert bis zu 5 s, eine Kachel bei Ghost-Tempo rund 0,7 s - fuer eine
+  // abgeschlossene Attacke braucht es also mehrere Kacheln Vorlauf, nicht eine einzige.
+  //
+  // BESTELLT: "Kein Überholen, wenn eines der nächsten 4 Teile die Haarnadel ist." 1 auf
+  // 4 angehoben - deckt damit einen guten Teil, aber nicht die vollen ~7 Kacheln einer
+  // kompletten 5-s-Attacke ab; 4 ist die vom Nutzer benannte Zahl und keine Herleitung
+  // aus der Zeitrechnung oben.
+  const SPICE_PASS_KEIN_HAARNADEL_VORAUS = 4;   // Kacheln Vorausblick
 
   // ---- 2. ZEITLUECKE STATT KACHELABSTAND -------------------------------------------
   //
@@ -4246,6 +4526,10 @@
   // Als let und nicht const, damit eine Messreihe ihn durchfahren kann - der Wert ist eine
   // Abwaegung zwischen Beruehrungen und dichtem Fahren, und die entscheidet eine Reihe und
   // nicht ein Kommentar. Der Fahrbetrieb aendert ihn nicht.
+  // v0.7.57 hob diesen Wert und SPICE_LUECKE_MIN_S auf 1,5 an ("ghosts etwas mehr
+  // abstand"). GEMELDET danach: "danach haben sie sich geschoben (zu geringer Abstand) und
+  // sind tuer an tuer gefahren" - also schlechter, genau wie die Messreihe unten es fuer
+  // groessere Soll-Luecken zeigt (mehr Bremsen, dann Auflaufen). ZURUECK auf 1,2.
   let SPICE_GAP_MIN = 1.2;      // Kacheln, ab hier wird gelupft (nur noch Rueckfall)
   // ---- DIE ZEITLUECKE IN SEKUNDEN --------------------------------------------------
   //
@@ -4290,6 +4574,7 @@
   // WARUM NICHT MEHR: darueber wird es wieder schlechter (1,8 und 2,5 liegen hoeher). Das
   // ist plausibel und kein Messfehler - eine sehr grosse Sollluecke laesst die Autos
   // staerker bremsen, und dann laufen sie wieder auf.
+  // In v0.7.57 kurz auf 1,5, wieder zurueck auf 1,2 - siehe SPICE_GAP_MIN darueber.
   let SPICE_LUECKE_MIN_S = 1.2;
   const SPICE_LUECKE_PER_CLOSING = 0.30;
   function lueckeMinSetzen(v) { SPICE_LUECKE_MIN_S = v; }
@@ -4297,6 +4582,42 @@
   function gapMinSetzen(v) { SPICE_GAP_MIN = v; }
   function gapMinLesen() { return SPICE_GAP_MIN; }
   const SPICE_GAP_LIFT = 0.26;  // hoechster Tempoabzug bei Beruehrung
+
+  // ---- RENNHAERTE: EIN REGLER FUER FUENF WERTE --------------------------------------
+  //
+  // BESTELLT (Phase 12, Punkte 5+6): "Weniger Ueberholmanoever, mehr sauberes
+  // Hintereinanderfahren (leicht versetzt), mit Regler" und "Ueberholmanoever nur, wenn
+  // Autos dicht hintereinander sind."
+  //
+  // FUENF WERTE STATT EINEM NEUEN VERHALTEN: alle fuenf existieren schon und sind
+  // einzeln GEMESSEN eingestellt (SPICE_ATTACK_RANGE gegen SPICE_GAP_MIN, siehe deren
+  // eigene Begruendung; SPICE_LUECKE_MIN_S gegen eine Sweep-Tabelle mit Beruehrungen je
+  // Minute, siehe darueber). Ein Regler, der sie unabhaengig voneinander verstellt,
+  // wuerde diese Messungen zerreissen - deshalb skaliert EIN Faktor alle fuenf gemeinsam,
+  // und bei 50 % (Vorgabe) kommt exakt der bisherige, gemessene Wert jedes einzelnen
+  // heraus. Wer den Regler nie anfasst, faehrt also unveraendert weiter.
+  //
+  // RICHTUNG: haerter (>50 %) heisst haeufiger angreifen (SPICE_ATTACK_P hoch), schneller
+  // zuenden (SPICE_ATTACK_ARM_MS runter) und eine kleinere Luecke reicht schon
+  // (SPICE_LUECKE_MIN_S/SPICE_GAP_MIN runter). Weicher (<50 %) ist die Umkehrung -
+  // seltener, geduldiger, mehr Abstand verlangt, damit ein Feld ohne haeufige Attacken
+  // sauber und leicht versetzt hintereinander bleibt statt zu kleben.
+  //
+  // SPICE_ATTACK_RANGE faehrt MIT DEMSELBEN Faktor wie die Luecken-Schwellen (nicht mit
+  // dem Angriffsfaktor): das haelt die dokumentierte Ungleichung RANGE > GAP_MIN bei
+  // jeder Reglerstellung automatisch ein, weil beide Seiten gleich skaliert werden.
+  function ghostRennhaerteAnwenden(intensitaet) {
+    const i = Math.max(0, Math.min(1, intensitaet));
+    const zu = i / 0.5;         // 0..2, 1 bei 50 % - fuer haeufiger/schneller
+    const von = 1.5 - i;        // 1.5..0.5, 1 bei 50 % - fuer Luecken/Reichweite
+    attackPSetzen(0.45 * zu);
+    attackArmMsSetzen(900 * von);
+    // Anker wieder 1,2/1,2/1,3 (v0.7.57 hatte 1,5/1,5/1,625, zurueckgenommen - siehe
+    // SPICE_GAP_MIN oben).
+    lueckeMinSetzen(1.2 * von);
+    gapMinSetzen(1.2 * von);
+    attackRangeSetzen(1.3 * von);
+  }
 
   // Fortschritt in Kacheln seit dem Start, mit Bruchteil. Absichtlich NICHT ueber den
   // Kachelindex der Karte: ohne eingescannte Strecke gibt es keinen, und Abstaende soll man
@@ -4372,11 +4693,69 @@
     return c.ghost.nurOrt ? c.ghost : null;
   }
 
+  // Der zuletzt gemeldete Kachelcode als Vorausblick-Byte, nur die bekannten Drahtcodes;
+  // alles andere (0x00 beim Stillstand, 0xff neben der Bahn) als Gerade.
+  function scanLiveCode(code) {
+    const bekannt = [TILE_TYPE.START, TILE_TYPE.STRAIGHT, TILE_TYPE.CURVE_LEFT,
+                     TILE_TYPE.CURVE_RIGHT, TILE_TYPE.HAIRPIN_LEFT, TILE_TYPE.HAIRPIN];
+    return bekannt.indexOf(code) >= 0 ? code : 0x02;
+  }
+  function scanInHaarnadel(car) {
+    const code = car ? car.tileCode : null;
+    return code === TILE_TYPE.HAIRPIN || code === TILE_TYPE.HAIRPIN_LEFT;
+  }
+
   function spielerOrtTick(auto) {
     // `auto` ist das gemeinte Auto. Ohne Argument ist es das Fahrerauto, damit jeder
     // vorhandene Aufruf unveraendert gueltig bleibt.
     const c = auto || playerCar;
     if (!c) return;
+    // ---- STRECKENSCAN: VOR DEM GATE, weil die Strecke waehrend eines Scans per
+    // Definition NICHT bekannt ist ---------------------------------------------------
+    //
+    // BESTELLT: "Wenn ich Strecke scannen druecke, muss sich mein Auto wie ein Ghost mit
+    // vorgeschriebener Querlage = 0 verhalten. Aktuell faehrt das Auto einfach geradeaus."
+    //
+    // GEFUNDEN: garageScan.aktiv laeuft AUSSERHALB von autopilotGrund()/
+    // driverAssistAktiv() (ein Scan betrifft genau EIN Auto, eine globale Bedingung
+    // wuerde das andere mit hineinziehen, siehe autopilot() in 50-drive.js - dort sendet
+    // sie bereits steer:0). Byte 7 = 0 OHNE modeBytes liest das Auto aber als
+    // RADSTELLUNG, nicht als "Bahnmitte" (siehe die Warnung bei fahrhilfeVollGilt()) -
+    // das allein waere schon der gemeldete Fehler. Der zweite, tiefere Grund: currentTrack-
+    // Tiles bleibt waehrend des GANZEN Scans leer (garageScanTick() in 60-track.js
+    // schreibt sie erst in dem einen Takt, in dem die Runde als geschlossen erkannt und
+    // der Scan sofort beendet wird, siehe dort) - das Gate zwei Zeilen weiter unten
+    // (currentTrackTiles.length < 3) haette also JEDEN modeBytes-Versuch fuer die
+    // GESAMTE Scandauer abgefangen, waere dieser Zweig nach dem Gate geblieben.
+    //
+    // Deshalb HIER, vor dem Gate, und OHNE ghostLookahead() (das braucht genau die
+    // Kachelkenntnis, die hier fehlt): ein neutraler Vorausblick (Gerade auf allen drei
+    // Feldern). Die Bytes 10/15 schalten die Selbstzentrierung ein, 16-18 sind nur die
+    // Ansage "was als naechstes kommt" - ohne bekannte Strecke ist "Gerade" die
+    // sicherste Annahme (keine Vorausbremsung vor einer Kurve, aber die Bahnmitte stimmt
+    // trotzdem), keine Ansage waere schlimmer als eine neutrale.
+    const scanAktiv = typeof garageScan !== 'undefined' && garageScan.aktiv
+                     && garageScan.car === c;
+    if (scanAktiv) {
+      const wer = (typeof playerCar2 !== 'undefined' && c === playerCar2) ? 2 : 1;
+      // Byte 16 ist die AKTUELLE Kachel (siehe ghostLookahead(): at(0)). Die kennt das Auto
+      // auch ohne Streckenwissen - es hat sie gerade selbst gemeldet. GEMELDET: "das Auto
+      // faehrt so schnell, dass es aus der Haarnadelkurve rausfaehrt" - mit "Gerade" als
+      // Ansage mitten in einer Haarnadel bereitet sich das Auto auf nichts vor.
+      const jetzt = scanLiveCode(c.tileCode);
+      c.modeBytes = (trackMode === 'on' && !abseitsJetztFuer(wer))
+        ? { 10: AUTO_MODE.b10, 15: AUTO_MODE.b15, 16: jetzt, 17: 0x02, 18: 0x02 }
+        : null;
+    } else if (!currentTrackTiles || currentTrackTiles.length < 3) {
+      // KEIN Scan, und die Strecke ist (noch) nicht bekannt genug fuer den normalen
+      // Zweig unten - das Gate zwei Zeilen weiter unten wuerde ihn ohnehin nie
+      // erreichen, liesse dabei aber einen zuvor gesetzten modeBytes-Wert stehen (zum
+      // Beispiel von einem gerade abgebrochenen Scan, dessen Strecke nie geschlossen
+      // wurde) - das Auto bliebe dann dauerhaft im Scan-Modus haengen, obwohl der
+      // Nutzer die Kontrolle zurueckhaben sollte. Ausdruecklich geloescht statt
+      // stillschweigend liegengelassen.
+      c.modeBytes = null;
+    }
     const g = spielerOrt(c);
     if (!g || !currentTrackTiles || currentTrackTiles.length < 3) return;
     const now = Date.now();
@@ -4657,7 +5036,12 @@
 
   // Alle fuenf Bausteine auf das Zieltempo. Rueckgabe: der Faktor, und ob gerade attackiert
   // wird (das braucht die Linie, nicht das Tempo).
-  function ghostSpice(car, aheadTight) {
+  // haarnadelNah ist OPTIONAL, mit Absicht: alle bestehenden Aufrufer (auch die
+  // zahlreichen Pruefstellen, die ghostSpice() direkt mit einem erfundenen aheadTight
+  // rufen) sollen ihr altes Verhalten unveraendert behalten. Nur wer die tatsaechliche,
+  // laengere Reichweite von SPICE_PASS_KEIN_HAARNADEL_VORAUS braucht (ghostTick(), siehe
+  // dort), gibt sie ausdruecklich mit.
+  function ghostSpice(car, aheadTight, haarnadelNah) {
     const g = car.ghost, now = Date.now();
     if (!wuerzeAn()) { g.attackUntil = 0; return { factor: 1, attack: 0 }; }
 
@@ -4853,16 +5237,28 @@
     // rechnet und deren Ergebnis niemand liest, ist kein Beleg fuer eine Begruendung -
     // sie ist die naechste Stelle, an der jemand denkt, sie taete etwas.
     const platz = 1;
-    // In eine Haarnadel hinein wird nicht angesetzt - siehe die Konstante. aheadTight kommt
-    // aus dem Layout; ohne Layout ist tight 0 und die Bedingung faellt weg, und das ist
-    // richtig: ohne Karte weiss niemand, was kommt.
-    const haarnadelVoraus = aheadTight.tight >= 2
-                            && aheadTight.dist <= SPICE_PASS_KEIN_HAARNADEL_VORAUS;
+    // In eine Haarnadel hinein wird nicht angesetzt - siehe die Konstante.
+    //
+    // haarnadelNah kommt, wenn gegeben, aus einem EIGENEN Scan (ghostHaarnadelInSicht)
+    // mit der vollen Reichweite von SPICE_PASS_KEIN_HAARNADEL_VORAUS. Der Rueckfall auf
+    // aheadTight ist fuer Aufrufer da, die haarnadelNah nicht mitgeben (die Bremskurve in
+    // ghostTick() braucht ihr aheadTight mit einer eigenen, KUERZEREN Reichweite, und
+    // dieselbe Reichweite auf hier anzuwenden wuerde eine naehere, weniger enge Kurve
+    // verschlucken - siehe die Begruendung bei ghostHaarnadelInSicht()). Ohne Layout
+    // liefert keiner der beiden Wege eine Haarnadel, und das ist richtig: ohne Karte
+    // weiss niemand, was kommt.
+    const haarnadelVoraus = haarnadelNah !== undefined ? haarnadelNah
+                            : (aheadTight.tight >= 2
+                               && aheadTight.dist <= SPICE_PASS_KEIN_HAARNADEL_VORAUS);
     // Auf BEIDEN Seiten einer: dann gibt es keinen Weg vorbei, und ein Versuch endet im
     // Schieben. Die Wahl selbst steht weiter unten; hier wird nur nicht angesetzt.
     const seitenFrei = ghostSeitenFrei(car);
     const irgendeineSeiteFrei = seitenFrei['-1'] || seitenFrei['1'];
-    if (ghostCfg.wuerzeUeberholen
+    // BESTELLT: "Kein Überholen in der Einführungsrunde." Im Formationstempo faehrt das
+    // Feld ohnehin in der Zweierkolonne (formationOffset()) - ein Ueberholversuch wuerde
+    // genau diese Kolonne aufloesen, und bei Boxentempo ist dafuer kein Grund: dort geht
+    // es nicht um Position, sondern darum, geordnet zur Ziellinie zu kommen.
+    if (ghostCfg.wuerzeUeberholen && !raceFormationLap
         && !g.attackUntil && g.closeSince && now - g.closeSince > SPICE_ATTACK_ARM_MS
         && platz >= SPICE_PASS_PLATZ_MIN
         && !haarnadelVoraus
@@ -5616,6 +6012,24 @@
     return out;
   }
 
+  // Eigener, laengerer Vorausblick NUR fuer die Ueberholsperre vor der Haarnadel -
+  // ghostAheadTightest() haelt die TIGHTESTE Kachel im Bereich fest und ueberschreibt
+  // dabei ihre Distanz, sobald eine engere Kachel WEITER HINTEN gefunden wird. Fuer die
+  // Bremskurve (deren Frage ist "was kommt und wie eng") ist das richtig; fuer "liegt
+  // UEBERHAUPT eine Haarnadel in den naechsten N Kacheln" waere es falsch - eine normale
+  // Kurve auf Kachel 1 wuerde die naeher liegende, weniger enge Kachel verschlucken,
+  // sobald bei Kachel 3 eine Haarnadel folgt, und die Bremskurve verloere ihre Kachel 1.
+  // Deshalb ein eigener, einfacherer Scan: nur die blosse ANWESENHEIT zaehlt.
+  function ghostHaarnadelInSicht(car, depth) {
+    const tiles = currentTrackTiles;
+    if (!tiles || tiles.length < 2 || !car.ghost || car.ghost.tileIndex === null) return false;
+    for (let k = 0; k <= depth; k++) {
+      const t = tiles[(car.ghost.tileIndex + k) % tiles.length];
+      if (tileTightness(t && t.type) >= 2) return true;
+    }
+    return false;
+  }
+
   // The three tile types the car is about to meet, in the form the original app sent them.
   // Gemessenes Alphabet: 0x01 Start, 0x02 Gerade, 0x03 Kurve links, 0x04 Kurve rechts,
   // 0x05 Haarnadel links, 0x06 Haarnadel rechts. Die Boxengasse geht als Gerade hinaus,
@@ -5732,6 +6146,10 @@
     // Fahren mit Begleitung" behauptete.
     car.ghost = { engine: e, tileIndex: null, lastCount: car.tileCount,
                   lastTick: 0, bias: 0, laps: 0, cutOut: false, freeRun: false,
+                  // Recovery-Versuch nach einem Abgang - siehe ghostRecoveryTick().
+                  // recoverUntil > 0 heisst "wird gerade versucht", recoverStuckSince > 0
+                  // heisst "seit hier steht das Tempo, moeglicherweise ein Aufprall".
+                  recoverUntil: 0, recoverStuckSince: 0,
                   // Faehrt dieser Ghost? NICHT car.timer pruefen: der wird erst in einem
                   // setTimeout gesetzt, damit vier Autos nicht in derselben Millisekunde
                   // senden - im Moment des Klicks ist er noch null.
@@ -6120,13 +6538,21 @@
     }
     const e = g.engine, cfg = e.config;
     // Die Oberflaeche aus Wetter und aufgezogenem Reifen, JEDEN TAKT. Nicht nur beim
-    // Wetterwechsel: wxRainLevel() ist eine Rampe ueber fuenf Sekunden, ein einmaliges
-    // Setzen wuerde also einen von hundert Zwischenwerten festhalten. Kostet zwei
-    // Multiplikationen.
+    // Wetterwechsel: wxRainLevel() ist eine Rampe ueber zehn Sekunden (WX_RAMP_S), ein
+    // einmaliges Setzen wuerde also einen von hundert Zwischenwerten festhalten. Kostet
+    // zwei Multiplikationen.
     ghostOberflaecheSetzen(car);
 
     // Follow the tile counter so we know where on the layout we are.
-    if (car.tileCount !== null && car.tileCount !== g.lastCount) {
+    //
+    // NICHT WAEHREND EINES RECOVERY-VERSUCHS (g.recoverUntil): GEMESSEN bei
+    // GHOST_ZAEHLER_FRISCH_MS/zaehlerLaeuft weiter unten - der Kachelzaehler laeuft auch
+    // NEBEN der Bahn weiter, nur ungewoehnlich schnell ("er rast"). Ohne diese Ausnahme
+    // wuerde g.tileIndex waehrend des Versuchs dem rasenden Zaehler folgen und "die
+    // bekannte Stelle" waere nach wenigen hundert Millisekunden nicht mehr die Stelle, an
+    // der die Strecke verlassen wurde, sondern irgendeine spaetere - die Ideallinie
+    // laenke dann auf eine falsche, sich staendig aendernde Zielkachel.
+    if (!g.recoverUntil && car.tileCount !== null && car.tileCount !== g.lastCount) {
       // Die Dauer der gerade verlassenen Kachel, fuer die Phasenschaetzung der Linie.
       if (g.tileStart) {
         // DER TYP DER GERADE VERLASSENEN Kachel, also der von g.tileIndex - er wird erst
@@ -6252,11 +6678,14 @@
     // Cut-out. Two detectors, and the first one is new: code 0x00 IS the off-track report,
     // so there is no need to wait for a timeout. The timeout stays as a backstop for the case
     // where notifications stop arriving altogether, which 0x00 cannot cover.
-    // Ohne Streckencode haelt der Ghost an. Das ist die richtige Vorsicht, solange eine
-    // gedruckte Strecke liegt - aber solange keine liegt, hat das Auto NIE einen Code
-    // gemeldet (!car.lastCodeAt), und dann faehrt der Ghost gar nicht erst los. Von aussen
-    // sieht das aus wie ein kaputtes Feature. Der Schalter erlaubt Fahren ohne Codes; das
-    // Auto haelt sich dann nicht selbst auf der Bahn, deshalb ist er standardmaessig an.
+    // Ohne Streckencode haelt der Ghost an - aber nur, wenn ghostCfg.needCode das verlangt
+    // (siehe die Parkbedingung unten). Solange keine gedruckte Strecke liegt, hat das Auto
+    // NIE einen Code gemeldet (!car.lastCodeAt), und ein Ghost, der das PARKEN verlangt,
+    // faehrt dann gar nicht erst los - von aussen sieht das aus wie ein kaputtes Feature.
+    // Deshalb ist needCode standardmaessig AUS: der Ghost faehrt dann auch ohne jedes
+    // Streckenwissen weiter (die Ideallinien-Faelle fallen auf 0 Lenkversatz zurueck, er
+    // haelt sich also nicht selbst auf der Bahn und ist auf die Leitplanke angewiesen).
+    // Wer gedruckte Strecke liegen hat, kann needCode einschalten.
     const noCode = !car.lastCodeAt || (now - car.lastCodeAt > GHOST_OFFTRACK_MS);
     // 0x00 muss STEHEN, nicht nur einmal auftreten. Ohne diese Entprellung hielt ein
     // einzelnes 0x00-Paket den Ghost sofort an, und weil solche Pakete zwischen zwei
@@ -6287,19 +6716,26 @@
     //     1013 ms 0x00,  92 ms je Kachel   Abflug, der Zaehler rast
     //    12806 ms 0x00, eine Kachel        steht
     //
-    // Also zwei Fragen statt einer: kam ueberhaupt noch ein Wechsel (sonst steht es), und
-    // kamen die letzten Wechsel in einem Abstand, den ein fahrendes Auto haben kann.
-    // GHOST_TILE_MS_MIN = 250 steht seit jeher im Code mit der Begruendung "schneller ist
-    // keine Kachel je gefahren worden" - es hatte hier nur noch keinen Leser.
+    // GEMELDET danach: "stelle sicher, dass Ghosts nach Verlassen der Strecke zuegig
+    // anhalten und nicht bis in die staubigste Ecke im Raum fahren, gegen die Wand, und
+    // dann immernoch Gas geben." Die drei "faehrt"-Faelle mit langem 0x00 sind eben keine
+    // Bahn-Lesungen, sondern ein Auto, das neben der Bahn auf dem Teppich weiterfaehrt -
+    // und der Kachelzaehler zaehlt dort weiter, weil die Firmware ihn nicht anhaelt. Wer
+    // auf diesen Zaehler hoert, laesst den Ghost genau so weiterfahren, wie gemeldet.
+    // Ein bestaetigter Abgang (0x00 steht 900 ms) stellt deshalb jetzt OHNE das Zaehler-
+    // Veto ab: eine einzelne 0x00-Luecke zwischen zwei Kacheln dauert im Median 32 ms und
+    // reicht nie an die Bestaetigung heran.
     const zaehlerFrisch = g.tileStart && (now - g.tileStart) < GHOST_ZAEHLER_FRISCH_MS;
     const ring = g.tileRing || [];
     const zaehlerPlausibel = ring.length > 0
       && (ring.reduce((a, b) => a + b, 0) / ring.length) >= GHOST_TILE_MS_MIN;
     const zaehlerLaeuft = !!(zaehlerFrisch && zaehlerPlausibel);
-    // UND DAS GILT JETZT FUER BEIDE ZWEIGE. Vorher hielt offConfirmed allein an, ohne den
-    // Zaehler zu fragen - und vier der sechs gemessenen 0x00-Strecken sind laenger als die
-    // 900 ms Bestaetigung. Genau so bleibt ein fahrendes Auto stehen und blinkt.
-    const offConfirmed = offSteht && !zaehlerLaeuft;
+    // offConfirmed steht jetzt ALLEIN, ohne das Zaehler-Veto. Das Veto war die Gegenprobe
+    // gegen "ein fahrendes Auto steht und blinkt" - aber ein Auto, das 900 ms lang 0x00
+    // liest, ist nicht auf der Bahn, sondern neben ihr (eine einzelne 0x00-Luecke zwischen
+    // zwei Kacheln dauert im Median 32 ms). Der Kachelzaehler laeuft neben der Bahn weiter,
+    // weil die Firmware ihn nicht anhaelt, und taugt deshalb nicht als Unterscheider.
+    const offConfirmed = offSteht;
     // DIE BEWEISLAGE ENTSCHEIDET, und bis v0.4.55 tat sie es nicht - der Ghost blieb neben
     // der Bahn nicht stehen. Zwei Vetos konnten den Halt verhindern, und mindestens eines
     // griff immer:
@@ -6348,8 +6784,57 @@
     const gnade = g.gnadeBis && now < g.gnadeBis;
     const parken = !gnade && !raceFormationLap
                    && (offConfirmed || (ghostCfg.needCode && noCode && !zaehlerLaeuft));
+    // ---- RECOVERY: erst versuchen zurueckzufahren, dann erst parken ------------------
+    //
+    // BESTELLT (Phase 12, Punkt 8): "Auf Basis der bekannten Strecke und des bekannten
+    // Ortes, an dem die Strecke verlassen wird, soll das Auto auf die Strecke
+    // zurückfahren, zumindest es für 3s versuchen - außer, es fährt in der Zeit irgendwo
+    // gegen. Es muss nicht an derselben Stelle wieder auffahren, nur irgendwo auf der
+    // Strecke."
+    //
+    // "AUF BASIS DER BEKANNTEN STRECKE" ist woertlich zu nehmen: car.parked bleibt
+    // waehrend des Versuchs ausdruecklich UNGESETZT, also bleibt offTrack unten false,
+    // und der normale Fahrblock weiter unten (`if (armed && !offTrack)`) rechnet ganz
+    // normal weiter - mit dem letzten bekannten g.tileIndex, der beim Ausfall der Lesung
+    // einfach stehenbleibt (siehe "Follow the tile counter" weiter oben). Die Ideallinie
+    // lenkt also dahin, wo die Strecke laut Karte an dieser Stelle als naechstes hinfuehrt
+    // - genau "auf Basis des bekannten Ortes", ohne eine zweite, eigene Lenkrechnung.
+    // Eine eigene Rueckweg-Geometrie zu erfinden waere hier das groessere Risiko gewesen:
+    // eine falsch herum geratene Lenkrichtung wuerde das Auto WEITER von der Strecke weg
+    // lenken statt zurueck, und genau davor warnt die Bestellung ausdruecklich.
     if (parken && !car.parked) {
-      parkCar(car, 'Bahn verlassen');
+      if (ghostCfg.wuerzeRecovery) {
+        if (!g.recoverUntil) g.recoverUntil = now + GHOST_RECOVER_MS;
+        if (now < g.recoverUntil) {
+          // "FAEHRT ES IRGENDWO GEGEN": kein Bytesignal verfuegbar (siehe die Begruendung
+          // bei GHOST_RECOVER_STUCK_V), also der groebere, aber robuste Ersatz - Gas liegt
+          // an (armed weiter unten), aber das Tempo bleibt nahe null.
+          const topKmh = g.engine && g.engine.config ? g.engine.config.topSpeedKmh : 0;
+          const vAnteil = (g.engine && g.engine.state && topKmh)
+            ? Math.abs(g.engine.state.speedKmh || 0) / topKmh : 0;
+          if (vAnteil < GHOST_RECOVER_STUCK_V) {
+            if (!g.recoverStuckSince) g.recoverStuckSince = now;
+            else if (now - g.recoverStuckSince > GHOST_RECOVER_STUCK_MS) {
+              log(garageLabel(car) + ': Rückweg abgebrochen, kein Vorankommen (vermutlich '
+                  + 'ein Hindernis).', 'err');
+              parkCar(car, 'Bahn verlassen');
+            }
+          } else {
+            g.recoverStuckSince = 0;
+          }
+        } else {
+          log(garageLabel(car) + ': Rückweg nach ' + (GHOST_RECOVER_MS / 1000)
+              + ' s nicht gefunden.', 'err');
+          parkCar(car, 'Bahn verlassen');
+        }
+      } else {
+        parkCar(car, 'Bahn verlassen');
+      }
+    } else if (g.recoverUntil) {
+      // parken ist nicht (mehr) noetig, waehrend ein Versuch lief - der Rueckweg hat
+      // funktioniert, nicht zwingend an derselben Stelle, wie bestellt.
+      log(garageLabel(car) + ': Rückweg gefunden, wieder auf der Bahn.', 'info');
+      g.recoverUntil = 0; g.recoverStuckSince = 0;
     }
     const offTrack = !!car.parked;
     // Wer steht, warnt die anderen - solange das Rennen laeuft und er nicht in der
@@ -6441,7 +6926,13 @@
       const kurveJetzt = Math.min(1, Math.max(here, ahead.dist <= 1 ? ahead.tight : 0));
       g.kurveMix = g.kurveMix === undefined ? kurveJetzt
         : g.kurveMix + (kurveJetzt - g.kurveMix) * Math.min(1, dt / GHOST_MIX_TAU);
-      const spice = underYellow ? { factor: 1, attack: 0 } : ghostSpice(car, ahead);
+      // Eigener, laengerer Scan fuer die Ueberholsperre: `ahead` oben ist mit Absicht auf
+      // 2 Kacheln gedeckelt (fuer kurveJetzt richtig so), SPICE_PASS_KEIN_HAARNADEL_VORAUS
+      // braucht aber bis zu 4 - siehe ghostHaarnadelInSicht() und der dritte Parameter von
+      // ghostSpice().
+      const haarnadelNah = ghostHaarnadelInSicht(car, SPICE_PASS_KEIN_HAARNADEL_VORAUS);
+      const spice = underYellow ? { factor: 1, attack: 0 }
+                                 : ghostSpice(car, ahead, haarnadelNah);
       target *= spice.factor;
       // Was gilt: die Kachel unter dem Auto, oder die naechste enge in Reichweite. Die
       // Reichweite haengt von der Enge ab - vor einer Haarnadel zwei Kacheln, vor einer
@@ -6788,11 +7279,18 @@
           : underYellow ? 0
           : passSeite !== 0 ? passSeite * passAussen()
           : ghostLineOffset(car) * ghostCfg.line * GHOST_LINE_STEER * linieGewicht;
-        const querRohSumme = quer
+        // BESTELLT (diese Runde): "querlage bei boxenstopps klappt nicht, die autos
+        // bleiben mitten auf der strecke stehen." Der Kommentar zwei Absaetze ueber pq
+        // sagt es schon: "waehrend eines Stopps gibt es keine Linie, keine Wuerze und
+        // keine Spur - nur den Rand" - aber quer OBEN wurde zwar korrekt auf pq gesetzt,
+        // die Summe hier addierte Spur/Ueberhol-Bias/Verbremser-Fehler trotzdem noch
+        // OBENDRAUF und zog das Auto von seinem Randwert wieder Richtung Mitte. Jetzt
+        // haelt ein Boxenstopp (pq !== null) exakt den Randwert, ohne Zusatz.
+        const querRohSumme = pq !== null ? quer : (quer
               + g.bias * ghostCfg.lateral * 0.25
               + ghostLane(car) * ghostCfg.lanes * GHOST_LANE_STEER * spurGewicht
               // Der Querausschlag eines Verbremsers, additiv - siehe SPICE_FEHLER_QUER.
-              + (spice.fehlerQuer || 0);
+              + (spice.fehlerQuer || 0));
         // ---- QUERTRAEGHEIT: eine RATENBEGRENZUNG und kein Tiefpass ------------------
         //
         // Der Unterschied ist wichtig. Ein Tiefpass (neu = alt + (soll-alt) * k) naehert sich
@@ -6893,6 +7391,18 @@
         const querSollFaktor = (1 - Math.pow(0.75, dt / (CONTROL_SEND_INTERVAL_MS / 1000)))
                               * tempoAnteil;
         g.querSoll = (g.querSoll || 0) + (querRoh - (g.querSoll || 0)) * querSollFaktor;
+        // BESTELLT (diese Runde): "querlage bei boxenstopps klappt nicht, die autos
+        // bleiben mitten auf der strecke stehen." Gefunden bei der Umstellung des
+        // Ideallinien-Vorgabewerts auf innen3: die Klemme oben (steer = min(steer, 0))
+        // wirkt auf den ROHEN Befehl, aber g.querSoll folgt ihm nur mit querSollFaktor -
+        // und der friert bei v nahe 0 komplett ein (siehe die Begruendung zwei Absaetze
+        // ueber diesem Block, "bei v = 0 friert er komplett ein"). Ein Auto, das GENAU IN
+        // DEM MOMENT langsam wird, in dem die Sperre beginnt, behaelt seinen alten,
+        // ungeklemmten querSoll fuer die ganze Standzeit - gemessen mit innen3 als
+        // Ideallinie auf SR3GLR2GR2G2 (+0,385 statt eines negativen Werts, 36 Takte lang).
+        // g.querSoll ist aber genau die Groesse, die Karte UND Test lesen - die Klemme
+        // muss also auch SIE direkt treffen, nicht nur den rohen Befehl.
+        if (pitSperreRechts(car)) g.querSoll = Math.min(g.querSoll, 0);
       } else {
         // Fallback for cars not in guard-rail mode: the old layout-plus-yaw controller.
         const dir = ghostTurnDir(car, 0);
@@ -7463,11 +7973,18 @@
   //
   // Nur REINE Funktionen, kein Zustand, kein Schreibzugriff. Was hier steht, kann eine
   // Pruefung aufrufen, ohne ein Auto zu verbinden oder auf eine Zeitmessung zu warten.
-  // Die drei Modellnamen fuer die Oberflaeche. Als EINE Tabelle, weil sie an drei Stellen
-  // gebraucht werden - Meldung, Vorschau und Selbsttest - und drei Kopien einer Zuordnung
-  // der Weg zu drei verschiedenen Namen fuer dasselbe Modell sind.
+  // Die Modellnamen fuer die Oberflaeche. Als EINE Tabelle, weil sie an drei Stellen
+  // gebraucht werden - Meldung, Vorschau und Selbsttest - und mehrere Kopien einer Zuordnung
+  // der Weg zu mehreren verschiedenen Namen fuer dasselbe Modell sind.
+  //
+  // GEMELDET: "steht 'undefined ist gewaehlt'." 'dreistufig' ist die VORGABE (lineModel in
+  // 60-track.js) und fehlte hier - wer die Voreinstellung nie angefasst hatte, sah die
+  // Meldung von Anfang an. Derselbe Name wie am Knopf im Streckeneditor ("3-stufig",
+  // data-linemodel="dreistufig", 00-index.head.html).
   const LINIENMODELL_NAME = {
     curvature: 'Kr\u00fcmmung', laptime: 'Rundenzeit', lateapex: 'Late Apex',
+    dreistufig: '3-stufig', mitte: 'Fahrbahnmitte', innen3: 'Innen (gemittelt)',
+    aussenin: 'Außen-Innen', luuke: 'Luuke-Linie',
   };
 
   // ---- Die gewaehlte Linie zeigen, direkt neben der Wahl ----
@@ -7740,15 +8257,29 @@
       p2Steer = 0; p2Throttle = 0;
       return;
     }
-    const gas = applyDeadzone(Math.max(0, readBindingValue(pad, bindings.throttle)), TRIGGER_DEADZONE);
-    const bremse = applyDeadzone(Math.max(0, readBindingValue(pad, bindings.brake)), TRIGGER_DEADZONE);
-    p2Steer = applyDeadzone(readBindingValue(pad, bindings.steering));
+    // ---- ERFASSUNG FUER SPIELER 2s EIGENE BELEGUNG ---------------------------------
+    //
+    // BESTELLT: "baue ein, dass sich Tasten von 2 Spielern unabhaengig zuweisen lassen."
+    // Wird gerade Spieler 2s Tabelle bearbeitet (bindEditSpieler === 2, siehe die
+    // Bindungstabelle weiter oben), hoert SEIN Pad auf den naechsten Knopfdruck - genau
+    // wie pollGamepad() es fuer Spieler 1 tut, nur auf dem jeweils anderen Pad. Ohne diese
+    // Abzweigung wuerde Spieler 2 hier weiterfahren, waehrend seine eigene Zuordnung
+    // wartet - und ein Tritt aufs Gas waere die naechste "Zuordnung".
+    if (listeningFor && bindEditSpieler === 2) {
+      tryCaptureBinding(pad);
+      return;
+    }
+    // bindings2: Spieler 2s EIGENE Belegung (siehe die Begruendung bei GAMEPAD_BINDINGS_KEY2
+    // weiter oben) - vorher las diese Funktion `bindings`, also Spieler 1s Tabelle mit.
+    const gas = applyDeadzone(Math.max(0, readBindingValue(pad, bindings2.throttle)), TRIGGER_DEADZONE);
+    const bremse = applyDeadzone(Math.max(0, readBindingValue(pad, bindings2.brake)), TRIGGER_DEADZONE);
+    p2Steer = applyDeadzone(readBindingValue(pad, bindings2.steering));
     p2Throttle = gas - bremse;
     // Schalten, flankengetriggert wie bei Spieler 1. Ohne das koennte ein Spieler 2 mit
     // Handschaltung nicht schalten - und die Handschaltung ist eine Einstellung, die fuer
     // beide gilt.
-    const abNow = readBindingValue(pad, bindings.downshift) > BUTTON_CAPTURE_THRESHOLD;
-    const aufNow = readBindingValue(pad, bindings.upshift) > BUTTON_CAPTURE_THRESHOLD;
+    const abNow = readBindingValue(pad, bindings2.downshift) > BUTTON_CAPTURE_THRESHOLD;
+    const aufNow = readBindingValue(pad, bindings2.upshift) > BUTTON_CAPTURE_THRESHOLD;
     if (abNow && !p2PrevDown && physicsEnabled && !physEngine2.state.isShifting) {
       physEngine2.triggerShift(-1);
     }
@@ -7771,29 +8302,26 @@
     // Erweiterung der Lichthupe von Auto 1 - sie ist die Absicht EINES Fahrers an das
     // Auto vor IHM, und ein gemeinsamer Zustand liesse Spieler 1s Knopf auch Auto 2s
     // Licht blitzen lassen.
-    const flashNow2 = readBindingValue(pad, bindings.lightflash) > BUTTON_CAPTURE_THRESHOLD;
+    const flashNow2 = readBindingValue(pad, bindings2.lightflash) > BUTTON_CAPTURE_THRESHOLD;
     if (flashNow2 && !p2PrevFlash && typeof triggerHeadlightFlash2 === 'function') {
       triggerHeadlightFlash2();
     }
     p2PrevFlash = flashNow2;
 
-    // Licht an/aus ist dagegen eine GLOBALE Einstellung (headlightsOn gilt fuer beide
-    // Autos, siehe die Begruendung bei "globale Einstellungen gelten fuer beide" in
-    // 20-protocol.js) - Spieler 2 darf sie deshalb genauso umschalten wie Spieler 1, und
-    // beide Autos zeigen danach denselben Stand.
-    const headNow2 = readBindingValue(pad, bindings.headlights) > BUTTON_CAPTURE_THRESHOLD;
+    // Licht an/aus ist jetzt SEIN EIGENES Licht (headlightsOn2) und nicht mehr das von
+    // Auto 1 - siehe die Begruendung bei headlightsOn2 in 50-drive.js. Kein Kaestchen zum
+    // Mitziehen: #dash-head-toggle gehoert allein Auto 1.
+    const headNow2 = readBindingValue(pad, bindings2.headlights) > BUTTON_CAPTURE_THRESHOLD;
     if (headNow2 && !p2PrevHeadlights) {
-      headlightsOn = !headlightsOn;
-      const cb = $('dash-head-toggle');
-      if (cb) cb.checked = headlightsOn;
-      showHudToast(headlightsOn ? 'Licht an' : 'Licht aus');
+      headlightsOn2 = !headlightsOn2;
+      showHudToast(headlightsOn2 ? 'P2: Licht an' : 'P2: Licht aus');
     }
     p2PrevHeadlights = headNow2;
 
     // Boxenstopp: derselbe Griff wie der Knopf auf dem Vergleichsschirm
     // (boxZweiAnfordern in 70-race.js) - er fordert an und bricht bei erneutem Druck ab,
     // genau wie bei Spieler 1.
-    const pitstopNow2 = readBindingValue(pad, bindings.pitstop) > BUTTON_CAPTURE_THRESHOLD;
+    const pitstopNow2 = readBindingValue(pad, bindings2.pitstop) > BUTTON_CAPTURE_THRESHOLD;
     if (pitstopNow2 && !p2PrevPitstop && typeof boxZweiAnfordern === 'function') {
       boxZweiAnfordern();
     }
@@ -7820,7 +8348,10 @@
     padConnected = true;
     padLastPollTime = performance.now();
 
-    if (listeningFor) {
+    // Nur abfangen, wenn hier auch wirklich Spieler 1s Belegung dran ist - waehrend
+    // Spieler 2s Tabelle bearbeitet wird (bindEditSpieler === 2), soll Spieler 1
+    // weiterfahren koennen, statt fuer eine fremde Zuordnung stillzustehen.
+    if (listeningFor && bindEditSpieler !== 2) {
       tryCaptureBinding(pad);
     } else {
       const throttleRaw = applyDeadzone(Math.max(0, readBindingValue(pad, bindings.throttle)), TRIGGER_DEADZONE);
@@ -7857,20 +8388,42 @@
       // Headlights on/off, edge-triggered. Drives the same checkbox the options menu uses
       // so the two can never disagree.
       const headNow = readBindingValue(pad, bindings.headlights) > BUTTON_CAPTURE_THRESHOLD;
-      // Triangle: reset in the editor, headlights otherwise.
-      if (headNow && !prevHeadlights && trackEditorPad('reset')) {
+      // Dreieck: dreht im Streckeneditor die Strecke, im Cockpit das Licht, ausserhalb des
+      // Cockpits (B2, v0.7) die Erklaerung der fokussierten Menuezeile. BESTELLT (Phase
+      // 13, Playstation-Belegung): "Dreieck zum Drehen." Reset (die ganze Strecke
+      // loeschen) hat seitdem keine eigene Gamepad-Taste mehr - nur noch per Klick auf
+      // "Leeren", ausdruecklich: eine so folgenreiche Aktion muss niemand versehentlich
+      // mit dem Steuerkreuz-Nachbarn treffen.
+      //
+      // BESTELLT: "außerhalb des cockpit screens die tastenbelegung so anpassen, dass
+      // Dreieck die Infos öffnet". Der Info-Knopf ist seit B2 kein eigener
+      // Navigationsschritt mehr (50b-menu-nav.js) - Dreieck oeffnet ihn jetzt direkt.
+      if (headNow && !prevHeadlights && trackEditorPad('rotate')) {
         // consumed by the editor
-      } else if (headNow && !prevHeadlights) {
+      } else if (headNow && !prevHeadlights
+                 && document.querySelector('.tabpage.active') === $('tab-race')) {
         headlightsOn = !headlightsOn;
         const cb = $('dash-head-toggle');
         if (cb) cb.checked = headlightsOn;
         showHudToast(headlightsOn ? 'Licht an' : 'Licht aus');
+      } else if (headNow && !prevHeadlights) {
+        menuNavOpenInfo();
       }
       prevHeadlights = headNow;
 
-      const wxNow = readBindingValue(pad, bindings.weather) > BUTTON_CAPTURE_THRESHOLD;
-      if (wxNow && !prevWeather) setWeather(weather === 'rain' ? 'dry' : 'rain');
-      prevWeather = wxNow;
+      // BESTELLT (v0.7): "Select Taste fuers Aendern des Bahn-Lesemodus statt des
+      // Wetters." Bis dahin schaltete dieselbe Taste das Wetter um - siehe
+      // audio/CREDITS.md-Stil-Historie in der Bindungsdefinition oben (trackReadMode).
+      // Wetter bleibt erreichbar, nur nicht mehr hier: Tipp/Klick auf #race-wx-box.
+      // Dieselben zwei Funktionen wie #race-act-scan's Klick-Handler (50-drive.js) -
+      // #setting-ontrack umschalten und ein change-Ereignis feuern, keine zweite Fassung
+      // der Umschalt-Logik.
+      const trmNow = readBindingValue(pad, bindings.trackReadMode) > BUTTON_CAPTURE_THRESHOLD;
+      if (trmNow && !prevTrackReadMode) {
+        const sw = $('setting-ontrack');
+        if (sw) { sw.checked = !sw.checked; sw.dispatchEvent(new Event('change', { bubbles: true })); }
+      }
+      prevTrackReadMode = trmNow;
 
       // Pit stop only from a standstill — a real crew does not service a moving car.
       // LB und RB machen nur noch Autodinge. Sie blaetterten ausserhalb des Cockpits durch
@@ -7889,32 +8442,68 @@
       if (trackViewNow && !prevTrackView) toggleTrackView();
       prevTrackView = trackViewNow;
 
-      // Leseart und Getriebe gehen ueber die Bedienelemente in den Optionen und deren
-      // 'change'-Ereignis - wie der Knopf im Cockpit und die Reifenkachel. Damit gibt es
-      // keinen zweiten Zustand, und die Optionen ziehen von selbst nach.
-      const scanNow = readBindingValue(pad, bindings.scanmode) > BUTTON_CAPTURE_THRESHOLD;
-      if (scanNow && !prevScanMode) {
-        const sw = $('setting-ontrack');
-        if (sw) { sw.checked = !sw.checked; sw.dispatchEvent(new Event('change', { bubbles: true })); }
-      }
-      prevScanMode = scanNow;
+      // LB/RB: Reifenwahl und Tankvorwahl, dieselben Funktionen, die vorher am
+      // Steuerkreuz hoch/runter hingen (siehe die Begruendung bei den Bindings oben).
+      const tyreNow = readBindingValue(pad, bindings.tyreSelect) > BUTTON_CAPTURE_THRESHOLD;
+      if (tyreNow && !prevTyreSelect) pitMischungWeiter();
+      prevTyreSelect = tyreNow;
 
-      const gearNow = readBindingValue(pad, bindings.gearmode) > BUTTON_CAPTURE_THRESHOLD;
-      if (gearNow && !prevGearMode) {
-        const sw = $('setting-autoshift');
-        if (sw) {
-          sw.checked = !sw.checked;
-          sw.dispatchEvent(new Event('change', { bubbles: true }));
-          showHudToast(sw.checked ? 'AUTOMATIK' : 'VON HAND');
+      const fuelNow = readBindingValue(pad, bindings.fuelSelect) > BUTTON_CAPTURE_THRESHOLD;
+      if (fuelNow && !prevFuelSelect) pitVorwahlSchalten('refuel');
+      prevFuelSelect = fuelNow;
+
+      // L3: Vollbild umschalten - im Cockpit race-fs, im Streckeneditor track-fs. Nach
+      // dem aktiven TAB entschieden und nicht nach der Kachel, damit ein Druck ausserhalb
+      // beider Tabs (Garage, Optionen, ...) folgenlos bleibt.
+      const fsToggleNow = readBindingValue(pad, bindings.fullscreenToggle) > BUTTON_CAPTURE_THRESHOLD;
+      if (fsToggleNow && !prevFsToggle) {
+        const aktiverTab = document.querySelector('.tab-btn.active');
+        const tabName = aktiverTab ? aktiverTab.dataset.tab : null;
+        if (tabName === 'race') {
+          if (document.body.classList.contains('race-fs')) exitRaceFullscreen();
+          else enterRaceFullscreen();
+        } else if (tabName === 'track') {
+          if (document.body.classList.contains('track-fs')) exitTrackFullscreen();
+          else enterTrackFullscreen();
         }
       }
-      prevGearMode = gearNow;
+      prevFsToggle = fsToggleNow;
 
-      // Gelbe Flagge auf HALTEN. Dieselben zwei Funktionen wie die Taste X, nicht eine
-      // zweite Fassung der Logik: flagHoldPress startet den Ladebalken, flagHoldRelease(true)
-      // loest aus. Zu frueh losgelassen passiert nichts - ein halber Druck darf keine halbe
-      // Wirkung haben.
-      flagTasteTick(readBindingValue(pad, bindings.yellowflag) > BUTTON_CAPTURE_THRESHOLD);
+      // Rechter Stick hoch/runter: Bildlauf auf jeder Seite, ausser im Vollbild (Cockpit
+      // oder Streckeneditor) - dort soll der Stick nichts tun, weder verstellen noch
+      // scrollen. Achse 3 ist im Standard-Mapping die Y-Achse des rechten Sticks.
+      // BESTELLT. Ausnahme: der Rennen-Uebersichtsschirm im Cockpit-Vollbild - dort landet
+      // seit Kurzem das Rennergebnis statt in einem eigenen Fenster, und mit vielen Autos/
+      // Runden reicht die Kachel nicht mehr aus. Dort scrollt der Stick #ov-tab statt der
+      // Seite.
+      const rechtsY = applyDeadzone((pad.axes || [])[3] || 0);
+      const imUebersichtsVollbild = document.body.classList.contains('race-fs')
+        && typeof cockpitScreenIst === 'function'
+        && cockpitScreenIst() && cockpitScreenIst().id === 'uebersicht';
+      if (rechtsY && imUebersichtsVollbild) {
+        const ovTab = $('ov-tab');
+        if (ovTab) ovTab.scrollTop += rechtsY * PAD_SCROLL_SPEED;
+      } else if (rechtsY && !document.body.classList.contains('race-fs')
+          && !document.body.classList.contains('track-fs')) {
+        document.body.scrollTop += rechtsY * PAD_SCROLL_SPEED;
+      }
+
+      // Gelbe Flagge auf HALTEN, aber im Streckeneditor-Vollbild bestaetigt dieselbe
+      // Taste (Kreuz/X) stattdessen die gewaehlte Aktion/Kachel - BESTELLT (Phase 13,
+      // Playstation-Belegung): "mit X bestaetigen, dass das Teil gesetzt wird." Die
+      // Flanke wird auch dann gemerkt, wenn der Editor sie verbraucht, sonst bestaetigt
+      // ein gehaltener Knopf jeden Takt erneut, weil flagTasteTick() (und mit ihr
+      // prevYellowFlag) diesen Takt ja gar nicht laeuft.
+      const yellowflagNow = readBindingValue(pad, bindings.yellowflag) > BUTTON_CAPTURE_THRESHOLD;
+      if (yellowflagNow && !prevYellowFlag && trackEditorPad('confirm')) {
+        prevYellowFlag = yellowflagNow;
+      } else {
+        // Dieselben zwei Funktionen wie die Taste X auf der Tastatur, nicht eine zweite
+        // Fassung der Logik: flagHoldPress startet den Ladebalken, flagHoldRelease(true)
+        // loest aus. Zu frueh losgelassen passiert nichts - ein halber Druck darf keine
+        // halbe Wirkung haben.
+        flagTasteTick(yellowflagNow);
+      }
 
       const resetNow = readBindingValue(pad, bindings.resetcar) > BUTTON_CAPTURE_THRESHOLD;
       if (resetNow && !prevResetCar) resetCarState();
@@ -7925,15 +8514,37 @@
       // No gear-range guards here any more: triggerShift() does its own bounds checking
       // and needs to see a downshift AT gear 0 (that is how manual mode selects reverse)
       // and an upshift while in reverse (how it comes back out).
-      // X / Square and B / Circle are shift buttons while driving and build/undo in the
-      // editor. The editor gets first refusal, and only in fullscreen.
-      if (downshiftNow && !prevDownshift && !trackEditorPad('confirm')
-          && physicsEnabled && !physEngine.state.isShifting) {
-        physEngine.triggerShift(-1);
+      // Quadrat/Square ist ab Phase 13 nur noch Runterschalten, ohne Sonderfall im
+      // Editor - Bestaetigen liegt jetzt auf Kreuz/X (siehe oben). Kreis/Circle bleibt
+      // Hochschalten UND Rueckgaengig im Editor, wie bestellt ("Kreis zum Rueckgaengig
+      // ist super").
+      //
+      // BESTELLT: "verschiedene Tasten (kreis, x, dreieck, quadrat) die infobox wieder
+      // schließen." Waehrend das Info-Popup offen ist, schliessen Kreis und Quadrat NUR
+      // ihn - kein Schalten, kein Rueckgaengig im Editor - genau wie X das schon ueber
+      // flagTasteTick() tut (98c-opt-info.js).
+      if (downshiftNow && !prevDownshift) {
+        if (optInfoOffen()) {
+          optInfoSchliessen();
+        } else if (physicsEnabled && !physEngine.state.isShifting) {
+          physEngine.triggerShift(-1);
+        }
       }
-      if (upshiftNow && !prevUpshift && !trackEditorPad('undo')
-          && physicsEnabled && !physEngine.state.isShifting) {
-        physEngine.triggerShift(1);
+      if (upshiftNow && !prevUpshift) {
+        // BESTELLT: "erlaube mir Kreistaste zu druecken, um aus den sub-menues
+        // zurueckzugehen, aktuell bleibe ich dabei manchmal stecken." showSubpage('') ist
+        // dieselbe Funktion, die auch der sichtbare .subpage-back-Knopf ruft - Kreis tut
+        // das jetzt direkt, wozu man sonst erst zur ersten Zeile hochnavigieren und
+        // "Waehlen" druecken musste. Nach demselben Muster wie optInfoOffen() oben: erst
+        // pruefen (kein Tab-race-Sonderfall noetig, dort gibt es nie ein offenes .subpage).
+        const offenerSub = document.querySelector('.tabpage.active .subpage.on');
+        if (optInfoOffen()) {
+          optInfoSchliessen();
+        } else if (offenerSub) {
+          showSubpage('');
+        } else if (!trackEditorPad('undo') && physicsEnabled && !physEngine.state.isShifting) {
+          physEngine.triggerShift(1);
+        }
       }
       prevDownshift = downshiftNow;
       prevUpshift = upshiftNow;
@@ -7942,76 +8553,84 @@
       const dLeft = padDpad(pad, 'left'), dRight = padDpad(pad, 'right');
       // Two consumers can claim the D-pad before the normal bindings see it: the track
       // editor in fullscreen, and an armed pit stop. Each returns true when it took the
-      // press, so at every other moment the pad keeps its usual job (accel and steering
-      // trim) — the meaning is never changed permanently, only while something is
-      // genuinely waiting for a decision.
-      // Nur noch zwei Verbraucher vor der Fahrfunktion: der Streckeneditor im Vollbild und
-      // ein scharfer Boxenstopp. Die allgemeine Menuenavigation ist ausgebaut - sie griff auf
-      // jedem Tab und auf jedes fokussierbare Element, und genau daraus kamen die
-      // Fehlbedienungen: ein Druck aufs Steuerkreuz verstellte irgendeinen Regler, den man
-      // gerade nicht im Blick hatte. Die Programmierschule hing an derselben Kette und ist
-      // mit ausgebaut; sie laesst sich weiterhin mit Maus und Finger bedienen.
-      // NEUE BELEGUNG seit v0.5.18, auf Wunsch:
+      // press, so at every other moment the pad keeps its usual job — the meaning is
+      // never changed permanently, only while something is genuinely waiting for a
+      // decision.
       //
-      //   hoch/runter    Lenkansprechen (vorher: Bremsbalance)
-      //   links/rechts   Cockpit-Schirm blaettern (vorher: Lenkansprechen)
+      // ---- PHASE 13: HOCH/RUNTER IST JETZT DIE MENUENAVIGATION -----------------------
       //
-      // Die Bremsbalance behaelt zwei Wege - den Regler in den Optionen und die Zieh-Skala
-      // im Cockpit -, und das genuegt fuer eine Groesse, die man einmal je Stint nachzieht.
+      // Der Kommentar, der hier bis Phase 13 stand, dokumentierte genau die Lehre, die
+      // diese Phase ernst nimmt: eine FRUEHERE, allgemeine Menuenavigation griff auf
+      // JEDEM Tab und JEDEM fokussierbaren Element, und genau daraus kamen die
+      // Fehlbedienungen. Diesmal ist sie eng geschnitten:
       //
-      // LINKS/RECHTS wird dem Boxenschirm ausdruecklich NICHT angeboten: ein Schirm, der die
-      // Taste frisst, mit der man ihn verlaesst, ist eine Sackgasse.
-      // ---- HOCH/RUNTER: REIFENWAHL UND TANKMENGE -------------------------------
+      //   - Nur auf dem Optionen-Tab passiert ueberhaupt etwas (menuNavMove()/
+      //     menuNavActive() pruefen das selbst, siehe 50b-menu-nav.js) - auf jedem
+      //     anderen Tab (Cockpit auf dem Hauptschirm, Garage, Strecke, ...) ist
+      //     hoch/runter ein Aufruf ins Leere.
+      //   - Regler und Auswahlfelder AENDERN SICH NICHT durch den Fokus allein: sie
+      //     muessen erst mit der Waehltaste "angewaehlt" werden (menuNavArmed), bevor
+      //     links/rechts ihren Wert veraendert. Ein Fokuswechsel kann also nie
+      //     versehentlich einen Wert kippen - nur ein zweiter, bewusster Tastendruck.
       //
-      // BESTELLT: "D-Pad hoch und runter im Cockpit aendert nicht Lenkung oder Brakebias,
-      // sondern: D-Pad oben schaltet Reifentypen durch und bestimmt, was beim naechsten
-      // Boxenstopp aufgezogen wird. D-Pad runter schaltet die Tankmenge durch - nicht
-      // tanken, halb, voll."
-      //
-      // Hier stand nudgeSteerResponse(+-0,1). Die VORRANGKETTE bleibt unveraendert:
-      // Streckeneditor und Boxenschirm bekommen die Taste zuerst, und nur was sie nicht
-      // verbrauchen, landet hier. Getauscht ist allein das letzte Glied.
-      //
-      // DIESELBEN FUNKTIONEN wie im Boxenschirm: pitMischungWeiter() und
-      // pitVorwahlSchalten('refuel') sind die Wege, die auch die Waehltaste nimmt. Ein
-      // eigener Zweig fuers Kreuz waere ein zweiter Ort mit derselben Aufgabe - und der
-      // erste, an dem Kachel und Menue auseinanderlaufen.
-      if (dUp && !prevDpad.up && !trackEditorPad('up') && !pitScreenPad('up')) {
-        pitMischungWeiter();
+      // pitScreenPad()/raceScreenPad() bekommen die Taste weiterhin ZUERST: auf dem
+      // Boxen- oder Renneinstellungen-Schirm gilt weiter ihre eigene, laengst gemessene
+      // Zeilenauswahl - menuNavMove() greift nur, wenn beide ablehnen (auf dem
+      // Optionen-Tab tun sie das immer, weil dort keiner der beiden Schirme aktiv ist).
+      if (dUp && !prevDpad.up && !trackEditorPad('up') && !pitScreenPad('up')
+          && !raceScreenPad('up')) {
+        menuNavMove('up');
       }
-      if (dDown && !prevDpad.down && !trackEditorPad('down') && !pitScreenPad('down')) {
-        pitVorwahlSchalten('refuel');
+      if (dDown && !prevDpad.down && !trackEditorPad('down') && !pitScreenPad('down')
+          && !raceScreenPad('down')) {
+        menuNavMove('down');
       }
-      // ---- BLAETTERN UEBER DIE BELEGUNG, nicht ueber das Kreuz -------------------
+      // ---- LINKS/RECHTS: REGLER, VOLLBILD-SCHIRME, ODER TABS -------------------------
       //
-      // Hier stand `if (dLeft && ...) cockpitScreenStep(-1)`, also das Steuerkreuz
-      // festverdrahtet. Jetzt liest es dieselbe Belegung wie Gas und Lichthupe, mit dem
-      // Kreuz als Vorgabe - siehe schirmZurueck/schirmVor in den Vorgabebelegungen.
+      // BESTELLT: "D-Pad links/rechts wechselt TABS - ausser bei einem angewaehlten
+      // Regler (dort verstellt es den Wert; gedrueckt halten beschleunigt) und ausser im
+      // Cockpit-Vollbild, wo es weiterhin die Cockpit-Schirme durchblaettert wie heute."
       //
-      // ZWEI FOLGEN, und beide sind gewollt:
-      //
-      //   Wer sie umlegt, blaettert mit dem neuen Knopf. Das Kreuz ist dann frei.
-      //   Wer sie LOESCHT, blaettert mit dem Gamepad gar nicht mehr - der Knopf am Schirm
-      //   und der Finger bleiben. Genau das war bestellt ("oder gar nicht zu belegen").
-      //
-      // Die Prev-Flanken liegen weiter in prevDpad, auch wenn die Belegung nicht mehr das
-      // Kreuz ist: es ist der Speicher fuer "war im letzten Takt gedrueckt", und woher der
-      // Wert kam, ist ihm gleich. Zwei Speicher fuer dieselbe Flanke waeren die naechste
-      // Stelle, an der etwas auseinanderlaeuft.
-      const schirmZ = readBindingValue(pad, bindings.schirmZurueck) > BUTTON_CAPTURE_THRESHOLD;
-      const schirmV = readBindingValue(pad, bindings.schirmVor) > BUTTON_CAPTURE_THRESHOLD;
-      // trackEditorPad() bekommt weiter das KREUZ und nicht die Belegung: der
-      // Streckeneditor bewegt seinen Zeiger mit dem Kreuz, und das ist keine belegbare
-      // Aktion. Ohne diese Trennung wuerde ein umgelegtes Blaettern den Editor mitnehmen.
-      if (dLeft && !prevDpad.left && trackEditorPad('left')) { /* Editor hat sie */ }
-      else if (schirmZ && !prevDpad.left) cockpitScreenStep(-1);
-      if (dRight && !prevDpad.right && trackEditorPad('right')) { /* Editor hat sie */ }
-      else if (schirmV && !prevDpad.right) cockpitScreenStep(+1);
+      // ANGEWAEHLTER REGLER GEHT JEDEM TAKT, nicht nur auf der steigenden Flanke - genau
+      // das ist die bestellte Wiederholung beim Halten. menuNavAdjustPad() fuehrt ihren
+      // eigenen kleinen Zeitgeber (erste Stufe sofort, danach alle 120 ms) und ist damit
+      // der EINZIGE Verbraucher, solange etwas angewaehlt ist: der Streckeneditor, das
+      // Blaettern der Cockpit-Schirme und der neue Tabwechsel bekommen die Taste gar
+      // nicht erst angeboten - ein angewaehlter Regler darf durch nichts anderes
+      // unterbrochen werden.
+      if (menuNavArmed) {
+        menuNavAdjustPad('left', dLeft);
+        menuNavAdjustPad('right', dRight);
+        // Auch hier merken, sonst sieht der andere Zweig beim Loslassen des Reglers eine
+        // veraltete Flanke und feuert einmal ins Leere (Editor/Tabwechsel), obwohl das
+        // Kreuz in Wahrheit schon laenger gehalten wird.
+        prevDpad.left = dLeft; prevDpad.right = dRight;
+      } else {
+        // schirmZurueck/schirmVor bleiben die belegbare Aktion, aber NUR NOCH im
+        // Cockpit-Vollbild wirksam - ausserhalb ist sie durch den neuen Tabwechsel
+        // ersetzt, der das rohe Steuerkreuz liest (dieselbe Begruendung wie beim alten
+        // "festverdrahtet vs. belegbar": der Tabwechsel ist keine Fahrentscheidung, die
+        // man umlegen wollen wuerde).
+        const raceFs = document.body.classList.contains('race-fs');
+        const schirmZ = readBindingValue(pad, bindings.schirmZurueck) > BUTTON_CAPTURE_THRESHOLD;
+        const schirmV = readBindingValue(pad, bindings.schirmVor) > BUTTON_CAPTURE_THRESHOLD;
+        // ANGEWAEHLTE RUNDENZAHL (Renneinstellungen-Schirm) geht VOR dem Schirmblaettern:
+        // erst die Waehltaste an der Dauer/Runden-Zeile, dann verstellt links/rechts exakt.
+        // raceScreenPad() gibt nur dann true zurueck, wenn wirklich verstellt wurde - ohne
+        // Anwahl bleibt die Taste beim Blaettern/Tabwechsel wie bisher.
+        if (dLeft && !prevDpad.left && trackEditorPad('left')) { /* Editor hat sie */ }
+        else if (dLeft && !prevDpad.left && raceScreenPad('left')) { /* Rundenzahl */ }
+        else if (raceFs && schirmZ && !prevDpad.left) cockpitScreenStep(-1);
+        else if (!raceFs && dLeft && !prevDpad.left) menuNavTabWechsel(-1);
+        if (dRight && !prevDpad.right && trackEditorPad('right')) { /* Editor hat sie */ }
+        else if (dRight && !prevDpad.right && raceScreenPad('right')) { /* Rundenzahl */ }
+        else if (raceFs && schirmV && !prevDpad.right) cockpitScreenStep(+1);
+        else if (!raceFs && dRight && !prevDpad.right) menuNavTabWechsel(+1);
+        // Die Flanken der BELEGUNG merken, nicht die des Kreuzes - sonst feuert ein
+        // umgelegter Knopf in jedem Takt, weil seine Flanke nie als verbraucht gilt.
+        prevDpad.left = schirmZ || dLeft; prevDpad.right = schirmV || dRight;
+      }
       prevDpad.up = dUp; prevDpad.down = dDown;
-      // Die Flanken der BELEGUNG merken, nicht die des Kreuzes - sonst feuert ein
-      // umgelegter Knopf in jedem Takt, weil seine Flanke nie als verbraucht gilt.
-      prevDpad.left = schirmZ || dLeft; prevDpad.right = schirmV || dRight;
-
     }
     // Keep prev-flags fresh even while rebinding, otherwise they go stale and the first
     // press after a rebind is swallowed (or fires twice).

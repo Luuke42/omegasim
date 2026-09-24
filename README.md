@@ -16,7 +16,12 @@ Einzelheiten in `CARRERA_HYBRID.md`.
 
 Der Cache wird **netz-zuerst** gefüllt: online immer aktuell, offline die letzte gesehene
 Fassung. Cache-zuerst wäre hier die schlechteste Wahl – bei mehreren Builds am Tag liefert
-er eine alte Fassung aus, während die neue schon daliegt.
+er eine alte Fassung aus, während die neue schon daliegt. **Eine Ausnahme: die Tondateien
+(`.ogg`).** Sie sind versioniert (der Cachename trägt die Programmversion) und ändern sich
+innerhalb einer Version nicht; eine installierte App soll die Megabyte Motorgeräusch nicht
+bei jedem Start neu vom Netz holen. Die kleinen Verzeichnisse (`loops.json`, `fx.json`,
+`voice.json`) bleiben netz-zuerst, weil ein veraltetes Verzeichnis Funktionen still
+verschwinden lässt.
 
 ## Mitarbeiten
 

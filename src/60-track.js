@@ -123,6 +123,10 @@
   // Je Leseart einer, benannt statt aufgezaehlt: wer das liest, sieht sofort, welcher wo
   // gilt. Die Liste darueber bleibt als Rueckfall und fuer isStartCode() ohne Leseart.
   const START_CODE_RAIL = 0x01;    // Kunststoffschiene, Bahn-Modus (seVen, bestaetigt)
+  // Im Ausdruck-Modus melden je nach Vorlage BEIDE Werte das Start/Ziel-Blatt: das
+  // Original meldet 0x0a (gemessen 25.08.), die App-Blaetter (startziel-a4.svg, muster-*,
+  // spur-*) tragen das Wort, das 0x01 ergibt (siehe tools/make_track_sheets.py und
+  // make_pattern_sheets.py). Deshalb zaehlt isStartCode() im Ausdruck-Modus beide.
   const START_CODE_PRINT = 0x0a;   // gedrucktes Blatt, Ausdruck-Modus (gemessen 25.08.)
   // AUS DER LISTE GELESEN und nicht daneben aufgezaehlt. Vorher stand hier
   // "c === 0x0a || c === START_CODE_LEGACY", und damit gab es die Tatsache "was gilt als
@@ -139,7 +143,10 @@
   // stand es hier vorher schon.
   function isStartCode(c) {
     if (typeof trackMode === 'string') {
-      return trackMode === 'on' ? c === START_CODE_RAIL : c === START_CODE_PRINT;
+      if (trackMode === 'on') return c === START_CODE_RAIL;
+      // Ausdruck: beide Werte. Auf der Schiene bleibt es strikt 0x01, damit die Engstelle
+      // (0x0a) keine Phantomrunde zaehlt - der Grund, aus dem v0.6.14 die Leseart einzog.
+      return c === START_CODE_PRINT || c === START_CODE_RAIL;
     }
     return START_CODES.indexOf(c) >= 0;
   }
@@ -1276,6 +1283,18 @@
   // Radius ist der aeussere. dreht ist +1 fuer eine Rechtskurve.
   const SPUR_EIN = 0.35;      // Anteil des Kurvenstuecks, der aussen angefahren wird
   const SPUR_MITTE = 0.30;    // Anteil, der innen gefahren wird
+  // BESTELLT (Phase 12, Punkt 7): "Ideallinie Haarnadel ueberarbeiten (kurz aussen, dann
+  // so weit wie moeglich innen)." SPUR_EIN/SPUR_MITTE oben gelten fuer JEDE Kurve
+  // gleich, ob 60 Grad oder Haarnadel - eine Haarnadel bekam damit dieselbe kurze
+  // Aussenphase wie eine offene Kurve und schwenkte dann schon wieder aussen, bevor der
+  // Scheitel ueberhaupt erreicht war.
+  //
+  // NUR ZWEI STUFEN statt drei, wie bestellt: kurz aussen anstellen (SPUR_EIN_HAARNADEL,
+  // deutlich kuerzer als SPUR_EIN), dann fuer den GESAMTEN Rest des Kurvenstuecks innen
+  // bleiben - keine dritte, wieder aussen ziehende Stufe innerhalb der Haarnadel selbst.
+  // Der Ruecksprung nach aussen fuer die folgende Gerade/Kurve passiert ohnehin schon
+  // ausserhalb dieser Funktion (Abschnitt "2. Die Geraden" weiter unten).
+  const SPUR_EIN_HAARNADEL = 0.15;
   // Wie weit ein voller Spurwechsel geht. 1,0 heisst: bis an die Schranke, die "Kurven
   // oeffnen" setzt - dieselbe Schranke wie bei den anderen Modellen, damit der Regler auch
   // hier gilt und nicht nur bei drei von vier Linien.
@@ -1283,6 +1302,60 @@
   // Der Anteil einer Geraden, der schon zum Anfahren der naechsten Kurve gehoert. Der Rest
   // ist Mitte. Begruendung an der Anwendungsstelle.
   const SPUR_GERADE_ANFAHRT = 0.40;
+
+  // ---- Geraden zwischen zwei Kurvenlaeufen: MITTE, dann die Aussenseite der naechsten
+  // Kurve - herausgezogen aus dreiStufenLine(), weil aussenInnenLine() (Phase 12,
+  // Punkt 14: "bei Geradenfolgen sanfter Uebergang zur jeweiligen Aussenseite")
+  // denselben Abschnitt unveraendert braucht. `stuecke` ist eine Liste von
+  // { idx, dreht }, wie sie beide Aufrufer schon aufbauen.
+  //
+  // DIE MITTE GEHOERT DAZU, und das ist eine Berichtigung. Der erste Anlauf liess die
+  // erste Haelfte der Geraden auf der Aussenseite der VORIGEN Kurve stehen und wechselte
+  // dann. Gemessen nahm die Linie damit auf drei geprueften Layouts genau ZWEI Werte an -
+  // +/-8,63, die Mitte kam nie vor. Eine "3-stufige" Linie, die nur zwei Stufen benutzt,
+  // ist keine, und schlimmer: der Unterschied zum 2-Stufen-Ausweichen beim Ueberholen
+  // (SPUR_PASS_AUSSEN in 90-ghosts.js) waere damit leer gewesen. Dort ist die Mitte
+  // ausdruecklich verboten, damit sich zwei Autos die Bahn teilen koennen - ein Verbot,
+  // das nichts verbietet, ist keine Zusage.
+  //
+  // Also drei Stufen mit drei Aufgaben:
+  //
+  //     Kurve     (siehe der jeweilige Aufrufer)     die Kurve selbst
+  //     Gerade    MITTE                              bis kurz vor der naechsten Kurve
+  //     Gerade    aussen der naechsten Kurve         das letzte Stueck, zum Anfahren
+  //
+  // Und die Mitte auf der Geraden ist nicht nur Kosmetik: dort ist zu beiden Seiten Platz,
+  // also kann ein Verfolger vorbei - egal auf welcher Seite. Ein Auto, das die Gerade am
+  // Rand entlangfaehrt, macht genau eine Seite auf.
+  //
+  // SPUR_GERADE_ANFAHRT ist der Anteil der Geraden, der schon zum Anfahren gehoert. 40
+  // Prozent: bei querTempo 4,0 dauert ein voller Spurwechsel 250 ms, eine Kachel bei
+  // Vorgabetempo rund 700 ms - 40 Prozent einer einkacheligen Geraden sind 280 ms und
+  // damit gerade genug. Kuerzer waere ein Anfahren, das erst am Kurveneingang ankommt.
+  function linieGeradenAussenAnfahrt(alpha, stuecke, at, n, limit, spurVoll, closed) {
+    const paare = [];
+    for (let s = 0; s + 1 < stuecke.length; s++) paare.push([s, s + 1]);
+    if (closed && stuecke.length > 1) paare.push([stuecke.length - 1, 0]);
+    for (const [a, b] of paare) {
+      const vonIdx = stuecke[a].idx[stuecke[a].idx.length - 1];
+      const bisIdx = stuecke[b].idx[0];
+      // Die Punkte dazwischen, zyklisch.
+      const zwischen = [];
+      let i = at(vonIdx + 1), sicher = 0;
+      while (i !== bisIdx && sicher++ <= n) { zwischen.push(i); i = at(i + 1); }
+      if (!zwischen.length) continue;     // Kurven stossen direkt aneinander
+      const neu = stuecke[b].dreht * spurVoll * limit;    // aussen der naechsten
+      // Ab hier gehoert die Gerade zum Anfahren der naechsten Kurve. Mindestens ein Punkt,
+      // damit auch eine sehr kurze Gerade noch vorpositioniert - sonst faehrt das Auto den
+      // Kurveneingang aus der Mitte an, und das ist genau der Fall, den SPUR_EIN vermeidet.
+      const abAnfahrt = Math.max(0, zwischen.length
+                                    - Math.max(1, Math.round(zwischen.length
+                                                             * SPUR_GERADE_ANFAHRT)));
+      for (let q = 0; q < zwischen.length; q++) {
+        alpha[zwischen[q]] = q < abAnfahrt ? 0 : neu;
+      }
+    }
+  }
 
   function dreiStufenLine(pts, nrm, o) {
     const n = pts.length;
@@ -1301,7 +1374,84 @@
     }
     const tab = trackKachelTabelle(pts, tiles.length);
     const at = (i) => closed ? ((i % n) + n) % n : Math.max(0, Math.min(n - 1, i));
-    // Je Kurvenlauf die Punktindizes, in Fahrtrichtung.
+    // Je Kurvenlauf die Punktindizes, in Fahrtrichtung - und ob eine Haarnadel/Engstelle
+    // darunter ist: ein Lauf kann mehrere gleichsinnige Kacheln zusammenfassen
+    // (lineKurvenLaeufe), eine davon reicht, um den ganzen Lauf als Haarnadel zu fahren.
+    const stuecke = laeufe.map((lauf) => {
+      const idx = [];
+      let haarnadel = false;
+      for (let kk = lauf.von; kk <= lauf.bis; kk++) {
+        const t = ((kk % tiles.length) + tiles.length) % tiles.length;
+        if (tileTightness(tiles[t].type) >= 2) haarnadel = true;
+        for (let d = 0; d < tab.zahl[t]; d++) idx.push(at(tab.start[t] + d));
+      }
+      return { idx, dreht: lauf.dreht, haarnadel };
+    }).filter((s) => s.idx.length);
+    if (!stuecke.length) {
+      return { alpha, limit, span: 0, lapTime: null, startLapTime: null,
+               v: null, gain: 0, apex: [], par: [], evals: 0, accepted: 0 };
+    }
+    // ---- 1. Die Kurven selbst: aussen, innen, aussen - ausser bei der Haarnadel -----
+    //
+    // BESTELLT: "kurz aussen, dann so weit wie moeglich innen." Eine Haarnadel bekommt
+    // nur zwei Stufen: kurz aussen anstellen (SPUR_EIN_HAARNADEL), dann innen fuer den
+    // GESAMTEN Rest des Kurvenstuecks - keine dritte, wieder aussen ziehende Stufe. Jede
+    // andere Kurve faehrt weiter aussen-innen-aussen wie bisher.
+    for (const st of stuecke) {
+      const m = st.idx.length;
+      const aussen = st.dreht * SPUR_VOLL * limit;
+      const innen = -st.dreht * SPUR_VOLL * limit;
+      if (st.haarnadel) {
+        const bisEin = Math.max(1, Math.round(m * SPUR_EIN_HAARNADEL));
+        for (let q = 0; q < m; q++) alpha[st.idx[q]] = q < bisEin ? aussen : innen;
+        continue;
+      }
+      const bisEin = Math.max(1, Math.round(m * SPUR_EIN));
+      const bisMitte = Math.min(m, bisEin + Math.max(1, Math.round(m * SPUR_MITTE)));
+      for (let q = 0; q < m; q++) {
+        alpha[st.idx[q]] = q < bisEin ? aussen : (q < bisMitte ? innen : aussen);
+      }
+    }
+    // ---- 2. Die Geraden: MITTE, dann die Aussenseite der naechsten Kurve ----------
+    // Siehe linieGeradenAussenAnfahrt() - derselbe Abschnitt, herausgezogen, weil
+    // aussenInnenLine() (Phase 12, Punkt 14) ihn unveraendert mitbenutzt.
+    linieGeradenAussenAnfahrt(alpha, stuecke, at, n, limit, SPUR_VOLL, closed);
+    // Dieselbe Bahn-aus-alpha-Rechnung wie in formLine: Punkt plus Normale mal alpha.
+    const bahn = pts.map((p, i) => [p.x + nrm[i].x * alpha[i],
+                                    p.y + nrm[i].y * alpha[i]]);
+    const prof = lapTimeOf(bahn, closed, o);
+    return { alpha, limit, span: Math.max.apply(null, alpha.map(Math.abs)),
+             lapTime: prof.time, startLapTime: prof.time, v: prof.v, gain: 0,
+             // Kein Scheitel und keine Parameter: dieses Modell sucht nichts. Die Felder
+             // bleiben leer statt zu behaupten, es haette welche.
+             apex: [], par: [], evals: 0, accepted: 0 };
+  }
+
+  // ---- Aussen nach innen: hart an jeder Kurve, sanft auf jeder Geraden --------------
+  //
+  // BESTELLT (Phase 12, Punkt 14): "Kurvenfolge gleicher Richtung aussen anfahren, mit
+  // Kurvenbeginn hart nach innen bis Kurvenende, bei Geradenfolgen sanfter Uebergang zur
+  // jeweiligen Aussenseite."
+  //
+  // Das "aussen anfahren" IST linieGeradenAussenAnfahrt() - dieselbe Funktion, die
+  // dreiStufenLine() fuer ihre Geraden benutzt, unveraendert uebernommen. Neu ist nur
+  // die Kurve selbst: keine Aussenphase am Kurvenbeginn wie bei dreiStufenLine (dort
+  // SPUR_EIN, bei der Haarnadel SPUR_EIN_HAARNADEL) - hier ist JEDE Kurve von der
+  // ERSTEN bis zur LETZTEN Kachel voll innen, "hart" im Wortsinn: kein Uebergang
+  // innerhalb der Kurve, die volle Staerke steht schon auf der allerersten Kachel.
+  function aussenInnenLine(pts, nrm, o) {
+    const n = pts.length;
+    const tiles = o.tiles || [];
+    const closed = o.closed !== false;
+    const limit = (o.limit !== undefined ? o.limit : TRACK_HALF_W - 3);
+    const alpha = new Array(n).fill(0);
+    const laeufe = lineKurvenLaeufe(tiles, closed);
+    if (!laeufe.length || !tiles.length) {
+      return { alpha, limit, span: 0, lapTime: null, startLapTime: null,
+               v: null, gain: 0, apex: [], par: [], evals: 0, accepted: 0 };
+    }
+    const tab = trackKachelTabelle(pts, tiles.length);
+    const at = (i) => closed ? ((i % n) + n) % n : Math.max(0, Math.min(n - 1, i));
     const stuecke = laeufe.map((lauf) => {
       const idx = [];
       for (let kk = lauf.von; kk <= lauf.bis; kk++) {
@@ -1314,72 +1464,102 @@
       return { alpha, limit, span: 0, lapTime: null, startLapTime: null,
                v: null, gain: 0, apex: [], par: [], evals: 0, accepted: 0 };
     }
-    // ---- 1. Die Kurven selbst: aussen, innen, aussen ------------------------------
+    // ---- 1. Die Kurven: von der ersten bis zur letzten Kachel voll innen -----------
     for (const st of stuecke) {
-      const m = st.idx.length;
-      const aussen = st.dreht * SPUR_VOLL * limit;
       const innen = -st.dreht * SPUR_VOLL * limit;
-      const bisEin = Math.max(1, Math.round(m * SPUR_EIN));
-      const bisMitte = Math.min(m, bisEin + Math.max(1, Math.round(m * SPUR_MITTE)));
-      for (let q = 0; q < m; q++) {
-        alpha[st.idx[q]] = q < bisEin ? aussen : (q < bisMitte ? innen : aussen);
-      }
+      for (const idx of st.idx) alpha[idx] = innen;
     }
     // ---- 2. Die Geraden: MITTE, dann die Aussenseite der naechsten Kurve ----------
-    //
-    // DIE MITTE GEHOERT DAZU, und das ist eine Berichtigung. Der erste Anlauf liess die
-    // erste Haelfte der Geraden auf der Aussenseite der VORIGEN Kurve stehen und wechselte
-    // dann. Gemessen nahm die Linie damit auf drei geprueften Layouts genau ZWEI Werte an -
-    // +/-8,63, die Mitte kam nie vor. Eine "3-stufige" Linie, die nur zwei Stufen benutzt,
-    // ist keine, und schlimmer: der Unterschied zum 2-Stufen-Ausweichen beim Ueberholen
-    // (SPUR_PASS_AUSSEN in 90-ghosts.js) waere damit leer gewesen. Dort ist die Mitte
-    // ausdruecklich verboten, damit sich zwei Autos die Bahn teilen koennen - ein Verbot,
-    // das nichts verbietet, ist keine Zusage.
-    //
-    // Also drei Stufen mit drei Aufgaben:
-    //
-    //     Kurve     aussen - innen - aussen        die Kurve selbst
-    //     Gerade    MITTE                          bis kurz vor der naechsten Kurve
-    //     Gerade    aussen der naechsten Kurve     das letzte Stueck, zum Anfahren
-    //
-    // Und die Mitte auf der Geraden ist nicht nur Kosmetik: dort ist zu beiden Seiten Platz,
-    // also kann ein Verfolger vorbei - egal auf welcher Seite. Ein Auto, das die Gerade am
-    // Rand entlangfaehrt, macht genau eine Seite auf.
-    //
-    // SPUR_GERADE_ANFAHRT ist der Anteil der Geraden, der schon zum Anfahren gehoert. 40
-    // Prozent: bei querTempo 4,0 dauert ein voller Spurwechsel 250 ms, eine Kachel bei
-    // Vorgabetempo rund 700 ms - 40 Prozent einer einkacheligen Geraden sind 280 ms und
-    // damit gerade genug. Kuerzer waere ein Anfahren, das erst am Kurveneingang ankommt.
-    const paare = [];
-    for (let s = 0; s + 1 < stuecke.length; s++) paare.push([s, s + 1]);
-    if (closed && stuecke.length > 1) paare.push([stuecke.length - 1, 0]);
-    for (const [a, b] of paare) {
-      const vonIdx = stuecke[a].idx[stuecke[a].idx.length - 1];
-      const bisIdx = stuecke[b].idx[0];
-      // Die Punkte dazwischen, zyklisch.
-      const zwischen = [];
-      let i = at(vonIdx + 1), sicher = 0;
-      while (i !== bisIdx && sicher++ <= n) { zwischen.push(i); i = at(i + 1); }
-      if (!zwischen.length) continue;     // Kurven stossen direkt aneinander
-      const neu = stuecke[b].dreht * SPUR_VOLL * limit;    // aussen der naechsten
-      // Ab hier gehoert die Gerade zum Anfahren der naechsten Kurve. Mindestens ein Punkt,
-      // damit auch eine sehr kurze Gerade noch vorpositioniert - sonst faehrt das Auto den
-      // Kurveneingang aus der Mitte an, und das ist genau der Fall, den SPUR_EIN vermeidet.
-      const abAnfahrt = Math.max(0, zwischen.length
-                                    - Math.max(1, Math.round(zwischen.length
-                                                             * SPUR_GERADE_ANFAHRT)));
-      for (let q = 0; q < zwischen.length; q++) {
-        alpha[zwischen[q]] = q < abAnfahrt ? 0 : neu;
-      }
-    }
-    // Dieselbe Bahn-aus-alpha-Rechnung wie in formLine: Punkt plus Normale mal alpha.
-    const bahn = pts.map((p, i) => [p.x + nrm[i].x * alpha[i],
-                                    p.y + nrm[i].y * alpha[i]]);
+    linieGeradenAussenAnfahrt(alpha, stuecke, at, n, limit, SPUR_VOLL, closed);
+    const bahn = pts.map((p, i) => [p.x + nrm[i].x * alpha[i], p.y + nrm[i].y * alpha[i]]);
     const prof = lapTimeOf(bahn, closed, o);
     return { alpha, limit, span: Math.max.apply(null, alpha.map(Math.abs)),
              lapTime: prof.time, startLapTime: prof.time, v: prof.v, gain: 0,
-             // Kein Scheitel und keine Parameter: dieses Modell sucht nichts. Die Felder
-             // bleiben leer statt zu behaupten, es haette welche.
+             apex: [], par: [], evals: 0, accepted: 0 };
+  }
+
+  // ---- Fahrbahnmitte: die denkbar einfachste Linie ----------------------------------
+  //
+  // BESTELLT (Phase 12, Punkt 12): ein Modus, der schlicht die Mitte der Fahrbahn haelt -
+  // kein Scheitel, keine Seite, kein Layout noetig. Braucht kein `tiles`, weil es nichts
+  // gibt, das es daraus lesen muesste.
+  function mitteLine(pts, nrm, o) {
+    const n = pts.length;
+    const closed = o.closed !== false;
+    const alpha = new Array(n).fill(0);
+    const bahn = pts.map((p) => [p.x, p.y]);
+    const prof = lapTimeOf(bahn, closed, o);
+    return { alpha, limit: (o.limit !== undefined ? o.limit : TRACK_HALF_W - 3), span: 0,
+             lapTime: prof.time, startLapTime: prof.time, v: prof.v, gain: 0,
+             apex: [], par: [], evals: 0, accepted: 0 };
+  }
+
+  // ---- Innenseite, gemittelt ueber die naechsten drei Kacheln -----------------------
+  //
+  // BESTELLT (Phase 12, Punkt 12): "innere Seite gemittelt ueber die naechsten 3 Teile."
+  // Anders als dreiStufenLine() (springt an jeder Kachelgrenze hart zwischen aussen und
+  // innen) mittelt dieses Modell die Drehrichtung (kurvenDrehung(), -1/0/+1) der
+  // aktuellen Kachel und der beiden folgenden zu EINEM weichen Wert je Kachel - eine
+  // kurze Kurve zwischen zwei Geraden zieht die Linie also nur teilweise nach innen
+  // statt sie hart umzuschalten, und eine Schikane (links-rechts kurz hintereinander)
+  // mittelt sich teilweise gegeneinander weg statt zweimal hart zu springen.
+  //
+  // BESTELLT (Nachtrag): "mach, dass sie schraeg ueber die Geraden geht, nicht dann von
+  // jeder Schiene auf die naechste ein Sprung passiert." Der Mittelwert selbst stand
+  // schon richtig da, wurde aber als FLACHES Plateau je Kachel aufgetragen - der Sprung
+  // sass exakt an jeder Kachelgrenze. Jetzt ist jede Kachel eine eigene Rampe: sie
+  // beginnt an ihrem eigenen Wert (drehMittel[t], "wo ich jetzt bin") und lauft bis zum
+  // Kachelende linear auf den Wert der NAECHSTEN Kachel zu ("wohin ich als naechstes
+  // muss") - am Kachelende, also am Anfang der naechsten, steht dadurch schon derselbe
+  // Wert, mit dem die naechste Rampe beginnt. Keine zwei Kacheln behaupten an ihrer
+  // gemeinsamen Grenze mehr zwei verschiedene Werte.
+  function innenGemitteltLine(pts, nrm, o) {
+    const n = pts.length;
+    const tiles = o.tiles || [];
+    const closed = o.closed !== false;
+    const limit = (o.limit !== undefined ? o.limit : TRACK_HALF_W - 3);
+    const alpha = new Array(n).fill(0);
+    if (!tiles.length) {
+      const bahn = pts.map((p) => [p.x, p.y]);
+      const prof = lapTimeOf(bahn, closed, o);
+      return { alpha, limit, span: 0, lapTime: prof.time, startLapTime: prof.time,
+               v: prof.v, gain: 0, apex: [], par: [], evals: 0, accepted: 0 };
+    }
+    const tCount = tiles.length;
+    const tab = trackKachelTabelle(pts, tCount);
+    const at = (i) => closed ? ((i % n) + n) % n : Math.max(0, Math.min(n - 1, i));
+    // Am offenen Streckenende (nicht closed) wird nicht ueber das Ende hinaus gemittelt -
+    // die letzten Kacheln mitteln also ueber weniger als drei, statt faelschlich mit der
+    // ersten Kachel der Strecke weiterzurechnen.
+    const drehMittel = tiles.map((t, i) => {
+      let summe = 0, zahl = 0;
+      for (let k = 0; k < 3; k++) {
+        const idx = i + k;
+        if (!closed && idx >= tCount) break;
+        summe += kurvenDrehung(tiles[closed ? idx % tCount : idx].type);
+        zahl++;
+      }
+      return zahl ? summe / zahl : 0;
+    });
+    for (let t = 0; t < tCount; t++) {
+      const m = tab.zahl[t];
+      const hatNaechste = closed || t + 1 < tCount;
+      const ziel = hatNaechste ? drehMittel[(t + 1) % tCount] : drehMittel[t];
+      for (let d = 0; d < m; d++) {
+        // Anteil nach INDEX und nicht nach Weglaenge: anders als bei
+        // lineGeradenPlan()/lineGeradenAnwenden() (fuer die Geraden ZWISCHEN zwei
+        // Kurven bei dreiStufenLine/aussenInnenLine) hat hier JEDE einzelne Kachel
+        // ihren eigenen, bedeutungsvollen Zielwert - eine Weglaengen-Gewichtung ueber
+        // mehrere Kacheln hinweg wuerde diese einzelnen Ziele wieder verschlucken.
+        const frac = m > 0 ? d / m : 0;
+        const wert = drehMittel[t] + (ziel - drehMittel[t]) * frac;
+        alpha[at(tab.start[t] + d)] = -wert * SPUR_VOLL * limit;
+      }
+    }
+    const bahn = pts.map((p, i) => [p.x + nrm[i].x * alpha[i], p.y + nrm[i].y * alpha[i]]);
+    const prof = lapTimeOf(bahn, closed, o);
+    return { alpha, limit, span: Math.max.apply(null, alpha.map(Math.abs)),
+             lapTime: prof.time, startLapTime: prof.time, v: prof.v, gain: 0,
              apex: [], par: [], evals: 0, accepted: 0 };
   }
 
@@ -1423,14 +1603,22 @@
   //
   // Die drei anderen bleiben waehlbar - sie sind als OPTIMIERUNG richtig und zeigen, wo eine
   // schnellste Linie laege. Sie sind nur nicht das, was dieses Fahrzeug fahren kann.
-  let lineModel = 'dreistufig';
+  //
+  // ---- LUUKE-LINIE IST DIE VORGABE ------------------------------------------------------
+  //
+  // v0.7.57 stellte auf "Innen (gemittelt)" um ("ideallinie standard: innen"). GEMELDET
+  // danach: die Ghosts "sind tuer an tuer gefahren" - innen3 kommt nie auf die Aussenseite
+  // (siehe dort), alle Ghosts draengen sich also auf dieselbe Bahnhaelfte. Und: "Luuke-
+  // Modus ist gut". Zurueck auf Luuke - Innen bleibt waehlbar.
+  let lineModel = 'luuke';
 
   // Die gueltigen Modellnamen an EINER Stelle. Vorher stand die Liste als zwei
   // Vergleiche in setLineModel und ein weiteres Mal als Bedingung in buildLine - beim
   // dritten Modell waeren das drei Orte fuer eine Liste gewesen.
   // 'dreistufig' ist KEINE Optimierung und steht deshalb am Ende: die drei davor suchen
   // ein Optimum, dieses folgt einer Vorschrift. Die Begruendung steht bei dreiStufenLine().
-  const LINE_MODELLE = ['curvature', 'laptime', 'lateapex', 'dreistufig'];
+  const LINE_MODELLE = ['curvature', 'laptime', 'lateapex', 'dreistufig', 'mitte', 'innen3',
+                        'aussenin', 'luuke'];
 
   function setLineModel(m) {
     if (LINE_MODELLE.indexOf(m) < 0) return;
@@ -1687,6 +1875,353 @@
     return plan ? lineGeradenAnwenden(alpha.slice(), plan) : alpha;
   }
 
+  // ======================= LUUKE-LINIE ================================================
+  //
+  // BESTELLT: eigener, von Hand vorgegebener Ideallinien-Modus, aus sechs
+  // Beispiel-Streckenverlaeufen mit Querlage-Ankern hergeleitet (-100 = ganz links,
+  // +100 = ganz rechts, 0 = Mitte - dieselbe Skala, in der die Beispiele geliefert
+  // wurden). Fuenf der sechs Beispiele sind verlaesslich (eines, SR3L3, passte nicht zur
+  // eigenen Kachelzahl und ist auf Anweisung fallengelassen):
+  //
+  //   SGR3G      0, -50, -100, 100, -50, 100
+  //   SRLG       0, 100, 0, -100
+  //   SGHG       0, -50, -75, 0
+  //   SR2GL2G    0, -100, 100, 0, 100, -100, 100
+  //   SR2G2RG2   0, -100, 100, -100, -100, 100, 0, -100
+  //
+  // DIE FUEHRENDE 0 JE ZEILE IST DIE STARTKACHEL - in allen fuenf Beispielen zufaellig 0,
+  // aber NICHT als eigene Vorgabe zu lesen (siehe Punkt 7 unten: ihr Anker wird
+  // inzwischen berechnet, nicht mehr aus den Beispielen abgeschrieben).
+  //
+  // DIE REGEL, tileweise hergeleitet und gegen alle 34 Zahlen der fuenf Beispiele
+  // geprueft (31 von 34 treffen exakt, zwei Ausreisser bleiben offen - siehe unten):
+  //
+  //   1. KURVENLAEUFE (lineKurvenLaeufe(), schon vorhanden fuer dreiStufenLine): der
+  //      Scheitel sitzt auf Lauf-Position min(1, Lauflaenge-1) - bei Laenge 1 die einzige
+  //      Kachel, bei Laenge 2 die zweite, bei Laenge 3 die MITTLERE (nicht die letzte).
+  //   2. Scheitel: volles Innen (=Kurvenrichtung), Betrag 100 - AUCH bei Schaerfeklasse 2
+  //      (Haarnadel/Enge). Stand hier frueher als Ausnahme bei -75 * Richtung (Aussen,
+  //      nur 75), belegt an einem einzelnen Beispiel (SGHG) und als offene Frage markiert
+  //      ("Vorzeichen-Dreher oder bewusstes Aussenfahren?"). BESTELLT (Antwort): "in
+  //      haarnadel weiter innen" - kein bewusstes Aussenfahren, die Ausnahme ist
+  //      aufgehoben. Den kurzen Aussen-Touch am Einstieg einer Haarnadel bildet seither
+  //      luukeLinie() selbst ab (eigenes Drei-Phasen-Profil je Kachel statt der
+  //      allgemeinen Zwei-Halbrampen-Form, siehe dort), nicht mehr der Anker selbst.
+  //   3. Erste Kachel eines Laufs (wenn nicht Scheitel): volles Aussen, Betrag 100 (bzw.
+  //      50 bei Schaerfeklasse 0, den weiten Kurven - keine Beispiele dafuer, aus der
+  //      Schaerfeklasse selbst hergeleitet: halbe Wirkung fuer ein Drittel der
+  //      Querbeschleunigung).
+  //   4. Kacheln NACH dem Scheitel, noch im selben Lauf: halbes Aussen (Betrag 50) - nur
+  //      mit einem Beleg (SGR3G, Laufl. 3) geprueft, fuer laengere Laeufe unbestaetigt.
+  //   5. EIN LAUF DER LAENGE 1, UNMITTELBAR (ohne Gerade dazwischen) einem gegensinnigen
+  //      Lauf folgend, ist "gedaempft": seine einzige Kachel wird 0 statt des Scheitels,
+  //      und der volle Scheitelwert wandert auf die naechste Kachel weiter, WENN diese
+  //      eine einfache Gerade ist (keine Startkachel, keine weitere Kurve) - belegt an
+  //      SRLG (R triftt L ohne Puffer: R selbst bleibt bei +100, L wird zu 0, die
+  //      folgende Gerade traegt den vollen Linksscheitel -100). Nur ein Beleg, als
+  //      Sonderfall uebernommen.
+  //   6. GERADEN (nicht die Startkachel, siehe Punkt 7): siehe luukeGeradenWert() - weder
+  //      reine Interpolation noch symmetrischer Zerfall passten auf die Daten, sondern
+  //      ein Blick nach vorn UND zurueck:
+  //        - Unmittelbar NACH der Startkachel: halbes Aussen Richtung naechstem Lauf,
+  //          aber nur, wenn dieser genau eine Kachel entfernt ist (SGR3G, SGHG).
+  //        - Unmittelbar nach dem Verlassen eines Laufs: volles Aussen Richtung des
+  //          naechsten Laufs, aber NUR wenn dieser hoechstens zwei Kacheln entfernt ist
+  //          UND gleichsinnig zum gerade verlassenen Lauf dreht (SR2G2RG2, beide Luecken)
+  //          - sonst 0 (Ruecksprung zur Mitte, SGHG/SR2GL2G/SR2G2RG2).
+  //   7. DIE STARTKACHEL selbst steht NICHT fest auf 0 (anders als in den fuenf
+  //      Beispielen, wo sie es zufaellig immer war). BESTELLT (Korrektur, nachdem Punkt
+  //      6 oben schon stand): "nicht bei Start immer in der Mitte, sondern so, dass man
+  //      von der Schiene davor und danach moeglichst wenig lenken muss." Ihr Anker ist
+  //      deshalb der MITTELWERT der beiden Nachbarkacheln (davor und danach je einmal um
+  //      die Naht herum) - das teilt die noetige Lenkbewegung gleichmaessig auf beide
+  //      Rampen auf, statt zusaetzlich ueber die Mitte zu erzwingen. Berechnet NACH allen
+  //      anderen Ankern; siehe der Kommentar an der Berechnung selbst, warum das keine
+  //      Ringabhaengigkeit ist.
+  //
+  //   ZWEI OFFENE RESTFRAGEN, nicht stillschweigend festgelegt (an Luuke zurueckspielen):
+  //     - SGR3G und SR2GL2G haben je EINE Gerade unmittelbar vor der Startkachel (nach
+  //       dem Verlassen eines Laufs, gleichsinnig zum naechsten Lauf ueber die Naht
+  //       hinweg), deren Wert (+100 in beiden Faellen) die Geraden-Regel (Punkt 6) nicht
+  //       erklaert - sie wuerde 0 vorhersagen (Ruecksprung zur Mitte). Beide Belege zeigen
+  //       ausgerechnet +100, nicht irgendeinen Wert - zu konsistent fuer reines Rauschen,
+  //       aber ohne erklaerenden Mechanismus. Vorschlag: 0 lassen (die haeufigere,
+  //       bestaetigte Regel), beide Faelle als offene Frage vermerkt. Punkt 7 (Startkachel
+  //       nicht mehr fest auf 0) aendert daran nichts: die Restfrage betrifft die Gerade
+  //       VOR der Startkachel, nicht die Startkachel selbst.
+  //     - Der Haarnadel-Scheitel (-75, Punkt 2 oben) koennte ebenso gut ein
+  //       Vorzeichendreher beim Eintippen sein (+75 waere das erwartete Vorzeichen).
+  //       Uebernommen wie geliefert, mit derselben Markierung.
+  //
+  // NEUER RICHTUNGS-HELFER FUER WEITE/KLEINE KURVEN: kurvenDrehung() liefert fuer sie
+  // bewusst 0 (siehe dort) - eine echte Luecke, aber dreistufig/innen3/aussenin haengen
+  // an genau dieser 0, also wird kurvenDrehung() selbst NICHT angefasst. luukeDrehung()
+  // ist ein PARALLELER Helfer, nur fuer dieses Modell.
+  function luukeDrehung(t) {
+    if (t === TILE_TYPE.CURVE_RIGHT || t === TILE_TYPE.HAIRPIN
+        || t === TILE_TYPE.WEIT_RIGHT || t === TILE_TYPE.KLEIN_RIGHT) return 1;
+    if (t === TILE_TYPE.CURVE_LEFT || t === TILE_TYPE.HAIRPIN_LEFT
+        || t === TILE_TYPE.WEIT_LEFT || t === TILE_TYPE.KLEIN_LEFT) return -1;
+    return 0;
+  }
+
+  // Kurvenlaeufe wie lineKurvenLaeufe(), nur mit luukeDrehung() statt kurvenDrehung() -
+  // sonst wuerden weite/kleine Kurven hier gar nicht erst als Lauf gezaehlt.
+  function luukeLaeufe(tiles, closed) {
+    const n = tiles.length;
+    const laeufe = [];
+    let i = 0;
+    while (i < n) {
+      const d = luukeDrehung(tiles[i].type);
+      if (!d) { i++; continue; }
+      let j = i;
+      while (j + 1 < n && luukeDrehung(tiles[j + 1].type) === d) j++;
+      laeufe.push({ von: i, bis: j, dreht: d });
+      i = j + 1;
+    }
+    if (closed && laeufe.length > 1) {
+      const erst = laeufe[0], letzt = laeufe[laeufe.length - 1];
+      if (erst.von === 0 && letzt.bis === n - 1 && erst.dreht === letzt.dreht) {
+        letzt.bis = erst.bis + n;
+        laeufe.shift();
+      }
+    }
+    return laeufe;
+  }
+
+  // 100 fuer Schaerfeklasse 1 und 2 (Standard-/Kleinkurve, Haarnadel/Enge), 50 fuer
+  // Klasse 0 (Weitkurve) - hergeleitet aus der Querbeschleunigung (ein Drittel des
+  // Radius bei gleichem Tempo), nicht aus einem Beispiel: keine der fuenf Vorlagen
+  // enthaelt eine Weitkurve.
+  function luukeBase(tightness) { return tightness === 0 ? 50 : 100; }
+
+  // Geraden - NICHT die Startkachel, die bekommt ihren eigenen Anker separat (Punkt 7
+  // oben) - siehe Punkt 6 oben.
+  function luukeGeradenWert(i, tiles, runOf, closed, at) {
+    const n = tiles.length;
+    const justAfterS = (closed || i > 0) && tiles[at(i - 1)].type === TILE_TYPE.START;
+    let prevRun = null;
+    for (let back = 1; back <= n; back++) {
+      if (!closed && i - back < 0) break;
+      const idx = at(i - back);
+      if (runOf[idx]) { prevRun = runOf[idx]; break; }
+    }
+    let nextRun = null, dist = null;
+    for (let fwd = 1; fwd <= n; fwd++) {
+      if (!closed && i + fwd >= n) break;
+      const idx = at(i + fwd);
+      if (runOf[idx]) { nextRun = runOf[idx]; dist = fwd; break; }
+    }
+    if (justAfterS) {
+      if (nextRun && dist === 1) {
+        const tight = tileTightness(tiles[at(nextRun.von)].type);
+        return -0.5 * luukeBase(tight) * nextRun.dreht;
+      }
+      return 0;
+    }
+    if (nextRun && prevRun && dist <= 2 && nextRun.dreht === prevRun.dreht) {
+      const tight = tileTightness(tiles[at(nextRun.von)].type);
+      return -luukeBase(tight) * nextRun.dreht;
+    }
+    return 0;
+  }
+
+  // Die Querlage-Anker je Kachel, auf der -100..100-Skala der Beispiele (noch keine
+  // alpha-Werte - das macht luukeLinie() daraus, mit der Vorzeichenumkehr und der
+  // Fahrgrenze).
+  function luukeLinieAnker(tiles, closed) {
+    const n = tiles.length;
+    const anker = new Array(n).fill(0);
+    if (!n) return anker;
+    const at = (i) => ((i % n) + n) % n;
+    const laeufe = luukeLaeufe(tiles, closed);
+    const runOf = new Array(n).fill(null);
+    laeufe.forEach((lauf) => {
+      for (let p = lauf.von; p <= lauf.bis; p++) runOf[at(p)] = lauf;
+    });
+
+    const override = new Map();
+    laeufe.forEach((lauf) => {
+      const len = lauf.bis - lauf.von + 1;
+      const d = lauf.dreht;
+      const tight = tileTightness(tiles[at(lauf.von)].type);
+      const base = luukeBase(tight);
+      const apexPos = Math.min(1, len - 1);
+      // Unmittelbar (ohne Puffer) einem gegensinnigen Lauf folgend? Siehe Punkt 5 oben.
+      let vor = null;
+      for (const other of laeufe) {
+        if (other !== lauf && at(other.bis + 1) === at(lauf.von)) { vor = other; break; }
+      }
+      const gedaempft = len === 1 && vor && vor.dreht === -d;
+      for (let p = 0; p < len; p++) {
+        const idx = at(lauf.von + p);
+        let wert;
+        // HAARNADEL-SCHEITEL: FRUEHERE SONDERREGEL AUFGEGEBEN. Stand bisher bei -75 * d
+        // (AUSSEN statt innen, nur 75 statt 100) - der einzige Beleg dafuer war ein
+        // einzelnes Beispiel (SGHG), als offene Frage an Luuke dokumentiert ("entweder
+        // Haarnadeln werden bewusst zur Aussenseite hin gefahren, oder es ist ein
+        // Vorzeichen-Dreher"). BESTELLT (Antwort, diese Runde): "in haarnadel weiter
+        // innen (am anfang kurz aussen, danach sofort nach innen)" - die Frage ist damit
+        // beantwortet: Vorzeichen-Dreher, kein bewusstes Aussenfahren. Der Scheitel folgt
+        // jetzt derselben allgemeinen Regel wie jede andere Kurve (Betrag 100, volles
+        // Innen); den kurzen Aussen-Touch am Anfang bildet stattdessen luukeLinie() selbst
+        // ab (das Drei-Phasen-Profil dort, siehe die Begruendung an ihrer eigenen Stelle).
+        if (p === apexPos) wert = base * d;
+        else if (p === 0) wert = -base * d;
+        else {
+          // NACH DEM SCHEITEL: BESTELLT (Korrektur), an einem Lauf von vier Rechtskurven
+          // beobachtet - "sollte das Auto erst ab der letzten oder vorletzten Kurve nach
+          // aussen driften, um herauszubeschleunigen." Die alte Fassung liess JEDE Kachel
+          // nach dem Scheitel sofort auf halbes Aussen fallen (-0,5*base*d) - das war nur
+          // an einem LAUF DER LAENGE 3 belegt (SGR3G), wo "sofort nach dem Scheitel" und
+          // "die letzte Kachel des Laufs" dieselbe Kachel sind und sich nicht
+          // unterscheiden liessen. Ab Lauflaenge 4 zeigt sich der Unterschied: die
+          // Kacheln VOR den letzten beiden halten jetzt den Scheitel (volles Innen),
+          // die vorletzte beginnt den Wechsel, und erst die letzte erreicht den
+          // bestaetigten Wert -0,5*base*d. Nur die letzte Kachel ist an Daten (SGR3G)
+          // belegt; die vorletzte (0,25*base*d) und "davor voll halten" sind eine
+          // Erweiterung nach der obigen Beobachtung, keine zweite Messung.
+          const distZumEnde = (len - 1) - p;
+          if (distZumEnde >= 2) wert = base * d;
+          else if (distZumEnde === 1) wert = 0.25 * base * d;
+          else wert = -0.5 * base * d;
+        }
+        if (gedaempft && p === apexPos) {
+          anker[idx] = 0;
+          const naechsterIdx = at(lauf.bis + 1);
+          if (!runOf[naechsterIdx] && tiles[naechsterIdx].type !== TILE_TYPE.START) {
+            override.set(naechsterIdx, wert);
+          }
+        } else {
+          anker[idx] = wert;
+        }
+      }
+    });
+
+    let startIdx = -1;
+    for (let i = 0; i < n; i++) {
+      if (runOf[i]) continue;
+      if (tiles[i].type === TILE_TYPE.START) { startIdx = i; continue; }
+      if (override.has(i)) { anker[i] = override.get(i); continue; }
+      anker[i] = luukeGeradenWert(i, tiles, runOf, closed, at);
+    }
+    // DIE STARTKACHEL NICHT MEHR FEST AUF 0: BESTELLT, "nicht bei Start immer in der
+    // Mitte, sondern so, dass man von der Schiene davor und danach moeglichst wenig
+    // lenken muss." Der Mittelwert der beiden Nachbarn teilt die noetige Lenkbewegung
+    // gleichmaessig auf die Rampe davor UND danach auf, statt zusaetzlich ueber die
+    // Mitte zu erzwingen - eine dritte, unnoetige Wende. Erst NACH allen anderen Ankern
+    // berechnet: luukeGeradenWert() und die gedaempfte Uebergabe oben pruefen nur den
+    // TYP der Startkachel (TILE_TYPE.START), nie ihren Zahlenwert - keine Ringabhaengigkeit.
+    if (startIdx >= 0 && n > 1) {
+      const vorIdx = at(startIdx - 1), nachIdx = at(startIdx + 1);
+      anker[startIdx] = (anker[vorIdx] + anker[nachIdx]) / 2;
+    }
+    return anker;
+  }
+
+  // Anker -> alpha: dieselbe Vorzeichenabbildung wie innenGemitteltLine() (alpha = -wert
+  // * limit, hier auf die -100..100-Skala bezogen statt auf SPUR_VOLL).
+  //
+  // DER ANKER GILT AN DER KACHELMITTE, nicht am Kachelanfang - BESTELLT (Korrektur,
+  // Bild einer Haarnadel mit einem Buckel am Innenrand): die vorige Fassung rampte von
+  // "diese Kachel" (bei Abtastpunkt 0) zu "naechste Kachel" (beim ERSTEN Punkt der
+  // naechsten Kachel) UEBER DIE GANZE Kachel hinweg - der eigentliche Kachelwert (z. B.
+  // der Scheitel einer Haarnadel) war damit nur fuer einen einzigen Abtastpunkt am
+  // Kachelanfang wahr und danach sofort wieder auf dem Weg zum naechsten Wert. Bei einer
+  // langen Kachel (eine Haarnadel hat 49 statt 14 Abtastpunkte) heisst das: der Scheitel
+  // wird nie wirklich GEFAHREN, nur gestreift. Jetzt zwei Halbrampen je Kachel, von der
+  // eigenen Mitte zu den GRENZEN (nicht zu den fremden Mitten) - der eigene Wert sitzt an
+  // der Kachelmitte, jede Grenze zur Nachbarkachel am MITTELWERT der beiden angrenzenden
+  // Kachelwerte.
+  //
+  // GEFUNDEN BEIM BAUEN, und zwar an einem echten Sprung, nicht nur einem Verdacht: eine
+  // erste Fassung liess die zweite Haelfte einer Kachel bis zum vollen Wert der NAECHSTEN
+  // Kachel rampen (und die erste Haelfte der naechsten Kachel wieder zurueck bis zum
+  // vollen Wert DIESER Kachel) - an der gemeinsamen Grenze trafen sich damit zwei
+  // GEGENSAETZLICHE Ziele (der Wert der jeweils ANDEREN Kachel) statt desselben Werts,
+  // und alpha sprang dort um bis zu 194 % der gesamten Fahrgrenze in einem einzigen
+  // Abtastschritt (gemessen an SR3GLR2GR2G2, Kachel 1/2: Sprung 16,75 bei einer Grenze
+  // von 8,63). Der Bericht dazu: "die luuke linie ist nun voellig wirr". Jetzt endet jede
+  // Halbrampe am MITTELWERT der eigenen und der Nachbarkachel - denselben Wert, den die
+  // Nachbarkachel an IHRER Seite derselben Grenze auch ansteuert. SMOOTHSTEP (3u^2 - 2u^3)
+  // je Halbrampe, Steigung null an Kachelmitte UND Kachelgrenze.
+  function luukeLinie(pts, nrm, o) {
+    const n = pts.length;
+    const tiles = o.tiles || [];
+    const closed = o.closed !== false;
+    const limit = (o.limit !== undefined ? o.limit : TRACK_HALF_W - 3);
+    const alpha = new Array(n).fill(0);
+    if (!tiles.length) {
+      const bahn = pts.map((p) => [p.x, p.y]);
+      const prof = lapTimeOf(bahn, closed, o);
+      return { alpha, limit, span: 0, lapTime: prof.time, startLapTime: prof.time,
+               v: prof.v, gain: 0, apex: [], par: [], evals: 0, accepted: 0 };
+    }
+    const tCount = tiles.length;
+    const tab = trackKachelTabelle(pts, tCount);
+    const anker = luukeLinieAnker(tiles, closed);
+    const at = (i) => closed ? ((i % n) + n) % n : Math.max(0, Math.min(n - 1, i));
+    const smooth = (u) => u * u * (3 - 2 * u);
+    let grenzeStart = 0;
+    for (let t = 0; t < tCount; t++) {
+      const m = tab.zahl[t];
+      const hatVorherige = closed || t > 0;
+      const hatNaechste = closed || t + 1 < tCount;
+      const aVor = hatVorherige ? anker[(t - 1 + tCount) % tCount] : anker[t];
+      const aHier = anker[t];
+      const aNach = hatNaechste ? anker[(t + 1) % tCount] : anker[t];
+      // Grenzwerte: der MITTELWERT zu jeder Nachbarkachel, nicht deren voller Wert -
+      // dieselbe Zahl, die die Nachbarkachel an ihrer Seite derselben Grenze ansteuert.
+      //
+      // HAARNADEL: BESTELLT (Korrektur der vorigen Runde): "Haarnadel muss insgesamt enger
+      // werden (mittig rein und raus und dazwischen so weit innen wie moeglich)." Jede
+      // Grenze, an der eine Haarnadel liegt, sitzt deshalb auf der MITTE (0) - fuer die
+      // Haarnadel selbst UND fuer ihre Nachbarkachel, die an derselben Grenze denselben
+      // Wert ansteuern muss (sonst springt alpha dort, siehe "voellig wirr" oben).
+      const hp = (i) => tileTightness(tiles[((i % tCount) + tCount) % tCount].type) === 2;
+      const istHaarnadel = hp(t);
+      const grenzeVorn = (hatVorherige && (istHaarnadel || hp(t - 1))) ? 0 : (aVor + aHier) / 2;
+      const grenzeHinten = (hatNaechste && (istHaarnadel || hp(t + 1))) ? 0 : (aHier + aNach) / 2;
+      if (t === 0) grenzeStart = grenzeVorn;
+      // In der Haarnadel: von der Mitte schnell auf volles Innen (bis HOLD_U), halten bis
+      // EXIT_U, dann zurueck zur Mitte. Der kurze Aussen-Touch der vorigen Fassung ist weg.
+      const HOLD_U = 0.2, EXIT_U = 0.8;
+      for (let d = 0; d < m; d++) {
+        const u = m > 0 ? (d + 0.5) / m : 0.5;
+        let wert;
+        if (istHaarnadel) {
+          wert = u < HOLD_U
+            ? grenzeVorn + (aHier - grenzeVorn) * smooth(u / HOLD_U)
+            : u < EXIT_U
+              ? aHier
+              : aHier + (grenzeHinten - aHier) * smooth((u - EXIT_U) / (1 - EXIT_U));
+        } else {
+          wert = u < 0.5
+            ? grenzeVorn + (aHier - grenzeVorn) * smooth(u / 0.5)
+            : aHier + (grenzeHinten - aHier) * smooth((u - 0.5) / 0.5);
+        }
+        alpha[at(tab.start[t] + d)] = -(wert / 100) * limit;
+      }
+    }
+    // DER VORPUNKT (tile: -1, trackCenterline() haengt ihn vor Kachel 0 an, siehe dort)
+    // bekommt NIE einen Anker aus der obigen Schleife - trackKachelTabelle() ueberspringt
+    // ihn ausdruecklich. alpha[0] blieb dadurch auf dem Fuellwert 0 stehen, waehrend
+    // alpha[1] (der erste echte Punkt der Start-Kachel) jetzt einen echten Ankerwert
+    // tragen kann, seit Start ihren Anker aus den Nachbarn mittelt statt fest 0 zu sein.
+    // Gemessen an SR4G/SR2G2RG2/SR3GLR2GR2G2: genau dort sprang alpha um den VOLLEN
+    // Lenkausschlag zwischen den ersten zwei Punkten - eine Nadel exakt auf der Start/
+    // Ziel-Linie, spuerbar als Ruck genau dort. pts[0] liegt geometrisch unmittelbar vor
+    // pts[1] (ein Abtastschritt Abstand), bekommt also densselben Grenzwert, den Kachel 0
+    // an ihrem eigenen Anfang ansteuert (grenzeStart) - keinen Sprung mehr, weil beide
+    // Punkte dann zur selben Grenze zeigen.
+    if (n > 0) alpha[0] = -(grenzeStart / 100) * limit;
+    const bahn = pts.map((p, i) => [p.x + nrm[i].x * alpha[i], p.y + nrm[i].y * alpha[i]]);
+    const prof = lapTimeOf(bahn, closed, o);
+    return { alpha, limit, span: Math.max.apply(null, alpha.map(Math.abs)),
+             lapTime: prof.time, startLapTime: prof.time, v: prof.v, gain: 0,
+             apex: [], par: [], evals: 0, accepted: 0 };
+  }
+
   // Beide Modelle hinter einem Aufruf. Editor und Ghosts gehen hier durch, damit die
   // gezeichnete und die gefahrene Linie nicht auseinanderlaufen koennen.
   function buildLine(pts, nrm, opts) {
@@ -1711,11 +2246,18 @@
     // 'dreistufig' BRAUCHT das Layout: seine ganze Vorschrift ist "aussen an der naechsten
     // Kurve", und ohne Kacheln gibt es keine naechste Kurve. Ohne Layout faellt es deshalb
     // auf das punktweise Rundenzeitmodell zurueck - wie die anderen zwei layoutgebundenen.
-    const line = !mitLayout
+    // 'mitte' braucht kein Layout und wird deshalb VOR der mitLayout-Weiche entschieden -
+    // die einzige Ausnahme, weil es die einzige Linie ist, der ein Layout schlicht
+    // gleichgueltig ist.
+    const line = m === 'mitte' ? mitteLine(pts, nrm, o)
+      : !mitLayout
         ? (m === 'curvature' ? idealLine(pts, nrm, o) : lapTimeLine(pts, nrm, o))
       : m === 'curvature' ? formLine(pts, nrm, o, 'kurve', 0.15, 0.85)
       : m === 'lateapex' ? formLine(pts, nrm, o, 'zeit', LATE_APEX_MIN, LATE_APEX_MAX)
       : m === 'dreistufig' ? dreiStufenLine(pts, nrm, o)
+      : m === 'innen3' ? innenGemitteltLine(pts, nrm, o)
+      : m === 'aussenin' ? aussenInnenLine(pts, nrm, o)
+      : m === 'luuke' ? luukeLinie(pts, nrm, o)
       : formLine(pts, nrm, o, 'zeit', 0.15, 0.85);
     line.model = m;
     line.grenzen = g;
@@ -1950,6 +2492,14 @@
   // line the dashboard minimap needs, where a 220px map has no room for any of that.
   //
   // Kerb colours follow the direction of travel: LEFT is blue/white, RIGHT is red/white.
+  // BESTELLT (erste Runde): "im Strecken-Editor sind die blaue und rote Randbegrenzung
+  // vertauscht angegeben" - damals geprueft: Code und Selbsttest stimmten miteinander
+  // ueberein (rot links, blau rechts), nur zwei Kommentare behaupteten das Gegenteil, also
+  // wurden nur die Kommentare berichtigt.
+  // BESTELLT (zweite Runde, nach Gegenpruefung am echten Auto): "Linker Rand soll blau und
+  // rechter Rand rot in Fahrtrichtung sein, das ist noch verkehrt herum." Diesmal war die
+  // Uebereinstimmung selbst falsch herum - jetzt sind Farbzuordnung UND Kommentare
+  // gedreht (kerbLeft/kerbRight weiter unten).
   // They are drawn as a solid white line with a dashed coloured line on top, which is how a
   // real kerb alternates, and it needs no per-block geometry.
   // How hard a car would be braking at each sample of a path, 0 = on the power,
@@ -2201,18 +2751,21 @@
         body += `<path d="M ${P2(A)} L ${P2(B)}" stroke="#ffffff" stroke-width="1.6" opacity=".85"/>`;
       }
 
-      // 4) Kerbs. Right = red/white, left = blue/white, both relative to travel direction.
-      // SIGN CHECK, because the old names were backwards and the legend followed them:
-      // trackNormals() rotates the tangent by -90 degrees, so a POSITIVE offset is the
-      // driver's LEFT. Heading north the tangent is (0,-1) and the normal comes out (-1,0),
-      // which on screen (y downwards) points left. The colours happened to be right anyway;
-      // the labels were not.
+      // 4) Kerbs. Left = blue/white, right = red/white, both relative to travel direction.
+      // BESTELLT (nach Gegenpruefung am echten Auto): "Linker Rand soll blau und rechter
+      // Rand rot in Fahrtrichtung sein, das ist noch verkehrt herum." Vorher stand hier
+      // rot links / blau rechts - das stimmte zwischen Code und Selbsttest ueberein
+      // (siehe Phase 9), war aber gegen die reale Bahn beides falsch herum. Nur die
+      // Farbzuordnung dreht sich, die Geometrie (SIGN CHECK unten) bleibt unveraendert.
+      // SIGN CHECK: trackNormals() rotates the tangent by -90 degrees, so a POSITIVE
+      // offset is the driver's LEFT. Heading north the tangent is (0,-1) and the normal
+      // comes out (-1,0), which on screen (y downwards) points left.
       const kerbLeft = offsetPath(pts, nrm, half + TRACK_KERB_W / 2);
       const kerbRight = offsetPath(pts, nrm, -(half + TRACK_KERB_W / 2));
       const kw = TRACK_KERB_W;
       // Brighter than the real kerb paint, on purpose: these are drawn on a dark track view
       // now, and the actual #b3131f / #1565c0 came out at under 3:1 against it.
-      [[kerbLeft, '#ff5c5c'], [kerbRight, '#5aa9ff']].forEach(([path, col]) => {
+      [[kerbLeft, '#5aa9ff'], [kerbRight, '#ff5c5c']].forEach(([path, col]) => {
         body += `<path d="${poly(path)}" fill="none" stroke="#ffffff" stroke-width="${kw}" stroke-linecap="butt"/>`;
         body += `<path d="${poly(path)}" fill="none" stroke="${col}" stroke-width="${kw}" stroke-linecap="butt" stroke-dasharray="7 7"/>`;
       });
@@ -3352,6 +3905,153 @@
   }
   $('track-scan-start').onclick = startTrackScan;
   $('track-scan-stop').onclick = stopTrackScan;
+
+  // ---- STRECKENSCAN AUS DER GARAGE: MIT AUTOPILOT, MIT SCHLUSSPRUEFUNG ---------------
+  //
+  // BESTELLT: "Streckenscan ueberarbeiten: fange mit Scan erst an, wenn auto ueber start
+  // gefahren ist. Wenn es dann wieder ueber start faehrt, muss die strecke geschlossen
+  // sein. Wenn nicht, dann miss noch eine runde, und pruefe wieder. Ausserdem soll
+  // streckenscan ein button in der garage sein neben dem ersten auto. Es soll dann mit
+  // querlage = 0 in mittlerem Tempo ueber die strecke fahren und anhalten, wenn ein
+  // geschlossener Rundkurs gemessen wurde."
+  //
+  // EIGENE, KLEINERE ZUSTANDSMASCHINE statt learnTick() wiederzuverwenden: learnTick()
+  // haengt am IMMER LAUFENDEN Hintergrundlernen (ghostCfg.learn) und uebernimmt die
+  // zweite Ueberfahrt UNGEPRUEFT - genau die Pruefung, die hier verlangt ist, fehlt dort.
+  // Ihre Zustaende zu teilen hiesse, das Hintergrundlernen mitten in einem Scan
+  // anzuhalten oder zwei Verbraucher an einem Zustand haengen zu lassen; eine eigene,
+  // kleine Maschine ist die kleinere Aenderung. trackSchluss()/trackCenterline() (siehe
+  // oben) sind bereits gebaut und gemessen - genau das Werkzeug fuer "ist es ein
+  // geschlossener Rundkurs".
+  const garageScan = { aktiv: false, car: null, seq: [], started: false,
+                       sperreVor: false, sperreFlanke: false, versuch: 0,
+                       lastCount: null, votes: {} };
+  const GARAGE_SCAN_VERSUCHE_MAX = 5;
+
+  function garageScanSperre(bytes) {
+    const jetzt = (bytes[15] & 0x08) !== 0;
+    if (jetzt && !garageScan.sperreVor) garageScan.sperreFlanke = true;
+    garageScan.sperreVor = jetzt;
+  }
+
+  function garageScanStatus(text) {
+    const el = $('gar-scan-status');
+    if (el) el.textContent = text;
+  }
+
+  function garageScanAbbrechen(meldung) {
+    garageScan.aktiv = false;
+    garageScan.car = null;
+    const gehen = $('gar-scan-start'), stopp = $('gar-scan-stop');
+    if (gehen) { gehen.hidden = false; gehen.disabled = false; }
+    if (stopp) stopp.hidden = true;
+    if (meldung) garageScanStatus(meldung);
+  }
+
+  function garageScanStart() {
+    if (trackScanning) {
+      alert('Der manuelle Streckeneditor-Scan läuft noch – dort zuerst stoppen.');
+      return;
+    }
+    const car = playerCar || garage.find((c) => c.role === 'player') || garage[0];
+    if (!car) { alert('Kein Auto verbunden. Erst in der Garage verbinden.'); return; }
+    garageScan.aktiv = true;
+    garageScan.car = car;
+    garageScan.seq = [];
+    garageScan.started = false;
+    garageScan.sperreVor = false;
+    garageScan.sperreFlanke = false;
+    garageScan.versuch = 1;
+    garageScan.lastCount = null;
+    garageScan.votes = {};
+    const gehen = $('gar-scan-start'), stopp = $('gar-scan-stop');
+    if (gehen) gehen.hidden = true;
+    if (stopp) stopp.hidden = false;
+    garageScanStatus('Wartet auf die erste Überfahrt von Start/Ziel …');
+    log('Garagenscan gestartet: ' + garageLabel(car)
+        + ' fährt mit Autopilot (Querlage 0, Formationstempo), bis der Rundkurs '
+        + 'geschlossen gemessen wurde.', 'info');
+  }
+
+  function garageScanStop() {
+    garageScanAbbrechen('Scan abgebrochen.');
+    log('Garagenscan von Hand abgebrochen.', 'info');
+  }
+
+  function garageScanTick(bytes) {
+    if (!garageScan.aktiv) return;
+    garageScanSperre(bytes);
+    const counter = bytes[11], type = bytes[12];
+    if (garageScan.lastCount === null) {
+      garageScan.lastCount = counter; garageScan.votes = {}; return;
+    }
+    if (counter === garageScan.lastCount) {
+      garageScan.votes[type] = (garageScan.votes[type] || 0) + 1;
+      return;
+    }
+    let best = null, bestN = -1;
+    for (const [t, c] of Object.entries(garageScan.votes)) {
+      const ty = parseInt(t, 10);
+      if (ty === 0xff || ty === TILE_OFFTRACK) continue;
+      if (c > bestN) { bestN = c; best = ty; }
+    }
+    garageScan.lastCount = counter;
+    garageScan.votes = {};
+    const sperre = garageScan.sperreFlanke;
+    garageScan.sperreFlanke = false;
+    if (best === null) return;
+    // ZWEI ANKER, dieselbe Begruendung wie bei learnTick() oben.
+    const anker = sperre || isStartCode(best);
+    if (!garageScan.started) {
+      if (!anker) return;
+      garageScan.started = true;
+      garageScan.seq = [{ type: TILE_TYPE.START }];
+      garageScanStatus('Scan läuft: 1 Teil (Auto fährt automatisch) …');
+      return;
+    }
+    if (anker) {
+      if (sperre && !isStartCode(best)) garageScan.seq.push({ type: codeZuTyp(best) });
+      // ---- DIE SCHLUSSPRUEFUNG, und genau das ist die Bestellung -------------------
+      const schluss = trackSchluss(trackCenterline(garageScan.seq));
+      if (schluss.closed && garageScan.seq.length >= 3) {
+        currentTrackTiles = garageScan.seq;
+        refreshTrackPreview();
+        const wie = 'Lücke ' + schluss.lueckeCm.toFixed(1) + ' cm, Winkel '
+          + schluss.winkel.toFixed(1) + '°';
+        garageScanAbbrechen('Fertig: ' + garageScan.seq.length + ' Teile, Rundkurs '
+          + 'geschlossen (' + wie + ').');
+        showHudToast('STRECKE GESCANNT: ' + garageScan.seq.length + ' TEILE');
+        log('Garagenscan fertig: ' + garageScan.seq.length + ' Teile, geschlossen (' + wie
+            + ') nach ' + garageScan.versuch + ' Versuch(en).', 'info');
+        return;
+      }
+      // NICHT GESCHLOSSEN: noch eine Runde messen, wie bestellt - statt aufzugeben.
+      garageScan.versuch++;
+      if (garageScan.versuch > GARAGE_SCAN_VERSUCHE_MAX) {
+        garageScanAbbrechen('Abgebrochen: nach ' + GARAGE_SCAN_VERSUCHE_MAX + ' Versuchen '
+          + 'schliesst die gemessene Runde nicht (zuletzt ' + garageScan.seq.length
+          + ' Teile, Lücke ' + schluss.lueckeCm.toFixed(1) + ' cm). Bitte von Hand prüfen.');
+        log('Garagenscan aufgegeben nach ' + GARAGE_SCAN_VERSUCHE_MAX + ' Versuchen.', 'err');
+        return;
+      }
+      garageScanStatus('Runde ' + (garageScan.versuch - 1) + ' schliesst nicht (Lücke '
+        + schluss.lueckeCm.toFixed(1) + ' cm, Winkel ' + schluss.winkel.toFixed(1)
+        + '°) – miss noch eine Runde …');
+      log('Garagenscan: Runde schliesst nicht (Lücke ' + schluss.lueckeCm.toFixed(1)
+          + ' cm, Winkel ' + schluss.winkel.toFixed(1) + '°), Versuch ' + garageScan.versuch
+          + ' von ' + GARAGE_SCAN_VERSUCHE_MAX + ' …', 'info');
+      garageScan.seq = [{ type: TILE_TYPE.START }];
+      return;
+    }
+    garageScan.seq.push({ type: best });
+    if (garageScan.seq.length > 60) {
+      garageScanAbbrechen('Abgebrochen: 60 Teile ohne zweite Start/Ziel-Überfahrt.');
+      log('Garagenscan verworfen: 60 Teile ohne zweite Start/Ziel-Ueberfahrt.', 'err');
+    }
+  }
+
+  if ($('gar-scan-start')) $('gar-scan-start').onclick = garageScanStart;
+  if ($('gar-scan-stop')) $('gar-scan-stop').onclick = garageScanStop;
 
   // ---- Race dashboard: live battery/off-track/minimap-position/lap-timing ----
   // Battery is a rough two-point estimate (0x9b/155≈100%, 0x90/144≈75%, observed in an

@@ -1,0 +1,22 @@
+{
+ "damage": {
+  "de": "voice_damage_de.ogg",
+  "en": "voice_damage_en.ogg"
+ },
+ "fuel": {
+  "de": "voice_fuel_de.ogg",
+  "en": "voice_fuel_en.ogg"
+ },
+ "tyre": {
+  "de": "voice_tyre_de.ogg",
+  "en": "voice_tyre_en.ogg"
+ },
+ "rainstart": {
+  "de": "voice_rainstart_de.ogg",
+  "en": "voice_rainstart_en.ogg"
+ },
+ "rainstop": {
+  "de": "voice_rainstop_de.ogg",
+  "en": "voice_rainstop_en.ogg"
+ }
+}

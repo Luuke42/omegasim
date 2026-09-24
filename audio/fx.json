@@ -37,16 +37,112 @@
   }
  },
  "start": {
-  "porsche": {
-   "file": "porsche_start.ogg",
-   "seconds": 2.6
-  },
-  "bmw": {
-   "file": "bmw_start.ogg",
-   "seconds": 2.6
-  },
   "mustang": {
    "file": "mustang_start.ogg",
+   "seconds": 2.6
+  },
+  "c6r": {
+   "file": "c6r_start.ogg",
+   "seconds": 2.6
+  },
+  "c5r": {
+   "file": "c5r_start.ogg",
+   "seconds": 2.6
+  },
+  "z06gt3r": {
+   "file": "z06gt3r_start.ogg",
+   "seconds": 2.6
+  },
+  "amggt3": {
+   "file": "amggt3_start.ogg",
+   "seconds": 2.6
+  },
+  "f296gt3": {
+   "file": "f296gt3_start.ogg",
+   "seconds": 2.6
+  },
+  "m4gt3": {
+   "file": "m4gt3_start.ogg",
+   "seconds": 2.6
+  },
+  "p992gt3r": {
+   "file": "p992gt3r_start.ogg",
+   "seconds": 2.6
+  },
+  "huracan": {
+   "file": "huracan_start.ogg",
+   "seconds": 2.6
+  },
+  "vantagegt3": {
+   "file": "vantagegt3_start.ogg",
+   "seconds": 2.6
+  },
+  "f1_2026": {
+   "file": "f1_2026_start.ogg",
+   "seconds": 2.6
+  },
+  "gt40": {
+   "file": "gt40_start.ogg",
+   "seconds": 2.6
+  },
+  "lolat70": {
+   "file": "lolat70_start.ogg",
+   "seconds": 2.6
+  },
+  "f330p4": {
+   "file": "f330p4_start.ogg",
+   "seconds": 2.6
+  },
+  "mc12": {
+   "file": "mc12_start.ogg",
+   "seconds": 2.6
+  },
+  "countach": {
+   "file": "countach_start.ogg",
+   "seconds": 2.6
+  },
+  "listerstorm": {
+   "file": "listerstorm_start.ogg",
+   "seconds": 2.6
+  },
+  "rs5dtm": {
+   "file": "rs5dtm_start.ogg",
+   "seconds": 2.6
+  },
+  "impalanascar": {
+   "file": "impalanascar_start.ogg",
+   "seconds": 2.6
+  },
+  "capri_zakspeed": {
+   "file": "capri_zakspeed_start.ogg",
+   "seconds": 2.6
+  },
+  "p935k4": {
+   "file": "p935k4_start.ogg",
+   "seconds": 2.6
+  },
+  "demon": {
+   "file": "demon_start.ogg",
+   "seconds": 2.6
+  },
+  "mustang68": {
+   "file": "mustang68_start.ogg",
+   "seconds": 2.6
+  },
+  "blazer90": {
+   "file": "blazer90_start.ogg",
+   "seconds": 2.6
+  },
+  "impreza99": {
+   "file": "impreza99_start.ogg",
+   "seconds": 2.6
+  },
+  "fordtudor37": {
+   "file": "fordtudor37_start.ogg",
+   "seconds": 2.6
+  },
+  "kaefer1300": {
+   "file": "kaefer1300_start.ogg",
    "seconds": 2.6
   }
  },
@@ -1170,5 +1266,169 @@
   "file": "tyre_squeal.ogg",
   "loop": true,
   "seconds": 1.6
+ },
+ "accel": {
+  "mustang": {
+   "file": "mustang_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "c6r": {
+   "file": "c6r_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "c5r": {
+   "file": "c5r_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "z06gt3r": {
+   "file": "z06gt3r_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "amggt3": {
+   "file": "amggt3_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "f296gt3": {
+   "file": "f296gt3_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "m4gt3": {
+   "file": "m4gt3_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "p992gt3r": {
+   "file": "p992gt3r_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "huracan": {
+   "file": "huracan_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "vantagegt3": {
+   "file": "vantagegt3_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "f1_2026": {
+   "file": "f1_2026_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "gt40": {
+   "file": "gt40_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "lolat70": {
+   "file": "lolat70_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "f330p4": {
+   "file": "f330p4_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "mc12": {
+   "file": "mc12_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "countach": {
+   "file": "countach_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "listerstorm": {
+   "file": "listerstorm_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "rs5dtm": {
+   "file": "rs5dtm_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "impalanascar": {
+   "file": "impalanascar_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "capri_zakspeed": {
+   "file": "capri_zakspeed_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "p935k4": {
+   "file": "p935k4_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "demon": {
+   "file": "demon_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "mustang68": {
+   "file": "mustang68_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "blazer90": {
+   "file": "blazer90_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "impreza99": {
+   "file": "impreza99_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "fordtudor37": {
+   "file": "fordtudor37_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  },
+  "kaefer1300": {
+   "file": "kaefer1300_demo.ogg",
+   "seconds": 9.77,
+   "upshifts": 5,
+   "downshifts": 5
+  }
  }
 }

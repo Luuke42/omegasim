@@ -1197,5 +1197,97 @@
   },
   "idleRpm": 650,
   "limiterRpm": 5000
+ },
+ "fordtudor37": {
+  "label": "Ford Tudor Slantback 1937 (3,6 l Flathead-V8, Cross-Plane) [WIP]",
+  "cylinders": 8,
+  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.3,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "fordtudor37_idle.ogg",
+    "baseRpm": 550,
+    "firingHz": 36.7,
+    "seconds": 1.9636,
+    "load": 1.0
+   },
+   "low": {
+    "file": "fordtudor37_low.ogg",
+    "baseRpm": 1049,
+    "firingHz": 69.9,
+    "seconds": 1.9447,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "fordtudor37_mid.ogg",
+    "baseRpm": 2000,
+    "firingHz": 133.3,
+    "seconds": 1.98,
+    "load": 1.0
+   },
+   "high": {
+    "file": "fordtudor37_high.ogg",
+    "baseRpm": 3800,
+    "firingHz": 253.3,
+    "seconds": 1.9895,
+    "load": 1.0
+   },
+   "over": {
+    "file": "fordtudor37_over.ogg",
+    "baseRpm": 2000,
+    "firingHz": 133.3,
+    "seconds": 1.98,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 550,
+  "limiterRpm": 3800
+ },
+ "kaefer1300": {
+  "label": "VW K\u00e4fer 1300 (1,3 l Boxer-4, luftgek\u00fchlt) [WIP]",
+  "cylinders": 4,
+  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.25,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "kaefer1300_idle.ogg",
+    "baseRpm": 850,
+    "firingHz": 28.3,
+    "seconds": 1.9765,
+    "load": 1.0
+   },
+   "low": {
+    "file": "kaefer1300_low.ogg",
+    "baseRpm": 1543,
+    "firingHz": 51.4,
+    "seconds": 2.022,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "kaefer1300_mid.ogg",
+    "baseRpm": 2800,
+    "firingHz": 93.3,
+    "seconds": 2.0143,
+    "load": 1.0
+   },
+   "high": {
+    "file": "kaefer1300_high.ogg",
+    "baseRpm": 4200,
+    "firingHz": 140.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "over": {
+    "file": "kaefer1300_over.ogg",
+    "baseRpm": 2800,
+    "firingHz": 93.3,
+    "seconds": 2.0143,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 850,
+  "limiterRpm": 4200
  }
 }

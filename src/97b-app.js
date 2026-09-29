@@ -11,6 +11,17 @@
   //
   // 2. HOST OHNE PC (Plugin OmegaHost): dieses Telefon traegt die Rangliste, die anderen
   //    finden es per Suche im WLAN, ein Tablet oeffnet /?info im Browser.
+  // ---- APK-LINK AUF DER TITELSEITE (v0.8.36) ----
+  // Nur im Browser: in der App ist sie schon installiert. Nicht auf iPhone/iPad, dort laeuft
+  // keine APK. Auf der luuke42-Kopie liegt die APK im eigenen Repo (apk/OmegaSim.apk).
+  (function apkLinkZeigen() {
+    const a = $('home-apk');
+    if (!a || (window.OMEGA_APP && window.OMEGA_APP.nativ)) return;
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) return;
+    if (/(^|\.)luuke42\.github\.io$/i.test(location.hostname)) a.href = 'apk/OmegaSim.apk';
+    a.hidden = false;
+  })();
+
   (function appAnbinden() {
     const APP = window.OMEGA_APP;
     if (!APP || !APP.nativ) return;

@@ -755,6 +755,8 @@
     "Der Modus": "The mode",
     "2-Spieler-Modus": "Two-player mode",
     "Gamepad-Menü-Steuerung": "Gamepad menu control",
+    "Installiere die App für Mehrspieler und Challenges": "Install the app for multiplayer and challenges",
+    "Titelseite im Browser: Link zum Download der neuesten Android-App. Die APK-Release hängt dafür zusätzlich eine Datei mit festem Namen an; die Android-Schicht ist unverändert, neu installieren ist nicht nötig.": "Title page in the browser: link to download the newest Android app. The APK release now also attaches a file with a fixed name; the Android layer is unchanged, no reinstall needed.",
     "Zurück zum Menü": "Back to menu",
     "Zurück zum Menü (Options, Esc)": "Back to menu (Options, Esc)",
     "Name in der Bestenliste": "Name on the leaderboard",

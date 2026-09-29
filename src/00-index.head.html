@@ -2457,6 +2457,12 @@
   .ps-fuss { display: flex; gap: 14px; align-items: center; font-size: 12px; }
   .ps-fuss button { font-size: 20px; line-height: 1; padding: 4px 14px; background: var(--k-grau); color: #fff; border: 1px solid rgba(255,255,255,.3); }
   /* ---- Tutorial ---- */
+  .k-apk { display: inline-flex; gap: 7px; align-items: center; margin-top: 10px; padding: 5px 14px;
+    border: 1px solid var(--k-blau); color: #fff; text-decoration: none; font-family: var(--k-font);
+    letter-spacing: .1em; text-transform: uppercase; font-size: 11.5px; background: rgba(0,163,224,.12); }
+  .k-apk:hover, .k-apk:focus-visible { background: var(--k-blau); color: var(--k-blau-text); }
+  .k-apk[hidden] { display: none; }
+  .k-apk svg { width: 15px; height: 15px; }
   .k-tutorial-knopf { font-family: var(--k-font); letter-spacing: .12em; text-transform: uppercase; font-size: 13px;
     background: rgba(10,12,18,.7); color: #fff; border: 2px solid var(--k-blau); border-radius: 0; padding: 6px 16px; }
   .k-tutorial-knopf:hover { background: var(--k-blau); color: var(--k-blau-text); }
@@ -3831,6 +3837,14 @@
           <span class="k-tutorial-taste" data-i18n-skip>&#9675; / S</span></button>
       </div>
       <div class="k-druecken"><span data-i18n-skip>&#10005;</span> zum Starten</div>
+      <!-- BESTELLT: "auf der Titelseite zur .apk verlinken, falls die App nicht darueber
+           geoeffnet ist, mit direktem Download der neuesten APK". Sichtbar nur im Browser und
+           nicht auf iPhone/iPad (97b-app.js). Die Adresse zeigt auf die feste Datei OmegaSim.apk
+           der neuesten Release; auf der luuke42-Kopie auf die APK im eigenen Repo. -->
+      <a class="k-apk" id="home-apk" href="https://github.com/LukasRoeseler/btsr/releases/latest/download/OmegaSim.apk" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+        <span>Installiere die App f&uuml;r Mehrspieler und Challenges</span></a>
     <!-- Nur in der Android-App: eine neue Web-Fassung liegt bereit (siehe 97b-app.js). -->
     <div class="app-update" id="app-update" hidden>
       <b id="app-update-text">Update verf&uuml;gbar</b>
@@ -3838,7 +3852,7 @@
       <div class="app-fortschritt" id="app-update-balken" hidden><i></i></div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">0.8.35</span></span>
+        <span class="foot-ver">v<span id="app-version">0.8.36</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -4802,6 +4816,7 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>0.8</span></b></p>
       <ul class="muted" id="patchnotes-08" style="padding-left:20px; line-height:1.7">
+        <li>Titelseite im Browser: Link zum Download der neuesten Android-App. Die APK-Release h&auml;ngt daf&uuml;r zus&auml;tzlich eine Datei mit festem Namen an; die Android-Schicht ist unver&auml;ndert, neu installieren ist nicht n&ouml;tig.</li>
         <li>Cockpit immer im Vollbild, der Men&uuml;-Knopf dort zeigt jetzt &bdquo;Zur&uuml;ck&ldquo;. Reiter oben: Fahren, Mehrspieler, Challenges, Optionen. Die Info-Kacheln stehen direkt in den Optionen unter einer eigenen Überschrift. Challenges: Strecken hei&szlig;en Monzetta, Suzuna, Monte Carlito und Silverbrook, der Name f&uuml;r die Bestenliste l&auml;sst sich auf jeder Strecken-Seite festlegen, das Perzentil z&auml;hlt je Spieler. Neue Kachel- und Hintergrundbilder im Fahren-Men&uuml;.</li>
         <li>Challenges: die Bestenliste kommt aus einem st&uuml;ndlichen Schnappschuss im Repo, dazu sofort die eigenen Zeiten; das Hochladen wiederholt bei Aussetzern.</li>
         <li>Challenges: gemeinsame Online-Bestenliste ab Werk eingetragen, f&uuml;r alle Kopien der App.</li>

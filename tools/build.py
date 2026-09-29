@@ -224,7 +224,12 @@ def build_sw(built):
     if alt != text:
         with io.open(SW_OUT, 'w', encoding='utf-8', newline='') as f:
             f.write(text)
-    return version, 'sw.js auf Version %s' % version
+    # Die Dateiliste der Android-Selbstaktualisierung, HIER und nicht als eigener Schritt:
+    # build_sw laeuft in build.py UND in bump_version.py, jeweils nach dem Schreiben von
+    # index.html. So gehoert app-update.json immer zu genau dieser Fassung.
+    import app_update
+    n, _ = app_update.schreiben(version)
+    return version, 'sw.js und app-update.json (%d Dateien) auf Version %s' % (n, version)
 
 
 def check_klammern(js, quelle):

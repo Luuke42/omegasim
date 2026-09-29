@@ -1,0 +1,69 @@
+{
+ "listen": {
+  "kehre|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "kehre|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "kehre|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "kehre|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "oval|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "oval|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "oval|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "oval|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "schlange|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "schlange|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "schlange|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "schlange|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "weitblick|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "weitblick|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "weitblick|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "weitblick|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  }
+ },
+ "stand": "2026-09-29T14:15:30Z"
+}

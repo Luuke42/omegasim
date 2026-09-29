@@ -98,13 +98,18 @@ REPO = os.path.dirname(HERE)
 _lock = threading.Lock()
 _fahrer = {}            # id -> {name, laps, letzte, beste, aktualisiert, abgaenge}
 _rennen = {'start': None, 'laps': None, 'minutes': None}
+# INFO-SCREENS (BESTELLT: "ein Geraet, das rein als Info-Screen fungiert"). Sie melden sich mit
+# /mp/state?zuschauer=<id>; solange einer da ist, schicken die Fahrer ihre Kartenpunkte mit.
+# Dieselbe Logik steht im Telefon-Host (android-app/.../HostServer.java) - beide zusammen aendern.
+_zuschauer = {}         # id -> letzter Abruf
+_strecke = {'code': ''}  # Kurzcode der Strecke, zuletzt gemeldet
 
 
 def _jetzt():
     return time.time()
 
 
-def zustand_lesen():
+def zustand_lesen(zuschauer_id=None):
     """Die Rangliste, sortiert - und die Sortierung ist die eigentliche Entscheidung.
 
     Gewertet wird zuerst nach RUNDENZAHL und dann nach der Zeit der letzten Ueberfahrt: wer
@@ -116,9 +121,15 @@ def zustand_lesen():
     fuehrt". Sie steht als Spalte daneben.
     """
     with _lock:
+        jetzt = _jetzt()
+        if zuschauer_id:
+            _zuschauer[str(zuschauer_id)[:64]] = jetzt
+        for zid in [z for z, t in _zuschauer.items() if jetzt - t > 60]:
+            del _zuschauer[zid]
+        zuschauer = sum(1 for t in _zuschauer.values() if jetzt - t < 5)
         leute = []
         for fid, f in _fahrer.items():
-            leute.append({
+            eintrag = {
                 'id': fid, 'name': f['name'], 'laps': f['laps'],
                 'letzte': f['letzte'], 'beste': f['beste'],
                 'abgaenge': f.get('abgaenge', 0),
@@ -128,15 +139,21 @@ def zustand_lesen():
                 # Sortierung griff auf ein Feld, das es im gebauten Dict nicht gab - dann
                 # sortiert sie still nach einer Konstanten.
                 'letzteZeitpunkt': f.get('letzteZeitpunkt', 0),
-            })
+            }
+            if 'pos' in f:
+                eintrag['pos'] = f['pos']
+                eintrag['posAlter'] = round(jetzt - f.get('posZeit', jetzt), 3)
+            leute.append(eintrag)
         leute.sort(key=lambda x: (-x['laps'], x['letzteZeitpunkt']))
         rennen = dict(_rennen)
+        strecke = _strecke['code']
     if rennen['start']:
         rennen['laufzeit'] = round(_jetzt() - rennen['start'], 1)
         if rennen['minutes']:
             rennen['restSekunden'] = max(
                 0, round(rennen['minutes'] * 60 - rennen['laufzeit'], 1))
-    return {'fahrer': leute, 'rennen': rennen, 'zeit': round(_jetzt(), 1)}
+    return {'fahrer': leute, 'rennen': rennen, 'zeit': round(_jetzt(), 1),
+            'zuschauer': zuschauer, 'strecke': strecke}
 
 
 def melden(daten):
@@ -152,7 +169,12 @@ def melden(daten):
             f['name'] = str(daten['name'])[:40]
         if 'laps' in daten:
             try:
-                f['laps'] = int(daten['laps'])
+                neu = int(daten['laps'])
+                # Der Gleichstand gilt der letzten RUNDE, nicht dem letzten Bericht: sonst
+                # gewinnt, wer zuletzt ein Lebenszeichen oder eine Position geschickt hat.
+                if neu != f['laps'] or 'letzteZeitpunkt' not in f:
+                    f['letzteZeitpunkt'] = _jetzt()
+                f['laps'] = neu
             except (TypeError, ValueError):
                 pass
         for k in ('letzte', 'beste'):
@@ -166,7 +188,13 @@ def melden(daten):
                 f['abgaenge'] = int(daten['abgaenge'])
             except (TypeError, ValueError):
                 pass
-        f['letzteZeitpunkt'] = _jetzt()
+        if isinstance(daten.get('pos'), list):
+            f['pos'] = daten['pos'][:8]
+            f['posZeit'] = _jetzt()
+        code = daten.get('strecke')
+        if isinstance(code, str) and code:
+            _strecke['code'] = code[:400]
+        f.setdefault('letzteZeitpunkt', _jetzt())
         f['aktualisiert'] = _jetzt()
         # Der ERSTE Bericht startet die Uhr. Ein eigener Startknopf waere ein zweiter Ort,
         # an dem ein Rennen beginnt - und dann laufen die beiden auseinander.
@@ -237,7 +265,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.startswith('/mp/state'):
-            self._json(zustand_lesen())
+            from urllib.parse import urlparse, parse_qs
+            z = parse_qs(urlparse(self.path).query).get('zuschauer', [None])[0]
+            self._json(zustand_lesen(z))
             return
         if self.path.startswith('/mp/reset'):
             self._json(zuruecksetzen())

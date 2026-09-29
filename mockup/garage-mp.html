@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Garage und Mehrspieler</title>
+<!--
+  MOCK-UP, nicht die App. BESTELLT: "mach Vorschläge für Neuorganisation des Garage-Menüs und
+  der Multiplayer-Submenüs. Da ist viel Text, große Buttons sind nebeneinander und
+  untereinander, und es ist nicht gut lesbar. Mach erstmal 2 Vorschläge für ein HTML-Mockup."
+  Dazu "Einheitliche ◀ ▶-Wertzeilen auch in Garage und Mehrspieler: ok" - beide Vorschläge
+  benutzen sie. Alle Bedienelemente der echten Seiten kommen vor (Platzhalterdaten).
+  Bedienung: Maus/Touch, Pfeiltasten (hoch/runter Zeile, links/rechts Wert), Enter.
+-->
+<style>
+  :root { --blau: #00a3e0; --blau-text: #04070c; --grau: #3b3f48; --weiss: #f3f4f6; --tinte: #0b0c10;
+    --dim: #a3acbd; --gut: #3ddc84; --rot: #ff2b5e;
+    --font: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+    color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: #05070c; color: #eef0f4; font-family: var(--font); font-size: 13px;
+    display: flex; flex-direction: column; overflow: hidden; }
+  body::before { content: ''; position: fixed; inset: 0; z-index: -1;
+    background: linear-gradient(rgba(5,7,12,.72), rgba(5,7,12,.9)), url(../img/garage-bg.jpg) center / cover; }
+  button { font-family: var(--font); cursor: pointer; }
+  /* Kopf wie in der App (halb so hoch) */
+  header { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+    padding: max(1px, env(safe-area-inset-top)) 12px 1px; background: #05070c; border-bottom: 1px solid rgba(255,255,255,.12); }
+  .logo { font-weight: 900; letter-spacing: .12em; }
+  .reiter { display: flex; min-width: 0; }
+  .reiter button { flex: 1; background: transparent; border: 0; color: var(--dim); text-transform: uppercase;
+    letter-spacing: .08em; font-size: 11.5px; padding: 1px 6px; font-weight: 600;
+    clip-path: polygon(6% 0, 100% 0, 94% 100%, 0 100%); }
+  .reiter button.an { background: var(--weiss); color: var(--tinte); font-weight: 800; }
+  .vorschlag { display: flex; }
+  .vorschlag button { background: transparent; border: 1px solid var(--blau); color: #fff; font-size: 11px;
+    letter-spacing: .08em; padding: 1px 8px; border-radius: 0; }
+  .vorschlag button.an { background: var(--blau); color: var(--blau-text); font-weight: 800; }
+  main { flex: 1; min-height: 0; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .seite { display: none; flex: 1; min-height: 0; }
+  .seite.an { display: flex; }
+  h3 { margin: 0; font-size: 11px; letter-spacing: .12em; color: var(--dim); text-transform: uppercase; font-weight: 700; }
+  .kasten { background: rgba(14,16,22,.9); border-top: 2px solid var(--grau); padding: 6px 8px; min-height: 0; }
+  /* Die Wertzeile, ueberall gleich: Beschriftung .... ◀ Wert ▶ */
+  .zeile { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px;
+    padding: 4px 8px; border: 1px solid transparent; min-height: 26px; }
+  .zeile + .zeile { border-top-color: rgba(255,255,255,.06); }
+  .zeile .l { color: #d6dae3; }
+  .zeile .w { display: flex; align-items: center; gap: 8px; font-weight: 800; }
+  .zeile .w .pf { color: var(--blau); font-size: 10px; background: none; border: 0; padding: 0 2px; }
+  .zeile.aus { opacity: .4; }
+  .fokus.sel, .fokus:hover { outline: 0; border-color: #fff; background: rgba(0,163,224,.18); }
+  .knopf { background: var(--grau); color: #fff; border: 1px solid transparent; border-radius: 0; padding: 3px 10px;
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+  .knopf.haupt { background: var(--blau); color: var(--blau-text); font-weight: 800; }
+  .knopf.fokus.sel, .knopf.fokus:hover { border-color: #fff; background: var(--blau); color: var(--blau-text); }
+  input.feld { background: #0b0e15; border: 1px solid rgba(255,255,255,.2); color: #fff; font-family: ui-monospace, monospace;
+    font-size: 12px; padding: 2px 6px; width: 170px; }
+  .punkt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .muted { color: var(--dim); }
+  .info { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--dim);
+    color: var(--dim); font-size: 10px; font-style: italic; font-weight: 700; margin-left: 6px; cursor: help; background: none; padding: 0; }
+  .beschr { font-size: 11.5px; color: #dde1e8; border-left: 3px solid var(--blau); padding: 2px 8px; background: rgba(10,12,18,.9);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  th { text-align: left; color: var(--dim); font-weight: 600; letter-spacing: .06em; font-size: 10px; text-transform: uppercase; padding: 2px 4px; }
+  td { padding: 2px 4px; border-top: 1px solid rgba(255,255,255,.06); }
+  code { font-family: ui-monospace, monospace; background: #0b0e15; padding: 2px 6px; font-size: 11.5px; }
+
+  /* ---- A: Liste links, Detail rechts ---- */
+  .a-garage { display: grid; grid-template-columns: minmax(170px, 30%) minmax(0, 1fr); gap: 8px; flex: 1; min-height: 0; }
+  .a-liste .auto { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 6px; padding: 6px 8px;
+    border: 1px solid transparent; }
+  .a-liste .auto b { font-size: 13px; letter-spacing: .04em; }
+  .a-liste .auto small { color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; }
+  .a-liste .auto.gewaehlt { background: rgba(0,163,224,.12); border-left: 3px solid var(--blau); }
+  .blink { color: var(--gut); font-size: 10px; letter-spacing: .06em; }
+  .a-mp { display: grid; grid-template-columns: minmax(150px, 28%) minmax(0, 1fr); gap: 8px; flex: 1; min-height: 0; }
+  .schritt { display: grid; grid-template-columns: 22px 1fr auto; gap: 6px; align-items: center; padding: 6px 8px; border: 1px solid transparent; }
+  .schritt .n { display: grid; place-items: center; width: 20px; height: 20px; background: var(--grau); font-weight: 800; }
+  .schritt.fertig .n { background: var(--gut); color: #04120a; }
+  .schritt.gewaehlt { background: rgba(0,163,224,.12); border-left: 3px solid var(--blau); }
+  .rechts { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: auto; }
+  .reihe { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+  /* ---- B: Kacheln und Assistent ---- */
+  .b-garage { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; }
+  .b-karten { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .karte { position: relative; background: rgba(14,16,22,.92); border: 2px solid transparent; display: flex; flex-direction: column; min-height: 0; }
+  .karte .bild { height: 58px; background: center / cover; filter: brightness(.8); }
+  .karte .kk { background: var(--grau); text-align: center; font-weight: 800; letter-spacing: .1em; padding: 2px; font-size: 11px; }
+  .karte.sel .kk, .karte:hover .kk { background: var(--blau); color: var(--blau-text); }
+  .karte .name { font-size: 16px; font-weight: 900; letter-spacing: .06em; padding: 4px 8px 0; }
+  .karte .rolle { display: flex; justify-content: center; align-items: center; gap: 10px; background: var(--weiss); color: var(--tinte);
+    font-weight: 800; text-transform: uppercase; margin: 4px 8px; padding: 2px; font-size: 12px; }
+  .pf { background: none; border: 0; padding: 0 3px; cursor: pointer; }
+  .karte .rolle .pf { color: #0077a8; font-size: 10px; }
+  .karte .fuss { display: flex; gap: 4px; padding: 0 8px 6px; justify-content: space-between; align-items: center; }
+  .karte.neu { display: grid; place-items: center; color: var(--dim); font-size: 22px; font-weight: 800; letter-spacing: .1em; min-height: 150px;
+    border: 2px dashed rgba(255,255,255,.2); }
+  .karte.sel, .karte:hover { border-color: #fff; }
+  .auf { background: rgba(14,16,22,.94); border-top: 2px solid var(--blau); padding: 4px 6px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 10px; }
+  .assistent { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 10px; min-height: 0; }
+  .ass-karte { background: rgba(14,16,22,.94); border-top: 3px solid var(--blau); padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .ass-kopf { color: var(--dim); letter-spacing: .14em; font-size: 11px; }
+  .ass-karte h2 { margin: 0; font-size: 20px; letter-spacing: .06em; text-transform: uppercase; }
+  .ass-karte p { margin: 0; line-height: 1.4; color: #d6dae3; }
+  .ass-nav { margin-top: auto; display: flex; justify-content: space-between; }
+  .punkte { display: flex; gap: 5px; }
+  .punkte i { width: 22px; height: 4px; background: var(--grau); }
+  .punkte i.an { background: var(--blau); }
+  .gross { font-size: 14px; padding: 8px 14px; }
+  @media (max-height: 420px) { .karte .bild { height: 40px; } .karte.neu { min-height: 110px; } }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">&#937;</span>
+  <nav class="reiter" id="reiter">
+    <button data-seite="garage" class="an">Garage</button>
+    <button data-seite="pc">Mehrspieler · PC</button>
+    <button data-seite="app">Mehrspieler · App</button>
+  </nav>
+  <div class="vorschlag" id="vorschlag">
+    <button data-v="a" class="an">VORSCHLAG A</button><button data-v="b">VORSCHLAG B</button>
+  </div>
+</header>
+<main id="main"></main>
+<div class="beschr" id="beschr" style="margin: 0 12px 6px"></div>
+
+<script>
+(() => {
+  'use strict';
+  // ---------------- Platzhalterdaten ----------------
+  const FARBEN = [['Rot', '#e8323c'], ['Blau', '#00a3e0'], ['Gelb', '#f5c400'], ['Grün', '#3ddc84'], ['Weiß', '#f3f4f6']];
+  const ROLLEN = ['Steuern', 'Spieler 2', 'Ghost', 'Aus'];
+  const CHARAKTER = ['Ausgewogen', 'Angreifer', 'Verteidiger', 'Fehleranfällig'];
+  const ABST = ['Pro', 'Einsteiger', 'Drift', 'GT7'];
+  const autos = [
+    { name: 'Alpha', farbe: 1, rolle: 0, tempo: 80, char: 0, id: 'HYBRID-3F2A · 7C:9E:…:3F' },
+    { name: 'Beta', farbe: 0, rolle: 2, tempo: 72, char: 1, id: 'HYBRID-91B0 · 7C:9E:…:B0' },
+  ];
+  const rang = [['#00a3e0', 'Luuke', 12, '8,10', '7,95'], ['#e8323c', 'SeV', 11, '8,42', '8,20']];
+  let v = 'a', seite = 'garage', gewaehlt = 0, schritt = 0, auf = -1, appSchritt = 0;
+  const BESCHR = {
+    rolle: 'Wer das Auto fährt: du, Spieler 2, ein Ghost – oder aus. Das erste Auto steuerst du.',
+    farbe: 'Farbe in Anzeigen, Karte und Rangliste.',
+    name: 'Kurzname für Cockpit und Rangliste, bis 18 Zeichen.',
+    tempo: 'Nur für Ghosts: wie schnell dieses Auto im Verhältnis fährt.',
+    char: 'Nur für Ghosts: Angreifer überholen öfter, Verteidiger halten die Linie.',
+    abst: 'Fahrzeug-Abstimmung für das Auto, das du steuerst (wie die Kachel Fahrgefühl).',
+    trennen: 'Trennt dieses Auto. Die gemerkten Namen und Farben bleiben.',
+    verbinden: 'Öffnet die Bluetooth-Auswahl. Jedes weitere Auto wird ein Ghost.',
+    alle: 'Trennt alle Autos.',
+    ghosts: 'Hält alle Ghosts an oder lässt sie losfahren.',
+    zeigen: 'Zeig auf ein Auto (Maus oder Steuerkreuz) – seine Lichter blinken, damit du weißt, welches es ist.',
+    bat: 'Startet den Host auf dem PC: sucht Python und zeigt die Adresse an.',
+    kopieren: 'Kopiert den Befehl für die Eingabeaufforderung.',
+    adresse: 'Die Adresse, die der Host anzeigt, z. B. http://192.168.1.50:8080 – alle Geräte im selben WLAN.',
+    mitname: 'Dein Name in der Rangliste. Jedes Telefon behält Namen und Kennung.',
+    mitmachen: 'Tritt dem Rennen bei. Gezählt werden gemessene Runden.',
+    info: 'Dieses Gerät zeigt nur Strecke, Autos und Rangliste – ohne eigenes Auto.',
+    verlassen: 'Verlässt die Runde. Dein Eintrag bleibt stehen.',
+    host: 'Dieses Telefon wird Host (nur in der App). Die anderen finden es im WLAN.',
+    suchen: 'Sucht einen Host im WLAN und trägt seine Adresse ein.',
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const wert = (key, text, extra) => `<div class="zeile fokus ${extra || ''}" data-wert="${key}" data-b="${key}" tabindex="0">
+      <span class="l">${esc(text)}</span><span class="w"><button class="pf" data-d="-1">◀</button><span data-anz="${key}"></span><button class="pf" data-d="1">▶</button></span></div>`;
+  const rangTabelle = () => `<table><thead><tr><th></th><th>Fahrer</th><th>Runden</th><th>Letzte</th><th>Beste</th></tr></thead><tbody>
+      ${rang.map((r) => `<tr><td><span class="punkt" style="background:${r[0]}"></span></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`).join('')}</tbody></table>`;
+  const beitreten = (kompakt) => `
+      <div class="zeile fokus" data-b="adresse" tabindex="0"><span class="l">Host-Adresse</span><span class="w"><input class="feld" placeholder="http://192.168.1.50:8080"></span></div>
+      <div class="zeile fokus" data-b="mitname" tabindex="0"><span class="l">Mein Name</span><span class="w"><input class="feld" placeholder="z. B. Luuke"></span></div>
+      <div class="reihe" style="padding:4px 8px">
+        <button class="knopf haupt fokus" data-b="mitmachen">Mitmachen</button>
+        <button class="knopf fokus" data-b="info">Als Info-Screen</button>
+        <button class="knopf fokus" data-b="verlassen">Verlassen</button>
+        <span class="muted" style="margin-left:auto">● verbunden · 2 Fahrer</span></div>
+      ${kompakt ? '' : '<h3 style="margin-top:4px">Rangliste</h3>'}${rangTabelle()}`;
+
+  // ---------------- Vorschlag A ----------------
+  function aGarage() {
+    const a = autos[gewaehlt];
+    return `<div class="a-garage">
+      <div class="kasten a-liste" style="display:flex;flex-direction:column;gap:2px">
+        <h3>Autos <button class="info" data-b="zeigen" title="Zeigen = Blinken">i</button></h3>
+        ${autos.map((x, i) => `<div class="auto fokus ${i === gewaehlt ? 'gewaehlt' : ''}" data-auto="${i}" data-b="zeigen" tabindex="0">
+            <span class="punkt" style="background:${FARBEN[x.farbe][1]}"></span>
+            <span><b>${esc(x.name)}</b><br><small>${ROLLEN[x.rolle]}</small></span>
+            <span class="blink" data-blink="${i}"></span></div>`).join('')}
+        <div style="margin-top:auto;display:flex;flex-direction:column;gap:4px">
+          <button class="knopf haupt fokus" data-b="verbinden">+ Auto verbinden</button>
+          <div class="reihe"><button class="knopf fokus" data-b="alle">Alle trennen</button>
+            <button class="knopf fokus" data-b="ghosts">Ghosts anhalten</button></div>
+        </div>
+      </div>
+      <div class="kasten rechts">
+        <h3>${esc(a.name)} <span class="muted" style="letter-spacing:.04em;text-transform:none;font-weight:400">${a.id}</span></h3>
+        ${wert('rolle', 'Rolle')}
+        <div class="zeile fokus" data-b="name" tabindex="0"><span class="l">Name</span><span class="w"><input class="feld" value="${esc(a.name)}" maxlength="18" style="width:130px"></span></div>
+        ${wert('farbe', 'Farbe')}
+        ${wert('tempo', 'Ghost-Tempo', a.rolle === 2 ? '' : 'aus')}
+        ${wert('char', 'Charakter', a.rolle === 2 ? '' : 'aus')}
+        ${wert('abst', 'Abstimmung', a.rolle === 0 ? '' : 'aus')}
+        <div class="reihe" style="padding:4px 8px"><button class="knopf fokus" data-b="trennen">Trennen</button>
+          <span class="muted">Zeig auf ein Auto links: es blinkt.</span></div>
+      </div></div>`;
+  }
+  const PC_SCHRITTE = [
+    ['Programm starten', () => `<p>Auf dem PC die Startdatei öffnen – sie sucht Python und zeigt die Adresse an.</p>
+       <div class="reihe"><button class="knopf haupt fokus" data-b="bat">Mehrspieler-Host starten.bat</button>
+         <button class="info" data-b="kopieren" title="Befehl statt Datei">i</button></div>
+       <div class="reihe"><code>python tools/omegasim_host.py --port 8080</code><button class="knopf fokus" data-b="kopieren">Kopieren</button></div>`],
+    ['Adresse eintragen', () => `<p>Die Adresse, die der PC anzeigt, hier eintragen. Alle im selben WLAN.</p>
+       <div class="zeile fokus" data-b="adresse" tabindex="0"><span class="l">Host-Adresse</span><span class="w"><input class="feld" placeholder="http://192.168.1.50:8080"></span></div>`],
+    ['Mitmachen', () => beitreten(true)],
+  ];
+  function aPc() {
+    return `<div class="a-mp">
+      <div class="kasten" style="display:flex;flex-direction:column;gap:2px">
+        <h3>Über PC mit Python <button class="info" title="Warum es keinen Knopf gibt · woran es scheitern kann · warum experimentell">i</button></h3>
+        ${PC_SCHRITTE.map((s, i) => `<div class="schritt fokus ${i === schritt ? 'gewaehlt' : ''} ${i < schritt ? 'fertig' : ''}" data-schritt="${i}" tabindex="0">
+            <span class="n">${i < schritt ? '✓' : i + 1}</span><span>${s[0]}</span><span class="muted">▶</span></div>`).join('')}
+        <div class="muted" style="margin-top:auto;font-size:11px">Fernseher-Übersicht: <code>/mp-overview.html</code></div>
+      </div>
+      <div class="kasten rechts"><h3>${schritt + 1} · ${PC_SCHRITTE[schritt][0]}</h3>${PC_SCHRITTE[schritt][1]()}
+        ${schritt < 2 ? `<h3 style="margin-top:6px">Rangliste</h3>${rangTabelle()}` : ''}</div></div>`;
+  }
+  function aApp() {
+    return `<div class="a-mp">
+      <div class="kasten" style="display:flex;flex-direction:column;gap:6px">
+        <h3>Über Android-App <button class="info" title="Nur in der App">i</button></h3>
+        <button class="knopf haupt fokus gross" data-b="host">Dieses Telefon ist Host</button>
+        <button class="knopf fokus gross" data-b="suchen">Host im WLAN suchen</button>
+        <div class="muted" style="font-size:11px">Host läuft · <code>http://192.168.1.23:8080</code></div>
+      </div>
+      <div class="kasten rechts"><h3>Beitreten und Rangliste</h3>${beitreten(false)}</div></div>`;
+  }
+
+  // ---------------- Vorschlag B ----------------
+  function bGarage() {
+    return `<div class="b-garage">
+      <div class="b-karten">
+        ${autos.map((x, i) => `<div class="karte fokus ${i === gewaehlt ? 'sel' : ''}" data-auto="${i}" data-b="zeigen" tabindex="0">
+            <div class="kk">${ROLLEN[x.rolle] === 'Steuern' ? 'DU' : 'AUTO ' + (i + 1)}</div>
+            <div class="bild" style="background-image:url(../img/${i ? 'garage' : 'auto'}.jpg)"></div>
+            <div class="name"><span class="punkt" style="background:${FARBEN[x.farbe][1]}"></span>${esc(x.name)} <span class="blink" data-blink="${i}"></span></div>
+            <div class="rolle" data-wert="rolle" data-auto2="${i}"><button class="pf" data-d="-1">◀</button><span>${ROLLEN[x.rolle]}</span><button class="pf" data-d="1">▶</button></div>
+            <div class="fuss"><button class="knopf fokus" data-auf="${i}" data-b="farbe">Einstellen ${auf === i ? '▴' : '▾'}</button>
+              <button class="knopf fokus" data-b="trennen">Trennen</button></div>
+          </div>`).join('')}
+        <div class="karte neu fokus" data-b="verbinden" tabindex="0">+ AUTO</div>
+      </div>
+      ${auf >= 0 ? `<div class="auf">
+          ${wert('farbe', 'Farbe')}${wert('abst', 'Abstimmung', autos[auf].rolle === 0 ? '' : 'aus')}
+          ${wert('tempo', 'Ghost-Tempo', autos[auf].rolle === 2 ? '' : 'aus')}${wert('char', 'Charakter', autos[auf].rolle === 2 ? '' : 'aus')}
+        </div>` : ''}
+      <div class="reihe"><button class="knopf fokus" data-b="alle">Alle trennen</button><button class="knopf fokus" data-b="ghosts">Ghosts anhalten</button>
+        <span class="muted">Zeig auf eine Karte: das Auto blinkt. □ wechselt die Rolle.</span></div>
+    </div>`;
+  }
+  const B_PC = [
+    ['Programm starten', 'Auf dem PC die Startdatei öffnen. Sie sucht Python und zeigt eine Adresse an.',
+      () => `<button class="knopf haupt fokus gross" data-b="bat">Mehrspieler-Host starten.bat</button>
+             <div class="reihe"><code>python tools/omegasim_host.py --port 8080</code><button class="knopf fokus" data-b="kopieren">Kopieren</button></div>`],
+    ['Adresse eintragen', 'Die Adresse vom PC hier eintragen. Alle Geräte müssen im selben WLAN sein.',
+      () => `<div class="zeile fokus" data-b="adresse" tabindex="0"><span class="l">Host-Adresse</span><span class="w"><input class="feld" placeholder="http://192.168.1.50:8080"></span></div>`],
+    ['Name und los', 'Dein Name erscheint in der Rangliste. Oder dieses Gerät wird ein Info-Screen ohne Auto.',
+      () => `<div class="zeile fokus" data-b="mitname" tabindex="0"><span class="l">Mein Name</span><span class="w"><input class="feld" placeholder="z. B. Luuke"></span></div>
+             <div class="reihe"><button class="knopf haupt fokus gross" data-b="mitmachen">Mitmachen</button><button class="knopf fokus" data-b="info">Als Info-Screen</button></div>`],
+    ['Rangliste', 'Gezählt werden gemessene Runden. Reißt das WLAN ab, fährt jeder weiter.',
+      () => `${rangTabelle()}<div class="reihe"><button class="knopf fokus" data-b="verlassen">Verlassen</button></div>`],
+  ];
+  const B_APP = [
+    ['Host werden', 'Ein Telefon mit der App wird Host – ganz ohne PC. Oder such einen Host, der schon läuft.',
+      () => `<div class="reihe"><button class="knopf haupt fokus gross" data-b="host">Dieses Telefon ist Host</button><button class="knopf fokus gross" data-b="suchen">Host suchen</button></div>
+             <div class="muted">Host läuft · <code>http://192.168.1.23:8080</code></div>`],
+    ['Beitreten', 'Die anderen Telefone treten mit dieser Adresse bei.', () => beitreten(false)],
+  ];
+  function assistent(liste, i, titel) {
+    const s = liste[i];
+    return `<div class="assistent">
+      <div class="ass-karte"><div class="ass-kopf">${titel} · SCHRITT ${i + 1} / ${liste.length}</div>
+        <h2>${s[0]}</h2><p>${s[1]}</p>
+        <div class="punkte">${liste.map((_, k) => `<i class="${k <= i ? 'an' : ''}"></i>`).join('')}</div>
+        <div class="ass-nav"><button class="knopf fokus" data-ass="-1" ${i ? '' : 'style="visibility:hidden"'}>◀ Zurück</button>
+          <button class="knopf haupt fokus" data-ass="1" ${i < liste.length - 1 ? '' : 'style="visibility:hidden"'}>Weiter ▶</button></div></div>
+      <div class="ass-karte" style="border-top-color:var(--grau)">${s[2]()}</div></div>`;
+  }
+
+  // ---------------- Zeichnen und Bedienen ----------------
+  function anzeigen() {
+    const a = autos[v === 'b' && auf >= 0 ? auf : gewaehlt];
+    const txt = { rolle: ROLLEN[a.rolle], farbe: FARBEN[a.farbe][0], tempo: a.tempo + ' %', char: CHARAKTER[a.char], abst: ABST[a.abst || 0] };
+    document.querySelectorAll('[data-anz]').forEach((el) => {
+      el.innerHTML = el.dataset.anz === 'farbe'
+        ? `<span class="punkt" style="background:${FARBEN[a.farbe][1]}"></span>${txt.farbe}` : txt[el.dataset.anz];
+    });
+  }
+  function zeichnen() {
+    const m = $('main');
+    if (v === 'a') m.innerHTML = seite === 'garage' ? aGarage() : seite === 'pc' ? aPc() : aApp();
+    else m.innerHTML = seite === 'garage' ? bGarage() : seite === 'pc' ? assistent(B_PC, schritt, 'ÜBER PC') : assistent(B_APP, appSchritt, 'ÜBER DIE APP');
+    document.querySelectorAll('#reiter button').forEach((b) => b.classList.toggle('an', b.dataset.seite === seite));
+    document.querySelectorAll('#vorschlag button').forEach((b) => b.classList.toggle('an', b.dataset.v === v));
+    anzeigen();
+    const f = [...document.querySelectorAll('.fokus')];
+    if (f.length) waehle(Math.min(fokusI, f.length - 1));
+  }
+  let fokusI = 0;
+  function waehle(i) {
+    const f = [...document.querySelectorAll('.fokus')];
+    f.forEach((el) => el.classList.remove('sel'));
+    fokusI = (i + f.length) % f.length;
+    const el = f[fokusI];
+    el.classList.add('sel');
+    el.scrollIntoView({ block: 'nearest' });
+    $('beschr').textContent = BESCHR[el.dataset.b] || '';
+    if (el.dataset.auto !== undefined) blinken(+el.dataset.auto);
+  }
+  function blinken(i) {
+    const s = document.querySelector(`[data-blink="${i}"]`);
+    if (!s) return;
+    s.textContent = 'blinkt…';
+    setTimeout(() => { if (s) s.textContent = ''; }, 1400);
+  }
+  function verstellen(key, d, idx) {
+    const a = autos[idx !== undefined ? idx : (v === 'b' && auf >= 0 ? auf : gewaehlt)];
+    if (key === 'rolle') a.rolle = (a.rolle + d + ROLLEN.length) % ROLLEN.length;
+    if (key === 'farbe') a.farbe = (a.farbe + d + FARBEN.length) % FARBEN.length;
+    if (key === 'tempo' && a.rolle === 2) a.tempo = Math.max(40, Math.min(120, a.tempo + 5 * d));
+    if (key === 'char' && a.rolle === 2) a.char = (a.char + d + CHARAKTER.length) % CHARAKTER.length;
+    if (key === 'abst' && a.rolle === 0) a.abst = ((a.abst || 0) + d + ABST.length) % ABST.length;
+    const merk = fokusI; zeichnen(); waehle(merk);
+  }
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    const r = t.closest('#reiter button'); if (r) { seite = r.dataset.seite; fokusI = 0; zeichnen(); return; }
+    const vs = t.closest('#vorschlag button'); if (vs) { v = vs.dataset.v; fokusI = 0; zeichnen(); return; }
+    const pf = t.closest('.pf');
+    if (pf) { const z = pf.closest('[data-wert]'); verstellen(z.dataset.wert, +pf.dataset.d, z.dataset.auto2 !== undefined ? +z.dataset.auto2 : undefined); return; }
+    const au = t.closest('[data-auf]'); if (au) { auf = auf === +au.dataset.auf ? -1 : +au.dataset.auf; zeichnen(); return; }
+    const a = t.closest('[data-auto]'); if (a && !t.closest('button')) { gewaehlt = +a.dataset.auto; zeichnen(); return; }
+    const sc = t.closest('[data-schritt]'); if (sc) { schritt = +sc.dataset.schritt; zeichnen(); return; }
+    const as = t.closest('[data-ass]');
+    if (as) { if (seite === 'pc') schritt = Math.max(0, Math.min(B_PC.length - 1, schritt + +as.dataset.ass));
+              else appSchritt = Math.max(0, Math.min(B_APP.length - 1, appSchritt + +as.dataset.ass));
+              fokusI = 0; zeichnen(); return; }
+  });
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('.fokus');
+    if (!el) return;
+    const f = [...document.querySelectorAll('.fokus')];
+    const i = f.indexOf(el);
+    if (i >= 0 && i !== fokusI) waehle(i);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' && !['ArrowUp', 'ArrowDown', 'Escape'].includes(e.key)) return;
+    const f = [...document.querySelectorAll('.fokus')];
+    const el = f[fokusI];
+    if (e.key === 'ArrowDown') { waehle(fokusI + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { waehle(fokusI - 1); e.preventDefault(); }
+    else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && el && el.dataset.wert) {
+      verstellen(el.dataset.wert, e.key === 'ArrowLeft' ? -1 : 1); e.preventDefault();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { waehle(fokusI + (e.key === 'ArrowLeft' ? -1 : 1)); e.preventDefault(); }
+    else if (e.key === 'Enter' && el) { const inp = el.querySelector('input'); if (inp) inp.focus(); else el.click(); e.preventDefault(); }
+    else if (e.key === 'q' || e.key === 'e') {
+      const s = ['garage', 'pc', 'app']; seite = s[(s.indexOf(seite) + (e.key === 'q' ? 2 : 1)) % 3]; fokusI = 0; zeichnen();
+    }
+  });
+  zeichnen();
+})();
+</script>
+</body>
+</html>

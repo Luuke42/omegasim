@@ -3,9 +3,10 @@
 """Versionsnummer aus der Git-Historie in index.html schreiben.
 
 Format:  0.<Woche>.<Push>
-  Woche  vollendete 7-Tage-Bloecke seit dem ersten Commit
-  Push   Commits seit Beginn des laufenden Blocks, einschliesslich des gerade
-         entstehenden - deshalb +1
+  Woche  vollendete 7-Tage-Bloecke seit dem ersten Commit, ausgerichtet auf
+         Kalenderwochen: jeder Block beginnt an einem Montag
+  Push   Commits seit Beginn des laufenden Blocks (also seit dem Montag der
+         laufenden Woche), einschliesslich des gerade entstehenden - deshalb +1
 
 Vor jedem Commit aufrufen:
 
@@ -15,9 +16,11 @@ Geschrieben wird in die QUELLE (src/00-index.head.html), danach wird index.html 
 mitgebaut.
 
 Warum aus der Historie und nicht von Hand: eine Zahl, die man selbst pflegt, ist nach dem
-dritten Push falsch. Der 7-Tage-Block wird ab dem ERSTEN Commit gezaehlt, nicht ab Montag -
-sonst stimmen die beiden Stellen nicht zueinander, weil die Wochenzahl ebenfalls vom
-Projektbeginn aus laeuft.
+dritten Push falsch. Der 7-Tage-Block wird ab dem ERSTEN Commit gezaehlt, aber an Kalenderwochen
+ausgerichtet, also an Montagen. GEMELDET: der Block rollte vorher am Wochentag des ersten Commits
+(Freitag), daraus wurde an einem Freitag mitten in der Woche 0.8.1 statt 0.7.62 - ein Wochensprung,
+der zur echten Wochenmitte drei Tage zu frueh kam. Erst ein Montag als Blockgrenze macht den
+Wochenzaehler mit der Kalenderwoche gleich.
 """
 import datetime
 import io
@@ -45,8 +48,14 @@ def version():
     first = git('log', '--reverse', '--format=%aI').splitlines()[0]
     start = datetime.datetime.fromisoformat(first).date()
     today = datetime.date.today()
-    week = (today - start).days // 7
-    block = start + datetime.timedelta(days=week * 7)
+    # Blockgrenze ist der Montag der laufenden Woche, nicht der Wochentag des ersten
+    # Commits. weekday(): Montag = 0, also ziehen wir genau so viele Tage ab, dass der
+    # Montag herauskommt.
+    monday = today - datetime.timedelta(days=today.weekday())
+    week = (monday - start).days // 7
+    if week < 0:
+        week = 0
+    block = monday
     n = int(git('rev-list', '--count', 'HEAD',
                 '--since=%s 00:00:00' % block.isoformat()))
     # +1, weil der Commit, fuer den diese Nummer gilt, noch nicht existiert.

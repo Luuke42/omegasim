@@ -619,12 +619,6 @@ def main():
         meta['shift']['up' if up else 'down'] = {'file': name + '.ogg', 'seconds': secs}
         print('%-17s %d KB  %.2fs' % (name, sz // 1024, secs))
 
-    # BESTELLT: eine echte Aufnahme fuer die Zuendung, "ideally the porsche" - siehe
-    # real_crank_from_recording() und der Kommentar am Kopf dieser Datei.
-    real_start_recordings = {
-        'p992gt3r': 'freesound_community-car-engine-start-44357.mp3',
-    }
-
     meta['start'] = {}
     meta['accel'] = {}
     for key, cfg in CARS.items():
@@ -639,20 +633,9 @@ def main():
         print('%-8s demo      %d KB  %.1fs  %d hoch / %d runter  0-%.1f km/h  Drehzahl %d-%d'
               % (key, sz // 1024, ts[-1], ups, downs, vs.max(), rs.min(), rs.max()))
 
-    # '<key>_rec'-Begleiteintraege: dieselbe Motorkonfiguration wie ihr synthetisches
-    # Original, aber mit einer echten Aufnahme unter der Zuendung, als EIGENES, direkt daneben
-    # waehlbares Profil in #sound-profile (audio/loops.json traegt den passenden Loop-Eintrag
-    # von Hand nach, mit denselben .ogg-Dateien wie das Original - nur die Zuendung
-    # unterscheidet sich). Nicht als Ersatz des Originals, damit ein direkter A/B-Vergleich
-    # moeglich ist statt einer stillen, schwer nachpruefbaren Aenderung.
-    for key, fname in real_start_recordings.items():
-        real_crank = real_crank_from_recording(os.path.join(SOUNDS, fname), crank_end=0.95)
-        rec_key = key + '_rec'
-        sz = to_ogg(engine_start(CARS[key], seed=seed_for('start', key), real_crank=real_crank),
-                    '%s_start' % rec_key)
-        meta['start'][rec_key] = {'file': '%s_start.ogg' % rec_key, 'seconds': 2.6}
-        print('%-8s start     %d KB  (echte Zuendung, Vergleichseintrag neben %s)'
-              % (rec_key, sz // 1024, key))
+    # Die '<key>_rec'-Vergleichseintraege (echte Zuendungs-Aufnahme) sind wieder entfernt -
+    # BESTELLT: "den neuen Porschesound aus v0.7 wieder rausnehmen, der klingt genauso".
+    # real_crank_from_recording() bleibt als Werkzeug stehen, erzeugt aber nichts mehr.
 
     # The curve data the documentation charts are drawn from, so the picture and the audio
     # come from the same simulation run.

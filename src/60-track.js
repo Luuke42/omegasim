@@ -240,7 +240,7 @@
   // track without one can never register a lap.
   function freshTrackTiles() { return [{ type: TILE_TYPE.START }]; }
   let currentTrackTiles = freshTrackTiles(); // [{type}]
-  let trackRotationDeg = 0; // whole-track orientation, rotatable in 90° steps
+  let trackRotationDeg = 0; // whole-track orientation, rotatable in 45° steps (v0.8.28)
 
   // Turtle-graphics walk: each tile is a fixed-length/fixed-turn step, always
   // continuing from the previous tile's exact end position and heading — so tiles
@@ -2765,10 +2765,49 @@
       const kw = TRACK_KERB_W;
       // Brighter than the real kerb paint, on purpose: these are drawn on a dark track view
       // now, and the actual #b3131f / #1565c0 came out at under 3:1 against it.
-      [[kerbLeft, '#5aa9ff'], [kerbRight, '#ff5c5c']].forEach(([path, col]) => {
-        body += `<path d="${poly(path)}" fill="none" stroke="#ffffff" stroke-width="${kw}" stroke-linecap="butt"/>`;
-        body += `<path d="${poly(path)}" fill="none" stroke="${col}" stroke-width="${kw}" stroke-linecap="butt" stroke-dasharray="7 7"/>`;
-      });
+      if (!o.echt) {
+        [[kerbLeft, '#5aa9ff'], [kerbRight, '#ff5c5c']].forEach(([path, col]) => {
+          body += `<path d="${poly(path)}" fill="none" stroke="#ffffff" stroke-width="${kw}" stroke-linecap="butt"/>`;
+          body += `<path d="${poly(path)}" fill="none" stroke="${col}" stroke-width="${kw}" stroke-linecap="butt" stroke-dasharray="7 7"/>`;
+        });
+      } else {
+        // WIE DIE ECHTEN TEILE (Editor). BESTELLT: "Die Teile sollen wie die echten aussehen
+        // (also an den Raendern muessen so leichte Pfeile in die Fahrtrichtung sein)". Ein
+        // weisser Randstreifen, darauf Pfeilspitzen in Fahrtrichtung: links blau, rechts rot
+        // - dieselben Farben wie die Randsteine. Als einzelne Pfade und NICHT als
+        // <g transform>: der Selbsttest zaehlt jede verschobene Gruppe als Auto.
+        const kw2 = kw * 2.2;
+        const kL = offsetPath(pts, nrm, half + kw2 / 2), kR = offsetPath(pts, nrm, -(half + kw2 / 2));
+        [[kL, 1, '#5aa9ff'], [kR, -1, '#ff5c5c']].forEach(([path, seite, col]) => {
+          body += `<path d="${poly(path)}" fill="none" stroke="#f3f5f8" stroke-width="${kw2}" stroke-linecap="butt"/>`;
+          let d = '';
+          for (let q = 1; q < pts.length - 1; q += 2) {
+            const p = pts[q], n = nrm[q];
+            const rad = p.heading * Math.PI / 180;
+            const vx = Math.sin(rad), vy = -Math.cos(rad);
+            const cx = p.x + n.x * seite * (half + kw2 / 2), cy = p.y + n.y * seite * (half + kw2 / 2);
+            const s = kw2 * 0.5;
+            const tip = [cx + vx * s, cy + vy * s];
+            const a = [cx - vx * s * 0.5 + n.x * s * 0.8, cy - vy * s * 0.5 + n.y * s * 0.8];
+            const b = [cx - vx * s * 0.5 - n.x * s * 0.8, cy - vy * s * 0.5 - n.y * s * 0.8];
+            d += ` M ${P2(a)} L ${P2(tip)} L ${P2(b)}`;
+          }
+          body += `<path d="${d.trim()}" fill="none" stroke="${col}" stroke-width="${(kw2 * 0.28).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+        });
+      }
+      // DAS GEWAEHLTE TEIL (Editor): gelb ueberzogen, damit man sieht, wo eingefuegt und was
+      // entfernt wird.
+      if (o.auswahl !== null && o.auswahl !== undefined && o.auswahl >= 0 && o.auswahl < tiles.length) {
+        const seg = [];
+        for (let q = kachelTab.start[o.auswahl]; q < pts.length && (pts[q].tile === o.auswahl || q === kachelTab.start[o.auswahl]); q++) {
+          seg.push([pts[q].x, pts[q].y]);
+        }
+        const naechster = kachelTab.start[o.auswahl + 1];
+        if (naechster !== undefined && pts[naechster]) seg.push([pts[naechster].x, pts[naechster].y]);
+        if (seg.length >= 2) {
+          body += `<path d="${poly(seg)}" fill="none" stroke="#ffd400" stroke-opacity=".5" stroke-width="${(half * 2).toFixed(1)}" stroke-linecap="butt"/>`;
+        }
+      }
 
       // 5) The ideal line, from the same geometry, coloured by whether a car would be
       //    braking there. Green = on the power, red = braking, and the transition is drawn
@@ -2788,7 +2827,7 @@
       // One short segment per sample pair, each with its own colour. A single path with a
       // gradient cannot follow an arbitrary curve, so the curve is cut instead.
       const IDEAL_W = 1.1;   // was 2.2; halved on request, the line was heavier than the kerbs
-      for (let i = 0; i + 1 < ideal.length; i++) {
+      for (let i = 0; i + 1 < (o.ohneLinie ? 0 : ideal.length); i++) {
         const v = (brake[i] + brake[i + 1]) / 2;
         body += `<path d="M ${P2(ideal[i])} L ${P2(ideal[i + 1])}" fill="none" `
               + `stroke="${brakeColour(v)}" stroke-width="${IDEAL_W}" stroke-linecap="round"/>`;
@@ -3060,7 +3099,7 @@
     // app, so importing something without it would break the lap counting.
     if (tiles[0].type !== TILE_TYPE.START) tiles.unshift({ type: TILE_TYPE.START });
     const rot = m[2] ? parseInt(m[2], 10) : 0;
-    return { tiles, rotation: (Math.round(rot / 90) * 90) % 360 };
+    return { tiles, rotation: (Math.round(rot / 45) * 45) % 360 };
   }
 
   $('track-code-copy').onclick = async () => {
@@ -3126,7 +3165,7 @@
                      //
                      // UMGEDREHT, weil querSoll ein Lenkbefehl ist und diese Karte entlang
                      // der Normalen zeichnet - siehe querSollAlsLage().
-                     quer: querSollAlsLage(g.querSoll) });
+                     quer: querSollAlsLage(g.querSoll), rolle: 'ghost' });
         } else if (c.role === 'player' && typeof dashMinimapIndex === 'number') {
           // Das eigene Auto lenkt die App nicht, es gibt also keine angeforderte QUERLAGE -
           // quer bleibt 0, statt eine zu erfinden.
@@ -3137,7 +3176,7 @@
           out.push({ index: dashMinimapIndex,
                      phase: (typeof dashTilePhase === 'function') ? dashTilePhase() : 0.5,
                      farbe: carColor(c).hex,
-                     kuerzel: garageLabel(c).slice(0, 3), quer: 0 });
+                     kuerzel: garageLabel(c).slice(0, 3), quer: 0, rolle: 'player' });
         }
       });
     } catch (e) { return out; }
@@ -3159,6 +3198,34 @@
     refreshTrackPreview();
   }, 250);
 
+  let trackEditorGeo = null;
+  // ---- Editor-Schalter (v0.8.29): Ideallinie, Tastenkuerzel. Je Geraet gemerkt. ----
+  // var und nicht let: refreshTrackPreview() laeuft schon beim Laden, und ein let weiter unten
+  // stuende dann noch in der temporalen Todeszone.
+  var editorSchalter = (function () {
+    const z = { linie: true, tasten: true };
+    try {
+      const s = JSON.parse(localStorage.getItem('omegasim-editor-schalter') || '{}');
+      if (typeof s.linie === 'boolean') z.linie = s.linie;
+      if (typeof s.tasten === 'boolean') z.tasten = s.tasten;
+    } catch (e) { /* ohne Speicher: an */ }
+    return z;
+  })();
+  function editorSchalterZeigen() {
+    [['track-opt-linie', editorSchalter.linie], ['track-opt-tasten', editorSchalter.tasten]].forEach(([id, an]) => {
+      const b = $(id);
+      if (b) { b.classList.toggle('an', an); b.setAttribute('aria-pressed', an ? 'true' : 'false'); }
+    });
+    const host = $('track-fs-host');
+    if (host) host.classList.toggle('ohne-tasten', !editorSchalter.tasten);
+  }
+  function editorSchalterUm(was) {
+    editorSchalter[was] = !editorSchalter[was];
+    try { localStorage.setItem('omegasim-editor-schalter', JSON.stringify(editorSchalter)); } catch (e) { /* egal */ }
+    editorSchalterZeigen();
+    if (was === 'linie') refreshTrackPreview();
+  }
+
   function refreshTrackPreview() {
     // Die Kachelzahl entscheidet, ob der Windschatten ueberhaupt rechnen kann. Hier gerufen
     // und nicht in 50-drive.js beim Laden: dort ist currentTrackTiles noch in der temporalen
@@ -3167,9 +3234,15 @@
     // MIT den Autos, seit v0.5.1. Vorher stand hier ausdruecklich null, also gar kein
     // Auto - und der gruene Strich auf der Startgeraden, den man dafuer hielt, ist die
     // Start/Ziel-Linie.
+    if (trackSel !== null && trackSel >= currentTrackTiles.length) trackSel = null;
+    const imEditor = document.body.classList.contains('track-fs');
     const result = renderTrackPreview(currentTrackTiles, null,
-      { detailed: true, cars: trackCarMarks() });
+      { detailed: true, cars: trackCarMarks(), echt: true, auswahl: imEditor ? trackSelIndex() : null,
+        ohneLinie: !editorSchalter.linie });
     $('track-preview-svg').innerHTML = result.html;
+    trackEditorGeo = result.geo || null;
+    trackInfoZeichnen();
+    editorSchalterZeigen();
     renderTrackPalette();
     updateTrackSpace();
     $('track-code').value = trackToCode(currentTrackTiles, trackRotationDeg);
@@ -3223,8 +3296,8 @@
         // hier, weil die Liste die einzige Stelle ist, die nach Index loescht.
         const i = parseInt(btn.dataset.idx, 10);
         if (!(i > 0)) return;
-        currentTrackTiles.splice(i, 1);
-        refreshTrackPreview();
+        trackSel = i;
+        trackTeilEntfernen();
       };
     });
     $('track-rotation-val').textContent = trackRotationDeg + '°';
@@ -3234,13 +3307,161 @@
   // an, der Import und das Laden stellen sie voran - nur addTile() hatte keinen Schutz, und
   // der Start-Knopf in der Palette konnte sie beliebig oft hinten anhaengen. Eine zweite
   // Start-Kachel bricht die Rundenzaehlung, weil sie sich auf die eine Ueberfahrt stuetzt.
+  // ---- AUSWAHL, EINFUEGEN, ENTFERNEN, RUECKGAENGIG (v0.8.28) -----------------------
+  //
+  // BESTELLT: "Ich will einzelne Teile auswaehlen und entfernen koennen und mittendrin ein
+  // Teil einfuegen koennen." Gewaehlt ist ein Teil (trackSel, Index; null = das letzte).
+  // Neue Teile kommen HINTER das gewaehlte, und das neue ist danach gewaehlt - wer nie
+  // waehlt, baut also wie bisher hinten an. Jede Aenderung legt vorher den Stand ab
+  // (trackVerlauf); Rueckgaengig holt ihn zurueck, nicht nur "letztes Teil weg".
+  let trackSel = null;
+  const trackVerlauf = [];
+  function trackSelIndex() {
+    const n = currentTrackTiles.length;
+    if (!n) return null;
+    return trackSel === null || trackSel >= n || trackSel < 0 ? n - 1 : trackSel;
+  }
+  function trackMerken() {
+    trackVerlauf.push({ tiles: currentTrackTiles.map((x) => Object.assign({}, x)),
+                        rot: trackRotationDeg, sel: trackSel });
+    if (trackVerlauf.length > 80) trackVerlauf.shift();
+  }
   function addTile(type) {
     if (type === TILE_TYPE.START && currentTrackTiles.some(t => t.type === TILE_TYPE.START)) {
       showHudToast('Start/Ziel gibt es nur einmal');
       return;
     }
-    currentTrackTiles.push({ type });
+    trackMerken();
+    const at = currentTrackTiles.length ? trackSelIndex() + 1 : 0;
+    currentTrackTiles.splice(at, 0, { type });
+    trackSel = at;
     refreshTrackPreview();
+  }
+  function trackTeilEntfernen() {
+    const i = trackSelIndex();
+    if (!(i > 0)) { showHudToast(t('Start/Ziel bleibt')); return false; }
+    trackMerken();
+    currentTrackTiles.splice(i, 1);
+    trackSel = i - 1;
+    refreshTrackPreview();
+    return true;
+  }
+  function trackRueckgaengig() {
+    const s = trackVerlauf.pop();
+    if (!s) { showHudToast(t('Nichts rückgängig zu machen')); return false; }
+    currentTrackTiles = s.tiles;
+    trackRotationDeg = s.rot;
+    trackSel = s.sel;
+    refreshTrackPreview();
+    return true;
+  }
+  function trackAuswahlSchritt(d) {
+    const n = currentTrackTiles.length;
+    if (!n) return;
+    trackSel = ((trackSelIndex() + d) % n + n) % n;
+    refreshTrackPreview();
+  }
+  // LAENGE: die Summe der Teile, dieselbe Laenge, mit der Ghosts und Rundenzeit rechnen
+  // (tileLength, 90-ghosts.js). Dazu das 50-fache in km: die Autos sind 1:50.
+  function trackLaengeM(tiles) {
+    let u = 0;
+    for (const k of tiles || []) u += tileLength(k.type);
+    return u / TRACK_UNITS_PER_CM / 100;
+  }
+  function trackLaengeText(tiles) {
+    const m = trackLaengeM(tiles);
+    const fmt = (x, n) => x.toFixed(n).replace('.', lang === 'en' ? '.' : ',');
+    return t('Länge') + ' ' + fmt(m, 2) + ' m · 1:50 = ' + fmt(m * 50 / 1000, 2) + ' km';
+  }
+
+  // ---- MEINE TEILE: was im Karton ist, und was die Strecke davon braucht --------------
+  const TEILE_KEY = 'omegasim-teile';
+  const TEILE_SORTEN = [TILE_TYPE.START, TILE_TYPE.STRAIGHT, TILE_TYPE.CURVE_LEFT, TILE_TYPE.CURVE_RIGHT,
+    TILE_TYPE.HAIRPIN_LEFT, TILE_TYPE.HAIRPIN, TILE_TYPE.WEIT_LEFT, TILE_TYPE.WEIT_RIGHT,
+    TILE_TYPE.KLEIN_LEFT, TILE_TYPE.KLEIN_RIGHT, TILE_TYPE.PIT, TILE_TYPE.ENGE];
+  // Die Pakete, wie sie der Nutzer beschrieben hat: Grundpackung 8 rechts, 2 links,
+  // 4 Geraden, 1 Start; Haarnadel-Set links und rechts; 30-Grad-Aussenkurven 2 L, 2 R.
+  const TEILE_PAKETE = {
+    grund: [[TILE_TYPE.CURVE_RIGHT, 8], [TILE_TYPE.CURVE_LEFT, 2], [TILE_TYPE.STRAIGHT, 4], [TILE_TYPE.START, 1]],
+    haarnadel: [[TILE_TYPE.HAIRPIN_LEFT, 1], [TILE_TYPE.HAIRPIN, 1]],
+    dreissig: [[TILE_TYPE.WEIT_LEFT, 2], [TILE_TYPE.WEIT_RIGHT, 2]],
+  };
+  function teileBestand() {
+    try {
+      const x = JSON.parse(localStorage.getItem(TEILE_KEY) || 'null');
+      return x && typeof x === 'object' ? x : null;
+    } catch (e) { return null; }
+  }
+  function teileSpeichern(b) {
+    try { if (b) localStorage.setItem(TEILE_KEY, JSON.stringify(b)); else localStorage.removeItem(TEILE_KEY); } catch (e) { /* privat */ }
+    teileZeichnen();
+    refreshTrackPreview();
+  }
+  // Je Sorte: vorhanden (null = nicht gezaehlt), gebraucht, Rest.
+  function teileBilanz(tiles) {
+    const b = teileBestand();
+    const braucht = {};
+    for (const k of tiles || []) braucht[k.type] = (braucht[k.type] || 0) + 1;
+    return TEILE_SORTEN.map((typ) => {
+      const hat = b && b[typ] !== undefined && b[typ] !== null ? +b[typ] : null;
+      const n = braucht[typ] || 0;
+      return { typ, hat, braucht: n, rest: hat === null ? null : hat - n };
+    });
+  }
+  function teileZeichnen() {
+    const host = $('teile-liste');
+    if (!host) return;
+    const b = teileBestand() || {};
+    host.innerHTML = '';
+    for (const typ of TEILE_SORTEN) {
+      const z = document.createElement('div');
+      z.className = 'teile-zeile';
+      const wert = b[typ] === undefined || b[typ] === null ? '–' : String(b[typ]);
+      z.innerHTML = '<span></span><button type="button" data-d="-1" aria-label="weniger">&minus;</button><b></b>'
+                  + '<button type="button" data-d="1" aria-label="mehr">+</button>';
+      z.querySelector('span').textContent = t(TILE_LABEL[typ] || ('0x' + typ.toString(16)));
+      z.querySelector('b').textContent = wert;
+      z.querySelectorAll('button').forEach((k) => {
+        k.onclick = () => {
+          const neu = Object.assign({}, teileBestand() || {});
+          const alt = neu[typ] === undefined || neu[typ] === null ? 0 : +neu[typ];
+          neu[typ] = Math.max(0, Math.min(99, alt + +k.dataset.d));
+          teileSpeichern(neu);
+        };
+      });
+      host.appendChild(z);
+    }
+  }
+  function teilePaket(name) {
+    const neu = Object.assign({}, teileBestand() || {});
+    for (const [typ, n] of TEILE_PAKETE[name] || []) neu[typ] = (neu[typ] ? +neu[typ] : 0) + n;
+    teileSpeichern(neu);
+  }
+  const teileKnopf = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
+  teileKnopf('teile-grund', () => teilePaket('grund'));
+  teileKnopf('teile-haarnadel', () => teilePaket('haarnadel'));
+  teileKnopf('teile-dreissig', () => teilePaket('dreissig'));
+  teileKnopf('teile-leer', () => { const n = {}; TEILE_SORTEN.forEach((x) => { n[x] = 0; }); teileSpeichern(n); });
+  teileZeichnen();
+
+  // Anzeige oben im Vollbild: Laenge, Teilebilanz; dazu die Tastenbelegung.
+  function trackInfoZeichnen() {
+    const info = $('track-fs-info');
+    const bilanz = teileBilanz(currentTrackTiles).filter((x) => x.hat !== null);
+    const fehlt = bilanz.filter((x) => x.rest < 0);
+    let html = trackLaengeText(currentTrackTiles);
+    if (bilanz.length) {
+      const uebrig = bilanz.reduce((s, x) => s + Math.max(0, x.rest), 0);
+      html += ' · ' + (fehlt.length
+        ? '<span class="tp-fehlt">' + t('Fehlt') + ': ' + fehlt.map((x) => (-x.rest) + '× ' + t(TILE_LABEL[x.typ])).join(', ') + '</span>'
+        : '<span class="tp-da">' + t('Alle Teile da') + '</span>')
+        + ' · ' + uebrig + ' ' + t('übrig');
+    }
+    if (info) info.innerHTML = html;
+    const l = $('track-laenge');
+    if (l) l.textContent = trackLaengeText(currentTrackTiles) + ' · ' + currentTrackTiles.length + ' ' + t('Teile');
+    const k = $('track-fs-tasten');
+    if (k) k.textContent = t('✕/Enter einfügen · □/Entf entfernen · L1 R1/Q E Teil wählen · △/R drehen · ○/Z zurück · L3/Esc schließen');
   }
   // ---- Symbol palette ----
   // The same five actions as the text buttons above, as icons, so they still fit under the
@@ -3304,13 +3525,21 @@
     const host = $('track-palette');
     if (!host) return;
     host.innerHTML = '';
+    // Gruppe je Teil: links drehend, gerade (auch Enge und Box), rechts drehend. Wechselt sie,
+    // steht ein feiner Strich davor (BESTELLT: "Trenne die Streckenteile im Editor jeweils
+    // nach Typ mit subtilen grauen vertikalen Strichen").
+    const gruppe = (p) => Math.sign(tileTurnDeg(p.type()));
     TRACK_PALETTE.forEach((p, i) => {
       const b = document.createElement('button');
-      b.className = 'tp-btn' + (i === trackPaletteSel ? ' sel' : '');
+      b.className = 'tp-btn' + (i === trackPaletteSel ? ' sel' : '')
+        + (i > 0 && gruppe(p) !== gruppe(TRACK_PALETTE[i - 1]) ? ' tp-trenn' : '');
       b.title = p.cap;
       b.setAttribute('aria-label', p.cap);
+      const bil = teileBilanz(currentTrackTiles).find((x) => x.typ === p.type());
+      const rest = bil && bil.hat !== null
+        ? `<span class="tp-rest${bil.rest < 0 ? ' fehlt' : ''}">${bil.rest}</span>` : '';
       b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${p.icon}</svg>`
-                  + `<span class="tp-cap">${p.cap}</span>`;
+                  + `<span class="tp-cap">${p.cap}</span>` + rest;
       b.onclick = () => { trackPaletteSel = i; renderTrackPalette(); addTile(p.type()); };
       host.appendChild(b);
     });
@@ -3424,9 +3653,14 @@
   // gelesen - renderTrackPadFocus und trackEditorPad nehmen beide ausschliesslich `id`.
   // Fuer den Umschalter waere sie ausserdem falsch geworden: er traegt jetzt zwei.
   const TRACK_ACTIONS = [
+    { id: 'track-opt-linie' },
+    { id: 'track-opt-tasten' },
     { id: 'track-undo' },
+    { id: 'track-delete-sel' },
+    { id: 'track-rotate-left' },
     { id: 'track-rotate-right' },
     { id: 'track-clear' },
+    { id: 'track-tour' },
     { id: 'track-fs-toggle' },
   ];
   let trackPadRow = 1;      // 0 = Aktionen oben, 1 = Teile unten
@@ -3467,11 +3701,14 @@
           addTile(TRACK_PALETTE[trackPaletteSel].type());
         }
         return true;
-      // Die drei Direkttasten bleiben, damit man fuer Zurueck nicht erst die Reihe wechseln
-      // muss - das ist die haeufigste Aktion beim Bauen.
-      case 'undo':  $('track-undo').click(); return true;
+      // Direkttasten (v0.8.28): Kreis rueckgaengig, Quadrat entfernt das gewaehlte Teil,
+      // Dreieck dreht um 45 Grad, L1/R1 waehlen das vorige/naechste Teil.
+      case 'undo':  trackRueckgaengig(); return true;
       case 'reset': trackReset(); return true;
-      case 'rotate': $('track-rotate-right').click(); return true;
+      case 'rotate': rotateTrack(45); return true;
+      case 'delete': trackTeilEntfernen(); return true;
+      case 'prev': trackAuswahlSchritt(-1); return true;
+      case 'next': trackAuswahlSchritt(1); return true;
       default: return false;
     }
   }
@@ -3487,20 +3724,79 @@
   // nicht mehr gibt (track-add-start und fuenf weitere). Sie prueften auf Vorhandensein und
   // taten deshalb nie etwas - toter Code, der wie eine Funktion aussieht. Gebaut wird mit
   // renderTrackPalette().
-  $('track-undo').onclick = () => {
-    // The first tile is the start/finish anchor and is not removable — the lap counting
-    // depends on it existing.
-    if (currentTrackTiles.length <= 1) { showHudToast('Nichts zu entfernen'); return; }
-    currentTrackTiles.pop();
-    refreshTrackPreview();
-  };
-  $('track-clear').onclick = () => { currentTrackTiles = freshTrackTiles(); refreshTrackPreview(); };
+  // Rueckgaengig nimmt jetzt die letzte AENDERUNG zurueck (Verlauf), nicht nur das letzte
+  // Teil. Start/Ziel bleibt dabei immer, weil jeder abgelegte Stand eine hatte.
+  $('track-undo').onclick = () => { trackRueckgaengig(); };
+  $('track-opt-linie').onclick = () => { editorSchalterUm('linie'); };
+  $('track-opt-tasten').onclick = () => { editorSchalterUm('tasten'); };
+  $('track-delete-sel').onclick = () => { trackTeilEntfernen(); };
+  $('track-clear').onclick = () => { trackMerken(); currentTrackTiles = freshTrackTiles(); trackSel = null; refreshTrackPreview(); };
 
+  // 45-Grad-Schritte in beide Richtungen. BESTELLT: "Ich will auch 45 Grad drehen koennen."
+  // Die Teile selbst haben keine eigene Richtung - sie ergibt sich aus der Reihenfolge -,
+  // gedreht wird deshalb die ganze Strecke (die Startrichtung, siehe trackCenterline).
   function rotateTrack(deltaDeg) {
+    trackMerken();
     trackRotationDeg = (trackRotationDeg + deltaDeg + 360) % 360;
     refreshTrackPreview();
   }
-  $('track-rotate-right').onclick = () => rotateTrack(90);
+  $('track-rotate-right').onclick = () => rotateTrack(45);
+  $('track-rotate-left').onclick = () => rotateTrack(-45);
+  $('track-tour').onclick = () => { if (typeof konsoleTourStart === 'function') konsoleTourStart(K_EDITOR); };
+  if ($('track-edit-tour')) {
+    $('track-edit-tour').onclick = async () => {
+      await enterTrackFullscreen();
+      if (typeof konsoleTourStart === 'function') konsoleTourStart(K_EDITOR);
+    };
+  }
+
+  // MAUS UND FINGER: ein Tipp auf die Karte waehlt das naechstgelegene Teil.
+  $('track-preview-svg').addEventListener('click', (e) => {
+    if (!document.body.classList.contains('track-fs') || !trackEditorGeo) return;
+    const svg = $('track-preview-svg').querySelector('svg');
+    if (!svg || !svg.getScreenCTM) return;
+    const m = svg.getScreenCTM();
+    if (!m) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const q = pt.matrixTransform(m.inverse());
+    const g = trackEditorGeo;
+    let best = null, bestD = Infinity;
+    g.pts.forEach((p) => {
+      if (p.tile < 0) return;
+      const dx = p.x + g.ox - q.x, dy = p.y + g.oy - q.y, d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; best = p.tile; }
+    });
+    if (best !== null && bestD < Math.pow(g.half * 3, 2)) { trackSel = best; refreshTrackPreview(); }
+  });
+
+  // TASTATUR IM EDITOR, im Erfassungslauf: die Pfeile sollen hier bauen und nicht fahren.
+  window.addEventListener('keydown', (e) => {
+    if (!document.body.classList.contains('track-fs')) return;
+    if (e.target && e.target.closest && e.target.closest('input, textarea, select')) return;
+    const k = (e.key || '').toLowerCase();
+    const weg = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+    // Tutorial offen: blaettern, schliessen.
+    if (typeof konsoleTourOffen === 'function' && konsoleTourOffen()) {
+      if (k === 'enter' || k === 'arrowright' || k === ' ') { weg(); konsoleTourWeiter(); }
+      else if (k === 'arrowleft' || k === 'backspace') { weg(); konsoleTourZurueck(); }
+      else if (k === 'escape') { weg(); konsoleTourZu(false); }
+      return;
+    }
+    if (e.repeat && !['arrowleft', 'arrowright', 'q', 'e'].includes(k)) return;
+    if (k === 'arrowleft') { weg(); trackEditorPad('left'); }
+    else if (k === 'arrowright') { weg(); trackEditorPad('right'); }
+    else if (k === 'arrowup') { weg(); trackEditorPad('up'); }
+    else if (k === 'arrowdown') { weg(); trackEditorPad('down'); }
+    else if (k === 'enter' || k === ' ') { weg(); trackEditorPad('confirm'); }
+    else if (k === 'delete' || k === 'backspace') { weg(); trackTeilEntfernen(); }
+    else if (k === 'z' || (k === 'z' && e.ctrlKey)) { weg(); trackRueckgaengig(); }
+    else if (k === 'r') { weg(); rotateTrack(e.shiftKey ? -45 : 45); }
+    else if (k === 'q' || k === ',') { weg(); trackAuswahlSchritt(-1); }
+    else if (k === 'e' || k === '.') { weg(); trackAuswahlSchritt(1); }
+    else if (k === 'h' || k === '?') { weg(); if (typeof konsoleTourStart === 'function') konsoleTourStart(K_EDITOR); }
+    else if (k === 'escape') { weg(); exitTrackFullscreen(); }
+  }, true);
 
   function refreshTrackList() {
     const store = loadTrackStore();

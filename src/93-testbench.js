@@ -1015,14 +1015,14 @@
       try {
         if (opt.zwei !== undefined) zweiSpieler = !!opt.zwei;
         renderGarage();
-        const zeilen = Array.from(($('gar-list') || { children: [] }).children);
+        // Seit v0.8.26 Karten: die Rollen stehen als Folge an der Karte (data-rollen), die
+        // gewaehlte in data-rolle; die leere "+ AUTO"-Karte und die Aufklappzeile zaehlen nicht.
+        const zeilen = Array.from(($('gar-list') || { children: [] }).children)
+          .filter((z) => z.classList.contains('gar-row'));
         const meine = zeilen[zeilen.length - 1];
-        const knoepfe = meine
-          ? Array.from(meine.querySelectorAll('button[data-role]')).map((b) => ({
-              rolle: b.dataset.role,
-              text: b.textContent.replace(/\s+/g, ' ').trim(),
-              an: b.classList.contains('on'),
-            }))
+        const r = meine && meine.querySelector('.gk-rolle');
+        const knoepfe = r
+          ? r.dataset.rollen.split(',').map((x) => ({ rolle: x, text: x, an: x === r.dataset.rolle }))
           : [];
         return { zeilen: zeilen.length, knoepfe,
                  rollen: knoepfe.map((k) => k.rolle),
@@ -1299,10 +1299,13 @@
     // Kunstgriff wie pitScreenSelect(idVorgabe)).
     raceEinstellungenSchirmProbe() {
       const merk = { screen: cockpitScreen, sel: raceScreenSel,
-                     mode: $('race-mode').value, limit: raceLimit };
+                     mode: $('race-mode').value, limit: raceLimit,
+                     tab: (document.querySelector('.tabpage.active') || {}).id };
       const zeilen = ['rs-row-mode', 'rs-row-limit', 'rs-row-go'];
       const wer = () => zeilen.findIndex((id) => document.getElementById(id).classList.contains('pr-sel'));
       try {
+        // Der Schirm reagiert nur, wenn das Cockpit auch zu sehen ist (raceScreenOffen()).
+        showTab('race');
         cockpitScreenZu('renneinstellungen');
         const start = wer();
         raceScreenPad('down');
@@ -1311,9 +1314,17 @@
         const nachUmlauf = wer();
         $('race-mode').value = 'practice';
         $('race-mode').dispatchEvent(new Event('change', { bubbles: true }));
+        // Anwaehlen, dann EIN Schritt nach rechts und wieder zurueck nach links.
+        raceScreenSel = 0;
         raceScreenSelect('mode');
+        const armiert = raceScreenLimitArmed;
+        raceScreenPad('right');
         const modeNachWahl = $('race-mode').value;
+        raceScreenPad('left');
+        const modeZurueck = $('race-mode').value;
+        raceScreenSelect('mode');
         return {
+          armiert, modeZurueck,
           screenErreichbar: cockpitScreenIst().id === 'renneinstellungen',
           nurEineZeileVorher: [start].every((i) => i >= 0),
           bewegtSich: nachEinem !== start,
@@ -1321,7 +1332,9 @@
           modeVorWahl: 'practice', modeNachWahl,
         };
       } finally {
+        raceScreenLimitArmed = false;
         cockpitScreenSet(merk.screen);
+        if (merk.tab) showTab(merk.tab.replace(/^tab-/, ''));
         raceScreenSel = merk.sel;
         $('race-mode').value = merk.mode;
         $('race-mode').dispatchEvent(new Event('change', { bubbles: true }));
@@ -1451,6 +1464,7 @@
     // .aktiv/.car von Hand setzen, ohne den echten garageScanStart() durchlaufen zu
     // muessen) wirken direkt, weil hier keine Kopie herausgeht.
     garageScan,
+    padDpad,
 
     // ---- GARAGENSCAN: SCHLIESST DIE RUNDE, UND WENN NICHT, WIRD ES NOCHMAL VERSUCHT ---
     //
@@ -2592,6 +2606,87 @@
         window.confirm = echtConfirm;
         if (echt === null) { try { localStorage.removeItem(CAR_STORE); } catch (e) { /* privat */ } }
         else { try { localStorage.setItem(CAR_STORE, echt); } catch (e) { /* privat */ } }
+        carStoreListeZeichnen();
+      }
+    },
+
+    // Rennuebersicht: Diagramm und Sektorentabelle mit gebauten Rundenzeiten. behalten=true
+    // laesst die Daten stehen (fuer einen Blick auf den Schirm), sonst wird alles zurueckgelegt.
+    ovDiagrammProbe(behalten) {
+      const merk = { sc: sectorCount, lt: raceLapTimes.slice(), sh: sectorHistory.slice(),
+                     art: ovDiagrammArt };
+      try {
+        sectorCount = 3;
+        raceLapTimes.length = 0;
+        sectorHistory.length = 0;
+        [[3.1, 4.2, 2.9], [3.0, 4.0, 3.1], [3.3, 4.4, 2.8], [3.0, 7.9, 3.0], [2.9, 4.1, 2.9]]
+          .forEach((sek, i) => {
+            const ms = sek.map((x) => x * 1000);
+            sectorHistory.push(ms);
+            raceLapTimes.push({ lap: i + 1, ms: ms.reduce((a, b) => a + b, 0) });
+          });
+        ovDiagrammArt = 0;
+        ovDiagrammMalen();
+        ovSektorenMalen();
+        const dia = $('ov-diagramm'), sek = $('ov-sektoren');
+        return { punkte: dia ? dia.querySelectorAll('circle').length : -1,
+                 pfeile: dia ? dia.querySelectorAll('path').length : -1,
+                 gitter: dia ? dia.querySelectorAll('.ov-dia-gitter').length : -1,
+                 spalten: sek ? sek.querySelectorAll('th').length : -1 };
+      } finally {
+        if (!behalten) {
+          sectorCount = merk.sc;
+          raceLapTimes.length = 0; merk.lt.forEach((l) => raceLapTimes.push(l));
+          sectorHistory.length = 0; merk.sh.forEach((l) => sectorHistory.push(l));
+          ovDiagrammArt = merk.art;
+          ovDiagrammMalen();
+          ovSektorenMalen();
+        }
+      }
+    },
+
+    // Gemerkte Autos: nur Geaendertes wird gespeichert, Rueckfall per Geraetename, und die
+    // Zuordnung per Klick. Mit Attrappen in der Garage, danach alles zurueck.
+    carProfilProbe() {
+      const echt = localStorage.getItem(CAR_STORE);
+      const merkGarage = garage.splice(0, garage.length);
+      const auto = (id, name) => ({ device: { id, name }, role: 'steuern', colorId: 'weiss',
+                                    alias: '', ghost: null });
+      try {
+        localStorage.removeItem(CAR_STORE);
+        const a = auto('neu-1', 'Carrera Hybrid A');
+        garage.push(a);
+        carRemember(a);
+        const leerGespeichert = Object.keys(carStore()).length;
+        a.alias = 'Blitz'; carRemember(a);
+        const mitName = !!carStore()['neu-1'];
+        // Neue Kennung, gleicher Name: der Rueckfall muss "Blitz" finden.
+        garage.length = 0;
+        const b = auto('neu-2', 'Carrera Hybrid A');
+        garage.push(b);
+        carAssign(b);
+        const perName = b.alias;
+        const umgezogen = !!carStore()['neu-2'] && !carStore()['neu-1'];
+        // Zuordnung per Klick: ein anderes Profil auf ein anderes Auto.
+        localStorage.setItem(CAR_STORE, JSON.stringify(Object.assign(carStore(),
+          { alt: { color: 'rot', alias: 'Rakete', farbe: true, name: 'X' } })));
+        const c = auto('neu-3', 'Carrera Hybrid C');
+        garage.push(c);
+        carAssign(c);
+        carStoreListeZeichnen();
+        const zeile = document.querySelector('.car-store-zeile[data-id="alt"]');
+        if (zeile) zeile.click();
+        const ziel = zeile ? [...zeile.querySelectorAll('.car-store-ziel')]
+          .find((btn) => btn.textContent.indexOf(garageLabel(c)) >= 0) : null;
+        if (ziel) ziel.click();
+        return { leerGespeichert, mitName, perName, umgezogen,
+                 klickAlias: c.alias, klickFarbe: c.colorId };
+      } finally {
+        garage.length = 0;
+        merkGarage.forEach((x) => garage.push(x));
+        if (echt === null) localStorage.removeItem(CAR_STORE);
+        else localStorage.setItem(CAR_STORE, echt);
+        carRetag();
         carStoreListeZeichnen();
       }
     },
@@ -6795,6 +6890,86 @@
       }
     },
 
+    // ---- POSITIONEN NUR MIT ZUSCHAUER --------------------------------------------
+    //
+    // Der Host meldet, wie viele Info-Screens zusehen. Mit einem schickt die App drei Mal je
+    // Sekunde ihre Kartenpunkte und die Strecke, ohne keinen - sonst waere jede Sitzung
+    // eine Last auf dem Faden, der den 45-ms-Sendetakt haelt.
+    async mpZuschauerProbe() {
+      const echtFetch = window.fetch;
+      const merk = { host: mp.host, an: mp.an, timer: mp.timer, zu: mp.zuschauer,
+                     pos: mp.posTimer, tiles: currentTrackTiles };
+      const gesendet = [];
+      let zuschauer = 1;
+      try {
+        if (mp.timer) { clearInterval(mp.timer); mp.timer = null; }
+        if (mp.posTimer) { clearInterval(mp.posTimer); mp.posTimer = null; }
+        mp.host = 'http://pruefhost:8080';
+        mp.an = true;
+        currentTrackTiles = [{ type: TILE_TYPE.START }, { type: TILE_TYPE.STRAIGHT },
+                             { type: TILE_TYPE.STRAIGHT }];
+        window.fetch = (url, init) => {
+          gesendet.push({ url: String(url), rumpf: init && init.body ? JSON.parse(init.body) : null });
+          if (String(url).indexOf('/mp/state') >= 0) {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({
+              fahrer: [], rennen: {}, zeit: 1, zuschauer }) });
+          }
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
+        };
+        await mpHolen();
+        const taktMit = mp.posTimer !== null;
+        gesendet.length = 0;
+        mpPosBerichten();
+        const bericht = gesendet.find((g) => g.url.indexOf('/mp/report') >= 0);
+        zuschauer = 0;
+        await mpHolen();
+        const taktOhne = mp.posTimer !== null;
+        return { taktMit, taktOhne, strecke: bericht && bericht.rumpf ? bericht.rumpf.strecke : null,
+                 posIstListe: !!(bericht && bericht.rumpf && Array.isArray(bericht.rumpf.pos)) };
+      } finally {
+        window.fetch = echtFetch;
+        if (mp.posTimer) { clearInterval(mp.posTimer); }
+        mp.posTimer = merk.pos; mp.zuschauer = merk.zu;
+        mp.host = merk.host; mp.an = merk.an;
+        if (mp.timer) clearInterval(mp.timer);
+        mp.timer = merk.timer;
+        currentTrackTiles = merk.tiles;
+      }
+    },
+
+    // ---- DER INFO-SCREEN ZEICHNET, WAS DER HOST MELDET ---------------------------
+    mpiProbe() {
+      const code = 'SG2R2G2R2';
+      const d = {
+        strecke: code, zuschauer: 1, zeit: 1,
+        rennen: { start: 1, laps: 10, laufzeit: 65 },
+        fahrer: [
+          { id: 'a', name: 'Luuke', laps: 3, letzte: 8.4, beste: 8.1, alter: 0.2, posAlter: 0.1,
+            pos: [{ i: 2, f: 0.5, c: '#ff4040', k: 'Luu', g: 0 }, { i: 5, f: 0.2, c: '#40c0ff', k: 'G1', g: 1 }] },
+          { id: 'b', name: 'SeVen', laps: 2, letzte: 9.0, beste: 8.8, alter: 0.4, posAlter: 0.2,
+            pos: [{ i: 7, f: 0.9, c: '#3ddc84', k: 'SeV', g: 0 }] },
+        ],
+      };
+      const merk = { schl: mpi.schluessel, n: mpi.n, geo: mpi.geo, spur: new Map(mpi.spur) };
+      const karte = $('mpi-karte'), alt = karte ? karte.innerHTML : '';
+      try {
+        mpi.schluessel = null;
+        mpi.spur.clear();
+        mpiAufnehmen(d);
+        const autos = karte ? [...karte.querySelectorAll('g.karte-autos > g')]
+          .filter((g) => g.getAttribute('visibility') === 'visible').length : 0;
+        const texte = karte ? [...karte.querySelectorAll('g.karte-autos text')].map((t) => t.textContent) : [];
+        const zeilen = $('mpi-rows') ? $('mpi-rows').rows.length : 0;
+        return { svg: !!(karte && karte.querySelector('svg')), autos, texte, zeilen,
+                 uhr: $('mpi-uhr') ? $('mpi-uhr').textContent : '',
+                 laenge: $('mpi-laenge') ? $('mpi-laenge').textContent : '' };
+      } finally {
+        mpi.schluessel = merk.schl; mpi.n = merk.n; mpi.geo = merk.geo; mpi.spur = merk.spur;
+        if (karte) karte.innerHTML = alt;
+        if ($('mpi-rows')) $('mpi-rows').innerHTML = '';
+      }
+    },
+
     // ---- WAS WIRD AUS EINEM GEMELDETEN CODE? ------------------------------------
     //
     // codeZuTyp() ist die eine Stelle, an der aus einem Byte des Autos eine Kachelart der
@@ -8094,6 +8269,74 @@
         if (wxBlobsSnapshot) { wxBlobs.length = 0; wxBlobs.push(...wxBlobsSnapshot); }
         applySurface();
       }
+    },
+
+    // FINGERABDRUCK DER FAHRPHYSIK. Eine frische Instanz faehrt eine feste Eingabefolge
+    // (anfahren, schalten, Lenkwelle, Vollbremsung, Kurve unter Gas) und gibt die Summen der
+    // zwei Groessen zurueck, die das Auto wirklich erreichen: Servowinkel und Tempo. Der
+    // Selbsttest vergleicht sie mit Werten, die VOR dem Pacejka-Modus gemessen wurden -
+    // BESTELLT war "Handling ist perfekt - daran nichts mehr aendern".
+    physikFingerabdruck(patch) {
+      const e = new CarreraPhysicsEngine();
+      Object.assign(e.config, patch || {});
+      let sSer = 0, sKmh = 0, sAbs = 0;
+      for (let i = 0; i < 900; i++) {
+        const t = i * 0.045;
+        const gas = i < 300 ? Math.min(1, i / 60) : (i < 420 ? 0 : (i < 600 ? 0.7 : 1));
+        const bremse = (i >= 420 && i < 480) ? 1 : 0;
+        const lenk = i < 300 ? 0.6 * Math.sin(t * 1.7) : (i < 600 ? 0.9 : -0.8 * Math.sin(t));
+        const out = e.update({ throttle: gas, brake: bremse, steering: lenk }, 0.045);
+        sSer += e.outputs.servoAngle;
+        sAbs += Math.abs(e.outputs.servoAngle);
+        sKmh += e.state.speedKmh;
+        if (out && typeof out.throttle === 'number') sAbs += out.throttle;
+      }
+      const r = (x) => Math.round(x * 1e6) / 1e6;
+      return { servo: r(sSer), betrag: r(sAbs), kmh: r(sKmh) };
+    },
+
+    // Eine frische Instanz bei festem Tempo und fester Eingabe, mit oder ohne Pacejka. Das
+    // Tempo wird jeden Takt zurueckgesetzt, damit Unter- und Uebersteuern bei GENAU diesem
+    // Tempo gemessen werden und nicht bei dem, auf das die Bremse es gerade gebracht hat.
+    // Eine Folge von Abschnitten auf einer Instanz: [{takte, gas, bremse, lenk, kmh}]. Je
+    // Abschnitt der Stand am Ende - fuer "der Rutsch haelt, bis man faengt".
+    pacejkaFolge(o) {
+      const e = new CarreraPhysicsEngine();
+      Object.assign(e.config, o.patch || {});
+      e.config.pacejka = true;
+      const st = e.state;
+      st.driveMode = 'forward';
+      st.currentGear = o.gear === undefined ? 3 : o.gear;
+      return (o.abschnitte || []).map((a) => {
+        let maxUeber = 0, minVortrieb = 1;
+        for (let i = 0; i < (a.takte || 20); i++) {
+          st.speedKmh = (a.kmh || o.kmh || 150) / REAL_SCALE;
+          e.update({ throttle: a.gas || 0, brake: a.bremse || 0, steering: a.lenk || 0 }, 0.045);
+          maxUeber = Math.max(maxUeber, st.pacUeber);
+          minVortrieb = Math.min(minVortrieb, st.pacVortrieb);
+        }
+        return { ueber: st.pacUeber, maxUeber, minVortrieb, vortrieb: st.pacVortrieb,
+                 servo: e.outputs.servoAngle, zustand: st.pacZustand, halt: st.pacHaltSeit,
+                 nutzV: st.pacNutzV, nutzH: st.pacNutzH, leistung: st.pacLeistung };
+      });
+    },
+
+    pacejkaFahrt(o) {
+      const e = new CarreraPhysicsEngine();
+      Object.assign(e.config, o.patch || {});
+      e.config.pacejka = !!o.pacejka;
+      const st = e.state;
+      st.driveMode = 'forward';
+      st.currentGear = o.gear === undefined ? 3 : o.gear;
+      let maxUeber = 0, zustaende = {};
+      for (let i = 0; i < (o.takte || 30); i++) {
+        st.speedKmh = o.kmh / REAL_SCALE;
+        e.update({ throttle: o.gas || 0, brake: o.bremse || 0, steering: o.lenk || 0 }, 0.045);
+        maxUeber = Math.max(maxUeber, st.pacUeber);
+        zustaende[st.pacZustand || '-'] = (zustaende[st.pacZustand || '-'] || 0) + 1;
+      }
+      return { servo: e.outputs.servoAngle, unter: st.pacUnter, ueber: st.pacUeber, maxUeber,
+               nutzV: st.pacNutzV, nutzH: st.pacNutzH, zustand: st.pacZustand, zustaende };
     },
 
     sampleLine(tiles, steps) {

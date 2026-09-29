@@ -130,10 +130,6 @@
     const t = opt.textContent.trim();
     const kandidaten = [t.indexOf(':'), t.indexOf(',')].filter(i => i > 0);
     let kurz = kandidaten.length ? t.slice(0, Math.min.apply(null, kandidaten)).trim() : t;
-    // "Porsche" gibt es zweimal: als gerechneten Saugmotor und als Aufnahme. Beide auf
-    // denselben Kurznamen zu bringen ist schlechter als ein zu langer Text - dann zeigt der
-    // Knopf zwei verschiedene Motoren gleich an.
-    if (t.indexOf('Aufnahme') >= 0) kurz += ' (Aufn.)';
     return kurz;
   }
 
@@ -402,13 +398,18 @@
   //
   // Der Drift-Modus faehrt wie "Aus" - rohe Stickstellung, keine Gaenge -, deshalb ist
   // physicsEnabled dort false. Was ihn unterscheidet, sitzt im Sendeweg: das Gegensteuern.
+  // PACEJKA ist "Physik" plus ein Schritt: dieselbe Kette (Gaenge, Reibkreis, Kennlinien),
+  // danach formt pacejkaStep() den Lenkbefehl am Limit. Deshalb physicsEnabled = true, und
+  // der Unterschied sitzt allein in config.pacejka - fuer BEIDE Autos.
   function physModusAnwenden(melden) {
     const v = $('phys-mode') ? $('phys-mode').value : 'physik';
     driftModus = (v === 'drift');
-    physicsEnabled = (v === 'physik');
+    physicsEnabled = (v === 'physik' || v === 'pacejka');
+    physEngine.config.pacejka = physEngine2.config.pacejka = (v === 'pacejka');
     physLastTime = null;
     if (melden) {
       log('Steuerungsmodus: ' + (v === 'physik' ? 'Physik'
+                             : v === 'pacejka' ? 'Pacejka (experimentell)'
                              : v === 'drift' ? 'Drift (experimentell)'
                              : 'Aus, rohe Stickstellung'), 'info');
     }
@@ -446,6 +447,53 @@
       out.textContent = teile.join(' \u00b7 ');
       log('Drift-Probe: ' + teile.join(' | '), 'info');
     });
+  }
+
+  // Die zwei Stellschrauben des Pacejka-Modus, fuer beide Autos gleich.
+  if ($('setting-pac-ueber')) {
+    const ueber = () => {
+      physEngine.config.pacejkaUebersteuern = physEngine2.config.pacejkaUebersteuern
+        = $('setting-pac-ueber').checked;
+    };
+    $('setting-pac-ueber').addEventListener('change', ueber);
+    ueber();
+  }
+  if ($('setting-pac-grenze')) {
+    const grenze = (v) => {
+      physEngine.config.pacejkaGrenze = physEngine2.config.pacejkaGrenze = v;
+      $('setting-pac-grenze-val').textContent = Math.round(v * 100) + '%';
+    };
+    $('setting-pac-grenze').addEventListener('input', (e) => grenze(parseFloat(e.target.value)));
+    grenze(parseFloat($('setting-pac-grenze').value));
+  }
+
+  // ---- Rueckmeldung aus dem Pacejka-Modus: Vibration ------------------------------------
+  //
+  // BESTELLT: "Beim Unter- und Uebersteuern soll Controllervibration getriggert werden."
+  // Untersteuern ist ein ZUSTAND (die Front schiebt) - ein leises Brummen im weichen Motor,
+  // solange es anhaelt. Uebersteuern ist ein EREIGNIS (das Heck kommt) - ein kraeftiger
+  // Stoss im starken Motor. Hoechstens alle 250 ms ein Aufruf je Spieler, sonst stapeln
+  // sich die Effekte im Pad. `wer` sorgt dafuer, dass nur der eigene Pad ruettelt.
+  // STAERKER SEIT v0.8.24 (BESTELLT: "Vibration staerker machen"): Uebersteuern alle
+  // 150 ms, 0,65 bis 1,0 im starken Motor, dazu der schwache; kam das Heck unter Gas, ein
+  // zusaetzlicher kurzer Stoss hinterher - das "Hinterrad".
+  const pacRumbleZuletzt = { 1: 0, 2: 0 };
+  function pacejkaRueckmeldung(motor, wer) {
+    if (!motor.config.pacejka) return false;
+    const st = motor.state;
+    if (!st.pacZustand) return false;
+    const jetzt = performance.now();
+    const takt = st.pacZustand === 'ueber' ? 150 : 250;
+    if (jetzt - pacRumbleZuletzt[wer] < takt) return false;
+    pacRumbleZuletzt[wer] = jetzt;
+    if (st.pacZustand === 'ueber') {
+      const k = Math.min(1, st.pacUeber / motor.config.pacejkaUeberMax);
+      const ok = padRumble(0.65 + 0.35 * k, 0.35, 170, 'rutschen', wer);
+      if (ok && st.pacLeistung) setTimeout(() => padRumble(0.2, 0.9, 60, 'rutschen', wer), 90);
+      return ok;
+    }
+    const k = Math.min(1, (1 - st.pacUnter) * 4);
+    return padRumble(0, 0.18 + 0.4 * k, 260, 'rutschen', wer);
   }
 
   if ($('setting-countersteer')) {
@@ -565,7 +613,7 @@
   // Schalter ergeben, und mit sechs Kaestchen waeren es sechs.
   const VIB_KAESTCHEN = { 'vib-schalt': 'schalt', 'vib-abs': 'abs', 'vib-crash': 'crash',
                           'vib-abseits': 'abseits', 'vib-box': 'box',
-                          'vib-meldung': 'meldung' };
+                          'vib-meldung': 'meldung', 'vib-rutschen': 'rutschen' };
   Object.keys(VIB_KAESTCHEN).forEach((id) => {
     const el = $(id);
     if (!el) return;
@@ -651,21 +699,105 @@
       g.toFixed(2) + (nah ? ' linear' : ' \u00b7 \u00bc Weg = ' + viertel + '%');
     kennlinienPlotZeichnen('setting-throttle-gamma-plot', (x) => gasKennlinie(x, g), 0, 1);
   }
-  // LENKKENNLINIE. BESTELLT: "wie beschleunigungskurve auch lenkkurve einbauen als
-  // option mit slider." Dieselbe Kurvenfamilie wie oben, bipolar - siehe expoSteer in
-  // 40-physics.js, das genau diese Rechnung (Vorzeichen mal Betrag hoch Exponent) im
-  // Fahrtakt schon ausfuehrt.
+  // LENKKENNLINIE, und der Plot zeigt jetzt, was das AUTO bekommt.
+  //
+  // GEMELDET: "Lenkkennlinie funktioniert, aber der Plot passt nicht zu dem, was passiert.
+  // Ich muss es umdrehen, damit es stimmt." Plot und Formel waren richtig - aber hinter der
+  // Kurve steht noch eine Verstaerkung: Lenkansprechen (steerResponse) mal Lenkkalibrierung
+  // (steerCalib), in der Vorgabe 3,0 x 2,5. Der volle Einschlag lag deshalb schon bei rund
+  // einem Sechstel Stick, und die gezeichnete Kurve (die nur die Form zeigte) sah dagegen
+  // "falsch herum" aus. Gezeichnet wird jetzt die WIRKSAME Kurve: Stick -> Lenkwinkel, im
+  // Stand und im 1. Gang, gedeckelt bei vollem Einschlag. Gestrichelt daneben dieselbe
+  // Verstaerkung ohne Kennlinie (linear) - liegt die Kurve darunter, reagiert ein leicht
+  // angetippter Stick weniger als linear. Die Physik selbst ist unveraendert.
+  // ---- DER SIMULIERTE G-PUNKT QUER: aus der KURVE, nicht aus dem Stick -------------
+  //
+  // GEMELDET: "gyro: links/rechts wird beim simulierten nicht wie beim echten angezeigt: der
+  // simulierte geht kurz zur Seite und dann zurueck. Der echte bleibt an der Seite." st.gLat
+  // ist der GRIFFVERBRAUCH aus Lenkbefehl mal Tempo (40-physics.js) - lenkt man mitten in
+  // der Kurve zurueck, faellt er auf null, obwohl die Leitplanke das Auto weiter herum fuehrt.
+  // Ist die Strecke bekannt und das Auto geortet, kommt die Anzeige deshalb aus der
+  // Kruemmung der Kachel: v^2/R, mit der Drehrichtung als Vorzeichen, bezogen auf eine
+  // Normalkurve bei halbem Tempo. Ohne Ortung bleibt der bisherige Wert. Nur Anzeige.
+  function gLatAnzeige(st) {
+    try {
+      const g = playerCar && playerCar.ghost;
+      const tiles = currentTrackTiles;
+      if (g && tiles && tiles.length >= 3 && g.tileIndex !== null && g.tileIndex !== undefined) {
+        const typ = tiles[g.tileIndex % tiles.length].type;
+        const dreh = tileTurnDeg(typ);
+        if (!dreh) return 0;
+        const v = Math.abs(st.speedKmh) / (physEngine.config.topSpeedKmh || 1);
+        const bezug = TRACK_RADIUS / tileRadius(typ);
+        return Math.sign(dreh) * Math.min(1, v * v * bezug * 4);
+      }
+    } catch (e) { /* ohne Strecke: bisheriger Wert */ }
+    return st.gLat;
+  }
+
+  function lenkWirksam(x, e) {
+    const c = physEngine.config;
+    const k = (c.steerResponse || 1) * (c.steerCalib || 1);
+    return Math.max(-1, Math.min(1, lenkKennlinie(x, e) * k));
+  }
   function lenkKennlinieAnwenden() {
     const el = $('setting-steer-expo');
     if (!el) return;
     const e = parseFloat(el.value);
     physEngine.config.steerExpo = e;
-    const nah = Math.abs(e - 1) < 0.001;
-    const viertel = Math.round(100 * Math.pow(0.25, e));
-    $('setting-steer-expo-val').textContent =
-      e.toFixed(2) + (nah ? ' linear' : ' \u00b7 \u00bc Weg = ' + viertel + '%');
-    kennlinienPlotZeichnen('setting-steer-expo-plot', (x) => lenkKennlinie(x, e), -1, 1);
+    const c = physEngine.config;
+    const k = (c.steerResponse || 1) * (c.steerCalib || 1);
+    // Ab welchem Stickweg der volle Einschlag erreicht ist - die Zahl, die man spuert.
+    const voll = Math.min(1, Math.pow(1 / Math.max(1, k), 1 / e));
+    $('setting-steer-expo-val').textContent = e.toFixed(2)
+      + ' \u00b7 ' + t('voll ab') + ' ' + Math.round(voll * 100) + '%';
+    kennlinienPlotZeichnen('setting-steer-expo-plot', (x) => lenkWirksam(x, e), -1, 1);
+    kennlinienPlotZeichnen('setting-steer-expo-ref', (x) => lenkWirksam(x, 1), -1, 1);
   }
+  // BREMSKENNLINIE, dieselbe Formel und dieselbe Darstellung wie die Gaskennlinie.
+  function bremsKennlinieAnwenden() {
+    const el = $('setting-brake-gamma');
+    if (!el) return;
+    const g = parseFloat(el.value);
+    physEngine.config.brakeGamma = g;
+    if (typeof physEngine2 !== 'undefined' && physEngine2) physEngine2.config.brakeGamma = g;
+    const nah = Math.abs(g - 1) < 0.001;
+    const viertel = Math.round(100 * Math.pow(0.25, g));
+    $('setting-brake-gamma-val').textContent =
+      g.toFixed(2) + (nah ? ' linear' : ' \u00b7 \u00bc Weg = ' + viertel + '%');
+    kennlinienPlotZeichnen('setting-brake-gamma-plot', (x) => gasKennlinie(x, g), 0, 1);
+  }
+
+  // ---- DER LIVE-PUNKT AUF DEN DREI KENNLINIEN --------------------------------------
+  //
+  // BESTELLT: "wenn ich dann den Stick oder die Trigger druecke, mir angezeigt wird, wie
+  // viel Input ich gebe und als was es dann interpretiert wird." steerX/throttleY sind die
+  // gemeinsamen Eingaenge aller Quellen (Pad, Tastatur, Touch); die Bremse ist dort der
+  // negative Teil von throttleY. Getaktet und nur bei offenem Optionen-Tab: der Punkt ist
+  // eine Anzeige, und eine Anzeige, die niemand sieht, braucht keinen Takt.
+  function kennlinienPunkt(dotId, liveId, x, y, xMin, xMax) {
+    const dot = $(dotId), live = $(liveId);
+    if (!dot || !live) return;
+    const spanne = xMax - xMin;
+    dot.setAttribute('cx', ((x - xMin) / spanne * 100).toFixed(1));
+    dot.setAttribute('cy', (60 - (y - xMin) / spanne * 60).toFixed(1));
+    live.textContent = t('Eingang') + ' ' + Math.round(x * 100) + '% \u2192 '
+      + Math.round(y * 100) + '%';
+  }
+  setInterval(() => {
+    const tab = document.querySelector('.tabpage.active');
+    if (!tab || tab.id !== 'tab-options') return;
+    const sx = typeof steerX === 'number' ? steerX : 0;
+    const ty = typeof throttleY === 'number' ? throttleY : 0;
+    const c = physEngine.config;
+    kennlinienPunkt('setting-steer-expo-dot', 'setting-steer-expo-live',
+                    sx, lenkWirksam(sx, c.steerExpo), -1, 1);
+    const gas = Math.max(0, ty), br = Math.max(0, -ty);
+    kennlinienPunkt('setting-throttle-gamma-dot', 'setting-throttle-gamma-live',
+                    gas, gasKennlinie(gas, c.throttleGamma), 0, 1);
+    kennlinienPunkt('setting-brake-gamma-dot', 'setting-brake-gamma-live',
+                    br, gasKennlinie(br, c.brakeGamma), 0, 1);
+  }, 66);
   function anfahrschubAnwenden() {
     const el = $('setting-minmove');
     if (!el) return;
@@ -682,6 +814,14 @@
   if ($('setting-steer-expo')) {
     lenkKennlinieAnwenden();
     $('setting-steer-expo').addEventListener('input', lenkKennlinieAnwenden);
+    // Die wirksame Kurve haengt auch an Lenkansprechen und Kalibrierung.
+    ['phys-steerresp', 'setting-steer-calib'].forEach((id) => {
+      if ($(id)) $(id).addEventListener('input', () => setTimeout(lenkKennlinieAnwenden, 0));
+    });
+  }
+  if ($('setting-brake-gamma')) {
+    bremsKennlinieAnwenden();
+    $('setting-brake-gamma').addEventListener('input', bremsKennlinieAnwenden);
   }
   if ($('setting-minmove')) {
     anfahrschubAnwenden();
@@ -732,6 +872,7 @@
       waehlen: () => pitScreenSelect(),
       malen: () => pitScreenRender() },
     { id: 'uebersicht', name: 'Rennen',
+      waehlen: () => ovNochmal(),
       malen: () => ovScreenRender() },
     // BESTELLT: "cockpit: weiteren screen mit Renneinstellungen einfuegen." waehlen()
     // ist generisch verdrahtet (cockpitScreenWaehlen()), pad() ist es NICHT - siehe die
@@ -1446,9 +1587,26 @@
     // NUR cockpitScreenIst().id, nicht ob tab-race ueberhaupt noch aktiv/im Vollbild ist -
     // ein Wechsel auf einen anderen Tab liess das D-Pad dort also weiter "essen", bevor
     // menuNavMove() es je sah. cockpitScreenZu('main') hier behebt das an der Quelle.
+    // SEIT v0.8.24 NUR NOCH VORUEBERGEHEND: der gewaehlte Schirm wird gemerkt. Bleibt man im
+    // Cockpit (Vollbild per Wischen oder Knopf verlassen), steht er sofort wieder da; wer
+    // den Tab verlaesst, bekommt ihn beim Zurueckkommen (cockpitScreenWiederherstellen,
+    // gerufen beim Tabwechsel in 10-ble-explorer.js). Der Grund fuer 'main' bleibt:
+    // ausserhalb des Cockpits darf kein Box- oder Rennschirm das Steuerkreuz essen.
+    const war = cockpitScreenIst().id;
     cockpitScreenZu('main');
+    if (war !== 'main') {
+      cockpitScreenMerk = war;
+      if (document.body.classList.contains('race-mode')) cockpitScreenWiederherstellen();
+    }
     cockpitPassung();
     setTimeout(() => cockpitPassung(), 120);
+  }
+  let cockpitScreenMerk = null;
+  function cockpitScreenWiederherstellen() {
+    if (!cockpitScreenMerk) return;
+    const id = cockpitScreenMerk;
+    cockpitScreenMerk = null;
+    cockpitScreenZu(id);
   }
 
   $('race-fs').addEventListener('click', enterRaceFullscreen);
@@ -1457,8 +1615,11 @@
   // they stay in the top-right corner of the ROTATED view rather than of the screen.
   window.addEventListener('resize', syncRaceRotation);
   // Leaving fullscreen by swipe or Escape must put the buttons back too.
+  // Im Cockpit bleibt das Vollbild-Layout auch dann, wenn das echte Vollbild per Geste endet
+  // (v0.8.35: das Cockpit ist immer Vollbild); nur ausserhalb raeumt das hier auf.
   document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement && document.body.classList.contains('race-fs')) {
+    if (!document.fullscreenElement && document.body.classList.contains('race-fs')
+        && !document.body.classList.contains('race-mode')) {
       exitRaceFullscreen();
     }
   });
@@ -1610,16 +1771,22 @@
         fuss.textContent = 'Boxenstopp: links f\u00fcr Auto 1, rechts f\u00fcr Auto 2.';
       }
     }
-    const knopf2 = $('p2s-act-pit');
-    if (knopf2) {
-      knopf2.classList.toggle('warn', lage !== 'aus');
-      knopf2.disabled = !zweiSpieler || !car2;
-    }
-    const knopf1 = $('vgl1-act-pit');
-    if (knopf1) {
-      knopf1.classList.toggle('warn',
-        typeof pitState !== 'undefined' && pitState !== 'off');
-    }
+    // BESTELLT: "Entferne in der 2-Spieler-Ansicht den Boxenstopp-Button und fuege
+    // stattdessen die Vorschaubilder fuer die naechsten Reifen und Menge Tankfuellung ein
+    // (Tasten sollten jeweils auch funktionieren)." Der Stopp selbst kommt weiter ueber die
+    // Boxentaste des jeweiligen Pads.
+    const wahlZeigen = (pre, st) => {
+      if (!st || !$(pre + '-tyre-next')) return;
+      $(pre + '-tyre-next').textContent = st.mixName;
+      $(pre + '-tyre-ring').style.borderColor = st.mixFarbe;
+      $(pre + '-act-tyre').classList.toggle('warn', !!st.mixWarnung);
+      $(pre + '-fuel-next').textContent = st.tankWort;
+    };
+    if (typeof pitKachelStand === 'function') wahlZeigen('vgl1', pitKachelStand());
+    if (typeof pitKachelStand2 === 'function') wahlZeigen('vgl2', pitKachelStand2());
+    ['vgl2-act-tyre', 'vgl2-act-fuel'].forEach((id) => {
+      if ($(id)) $(id).disabled = !zweiSpieler || !car2;
+    });
     // BESTELLT: "Spieler 1 und Spieler 2 sollen verschiedene Motorsounds haben duerfen."
     // Zwei Knoepfe statt einem - je einer zeigt SEIN EIGENES Auswahlfeld an.
     const ton1 = $('vgl1-act-sound-txt');
@@ -1636,23 +1803,17 @@
     }
   }
 
-  if ($('p2s-act-pit')) {
-    $('p2s-act-pit').addEventListener('click', () => {
-      // Defensiv gerufen: 70-race.js wird SPAETER gebaut. Zur Laufzeit ist die Funktion da.
-      if (typeof boxZweiAnfordern === 'function') boxZweiAnfordern();
-      p2ScreenRender();
-    });
-  }
+  // Die vier Wahlkacheln: Auto 1 ueber DIESELBEN Funktionen wie LB/RB, Auto 2 ueber seine.
+  // Defensiv gerufen: 70-race.js wird SPAETER gebaut. Zur Laufzeit sind die Funktionen da.
+  [['vgl1-act-tyre', () => pitMischungWeiter()],
+   ['vgl1-act-fuel', () => pitVorwahlSchalten('refuel')],
+   ['vgl2-act-tyre', () => pitMischungWeiter2()],
+   ['vgl2-act-fuel', () => tankZiel2Weiter()]].forEach(([id, fn]) => {
+    if ($(id)) $(id).addEventListener('click', () => { fn(); p2ScreenRender(); });
+  });
   // Die zwei Knoepfe fuer Auto 1 leiten auf die vorhandenen weiter, statt ihre Wirkung zu
   // verdoppeln: ein zweiter Weg in den Boxenstopp waere ein zweiter Ort, an dem die
   // Vorwahl entsteht - und die Vorwahl gibt es genau einmal, auf dem Boxenschirm.
-  if ($('vgl1-act-pit')) {
-    $('vgl1-act-pit').addEventListener('click', () => {
-      const q = $('race-act-pit');
-      if (q) q.click();
-      p2ScreenRender();
-    });
-  }
   // BESTELLT: eigener Motor-Knopf fuer Auto 1 auf dem Vergleichsschirm, neben dem fuer
   // Auto 2 - genau wie die zwei Boxenstopp-Knoepfe. Leitet weiter wie beim Boxenstopp-
   // Knopf: derselbe Klick-Ort (links/rechts) geht an #race-act-sound, damit es EINEN Weg
@@ -1846,7 +2007,7 @@
     // scaled independently on purpose: the real numbers are far noisier and much larger
     // relative to their range, so a shared scale would push one of them off the dial.
     const R = 42;
-    $('race-g-sim').setAttribute('cx', (50 + Math.max(-1, Math.min(1, st.gLat)) * R).toFixed(1));
+    $('race-g-sim').setAttribute('cx', (50 + Math.max(-1, Math.min(1, gLatAnzeige(st))) * R).toFixed(1));
     $('race-g-sim').setAttribute('cy', (50 + Math.max(-1, Math.min(1, -st.gLong)) * R).toFixed(1));
 
     // Das Einspurmodell in zwei Zahlen. Beide sind Instrument.
@@ -1874,8 +2035,12 @@
         const grad = Math.abs(st.yawRate * 180 / Math.PI);
         const soll = Math.abs(st.yawSteady);
         const anteil = soll > 0.02 ? Math.round(100 * Math.abs(st.yawRate) / soll) : null;
+        // Im Pacejka-Modus dazu, WAS gerade passiert - das ist dort die eigentliche Aussage.
+        const pac = physEngine.config.pacejka
+          ? (st.pacZustand === 'ueber' ? ' · ' + t('Übersteuern')
+            : st.pacZustand === 'unter' ? ' · ' + t('Untersteuern') : '') : '';
         yawEl.textContent = grad.toFixed(0) + '°/s'
-          + (anteil === null ? '' : ' · ' + Math.min(999, anteil) + '%');
+          + (anteil === null ? '' : ' · ' + Math.min(999, anteil) + '%') + pac;
       }
     }
     const gx = Math.max(-1, Math.min(1, gyroRaw.x / gyroRaw.span));
@@ -2051,9 +2216,12 @@
       $('race-pit-text').textContent = pitState === 'limited'
         ? 'PIT LIMITER ENGAGED \u00b7 '
           + Math.round(PIT_SPEED_FACTOR * physEngine.config.topSpeedKmh * REAL_SCALE) + ' KM/H'
-        : 'PIT STOP \u00b7 ' + ((Date.now() - (pitServiceStart || Date.now())) / 1000).toFixed(1) + 's'
+        : (pitSpielAktiv()
+          ? 'PIT GAME \u00b7 ' + pitSpielRest().toFixed(1) + 's \u00b7 \u2713 ' + pitSpiel.treffer
+            + '/' + PIT_SPIEL_ANZAHL
+          : 'PIT STOP \u00b7 ' + ((Date.now() - (pitServiceStart || Date.now())) / 1000).toFixed(1) + 's'
           + ' \u00b7 TANK +' + fuelLiters(pitFuelGained) + 'l'
-          + ' \u00b7 REP +' + Math.round(pitDamageRepaired) + '%';
+          + ' \u00b7 REP +' + Math.round(pitDamageRepaired) + '%');
     }
 
     if (raceState === 'finished' && racePartialMs !== null) {
@@ -2617,7 +2785,7 @@
     // je nach Gaseinstellung anders anfuehlt, waere eine Falle.
     const gasKurve = gasKennlinie(Math.max(0, throttleY), physEngine.config.throttleGamma);
     let rawThrottle = fuelDamageDerate(gasKurve, fuelCut);
-    let rawBrake = Math.max(0, -throttleY);
+    let rawBrake = gasKennlinie(Math.max(0, -throttleY), physEngine.config.brakeGamma);
     // Der rohe Lenk-Input geht unveraendert durch. Steht die Fahrhilfe auf 'quer' (siehe
     // driverAssistAktiv() oben), aendert das NICHT diese Zahl, sondern nur, wie das Auto
     // sie versteht: modeBytes gehen dann mit hinaus (spielerOrtTick in 90-ghosts.js), und
@@ -2666,6 +2834,7 @@
     ps.dirtyAir += (ziel - ps.dirtyAir) * Math.min(1, dt * 4);
     const out = physEngine.update({ steering: steer, throttle: rawThrottle, brake: rawBrake,
                                     headlights: headlightsOn }, dt);
+    pacejkaRueckmeldung(physEngine, 1);
     updateDashboard(out);
     // Gefahrene Strecke mitzaehlen, siehe 97-sessions.js. Hier und nicht dort, weil dies
     // der einzige Ort mit einem verlaesslichen dt ist - und ausdruecklich OHNE
@@ -2750,7 +2919,7 @@
     // DIESELBE Reihenfolge wie bei Auto 1: der Autopilot setzt Gas und Bremse NACH Tank
     // und Schaden. Ein Notlauf bleibt ein Notlauf, auch unter Gelb.
     let lenkung = p2Steer;
-    let bremse = Math.max(0, -p2Throttle);
+    let bremse = gasKennlinie(Math.max(0, -p2Throttle), physEngine2.config.brakeGamma);
     const ap2 = autopilot(bremse, 2);
     if (ap2) {
       gas = ap2.throttle;
@@ -2771,6 +2940,7 @@
     const out = physEngine2.update({ steering: lenkung, throttle: gas,
                                      brake: bremse,
                                      headlights: headlightsOn }, dt);
+    pacejkaRueckmeldung(physEngine2, 2);
     // Der Motorton von Auto 2, aus SEINER Drehzahl - dieselbe Zahl, die seine Anzeige
     // bekommt. Defensiv gerufen, weil 80-sound.js SPAETER gebaut wird: zur Laufzeit ist die
     // Funktion da, zur Ladezeit waere ein Zugriff die temporale Todeszone.

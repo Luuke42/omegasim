@@ -110,12 +110,12 @@
   const BIND_ACTION_LABELS = {
     throttle: 'Gas', brake: 'Bremse', steering: 'Lenkung',
     downshift: 'Runterschalten', upshift: 'Hochschalten',
-    headlights: 'Licht an/aus', lightflash: 'Lichthupe', pitstop: 'Boxenstopp',
+    headlights: 'Licht an/aus', lightflash: 'Lichthupe', pitstop: 'Menü (Cockpit ↔ Fahren)',
     schirmZurueck: 'Cockpit-Schirm zurück', schirmVor: 'Cockpit-Schirm vor',
     racestart: 'Rennen starten / abbrechen',
     tyreSelect: 'Reifenwahl weiter',
     fuelSelect: 'Tankmenge weiter',
-    yellowflag: 'Gelbe Flagge (1 s halten)',
+    yellowflag: 'Boxenstopp (tippen), gelbe Flagge (1 s halten)',
     trackReadMode: 'Bahn-Lesemodus umschalten',
     trackview: 'Streckenansicht',
     fullscreenToggle: 'Vollbild umschalten',
@@ -766,10 +766,46 @@
   // Also beides: erst die Knoepfe, dann als Rueckfall die Achsen ab Index 4 - die Achsen 0
   // bis 3 sind die beiden Sticks und duerfen das Kreuz nicht ausloesen.
   const DPAD_AXIS_THRESHOLD = 0.6;
+  // ---- HAT-SCHALTER (DualShock 4 ohne Standard-Mapping) ---------------------------
+  //
+  // GEMELDET: "d-pad auf DualSense zur Menue-Navigation klappt, aber auf DualShock 4
+  // nicht". Ein DS4 ohne 'standard'-Mapping meldet das Kreuz als EINE Achse mit acht
+  // Stufen (-1, -5/7, ... +5/7 im Uhrzeigersinn ab "hoch") und in Ruhe +9/7 = 1,286.
+  // Die Paar-Logik darunter las diese Ruhe als "runter gedrueckt" - und eine Taste, die
+  // nie losgelassen wird, loest nie aus. Dazu ruhen seine Trigger-Achsen bei -1, was die
+  // Paar-Logik als "links" las.
+  //
+  // Also je Pad gemerkt: eine Achse, die je ueber 1,05 stand, ist ein Hat; eine Achse,
+  // die beim ersten Blick bei -1 ruhte, ist ein Trigger und gehoert nicht zum Kreuz.
+  // (Aus Chromes HID-Abbildung abgeleitet, nicht an einem DS4 hier gemessen.)
+  const padAchsenInfo = new Map();
+  function padAchsen(pad) {
+    const key = pad.index + '|' + pad.id;
+    let info = padAchsenInfo.get(key);
+    const ax = pad.axes || [];
+    if (!info) {
+      info = { hat: new Set(), trigger: new Set() };
+      ax.forEach((v, i) => { if (i >= 4 && v < -0.9) info.trigger.add(i); });
+      padAchsenInfo.set(key, info);
+    }
+    ax.forEach((v, i) => { if (v > 1.05) info.hat.add(i); });
+    return info;
+  }
+  const HAT_RICHTUNGEN = [['up'], ['up', 'right'], ['right'], ['down', 'right'], ['down'],
+                          ['down', 'left'], ['left'], ['up', 'left']];
+  function hatRichtung(v, dir) {
+    if (!(v >= -1.05 && v <= 1.05)) return false;       // Ruhe (1,286) oder Unsinn
+    const k = Math.round((v + 1) * 3.5);
+    return !!HAT_RICHTUNGEN[k] && HAT_RICHTUNGEN[k].indexOf(dir) >= 0;
+  }
   function padDpad(pad, dir) {
     if (padButtonPressed(pad, DPAD[dir])) return true;
     const ax = pad.axes || [];
+    const info = padAchsen(pad);
+    for (const i of info.hat) if (hatRichtung(ax[i], dir)) return true;
     for (let i = 4; i + 1 < ax.length; i += 2) {
+      if (info.hat.has(i) || info.hat.has(i + 1)
+          || info.trigger.has(i) || info.trigger.has(i + 1)) continue;
       const x = ax[i] || 0, y = ax[i + 1] || 0;
       if (dir === 'left' && x < -DPAD_AXIS_THRESHOLD) return true;
       if (dir === 'right' && x > DPAD_AXIS_THRESHOLD) return true;
@@ -850,10 +886,23 @@
   // Reihenfolge, soll dasselbe Auto dieselbe Farbe und denselben Namen haben. Eine
   // Rennaufstellung einmal einzutragen und dann durch eine Funkstoerung zu verlieren waere
   // genau das, was diese Kennung verhindern soll.
+  // NUR GEAENDERTES IST EIN PROFIL. BESTELLT: "profile nur speichern, wenn ich den default
+  // namen geaendert habe" und in der Auswahl "nur die auflisten, bei denen Farbe oder Name
+  // oder beides geaendert wurde". Die automatisch vergebene Farbe haengt an der
+  // Verbindungsreihenfolge und ist deshalb keine Eigenschaft des Autos - gemerkt wird sie
+  // nur, wenn sie von Hand gewaehlt wurde (car.farbeGewaehlt). Ohne beides wird ein
+  // vorhandener Eintrag geloescht statt ein leerer angelegt.
+  function carProfilGeaendert(e) { return !!(e && (e.alias || e.farbe)); }
+  function carStoreSchreiben(all) {
+    try { localStorage.setItem(CAR_STORE, JSON.stringify(all)); } catch (e) { /* privat */ }
+  }
   function carRemember(car) {
     const all = carStore();
-    all[String(car.device.id)] = { color: car.colorId, alias: car.alias || '' };
-    try { localStorage.setItem(CAR_STORE, JSON.stringify(all)); } catch (e) { /* privat */ }
+    const e = { color: car.colorId, alias: car.alias || '', farbe: !!car.farbeGewaehlt,
+                name: car.device.name || '' };
+    if (carProfilGeaendert(e)) all[String(car.device.id)] = e;
+    else delete all[String(car.device.id)];
+    carStoreSchreiben(all);
     // Die Bestandszeile der Sicherung nennt die gemerkten Autos - sie muss also mitgehen,
     // sobald hier eines dazukommt oder seinen Namen aendert. Defensiv gerufen, weil
     // 98b-sicherung.js SPAETER gebaut wird: zur Laufzeit ist die Funktion da.
@@ -873,11 +922,49 @@
   // punkts oder Anfuehrungszeichens darin - eine BluetoothDevice.id ist ein UUID-artiger
   // String, aber ungeprueft von aussen), nie im sichtbaren Text: sie sagt niemandem etwas
   // und ist lang genug, um jede Zeile zu sprengen.
+  // Alte Eintraege, die nur Standardwerte tragen, einmal beim Laden entfernen - sie
+  // stammen aus der Zeit, in der jedes verbundene Auto sofort gemerkt wurde.
+  (function carStoreBereinigen() {
+    const all = carStore();
+    let weg = 0;
+    for (const id of Object.keys(all)) {
+      if (!carProfilGeaendert(all[id])) { delete all[id]; weg++; }
+    }
+    if (weg) carStoreSchreiben(all);
+  })();
+
+  // ---- EIN GEMERKTES PROFIL VON HAND ZUORDNEN ------------------------------------
+  //
+  // BESTELLT: "lass mich ein gemerktes Auto anklicken und je verbundenem Auto zuordnen"
+  // und "keine Autos merken, das funktioniert nicht. Entweder reparieren, sodass beim
+  // Verbinden Farbe und Name wieder da ist, oder weglassen". Der Grund, warum es nicht
+  // griff: BluetoothDevice.id ist je Herkunft und ohne dauerhafte Erlaubnis nicht stabil -
+  // ein neuer Browserstart gibt dem Auto eine neue Kennung. Die Zuordnung per Klick macht
+  // das Profil unabhaengig davon; die neue Kennung wird dazugemerkt.
+  function carProfilZuordnen(id, car) {
+    const all = carStore();
+    const e = all[id];
+    if (!e || !car) return;
+    const belegt = garage.find(c => c !== car && c.colorId === e.color);
+    if (belegt) belegt.colorId = car.colorId;          // tauschen statt doppelt vergeben
+    car.colorId = e.color;
+    car.alias = e.alias || '';
+    car.farbeGewaehlt = !!e.farbe;
+    delete all[id];
+    all[String(car.device.id)] = Object.assign({}, e, { name: car.device.name || e.name || '' });
+    carStoreSchreiben(all);
+    carRetag();
+    if (typeof renderGarage === 'function') renderGarage();
+    if (typeof renderRaceGrid === 'function') renderRaceGrid();
+    carStoreListeZeichnen();
+    log('Profil "' + (e.alias || e.color) + '" zugeordnet: ' + garageLabel(car) + '.', 'info');
+  }
+
   function carStoreListeZeichnen() {
     const host = $('car-store-liste');
     if (!host) return;
     const roh = carStore();
-    const ids = Object.keys(roh);
+    const ids = Object.keys(roh).filter((id) => carProfilGeaendert(roh[id]));
     const alleBtn = $('car-store-alle-loeschen');
     if (alleBtn) alleBtn.hidden = ids.length < 2;
     if (!ids.length) {
@@ -895,6 +982,30 @@
            + '<button type="button" class="car-store-loeschen" title="Löschen"'
            + ' data-i18n-skip>&times;</button></span>';
     }).join('');
+    // Klick auf die Zeile (nicht auf das x): verbundene Autos zur Auswahl zeigen. Ist nur
+    // eines verbunden, gleich zuordnen.
+    host.querySelectorAll('.car-store-zeile').forEach((zeile) => {
+      zeile.onclick = (ev) => {
+        if (ev.target.closest('.car-store-loeschen') || ev.target.closest('.car-store-ziel')) return;
+        const id = decodeURIComponent(zeile.dataset.id);
+        const verbunden = garage.filter(c => c.device);
+        if (!verbunden.length) { showHudToast(t('Erst ein Auto verbinden')); return; }
+        if (verbunden.length === 1) { carProfilZuordnen(id, verbunden[0]); return; }
+        const alt = zeile.querySelector('.car-store-ziele');
+        if (alt) { alt.remove(); return; }
+        const box = document.createElement('span');
+        box.className = 'car-store-ziele';
+        verbunden.forEach((c) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'car-store-ziel';
+          b.textContent = '\u2192 ' + garageLabel(c);
+          b.onclick = (e2) => { e2.stopPropagation(); carProfilZuordnen(id, c); };
+          box.appendChild(b);
+        });
+        zeile.appendChild(box);
+      };
+    });
     host.querySelectorAll('.car-store-loeschen').forEach((btn) => {
       btn.onclick = () => {
         const id = decodeURIComponent(btn.closest('.car-store-zeile').dataset.id);
@@ -921,7 +1032,26 @@
   // Farbe fuer ein neu verbundenes Auto. Gemerktes hat Vorrang, sonst die naechste noch
   // freie Farbe der Reihe - zwei Autos in derselben Farbe waeren keine Zuordnung.
   function carAssign(car) {
-    const merk = carStore()[String(car.device.id)] || {};
+    const alle = carStore();
+    let merk = alle[String(car.device.id)];
+    // RUECKFALL PER GERAETENAME: passt keine Kennung (neuer Browserstart, andere Herkunft),
+    // aber GENAU EIN gemerktes Profil traegt denselben Bluetooth-Namen und ist keinem
+    // verbundenen Auto zugeordnet, gilt es. Bei zwei gleich heissenden Autos entscheidet
+    // der Name nichts - dann bleibt die Zuordnung per Klick.
+    if (!merk && car.device.name) {
+      const vergeben = new Set(garage.filter(c => c !== car && c.device)
+                                      .map(c => String(c.device.id)));
+      const treffer = Object.keys(alle).filter((id) => !vergeben.has(id)
+        && alle[id].name === car.device.name && carProfilGeaendert(alle[id]));
+      if (treffer.length === 1) {
+        merk = alle[treffer[0]];
+        delete alle[treffer[0]];
+        alle[String(car.device.id)] = merk;
+        carStoreSchreiben(alle);
+      }
+    }
+    merk = merk || {};
+    car.farbeGewaehlt = !!merk.farbe;
     const belegt = new Set(garage.filter(c => c !== car).map(c => c.colorId));
     car.colorId = (merk.color && CAR_COLORS.some(c => c.id === merk.color)
                    && !belegt.has(merk.color))
@@ -1187,6 +1317,106 @@
   // charakterZiehen() und ghostCfg stehen WEITER UNTEN in dieser Datei. Das ist kein
   // Problem, weil diese Funktion erst beim Zeichnen laeuft, also lange nach dem Aufbau -
   // dieselbe Hochziehung, auf der auch renderGarage() selbst beruht.
+  // ---- Karten der Garage: Rollen, aufgeklappte Zeile, Fotos -------------------------
+  const GAR_ROLLEN = [
+    { id: 'player', name: 'Steuern', kurz: 'FAHRER' },
+    { id: 'player2', name: 'Spieler 2', kurz: 'SPIELER 2' },
+    { id: 'ghost', name: 'Ghost', kurz: 'GHOST' },
+    { id: 'none', name: 'Aus', kurz: 'AUS' },
+  ];
+  let garAufAuto = null;
+  let garFotoFuer = null;
+  function garageFarbeSetzen(car, id) {
+    car.colorId = id;
+    car.farbeGewaehlt = true;
+    carRemember(car);
+    renderGarage();
+    renderRaceGrid();
+  }
+  // Eine Wertzeile im Stil der Menues: Beschriftung .... < Wert >
+  function garWertZeile(titel, wert, zurueck, vor, extra) {
+    const z = document.createElement('div');
+    z.className = 'gk-zeile';
+    z.innerHTML = '<span class="gk-l"></span><span class="gk-w"><button type="button" data-d="-1" aria-label="weniger">&#9664;</button>'
+      + '<b></b><button type="button" data-d="1" aria-label="mehr">&#9654;</button></span>';
+    z.querySelector('.gk-l').textContent = titel;
+    z.querySelector('b').textContent = wert;
+    z.querySelector('[data-d="-1"]').onclick = (e) => { e.stopPropagation(); zurueck(); };
+    z.querySelector('[data-d="1"]').onclick = (e) => { e.stopPropagation(); vor(); };
+    if (extra) z.querySelector('.gk-w').appendChild(extra);
+    return z;
+  }
+  function garageAufZeile(car) {
+    const box = document.createElement('div');
+    box.className = 'gk-aufzeile';
+    const f = carColor(car);
+    const fi = CAR_COLORS.findIndex((c) => c.id === f.id);
+    const farbe = (d) => garageFarbeSetzen(car, CAR_COLORS[(fi + d + CAR_COLORS.length) % CAR_COLORS.length].id);
+    box.appendChild(garWertZeile('Farbe ' + garageLabel(car), f.name, () => farbe(-1), () => farbe(1)));
+    if (car.role === 'ghost') {
+      const eigen = car.ghostSpeed !== undefined && car.ghostSpeed !== null;
+      const v = eigen ? car.ghostSpeed : ghostCfg.speed;
+      const tempo = (d) => {
+        car.ghostSpeed = Math.round(Math.max(GHOST_READ_MIN, Math.min(1, v + 0.05 * d)) * 100) / 100;
+        renderGarage();
+      };
+      const rst = document.createElement('button');
+      rst.type = 'button';
+      rst.className = 'gar-speed-reset';
+      rst.innerHTML = '&#8635;';
+      rst.title = 'Zurueck auf die Vorgabe aus den Optionen';
+      rst.style.visibility = eigen ? '' : 'hidden';
+      rst.onclick = (e) => {
+        e.stopPropagation();
+        car.ghostSpeed = null;
+        showHudToast(garageLabel(car).toUpperCase() + ' FOLGT DER VORGABE');
+        renderGarage();
+      };
+      box.appendChild(garWertZeile('Ghost-Tempo', Math.round(v * 100) + ' %' + (eigen ? '' : ' (Vorgabe)'),
+                                   () => tempo(-1), () => tempo(1), rst));
+      const ch = document.createElement('div');
+      ch.innerHTML = charakterZeile(car);
+      if (ch.firstElementChild) box.appendChild(ch.firstElementChild);
+    } else {
+      const h = document.createElement('div');
+      h.className = 'gk-hinweis';
+      h.textContent = car.role === 'player'
+        ? 'Abstimmung und Fahrgefühl stehen unten und unter Optionen.'
+        : 'Tempo und Charakter gibt es nur für Ghosts.';
+      box.appendChild(h);
+    }
+    return box;
+  }
+  // EIGENE FOTOS JE AUTO, wie beim Streckenfoto: verkleinert als JPEG im localStorage,
+  // unter der Kennung des Autos (in der App die MAC-Adresse, ueber Neustarts stabil).
+  const AUTO_FOTO = 'omegasim-autofoto:';
+  function autoFoto(car) {
+    try { return (car && car.device && localStorage.getItem(AUTO_FOTO + car.device.id)) || ''; } catch (e) { return ''; }
+  }
+  function autoFotoSetzen(car, daten) {
+    try {
+      if (daten) localStorage.setItem(AUTO_FOTO + car.device.id, daten);
+      else localStorage.removeItem(AUTO_FOTO + car.device.id);
+    } catch (e) { return false; }
+    renderGarage();
+    if (typeof konsoleZeichnen === 'function') konsoleZeichnen();
+    return true;
+  }
+  if ($('gar-foto-datei')) {
+    $('gar-foto-datei').addEventListener('change', () => {
+      const d = $('gar-foto-datei');
+      const datei = d.files && d.files[0];
+      const car = garFotoFuer;
+      garFotoFuer = null;
+      if (!datei || !car) return;
+      konsoleFotoLesen(datei, 900).then((daten) => {
+        if (!autoFotoSetzen(car, daten)) {
+          konsoleFrage(t('Foto zu groß'), t('Der Speicher des Browsers ist voll. Ein kleineres Bild versuchen.'), [[t('Schließen'), null]]);
+        }
+      }).catch(() => konsoleFrage(t('Kein Bild'), t('Diese Datei ließ sich nicht als Bild lesen.'), [[t('Schließen'), null]]));
+    });
+  }
+
   function charakterZeile(car) {
     if (car.role !== 'ghost' || !ghostCfg.charakter) return '';
     const ch = car.ghost && car.ghost.charakter;
@@ -1201,6 +1431,22 @@
          + ' · Fehler ' + p(ch.fehler)
          + ' · Kurve ' + p(ch.kurvenAbzug)
          + ' · Box ' + versatz + '</b></div>';
+  }
+
+  const garBlinkZuletzt = new WeakMap();
+  let garFokusZeile = null;
+  function garageBlinkSanft(car) {
+    if (!car || !car.device) return;
+    const jetzt = performance.now();
+    if (jetzt - (garBlinkZuletzt.get(car) || 0) < 1500) return;
+    garBlinkZuletzt.set(car, jetzt);
+    blinkCar(car);
+  }
+  function garageFokusZeile(el) {
+    const r = el && el.closest ? el.closest('.gar-row') : null;
+    if (r === garFokusZeile) return;
+    garFokusZeile = r;
+    if (r && r._car) garageBlinkSanft(r._car);
   }
 
   function renderGarage() {
@@ -1224,58 +1470,86 @@
     $('gar-count').textContent = echte.length
       ? `${echte.length} Auto${echte.length === 1 ? '' : 's'} verbunden`
       : 'keine Autos verbunden';
+    // ---- DIE GARAGE ALS KARTEN (v0.8.26, Vorschlag B aus mockup/garage-mp.html) --------
+    //
+    // BESTELLT: "Garage: Implementiere Vorschlag B. Als Bilder nimm die Farben wie vorher
+    // (Blau, Rot, ...) und fuege jeweils einen Button hinzu, bei dem ich ein Foto dafuer
+    // hochladen kann." Je Auto eine Karte: Kopf mit Rolle, Bild (Farbe oder eigenes Foto),
+    // Name mit Farbklecks, Rolle als Wertzeile mit Pfeilen, Einstellen und Trennen. Unter den
+    // Karten klappt fuer das gewaehlte Auto eine Zeile mit Farbe, Ghost-Tempo und Charakter
+    // auf. Die Rollenfolge steht an der Karte (data-rollen) - der Selbsttest "jede Zeile hat
+    // vier Rollen" liest sie dort.
     list.innerHTML = '';
+    list.classList.add('gar-karten');
+    if (garAufAuto && !echte.includes(garAufAuto)) garAufAuto = null;
     echte.forEach((car, i) => {
       const row = document.createElement('div');
-      row.className = 'gar-row' + (car.role === 'player' ? ' is-player'
+      row.className = 'gar-row gar-karte' + (car.role === 'player' ? ' is-player'
                                  : car.role === 'player2' ? ' is-zwei'
-                                 : car.role === 'ghost' ? ' is-ghost' : '');
+                                 : car.role === 'ghost' ? ' is-ghost' : '')
+                    + (garAufAuto === car ? ' gk-auf' : '');
       const f = carColor(car);
+      const foto = autoFoto(car);
+      const rolle = GAR_ROLLEN.find((r) => r.id === car.role) || GAR_ROLLEN[3];
+      const bild = foto
+        ? 'background-image:url("' + foto + '")'
+        : 'background:linear-gradient(135deg,' + f.hex + ' 0%,' + f.hex + ' 55%,rgba(0,0,0,.55) 100%);color:' + f.ink;
       row.innerHTML = `
-        <div>
-          <div class="car-tag">
-            <button class="car-chip" data-act="color"
-                    style="background:${f.hex};color:${f.ink}"
-                    title="Farbe wählen, gerade ${f.name}">${car.tagChar || ''}</button>
-            <input class="car-name-in" data-act="alias" type="text" maxlength="18"
-                   placeholder="${car.tag || 'Name'}"
-                   value="${(car.alias || '').replace(/"/g, '&quot;')}"
-                   aria-label="Name für die Rundenuebersicht">
-          </div>
-          <div class="gar-id">${car.tag || ''} &middot; ${String(car.device.id).slice(0, 12)}
-            ${car.blinking ? '<span class="gar-blink">&nbsp;blinkt&hellip;</span>' : ''}</div></div>
-        <div class="gar-roles">
-          <button data-role="player" class="${car.role === 'player' ? 'on' : ''}">Steuern</button>
-          <button data-role="player2" class="gar-rolle-zwei ${car.role === 'player2' ? 'on zwei' : ''}"
-                  title="${zweiSpieler ? 'Zweites Auto, zweiter Controller'
-                          : 'Schaltet den 2-Spieler-Modus ein und weist dieses Auto zu'}"
-                  ><span>Spieler&nbsp;2</span><span class="wip-tag">experimentell</span></button>
-          <button data-role="ghost" class="${car.role === 'ghost' ? 'on ghost' : ''}">Ghost</button>
-          <button data-role="none" class="${car.role === 'none' ? 'on off' : ''}">Aus</button>
+        <div class="gk-kopf"><span>${car.role === 'player' ? 'DU' : 'AUTO ' + (i + 1)}</span>
+          <span class="gk-kopf-rolle">${rolle.kurz}</span></div>
+        <div class="gk-bild${foto ? ' mit-foto' : ''}" style='${bild}'>
+          ${foto ? '' : `<span class="gk-zeichen">${car.tagChar || ''}</span>`}
+          <button type="button" class="gk-foto" data-act="foto">${foto ? 'Foto ändern' : 'Foto'}</button>
+          ${foto ? '<button type="button" class="gk-foto-weg" data-act="foto-weg" aria-label="Foto entfernen">&#10005;</button>' : ''}
         </div>
-        <button data-act="drop">Trennen</button>
-        ${car.role === 'ghost' ? `
-        <div class="gar-speed">
-          <label>Tempo</label>
-          <input type="range" min="${GHOST_READ_MIN}" max="1" step="0.05"
-                 value="${car.ghostSpeed === undefined || car.ghostSpeed === null
-                          ? ghostCfg.speed : car.ghostSpeed}">
-          <b></b>
-          <button class="gar-speed-reset" data-act="speedreset"
-                  title="Zurueck auf die Vorgabe aus den Optionen">&#8635;</button>
-        </div>` : ''}
-        ${charakterZeile(car)}`;
-      // Clicking the row itself identifies the car; the buttons must not also blink it.
-      row.onclick = (e) => { if (!e.target.closest('button')) blinkCar(car); };
-      row.querySelectorAll('button[data-role]').forEach(b => {
-        b.onclick = () => setCarRole(car, b.dataset.role);
+        <div class="gk-name car-tag">
+          <button class="car-chip" data-act="color"
+                  style="background:${f.hex};color:${f.ink}"
+                  title="Farbe wählen, gerade ${f.name}">${car.tagChar || ''}</button>
+          <input class="car-name-in" data-act="alias" type="text" maxlength="18"
+                 placeholder="${car.tag || 'Name'}"
+                 value="${(car.alias || '').replace(/"/g, '&quot;')}"
+                 aria-label="Name für die Rundenuebersicht">
+        </div>
+        <div class="gk-rolle" data-rollen="${GAR_ROLLEN.map((r) => r.id).join(',')}" data-rolle="${rolle.id}">
+          <button type="button" data-act="rolle" data-d="-1" aria-label="Rolle zurück">&#9664;</button>
+          <b>${rolle.name}</b>${rolle.id === 'player2' ? '<span class="wip-tag">experimentell</span>' : ''}
+          <button type="button" data-act="rolle" data-d="1" aria-label="Rolle vor">&#9654;</button>
+        </div>
+        <div class="gk-fuss">
+          <button type="button" data-act="auf">Einstellen ${garAufAuto === car ? '&#9652;' : '&#9662;'}</button>
+          <button type="button" data-act="drop">Trennen</button>
+        </div>
+        <div class="gar-id">${car.tag || ''} &middot; ${String(car.device.id).slice(0, 12)}
+          ${car.blinking ? '<span class="gar-blink">&nbsp;blinkt&hellip;</span>' : ''}</div>`;
+      // Blinken beim Ueberfahren (Maus und Menueauswahl), siehe garageFokusZeile.
+      row._car = car;
+      row.onmouseenter = () => garageBlinkSanft(car);
+      row.querySelectorAll('button[data-act="rolle"]').forEach((b) => {
+        b.onclick = (e) => {
+          e.stopPropagation();
+          const k = GAR_ROLLEN.findIndex((r) => r.id === car.role);
+          const n = GAR_ROLLEN[((k < 0 ? 3 : k) + +b.dataset.d + GAR_ROLLEN.length) % GAR_ROLLEN.length];
+          setCarRole(car, n.id);
+        };
       });
       row.querySelector('button[data-act="drop"]').onclick = () => disconnectCar(car);
+      row.querySelector('button[data-act="auf"]').onclick = () => {
+        garAufAuto = garAufAuto === car ? null : car;
+        renderGarage();
+      };
+      row.querySelector('button[data-act="foto"]').onclick = (e) => {
+        e.stopPropagation();
+        garFotoFuer = car;
+        const d = $('gar-foto-datei');
+        if (d) { d.value = ''; d.click(); }
+      };
+      const weg = row.querySelector('button[data-act="foto-weg"]');
+      if (weg) weg.onclick = (e) => { e.stopPropagation(); autoFotoSetzen(car, ''); };
 
       // Name: bei jedem Tastendruck merken, aber NICHT neu zeichnen - renderGarage()
       // waehrend des Tippens wuerde das Feld ersetzen und den Schreibstand mitnehmen.
-      // Dasselbe Muster wie beim Temporegler eine Zeile weiter unten. Neu gezeichnet wird
-      // erst beim Verlassen des Feldes.
+      // Neu gezeichnet wird erst beim Verlassen des Feldes.
       const nf = row.querySelector('input[data-act="alias"]');
       nf.addEventListener('input', () => { car.alias = nf.value.trim(); carRemember(car); });
       nf.addEventListener('change', () => { renderGarage(); renderRaceGrid(); });
@@ -1283,8 +1557,6 @@
       nf.addEventListener('pointerdown', (e) => e.stopPropagation());
 
       // Farbe: die Auswahl klappt unter dem Klecks auf, acht Farben brauchen keinen Dialog.
-      // Schon belegte Farben bleiben waehlbar, sind aber angeschrieben: zwei gleiche Farben
-      // sind eine schlechte Idee, aber es ist deine Entscheidung und nicht meine.
       const chip = row.querySelector('button[data-act="color"]');
       chip.onclick = (e) => {
         e.stopPropagation();
@@ -1301,18 +1573,13 @@
           b.setAttribute('aria-label', b.title);
           b.onclick = (ev) => {
             ev.stopPropagation();
-            car.colorId = fb.id;
-            carRemember(car);
+            garageFarbeSetzen(car, fb.id);
             pal.remove();
-            renderGarage();
-            renderRaceGrid();
           };
           pal.appendChild(b);
         }
         document.body.appendChild(pal);
         const r = chip.getBoundingClientRect();
-        // An den Klecks gesetzt, aber im Schirm gehalten: am rechten Rand waere die
-        // Auswahl sonst zur Haelfte draussen.
         pal.style.top = (r.bottom + window.scrollY + 4) + 'px';
         pal.style.left = Math.min(r.left + window.scrollX,
           window.scrollX + document.documentElement.clientWidth - pal.offsetWidth - 8) + 'px';
@@ -1321,44 +1588,19 @@
           pal.remove();
           document.removeEventListener('pointerdown', zu, true);
         };
-        // Erst im naechsten Takt lauschen, sonst schliesst der eigene Klick sofort wieder.
         setTimeout(() => document.addEventListener('pointerdown', zu, true), 0);
       };
-      const sp = row.querySelector('.gar-speed input');
-      if (sp) {
-        const out = row.querySelector('.gar-speed b');
-        const rst = row.querySelector('.gar-speed-reset');
-        // Die Zeile sagt jetzt, WOHER ihr Wert kommt. Vorher war sie mit dem globalen Wert
-        // vorbelegt und sah damit aus wie eine Anzeige desselben Werts - waehrend ein
-        // einziges Antippen sie dauerhaft davon abkoppelte, ohne dass das irgendwo stand.
-        const paint = () => {
-          const eigen = car.ghostSpeed !== undefined && car.ghostSpeed !== null;
-          out.textContent = Math.round(sp.value * 100) + ' %'
-                            + (eigen ? '' : '\u00a0(Vorgabe)');
-          out.classList.toggle('gar-speed-own', eigen);
-          if (rst) rst.style.visibility = eigen ? '' : 'hidden';
-        };
-        paint();
-        // Nur der Wert wird gesetzt, NICHT neu gezeichnet: renderGarage() beim Ziehen
-        // aufzurufen wuerde den Regler unter dem Finger ersetzen und den Zug abbrechen.
-        sp.addEventListener('input', () => { car.ghostSpeed = +sp.value; paint(); });
-        if (rst) {
-          rst.onclick = (ev) => {
-            ev.stopPropagation();
-            // Der Weg zurueck. Ohne ihn war das Einrasten endgueltig - es gab im ganzen
-            // Projekt keine Stelle, die car.ghostSpeed wieder auf null setzt.
-            car.ghostSpeed = null;
-            sp.value = ghostCfg.speed;
-            paint();
-            showHudToast(garageLabel(car).toUpperCase() + ' FOLGT DER VORGABE');
-          };
-        }
-        // Der Klick auf die Zeile laesst das Auto blinken - am Regler waere das laestig.
-        sp.addEventListener('click', (e) => e.stopPropagation());
-        sp.addEventListener('pointerdown', (e) => e.stopPropagation());
-      }
       list.appendChild(row);
     });
+    // Leere Karte: ein weiteres Auto verbinden.
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'gar-karte-neu';
+    plus.innerHTML = '+ <span>AUTO</span>';
+    plus.onclick = () => { const c = $('gar-connect'); if (c) c.click(); };
+    list.appendChild(plus);
+    // Die aufgeklappte Zeile des gewaehlten Autos: Farbe, Ghost-Tempo, Charakter.
+    if (garAufAuto) list.appendChild(garageAufZeile(garAufAuto));
     refreshGarageGo();
   }
 
@@ -1382,14 +1624,19 @@
     // Anhalten ist nur scharf, wenn wirklich einer faehrt. Gepruefte Bedingung ist der
     // ZEITGEBER und nicht die Rolle: ein Auto auf "Ghost" zu stellen laesst es nicht
     // fahren, und ein Knopf, der dann etwas anzuhalten verspricht, luegt.
+    // EIN KNOPF FUER BEIDES. BESTELLT: "Der 'Ghosts anhalten'-Button soll gleichzeitig ein
+    // 'Ghosts starten'-Button sein, wenn sie noch nicht fahren."
     const stop = $('gar-stop-ghosts');
     if (stop) {
       const fahren = garage.filter(c => c.role === 'ghost' && c.ghost && c.ghost.running);
-      stop.disabled = !fahren.length;
+      stop.disabled = !fahren.length && !ghosts;
+      stop.textContent = fahren.length ? 'Ghosts anhalten' : 'Ghosts starten';
+      stop.dataset.lage = fahren.length ? 'anhalten' : 'starten';
       stop.title = fahren.length
         ? fahren.length + ' Ghost' + (fahren.length === 1 ? '' : 's')
           + ' ausrollen lassen und anhalten'
-        : 'Kein Ghost f\u00e4hrt gerade';
+        : (ghosts ? ghosts + ' Ghost' + (ghosts === 1 ? '' : 's') + ' losfahren lassen'
+                  : 'Erst ein Auto auf "Ghost" stellen');
     }
   }
 
@@ -1401,6 +1648,11 @@
   // drueckt, meint "jetzt" - und ein Knopf, der beim zweiten Mal dasselbe tut wie beim
   // ersten, naemlich nichts Sichtbares, ist der naechste Fehlerbericht.
   $('gar-stop-ghosts').onclick = () => {
+    // Faehrt keiner, startet derselbe Knopf sie (wie "Losfahren" es fuer die Ghosts tat).
+    if (!garage.some(c => c.role === 'ghost' && c.ghost && c.ghost.running)) {
+      garageGhostsStarten();
+      return;
+    }
     const ghosts = garage.filter(c => c.role === 'ghost' && c.ghost);
     if (!ghosts.length) return;
     const laufend = ghosts.filter(c => c.ghost.finish);
@@ -1416,7 +1668,8 @@
     refreshGarageGo();
   };
 
-  $('gar-go').onclick = () => {
+  $('gar-go').onclick = () => { garageGhostsStarten(); };
+  function garageGhostsStarten() {
     const player = garage.find(c => c.role === 'player');
     const ghosts = garage.filter(c => c.role === 'ghost');
     if (!player && !ghosts.length) return;
@@ -1439,7 +1692,7 @@
     log((player ? garageLabel(player) + ' im Cockpit' : 'Nur Ghosts')
         + (n ? ', ' + n + ' Ghost' + (n === 1 ? '' : 's') + ' gestartet' : ''), 'info');
     refreshGarageGo();
-  };
+  }
 
   // Die Lage EINMAL anzeigen, sobald sie bekannt ist - und nicht erst als Fehlermeldung
   // nach dem dritten vergeblichen Klick. bluetoothLageGenau() steht in 10-ble-explorer.js
@@ -1465,10 +1718,13 @@
   // Bitte des Nutzers wieder heraus. Der eigentliche Fund von v0.5.16 bleibt: der Filter
   // darunter ist ODER-verknuepft und nimmt ersatzweise den Nordic-UART-Dienst, ein Auto
   // ohne Namen in der Werbung faellt damit nicht mehr durch.
-  async function garageConnect() {
+  // opt.stumm: kein alert(), sondern die Lage zurueckgeben - das ACC-Menue zeigt sie in
+  // seinem eigenen, mit dem Pad bedienbaren Dialog (samt "Trotzdem starten", 51-konsole.js).
+  async function garageConnect(opt) {
     const lage = await bluetoothLageGenau();
     if (lage !== 'ok') {
       garageLageZeigen();
+      if (opt && opt.stumm) return lage;
       alert(bluetoothLageText(lage));
       return;
     }
@@ -3883,6 +4139,7 @@
   // - Quadrat trug Runterschalten UND die Flagge - und ist als Fehler zurueckgenommen
   // worden. Der Ladebalken startet auf den anderen Schirmen gar nicht erst, statt bei 40
   // Prozent stehenzubleiben.
+  let padKreuzSeit = null;
   function flagTasteTick(flagNow) {
     // ALLERERSTE STUFE: ist das Info-Popup offen (98c-opt-info.js), schliesst dieselbe
     // Taste nur IHN - alles dahinter (Menuenavigation, Cockpit-Schirm, gelbe Flagge)
@@ -3900,13 +4157,21 @@
     } else if (cockpitScreenIst().id !== 'main') {
       if (flagNow && !prevYellowFlag) cockpitScreenWaehlen();
     } else {
-      if (flagNow && !prevYellowFlag) { padFlagFired = false; flagHoldPress(); }
+      // KREUZ TIPPEN = BOXENSTOPP, halten = gelbe Flagge wie bisher. BESTELLT: "X soll pit
+      // mode aktivieren (statt OPTIONS)". Getippt heisst: vor Ablauf der Haltesekunde
+      // losgelassen - gemessen an der eigenen Uhr des Drucks, weil flagHoldPress() waehrend
+      // der Neustart-Ampel gar nicht erst zu laden beginnt.
+      if (flagNow && !prevYellowFlag) { padFlagFired = false; padKreuzSeit = Date.now(); flagHoldPress(); }
       if (flagNow && !padFlagFired && flagHoldStart !== null
           && Date.now() - flagHoldStart >= FLAG_HOLD_MS) {
         padFlagFired = true;
         flagHoldRelease(true);
       }
-      if (!flagNow && prevYellowFlag) flagHoldRelease(false);
+      if (!flagNow && prevYellowFlag) {
+        flagHoldRelease(false);
+        if (!padFlagFired && padKreuzSeit !== null && Date.now() - padKreuzSeit < FLAG_HOLD_MS) requestPitStop();
+        padKreuzSeit = null;
+      }
     }
     // DIE SPERRE FAELLT BEIM LOSLASSEN, und das ist die Behebung eines gemeldeten Fehlers.
     // padFlagFired heisst "in DIESEM Druck ist die Sekunde schon voll gewesen", also endet
@@ -8249,6 +8514,7 @@
   // Licht, Lichthupe, Boxenstopp - dieselbe Flankenerkennung wie beim Schalten oben,
   // eigene Merker, weil es Spieler 2s EIGENER Griff zum Knopf ist.
   let p2PrevHeadlights = false, p2PrevFlash = false, p2PrevPitstop = false;
+  let p2PrevTyre = false, p2PrevFuel = false;
   function pollPad2(pad) {
     if (!pad) {
       // Kein zweites Pad: Spieler 2 steht. Ohne diese zwei Zeilen behielte er den letzten
@@ -8326,6 +8592,17 @@
       boxZweiAnfordern();
     }
     p2PrevPitstop = pitstopNow2;
+    // Reifen- und Tankwahl fuer Auto 2 an SEINEM Pad, dieselben Tasten wie bei Auto 1.
+    if (bindings2.tyreSelect) {
+      const tyre2 = readBindingValue(pad, bindings2.tyreSelect) > BUTTON_CAPTURE_THRESHOLD;
+      if (tyre2 && !p2PrevTyre && typeof pitMischungWeiter2 === 'function') pitMischungWeiter2();
+      p2PrevTyre = tyre2;
+    }
+    if (bindings2.fuelSelect) {
+      const fuel2 = readBindingValue(pad, bindings2.fuelSelect) > BUTTON_CAPTURE_THRESHOLD;
+      if (fuel2 && !p2PrevFuel && typeof tankZiel2Weiter === 'function') tankZiel2Weiter();
+      p2PrevFuel = fuel2;
+    }
   }
 
   function pollGamepad() {
@@ -8347,6 +8624,15 @@
     }
     padConnected = true;
     padLastPollTime = performance.now();
+    // TITELBILDSCHIRM (ACC-Menue): jede Taste fuehrt ins Hauptmenue, links/rechts wechselt die
+    // Sprache. Solange danach noch eine Taste gehalten wird, tut dieser Takt nichts weiter -
+    // sonst oeffnete dasselbe gehaltene Kreuz im Hauptmenue gleich die naechste Kachel.
+    if (typeof konsolePadTitel === 'function' && konsolePadTitel(pad)) return;
+    // Steuerungs-Fuehrung offen: jede Taste wird dort angezeigt, gefahren wird nicht.
+    if (typeof konsoleTourPad === 'function' && konsoleTourPad(pad)) {
+      releaseInput(SRC.PAD);
+      return;
+    }
 
     // Nur abfangen, wenn hier auch wirklich Spieler 1s Belegung dran ist - waehrend
     // Spieler 2s Tabelle bearbeitet wird (bindEditSpieler === 2), soll Spieler 1
@@ -8429,8 +8715,11 @@
       // LB und RB machen nur noch Autodinge. Sie blaetterten ausserhalb des Cockpits durch
       // die Tabs, und das war eine der Quellen der Fehlbedienungen: ein Griff zum
       // Boxenstopp-Knopf im falschen Moment sprang in einen anderen Tab.
+      // ACC-MENUE: Options fuehrt aus dem Cockpit ins Fahren-Menue und von dort zurueck.
+      // BESTELLT: "X soll pit mode aktivieren (statt OPTIONS) und options 1x ins menü,
+      // nochmal zurück zum cockpit." Der Boxenstopp liegt auf Kreuz (flagTasteTick).
       const pitstopNow = readBindingValue(pad, bindings.pitstop) > BUTTON_CAPTURE_THRESHOLD;
-      if (pitstopNow && !prevPitstop) requestPitStop();
+      konsoleOptionsTaste(pitstopNow);
       prevPitstop = pitstopNow;
 
       // One button, both directions: start when idle, abort when running.
@@ -8444,12 +8733,14 @@
 
       // LB/RB: Reifenwahl und Tankvorwahl, dieselben Funktionen, die vorher am
       // Steuerkreuz hoch/runter hingen (siehe die Begruendung bei den Bindings oben).
+      // BESTELLT (ACC-Menue): "schultertasten zum tab wechseln" - in den Menues wechseln
+      // L1/R1 die Reiter der innersten Ebene, im Cockpit bleiben sie Reifen- und Tankvorwahl.
       const tyreNow = readBindingValue(pad, bindings.tyreSelect) > BUTTON_CAPTURE_THRESHOLD;
-      if (tyreNow && !prevTyreSelect) pitMischungWeiter();
+      if (tyreNow && !prevTyreSelect) { if (trackEditorPad('prev')) { /* Editor */ } else if (konsoleMenue()) konsoleReiterSchritt(-1); else pitMischungWeiter(); }
       prevTyreSelect = tyreNow;
 
       const fuelNow = readBindingValue(pad, bindings.fuelSelect) > BUTTON_CAPTURE_THRESHOLD;
-      if (fuelNow && !prevFuelSelect) pitVorwahlSchalten('refuel');
+      if (fuelNow && !prevFuelSelect) { if (trackEditorPad('next')) { /* Editor */ } else if (konsoleMenue()) konsoleReiterSchritt(1); else pitVorwahlSchalten('refuel'); }
       prevFuelSelect = fuelNow;
 
       // L3: Vollbild umschalten - im Cockpit race-fs, im Streckeneditor track-fs. Nach
@@ -8459,10 +8750,8 @@
       if (fsToggleNow && !prevFsToggle) {
         const aktiverTab = document.querySelector('.tab-btn.active');
         const tabName = aktiverTab ? aktiverTab.dataset.tab : null;
-        if (tabName === 'race') {
-          if (document.body.classList.contains('race-fs')) exitRaceFullscreen();
-          else enterRaceFullscreen();
-        } else if (tabName === 'track') {
+        // Im Cockpit nichts mehr: es ist immer Vollbild (v0.8.35).
+        if (tabName === 'track') {
           if (document.body.classList.contains('track-fs')) exitTrackFullscreen();
           else enterTrackFullscreen();
         }
@@ -8485,7 +8774,7 @@
         if (ovTab) ovTab.scrollTop += rechtsY * PAD_SCROLL_SPEED;
       } else if (rechtsY && !document.body.classList.contains('race-fs')
           && !document.body.classList.contains('track-fs')) {
-        document.body.scrollTop += rechtsY * PAD_SCROLL_SPEED;
+        konsoleBildlauf(rechtsY * PAD_SCROLL_SPEED);
       }
 
       // Gelbe Flagge auf HALTEN, aber im Streckeneditor-Vollbild bestaetigt dieselbe
@@ -8526,6 +8815,13 @@
       if (downshiftNow && !prevDownshift) {
         if (optInfoOffen()) {
           optInfoSchliessen();
+        } else if (trackEditorPad('delete')) {
+          /* Streckeneditor: Quadrat entfernt das gewaehlte Teil */
+        } else if (pitSpielTaste('quad')) {
+          /* Boxen-Minigame: Quadrat gehoert dem Spiel, es wird nicht geschaltet */
+        } else if (konsoleMenue()) {
+          // Quadrat im Menue: schneller Wechsel auf einer Kachel (Renntyp, Bahn/Frei, ...).
+          konsoleQuadrat();
         } else if (physicsEnabled && !physEngine.state.isShifting) {
           physEngine.triggerShift(-1);
         }
@@ -8537,12 +8833,17 @@
         // das jetzt direkt, wozu man sonst erst zur ersten Zeile hochnavigieren und
         // "Waehlen" druecken musste. Nach demselben Muster wie optInfoOffen() oben: erst
         // pruefen (kein Tab-race-Sonderfall noetig, dort gibt es nie ein offenes .subpage).
-        const offenerSub = document.querySelector('.tabpage.active .subpage.on');
+        // ACC-Menue: Kreis ist in jedem Menue "zurueck", eine Ebene (Unterseite, Stapel,
+        // Eltern). Im Streckeneditor-Vollbild bleibt er Rueckgaengig, im Cockpit Hochschalten.
         if (optInfoOffen()) {
           optInfoSchliessen();
-        } else if (offenerSub) {
-          showSubpage('');
-        } else if (!trackEditorPad('undo') && physicsEnabled && !physEngine.state.isShifting) {
+        } else if (trackEditorPad('undo')) {
+          /* vom Editor verbraucht */
+        } else if (pitSpielTaste('kreis')) {
+          /* Boxen-Minigame: Kreis gehoert dem Spiel */
+        } else if (konsoleMenue()) {
+          konsoleZurueck();
+        } else if (physicsEnabled && !physEngine.state.isShifting) {
           physEngine.triggerShift(1);
         }
       }
@@ -8577,57 +8878,47 @@
       // Boxen- oder Renneinstellungen-Schirm gilt weiter ihre eigene, laengst gemessene
       // Zeilenauswahl - menuNavMove() greift nur, wenn beide ablehnen (auf dem
       // Optionen-Tab tun sie das immer, weil dort keiner der beiden Schirme aktiv ist).
-      if (dUp && !prevDpad.up && !trackEditorPad('up') && !pitScreenPad('up')
-          && !raceScreenPad('up')) {
-        menuNavMove('up');
-      }
-      if (dDown && !prevDpad.down && !trackEditorPad('down') && !pitScreenPad('down')
-          && !raceScreenPad('down')) {
-        menuNavMove('down');
-      }
-      // ---- LINKS/RECHTS: REGLER, VOLLBILD-SCHIRME, ODER TABS -------------------------
+      // ---- ACC-MENUE: Steuerkreuz in den Menues ------------------------------------------
       //
-      // BESTELLT: "D-Pad links/rechts wechselt TABS - ausser bei einem angewaehlten
-      // Regler (dort verstellt es den Wert; gedrueckt halten beschleunigt) und ausser im
-      // Cockpit-Vollbild, wo es weiterhin die Cockpit-Schirme durchblaettert wie heute."
+      // Kacheln RAEUMLICH, Einstellungszeilen hoch/runter, und links/rechts verstellt die
+      // angewaehlte Zeile DIREKT (die Tabs wechseln jetzt L1/R1). Gehalten wiederholt es.
       //
-      // ANGEWAEHLTER REGLER GEHT JEDEM TAKT, nicht nur auf der steigenden Flanke - genau
-      // das ist die bestellte Wiederholung beim Halten. menuNavAdjustPad() fuehrt ihren
-      // eigenen kleinen Zeitgeber (erste Stufe sofort, danach alle 120 ms) und ist damit
-      // der EINZIGE Verbraucher, solange etwas angewaehlt ist: der Streckeneditor, das
-      // Blaettern der Cockpit-Schirme und der neue Tabwechsel bekommen die Taste gar
-      // nicht erst angeboten - ein angewaehlter Regler darf durch nichts anderes
-      // unterbrochen werden.
-      if (menuNavArmed) {
-        menuNavAdjustPad('left', dLeft);
-        menuNavAdjustPad('right', dRight);
-        // Auch hier merken, sonst sieht der andere Zweig beim Loslassen des Reglers eine
-        // veraltete Flanke und feuert einmal ins Leere (Editor/Tabwechsel), obwohl das
-        // Kreuz in Wahrheit schon laenger gehalten wird.
+      // Links/rechts wird NUR in der gedrueckten Richtung gerufen. Hier stand vorher
+      // menuNavAdjustPad('left', dLeft); menuNavAdjustPad('right', dRight) - der Aufruf mit
+      // false setzte den Haltezustand in JEDEM Takt zurueck, und die gedrueckte Richtung galt
+      // dadurch jeden Takt als neuer Druck: ein Auswahlfeld sprang so mehrere Optionen weit.
+      // Das war die Ursache von "manche Menues schalten mehrere Optionen auf einmal durch".
+      const imEditorVollbild = document.body.classList.contains('track-fs');
+      if (konsoleMenue() && !imEditorVollbild) {
+        if (konsoleWdh('up', dUp)) menuNavMove('up');
+        if (konsoleWdh('down', dDown)) menuNavMove('down');
+        if (menuNavIstRaum()) {
+          if (konsoleWdh('left', dLeft)) menuNavRaum('left');
+          if (konsoleWdh('right', dRight)) menuNavRaum('right');
+        } else if (dLeft) menuNavSeitwaerts('left', true);
+        else if (dRight) menuNavSeitwaerts('right', true);
+        else menuNavAdjustPad('left', false);
         prevDpad.left = dLeft; prevDpad.right = dRight;
       } else {
-        // schirmZurueck/schirmVor bleiben die belegbare Aktion, aber NUR NOCH im
-        // Cockpit-Vollbild wirksam - ausserhalb ist sie durch den neuen Tabwechsel
-        // ersetzt, der das rohe Steuerkreuz liest (dieselbe Begruendung wie beim alten
-        // "festverdrahtet vs. belegbar": der Tabwechsel ist keine Fahrentscheidung, die
-        // man umlegen wollen wuerde).
-        const raceFs = document.body.classList.contains('race-fs');
+        if (dUp && !prevDpad.up && !trackEditorPad('up') && !pitScreenPad('up')
+            && !raceScreenPad('up')) {
+          /* im Cockpit ohne eigene Zeilenauswahl: nichts */
+        }
+        if (dDown && !prevDpad.down && !trackEditorPad('down') && !pitScreenPad('down')
+            && !raceScreenPad('down')) {
+          /* dito */
+        }
         const schirmZ = readBindingValue(pad, bindings.schirmZurueck) > BUTTON_CAPTURE_THRESHOLD;
         const schirmV = readBindingValue(pad, bindings.schirmVor) > BUTTON_CAPTURE_THRESHOLD;
-        // ANGEWAEHLTE RUNDENZAHL (Renneinstellungen-Schirm) geht VOR dem Schirmblaettern:
-        // erst die Waehltaste an der Dauer/Runden-Zeile, dann verstellt links/rechts exakt.
-        // raceScreenPad() gibt nur dann true zurueck, wenn wirklich verstellt wurde - ohne
-        // Anwahl bleibt die Taste beim Blaettern/Tabwechsel wie bisher.
+        // Cockpit: links/rechts blaettert die Cockpit-Schirme, mit und ohne Vollbild (die
+        // Tabs wechseln nicht mehr mit dem Steuerkreuz). Die angewaehlte Rundenzahl auf dem
+        // Renneinstellungen-Schirm und der Streckeneditor gehen vor.
         if (dLeft && !prevDpad.left && trackEditorPad('left')) { /* Editor hat sie */ }
         else if (dLeft && !prevDpad.left && raceScreenPad('left')) { /* Rundenzahl */ }
-        else if (raceFs && schirmZ && !prevDpad.left) cockpitScreenStep(-1);
-        else if (!raceFs && dLeft && !prevDpad.left) menuNavTabWechsel(-1);
+        else if (schirmZ && !prevDpad.left && !imEditorVollbild) cockpitScreenStep(-1);
         if (dRight && !prevDpad.right && trackEditorPad('right')) { /* Editor hat sie */ }
         else if (dRight && !prevDpad.right && raceScreenPad('right')) { /* Rundenzahl */ }
-        else if (raceFs && schirmV && !prevDpad.right) cockpitScreenStep(+1);
-        else if (!raceFs && dRight && !prevDpad.right) menuNavTabWechsel(+1);
-        // Die Flanken der BELEGUNG merken, nicht die des Kreuzes - sonst feuert ein
-        // umgelegter Knopf in jedem Takt, weil seine Flanke nie als verbraucht gilt.
+        else if (schirmV && !prevDpad.right && !imEditorVollbild) cockpitScreenStep(+1);
         prevDpad.left = schirmZ || dLeft; prevDpad.right = schirmV || dRight;
       }
       prevDpad.up = dUp; prevDpad.down = dDown;

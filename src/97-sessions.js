@@ -473,7 +473,12 @@
   const MP_STORE = 'chc.mp.v1';
   const MP_POLL_MS = 1500;      // Rangliste holen
   const MP_HEARTBEAT_MS = 5000; // Lebenszeichen, damit die eigene Zeile nicht blass wird
-  const mp = { host: '', name: '', id: '', an: false, timer: null, letzterBericht: 0 };
+  const mp = { host: '', name: '', id: '', an: false, timer: null, letzterBericht: 0,
+               zuschauer: 0, posTimer: null };
+  // POSITIONEN NUR, WENN JEMAND ZUSIEHT. Der Host zaehlt die Info-Screens (zuschauer in
+  // /mp/state); ist keiner da, bleibt es bei Rundenschluss und Lebenszeichen wie bisher.
+  // Mit Zuschauer drei Berichte je Sekunde - der Info-Screen rechnet dazwischen weiter.
+  const MP_POS_MS = 330;
 
   function mpLaden() {
     try {
@@ -540,6 +545,41 @@
     } catch (e) { /* die Rangliste zeigt es beim naechsten Holen */ }
   }
 
+  // Die Kartenpunkte dieses Telefons: das eigene Auto und seine Ghosts, knapp kodiert
+  // (i Kachel, f Anteil darin, c Farbe, k Kuerzel, g Ghost). Das eigene Auto traegt das
+  // Kuerzel des Fahrernamens, damit man es auf dem Info-Screen wiedererkennt.
+  function mpPositionen() {
+    const marken = (typeof trackCarMarks === 'function') ? trackCarMarks() : [];
+    return marken.filter((m) => m && m.index !== null && m.index !== undefined).slice(0, 8)
+      .map((m) => ({ i: m.index, f: Math.round((m.phase || 0) * 1000) / 1000,
+                     c: m.farbe || '#ffffff',
+                     k: String(m.rolle === 'player' ? (mp.name || m.kuerzel || '') : (m.kuerzel || ''))
+                          .slice(0, 3),
+                     g: m.rolle === 'ghost' ? 1 : 0 }));
+  }
+
+  function mpStreckenCode() {
+    try {
+      const tiles = currentTrackTiles;
+      return (tiles && tiles.length > 1 && typeof trackToCode === 'function') ? trackToCode(tiles) : '';
+    } catch (e) { return ''; }
+  }
+
+  function mpPosBerichten() {
+    if (!mp.an || mp.zuschauer <= 0) return;
+    fetch(mpUrl('/mp/report'), {
+      method: 'POST', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: mp.id, pos: mpPositionen(), strecke: mpStreckenCode() }),
+    }).catch(() => { /* naechster Takt */ });
+  }
+
+  function mpPosTakt() {
+    const soll = mp.an && mp.zuschauer > 0;
+    if (soll && mp.posTimer === null) mp.posTimer = setInterval(mpPosBerichten, MP_POS_MS);
+    if (!soll && mp.posTimer !== null) { clearInterval(mp.posTimer); mp.posTimer = null; }
+  }
+
   // Aus playerLapCrossed gerufen. Eine Runde ist der Moment, in dem sich die Rangliste
   // wirklich aendert - alles andere ist Lebenszeichen.
   function mpRundeGefahren() {
@@ -555,6 +595,8 @@
       const r = await fetch(mpUrl('/mp/state'), { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
+      mp.zuschauer = d.zuschauer || 0;
+      mpPosTakt();
       mpZeichnen(d);
       mpSay(t('verbunden') + ', ' + (d.fahrer || []).length + ' '
             + t('Fahrer'));
@@ -594,10 +636,205 @@
 
   function mpLeave() {
     mp.an = false;
+    mpPosTakt();
     if (mp.timer !== null) { clearInterval(mp.timer); mp.timer = null; }
     mpSay(t('nicht verbunden'));
     log('Mehrspieler verlassen.', 'info');
   }
+
+  // ============================== INFO-SCREEN ==============================
+  //
+  // BESTELLT: "Ich will ein Geraet sich einloggen lassen, das rein als Info-Screen fungiert
+  // (Streckenscreen, ohne eigenes Auto; zB ein Tablet)."
+  //
+  // Ein Info-Screen MELDET NICHTS als Fahrer. Er fragt /mp/state?zuschauer=<id> ab; damit
+  // weiss der Host, dass jemand zusieht, und die Fahrer schicken ihre Kartenpunkte mit. Die
+  // Strecke kommt als Kurzcode (trackToCode) vom Fahrer, der zuletzt eine gemeldet hat.
+  //
+  // ZWISCHEN DEN BERICHTEN WIRD WEITERGERECHNET: drei Berichte je Sekunde sind fuer eine Karte
+  // zu wenig, ein Punkt, der springt, liest sich als Stottern. Aus den letzten zwei Berichten
+  // je Auto folgt ein Tempo in Kacheln je Sekunde, und damit laeuft der Punkt bis zu 0,8 s
+  // weiter. Bleiben Berichte laenger aus, bleibt er stehen - das ist ehrlicher als Raten.
+  //
+  // KEIN BLUETOOTH NOETIG, also auch kein secure context: ein Tablet oeffnet einfach
+  // http://<Host>:8080/?info im Browser.
+  const MPI_POLL_MS = 400;
+  const mpi = { an: false, host: '', id: 'z' + Math.random().toString(36).slice(2, 10),
+                timer: null, rahmen: null, daten: null, empfangen: 0,
+                schluessel: null, geo: null, spur: new Map(), n: 0 };
+
+  function mpiHolen() {
+    if (!mpi.an) return;
+    fetch(mpBasis(mpi.host) + '/mp/state?zuschauer=' + encodeURIComponent(mpi.id),
+          { cache: 'no-store' })
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then((d) => { mpiAufnehmen(d); })
+      .catch((e) => {
+        if ($('mpi-status')) $('mpi-status').textContent = t('kein Kontakt zum Host') + ': ' + e.message;
+      });
+  }
+
+  function mpiAufnehmen(d) {
+    const jetzt = performance.now();
+    mpi.daten = d;
+    mpi.empfangen = jetzt;
+    // Strecke nur neu zeichnen, wenn sie sich aendert.
+    const code = d.strecke || '';
+    if (code !== mpi.schluessel) {
+      mpi.schluessel = code;
+      mpi.geo = null;
+      const host = $('mpi-karte');
+      let tiles = null;
+      try {
+        const gelesen = code && typeof codeToTrack === 'function' ? codeToTrack(code) : null;
+        tiles = gelesen ? gelesen.tiles : null;
+      } catch (e) { tiles = null; }
+      if (host) {
+        if (tiles && tiles.length > 1) {
+          const r = renderTrackPreview(tiles, null, { detailed: true, cars: [] });
+          host.innerHTML = r.html;
+          mpi.geo = r.geo || null;
+          mpi.n = tiles.length;
+        } else {
+          host.innerHTML = '<p class="mpi-leer">' + t('Noch keine Strecke gemeldet.') + '</p>';
+          mpi.n = 0;
+        }
+      }
+    }
+    // Stuetzpunkte je Auto: Ort (Kachel + Anteil) zu dem Zeitpunkt, an dem er gemeldet wurde.
+    const gesehen = new Set();
+    (d.fahrer || []).forEach((f) => {
+      if (!f.pos || f.posAlter === undefined || f.posAlter > 3) return;
+      const t0 = jetzt - f.posAlter * 1000;
+      f.pos.forEach((p, k) => {
+        const schl = f.id + ':' + k;
+        gesehen.add(schl);
+        const ort = (p.i || 0) + Math.max(0, Math.min(0.999, p.f || 0));
+        const alt = mpi.spur.get(schl);
+        let v = 0;
+        if (alt && t0 > alt.t + 50 && mpi.n) {
+          let d = ort - alt.ort;
+          if (d < -mpi.n / 2) d += mpi.n;          // ueber Start/Ziel
+          if (d > mpi.n / 2) d -= mpi.n;
+          v = d > 0 ? d / ((t0 - alt.t) / 1000) : 0;
+          if (v > 12) v = 0;                         // Sprung (Neustart, Abflug): nicht rechnen
+        }
+        // Nur ein NEUER Bericht zaehlt (derselbe kann zweimal abgeholt werden). Steht das
+        // Auto, ist v = 0, und der Punkt bleibt stehen.
+        if (!alt || t0 > alt.t + 50) {
+          mpi.spur.set(schl, { ort, t: t0, v, c: p.c, k: p.k, g: p.g });
+        }
+      });
+    });
+    for (const schl of Array.from(mpi.spur.keys())) if (!gesehen.has(schl)) mpi.spur.delete(schl);
+    mpiTabelle(d);
+    mpiBild();
+  }
+
+  function mpiUhr(sek) {
+    if (sek === null || sek === undefined) return '\u2013';
+    const m = Math.floor(sek / 60), r = Math.floor(sek % 60);
+    return m + ':' + String(r).padStart(2, '0');
+  }
+
+  function mpiTabelle(d) {
+    const leute = d.fahrer || [];
+    const rennen = d.rennen || {};
+    if ($('mpi-anzahl')) $('mpi-anzahl').textContent = leute.length;
+    if ($('mpi-uhr')) {
+      const rest = rennen.restSekunden !== undefined;
+      $('mpi-uhr-label').textContent = t(rest ? 'Restzeit' : 'Laufzeit');
+      $('mpi-uhr').textContent = mpiUhr(rest ? rennen.restSekunden : rennen.laufzeit);
+    }
+    if ($('mpi-laenge')) {
+      const fuehrend = leute.length ? leute[0].laps : 0;
+      $('mpi-laenge').textContent = rennen.laps ? Math.max(0, rennen.laps - fuehrend) + ' / ' + rennen.laps
+        : (rennen.minutes ? rennen.minutes + ' min' : t('offen'));
+    }
+    const zeit = (x) => (x === null || x === undefined) ? '\u2013' : x.toFixed(2) + 's';
+    const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    if ($('mpi-rows')) {
+      $('mpi-rows').innerHTML = leute.map((f, i) => {
+        const eigen = (f.pos || []).find((p) => !p.g);
+        const farbe = eigen && /^#[0-9a-fA-F]{3,8}$/.test(eigen.c) ? eigen.c : '#8b99b4';
+        const kl = [];
+        if (i === 0 && f.laps > 0) kl.push('fuehrt');
+        if (f.alter > 10) kl.push('alt');
+        return '<tr class="' + kl.join(' ') + '"><td>' + (i + 1) + '</td><td><span class="mpi-punkt" style="background:'
+          + farbe + '"></span>' + esc(f.name) + '</td><td>' + f.laps + '</td><td>' + zeit(f.letzte)
+          + '</td><td>' + zeit(f.beste) + '</td></tr>';
+      }).join('') || ('<tr><td colspan="5" class="mpi-leer">' + t('Noch kein Fahrer angemeldet.') + '</td></tr>');
+    }
+    if ($('mpi-status')) {
+      $('mpi-status').textContent = mpBasis(mpi.host) + ' \u00b7 ' + t('verbunden');
+    }
+  }
+
+  // Der Takt ist requestAnimationFrame, dazu ein Bild je Abruf: rAF steht still, wenn der
+  // Browser die Seite fuer verdeckt haelt (manche Fernseher, Bildschirmschoner), und dann
+  // sollen die Autos wenigstens im Abruftakt weiterlaufen statt einzufrieren.
+  function mpiMalen() {
+    if (!mpi.an) return;
+    mpi.rahmen = requestAnimationFrame(mpiMalen);
+    mpiBild();
+  }
+
+  function mpiBild() {
+    const host = $('mpi-karte');
+    const svg = host && host.querySelector('svg');
+    if (!svg || !mpi.geo || !mpi.n || typeof karteAutosSetzen !== 'function') return;
+    const jetzt = performance.now();
+    const marken = [];
+    mpi.spur.forEach((s) => {
+      const dt = Math.min(0.8, Math.max(0, (jetzt - s.t) / 1000));
+      let ort = s.ort + s.v * dt;
+      ort = ((ort % mpi.n) + mpi.n) % mpi.n;
+      const i = Math.floor(ort);
+      marken.push({ index: i, phase: ort - i, farbe: s.c, kuerzel: s.k, quer: 0 });
+    });
+    karteAutosSetzen(svg, mpi.geo, marken);
+  }
+
+  function mpiStart(host) {
+    const h = mpBasis(host || ($('mp-host') ? $('mp-host').value : '') || mp.host);
+    if (!h) { mpSay(t('Ohne Host-Adresse geht es nicht.'), true); return false; }
+    mpi.host = h;
+    mpi.an = true;
+    mpi.schluessel = null;
+    mpi.spur.clear();
+    // Direkt unter <body>: <main> hat z-index 1 und damit einen eigenen Stapel - darin
+    // lag die Kopfzeile der App ueber dem Info-Screen, egal welcher z-index hier steht.
+    const schirm = $('mp-info');
+    if (schirm) {
+      if (schirm.parentElement !== document.body) document.body.appendChild(schirm);
+      schirm.hidden = false;
+    }
+    if (mpi.timer === null) mpi.timer = setInterval(mpiHolen, MPI_POLL_MS);
+    mpiHolen();
+    if (mpi.rahmen === null) mpi.rahmen = requestAnimationFrame(mpiMalen);
+    log('Info-Screen: zeigt ' + h + '.', 'info');
+    return true;
+  }
+
+  function mpiStop() {
+    mpi.an = false;
+    if (mpi.timer !== null) { clearInterval(mpi.timer); mpi.timer = null; }
+    if (mpi.rahmen !== null) { cancelAnimationFrame(mpi.rahmen); mpi.rahmen = null; }
+    if ($('mp-info')) $('mp-info').hidden = true;
+  }
+
+  if ($('mp-info-join')) $('mp-info-join').addEventListener('click', () => mpiStart());
+  if ($('mpi-zu')) $('mpi-zu').addEventListener('click', mpiStop);
+
+  // /?info in der Adresse: sofort Info-Screen, Host ist die Seite selbst (oder der Wert von
+  // info=, wenn einer dasteht). So genuegt auf dem Tablet ein Lesezeichen.
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.has('info')) {
+      const ziel = q.get('info') || (/^https?:$/.test(location.protocol) ? location.origin : '');
+      if (ziel) setTimeout(() => mpiStart(ziel), 0);
+    }
+  } catch (e) { /* ohne URLSearchParams kein Kurzweg */ }
 
   mpLaden();
   if ($('mp-host')) $('mp-host').value = mp.host;

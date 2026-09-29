@@ -337,7 +337,10 @@
   // the keydown listener rather than the polling interval, so one tap is one shift.
   window.addEventListener('keydown', (e) => {
     const k = (e.key || '').toLowerCase();
-    if ((k === 'i' || k === 'k') && !e.repeat && physicsEnabled && !physEngine.state.isShifting) {
+    // Boxen-Minigame: K ist Quadrat, I ist Kreis - dieselbe Lage wie Runter/Hoch.
+    if ((k === 'i' || k === 'k') && !e.repeat && pitSpielTaste(k === 'k' ? 'quad' : 'kreis')) {
+      /* vom Spiel verbraucht */
+    } else if ((k === 'i' || k === 'k') && !e.repeat && physicsEnabled && !physEngine.state.isShifting) {
       physEngine.triggerShift(k === 'i' ? 1 : -1);
     }
     if (k === 'l' && !e.repeat) triggerHeadlightFlash();
@@ -378,7 +381,8 @@
       else if (cockpitScreenIst().id !== 'main') cockpitScreenWaehlen();
       else flagHoldPress();
     }
-    if (k === 'q' && !e.repeat) debugCountLap(e.shiftKey);
+    // Q ist in den Menues L1 (51-konsole.js); die Test-Runde gibt es nur noch im Cockpit.
+    if (k === 'q' && !e.repeat && !konsoleMenue()) debugCountLap(e.shiftKey);
     if (k === 'm' && !e.repeat) {
       // Next unused section, so one key walks the whole protocol in order.
       const label = REC_SECTIONS[rec.next] || ('Markierung ' + (rec.next + 1));
@@ -407,14 +411,14 @@
     // teilt sich den Beschleunigungszustand mit dem Gamepad (50b-menu-nav.js), das native
     // Wiederholen des Betriebssystems ersetzt hier nur dessen eigenen Zeitgeber. Ohne
     // Anwahl geht die Taste unveraendert an den Tabwechsel, wie am Gamepad auch.
+    // ACC-MENUE: Kacheln raeumlich, Einstellungszeilen hoch/runter, links/rechts verstellt
+    // die angewaehlte Zeile direkt. Die Reiter wechseln jetzt Q/E (L1/R1), siehe 51-konsole.js.
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key) && menuNavActive()) {
-      if (e.key === 'ArrowUp') menuNavMove('up');
-      else if (e.key === 'ArrowDown') menuNavMove('down');
-      else if (e.key === 'ArrowLeft') {
-        if (menuNavArmed) menuNavAdjustGehalten('left', true); else menuNavTabWechsel(-1);
-      } else if (e.key === 'ArrowRight') {
-        if (menuNavArmed) menuNavAdjustGehalten('right', true); else menuNavTabWechsel(1);
-      }
+      const dir = e.key === 'ArrowUp' ? 'up' : e.key === 'ArrowDown' ? 'down'
+                : e.key === 'ArrowLeft' ? 'left' : 'right';
+      if (dir === 'up' || dir === 'down') menuNavMove(dir);
+      else if (menuNavIstRaum()) menuNavRaum(dir);
+      else menuNavSeitwaerts(dir, true);
       return;
     }
     // Cockpit-Renneinstellungen: dort lenken die Pfeiltasten die Zeilenauswahl, nicht das

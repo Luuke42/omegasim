@@ -517,9 +517,9 @@
 
   // ============================ ANSAGEN =============================================
   //
-  // FUENF MELDUNGEN AN FUENF SCHALTERN, dazu ein Funkfilter. Sie teilen sich einen Kern:
-  // eine Stimme, eine Abbruchregel, eine Fehlerzeile. Fuenf eigene Sprechfunktionen waeren
-  // fuenf Orte, an denen der naechste Schalter vergessen wird.
+  // SECHS MELDUNGEN AN SECHS SCHALTERN, dazu ein Funkfilter. Sie teilen sich einen Kern:
+  // eine Stimme, eine Abbruchregel, eine Fehlerzeile. Sechs eigene Sprechfunktionen waeren
+  // sechs Orte, an denen der naechste Schalter vergessen wird.
   //
   // JEDE MELDUNG IST EINE FLANKE, kein Zustand. Ein Tank unter 10 % bleibt minutenlang
   // unter 10 %, und eine Ansage je Takt waere unbenutzbar. Gemeldet wird deshalb der
@@ -527,7 +527,7 @@
   // steigt - beim Tank also nach dem Tanken, beim Schaden nach der Reparatur.
   const ANSAGE_SCHWELLE = 0.10;   // 10 %, wie in der Aufgabe
   const ANSAGE_HYSTERESE = 0.18;  // erst darueber ist die Meldung wieder scharf
-  const ansageAn = { lap: true, damage: false, fuel: false, tyre: false, rain: false };
+  const ansageAn = { lap: true, damage: false, fuel: false, tyre: false, rain: false, pit: true };
   const ansageLatch = { damage: false, fuel: false, tyre: false, rain: null };
 
   // HIER STAND DER FUNKFILTER als Live-Effekt auf der Browserstimme, und er ist auf Bitte
@@ -650,7 +650,7 @@
   // toten Schalter ergeben hat.
   const ANSAGE_KAESTCHEN = { 'setting-announce': 'lap', 'setting-announce-damage': 'damage',
                              'setting-announce-fuel': 'fuel', 'setting-announce-tyre': 'tyre',
-                             'setting-announce-rain': 'rain' };
+                             'setting-announce-rain': 'rain', 'setting-announce-pit': 'pit' };
   Object.keys(ANSAGE_KAESTCHEN).forEach((id) => {
     const el = $(id);
     if (!el) return;
@@ -756,7 +756,9 @@
       tyreNode.start();
     }
     if (!tyreGain) return;
-    tyreGain.gain.setTargetAtTime(Math.min(0.3, menge * 0.3) * tyreVolume,
+    // LAUTER: Deckel 0,3 -> 0,45. BESTELLT: "nimm die aktuellen, aber mach sie noch etwas
+    // hoerbarer; evtl. einfach Lautstaerke etwas hoeher". Gilt in allen Modi.
+    tyreGain.gain.setTargetAtTime(Math.min(0.45, menge * 0.45) * tyreVolume,
                                   audioCtx.currentTime, 0.05);
     // 1,0 bis 1,18: hoerbar, aber ohne dass der Ton nach Bandgeschwindigkeit klingt. Mehr
     // verschiebt auch die Schleifenlaenge und macht die Naht hoerbar.
@@ -1932,7 +1934,13 @@
       ? Math.max(0, Math.min(1, (Math.max(0, -throttleY) - 0.25) / 0.55)) : 0;
     setBrakeSqueal(brakeAmt);
     // Der Reibkreis-Querbedarf treibt es. Er steht im Zustand, weil er hier gebraucht wird.
-    setTyreSqueal(physEngine.state.latUse || 0);
+    // Im Pacejka-Modus zusaetzlich aus der Ausnutzung der staerker belasteten Achse: 1 ist
+    // dort der Scheitel, und 0,8 bildet ihn auf eine halbe Lautstaerke ab (Schwelle 0,6,
+    // voll bei 1,0). Wer ueber den Scheitel schiebt oder rutscht, HOERT es also.
+    const pst = physEngine.state;
+    const pacQuietsch = physEngine.config.pacejka
+      ? Math.max(pst.pacNutzV || 0, pst.pacNutzH || 0) * 0.8 : 0;
+    setTyreSqueal(Math.max(pst.latUse || 0, pacQuietsch));
 
     // VOR dem fruehen Ausstieg: die Zusaetze gelten in beiden Tonarten, nicht nur im
     // Schleifenzweig.

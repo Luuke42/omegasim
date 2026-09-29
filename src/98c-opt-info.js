@@ -20,16 +20,19 @@
     document.querySelectorAll('.opt-row').forEach((row) => {
       const label = row.querySelector('.opt-label');
       if (!label) return;
-      const small = label.querySelector('small');
-      if (!small || small.classList.contains('opt-info-versteckt')) return;
+      // ALLE <small> eines Labels, nicht nur das erste. BESTELLT: "keinen Text unter die
+      // Optionen, sondern immer hinter das i im Kreis". Beim Steuerungsmodus stand der
+      // Pacejka-Absatz in einem zweiten <small> und blieb deshalb sichtbar unter der Zeile.
+      const smalls = [...label.querySelectorAll('small')];
+      if (!smalls.length || smalls.every((x) => x.classList.contains('opt-info-versteckt'))) return;
+      const small = smalls[0];
       // Nicht ueber childNodes[0] geraten: manche Titel stecken selbst in einem <span>
       // (z.B. id="race-limit-label" fuer Werte, die JS nachfuehrt), dann ist das erste
       // Kind kein Textknoten und label.textContent haette faelschlich auch die
       // Erklaerung mitgenommen. Stattdessen ein Klon OHNE die <small> - was danach an
       // Text uebrig ist, ist der Titel, unabhaengig davon, wie er aufgebaut ist.
       const klon = label.cloneNode(true);
-      const smallImKlon = klon.querySelector('small');
-      if (smallImKlon) smallImKlon.remove();
+      klon.querySelectorAll('small').forEach((x) => x.remove());
       const titel = klon.textContent.trim();
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -38,10 +41,12 @@
       btn.setAttribute('aria-label', t('Erklärung anzeigen') + (titel ? ': ' + titel : ''));
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        optInfoOeffnen(titel, small.innerHTML);
+        // Beim Klick gelesen, nicht beim Einrichten: so steht der Text in der Sprache, die
+        // gerade gilt (der Uebersetzer tauscht die Textknoten in den <small> selbst).
+        optInfoOeffnen(titel, smalls.map((x) => x.innerHTML).join('<br><br>'));
       });
       label.insertBefore(btn, small);
-      small.classList.add('opt-info-versteckt');
+      smalls.forEach((x) => x.classList.add('opt-info-versteckt'));
     });
   }
 

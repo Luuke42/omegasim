@@ -87,8 +87,16 @@
   // nach dem Boxenmenue nimmt der Cockpitschirm sie wieder". Der ganze Tab bleibt
   // deshalb aussen vor, nicht nur sein Hauptschirm.
   function menuNavContainer() {
+    // Das Cockpit-Menue (Options 1 s halten, 51-konsole.js) liegt ueber allem und hat
+    // Vorrang - auch im Cockpit, das sonst keine generische Zeilenliste bekommt.
+    if (typeof konsoleFrageOffen === 'function' && konsoleFrageOffen()) return $('k-frage');
+    if (typeof konsoleTourOffen === 'function' && konsoleTourOffen()) return $('k-tour-karte');
     const tab = document.querySelector('.tabpage.active');
     if (!tab || tab.id === 'tab-race') return null;
+    // Der TITELBILDSCHIRM hat keine Zeilen: jede Taste fuehrt nach Fahren (51-konsole.js).
+    // Als Zeilenliste waere #lang-toggle die erste - und die Waehltaste schaltete die Sprache
+    // um, statt weiterzugehen. So im Selbsttest passiert: der Rest der Suite lief englisch.
+    if (tab.id === 'tab-home') return null;
     // Der Streckeneditor im VOLLBILD hat sein eigenes, vollstaendiges D-Pad-Schema
     // (trackEditorPad(), 60-track.js: hoch/runter/links/rechts/bestaetigen/rueckgaengig/
     // drehen) - eine generische Zeilenliste wuerde X/Kreuz/Dreieck dort wegschnappen,
@@ -138,7 +146,10 @@
   function menuNavRows() {
     const host = menuNavContainer();
     if (!host) return [];
-    const tiles = [...host.querySelectorAll('.misc-tile')].filter(menuNavSichtbar);
+    // .k-kachel/.k-knopf: die Kacheln des ACC-Menues (Hauptmenue, Fahren) samt der Knoepfe
+    // IN einer Kachel (Scan/Editor/Laden auf STRECKE). Alle Kacheln werden RAEUMLICH
+    // angesteuert (menuNavRaum), nicht mehr in einer Liste.
+    const tiles = [...host.querySelectorAll('.misc-tile, .k-kachel, .k-knopf')].filter(menuNavSichtbar);
     if (tiles.length) return tiles.map((el) => ({ el, kind: 'tile', control: el }));
 
     // .mw-row gehoert dazu: die Motorwerkstatt sitzt als eigenes Raster am Ende der
@@ -181,18 +192,32 @@
   // Wechselt der Kontext (Unterseite auf/zu, Kachel geoeffnet, Tab verlassen), faengt
   // ganz von vorn an - ein gemerkter Index aus einer anderen Zeilenliste zeigt sonst auf
   // eine zufaellige Stelle, sobald man zurueckkommt.
+  // LETZTE AUSWAHL JE SEITE (v0.8.24, BESTELLT): beim Verlassen eines Kontexts wird die
+  // Zeile gemerkt, beim Zurueckkommen steht die Auswahl wieder dort. Nicht fuer Dialoge
+  // (#k-frage, Tutorial): die fangen immer oben an.
+  const menuNavMerk = {};
+  const MENU_NAV_OHNE_MERK = ['k-frage', 'k-tour-karte'];
+  function menuNavMerkLeeren() { Object.keys(menuNavMerk).forEach((k) => { delete menuNavMerk[k]; }); }
   function menuNavEnsureContext() {
     const key = menuNavContextNow();
     if (key !== menuNavContextKey) {
+      if (menuNavContextKey && menuNavGezeigt && !MENU_NAV_OHNE_MERK.includes(menuNavContextKey)) {
+        menuNavMerk[menuNavContextKey] = menuNavIndex;
+      }
       // Den Kontext verlassen: menuNavRender() scrollt document.body (nicht das
       // Fenster) fuer jede fokussierte Zeile, und dieser Bildlauf blieb sonst stehen -
       // ein anderer Tab konnte so scheinbar grundlos mitten im Bild aufschlagen, obwohl
       // niemand ihn dorthin gescrollt hat.
       if (menuNavContextKey !== null && key === null) document.body.scrollTop = 0;
       menuNavContextKey = key;
-      menuNavIndex = 0;
       menuNavArmed = false;
-      menuNavGezeigt = false;
+      if (key && menuNavMerk[key] !== undefined && !MENU_NAV_OHNE_MERK.includes(key)) {
+        menuNavIndex = menuNavMerk[key];
+        menuNavGezeigt = true;
+      } else {
+        menuNavIndex = 0;
+        menuNavGezeigt = false;
+      }
     }
   }
 
@@ -212,6 +237,62 @@
     row.el.classList.add('menu-nav-sel');
     if (menuNavArmed) row.el.classList.add('menu-nav-armed');
     if (typeof row.el.scrollIntoView === 'function') row.el.scrollIntoView({ block: 'nearest' });
+    if (typeof garageFokusZeile === 'function') garageFokusZeile(row.el);
+  }
+
+  // ---- RAEUMLICH: der naechste Nachbar in der Richtung ------------------------------
+  //
+  // BESTELLT (ACC-Menue): "kacheln, dpad richtungen zum wählen". Gemessen von Mittelpunkt zu
+  // Mittelpunkt; quer zur Richtung zaehlt die Abweichung zweieinhalbfach, damit "rechts" in
+  // derselben Reihe bleibt. Seitwaerts nur zu Kacheln, die sich senkrecht UEBERLAPPEN - sonst
+  // spraenge rechts am Rand schraeg nach oben; bei ACC passiert dort einfach nichts. Aus dem
+  // Mock-up uebernommen und dort ausprobiert.
+  function menuNavRaum(dir) {
+    const rows = menuNavRows();
+    if (!rows.length) return false;
+    if (!menuNavGezeigt) { menuNavGezeigt = true; menuNavRender(); menuNavTonBewegen(); return true; }
+    const cur = rows[menuNavIndex] || rows[0];
+    const a = cur.el.getBoundingClientRect();
+    const ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+    let best = -1, bestWert = Infinity;
+    rows.forEach((r, i) => {
+      if (r === cur) return;
+      const b = r.el.getBoundingClientRect();
+      const bx = b.left + b.width / 2, by = b.top + b.height / 2;
+      const selbeZeile = b.bottom > a.top + 4 && b.top < a.bottom - 4;
+      let haupt, quer;
+      if (dir === 'right') { if (bx <= ax + 2 || !selbeZeile) return; haupt = b.left - a.right; quer = Math.abs(by - ay); }
+      else if (dir === 'left') { if (bx >= ax - 2 || !selbeZeile) return; haupt = a.left - b.right; quer = Math.abs(by - ay); }
+      else if (dir === 'down') { if (by <= ay + 2) return; haupt = b.top - a.bottom; quer = Math.abs(bx - ax); }
+      else { if (by >= ay - 2) return; haupt = a.top - b.bottom; quer = Math.abs(bx - ax); }
+      const wert = Math.max(0, haupt) + quer * 2.5;
+      if (wert < bestWert) { bestWert = wert; best = i; }
+    });
+    if (best < 0) return true;   // am Rand: nichts tun, aber die Taste ist verbraucht
+    menuNavIndex = best;
+    menuNavArmed = false;
+    menuNavRender();
+    menuNavTonBewegen();
+    return true;
+  }
+  function menuNavIstRaum() {
+    const rows = menuNavRows();
+    return rows.length > 0 && rows.every((r) => r.kind === 'tile');
+  }
+  // Links/rechts: auf Kacheln zum Nachbarn, auf einer Einstellungszeile DIREKT den Wert -
+  // ohne vorheriges Anwaehlen, seit links/rechts keine Tabs mehr wechselt (das tun L1/R1).
+  // Gibt zurueck, ob die Taste verbraucht wurde.
+  function menuNavSeitwaerts(dir, gehalten) {
+    if (typeof optInfoOffen === 'function' && optInfoOffen()) return true;
+    menuNavEnsureContext();
+    const rows = menuNavRows();
+    if (!rows.length) return false;
+    if (menuNavIstRaum()) { if (gehalten !== false) return menuNavRaum(dir); return true; }
+    const row = rows[menuNavIndex];
+    if (!row || !['range', 'select', 'toggle'].includes(row.kind)) return false;
+    menuNavGezeigt = true;
+    menuNavAdjustGehalten(dir, gehalten !== false);
+    return true;
   }
 
   function menuNavMove(dir) {
@@ -222,6 +303,7 @@
     menuNavEnsureContext();
     const rows = menuNavRows();
     if (!rows.length) return;
+    if (rows.every((r) => r.kind === 'tile')) { menuNavRaum(dir); return; }
     menuNavArmed = false;
     // Der ERSTE Tastendruck in einem frischen Menue zeigt nur Zeile 0 - er bewegt noch
     // nicht. Sonst huepft "runter" sofort zur zweiten Zeile, ohne dass die erste je zu
@@ -290,10 +372,18 @@
     // - den Aufrufer zum Tabwechsel verleiten. Ein offenes Modal blockiert beides.
     if (optInfoOffen()) return true;
     menuNavEnsureContext();
-    if (!menuNavArmed) return false;
     const rows = menuNavRows();
     if (!rows.length) return false;
     const row = rows[menuNavIndex];
+    // SEIT DEM ACC-MENUE OHNE ANWAHL: links/rechts verstellt die angewaehlte Zeile direkt
+    // (menuNavSeitwaerts). Ein Kontrollkaestchen schaltet mit links wie mit rechts um.
+    if (!row) return false;
+    if (row.kind === 'toggle') {
+      row.control.click();
+      menuNavRender();
+      menuNavTonVerstellen();
+      return true;
+    }
     const schritte = gross ? MENU_NAV_STEP_BIG : 1;
     if (row.kind === 'range') {
       for (let i = 0; i < schritte; i++) {
@@ -344,6 +434,12 @@
       menuNavAdjust(dir, false);
       return;
     }
+    // NUR REGLER WIEDERHOLEN BEIM HALTEN. Ein Auswahlfeld schaltete nach 300 ms Halten
+    // weiter - ein etwas laengerer Druck sprang so schon zwei Optionen. Gemeldet: "manche
+    // Menues schalten mehrere Optionen auf einmal durch". Auswahlfelder: ein Druck, ein Schritt.
+    const rows = menuNavRows();
+    const zeile = rows[menuNavIndex];
+    if (!zeile || zeile.kind !== 'range') return;
     const seitZugbeginn = jetzt - menuNavHoldStart;
     const beschleunigt = seitZugbeginn >= MENU_NAV_ACCEL_MS;
     const naechsterSchrittNach = menuNavLastStep === menuNavHoldStart

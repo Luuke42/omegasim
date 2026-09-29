@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KLARTEXT IM WLAN. Die App laeuft unter https://localhost, der Mehrspieler-Host unter
+     http://192.168.x.x:8080 - und ab Android 9 ist unverschluesseltes HTTP gesperrt. IP-Bereiche
+     lassen sich hier nicht eingrenzen, deshalb gilt es fuer die ganze App. Vertretbar: ausser
+     Host und Update-Quelle (https) stellt die App keine Netzanfragen. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

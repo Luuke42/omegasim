@@ -22,23 +22,20 @@
   //
   // gamma > 1 streckt den unteren Bereich (mehr Weg fuer wenig Gas), gamma < 1 macht ihn
   // spitzer. 1 ist die Gerade und bitgleich zum Verhalten vor v0.5.10.
-  function gasKennlinie(x, gamma) {
-    const v = Math.max(0, Math.min(1, x));
-    if (!(gamma > 0) || gamma === 1) return v;
-    return Math.pow(v, gamma);
+  // EINE FORMEL FUER ALLE DREI KENNLINIEN (Gas, Bremse, Lenkung): x hoch g, mit dem
+  // Vorzeichen getrennt, weil ein negativer Betrag hoch einem nicht-ganzen Exponenten NaN
+  // waere. GEFRAGT: "warum sind die Kurven bei Lenkkennlinie und Gaskennlinie nicht
+  // dieselben mathematischen Formeln?" - sie waren es schon, nur als zwei Abschriften.
+  // Jetzt steht die Rechnung einmal; die zwei Namen sagen nur noch den Wertebereich.
+  function kennlinie(x, g) {
+    if (!(g > 0) || g === 1) return x;
+    return Math.sign(x) * Math.pow(Math.abs(x), g);
   }
-
-  // ---- Die Lenkkennlinie: dieselbe Kurve, mit Vorzeichen -----------------------------
-  //
-  // BESTELLT: "wie beschleunigungskurve auch lenkkurve einbauen als option mit slider."
-  // x^gamma ist nur fuer x >= 0 definiert (ein negativer Betrag hoch einem nicht-ganzen
-  // Exponenten ist NaN) - deshalb Betrag und Vorzeichen getrennt, wie es der Fahrtakt
-  // vorher schon inline tat. Herausgezogen, damit Kurve und Visualisierung (siehe
-  // kennlinienPlotZeichnen in 50-drive.js) und der Fahrtakt dieselbe Rechnung teilen.
+  function gasKennlinie(x, gamma) {
+    return kennlinie(Math.max(0, Math.min(1, x)), gamma);
+  }
   function lenkKennlinie(x, expo) {
-    const v = Math.max(-1, Math.min(1, x));
-    if (!(expo > 0) || expo === 1) return v;
-    return Math.sign(v) * Math.pow(Math.abs(v), expo);
+    return kennlinie(Math.max(-1, Math.min(1, x)), expo);
   }
 
   // Die Nickgrenzen, GERECHNET aus der statischen Achslast und dem Verlagerungsanteil.
@@ -116,6 +113,27 @@
 
   const loadOnPower = (cfg) => cfg.loadFrontStatic - cfg.transferK;
   const loadOnBrake = (cfg) => cfg.loadFrontStatic + cfg.transferK;
+
+  // ---- Magic Formula, normiert (Pacejka & Bakker 1992) --------------------------------
+  // y(u) = sin(C*atan(B*u - E*(B*u - atan(B*u)))). pacB sucht das B, bei dem der Scheitel
+  // genau bei u = 1 liegt: dort ist C*atan(...) = pi/2. Das Innere steigt fuer E < 1
+  // monoton mit B, deshalb reicht eine Halbierung. Einmal je (C, E) gerechnet.
+  function pacY(u, B, C, E) {
+    const bu = B * u;
+    return Math.sin(C * Math.atan(bu - E * (bu - Math.atan(bu))));
+  }
+  const pacBCache = {};
+  function pacB(C, E) {
+    const key = C + '|' + E;
+    if (pacBCache[key]) return pacBCache[key];
+    const ziel = Math.tan(Math.PI / (2 * C));
+    let lo = 0.01, hi = 50;
+    for (let i = 0; i < 60; i++) {
+      const b = (lo + hi) / 2;
+      if (b - E * (b - Math.atan(b)) < ziel) lo = b; else hi = b;
+    }
+    return (pacBCache[key] = (lo + hi) / 2);
+  }
 
   class CarreraPhysicsEngine {
     constructor() {
@@ -312,6 +330,9 @@
         // braucht ein Trigger mit grosser Totzone, um ein Tempo zu HALTEN.
         // Die Enden liegen fuer jedes Gamma fest - 0 bleibt 0, 1 bleibt 1.
         throttleGamma: 1.0,
+        // BREMSKENNLINIE, dieselbe Formel wie die Gaskennlinie. BESTELLT: "noch eine
+        // Bremskennlinie einfuegen (standard: etwas unempfindlicher im Anfangsbereich)".
+        brakeGamma: 1.3,
         // 10 km/h on the racing display, which reads speedKmh * REAL_SCALE (71.25).
         // Below this the car is walking pace and should simply stop.
         crawlCutoffKmh: 10 / REAL_SCALE,
@@ -459,6 +480,36 @@
         // Byte 7 kann nicht mehr als 127 tragen, und das ist der Anschlag des Autos.
         steerCalib: 1.0,
         aquaplaning: 0,       // 0 = dry grip, 1 = slicks in standing water
+        // ---- PACEJKA-MODUS (experimentell), siehe pacejkaStep() ----
+        // Aus heisst: kein einziger Rechenschritt davon laeuft, und "Physik" ist bitgleich
+        // mit dem Stand davor (Selbsttest "Physik bitgleich").
+        pacejka: false,
+        pacejkaUebersteuern: true,   // BESTELLT: "evtl. sage ich spaeter, Uebersteuern aus"
+        // Die Haftgrenze in Einheiten der Querausnutzung (latUse ohne Deckel). 0,7 heisst:
+        // voller Einschlag ist ab etwa 115 km/h am Limit, halber ab 230 - dieselbe Skala,
+        // die auch das Quietschen benutzt (TYRE_SQUEAL_START 0,6 liegt knapp darunter).
+        pacejkaGrenze: 0.7,
+        pacejkaC: 1.3,               // Formfaktor der Magic Formula (Seitenkraft: 1,3)
+        pacejkaE: -0.5,              // Kruemmung; negativ = ausgepraegter Scheitel
+        pacejkaUeberMax: 0.35,       // groesster Zuschlag beim Uebersteuern, in servoAngle
+        // Hinten 20 % mehr Seitenhalt als vorn: ab Werk leicht untersteuernd, wie fast jedes
+        // Auto abgestimmt ist. Ohne diese Reserve kam das Heck schon beim Rollen mit vollem
+        // Einschlag (gemessen: 90 km/h, kein Gas) - das Schleppmoment belastet die Front, und
+        // ein neutral verteiltes Auto waere damit immer zuerst hinten am Limit.
+        pacejkaHeckReserve: 1.2,
+        // UEBERSTEUERN SPUERBAR (v0.8.24). BESTELLT, nach "ich habe nichts davon gemerkt ...
+        // Nimmt denn dabei die Beschleunigung ab?": alle vier Punkte, und nur mit dem
+        // Schalter "Uebersteuern" (pacejkaUebersteuern). Aus = das Pacejka von vorher.
+        //  - Rutscht das Heck, geht Vortrieb verloren: bis zu 55 Prozent weniger Antrieb.
+        //  - Leistungsuebersteuern: Vollgas nimmt hinten Seitenhalt. Ab 55 % Gas waechst die
+        //    Ausnutzung hinten, bei Vollgas auf das 2,4-fache - so kommt das Heck unter Gas
+        //    vor der Front (bei Vollgas ist die Front leicht, ihr Faktor ist auf 1,6
+        //    gedeckelt; unter 2,2 bliebe es Schieben). Ausgerechnet, nicht erfahren.
+        //  - Der Rutsch haelt, bis gegengelenkt oder vom Pedal gegangen wird (beide unter
+        //    20 %), hoechstens 2 s, und nicht unter 15 Prozent des Hoechsttempos.
+        pacejkaRutschVortrieb: 0.55,
+        pacejkaLeistung: 1.4,
+        pacejkaHaltMax: 2.0,
 
         // ---- Longitudinal weight transfer ----
         // Under braking the mass pitches onto the front axle, under power onto the rear.
@@ -795,6 +846,13 @@
         kU: 0,             // s^2/m, Eigenlenkgradient: >0 untersteuernd
         yawSteady: 0,      // rad/s, stationaere Gierrate zum aktuellen Lenkwinkel
         latUse: 0,         // Querausnutzung des Reibkreises, 0..1 - treibt das Quietschen
+        // Pacejka-Modus: Wirkfaktor vorn (1 = voll), Zuschlag hinten, Richtung des Rutschens,
+        // Ausnutzung beider Achsen relativ zur Haftgrenze (1 = am Scheitel) und der Zustand
+        // fuer Anzeige, Vibration und Quietschen: '' | 'unter' | 'ueber'.
+        pacUnter: 1, pacUeber: 0, pacRichtung: 0, pacNutzV: 0, pacNutzH: 0, pacZustand: '',
+        // Antriebsfaktor waehrend des Rutschens (1 = voll), wie lange der Rutsch schon haelt,
+        // und ob er unter Gas kam (fuer die Vibration).
+        pacVortrieb: 1, pacHaltSeit: 0, pacLeistung: false,
         // ayUse und vLimitKmh standen hier und liest jetzt niemand mehr. Sie waren fuer eine
         // Anzeige gedacht, die gefahren gemessen dauerhaft am Anschlag stand - siehe den
         // Skalenwiderspruch in yawStep. Ein Zustandsfeld ohne Leser ist toter Ballast, und
@@ -840,6 +898,100 @@
       // nichts, aber ein Layout, das vor dem Kalibrierbezug gesetzt wuerde, waere danach
       // nicht mehr davon zu unterscheiden - und physConfigDiff() koennte es nicht melden.
       this.applyLayout('neutral');
+    }
+
+    // ---- PACEJKA-MODUS: Reifen mit Scheitel, und das formt den Lenkbefehl --------------
+    //
+    // BESTELLT: "Bau es in dieser Runde mit ein. Nenn den 4. Modus Pacejka. Beim Unter- und
+    // Uebersteuern soll Controllervibration getriggert werden und Reifengeraeusche."
+    //
+    // DIE MAGIC FORMULA (Pacejka & Bakker 1992) beschreibt die Seitenkraft eines Reifens
+    // ueber seinem Schraeglauf: erst fast linear, dann ein Scheitel, danach faellt sie ab.
+    //     y(u) = sin(C * atan(B*u - E*(B*u - atan(B*u))))
+    // Hier NORMIERT: u = 1 ist der Scheitel (B wird dafuer einmal ausgerechnet, siehe
+    // pacB), y(1) = 1 ist die groesste Kraft.
+    //
+    // WARUM NICHT DIREKT IM EINSPURMODELL. yawStep rechnet mit echten Einheiten, und dort
+    // steht der Skalenwiderspruch beschrieben: 45 Grad Lenkbereich eines Modellautos bei
+    // Tempi eines echten ergeben 21 g. Ein Pacejka-Reifen in diesem Modell waere bei jeder
+    // Kurve weit hinter dem Scheitel - der Modus haette dauernd die Lenkung beschnitten.
+    // Die Ausnutzung kommt deshalb aus der Groesse, die gefahren kalibriert ist: der
+    // Querausnutzung des Reibkreises (latUse, hier ohne den Deckel bei 1), geteilt durch die
+    // einstellbare Haftgrenze.
+    //
+    // JE ACHSE ueber die Achslast, die schon da ist (loadFront): Gas entlastet vorn, also
+    // schiebt ein Auto unter Gas frueher ueber die Vorderraeder; Bremsen entlastet hinten,
+    // also kommt beim Anbremsen das Heck. Hinten zehrt zusaetzlich der Antrieb am Budget
+    // (Heckantrieb): wer mitten in der Kurve Gas gibt, hat hinten weniger Seitenhalt.
+    //
+    // WAS DARAUS FOLGT, am Befehl an das echte Auto:
+    //   Untersteuern: vorn hinter dem Scheitel. Der Winkel wird auf das gekuerzt, was der
+    //     Reifen noch an Kraft bringt (y(u)/u). Mehr Einschlag bringt dann nichts mehr -
+    //     jenseits des Scheitels sogar weniger.
+    //   Uebersteuern: hinten weiter hinter dem Scheitel als vorn. Das Heck kommt, die App
+    //     gibt Einschlag IN die Kurve dazu, der Fahrer muss gegenlenken. Gegenlenken faengt
+    //     es: dann klingt der Zuschlag schnell ab.
+    // Unterhalb des Scheitels aendert sich NICHTS, auch nicht ein bisschen: der Modus soll
+    // sich im normalen Fahren anfuehlen wie "Physik" und erst am Limit anders werden.
+    pacejkaStep(dt, inputs) {
+      const st = this.state, cfg = this.config;
+      const heck = !!cfg.pacejkaUebersteuern;
+      const gas = inputs ? Math.max(0, inputs.throttle || 0) : 0;
+      const bremse = inputs ? Math.max(0, inputs.brake || 0) : 0;
+      const kmhAnteil = Math.abs(st.speedKmh) / cfg.topSpeedKmh;
+      const lenk = this.state.dampedSteering;
+      const quer = Math.abs(lenk) * kmhAnteil * cfg.corneringLoad
+                   / Math.max(0.1, cfg.pacejkaGrenze);
+      const grip = Math.max(0.2, (st.tyreGrip === undefined ? 1 : st.tyreGrip) * cfg.gripScale);
+      const vorn = Math.max(0.6, Math.min(1.6,
+        cfg.loadFrontStatic / Math.max(0.05, st.loadFront)));
+      const hinten = Math.max(0.6, Math.min(1.6,
+        (1 - cfg.loadFrontStatic) / Math.max(0.05, 1 - st.loadFront)));
+      // Der Antrieb nimmt hinten Seitenhalt: Reibkreis, 0,7 ist sein Anteil am Budget.
+      const antrieb = Math.max(0, Math.min(1, st.longUse)) * 0.7;
+      const rest = Math.sqrt(Math.max(0.2, 1 - antrieb * antrieb));
+      const uV = quer * vorn / grip;
+      let uH = quer * hinten / grip / rest / Math.max(0.5, cfg.pacejkaHeckReserve);
+      // LEISTUNGSUEBERSTEUERN: viel Gas nimmt hinten zusaetzlich Seitenhalt (siehe config).
+      const leistung = heck && gas > 0.55;
+      if (leistung) uH *= 1 + cfg.pacejkaLeistung * Math.min(1, (gas - 0.55) / 0.45);
+      st.pacNutzV = uV; st.pacNutzH = uH;
+      const C = cfg.pacejkaC, E = cfg.pacejkaE, B = pacB(C, E);
+      const wirk = (u) => (u <= 1 ? 1 : pacY(u, B, C, E) / u);
+      // Vorn: Wirkfaktor auf den Winkel, weich nachgefuehrt (80 ms), damit es kein Zucken ist.
+      const zielU = wirk(uV);
+      st.pacUnter += (zielU - st.pacUnter) * (1 - Math.exp(-dt / 0.08));
+      // Hinten: nur, wenn das Heck WEITER jenseits ist als die Front - sonst ist es Schieben.
+      let zielO = 0;
+      const richtung = Math.sign(lenk);
+      // Gegenlenken: Stick gegen die Rutschrichtung faengt das Auto.
+      const gegen = !!(st.pacRichtung && richtung && richtung !== st.pacRichtung);
+      if (heck && uH > 1 && uH > uV) {
+        if (!st.pacRichtung && richtung) st.pacRichtung = richtung;
+        if (!gegen) zielO = Math.min(cfg.pacejkaUeberMax, 1 - wirk(uH));
+        if (zielO > 0) st.pacLeistung = leistung;
+      }
+      // DER RUTSCH HAELT. Einmal gekommen, klingt das Heck nicht mehr von selbst ab - auch
+      // mit losgelassenem Stick lenkt das Auto weiter ein, bis man gegenlenkt oder vom Pedal
+      // geht. Deckel: pacejkaHaltMax Sekunden, und nicht bei Schritttempo.
+      const pedal = gas >= 0.2 || bremse >= 0.2;
+      if (heck && st.pacUeber > 0.05 && st.pacRichtung && !gegen && pedal
+          && kmhAnteil > 0.15 && st.pacHaltSeit < cfg.pacejkaHaltMax) {
+        zielO = Math.max(zielO, st.pacUeber);
+        st.pacHaltSeit += dt;
+      }
+      const tau = zielO > st.pacUeber ? 0.12 : (gegen ? 0.1 : 0.25);
+      st.pacUeber += (zielO - st.pacUeber) * (1 - Math.exp(-dt / tau));
+      if (st.pacUeber < 0.005 && zielO === 0) {
+        st.pacUeber = 0; st.pacRichtung = 0; st.pacHaltSeit = 0; st.pacLeistung = false;
+      }
+      // VORTRIEB: der Antrieb im naechsten Takt (update() liest ihn beim Schub).
+      st.pacVortrieb = heck
+        ? 1 - cfg.pacejkaRutschVortrieb * Math.min(1, st.pacUeber / Math.max(0.01, cfg.pacejkaUeberMax))
+        : 1;
+      st.pacZustand = st.pacUeber > 0.03 ? 'ueber' : (st.pacUnter < 0.97 ? 'unter' : '');
+      this.outputs.servoAngle = Math.max(-1, Math.min(1,
+        this.outputs.servoAngle * st.pacUnter + st.pacRichtung * st.pacUeber));
     }
 
     // ---- EINSPURMODELL, ein Schritt ---------------------------------------------------
@@ -1061,6 +1213,9 @@
       st.driveMode = 'neutral'; st.neutralRpm = 0;
       st.currentGear = 0; st.rpm = IDLE_RPM; st.rpmFrac = 0;
       st.isShifting = false; st.engineLoad = 0; st.onLimiter = false;
+      st.pacUnter = 1; st.pacUeber = 0; st.pacRichtung = 0;
+      st.pacNutzV = 0; st.pacNutzH = 0; st.pacZustand = '';
+      st.pacVortrieb = 1; st.pacHaltSeit = 0; st.pacLeistung = false;
     }
 
     // rpm comes from the gear RATIO, not from the band edges. Consequence straight out of
@@ -1651,7 +1806,10 @@
           accel = st.isShifting
             ? -resist * cfg.shiftDragFactor // a brief lull, not a full coast-down
             : this.thrustAt(st.speedKmh, gearIdx, inputs.throttle, A)
-                * st.gripLong * surf * rearGrip * st.tyreGrip / st.massFactor - resist;
+                * st.gripLong * surf * rearGrip * st.tyreGrip / st.massFactor
+                // Pacejka: ein rutschendes Heck bringt weniger auf die Strasse. In "Physik"
+                // ist der Faktor genau 1 - x * 1 === x, der Fingerabdruck bleibt bitgleich.
+                * (cfg.pacejka ? st.pacVortrieb : 1) - resist;
         } else {
           st.engineLoad = 0;
           accel = -resist; // lift off and it rolls out
@@ -1826,6 +1984,9 @@
       st.steerDemand = this.state.dampedSteering * st.aquaFactor * st.steerGrip;
       this.outputs.servoAngle = Math.max(-1, Math.min(1,
         st.steerDemand * cfg.steerCalib + zug));
+      // Pacejka formt den Befehl NACH dem Deckel, siehe dort. Nur hinter dem Schalter:
+      // "Physik" rechnet keinen Schritt davon.
+      if (cfg.pacejka) this.pacejkaStep(dt, inputs);
 
       // ---- EINSPURMODELL, ein Schritt --------------------------------------------------
       //
@@ -2082,7 +2243,7 @@
   // zeigen, sondern auf einen Zustand bzw. eine Nachricht - ein Dauerbrummen im Gelaende
   // ist Geschmackssache, und ein Wetterwechsel ist keine Kraft.
   const RUMBLE_ARTEN = { schalt: true, abs: true, crash: true,
-                         abseits: false, box: true, meldung: false };
+                         abseits: false, box: true, meldung: false, rutschen: true };
 
   // ---- Trigger-Vibration, und WELCHER Trigger zu welcher Art gehoert -----------------
   //

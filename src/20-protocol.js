@@ -524,11 +524,14 @@
   // the temporal dead zone. That trap has been sprung in this file more than once, so the
   // dependency is inverted instead of ordered.
   let pitThrottleLock = false;
+  // Boxen-Minigame (70-race.js): waehrend des ganzen Stopps weder Gas noch Rueckwaerts.
+  let pitVollSperre = false;
 
   function setThrottle(ny) {
     // Wheels off: the request is dropped rather than damped, and the pedal snaps back to
     // zero so the display does not show a throttle the car is not getting.
     if (pitThrottleLock && -ny > 0) { ny = 0; }
+    if (pitVollSperre) { ny = 0; }
     throttleY = -ny; // up = positive
     const topPx = 93 + ny * TR;
     throttleInner.style.top = topPx + 'px';

@@ -15,8 +15,11 @@
   // keinen - dort wird nicht angemeldet, und das ist kein Mangel: von der Platte ist die App
   // ohnehin ohne Netz da. Die Abfrage ist Pflicht, denn ein Wurf im Ladepfad nimmt die ganze
   // IIFE mit, und dann fehlt OMEGA_TEST und der Selbsttest zeigt null Zeilen.
+  // IN DER ANDROID-APP NICHT: dort liefert die App ihre Dateien selbst aus und aktualisiert
+  // sie selbst (OmegaUpdate). Ein Arbeiter daneben waere eine zweite Ablage, die nach einem
+  // Update die alte Fassung ausliefert.
   if ('serviceWorker' in navigator && window.isSecureContext
-      && location.protocol !== 'file:') {
+      && location.protocol !== 'file:' && !(window.OMEGA_APP && window.OMEGA_APP.nativ)) {
     // Nach dem Laden anmelden und nicht davor: die Anmeldung holt Dateien, und das soll
     // nicht mit dem ersten Aufbau des Cockpits um die Leitung streiten.
     window.addEventListener('load', () => {

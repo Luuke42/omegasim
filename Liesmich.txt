@@ -1,0 +1,22 @@
+CH Control - Desktopversion
+============================
+
+Starten:
+  Doppelklick auf "Start CH Control.bat"
+  Es oeffnet sich kurz ein kleines schwarzes Fenster (der lokale Server)
+  und danach ein App-Fenster mit CH Control.
+
+Beenden:
+  Einfach das App-Fenster schliessen, und danach das kleine schwarze
+  Server-Fenster schliessen (oder einfach offen lassen, es braucht kein
+  Internet und stoert nicht).
+
+Auf einem anderen Windows-PC benutzen:
+  Diesen ganzen Ordner kopieren (USB-Stick, Cloud, etc.) und dort genauso
+  "Start CH Control.bat" doppelklicken. Es muss nichts installiert werden -
+  Windows bringt alles Noetige (PowerShell, Edge) schon mit.
+
+Falls beim ersten Start eine Windows-Sicherheitswarnung erscheint
+("Unbekannter Herausgeber" o.ae.), liegt das daran, dass die Datei aus dem
+Internet/von einem anderen Rechner kopiert wurde. Einfach ueber "Weitere
+Informationen" -> "Trotzdem ausfuehren" bestaetigen.

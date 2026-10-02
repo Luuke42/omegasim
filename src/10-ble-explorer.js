@@ -820,7 +820,7 @@
     "Während der Challenge gesperrt": "Locked during the challenge",
     "Während einer Challenge sind die Einstellungen gesperrt.": "Settings are locked during a challenge.",
     "Challenges gegen Schummeln: jede Runde wird gegen die Strecke geprüft (mindestens 90 % der Teile erkannt), eine plausible Mindestrundenzeit gilt in App und Bestenliste, und die Einstellungen sind während des Laufs gesperrt; wer sie doch ändert, bricht ab.": "Challenges against cheating: every lap is checked against the track (at least 90 % of the pieces recognised), a plausible minimum lap time applies in the app and the leaderboard, and settings are locked during the run; changing them anyway aborts it.",
-    "Installiere die App für Mehrspieler": "Install the app for multiplayer",
+    "Installiere die Android App für Mehrspieler": "Install the Android app for multiplayer",
     "Titelseite im Browser: Link zum Download der neuesten Android-App. Die APK-Release hängt dafür zusätzlich eine Datei mit festem Namen an; die Android-Schicht ist unverändert, neu installieren ist nicht nötig.": "Title page in the browser: link to download the newest Android app. The APK release now also attaches a file with a fixed name; the Android layer is unchanged, no reinstall needed.",
     "Zurück zum Menü": "Back to menu",
     "Zurück zum Menü (Options, Esc)": "Back to menu (Options, Esc)",
@@ -843,7 +843,11 @@
     "Verbindung testen": "Test connection",
     "Online-Bestenliste": "Online leaderboard",
     "Gemeinsame Bestenliste über ein Google Sheet.": "Shared leaderboard via a Google Sheet.",
-    "Online": "Online",
+    "Network": "Network",
+    "Online Settings": "Online Settings",
+    "Wöchentliche Challenges": "Weekly challenges",
+    "Dauerrennen": "Endurance races",
+    "Dauerrennen über {n} Teile: Ausdauer und saubere Runden zählen, die längste Gerade hat {g} Teile.": "Endurance race over {n} pieces: stamina and clean laps count, the longest straight has {g} pieces.",
     "Beste Runde": "Best lap",
     "Bestenliste": "Leaderboard",
     "Challenge starten": "Start challenge",
@@ -1042,6 +1046,8 @@
     "Zeigst du auf eine Karte, blinkt das Auto": "Point at a card and that car flashes",
     "App: nach Schließen und Öffnen lässt sich das Auto wieder verbinden (es hing an der alten Verbindung fest); ab der nächsten APK trennt die App beim Schließen sauber.": "App: after closing and reopening, the car can be connected again (it was stuck on the old connection); from the next APK on the app disconnects cleanly when it closes.",
     "Foto": "Photo",
+    "Eigene Autofotos: am besten quer, z. B. 4:3 oder 16:9.": "Own car photos: landscape is best, e.g. 4:3 or 16:9.",
+    "Optimal: quer, z. B. 4:3 oder 16:9": "Optimal: landscape, e.g. 4:3 or 16:9",
     "Foto löschen": "Delete photo",
     "Streckenfoto": "Track photo",
     "Streckenfoto löschen?": "Delete the track photo?",
@@ -2927,7 +2933,12 @@
     if (typeof konsoleNachSubpage === 'function') konsoleNachSubpage(key);
   }
   document.querySelectorAll('.subpage-open').forEach(el => {
-    el.addEventListener('click', () => showSubpage(el.dataset.sub));
+    el.addEventListener('click', () => {
+      // Dauerrennen-Kacheln (data-ch): die Kategorie-Unterseite sub-ch-e oeffnet der
+      // challengeSeiteZeigen-Aufruf selbst; data-sub="ch-e" steht nur als Oeffner dafuer.
+      if (el.dataset.ch && typeof challengeSeiteZeigen === 'function') challengeSeiteZeigen(el.dataset.ch);
+      else showSubpage(el.dataset.sub);
+    });
   });
   document.querySelectorAll('.subpage-back').forEach(el => {
     el.addEventListener('click', () => showSubpage(''));

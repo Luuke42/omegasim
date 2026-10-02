@@ -1292,6 +1292,12 @@
       if (mpPlan.wind && Number.isFinite(mpPlan.wind.x)) { WX_WIND.x = mpPlan.wind.x; WX_WIND.y = mpPlan.wind.y; }
       mpWetter = { gruen: gruenBei, liste: Array.isArray(mpPlan.wetterPlan) ? mpPlan.wetterPlan : [], i: 0 };
     }
+    // BESTELLT (Balkonia): ein Challenge-Wetterfenster (z. B. "Regen von Minute 2 bis 4")
+    // laeuft ueber denselben Plan-Mechanismus, den auch der Mehrspieler benutzt. Nur wenn
+    // kein Mehrspieler-Plan vorliegt und die Challenge einen mitbringt.
+    if (chWetterPlan && gruenBei) {
+      mpWetter = { gruen: gruenBei, liste: chWetterPlan, i: 0 };
+    }
     fuel = Math.max(0, Math.min(100, raceFuelStartL / FUEL_TANK_LITERS * 100));
     // BEIDE Autos mit derselben Startmenge und beide schadenfrei. Ein Rennen, in dem das
     // eine Auto voll und das andere halb leer startet, waere kein Rennen - das ist die

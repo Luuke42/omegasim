@@ -192,7 +192,7 @@
   nav.tabs button {
     background: transparent; border: none; border-bottom: 3px solid transparent;
     white-space: nowrap; flex-shrink: 0;
-    border-radius: 0; padding: 11px 15px; color: var(--muted); font-weight: 700;
+    border-radius: 0; padding: 27px 15px; color: var(--muted); font-weight: 700;
     text-transform: uppercase; letter-spacing: .09em; font-size: 11.5px;
   }
   /* Every tab gets a hint of the channel offset, the active one gets it at full strength.
@@ -545,6 +545,7 @@
     .home-topbar { padding: 10px 16px; font-size: 12.5px; gap: 8px 10px; }
     .home-topbar .foot-brand { display: none; }
     #lang-toggle { min-width: 104px; }
+    nav.tabs button { padding: 15px 15px; }
   }
   /* Die aktive Sprache steht hell, die andere gedimmt - ein Umschalter, der zeigt, was
      gerade gilt, statt nur was man anklicken kann. */
@@ -4047,7 +4048,7 @@
       <a class="k-apk" id="home-apk" href="https://github.com/LukasRoeseler/btsr/releases/latest/download/OmegaSim.apk" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
              stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
-        <span>Installiere die App f&uuml;r Mehrspieler</span></a>
+        <span>Installiere die Android App f&uuml;r Mehrspieler</span></a>
     <!-- Nur in der Android-App: eine neue Web-Fassung liegt bereit (siehe 97b-app.js).
          Kompakt gehalten (BESTELLT): der Ladebalken liegt im Hintergrund des Laden-Knopfs
          und es gibt einen Abbrechen-Knopf, damit die Box den Titelbildschirm nicht
@@ -4063,7 +4064,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">0.8.86</span></span>
+        <span class="foot-ver">v<span id="app-version">0.8.92</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -4105,7 +4106,7 @@
           <button type="button" class="k-knopf" id="fa-editor">Editor</button>
           <button type="button" class="k-knopf" id="fa-laden">Laden</button>
           <button type="button" class="k-knopf" id="fa-druck" hidden>Druckvorlagen</button>
-          <button type="button" class="k-knopf" id="fa-foto" hidden>Foto</button>
+          <button type="button" class="k-knopf" id="fa-foto" hidden title="Optimal: quer, z. B. 4:3 oder 16:9">Foto</button>
           <button type="button" class="k-knopf" id="fa-foto-weg" hidden>Foto löschen</button>
         </span>
       </div>
@@ -4757,6 +4758,7 @@
   <section class="tabpage" id="tab-challenges">
     <div class="card subpage-home" id="sub-home-challenges">
       <h2>Challenges <span class="wip-tag">experimentell</span></h2>
+      <h3 class="k-zwischen">W&ouml;chentliche Challenges</h3>
       <div class="misc-grid ch-kacheln">
         <button class="misc-tile subpage-open ch-kachel" data-sub="ch-a">
           <span class="ch-mini" data-kat="a" aria-hidden="true"></span>
@@ -4786,9 +4788,33 @@
           <em class="ch-k-woche" data-i18n-skip></em>
           <em class="ch-k-rang" data-i18n-skip></em>
           <em class="ch-k-beliebt" hidden>&#9733; Beliebteste Strecke</em></button>
+      </div>
+      <h3 class="k-zwischen">Dauerrennen</h3>
+      <div class="misc-grid ch-kacheln">
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-e" data-ch="dauer-homington">
+          <span class="ch-mini" data-dauer="dauer-homington" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip>Homington</b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip>Dauerrennen</em>
+          <em class="ch-k-rang" data-i18n-skip></em></button>
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-e" data-ch="dauer-circuitdusol">
+          <span class="ch-mini" data-dauer="dauer-circuitdusol" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip>Circuit Du Sol</b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip>Dauerrennen</em>
+          <em class="ch-k-rang" data-i18n-skip></em></button>
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-e" data-ch="dauer-balkonia">
+          <span class="ch-mini" data-dauer="dauer-balkonia" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip>Balkonia 50 Kilometers</b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip>Dauerrennen</em>
+          <em class="ch-k-rang" data-i18n-skip></em></button>
+      </div>
+      <h3 class="k-zwischen">Network</h3>
+      <div class="misc-grid">
         <button class="misc-tile subpage-open" data-sub="ch-online">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="24" cy="24" r="16"/><path d="M8 24h32M24 8c6 5 6 27 0 32M24 8c-6 5-6 27 0 32" stroke="var(--bad)"/></svg>
-          <b>Online</b>
+          <b>Online Settings</b>
           <span>Gemeinsame Bestenliste &uuml;ber ein Google Sheet.</span>
         </button>
       </div>
@@ -4809,6 +4835,13 @@
       <div class="ch-platz"></div>
     </div>
     <div class="card subpage" id="sub-ch-d">
+      <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
+      <h2 class="ch-titel" data-i18n-skip></h2>
+      <div class="ch-platz"></div>
+    </div>
+    <!-- Dauerrennen (v0.8.86): eine Kategorie-Unterseite wie ch-a..ch-d; der Inhalt ist
+         EINE der festen Strecken, je nachdem welche Kachel geoeffnet wurde. -->
+    <div class="card subpage" id="sub-ch-e">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
       <h2 class="ch-titel" data-i18n-skip></h2>
       <div class="ch-platz"></div>
@@ -4842,6 +4875,7 @@
              title="Vergr&ouml;&szlig;ern (X) / Verkleinern (X oder Kreis)" aria-label="Streckenkarte vergr&ouml;&szlig;ern"></div>
         <p class="muted" id="ch-idee"></p>
         <p class="ch-fakten" id="ch-fakten" data-i18n-skip></p>
+        <p class="ch-teile" id="ch-teile" data-i18n-skip></p>
         <div class="ch-ergebnis" id="ch-ergebnis" hidden>
           <div class="ch-erg-titel" id="ch-erg-titel" data-i18n-skip></div>
           <div class="ch-erg-zeit" id="ch-erg-zeit" data-i18n-skip></div>
@@ -4849,9 +4883,7 @@
           <div class="muted" id="ch-erg-text" data-i18n-skip></div>
         </div>
         <button type="button" class="ch-umschalter" id="ch-modus" aria-label="Modus umschalten"><span data-m="hotlap">Beste Runde</span><span data-m="rennen">Rennen</span></button>
-        <p class="muted" id="ch-modus-text" data-i18n-skip></p>
         <p class="ch-medaille-hinweis" id="ch-medaille-hinweis" data-i18n-skip></p>
-        <p class="ch-teile" id="ch-teile" data-i18n-skip></p>
         <div class="ch-name-zeile"><label for="ch-name">Name in der Bestenliste</label>
           <input type="text" id="ch-name" maxlength="16" data-preset-skip></div>
         <button type="button" class="primary ch-start" id="ch-start">Challenge starten</button>
@@ -7622,6 +7654,9 @@
         <button id="gar-stop-ghosts" disabled>Ghosts anhalten</button>
         <button class="primary" id="gar-go" hidden disabled>Losfahren</button>
       </div>
+      <p class="muted" style="font-size:12px; margin:-6px 0 10px 0">
+        Eigene Autofotos: am besten quer, z.&nbsp;B. 4:3 oder 16:9.
+      </p>
       <!-- BESTELLT: "Im Garage Tab ueber den Autos Link zum Cockpit stattdessen einfuegen"
            (statt des entfernten Cockpit-Knopfs auf der Startseite). -->
       <button class="goto-tab" id="gar-to-cockpit" data-tab="race"
@@ -11979,7 +12014,7 @@
     "Während der Challenge gesperrt": "Locked during the challenge",
     "Während einer Challenge sind die Einstellungen gesperrt.": "Settings are locked during a challenge.",
     "Challenges gegen Schummeln: jede Runde wird gegen die Strecke geprüft (mindestens 90 % der Teile erkannt), eine plausible Mindestrundenzeit gilt in App und Bestenliste, und die Einstellungen sind während des Laufs gesperrt; wer sie doch ändert, bricht ab.": "Challenges against cheating: every lap is checked against the track (at least 90 % of the pieces recognised), a plausible minimum lap time applies in the app and the leaderboard, and settings are locked during the run; changing them anyway aborts it.",
-    "Installiere die App für Mehrspieler": "Install the app for multiplayer",
+    "Installiere die Android App für Mehrspieler": "Install the Android app for multiplayer",
     "Titelseite im Browser: Link zum Download der neuesten Android-App. Die APK-Release hängt dafür zusätzlich eine Datei mit festem Namen an; die Android-Schicht ist unverändert, neu installieren ist nicht nötig.": "Title page in the browser: link to download the newest Android app. The APK release now also attaches a file with a fixed name; the Android layer is unchanged, no reinstall needed.",
     "Zurück zum Menü": "Back to menu",
     "Zurück zum Menü (Options, Esc)": "Back to menu (Options, Esc)",
@@ -12002,7 +12037,11 @@
     "Verbindung testen": "Test connection",
     "Online-Bestenliste": "Online leaderboard",
     "Gemeinsame Bestenliste über ein Google Sheet.": "Shared leaderboard via a Google Sheet.",
-    "Online": "Online",
+    "Network": "Network",
+    "Online Settings": "Online Settings",
+    "Wöchentliche Challenges": "Weekly challenges",
+    "Dauerrennen": "Endurance races",
+    "Dauerrennen über {n} Teile: Ausdauer und saubere Runden zählen, die längste Gerade hat {g} Teile.": "Endurance race over {n} pieces: stamina and clean laps count, the longest straight has {g} pieces.",
     "Beste Runde": "Best lap",
     "Bestenliste": "Leaderboard",
     "Challenge starten": "Start challenge",
@@ -12201,6 +12240,8 @@
     "Zeigst du auf eine Karte, blinkt das Auto": "Point at a card and that car flashes",
     "App: nach Schließen und Öffnen lässt sich das Auto wieder verbinden (es hing an der alten Verbindung fest); ab der nächsten APK trennt die App beim Schließen sauber.": "App: after closing and reopening, the car can be connected again (it was stuck on the old connection); from the next APK on the app disconnects cleanly when it closes.",
     "Foto": "Photo",
+    "Eigene Autofotos: am besten quer, z. B. 4:3 oder 16:9.": "Own car photos: landscape is best, e.g. 4:3 or 16:9.",
+    "Optimal: quer, z. B. 4:3 oder 16:9": "Optimal: landscape, e.g. 4:3 or 16:9",
     "Foto löschen": "Delete photo",
     "Streckenfoto": "Track photo",
     "Streckenfoto löschen?": "Delete the track photo?",
@@ -14086,7 +14127,12 @@
     if (typeof konsoleNachSubpage === 'function') konsoleNachSubpage(key);
   }
   document.querySelectorAll('.subpage-open').forEach(el => {
-    el.addEventListener('click', () => showSubpage(el.dataset.sub));
+    el.addEventListener('click', () => {
+      // Dauerrennen-Kacheln (data-ch): die Kategorie-Unterseite sub-ch-e oeffnet der
+      // challengeSeiteZeigen-Aufruf selbst; data-sub="ch-e" steht nur als Oeffner dafuer.
+      if (el.dataset.ch && typeof challengeSeiteZeigen === 'function') challengeSeiteZeigen(el.dataset.ch);
+      else showSubpage(el.dataset.sub);
+    });
   });
   document.querySelectorAll('.subpage-back').forEach(el => {
     el.addEventListener('click', () => showSubpage(''));
@@ -29510,6 +29556,12 @@
       if (mpPlan.wind && Number.isFinite(mpPlan.wind.x)) { WX_WIND.x = mpPlan.wind.x; WX_WIND.y = mpPlan.wind.y; }
       mpWetter = { gruen: gruenBei, liste: Array.isArray(mpPlan.wetterPlan) ? mpPlan.wetterPlan : [], i: 0 };
     }
+    // BESTELLT (Balkonia): ein Challenge-Wetterfenster (z. B. "Regen von Minute 2 bis 4")
+    // laeuft ueber denselben Plan-Mechanismus, den auch der Mehrspieler benutzt. Nur wenn
+    // kein Mehrspieler-Plan vorliegt und die Challenge einen mitbringt.
+    if (chWetterPlan && gruenBei) {
+      mpWetter = { gruen: gruenBei, liste: chWetterPlan, i: 0 };
+    }
     fuel = Math.max(0, Math.min(100, raceFuelStartL / FUEL_TANK_LITERS * 100));
     // BEIDE Autos mit derselben Startmenge und beide schadenfrei. Ein Rennen, in dem das
     // eine Auto voll und das andere halb leer startet, waere kein Rennen - das ist die
@@ -34402,10 +34454,24 @@
       { id: 'wd20-nuerbelberg', name: 'Nürbelberg', code: 'SRRQRWGGRRQRWG', runden: 8 },
     ],
   };
+  // DAUERRENNEN (BESTELLT): feste Strecken, die nicht mit den Wochen rotieren - die dritte
+  // Kategorie unter den Wochenstrecken (ueber der Online-Kachel). Drei Strecken: eine kurze
+  // aus der Grundpackung, eine lange mit Haarnadel-Set, und das 100-Runden-Rennen "Balkonia
+  // 50 Kilometers" mit Pflichtboxenstopp und einem Regenfenster in Minute 2-4.
+  const CH_DAUER = [
+    { id: 'dauer-homington', name: 'Homington', code: 'SGR2GRGRLR3G@270', runden: 20, kat: 'E', sets: ['grund'] },
+    { id: 'dauer-circuitdusol', name: 'Circuit Du Sol', code: 'SGRHLGJR4LR2GRG@270', runden: 20, kat: 'E', sets: ['grund', 'haarnadel'] },
+    { id: 'dauer-balkonia', name: 'Balkonia 50 Kilometers', code: 'SG2RLGR3LGHLGLJR4G3R2@270', runden: 100, kat: 'E', sets: ['grund', 'grund', 'haarnadel'], max: 3.5, pit: 1, wx: [{ min: 2, wetter: 'rain' }, { min: 4, wetter: 'dry' }] },
+  ];
   const CH_ALLE = [];
   Object.keys(CH_KATALOG).forEach((k) => CH_KATALOG[k].forEach((d, i) => {
     d.kat = k; d.woche = i + 1; d.sets = CH_KAT_SETS[k]; CH_ALLE.push(d);
   }));
+  CH_DAUER.forEach((d) => CH_ALLE.push(d));
+  // BESTELLT (Balkonia): ein festes Wetterfenster im Rennen (z. B. "Regen von Minute 2 bis 4").
+  // Der Plan wird beim Anwenden der Challenge aus def.wx gebaut und im Rennstart (70-race.js)
+  // ueber den vorhandenen mpWetter-Mechanismus gefahren; nach dem Lauf zurueckgesetzt.
+  let chWetterPlan = null;
   // Wanduhr in Berlin als UTC-Zahl: so zaehlt ein Tag immer 24 h, auch ueber die Zeitumstellung.
   const CH_ANKER = Date.UTC(2026, 8, 30);          // Mittwoch, 30.09.2026, 0:00 in Berlin
   const CH_WOCHE_MS = 7 * 86400000;
@@ -34441,10 +34507,18 @@
     const vorlage = { A: 'Kurzer Kurs mit {n} Teilen: Rhythmus finden, jede Kurve zählt.',
                       B: 'Langer Kurs mit {n} Teilen, die längste Gerade hat {g} Teile: dort Anlauf holen.',
                       C: 'Stadtkurs mit beiden Haarnadeln: spät bremsen, eng einlenken, sauber raus.',
-                      D: 'Schneller Kurs: die weiten 30-Grad-Bögen gehen fast voll, die engen Kurven entscheiden.' }[def.kat];
+                      D: 'Schneller Kurs: die weiten 30-Grad-Bögen gehen fast voll, die engen Kurven entscheiden.',
+                      E: 'Dauerrennen über {n} Teile: Ausdauer und saubere Runden zählen, die längste Gerade hat {g} Teile.' }[def.kat];
     return t(vorlage).replace('{n}', tiles.length).replace('{g}', g);
   }
   const CH_SET_NAME = { grund: 'Grundpackung', haarnadel: 'Haarnadel-Set', dreissig: '30°-Außenkurven-Set' };
+  // BESTELLT (Balkonia): eine Strecke kann MEHRERE Packungen brauchen (z. B. zweimal Grund).
+  // In der Anzeige zaehlt das, statt "Grundpackung + Grundpackung" zu wiederholen.
+  function chSetsText(def) {
+    const z = {};
+    def.sets.forEach((s) => { z[s] = (z[s] || 0) + 1; });
+    return Object.entries(z).map(([s, n]) => (n > 1 ? n + '× ' : '') + t(CH_SET_NAME[s])).join(' + ');
+  }
   const CH_MODUS_NAME = { hotlap: 'Beste Runde', rennen: 'Rennen' };
   const CH_STORE = 'omegasim-challenges';
   const CH_ONLINE_STORE = 'omegasim-ch-online';
@@ -34520,7 +34594,13 @@
   function chSchluessel(id, modus, preset) { return id + '|' + modus + '|' + preset; }
   // PFLICHTSTOPP (v0.8.39). BESTELLT: "bei Rundenrennen in Challenge 4 immer einen Pitstop
   // verpflichtend (egal wo und mit Pit-Minigame)". Kategorie D, nur im Modus Rennen.
-  function chPflichtstopp(def, modus) { return def.kat === 'D' && modus === 'rennen'; }
+  // BESTELLT (Balkonia): eine Strecke kann eine eigene Pflichtzahl angeben (def.pit).
+  function chPitZahl(def, modus) {
+    if (modus !== 'rennen') return 0;
+    if (def.pit !== undefined) return def.pit;
+    return def.kat === 'D' ? 1 : 0;
+  }
+  function chPflichtstopp(def, modus) { return chPitZahl(def, modus) > 0; }
   function chTiles(def) { const p = codeToTrack(def.code); return p ? p.tiles : []; }
   function challengeLaeuft() { return !!chLauf; }
 
@@ -34591,9 +34671,9 @@
     const r = modus === 'rennen' ? (def.runden || 1) : 1;
     const gold = chSekunden(s.gold * r), silber = chSekunden(s.silber * r);
     return '<span class="ch-sterne" style="color:var(--gold)">' + chSterneZeichen(3) + '</span> ' + t('Gold')
-      + ': ' + t('bis {zeit}').replace('{zeit}', gold) + ' &middot; '
+      + ': ' + t('bis {zeit}').replace('{zeit}', gold) + '<br>'
       + '<span class="ch-sterne" style="color:var(--silber)">' + chSterneZeichen(2) + '</span> ' + t('Silber')
-      + ': ' + t('bis {zeit}').replace('{zeit}', silber) + ' &middot; '
+      + ': ' + t('bis {zeit}').replace('{zeit}', silber) + '<br>'
       + '<span class="ch-sterne" style="color:var(--bronze)">' + chSterneZeichen(1) + '</span> ' + t('Bronze')
       + ': ' + t('gefahren');
   }
@@ -34674,7 +34754,8 @@
       if (!flagge) {
         return { gueltig: false, zeit: null, grund: 'abgebrochen' };
       }
-      if (chPflichtstopp(def, modus) && pitDone !== undefined && !(pitDone >= 1)) {
+      const pitSoll = chPitZahl(def, modus);
+      if (pitSoll > 0 && pitDone !== undefined && !(pitDone >= pitSoll)) {
         return { gueltig: false, zeit: null, grund: 'Pflichtstopp fehlt' };
       }
       if (gueltig.length < def.runden) {
@@ -34845,8 +34926,14 @@
     raceLimit = modus === 'rennen' ? def.runden + CH_EXTRA_LAPS : def.runden;
     $('race-limit').value = raceLimit;
     chSetzen('race-wx-start', 'dry');
-    chSetzen('race-pit-required', chPflichtstopp(def, modus) ? '1' : '0');
-    if (chPflichtstopp(def, modus)) {
+    // BESTELLT (Balkonia): festes Wetterfenster, falls die Strecke eins mitbringt (def.wx).
+    // Start bleibt trocken; die Wechsel kommen aus dem Plan. "Wetter aendert sich" wird
+    // ausgeschaltet, sonst wuerde der Zufallswechsel dazwischenfunken.
+    chWetterPlan = def.wx ? def.wx.map((e) => ({ abMs: e.min * 60000, wetter: e.wetter })) : null;
+    if (def.wx) chSetzen('race-wx-change', false);
+    const pit = chPitZahl(def, modus);
+    chSetzen('race-pit-required', String(pit));
+    if (pit > 0) {
       chSetzen('pit-modus', 'minigame');
       chSetzen('pit-trigger', 'anywhere');
     }
@@ -34862,6 +34949,7 @@
   }
   function chZuruecksetzen(m) {
     if (!m) return;
+    chWetterPlan = null;
     for (const [id, wert] of Object.entries(m.regler)) chSetzen(id, wert);
     chSetzen('race-mode', m.modus);
     raceLimit = m.limit;
@@ -35119,7 +35207,8 @@
       const def = chDef(id);
       if (!def || def.id !== id) return;
       const kat = def.kat.toLowerCase();
-      if ('abcd'.indexOf(kat) < 0) return;
+      // 'e' = Dauerrennen (sub-ch-e), sonst die Wochenkategorien a-d.
+      if ('abcde'.indexOf(kat) < 0) return;
       chWahl = def.id;
       // Die Kategorie-Unterseite oeffnen, wie showSubpage('ch-'+kat) es tae (nur die Kategorie-
       // Buchstaben existieren als Unterseiten; die Strecken-Kennung tut das nicht).
@@ -35155,14 +35244,9 @@
     $('ch-idee').textContent = chIdee(def);
     const [bw, bh] = chFlaeche(tiles);
     const m = trackLaengeM(tiles);
-    $('ch-fakten').textContent = t('Länge') + ' ' + chZahl(m, 2) + ' m · 1:50 ' + chZahl(m * 50 / 1000, 2) + ' km · '
-      + t('Platzbedarf') + ' ' + chZahl(bw, 2) + ' × ' + chZahl(bh, 2) + ' m · ' + def.sets.map((s) => t(CH_SET_NAME[s])).join(' + ');
+    $('ch-fakten').textContent = t('Länge') + ' ' + chZahl(m, 2) + ' m · '
+      + t('Platzbedarf') + ' ' + chZahl(bw, 2) + ' × ' + chZahl(bh, 2) + ' m · ' + chSetsText(def);
     document.querySelectorAll('#ch-modus [data-m]').forEach((b) => b.classList.toggle('an', b.dataset.m === chModus));
-    $('ch-modus-text').textContent = (chModus === 'hotlap'
-      ? t('So viele Runden du willst, die schnellste zählt. Schluss mit der Rennen-Taste (R1).')
-      : t('{n} Runden ab stehendem Start, die Gesamtzeit zählt. Zählt eine Runde nicht, fährst du eine extra.').replace('{n}', def.runden)
-        + (chPflichtstopp(def, 'rennen') ? ' ' + t('Pflichtstopp: einmal an die Box (Boxen-Minigame), egal wo.') : ''))
-      + ' ' + t('Jede Runde wird gegen die Strecke geprüft: mindestens 90 % der Teile müssen erkannt werden. Einstellungen sind gesperrt.');
     const mh = $('ch-medaille-hinweis');
     if (mh) mh.innerHTML = chMedailleHinweis(def, chModus);
     // Teile: nur, was unter Strecke > Meine Teile eingetragen ist.
@@ -35358,7 +35442,7 @@
       const kachel = el && el.closest('.ch-kachel');
       if (!kachel) return;
       kachel.querySelector('.ch-k-name').textContent = def.name;
-      kachel.querySelector('.ch-k-info').textContent = def.sets.map((s) => t(CH_SET_NAME[s])).join(' + ') + ' · '
+      kachel.querySelector('.ch-k-info').textContent = chSetsText(def) + ' · '
         + def.runden + ' ' + t('Runden') + ' · ' + t('Woche') + ' ' + def.woche + '/20 · ' + wechsel;
       // Sichtbar auch im Konsolen-Layout, das die Beschreibungszeile der Kacheln ausblendet.
       kachel.querySelector('.ch-k-woche').textContent = t('Woche') + ' ' + def.woche + '/20 · '
@@ -35367,6 +35451,23 @@
       const banner = kachel.querySelector('.ch-k-beliebt');
       if (banner) banner.hidden = !chBeliebtesteId || chBeliebtesteId !== def.id;
       // Erreichter Rang (Medaille + Perzentil) auf der Uebersicht.
+      const rang = kachel.querySelector('.ch-k-rang');
+      if (rang) rang.innerHTML = chRangKachelText(chKachelRang(def));
+    });
+    chDauerKachelnZeichnen();
+  }
+  // Dauerrennen-Kacheln (sub-ch-e): feste Strecken, keine Wochenrotation.
+  function chDauerKachelnZeichnen() {
+    CH_DAUER.forEach((def) => {
+      const el = document.querySelector('.ch-mini[data-dauer="' + def.id + '"]');
+      if (el && el.dataset.id !== def.id) { el.innerHTML = chKarte(def, false); el.dataset.id = def.id; }
+      const kachel = el && el.closest('.ch-kachel');
+      if (!kachel) return;
+      kachel.querySelector('.ch-k-name').textContent = def.name;
+      kachel.querySelector('.ch-k-info').textContent = chSetsText(def) + ' · '
+        + def.runden + ' ' + t('Runden');
+      const woche = kachel.querySelector('.ch-k-woche');
+      if (woche) woche.textContent = t('Dauerrennen');
       const rang = kachel.querySelector('.ch-k-rang');
       if (rang) rang.innerHTML = chRangKachelText(chKachelRang(def));
     });
@@ -39069,6 +39170,14 @@
   function renderGarage() {
     const list = $('gar-list');
     if (!list) return;
+    // Ein gerade fokussiertes Textfeld in der Garage nicht wegreissen: auf Touch loest das
+    // Tippen ein synthetisches mouseenter auf der Karte aus, das den Blink anwirft, und der
+    // ruft renderGarage() alle 150 ms - das Feld wird ersetzt und die Bildschirmtastatur
+    // klappt zu (gemeldet: "auf Android Tablet kann ich keinen Namen eingeben"). Der Name
+    // wird beim Verlassen des Feldes gerendert (change-Handler).
+    const aktiv = document.activeElement;
+    if (aktiv && list.contains(aktiv)
+        && (aktiv.tagName === 'INPUT' || aktiv.tagName === 'TEXTAREA')) return;
     // Ueber das Fenster und nicht direkt: 98-presets.js wird NACH dieser Datei gebaut, die
     // Funktion existiert zur Deklarationszeit hier also noch nicht. Zur Laufzeit ist sie
     // da. Genau dieser Unterschied hat in dieser Datei schon fuenf Ladeabbrueche gekostet.
@@ -39169,7 +39278,12 @@
       // Neu gezeichnet wird erst beim Verlassen des Feldes.
       const nf = row.querySelector('input[data-act="alias"]');
       nf.addEventListener('input', () => { car.alias = nf.value.trim(); carRemember(car); });
-      nf.addEventListener('change', () => { renderGarage(); renderRaceGrid(); });
+      nf.addEventListener('change', () => {
+        // Beim Verlassen rendern - aber erst das Feld verlassen, sonst wuerde die
+        // renderGarage-Sperre (fokussiertes Feld) den Render verschlucken.
+        if (document.activeElement === nf) nf.blur();
+        renderGarage(); renderRaceGrid();
+      });
       nf.addEventListener('click', (e) => e.stopPropagation());
       nf.addEventListener('pointerdown', (e) => e.stopPropagation());
 
@@ -39702,6 +39816,11 @@
   // Drei Sekunden reichen fuer mehrere Kacheln - wer bis dahin nichts gelesen hat, liegt
   // wirklich neben der Bahn.
   const GHOST_START_GNADE_MS = 3000;
+  // BESTELLT: "wenn ghosts nach abflug losfahren ... ganz kurz die lenkung gerade machen."
+  // Ein frisch gestarteter Ghost lenkt sonst sofort voll auf die Ideallinie ein und faellt von
+  // der Bahn, bevor er das Muster erkennt (Kachelzaehler steht noch nicht). In den ersten
+  // Millisekunden nach dem Anfahren wird die Lenkung deshalb gerade gehalten (steer = 0).
+  const GHOST_START_LENK_MS = 600;
   const GHOST_YAW_GAIN = 0.045;     // rotation units -> steering; refined on the real car
   const GHOST_STEER_CURVE = 0.55;   // feed-forward lock in a curve, before the yaw loop
 
@@ -44122,6 +44241,14 @@
                   // Auto nie wieder hoch, weil es zum Lesen fahren muesste und zum Fahren
                   // gelesen haben muesste.
                   gnadeBis: Date.now() + GHOST_START_GNADE_MS,
+                  // Startlenkung gerade: siehe GHOST_START_LENK_MS. startLenkBis ist der
+                  // Zeitpunkt, bis zu dem die Lenkung nach dem Anfahren gerade gehalten
+                  // wird; armedVorher merkt sich die Flanke, damit die Frist GENAU beim
+                  // Anfahren beginnt (nicht beim startGhost-Aufruf, der beim Rennstart lange
+                  // vor der Ampel liegt). startLenkEinmalig sorgt dafuer, dass die Frist nur
+                  // beim ECHTEN Anfahren gilt - nach einem Zwischenstopp (parken/wieder
+                  // anfahren) wuerde sie sonst die Boxen-Ausfahrt mit steer=0 ueberschreiben.
+                  startLenkBis: 0, armedVorher: false, startLenkEinmalig: true,
                   running: true };
     // Die erste Faelligkeit ziehen. Ohne sie steht pitFaellig auf 0 und der Ghost pittet in
     // der ersten Runde - ein Boxenstopp, bevor jemand eine Runde gefahren ist.
@@ -44768,6 +44895,15 @@
     const armed = (raceState === 'racing' || raceState === 'finishing'
                    || g.freeRun || g.auslauf)
                   && !car.parked;
+    // Startlenkung gerade: die Frist beginnt an der FLANKE zum Anfahren (armed), nicht beim
+    // startGhost-Aufruf - beim Rennstart liegt der lange vor der Ampel. Einmalig: nur der
+    // echte Start, nicht jede Wiederaufnahme nach einem Stopp (sonst wuerde die Boxen-
+    // Ausfahrt mit steer=0 ueberschrieben). Siehe startGhost.
+    if (armed && !g.armedVorher && g.startLenkEinmalig) {
+      g.startLenkBis = now + GHOST_START_LENK_MS;
+      g.startLenkEinmalig = false;
+    }
+    g.armedVorher = armed;
     // Abgaenge zaehlen, nicht nur melden. Ohne eine Zahl je Runde ist "die Linie hilft"
     // oder "die Linie schmeisst ihn raus" nicht entscheidbar, und dann wird der Regler nach
     // Gefuehl gedreht. Gezaehlt wird die FLANKE, nicht das Paket - ein zwei Sekunden langer
@@ -45360,6 +45496,12 @@
       steer = ghostQuerTestAn() ? ghostQuerTest
             : Math.max(-1, Math.min(1, steer + weave));
     }
+
+    // BESTELLT: "wenn ghosts nach abflug losfahren ... ganz kurz die lenkung gerade machen."
+    // Kurz nach dem Anfahren geradeaus, bis der Kachelzaehler steht (Muster erkannt) - sonst
+    // faellt der Ghost von der Bahn, bevor er die Ideallinie richtig kennt. Der Pruefstand
+    // (ghostQuerTestAn) bleibt unberuehrt: ein fester Versatz gehoert nicht in diese Frist.
+    if (!ghostQuerTestAn() && now < (g.startLenkBis || 0)) steer = 0;
 
     const out = e.update({ steering: steer, throttle, brake, headlights: true }, dt);
     // Put the car into the mode where it keeps itself on the track: bit 5 of byte 14, plus
@@ -67908,20 +68050,20 @@
   });
 
   // ---- CHALLENGES (v0.8.30) ----
-  stAdd('Challenges: alle 80 Wochenstrecken geschlossen, baubar, verschieden, passend gross', () => {
+  stAdd('Challenges: alle 83 Strecken geschlossen, baubar, verschieden, passend gross', () => {
     const f = [], zeilen = [];
     const merkRot = trackRotationDeg;
     trackRotationDeg = 0;
     try {
       const ids = new Set(CH_ALLE.map((d) => d.id));
-      if (ids.size !== 80) f.push(ids.size + ' verschiedene Kennungen statt 80');
+      if (ids.size !== 83) f.push(ids.size + ' verschiedene Kennungen statt 83 (80 Wochen + 3 Dauerrennen)');
       for (const k of 'ABCD') if (CH_KATALOG[k].length !== 20) f.push(k + ': ' + CH_KATALOG[k].length + ' statt 20');
       for (const def of CH_ALLE) {
         const n = chTiles(def).length;
         if (def.kat === 'A' && (n < 8 || n > 12)) f.push(def.name + ': ' + n + ' Teile in A');
         if (def.kat === 'B' && (n < 13 || n > 15)) f.push(def.name + ': ' + n + ' Teile in B');
         const [bw, bh] = chFlaeche(chTiles(def));
-        if (bw > 2.65 || bh > 2.65) f.push(def.name + ' zu gross ' + bw.toFixed(2) + 'x' + bh.toFixed(2));
+        if (bw > (def.max || 2.65) || bh > (def.max || 2.65)) f.push(def.name + ' zu gross ' + bw.toFixed(2) + 'x' + bh.toFixed(2));
         const tiles = chTiles(def);
         const sch = trackSchluss(trackCenterline(tiles));
         if (!sch.closed) f.push(def.name + ' nicht geschlossen (' + sch.lueckeCm.toFixed(1) + ' cm)');
@@ -67939,7 +68081,7 @@
       }
     } finally { trackRotationDeg = merkRot; }
     if (CHALLENGES.length !== 4) f.push(CHALLENGES.length + ' statt 4 Strecken');
-    return { ok: !f.length, mass: f.length ? f.slice(0, 6).join('; ') : '80 geprueft, jetzt: ' + zeilen.join(' | ') };
+    return { ok: !f.length, mass: f.length ? f.slice(0, 6).join('; ') : '83 geprueft, jetzt: ' + zeilen.join(' | ') };
   });
 
   stAdd('Challenges: Wochenwechsel Mittwoch 0:00 Berlin, nach 20 Wochen von vorn', () => {
@@ -68108,6 +68250,30 @@
     if (nachher.modus !== vorher.modus || nachher.limit !== vorher.limit) f.push('Rennmodus nicht zurueck');
     if (trackToCode(currentTrackTiles, trackRotationDeg) !== vorCode) f.push('Strecke nicht zurueck');
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Pro gesetzt, danach alles wie vorher' };
+  });
+
+  stAdd('Challenges: Balkonia hat 1 Pflichtstopp und ein Regenfenster Minute 2-4', () => {
+    const f = [];
+    const def = chDef('dauer-balkonia');
+    if (chPitZahl(def, 'rennen') !== 1) f.push('Balkonia: ' + chPitZahl(def, 'rennen') + ' Pflichtstopp statt 1');
+    if (chPitZahl(def, 'hotlap') !== 0) f.push('Balkonia: Pflichtstopp auch im Hotlap');
+    if (!chPflichtstopp(def, 'rennen')) f.push('Balkonia: chPflichtstopp false');
+    const vorher = chMerken();
+    try {
+      chAnwenden(def, 'rennen', 'pro');
+      if ($('race-pit-required').value !== '1') f.push('race-pit-required ' + $('race-pit-required').value);
+      if ($('pit-modus').value !== 'minigame') f.push('pit-modus ' + $('pit-modus').value);
+      if ($('pit-trigger').value !== 'anywhere') f.push('pit-trigger ' + $('pit-trigger').value);
+      if ($('race-wx-change').checked) f.push('race-wx-change nicht aus');
+      if ($('race-wx-start').value !== 'dry') f.push('race-wx-start ' + $('race-wx-start').value);
+      if (!chWetterPlan || chWetterPlan.length !== 2) f.push('Wetterplan ' + JSON.stringify(chWetterPlan));
+      else {
+        if (chWetterPlan[0].abMs !== 120000 || chWetterPlan[0].wetter !== 'rain') f.push('Plan 0 ' + JSON.stringify(chWetterPlan[0]));
+        if (chWetterPlan[1].abMs !== 240000 || chWetterPlan[1].wetter !== 'dry') f.push('Plan 1 ' + JSON.stringify(chWetterPlan[1]));
+      }
+    } finally { chZuruecksetzen(vorher); }
+    if (chWetterPlan !== null) f.push('Wetterplan nach Zuruecksetzen nicht null');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : '1 Pflichtstopp, Wetterplan Regen 2 min / trocken 4 min' };
   });
 
   stAdd('Challenges: Seite zeigt Strecke, Modi und Bestenliste; Rennen-Taste bricht das Warten ab', () => {

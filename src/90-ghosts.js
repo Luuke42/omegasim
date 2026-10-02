@@ -1484,6 +1484,14 @@
   function renderGarage() {
     const list = $('gar-list');
     if (!list) return;
+    // Ein gerade fokussiertes Textfeld in der Garage nicht wegreissen: auf Touch loest das
+    // Tippen ein synthetisches mouseenter auf der Karte aus, das den Blink anwirft, und der
+    // ruft renderGarage() alle 150 ms - das Feld wird ersetzt und die Bildschirmtastatur
+    // klappt zu (gemeldet: "auf Android Tablet kann ich keinen Namen eingeben"). Der Name
+    // wird beim Verlassen des Feldes gerendert (change-Handler).
+    const aktiv = document.activeElement;
+    if (aktiv && list.contains(aktiv)
+        && (aktiv.tagName === 'INPUT' || aktiv.tagName === 'TEXTAREA')) return;
     // Ueber das Fenster und nicht direkt: 98-presets.js wird NACH dieser Datei gebaut, die
     // Funktion existiert zur Deklarationszeit hier also noch nicht. Zur Laufzeit ist sie
     // da. Genau dieser Unterschied hat in dieser Datei schon fuenf Ladeabbrueche gekostet.
@@ -1584,7 +1592,12 @@
       // Neu gezeichnet wird erst beim Verlassen des Feldes.
       const nf = row.querySelector('input[data-act="alias"]');
       nf.addEventListener('input', () => { car.alias = nf.value.trim(); carRemember(car); });
-      nf.addEventListener('change', () => { renderGarage(); renderRaceGrid(); });
+      nf.addEventListener('change', () => {
+        // Beim Verlassen rendern - aber erst das Feld verlassen, sonst wuerde die
+        // renderGarage-Sperre (fokussiertes Feld) den Render verschlucken.
+        if (document.activeElement === nf) nf.blur();
+        renderGarage(); renderRaceGrid();
+      });
       nf.addEventListener('click', (e) => e.stopPropagation());
       nf.addEventListener('pointerdown', (e) => e.stopPropagation());
 
@@ -2117,6 +2130,11 @@
   // Drei Sekunden reichen fuer mehrere Kacheln - wer bis dahin nichts gelesen hat, liegt
   // wirklich neben der Bahn.
   const GHOST_START_GNADE_MS = 3000;
+  // BESTELLT: "wenn ghosts nach abflug losfahren ... ganz kurz die lenkung gerade machen."
+  // Ein frisch gestarteter Ghost lenkt sonst sofort voll auf die Ideallinie ein und faellt von
+  // der Bahn, bevor er das Muster erkennt (Kachelzaehler steht noch nicht). In den ersten
+  // Millisekunden nach dem Anfahren wird die Lenkung deshalb gerade gehalten (steer = 0).
+  const GHOST_START_LENK_MS = 600;
   const GHOST_YAW_GAIN = 0.045;     // rotation units -> steering; refined on the real car
   const GHOST_STEER_CURVE = 0.55;   // feed-forward lock in a curve, before the yaw loop
 
@@ -6537,6 +6555,14 @@
                   // Auto nie wieder hoch, weil es zum Lesen fahren muesste und zum Fahren
                   // gelesen haben muesste.
                   gnadeBis: Date.now() + GHOST_START_GNADE_MS,
+                  // Startlenkung gerade: siehe GHOST_START_LENK_MS. startLenkBis ist der
+                  // Zeitpunkt, bis zu dem die Lenkung nach dem Anfahren gerade gehalten
+                  // wird; armedVorher merkt sich die Flanke, damit die Frist GENAU beim
+                  // Anfahren beginnt (nicht beim startGhost-Aufruf, der beim Rennstart lange
+                  // vor der Ampel liegt). startLenkEinmalig sorgt dafuer, dass die Frist nur
+                  // beim ECHTEN Anfahren gilt - nach einem Zwischenstopp (parken/wieder
+                  // anfahren) wuerde sie sonst die Boxen-Ausfahrt mit steer=0 ueberschreiben.
+                  startLenkBis: 0, armedVorher: false, startLenkEinmalig: true,
                   running: true };
     // Die erste Faelligkeit ziehen. Ohne sie steht pitFaellig auf 0 und der Ghost pittet in
     // der ersten Runde - ein Boxenstopp, bevor jemand eine Runde gefahren ist.
@@ -7183,6 +7209,15 @@
     const armed = (raceState === 'racing' || raceState === 'finishing'
                    || g.freeRun || g.auslauf)
                   && !car.parked;
+    // Startlenkung gerade: die Frist beginnt an der FLANKE zum Anfahren (armed), nicht beim
+    // startGhost-Aufruf - beim Rennstart liegt der lange vor der Ampel. Einmalig: nur der
+    // echte Start, nicht jede Wiederaufnahme nach einem Stopp (sonst wuerde die Boxen-
+    // Ausfahrt mit steer=0 ueberschrieben). Siehe startGhost.
+    if (armed && !g.armedVorher && g.startLenkEinmalig) {
+      g.startLenkBis = now + GHOST_START_LENK_MS;
+      g.startLenkEinmalig = false;
+    }
+    g.armedVorher = armed;
     // Abgaenge zaehlen, nicht nur melden. Ohne eine Zahl je Runde ist "die Linie hilft"
     // oder "die Linie schmeisst ihn raus" nicht entscheidbar, und dann wird der Regler nach
     // Gefuehl gedreht. Gezaehlt wird die FLANKE, nicht das Paket - ein zwei Sekunden langer
@@ -7775,6 +7810,12 @@
       steer = ghostQuerTestAn() ? ghostQuerTest
             : Math.max(-1, Math.min(1, steer + weave));
     }
+
+    // BESTELLT: "wenn ghosts nach abflug losfahren ... ganz kurz die lenkung gerade machen."
+    // Kurz nach dem Anfahren geradeaus, bis der Kachelzaehler steht (Muster erkannt) - sonst
+    // faellt der Ghost von der Bahn, bevor er die Ideallinie richtig kennt. Der Pruefstand
+    // (ghostQuerTestAn) bleibt unberuehrt: ein fester Versatz gehoert nicht in diese Frist.
+    if (!ghostQuerTestAn() && now < (g.startLenkBis || 0)) steer = 0;
 
     const out = e.update({ steering: steer, throttle, brake, headlights: true }, dt);
     // Put the car into the mode where it keeps itself on the track: bit 5 of byte 14, plus

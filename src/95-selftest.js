@@ -10651,20 +10651,20 @@
   });
 
   // ---- CHALLENGES (v0.8.30) ----
-  stAdd('Challenges: alle 80 Wochenstrecken geschlossen, baubar, verschieden, passend gross', () => {
+  stAdd('Challenges: alle 83 Strecken geschlossen, baubar, verschieden, passend gross', () => {
     const f = [], zeilen = [];
     const merkRot = trackRotationDeg;
     trackRotationDeg = 0;
     try {
       const ids = new Set(CH_ALLE.map((d) => d.id));
-      if (ids.size !== 80) f.push(ids.size + ' verschiedene Kennungen statt 80');
+      if (ids.size !== 83) f.push(ids.size + ' verschiedene Kennungen statt 83 (80 Wochen + 3 Dauerrennen)');
       for (const k of 'ABCD') if (CH_KATALOG[k].length !== 20) f.push(k + ': ' + CH_KATALOG[k].length + ' statt 20');
       for (const def of CH_ALLE) {
         const n = chTiles(def).length;
         if (def.kat === 'A' && (n < 8 || n > 12)) f.push(def.name + ': ' + n + ' Teile in A');
         if (def.kat === 'B' && (n < 13 || n > 15)) f.push(def.name + ': ' + n + ' Teile in B');
         const [bw, bh] = chFlaeche(chTiles(def));
-        if (bw > 2.65 || bh > 2.65) f.push(def.name + ' zu gross ' + bw.toFixed(2) + 'x' + bh.toFixed(2));
+        if (bw > (def.max || 2.65) || bh > (def.max || 2.65)) f.push(def.name + ' zu gross ' + bw.toFixed(2) + 'x' + bh.toFixed(2));
         const tiles = chTiles(def);
         const sch = trackSchluss(trackCenterline(tiles));
         if (!sch.closed) f.push(def.name + ' nicht geschlossen (' + sch.lueckeCm.toFixed(1) + ' cm)');
@@ -10682,7 +10682,7 @@
       }
     } finally { trackRotationDeg = merkRot; }
     if (CHALLENGES.length !== 4) f.push(CHALLENGES.length + ' statt 4 Strecken');
-    return { ok: !f.length, mass: f.length ? f.slice(0, 6).join('; ') : '80 geprueft, jetzt: ' + zeilen.join(' | ') };
+    return { ok: !f.length, mass: f.length ? f.slice(0, 6).join('; ') : '83 geprueft, jetzt: ' + zeilen.join(' | ') };
   });
 
   stAdd('Challenges: Wochenwechsel Mittwoch 0:00 Berlin, nach 20 Wochen von vorn', () => {
@@ -10851,6 +10851,30 @@
     if (nachher.modus !== vorher.modus || nachher.limit !== vorher.limit) f.push('Rennmodus nicht zurueck');
     if (trackToCode(currentTrackTiles, trackRotationDeg) !== vorCode) f.push('Strecke nicht zurueck');
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Pro gesetzt, danach alles wie vorher' };
+  });
+
+  stAdd('Challenges: Balkonia hat 1 Pflichtstopp und ein Regenfenster Minute 2-4', () => {
+    const f = [];
+    const def = chDef('dauer-balkonia');
+    if (chPitZahl(def, 'rennen') !== 1) f.push('Balkonia: ' + chPitZahl(def, 'rennen') + ' Pflichtstopp statt 1');
+    if (chPitZahl(def, 'hotlap') !== 0) f.push('Balkonia: Pflichtstopp auch im Hotlap');
+    if (!chPflichtstopp(def, 'rennen')) f.push('Balkonia: chPflichtstopp false');
+    const vorher = chMerken();
+    try {
+      chAnwenden(def, 'rennen', 'pro');
+      if ($('race-pit-required').value !== '1') f.push('race-pit-required ' + $('race-pit-required').value);
+      if ($('pit-modus').value !== 'minigame') f.push('pit-modus ' + $('pit-modus').value);
+      if ($('pit-trigger').value !== 'anywhere') f.push('pit-trigger ' + $('pit-trigger').value);
+      if ($('race-wx-change').checked) f.push('race-wx-change nicht aus');
+      if ($('race-wx-start').value !== 'dry') f.push('race-wx-start ' + $('race-wx-start').value);
+      if (!chWetterPlan || chWetterPlan.length !== 2) f.push('Wetterplan ' + JSON.stringify(chWetterPlan));
+      else {
+        if (chWetterPlan[0].abMs !== 120000 || chWetterPlan[0].wetter !== 'rain') f.push('Plan 0 ' + JSON.stringify(chWetterPlan[0]));
+        if (chWetterPlan[1].abMs !== 240000 || chWetterPlan[1].wetter !== 'dry') f.push('Plan 1 ' + JSON.stringify(chWetterPlan[1]));
+      }
+    } finally { chZuruecksetzen(vorher); }
+    if (chWetterPlan !== null) f.push('Wetterplan nach Zuruecksetzen nicht null');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : '1 Pflichtstopp, Wetterplan Regen 2 min / trocken 4 min' };
   });
 
   stAdd('Challenges: Seite zeigt Strecke, Modi und Bestenliste; Rennen-Taste bricht das Warten ab', () => {

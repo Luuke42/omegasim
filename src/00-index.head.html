@@ -192,7 +192,7 @@
   nav.tabs button {
     background: transparent; border: none; border-bottom: 3px solid transparent;
     white-space: nowrap; flex-shrink: 0;
-    border-radius: 0; padding: 11px 15px; color: var(--muted); font-weight: 700;
+    border-radius: 0; padding: 27px 15px; color: var(--muted); font-weight: 700;
     text-transform: uppercase; letter-spacing: .09em; font-size: 11.5px;
   }
   /* Every tab gets a hint of the channel offset, the active one gets it at full strength.
@@ -545,6 +545,7 @@
     .home-topbar { padding: 10px 16px; font-size: 12.5px; gap: 8px 10px; }
     .home-topbar .foot-brand { display: none; }
     #lang-toggle { min-width: 104px; }
+    nav.tabs button { padding: 15px 15px; }
   }
   /* Die aktive Sprache steht hell, die andere gedimmt - ein Umschalter, der zeigt, was
      gerade gilt, statt nur was man anklicken kann. */
@@ -4047,7 +4048,7 @@
       <a class="k-apk" id="home-apk" href="https://github.com/LukasRoeseler/btsr/releases/latest/download/OmegaSim.apk" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
              stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
-        <span>Installiere die App f&uuml;r Mehrspieler</span></a>
+        <span>Installiere die Android App f&uuml;r Mehrspieler</span></a>
     <!-- Nur in der Android-App: eine neue Web-Fassung liegt bereit (siehe 97b-app.js).
          Kompakt gehalten (BESTELLT): der Ladebalken liegt im Hintergrund des Laden-Knopfs
          und es gibt einen Abbrechen-Knopf, damit die Box den Titelbildschirm nicht
@@ -4063,7 +4064,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">0.8.86</span></span>
+        <span class="foot-ver">v<span id="app-version">0.8.92</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -4105,7 +4106,7 @@
           <button type="button" class="k-knopf" id="fa-editor">Editor</button>
           <button type="button" class="k-knopf" id="fa-laden">Laden</button>
           <button type="button" class="k-knopf" id="fa-druck" hidden>Druckvorlagen</button>
-          <button type="button" class="k-knopf" id="fa-foto" hidden>Foto</button>
+          <button type="button" class="k-knopf" id="fa-foto" hidden title="Optimal: quer, z. B. 4:3 oder 16:9">Foto</button>
           <button type="button" class="k-knopf" id="fa-foto-weg" hidden>Foto löschen</button>
         </span>
       </div>
@@ -4757,6 +4758,7 @@
   <section class="tabpage" id="tab-challenges">
     <div class="card subpage-home" id="sub-home-challenges">
       <h2>Challenges <span class="wip-tag">experimentell</span></h2>
+      <h3 class="k-zwischen">W&ouml;chentliche Challenges</h3>
       <div class="misc-grid ch-kacheln">
         <button class="misc-tile subpage-open ch-kachel" data-sub="ch-a">
           <span class="ch-mini" data-kat="a" aria-hidden="true"></span>
@@ -4786,9 +4788,33 @@
           <em class="ch-k-woche" data-i18n-skip></em>
           <em class="ch-k-rang" data-i18n-skip></em>
           <em class="ch-k-beliebt" hidden>&#9733; Beliebteste Strecke</em></button>
+      </div>
+      <h3 class="k-zwischen">Dauerrennen</h3>
+      <div class="misc-grid ch-kacheln">
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-e" data-ch="dauer-homington">
+          <span class="ch-mini" data-dauer="dauer-homington" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip>Homington</b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip>Dauerrennen</em>
+          <em class="ch-k-rang" data-i18n-skip></em></button>
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-e" data-ch="dauer-circuitdusol">
+          <span class="ch-mini" data-dauer="dauer-circuitdusol" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip>Circuit Du Sol</b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip>Dauerrennen</em>
+          <em class="ch-k-rang" data-i18n-skip></em></button>
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-e" data-ch="dauer-balkonia">
+          <span class="ch-mini" data-dauer="dauer-balkonia" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip>Balkonia 50 Kilometers</b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip>Dauerrennen</em>
+          <em class="ch-k-rang" data-i18n-skip></em></button>
+      </div>
+      <h3 class="k-zwischen">Network</h3>
+      <div class="misc-grid">
         <button class="misc-tile subpage-open" data-sub="ch-online">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="24" cy="24" r="16"/><path d="M8 24h32M24 8c6 5 6 27 0 32M24 8c-6 5-6 27 0 32" stroke="var(--bad)"/></svg>
-          <b>Online</b>
+          <b>Online Settings</b>
           <span>Gemeinsame Bestenliste &uuml;ber ein Google Sheet.</span>
         </button>
       </div>
@@ -4809,6 +4835,13 @@
       <div class="ch-platz"></div>
     </div>
     <div class="card subpage" id="sub-ch-d">
+      <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
+      <h2 class="ch-titel" data-i18n-skip></h2>
+      <div class="ch-platz"></div>
+    </div>
+    <!-- Dauerrennen (v0.8.86): eine Kategorie-Unterseite wie ch-a..ch-d; der Inhalt ist
+         EINE der festen Strecken, je nachdem welche Kachel geoeffnet wurde. -->
+    <div class="card subpage" id="sub-ch-e">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
       <h2 class="ch-titel" data-i18n-skip></h2>
       <div class="ch-platz"></div>
@@ -4842,6 +4875,7 @@
              title="Vergr&ouml;&szlig;ern (X) / Verkleinern (X oder Kreis)" aria-label="Streckenkarte vergr&ouml;&szlig;ern"></div>
         <p class="muted" id="ch-idee"></p>
         <p class="ch-fakten" id="ch-fakten" data-i18n-skip></p>
+        <p class="ch-teile" id="ch-teile" data-i18n-skip></p>
         <div class="ch-ergebnis" id="ch-ergebnis" hidden>
           <div class="ch-erg-titel" id="ch-erg-titel" data-i18n-skip></div>
           <div class="ch-erg-zeit" id="ch-erg-zeit" data-i18n-skip></div>
@@ -4849,9 +4883,7 @@
           <div class="muted" id="ch-erg-text" data-i18n-skip></div>
         </div>
         <button type="button" class="ch-umschalter" id="ch-modus" aria-label="Modus umschalten"><span data-m="hotlap">Beste Runde</span><span data-m="rennen">Rennen</span></button>
-        <p class="muted" id="ch-modus-text" data-i18n-skip></p>
         <p class="ch-medaille-hinweis" id="ch-medaille-hinweis" data-i18n-skip></p>
-        <p class="ch-teile" id="ch-teile" data-i18n-skip></p>
         <div class="ch-name-zeile"><label for="ch-name">Name in der Bestenliste</label>
           <input type="text" id="ch-name" maxlength="16" data-preset-skip></div>
         <button type="button" class="primary ch-start" id="ch-start">Challenge starten</button>
@@ -7622,6 +7654,9 @@
         <button id="gar-stop-ghosts" disabled>Ghosts anhalten</button>
         <button class="primary" id="gar-go" hidden disabled>Losfahren</button>
       </div>
+      <p class="muted" style="font-size:12px; margin:-6px 0 10px 0">
+        Eigene Autofotos: am besten quer, z.&nbsp;B. 4:3 oder 16:9.
+      </p>
       <!-- BESTELLT: "Im Garage Tab ueber den Autos Link zum Cockpit stattdessen einfuegen"
            (statt des entfernten Cockpit-Knopfs auf der Startseite). -->
       <button class="goto-tab" id="gar-to-cockpit" data-tab="race"

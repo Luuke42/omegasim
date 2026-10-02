@@ -134,10 +134,24 @@
       { id: 'wd20-nuerbelberg', name: 'Nürbelberg', code: 'SRRQRWGGRRQRWG', runden: 8 },
     ],
   };
+  // DAUERRENNEN (BESTELLT): feste Strecken, die nicht mit den Wochen rotieren - die dritte
+  // Kategorie unter den Wochenstrecken (ueber der Online-Kachel). Drei Strecken: eine kurze
+  // aus der Grundpackung, eine lange mit Haarnadel-Set, und das 100-Runden-Rennen "Balkonia
+  // 50 Kilometers" mit Pflichtboxenstopp und einem Regenfenster in Minute 2-4.
+  const CH_DAUER = [
+    { id: 'dauer-homington', name: 'Homington', code: 'SGR2GRGRLR3G@270', runden: 20, kat: 'E', sets: ['grund'] },
+    { id: 'dauer-circuitdusol', name: 'Circuit Du Sol', code: 'SGRHLGJR4LR2GRG@270', runden: 20, kat: 'E', sets: ['grund', 'haarnadel'] },
+    { id: 'dauer-balkonia', name: 'Balkonia 50 Kilometers', code: 'SG2RLGR3LGHLGLJR4G3R2@270', runden: 100, kat: 'E', sets: ['grund', 'grund', 'haarnadel'], max: 3.5, pit: 1, wx: [{ min: 2, wetter: 'rain' }, { min: 4, wetter: 'dry' }] },
+  ];
   const CH_ALLE = [];
   Object.keys(CH_KATALOG).forEach((k) => CH_KATALOG[k].forEach((d, i) => {
     d.kat = k; d.woche = i + 1; d.sets = CH_KAT_SETS[k]; CH_ALLE.push(d);
   }));
+  CH_DAUER.forEach((d) => CH_ALLE.push(d));
+  // BESTELLT (Balkonia): ein festes Wetterfenster im Rennen (z. B. "Regen von Minute 2 bis 4").
+  // Der Plan wird beim Anwenden der Challenge aus def.wx gebaut und im Rennstart (70-race.js)
+  // ueber den vorhandenen mpWetter-Mechanismus gefahren; nach dem Lauf zurueckgesetzt.
+  let chWetterPlan = null;
   // Wanduhr in Berlin als UTC-Zahl: so zaehlt ein Tag immer 24 h, auch ueber die Zeitumstellung.
   const CH_ANKER = Date.UTC(2026, 8, 30);          // Mittwoch, 30.09.2026, 0:00 in Berlin
   const CH_WOCHE_MS = 7 * 86400000;
@@ -173,10 +187,18 @@
     const vorlage = { A: 'Kurzer Kurs mit {n} Teilen: Rhythmus finden, jede Kurve zählt.',
                       B: 'Langer Kurs mit {n} Teilen, die längste Gerade hat {g} Teile: dort Anlauf holen.',
                       C: 'Stadtkurs mit beiden Haarnadeln: spät bremsen, eng einlenken, sauber raus.',
-                      D: 'Schneller Kurs: die weiten 30-Grad-Bögen gehen fast voll, die engen Kurven entscheiden.' }[def.kat];
+                      D: 'Schneller Kurs: die weiten 30-Grad-Bögen gehen fast voll, die engen Kurven entscheiden.',
+                      E: 'Dauerrennen über {n} Teile: Ausdauer und saubere Runden zählen, die längste Gerade hat {g} Teile.' }[def.kat];
     return t(vorlage).replace('{n}', tiles.length).replace('{g}', g);
   }
   const CH_SET_NAME = { grund: 'Grundpackung', haarnadel: 'Haarnadel-Set', dreissig: '30°-Außenkurven-Set' };
+  // BESTELLT (Balkonia): eine Strecke kann MEHRERE Packungen brauchen (z. B. zweimal Grund).
+  // In der Anzeige zaehlt das, statt "Grundpackung + Grundpackung" zu wiederholen.
+  function chSetsText(def) {
+    const z = {};
+    def.sets.forEach((s) => { z[s] = (z[s] || 0) + 1; });
+    return Object.entries(z).map(([s, n]) => (n > 1 ? n + '× ' : '') + t(CH_SET_NAME[s])).join(' + ');
+  }
   const CH_MODUS_NAME = { hotlap: 'Beste Runde', rennen: 'Rennen' };
   const CH_STORE = 'omegasim-challenges';
   const CH_ONLINE_STORE = 'omegasim-ch-online';
@@ -252,7 +274,13 @@
   function chSchluessel(id, modus, preset) { return id + '|' + modus + '|' + preset; }
   // PFLICHTSTOPP (v0.8.39). BESTELLT: "bei Rundenrennen in Challenge 4 immer einen Pitstop
   // verpflichtend (egal wo und mit Pit-Minigame)". Kategorie D, nur im Modus Rennen.
-  function chPflichtstopp(def, modus) { return def.kat === 'D' && modus === 'rennen'; }
+  // BESTELLT (Balkonia): eine Strecke kann eine eigene Pflichtzahl angeben (def.pit).
+  function chPitZahl(def, modus) {
+    if (modus !== 'rennen') return 0;
+    if (def.pit !== undefined) return def.pit;
+    return def.kat === 'D' ? 1 : 0;
+  }
+  function chPflichtstopp(def, modus) { return chPitZahl(def, modus) > 0; }
   function chTiles(def) { const p = codeToTrack(def.code); return p ? p.tiles : []; }
   function challengeLaeuft() { return !!chLauf; }
 
@@ -323,9 +351,9 @@
     const r = modus === 'rennen' ? (def.runden || 1) : 1;
     const gold = chSekunden(s.gold * r), silber = chSekunden(s.silber * r);
     return '<span class="ch-sterne" style="color:var(--gold)">' + chSterneZeichen(3) + '</span> ' + t('Gold')
-      + ': ' + t('bis {zeit}').replace('{zeit}', gold) + ' &middot; '
+      + ': ' + t('bis {zeit}').replace('{zeit}', gold) + '<br>'
       + '<span class="ch-sterne" style="color:var(--silber)">' + chSterneZeichen(2) + '</span> ' + t('Silber')
-      + ': ' + t('bis {zeit}').replace('{zeit}', silber) + ' &middot; '
+      + ': ' + t('bis {zeit}').replace('{zeit}', silber) + '<br>'
       + '<span class="ch-sterne" style="color:var(--bronze)">' + chSterneZeichen(1) + '</span> ' + t('Bronze')
       + ': ' + t('gefahren');
   }
@@ -406,7 +434,8 @@
       if (!flagge) {
         return { gueltig: false, zeit: null, grund: 'abgebrochen' };
       }
-      if (chPflichtstopp(def, modus) && pitDone !== undefined && !(pitDone >= 1)) {
+      const pitSoll = chPitZahl(def, modus);
+      if (pitSoll > 0 && pitDone !== undefined && !(pitDone >= pitSoll)) {
         return { gueltig: false, zeit: null, grund: 'Pflichtstopp fehlt' };
       }
       if (gueltig.length < def.runden) {
@@ -577,8 +606,14 @@
     raceLimit = modus === 'rennen' ? def.runden + CH_EXTRA_LAPS : def.runden;
     $('race-limit').value = raceLimit;
     chSetzen('race-wx-start', 'dry');
-    chSetzen('race-pit-required', chPflichtstopp(def, modus) ? '1' : '0');
-    if (chPflichtstopp(def, modus)) {
+    // BESTELLT (Balkonia): festes Wetterfenster, falls die Strecke eins mitbringt (def.wx).
+    // Start bleibt trocken; die Wechsel kommen aus dem Plan. "Wetter aendert sich" wird
+    // ausgeschaltet, sonst wuerde der Zufallswechsel dazwischenfunken.
+    chWetterPlan = def.wx ? def.wx.map((e) => ({ abMs: e.min * 60000, wetter: e.wetter })) : null;
+    if (def.wx) chSetzen('race-wx-change', false);
+    const pit = chPitZahl(def, modus);
+    chSetzen('race-pit-required', String(pit));
+    if (pit > 0) {
       chSetzen('pit-modus', 'minigame');
       chSetzen('pit-trigger', 'anywhere');
     }
@@ -594,6 +629,7 @@
   }
   function chZuruecksetzen(m) {
     if (!m) return;
+    chWetterPlan = null;
     for (const [id, wert] of Object.entries(m.regler)) chSetzen(id, wert);
     chSetzen('race-mode', m.modus);
     raceLimit = m.limit;
@@ -851,7 +887,8 @@
       const def = chDef(id);
       if (!def || def.id !== id) return;
       const kat = def.kat.toLowerCase();
-      if ('abcd'.indexOf(kat) < 0) return;
+      // 'e' = Dauerrennen (sub-ch-e), sonst die Wochenkategorien a-d.
+      if ('abcde'.indexOf(kat) < 0) return;
       chWahl = def.id;
       // Die Kategorie-Unterseite oeffnen, wie showSubpage('ch-'+kat) es tae (nur die Kategorie-
       // Buchstaben existieren als Unterseiten; die Strecken-Kennung tut das nicht).
@@ -887,14 +924,9 @@
     $('ch-idee').textContent = chIdee(def);
     const [bw, bh] = chFlaeche(tiles);
     const m = trackLaengeM(tiles);
-    $('ch-fakten').textContent = t('Länge') + ' ' + chZahl(m, 2) + ' m · 1:50 ' + chZahl(m * 50 / 1000, 2) + ' km · '
-      + t('Platzbedarf') + ' ' + chZahl(bw, 2) + ' × ' + chZahl(bh, 2) + ' m · ' + def.sets.map((s) => t(CH_SET_NAME[s])).join(' + ');
+    $('ch-fakten').textContent = t('Länge') + ' ' + chZahl(m, 2) + ' m · '
+      + t('Platzbedarf') + ' ' + chZahl(bw, 2) + ' × ' + chZahl(bh, 2) + ' m · ' + chSetsText(def);
     document.querySelectorAll('#ch-modus [data-m]').forEach((b) => b.classList.toggle('an', b.dataset.m === chModus));
-    $('ch-modus-text').textContent = (chModus === 'hotlap'
-      ? t('So viele Runden du willst, die schnellste zählt. Schluss mit der Rennen-Taste (R1).')
-      : t('{n} Runden ab stehendem Start, die Gesamtzeit zählt. Zählt eine Runde nicht, fährst du eine extra.').replace('{n}', def.runden)
-        + (chPflichtstopp(def, 'rennen') ? ' ' + t('Pflichtstopp: einmal an die Box (Boxen-Minigame), egal wo.') : ''))
-      + ' ' + t('Jede Runde wird gegen die Strecke geprüft: mindestens 90 % der Teile müssen erkannt werden. Einstellungen sind gesperrt.');
     const mh = $('ch-medaille-hinweis');
     if (mh) mh.innerHTML = chMedailleHinweis(def, chModus);
     // Teile: nur, was unter Strecke > Meine Teile eingetragen ist.
@@ -1090,7 +1122,7 @@
       const kachel = el && el.closest('.ch-kachel');
       if (!kachel) return;
       kachel.querySelector('.ch-k-name').textContent = def.name;
-      kachel.querySelector('.ch-k-info').textContent = def.sets.map((s) => t(CH_SET_NAME[s])).join(' + ') + ' · '
+      kachel.querySelector('.ch-k-info').textContent = chSetsText(def) + ' · '
         + def.runden + ' ' + t('Runden') + ' · ' + t('Woche') + ' ' + def.woche + '/20 · ' + wechsel;
       // Sichtbar auch im Konsolen-Layout, das die Beschreibungszeile der Kacheln ausblendet.
       kachel.querySelector('.ch-k-woche').textContent = t('Woche') + ' ' + def.woche + '/20 · '
@@ -1099,6 +1131,23 @@
       const banner = kachel.querySelector('.ch-k-beliebt');
       if (banner) banner.hidden = !chBeliebtesteId || chBeliebtesteId !== def.id;
       // Erreichter Rang (Medaille + Perzentil) auf der Uebersicht.
+      const rang = kachel.querySelector('.ch-k-rang');
+      if (rang) rang.innerHTML = chRangKachelText(chKachelRang(def));
+    });
+    chDauerKachelnZeichnen();
+  }
+  // Dauerrennen-Kacheln (sub-ch-e): feste Strecken, keine Wochenrotation.
+  function chDauerKachelnZeichnen() {
+    CH_DAUER.forEach((def) => {
+      const el = document.querySelector('.ch-mini[data-dauer="' + def.id + '"]');
+      if (el && el.dataset.id !== def.id) { el.innerHTML = chKarte(def, false); el.dataset.id = def.id; }
+      const kachel = el && el.closest('.ch-kachel');
+      if (!kachel) return;
+      kachel.querySelector('.ch-k-name').textContent = def.name;
+      kachel.querySelector('.ch-k-info').textContent = chSetsText(def) + ' · '
+        + def.runden + ' ' + t('Runden');
+      const woche = kachel.querySelector('.ch-k-woche');
+      if (woche) woche.textContent = t('Dauerrennen');
       const rang = kachel.querySelector('.ch-k-rang');
       if (rang) rang.innerHTML = chRangKachelText(chKachelRang(def));
     });

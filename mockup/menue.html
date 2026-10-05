@@ -1,0 +1,1141 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OmegaSim · Menü-Mock-up</title>
+<!--
+  MOCK-UP der neuen Menüführung im Stil von Assetto Corsa Competizione (PS5-Tastenlayout).
+  BESTELLT: "Kannst du mir ein funktionierendes Mock-up bauen, bevor du alles neu verlinkst und
+  an dem wir dann zuerst rumwerkeln?" Diese Datei ist EIGENSTÄNDIG: sie fasst die App nicht an,
+  alle Daten sind Platzhalter. Plan: ~/.claude/plans/kann-ich-die-polymorphic-dewdrop.md.
+
+  Steuerung: Steuerkreuz räumlich · ✕ bestätigen · ○ zurück · □ wechseln/Aktion · △ Abschnitt
+  bzw. Aktion · L1/R1 Reiter · Options 1 s halten im Cockpit = Menü.
+  Tastatur: Pfeile · Enter · Esc · Leertaste (□) · O (△) · Q/E (L1/R1) · im Cockpit Esc.
+-->
+<style>
+  :root {
+    --rot: #d7182a; --rot-dunkel: #8e0f1b; --weiss: #f3f4f6; --grau: #2b2e35;
+    --grau2: #3b3f48; --tinte: #0b0c10; --dim: #9aa3b5; --gruen: #3ddc84;
+    --glitch-r: #ff2a4d; --glitch-c: #22d3ee;
+    --font: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #05070c; color: var(--weiss);
+    font-family: var(--font); overflow: hidden; }
+  button { font-family: inherit; }
+
+  /* ---- Hintergrund ---- */
+  .bg { position: fixed; inset: -3%; background-size: cover; background-position: center;
+    filter: brightness(.42) saturate(1.1) blur(1.5px); transition: background-image .5s;
+    animation: zoom 38s ease-in-out infinite alternate; z-index: 0; }
+  @keyframes zoom { from { transform: scale(1); } to { transform: scale(1.07) translate(-1%, -1%); } }
+  .bg::after { content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(5,7,12,.55), rgba(5,7,12,.1) 30%, rgba(5,7,12,.7)); }
+  @media (prefers-reduced-motion: reduce) { .bg { animation: none; } }
+
+  /* ---- Rahmen ---- */
+  .app { position: relative; z-index: 1; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto; padding: 0 clamp(10px, 2.2vw, 40px); }
+  .kopf { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px;
+    padding: clamp(8px, 1.4vw, 18px) 0 8px; }
+  .logo { font-weight: 900; letter-spacing: .16em; font-size: clamp(16px, 1.8vw, 26px);
+    text-shadow: 2px 0 0 var(--glitch-r), -2px 0 0 var(--glitch-c); cursor: pointer; white-space: nowrap; }
+  .pfad { text-align: center; font-size: clamp(15px, 1.9vw, 30px); letter-spacing: .04em; }
+  .pfad span { color: var(--dim); } .pfad b { font-weight: 700; }
+  .status { font-size: clamp(10px, 1vw, 13px); color: var(--dim); text-align: right; line-height: 1.5; }
+  .status .an { color: var(--gruen); } .wip { background: var(--rot); color: #fff; padding: 1px 6px;
+    font-weight: 700; letter-spacing: .08em; margin-left: 6px; }
+  .zurueck-pfeil { cursor: pointer; font-size: 22px; padding: 0 10px; color: var(--dim); }
+
+  .leiste { display: flex; align-items: stretch; margin-bottom: clamp(8px, 1.2vw, 16px); min-height: 0; }
+  .leiste[hidden] { display: none; }
+  .leiste .sh { display: flex; align-items: center; padding: 0 10px; background: rgba(0,0,0,.55);
+    font-size: 12px; color: var(--dim); }
+  .reiter { flex: 1; display: flex; background: rgba(12,14,20,.72); overflow: hidden; }
+  .reiter button { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--dim);
+    font-size: clamp(11px, 1.25vw, 18px); letter-spacing: .08em; padding: 10px 6px; cursor: pointer;
+    text-transform: uppercase; clip-path: polygon(6% 0, 100% 0, 94% 100%, 0 100%); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  .reiter button.an { background: var(--weiss); color: var(--tinte); font-weight: 700; }
+  .reiter button:hover { color: #fff; } .reiter button.an:hover { color: var(--tinte); }
+
+  .buehne { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 6px 4px 12px;
+    scrollbar-width: thin; scrollbar-color: #555 transparent; }
+
+  .beschreibung { min-height: 58px; background: rgba(10,12,18,.82); border-left: 4px solid var(--rot);
+    padding: 8px 14px; font-size: clamp(12px, 1.05vw, 15px); line-height: 1.45; color: #d9dde6;
+    margin-bottom: 6px; }
+  .beschreibung[hidden] { display: none; }
+  .beschreibung b { color: #fff; letter-spacing: .04em; }
+
+  .fuss { display: flex; align-items: center; gap: clamp(10px, 2.2vw, 34px); flex-wrap: wrap;
+    border-top: 2px solid rgba(255,255,255,.35); padding: 8px 0 max(10px, env(safe-area-inset-bottom));
+    font-size: clamp(11px, 1.05vw, 15px); letter-spacing: .06em; text-transform: uppercase; }
+  .fuss .h { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .fuss .rechts { margin-left: auto; color: var(--dim); text-transform: none; }
+  .fuss svg { width: 22px; height: 22px; }
+  .taste { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1.5px solid #cfd3db;
+    border-radius: 4px; font-size: 11px; text-align: center; }
+
+  /* ---- Kacheln ---- */
+  .gitter { display: grid; gap: clamp(8px, 1vw, 14px); }
+  .k { position: relative; display: flex; flex-direction: column; background: rgba(14,16,22,.86);
+    cursor: pointer; transition: transform .12s, box-shadow .12s; min-width: 0; outline: 0;
+    border: 2px solid transparent; }
+  .k .kk { background: var(--grau2); color: #fff; text-align: center; font-weight: 700;
+    letter-spacing: .12em; padding: 6px 8px; font-size: clamp(11px, 1.1vw, 15px); text-transform: uppercase; }
+  .k .kt { background: var(--weiss); color: var(--tinte); text-align: center; font-weight: 700;
+    letter-spacing: .06em; padding: 8px; font-size: clamp(13px, 1.4vw, 20px); text-transform: uppercase;
+    display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .k .kt .pf { color: var(--rot); font-weight: 900; }
+  .k .kb { flex: 1; min-height: 70px; background-size: cover; background-position: center; position: relative; }
+  .k .ki { padding: 8px 10px; font-size: clamp(11px, .95vw, 13px); line-height: 1.55;
+    display: grid; grid-template-columns: 1fr auto; column-gap: 12px; }
+  .k .ki .l { color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
+  .k .ki .w { text-align: right; font-weight: 700; }
+  .k .streifen { position: absolute; right: 8px; bottom: 6px; width: 46px; height: 8px;
+    background: repeating-linear-gradient(90deg, var(--rot) 0 5px, transparent 5px 9px); opacity: .7; }
+  .k.f, .k:hover { border-color: #fff; }
+  .k.f { transform: scale(1.02); box-shadow: 0 10px 34px rgba(0,0,0,.6), 0 0 0 1px #fff; z-index: 2; }
+  .k.f .kk { background: var(--rot); }
+  .k.klein .kb { min-height: 0; }
+  .k .knopfreihe { display: flex; gap: 6px; padding: 0 10px 10px; flex-wrap: wrap; }
+
+  .btn { background: var(--grau); color: #fff; border: 2px solid transparent; padding: 8px 12px;
+    font-size: clamp(11px, 1vw, 14px); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  .btn.f, .btn:hover { border-color: #fff; } .btn.f { background: var(--rot); }
+
+  .start { background-size: cover; background-position: center; display: flex; align-items: center;
+    justify-content: center; font-size: clamp(22px, 3.4vw, 54px); font-weight: 900; letter-spacing: .08em;
+    text-shadow: 0 2px 14px #000; position: relative; min-height: 90px; border: 2px solid transparent; cursor: pointer;
+    text-transform: uppercase; text-align: center; }
+  .start::before, .start::after { content: ''; width: clamp(40px, 6vw, 90px); height: clamp(28px, 4vw, 60px);
+    background: repeating-conic-gradient(#fff 0 25%, #111 0 50%) 0 0 / 14px 14px; margin: 0 22px;
+    transform: skewX(-18deg); opacity: .9; }
+  .start.f, .start:hover { border-color: #fff; } .start.f { box-shadow: 0 0 0 3px var(--rot), 0 12px 36px rgba(0,0,0,.6); }
+  .start small { display: block; font-size: 12px; letter-spacing: .1em; font-weight: 400; color: #eee; }
+
+  /* ---- Titel ---- */
+  .titel { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: clamp(10px, 2vh, 26px); }
+  .titel-schrift { position: relative; display: inline-block; font-weight: 900; font-size: clamp(40px, 8.2vw, 150px);
+    letter-spacing: .12em; padding-left: .12em; line-height: 1; text-shadow: 4px 0 0 var(--glitch-r), -4px 0 0 var(--glitch-c); }
+  .titel-schrift::before, .titel-schrift::after { content: attr(data-text); position: absolute; inset: 0; }
+  .titel-schrift::before { color: var(--glitch-c); clip-path: inset(18% 0 58% 0); transform: translate(-5px,0);
+    animation: ga 3.2s steps(1) infinite; }
+  .titel-schrift::after { color: var(--glitch-r); clip-path: inset(62% 0 12% 0); transform: translate(5px,0);
+    animation: gb 2.7s steps(1) infinite; }
+  @keyframes ga { 0%,86%,100% { transform: translate(-5px,0); clip-path: inset(18% 0 58% 0); }
+    88% { transform: translate(8px,-1px); clip-path: inset(40% 0 38% 0); } 92% { transform: translate(-10px,1px); clip-path: inset(8% 0 80% 0); } }
+  @keyframes gb { 0%,80%,100% { transform: translate(5px,0); clip-path: inset(62% 0 12% 0); }
+    83% { transform: translate(-9px,1px); clip-path: inset(70% 0 5% 0); } 90% { transform: translate(11px,0); clip-path: inset(30% 0 52% 0); } }
+  .slogan { font-size: clamp(14px, 2vw, 28px); padding: 0 16px; letter-spacing: .06em; color: #e6e8ee; max-width: 900px; }
+  .sprachen { display: flex; gap: 0; }
+  .sprachen button { background: rgba(10,12,18,.7); border: 2px solid rgba(255,255,255,.4); color: var(--dim);
+    padding: 8px 22px; font-size: 15px; letter-spacing: .14em; cursor: pointer; }
+  .sprachen button.an { background: #fff; color: var(--tinte); font-weight: 700; border-color: #fff; }
+  .druecken { font-size: clamp(14px, 1.8vw, 24px); letter-spacing: .3em; text-transform: uppercase;
+    animation: blink 1.6s ease-in-out infinite; margin-top: 3vh; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .titel-fuss { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--dim); }
+
+  /* ---- Optionslisten ---- */
+  .liste-rahmen { display: grid; grid-template-columns: minmax(150px, 22%) 1fr; gap: 14px; }
+  .abschnitte { background: rgba(10,12,18,.72); align-self: start; position: sticky; top: 0; }
+  .abschnitte div { padding: 9px 12px; font-size: clamp(11px, 1vw, 14px); letter-spacing: .06em;
+    color: var(--dim); text-transform: uppercase; border-left: 4px solid transparent; cursor: pointer; }
+  .abschnitte div.an { color: #fff; border-left-color: var(--rot); background: rgba(255,255,255,.06); }
+  .zeilen { display: flex; flex-direction: column; gap: 3px; }
+  .abs-kopf { font-size: 12px; letter-spacing: .18em; color: var(--dim); text-transform: uppercase;
+    padding: 14px 4px 4px; }
+  .abs-kopf:first-child { padding-top: 0; }
+  .zeile { display: grid; grid-template-columns: 1fr minmax(170px, 36%); align-items: center; gap: 12px;
+    background: rgba(14,16,22,.84); padding: 9px 14px; border: 2px solid transparent; cursor: pointer;
+    font-size: clamp(12px, 1.1vw, 16px); }
+  .zeile.f, .zeile:hover { border-color: #fff; } .zeile.f { background: rgba(215,24,42,.28); }
+  .zeile .wert { display: flex; align-items: center; justify-content: flex-end; gap: 10px; font-weight: 700; }
+  .zeile .wert .pf { color: var(--rot); font-weight: 900; opacity: .9; cursor: pointer; padding: 0 4px; }
+  .zeile.f .wert .pf { color: #fff; }
+  .zeile .balken { flex: 1; height: 6px; background: rgba(255,255,255,.18); max-width: 140px; }
+  .zeile .balken i { display: block; height: 100%; background: var(--rot); }
+  .zeile.f .balken i { background: #fff; }
+  .zeile .knopf { border: 1.5px solid #cfd3db; padding: 3px 12px; letter-spacing: .1em; font-size: 12px; }
+  .zeile.info .wert { color: var(--dim); font-weight: 400; }
+
+  /* ---- Garage ---- */
+  .garage { display: grid; grid-template-columns: minmax(200px, 30%) 1fr; gap: 14px; }
+  .autoliste { display: flex; flex-direction: column; gap: 8px; }
+  .auto { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center;
+    background: rgba(14,16,22,.86); padding: 10px 12px; border: 2px solid transparent; cursor: pointer; }
+  .auto .chip { width: 14px; height: 38px; }
+  .auto b { font-size: 17px; letter-spacing: .06em; } .auto span { color: var(--dim); font-size: 12px; }
+  .auto.f, .auto:hover { border-color: #fff; } .auto.f { background: rgba(215,24,42,.28); }
+  .auto.aktiv { box-shadow: inset 4px 0 0 #fff; }
+
+  /* ---- Tafeln ---- */
+  .tafel { background: rgba(10,12,18,.8); padding: 14px 18px; line-height: 1.6; font-size: clamp(13px, 1.1vw, 16px); }
+  .tafel h3 { margin: 0 0 8px; letter-spacing: .1em; text-transform: uppercase; font-size: 15px; color: #fff; }
+  .tabelle { width: 100%; border-collapse: collapse; font-size: clamp(12px, 1.1vw, 16px); }
+  .tabelle th { text-align: left; color: var(--dim); font-weight: 400; letter-spacing: .12em; font-size: 11px;
+    text-transform: uppercase; padding: 4px 8px; }
+  .tabelle td { padding: 7px 8px; border-top: 1px solid rgba(255,255,255,.12); font-variant-numeric: tabular-nums; }
+
+  /* ---- Überlagerungen ---- */
+  .schicht { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.66); display: flex;
+    align-items: center; justify-content: center; }
+  .schicht[hidden] { display: none; }
+  .dialog { width: min(560px, 92vw); background: #111319; border-top: 4px solid var(--rot); }
+  .dialog h2 { margin: 0; padding: 14px 18px; font-size: 18px; letter-spacing: .14em; text-transform: uppercase; }
+  .dialog .inhalt { padding: 0 18px 18px; display: flex; flex-direction: column; gap: 6px; }
+  .dialog .hinweis { color: var(--dim); font-size: 13px; padding: 0 18px 14px; }
+  .pausen-knopf { text-align: left; font-size: 18px; letter-spacing: .1em; padding: 12px 16px; }
+
+  /* ---- Cockpit-Platzhalter ---- */
+  .cockpit { position: fixed; inset: 0; z-index: 20; background: #000; display: grid;
+    grid-template-rows: auto 1fr auto; padding: 16px; }
+  .cockpit[hidden] { display: none; }
+  .ampel { display: flex; gap: 14px; justify-content: center; }
+  .ampel i { width: 34px; height: 34px; border-radius: 50%; background: #300; box-shadow: inset 0 0 0 3px #111; }
+  .ampel i.rot { background: #ff2a2a; box-shadow: 0 0 22px #f00; } .ampel i.gruen { background: #3ddc84; box-shadow: 0 0 22px #3ddc84; }
+  .dash { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; }
+  .tempo { font-size: clamp(80px, 16vw, 220px); font-weight: 900; font-variant-numeric: tabular-nums; text-align: center; line-height: 1; }
+  .tempo small { display: block; font-size: 18px; letter-spacing: .3em; color: var(--dim); font-weight: 400; }
+  .dash .seite { font-size: clamp(14px, 1.6vw, 22px); line-height: 1.8; }
+  .dash .seite b { color: #fff; } .dash .seite span { color: var(--dim); }
+  .cockpit-hinweis { text-align: center; color: var(--dim); font-size: 14px; letter-spacing: .08em; }
+  .halte { height: 4px; background: var(--rot); width: 0; margin: 8px auto 0; max-width: 360px; }
+  .toast { position: fixed; top: 18%; left: 50%; transform: translateX(-50%); z-index: 60;
+    background: rgba(10,12,18,.92); border-left: 4px solid var(--rot); padding: 10px 18px; font-size: 16px;
+    letter-spacing: .08em; text-transform: uppercase; pointer-events: none; opacity: 0; transition: opacity .2s; }
+  .toast.an { opacity: 1; }
+
+  /* ---- Schmale Schirme ---- */
+  @media (max-width: 760px) {
+    .kopf { grid-template-columns: 1fr auto; } .pfad { grid-column: 1 / -1; order: 3; text-align: left; }
+    .liste-rahmen, .garage { grid-template-columns: 1fr; } .abschnitte { display: none; }
+    .zeile { grid-template-columns: 1fr; } .zeile .wert { justify-content: flex-start; }
+    .gitter { grid-template-columns: 1fr !important; grid-template-rows: none !important; }
+    .gitter > * { grid-column: auto !important; grid-row: auto !important; }
+    .k .kb { min-height: 120px; max-height: 24vh; } .start { min-height: 110px; }
+    .fuss .rechts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="bg" id="bg"></div>
+<div class="app" id="app">
+  <header class="kopf" id="kopf">
+    <div class="logo" id="logo" title="Zum Hauptmenü">OMEGA SIM</div>
+    <div class="pfad" id="pfad"></div>
+    <div class="status" id="status"></div>
+  </header>
+  <div class="leiste" id="leiste" hidden>
+    <div class="sh" id="sh-l"></div>
+    <div class="reiter" id="reiter"></div>
+    <div class="sh" id="sh-r"></div>
+  </div>
+  <main class="buehne" id="buehne"></main>
+  <div class="beschreibung" id="beschreibung" hidden></div>
+  <footer class="fuss" id="fuss"></footer>
+</div>
+
+<div class="cockpit" id="cockpit" hidden>
+  <div>
+    <div class="ampel" id="ampel"><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
+  <div class="dash">
+    <div class="seite" id="dash-links"></div>
+    <div class="tempo"><span id="tempo">0</span><small>KM/H</small></div>
+    <div class="seite" id="dash-rechts" style="text-align:right"></div>
+  </div>
+  <div>
+    <div class="cockpit-hinweis" id="cockpit-hinweis"></div>
+    <div class="halte" id="halte"></div>
+  </div>
+</div>
+
+<div class="schicht" id="schicht" hidden><div class="dialog" id="dialog"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+
+  // =====================================================================================
+  // ZUSTAND (Platzhalter). In der App kommen diese Werte aus garage, raceMode, trackMode …
+  // =====================================================================================
+  const S = {
+    lang: 'de', dev: false, eingabe: 'maus',
+    autos: [],                       // {name, farbe, rolle}
+    renntyp: 2, dauer: 10, wetter: 2, stopps: 1,
+    bahn: true, strecke: { name: 'Wohnzimmer-Oval', teile: 12, code: 'SG2R2G2R2G2' },
+    profil: 2, haerte: 50,
+    rennTab: 0, optKat: 0, mpTab: 0,
+    werte: {},                       // Optionszeilen: key -> Wert
+    wartetAufStart: false,
+  };
+  const L = (de, en) => (S.lang === 'en' && en !== undefined ? en : de);
+  const RENNTYPEN = [['Freies Training', 'Free practice'], ['Qualifying', 'Qualifying'], ['Runden', 'Laps'], ['Endurance', 'Endurance']];
+  const WETTER = [['Trocken', 'Dry'], ['Regen', 'Rain'], ['Wechselhaft', 'Changeable']];
+  const PROFILE = [['Einsteiger', 'Beginner'], ['Fortgeschritten', 'Intermediate'], ['Profi', 'Pro'], ['Rennfahrer', 'Racer'], ['Eigen', 'Custom']];
+  const ROLLEN = [['Steuern', 'Drive'], ['Spieler 2', 'Player 2'], ['Ghost', 'Ghost'], ['Aus', 'Off']];
+  const FARBEN = [['#ff3b3b', 'Rot'], ['#f4f6fb', 'Weiß'], ['#1f1f1f', 'Schwarz'], ['#2f8cff', 'Blau'], ['#3ddc84', 'Grün'], ['#ffb02e', 'Orange']];
+  const NAMEN = ['Alpha', 'Beta', 'Gamma', 'Delta'];
+
+  // =====================================================================================
+  // OPTIONEN: echte Zeilentitel aus der App (Inventar vom 28.09.), Werte sind Platzhalter
+  // =====================================================================================
+  const AN = (t, en, an, d) => ({ t, en, typ: 'an', v: an !== false, d });
+  const WAHL = (t, en, o, i, d) => ({ t, en, typ: 'wahl', o, v: i || 0, d });
+  const REG = (t, en, min, max, v, e, d) => ({ t, en, typ: 'reg', min, max, v, e: e || '%', d });
+  const KNOPF = (t, en, k, d, act) => ({ t, en, typ: 'knopf', k, d, act });
+  const INFO = (t, en, w, d) => ({ t, en, typ: 'info', w, d });
+  const OPT = [
+    { t: 'Allgemein', en: 'General', abs: [
+      { t: 'Allgemein', en: 'General', z: [
+        WAHL('Cockpit-Ansicht', 'Cockpit view', ['GT3', 'Klassisch'], 0),
+        AN('Scheinwerfer', 'Headlights', true),
+        Object.assign(AN('Auf der Bahn', 'On the track', true, 'Zwei Lesearten, kein Sensorschalter. An: das Auto liest die Kodierung der Kunststoffschiene und hält sich selbst auf der Bahn. Aus: es liest gedruckte Muster, hält sich aber nicht selbst.'), { key: 'bahn-an' }),
+        WAHL('Steuerungsmodus', 'Control mode', ['Physik', 'Pacejka', 'Aus', 'Drift'], 0, 'Physik: Drehmoment, Gänge, Reibkreis – die Vorgabe. Pacejka: dazu Reifen mit Haftgrenze (experimentell). Aus: rohe Stickstellung. Drift: automatisches Gegensteuern (experimentell).'),
+        AN('Übersteuern (Pacejka)', 'Oversteer (Pacejka)', true, 'Nur im Modus Pacejka. Aus: das Heck bricht nie aus.'),
+        REG('Haftgrenze (Pacejka)', 'Grip limit (Pacejka)', 40, 120, 70),
+        REG('Gegensteuern im Drift', 'Drift countersteer', 0, 100, 50),
+        AN('Drosselung jenseits der Fahrbahn', 'Throttle off the track', true),
+        REG('Drosselung abseits beginnt nach', 'Off-track throttle starts after', 0, 2000, 350, ' ms'),
+      ] },
+      { t: 'Controller-Vibration', en: 'Controller vibration', z: [
+        AN('Vibration überhaupt', 'Vibration at all', true), KNOPF('Rütteln testen', 'Test rumble', 'TESTEN'),
+        AN('Gangwechsel', 'Gear shift', true), AN('ABS', 'ABS', true), AN('Aufprall', 'Impact', true),
+        AN('Neben der Bahn', 'Off the track', false), AN('Boxenstopp', 'Pit stop', true),
+        AN('Unter- und Übersteuern', 'Understeer and oversteer', true), AN('Meldungen', 'Messages', false),
+        AN('Trigger-Vibration', 'Trigger vibration', true), INFO('Was dein Controller kann', 'What your controller can do', 'Rumble ✓ · Trigger ✗'),
+      ] },
+      { t: 'Akku', en: 'Battery', z: [
+        AN('Leistung über Akkulaufzeit konstant halten', 'Keep power constant over battery life', true),
+        REG('Referenz-Akkustand', 'Reference battery level', 50, 100, 90),
+      ] },
+      { t: 'Tank & Schaden', en: 'Fuel & damage', z: [
+        REG('Tankverbrauch', 'Fuel consumption', 0, 300, 100), AN('Boxengasse aktiv', 'Pit lane active', true),
+        WAHL('Wo ist die Boxengasse?', 'Where is the pit lane?', ['Kachel B', 'Doppel-Ausdruck', 'Aus'], 0),
+        WAHL('Boxeneinfahrt zählt', 'Pit entry counts', ['1 Runde', '0 Runden'], 0),
+        REG('Zeitfenster des Doppel-Ausdrucks', 'Double-printout window', 1, 10, 4, ' s'),
+        REG('Crashs bis Fahrzeug ruckelt', 'Crashes until the car stutters', 1, 20, 6, ''),
+        REG('Schaden', 'Damage', 0, 200, 100), REG('Crash-Schwelle', 'Crash threshold', 0, 100, 55),
+        REG('Vollständige Reparatur dauert', 'Full repair takes', 5, 60, 20, ' s'),
+      ] },
+    ] },
+    { t: 'Fahrgefühl', en: 'Handling', abs: [
+      { t: 'Fahrhilfe', en: 'Driving aid', z: [AN('Fahrhilfe: Auto lenkt selbst', 'Driving aid: car steers itself', false)] },
+      { t: 'Voreinstellungen', en: 'Presets', z: [
+        WAHL('Voreinstellung', 'Preset', PROFILE.map((p) => p[0]), 2, 'Dieselben fünf Profile wie auf der Kachel FAHRGEFÜHL im Fahren-Schirm.'),
+        KNOPF('Eigene Voreinstellung speichern', 'Save own preset', 'SPEICHERN'), KNOPF('Standard wiederherstellen', 'Restore defaults', 'ZURÜCK'),
+        KNOPF('Voreinstellung als JSON', 'Preset as JSON', 'EXPORT'),
+      ] },
+      { t: 'Fahrzeug', en: 'Vehicle', z: [WAHL('Layout', 'Layout', ['Frontmotor', 'Mittelmotor', 'Heckmotor'], 2), WAHL('Getriebe', 'Gearbox', ['GT3 6-Gang', 'Sequenziell 7-Gang'], 0)] },
+      { t: 'Fahrwerk', en: 'Chassis', z: [REG('Gasfaktor', 'Throttle factor', 20, 150, 100), REG('Reifengrip', 'Tyre grip', 20, 150, 100), REG('Bremswirkung', 'Braking', 20, 150, 100)] },
+      { t: 'Getriebe & Fahrleistung', en: 'Gearbox & performance', z: [AN('Automatikgetriebe', 'Automatic gearbox', true), REG('Höchstgeschwindigkeit', 'Top speed', 100, 330, 295, ' km/h'), REG('0→100 km/h', '0→100 km/h', 2, 10, 3.4, ' s'), REG('Ausrollen', 'Coasting', 0, 100, 40)] },
+      { t: 'Masse & Reifen', en: 'Mass & tyres', z: [REG('Tankgewicht', 'Fuel weight', 0, 100, 50), AN('Reifen: Temperatur & Verschleiß', 'Tyres: temperature & wear', true), REG('Mischungsunterschied', 'Compound difference', 0, 100, 50), AN('Reifenwärmer', 'Tyre warmers', false), AN('Jedes Rad einzeln', 'Each wheel separately', true), REG('Reifendruck', 'Tyre pressure', 1.2, 2.4, 1.8, ' bar')] },
+      { t: 'Bremsen', en: 'Brakes', z: [AN('Bremstemperatur und Fading', 'Brake temperature and fading', true), REG('Stärke des Fadings', 'Fading strength', 0, 100, 50)] },
+      { t: 'Aerodynamik', en: 'Aerodynamics', z: [AN('Windschatten in Kurven', 'Slipstream in corners', false), REG('Stärke des Windschattens', 'Slipstream strength', 0, 100, 50)] },
+      { t: 'Lenkung & Feinabstimmung', en: 'Steering & fine tuning', z: [
+        REG('Lenkansprechen', 'Steering response', 50, 400, 300), REG('Lenkkennlinie', 'Steering curve', 0.5, 3, 1.15, ''), REG('Lenkkraft unter Gas', 'Steering under throttle', 0, 100, 70),
+        REG('Lenkdämpfung', 'Steering damping', 0, 500, 83, ' ms'), REG('Bremsen nimmt Lenkung', 'Braking takes steering', 0, 100, 40), REG('Lenkwinkel-Kalibrierung', 'Steering calibration', 50, 300, 250),
+        REG('Beschleunigungsfaktor', 'Acceleration factor', 20, 200, 100), REG('Gaskennlinie', 'Throttle curve', 0.5, 3, 1.4, ''), REG('Bremskennlinie', 'Brake curve', 0.5, 3, 1.3, ''),
+        REG('Anfahrschub', 'Launch thrust', 0, 100, 50), REG('Bremsbalance', 'Brake balance', 30, 70, 56), REG('Gewichtsverlagerung', 'Weight transfer', 0, 100, 60), REG('Trägheit der Gewichtsverlagerung', 'Weight transfer inertia', 0, 500, 120, ' ms'),
+      ] },
+    ] },
+    { t: 'Rennen', en: 'Race', rennen: true, abs: [] },
+    { t: 'Ton', en: 'Sound', abs: [
+      { t: 'Ton', en: 'Sound', z: [
+        AN('Motorsound', 'Engine sound', true), AN('Motorton-Zusätze', 'Engine sound extras', true), AN('Rundenzeiten ansagen', 'Announce lap times', true),
+        AN('Schaden ansagen', 'Announce damage', true), AN('Tank ansagen', 'Announce fuel', true), AN('Reifen ansagen', 'Announce tyres', true),
+        AN('Regen ansagen', 'Announce rain', true), AN('Boxenstopp ansagen', 'Announce pit stop', true), AN('Regen', 'Rain', true),
+        AN('Strecken-Ambience', 'Track ambience', true), REG('Streckenlautstärke', 'Track volume', 0, 100, 60), REG('Regenlautstärke', 'Rain volume', 0, 100, 60),
+        REG('Reifenquietschen', 'Tyre squeal', 0, 100, 70), REG('Bremsenquietschen', 'Brake squeal', 0, 100, 60),
+        WAHL('Motorsound-Profil', 'Engine sound profile', ['Porsche 911 GT3 R', 'BMW M4 GT3', 'Corvette C8.R', 'VW Käfer 1300'], 0),
+        REG('Motorlautstärke', 'Engine volume', 0, 100, 80), WAHL('Ton bei Lichthupe', 'Sound on headlight flash', ['Hupe', 'Aus'], 0),
+      ] },
+      { t: 'Motorwerkstatt', en: 'Engine workshop', z: [
+        WAHL('Motor', 'Engine', ['Flat-6', 'V8', 'V10', 'R4', 'Boxer-4', 'V12', 'R6'], 0),
+        REG('Zylinder', 'Cylinders', 2, 12, 6, ''), WAHL('Bauart', 'Layout', ['Boxer', 'V', 'Reihe'], 0), WAHL('Kurbelwelle', 'Crankshaft', ['Flat-plane', 'Cross-plane'], 0),
+        REG('Drehzahl', 'RPM', 1000, 9500, 4000, ' /min'), REG('Primärrohr', 'Primary pipe', 0, 100, 50), REG('Impulslänge', 'Pulse length', 0, 100, 50),
+        REG('Auspuffnachhall', 'Exhaust reverb', 0, 100, 40), REG('Sättigung', 'Saturation', 0, 100, 50), REG('Ventiltrieb', 'Valvetrain', 0, 100, 30),
+        REG('Zündstreuung', 'Ignition jitter', 0, 100, 10), REG('Ansauganteil', 'Intake share', 0, 100, 40), REG('Last', 'Load', 0, 100, 70),
+        KNOPF('Anhören', 'Listen', 'START'), KNOPF('Übernehmen', 'Apply', 'OK'), KNOPF('Speichern und austauschen', 'Save and share', 'ÖFFNEN'),
+      ] },
+    ] },
+    { t: 'Gegner', en: 'Opponents', abs: [
+      { t: 'Autonome Gegner', en: 'Autonomous opponents', z: [
+        REG('Ghost-Tempo', 'Ghost pace', 20, 150, 90), REG('Ghost: Rennhärte', 'Ghost: race hardness', 0, 100, 50), REG('Ghost: Kurvendrosselung', 'Ghost: corner throttle', 0, 100, 50),
+        AN('Rennwürze: einzeln zuschaltbar', 'Race spice: individually', true), AN('Überholmanöver', 'Overtaking', true), AN('Abstand halten', 'Keep distance', true),
+        AN('Tagesform', 'Form of the day', true), AN('Fahrfehler', 'Driving errors', true), AN('Windschatten', 'Slipstream', true), AN('Verteidigen', 'Defending', true),
+        AN('Blaue Flagge', 'Blue flag', true), WAHL('Fahrercharakter', 'Driver character', ['gemischt', 'ruhig', 'aggressiv'], 0), REG('Startreaktion', 'Start reaction', 0, 100, 50),
+        AN('Ghost: Rückweg nach einem Abgang', 'Ghost: way back after going off', true), WAHL('Ghost: Ideallinie', 'Ghost: racing line', ['Luuke-Linie', 'Mitte', 'Innen', 'Außen', 'Geometrisch', 'Glatt'], 0),
+        AN('Ghost: Kurven öffnen', 'Ghost: open corners', true), REG('Ghost: Querträgheit', 'Ghost: lateral inertia', 0, 100, 50), REG('Ghost: Brems- und Gasverhalten', 'Ghost: braking and throttle', 0, 100, 50),
+        AN('Ghost: Boxenstopp', 'Ghost: pit stop', true), AN('Boxenstopp im freien Fahren', 'Pit stop in free running', false), REG('Boxenstopp-Länge', 'Pit stop length', 3, 30, 8, ' s'),
+        REG('Boxenstopp frühestens nach', 'Pit stop at the earliest after', 1, 30, 4, ' Rd.'), REG('Boxenstopp spätestens nach', 'Pit stop at the latest after', 1, 60, 12, ' Rd.'),
+        WAHL('Ghost: Linienmodell', 'Ghost: line model', ['Kachel', 'Vorausblick'], 1), INFO('Ghost: so fährt das gewählte Modell', 'Ghost: how the chosen model drives', 'Karte'),
+        AN('Ghost: lernt von Runde zu Runde', 'Ghost: learns lap by lap', true), REG('Ghost: seitlicher Versatz', 'Ghost: lateral offset', 0, 100, 30), AN('Ghost: eigene Spuren', 'Ghost: own lanes', true),
+        AN('Ghost: Querlage festhalten', 'Ghost: hold lateral position', false), AN('Strecke beim Fahren lernen', 'Learn the track while driving', true), AN('Ghost braucht Streckencode', 'Ghost needs track code', false),
+        AN('Ghost: Feld zusammenhalten', 'Ghost: keep the field together', false), REG('Ghost: Stärke der Staffel', 'Ghost: relay strength', 0, 100, 50),
+      ] },
+      { t: 'Rennen simulieren', en: 'Simulate a race', z: [
+        INFO('Was hier passiert', 'What happens here', '', 'Ein Rennen ganz ohne Autos: die Ghost-Logik fährt auf der Karte, zum Prüfen von Linien und Rennwürze.'),
+        REG('Anzahl Ghosts', 'Number of ghosts', 1, 8, 4, ''), REG('Anzahl Runden', 'Number of laps', 1, 50, 10, ''), AN('Doppelte Geschwindigkeit', 'Double speed', false),
+        KNOPF('Simulation starten', 'Start simulation', 'START'),
+      ] },
+    ] },
+    { t: 'Controller', en: 'Controller', abs: [
+      { t: 'Controller', en: 'Controller', z: [
+        INFO('Erkannter Controller', 'Detected controller', '–'), WAHL('Belegung für', 'Mapping for', ['Spieler 1', 'Spieler 2'], 0),
+        KNOPF('Tastenbelegung ändern', 'Change button mapping', 'ÖFFNEN'), KNOPF('Standardbelegung', 'Default mapping', 'ZURÜCK'),
+        KNOPF('Controller-Belegung (Bild)', 'Controller layout (picture)', 'ZEIGEN', 'Das Bild, das heute in der Garage steht.'), INFO('Live-Eingabewerte', 'Live input values', 'Stick · Trigger'),
+      ] },
+      { t: 'Tastatur', en: 'Keyboard', z: [INFO('Tastatur, Fahren', 'Keyboard, driving', 'WASD · Pfeile'), INFO('Tastatur: Test und Fehlersuche am PC', 'Keyboard: testing on the PC', 'I K W L …')] },
+    ] },
+    { t: '2 Spieler', en: '2 players', abs: [
+      { t: 'Der Modus', en: 'The mode', z: [AN('2-Spieler-Modus', '2-player mode', false, 'Zwei Autos, zwei Controller auf demselben Sendetakt. Im Aufbau.'), AN('Controller tauschen', 'Swap controllers', false)] },
+      { t: 'Was gerade erkannt ist', en: 'What is detected', z: [INFO('Controller', 'Controllers', '1'), INFO('Autos', 'Cars', '0')] },
+      { t: 'Was Auto 2 nicht hat', en: 'What car 2 lacks', z: [INFO('Kein Windschatten, keine Ghost-Rolle …', 'No slipstream, no ghost role …', '')] },
+    ] },
+    { t: 'System', en: 'System', abs: [
+      { t: 'Sprache & App', en: 'Language & app', z: [
+        WAHL('Sprache', 'Language', ['Deutsch', 'English'], 0, 'Dieselbe Wahl wie auf dem Titelbildschirm.'),
+        KNOPF('App & Updates', 'App & updates', 'ÖFFNEN', 'Nur in der Android-App: Version, Updates ohne neue APK.'),
+      ] },
+      { t: 'Sicherung', en: 'Backup', z: [
+        KNOPF('Sicherung speichern', 'Save backup', 'DATEI'), KNOPF('Sicherung laden', 'Load backup', 'DATEI'),
+        KNOPF('Gemerkte Autos', 'Remembered cars', 'LISTE', 'Autos, deren Name oder Farbe du geändert hast. Heute in der Garage.'),
+      ] },
+      { t: 'Entwicklung', en: 'Development', z: [
+        { t: 'Entwicklertools zeigen', en: 'Show developer tools', typ: 'an', v: false, key: 'dev',
+          d: 'Blendet im Hauptmenü die Kachel ENTWICKLER ein: Doku, Programmierschule, BLE-Werkbank, Selbsttest, Code-Sonde, Zahlensysteme, Aufnahme-Modus. Auch mit ?dev in der Adresse.' },
+      ] },
+    ] },
+  ];
+  const RENN_ZEILEN = () => [
+    { t: 'Renntyp', en: 'Race type', typ: 'wahl', o: RENNTYPEN.map((r) => L(r[0], r[1])), key: 'renntyp', d: 'Freies Training ohne Wertung, Qualifying auf die beste Runde, Runden bis zur Zielflagge, Endurance auf Zeit.' },
+    { t: S.renntyp === 3 ? 'Dauer' : 'Runden', en: S.renntyp === 3 ? 'Duration' : 'Laps', typ: 'reg', min: 1, max: 60, key: 'dauer', e: S.renntyp === 3 ? ' min' : '' },
+    AN('Sektoren', 'Sectors', true), AN('Fliegender Start', 'Flying start', false, 'Statt Startampel eine Einführungsrunde hinter dem Führenden; das Startfeld darunter.'),
+    { t: 'Wetter zu Beginn', en: 'Weather at start', typ: 'wahl', o: WETTER.map((w) => L(w[0], w[1])), key: 'wetter' },
+    AN('Wetter ändert sich', 'Weather changes', true, 'Bei „wechselhaft“ alle ein bis drei Minuten, Schauer kürzer als Trockenphasen.'),
+    { t: 'Pflichtboxenstopps', en: 'Mandatory pit stops', typ: 'reg', min: 0, max: 5, key: 'stopps', e: '' },
+    REG('Strafe je verpasstem Stopp', 'Penalty per missed stop', 0, 60, 10, ' s'), REG('Tank beim Start', 'Fuel at start', 10, 100, 100),
+  ];
+
+  // =====================================================================================
+  // SCHIRME
+  // =====================================================================================
+  const HAUPT_REITER = () => [['fahren', L('Fahren', 'Drive')], ['mehrspieler', L('Mehrspieler', 'Multiplayer')],
+    ['optionen', L('Optionen', 'Options')], ['info', L('Info', 'Info')]].concat(S.dev ? [['entwickler', L('Entwickler', 'Developer')]] : []);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const img = (n, bg) => 'img/' + n + (bg ? '-bg' : '') + '.jpg';
+  const zeilenInfo = (paare) => '<div class="ki">' + paare.map(([l, w]) => '<span class="l">' + l + '</span><span class="w">' + w + '</span>').join('') + '</div>';
+  const kachel = (o) => '<div class="k' + (o.klein ? ' klein' : '') + '" data-f="' + o.f + '"'
+    + (o.ziel ? ' data-ziel="' + o.ziel + '"' : '') + (o.act ? ' data-act="' + o.act + '"' : '')
+    + (o.quad ? ' data-quad="' + o.quad + '" data-quadtext="' + esc(o.quadtext || '') + '"' : '')
+    + (o.d ? ' data-d="' + esc(o.d) + '"' : '') + ' style="' + (o.stil || '') + '">'
+    + '<div class="kk">' + o.kopf + '</div>'
+    + (o.titel ? '<div class="kt">' + o.titel + '</div>' : '')
+    + (o.bild ? '<div class="kb" style="background-image:url(' + o.bild + ')"></div>' : '')
+    + (o.info ? zeilenInfo(o.info) : '') + (o.mehr || '') + '<div class="streifen"></div></div>';
+
+  const autoText = () => S.autos.length ? S.autos.map((a) => '<span style="color:' + a.farbe + '">●</span> ' + esc(a.name)).join(' · ') : L('keines', 'none');
+
+  const SCHIRME = {
+    titel: { bg: 'titel', ohneRahmen: true, render: () => `
+      <div class="titel">
+        <span class="titel-schrift" data-text="OMEGA SIM">OMEGA SIM</span>
+        <div class="slogan">${L('Vollständige Gestaltungsfreiheit für deine Carrera Hybrid Bahn', 'Complete creative freedom for your Carrera Hybrid track')}</div>
+        <div class="sprachen">
+          <button class="${S.lang === 'de' ? 'an' : ''}" data-lang="de">DEUTSCH</button>
+          <button class="${S.lang === 'en' ? 'an' : ''}" data-lang="en">ENGLISH</button>
+        </div>
+        <div class="druecken">${L('Beliebige Taste drücken', 'Press any button')}</div>
+        <div class="titel-fuss">Mock-up · OmegaSim 0.8.16 · ${L('◀▶ Sprache', '◀▶ language')} · github.com/LukasRoeseler/btsr</div>
+      </div>` },
+
+    haupt: { bg: 'haupt', pfad: () => [L('Hauptmenü', 'Main menu')], reiter: 'haupt', start: 'k-fahren', render: () => `
+      <div class="gitter" style="grid-template-columns: 1.6fr 1fr 1fr; grid-template-rows: minmax(260px, 50vh) auto;">
+        ${kachel({ f: 'k-fahren', ziel: 'fahren', kopf: L('Fahren', 'Drive'), titel: L('Auto · Rennen · Strecke', 'Car · race · track'), bild: img('fahren'),
+          info: [[L('Auto', 'Car'), autoText()], [L('Strecke', 'Track'), (S.bahn ? L('Bahn', 'Track') : L('Frei', 'Free')) + ' · ' + S.strecke.teile + L(' Teile', ' pieces')], [L('Bestzeit', 'Best lap'), '8,10 s']],
+          d: L('Auto verbinden, Rennen einstellen, Strecke wählen und losfahren – alles auf einem Schirm.', 'Connect a car, set up the race, choose the track and go – all on one screen.') })}
+        ${kachel({ f: 'k-mp', ziel: 'mehrspieler', kopf: L('Mehrspieler', 'Multiplayer'), titel: L('Im WLAN', 'On Wi-Fi'), bild: img('mehrspieler'),
+          info: [['Host', L('keiner', 'none')], [L('Fahrer', 'Drivers'), '0']], d: L('Ein Telefon oder PC ist Host, die anderen treten bei; ein Tablet wird Info-Screen.', 'One phone or PC hosts, the others join; a tablet becomes the info screen.') })}
+        ${kachel({ f: 'k-opt', ziel: 'optionen', kopf: L('Optionen', 'Options'), titel: L('Alle Einstellungen', 'All settings'), bild: img('optionen'),
+          info: [[L('Profil', 'Profile'), L(PROFILE[S.profil][0], PROFILE[S.profil][1])], [L('Modus', 'Mode'), 'Physik']], d: L('Allgemein, Fahrgefühl, Rennen, Ton, Gegner, Controller, 2 Spieler, System.', 'General, handling, race, sound, opponents, controller, 2 players, system.') })}
+        <div class="gitter" style="grid-column: 1 / -1; grid-template-columns: repeat(${S.dev ? 3 : 2}, 1fr);">
+          ${kachel({ f: 'k-info', ziel: 'info', kopf: 'Info', klein: true, titel: L('Wozu · Danksagungen · Rechtliches', 'Why · credits · legal') })}
+          ${kachel({ f: 'k-patch', ziel: 'patchnotes', kopf: 'Patchnotes', klein: true, titel: '0.8 · 0.7' })}
+          ${S.dev ? kachel({ f: 'k-dev', ziel: 'entwickler', kopf: L('Entwickler', 'Developer'), klein: true, titel: L('Werkbank', 'Workbench') }) : ''}
+        </div>
+      </div>` },
+
+    fahren: { bg: 'fahren', pfad: () => [L('Hauptmenü', 'Main menu'), L('Fahren', 'Drive')], reiter: 'haupt',
+      start: () => (S.autos.length ? 'k-start' : 'k-auto'), render: () => {
+        const rt = RENNTYPEN[S.renntyp];
+        const bahnTeile = S.bahn
+          ? `<div class="knopfreihe"><button class="btn" data-f="b-scan" data-ziel="scan">${L('Scan', 'Scan')}</button><button class="btn" data-f="b-editor" data-ziel="editor">Editor</button><button class="btn" data-f="b-laden" data-ziel="laden">${L('Laden', 'Load')}</button></div>`
+          : `<div class="knopfreihe"><button class="btn" data-f="b-druck" data-ziel="druck">${L('Druckvorlagen', 'Print templates')}</button><button class="btn" data-f="b-editor" data-ziel="editor">Editor</button></div>`;
+        return `
+      <div class="gitter" style="grid-template-columns: repeat(3, 1fr); grid-template-rows: minmax(300px, 54vh) minmax(100px, 22vh);">
+        ${kachel({ f: 'k-auto', act: 'auto', kopf: L('Auto', 'Car'), titel: S.autos.length ? S.autos.length + L(' verbunden', ' connected') : L('Auto verbinden', 'Connect car'), bild: img('auto'),
+          info: S.autos.length ? S.autos.map((a) => ['<span style="color:' + a.farbe + '">●</span> ' + esc(a.name), L(ROLLEN[a.rolle][0], ROLLEN[a.rolle][1])]).concat([[L('Akku', 'Battery'), '82 %']])
+            : [[L('Status', 'Status'), L('nicht verbunden', 'not connected')], ['✕', L('Bluetooth-Auswahl öffnen', 'open Bluetooth chooser')]],
+          d: S.autos.length ? L('✕ öffnet die Garage: Rollen, Namen, Farben, Ghost-Tempo, weitere Autos.', '✕ opens the garage: roles, names, colours, ghost pace, more cars.')
+            : L('✕ öffnet sofort die Bluetooth-Auswahl. Das erste Auto steuerst du, weitere werden Ghosts.', '✕ opens the Bluetooth chooser right away. You drive the first car, further ones become ghosts.') })}
+        ${kachel({ f: 'k-renn', ziel: 'rennen', quad: 'renntyp', quadtext: L('Renntyp', 'Race type'), kopf: L('Rennoptionen', 'Race options'),
+          titel: '<span class="pf">◀</span>' + L(rt[0], rt[1]) + '<span class="pf">▶</span>', bild: img('rennen'),
+          info: [[S.renntyp === 3 ? L('Dauer', 'Duration') : L('Runden', 'Laps'), S.dauer + (S.renntyp === 3 ? ' min' : '')], [L('Wetter', 'Weather'), L(WETTER[S.wetter][0], WETTER[S.wetter][1])],
+            [L('Pflichtstopps', 'Mandatory stops'), S.stopps], [L('Sektoren', 'Sectors'), L('an', 'on')]],
+          d: L('□ wechselt den Renntyp direkt hier, ✕ öffnet alle Renneinstellungen, Ergebnisse und Sitzungen.', '□ changes the race type right here, ✕ opens all race settings, results and sessions.') })}
+        ${kachel({ f: 'k-strecke', ziel: 'strecke', quad: 'bahn', quadtext: L('Bahn / Frei', 'Track / free'), kopf: L('Strecke', 'Track'),
+          titel: '<span class="pf">◀</span>' + (S.bahn ? L('Auf der Bahn', 'On the track') : L('Frei', 'Free')) + '<span class="pf">▶</span>', bild: img(S.bahn ? 'strecke-bahn' : 'strecke-frei'),
+          info: S.bahn ? [[esc(S.strecke.name), S.strecke.teile + L(' Teile', ' pieces')], ['Code', S.strecke.code]] : [[L('Modus', 'Mode'), L('Ausdruck / ohne Bahn', 'printout / no track')]],
+          mehr: bahnTeile, d: L('□ schaltet zwischen Auf der Bahn und Frei. Auf der Bahn: Streckenscan, Editor, Strecke laden. Frei: Druckvorlagen und Editor.', '□ switches between on the track and free. On the track: scan, editor, load a track. Free: print templates and editor.') })}
+        <div class="gitter" style="grid-column: 1 / -1; grid-template-columns: 1fr 1fr 2fr;">
+          ${kachel({ f: 'k-profil', ziel: 'optionen', act: 'opt-fahrgefuehl', quad: 'profil', quadtext: L('Profil', 'Profile'), kopf: L('Fahrgefühl', 'Handling'), klein: true,
+            titel: '<span class="pf">◀</span>' + L(PROFILE[S.profil][0], PROFILE[S.profil][1]) + '<span class="pf">▶</span>',
+            d: L('□ blättert die Voreinstellungen durch, ✕ öffnet Optionen → Fahrgefühl.', '□ cycles the presets, ✕ opens Options → Handling.') })}
+          ${kachel({ f: 'k-gegner', ziel: 'optionen', act: 'opt-gegner', quad: 'haerte', quadtext: L('Härte', 'Hardness'), kopf: L('Gegner', 'Opponents'), klein: true,
+            titel: '<span class="pf">◀</span>' + L('Härte ', 'Hardness ') + S.haerte + ' %<span class="pf">▶</span>',
+            d: L('□ stellt die Rennhärte der Ghosts, ✕ öffnet Optionen → Gegner.', '□ sets the ghosts\' race hardness, ✕ opens Options → Opponents.') })}
+          <div class="start" data-f="k-start" data-act="start" style="background-image:linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.5)),url(${img('start')})"
+               data-d="${esc(L('Ins Cockpit und die Startampel läuft. Fehlt noch ein Auto, kommt zuerst die Bluetooth-Auswahl.', 'Into the cockpit, and the start lights begin. Without a car, the Bluetooth chooser comes first.'))}">
+            <div>${S.renntyp === 0 ? L('Training starten', 'Start practice') : L('Rennen starten', 'Start race')}<small>${L(rt[0], rt[1])} · ${S.bahn ? L('auf der Bahn', 'on the track') : L('frei', 'free')}</small></div>
+          </div>
+        </div>
+      </div>`; } },
+
+    garage: { bg: 'garage', pfad: () => [L('Fahren', 'Drive'), 'Garage'], start: () => (S.autos.length ? 'auto-0' : 'g-verbinden'), render: () => {
+      const i = Math.min(S.garageWahl || 0, Math.max(0, S.autos.length - 1));
+      const a = S.autos[i];
+      return `
+      <div class="knopfreihe" style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap">
+        <button class="btn" data-f="g-verbinden" data-act="verbinden">+ ${L('Auto verbinden', 'Connect car')}</button>
+        <button class="btn" data-f="g-trennen" data-act="alle-trennen">${L('Alle trennen', 'Disconnect all')}</button>
+        <button class="btn" data-f="g-ghosts" data-act="toast:${esc(L('Ghosts angehalten', 'Ghosts stopped'))}">${L('Ghosts anhalten', 'Stop ghosts')}</button>
+        <button class="btn" data-f="g-los" data-act="toast:${esc(L('Ghosts fahren los', 'Ghosts go'))}">${L('Losfahren', 'Go')}</button>
+      </div>
+      <div class="garage">
+        <div class="autoliste">${S.autos.length ? S.autos.map((x, k) => `
+          <div class="auto${k === i ? ' aktiv' : ''}" data-f="auto-${k}" data-act="garage-wahl:${k}" data-d="${esc(L('✕ wählt das Auto zum Einstellen, □ trennt es, △ lässt es blinken, damit du weißt, welches es ist.', '✕ selects the car for editing, □ disconnects it, △ makes it blink so you know which one it is.'))}" data-quad="trennen:${k}" data-quadtext="${esc(L('Trennen', 'Disconnect'))}" data-drei="blink" data-dreitext="${esc(L('Blinken', 'Blink'))}">
+            <div class="chip" style="background:${x.farbe}"></div><div><b>${esc(x.name)}</b><br><span>HYBRID-${(0xA1B2 + k * 1117).toString(16).toUpperCase()}</span></div>
+            <span>${L(ROLLEN[x.rolle][0], ROLLEN[x.rolle][1])}</span></div>`).join('')
+          : `<div class="tafel">${L('Noch kein Auto verbunden.', 'No car connected yet.')}</div>`}
+        </div>
+        <div class="zeilen">${a ? [
+          { t: 'Rolle', en: 'Role', typ: 'wahl', o: ROLLEN.map((r) => L(r[0], r[1])), key: 'g-rolle', d: L('Steuern: dein Auto. Spieler 2: zweiter Controller. Ghost: fährt selbst. Aus: verbunden, steht.', 'Drive: your car. Player 2: second controller. Ghost: drives itself. Off: connected, standing still.') },
+          { t: 'Name', en: 'Name', typ: 'text', key: 'g-name' },
+          { t: 'Farbe', en: 'Colour', typ: 'wahl', o: FARBEN.map((c) => c[1]), key: 'g-farbe' },
+          REG('Ghost-Tempo', 'Ghost pace', 20, 150, 90), WAHL('Fahrercharakter', 'Driver character', ['gemischt', 'ruhig', 'aggressiv'], 0),
+          KNOPF('Auto blinken lassen', 'Make the car blink', '△'), KNOPF('Trennen', 'Disconnect', '□', undefined, 'trennen:' + i),
+        ].map((z, k) => zeileHtml(z, 'gz-' + k)).join('') : ''}</div>
+      </div>`; } },
+
+    rennen: { bg: 'rennen', pfad: () => [L('Fahren', 'Drive'), L('Renneinstellungen', 'Race settings')], reiter: 'renn', start: 'rz-start', beschreibung: true, render: () => {
+      if (S.rennTab === 1) return `<div class="tafel"><h3>${L('Ergebnis', 'Result')}</h3><table class="tabelle"><tr><th>Pos</th><th>${L('Fahrer', 'Driver')}</th><th>${L('Runden', 'Laps')}</th><th>${L('Beste', 'Best')}</th></tr>
+        <tr><td>1</td><td>Luuke</td><td>10</td><td>8,10 s</td></tr><tr><td>2</td><td>Ghost Beta</td><td>10</td><td>8,62 s</td></tr></table>
+        <div class="knopfreihe" style="display:flex;gap:8px;margin-top:10px"><button class="btn" data-f="r-csv" data-act="toast:CSV">${L('Als CSV speichern', 'Save as CSV')}</button></div></div>`;
+      if (S.rennTab === 2) return `<div class="tafel"><h3>${L('Gefahrene Sitzungen', 'Sessions driven')}</h3><table class="tabelle"><tr><th>${L('Datum', 'Date')}</th><th>km</th><th>${L('Runden', 'Laps')}</th></tr>
+        <tr><td>28.09.</td><td>1,4</td><td>38</td></tr><tr><td>27.09.</td><td>0,9</td><td>22</td></tr></table>
+        <div class="knopfreihe" style="display:flex;gap:8px;margin-top:10px"><button class="btn" data-f="s-export" data-act="toast:Export">${L('Exportieren', 'Export')}</button><button class="btn" data-f="s-loeschen" data-act="toast:${esc(L('Nachfrage: wirklich löschen?', 'Confirm: really delete?'))}">${L('Alle löschen', 'Delete all')}</button></div></div>`;
+      return '<div class="zeilen">' + zeileHtml(KNOPF('Rennen starten', 'Start race', 'START', L('Dasselbe wie RENNEN STARTEN im Fahren-Schirm.', 'Same as START RACE on the drive screen.'), 'start'), 'rz-start')
+        + RENN_ZEILEN().map((z, k) => zeileHtml(z, 'rz-' + k)).join('') + '</div>'; } },
+
+    strecke: { bg: () => (S.bahn ? 'strecke-bahn' : 'strecke-frei'), pfad: () => [L('Fahren', 'Drive'), L('Strecke', 'Track')], start: 'st-modus', render: () => `
+      <div class="zeilen" style="margin-bottom:12px">${zeileHtml({ t: 'Modus', en: 'Mode', typ: 'wahl', o: [L('Auf der Bahn', 'On the track'), L('Frei (Ausdruck, ohne Bahn)', 'Free (printout, no track)')], key: 'bahn',
+        d: L('Auf der Bahn: das Auto liest die Schiene und hält sich selbst. Frei: gedruckte Muster auf dem Boden.', 'On the track: the car reads the rail and holds itself. Free: printed patterns on the floor.') }, 'st-modus')}</div>
+      <div class="gitter" style="grid-template-columns: repeat(${S.bahn ? 3 : 2}, 1fr); grid-template-rows: minmax(220px, 46vh);">
+        ${S.bahn ? kachel({ f: 'st-scan', ziel: 'scan', kopf: L('Streckenscan', 'Track scan'), titel: L('Strecke einlesen', 'Read the track'), bild: img('strecke-bahn'),
+          info: [[L('Autopilot-Runde', 'Autopilot lap'), '✕'], ['Live-Scan', L('beim Fahren', 'while driving')]], d: L('Das Auto fährt eine Runde und liest dabei die Teile; oder du fährst selbst und die App liest mit.', 'The car drives a lap and reads the pieces; or you drive and the app reads along.') }) : ''}
+        ${kachel({ f: 'st-editor', ziel: 'editor', kopf: L('Streckeneditor', 'Track editor'), titel: L('Bauen & teilen', 'Build & share'), bild: img('strecke-frei'),
+          info: [[L('Teile', 'Pieces'), S.strecke.teile], ['Code', S.strecke.code]], d: L('Strecke aus Teilen bauen, drehen, als Code weitergeben. Vollbild mit dem Controller bedienbar.', 'Build a track from pieces, rotate it, share it as a code. Fullscreen works with the controller.') })}
+        ${S.bahn ? kachel({ f: 'st-laden', ziel: 'laden', kopf: L('Strecke laden', 'Load track'), titel: L('Gespeichert', 'Saved'), bild: img('fahren'),
+          info: [[L('Gespeichert', 'Saved'), '3'], [L('Aktuell', 'Current'), esc(S.strecke.name)]] })
+          : kachel({ f: 'st-druck', ziel: 'druck', kopf: L('Druckvorlagen', 'Print templates'), titel: L('Zum Ausdrucken', 'To print'), bild: img('strecke-frei'),
+          info: [['Start/Ziel', 'SVG'], [L('Bahn zum Auslegen', 'Track to lay out'), L('exp.', 'exp.')]] })}
+      </div>` },
+
+    laden: { bg: 'fahren', pfad: () => [L('Strecke', 'Track'), L('Strecke laden', 'Load track')], start: 'sl-0', beschreibung: true, render: () => `
+      <div class="zeilen">${(S.gespeichert || (S.gespeichert = ['Wohnzimmer-Oval', 'Luuke-Haarnadel', 'Küchen-GP'])).map((n, k) =>
+        `<div class="zeile" data-f="sl-${k}" data-act="laden:${k}" data-quad="loeschen:${k}" data-quadtext="${esc(L('Löschen', 'Delete'))}" data-d="${esc(L('✕ lädt die Strecke, □ löscht sie, △ speichert die aktuelle unter neuem Namen.', '✕ loads the track, □ deletes it, △ saves the current one under a new name.'))}" data-drei="speichern" data-dreitext="${esc(L('Aktuelle speichern', 'Save current'))}">
+          <span>${esc(n)}</span><span class="wert">${n === S.strecke.name ? L('geladen', 'loaded') : '<span class="knopf">' + L('LADEN', 'LOAD') + '</span>'}</span></div>`).join('')}</div>` },
+
+    mehrspieler: { bg: 'mehrspieler', pfad: () => [L('Hauptmenü', 'Main menu'), L('Mehrspieler', 'Multiplayer')], reiter: 'haupt', start: 'mp-host', render: () => `
+      <div class="gitter" style="grid-template-columns: repeat(3, 1fr) 1.2fr; grid-template-rows: minmax(240px, 48vh);">
+        ${kachel({ f: 'mp-host', ziel: 'mp-host', kopf: 'Host', titel: L('Dieses Gerät ist Host', 'This device hosts'), bild: img('mehrspieler'),
+          info: [['App', L('Telefon ist Host', 'phone hosts')], ['PC', 'omegasim_host.py']], d: L('In der App: ein Tipp, und dieses Telefon trägt die Rangliste. Am PC: Startdatei doppelklicken.', 'In the app: one tap and this phone carries the standings. On the PC: double-click the start file.') })}
+        ${kachel({ f: 'mp-join', ziel: 'mp-join', kopf: L('Beitreten', 'Join'), titel: L('Host suchen', 'Find host'), bild: img('haupt'),
+          info: [[L('Adresse', 'Address'), '192.168.1.50:8080'], ['Name', 'Luuke']] })}
+        ${kachel({ f: 'mp-info', act: 'toast:' + L('Info-Screen öffnet sich (Strecke, Autos, Rangliste)', 'Info screen opens (track, cars, standings)'), kopf: 'Info-Screen', titel: L('Ohne eigenes Auto', 'Without a car'), bild: img('strecke-bahn'),
+          info: [[L('Tablet', 'Tablet'), '/?info']], d: L('Ein Tablet oder Fernseher zeigt Strecke, alle Autos und die Rangliste.', 'A tablet or TV shows the track, all cars and the standings.') })}
+        <div class="tafel"><h3>${L('Rangliste', 'Standings')}</h3><table class="tabelle"><tr><th></th><th>${L('Fahrer', 'Driver')}</th><th>${L('Runden', 'Laps')}</th><th>${L('Beste', 'Best')}</th></tr>
+          <tr><td colspan="4" style="color:var(--dim)">${L('keine Daten', 'no data')}</td></tr></table></div>
+      </div>` },
+
+    optionen: { bg: () => (OPT[S.optKat].t === 'Ton' ? 'optionen' : 'garage'), pfad: () => [L('Hauptmenü', 'Main menu'), L('Optionen', 'Options'), L(OPT[S.optKat].t, OPT[S.optKat].en)],
+      reiter: 'opt', start: 'oz-0-0', beschreibung: true, render: () => {
+        const kat = OPT[S.optKat];
+        if (kat.rennen) return '<div class="zeilen">' + zeileHtml(KNOPF('Rennen starten', 'Start race', 'START', undefined, 'start'), 'oz-0-0') + RENN_ZEILEN().map((z, k) => zeileHtml(z, 'oz-r-' + k)).join('') + '</div>';
+        return `<div class="liste-rahmen"><div class="abschnitte" id="abschnitte">${kat.abs.map((a, k) => `<div data-abs="${k}">${L(a.t, a.en)}</div>`).join('')}</div>
+          <div class="zeilen">${kat.abs.map((a, ai) => `<div class="abs-kopf" id="abs-${ai}">${L(a.t, a.en)}</div>` + a.z.map((z, zi) => zeileHtml(z, 'oz-' + ai + '-' + zi, ai)).join('')).join('')}</div></div>`; } },
+
+    info: { bg: 'garage', pfad: () => [L('Hauptmenü', 'Main menu'), 'Info'], reiter: 'haupt', start: 'i-0', render: () => '<div class="gitter" style="grid-template-columns: repeat(4, 1fr)">'
+      + [['Wozu?', 'Why?', 'Warum dieses Projekt existiert'], ['Was du brauchst', 'What you need', 'Browser, Firmware, Controller'], ['Funktionen', 'Features', '18 Punkte, über 300 Einstellungen'],
+        ['Danksagungen', 'Credits', 'engine-sim, Klänge, Fachliteratur'], ['Patchnotes', 'Patch notes', 'je Wochenversion'], ['Rechtliches', 'Legal', 'unabhängig, offen, ohne Gewähr'],
+        ['App & Updates', 'App & updates', 'nur in der Android-App']].map((x, k) => kachel({ f: 'i-' + k, ziel: k === 4 ? 'patchnotes' : 'seite:' + x[0], kopf: L(x[0], x[1]), klein: true, titel: L(x[2], x[2]) })).join('') + '</div>' },
+
+    patchnotes: { bg: 'garage', pfad: () => ['Info', 'Patchnotes'], start: 'pn', render: () => `<div class="tafel" data-f="pn"><h3>0.8</h3><ul>
+      <li>${L('Android-App mit Host ohne PC und Updates ohne Neuinstallation (experimentell).', 'Android app with host without a PC and updates without reinstalling (experimental).')}</li>
+      <li>${L('Info-Screen für Tablet oder Fernseher.', 'Info screen for a tablet or TV.')}</li><li>${L('Neuer Steuerungsmodus Pacejka.', 'New control mode Pacejka.')}</li><li>…</li></ul><h3>0.7</h3><ul><li>…</li></ul></div>` },
+
+    entwickler: { bg: 'mehrspieler', pfad: () => [L('Hauptmenü', 'Main menu'), L('Entwickler', 'Developer')], reiter: 'haupt', start: 'e-0', render: () => '<div class="gitter" style="grid-template-columns: repeat(4, 1fr)">'
+      + [['Doku', 'Docs', 'Protokoll, Physik, Töne'], ['Programmierschule', 'Coding school', 'Kurven ziehen statt Code'], ['BLE-Werkbank', 'BLE workbench', 'Explorer · Kalibrierung · Maus · Targets'],
+        ['Selbsttest', 'Self-test', 'ein Knopf, viele Messungen'], ['Code-Sonde', 'Code probe', 'was das Auto liest'], ['Zahlensysteme', 'Number systems', 'Binär und Hex'], ['Aufnahme-Modus', 'Recording mode', 'aufzeichnen, nachfahren']]
+        .map((x, k) => kachel({ f: 'e-' + k, ziel: 'seite:' + x[0], kopf: L(x[0], x[1]), klein: true, titel: x[2] })).join('') + '</div>' },
+
+    seite: { bg: 'garage', pfad: () => [S.seiteTitel], start: 'sei', render: () => `<div class="tafel" data-f="sei"><h3>${esc(S.seiteTitel)}</h3>
+      ${L('In der App steht hier die bestehende Seite „', 'In the app, this is the existing page “') + esc(S.seiteTitel) + L('“ – Inhalt unverändert, im neuen Rahmen (Kopfzeile, Farben, Fußleiste).', '” – content unchanged, in the new frame (header, colours, footer).')}</div>` },
+  };
+  // Einfache Unterseiten, die im Mock-up nur zeigen, wohin der Weg führt.
+  [['scan', 'Streckenscan', 'Autopilot-Runde · Live-Scan · Status'], ['editor', 'Streckeneditor', 'der heutige Editor samt Vollbild, Streckencode, Teileliste'],
+   ['druck', 'Druckvorlagen', 'Start/Ziel, Schneidebogen, Bahn zum Auslegen, Trapez-Muster'], ['mp-host', 'Host', 'Dieses Telefon ist Host · PC-Anleitung · Übersichtsadresse'],
+   ['mp-join', 'Beitreten', 'Host im WLAN suchen · Adresse · Name · Mitmachen/Verlassen']].forEach(([id, t, w]) => {
+    SCHIRME[id] = { bg: 'garage', pfad: () => [t], start: 'u-0', render: () => `<div class="tafel" data-f="u-0"><h3>${t}</h3>${L('Im Mock-up ein Platzhalter. In der App: ', 'A placeholder in the mock-up. In the app: ')}${w}.</div>` };
+  });
+
+  // =====================================================================================
+  // OPTIONSZEILEN
+  // =====================================================================================
+  function wertLesen(z, schluessel) {
+    if (z.key === 'renntyp') return S.renntyp;
+    if (z.key === 'dauer') return S.dauer;
+    if (z.key === 'wetter') return S.wetter;
+    if (z.key === 'stopps') return S.stopps;
+    if (z.key === 'bahn') return S.bahn ? 0 : 1;
+    if (z.key === 'bahn-an') return S.bahn;
+    if (z.key === 'dev') return S.dev;
+    const a = S.autos[S.garageWahl || 0];
+    if (z.key === 'g-rolle') return a ? a.rolle : 0;
+    if (z.key === 'g-farbe') return a ? Math.max(0, FARBEN.findIndex((c) => c[0] === a.farbe)) : 0;
+    if (z.key === 'g-name') return a ? a.name : '';
+    if (z.t === 'Sprache') return S.lang === 'en' ? 1 : 0;
+    if (z.t === 'Voreinstellung') return S.profil;
+    return schluessel in S.werte ? S.werte[schluessel] : z.v;
+  }
+  function wertSetzen(z, schluessel, v) {
+    const a = S.autos[S.garageWahl || 0];
+    if (z.key === 'renntyp') S.renntyp = v;
+    else if (z.key === 'dauer') S.dauer = v;
+    else if (z.key === 'wetter') S.wetter = v;
+    else if (z.key === 'stopps') S.stopps = v;
+    else if (z.key === 'bahn') S.bahn = v === 0;
+    else if (z.key === 'bahn-an') S.bahn = !!v;
+    else if (z.key === 'dev') { S.dev = v; toast(v ? L('Entwickler im Hauptmenü sichtbar', 'Developer visible in the main menu') : L('Entwickler ausgeblendet', 'Developer hidden')); }
+    else if (z.key === 'g-rolle' && a) a.rolle = v;
+    else if (z.key === 'g-farbe' && a) a.farbe = FARBEN[v][0];
+    else if (z.t === 'Sprache') S.lang = v ? 'en' : 'de';
+    else if (z.t === 'Voreinstellung') S.profil = v;
+    else S.werte[schluessel] = v;
+  }
+  const ZEILEN = {};   // data-f -> Zeilenbeschreibung
+  function zeileHtml(z, f, abs) {
+    ZEILEN[f] = z;
+    const v = wertLesen(z, f);
+    let w = '';
+    if (z.typ === 'an') w = '<span class="pf">◀</span>' + (v ? L('AN', 'ON') : L('AUS', 'OFF')) + '<span class="pf">▶</span>';
+    else if (z.typ === 'wahl') w = '<span class="pf">◀</span>' + esc(z.o[v] !== undefined ? z.o[v] : '') + '<span class="pf">▶</span>';
+    else if (z.typ === 'reg') {
+      const anteil = Math.max(0, Math.min(1, (v - z.min) / (z.max - z.min)));
+      const zahl = (Math.round(v * 100) / 100).toString().replace('.', ',');
+      w = '<span class="balken"><i style="width:' + Math.round(anteil * 100) + '%"></i></span><span class="pf">◀</span>' + zahl + (z.e || '') + '<span class="pf">▶</span>';
+    } else if (z.typ === 'knopf') w = '<span class="knopf">' + esc(z.k) + '</span>';
+    else if (z.typ === 'text') w = esc(v) + ' <span class="knopf">✎</span>';
+    else w = esc(z.w || '');
+    return '<div class="zeile' + (z.typ === 'info' ? ' info' : '') + '" data-f="' + f + '" data-zeile="1"' + (abs !== undefined ? ' data-abs-i="' + abs + '"' : '')
+      + (z.act ? ' data-act="' + z.act + '"' : '')
+      + ' data-d="' + esc(z.d || L('In der App steht hier der Erklärtext dieser Einstellung (heute das kleine i).', 'In the app, this setting\'s explanation appears here (today the small i).')) + '">'
+      + '<span>' + esc(L(z.t, z.en)) + '</span><span class="wert">' + w + '</span></div>';
+  }
+  function zeileVerstellen(f, dir) {
+    const z = ZEILEN[f];
+    if (!z) return false;
+    const v = wertLesen(z, f);
+    if (z.typ === 'an') wertSetzen(z, f, !v);
+    else if (z.typ === 'wahl') wertSetzen(z, f, (v + dir + z.o.length) % z.o.length);
+    else if (z.typ === 'reg') {
+      const schritt = (z.max - z.min) > 20 ? ((z.max - z.min) > 400 ? 50 : 1) : ((z.max - z.min) <= 3 ? 0.05 : 1);
+      wertSetzen(z, f, Math.max(z.min, Math.min(z.max, Math.round((v + dir * schritt) * 100) / 100)));
+    } else return false;
+    ton(dir > 0 ? 880 : 740);
+    neuZeichnen();
+    return true;
+  }
+
+  // =====================================================================================
+  // NAVIGATION
+  // =====================================================================================
+  let aktuell = 'titel';
+  const stapel = [];
+  const fokusMerk = {};
+  let fokus = null;
+  let dialogOffen = null;
+
+  function gehe(id, o) {
+    const opt = o || {};
+    if (id.startsWith('seite:')) { S.seiteTitel = id.slice(6); id = 'seite'; }
+    if (!SCHIRME[id]) return;
+    if (fokus) fokusMerk[aktuell] = fokus;
+    if (!opt.ersetzen && !opt.zurueck && aktuell !== id) stapel.push(aktuell);
+    aktuell = id;
+    if (opt.fokus) fokusMerk[id] = opt.fokus;
+    ton(620);
+    neuZeichnen(true);
+  }
+  function zurueck() {
+    if (dialogOffen) { dialogZu(); return; }
+    if (!stapel.length) { if (aktuell !== 'titel') gehe('titel', { zurueck: true }); return; }
+    const ziel = stapel.pop();
+    ton(420);
+    fokusMerk[aktuell] = fokus;
+    aktuell = ziel;
+    neuZeichnen(true);
+  }
+
+  function neuZeichnen(neu) {
+    const s = SCHIRME[aktuell];
+    const bg = typeof s.bg === 'function' ? s.bg() : s.bg;
+    $('bg').style.backgroundImage = 'url(' + img(bg, true) + ')';
+    for (const k in ZEILEN) delete ZEILEN[k];
+    $('buehne').innerHTML = s.render();
+    const rahmen = !s.ohneRahmen;
+    $('kopf').style.visibility = rahmen ? '' : 'hidden';
+    $('fuss').style.visibility = rahmen ? '' : 'hidden';
+    const pfad = s.pfad ? s.pfad() : [];
+    $('pfad').innerHTML = (stapel.length ? '<span class="zurueck-pfeil" id="pfeil">‹</span>' : '')
+      + pfad.map((p, i) => (i === pfad.length - 1 ? '<b>' + esc(String(p).toUpperCase()) + '</b>' : '<span>' + esc(String(p).toUpperCase()) + ' / </span>')).join('');
+    if ($('pfeil')) $('pfeil').onclick = zurueck;
+    $('status').innerHTML = (S.autos.length ? '<span class="an">●</span> ' + S.autos.length + L(' Auto', ' car') + (S.autos.length > 1 ? L('s', 's') : '') : '○ ' + L('kein Auto', 'no car'))
+      + ' · Bluetooth ' + L('an', 'on') + '<br>0.8.16 · Mock-up<span class="wip">' + L('NEUES MENÜ · WIP', 'NEW MENU · WIP') + '</span>';
+    reiterZeichnen(s);
+    $('beschreibung').hidden = !rahmen;
+    // Fokus wiederherstellen oder Startfokus
+    const liste = fokussierbar();
+    let ziel = neu ? (fokusMerk[aktuell] || (typeof s.start === 'function' ? s.start() : s.start)) : fokus;
+    let el = liste.find((e) => e.dataset.f === ziel) || liste[0] || null;
+    setzeFokus(el, true);
+    fussZeichnen();
+  }
+
+  function reiterZeichnen(s) {
+    const leiste = $('leiste');
+    let eintraege = null, aktivIndex = 0;
+    if (s.reiter === 'haupt') { eintraege = HAUPT_REITER(); aktivIndex = eintraege.findIndex((e) => e[0] === aktuell); }
+    if (s.reiter === 'opt') { eintraege = OPT.map((k, i) => ['opt:' + i, L(k.t, k.en)]); aktivIndex = S.optKat; }
+    if (s.reiter === 'renn') { eintraege = [['renn:0', L('Einstellungen', 'Settings')], ['renn:1', L('Ergebnisse', 'Results')], ['renn:2', L('Sitzungen', 'Sessions')]]; aktivIndex = S.rennTab; }
+    leiste.hidden = !eintraege;
+    if (!eintraege) return;
+    $('reiter').innerHTML = eintraege.map((e, i) => '<button data-reiter="' + e[0] + '" class="' + (i === aktivIndex ? 'an' : '') + '">' + esc(e[1]) + '</button>').join('');
+    $('sh-l').innerHTML = glyph('l1'); $('sh-r').innerHTML = glyph('r1');
+    $('reiter').querySelectorAll('button').forEach((b) => { b.onclick = () => reiterWahl(b.dataset.reiter); });
+  }
+  function reiterWahl(r) {
+    if (r.startsWith('opt:')) { S.optKat = +r.slice(4); fokusMerk.optionen = null; neuZeichnen(true); return; }
+    if (r.startsWith('renn:')) { S.rennTab = +r.slice(5); fokusMerk.rennen = null; neuZeichnen(true); return; }
+    gehe(r, { ersetzen: true });
+  }
+  function reiterSchritt(d) {
+    const s = SCHIRME[aktuell];
+    if (aktuell === 'titel') { S.lang = S.lang === 'de' ? 'en' : 'de'; neuZeichnen(); return; }
+    if (s.reiter === 'opt') { S.optKat = (S.optKat + d + OPT.length) % OPT.length; fokusMerk.optionen = null; ton(700); neuZeichnen(true); return; }
+    if (s.reiter === 'renn') { S.rennTab = (S.rennTab + d + 3) % 3; fokusMerk.rennen = null; ton(700); neuZeichnen(true); return; }
+    // Hauptmenü und Ebene 1: der Reiter wechselt den Schirm. Vom Hauptmenü aus geht R1 auf FAHREN.
+    const e = HAUPT_REITER().map((x) => x[0]);
+    let i = e.indexOf(aktuell);
+    if (i < 0) i = d > 0 ? -1 : 0;
+    const ziel = e[(i + d + e.length) % e.length];
+    if (aktuell === 'haupt') gehe(ziel); else gehe(ziel, { ersetzen: true });
+  }
+
+  function fokussierbar() {
+    const wurzel = dialogOffen ? $('dialog') : $('buehne');
+    return [...wurzel.querySelectorAll('[data-f]')].filter((e) => e.offsetParent !== null);
+  }
+  function setzeFokus(el, still) {
+    document.querySelectorAll('.f').forEach((e) => e.classList.remove('f'));
+    fokus = el ? el.dataset.f : null;
+    if (!el) { $('beschreibung').innerHTML = ''; return; }
+    el.classList.add('f');
+    if (!still) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    else el.scrollIntoView({ block: 'nearest' });
+    const d = el.dataset.d;
+    $('beschreibung').style.visibility = d ? '' : 'hidden';
+    $('beschreibung').innerHTML = d ? '<b>' + esc((el.querySelector('span, .kk') || el).textContent.trim()).toUpperCase() + '</b> · ' + esc(d) : '';
+    // Abschnittsleiste mitziehen
+    const ai = el.dataset.absI;
+    document.querySelectorAll('#abschnitte [data-abs]').forEach((a) => a.classList.toggle('an', a.dataset.abs === ai));
+    fussZeichnen();
+  }
+  function fokusEl() { return fokussierbar().find((e) => e.dataset.f === fokus) || null; }
+
+  // RÄUMLICH: nächster Nachbar in der Richtung, gemessen von Mittelpunkt zu Mittelpunkt. Quer
+  // zur Richtung zählt die Abweichung zweieinhalbfach, damit "rechts" in derselben Zeile bleibt.
+  function bewege(dir) {
+    const liste = fokussierbar();
+    const cur = fokusEl();
+    if (!cur) { setzeFokus(liste[0]); return; }
+    // Optionszeilen: links/rechts verstellt den Wert.
+    if ((dir === 'links' || dir === 'rechts') && cur.dataset.zeile && zeileVerstellen(cur.dataset.f, dir === 'rechts' ? 1 : -1)) return;
+    const a = cur.getBoundingClientRect();
+    const ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+    let best = null, bestWert = Infinity;
+    for (const e of liste) {
+      if (e === cur) continue;
+      const b = e.getBoundingClientRect();
+      const bx = b.left + b.width / 2, by = b.top + b.height / 2;
+      let haupt, quer;
+      // Seitwärts nur in DERSELBEN Zeile (die Rechtecke überlappen senkrecht). Sonst springt
+      // → am rechten Rand schräg nach oben – bei ACC passiert dort einfach nichts.
+      const selbeZeile = b.bottom > a.top + 4 && b.top < a.bottom - 4;
+      if (dir === 'rechts') { haupt = b.left - a.right; quer = Math.abs(by - ay); if (bx <= ax + 2 || !selbeZeile) continue; }
+      if (dir === 'links') { haupt = a.left - b.right; quer = Math.abs(by - ay); if (bx >= ax - 2 || !selbeZeile) continue; }
+      if (dir === 'unten') { haupt = b.top - a.bottom; quer = Math.abs(bx - ax); if (by <= ay + 2) continue; }
+      if (dir === 'oben') { haupt = a.top - b.bottom; quer = Math.abs(bx - ax); if (by >= ay - 2) continue; }
+      const wert = Math.max(0, haupt) + quer * 2.5;
+      if (wert < bestWert) { bestWert = wert; best = e; }
+    }
+    if (best) { ton(520); setzeFokus(best); }
+  }
+
+  function bestaetige() {
+    const el = fokusEl();
+    if (!el) return;
+    ton(980);
+    if (el.dataset.zeile) {
+      const z = ZEILEN[el.dataset.f];
+      if (z && z.act) { aktion(z.act); return; }
+      if (z && (z.typ === 'an' || z.typ === 'wahl')) { zeileVerstellen(el.dataset.f, 1); return; }
+      if (z && z.typ === 'text') { const n = prompt(L('Name', 'Name'), wertLesen(z)); if (n && S.autos[S.garageWahl || 0]) { S.autos[S.garageWahl || 0].name = n; neuZeichnen(); } return; }
+      if (z && z.typ === 'knopf') { toast(L(z.t, z.en) + ' – ' + L('im Mock-up ohne Funktion', 'no function in the mock-up')); return; }
+      if (el.dataset.act) { aktion(el.dataset.act); return; }
+      return;
+    }
+    if (el.dataset.act && !el.dataset.act.startsWith('opt-')) { aktion(el.dataset.act); return; }
+    if (el.dataset.act && el.dataset.act.startsWith('opt-')) {
+      S.optKat = el.dataset.act === 'opt-gegner' ? 4 : 1; fokusMerk.optionen = null;
+    }
+    if (el.dataset.ziel) gehe(el.dataset.ziel);
+  }
+  function quadrat() {
+    const el = fokusEl();
+    if (!el || !el.dataset.quad) return;
+    const q = el.dataset.quad;
+    if (q === 'renntyp') S.renntyp = (S.renntyp + 1) % 4;
+    else if (q === 'bahn') S.bahn = !S.bahn;
+    else if (q === 'profil') S.profil = (S.profil + 1) % PROFILE.length;
+    else if (q === 'haerte') S.haerte = S.haerte >= 100 ? 0 : S.haerte + 25;
+    else { aktion(q); return; }
+    ton(760);
+    neuZeichnen();
+  }
+  function dreieck() {
+    const el = fokusEl();
+    if (el && el.dataset.drei) { aktion(el.dataset.drei); return; }
+    // In Optionslisten: zum nächsten Abschnitt springen.
+    if (el && el.dataset.absI !== undefined) {
+      const n = +el.dataset.absI + 1;
+      const ziel = fokussierbar().find((e) => +e.dataset.absI === n) || fokussierbar().find((e) => e.dataset.absI === '0');
+      if (ziel) { ton(700); setzeFokus(ziel); }
+    }
+  }
+
+  function aktion(a) {
+    const [name, arg] = a.split(/:(.*)/s);
+    if (name === 'auto') { if (!S.autos.length) btAuswahl(false); else gehe('garage'); return; }
+    if (name === 'verbinden') { btAuswahl(false); return; }
+    if (name === 'start') { if (!S.autos.length) btAuswahl(true); else cockpitStart(); return; }
+    if (name === 'alle-trennen') { S.autos = []; toast(L('Alle Autos getrennt', 'All cars disconnected')); neuZeichnen(true); return; }
+    if (name === 'trennen') { S.autos.splice(+arg, 1); S.garageWahl = 0; toast(L('Getrennt', 'Disconnected')); neuZeichnen(true); return; }
+    if (name === 'garage-wahl') { S.garageWahl = +arg; neuZeichnen(); return; }
+    if (name === 'blink') { toast(L('Auto blinkt', 'Car blinks')); return; }
+    if (name === 'laden') { S.strecke.name = S.gespeichert[+arg]; toast(L('Geladen: ', 'Loaded: ') + S.strecke.name); neuZeichnen(); return; }
+    if (name === 'loeschen') { S.gespeichert.splice(+arg, 1); toast(L('Gelöscht', 'Deleted')); neuZeichnen(true); return; }
+    if (name === 'speichern') { const n = prompt(L('Name der Strecke', 'Track name'), S.strecke.name + ' 2'); if (n) { S.gespeichert.push(n); neuZeichnen(); } return; }
+    if (name === 'toast') { toast(arg); return; }
+    if (name === 'pause') { pauseAktion(arg); return; }
+  }
+
+  // =====================================================================================
+  // DIALOGE: Bluetooth-Auswahl (simuliert), Cockpit-Menü
+  // =====================================================================================
+  function dialogAuf(html, startF) {
+    $('dialog').innerHTML = html;
+    $('schicht').hidden = false;
+    dialogOffen = { vorher: fokus };
+    const el = fokussierbar().find((e) => e.dataset.f === startF) || fokussierbar()[0];
+    setzeFokus(el);
+  }
+  function dialogZu() {
+    $('schicht').hidden = true;
+    const v = dialogOffen && dialogOffen.vorher;
+    dialogOffen = null;
+    const el = fokussierbar().find((e) => e.dataset.f === v);
+    setzeFokus(el || fokussierbar()[0], true);
+  }
+  function btAuswahl(dannStart) {
+    S.wartetAufStart = dannStart;
+    const geraete = ['HYBRID-A1B2C3', 'HYBRID-5F9E21', 'HYBRID-77D0AA'].filter((g, k) => k >= S.autos.length);
+    dialogAuf(`<h2>${L('Bluetooth · Gerät wählen', 'Bluetooth · choose device')}</h2>
+      <div class="hinweis">${L('Simuliert. In der App ist das die Auswahl von Chrome bzw. Android.', 'Simulated. In the app this is the Chrome / Android chooser.')}</div>
+      <div class="inhalt">${geraete.map((g, k) => `<button class="btn pausen-knopf" data-f="bt-${k}" data-bt="${g}">${g}</button>`).join('')}
+      <button class="btn pausen-knopf" data-f="bt-x" data-bt="">${L('Abbrechen', 'Cancel')}</button></div>`, 'bt-0');
+  }
+  function btGewaehlt(g) {
+    dialogZu();
+    if (!g) { S.wartetAufStart = false; return; }
+    const k = S.autos.length;
+    S.autos.push({ name: NAMEN[k] || 'Auto ' + (k + 1), farbe: FARBEN[k % FARBEN.length][0], rolle: k === 0 ? 0 : 2 });
+    toast(L('Verbunden: ', 'Connected: ') + NAMEN[k] + (k === 0 ? L(' · du steuerst', ' · you drive') : ' · Ghost'));
+    if (S.wartetAufStart) { S.wartetAufStart = false; cockpitStart(); return; }
+    if (aktuell === 'fahren') fokusMerk.fahren = 'k-start';
+    neuZeichnen(true);
+  }
+
+  // =====================================================================================
+  // COCKPIT (Platzhalter) und das Menü über Options halten
+  // =====================================================================================
+  let imCockpit = false, tempo = 0, gasAus = false, ampelTimer = null;
+  function cockpitStart() {
+    imCockpit = true;
+    $('cockpit').hidden = false;
+    const rt = RENNTYPEN[S.renntyp];
+    $('dash-links').innerHTML = `<span>${L('Runde', 'Lap')}</span> <b>1 / ${S.renntyp === 3 ? '∞' : S.dauer}</b><br><span>${L('Pos', 'Pos')}</span> <b>1 / ${S.autos.length}</b><br><span>${L('Reifen', 'Tyres')}</span> <b>${L('Mittel', 'Medium')}</b>`;
+    $('dash-rechts').innerHTML = `<b>${L(rt[0], rt[1])}</b><br><span>${L('Beste', 'Best')}</span> <b>–</b><br><span>${L('Tank', 'Fuel')}</span> <b>100 %</b>`;
+    $('cockpit-hinweis').innerHTML = cockpitHinweis();
+    const lampen = [...$('ampel').children];
+    lampen.forEach((l) => { l.className = ''; });
+    let n = 0;
+    clearInterval(ampelTimer);
+    ampelTimer = setInterval(() => {
+      if (n < 5) { lampen[n].className = 'rot'; ton(440); n++; return; }
+      clearInterval(ampelTimer);
+      lampen.forEach((l) => { l.className = 'gruen'; });
+      ton(880);
+      setTimeout(() => lampen.forEach((l) => { l.className = ''; }), 900);
+    }, 700);
+  }
+  function cockpitHinweis() {
+    return S.eingabe === 'pad'
+      ? L('Options 1 s halten → Menü · kurz → Boxenstopp · L1/R1 Reifen/Tank vorwählen', 'Hold Options 1 s → menu · tap → pit stop · L1/R1 preselect tyres/fuel')
+      : L('Esc → Menü · (am Controller: Options 1 s halten)', 'Esc → menu · (on the controller: hold Options 1 s)');
+  }
+  function pauseAuf() {
+    gasAus = true;
+    dialogAuf(`<h2>${L('Menü', 'Menu')}</h2><div class="hinweis">${L('Gas ist aus, solange das Menü offen ist – das Auto rollt aus. Ghosts fahren im Rennen weiter.', 'Throttle is off while the menu is open – the car rolls out. Ghosts keep racing.')}</div>
+      <div class="inhalt">${[['weiter', L('Weiterfahren', 'Continue')], ['box', L('Boxenstopp', 'Pit stop')], ['uebersicht', L('Rennübersicht', 'Race overview')],
+        ['abbrechen', L('Rennen abbrechen', 'Abort race')], ['optionen', L('Optionen', 'Options')], ['fahren', L('Zum Fahren-Menü', 'To the drive menu')], ['haupt', L('Zum Hauptmenü', 'To the main menu')]]
+        .map(([k, t]) => `<button class="btn pausen-knopf" data-f="p-${k}" data-act="pause:${k}">${t}</button>`).join('')}</div>`, 'p-weiter');
+  }
+  function pauseAktion(k) {
+    dialogZu();
+    gasAus = false;
+    if (k === 'weiter') return;
+    if (k === 'box') { toast(L('Boxenstopp angefordert', 'Pit stop requested')); return; }
+    if (k === 'uebersicht') { toast(L('Cockpit-Schirm „Rennen“', 'Cockpit screen “Race”')); return; }
+    imCockpit = false;
+    $('cockpit').hidden = true;
+    if (k === 'abbrechen') { toast(L('Rennen abgebrochen', 'Race aborted')); gehe('fahren', { ersetzen: true, fokus: 'k-start' }); return; }
+    if (k === 'optionen') { gehe('optionen'); return; }
+    stapel.length = 0;
+    if (k === 'fahren') { stapel.push('haupt'); aktuell = 'haupt'; gehe('fahren', { ersetzen: true, fokus: 'k-start' }); return; }
+    aktuell = 'titel'; gehe('haupt');
+  }
+  setInterval(() => {
+    if (!imCockpit) return;
+    const ziel = gasAus || dialogOffen ? 0 : 60 + 60 * Math.sin(Date.now() / 1700) + 40 * Math.sin(Date.now() / 530);
+    tempo += (ziel - tempo) * 0.08;
+    $('tempo').textContent = Math.max(0, Math.round(tempo));
+  }, 50);
+
+  // =====================================================================================
+  // EINGABE: Tastatur, Maus/Touch, Gamepad (Standard-Mapping, PS5)
+  // =====================================================================================
+  function eingabe(art) {
+    if (S.eingabe === art) return;
+    S.eingabe = art;
+    fussZeichnen();
+    if (imCockpit) $('cockpit-hinweis').innerHTML = cockpitHinweis();
+  }
+  function befehl(b) {
+    if (imCockpit && !dialogOffen) {
+      if (b === 'menue' || b === 'zurueck') pauseAuf();
+      return;
+    }
+    if (aktuell === 'titel' && !dialogOffen) {
+      if (b === 'links' || b === 'rechts' || b === 'l1' || b === 'r1') { S.lang = S.lang === 'de' ? 'en' : 'de'; ton(700); neuZeichnen(); return; }
+      gehe('haupt');
+      return;
+    }
+    if (b === 'oben' || b === 'unten' || b === 'links' || b === 'rechts') { bewege(b); return; }
+    if (b === 'ok') { const el = fokusEl(); if (el && el.dataset.bt !== undefined) { btGewaehlt(el.dataset.bt); return; } bestaetige(); return; }
+    if (b === 'zurueck') { zurueck(); return; }
+    if (b === 'quadrat') { quadrat(); return; }
+    if (b === 'dreieck') { dreieck(); return; }
+    if (b === 'l1') { if (!dialogOffen) reiterSchritt(-1); return; }
+    if (b === 'r1') { if (!dialogOffen) reiterSchritt(1); return; }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    const map = { arrowup: 'oben', arrowdown: 'unten', arrowleft: 'links', arrowright: 'rechts', enter: 'ok', escape: imCockpit ? 'menue' : 'zurueck',
+      backspace: 'zurueck', ' ': 'quadrat', o: 'dreieck', q: 'l1', e: 'r1' };
+    const b = map[k];
+    if (aktuell === 'titel' && !imCockpit && !dialogOffen && !b && !e.ctrlKey && !e.altKey && !e.metaKey) { eingabe('tasten'); gehe('haupt'); return; }
+    if (!b) return;
+    e.preventDefault();
+    eingabe('tasten');
+    befehl(b);
+  });
+
+  document.addEventListener('click', (e) => {
+    eingabe('maus');
+    const lang = e.target.closest('[data-lang]');
+    if (lang) { S.lang = lang.dataset.lang; neuZeichnen(); return; }
+    if (aktuell === 'titel' && !imCockpit && !dialogOffen) { gehe('haupt'); return; }
+    if (e.target.closest('#logo')) { if (!imCockpit) { stapel.length = 0; aktuell = 'titel'; gehe('haupt'); } return; }
+    if (imCockpit && !dialogOffen) { pauseAuf(); return; }
+    const pf = e.target.closest('.pf');
+    const el = e.target.closest('[data-f]');
+    if (!el) { if (dialogOffen && e.target === $('schicht')) dialogZu(); return; }
+    setzeFokus(el);
+    if (pf && el.dataset.zeile) {
+      const pfeile = [...pf.parentElement.querySelectorAll('.pf')];
+      zeileVerstellen(el.dataset.f, pfeile.indexOf(pf) === 0 ? -1 : 1);
+      return;
+    }
+    if (pf && el.dataset.quad) { quadrat(); return; }
+    if (el.dataset.bt !== undefined) { btGewaehlt(el.dataset.bt); return; }
+    bestaetige();
+  });
+  document.addEventListener('mousemove', () => eingabe('maus'), { passive: true });
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('#abschnitte [data-abs]');
+    if (!a) return;
+    const z = fokussierbar().find((x) => x.dataset.absI === a.dataset.abs);
+    if (z) setzeFokus(z);
+  }, true);
+
+  // Gamepad: Standard-Mapping (0 ✕, 1 ○, 2 □, 3 △, 4 L1, 5 R1, 9 Options, 12–15 Steuerkreuz).
+  // Wiederholung beim Halten des Steuerkreuzes: 350 ms, dann alle 120 ms.
+  const vorher = {};
+  let halteDir = null, halteSeit = 0, halteLetzt = 0, optionsSeit = 0, optionsMenue = false;
+  function padTick() {
+    const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+    const p = pads.find((x) => x.mapping === 'standard') || pads[0];
+    if (p) {
+      const gedrueckt = (i) => !!(p.buttons[i] && p.buttons[i].pressed);
+      let achse = { oben: false, unten: false, links: false, rechts: false };
+      const hat = p.axes[9];
+      if (typeof hat === 'number' && hat > -1.1 && hat < 1.1 && p.mapping !== 'standard') {
+        const st = Math.round((hat + 1) * 3.5);   // DS4 ohne Standard-Mapping: 0 oben … 7
+        if (hat < 1.05) achse = { oben: [0, 1, 7].includes(st), rechts: [1, 2, 3].includes(st), unten: [3, 4, 5].includes(st), links: [5, 6, 7].includes(st) };
+      }
+      const richt = { oben: gedrueckt(12) || achse.oben, unten: gedrueckt(13) || achse.unten, links: gedrueckt(14) || achse.links, rechts: gedrueckt(15) || achse.rechts };
+      const jetzt = performance.now();
+      const dir = Object.keys(richt).find((k) => richt[k]) || null;
+      if (dir) {
+        eingabe('pad');
+        if (dir !== halteDir) { halteDir = dir; halteSeit = jetzt; halteLetzt = jetzt; befehl(dir); }
+        else if (jetzt - halteSeit > 350 && jetzt - halteLetzt > 120) { halteLetzt = jetzt; befehl(dir); }
+      } else halteDir = null;
+      const knoepfe = { 0: 'ok', 1: 'zurueck', 2: 'quadrat', 3: 'dreieck', 4: 'l1', 5: 'r1' };
+      for (const i in knoepfe) {
+        const n = gedrueckt(+i);
+        if (n && !vorher[i]) { eingabe('pad'); if (!(imCockpit && !dialogOffen)) befehl(knoepfe[i]); else if (+i === 4 || +i === 5) toast(+i === 4 ? L('Reifen vorgewählt: Weich', 'Tyres preselected: soft') : L('Tanken vorgewählt', 'Refuel preselected')); }
+        vorher[i] = n;
+      }
+      if (aktuell === 'titel' && !imCockpit && !dialogOffen) {
+        for (let i = 6; i < p.buttons.length; i++) { const n = gedrueckt(i); if (n && !vorher['t' + i] && i !== 9 && i < 12) { eingabe('pad'); gehe('haupt'); } vorher['t' + i] = n; }
+      }
+      // Options: kurz = Boxenstopp (beim Loslassen), 1 s halten = Menü (nur im Cockpit)
+      const opt = gedrueckt(9);
+      if (opt && !vorher[9]) { optionsSeit = jetzt; optionsMenue = false; eingabe('pad'); if (aktuell === 'titel' && !imCockpit) gehe('haupt'); }
+      if (opt && imCockpit && !dialogOffen && !optionsMenue) {
+        const anteil = Math.min(1, (jetzt - optionsSeit) / 1000);
+        $('halte').style.width = Math.round(anteil * 100) + '%';
+        if (anteil >= 1) { optionsMenue = true; $('halte').style.width = '0'; pauseAuf(); }
+      }
+      if (!opt && vorher[9]) {
+        $('halte').style.width = '0';
+        if (imCockpit && !optionsMenue && !dialogOffen) toast(L('Boxenstopp angefordert', 'Pit stop requested'));
+      }
+      vorher[9] = opt;
+    }
+    requestAnimationFrame(padTick);
+  }
+  window.addEventListener('gamepadconnected', () => { eingabe('pad'); toast(L('Controller erkannt', 'Controller detected')); });
+  requestAnimationFrame(padTick);
+
+  // =====================================================================================
+  // FUSSLEISTE, GLYPHEN, TON, HINWEIS
+  // =====================================================================================
+  function glyph(n) {
+    if (S.eingabe !== 'pad') {
+      const t = { ok: 'Enter', zurueck: 'Esc', nav: '← ↑ ↓ →', l1: 'Q', r1: 'E', quadrat: 'Leer', dreieck: 'O', lr: '← →' }[n];
+      return '<span class="taste">' + (S.lang === 'en' && t === 'Leer' ? 'Space' : t) + '</span>';
+    }
+    const s = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">';
+    if (n === 'ok') return s + '<circle cx="12" cy="12" r="10.5"/><path d="M7.5 7.5l9 9M16.5 7.5l-9 9" stroke="#7fb2ff" stroke-width="2.2"/></svg>';
+    if (n === 'zurueck') return s + '<circle cx="12" cy="12" r="10.5"/><circle cx="12" cy="12" r="5" stroke="#ff6b7a" stroke-width="2.2"/></svg>';
+    if (n === 'quadrat') return s + '<circle cx="12" cy="12" r="10.5"/><rect x="7" y="7" width="10" height="10" stroke="#ff8ad8" stroke-width="2.2"/></svg>';
+    if (n === 'dreieck') return s + '<circle cx="12" cy="12" r="10.5"/><path d="M12 6.5l6 10.5H6z" stroke="#3ddc84" stroke-width="2.2"/></svg>';
+    if (n === 'nav' || n === 'lr') return s + '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></svg>';
+    if (n === 'l1' || n === 'r1') return '<span class="taste">' + n.toUpperCase() + '</span>';
+    return '';
+  }
+  function fussZeichnen() {
+    const s = SCHIRME[aktuell];
+    const el = fokusEl();
+    const teile = [];
+    teile.push([glyph('ok'), L('Bestätigen', 'Confirm')]);
+    teile.push([glyph('zurueck'), L('Zurück', 'Back')]);
+    teile.push([glyph('nav'), L('Navigieren', 'Navigate')]);
+    if (el && el.dataset.zeile) teile.push([glyph('lr'), L('Wert ändern', 'Change value')]);
+    if (el && el.dataset.quad) teile.push([glyph('quadrat'), el.dataset.quadtext || L('Wechseln', 'Switch')]);
+    if (el && el.dataset.drei) teile.push([glyph('dreieck'), el.dataset.dreitext]);
+    else if (el && el.dataset.absI !== undefined) teile.push([glyph('dreieck'), L('Nächster Abschnitt', 'Next section')]);
+    if (s && s.reiter && !dialogOffen) teile.push([glyph('l1') + glyph('r1'), L('Reiter', 'Tabs')]);
+    $('fuss').innerHTML = teile.map(([g, t]) => '<span class="h">' + g + esc(t) + '</span>').join('')
+      + '<span class="rechts">' + (S.autos.length ? '<span style="color:var(--gruen)">●</span> ' + L('Verbunden', 'Connected') : '○ ' + L('Kein Auto', 'No car'))
+      + ' · ' + { pad: 'Controller', tasten: L('Tastatur', 'Keyboard'), maus: L('Maus/Touch', 'Mouse/touch') }[S.eingabe] + '</span>';
+  }
+
+  let audio = null;
+  function ton(f) {
+    try {
+      if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, audio.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.035, audio.currentTime + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.07);
+      o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + 0.08);
+    } catch (e) { /* ohne Ton */ }
+  }
+  let toastTimer = null;
+  function toast(t) {
+    $('toast').textContent = t; $('toast').classList.add('an');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('an'), 1800);
+  }
+
+  if (/[?&]dev\b/.test(location.search)) S.dev = true;
+  window.MOCKUP = { S, gehe, befehl, get aktuell() { return aktuell; }, get fokus() { return fokus; }, stapel };
+  neuZeichnen(true);
+})();
+</script>
+</body>
+</html>

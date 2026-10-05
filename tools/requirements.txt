@@ -1,0 +1,23 @@
+# Abhaengigkeiten der Werkzeuge in diesem Ordner.
+#
+#     python -m pip install -r tools/requirements.txt
+#
+# Was OHNE diese Pakete laeuft, weil es nur die Standardbibliothek braucht:
+#
+#     build.py           index.html aus src/ bauen
+#     bump_version.py    Versionsnummer aus der Git-Historie
+#     parse_btsnoop.py   btsnoop -> HCI -> L2CAP -> ATT, von Hand geschrieben, weil
+#                        tshark und scapy hier nicht verfuegbar waren
+#     make_pattern.py    Druckvorlage aus dem Original-PDF
+#
+# Was die Klangwerkzeuge brauchen (engine_synth, engine_loops, engine_fx, engine_render,
+# pit_sounds, horn_sounds, porsche_rec, ambience):
+numpy>=1.21
+scipy>=1.7
+
+# Dazu ffmpeg als PROGRAMM im Pfad, nicht als Python-Paket: die Werkzeuge rufen es fuer
+# das Ogg-Kodieren und fuer m4a-Eingaben auf.
+#
+#     Windows:  winget install ffmpeg
+#     macOS:    brew install ffmpeg
+#     Debian:   apt install ffmpeg

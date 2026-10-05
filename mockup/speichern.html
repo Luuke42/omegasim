@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Speichersystem</title>
+<!--
+  MOCK-UP ZUM ABSEGNEN, nicht die App. BESTELLT: "mach Vorschläge für Speicherungssystem, je Menü
+  (Fahrgefühl, Tastenbelegung), mit Presets und Namen zum Speichern, etc." und (Familie) "ob es
+  nicht Sinn macht, ein globales Profil zu erstellen". Platzhalterdaten.
+-->
+<style>
+  :root { --blau: #00a3e0; --blau-text: #04070c; --grau: #3b3f48; --dim: #a3acbd; --gut: #3ddc84; --warn: #ffb400;
+    --font: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #05070c; color: #eef0f4; font-family: var(--font); font-size: 13px; }
+  main { padding: 12px 16px 40px; max-width: 1100px; margin: 0 auto; }
+  h1 { margin: 6px 0 4px; letter-spacing: .1em; text-transform: uppercase; font-size: 20px; }
+  h2 { margin: 20px 0 6px; letter-spacing: .1em; text-transform: uppercase; font-size: 15px; }
+  p { line-height: 1.45; margin: 4px 0 8px; max-width: 90ch; }
+  .muted { color: var(--dim); }
+  .ebenen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  @media (max-width: 800px) { .ebenen { grid-template-columns: 1fr; } }
+  .ebene { background: #11141b; border-top: 3px solid var(--grau); padding: 10px; }
+  .ebene.b { border-top-color: var(--blau); } .ebene.g { border-top-color: var(--gut); } .ebene.w { border-top-color: var(--warn); }
+  .ebene h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+  .ebene ul { margin: 4px 0 0 16px; padding: 0; line-height: 1.6; }
+  .schirm { background: #0c0e14; border: 1px solid rgba(255,255,255,.12); padding: 10px; display: flex; flex-direction: column; gap: 6px; max-width: 640px; }
+  .wz { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; background: #181c25; padding: 6px 9px; }
+  .wz.sel { outline: 2px solid #fff; }
+  .wz .l { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .wz .v { font-weight: 800; }
+  .pf { color: var(--blau); margin: 0 6px; }
+  .knopfreihe { display: flex; gap: 6px; flex-wrap: wrap; }
+  .knopf { background: #1d212b; border: 0; color: #fff; padding: 7px 10px; font-family: var(--font); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700; }
+  .knopf.primary { background: var(--blau); color: var(--blau-text); }
+  .stern { color: var(--warn); }
+  .geaendert { color: var(--warn); font-size: 11px; font-weight: 700; }
+  table { border-collapse: collapse; width: 100%; max-width: 900px; }
+  td, th { border-bottom: 1px solid rgba(255,255,255,.1); padding: 6px; text-align: left; vertical-align: top; }
+  th { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+</style>
+</head>
+<body>
+<main>
+<h1>Speichersystem · Vorschlag</h1>
+<p><b>Grundsatz:</b> Alles speichert sich <b>automatisch</b>, sofort beim Ändern – man muss nie „laden“. Presets und Profile sind nur dafür da, zwischen <b>benannten</b> Ständen zu wechseln. Das ist seit v0.9.6 schon so; dieser Vorschlag ordnet die Presets und ergänzt Profile.</p>
+
+<h2>Drei Ebenen</h2>
+<div class="ebenen">
+  <div class="ebene b"><h3>1 · Profil (global)</h3>
+    <p class="muted">Wer spielt? Ein Profil ist ein vollständiger Satz aller Menü-Presets.</p>
+    <ul><li>z.&nbsp;B. „Lukas“, „Kinder“, „Party“</li><li>Wechsel ganz oben in Optionen</li><li>Neues Profil = Kopie des aktuellen</li></ul></div>
+  <div class="ebene g"><h3>2 · Preset je Menü</h3>
+    <p class="muted">Ein benannter Stand für EIN Menü, unabhängig von den anderen.</p>
+    <ul><li>Fahrgefühl (heute „Eigene Abstimmung“)</li><li>Tastenbelegung (je Controller)</li><li>Ghosts</li><li>Cockpit / Ansicht</li><li>Renneinstellungen</li></ul></div>
+  <div class="ebene w"><h3>3 · Gerätedaten (immer geteilt)</h3>
+    <p class="muted">Gehören zum Gerät, nicht zu einer Person, und gelten in jedem Profil.</p>
+    <ul><li>Autos (Namen, Farben, Fotos, Rollen)</li><li>Strecken, Teilebestand, Raum</li><li>Statistiken und Rundenzeiten</li><li>Sprache, System, Mehrspieler-Host</li></ul></div>
+</div>
+
+<h2>So sähe eine Menü-Kopfzeile aus</h2>
+<p class="muted">Oben auf jeder Seite (Fahrgefühl, Tastenbelegung, Ghosts …) dieselbe Zeile, mit dem Pad bedienbar:</p>
+<div class="schirm">
+  <div class="wz sel"><span class="l">Preset Fahrgefühl</span><span class="v"><span class="pf">◀</span>Pro <span class="stern">★</span><span class="pf">▶</span> <span class="geaendert">· geändert</span></span></div>
+  <div class="knopfreihe"><button class="knopf primary">Speichern</button><button class="knopf">Speichern unter …</button><button class="knopf">Umbenennen</button><button class="knopf">Löschen</button><button class="knopf">Werkseinstellung</button></div>
+  <p class="muted" style="margin:2px 0 0">◀▶ wechselt sofort zum nächsten Preset. „geändert“ zeigt, dass du seit dem Laden etwas verstellt hast – es ist trotzdem schon gespeichert (als „zuletzt verwendet“), „Speichern“ schreibt es ins Preset zurück. ★ = Werkspreset (Arcade, Pro, …), nicht löschbar.</p>
+</div>
+
+<h2>Profilwechsel in Optionen</h2>
+<div class="schirm">
+  <div class="wz sel"><span class="l">Profil</span><span class="v"><span class="pf">◀</span>Lukas<span class="pf">▶</span></span></div>
+  <div class="knopfreihe"><button class="knopf">Neues Profil</button><button class="knopf">Umbenennen</button><button class="knopf">Löschen</button></div>
+  <p class="muted" style="margin:2px 0 0">Ein Profil merkt sich je Menü, welches Preset aktiv war – „Kinder“ fährt z.&nbsp;B. Fahrgefühl „Arcade“, Ghosts „langsam“, Tastenbelegung „Einfach“.</p>
+</div>
+
+<h2>Was wohin gehört</h2>
+<table>
+  <tr><th>Daten</th><th>Ebene</th><th>Heute</th></tr>
+  <tr><td>Fahrgefühl, Kennlinien, Physik-Modus</td><td>Preset „Fahrgefühl“</td><td>„Eigene Abstimmung“ (enthält heute fast alles)</td></tr>
+  <tr><td>Tastenbelegung</td><td>Preset „Tastenbelegung“, je Controller gemerkt</td><td>je Spieler und je Controller (seit v0.9.6)</td></tr>
+  <tr><td>Ghost-Tempo, Rennhärte, Ideallinie …</td><td>Preset „Ghosts“</td><td>im Fahrgefühl-Preset mit drin</td></tr>
+  <tr><td>Cockpit-Ansicht, Layout</td><td>Preset „Cockpit“</td><td>eigene Ablagen</td></tr>
+  <tr><td>Autos, Strecken, Statistiken</td><td>Gerätedaten</td><td>gespeichert, nicht in Presets</td></tr>
+  <tr><td>Alles zusammen</td><td>Sicherungsdatei</td><td>Dokumente/OmegaSim (App), „Sicherung speichern“</td></tr>
+</table>
+<p class="muted" style="margin-top:14px">Wenn du zustimmst, baue ich das in dieser Reihenfolge: (1) Preset-Zeile je Menü und Aufteilen der heutigen „Eigenen Abstimmung“ in Fahrgefühl / Ghosts, (2) Profile. Bestehende Presets werden übernommen.</p>
+</main>
+</body>
+</html>

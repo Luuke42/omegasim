@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="297.01mm" height="210.02mm" viewBox="0 0 297.01 210.02">
+  <!--
+    KURVE, Blatt 1 von 2. A4 QUER, 1 SVG-Einheit = 1 mm.
+
+    RADIALE BALKEN MIT KONSTANTER BOGENLAENGE AUF DER MITTELLINIE, nicht mit
+    konstantem Winkel. Bei konstantem Winkel waere das Modulmass am aeusseren
+    Rand groesser als am inneren, und der Sensor - der irgendwo zwischen beiden
+    faehrt - laese je nach Linie eine andere Folge. Konstante Bogenlaenge auf der
+    Mittellinie haelt das Modul dort genau richtig; nach aussen werden die
+    Balken breiter, nach innen schmaler. Genau so sehen die Infrarot-Aufnahmen
+    der echten Kurve auch aus.
+
+    Radius der Mittellinie 370 mm, Bahnbreite 250 mm, dieses Blatt 15 Grad.
+    Zwei Blaetter ergeben die 30-Grad-Kachel des Editors.
+
+    EXPERIMENTELL, und dasselbe gilt wie fuer die Gerade: das Wort ist das von
+    START/ZIEL (0x01), weil das Wort der RECHTSKURVE (0x04) nicht entziffert
+    ist. Diese Kurve meldet also ueberall Start/Ziel.
+  -->
+  <rect x="0" y="0" width="297.01" height="210.02" fill="#ffffff"/>
+  <g fill="#000000">
+    <path d="M 260.490 46.167 A 495.000 495.000 0 0 1 261.462 54.948 L 12.744 80.232 A 245.000 245.000 0 0 0 12.263 75.886 Z"/>
+    <path d="M 261.915 59.626 A 495.000 495.000 0 0 1 262.333 64.421 L 13.175 84.921 A 245.000 245.000 0 0 0 12.968 82.547 Z"/>
+    <path d="M 262.973 73.134 A 495.000 495.000 0 0 1 263.259 77.939 L 13.633 91.611 A 245.000 245.000 0 0 0 13.491 89.233 Z"/>
+    <path d="M 263.660 86.666 A 495.000 495.000 0 0 1 263.909 95.497 L 13.955 100.302 A 245.000 245.000 0 0 0 13.832 95.931 Z"/>
+    <path d="M 263.977 100.197 A 495.000 495.000 0 0 1 264.000 105.010 L 14.000 105.010 A 245.000 245.000 0 0 0 13.988 102.628 Z"/>
+    <path d="M 264.000 105.010 A 495.000 495.000 0 0 1 263.977 109.823 L 13.988 107.392 A 245.000 245.000 0 0 0 14.000 105.010 Z"/>
+    <path d="M 263.815 118.558 A 495.000 495.000 0 0 1 263.494 127.387 L 13.750 116.086 A 245.000 245.000 0 0 0 13.908 111.716 Z"/>
+    <path d="M 263.259 132.081 A 495.000 495.000 0 0 1 262.973 136.886 L 13.491 120.787 A 245.000 245.000 0 0 0 13.633 118.409 Z"/>
+    <path d="M 262.333 145.599 A 495.000 495.000 0 0 1 261.915 150.394 L 12.968 127.473 A 245.000 245.000 0 0 0 13.175 125.099 Z"/>
+    <path d="M 261.037 159.086 A 495.000 495.000 0 0 1 259.994 167.859 L 12.017 136.117 A 245.000 245.000 0 0 0 12.534 131.775 Z"/>
+  </g>
+  <text x="148.50" y="206.02" text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="3.0"
+        fill="#000000">Kurve, Blatt 1/2 &#183; EXPERIMENTELL, tr&#228;gt das Start/Ziel-Wort</text>
+  <g stroke="#000000" stroke-width="0.25" fill="none">
+    <path d="M 279.01 55.00 h 4"/>
+    <path d="M 279.01 155.00 h 4"/>
+    <path d="M 281.01 55.00 v 100"/>
+  </g>
+  <text x="285.01" y="105.00" text-anchor="middle" transform="rotate(90 285.01 105.00)"
+        font-family="Arial, Helvetica, sans-serif" font-size="3.0"
+        fill="#000000">100 mm senkrecht nachmessen</text>
+</svg>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>DIN A4 Barcode Target</title>
+    <style>
+        /* Definiert das exakte DIN A4 Format für den Druck */
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: white;
+            display: flex;
+            justify-content: center;
+        }
+        .a4-page {
+            width: 210mm;
+            height: 297mm;
+            background: white;
+            padding: 10mm;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .label-box {
+            border: 1px solid #ffcccc; /* Entspricht den feinen rosa Linien im Original */
+            border-radius: 4mm;
+            height: 52mm;
+            padding: 4mm 2mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
+        }
+        .bar {
+            background-color: black;
+            width: 100%;
+        }
+        /* Verschiedene Strichstärken in Anlehnung an das Bild */
+        .bar-xl { height: 6mm; }
+        .bar-l { height: 4mm; }
+        .bar-m { height: 2.5mm; }
+        .bar-s { height: 1.5mm; }
+    </style>
+</head>
+<body>
+    <div class="a4-page">
+        <!-- Block 1 -->
+        <div class="label-box">
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-s"></div>
+            <div class="bar bar-l"></div>
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-m"></div>
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-s"></div>
+        </div>
+        <!-- Block 2 -->
+        <div class="label-box">
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-s"></div>
+            <div class="bar bar-l"></div>
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-m"></div>
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-s"></div>
+        </div>
+        <!-- Block 3 -->
+        <div class="label-box">
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-s"></div>
+            <div class="bar bar-l"></div>
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-m"></div>
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-s"></div>
+        </div>
+        <!-- Block 4 -->
+        <div class="label-box">
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-s"></div>
+            <div class="bar bar-l"></div>
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-m"></div>
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-s"></div>
+        </div>
+        <!-- Block 5 -->
+        <div class="label-box">
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-s"></div>
+            <div class="bar bar-l"></div>
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-m"></div>
+            <div class="bar bar-xl"></div>
+            <div class="bar bar-s"></div>
+        </div>
+    </div>
+</body>
+</html>

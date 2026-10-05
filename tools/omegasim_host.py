@@ -1,0 +1,483 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""OmegaSim Multiplayer, Version A: ein kleines Host-Programm fuers WLAN.
+
+    python tools/omegasim_host.py                 Port 8080, dieses Verzeichnis
+    python tools/omegasim_host.py --port 9000
+    python tools/omegasim_host.py --laps 12        Rennlaenge fuer den Ueberblicksschirm
+    python tools/omegasim_host.py --minutes 8      statt Runden eine Zeit
+
+Danach:
+    Auf dem PC       http://localhost:PORT/mp-overview.html   der Ueberblicksschirm
+    Auf den Telefonen http://<IP-des-PC>:PORT/                die App
+
+EXPERIMENTELL. Nicht, weil der Code wackelt, sondern weil eine Browserregel dazwischensteht,
+die man verstehen muss, bevor man sie umgeht - siehe unten.
+
+
+DER HARTE BEFUND, DER DEN GANZEN ENTWURF BESTIMMT
+=================================================
+
+Web Bluetooth verlangt einen SECURE CONTEXT. Das sind https://, http://localhost und -
+deshalb laeuft OmegaSim von der Platte - file://.
+
+    http://192.168.x.x IST KEINER.
+
+Ein Host-Programm, das die App per HTTP ins WLAN liefert, kann sie also nicht so ausliefern,
+dass die Telefone ihr Auto verbinden koennen. Das ist eine Browserregel und keine
+Einstellungssache, und jeder Entwurf, der sie uebersieht, scheitert erst beim Verbinden -
+also nachdem alles andere schon funktioniert.
+
+ZWEI WEGE, und beide kosten eine Einrichtung je Telefon:
+
+  1. URSPRUNG EINMALIG FREIGEBEN. In Chrome auf dem Telefon
+     chrome://flags/#unsafely-treat-insecure-origin-as-secure oeffnen, dort
+     http://<IP-des-PC>:PORT eintragen, Chrome neu starten. Einmal je Telefon, danach
+     funktioniert alles ohne weiteres.
+
+     Was man dabei tut: man erklaert diesem einen Ursprung fuer vertrauenswuerdig. Im
+     Heim-WLAN mit einem PC, den man selbst betreibt, ist das vertretbar - aber es ist eine
+     Ausnahme von einer Sicherheitsregel, und deshalb steht sie hier ausgeschrieben und
+     nicht als Klickanleitung.
+
+  2. EIGENE ZERTIFIZIERUNGSSTELLE. Eine CA erzeugen, sie auf jedem Telefon installieren, der
+     Host liefert ueber https://. Aufwendiger einzurichten, danach ohne Flag. Dieses Programm
+     macht das NICHT: openssl-Aufrufe und Zertifikatsverwaltung waeren mehr Code als der
+     ganze Rest, und ein halb funktionierender Zertifikatspfad ist schlimmer als eine klare
+     Anleitung.
+
+DER UEBERBLICKSSCHIRM BRAUCHT NICHTS DAVON. Er laeuft auf http://localhost, ist damit ein
+secure context, und er braucht ohnehin kein Bluetooth. Dieser Teil funktioniert ohne
+Vorbehalt - er ist der Teil, der sofort trägt.
+
+
+WARUM HTTP UND KEIN WEBSOCKET
+=============================
+
+Der erste Entwurf hatte einen handgeschriebenen WebSocket: Handshake mit SHA-1 und Base64,
+dann Rahmen zerlegen. Das sind gut sechzig Zeilen, und jede davon kann ein Rahmenfehler sein,
+der sich als "haengt manchmal" zeigt.
+
+Gebraucht wird das nicht. Uebertragen werden Rundenzeiten, Rundenzahl und Position - eine
+Rangliste. Sie aendert sich, wenn jemand eine Runde faehrt, also alle paar Sekunden. Zweimal
+je Sekunde abzufragen ist dafuer reichlich und kostet bei vier Telefonen acht Anfragen je
+Sekunde. Ein WebSocket waere hier Technik ohne Anlass.
+
+Und ein Nebeneffekt, der wichtiger ist als die Ersparnis: eine abgerissene HTTP-Anfrage ist
+ein Fehler in EINER Abfrage. Ein abgerissener WebSocket ist ein Zustand, den man wieder
+aufbauen muss - und im WLAN unter einem Tisch mit vier Telefonen reisst er ab.
+
+
+WAS DER HOST NICHT MACHT
+========================
+
+Er rechnet KEINE Physik und haelt KEINE Bluetooth-Verbindung. Jedes Telefon hat seine eigene
+Verbindung zu seinem Auto und rechnet seine eigene Physik - das funktioniert nachgewiesen,
+und es hat die Eigenschaft, die im Wohnzimmer zaehlt: reisst das WLAN ab, faehrt jeder
+weiter. Nur die Rangliste steht dann still.
+
+Ein Host, der alle Autos selbst verbindet, waere die andere Bauform. Sie braucht bleak und
+eine zweite Physik in Python, und sie faellt komplett aus, wenn der PC hustet.
+"""
+import argparse
+import http.server
+import json
+import random
+import os
+import socket
+import socketserver
+import threading
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
+
+# ---- Der Zustand, den alle sehen -----------------------------------------------------
+#
+# EIN Schloss um alles. Der Zustand ist klein (ein Dict je Fahrer), und ein feineres
+# Sperrschema waere hier mehr Fehlerquelle als Gewinn: die Anfragen dauern Mikrosekunden.
+_lock = threading.Lock()
+_fahrer = {}            # id -> {name, laps, letzte, beste, aktualisiert, abgaenge}
+_rennen = {'start': None, 'laps': None, 'minutes': None,
+           # GEMEINSAMER START (v0.8.42): ein Telefon schickt POST /mp/race mit einem Plan
+           # (Renntyp, Wetterplan, Wind ...); der Host setzt die Startzeit in SEINER Uhr und
+           # verteilt beides ueber /mp/state. Die Logik bleibt in der App - der Host speichert
+           # und verteilt nur. Dieselbe API im Telefon-Host (HostServer.java).
+           #
+           # BEREIT-GATE (v0.8.126): das Rennen laeuft in zwei Phasen. 'bereit' zeigt allen
+           # Telefonen den Bereitschaftsschirm (Mitglieder, wer ist bereit); 'start' setzt
+           # die Startzeit, aber erst, wenn alle AUSSER dem Initiator bereit sind.
+           'id': 0, 'startAt': None, 'plan': None,
+           'phase': 'idle', 'initiator': None, 'bereit': []}
+# INFO-SCREENS (BESTELLT: "ein Geraet, das rein als Info-Screen fungiert"). Sie melden sich mit
+# /mp/state?zuschauer=<id>; solange einer da ist, schicken die Fahrer ihre Kartenpunkte mit.
+# Dieselbe Logik steht im Telefon-Host (android-app/.../HostServer.java) - beide zusammen aendern.
+_zuschauer = {}         # id -> letzter Abruf
+_strecke = {'code': ''}  # Kurzcode der Strecke, zuletzt gemeldet
+
+
+def _jetzt():
+    return time.time()
+
+
+# Host-Kennung (v0.9.2): die Renn-Nummer beginnt nach einem Neustart wieder bei 1; mit der
+# Kennung erkennt ein Telefon trotzdem, dass es ein NEUES Rennen ist.
+_BOOT = '%08x' % random.getrandbits(32)
+# Wer bei "alle bereit" zaehlt: nur, wer sich in den letzten 15 s gemeldet hat.
+AKTIV_S = 15
+
+
+def zustand_lesen(zuschauer_id=None):
+    """Die Rangliste, sortiert - und die Sortierung ist die eigentliche Entscheidung.
+
+    Gewertet wird zuerst nach RUNDENZAHL und dann nach der Zeit der letzten Ueberfahrt: wer
+    mehr Runden hat, ist vorn, und bei gleicher Rundenzahl der, der zuerst dort war. Das ist
+    dieselbe Regel wie im Rennsport, und sie hat den Vorteil, dass sie ohne Streckenposition
+    auskommt - die kennt der Host nicht.
+
+    Eine Sortierung nach BESTZEIT waere falsch: sie beantwortet "wer ist schnell", nicht "wer
+    fuehrt". Sie steht als Spalte daneben.
+    """
+    with _lock:
+        jetzt = _jetzt()
+        if zuschauer_id:
+            _zuschauer[str(zuschauer_id)[:64]] = jetzt
+        for zid in [z for z, t in _zuschauer.items() if jetzt - t > 60]:
+            del _zuschauer[zid]
+        zuschauer = sum(1 for t in _zuschauer.values() if jetzt - t < 5)
+        leute = []
+        for fid, f in _fahrer.items():
+            eintrag = {
+                'id': fid, 'name': f['name'], 'laps': f['laps'],
+                'letzte': f['letzte'], 'beste': f['beste'],
+                'abgaenge': f.get('abgaenge', 0),
+                'alter': round(_jetzt() - f['aktualisiert'], 1),
+                # Der Zeitpunkt der letzten Ueberfahrt ist das ZWEITE Sortierkriterium und
+                # muss deshalb mit ins Dict. Er stand nur im internen Zustand, und die
+                # Sortierung griff auf ein Feld, das es im gebauten Dict nicht gab - dann
+                # sortiert sie still nach einer Konstanten.
+                'letzteZeitpunkt': f.get('letzteZeitpunkt', 0),
+            }
+            if 'pos' in f:
+                eintrag['pos'] = f['pos']
+                eintrag['posAlter'] = round(jetzt - f.get('posZeit', jetzt), 3)
+            leute.append(eintrag)
+        leute.sort(key=lambda x: (-x['laps'], x['letzteZeitpunkt']))
+        rennen = dict(_rennen)
+        strecke = _strecke['code']
+    if rennen['start']:
+        rennen['laufzeit'] = round(_jetzt() - rennen['start'], 1)
+        if rennen['minutes']:
+            rennen['restSekunden'] = max(
+                0, round(rennen['minutes'] * 60 - rennen['laufzeit'], 1))
+    # zeitMs: die Host-Uhr in Millisekunden, fuer den Uhrabgleich der Telefone.
+    rennen['bereit'] = list(rennen.get('bereit') or [])
+    return {'fahrer': leute, 'rennen': rennen, 'zeit': round(_jetzt(), 1),
+            'zeitMs': int(_jetzt() * 1000), 'boot': _BOOT,
+            'zuschauer': zuschauer, 'strecke': strecke}
+
+
+def rennen_starten(daten):
+    """POST /mp/race {plan, phase, initiator, vorlaufMs}: ein gemeinsames Rennen.
+
+    phase 'bereit' (Voreinstellung): Bereitschaftsschirm auf allen Telefonen, es wird noch
+    nicht gestartet. phase 'start': Startzeit in der Host-Uhr setzen - aber nur, wenn alle
+    Fahrer AUSSER dem Initiator bereit sind.
+    """
+    plan = daten.get('plan')
+    # OHNE phase (Telefone bis v0.8.96): sofort starten wie frueher. Vorher galt "fehlt" als
+    # 'bereit' - aeltere Telefone eroeffneten dann nur eine Bereitschaftsrunde, die nie startete.
+    phase = daten.get('phase')
+    initiator = str(daten.get('initiator') or '')[:64]
+    with _lock:
+        if not isinstance(plan, dict) and phase == 'start':
+            plan = _rennen.get('plan')                     # angekuendigter Plan
+        if not isinstance(plan, dict):
+            return {'ok': False, 'fehler': 'kein Plan'}
+        jetzt_ms = int(_jetzt() * 1000)
+        if phase in (None, 'start'):
+            if phase == 'start':
+                # Alle AKTIVEN ausser dem Initiator muessen bereit sein.
+                jetzt = _jetzt()
+                nicht_bereit = [f.get('name') or fid for fid, f in _fahrer.items()
+                                if fid != initiator and fid not in _rennen['bereit']
+                                and jetzt - f.get('aktualisiert', 0) <= AKTIV_S]
+                if nicht_bereit:
+                    return {'ok': False, 'fehler': 'nicht alle bereit: ' + ', '.join(nicht_bereit)}
+            try:
+                vorlauf = int(daten.get('vorlaufMs') or 12000)
+            except (TypeError, ValueError):
+                vorlauf = 12000
+            vorlauf = max(6000, min(30000, vorlauf))
+            _rennen['id'] = int(_rennen.get('id') or 0) + 1
+            _rennen['startAt'] = jetzt_ms + vorlauf
+            _rennen['plan'] = plan
+            _rennen['start'] = _rennen['startAt'] / 1000.0
+            _rennen['phase'] = 'start'
+            _rennen['bereit'] = []
+            # Neues Rennen: Runden und Zeiten aller auf null, die Fahrer bleiben stehen.
+            for f in _fahrer.values():
+                f['laps'] = 0
+                f['letzte'] = None
+                f['beste'] = None
+                f['letzteZeitpunkt'] = _jetzt()
+            return {'ok': True, 'id': _rennen['id'], 'startAt': _rennen['startAt'],
+                    'zeitMs': jetzt_ms, 'plan': plan}
+        # phase == 'bereit': nur den Schirm ankündigen, noch keine Startzeit.
+        _rennen['id'] = int(_rennen.get('id') or 0) + 1
+        _rennen['plan'] = plan
+        _rennen['phase'] = 'bereit'
+        _rennen['initiator'] = initiator
+        _rennen['bereit'] = []
+        _rennen['startAt'] = None
+        _rennen['start'] = None
+        return {'ok': True, 'id': _rennen['id'], 'zeitMs': jetzt_ms}
+
+
+def rennen_abbrechen():
+    """POST /mp/race/cancel: nur die Bereitschaftsrunde beenden, Fahrer und Wertung bleiben."""
+    with _lock:
+        if _rennen.get('phase') == 'bereit':
+            _rennen['phase'] = 'idle'
+            _rennen['plan'] = None
+            _rennen['initiator'] = None
+            _rennen['bereit'] = []
+    return {'ok': True}
+
+
+def abmelden(daten):
+    """POST /mp/leave {id}: dieses Telefon ist raus."""
+    fid = str(daten.get('id') or '')[:64]
+    with _lock:
+        _fahrer.pop(fid, None)
+        if fid in _rennen['bereit']:
+            _rennen['bereit'].remove(fid)
+    return {'ok': True}
+
+
+def bereit_maelden(daten):
+    """POST /mp/ready {id}: dieses Telefon ist bereit."""
+    fid = str(daten.get('id') or '')[:64]
+    if not fid:
+        return {'ok': False, 'fehler': 'keine Kennung'}
+    with _lock:
+        if fid not in _rennen['bereit']:
+            _rennen['bereit'].append(fid)
+    return {'ok': True}
+
+
+def melden(daten):
+    """Ein Telefon meldet seinen Stand. Alles optional ausser der Kennung."""
+    fid = str(daten.get('id') or '')[:64]
+    if not fid:
+        return {'ok': False, 'fehler': 'keine Kennung'}
+    with _lock:
+        f = _fahrer.setdefault(fid, {'name': fid, 'laps': 0, 'letzte': None,
+                                     'beste': None, 'abgaenge': 0,
+                                     'aktualisiert': _jetzt()})
+        if 'name' in daten:
+            f['name'] = str(daten['name'])[:40]
+        if 'laps' in daten:
+            try:
+                neu = int(daten['laps'])
+                # Der Gleichstand gilt der letzten RUNDE, nicht dem letzten Bericht: sonst
+                # gewinnt, wer zuletzt ein Lebenszeichen oder eine Position geschickt hat.
+                if neu != f['laps'] or 'letzteZeitpunkt' not in f:
+                    f['letzteZeitpunkt'] = _jetzt()
+                f['laps'] = neu
+            except (TypeError, ValueError):
+                pass
+        for k in ('letzte', 'beste'):
+            if k in daten and daten[k] is not None:
+                try:
+                    f[k] = round(float(daten[k]), 3)
+                except (TypeError, ValueError):
+                    pass
+        if 'abgaenge' in daten:
+            try:
+                f['abgaenge'] = int(daten['abgaenge'])
+            except (TypeError, ValueError):
+                pass
+        if isinstance(daten.get('pos'), list):
+            f['pos'] = daten['pos'][:8]
+            f['posZeit'] = _jetzt()
+        code = daten.get('strecke')
+        if isinstance(code, str) and code:
+            _strecke['code'] = code[:400]
+        f.setdefault('letzteZeitpunkt', _jetzt())
+        f['aktualisiert'] = _jetzt()
+        # Der ERSTE Bericht startet die Uhr. Ein eigener Startknopf waere ein zweiter Ort,
+        # an dem ein Rennen beginnt - und dann laufen die beiden auseinander.
+        if _rennen['start'] is None:
+            _rennen['start'] = _jetzt()
+    return {'ok': True}
+
+
+def zuruecksetzen():
+    with _lock:
+        _fahrer.clear()
+        _rennen['start'] = None
+        _rennen['startAt'] = None
+        _rennen['plan'] = None
+        _rennen['phase'] = 'idle'
+        _rennen['initiator'] = None
+        _rennen['bereit'] = []
+    return {'ok': True}
+
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *a, **kw):
+        super().__init__(*a, directory=REPO, **kw)
+
+    # Ruhiger Log: eine Zeile je Sekunde bei 2 Hz Abfrage und vier Telefonen waere acht
+    # Zeilen je Sekunde, und dann sieht man die echten Meldungen nicht mehr.
+    def log_message(self, fmt, *args):
+        if self.path.startswith('/mp/'):
+            return
+        super().log_message(fmt, *args)
+
+    def _cors(self):
+        """Die Kopfzeilen, ohne die Mehrspieler nur vom Host selbst aus geht.
+
+        WARUM DAS NOETIG IST, und es war der Grund, warum "Mitmachen" von anderswo
+        scheiterte: die App meldet mit Content-Type: application/json. Das ist KEINE
+        einfache Anfrage im Sinne der Gleiche-Herkunft-Regel, der Browser schickt also
+        zuerst einen Vorabflug (OPTIONS) - und SimpleHTTPRequestHandler beantwortet den mit
+        501. Der POST kam nie an.
+
+        Sichtbar war davon nichts: der Meldeaufruf faengt seine Fehler ab (catch(e){}), und
+        das Abholen meldete nur "kein Kontakt zum Host". Wer die App vom Host selbst geladen
+        hatte, merkte nichts - gleiche Herkunft, kein Vorabflug.
+
+        Ein Stern als erlaubte Herkunft ist hier richtig und keine Nachlaessigkeit: der
+        Dienst hat keine Anmeldung, keine Sitzung und keine Geheimnisse. Er traegt eine
+        Rangliste, die ohnehin jeder im Netz sehen soll.
+        """
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        # Damit der Browser den Vorabflug nicht vor jedem Bericht wiederholt. Zehn Minuten
+        # sind mehr als ein Rennen dauert.
+        self.send_header('Access-Control-Max-Age', '600')
+
+    def _json(self, obj, code=200):
+        roh = json.dumps(obj, ensure_ascii=False).encode('utf-8')
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(roh)))
+        # Kein Zwischenspeichern: eine gecachte Rangliste ist keine Rangliste.
+        self.send_header('Cache-Control', 'no-store')
+        self._cors()
+        self.end_headers()
+        self.wfile.write(roh)
+
+    def do_OPTIONS(self):
+        """Der Vorabflug. Ohne ihn antwortet die Grundklasse mit 501."""
+        self.send_response(204)
+        self.send_header('Content-Length', '0')
+        self._cors()
+        self.end_headers()
+
+    def do_GET(self):
+        if self.path.startswith('/mp/state'):
+            from urllib.parse import urlparse, parse_qs
+            z = parse_qs(urlparse(self.path).query).get('zuschauer', [None])[0]
+            self._json(zustand_lesen(z))
+            return
+        if self.path.startswith('/mp/reset'):
+            self._json(zuruecksetzen())
+            return
+        if self.path.startswith('/mp/info'):
+            self._json({'rennen': dict(_rennen), 'adresse': eigene_adresse()})
+            return
+        super().do_GET()
+
+    def do_POST(self):
+        if not (self.path.startswith('/mp/report') or self.path.startswith('/mp/race')
+                or self.path.startswith('/mp/ready') or self.path.startswith('/mp/leave')):
+            self.send_error(404)
+            return
+        try:
+            n = int(self.headers.get('Content-Length') or 0)
+            if n > 16384:
+                self._json({'ok': False, 'fehler': 'zu gross'}, 413)
+                return
+            daten = json.loads(self.rfile.read(n).decode('utf-8'))
+        except Exception as e:
+            self._json({'ok': False, 'fehler': str(e)}, 400)
+            return
+        if self.path.startswith('/mp/race/cancel'):
+            self._json(rennen_abbrechen())
+            return
+        if self.path.startswith('/mp/race'):
+            self._json(rennen_starten(daten))
+            return
+        if self.path.startswith('/mp/leave'):
+            self._json(abmelden(daten))
+            return
+        if self.path.startswith('/mp/ready'):
+            self._json(bereit_maelden(daten))
+            return
+        self._json(melden(daten))
+
+
+class Server(socketserver.ThreadingTCPServer):
+    # Ohne das haengt der Port nach einem Neustart in TIME_WAIT und der zweite Start
+    # scheitert - genau in dem Moment, in dem man schnell etwas ausprobieren will.
+    allow_reuse_address = True
+    daemon_threads = True
+
+
+def eigene_adresse():
+    """Die IP, unter der die Telefone den PC erreichen.
+
+    Ueber einen UDP-Socket zu einer Adresse ausserhalb, OHNE etwas zu senden: das Betriebs-
+    system waehlt dabei die Schnittstelle, die es fuer den Weg nach draussen nehmen wuerde,
+    und genau die ist die richtige. gethostbyname(gethostname()) liefert auf vielen Rechnern
+    127.0.0.1 oder die Adresse eines VPN-Adapters.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1))
+        return s.getsockname()[0]
+    except Exception:
+        return '127.0.0.1'
+    finally:
+        s.close()
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split(chr(10))[0])
+    ap.add_argument('--port', type=int, default=8080)
+    ap.add_argument('--laps', type=int, default=None, help='Rennlaenge in Runden')
+    ap.add_argument('--minutes', type=float, default=None, help='Rennlaenge in Minuten')
+    a = ap.parse_args()
+    _rennen['laps'] = a.laps
+    _rennen['minutes'] = a.minutes
+
+    ip = eigene_adresse()
+    print('OmegaSim Host laeuft.')
+    print('')
+    print('  Ueberblicksschirm auf DIESEM PC:')
+    print('    http://localhost:%d/mp-overview.html' % a.port)
+    print('')
+    print('  Die App auf den Telefonen:')
+    print('    http://%s:%d/' % (ip, a.port))
+    print('')
+    print('  ACHTUNG, einmal je Telefon: Web Bluetooth braucht einen secure context, und')
+    print('  http://%s:%d ist keiner. In Chrome auf dem Telefon' % (ip, a.port))
+    print('    chrome://flags/#unsafely-treat-insecure-origin-as-secure')
+    print('  oeffnen, dort http://%s:%d eintragen und Chrome neu starten.' % (ip, a.port))
+    print('  Ohne das laedt die App, aber "Auto verbinden" bleibt ohne Wirkung.')
+    print('')
+    print('  Beenden mit Strg+C.')
+    print('')
+    with Server(('', a.port), Handler) as srv:
+        try:
+            srv.serve_forever()
+        except KeyboardInterrupt:
+            print(chr(10) + 'beendet.')
+
+
+if __name__ == '__main__':
+    main()

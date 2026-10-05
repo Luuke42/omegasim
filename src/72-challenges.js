@@ -295,8 +295,9 @@
     if (c) return c;
     // Community-Strecke als Challenge fahren: die Strecke wird aus dem eingereichten Code
     // aufgebaut, ein Lauf mit Ampel, Wertung nach erkannten Teilen.
-    const d = communityLesen();
-    const tr = d.tracks.find((t) => t.id === id);
+    // Direkt nach Kennung, ohne Zusammenfuehrung: chDef laeuft auch im Fahrtakt.
+    let tr = communityLesen().tracks.find((t) => t.id === id);
+    if (!tr && communityOnline) tr = communityOnline.tracks.find((t) => t.id === id);
     if (tr) return { id: tr.id, code: tr.code, name: tr.name, runden: 1, pit: 0, wx: null, community: true };
     return CHALLENGES[0];
   }
@@ -549,6 +550,79 @@
   function communitySchreiben(d) {
     try { localStorage.setItem(COMMUNITY_STORE, JSON.stringify(d)); } catch (e) { /* privat */ }
   }
+  // ---- GETEILT UEBER DAS SHEET (v0.9.10) ----
+  // BESTELLT: die Community-Strecken sollen fuer alle sichtbar sein - vorher lagen sie nur auf
+  // dem eigenen Geraet. Das Apps Script der Challenges fuehrt dafuer zwei Blaetter (Community,
+  // CommunityZeiten). Die Liste wird hoechstens alle 2 Minuten geholt und mit den eigenen,
+  // lokalen Daten zusammengefuehrt; ohne Netz bleibt alles wie bisher lokal. Eigene Strecken,
+  // die online noch fehlen, werden beim naechsten Abgleich eingereicht.
+  let communityOnline = null, communityOnlineAt = 0, communityHolt = false, communityFehler = false;
+  function communityUrl() { const o = chOnline(); return o && o.url ? o.url : ''; }
+  function communityPost(eintrag) {
+    const url = communityUrl();
+    if (!url) return Promise.resolve(null);
+    const senden = (versuch) => fetch(url, { method: 'POST', body: JSON.stringify(Object.assign({ geraet: chGeraet() }, eintrag)) })
+      .then((r) => r.json())
+      .catch((e) => (versuch < 2 ? new Promise((ok) => setTimeout(ok, 1500)).then(() => senden(versuch + 1)) : null));
+    return senden(0);
+  }
+  function communityHolen(frisch) {
+    const url = communityUrl();
+    if (!url || communityHolt) return Promise.resolve(communityOnline);
+    if (!frisch && communityOnline && Date.now() - communityOnlineAt < 120000) return Promise.resolve(communityOnline);
+    communityHolt = true;
+    const holen = () => fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'community=1').then((r) => r.json());
+    return holen().catch(() => new Promise((ok) => setTimeout(ok, 1200)).then(holen))
+      .then((j) => {
+        if (j && j.ok && Array.isArray(j.tracks)) { communityOnline = j; communityOnlineAt = Date.now(); communityFehler = false; }
+        else { communityFehler = true; communityOnlineAt = Date.now(); }
+        return communityOnline;
+      })
+      .catch(() => { communityFehler = true; communityOnlineAt = Date.now(); return communityOnline; })
+      .then((j) => { communityHolt = false; return j; });
+  }
+  // Online-Liste + lokale Daten zu EINER Sicht. Online-Strecken haben ihre Server-Kennung; eine
+  // lokale Strecke, die (auch gespiegelt) online schon steht, wird unter deren Kennung gefuehrt.
+  function communitySicht() {
+    const lokal = communityLesen();
+    const on = communityOnline;
+    if (!on) return lokal;
+    const sicht = { tracks: [], times: {}, nextId: lokal.nextId, online: true };
+    for (const tr of on.tracks) {
+      sicht.tracks.push({ id: tr.id, code: tr.code, name: tr.name, online: true });
+      sicht.times[tr.id] = (on.zeiten[tr.id] || []).map((z) => ({ zeit: z.zeit_ms, fahrer: z.fahrer || '', geraet: z.geraet,
+        datum: Date.parse(z.zeitpunkt) || 0 }));
+    }
+    for (const tr of lokal.tracks) {
+      const p = codeToTrack(tr.code);
+      const gleich = p ? sicht.tracks.find((x) => { const q = codeToTrack(x.code); return q && communityGleiche(p.tiles, q.tiles); }) : null;
+      const ziel = gleich ? gleich.id : tr.id;
+      if (!gleich) sicht.tracks.push({ id: tr.id, code: tr.code, name: tr.name, online: false });
+      const liste = sicht.times[ziel] = sicht.times[ziel] || [];
+      for (const z of (lokal.times[tr.id] || [])) {
+        if (!liste.some((x) => x.geraet === z.geraet && Math.abs(x.zeit - z.zeit) < 2)) liste.push(z);
+      }
+      liste.sort((a, b) => a.zeit - b.zeit);
+    }
+    return sicht;
+  }
+  // Lokale Strecken, die online fehlen, einreichen; ihre Zeiten hinterher. Laeuft still.
+  function communityAbgleichen() {
+    if (!communityOnline) return;
+    const lokal = communityLesen();
+    const fehlen = lokal.tracks.filter((tr) => {
+      const p = codeToTrack(tr.code);
+      return p && !communityOnline.tracks.some((x) => { const q = codeToTrack(x.code); return q && communityGleiche(p.tiles, q.tiles); });
+    });
+    fehlen.slice(0, 3).forEach((tr, i) => setTimeout(() => {
+      communityPost({ art: 'community-strecke', code: tr.code, name: tr.name }).then((r) => {
+        if (!r || !r.ok || !r.id) return;
+        const meine = (lokal.times[tr.id] || []).filter((z) => z.geraet === chGeraet());
+        if (meine.length) setTimeout(() => communityPost({ art: 'community-zeit', id: r.id, zeit_ms: meine[0].zeit, fahrer: meine[0].fahrer }), 11000);
+        communityHolen(true).then(() => { if ($('community-bereich')) communityZeichnen(); });
+      });
+    }, i * 11000));
+  }
   function communityCode(tiles) { return trackToCode(tiles, 0); }
   // Zwei Strecken sind dieselbe, wenn ihr Code gleich ist ODER die eine das Spiegelbild der
   // anderen ist (Reihenfolge umkehren + links/rechts tauschen, wie chSpiegelTiles).
@@ -610,8 +684,18 @@
   function communityZeichnen() {
     const bereich = $('community-bereich');
     if (!bereich) return;
-    const data = communityLesen();
+    // Online-Liste im Hintergrund holen; sobald sie da ist, noch einmal zeichnen.
+    if (communityUrl() && (!communityOnline || Date.now() - communityOnlineAt > 120000) && !communityHolt) {
+      communityHolen(false).then((j) => { if (j) communityAbgleichen(); communityZeichnen(); });
+    }
+    const data = communitySicht();
     bereich.innerHTML = '';
+    const stand = document.createElement('p');
+    stand.className = 'muted community-stand';
+    stand.setAttribute('data-i18n-skip', '');
+    stand.textContent = data.online ? t('Gemeinsame Liste: {n} Strecken.').replace('{n}', data.tracks.length)
+      : (communityUrl() ? (communityFehler ? t('Gemeinsame Liste nicht erreichbar, hier deine eigenen Strecken.') : t('Lade die gemeinsame Liste …'))
+         : t('Nur auf diesem Gerät (keine Online-Adresse eingestellt).'));
     const ein = document.createElement('button');
     ein.className = 'primary';
     ein.textContent = t('Eigene Strecke einreichen');
@@ -630,14 +714,22 @@
         t('So sieht deine Strecke aus. Bitte prüfe das Bild, dann wird sie eingereicht.'),
         [[t('Einreichen'), () => {
            const name = prompt(t('Name der Strecke'), '') || 'Strecke ' + String(data.nextId || 1).padStart(4, '0');
-           const id = communityEinreichen(data, currentTrackTiles, name);
-           communitySchreiben(data);
-           showHudToast(t('Strecke {n} eingereicht.').replace('{n}', id));
+           // Gibt es sie online schon (auch gespiegelt)? Dann nur deren Kennung nehmen.
+           const schon = data.online ? data.tracks.find((x) => { const q = codeToTrack(x.code); return q && communityGleiche(currentTrackTiles, q.tiles); }) : null;
+           if (schon) { showHudToast(t('Diese Strecke gibt es schon: {n}').replace('{n}', schon.id + ' · ' + schon.name)); return; }
+           const lokal = communityLesen();
+           const id = communityEinreichen(lokal, currentTrackTiles, name);
+           communitySchreiben(lokal);
+           communityPost({ art: 'community-strecke', code: communityCode(currentTrackTiles), name }).then((r) => {
+             showHudToast(r && r.ok ? t('Strecke {n} für alle eingereicht.').replace('{n}', r.id) : t('Strecke {n} eingereicht (nur auf diesem Gerät).').replace('{n}', id));
+             communityHolen(true).then(() => communityZeichnen());
+           });
            communityZeichnen();
          }],
          [t('Abbrechen'), null]], true, vorschau);
     };
     bereich.appendChild(ein);
+    bereich.appendChild(stand);
     const liste = communitySortiert(data);
     if (!liste.length) {
       const p = document.createElement('p');
@@ -651,9 +743,20 @@
     for (const tr of liste) {
       const row = document.createElement('div');
       row.className = 'community-zeile';
+      // BESTELLT: "community strecken: layout in der vorschau zeigen".
+      const mini = document.createElement('span');
+      mini.className = 'community-mini';
+      mini.setAttribute('aria-hidden', 'true');
+      try {
+        const p = codeToTrack(tr.code);
+        if (p) { const merk = trackRotationDeg; trackRotationDeg = 0; try { mini.innerHTML = renderTrackPreview(p.tiles, null, {}).html; } finally { trackRotationDeg = merk; } }
+      } catch (e) { /* ohne Bild */ }
+      row.appendChild(mini);
       const links = document.createElement('div');
+      links.className = 'community-text';
       const b = document.createElement('b');
-      b.textContent = tr.id + ' \u00b7 ' + tr.name;
+      b.setAttribute('data-i18n-skip', '');
+      b.textContent = tr.id + ' \u00b7 ' + tr.name + (tr.online === false && data.online ? ' (' + t('nur hier') + ')' : '');
       const best = communityBesteZeit(data, tr.id);
       const spieler = communitySpieler(data, tr.id);
       const em = document.createElement('em');
@@ -1026,7 +1129,9 @@
       // ist dieselbe Challenge-Maschinerie.
       if (lauf.community) {
         communityZeit(communityLesen(), erg.id, erg.zeit, erg.fahrer);
-        hochgeladen = true;
+        hochgeladen = communityPost({ art: 'community-zeit', id: erg.id, zeit_ms: Math.round(erg.zeit), fahrer: erg.fahrer || '' })
+          .then((r) => { hochgeladen = !!(r && r.ok); communityHolen(true).then(() => communityZeichnen()); return hochgeladen; })
+          .catch(() => { hochgeladen = false; return false; });
         communityZeichnen();
       } else {
         chLokalSpeichern(erg);
@@ -1382,6 +1487,7 @@
       // Erreichter Rang (Medaille + Perzentil) auf der Uebersicht.
       const rang = kachel.querySelector('.ch-k-rang');
       if (rang) rang.innerHTML = chRangKachelText(chKachelRang(def));
+      chErgebnisseZeigen(kachel, def.id);
     });
     chDauerKachelnZeichnen();
   }
@@ -1399,6 +1505,7 @@
       if (woche) woche.textContent = t('Dauerrennen');
       const rang = kachel.querySelector('.ch-k-rang');
       if (rang) rang.innerHTML = chRangKachelText(chKachelRang(def));
+      chErgebnisseZeigen(kachel, def.id);
     });
   }
   // BESTELLT: "ein 'beliebteste Strecke'-Banner auf die Challenge mit den meisten Spielern".
@@ -1406,6 +1513,23 @@
   // Strecke|Modus|Preset); ein Spieler kann mehrere Eintraege haben, naeher kommen wir ohne
   // eigene Spieler-Statistik nicht. Die Rechnung laeuft im Hintergrund und setzt das Banner.
   let chBeliebtesteId = null;
+  // Ergebnisse je Strecke (alle Modi/Presets), aus demselben Schnappschuss. BESTELLT: "zeig bei
+  // den woechentlichen Challenges an, wie viele Spieler jeweils Zeiten beigetragen haben
+  // (einfach nur darunter: 'X Ergebnisse')".
+  let chErgebnisse = null;
+  function chErgebnisseZeigen(kachel, id) {
+    let em = kachel.querySelector('.ch-k-anzahl');
+    if (!em) {
+      em = document.createElement('em');
+      em.className = 'ch-k-anzahl';
+      em.setAttribute('data-i18n-skip', '');
+      const nach = kachel.querySelector('.ch-k-woche');
+      if (nach && nach.nextSibling) kachel.insertBefore(em, nach.nextSibling); else kachel.appendChild(em);
+    }
+    const n = chErgebnisse ? (chErgebnisse[id] || 0) : null;
+    em.hidden = n === null;
+    em.textContent = n === 1 ? t('1 Ergebnis') : t('{n} Ergebnisse').replace('{n}', n);
+  }
   function chBeliebteste() {
     chSchnappschuss().then((j) => {
       if (!j || !j.listen) return;
@@ -1424,6 +1548,7 @@
       let best = null;
       ids.forEach((id) => { if (summe[id] > 0 && (best === null || summe[id] > summe[best])) best = id; });
       chBeliebtesteId = best;
+      chErgebnisse = summe;
       chKachelnZeichnen();
     }).catch(() => { /* ohne Schnappschuss kein Banner */ });
   }

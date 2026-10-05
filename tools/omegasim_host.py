@@ -82,6 +82,7 @@ eine zweite Physik in Python, und sie faellt komplett aus, wenn der PC hustet.
 import argparse
 import http.server
 import json
+import random
 import os
 import socket
 import socketserver
@@ -117,6 +118,13 @@ _strecke = {'code': ''}  # Kurzcode der Strecke, zuletzt gemeldet
 
 def _jetzt():
     return time.time()
+
+
+# Host-Kennung (v0.9.2): die Renn-Nummer beginnt nach einem Neustart wieder bei 1; mit der
+# Kennung erkennt ein Telefon trotzdem, dass es ein NEUES Rennen ist.
+_BOOT = '%08x' % random.getrandbits(32)
+# Wer bei "alle bereit" zaehlt: nur, wer sich in den letzten 15 s gemeldet hat.
+AKTIV_S = 15
 
 
 def zustand_lesen(zuschauer_id=None):
@@ -163,8 +171,9 @@ def zustand_lesen(zuschauer_id=None):
             rennen['restSekunden'] = max(
                 0, round(rennen['minutes'] * 60 - rennen['laufzeit'], 1))
     # zeitMs: die Host-Uhr in Millisekunden, fuer den Uhrabgleich der Telefone.
+    rennen['bereit'] = list(rennen.get('bereit') or [])
     return {'fahrer': leute, 'rennen': rennen, 'zeit': round(_jetzt(), 1),
-            'zeitMs': int(_jetzt() * 1000),
+            'zeitMs': int(_jetzt() * 1000), 'boot': _BOOT,
             'zuschauer': zuschauer, 'strecke': strecke}
 
 
@@ -176,18 +185,25 @@ def rennen_starten(daten):
     Fahrer AUSSER dem Initiator bereit sind.
     """
     plan = daten.get('plan')
-    if not isinstance(plan, dict):
-        return {'ok': False, 'fehler': 'kein Plan'}
-    phase = daten.get('phase', 'bereit')
+    # OHNE phase (Telefone bis v0.8.96): sofort starten wie frueher. Vorher galt "fehlt" als
+    # 'bereit' - aeltere Telefone eroeffneten dann nur eine Bereitschaftsrunde, die nie startete.
+    phase = daten.get('phase')
     initiator = str(daten.get('initiator') or '')[:64]
     with _lock:
+        if not isinstance(plan, dict) and phase == 'start':
+            plan = _rennen.get('plan')                     # angekuendigter Plan
+        if not isinstance(plan, dict):
+            return {'ok': False, 'fehler': 'kein Plan'}
         jetzt_ms = int(_jetzt() * 1000)
-        if phase == 'start':
-            # Alle ausser dem Initiator muessen bereit sein.
-            nicht_bereit = [fid for fid in _fahrer
-                            if fid != initiator and fid not in _rennen['bereit']]
-            if nicht_bereit:
-                return {'ok': False, 'fehler': 'nicht alle bereit: ' + ', '.join(nicht_bereit)}
+        if phase in (None, 'start'):
+            if phase == 'start':
+                # Alle AKTIVEN ausser dem Initiator muessen bereit sein.
+                jetzt = _jetzt()
+                nicht_bereit = [f.get('name') or fid for fid, f in _fahrer.items()
+                                if fid != initiator and fid not in _rennen['bereit']
+                                and jetzt - f.get('aktualisiert', 0) <= AKTIV_S]
+                if nicht_bereit:
+                    return {'ok': False, 'fehler': 'nicht alle bereit: ' + ', '.join(nicht_bereit)}
             try:
                 vorlauf = int(daten.get('vorlaufMs') or 12000)
             except (TypeError, ValueError):
@@ -198,8 +214,15 @@ def rennen_starten(daten):
             _rennen['plan'] = plan
             _rennen['start'] = _rennen['startAt'] / 1000.0
             _rennen['phase'] = 'start'
+            _rennen['bereit'] = []
+            # Neues Rennen: Runden und Zeiten aller auf null, die Fahrer bleiben stehen.
+            for f in _fahrer.values():
+                f['laps'] = 0
+                f['letzte'] = None
+                f['beste'] = None
+                f['letzteZeitpunkt'] = _jetzt()
             return {'ok': True, 'id': _rennen['id'], 'startAt': _rennen['startAt'],
-                    'zeitMs': jetzt_ms}
+                    'zeitMs': jetzt_ms, 'plan': plan}
         # phase == 'bereit': nur den Schirm ankündigen, noch keine Startzeit.
         _rennen['id'] = int(_rennen.get('id') or 0) + 1
         _rennen['plan'] = plan
@@ -209,6 +232,27 @@ def rennen_starten(daten):
         _rennen['startAt'] = None
         _rennen['start'] = None
         return {'ok': True, 'id': _rennen['id'], 'zeitMs': jetzt_ms}
+
+
+def rennen_abbrechen():
+    """POST /mp/race/cancel: nur die Bereitschaftsrunde beenden, Fahrer und Wertung bleiben."""
+    with _lock:
+        if _rennen.get('phase') == 'bereit':
+            _rennen['phase'] = 'idle'
+            _rennen['plan'] = None
+            _rennen['initiator'] = None
+            _rennen['bereit'] = []
+    return {'ok': True}
+
+
+def abmelden(daten):
+    """POST /mp/leave {id}: dieses Telefon ist raus."""
+    fid = str(daten.get('id') or '')[:64]
+    with _lock:
+        _fahrer.pop(fid, None)
+        if fid in _rennen['bereit']:
+            _rennen['bereit'].remove(fid)
+    return {'ok': True}
 
 
 def bereit_maelden(daten):
@@ -350,7 +394,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         if not (self.path.startswith('/mp/report') or self.path.startswith('/mp/race')
-                or self.path.startswith('/mp/ready')):
+                or self.path.startswith('/mp/ready') or self.path.startswith('/mp/leave')):
             self.send_error(404)
             return
         try:
@@ -362,8 +406,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self._json({'ok': False, 'fehler': str(e)}, 400)
             return
+        if self.path.startswith('/mp/race/cancel'):
+            self._json(rennen_abbrechen())
+            return
         if self.path.startswith('/mp/race'):
             self._json(rennen_starten(daten))
+            return
+        if self.path.startswith('/mp/leave'):
+            self._json(abmelden(daten))
             return
         if self.path.startswith('/mp/ready'):
             self._json(bereit_maelden(daten))

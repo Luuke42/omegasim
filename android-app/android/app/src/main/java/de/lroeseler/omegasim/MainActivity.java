@@ -62,6 +62,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(OmegaUpdatePlugin.class);
         registerPlugin(OmegaHostPlugin.class);
         registerPlugin(OmegaBlePlugin.class);
+        registerPlugin(OmegaSicherungPlugin.class);
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (Build.VERSION.SDK_INT >= 28) {

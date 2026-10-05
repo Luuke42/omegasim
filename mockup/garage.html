@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Garage aufräumen</title>
+<!--
+  MOCK-UP ZUM ABSEGNEN, nicht die App. BESTELLT: "schaue alle Buttons an und wie die angewählt
+  werden. Die Steuerkreuzrichtungen sollten intuitiv sein. Buttons sollten lieber einspaltig
+  sein, Dropdowns mit weniger als 5 Optionen lieber mit Durchschaltmöglichkeit, Garage-Menü
+  aufräumen (ggf. erstmal 2 Vorschläge als HTML-Mockup)". Zwei Vorschläge, Platzhalterdaten.
+-->
+<style>
+  :root { --blau: #00a3e0; --blau-text: #04070c; --grau: #3b3f48; --weiss: #f3f4f6; --tinte: #0b0c10;
+    --dim: #a3acbd; --gut: #3ddc84; --rot: #ff2b5e; --warn: #ffb400;
+    --font: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+    color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #05070c; color: #eef0f4; font-family: var(--font); font-size: 13px; }
+  main { padding: 12px 16px 40px; max-width: 1240px; margin: 0 auto; }
+  h1 { margin: 6px 0 4px; letter-spacing: .1em; text-transform: uppercase; font-size: 20px; }
+  h2 { margin: 18px 0 6px; letter-spacing: .1em; text-transform: uppercase; font-size: 15px; }
+  p { line-height: 1.45; margin: 4px 0 8px; max-width: 90ch; }
+  .muted { color: var(--dim); }
+  .wip { background: var(--warn); color: #1a1100; font-size: 10px; font-weight: 800; padding: 0 5px; margin-left: 6px; }
+  .vars { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .vars { grid-template-columns: 1fr; } }
+  .schirm { background: #0c0e14; border: 1px solid rgba(255,255,255,.12); padding: 10px; min-height: 300px; display: flex; flex-direction: column; gap: 8px; }
+  .kopf { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.1); padding-bottom: 6px; }
+  .kopf b { letter-spacing: .12em; text-transform: uppercase; }
+  .hint { font-size: 11px; color: var(--dim); }
+  .k { display: inline-block; min-width: 18px; padding: 0 4px; border: 1px solid var(--dim); border-radius: 3px; font-size: 10px; text-align: center; margin: 0 2px; }
+  /* Variante A: einspaltige Liste + Detail rechts */
+  .a-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 10px; flex: 1; min-height: 0; }
+  .a-liste { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  .a-zeile { display: grid; grid-template-columns: 6px 54px 1fr auto; gap: 8px; align-items: center; background: #151821; padding: 5px 8px 5px 0; border: 2px solid transparent; }
+  .a-zeile.sel { border-color: #fff; }
+  .a-zeile i { align-self: stretch; }
+  .a-foto { height: 36px; background: linear-gradient(135deg, #333, #111); background-size: cover; }
+  .a-name b { display: block; font-size: 14px; letter-spacing: .05em; text-transform: uppercase; }
+  .a-name span { font-size: 11px; color: var(--dim); }
+  .rolle { display: flex; align-items: center; gap: 4px; font-weight: 800; letter-spacing: .06em; font-size: 12px; }
+  .rolle .pf { color: var(--blau); font-size: 15px; }
+  .rolle .wert { min-width: 74px; text-align: center; padding: 2px 6px; background: var(--grau); }
+  .rolle.p1 .wert { background: var(--blau); color: var(--blau-text); }
+  .rolle.p2 .wert { background: #ffb02e; color: #1a1100; }
+  .rolle.gh .wert { background: #6b5bd6; }
+  .knopf { background: #1d212b; border: 0; color: #fff; padding: 8px 10px; text-align: left; font-family: var(--font); font-size: 12.5px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700; }
+  .knopf.sel { outline: 2px solid #fff; }
+  .knopf.primary { background: var(--blau); color: var(--blau-text); }
+  .a-detail { background: #11141b; border-top: 3px solid var(--blau); padding: 8px; display: flex; flex-direction: column; gap: 5px; min-height: 0; }
+  .wz { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; background: #181c25; padding: 5px 8px; }
+  .wz .l { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .wz .v { font-weight: 800; }
+  .wz .v .pf { color: var(--blau); margin: 0 6px; }
+  .fuss { display: flex; gap: 6px; }
+  .fuss .knopf { flex: 1; text-align: center; }
+  /* Variante B: Kacheln + eigene Detailseite */
+  .b-kacheln { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; flex: 1; min-height: 0; }
+  .b-kachel { background: #151821; display: flex; flex-direction: column; border: 2px solid transparent; }
+  .b-kachel.sel { border-color: #fff; }
+  .b-kachel .bild { flex: 1; min-height: 60px; background: linear-gradient(135deg, #2a2d36, #0d0f14); position: relative; }
+  .b-kachel .bild .band { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; }
+  .b-kachel .nm { padding: 4px 6px 0; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+  .b-kachel .rolle { padding: 4px 6px 6px; }
+  .b-kachel.neu { align-items: center; justify-content: center; border: 2px dashed rgba(255,255,255,.2); color: var(--dim); font-weight: 800; letter-spacing: .1em; }
+  .b-leiste { display: flex; gap: 6px; }
+  .b-leiste .knopf { flex: 1; text-align: center; }
+  .b-detail { display: grid; grid-template-columns: 1fr 1.3fr; gap: 10px; flex: 1; min-height: 0; }
+  .b-detail .gross { background: linear-gradient(135deg, #2a2d36, #0d0f14); display: grid; place-items: center; color: var(--dim); }
+  .b-spalte { display: flex; flex-direction: column; gap: 5px; }
+  ul.punkte { margin: 4px 0 0 18px; padding: 0; line-height: 1.6; }
+  .cmp { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .cmp td, .cmp th { border-bottom: 1px solid rgba(255,255,255,.1); padding: 6px; text-align: left; vertical-align: top; }
+  .cmp th { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+</style>
+</head>
+<body>
+<main>
+<h1>Garage aufräumen · zwei Vorschläge</h1>
+<p>Beide Vorschläge folgen denselben Regeln: <b>Knöpfe einspaltig</b>, das <b>Steuerkreuz bewegt sich so, wie es aussieht</b> (hoch/runter durch die Liste, links/rechts ändert den Wert der markierten Zeile), Auswahlfelder mit weniger als 5 Werten werden zu <b>◀ Wert ▶</b>. Die Rolle bietet nur <b>freie</b> Rollen an (Spieler 1/2/3 nur, wenn kein anderes Auto sie hat). <span class="muted">Platzhalterdaten, ohne Funktion.</span></p>
+
+<div class="vars">
+<section>
+  <h2>A · Liste links, Einstellungen rechts</h2>
+  <div class="schirm">
+    <div class="kopf"><b>Garage</b><span class="hint"><span class="k">▲▼</span> Auto <span class="k">◀▶</span> Rolle <span class="k">✕</span> Einstellen <span class="k">△</span> Blinken</span></div>
+    <div class="a-grid">
+      <div class="a-liste">
+        <div class="a-zeile sel"><i style="background:#2ee06a"></i><div class="a-foto"></div><div class="a-name"><b>Porsche 911</b><span>verbunden · Akku 82 %</span></div><div class="rolle p1"><span class="pf">◀</span><span class="wert">SPIELER 1</span><span class="pf">▶</span></div></div>
+        <div class="a-zeile"><i style="background:#ffb02e"></i><div class="a-foto"></div><div class="a-name"><b>BMW M4</b><span>verbunden · Akku 64 %</span></div><div class="rolle gh"><span class="pf">◀</span><span class="wert">GHOST</span><span class="pf">▶</span></div></div>
+        <div class="a-zeile"><i style="background:#00a3e0"></i><div class="a-foto"></div><div class="a-name"><b>Mustang</b><span>verbunden · Akku 91 %</span></div><div class="rolle gh"><span class="pf">◀</span><span class="wert">GHOST</span><span class="pf">▶</span></div></div>
+        <button class="knopf primary">+ Auto verbinden</button>
+        <button class="knopf">Ghosts losfahren lassen</button>
+        <button class="knopf">Strecke scannen</button>
+      </div>
+      <div class="a-detail">
+        <div class="wz"><span class="l">Name</span><span class="v">Porsche 911</span></div>
+        <div class="wz"><span class="l">Farbe</span><span class="v"><span class="pf">◀</span>Grün<span class="pf">▶</span></span></div>
+        <div class="wz"><span class="l">Motorsound</span><span class="v"><span class="pf">◀</span>911 GT3 R<span class="pf">▶</span></span></div>
+        <div class="wz"><span class="l">Ghost-Tempo</span><span class="v"><span class="pf">◀</span>Vorgabe (55 %)<span class="pf">▶</span></span></div>
+        <div class="wz"><span class="l">Foto</span><span class="v">aufnehmen / entfernen</span></div>
+        <div class="fuss"><button class="knopf">Blinken</button><button class="knopf">Trennen</button></div>
+      </div>
+    </div>
+  </div>
+  <ul class="punkte">
+    <li>Alles auf <b>einem</b> Schirm: links die Autos untereinander, rechts sofort die Einstellungen des markierten Autos.</li>
+    <li><span class="k">▲▼</span> wählt das Auto, <span class="k">◀▶</span> schaltet direkt seine Rolle, <span class="k">✕</span> springt nach rechts in die Einstellungen (dort wieder ▲▼ / ◀▶), <span class="k">○</span> zurück.</li>
+    <li>Am Handy hochkant rutscht die rechte Spalte unter die Liste.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>B · Kacheln, Einstellungen auf eigener Seite</h2>
+  <div class="schirm">
+    <div class="kopf"><b>Garage</b><span class="hint"><span class="k">◀▶▲▼</span> Kachel <span class="k">✕</span> öffnen <span class="k">□</span> Rolle weiter</span></div>
+    <div class="b-kacheln">
+      <div class="b-kachel sel"><div class="bild"><div class="band" style="background:#2ee06a"></div></div><div class="nm">Porsche 911</div><div class="rolle p1"><span class="pf">◀</span><span class="wert">SPIELER 1</span><span class="pf">▶</span></div></div>
+      <div class="b-kachel"><div class="bild"><div class="band" style="background:#ffb02e"></div></div><div class="nm">BMW M4</div><div class="rolle gh"><span class="pf">◀</span><span class="wert">GHOST</span><span class="pf">▶</span></div></div>
+      <div class="b-kachel"><div class="bild"><div class="band" style="background:#00a3e0"></div></div><div class="nm">Mustang</div><div class="rolle gh"><span class="pf">◀</span><span class="wert">GHOST</span><span class="pf">▶</span></div></div>
+      <div class="b-kachel neu">+ AUTO</div>
+    </div>
+    <div class="b-leiste"><button class="knopf">Ghosts losfahren</button><button class="knopf">Strecke scannen</button></div>
+  </div>
+  <p class="muted" style="margin-top:8px">Nach ✕ auf einer Kachel:</p>
+  <div class="schirm">
+    <div class="kopf"><b>← Garage · Porsche 911</b><span class="hint"><span class="k">▲▼</span> Zeile <span class="k">◀▶</span> Wert <span class="k">○</span> zurück</span></div>
+    <div class="b-detail">
+      <div class="gross">Foto / Farbe</div>
+      <div class="b-spalte">
+        <div class="wz"><span class="l">Rolle</span><span class="v"><span class="pf">◀</span>Spieler 1<span class="pf">▶</span></span></div>
+        <div class="wz"><span class="l">Farbe</span><span class="v"><span class="pf">◀</span>Grün<span class="pf">▶</span></span></div>
+        <div class="wz"><span class="l">Motorsound</span><span class="v"><span class="pf">◀</span>911 GT3 R<span class="pf">▶</span></span></div>
+        <div class="wz"><span class="l">Ghost-Tempo</span><span class="v"><span class="pf">◀</span>Vorgabe<span class="pf">▶</span></span></div>
+        <button class="knopf">Blinken</button><button class="knopf">Foto</button><button class="knopf">Trennen</button>
+      </div>
+    </div>
+  </div>
+  <ul class="punkte">
+    <li>Die Übersicht bleibt bildstark (Fotos groß), jede Kachel zeigt nur Name und Rolle.</li>
+    <li>Alles Weitere auf einer eigenen Seite je Auto, einspaltig – mit dem Pad wie jede Optionenseite.</li>
+    <li>Am Handy: 2 Kacheln je Reihe.</li>
+  </ul>
+</section>
+</div>
+
+<h2>Vergleich</h2>
+<table class="cmp">
+  <tr><th></th><th>A · Liste + Detail</th><th>B · Kacheln + Detailseite</th></tr>
+  <tr><td>Schnell die Rolle ändern</td><td>◀▶ direkt in der Liste</td><td>□ auf der Kachel oder auf der Detailseite</td></tr>
+  <tr><td>Einstellungen eines Autos</td><td>sofort sichtbar, kein Seitenwechsel</td><td>ein Schritt mehr (✕), dafür mehr Platz</td></tr>
+  <tr><td>Fotos</td><td>klein (Daumennagel)</td><td>groß</td></tr>
+  <tr><td>Viele Autos (6+)</td><td>Liste scrollt, bleibt übersichtlich</td><td>2 Reihen Kacheln</td></tr>
+  <tr><td>Steuerkreuz</td><td>immer: ▲▼ Auswahl, ◀▶ Wert</td><td>Übersicht: Raster (alle 4 Richtungen), Detail: ▲▼/◀▶</td></tr>
+</table>
+<p class="muted" style="margin-top:14px">Meine Empfehlung: <b>A</b>, weil das Steuerkreuz dort überall gleich funktioniert (▲▼ wählen, ◀▶ ändern) und die häufigste Handlung – Rolle umschalten – ohne Seitenwechsel geht.</p>
+</main>
+</body>
+</html>

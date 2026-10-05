@@ -7,6 +7,8 @@ import android.bluetooth.BluetoothStatusCodes;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.SystemClock;
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginHandle;
@@ -16,63 +18,61 @@ import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * SCHNELLER STEUER-SCHREIBWEG, ohne den Umweg ueber das Community-Plugin.
  *
- * GEMELDET (nur in der App): "auf meinem schwaecheren Handy ist die Verzoegerung sehr gross".
- * Zwei Quellen stecken dahinter, und beide wuergen den Steuertakt:
+ * GEMELDET (nur in der App): "auf meinem schwaecheren Handy ist die Verzoegerung sehr gross" und
+ * "apk, auch die original app von carrera, hat eine kleine merkbare Verzoegerung".
  *
- *   1. writeWithoutResponse des Community-Plugins wartet auf onCharacteristicWrite (GATT-
- *      Bestaetigung), BEVOR es das JS-Promise aufloest. Ein Steuerbefehl haengt also am
- *      Rundlauf JS <-> nativ <-> GATT <-> nativ <-> JS.
- *   2. Die Web-Seite wartet auf diesen Rundlauf. Ist er laenger als der 45-ms-Takt, laufen die
- *      Steuerbefehle auf - und das Fahren fuehlt sich traege an.
+ * Das Community-Plugin loest writeWithoutResponse erst nach onCharacteristicWrite auf; jeder
+ * Steuerbefehl haengt dann am Rundlauf JS -> nativ -> GATT -> nativ -> JS. Hier dagegen:
+ *   - writeControl() antwortet gar nicht (RETURN_NONE): kein Rueckweg ueber den Hauptthread.
+ *   - Der GATT-Write laeuft auf einem eigenen Thread, "neuester gewinnt": je Geraet EIN Platz
+ *     (AtomicReference), ein neuerer Befehl ersetzt den wartenden.
  *
- * Dieses Plugin trennt beides:
- *   - writeControl() loest SOFORT auf (fire-and-forget). Der Bridge-Rundlauf bleibt, aber er
- *     haelt den Steuertakt nicht mehr auf.
- *   - Der eigentliche GATT-Write laeuft auf einem eigenen Hintergrund-Thread (HandlerThread),
- *     nicht auf dem UI-Thread, auf dem die WebView zeichnet. Jede Malarbeit vor dem Senden
- *     verzoegert dort sonst die Bluetooth-Antworten.
- *   - Schreiben sind serialisiert und "letzter gewinnt": kommt waehrend eines Write ein neuer
- *     Befehl, wird der naechste geschrieben; der aeltere faellt weg. Bei WRITE_TYPE_NO_RESPONSE
- *     ist das richtig, weil jedes Steuerpaket das vorherige ersetzt.
+ * NEU GEBAUT in v0.9.2 (die erste Fassung aus v0.8.124-126 hatte vier Fehler):
+ *   1. Ein abgelehnter Write (GATT belegt, getrennt) stellte sich OHNE PAUSE sofort neu ein -
+ *      eine Dauerschleife auf dem schwachen Handy. Jetzt: hoechstens 3 Versuche mit 3 ms Pause,
+ *      und sobald ein neuerer Befehl wartet, wird der alte nicht weiter versucht.
+ *   2. Der gemerkte GATT-Griff wurde bei JEDEM Fehlschlag verworfen (und per Reflexion neu
+ *      gesucht). Jetzt erst nach 3 Fehlschlaegen in Folge - das ist der Fall "neu verbunden".
+ *   3. Zwischen dem Pruefen von "gen" und dem Freigeben konnte ein neuer Befehl liegen bleiben
+ *      (bis zum naechsten Takt). Jetzt atomar: Platz leeren, Lauf beenden, nochmal nachsehen.
+ *   4. Die Web-Seite hielt jeden Befehl fuer geschrieben, auch ohne GATT. Jetzt meldet status()
+ *      ehrlich "bereit" oder nicht, und die Seite faellt dann auf das Community-Plugin zurueck.
+ * Dazu pause(): waehrend das Community-Plugin selbst einen GATT-Vorgang macht (Abo, Lesen,
+ * Schreiben mit Antwort), schreibt OmegaBle nicht - Android erlaubt nur einen Vorgang zugleich.
  *
- * SEIT v0.8.126 (BESTELLT "occasionally it is too much"): die GATT-Verbindung und die beiden
- * UUIDs werden je Geraet GEMERKT, statt sie bei jedem Write per Reflexion zu suchen und neu zu
- * parsen - die Reflexion war der teuerste Teil des Background-Writes. Ausserdem wird der
- * Rueckgabewert von writeCharacteristic geprueft: liefert er einen Fehler (GATT-Stack noch
- * beschaefigt, Verbindung gerade weg), wird der Write als verloren behandelt und sofort
- * erneut versucht, statt dass das Paket stillschweigend unter den Tisch faellt - ein
- * verschluckter Lenkbefehl fuehlt sich genau wie ein Verzoegerungsausreisser an.
- *
- * DIE VERBINDUNG LEIHEN wir uns vom Community-Plugin: es haelt die GATT-Verbindung (deviceMap ->
- * bluetoothGatt). Dasselbe tut MainActivity.bluetoothTrennen() per Reflexion. Scheitert die
- * Reflexion (andere Plugin-Fassung), faellt die Web-Seite auf das Community-Plugin zurueck.
+ * DIE VERBINDUNG LEIHEN wir uns vom Community-Plugin (deviceMap -> bluetoothGatt), per Reflexion
+ * wie MainActivity.bluetoothTrennen().
  */
 @CapacitorPlugin(name = "OmegaBle")
 public class OmegaBlePlugin extends Plugin {
 
-    private final Map<String, byte[]> neueste = new ConcurrentHashMap<>();
-    private final Map<String, String[]> ziele = new ConcurrentHashMap<>();
-    private final Map<String, Long> gen = new ConcurrentHashMap<>();
-    private final Map<String, Boolean> schreibt = new ConcurrentHashMap<>();
-    // GEMERKTE GATT-Handles: pro Geraet die Verbindung plus die aufgeloesten UUID-Objekte.
-    // Das spart die Reflexion (findeGatt) und das UUID.fromString bei jedem Write.
-    private final Map<String, Ziel> zielCache = new ConcurrentHashMap<>();
-    private HandlerThread writeThread;
-    private Handler writeHandler;
+    private static final int VERSUCHE = 3;
+    private static final long VERSUCH_PAUSE_MS = 3;
+    private static final long PAUSE_HOECHSTENS_MS = 1500;   // falls die Seite das Ende vergisst
 
-    /** Ein gemerktes Schreibziel: die GATT-Verbindung und das aufgeloeste Merkmal. */
-    private static final class Ziel {
-        BluetoothGatt gatt;
-        BluetoothGattCharacteristic merkmal;
-        Ziel(BluetoothGatt gatt, BluetoothGattCharacteristic merkmal) {
-            this.gatt = gatt;
-            this.merkmal = merkmal;
-        }
+    /** Alles je Geraet. */
+    private static final class Platz {
+        final AtomicReference<byte[]> neu = new AtomicReference<>();
+        final AtomicBoolean laeuft = new AtomicBoolean(false);
+        volatile String dienst, merkmal;
+        volatile BluetoothGatt gatt;
+        volatile BluetoothGattCharacteristic ziel;
+        int fehlInFolge;                                    // nur auf dem Schreib-Thread
+        final AtomicLong geschrieben = new AtomicLong(), wiederholt = new AtomicLong(),
+                         verworfen = new AtomicLong(), ersetzt = new AtomicLong();
     }
+
+    private final Map<String, Platz> plaetze = new ConcurrentHashMap<>();
+    private volatile long pauseBis = 0;
+    private HandlerThread writeThread;
+    private volatile Handler writeHandler;
 
     @Override
     public void load() {
@@ -81,97 +81,138 @@ public class OmegaBlePlugin extends Plugin {
         writeHandler = new Handler(writeThread.getLooper());
     }
 
-    @PluginMethod
+    private Platz platz(String id) {
+        Platz p = plaetze.get(id);
+        if (p == null) {
+            p = new Platz();
+            Platz alt = plaetze.putIfAbsent(id, p);
+            if (alt != null) p = alt;
+        }
+        return p;
+    }
+
+    @PluginMethod(returnType = PluginMethod.RETURN_NONE)
     public void writeControl(PluginCall call) {
         String deviceId = call.getString("deviceId");
         String service = call.getString("service");
         String characteristic = call.getString("characteristic");
         String value = call.getString("value");
-        if (deviceId == null || service == null || characteristic == null || value == null) {
-            call.reject("deviceId, service, characteristic und value sind erforderlich.");
-            return;
+        Handler h = writeHandler;
+        if (deviceId == null || service == null || characteristic == null || value == null || h == null) return;
+        Platz p = platz(deviceId);
+        if (!service.equals(p.dienst) || !characteristic.equals(p.merkmal)) {
+            p.dienst = service;
+            p.merkmal = characteristic;
+            p.ziel = null;
         }
-        ziele.put(deviceId, new String[]{service, characteristic});
-        neueste.put(deviceId, hexZuBytes(value));
-        gen.put(deviceId, System.nanoTime());
-        if (schreibt.putIfAbsent(deviceId, true) == null) {
-            writeHandler.post(() -> schreibe(deviceId));
+        if (p.neu.getAndSet(hexZuBytes(value)) != null) p.ersetzt.incrementAndGet();
+        if (p.laeuft.compareAndSet(false, true)) h.post(() -> abarbeiten(deviceId, p));
+    }
+
+    /** Ehrliche Auskunft fuer die Web-Seite: findet OmegaBle die Verbindung? Dazu die Zaehler. */
+    @PluginMethod
+    public void status(PluginCall call) {
+        String deviceId = call.getString("deviceId");
+        String service = call.getString("service");
+        String characteristic = call.getString("characteristic");
+        JSObject r = new JSObject();
+        boolean bereit = false;
+        if (deviceId != null && service != null && characteristic != null) {
+            Platz p = platz(deviceId);
+            p.dienst = service;
+            p.merkmal = characteristic;
+            bereit = zielHolen(deviceId, p, false);
+            r.put("geschrieben", p.geschrieben.get());
+            r.put("wiederholt", p.wiederholt.get());
+            r.put("verworfen", p.verworfen.get());
+            r.put("ersetzt", p.ersetzt.get());
         }
-        // Fire-and-forget: sofort aufloesen, nicht auf das GATT-Schreiben warten.
+        r.put("bereit", bereit);
+        r.put("version", 2);
+        call.resolve(r);
+    }
+
+    /** Waehrend das Community-Plugin einen GATT-Vorgang macht, nicht schreiben. */
+    @PluginMethod
+    public void pause(PluginCall call) {
+        Boolean an = call.getBoolean("an", false);
+        pauseBis = an != null && an ? SystemClock.uptimeMillis() + PAUSE_HOECHSTENS_MS : 0;
         call.resolve();
     }
 
-    /** Schreiben auf dem Hintergrund-Thread, serialisiert, "letzter gewinnt". */
-    private void schreibe(String deviceId) {
-        boolean weiter = false;
-        try {
-            byte[] wert = neueste.get(deviceId);
-            long g = gen.getOrDefault(deviceId, 0L);
-            if (wert != null) {
-                String[] ziel = ziele.get(deviceId);
-                if (ziel != null) {
-                    // Gemerktes Ziel holen; fehlt es oder ist es veraltet, neu suchen.
-                    Ziel z = zielCache.get(deviceId);
-                    if (z == null || z.gatt == null || z.merkmal == null) {
-                        z = findeZiel(deviceId, ziel);
-                        if (z != null) zielCache.put(deviceId, z);
-                    }
-                    if (z != null && z.gatt != null && z.merkmal != null) {
-                        // Erfolg? Bei Fehler das gemerkte Ziel verwerfen und gleich nochmal.
-                        if (!schreibeGatt(z.gatt, z.merkmal, wert)) {
-                            zielCache.remove(deviceId);
-                            weiter = true;
-                        }
-                    } else {
-                        // Verbindung (noch) nicht auffindbar: der naechste Befehl versucht es.
-                        zielCache.remove(deviceId);
-                    }
-                }
-            }
-            // Kam waehrend des Write ein neuer Befehl, den naechsten schreiben; sonst frei.
-            if (!weiter && gen.getOrDefault(deviceId, 0L) != g) weiter = true;
-            if (weiter) {
-                writeHandler.post(() -> schreibe(deviceId));
-            } else {
-                schreibt.remove(deviceId);
-            }
-        } catch (Throwable e) {
-            schreibt.remove(deviceId);
+    /** Auf dem Schreib-Thread: den jeweils neuesten Befehl schreiben, bis keiner mehr wartet. */
+    private void abarbeiten(String deviceId, Platz p) {
+        Handler h = writeHandler;
+        if (h == null) { p.laeuft.set(false); return; }
+        long warte = pauseBis - SystemClock.uptimeMillis();
+        if (warte > 0) {                                    // pausiert: spaeter weiter, Lauf bleibt
+            h.postDelayed(() -> abarbeiten(deviceId, p), Math.min(warte, 5));
+            return;
         }
+        byte[] wert = p.neu.getAndSet(null);
+        if (wert != null) schreibenMitVersuchen(deviceId, p, wert);
+        if (p.neu.get() != null) { h.post(() -> abarbeiten(deviceId, p)); return; }
+        p.laeuft.set(false);
+        // Kam genau jetzt ein Befehl, hat writeControl den Lauf nicht neu starten koennen.
+        if (p.neu.get() != null && p.laeuft.compareAndSet(false, true)) h.post(() -> abarbeiten(deviceId, p));
     }
 
-    /**
-     * Der eigentliche GATT-Write. liefert true, wenn der Stack den Write angenommen hat.
-     * Der Rueckgabewert von writeCharacteristic wird geprueft: 0 = SUCCESS; alles andere
-     * bedeutet, der Write kam nicht an (GATT-Busy, Verbindung weg) und das Paket waere
-     * verloren. Nur dann wird hier false geliefert, damit der Aufrufer neu versucht.
-     */
-    private static boolean schreibeGatt(BluetoothGatt gatt, BluetoothGattCharacteristic c, byte[] bytes) {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                int status = gatt.writeCharacteristic(c, bytes, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
-                return status == BluetoothStatusCodes.SUCCESS;
+    private void schreibenMitVersuchen(String deviceId, Platz p, byte[] wert) {
+        for (int versuch = 0; versuch < VERSUCHE; versuch++) {
+            if (versuch > 0) {
+                if (p.neu.get() != null) { p.verworfen.incrementAndGet(); return; }   // Neueres wartet
+                p.wiederholt.incrementAndGet();
+                SystemClock.sleep(VERSUCH_PAUSE_MS);
             }
-            c.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
-            c.setValue(bytes);
-            return gatt.writeCharacteristic(c);
+            if (!zielHolen(deviceId, p, false)) continue;
+            int erg = schreibeGatt(p.gatt, p.ziel, wert);
+            if (erg == 0) { p.fehlInFolge = 0; p.geschrieben.incrementAndGet(); return; }
+            if (erg < 0) break;                             // SecurityException: zwecklos
+            if (++p.fehlInFolge >= VERSUCHE) {              // vermutlich neu verbunden
+                p.gatt = null;
+                p.ziel = null;
+                p.fehlInFolge = 0;
+            }
+        }
+        p.verworfen.incrementAndGet();
+    }
+
+    /** Gemerktes Ziel pruefen oder per Reflexion neu suchen. */
+    private boolean zielHolen(String deviceId, Platz p, boolean neu) {
+        if (!neu && p.gatt != null && p.ziel != null) return true;
+        try {
+            BluetoothGatt gatt = findeGatt(deviceId);
+            if (gatt == null || p.dienst == null || p.merkmal == null) return false;
+            BluetoothGattService s = gatt.getService(UUID.fromString(p.dienst));
+            if (s == null) return false;
+            BluetoothGattCharacteristic c = s.getCharacteristic(UUID.fromString(p.merkmal));
+            if (c == null) return false;
+            p.gatt = gatt;
+            p.ziel = c;
+            return true;
         } catch (Throwable e) {
             return false;
         }
     }
 
-    /** Die GATT-Verbindung aus dem Community-Plugin holen und das Merkmal aufloesen. */
-    private Ziel findeZiel(String deviceId, String[] ziel) {
+    /** 0 = angenommen, 1 = abgelehnt (belegt, getrennt), -1 = keine Berechtigung. */
+    private static int schreibeGatt(BluetoothGatt gatt, BluetoothGattCharacteristic c, byte[] bytes) {
         try {
-            BluetoothGatt gatt = findeGatt(deviceId);
-            if (gatt == null) return null;
-            BluetoothGattService s = gatt.getService(UUID.fromString(ziel[0]));
-            if (s == null) return null;
-            BluetoothGattCharacteristic c = s.getCharacteristic(UUID.fromString(ziel[1]));
-            if (c == null) return null;
-            return new Ziel(gatt, c);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                int status = gatt.writeCharacteristic(c, bytes, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+                return status == BluetoothStatusCodes.SUCCESS ? 0 : 1;
+            }
+            // Vor Android 13 haengt der Wert am geteilten Merkmal-Objekt; der Schreib-Thread ist
+            // der einzige, der es fuer Steuerbefehle anfasst.
+            synchronized (c) {
+                c.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+                c.setValue(bytes);
+                return gatt.writeCharacteristic(c) ? 0 : 1;
+            }
+        } catch (SecurityException e) {
+            return -1;
         } catch (Throwable e) {
-            return null;
+            return 1;
         }
     }
 
@@ -210,10 +251,12 @@ public class OmegaBlePlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        Handler h = writeHandler;
+        writeHandler = null;
+        if (h != null) h.removeCallbacksAndMessages(null);
         if (writeThread != null) {
             writeThread.quitSafely();
             writeThread = null;
-            writeHandler = null;
         }
     }
 }

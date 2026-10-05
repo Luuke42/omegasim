@@ -55,7 +55,7 @@ public class OmegaUpdatePlugin extends Plugin {
 
     /** Muss zu APK_STUFE in tools/app_update.py passen. Hochzaehlen, wenn index.html neue
      *  native Faehigkeiten braucht - dann meldet pruefen() "neue APK noetig". */
-    static final int APK_STUFE = 1;
+    static final int APK_STUFE = 2;
 
     static final String QUELLE = "https://lukasroeseler.github.io/btsr/";
     static final String PREFS = "OmegaUpdate";

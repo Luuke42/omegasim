@@ -259,6 +259,40 @@
     return true;
   }
 
+  // ---- WISCHEN WECHSELT DIE REITER (v0.9.4) -------------------------------------------
+  // BESTELLT: "mach, dass ich mit swipe nach links und rechts so wie mit den Schultertasten
+  // die Tabs wechseln kann". Dieselbe Funktion wie L1/R1 (innerste Leiste). Nicht im Cockpit,
+  // im Editor, auf Reglern, Karten und in waagrecht scrollbaren Bereichen - dort gehoert die
+  // Wischgeste dem Inhalt. Mindestens 60 px, deutlich waagrecht, in hoechstens 0,7 s.
+  (function wischenAnbinden() {
+    const NICHT = '.tp-karte, input, select, textarea, canvas, .k-pause, .lb-wrap, #mp-info, .k-kein-wischen';
+    let a = null;
+    document.addEventListener('touchstart', (e) => {
+      a = null;
+      if (e.touches.length !== 1) return;
+      const z = e.target;
+      if (!z || !z.closest || z.closest(NICHT) || document.body.classList.contains('track-fs')) return;
+      for (let el = z; el && el !== document.body; el = el.parentElement) {
+        if (el.scrollWidth > el.clientWidth + 4) {
+          const ox = getComputedStyle(el).overflowX;
+          if (ox === 'auto' || ox === 'scroll') return;
+        }
+      }
+      a = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: performance.now() };
+    }, { passive: true });
+    document.addEventListener('touchend', (e) => {
+      if (!a || !e.changedTouches.length) return;
+      const p = e.changedTouches[0];
+      const dx = p.clientX - a.x, dy = p.clientY - a.y, dt = performance.now() - a.t;
+      a = null;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy) || dt > 700) return;
+      const tab = document.querySelector('.tabpage.active');
+      if (!tab || tab.id === 'tab-home' || tab.id === 'tab-race') return;
+      if (typeof konsoleFrageOffen === 'function' && konsoleFrageOffen()) return;
+      konsoleReiterSchritt(dx < 0 ? 1 : -1);
+    }, { passive: true });
+  })();
+
   // ---- Quadrat: schneller Wechsel auf Kacheln mit data-quad --------------------------
   function konsoleQuadWechsel(q, dir) {
     if (q === 'renntyp') {

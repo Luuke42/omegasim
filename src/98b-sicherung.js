@@ -9,8 +9,8 @@
   // ---- WARUM DAS NOETIG IST, UND NICHT NUR BEQUEM --------------------------------
   //
   // Alles liegt in localStorage. Ein Browser darf das raeumen - beim Aufraeumen von
-  // Websitedaten, im privaten Modus, auf einem iPhone auch nach sieben Tagen ohne Besuch -
-  // und navigator.storage.persist() wird nirgends angefordert. Fuer die Sitzungshistorie
+  // Websitedaten, im privaten Modus, auf einem iPhone auch nach sieben Tagen ohne Besuch.
+  // navigator.storage.persist() wird seit v0.8.96 angefordert (unten, best effort). Fuer die Sitzungshistorie
   // (bis 200 Rennen mit allen Rundenzeiten) ist das die eigentliche Schwachstelle: die ist
   // nicht nachbaubar, anders als eine Abstimmung.
   //
@@ -55,7 +55,7 @@
   //      Rennmodus"). Eine benannte Ausnahme mit Grund - und kein aufgeweiteter Selektor,
   //      der nebenbei sess-plot-pick mitnehmen wuerde.
   const SICHERUNG_REITER = ['tab-options', 'tab-control'];
-  const SICHERUNG_EXTRA = ['race-mode', 'mp-force-preset'];
+  const SICHERUNG_EXTRA = ['race-mode', 'mp-force-preset', 'grid-selbst'];
 
   function sicherungRegler() {
     // .opt-row sind die Abstimmungs- und Rennregler, .mw-row die Motorwerkstatt-Regler
@@ -214,9 +214,11 @@
   // denen ein spaeter dazukommender Regler vergessen wird. Dieselbe Begruendung wie bei
   // updateGaragePresetRow() in 98-presets.js.
   let autoSicherungFaellig = null;
+  let autoSicherungAt = 0;
   function autoSicherungSchreiben() {
-    try { localStorage.setItem(AUTO_STORE, JSON.stringify(sicherungReglerLesen())); }
+    try { localStorage.setItem(AUTO_STORE, JSON.stringify(sicherungReglerLesen())); autoSicherungAt = Date.now(); }
     catch (e) { /* privater Modus oder voll - dann eben nicht */ }
+    if (typeof sichStandZeigen === 'function') sichStandZeigen();
   }
   function autoSicherungPlanen() {
     // Gebuendelt: ein Zug am Schieberegler feuert 'input' dutzendfach, und jedes Mal alle
@@ -312,7 +314,7 @@
   const LAGE_ABLAGEN = [
     // Schluessel, Name, und wie man den Inhalt zaehlt. `zahl` gibt null zurueck, wenn es
     // nichts zu zaehlen gibt - dann wird die Zeile weggelassen.
-    ['chc.layout.v1', 'Streckenlayout', (v) => (v && Object.keys(v).length) || null],
+    ['chc.layout.v1', 'Fahrzeug-Layout', (v) => (v && Object.keys(v).length) || null],
     ['carrera-hybrid-tracks', 'Strecken', (v) => (Array.isArray(v) ? v.length : null)],
     ['chc.sessions.v1', 'Sitzungen', (v) => (Array.isArray(v) ? v.length
                                              : (v && v.sitzungen ? v.sitzungen.length : null))],
@@ -555,11 +557,13 @@
   // melden beides. Beide zu nehmen kostet nichts, weil das Schreiben gebuendelt ist.
   document.addEventListener('change', (e) => {
     if (e.target && e.target.closest
-        && e.target.closest('#tab-options, #tab-control, #tab-mp')) autoSicherungPlanen();
+        && (e.target.closest('#tab-options, #tab-control, #tab-mp')
+            || SICHERUNG_EXTRA.indexOf(e.target.id) >= 0)) autoSicherungPlanen();
   }, true);
   document.addEventListener('input', (e) => {
     if (e.target && e.target.closest
-        && e.target.closest('#tab-options, #tab-control, #tab-mp')) autoSicherungPlanen();
+        && (e.target.closest('#tab-options, #tab-control, #tab-mp')
+            || SICHERUNG_EXTRA.indexOf(e.target.id) >= 0)) autoSicherungPlanen();
   }, true);
   // BESTELLT: "alle einstellungen im browsercache gespeichert werden und auch bei neuladen
   // der seite da bleiben (bei apk im cache speichern)". localStorage ueberlebt das Neuladen,
@@ -568,3 +572,174 @@
   if (navigator.storage && navigator.storage.persist) {
     try { navigator.storage.persist(); } catch (e) { /* nicht moeglich - dann eben nicht */ }
   }
+
+  // ==== SICHERUNG, DIE EINE NEUINSTALLATION UEBERLEBT (v0.9.6) ============================
+  //
+  // BESTELLT: "Idealerweise ueberleben meine Statistiken, geladenen Strecken, usw. auch eine
+  // Neuinstallation der App mit neuer APK." Ein APK-Update behaelt den localStorage, ein
+  // Deinstallieren loescht ihn. In der App (ab APK 0.9.6, Plugin OmegaSicherung) wird darum
+  // die ganze Sicherung - dieselbe wie "Sicherung speichern" - als Datei nach
+  // Dokumente/OmegaSim/OmegaSim-Sicherung.json geschrieben: alle 2 Minuten, wenn sich etwas
+  // geaendert hat, und sofort, wenn die App in den Hintergrund geht. Nach einer
+  // Neuinstallation bietet die App beim ersten (leeren) Start an, sie wieder einzulesen.
+  //
+  // Der Merker steht unter einem Schluessel OHNE Sicherungs-Praefix, sonst aenderte er die
+  // Sicherung bei jedem Schreiben und sie wuerde jedes Mal neu geschrieben.
+  const SICH_DATEI_MERK = 'sicherungsdatei.v1';
+  const SICH_GEFRAGT = 'sicherungsdatei.gefragt';
+  function sichNativ() {
+    const C = window.Capacitor;
+    try {
+      return !!(window.OMEGA_APP && window.OMEGA_APP.nativ && C && typeof C.isPluginAvailable === 'function'
+                && C.isPluginAvailable('OmegaSicherung'));
+    } catch (e) { return false; }
+  }
+  function sichHash(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return h + ':' + s.length;
+  }
+  function sichMerk() {
+    try { return JSON.parse(localStorage.getItem(SICH_DATEI_MERK) || 'null'); } catch (e) { return null; }
+  }
+  let sichSchreibt = false;
+  async function sichDateiSchreiben(grund) {
+    if (!sichNativ() || sichSchreibt) return null;
+    const b = sicherungLesen();
+    if (!Object.keys(b.ablagen).length && !Object.keys(b.regler).length) return null;
+    const h = sichHash(JSON.stringify({ r: b.regler, a: b.ablagen }));
+    const alt = sichMerk();
+    if (alt && alt.hash === h && grund !== 'hand') return null;
+    sichSchreibt = true;
+    try {
+      const r = await window.Capacitor.nativePromise('OmegaSicherung', 'speichern', { text: JSON.stringify(b) });
+      try { localStorage.setItem(SICH_DATEI_MERK, JSON.stringify({ at: Date.now(), ort: r && r.ort, hash: h })); } catch (e) { /* voll */ }
+      sichStandZeigen();
+      return r;
+    } catch (e) {
+      log('Sicherungsdatei nicht geschrieben: ' + (e && e.message), 'warn');
+      if (grund === 'hand') throw e;
+      return null;
+    } finally { sichSchreibt = false; }
+  }
+  function sichStandZeigen() {
+    const el = $('sich-auto');
+    if (!el) return;
+    const uhr = (ms) => new Date(ms).toLocaleTimeString(lang === 'en' ? 'en-GB' : 'de-DE', { hour: '2-digit', minute: '2-digit' });
+    let txt = t('Alles wird automatisch gespeichert, du musst nichts laden.');
+    if (autoSicherungAt) txt += ' ' + t('Einstellungen zuletzt um {u}.').replace('{u}', uhr(autoSicherungAt));
+    if (sichNativ()) {
+      const m = sichMerk();
+      txt += ' ' + (m && m.at
+        ? t('Sicherungsdatei (übersteht eine Neuinstallation) zuletzt um {u}: {o}.').replace('{u}', uhr(m.at)).replace('{o}', m.ort || 'Dokumente/OmegaSim')
+        : t('Die Sicherungsdatei in Dokumente/OmegaSim wird gleich angelegt.'));
+    }
+    el.textContent = txt;
+  }
+  async function sichWiederherstellen() {
+    let r;
+    try { r = await window.Capacitor.nativePromise('OmegaSicherung', 'oeffnen', {}); }
+    catch (e) { if (e && e.message !== 'abgebrochen') sicherungSagen(String((e && e.message) || e), 'bad'); return false; }
+    let b;
+    try { b = JSON.parse(r.text); } catch (e) { sicherungSagen(t('Die Datei ist nicht lesbar') + ': ' + e.message, 'bad'); return false; }
+    const erg = sicherungAnwenden(b);
+    sicherungSagen(sicherungBericht(erg), erg.fehler ? 'bad' : 'ok');
+    if (erg.fehler) { showHudToast(t('Sicherung nicht geladen')); return false; }
+    try { localStorage.setItem(SICH_GEFRAGT, '1'); } catch (e) { /* egal */ }
+    showHudToast(t('Sicherung geladen, die App startet neu …'));
+    setTimeout(() => location.reload(), 1500);
+    return true;
+  }
+  // In der App gehen "Sicherung speichern" und "Sicherung laden" ueber den nativen Weg: ein
+  // Blob-Download (a.download) erreicht in der WebView keinen Ordner.
+  if (sichNativ()) {
+    if ($('sich-export')) $('sich-export').onclick = async () => {
+      try {
+        const r = await sichDateiSchreiben('hand');
+        sicherungSagen(t('Gespeichert: {o}').replace('{o}', (r && r.ort) || 'Dokumente/OmegaSim'), 'ok');
+      } catch (e) { sicherungSagen(String((e && e.message) || e), 'bad'); }
+    };
+    if ($('sich-import')) $('sich-import').onclick = () => { sichWiederherstellen(); };
+    setInterval(() => { sichDateiSchreiben('takt'); }, 120000);
+    setTimeout(() => { sichDateiSchreiben('start'); }, 20000);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) sichDateiSchreiben('weg'); });
+    // ERSTER START NACH EINER NEUINSTALLATION: nichts Gespeichertes da.
+    let leer = true;
+    try {
+      leer = !['chc.sessions.v1', 'carrera-hybrid-tracks', 'chc.cars.v1', AUTO_STORE]
+        .some((k) => localStorage.getItem(k)) && !localStorage.getItem(SICH_GEFRAGT);
+    } catch (e) { leer = false; }
+    if (leer && typeof konsoleFrage === 'function') {
+      setTimeout(() => konsoleFrage(t('Frühere Daten wiederherstellen?'),
+        t('Die App sichert alles automatisch in Dokumente/OmegaSim (Datei OmegaSim-Sicherung.json). Nach einer Neuinstallation kannst du sie hier wieder einlesen: Einstellungen, Strecken, Statistiken, Autos und Tastenbelegung.'),
+        [[t('Sicherungsdatei wählen'), () => { sichWiederherstellen(); }],
+         [t('Neu anfangen'), () => { try { localStorage.setItem(SICH_GEFRAGT, '1'); } catch (e) { /* egal */ } }]]), 1800);
+    }
+  }
+  sichStandZeigen();
+
+  // ==== AUSWAHLFELDER MIT WENIGEN WERTEN ALS "◀ WERT ▶" (v0.9.7) =========================
+  //
+  // BESTELLT: "Dropdowns mit weniger als 5 Optionen lieber mit Durchschaltmoeglichkeit". Jedes
+  // Auswahlfeld einer Optionszeile mit hoechstens 4 Werten bekommt zwei Pfeile und den Wert
+  // dazwischen; ein Tipp schaltet weiter (am Ende wieder von vorn). Das <select> bleibt im
+  // Dokument, nur unsichtbar - Speicherung, Presets und das Steuerkreuz (menuNavAdjust, links/
+  // rechts) arbeiten weiter mit ihm. Ausgenommen sind Felder, deren Liste zur Laufzeit gefuellt
+  // wird (Preset-, Sitzungs- und Diagrammwahl).
+  const BLAETTERN_MAX = 4;
+  const BLAETTERN_NICHT = /store|preset|sess|plot|ablage/i;
+  const blaetternFelder = [];
+  function blaetternBauen(sel) {
+    if (sel.dataset.blaettern) return;
+    sel.dataset.blaettern = '1';
+    const box = document.createElement('span');
+    box.className = 'opt-blaettern';
+    const pfeil = (txt, d) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ob-pf';
+      b.textContent = txt;
+      b.setAttribute('data-i18n-skip', '');
+      b.setAttribute('aria-label', d < 0 ? t('zurück') : t('weiter'));
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const n = sel.options.length;
+        if (!n || sel.disabled) return;
+        sel.selectedIndex = ((sel.selectedIndex + d) % n + n) % n;
+        sel.dispatchEvent(new Event('input', { bubbles: true }));
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      return b;
+    };
+    const wert = document.createElement('span');
+    wert.className = 'ob-wert';
+    wert.setAttribute('data-i18n-skip', '');
+    box.appendChild(pfeil('\u25C0', -1));
+    box.appendChild(wert);
+    box.appendChild(pfeil('\u25B6', 1));
+    sel.insertAdjacentElement('afterend', box);
+    sel.classList.add('ob-versteckt');
+    const zeigen = () => {
+      const o = sel.options[sel.selectedIndex];
+      const txt = o ? o.textContent.trim() : '';
+      if (wert.textContent !== txt) wert.textContent = txt;
+      box.classList.toggle('aus', !!sel.disabled);
+    };
+    sel.addEventListener('change', zeigen);
+    blaetternFelder.push(zeigen);
+    zeigen();
+  }
+  function blaetternAuffrischen() { blaetternFelder.forEach((f) => f()); }
+  function blaetternAlle() {
+    document.querySelectorAll('.opt-row select').forEach((sel) => {
+      if (sel.multiple || sel.hidden || sel.style.display === 'none') return;
+      if (BLAETTERN_NICHT.test(sel.id || '')) return;
+      if (sel.options.length < 2 || sel.options.length > BLAETTERN_MAX) return;
+      blaetternBauen(sel);
+    });
+  }
+  blaetternAlle();
+  // Werte, die Code ohne 'change' setzt, und uebersetzte Optionstexte holt ein leiser Abgleich
+  // nach (rund ein Dutzend Felder, einmal je Sekunde).
+  setInterval(blaetternAuffrischen, 1000);
+  if (typeof i18nOnLangChange === 'function') i18nOnLangChange(() => setTimeout(blaetternAuffrischen, 0));

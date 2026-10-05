@@ -141,7 +141,9 @@
   // which is what "sobald das erste Auto über Start fährt" means literally.
   let raceFlying = false;
   let raceGridOrder = [];      // device ids, first = pole
-let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
+let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentell). Hiess bis v0.9.2
+                            // "Autos fahren selbst in Position" - das tat er nie, er aendert nur den
+                            // Querversatz der Startaufstellung in der Einfuehrungsrunde.
   let raceFormationLap = false;
   let raceStartedAt = null;
   let raceClockTimer = null;
@@ -193,7 +195,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
     if (!knockoutLaeuft) return;
     if (wer === 2) knockoutLeben2 = Math.max(0, knockoutLeben2 - 1);
     else knockoutLeben = Math.max(0, knockoutLeben - 1);
-    showHudToast('Leben ' + (wer === 2 ? '2' : '1') + ': noch ' + (wer === 2 ? knockoutLeben2 : knockoutLeben));
+    showHudToast(t('Spieler {s}: noch {n} Leben').replace('{s}', wer === 2 ? '2' : '1').replace('{n}', wer === 2 ? knockoutLeben2 : knockoutLeben));
     knockoutPruefen();
   }
   // Ende: alle Geister raus -> Sieg; alle Menschen raus -> Niederlage.
@@ -255,7 +257,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       playTone(880, 0.06, 'sine', 0.2);
       setTimeout(() => playTone(1320, 0.09, 'sine', 0.2), 45);
     }
-    showHudToast('Geist aus · Kills ' + derbyKills);
+    showHudToast(t('Geist aus') + ' · Kills ' + derbyKills);
     derbyPruefen();
   }
   // Aufprall-Schaden fuer den Spieler (head-on 10 %, sonst 20 %).
@@ -323,10 +325,10 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       catch (e) { return { name: '?', farbe: '#8b99b4' }; }
     };
     const teile = [];
-    teile.push({ name: 'Du', farbe: '#2ee06a', health: derbyHealth, kills: derbyKills,
+    teile.push({ name: t('Du'), farbe: '#2ee06a', health: derbyHealth, kills: derbyKills,
                  aus: derbyHealth <= 0 });
     if (typeof zweiSpieler !== 'undefined' && zweiSpieler) {
-      teile.push({ name: 'Spieler 2', farbe: '#ffb02e', health: derbyHealth2, kills: derbyKills2,
+      teile.push({ name: t('Spieler 2'), farbe: '#ffb02e', health: derbyHealth2, kills: derbyKills2,
                    aus: derbyHealth2 <= 0 });
     }
     for (const c of garage) {
@@ -1656,7 +1658,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       knockoutSieger = null; knockoutLaeuft = true;
       for (const c of garage) if (c && c.ghost) c.ghost.eliminated = false;
       knockoutGeister = knockoutGeisterZaehlen();
-      showHudToast('Knockout: ' + knockoutGeister + ' Geister · ' + KO_LEBEN + ' Leben');
+      showHudToast('Knockout: ' + knockoutGeister + ' ' + t('Geister') + ' · ' + KO_LEBEN + ' ' + t('Leben'));
     }
     if (raceMode === 'derby') {
       derbyLaeuft = true; derbySieger = null; derbyTitel = null;
@@ -1665,7 +1667,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       for (const c of garage) if (c && c.ghost) {
         c.ghost.derbyHealth = DERBY_MAX; c.ghost.derbyAus = false; c.ghost.derbyKills = 0;
       }
-      showHudToast('Derby: ' + derbyGeisterZaehlen() + ' Gegner · Health 100');
+      showHudToast('Derby: ' + derbyGeisterZaehlen() + ' ' + t('Gegner') + ' · Health 100');
     }
     if (raceFormationLap) {
       // formationPace() und nicht PIT_SPEED_FACTOR: der Deckel muss zum Ziel des
@@ -1872,8 +1874,8 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
   function applyRaceModeUi() {
     syncRaceModeTiles();
     const m = RACE_MODES[raceMode];
-    $('race-limit-label').textContent = m.unit;
-    $('race-mode-hint').textContent = m.hint;
+    $('race-limit-label').textContent = t(m.unit);
+    $('race-mode-hint').textContent = t(m.hint);
     $('race-start-btn').textContent = `\u{1F3C1} ${m.label} starten`;
     // Free practice has no limit, so the field would be a lie. Disabled, not hidden:
     // a control that vanishes makes people wonder whether they broke something.
@@ -6019,8 +6021,12 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
     // lokalen Zeilen (eigene Autos/Ghosts) bleiben; die anderen Geraete aus der Rangliste
     // kommen als zusaetzliche Zeilen dazu - jede mit ihren gemeldeten Runden/Zeiten.
     let mpHtml = '';
-    if (typeof mpStand === 'function') {
-      const stand = mpStand();
+    // try: mpStand liest mp aus 97-sessions.js - ein Aufruf vor dessen Auswertung (Sprachwechsel
+    // beim Laden) waere sonst ein Fehler der Ladereihenfolge (temporale Todeszone).
+    let mpStandJetzt = null;
+    try { mpStandJetzt = typeof mpStand === 'function' ? mpStand() : null; } catch (e) { /* Ladefolge */ }
+    if (mpStandJetzt) {
+      const stand = mpStandJetzt;
       const leute = (stand && stand.fahrer) || [];
       const lokale = new Set();
       if (typeof raceAllCars === 'function') {

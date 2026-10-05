@@ -48,6 +48,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Sicherungsdatei in Dokumente/OmegaSim auf Android 7-9 (ab 10 ueber MediaStore, ohne Recht). -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Host-Suche im WLAN (mDNS) und zugleich die Voraussetzung fuer den Vordergrunddienst

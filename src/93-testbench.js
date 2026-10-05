@@ -1395,7 +1395,7 @@
         const modeNach = $('race-mode').value;
         return {
           armiert: false, modeZurueck: 'practice',
-          screenErreichbar: COCKPIT_SCREENS.every((s) => s.id !== 'renneinstellungen'),
+          renneinstellungenRaus: COCKPIT_SCREENS.every((s) => s.id !== 'renneinstellungen'),
           nurEineZeileVorher: true, bewegtSich: false, umlaufKehrtZurueck: true,
           modeVorWahl: vor, modeNachWahl: modeNach,
         };
@@ -6890,8 +6890,8 @@
       const opt = o || {};
       const echtFetch = window.fetch;
       const merk = { host: mp.host, name: mp.name, an: mp.an, timer: mp.timer,
-                     id: mp.id, letzter: mp.letzterBericht,
-                     runden: dashLapTimes.slice() };
+                     id: mp.id, letzter: mp.letzterBericht, bekannt: mp.bekannt,
+                     stand: mpLetzterStand, runden: dashLapTimes.slice() };
       const gesendet = [];
       try {
         // Kein Zeitgeber waehrend der Messung: mpJoin() startet einen, und ein Takt, der
@@ -6952,6 +6952,9 @@
         window.fetch = echtFetch;
         mp.host = merk.host; mp.name = merk.name; mp.an = merk.an;
         mp.id = merk.id; mp.letzterBericht = merk.letzter;
+        // Auch die Fahrerliste des Probelaufs zuruecknehmen (v0.9.3): sonst stand der
+        // Pruef-Fahrer "x" danach in mp.bekannt und loeste einen falschen Abschiedston aus.
+        mp.bekannt = merk.bekannt; mpLetzterStand = merk.stand;
         if (mp.timer) { clearInterval(mp.timer); }
         mp.timer = merk.timer;
         dashLapTimes = merk.runden;

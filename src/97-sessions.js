@@ -611,16 +611,23 @@
     mp.offset = mp.proben.reduce((a, x) => (x.weg < a.weg ? x : a)).off;
   }
   // Ein neuer Plan vom Host: uebernehmen, wenn Gruen noch bevorsteht.
-  function mpRennenPruefen(r) {
+  //
+  // Erkannt wird ein Rennen an HOST-KENNUNG + Nummer (v0.9.2): die Nummer beginnt nach einem
+  // Neustart des Hosts wieder bei 1, und ohne die Kennung (`boot`) hielte ein Telefon das neue
+  // Rennen fuer ein schon gefahrenes und liesse es still aus. Die Bereitschaftsphase hat noch
+  // keine Startzeit und wird hier nicht genommen (alte Hosts kennen keine `phase`).
+  function mpRennenPruefen(r, boot) {
     if (!r || !r.id || !r.startAt || !r.plan) return false;
-    if (r.id === mp.rennenId) return false;
+    if (r.phase && r.phase !== 'start') return false;
+    const schl = (boot || '') + ':' + r.id;
+    if (schl === mp.rennenId) return false;
     const lokal = r.startAt - mp.offset;
     // Erst pruefen, dann merken: Wer zu spaet (oder mit falsch geeichter Uhr) kommt,
     // darf den Renn-ID nicht verbrauchen, sonst wuerde der naechste Poll denselben Plan
     // nicht mehr annehmen und das Rennen startete fuer ihn nie. So kann eine verpasste
     // Probe (gedrosselter Tab, langsames WLAN, Uhrversatz) beim naechsten Poll nachziehen.
     if (lokal < Date.now() + 500) return false;          // schon vorbei oder zu knapp
-    mp.rennenId = r.id;
+    mp.rennenId = schl;
     mpRennenUebernehmen(r.plan, lokal);
     return true;
   }
@@ -647,8 +654,14 @@
     showHudToast(t('Rennen für alle: Ampel kommt gleich'));
     log('Mehrspieler: gemeinsamer Start in ' + Math.round((lokal - Date.now()) / 100) / 10 + ' s.', 'info');
   }
-  async function mpRennenFuerAlle() {
-    if (!mp.an) { mpSay(t('Erst mitmachen, dann für alle starten.'), true); return; }
+  // Fehler sichtbar machen, wo man gerade ist: die Statuszeile steht nur im Mehrspieler-Reiter.
+  function mpFehler(text) {
+    mpSay(text, true);
+    if (typeof showHudToast === 'function') showHudToast(text);
+  }
+  // EIN Plan (v0.9.2): vorher wurde er beim Ankuendigen und beim Start je neu gewuerfelt - dann
+  // stimmten Wetter und Wind nicht mit dem angekuendigten Plan ueberein.
+  function mpPlanBauen() {
     const w = Math.random() * 2 * Math.PI;
     const plan = { modus: raceMode, limit: raceLimit, wx: raceWxStart, wxChange: raceWxChange,
                    fliegend: raceFlying, pit: racePitRequired, tank: raceFuelStartL,
@@ -661,6 +674,12 @@
       const p = window.__presetActive();
       if (p) plan.preset = p;
     }
+    return plan;
+  }
+  async function mpRennenFuerAlle() {
+    if (!mp.an) { mpFehler(t('Erst mitmachen, dann für alle starten.')); return; }
+    const plan = mpPlanBauen();
+    mp.planBereit = plan;
     try {
       const t0 = Date.now();
       // BEREIT-GATE (v0.8.126): zuerst nur den Bereitschaftsschirm ankündigen (phase
@@ -674,11 +693,21 @@
       const d = await r.json();
       if (!d.ok) throw new Error(d.fehler || 'abgelehnt');
       mpUhrProbe(t0, t1, d.zeitMs);
+      // Ein Host ohne Bereitschaftsrunde (aelter als v0.8.126) startet sofort und schickt die
+      // Startzeit gleich mit: dann wie frueher direkt uebernehmen.
+      if (d.startAt) { mpRennenPruefen({ id: d.id, startAt: d.startAt, plan }, mpBoot()); return; }
       mpSay(t('Rennen für alle: alle bereit machen, dann startet der Host.'));
+      mpHolen();                                         // Schirm sofort zeigen
     } catch (e) {
-      mpSay(t('Start für alle fehlgeschlagen') + ': ' + e.message, true);
+      mpFehler(t('Start für alle fehlgeschlagen') + ': ' + e.message);
     }
   }
+  function mpBoot() { return mpLetzterStand && mpLetzterStand.boot; }
+  // Wer zaehlt bei "alle bereit": nur, wer sich in den letzten 15 s gemeldet hat (dieselbe
+  // Grenze wie in beiden Hosts). Abgemeldete, schlafende oder abgestuerzte Telefone blockierten
+  // sonst den Start fuer immer - sie blieben in der Fahrerliste stehen.
+  const MP_AKTIV_S = 15;
+  function mpAktiv(f) { return !(f && Number.isFinite(f.alter) && f.alter > MP_AKTIV_S); }
   // ---- BEREITSCHAFTSSCHIRM (v0.8.126) -----------------------------------------------
   // Der Schirm wird aus dem /mp/state-Abruf gespeist (mpBereitSchirm). Jeder tippt
   // "Bereit" (POST /mp/ready); der Initiator sieht "Start", sobald alle anderen bereit sind.
@@ -692,28 +721,28 @@
     if (rennen.phase !== 'bereit') { screen.hidden = true; return; }
     const initiator = rennen.initiator;
     const bereitListe = Array.isArray(rennen.bereit) ? rennen.bereit : [];
-    const leute = (d && d.fahrer) || [];
+    const leute = ((d && d.fahrer) || []).filter(mpAktiv);
     const istInitiator = mp.id === initiator;
     const andere = leute.filter((f) => f.id && f.id !== initiator);
     const alleBereit = andere.every((f) => bereitListe.indexOf(f.id) >= 0);
     const host = $('mp-ready-liste');
     if (host) {
       host.innerHTML = leute.map((f) => {
-        const bereit = bereitListe.indexOf(f.id) >= 0;
+        const bereit = f.id === initiator || bereitListe.indexOf(f.id) >= 0;
         const eigen = f.id === mp.id;
         return '<div class="mp-ready-zeile' + (bereit ? ' bereit' : '') + '">'
-          + '<span class="mp-ready-name">' + mpBereitEsc(f.name || f.id) + (eigen ? ' (du)' : '')
-          + (f.id === initiator ? ' · Host' : '') + '</span>'
-          + '<span class="mp-ready-status">' + (bereit ? '\u2713 bereit' : 'wartet\u2026')
+          + '<span class="mp-ready-name">' + mpBereitEsc(f.name || f.id) + (eigen ? ' (' + t('du') + ')' : '')
+          + (f.id === initiator ? ' · ' + t('startet') : '') + '</span>'
+          + '<span class="mp-ready-status">' + (bereit ? '\u2713 ' + t('bereit') : t('wartet …'))
           + '</span></div>';
       }).join('');
     }
     const info = $('mp-ready-info');
     if (info) {
       info.textContent = istInitiator
-        ? (alleBereit ? 'Alle bereit \u2013 du kannst starten.' : 'Warte auf die Bereitschaft aller anderen.')
-        : (bereitListe.indexOf(mp.id) >= 0 ? 'Du bist bereit. Warte, bis der Host startet.'
-           : 'Tippe auf \u201eBereit\u201c, sobald du soweit bist.');
+        ? (alleBereit ? t('Alle bereit, du kannst starten.') : t('Warte, bis alle anderen bereit sind.'))
+        : (bereitListe.indexOf(mp.id) >= 0 ? t('Du bist bereit. Warte, bis gestartet wird.')
+           : t('Tippe auf „Bereit“, sobald du soweit bist.'));
     }
     if ($('mp-ready-bereit')) $('mp-ready-bereit').hidden = istInitiator || bereitListe.indexOf(mp.id) >= 0;
     if ($('mp-ready-start')) {
@@ -721,7 +750,10 @@
       $('mp-ready-start').disabled = !alleBereit;
     }
     if ($('mp-ready-abbrechen')) $('mp-ready-abbrechen').hidden = !istInitiator;
-    screen.hidden = false;
+    if (screen.hidden) {
+      screen.hidden = false;
+      if (typeof menuNavEnsureContext === 'function') { menuNavEnsureContext(); menuNavIndex = 0; menuNavGezeigt = true; menuNavRender(); }
+    }
   }
   async function mpBereitMelden() {
     if (!mp.an) return;
@@ -733,15 +765,8 @@
   }
   async function mpBereitStarten() {
     if (!mp.an) return;
-    const w = Math.random() * 2 * Math.PI;
-    const plan = { modus: raceMode, limit: raceLimit, wx: raceWxStart, wxChange: raceWxChange,
-                   fliegend: raceFlying, pit: racePitRequired, tank: raceFuelStartL,
-                   wetterPlan: wetterPlanBauen(), wind: { x: Math.cos(w), y: Math.sin(w) } };
-    if ($('mp-force-preset') && $('mp-force-preset').checked
-        && typeof window.__presetActive === 'function') {
-      const p = window.__presetActive();
-      if (p) plan.preset = p;
-    }
+    // Derselbe Plan wie angekuendigt; nach einem Neuladen kennt ihn nur der Host (plan: null).
+    const plan = mp.planBereit || null;
     try {
       const t0 = Date.now();
       const r = await fetch(mpUrl('/mp/race'), { method: 'POST', cache: 'no-store',
@@ -752,16 +777,21 @@
       const d = await r.json();
       if (!d.ok) throw new Error(d.fehler || 'abgelehnt');
       mpUhrProbe(t0, t1, d.zeitMs);
-      mpRennenPruefen({ id: d.id, startAt: d.startAt, plan });
+      mpRennenPruefen({ id: d.id, startAt: d.startAt, plan: d.plan || plan, phase: 'start' }, mpBoot());
       $('mp-ready-screen').hidden = true;
+      mp.planBereit = null;
     } catch (e) {
-      mpSay(t('Start für alle fehlgeschlagen') + ': ' + e.message, true);
+      mpFehler(t('Start für alle fehlgeschlagen') + ': ' + e.message);
     }
   }
+  // Nur die Bereitschaftsrunde beenden (v0.9.2). Vorher rief das /mp/reset - und loeschte
+  // damit Fahrerliste und Wertung aller Mitspieler.
   async function mpBereitAbbrechen() {
     try {
-      await fetch(mpUrl('/mp/reset'), { method: 'GET', cache: 'no-store' });
-    } catch (e) { /* egal */ }
+      await fetch(mpUrl('/mp/race/cancel'), { method: 'POST', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: mp.id }) });
+    } catch (e) { /* der naechste Abruf zeigt es */ }
+    mp.planBereit = null;
     $('mp-ready-screen').hidden = true;
   }
   // Aus toggleRace (70-race.js): im Mehrspieler erst fragen. true = Dialog offen.
@@ -786,7 +816,7 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       mpUhrProbe(t0, Date.now(), d.zeitMs);
-      mpRennenPruefen(d.rennen);
+      mpRennenPruefen(d.rennen, d.boot);
       mp.zuschauer = d.zuschauer || 0;
       mpLetzterStand = d;
       mpPosTakt();
@@ -853,6 +883,14 @@
   }
 
   function mpLeave() {
+    // Beim Host abmelden (v0.9.2), sonst stand man noch in der Fahrerliste und blockierte eine
+    // Bereitschaftsrunde. Aeltere Hosts kennen /mp/leave nicht - dann zaehlt die 15-s-Grenze.
+    if (mp.an && mp.host) {
+      fetch(mpUrl('/mp/leave'), { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ id: mp.id }) }).catch(() => {});
+    }
+    if ($('mp-ready-screen')) $('mp-ready-screen').hidden = true;
+    mp.planBereit = null;
     mp.an = false;
     mp.bekannt = null;
     mpPosTakt();

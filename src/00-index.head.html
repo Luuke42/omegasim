@@ -192,7 +192,7 @@
   nav.tabs button {
     background: transparent; border: none; border-bottom: 3px solid transparent;
     white-space: nowrap; flex-shrink: 0;
-    border-radius: 0; padding: 27px 15px; min-height: 345px; color: var(--muted); font-weight: 700;
+    border-radius: 0; padding: 11px 15px; color: var(--muted); font-weight: 700;
     text-transform: uppercase; letter-spacing: .09em; font-size: 11.5px;
   }
   /* Every tab gets a hint of the channel offset, the active one gets it at full strength.
@@ -563,7 +563,6 @@
     .home-topbar { padding: 10px 16px; font-size: 12.5px; gap: 8px 10px; }
     .home-topbar .foot-brand { display: none; }
     #lang-toggle { min-width: 104px; }
-    nav.tabs button { padding: 15px 15px; min-height: 90px; }
   }
   /* Die aktive Sprache steht hell, die andere gedimmt - ein Umschalter, der zeigt, was
      gerade gilt, statt nur was man anklicken kann. */
@@ -2596,6 +2595,35 @@
     #k-leiste .k-reiter button { padding: 5px 8px; font-size: clamp(9px, 1.9vh, 12px); }
     .k-leiste2 .k-reiter button { padding: 4px 8px; font-size: clamp(8.5px, 1.7vh, 11px); }
   }
+  /* AUSWAHL MIT WENIGEN WERTEN ALS "◀ WERT ▶" (v0.9.7, 98b-sicherung.js blaetternBauen) */
+  .ob-versteckt { display: none !important; }
+  .opt-blaettern { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
+  .opt-blaettern.aus { opacity: .45; pointer-events: none; }
+  .opt-blaettern .ob-pf { min-width: 30px; min-height: 30px; padding: 0 6px; background: transparent;
+    border: 1px solid rgba(255,255,255,.22); color: var(--k-blau, #00a3e0); font-size: 12px; line-height: 1; cursor: pointer; }
+  .opt-blaettern .ob-pf:hover { background: rgba(255,255,255,.08); }
+  .opt-blaettern .ob-wert { min-width: 7.5em; text-align: center; font-weight: 700; padding: 0 6px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  /* KEIN ZIEHEN-ZUM-AKTUALISIEREN (v0.9.4). BESTELLT: "in der installierten Chrome-App (nicht
+     .apk) das Herunterswipen nicht zum Aktualisieren fuehren". */
+  html, body { overscroll-behavior-y: contain; }
+  /* COCKPIT RECHTS (v0.9.4). BESTELLT: "Sound und 'Rennen starten' Buttons rechts weg und dafuer
+     Rundenzeiten in doppelt so grosser Schriftgroesse." Die Knoepfe bleiben im Dokument (Tasten,
+     Tests und Zustandsanzeige haengen an ihnen), werden aber nicht mehr gezeigt: Rennen starten
+     geht ueber die Rennen-Taste/das Menue, der Motorklang ueber Optionen > Sound. */
+  #race-act-start, #race-act-sound { display: none !important; }
+  .gt3-right .gt3-times .gt3-val { font-size: clamp(26px, 5.2vw, 54px); line-height: 1.05; }
+  .gt3-right .gt3-times .gt3-lbl { font-size: clamp(9px, 1.4vw, 12px); }
+  .gt3-right .gt3-laps { font-size: clamp(16px, 2.4vw, 24px); max-height: none; }
+  /* REITER HOEHER (v0.9.3). BESTELLT: "tab höhe ganz oben in der navbar erhöhen; Auf PC das
+     4fache, auf mobile 2-3 fache, damit man auch mit finger ganz ok drauftippen kann (sollte
+     trotzdem noch schlank sein)." Gemessen vorher: 10 px am PC, 20-23 px am Handy. Die
+     Aenderungen v0.8.92-96 hatten das verborgene nav.tabs erhoeht und deshalb nichts bewirkt. */
+  #k-leiste .k-reiter button { min-height: 40px; padding: 0 10px; font-size: 12.5px; letter-spacing: .08em; }
+  @media (pointer: coarse) {
+    #k-leiste .k-reiter button { min-height: 46px; padding: 0 4px; font-size: clamp(10px, 2.9vw, 13px); letter-spacing: .02em;
+      white-space: normal; line-height: 1.1; text-overflow: clip; }
+  }
   /* Offene Unterseite mit zweiter Leiste: die Ueberschrift steht dort schon, der
      Zurueck-Knopf wird eine knappe Zeile. */
   body.k-innen .subpage.on > h2 { display: none; }
@@ -2766,6 +2794,8 @@
   .ch-kachel .ch-k-beliebt[hidden] { display: none; }
   .ch-kachel .ch-k-rang { display: block; font-style: normal; font-size: 11px; letter-spacing: .03em; text-align: center; padding: 0 4px 6px; }
   .ch-kachel .ch-k-rang:empty { display: none; }
+  .ch-kachel .ch-k-anzahl { display: block; font-style: normal; font-size: 10.5px; color: var(--dim, #a3acbd); text-align: center; padding: 0 4px 5px; }
+  .ch-kachel .ch-k-anzahl[hidden] { display: none; }
   .ch-k-medaille-hinweis { font-size: 12px; line-height: 1.5; margin: 2px 0 8px; }
   .ch-detail { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   .ch-rechts > h3:first-child { margin-top: 0; }
@@ -3367,12 +3397,23 @@
   .track-kachel-vorschau svg { width: 100%; height: 100%; display: block; }
   .track-kachel b { font-size: 13px; }
   .track-kachel em { font-style: normal; font-size: 11px; color: var(--muted); }
-  .track-kachel-del { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px;
-    border-radius: 50%; font-size: 12px; line-height: 1; padding: 0; display: flex;
-    align-items: center; justify-content: center; background: var(--danger, #c0392b);
+  /* Das Loeschen-Kreuz ist ein eigener Knopf NEBEN der Kachel (v0.9.3; vorher ein Knopf im
+     Knopf - ungueltiges HTML) und wirklich rund: die allgemeinen Knopf-Mindestmasse machten es
+     oval, deshalb hier feste Groesse ohne Mindestmasse und Seitenverhaeltnis 1. */
+  .track-kachel-wrap { position: relative; display: flex; min-width: 0; }
+  .track-kachel-wrap > .track-kachel { flex: 1; min-width: 0; }
+  .track-kachel-del { position: absolute; top: 6px; right: 6px; z-index: 1;
+    width: 26px !important; height: 26px !important; min-width: 0 !important; min-height: 0 !important;
+    aspect-ratio: 1 / 1; box-sizing: border-box; flex: none;
+    border-radius: 50%; font-size: 13px; line-height: 1; padding: 0 !important; display: grid;
+    place-items: center; background: var(--danger, #c0392b);
     color: #fff; border: none; cursor: pointer; }
   /* Community Strecken: Liste der eingereichten Strecken. */
   .community-liste { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .community-mini { flex: none; width: 74px; height: 52px; display: grid; place-items: center; background: rgba(0,0,0,.25); border-radius: 6px; overflow: hidden; }
+  .community-mini svg { width: 100%; height: 100%; }
+  .community-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .community-stand { margin: 6px 0 0; font-size: 12px; }
   .community-zeile { display: flex; align-items: center; justify-content: space-between;
     gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
     background: var(--panel-2); }
@@ -4183,7 +4224,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">0.9.1</span></span>
+        <span class="foot-ver">v<span id="app-version">0.9.11</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -4853,7 +4894,7 @@
         <p class="grid-hinweis" id="grid-hinweis">Alle Autos stehen auf den Teilen <b>vor</b> Start/Ziel. Erst wenn du Start/Ziel zum ersten Mal &uuml;berf&auml;hrst, beginnt Runde&nbsp;1.</p>
         <label class="grid-selbst" id="grid-selbst-wrap">
           <input type="checkbox" id="grid-selbst">
-          <span class="wip-tag">experimentell</span> Autos fahren selbst in Position
+          <span class="wip-tag">experimentell</span> Aufstellung mit gr&ouml;&szlig;ter Querlage (links/rechts)
         </label>
         <div class="grid-liste" id="grid-liste"></div>
         <div class="schirm-fuss grid-fuss">
@@ -4862,19 +4903,6 @@
         </div>
       </div>
 
-      <!-- MEHRSPIELER-BEREITSCHAFT (v0.8.126): wenn jemand ein Rennen "fuer alle" startet,
-           sehen ALLE Telefone diesen Schirm. Jeder meldet sich bereit; der Initiator kann
-           erst starten, wenn alle anderen bereit sind. -->
-      <div class="gt3-gridschirm" id="mp-ready-screen" data-i18n-skip hidden>
-        <div class="schirm-kopf"><b>Rennen für alle: bereit?</b>
-          <span id="mp-ready-info" data-i18n-skip></span></div>
-        <div class="grid-liste" id="mp-ready-liste"></div>
-        <div class="schirm-fuss grid-fuss">
-          <button type="button" class="warn" id="mp-ready-abbrechen">Abbrechen</button>
-          <button type="button" class="primary grid-start-gross" id="mp-ready-start" disabled>Start</button>
-          <button type="button" class="primary grid-start-gross" id="mp-ready-bereit" hidden>Bereit</button>
-        </div>
-      </div>
     </div>
 
   </section>
@@ -5267,6 +5295,14 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>0.9</span></b></p>
       <ul class="muted" id="patchnotes-09" style="padding-left:20px; line-height:1.7">
+        <li>Streckeneditor: Das Raum-Rechteck ist auch mit nur einer Grenze sichtbar und zeigt die Ma&#223;e. Die Strecke l&#228;sst sich darin mit dem Finger oder der Maus verschieben, im Vollbild auch mit dem rechten Stick; rechten Stick dr&#252;cken zentriert.</li>
+        <li>Community-Strecken werden jetzt &#252;ber das Online-Sheet mit allen geteilt (Strecken und Zeiten), jede Zeile zeigt ein Vorschaubild. Eigene, bisher nur lokale Strecken werden beim n&#228;chsten Abgleich eingereicht. Dauerrennen-Zeiten kommen jetzt auch in die Online-Bestenliste. Das Apps Script muss daf&#252;r neu bereitgestellt werden.</li>
+        <li>Auswahlfelder mit wenigen Werten (Physik-Modus, Getriebe, Boxenstopp, Sprache &#8230;) sind jetzt &#8222;&#9664; Wert &#9654;&#8220; zum Durchschalten statt Aufklapplisten.</li>
+        <li>Alles bleibt gespeichert: Rolle und Ghost-Tempo je Auto, die Strecke im Editor (mit Drehung und Zoom) und die Tastenbelegung je Controller. In der App zus&#228;tzlich eine Sicherungsdatei in Dokumente/OmegaSim, die auch eine Neuinstallation &#252;bersteht; nach einer Neuinstallation bietet die App an, sie einzulesen (neue APK n&#246;tig). Garage: Spieler 1/2 lassen sich nur noch w&#228;hlen, wenn kein anderes Auto sie hat. Presets enthalten Sprache, Entwickler- und Zwei-Spieler-Modus nicht mehr.</li>
+        <li>Ghosts (experimentell): Regler &#8222;Tempo-Streuung&#8220; (Vorgabe 0 %), Start je Startreihe versetzt (an, 200 ms je Reihe), und zu zweit in Kurven f&#228;hrt das vordere Auto innen, das hintere in der Mitte (an).</li>
+        <li>Streckenscan langsamer (auch in der Haarnadel), das Auto h&#228;lt am Ende an; der Live-Scan erkennt das Rundenende selbst. Reiter wechseln per Wischen nach links/rechts. Kein Neuladen mehr durch Herunterziehen. Challenges zeigen &#8222;X Ergebnisse&#8220;. Cockpit: Rundenzeiten doppelt so gro&#223;, Sound- und Start-Knopf rechts entfernt.</li>
+        <li>Obere Reiterleiste deutlich h&#246;her (PC 40 px, Handy 46 px), gut zum Tippen. Meine Strecken: Ton beim Laden, rundes L&#246;schen-Kreuz mit R&#252;ckfrage. Ghosts halten wieder den gemessenen Abstand (1,2 Kacheln, mehr &#252;ber &#8222;Feld-Abstand&#8220;). Knockout und Derby als experimentell gekennzeichnet, Texte &#252;bersetzt.</li>
+        <li>Mehrspieler: &#8222;Rennen f&#252;r alle&#8220; repariert. Der Bereitschaftsschirm erscheint jetzt auf jedem Reiter, inaktive oder abgemeldete Telefone blockieren den Start nicht mehr, Abbrechen l&#246;scht nicht mehr die Wertung aller, und das angek&#252;ndigte Wetter gilt auch beim Start. App: schnellerer, stabilerer direkter Steuerweg zum Auto (neue APK n&#246;tig).</li>
         <li>Zweite Kopie der App: Die Download-Links zeigen auf deren eigenes Release (mit Download-Z&#228;hler), sonst auf die APK im Repo.</li>
       </ul>
       <p class="muted"><b><span data-i18n-skip>0.8</span></b></p>
@@ -8192,12 +8228,12 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M7 7h10M7 17h10M12 7v10"/><circle cx="12" cy="12" r="3"/>
-          </svg><b>Knockout</b></button>
+          </svg><b>Knockout</b><span class="wip-tag">experimentell</span></button>
         <button type="button" class="mode-tile kachelbild derby" data-mode="derby">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="9" cy="9" r="3"/><circle cx="15" cy="15" r="3"/><path d="M9 12v9M15 12V3"/>
-          </svg><b>Demolition Derby</b></button>
+          </svg><b>Demolition Derby</b><span class="wip-tag">experimentell</span></button>
       </div>
       <select id="race-mode" hidden style="display:none">
         <option value="practice" selected>Freies Training</option>
@@ -9669,6 +9705,32 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-ueber-val">0.5</span>
         </div></div>
+      <!-- v0.9.5. BESTELLT: "gibt es fuer ghosts schon einen slider, der die heterogenitaet der
+           geschwindigkeiten angibt, also dass manche autos im schnitt minimal schneller sind auf
+           der geraden? Ansonsten einbauen, als experimentell, erstmal bei 0 varianz lassen" -->
+      <div class="opt-row"><div class="opt-label">Ghost: Tempo-Streuung<span class="wip-tag">experimentell</span><small>Jedes Auto bekommt je Rennen ein eigenes Grundtempo auf der Geraden, bis zu so viel Prozent schneller oder langsamer. 0&nbsp;% = alle gleich.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-streuung" min="0" max="10" step="1" value="0">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-streuung-val">0%</span>
+        </div></div>
+      <!-- v0.9.5. BESTELLT: "verzoegere beim rennstart leicht je paerchen autos, also platz 1 und 2
+           fahren minimal frueher los als 3 und 4 usw ... Ausserdem, wenn 2 autos nebeneinander
+           fahren, mach es so, dass in den kurven eins innen und eins in der mitte faehrt (nicht
+           aussen, dann riskiert es einen abflug). Diese einstellungen als toggles die
+           standardmaessig an sind einbauen" -->
+      <div class="opt-row"><div class="opt-label">Ghost: Start je Startreihe versetzt<span class="wip-tag">experimentell</span><small>Startplatz 1 und 2 fahren sofort los, 3 und 4 etwas später, 5 und 6 noch etwas später – so kommt Luft in die erste Kurve.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-staffel" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Versatz je Startreihe<span class="wip-tag">experimentell</span><small>Wie viel später jede weitere Zweierreihe losfährt.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-staffel-ms" min="50" max="600" step="50" value="200">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-staffel-ms-val">200 ms</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Zu zweit in Kurven innen/Mitte<span class="wip-tag">experimentell</span><small>Fahren zwei Autos nebeneinander in eine Kurve, nimmt das vordere die Innenseite und das hintere die Mitte, statt außen zu fahren und abzufliegen.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-paar-kurve" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Ghost: Kurvendrosselung<small>Wie viel Tempo in Kurven abgegeben wird. <b>Braucht ein Streckenlayout</b>: ohne gelesene oder gebaute Kacheln wei&szlig; der Ghost nicht, wo eine Kurve ist, und der Regler multipliziert eine Null.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
@@ -10324,10 +10386,10 @@
       <h2>System</h2>
       <div class="opt-row"><div class="opt-label">Sprache
           <small>Dieselbe Wahl wie auf dem Titelbildschirm.</small></div>
-        <select id="setting-sprache"><option value="de">Deutsch</option><option value="en">English</option></select></div>
+        <select id="setting-sprache" data-preset-skip><option value="de">Deutsch</option><option value="en">English</option></select></div>
       <div class="opt-row"><div class="opt-label">Entwicklertools zeigen
           <small>Blendet im Hauptmen&uuml; die Kachel Entwickler ein: Doku, Programmierschule, BLE-Werkbank, Selbsttest, Code-Sonde, Zahlensysteme, Aufnahme-Modus. Auch mit ?dev in der Adresse.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-dev"><span></span></label></div>
+        <label class="tgl"><input type="checkbox" id="setting-dev" data-preset-skip><span></span></label></div>
       <!-- v0.8.41: Messanzeige fuer den Lag in der App (BESTELLT: "Verzoegerung auf meinem
            schwaecheren Handy optimieren", erst Stufe 1, dann messen). -->
       <div class="opt-row"><div class="opt-label">Funk-Rundlauf
@@ -10383,6 +10445,7 @@
       </div>
       <div class="muted" id="sich-status" style="margin-top:8px; font-size:12px"
            data-i18n-skip>&nbsp;</div>
+      <div class="muted" id="sich-auto" style="margin-top:6px; font-size:12px" data-i18n-skip>&nbsp;</div>
       <p class="muted" style="font-size:11.5px; border-left:3px solid var(--info);
          padding-left:9px; margin-top:12px">
         Der Browser darf diesen Speicher jederzeit leeren &ndash; diese Datei ist die
@@ -10405,7 +10468,7 @@
           vorbehalten. Beide Autos werden aus demselben 45-ms-Sendetakt bedient &ndash;
           getrennte Takte waren die Ursache des Stotterns mit echtem Controller, und dieser
           Modus wiederholt den Fehler nicht.</small></div>
-        <label class="tgl"><input type="checkbox" id="opt-zwei-an"></label></div>
+        <label class="tgl"><input type="checkbox" id="opt-zwei-an" data-preset-skip></label></div>
       <div class="opt-row"><div class="opt-label">Controller tauschen<small>Welcher der
           beiden erkannten Controller Auto&nbsp;1 f&auml;hrt. Die Reihenfolge kommt vom
           Browser und ist nicht w&auml;hlbar: hier ist der Schalter daf&uuml;r.</small></div>
@@ -11101,6 +11164,22 @@
         <input type="text" id="k-frage-eingabe-feld" maxlength="16" autocomplete="off">
       </div>
       <div class="k-frage-knoepfe" id="k-frage-knoepfe"></div>
+    </div>
+  </div>
+  <!-- MEHRSPIELER-BEREITSCHAFT (v0.8.126, seit v0.9.2 als Einblendung ueber ALLEM): wenn jemand
+       ein Rennen "fuer alle" startet, sehen alle Telefone diesen Schirm, egal auf welchem Reiter.
+       Vorher lag er im Cockpit, der Knopf aber im Mehrspieler-Reiter - niemand sah ihn. Jeder
+       meldet sich bereit; der Initiator startet, sobald alle anderen bereit sind. -->
+  <div class="k-pause" id="mp-ready-screen" hidden>
+    <div class="k-pause-dialog">
+      <h2>Rennen für alle: bereit? <span class="wip-tag">experimentell</span></h2>
+      <p class="muted" id="mp-ready-info" data-i18n-skip></p>
+      <div class="grid-liste" id="mp-ready-liste"></div>
+      <div class="k-frage-knoepfe">
+        <button type="button" class="primary" id="mp-ready-bereit" hidden>Bereit</button>
+        <button type="button" class="primary" id="mp-ready-start" disabled>Start</button>
+        <button type="button" class="warn" id="mp-ready-abbrechen">Abbrechen</button>
+      </div>
     </div>
   </div>
 </main>

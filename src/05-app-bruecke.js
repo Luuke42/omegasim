@@ -83,17 +83,59 @@
     }
     return omegaBleDa;
   }
-  // Natives Direktschreiben, FEUER UND WEG: der Aufruf loest sofort auf und haelt den
-  // Steuertakt nicht auf. Der eigentliche GATT-Write laeuft im Plugin auf einem eigenen
-  // Hintergrund-Thread. Kommt waehrend eines Write ein neuer Befehl, gewinnt der neueste.
+  // Natives Direktschreiben, FEUER UND WEG (v0.9.2 neu): toNative OHNE gespeicherten Rueckruf -
+  // writeControl antwortet ab APK 0.9.2 gar nicht (RETURN_NONE), es bleibt also auch kein Promise
+  // je Takt liegen. Aeltere OmegaBle-Fassungen antworten noch; ohne Rueckruf verfaellt die Antwort.
+  //
+  // EHRLICHER RUECKFALL: OmegaBle meldet ueber status(), ob es die Verbindung findet. Solange das
+  // nicht feststeht oder "nein" heisst, schreibt das Community-Plugin. Geprueft wird beim ersten
+  // Befehl und danach alle 2 s, im Hintergrund. Kennt das Plugin status() nicht (APK 0.8.124-126),
+  // bleibt es beim alten Verhalten: OmegaBle schreibt.
+  const omegaLage = new Map();
+  function omegaBleBereit(z) {
+    let l = omegaLage.get(z.deviceId);
+    if (!l) { l = { bereit: null, geprueft: 0, fragt: false, zaehler: null, alt: false }; omegaLage.set(z.deviceId, l); }
+    const jetzt = performance.now();
+    if (!l.fragt && jetzt - l.geprueft > 2000) {
+      l.fragt = true;
+      C.nativePromise('OmegaBle', 'status', z)
+        .then((r) => {
+          // Findet es die Verbindung, verwirft aber seit der letzten Frage nur noch (nichts
+          // geschrieben, etwas verworfen): dann ebenfalls das Plugin nehmen.
+          const v = l.zaehler;
+          const nurVerworfen = v && r && r.geschrieben === v.geschrieben && r.verworfen > v.verworfen;
+          l.bereit = !!(r && r.bereit) && !nurVerworfen;
+          l.zaehler = r || null;
+        })
+        .catch(() => { l.bereit = true; l.alt = true; })
+        .then(() => { l.fragt = false; l.geprueft = performance.now(); });
+    }
+    return l.bereit === true;
+  }
   function omegaBleSchreiben(z, hex) {
     try {
-      C.nativePromise('OmegaBle', 'writeControl', { deviceId: z.deviceId, service: z.service,
-                                                    characteristic: z.characteristic, value: hex })
-        .catch(() => {});
+      C.toNative('OmegaBle', 'writeControl', { deviceId: z.deviceId, service: z.service,
+                                               characteristic: z.characteristic, value: hex });
       return true;
     } catch (e) { return false; }
   }
+  // Waehrend das Community-Plugin selbst ans GATT geht (Abo, Lesen, Schreiben mit Antwort),
+  // schreibt OmegaBle nicht: Android erlaubt nur EINEN GATT-Vorgang zugleich. Gezaehlt, weil
+  // mehrere Vorgaenge ueberlappen koennen; das Plugin hebt die Pause nach 1,5 s selbst auf.
+  let omegaPausen = 0;
+  async function mitOmegaPause(fn) {
+    if (!omegaBleVerfuegbar()) return fn();
+    if (omegaPausen++ === 0) await C.nativePromise('OmegaBle', 'pause', { an: true }).catch(() => {});
+    try { return await fn(); } finally {
+      if (--omegaPausen === 0) C.nativePromise('OmegaBle', 'pause', { an: false }).catch(() => {});
+    }
+  }
+  // Fuer die Anzeige "Funk-Rundlauf" (Optionen > System).
+  window.OMEGA_BRUECKE.omegaInfo = () => {
+    if (!omegaBleVerfuegbar()) return { weg: 'Plugin' };
+    const l = [...omegaLage.values()][0];
+    return { weg: l && l.bereit ? 'OmegaBle' : 'Plugin', alt: !!(l && l.alt), zaehler: l && l.zaehler };
+  };
 
   let bereit = null;
   function starten() {
@@ -136,18 +178,18 @@
     writeValueWithoutResponse(daten) {
       const z = this._ziel;
       const hex = zuHex(daten);
-      if (omegaBleVerfuegbar() && omegaBleSchreiben(z, hex)) return Promise.resolve();
+      if (omegaBleVerfuegbar() && omegaBleBereit(z) && omegaBleSchreiben(z, hex)) return Promise.resolve();
       return ruf('writeWithoutResponse', { deviceId: z.deviceId, service: z.service,
                                            characteristic: z.characteristic, value: hex, timeout: 300 });
     }
     async writeValueWithResponse(daten) {
       const z = this._ziel;
-      await ruf('write', { deviceId: z.deviceId, service: z.service,
-                           characteristic: z.characteristic, value: zuHex(daten), timeout: 300 });
+      await mitOmegaPause(() => ruf('write', { deviceId: z.deviceId, service: z.service,
+                                               characteristic: z.characteristic, value: zuHex(daten), timeout: 300 }));
     }
     writeValue(daten) { return this.writeValueWithResponse(daten); }
     async readValue() {
-      const r = await ruf('read', this._ziel);
+      const r = await mitOmegaPause(() => ruf('read', this._ziel));
       this.value = ausHex(r && r.value);
       return this.value;
     }
@@ -162,11 +204,11 @@
           this.dispatchEvent(new Event('characteristicvaluechanged'));
         });
       }
-      await ruf('startNotifications', z);
+      await mitOmegaPause(() => ruf('startNotifications', z));
       return this;
     }
     async stopNotifications() {
-      await ruf('stopNotifications', this._ziel);
+      await mitOmegaPause(() => ruf('stopNotifications', this._ziel));
       if (this._abo) { this._abo.remove(); this._abo = null; }
       return this;
     }
@@ -207,6 +249,13 @@
       // SCHNELLES VERBINDUNGSINTERVALL. Android waehlt sonst 30-50 ms, und der Sendetakt ist
       // 45 ms - dann faellt jedes zweite Paket auf das naechste Intervall. 1 = HIGH.
       ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 }).catch(() => {});
+      // Und alle 10 s nachlegen (v0.9.2): manche Autos/Telefone handeln das Intervall spaeter
+      // wieder hoch, und ein langsames Intervall fuehlt sich genau wie Eingabeverzoegerung an.
+      clearInterval(this._prio);
+      this._prio = setInterval(() => {
+        if (!this.connected) { clearInterval(this._prio); return; }
+        ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 }).catch(() => {});
+      }, 10000);
       return this;
     }
     disconnect() {

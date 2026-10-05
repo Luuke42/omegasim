@@ -2292,9 +2292,9 @@
     // die verbleibende Zeit - eine Rundenzahl anzuschreiben, die es in diesem Modus nicht
     // gibt, waere eine erfundene Angabe.
     $('race-lap-count').textContent = raceMode === 'knockout'
-      ? 'Leben ' + knockoutLeben + (zweiSpieler ? '/' + knockoutLeben2 : '') + ' · Geister ' + knockoutGeister
+      ? t('Leben') + ' ' + knockoutLeben + (zweiSpieler ? '/' + knockoutLeben2 : '') + ' · ' + t('Geister') + ' ' + knockoutGeister
       : raceMode === 'derby'
-        ? 'Health ' + Math.round(derbyHealth) + '% · Kills ' + derbyKills + ' · Gegner ' + derbyGeisterZaehlen()
+        ? 'Health ' + Math.round(derbyHealth) + '% · Kills ' + derbyKills + ' · ' + t('Gegner') + ' ' + derbyGeisterZaehlen()
         : raceLapTarget(laps.length);
     $('race-lap-list').innerHTML = laps.slice().reverse().slice(0, 10).map(l =>
       `<li><span>${l.lap}</span><span${l.ms === best ? ' class="gt3-ok"' : ''}>${formatLapTime(l.ms)}</span></li>`
@@ -2314,8 +2314,14 @@
     if (!el || !el.offsetParent) return;
     const s = typeof funkStatistik === 'function' ? funkStatistik() : null;
     const wv = (navigator.userAgent.match(/Chrome\/(\d+)/) || [])[1];
+    // Schreibweg in der App (v0.9.2): OmegaBle (direkt, ohne Rundlauf) oder das Plugin.
+    const ob = window.OMEGA_APP && window.OMEGA_BRUECKE && window.OMEGA_BRUECKE.omegaInfo
+      ? window.OMEGA_BRUECKE.omegaInfo() : null;
+    const z = ob && ob.zaehler;
+    const weg = ob ? ' · ' + t('Weg') + ' ' + ob.weg + (ob.alt ? ' (' + t('alte APK') + ')' : '')
+      + (z ? ' · ' + z.geschrieben + ' ' + t('geschrieben') + ', ' + z.wiederholt + ' ' + t('wiederholt') + ', ' + z.verworfen + ' ' + t('verworfen') : '') : '';
     el.textContent = (s ? Math.round(s.mittel) + ' / ' + Math.round(s.p95) + ' ms' + (s.haenger ? ' · ' + s.haenger + '× hing' : '')
-      : t('noch keine Befehle')) + (wv ? ' · WebView ' + wv : '');
+      : t('noch keine Befehle')) + weg + (wv ? ' · WebView ' + wv : '');
   }, 1000);
   // COCKPIT GEDROSSELT (v0.8.41): hoechstens alle COCKPIT_MAL_MS, nach dem Senden.
   const COCKPIT_MAL_MS = 90;
@@ -2561,6 +2567,9 @@
   // Moeglich wurde es durch die Ortung aus v0.6.46: autopilotGrund() ist global (Flagge,
   // Einfuehrungsrunde, Bahn/Ausdruck-Stellung), der Rest haengt am Auto - Motor, Regler,
   // Kolonnenversatz, Abseits-Antwort. `wer` ist 1, wenn nichts dasteht.
+  const SCAN_TEMPO = 0.6, SCAN_TEMPO_HAARNADEL = 0.4;
+  const scanStopp = { car: null, bis: 0 };
+  function scanAnhalten(car) { if (car) { scanStopp.car = car; scanStopp.bis = Date.now() + 1500; } }
   function autopilot(fahrerBremse, wer) {
     const zwei = wer === 2;
     const motor = zwei ? physEngine2 : physEngine;
@@ -2575,6 +2584,11 @@
     // garageScan.car in 60-track.js. Ein globales 'scan' wuerde das jeweils andere Auto
     // mit hineinziehen, auch wenn nur eines tatsaechlich gescannt wird.
     const meinAuto = zwei ? (typeof playerCar2 !== 'undefined' ? playerCar2 : null) : playerCar;
+    // NACH DEM SCAN ANHALTEN (v0.9.4). BESTELLT: "wenn livescan fertig, dann auto anhalten".
+    // 1,5 s Bremse, danach wieder der Fahrer - steht der Gashebel auf null, bleibt das Auto stehen.
+    if (scanStopp.car && scanStopp.car === meinAuto && Date.now() < scanStopp.bis) {
+      return { grund: 'scan', throttle: 0, brake: 1, steer: 0, lenkt: false };
+    }
     if (typeof garageScan !== 'undefined' && garageScan.aktiv && garageScan.car === meinAuto) {
       const v = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
       const dt = Math.max(0.01, Math.min(0.25, (Date.now() - (regler.at || Date.now())) / 1000));
@@ -2585,7 +2599,12 @@
       // Haarnadelkurve rausfaehrt -> drosseln." Insgesamt 85 % der Einfuehrungsrunde, in
       // einer gemeldeten Haarnadel 65 %. Die Leseschwelle 0,35 (GHOST_READ_MIN) ist am
       // GEDRUCKTEN Muster gemessen; der Scan laeuft auf der Bahn (trackMode 'on').
-      const ziel = formationPace() * (scanInHaarnadel(meinAuto) ? 0.65 : 0.85);
+      // v0.9.4: BESTELLT "Streckenscan funktioniert nicht. Das Auto faehrt in der Haarnadelkurve
+      // raus. Mach insgesamt langsamer." Waehrend des Scans ist die Strecke unbekannt - eine
+      // Haarnadel ist erst zu erkennen, wenn das Auto schon auf ihr steht. Deshalb ueberall
+      // langsamer (60 statt 85 %, in der Haarnadel 40 statt 65 %); auf der Bahn liest das Auto
+      // die Codes auch darunter (die Schwelle 0,35 gilt fuer das gedruckte Muster).
+      const ziel = formationPace() * (scanInHaarnadel(meinAuto) ? SCAN_TEMPO_HAARNADEL : SCAN_TEMPO);
       const geregelt = ghostSpeedControl(regler, ziel, v, dt);
       return { grund: 'scan', throttle: geregelt.throttle, brake: geregelt.brake,
                steer: 0, lenkt: !abseitsJetztFuer(zwei ? 2 : 1) };

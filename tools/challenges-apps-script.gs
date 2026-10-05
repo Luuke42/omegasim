@@ -119,6 +119,11 @@ const CHALLENGES = {
   'wd18-thruxford': { runden: 8, min: 2250 },
   'wd19-jaramilla': { runden: 8, min: 2710 },
   'wd20-nuerbelberg': { runden: 8, min: 2450 },
+  // Dauerrennen (feste Strecken, 72-challenges.js CH_DAUER). Fehlten bis v0.9.10 - das Sheet
+  // lehnte ihre Zeiten als "unbekannte Challenge" ab.
+  'dauer-homington': { runden: 20, min: 2010 },
+  'dauer-circuitdusol': { runden: 20, min: 2920 },
+  'dauer-balkonia': { runden: 100, min: 4180 },
 };
 const MODI = ['hotlap', 'rennen'];
 const PRESETS = ['pro', 'arcade'];
@@ -165,9 +170,73 @@ function zeileZuEintrag(sp, z) {
     auto: zelle(sp, z, 'auto'), fahrer: zelle(sp, z, 'fahrer'), geraet: zelle(sp, z, 'geraet'),
     runden: runden, runden_ms: rundenMs };
 }
+// ---- COMMUNITY-STRECKEN (v0.9.10) ---------------------------------------------------------
+// Eigene Strecken, die alle sehen und fahren koennen. Zwei Blaetter, beide legt das Skript selbst
+// an: "Community" (eine Zeile je Strecke) und "CommunityZeiten" (eine Zeile je Lauf). Ob eine
+// Strecke schon da ist (auch gespiegelt), prueft die App vor dem Einreichen - dafuer braucht es
+// die Streckengeometrie, und die steht in der App.
+const C_BLATT = 'Community', C_KOPF = ['zeitpunkt', 'id', 'code', 'name', 'geraet'];
+const CZ_BLATT = 'CommunityZeiten', CZ_KOPF = ['zeitpunkt', 'id', 'zeit_ms', 'fahrer', 'geraet'];
+function blattMit(name, kopf) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(name);
+  if (!sh) { sh = ss.insertSheet(name); sh.appendRow(kopf); sh.setFrozenRows(1); }
+  return sh;
+}
+function communityStrecken() {
+  return blattMit(C_BLATT, C_KOPF).getDataRange().getValues().slice(1)
+    .map((z) => ({ zeitpunkt: z[0], id: String(z[1]), code: String(z[2]), name: String(z[3]) }))
+    .filter((t) => t.id && t.code);
+}
+function communityPost(d) {
+  if (!d.geraet) return { ok: false, fehler: 'keine Geräte-Kennung' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    if (d.art === 'community-strecke') {
+      const code = String(d.code || '');
+      if (!/^[A-Z0-9@]{3,200}$/.test(code)) return { ok: false, fehler: 'Streckencode unplausibel' };
+      const alle = communityStrecken();
+      const gleich = alle.find((t) => t.code === code);
+      if (gleich) return { ok: true, id: gleich.id, schonDa: true };
+      const max = alle.reduce((m, t) => Math.max(m, parseInt(t.id, 10) || 0), 0);
+      const id = String(max + 1).padStart(4, '0');
+      blattMit(C_BLATT, C_KOPF).appendRow([new Date(), id, code, String(d.name || ('Strecke ' + id)).slice(0, 32),
+        String(d.geraet).slice(0, 40)]);
+      return { ok: true, id: id };
+    }
+    if (d.art === 'community-zeit') {
+      const id = String(d.id || '');
+      if (!communityStrecken().some((t) => t.id === id)) return { ok: false, fehler: 'unbekannte Strecke' };
+      const z = Number(d.zeit_ms);
+      if (!isFinite(z) || z < 1000 || z > 3600000) return { ok: false, fehler: 'Zeit unplausibel' };
+      blattMit(CZ_BLATT, CZ_KOPF).appendRow([new Date(), id, Math.round(z), String(d.fahrer || '').slice(0, 16),
+        String(d.geraet).slice(0, 40)]);
+      return { ok: true };
+    }
+    return { ok: false, fehler: 'unbekannte Art' };
+  } finally { lock.releaseLock(); }
+}
+function communityGet() {
+  const zeiten = {};
+  blattMit(CZ_BLATT, CZ_KOPF).getDataRange().getValues().slice(1).forEach((z) => {
+    const id = String(z[1]);
+    (zeiten[id] = zeiten[id] || []).push({ zeitpunkt: z[0], zeit_ms: Number(z[2]), fahrer: z[3], geraet: z[4] });
+  });
+  Object.keys(zeiten).forEach((id) => { zeiten[id] = zeiten[id].sort((a, b) => a.zeit_ms - b.zeit_ms).slice(0, 100); });
+  return { ok: true, community: true, tracks: communityStrecken(), zeiten: zeiten };
+}
+
 function doPost(e) {
   let d;
   try { d = JSON.parse(e.postData.contents); } catch (err) { return antwort({ ok: false, fehler: 'kein JSON' }); }
+  if (d && (d.art === 'community-strecke' || d.art === 'community-zeit')) {
+    const cache = CacheService.getScriptCache();
+    const cs = 'c_' + String(d.geraet).slice(0, 40);
+    if (cache.get(cs)) return antwort({ ok: false, fehler: 'zu schnell hintereinander' });
+    cache.put(cs, '1', 10);
+    return antwort(communityPost(d));
+  }
   const fehler = pruefen(d);
   if (fehler) return antwort({ ok: false, fehler: fehler });
   // Drossel: höchstens ein Eintrag je Gerät alle 15 Sekunden.
@@ -226,13 +295,13 @@ function pruefen(d) {
 // x 2 Modi x 2 Presets waeren sonst 320 Aufrufe).
 function doGet(e) {
   const p = (e && e.parameter) || {};
-  // DIAGNOSE: ?debug=1 nennt das Sheet, an dem diese Web-App haengt (getActiveSpreadsheet),
-  // damit man prüfen kann, ob die Zeiten im richtigen Blatt liegen. Antwortet nur, wenn
-  // wirklich ein Sheet gebunden ist - sonst 'kein Sheet'.
+  // DIAGNOSE: ?debug=1 zeigt, ob ein Sheet gebunden ist, die Kopfzeile und wie viele Zeilen je
+  // Challenge darin stehen. Seit v0.9.3 OHNE Adresse und Namen des Sheets und ohne die letzte
+  // Zeile - die Web-App ist oeffentlich, und die letzte Zeile enthielt Geraete-ID und Namen.
   if (p.debug) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sh = ss ? ss.getSheetByName(BLATT) : null;
-    let kopf = [], zeilen = 0, challenges = [], letzte = null;
+    let kopf = [], zeilen = 0, challenges = [];
     if (sh) {
       const werte = sh.getDataRange().getValues();
       zeilen = Math.max(0, werte.length - 1);
@@ -246,14 +315,12 @@ function doGet(e) {
         gez[c] = (gez[c] || 0) + 1;
       });
       challenges = Object.keys(gez).sort().map((c) => ({ id: c, n: gez[c] }));
-      if (werte.length > 1) letzte = werte[werte.length - 1];
     }
-    return antwort({ ok: true, debug: true,
-      url: ss ? ss.getUrl() : null,
-      name: ss ? ss.getName() : null,
+    return antwort({ ok: true, debug: true, gebunden: !!ss,
       blatt: sh ? BLATT : null,
-      kopf: kopf, zeilen: zeilen, challenges: challenges, letzte: letzte });
+      kopf: kopf, zeilen: zeilen, challenges: challenges });
   }
+  if (p.community) return antwort(communityGet());
   const sp = spalten();
   const werte = blatt().getDataRange().getValues().slice(1);
   if (p.alle) {

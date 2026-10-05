@@ -36,7 +36,7 @@ TEXT = ('.html', '.json', '.webmanifest', '.svg', '.js', '.css', '.txt', '.md')
 # Die Fassung der NATIVEN Schicht (Plugins, Rechte), die diese Web-App mindestens braucht.
 # Hochzaehlen, wenn index.html ein neues natives Plugin ruft - dann bietet die App statt eines
 # Web-Updates "neue APK noetig" an. Muss zu APK_STUFE in OmegaUpdatePlugin.java passen.
-APK_STUFE = 1
+APK_STUFE = 2
 
 
 def inhalt(pfad):

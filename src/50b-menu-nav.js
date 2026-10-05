@@ -95,6 +95,8 @@
     // unsichtbar darunter weiter.
     const mi = $('mp-info');
     if (mi && !mi.hidden) return mi;
+    const mr = $('mp-ready-screen');
+    if (mr && !mr.hidden) return mr;
     const tab = document.querySelector('.tabpage.active');
     if (!tab || tab.id === 'tab-race') return null;
     // Der TITELBILDSCHIRM hat keine Zeilen: jede Taste fuehrt nach Fahren (51-konsole.js).
@@ -224,7 +226,7 @@
   // Zeile gemerkt, beim Zurueckkommen steht die Auswahl wieder dort. Nicht fuer Dialoge
   // (#k-frage, Tutorial): die fangen immer oben an.
   const menuNavMerk = {};
-  const MENU_NAV_OHNE_MERK = ['k-frage', 'k-tour-karte'];
+  const MENU_NAV_OHNE_MERK = ['k-frage', 'k-tour-karte', 'mp-ready-screen'];
   function menuNavMerkLeeren() { Object.keys(menuNavMerk).forEach((k) => { delete menuNavMerk[k]; }); }
   function menuNavEnsureContext() {
     const key = menuNavContextNow();

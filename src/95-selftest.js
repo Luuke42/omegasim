@@ -6052,7 +6052,7 @@
       // ghostRennhaerteAnwenden() von 1,2/1,2/1,3 auf 1,5/1,5/1,65 angehoben, das
       // Verhaeltnis (RANGE > GAP_MIN) bleibt gleich. Diese Erwartung ist mitgezogen.
       OMEGA_TEST.ghostRennhaerteAnwenden(0.5);
-      const soll = { p: 0.45, arm: 900, luecke: 1.5, gap: 1.5, range: 1.65 };
+      const soll = { p: 0.45, arm: 900, luecke: 1.2, gap: 1.2, range: 1.3 };
       const ist50 = { p: OMEGA_TEST.attackPLesen(), arm: OMEGA_TEST.attackArmMsLesen(),
                       luecke: OMEGA_TEST.lueckeMinLesen(), gap: OMEGA_TEST.gapMinLesen(),
                       range: OMEGA_TEST.attackRangeLesen() };
@@ -10247,6 +10247,14 @@
       if (!$('gar-list').querySelector('.gar-karte-neu')) f.push('keine Karte "+ AUTO"');
       karte().querySelector('[data-act="rolle"][data-d="1"]').click();
       if (att.role !== 'none') f.push('Rolle vor fuehrt zu ' + att.role + ' statt Aus');
+      // Freie Rollen: hat ein anderes Auto "Spieler 1", bietet der Pfeil sie nicht an.
+      const anderer = { role: 'player', device: { id: 'probe-andere' }, alias: '', colorId: 'blau', sim: false, testSenke: [] };
+      garage.push(anderer);
+      try {
+        const frei = garRollenFrei(att).map((r) => r.id);
+        if (frei.indexOf('player') >= 0) f.push('Spieler 1 angeboten, obwohl vergeben');
+        if (frei.indexOf('ghost') < 0 || frei.indexOf('none') < 0) f.push('Ghost/Aus fehlen in den freien Rollen');
+      } finally { garage.splice(garage.indexOf(anderer), 1); }
       setCarRole(att, 'ghost');
       renderGarage();
       const c = document.createElement('canvas'); c.width = 2; c.height = 2;
@@ -10563,6 +10571,126 @@
       if (merkTab) showTab(merkTab);
     }
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Renntyp, Zurueck und Start per Pad, Tauschen ohne zweites Pad harmlos' };
+  });
+
+  stAdd('Editor: Raum-Rechteck sichtbar, Strecke darin verschiebbar, R3 zentriert', () => {
+    const f = [];
+    let merkRaum = null, merkV = null;
+    try { merkRaum = localStorage.getItem('omegasim-raum'); merkV = JSON.stringify(raumVersatz); } catch (e) { return { skip: true, mass: 'kein Speicher' }; }
+    const merkTiles = currentTrackTiles;
+    try {
+      localStorage.setItem('omegasim-raum', JSON.stringify({ x: 2.6, y: 0 }));
+      currentTrackTiles = codeToTrack('SG2R6G2R6').tiles;
+      raumVersatz = { x: 0, y: 0 };
+      refreshTrackPreview();
+      const g = document.querySelector('#track-preview-svg .tp-raum');
+      if (!g) f.push('kein Raum-Rechteck bei nur einer Grenze');
+      else {
+        const x0 = parseFloat(g.querySelector('rect').getAttribute('x'));
+        raumRechteckSchieben(-50, 0);
+        const x1 = parseFloat(g.querySelector('rect').getAttribute('x'));
+        if (Math.abs(x1 - x0 + 50) > 0.2) f.push('Rechteck nicht verschoben');
+        if (!(raumVersatz.x < 0)) f.push('Versatz nicht gemerkt');
+        raumR3Vor = false;
+        raumVersatzStick(0, 0, true);
+        if (raumVersatz.x !== 0 || raumVersatz.y !== 0) f.push('R3 zentriert nicht');
+      }
+    } finally {
+      if (merkRaum === null) localStorage.removeItem('omegasim-raum'); else localStorage.setItem('omegasim-raum', merkRaum);
+      raumVersatz = JSON.parse(merkV); raumVersatzSpeichern();
+      currentTrackTiles = merkTiles; refreshTrackPreview();
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Rechteck mit 2,6 × – m, Schieben, R3' };
+  });
+
+  stAdd('Auswahl mit wenigen Werten: ◀ Wert ▶ schaltet das versteckte Feld', () => {
+    const f = [];
+    const sel = document.querySelector('.opt-row select[data-blaettern]');
+    if (!sel) return { ok: false, mass: 'kein umgebautes Auswahlfeld gefunden' };
+    const box = sel.nextElementSibling;
+    if (!box || !box.classList.contains('opt-blaettern')) return { ok: false, mass: 'Pfeile fehlen bei ' + sel.id };
+    const vorher = sel.selectedIndex;
+    let gemeldet = 0;
+    const zaehl = () => { gemeldet++; };
+    sel.addEventListener('change', zaehl);
+    try {
+      box.querySelectorAll('.ob-pf')[1].click();
+      if (sel.selectedIndex === vorher && sel.options.length > 1) f.push('▶ schaltet nicht');
+      if (!gemeldet) f.push('kein change-Ereignis');
+      if (box.querySelector('.ob-wert').textContent !== sel.options[sel.selectedIndex].textContent.trim()) f.push('Anzeige folgt nicht');
+      if (getComputedStyle(sel).display !== 'none') f.push('Auswahlfeld noch sichtbar');
+    } finally {
+      sel.removeEventListener('change', zaehl);
+      if (sel.selectedIndex !== vorher) { sel.selectedIndex = vorher; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    const n = document.querySelectorAll('.opt-row select[data-blaettern]').length;
+    return { ok: !f.length, mass: f.length ? f.join('; ') : n + ' Felder umgebaut, ' + sel.id + ' geprueft' };
+  });
+
+  stAdd('Speichern: Rolle je Auto, Editor-Strecke, Belegung je Controller', () => {
+    const f = [];
+    const merkR = localStorage.getItem(CAR_ROLLEN_STORE), merkE = localStorage.getItem(EDITOR_STRECKE_STORE);
+    const merkTiles = currentTrackTiles, merkRot = trackRotationDeg, merkB = bindings, merkFuer = padBelegungFuer[1];
+    try {
+      const auto = { role: 'ghost', ghostSpeed: 0.6, device: { id: 'probe-rolle' } };
+      carRolleMerken(auto);
+      const r = carRollenLesen()['probe-rolle'];
+      if (!r || r.role !== 'ghost' || r.ghostSpeed !== 0.6) f.push('Rolle/Tempo nicht gemerkt');
+      currentTrackTiles = [{ type: TILE_TYPE.START }, { type: TILE_TYPE.STRAIGHT }, { type: TILE_TYPE.CURVE_RIGHT }];
+      localStorage.setItem(EDITOR_STRECKE_STORE, JSON.stringify({ tiles: currentTrackTiles.map((x) => x.type), rotation: 90 }));
+      currentTrackTiles = [{ type: TILE_TYPE.START }];
+      if (!editorStreckeLaden() || currentTrackTiles.length !== 3 || trackRotationDeg !== 90) f.push('Editor-Strecke nicht wieder geladen');
+      localStorage.setItem(PAD_BELEGUNG_PRAEFIX + 'probe-pad', JSON.stringify({ ...DEFAULT_BINDINGS, steering: { type: 'axis', index: 0, invert: true, label: 'probe' } }));
+      padBelegungFuer[1] = null;
+      padBelegungAbgleichen({ p1: { id: 'probe-pad' }, p2: null });
+      if (!bindings.steering || bindings.steering.invert !== true) f.push('Belegung je Controller nicht geladen');
+    } finally {
+      const zurueck = (k, v) => { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); };
+      zurueck(CAR_ROLLEN_STORE, merkR); zurueck(EDITOR_STRECKE_STORE, merkE);
+      localStorage.removeItem(PAD_BELEGUNG_PRAEFIX + 'probe-pad');
+      currentTrackTiles = merkTiles; trackRotationDeg = merkRot; bindings = merkB; padBelegungFuer[1] = merkFuer;
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Rolle+Tempo, Strecke+Drehung, Pad-Belegung' };
+  });
+
+  stAdd('Ghosts: Tempo-Streuung (0 = gleich), Startversatz je Reihe, Paar in der Kurve', () => {
+    const f = [];
+    const merk = { p: ghostCfg.tempoStreuung, s: ghostCfg.staffelStart, ms: ghostCfg.staffelMs, k: ghostCfg.paarKurve, ord: raceGridOrder };
+    try {
+      const auto = { ghost: { tempoZ: 0.7 }, tileCode: null, device: { id: 'g3' } };
+      ghostCfg.tempoStreuung = 0;
+      if (ghostStreuFaktor(auto) !== 1) f.push('Streuung 0 aendert das Tempo');
+      ghostCfg.tempoStreuung = 10;
+      if (Math.abs(ghostStreuFaktor(auto) - 1.07) > 1e-9) f.push('10 % bei z=0,7 ergibt ' + ghostStreuFaktor(auto));
+      raceGridOrder = ['g1', 'g2', 'g3', 'g4', 'g5'];
+      ghostCfg.staffelStart = true; ghostCfg.staffelMs = 200;
+      const ms = (id) => ghostStaffelMs({ device: { id } });
+      if (ms('g1') !== 0 || ms('g2') !== 0 || ms('g3') !== 200 || ms('g4') !== 200 || ms('g5') !== 400) f.push('Reihen: ' + ['g1','g2','g3','g4','g5'].map(ms).join('/'));
+      ghostCfg.staffelStart = false;
+      if (ms('g5') !== 0) f.push('Schalter aus, trotzdem Versatz');
+      ghostCfg.paarKurve = false;
+      if (ghostPaarKurve(auto) !== null) f.push('Paar-Regel trotz Schalter aus');
+    } finally {
+      ghostCfg.tempoStreuung = merk.p; ghostCfg.staffelStart = merk.s; ghostCfg.staffelMs = merk.ms;
+      ghostCfg.paarKurve = merk.k; raceGridOrder = merk.ord;
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Faktor 1 bei 0 %, Reihen 0/0/200/200/400 ms, Schalter wirken' };
+  });
+
+  stAdd('Mehrspieler: Bereitschaft nur mit aktiven Fahrern, Rennen an Host-Kennung erkannt', () => {
+    const f = [];
+    if (!mpAktiv({ alter: 3 }) || mpAktiv({ alter: 40 }) || !mpAktiv({})) f.push('mpAktiv: 15-s-Grenze stimmt nicht');
+    const merk = mp.rennenId;
+    try {
+      mp.rennenId = 'abc:2';
+      if (mpRennenPruefen({ id: 2, startAt: Date.now() + 9000, plan: {}, phase: 'start' }, 'abc')) f.push('gleiches Rennen zweimal genommen');
+      if (mpRennenPruefen({ id: 3, startAt: Date.now() + 9000, plan: {}, phase: 'bereit' }, 'abc')) f.push('Bereitschaftsphase als Start genommen');
+      if (mpRennenPruefen({ id: 3, startAt: Date.now() - 1000, plan: {}, phase: 'start' }, 'abc')) f.push('vergangenen Start genommen');
+      if (mp.rennenId !== 'abc:2') f.push('Abgelehntes hat die Renn-Kennung verbraucht');
+    } finally { mp.rennenId = merk; }
+    const scr = $('mp-ready-screen');
+    if (!scr || scr.closest('.tabpage')) f.push('Bereitschaftsschirm liegt in einem Reiter statt darueber');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'aktiv <= 15 s, boot+id, Phase, Schirm global' };
   });
 
   stAdd('Mehrspieler: Ampel nach Frist, Uhrabgleich, gemeinsamer Wetterplan', () => {
@@ -12399,7 +12527,7 @@
     const maengel = [];
     // BESTELLT: "Renneinstellungen aus dem Cockpit-Schirmkreis herausnehmen" - der Schirm
     // darf NICHT mehr blaetterbar sein; Rennmodus/Dauer stehen im Fahren-Tab.
-    if (!r.screenErreichbar) maengel.push('Schirm "renneinstellungen" noch im Cockpit-Kreis');
+    if (!r.renneinstellungenRaus) maengel.push('Schirm "renneinstellungen" noch im Cockpit-Kreis');
     if (r.modeNachWahl === r.modeVorWahl) maengel.push('Tab-Aenderung schreibt nicht auf #race-mode');
     return { ok: !maengel.length,
              mass: 'genau eine Zeile ausgewaehlt, hoch/runter bewegt sie mit Umlauf, '

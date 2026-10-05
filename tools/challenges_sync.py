@@ -62,6 +62,10 @@ def kennungen():
     ids = re.findall(r"\{ id: '([a-z0-9-]+)'", s[a:s.index('\n  };', a)])
     if len(ids) != 80:
         raise SystemExit('%d Kennungen statt 80 in CH_KATALOG' % len(ids))
+    # Dauerrennen (feste Strecken) seit v0.9.10 mit im Schnappschuss.
+    if 'const CH_DAUER' in s:
+        b = s.index('const CH_DAUER')
+        ids += re.findall(r"\{ id: '([a-z0-9-]+)'", s[b:s.index('\n  ];', b)])
     return ids
 
 

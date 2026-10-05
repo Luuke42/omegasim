@@ -192,7 +192,7 @@
   nav.tabs button {
     background: transparent; border: none; border-bottom: 3px solid transparent;
     white-space: nowrap; flex-shrink: 0;
-    border-radius: 0; padding: 27px 15px; min-height: 345px; color: var(--muted); font-weight: 700;
+    border-radius: 0; padding: 11px 15px; color: var(--muted); font-weight: 700;
     text-transform: uppercase; letter-spacing: .09em; font-size: 11.5px;
   }
   /* Every tab gets a hint of the channel offset, the active one gets it at full strength.
@@ -563,7 +563,6 @@
     .home-topbar { padding: 10px 16px; font-size: 12.5px; gap: 8px 10px; }
     .home-topbar .foot-brand { display: none; }
     #lang-toggle { min-width: 104px; }
-    nav.tabs button { padding: 15px 15px; min-height: 90px; }
   }
   /* Die aktive Sprache steht hell, die andere gedimmt - ein Umschalter, der zeigt, was
      gerade gilt, statt nur was man anklicken kann. */
@@ -2596,6 +2595,35 @@
     #k-leiste .k-reiter button { padding: 5px 8px; font-size: clamp(9px, 1.9vh, 12px); }
     .k-leiste2 .k-reiter button { padding: 4px 8px; font-size: clamp(8.5px, 1.7vh, 11px); }
   }
+  /* AUSWAHL MIT WENIGEN WERTEN ALS "◀ WERT ▶" (v0.9.7, 98b-sicherung.js blaetternBauen) */
+  .ob-versteckt { display: none !important; }
+  .opt-blaettern { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
+  .opt-blaettern.aus { opacity: .45; pointer-events: none; }
+  .opt-blaettern .ob-pf { min-width: 30px; min-height: 30px; padding: 0 6px; background: transparent;
+    border: 1px solid rgba(255,255,255,.22); color: var(--k-blau, #00a3e0); font-size: 12px; line-height: 1; cursor: pointer; }
+  .opt-blaettern .ob-pf:hover { background: rgba(255,255,255,.08); }
+  .opt-blaettern .ob-wert { min-width: 7.5em; text-align: center; font-weight: 700; padding: 0 6px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  /* KEIN ZIEHEN-ZUM-AKTUALISIEREN (v0.9.4). BESTELLT: "in der installierten Chrome-App (nicht
+     .apk) das Herunterswipen nicht zum Aktualisieren fuehren". */
+  html, body { overscroll-behavior-y: contain; }
+  /* COCKPIT RECHTS (v0.9.4). BESTELLT: "Sound und 'Rennen starten' Buttons rechts weg und dafuer
+     Rundenzeiten in doppelt so grosser Schriftgroesse." Die Knoepfe bleiben im Dokument (Tasten,
+     Tests und Zustandsanzeige haengen an ihnen), werden aber nicht mehr gezeigt: Rennen starten
+     geht ueber die Rennen-Taste/das Menue, der Motorklang ueber Optionen > Sound. */
+  #race-act-start, #race-act-sound { display: none !important; }
+  .gt3-right .gt3-times .gt3-val { font-size: clamp(26px, 5.2vw, 54px); line-height: 1.05; }
+  .gt3-right .gt3-times .gt3-lbl { font-size: clamp(9px, 1.4vw, 12px); }
+  .gt3-right .gt3-laps { font-size: clamp(16px, 2.4vw, 24px); max-height: none; }
+  /* REITER HOEHER (v0.9.3). BESTELLT: "tab höhe ganz oben in der navbar erhöhen; Auf PC das
+     4fache, auf mobile 2-3 fache, damit man auch mit finger ganz ok drauftippen kann (sollte
+     trotzdem noch schlank sein)." Gemessen vorher: 10 px am PC, 20-23 px am Handy. Die
+     Aenderungen v0.8.92-96 hatten das verborgene nav.tabs erhoeht und deshalb nichts bewirkt. */
+  #k-leiste .k-reiter button { min-height: 40px; padding: 0 10px; font-size: 12.5px; letter-spacing: .08em; }
+  @media (pointer: coarse) {
+    #k-leiste .k-reiter button { min-height: 46px; padding: 0 4px; font-size: clamp(10px, 2.9vw, 13px); letter-spacing: .02em;
+      white-space: normal; line-height: 1.1; text-overflow: clip; }
+  }
   /* Offene Unterseite mit zweiter Leiste: die Ueberschrift steht dort schon, der
      Zurueck-Knopf wird eine knappe Zeile. */
   body.k-innen .subpage.on > h2 { display: none; }
@@ -2766,6 +2794,8 @@
   .ch-kachel .ch-k-beliebt[hidden] { display: none; }
   .ch-kachel .ch-k-rang { display: block; font-style: normal; font-size: 11px; letter-spacing: .03em; text-align: center; padding: 0 4px 6px; }
   .ch-kachel .ch-k-rang:empty { display: none; }
+  .ch-kachel .ch-k-anzahl { display: block; font-style: normal; font-size: 10.5px; color: var(--dim, #a3acbd); text-align: center; padding: 0 4px 5px; }
+  .ch-kachel .ch-k-anzahl[hidden] { display: none; }
   .ch-k-medaille-hinweis { font-size: 12px; line-height: 1.5; margin: 2px 0 8px; }
   .ch-detail { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   .ch-rechts > h3:first-child { margin-top: 0; }
@@ -3367,12 +3397,23 @@
   .track-kachel-vorschau svg { width: 100%; height: 100%; display: block; }
   .track-kachel b { font-size: 13px; }
   .track-kachel em { font-style: normal; font-size: 11px; color: var(--muted); }
-  .track-kachel-del { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px;
-    border-radius: 50%; font-size: 12px; line-height: 1; padding: 0; display: flex;
-    align-items: center; justify-content: center; background: var(--danger, #c0392b);
+  /* Das Loeschen-Kreuz ist ein eigener Knopf NEBEN der Kachel (v0.9.3; vorher ein Knopf im
+     Knopf - ungueltiges HTML) und wirklich rund: die allgemeinen Knopf-Mindestmasse machten es
+     oval, deshalb hier feste Groesse ohne Mindestmasse und Seitenverhaeltnis 1. */
+  .track-kachel-wrap { position: relative; display: flex; min-width: 0; }
+  .track-kachel-wrap > .track-kachel { flex: 1; min-width: 0; }
+  .track-kachel-del { position: absolute; top: 6px; right: 6px; z-index: 1;
+    width: 26px !important; height: 26px !important; min-width: 0 !important; min-height: 0 !important;
+    aspect-ratio: 1 / 1; box-sizing: border-box; flex: none;
+    border-radius: 50%; font-size: 13px; line-height: 1; padding: 0 !important; display: grid;
+    place-items: center; background: var(--danger, #c0392b);
     color: #fff; border: none; cursor: pointer; }
   /* Community Strecken: Liste der eingereichten Strecken. */
   .community-liste { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .community-mini { flex: none; width: 74px; height: 52px; display: grid; place-items: center; background: rgba(0,0,0,.25); border-radius: 6px; overflow: hidden; }
+  .community-mini svg { width: 100%; height: 100%; }
+  .community-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .community-stand { margin: 6px 0 0; font-size: 12px; }
   .community-zeile { display: flex; align-items: center; justify-content: space-between;
     gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
     background: var(--panel-2); }
@@ -4183,7 +4224,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">0.9.1</span></span>
+        <span class="foot-ver">v<span id="app-version">0.9.11</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -4853,7 +4894,7 @@
         <p class="grid-hinweis" id="grid-hinweis">Alle Autos stehen auf den Teilen <b>vor</b> Start/Ziel. Erst wenn du Start/Ziel zum ersten Mal &uuml;berf&auml;hrst, beginnt Runde&nbsp;1.</p>
         <label class="grid-selbst" id="grid-selbst-wrap">
           <input type="checkbox" id="grid-selbst">
-          <span class="wip-tag">experimentell</span> Autos fahren selbst in Position
+          <span class="wip-tag">experimentell</span> Aufstellung mit gr&ouml;&szlig;ter Querlage (links/rechts)
         </label>
         <div class="grid-liste" id="grid-liste"></div>
         <div class="schirm-fuss grid-fuss">
@@ -4862,19 +4903,6 @@
         </div>
       </div>
 
-      <!-- MEHRSPIELER-BEREITSCHAFT (v0.8.126): wenn jemand ein Rennen "fuer alle" startet,
-           sehen ALLE Telefone diesen Schirm. Jeder meldet sich bereit; der Initiator kann
-           erst starten, wenn alle anderen bereit sind. -->
-      <div class="gt3-gridschirm" id="mp-ready-screen" data-i18n-skip hidden>
-        <div class="schirm-kopf"><b>Rennen für alle: bereit?</b>
-          <span id="mp-ready-info" data-i18n-skip></span></div>
-        <div class="grid-liste" id="mp-ready-liste"></div>
-        <div class="schirm-fuss grid-fuss">
-          <button type="button" class="warn" id="mp-ready-abbrechen">Abbrechen</button>
-          <button type="button" class="primary grid-start-gross" id="mp-ready-start" disabled>Start</button>
-          <button type="button" class="primary grid-start-gross" id="mp-ready-bereit" hidden>Bereit</button>
-        </div>
-      </div>
     </div>
 
   </section>
@@ -5267,6 +5295,14 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>0.9</span></b></p>
       <ul class="muted" id="patchnotes-09" style="padding-left:20px; line-height:1.7">
+        <li>Streckeneditor: Das Raum-Rechteck ist auch mit nur einer Grenze sichtbar und zeigt die Ma&#223;e. Die Strecke l&#228;sst sich darin mit dem Finger oder der Maus verschieben, im Vollbild auch mit dem rechten Stick; rechten Stick dr&#252;cken zentriert.</li>
+        <li>Community-Strecken werden jetzt &#252;ber das Online-Sheet mit allen geteilt (Strecken und Zeiten), jede Zeile zeigt ein Vorschaubild. Eigene, bisher nur lokale Strecken werden beim n&#228;chsten Abgleich eingereicht. Dauerrennen-Zeiten kommen jetzt auch in die Online-Bestenliste. Das Apps Script muss daf&#252;r neu bereitgestellt werden.</li>
+        <li>Auswahlfelder mit wenigen Werten (Physik-Modus, Getriebe, Boxenstopp, Sprache &#8230;) sind jetzt &#8222;&#9664; Wert &#9654;&#8220; zum Durchschalten statt Aufklapplisten.</li>
+        <li>Alles bleibt gespeichert: Rolle und Ghost-Tempo je Auto, die Strecke im Editor (mit Drehung und Zoom) und die Tastenbelegung je Controller. In der App zus&#228;tzlich eine Sicherungsdatei in Dokumente/OmegaSim, die auch eine Neuinstallation &#252;bersteht; nach einer Neuinstallation bietet die App an, sie einzulesen (neue APK n&#246;tig). Garage: Spieler 1/2 lassen sich nur noch w&#228;hlen, wenn kein anderes Auto sie hat. Presets enthalten Sprache, Entwickler- und Zwei-Spieler-Modus nicht mehr.</li>
+        <li>Ghosts (experimentell): Regler &#8222;Tempo-Streuung&#8220; (Vorgabe 0 %), Start je Startreihe versetzt (an, 200 ms je Reihe), und zu zweit in Kurven f&#228;hrt das vordere Auto innen, das hintere in der Mitte (an).</li>
+        <li>Streckenscan langsamer (auch in der Haarnadel), das Auto h&#228;lt am Ende an; der Live-Scan erkennt das Rundenende selbst. Reiter wechseln per Wischen nach links/rechts. Kein Neuladen mehr durch Herunterziehen. Challenges zeigen &#8222;X Ergebnisse&#8220;. Cockpit: Rundenzeiten doppelt so gro&#223;, Sound- und Start-Knopf rechts entfernt.</li>
+        <li>Obere Reiterleiste deutlich h&#246;her (PC 40 px, Handy 46 px), gut zum Tippen. Meine Strecken: Ton beim Laden, rundes L&#246;schen-Kreuz mit R&#252;ckfrage. Ghosts halten wieder den gemessenen Abstand (1,2 Kacheln, mehr &#252;ber &#8222;Feld-Abstand&#8220;). Knockout und Derby als experimentell gekennzeichnet, Texte &#252;bersetzt.</li>
+        <li>Mehrspieler: &#8222;Rennen f&#252;r alle&#8220; repariert. Der Bereitschaftsschirm erscheint jetzt auf jedem Reiter, inaktive oder abgemeldete Telefone blockieren den Start nicht mehr, Abbrechen l&#246;scht nicht mehr die Wertung aller, und das angek&#252;ndigte Wetter gilt auch beim Start. App: schnellerer, stabilerer direkter Steuerweg zum Auto (neue APK n&#246;tig).</li>
         <li>Zweite Kopie der App: Die Download-Links zeigen auf deren eigenes Release (mit Download-Z&#228;hler), sonst auf die APK im Repo.</li>
       </ul>
       <p class="muted"><b><span data-i18n-skip>0.8</span></b></p>
@@ -8192,12 +8228,12 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M7 7h10M7 17h10M12 7v10"/><circle cx="12" cy="12" r="3"/>
-          </svg><b>Knockout</b></button>
+          </svg><b>Knockout</b><span class="wip-tag">experimentell</span></button>
         <button type="button" class="mode-tile kachelbild derby" data-mode="derby">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="9" cy="9" r="3"/><circle cx="15" cy="15" r="3"/><path d="M9 12v9M15 12V3"/>
-          </svg><b>Demolition Derby</b></button>
+          </svg><b>Demolition Derby</b><span class="wip-tag">experimentell</span></button>
       </div>
       <select id="race-mode" hidden style="display:none">
         <option value="practice" selected>Freies Training</option>
@@ -9669,6 +9705,32 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-ueber-val">0.5</span>
         </div></div>
+      <!-- v0.9.5. BESTELLT: "gibt es fuer ghosts schon einen slider, der die heterogenitaet der
+           geschwindigkeiten angibt, also dass manche autos im schnitt minimal schneller sind auf
+           der geraden? Ansonsten einbauen, als experimentell, erstmal bei 0 varianz lassen" -->
+      <div class="opt-row"><div class="opt-label">Ghost: Tempo-Streuung<span class="wip-tag">experimentell</span><small>Jedes Auto bekommt je Rennen ein eigenes Grundtempo auf der Geraden, bis zu so viel Prozent schneller oder langsamer. 0&nbsp;% = alle gleich.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-streuung" min="0" max="10" step="1" value="0">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-streuung-val">0%</span>
+        </div></div>
+      <!-- v0.9.5. BESTELLT: "verzoegere beim rennstart leicht je paerchen autos, also platz 1 und 2
+           fahren minimal frueher los als 3 und 4 usw ... Ausserdem, wenn 2 autos nebeneinander
+           fahren, mach es so, dass in den kurven eins innen und eins in der mitte faehrt (nicht
+           aussen, dann riskiert es einen abflug). Diese einstellungen als toggles die
+           standardmaessig an sind einbauen" -->
+      <div class="opt-row"><div class="opt-label">Ghost: Start je Startreihe versetzt<span class="wip-tag">experimentell</span><small>Startplatz 1 und 2 fahren sofort los, 3 und 4 etwas später, 5 und 6 noch etwas später – so kommt Luft in die erste Kurve.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-staffel" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Versatz je Startreihe<span class="wip-tag">experimentell</span><small>Wie viel später jede weitere Zweierreihe losfährt.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-staffel-ms" min="50" max="600" step="50" value="200">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-staffel-ms-val">200 ms</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Zu zweit in Kurven innen/Mitte<span class="wip-tag">experimentell</span><small>Fahren zwei Autos nebeneinander in eine Kurve, nimmt das vordere die Innenseite und das hintere die Mitte, statt außen zu fahren und abzufliegen.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-paar-kurve" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Ghost: Kurvendrosselung<small>Wie viel Tempo in Kurven abgegeben wird. <b>Braucht ein Streckenlayout</b>: ohne gelesene oder gebaute Kacheln wei&szlig; der Ghost nicht, wo eine Kurve ist, und der Regler multipliziert eine Null.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
@@ -10324,10 +10386,10 @@
       <h2>System</h2>
       <div class="opt-row"><div class="opt-label">Sprache
           <small>Dieselbe Wahl wie auf dem Titelbildschirm.</small></div>
-        <select id="setting-sprache"><option value="de">Deutsch</option><option value="en">English</option></select></div>
+        <select id="setting-sprache" data-preset-skip><option value="de">Deutsch</option><option value="en">English</option></select></div>
       <div class="opt-row"><div class="opt-label">Entwicklertools zeigen
           <small>Blendet im Hauptmen&uuml; die Kachel Entwickler ein: Doku, Programmierschule, BLE-Werkbank, Selbsttest, Code-Sonde, Zahlensysteme, Aufnahme-Modus. Auch mit ?dev in der Adresse.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-dev"><span></span></label></div>
+        <label class="tgl"><input type="checkbox" id="setting-dev" data-preset-skip><span></span></label></div>
       <!-- v0.8.41: Messanzeige fuer den Lag in der App (BESTELLT: "Verzoegerung auf meinem
            schwaecheren Handy optimieren", erst Stufe 1, dann messen). -->
       <div class="opt-row"><div class="opt-label">Funk-Rundlauf
@@ -10383,6 +10445,7 @@
       </div>
       <div class="muted" id="sich-status" style="margin-top:8px; font-size:12px"
            data-i18n-skip>&nbsp;</div>
+      <div class="muted" id="sich-auto" style="margin-top:6px; font-size:12px" data-i18n-skip>&nbsp;</div>
       <p class="muted" style="font-size:11.5px; border-left:3px solid var(--info);
          padding-left:9px; margin-top:12px">
         Der Browser darf diesen Speicher jederzeit leeren &ndash; diese Datei ist die
@@ -10405,7 +10468,7 @@
           vorbehalten. Beide Autos werden aus demselben 45-ms-Sendetakt bedient &ndash;
           getrennte Takte waren die Ursache des Stotterns mit echtem Controller, und dieser
           Modus wiederholt den Fehler nicht.</small></div>
-        <label class="tgl"><input type="checkbox" id="opt-zwei-an"></label></div>
+        <label class="tgl"><input type="checkbox" id="opt-zwei-an" data-preset-skip></label></div>
       <div class="opt-row"><div class="opt-label">Controller tauschen<small>Welcher der
           beiden erkannten Controller Auto&nbsp;1 f&auml;hrt. Die Reihenfolge kommt vom
           Browser und ist nicht w&auml;hlbar: hier ist der Schalter daf&uuml;r.</small></div>
@@ -11103,6 +11166,22 @@
       <div class="k-frage-knoepfe" id="k-frage-knoepfe"></div>
     </div>
   </div>
+  <!-- MEHRSPIELER-BEREITSCHAFT (v0.8.126, seit v0.9.2 als Einblendung ueber ALLEM): wenn jemand
+       ein Rennen "fuer alle" startet, sehen alle Telefone diesen Schirm, egal auf welchem Reiter.
+       Vorher lag er im Cockpit, der Knopf aber im Mehrspieler-Reiter - niemand sah ihn. Jeder
+       meldet sich bereit; der Initiator startet, sobald alle anderen bereit sind. -->
+  <div class="k-pause" id="mp-ready-screen" hidden>
+    <div class="k-pause-dialog">
+      <h2>Rennen für alle: bereit? <span class="wip-tag">experimentell</span></h2>
+      <p class="muted" id="mp-ready-info" data-i18n-skip></p>
+      <div class="grid-liste" id="mp-ready-liste"></div>
+      <div class="k-frage-knoepfe">
+        <button type="button" class="primary" id="mp-ready-bereit" hidden>Bereit</button>
+        <button type="button" class="primary" id="mp-ready-start" disabled>Start</button>
+        <button type="button" class="warn" id="mp-ready-abbrechen">Abbrechen</button>
+      </div>
+    </div>
+  </div>
 </main>
 <!-- BESCHREIBUNG UND FUSSLEISTE: was die angewaehlte Zeile tut, und welche Taste was macht. -->
 
@@ -11204,17 +11283,59 @@
     }
     return omegaBleDa;
   }
-  // Natives Direktschreiben, FEUER UND WEG: der Aufruf loest sofort auf und haelt den
-  // Steuertakt nicht auf. Der eigentliche GATT-Write laeuft im Plugin auf einem eigenen
-  // Hintergrund-Thread. Kommt waehrend eines Write ein neuer Befehl, gewinnt der neueste.
+  // Natives Direktschreiben, FEUER UND WEG (v0.9.2 neu): toNative OHNE gespeicherten Rueckruf -
+  // writeControl antwortet ab APK 0.9.2 gar nicht (RETURN_NONE), es bleibt also auch kein Promise
+  // je Takt liegen. Aeltere OmegaBle-Fassungen antworten noch; ohne Rueckruf verfaellt die Antwort.
+  //
+  // EHRLICHER RUECKFALL: OmegaBle meldet ueber status(), ob es die Verbindung findet. Solange das
+  // nicht feststeht oder "nein" heisst, schreibt das Community-Plugin. Geprueft wird beim ersten
+  // Befehl und danach alle 2 s, im Hintergrund. Kennt das Plugin status() nicht (APK 0.8.124-126),
+  // bleibt es beim alten Verhalten: OmegaBle schreibt.
+  const omegaLage = new Map();
+  function omegaBleBereit(z) {
+    let l = omegaLage.get(z.deviceId);
+    if (!l) { l = { bereit: null, geprueft: 0, fragt: false, zaehler: null, alt: false }; omegaLage.set(z.deviceId, l); }
+    const jetzt = performance.now();
+    if (!l.fragt && jetzt - l.geprueft > 2000) {
+      l.fragt = true;
+      C.nativePromise('OmegaBle', 'status', z)
+        .then((r) => {
+          // Findet es die Verbindung, verwirft aber seit der letzten Frage nur noch (nichts
+          // geschrieben, etwas verworfen): dann ebenfalls das Plugin nehmen.
+          const v = l.zaehler;
+          const nurVerworfen = v && r && r.geschrieben === v.geschrieben && r.verworfen > v.verworfen;
+          l.bereit = !!(r && r.bereit) && !nurVerworfen;
+          l.zaehler = r || null;
+        })
+        .catch(() => { l.bereit = true; l.alt = true; })
+        .then(() => { l.fragt = false; l.geprueft = performance.now(); });
+    }
+    return l.bereit === true;
+  }
   function omegaBleSchreiben(z, hex) {
     try {
-      C.nativePromise('OmegaBle', 'writeControl', { deviceId: z.deviceId, service: z.service,
-                                                    characteristic: z.characteristic, value: hex })
-        .catch(() => {});
+      C.toNative('OmegaBle', 'writeControl', { deviceId: z.deviceId, service: z.service,
+                                               characteristic: z.characteristic, value: hex });
       return true;
     } catch (e) { return false; }
   }
+  // Waehrend das Community-Plugin selbst ans GATT geht (Abo, Lesen, Schreiben mit Antwort),
+  // schreibt OmegaBle nicht: Android erlaubt nur EINEN GATT-Vorgang zugleich. Gezaehlt, weil
+  // mehrere Vorgaenge ueberlappen koennen; das Plugin hebt die Pause nach 1,5 s selbst auf.
+  let omegaPausen = 0;
+  async function mitOmegaPause(fn) {
+    if (!omegaBleVerfuegbar()) return fn();
+    if (omegaPausen++ === 0) await C.nativePromise('OmegaBle', 'pause', { an: true }).catch(() => {});
+    try { return await fn(); } finally {
+      if (--omegaPausen === 0) C.nativePromise('OmegaBle', 'pause', { an: false }).catch(() => {});
+    }
+  }
+  // Fuer die Anzeige "Funk-Rundlauf" (Optionen > System).
+  window.OMEGA_BRUECKE.omegaInfo = () => {
+    if (!omegaBleVerfuegbar()) return { weg: 'Plugin' };
+    const l = [...omegaLage.values()][0];
+    return { weg: l && l.bereit ? 'OmegaBle' : 'Plugin', alt: !!(l && l.alt), zaehler: l && l.zaehler };
+  };
 
   let bereit = null;
   function starten() {
@@ -11257,18 +11378,18 @@
     writeValueWithoutResponse(daten) {
       const z = this._ziel;
       const hex = zuHex(daten);
-      if (omegaBleVerfuegbar() && omegaBleSchreiben(z, hex)) return Promise.resolve();
+      if (omegaBleVerfuegbar() && omegaBleBereit(z) && omegaBleSchreiben(z, hex)) return Promise.resolve();
       return ruf('writeWithoutResponse', { deviceId: z.deviceId, service: z.service,
                                            characteristic: z.characteristic, value: hex, timeout: 300 });
     }
     async writeValueWithResponse(daten) {
       const z = this._ziel;
-      await ruf('write', { deviceId: z.deviceId, service: z.service,
-                           characteristic: z.characteristic, value: zuHex(daten), timeout: 300 });
+      await mitOmegaPause(() => ruf('write', { deviceId: z.deviceId, service: z.service,
+                                               characteristic: z.characteristic, value: zuHex(daten), timeout: 300 }));
     }
     writeValue(daten) { return this.writeValueWithResponse(daten); }
     async readValue() {
-      const r = await ruf('read', this._ziel);
+      const r = await mitOmegaPause(() => ruf('read', this._ziel));
       this.value = ausHex(r && r.value);
       return this.value;
     }
@@ -11283,11 +11404,11 @@
           this.dispatchEvent(new Event('characteristicvaluechanged'));
         });
       }
-      await ruf('startNotifications', z);
+      await mitOmegaPause(() => ruf('startNotifications', z));
       return this;
     }
     async stopNotifications() {
-      await ruf('stopNotifications', this._ziel);
+      await mitOmegaPause(() => ruf('stopNotifications', this._ziel));
       if (this._abo) { this._abo.remove(); this._abo = null; }
       return this;
     }
@@ -11328,6 +11449,13 @@
       // SCHNELLES VERBINDUNGSINTERVALL. Android waehlt sonst 30-50 ms, und der Sendetakt ist
       // 45 ms - dann faellt jedes zweite Paket auf das naechste Intervall. 1 = HIGH.
       ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 }).catch(() => {});
+      // Und alle 10 s nachlegen (v0.9.2): manche Autos/Telefone handeln das Intervall spaeter
+      // wieder hoch, und ein langsames Intervall fuehlt sich genau wie Eingabeverzoegerung an.
+      clearInterval(this._prio);
+      this._prio = setInterval(() => {
+        if (!this.connected) { clearInterval(this._prio); return; }
+        ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 }).catch(() => {});
+      }, 10000);
       return this;
     }
     disconnect() {
@@ -12202,6 +12330,72 @@
     "Der Modus": "The mode",
     "2-Spieler-Modus": "Two-player mode",
     "Gamepad-Menü-Steuerung": "Gamepad menu control",
+    "Streckeneditor: Das Raum-Rechteck ist auch mit nur einer Grenze sichtbar und zeigt die Maße. Die Strecke lässt sich darin mit dem Finger oder der Maus verschieben, im Vollbild auch mit dem rechten Stick; rechten Stick drücken zentriert.": "Track editor: the room rectangle is visible even with only one limit and shows its size. The track can be moved inside it by finger or mouse, in fullscreen also with the right stick; pressing the right stick centres it.",
+    "Gemeinsame Liste nicht erreichbar, hier deine eigenen Strecken.": "Shared list not reachable, here are your own tracks.",
+    "Gemeinsame Liste: {n} Strecken.": "Shared list: {n} tracks.",
+    "Lade die gemeinsame Liste …": "Loading the shared list …",
+    "Nur auf diesem Gerät (keine Online-Adresse eingestellt).": "Only on this device (no online address set).",
+    "Diese Strecke gibt es schon: {n}": "This track already exists: {n}",
+    "Strecke {n} für alle eingereicht.": "Track {n} submitted for everyone.",
+    "Strecke {n} eingereicht (nur auf diesem Gerät).": "Track {n} submitted (only on this device).",
+    "nur hier": "only here",
+    "Community-Strecken werden jetzt über das Online-Sheet mit allen geteilt (Strecken und Zeiten), jede Zeile zeigt ein Vorschaubild. Eigene, bisher nur lokale Strecken werden beim nächsten Abgleich eingereicht. Dauerrennen-Zeiten kommen jetzt auch in die Online-Bestenliste. Das Apps Script muss dafür neu bereitgestellt werden.": "Community tracks are now shared with everyone through the online sheet (tracks and times), each row shows a preview. Your own tracks that were only local are submitted at the next sync. Endurance times now also go to the online leaderboard. The Apps Script needs to be redeployed for this.",
+    "zurück": "back",
+    "weiter": "next",
+    "Auswahlfelder mit wenigen Werten (Physik-Modus, Getriebe, Boxenstopp, Sprache …) sind jetzt „◀ Wert ▶“ zum Durchschalten statt Aufklapplisten.": "Selectors with few values (physics mode, gearbox, pit stop, language …) are now \"◀ value ▶\" to cycle through instead of drop-down lists.",
+    "Alles bleibt gespeichert: Rolle und Ghost-Tempo je Auto, die Strecke im Editor (mit Drehung und Zoom) und die Tastenbelegung je Controller. In der App zusätzlich eine Sicherungsdatei in Dokumente/OmegaSim, die auch eine Neuinstallation übersteht; nach einer Neuinstallation bietet die App an, sie einzulesen (neue APK nötig). Garage: Spieler 1/2 lassen sich nur noch wählen, wenn kein anderes Auto sie hat. Presets enthalten Sprache, Entwickler- und Zwei-Spieler-Modus nicht mehr.": "Everything stays saved: role and ghost speed per car, the track in the editor (with rotation and zoom) and the button mapping per controller. In the app there is also a backup file in Documents/OmegaSim that survives a reinstall; after a reinstall the app offers to read it back in (new APK needed). Garage: player 1/2 can only be chosen when no other car has them. Presets no longer contain language, developer and two-player mode.",
+    "Alles wird automatisch gespeichert, du musst nichts laden.": "Everything is saved automatically, you do not need to load anything.",
+    "Einstellungen zuletzt um {u}.": "Settings last saved at {u}.",
+    "Sicherungsdatei (übersteht eine Neuinstallation) zuletzt um {u}: {o}.": "Backup file (survives a reinstall) last written at {u}: {o}.",
+    "Die Sicherungsdatei in Dokumente/OmegaSim wird gleich angelegt.": "The backup file in Documents/OmegaSim will be created shortly.",
+    "Die Datei ist nicht lesbar": "The file cannot be read",
+    "Sicherung nicht geladen": "Backup not loaded",
+    "Sicherung geladen, die App startet neu …": "Backup loaded, the app restarts …",
+    "Gespeichert: {o}": "Saved: {o}",
+    "Frühere Daten wiederherstellen?": "Restore earlier data?",
+    "Die App sichert alles automatisch in Dokumente/OmegaSim (Datei OmegaSim-Sicherung.json). Nach einer Neuinstallation kannst du sie hier wieder einlesen: Einstellungen, Strecken, Statistiken, Autos und Tastenbelegung.": "The app backs everything up automatically to Documents/OmegaSim (file OmegaSim-Sicherung.json). After a reinstall you can read it back in here: settings, tracks, statistics, cars and button mapping.",
+    "Sicherungsdatei wählen": "Choose backup file",
+    "Neu anfangen": "Start fresh",
+    "Ghost: Tempo-Streuung": "Ghost: speed spread",
+    "Jedes Auto bekommt je Rennen ein eigenes Grundtempo auf der Geraden, bis zu so viel Prozent schneller oder langsamer. 0 % = alle gleich.": "Each car gets its own base speed on the straights per race, up to this many percent faster or slower. 0 % = all equal.",
+    "Ghost: Start je Startreihe versetzt": "Ghost: staggered start per grid row",
+    "Startplatz 1 und 2 fahren sofort los, 3 und 4 etwas später, 5 und 6 noch etwas später – so kommt Luft in die erste Kurve.": "Grid slots 1 and 2 go at once, 3 and 4 a little later, 5 and 6 later still – this leaves room in the first corner.",
+    "Ghost: Versatz je Startreihe": "Ghost: delay per grid row",
+    "Wie viel später jede weitere Zweierreihe losfährt.": "How much later each further row of two starts.",
+    "Ghost: Zu zweit in Kurven innen/Mitte": "Ghost: side by side in corners inside/middle",
+    "Fahren zwei Autos nebeneinander in eine Kurve, nimmt das vordere die Innenseite und das hintere die Mitte, statt außen zu fahren und abzufliegen.": "When two cars enter a corner side by side, the front one takes the inside and the rear one the middle, instead of going wide and flying off.",
+    "Ghosts (experimentell): Regler „Tempo-Streuung“ (Vorgabe 0 %), Start je Startreihe versetzt (an, 200 ms je Reihe), und zu zweit in Kurven fährt das vordere Auto innen, das hintere in der Mitte (an).": "Ghosts (experimental): \"speed spread\" slider (default 0 %), staggered start per grid row (on, 200 ms per row), and when side by side in corners the front car takes the inside, the rear car the middle (on).",
+    "Scan fertig: {n} Teile, Runde geschlossen.": "Scan done: {n} pieces, lap closed.",
+    "STRECKE GESCANNT: {n} TEILE": "TRACK SCANNED: {n} PIECES",
+    "1 Ergebnis": "1 result",
+    "{n} Ergebnisse": "{n} results",
+    "Streckenscan langsamer (auch in der Haarnadel), das Auto hält am Ende an; der Live-Scan erkennt das Rundenende selbst. Reiter wechseln per Wischen nach links/rechts. Kein Neuladen mehr durch Herunterziehen. Challenges zeigen „X Ergebnisse“. Cockpit: Rundenzeiten doppelt so groß, Sound- und Start-Knopf rechts entfernt.": "Track scan slower (also in the hairpin), the car stops at the end; the live scan detects the end of the lap itself. Swipe left/right switches tabs. Pulling down no longer reloads. Challenges show \"X results\". Cockpit: lap times twice as large, sound and start buttons on the right removed.",
+    "Obere Reiterleiste deutlich höher (PC 40 px, Handy 46 px), gut zum Tippen. Meine Strecken: Ton beim Laden, rundes Löschen-Kreuz mit Rückfrage. Ghosts halten wieder den gemessenen Abstand (1,2 Kacheln, mehr über „Feld-Abstand“). Knockout und Derby als experimentell gekennzeichnet, Texte übersetzt.": "Top tab bar much taller (PC 40 px, phone 46 px), easy to tap. My tracks: sound when loading, round delete cross with confirmation. Ghosts keep the measured gap again (1.2 tiles, more via \"field spacing\"). Knockout and Derby marked experimental, texts translated.",
+    "Fahrzeug-Layout": "Vehicle layout",
+    "{n} laden": "Load {n}",
+    "Strecke löschen?": "Delete track?",
+    "„{n}“ wird gelöscht. Bist du sicher?": "\"{n}\" will be deleted. Are you sure?",
+    "Strecke „{n}“ geladen": "Track \"{n}\" loaded",
+    "Leben": "Lives",
+    "Geister": "Ghosts",
+    "Spieler {s}: noch {n} Leben": "Player {s}: {n} lives left",
+    "Geist aus": "Ghost out",
+    "Du": "You",
+    "Aufstellung mit größter Querlage (links/rechts)": "Grid with widest offset (left/right)",
+    "Weg": "Path",
+    "alte APK": "old APK",
+    "geschrieben": "written",
+    "wiederholt": "retried",
+    "verworfen": "dropped",
+    "Mehrspieler: „Rennen für alle“ repariert. Der Bereitschaftsschirm erscheint jetzt auf jedem Reiter, inaktive oder abgemeldete Telefone blockieren den Start nicht mehr, Abbrechen löscht nicht mehr die Wertung aller, und das angekündigte Wetter gilt auch beim Start. App: schnellerer, stabilerer direkter Steuerweg zum Auto (neue APK nötig).": "Multiplayer: \"Race for everyone\" fixed. The ready screen now appears on every tab, inactive or departed phones no longer block the start, cancelling no longer wipes everyone's standings, and the announced weather also applies at the start. App: faster, more stable direct control path to the car (new APK needed).",
+    "Rennen für alle: bereit?": "Race for everyone: ready?",
+    "du": "you",
+    "startet": "starts",
+    "wartet …": "waiting …",
+    "Alle bereit, du kannst starten.": "Everyone is ready, you can start.",
+    "Warte, bis alle anderen bereit sind.": "Waiting until everyone else is ready.",
+    "Du bist bereit. Warte, bis gestartet wird.": "You are ready. Wait for the start.",
+    "Tippe auf „Bereit“, sobald du soweit bist.": "Tap \"Ready\" as soon as you are set.",
     "Zweite Kopie der App: Die Download-Links zeigen auf deren eigenes Release (mit Download-Zähler), sonst auf die APK im Repo.": "Second copy of the app: download links point to its own release (with download counter), otherwise to the APK in the repo.",
     "neu morgen": "new tomorrow",
     "neu in {n} Tagen": "new in {n} days",
@@ -20539,9 +20733,9 @@
     // die verbleibende Zeit - eine Rundenzahl anzuschreiben, die es in diesem Modus nicht
     // gibt, waere eine erfundene Angabe.
     $('race-lap-count').textContent = raceMode === 'knockout'
-      ? 'Leben ' + knockoutLeben + (zweiSpieler ? '/' + knockoutLeben2 : '') + ' · Geister ' + knockoutGeister
+      ? t('Leben') + ' ' + knockoutLeben + (zweiSpieler ? '/' + knockoutLeben2 : '') + ' · ' + t('Geister') + ' ' + knockoutGeister
       : raceMode === 'derby'
-        ? 'Health ' + Math.round(derbyHealth) + '% · Kills ' + derbyKills + ' · Gegner ' + derbyGeisterZaehlen()
+        ? 'Health ' + Math.round(derbyHealth) + '% · Kills ' + derbyKills + ' · ' + t('Gegner') + ' ' + derbyGeisterZaehlen()
         : raceLapTarget(laps.length);
     $('race-lap-list').innerHTML = laps.slice().reverse().slice(0, 10).map(l =>
       `<li><span>${l.lap}</span><span${l.ms === best ? ' class="gt3-ok"' : ''}>${formatLapTime(l.ms)}</span></li>`
@@ -20561,8 +20755,14 @@
     if (!el || !el.offsetParent) return;
     const s = typeof funkStatistik === 'function' ? funkStatistik() : null;
     const wv = (navigator.userAgent.match(/Chrome\/(\d+)/) || [])[1];
+    // Schreibweg in der App (v0.9.2): OmegaBle (direkt, ohne Rundlauf) oder das Plugin.
+    const ob = window.OMEGA_APP && window.OMEGA_BRUECKE && window.OMEGA_BRUECKE.omegaInfo
+      ? window.OMEGA_BRUECKE.omegaInfo() : null;
+    const z = ob && ob.zaehler;
+    const weg = ob ? ' · ' + t('Weg') + ' ' + ob.weg + (ob.alt ? ' (' + t('alte APK') + ')' : '')
+      + (z ? ' · ' + z.geschrieben + ' ' + t('geschrieben') + ', ' + z.wiederholt + ' ' + t('wiederholt') + ', ' + z.verworfen + ' ' + t('verworfen') : '') : '';
     el.textContent = (s ? Math.round(s.mittel) + ' / ' + Math.round(s.p95) + ' ms' + (s.haenger ? ' · ' + s.haenger + '× hing' : '')
-      : t('noch keine Befehle')) + (wv ? ' · WebView ' + wv : '');
+      : t('noch keine Befehle')) + weg + (wv ? ' · WebView ' + wv : '');
   }, 1000);
   // COCKPIT GEDROSSELT (v0.8.41): hoechstens alle COCKPIT_MAL_MS, nach dem Senden.
   const COCKPIT_MAL_MS = 90;
@@ -20808,6 +21008,9 @@
   // Moeglich wurde es durch die Ortung aus v0.6.46: autopilotGrund() ist global (Flagge,
   // Einfuehrungsrunde, Bahn/Ausdruck-Stellung), der Rest haengt am Auto - Motor, Regler,
   // Kolonnenversatz, Abseits-Antwort. `wer` ist 1, wenn nichts dasteht.
+  const SCAN_TEMPO = 0.6, SCAN_TEMPO_HAARNADEL = 0.4;
+  const scanStopp = { car: null, bis: 0 };
+  function scanAnhalten(car) { if (car) { scanStopp.car = car; scanStopp.bis = Date.now() + 1500; } }
   function autopilot(fahrerBremse, wer) {
     const zwei = wer === 2;
     const motor = zwei ? physEngine2 : physEngine;
@@ -20822,6 +21025,11 @@
     // garageScan.car in 60-track.js. Ein globales 'scan' wuerde das jeweils andere Auto
     // mit hineinziehen, auch wenn nur eines tatsaechlich gescannt wird.
     const meinAuto = zwei ? (typeof playerCar2 !== 'undefined' ? playerCar2 : null) : playerCar;
+    // NACH DEM SCAN ANHALTEN (v0.9.4). BESTELLT: "wenn livescan fertig, dann auto anhalten".
+    // 1,5 s Bremse, danach wieder der Fahrer - steht der Gashebel auf null, bleibt das Auto stehen.
+    if (scanStopp.car && scanStopp.car === meinAuto && Date.now() < scanStopp.bis) {
+      return { grund: 'scan', throttle: 0, brake: 1, steer: 0, lenkt: false };
+    }
     if (typeof garageScan !== 'undefined' && garageScan.aktiv && garageScan.car === meinAuto) {
       const v = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
       const dt = Math.max(0.01, Math.min(0.25, (Date.now() - (regler.at || Date.now())) / 1000));
@@ -20832,7 +21040,12 @@
       // Haarnadelkurve rausfaehrt -> drosseln." Insgesamt 85 % der Einfuehrungsrunde, in
       // einer gemeldeten Haarnadel 65 %. Die Leseschwelle 0,35 (GHOST_READ_MIN) ist am
       // GEDRUCKTEN Muster gemessen; der Scan laeuft auf der Bahn (trackMode 'on').
-      const ziel = formationPace() * (scanInHaarnadel(meinAuto) ? 0.65 : 0.85);
+      // v0.9.4: BESTELLT "Streckenscan funktioniert nicht. Das Auto faehrt in der Haarnadelkurve
+      // raus. Mach insgesamt langsamer." Waehrend des Scans ist die Strecke unbekannt - eine
+      // Haarnadel ist erst zu erkennen, wenn das Auto schon auf ihr steht. Deshalb ueberall
+      // langsamer (60 statt 85 %, in der Haarnadel 40 statt 65 %); auf der Bahn liest das Auto
+      // die Codes auch darunter (die Schwelle 0,35 gilt fuer das gedruckte Muster).
+      const ziel = formationPace() * (scanInHaarnadel(meinAuto) ? SCAN_TEMPO_HAARNADEL : SCAN_TEMPO);
       const geregelt = ghostSpeedControl(regler, ziel, v, dt);
       return { grund: 'scan', throttle: geregelt.throttle, brake: geregelt.brake,
                steer: 0, lenkt: !abseitsJetztFuer(zwei ? 2 : 1) };
@@ -21910,6 +22123,8 @@
     // unsichtbar darunter weiter.
     const mi = $('mp-info');
     if (mi && !mi.hidden) return mi;
+    const mr = $('mp-ready-screen');
+    if (mr && !mr.hidden) return mr;
     const tab = document.querySelector('.tabpage.active');
     if (!tab || tab.id === 'tab-race') return null;
     // Der TITELBILDSCHIRM hat keine Zeilen: jede Taste fuehrt nach Fahren (51-konsole.js).
@@ -22039,7 +22254,7 @@
   // Zeile gemerkt, beim Zurueckkommen steht die Auswahl wieder dort. Nicht fuer Dialoge
   // (#k-frage, Tutorial): die fangen immer oben an.
   const menuNavMerk = {};
-  const MENU_NAV_OHNE_MERK = ['k-frage', 'k-tour-karte'];
+  const MENU_NAV_OHNE_MERK = ['k-frage', 'k-tour-karte', 'mp-ready-screen'];
   function menuNavMerkLeeren() { Object.keys(menuNavMerk).forEach((k) => { delete menuNavMerk[k]; }); }
   function menuNavEnsureContext() {
     const key = menuNavContextNow();
@@ -22611,6 +22826,40 @@
     menuNavTonBewegen();
     return true;
   }
+
+  // ---- WISCHEN WECHSELT DIE REITER (v0.9.4) -------------------------------------------
+  // BESTELLT: "mach, dass ich mit swipe nach links und rechts so wie mit den Schultertasten
+  // die Tabs wechseln kann". Dieselbe Funktion wie L1/R1 (innerste Leiste). Nicht im Cockpit,
+  // im Editor, auf Reglern, Karten und in waagrecht scrollbaren Bereichen - dort gehoert die
+  // Wischgeste dem Inhalt. Mindestens 60 px, deutlich waagrecht, in hoechstens 0,7 s.
+  (function wischenAnbinden() {
+    const NICHT = '.tp-karte, input, select, textarea, canvas, .k-pause, .lb-wrap, #mp-info, .k-kein-wischen';
+    let a = null;
+    document.addEventListener('touchstart', (e) => {
+      a = null;
+      if (e.touches.length !== 1) return;
+      const z = e.target;
+      if (!z || !z.closest || z.closest(NICHT) || document.body.classList.contains('track-fs')) return;
+      for (let el = z; el && el !== document.body; el = el.parentElement) {
+        if (el.scrollWidth > el.clientWidth + 4) {
+          const ox = getComputedStyle(el).overflowX;
+          if (ox === 'auto' || ox === 'scroll') return;
+        }
+      }
+      a = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: performance.now() };
+    }, { passive: true });
+    document.addEventListener('touchend', (e) => {
+      if (!a || !e.changedTouches.length) return;
+      const p = e.changedTouches[0];
+      const dx = p.clientX - a.x, dy = p.clientY - a.y, dt = performance.now() - a.t;
+      a = null;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy) || dt > 700) return;
+      const tab = document.querySelector('.tabpage.active');
+      if (!tab || tab.id === 'tab-home' || tab.id === 'tab-race') return;
+      if (typeof konsoleFrageOffen === 'function' && konsoleFrageOffen()) return;
+      konsoleReiterSchritt(dx < 0 ? 1 : -1);
+    }, { passive: true });
+  })();
 
   // ---- Quadrat: schneller Wechsel auf Kacheln mit data-quad --------------------------
   function konsoleQuadWechsel(q, dir) {
@@ -26324,13 +26573,20 @@
     // Es wird mittig auf den Umriss der Strecke gelegt und erweitert die Ansicht, damit es
     // nicht am Kartenrand abgeschnitten wird. Nur der Editor (o.raum) zeichnet es.
     let raumRect = null;
-    if (o.raum && o.raum.x > 0 && o.raum.y > 0) {
+    // v0.9.11: auch mit nur EINER begrenzten Richtung (die andere spannt die Strecke auf), und
+    // verschiebbar: o.raumVersatz (cm) legt den Raum gegen die Strecke - BESTELLT "Raumgrenzen
+    // anzeigen, mich die Strecke mit Fingertouch verschieben lassen und rechter Stick (rechter
+    // Stick druecken = zentrieren)".
+    if (o.raum && (o.raum.x > 0 || o.raum.y > 0)) {
       const cxs = pts.map(p => p.x), cys = pts.map(p => p.y);
       const cx = (Math.min(...cxs) + Math.max(...cxs)) / 2;
       const cy = (Math.min(...cys) + Math.max(...cys)) / 2;
-      const rw = o.raum.x * 100 * TRACK_UNITS_PER_CM / 2;
-      const rh = o.raum.y * 100 * TRACK_UNITS_PER_CM / 2;
-      raumRect = { x: cx - rw, y: cy - rh, w: rw * 2, h: rh * 2 };
+      const rand = TRACK_HALF_W + 20;
+      const rw = o.raum.x > 0 ? o.raum.x * 100 * TRACK_UNITS_PER_CM / 2 : (Math.max(...cxs) - Math.min(...cxs)) / 2 + rand;
+      const rh = o.raum.y > 0 ? o.raum.y * 100 * TRACK_UNITS_PER_CM / 2 : (Math.max(...cys) - Math.min(...cys)) / 2 + rand;
+      const v = o.raumVersatz || { x: 0, y: 0 };
+      raumRect = { x: cx - rw + (v.x || 0) * TRACK_UNITS_PER_CM, y: cy - rh + (v.y || 0) * TRACK_UNITS_PER_CM,
+                   w: rw * 2, h: rh * 2, mx: o.raum.x, my: o.raum.y };
       all.push([raumRect.x, raumRect.y], [raumRect.x + raumRect.w, raumRect.y + raumRect.h]);
     }
     const xs = all.map(p => p[0]), ys = all.map(p => p[1]);
@@ -26604,9 +26860,14 @@
               + `<rect x="0" y="0" width="${w.toFixed(0)}" height="${h.toFixed(0)}" fill="url(#tp-grid)"/>`;
     }
     if (raumRect) {
-      body += `<rect x="${(raumRect.x + ox).toFixed(1)}" y="${(raumRect.y + oy).toFixed(1)}" `
+      const fs = Math.max(8, Math.min(w, h) * 0.035);
+      const mass = (raumRect.mx > 0 ? String(raumRect.mx).replace('.', ',') : '–') + ' × '
+                 + (raumRect.my > 0 ? String(raumRect.my).replace('.', ',') : '–') + ' m';
+      body += `<g class="tp-raum"><rect x="${(raumRect.x + ox).toFixed(1)}" y="${(raumRect.y + oy).toFixed(1)}" `
         + `width="${raumRect.w.toFixed(1)}" height="${raumRect.h.toFixed(1)}" fill="none" `
-        + `stroke="rgba(110,160,255,.55)" stroke-width="1.5" stroke-dasharray="7 5"/>`;
+        + `stroke="rgba(110,160,255,.7)" stroke-width="2" stroke-dasharray="7 5"/>`
+        + `<text x="${(raumRect.x + ox + fs * 0.4).toFixed(1)}" y="${(raumRect.y + oy + fs * 1.2).toFixed(1)}" `
+        + `font-size="${fs.toFixed(1)}" fill="rgba(140,180,255,.85)">${mass}</text></g>`;
     }
     const html = `<svg class="tp-karte" viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}">${gridSvg}${body}</svg>`;
     // DIE GEOMETRIE MIT HERAUS, damit ein Aufrufer Punkte setzen kann, ohne die Strecke neu
@@ -26939,7 +27200,35 @@
     if (was === 'linie') refreshTrackPreview();
   }
 
+  // DIE STRECKE IM EDITOR UEBERLEBT EINEN NEUSTART (v0.9.6). Vorher stand nach dem Neuladen
+  // wieder nur das Startteil da. Gebuendelt geschrieben, weil die Vorschau beim Fahren oft
+  // neu gezeichnet wird.
+  // var und nicht const/let: refreshTrackPreview() laeuft schon beim Laden (siehe editorZoom).
+  var EDITOR_STRECKE_STORE = 'omegasim-editor-strecke';
+  var editorStreckeFaellig = null;
+  function editorStreckeMerken() {
+    if (editorStreckeFaellig !== null) return;
+    editorStreckeFaellig = setTimeout(() => {
+      editorStreckeFaellig = null;
+      try {
+        localStorage.setItem(EDITOR_STRECKE_STORE, JSON.stringify({ tiles: currentTrackTiles.map((x) => x.type),
+          rotation: trackRotationDeg, zoom: editorZoom }));
+      } catch (e) { /* voll oder privat */ }
+    }, 800);
+  }
+  function editorStreckeLaden() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(EDITOR_STRECKE_STORE) || 'null'); } catch (e) { return false; }
+    if (!d || !Array.isArray(d.tiles) || d.tiles.length < 2) return false;
+    const ok = Object.values(TILE_TYPE);
+    if (!d.tiles.every((x) => ok.includes(x))) return false;
+    currentTrackTiles = d.tiles.map((type) => ({ type }));
+    if (Number.isFinite(d.rotation)) trackRotationDeg = d.rotation;
+    if (Number.isFinite(d.zoom)) editorZoom = Math.max(0.5, Math.min(3, d.zoom));
+    return true;
+  }
   function refreshTrackPreview() {
+    editorStreckeMerken();
     // Die Kachelzahl entscheidet, ob der Windschatten ueberhaupt rechnen kann. Hier gerufen
     // und nicht in 50-drive.js beim Laden: dort ist currentTrackTiles noch in der temporalen
     // Todeszone, siehe den Kommentar bei dirtyAirVerfuegbar().
@@ -26953,7 +27242,7 @@
     const result = renderTrackPreview(currentTrackTiles, null,
       { detailed: true, cars: trackCarMarks(), echt: true, auswahl: imEditor ? trackSelIndex() : null,
         ohneLinie: !editorSchalter.linie, grid: true,
-        raum: (raum.x > 0 || raum.y > 0) ? raum : null });
+        raum: (raum.x > 0 || raum.y > 0) ? raum : null, raumVersatz });
     $('track-preview-svg').innerHTML = result.html;
     trackZoomAnwenden();
     trackEditorGeo = result.geo || null;
@@ -27121,6 +27410,85 @@
   // Default 0 m x 0 m = keine Begrenzung: die Zufallsstrecke ignoriert den Raum, bis der
   // Nutzer eine Groesse eintraegt. Ein Wert 0 je Achse heisst "diese Richtung unbegrenzt".
   const RAUM_KEY = 'omegasim-raum';
+  // ---- DIE STRECKE IM RAUM VERSCHIEBEN (v0.9.11) ---------------------------------------
+  // Der Versatz (cm) legt das Raum-Rechteck gegen die Strecke - fuers Aufbauen auf dem Boden:
+  // wo im Zimmer liegt die Strecke? Er aendert die Strecke nicht. var, weil refreshTrackPreview()
+  // schon beim Laden laeuft. Beim Ziehen wird nur das Rechteck im SVG bewegt (eine ganze
+  // Vorschau kostet rund 94 ms), neu gezeichnet wird beim Loslassen.
+  var RAUM_VERSATZ_KEY = 'omegasim-raum-versatz';
+  var raumVersatz = (function () {
+    try { const v = JSON.parse(localStorage.getItem('omegasim-raum-versatz') || 'null'); if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) return v; } catch (e) { /* privat */ }
+    return { x: 0, y: 0 };
+  })();
+  function raumVersatzSpeichern() {
+    try { localStorage.setItem(RAUM_VERSATZ_KEY, JSON.stringify(raumVersatz)); } catch (e) { /* privat */ }
+  }
+  // Rechteck sofort um (dx, dy) Kartenpunkte verschieben, ohne neu zu zeichnen.
+  function raumRechteckSchieben(dxEinh, dyEinh) {
+    const g = document.querySelector('#track-preview-svg .tp-raum');
+    if (!g) return false;
+    g.querySelectorAll('rect, text').forEach((el) => {
+      el.setAttribute('x', (parseFloat(el.getAttribute('x')) + dxEinh).toFixed(1));
+      el.setAttribute('y', (parseFloat(el.getAttribute('y')) + dyEinh).toFixed(1));
+    });
+    raumVersatz.x += dxEinh / TRACK_UNITS_PER_CM;
+    raumVersatz.y += dyEinh / TRACK_UNITS_PER_CM;
+    return true;
+  }
+  function raumVersatzNull() {
+    raumVersatz = { x: 0, y: 0 };
+    raumVersatzSpeichern();
+    refreshTrackPreview();
+  }
+  let raumNeuZeichnen = null;
+  function raumSpaeterZeichnen() {
+    clearTimeout(raumNeuZeichnen);
+    raumNeuZeichnen = setTimeout(() => { raumVersatzSpeichern(); refreshTrackPreview(); }, 350);
+  }
+  // Rechter Stick im Editor-Vollbild (aus pollGamepad): schiebt mit bis zu 60 cm/s; R3 zentriert.
+  let raumStickAt = 0, raumR3Vor = false;
+  function raumVersatzStick(ax, ay, r3) {
+    const jetzt = performance.now();
+    const dt = Math.min(0.1, (jetzt - (raumStickAt || jetzt)) / 1000);
+    raumStickAt = jetzt;
+    if (r3 && !raumR3Vor) raumVersatzNull();
+    raumR3Vor = r3;
+    const tot = 0.2;
+    const x = Math.abs(ax) > tot ? ax : 0, y = Math.abs(ay) > tot ? ay : 0;
+    if (!x && !y) return;
+    // Der Stick bewegt die STRECKE: nach rechts gedrueckt wandert sie nach rechts, also der
+    // Raum nach links.
+    const cm = 60 * dt;
+    if (raumRechteckSchieben(-x * cm * TRACK_UNITS_PER_CM, -y * cm * TRACK_UNITS_PER_CM)) raumSpaeterZeichnen();
+  }
+  (function raumZiehenAnbinden() {
+    const host = $('track-preview-svg');
+    if (!host) return;
+    let a = null, gezogen = false;
+    host.addEventListener('pointerdown', (e) => {
+      if (!e.isPrimary || !host.querySelector('.tp-raum')) { a = null; return; }
+      const svg = host.querySelector('svg.tp-karte');
+      if (!svg) return;
+      const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+      a = { x: e.clientX, y: e.clientY, k: vb && r.width ? vb.width / r.width : 1, id: e.pointerId };
+      gezogen = false;
+    });
+    host.addEventListener('pointermove', (e) => {
+      if (!a || e.pointerId !== a.id) return;
+      const dx = e.clientX - a.x, dy = e.clientY - a.y;
+      if (!gezogen && Math.hypot(dx, dy) < 8) return;
+      gezogen = true;
+      e.preventDefault();
+      // Finger nach rechts = Strecke nach rechts = Raum nach links.
+      raumRechteckSchieben(-dx * a.k, -dy * a.k);
+      a.x = e.clientX; a.y = e.clientY;
+    });
+    const ende = () => { if (a && gezogen) raumSpaeterZeichnen(); a = null; };
+    host.addEventListener('pointerup', ende);
+    host.addEventListener('pointercancel', () => { a = null; });
+    // Ein Zug ist kein Antippen: den Klick danach nicht als Kachelwahl werten.
+    host.addEventListener('click', (e) => { if (gezogen) { e.stopPropagation(); e.preventDefault(); gezogen = false; } }, true);
+  })();
   const RAUM_DEFAULT = { x: 0, y: 0 };
   const TEILE_SORTEN = [TILE_TYPE.START, TILE_TYPE.STRAIGHT, TILE_TYPE.CURVE_LEFT, TILE_TYPE.CURVE_RIGHT,
     TILE_TYPE.HAIRPIN_LEFT, TILE_TYPE.HAIRPIN, TILE_TYPE.WEIT_LEFT, TILE_TYPE.WEIT_RIGHT,
@@ -28185,29 +28553,40 @@
     // in den Editor." Die Kacheln werden als DOM-Elemente gebaut (kein innerHTML fuer den
     // Namen), damit ein Streckenname mit Sonderzeichen die Seite nicht zerreisst.
     keys.forEach(name => {
-      const t = store[name];
+      const eintrag = store[name];
+      const wrap = document.createElement('div');
+      wrap.className = 'track-kachel-wrap';
       const btn = document.createElement('button');
       btn.className = 'track-kachel';
-      btn.title = name + ' laden';
+      btn.title = t('{n} laden').replace('{n}', name);
       const vor = document.createElement('span');
       vor.className = 'track-kachel-vorschau';
       try {
-        const tiles = migrateTiles((t.tiles || []).slice());
+        const tiles = migrateTiles((eintrag.tiles || []).slice());
         vor.innerHTML = renderTrackPreview(tiles, null, {}).html;
       } catch (e) { /* ohne Vorschau */ }
       const b = document.createElement('b');
       b.textContent = name;
+      b.setAttribute('data-i18n-skip', '');
       const em = document.createElement('em');
-      em.textContent = (t.tiles ? t.tiles.length : 0) + ' Teile';
+      em.textContent = (eintrag.tiles ? eintrag.tiles.length : 0) + ' ' + t('Teile');
+      em.setAttribute('data-i18n-skip', '');
       btn.appendChild(vor); btn.appendChild(b); btn.appendChild(em);
       btn.addEventListener('click', () => trackLaden(name));
       const del = document.createElement('button');
+      del.type = 'button';
       del.className = 'track-kachel-del';
       del.textContent = '✕';
-      del.title = 'Löschen';
-      del.addEventListener('click', (e) => { e.stopPropagation(); trackLoeschen(name); });
-      btn.appendChild(del);
-      cont.appendChild(btn);
+      del.title = t('Löschen');
+      // BESTELLT: "Wenn ich es zum Strecke loeschen klicke, soll noch ein 'bist du sicher?'
+      // Fenster kommen."
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        konsoleFrage(t('Strecke löschen?'), t('„{n}“ wird gelöscht. Bist du sicher?').replace('{n}', name),
+          [[t('Löschen'), () => trackLoeschen(name)], [t('Abbrechen'), null]]);
+      });
+      wrap.appendChild(btn); wrap.appendChild(del);
+      cont.appendChild(wrap);
     });
   }
   // Klick auf eine Kachel laedt die Strecke in den Editor (vorher das <select>-Laden).
@@ -28223,7 +28602,10 @@
     }
     $('track-name').value = name;
     refreshTrackPreview();
-    showHudToast('Strecke "' + name + '" geladen');
+    // BESTELLT: "bei Strecken laden einen Ton abspielen, wenn die Strecke erfolgreich geladen
+    // wurde" - derselbe Klack wie bei einer fertigen Strecke im Editor.
+    try { trackFertigKlang(); } catch (e) { /* ohne Ton */ }
+    showHudToast(t('Strecke „{n}“ geladen').replace('{n}', name));
   }
   function trackLoeschen(name) {
     const store = loadTrackStore();
@@ -28321,6 +28703,20 @@
         const ty = parseInt(t, 10);
         if (ty === 0xff || ty === TILE_OFFTRACK) { dropped += c; continue; }
         if (c > bestCount) { bestCount = c; bestType = ty; }
+      }
+      // FERTIG BEI DER ZWEITEN START/ZIEL-UEBERFAHRT (v0.9.4). BESTELLT: "wenn livescan fertig,
+      // dann auto anhalten". Vorher lief der Live-Scan, bis man von Hand stoppte - und schrieb
+      // dabei die zweite Runde hinten an. Jetzt: Start/Ziel nach mindestens vier Teilen ist das
+      // Ende der Runde; die Strecke bleibt, das Auto haelt an.
+      if (bestType != null && isStartCode(bestType) && currentTrackTiles.length >= 5) {
+        const auto = trackScanCar;
+        refreshTrackPreview();
+        stopTrackScan();
+        $('track-scan-status').textContent = t('Scan fertig: {n} Teile, Runde geschlossen.').replace('{n}', currentTrackTiles.length);
+        showHudToast(t('STRECKE GESCANNT: {n} TEILE').replace('{n}', currentTrackTiles.length));
+        if (typeof scanAnhalten === 'function') scanAnhalten(auto || playerCar);
+        try { trackFertigKlang(); } catch (err) { /* ohne Ton */ }
+        return;
       }
       if (bestType != null && Object.values(TILE_TYPE).includes(bestType)) {
         currentTrackTiles.push({ type: bestType });
@@ -28757,8 +29153,10 @@
         refreshTrackPreview();
         const wie = 'Lücke ' + schluss.lueckeCm.toFixed(1) + ' cm, Winkel '
           + schluss.winkel.toFixed(1) + '°';
+        const gescannt = garageScan.car;
         garageScanAbbrechen('Fertig: ' + garageScan.seq.length + ' Teile, Rundkurs '
           + 'geschlossen (' + wie + ').');
+        if (typeof scanAnhalten === 'function') scanAnhalten(gescannt);
         showHudToast('STRECKE GESCANNT: ' + garageScan.seq.length + ' TEILE');
         log('Garagenscan fertig: ' + garageScan.seq.length + ' Teile, geschlossen (' + wie
             + ') nach ' + garageScan.versuch + ' Versuch(en).', 'info');
@@ -28796,6 +29194,9 @@
   // Battery is a rough two-point estimate (0x9b/155≈100%, 0x90/144≈75%, observed in an
   // earlier session) — not a calibrated formula, just enough for a rough gauge.
   let dashBattery = null;
+
+  // Editor-Strecke aus der letzten Sitzung (v0.9.6).
+  if (editorStreckeLaden()) { refreshTrackPreview(); if (typeof trackZoomAnwenden === 'function') trackZoomAnwenden(); }
   // =========================================================================
   // Das Rennen: Armaturenbrett, Modi, Boxengasse, Wetter
   // =========================================================================
@@ -28939,7 +29340,9 @@
   // which is what "sobald das erste Auto über Start fährt" means literally.
   let raceFlying = false;
   let raceGridOrder = [];      // device ids, first = pole
-let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
+let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentell). Hiess bis v0.9.2
+                            // "Autos fahren selbst in Position" - das tat er nie, er aendert nur den
+                            // Querversatz der Startaufstellung in der Einfuehrungsrunde.
   let raceFormationLap = false;
   let raceStartedAt = null;
   let raceClockTimer = null;
@@ -28991,7 +29394,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
     if (!knockoutLaeuft) return;
     if (wer === 2) knockoutLeben2 = Math.max(0, knockoutLeben2 - 1);
     else knockoutLeben = Math.max(0, knockoutLeben - 1);
-    showHudToast('Leben ' + (wer === 2 ? '2' : '1') + ': noch ' + (wer === 2 ? knockoutLeben2 : knockoutLeben));
+    showHudToast(t('Spieler {s}: noch {n} Leben').replace('{s}', wer === 2 ? '2' : '1').replace('{n}', wer === 2 ? knockoutLeben2 : knockoutLeben));
     knockoutPruefen();
   }
   // Ende: alle Geister raus -> Sieg; alle Menschen raus -> Niederlage.
@@ -29053,7 +29456,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       playTone(880, 0.06, 'sine', 0.2);
       setTimeout(() => playTone(1320, 0.09, 'sine', 0.2), 45);
     }
-    showHudToast('Geist aus · Kills ' + derbyKills);
+    showHudToast(t('Geist aus') + ' · Kills ' + derbyKills);
     derbyPruefen();
   }
   // Aufprall-Schaden fuer den Spieler (head-on 10 %, sonst 20 %).
@@ -29121,10 +29524,10 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       catch (e) { return { name: '?', farbe: '#8b99b4' }; }
     };
     const teile = [];
-    teile.push({ name: 'Du', farbe: '#2ee06a', health: derbyHealth, kills: derbyKills,
+    teile.push({ name: t('Du'), farbe: '#2ee06a', health: derbyHealth, kills: derbyKills,
                  aus: derbyHealth <= 0 });
     if (typeof zweiSpieler !== 'undefined' && zweiSpieler) {
-      teile.push({ name: 'Spieler 2', farbe: '#ffb02e', health: derbyHealth2, kills: derbyKills2,
+      teile.push({ name: t('Spieler 2'), farbe: '#ffb02e', health: derbyHealth2, kills: derbyKills2,
                    aus: derbyHealth2 <= 0 });
     }
     for (const c of garage) {
@@ -30454,7 +30857,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       knockoutSieger = null; knockoutLaeuft = true;
       for (const c of garage) if (c && c.ghost) c.ghost.eliminated = false;
       knockoutGeister = knockoutGeisterZaehlen();
-      showHudToast('Knockout: ' + knockoutGeister + ' Geister · ' + KO_LEBEN + ' Leben');
+      showHudToast('Knockout: ' + knockoutGeister + ' ' + t('Geister') + ' · ' + KO_LEBEN + ' ' + t('Leben'));
     }
     if (raceMode === 'derby') {
       derbyLaeuft = true; derbySieger = null; derbyTitel = null;
@@ -30463,7 +30866,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       for (const c of garage) if (c && c.ghost) {
         c.ghost.derbyHealth = DERBY_MAX; c.ghost.derbyAus = false; c.ghost.derbyKills = 0;
       }
-      showHudToast('Derby: ' + derbyGeisterZaehlen() + ' Gegner · Health 100');
+      showHudToast('Derby: ' + derbyGeisterZaehlen() + ' ' + t('Gegner') + ' · Health 100');
     }
     if (raceFormationLap) {
       // formationPace() und nicht PIT_SPEED_FACTOR: der Deckel muss zum Ziel des
@@ -30670,8 +31073,8 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
   function applyRaceModeUi() {
     syncRaceModeTiles();
     const m = RACE_MODES[raceMode];
-    $('race-limit-label').textContent = m.unit;
-    $('race-mode-hint').textContent = m.hint;
+    $('race-limit-label').textContent = t(m.unit);
+    $('race-mode-hint').textContent = t(m.hint);
     $('race-start-btn').textContent = `\u{1F3C1} ${m.label} starten`;
     // Free practice has no limit, so the field would be a lie. Disabled, not hidden:
     // a control that vanishes makes people wonder whether they broke something.
@@ -34817,8 +35220,12 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
     // lokalen Zeilen (eigene Autos/Ghosts) bleiben; die anderen Geraete aus der Rangliste
     // kommen als zusaetzliche Zeilen dazu - jede mit ihren gemeldeten Runden/Zeiten.
     let mpHtml = '';
-    if (typeof mpStand === 'function') {
-      const stand = mpStand();
+    // try: mpStand liest mp aus 97-sessions.js - ein Aufruf vor dessen Auswertung (Sprachwechsel
+    // beim Laden) waere sonst ein Fehler der Ladereihenfolge (temporale Todeszone).
+    let mpStandJetzt = null;
+    try { mpStandJetzt = typeof mpStand === 'function' ? mpStand() : null; } catch (e) { /* Ladefolge */ }
+    if (mpStandJetzt) {
+      const stand = mpStandJetzt;
       const leute = (stand && stand.fahrer) || [];
       const lokale = new Set();
       if (typeof raceAllCars === 'function') {
@@ -35455,8 +35862,9 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
     if (c) return c;
     // Community-Strecke als Challenge fahren: die Strecke wird aus dem eingereichten Code
     // aufgebaut, ein Lauf mit Ampel, Wertung nach erkannten Teilen.
-    const d = communityLesen();
-    const tr = d.tracks.find((t) => t.id === id);
+    // Direkt nach Kennung, ohne Zusammenfuehrung: chDef laeuft auch im Fahrtakt.
+    let tr = communityLesen().tracks.find((t) => t.id === id);
+    if (!tr && communityOnline) tr = communityOnline.tracks.find((t) => t.id === id);
     if (tr) return { id: tr.id, code: tr.code, name: tr.name, runden: 1, pit: 0, wx: null, community: true };
     return CHALLENGES[0];
   }
@@ -35709,6 +36117,79 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
   function communitySchreiben(d) {
     try { localStorage.setItem(COMMUNITY_STORE, JSON.stringify(d)); } catch (e) { /* privat */ }
   }
+  // ---- GETEILT UEBER DAS SHEET (v0.9.10) ----
+  // BESTELLT: die Community-Strecken sollen fuer alle sichtbar sein - vorher lagen sie nur auf
+  // dem eigenen Geraet. Das Apps Script der Challenges fuehrt dafuer zwei Blaetter (Community,
+  // CommunityZeiten). Die Liste wird hoechstens alle 2 Minuten geholt und mit den eigenen,
+  // lokalen Daten zusammengefuehrt; ohne Netz bleibt alles wie bisher lokal. Eigene Strecken,
+  // die online noch fehlen, werden beim naechsten Abgleich eingereicht.
+  let communityOnline = null, communityOnlineAt = 0, communityHolt = false, communityFehler = false;
+  function communityUrl() { const o = chOnline(); return o && o.url ? o.url : ''; }
+  function communityPost(eintrag) {
+    const url = communityUrl();
+    if (!url) return Promise.resolve(null);
+    const senden = (versuch) => fetch(url, { method: 'POST', body: JSON.stringify(Object.assign({ geraet: chGeraet() }, eintrag)) })
+      .then((r) => r.json())
+      .catch((e) => (versuch < 2 ? new Promise((ok) => setTimeout(ok, 1500)).then(() => senden(versuch + 1)) : null));
+    return senden(0);
+  }
+  function communityHolen(frisch) {
+    const url = communityUrl();
+    if (!url || communityHolt) return Promise.resolve(communityOnline);
+    if (!frisch && communityOnline && Date.now() - communityOnlineAt < 120000) return Promise.resolve(communityOnline);
+    communityHolt = true;
+    const holen = () => fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'community=1').then((r) => r.json());
+    return holen().catch(() => new Promise((ok) => setTimeout(ok, 1200)).then(holen))
+      .then((j) => {
+        if (j && j.ok && Array.isArray(j.tracks)) { communityOnline = j; communityOnlineAt = Date.now(); communityFehler = false; }
+        else { communityFehler = true; communityOnlineAt = Date.now(); }
+        return communityOnline;
+      })
+      .catch(() => { communityFehler = true; communityOnlineAt = Date.now(); return communityOnline; })
+      .then((j) => { communityHolt = false; return j; });
+  }
+  // Online-Liste + lokale Daten zu EINER Sicht. Online-Strecken haben ihre Server-Kennung; eine
+  // lokale Strecke, die (auch gespiegelt) online schon steht, wird unter deren Kennung gefuehrt.
+  function communitySicht() {
+    const lokal = communityLesen();
+    const on = communityOnline;
+    if (!on) return lokal;
+    const sicht = { tracks: [], times: {}, nextId: lokal.nextId, online: true };
+    for (const tr of on.tracks) {
+      sicht.tracks.push({ id: tr.id, code: tr.code, name: tr.name, online: true });
+      sicht.times[tr.id] = (on.zeiten[tr.id] || []).map((z) => ({ zeit: z.zeit_ms, fahrer: z.fahrer || '', geraet: z.geraet,
+        datum: Date.parse(z.zeitpunkt) || 0 }));
+    }
+    for (const tr of lokal.tracks) {
+      const p = codeToTrack(tr.code);
+      const gleich = p ? sicht.tracks.find((x) => { const q = codeToTrack(x.code); return q && communityGleiche(p.tiles, q.tiles); }) : null;
+      const ziel = gleich ? gleich.id : tr.id;
+      if (!gleich) sicht.tracks.push({ id: tr.id, code: tr.code, name: tr.name, online: false });
+      const liste = sicht.times[ziel] = sicht.times[ziel] || [];
+      for (const z of (lokal.times[tr.id] || [])) {
+        if (!liste.some((x) => x.geraet === z.geraet && Math.abs(x.zeit - z.zeit) < 2)) liste.push(z);
+      }
+      liste.sort((a, b) => a.zeit - b.zeit);
+    }
+    return sicht;
+  }
+  // Lokale Strecken, die online fehlen, einreichen; ihre Zeiten hinterher. Laeuft still.
+  function communityAbgleichen() {
+    if (!communityOnline) return;
+    const lokal = communityLesen();
+    const fehlen = lokal.tracks.filter((tr) => {
+      const p = codeToTrack(tr.code);
+      return p && !communityOnline.tracks.some((x) => { const q = codeToTrack(x.code); return q && communityGleiche(p.tiles, q.tiles); });
+    });
+    fehlen.slice(0, 3).forEach((tr, i) => setTimeout(() => {
+      communityPost({ art: 'community-strecke', code: tr.code, name: tr.name }).then((r) => {
+        if (!r || !r.ok || !r.id) return;
+        const meine = (lokal.times[tr.id] || []).filter((z) => z.geraet === chGeraet());
+        if (meine.length) setTimeout(() => communityPost({ art: 'community-zeit', id: r.id, zeit_ms: meine[0].zeit, fahrer: meine[0].fahrer }), 11000);
+        communityHolen(true).then(() => { if ($('community-bereich')) communityZeichnen(); });
+      });
+    }, i * 11000));
+  }
   function communityCode(tiles) { return trackToCode(tiles, 0); }
   // Zwei Strecken sind dieselbe, wenn ihr Code gleich ist ODER die eine das Spiegelbild der
   // anderen ist (Reihenfolge umkehren + links/rechts tauschen, wie chSpiegelTiles).
@@ -35770,8 +36251,18 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
   function communityZeichnen() {
     const bereich = $('community-bereich');
     if (!bereich) return;
-    const data = communityLesen();
+    // Online-Liste im Hintergrund holen; sobald sie da ist, noch einmal zeichnen.
+    if (communityUrl() && (!communityOnline || Date.now() - communityOnlineAt > 120000) && !communityHolt) {
+      communityHolen(false).then((j) => { if (j) communityAbgleichen(); communityZeichnen(); });
+    }
+    const data = communitySicht();
     bereich.innerHTML = '';
+    const stand = document.createElement('p');
+    stand.className = 'muted community-stand';
+    stand.setAttribute('data-i18n-skip', '');
+    stand.textContent = data.online ? t('Gemeinsame Liste: {n} Strecken.').replace('{n}', data.tracks.length)
+      : (communityUrl() ? (communityFehler ? t('Gemeinsame Liste nicht erreichbar, hier deine eigenen Strecken.') : t('Lade die gemeinsame Liste …'))
+         : t('Nur auf diesem Gerät (keine Online-Adresse eingestellt).'));
     const ein = document.createElement('button');
     ein.className = 'primary';
     ein.textContent = t('Eigene Strecke einreichen');
@@ -35790,14 +36281,22 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
         t('So sieht deine Strecke aus. Bitte prüfe das Bild, dann wird sie eingereicht.'),
         [[t('Einreichen'), () => {
            const name = prompt(t('Name der Strecke'), '') || 'Strecke ' + String(data.nextId || 1).padStart(4, '0');
-           const id = communityEinreichen(data, currentTrackTiles, name);
-           communitySchreiben(data);
-           showHudToast(t('Strecke {n} eingereicht.').replace('{n}', id));
+           // Gibt es sie online schon (auch gespiegelt)? Dann nur deren Kennung nehmen.
+           const schon = data.online ? data.tracks.find((x) => { const q = codeToTrack(x.code); return q && communityGleiche(currentTrackTiles, q.tiles); }) : null;
+           if (schon) { showHudToast(t('Diese Strecke gibt es schon: {n}').replace('{n}', schon.id + ' · ' + schon.name)); return; }
+           const lokal = communityLesen();
+           const id = communityEinreichen(lokal, currentTrackTiles, name);
+           communitySchreiben(lokal);
+           communityPost({ art: 'community-strecke', code: communityCode(currentTrackTiles), name }).then((r) => {
+             showHudToast(r && r.ok ? t('Strecke {n} für alle eingereicht.').replace('{n}', r.id) : t('Strecke {n} eingereicht (nur auf diesem Gerät).').replace('{n}', id));
+             communityHolen(true).then(() => communityZeichnen());
+           });
            communityZeichnen();
          }],
          [t('Abbrechen'), null]], true, vorschau);
     };
     bereich.appendChild(ein);
+    bereich.appendChild(stand);
     const liste = communitySortiert(data);
     if (!liste.length) {
       const p = document.createElement('p');
@@ -35811,9 +36310,20 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
     for (const tr of liste) {
       const row = document.createElement('div');
       row.className = 'community-zeile';
+      // BESTELLT: "community strecken: layout in der vorschau zeigen".
+      const mini = document.createElement('span');
+      mini.className = 'community-mini';
+      mini.setAttribute('aria-hidden', 'true');
+      try {
+        const p = codeToTrack(tr.code);
+        if (p) { const merk = trackRotationDeg; trackRotationDeg = 0; try { mini.innerHTML = renderTrackPreview(p.tiles, null, {}).html; } finally { trackRotationDeg = merk; } }
+      } catch (e) { /* ohne Bild */ }
+      row.appendChild(mini);
       const links = document.createElement('div');
+      links.className = 'community-text';
       const b = document.createElement('b');
-      b.textContent = tr.id + ' \u00b7 ' + tr.name;
+      b.setAttribute('data-i18n-skip', '');
+      b.textContent = tr.id + ' \u00b7 ' + tr.name + (tr.online === false && data.online ? ' (' + t('nur hier') + ')' : '');
       const best = communityBesteZeit(data, tr.id);
       const spieler = communitySpieler(data, tr.id);
       const em = document.createElement('em');
@@ -36186,7 +36696,9 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       // ist dieselbe Challenge-Maschinerie.
       if (lauf.community) {
         communityZeit(communityLesen(), erg.id, erg.zeit, erg.fahrer);
-        hochgeladen = true;
+        hochgeladen = communityPost({ art: 'community-zeit', id: erg.id, zeit_ms: Math.round(erg.zeit), fahrer: erg.fahrer || '' })
+          .then((r) => { hochgeladen = !!(r && r.ok); communityHolen(true).then(() => communityZeichnen()); return hochgeladen; })
+          .catch(() => { hochgeladen = false; return false; });
         communityZeichnen();
       } else {
         chLokalSpeichern(erg);
@@ -36542,6 +37054,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       // Erreichter Rang (Medaille + Perzentil) auf der Uebersicht.
       const rang = kachel.querySelector('.ch-k-rang');
       if (rang) rang.innerHTML = chRangKachelText(chKachelRang(def));
+      chErgebnisseZeigen(kachel, def.id);
     });
     chDauerKachelnZeichnen();
   }
@@ -36559,6 +37072,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       if (woche) woche.textContent = t('Dauerrennen');
       const rang = kachel.querySelector('.ch-k-rang');
       if (rang) rang.innerHTML = chRangKachelText(chKachelRang(def));
+      chErgebnisseZeigen(kachel, def.id);
     });
   }
   // BESTELLT: "ein 'beliebteste Strecke'-Banner auf die Challenge mit den meisten Spielern".
@@ -36566,6 +37080,23 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
   // Strecke|Modus|Preset); ein Spieler kann mehrere Eintraege haben, naeher kommen wir ohne
   // eigene Spieler-Statistik nicht. Die Rechnung laeuft im Hintergrund und setzt das Banner.
   let chBeliebtesteId = null;
+  // Ergebnisse je Strecke (alle Modi/Presets), aus demselben Schnappschuss. BESTELLT: "zeig bei
+  // den woechentlichen Challenges an, wie viele Spieler jeweils Zeiten beigetragen haben
+  // (einfach nur darunter: 'X Ergebnisse')".
+  let chErgebnisse = null;
+  function chErgebnisseZeigen(kachel, id) {
+    let em = kachel.querySelector('.ch-k-anzahl');
+    if (!em) {
+      em = document.createElement('em');
+      em.className = 'ch-k-anzahl';
+      em.setAttribute('data-i18n-skip', '');
+      const nach = kachel.querySelector('.ch-k-woche');
+      if (nach && nach.nextSibling) kachel.insertBefore(em, nach.nextSibling); else kachel.appendChild(em);
+    }
+    const n = chErgebnisse ? (chErgebnisse[id] || 0) : null;
+    em.hidden = n === null;
+    em.textContent = n === 1 ? t('1 Ergebnis') : t('{n} Ergebnisse').replace('{n}', n);
+  }
   function chBeliebteste() {
     chSchnappschuss().then((j) => {
       if (!j || !j.listen) return;
@@ -36584,6 +37115,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       let best = null;
       ids.forEach((id) => { if (summe[id] > 0 && (best === null || summe[id] > summe[best])) best = id; });
       chBeliebtesteId = best;
+      chErgebnisse = summe;
       chKachelnZeichnen();
     }).catch(() => { /* ohne Schnappschuss kein Banner */ });
   }
@@ -38147,6 +38679,8 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
     ['ghost-charakter', 'charakter'],
     ['ghost-w-start', 'wuerzeStart'],
     ['ghost-w-recovery', 'wuerzeRecovery'],
+    ['ghost-staffel', 'staffelStart'],
+    ['ghost-paar-kurve', 'paarKurve'],
     // Die zwei Boxenstopp-Schalter. Sie gehoeren in dieselbe Liste, weil sie dieselbe Form
     // haben - Kaestchen an, Feld true - und nicht, weil sie mit der Wuerze zu tun haetten.
     ['ghost-pit', 'pitAn'],
@@ -38298,6 +38832,14 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
   $('ghost-feld').addEventListener('input', (e) => {
     ghostCfg.feldAbstand = parseFloat(e.target.value);
     $('ghost-feld-val').textContent = e.target.value + '%';
+  });
+  if ($('ghost-streuung')) $('ghost-streuung').addEventListener('input', (e) => {
+    ghostCfg.tempoStreuung = parseFloat(e.target.value);
+    $('ghost-streuung-val').textContent = e.target.value + '%';
+  });
+  if ($('ghost-staffel-ms')) $('ghost-staffel-ms').addEventListener('input', (e) => {
+    ghostCfg.staffelMs = parseFloat(e.target.value);
+    $('ghost-staffel-ms-val').textContent = e.target.value + ' ms';
   });
   $('ghost-ueber').addEventListener('input', (e) => {
     ghostCfg.ueberholRate = parseFloat(e.target.value);
@@ -39054,7 +39596,22 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       return resolveBindingCollisions(migrateBindings({ ...DEFAULT_BINDINGS, ...saved }));
     } catch { return { ...DEFAULT_BINDINGS }; }
   }
-  function saveBindings() { localStorage.setItem(GAMEPAD_BINDINGS_KEY, JSON.stringify(bindings)); }
+  // BELEGUNG JE CONTROLLER (v0.9.6). GEMELDET (Familie): "Scheinbar wird die Controller-Belegung
+  // nirgends gespeichert." Gespeichert war sie - aber je SPIELER. Wer zwischen einem No-Name-Pad
+  // (eigene Knopfnummern) und einem Standard-Pad wechselt, bekam deshalb die Belegung des
+  // anderen. Jetzt zusaetzlich je Controller-Kennung (pad.id); verbindet sich ein bekanntes Pad
+  // als Spieler 1 oder 2, kommt seine Belegung mit (padBelegungAbgleichen in pollGamepad).
+  const PAD_BELEGUNG_PRAEFIX = 'carrera-hybrid-gamepad-pad:';
+  const padBelegungFuer = { 1: null, 2: null };
+  function padBelegungSpeichern(spielerNr, b) {
+    const id = padBelegungFuer[spielerNr];
+    if (!id) return;
+    try { localStorage.setItem(PAD_BELEGUNG_PRAEFIX + id, JSON.stringify(b)); } catch (e) { /* voll */ }
+  }
+  function saveBindings() {
+    localStorage.setItem(GAMEPAD_BINDINGS_KEY, JSON.stringify(bindings));
+    padBelegungSpeichern(1, bindings);
+  }
 
   let bindings = loadBindings();
   if (bindings.__kollisionen) {
@@ -39085,7 +39642,29 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       return resolveBindingCollisions({ ...DEFAULT_BINDINGS2, ...saved }, DEFAULT_BINDINGS2);
     } catch { return { ...DEFAULT_BINDINGS2 }; }
   }
-  function saveBindings2() { localStorage.setItem(GAMEPAD_BINDINGS_KEY2, JSON.stringify(bindings2)); }
+  function saveBindings2() {
+    localStorage.setItem(GAMEPAD_BINDINGS_KEY2, JSON.stringify(bindings2));
+    padBelegungSpeichern(2, bindings2);
+  }
+  // Wechselt das Pad eines Spielers, seine gemerkte Belegung laden (falls es eine gibt).
+  function padBelegungAbgleichen(spieler) {
+    for (const nr of [1, 2]) {
+      const pad = nr === 1 ? spieler.p1 : spieler.p2;
+      const id = pad && pad.id ? String(pad.id).slice(0, 120) : null;
+      if (id === padBelegungFuer[nr]) continue;
+      padBelegungFuer[nr] = id;
+      if (!id) continue;
+      let roh = null;
+      try { roh = localStorage.getItem(PAD_BELEGUNG_PRAEFIX + id); } catch (e) { /* privat */ }
+      if (!roh) continue;
+      try {
+        const saved = JSON.parse(roh);
+        if (nr === 1) { bindings = resolveBindingCollisions(migrateBindings({ ...DEFAULT_BINDINGS, ...saved })); delete bindings.__kollisionen; }
+        else { bindings2 = resolveBindingCollisions({ ...DEFAULT_BINDINGS2, ...saved }, DEFAULT_BINDINGS2); delete bindings2.__kollisionen; }
+        log('Controller: gemerkte Belegung fuer "' + id + '" geladen (Spieler ' + nr + ').', 'info');
+      } catch (e) { /* unlesbar: bleibt die bisherige */ }
+    }
+  }
   let bindings2 = loadBindings2();
   if (bindings2.__kollisionen) {
     for (const zeile of bindings2.__kollisionen) log('Controller (Spieler 2): ' + zeile, 'notify');
@@ -39698,6 +40277,20 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
   // nur, wenn sie von Hand gewaehlt wurde (car.farbeGewaehlt). Ohne beides wird ein
   // vorhandener Eintrag geloescht statt ein leerer angelegt.
   function carProfilGeaendert(e) { return !!(e && (e.alias || e.farbe)); }
+  // ROLLE UND GHOST-TEMPO JE AUTO (v0.9.6). GEMELDET (Familie): Einstellungen muessten am
+  // naechsten Tag neu gesetzt werden. Rolle und eigenes Ghost-Tempo lagen nur im Speicher der
+  // Sitzung. Eigene Ablage, damit carProfilGeaendert (Name/Farbe) unberuehrt bleibt.
+  const CAR_ROLLEN_STORE = 'chc.rollen.v1';
+  function carRollenLesen() {
+    try { return JSON.parse(localStorage.getItem(CAR_ROLLEN_STORE) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function carRolleMerken(car) {
+    if (!car || !car.device || car.sim) return;
+    const alle = carRollenLesen();
+    alle[String(car.device.id)] = { role: car.role,
+      ghostSpeed: car.ghostSpeed === undefined ? null : car.ghostSpeed };
+    try { localStorage.setItem(CAR_ROLLEN_STORE, JSON.stringify(alle)); } catch (e) { /* voll */ }
+  }
   function carStoreSchreiben(all) {
     try { localStorage.setItem(CAR_STORE, JSON.stringify(all)); } catch (e) { /* privat */ }
   }
@@ -40119,8 +40712,9 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
     }
     car.role = role;
     if (role !== 'ghost') stopGhost(car);
+    carRolleMerken(car);
     renderGarage();
-    const name = role === 'player' ? 'Steuern' : role === 'player2' ? 'Spieler 2'
+    const name = role === 'player' ? 'Spieler 1' : role === 'player2' ? 'Spieler 2'
                : role === 'ghost' ? 'Ghost' : 'keine';
     log(`${garageLabel(car)}: Rolle ${name}`, 'info');
   }
@@ -40141,11 +40735,16 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
   // dieselbe Hochziehung, auf der auch renderGarage() selbst beruht.
   // ---- Karten der Garage: Rollen, aufgeklappte Zeile, Fotos -------------------------
   const GAR_ROLLEN = [
-    { id: 'player', name: 'Steuern', kurz: 'FAHRER' },
+    { id: 'player', name: 'Spieler 1', kurz: 'SPIELER 1' },
     { id: 'player2', name: 'Spieler 2', kurz: 'SPIELER 2' },
     { id: 'ghost', name: 'Ghost', kurz: 'GHOST' },
     { id: 'none', name: 'Aus', kurz: 'AUS' },
   ];
+  // Die Rollen, die dieses Auto bekommen darf: Spieler-Rollen nur, wenn kein ANDERES Auto sie hat.
+  function garRollenFrei(car) {
+    return GAR_ROLLEN.filter((r) => (r.id !== 'player' && r.id !== 'player2')
+      || !garage.some((c) => c !== car && c.role === r.id));
+  }
   let garAufAuto = null;
   let garFotoFuer = null;
   function garageFarbeSetzen(car, id) {
@@ -40180,6 +40779,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       const v = eigen ? car.ghostSpeed : ghostCfg.speed;
       const tempo = (d) => {
         car.ghostSpeed = Math.round(Math.max(GHOST_READ_MIN, Math.min(1, v + 0.05 * d)) * 100) / 100;
+        carRolleMerken(car);
         renderGarage();
       };
       const rst = document.createElement('button');
@@ -40191,6 +40791,7 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       rst.onclick = (e) => {
         e.stopPropagation();
         car.ghostSpeed = null;
+        carRolleMerken(car);
         showHudToast(garageLabel(car).toUpperCase() + ' FOLGT DER VORGABE');
         renderGarage();
       };
@@ -40381,8 +40982,14 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       row.querySelectorAll('button[data-act="rolle"]').forEach((b) => {
         b.onclick = (e) => {
           e.stopPropagation();
-          const k = GAR_ROLLEN.findIndex((r) => r.id === car.role);
-          const n = GAR_ROLLEN[((k < 0 ? 3 : k) + +b.dataset.d + GAR_ROLLEN.length) % GAR_ROLLEN.length];
+          // Nur FREIE Rollen (v0.9.6). BESTELLT: "wenn ich Auto 2 umschalte, soll es nicht den
+          // Status 'Steuern' von Auto 1 klauen, sondern der Status 'Spieler 1' ist erst dann
+          // verfuegbar, wenn kein anderes Auto das hat; das andere Auto hat dann nur die
+          // uebrigen Optionen zur Auswahl." Vorher lief der Pfeil durch alle vier Rollen, und
+          // setCarRole nahm dem anderen Auto seine Rolle weg.
+          const frei = garRollenFrei(car);
+          const k = frei.findIndex((r) => r.id === car.role);
+          const n = frei[((k < 0 ? frei.length - 1 : k) + +b.dataset.d + frei.length) % frei.length];
           setCarRole(car, n.id);
         };
       });
@@ -40623,7 +41230,12 @@ let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
       // Ghost, unabhaengig vom Zwei-Spieler-Modus. Spieler 2 bleibt eine bewusste manuelle
       // Zuweisung ueber den Rollen-Knopf in der Garage (setCarRole schaltet dabei weiterhin
       // von selbst den Zwei-Spieler-Modus an, siehe dort).
-      if (!playerCar) setCarRole(car, 'player');
+      // Gemerkte Rolle zuerst (v0.9.6) - wenn sie frei ist; sonst wie bisher.
+      const gemerkt = carRollenLesen()[String(car.device.id)];
+      if (gemerkt && typeof gemerkt.ghostSpeed === 'number') car.ghostSpeed = gemerkt.ghostSpeed;
+      const frei = gemerkt && garRollenFrei(car).some((r) => r.id === gemerkt.role);
+      if (frei && gemerkt.role !== 'none') setCarRole(car, gemerkt.role);
+      else if (!playerCar) setCarRole(car, 'player');
       else setCarRole(car, 'ghost');
       log(`${garageLabel(car)} verbunden (${garage.length} insgesamt).`, 'info');
       playFx(fxBuffers.start[$('sound-profile').value] || fxBuffers.start.p992gt3r, 0.85);
@@ -41152,6 +41764,13 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // Fahrercharakter je Auto und Rennen, und die Startreaktion. Beide Standard AUS.
     charakter: false,
     wuerzeStart: false,
+    // v0.9.5 (experimentell): Tempo-Streuung in Prozent (0 = alle gleich), Startversatz je
+    // Zweierreihe, und zu zweit in Kurven innen/Mitte. Siehe ghostStreuFaktor, ghostStaffelMs,
+    // ghostPaarKurve.
+    tempoStreuung: 0,
+    staffelStart: true,
+    staffelMs: 200,
+    paarKurve: true,
     // Lernen von Runde zu Runde, standardmaessig aus: es aendert das Fahrverhalten ueber
     // ein Rennen hinweg, und das soll niemand ungefragt bekommen.
     learnPace: false,
@@ -43224,7 +43843,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // der Verfolger darf also heran - genau dafuer ist die Ausnahme dort.
   // let und nicht const, damit ein Prueflauf sie sweepen kann - sie und SPICE_GAP_MIN
   // bestreiten dasselbe Band, und welches Paar taugt, ist eine Messung und keine Meinung.
-  let SPICE_ATTACK_RANGE = 1.65;
+  let SPICE_ATTACK_RANGE = 1.3;
   function attackRangeSetzen(v) { SPICE_ATTACK_RANGE = v; }
   function attackRangeLesen() { return SPICE_ATTACK_RANGE; }
   function attackPSetzen(v) { SPICE_ATTACK_P = v; }
@@ -43495,6 +44114,40 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // NUR IM ECHTEN RENNEN, und das gehoert gesagt: es haengt an raceStartedAt, das
   // raceGreen() setzt. simStart() geht nicht durch raceGreen - die Kennzahlensonde sieht
   // diesen Baustein also nicht, und eine Messung dazu waere eine Messung von nichts.
+  // ---- TEMPO-STREUUNG, STARTVERSATZ, PAAR IN DER KURVE (v0.9.5, experimentell) ---------
+  // Streuung: nur auf der Geraden (BESTELLT "im Schnitt minimal schneller auf der Geraden"),
+  // Faktor 1 + Prozent * tempoZ. Bei 0 % genau 1 - das Fahrverhalten bleibt dann bitgleich.
+  function ghostStreuFaktor(car) {
+    const p = ghostCfg.tempoStreuung || 0;
+    const g = car && car.ghost;
+    if (!p || !g || typeof g.tempoZ !== 'number') return 1;
+    if (ghostTurnOf(car.tileCode)) return 1;          // in Kurven gleich
+    return 1 + (p / 100) * g.tempoZ;
+  }
+  // Wartezeit nach Gruen fuer dieses Auto: Reihe = Startplatz / 2 (abgerundet).
+  function ghostStaffelMs(car) {
+    if (!ghostCfg.staffelStart) return 0;
+    const pos = gridPosOf(car);
+    if (pos < 0) return 0;
+    return Math.floor(pos / 2) * (ghostCfg.staffelMs || 0);
+  }
+  // Zu zweit in einer Kurve: das vordere Auto innen, das hintere in der Mitte. null = keine
+  // Vorgabe (allein, Gerade, Schalter aus). Innen ist +dir (siehe ghostLineFromCode).
+  const GHOST_PAAR_INNEN = 0.8;
+  function ghostPaarKurve(car) {
+    if (!ghostCfg.paarKurve || !car || !car.ghost) return null;
+    const dir = ghostTurnOf(car.tileCode);
+    if (!dir) return null;
+    let nb = null;
+    for (const o of ghostFieldRacing()) {
+      if (o !== car && o.ghost && ghostNahe(car, o)) { nb = o; break; }
+    }
+    if (!nb) return null;
+    const a = ghostOrtGes(car), b = ghostOrtGes(nb);
+    const vorn = (a === null || b === null) ? garage.indexOf(car) < garage.indexOf(nb) : a >= b;
+    return vorn ? dir * GHOST_PAAR_INNEN : 0;
+  }
+
   const GHOST_START_REAKTION_MS = [80, 300];
   const GHOST_START_VORSICHT_MS = 2500;
   const GHOST_START_VORSICHT = 0.85;
@@ -43678,7 +44331,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // abstand"). GEMELDET danach: "danach haben sie sich geschoben (zu geringer Abstand) und
   // sind tuer an tuer gefahren" - also schlechter, genau wie die Messreihe unten es fuer
   // groessere Soll-Luecken zeigt (mehr Bremsen, dann Auflaufen). ZURUECK auf 1,2.
-  let SPICE_GAP_MIN = 1.5;      // Kacheln, ab hier wird gelupft (nur noch Rueckfall)
+  let SPICE_GAP_MIN = 1.2;      // Kacheln, ab hier wird gelupft (nur noch Rueckfall)
   // ---- DIE ZEITLUECKE IN SEKUNDEN --------------------------------------------------
   //
   // ABGELEITET UND NICHT GEWAEHLT, aus der Fahrzeuglaenge und dem Tempo. Ein Auto ist 9,5 cm
@@ -43723,7 +44376,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // ist plausibel und kein Messfehler - eine sehr grosse Sollluecke laesst die Autos
   // staerker bremsen, und dann laufen sie wieder auf.
   // In v0.7.57 kurz auf 1,5, wieder zurueck auf 1,2 - siehe SPICE_GAP_MIN darueber.
-  let SPICE_LUECKE_MIN_S = 1.5;
+  let SPICE_LUECKE_MIN_S = 1.2;
   const SPICE_LUECKE_PER_CLOSING = 0.30;
   function lueckeMinSetzen(v) { SPICE_LUECKE_MIN_S = v; }
   function lueckeMinLesen() { return SPICE_LUECKE_MIN_S; }
@@ -43760,13 +44413,13 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     const von = 1.5 - i;        // 1.5..0.5, 1 bei 50 % - fuer Luecken/Reichweite
     attackPSetzen(0.45 * zu);
     attackArmMsSetzen(900 * von);
-    // BESTELLT: "Autos sollen mehr Abstand halten." Die Anker stehen auf 1,5/1,5/1,65 -
-    // vorher 1,2/1,2/1,3. Das Gummiband-Fenster (RANGE - GAP) bleibt bei 0,15, und die
-    // Ungleichung RANGE > GAP bleibt bei jeder Reglerstellung erfuellt (beide laufen mit
-    // demselben `von`).
-    lueckeMinSetzen(1.5 * von);
-    gapMinSetzen(1.5 * von);
-    attackRangeSetzen(1.65 * von);
+    // Anker 1,2/1,2/1,3 (v0.9.3 wieder): eine Zwischenfassung hatte 1,5/1,5/1,65 - genau der
+    // Wert, der in v0.7.57 schon schlechter gemessen war ("tuer an tuer", siehe SPICE_GAP_MIN).
+    // Wer mehr Abstand will, nimmt den Regler "Feld-Abstand" (ghostSpice). Die Ungleichung
+    // RANGE > GAP bleibt bei jeder Reglerstellung erfuellt (beide laufen mit demselben `von`).
+    lueckeMinSetzen(1.2 * von);
+    gapMinSetzen(1.2 * von);
+    attackRangeSetzen(1.3 * von);
   }
 
   // Fortschritt in Kacheln seit dem Start, mit Bruchteil. Absichtlich NICHT ueber den
@@ -45379,6 +46032,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
                   // Die Reaktionszeit dieses Fahrers am Start, in Millisekunden. Auch sie
                   // wird immer gezogen und nur bei eingeschaltetem Schalter gelesen.
                   startReaktion: startReaktionZiehen(),
+                  // Lage dieses Fahrers in der Tempo-Streuung, -1..1, EINMAL je Rennen gezogen
+                  // und nur gelesen, wenn der Regler nicht auf 0 steht.
+                  tempoZ: Math.random() * 2 - 1,
                   // Der aufintegrierte Weg auf der aktuellen Kachel, in Zeichnungseinheiten.
                   // Er traegt die Kachelphase, sobald dieser Kacheltyp zweimal gemessen ist -
                   // siehe ghostTilePhaseWeg().
@@ -46082,6 +46738,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // Gelb wirklich das Limit ist: ein lernender Ghost darf sich nicht ueber eine
       // Neutralisierung hinwegsetzen.
       target = Math.max(0.05, Math.min(1, target * learnFactors(car).pace));
+      target *= ghostStreuFaktor(car);
       // Gelbe Flagge: alle auf denselben Wert, und zwar bevor irgendetwas anderes daran
       // dreht. Gleiches Tempo fuer alle heisst von selbst "kein Ueberholen".
       const underYellow = flagState !== 'green';
@@ -46240,6 +46897,10 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // Begruendung und Zahlen stehen bei GHOST_START_REAKTION_MS. Es steht NEBEN der
       // Einfuehrungsrunde, weil es dieselbe Art Griff ist - eine Obergrenze in der
       // Startphase - und vor der Anfahrrampe, die ihre eigene Aufgabe hat.
+      // STARTVERSATZ JE REIHE (v0.9.5): Reihe 1 (Platz 1/2) sofort, jede weitere ghostCfg.staffelMs
+      // spaeter. Unabhaengig von der Startreaktion und vor ihr - beide addieren sich.
+      const reihenWarten = raceStartedAt ? ghostStaffelMs(car) : 0;
+      if (reihenWarten && now - raceStartedAt < reihenWarten) target = 0;
       if (ghostCfg.wuerzeStart && raceStartedAt && g.startReaktion) {
         const seitGruen = now - raceStartedAt;
         if (seitGruen < g.startReaktion) target = 0;
@@ -46482,9 +47143,11 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         // eines von beiden ausweichen kann, ist eine Mitte, auf der sie sich treffen.
         const passSeite = (spice.attack || 0) !== 0 ? Math.sign(spice.attack)
                         : (weiche !== 0 ? Math.sign(weiche) : 0);
+        const paar = pq === null && !underYellow && passSeite === 0 ? ghostPaarKurve(car) : null;
         const quer = pq !== null ? pq
           : underYellow ? 0
           : passSeite !== 0 ? passSeite * passAussen()
+          : paar !== null ? paar * GHOST_LINE_STEER
           : ghostLineOffset(car) * ghostCfg.line * GHOST_LINE_STEER * linieGewicht;
         // BESTELLT (diese Runde): "querlage bei boxenstopps klappt nicht, die autos
         // bleiben mitten auf der strecke stehen." Der Kommentar zwei Absaetze ueber pq
@@ -46495,7 +47158,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         // haelt ein Boxenstopp (pq !== null) exakt den Randwert, ohne Zusatz.
         const querRohSumme = pq !== null ? quer : (quer
               + g.bias * ghostCfg.lateral * 0.25
-              + ghostLane(car) * ghostCfg.lanes * GHOST_LANE_STEER * spurGewicht
+              + (paar !== null ? 0 : ghostLane(car) * ghostCfg.lanes * GHOST_LANE_STEER * spurGewicht)
               // Der Querausschlag eines Verbremsers, additiv - siehe SPICE_FEHLER_QUER.
               + (spice.fehlerQuer || 0));
         // ---- QUERTRAEGHEIT: eine RATENBEGRENZUNG und kein Tiefpass ------------------
@@ -46633,13 +47296,15 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
           // dieser Zweig beginnt. Ein Boxenstopp ist kein Zuschlag auf eine Kurvenfahrt.
           steer = pq2;
         } else {
+          const paar2 = passSeite2 === 0 ? ghostPaarKurve(car) : null;
           steer += (passSeite2 !== 0
                     ? passSeite2 * passAussen()
+                    : paar2 !== null ? paar2 * GHOST_LINE_STEER
                     : ghostLineOffset(car) * ghostCfg.line * GHOST_LINE_STEER
                       * ghostLinieGewicht(mix2))
                  + g.bias * ghostCfg.lateral * 0.25
-                 + ghostLane(car) * ghostCfg.lanes * GHOST_LANE_STEER
-                   * ghostSpurGewicht(mix2);
+                 + (paar2 !== null ? 0 : ghostLane(car) * ghostCfg.lanes * GHOST_LANE_STEER
+                   * ghostSpurGewicht(mix2));
         }
       }
       // DER PRUEFSTAND UEBERSCHREIBT ALLES, auch das Schlaengeln: ein fester Versatz, der
@@ -47578,6 +48243,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
 
   function pollGamepad() {
     const spieler = padsFuerSpieler();
+    padBelegungAbgleichen(spieler);
     // Spieler 2 zuerst, und ohne Bedingung auf `pad`: sein Eingang muss auch dann auf null
     // gehen, wenn Spieler 1 gar kein Pad hat (der Rumpf darunter kehrt dann frueh zurueck).
     if (zweiSpieler) pollPad2(spieler.p2); else { p2Steer = 0; p2Throttle = 0; }
@@ -47866,6 +48532,10 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // dadurch jeden Takt als neuer Druck: ein Auswahlfeld sprang so mehrere Optionen weit.
       // Das war die Ursache von "manche Menues schalten mehrere Optionen auf einmal durch".
       const imEditorVollbild = document.body.classList.contains('track-fs');
+      // Rechter Stick im Editor-Vollbild: Strecke im Raum verschieben, R3 zentriert (v0.9.11).
+      if (imEditorVollbild && typeof raumVersatzStick === 'function') {
+        raumVersatzStick(pad.axes[2] || 0, pad.axes[3] || 0, !!(pad.buttons[11] && pad.buttons[11].pressed));
+      }
       if (konsoleMenue() && !imEditorVollbild) {
         if (konsoleWdh('up', dUp)) menuNavMove('up');
         if (konsoleWdh('down', dDown)) menuNavMove('down');
@@ -50704,7 +51374,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         const modeNach = $('race-mode').value;
         return {
           armiert: false, modeZurueck: 'practice',
-          screenErreichbar: COCKPIT_SCREENS.every((s) => s.id !== 'renneinstellungen'),
+          renneinstellungenRaus: COCKPIT_SCREENS.every((s) => s.id !== 'renneinstellungen'),
           nurEineZeileVorher: true, bewegtSich: false, umlaufKehrtZurueck: true,
           modeVorWahl: vor, modeNachWahl: modeNach,
         };
@@ -56199,8 +56869,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       const opt = o || {};
       const echtFetch = window.fetch;
       const merk = { host: mp.host, name: mp.name, an: mp.an, timer: mp.timer,
-                     id: mp.id, letzter: mp.letzterBericht,
-                     runden: dashLapTimes.slice() };
+                     id: mp.id, letzter: mp.letzterBericht, bekannt: mp.bekannt,
+                     stand: mpLetzterStand, runden: dashLapTimes.slice() };
       const gesendet = [];
       try {
         // Kein Zeitgeber waehrend der Messung: mpJoin() startet einen, und ein Takt, der
@@ -56261,6 +56931,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         window.fetch = echtFetch;
         mp.host = merk.host; mp.name = merk.name; mp.an = merk.an;
         mp.id = merk.id; mp.letzterBericht = merk.letzter;
+        // Auch die Fahrerliste des Probelaufs zuruecknehmen (v0.9.3): sonst stand der
+        // Pruef-Fahrer "x" danach in mp.bekannt und loeste einen falschen Abschiedston aus.
+        mp.bekannt = merk.bekannt; mpLetzterStand = merk.stand;
         if (mp.timer) { clearInterval(mp.timer); }
         mp.timer = merk.timer;
         dashLapTimes = merk.runden;
@@ -64689,7 +65362,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // ghostRennhaerteAnwenden() von 1,2/1,2/1,3 auf 1,5/1,5/1,65 angehoben, das
       // Verhaeltnis (RANGE > GAP_MIN) bleibt gleich. Diese Erwartung ist mitgezogen.
       OMEGA_TEST.ghostRennhaerteAnwenden(0.5);
-      const soll = { p: 0.45, arm: 900, luecke: 1.5, gap: 1.5, range: 1.65 };
+      const soll = { p: 0.45, arm: 900, luecke: 1.2, gap: 1.2, range: 1.3 };
       const ist50 = { p: OMEGA_TEST.attackPLesen(), arm: OMEGA_TEST.attackArmMsLesen(),
                       luecke: OMEGA_TEST.lueckeMinLesen(), gap: OMEGA_TEST.gapMinLesen(),
                       range: OMEGA_TEST.attackRangeLesen() };
@@ -68884,6 +69557,14 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       if (!$('gar-list').querySelector('.gar-karte-neu')) f.push('keine Karte "+ AUTO"');
       karte().querySelector('[data-act="rolle"][data-d="1"]').click();
       if (att.role !== 'none') f.push('Rolle vor fuehrt zu ' + att.role + ' statt Aus');
+      // Freie Rollen: hat ein anderes Auto "Spieler 1", bietet der Pfeil sie nicht an.
+      const anderer = { role: 'player', device: { id: 'probe-andere' }, alias: '', colorId: 'blau', sim: false, testSenke: [] };
+      garage.push(anderer);
+      try {
+        const frei = garRollenFrei(att).map((r) => r.id);
+        if (frei.indexOf('player') >= 0) f.push('Spieler 1 angeboten, obwohl vergeben');
+        if (frei.indexOf('ghost') < 0 || frei.indexOf('none') < 0) f.push('Ghost/Aus fehlen in den freien Rollen');
+      } finally { garage.splice(garage.indexOf(anderer), 1); }
       setCarRole(att, 'ghost');
       renderGarage();
       const c = document.createElement('canvas'); c.width = 2; c.height = 2;
@@ -69200,6 +69881,126 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       if (merkTab) showTab(merkTab);
     }
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Renntyp, Zurueck und Start per Pad, Tauschen ohne zweites Pad harmlos' };
+  });
+
+  stAdd('Editor: Raum-Rechteck sichtbar, Strecke darin verschiebbar, R3 zentriert', () => {
+    const f = [];
+    let merkRaum = null, merkV = null;
+    try { merkRaum = localStorage.getItem('omegasim-raum'); merkV = JSON.stringify(raumVersatz); } catch (e) { return { skip: true, mass: 'kein Speicher' }; }
+    const merkTiles = currentTrackTiles;
+    try {
+      localStorage.setItem('omegasim-raum', JSON.stringify({ x: 2.6, y: 0 }));
+      currentTrackTiles = codeToTrack('SG2R6G2R6').tiles;
+      raumVersatz = { x: 0, y: 0 };
+      refreshTrackPreview();
+      const g = document.querySelector('#track-preview-svg .tp-raum');
+      if (!g) f.push('kein Raum-Rechteck bei nur einer Grenze');
+      else {
+        const x0 = parseFloat(g.querySelector('rect').getAttribute('x'));
+        raumRechteckSchieben(-50, 0);
+        const x1 = parseFloat(g.querySelector('rect').getAttribute('x'));
+        if (Math.abs(x1 - x0 + 50) > 0.2) f.push('Rechteck nicht verschoben');
+        if (!(raumVersatz.x < 0)) f.push('Versatz nicht gemerkt');
+        raumR3Vor = false;
+        raumVersatzStick(0, 0, true);
+        if (raumVersatz.x !== 0 || raumVersatz.y !== 0) f.push('R3 zentriert nicht');
+      }
+    } finally {
+      if (merkRaum === null) localStorage.removeItem('omegasim-raum'); else localStorage.setItem('omegasim-raum', merkRaum);
+      raumVersatz = JSON.parse(merkV); raumVersatzSpeichern();
+      currentTrackTiles = merkTiles; refreshTrackPreview();
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Rechteck mit 2,6 × – m, Schieben, R3' };
+  });
+
+  stAdd('Auswahl mit wenigen Werten: ◀ Wert ▶ schaltet das versteckte Feld', () => {
+    const f = [];
+    const sel = document.querySelector('.opt-row select[data-blaettern]');
+    if (!sel) return { ok: false, mass: 'kein umgebautes Auswahlfeld gefunden' };
+    const box = sel.nextElementSibling;
+    if (!box || !box.classList.contains('opt-blaettern')) return { ok: false, mass: 'Pfeile fehlen bei ' + sel.id };
+    const vorher = sel.selectedIndex;
+    let gemeldet = 0;
+    const zaehl = () => { gemeldet++; };
+    sel.addEventListener('change', zaehl);
+    try {
+      box.querySelectorAll('.ob-pf')[1].click();
+      if (sel.selectedIndex === vorher && sel.options.length > 1) f.push('▶ schaltet nicht');
+      if (!gemeldet) f.push('kein change-Ereignis');
+      if (box.querySelector('.ob-wert').textContent !== sel.options[sel.selectedIndex].textContent.trim()) f.push('Anzeige folgt nicht');
+      if (getComputedStyle(sel).display !== 'none') f.push('Auswahlfeld noch sichtbar');
+    } finally {
+      sel.removeEventListener('change', zaehl);
+      if (sel.selectedIndex !== vorher) { sel.selectedIndex = vorher; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    const n = document.querySelectorAll('.opt-row select[data-blaettern]').length;
+    return { ok: !f.length, mass: f.length ? f.join('; ') : n + ' Felder umgebaut, ' + sel.id + ' geprueft' };
+  });
+
+  stAdd('Speichern: Rolle je Auto, Editor-Strecke, Belegung je Controller', () => {
+    const f = [];
+    const merkR = localStorage.getItem(CAR_ROLLEN_STORE), merkE = localStorage.getItem(EDITOR_STRECKE_STORE);
+    const merkTiles = currentTrackTiles, merkRot = trackRotationDeg, merkB = bindings, merkFuer = padBelegungFuer[1];
+    try {
+      const auto = { role: 'ghost', ghostSpeed: 0.6, device: { id: 'probe-rolle' } };
+      carRolleMerken(auto);
+      const r = carRollenLesen()['probe-rolle'];
+      if (!r || r.role !== 'ghost' || r.ghostSpeed !== 0.6) f.push('Rolle/Tempo nicht gemerkt');
+      currentTrackTiles = [{ type: TILE_TYPE.START }, { type: TILE_TYPE.STRAIGHT }, { type: TILE_TYPE.CURVE_RIGHT }];
+      localStorage.setItem(EDITOR_STRECKE_STORE, JSON.stringify({ tiles: currentTrackTiles.map((x) => x.type), rotation: 90 }));
+      currentTrackTiles = [{ type: TILE_TYPE.START }];
+      if (!editorStreckeLaden() || currentTrackTiles.length !== 3 || trackRotationDeg !== 90) f.push('Editor-Strecke nicht wieder geladen');
+      localStorage.setItem(PAD_BELEGUNG_PRAEFIX + 'probe-pad', JSON.stringify({ ...DEFAULT_BINDINGS, steering: { type: 'axis', index: 0, invert: true, label: 'probe' } }));
+      padBelegungFuer[1] = null;
+      padBelegungAbgleichen({ p1: { id: 'probe-pad' }, p2: null });
+      if (!bindings.steering || bindings.steering.invert !== true) f.push('Belegung je Controller nicht geladen');
+    } finally {
+      const zurueck = (k, v) => { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); };
+      zurueck(CAR_ROLLEN_STORE, merkR); zurueck(EDITOR_STRECKE_STORE, merkE);
+      localStorage.removeItem(PAD_BELEGUNG_PRAEFIX + 'probe-pad');
+      currentTrackTiles = merkTiles; trackRotationDeg = merkRot; bindings = merkB; padBelegungFuer[1] = merkFuer;
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Rolle+Tempo, Strecke+Drehung, Pad-Belegung' };
+  });
+
+  stAdd('Ghosts: Tempo-Streuung (0 = gleich), Startversatz je Reihe, Paar in der Kurve', () => {
+    const f = [];
+    const merk = { p: ghostCfg.tempoStreuung, s: ghostCfg.staffelStart, ms: ghostCfg.staffelMs, k: ghostCfg.paarKurve, ord: raceGridOrder };
+    try {
+      const auto = { ghost: { tempoZ: 0.7 }, tileCode: null, device: { id: 'g3' } };
+      ghostCfg.tempoStreuung = 0;
+      if (ghostStreuFaktor(auto) !== 1) f.push('Streuung 0 aendert das Tempo');
+      ghostCfg.tempoStreuung = 10;
+      if (Math.abs(ghostStreuFaktor(auto) - 1.07) > 1e-9) f.push('10 % bei z=0,7 ergibt ' + ghostStreuFaktor(auto));
+      raceGridOrder = ['g1', 'g2', 'g3', 'g4', 'g5'];
+      ghostCfg.staffelStart = true; ghostCfg.staffelMs = 200;
+      const ms = (id) => ghostStaffelMs({ device: { id } });
+      if (ms('g1') !== 0 || ms('g2') !== 0 || ms('g3') !== 200 || ms('g4') !== 200 || ms('g5') !== 400) f.push('Reihen: ' + ['g1','g2','g3','g4','g5'].map(ms).join('/'));
+      ghostCfg.staffelStart = false;
+      if (ms('g5') !== 0) f.push('Schalter aus, trotzdem Versatz');
+      ghostCfg.paarKurve = false;
+      if (ghostPaarKurve(auto) !== null) f.push('Paar-Regel trotz Schalter aus');
+    } finally {
+      ghostCfg.tempoStreuung = merk.p; ghostCfg.staffelStart = merk.s; ghostCfg.staffelMs = merk.ms;
+      ghostCfg.paarKurve = merk.k; raceGridOrder = merk.ord;
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Faktor 1 bei 0 %, Reihen 0/0/200/200/400 ms, Schalter wirken' };
+  });
+
+  stAdd('Mehrspieler: Bereitschaft nur mit aktiven Fahrern, Rennen an Host-Kennung erkannt', () => {
+    const f = [];
+    if (!mpAktiv({ alter: 3 }) || mpAktiv({ alter: 40 }) || !mpAktiv({})) f.push('mpAktiv: 15-s-Grenze stimmt nicht');
+    const merk = mp.rennenId;
+    try {
+      mp.rennenId = 'abc:2';
+      if (mpRennenPruefen({ id: 2, startAt: Date.now() + 9000, plan: {}, phase: 'start' }, 'abc')) f.push('gleiches Rennen zweimal genommen');
+      if (mpRennenPruefen({ id: 3, startAt: Date.now() + 9000, plan: {}, phase: 'bereit' }, 'abc')) f.push('Bereitschaftsphase als Start genommen');
+      if (mpRennenPruefen({ id: 3, startAt: Date.now() - 1000, plan: {}, phase: 'start' }, 'abc')) f.push('vergangenen Start genommen');
+      if (mp.rennenId !== 'abc:2') f.push('Abgelehntes hat die Renn-Kennung verbraucht');
+    } finally { mp.rennenId = merk; }
+    const scr = $('mp-ready-screen');
+    if (!scr || scr.closest('.tabpage')) f.push('Bereitschaftsschirm liegt in einem Reiter statt darueber');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'aktiv <= 15 s, boot+id, Phase, Schirm global' };
   });
 
   stAdd('Mehrspieler: Ampel nach Frist, Uhrabgleich, gemeinsamer Wetterplan', () => {
@@ -71036,7 +71837,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     const maengel = [];
     // BESTELLT: "Renneinstellungen aus dem Cockpit-Schirmkreis herausnehmen" - der Schirm
     // darf NICHT mehr blaetterbar sein; Rennmodus/Dauer stehen im Fahren-Tab.
-    if (!r.screenErreichbar) maengel.push('Schirm "renneinstellungen" noch im Cockpit-Kreis');
+    if (!r.renneinstellungenRaus) maengel.push('Schirm "renneinstellungen" noch im Cockpit-Kreis');
     if (r.modeNachWahl === r.modeVorWahl) maengel.push('Tab-Aenderung schreibt nicht auf #race-mode');
     return { ok: !maengel.length,
              mass: 'genau eine Zeile ausgewaehlt, hoch/runter bewegt sie mit Umlauf, '
@@ -75770,16 +76571,23 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     mp.offset = mp.proben.reduce((a, x) => (x.weg < a.weg ? x : a)).off;
   }
   // Ein neuer Plan vom Host: uebernehmen, wenn Gruen noch bevorsteht.
-  function mpRennenPruefen(r) {
+  //
+  // Erkannt wird ein Rennen an HOST-KENNUNG + Nummer (v0.9.2): die Nummer beginnt nach einem
+  // Neustart des Hosts wieder bei 1, und ohne die Kennung (`boot`) hielte ein Telefon das neue
+  // Rennen fuer ein schon gefahrenes und liesse es still aus. Die Bereitschaftsphase hat noch
+  // keine Startzeit und wird hier nicht genommen (alte Hosts kennen keine `phase`).
+  function mpRennenPruefen(r, boot) {
     if (!r || !r.id || !r.startAt || !r.plan) return false;
-    if (r.id === mp.rennenId) return false;
+    if (r.phase && r.phase !== 'start') return false;
+    const schl = (boot || '') + ':' + r.id;
+    if (schl === mp.rennenId) return false;
     const lokal = r.startAt - mp.offset;
     // Erst pruefen, dann merken: Wer zu spaet (oder mit falsch geeichter Uhr) kommt,
     // darf den Renn-ID nicht verbrauchen, sonst wuerde der naechste Poll denselben Plan
     // nicht mehr annehmen und das Rennen startete fuer ihn nie. So kann eine verpasste
     // Probe (gedrosselter Tab, langsames WLAN, Uhrversatz) beim naechsten Poll nachziehen.
     if (lokal < Date.now() + 500) return false;          // schon vorbei oder zu knapp
-    mp.rennenId = r.id;
+    mp.rennenId = schl;
     mpRennenUebernehmen(r.plan, lokal);
     return true;
   }
@@ -75806,8 +76614,14 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     showHudToast(t('Rennen für alle: Ampel kommt gleich'));
     log('Mehrspieler: gemeinsamer Start in ' + Math.round((lokal - Date.now()) / 100) / 10 + ' s.', 'info');
   }
-  async function mpRennenFuerAlle() {
-    if (!mp.an) { mpSay(t('Erst mitmachen, dann für alle starten.'), true); return; }
+  // Fehler sichtbar machen, wo man gerade ist: die Statuszeile steht nur im Mehrspieler-Reiter.
+  function mpFehler(text) {
+    mpSay(text, true);
+    if (typeof showHudToast === 'function') showHudToast(text);
+  }
+  // EIN Plan (v0.9.2): vorher wurde er beim Ankuendigen und beim Start je neu gewuerfelt - dann
+  // stimmten Wetter und Wind nicht mit dem angekuendigten Plan ueberein.
+  function mpPlanBauen() {
     const w = Math.random() * 2 * Math.PI;
     const plan = { modus: raceMode, limit: raceLimit, wx: raceWxStart, wxChange: raceWxChange,
                    fliegend: raceFlying, pit: racePitRequired, tank: raceFuelStartL,
@@ -75820,6 +76634,12 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       const p = window.__presetActive();
       if (p) plan.preset = p;
     }
+    return plan;
+  }
+  async function mpRennenFuerAlle() {
+    if (!mp.an) { mpFehler(t('Erst mitmachen, dann für alle starten.')); return; }
+    const plan = mpPlanBauen();
+    mp.planBereit = plan;
     try {
       const t0 = Date.now();
       // BEREIT-GATE (v0.8.126): zuerst nur den Bereitschaftsschirm ankündigen (phase
@@ -75833,11 +76653,21 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       const d = await r.json();
       if (!d.ok) throw new Error(d.fehler || 'abgelehnt');
       mpUhrProbe(t0, t1, d.zeitMs);
+      // Ein Host ohne Bereitschaftsrunde (aelter als v0.8.126) startet sofort und schickt die
+      // Startzeit gleich mit: dann wie frueher direkt uebernehmen.
+      if (d.startAt) { mpRennenPruefen({ id: d.id, startAt: d.startAt, plan }, mpBoot()); return; }
       mpSay(t('Rennen für alle: alle bereit machen, dann startet der Host.'));
+      mpHolen();                                         // Schirm sofort zeigen
     } catch (e) {
-      mpSay(t('Start für alle fehlgeschlagen') + ': ' + e.message, true);
+      mpFehler(t('Start für alle fehlgeschlagen') + ': ' + e.message);
     }
   }
+  function mpBoot() { return mpLetzterStand && mpLetzterStand.boot; }
+  // Wer zaehlt bei "alle bereit": nur, wer sich in den letzten 15 s gemeldet hat (dieselbe
+  // Grenze wie in beiden Hosts). Abgemeldete, schlafende oder abgestuerzte Telefone blockierten
+  // sonst den Start fuer immer - sie blieben in der Fahrerliste stehen.
+  const MP_AKTIV_S = 15;
+  function mpAktiv(f) { return !(f && Number.isFinite(f.alter) && f.alter > MP_AKTIV_S); }
   // ---- BEREITSCHAFTSSCHIRM (v0.8.126) -----------------------------------------------
   // Der Schirm wird aus dem /mp/state-Abruf gespeist (mpBereitSchirm). Jeder tippt
   // "Bereit" (POST /mp/ready); der Initiator sieht "Start", sobald alle anderen bereit sind.
@@ -75851,28 +76681,28 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     if (rennen.phase !== 'bereit') { screen.hidden = true; return; }
     const initiator = rennen.initiator;
     const bereitListe = Array.isArray(rennen.bereit) ? rennen.bereit : [];
-    const leute = (d && d.fahrer) || [];
+    const leute = ((d && d.fahrer) || []).filter(mpAktiv);
     const istInitiator = mp.id === initiator;
     const andere = leute.filter((f) => f.id && f.id !== initiator);
     const alleBereit = andere.every((f) => bereitListe.indexOf(f.id) >= 0);
     const host = $('mp-ready-liste');
     if (host) {
       host.innerHTML = leute.map((f) => {
-        const bereit = bereitListe.indexOf(f.id) >= 0;
+        const bereit = f.id === initiator || bereitListe.indexOf(f.id) >= 0;
         const eigen = f.id === mp.id;
         return '<div class="mp-ready-zeile' + (bereit ? ' bereit' : '') + '">'
-          + '<span class="mp-ready-name">' + mpBereitEsc(f.name || f.id) + (eigen ? ' (du)' : '')
-          + (f.id === initiator ? ' · Host' : '') + '</span>'
-          + '<span class="mp-ready-status">' + (bereit ? '\u2713 bereit' : 'wartet\u2026')
+          + '<span class="mp-ready-name">' + mpBereitEsc(f.name || f.id) + (eigen ? ' (' + t('du') + ')' : '')
+          + (f.id === initiator ? ' · ' + t('startet') : '') + '</span>'
+          + '<span class="mp-ready-status">' + (bereit ? '\u2713 ' + t('bereit') : t('wartet …'))
           + '</span></div>';
       }).join('');
     }
     const info = $('mp-ready-info');
     if (info) {
       info.textContent = istInitiator
-        ? (alleBereit ? 'Alle bereit \u2013 du kannst starten.' : 'Warte auf die Bereitschaft aller anderen.')
-        : (bereitListe.indexOf(mp.id) >= 0 ? 'Du bist bereit. Warte, bis der Host startet.'
-           : 'Tippe auf \u201eBereit\u201c, sobald du soweit bist.');
+        ? (alleBereit ? t('Alle bereit, du kannst starten.') : t('Warte, bis alle anderen bereit sind.'))
+        : (bereitListe.indexOf(mp.id) >= 0 ? t('Du bist bereit. Warte, bis gestartet wird.')
+           : t('Tippe auf „Bereit“, sobald du soweit bist.'));
     }
     if ($('mp-ready-bereit')) $('mp-ready-bereit').hidden = istInitiator || bereitListe.indexOf(mp.id) >= 0;
     if ($('mp-ready-start')) {
@@ -75880,7 +76710,10 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       $('mp-ready-start').disabled = !alleBereit;
     }
     if ($('mp-ready-abbrechen')) $('mp-ready-abbrechen').hidden = !istInitiator;
-    screen.hidden = false;
+    if (screen.hidden) {
+      screen.hidden = false;
+      if (typeof menuNavEnsureContext === 'function') { menuNavEnsureContext(); menuNavIndex = 0; menuNavGezeigt = true; menuNavRender(); }
+    }
   }
   async function mpBereitMelden() {
     if (!mp.an) return;
@@ -75892,15 +76725,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   }
   async function mpBereitStarten() {
     if (!mp.an) return;
-    const w = Math.random() * 2 * Math.PI;
-    const plan = { modus: raceMode, limit: raceLimit, wx: raceWxStart, wxChange: raceWxChange,
-                   fliegend: raceFlying, pit: racePitRequired, tank: raceFuelStartL,
-                   wetterPlan: wetterPlanBauen(), wind: { x: Math.cos(w), y: Math.sin(w) } };
-    if ($('mp-force-preset') && $('mp-force-preset').checked
-        && typeof window.__presetActive === 'function') {
-      const p = window.__presetActive();
-      if (p) plan.preset = p;
-    }
+    // Derselbe Plan wie angekuendigt; nach einem Neuladen kennt ihn nur der Host (plan: null).
+    const plan = mp.planBereit || null;
     try {
       const t0 = Date.now();
       const r = await fetch(mpUrl('/mp/race'), { method: 'POST', cache: 'no-store',
@@ -75911,16 +76737,21 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       const d = await r.json();
       if (!d.ok) throw new Error(d.fehler || 'abgelehnt');
       mpUhrProbe(t0, t1, d.zeitMs);
-      mpRennenPruefen({ id: d.id, startAt: d.startAt, plan });
+      mpRennenPruefen({ id: d.id, startAt: d.startAt, plan: d.plan || plan, phase: 'start' }, mpBoot());
       $('mp-ready-screen').hidden = true;
+      mp.planBereit = null;
     } catch (e) {
-      mpSay(t('Start für alle fehlgeschlagen') + ': ' + e.message, true);
+      mpFehler(t('Start für alle fehlgeschlagen') + ': ' + e.message);
     }
   }
+  // Nur die Bereitschaftsrunde beenden (v0.9.2). Vorher rief das /mp/reset - und loeschte
+  // damit Fahrerliste und Wertung aller Mitspieler.
   async function mpBereitAbbrechen() {
     try {
-      await fetch(mpUrl('/mp/reset'), { method: 'GET', cache: 'no-store' });
-    } catch (e) { /* egal */ }
+      await fetch(mpUrl('/mp/race/cancel'), { method: 'POST', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: mp.id }) });
+    } catch (e) { /* der naechste Abruf zeigt es */ }
+    mp.planBereit = null;
     $('mp-ready-screen').hidden = true;
   }
   // Aus toggleRace (70-race.js): im Mehrspieler erst fragen. true = Dialog offen.
@@ -75945,7 +76776,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       mpUhrProbe(t0, Date.now(), d.zeitMs);
-      mpRennenPruefen(d.rennen);
+      mpRennenPruefen(d.rennen, d.boot);
       mp.zuschauer = d.zuschauer || 0;
       mpLetzterStand = d;
       mpPosTakt();
@@ -76012,6 +76843,14 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   }
 
   function mpLeave() {
+    // Beim Host abmelden (v0.9.2), sonst stand man noch in der Fahrerliste und blockierte eine
+    // Bereitschaftsrunde. Aeltere Hosts kennen /mp/leave nicht - dann zaehlt die 15-s-Grenze.
+    if (mp.an && mp.host) {
+      fetch(mpUrl('/mp/leave'), { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ id: mp.id }) }).catch(() => {});
+    }
+    if ($('mp-ready-screen')) $('mp-ready-screen').hidden = true;
+    mp.planBereit = null;
     mp.an = false;
     mp.bekannt = null;
     mpPosTakt();
@@ -77152,8 +77991,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // ---- WARUM DAS NOETIG IST, UND NICHT NUR BEQUEM --------------------------------
   //
   // Alles liegt in localStorage. Ein Browser darf das raeumen - beim Aufraeumen von
-  // Websitedaten, im privaten Modus, auf einem iPhone auch nach sieben Tagen ohne Besuch -
-  // und navigator.storage.persist() wird nirgends angefordert. Fuer die Sitzungshistorie
+  // Websitedaten, im privaten Modus, auf einem iPhone auch nach sieben Tagen ohne Besuch.
+  // navigator.storage.persist() wird seit v0.8.96 angefordert (unten, best effort). Fuer die Sitzungshistorie
   // (bis 200 Rennen mit allen Rundenzeiten) ist das die eigentliche Schwachstelle: die ist
   // nicht nachbaubar, anders als eine Abstimmung.
   //
@@ -77198,7 +78037,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   //      Rennmodus"). Eine benannte Ausnahme mit Grund - und kein aufgeweiteter Selektor,
   //      der nebenbei sess-plot-pick mitnehmen wuerde.
   const SICHERUNG_REITER = ['tab-options', 'tab-control'];
-  const SICHERUNG_EXTRA = ['race-mode', 'mp-force-preset'];
+  const SICHERUNG_EXTRA = ['race-mode', 'mp-force-preset', 'grid-selbst'];
 
   function sicherungRegler() {
     // .opt-row sind die Abstimmungs- und Rennregler, .mw-row die Motorwerkstatt-Regler
@@ -77357,9 +78196,11 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // denen ein spaeter dazukommender Regler vergessen wird. Dieselbe Begruendung wie bei
   // updateGaragePresetRow() in 98-presets.js.
   let autoSicherungFaellig = null;
+  let autoSicherungAt = 0;
   function autoSicherungSchreiben() {
-    try { localStorage.setItem(AUTO_STORE, JSON.stringify(sicherungReglerLesen())); }
+    try { localStorage.setItem(AUTO_STORE, JSON.stringify(sicherungReglerLesen())); autoSicherungAt = Date.now(); }
     catch (e) { /* privater Modus oder voll - dann eben nicht */ }
+    if (typeof sichStandZeigen === 'function') sichStandZeigen();
   }
   function autoSicherungPlanen() {
     // Gebuendelt: ein Zug am Schieberegler feuert 'input' dutzendfach, und jedes Mal alle
@@ -77455,7 +78296,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   const LAGE_ABLAGEN = [
     // Schluessel, Name, und wie man den Inhalt zaehlt. `zahl` gibt null zurueck, wenn es
     // nichts zu zaehlen gibt - dann wird die Zeile weggelassen.
-    ['chc.layout.v1', 'Streckenlayout', (v) => (v && Object.keys(v).length) || null],
+    ['chc.layout.v1', 'Fahrzeug-Layout', (v) => (v && Object.keys(v).length) || null],
     ['carrera-hybrid-tracks', 'Strecken', (v) => (Array.isArray(v) ? v.length : null)],
     ['chc.sessions.v1', 'Sitzungen', (v) => (Array.isArray(v) ? v.length
                                              : (v && v.sitzungen ? v.sitzungen.length : null))],
@@ -77698,11 +78539,13 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // melden beides. Beide zu nehmen kostet nichts, weil das Schreiben gebuendelt ist.
   document.addEventListener('change', (e) => {
     if (e.target && e.target.closest
-        && e.target.closest('#tab-options, #tab-control, #tab-mp')) autoSicherungPlanen();
+        && (e.target.closest('#tab-options, #tab-control, #tab-mp')
+            || SICHERUNG_EXTRA.indexOf(e.target.id) >= 0)) autoSicherungPlanen();
   }, true);
   document.addEventListener('input', (e) => {
     if (e.target && e.target.closest
-        && e.target.closest('#tab-options, #tab-control, #tab-mp')) autoSicherungPlanen();
+        && (e.target.closest('#tab-options, #tab-control, #tab-mp')
+            || SICHERUNG_EXTRA.indexOf(e.target.id) >= 0)) autoSicherungPlanen();
   }, true);
   // BESTELLT: "alle einstellungen im browsercache gespeichert werden und auch bei neuladen
   // der seite da bleiben (bei apk im cache speichern)". localStorage ueberlebt das Neuladen,
@@ -77711,6 +78554,177 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   if (navigator.storage && navigator.storage.persist) {
     try { navigator.storage.persist(); } catch (e) { /* nicht moeglich - dann eben nicht */ }
   }
+
+  // ==== SICHERUNG, DIE EINE NEUINSTALLATION UEBERLEBT (v0.9.6) ============================
+  //
+  // BESTELLT: "Idealerweise ueberleben meine Statistiken, geladenen Strecken, usw. auch eine
+  // Neuinstallation der App mit neuer APK." Ein APK-Update behaelt den localStorage, ein
+  // Deinstallieren loescht ihn. In der App (ab APK 0.9.6, Plugin OmegaSicherung) wird darum
+  // die ganze Sicherung - dieselbe wie "Sicherung speichern" - als Datei nach
+  // Dokumente/OmegaSim/OmegaSim-Sicherung.json geschrieben: alle 2 Minuten, wenn sich etwas
+  // geaendert hat, und sofort, wenn die App in den Hintergrund geht. Nach einer
+  // Neuinstallation bietet die App beim ersten (leeren) Start an, sie wieder einzulesen.
+  //
+  // Der Merker steht unter einem Schluessel OHNE Sicherungs-Praefix, sonst aenderte er die
+  // Sicherung bei jedem Schreiben und sie wuerde jedes Mal neu geschrieben.
+  const SICH_DATEI_MERK = 'sicherungsdatei.v1';
+  const SICH_GEFRAGT = 'sicherungsdatei.gefragt';
+  function sichNativ() {
+    const C = window.Capacitor;
+    try {
+      return !!(window.OMEGA_APP && window.OMEGA_APP.nativ && C && typeof C.isPluginAvailable === 'function'
+                && C.isPluginAvailable('OmegaSicherung'));
+    } catch (e) { return false; }
+  }
+  function sichHash(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return h + ':' + s.length;
+  }
+  function sichMerk() {
+    try { return JSON.parse(localStorage.getItem(SICH_DATEI_MERK) || 'null'); } catch (e) { return null; }
+  }
+  let sichSchreibt = false;
+  async function sichDateiSchreiben(grund) {
+    if (!sichNativ() || sichSchreibt) return null;
+    const b = sicherungLesen();
+    if (!Object.keys(b.ablagen).length && !Object.keys(b.regler).length) return null;
+    const h = sichHash(JSON.stringify({ r: b.regler, a: b.ablagen }));
+    const alt = sichMerk();
+    if (alt && alt.hash === h && grund !== 'hand') return null;
+    sichSchreibt = true;
+    try {
+      const r = await window.Capacitor.nativePromise('OmegaSicherung', 'speichern', { text: JSON.stringify(b) });
+      try { localStorage.setItem(SICH_DATEI_MERK, JSON.stringify({ at: Date.now(), ort: r && r.ort, hash: h })); } catch (e) { /* voll */ }
+      sichStandZeigen();
+      return r;
+    } catch (e) {
+      log('Sicherungsdatei nicht geschrieben: ' + (e && e.message), 'warn');
+      if (grund === 'hand') throw e;
+      return null;
+    } finally { sichSchreibt = false; }
+  }
+  function sichStandZeigen() {
+    const el = $('sich-auto');
+    if (!el) return;
+    const uhr = (ms) => new Date(ms).toLocaleTimeString(lang === 'en' ? 'en-GB' : 'de-DE', { hour: '2-digit', minute: '2-digit' });
+    let txt = t('Alles wird automatisch gespeichert, du musst nichts laden.');
+    if (autoSicherungAt) txt += ' ' + t('Einstellungen zuletzt um {u}.').replace('{u}', uhr(autoSicherungAt));
+    if (sichNativ()) {
+      const m = sichMerk();
+      txt += ' ' + (m && m.at
+        ? t('Sicherungsdatei (übersteht eine Neuinstallation) zuletzt um {u}: {o}.').replace('{u}', uhr(m.at)).replace('{o}', m.ort || 'Dokumente/OmegaSim')
+        : t('Die Sicherungsdatei in Dokumente/OmegaSim wird gleich angelegt.'));
+    }
+    el.textContent = txt;
+  }
+  async function sichWiederherstellen() {
+    let r;
+    try { r = await window.Capacitor.nativePromise('OmegaSicherung', 'oeffnen', {}); }
+    catch (e) { if (e && e.message !== 'abgebrochen') sicherungSagen(String((e && e.message) || e), 'bad'); return false; }
+    let b;
+    try { b = JSON.parse(r.text); } catch (e) { sicherungSagen(t('Die Datei ist nicht lesbar') + ': ' + e.message, 'bad'); return false; }
+    const erg = sicherungAnwenden(b);
+    sicherungSagen(sicherungBericht(erg), erg.fehler ? 'bad' : 'ok');
+    if (erg.fehler) { showHudToast(t('Sicherung nicht geladen')); return false; }
+    try { localStorage.setItem(SICH_GEFRAGT, '1'); } catch (e) { /* egal */ }
+    showHudToast(t('Sicherung geladen, die App startet neu …'));
+    setTimeout(() => location.reload(), 1500);
+    return true;
+  }
+  // In der App gehen "Sicherung speichern" und "Sicherung laden" ueber den nativen Weg: ein
+  // Blob-Download (a.download) erreicht in der WebView keinen Ordner.
+  if (sichNativ()) {
+    if ($('sich-export')) $('sich-export').onclick = async () => {
+      try {
+        const r = await sichDateiSchreiben('hand');
+        sicherungSagen(t('Gespeichert: {o}').replace('{o}', (r && r.ort) || 'Dokumente/OmegaSim'), 'ok');
+      } catch (e) { sicherungSagen(String((e && e.message) || e), 'bad'); }
+    };
+    if ($('sich-import')) $('sich-import').onclick = () => { sichWiederherstellen(); };
+    setInterval(() => { sichDateiSchreiben('takt'); }, 120000);
+    setTimeout(() => { sichDateiSchreiben('start'); }, 20000);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) sichDateiSchreiben('weg'); });
+    // ERSTER START NACH EINER NEUINSTALLATION: nichts Gespeichertes da.
+    let leer = true;
+    try {
+      leer = !['chc.sessions.v1', 'carrera-hybrid-tracks', 'chc.cars.v1', AUTO_STORE]
+        .some((k) => localStorage.getItem(k)) && !localStorage.getItem(SICH_GEFRAGT);
+    } catch (e) { leer = false; }
+    if (leer && typeof konsoleFrage === 'function') {
+      setTimeout(() => konsoleFrage(t('Frühere Daten wiederherstellen?'),
+        t('Die App sichert alles automatisch in Dokumente/OmegaSim (Datei OmegaSim-Sicherung.json). Nach einer Neuinstallation kannst du sie hier wieder einlesen: Einstellungen, Strecken, Statistiken, Autos und Tastenbelegung.'),
+        [[t('Sicherungsdatei wählen'), () => { sichWiederherstellen(); }],
+         [t('Neu anfangen'), () => { try { localStorage.setItem(SICH_GEFRAGT, '1'); } catch (e) { /* egal */ } }]]), 1800);
+    }
+  }
+  sichStandZeigen();
+
+  // ==== AUSWAHLFELDER MIT WENIGEN WERTEN ALS "◀ WERT ▶" (v0.9.7) =========================
+  //
+  // BESTELLT: "Dropdowns mit weniger als 5 Optionen lieber mit Durchschaltmoeglichkeit". Jedes
+  // Auswahlfeld einer Optionszeile mit hoechstens 4 Werten bekommt zwei Pfeile und den Wert
+  // dazwischen; ein Tipp schaltet weiter (am Ende wieder von vorn). Das <select> bleibt im
+  // Dokument, nur unsichtbar - Speicherung, Presets und das Steuerkreuz (menuNavAdjust, links/
+  // rechts) arbeiten weiter mit ihm. Ausgenommen sind Felder, deren Liste zur Laufzeit gefuellt
+  // wird (Preset-, Sitzungs- und Diagrammwahl).
+  const BLAETTERN_MAX = 4;
+  const BLAETTERN_NICHT = /store|preset|sess|plot|ablage/i;
+  const blaetternFelder = [];
+  function blaetternBauen(sel) {
+    if (sel.dataset.blaettern) return;
+    sel.dataset.blaettern = '1';
+    const box = document.createElement('span');
+    box.className = 'opt-blaettern';
+    const pfeil = (txt, d) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ob-pf';
+      b.textContent = txt;
+      b.setAttribute('data-i18n-skip', '');
+      b.setAttribute('aria-label', d < 0 ? t('zurück') : t('weiter'));
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const n = sel.options.length;
+        if (!n || sel.disabled) return;
+        sel.selectedIndex = ((sel.selectedIndex + d) % n + n) % n;
+        sel.dispatchEvent(new Event('input', { bubbles: true }));
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      return b;
+    };
+    const wert = document.createElement('span');
+    wert.className = 'ob-wert';
+    wert.setAttribute('data-i18n-skip', '');
+    box.appendChild(pfeil('\u25C0', -1));
+    box.appendChild(wert);
+    box.appendChild(pfeil('\u25B6', 1));
+    sel.insertAdjacentElement('afterend', box);
+    sel.classList.add('ob-versteckt');
+    const zeigen = () => {
+      const o = sel.options[sel.selectedIndex];
+      const txt = o ? o.textContent.trim() : '';
+      if (wert.textContent !== txt) wert.textContent = txt;
+      box.classList.toggle('aus', !!sel.disabled);
+    };
+    sel.addEventListener('change', zeigen);
+    blaetternFelder.push(zeigen);
+    zeigen();
+  }
+  function blaetternAuffrischen() { blaetternFelder.forEach((f) => f()); }
+  function blaetternAlle() {
+    document.querySelectorAll('.opt-row select').forEach((sel) => {
+      if (sel.multiple || sel.hidden || sel.style.display === 'none') return;
+      if (BLAETTERN_NICHT.test(sel.id || '')) return;
+      if (sel.options.length < 2 || sel.options.length > BLAETTERN_MAX) return;
+      blaetternBauen(sel);
+    });
+  }
+  blaetternAlle();
+  // Werte, die Code ohne 'change' setzt, und uebersetzte Optionstexte holt ein leiser Abgleich
+  // nach (rund ein Dutzend Felder, einmal je Sekunde).
+  setInterval(blaetternAuffrischen, 1000);
+  if (typeof i18nOnLangChange === 'function') i18nOnLangChange(() => setTimeout(blaetternAuffrischen, 0));
   // ============================ INFO-POPUP FUER OPTIONEN (Phase 13) ==================
   //
   // BESTELLT: "Schiebe alle Infos zu den Optionen in ein Pop-up mit 'i' im Kreis. Wenn

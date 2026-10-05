@@ -2692,13 +2692,20 @@
     // Es wird mittig auf den Umriss der Strecke gelegt und erweitert die Ansicht, damit es
     // nicht am Kartenrand abgeschnitten wird. Nur der Editor (o.raum) zeichnet es.
     let raumRect = null;
-    if (o.raum && o.raum.x > 0 && o.raum.y > 0) {
+    // v0.9.11: auch mit nur EINER begrenzten Richtung (die andere spannt die Strecke auf), und
+    // verschiebbar: o.raumVersatz (cm) legt den Raum gegen die Strecke - BESTELLT "Raumgrenzen
+    // anzeigen, mich die Strecke mit Fingertouch verschieben lassen und rechter Stick (rechter
+    // Stick druecken = zentrieren)".
+    if (o.raum && (o.raum.x > 0 || o.raum.y > 0)) {
       const cxs = pts.map(p => p.x), cys = pts.map(p => p.y);
       const cx = (Math.min(...cxs) + Math.max(...cxs)) / 2;
       const cy = (Math.min(...cys) + Math.max(...cys)) / 2;
-      const rw = o.raum.x * 100 * TRACK_UNITS_PER_CM / 2;
-      const rh = o.raum.y * 100 * TRACK_UNITS_PER_CM / 2;
-      raumRect = { x: cx - rw, y: cy - rh, w: rw * 2, h: rh * 2 };
+      const rand = TRACK_HALF_W + 20;
+      const rw = o.raum.x > 0 ? o.raum.x * 100 * TRACK_UNITS_PER_CM / 2 : (Math.max(...cxs) - Math.min(...cxs)) / 2 + rand;
+      const rh = o.raum.y > 0 ? o.raum.y * 100 * TRACK_UNITS_PER_CM / 2 : (Math.max(...cys) - Math.min(...cys)) / 2 + rand;
+      const v = o.raumVersatz || { x: 0, y: 0 };
+      raumRect = { x: cx - rw + (v.x || 0) * TRACK_UNITS_PER_CM, y: cy - rh + (v.y || 0) * TRACK_UNITS_PER_CM,
+                   w: rw * 2, h: rh * 2, mx: o.raum.x, my: o.raum.y };
       all.push([raumRect.x, raumRect.y], [raumRect.x + raumRect.w, raumRect.y + raumRect.h]);
     }
     const xs = all.map(p => p[0]), ys = all.map(p => p[1]);
@@ -2972,9 +2979,14 @@
               + `<rect x="0" y="0" width="${w.toFixed(0)}" height="${h.toFixed(0)}" fill="url(#tp-grid)"/>`;
     }
     if (raumRect) {
-      body += `<rect x="${(raumRect.x + ox).toFixed(1)}" y="${(raumRect.y + oy).toFixed(1)}" `
+      const fs = Math.max(8, Math.min(w, h) * 0.035);
+      const mass = (raumRect.mx > 0 ? String(raumRect.mx).replace('.', ',') : '–') + ' × '
+                 + (raumRect.my > 0 ? String(raumRect.my).replace('.', ',') : '–') + ' m';
+      body += `<g class="tp-raum"><rect x="${(raumRect.x + ox).toFixed(1)}" y="${(raumRect.y + oy).toFixed(1)}" `
         + `width="${raumRect.w.toFixed(1)}" height="${raumRect.h.toFixed(1)}" fill="none" `
-        + `stroke="rgba(110,160,255,.55)" stroke-width="1.5" stroke-dasharray="7 5"/>`;
+        + `stroke="rgba(110,160,255,.7)" stroke-width="2" stroke-dasharray="7 5"/>`
+        + `<text x="${(raumRect.x + ox + fs * 0.4).toFixed(1)}" y="${(raumRect.y + oy + fs * 1.2).toFixed(1)}" `
+        + `font-size="${fs.toFixed(1)}" fill="rgba(140,180,255,.85)">${mass}</text></g>`;
     }
     const html = `<svg class="tp-karte" viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}">${gridSvg}${body}</svg>`;
     // DIE GEOMETRIE MIT HERAUS, damit ein Aufrufer Punkte setzen kann, ohne die Strecke neu
@@ -3307,7 +3319,35 @@
     if (was === 'linie') refreshTrackPreview();
   }
 
+  // DIE STRECKE IM EDITOR UEBERLEBT EINEN NEUSTART (v0.9.6). Vorher stand nach dem Neuladen
+  // wieder nur das Startteil da. Gebuendelt geschrieben, weil die Vorschau beim Fahren oft
+  // neu gezeichnet wird.
+  // var und nicht const/let: refreshTrackPreview() laeuft schon beim Laden (siehe editorZoom).
+  var EDITOR_STRECKE_STORE = 'omegasim-editor-strecke';
+  var editorStreckeFaellig = null;
+  function editorStreckeMerken() {
+    if (editorStreckeFaellig !== null) return;
+    editorStreckeFaellig = setTimeout(() => {
+      editorStreckeFaellig = null;
+      try {
+        localStorage.setItem(EDITOR_STRECKE_STORE, JSON.stringify({ tiles: currentTrackTiles.map((x) => x.type),
+          rotation: trackRotationDeg, zoom: editorZoom }));
+      } catch (e) { /* voll oder privat */ }
+    }, 800);
+  }
+  function editorStreckeLaden() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(EDITOR_STRECKE_STORE) || 'null'); } catch (e) { return false; }
+    if (!d || !Array.isArray(d.tiles) || d.tiles.length < 2) return false;
+    const ok = Object.values(TILE_TYPE);
+    if (!d.tiles.every((x) => ok.includes(x))) return false;
+    currentTrackTiles = d.tiles.map((type) => ({ type }));
+    if (Number.isFinite(d.rotation)) trackRotationDeg = d.rotation;
+    if (Number.isFinite(d.zoom)) editorZoom = Math.max(0.5, Math.min(3, d.zoom));
+    return true;
+  }
   function refreshTrackPreview() {
+    editorStreckeMerken();
     // Die Kachelzahl entscheidet, ob der Windschatten ueberhaupt rechnen kann. Hier gerufen
     // und nicht in 50-drive.js beim Laden: dort ist currentTrackTiles noch in der temporalen
     // Todeszone, siehe den Kommentar bei dirtyAirVerfuegbar().
@@ -3321,7 +3361,7 @@
     const result = renderTrackPreview(currentTrackTiles, null,
       { detailed: true, cars: trackCarMarks(), echt: true, auswahl: imEditor ? trackSelIndex() : null,
         ohneLinie: !editorSchalter.linie, grid: true,
-        raum: (raum.x > 0 || raum.y > 0) ? raum : null });
+        raum: (raum.x > 0 || raum.y > 0) ? raum : null, raumVersatz });
     $('track-preview-svg').innerHTML = result.html;
     trackZoomAnwenden();
     trackEditorGeo = result.geo || null;
@@ -3489,6 +3529,85 @@
   // Default 0 m x 0 m = keine Begrenzung: die Zufallsstrecke ignoriert den Raum, bis der
   // Nutzer eine Groesse eintraegt. Ein Wert 0 je Achse heisst "diese Richtung unbegrenzt".
   const RAUM_KEY = 'omegasim-raum';
+  // ---- DIE STRECKE IM RAUM VERSCHIEBEN (v0.9.11) ---------------------------------------
+  // Der Versatz (cm) legt das Raum-Rechteck gegen die Strecke - fuers Aufbauen auf dem Boden:
+  // wo im Zimmer liegt die Strecke? Er aendert die Strecke nicht. var, weil refreshTrackPreview()
+  // schon beim Laden laeuft. Beim Ziehen wird nur das Rechteck im SVG bewegt (eine ganze
+  // Vorschau kostet rund 94 ms), neu gezeichnet wird beim Loslassen.
+  var RAUM_VERSATZ_KEY = 'omegasim-raum-versatz';
+  var raumVersatz = (function () {
+    try { const v = JSON.parse(localStorage.getItem('omegasim-raum-versatz') || 'null'); if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) return v; } catch (e) { /* privat */ }
+    return { x: 0, y: 0 };
+  })();
+  function raumVersatzSpeichern() {
+    try { localStorage.setItem(RAUM_VERSATZ_KEY, JSON.stringify(raumVersatz)); } catch (e) { /* privat */ }
+  }
+  // Rechteck sofort um (dx, dy) Kartenpunkte verschieben, ohne neu zu zeichnen.
+  function raumRechteckSchieben(dxEinh, dyEinh) {
+    const g = document.querySelector('#track-preview-svg .tp-raum');
+    if (!g) return false;
+    g.querySelectorAll('rect, text').forEach((el) => {
+      el.setAttribute('x', (parseFloat(el.getAttribute('x')) + dxEinh).toFixed(1));
+      el.setAttribute('y', (parseFloat(el.getAttribute('y')) + dyEinh).toFixed(1));
+    });
+    raumVersatz.x += dxEinh / TRACK_UNITS_PER_CM;
+    raumVersatz.y += dyEinh / TRACK_UNITS_PER_CM;
+    return true;
+  }
+  function raumVersatzNull() {
+    raumVersatz = { x: 0, y: 0 };
+    raumVersatzSpeichern();
+    refreshTrackPreview();
+  }
+  let raumNeuZeichnen = null;
+  function raumSpaeterZeichnen() {
+    clearTimeout(raumNeuZeichnen);
+    raumNeuZeichnen = setTimeout(() => { raumVersatzSpeichern(); refreshTrackPreview(); }, 350);
+  }
+  // Rechter Stick im Editor-Vollbild (aus pollGamepad): schiebt mit bis zu 60 cm/s; R3 zentriert.
+  let raumStickAt = 0, raumR3Vor = false;
+  function raumVersatzStick(ax, ay, r3) {
+    const jetzt = performance.now();
+    const dt = Math.min(0.1, (jetzt - (raumStickAt || jetzt)) / 1000);
+    raumStickAt = jetzt;
+    if (r3 && !raumR3Vor) raumVersatzNull();
+    raumR3Vor = r3;
+    const tot = 0.2;
+    const x = Math.abs(ax) > tot ? ax : 0, y = Math.abs(ay) > tot ? ay : 0;
+    if (!x && !y) return;
+    // Der Stick bewegt die STRECKE: nach rechts gedrueckt wandert sie nach rechts, also der
+    // Raum nach links.
+    const cm = 60 * dt;
+    if (raumRechteckSchieben(-x * cm * TRACK_UNITS_PER_CM, -y * cm * TRACK_UNITS_PER_CM)) raumSpaeterZeichnen();
+  }
+  (function raumZiehenAnbinden() {
+    const host = $('track-preview-svg');
+    if (!host) return;
+    let a = null, gezogen = false;
+    host.addEventListener('pointerdown', (e) => {
+      if (!e.isPrimary || !host.querySelector('.tp-raum')) { a = null; return; }
+      const svg = host.querySelector('svg.tp-karte');
+      if (!svg) return;
+      const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+      a = { x: e.clientX, y: e.clientY, k: vb && r.width ? vb.width / r.width : 1, id: e.pointerId };
+      gezogen = false;
+    });
+    host.addEventListener('pointermove', (e) => {
+      if (!a || e.pointerId !== a.id) return;
+      const dx = e.clientX - a.x, dy = e.clientY - a.y;
+      if (!gezogen && Math.hypot(dx, dy) < 8) return;
+      gezogen = true;
+      e.preventDefault();
+      // Finger nach rechts = Strecke nach rechts = Raum nach links.
+      raumRechteckSchieben(-dx * a.k, -dy * a.k);
+      a.x = e.clientX; a.y = e.clientY;
+    });
+    const ende = () => { if (a && gezogen) raumSpaeterZeichnen(); a = null; };
+    host.addEventListener('pointerup', ende);
+    host.addEventListener('pointercancel', () => { a = null; });
+    // Ein Zug ist kein Antippen: den Klick danach nicht als Kachelwahl werten.
+    host.addEventListener('click', (e) => { if (gezogen) { e.stopPropagation(); e.preventDefault(); gezogen = false; } }, true);
+  })();
   const RAUM_DEFAULT = { x: 0, y: 0 };
   const TEILE_SORTEN = [TILE_TYPE.START, TILE_TYPE.STRAIGHT, TILE_TYPE.CURVE_LEFT, TILE_TYPE.CURVE_RIGHT,
     TILE_TYPE.HAIRPIN_LEFT, TILE_TYPE.HAIRPIN, TILE_TYPE.WEIT_LEFT, TILE_TYPE.WEIT_RIGHT,
@@ -4553,29 +4672,40 @@
     // in den Editor." Die Kacheln werden als DOM-Elemente gebaut (kein innerHTML fuer den
     // Namen), damit ein Streckenname mit Sonderzeichen die Seite nicht zerreisst.
     keys.forEach(name => {
-      const t = store[name];
+      const eintrag = store[name];
+      const wrap = document.createElement('div');
+      wrap.className = 'track-kachel-wrap';
       const btn = document.createElement('button');
       btn.className = 'track-kachel';
-      btn.title = name + ' laden';
+      btn.title = t('{n} laden').replace('{n}', name);
       const vor = document.createElement('span');
       vor.className = 'track-kachel-vorschau';
       try {
-        const tiles = migrateTiles((t.tiles || []).slice());
+        const tiles = migrateTiles((eintrag.tiles || []).slice());
         vor.innerHTML = renderTrackPreview(tiles, null, {}).html;
       } catch (e) { /* ohne Vorschau */ }
       const b = document.createElement('b');
       b.textContent = name;
+      b.setAttribute('data-i18n-skip', '');
       const em = document.createElement('em');
-      em.textContent = (t.tiles ? t.tiles.length : 0) + ' Teile';
+      em.textContent = (eintrag.tiles ? eintrag.tiles.length : 0) + ' ' + t('Teile');
+      em.setAttribute('data-i18n-skip', '');
       btn.appendChild(vor); btn.appendChild(b); btn.appendChild(em);
       btn.addEventListener('click', () => trackLaden(name));
       const del = document.createElement('button');
+      del.type = 'button';
       del.className = 'track-kachel-del';
       del.textContent = '✕';
-      del.title = 'Löschen';
-      del.addEventListener('click', (e) => { e.stopPropagation(); trackLoeschen(name); });
-      btn.appendChild(del);
-      cont.appendChild(btn);
+      del.title = t('Löschen');
+      // BESTELLT: "Wenn ich es zum Strecke loeschen klicke, soll noch ein 'bist du sicher?'
+      // Fenster kommen."
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        konsoleFrage(t('Strecke löschen?'), t('„{n}“ wird gelöscht. Bist du sicher?').replace('{n}', name),
+          [[t('Löschen'), () => trackLoeschen(name)], [t('Abbrechen'), null]]);
+      });
+      wrap.appendChild(btn); wrap.appendChild(del);
+      cont.appendChild(wrap);
     });
   }
   // Klick auf eine Kachel laedt die Strecke in den Editor (vorher das <select>-Laden).
@@ -4591,7 +4721,10 @@
     }
     $('track-name').value = name;
     refreshTrackPreview();
-    showHudToast('Strecke "' + name + '" geladen');
+    // BESTELLT: "bei Strecken laden einen Ton abspielen, wenn die Strecke erfolgreich geladen
+    // wurde" - derselbe Klack wie bei einer fertigen Strecke im Editor.
+    try { trackFertigKlang(); } catch (e) { /* ohne Ton */ }
+    showHudToast(t('Strecke „{n}“ geladen').replace('{n}', name));
   }
   function trackLoeschen(name) {
     const store = loadTrackStore();
@@ -4689,6 +4822,20 @@
         const ty = parseInt(t, 10);
         if (ty === 0xff || ty === TILE_OFFTRACK) { dropped += c; continue; }
         if (c > bestCount) { bestCount = c; bestType = ty; }
+      }
+      // FERTIG BEI DER ZWEITEN START/ZIEL-UEBERFAHRT (v0.9.4). BESTELLT: "wenn livescan fertig,
+      // dann auto anhalten". Vorher lief der Live-Scan, bis man von Hand stoppte - und schrieb
+      // dabei die zweite Runde hinten an. Jetzt: Start/Ziel nach mindestens vier Teilen ist das
+      // Ende der Runde; die Strecke bleibt, das Auto haelt an.
+      if (bestType != null && isStartCode(bestType) && currentTrackTiles.length >= 5) {
+        const auto = trackScanCar;
+        refreshTrackPreview();
+        stopTrackScan();
+        $('track-scan-status').textContent = t('Scan fertig: {n} Teile, Runde geschlossen.').replace('{n}', currentTrackTiles.length);
+        showHudToast(t('STRECKE GESCANNT: {n} TEILE').replace('{n}', currentTrackTiles.length));
+        if (typeof scanAnhalten === 'function') scanAnhalten(auto || playerCar);
+        try { trackFertigKlang(); } catch (err) { /* ohne Ton */ }
+        return;
       }
       if (bestType != null && Object.values(TILE_TYPE).includes(bestType)) {
         currentTrackTiles.push({ type: bestType });
@@ -5125,8 +5272,10 @@
         refreshTrackPreview();
         const wie = 'Lücke ' + schluss.lueckeCm.toFixed(1) + ' cm, Winkel '
           + schluss.winkel.toFixed(1) + '°';
+        const gescannt = garageScan.car;
         garageScanAbbrechen('Fertig: ' + garageScan.seq.length + ' Teile, Rundkurs '
           + 'geschlossen (' + wie + ').');
+        if (typeof scanAnhalten === 'function') scanAnhalten(gescannt);
         showHudToast('STRECKE GESCANNT: ' + garageScan.seq.length + ' TEILE');
         log('Garagenscan fertig: ' + garageScan.seq.length + ' Teile, geschlossen (' + wie
             + ') nach ' + garageScan.versuch + ' Versuch(en).', 'info');
@@ -5164,3 +5313,6 @@
   // Battery is a rough two-point estimate (0x9b/155≈100%, 0x90/144≈75%, observed in an
   // earlier session) — not a calibrated formula, just enough for a rough gauge.
   let dashBattery = null;
+
+  // Editor-Strecke aus der letzten Sitzung (v0.9.6).
+  if (editorStreckeLaden()) { refreshTrackPreview(); if (typeof trackZoomAnwenden === 'function') trackZoomAnwenden(); }

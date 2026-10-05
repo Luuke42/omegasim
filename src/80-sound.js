@@ -1471,6 +1471,8 @@
     ['ghost-charakter', 'charakter'],
     ['ghost-w-start', 'wuerzeStart'],
     ['ghost-w-recovery', 'wuerzeRecovery'],
+    ['ghost-staffel', 'staffelStart'],
+    ['ghost-paar-kurve', 'paarKurve'],
     // Die zwei Boxenstopp-Schalter. Sie gehoeren in dieselbe Liste, weil sie dieselbe Form
     // haben - Kaestchen an, Feld true - und nicht, weil sie mit der Wuerze zu tun haetten.
     ['ghost-pit', 'pitAn'],
@@ -1622,6 +1624,14 @@
   $('ghost-feld').addEventListener('input', (e) => {
     ghostCfg.feldAbstand = parseFloat(e.target.value);
     $('ghost-feld-val').textContent = e.target.value + '%';
+  });
+  if ($('ghost-streuung')) $('ghost-streuung').addEventListener('input', (e) => {
+    ghostCfg.tempoStreuung = parseFloat(e.target.value);
+    $('ghost-streuung-val').textContent = e.target.value + '%';
+  });
+  if ($('ghost-staffel-ms')) $('ghost-staffel-ms').addEventListener('input', (e) => {
+    ghostCfg.staffelMs = parseFloat(e.target.value);
+    $('ghost-staffel-ms-val').textContent = e.target.value + ' ms';
   });
   $('ghost-ueber').addEventListener('input', (e) => {
     ghostCfg.ueberholRate = parseFloat(e.target.value);

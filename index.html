@@ -2595,6 +2595,17 @@
     #k-leiste .k-reiter button { padding: 5px 8px; font-size: clamp(9px, 1.9vh, 12px); }
     .k-leiste2 .k-reiter button { padding: 4px 8px; font-size: clamp(8.5px, 1.7vh, 11px); }
   }
+  /* PRESETS JE MENUE UND PROFILE (v0.9.14, 98d-profile.js) */
+  .menu-preset-box { margin: 2px 0 12px; padding: 6px 8px 4px; background: rgba(0,163,224,.06); border-left: 3px solid var(--k-blau, #00a3e0); }
+  .menu-preset .mp-wahl { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+  .menu-preset .mp-name, .profil-zeile .mp-name { min-width: 8em; text-align: center; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mp-geaendert { color: var(--warn, #ffb400); font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .mp-pf { min-width: 30px; min-height: 30px; padding: 0 6px; background: transparent; border: 1px solid rgba(255,255,255,.22);
+    color: var(--k-blau, #00a3e0); font-size: 12px; line-height: 1; cursor: pointer; }
+  .menu-preset-knoepfe { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 4px; }
+  .menu-preset-knoepfe .opt-row { padding: 0; border: 0; min-height: 0; }
+  .menu-preset-knoepfe button { width: 100%; }
+  .mp-status { font-size: 11.5px; min-height: 1.2em; margin-top: 3px; }
   /* AUSWAHL MIT WENIGEN WERTEN ALS "◀ WERT ▶" (v0.9.7, 98b-sicherung.js blaetternBauen) */
   .ob-versteckt { display: none !important; }
   .opt-blaettern { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
@@ -2743,6 +2754,34 @@
     .mp-spalten { grid-template-columns: minmax(0, 1fr); }
     .mp-spalte-links .row label.small { flex: 1 1 100%; }
   }
+  /* ---- Garage Variante A (v0.9.12): Liste links, Einstellungen rechts ---- */
+  .gar-alt-aktionen > button, #gar-to-cockpit { display: none !important; }
+  .gar-alt-aktionen { margin-bottom: 6px !important; }
+  #gar-list.gar-a { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  @media (max-width: 640px) { #gar-list.gar-a { grid-template-columns: minmax(0, 1fr); } }
+  .gar-a-links, .gar-a-rechts { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .gar-a-rechts { background: rgba(14,16,22,.94); border-top: 3px solid var(--k-blau); padding: 6px 8px; }
+  .gar-a-titel { margin: 2px 0 4px; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
+  .gar-row.gar-a-zeile { display: grid; grid-template-columns: 6px 56px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+    padding: 4px 8px 4px 0; background: rgba(14,16,22,.94); border: 2px solid transparent; border-radius: 0; cursor: pointer; }
+  .gar-row.gar-a-zeile.gk-auf { border-color: rgba(255,255,255,.55); }
+  .gar-row.gar-a-zeile:hover, .gar-row.gar-a-zeile.menu-nav-sel { border-color: #fff; }
+  .gar-a-zeile .gk-streifen { align-self: stretch; }
+  .gar-a-zeile .gk-bild { height: 38px; }
+  .gar-a-zeile .gk-zeichen { font-size: 20px; }
+  .gar-a-zeile .gk-text { display: flex; flex-direction: column; min-width: 0; }
+  .gar-a-zeile .gk-text b { font-size: 14px; letter-spacing: .05em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gar-a-zeile .gar-id { font-size: 10.5px; color: var(--k-dim); padding: 0; }
+  .gar-a-zeile .gk-rolle { margin: 0; min-width: 132px; }
+  .gar-a-zeile.is-player .gk-rolle { background: var(--k-blau); color: var(--k-blau-text); }
+  .gar-a-zeile.is-zwei .gk-rolle { background: #ffb02e; color: #1a1100; }
+  .gar-a-zeile.is-ghost .gk-rolle { background: #6b5bd6; color: #fff; }
+  .gar-a-zeile.is-ghost .gk-rolle button, .gar-a-zeile.is-player .gk-rolle button { color: inherit; }
+  .gar-a-aktion > button { width: 100%; text-align: left; }
+  .gar-a-aktion .gar-karte-neu { min-height: 0; font-size: 13px; letter-spacing: .06em; text-align: left; border-style: solid; }
+  .gar-a-rechts .gk-aufzeile { display: flex; flex-direction: column; gap: 0; background: none; border: 0; padding: 0; }
+  .gar-a-rechts .gk-foto, .gar-a-rechts .gk-foto-weg { position: static; }
+  .gar-a-name .car-name-in { max-width: 12em; font-weight: 700; }
   /* ---- Garage als Karten (v0.8.26, Vorschlag B) ---- */
   #gar-list.gar-karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
   .gar-row.gar-karte { display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden; border-radius: 0;
@@ -4224,7 +4263,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">0.9.11</span></span>
+        <span class="foot-ver">v<span id="app-version">0.9.16</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -5295,6 +5334,12 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>0.9</span></b></p>
       <ul class="muted" id="patchnotes-09" style="padding-left:20px; line-height:1.7">
+        <li>Streckeneditor: gezoomt l&#228;sst sich die Karte jetzt mit Finger oder Maus verschieben, im Vollbild zoomt das Mausrad; der Zoom bleibt gespeichert.</li>
+        <li>Demolition Derby repariert: Rammen trifft einmal je Ann&#228;herung statt in jedem Takt (ein naher Ghost war nach 0,2 s raus), ein Auto bei 0 % bleibt wirklich stehen, Absch&#252;sse werden dem richtigen Spieler gemeldet, Auto 2 wird nicht mehr nach dem Kreisel von Auto 1 gewertet. Knockout/Derby-Meldungen &#252;bersetzt, neue Selbsttests; gepr&#252;ft, dass jede Gold-Zeit erreichbar ist.</li>
+        <li>Zwei-Spieler-Modus repariert: Beim Abschalten h&#228;lt Auto 2 jetzt an (fuhr vorher mit dem letzten Gas weiter), ein getrenntes Auto 2 wird freigegeben, das Licht von Auto 2 gilt f&#252;r Auto 2, kein Drift-Gegenlenken nach den Daten von Auto 1, alte Tastenbelegungen von Spieler 2 werden aufger&#228;umt.</li>
+        <li>Speichersystem (experimentell): Oben in jedem Men&#252; (Allgemein, Fahrgef&#252;hl, Ton, Autonome Gegner, Controller, Renneinstellungen) eine Preset-Zeile &#9664; Name &#9654; mit Speichern, Speichern unter und L&#246;schen; Werkspresets mit &#9733;, &#8222;ge&#228;ndert&#8220; zeigt Abweichungen. Profile unter Optionen &gt; System: jedes Profil merkt sich alle Einstellungen, die Tastenbelegung und das Preset je Men&#252;. Bisherige eigene Abstimmungen stehen im Fahrgef&#252;hl in der Liste.</li>
+        <li>Zufallsstrecke: Die beiden Haarnadeln liegen jetzt meist getrennt statt immer direkt hintereinander, und mit Grundpackung + Haarnadel-Set entstehen deutlich &#246;fter g&#252;ltige Strecken. Meine Strecken: der Speichern-Knopf ist weg (gespeichert wird im Editor, der den Namen der geladenen Strecke vorschl&#228;gt).</li>
+        <li>Garage neu (Variante A): links die Autos untereinander mit ihrer Rolle (&#9664; &#9654;, nur freie Rollen) und darunter die Aktionen, rechts die Einstellungen des gew&#228;hlten Autos (Name, Farbe, Ghost-Tempo, Motorklang, Foto, Blinken, Trennen). Mit dem Steuerkreuz: hoch/runter w&#228;hlt, links/rechts &#228;ndert, X springt nach rechts.</li>
         <li>Streckeneditor: Das Raum-Rechteck ist auch mit nur einer Grenze sichtbar und zeigt die Ma&#223;e. Die Strecke l&#228;sst sich darin mit dem Finger oder der Maus verschieben, im Vollbild auch mit dem rechten Stick; rechten Stick dr&#252;cken zentriert.</li>
         <li>Community-Strecken werden jetzt &#252;ber das Online-Sheet mit allen geteilt (Strecken und Zeiten), jede Zeile zeigt ein Vorschaubild. Eigene, bisher nur lokale Strecken werden beim n&#228;chsten Abgleich eingereicht. Dauerrennen-Zeiten kommen jetzt auch in die Online-Bestenliste. Das Apps Script muss daf&#252;r neu bereitgestellt werden.</li>
         <li>Auswahlfelder mit wenigen Werten (Physik-Modus, Getriebe, Boxenstopp, Sprache &#8230;) sind jetzt &#8222;&#9664; Wert &#9654;&#8220; zum Durchschalten statt Aufklapplisten.</li>
@@ -7866,7 +7911,7 @@
            das soll er sehen, bevor er dreimal auf "Auto verbinden" drueckt. Leer und
            unsichtbar, solange alles in Ordnung ist. -->
       <p id="gar-bt-lage" class="gar-warnung" hidden data-i18n-skip></p>
-      <div class="row" style="gap:8px; margin-bottom:14px">
+      <div class="row gar-alt-aktionen" style="gap:8px; margin-bottom:14px">
         <button class="primary" id="gar-connect">Auto verbinden</button>
         <button id="gar-disconnect-all">Alle trennen</button>
         <span class="muted" id="gar-count">keine Autos verbunden</span>
@@ -10777,7 +10822,10 @@
     <div class="card subpage" id="sub-laden">
       <button class="misc-back subpage-back" data-sub="">&larr; Strecke</button>
       <h2>Meine Strecken</h2>
-      <div class="row">
+      <!-- Speichern geht ueber den Knopf im Editor (v0.9.13, BESTELLT: "Im 'Strecke laden'-Menue den
+           'Speichern'-Button rausnehmen, ist ja beim Editor"). Das Namensfeld bleibt verborgen
+           im Dokument: Laden traegt den Namen ein, und der Editor schlaegt ihn beim Speichern vor. -->
+      <div class="row" hidden>
         <input type="text" id="track-name" placeholder="Name der Strecke">
         <button id="track-save">Speichern</button>
       </div>
@@ -12330,6 +12378,51 @@
     "Der Modus": "The mode",
     "2-Spieler-Modus": "Two-player mode",
     "Gamepad-Menü-Steuerung": "Gamepad menu control",
+    "Streckeneditor: gezoomt lässt sich die Karte jetzt mit Finger oder Maus verschieben, im Vollbild zoomt das Mausrad; der Zoom bleibt gespeichert.": "Track editor: when zoomed, the map can now be moved by finger or mouse, in fullscreen the mouse wheel zooms; the zoom stays saved.",
+    "Geist raus · noch {n} Geister": "Ghost out · {n} ghosts left",
+    "Knockout: Menschen gewinnen!": "Knockout: humans win!",
+    "Knockout: Geister gewinnen.": "Knockout: ghosts win.",
+    "Derby: Spieler 1 gewinnt!": "Derby: player 1 wins!",
+    "Derby: Spieler 2 gewinnt!": "Derby: player 2 wins!",
+    "Derby: Geist gewinnt.": "Derby: a ghost wins.",
+    "Demolition Derby repariert: Rammen trifft einmal je Annäherung statt in jedem Takt (ein naher Ghost war nach 0,2 s raus), ein Auto bei 0 % bleibt wirklich stehen, Abschüsse werden dem richtigen Spieler gemeldet, Auto 2 wird nicht mehr nach dem Kreisel von Auto 1 gewertet. Knockout/Derby-Meldungen übersetzt, neue Selbsttests; geprüft, dass jede Gold-Zeit erreichbar ist.": "Demolition Derby fixed: ramming hits once per approach instead of every tick (a nearby ghost was out after 0.2 s), a car at 0 % really stays put, kills are reported for the right player, car 2 is no longer judged by car 1's gyro. Knockout/derby messages translated, new self-tests; checked that every gold time is reachable.",
+    "Zwei-Spieler-Modus repariert: Beim Abschalten hält Auto 2 jetzt an (fuhr vorher mit dem letzten Gas weiter), ein getrenntes Auto 2 wird freigegeben, das Licht von Auto 2 gilt für Auto 2, kein Drift-Gegenlenken nach den Daten von Auto 1, alte Tastenbelegungen von Spieler 2 werden aufgeräumt.": "Two-player mode fixed: switching it off now stops car 2 (it used to keep driving with the last throttle), a disconnected car 2 is released, car 2's lights apply to car 2, no drift counter-steer from car 1's data, old player-2 button layouts are cleaned up.",
+    "Werkseinstellung": "Factory default",
+    "– keins –": "– none –",
+    "geändert": "changed",
+    "„{n}“ geladen.": "\"{n}\" loaded.",
+    "{k} Regler gesetzt.": "{k} controls set.",
+    "Name des Presets": "Preset name",
+    "„{n}“ gespeichert.": "\"{n}\" saved.",
+    "Preset löschen?": "Delete preset?",
+    "„{n}“ wird gelöscht. Die aktuellen Einstellungen bleiben, wie sie sind.": "\"{n}\" will be deleted. The current settings stay as they are.",
+    "„{n}“ gelöscht.": "\"{n}\" deleted.",
+    "Preset": "Preset",
+    "Ein benannter Stand nur für dieses Menü. ◀ ▶ wechselt sofort. „geändert“ heißt: seit dem Laden verstellt – gespeichert ist es trotzdem (alles speichert sich von selbst), „Speichern“ schreibt es ins Preset zurück. ★ = Werkspreset.": "A named state for this menu only. ◀ ▶ switches at once. \"changed\" means: adjusted since loading – it is saved anyway (everything saves itself), \"Save\" writes it back into the preset. ★ = factory preset.",
+    "Speichern unter …": "Save as …",
+    "Profil „{n}“": "Profile \"{n}\"",
+    "Name des neuen Profils": "Name of the new profile",
+    "Das Profil gibt es schon.": "That profile already exists.",
+    "Neuer Name für „{n}“": "New name for \"{n}\"",
+    "Das letzte Profil bleibt.": "The last profile stays.",
+    "Profil löschen?": "Delete profile?",
+    "„{n}“ wird gelöscht, die App wechselt zum nächsten Profil.": "\"{n}\" will be deleted, the app switches to the next profile.",
+    "Profil": "Profile",
+    "Wer spielt? Ein Profil merkt sich alle Einstellungen, die Tastenbelegung und das Preset je Menü. Autos, Strecken und Statistiken gehören keinem Profil, sie gelten immer.": "Who is playing? A profile remembers all settings, the button mapping and the preset per menu. Cars, tracks and statistics belong to no profile, they always apply.",
+    "Neues Profil": "New profile",
+    "Umbenennen": "Rename",
+    "Speichersystem (experimentell): Oben in jedem Menü (Allgemein, Fahrgefühl, Ton, Autonome Gegner, Controller, Renneinstellungen) eine Preset-Zeile ◀ Name ▶ mit Speichern, Speichern unter und Löschen; Werkspresets mit ★, „geändert“ zeigt Abweichungen. Profile unter Optionen > System: jedes Profil merkt sich alle Einstellungen, die Tastenbelegung und das Preset je Menü. Bisherige eigene Abstimmungen stehen im Fahrgefühl in der Liste.": "Save system (experimental): at the top of each menu (General, Driving feel, Sound, Autonomous opponents, Controller, Race settings) a preset row ◀ name ▶ with Save, Save as and Delete; factory presets with ★, \"changed\" shows deviations. Profiles under Options > System: each profile remembers all settings, the button mapping and the preset per menu. Earlier own tunings are listed under Driving feel.",
+    "Zufallsstrecke: Die beiden Haarnadeln liegen jetzt meist getrennt statt immer direkt hintereinander, und mit Grundpackung + Haarnadel-Set entstehen deutlich öfter gültige Strecken. Meine Strecken: der Speichern-Knopf ist weg (gespeichert wird im Editor, der den Namen der geladenen Strecke vorschlägt).": "Random track: the two hairpins are now mostly separate instead of always right after each other, and with the basic set + hairpin set valid tracks come up much more often. My tracks: the save button is gone (saving happens in the editor, which suggests the name of the loaded track).",
+    "blinkt": "blinking",
+    "Farbe wählen": "Choose colour",
+    "Name für die Rundenübersicht": "Name for the lap overview",
+    "Foto aufnehmen": "Take photo",
+    "Foto entfernen": "Remove photo",
+    "Blinken": "Blink",
+    "Trennen": "Disconnect",
+    "Noch kein Auto verbunden. Links auf „+ Auto verbinden“ tippen.": "No car connected yet. Tap \"+ Connect car\" on the left.",
+    "Name": "Name",
+    "Garage neu (Variante A): links die Autos untereinander mit ihrer Rolle (◀ ▶, nur freie Rollen) und darunter die Aktionen, rechts die Einstellungen des gewählten Autos (Name, Farbe, Ghost-Tempo, Motorklang, Foto, Blinken, Trennen). Mit dem Steuerkreuz: hoch/runter wählt, links/rechts ändert, X springt nach rechts.": "New garage (variant A): on the left the cars one below the other with their role (◀ ▶, only free roles) and the actions below, on the right the settings of the selected car (name, colour, ghost speed, engine sound, photo, blink, disconnect). With the D-pad: up/down selects, left/right changes, X jumps to the right.",
     "Streckeneditor: Das Raum-Rechteck ist auch mit nur einer Grenze sichtbar und zeigt die Maße. Die Strecke lässt sich darin mit dem Finger oder der Maus verschieben, im Vollbild auch mit dem rechten Stick; rechten Stick drücken zentriert.": "Track editor: the room rectangle is visible even with only one limit and shows its size. The track can be moved inside it by finger or mouse, in fullscreen also with the right stick; pressing the right stick centres it.",
     "Gemeinsame Liste nicht erreichbar, hier deine eigenen Strecken.": "Shared list not reachable, here are your own tracks.",
     "Gemeinsame Liste: {n} Strecken.": "Shared list: {n} tracks.",
@@ -15249,7 +15342,8 @@
     //                             Rennen ungleich schnell, ohne dass man den Grund sieht.
     if (throttle > 0) throttle *= topSpeedScale;
     throttle *= batteryCompensationScale();
-    if (driftModus) steer = driftGegenlenken(steer);
+    // Kein Drift-Gegenlenken fuer Auto 2 (v0.9.15): driftGegenlenken liest den Kreisel und das
+    // Tempo von AUTO 1 - fuer Auto 2 lenkte es also nach den Daten des falschen Autos.
     // ---- MIT VORAUSBLICK, seit v0.6.46 ---------------------------------------------
     //
     // Hier stand "KEIN VORAUSBLICK, und das ist eine Entscheidung und kein Vergessen" -
@@ -21350,6 +21444,9 @@
     // bevor 70-race.js seine Konstanten angelegt hat (temporale Todeszone beim Laden).
     try {
       if (fruehstartStrafeAktiv(1)) { rawThrottle = 0; rawBrake = Math.max(rawBrake, FRUEHSTART_BREMSE); }
+      // Derby bei 0 % (v0.9.16): das Auto bleibt stehen - vorher wurde nur das Tempo EINMAL auf
+      // null gesetzt, danach fuhr es mit dem Gas weiter.
+      if (typeof derbyLaeuft !== 'undefined' && derbyLaeuft && derbyTot1) { rawThrottle = 0; rawBrake = 1; }
     } catch (e) { /* beim Laden */ }
     // ... und das Brummen an seinem. padRumble() prueft rumbleOn selbst, also steht hier nur
     // die Frage, OB gebrummt werden soll - nicht, ob der Nutzer Vibration will.
@@ -21474,6 +21571,7 @@
     if (offtrackGiltFuer(2)) gas = Math.min(gas, OFFTRACK_GAS);
     try {
       if (fruehstartStrafeAktiv(2)) { gas = 0; bremse = Math.max(bremse, FRUEHSTART_BREMSE); }
+      if (typeof derbyLaeuft !== 'undefined' && derbyLaeuft && derbyTot2) { gas = 0; bremse = 1; }
     } catch (e) { /* beim Laden */ }
     // Und das Rumpeln, an seinen eigenen Pad. Bis v0.6.45 waere es der Pad von Spieler 1
     // gewesen; jetzt hat jeder Stoss eine Adresse.
@@ -21486,7 +21584,7 @@
     }
     const out = physEngine2.update({ steering: lenkung, throttle: gas,
                                      brake: bremse,
-                                     headlights: headlightsOn }, dt);
+                                     headlights: headlightsOn2 }, dt);
     pacejkaRueckmeldung(physEngine2, 2);
     // Der Motorton von Auto 2, aus SEINER Drehzahl - dieselbe Zahl, die seine Anzeige
     // bekommt. Defensiv gerufen, weil 80-sound.js SPAETER gebaut wird: zur Laufzeit ist die
@@ -21551,7 +21649,10 @@
     // Motormodell, nicht je Auto), bekommt aber eine eigene Stereoseite - zwei Motoren im
     // selben Drehzahlband aus einem Lautsprecher klingen wie ein verstimmter Motor.
     if (typeof stimmeZweiSetzen === 'function') stimmeZweiSetzen(zweiSpieler);
-    else {
+    // v0.9.15: das Anhalten stand bis hierher im else-Zweig des Stimmen-Aufrufs - und weil es die
+    // Funktion zur Laufzeit immer gibt, lief es nie: Auto 2 fuhr nach dem Abschalten mit dem
+    // letzten Gas weiter.
+    if (!zweiSpieler) {
       p2Steer = 0; p2Throttle = 0; physOut2Steer = 0; physOut2Throttle = 0;
       // AUSSCHALTEN IST EIN HALTEBEFEHL, und zwar aus einem Grund, der beim Bauen leicht
       // untergeht: writeToCar() schickt nur, was es bekommt. Wird der Modus WAEHREND der
@@ -22402,6 +22503,12 @@
     if (!rows.length) return;
     menuNavGezeigt = true;
     const row = rows[menuNavIndex];
+    // Sprungziel (v0.9.12, Garage): X auf einer Zeile mit data-x-sprung springt zur ersten
+    // passenden Zeile, statt das Feld zu "bewaffnen".
+    if (row.el && row.el.dataset && row.el.dataset.xSprung) {
+      const ziel = rows.findIndex((r) => r.el.matches && r.el.matches(row.el.dataset.xSprung));
+      if (ziel >= 0) { menuNavIndex = ziel; menuNavArmed = false; menuNavRender(); menuNavTonAktivieren(); return; }
+    }
     if (row.kind === 'range' || row.kind === 'select') {
       menuNavArmed = !menuNavArmed;
       menuNavRender();
@@ -27165,13 +27272,20 @@
   // zoomen". Ein Zoom-Faktor auf die Vorschaukarte; + / - (Tastatur) und Zwei-Finger-Pinch
   // aendern ihn, 0 setzt zurueck. var, weil refreshTrackPreview() schon beim Laden laeuft.
   var editorZoom = 1;
+  // Verschiebung der gezoomten Karte in Bildpunkten (v0.9.16): ab Zoom > 1 ragt sie ueber den
+  // Rand, und ohne Verschieben war der Rest nicht mehr erreichbar.
+  var editorPan = { x: 0, y: 0 };
   function trackZoomAnwenden() {
     const k = document.querySelector('#track-preview-svg .tp-karte');
-    if (k) k.style.transform = editorZoom === 1 ? '' : 'scale(' + editorZoom + ')';
+    if (!k) return;
+    if (editorZoom <= 1) { editorPan = { x: 0, y: 0 }; }
+    k.style.transform = editorZoom === 1 && !editorPan.x && !editorPan.y ? ''
+      : 'translate(' + editorPan.x.toFixed(0) + 'px,' + editorPan.y.toFixed(0) + 'px) scale(' + editorZoom + ')';
   }
   function trackZoom(d) {
     editorZoom = Math.max(0.5, Math.min(3, Math.round((editorZoom + d) * 10) / 10));
     trackZoomAnwenden();
+    if (typeof editorStreckeMerken === 'function') editorStreckeMerken();
   }
   // ---- Editor-Schalter (v0.8.29): Ideallinie, Tastenkuerzel. Je Geraet gemerkt. ----
   // var und nicht let: refreshTrackPreview() laeuft schon beim Laden, und ein let weiter unten
@@ -27466,11 +27580,12 @@
     if (!host) return;
     let a = null, gezogen = false;
     host.addEventListener('pointerdown', (e) => {
-      if (!e.isPrimary || !host.querySelector('.tp-raum')) { a = null; return; }
+      const pan = editorZoom > 1;
+      if (!e.isPrimary || (!pan && !host.querySelector('.tp-raum'))) { a = null; return; }
       const svg = host.querySelector('svg.tp-karte');
       if (!svg) return;
       const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
-      a = { x: e.clientX, y: e.clientY, k: vb && r.width ? vb.width / r.width : 1, id: e.pointerId };
+      a = { x: e.clientX, y: e.clientY, k: vb && r.width ? vb.width / r.width : 1, id: e.pointerId, pan };
       gezogen = false;
     });
     host.addEventListener('pointermove', (e) => {
@@ -27479,10 +27594,22 @@
       if (!gezogen && Math.hypot(dx, dy) < 8) return;
       gezogen = true;
       e.preventDefault();
-      // Finger nach rechts = Strecke nach rechts = Raum nach links.
-      raumRechteckSchieben(-dx * a.k, -dy * a.k);
+      if (a.pan) {
+        // Gezoomt: die Ansicht verschieben.
+        editorPan.x += dx; editorPan.y += dy;
+        trackZoomAnwenden();
+      } else {
+        // Finger nach rechts = Strecke nach rechts = Raum nach links.
+        raumRechteckSchieben(-dx * a.k, -dy * a.k);
+      }
       a.x = e.clientX; a.y = e.clientY;
     });
+    // Mausrad zoomt im Editor-Vollbild (ausserhalb bleibt es Seitenbildlauf).
+    host.addEventListener('wheel', (e) => {
+      if (!document.body.classList.contains('track-fs') && !e.ctrlKey) return;
+      e.preventDefault();
+      trackZoom(e.deltaY < 0 ? 0.1 : -0.1);
+    }, { passive: false });
     const ende = () => { if (a && gezogen) raumSpaeterZeichnen(); a = null; };
     host.addEventListener('pointerup', ende);
     host.addEventListener('pointercancel', () => { a = null; });
@@ -28057,20 +28184,24 @@
   // kommt in den 80 Wochenstrecken nicht vor und bleibt deshalb aussen vor.
 
   // Eine zufaellige Aufteilung von dir*360 auf nc Kurvenlaeufe, jeder ein Vielfaches von 30.
-  function trackZufallRunTurns(dir, nc) {
+  // `schritt` (v0.9.13): 60, wenn keine 30-Grad-Teile im Bestand sind - sonst wuerden Laeufe von
+  // 90 oder 150 Grad gewuerfelt, die sich aus 60-Grad-Kurven nicht bauen lassen (gemessen: drei
+  // Viertel der Versuche scheiterten daran).
+  function trackZufallRunTurns(dir, nc, schritt) {
+    const st = schritt || 30;
     let rem = dir * 360;
     const turns = [];
     for (let i = 0; i < nc - 1; i++) {
       const left = nc - 1 - i;
-      const lo = 30, hi = rem - left * 30;
+      const lo = st, hi = rem - left * st;
       if (hi < lo) return null;
       const choices = [];
-      for (let v = lo; v <= hi; v += 30) choices.push(v);
+      for (let v = lo; v <= hi; v += st) choices.push(v);
       const v = choices[Math.floor(Math.random() * choices.length)];
       turns.push(v);
       rem -= v;
     }
-    if (Math.abs(rem) < 30) return null;
+    if (Math.abs(rem) < st) return null;
     turns.push(rem);
     if (Math.random() < 0.5) {
       for (let i = turns.length - 1; i > 0; i--) {
@@ -28079,6 +28210,37 @@
       }
     }
     return turns;
+  }
+
+  // GEGENLAUF (v0.9.13). GEMELDET: "Streckeneditor: Haarnadelkurven (links-rechts) folgen immer
+  // aufeinander." Alle Laeufe drehten bisher in Fahrtrichtung (Summe +-360); eine Gegen-Haarnadel
+  // kam deshalb nur ueber die Schikane H+J vor - und die steht immer am Stueck. Jetzt wird oft
+  // ein eigener Lauf GEGEN die Fahrtrichtung eingesetzt (180 Grad, wenn die passende Haarnadel
+  // da ist, sonst 60 oder 120), und ein anderer Lauf dreht um denselben Betrag mehr. Wo er
+  // steht, entscheidet das Mischen - die beiden Haarnadeln liegen dann getrennt.
+  function trackZufallGegenlauf(turns, dir, b) {
+    if (Math.random() < 0.15) return;
+    const gegenNadel = dir > 0 ? TILE_TYPE.HAIRPIN_LEFT : TILE_TYPE.HAIRPIN;
+    const gegenKurve = dir > 0 ? [TILE_TYPE.CURVE_LEFT, TILE_TYPE.WEIT_LEFT, TILE_TYPE.KLEIN_LEFT]
+                               : [TILE_TYPE.CURVE_RIGHT, TILE_TYPE.WEIT_RIGHT, TILE_TYPE.KLEIN_RIGHT];
+    const nGegen = gegenKurve.reduce((a, t) => a + Math.max(0, +b[t] || 0), 0);
+    let m = 0;
+    if ((+b[gegenNadel] || 0) > 0 && Math.random() < 0.9) m = 180;
+    else if (nGegen > 0) m = nGegen >= 2 && Math.random() < 0.4 ? 120 : 60;
+    if (!m) return;
+    // Ein eigener Ausgleichslauf (+m, mit 180 meist die gleichsinnige Haarnadel) und der
+    // Gegenlauf (-m), moeglichst NICHT nebeneinander (auch nicht ueber das Rundenende).
+    const plusPos = Math.floor(Math.random() * (turns.length + 1));
+    turns.splice(plusPos, 0, dir * m);
+    const n = turns.length + 1;
+    const frei = [];
+    for (let q = 0; q < n; q++) {
+      // q ist die Einfuegestelle; der neue Lauf steht dann zwischen q-1 und q.
+      const nachbarn = [(q - 1 + turns.length) % turns.length, q % turns.length];
+      if (!nachbarn.includes(plusPos)) frei.push(q);
+    }
+    const q = frei.length ? frei[Math.floor(Math.random() * frei.length)] : Math.floor(Math.random() * n);
+    turns.splice(q, 0, -dir * m);
   }
 
   // Ein Kurvenlauf, dessen Drehungen sich zu `target` addieren - nur gleichsinnige Kacheln,
@@ -28136,7 +28298,11 @@
       const j = Math.floor(Math.random() * (i + 1));
       [patterns[i], patterns[j]] = [patterns[j], patterns[i]];
     }
-    for (const p of patterns) if (p.every(t => avail(t) > 0)) return p;
+    // Die Haarnadel-Schikane (H+J am Stueck) nur noch selten (v0.9.13): die beiden Haarnadeln
+    // sollen meist getrennt liegen, siehe trackZufallGegenlauf.
+    const nadel = (p) => p.includes(TILE_TYPE.HAIRPIN) && p.includes(TILE_TYPE.HAIRPIN_LEFT);
+    for (const p of patterns) if (!nadel(p) && p.every(t => avail(t) > 0)) return p;
+    if (Math.random() < 0.1) for (const p of patterns) if (nadel(p) && p.every(t => avail(t) > 0)) return p;
     return null;
   }
 
@@ -28287,16 +28453,23 @@
     let beste = null, besteAnders = null, besteGleich = null;
     let raumZuKlein = false;
     const letzte = trackZufallCodes.length ? trackZufallCodes[trackZufallCodes.length - 1] : null;
-    const besser = (a, z) => !a || z.rest < a.rest || (z.rest === a.rest && Math.random() < 0.4);
+    // Wenigste uebrige Teile gewinnt; zwei Haarnadeln am Stueck zaehlen dabei wie 1,5 weitere
+    // uebrige Teile (v0.9.13) - getrennte Haarnadeln gehen damit vor, ohne dass Strecken ganz
+    // ohne Haarnadel kuenstlich bevorzugt werden.
+    const wert = (k) => k.rest + (k.nadelPaar ? 1.5 : 0);
+    const besser = (a, z) => !a || wert(z) < wert(a) || (wert(z) === wert(a) && Math.random() < 0.4);
     const startZeit = performance.now();
+    const zufallSchritt = [TILE_TYPE.WEIT_LEFT, TILE_TYPE.WEIT_RIGHT, TILE_TYPE.KLEIN_LEFT, TILE_TYPE.KLEIN_RIGHT]
+      .some((t) => hat(t) > 0) ? 30 : 60;
     for (let versuch = 0; versuch < 400; versuch++) {
       if (performance.now() - startZeit > 3000) break;
       const dir = Math.random() < 0.5 ? 1 : -1;
       const r = Math.random();
       const nc = r < 0.05 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : r < 0.93 ? 4 : 5;
       const used = {};
-      const turns = trackZufallRunTurns(dir, nc);
+      const turns = trackZufallRunTurns(dir, nc, zufallSchritt);
       if (!turns) continue;
+      trackZufallGegenlauf(turns, dir, b);
       const runs = [];
       let gut = true;
       for (const t of turns) {
@@ -28329,7 +28502,10 @@
       if (rot < 0) { raumZuKlein = true; continue; }
       const rest = trackZufallRest(tiles, b);
       const code = trackToCode(tiles, 0);
-      const kandidat = { tiles, rest, code, rot };
+      // Haarnadeln direkt nacheinander (auch ueber das Rundenende)?
+      const nadel = (x) => x.type === TILE_TYPE.HAIRPIN || x.type === TILE_TYPE.HAIRPIN_LEFT;
+      const nadelPaar = tiles.some((x, i) => nadel(x) && nadel(tiles[(i + 1) % tiles.length]));
+      const kandidat = { tiles, rest, code, rot, nadelPaar };
       if (!trackZufallCodeKennt(code) && besser(beste, kandidat)) beste = kandidat;
       if (code !== letzte && besser(besteAnders, kandidat)) besteAnders = kandidat;
       if (besser(besteGleich, kandidat)) besteGleich = kandidat;
@@ -28640,7 +28816,9 @@
   // top on the left side (so that I don't accidentally click on close instead of save)."
   $('track-save-toolbar').onclick = () => {
     if (currentTrackTiles.length === 0) { alert('Keine Streckenteile vorhanden.'); return; }
-    const eingabe = prompt(t('Name der Strecke'), trackNameVorschlag());
+    // Eine geladene Strecke wird unter ihrem Namen vorgeschlagen (Namensfeld aus Meine Strecken).
+    const geladen = ($('track-name') && $('track-name').value.trim()) || '';
+    const eingabe = prompt(t('Name der Strecke'), geladen || trackNameVorschlag());
     if (eingabe === null) return; // Abbrechen
     trackSpeichern(eingabe.trim() || trackNameVorschlag());
   };
@@ -29386,7 +29564,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       playTone(880, 0.06, 'sine', 0.2);
       setTimeout(() => playTone(1320, 0.09, 'sine', 0.2), 45);
     }
-    showHudToast('Geist raus · noch ' + knockoutGeister + ' Geister');
+    showHudToast(t('Geist raus · noch {n} Geister').replace('{n}', knockoutGeister));
     knockoutPruefen();
   }
   // Ein Mensch verliert ein Leben (Abkommen von der Bahn).
@@ -29398,12 +29576,18 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     knockoutPruefen();
   }
   // Ende: alle Geister raus -> Sieg; alle Menschen raus -> Niederlage.
-  function knockoutPruefen() {
-    if (!knockoutLaeuft) return;
+  // Die Entscheidung allein, ohne Folgen (v0.9.16, fuer den Selbsttest): null = weiter.
+  function knockoutUrteil() {
     const menschen = (typeof zweiSpieler !== 'undefined' && zweiSpieler) ? 2 : 1;
     const menschenRaus = knockoutLeben <= 0 && (menschen < 2 || knockoutLeben2 <= 0);
-    if (knockoutGeister <= 0) knockoutEnde('menschen');
-    else if (menschenRaus) knockoutEnde('geister');
+    if (knockoutGeister <= 0) return 'menschen';
+    if (menschenRaus) return 'geister';
+    return null;
+  }
+  function knockoutPruefen() {
+    if (!knockoutLaeuft) return;
+    const u = knockoutUrteil();
+    if (u) knockoutEnde(u);
   }
   function knockoutEnde(sieger) {
     if (!knockoutLaeuft || knockoutSieger) return;
@@ -29411,14 +29595,14 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     knockoutLaeuft = false;
     if (sieger === 'menschen') {
       if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare();
-      showHudToast('Knockout: Menschen gewinnen!');
+      showHudToast(t('Knockout: Menschen gewinnen!'));
     } else {
       if (typeof playTone === 'function') {   // dunkler Abwaertston
         playTone(200, 0.12, 'square', 0.16);
         setTimeout(() => playTone(140, 0.16, 'square', 0.14), 70);
         setTimeout(() => playTone(110, 0.2, 'square', 0.12), 160);
       }
-      showHudToast('Knockout: Geister gewinnen.');
+      showHudToast(t('Knockout: Geister gewinnen.'));
     }
     if (typeof finishRace === 'function') finishRace(false);
   }
@@ -29452,21 +29636,26 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     car.ghost.derbyAus = true;
     if (typeof stopGhost === 'function') stopGhost(car);
     if (schuetze === 2) derbyKills2++; else derbyKills++;
+    const kills = schuetze === 2 ? derbyKills2 : derbyKills;
     if (typeof playTone === 'function') {   // positiver Ton fuer den Abschuss
       playTone(880, 0.06, 'sine', 0.2);
       setTimeout(() => playTone(1320, 0.09, 'sine', 0.2), 45);
     }
-    showHudToast(t('Geist aus') + ' · Kills ' + derbyKills);
+    // Die Kills dessen, der getroffen hat (v0.9.16; vorher immer die von Spieler 1).
+    showHudToast(t('Geist aus') + ' · ' + (schuetze === 2 ? t('Spieler 2') : t('Spieler 1')) + ' · Kills ' + kills);
     derbyPruefen();
   }
   // Aufprall-Schaden fuer den Spieler (head-on 10 %, sonst 20 %).
   function derbyAufprall(wer) {
     if (!derbyLaeuft) return;
-    const frontal = derbyFrontal();
+    const frontal = derbyFrontal(wer);
     derbySchaden(wer, frontal ? 10 : 20);
   }
   // Head-on, wenn der Gyro stark nach vorne ausschlaegt (x-Achse dominiert). Sonst Seite/Ramme.
-  function derbyFrontal() {
+  // Der Kreisel ist der von Auto 1 (v0.9.16): fuer Auto 2 gilt deshalb immer "Seite" - vorher
+  // entschied dort der Kreisel des falschen Autos.
+  function derbyFrontal(wer) {
+    if (wer === 2) return false;
     if (typeof gyroRaw !== 'undefined' && gyroRaw) {
       return Math.abs(gyroRaw.x) >= Math.abs(gyroRaw.y) * 1.3;
     }
@@ -29475,6 +29664,11 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // Ende: der Spieler mit den meisten Kills gewinnt. Bei Gleichstand: der mit mehr Health.
   function derbyPruefen() {
     if (!derbyLaeuft) return;
+    const u = derbyUrteil();
+    if (u) derbyEnde(u);
+  }
+  // Die Entscheidung allein, ohne Folgen (v0.9.16, fuer den Selbsttest): null = weiter.
+  function derbyUrteil() {
     const geister = derbyGeisterZaehlen();
     const geistKills = Math.max(0, ...garage.filter(c => c.role === 'ghost' && c.ghost)
       .map(c => c.ghost.derbyKills || 0));
@@ -29487,24 +29681,25 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // KILLS-ZIEL (v0.8.126, Voreinstellung 1): wer das Ziel erreicht, beendet das Derby sofort.
     const ziel = raceLimit;
     if (ziel > 0) {
-      if (derbyKills >= ziel) { derbyEnde('p1'); return; }
-      if (typeof zweiSpieler !== 'undefined' && zweiSpieler && derbyKills2 >= ziel) { derbyEnde('p2'); return; }
+      if (derbyKills >= ziel) return 'p1';
+      if (typeof zweiSpieler !== 'undefined' && zweiSpieler && derbyKills2 >= ziel) return 'p2';
     }
     if (alleGeister) {
       // Sieger nach Kills (dann Health als Tiebreaker).
-      const k = [['p1', derbyKills, derbyHealth], ['p2', derbyKills2, derbyHealth2]];
+      const k = [['p1', derbyKills, derbyHealth]];
+      if (typeof zweiSpieler !== 'undefined' && zweiSpieler) k.push(['p2', derbyKills2, derbyHealth2]);
       k.sort((a, b) => b[1] - a[1] || b[2] - a[2]);
-      derbyEnde(k[0][0]);
-    } else if (alleMenschen) {
-      derbyEnde('geist');
+      return k[0][0];
     }
+    if (alleMenschen) return 'geist';
+    return null;
   }
   function derbyEnde(sieger) {
     if (!derbyLaeuft || derbySieger) return;
     derbySieger = sieger; derbyLaeuft = false;
-    if (sieger === 'p1') { if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare(); showHudToast('Derby: Spieler 1 gewinnt!'); }
-    else if (sieger === 'p2') { if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare(); showHudToast('Derby: Spieler 2 gewinnt!'); }
-    else { if (typeof playTone === 'function') { playTone(200, 0.12, 'square', 0.16); setTimeout(() => playTone(140, 0.16, 'square', 0.14), 70); setTimeout(() => playTone(110, 0.2, 'square', 0.12), 160); } showHudToast('Derby: Geist gewinnt.'); }
+    if (sieger === 'p1') { if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare(); showHudToast(t('Derby: Spieler 1 gewinnt!')); }
+    else if (sieger === 'p2') { if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare(); showHudToast(t('Derby: Spieler 2 gewinnt!')); }
+    else { if (typeof playTone === 'function') { playTone(200, 0.12, 'square', 0.16); setTimeout(() => playTone(140, 0.16, 'square', 0.14), 70); setTimeout(() => playTone(110, 0.2, 'square', 0.12), 160); } showHudToast(t('Derby: Geist gewinnt.')); }
     if (typeof finishRace === 'function') finishRace(false);
   }
   // ---- DERBY-COCKPIT (v0.8.126) ----
@@ -29548,6 +29743,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   }
   // Im Derby: nahe Geister werden vom fahrenden Spieler gerammt (sie verlieren 20 % Health).
   const DERBY_RAM_TILES = 4, DERBY_RAM_KMH = 30;
+  const DERBY_TREFFER_MS = 1000;
   function derbyTick() {
     if (!derbyLaeuft || raceState !== 'racing') return;
     const ort = typeof spielerOrtGes === 'function' ? spielerOrtGes() : null;
@@ -29556,7 +29752,13 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     for (const c of garage) {
       if (c.role !== 'ghost' || !c.ghost || c.ghost.derbyAus) continue;
       const dist = Math.abs(ghostOrtGes(c) - ort);
-      if (dist < DERBY_RAM_TILES && tempo > DERBY_RAM_KMH) derbySchaden(c, 20, 1);
+      // EIN Treffer je Annaeherung (v0.9.16): vorher zog jeder 45-ms-Takt 20 % ab, ein naher
+      // Ghost war nach fuenf Takten (0,2 s) raus. Jetzt hoechstens ein Treffer je Sekunde.
+      const jetzt = Date.now();
+      if (dist < DERBY_RAM_TILES && tempo > DERBY_RAM_KMH && jetzt - (c.ghost.derbyTrefferAt || 0) > DERBY_TREFFER_MS) {
+        c.ghost.derbyTrefferAt = jetzt;
+        derbySchaden(c, 20, 1);
+      }
     }
   }
 
@@ -39639,7 +39841,8 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     try {
       const saved = JSON.parse(localStorage.getItem(GAMEPAD_BINDINGS_KEY2) || 'null');
       if (!saved) return { ...DEFAULT_BINDINGS2 };
-      return resolveBindingCollisions({ ...DEFAULT_BINDINGS2, ...saved }, DEFAULT_BINDINGS2);
+      // v0.9.15: dieselbe Aufraeumung alter Layouts wie bei Spieler 1.
+      return resolveBindingCollisions(migrateBindings({ ...DEFAULT_BINDINGS2, ...saved }), DEFAULT_BINDINGS2);
     } catch { return { ...DEFAULT_BINDINGS2 }; }
   }
   function saveBindings2() {
@@ -40757,7 +40960,10 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // Eine Wertzeile im Stil der Menues: Beschriftung .... < Wert >
   function garWertZeile(titel, wert, zurueck, vor, extra) {
     const z = document.createElement('div');
-    z.className = 'gk-zeile';
+    // Optionszeile mit einem versteckten Schieber von -1 bis 1 (v0.9.12): so verstellt das
+    // Steuerkreuz den Wert mit links/rechts wie in jeder anderen Optionenliste
+    // (menuNavAdjust), ohne dass die Menuefuehrung die Garage eigens kennen muss.
+    z.className = 'opt-row gk-zeile';
     z.innerHTML = '<span class="gk-l"></span><span class="gk-w"><button type="button" data-d="-1" aria-label="weniger">&#9664;</button>'
       + '<b></b><button type="button" data-d="1" aria-label="mehr">&#9654;</button></span>';
     z.querySelector('.gk-l').textContent = titel;
@@ -40765,6 +40971,11 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     z.querySelector('[data-d="-1"]').onclick = (e) => { e.stopPropagation(); zurueck(); };
     z.querySelector('[data-d="1"]').onclick = (e) => { e.stopPropagation(); vor(); };
     if (extra) z.querySelector('.gk-w').appendChild(extra);
+    const rg = document.createElement('input');
+    rg.type = 'range'; rg.min = '-1'; rg.max = '1'; rg.step = '1'; rg.value = '0';
+    rg.hidden = true; rg.className = 'gk-pad'; rg.setAttribute('data-preset-skip', ''); rg.tabIndex = -1;
+    rg.addEventListener('input', () => { const v = +rg.value; rg.value = '0'; if (v > 0) vor(); else if (v < 0) zurueck(); });
+    z.appendChild(rg);
     return z;
   }
   function garageAufZeile(car) {
@@ -40895,6 +41106,60 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     if (r && r._car) garageBlinkSanft(r._car);
   }
 
+  // Farbwahl unter einem Klecks (vorher direkt in renderGarage).
+  function garFarbWahl(chip, car) {
+    const offen = document.querySelector('.car-pal');
+    if (offen) offen.remove();
+    const pal = document.createElement('div');
+    pal.className = 'car-pal on';
+    for (const fb of CAR_COLORS) {
+      const b = document.createElement('button');
+      b.style.background = fb.hex;
+      b.className = fb.id === car.colorId ? 'on' : '';
+      const wer = garage.find(c => c !== car && c.colorId === fb.id);
+      b.title = fb.name + (wer ? ' (schon ' + garageLabel(wer) + ')' : '');
+      b.setAttribute('aria-label', b.title);
+      b.onclick = (ev) => { ev.stopPropagation(); garageFarbeSetzen(car, fb.id); pal.remove(); };
+      pal.appendChild(b);
+    }
+    document.body.appendChild(pal);
+    const r = chip.getBoundingClientRect();
+    pal.style.top = (r.bottom + window.scrollY + 4) + 'px';
+    pal.style.left = Math.min(r.left + window.scrollX,
+      window.scrollX + document.documentElement.clientWidth - pal.offsetWidth - 8) + 'px';
+    const zu = (ev) => {
+      if (pal.contains(ev.target)) return;
+      pal.remove();
+      document.removeEventListener('pointerdown', zu, true);
+    };
+    setTimeout(() => document.addEventListener('pointerdown', zu, true), 0);
+  }
+  // Eine Aktionszeile, die einen vorhandenen Knopf ausloest (Text und Sperre von ihm).
+  function garAktionsZeile(id, extraKlasse) {
+    const orig = $(id);
+    if (!orig) return null;
+    const z = document.createElement('div');
+    z.className = 'opt-row opt-breit gar-a-aktion' + (extraKlasse ? ' ' + extraKlasse : '');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = (orig.classList.contains('primary') ? 'primary ' : '') + 'gar-a-knopf';
+    b.dataset.fuer = id;
+    b.textContent = orig.textContent;
+    b.disabled = orig.disabled;
+    b.onclick = () => orig.click();
+    z.appendChild(b);
+    return z;
+  }
+  function garAktionenAbgleichen() {
+    document.querySelectorAll('#gar-list .gar-a-knopf[data-fuer]').forEach((b) => {
+      const o = $(b.dataset.fuer);
+      if (!o) return;
+      b.textContent = o.textContent;
+      b.disabled = o.disabled;
+      b.closest('.gar-a-aktion').hidden = o.hidden;
+    });
+  }
+
   function renderGarage() {
     const list = $('gar-list');
     if (!list) return;
@@ -40933,140 +41198,151 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // Karten klappt fuer das gewaehlte Auto eine Zeile mit Farbe, Ghost-Tempo und Charakter
     // auf. Die Rollenfolge steht an der Karte (data-rollen) - der Selbsttest "jede Zeile hat
     // vier Rollen" liest sie dort.
+    // ---- GARAGE VARIANTE A (v0.9.12), abgesegnet am Mock-up mockup/garage.html --------
+    // BESTELLT: "Buttons sollten lieber einspaltig sein ... Garage-Menue aufraeumen". Links die
+    // Autos untereinander, darunter die Aktionen; rechts die Einstellungen des gewaehlten
+    // Autos. Jede Zeile ist eine Optionszeile: Steuerkreuz hoch/runter waehlt, links/rechts
+    // aendert (bei einem Auto: seine Rolle, nur freie Rollen), X springt nach rechts.
     list.innerHTML = '';
-    list.classList.add('gar-karten');
+    list.classList.remove('gar-karten');
+    list.classList.add('gar-a');
     if (garAufAuto && !echte.includes(garAufAuto)) garAufAuto = null;
+    if (!garAufAuto && echte.length) garAufAuto = echte[0];
+    const links = document.createElement('div');
+    links.className = 'gar-a-links';
+    const rechts = document.createElement('div');
+    rechts.className = 'gar-a-rechts';
+    const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     echte.forEach((car, i) => {
       const row = document.createElement('div');
-      row.className = 'gar-row gar-karte' + (car.role === 'player' ? ' is-player'
+      row.className = 'opt-row gar-row gar-karte gar-a-zeile' + (car.role === 'player' ? ' is-player'
                                  : car.role === 'player2' ? ' is-zwei'
                                  : car.role === 'ghost' ? ' is-ghost' : '')
                     + (garAufAuto === car ? ' gk-auf' : '');
+      row.dataset.xSprung = '.gar-a-rechts .opt-row';
       const f = carColor(car);
       const foto = autoFoto(car);
       const rolle = GAR_ROLLEN.find((r) => r.id === car.role) || GAR_ROLLEN[3];
+      const frei = garRollenFrei(car);
       const bild = foto
         ? 'background-image:url("' + foto + '")'
         : 'background:linear-gradient(135deg,' + f.hex + ' 0%,' + f.hex + ' 55%,rgba(0,0,0,.55) 100%);color:' + f.ink;
+      const name = car.alias || car.tag || garageLabel(car);
       row.innerHTML = `
-        <div class="gk-kopf"><span>${car.role === 'player' ? t('DU') : t('AUTO {n}').replace('{n}', i + 1)}</span>
-          <span class="gk-kopf-rolle">${rolle.kurz}</span></div>
-        <div class="gk-bild${foto ? ' mit-foto' : ''}" style='${bild}'>
-          ${foto ? '' : `<span class="gk-zeichen">${car.tagChar || ''}</span>`}
-          <button type="button" class="gk-foto" data-act="foto">${foto ? 'Foto ändern' : 'Foto'}</button>
-          ${foto ? '<button type="button" class="gk-foto-weg" data-act="foto-weg" aria-label="Foto entfernen">&#10005;</button>' : ''}
-        </div>
-        <div class="gk-name car-tag">
-          <button class="car-chip" data-act="color"
-                  style="background:${f.hex};color:${f.ink}"
-                  title="Farbe wählen, gerade ${f.name}">${car.tagChar || ''}</button>
-          <input class="car-name-in" data-act="alias" type="text" maxlength="18"
-                 placeholder="${car.tag || 'Name'}"
-                 value="${(car.alias || '').replace(/"/g, '&quot;')}"
-                 aria-label="Name für die Rundenuebersicht">
-        </div>
+        <i class="gk-streifen" style="background:${f.hex}"></i>
+        <div class="gk-bild${foto ? ' mit-foto' : ''}" style='${bild}'>${foto ? '' : `<span class="gk-zeichen">${car.tagChar || ''}</span>`}</div>
+        <div class="gk-text"><b data-i18n-skip>${esc(name)}</b>
+          <span class="gar-id" data-i18n-skip>${esc(car.tag || '')} &middot; ${esc(String(car.device.id).slice(0, 10))}${car.blinking ? ' &middot; ' + t('blinkt') : ''}</span></div>
         <div class="gk-rolle" data-rollen="${GAR_ROLLEN.map((r) => r.id).join(',')}" data-rolle="${rolle.id}">
           <button type="button" data-act="rolle" data-d="-1" aria-label="Rolle zurück">&#9664;</button>
-          <b>${rolle.name}</b>${rolle.id === 'player2' ? '<span class="wip-tag">experimentell</span>' : ''}
+          <b>${t(rolle.name)}</b>${rolle.id === 'player2' ? '<span class="wip-tag">experimentell</span>' : ''}
           <button type="button" data-act="rolle" data-d="1" aria-label="Rolle vor">&#9654;</button>
         </div>
-        <div class="gk-fuss">
-          <button type="button" data-act="auf">Einstellen ${garAufAuto === car ? '&#9652;' : '&#9662;'}</button>
-          <button type="button" data-act="drop">Trennen</button>
-        </div>
-        <div class="gar-id">${car.tag || ''} &middot; ${String(car.device.id).slice(0, 12)}
-          ${car.blinking ? '<span class="gar-blink">&nbsp;blinkt&hellip;</span>' : ''}</div>`;
-      // Blinken beim Ueberfahren (Maus und Menueauswahl), siehe garageFokusZeile.
+        <select class="gk-rolle-wahl" hidden data-preset-skip data-blaettern="1" aria-label="Rolle">${frei.map((r) =>
+          `<option value="${r.id}"${r.id === car.role ? ' selected' : ''}>${r.name}</option>`).join('')}</select>`;
       row._car = car;
       row.onmouseenter = () => garageBlinkSanft(car);
+      // Ein Tipp auf die Zeile waehlt das Auto fuer die rechte Seite.
+      row.onclick = (e) => {
+        if (e.target.closest('button, input, select')) return;
+        if (garAufAuto !== car) { garAufAuto = car; renderGarage(); }
+      };
       row.querySelectorAll('button[data-act="rolle"]').forEach((b) => {
         b.onclick = (e) => {
           e.stopPropagation();
-          // Nur FREIE Rollen (v0.9.6). BESTELLT: "wenn ich Auto 2 umschalte, soll es nicht den
-          // Status 'Steuern' von Auto 1 klauen, sondern der Status 'Spieler 1' ist erst dann
-          // verfuegbar, wenn kein anderes Auto das hat; das andere Auto hat dann nur die
-          // uebrigen Optionen zur Auswahl." Vorher lief der Pfeil durch alle vier Rollen, und
-          // setCarRole nahm dem anderen Auto seine Rolle weg.
-          const frei = garRollenFrei(car);
-          const k = frei.findIndex((r) => r.id === car.role);
-          const n = frei[((k < 0 ? frei.length - 1 : k) + +b.dataset.d + frei.length) % frei.length];
+          // Nur FREIE Rollen (v0.9.6), siehe garRollenFrei.
+          const fr = garRollenFrei(car);
+          const k = fr.findIndex((r) => r.id === car.role);
+          const n = fr[((k < 0 ? fr.length - 1 : k) + +b.dataset.d + fr.length) % fr.length];
+          garAufAuto = car;
           setCarRole(car, n.id);
         };
       });
-      row.querySelector('button[data-act="drop"]').onclick = () => disconnectCar(car);
-      row.querySelector('button[data-act="auf"]').onclick = () => {
-        garAufAuto = garAufAuto === car ? null : car;
-        renderGarage();
-      };
-      row.querySelector('button[data-act="foto"]').onclick = (e) => {
+      // Steuerkreuz links/rechts auf der Zeile (menuNavAdjust verstellt das versteckte Feld).
+      row.querySelector('select.gk-rolle-wahl').addEventListener('change', (e) => {
+        garAufAuto = car;
+        setCarRole(car, e.target.value);
+      });
+      links.appendChild(row);
+    });
+    // Aktionen, einspaltig unter den Autos.
+    const plus = document.createElement('div');
+    plus.className = 'opt-row opt-breit gar-a-aktion';
+    const plusKnopf = document.createElement('button');
+    plusKnopf.type = 'button';
+    plusKnopf.className = 'gar-karte-neu primary';
+    plusKnopf.textContent = '+ ' + t('Auto verbinden');
+    plusKnopf.onclick = () => { const c = $('gar-connect'); if (c) c.click(); };
+    plus.appendChild(plusKnopf);
+    links.appendChild(plus);
+    ['gar-stop-ghosts', 'gar-go', 'gar-disconnect-all', 'gar-to-cockpit'].forEach((id) => {
+      const z = garAktionsZeile(id);
+      if (z) links.appendChild(z);
+    });
+    // Rechte Seite: das gewaehlte Auto.
+    const car = garAufAuto;
+    if (car) {
+      const kopf = document.createElement('h3');
+      kopf.className = 'gar-a-titel';
+      kopf.setAttribute('data-i18n-skip', '');
+      kopf.textContent = car.alias || car.tag || garageLabel(car);
+      rechts.appendChild(kopf);
+      // Name
+      const zn = document.createElement('div');
+      zn.className = 'opt-row gk-zeile gar-a-name';
+      zn.innerHTML = `<span class="gk-l">${t('Name')}</span>
+        <span class="gk-w car-tag"><button class="car-chip" data-act="color" style="background:${carColor(car).hex};color:${carColor(car).ink}"
+          title="${t('Farbe wählen')}">${car.tagChar || ''}</button>
+        <input class="car-name-in" data-act="alias" type="text" maxlength="18" placeholder="${esc(car.tag || 'Name')}"
+          value="${esc(car.alias || '')}" aria-label="${t('Name für die Rundenübersicht')}"></span>`;
+      rechts.appendChild(zn);
+      const nf = zn.querySelector('input[data-act="alias"]');
+      nf.addEventListener('input', () => { car.alias = nf.value.trim(); carRemember(car); });
+      nf.addEventListener('change', () => {
+        if (document.activeElement === nf) nf.blur();
+        renderGarage(); renderRaceGrid();
+      });
+      zn.querySelector('button[data-act="color"]').onclick = (e) => { e.stopPropagation(); garFarbWahl(e.currentTarget, car); };
+      // Farbe, Ghost-Tempo, Charakter, Motorsound: die bisherigen Wertzeilen.
+      rechts.appendChild(garageAufZeile(car));
+      // Foto
+      const zf = document.createElement('div');
+      zf.className = 'opt-row gk-zeile';
+      const foto = autoFoto(car);
+      zf.innerHTML = `<span class="gk-l">${t('Foto')}</span><span class="gk-w">
+        <button type="button" class="gk-foto" data-act="foto">${foto ? t('Foto ändern') : t('Foto aufnehmen')}</button>
+        ${foto ? `<button type="button" class="gk-foto-weg" data-act="foto-weg" aria-label="${t('Foto entfernen')}">&#10005;</button>` : ''}</span>`;
+      zf.querySelector('[data-act="foto"]').onclick = (e) => {
         e.stopPropagation();
         garFotoFuer = car;
         const d = $('gar-foto-datei');
         if (d) { d.value = ''; d.click(); }
       };
-      const weg = row.querySelector('button[data-act="foto-weg"]');
+      const weg = zf.querySelector('[data-act="foto-weg"]');
       if (weg) weg.onclick = (e) => { e.stopPropagation(); autoFotoSetzen(car, ''); };
-
-      // Name: bei jedem Tastendruck merken, aber NICHT neu zeichnen - renderGarage()
-      // waehrend des Tippens wuerde das Feld ersetzen und den Schreibstand mitnehmen.
-      // Neu gezeichnet wird erst beim Verlassen des Feldes.
-      const nf = row.querySelector('input[data-act="alias"]');
-      nf.addEventListener('input', () => { car.alias = nf.value.trim(); carRemember(car); });
-      nf.addEventListener('change', () => {
-        // Beim Verlassen rendern - aber erst das Feld verlassen, sonst wuerde die
-        // renderGarage-Sperre (fokussiertes Feld) den Render verschlucken.
-        if (document.activeElement === nf) nf.blur();
-        renderGarage(); renderRaceGrid();
+      rechts.appendChild(zf);
+      // Blinken und Trennen
+      [['blinken', t('Blinken'), () => blinkCar(car)], ['drop', t('Trennen'), () => disconnectCar(car)]].forEach(([act, txt, fn]) => {
+        const z = document.createElement('div');
+        z.className = 'opt-row opt-breit gar-a-aktion';
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.act = act;
+        b.textContent = txt;
+        b.onclick = fn;
+        z.appendChild(b);
+        rechts.appendChild(z);
       });
-      nf.addEventListener('click', (e) => e.stopPropagation());
-      nf.addEventListener('pointerdown', (e) => e.stopPropagation());
-
-      // Farbe: die Auswahl klappt unter dem Klecks auf, acht Farben brauchen keinen Dialog.
-      const chip = row.querySelector('button[data-act="color"]');
-      chip.onclick = (e) => {
-        e.stopPropagation();
-        const offen = document.querySelector('.car-pal');
-        if (offen) offen.remove();
-        const pal = document.createElement('div');
-        pal.className = 'car-pal on';
-        for (const fb of CAR_COLORS) {
-          const b = document.createElement('button');
-          b.style.background = fb.hex;
-          b.className = fb.id === car.colorId ? 'on' : '';
-          const wer = garage.find(c => c !== car && c.colorId === fb.id);
-          b.title = fb.name + (wer ? ' (schon ' + garageLabel(wer) + ')' : '');
-          b.setAttribute('aria-label', b.title);
-          b.onclick = (ev) => {
-            ev.stopPropagation();
-            garageFarbeSetzen(car, fb.id);
-            pal.remove();
-          };
-          pal.appendChild(b);
-        }
-        document.body.appendChild(pal);
-        const r = chip.getBoundingClientRect();
-        pal.style.top = (r.bottom + window.scrollY + 4) + 'px';
-        pal.style.left = Math.min(r.left + window.scrollX,
-          window.scrollX + document.documentElement.clientWidth - pal.offsetWidth - 8) + 'px';
-        const zu = (ev) => {
-          if (pal.contains(ev.target)) return;
-          pal.remove();
-          document.removeEventListener('pointerdown', zu, true);
-        };
-        setTimeout(() => document.addEventListener('pointerdown', zu, true), 0);
-      };
-      list.appendChild(row);
-    });
-    // Leere Karte: ein weiteres Auto verbinden.
-    const plus = document.createElement('button');
-    plus.type = 'button';
-    plus.className = 'gar-karte-neu';
-    plus.innerHTML = '+ <span>AUTO</span>';
-    plus.onclick = () => { const c = $('gar-connect'); if (c) c.click(); };
-    list.appendChild(plus);
-    // Die aufgeklappte Zeile des gewaehlten Autos: Farbe, Ghost-Tempo, Charakter.
-    if (garAufAuto) list.appendChild(garageAufZeile(garAufAuto));
+    } else {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = t('Noch kein Auto verbunden. Links auf „+ Auto verbinden“ tippen.');
+      rechts.appendChild(p);
+    }
+    list.appendChild(links);
+    list.appendChild(rechts);
     refreshGarageGo();
+    garAktionenAbgleichen();
   }
 
   // "Losfahren" is the one button that turns a set of assigned roles into actually driving.
@@ -41097,6 +41373,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       stop.disabled = !fahren.length && !ghosts;
       stop.textContent = fahren.length ? 'Ghosts anhalten' : 'Ghosts starten';
       stop.dataset.lage = fahren.length ? 'anhalten' : 'starten';
+      if (typeof garAktionenAbgleichen === 'function') setTimeout(garAktionenAbgleichen, 0);
       stop.title = fahren.length
         ? fahren.length + ' Ghost' + (fahren.length === 1 ? '' : 's')
           + ' ausrollen lassen und anhalten'
@@ -41372,6 +41649,8 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     const i = garage.indexOf(car);
     if (i >= 0) garage.splice(i, 1);
     if (playerCar === car) playerCar = null;
+    // v0.9.15: auch Auto 2 freigeben, sonst sendete der Herzschlag an ein getrenntes Auto.
+    if (playerCar2 === car) { playerCar2 = null; p2Steer = 0; p2Throttle = 0; }
     renderGarage();
   }
 
@@ -50001,6 +50280,23 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   //      sie und stellt sie von Hand.
 
   window.OMEGA_TEST = {
+    // ---- Garage mit Schein-Autos (v0.9.12): fuer Sichtpruefung und Selbsttests der Garage.
+    // Die Autos haben keine Verbindung (rx/tx fehlen); garageProbeWeg() nimmt sie wieder heraus.
+    garageProbe(n) {
+      const namen = ['Porsche 911', 'BMW M4', 'Mustang', 'Ferrari 296'];
+      const farben = ['gruen', 'gelb', 'blau', 'rot'];
+      for (let i = 0; i < (n || 3); i++) {
+        garage.push({ role: i === 0 ? 'player' : 'ghost', device: { id: 'probe-garage-' + i, name: 'Probe' },
+          alias: namen[i % 4], colorId: farben[i % 4], sim: false, testSenke: [], probe: true });
+      }
+      carRetag(); renderGarage();
+      return garage.filter((c) => c.probe).length;
+    },
+    garageProbeWeg() {
+      for (let i = garage.length - 1; i >= 0; i--) if (garage[i].probe) garage.splice(i, 1);
+      garAufAuto = null; renderGarage();
+      return garage.length;
+    },
     // ---- Menuenavigation (Phase 13, 50b-menu-nav.js) --------------------------------
     //
     // Reine Durchreichen zu den modulinternen Funktionen - keine eigene Logik, damit ein
@@ -51075,8 +51371,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         renderGarage();
         // Seit v0.8.26 Karten: die Rollen stehen als Folge an der Karte (data-rollen), die
         // gewaehlte in data-rolle; die leere "+ AUTO"-Karte und die Aufklappzeile zaehlen nicht.
-        const zeilen = Array.from(($('gar-list') || { children: [] }).children)
-          .filter((z) => z.classList.contains('gar-row'));
+        // Seit v0.9.12 (Variante A) stehen die Zeilen in der linken Spalte.
+        const zeilen = Array.from(($('gar-list') || document).querySelectorAll('.gar-row'));
         const meine = zeilen[zeilen.length - 1];
         const r = meine && meine.querySelector('.gk-rolle');
         const knoepfe = r
@@ -62828,7 +63124,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       const d = ghostAbstandSek(vorn, hinten);
       if (!(d > 0)) schlecht.push('vorn/hinten gibt ' + d + ', nicht positiv');
       const rueck = ghostAbstandSek(hinten, vorn);
-      if (Math.abs(d + rueck) > 1e-9) schlecht.push('nicht antisymmetrisch: ' + d + ' / ' + rueck);
+      // 10 ms Spielraum: beide Aufrufe lesen die Uhr nacheinander, eine Millisekunde dazwischen
+      // verschiebt die Phase (gesehen: 1,6 / -1,601).
+      if (Math.abs(d + rueck) > 0.01) schlecht.push('nicht antisymmetrisch: ' + d + ' / ' + rueck);
       // Zwei Kacheln bei 800 ms je Kachel sind 1,6 s.
       if (Math.abs(d - 1.6) > 0.05) schlecht.push('zwei Kacheln sind ' + d.toFixed(3) + ' s, nicht 1,6');
       // Ohne Tempo wird nicht geraten.
@@ -69554,7 +69852,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       renderGarage();
       if (!karte()) return { ok: false, mass: 'keine Karte gezeichnet' };
       if (!/linear-gradient/.test(karte().querySelector('.gk-bild').getAttribute('style') || '')) f.push('ohne Foto nicht die Farbe als Bild');
-      if (!$('gar-list').querySelector('.gar-karte-neu')) f.push('keine Karte "+ AUTO"');
+      if (!$('gar-list').querySelector('.gar-karte-neu')) f.push('keine Zeile "+ Auto verbinden"');
+      if (!karte().classList.contains('opt-row') || !karte().querySelector('select.gk-rolle-wahl')) f.push('Auto-Zeile ist keine Optionszeile mit Rollenfeld');
       karte().querySelector('[data-act="rolle"][data-d="1"]').click();
       if (att.role !== 'none') f.push('Rolle vor fuehrt zu ' + att.role + ' statt Aus');
       // Freie Rollen: hat ein anderes Auto "Spieler 1", bietet der Pfeil sie nicht an.
@@ -69571,9 +69870,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       const foto = c.toDataURL('image/jpeg', 0.8);
       if (!autoFotoSetzen(att, foto)) return { skip: true, mass: 'Speicher voll' };
       if (!/url\(/.test(karte().querySelector('.gk-bild').getAttribute('style') || '')) f.push('Foto nicht auf der Karte');
-      if (!karte().querySelector('[data-act="foto-weg"]')) f.push('kein Knopf zum Entfernen');
-      karte().querySelector('[data-act="auf"]').click();
-      const auf = $('gar-list').querySelector('.gk-aufzeile');
+      garAufAuto = att; renderGarage();
+      if (!$('gar-list').querySelector('.gar-a-rechts [data-act="foto-weg"]')) f.push('kein Knopf zum Entfernen');
+      const auf = $('gar-list').querySelector('.gar-a-rechts .gk-aufzeile');
       if (!auf) f.push('Einstellen klappt nichts auf');
       else if (![...auf.querySelectorAll('.gk-l')].some((l) => /Tempo/.test(l.textContent))) f.push('kein Ghost-Tempo in der Aufklappzeile');
       refreshGarageGo();
@@ -69883,6 +70182,102 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Renntyp, Zurueck und Start per Pad, Tauschen ohne zweites Pad harmlos' };
   });
 
+  stAdd('Knockout und Derby: Leben, Schaden, Abschüsse, Ende', () => {
+    const f = [];
+    const merk = { koL: knockoutLeben, koL2: knockoutLeben2, koG: knockoutGeister, koLauf: knockoutLaeuft,
+      dL: derbyLaeuft, dH: derbyHealth, dH2: derbyHealth2, dK: derbyKills, dK2: derbyKills2, dT1: derbyTot1, dT2: derbyTot2,
+      zwei: zweiSpieler, lim: raceLimit, sp: physEngine.state.speedKmh, sp2: physEngine2.state.speedKmh };
+    const geist = { role: 'ghost', ghost: { running: true }, device: { id: 'probe-ko' }, sim: true, testSenke: [] };
+    garage.push(geist);
+    try {
+      // Knockout
+      zweiSpieler = false;
+      knockoutLeben = KO_LEBEN; knockoutGeister = 1; knockoutLaeuft = true;
+      if (knockoutUrteil() !== null) f.push('KO: Urteil am Anfang ' + knockoutUrteil());
+      knockoutLaeuft = false;                       // ohne Rennende pruefen
+      knockoutLeben = 0;
+      if (knockoutUrteil() !== 'geister') f.push('KO: ohne Leben nicht "geister"');
+      zweiSpieler = true; knockoutLeben2 = 1;
+      if (knockoutUrteil() !== null) f.push('KO: Spieler 2 hat noch ein Leben, trotzdem Ende');
+      knockoutGeister = 0;
+      if (knockoutUrteil() !== 'menschen') f.push('KO: alle Geister raus, nicht "menschen"');
+      // Derby
+      derbyLaeuft = true; zweiSpieler = false; raceLimit = 2;
+      derbyHealth = DERBY_MAX; derbyKills = 0; derbyTot1 = false;
+      geist.ghost.derbyHealth = DERBY_MAX; geist.ghost.derbyAus = false;
+      derbyLaeuft = false;                          // Schaden direkt, ohne derbyPruefen-Ende
+      derbyHealth = Math.max(0, derbyHealth - 20);
+      if (derbyHealth !== 80) f.push('Derby: Schaden falsch');
+      derbyLaeuft = true;
+      if (derbyUrteil() !== null) f.push('Derby: Ende ohne Grund (' + derbyUrteil() + ')');
+      derbyKills = 2;
+      if (derbyUrteil() !== 'p1') f.push('Derby: Kill-Ziel erreicht, nicht "p1"');
+      derbyKills = 0; derbyHealth = 0;
+      if (derbyUrteil() !== 'geist') f.push('Derby: Spieler 1 bei 0 %, nicht "geist"');
+      if (derbyFrontal(2) !== false) f.push('Derby: Auto 2 nach dem Kreisel von Auto 1');
+    } finally {
+      garage.splice(garage.indexOf(geist), 1);
+      knockoutLeben = merk.koL; knockoutLeben2 = merk.koL2; knockoutGeister = merk.koG; knockoutLaeuft = merk.koLauf;
+      derbyLaeuft = merk.dL; derbyHealth = merk.dH; derbyHealth2 = merk.dH2; derbyKills = merk.dK; derbyKills2 = merk.dK2;
+      derbyTot1 = merk.dT1; derbyTot2 = merk.dT2; zweiSpieler = merk.zwei; raceLimit = merk.lim;
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Leben/Ende, Schaden, Kill-Ziel, 0 %, Kreisel je Auto' };
+  });
+
+  stAdd('Challenges: Gold ist erreichbar (nicht schneller als die Mindestrunde)', () => {
+    const f = [];
+    for (const def of CH_ALLE) {
+      const s = chSterneSchwellen(def);
+      const min = chMinRundeMs(def);
+      if (!(s.gold >= min)) f.push(def.name + ': Gold ' + s.gold + ' ms < Mindestrunde ' + min + ' ms');
+      if (!(s.silber >= s.gold)) f.push(def.name + ': Silber schneller als Gold');
+    }
+    return { ok: !f.length, mass: f.length ? f.slice(0, 6).join('; ') : CH_ALLE.length + ' Strecken: Gold ≥ Mindestrunde, Silber ≥ Gold' };
+  });
+
+  stAdd('Speichern: Preset je Menü (geändert, Werk, eigenes) und Profilwechsel', () => {
+    const f = [];
+    const b = MNP_BEREICHE.find((x) => x.id === 'ghosts');
+    const merkMp = localStorage.getItem(MNP_STORE), merkPr = localStorage.getItem(PROFIL_STORE);
+    const el = $('ghost-speed');
+    if (!el || !document.querySelector('.menu-preset[data-mp="ghosts"]')) return { ok: false, mass: 'Preset-Zeile oder ghost-speed fehlt' };
+    const merkWert = el.value;
+    try {
+      // Eigenes Preset mit einem anderen Wert ablegen und waehlen.
+      const s = mnpLesenStore();
+      const w = mnpWerteLesen(b);
+      w['ghost-speed'] = +el.min + (+el.step || 0.01) * 2;
+      mnpBereich(s, 'ghosts').eigene['Probe'] = w;
+      mnpSchreibenStore(s);
+      mnpWaehlen(b, 'Probe');
+      if (Math.abs(+el.value - w['ghost-speed']) > 1e-9) f.push('eigenes Preset nicht angewandt');
+      presetSet('ghost-speed', +el.max);
+      mnpZeichnen(b);
+      if (!/geändert/.test(document.querySelector('.menu-preset[data-mp="ghosts"] .mp-geaendert').textContent)) f.push('"geändert" fehlt');
+      mnpWaehlen(b, '*werk');
+      if (String(el.value) !== String(el.defaultValue)) f.push('Werkseinstellung nicht gesetzt (' + el.value + ' statt ' + el.defaultValue + ')');
+      // Profil: neues Profil mit anderem Wert, zurueckwechseln stellt den alten her.
+      localStorage.removeItem(PROFIL_STORE);
+      const vorher = el.value;
+      const p = profilLesen();
+      p.profile[p.aktiv] = profilStand();
+      p.profile['Probe2'] = profilStand();
+      profilSchreiben(p);
+      profilWechseln('Probe2');
+      presetSet('ghost-speed', +el.max);
+      profilWechseln('Standard');
+      if (String(el.value) !== String(vorher)) f.push('Profilwechsel stellt nicht her (' + el.value + ' statt ' + vorher + ')');
+      profilWechseln('Probe2');
+      if (String(el.value) !== String(el.max)) f.push('Profil "Probe2" hat seinen Wert nicht behalten');
+    } finally {
+      const z = (k, v) => { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); };
+      z(MNP_STORE, merkMp); z(PROFIL_STORE, merkPr);
+      presetSet('ghost-speed', merkWert);
+      MNP_BEREICHE.forEach(mnpZeichnen); profilZeichnen();
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'eigenes/Werk/geändert, Profil hin und zurück' };
+  });
+
   stAdd('Editor: Raum-Rechteck sichtbar, Strecke darin verschiebbar, R3 zentriert', () => {
     const f = [];
     let merkRaum = null, merkV = null;
@@ -69915,7 +70310,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
 
   stAdd('Auswahl mit wenigen Werten: ◀ Wert ▶ schaltet das versteckte Feld', () => {
     const f = [];
-    const sel = document.querySelector('.opt-row select[data-blaettern]');
+    const sel = document.querySelector('.opt-row select.ob-versteckt');
     if (!sel) return { ok: false, mass: 'kein umgebautes Auswahlfeld gefunden' };
     const box = sel.nextElementSibling;
     if (!box || !box.classList.contains('opt-blaettern')) return { ok: false, mass: 'Pfeile fehlen bei ' + sel.id };
@@ -69933,7 +70328,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       sel.removeEventListener('change', zaehl);
       if (sel.selectedIndex !== vorher) { sel.selectedIndex = vorher; sel.dispatchEvent(new Event('change', { bubbles: true })); }
     }
-    const n = document.querySelectorAll('.opt-row select[data-blaettern]').length;
+    const n = document.querySelectorAll('.opt-row select.ob-versteckt').length;
     return { ok: !f.length, mass: f.length ? f.join('; ') : n + ' Felder umgebaut, ' + sel.id + ' geprueft' };
   });
 
@@ -78810,6 +79205,369 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
 
   optInfoEinrichten();
 
+
+  // ============================ PRESETS JE MENUE UND PROFILE (v0.9.14) ============================
+  //
+  // BESTELLT: "mach Vorschlaege fuer ein Speicherungssystem, je Menue (Fahrgefuehl,
+  // Tastenbelegung), mit Presets und Namen zum Speichern" und (Familie) "ob es nicht Sinn macht,
+  // ein globales Profil zu erstellen". Abgesegnet am Mock-up mockup/speichern.html.
+  //
+  // DREI EBENEN:
+  //   1. Profil (global): wer spielt. Ein Profil ist ein vollstaendiger Stand aller Menues und der
+  //      Tastenbelegung. Wechsel unter Optionen > System.
+  //   2. Preset je Menue: ein benannter Stand fuer GENAU EIN Menue, oben auf jeder Seite.
+  //   3. Geraetedaten (Autos, Strecken, Statistiken, Sprache): gehoeren keinem Profil.
+  //
+  // Alles speichert sich weiterhin von selbst (98b-sicherung.js). Ein Preset aendert nichts an
+  // dieser Selbstsicherung - es ist nur ein benannter Stand, zu dem man wechseln kann.
+
+  const MNP_STORE = 'chc.menupresets.v1';
+  const PROFIL_STORE = 'chc.profile.v1';
+  // Die Menues. root: das Element, dessen Optionszeilen zum Preset gehoeren.
+  const MNP_BEREICHE = [
+    { id: 'general', root: 'sub-opt-general', titel: 'Allgemein' },
+    { id: 'feel', root: 'sub-opt-feel', titel: 'Fahrgefühl', werks: true },
+    { id: 'sound', root: 'sub-opt-sound', titel: 'Ton' },
+    { id: 'ghosts', root: 'sub-opt-ghosts', titel: 'Autonome Gegner' },
+    { id: 'pad', root: 'sub-opt-pad', titel: 'Controller', pad: true },
+    { id: 'race', root: 'tab-control', titel: 'Renneinstellungen' },
+  ];
+  function mnpLesenStore() {
+    try { const s = JSON.parse(localStorage.getItem(MNP_STORE) || '{}'); return s && typeof s === 'object' ? s : {}; }
+    catch (e) { return {}; }
+  }
+  function mnpSchreibenStore(s) {
+    try { localStorage.setItem(MNP_STORE, JSON.stringify(s)); } catch (e) { /* voll oder privat */ }
+  }
+  function mnpBereich(s, id) {
+    if (!s[id] || typeof s[id] !== 'object') s[id] = { eigene: {}, aktiv: null };
+    if (!s[id].eigene) s[id].eigene = {};
+    return s[id];
+  }
+  function mnpRegler(b) {
+    const root = $(b.root);
+    if (!root) return [];
+    return [...root.querySelectorAll('.opt-row input[id]:not([type=file]):not([type=button]):not([data-preset-skip]), '
+      + '.opt-row select[id]:not([data-preset-skip])')];
+  }
+  function mnpWert(el) { return el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? +el.value : el.value; }
+  function mnpWerteLesen(b) {
+    if (b.pad) return { b1: JSON.parse(JSON.stringify(bindings)), b2: JSON.parse(JSON.stringify(bindings2)) };
+    const o = {};
+    for (const el of mnpRegler(b)) o[el.id] = mnpWert(el);
+    return o;
+  }
+  function mnpWerteAnwenden(b, w) {
+    if (!w) return 0;
+    if (b.pad) {
+      if (w.b1) { bindings = resolveBindingCollisions(migrateBindings({ ...DEFAULT_BINDINGS, ...w.b1 })); delete bindings.__kollisionen; saveBindings(); }
+      if (w.b2) { bindings2 = resolveBindingCollisions({ ...DEFAULT_BINDINGS2, ...w.b2 }, DEFAULT_BINDINGS2); delete bindings2.__kollisionen; saveBindings2(); }
+      if (typeof renderBindTable === 'function') renderBindTable();
+      return 1;
+    }
+    let n = 0;
+    for (const [id, v] of Object.entries(w)) if (presetSet(id, v)) n++;
+    return n;
+  }
+  // Werkseinstellung eines Menues: die Werte, mit denen das Markup ausgeliefert wird.
+  function mnpWerksWerte(b) {
+    if (b.pad) return { b1: { ...DEFAULT_BINDINGS }, b2: { ...DEFAULT_BINDINGS2 } };
+    const o = {};
+    for (const el of mnpRegler(b)) {
+      if (el.type === 'checkbox') o[el.id] = el.defaultChecked;
+      else if (el.tagName === 'SELECT') {
+        const d = [...el.options].find((x) => x.defaultSelected) || el.options[0];
+        if (d) o[el.id] = d.value;
+      } else o[el.id] = el.type === 'range' || el.type === 'number' ? +el.defaultValue : el.defaultValue;
+    }
+    return o;
+  }
+  // Die Liste eines Menues: Werkspresets (mit Stern) und eigene. Im Fahrgefuehl sind die
+  // kuratierten Abstimmungen (Arcade, Pro, ...) die Werkspresets, und die bisherige "Eigene
+  // Abstimmung" (chc.presets.v1) erscheint mit - nichts geht verloren.
+  function mnpListe(b) {
+    const s = mnpBereich(mnpLesenStore(), b.id);
+    const l = [];
+    if (b.werks && typeof PRESETS === 'object') {
+      for (const k of Object.keys(PRESETS)) l.push({ key: '*' + k, name: PRESETS[k].label, werks: true, werte: () => PRESETS[k].v });
+    }
+    l.push({ key: '*werk', name: t('Werkseinstellung'), werks: true, werte: () => mnpWerksWerte(b) });
+    for (const n of Object.keys(s.eigene).sort()) l.push({ key: n, name: n, werte: () => s.eigene[n] });
+    if (b.id === 'feel' && typeof presetStoreRead === 'function') {
+      const alt = presetStoreRead();
+      for (const n of Object.keys(alt).sort()) {
+        if (!s.eigene[n]) l.push({ key: 'alt:' + n, name: n, alt: true, werte: () => alt[n] });
+      }
+    }
+    return l;
+  }
+  function mnpGleich(b, w) {
+    if (!w) return false;
+    const jetzt = mnpWerteLesen(b);
+    if (b.pad) return JSON.stringify(jetzt) === JSON.stringify({ b1: { ...DEFAULT_BINDINGS, ...w.b1 }, b2: { ...DEFAULT_BINDINGS2, ...w.b2 } })
+                    || JSON.stringify(jetzt) === JSON.stringify(w);
+    return Object.entries(w).every(([id, v]) => !(id in jetzt) || String(jetzt[id]) === String(v));
+  }
+  function mnpSagen(b, text) {
+    const el = document.querySelector('.mp-status[data-mp="' + b.id + '"]');
+    if (el) el.textContent = text;
+  }
+  function mnpZeichnen(b) {
+    const zeile = document.querySelector('.menu-preset[data-mp="' + b.id + '"]');
+    if (!zeile) return;
+    const s = mnpBereich(mnpLesenStore(), b.id);
+    const liste = mnpListe(b);
+    const sel = zeile.querySelector('select.mp-sel');
+    sel.innerHTML = liste.map((e) => '<option value="' + e.key.replace(/"/g, '&quot;') + '">'
+      + e.name.replace(/</g, '&lt;') + (e.werks ? ' ★' : '') + '</option>').join('');
+    const aktiv = liste.find((e) => e.key === s.aktiv) || null;
+    if (aktiv) sel.value = aktiv.key; else sel.selectedIndex = -1;
+    const name = zeile.querySelector('.mp-name');
+    name.textContent = aktiv ? aktiv.name + (aktiv.werks ? ' ★' : '') : t('– keins –');
+    const geaendert = aktiv && !mnpGleich(b, aktiv.werte());
+    zeile.querySelector('.mp-geaendert').textContent = geaendert ? '· ' + t('geändert') : '';
+    const knoepfe = document.querySelector('.menu-preset-knoepfe[data-mp="' + b.id + '"]');
+    if (knoepfe) {
+      const loesch = knoepfe.querySelector('[data-mp-act="loeschen"]');
+      if (loesch) loesch.disabled = !aktiv || aktiv.werks;
+    }
+  }
+  function mnpWaehlen(b, key) {
+    const e = mnpListe(b).find((x) => x.key === key);
+    if (!e) return;
+    const n = mnpWerteAnwenden(b, e.werte());
+    const s = mnpLesenStore();
+    mnpBereich(s, b.id).aktiv = key;
+    mnpSchreibenStore(s);
+    mnpSagen(b, t('„{n}“ geladen.').replace('{n}', e.name) + (b.pad ? '' : ' ' + t('{k} Regler gesetzt.').replace('{k}', n)));
+    mnpZeichnen(b);
+  }
+  function mnpSpeichernUnter(b, vorschlag) {
+    const name = (prompt(t('Name des Presets'), vorschlag || '') || '').trim().slice(0, 40);
+    if (!name) return;
+    const s = mnpLesenStore();
+    const ber = mnpBereich(s, b.id);
+    ber.eigene[name] = mnpWerteLesen(b);
+    ber.aktiv = name;
+    mnpSchreibenStore(s);
+    mnpSagen(b, t('„{n}“ gespeichert.').replace('{n}', name));
+    mnpZeichnen(b);
+  }
+  function mnpSpeichern(b) {
+    const s = mnpLesenStore();
+    const ber = mnpBereich(s, b.id);
+    const aktiv = mnpListe(b).find((e) => e.key === ber.aktiv);
+    if (!aktiv || aktiv.werks || aktiv.alt) { mnpSpeichernUnter(b, aktiv && !aktiv.werks ? aktiv.name : ''); return; }
+    ber.eigene[aktiv.key] = mnpWerteLesen(b);
+    mnpSchreibenStore(s);
+    mnpSagen(b, t('„{n}“ gespeichert.').replace('{n}', aktiv.name));
+    mnpZeichnen(b);
+  }
+  function mnpLoeschen(b) {
+    const s = mnpLesenStore();
+    const ber = mnpBereich(s, b.id);
+    const aktiv = mnpListe(b).find((e) => e.key === ber.aktiv);
+    if (!aktiv || aktiv.werks) return;
+    konsoleFrage(t('Preset löschen?'), t('„{n}“ wird gelöscht. Die aktuellen Einstellungen bleiben, wie sie sind.').replace('{n}', aktiv.name),
+      [[t('Löschen'), () => {
+        const s2 = mnpLesenStore();
+        const b2 = mnpBereich(s2, b.id);
+        if (aktiv.alt && typeof presetStoreRead === 'function') {
+          const alt = presetStoreRead(); delete alt[aktiv.name]; presetStoreWrite(alt);
+          if (typeof presetStoreList === 'function') presetStoreList();
+        } else delete b2.eigene[aktiv.key];
+        b2.aktiv = null;
+        mnpSchreibenStore(s2);
+        mnpSagen(b, t('„{n}“ gelöscht.').replace('{n}', aktiv.name));
+        mnpZeichnen(b);
+      }], [t('Abbrechen'), null]]);
+  }
+  // Die Zeilen bauen: eine Preset-Zeile (◀ Name ▶, Steuerkreuz links/rechts waehlt) und drei
+  // Knopfzeilen nebeneinander. data-preset-skip und ohne id: sie gehoeren selbst zu keinem Preset
+  // und werden nicht selbstgesichert.
+  function mnpZeilenBauen(b) {
+    const root = $(b.root);
+    if (!root || root.querySelector('.menu-preset')) return;
+    const box = document.createElement('div');
+    box.className = 'menu-preset-box';
+    box.innerHTML = `
+      <div class="opt-row menu-preset" data-mp="${b.id}">
+        <div class="opt-label">${t('Preset')} <span class="wip-tag">${t('experimentell')}</span><small>${t('Ein benannter Stand nur für dieses Menü. ◀ ▶ wechselt sofort. „geändert“ heißt: seit dem Laden verstellt – gespeichert ist es trotzdem (alles speichert sich von selbst), „Speichern“ schreibt es ins Preset zurück. ★ = Werkspreset.')}</small></div>
+        <span class="mp-wahl"><button type="button" class="mp-pf" data-d="-1" aria-label="${t('zurück')}">&#9664;</button>
+          <b class="mp-name" data-i18n-skip></b><span class="mp-geaendert" data-i18n-skip></span>
+          <button type="button" class="mp-pf" data-d="1" aria-label="${t('weiter')}">&#9654;</button></span>
+        <select class="mp-sel" hidden data-preset-skip data-blaettern="1" aria-label="${t('Preset')}"></select>
+      </div>
+      <div class="menu-preset-knoepfe" data-mp="${b.id}">
+        <div class="opt-row opt-breit"><button type="button" data-mp-act="speichern">${t('Speichern')}</button></div>
+        <div class="opt-row opt-breit"><button type="button" data-mp-act="unter">${t('Speichern unter …')}</button></div>
+        <div class="opt-row opt-breit"><button type="button" data-mp-act="loeschen">${t('Löschen')}</button></div>
+      </div>
+      <div class="muted mp-status" data-mp="${b.id}" data-i18n-skip></div>`;
+    // Nach der Ueberschrift (und dem Zurueck-Knopf) einsetzen.
+    const h = root.querySelector('h2');
+    if (h && h.parentNode === root) h.insertAdjacentElement('afterend', box);
+    else root.insertBefore(box, root.firstChild);
+    const sel = box.querySelector('select.mp-sel');
+    sel.addEventListener('change', () => mnpWaehlen(b, sel.value));
+    box.querySelectorAll('.mp-pf').forEach((p) => p.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const n = sel.options.length;
+      if (!n) return;
+      const i = sel.selectedIndex < 0 ? (+p.dataset.d > 0 ? 0 : n - 1) : ((sel.selectedIndex + +p.dataset.d) % n + n) % n;
+      sel.selectedIndex = i;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }));
+    box.querySelector('[data-mp-act="speichern"]').onclick = () => mnpSpeichern(b);
+    box.querySelector('[data-mp-act="unter"]').onclick = () => mnpSpeichernUnter(b, '');
+    box.querySelector('[data-mp-act="loeschen"]').onclick = () => mnpLoeschen(b);
+    // "geaendert" nachfuehren, sobald im Menue etwas verstellt wird.
+    let faellig = null;
+    const nach = (e) => {
+      if (e.target && e.target.closest && e.target.closest('.menu-preset-box')) return;
+      clearTimeout(faellig);
+      faellig = setTimeout(() => mnpZeichnen(b), 250);
+    };
+    root.addEventListener('input', nach);
+    root.addEventListener('change', nach);
+    mnpZeichnen(b);
+  }
+  MNP_BEREICHE.forEach(mnpZeilenBauen);
+  if (typeof i18nOnLangChange === 'function') i18nOnLangChange(() => MNP_BEREICHE.forEach(mnpZeichnen));
+  // Die alte Ablage im Fahrgefuehl ("Oder auf diesem Geraet ablegen") ist jetzt die Preset-Zeile
+  // oben; ihre Eintraege stehen dort in der Liste. Die Knoepfe bleiben im Dokument (Tests,
+  // Garage), werden aber nicht mehr gezeigt.
+  (function () {
+    const n = $('preset-store-name');
+    const zeile = n && n.closest('.row');
+    if (zeile) { zeile.hidden = true; const p = zeile.previousElementSibling; if (p && p.tagName === 'P') p.hidden = true; }
+  })();
+
+  // ---- PROFILE ----------------------------------------------------------------------------
+  // Ein Profil = alle Regler (dieselbe Auswahl wie die Selbstsicherung), die Tastenbelegung beider
+  // Spieler und welches Preset je Menue aktiv war. Gewechselt wird so: den jetzigen Stand ins
+  // aktive Profil schreiben, dann den des Ziels anwenden.
+  function profilLesen() {
+    let p = null;
+    try { p = JSON.parse(localStorage.getItem(PROFIL_STORE) || 'null'); } catch (e) { /* kaputt */ }
+    if (!p || typeof p !== 'object' || !p.profile) p = { aktiv: 'Standard', profile: {} };
+    if (!p.profile[p.aktiv]) p.profile[p.aktiv] = null;   // noch kein Stand gemerkt
+    return p;
+  }
+  function profilSchreiben(p) {
+    try { localStorage.setItem(PROFIL_STORE, JSON.stringify(p)); } catch (e) { /* voll */ }
+  }
+  function profilStand() {
+    const mp = mnpLesenStore();
+    const aktivJe = {};
+    for (const b of MNP_BEREICHE) aktivJe[b.id] = mnpBereich(mp, b.id).aktiv;
+    return { regler: sicherungReglerLesen(), b1: JSON.parse(JSON.stringify(bindings)),
+             b2: JSON.parse(JSON.stringify(bindings2)), menue: aktivJe };
+  }
+  function profilAnwenden(stand) {
+    if (!stand) return;
+    for (const [id, v] of Object.entries(stand.regler || {})) presetSet(id, v);
+    mnpWerteAnwenden(MNP_BEREICHE.find((b) => b.pad), { b1: stand.b1, b2: stand.b2 });
+    const mp = mnpLesenStore();
+    for (const b of MNP_BEREICHE) mnpBereich(mp, b.id).aktiv = (stand.menue || {})[b.id] || null;
+    mnpSchreibenStore(mp);
+    MNP_BEREICHE.forEach(mnpZeichnen);
+  }
+  function profilWechseln(name) {
+    const p = profilLesen();
+    if (name === p.aktiv || !(name in p.profile)) return;
+    p.profile[p.aktiv] = profilStand();
+    const ziel = p.profile[name];
+    p.aktiv = name;
+    profilSchreiben(p);
+    if (ziel) profilAnwenden(ziel);
+    profilZeichnen();
+    showHudToast(t('Profil „{n}“').replace('{n}', name));
+  }
+  function profilNeu() {
+    const name = (prompt(t('Name des neuen Profils'), '') || '').trim().slice(0, 24);
+    if (!name) return;
+    const p = profilLesen();
+    if (name in p.profile) { showHudToast(t('Das Profil gibt es schon.')); return; }
+    p.profile[p.aktiv] = profilStand();
+    p.profile[name] = profilStand();      // Kopie des jetzigen Stands
+    p.aktiv = name;
+    profilSchreiben(p);
+    profilZeichnen();
+  }
+  function profilUmbenennen() {
+    const p = profilLesen();
+    const name = (prompt(t('Neuer Name für „{n}“').replace('{n}', p.aktiv), p.aktiv) || '').trim().slice(0, 24);
+    if (!name || name === p.aktiv || name in p.profile) return;
+    p.profile[name] = p.profile[p.aktiv];
+    delete p.profile[p.aktiv];
+    p.aktiv = name;
+    profilSchreiben(p);
+    profilZeichnen();
+  }
+  function profilLoeschen() {
+    const p = profilLesen();
+    const namen = Object.keys(p.profile);
+    if (namen.length < 2) { showHudToast(t('Das letzte Profil bleibt.')); return; }
+    konsoleFrage(t('Profil löschen?'), t('„{n}“ wird gelöscht, die App wechselt zum nächsten Profil.').replace('{n}', p.aktiv),
+      [[t('Löschen'), () => {
+        const q = profilLesen();
+        const weg = q.aktiv;
+        const ziel = Object.keys(q.profile).find((n) => n !== weg);
+        delete q.profile[weg];
+        q.aktiv = ziel;
+        profilSchreiben(q);
+        if (q.profile[ziel]) profilAnwenden(q.profile[ziel]);
+        profilZeichnen();
+      }], [t('Abbrechen'), null]]);
+  }
+  function profilZeichnen() {
+    const zeile = document.querySelector('.profil-zeile');
+    if (!zeile) return;
+    const p = profilLesen();
+    const sel = zeile.querySelector('select');
+    const namen = Object.keys(p.profile).sort();
+    sel.innerHTML = namen.map((n) => '<option>' + n.replace(/</g, '&lt;') + '</option>').join('');
+    sel.value = p.aktiv;
+    zeile.querySelector('.mp-name').textContent = p.aktiv;
+  }
+  (function profilBauen() {
+    const root = $('sub-opt-system');
+    if (!root || root.querySelector('.profil-zeile')) return;
+    const box = document.createElement('div');
+    box.className = 'menu-preset-box profil-box';
+    box.innerHTML = `
+      <div class="opt-row profil-zeile">
+        <div class="opt-label">${t('Profil')} <span class="wip-tag">${t('experimentell')}</span><small>${t('Wer spielt? Ein Profil merkt sich alle Einstellungen, die Tastenbelegung und das Preset je Menü. Autos, Strecken und Statistiken gehören keinem Profil, sie gelten immer.')}</small></div>
+        <span class="mp-wahl"><button type="button" class="mp-pf" data-d="-1" aria-label="${t('zurück')}">&#9664;</button>
+          <b class="mp-name" data-i18n-skip></b>
+          <button type="button" class="mp-pf" data-d="1" aria-label="${t('weiter')}">&#9654;</button></span>
+        <select hidden data-preset-skip data-blaettern="1" aria-label="${t('Profil')}"></select>
+      </div>
+      <div class="menu-preset-knoepfe">
+        <div class="opt-row opt-breit"><button type="button" data-pr="neu">${t('Neues Profil')}</button></div>
+        <div class="opt-row opt-breit"><button type="button" data-pr="um">${t('Umbenennen')}</button></div>
+        <div class="opt-row opt-breit"><button type="button" data-pr="weg">${t('Löschen')}</button></div>
+      </div>`;
+    const h = root.querySelector('h2');
+    if (h && h.parentNode === root) h.insertAdjacentElement('afterend', box); else root.insertBefore(box, root.firstChild);
+    const sel = box.querySelector('select');
+    sel.addEventListener('change', () => profilWechseln(sel.value));
+    box.querySelectorAll('.mp-pf').forEach((pf) => pf.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const n = sel.options.length;
+      if (n < 2) return;
+      sel.selectedIndex = ((sel.selectedIndex + +pf.dataset.d) % n + n) % n;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }));
+    box.querySelector('[data-pr="neu"]').onclick = profilNeu;
+    box.querySelector('[data-pr="um"]').onclick = profilUmbenennen;
+    box.querySelector('[data-pr="weg"]').onclick = profilLoeschen;
+    profilZeichnen();
+  })();
+  // Die neuen Zeilen haben eine Erklaerung im <small>: in den Info-Knopf damit (wie alle anderen,
+  // 98c-opt-info.js laeuft schon vorher und ist wiederholbar).
+  if (typeof optInfoEinrichten === 'function') optInfoEinrichten();
 
   // ---- ENDE DES GEMEINSAMEN GUELTIGKEITSBEREICHS --------------------------------
   //

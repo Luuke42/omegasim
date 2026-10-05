@@ -3518,7 +3518,9 @@
       const d = ghostAbstandSek(vorn, hinten);
       if (!(d > 0)) schlecht.push('vorn/hinten gibt ' + d + ', nicht positiv');
       const rueck = ghostAbstandSek(hinten, vorn);
-      if (Math.abs(d + rueck) > 1e-9) schlecht.push('nicht antisymmetrisch: ' + d + ' / ' + rueck);
+      // 10 ms Spielraum: beide Aufrufe lesen die Uhr nacheinander, eine Millisekunde dazwischen
+      // verschiebt die Phase (gesehen: 1,6 / -1,601).
+      if (Math.abs(d + rueck) > 0.01) schlecht.push('nicht antisymmetrisch: ' + d + ' / ' + rueck);
       // Zwei Kacheln bei 800 ms je Kachel sind 1,6 s.
       if (Math.abs(d - 1.6) > 0.05) schlecht.push('zwei Kacheln sind ' + d.toFixed(3) + ' s, nicht 1,6');
       // Ohne Tempo wird nicht geraten.
@@ -10244,7 +10246,8 @@
       renderGarage();
       if (!karte()) return { ok: false, mass: 'keine Karte gezeichnet' };
       if (!/linear-gradient/.test(karte().querySelector('.gk-bild').getAttribute('style') || '')) f.push('ohne Foto nicht die Farbe als Bild');
-      if (!$('gar-list').querySelector('.gar-karte-neu')) f.push('keine Karte "+ AUTO"');
+      if (!$('gar-list').querySelector('.gar-karte-neu')) f.push('keine Zeile "+ Auto verbinden"');
+      if (!karte().classList.contains('opt-row') || !karte().querySelector('select.gk-rolle-wahl')) f.push('Auto-Zeile ist keine Optionszeile mit Rollenfeld');
       karte().querySelector('[data-act="rolle"][data-d="1"]').click();
       if (att.role !== 'none') f.push('Rolle vor fuehrt zu ' + att.role + ' statt Aus');
       // Freie Rollen: hat ein anderes Auto "Spieler 1", bietet der Pfeil sie nicht an.
@@ -10261,9 +10264,9 @@
       const foto = c.toDataURL('image/jpeg', 0.8);
       if (!autoFotoSetzen(att, foto)) return { skip: true, mass: 'Speicher voll' };
       if (!/url\(/.test(karte().querySelector('.gk-bild').getAttribute('style') || '')) f.push('Foto nicht auf der Karte');
-      if (!karte().querySelector('[data-act="foto-weg"]')) f.push('kein Knopf zum Entfernen');
-      karte().querySelector('[data-act="auf"]').click();
-      const auf = $('gar-list').querySelector('.gk-aufzeile');
+      garAufAuto = att; renderGarage();
+      if (!$('gar-list').querySelector('.gar-a-rechts [data-act="foto-weg"]')) f.push('kein Knopf zum Entfernen');
+      const auf = $('gar-list').querySelector('.gar-a-rechts .gk-aufzeile');
       if (!auf) f.push('Einstellen klappt nichts auf');
       else if (![...auf.querySelectorAll('.gk-l')].some((l) => /Tempo/.test(l.textContent))) f.push('kein Ghost-Tempo in der Aufklappzeile');
       refreshGarageGo();
@@ -10573,6 +10576,102 @@
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Renntyp, Zurueck und Start per Pad, Tauschen ohne zweites Pad harmlos' };
   });
 
+  stAdd('Knockout und Derby: Leben, Schaden, Abschüsse, Ende', () => {
+    const f = [];
+    const merk = { koL: knockoutLeben, koL2: knockoutLeben2, koG: knockoutGeister, koLauf: knockoutLaeuft,
+      dL: derbyLaeuft, dH: derbyHealth, dH2: derbyHealth2, dK: derbyKills, dK2: derbyKills2, dT1: derbyTot1, dT2: derbyTot2,
+      zwei: zweiSpieler, lim: raceLimit, sp: physEngine.state.speedKmh, sp2: physEngine2.state.speedKmh };
+    const geist = { role: 'ghost', ghost: { running: true }, device: { id: 'probe-ko' }, sim: true, testSenke: [] };
+    garage.push(geist);
+    try {
+      // Knockout
+      zweiSpieler = false;
+      knockoutLeben = KO_LEBEN; knockoutGeister = 1; knockoutLaeuft = true;
+      if (knockoutUrteil() !== null) f.push('KO: Urteil am Anfang ' + knockoutUrteil());
+      knockoutLaeuft = false;                       // ohne Rennende pruefen
+      knockoutLeben = 0;
+      if (knockoutUrteil() !== 'geister') f.push('KO: ohne Leben nicht "geister"');
+      zweiSpieler = true; knockoutLeben2 = 1;
+      if (knockoutUrteil() !== null) f.push('KO: Spieler 2 hat noch ein Leben, trotzdem Ende');
+      knockoutGeister = 0;
+      if (knockoutUrteil() !== 'menschen') f.push('KO: alle Geister raus, nicht "menschen"');
+      // Derby
+      derbyLaeuft = true; zweiSpieler = false; raceLimit = 2;
+      derbyHealth = DERBY_MAX; derbyKills = 0; derbyTot1 = false;
+      geist.ghost.derbyHealth = DERBY_MAX; geist.ghost.derbyAus = false;
+      derbyLaeuft = false;                          // Schaden direkt, ohne derbyPruefen-Ende
+      derbyHealth = Math.max(0, derbyHealth - 20);
+      if (derbyHealth !== 80) f.push('Derby: Schaden falsch');
+      derbyLaeuft = true;
+      if (derbyUrteil() !== null) f.push('Derby: Ende ohne Grund (' + derbyUrteil() + ')');
+      derbyKills = 2;
+      if (derbyUrteil() !== 'p1') f.push('Derby: Kill-Ziel erreicht, nicht "p1"');
+      derbyKills = 0; derbyHealth = 0;
+      if (derbyUrteil() !== 'geist') f.push('Derby: Spieler 1 bei 0 %, nicht "geist"');
+      if (derbyFrontal(2) !== false) f.push('Derby: Auto 2 nach dem Kreisel von Auto 1');
+    } finally {
+      garage.splice(garage.indexOf(geist), 1);
+      knockoutLeben = merk.koL; knockoutLeben2 = merk.koL2; knockoutGeister = merk.koG; knockoutLaeuft = merk.koLauf;
+      derbyLaeuft = merk.dL; derbyHealth = merk.dH; derbyHealth2 = merk.dH2; derbyKills = merk.dK; derbyKills2 = merk.dK2;
+      derbyTot1 = merk.dT1; derbyTot2 = merk.dT2; zweiSpieler = merk.zwei; raceLimit = merk.lim;
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Leben/Ende, Schaden, Kill-Ziel, 0 %, Kreisel je Auto' };
+  });
+
+  stAdd('Challenges: Gold ist erreichbar (nicht schneller als die Mindestrunde)', () => {
+    const f = [];
+    for (const def of CH_ALLE) {
+      const s = chSterneSchwellen(def);
+      const min = chMinRundeMs(def);
+      if (!(s.gold >= min)) f.push(def.name + ': Gold ' + s.gold + ' ms < Mindestrunde ' + min + ' ms');
+      if (!(s.silber >= s.gold)) f.push(def.name + ': Silber schneller als Gold');
+    }
+    return { ok: !f.length, mass: f.length ? f.slice(0, 6).join('; ') : CH_ALLE.length + ' Strecken: Gold ≥ Mindestrunde, Silber ≥ Gold' };
+  });
+
+  stAdd('Speichern: Preset je Menü (geändert, Werk, eigenes) und Profilwechsel', () => {
+    const f = [];
+    const b = MNP_BEREICHE.find((x) => x.id === 'ghosts');
+    const merkMp = localStorage.getItem(MNP_STORE), merkPr = localStorage.getItem(PROFIL_STORE);
+    const el = $('ghost-speed');
+    if (!el || !document.querySelector('.menu-preset[data-mp="ghosts"]')) return { ok: false, mass: 'Preset-Zeile oder ghost-speed fehlt' };
+    const merkWert = el.value;
+    try {
+      // Eigenes Preset mit einem anderen Wert ablegen und waehlen.
+      const s = mnpLesenStore();
+      const w = mnpWerteLesen(b);
+      w['ghost-speed'] = +el.min + (+el.step || 0.01) * 2;
+      mnpBereich(s, 'ghosts').eigene['Probe'] = w;
+      mnpSchreibenStore(s);
+      mnpWaehlen(b, 'Probe');
+      if (Math.abs(+el.value - w['ghost-speed']) > 1e-9) f.push('eigenes Preset nicht angewandt');
+      presetSet('ghost-speed', +el.max);
+      mnpZeichnen(b);
+      if (!/geändert/.test(document.querySelector('.menu-preset[data-mp="ghosts"] .mp-geaendert').textContent)) f.push('"geändert" fehlt');
+      mnpWaehlen(b, '*werk');
+      if (String(el.value) !== String(el.defaultValue)) f.push('Werkseinstellung nicht gesetzt (' + el.value + ' statt ' + el.defaultValue + ')');
+      // Profil: neues Profil mit anderem Wert, zurueckwechseln stellt den alten her.
+      localStorage.removeItem(PROFIL_STORE);
+      const vorher = el.value;
+      const p = profilLesen();
+      p.profile[p.aktiv] = profilStand();
+      p.profile['Probe2'] = profilStand();
+      profilSchreiben(p);
+      profilWechseln('Probe2');
+      presetSet('ghost-speed', +el.max);
+      profilWechseln('Standard');
+      if (String(el.value) !== String(vorher)) f.push('Profilwechsel stellt nicht her (' + el.value + ' statt ' + vorher + ')');
+      profilWechseln('Probe2');
+      if (String(el.value) !== String(el.max)) f.push('Profil "Probe2" hat seinen Wert nicht behalten');
+    } finally {
+      const z = (k, v) => { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); };
+      z(MNP_STORE, merkMp); z(PROFIL_STORE, merkPr);
+      presetSet('ghost-speed', merkWert);
+      MNP_BEREICHE.forEach(mnpZeichnen); profilZeichnen();
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'eigenes/Werk/geändert, Profil hin und zurück' };
+  });
+
   stAdd('Editor: Raum-Rechteck sichtbar, Strecke darin verschiebbar, R3 zentriert', () => {
     const f = [];
     let merkRaum = null, merkV = null;
@@ -10605,7 +10704,7 @@
 
   stAdd('Auswahl mit wenigen Werten: ◀ Wert ▶ schaltet das versteckte Feld', () => {
     const f = [];
-    const sel = document.querySelector('.opt-row select[data-blaettern]');
+    const sel = document.querySelector('.opt-row select.ob-versteckt');
     if (!sel) return { ok: false, mass: 'kein umgebautes Auswahlfeld gefunden' };
     const box = sel.nextElementSibling;
     if (!box || !box.classList.contains('opt-blaettern')) return { ok: false, mass: 'Pfeile fehlen bei ' + sel.id };
@@ -10623,7 +10722,7 @@
       sel.removeEventListener('change', zaehl);
       if (sel.selectedIndex !== vorher) { sel.selectedIndex = vorher; sel.dispatchEvent(new Event('change', { bubbles: true })); }
     }
-    const n = document.querySelectorAll('.opt-row select[data-blaettern]').length;
+    const n = document.querySelectorAll('.opt-row select.ob-versteckt').length;
     return { ok: !f.length, mass: f.length ? f.join('; ') : n + ' Felder umgebaut, ' + sel.id + ' geprueft' };
   });
 

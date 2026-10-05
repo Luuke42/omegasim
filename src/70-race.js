@@ -187,7 +187,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       playTone(880, 0.06, 'sine', 0.2);
       setTimeout(() => playTone(1320, 0.09, 'sine', 0.2), 45);
     }
-    showHudToast('Geist raus · noch ' + knockoutGeister + ' Geister');
+    showHudToast(t('Geist raus · noch {n} Geister').replace('{n}', knockoutGeister));
     knockoutPruefen();
   }
   // Ein Mensch verliert ein Leben (Abkommen von der Bahn).
@@ -199,12 +199,18 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     knockoutPruefen();
   }
   // Ende: alle Geister raus -> Sieg; alle Menschen raus -> Niederlage.
-  function knockoutPruefen() {
-    if (!knockoutLaeuft) return;
+  // Die Entscheidung allein, ohne Folgen (v0.9.16, fuer den Selbsttest): null = weiter.
+  function knockoutUrteil() {
     const menschen = (typeof zweiSpieler !== 'undefined' && zweiSpieler) ? 2 : 1;
     const menschenRaus = knockoutLeben <= 0 && (menschen < 2 || knockoutLeben2 <= 0);
-    if (knockoutGeister <= 0) knockoutEnde('menschen');
-    else if (menschenRaus) knockoutEnde('geister');
+    if (knockoutGeister <= 0) return 'menschen';
+    if (menschenRaus) return 'geister';
+    return null;
+  }
+  function knockoutPruefen() {
+    if (!knockoutLaeuft) return;
+    const u = knockoutUrteil();
+    if (u) knockoutEnde(u);
   }
   function knockoutEnde(sieger) {
     if (!knockoutLaeuft || knockoutSieger) return;
@@ -212,14 +218,14 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     knockoutLaeuft = false;
     if (sieger === 'menschen') {
       if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare();
-      showHudToast('Knockout: Menschen gewinnen!');
+      showHudToast(t('Knockout: Menschen gewinnen!'));
     } else {
       if (typeof playTone === 'function') {   // dunkler Abwaertston
         playTone(200, 0.12, 'square', 0.16);
         setTimeout(() => playTone(140, 0.16, 'square', 0.14), 70);
         setTimeout(() => playTone(110, 0.2, 'square', 0.12), 160);
       }
-      showHudToast('Knockout: Geister gewinnen.');
+      showHudToast(t('Knockout: Geister gewinnen.'));
     }
     if (typeof finishRace === 'function') finishRace(false);
   }
@@ -253,21 +259,26 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     car.ghost.derbyAus = true;
     if (typeof stopGhost === 'function') stopGhost(car);
     if (schuetze === 2) derbyKills2++; else derbyKills++;
+    const kills = schuetze === 2 ? derbyKills2 : derbyKills;
     if (typeof playTone === 'function') {   // positiver Ton fuer den Abschuss
       playTone(880, 0.06, 'sine', 0.2);
       setTimeout(() => playTone(1320, 0.09, 'sine', 0.2), 45);
     }
-    showHudToast(t('Geist aus') + ' · Kills ' + derbyKills);
+    // Die Kills dessen, der getroffen hat (v0.9.16; vorher immer die von Spieler 1).
+    showHudToast(t('Geist aus') + ' · ' + (schuetze === 2 ? t('Spieler 2') : t('Spieler 1')) + ' · Kills ' + kills);
     derbyPruefen();
   }
   // Aufprall-Schaden fuer den Spieler (head-on 10 %, sonst 20 %).
   function derbyAufprall(wer) {
     if (!derbyLaeuft) return;
-    const frontal = derbyFrontal();
+    const frontal = derbyFrontal(wer);
     derbySchaden(wer, frontal ? 10 : 20);
   }
   // Head-on, wenn der Gyro stark nach vorne ausschlaegt (x-Achse dominiert). Sonst Seite/Ramme.
-  function derbyFrontal() {
+  // Der Kreisel ist der von Auto 1 (v0.9.16): fuer Auto 2 gilt deshalb immer "Seite" - vorher
+  // entschied dort der Kreisel des falschen Autos.
+  function derbyFrontal(wer) {
+    if (wer === 2) return false;
     if (typeof gyroRaw !== 'undefined' && gyroRaw) {
       return Math.abs(gyroRaw.x) >= Math.abs(gyroRaw.y) * 1.3;
     }
@@ -276,6 +287,11 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // Ende: der Spieler mit den meisten Kills gewinnt. Bei Gleichstand: der mit mehr Health.
   function derbyPruefen() {
     if (!derbyLaeuft) return;
+    const u = derbyUrteil();
+    if (u) derbyEnde(u);
+  }
+  // Die Entscheidung allein, ohne Folgen (v0.9.16, fuer den Selbsttest): null = weiter.
+  function derbyUrteil() {
     const geister = derbyGeisterZaehlen();
     const geistKills = Math.max(0, ...garage.filter(c => c.role === 'ghost' && c.ghost)
       .map(c => c.ghost.derbyKills || 0));
@@ -288,24 +304,25 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // KILLS-ZIEL (v0.8.126, Voreinstellung 1): wer das Ziel erreicht, beendet das Derby sofort.
     const ziel = raceLimit;
     if (ziel > 0) {
-      if (derbyKills >= ziel) { derbyEnde('p1'); return; }
-      if (typeof zweiSpieler !== 'undefined' && zweiSpieler && derbyKills2 >= ziel) { derbyEnde('p2'); return; }
+      if (derbyKills >= ziel) return 'p1';
+      if (typeof zweiSpieler !== 'undefined' && zweiSpieler && derbyKills2 >= ziel) return 'p2';
     }
     if (alleGeister) {
       // Sieger nach Kills (dann Health als Tiebreaker).
-      const k = [['p1', derbyKills, derbyHealth], ['p2', derbyKills2, derbyHealth2]];
+      const k = [['p1', derbyKills, derbyHealth]];
+      if (typeof zweiSpieler !== 'undefined' && zweiSpieler) k.push(['p2', derbyKills2, derbyHealth2]);
       k.sort((a, b) => b[1] - a[1] || b[2] - a[2]);
-      derbyEnde(k[0][0]);
-    } else if (alleMenschen) {
-      derbyEnde('geist');
+      return k[0][0];
     }
+    if (alleMenschen) return 'geist';
+    return null;
   }
   function derbyEnde(sieger) {
     if (!derbyLaeuft || derbySieger) return;
     derbySieger = sieger; derbyLaeuft = false;
-    if (sieger === 'p1') { if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare(); showHudToast('Derby: Spieler 1 gewinnt!'); }
-    else if (sieger === 'p2') { if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare(); showHudToast('Derby: Spieler 2 gewinnt!'); }
-    else { if (typeof playTone === 'function') { playTone(200, 0.12, 'square', 0.16); setTimeout(() => playTone(140, 0.16, 'square', 0.14), 70); setTimeout(() => playTone(110, 0.2, 'square', 0.12), 160); } showHudToast('Derby: Geist gewinnt.'); }
+    if (sieger === 'p1') { if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare(); showHudToast(t('Derby: Spieler 1 gewinnt!')); }
+    else if (sieger === 'p2') { if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare(); showHudToast(t('Derby: Spieler 2 gewinnt!')); }
+    else { if (typeof playTone === 'function') { playTone(200, 0.12, 'square', 0.16); setTimeout(() => playTone(140, 0.16, 'square', 0.14), 70); setTimeout(() => playTone(110, 0.2, 'square', 0.12), 160); } showHudToast(t('Derby: Geist gewinnt.')); }
     if (typeof finishRace === 'function') finishRace(false);
   }
   // ---- DERBY-COCKPIT (v0.8.126) ----
@@ -349,6 +366,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   }
   // Im Derby: nahe Geister werden vom fahrenden Spieler gerammt (sie verlieren 20 % Health).
   const DERBY_RAM_TILES = 4, DERBY_RAM_KMH = 30;
+  const DERBY_TREFFER_MS = 1000;
   function derbyTick() {
     if (!derbyLaeuft || raceState !== 'racing') return;
     const ort = typeof spielerOrtGes === 'function' ? spielerOrtGes() : null;
@@ -357,7 +375,13 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     for (const c of garage) {
       if (c.role !== 'ghost' || !c.ghost || c.ghost.derbyAus) continue;
       const dist = Math.abs(ghostOrtGes(c) - ort);
-      if (dist < DERBY_RAM_TILES && tempo > DERBY_RAM_KMH) derbySchaden(c, 20, 1);
+      // EIN Treffer je Annaeherung (v0.9.16): vorher zog jeder 45-ms-Takt 20 % ab, ein naher
+      // Ghost war nach fuenf Takten (0,2 s) raus. Jetzt hoechstens ein Treffer je Sekunde.
+      const jetzt = Date.now();
+      if (dist < DERBY_RAM_TILES && tempo > DERBY_RAM_KMH && jetzt - (c.ghost.derbyTrefferAt || 0) > DERBY_TREFFER_MS) {
+        c.ghost.derbyTrefferAt = jetzt;
+        derbySchaden(c, 20, 1);
+      }
     }
   }
 

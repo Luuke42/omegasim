@@ -2909,6 +2909,9 @@
     // bevor 70-race.js seine Konstanten angelegt hat (temporale Todeszone beim Laden).
     try {
       if (fruehstartStrafeAktiv(1)) { rawThrottle = 0; rawBrake = Math.max(rawBrake, FRUEHSTART_BREMSE); }
+      // Derby bei 0 % (v0.9.16): das Auto bleibt stehen - vorher wurde nur das Tempo EINMAL auf
+      // null gesetzt, danach fuhr es mit dem Gas weiter.
+      if (typeof derbyLaeuft !== 'undefined' && derbyLaeuft && derbyTot1) { rawThrottle = 0; rawBrake = 1; }
     } catch (e) { /* beim Laden */ }
     // ... und das Brummen an seinem. padRumble() prueft rumbleOn selbst, also steht hier nur
     // die Frage, OB gebrummt werden soll - nicht, ob der Nutzer Vibration will.
@@ -3033,6 +3036,7 @@
     if (offtrackGiltFuer(2)) gas = Math.min(gas, OFFTRACK_GAS);
     try {
       if (fruehstartStrafeAktiv(2)) { gas = 0; bremse = Math.max(bremse, FRUEHSTART_BREMSE); }
+      if (typeof derbyLaeuft !== 'undefined' && derbyLaeuft && derbyTot2) { gas = 0; bremse = 1; }
     } catch (e) { /* beim Laden */ }
     // Und das Rumpeln, an seinen eigenen Pad. Bis v0.6.45 waere es der Pad von Spieler 1
     // gewesen; jetzt hat jeder Stoss eine Adresse.
@@ -3045,7 +3049,7 @@
     }
     const out = physEngine2.update({ steering: lenkung, throttle: gas,
                                      brake: bremse,
-                                     headlights: headlightsOn }, dt);
+                                     headlights: headlightsOn2 }, dt);
     pacejkaRueckmeldung(physEngine2, 2);
     // Der Motorton von Auto 2, aus SEINER Drehzahl - dieselbe Zahl, die seine Anzeige
     // bekommt. Defensiv gerufen, weil 80-sound.js SPAETER gebaut wird: zur Laufzeit ist die
@@ -3110,7 +3114,10 @@
     // Motormodell, nicht je Auto), bekommt aber eine eigene Stereoseite - zwei Motoren im
     // selben Drehzahlband aus einem Lautsprecher klingen wie ein verstimmter Motor.
     if (typeof stimmeZweiSetzen === 'function') stimmeZweiSetzen(zweiSpieler);
-    else {
+    // v0.9.15: das Anhalten stand bis hierher im else-Zweig des Stimmen-Aufrufs - und weil es die
+    // Funktion zur Laufzeit immer gibt, lief es nie: Auto 2 fuhr nach dem Abschalten mit dem
+    // letzten Gas weiter.
+    if (!zweiSpieler) {
       p2Steer = 0; p2Throttle = 0; physOut2Steer = 0; physOut2Throttle = 0;
       // AUSSCHALTEN IST EIN HALTEBEFEHL, und zwar aus einem Grund, der beim Bauen leicht
       // untergeht: writeToCar() schickt nur, was es bekommt. Wird der Modus WAEHREND der

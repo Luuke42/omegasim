@@ -470,7 +470,8 @@
     //                             Rennen ungleich schnell, ohne dass man den Grund sieht.
     if (throttle > 0) throttle *= topSpeedScale;
     throttle *= batteryCompensationScale();
-    if (driftModus) steer = driftGegenlenken(steer);
+    // Kein Drift-Gegenlenken fuer Auto 2 (v0.9.15): driftGegenlenken liest den Kreisel und das
+    // Tempo von AUTO 1 - fuer Auto 2 lenkte es also nach den Daten des falschen Autos.
     // ---- MIT VORAUSBLICK, seit v0.6.46 ---------------------------------------------
     //
     // Hier stand "KEIN VORAUSBLICK, und das ist eine Entscheidung und kein Vergessen" -

@@ -3284,13 +3284,20 @@
   // zoomen". Ein Zoom-Faktor auf die Vorschaukarte; + / - (Tastatur) und Zwei-Finger-Pinch
   // aendern ihn, 0 setzt zurueck. var, weil refreshTrackPreview() schon beim Laden laeuft.
   var editorZoom = 1;
+  // Verschiebung der gezoomten Karte in Bildpunkten (v0.9.16): ab Zoom > 1 ragt sie ueber den
+  // Rand, und ohne Verschieben war der Rest nicht mehr erreichbar.
+  var editorPan = { x: 0, y: 0 };
   function trackZoomAnwenden() {
     const k = document.querySelector('#track-preview-svg .tp-karte');
-    if (k) k.style.transform = editorZoom === 1 ? '' : 'scale(' + editorZoom + ')';
+    if (!k) return;
+    if (editorZoom <= 1) { editorPan = { x: 0, y: 0 }; }
+    k.style.transform = editorZoom === 1 && !editorPan.x && !editorPan.y ? ''
+      : 'translate(' + editorPan.x.toFixed(0) + 'px,' + editorPan.y.toFixed(0) + 'px) scale(' + editorZoom + ')';
   }
   function trackZoom(d) {
     editorZoom = Math.max(0.5, Math.min(3, Math.round((editorZoom + d) * 10) / 10));
     trackZoomAnwenden();
+    if (typeof editorStreckeMerken === 'function') editorStreckeMerken();
   }
   // ---- Editor-Schalter (v0.8.29): Ideallinie, Tastenkuerzel. Je Geraet gemerkt. ----
   // var und nicht let: refreshTrackPreview() laeuft schon beim Laden, und ein let weiter unten
@@ -3585,11 +3592,12 @@
     if (!host) return;
     let a = null, gezogen = false;
     host.addEventListener('pointerdown', (e) => {
-      if (!e.isPrimary || !host.querySelector('.tp-raum')) { a = null; return; }
+      const pan = editorZoom > 1;
+      if (!e.isPrimary || (!pan && !host.querySelector('.tp-raum'))) { a = null; return; }
       const svg = host.querySelector('svg.tp-karte');
       if (!svg) return;
       const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
-      a = { x: e.clientX, y: e.clientY, k: vb && r.width ? vb.width / r.width : 1, id: e.pointerId };
+      a = { x: e.clientX, y: e.clientY, k: vb && r.width ? vb.width / r.width : 1, id: e.pointerId, pan };
       gezogen = false;
     });
     host.addEventListener('pointermove', (e) => {
@@ -3598,10 +3606,22 @@
       if (!gezogen && Math.hypot(dx, dy) < 8) return;
       gezogen = true;
       e.preventDefault();
-      // Finger nach rechts = Strecke nach rechts = Raum nach links.
-      raumRechteckSchieben(-dx * a.k, -dy * a.k);
+      if (a.pan) {
+        // Gezoomt: die Ansicht verschieben.
+        editorPan.x += dx; editorPan.y += dy;
+        trackZoomAnwenden();
+      } else {
+        // Finger nach rechts = Strecke nach rechts = Raum nach links.
+        raumRechteckSchieben(-dx * a.k, -dy * a.k);
+      }
       a.x = e.clientX; a.y = e.clientY;
     });
+    // Mausrad zoomt im Editor-Vollbild (ausserhalb bleibt es Seitenbildlauf).
+    host.addEventListener('wheel', (e) => {
+      if (!document.body.classList.contains('track-fs') && !e.ctrlKey) return;
+      e.preventDefault();
+      trackZoom(e.deltaY < 0 ? 0.1 : -0.1);
+    }, { passive: false });
     const ende = () => { if (a && gezogen) raumSpaeterZeichnen(); a = null; };
     host.addEventListener('pointerup', ende);
     host.addEventListener('pointercancel', () => { a = null; });
@@ -4176,20 +4196,24 @@
   // kommt in den 80 Wochenstrecken nicht vor und bleibt deshalb aussen vor.
 
   // Eine zufaellige Aufteilung von dir*360 auf nc Kurvenlaeufe, jeder ein Vielfaches von 30.
-  function trackZufallRunTurns(dir, nc) {
+  // `schritt` (v0.9.13): 60, wenn keine 30-Grad-Teile im Bestand sind - sonst wuerden Laeufe von
+  // 90 oder 150 Grad gewuerfelt, die sich aus 60-Grad-Kurven nicht bauen lassen (gemessen: drei
+  // Viertel der Versuche scheiterten daran).
+  function trackZufallRunTurns(dir, nc, schritt) {
+    const st = schritt || 30;
     let rem = dir * 360;
     const turns = [];
     for (let i = 0; i < nc - 1; i++) {
       const left = nc - 1 - i;
-      const lo = 30, hi = rem - left * 30;
+      const lo = st, hi = rem - left * st;
       if (hi < lo) return null;
       const choices = [];
-      for (let v = lo; v <= hi; v += 30) choices.push(v);
+      for (let v = lo; v <= hi; v += st) choices.push(v);
       const v = choices[Math.floor(Math.random() * choices.length)];
       turns.push(v);
       rem -= v;
     }
-    if (Math.abs(rem) < 30) return null;
+    if (Math.abs(rem) < st) return null;
     turns.push(rem);
     if (Math.random() < 0.5) {
       for (let i = turns.length - 1; i > 0; i--) {
@@ -4198,6 +4222,37 @@
       }
     }
     return turns;
+  }
+
+  // GEGENLAUF (v0.9.13). GEMELDET: "Streckeneditor: Haarnadelkurven (links-rechts) folgen immer
+  // aufeinander." Alle Laeufe drehten bisher in Fahrtrichtung (Summe +-360); eine Gegen-Haarnadel
+  // kam deshalb nur ueber die Schikane H+J vor - und die steht immer am Stueck. Jetzt wird oft
+  // ein eigener Lauf GEGEN die Fahrtrichtung eingesetzt (180 Grad, wenn die passende Haarnadel
+  // da ist, sonst 60 oder 120), und ein anderer Lauf dreht um denselben Betrag mehr. Wo er
+  // steht, entscheidet das Mischen - die beiden Haarnadeln liegen dann getrennt.
+  function trackZufallGegenlauf(turns, dir, b) {
+    if (Math.random() < 0.15) return;
+    const gegenNadel = dir > 0 ? TILE_TYPE.HAIRPIN_LEFT : TILE_TYPE.HAIRPIN;
+    const gegenKurve = dir > 0 ? [TILE_TYPE.CURVE_LEFT, TILE_TYPE.WEIT_LEFT, TILE_TYPE.KLEIN_LEFT]
+                               : [TILE_TYPE.CURVE_RIGHT, TILE_TYPE.WEIT_RIGHT, TILE_TYPE.KLEIN_RIGHT];
+    const nGegen = gegenKurve.reduce((a, t) => a + Math.max(0, +b[t] || 0), 0);
+    let m = 0;
+    if ((+b[gegenNadel] || 0) > 0 && Math.random() < 0.9) m = 180;
+    else if (nGegen > 0) m = nGegen >= 2 && Math.random() < 0.4 ? 120 : 60;
+    if (!m) return;
+    // Ein eigener Ausgleichslauf (+m, mit 180 meist die gleichsinnige Haarnadel) und der
+    // Gegenlauf (-m), moeglichst NICHT nebeneinander (auch nicht ueber das Rundenende).
+    const plusPos = Math.floor(Math.random() * (turns.length + 1));
+    turns.splice(plusPos, 0, dir * m);
+    const n = turns.length + 1;
+    const frei = [];
+    for (let q = 0; q < n; q++) {
+      // q ist die Einfuegestelle; der neue Lauf steht dann zwischen q-1 und q.
+      const nachbarn = [(q - 1 + turns.length) % turns.length, q % turns.length];
+      if (!nachbarn.includes(plusPos)) frei.push(q);
+    }
+    const q = frei.length ? frei[Math.floor(Math.random() * frei.length)] : Math.floor(Math.random() * n);
+    turns.splice(q, 0, -dir * m);
   }
 
   // Ein Kurvenlauf, dessen Drehungen sich zu `target` addieren - nur gleichsinnige Kacheln,
@@ -4255,7 +4310,11 @@
       const j = Math.floor(Math.random() * (i + 1));
       [patterns[i], patterns[j]] = [patterns[j], patterns[i]];
     }
-    for (const p of patterns) if (p.every(t => avail(t) > 0)) return p;
+    // Die Haarnadel-Schikane (H+J am Stueck) nur noch selten (v0.9.13): die beiden Haarnadeln
+    // sollen meist getrennt liegen, siehe trackZufallGegenlauf.
+    const nadel = (p) => p.includes(TILE_TYPE.HAIRPIN) && p.includes(TILE_TYPE.HAIRPIN_LEFT);
+    for (const p of patterns) if (!nadel(p) && p.every(t => avail(t) > 0)) return p;
+    if (Math.random() < 0.1) for (const p of patterns) if (nadel(p) && p.every(t => avail(t) > 0)) return p;
     return null;
   }
 
@@ -4406,16 +4465,23 @@
     let beste = null, besteAnders = null, besteGleich = null;
     let raumZuKlein = false;
     const letzte = trackZufallCodes.length ? trackZufallCodes[trackZufallCodes.length - 1] : null;
-    const besser = (a, z) => !a || z.rest < a.rest || (z.rest === a.rest && Math.random() < 0.4);
+    // Wenigste uebrige Teile gewinnt; zwei Haarnadeln am Stueck zaehlen dabei wie 1,5 weitere
+    // uebrige Teile (v0.9.13) - getrennte Haarnadeln gehen damit vor, ohne dass Strecken ganz
+    // ohne Haarnadel kuenstlich bevorzugt werden.
+    const wert = (k) => k.rest + (k.nadelPaar ? 1.5 : 0);
+    const besser = (a, z) => !a || wert(z) < wert(a) || (wert(z) === wert(a) && Math.random() < 0.4);
     const startZeit = performance.now();
+    const zufallSchritt = [TILE_TYPE.WEIT_LEFT, TILE_TYPE.WEIT_RIGHT, TILE_TYPE.KLEIN_LEFT, TILE_TYPE.KLEIN_RIGHT]
+      .some((t) => hat(t) > 0) ? 30 : 60;
     for (let versuch = 0; versuch < 400; versuch++) {
       if (performance.now() - startZeit > 3000) break;
       const dir = Math.random() < 0.5 ? 1 : -1;
       const r = Math.random();
       const nc = r < 0.05 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : r < 0.93 ? 4 : 5;
       const used = {};
-      const turns = trackZufallRunTurns(dir, nc);
+      const turns = trackZufallRunTurns(dir, nc, zufallSchritt);
       if (!turns) continue;
+      trackZufallGegenlauf(turns, dir, b);
       const runs = [];
       let gut = true;
       for (const t of turns) {
@@ -4448,7 +4514,10 @@
       if (rot < 0) { raumZuKlein = true; continue; }
       const rest = trackZufallRest(tiles, b);
       const code = trackToCode(tiles, 0);
-      const kandidat = { tiles, rest, code, rot };
+      // Haarnadeln direkt nacheinander (auch ueber das Rundenende)?
+      const nadel = (x) => x.type === TILE_TYPE.HAIRPIN || x.type === TILE_TYPE.HAIRPIN_LEFT;
+      const nadelPaar = tiles.some((x, i) => nadel(x) && nadel(tiles[(i + 1) % tiles.length]));
+      const kandidat = { tiles, rest, code, rot, nadelPaar };
       if (!trackZufallCodeKennt(code) && besser(beste, kandidat)) beste = kandidat;
       if (code !== letzte && besser(besteAnders, kandidat)) besteAnders = kandidat;
       if (besser(besteGleich, kandidat)) besteGleich = kandidat;
@@ -4759,7 +4828,9 @@
   // top on the left side (so that I don't accidentally click on close instead of save)."
   $('track-save-toolbar').onclick = () => {
     if (currentTrackTiles.length === 0) { alert('Keine Streckenteile vorhanden.'); return; }
-    const eingabe = prompt(t('Name der Strecke'), trackNameVorschlag());
+    // Eine geladene Strecke wird unter ihrem Namen vorgeschlagen (Namensfeld aus Meine Strecken).
+    const geladen = ($('track-name') && $('track-name').value.trim()) || '';
+    const eingabe = prompt(t('Name der Strecke'), geladen || trackNameVorschlag());
     if (eingabe === null) return; // Abbrechen
     trackSpeichern(eingabe.trim() || trackNameVorschlag());
   };

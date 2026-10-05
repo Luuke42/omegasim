@@ -2595,6 +2595,17 @@
     #k-leiste .k-reiter button { padding: 5px 8px; font-size: clamp(9px, 1.9vh, 12px); }
     .k-leiste2 .k-reiter button { padding: 4px 8px; font-size: clamp(8.5px, 1.7vh, 11px); }
   }
+  /* PRESETS JE MENUE UND PROFILE (v0.9.14, 98d-profile.js) */
+  .menu-preset-box { margin: 2px 0 12px; padding: 6px 8px 4px; background: rgba(0,163,224,.06); border-left: 3px solid var(--k-blau, #00a3e0); }
+  .menu-preset .mp-wahl { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+  .menu-preset .mp-name, .profil-zeile .mp-name { min-width: 8em; text-align: center; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mp-geaendert { color: var(--warn, #ffb400); font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .mp-pf { min-width: 30px; min-height: 30px; padding: 0 6px; background: transparent; border: 1px solid rgba(255,255,255,.22);
+    color: var(--k-blau, #00a3e0); font-size: 12px; line-height: 1; cursor: pointer; }
+  .menu-preset-knoepfe { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 4px; }
+  .menu-preset-knoepfe .opt-row { padding: 0; border: 0; min-height: 0; }
+  .menu-preset-knoepfe button { width: 100%; }
+  .mp-status { font-size: 11.5px; min-height: 1.2em; margin-top: 3px; }
   /* AUSWAHL MIT WENIGEN WERTEN ALS "◀ WERT ▶" (v0.9.7, 98b-sicherung.js blaetternBauen) */
   .ob-versteckt { display: none !important; }
   .opt-blaettern { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
@@ -2743,6 +2754,34 @@
     .mp-spalten { grid-template-columns: minmax(0, 1fr); }
     .mp-spalte-links .row label.small { flex: 1 1 100%; }
   }
+  /* ---- Garage Variante A (v0.9.12): Liste links, Einstellungen rechts ---- */
+  .gar-alt-aktionen > button, #gar-to-cockpit { display: none !important; }
+  .gar-alt-aktionen { margin-bottom: 6px !important; }
+  #gar-list.gar-a { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  @media (max-width: 640px) { #gar-list.gar-a { grid-template-columns: minmax(0, 1fr); } }
+  .gar-a-links, .gar-a-rechts { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .gar-a-rechts { background: rgba(14,16,22,.94); border-top: 3px solid var(--k-blau); padding: 6px 8px; }
+  .gar-a-titel { margin: 2px 0 4px; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
+  .gar-row.gar-a-zeile { display: grid; grid-template-columns: 6px 56px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+    padding: 4px 8px 4px 0; background: rgba(14,16,22,.94); border: 2px solid transparent; border-radius: 0; cursor: pointer; }
+  .gar-row.gar-a-zeile.gk-auf { border-color: rgba(255,255,255,.55); }
+  .gar-row.gar-a-zeile:hover, .gar-row.gar-a-zeile.menu-nav-sel { border-color: #fff; }
+  .gar-a-zeile .gk-streifen { align-self: stretch; }
+  .gar-a-zeile .gk-bild { height: 38px; }
+  .gar-a-zeile .gk-zeichen { font-size: 20px; }
+  .gar-a-zeile .gk-text { display: flex; flex-direction: column; min-width: 0; }
+  .gar-a-zeile .gk-text b { font-size: 14px; letter-spacing: .05em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gar-a-zeile .gar-id { font-size: 10.5px; color: var(--k-dim); padding: 0; }
+  .gar-a-zeile .gk-rolle { margin: 0; min-width: 132px; }
+  .gar-a-zeile.is-player .gk-rolle { background: var(--k-blau); color: var(--k-blau-text); }
+  .gar-a-zeile.is-zwei .gk-rolle { background: #ffb02e; color: #1a1100; }
+  .gar-a-zeile.is-ghost .gk-rolle { background: #6b5bd6; color: #fff; }
+  .gar-a-zeile.is-ghost .gk-rolle button, .gar-a-zeile.is-player .gk-rolle button { color: inherit; }
+  .gar-a-aktion > button { width: 100%; text-align: left; }
+  .gar-a-aktion .gar-karte-neu { min-height: 0; font-size: 13px; letter-spacing: .06em; text-align: left; border-style: solid; }
+  .gar-a-rechts .gk-aufzeile { display: flex; flex-direction: column; gap: 0; background: none; border: 0; padding: 0; }
+  .gar-a-rechts .gk-foto, .gar-a-rechts .gk-foto-weg { position: static; }
+  .gar-a-name .car-name-in { max-width: 12em; font-weight: 700; }
   /* ---- Garage als Karten (v0.8.26, Vorschlag B) ---- */
   #gar-list.gar-karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
   .gar-row.gar-karte { display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden; border-radius: 0;
@@ -4224,7 +4263,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">0.9.11</span></span>
+        <span class="foot-ver">v<span id="app-version">0.9.16</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -5295,6 +5334,12 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>0.9</span></b></p>
       <ul class="muted" id="patchnotes-09" style="padding-left:20px; line-height:1.7">
+        <li>Streckeneditor: gezoomt l&#228;sst sich die Karte jetzt mit Finger oder Maus verschieben, im Vollbild zoomt das Mausrad; der Zoom bleibt gespeichert.</li>
+        <li>Demolition Derby repariert: Rammen trifft einmal je Ann&#228;herung statt in jedem Takt (ein naher Ghost war nach 0,2 s raus), ein Auto bei 0 % bleibt wirklich stehen, Absch&#252;sse werden dem richtigen Spieler gemeldet, Auto 2 wird nicht mehr nach dem Kreisel von Auto 1 gewertet. Knockout/Derby-Meldungen &#252;bersetzt, neue Selbsttests; gepr&#252;ft, dass jede Gold-Zeit erreichbar ist.</li>
+        <li>Zwei-Spieler-Modus repariert: Beim Abschalten h&#228;lt Auto 2 jetzt an (fuhr vorher mit dem letzten Gas weiter), ein getrenntes Auto 2 wird freigegeben, das Licht von Auto 2 gilt f&#252;r Auto 2, kein Drift-Gegenlenken nach den Daten von Auto 1, alte Tastenbelegungen von Spieler 2 werden aufger&#228;umt.</li>
+        <li>Speichersystem (experimentell): Oben in jedem Men&#252; (Allgemein, Fahrgef&#252;hl, Ton, Autonome Gegner, Controller, Renneinstellungen) eine Preset-Zeile &#9664; Name &#9654; mit Speichern, Speichern unter und L&#246;schen; Werkspresets mit &#9733;, &#8222;ge&#228;ndert&#8220; zeigt Abweichungen. Profile unter Optionen &gt; System: jedes Profil merkt sich alle Einstellungen, die Tastenbelegung und das Preset je Men&#252;. Bisherige eigene Abstimmungen stehen im Fahrgef&#252;hl in der Liste.</li>
+        <li>Zufallsstrecke: Die beiden Haarnadeln liegen jetzt meist getrennt statt immer direkt hintereinander, und mit Grundpackung + Haarnadel-Set entstehen deutlich &#246;fter g&#252;ltige Strecken. Meine Strecken: der Speichern-Knopf ist weg (gespeichert wird im Editor, der den Namen der geladenen Strecke vorschl&#228;gt).</li>
+        <li>Garage neu (Variante A): links die Autos untereinander mit ihrer Rolle (&#9664; &#9654;, nur freie Rollen) und darunter die Aktionen, rechts die Einstellungen des gew&#228;hlten Autos (Name, Farbe, Ghost-Tempo, Motorklang, Foto, Blinken, Trennen). Mit dem Steuerkreuz: hoch/runter w&#228;hlt, links/rechts &#228;ndert, X springt nach rechts.</li>
         <li>Streckeneditor: Das Raum-Rechteck ist auch mit nur einer Grenze sichtbar und zeigt die Ma&#223;e. Die Strecke l&#228;sst sich darin mit dem Finger oder der Maus verschieben, im Vollbild auch mit dem rechten Stick; rechten Stick dr&#252;cken zentriert.</li>
         <li>Community-Strecken werden jetzt &#252;ber das Online-Sheet mit allen geteilt (Strecken und Zeiten), jede Zeile zeigt ein Vorschaubild. Eigene, bisher nur lokale Strecken werden beim n&#228;chsten Abgleich eingereicht. Dauerrennen-Zeiten kommen jetzt auch in die Online-Bestenliste. Das Apps Script muss daf&#252;r neu bereitgestellt werden.</li>
         <li>Auswahlfelder mit wenigen Werten (Physik-Modus, Getriebe, Boxenstopp, Sprache &#8230;) sind jetzt &#8222;&#9664; Wert &#9654;&#8220; zum Durchschalten statt Aufklapplisten.</li>
@@ -7866,7 +7911,7 @@
            das soll er sehen, bevor er dreimal auf "Auto verbinden" drueckt. Leer und
            unsichtbar, solange alles in Ordnung ist. -->
       <p id="gar-bt-lage" class="gar-warnung" hidden data-i18n-skip></p>
-      <div class="row" style="gap:8px; margin-bottom:14px">
+      <div class="row gar-alt-aktionen" style="gap:8px; margin-bottom:14px">
         <button class="primary" id="gar-connect">Auto verbinden</button>
         <button id="gar-disconnect-all">Alle trennen</button>
         <span class="muted" id="gar-count">keine Autos verbunden</span>
@@ -10777,7 +10822,10 @@
     <div class="card subpage" id="sub-laden">
       <button class="misc-back subpage-back" data-sub="">&larr; Strecke</button>
       <h2>Meine Strecken</h2>
-      <div class="row">
+      <!-- Speichern geht ueber den Knopf im Editor (v0.9.13, BESTELLT: "Im 'Strecke laden'-Menue den
+           'Speichern'-Button rausnehmen, ist ja beim Editor"). Das Namensfeld bleibt verborgen
+           im Dokument: Laden traegt den Namen ein, und der Editor schlaegt ihn beim Speichern vor. -->
+      <div class="row" hidden>
         <input type="text" id="track-name" placeholder="Name der Strecke">
         <button id="track-save">Speichern</button>
       </div>

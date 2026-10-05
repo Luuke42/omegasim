@@ -374,6 +374,12 @@
     if (!rows.length) return;
     menuNavGezeigt = true;
     const row = rows[menuNavIndex];
+    // Sprungziel (v0.9.12, Garage): X auf einer Zeile mit data-x-sprung springt zur ersten
+    // passenden Zeile, statt das Feld zu "bewaffnen".
+    if (row.el && row.el.dataset && row.el.dataset.xSprung) {
+      const ziel = rows.findIndex((r) => r.el.matches && r.el.matches(row.el.dataset.xSprung));
+      if (ziel >= 0) { menuNavIndex = ziel; menuNavArmed = false; menuNavRender(); menuNavTonAktivieren(); return; }
+    }
     if (row.kind === 'range' || row.kind === 'select') {
       menuNavArmed = !menuNavArmed;
       menuNavRender();

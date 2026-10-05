@@ -22,6 +22,23 @@
   //      sie und stellt sie von Hand.
 
   window.OMEGA_TEST = {
+    // ---- Garage mit Schein-Autos (v0.9.12): fuer Sichtpruefung und Selbsttests der Garage.
+    // Die Autos haben keine Verbindung (rx/tx fehlen); garageProbeWeg() nimmt sie wieder heraus.
+    garageProbe(n) {
+      const namen = ['Porsche 911', 'BMW M4', 'Mustang', 'Ferrari 296'];
+      const farben = ['gruen', 'gelb', 'blau', 'rot'];
+      for (let i = 0; i < (n || 3); i++) {
+        garage.push({ role: i === 0 ? 'player' : 'ghost', device: { id: 'probe-garage-' + i, name: 'Probe' },
+          alias: namen[i % 4], colorId: farben[i % 4], sim: false, testSenke: [], probe: true });
+      }
+      carRetag(); renderGarage();
+      return garage.filter((c) => c.probe).length;
+    },
+    garageProbeWeg() {
+      for (let i = garage.length - 1; i >= 0; i--) if (garage[i].probe) garage.splice(i, 1);
+      garAufAuto = null; renderGarage();
+      return garage.length;
+    },
     // ---- Menuenavigation (Phase 13, 50b-menu-nav.js) --------------------------------
     //
     // Reine Durchreichen zu den modulinternen Funktionen - keine eigene Logik, damit ein
@@ -1096,8 +1113,8 @@
         renderGarage();
         // Seit v0.8.26 Karten: die Rollen stehen als Folge an der Karte (data-rollen), die
         // gewaehlte in data-rolle; die leere "+ AUTO"-Karte und die Aufklappzeile zaehlen nicht.
-        const zeilen = Array.from(($('gar-list') || { children: [] }).children)
-          .filter((z) => z.classList.contains('gar-row'));
+        // Seit v0.9.12 (Variante A) stehen die Zeilen in der linken Spalte.
+        const zeilen = Array.from(($('gar-list') || document).querySelectorAll('.gar-row'));
         const meine = zeilen[zeilen.length - 1];
         const r = meine && meine.querySelector('.gk-rolle');
         const knoepfe = r

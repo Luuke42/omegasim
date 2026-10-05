@@ -93,6 +93,8 @@
   let fahrmodusIdx = -1;
   if ($('race-act-mode')) {
     $('race-act-mode').addEventListener('click', () => {
+      // In einer Challenge ist die Abstimmung festgelegt (72-challenges.js).
+      if (typeof challengeLaeuft === 'function' && challengeLaeuft()) { showHudToast(t('Während der Challenge gesperrt')); return; }
       const keys = window.__presetKeys ? window.__presetKeys() : [];
       if (!keys.length) return;
       // Beim ersten Druck da anfangen, wo die Regler stehen: sonst springt der Knopf von
@@ -431,8 +433,7 @@
       out.textContent = 'Vollgas geradeaus, ohne zu lenken \u2026';
       const r = await OMEGA_TEST.driftProbe(4000);
       if (!r.mitTempo) {
-        out.textContent = 'Das Auto ist nicht gefahren \u2013 ohne Fahrt gibt es kein '
-                        + 'Drehsignal, Byte 3 schwankt erst dann.';
+        out.textContent = t('Das Auto ist nicht gefahren – ohne Fahrt gibt es kein Drehsignal, Byte 3 schwankt erst dann.');
         return;
       }
       const teile = [
@@ -737,6 +738,7 @@
 
   function lenkWirksam(x, e) {
     const c = physEngine.config;
+    if (c.steerVoll) return lenkVollAnteil(x, c.steerVoll, e, c.steerResponse);
     const k = (c.steerResponse || 1) * (c.steerCalib || 1);
     return Math.max(-1, Math.min(1, lenkKennlinie(x, e) * k));
   }
@@ -747,8 +749,12 @@
     physEngine.config.steerExpo = e;
     const c = physEngine.config;
     const k = (c.steerResponse || 1) * (c.steerCalib || 1);
-    // Ab welchem Stickweg der volle Einschlag erreicht ist - die Zahl, die man spuert.
-    const voll = Math.min(1, Math.pow(1 / Math.max(1, k), 1 / e));
+    // Ab welchem Stickweg der volle Einschlag erreicht ist - die Zahl, die man spuert. Im neuen
+    // Weg: "Voller Einschlag bei" mal der Trimmung durch das Lenkansprechen.
+    const faktor = (c.steerResponse || STEER_VOLL_BEZUG) / STEER_VOLL_BEZUG;
+    const voll = c.steerVoll
+      ? Math.min(1, c.steerVoll * Math.pow(1 / Math.max(1, faktor), 1 / e))
+      : Math.min(1, Math.pow(1 / Math.max(1, k), 1 / e));
     $('setting-steer-expo-val').textContent = e.toFixed(2)
       + ' \u00b7 ' + t('voll ab') + ' ' + Math.round(voll * 100) + '%';
     kennlinienPlotZeichnen('setting-steer-expo-plot', (x) => lenkWirksam(x, e), -1, 1);
@@ -811,6 +817,20 @@
     gasKennlinieAnwenden();
     $('setting-throttle-gamma').addEventListener('input', gasKennlinieAnwenden);
   }
+  // VOLLER EINSCHLAG BEI (v0.8.40): setzt den neuen Lenkweg fuer beide Autos.
+  function lenkVollAnwenden() {
+    const el = $('setting-steer-voll');
+    if (!el) return;
+    const v = parseFloat(el.value);
+    physEngine.config.steerVoll = v;
+    if (typeof physEngine2 !== 'undefined' && physEngine2) physEngine2.config.steerVoll = v;
+    $('setting-steer-voll-val').textContent = Math.round(v * 100) + '%';
+    lenkKennlinieAnwenden();
+  }
+  if ($('setting-steer-voll')) {
+    lenkVollAnwenden();
+    $('setting-steer-voll').addEventListener('input', lenkVollAnwenden);
+  }
   if ($('setting-steer-expo')) {
     lenkKennlinieAnwenden();
     $('setting-steer-expo').addEventListener('input', lenkKennlinieAnwenden);
@@ -866,7 +886,11 @@
   // Hochziehung zwar ohnehin, aber ein Verweis im Array wuerde beim Aufbau ausgewertet, und
   // diese Datei hat schon fuenf Ladeabbrueche an genau dieser Falle gekostet.
   const COCKPIT_SCREENS = [
-    { id: 'main', name: 'Cockpit' },
+    // BESTELLT: "statt einem extra cockpit screen für 2 spieler, mach es so dass der
+    // standard cockpit screen sich zum 2-spieler screen ändert, wenn in der garage zwei
+    // autos als gesteuert angemeldet sind." Der Standardschirm (main) zeigt bei aktivem
+    // Zwei-Spieler-Modus den Beide-Schirm (auto2), statt dass man extra dorthin blaettert.
+    { id: 'main', name: 'Cockpit', malen: () => cockpitMainMalen() },
     { id: 'pit', name: 'Box',
       pad: (d) => pitScreenPad(d),
       waehlen: () => pitScreenSelect(),
@@ -874,29 +898,36 @@
     { id: 'uebersicht', name: 'Rennen',
       waehlen: () => ovNochmal(),
       malen: () => ovScreenRender() },
-    // BESTELLT: "cockpit: weiteren screen mit Renneinstellungen einfuegen." waehlen()
-    // ist generisch verdrahtet (cockpitScreenWaehlen()), pad() ist es NICHT - siehe die
-    // Begruendung bei raceScreenPad() in 70-race.js und den Aufruf in pollGamepad()
-    // (90-ghosts.js), der ihn genau wie pitScreenPad() von Hand mit einbindet.
-    { id: 'renneinstellungen', name: 'Renneinstellungen',
-      waehlen: () => raceScreenSelect(),
-      malen: () => raceScreenRender() },
-    // ---- NUR IM ZWEI-SPIELER-MODUS BLAETTERBAR ---------------------------------------
-    //
-    // Der Eintrag steht IMMER in der Liste und wird beim Blaettern uebersprungen, solange
-    // der Modus aus ist. Die Alternative waere eine Liste, deren LAENGE sich aendert - und
-    // an ihr haengen der Schirmzaehler, die Punkte unter dem Pfeil und zwei Selbsttests.
-    // Eine Liste, die beim Umschalten kuerzer wird, verschiebt den gerade gezeigten Schirm.
-    // Der Name ist "Beide" und nicht mehr "Auto 2": der Schirm zeigt seit v0.6.56 beide
-    // Autos nebeneinander. Die id bleibt `auto2` - sie steht in gespeicherten Zustaenden
-    // und in Prueflaeufen, und ein Name im Menue ist kein Grund, eine Kennung zu aendern.
-    { id: 'auto2', name: 'Beide',
-      nurZweiSpieler: true,
-      malen: () => p2ScreenRender() },
   ];
   let cockpitScreen = 0;
 
   function cockpitScreenIst() { return COCKPIT_SCREENS[cockpitScreen]; }
+
+  // Der Standardschirm: im Zwei-Spieler-Modus zeigt er die Beide-Ansicht, sonst das normale
+  // Cockpit (das ist per CSS an data-screen="main" gebunden und braucht kein malen).
+  function cockpitMainMalen() {
+    const el = $('race-dash');
+    if (!el) return;
+    if (zweiSpielerAktiv()) {
+      el.dataset.screen = 'auto2';
+      if (typeof p2ScreenRender === 'function') p2ScreenRender();
+    } else {
+      el.dataset.screen = 'main';
+    }
+  }
+
+  // NUR DANN ZWEI SPIELER, WENN BEIDE AUTOS WIRKLICH DA SIND. Der Schalter
+  // (zweiSpieler) kann anstehen, ohne dass ein zweites Auto verbunden ist - etwa nach
+  // dem Trennen oder wenn eine Rolle in der gespeicherten Garage stehen blieb. Das
+  // Cockpit soll dann nicht zwei Spieler zeigen, die es nicht gibt. Die Garage haelt
+  // nur verbundene Autos, also ist `garage.indexOf(...)` die Verbindungsprobe.
+  function zweiSpielerAktiv() {
+    if (typeof zweiSpieler === 'undefined' || !zweiSpieler) return false;
+    if (typeof playerCar === 'undefined' || !playerCar) return false;
+    if (typeof playerCar2 === 'undefined' || !playerCar2) return false;
+    if (typeof garage === 'undefined') return false;
+    return garage.indexOf(playerCar) >= 0 && garage.indexOf(playerCar2) >= 0;
+  }
 
   function cockpitScreenSet(i) {
     const n = COCKPIT_SCREENS.length;
@@ -928,7 +959,8 @@
   // Zahlen stehen bleiben - schlimmer als ein Schirm, den es nicht gibt.
   function cockpitScreenGilt(s) {
     if (!s) return false;
-    if (s.nurZweiSpieler) return typeof zweiSpieler !== 'undefined' && !!zweiSpieler;
+    // Seit dem Cockpit-Umbau ist die Beide-Ansicht der morph(t)e Standardschirm (main)
+    // selbst und kein eigener Schirm mehr - es gibt keinen Schirm mehr mit einer Sperre.
     return true;
   }
 
@@ -1378,6 +1410,13 @@
     log('Schadensmodell ' + (e.target.checked ? 'an' : 'aus') + '.', 'info');
   });
 
+  // "Kein Schaden im Stand": ab Werk AN. Der Wert wird beim Laden neben der Deklaration in
+  // 70-race.js gelesen; dieser Listener laeuft nur auf eine Nutzergeste.
+  $('setting-crash-stationary').addEventListener('change', (e) => {
+    crashStationarySafe = e.target.checked;
+    log('Schaden im Stand ' + (e.target.checked ? 'aus' : 'an') + '.', 'info');
+  });
+
   $('setting-repair-time').addEventListener('input', (e) => {
     pitFullRepairS = parseInt(e.target.value, 10);
     $('setting-repair-time-val').textContent = pitFullRepairS + ' s';
@@ -1757,9 +1796,9 @@
       } else if (lage === 'angefordert') {
         const kmh = Math.abs(physEngine2.state.speedKmh) * REAL_SCALE;
         const schwelle = PIT_STANDSTILL_KMH * REAL_SCALE;
-        fuss.textContent = 'P2 Boxenstopp: bremsen und anhalten \u2013 '
-          + Math.round(kmh) + ' km/h, nötig unter ' + Math.round(schwelle)
-          + ', dann Finger vom Gas.';
+        fuss.textContent = t('P2 Boxenstopp: bremsen und anhalten – {a} km/h, nötig unter {b}, dann Finger vom Gas.')
+          .replace('{a}', Math.round(kmh))
+          .replace('{b}', Math.round(schwelle));
       } else if (lage === 'service') {
         const offen = [];
         if (tankZweiStand() < 100 - 0.05) offen.push('tankt');
@@ -1959,6 +1998,11 @@
     // ABS is a real flag in the model, so it earns a cell. Traction control does not exist
     // in this drivetrain and therefore gets no cell, rather than a permanent zero.
     $('race-abs').classList.toggle('active', st.absActive);
+
+    // DERBY-COCKPIT (v0.8.126): blendet die Seitenteile aus und malt die Health-Balken,
+    // sobald ein Demolition-Derby laeuft. Defensiv gerufen, weil die Funktion in der
+    // spaeteren 70-race.js steht.
+    if (typeof derbyCockpitMalen === 'function') derbyCockpitMalen();
 
     // Headlight tell-tale. Reads the real state rather than sniffing the lamp's CSS
     // colour: there are two different "off" colours in this file (#3a4a6b and #444), so a
@@ -2247,7 +2291,11 @@
     // noch 2 kommen. Bei Endurance und Qualifying ist das Ziel eine ZEIT, also steht dort
     // die verbleibende Zeit - eine Rundenzahl anzuschreiben, die es in diesem Modus nicht
     // gibt, waere eine erfundene Angabe.
-    $('race-lap-count').textContent = raceLapTarget(laps.length);
+    $('race-lap-count').textContent = raceMode === 'knockout'
+      ? 'Leben ' + knockoutLeben + (zweiSpieler ? '/' + knockoutLeben2 : '') + ' · Geister ' + knockoutGeister
+      : raceMode === 'derby'
+        ? 'Health ' + Math.round(derbyHealth) + '% · Kills ' + derbyKills + ' · Gegner ' + derbyGeisterZaehlen()
+        : raceLapTarget(laps.length);
     $('race-lap-list').innerHTML = laps.slice().reverse().slice(0, 10).map(l =>
       `<li><span>${l.lap}</span><span${l.ms === best ? ' class="gt3-ok"' : ''}>${formatLapTime(l.ms)}</span></li>`
     ).join('');
@@ -2260,6 +2308,26 @@
   //
   // resolveLights() bleibt, und zwar nicht als Anzeige: es setzt lightBits und liefert
   // raceLampHead, die BEIDE ins gesendete Paket gehen.
+  // Anzeige unter Optionen > System, nur wenn sie offen ist.
+  setInterval(() => {
+    const el = $('funk-rundlauf');
+    if (!el || !el.offsetParent) return;
+    const s = typeof funkStatistik === 'function' ? funkStatistik() : null;
+    const wv = (navigator.userAgent.match(/Chrome\/(\d+)/) || [])[1];
+    el.textContent = (s ? Math.round(s.mittel) + ' / ' + Math.round(s.p95) + ' ms' + (s.haenger ? ' · ' + s.haenger + '× hing' : '')
+      : t('noch keine Befehle')) + (wv ? ' · WebView ' + wv : '');
+  }, 1000);
+  // COCKPIT GEDROSSELT (v0.8.41): hoechstens alle COCKPIT_MAL_MS, nach dem Senden.
+  const COCKPIT_MAL_MS = 90;
+  let cockpitMalFaellig = false, cockpitGemaltAt = 0;
+  function cockpitNachSenden() {
+    if (!cockpitMalFaellig) return;
+    const jetzt = performance.now();
+    if (jetzt - cockpitGemaltAt < COCKPIT_MAL_MS) return;
+    cockpitGemaltAt = jetzt;
+    cockpitMalFaellig = false;
+    updateRaceScreen(physEngine.state);
+  }
   function updateDashboard(out) {
     const st = physEngine.state;
     updateRaceScreen(st);
@@ -2657,7 +2725,10 @@
       if (abseits) {
         a.wiederSeit = null;
         if (a.seit === null) a.seit = jetzt;
-        if (!a.aktiv && jetzt - a.seit >= offtrackEinMs) { a.aktiv = true; a.zaehler++; }
+        if (!a.aktiv && jetzt - a.seit >= offtrackEinMs) {
+          a.aktiv = true; a.zaehler++;
+          if (typeof knockoutLebenVerlieren === 'function') knockoutLebenVerlieren(2);
+        }
       } else {
         a.seit = null;
         if (a.wiederSeit === null) a.wiederSeit = jetzt;
@@ -2673,6 +2744,7 @@
       if (!offtrackAktiv && jetzt - offtrackSeit >= offtrackEinMs) {
         offtrackAktiv = true;
         offtrackZaehler++;
+        if (typeof knockoutLebenVerlieren === 'function') knockoutLebenVerlieren(1);
       }
     } else {
       offtrackSeit = null;
@@ -2725,7 +2797,10 @@
     // t('ABSEITS \u00b7 GAS ' + Prozent + '%') - ein dynamischer Woerterbuchschluessel, und
     // solche gibt es hier nicht: nachgeschlagen werden ganze Textknoten. Eine Aenderung an
     // OFFTRACK_GAS haette die Uebersetzung still ausfallen lassen.
-    el.style.display = offtrackGilt() ? 'block' : 'none';
+    const an = offtrackGilt();
+    if (el.dataset.an === (an ? '1' : '0')) return;   // nur bei Wechsel anfassen
+    el.dataset.an = an ? '1' : '0';
+    el.style.display = an ? 'block' : 'none';
   }
 
   // Ist das Auto neben der Bahn? Die entprellte Antwort, und ausdruecklich OHNE
@@ -2811,6 +2886,11 @@
     if (offtrackGilt()) {
       rawThrottle = Math.min(rawThrottle, OFFTRACK_GAS);
     }
+    // Fruehstart-Strafe (70-race.js): kurz kein Gas und bremsen. try, weil der Takt schon laeuft,
+    // bevor 70-race.js seine Konstanten angelegt hat (temporale Todeszone beim Laden).
+    try {
+      if (fruehstartStrafeAktiv(1)) { rawThrottle = 0; rawBrake = Math.max(rawBrake, FRUEHSTART_BREMSE); }
+    } catch (e) { /* beim Laden */ }
     // ... und das Brummen an seinem. padRumble() prueft rumbleOn selbst, also steht hier nur
     // die Frage, OB gebrummt werden soll - nicht, ob der Nutzer Vibration will.
     if (abseitsJetzt()) {
@@ -2835,7 +2915,11 @@
     const out = physEngine.update({ steering: steer, throttle: rawThrottle, brake: rawBrake,
                                     headlights: headlightsOn }, dt);
     pacejkaRueckmeldung(physEngine, 1);
-    updateDashboard(out);
+    // Nur die LICHTER hier - sie gehen ins Paket. Das Cockpit malt cockpitNachSenden() nach
+    // dem Absetzen (20-protocol.js, controlHeartbeat).
+    const lamp = resolveLights(out.lights.head, out.lights.brake);
+    raceLampHead = lamp.head;
+    cockpitMalFaellig = true;
     // Gefahrene Strecke mitzaehlen, siehe 97-sessions.js. Hier und nicht dort, weil dies
     // der einzige Ort mit einem verlaesslichen dt ist - und ausdruecklich OHNE
     // Speicherzugriff: localStorage ist synchron und wuerde den 45-ms-Sendetakt stoeren.
@@ -2928,6 +3012,9 @@
       if (ap2.lenkt) lenkung = ap2.steer;
     }
     if (offtrackGiltFuer(2)) gas = Math.min(gas, OFFTRACK_GAS);
+    try {
+      if (fruehstartStrafeAktiv(2)) { gas = 0; bremse = Math.max(bremse, FRUEHSTART_BREMSE); }
+    } catch (e) { /* beim Laden */ }
     // Und das Rumpeln, an seinen eigenen Pad. Bis v0.6.45 waere es der Pad von Spieler 1
     // gewesen; jetzt hat jeder Stoss eine Adresse.
     if (abseitsJetztFuer(2)) {
@@ -2947,6 +3034,7 @@
     if (typeof updateEngineSound2 === 'function') updateEngineSound2();
     physOut2Steer = out.servoAngle;
     physOut2Throttle = out.motorPWM;
+    physOut2Brake = out.lights.brake;
   }
 
   // Beim Umschalten die Einstellungen uebernehmen. Die rund sechzig Regler im Optionentab
@@ -3020,11 +3108,10 @@
         setCarRole(playerCar2, 'none');
       }
     }
-    // Liegt der Schirm von Auto 2 vorne, wenn der Modus ausgeht, muss er verlassen werden -
-    // sonst starrt man auf neun Zahlen, die niemand mehr nachfuehrt, und der Pfeil kommt
-    // nicht zurueck (cockpitScreenStep ueberspringt ihn dann ja gerade).
-    if (!zweiSpieler && cockpitScreenIst() && cockpitScreenIst().nurZweiSpieler) {
-      cockpitScreenZu('main');
+    // Standardschirm morph(t) im Zwei-Spieler-Modus zur Beide-Ansicht: beim Umschalten neu
+    // zeichnen, wenn man gerade auf main steht.
+    if (cockpitScreenIst() && cockpitScreenIst().id === 'main' && cockpitScreenIst().malen) {
+      cockpitScreenIst().malen();
     }
     // DAS KAESTCHEN GEHT MIT. Der Modus laesst sich seit v0.6.45 auch aus der Garage
     // einschalten (siehe setCarRole in 90-ghosts.js), und ein Schalter, der "aus" zeigt,
@@ -3140,7 +3227,7 @@
 
     for (const step of CALIB_MATRIX) {
       if (!calibRunning) break;
-      $('calib-status').textContent = `Läuft: ${step.label}...`;
+      $('calib-status').textContent = t('Läuft: {s}...').replace('{s}', step.label);
       await runCalibrationStep(step);
     }
     await sendControlValue(0, 0);

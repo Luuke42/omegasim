@@ -91,6 +91,10 @@
     // Vorrang - auch im Cockpit, das sonst keine generische Zeilenliste bekommt.
     if (typeof konsoleFrageOffen === 'function' && konsoleFrageOffen()) return $('k-frage');
     if (typeof konsoleTourOffen === 'function' && konsoleTourOffen()) return $('k-tour-karte');
+    // Die Mehrspieler-Anzeige "Info-Screen" liegt ueber allem (v0.8.41): sonst lief die Auswahl
+    // unsichtbar darunter weiter.
+    const mi = $('mp-info');
+    if (mi && !mi.hidden) return mi;
     const tab = document.querySelector('.tabpage.active');
     if (!tab || tab.id === 'tab-race') return null;
     // Der TITELBILDSCHIRM hat keine Zeilen: jede Taste fuehrt nach Fahren (51-konsole.js).
@@ -119,6 +123,7 @@
       || row.querySelector('input[type="range"]')
       || row.querySelector('select')
       || row.querySelector('input[type="number"], input[type="text"]')
+      || row.querySelector('button:not(.opt-label button):not(:disabled)')
       || row.querySelector('button:not(.opt-label button)');
   }
 
@@ -162,7 +167,9 @@
     // Reihenfolge der Selektoren - .opt-row- und .mw-row-Zeilen bleiben also gemischt in
     // ihrer Bildschirmreihenfolge.
     const optRows = [...host.querySelectorAll('.opt-row, .mw-row')].filter(menuNavSichtbar);
-    const back = host.querySelector('.subpage-back');
+    // Auch .misc-back (v0.8.41): "← Optionen" in den Renneinstellungen und den Info-Seiten ist
+    // ein goto-tab-Knopf und war fuer das Steuerkreuz nicht erreichbar.
+    const back = host.querySelector('.subpage-back') || host.querySelector('.misc-back');
     const rows = [];
     if (back && menuNavSichtbar(back)) rows.push({ el: back, kind: 'button', control: back });
     if (optRows.length) {
@@ -177,9 +184,30 @@
       });
       return rows;
     }
+    // "Meine Teile": die Zeilenliste ist das eigentliche Bedienelement - hoch/runter waehlt
+    // die Sorte, links/rechts veraendert den Bestand (siehe menuNavAdjust, kind 'teile').
+    // Die Paket-Knoepfe oben sind sekundaer und stehen hinten an.
+    const teileZeilen = [...host.querySelectorAll('.teile-zeile')].filter(menuNavSichtbar);
+    if (teileZeilen.length) {
+      const tRows = [];
+      if (back && menuNavSichtbar(back)) tRows.push({ el: back, kind: 'button', control: back });
+      // Raumgrenzen (Breite/Tiefe) stehen ueber der Teileliste; links/rechts aendert sie.
+      host.querySelectorAll('.raum-zeile').forEach((el) => {
+        if (menuNavSichtbar(el)) tRows.push({ el, kind: 'raum', control: el, achse: el.dataset.achse });
+      });
+      teileZeilen.forEach((el) => tRows.push({ el, kind: 'teile', control: el }));
+      host.querySelectorAll('button').forEach((el) => {
+        if (el.classList.contains('subpage-back') || el.classList.contains('misc-back')) return;
+        if (el.closest('.teile-zeile')) return;
+        if (el.closest('.raum-zeile')) return;
+        if (menuNavSichtbar(el)) tRows.push({ el, kind: 'button', control: el });
+      });
+      return tRows;
+    }
     [...host.querySelectorAll(
       'button:not(.subpage-back), select, input[type="checkbox"], input[type="range"], '
-      + 'input[type="number"], input[type="text"], a[href]',
+      + 'input[type="number"], input[type="text"], a[href]:not([download]):not([target="_blank"]), '
+      + '[data-ch-voll]',
     )].filter(menuNavSichtbar).forEach((el) => rows.push({ el, kind: menuNavKindOf(el), control: el }));
     return rows;
   }
@@ -265,15 +293,24 @@
       else if (dir === 'left') { if (bx >= ax - 2 || !selbeZeile) return; haupt = a.left - b.right; quer = Math.abs(by - ay); }
       else if (dir === 'down') { if (by <= ay + 2) return; haupt = b.top - a.bottom; quer = Math.abs(bx - ax); }
       else { if (by >= ay - 2) return; haupt = a.top - b.bottom; quer = Math.abs(bx - ax); }
-      const wert = Math.max(0, haupt) + quer * 2.5;
+      const wert = Math.max(0, haupt) + quer * 2.5
+        - ((dir === 'down' || dir === 'up') && cur.el.contains(r.el) ? 1000 : 0);
       if (wert < bestWert) { bestWert = wert; best = i; }
     });
+    // Am Rand einer Kachel mit Wert (data-quad, zeigt ◀ ▶): den Wert umschalten statt nichts
+    // zu tun (v0.8.41, GEMELDET: Renntyp liess sich mit dem Steuerkreuz nicht waehlen).
+    if (best < 0 && (dir === 'left' || dir === 'right') && cur.el.dataset && cur.el.dataset.quad
+        && typeof konsoleQuadrat === 'function') { konsoleQuadrat(dir === 'left' ? -1 : 1); return true; }
     if (best < 0) return true;   // am Rand: nichts tun, aber die Taste ist verbraucht
     menuNavIndex = best;
     menuNavArmed = false;
     menuNavRender();
     menuNavTonBewegen();
     return true;
+  }
+  function menuNavTextfeldLoesen() {
+    const a = document.activeElement;
+    if (a && a.matches && a.matches('input[type="text"], input[type="number"], input[type="url"], textarea')) a.blur();
   }
   function menuNavIstRaum() {
     const rows = menuNavRows();
@@ -289,7 +326,7 @@
     if (!rows.length) return false;
     if (menuNavIstRaum()) { if (gehalten !== false) return menuNavRaum(dir); return true; }
     const row = rows[menuNavIndex];
-    if (!row || !['range', 'select', 'toggle'].includes(row.kind)) return false;
+    if (!row || !['range', 'select', 'toggle', 'teile'].includes(row.kind)) return false;
     menuNavGezeigt = true;
     menuNavAdjustGehalten(dir, gehalten !== false);
     return true;
@@ -300,6 +337,9 @@
     // dahinterliegenden, unsichtbaren Fokus verschieben - der naechste Blick nach dem
     // Schliessen saehe sonst eine andere Zeile ausgewaehlt, als man verlassen hatte.
     if (optInfoOffen()) return;
+    // Ein offenes Textfeld beim Weiterbewegen schliessen (v0.8.41): sonst bleibt die
+    // Handytastatur offen, und Tasten landen im Feld.
+    menuNavTextfeldLoesen();
     menuNavEnsureContext();
     const rows = menuNavRows();
     if (!rows.length) return;
@@ -321,6 +361,13 @@
   // das macht erst menuNavAdjust()), Textfeld -> fokussieren und Inhalt markieren.
   function menuNavActivate() {
     menuNavEnsureContext();
+    // Challenge-Karte im Vollbild: X (Kreuz) verkleinert sie, statt etwas darunter
+    // auszuloesen (72-challenges.js, chKarteVoll/chKarteVollOffen).
+    if (typeof chKarteVollOffen === 'function' && chKarteVollOffen()) {
+      if (typeof chKarteVoll === 'function') chKarteVoll();
+      menuNavTonAktivieren();
+      return;
+    }
     const rows = menuNavRows();
     if (!rows.length) return;
     menuNavGezeigt = true;
@@ -405,6 +452,19 @@
         row.control.selectedIndex = i1;
         row.control.dispatchEvent(new Event('change', { bubbles: true }));
       }
+    } else if (row.kind === 'teile') {
+      // "Meine Teile": links/rechts veraendert den Bestand der fokussierten Sorte.
+      if (typeof teileAendern === 'function') {
+        const typ = row.el.dataset.teile;
+        if (typ !== undefined) teileAendern(typ, dir === 'left' ? -1 : 1);
+      }
+    } else if (row.kind === 'raum') {
+      // Raumgrenze: links/rechts aendert die fokussierte Achse (0,1 je Schritt, beim
+      // Halten 0,5) - dieselbe Stelle wie die Minus/Plus-Knoepfe in "Meine Teile".
+      if (typeof raumAendern === 'function') {
+        const achse = row.achse;
+        if (achse) raumAendern(achse, dir === 'left' ? -(gross ? 0.5 : 0.1) : (gross ? 0.5 : 0.1));
+      }
     } else {
       return false;
     }
@@ -437,9 +497,10 @@
     // NUR REGLER WIEDERHOLEN BEIM HALTEN. Ein Auswahlfeld schaltete nach 300 ms Halten
     // weiter - ein etwas laengerer Druck sprang so schon zwei Optionen. Gemeldet: "manche
     // Menues schalten mehrere Optionen auf einmal durch". Auswahlfelder: ein Druck, ein Schritt.
+    // "Meine Teile" darf wie eine Skala beim Halten weiterlaufen (viel hin und her waehlen).
     const rows = menuNavRows();
     const zeile = rows[menuNavIndex];
-    if (!zeile || zeile.kind !== 'range') return;
+    if (!zeile || (zeile.kind !== 'range' && zeile.kind !== 'teile' && zeile.kind !== 'raum')) return;
     const seitZugbeginn = jetzt - menuNavHoldStart;
     const beschleunigt = seitZugbeginn >= MENU_NAV_ACCEL_MS;
     const naechsterSchrittNach = menuNavLastStep === menuNavHoldStart

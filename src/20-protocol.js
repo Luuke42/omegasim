@@ -184,31 +184,68 @@
   //
   // GEMERKT WIRD DAS FERTIGE PAKET. Alles, was am Bauen haengt - Verbrauch, Motorton,
   // Aufnahme - ist beim Bauen schon gelaufen und darf nicht ein zweites Mal laufen.
-  let wartendes = null;
-
+  // ---- EIN SCHLOSS JE MERKMAL, MIT WACHHUND (v0.8.41) ----------------------------------
+  //
+  // GEMELDET: "Multiplayer erstellen und beitreten klappt, aber danach reagiert das Auto nicht
+  // und faehrt nicht mehr" und "auf meinem schwaecheren Handy ist die Verzoegerung sehr gross"
+  // (nur in der App). Das Bluetooth-Plugin der App haelt je Merkmal EINE offene Antwort
+  // (Device.kt: callbackMap["write|svc|char"]). Ueberlappen zwei Schreibvorgaenge ans selbe
+  // Merkmal, wird die erste Antwort ueberschrieben, ihr Promise endet nie - und die alte,
+  // globale Sperre blieb fuer immer gesetzt: kein Paket mehr ans Auto.
+  //
+  // Jetzt: ein Zustand JE MERKMAL (alle Wege ans Fahrerauto gehen hindurch, auch Blinken und
+  // Stopp aus writeToCar), und ein Wachhund - ist ein Schreibvorgang nach FUNK_HAENGT_MS nicht
+  // zurueck, gilt er als verloren, und der naechste geht los. `gen` sorgt dafuer, dass ein
+  // spaet doch noch ankommendes Ende den neuen Zustand nicht freigibt. Das Wartende ueberlebt
+  // jetzt einen Fehler (vorher wurde es verworfen). writeInFlight bleibt als Spiegel fuer die
+  // Pruefbank.
+  const FUNK_HAENGT_MS = 300;
+  const funkLage = new WeakMap();
+  // Rundlauf je Schreibvorgang, fuer die Anzeige unter Optionen > System.
+  const funkMess = { werte: [], haenger: 0 };
+  function funkZustand(ziel) {
+    let z = funkLage.get(ziel);
+    if (!z) { z = { unterwegs: false, seit: 0, gen: 0, wartendes: null }; funkLage.set(ziel, z); }
+    return z;
+  }
+  function funkMessen(ms) {
+    funkMess.werte.push(ms);
+    if (funkMess.werte.length > 200) funkMess.werte.shift();
+  }
+  function funkStatistik() {
+    const w = funkMess.werte.slice().sort((a, b) => a - b);
+    if (!w.length) return null;
+    const mittel = w.reduce((a, b) => a + b, 0) / w.length;
+    return { n: w.length, mittel, p95: w[Math.min(w.length - 1, Math.floor(w.length * 0.95))], haenger: funkMess.haenger };
+  }
   async function funkSchreiben(ziel, payload, notiz) {
-    if (writeInFlight) { wartendes = { ziel, payload, notiz }; return; }
-    writeInFlight = true;
-    try {
-      let auf = { ziel, payload, notiz };
-      while (auf) {
-        try {
-          if (auf.ziel.properties.writeWithoutResponse) await auf.ziel.writeValueWithoutResponse(auf.payload);
-          else await auf.ziel.writeValueWithResponse(auf.payload);
-          if (auf.notiz) log(`WRITE ${auf.notiz}: ${bufToHex(auf.payload)}`, 'write');
-        } catch (err) {
-          // Abbrechen und nicht weiterschleifen: wenn die Verbindung weg ist, wirft jeder
-          // Versuch, und das Wartende ist in 45 ms ohnehin durch ein frisches ersetzt.
-          log('Steuer-Schreibfehler: ' + err.message, 'err');
-          break;
-        }
-        auf = wartendes;
-        wartendes = null;
-      }
-    } finally {
-      writeInFlight = false;
-      wartendes = null;
+    const z = funkZustand(ziel);
+    const jetzt = performance.now();
+    if (z.unterwegs && jetzt - z.seit < FUNK_HAENGT_MS) { z.wartendes = { payload, notiz }; return; }
+    if (z.unterwegs) {
+      funkMess.haenger++;
+      log('Funk: Schreiben hing ' + Math.round(jetzt - z.seit) + ' ms, freigegeben.', 'warn');
     }
+    const gen = ++z.gen;
+    z.unterwegs = true;
+    writeInFlight = true;
+    let auf = { payload, notiz };
+    while (auf) {
+      z.seit = performance.now();
+      try {
+        if (ziel.properties.writeWithoutResponse) await ziel.writeValueWithoutResponse(auf.payload);
+        else await ziel.writeValueWithResponse(auf.payload);
+        funkMessen(performance.now() - z.seit);
+        if (auf.notiz) log(`WRITE ${auf.notiz}: ${bufToHex(auf.payload)}`, 'write');
+      } catch (err) {
+        log('Steuer-Schreibfehler: ' + err.message, 'err');
+      }
+      if (gen !== z.gen) return;          // der Wachhund hat inzwischen neu begonnen
+      auf = z.wartendes;
+      z.wartendes = null;
+    }
+    z.unterwegs = false;
+    writeInFlight = false;
   }
 
   async function sendControlValue(overrideSteer, overrideThrottle) {
@@ -315,7 +352,7 @@
   let physOutSteer = 0, physOutThrottle = 0;
   // Und dasselbe Paar fuer Spieler 2. Es steht neben dem ersten, weil es dieselbe Rolle
   // hat: der geformte Ausgang der Physik, den der Herzschlag verschickt.
-  let physOut2Steer = 0, physOut2Throttle = 0;
+  let physOut2Steer = 0, physOut2Throttle = 0, physOut2Brake = false;
 
   const CONTROL_SEND_INTERVAL_MS = 45; // matches the real app's observed command cadence
 
@@ -377,6 +414,10 @@
     if (driftModus) steer = driftGegenlenken(steer);
     sendControlValue(steer, throttle);
     spielerZweiSenden();
+    // ERST SENDEN, DANN MALEN (v0.8.41): das Cockpit wird nach dem Absetzen gezeichnet und
+    // gedrosselt - in der App zeichnet die WebView auf dem UI-Thread, und jede Malarbeit vor
+    // dem Senden verzoegert dort die Bluetooth-Antworten (50-drive.js, cockpitNachSenden).
+    if (typeof cockpitNachSenden === 'function') cockpitNachSenden();
   }
 
   // ---- SPIELER 2 FAEHRT AUS DEM SELBEN HERZSCHLAG ------------------------------------
@@ -466,7 +507,8 @@
     const kopflicht2 = typeof headlichtZwei === 'function'
       ? headlichtZwei(headlightsOn2) : headlightsOn2;
     writeToCar(playerCar2, steer, throttle,
-               trackModeBit() | (kopflicht2 ? LIGHT_HEAD : 0),
+               trackModeBit() | (kopflicht2 ? LIGHT_HEAD : 0)
+                 | (physOut2Brake ? LIGHT_BRAKE : 0),
                playerCar2.modeBytes || null);
   }
   setInterval(controlHeartbeat, CONTROL_SEND_INTERVAL_MS);

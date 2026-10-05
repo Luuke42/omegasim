@@ -5210,7 +5210,8 @@
       el.value = merk;
       el.dispatchEvent(new Event('input', { bubbles: true }));
     }
-    if (Math.abs(parseFloat(merk) - 1.3) > 1e-9) schlecht.push('Vorgabe ' + merk + ' statt 1,3');
+    // Vorgabe seit v0.8.40 2,45 (BESTELLT: "Gas und Bremskennlinien standardmaessig auf 2,45").
+    if (Math.abs(parseFloat(merk) - 2.45) > 1e-9) schlecht.push('Vorgabe ' + merk + ' statt 2,45');
     return { ok: !schlecht.length, mass: schlecht.length ? schlecht.join('; ') : 'eine Formel, Regler wirkt' };
   });
 
@@ -6047,11 +6048,11 @@
     try {
       // 1. BEI 50% EXAKT DIE BISHERIGEN ZAHLEN.
       //
-      // BESTELLT (diese Runde): "ghosts etwas mehr abstand" - luecke/gap/range-Anker in
-      // ghostRennhaerteAnwenden() von 1,2/1,2/1,3 auf 1,5/1,5/1,625 angehoben, das
+      // BESTELLT (diese Runde): "Autos sollen mehr Abstand halten" - luecke/gap/range-Anker in
+      // ghostRennhaerteAnwenden() von 1,2/1,2/1,3 auf 1,5/1,5/1,65 angehoben, das
       // Verhaeltnis (RANGE > GAP_MIN) bleibt gleich. Diese Erwartung ist mitgezogen.
       OMEGA_TEST.ghostRennhaerteAnwenden(0.5);
-      const soll = { p: 0.45, arm: 900, luecke: 1.2, gap: 1.2, range: 1.3 };
+      const soll = { p: 0.45, arm: 900, luecke: 1.5, gap: 1.5, range: 1.65 };
       const ist50 = { p: OMEGA_TEST.attackPLesen(), arm: OMEGA_TEST.attackArmMsLesen(),
                       luecke: OMEGA_TEST.lueckeMinLesen(), gap: OMEGA_TEST.gapMinLesen(),
                       range: OMEGA_TEST.attackRangeLesen() };
@@ -6341,6 +6342,30 @@
     return { ok: schlecht.length === 0,
              mass: [kurz, lang1, lang2, best].join(' | ')
                    + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Rundenzeit aus Clips (App ohne speechSynthesis) ----
+  stAdd('Rundenansage aus Clips: Folge stimmt, alle Clips im Manifest', async () => {
+    const f = [];
+    const soll = [[12400, false, '12 komma 4'], [63200, false, 'minute 3 komma 2'],
+                  [125000, true, '2 minuten 5 komma 0 bestzeit'], [59960, false, 'minute 0 komma 0'],
+                  [9040, false, '9 komma 0']];
+    for (const [ms, b, text] of soll) {
+      const ist = lapClipFolge(ms, b).join(' ');
+      if (ist !== text) f.push(ms + ': "' + ist + '" statt "' + text + '"');
+    }
+    if (location.protocol !== 'file:') {
+      try {
+        const man = await fetch('audio/zahlen.json', { cache: 'reload' }).then((r) => r.json());
+        const noetig = ['komma', 'minute', 'minuten', 'bestzeit'];
+        for (let n = 0; n <= 60; n++) noetig.push(String(n));
+        for (const spr of ['de', 'en']) {
+          const fehlt = noetig.filter((k) => !(man[spr] && man[spr][k]));
+          if (fehlt.length) f.push(spr + ' fehlt: ' + fehlt.slice(0, 5).join(','));
+        }
+      } catch (e) { f.push('zahlen.json: ' + e.message); }
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : '5 Zeiten richtig zerlegt, 65 Clips je Sprache' };
   });
 
   // ---- Ansage: jede Aeusserung bricht die vorherige ab ----
@@ -9701,7 +9726,7 @@
       if (kAktiverTab() !== 'fahren') f.push('Taste auf dem Titel fuehrt nach ' + kAktiverTab() + ' statt nach Fahren');
       konsoleReiterSchritt(1);
       if (kAktiverTab() !== 'mp') f.push('R1 im Fahren-Schirm fuehrt nach ' + kAktiverTab());
-      if (konsoleZurueck() || kAktiverTab() !== 'mp') f.push('Kreis auf der Ebene 1 tut etwas (' + kAktiverTab() + ')');
+      if (!konsoleZurueck() || kAktiverTab() !== 'fahren') f.push('Kreis auf der Ebene 1 fuehrt nicht nach Fahren (' + kAktiverTab() + ')');
       showTab('fahren');
       $('fa-garage').click();
       if (kAktiverTab() !== 'garage') f.push('Knopf Garage auf AUTO fuehrt nach ' + kAktiverTab());
@@ -9977,13 +10002,16 @@
   function pitSpielLauf(tippen) {
     const reifen = pitSpielReifenMerk();
     const merk = { modus: pitModus, an: pitLaneEnabled, trig: pitTrigger, fuel, damage,
-                   kmh: physEngine.state.speedKmh, gas: throttleY };
+                   kmh: physEngine.state.speedKmh, gas: throttleY, zwei: zweiSpieler };
     const echtNow = Date.now;
     let uhr = echtNow.call(Date);
     const r = { f: [] };
     try {
       Date.now = () => uhr;
       pitModus = 'minigame'; pitLaneEnabled = true; pitTrigger = 'anywhere';
+      // Im Zwei-Spieler-Modus ist das Minigame bewusst abgeschaltet (siehe setPitState);
+      // dieser Prueflauf testet das Einzelspieler-Minigame und setzt deshalb die Weiche.
+      zweiSpieler = false;
       fuel = 30; damage = 20;
       physEngine.state.speedKmh = 0; throttleY = 0;
       setPitState('off');
@@ -10015,6 +10043,7 @@
       setPitState('off');
       pitRearmBlockedUntil = 0;
       pitModus = merk.modus; pitLaneEnabled = merk.an; pitTrigger = merk.trig;
+      zweiSpieler = merk.zwei;
       fuel = merk.fuel; damage = merk.damage;
       physEngine.state.speedKmh = merk.kmh; throttleY = merk.gas;
       pitSpielReifenZurueck(reifen);
@@ -10033,7 +10062,9 @@
       if (!r.rueckGesperrt) f.push('Rueckwaerts nicht gesperrt');
       if (!r.fertig) f.push('nicht fertig geworden (' + r.stand + ')');
       if (Math.abs(r.dauer - r.T) > 0.15) f.push('Dauer ' + r.dauer.toFixed(2) + ' s statt ' + r.T.toFixed(2));
-      const erwartet = Math.floor(r.T / (r.T / 10 + 0.1));
+      // Fenster = ein Zehntel + 200 ms (70-race.js, pitSpielStart).
+      // 0,15 s Toleranz: endet das letzte Fenster knapp vor dem Stopp, sieht der Testtakt es nicht mehr.
+      const erwartet = Math.floor((r.T - 0.15) / (r.T / 10 + 0.2));
       if (r.i < erwartet) f.push('nur ' + r.i + ' Symbole abgelaufen statt ' + erwartet);
       if (fuelSimOn() && r.fuel < 99.9) f.push('Tank am Ende ' + r.fuel.toFixed(1));
       if (r.plan.repair && r.damage > 0.01) f.push('Schaden am Ende ' + r.damage.toFixed(1));
@@ -10058,12 +10089,13 @@
   stAdd('Boxen-Minigame: Quadrat und Kreis schalten waehrenddessen nicht, Kreuz bricht ab', () => {
     const merk = { modus: pitModus, an: pitLaneEnabled, trig: pitTrigger,
                    kmh: physEngine.state.speedKmh, gang: physEngine.state.currentGear,
-                   mode: physEngine.state.driveMode };
+                   mode: physEngine.state.driveMode, zwei: zweiSpieler };
     const echt = navigator.getGamepads;
     const reifen = pitSpielReifenMerk();
     const f = [];
     try {
       pitModus = 'minigame'; pitLaneEnabled = true; pitTrigger = 'anywhere';
+      zweiSpieler = false;
       physEngine.state.speedKmh = 0; throttleY = 0;
       setPitState('off'); pitRearmBlockedUntil = 0;
       setPitState('limited'); pitLastTick = 0; pitLaneTick();
@@ -10090,11 +10122,40 @@
       try { pollGamepad(); } catch (e) { /* ohne Pad */ }
       setPitState('off'); pitRearmBlockedUntil = 0;
       pitModus = merk.modus; pitLaneEnabled = merk.an; pitTrigger = merk.trig;
+      zweiSpieler = merk.zwei;
       physEngine.state.speedKmh = merk.kmh;
       physEngine.state.currentGear = merk.gang; physEngine.state.driveMode = merk.mode;
       pitSpielReifenZurueck(reifen);
     }
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Quadrat gehoert dem Spiel, kein Gangwechsel, Abbruch beendet es' };
+  });
+
+  stAdd('Boxen-Minigame: der letzte Knopf ist immer Kreis', () => {
+    const merk = { modus: pitModus, an: pitLaneEnabled, trig: pitTrigger, kmh: physEngine.state.speedKmh, zwei: zweiSpieler };
+    const reifen = pitSpielReifenMerk();
+    const f = [];
+    try {
+      pitModus = 'minigame'; pitLaneEnabled = true; pitTrigger = 'anywhere';
+      zweiSpieler = false;
+      physEngine.state.speedKmh = 0; throttleY = 0;
+      for (let i = 0; i < 8; i++) {
+        setPitState('off'); pitRearmBlockedUntil = 0;
+        setPitState('limited'); pitLastTick = 0; pitLaneTick();
+        if (!pitSpielAktiv()) { f.push('kein Minigame-Stopp'); break; }
+        const folge = pitSpiel.folge;
+        if (!folge.length) { f.push('leere Folge'); break; }
+        if (folge[folge.length - 1] !== 'kreis') f.push('letzter Knopf ist ' + folge[folge.length - 1] + ' statt Kreis');
+        if (folge.some(x => x !== 'quad' && x !== 'kreis')) f.push('unbekannter Knopf in der Folge');
+        setPitState('off');
+      }
+    } finally {
+      setPitState('off'); pitRearmBlockedUntil = 0;
+      pitModus = merk.modus; pitLaneEnabled = merk.an; pitTrigger = merk.trig;
+      zweiSpieler = merk.zwei;
+      physEngine.state.speedKmh = merk.kmh;
+      pitSpielReifenZurueck(reifen);
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : '8 Stopps, letzter Knopf immer Kreis' };
   });
 
   stAdd('Tutorial: startet vom Titel, führt durch alle Schritte, Kreis zurück', () => {
@@ -10292,10 +10353,111 @@
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'SG3 = ' + m.toFixed(2) + ' m, fehlende Gerade erkannt, nicht gezaehlte Sorten frei' };
   });
 
+  stAdd('Editor: Speichern-Knopf oben links, Namens-Vorschlag klingt wie eine Rennstrecke', () => {
+    const f = [];
+    const k = $('track-save-toolbar');
+    if (!k) f.push('Speichern-Knopf im Editor fehlt');
+    else {
+      if (!k.onclick) f.push('Speichern-Knopf nicht verdrahtet');
+      const cap = k.querySelector('.tp-cap');
+      if (!cap || !cap.textContent.trim()) f.push('Aufschrift fehlt');
+      const bar = k.closest('.tp-actions');
+      if (bar && bar.firstElementChild !== k) f.push('Speichern steht nicht ganz links');
+    }
+    let gut = 0;
+    for (let i = 0; i < 40; i++) {
+      const n = trackNameVorschlag();
+      if (typeof n === 'string' && /^[A-Z][a-z]+/.test(n) && n.length >= 5 && n.length <= 24
+          && !/\s/.test(n)) gut++;
+    }
+    if (gut < 38) f.push('Namens-Vorschlaege klingen nicht plausibel (' + gut + '/40)');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Knopf links, Vorschlag ' + trackNameVorschlag() };
+  });
+
+  stAdd('Zufallsstrecke: Wuerfe verschieden, Verlauf gemerkt, leerer Bestand zeigt Dialog', () => {
+    const merk = { tiles: currentTrackTiles, rot: trackRotationDeg, sel: trackSel, verlauf: trackVerlauf.length, codes: trackZufallCodes.slice() };
+    const f = [];
+    let alt = null;
+    try { alt = localStorage.getItem(TEILE_KEY); } catch (e) { return { skip: true, mass: 'kein Speicher' }; }
+    try {
+      // Grundpackung: 1 Start, 4 Gerade, 8 rechts, 2 links - ergibt zuverlaessig einen Ring.
+      const inv = {}; inv[TILE_TYPE.START] = 1; inv[TILE_TYPE.STRAIGHT] = 4;
+      inv[TILE_TYPE.CURVE_RIGHT] = 8; inv[TILE_TYPE.CURVE_LEFT] = 2;
+      localStorage.setItem(TEILE_KEY, JSON.stringify(inv));
+      trackZufallCodes = [];
+      const codes = [];
+      // Bis zu TRACK_ZUFALL_CODE_MAX Wuerfe. Harte Zusage: nie zweimal dieselbe in Folge.
+      // Das Dedup-Fenster ist ein "so viele wie moeglich"-Bestreben; wenn der Bestand keine
+      // neue Variante mehr hergibt, ist "Keine neue Variante" ein legitimes Ende - dann brechen
+      // wir ab, ohne den Wurf als Fehler zu werten.
+      for (let i = 0; i < TRACK_ZUFALL_CODE_MAX; i++) {
+        const ok = trackZufall();
+        if (!ok) break;
+        if (!trackZufallPasst(currentTrackTiles)) { f.push('Wurf ' + (i + 1) + ' nicht geschlossen/kreuzungsfrei'); break; }
+        const code = trackToCode(currentTrackTiles, 0);
+        if (i > 0 && code === codes[codes.length - 1]) { f.push('Wurf ' + (i + 1) + ' wiederholte die vorherige Strecke'); break; }
+        codes.push(code);
+      }
+      if (codes.length < 4) f.push('nur ' + codes.length + ' verschiedene Strecken aus der Grundpackung');
+      // Verlauf: mehrere Codes ohne Duplikate, und nicht groesser als das Fenster.
+      if (trackZufallCodes.length < 2) f.push('Verlauf merkt nicht mehrere Codes');
+      if (trackZufallCodes.length > TRACK_ZUFALL_CODE_MAX) f.push('Fenster groesser als ' + TRACK_ZUFALL_CODE_MAX);
+      if (new Set(trackZufallCodes).size !== trackZufallCodes.length) f.push('Verlauf enthaelt Duplikate');
+      // Leerer Bestand: Dialog statt stillem Toast.
+      localStorage.setItem(TEILE_KEY, '{}');
+      const ok3 = trackZufall();
+      if (ok3 !== false) f.push('leerer Bestand gab keine Fehlermeldung');
+      if (!document.getElementById('k-frage') || document.getElementById('k-frage').hidden) {
+        f.push('kein Dialog bei leerem Bestand');
+      }
+      if (typeof konsoleFrageZu === 'function') konsoleFrageZu();
+    } finally {
+      try { if (alt === null) localStorage.removeItem(TEILE_KEY); else localStorage.setItem(TEILE_KEY, alt); } catch (e) { /* egal */ }
+      currentTrackTiles = merk.tiles; trackRotationDeg = merk.rot; trackSel = merk.sel;
+      trackVerlauf.length = Math.min(trackVerlauf.length, merk.verlauf);
+      trackZufallCodes = merk.codes;
+      refreshTrackPreview();
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Wuerfe verschieden, Verlauf gemerkt, leerer Bestand zeigt Dialog' };
+  });
+
+  stAdd('Zufallsstrecke: passt in den eingestellten Raum (45°-Schritte)', () => {
+    const merk = { tiles: currentTrackTiles, rot: trackRotationDeg, sel: trackSel, verlauf: trackVerlauf.length };
+    const f = [];
+    let alt = null, altRaum = null;
+    try { alt = localStorage.getItem(TEILE_KEY); } catch (e) { return { skip: true, mass: 'kein Speicher' }; }
+    try { altRaum = localStorage.getItem(RAUM_KEY); } catch (e) { /* egal */ }
+    try {
+      if (!$('teile-raum-x') || !$('teile-raum-y')) f.push('Raumfelder fehlen in Meine Teile');
+      const inv = {}; inv[TILE_TYPE.START] = 1; inv[TILE_TYPE.STRAIGHT] = 4;
+      inv[TILE_TYPE.CURVE_RIGHT] = 8; inv[TILE_TYPE.CURVE_LEFT] = 2;
+      localStorage.setItem(TEILE_KEY, JSON.stringify(inv));
+      // Grosser Raum (3 m x 3 m): es muss eine Strecke hineinpassen, und sie darf in 45°-Schritten gedreht werden.
+      localStorage.setItem(RAUM_KEY, JSON.stringify({ x: 3, y: 3 }));
+      const ok = trackZufall();
+      if (!ok) f.push('3x3 m Raum ergab keine Strecke');
+      else {
+        if (!trackZufallPasst(currentTrackTiles)) f.push('gebaut nicht geschlossen/kreuzungsfrei');
+        if (trackZufallPasstRaum(currentTrackTiles) < 0) f.push('Strecke passt nicht in den Raum');
+      }
+      // Winziger Raum (0,5 m x 0,5 m): nichts darf hineinpassen.
+      localStorage.setItem(RAUM_KEY, JSON.stringify({ x: 0.5, y: 0.5 }));
+      const okKlein = trackZufall();
+      if (okKlein !== false) f.push('0,5x0,5 m Raum liess doch eine Strecke zu');
+    } finally {
+      try { if (alt === null) localStorage.removeItem(TEILE_KEY); else localStorage.setItem(TEILE_KEY, alt); } catch (e) { /* egal */ }
+      try { if (altRaum === null) localStorage.removeItem(RAUM_KEY); else localStorage.setItem(RAUM_KEY, altRaum); } catch (e) { /* egal */ }
+      currentTrackTiles = merk.tiles; trackRotationDeg = merk.rot; trackSel = merk.sel;
+      trackVerlauf.length = Math.min(trackVerlauf.length, merk.verlauf);
+      refreshTrackPreview();
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'grosser Raum baut eine passende Strecke, winziger nicht' };
+  });
+
   stAdd('Strecke: jede Unterseite hat nur, was sie bezeichnet', () => {
     const f = [];
     const drin = (sub, id) => { const s = $('sub-' + sub); return !!(s && $(id) && s.contains($(id))); };
-    if (!drin('laden', 'track-list') || drin('edit', 'track-list')) f.push('gespeicherte Strecken nicht (nur) unter Laden');
+    if (!drin('laden', 'track-kacheln') || drin('edit', 'track-kacheln')) f.push('gespeicherte Strecken nicht (nur) unter Laden');
     if (!drin('edit', 'track-preview-svg')) f.push('Editor-Karte nicht im Editor');
     if (drin('laden', 'track-preview-svg')) f.push('Editor unter Laden');
     if (!drin('scan', 'track-scan-start') || drin('edit', 'track-scan-start')) f.push('Live-Scan nicht (nur) im Scan');
@@ -10333,13 +10495,184 @@
     return { ok: !f.length, mass: f.length ? f.join('; ') : K_EDITOR.length + ' Schritte, Pad blaettert, bleibt im Editor' };
   });
 
+  stAdd('Menue: Kachelzeilen nehmen Knoten auch als Beschriftung, Titel je Buchstabe', () => {
+    const f = [];
+    const host = document.createElement('div');
+    kZeilen(host, [[kPunkt('#ff0000', 'Testauto'), 'Steuern']]);
+    if (/\[object/.test(host.textContent)) f.push('"[object" in der Zeile: ' + host.textContent);
+    if (host.textContent.indexOf('Testauto') < 0) f.push('Name fehlt');
+    const b = [...document.querySelectorAll('.home-titel .gl-b')];
+    if (b.map((x) => x.textContent).join('') !== 'OMEGASIM') f.push('Titel nicht in Buchstaben zerlegt: ' + b.map((x) => x.textContent).join(''));
+    if (b.some((x) => !/glitch-[cr]/.test(x.style.getPropertyValue('--gl-o') + x.style.getPropertyValue('--gl-u')))) f.push('Buchstabe ohne Farbe');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Knoten als Beschriftung, 8 Buchstaben mit Zufallsfarben' };
+  });
+
+  stAdd('Funk: haengender Schreibvorgang wird nach 300 ms freigegeben, neuester Wert geht raus', async () => {
+    const f = [];
+    const gesendet = [];
+    let loesen = null;
+    const ziel = { properties: { writeWithoutResponse: true },
+      writeValueWithoutResponse(p) { gesendet.push(p[0]); if (p[0] === 1) return new Promise(() => {}); return Promise.resolve(); } };
+    const merkNow = performance.now.bind(performance);
+    let jetzt = merkNow();
+    performance.now = () => jetzt;
+    try {
+      funkSchreiben(ziel, new Uint8Array([1]));          // haengt fuer immer
+      funkSchreiben(ziel, new Uint8Array([2]));          // wartet
+      funkSchreiben(ziel, new Uint8Array([3]));          // ersetzt 2
+      if (gesendet.join() !== '1') f.push('vor dem Wachhund schon gesendet: ' + gesendet.join());
+      jetzt += 320;
+      funkSchreiben(ziel, new Uint8Array([4]));          // Wachhund: haengt zu lange, neu
+      await Promise.resolve(); await Promise.resolve();
+      if (gesendet.indexOf(4) < 0) f.push('nach 300 ms geht nichts raus: ' + gesendet.join());
+      if (gesendet.indexOf(2) >= 0) f.push('veralteter Wert 2 wurde nachgeliefert');
+    } finally { performance.now = merkNow; }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Haenger nach 300 ms frei, veraltete Werte verworfen: ' + gesendet.join() };
+  });
+
+  stAdd('D-Pad: Renntyp in den Renneinstellungen, Rand der Renntyp-Kachel, Pad-Wahl', () => {
+    const f = [];
+    const merkTab = kAktiverTab();
+    const merkModus = $('race-mode').value;
+    try {
+      showTab('control');
+      menuNavEnsureContext();
+      const rows = menuNavRows();
+      const i = rows.findIndex((r) => r.el.id === 'race-mode-zeile');
+      if (i < 0) f.push('Renntyp-Zeile fuer das Steuerkreuz unsichtbar');
+      else {
+        menuNavIndex = i; menuNavGezeigt = true;
+        const vor = $('race-mode').selectedIndex;
+        menuNavSeitwaerts('right');
+        if ($('race-mode').selectedIndex === vor && vor < $('race-mode').options.length - 1) f.push('rechts schaltet den Renntyp nicht');
+      }
+      if (!rows.some((r) => r.el.classList && r.el.classList.contains('misc-back'))) f.push('Zurueck-Knopf nicht erreichbar');
+      if (!rows.some((r) => r.control && r.control.id === 'race-start-btn')) f.push('Rennen starten nicht erreichbar');
+      // Pads: ohne Zwei-Spieler-Modus und mit "tauschen" bleibt p1 stehen.
+      const merkTausch = padTauschenLesen();
+      padTauschenSetzen(true);
+      const ohneZwei = typeof zweiSpieler === 'undefined' || !zweiSpieler;
+      if (ohneZwei && navigator.getGamepads) {
+        const p = padsFuerSpieler();
+        const anzahl = [...navigator.getGamepads()].filter(Boolean).length;
+        if (anzahl && !p.p1) f.push('mit "tauschen" und einem Pad ist p1 leer');
+      }
+      padTauschenSetzen(merkTausch);
+    } finally {
+      $('race-mode').value = merkModus; $('race-mode').dispatchEvent(new Event('change', { bubbles: true }));
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Renntyp, Zurueck und Start per Pad, Tauschen ohne zweites Pad harmlos' };
+  });
+
+  stAdd('Mehrspieler: Ampel nach Frist, Uhrabgleich, gemeinsamer Wetterplan', () => {
+    const f = [];
+    const z = ampelZeitplan(10000);
+    if (JSON.stringify(z) !== JSON.stringify([[7000, 3], [8000, 2], [9000, 1], [10000, 0]])) f.push('Zeitplan ' + JSON.stringify(z));
+    const merkP = mp.proben.slice(), merkO = mp.offset;
+    try {
+      mp.proben = [];
+      mpUhrProbe(1000, 1200, 5000);     // Weg 200, Versatz 3900
+      mpUhrProbe(2000, 2040, 6000);     // Weg 40, Versatz 3980 - gilt
+      mpUhrProbe(3000, 3500, 9000);     // Weg 500 - zaehlt nicht
+      if (mp.offset !== 3980) f.push('Versatz ' + mp.offset + ' statt 3980');
+    } finally { mp.proben = merkP; mp.offset = merkO; }
+    const merk = { wx: raceWxStart, mode: raceMode, lim: raceLimit, wetter: weather, st: raceState, now: Date.now };
+    try {
+      raceWxStart = 'wechsel'; raceMode = 'laps'; raceLimit = 10;
+      const plan = wetterPlanBauen();
+      if (plan.length < 3) f.push('wechselhaft ergibt nur ' + plan.length + ' Wechsel');
+      if (plan.some((e, i) => i && e.abMs <= plan[i - 1].abMs)) f.push('Plan nicht aufsteigend');
+      if (plan[0] && plan[0].wetter !== 'rain') f.push('erster Wechsel nicht zu Regen');
+      let jetzt = 100000;
+      Date.now = () => jetzt;
+      raceState = 'racing';
+      mpWetter = { gruen: 100000, liste: [{ abMs: 1000, wetter: 'rain' }, { abMs: 5000, wetter: 'dry' }], i: 0 };
+      weather = 'dry';
+      jetzt = 100500; mpWetterTick();
+      if (weather !== 'dry') f.push('Wetter vor der Zeit gewechselt');
+      jetzt = 101200; mpWetterTick();
+      if (weather !== 'rain') f.push('Regen nicht nach Plan');
+      jetzt = 106000; mpWetterTick();
+      if (weather !== 'dry') f.push('Abtrocknen nicht nach Plan');
+    } finally {
+      Date.now = merk.now; raceWxStart = merk.wx; raceMode = merk.mode; raceLimit = merk.lim;
+      raceState = merk.st; mpWetter = null; setWeather(merk.wetter);
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Lichter -3/-2/-1/0 s, Versatz vom kuerzesten Weg, Wetter folgt dem Plan' };
+  });
+
+  stAdd('Lenkkennlinie: voll genau bei X %, Anfang unter linear, symmetrisch, am Servo', () => {
+    const f = [];
+    const c = physEngine.config;
+    const merk = { voll: c.steerVoll, expo: c.steerExpo, resp: c.steerResponse };
+    try {
+      c.steerVoll = 0.9; c.steerExpo = 2.45; c.steerResponse = 3;
+      if (lenkWirksam(0, 2.45) !== 0) f.push('0 bleibt nicht 0');
+      if (Math.abs(lenkWirksam(0.9, 2.45) - 1) > 1e-9) f.push('bei 90 % nicht voll: ' + lenkWirksam(0.9, 2.45));
+      if (lenkWirksam(0.85, 2.45) >= 1) f.push('schon vor 90 % voll');
+      const halb = lenkWirksam(0.45, 2.45);
+      if (!(halb > 0 && halb < 0.5)) f.push('Anfang nicht unter linear: ' + halb.toFixed(3));
+      if (Math.abs(lenkWirksam(0.45, 1) - 0.5) > 1e-9) f.push('Kennlinie 1 ist nicht linear');
+      if (lenkWirksam(-0.45, 2.45) !== -halb) f.push('nicht symmetrisch');
+      // Am Servo, frische Instanz im Stand: 90 % Stick ergibt vollen Ausschlag, 45 % etwa 18 %.
+      const probe = (x) => {
+        const e = new CarreraPhysicsEngine();
+        // Kalibrierung wie im Menue (2,5): sie gleicht den Gripverlust im Stand aus.
+        Object.assign(e.config, { steerVoll: 0.9, steerExpo: 2.45, steerResponse: 3, steerCalib: 2.5 });
+        for (let i = 0; i < 40; i++) e.update({ throttle: 0, brake: 0, steering: x }, 0.045);
+        return e.outputs.servoAngle;
+      };
+      const s90 = probe(0.9), s45 = probe(0.45);
+      if (s90 < 0.98) f.push('Servo bei 90 % Stick nur ' + s90.toFixed(3));
+      if (Math.abs(s45 - Math.pow(0.5, 2.45)) > 0.03) f.push('Servo bei 45 % Stick ' + s45.toFixed(3) + ' statt ' + Math.pow(0.5, 2.45).toFixed(3));
+    } finally { c.steerVoll = merk.voll; c.steerExpo = merk.expo; c.steerResponse = merk.resp; }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'voll bei 90 %, halber Weg ' + Math.pow(0.5, 2.45).toFixed(2) + ', symmetrisch, Servo stimmt' };
+  });
+
+  stAdd('Fruehstart: Ampel laeuft weiter, nach Gruen 2 s kein Gas und Bremse, danach frei', () => {
+    const f = [];
+    const merkState = raceState, merkT = physEngine.state.speedKmh, merkNow = Date.now;
+    let jetzt = merkNow.call(Date);
+    try {
+      Date.now = () => jetzt;
+      fruehstartReset();
+      raceState = 'countdown';
+      fruehstart[1].frueh = true;                 // wie vom Waechter im Countdown gesetzt
+      fruehstartGruen();
+      raceState = 'racing';
+      physEngine.state.speedKmh = 0;
+      if (fruehstartStrafeAktiv(1)) f.push('Strafe schon vor dem Anfahren');
+      physEngine.state.speedKmh = 10;
+      if (!fruehstartStrafeAktiv(1)) f.push('keine Strafe nach dem Anfahren');
+      jetzt += 1900;
+      if (!fruehstartStrafeAktiv(1)) f.push('Strafe endet vor 2 s');
+      jetzt += 200;
+      if (fruehstartStrafeAktiv(1)) f.push('Strafe laenger als 2 s');
+      fruehstartReset();
+      fruehstartGruen();
+      if (fruehstartStrafeAktiv(1)) f.push('Strafe ohne Fruehstart');
+    } finally {
+      Date.now = merkNow; raceState = merkState; physEngine.state.speedKmh = merkT; fruehstartReset();
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Strafe erst nach dem Anfahren, genau 2 s, ohne Fruehstart keine' };
+  });
+
   // ---- CHALLENGES (v0.8.30) ----
-  stAdd('Challenges: vier Strecken geschlossen und aus ihren Sets baubar', () => {
+  stAdd('Challenges: alle 83 Strecken geschlossen, baubar, verschieden, passend gross', () => {
     const f = [], zeilen = [];
     const merkRot = trackRotationDeg;
     trackRotationDeg = 0;
     try {
-      for (const def of CHALLENGES) {
+      const ids = new Set(CH_ALLE.map((d) => d.id));
+      if (ids.size !== 83) f.push(ids.size + ' verschiedene Kennungen statt 83 (80 Wochen + 3 Dauerrennen)');
+      for (const k of 'ABCD') if (CH_KATALOG[k].length !== 20) f.push(k + ': ' + CH_KATALOG[k].length + ' statt 20');
+      for (const def of CH_ALLE) {
+        const n = chTiles(def).length;
+        if (def.kat === 'A' && (n < 8 || n > 12)) f.push(def.name + ': ' + n + ' Teile in A');
+        if (def.kat === 'B' && (n < 13 || n > 15)) f.push(def.name + ': ' + n + ' Teile in B');
+        const [bw, bh] = chFlaeche(chTiles(def));
+        if (bw > (def.max || 2.65) || bh > (def.max || 2.65)) f.push(def.name + ' zu gross ' + bw.toFixed(2) + 'x' + bh.toFixed(2));
         const tiles = chTiles(def);
         const sch = trackSchluss(trackCenterline(tiles));
         if (!sch.closed) f.push(def.name + ' nicht geschlossen (' + sch.lueckeCm.toFixed(1) + ' cm)');
@@ -10350,12 +10683,130 @@
         for (const [typ, n] of Object.entries(braucht)) {
           if ((hat[typ] || 0) < n) f.push(def.name + ': ' + n + '× ' + TILE_LABEL[typ] + ', im Set ' + (hat[typ] || 0));
         }
-        const [w, h] = chFlaeche(tiles);
-        zeilen.push(def.id + ' ' + tiles.length + ' Teile ' + w.toFixed(2) + 'x' + h.toFixed(2) + ' m');
+        if (CHALLENGES.indexOf(def) >= 0) {
+          const [w, h] = chFlaeche(tiles);
+          zeilen.push(def.id + ' ' + tiles.length + ' Teile ' + w.toFixed(2) + 'x' + h.toFixed(2) + ' m');
+        }
       }
     } finally { trackRotationDeg = merkRot; }
     if (CHALLENGES.length !== 4) f.push(CHALLENGES.length + ' statt 4 Strecken');
-    return { ok: !f.length, mass: f.length ? f.join('; ') : zeilen.join(' | ') };
+    return { ok: !f.length, mass: f.length ? f.slice(0, 6).join('; ') : '83 geprueft, jetzt: ' + zeilen.join(' | ') };
+  });
+
+  stAdd('Challenges: Wochenwechsel Mittwoch 0:00 Berlin, nach 20 Wochen von vorn', () => {
+    const f = [];
+    const pruefe = (utc, soll, was) => { const i = chWoche(utc).index; if (i !== soll) f.push(was + ': Woche-Index ' + i + ' statt ' + soll); };
+    pruefe(Date.UTC(2026, 8, 29, 21, 59), 0, 'Di 29.09. 23:59 (vor dem Anker)');
+    pruefe(Date.UTC(2026, 9, 6, 21, 59, 59), 0, 'Di 06.10. 23:59:59');
+    pruefe(Date.UTC(2026, 9, 6, 22, 0, 0), 1, 'Mi 07.10. 0:00 Sommerzeit');
+    pruefe(Date.UTC(2026, 9, 27, 22, 59, 59), 3, 'Di 27.10. 23:59:59 Winterzeit');
+    pruefe(Date.UTC(2026, 9, 27, 23, 0, 0), 4, 'Mi 28.10. 0:00 Winterzeit');
+    pruefe(Date.UTC(2027, 1, 16, 22, 59, 59), 19, 'Di 16.02.2027 23:59:59');
+    pruefe(Date.UTC(2027, 1, 16, 23, 0, 0), 0, 'Mi 17.02.2027 0:00, wieder Woche 1');
+    const w = chWoche(Date.UTC(2026, 9, 5, 10, 0));
+    if (w.tage !== 2) f.push('Mo 05.10. mittags: ' + w.tage + ' statt 2 Tage bis zum Wechsel');
+    const a = chAktuelle(Date.UTC(2026, 9, 1)), b = chAktuelle(Date.UTC(2026, 9, 8));
+    if (a[1].id !== 'oval' || b[1].id !== 'schlange') f.push('B: Woche 1/2 nicht Monzetta/Suzuna');
+    if (a[2].id !== 'kehre' || a[3].id !== 'weitblick') f.push('C/D Woche 1 nicht Monte Carlito/Silverbrook');
+    if (a.some((d, i) => d.kat !== 'ABCD'[i])) f.push('Kategorien vertauscht');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Grenzen Sommer/Winterzeit, Umlauf nach 20 Wochen, Tage bis zum Wechsel' };
+  });
+
+  stAdd('Challenges: Rundenpruefung (90 % der Teile), Mindestzeit, geaenderte Einstellungen', () => {
+    const f = [];
+    const def = chDef('kehre');                       // SGRRRLHJRRRRG: 12 Teile nach Start
+    const codes = chTiles(def).slice(1).map((x) => x.type);
+    if (!chRundePruefen(def, codes).ok) f.push('exakte Runde nicht erkannt');
+    const eins = codes.slice(); eins.splice(4, 1);
+    const p1 = chRundePruefen(def, eins);
+    if (!p1.ok) f.push('eine Fehllesung (11/12) gilt als falsch, Quote ' + p1.quote.toFixed(2));
+    const zwei = eins.slice(); zwei.splice(7, 1);
+    if (chRundePruefen(def, zwei).ok) f.push('zwei fehlende Teile (10/12) gelten noch als richtig');
+    const kurz = codeToTrack('SRRRGGRRRG').tiles.slice(1).map((x) => x.type);
+    if (chRundePruefen(def, kurz).ok) f.push('eine andere, kuerzere Bahn gilt als richtig');
+    const doppelt = codes.concat(codes);
+    if (chRundePruefen(def, doppelt).ok) f.push('zwei Runden in einer gelten als richtig');
+    const zurueck = codes.slice().reverse().map((c) => (c === TILE_TYPE.CURVE_RIGHT ? TILE_TYPE.CURVE_LEFT
+      : c === TILE_TYPE.CURVE_LEFT ? TILE_TYPE.CURVE_RIGHT : c === TILE_TYPE.HAIRPIN ? TILE_TYPE.HAIRPIN_LEFT
+      : c === TILE_TYPE.HAIRPIN_LEFT ? TILE_TYPE.HAIRPIN : c));
+    if (!chRundePruefen(def, zurueck).ok) f.push('gegen die Richtung gefahren nicht erkannt');
+    const weit = chDef('weitblick');
+    const wc = chTiles(weit).slice(1).map((x) => (x.type === TILE_TYPE.WEIT_RIGHT ? TILE_TYPE.CURVE_RIGHT
+      : x.type === TILE_TYPE.WEIT_LEFT ? TILE_TYPE.CURVE_LEFT : x.type));
+    if (!chRundePruefen(weit, wc).ok) f.push('30-Grad-Kurve als 60-Grad gelesen wird verworfen');
+    const min = chMinRundeMs(def);
+    if (!(min > 2000 && min < 3000)) f.push('Mindestrunde ' + min + ' ms unplausibel');
+    const ok = { ok: true }, nein = { ok: false };
+    const d3 = { runden: 3 };
+    if (chWertung(d3, 'rennen', [5000, 5000, 5000], true, false, [ok, nein, ok], 2000).gueltig) f.push('Rennen mit ungeprueft Runde gewertet');
+    if (chWertung(d3, 'rennen', [5000, 1500, 5000], true, false, [ok, ok, ok], 2000).gueltig) f.push('Rennen mit zu schneller Runde gewertet');
+    const hb = chWertung(d3, 'hotlap', [5000, 1500, 4800, 4000], false, false, [ok, ok, ok, nein], 2000);
+    if (!hb.gueltig || hb.zeit !== 4800) f.push('beste Runde ' + hb.zeit + ' statt 4800 (1500 zu schnell, 4000 ungeprueft)');
+    if (chWertung(d3, 'hotlap', [5000], false, false, [ok], 2000, true).gueltig) f.push('geaenderte Einstellungen gewertet');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'exakt/1 Fehler ok, 2 Fehler/kuerzer/doppelt nein, rueckwaerts und 30->60 ok, Mindestrunde ' + min + ' ms' };
+  });
+
+  stAdd('Challenges: Sterne (Bronze/Silber/Gold) nach Strecke', () => {
+    const f = [];
+    const imo = chDef('wa01-imolina');
+    // Kalibriert an der gemessenen Imolina-Pro-Bestzeit 4639 ms -> das muss Gold sein.
+    const s = chSterneSchwellen(imo);
+    if (!(s.gold > 4000 && s.gold < 5200)) f.push('Imolina-Pro Gold ' + s.gold + ' ms unplausibel (erwartet um 4639)');
+    if (!(s.silber > s.gold)) f.push('Silber muss langsamer (groesser) als Gold sein');
+    // Bronze: jede gewertete Zeit unter Silber; Silber: zwischen Gold und Silber.
+    if (chSterne(imo, 'hotlap', 4639) !== 3) f.push('Imolina-Pro 4639 ms ist kein Gold');
+    if (chSterne(imo, 'hotlap', Math.round(s.gold + 1)) !== 2) f.push('knapp ueber Gold ist kein Silber');
+    if (chSterne(imo, 'hotlap', s.silber * 2) !== 1) f.push('deutlich langsamer ist kein Bronze');
+    if (chSterne(imo, 'hotlap', 0) !== 0) f.push('Zeit 0 (keine Wertung) ist keine Bronze');
+    // Rennen skaliert mit der Rundenzahl: die Gesamtzeit zaehlt def.runden Runden.
+    const rennen = chSterne(imo, 'rennen', s.gold * imo.runden);
+    if (rennen !== 3) f.push('Rennen: Goldzeit ueber ' + imo.runden + ' Runden ist kein Gold');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Gold/Silber/Bronce geordnet, Rennen skaliert, Imolina-Kalibrierung ' + s.gold + ' ms' };
+  });
+
+  stAdd('Challenges: Medaillen-Hinweis zeigt Bedingungen, Kachel-Rang Medaille + Perzentil', () => {
+    const f = [];
+    const imo = chDef('wa01-imolina');
+    const s = chSterneSchwellen(imo);
+    // Hinweis: Gold/Silber mit Zeit, Bronze ohne Zeit; Rennen skaliert mit der Rundenzahl.
+    const h = chMedailleHinweis(imo, 'hotlap');
+    if (h.indexOf('Gold') < 0 || h.indexOf('Silber') < 0 || h.indexOf('Bronze') < 0) f.push('Hinweis ohne alle drei Medaillen');
+    if (h.indexOf(chSekunden(s.gold)) < 0 || h.indexOf(chSekunden(s.silber)) < 0) f.push('Hinweis ohne Zeiten der Schwellen');
+    if (!/[0-9],[0-9] s|[0-9]\.[0-9] s/.test(h)) f.push('Zeiten nicht auf Zehntelsekunden gerundet: ' + h);
+    const hr = chMedailleHinweis(imo, 'rennen');
+    if (hr.indexOf(chSekunden(s.gold * imo.runden)) < 0) f.push('Rennen-Hinweis ohne skalierte Goldzeit');
+    // Kachel-Rang: ohne eigene Zeit leer; mit Zeit Medaille; Perzentil nur bei Konkurrenz.
+    const leer = chRangKachelText(null);
+    if (leer !== '') f.push('leerer Rang ist nicht leer: ' + leer);
+    let alt = null;
+    try { alt = localStorage.getItem(CH_STORE); } catch (e) { return { skip: true, mass: 'kein Speicher' }; }
+    try {
+      chLokalSpeichern({ id: imo.id, modus: 'hotlap', preset: 'pro', zeit: 4639, gueltig: true, auto: 'Test', geraet: 'x', fahrer: 'Test', runden: [4639] });
+      const r = chKachelRang(imo);
+      if (!r || r.st !== 3) f.push('Kachel-Rang ist kein Gold bei 4639 ms');
+      const txt = chRangKachelText(r);
+      if (txt.indexOf('Gold') < 0) f.push('Rang-Text ohne Medaillennamen: ' + txt);
+      if (r.n >= 2 && txt.indexOf('TOP') < 0) f.push('Rang ohne Perzentil bei Konkurrenz: ' + txt);
+    } finally {
+      try { if (alt === null) localStorage.removeItem(CH_STORE); else localStorage.setItem(CH_STORE, alt); } catch (e) { /* egal */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Hinweis mit Gold/Silber/Bronze und Zeiten, Rennen skaliert, Rang Gold' };
+  });
+
+  stAdd('Challenges: Einstellungen waehrend des Laufs gesperrt und danach frei', () => {
+    const f = [];
+    const pm = $('phys-mode'), fm = $('race-act-mode');
+    const vorher = [pm.disabled, fm ? fm.disabled : null];
+    try {
+      chSperre(true);
+      if (!pm.disabled) f.push('Steuerungsmodus nicht gesperrt');
+      if (fm && !fm.disabled) f.push('Fahrmodus-Knopf im Cockpit nicht gesperrt');
+      if ($('ch-sperre').hidden) f.push('kein Hinweis in den Optionen');
+      if (presetControls().some((el) => !el.disabled)) f.push('nicht alle Regler gesperrt');
+    } finally { chSperre(false); }
+    if (pm.disabled !== vorher[0] || (fm && fm.disabled !== vorher[1])) f.push('danach nicht wieder frei');
+    if (!$('ch-sperre').hidden) f.push('Hinweis bleibt stehen');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : presetControls().length + ' Regler gesperrt und wieder frei' };
   });
 
   stAdd('Challenges: Wertung, Perzentil und Histogramm', () => {
@@ -10368,7 +10819,11 @@
     const b = chWertung(def, 'hotlap', [5000, 3800, 4200], false, false);
     if (!b.gueltig || b.zeit !== 3800) f.push('beste Runde ' + b.zeit + ' statt 3800');
     if (chWertung(def, 'hotlap', [], false, false).gueltig) f.push('beste Runde ohne Runde gewertet');
-    if (chWertung(def, 'hotlap', [3000], false, true).gueltig) f.push('Fruehstart gewertet');
+    if (!chWertung(def, 'hotlap', [3000], false, true).gueltig) f.push('Fruehstart bricht noch ab (soll mit Bremsstrafe zaehlen)');
+    const dD = { runden: 2, kat: 'D' };
+    if (chWertung(dD, 'rennen', [5000, 5000], true, false, null, 0, false, 0).gueltig) f.push('Kategorie D ohne Pflichtstopp gewertet');
+    if (!chWertung(dD, 'rennen', [5000, 5000], true, false, null, 0, false, 1).gueltig) f.push('Kategorie D mit Pflichtstopp nicht gewertet');
+    if (!chWertung({ runden: 2, kat: 'B' }, 'rennen', [5000, 5000], true, false, null, 0, false, 0).gueltig) f.push('Pflichtstopp auch ausserhalb von D verlangt');
     const p = chPerzentil([10, 20, 30, 40, 50], 20);
     if (p !== 75) f.push('Perzentil ' + p + ' statt 75');
     if (chPerzentil([7], 7) !== 100) f.push('allein nicht 100 Prozent');
@@ -10376,7 +10831,7 @@
     const summe = k.reduce((a, x) => a + x.anz, 0);
     if (k.length !== 4 || summe !== 6) f.push('Histogramm ' + k.length + ' Klassen, ' + summe + ' Werte');
     if (k[0].anz !== 3 || k[3].anz !== 1) f.push('schnelle Zeiten nicht oben: ' + k.map((x) => x.anz).join(','));
-    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Rennen Summe, beste Runde Minimum, Abbruch und Fruehstart ungueltig, 75 %, 3/1/1/1' };
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Rennen Summe, beste Runde Minimum, Abbruch ungueltig, Fruehstart zaehlt, Pflichtstopp D, 75 %, 3/1/1/1' };
   });
 
   stAdd('Challenges: setzt Preset, Rennen und Strecke und stellt danach alles zurück', () => {
@@ -10385,10 +10840,10 @@
     const vorCode = trackToCode(currentTrackTiles, trackRotationDeg);
     const def = chDef('kehre');
     try {
-      chAnwenden(def, 'rennen', 'arcade');
-      if ($('race-mode').value !== 'laps' || raceLimit !== def.runden) f.push('Rennen nicht auf ' + def.runden + ' Runden');
+      chAnwenden(def, 'rennen', 'pro');
+      if ($('race-mode').value !== 'laps' || raceLimit !== def.runden + CH_EXTRA_LAPS) f.push('Rennen nicht auf ' + def.runden + ' Runden (+ ' + CH_EXTRA_LAPS + ' Ausgleichsrunden)');
       if ($('phys-mode').value !== 'physik') f.push('Steuerungsmodus nicht Physik');
-      if (window.__presetActive && window.__presetActive() !== 'arcade') f.push('Preset ist ' + window.__presetActive());
+      if (window.__presetActive && window.__presetActive() !== 'pro') f.push('Preset ist ' + window.__presetActive());
       if ($('race-wx-start').value !== 'dry' || $('race-pit-required').value !== '0') f.push('Wetter/Pflichtstopps nicht neutral');
       if (trackToCode(currentTrackTiles, 0).replace(/\d/g, '') !== trackToCode(codeToTrack(def.code).tiles, 0).replace(/\d/g, '')) f.push('Strecke nicht geladen');
       chAnwenden(def, 'hotlap', 'pro');
@@ -10403,7 +10858,80 @@
     }
     if (nachher.modus !== vorher.modus || nachher.limit !== vorher.limit) f.push('Rennmodus nicht zurueck');
     if (trackToCode(currentTrackTiles, trackRotationDeg) !== vorCode) f.push('Strecke nicht zurueck');
-    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Arcade und Pro gesetzt, danach alles wie vorher' };
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Pro gesetzt, danach alles wie vorher' };
+  });
+
+  stAdd('Challenges: Balkonia hat 1 Pflichtstopp und ein Regenfenster Minute 2-4', () => {
+    const f = [];
+    const def = chDef('dauer-balkonia');
+    if (chPitZahl(def, 'rennen') !== 1) f.push('Balkonia: ' + chPitZahl(def, 'rennen') + ' Pflichtstopp statt 1');
+    if (chPitZahl(def, 'hotlap') !== 0) f.push('Balkonia: Pflichtstopp auch im Hotlap');
+    if (!chPflichtstopp(def, 'rennen')) f.push('Balkonia: chPflichtstopp false');
+    const vorher = chMerken();
+    try {
+      chAnwenden(def, 'rennen', 'pro');
+      if ($('race-pit-required').value !== '1') f.push('race-pit-required ' + $('race-pit-required').value);
+      if ($('pit-modus').value !== 'minigame') f.push('pit-modus ' + $('pit-modus').value);
+      if ($('pit-trigger').value !== 'anywhere') f.push('pit-trigger ' + $('pit-trigger').value);
+      if ($('race-wx-change').checked) f.push('race-wx-change nicht aus');
+      if ($('race-wx-start').value !== 'dry') f.push('race-wx-start ' + $('race-wx-start').value);
+      if (!chWetterPlan || chWetterPlan.length !== 2) f.push('Wetterplan ' + JSON.stringify(chWetterPlan));
+      else {
+        if (chWetterPlan[0].abMs !== 120000 || chWetterPlan[0].wetter !== 'rain') f.push('Plan 0 ' + JSON.stringify(chWetterPlan[0]));
+        if (chWetterPlan[1].abMs !== 240000 || chWetterPlan[1].wetter !== 'dry') f.push('Plan 1 ' + JSON.stringify(chWetterPlan[1]));
+      }
+    } finally { chZuruecksetzen(vorher); }
+    if (chWetterPlan !== null) f.push('Wetterplan nach Zuruecksetzen nicht null');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : '1 Pflichtstopp, Wetterplan Regen 2 min / trocken 4 min' };
+  });
+
+  // BESTELLT (Balkonia): "relax the times ... Make gold 16 and recalibrate all other
+  // times." Die Strecke gibt sich ihre Gold-Zeit selbst (Sekunden je Runde); Silber wird
+  // daraus gerechnet. Im Rennen (100 Runden) ergibt das 16 min Gold und 24 min Silber.
+  stAdd('Challenges: Balkonia Gold-Zeit entspannt auf 16 min', () => {
+    const f = [];
+    const def = chDef('dauer-balkonia');
+    const s = chSterneSchwellen(def);
+    if (s.gold !== 9600) f.push('Gold je Runde ' + s.gold + ' statt 9600 ms');
+    if (s.silber !== Math.round(9600 * CH_STERNE_SILBER_FAKTOR)) f.push('Silber je Runde ' + s.silber);
+    const r = def.runden || 1;
+    if (Math.round(s.gold * r / 1000 / 60) !== 16) f.push('Rennen-Gold ' + Math.round(s.gold * r / 1000 / 60) + ' min statt 16');
+    if (Math.round(s.silber * r / 1000 / 60) !== 24) f.push('Rennen-Silber ' + Math.round(s.silber * r / 1000 / 60) + ' min statt 24');
+    if (chSterne(def, 'rennen', 15.5 * 60000) !== 3) f.push('Bestzeit 15.5 min gibt nicht Gold');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Gold 9.6 s/Runde, Rennen 16 min, Silber 24 min' };
+  });
+
+  // BESTELLT: "mirroring the track does not work. Check it for all existing ones in the
+  // current challenges." Die Spiegelung (chSpiegelTiles) wird fuer alle bestehenden
+  // Challenges geprueft: gueltige Geometrie, gleiche Laenge, und die Anti-Cheat-Pruefung
+  // erkennt die gespiegelte Runde.
+  stAdd('Challenges: Spiegelung funktioniert fuer alle Strecken', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.spiegelProbe) {
+      return { skip: true, mass: 'spiegelProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.spiegelProbe();
+    return { ok: r.schlecht.length === 0,
+             mass: r.geprueft + ' Strecken gespiegelt'
+                   + (r.schlecht.length ? ' || ' + r.schlecht.join('; ') : '') };
+  });
+
+  // BESTELLT: "for the best 3 times, consider only 3 subsequent times that were all valid
+  // because if there was one invalid one (eg 1s, it skews all times)." Die beste
+  // Dreiergruppe besteht nur aus Runden, die alle ueber der Mindestzeit liegen.
+  stAdd('Challenges: 3er-Serie nur aus drei gueltigen Runden', () => {
+    const f = [];
+    // [10,11,12] -> Summe 33.
+    if (chDreierBeste([10, 11, 12], 0) !== 33) f.push('einfache Dreiergruppe');
+    // [1, 10, 11, 12] -> die 1-s-Runde ist zu kurz, also zaehlt [10,11,12] = 33.
+    if (chDreierBeste([1, 10, 11, 12], 5) !== 33) f.push('zu kurze Runde vorn');
+    // [10, 1, 11, 12] -> die 1-s-Runde liegt MITTEN drin, beide Dreiergruppen sind zu
+    // verwerfen -> null (nur [10,1,11] und [1,11,12], beide enthalten die 1 s).
+    if (chDreierBeste([10, 1, 11, 12], 5) !== null) f.push('zu kurze Runde mittendrin');
+    // [10, 11, 12, 13] -> beste Gruppe [10,11,12] = 33.
+    if (chDreierBeste([10, 11, 12, 13], 0) !== 33) f.push('beste von zwei Gruppen');
+    // Weniger als drei Runden -> null.
+    if (chDreierBeste([10, 11], 0) !== null) f.push('zu wenige Runden');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'nur Dreier aus gueltigen Runden' };
   });
 
   stAdd('Challenges: Seite zeigt Strecke, Modi und Bestenliste; Rennen-Taste bricht das Warten ab', () => {
@@ -10412,18 +10940,25 @@
     let alt = null;
     try { alt = localStorage.getItem(CH_STORE); } catch (e) { return { skip: true, mass: 'kein Speicher' }; }
     try {
-      localStorage.setItem(CH_STORE, JSON.stringify({ 'schlange|hotlap|pro': [{ zeit: 4200, auto: 'Test', geraet: 'x' }, { zeit: 4800, auto: 'Test', geraet: 'x' }] }));
+      const idB = CHALLENGES[1].id;
+      localStorage.setItem(CH_STORE, JSON.stringify({ [idB + '|hotlap|pro']: [{ zeit: 4200, auto: 'Test', geraet: 'x' }, { zeit: 4800, auto: 'Test', geraet: 'y' }] }));
       showTab('challenges');
-      showSubpage('ch-schlange');
-      if (!$('sub-ch-schlange').contains($('ch-detail')) || $('ch-detail').hidden) f.push('Inhalt nicht in der Seite');
+      showSubpage('ch-b');
+      if (!$('sub-ch-b').contains($('ch-detail')) || $('ch-detail').hidden) f.push('Inhalt nicht in der Seite');
+      if ($('sub-ch-b').querySelector('.ch-titel').textContent !== CHALLENGES[1].name) f.push('Titel nicht die Strecke der Woche');
+      if (!document.querySelector('.ch-kachel .ch-mini[data-kat="b"] svg')) f.push('Kachel ohne Minikarte');
       if (!$('ch-karte').querySelector('svg')) f.push('keine Streckenkarte');
       $('ch-modus').querySelector('[data-m="hotlap"]').click();
-      $('ch-preset').querySelector('[data-p="pro"]').click();
+      $('ch-modus').click();
+      if (chModus !== 'rennen') f.push('X auf dem Modus-Knopf schaltet nicht um');
+      $('ch-modus').click();
+      if (chModus !== 'hotlap') f.push('zweites X schaltet nicht zurueck');
+      if (!$('ch-detail').querySelector('.ch-links #ch-start') || !$('ch-detail').querySelector('.ch-rechts #ch-liste')) f.push('Anordnung: Einstellungen links, Bestenliste rechts stimmt nicht');
       if ($('ch-liste').children.length !== 2) f.push($('ch-liste').children.length + ' statt 2 Zeilen in der Bestenliste');
       if ($('ch-histo').children.length < 3) f.push('kein Histogramm');
       // Warten auf Stillstand, dann Rennen-Taste: abbrechen, keine Ampel.
       const merkLauf = chMerken();
-      chLauf = { id: 'schlange', modus: 'hotlap', preset: 'pro', phase: 'stehen', stillSeit: 0, hinweisAt: 0, merk: merkLauf };
+      chLauf = { id: idB, modus: 'hotlap', preset: 'pro', phase: 'stehen', stillSeit: 0, hinweisAt: 0, merk: merkLauf };
       toggleRace();
       if (chLauf) f.push('Challenge laeuft nach der Rennen-Taste weiter');
       if (raceState !== 'idle' && raceState !== 'finished') f.push('Ampel trotzdem gestartet (' + raceState + ')');
@@ -10489,6 +11024,63 @@
       ovKarteMalen();
     }
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Foto frei gezeigt, auf der Bahn wieder die Karte' };
+  });
+
+  // BESTELLT v0.8.126: mehrere verbundene Autos mit Fotos gemeinsam zeigen (Garage auf dem
+  // Fahren-Schirm). Erst ab zwei Fotos wird daraus eine Galerie, sonst bleibt es beim einen
+  // Bild des Fahrer-Autos.
+  stAdd('Fahren: mehrere verbundene Autos zeigen ihre Fotos gemeinsam', () => {
+    const merk = garage.slice();
+    const f = [];
+    const a1 = { role: 'player', device: { id: 'probe-galerie-1' }, alias: 'Alpha', colorId: 'rot', sim: false, testSenke: [] };
+    const a2 = { role: 'player2', device: { id: 'probe-galerie-2' }, alias: 'Beta', colorId: 'blau', sim: false, testSenke: [] };
+    const alt = (id) => { try { return localStorage.getItem('omegasim-autofoto:' + id) || ''; } catch (e) { return ''; } };
+    const alt1 = alt(a1.device.id), alt2 = alt(a2.device.id);
+    try {
+      garage.splice(0, garage.length);
+      garage.push(a1, a2);
+      const c = document.createElement('canvas'); c.width = 2; c.height = 2;
+      const foto = c.toDataURL('image/jpeg', 0.8);
+      if (!autoFotoSetzen(a1, foto) || !autoFotoSetzen(a2, foto)) return { skip: true, mass: 'Speicher voll' };
+      konsoleFahrenZeichnen();
+      const gal = $('fa-auto-bild').querySelector('.k-auto-galerie');
+      if (!gal) f.push('keine Galerie bei zwei Fotos');
+      else if (gal.querySelectorAll('.k-auto-zelle').length !== 2) f.push('Galerie hat nicht 2 Kacheln');
+      if (!$('fa-auto').classList.contains('k-auto-mehr')) f.push('Kachel traegt k-auto-mehr nicht');
+      autoFotoSetzen(a2, '');
+      konsoleFahrenZeichnen();
+      if ($('fa-auto-bild').querySelector('.k-auto-galerie')) f.push('Galerie bleibt bei einem Foto');
+    } finally {
+      garage.splice(0, garage.length);
+      for (const c of merk) garage.push(c);
+      try { localStorage.setItem('omegasim-autofoto:' + a1.device.id, alt1); } catch (e) { /* egal */ }
+      try { localStorage.setItem('omegasim-autofoto:' + a2.device.id, alt2); } catch (e) { /* egal */ }
+      konsoleFahrenZeichnen();
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'zwei Fotos gemeinsam, eines wieder einzeln' };
+  });
+
+  // BESTELLT v0.8.126: ist eine Strecke eingegeben und der Modus steht auf "auf der Bahn",
+  // zeigt das Band die Streckenvorschau aus dem Editor statt des Beispielbilds.
+  stAdd('Fahren: eingegebene Strecke zeigt die Vorschau statt des Fotos', () => {
+    const keep = currentTrackTiles;
+    const merkBahn = ($('setting-ontrack') || {}).checked;
+    const f = [];
+    try {
+      currentTrackTiles = codeToTrack('SGHR').tiles;
+      $('setting-ontrack').checked = true;
+      konsoleFahrenZeichnen();
+      if (!$('fa-strecke-bild').querySelector('.tp-karte')) f.push('keine Streckenvorschau bei eingegebener Strecke');
+      if (!$('fa-strecke').classList.contains('k-vorschau')) f.push('Kachel traegt k-vorschau nicht');
+      $('setting-ontrack').checked = false;
+      konsoleFahrenZeichnen();
+      if ($('fa-strecke-bild').querySelector('.tp-karte')) f.push('Vorschau bleibt ohne Bahn-Modus');
+    } finally {
+      currentTrackTiles = keep;
+      $('setting-ontrack').checked = merkBahn;
+      konsoleFahrenZeichnen();
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Vorschau auf der Bahn, Foto ohne Bahn' };
   });
 
   stAdd('ACC-Menü: Entwicklertools versteckt, Schalter blendet sie ein', () => {
@@ -11805,13 +12397,10 @@
     }
     const r = OMEGA_TEST.raceEinstellungenSchirmProbe();
     const maengel = [];
-    if (!r.screenErreichbar) maengel.push('Schirm "renneinstellungen" nicht erreichbar');
-    if (!r.nurEineZeileVorher) maengel.push('keine oder mehrere Zeilen ausgewaehlt');
-    if (!r.bewegtSich) maengel.push('"runter" bewegt die Auswahl nicht');
-    if (!r.umlaufKehrtZurueck) maengel.push('drei Schritte "runter" kehren nicht zur Ausgangszeile zurueck');
-    if (!r.armiert) maengel.push('Waehltaste auf "Renntyp" waehlt die Zeile nicht an');
-    if (r.modeNachWahl === r.modeVorWahl) maengel.push('rechts auf "Renntyp" aendert #race-mode nicht');
-    if (r.modeZurueck !== r.modeVorWahl) maengel.push('links geht nicht genau einen Schritt zurueck');
+    // BESTELLT: "Renneinstellungen aus dem Cockpit-Schirmkreis herausnehmen" - der Schirm
+    // darf NICHT mehr blaetterbar sein; Rennmodus/Dauer stehen im Fahren-Tab.
+    if (!r.screenErreichbar) maengel.push('Schirm "renneinstellungen" noch im Cockpit-Kreis');
+    if (r.modeNachWahl === r.modeVorWahl) maengel.push('Tab-Aenderung schreibt nicht auf #race-mode');
     return { ok: !maengel.length,
              mass: 'genau eine Zeile ausgewaehlt, hoch/runter bewegt sie mit Umlauf, '
                  + 'Renntyp ' + r.modeVorWahl + ' -> ' + r.modeNachWahl + ' auf #race-mode selbst'
@@ -12056,11 +12645,11 @@
     const r = OMEGA_TEST.schirmZweiProbe();
     const w = r.werte;
     const maengel = [];
-    if (r.liste.indexOf('auto2') < 0) maengel.push('Schirm nicht in der Registry');
-    if (r.ohne.indexOf('auto2') >= 0) {
-      maengel.push('ohne Modus erreichbar: ' + r.ohne.join('>'));
-    }
-    if (r.mit.indexOf('auto2') < 0) maengel.push('mit Modus nicht erreichbar: ' + r.mit.join('>'));
+    // Die Beide-Ansicht ist seit dem Cockpit-Umbau der morph(t)e Standardschirm (main)
+    // selbst und kein eigener Schirm mehr: kein auto2 in der Registry, und main zeigt
+    // im Zwei-Spieler-Modus die Beide-Ansicht.
+    if (r.liste.indexOf('auto2') >= 0) maengel.push('auto2-Schirm existiert noch: ' + r.liste.join('>'));
+    if (r.mainSchirm !== 'auto2') maengel.push('main zeigt im Zwei-Spieler-Modus nicht die Beide-Ansicht: ' + r.mainSchirm);
     if (r.nachAus !== 'main') maengel.push('nach dem Abschalten noch auf ' + r.nachAus);
     // ---- Die beiden Spalten zeigen VERSCHIEDENE Autos --------------------------
     // 80 % von 110 l sind 88, 40 % sind 44.
@@ -12644,6 +13233,7 @@
       ['setting-autoshift', () => physEngine.config.autoShift],
       ['setting-battery-comp', () => batteryCompEnabled],
       ['setting-crash-damage', () => crashDetectionEnabled],
+      ['setting-crash-stationary', () => crashStationarySafe],
       ['setting-offtrack', () => offtrackEffekt],
       ['setting-tyre-blankets', () => physEngine.config.tyreBlankets],
       ['setting-vibration', () => rumbleOn],
@@ -15085,10 +15675,12 @@
     const L = OMEGA_TEST.crashLage ? OMEGA_TEST.crashLage(1) : null;
     const gemerkt = { sp: playerCar, dmg: damage,
                       an: crashDetectionEnabled,
+                      cs: crashStationarySafe,
                       a1: L && L.avg1, a3: L && L.avg3, lt: L && L.letzter,
                       gb: L && L.gnadeBis };
     try {
       crashDetectionEnabled = true;
+      crashStationarySafe = false;
       if (L) { L.avg1 = null; L.avg3 = null; L.letzter = 0; L.gnadeBis = 0; }
       damage = 0;
       const attrappe = { device: { id: 'st-crash', name: 'Pruefwagen' }, role: 'player',
@@ -15113,6 +15705,67 @@
     } finally {
       playerCar = gemerkt.sp; damage = gemerkt.dmg;
       crashDetectionEnabled = gemerkt.an;
+      crashStationarySafe = gemerkt.cs;
+      if (L) { L.avg1 = gemerkt.a1; L.avg3 = gemerkt.a3; L.gnadeBis = gemerkt.gb; }
+      if (L) L.letzter = gemerkt.lt;
+      updateDamageFuelUI();
+    }
+  });
+
+  // ---- Kein Schaden, solange das Auto steht (0 km/h) ----
+  //
+  // BESTELLT: "das Auto soll keinen Schaden nehmen, wenn es nicht faehrt (0 km/h), damit
+  // ich es aufheben kann." Die Hand, die ein stehendes Auto hochhebt, erzeugt auf den Bytes
+  // 1 und 3 dieselbe Abweichung wie ein Aufprall - nur dass das Auto dabei eben steht.
+  // Geprueft wird beides: stehend + Schalter an => kein Schaden, und fahrend + Schalter an
+  // => doch Schaden (der Schalter schaltet das Schadensmodell also nicht global aus).
+  stAdd('Kein Schaden, solange das Auto steht (0 km/h)', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.feedNotify) {
+      return { skip: true, mass: 'feedNotify nicht vorhanden' };
+    }
+    const L = OMEGA_TEST.crashLage ? OMEGA_TEST.crashLage(1) : null;
+    const gemerkt = { sp: playerCar, dmg: damage, an: crashDetectionEnabled,
+                      cs: crashStationarySafe, v: physEngine.state.speedKmh,
+                      a1: L && L.avg1, a3: L && L.avg3, lt: L && L.letzter,
+                      gb: L && L.gnadeBis };
+    const echtNow = Date.now;
+    let uhr = 500000;
+    try {
+      Date.now = () => uhr;
+      crashDetectionEnabled = true;
+      crashStationarySafe = true;
+      if (L) { L.avg1 = null; L.avg3 = null; L.letzter = 0; L.gnadeBis = 0; }
+      damage = 0;
+      physEngine.state.speedKmh = 0;
+      const attrappe = { device: { id: 'st-stand', name: 'Pruefwagen' }, role: 'player',
+                         rx: null, tx: null, tileCode: 0xff, tileCount: null,
+                         lastCodeAt: 0, yaw: 0, ghost: null, timer: null, race: null };
+      playerCar = attrappe;
+      const paket = (b1, b3) => {
+        const a = new Array(19).fill(0);
+        a[1] = b1 & 0xff; a[3] = b3 & 0xff; a[14] = 0x22;
+        return a;
+      };
+      const ruhigStoss = (v) => {
+        if (L) { L.avg1 = null; L.avg3 = null; L.letzter = 0; L.gnadeBis = 0; }
+        for (let i = 0; i < 12; i++) { uhr += 45; OMEGA_TEST.feedNotify(paket(4, 2), { car: attrappe }); }
+        uhr += 2000;   // ueber Sperr- und Gnadenzeit hinaus
+        OMEGA_TEST.feedNotify(paket(100, 90), { car: attrappe });
+        return damage;
+      };
+      // Stehend: der Stoss darf KEINEN Schaden geben.
+      const imStand = ruhigStoss();
+      // Fahrend: derselbe Stoss MUSS Schaden geben - der Schalter ist nicht global aus.
+      physEngine.state.speedKmh = 180 / REAL_SCALE;
+      const inFahrt = ruhigStoss();
+      return { ok: imStand === 0 && inFahrt > 0,
+               mass: 'im Stand ' + imStand.toFixed(1) + ' %, in Fahrt '
+                     + inFahrt.toFixed(1) + ' % Schaden' };
+    } finally {
+      Date.now = echtNow;
+      playerCar = gemerkt.sp; damage = gemerkt.dmg;
+      crashDetectionEnabled = gemerkt.an; crashStationarySafe = gemerkt.cs;
+      physEngine.state.speedKmh = gemerkt.v;
       if (L) { L.avg1 = gemerkt.a1; L.avg3 = gemerkt.a3; L.gnadeBis = gemerkt.gb; }
       if (L) L.letzter = gemerkt.lt;
       updateDamageFuelUI();

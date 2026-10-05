@@ -50,8 +50,11 @@ MOTIVE = {
     'fahren': ('fcfd5041-9934-4ffc-ae13-c784316066ed.jpg', 0, (110, 150, 640, 430)),
     'auto': '24276.jpg',                    # M4 GT3 von hinten
     'garage': ('24273.jpg', 90),            # M4 GT3 von oben, quer gelegt
-    'strecke-bahn': '03a18c66-3e7f-4c80-a5f6-94465b9d43c7.jpg',   # Randstein in der Kurve
-    'strecke-frei': '24282.jpg',            # ausgedruckte Streifen
+    # BESTELLT (v0.8.53): TRACK-Kachel im Fahren-Menue - "Auf der Bahn" zeigt 24282 (Carrera
+    # Hybrid), "Frei" das neu dazugekommene 744468c1. Beide dienen auch als Tab-Hintergrund
+    # und in der Startaufstellung.
+    'strecke-bahn': '24282.jpg',            # Carrera-Hybrid-Bahn
+    'strecke-frei': '744468c1-47c0-4228-a8c9-b73a44cd62ad.jpg',   # ausgedruckte Streifen
     'rennen': '3a0115af-1174-4c1d-98c5-0ae21c34722e.jpg',   # Startaufstellung von oben
     'start': '4be73532-6d99-4a25-b4a1-66abaf6e52d5.jpg',    # Autos in der Senke
     'mehrspieler': '24279.jpg',             # Auto, Controller mit Telefonhalter
@@ -67,6 +70,11 @@ MOTIVE = {
     # einem der Nordschleife-Bilder ersetzen".
     'strecke-kachel': ('03a18c66-3e7f-4c80-a5f6-94465b9d43c7.jpg', 0, (300, 340, 840, 559)),
     'rennoptionen': ('eb15c751-2d72-41aa-af6c-8e5bc54bee18.jpg', 0, (330, 170, 860, 470)),
+    # Rennoptionen-Kachel wechselt mit dem Rennmodus das Bild (BESTELLT v0.8.53).
+    'rennoptionen-practice': '6910463278_f7aa66a535_b.jpg',
+    'rennoptionen-endurance': ('eb15c751-2d72-41aa-af6c-8e5bc54bee18.jpg', 0, (330, 170, 860, 470)),
+    'rennoptionen-qualifying': '03a18c66-3e7f-4c80-a5f6-94465b9d43c7.jpg',
+    'rennoptionen-laps': 'Gemini_Generated_Image_t5r42rt5r42rt5r4.jpg',
     'asphalt': ('03a18c66-3e7f-4c80-a5f6-94465b9d43c7.jpg', 0, (0, 238, 420, 345)),
 }
 GROESSEN = {'-bg': 1920, '': 720}

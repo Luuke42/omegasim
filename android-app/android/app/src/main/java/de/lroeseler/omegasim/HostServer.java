@@ -23,6 +23,11 @@ import org.json.JSONObject;
  *   POST /mp/report                eigener Stand eines Telefons (JSON, hoechstens 8 KiB)
  *   GET  /mp/info                  Rennlaenge und Adresse
  *   GET  /mp/reset                 neues Rennen
+ *   POST /mp/race                  gemeinsames Rennen: {plan, phase, initiator, vorlaufMs}
+ *                                  phase 'bereit' -> Bereitschaftsschirm; phase 'start' ->
+ *                                  Startzeit in der Host-Uhr, nur wenn alle ausser dem
+ *                                  Initiator bereit sind (v0.8.126)
+ *   POST /mp/ready                 {id}: dieses Telefon ist bereit
  *   OPTIONS                        Vorabflug, CORS *
  *   alles andere                   die App selbst (laufende Fassung), fuer Browser im WLAN
  *
@@ -36,6 +41,15 @@ class HostServer extends NanoHTTPD {
     private Double start = null;
     private Integer runden = null, minuten = null;
     private String strecke = "";
+    // GEMEINSAMER START (v0.8.42): Plan und Startzeit (Host-Uhr, ms), verteilt ueber /mp/state.
+    private long raceId = 0;
+    private Long startAt = null;
+    private JSONObject plan = null;
+    // BEREIT-GATE (v0.8.126): zwei Phasen. 'bereit' zeigt den Bereitschaftsschirm, 'start'
+    // setzt die Startzeit - aber erst, wenn alle ausser dem Initiator bereit sind.
+    private String phase = "idle";
+    private String initiator = null;
+    private final List<String> bereit = new ArrayList<>();
 
     HostServer(Context ctx, int port) {
         super(port);
@@ -71,11 +85,12 @@ class HostServer extends NanoHTTPD {
                 o.put("adresse", a.isEmpty() ? "" : a.get(0));
                 return json(o);
             }
-            if (uri.startsWith("/mp/report")) {
+            if (uri.startsWith("/mp/report") || uri.startsWith("/mp/race")
+                    || uri.startsWith("/mp/ready")) {
                 if (s.getMethod() != Method.POST) return cors(newFixedLengthResponse(Response.Status.METHOD_NOT_ALLOWED, "text/plain", "POST"));
                 String laenge = s.getHeaders().get("content-length");
                 int n = laenge == null ? 0 : Integer.parseInt(laenge.trim());
-                if (n > 8192) {
+                if (n > 16384) {
                     JSONObject f = new JSONObject();
                     f.put("ok", false);
                     f.put("fehler", "zu gross");
@@ -89,7 +104,10 @@ class HostServer extends NanoHTTPD {
                     if (k < 0) break;
                     gelesen += k;
                 }
-                return json(melden(new JSONObject(new String(b, 0, gelesen, StandardCharsets.UTF_8))));
+                JSONObject daten = new JSONObject(new String(b, 0, gelesen, StandardCharsets.UTF_8));
+                if (uri.startsWith("/mp/race")) return json(rennenStarten(daten));
+                if (uri.startsWith("/mp/ready")) return json(bereitMelden(daten));
+                return json(melden(daten));
             }
             return datei(uri);
         } catch (Exception e) {
@@ -104,6 +122,12 @@ class HostServer extends NanoHTTPD {
         r.put("start", start == null ? JSONObject.NULL : start);
         r.put("laps", runden == null ? JSONObject.NULL : runden);
         r.put("minutes", minuten == null ? JSONObject.NULL : minuten);
+        r.put("id", raceId);
+        r.put("startAt", startAt == null ? JSONObject.NULL : startAt);
+        r.put("plan", plan == null ? JSONObject.NULL : plan);
+        r.put("phase", phase);
+        r.put("initiator", initiator == null ? JSONObject.NULL : initiator);
+        r.put("bereit", new JSONArray(bereit));
         if (start != null) {
             double lauf = Math.round((jetzt() - start) * 10) / 10.0;
             r.put("laufzeit", lauf);
@@ -150,6 +174,7 @@ class HostServer extends NanoHTTPD {
         r.put("fahrer", new JSONArray(leute));
         r.put("rennen", rennen());
         r.put("zeit", Math.round(t * 10) / 10.0);
+        r.put("zeitMs", System.currentTimeMillis());
         r.put("zuschauer", aktiv);
         r.put("strecke", strecke);
         return r;
@@ -200,9 +225,75 @@ class HostServer extends NanoHTTPD {
         return ok;
     }
 
+    private synchronized JSONObject rennenStarten(JSONObject d) throws Exception {
+        JSONObject o = new JSONObject();
+        JSONObject p = d.optJSONObject("plan");
+        if (p == null) {
+            o.put("ok", false);
+            o.put("fehler", "kein Plan");
+            return o;
+        }
+        String ph = d.optString("phase", "bereit");
+        String ini = kuerze(d.optString("initiator", ""), 64);
+        long jetzt = System.currentTimeMillis();
+        if ("start".equals(ph)) {
+            // Alle ausser dem Initiator muessen bereit sein.
+            List<String> nichtBereit = new ArrayList<>();
+            for (String fid : fahrer.keySet()) {
+                if (!fid.equals(ini) && !bereit.contains(fid)) nichtBereit.add(fid);
+            }
+            if (!nichtBereit.isEmpty()) {
+                o.put("ok", false);
+                o.put("fehler", "nicht alle bereit: " + String.join(", ", nichtBereit));
+                return o;
+            }
+            long vorlauf = Math.max(6000, Math.min(30000, d.optLong("vorlaufMs", 12000)));
+            raceId++;
+            startAt = jetzt + vorlauf;
+            plan = p;
+            start = startAt / 1000.0;
+            phase = "start";
+            o.put("ok", true);
+            o.put("id", raceId);
+            o.put("startAt", startAt);
+            o.put("zeitMs", jetzt);
+            return o;
+        }
+        // phase == 'bereit': nur den Bereitschaftsschirm ankündigen, noch keine Startzeit.
+        raceId++;
+        plan = p;
+        phase = "bereit";
+        initiator = ini;
+        bereit.clear();
+        startAt = null;
+        start = null;
+        o.put("ok", true);
+        o.put("id", raceId);
+        o.put("zeitMs", jetzt);
+        return o;
+    }
+
+    private synchronized JSONObject bereitMelden(JSONObject d) throws Exception {
+        JSONObject o = new JSONObject();
+        String id = d.optString("id", "");
+        if (id.isEmpty()) {
+            o.put("ok", false);
+            o.put("fehler", "keine Kennung");
+            return o;
+        }
+        if (!bereit.contains(id)) bereit.add(id);
+        o.put("ok", true);
+        return o;
+    }
+
     private synchronized JSONObject zuruecksetzen() throws Exception {
         fahrer.clear();
         start = null;
+        startAt = null;
+        plan = null;
+        phase = "idle";
+        initiator = null;
+        bereit.clear();
         JSONObject ok = new JSONObject();
         ok.put("ok", true);
         return ok;

@@ -241,6 +241,20 @@
   function freshTrackTiles() { return [{ type: TILE_TYPE.START }]; }
   let currentTrackTiles = freshTrackTiles(); // [{type}]
   let trackRotationDeg = 0; // whole-track orientation, rotatable in 45° steps (v0.8.28)
+  // Zuletzt gebaute Zufallsstrecken (Codes). Nicht nur die letzte: wer mehr merkt, bekommt
+  // mehr Abwechslung. Das Fenster ist begrenzt, damit der Schutz die Erzeugung nicht blockiert
+  // (s. trackZufall: faellt auf "nur nicht dieselbe wie zuletzt" zurueck).
+  let trackZufallCodes = [];
+  const TRACK_ZUFALL_CODE_MAX = 12;
+  function trackZufallCodeKennt(code) { return trackZufallCodes.indexOf(code) >= 0; }
+  function trackZufallCodeMerken(code) {
+    // MRU: schon bekannt -> ans Ende, sonst anfuegen. So bleiben die gemerkten Codes ohne
+    // Duplikate, und das Fenster zeigt die zuletzt gebauten Strecken.
+    const i = trackZufallCodes.indexOf(code);
+    if (i >= 0) trackZufallCodes.splice(i, 1);
+    trackZufallCodes.push(code);
+    if (trackZufallCodes.length > TRACK_ZUFALL_CODE_MAX) trackZufallCodes.shift();
+  }
 
   // Turtle-graphics walk: each tile is a fixed-length/fixed-turn step, always
   // continuing from the previous tile's exact end position and heading — so tiles
@@ -476,6 +490,11 @@
   // vorkommende Fall sind 120 Grad. Dazwischen ist viel Platz.
   const TRACK_SCHLUSS_CM = 15;
   const TRACK_SCHLUSS_GRAD = 12;
+  // Der Zufallsknopf verlangt MEHR als die Scan-Toleranz oben: 15 cm lassen eine sichtbare
+  // Luecke durch (eine fehlende Kachel sind 43 cm, also 8-12 cm sind schon ein Drittel davon).
+  // Eine selbst gebaute Strecke kann exakt schliessen (A == B, gemessen 0,00 cm) oder bei
+  // asymmetrisch knapp darueber - deshalb hier 3 cm, damit "geschlossen" auch so aussieht.
+  const TRACK_SCHLUSS_STRENG_CM = 3;
 
   function trackSchluss(pts) {
     if (!pts || pts.length < 3) return { closed: false, lueckeCm: null, winkel: null };
@@ -2098,10 +2117,10 @@
       }
     });
 
-    let startIdx = -1;
+    const startIdxListe = [];
     for (let i = 0; i < n; i++) {
       if (runOf[i]) continue;
-      if (tiles[i].type === TILE_TYPE.START) { startIdx = i; continue; }
+      if (tiles[i].type === TILE_TYPE.START) { startIdxListe.push(i); continue; }
       if (override.has(i)) { anker[i] = override.get(i); continue; }
       anker[i] = luukeGeradenWert(i, tiles, runOf, closed, at);
     }
@@ -2112,9 +2131,13 @@
     // Mitte zu erzwingen - eine dritte, unnoetige Wende. Erst NACH allen anderen Ankern
     // berechnet: luukeGeradenWert() und die gedaempfte Uebergabe oben pruefen nur den
     // TYP der Startkachel (TILE_TYPE.START), nie ihren Zahlenwert - keine Ringabhaengigkeit.
-    if (startIdx >= 0 && n > 1) {
-      const vorIdx = at(startIdx - 1), nachIdx = at(startIdx + 1);
-      anker[startIdx] = (anker[vorIdx] + anker[nachIdx]) / 2;
+    // BESTELLT: mehrere Start/Ziel-Geraden als Sektoren - JEDE Startkachel wird so
+    // gesetzt, nicht nur die letzte.
+    if (startIdxListe.length && n > 1) {
+      startIdxListe.forEach((si) => {
+        const vorIdx = at(si - 1), nachIdx = at(si + 1);
+        anker[si] = (anker[vorIdx] + anker[nachIdx]) / 2;
+      });
     }
     return anker;
   }
@@ -2665,6 +2688,19 @@
     if (o.detailed) {
       all.push(...offsetPath(pts, nrm, half + 6), ...offsetPath(pts, nrm, -(half + 6)));
     }
+    // Raum-Rechteck (o.raum, in Metern): die Zufallsstrecke muss in dieses Rechteck passen.
+    // Es wird mittig auf den Umriss der Strecke gelegt und erweitert die Ansicht, damit es
+    // nicht am Kartenrand abgeschnitten wird. Nur der Editor (o.raum) zeichnet es.
+    let raumRect = null;
+    if (o.raum && o.raum.x > 0 && o.raum.y > 0) {
+      const cxs = pts.map(p => p.x), cys = pts.map(p => p.y);
+      const cx = (Math.min(...cxs) + Math.max(...cxs)) / 2;
+      const cy = (Math.min(...cys) + Math.max(...cys)) / 2;
+      const rw = o.raum.x * 100 * TRACK_UNITS_PER_CM / 2;
+      const rh = o.raum.y * 100 * TRACK_UNITS_PER_CM / 2;
+      raumRect = { x: cx - rw, y: cy - rh, w: rw * 2, h: rh * 2 };
+      all.push([raumRect.x, raumRect.y], [raumRect.x + raumRect.w, raumRect.y + raumRect.h]);
+    }
     const xs = all.map(p => p[0]), ys = all.map(p => p[1]);
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minY = Math.min(...ys), maxY = Math.max(...ys);
@@ -2837,13 +2873,24 @@
       body += `<path d="${poly(centre)}" fill="none" stroke="#7d8698" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
     }
 
-    // Start line and the live position marker.
-    const i0 = 0;
-    const sA = [pts[i0].x + nrm[i0].x * half, pts[i0].y + nrm[i0].y * half];
-    const sB = [pts[i0].x - nrm[i0].x * half, pts[i0].y - nrm[i0].y * half];
-    body += o.detailed
-      ? `<path d="M ${P2(sA)} L ${P2(sB)}" stroke="#3ddc84" stroke-width="4"/>`
-      : `<circle cx="${(first.x + ox).toFixed(1)}" cy="${(first.y + oy).toFixed(1)}" r="5" fill="#1c7a4d"/>`;
+    // Start line and the live position marker. Die ERSTE Start/Ziel-Gerade ist die
+    // Rundenlinie (gruen); jede weitere ist eine Sektorgrenze und wird gelb gezeichnet,
+    // damit man sie von der ersten unterscheidet (BESTELLT: "die zweite Start/Ziel-Gerade
+    // soll sich deutlich von der ersten unterscheiden").
+    let ersteStart = true;
+    for (let ti = 0; ti < tiles.length; ti++) {
+      if (tiles[ti].type !== TILE_TYPE.START) continue;
+      const pi = kachelTab && kachelTab.start ? kachelTab.start[ti] : 0;
+      const p = pts[pi] || pts[0];
+      if (!p) continue;
+      const sA = [p.x + nrm[pi].x * half, p.y + nrm[pi].y * half];
+      const sB = [p.x - nrm[pi].x * half, p.y - nrm[pi].y * half];
+      const farbe = ersteStart ? '#3ddc84' : '#ffd400';
+      body += o.detailed
+        ? `<path d="M ${P2(sA)} L ${P2(sB)}" stroke="${farbe}" stroke-width="4"/>`
+        : `<circle cx="${(p.x + ox).toFixed(1)}" cy="${(p.y + oy).toFixed(1)}" r="5" fill="${farbe}"/>`;
+      ersteStart = false;
+    }
     // ---- Die Autos ----------------------------------------------------------------
     //
     // `currentIndex` zeichnet EIN Auto und bleibt fuer alte Aufrufer; `o.cars` zeichnet
@@ -2907,7 +2954,29 @@
     // Fall -, hatte ohnehin keinen Aufrufer mehr: alle fuenf Aufrufe uebergeben
     // detailed: true. Sie sah aus wie eine Zusicherung und war keine. `o.detailed` bleibt
     // fuer die GEOMETRIE zustaendig - Fahrbahn statt Linie -, dort ist der Unterschied echt.
-    const html = `<svg class="tp-karte" viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}">${body}</svg>`;
+    // ---- 50-cm-Raster im Editor-Hintergrund ------------------------------------------
+    // BESTELLT: "generiere einen Hintergrund mit horizontalen und vertikalen Linien alle
+    // 50 cm." Der Editor zeichnet die Strecke in echten Bahneinheiten (TRACK_UNITS_PER_CM),
+    // also sind 50 cm = 50 * TRACK_UNITS_PER_CM Zeichnungseinheiten. Ein <pattern> in
+    // userSpaceOnUse richtet das Raster am Koordinatenursprung der Bahn aus (Start/Ziel),
+    // und patternTransform verschiebt es um ox/oy, damit die Linien auf den Kachelmassen
+    // liegen statt auf dem Kartenrand. Nur der Editor (o.grid) bekommt es - die Minikarte
+    // und der Uebersichtsschirm nicht.
+    let gridSvg = '';
+    if (o.grid) {
+      const grid = (50 * TRACK_UNITS_PER_CM).toFixed(2);
+      gridSvg = `<defs><pattern id="tp-grid" width="${grid}" height="${grid}" `
+              + `patternUnits="userSpaceOnUse" patternTransform="translate(${ox.toFixed(2)} ${oy.toFixed(2)})">`
+              + `<path d="M ${grid} 0 L 0 0 0 ${grid}" fill="none" stroke="rgba(140,155,180,.30)" stroke-width="0.7"/>`
+              + `</pattern></defs>`
+              + `<rect x="0" y="0" width="${w.toFixed(0)}" height="${h.toFixed(0)}" fill="url(#tp-grid)"/>`;
+    }
+    if (raumRect) {
+      body += `<rect x="${(raumRect.x + ox).toFixed(1)}" y="${(raumRect.y + oy).toFixed(1)}" `
+        + `width="${raumRect.w.toFixed(1)}" height="${raumRect.h.toFixed(1)}" fill="none" `
+        + `stroke="rgba(110,160,255,.55)" stroke-width="1.5" stroke-dasharray="7 5"/>`;
+    }
+    const html = `<svg class="tp-karte" viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}">${gridSvg}${body}</svg>`;
     // DIE GEOMETRIE MIT HERAUS, damit ein Aufrufer Punkte setzen kann, ohne die Strecke neu
     // zu rechnen. Gemessen kostet ein Aufruf dieser Funktion rund 94 ms - sie rechnet
     // Mittellinie, Normalen UND die Ideallinie, und die ist eine Optimierung. Das gehoert
@@ -3199,6 +3268,18 @@
   }, 250);
 
   let trackEditorGeo = null;
+  // BESTELLT: "editor: lass mich mit noch freien tasten und w finger touch in die strecke
+  // zoomen". Ein Zoom-Faktor auf die Vorschaukarte; + / - (Tastatur) und Zwei-Finger-Pinch
+  // aendern ihn, 0 setzt zurueck. var, weil refreshTrackPreview() schon beim Laden laeuft.
+  var editorZoom = 1;
+  function trackZoomAnwenden() {
+    const k = document.querySelector('#track-preview-svg .tp-karte');
+    if (k) k.style.transform = editorZoom === 1 ? '' : 'scale(' + editorZoom + ')';
+  }
+  function trackZoom(d) {
+    editorZoom = Math.max(0.5, Math.min(3, Math.round((editorZoom + d) * 10) / 10));
+    trackZoomAnwenden();
+  }
   // ---- Editor-Schalter (v0.8.29): Ideallinie, Tastenkuerzel. Je Geraet gemerkt. ----
   // var und nicht let: refreshTrackPreview() laeuft schon beim Laden, und ein let weiter unten
   // stuende dann noch in der temporalen Todeszone.
@@ -3236,10 +3317,13 @@
     // Start/Ziel-Linie.
     if (trackSel !== null && trackSel >= currentTrackTiles.length) trackSel = null;
     const imEditor = document.body.classList.contains('track-fs');
+    const raum = teileRaum();
     const result = renderTrackPreview(currentTrackTiles, null,
       { detailed: true, cars: trackCarMarks(), echt: true, auswahl: imEditor ? trackSelIndex() : null,
-        ohneLinie: !editorSchalter.linie });
+        ohneLinie: !editorSchalter.linie, grid: true,
+        raum: (raum.x > 0 || raum.y > 0) ? raum : null });
     $('track-preview-svg').innerHTML = result.html;
+    trackZoomAnwenden();
     trackEditorGeo = result.geo || null;
     trackInfoZeichnen();
     editorSchalterZeigen();
@@ -3327,15 +3411,39 @@
     if (trackVerlauf.length > 80) trackVerlauf.shift();
   }
   function addTile(type) {
-    if (type === TILE_TYPE.START && currentTrackTiles.some(t => t.type === TILE_TYPE.START)) {
-      showHudToast('Start/Ziel gibt es nur einmal');
-      return;
-    }
+    // BESTELLT: "lass mich im editor weitere start/ziel geraden einbauen, die dann als
+    // sektor gelten". Mehrere Start/Ziel-Kacheln sind jetzt erlaubt - die erste ist die
+    // Rundenlinie, die weiteren sind Sektorgrenzen (siehe trackSektorAnzahl).
+    const warZu = trackIstGeschlossen();
     trackMerken();
     const at = currentTrackTiles.length ? trackSelIndex() + 1 : 0;
     currentTrackTiles.splice(at, 0, { type });
     trackSel = at;
+    // BESTELLT: "beim zusammenfügen ein angenehmes klick geräusch". Ein kurzer, heller Ton.
+    if (typeof playTone === 'function') playTone(660, 0.045, 'sine', 0.12);
+    // BESTELLT: "wenn die strecke fertig ist, ein noch befriedigenderes klack". Erst beim
+    // UEBERGANG von offen zu geschlossen, nicht bei jedem weiteren Teil auf der fertigen Runde.
+    if (!warZu && trackIstGeschlossen()) trackFertigKlang();
     refreshTrackPreview();
+  }
+  // BESTELLT: "im editor weitere start/ziel geraden einbauen, die dann als sektor gelten".
+  // Die Zahl der Start/Ziel-Kacheln ist die Zahl der Sektoren: die erste ist die Rundenlinie,
+  // die weiteren sind Sektorgrenzen (Zwischenzeit).
+  function trackSektorAnzahl(tiles) {
+    return (tiles || []).filter((t) => t.type === TILE_TYPE.START).length;
+  }
+  function trackIstGeschlossen() {
+    if (currentTrackTiles.length < 3) return false;
+    if (typeof trackCenterline !== 'function' || typeof trackSchluss !== 'function') return false;
+    try { return trackSchluss(trackCenterline(currentTrackTiles)); } catch (e) { return false; }
+  }
+  // Befriedigendes Klack (ein bisschen wie bei Legovideospielen): drei schnell ansteigende
+  // Toene, der letzte laenger und heller.
+  function trackFertigKlang() {
+    if (typeof playTone !== 'function') return;
+    playTone(520, 0.05, 'sine', 0.18);
+    setTimeout(() => playTone(780, 0.07, 'sine', 0.2), 55);
+    setTimeout(() => playTone(1040, 0.1, 'sine', 0.24), 120);
   }
   function trackTeilEntfernen() {
     const i = trackSelIndex();
@@ -3376,6 +3484,12 @@
 
   // ---- MEINE TEILE: was im Karton ist, und was die Strecke davon braucht --------------
   const TEILE_KEY = 'omegasim-teile';
+  // BESTELLT: "let me determine the maximum size of the room as a rectangle (x and y, in
+  // meters, format X.Y)". Die Zufallsstrecke muss in dieses Rechteck passen (45°-Schritte).
+  // Default 0 m x 0 m = keine Begrenzung: die Zufallsstrecke ignoriert den Raum, bis der
+  // Nutzer eine Groesse eintraegt. Ein Wert 0 je Achse heisst "diese Richtung unbegrenzt".
+  const RAUM_KEY = 'omegasim-raum';
+  const RAUM_DEFAULT = { x: 0, y: 0 };
   const TEILE_SORTEN = [TILE_TYPE.START, TILE_TYPE.STRAIGHT, TILE_TYPE.CURVE_LEFT, TILE_TYPE.CURVE_RIGHT,
     TILE_TYPE.HAIRPIN_LEFT, TILE_TYPE.HAIRPIN, TILE_TYPE.WEIT_LEFT, TILE_TYPE.WEIT_RIGHT,
     TILE_TYPE.KLEIN_LEFT, TILE_TYPE.KLEIN_RIGHT, TILE_TYPE.PIT, TILE_TYPE.ENGE];
@@ -3383,8 +3497,12 @@
   // 4 Geraden, 1 Start; Haarnadel-Set links und rechts; 30-Grad-Aussenkurven 2 L, 2 R.
   const TEILE_PAKETE = {
     grund: [[TILE_TYPE.CURVE_RIGHT, 8], [TILE_TYPE.CURVE_LEFT, 2], [TILE_TYPE.STRAIGHT, 4], [TILE_TYPE.START, 1]],
+    // Spiegeldbild der Grundpackung: 8 links, 2 rechts, gleiche Geraden - und bewusst KEIN
+    // Start/Ziel, weil es das nur einmal gibt und die Grundpackung es schon liefert.
+    links: [[TILE_TYPE.CURVE_LEFT, 8], [TILE_TYPE.CURVE_RIGHT, 2], [TILE_TYPE.STRAIGHT, 4]],
     haarnadel: [[TILE_TYPE.HAIRPIN_LEFT, 1], [TILE_TYPE.HAIRPIN, 1]],
     dreissig: [[TILE_TYPE.WEIT_LEFT, 2], [TILE_TYPE.WEIT_RIGHT, 2]],
+    enge: [[TILE_TYPE.ENGE, 1]],
   };
   function teileBestand() {
     try {
@@ -3392,8 +3510,22 @@
       return x && typeof x === 'object' ? x : null;
     } catch (e) { return null; }
   }
+  // Raumgrenzen (m) fuer die Zufallsstrecke. Fehlt der Eintrag oder ist er unbrauchbar,
+  // gilt 0 x 0 - also keine Begrenzung. 0 je Achse heisst "diese Richtung unbegrenzt".
+  function teileRaum() {
+    let r = null;
+    try { r = JSON.parse(localStorage.getItem(RAUM_KEY) || 'null'); } catch (e) { r = null; }
+    if (!r || typeof r !== 'object') return { x: 0, y: 0 };
+    return { x: Math.max(0, +r.x || 0), y: Math.max(0, +r.y || 0) };
+  }
+  function teileRaumSpeichern(r) {
+    try { localStorage.setItem(RAUM_KEY, JSON.stringify({ x: +r.x || 0, y: +r.y || 0 })); } catch (e) { /* privat */ }
+  }
   function teileSpeichern(b) {
     try { if (b) localStorage.setItem(TEILE_KEY, JSON.stringify(b)); else localStorage.removeItem(TEILE_KEY); } catch (e) { /* privat */ }
+    // Neuer Bestand: die Zufallsstrecken duerfen wiederkommen, sonst blockiert der
+    // "nicht zweimal dieselbe"-Schutz die Erzeugung dauerhaft.
+    trackZufallCodes = [];
     teileZeichnen();
     refreshTrackPreview();
   }
@@ -3408,6 +3540,32 @@
       return { typ, hat, braucht: n, rest: hat === null ? null : hat - n };
     });
   }
+  // Symbol je Sorte fuer die "Meine Teile"-Liste. Dieselben Linien wie die Bildleiste im
+  // Editor (TRACK_PALETTE), damit das Teil dort und hier gleich aussieht; Start/Ziel fehlt
+  // in der Bildleiste und bekommt hier ein Zielflaggen-Band. Bewusst EIN Ort mehr als die
+  // Bildleiste, weil diese Liste auch Typen zeigt, die dort nicht anwaehlbar sind.
+  const TILE_ICON = {
+    [TILE_TYPE.START]: '<path d="M4 9 H20 M4 15 H20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+      + '<rect x="4" y="9" width="2" height="3" fill="currentColor"/><rect x="8" y="9" width="2" height="3" fill="currentColor"/>'
+      + '<rect x="12" y="9" width="2" height="3" fill="currentColor"/><rect x="16" y="9" width="2" height="3" fill="currentColor"/>'
+      + '<rect x="6" y="12" width="2" height="3" fill="currentColor"/><rect x="10" y="12" width="2" height="3" fill="currentColor"/>'
+      + '<rect x="14" y="12" width="2" height="3" fill="currentColor"/><rect x="18" y="12" width="2" height="3" fill="currentColor"/>',
+    [TILE_TYPE.STRAIGHT]: '<path d="M12 22 L12 2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+    [TILE_TYPE.CURVE_LEFT]: '<path d="M18 22 L18 13 A7 7 0 0 0 11 6 L4 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+    [TILE_TYPE.CURVE_RIGHT]: '<path d="M6 22 L6 13 A7 7 0 0 1 13 6 L20 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+    [TILE_TYPE.HAIRPIN_LEFT]: '<path d="M16 22 L16 14 A5 5 0 0 0 6 14 L6 22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'
+      + '<path d="M16 22 L16 19" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>',
+    [TILE_TYPE.HAIRPIN]: '<path d="M8 22 L8 14 A5 5 0 0 1 18 14 L18 22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'
+      + '<path d="M8 22 L8 19" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>',
+    [TILE_TYPE.WEIT_LEFT]: '<path d="M15 22 L15 12 A20 20 0 0 0 9.5 3.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+    [TILE_TYPE.WEIT_RIGHT]: '<path d="M9 22 L9 12 A20 20 0 0 1 14.5 3.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+    [TILE_TYPE.KLEIN_LEFT]: '<path d="M16 22 L16 13 A7 7 0 0 0 12.2 6.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+    [TILE_TYPE.KLEIN_RIGHT]: '<path d="M8 22 L8 13 A7 7 0 0 1 11.8 6.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+    [TILE_TYPE.PIT]: '<path d="M8 22 L8 2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'
+      + '<path d="M16 20 L16 9 A5 5 0 0 1 21 4" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5" stroke-linecap="round"/>',
+    [TILE_TYPE.ENGE]: '<path d="M7 2 L7 8 L10 12 L10 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
+      + '<path d="M17 2 L17 8 L14 12 L14 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  };
   function teileZeichnen() {
     const host = $('teile-liste');
     if (!host) return;
@@ -3416,21 +3574,35 @@
     for (const typ of TEILE_SORTEN) {
       const z = document.createElement('div');
       z.className = 'teile-zeile';
-      const wert = b[typ] === undefined || b[typ] === null ? '–' : String(b[typ]);
-      z.innerHTML = '<span></span><button type="button" data-d="-1" aria-label="weniger">&minus;</button><b></b>'
-                  + '<button type="button" data-d="1" aria-label="mehr">+</button>';
-      z.querySelector('span').textContent = t(TILE_LABEL[typ] || ('0x' + typ.toString(16)));
-      z.querySelector('b').textContent = wert;
-      z.querySelectorAll('button').forEach((k) => {
-        k.onclick = () => {
-          const neu = Object.assign({}, teileBestand() || {});
-          const alt = neu[typ] === undefined || neu[typ] === null ? 0 : +neu[typ];
-          neu[typ] = Math.max(0, Math.min(99, alt + +k.dataset.d));
-          teileSpeichern(neu);
-        };
-      });
+      z.dataset.teile = typ;
+      z.tabIndex = 0;
+      z.setAttribute('role', 'button');
+      const name = t(TILE_LABEL[typ] || ('0x' + typ.toString(16)));
+      z.setAttribute('aria-label', name);
+      const wert = b[typ] === undefined || b[typ] === null ? 0 : +b[typ];
+      // Symbol links, Name in der Mitte, rechts Minus/Zahl/Plus - so aendert man den
+      // Bestand mit der Maus oder dem Finger und nicht nur mit dem D-Pad.
+      z.innerHTML = '<svg class="teile-ic" viewBox="0 0 24 24" aria-hidden="true">'
+          + (TILE_ICON[typ] || '') + '</svg>'
+          + '<span class="teile-name"></span>'
+          + '<span class="teile-steuer">'
+          + '<button class="teile-minus" type="button" aria-label="' + name + ' weniger">&#8722;</button>'
+          + '<span class="teile-zahl"></span>'
+          + '<button class="teile-plus" type="button" aria-label="' + name + ' mehr">+</button>'
+          + '</span>';
+      z.querySelector('.teile-name').textContent = name;
+      z.querySelector('.teile-zahl').textContent = wert;
+      z.querySelector('.teile-minus').onclick = (e) => { e.stopPropagation(); teileAendern(typ, -1); };
+      z.querySelector('.teile-plus').onclick = (e) => { e.stopPropagation(); teileAendern(typ, 1); };
       host.appendChild(z);
     }
+  }
+  // D-Pad links/rechts auf einer Zeile: eine Sorte um d veraendern (unten 0, oben 9999).
+  function teileAendern(typ, d) {
+    const neu = Object.assign({}, teileBestand() || {});
+    const alt = neu[typ] === undefined || neu[typ] === null ? 0 : +neu[typ];
+    neu[typ] = Math.max(0, Math.min(9999, alt + d));
+    teileSpeichern(neu);
   }
   function teilePaket(name) {
     const neu = Object.assign({}, teileBestand() || {});
@@ -3439,10 +3611,77 @@
   }
   const teileKnopf = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
   teileKnopf('teile-grund', () => teilePaket('grund'));
+  teileKnopf('teile-links', () => teilePaket('links'));
   teileKnopf('teile-haarnadel', () => teilePaket('haarnadel'));
   teileKnopf('teile-dreissig', () => teilePaket('dreissig'));
+  teileKnopf('teile-enge', () => teilePaket('enge'));
   teileKnopf('teile-leer', () => { const n = {}; TEILE_SORTEN.forEach((x) => { n[x] = 0; }); teileSpeichern(n); });
   teileZeichnen();
+
+  // Raumgrenze (m) einer Achse um delta aendern (0,1 je Schritt, beim Halten groesser).
+  // Top-level, damit das Steuerkreuz in 50b-menu-nav.js (row.kind 'raum') dieselbe Stelle
+  // schreibt wie die Minus/Plus-Knoepfe - keine zweite Kopie von teileRaum().
+  function raumAendern(achse, delta) {
+    const r = teileRaum();
+    r[achse] = Math.max(0, Math.min(99, Math.round((r[achse] + delta) * 10) / 10));
+    teileRaumSpeichern(r);
+    if (typeof raumAnzeigen === 'function') raumAnzeigen();
+    // Das Raum-Rechteck zeichnet erst der Editor (refreshTrackPreview). Beim Halten der
+    // Knoepfe wuerde jede 0,1-Stufe sonst die teure Streckenberechnung neu ausloesen.
+    if (document.body.classList.contains('track-fs')) refreshTrackPreview();
+  }
+
+  // Raumgrenzen (m) fuer die Zufallsstrecke: zwei Felder "Breite" und "Tiefe", Format X.Y (z. B. 1,2).
+  // 0 (oder leer) heisst "keine Begrenzung". Minus/Plus-Knoepfe aendern um 0,1, beim Halten
+  // beschleunigt (erst schneller, dann groessere Schritte) - dasselbe Muster wie das Steuerkreuz.
+  const raumX = $('teile-raum-x'), raumY = $('teile-raum-y');
+  let raumAnzeigen = () => {};
+  if (raumX && raumY) {
+    raumAnzeigen = () => {
+      const r = teileRaum();
+      raumX.value = String(r.x);
+      raumY.value = String(r.y);
+    };
+    const lesen = () => {
+      // Punkt und Komma gleichwertig (X.Y oder X,Y); leer oder unlesbar = 0 (keine Begrenzung).
+      const parse = (v) => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) && n >= 0 ? Math.min(99, n) : 0; };
+      teileRaumSpeichern({ x: parse(raumX.value), y: parse(raumY.value) });
+      raumAnzeigen();
+      refreshTrackPreview();
+    };
+    raumX.addEventListener('change', lesen);
+    raumY.addEventListener('change', lesen);
+    // Minus/Plus je Achse: 0,1 je Klick, beim Halten schneller/groesser (Date.now-Muster).
+    const raumHold = (btn, achse, richtung) => {
+      let timer = null, start = 0, last = 0;
+      const step = (schritt) => { raumAendern(achse, richtung * schritt); };
+      const begin = (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (btn.setPointerCapture && e.pointerId !== undefined) { try { btn.setPointerCapture(e.pointerId); } catch (x) { /* egal */ } }
+        step(0.1);
+        start = last = Date.now();
+        let delay = 300;
+        const tick = () => {
+          const now = Date.now();
+          const beschleunigt = now - start >= 500;
+          const schritt = beschleunigt ? 0.5 : 0.1;
+          delay = last === start ? 300 : (beschleunigt ? 70 : 120);
+          if (now - last >= delay) { last = now; step(schritt); }
+          timer = setTimeout(tick, delay);
+        };
+        timer = setTimeout(tick, delay);
+      };
+      const end = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      btn.addEventListener('pointerdown', begin);
+      btn.addEventListener('pointerup', end);
+      btn.addEventListener('pointerleave', end);
+      btn.addEventListener('pointercancel', end);
+    };
+    const rm = (id, achse, richtung) => { const b = $(id); if (b) raumHold(b, achse, richtung); };
+    rm('raum-x-minus', 'x', -1); rm('raum-x-plus', 'x', 1);
+    rm('raum-y-minus', 'y', -1); rm('raum-y-plus', 'y', 1);
+    raumAnzeigen();
+  }
 
   // Anzeige oben im Vollbild: Laenge, Teilebilanz; dazu die Tastenbelegung.
   function trackInfoZeichnen() {
@@ -3473,6 +3712,15 @@
   // mit dem Daumen trifft. Vorher lagen BEIDE Haarnadeln rechts, eine Linkshaarnadel war
   // also am falschen Ende zu suchen.
   const TRACK_PALETTE = [
+    // BESTELLT: "im editor weitere start/ziel geraden einbauen, die dann als sektor gelten".
+    // Start/Ziel ist jetzt in der Palette, damit man eine zweite Rundenlinie als Sektor
+    // legen kann. Die erste Kachel bleibt die Rundenlinie (siehe sektorZiel()).
+    { key: 'start', type: () => TILE_TYPE.START, cap: 'Start/Ziel',
+      icon: '<path d="M4 9 H20 M4 15 H20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+          + '<rect x="4" y="9" width="2" height="3" fill="currentColor"/><rect x="8" y="9" width="2" height="3" fill="currentColor"/>'
+          + '<rect x="12" y="9" width="2" height="3" fill="currentColor"/><rect x="16" y="9" width="2" height="3" fill="currentColor"/>'
+          + '<rect x="6" y="12" width="2" height="3" fill="currentColor"/><rect x="10" y="12" width="2" height="3" fill="currentColor"/>'
+          + '<rect x="14" y="12" width="2" height="3" fill="currentColor"/><rect x="18" y="12" width="2" height="3" fill="currentColor"/>' },
     { key: 'hairpin-left', type: () => TILE_TYPE.HAIRPIN_LEFT, cap: 'Haarnadel L',
       icon: '<path d="M16 22 L16 14 A5 5 0 0 0 6 14 L6 22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'
           + '<path d="M16 22 L16 19" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>' },
@@ -3563,7 +3811,10 @@
     const xs = all.map(p => p[0]), ys = all.map(p => p[1]);
     const wCm = (Math.max(...xs) - Math.min(...xs)) / TRACK_UNITS_PER_CM;
     const hCm = (Math.max(...ys) - Math.min(...ys)) / TRACK_UNITS_PER_CM;
-    el.textContent = `${Math.round(wCm)} × ${Math.round(hCm)} cm · ${currentTrackTiles.length} Teile`;
+    el.textContent = t('{w} × {h} cm · {n} Teile')
+      .replace('{w}', Math.round(wCm))
+      .replace('{h}', Math.round(hCm))
+      .replace('{n}', currentTrackTiles.length);
   }
 
   // ====================================================================================
@@ -3653,6 +3904,7 @@
   // gelesen - renderTrackPadFocus und trackEditorPad nehmen beide ausschliesslich `id`.
   // Fuer den Umschalter waere sie ausserdem falsch geworden: er traegt jetzt zwei.
   const TRACK_ACTIONS = [
+    { id: 'track-save-toolbar' },
     { id: 'track-opt-linie' },
     { id: 'track-opt-tasten' },
     { id: 'track-undo' },
@@ -3719,6 +3971,466 @@
     if (currentTrackTiles.length > 1 && !confirm('Strecke wirklich zurücksetzen?')) return;
     $('track-clear').click();
   }
+
+  // ---- Zufaellige Strecke aus dem vorhandenen Bestand ---------------------------------
+  // BESTELLT: "generates a random track given the available pieces (should only work if
+  // there are enough pieces)", dann "It works but it generates quite boring tracks. Make
+  // this more advanced." und zuletzt: "the track is not overlapping ... make it also have
+  // asymmetric tracks. I have a hairpin in my inventory but it is never using that."
+  //
+  // DIE IDEE, und warum sie schliesst: `S + A + G^m + B + G^(m-1)` ist geschlossen, wenn
+  // A und B beide auf +/-180 Grad drehen (zusammen 360). A == B ist der alte symmetrische
+  // "Rundkurs mit zwei gleichen Ecken". Fuer A != B wird B gesucht: es muss die
+  // Verschiebung von `S + A + G^m` zurueck auf die Startlinie heben. Nachgerechnet
+  // (Python-Simulation der echten trackCenterline) schliessen z. B. A = RRR, H, RRLRR und
+  // passende B; die Suche findet bei den meisten A nach ein paar Versuchen ein B. Weil A
+  // dabei nur EINMAL vorkommt, darf auch eine einzelne Haarnadel im Karton benutzt werden.
+  //
+  // Damit die Strecke NICHT ueberlappt, wird jede Kandidaten-Strecke geprueft: keine
+  // Kreuzung der Mittellinie und kein Punkt naeher als 30 cm an einem nicht benachbarten
+  // Abschnitt. Die Challenge-Strecken erfuellen beides ("kreuzungsfrei, Bahnen > 30 cm
+  // auseinander") - die Pruefung oben gibt sie alle als gueltig aus.
+  // Ein Kandidat ist erst gut, wenn er STRENG schliesst (siehe TRACK_SCHLUSS_STRENG_CM) und
+  // kreuzungsfrei ist. Die eine Stelle, an der der Zufallsknopf eine Strecke annimmt.
+  // Der Zufallsknopf soll kein Mini-Oval bauen (SR3GR3 und sein Spiegelbild SL3GL3): nur
+  // drei Kurven, eine Gerade, drei Kurven - kurz, symmetrisch und langweilig.
+  function trackLangweilig(tiles) {
+    const c = trackToCode(tiles, 0);
+    return c === 'SR3GR3' || c === 'SL3GL3';
+  }
+  function trackZufallPasst(tiles) {
+    if (trackLangweilig(tiles)) return false;
+    if (!trackEndeNah(tiles)) return false;
+    const pts = trackCenterline(tiles);
+    const s = trackSchluss(pts);
+    return s.closed && s.lueckeCm <= TRACK_SCHLUSS_STRENG_CM && trackKreuzungsfrei(pts);
+  }
+  // Passt die Strecke in den angegebenen Raum? Die Strecke darf in 45°-Schritten gedreht
+  // werden, deshalb wird jede der 8 Lagen geprueft. Rueckgabe: die passende Drehung in Grad
+  // (0, 45, ...) oder -1, wenn keine Lage in den Raum passt. Die Drehung ist dieselbe wie
+  // trackRotationDeg (Startkurs), sodass man die Strecke direkt in die passende Lage drehen kann.
+  function trackZufallPasstRaum(tiles) {
+    const r = teileRaum();
+    const raumX = r.x * 100, raumY = r.y * 100;  // cm
+    // 0 x 0 (oder eine Achse 0): keine Begrenzung in dieser Richtung. Beide 0: gar keine.
+    if (raumX <= 0 && raumY <= 0) return 0;
+    const pts = trackCenterline(tiles);
+    for (let step = 0; step < 8; step++) {
+      const rad = step * 45 * Math.PI / 180;
+      const cos = Math.cos(rad), sin = Math.sin(rad);
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const p of pts) {
+        const x = p.x * cos - p.y * sin;
+        const y = p.x * sin + p.y * cos;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      const passtX = raumX <= 0 || (maxX - minX) / TRACK_UNITS_PER_CM <= raumX;
+      const passtY = raumY <= 0 || (maxY - minY) / TRACK_UNITS_PER_CM <= raumY;
+      if (passtX && passtY) return step * 45;
+    }
+    return -1;
+  }
+  // =========================================================================
+  // Zufallsstrecke: frei zusammenbauen statt "zwei Haelfte".
+  //
+  // Der Wochenstrecken-Mockup (mockup/wochenstrecken.html) baut JEDE Folge von
+  // Kurvenlaeufen, deren Drehungen sich zu +360 addieren, und loest dann die Laengen der
+  // Geradenstuecke, damit der Ring schliesst. Genau das wird hier nachgebaut: statt des
+  // starren S + A + G^m + B + G^(m-1) (A und B je netto 180) entsteht ein "Rueckgrat" aus
+  // beliebigen Kurvenlaeufen (netto +360 oder -360), und die Geradenluecken werden linear
+  // geloest.
+  //
+  // DIE ENDPOSITION IST LINEAR IN DEN GERADENLUECKEN. Jede Gerade verschiebt um einen
+  // festen Vektor (Richtung = Kurs vor der Luecke, Kurven aendern den Kurs, Geraden nicht);
+  // Kurven verschieben unabhaengig von den Luecken. Also ist
+  //
+  //     Ende = C + Summe( luecke[g] * v_g )
+  //
+  // mit C = Verschiebung aller Kurven plus der Start-Kachel (selbst eine Gerade). Ein kleines
+  // ganzzahliges Suchen ueber luecke[g] in 0..maxg findet den Schluss, OHNE fuer jeden
+  // Kandidaten die teure trackCenterline() zu rechnen - die macht erst die Endabnahme.
+  //
+  // Die Kurventypen sind die des Mockups (R/L/W/Q/H/J); die "kleine" 30-Grad-Kurve (K/M)
+  // kommt in den 80 Wochenstrecken nicht vor und bleibt deshalb aussen vor.
+
+  // Eine zufaellige Aufteilung von dir*360 auf nc Kurvenlaeufe, jeder ein Vielfaches von 30.
+  function trackZufallRunTurns(dir, nc) {
+    let rem = dir * 360;
+    const turns = [];
+    for (let i = 0; i < nc - 1; i++) {
+      const left = nc - 1 - i;
+      const lo = 30, hi = rem - left * 30;
+      if (hi < lo) return null;
+      const choices = [];
+      for (let v = lo; v <= hi; v += 30) choices.push(v);
+      const v = choices[Math.floor(Math.random() * choices.length)];
+      turns.push(v);
+      rem -= v;
+    }
+    if (Math.abs(rem) < 30) return null;
+    turns.push(rem);
+    if (Math.random() < 0.5) {
+      for (let i = turns.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [turns[i], turns[j]] = [turns[j], turns[i]];
+      }
+    }
+    return turns;
+  }
+
+  // Ein Kurvenlauf, dessen Drehungen sich zu `target` addieren - nur gleichsinnige Kacheln,
+  // damit der Lauf als EINE Ecke liest (wie "RRR" oder "R2" im Mockup). used/b verfolgen,
+  // wie viel vom Bestand schon verbraucht ist.
+  function trackZufallRun(target, used, b) {
+    const same = [TILE_TYPE.CURVE_RIGHT, TILE_TYPE.WEIT_RIGHT, TILE_TYPE.HAIRPIN,
+                  TILE_TYPE.KLEIN_RIGHT,
+                  TILE_TYPE.CURVE_LEFT, TILE_TYPE.WEIT_LEFT, TILE_TYPE.HAIRPIN_LEFT,
+                  TILE_TYPE.KLEIN_LEFT]
+      .filter(t => (tileTurnDeg(t) > 0) === (target > 0) && (b[t] || 0) > (used[t] || 0));
+    const avail = (t) => (b[t] || 0) - (used[t] || 0);
+    const rec = (rem, lst) => {
+      if (Math.abs(rem) < 1e-6) return lst.slice();
+      if (lst.length >= 8) return null;
+      if (Math.abs(rem) < 30) return null;
+      let cands = same.filter(t => avail(t) > 0 && Math.abs(tileTurnDeg(t)) <= Math.abs(rem) + 1e-6);
+      if (!cands.length) return null;
+      for (let i = cands.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cands[i], cands[j]] = [cands[j], cands[i]];
+      }
+      // Meistens aus mehreren 60/30-Teilen bauen (laenger, wie der Mockup); eine Haarnadel
+      // bleibt moeglich, damit der Lauf nicht immer auf eine Kachel zusammenfällt.
+      if (Math.random() < 0.45) cands.sort((a, z) => Math.abs(tileTurnDeg(z)) - Math.abs(tileTurnDeg(a)));
+      else cands.sort((a, z) => (Math.abs(tileTurnDeg(a)) !== 60) - (Math.abs(tileTurnDeg(z)) !== 60));
+      for (const t of cands) {
+        used[t] = (used[t] || 0) + 1;
+        const r = rec(rem - tileTurnDeg(t), lst.concat(t));
+        if (r) return r;
+        used[t]--;
+      }
+      return null;
+    };
+    return rec(target, []);
+  }
+
+  // Ein netto-0-Schikane-Lauf (H+J oder R+L oder W+Q): dreht hin und zurueck, aendert den
+  // Kurs nicht, verschiebt aber die Bahn - genau die "Kerbe", die der Mockup einsetzt.
+  function trackZufallWiggle(used, b) {
+    const avail = (t) => (b[t] || 0) - (used[t] || 0);
+    const patterns = [
+      [TILE_TYPE.HAIRPIN, TILE_TYPE.HAIRPIN_LEFT],
+      [TILE_TYPE.HAIRPIN_LEFT, TILE_TYPE.HAIRPIN],
+      [TILE_TYPE.CURVE_RIGHT, TILE_TYPE.CURVE_LEFT],
+      [TILE_TYPE.CURVE_LEFT, TILE_TYPE.CURVE_RIGHT],
+      [TILE_TYPE.WEIT_RIGHT, TILE_TYPE.WEIT_LEFT],
+      [TILE_TYPE.WEIT_LEFT, TILE_TYPE.WEIT_RIGHT],
+      [TILE_TYPE.KLEIN_RIGHT, TILE_TYPE.KLEIN_LEFT],
+      [TILE_TYPE.KLEIN_LEFT, TILE_TYPE.KLEIN_RIGHT],
+      [TILE_TYPE.KLEIN_RIGHT, TILE_TYPE.WEIT_LEFT],
+      [TILE_TYPE.KLEIN_LEFT, TILE_TYPE.WEIT_RIGHT],
+    ];
+    for (let i = patterns.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [patterns[i], patterns[j]] = [patterns[j], patterns[i]];
+    }
+    for (const p of patterns) if (p.every(t => avail(t) > 0)) return p;
+    return null;
+  }
+
+  // Rueckgrat-Information: Verschiebung C der Kurven (plus Start-Kachel) und der
+  // Verschiebungsvektor v_g je Geradenluecke (Kurs vor der Luecke).
+  function trackZufallSpineInfo(runs) {
+    let x = 0, y = 0, heading = 0;
+    const headings = [0];
+    const step = (tile) => {
+      const turn = tileTurnDeg(tile);
+      const radius = tileRadius(tile);
+      if (tile === TILE_TYPE.HAIRPIN || tile === TILE_TYPE.HAIRPIN_LEFT) {
+        const rad0 = heading * Math.PI / 180;
+        x += Math.sin(rad0) * TRACK_HAIRPIN_LEAD;
+        y -= Math.cos(rad0) * TRACK_HAIRPIN_LEAD;
+      }
+      const sgn = Math.sign(turn);
+      const cx = x + Math.cos(heading * Math.PI / 180) * radius * sgn;
+      const cy = y + Math.sin(heading * Math.PI / 180) * radius * sgn;
+      const a0 = Math.atan2(y - cy, x - cx);
+      const a = a0 + turn * Math.PI / 180;
+      x = cx + Math.cos(a) * radius;
+      y = cy + Math.sin(a) * radius;
+      heading += turn;
+    };
+    for (const run of runs) {
+      for (const t of run) step(t);
+      headings.push(heading);
+    }
+    const vs = headings.map(h => {
+      const rad = h * Math.PI / 180;
+      return { x: Math.sin(rad) * TRACK_STEP, y: -Math.cos(rad) * TRACK_STEP };
+    });
+    return { C: { x: x + vs[0].x, y: y + vs[0].y }, headings, vs };
+  }
+
+  // Sucht die Geradenluecken (je 0..maxg), die Ende nahe 0 bringen. Bevorzugt den engsten
+  // Schluss, dann die wenigsten Geraden - so entstehen die kurzen Luecken des Mockups.
+  function trackZufallSolveGaps(runs, maxg, tolCm) {
+    const info = trackZufallSpineInfo(runs);
+    const tx = -info.C.x, ty = -info.C.y;
+    const vs = info.vs;
+    const n = runs.length;
+    const tol = tolCm * TRACK_UNITS_PER_CM;
+    let best = null;
+    const rec = (g, px, py, gaps, total) => {
+      if (g === n + 1) {
+        const d = Math.hypot(px - tx, py - ty);
+        if (d <= tol) {
+          const dr = Math.round(d * 1000) / 1000;
+          if (!best || dr < best.d || (dr === best.d && total < best.total)) {
+            best = { d: dr, total, gaps: gaps.slice() };
+          }
+        }
+        return;
+      }
+      const remaining = (n + 1 - g) * maxg * TRACK_STEP;
+      if (Math.hypot(px - tx, py - ty) - remaining > tol) return;
+      const vx = vs[g].x, vy = vs[g].y;
+      for (let k = 0; k <= maxg; k++) {
+        gaps.push(k);
+        rec(g + 1, px + k * vx, py + k * vy, gaps, total + k);
+        gaps.pop();
+      }
+    };
+    rec(0, 0, 0, [], 0);
+    return best ? best.gaps : null;
+  }
+
+  // Ist ueberhaupt etwas eingetragen? Leer heisst: nichts gespeichert oder alle Zaehler 0.
+  function trackZufallTotalLeer(b) {
+    if (!b) return true;
+    for (const typ of TEILE_SORTEN) if ((+b[typ] || 0) > 0) return false;
+    return true;
+  }
+  // Wie viele Teile des eingetragenen Bestands die Strecke NICHT nutzt. Je kleiner, desto
+  // besser - die Zufallsstrecke soll moeglichst den ganzen Karton verbrauchen.
+  function trackZufallRest(tiles, b) {
+    const braucht = {};
+    for (const t of tiles) braucht[t.type] = (braucht[t.type] || 0) + 1;
+    let rest = 0;
+    for (const typ of TEILE_SORTEN) {
+      const hat = b && b[typ] !== undefined && b[typ] !== null ? Math.max(0, Math.floor(+b[typ])) : null;
+      if (hat === null) continue;
+      rest += Math.max(0, hat - (braucht[typ] || 0));
+    }
+    return rest;
+  }
+  // Fuelle eine Luecke von `units` Kachel-Laengen mit den geraden Teilen: PIT ist 2 lang,
+  // ENGE und STRAIGHT sind 1 lang. Greedy, damit auch PIT/ENGE aus dem Bestand landen.
+  function trackZufallFuellGap(units, verf) {
+    const seq = [];
+    let rem = units;
+    while (rem >= 2 && verf[TILE_TYPE.PIT] > 0) { seq.push(TILE_TYPE.PIT); verf[TILE_TYPE.PIT]--; rem -= 2; }
+    while (rem >= 1 && verf[TILE_TYPE.ENGE] > 0) { seq.push(TILE_TYPE.ENGE); verf[TILE_TYPE.ENGE]--; rem -= 1; }
+    while (rem >= 1 && verf[TILE_TYPE.STRAIGHT] > 0) { seq.push(TILE_TYPE.STRAIGHT); verf[TILE_TYPE.STRAIGHT]--; rem -= 1; }
+    return rem === 0 ? seq : null;
+  }
+  function trackZufallBaueTiles(runs, gaps, b) {
+    const verf = {};
+    for (const typ of [TILE_TYPE.STRAIGHT, TILE_TYPE.ENGE, TILE_TYPE.PIT]) {
+      verf[typ] = Math.max(0, Math.floor(+b[typ] || 0));
+    }
+    const tiles = [{ type: TILE_TYPE.START }];
+    const g0 = trackZufallFuellGap(gaps[0], verf);
+    if (!g0) return null;
+    for (const t of g0) tiles.push({ type: t });
+    for (let ci = 0; ci < runs.length; ci++) {
+      for (const t of runs[ci]) tiles.push({ type: t });
+      const g = trackZufallFuellGap(gaps[ci + 1], verf);
+      if (!g) return null;
+      for (const t of g) tiles.push({ type: t });
+    }
+    return tiles;
+  }
+  // Keine Teile eingetragen: ein Dialog statt eines stillen Toasts, mit "Teile eingeben" und
+  // "Abbrechen". BESTELLT: "If no track parts are entered, generate an error message pop up
+  // saying 'Enter track parts first' with two options: enter track parts, cancel".
+  function trackZufallKeineTeile() {
+    if (typeof konsoleFrage !== 'function') { showHudToast(t('Erst die Streckenteile eingeben')); return; }
+    konsoleFrage(t('Zufall: Keine Streckenteile'), t('Erst die Streckenteile eingeben'), [
+      [t('Teile eingeben'), () => {
+        if (typeof exitTrackFullscreen === 'function') exitTrackFullscreen();
+        showTab('track');
+        showSubpage('teile');
+      }],
+      [t('Abbrechen'), null],
+    ]);
+  }
+
+  function trackZufall() {
+    const b = teileBestand();
+    if (trackZufallTotalLeer(b)) { trackZufallKeineTeile(); return false; }
+    const hat = (typ) => Math.max(0, Math.floor(+b[typ] || 0));
+    if (!(hat(TILE_TYPE.START) > 0)) {
+      showHudToast(t('Zufall: Kein Startteil vorhanden'));
+      return false;
+    }
+    if (hat(TILE_TYPE.STRAIGHT) + hat(TILE_TYPE.ENGE) + hat(TILE_TYPE.PIT) * 2 < 1) {
+      showHudToast(t('Zufall: Nicht genug Geraden'));
+      return false;
+    }
+    // Beste Kandidaten: einer, der nicht in den letzten Codes vorkommt (Dedup ueber ein Fenster,
+    // nicht nur die letzte Strecke), einer, der nur nicht der allerletzte ist (Rueckfall, damit
+    // "nicht zweimal dieselbe in Folge" trotzdem gilt), und einer, der es egal ist. Ueber viele
+    // Versuche wird der mit den wenigsten ungenutzten Teilen behalten - so naehert sich die
+    // Zufallsstrecke dem Ziel, den ganzen Bestand zu verbrauchen.
+    let beste = null, besteAnders = null, besteGleich = null;
+    let raumZuKlein = false;
+    const letzte = trackZufallCodes.length ? trackZufallCodes[trackZufallCodes.length - 1] : null;
+    const besser = (a, z) => !a || z.rest < a.rest || (z.rest === a.rest && Math.random() < 0.4);
+    const startZeit = performance.now();
+    for (let versuch = 0; versuch < 400; versuch++) {
+      if (performance.now() - startZeit > 3000) break;
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      const r = Math.random();
+      const nc = r < 0.05 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : r < 0.93 ? 4 : 5;
+      const used = {};
+      const turns = trackZufallRunTurns(dir, nc);
+      if (!turns) continue;
+      const runs = [];
+      let gut = true;
+      for (const t of turns) {
+        const run = trackZufallRun(t, used, b);
+        if (!run) { gut = false; break; }
+        runs.push(run);
+      }
+      if (!gut) continue;
+      // Netto-0-Schikanen einsetzen, solange welche passen: verbraucht uebrige Kurvenpaare,
+      // damit die Strecke mehr vom Bestand nutzt. Jede Einsetzung muss den Schluss halten.
+      for (let wi = 0; wi < 3; wi++) {
+        const wig = trackZufallWiggle(used, b);
+        if (!wig) break;
+        const pos = Math.floor(Math.random() * (runs.length + 1));
+        const test = runs.slice();
+        test.splice(pos, 0, wig);
+        const g = trackZufallSolveGaps(test, 3, TRACK_SCHLUSS_STRENG_CM);
+        if (!g) continue;
+        runs.splice(pos, 0, wig);
+        for (const t of wig) used[t] = (used[t] || 0) + 1;
+      }
+      const gaps = trackZufallSolveGaps(runs, 3, TRACK_SCHLUSS_STRENG_CM);
+      if (!gaps) continue;
+      const tiles = trackZufallBaueTiles(runs, gaps, b);
+      if (!tiles) continue;
+      trackRotationDeg = 0;
+      if (!trackZufallPasst(tiles)) continue;
+      // Fussabdruck: die Strecke muss in den angegebenen Raum passen (45°-Schritte).
+      const rot = trackZufallPasstRaum(tiles);
+      if (rot < 0) { raumZuKlein = true; continue; }
+      const rest = trackZufallRest(tiles, b);
+      const code = trackToCode(tiles, 0);
+      const kandidat = { tiles, rest, code, rot };
+      if (!trackZufallCodeKennt(code) && besser(beste, kandidat)) beste = kandidat;
+      if (code !== letzte && besser(besteAnders, kandidat)) besteAnders = kandidat;
+      if (besser(besteGleich, kandidat)) besteGleich = kandidat;
+    }
+    const wahl = beste || besteAnders;
+    if (wahl) {
+      trackMerken();
+      currentTrackTiles = wahl.tiles;
+      trackSel = null;
+      trackRotationDeg = wahl.rot || 0;
+      refreshTrackPreview();
+      trackZufallCodeMerken(wahl.code);
+      // BESTELLT: "beim zufälliger strecke wenn möglich eine Animation abspielen (max 500ms
+      // lang), wie sich die strecke selbst zusammenbaut." Plus das befriedigende Klack.
+      trackFertigKlang();
+      const pre = $('track-preview-svg');
+      if (pre) { pre.classList.remove('track-baut'); void pre.offsetWidth; pre.classList.add('track-baut'); }
+      showHudToast(t('Zufällige Strecke gebaut'));
+      return true;
+    }
+    if (besteGleich) {
+      showHudToast(t('Zufall: Keine neue Variante möglich'));
+      return false;
+    }
+    if (raumZuKlein) {
+      showHudToast(t('Zufall: Raum zu klein für einen Rundkurs'));
+      return false;
+    }
+    showHudToast(t('Zufall: Nicht genug Kurventeile für einen Rundkurs'));
+    return false;
+  }
+  // Nur der Endpunkt der Strecke - billig, ohne die 14 Abtastungen je Kachel. Wird als
+  // Vorfilter genutzt (doppelte Toleranz), damit nicht jede Kandidaten-Strecke die teure
+  // trackCenterline rechnen muss. Autoritativ bleibt trackSchluss(trackCenterline(...)).
+  function trackEnde(tiles) {
+    let x = 0, y = 0, heading = 0;
+    for (const t of tiles) {
+      if (tileIsCurve(t.type)) {
+        if (t.type === TILE_TYPE.HAIRPIN || t.type === TILE_TYPE.HAIRPIN_LEFT) {
+          const rad = heading * Math.PI / 180;
+          x += Math.sin(rad) * TRACK_HAIRPIN_LEAD;
+          y -= Math.cos(rad) * TRACK_HAIRPIN_LEAD;
+        }
+        const tw = tileTurnDeg(t.type);
+        const r = tileRadius(t.type);
+        const rad = heading * Math.PI / 180;
+        const sgn = Math.sign(tw);
+        const cx = x + Math.cos(rad) * r * sgn;
+        const cy = y + Math.sin(rad) * r * sgn;
+        const a0 = Math.atan2(y - cy, x - cx);
+        const a = a0 + tw * Math.PI / 180;
+        x = cx + Math.cos(a) * r; y = cy + Math.sin(a) * r;
+        heading += tw;
+      } else {
+        const len = t.type === TILE_TYPE.PIT ? TRACK_STEP * 2 : TRACK_STEP;
+        const rad = heading * Math.PI / 180;
+        x += Math.sin(rad) * len; y -= Math.cos(rad) * len;
+      }
+    }
+    return { x, y };
+  }
+  function trackEndeNah(tiles) {
+    const e = trackEnde(tiles);
+    return Math.hypot(e.x, e.y) / TRACK_UNITS_PER_CM <= TRACK_SCHLUSS_STRENG_CM * 2;
+  }
+  // Kreuzt sich die Strecke, oder laufen zwei nicht benachbarte Abschnitte dichter als
+  // 30 cm zusammen? Dann ueberlappt die Bahn und die Kandidaten-Strecke wird verworfen.
+  function trackKreuzungsfrei(pts, minCm, gap) {
+    const min = minCm || 30, gapS = gap || 40;
+    const m = pts.length;
+    if (m < 6) return true;
+    // Kreuzung: zwei nicht benachbarte Segmente schneiden sich.
+    for (let i = 0; i < m; i++) {
+      const i1 = (i + 1) % m;
+      for (let j = i + 2; j < m; j++) {
+        if (i === 0 && j === m - 1) continue;
+        const j1 = (j + 1) % m;
+        if (segKreuz(pts[i], pts[i1], pts[j], pts[j1])) return false;
+      }
+    }
+    // Abstand: zwei nicht benachbarte Punkte naeher als 30 cm.
+    for (let i = 0; i < m; i++) {
+      for (let j = i + 1; j < m; j++) {
+        const arc = Math.min(j - i, m - (j - i));
+        if (arc < gapS) continue;
+        const d = Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y) / TRACK_UNITS_PER_CM;
+        if (d < min) return false;
+      }
+    }
+    return true;
+  }
+  function segKreuz(a, b, c, d) {
+    const d1x = b.x - a.x, d1y = b.y - a.y;
+    const d2x = d.x - c.x, d2y = d.y - c.y;
+    const den = d1x * d2y - d1y * d2x;
+    if (Math.abs(den) < 1e-9) return false;
+    const t = ((c.x - a.x) * d2y - (c.y - a.y) * d2x) / den;
+    const u = ((c.x - a.x) * d1y - (c.y - a.y) * d1x) / den;
+    return t > 0 && t < 1 && u > 0 && u < 1;
+  }
+  $('track-random').onclick = () => trackZufall();
 
   // Hier standen sechs Bindungen auf Knopf-ids, die es seit dem Umbau auf die Bildleiste
   // nicht mehr gibt (track-add-start und fuenf weitere). Sie prueften auf Vorhandensein und
@@ -3794,37 +4506,80 @@
     else if (k === 'r') { weg(); rotateTrack(e.shiftKey ? -45 : 45); }
     else if (k === 'q' || k === ',') { weg(); trackAuswahlSchritt(-1); }
     else if (k === 'e' || k === '.') { weg(); trackAuswahlSchritt(1); }
+    // BESTELLT: "mit noch freien tasten ... in die strecke zoomen". + / - zoomen, 0 zurueck.
+    else if (k === '+' || k === '=') { weg(); trackZoom(0.1); }
+    else if (k === '-') { weg(); trackZoom(-0.1); }
+    else if (k === '0') { weg(); editorZoom = 1; trackZoomAnwenden(); }
     else if (k === 'h' || k === '?') { weg(); if (typeof konsoleTourStart === 'function') konsoleTourStart(K_EDITOR); }
     else if (k === 'escape') { weg(); exitTrackFullscreen(); }
   }, true);
 
+  // Zwei-Finger-Pinch auf der Vorschau zoomen (der "w-finger touch").
+  (function () {
+    const host = $('track-preview-svg');
+    if (!host) return;
+    let a = null;
+    host.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        const [p1, p2] = e.touches;
+        a = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+      }
+    }, { passive: true });
+    host.addEventListener('touchmove', (e) => {
+      if (e.touches.length !== 2 || a === null) return;
+      const [p1, p2] = e.touches;
+      const b = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+      if (b > 0) trackZoom(Math.round((b - a) / 40 * 10) / 10);
+      a = b;
+    }, { passive: true });
+    host.addEventListener('touchend', () => { a = null; }, { passive: true });
+  })();
+
   function refreshTrackList() {
     const store = loadTrackStore();
-    const sel = $('track-list');
-    sel.innerHTML = '<option value="">-- gespeicherte Strecken --</option>';
-    Object.keys(store).forEach(name => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = `${name} (${store[name].tiles.length} Teile)`;
-      sel.appendChild(opt);
+    const cont = $('track-kacheln');
+    if (!cont) return;
+    cont.innerHTML = '';
+    const keys = Object.keys(store).sort();
+    if (!keys.length) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = t('Noch keine Strecken gespeichert.');
+      cont.appendChild(p);
+      return;
+    }
+    // BESTELLT: "gespeicherte strecken / strecke laden: nenne das menü 'meine strecken' und
+    // stelle sie als kacheln mit vorschaubild dar statt drop down. Klick auf strecke lädt sie
+    // in den Editor." Die Kacheln werden als DOM-Elemente gebaut (kein innerHTML fuer den
+    // Namen), damit ein Streckenname mit Sonderzeichen die Seite nicht zerreisst.
+    keys.forEach(name => {
+      const t = store[name];
+      const btn = document.createElement('button');
+      btn.className = 'track-kachel';
+      btn.title = name + ' laden';
+      const vor = document.createElement('span');
+      vor.className = 'track-kachel-vorschau';
+      try {
+        const tiles = migrateTiles((t.tiles || []).slice());
+        vor.innerHTML = renderTrackPreview(tiles, null, {}).html;
+      } catch (e) { /* ohne Vorschau */ }
+      const b = document.createElement('b');
+      b.textContent = name;
+      const em = document.createElement('em');
+      em.textContent = (t.tiles ? t.tiles.length : 0) + ' Teile';
+      btn.appendChild(vor); btn.appendChild(b); btn.appendChild(em);
+      btn.addEventListener('click', () => trackLaden(name));
+      const del = document.createElement('button');
+      del.className = 'track-kachel-del';
+      del.textContent = '✕';
+      del.title = 'Löschen';
+      del.addEventListener('click', (e) => { e.stopPropagation(); trackLoeschen(name); });
+      btn.appendChild(del);
+      cont.appendChild(btn);
     });
   }
-  refreshTrackList();
-
-  $('track-save').onclick = () => {
-    const name = $('track-name').value.trim();
-    if (!name) { alert('Bitte einen Namen für die Strecke eingeben.'); return; }
-    if (currentTrackTiles.length === 0) { alert('Keine Streckenteile vorhanden.'); return; }
-    const store = loadTrackStore();
-    const now = new Date().toISOString();
-    store[name] = { id: name, name, tiles: currentTrackTiles, rotation: trackRotationDeg, createdAt: store[name]?.createdAt || now, updatedAt: now };
-    saveTrackStore(store);
-    refreshTrackList();
-    log(`Strecke "${name}" gespeichert (${currentTrackTiles.length} Teile).`, 'info');
-  };
-  $('track-load').onclick = () => {
-    const name = $('track-list').value;
-    if (!name) return;
+  // Klick auf eine Kachel laedt die Strecke in den Editor (vorher das <select>-Laden).
+  function trackLaden(name) {
     const store = loadTrackStore();
     if (!store[name]) return;
     // Gewandert, weil gespeicherte Strecken den Kacheltyp als Zahl halten und
@@ -3836,15 +4591,66 @@
     }
     $('track-name').value = name;
     refreshTrackPreview();
-  };
-  $('track-delete').onclick = () => {
-    const name = $('track-list').value;
-    if (!name) return;
+    showHudToast('Strecke "' + name + '" geladen');
+  }
+  function trackLoeschen(name) {
     const store = loadTrackStore();
     delete store[name];
     saveTrackStore(store);
     refreshTrackList();
+  }
+  refreshTrackList();
+
+  // Gemeinsames Speichern fuer beide Knoepfe: "Strecke laden" und der Speichern-Knopf im
+  // Editor. BESTELLT: "It should save the track like the saving function does in the load
+  // track tab" - deshalb derselbe Ablauf (Store, Zeitstempel, Liste aktualisieren, log).
+  function trackSpeichern(name) {
+    if (!name) return;
+    if (currentTrackTiles.length === 0) { alert('Keine Streckenteile vorhanden.'); return; }
+    const store = loadTrackStore();
+    const now = new Date().toISOString();
+    store[name] = { id: name, name, tiles: currentTrackTiles, rotation: trackRotationDeg, createdAt: store[name]?.createdAt || now, updatedAt: now };
+    saveTrackStore(store);
+    refreshTrackList();
+    log(`Strecke "${name}" gespeichert (${currentTrackTiles.length} Teile).`, 'info');
+  }
+  $('track-save').onclick = () => {
+    const name = $('track-name').value.trim();
+    if (!name) { alert('Bitte einen Namen für die Strecke eingeben.'); return; }
+    trackSpeichern(name);
   };
+  // Speichern im Editor (oben links): fragt nach einem Namen, schlaegt aber einen vor, wenn
+  // man keinen eintippen will. BESTELLT: "Add a save button to the editor that prompts you to
+  // enter a track name but if you are too lazy to enter one, provide a suggestion that sounds
+  // like a real track and that I can just use to save the track. The button should be at the
+  // top on the left side (so that I don't accidentally click on close instead of save)."
+  $('track-save-toolbar').onclick = () => {
+    if (currentTrackTiles.length === 0) { alert('Keine Streckenteile vorhanden.'); return; }
+    const eingabe = prompt(t('Name der Strecke'), trackNameVorschlag());
+    if (eingabe === null) return; // Abbrechen
+    trackSpeichern(eingabe.trim() || trackNameVorschlag());
+  };
+  // Ein Vorschlag, der nach einer echten Rennstrecke klingt: Orts-/Bildwort + Rennstrecken-Endung.
+  const TRACK_NAME_ANFANG = ['Silver', 'Thunder', 'Apex', 'Riverside', 'Lakeside', 'Sunset',
+    'Alpine', 'Crimson', 'Iron', 'Golden', 'Wild', 'Storm', 'Summit', 'Falcon', 'Meteor',
+    'Comet', 'Hurricane', 'Volt', 'Turbo', 'Granite', 'Cobalt', 'Ember', 'Vortex', 'Horizon',
+    'Nova', 'Phoenix', 'Dragon', 'Viper', 'Aurora', 'Beacon', 'Canyon', 'Cedar', 'Willow',
+    'Monte', 'Amber', 'Sierra'];
+  const TRACK_NAME_ENDUNG = ['ring', 'park', 'speedway', 'raceway', 'circuit', 'cross',
+    'field', 'point', 'valley', 'berg', 'burg', 'way', 'view', 'track', 'grund'];
+  function trackNameVorschlag() {
+    const store = loadTrackStore();
+    // Nicht mit einer schon gespeicherten Strecke kollidieren: ein versehentliches OK auf den
+    // Vorschlag soll keine vorhandene Strecke ueberschreiben.
+    for (let i = 0; i < 30; i++) {
+      const n = TRACK_NAME_ANFANG[Math.floor(Math.random() * TRACK_NAME_ANFANG.length)]
+        + TRACK_NAME_ENDUNG[Math.floor(Math.random() * TRACK_NAME_ENDUNG.length)];
+      if (!Object.prototype.hasOwnProperty.call(store, n)) return n;
+    }
+    return TRACK_NAME_ANFANG[Math.floor(Math.random() * TRACK_NAME_ANFANG.length)]
+      + TRACK_NAME_ENDUNG[Math.floor(Math.random() * TRACK_NAME_ENDUNG.length)];
+  }
+  refreshTrackList();
 
   // ---- Live track scan: subscribe to NUS TX, watch byte 11 (tile counter) for
   // changes, majority-vote byte 12 (tile type) across samples seen during that tile's
@@ -3887,15 +4693,20 @@
       if (bestType != null && Object.values(TILE_TYPE).includes(bestType)) {
         currentTrackTiles.push({ type: bestType });
         refreshTrackPreview();
-        $('track-scan-status').textContent = 'Scan läuft: ' + currentTrackTiles.length
-          + ' Teile (zuletzt: ' + (TILE_LABEL[bestType] || bestType) + ')';
+        $('track-scan-status').textContent = t('Scan läuft: {n} Teile (zuletzt: {t})')
+          .replace('{n}', currentTrackTiles.length)
+          .replace('{t}', TILE_LABEL[bestType] ? t(TILE_LABEL[bestType]) : bestType);
       } else {
         // Nicht mehr stumm: eine Kachel ohne einen einzigen echten Code ist eine Auskunft
         // und kein Nichts. Genau dieses Schweigen hat den Fehler oben verdeckt.
         trackScanSkipped++;
-        $('track-scan-status').textContent = 'Scan läuft: ' + currentTrackTiles.length
-          + ' Teile, ' + trackScanSkipped + ' ohne lesbaren Code'
-          + (dropped ? ' (' + dropped + ' Pakete ohne Lesung)' : '');
+        const scanStatusVorlage = dropped
+          ? 'Scan läuft: {n} Teile, {k} ohne lesbaren Code ({p} Pakete ohne Lesung)'
+          : 'Scan läuft: {n} Teile, {k} ohne lesbaren Code';
+        $('track-scan-status').textContent = t(scanStatusVorlage)
+          .replace('{n}', currentTrackTiles.length)
+          .replace('{k}', trackScanSkipped)
+          .replace('{p}', dropped);
       }
       trackScanLastCounter = counter;
       trackScanTypeVotes = {};
@@ -4189,8 +5000,8 @@
     refreshTrackPreview();
     $('track-scan-start').disabled = true;
     $('track-scan-stop').disabled = false;
-    $('track-scan-status').textContent = 'Scan läuft: 0 Teile'
-      + (trackScanCar ? ' (' + garageLabel(trackScanCar) + ')' : ' (BLE-Explorer)');
+    $('track-scan-status').textContent = t('Scan läuft: 0 Teile ({q})')
+      .replace('{q}', trackScanCar ? garageLabel(trackScanCar) : 'BLE-Explorer');
   }
   function stopTrackScan() {
     trackScanning = false;

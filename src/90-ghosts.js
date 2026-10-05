@@ -732,9 +732,24 @@
   window.addEventListener('gamepadconnected', (e) => {
     padConnected = true;
     $('pad-dot').classList.add('on');
-    $('pad-status-text').textContent = `Verbunden: ${e.gamepad.id}`;
+    $('pad-status-text').textContent = `Verbunden: ${e.gamepad.id}`
+      + (e.gamepad.mapping === 'standard' ? '' : ' · ' + t('ohne Standardbelegung'));
     log(`Gamepad verbunden: ${e.gamepad.id}`, 'info');
     startPadLoop();
+    // CONTROLLER OHNE STANDARDBELEGUNG (v0.8.41). GEMELDET: "Die Tab-Wechseltasten gehen im
+    // Browser nicht auf dem alten Handy (mit No-Name-Wireless-Controller)." Solche Pads melden
+    // andere Knopfnummern, L1/R1 liegen dann nicht auf 4/5. Einmal je Controller ein Hinweis,
+    // mit dem Weg zur eigenen Zuordnung.
+    if (e.gamepad.mapping !== 'standard') {
+      const schl = 'omegasim-pad-hinweis:' + e.gamepad.id;
+      let gesehen = false;
+      try { gesehen = localStorage.getItem(schl) === '1'; localStorage.setItem(schl, '1'); } catch (err) { /* privat */ }
+      if (!gesehen && typeof konsoleFrage === 'function') {
+        setTimeout(() => konsoleFrage(t('Controller ohne Standardbelegung'),
+          t('Dieser Controller meldet eigene Knopfnummern. Wechseln L1/R1 die Reiter nicht, weise sie unter Optionen > Controller neu zu: bei „Reifenwahl weiter“ und „Tankmenge weiter“ auf Neu zuweisen tippen und L1 bzw. R1 drücken.'),
+          [[t('Zur Controller-Seite'), () => konsoleZeige('options', 'opt-pad')], [t('Später'), null]]), 600);
+      }
+    }
   });
   window.addEventListener('gamepaddisconnected', () => {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -1207,8 +1222,25 @@
       car.testSenke.push({ steer, throttle, lightBits });
       return;
     }
-    if (!car.rx || car.writeInFlight) return;
+    if (!car.rx) return;
+    // Das FAHRERAUTO geht durch dasselbe Schloss wie der Sendetakt (20-protocol.js): Blinken,
+    // Stopp und Latenzprobe schrieben sonst neben dem Takt her ans selbe Merkmal - genau die
+    // Ueberlappung, bei der das Plugin der App eine Antwort verliert (v0.8.41).
+    if (car === playerCar) {
+      const pkt = buildCommandPacket(steer, throttle, lightBits, modeBytes,
+                                     typeof lichtSchadenVon === 'function' ? lichtSchadenVon(car) : undefined);
+      recWrite(pkt, garageLabel(car));
+      await funkSchreiben(car.rx, pkt, null);
+      return;
+    }
+    // WACHHUND: haengt ein Schreibvorgang laenger als FUNK_HAENGT_MS, gilt er als verloren -
+    // sonst stuende dieses Auto (Spieler 2, Ghost) fuer immer still.
+    const jetzt = performance.now();
+    if (car.writeInFlight && jetzt - (car.writeSeit || 0) < FUNK_HAENGT_MS) return;
+    const gen = (car.writeGen || 0) + 1;
+    car.writeGen = gen;
     car.writeInFlight = true;
+    car.writeSeit = jetzt;
     try {
       // Der Lampenschaden DIESES Autos. Fuer einen Ghost ist das "keiner" - bis v0.6.46
       // erbte er den Schaden des Fahrerautos, und seine Scheinwerfer flackerten mit.
@@ -1222,7 +1254,7 @@
       // A disconnect mid-drive is normal; do not spam the log from a 22 Hz loop.
       car.writeErrors = (car.writeErrors || 0) + 1;
     } finally {
-      car.writeInFlight = false;
+      if (car.writeGen === gen) car.writeInFlight = false;
     }
   }
 
@@ -1378,14 +1410,37 @@
       ch.innerHTML = charakterZeile(car);
       if (ch.firstElementChild) box.appendChild(ch.firstElementChild);
     } else {
+      // BESTELLT: "garage bedienfreundlich machen, je auto (wenn gesteuert) auch presets
+      // anzeigen und motorsound." Presets stehen in der Leiste darunter (#gar-preset); hier
+      // kommt der Motorsound des gesteuerten Autos dazu (pro Spieler: sound-profile bzw.
+      // sound-profile-2 fuer Spieler 2).
+      if (car.role === 'player' || car.role === 'player2') box.appendChild(garMotorZeile(car));
       const h = document.createElement('div');
       h.className = 'gk-hinweis';
-      h.textContent = car.role === 'player'
+      h.textContent = car.role === 'player' || car.role === 'player2'
         ? 'Abstimmung und Fahrgefühl stehen unten und unter Optionen.'
         : 'Tempo und Charakter gibt es nur für Ghosts.';
       box.appendChild(h);
     }
     return box;
+  }
+  // Motorsound-Zeile fuer ein gesteuertes Auto: zeigt den Motor und blaettert ihn durch.
+  function garMotorZeile(car) {
+    const sel = car.role === 'player2' ? $('sound-profile-2') : $('sound-profile');
+    const name = sel && sel.selectedOptions[0]
+      ? sel.selectedOptions[0].textContent.split(':')[0].trim() : '–';
+    return garWertZeile('Motorsound', name,
+      () => garMotorWechsel(car, -1), () => garMotorWechsel(car, 1));
+  }
+  function garMotorWechsel(car, dir) {
+    const sel = car.role === 'player2' ? $('sound-profile-2') : $('sound-profile');
+    if (!sel) return;
+    const opts = [...sel.options].filter((o) => !o.disabled);
+    if (!opts.length) return;
+    const n = opts[(opts.indexOf(sel.selectedOptions[0]) + dir + opts.length) % opts.length];
+    sel.value = n.value;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    renderGarage();
   }
   // EIGENE FOTOS JE AUTO, wie beim Streckenfoto: verkleinert als JPEG im localStorage,
   // unter der Kennung des Autos (in der App die MAC-Adresse, ueber Neustarts stabil).
@@ -1452,6 +1507,14 @@
   function renderGarage() {
     const list = $('gar-list');
     if (!list) return;
+    // Ein gerade fokussiertes Textfeld in der Garage nicht wegreissen: auf Touch loest das
+    // Tippen ein synthetisches mouseenter auf der Karte aus, das den Blink anwirft, und der
+    // ruft renderGarage() alle 150 ms - das Feld wird ersetzt und die Bildschirmtastatur
+    // klappt zu (gemeldet: "auf Android Tablet kann ich keinen Namen eingeben"). Der Name
+    // wird beim Verlassen des Feldes gerendert (change-Handler).
+    const aktiv = document.activeElement;
+    if (aktiv && list.contains(aktiv)
+        && (aktiv.tagName === 'INPUT' || aktiv.tagName === 'TEXTAREA')) return;
     // Ueber das Fenster und nicht direkt: 98-presets.js wird NACH dieser Datei gebaut, die
     // Funktion existiert zur Deklarationszeit hier also noch nicht. Zur Laufzeit ist sie
     // da. Genau dieser Unterschied hat in dieser Datei schon fuenf Ladeabbrueche gekostet.
@@ -1495,7 +1558,7 @@
         ? 'background-image:url("' + foto + '")'
         : 'background:linear-gradient(135deg,' + f.hex + ' 0%,' + f.hex + ' 55%,rgba(0,0,0,.55) 100%);color:' + f.ink;
       row.innerHTML = `
-        <div class="gk-kopf"><span>${car.role === 'player' ? 'DU' : 'AUTO ' + (i + 1)}</span>
+        <div class="gk-kopf"><span>${car.role === 'player' ? t('DU') : t('AUTO {n}').replace('{n}', i + 1)}</span>
           <span class="gk-kopf-rolle">${rolle.kurz}</span></div>
         <div class="gk-bild${foto ? ' mit-foto' : ''}" style='${bild}'>
           ${foto ? '' : `<span class="gk-zeichen">${car.tagChar || ''}</span>`}
@@ -1552,7 +1615,12 @@
       // Neu gezeichnet wird erst beim Verlassen des Feldes.
       const nf = row.querySelector('input[data-act="alias"]');
       nf.addEventListener('input', () => { car.alias = nf.value.trim(); carRemember(car); });
-      nf.addEventListener('change', () => { renderGarage(); renderRaceGrid(); });
+      nf.addEventListener('change', () => {
+        // Beim Verlassen rendern - aber erst das Feld verlassen, sonst wuerde die
+        // renderGarage-Sperre (fokussiertes Feld) den Render verschlucken.
+        if (document.activeElement === nf) nf.blur();
+        renderGarage(); renderRaceGrid();
+      });
       nf.addEventListener('click', (e) => e.stopPropagation());
       nf.addEventListener('pointerdown', (e) => e.stopPropagation());
 
@@ -1974,6 +2042,7 @@
   // Einfuehrungsrunde geht es mit Boxentempo zu, und dort verzeiht ein seitlicher Versatz
   // mehr.
   const GHOST_GRID_OFFSET = 0.38;
+const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experimentell)
   // DIE LESESCHWELLE. Unter diesem Anteil der Hoechstgeschwindigkeit faehrt das Auto so
   // langsam, dass es die gedruckte Strecke nicht mehr zuverlaessig liest - dann meldet Byte
   // 12 nur noch 0x00, der Vorausblick faellt aus, und der Abgangsmelder haelt das fuer "Bahn
@@ -2016,7 +2085,14 @@
   function formationOffset(halter, gridPos, now) {
     if (halter.weavePhase === undefined) halter.weavePhase = Math.random() * 6.283;
     let v = Math.sin(now / 700 + halter.weavePhase) * GHOST_WEAVE;
-    if (gridPos >= 0) v += (gridPos % 2 ? -1 : 1) * GHOST_GRID_OFFSET;
+    if (gridPos >= 0) {
+      const seit = gridPos % 2 ? -1 : 1;
+      // BESTELLT: "alle abwechselnd link und rechts (max querlage) anhalten". Bei "Autos
+      // fahren selbst in Position" (gridSelbst, experimentell) wird die maximale Querlage
+      // angesteuert, sonst der bisherige Versatz.
+      const breite = (typeof gridSelbst !== 'undefined' && gridSelbst) ? GHOST_GRID_MAX : GHOST_GRID_OFFSET;
+      v += seit * breite;
+    }
     return v;
   }
 
@@ -2085,6 +2161,11 @@
   // Drei Sekunden reichen fuer mehrere Kacheln - wer bis dahin nichts gelesen hat, liegt
   // wirklich neben der Bahn.
   const GHOST_START_GNADE_MS = 3000;
+  // BESTELLT: "wenn ghosts nach abflug losfahren ... ganz kurz die lenkung gerade machen."
+  // Ein frisch gestarteter Ghost lenkt sonst sofort voll auf die Ideallinie ein und faellt von
+  // der Bahn, bevor er das Muster erkennt (Kachelzaehler steht noch nicht). In den ersten
+  // Millisekunden nach dem Anfahren wird die Lenkung deshalb gerade gehalten (steer = 0).
+  const GHOST_START_LENK_MS = 600;
   const GHOST_YAW_GAIN = 0.045;     // rotation units -> steering; refined on the real car
   const GHOST_STEER_CURVE = 0.55;   // feed-forward lock in a curve, before the yaw loop
 
@@ -2237,6 +2318,11 @@
     // ueber. Der Anti-Windup daneben ist genau dafuer da, und der Boden bei 0,3 laesst den
     // alten, weichen Zustand jederzeit wieder einstellen.
     gasDynamik: 4.0,
+    // BESTELLT: "das Feld noch etwas auffächern, indem die Abstände zwischen allen Autos
+    // vergrößert werden (dazu slider)" und "Pro 4 Autos ... wie viele Überholmanöver pro
+    // Runde ... auf 0m5 setzen". Beide experimentell.
+    feldAbstand: 0,        // 0-100 %: vergroessert die Abstaende zwischen den Autos
+    ueberholRate: 0.5,     // Ueberholmanoever pro Runde pro 4 Autos (0.1er Schritte)
     // ---- GHOST-BOXENSTOPP ----------------------------------------------------------
     //
     // pitAn steht auf AN, obwohl es neu und experimentell ist: bestellt war ein Feature, das
@@ -4141,6 +4227,13 @@
   // Prozent stehenzubleiben.
   let padKreuzSeit = null;
   function flagTasteTick(flagNow) {
+    // ALLERERSTE STUFE: ist das Autos-in-Position-Fenster offen (70-race.js), startet dieselbe
+    // Taste das Rennen (X statt Touch). Alles dahinter bleibt unberuehrt.
+    if (typeof raceGridOffen === 'function' && raceGridOffen()) {
+      if (flagNow && !prevYellowFlag) raceGridStart();
+      prevYellowFlag = flagNow;
+      return;
+    }
     // ALLERERSTE STUFE: ist das Info-Popup offen (98c-opt-info.js), schliesst dieselbe
     // Taste nur IHN - alles dahinter (Menuenavigation, Cockpit-Schirm, gelbe Flagge)
     // bleibt unberuehrt, waehrend ein Modal offen ist.
@@ -4341,7 +4434,7 @@
   // der Verfolger darf also heran - genau dafuer ist die Ausnahme dort.
   // let und nicht const, damit ein Prueflauf sie sweepen kann - sie und SPICE_GAP_MIN
   // bestreiten dasselbe Band, und welches Paar taugt, ist eine Messung und keine Meinung.
-  let SPICE_ATTACK_RANGE = 1.3;
+  let SPICE_ATTACK_RANGE = 1.65;
   function attackRangeSetzen(v) { SPICE_ATTACK_RANGE = v; }
   function attackRangeLesen() { return SPICE_ATTACK_RANGE; }
   function attackPSetzen(v) { SPICE_ATTACK_P = v; }
@@ -4795,7 +4888,7 @@
   // abstand"). GEMELDET danach: "danach haben sie sich geschoben (zu geringer Abstand) und
   // sind tuer an tuer gefahren" - also schlechter, genau wie die Messreihe unten es fuer
   // groessere Soll-Luecken zeigt (mehr Bremsen, dann Auflaufen). ZURUECK auf 1,2.
-  let SPICE_GAP_MIN = 1.2;      // Kacheln, ab hier wird gelupft (nur noch Rueckfall)
+  let SPICE_GAP_MIN = 1.5;      // Kacheln, ab hier wird gelupft (nur noch Rueckfall)
   // ---- DIE ZEITLUECKE IN SEKUNDEN --------------------------------------------------
   //
   // ABGELEITET UND NICHT GEWAEHLT, aus der Fahrzeuglaenge und dem Tempo. Ein Auto ist 9,5 cm
@@ -4840,7 +4933,7 @@
   // ist plausibel und kein Messfehler - eine sehr grosse Sollluecke laesst die Autos
   // staerker bremsen, und dann laufen sie wieder auf.
   // In v0.7.57 kurz auf 1,5, wieder zurueck auf 1,2 - siehe SPICE_GAP_MIN darueber.
-  let SPICE_LUECKE_MIN_S = 1.2;
+  let SPICE_LUECKE_MIN_S = 1.5;
   const SPICE_LUECKE_PER_CLOSING = 0.30;
   function lueckeMinSetzen(v) { SPICE_LUECKE_MIN_S = v; }
   function lueckeMinLesen() { return SPICE_LUECKE_MIN_S; }
@@ -4877,11 +4970,13 @@
     const von = 1.5 - i;        // 1.5..0.5, 1 bei 50 % - fuer Luecken/Reichweite
     attackPSetzen(0.45 * zu);
     attackArmMsSetzen(900 * von);
-    // Anker wieder 1,2/1,2/1,3 (v0.7.57 hatte 1,5/1,5/1,625, zurueckgenommen - siehe
-    // SPICE_GAP_MIN oben).
-    lueckeMinSetzen(1.2 * von);
-    gapMinSetzen(1.2 * von);
-    attackRangeSetzen(1.3 * von);
+    // BESTELLT: "Autos sollen mehr Abstand halten." Die Anker stehen auf 1,5/1,5/1,65 -
+    // vorher 1,2/1,2/1,3. Das Gummiband-Fenster (RANGE - GAP) bleibt bei 0,15, und die
+    // Ungleichung RANGE > GAP bleibt bei jeder Reglerstellung erfuellt (beide laufen mit
+    // demselben `von`).
+    lueckeMinSetzen(1.5 * von);
+    gapMinSetzen(1.5 * von);
+    attackRangeSetzen(1.65 * von);
   }
 
   // Fortschritt in Kacheln seit dem Start, mit Bruchteil. Absichtlich NICHT ueber den
@@ -5154,6 +5249,31 @@
     return frei;
   }
 
+  // ---- HOECHSTENS EIN UEBERHOLEN PRO VIER AUTOS ----------------------------------
+  //
+  // BESTELLT: "es soll höchstens ein Überholmanöver pro vier Autos gleichzeitig geben."
+  // Gemessen war das Gegenteil: bei drei Autos nebeneinander in der Kurve schoben sie sich
+  // gegenseitig von der Strecke, weil gleichzeitig mehrere Angreifer aussen oder innen
+  // lagen. Gezaehlt werden die AKTIVEN Sequenzen (g.attackUntil gesetzt, Phase 'raus'/'vorbei'
+  // - die Ansage und das Einordnen zaehlen nicht, da ist noch kein zweites Auto bedraengt).
+  // Bei mehr als einem Viertel der Rennwagen im Angriff wird nicht angesetzt.
+  function ghostAttackeAktiv(car) {
+    const feld = ghostFieldRacing();
+    let n = 0;
+    for (const o of feld) {
+      if (!o.ghost) continue;
+      if (o.ghost.attackUntil && (o.ghost.passPhase === 'raus' || o.ghost.passPhase === 'vorbei')) n++;
+    }
+    return n;
+  }
+  function ghostAttackeErlaubt(car) {
+    const feld = ghostFieldRacing();
+    const autos = feld.filter((o) => o.ghost).length;
+    if (autos <= 1) return true;
+    const erlaubt = Math.max(1, Math.floor(autos / 4));
+    return ghostAttackeAktiv(car) < erlaubt;
+  }
+
   // ---- Wer faehrt AUF DER RUNDE dicht hinter mir? ----------------------------------
   //
   // NICHT ueber ghostProgress(), und das ist der Kern: der Fortschritt ist absolut
@@ -5368,6 +5488,12 @@
     }
 
     const ah = ghostAhead(car);
+    // BESTELLT (experimentell): "Feld auffächern" (0-100 %) vergrößert den Abstand, die
+    // "Überholrate" (0.1er Schritte, Vorgabe 0.5) skaliert die Reichweite, ab der ein
+    // Angriff beginnt - kleinere Reichweite = weniger Ueberholmanoever.
+    const feldF = 1 + (ghostCfg.feldAbstand || 0) / 100;
+    // 0.5 ist die bisherige Abstimmung: bei der Vorgabe bleibt die Reichweite unveraendert.
+    const ueberF = Math.max(0.1, (ghostCfg.ueberholRate || 0.5) / 0.5);
     const onStraight = aheadTight.tight === 0;
     // DIE ANNAEHERUNGSRATE GENAU EINMAL JE TAKT, und deshalb steht sie hier oben. Sie ist
     // eine ABLEITUNG mit Zustand (g.gapLast, g.gapAt): ein zweiter Aufruf im selben Takt
@@ -5377,12 +5503,12 @@
     const naehern = ghostClosing(car, ah ? ah.gap : null);
 
     // 3. Windschatten
-    if (ghostCfg.wuerzeWindschatten && ah && ah.gap <= SPICE_SLIP_TILES && onStraight) {
-      f *= 1 + SPICE_SLIP_GAIN * (1 - ah.gap / SPICE_SLIP_TILES);
+    if (ghostCfg.wuerzeWindschatten && ah && ah.gap <= SPICE_SLIP_TILES * feldF && onStraight) {
+      f *= 1 + SPICE_SLIP_GAIN * (1 - ah.gap / (SPICE_SLIP_TILES * feldF));
     }
 
     // 4. Attacke
-    if (ah && ah.gap <= SPICE_ATTACK_RANGE) {
+    if (ah && ah.gap <= SPICE_ATTACK_RANGE * feldF * ueberF) {
       if (!g.closeSince) g.closeSince = now;
     } else {
       g.closeSince = 0;
@@ -5528,6 +5654,7 @@
         && platz >= SPICE_PASS_PLATZ_MIN
         && !haarnadelVoraus
         && irgendeineSeiteFrei
+        && ghostAttackeErlaubt(car)
         && now > (g.passBlockUntil || 0)
         && now - (g.attackTriedAt || 0) > SPICE_ATTACK_RETRY_MS) {
       g.attackTriedAt = now;
@@ -6378,6 +6505,9 @@
     e.config.speedSteerReduction = 0;
     e.config.steerExpo = 1;
     e.config.steerResponse = 1;
+    // Und der alte Lenkweg: "Voller Einschlag bei" ist eine Einstellung fuer den Stick des
+    // Fahrers, ein Ghost hat keinen (v0.8.40).
+    e.config.steerVoll = null;
     // UND DIE LENKKALIBRIERUNG AUF 1, was in dieser Liste gefehlt hat.
     //
     // Sie ist dafuer da, dass der STICK des Fahrers auf engen Strecken die 45 Grad des Autos
@@ -6467,6 +6597,14 @@
                   // Auto nie wieder hoch, weil es zum Lesen fahren muesste und zum Fahren
                   // gelesen haben muesste.
                   gnadeBis: Date.now() + GHOST_START_GNADE_MS,
+                  // Startlenkung gerade: siehe GHOST_START_LENK_MS. startLenkBis ist der
+                  // Zeitpunkt, bis zu dem die Lenkung nach dem Anfahren gerade gehalten
+                  // wird; armedVorher merkt sich die Flanke, damit die Frist GENAU beim
+                  // Anfahren beginnt (nicht beim startGhost-Aufruf, der beim Rennstart lange
+                  // vor der Ampel liegt). startLenkEinmalig sorgt dafuer, dass die Frist nur
+                  // beim ECHTEN Anfahren gilt - nach einem Zwischenstopp (parken/wieder
+                  // anfahren) wuerde sie sonst die Boxen-Ausfahrt mit steer=0 ueberschreiben.
+                  startLenkBis: 0, armedVorher: false, startLenkEinmalig: true,
                   running: true };
     // Die erste Faelligkeit ziehen. Ohne sie steht pitFaellig auf 0 und der Ghost pittet in
     // der ersten Runde - ein Boxenstopp, bevor jemand eine Runde gefahren ist.
@@ -7113,6 +7251,15 @@
     const armed = (raceState === 'racing' || raceState === 'finishing'
                    || g.freeRun || g.auslauf)
                   && !car.parked;
+    // Startlenkung gerade: die Frist beginnt an der FLANKE zum Anfahren (armed), nicht beim
+    // startGhost-Aufruf - beim Rennstart liegt der lange vor der Ampel. Einmalig: nur der
+    // echte Start, nicht jede Wiederaufnahme nach einem Stopp (sonst wuerde die Boxen-
+    // Ausfahrt mit steer=0 ueberschrieben). Siehe startGhost.
+    if (armed && !g.armedVorher && g.startLenkEinmalig) {
+      g.startLenkBis = now + GHOST_START_LENK_MS;
+      g.startLenkEinmalig = false;
+    }
+    g.armedVorher = armed;
     // Abgaenge zaehlen, nicht nur melden. Ohne eine Zahl je Runde ist "die Linie hilft"
     // oder "die Linie schmeisst ihn raus" nicht entscheidbar, und dann wird der Regler nach
     // Gefuehl gedreht. Gezaehlt wird die FLANKE, nicht das Paket - ein zwei Sekunden langer
@@ -7121,6 +7268,8 @@
       if (!car.race) car.race = { laps: [], lapStart: null, pending: null, seen: 0,
                                   lastActed: 0, lastCount: null };
       car.race.offLap = (car.race.offLap || 0) + 1;
+      // Knockout (experimentell): ein Geist, der von der Bahn ist, ist raus.
+      if (typeof knockoutGeistRaus === 'function') knockoutGeistRaus(car);
     }
     if (offTrack !== g.cutOut) {
       g.cutOut = offTrack;
@@ -7254,6 +7403,9 @@
       // 20 Prozent in der Kurve und 40 in der Haarnadel oder Engstelle.
       const abzugKachel = tight > 0 ? Math.min(0.85, curveSlowIch * tight) : 0;
       target *= 1 - Math.max(abzugProfil, abzugKachel);
+      // BESTELLT: "wenn sie nah beieinander fahren ... 5% langsamer fahren in den kurven."
+      // Nur in der Kurve (Abzug aktiv) und nur bei nahem Nachbarn.
+      if ((tight > 0 || bd !== null) && ghostNah(car)) target *= 1 - 0.05;
       // GESTAFFELT UEBER DAS GANZE FELD, nicht nur der Erste. Begruendung und Formel
       // stehen bei ghostFeldStaffel(); ein Rennen ist ausdruecklich nicht Bedingung, auch im
       // freien Fahren gibt es einen Ersten und einen Letzten.
@@ -7706,6 +7858,12 @@
             : Math.max(-1, Math.min(1, steer + weave));
     }
 
+    // BESTELLT: "wenn ghosts nach abflug losfahren ... ganz kurz die lenkung gerade machen."
+    // Kurz nach dem Anfahren geradeaus, bis der Kachelzaehler steht (Muster erkannt) - sonst
+    // faellt der Ghost von der Bahn, bevor er die Ideallinie richtig kennt. Der Pruefstand
+    // (ghostQuerTestAn) bleibt unberuehrt: ein fester Versatz gehoert nicht in diese Frist.
+    if (!ghostQuerTestAn() && now < (g.startLenkBis || 0)) steer = 0;
+
     const out = e.update({ steering: steer, throttle, brake, headlights: true }, dt);
     // Put the car into the mode where it keeps itself on the track: bit 5 of byte 14, plus
     // the three-tile lookahead in bytes 16-18. Bit 7 stays CLEAR, because it was clear
@@ -8007,6 +8165,16 @@
     if (d !== null) return Math.abs(d) <= GHOST_NAH_SEK;
     return a.ghost.laps === b.ghost.laps
       && Math.abs((a.ghost.tilesTotal || 0) - (b.ghost.tilesTotal || 0)) <= 1;
+  }
+
+  // Ist dieses Auto nah an irgendeinem anderen Ghost? BESTELLT: "wenn sie nah beieinander
+  // fahren ... 5% langsamer fahren in den kurven."
+  function ghostNah(car) {
+    const feld = ghostFieldRacing();
+    for (const o of feld) {
+      if (o !== car && o.ghost && ghostNahe(car, o)) return true;
+    }
+    return false;
   }
 
   // ---- Die Feldstaffel: gebremst wird nach PLATZ, nicht nur der Erste ---------------
@@ -8440,9 +8608,22 @@
   }
   function padsFuerSpieler() {
     const sortiert = padsSortiert();
+    // OHNE ZWEI-SPIELER-MODUS (v0.8.41): das zuletzt benutzte Pad faehrt und bedient die Menues,
+    // gemappte vor rohen (Windows listet dasselbe Pad oft zweimal). GEMELDET: "im Multiplayer-
+    // modus ging gar kein Waehlen" - "Controller tauschen" mit EINEM Pad machte p1 zu null, und
+    // pollGamepad kehrte vor allen Menues zurueck; und das "erste" Pad der Browserliste kippt,
+    // wenn ein Bluetooth-Pad kurz schlaeft.
+    if (typeof zweiSpieler === 'undefined' || !zweiSpieler) {
+      const gemappt = sortiert.filter(p => p.mapping === 'standard');
+      const pool = gemappt.length ? gemappt : sortiert;
+      let best = pool[0] || null;
+      pool.forEach((p) => { if (best && (p.timestamp || 0) > (best.timestamp || 0)) best = p; });
+      return { p1: best, p2: null };
+    }
     const a = sortiert[0] || null;
     const b = sortiert.length > 1 ? sortiert[1] : null;
-    return padTauschen ? { p1: b, p2: a } : { p1: a, p2: b };
+    // Tauschen nur mit ZWEI Pads.
+    return padTauschen && a && b ? { p1: b, p2: a } : { p1: a, p2: b };
   }
 
   // ---- Die Bedienung der Kachel "2 Spieler" ---------------------------------------
@@ -8584,10 +8765,10 @@
     }
     p2PrevHeadlights = headNow2;
 
-    // Boxenstopp: derselbe Griff wie der Knopf auf dem Vergleichsschirm
-    // (boxZweiAnfordern in 70-race.js) - er fordert an und bricht bei erneutem Druck ab,
+    // Boxenstopp: BESTELLT "pitbutton bei beiden auf X". Derselbe Griff wie bei Spieler 1
+    // (bindings.yellowflag = Kreuz/X) - er fordert an und bricht bei erneutem Druck ab,
     // genau wie bei Spieler 1.
-    const pitstopNow2 = readBindingValue(pad, bindings2.pitstop) > BUTTON_CAPTURE_THRESHOLD;
+    const pitstopNow2 = readBindingValue(pad, bindings2.yellowflag) > BUTTON_CAPTURE_THRESHOLD;
     if (pitstopNow2 && !p2PrevPitstop && typeof boxZweiAnfordern === 'function') {
       boxZweiAnfordern();
     }
@@ -8655,6 +8836,12 @@
         : (pad.buttons.length > 15 ? 'nichts' : 'nichts, Pad hat nur ' + pad.buttons.length + ' Knoepfe');
       $('pad-live-axes').textContent = (pad.axes || []).length + ': '
         + [...(pad.axes || [])].map(v => v.toFixed(1)).join(' ');
+      // Welche Knopfnummern gerade gedrueckt sind (v0.8.41): damit sich bei einem Controller
+      // ohne Standardbelegung ablesen laesst, welche Nummer L1/R1 wirklich hat.
+      if ($('pad-live-knoepfe')) {
+        const gedr = [...(pad.buttons || [])].map((b, i) => (b && b.pressed ? i : -1)).filter(i => i >= 0);
+        $('pad-live-knoepfe').textContent = (gedr.length ? gedr.join(' ') : '–') + (pad.mapping === 'standard' ? '' : ' · ' + t('ohne Standardbelegung'));
+      }
 
       // No tab gate any more, and setThrottleLogical (not setThrottle) so that pressing
       // the throttle actually goes FORWARD — setThrottle takes screen-space and was

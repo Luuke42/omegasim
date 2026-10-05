@@ -14,11 +14,27 @@
   // ---- APK-LINK AUF DER TITELSEITE (v0.8.36) ----
   // Nur im Browser: in der App ist sie schon installiert. Nicht auf iPhone/iPad, dort laeuft
   // keine APK. Auf der luuke42-Kopie liegt die APK im eigenen Repo (apk/OmegaSim.apk).
+  //
+  // v0.8.127: die luuke42-Kopie hat ein eigenes Release (mit Download-Zaehler). Alle APK-Links
+  // dort zeigen darauf, sobald es eines gibt - die GitHub-API sagt es (CORS erlaubt); bis dahin
+  // und ohne Netz bleibt die Datei im Repo der Rueckfall.
   (function apkLinkZeigen() {
     const a = $('home-apk');
     if (!a || (window.OMEGA_APP && window.OMEGA_APP.nativ)) return;
     if (/iPhone|iPad|iPod/.test(navigator.userAgent)) return;
-    if (/(^|\.)luuke42\.github\.io$/i.test(location.hostname)) a.href = 'apk/OmegaSim.apk';
+    if (/(^|\.)luuke42\.github\.io$/i.test(location.hostname)) {
+      const info = $('app-apk-link');
+      a.href = 'apk/OmegaSim.apk';
+      if (info) info.href = 'apk/OmegaSim.apk';
+      fetch('https://api.github.com/repos/Luuke42/omegasim/releases/latest', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (!j || !(j.assets || []).some((x) => x.name === 'OmegaSim.apk')) return;
+          a.href = 'https://github.com/Luuke42/omegasim/releases/latest/download/OmegaSim.apk';
+          if (info) info.href = 'https://github.com/Luuke42/omegasim/releases/latest';
+        })
+        .catch(() => { /* Datei im Repo bleibt */ });
+    }
     a.hidden = false;
   })();
 
@@ -78,12 +94,16 @@
       angebot = r;
       if (r.apkNoetig) {
         $('app-update-text').textContent = t('Neue APK nötig für Fassung') + ' ' + r.version;
-        $('app-update-laden').textContent = t('APK holen');
+        $('app-update-laden-text').textContent = t('APK holen');
       } else {
         $('app-update-text').textContent = t('Update verfügbar') + ': ' + r.version
           + ' (' + mb(r.bytes) + ')';
-        $('app-update-laden').textContent = t('Jetzt laden');
+        $('app-update-laden-text').textContent = t('Jetzt laden');
       }
+      // Einen uebrig gebliebenen Ladebalken aus einem abgebrochenen Download zuruecksetzen,
+      // sonst zeigte der Knopf beim naechsten Anbieten einen alten Fuellstand.
+      const bar = $('app-update-balken');
+      if (bar) { bar.hidden = true; if (bar.firstElementChild) bar.firstElementChild.style.width = '0%'; }
       box.hidden = false;
     }
 
@@ -127,6 +147,15 @@
           knopf.disabled = false;
           $('app-update-text').textContent = String(e && e.message || e);
         }
+      });
+    }
+    // Abbrechen: laufenden Download stoppen (auch aeltere APK meldet dann einen Fehler, der
+    // den Knopf freigibt) und die Box wieder einklappen.
+    if ($('app-update-abbrechen')) {
+      $('app-update-abbrechen').addEventListener('click', () => {
+        upd('abbrechen').catch(() => { /* aeltere APK ohne Plugin */ });
+        const box = $('app-update');
+        if (box) box.hidden = true;
       });
     }
 

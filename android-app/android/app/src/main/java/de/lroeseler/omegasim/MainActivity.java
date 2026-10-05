@@ -61,6 +61,7 @@ public class MainActivity extends BridgeActivity {
         OmegaUpdatePlugin.beimStart(this);
         registerPlugin(OmegaUpdatePlugin.class);
         registerPlugin(OmegaHostPlugin.class);
+        registerPlugin(OmegaBlePlugin.class);
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (Build.VERSION.SDK_INT >= 28) {

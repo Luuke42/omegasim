@@ -12,9 +12,13 @@ Die App liest diese Datei zuerst (72-challenges.js) und mischt die eigenen, loka
 Zeiten dazu; ist sie aelter als zwei Stunden, fragt sie das Sheet direkt. Geschrieben wird nur,
 wenn sich an den Listen etwas geaendert hat - sonst gaebe es jede Stunde einen leeren Commit.
 
-Holt je Strecke, Modus und Preset eine Liste (4 x 2 x 2 = 16 Aufrufe) ueber dieselbe
-doGet-Schnittstelle wie die App; am Apps Script muss dafuer nichts geaendert werden.
+Seit v0.8.44 (80 Wochenstrecken) EIN Aufruf ?alle=1; die Kennungen liest das Skript aus
+src/72-challenges.js (CH_KATALOG), und jede Liste steht in der Datei, auch leere - sonst fragte
+die App fuer jede leere Liste live nach. Kennt das bereitgestellte Apps Script alle=1 noch nicht,
+holt es die vier alten Listen einzeln wie bisher. Neu geschrieben wird bei jeder Aenderung und
+spaetestens alle 6 Stunden (die App nimmt den Schnappschuss bis 8 Stunden).
 """
+import re
 import datetime
 import json
 import os
@@ -25,10 +29,11 @@ import urllib.request
 
 URL = os.environ.get('CH_URL') or ('https://script.google.com/macros/s/'
       'AKfycbxCgxLcORkrqnp1QU_9d3r1x6HuBor2ZlB6vFQFf1cT_noiVm_ePWPMWcKfbDsB7G-C/exec')
-IDS = ['oval', 'schlange', 'kehre', 'weitblick']
+ALTE_IDS = ['oval', 'schlange', 'kehre', 'weitblick']
+NEU_NACH_S = 6 * 3600
 MODI = ['hotlap', 'rennen']
 PRESETS = ['pro', 'arcade']
-FELDER = ('zeit_ms', 'auto', 'fahrer', 'geraet', 'zeitpunkt')
+FELDER = ('zeit_ms', 'auto', 'fahrer', 'geraet', 'zeitpunkt', 'runden', 'runden_ms')
 MAX = 500
 HERE = os.path.dirname(os.path.abspath(__file__))
 ZIEL = os.path.join(os.path.dirname(HERE), 'data', 'challenges.json')
@@ -50,14 +55,35 @@ def holen(q):
     raise SystemExit('Liste %s nicht erreichbar: %s' % (q, letzter))
 
 
+def kennungen():
+    with open(os.path.join(os.path.dirname(HERE), 'src', '72-challenges.js'), encoding='utf-8') as f:
+        s = f.read()
+    a = s.index('const CH_KATALOG')
+    ids = re.findall(r"\{ id: '([a-z0-9-]+)'", s[a:s.index('\n  };', a)])
+    if len(ids) != 80:
+        raise SystemExit('%d Kennungen statt 80 in CH_KATALOG' % len(ids))
+    return ids
+
+
+def eintrag(j):
+    zeiten = [{k: z.get(k) for k in FELDER} for z in (j.get('zeiten') or [])][:MAX]
+    return {'anzahl': j.get('anzahl', len(zeiten)), 'zeiten': zeiten}
+
+
 def main():
-    listen = {}
-    for i in IDS:
-        for m in MODI:
-            for p in PRESETS:
-                j = holen({'challenge': i, 'modus': m, 'preset': p})
-                zeiten = [{k: z.get(k) for k in FELDER} for z in (j.get('zeiten') or [])][:MAX]
-                listen['%s|%s|%s' % (i, m, p)] = {'anzahl': j.get('anzahl', len(zeiten)), 'zeiten': zeiten}
+    ids = kennungen()
+    listen = {'%s|%s|%s' % (i, m, p): {'anzahl': 0, 'zeiten': []} for i in ids for m in MODI for p in PRESETS}
+    j = holen({'alle': 1})
+    if isinstance(j.get('listen'), dict):
+        for schl, l in j['listen'].items():
+            if schl in listen:
+                listen[schl] = eintrag(l)
+    else:
+        print('Apps Script kennt alle=1 noch nicht - vier alte Strecken einzeln')
+        for i in ALTE_IDS:
+            for m in MODI:
+                for p in PRESETS:
+                    listen['%s|%s|%s' % (i, m, p)] = eintrag(holen({'challenge': i, 'modus': m, 'preset': p}))
     alt = None
     if os.path.exists(ZIEL):
         try:
@@ -66,8 +92,14 @@ def main():
         except ValueError:
             alt = None
     if alt and alt.get('listen') == listen:
-        print('unveraendert')
-        return 0
+        try:
+            alter = time.time() - datetime.datetime.strptime(alt.get('stand', ''), '%Y-%m-%dT%H:%M:%SZ').replace(
+                tzinfo=datetime.timezone.utc).timestamp()
+        except ValueError:
+            alter = NEU_NACH_S
+        if alter < NEU_NACH_S:
+            print('unveraendert')
+            return 0
     os.makedirs(os.path.dirname(ZIEL), exist_ok=True)
     stand = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     with open(ZIEL, 'w', encoding='utf-8', newline='\n') as f:

@@ -66,6 +66,7 @@ public class OmegaUpdatePlugin extends Plugin {
     static final long WACHHUND_MS = 25000;
 
     private volatile boolean laeuft = false;
+    private volatile boolean abbruch = false;
     private final Handler haupt = new Handler(Looper.getMainLooper());
 
     // ---- Beim Start, VOR Bridge ----------------------------------------------------------
@@ -172,6 +173,7 @@ public class OmegaUpdatePlugin extends Plugin {
             return;
         }
         laeuft = true;
+        abbruch = false;
         final String quelle = quelle(call);
         new Thread(() -> {
             File ziel = null;
@@ -190,6 +192,7 @@ public class OmegaUpdatePlugin extends Plugin {
                 long gesamt = 0, fertig = 0;
                 for (int i = 0; i < d.length(); i++) gesamt += d.getJSONObject(i).optLong("g", 0);
                 for (int i = 0; i < d.length(); i++) {
+                    if (abbruch) throw new IOException("Vom Nutzer abgebrochen.");
                     JSONObject e = d.getJSONObject(i);
                     String rel = e.getString("p");
                     if (rel.contains("..") || rel.startsWith("/")) throw new IOException("Unzulaessiger Pfad: " + rel);
@@ -285,6 +288,13 @@ public class OmegaUpdatePlugin extends Plugin {
         setzePfad(ctx, "");
         call.resolve();
         haupt.postDelayed(() -> getBridge().setServerAssetPath("public"), 300);
+    }
+
+    /** Bricht einen laufenden Download ab; der Thread sieht das Flag und raeumt auf. */
+    @PluginMethod
+    public void abbrechen(PluginCall call) {
+        abbruch = true;
+        call.resolve();
     }
 
     @PluginMethod

@@ -63,6 +63,11 @@ def dateien():
             for wurzel, _, namen in os.walk(os.path.join(REPO, o)):
                 for n in namen:
                     spur.append(os.path.relpath(os.path.join(wurzel, n), REPO).replace(os.sep, '/'))
+    # Root-Ebene: die SVG-Muster der Druckvorlagen (Start/Ziel, Trapeze, Schneidebogen), die
+    # index.html als Vorschau-Bild und als Download anbietet. Ohne sie fehlt das Vorschaubild
+    # in der App (APK baut aus dieser Liste). favicon.svg steht schon in EINZELN.
+    spur += [n for n in os.listdir(REPO) if n.endswith('.svg') and n != 'favicon.svg'
+             and os.path.isfile(os.path.join(REPO, n))]
     # Nur was es wirklich gibt: eine geloeschte, aber noch nicht aus git entfernte Datei
     # wuerde sonst jeden Download mit 404 abbrechen.
     liste += sorted(p for p in spur if os.path.isfile(os.path.join(REPO, p)))

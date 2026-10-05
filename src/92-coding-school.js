@@ -57,17 +57,26 @@
     if (!a || !st) return;
     a.innerHTML = psEditorSvg('accel', psAccel);
     st.innerHTML = psEditorSvg('steer', psSteer);
-    psWireDrag(a, 'accel', psAccel);
-    psWireDrag(st, 'steer', psSteer);
   }
 
   // Pointer events, not mouse events: the same code then works with a finger, and a phone
   // is the most likely place for this tab.
-  function psWireDrag(host, which, data) {
-    const svg = host.querySelector('svg');
-    if (!svg) return;
+  //
+  // Ein Listener je Editor, am HOST und NUR EINMAL verdrahtet. Die alte Fassung rief
+  // psWireDrag() aus psRenderEditors() bei jedem pointerdown/pointermove erneut auf, was
+  // das SVG per innerHTML ersetzte und eine NEUE Closure mit dragging=null anlegte - der
+  // pointermove nach dem ersten pointerdown sah also dragging===null und tat nichts. Am
+  // HOST (der den innerHTML-Tausch ueberlebt) haengt die Closure ueber alle Re-Renders
+  // hinweg; psEditorDaten() liest das AKTUELLE Array, damit Zuruecksetzen/Vorgaben (die
+  // psAccel/psSteer neu zuweisen) nicht auf einer veralteten Referenz schreiben.
+  function psEditorDaten(which) { return which === 'accel' ? psAccel : psSteer; }
+
+  function psWireDrag(host, which) {
+    if (!host) return;
     let dragging = null;
     const toLocal = (e) => {
+      const svg = host.querySelector('svg');
+      if (!svg) return null;
       const r = svg.getBoundingClientRect();
       return { x: (e.clientX - r.left) / r.width * PS_W,
                y: (e.clientY - r.top) / r.height * PS_H };
@@ -80,22 +89,25 @@
       }
       return best;
     };
-    svg.addEventListener('pointerdown', (e) => {
+    host.addEventListener('pointerdown', (e) => {
       const p = toLocal(e);
+      if (!p) return;
       dragging = nearest(p.x);
       psActive = which; psSel = dragging;
-      data[dragging] = psValFromY(p.y);
-      svg.setPointerCapture(e.pointerId);
+      psEditorDaten(which)[dragging] = psValFromY(p.y);
+      host.setPointerCapture(e.pointerId);
       psRenderEditors();
     });
-    svg.addEventListener('pointermove', (e) => {
+    host.addEventListener('pointermove', (e) => {
       if (dragging === null) return;
-      data[dragging] = psValFromY(toLocal(e).y);
+      const p = toLocal(e);
+      if (!p) return;
+      psEditorDaten(which)[dragging] = psValFromY(p.y);
       psRenderEditors();
     });
     const end = () => { dragging = null; };
-    svg.addEventListener('pointerup', end);
-    svg.addEventListener('pointercancel', end);
+    host.addEventListener('pointerup', end);
+    host.addEventListener('pointercancel', end);
   }
 
   // ---- The simulation ----
@@ -130,10 +142,11 @@
     psRenderResult();
     const top = Math.max(...trace.map(p => p.kmh));
     const m = psFollowMetrics(trace);
-    $('ps-status').textContent =
-      `Gefahren: Spitze ${Math.round(top)} km/h · `
-      + `Lenkung konnte ${m.pct.toFixed(0)} % der verlangten Änderung nicht folgen `
-      + `(${m.limited} von ${trace.length} Takten am Anschlag).`;
+    $('ps-status').textContent = t('Gefahren: Spitze {a} km/h · Lenkung konnte {b} % der verlangten Änderung nicht folgen ({c} von {d} Takten am Anschlag).')
+      .replace('{a}', Math.round(top))
+      .replace('{b}', m.pct.toFixed(0))
+      .replace('{c}', m.limited)
+      .replace('{d}', trace.length);
   }
 
   // Linear interpolation between control points. Deliberately linear and not a spline: the
@@ -278,5 +291,8 @@
 
   // Gamepad, only while this tab is open — otherwise the D-pad would lose its driving job.
   psRenderEditors();
+  // Drag einmal am HOST verdrahten, nicht bei jedem Zeichnen (siehe psWireDrag).
+  psWireDrag($('ps-accel'), 'accel');
+  psWireDrag($('ps-steer'), 'steer');
   psRefreshSendButton();
 

@@ -46,4 +46,28 @@
     });
   }
 
-
+  // ---- TITEL-GLITCH JE BUCHSTABE (v0.8.38) ----
+  // BESTELLT: "je Buchstabe je Seite (oben, unten) zufaellig festlegen, ob der Glitch-Effekt
+  // blau oder rot ist." Bei jedem Laden neu gewuerfelt; die Animation je Buchstabe versetzt,
+  // damit nicht alle im Gleichtakt springen. Der Titel traegt aria-label, die Buchstaben sind
+  // fuer Bildschirmleser ausgeblendet.
+  (function titelGlitchZerlegen() {
+    const farbe = () => (Math.random() < 0.5 ? 'var(--glitch-c)' : 'var(--glitch-r)');
+    document.querySelectorAll('.home-titel .home-titel-text').forEach((wort) => {
+      const text = wort.textContent;
+      wort.textContent = '';
+      for (const ch of text) {
+        const b = document.createElement('span');
+        b.className = 'gl-b';
+        b.setAttribute('data-t', ch);
+        b.setAttribute('aria-hidden', 'true');
+        b.textContent = ch;
+        b.style.setProperty('--gl-o', farbe());
+        b.style.setProperty('--gl-u', farbe());
+        b.style.setProperty('--gl-d', (-Math.random() * 3.2).toFixed(2) + 's');
+        b.style.setProperty('--gl-e', (-Math.random() * 2.7).toFixed(2) + 's');
+        wort.appendChild(b);
+      }
+      wort.classList.add('gl-zerlegt');
+    });
+  })();

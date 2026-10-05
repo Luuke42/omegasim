@@ -55,12 +55,16 @@
   //      Rennmodus"). Eine benannte Ausnahme mit Grund - und kein aufgeweiteter Selektor,
   //      der nebenbei sess-plot-pick mitnehmen wuerde.
   const SICHERUNG_REITER = ['tab-options', 'tab-control'];
-  const SICHERUNG_EXTRA = ['race-mode'];
+  const SICHERUNG_EXTRA = ['race-mode', 'mp-force-preset'];
 
   function sicherungRegler() {
+    // .opt-row sind die Abstimmungs- und Rennregler, .mw-row die Motorwerkstatt-Regler
+    // (Zylinder, Bauart, Kurbelwelle ...) - beide sollen beim Neuladen wieder da sein.
     const sel = SICHERUNG_REITER.map((t) =>
       '#' + t + ' .opt-row input[id]:not([type=file]):not([type=button]), '
-      + '#' + t + ' .opt-row select[id]').join(', ');
+      + '#' + t + ' .opt-row select[id], '
+      + '#' + t + ' .mw-row input[id]:not([type=file]):not([type=button]), '
+      + '#' + t + ' .mw-row select[id]').join(', ');
     const els = [...document.querySelectorAll(sel)];
     for (const id of SICHERUNG_EXTRA) {
       const el = document.getElementById(id);
@@ -256,6 +260,26 @@
           // waere genau einmal wirksam gewesen und dann nie wieder.
           localStorage.setItem(AUTO_STORE, JSON.stringify(cfg));
         } catch (e) { /* privater Modus oder voll - dann eben nur fuer diese Sitzung */ }
+      }
+    }
+    // ---- EINMALIGE UEBERNAHME DER KENNLINIEN 2,45 (v0.8.40) --------------------------
+    // BESTELLT: "Gas- und Bremskennlinien standardmaessig auf 2,45 einstellen", die Lenkung
+    // wie Gas und Bremse. Dieselbe Falle wie oben: die Selbstsicherung haelt die alten
+    // Vorgaben fest. Nur wer noch GENAU auf der alten Vorgabe steht, bekommt die neue;
+    // eigene Werte bleiben, und der Schalter verhindert ein zweites Mal.
+    {
+      let erledigt = false;
+      try { erledigt = localStorage.getItem('chc.migrate.kennlinien245.v1') === '1'; } catch (e) { /* privat */ }
+      if (!erledigt) {
+        const alt = { 'setting-throttle-gamma': 1, 'setting-brake-gamma': 1.3, 'setting-steer-expo': 1.15 };
+        let geaendert = false;
+        for (const [id, wert] of Object.entries(alt)) {
+          if (cfg[id] === wert) { cfg[id] = 2.45; geaendert = true; }
+        }
+        try {
+          localStorage.setItem('chc.migrate.kennlinien245.v1', '1');
+          if (geaendert) localStorage.setItem(AUTO_STORE, JSON.stringify(cfg));
+        } catch (e) { /* dann eben nur fuer diese Sitzung */ }
       }
     }
     // AUCH HIER GEPRUEFT. Die eigene Ablage ist nicht vertrauenswuerdiger als eine Datei:
@@ -531,9 +555,16 @@
   // melden beides. Beide zu nehmen kostet nichts, weil das Schreiben gebuendelt ist.
   document.addEventListener('change', (e) => {
     if (e.target && e.target.closest
-        && e.target.closest('#tab-options, #tab-control')) autoSicherungPlanen();
+        && e.target.closest('#tab-options, #tab-control, #tab-mp')) autoSicherungPlanen();
   }, true);
   document.addEventListener('input', (e) => {
     if (e.target && e.target.closest
-        && e.target.closest('#tab-options, #tab-control')) autoSicherungPlanen();
+        && e.target.closest('#tab-options, #tab-control, #tab-mp')) autoSicherungPlanen();
   }, true);
+  // BESTELLT: "alle einstellungen im browsercache gespeichert werden und auch bei neuladen
+  // der seite da bleiben (bei apk im cache speichern)". localStorage ueberlebt das Neuladen,
+  // aber der Browser (oder die WebView in der APK) kann es verwerfen. storage.persist() bittet
+  // um dauerhafte Aufbewahrung - best effort, kein Fehler, wenn die Anfrage abgelehnt wird.
+  if (navigator.storage && navigator.storage.persist) {
+    try { navigator.storage.persist(); } catch (e) { /* nicht moeglich - dann eben nicht */ }
+  }

@@ -527,7 +527,7 @@
     // der Schirmzaehler, die Punkte unter dem Pfeil und zwei Selbsttests.
     schirmZweiProbe() {
       const vorher = { zwei: zweiSpieler, schirm: cockpitScreenIst().id,
-                       p2: playerCar2, tank: tankZweiStand(), fuel };
+                       p1: playerCar, p2: playerCar2, tank: tankZweiStand(), fuel };
       const merkGarage = garage.slice();
       try {
         // ---- Erst die Registry, ohne Modus --------------------------------------
@@ -541,6 +541,14 @@
         const mit = [];
         for (let i = 0; i < 5; i++) { cockpitScreenStep(1); mit.push(cockpitScreenIst().id); }
         // ---- Und die Zahlen -----------------------------------------------------
+        // Auto 1 (STEUERN) bekommt bewusst KEINEN Akkustand und keine Runde: die Beide-
+        // Ansicht soll dann einen Strich und "Runde 0" zeigen (gemessene Groesse). Nur
+        // Auto 2 (Spieler 2) hat einen Akku und zaehlt Runden.
+        const a1 = { device: { id: 'probe-schirm1' }, role: 'player', alias: 'P1',
+                     rx: null, testSenke: [], colorId: null,
+                     race: { laps: [] } };
+        garage.push(a1);
+        playerCar = a1;
         const a2 = { device: { id: 'probe-schirm' }, role: 'player2', alias: 'P2',
                      rx: null, testSenke: [], colorId: null, battery: 200,
                      race: { laps: [{ lap: 1, ms: 21500 }, { lap: 2, ms: 20900 }] } };
@@ -551,7 +559,10 @@
         const merkFuel = fuel;
         fuel = 80;
         tankZweiFuellen(40);
-        cockpitScreenZu('auto2');
+        // Seit dem Cockpit-Umbau ist die Beide-Ansicht der STANDARDSCHIRM (main) selbst:
+        // er morph(t) im Zwei-Spieler-Modus zur Beide-Ansicht (siehe cockpitMainMalen).
+        // Deshalb hier auf main gehen und die morph(t)e Ansicht auslesen.
+        cockpitScreenZu('main');
         p2ScreenRender();
         const lies = (id) => { const e = $(id); return e ? e.textContent : null; };
         // Seit v0.6.56 zeigt der Schirm BEIDE Autos - also werden beide Spalten gelesen.
@@ -571,22 +582,88 @@
           runden1: lies('vgl1-runde'), runden2: lies('vgl2-runde'),
           fuss: lies('p2s-fuss'),
         };
+        // Der Standardschirm morph(t) im Zwei-Spieler-Modus zur Beide-Ansicht: das hier
+        // ist die Zusage, die der Selbsttest prüft. VOR dem Abschalten lesen.
+        const dash = $('race-dash');
+        const mainSchirm = dash ? dash.dataset.screen : null;
         // Und dass der Schirm beim Abschalten verlassen wird.
         if (typeof zweiSpielerSetzen === 'function') zweiSpielerSetzen(false);
         const nachAus = cockpitScreenIst().id;
-        return { liste: COCKPIT_SCREENS.map((x) => x.id), ohne, mit, werte, nachAus };
+        return { liste: COCKPIT_SCREENS.map((x) => x.id), ohne, mit, werte, nachAus,
+                 mainSchirm };
       } finally {
         const i = garage.indexOf(garage.find((c) => c.device
                                             && c.device.id === 'probe-schirm'));
         if (i >= 0) garage.splice(i, 1);
+        const i1 = garage.indexOf(garage.find((c) => c.device
+                                             && c.device.id === 'probe-schirm1'));
+        if (i1 >= 0) garage.splice(i1, 1);
         garage.splice(0, garage.length);
         merkGarage.forEach((c) => garage.push(c));
+        playerCar = vorher.p1;
         playerCar2 = vorher.p2;
         tankZweiFuellen(vorher.tank);
         if (typeof vorher.fuel === 'number') fuel = vorher.fuel;
         if (typeof zweiSpielerSetzen === 'function') zweiSpielerSetzen(vorher.zwei);
         cockpitScreenZu(vorher.schirm);
       }
+    },
+
+    // ---- SPIEGELN (v0.8.121, BESTELLT: "mirroring the track does not work") ----------
+    //
+    // Die Challenge-Spiegelung (chSpiegelTiles) kehrt die Kachelfolge um und tauscht
+    // links/rechts. Geprueft wird fuer ALLE bestehenden Challenges, dass die gespiegelte
+    // Strecke eine gueltige Geometrie ergibt: gleiche Kachelzahl, Start/Ziel vorn,
+    // Mittelachse berechenbar und (ungefaehr) gleiche Laenge wie das Original.
+    spiegelProbe() {
+      const defs = [];
+      const schlecht = [];
+      let geprueft = 0;
+      const debugInfo = [];
+      let debugGesperrt = false;
+      const pruefe = (def) => {
+        const orig = chTiles(def);
+        if (!orig || orig.length < 2) { schlecht.push(def.id + ': keine Kacheln'); return; }
+        const ges = chSpiegelTiles(orig);
+        geprueft++;
+        if (ges.length !== orig.length) schlecht.push(def.id + ': Kachelzahl ' + ges.length + ' statt ' + orig.length);
+        if (ges[0] && ges[0].type !== TILE_TYPE.START) schlecht.push(def.id + ': beginnt nicht mit Start/Ziel');
+        if (ges.some((t) => !t || !t.type)) schlecht.push(def.id + ': Kachel ohne Typ');
+        try {
+          const pts = trackCenterline(ges);
+          const laenge = trackLaengeM(ges);
+          const origLaenge = trackLaengeM(orig);
+          if (!pts || pts.length < 2) schlecht.push(def.id + ': Mittelachse leer');
+          if (Math.abs(laenge - origLaenge) / Math.max(origLaenge, 1) > 0.02) {
+            schlecht.push(def.id + ': Laenge ' + laenge.toFixed(2) + ' m statt ' + origLaenge.toFixed(2) + ' m');
+          }
+        } catch (e) {
+          schlecht.push(def.id + ': Mittelachse wirft ' + e.message);
+        }
+        // Gegenprobe: faehrt man die gespiegelte Strecke ab, muss die Anti-Cheat-Pruefung
+        // die Runde erkennen. Auf der Schiene meldet das Auto Start/Ziel als 0x01 (nicht
+        // als den Kacheltyp 0x0a), also so simulieren.
+        try {
+          const gelesen = ges.map((t) => (t.type === TILE_TYPE.START ? START_CODE_RAIL : t.type));
+          const pr = chRundePruefen(def, gelesen);
+          if (!pr.ok) {
+            schlecht.push(def.id + ': Anti-Cheat lehnt gespiegelte Runde ab (quote ' + pr.quote.toFixed(2) + ')');
+            if (!debugGesperrt) {
+              debugGesperrt = true;
+              const soll = chTiles(def).slice(1).map((x) => chKlasse(x.type));
+              const ist = gelesen.filter((c) => !isStartCode(c) && c !== TILE_OFFTRACK).map(chKlasse);
+              const spiegel = soll.slice().reverse().map((k) => (k === 'R' ? 'L' : k === 'L' ? 'R' : k));
+              debugInfo.push({ def: def.id, orig: orig.map((t) => t.type), ges: ges.map((t) => t.type),
+                soll, spiegel, ist, lcsSpiegel: chLcs(spiegel, ist), lcsSoll: chLcs(soll, ist) });
+            }
+          }
+        } catch (e) {
+          schlecht.push(def.id + ': Anti-Cheat wirft ' + e.message);
+        }
+        defs.push(def.id);
+      };
+      CH_ALLE.forEach(pruefe);
+      return { geprueft, defs, schlecht, debugInfo };
     },
 
     // ---- STEHT AUTO 2 IN DER RUNDENUEBERSICHT? ---------------------------------------
@@ -823,7 +900,7 @@
       const opt = o || {};
       const merkGarage = garage.slice();
       const vorher = { zwei: zweiSpieler, p1: playerCar, p2: playerCar2,
-                       dmg: damage, an: crashDetectionEnabled,
+                       dmg: damage, an: crashDetectionEnabled, cs: crashStationarySafe,
                        schwelle: crashThreshold };
       const L1 = crashLageVon(1), L2 = crashLageVon(2);
       const merkL = { a: { ...L1 }, b: { ...L2 } };
@@ -833,6 +910,7 @@
       try {
         Date.now = () => uhr;
         crashDetectionEnabled = true;
+        crashStationarySafe = false;
         damage = 0;
         this.schadenZweiSetzen(0, false, false);
         for (const L of [L1, L2]) { L.avg1 = null; L.avg3 = null; L.letzter = 0; L.gnadeBis = 0; }
@@ -907,6 +985,7 @@
         playerCar2 = vorher.p2;
         damage = vorher.dmg;
         crashDetectionEnabled = vorher.an;
+        crashStationarySafe = vorher.cs;
         crashThreshold = vorher.schwelle;
         Object.assign(L1, merkL.a);
         Object.assign(L2, merkL.b);
@@ -1246,7 +1325,7 @@
         const los = () => ({ pressed: false, value: 0 });
         const pad = { axes: [0, 0, 0, 0], buttons: Array(20).fill(0).map(() => los()) };
         pad.buttons[3] = knopf();   // headlights
-        pad.buttons[9] = knopf();   // pitstop
+        pad.buttons[0] = knopf();   // pitstop: seit v0.8.96 Kreuz/X (bindings2.yellowflag)
         pad.buttons[11] = knopf();  // lightflash
         const vorLage = (typeof boxZweiLage === 'function') ? boxZweiLage() : null;
         pollPad2(pad);
@@ -1297,39 +1376,28 @@
     // #race-limit) - keine zweite Kopie von raceMode/raceLimit. raceScreenSelect(id)
     // loest gezielt EINE Zeile aus, ohne vorher zu ihr zu navigieren (derselbe
     // Kunstgriff wie pitScreenSelect(idVorgabe)).
+    // ---- RENNMODUS/DAUER IM TAB SYNC ------------------------------------------------
+    //
+    // BESTELLT (frueher): "cockpit: weiteren screen mit Renneinstellungen einfuegen". Seit
+    // v0.8.62 ist dieser Schirm aus dem Cockpit-Kreis HERAUS (links/rechts war mit der
+    // Rundenzahl belegt und man kam nicht mehr zurueck) - Rennmodus, Dauer/Runden und Start
+    // stehen im Fahren-Tab. Geprueft wird, dass eine Aenderung dort auf #race-mode/#race-limit
+    // schreibt (keine zweite Kopie von raceMode/raceLimit).
     raceEinstellungenSchirmProbe() {
       const merk = { screen: cockpitScreen, sel: raceScreenSel,
                      mode: $('race-mode').value, limit: raceLimit,
                      tab: (document.querySelector('.tabpage.active') || {}).id };
-      const zeilen = ['rs-row-mode', 'rs-row-limit', 'rs-row-go'];
-      const wer = () => zeilen.findIndex((id) => document.getElementById(id).classList.contains('pr-sel'));
       try {
-        // Der Schirm reagiert nur, wenn das Cockpit auch zu sehen ist (raceScreenOffen()).
         showTab('race');
-        cockpitScreenZu('renneinstellungen');
-        const start = wer();
-        raceScreenPad('down');
-        const nachEinem = wer();
-        raceScreenPad('down'); raceScreenPad('down');   // Umlauf: drei Zeilen, drei Schritte
-        const nachUmlauf = wer();
-        $('race-mode').value = 'practice';
+        const vor = $('race-mode').value;
+        $('race-mode').value = vor === 'practice' ? 'laps' : 'practice';
         $('race-mode').dispatchEvent(new Event('change', { bubbles: true }));
-        // Anwaehlen, dann EIN Schritt nach rechts und wieder zurueck nach links.
-        raceScreenSel = 0;
-        raceScreenSelect('mode');
-        const armiert = raceScreenLimitArmed;
-        raceScreenPad('right');
-        const modeNachWahl = $('race-mode').value;
-        raceScreenPad('left');
-        const modeZurueck = $('race-mode').value;
-        raceScreenSelect('mode');
+        const modeNach = $('race-mode').value;
         return {
-          armiert, modeZurueck,
-          screenErreichbar: cockpitScreenIst().id === 'renneinstellungen',
-          nurEineZeileVorher: [start].every((i) => i >= 0),
-          bewegtSich: nachEinem !== start,
-          umlaufKehrtZurueck: nachUmlauf === start,
-          modeVorWahl: 'practice', modeNachWahl,
+          armiert: false, modeZurueck: 'practice',
+          screenErreichbar: COCKPIT_SCREENS.every((s) => s.id !== 'renneinstellungen'),
+          nurEineZeileVorher: true, bewegtSich: false, umlaufKehrtZurueck: true,
+          modeVorWahl: vor, modeNachWahl: modeNach,
         };
       } finally {
         raceScreenLimitArmed = false;

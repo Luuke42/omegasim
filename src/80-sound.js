@@ -34,6 +34,7 @@
       loadEngineSamples(); // needs the AudioContext, so it can only start from here
       loadFxSamples();
       loadVoiceSamples();
+      if (!('speechSynthesis' in window)) zahlenClipsLaden(lang);
       loadAmbience();
     }
     document.removeEventListener('pointerdown', unlockAudioOnFirstGesture);
@@ -50,6 +51,7 @@
       loadEngineSamples();
       loadFxSamples();
       loadVoiceSamples();
+      if (!('speechSynthesis' in window)) zahlenClipsLaden(lang);
       loadAmbience();
       refreshAmbienceGains();
     } else if (engineGain) {
@@ -383,6 +385,75 @@
     }
   }
 
+  // ---- RUNDENZEIT AUS CLIPS (v0.8.43) ----
+  // BESTELLT: "kannst du die ganzen Zahlen von 1 bis 60 und 'Minute' selbst aufnehmen oder
+  // gibt es dafuer nicht einen MIT lizenzierten Katalog". Die Android-WebView der App hat
+  // kein speechSynthesis, dort blieb die Rundenzeit stumm. tools/voice_zahlen.py erzeugt mit
+  // Piper (Stimmen Thorsten / LJ Speech) je Sprache 0-60 und vier Woerter; hier werden sie
+  // lueckenlos im AudioContext aneinandergereiht. Geladen wird nur die gerade gewaehlte
+  // Sprache, und erst wenn es kein speechSynthesis gibt - der Browser braucht sie nicht.
+  const zahlenBuffers = { de: null, en: null };
+  let zahlenManifest = null, zahlenLaden = {}, zahlenQuellen = [];
+  async function zahlenClipsLaden(spr) {
+    if (!audioCtx || zahlenBuffers[spr] || zahlenLaden[spr]) return;
+    zahlenLaden[spr] = true;
+    try {
+      if (!zahlenManifest) {
+        const res = await fetch('audio/zahlen.json');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        zahlenManifest = await res.json();
+      }
+      const satz = {};
+      for (const [k, datei] of Object.entries(zahlenManifest[spr] || {})) {
+        const r = await fetch('audio/' + datei);
+        if (!r.ok) throw new Error(datei);
+        satz[k] = await audioCtx.decodeAudioData(await r.arrayBuffer());
+      }
+      zahlenBuffers[spr] = satz;
+    } catch (err) {
+      log('Rundenzeit-Aufnahmen nicht ladbar (' + err.message + '), die Rundenansage bleibt aus.', 'info');
+    } finally {
+      zahlenLaden[spr] = false;
+    }
+  }
+  // Rundenzeit -> Clip-Schluessel, gleicher Wortlaut wie lapSpeechText(). Gerundet wird
+  // EINMAL auf Zehntel, damit 59,96 s nicht "59 Komma 10" wird, sondern "eine Minute null Komma null".
+  function lapClipFolge(ms, istBest) {
+    const z = Math.max(0, Math.round(ms / 100));
+    const m = Math.min(60, Math.floor(z / 600));
+    const s = Math.floor((z % 600) / 10);
+    const folge = [];
+    if (m === 1) folge.push('minute');
+    else if (m > 1) folge.push(String(m), 'minuten');
+    folge.push(String(s), 'komma', String(z % 10));
+    if (istBest) folge.push('bestzeit');
+    return folge;
+  }
+  function lapClipsSpielen(ms, istBest) {
+    const satz = zahlenBuffers[lang];
+    if (!satz) { zahlenClipsLaden(lang); return false; }
+    if (!audioCtx || !soundEnabled) return false;
+    const folge = lapClipFolge(ms, istBest);
+    if (folge.some((k) => !satz[k])) return false;
+    // Abbrechen vor dem Sprechen, wie bei speechSynthesis in ansage().
+    for (const q of zahlenQuellen) { try { q.stop(); } catch (e) {} }
+    zahlenQuellen = [];
+    let t0 = audioCtx.currentTime + 0.03;
+    for (const k of folge) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = satz[k];
+      const g = audioCtx.createGain();
+      g.gain.value = 1.0;
+      src.connect(g).connect(audioCtx.destination);
+      src.start(t0);
+      zahlenQuellen.push(src);
+      t0 += satz[k].duration + (k === 'komma' ? 0.02 : 0.06);
+    }
+    announceCancels++;
+    announceCalls++;
+    return true;
+  }
+
   // Die aufgenommene Ansage abspielen, wenn es sie gibt - sonst false, genau wie ein
   // gescheiterter ansage()-Aufruf. `key` ist meist gleich `art` (siehe ansage()), nur
   // 'rain' hat zwei Aufnahmen (an/aus) und braucht den spezifischeren Schluessel.
@@ -469,6 +540,34 @@
     if (!fxBuffers.crash.length) return false;
     const i = Math.floor(Math.random() * fxBuffers.crash.length);
     return playFx(fxBuffers.crash[i], 0.95);
+  }
+
+  // ---- ZWEI NOTEN FUER MEHRSPIELER: Beitritt und Abschied ------------------------------
+  // BESTELLT: "subtle join and leave sound (like two notes, medium-high for join and
+  // high-medium for leave) when another player is joining, for all players already part of a
+  // multiplayer session." Aufwaerts (mittel -> hoch) fuer einen Neuzugang, abwaerts
+  // (hoch -> mittel) fuer einen Abschied. Kurz und leise, damit es nicht nach Alarm klingt.
+  const MP_JOIN_TONE = [587.33, 783.99];   // D5 -> G5
+  const MP_LEAVE_TONE = [783.99, 587.33];  // G5 -> D5
+  function spielerWechselTon(join) {
+    if (!audioCtx || !soundEnabled) return;
+    const t0 = audioCtx.currentTime + 0.02;
+    const folge = join ? MP_JOIN_TONE : MP_LEAVE_TONE;
+    const dauer = 0.09, pause = 0.05, laut = 0.13;
+    folge.forEach((hz, i) => {
+      const t = t0 + i * (dauer + pause);
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = 'sine';
+      o.frequency.value = hz;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(laut, t + 0.008);
+      g.gain.setValueAtTime(laut, t + dauer - 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dauer);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(t);
+      o.stop(t + dauer + 0.02);
+    });
   }
 
   // The brake squeal is a sustained loop faded by pressure, the way a real squeal swells
@@ -642,6 +741,11 @@
   }
 
   function speakLap(ms, istBest) {
+    // Ohne Sprachausgabe (App-WebView): die Zahlen-Clips.
+    if (!('speechSynthesis' in window)) {
+      if (ansageAn.lap) lapClipsSpielen(ms, istBest);
+      return;
+    }
     ansage('lap', lapSpeechText(ms, istBest));
   }
 
@@ -664,6 +768,10 @@
       if (art === 'lap') announceOn = e.target.checked;
       // Beim Ausschalten sofort still sein und nicht den Satz noch beenden.
       if (!e.target.checked && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (!e.target.checked && art === 'lap') {
+        for (const q of zahlenQuellen) { try { q.stop(); } catch (e2) {} }
+        zahlenQuellen = [];
+      }
     });
   });
 
@@ -1509,6 +1617,15 @@
   $('ghost-curve').addEventListener('input', (e) => {
     ghostCfg.curveSlow = parseFloat(e.target.value);
     $('ghost-curve-val').textContent = Math.round(ghostCfg.curveSlow * 100) + '%';
+  });
+  // BESTELLT: Feld auffächern + Überholmanöver je Runde (experimentell).
+  $('ghost-feld').addEventListener('input', (e) => {
+    ghostCfg.feldAbstand = parseFloat(e.target.value);
+    $('ghost-feld-val').textContent = e.target.value + '%';
+  });
+  $('ghost-ueber').addEventListener('input', (e) => {
+    ghostCfg.ueberholRate = parseFloat(e.target.value);
+    $('ghost-ueber-val').textContent = e.target.value;
   });
   $('ghost-lateral').addEventListener('input', (e) => {
     ghostCfg.lateral = parseFloat(e.target.value);

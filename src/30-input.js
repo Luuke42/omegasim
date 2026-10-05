@@ -263,9 +263,16 @@
     if (!rec.on && !rec.rows.length) { el.textContent = 'keine Aufnahme'; return; }
     const secs = rec.rows.length ? (rec.rows[rec.rows.length - 1].t / 1000).toFixed(0) : 0;
     const marks = rec.rows.filter(r => r.dir === 'mark').length;
-    el.textContent = `${rec.on ? 'läuft' : 'gestoppt'}, ${rec.rows.length} Zeilen, `
-                   + `${secs} s, ${marks} Markierungen`;
-    $('rec-badge-text').textContent = `Aufnahme ${secs}s · ${marks} Mark.`;
+    const vorlage = rec.on
+      ? 'läuft, {n} Zeilen, {s} s, {m} Markierungen'
+      : 'gestoppt, {n} Zeilen, {s} s, {m} Markierungen';
+    el.textContent = t(vorlage)
+      .replace('{n}', rec.rows.length)
+      .replace('{s}', secs)
+      .replace('{m}', marks);
+    $('rec-badge-text').textContent = t('Aufnahme {s}s · {m} Mark.')
+      .replace('{s}', secs)
+      .replace('{m}', marks);
   }
 
   function recStart() {
@@ -335,7 +342,13 @@
   const keys = new Set();
   // Keyboard shifting, for testing without a controller: I up, K down. Edge-triggered via
   // the keydown listener rather than the polling interval, so one tap is one shift.
+  // Tippt man in ein Textfeld (Name, Host-Adresse), sind die Fahr- und Testtasten aus
+  // (v0.8.41): "p" loeste sonst einen Boxenstopp aus, Enter klickte eine Menuezeile.
+  function tasteImTextfeld(e) {
+    return !!(e.target && e.target.closest && e.target.closest('input[type="text"], input[type="number"], input[type="url"], textarea, select'));
+  }
   window.addEventListener('keydown', (e) => {
+    if (tasteImTextfeld(e)) return;
     const k = (e.key || '').toLowerCase();
     // Boxen-Minigame: K ist Quadrat, I ist Kreis - dieselbe Lage wie Runter/Hoch.
     if ((k === 'i' || k === 'k') && !e.repeat && pitSpielTaste(k === 'k' ? 'quad' : 'kreis')) {
@@ -389,18 +402,17 @@
       rec.next = Math.min(rec.next + 1, REC_SECTIONS.length);
       recMark(label);
     }
-    if (k === '?' || (k === '/' && e.shiftKey)) { if (!e.repeat) toggleHelp(); }
-    // optInfoSchliessen() ZUERST: toggleHelp() ist eine tote Referenz (keine solche
-    // Funktion existiert mehr im Projekt, siehe die Fundstelle) und wirft bei jedem
-    // Escape/? - stuende sie vorn, wuerde sie diese Zeile nie bis zum Popup kommen
-    // lassen. Unabhaengiger Fund, nicht Teil dieser Bestellung - dem Nutzer gemeldet,
-    // nicht stillschweigend "repariert".
+    // ? zeigt die Tastenbelegung. Die alte Hilfe-Karte lag einmal ueber allem, ist aber
+    // nach Optionen -> Controller gewandert (eine Tastenbelegung liest man vor dem
+    // Fahren, nicht waehrenddessen). toggleHelp() gab es nie als Funktion - es war eine
+    // tote Referenz und warf bei jedem ?/Escape einen ReferenceError.
+    if (k === '?' || (k === '/' && e.shiftKey)) { if (!e.repeat) { showTab('options'); showSubpage('opt-pad'); } }
     if (k === 'escape') {
       if (optInfoOffen()) optInfoSchliessen();
-      toggleHelp(false);
     }
   });
   window.addEventListener('keydown', (e) => {
+    if (tasteImTextfeld(e)) return;
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
     // Phase 13: auf dem Optionen-Tab lenken die Pfeiltasten die Menuenavigation statt zu
     // steuern - sonst wuerde ein Fokuswechsel gleichzeitig das (nicht sichtbare) Auto

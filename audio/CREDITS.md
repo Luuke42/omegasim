@@ -419,3 +419,19 @@ einzelne pruefte eine Behauptung, die ohne ihn nur eine Absicht gewesen waere:
 
 Was **nicht** geprueft ist: wie es klingt. Dass die Zuendstruktur richtig ist, sagt nichts
 darueber, ob ein Motor ueberzeugt.
+
+## Rundenzeit-Ansage (seit v0.8.43)
+
+`audio/zahl_*.ogg` (Zahlen 0-60, "Komma", "Minute(n)", "Bestzeit", je Deutsch und Englisch),
+erzeugt mit `tools/voice_zahlen.py`, danach band-begrenzt wie die anderen Ansagen:
+
+* **Piper TTS** 2023.11.14-2, MIT-Lizenz, https://github.com/rhasspy/piper
+* **Deutsch:** Stimme `de_DE-thorsten-medium`, Datensatz Thorsten-Voice von Thorsten Mueller,
+  CC0 (https://github.com/thorstenMueller/Thorsten-Voice). Laut Modellkarte ist das Modell von
+  der englischen Piper-Stimme "lessac" feinabgestimmt, deren Datensatz (Blizzard Challenge 2013)
+  eigene Bedingungen hat.
+* **Englisch:** Stimme `en_US-ljspeech-medium`, Datensatz LJ Speech, gemeinfrei
+  (https://keithito.com/LJ-Speech-Dataset/), von Grund auf trainiert.
+
+Beide Stimmmodelle stammen von https://huggingface.co/rhasspy/piper-voices und sind nicht
+im Repository, nur die erzeugten Clips.

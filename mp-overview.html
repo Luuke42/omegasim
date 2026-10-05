@@ -61,6 +61,9 @@
   button:hover { background: #2b3a55; }
   .warnbox { border-left: 3px solid var(--warn); padding-left: 10px; margin-top: 12px; }
   .leer { color: var(--dim); font-size: clamp(13px, 2vw, 22px); margin-top: 20px; }
+  #karte { margin-top: clamp(10px, 2vw, 22px); display: grid; place-items: center; }
+  #karte svg { max-width: 100%; max-height: 34vh; }
+  #karte-ohne { color: var(--dim); font-size: clamp(11px, 1.4vw, 16px); margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -84,6 +87,9 @@
   <tbody id="rows"></tbody>
 </table>
 <div class="leer" id="leer">Noch kein Fahrer angemeldet.</div>
+
+<div id="karte"></div>
+<div id="karte-ohne" style="display:none"></div>
 
 <footer>
   <div id="status">verbinde …</div>
@@ -164,6 +170,25 @@
         + '</tr>';
     });
     $('rows').innerHTML = zeilen.join('');
+
+    // Streckenkarte: der Host sammelt den Kurzcode der zuletzt gemeldeten Strecke (d.strecke).
+    // Diese Seite kennt den Code-Decoder der App nicht, zeichnet also nur eine erkennbare
+    // Karte, wenn sie den Code als "Carrera-Strecke" einordnen kann. Ohne gemeldete Strecke
+    // steht ein ehrlicher Hinweis.
+    const karte = $('karte'), ohne = $('karte-ohne');
+    const code = (d.strecke || '').trim();
+    const tiles = code && window.codeToTrack ? (window.codeToTrack(code) || {}).tiles : null;
+    if (tiles && tiles.length > 1 && window.renderTrackPreview) {
+      ohne.style.display = 'none';
+      const r = window.renderTrackPreview(tiles, null, { detailed: true, cars: [] });
+      if (karte.innerHTML !== r.html) karte.innerHTML = r.html;
+    } else {
+      karte.innerHTML = '';
+      ohne.style.display = '';
+      ohne.textContent = code
+        ? 'Strecke erkannt, aber ohne Carrera-Karte: ' + code
+        : 'Keine Carrera-Strecke gemeldet.';
+    }
   }
 
   function escape(t) {

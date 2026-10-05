@@ -33,7 +33,7 @@
   const K_EBENE1 = ['fahren', 'mp', 'challenges', 'options', 'misc'];
   const K_NAME = {
     home: 'Titel', fahren: 'Fahren', garage: 'Garage', race: 'Cockpit',
-    options: 'Optionen', control: 'Renneinstellungen', track: 'Strecke', mp: 'Mehrspieler',
+    options: 'Optionen', control: 'Renneinstellungen', track: 'Strecke', mp: 'WLAN Mehrspieler',
     info: 'Info', challenges: 'Challenges', misc: 'Entwickler', doc: 'Doku', school: 'Programmierschule',
     dev: 'BLE-Werkbank', selftest: 'Selbsttest', probe: 'Code-Sonde', numtrain: 'Zahlensysteme',
     record: 'Aufnahme-Modus',
@@ -53,6 +53,7 @@
   let kStapel = [];
   let kZurueckLaeuft = false;
   let kFrageOffen = false;
+  let kFrageWert = '';        // aktueller Wert der Namenseingabe im Frage-Dialog
   let kLetzterTab = 'home';
 
   function kAktiverTab() {
@@ -91,6 +92,9 @@
         menuNavEnsureContext();
         if (!menuNavGezeigt) konsoleFokusAuf(playerCar ? 'fa-start' : 'fa-auto');
       }
+      // Die gemerkte Stelle auch ZEIGEN (v0.8.41): vorher war sie aktiv, aber unmarkiert.
+      menuNavEnsureContext();
+      if (menuNavGezeigt) menuNavRender();
     }, 0);
   }
   function konsoleNachSubpage(key) {
@@ -100,7 +104,11 @@
     const mpg = $('mp-gemeinsam');
     const platz = key && document.querySelector('#sub-' + key + ' .mp-platz');
     if (mpg && platz && mpg.parentNode !== platz) platz.appendChild(mpg);
-    setTimeout(konsoleZeichnen, 0);
+    setTimeout(() => {
+      konsoleZeichnen();
+      menuNavEnsureContext();
+      if (menuNavGezeigt) menuNavRender();
+    }, 0);
   }
 
   function konsoleZeige(tab, sub) {
@@ -117,6 +125,7 @@
   // Im Browser dasselbe ueber einen Verlaufseintrag: Zurueck landet auf popstate statt die
   // Seite zu verlassen, und auf dem Startbildschirm geht es wie gewohnt zurueck.
   function omegaZurueck() {
+    if ($('mp-info') && !$('mp-info').hidden && typeof mpiStop === 'function') { mpiStop(); return true; }
     const imEditor = document.body.classList.contains('track-fs');
     const tour = typeof konsoleTourOffen === 'function' && konsoleTourOffen();
     if (kAktiverTab() === 'home' && !imEditor && !tour && !kFrageOffen) return false;
@@ -141,23 +150,26 @@
   // Unterseite), dann der Stapel, zuletzt die Eltern-Ebene.
   function konsoleZurueck() {
     if (typeof optInfoOffen === 'function' && optInfoOffen()) { optInfoSchliessen(); return true; }
+    // Challenge-Karte im Vollbild: Kreis verkleinert sie, statt die Unterseite zu schliessen.
+    if (typeof chKarteVollOffen === 'function' && chKarteVollOffen()) {
+      if (typeof chKarteVoll === 'function') chKarteVoll();
+      return true;
+    }
+    if ($('mp-info') && !$('mp-info').hidden && typeof mpiStop === 'function') { mpiStop(); return true; }
+    menuNavTextfeldLoesen();
     if (kFrageOffen) { konsoleFrageZu(); return true; }
     if (typeof konsoleTourOffen === 'function' && konsoleTourOffen()) { konsoleTourZurueck(); return true; }
     const lb = $('lb-wrap');
     if (lb && lb.classList.contains('on') && $('lb-close')) { $('lb-close').click(); return true; }
     const tab = kAktiverTab();
-    if (tab === 'info' && document.querySelector('#tab-info .subpage.on')) { konsoleZeige('options'); return true; }
+    if (tab === 'info' && document.querySelector('#tab-info .subpage.on')) { konsoleZeige('fahren'); return true; }
     if (document.querySelector('.tabpage.active .subpage.on')) { showSubpage(''); return true; }
-    if (tab === 'home' || K_EBENE1.includes(tab)) return false;
-    let ziel = null;
-    while (kStapel.length && !ziel) {
-      const z = kStapel.pop();
-      const zt = typeof z === 'string' ? { tab: z, sub: '' } : z;
-      if (zt.tab !== tab && zt.tab !== 'home') ziel = zt;
-    }
-    if (!ziel) ziel = { tab: K_ELTERN[tab] || 'fahren', sub: '' };
+    if (tab === 'home' || tab === 'fahren') return false;
+    // BESTELLT: "wenn ich aus menues mit kreistaste zurueckgehe, will ich zu fahren kommen."
+    // Der Stapel fuehrte sonst in den zuletzt besuchten Menue-Reiter zurueck; Kreis soll
+    // aber immer auf dem Fahren-Reiter landen.
     kZurueckLaeuft = true;
-    try { showTab(ziel.tab); if (ziel.sub) showSubpage(ziel.sub); } finally { kZurueckLaeuft = false; }
+    try { showTab('fahren'); } finally { kZurueckLaeuft = false; }
     menuNavTonAbwaehlen();
     return true;
   }
@@ -181,8 +193,16 @@
       if (kacheln.length >= 2) {
         return kacheln.map((k) => ({
           text: (k.querySelector('b') || k).textContent.trim(),
-          an: k.dataset.sub === offen.id.replace(/^sub-/, ''),
-          wahl: () => { showSubpage(k.dataset.sub); },
+          // Dauerrennen-Kacheln (data-ch) zeigen alle dieselbe Kategorie-Unterseite sub-ch-e;
+          // der aktive ist der, dessen Strecke gerade offen ist (chWahl). So sind sie auf
+          // derselben Ebene wie die Wochenkategorien - BESTELLT: "wöchentliche Challenges und
+          // Dauerrennen sind auf verschiedenen menü-ebenen, bitte angleichen".
+          an: k.dataset.ch ? k.dataset.ch === chWahl
+              : k.dataset.sub === offen.id.replace(/^sub-/, ''),
+          wahl: () => {
+            if (k.dataset.ch && typeof challengeSeiteZeigen === 'function') challengeSeiteZeigen(k.dataset.ch);
+            else showSubpage(k.dataset.sub);
+          },
         }));
       }
       return null;
@@ -240,14 +260,10 @@
   }
 
   // ---- Quadrat: schneller Wechsel auf Kacheln mit data-quad --------------------------
-  function konsoleQuadrat() {
-    const zeile = menuNavRows()[menuNavIndex];
-    const el = zeile && zeile.el;
-    const q = el && el.dataset ? el.dataset.quad : null;
-    if (!q) return false;
+  function konsoleQuadWechsel(q, dir) {
     if (q === 'renntyp') {
       const s = $('race-mode');
-      s.selectedIndex = (s.selectedIndex + 1) % s.options.length;
+      s.selectedIndex = (s.selectedIndex + dir + s.options.length) % s.options.length;
       s.dispatchEvent(new Event('change', { bubbles: true }));
     } else if (q === 'bahn') {
       const cb = $('setting-ontrack');
@@ -259,14 +275,50 @@
       const s = $('sound-profile');
       const opts = s ? [...s.options].filter((o) => !o.disabled) : [];
       if (opts.length) {
-        const n = opts[(opts.indexOf(s.selectedOptions[0]) + 1) % opts.length];
+        const n = opts[(opts.indexOf(s.selectedOptions[0]) + dir + opts.length) % opts.length];
         s.value = n.value;
         s.dispatchEvent(new Event('change', { bubbles: true }));
       }
+    } else {
+      return false;
     }
     menuNavTonVerstellen();
     konsoleFahrenZeichnen();
     return true;
+  }
+  function konsoleQuadrat(richtung) {
+    const dir = richtung === -1 ? -1 : 1;
+    menuNavEnsureContext();
+    const zeile = menuNavRows()[menuNavIndex];
+    const el = zeile && zeile.el;
+    const q = el && el.dataset ? el.dataset.quad : null;
+    if (!q) return false;
+    return konsoleQuadWechsel(q, dir);
+  }
+  // Die Schaltstellungen einer Kachel (Anzahl Punkte und welcher gefuellt ist), aus denselben
+  // Bedienelementen, die konsoleQuadWechsel() weiterdreht - damit Zahl und Punkt nicht
+  // auseinanderlaufen koennen.
+  function kQuadPunkte(quad) {
+    if (quad === 'bahn') {
+      const cb = $('setting-ontrack');
+      return { anzahl: 2, index: cb && cb.checked ? 1 : 0 };
+    }
+    if (quad === 'renntyp') {
+      const s = $('race-mode');
+      return { anzahl: s ? s.options.length : 0, index: s ? s.selectedIndex : -1 };
+    }
+    if (quad === 'profil') {
+      const keys = window.__presetKeys ? window.__presetKeys() : [];
+      const aktiv = window.__presetActive ? window.__presetActive() : null;
+      return { anzahl: keys.length, index: aktiv ? keys.indexOf(aktiv) : -1 };
+    }
+    if (quad === 'motor') {
+      const s = $('sound-profile');
+      const opts = s ? [...s.options].filter((o) => !o.disabled) : [];
+      const sel = s && s.selectedOptions[0];
+      return { anzahl: opts.length, index: sel ? opts.indexOf(sel) : -1 };
+    }
+    return { anzahl: 0, index: -1 };
   }
 
   // ---- Titel: jede Taste fuehrt nach FAHREN ------------------------------------------
@@ -339,7 +391,10 @@
 
   // ---- Frage-Dialog (#k-frage): wie das Cockpit-Menue, mit dem Pad bedienbar ----------
   // knoepfe: [[Text, Funktion oder null], ...]; der erste ist vorgewaehlt.
-  function konsoleFrage(titel, text, knoepfe, wip) {
+  // `bild` ist optionales HTML (z. B. ein Strecken-SVG) fuer die Vorschau im Dialog.
+  // `eingabe` ist optional { label, wert }: eine Namenseingabe; der aktuelle Wert steht
+  // in kFrageWert und wird von der Klick-Funktion der Knoepfe gelesen.
+  function konsoleFrage(titel, text, knoepfe, wip, bild, eingabe) {
     const d = $('k-frage');
     if (!d) return;
     $('k-frage-titel').textContent = titel;
@@ -349,6 +404,29 @@
       w.textContent = t('experimentell');
       $('k-frage-titel').appendChild(document.createTextNode(' '));
       $('k-frage-titel').appendChild(w);
+    }
+    const bd = $('k-frage-bild');
+    if (bd) {
+      if (bild) { bd.innerHTML = bild; bd.hidden = false; }
+      else { bd.innerHTML = ''; bd.hidden = true; }
+    }
+    const ei = $('k-frage-eingabe');
+    if (ei) {
+      if (eingabe) {
+        ei.hidden = false;
+        const lbl = ei.querySelector('label');
+        if (lbl) lbl.textContent = eingabe.label || '';
+        const feld = $('k-frage-eingabe-feld');
+        if (feld) {
+          feld.value = eingabe.wert || '';
+          feld.addEventListener('input', () => { kFrageWert = feld.value.trim(); });
+          setTimeout(() => { try { feld.focus(); } catch (e) {} }, 0);
+        }
+        kFrageWert = (eingabe.wert || '').trim();
+      } else {
+        ei.hidden = true;
+        kFrageWert = '';
+      }
     }
     $('k-frage-text').textContent = text || '';
     const host = $('k-frage-knoepfe');
@@ -425,6 +503,14 @@
   function konsoleZumMenue() {
     kCockpitVollbild = document.body.classList.contains('race-fs');
     if (kCockpitVollbild) exitRaceFullscreen();
+    // BESTELLT: "im Cockpit soll der Menue-Knopf das laufende Rennen/Training immer
+    // beenden." Vorher blieb ein Rennen im Hintergrund laufen, wenn man ueber den
+    // Menue-Knopf in die Menues wechselte - die Ampel lief weiter, das Auto fuhr ohne
+    // Fahrer. Der Menue-Knopf ist ein Ausstieg, also beendet er auch die Sitzung.
+    if (typeof kRennenLaeuft === 'function' && kRennenLaeuft()
+        && typeof requestRaceStop === 'function') {
+      requestRaceStop();
+    }
     const r = kMenueRueck;
     kMenueRueck = null;
     if (r && r.tab && r.tab !== 'race' && r.tab !== 'home') konsoleZeige(r.tab, r.sub || '');
@@ -516,7 +602,10 @@
     if (!host) return;
     host.innerHTML = '';
     for (const [l, w] of paare) {
-      const a = document.createElement('span'); a.className = 'k-l'; a.textContent = l;
+      // Auch die BESCHRIFTUNG darf ein Knoten sein: die Autos-Kachel gibt den Farbpunkt mit
+      // Namen als Span. Mit textContent stand dort "[object HTMLSpanElement]" (GEMELDET).
+      const a = document.createElement('span'); a.className = 'k-l';
+      if (l instanceof Node) a.appendChild(l); else a.textContent = l;
       const b = document.createElement('span'); b.className = 'k-w';
       if (w instanceof Node) b.appendChild(w); else b.textContent = w;
       host.appendChild(a); host.appendChild(b);
@@ -543,13 +632,46 @@
     if (!$('fa-auto')) return;
     const autos = kAutos();
     $('fa-auto-titel').textContent = autos.length ? autos.length + ' ' + t('verbunden') : t('Autos verbinden');
+    // BESTELLT v0.8.126: mehrere verbundene Autos mit Fotos gemeinsam zeigen (die Garage auf dem
+    // Fahren-Schirm). Erst ab zwei Fotos, sonst bleibt es beim einen Bild des Fahrer-Autos.
+    const mitFotos = autos.filter((c) => typeof autoFoto === 'function' && autoFoto(c));
+    const galerieAn = mitFotos.length >= 2;
+    const faAuto = $('fa-auto');
+    if (faAuto) faAuto.classList.toggle('k-auto-mehr', galerieAn);
     // Das eigene Foto des Fahrer-Autos (Garage) statt des Beispielbilds.
     const fahrer = autos.find((c) => c.role === 'player') || autos[0];
     const afoto = fahrer && typeof autoFoto === 'function' ? autoFoto(fahrer) : '';
     const ab = $('fa-auto-bild');
-    const abNeu = afoto ? 'foto:' + afoto.length : 'auto';
+    let abNeu;
+    if (galerieAn) {
+      abNeu = 'galerie:' + mitFotos.map((c) => (c.device ? c.device.id : '') + ':' + autoFoto(c).length).join('|');
+    } else {
+      abNeu = afoto ? 'foto:' + afoto.length : 'auto';
+    }
     if (ab && ab.dataset.bild !== abNeu) {
-      ab.style.backgroundImage = afoto ? 'url("' + afoto + '")' : 'url(img/auto.jpg)';
+      if (galerieAn) {
+        ab.style.backgroundImage = 'none';
+        ab.innerHTML = '';
+        const gal = document.createElement('div');
+        gal.className = 'k-auto-galerie';
+        mitFotos.forEach((c) => {
+          const zelle = document.createElement('div');
+          zelle.className = 'k-auto-zelle';
+          zelle.style.backgroundImage = 'url("' + autoFoto(c) + '")';
+          zelle.title = garageLabel(c);
+          const lab = document.createElement('span');
+          const dot = document.createElement('i');
+          dot.style.background = carColor(c).hex;
+          lab.appendChild(dot);
+          lab.appendChild(document.createTextNode(garageLabel(c)));
+          zelle.appendChild(lab);
+          gal.appendChild(zelle);
+        });
+        ab.appendChild(gal);
+      } else {
+        ab.style.backgroundImage = afoto ? 'url("' + afoto + '")' : 'url(img/auto.jpg)';
+        ab.innerHTML = '';
+      }
       ab.dataset.bild = abNeu;
     }
     kZeilen($('fa-auto-info'), autos.length
@@ -558,6 +680,15 @@
     const rm = $('race-mode');
     const modus = rm.selectedOptions[0] ? rm.selectedOptions[0].textContent : '';
     $('fa-renn-titel').textContent = modus;
+    // Rennoptionen-Kachel wechselt mit dem Rennmodus das Bild (BESTELLT v0.8.53).
+    const rmBild = { practice: 'rennoptionen-practice', endurance: 'rennoptionen-endurance',
+                     qualifying: 'rennoptionen-qualifying', laps: 'rennoptionen-laps',
+                     knockout: 'knockout', derby: 'derby' }[rm.value];
+    const rb = $('fa-renn-bild');
+    if (rb && rmBild && rb.dataset.bild !== rmBild) {
+      rb.style.backgroundImage = 'url(img/' + rmBild + '.jpg)';
+      rb.dataset.bild = rmBild;
+    }
     const wx = $('race-wx-start');
     kZeilen($('fa-renn-info'), [
       // Freies Training laeuft ohne Ende: dort steht das Unendlich statt einer Minutenzahl.
@@ -570,18 +701,45 @@
     const foto = konsoleFoto();
     $('fa-strecke-titel').textContent = bahn ? t('Auf der Bahn') : t('Frei');
     const bild = $('fa-strecke-bild');
+    // BESTELLT v0.8.126: ist eine Strecke eingegeben und der Modus steht auf "auf der Bahn",
+    // zeigt das Band die Streckenvorschau aus dem Editor statt des Beispielbilds.
+    let teileAn = 0;
+    try { teileAn = currentTrackTiles.length; } catch (e) { teileAn = 0; }
+    const vorschauAn = bahn && teileAn >= 3 && typeof renderTrackPreview === 'function';
+    const faStrecke = $('fa-strecke');
+    if (faStrecke) faStrecke.classList.toggle('k-vorschau', vorschauAn);
     // Im Ausdruck-Modus zeigt das Band das eigene Streckenfoto, sobald es eines gibt. Nur neu
     // setzen, wenn es sich geaendert hat: die Daten-URL ist einige hundert KB lang.
-    const bildNeu = !bahn && foto ? 'foto:' + foto.length : (bahn ? 'strecke-kachel' : 'strecke-frei');
+    let bildNeu;
+    if (vorschauAn) {
+      try { bildNeu = 'karte:' + trackToCode(currentTrackTiles, trackRotationDeg); }
+      catch (e) { bildNeu = 'karte'; }
+    } else {
+      bildNeu = !bahn && foto ? 'foto:' + foto.length : (bahn ? 'strecke-bahn' : 'strecke-frei');
+    }
     if (bild && bild.dataset.bild !== bildNeu) {
-      bild.style.backgroundImage = !bahn && foto ? 'url("' + foto + '")' : 'url(img/' + bildNeu + '.jpg)';
+      let gezeichnet = false;
+      if (vorschauAn) {
+        try {
+          const res = renderTrackPreview(currentTrackTiles, null, { detailed: true });
+          bild.style.backgroundImage = 'none';
+          bild.innerHTML = res.html;
+          gezeichnet = true;
+        } catch (e) { /* Fall: Foto */ }
+      }
+      if (!gezeichnet) {
+        bild.style.backgroundImage = !bahn && foto ? 'url("' + foto + '")' : 'url(img/' + (bahn ? 'strecke-bahn' : 'strecke-frei') + '.jpg)';
+        bild.innerHTML = '';
+      }
       bild.dataset.bild = bildNeu;
     }
     kZeilen($('fa-strecke-info'), bahn
       ? [[t('Teile'), String(kTeile())], ['Code', kCode() || '–']]
       : [[t('Modus'), t('Ausdruck, ohne Bahn')], [t('Streckenfoto'), foto ? t('hochgeladen') : t('keins')]]);
     ['fa-scan', 'fa-laden'].forEach((id) => { if ($(id)) $(id).hidden = !bahn; });
-    if ($('fa-druck')) $('fa-druck').hidden = bahn;
+    // BESTELLT: "wenn ich auf TRACK klicke, sollen alle Optionen sichtbar sein" - auch im
+    // Bahn-Modus sollen die Druckvorlagen erreichbar bleiben.
+    if ($('fa-druck')) $('fa-druck').hidden = false;
     if ($('fa-foto')) $('fa-foto').hidden = bahn;
     if ($('fa-foto-weg')) $('fa-foto-weg').hidden = bahn || !foto;
     $('fa-profil-titel').textContent = ($('race-act-mode-txt') || {}).textContent || '–';
@@ -592,6 +750,25 @@
     $('fa-start-titel').textContent = kRennenLaeuft() ? t('Zurück ins Rennen')
       : (training ? t('Training starten') : t('Rennen starten'));
     $('fa-start-unter').textContent = modus + ' · ' + (bahn ? t('auf der Bahn') : t('frei'));
+    // Punkte rechts neben dem Wert (in derselben .k-kopf-Zeile): so viele, wie es
+    // Schaltstellungen gibt, die gewaehlte gefuellt. Bei zu vielen (z. B. Motorsound mit
+    // 27 Motoren) wuerden die Punkte nicht mehr passen - dort stehen Pfeile im Markup.
+    // Fuer 6..10 Stellungen ohne Pfeile reicht auch der Platz nicht mehr: dann eine kompakte
+    // "N/M"-Anzeige statt der Punkte (BESTELLT: "N/8"-Readout, wenn die Punkte drangeln).
+    [['fa-strecke-punkte', 'bahn'], ['fa-renn-punkte', 'renntyp'],
+     ['fa-profil-punkte', 'profil']].forEach(([id, quad]) => {
+      const host = $(id);
+      if (!host) return;
+      const p = kQuadPunkte(quad);
+      let html = '';
+      if (p.anzahl <= 5) {
+        for (let i = 0; i < p.anzahl; i++) html += '<i' + (i === p.index ? ' class="an"' : '') + '></i>';
+      } else if (p.anzahl > 0) {
+        const n = p.index >= 0 ? p.index + 1 : '&ndash;';
+        html = '<b class="k-quad-zahl">' + n + '/' + p.anzahl + '</b>';
+      }
+      if (host.innerHTML !== html) host.innerHTML = html;
+    });
   }
 
   // ---- Streckenfoto (Ausdruck-Modus, experimentell) --------------------------------
@@ -686,7 +863,16 @@
         && !(typeof konsoleTourOffen === 'function' && konsoleTourOffen())
         && !document.body.classList.contains('track-fs')) {
       const tab = kAktiverTab();
-      if (tab === 'race') konsoleZumMenue();
+      if (tab === 'race') {
+        // BESTELLT: "Options waehrend einer Challenge beendet die Challenge und zeigt das
+        // Ergebnis". requestRaceStop() -> finishRace() -> challengeRennenEnde() wertet und
+        // zeigt den Ergebnis-Dialog. Nichts zaehlt mehr, auch der Abbruch in die Rennmaschine.
+        if (typeof challengeLaeuft === 'function' && challengeLaeuft() && kRennenLaeuft()) {
+          requestRaceStop();
+        } else {
+          konsoleZumMenue();
+        }
+      }
       else if (tab && tab !== 'home') konsoleInsCockpit(true);
     }
     konsoleOptionsTaste.vorher = gedrueckt;
@@ -762,6 +948,27 @@
     kn('fa-laden', () => konsoleZeige('track', 'laden'));
     kn('fa-druck', () => konsoleZeige('track', 'print'));
     kn('fa-profil', () => konsoleZeige('options', 'opt-feel'));
+    // BESTELLT: "wenn ich auf den Header tippe, soll es zur naechsten Option schalten".
+    // Der Kachelkopf (Titel + Wert) dreht die Schaltstellung weiter, der Rest der Kachel
+    // oeffnet wie bisher die Unterseite. Das Gamepad bleibt unveraendert (Quadrat/links/rechts).
+    [['fa-strecke', 'bahn'], ['fa-renn', 'renntyp'], ['fa-profil', 'profil'], ['fa-motor', 'motor']]
+      .forEach(([tileId, quad]) => {
+        const tile = $(tileId);
+        if (!tile) return;
+        tile.querySelectorAll('.k-kk, .k-kt').forEach((el) => {
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            konsoleQuadWechsel(quad, 1);
+          });
+        });
+      });
+    // Die Pfeile des Motorsound-Kachelkopfs blaettern vor und zurueck (nicht das Gamepad).
+    document.querySelectorAll('.k-arrow').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        konsoleQuadWechsel(el.dataset.quad, parseInt(el.dataset.dir, 10));
+      });
+    });
     kn('race-menue', () => konsoleZumMenue());
     document.querySelectorAll('.info-open').forEach((el) => el.addEventListener('click', () => konsoleZeige('info', el.dataset.sub)));
     kn('mp-erkl-knopf', (e) => { e.stopPropagation(); optInfoOeffnen(t('Beitreten und Rangliste'), $('mp-erkl').innerHTML); });

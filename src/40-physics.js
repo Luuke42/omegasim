@@ -85,6 +85,17 @@
   // also aus 50-drive.js zur Aufbauzeit lesbar - die umgekehrte Richtung ist die temporale
   // Todeszone, gegen die der Kommentar dort argumentiert, und sie bleibt gemieden.
   const STEER_RESP_REF = 2.0;
+  // Bezug der Lenkansprechen-Trimmung im neuen Weg (steerVoll gesetzt): bei diesem Wert, der
+  // Vorgabe des Reglers, liegt der volle Einschlag genau bei "Voller Einschlag bei". Darueber
+  // kommt er frueher, darunter nie ganz.
+  const STEER_VOLL_BEZUG = 3.0;
+  // Der eine Rechenweg fuer Physik, Plot und Live-Punkt: Stick -> Anteil des vollen Servo-
+  // ausschlags, bei vollem Grip und im Stand. s = sign(x) * min(1, (|x|/voll)^e) mal Trimmung.
+  function lenkVollAnteil(x, voll, expo, resp) {
+    const a = Math.min(1, Math.abs(Math.max(-1, Math.min(1, x))) / Math.max(0.05, voll));
+    const s = Math.sign(x) * (expo > 0 && expo !== 1 ? Math.pow(a, expo) : a);
+    return Math.max(-1, Math.min(1, s * (resp || STEER_VOLL_BEZUG) / STEER_VOLL_BEZUG));
+  }
 
   // ---- LENKDAEMPFUNG: WIE LANGE VON NULL BIS ZUM VOLLEN AUSSCHLAG ---------------------
   //
@@ -168,6 +179,13 @@
         // Herausbeschleunigen sind genau das. Zurueckgesetzt auf 1.15, wie vor v0.7.9 -
         // der Regler #setting-steer-expo bleibt, wer will, stellt haerter selbst ein.
         steerExpo: 1.15,
+        // VOLLER EINSCHLAG BEI (v0.8.40). BESTELLT: "Lenkkennlinie so wie Gas/Bremse, nur in
+        // beide Richtungen. Ich will es linear einstellen koennen, aber auch, wann 100 %
+        // gelenkt wird (idealerweise nicht ab 50 % Input)." Anteil des Stickwegs, bei dem der
+        // volle Servoausschlag erreicht ist. null = der alte Weg (Kennlinie mal Lenkansprechen
+        // mal Kalibrierung), bitgleich wie vorher - das haelt der Fingerabdruck-Test fest. Das
+        // Markup setzt 0,9, siehe #setting-steer-voll.
+        steerVoll: null,
         // Der volle Lenkausschlag ist MECHANISCH 45 Grad. Das stand nirgends, und damit
         // war steerResponse eine Zahl ohne Einheit: der Regler ging von 0,5 bis 3,0, und
         // was 2,0 bedeutete, wusste nur die Kalibrierung. Jetzt ist die Groesse im Modell,
@@ -1904,8 +1922,13 @@
       // ANFORDERUNG wirkt statt auf die erlaubte Vorgabe - und damit in jedem Gang.
       const maxSteerLimit = Math.min(1,
         1.0 - this.state.virtualSpeed * cfg.speedSteerReduction * gearFrac);
-      const targetSteer = Math.max(-1, Math.min(1,
-        expoSteer * maxSteerLimit * cfg.steerResponse));
+      // Neuer Weg (steerVoll gesetzt): der Lenkwunsch IST die neue Kurve (1 = voller
+      // Einschlag). Am Servo kommt er unten mal min(1, Kalibrierung x Grip) an: bei vollem
+      // Grip genau der Wunsch, bei Gripverlust gleicht die Kalibrierung aus, soweit sie reicht.
+      const targetSteer = cfg.steerVoll
+        ? Math.max(-1, Math.min(1, lenkVollAnteil(inputs.steering, cfg.steerVoll, cfg.steerExpo, cfg.steerResponse)
+                                   * maxSteerLimit))
+        : Math.max(-1, Math.min(1, expoSteer * maxSteerLimit * cfg.steerResponse));
 
       // RATE LIMIT, not exponential smoothing. An exponential lag moves slowest at the very
       // start of a movement — precisely the moment that has to feel immediate. A rate limit
@@ -1949,7 +1972,11 @@
       // zwischen zwei Takten kaum aendert.
       const k = Math.max(0.05, cfg.steerCalib * (st.aquaFactor === undefined ? 1 : st.aquaFactor)
                                * (st.steerGrip === undefined ? 1 : st.steerGrip));
-      const weg = Math.min(1, 1 / k);
+      // Im neuen Weg ist der groesste moegliche Wunsch 1 mal die Trimmung durch das
+      // Lenkansprechen (lenkVollAnteil deckelt dort) - bis dorthin gilt die eingestellte Zeit.
+      const weg = cfg.steerVoll
+        ? Math.min(1, (cfg.steerResponse || STEER_VOLL_BEZUG) / STEER_VOLL_BEZUG)
+        : Math.min(1, 1 / k);
       const maxStep = cfg.steerDaempfungMs > 0
         ? dt * 1000 / cfg.steerDaempfungMs * weg
         : Infinity;
@@ -1982,8 +2009,9 @@
       // vorzeichenbehafteten Bereichs. Die 45 Grad sind eine Grenze des Autos, nicht der App,
       // und kein Reglerwert kann darueber hinaus.
       st.steerDemand = this.state.dampedSteering * st.aquaFactor * st.steerGrip;
-      this.outputs.servoAngle = Math.max(-1, Math.min(1,
-        st.steerDemand * cfg.steerCalib + zug));
+      this.outputs.servoAngle = Math.max(-1, Math.min(1, cfg.steerVoll
+        ? this.state.dampedSteering * Math.min(1, cfg.steerCalib * st.aquaFactor * st.steerGrip) + zug
+        : st.steerDemand * cfg.steerCalib + zug));
       // Pacejka formt den Befehl NACH dem Deckel, siehe dort. Nur hinter dem Schalter:
       // "Physik" rechnet keinen Schritt davon.
       if (cfg.pacejka) this.pacejkaStep(dt, inputs);

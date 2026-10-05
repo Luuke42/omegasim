@@ -72,6 +72,9 @@
     --good: #3ddc84;
     --bad: #ff5c5c;
     --warn: #ffb02e;
+    --bronze: #cd7f32;
+    --silber: #c0c6cf;
+    --gold: #ffd34d;
     --stripe: #f4f6fb;
     --info: #5aa9ff;      /* the blue side of the track, and links */
     /* The zebra striping and hover washes were semi-transparent navy over white. Over black
@@ -189,7 +192,7 @@
   nav.tabs button {
     background: transparent; border: none; border-bottom: 3px solid transparent;
     white-space: nowrap; flex-shrink: 0;
-    border-radius: 0; padding: 11px 15px; color: var(--muted); font-weight: 700;
+    border-radius: 0; padding: 27px 15px; min-height: 345px; color: var(--muted); font-weight: 700;
     text-transform: uppercase; letter-spacing: .09em; font-size: 11.5px;
   }
   /* Every tab gets a hint of the channel offset, the active one gets it at full strength.
@@ -220,6 +223,24 @@
      allein ist kein Zustand, wenn jemand sie nicht unterscheiden kann. */
   .mode-tile.sel { color: var(--ink); border-color: var(--bad);
     box-shadow: inset 3px 0 0 var(--bad); background: var(--panel-3); }
+  /* Kachelbild fuer die experimentellen Modi: das Gemini-Bild als Hintergrund, dunkel
+     ueberlagert, damit der Text lesbar bleibt. */
+  .mode-tile.kachelbild { min-height: 96px; color: #fff; border-color: rgba(255,255,255,.25);
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)); }
+  .mode-tile.kachelbild.knockout {
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(img/knockout.jpg) center / cover; }
+  .mode-tile.kachelbild.derby {
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(img/derby.jpg) center / cover; }
+  .mode-tile.kachelbild.practice {
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(img/rennoptionen-practice.jpg) center / cover; }
+  .mode-tile.kachelbild.endurance {
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(img/rennoptionen-endurance.jpg) center / cover; }
+  .mode-tile.kachelbild.qualifying {
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(img/rennoptionen-qualifying.jpg) center / cover; }
+  .mode-tile.kachelbild.laps {
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(img/rennoptionen-laps.jpg) center / cover; }
+  .mode-tile.kachelbild:hover, .mode-tile.kachelbild.sel { color: #fff; background-color: transparent; }
+  .mode-tile.kachelbild.sel { border-color: var(--bad); box-shadow: inset 3px 0 0 var(--bad); }
   .wx-pick { display: flex; gap: 6px; }
   .wx-pick button {
     width: 46px; min-height: 44px; padding: 0; display: grid; place-items: center;
@@ -346,8 +367,15 @@
   .home-legal-h { font-weight: 700; color: #f4f6fb; font-size: 13px; letter-spacing: .02em;
     margin-bottom: 6px; }
   .home-legal p { margin: 0 0 8px 0; }
-  .home-titel { text-align: center; padding: 18px 16px 4px; }
-  .home-titel-text { position: relative; display: inline-block; font-weight: 900;
+  /* Ein grosses, sehr dezent gehaltenes Omega hinter dem Schriftzug (BESTELLT). Es liegt
+     hinter dem Text (z-index 0, die Woerter kommen danach im DOM) und faellt nur auf, wenn
+     man hinsieht - kein Bild, ein Zeichen. */
+  .home-titel { position: relative; text-align: center; padding: 18px 16px 4px; }
+  .home-titel::before {
+    content: 'Ω'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font-size: clamp(120px, 34vw, 480px); font-weight: 900; line-height: 1;
+    color: rgba(244,246,251,.045); pointer-events: none; z-index: 0; }
+  .home-titel-text { position: relative; z-index: 1; display: inline-block; font-weight: 900;
     font-size: clamp(30px, 8vw, 72px); letter-spacing: .18em; color: #f4f6fb;
     text-shadow: 3px 0 0 var(--glitch-r), -3px 0 0 var(--glitch-c); }
   .home-titel-text::before, .home-titel-text::after {
@@ -370,8 +398,21 @@
   .home-titel-text.k-glitch-rot { text-shadow: 3px 0 0 var(--glitch-r), -3px 0 0 var(--glitch-r); margin-left: .45em; }
   .home-titel-text.k-glitch-blau::after { color: var(--glitch-c); }
   .home-titel-text.k-glitch-rot::before { color: var(--glitch-r); }
+  /* JE BUCHSTABE ZUFAELLIG (v0.8.38). BESTELLT: "je Buchstabe sollst du je Seite (oben, unten)
+     zufaellig festlegen, ob der Glitch-Effekt blau oder rot ist." 96-home.js zerlegt die Woerter
+     beim Laden in Buchstaben und setzt je Buchstabe --gl-o (oberer Schnipsel und linker
+     Schatten), --gl-u (unterer Schnipsel und rechter Schatten) und einen Versatz der Animation. */
+  .home-titel-text.gl-zerlegt { text-shadow: none; }
+  .home-titel-text.gl-zerlegt::before, .home-titel-text.gl-zerlegt::after { content: none; }
+  .gl-b { position: relative; display: inline-block;
+    text-shadow: -3px 0 0 var(--gl-o), 3px 0 0 var(--gl-u); }
+  .gl-b::before, .gl-b::after { content: attr(data-t); position: absolute; inset: 0; pointer-events: none; }
+  .gl-b::before { color: var(--gl-o); clip-path: inset(18% 0 58% 0); transform: translate(-4px, 0);
+    animation: titel-glitch-a 3.2s steps(1) infinite; animation-delay: var(--gl-d, 0s); }
+  .gl-b::after { color: var(--gl-u); clip-path: inset(62% 0 12% 0); transform: translate(4px, 0);
+    animation: titel-glitch-b 2.7s steps(1) infinite; animation-delay: var(--gl-e, 0s); }
   @media (prefers-reduced-motion: reduce) {
-    .home-titel-text::before, .home-titel-text::after { animation: none; } }
+    .home-titel-text::before, .home-titel-text::after, .gl-b::before, .gl-b::after { animation: none; } }
   .home-feat { margin: 0 auto; max-width: 1100px; }
   .home-legal p:last-of-type { margin-bottom: 10px; }
   .home-legal-links { display: flex; gap: 18px; flex-wrap: wrap; }
@@ -522,6 +563,7 @@
     .home-topbar { padding: 10px 16px; font-size: 12.5px; gap: 8px 10px; }
     .home-topbar .foot-brand { display: none; }
     #lang-toggle { min-width: 104px; }
+    nav.tabs button { padding: 15px 15px; min-height: 90px; }
   }
   /* Die aktive Sprache steht hell, die andere gedimmt - ein Umschalter, der zeigt, was
      gerade gilt, statt nur was man anklicken kann. */
@@ -545,12 +587,17 @@
   [hidden] { display: none !important; }
 
   /* ---- ANDROID-APP: Update-Hinweis und Info-Screen ------------------------------------ */
-  .app-update { max-width: 1052px; margin: 8px auto 0; padding: 10px 14px; box-sizing: border-box;
-    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  .app-update { max-width: 1052px; margin: 8px auto 0; padding: 7px 12px; box-sizing: border-box;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
     background: rgba(61,220,132,.10); border-left: 3px solid var(--good); }
-  .app-update b { flex: 1 1 200px; }
-  .app-fortschritt { width: 100%; height: 6px; background: rgba(255,255,255,.12); }
-  .app-fortschritt > i { display: block; height: 100%; width: 0; background: var(--good); }
+  .app-update b { flex: 1 1 170px; font-size: 13.5px; line-height: 1.35; }
+  .app-update-aktion { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  /* Der Ladebalken liegt als Hintergrund im "Jetzt laden"-Knopf (BESTELLT): er braucht
+     keine eigene volle Zeile mehr, die den Titelbildschirm auseinanderzieht. */
+  .app-update-laden { position: relative; overflow: hidden; }
+  .app-update-balken { position: absolute; inset: 0; background: rgba(255,255,255,.13); }
+  .app-update-balken > i { display: block; height: 100%; width: 0; background: rgba(255,255,255,.4); }
+  .app-update-laden > span:last-child { position: relative; z-index: 1; }
   .mp-app { border-left: 3px solid var(--good); padding: 8px 12px; margin: 10px 0;
     background: rgba(61,220,132,.06); }
   .mp-app-adresse { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums;
@@ -1297,6 +1344,30 @@
     align-content: center; }
   .gt3-right { grid-area: right; display: grid; gap: clamp(4px, .8vw, 9px);
     align-content: start; }
+  /* ---- DERBY-COCKPIT (v0.8.126) ----
+     Nur der Mittelteil (Gang, Tempo, Drehzahl), darueber die Ampel, darunter die
+     Health-Balken aller Teilnehmer. Seitenteile und Reifenleiste fallen weg. */
+  .gt3-derby-health { grid-area: derby; display: none; gap: clamp(4px, .8vw, 9px);
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); align-content: center; }
+  #race-dash.derby { grid-template-areas:
+    "flag flag flag" "shift shift shift" "derby derby derby" "left gear right"
+    "strip strip strip" "banner banner banner" "foot foot foot" "toast toast toast" "marke marke marke"; }
+  #race-dash.derby .gt3-left, #race-dash.derby .gt3-right,
+  #race-dash.derby .gt3-strip { display: none; }
+  #race-dash.derby .gt3-gear { align-content: center; }
+  #race-dash.derby .gt3-derby-health { display: grid; }
+  .derby-balken { display: grid; gap: 3px; align-content: start;
+    background: rgba(255,255,255,.045); border-radius: 8px; padding: clamp(5px,.9vw,9px); }
+  .derby-balken .db-kopf { display: flex; justify-content: space-between; gap: 6px;
+    font-size: clamp(10px, 1.6vw, 13px); line-height: 1.1; white-space: nowrap; }
+  .derby-balken .db-name { overflow: hidden; text-overflow: ellipsis; }
+  .derby-balken .db-wert { font-variant-numeric: tabular-nums; opacity: .85; }
+  .derby-balken .db-leiste { height: clamp(6px, 1.1vw, 11px); border-radius: 999px;
+    background: rgba(255,255,255,.09); overflow: hidden; }
+  .derby-balken .db-leiste > i { display: block; height: 100%; width: 100%;
+    border-radius: inherit; transition: width .2s linear; }
+  .derby-balken.aus { opacity: .45; }
+  .derby-balken.aus .db-name { text-decoration: line-through; }
   /* Acht Spalten auf 375 px sind 40 px je Kachel, und darin passt keine Beschriftung:
      gemessen lief der Reifentext ueber die Akkukachel. Unter 560 px deshalb zweireihig. */
   .gt3-strip { grid-area: strip; display: grid; gap: clamp(3px, .7vw, 8px);
@@ -1553,9 +1624,18 @@
   #race-act-flag > * { position: relative; }
   /* Dieselbe Zeile wie die Flagge, andere Farbe: Braun-Orange fuer "du bist neben der
      Bahn", nicht Gelb - Gelb ist im Rennsport die Flagge und darf nicht zweierlei heissen. */
-  #gt3-offtrack { display: none; grid-area: flag; background: #3a2410; color: #ffb26b;
-    font-weight: 700; text-align: center; letter-spacing: .09em;
-    font-size: clamp(10px, 2.2vw, 13px); padding: 3px 6px; }
+  /* ABSEITS ALS EINBLENDUNG (v0.8.38). GEMELDET: "'Abseits der Bahn' ist zu weit oben und nicht
+     erkennbar" - vorher ein duenner Streifen in der Flaggenzeile ganz oben. Jetzt mittig ueber
+     dem Cockpit, gross und pulsierend, in derselben Flaeche wie das Boxen-Minigame. */
+  #gt3-offtrack { display: none; position: absolute; z-index: 6; pointer-events: none;
+    grid-row: left-start / strip-end; grid-column: left-start / right-end;
+    justify-self: center; align-self: start; margin-top: 18%;
+    background: rgba(58,36,16,.94); color: #ffb26b; border: 2px solid #ffb26b;
+    font-weight: 800; text-align: center; letter-spacing: .12em; text-transform: uppercase;
+    font-size: clamp(14px, 3.6vw, 24px); padding: .35em 1em; box-shadow: 0 8px 30px rgba(0,0,0,.6);
+    animation: abseits-puls 1.1s ease-in-out infinite; }
+  @keyframes abseits-puls { 0%, 100% { opacity: 1; } 50% { opacity: .62; } }
+  @media (prefers-reduced-motion: reduce) { #gt3-offtrack { animation: none; } }
   #gt3-flag { display: none; grid-area: flag; background: #4a3c00; color: #ffd83d;
     font-weight: 800; letter-spacing: .16em; text-align: center;
     padding: clamp(2px, .6vw, 6px) 0; font-size: clamp(9px, 1.5vw, 14px); }
@@ -1917,6 +1997,40 @@
     grid-template-areas: "kopf kopf" "tab karte" "dia sek" "fuss fuss"; }
   #race-ovscreen > .ov-diagramm { grid-area: dia; min-width: 0; cursor: pointer; }
   #race-ovscreen > .ov-sektoren { grid-area: sek; min-width: 0; overflow: auto; }
+  /* PODEST: eine eigene Zeile ueber der Tabelle, sobald ein Rennen beendet ist. */
+  #race-ovscreen > .ov-podest { grid-area: podium; }
+  #race-ovscreen:has(.ov-podest:not([hidden])) {
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "kopf kopf" "podium podium" "tab karte" "dia sek" "fuss fuss"; }
+  #race-ovscreen:has(.ov-podest:not([hidden])):has(.ov-karte:empty) {
+    grid-template-areas: "kopf kopf" "podium podium" "tab tab" "dia sek" "fuss fuss"; }
+  #race-ovscreen:has(.ov-podest:not([hidden])):has(.ov-karte:empty):has(.ov-sektoren:empty) {
+    grid-template-areas: "kopf kopf" "podium podium" "tab tab" "dia dia" "fuss fuss"; }
+  .ov-podest { display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: clamp(4px, 1vw, 12px); align-items: end; margin: 2px 0 6px; }
+  .ov-podest[hidden] { display: none; }
+  .ov-podest .platz { display: flex; flex-direction: column; align-items: center; gap: 3px;
+    min-width: 0; }
+  .ov-podest .name { display: flex; align-items: center; gap: 5px; max-width: 100%;
+    font-size: clamp(10px, 1.5vw, 15px); font-weight: 800; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .ov-podest .name.leer { opacity: 0; }
+  .ov-podest .zeit { color: var(--gt3-strip-ink, #a9b2c4); font-family: monospace;
+    font-size: clamp(9px, 1.2vw, 12px); }
+  /* Die Gesamtzeit des Siegers: groesser und in der Goldfarbe, damit der Blick dort landet. */
+  .ov-podest .zeit.zeit-1 { color: #f5c518; font-weight: 800; font-size: clamp(11px, 1.7vw, 17px); }
+  .ov-podest .block { width: 100%; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; background: var(--gt3-tile); color: var(--gt3-tile-ink);
+    border-radius: var(--gt3-radius); position: relative; overflow: hidden; }
+  .ov-podest .block b { font-size: clamp(18px, 3.6vw, 40px); font-weight: 900; line-height: 1; }
+  .ov-podest .platz-1 .block { height: clamp(44px, 11vh, 84px); color: #f5c518;
+    background: linear-gradient(180deg, #f7d26a, #e0a91e); }
+  .ov-podest .platz-1 .block b { color: #2b1c00; }
+  /* Kleines Zielflaggen-Band am oberen Rand des Siegerblocks. */
+  .ov-podest .platz-1 .block::before { content: ''; position: absolute; left: 0; right: 0;
+    top: 0; height: 5px; background: repeating-conic-gradient(#fff 0 25%, #111 0 50%) 0 0 / 8px 8px; }
+  .ov-podest .platz-2 .block { height: clamp(34px, 8.5vh, 66px); color: #c9d1e0; }
+  .ov-podest .platz-3 .block { height: clamp(27px, 6.8vh, 52px); color: #cd7f32; }
   .ov-dia-svg { width: 100%; height: auto; max-height: 22vh; display: block; }
   .ov-dia-gitter { stroke: rgba(255,255,255,.14); stroke-width: 1; }
   .ov-dia-text { fill: var(--gt3-strip-ink, #a9b2c4); font-size: 8px; font-family: monospace; }
@@ -1964,13 +2078,19 @@
     grid-template-areas: "kopf kopf" "tab tab" "dia dia" "fuss fuss"; }
   .ov-tab { display: grid; align-content: start; gap: 2px; overflow-y: auto;
     font-family: monospace; font-size: clamp(9px, 1.35vw, 14px); }
-  .ov-zeile { display: grid; align-items: center;
+  .ov-zeile { display: grid; align-items: center; position: relative;
     grid-template-columns: 1.5em 1.1em minmax(0, 1fr) 2.2em 2.2em 1.4em 4.4em 4.4em 3.8em;
     gap: clamp(2px, .55vw, 7px);
     padding: clamp(1px, .35vw, 4px) clamp(3px, .8vw, 8px);
     background: var(--gt3-tile); color: var(--gt3-tile-ink);
     border-radius: var(--gt3-radius); }
-  .ov-zeile.ov-ich { outline: 1px solid var(--gt3-tile-ink); outline-offset: -1px; }
+  /* Das eigene Auto: eine Akzentleiste links statt einer Umrandung - auf einen Blick. */
+  .ov-zeile.ov-ich::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--gt3-tile-ink);
+    border-radius: var(--gt3-radius) 0 0 var(--gt3-radius); }
+  /* NACH DEM RENNEN (ov-fertig): die Spalte "letzte" ausgeblendet, nur die beste zaehlt. */
+  #race-ovscreen.ov-fertig .ov-zeile { grid-template-columns: 1.5em 1.1em minmax(0, 1fr) 2.2em 2.2em 1.4em 4.4em 3.8em; }
+  #race-ovscreen.ov-fertig .ov-zeile > .ov-letzte { display: none; }
   .ov-pos { color: var(--gt3-strip-ink); }
   /* Der Farbklecks des Autos, dieselbe Kennung wie in der Garage. */
   .ov-farbe { width: 1em; height: 1em; border-radius: 50%; align-self: center;
@@ -2243,12 +2363,58 @@
     font-family: var(--k-font); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
   .k-knopf:hover, .k-knopf.menu-nav-sel { border-color: #fff; background: var(--k-blau); color: var(--k-blau-text); outline: 0; }
   .k-klein .k-kt { font-size: clamp(12px, 1.1vw, 16px); }
-  /* Die Kacheln mit schnellem Wechsel (Quadrat) zeigen die Pfeile des Vorbilds. */
-  .k-kachel[data-quad] .k-kt::before { content: '◀'; color: #0077a8; margin-right: 10px; font-size: .8em; }
-  .k-kachel[data-quad] .k-kt::after { content: '▶'; color: #0077a8; margin-left: 10px; font-size: .8em; }
+  /* Die Kacheln mit schnellem Wechsel (Quadrat): statt der kleinen blauen Pfeile zeigen
+     rechts neben dem Wert so viele Punkte, wie es Schaltstellungen gibt; die gewaehlte
+     ist gefuellt (51-konsole.js, kQuadPunkte). Wert und Punkte liegen in EINER Zeile
+     (.k-kopf) - als eigene Flexzeile waren die Punkte unter dem Wert kaum zu sehen. */
+  .k-kopf { display: flex; align-items: center; justify-content: center; background: var(--k-weiss);
+    color: var(--k-tinte); height: clamp(20px, 3.4vh, 32px); }
+  .k-kopf .k-kt { flex: 0 1 auto; background: none; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; line-height: 1.1; padding: 0 6px; }
+  .k-kopf .k-quad-punkte { flex: 0 0 auto; margin-left: 6px; }
+  .k-quad-punkte { display: inline-flex; gap: 4px; margin-left: 10px; align-items: center; vertical-align: middle; }
+  .k-quad-punkte i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--k-blau); box-sizing: border-box; }
+  .k-quad-punkte i.an { background: var(--k-blau); }
+  /* Kompakte "N/M"-Anzeige statt vieler Punkte (viele Schaltstellungen, keine Pfeile). */
+  .k-quad-punkte .k-quad-zahl { font-size: 12px; font-weight: 800; line-height: 1;
+    color: var(--k-blau); letter-spacing: .02em; }
+  /* Motorsound: Pfeile LINKS und RECHTS vom Wert (nicht beide rechts). Der Wert nimmt die
+     Mitte (flex:1), damit er beim Blaettern nicht breiter/breiter wird und die Pfeile nicht
+     springen; lange Namen laufen in die Ellipse. Die Dreiecke sind blau mit grauem Rand -
+     kein Kasten, nur das Zeichen. */
+  .k-kopf-wechsel { gap: 4px; }
+  .k-kopf-wechsel .k-kt { flex: 1 1 auto; text-align: center; }
+  .k-arrow { background: transparent; color: var(--k-blau); border: 0; padding: 0 2px;
+    cursor: pointer; display: inline-flex; align-items: center; outline: 0; }
+  .k-arrow svg { width: 13px; height: 13px; display: block; }
+  .k-arrow svg path { fill: var(--k-blau); stroke: var(--k-grau); stroke-width: 1.3;
+    stroke-linejoin: round; }
+  .k-arrow:hover, .k-arrow:active, .k-arrow:focus-visible { background: transparent;
+    color: var(--k-blau); outline: 0; }
 
   .k-fahren { grid-template-columns: repeat(3, 1fr); grid-template-rows: minmax(300px, 56vh) minmax(96px, 20vh); }
   .k-fahren-unten { grid-column: 1 / -1; grid-template-columns: 1fr 1fr 2fr; }
+  /* BESTELLT v0.8.126: mehrere verbundene Autos mit Fotos gemeinsam zeigen (Garage auf dem
+     Fahren-Schirm). Erst ab zwei Fotos; dann ist die Abdunklung aus, sonst waere das Foto zu
+     dunkel. Die Kacheln stehen in der .k-kb-Flaeche (Auto-Bild). */
+  #fa-auto.k-auto-mehr > .k-kb { filter: none; }
+  #fa-auto.k-auto-mehr > .k-kb::after { display: none; }
+  #fa-auto .k-auto-galerie { position: absolute; inset: 0; display: flex; gap: 10px; padding: 12px;
+    align-items: center; justify-content: center; }
+  #fa-auto .k-auto-zelle { width: clamp(90px, 22vw, 160px); aspect-ratio: 4 / 3; min-width: 0;
+    border: 2px solid rgba(255,255,255,.4); border-radius: 8px; background-size: cover;
+    background-position: center; position: relative; overflow: hidden; }
+  #fa-auto .k-auto-zelle span { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 5px;
+    background: rgba(0,0,0,.72); color: #fff; font-size: 11px; font-weight: 700; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #fa-auto .k-auto-zelle span i { display: inline-block; width: .6em; height: .6em; border-radius: 50%;
+    margin-right: .4em; vertical-align: middle; }
+  /* BESTELLT v0.8.126: Streckenvorschau im Fahren-Band statt des Beispielbilds, sobald eine
+     Strecke eingegeben ist und der Modus auf "auf der Bahn" steht. */
+  #fa-strecke.k-vorschau > .k-kb { filter: none; background-color: var(--panel-2); }
+  #fa-strecke.k-vorschau > .k-kb::after { display: none; }
+  #fa-strecke.k-vorschau .tp-karte { width: 100%; height: 100%; max-width: none; max-height: none;
+    border: none; border-radius: 0; }
   .k-start { justify-content: center; align-items: center; min-height: 96px; text-transform: uppercase;
     background: linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5)), url(img/start.jpg) center / cover; }
   .k-start-innen { display: flex; flex-direction: column; align-items: center; text-align: center; text-shadow: 0 2px 14px #000; }
@@ -2292,6 +2458,15 @@
     background: var(--k-grau); color: #fff; border: 2px solid transparent; border-radius: 0; padding: 11px 16px; }
   .k-pause-dialog button.menu-nav-sel, .k-pause-dialog button:hover { outline: 0; border-color: #fff; background: var(--k-blau); color: var(--k-blau-text); }
   .k-frage-knoepfe { display: flex; flex-direction: column; gap: 6px; }
+  /* Vorschau im Frage-Dialog (Community-Strecke): das Streckenbild, eingerahmt. */
+  .k-pause-dialog .k-frage-bild { display: block; background: #05070a; border: 1px solid rgba(255,255,255,.14);
+    border-radius: 4px; padding: 6px; margin: 0 0 4px; }
+  .k-pause-dialog .k-frage-bild svg { display: block; width: 100%; height: auto; }
+  /* Namenseingabe im Frage-Dialog (Challenge-Start): der Name fuer die Bestenliste. */
+  .k-pause-dialog .k-frage-eingabe { display: flex; flex-direction: column; gap: 4px; margin: 0 0 6px; }
+  .k-pause-dialog .k-frage-eingabe label { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .k-pause-dialog .k-frage-eingabe input { font-size: 17px; padding: 8px 10px; background: #05070a;
+    color: #fff; border: 1px solid rgba(255,255,255,.25); border-radius: 0; letter-spacing: .06em; }
   /* Der Grund bleibt auch auf dem niedrigen Telefon sichtbar (dort blendet .k-pause-dialog p
      die Erklaerzeilen des Cockpit-Menues aus). */
   .k-pause-dialog .k-frage-text { display: block; white-space: pre-line; font-size: clamp(11px, 2.6vh, 13.5px); margin: 0 0 4px; line-height: 1.4; }
@@ -2389,13 +2564,15 @@
       linear-gradient(90deg, rgba(8,10,16,.92) 0, rgba(8,10,16,.8) 36%, rgba(8,10,16,.28) 72%, rgba(8,10,16,.12)),
       linear-gradient(transparent 58%, rgba(0,229,255,.35) 58% 59.5%, transparent 59.5% 78%, rgba(255,43,94,.38) 78% 79.5%, transparent 79.5%) right / 32% 100% no-repeat; }
     .k-kachel.menu-nav-sel > .k-kb, .k-kachel:hover > .k-kb { filter: brightness(.95) saturate(1) contrast(1.05); }
-    .k-kachel > .k-kk, .k-kachel > .k-kt, .k-kachel > .k-ki, .k-kachel > .k-knopfreihe { position: relative; z-index: 1; }
+    .k-kachel > .k-kk, .k-kachel > .k-kt, .k-kachel > .k-ki, .k-kachel > .k-knopfreihe,
+    .k-kachel > .k-kopf { position: relative; z-index: 1; }
     .k-kachel > .k-ki { text-shadow: 0 1px 3px rgba(0,0,0,.95); }
-    /* Kleine Kacheln: eine Zeile fuer "PRO" und "PORSCHE 911 GT3 R", lange Namen umbrechen. */
-    .k-klein .k-kt { font-size: clamp(9.5px, 1.9vh, 13.5px); white-space: normal; line-height: 1.15; }
+    /* Kleine Kacheln: eine Zeile fuer "PRO" und "PORSCHE 911 GT3 R". Einzeilig und mit
+       Ellipse statt Umbruch: so bleiben Fahrgefuehl- und Motorsound-Band gleich hoch. */
+    .k-klein .k-kt { font-size: clamp(9.5px, 1.9vh, 13.5px); line-height: 1.15; }
   }
-  .k-kachel[data-quad] .k-kt::before { margin-right: 6px; font-size: .7em; }
-  .k-kachel[data-quad] .k-kt::after { margin-left: 6px; font-size: .7em; }
+  .k-klein .k-quad-punkte { gap: 3px; margin-left: 6px; }
+  .k-klein .k-quad-punkte i { width: 5px; height: 5px; border-width: 1px; }
   /* Kopf halb so hoch: Reiter, Logo und Innenabstand. Info bleibt ein Reiter. */
   /* NOCH EINMAL HALBIERT (v0.8.27). BESTELLT: "Die zwei Tab-Leisten noch flacher machen (50%
      der aktuellen Groesse), sonst ist der Bildschirm zu klein fuer die wichtigen Inhalte."
@@ -2516,6 +2693,28 @@
   #sub-mp-app #mp-gemeinsam .row { gap: 6px 8px; }
   #sub-mp-app #mp-gemeinsam label.small { flex: 1 1 100%; display: grid; grid-template-columns: 110px minmax(0, 1fr);
     align-items: center; gap: 8px; }
+  /* Beitreten/Rangliste zweispaltig auf schmalen Schirmen (BESTELLT: "optimize the menu for
+     mobile view"): links Knoepfe und Info untereinander, rechts die Fahrerliste. Auf breiten
+     Schirmen bleibt der bisherige eine Spaltenstapel (Formularzeile, dann Tabelle). */
+  .mp-spalten { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 16px; align-items: start; }
+  .mp-force { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .mp-spalte-rechts { min-width: 0; }
+  @media (max-width: 900px) {
+    .mp-spalten { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+    .mp-spalte-links { display: flex; flex-direction: column; gap: 8px; }
+    /* Host und Name nebeneinander (spart Hoehe), die Knoepfe darunter. */
+    .mp-spalte-links .row { flex-direction: row; flex-wrap: wrap; gap: 6px; align-items: flex-end; }
+    .mp-spalte-links .row label.small { flex: 1 1 40%; min-width: 110px; }
+    .mp-spalte-links .row button { flex: 1 1 auto; }
+    /* Die App-Seite hat ihren eigenen 2-Spalter; auf Mobile in eine Spalte, damit nicht zwei
+       Spalten ineinander liegen. */
+    #sub-mp-app.on { grid-template-columns: minmax(0, 1fr); }
+  }
+  /* Sehr schmal: wieder eine Spalte, damit die Fahrerliste nicht gequetscht wird. */
+  @media (max-width: 600px) {
+    .mp-spalten { grid-template-columns: minmax(0, 1fr); }
+    .mp-spalte-links .row label.small { flex: 1 1 100%; }
+  }
   /* ---- Garage als Karten (v0.8.26, Vorschlag B) ---- */
   #gar-list.gar-karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
   .gar-row.gar-karte { display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden; border-radius: 0;
@@ -2557,17 +2756,33 @@
     text-transform: uppercase; color: var(--muted); border-left: 3px solid var(--k-blau); }
   .subpage-home > .k-zwischen:first-of-type { margin-top: 2px; }
   /* ---- Challenges (v0.8.30) ---- */
+  .ch-sperre-hinweis { border-left: 3px solid var(--warn); padding: 4px 10px; margin: 0 0 8px; font-size: 12px;
+    background: rgba(255,180,0,.08); color: #f3d9a0; }
+  .ch-sperre-hinweis[hidden] { display: none; }
   .ch-kachel .ch-mini { display: grid; place-items: center; height: clamp(64px, 26vh, 170px); padding: 6px 6px 2px; }
   .ch-mini svg { max-width: 100%; max-height: 100%; width: auto; height: 100%; }
-  .ch-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 14px; align-items: start; }
+  .ch-kachel .ch-k-woche { display: block; font-style: normal; font-size: 10.5px; letter-spacing: .04em; color: var(--dim, #a3acbd); text-align: center; padding: 0 4px 5px; }
+  .ch-kachel .ch-k-beliebt { display: block; font-style: normal; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; color: #fff; background: #7a5bd6; text-align: center; padding: 3px 4px; margin: 0 4px 5px; border-radius: 4px; }
+  .ch-kachel .ch-k-beliebt[hidden] { display: none; }
+  .ch-kachel .ch-k-rang { display: block; font-style: normal; font-size: 11px; letter-spacing: .03em; text-align: center; padding: 0 4px 6px; }
+  .ch-kachel .ch-k-rang:empty { display: none; }
+  .ch-k-medaille-hinweis { font-size: 12px; line-height: 1.5; margin: 2px 0 8px; }
+  .ch-detail { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .ch-rechts > h3:first-child { margin-top: 0; }
+  .ch-stats { font-size: 12px; line-height: 1.5; }
   .ch-detail[hidden] { display: none; }
   @media (max-width: 640px) { .ch-detail { grid-template-columns: minmax(0, 1fr); } }
-  .ch-karte { height: clamp(150px, 44vh, 340px); display: grid; place-items: center; }
+  .ch-karte { height: clamp(140px, 38vh, 300px); display: grid; place-items: center; cursor: zoom-in; }
   .ch-karte svg { width: 100%; height: 100%; max-width: 100%; max-height: 100%; }
+  /* Vollbild (72-challenges.js, X/Kreis oder Tap): die Karte liegt ueber allem, dunkel. */
+  .ch-karte.ch-voll { position: fixed; inset: 0; z-index: 20000; height: auto; margin: 0;
+    background: #05070b; padding: 3vmin; cursor: zoom-out; }
+  .ch-karte.ch-voll svg { width: 100%; height: 100%; max-width: 100%; max-height: 100%; }
   .ch-fakten { font-size: 12px; color: var(--muted); }
-  .ch-wahl { display: flex; margin: 6px 0; }
-  .ch-wahl button { flex: 1; border-radius: 0; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-  .ch-wahl button.an { background: var(--k-blau); color: var(--k-blau-text); border-color: #fff; }
+  .ch-umschalter { display: flex; width: 100%; padding: 0; margin: 6px 0; border-radius: 0; overflow: hidden; }
+  .ch-umschalter > span { flex: 1; padding: 8px 6px; text-align: center; font-weight: 800; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted); }
+  .ch-umschalter > span.an { background: var(--k-blau); color: var(--k-blau-text); }
   .ch-teile { font-size: 12px; color: var(--muted); }
   .ch-teile.fehlt { color: var(--bad); }
   .ch-teile.da { color: var(--good); }
@@ -2578,6 +2793,8 @@
   .ch-ergebnis[hidden] { display: none; }
   .ch-erg-titel { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
   .ch-erg-zeit { font-size: 26px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .ch-erg-sterne { font-size: 20px; margin-top: 2px; }
+  .ch-erg-sterne[hidden] { display: none; }
   .ch-perz { font-weight: 800; margin: 4px 0; }
   .ch-histo { display: grid; grid-template-columns: 62px minmax(0, 1fr) 26px; gap: 3px 8px; align-items: center;
     font-size: 11px; font-variant-numeric: tabular-nums; margin: 6px 0 10px; }
@@ -2587,7 +2804,11 @@
   .ch-h-bar.du { background: var(--k-blau); }
   .ch-tabelle { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
   .ch-tabelle td { padding: 3px 4px; border-top: 1px solid rgba(255,255,255,.06); }
+  .ch-tabelle thead th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); text-align: left; padding: 2px 4px; }
   .ch-tabelle tr.du td { background: rgba(0,163,224,.2); font-weight: 800; }
+  .ch-sterne-hinweis { font-size: 11px; margin: 2px 0 10px; }
+  .ch-sterne { letter-spacing: .06em; white-space: nowrap; }
   /* ---- Streckeneditor (v0.8.28) ---- */
   .te-warn { border-left: 3px solid var(--warn); padding: 3px 10px; font-size: 12px; color: #f3d9a0; background: rgba(255,180,0,.08); }
   .te-start-reihe { gap: 10px; align-items: center; margin: 8px 0; }
@@ -2602,7 +2823,7 @@
   .tp-tasten { font-size: 10.5px; color: var(--muted); flex: 1 1 260px; text-align: right; line-height: 1.35; }
   body:not(.track-fs) .tp-tasten, body:not(.track-fs) .tp-info { display: none; }
   .tp-btn { position: relative; }
-  .tp-rest { position: absolute; top: 2px; right: 3px; font-size: 9px; font-weight: 800; color: var(--good); }
+  .tp-rest { font-size: 9px; font-weight: 800; color: var(--good); line-height: 1.1; margin-top: 1px; }
   .tp-rest.fehlt { color: var(--bad); }
   #track-preview-svg { cursor: pointer; }
   /* Teile nach Typ getrennt: Linkskurven | Geraden | Rechtskurven, mit einem feinen Strich. */
@@ -2617,11 +2838,41 @@
   .tp-actions .tp-schalter.sel { border-color: var(--info); }
   .tp-actions .tp-schalter + .tp-schalter { margin-right: 8px; }
   #track-fs-host.ohne-tasten .tp-tasten { display: none; }
-  .teile-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 14px; margin-top: 10px; }
-  .teile-zeile { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 6px;
-    padding: 3px 4px; border-bottom: 1px solid rgba(255,255,255,.06); }
-  .teile-zeile b { min-width: 2.2em; text-align: center; }
-  .teile-zeile button { min-height: 0; padding: 2px 9px; }
+  .teile-liste { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; max-width: 560px; }
+  .teile-zeile { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 7px 12px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; }
+  .teile-zeile:nth-child(odd) { background: rgba(255,255,255,.03); }
+  .teile-zeile .teile-name { color: var(--ink); flex: 1 1 auto; min-width: 0; }
+  .teile-zeile .teile-ic { width: 22px; height: 22px; flex: 0 0 auto; color: var(--ink); opacity: .95; }
+  .teile-zeile .teile-steuer { display: inline-flex; align-items: center; gap: 6px; }
+  .teile-zeile .teile-zahl { font-weight: 800; color: var(--k-blau); min-width: 3ch; text-align: right;
+    font-variant-numeric: tabular-nums; }
+  .teile-zeile .teile-minus, .teile-zeile .teile-plus {
+    width: 32px; height: 30px; padding: 0; border-radius: 6px; background: var(--panel-2);
+    color: var(--ink); font-size: 17px; font-weight: 700; line-height: 1;
+  }
+  .teile-zeile .teile-minus:hover, .teile-zeile .teile-plus:hover { background: var(--panel-2); filter: brightness(1.1); }
+  .teile-zeile .teile-minus:active, .teile-zeile .teile-plus:active { background: rgba(0,163,224,.2); }
+  .teile-zeile.menu-nav-sel { background: rgba(0,163,224,.12); }
+  /* Zahleneingaben in den Einstellungen wie "Meine Teile": Minus / Wert / Plus. */
+  .num-steuer { display: inline-flex; align-items: center; gap: 6px; }
+  .num-steuer input[type="number"] { width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+  .num-steuer .num-minus, .num-steuer .num-plus {
+    width: 30px; height: 30px; padding: 0; border-radius: 6px; background: var(--panel-2);
+    color: var(--ink); font-size: 17px; font-weight: 700; line-height: 1;
+  }
+  .num-steuer .num-minus:hover, .num-steuer .num-plus:hover { background: var(--panel-2); filter: brightness(1.1); }
+  .num-steuer .num-minus:active, .num-steuer .num-plus:active { background: rgba(0,163,224,.2); }
+  /* Raumgrenzen in "Meine Teile": Minus / Wert / Plus je Achse, wie eine num-steuer-Zeile. */
+  .raum-zeile { display: inline-flex; align-items: center; gap: 6px; }
+  .raum-zeile label { margin: 0; }
+  .raum-knopf {
+    width: 30px; height: 30px; padding: 0; border-radius: 6px; background: var(--panel-2);
+    color: var(--ink); font-size: 17px; font-weight: 700; line-height: 1;
+  }
+  .raum-knopf:hover { background: var(--panel-2); filter: brightness(1.1); }
+  .raum-knopf:active { background: rgba(0,163,224,.2); }
+  .raum-zeile.menu-nav-sel { border-radius: 8px; }
   /* HOCHFORMAT, schmal (Telefon im Browser): untereinander, mit Bildlauf. */
   @media (max-width: 760px) and (orientation: portrait) {
     header#k-kopf { grid-template-columns: 1fr auto; }
@@ -2887,6 +3138,26 @@
     background: var(--panel); }
   .grid-row.dragging { opacity: .45; }
   .grid-row.over { border-color: var(--accent); border-style: dashed; }
+  /* ---- AUTOS IN POSITION: Deckfenster vor dem Countdown -------------------------- */
+  .gt3-gridschirm { position: absolute; inset: 0; z-index: 10; display: flex;
+    flex-direction: column; gap: clamp(4px, .8vw, 9px); background: var(--gt3-strip);
+    color: var(--gt3-strip-ink); padding: clamp(6px, 1.2vw, 14px); }
+  .gt3-gridschirm[hidden] { display: none; }
+  .gt3-gridschirm .schirm-kopf { flex: 0 0 auto; }
+  .grid-bild { flex: 0 0 auto; max-height: 26vh; overflow: hidden; display: grid;
+    place-items: center; min-height: 0; }
+  .grid-bild .tp-karte, .grid-bild img { max-width: 100%; max-height: 26vh;
+    object-fit: contain; }
+  .grid-bild .tp-karte { max-height: 26vh; }
+  .grid-liste { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex;
+    flex-direction: column; gap: 4px; }
+  .grid-liste .grid-row { background: var(--panel); margin-bottom: 0; }
+.grid-fuss { flex: 0 0 auto; justify-content: flex-end; gap: 10px; }
+.grid-start-gross { font-size: clamp(16px, 2.4vw, 26px); padding: clamp(10px, 1.8vw, 18px) clamp(28px, 6vw, 70px); }
+.grid-selbst { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px 0;
+  font-size: clamp(10px, 1.2vw, 13px); color: var(--muted); }
+.grid-hinweis { flex: 0 0 auto; margin: 0; font-size: clamp(10px, 1.2vw, 13px);
+    line-height: 1.35; color: var(--gt3-strip-ink); opacity: .9; }
   .grid-pos { font-family: monospace; font-weight: 700; min-width: 26px; color: var(--muted); }
   .grid-handle { cursor: grab; user-select: none; font-size: 15px; color: var(--muted);
     padding: 0 4px; }
@@ -2937,6 +3208,20 @@
   #track-preview-svg {
     height: clamp(240px, 42vh, 460px);
     display: grid; place-items: center; overflow: hidden;
+    /* BESTELLT: "beim zufälliger strecke ... Animation ... wie sich die strecke selbst
+       zusammenbaut". trackZufall() setzt die Klasse; die Animation ist auf hoechstens
+       500 ms begrenzt und laeuft nicht bei jedem normalen Neuzeichnen. */
+  }
+  #track-preview-svg.track-baut { animation: trackBaut .5s ease-out; }
+  @keyframes trackBaut {
+    0% { opacity: 0; transform: scale(.92); }
+    60% { opacity: 1; }
+    100% { opacity: 1; transform: scale(1); }
+  }
+    /* Die Platz-Bedarf-Zeile (.tp-space) steht jetzt oben rechts im Hintergrund. Die
+       untere Leiste bleibt: sie holt die Karte im Vollbild etwas von der Palette weg
+       und gibt dem 50-cm-Raster Luft. */
+    padding-bottom: 26px;
   }
   /* Die Deckelung auf 520 px stand bis v0.5.30 im Zeichner. Sie gehoert hierher: sie
      beschreibt diese Spalte und nicht dieses Bild. */
@@ -2997,7 +3282,8 @@
      596 px unbenutzt, nachdem die feste Hoehe weg war. Der Ausnahmefall gehoert an die
      Karte und nicht an den Host: die Leisten sollen mittig bleiben. */
   body.track-fs #track-fs-host > #track-preview-svg { height: auto; min-height: 0;
-    align-self: stretch; overflow: hidden; display: grid; place-items: center; }
+    align-self: stretch; overflow: hidden; display: grid; place-items: center;
+    padding-bottom: 0; }
   /* Der Warnabsatz ueber die unvollstaendige Palette ist mit v0.6.18 ganz entfallen - die
      fehlenden Kacheltypen sind vermessen und eingebaut. Die Regel bleibt trotzdem stehen:
      sie sagt, dass in diesen Kasten keine Prosa gehoert. Ein Absatz nimmt hier eine eigene
@@ -3050,15 +3336,50 @@
   .mp-kopier { font-size: 11px; padding: 4px 9px; }
   .mp-datei { display: inline-block; margin-top: 3px; font-size: 11.5px; }
 
+  /* MEHRSPIELER-BEREITSCHAFT (v0.8.126): die Zeilen im Bereitschaftsschirm. */
+  .mp-ready-zeile { display: flex; justify-content: space-between; align-items: center;
+    gap: 10px; padding: clamp(7px, 1.2vw, 12px) clamp(9px, 1.6vw, 14px);
+    border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px;
+    background: rgba(255,255,255,.035); }
+  .mp-ready-zeile.bereit { border-color: var(--good); background: rgba(46,224,106,.08); }
+  .mp-ready-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+  .mp-ready-status { font-size: 12px; opacity: .85; flex: none; }
+
   .tp-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-    justify-content: center; }
-  .tp-btn { width: 54px; height: 54px; padding: 0; display: grid; place-items: center;
-    border-radius: 8px; }
+    justify-content: center; padding-bottom: 4px; }
+  .tp-btn { width: 54px; min-height: 60px; padding: 3px 0 2px 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start; border-radius: 8px; }
   .tp-btn svg { width: 26px; height: 26px; }
   .tp-btn.sel { border-color: var(--accent); border-width: 3px; background: var(--panel-3); }
   .tp-actions .tp-btn.sel { border-color: var(--info); }
   .tp-btn .tp-cap { font-size: 8.5px; letter-spacing: .04em; text-transform: uppercase;
     color: var(--muted); margin-top: 1px; }
+  /* Meine Strecken: gespeicherte Strecken als Kacheln mit Vorschaubild (statt <select>). */
+  .track-kacheln { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px; margin-top: 8px; }
+  .track-kachel { position: relative; display: flex; flex-direction: column; gap: 4px;
+    padding: 8px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel-2); cursor: pointer; text-align: left; }
+  .track-kachel:hover { border-color: var(--accent); }
+  .track-kachel-vorschau { display: block; min-height: 90px; border-radius: 6px;
+    background: var(--panel-3); overflow: hidden; }
+  .track-kachel-vorschau svg { width: 100%; height: 100%; display: block; }
+  .track-kachel b { font-size: 13px; }
+  .track-kachel em { font-style: normal; font-size: 11px; color: var(--muted); }
+  .track-kachel-del { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px;
+    border-radius: 50%; font-size: 12px; line-height: 1; padding: 0; display: flex;
+    align-items: center; justify-content: center; background: var(--danger, #c0392b);
+    color: #fff; border: none; cursor: pointer; }
+  /* Community Strecken: Liste der eingereichten Strecken. */
+  .community-liste { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .community-zeile { display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--panel-2); }
+  .community-zeile div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .community-zeile b { font-size: 13px; }
+  .community-zeile em { font-style: normal; font-size: 11px; color: var(--muted); }
+  .community-zeile button { white-space: nowrap; }
   /* Etwas Abstand zwischen Teilen und Aktionen, damit "Leeren" nicht neben "Haarnadel"
      steht und aussieht wie ein weiteres Streckenteil. */
   .tp-actions { margin-bottom: 4px; }
@@ -3074,7 +3395,7 @@
      (Die Regel an der Karte setzt schon min-height: 0 und overflow: hidden - das deckt
      den Fall fuer das Rasterkind ab, nicht aber die Spurberechnung selbst.) */
   body.track-fs #track-fs-host { grid-template-rows: auto minmax(0, 1fr) auto; }
-  body.track-fs .tp-btn { width: 46px; height: 46px; }
+  body.track-fs .tp-btn { width: 46px; min-height: 52px; }
   /* Space usage, subtle, in a corner as asked. */
   /* The gamepad moves the REAL focus rather than a painted marker of its own, so keyboard,
      controller and screen reader all agree on where you are. That only works if focus is
@@ -3488,9 +3809,11 @@
   .numtrain-feedback.on-bad { color: var(--bad); }
   .numtrain-score { font-size: 11.5px; color: var(--muted); margin: 0; }
 
-  .tp-space { position: absolute; right: 10px; bottom: 8px; font-family: monospace;
+  .tp-space { position: absolute; right: 10px; top: 8px; font-family: monospace;
     font-size: 11px; color: var(--muted); pointer-events: none; }
-  body.track-fs .tp-space { right: 14px; bottom: 68px; }
+  /* Im Vollbild steht die Aktionsleiste oben; die Platz-Bedarf-Zeile liegt knapp darunter
+     im Hintergrund, statt die Karte zu ueberlappen. */
+  body.track-fs .tp-space { right: 14px; top: 72px; }
   .gar-row.is-player { border-color: var(--good); }
   .gar-row.is-zwei { border-color: #3d8bff; }
   /* Die Bestandszeile der Sicherung. Ein Kasten mit linker Kante, wie die Hinweise
@@ -3768,7 +4091,7 @@
        jetzt ueber die Kachel in den Einstellungen, genau wie Doku/Programmierschule/
        Entwickler/Selbsttest/Code-Sonde ueber Entwicklertools. -->
   <button class="tab-btn" data-tab="control" data-parent="options" hidden style="display:none">Renneinstellungen</button>
-  <button class="tab-btn" data-tab="mp">Mehrspieler</button>
+  <button class="tab-btn" data-tab="mp">WLAN Mehrspieler</button>
   <button class="tab-btn" data-tab="info" data-parent="options" hidden style="display:none">Info</button>
   <button class="tab-btn" data-tab="challenges">Challenges</button>
   <button class="tab-btn" data-tab="misc">Entwicklertools</button>
@@ -3844,15 +4167,23 @@
       <a class="k-apk" id="home-apk" href="https://github.com/LukasRoeseler/btsr/releases/latest/download/OmegaSim.apk" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
              stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
-        <span>Installiere die App f&uuml;r Mehrspieler und Challenges</span></a>
-    <!-- Nur in der Android-App: eine neue Web-Fassung liegt bereit (siehe 97b-app.js). -->
+        <span>Installiere die Android App f&uuml;r Mehrspieler</span></a>
+    <!-- Nur in der Android-App: eine neue Web-Fassung liegt bereit (siehe 97b-app.js).
+         Kompakt gehalten (BESTELLT): der Ladebalken liegt im Hintergrund des Laden-Knopfs
+         und es gibt einen Abbrechen-Knopf, damit die Box den Titelbildschirm nicht
+         auseinanderzieht. -->
     <div class="app-update" id="app-update" hidden>
       <b id="app-update-text">Update verf&uuml;gbar</b>
-      <button type="button" class="primary" id="app-update-laden">Jetzt laden</button>
-      <div class="app-fortschritt" id="app-update-balken" hidden><i></i></div>
+      <div class="app-update-aktion">
+        <button type="button" class="primary app-update-laden" id="app-update-laden">
+          <span class="app-update-balken" id="app-update-balken" hidden><i></i></span>
+          <span id="app-update-laden-text">Jetzt laden</span>
+        </button>
+        <button type="button" id="app-update-abbrechen">Abbrechen</button>
+      </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">0.8.36</span></span>
+        <span class="foot-ver">v<span id="app-version">0.9.1</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -3886,35 +4217,35 @@
       </div>
       <div class="k-kachel " id="fa-strecke" role="button" tabindex="0" data-quad="bahn">
         <span class="k-kk">Strecke</span>
-        <span class="k-kt" id="fa-strecke-titel"></span>
-        <span class="k-kb" id="fa-strecke-bild" style="background-image:url(img/strecke-kachel.jpg)"></span>
+        <span class="k-kopf"><span class="k-kt" id="fa-strecke-titel"></span><span class="k-quad-punkte" id="fa-strecke-punkte" aria-hidden="true"></span></span>
+        <span class="k-kb" id="fa-strecke-bild" style="background-image:url(img/strecke-bahn.jpg)"></span>
         <span class="k-ki" id="fa-strecke-info"></span>
         <span class="k-knopfreihe">
           <button type="button" class="k-knopf" id="fa-scan">Scan</button>
           <button type="button" class="k-knopf" id="fa-editor">Editor</button>
           <button type="button" class="k-knopf" id="fa-laden">Laden</button>
           <button type="button" class="k-knopf" id="fa-druck" hidden>Druckvorlagen</button>
-          <button type="button" class="k-knopf" id="fa-foto" hidden>Foto</button>
+          <button type="button" class="k-knopf" id="fa-foto" hidden title="Optimal: quer, z. B. 4:3 oder 16:9">Foto</button>
           <button type="button" class="k-knopf" id="fa-foto-weg" hidden>Foto löschen</button>
         </span>
       </div>
       <div class="k-kachel " id="fa-renn" role="button" tabindex="0" data-quad="renntyp">
         <span class="k-kk">Rennoptionen</span>
-        <span class="k-kt" id="fa-renn-titel"></span>
-        <span class="k-kb" style="background-image:url(img/rennoptionen.jpg)"></span>
+        <span class="k-kopf"><span class="k-kt" id="fa-renn-titel"></span><span class="k-quad-punkte" id="fa-renn-punkte" aria-hidden="true"></span></span>
+        <span class="k-kb" id="fa-renn-bild" style="background-image:url(img/rennoptionen.jpg)"></span>
         <span class="k-ki" id="fa-renn-info"></span>
       </div>
       <div class="k-gitter k-fahren-unten">
       <div class="k-kachel k-klein" id="fa-profil" role="button" tabindex="0" data-quad="profil">
         <span class="k-kk">Fahrgefühl</span>
-        <span class="k-kt" id="fa-profil-titel"></span>
+        <span class="k-kopf"><span class="k-kt" id="fa-profil-titel"></span><span class="k-quad-punkte" id="fa-profil-punkte" aria-hidden="true"></span></span>
         <span class="k-ki"></span>
       </div>
       <!-- BESTELLT: "Statt Gegnerhärte Motorsound einstellen lassen im Fahren Menü". Quadrat
            blaettert die Motoren durch (#sound-profile), Kreuz oeffnet Optionen, Ton. -->
       <div class="k-kachel k-klein" id="fa-motor" role="button" tabindex="0" data-quad="motor">
         <span class="k-kk">Motorsound</span>
-        <span class="k-kt" id="fa-motor-titel"></span>
+        <span class="k-kopf k-kopf-wechsel"><button type="button" class="k-arrow" data-quad="motor" data-dir="-1" aria-label="vorheriger Motorsound"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3v10L4 8z"/></svg></button><span class="k-kt" id="fa-motor-titel"></span><button type="button" class="k-arrow" data-quad="motor" data-dir="1" aria-label="naechster Motorsound"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10l7-5z"/></svg></button></span>
         <span class="k-ki"></span>
       </div>
         <div class="k-kachel k-start" id="fa-start" role="button" tabindex="0">
@@ -4054,6 +4385,10 @@
           </div>
           <div class="gt3-abs" id="race-abs">ABS</div></div>
       </div>
+
+      <!-- DERBY (v0.8.126): nur Mittelteil, Ampel und Health-Balken. Wird nur im
+           Demolition-Derby angezeigt; sonst versteckt. -->
+      <div class="gt3-derby-health" id="derby-health" aria-label="Health der Teilnehmer"></div>
 
       <!-- Die drei Zeiten standen in drei eigenen Kaesten uebereinander. Sie gehoeren
            zusammen - man liest sie zusammen -, also stehen sie jetzt in EINEM Feld als
@@ -4326,6 +4661,10 @@
       <div class="gt3-schirm" id="race-ovscreen">
         <div class="schirm-kopf"><b>Rennen</b><span id="ov-kopf-lage" data-i18n-skip>&ndash;</span>
           <span style="margin-left:auto" id="ov-kopf-runde" data-i18n-skip></span></div>
+        <!-- PODEST DER DREI BESTEN (BESTELLT: "Rennende-Mock-up umsetzen"). Erst das Podest,
+             dann darunter die gewohnte Ergebnistabelle. Nur sichtbar, wenn ein Rennen
+             beendet ist; waehrend des Rennens bleibt die Zeile leer und faellt zusammen. -->
+        <div class="ov-podest" id="ov-podest" hidden aria-label="Podest"></div>
         <div class="ov-tab" id="ov-tab"></div>
         <!-- DIE STRECKE NEBEN DER TABELLE, nicht darunter: das Cockpit ist breit und flach,
              und untereinander bliebe fuer beides zu wenig Hoehe. Leer und verborgen, solange
@@ -4501,6 +4840,41 @@
       </div>
 
       <div class="gt3-banner" id="hud-toast-wrap"><span id="hud-toast"></span></div>
+
+      <!-- AUTOS IN POSITION (BESTELLT: "Vor jedem Rennen ein Fenster, das alle
+           teilnehmenden Autos und ihre Reihenfolge zeigt, mit der Moeglichkeit die
+           Reihenfolge zu aendern. Oben 'Bringe die Autos in Position', dazu das
+           Streckenbild, unten ein Start-Knopf.") Ein Deckfenster ueber dem Cockpit,
+           unabhaengig vom Schirmblaettern: erscheint vor dem Countdown. -->
+      <div class="gt3-gridschirm" id="race-gridscreen" hidden>
+        <div class="schirm-kopf"><b>Bringe die Autos in Position</b>
+          <span id="grid-kopf-info" data-i18n-skip></span></div>
+        <div class="grid-bild" id="grid-bild" data-i18n-skip></div>
+        <p class="grid-hinweis" id="grid-hinweis">Alle Autos stehen auf den Teilen <b>vor</b> Start/Ziel. Erst wenn du Start/Ziel zum ersten Mal &uuml;berf&auml;hrst, beginnt Runde&nbsp;1.</p>
+        <label class="grid-selbst" id="grid-selbst-wrap">
+          <input type="checkbox" id="grid-selbst">
+          <span class="wip-tag">experimentell</span> Autos fahren selbst in Position
+        </label>
+        <div class="grid-liste" id="grid-liste"></div>
+        <div class="schirm-fuss grid-fuss">
+          <button type="button" id="grid-abbrechen">Abbrechen</button>
+          <button type="button" class="primary grid-start-gross" id="grid-start">Start</button>
+        </div>
+      </div>
+
+      <!-- MEHRSPIELER-BEREITSCHAFT (v0.8.126): wenn jemand ein Rennen "fuer alle" startet,
+           sehen ALLE Telefone diesen Schirm. Jeder meldet sich bereit; der Initiator kann
+           erst starten, wenn alle anderen bereit sind. -->
+      <div class="gt3-gridschirm" id="mp-ready-screen" data-i18n-skip hidden>
+        <div class="schirm-kopf"><b>Rennen für alle: bereit?</b>
+          <span id="mp-ready-info" data-i18n-skip></span></div>
+        <div class="grid-liste" id="mp-ready-liste"></div>
+        <div class="schirm-fuss grid-fuss">
+          <button type="button" class="warn" id="mp-ready-abbrechen">Abbrechen</button>
+          <button type="button" class="primary grid-start-gross" id="mp-ready-start" disabled>Start</button>
+          <button type="button" class="primary grid-start-gross" id="mp-ready-bereit" hidden>Bereit</button>
+        </div>
+      </div>
     </div>
 
   </section>
@@ -4517,61 +4891,122 @@
        Fliesstext, und die Sprachtests nehmen tab-doc ausdruecklich aus. Ein Reiter
        mit halb uebersetztem Fliesstext waere schlechter als einer mit einem
        ehrlichen Hinweis darauf, dass er nur deutsch vorliegt. -->
-  <!-- CHALLENGES (v0.8.30, experimentell). BESTELLT: "Implementiere Challenges". Vier feste
-       Strecken, je zwei Modi (beste Runde, Rennen) und zwei Presets (Pro, Arcade); Ablauf und
+  <!-- CHALLENGES (v0.8.30, experimentell; seit v0.8.44 vier Kategorien mit Wochenstrecken, die
+       Kacheln fuellt chKachelnZeichnen). BESTELLT: "Implementiere Challenges". Vier
+       Strecken, je zwei Modi (beste Runde, Rennen) und das Pro-Preset; Ablauf und
        Wertung in src/72-challenges.js. Je Strecke eine Unterseite, damit L1/R1 zwischen ihnen
        blaettern; der Inhalt (#ch-detail) ist EINER und wird in die offene Seite gehaengt. -->
   <section class="tabpage" id="tab-challenges">
     <div class="card subpage-home" id="sub-home-challenges">
       <h2>Challenges <span class="wip-tag">experimentell</span></h2>
+      <h3 class="k-zwischen">W&ouml;chentliche Challenges</h3>
       <div class="misc-grid ch-kacheln">
-        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-oval">
-          <span class="ch-mini" data-ch="oval" aria-hidden="true"></span>
-          <b data-i18n-skip>Monzetta</b>
-          <span>Grundpackung · 10 Runden</span></button>
-        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-schlange">
-          <span class="ch-mini" data-ch="schlange" aria-hidden="true"></span>
-          <b data-i18n-skip>Suzuna</b>
-          <span>Grundpackung · 8 Runden</span></button>
-        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-kehre">
-          <span class="ch-mini" data-ch="kehre" aria-hidden="true"></span>
-          <b data-i18n-skip>Monte Carlito</b>
-          <span>Grundpackung und Haarnadel-Set · 8 Runden</span></button>
-        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-weitblick">
-          <span class="ch-mini" data-ch="weitblick" aria-hidden="true"></span>
-          <b data-i18n-skip>Silverbrook</b>
-          <span>Grundpackung und 30&deg;-Au&szlig;enkurven-Set · 8 Runden</span></button>
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-a">
+          <span class="ch-mini" data-kat="a" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip></b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip></em>
+          <em class="ch-k-rang" data-i18n-skip></em>
+          <em class="ch-k-beliebt" hidden>&#9733; Beliebteste Strecke</em></button>
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-b">
+          <span class="ch-mini" data-kat="b" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip></b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip></em>
+          <em class="ch-k-rang" data-i18n-skip></em>
+          <em class="ch-k-beliebt" hidden>&#9733; Beliebteste Strecke</em></button>
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-c">
+          <span class="ch-mini" data-kat="c" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip></b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip></em>
+          <em class="ch-k-rang" data-i18n-skip></em>
+          <em class="ch-k-beliebt" hidden>&#9733; Beliebteste Strecke</em></button>
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-d">
+          <span class="ch-mini" data-kat="d" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip></b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip></em>
+          <em class="ch-k-rang" data-i18n-skip></em>
+          <em class="ch-k-beliebt" hidden>&#9733; Beliebteste Strecke</em></button>
+      </div>
+      <h3 class="k-zwischen">Dauerrennen</h3>
+      <div class="misc-grid ch-kacheln">
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-e" data-ch="dauer-homington">
+          <span class="ch-mini" data-dauer="dauer-homington" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip>Homington</b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip>Dauerrennen</em>
+          <em class="ch-k-rang" data-i18n-skip></em></button>
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-e" data-ch="dauer-circuitdusol">
+          <span class="ch-mini" data-dauer="dauer-circuitdusol" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip>Circuit Du Sol</b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip>Dauerrennen</em>
+          <em class="ch-k-rang" data-i18n-skip></em></button>
+        <button class="misc-tile subpage-open ch-kachel" data-sub="ch-e" data-ch="dauer-balkonia">
+          <span class="ch-mini" data-dauer="dauer-balkonia" aria-hidden="true"></span>
+          <b class="ch-k-name" data-i18n-skip>Balkonia 50 Kilometers</b>
+          <span class="ch-k-info" data-i18n-skip></span>
+          <em class="ch-k-woche" data-i18n-skip>Dauerrennen</em>
+          <em class="ch-k-rang" data-i18n-skip></em></button>
+      </div>
+      <h3 class="k-zwischen">Network</h3>
+      <div class="misc-grid">
         <button class="misc-tile subpage-open" data-sub="ch-online">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="24" cy="24" r="16"/><path d="M8 24h32M24 8c6 5 6 27 0 32M24 8c-6 5-6 27 0 32" stroke="var(--bad)"/></svg>
-          <b>Online</b>
+          <b>Online Settings</b>
           <span>Gemeinsame Bestenliste &uuml;ber ein Google Sheet.</span>
         </button>
       </div>
+      <h3 class="k-zwischen">Community Strecken</h3>
+      <div class="misc-grid">
+        <button class="misc-tile subpage-open" data-sub="ch-community">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 34c0-4 3-8 8-8s8 3 8 8M20 14a6 6 0 1 1 0 12 6 6 0 0 1 0-12z"/><path d="M28 14c4-2 10-1 12 4M36 26c-2 4-6 6-10 6" stroke="var(--accent)"/></svg>
+          <b>Community Strecken</b>
+          <span>Eigene Strecken eintragen und Bestzeiten teilen.</span>
+        </button>
+      </div>
     </div>
-    <div class="card subpage" id="sub-ch-oval">
+    <div class="card subpage" id="sub-ch-a">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
-      <h2 data-i18n-skip>Monzetta</h2>
+      <h2 class="ch-titel" data-i18n-skip></h2>
       <div class="ch-platz"></div>
     </div>
-    <div class="card subpage" id="sub-ch-schlange">
+    <div class="card subpage" id="sub-ch-b">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
-      <h2 data-i18n-skip>Suzuna</h2>
+      <h2 class="ch-titel" data-i18n-skip></h2>
       <div class="ch-platz"></div>
     </div>
-    <div class="card subpage" id="sub-ch-kehre">
+    <div class="card subpage" id="sub-ch-c">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
-      <h2 data-i18n-skip>Monte Carlito</h2>
+      <h2 class="ch-titel" data-i18n-skip></h2>
       <div class="ch-platz"></div>
     </div>
-    <div class="card subpage" id="sub-ch-weitblick">
+    <div class="card subpage" id="sub-ch-d">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
-      <h2 data-i18n-skip>Silverbrook</h2>
+      <h2 class="ch-titel" data-i18n-skip></h2>
       <div class="ch-platz"></div>
+    </div>
+    <!-- Dauerrennen (v0.8.86): eine Kategorie-Unterseite wie ch-a..ch-d; der Inhalt ist
+         EINE der festen Strecken, je nachdem welche Kachel geoeffnet wurde. -->
+    <div class="card subpage" id="sub-ch-e">
+      <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
+      <h2 class="ch-titel" data-i18n-skip></h2>
+      <div class="ch-platz"></div>
+    </div>
+    <div class="card subpage" id="sub-ch-community">
+      <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
+      <h2>Community Strecken</h2>
+      <div id="community-bereich"></div>
     </div>
     <div class="card subpage" id="sub-ch-online">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
       <h2>Online-Bestenliste</h2>
-      <div class="opt-row"><div class="opt-label">Adresse der Web-App
+      <!-- Ausgeblendet (v0.8.37). BESTELLT: "Adresse der Web-App bitte aus dem Online-Menue
+           ausblenden." Die gemeinsame Adresse steht als Vorgabe im Code (CH_STANDARD_URL); das
+           Feld bleibt im Dokument, damit Speichern und Verbindungstest unveraendert arbeiten. -->
+      <div class="opt-row" hidden><div class="opt-label">Adresse der Web-App
           <small>Vorgabe ist die gemeinsame OmegaSim-Bestenliste. Wer eine eigene will: die Adresse, die Google beim Bereitstellen des Apps Script anzeigt (endet auf /exec), Anleitung in tools/challenges-apps-script.gs. Feld leer lassen hei&szlig;t: nur lokal.</small></div>
         <input type="url" id="ch-url" data-preset-skip data-i18n-skip placeholder="https://script.google.com/macros/s/.../exec"></div>
       <div class="opt-row"><div class="opt-label">Dein Name in der Liste
@@ -4584,30 +5019,46 @@
         <button type="button" id="ch-test">Verbindung testen</button>
         <span class="muted" id="ch-test-status" data-i18n-skip></span></div>
     </div>
+    <!-- NEU ANGEORDNET (v0.8.39). BESTELLT: "die Einstellungen je Strecke unter das Bild vom
+         Streckenlayout und die Bestenliste auf die rechte Seite". Modus und Preset sind je EIN
+         Knopf: X schaltet um (BESTELLT: "nicht dpad runter auf Rundenrennen rechts daneben,
+         sondern mit X zwischen dem einen und dem anderen hin und her schalten"). -->
     <div id="ch-detail" class="ch-detail" hidden>
       <div class="ch-links">
-        <div class="ch-karte" id="ch-karte"></div>
+        <div class="ch-karte" id="ch-karte" tabindex="0" role="button" data-ch-voll
+             title="Vergr&ouml;&szlig;ern (X) / Verkleinern (X oder Kreis)" aria-label="Streckenkarte vergr&ouml;&szlig;ern"></div>
         <p class="muted" id="ch-idee"></p>
         <p class="ch-fakten" id="ch-fakten" data-i18n-skip></p>
-      </div>
-      <div class="ch-rechts">
+        <p class="ch-teile" id="ch-teile" data-i18n-skip></p>
         <div class="ch-ergebnis" id="ch-ergebnis" hidden>
           <div class="ch-erg-titel" id="ch-erg-titel" data-i18n-skip></div>
           <div class="ch-erg-zeit" id="ch-erg-zeit" data-i18n-skip></div>
+          <div class="ch-erg-sterne" id="ch-erg-sterne" data-i18n-skip hidden></div>
           <div class="muted" id="ch-erg-text" data-i18n-skip></div>
         </div>
-        <div class="ch-wahl" id="ch-modus"><button type="button" data-m="hotlap">Beste Runde</button><button type="button" data-m="rennen">Rennen</button></div>
-        <p class="muted" id="ch-modus-text" data-i18n-skip></p>
-        <div class="ch-wahl" id="ch-preset"><button type="button" data-p="pro" data-i18n-skip>Pro</button><button type="button" data-p="arcade" data-i18n-skip>Arcade</button></div>
-        <p class="ch-teile" id="ch-teile" data-i18n-skip></p>
+        <button type="button" class="ch-umschalter" id="ch-modus" aria-label="Modus umschalten"><span data-m="hotlap">Beste Runde</span><span data-m="rennen">Rennen</span></button>
+        <label class="tgl" id="ch-spiegel-zeile" title="Strecke spiegeln: Kurven links/rechts tauschen und die Schleife rueckwaerts fahren">
+          <input type="checkbox" id="ch-spiegel"> Strecke spiegeln
+        </label>
+        <p class="ch-medaille-hinweis" id="ch-medaille-hinweis" data-i18n-skip></p>
         <div class="ch-name-zeile"><label for="ch-name">Name in der Bestenliste</label>
           <input type="text" id="ch-name" maxlength="16" data-preset-skip></div>
         <button type="button" class="primary ch-start" id="ch-start">Challenge starten</button>
+      </div>
+      <div class="ch-rechts">
         <h3>Bestenliste</h3>
         <p class="muted" id="ch-liste-status" data-i18n-skip></p>
+        <p class="muted ch-stats" id="ch-stats" data-i18n-skip></p>
         <div class="ch-perz" id="ch-perz" data-i18n-skip></div>
         <div class="ch-histo" id="ch-histo"></div>
-        <table class="ch-tabelle"><tbody id="ch-liste"></tbody></table>
+        <table class="ch-tabelle">
+          <thead><tr><th>#</th><th>Fahrer</th><th>Zeit</th><th>Abstand</th><th aria-label="Sterne"></th></tr></thead>
+          <tbody id="ch-liste"></tbody>
+        </table>
+        <p class="muted ch-sterne-hinweis" id="ch-sterne-hinweis"></p>
+        <h3 class="ch-zweite" id="ch-zweite-3er">Beste 3er-Serie</h3>
+        <p class="muted ch-stats" id="ch-hinweis-3er">Durchschnitt der drei schnellsten aufeinanderfolgenden Runden.</p>
+        <table class="ch-tabelle"><tbody id="ch-liste-3er"></tbody></table>
       </div>
     </div>
   </section>
@@ -4814,13 +5265,25 @@
     <div class="card subpage" id="sub-patchnotes">
       <button class="misc-back goto-tab" data-tab="options">&larr; Optionen</button>
       <h2>Patchnotes</h2>
+      <p class="muted"><b><span data-i18n-skip>0.9</span></b></p>
+      <ul class="muted" id="patchnotes-09" style="padding-left:20px; line-height:1.7">
+        <li>Zweite Kopie der App: Die Download-Links zeigen auf deren eigenes Release (mit Download-Z&#228;hler), sonst auf die APK im Repo.</li>
+      </ul>
       <p class="muted"><b><span data-i18n-skip>0.8</span></b></p>
       <ul class="muted" id="patchnotes-08" style="padding-left:20px; line-height:1.7">
+        <li>Challenges: Wochenstrecken. Vier Kategorien (A kurz, B lang, C Haarnadel, D 30&deg;) mit je 20 Strecken, jeden Mittwoch um 0:00 Uhr (deutsche Zeit) kommt je Kategorie die n&auml;chste, nach 20 Wochen von vorn. Bestenlisten bleiben je Strecke erhalten. Die Kacheln zeigen, wann die n&auml;chste Strecke kommt.</li>
+        <li>Rundenzeit-Ansage jetzt auch in der App: Dort fehlt die Sprachausgabe des Browsers, deshalb liest die App die Zeit aus Aufnahmen vor (Zahlen 0&ndash;60, erzeugt mit Piper TTS, Stimmen &bdquo;Thorsten&ldquo; und &bdquo;LJ Speech&ldquo;).</li>
+        <li>Mehrspieler (experimentell): &bdquo;Rennen f&uuml;r alle starten&ldquo; zeigt auf allen Telefonen einen Bereitschaftsschirm. Jeder tippt &bdquo;Bereit&ldquo;; erst wenn alle anderen bereit sind, kann der Initiator starten. Dann &uuml;bernehmen alle Renntyp, L&auml;nge und einen gemeinsamen Wetterplan, und die Ampel kommt &uuml;berall gleichzeitig (Uhrabgleich mit dem Host). &bdquo;Rennen starten&ldquo; fragt im Mehrspieler: f&uuml;r alle oder nur ich. F&uuml;r den Telefon-Host braucht es die neue APK.</li>
+        <li>Funk: ein Schloss je Auto mit Wachhund; ein h&auml;ngender Befehl blockiert kein Auto mehr (Ursache f&uuml;r &bdquo;Auto reagiert nach Mehrspieler-Beitritt nicht&ldquo;). In der App: kurzes Timeout, erst senden, dann das Cockpit gedrosselt malen, weniger Arbeit je Meldung; Messanzeige &bdquo;Funk-Rundlauf&ldquo; unter System. Steuerkreuz: Renntyp in den Renneinstellungen und im Cockpit direkt mit links/rechts, am Rand der Renntyp-Kachel schaltet es, Zur&uuml;ck und Rennen starten erreichbar, Info-Screen schlie&szlig;t mit &#9675;. Ohne Zwei-Spieler-Modus f&auml;hrt das zuletzt benutzte Pad; &bdquo;Controller tauschen&ldquo; legt ein einzelnes Pad nicht mehr lahm. Controller ohne Standardbelegung: Hinweis und Anzeige der gedr&uuml;ckten Kn&ouml;pfe.</li>
+        <li>Gas-, Brems- und Lenkkennlinie ab Werk 2,45. Neu: &bdquo;Voller Einschlag bei&ldquo; (Vorgabe 90 % Stickweg, experimentell), darunter lenkt der Stick schon, am Anfang schw&auml;cher als linear; Lenkkalibrierung verschiebt den Punkt nicht mehr. Wer noch auf den alten Vorgaben stand, bekommt die neuen einmalig; eigene Werte bleiben.</li>
+        <li>Challenges: Einstellungen unter der Streckenkarte, Bestenliste rechts; Modus und Preset schaltet &#10005; um. Fr&uuml;hstart bei allen Starts mit Ampel: kein Abbruch mehr, sondern kurz ausgebremst, sobald das Auto nach Gr&uuml;n f&auml;hrt. Silverbrook-Rennen mit einem Pflichtstopp (Boxen-Minigame, egal wo).</li>
+        <li>Titel-Glitch je Buchstabe zuf&auml;llig blau oder rot, oben und unten getrennt. &bdquo;Abseits&ldquo; erscheint jetzt gro&szlig; in der Mitte des Cockpits. Autos-Kachel zeigt wieder den Namen statt &bdquo;[object HTMLSpanElement]&ldquo;. Boxen-Minigame: Tasten stehen 100 ms l&auml;nger.</li>
+        <li>Challenges gegen Schummeln: jede Runde wird gegen die Strecke gepr&uuml;ft (mindestens 90 % der Teile erkannt), eine plausible Mindestrundenzeit gilt in App und Bestenliste, und die Einstellungen sind w&auml;hrend des Laufs gesperrt; wer sie doch &auml;ndert, bricht ab.</li>
         <li>Titelseite im Browser: Link zum Download der neuesten Android-App. Die APK-Release h&auml;ngt daf&uuml;r zus&auml;tzlich eine Datei mit festem Namen an; die Android-Schicht ist unver&auml;ndert, neu installieren ist nicht n&ouml;tig.</li>
         <li>Cockpit immer im Vollbild, der Men&uuml;-Knopf dort zeigt jetzt &bdquo;Zur&uuml;ck&ldquo;. Reiter oben: Fahren, Mehrspieler, Challenges, Optionen. Die Info-Kacheln stehen direkt in den Optionen unter einer eigenen Überschrift. Challenges: Strecken hei&szlig;en Monzetta, Suzuna, Monte Carlito und Silverbrook, der Name f&uuml;r die Bestenliste l&auml;sst sich auf jeder Strecken-Seite festlegen, das Perzentil z&auml;hlt je Spieler. Neue Kachel- und Hintergrundbilder im Fahren-Men&uuml;.</li>
         <li>Challenges: die Bestenliste kommt aus einem st&uuml;ndlichen Schnappschuss im Repo, dazu sofort die eigenen Zeiten; das Hochladen wiederholt bei Aussetzern.</li>
         <li>Challenges: gemeinsame Online-Bestenliste ab Werk eingetragen, f&uuml;r alle Kopien der App.</li>
-        <li>Challenges (experimentell): vier feste Strecken, je beste Runde oder Rennen &uuml;ber feste Runden, Pro oder Arcade. Das Auto muss stehen, dann Ampel, dann los; ohne Ghosts, danach sind die eigenen Einstellungen wieder da. Bestenliste mit Histogramm und Perzentil, lokal und online &uuml;ber ein eigenes Google Sheet.</li>
+        <li>Challenges (experimentell): vier feste Strecken, je beste Runde oder Rennen &uuml;ber feste Runden, im Pro-Preset. Das Auto muss stehen, dann Ampel, dann los; ohne Ghosts, danach sind die eigenen Einstellungen wieder da. Bestenliste mit Histogramm und Perzentil, lokal und online &uuml;ber ein eigenes Google Sheet.</li>
         <li>Logos aus den KI-Bildern entfernt, die Credits nennen die KI-Bilder (Gemini Flash). Reiter am Handy doppelt so hoch. Die Zur&uuml;ck-Taste des Handys f&uuml;hrt zum Startbildschirm (in der App ab APK 0.8.29). Editor: Asphalt im Hintergrund, Teile nach Typ getrennt, Schalter f&uuml;r Ideallinie und Tastenk&uuml;rzel.</li>
         <li>Strecke aufger&auml;umt: Editor, Scan, Laden, Meine Teile und Ausdruck haben je eine eigene Seite. Der Editor startet im Vollbild, mit Tutorial und Tasten&uuml;bersicht: Teile anw&auml;hlen, mittendrin einf&uuml;gen und entfernen, r&uuml;ckg&auml;ngig, in 45&deg;-Schritten drehen, L&auml;nge in Metern und im Ma&szlig;stab 1:50, Pfeile an den Kanten in Fahrtrichtung. Meine Teile (experimentell) z&auml;hlt deinen Bestand und zeigt im Editor, was fehlt oder &uuml;brig ist. Challenges: Plan und Mock-up mit vier Strecken, je beste Runde und Rennen.</li>
         <li>Kopfzeile nochmals flacher, Omega oben links f&uuml;hrt zum Startbildschirm, Info unter Optionen, neuer Reiter Challenges (WIP). Tutorial-Texte k&uuml;rzer; Steuerung l&auml;uft auf dem Cockpit, zeigt gedr&uuml;ckte Tasten und f&auml;hrt dabei nicht. Neue Stimmungsbilder (KI) f&uuml;r Titel, Rennoptionen, Start, Strecke, Optionen, Info und Challenges.</li>
@@ -5303,6 +5766,32 @@
       <p class="muted">
         Vor einem Rennen kann die App die Strecke einmal abscannen: Das Auto fährt sie ab, meldet jedes neu
         erkannte Teil per Bluetooth, und daraus entsteht Stück für Stück eine digitale Streckenkarte.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Der Streckenrandomisator (Zufallsknopf)</h2>
+      <p class="muted">
+        Der Zufallsknopf baut eine geschlossene Runde aus den Teilen, die als vorhanden eingetragen sind.
+        Das Kernprinzip: Es entsteht ein <b>&bdquo;Rückgrat&ldquo;</b> aus beliebigen Kurvenläufen, deren
+        Drehungen sich zu +360 oder &ndash;360 addieren &ndash; also ein Rundkurs aus lauter Kurven. Die
+        L&uuml;cken zwischen den Kurvenbl&ouml;cken werden dann mit Geradenst&uuml;cken aufgefüllt.
+      </p>
+      <p class="muted">
+        <b>Warum das schnell geht:</b> Die Endposition des Ringes ist <em>linear</em> in den
+        Geradenl&uuml;cken. Jede Gerade verschiebt um einen festen Vektor (Kurs vor der L&uuml;cke),
+        Kurven verschieben unabh&auml;ngig von den L&uuml;cken. Also gilt
+        <code>Ende = C + Summe(l&uuml;cke[g] &middot; v<sub>g</sub>)</code> mit festem <code>C</code>.
+        Ein kleines ganzzahliges Suchen &uuml;ber die Geradenl&auml;ngen findet den Schluss, ohne f&uuml;r
+        jeden Kandidaten die teure Mittelpunktsrechnung auszuf&uuml;hren &ndash; die l&auml;uft erst bei der
+        Endabnahme.
+      </p>
+      <p class="muted">
+        <b>Die Endabnahme pr&uuml;ft:</b> die Strecke ist kein langweiliges Mini-Oval (SR3GR3 und sein
+        Spiegelbild), Anfang und Ende liegen nah genug beieinander, der Ring ist wirklich geschlossen,
+        und die Bahn kreuzt sich nicht. Passt die Strecke in einen angegebenen Raum, werden alle acht
+        45&deg;-Lagen gepr&uuml;ft und die passende Drehung zur&uuml;ckgegeben. Zuletzt merkt sich die App
+        die zuletzt gebauten Strecken, damit nicht dieselbe Form zweimal hintereinander kommt.
       </p>
     </div>
 
@@ -7352,6 +7841,9 @@
         <button id="gar-stop-ghosts" disabled>Ghosts anhalten</button>
         <button class="primary" id="gar-go" hidden disabled>Losfahren</button>
       </div>
+      <p class="muted" style="font-size:12px; margin:-6px 0 10px 0">
+        Eigene Autofotos: am besten quer, z.&nbsp;B. 4:3 oder 16:9.
+      </p>
       <!-- BESTELLT: "Im Garage Tab ueber den Autos Link zum Cockpit stattdessen einfuegen"
            (statt des entfernten Cockpit-Knopfs auf der Startseite). -->
       <button class="goto-tab" id="gar-to-cockpit" data-tab="race"
@@ -7419,7 +7911,7 @@
          Status und Rangliste gehoeren zu beiden Wegen: der Block #mp-gemeinsam wandert beim
          Oeffnen in die jeweilige Unterseite (51-konsole.js) - so gibt es jede id nur einmal. -->
     <div class="card subpage-home" id="sub-home-mp">
-      <h2>Mehrspieler im WLAN <span class="wip-tag">experimentell</span></h2>
+      <h2>WLAN Mehrspieler <span class="wip-tag">experimentell</span></h2>
       <p class="muted">
         Mehrere Telefone, jedes mit eigenem Auto, eine gemeinsame Rangliste. Host ist entweder
         ein PC mit einem kleinen Python-Programm oder ein Telefon mit der Android-App.
@@ -7546,7 +8038,7 @@
     <div class="card subpage" id="sub-mp-app">
       <button class="misc-back subpage-back" data-sub="">&larr; Mehrspieler</button>
       <h2>&Uuml;ber Android-App</h2>
-      <p class="muted" id="mp-app-hinweis">Nur in der Android-App: dieses Telefon wird Host, die anderen finden es im WLAN. Im Browser geht das nicht &ndash; dort den Weg &uuml;ber den PC nehmen.</p>
+      <p class="muted" id="mp-app-hinweis">Nur in der Android-App: dieses Telefon wird Host, die anderen finden es im WLAN. Im Browser geht das nicht &ndash; dort den Weg &uuml;ber den PC nehmen. Wer im Browser mitspielen will, braucht f&uuml;r das Auto die App (Web Bluetooth verlangt einen secure context; das APK hat das eingebaut).</p>
       <!-- NUR IN DER ANDROID-APP: dieses Telefon wird Host, ohne PC. -->
       <div class="mp-app" id="mp-app" hidden>
         <h3 class="mp-gemeinsam-h">Host <span class="wip-tag">experimentell</span>
@@ -7566,21 +8058,29 @@
     <div id="mp-gemeinsam">
       <h3 class="mp-gemeinsam-h">Beitreten und Rangliste
         <button type="button" class="opt-info-btn" id="mp-erkl-knopf" aria-label="Erklärung anzeigen">i</button></h3>
-      <div class="row" style="gap:10px; flex-wrap:wrap; align-items:flex-end">
-        <label class="small" style="flex:1 1 200px">Host-Adresse
-          <input type="text" id="mp-host" placeholder="http://192.168.1.50:8080"></label>
-        <label class="small" style="flex:1 1 140px">Mein Name
-          <input type="text" id="mp-name" maxlength="40" placeholder="z. B. Luuke"></label>
-        <button class="primary" id="mp-join">Mitmachen</button>
-        <button id="mp-info-join" title="Ohne eigenes Auto: zeigt Strecke, Autos und Rangliste">Als Info-Screen <span class="wip-tag">experimentell</span></button>
-        <button id="mp-leave" class="warn">Verlassen</button>
+      <div class="mp-spalten">
+        <div class="mp-spalte-links">
+          <div class="row" style="gap:10px; flex-wrap:wrap; align-items:flex-end">
+            <label class="small" style="flex:1 1 200px">Host-Adresse
+              <input type="text" id="mp-host" placeholder="http://192.168.1.50:8080"></label>
+            <label class="small" style="flex:1 1 140px">Mein Name
+              <input type="text" id="mp-name" maxlength="40" placeholder="z. B. Luuke"></label>
+            <button class="primary" id="mp-join">Mitmachen</button>
+            <button id="mp-info-join" title="Ohne eigenes Auto: zeigt Strecke, Autos und Rangliste">Als Info-Screen <span class="wip-tag">experimentell</span></button>
+            <button id="mp-rennen-alle">Rennen für alle starten <span class="wip-tag">experimentell</span></button>
+            <label class="small mp-force" title="Tempo, Handling, Beschleunigung, Schaden und Reifenverschleiss auf alle setzen (Controller, Tasten, Empfindlichkeit, Rumble und Sound bleiben unberührt)">Renneinstellungen erzwingen <input type="checkbox" id="mp-force-preset" checked></label>
+            <button id="mp-leave" class="warn">Verlassen</button>
+          </div>
+          <div class="muted" id="mp-status" style="margin-top:8px">nicht verbunden</div>
+        </div>
+        <div class="mp-spalte-rechts">
+          <table class="cm-tab"><thead><tr>
+            <th></th><th>Fahrer</th><th>Runden</th><th>Letzte</th><th>Beste</th>
+          </tr></thead><tbody id="mp-rows">
+            <tr><td colspan="5" class="muted">keine Daten</td></tr>
+          </tbody></table>
+        </div>
       </div>
-      <div class="muted" id="mp-status" style="margin-top:8px">nicht verbunden</div>
-      <table class="cm-tab"><thead><tr>
-        <th></th><th>Fahrer</th><th>Runden</th><th>Letzte</th><th>Beste</th>
-      </tr></thead><tbody id="mp-rows">
-        <tr><td colspan="5" class="muted">keine Daten</td></tr>
-      </tbody></table>
       <!-- Die Erklaerungen stehen hinter dem i (BESTELLT: "keinen Text unter die Optionen,
            sondern immer hinter das i im Kreis"). -->
       <div class="mp-erkl" id="mp-erkl" hidden>
@@ -7633,11 +8133,13 @@
            bekommt dasselbe Gruen, das vorher #btn-connect trug (siehe die Begruendung
            bei .home-topbar in der Kopfzeilen-CSS), #race-stop-btn die globale
            .danger-Klasse, die es bisher im Markup nirgends benutzte. -->
-      <div class="row" style="gap:10px; margin-bottom:14px">
+      <!-- ALS EINSTELLUNGSZEILE (v0.8.41), damit das Steuerkreuz sie erreicht (menuNavRows nimmt
+           auf dieser Seite nur .opt-row). X loest den jeweils freien Knopf aus. -->
+      <div class="opt-row opt-breit"><div class="row" style="gap:10px; margin-bottom:6px">
         <button id="race-start-btn" class="race-go">🏁 Rennen starten</button>
         <button id="race-stop-btn" class="danger" disabled>Rennen abbrechen</button>
         <span class="muted" id="race-clock" style="font-family:monospace"></span>
-      </div>
+      </div></div>
       <div class="row" style="align-items:center; gap:18px; flex-wrap:wrap">
         <div style="display:flex; gap:8px">
           <span class="race-light" id="race-light-1"></span>
@@ -7660,34 +8162,51 @@
            versteckt: applyRaceModeUi(), die Voreinstellungen und die change-Bindung lesen
            es weiter, die Kacheln setzen nur value und loesen change aus. Ein Umbau der
            Zustandslogik waere unnoetiges Risiko fuer eine Frage der Bedienung. -->
+      <!-- RENNTYP ALS EINSTELLUNGSZEILE (v0.8.41). GEMELDET: "Im Rennmenue kann ich mit dem D-Pad
+           nicht den Renntyp anwaehlen." Die Kacheln standen ausserhalb jeder .opt-row und waren
+           fuer das Steuerkreuz unsichtbar. Jetzt wie die Wetterzeile: links/rechts schaltet das
+           versteckte Auswahlfeld, die Kacheln ziehen nach. -->
+      <div class="opt-row opt-breit" id="race-mode-zeile"><div class="opt-label">Renntyp</div>
       <div class="mode-grid" id="race-mode-tiles">
-        <button type="button" class="mode-tile" data-mode="practice">
+        <button type="button" class="mode-tile kachelbild practice" data-mode="practice">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" aria-hidden="true">
             <circle cx="12" cy="13" r="8"/><path d="M12 13V8.5M12 2h0M9 3h6"/>
           </svg><b>Freies Training</b></button>
-        <button type="button" class="mode-tile" data-mode="endurance">
+        <button type="button" class="mode-tile kachelbild endurance" data-mode="endurance">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" aria-hidden="true">
             <circle cx="12" cy="12" r="9"/><path d="M12 12V6M12 12l4.5 3"/>
           </svg><b>Endurance</b></button>
-        <button type="button" class="mode-tile" data-mode="qualifying">
+        <button type="button" class="mode-tile kachelbild qualifying" data-mode="qualifying">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M5 20V4l14 4-14 4"/><path d="M5 12v8"/>
           </svg><b>Qualifying</b></button>
-        <button type="button" class="mode-tile" data-mode="laps">
+        <button type="button" class="mode-tile kachelbild laps" data-mode="laps">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" aria-hidden="true">
             <path d="M4 8a8 5 0 1 0 16 0 8 5 0 1 0-16 0"/><path d="M12 3v3M12 13v-3"/>
           </svg><b>Runden</b></button>
+        <button type="button" class="mode-tile kachelbild knockout" data-mode="knockout">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 7h10M7 17h10M12 7v10"/><circle cx="12" cy="12" r="3"/>
+          </svg><b>Knockout</b></button>
+        <button type="button" class="mode-tile kachelbild derby" data-mode="derby">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="9" cy="9" r="3"/><circle cx="15" cy="15" r="3"/><path d="M9 12v9M15 12V3"/>
+          </svg><b>Demolition Derby</b></button>
       </div>
       <select id="race-mode" hidden style="display:none">
         <option value="practice" selected>Freies Training</option>
         <option value="endurance">Endurance</option>
         <option value="qualifying">Qualifying</option>
         <option value="laps">Runden</option>
-      </select>
+        <option value="knockout">Knockout</option>
+        <option value="derby">Demolition Derby</option>
+      </select></div>
       <p class="muted" id="race-mode-hint" style="font-size:11.5px; margin:8px 0 0 0"></p>
 
       <!-- Ab hier senkrecht, in derselben Form wie die Optionen: eine Zeile je Einstellung,
@@ -7695,16 +8214,16 @@
            zwei waagerechten Reihen, und auf dem Telefon brachen sie unvorhersehbar um. -->
       <div class="opt-row"><div class="opt-label"><span id="race-limit-label">Minuten</span>
           <small>Bei freiem Training ohne Bedeutung.</small></div>
-        <input type="number" id="race-limit" value="2" min="1" max="120" step="1" style="width:84px"></div>
+        <span class="num-steuer"><button class="num-minus" type="button" aria-label="Minus eins">&#8722;</button><input type="number" id="race-limit" value="2" min="1" max="120" step="1" style="width:84px"><button class="num-plus" type="button" aria-label="Plus eins">+</button></span></div>
       <div class="opt-row"><div class="opt-label">Sektoren
           <span class="wip-tag">experimentell</span>
-          <small>&Uuml;berfahrten je Runde. Nur <b>ohne Bahn</b> sinnvoll: auf der
-          CH-Schiene gibt es genau ein Start/Ziel, also ist jede &Uuml;berfahrt eine Runde.
-          Im Ausdruck-Modus legt man die Muster selbst hin &ndash; drei Ausdrucke &uuml;ber
-          eine Runde verteilt sind drei Sektoren. Eine Sektorzeit ist die
-          <em>gemessene</em> Zeit zwischen zwei Kontakten und nicht die Rundenzeit geteilt
-          durch drei: genau darin liegt der Wert, denn die Streuung sagt, <em>wo</em> Zeit
-          verlorengeht.</small></div>
+          <small>&Uuml;berfahrten je Runde. <b>Im Bahn-Modus</b> (Editor) bestimmt die Strecke
+          die Sektorzahl: jede Start/Ziel-Gerade ist eine Sektorgrenze, die erste ist die
+          Rundenlinie. <b>Ohne Bahn</b> (Ausdruck) gilt dieser Regler - dort legt man die
+          Muster selbst hin, drei Ausdrucke &uuml;ber eine Runde verteilt sind drei Sektoren.
+          Eine Sektorzeit ist die <em>gemessene</em> Zeit zwischen zwei Kontakten und nicht
+          die Rundenzeit geteilt durch drei: genau darin liegt der Wert, denn die Streuung
+          sagt, <em>wo</em> Zeit verlorengeht.</small></div>
         <select id="sector-count">
           <option value="1" selected>1 (aus)</option>
           <option value="2">2</option>
@@ -7798,9 +8317,9 @@
           <option value="2">2</option>
         </select></div>
       <div class="opt-row"><div class="opt-label">Strafe je verpasstem Stopp (s)</div>
-        <input type="number" id="race-pit-penalty" value="10" min="0" max="300" step="1" style="width:84px"></div>
+        <span class="num-steuer"><button class="num-minus" type="button" aria-label="Minus eins">&#8722;</button><input type="number" id="race-pit-penalty" value="10" min="0" max="300" step="1" style="width:84px"><button class="num-plus" type="button" aria-label="Plus eins">+</button></span></div>
       <div class="opt-row"><div class="opt-label">Tank beim Start (l)</div>
-        <input type="number" id="race-fuel-start" value="110" min="5" max="110" step="5" style="width:84px"></div>
+        <span class="num-steuer"><button class="num-minus" type="button" aria-label="Minus eins">&#8722;</button><input type="number" id="race-fuel-start" value="110" min="5" max="110" step="5" style="width:84px"><button class="num-plus" type="button" aria-label="Plus eins">+</button></span></div>
       <p class="muted" style="margin-top:8px; font-size:11.5px">
         Eine Runde zählt, sobald das Auto das Start/Ziel-Muster auf der Strecke überfährt
         (dasselbe Signal, das auch der Streckenscanner ausliest): kein eigener Sensor in der App.
@@ -7871,6 +8390,7 @@
 
   <!-- OPTIONEN TAB: player-facing settings (feel, sound, controller bindings) -->
   <section class="tabpage" id="tab-options">
+    <div class="ch-sperre-hinweis" id="ch-sperre" hidden>W&auml;hrend einer Challenge sind die Einstellungen gesperrt.</div>
     <div class="card subpage-home" id="sub-home-options">
       <h2>Einstellungen</h2>
       <div class="k-zwischen">Einstellungen</div>
@@ -8292,6 +8812,11 @@
           <span class="opt-val" id="setting-crash-count-val">10</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Schaden</div><label class="tgl"><input type="checkbox" id="setting-crash-damage" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Kein Schaden im Stand
+          <small>Solange das Auto steht (0&nbsp;km/h), z&auml;hlt kein Sto&szlig; als
+          Crash &ndash; du kannst es aufheben, ohne dass es simulierten Schaden
+          nimmt.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-crash-stationary" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Crash-Schwelle
           <small>Wie weit die Bewegungsbytes 1 und 3 vom gleitenden Mittel abweichen
           m&uuml;ssen, damit ein Sto&szlig; als Crash gilt. Niedriger hei&szlig;t
@@ -8592,9 +9117,9 @@
           Stick live.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="setting-steer-expo" min="0.6" max="3" step="0.05" value="1.15">
+          <input type="range" id="setting-steer-expo" min="0.6" max="3" step="0.05" value="2.45">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="setting-steer-expo-val">1.15</span>
+          <span class="opt-val" id="setting-steer-expo-val">2.45</span>
         </div>
         <svg class="curve-plot" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
           <line x1="0" y1="60" x2="100" y2="60" class="curve-axis"/>
@@ -8603,6 +9128,17 @@
           <path id="setting-steer-expo-plot" class="curve-line" d=""/>
           <circle id="setting-steer-expo-dot" class="curve-dot" r="3" cx="-10" cy="-10"/>
         </svg><span class="curve-live" id="setting-steer-expo-live" data-i18n-skip></span></div>
+      <!-- BESTELLT (v0.8.40): "Lenkkennlinie so machen wie Gas/Bremse nur halt in beide
+           Richtungen. Ich will, dass ich es linear einstellen kann aber auch, wann 100 %
+           gelenkt wird (idealerweise nicht ab 50 % Input)." -->
+      <div class="opt-row"><div class="opt-label">Voller Einschlag bei <span class="wip-tag">experimentell</span>
+          <small>Ab welchem Stickweg der volle Lenkeinschlag erreicht ist, in beide Richtungen gleich. Darunter lenkt der Stick schon; mit einer Lenkkennlinie &uuml;ber 1 am Anfang schw&auml;cher als linear, mit 1 genau linear. Lenkansprechen trimmt das nur noch fein, die Lenkkalibrierung verschiebt den Punkt nicht.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-steer-voll" min="0.3" max="1" step="0.05" value="0.9">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-steer-voll-val">90%</span>
+        </div></div>
       <!-- BESTELLT: "bei gas lenkstärke noch besser machen und mir einen slider geben
            (minimal weniger abschwächen die Lenkung)." Betrifft NUR die Gas-Seite des
            Reibkreises (capRaw in 40-physics.js, wirkt nur bei uF < 1, also beim
@@ -8669,7 +9205,7 @@
           <small>Wie der Gasweg des Controllers auf die Beschleunigung abgebildet wird. Die Enden liegen immer fest: kein Gas hei&szlig;t keine Beschleunigung, Vollgas hei&szlig;t volle Beschleunigung &ndash; ge&auml;ndert wird nur, was dazwischen passiert. 1,0 ist die Gerade und &auml;ndert nichts. &Uuml;ber 1,0 streckt den unteren Bereich: ein Viertel Gasweg gibt bei 1,8 nur noch 8&nbsp;% statt 25&nbsp;%. Genau das braucht ein Trigger mit gro&szlig;er Totzone &ndash; ein DualShock&nbsp;4 oder DualSense gibt schon bei leichtem Druck viel ab, und dann l&auml;sst sich kein Tempo halten. Unter 1,0 macht es umgekehrt spitzer, f&uuml;r Pedale mit langem Weg.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="setting-throttle-gamma" min="0.6" max="3" step="0.05" value="1">
+          <input type="range" id="setting-throttle-gamma" min="0.6" max="3" step="0.05" value="2.45">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-throttle-gamma-val">1.00 linear</span>
         </div>
@@ -8693,7 +9229,7 @@
           Druck bleibt volle Bremse.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="setting-brake-gamma" min="0.6" max="3" step="0.05" value="1.3">
+          <input type="range" id="setting-brake-gamma" min="0.6" max="3" step="0.05" value="2.45">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-brake-gamma-val">1.30</span>
         </div>
@@ -9115,6 +9651,23 @@
           <input type="range" id="ghost-hardness" min="0" max="100" step="5" value="50">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-hardness-val">50%</span>
+        </div></div>
+      <!-- BESTELLT: "das Feld noch etwas auffächern, indem die Abstände zwischen allen Autos
+           vergrößert werden (dazu slider)" und "Pro 4 Autos ... wie viele Überholmanöver pro
+           Runde ... auf 0m5 setzen ... in 0.1er schritten". Beide experimentell. -->
+      <div class="opt-row"><div class="opt-label">Ghost: Feld auffächern<span class="wip-tag">experimentell</span><small>Vergrößert die Abstände zwischen den Autos. 0% = wie bisher.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-feld" min="0" max="100" step="5" value="0">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-feld-val">0%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Ghost: Überholmanöver je Runde<span class="wip-tag">experimentell</span><small>Pro 4 Autos, wie viele Überholmanöver pro Runde. 0.5 = eines alle 2 Runden.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-ueber" min="0" max="2" step="0.1" value="0.5">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-ueber-val">0.5</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Ghost: Kurvendrosselung<small>Wie viel Tempo in Kurven abgegeben wird. <b>Braucht ein Streckenlayout</b>: ohne gelesene oder gebaute Kacheln wei&szlig; der Ghost nicht, wo eine Kurve ist, und der Regler multipliziert eine Null.</small></div>
         <div class="opt-slider">
@@ -9564,6 +10117,7 @@
         <span class="muted">Lenkung: <b id="pad-live-steer">0.00</b></span>
         <span class="muted">Steuerkreuz: <b id="pad-live-dpad">&ndash;</b></span>
         <span class="muted" style="font-size:11px">Achsen: <b id="pad-live-axes">&ndash;</b></span>
+        <span class="muted" style="font-size:11px">Knöpfe gedrückt: <b id="pad-live-knoepfe" data-i18n-skip>&ndash;</b></span>
       </div>
 
       <!-- Aus dem Cockpit hierher. Dort war sie eine ganze Karte unter dem Schirm, und
@@ -9774,6 +10328,11 @@
       <div class="opt-row"><div class="opt-label">Entwicklertools zeigen
           <small>Blendet im Hauptmen&uuml; die Kachel Entwickler ein: Doku, Programmierschule, BLE-Werkbank, Selbsttest, Code-Sonde, Zahlensysteme, Aufnahme-Modus. Auch mit ?dev in der Adresse.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-dev"><span></span></label></div>
+      <!-- v0.8.41: Messanzeige fuer den Lag in der App (BESTELLT: "Verzoegerung auf meinem
+           schwaecheren Handy optimieren", erst Stufe 1, dann messen). -->
+      <div class="opt-row"><div class="opt-label">Funk-Rundlauf
+          <small>Wie lange ein Steuerbefehl bis zur Best&auml;tigung durch das Bluetooth braucht: Mittelwert und 95 % der Befehle. Über 45 ms f&auml;llt jeder zweite Befehl aus dem Takt. H&auml;ngende Befehle gibt der Wachhund nach 300 ms frei. In der App auf einem &auml;lteren Handy hilft oft, &bdquo;Android System WebView&ldquo; im Play Store zu aktualisieren.</small></div>
+        <span class="opt-val" id="funk-rundlauf" data-i18n-skip>&ndash;</span></div>
       <div class="opt-row" id="opt-app-zeile" hidden><div class="opt-label">App &amp; Updates
           <small>Nur in der Android-App: Version, Updates ohne neue APK.</small></div>
         <button type="button" class="goto-tab" data-tab="info" data-k-sub="app">&Ouml;ffnen</button></div>
@@ -10006,7 +10565,7 @@
           <b>Meine Teile</b>
           <span>Wie viele Teile du von jeder Sorte hast. Der Editor zeigt, was fehlt.</span>
         </button>
-        <button class="misc-tile subpage-open" data-sub="print" data-modus="frei">
+        <button class="misc-tile subpage-open" data-sub="print">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V8h20v10"/><rect x="8" y="18" width="32" height="14" rx="2"/><path d="M14 32h20v10H14z" stroke="var(--bad)"/></svg>
           <b>Druckvorlagen</b>
@@ -10032,6 +10591,14 @@
            sondern 'Editor starten', und dann ist er im Vollbild"). -->
       <div id="track-fs-host">
         <div class="tp-bar tp-actions">
+          <!-- Speichern (BESTELLT): oben LINKS, damit man nicht aus Versehen auf
+               "Schliessen" statt "Speichern" klickt. Fragt nach einem Namen; bleibt das Feld
+               leer, schlaegt die App einen passenden Streckennamen vor. -->
+          <button class="tp-btn" id="track-save-toolbar" title="Strecke speichern" aria-label="Strecke speichern">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/>
+              <path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>
+            <span class="tp-cap">Speichern</span></button>
           <!-- BESTELLT: "oben links eine Checkbox (so gross wie die Zurueck- und Entfernen-
                Buttons) fuer Ideallinie und eine fuer Tastenkuerzel anzeigen ... ein
                Idealliniensymbol mit farbigem Rand wenn aktiv und grauem Rand wenn inaktiv und
@@ -10072,6 +10639,11 @@
                  stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3"/>
               <path d="M7 7l1 13h8l1-13"/></svg>
             <span class="tp-cap">Leeren</span></button>
+          <button class="tp-btn" id="track-random" title="Zuf&auml;llige Strecke aus den vorhandenen Teilen bauen" aria-label="Zufaellige Strecke bauen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 6h3l7 12h3M4 18h3l7-12h3"/><path d="M17 4l3 2-3 2M17 16l3 2-3 2"/></svg>
+            <span class="tp-cap">Zufall</span></button>
           <button class="tp-btn" id="track-tour" title="Tutorial zum Editor" aria-label="Tutorial zum Editor">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                  stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01"/></svg>
@@ -10138,19 +10710,16 @@
       </p>
 
       <ol class="muted" id="track-tile-list" style="padding-left:20px; line-height:1.9; max-height:200px; overflow-y:auto; margin-top:12px"></ol>
-
-      <ol class="muted" id="track-tile-list" style="padding-left:20px; line-height:1.9; max-height:200px; overflow-y:auto; margin-top:12px"></ol>
     </div>
     <div class="card subpage" id="sub-laden">
       <button class="misc-back subpage-back" data-sub="">&larr; Strecke</button>
-      <h2>Strecke laden</h2>
+      <h2>Meine Strecken</h2>
       <div class="row">
         <input type="text" id="track-name" placeholder="Name der Strecke">
         <button id="track-save">Speichern</button>
-        <select id="track-list"><option value="">-- gespeicherte Strecken --</option></select>
-        <button id="track-load">Laden</button>
-        <button id="track-delete">Löschen</button>
       </div>
+      <div class="track-kacheln" id="track-kacheln"></div>
+    </div>
     <div class="card subpage" id="sub-teile">
       <button class="misc-back subpage-back" data-sub="">&larr; Strecke</button>
       <h2>Meine Teile</h2>
@@ -10161,9 +10730,29 @@
         und was fehlt. Leer lassen hei&szlig;t: nicht gez&auml;hlt.</p>
       <div class="row" style="gap:6px; flex-wrap:wrap">
         <button id="teile-grund">+ Grundpackung</button>
+        <button id="teile-links">+ Linkskurven-Set</button>
         <button id="teile-haarnadel">+ Haarnadel-Set</button>
         <button id="teile-dreissig">+ 30&deg;-Au&szlig;enkurven-Set</button>
+        <button id="teile-enge">+ Engstelle</button>
         <button id="teile-leer">Alles auf 0</button>
+      </div>
+      <!-- BESTELLT: "let me determine the maximum size of the room as a rectangle (x and y, in
+           meters, format X.Y). The generated track must fit into that rectangle. Remember that
+           you can turn the track in 45° steps." 0 x 0 = keine Begrenzung. -->
+      <div class="row" style="gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px">
+        <span class="muted">Zufallsstrecke: max. Raum (m)</span>
+        <span class="raum-zeile" data-achse="x">
+          <label for="teile-raum-x">Breite</label>
+          <button class="raum-knopf" id="raum-x-minus" type="button" aria-label="Breite weniger">&#8722;</button>
+          <input id="teile-raum-x" type="text" inputmode="decimal" style="width:60px; text-align:center">
+          <button class="raum-knopf" id="raum-x-plus" type="button" aria-label="Breite mehr">+</button>
+        </span>
+        <span class="raum-zeile" data-achse="y">
+          <label for="teile-raum-y">Tiefe</label>
+          <button class="raum-knopf" id="raum-y-minus" type="button" aria-label="Tiefe weniger">&#8722;</button>
+          <input id="teile-raum-y" type="text" inputmode="decimal" style="width:60px; text-align:center">
+          <button class="raum-knopf" id="raum-y-plus" type="button" aria-label="Tiefe mehr">+</button>
+        </span>
       </div>
       <div class="teile-liste" id="teile-liste"></div>
     </div>
@@ -10249,6 +10838,8 @@
             Original-Vorlage erzeugt und nicht nachgemessen: neun Balken, d&uuml;nn
             3,598 mm und dick 6,604 mm, L&uuml;cken 3,514 und 6,530 mm.
           </p>
+        </div>
+        <div style="flex:0 0 auto; align-self:center">
           <a href="startziel-a4.svg" download="startziel-a4.svg">
             <button class="primary">Start/Ziel herunterladen (SVG)</button>
           </a>
@@ -10503,7 +11094,12 @@
   <div class="k-pause" id="k-frage" hidden>
     <div class="k-pause-dialog">
       <h2 id="k-frage-titel"></h2>
+      <div class="k-frage-bild" id="k-frage-bild" hidden></div>
       <p class="muted k-frage-text" id="k-frage-text"></p>
+      <div class="k-frage-eingabe" id="k-frage-eingabe" hidden>
+        <label for="k-frage-eingabe-feld"></label>
+        <input type="text" id="k-frage-eingabe-feld" maxlength="16" autocomplete="off">
+      </div>
       <div class="k-frage-knoepfe" id="k-frage-knoepfe"></div>
     </div>
   </div>

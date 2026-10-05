@@ -86,9 +86,45 @@
     endurance:  { label: 'Endurance', unit: 'Minuten', timed: true, hint: 'Meiste Runden in der Zeit.' },
     qualifying: { label: 'Qualifying', unit: 'Minuten', timed: true, hint: 'Schnellste Einzelrunde zählt.' },
     laps:       { label: 'Runden', unit: 'Runden', timed: true, hint: 'Wer zuerst die Rundenzahl hat.' },
+    // BESTELLT: "neuer rennmodus (experimentell): knockout." Die Wertung ist nicht zeit- oder
+    // rundenzahlbasiert (timed:false), sondern eliminiert: Geister fliegen bei Abkommen von
+    // der Bahn, Menschen verlieren ein Leben. Ende, wenn alle Geister weg (Sieg) oder alle
+    // Menschen raus (Niederlage) sind.
+    knockout:   { label: 'Knockout', unit: 'Leben', timed: false,
+                  hint: 'Experimentell: Geister von der Bahn rammen, 3 Leben.' },
+    // BESTELLT: "weiteren experimentellen rennmodus: demolition derby." Jedes Auto hat Health
+    // 0-100; ein Aufprall kostet 10 % (frontal) bzw. 20 % (von der Seite gerammt). Bei 0 %
+    // bleibt das Auto stehen, die Lichter flackern nur noch. Kein Boxenstopp, keine Runden.
+    // BESTELLT (nachgefragt): Sieger nach Kills (meiste Abschuesse), alle Aufpraelle zaehlen,
+    // auch Geister haben Health.
+    derby:      { label: 'Demolition Derby', unit: 'Kills', timed: false,
+                  hint: 'Experimentell: rammen, Health 0-100, Sieg nach Kills.' },
   };
   let raceMode = 'practice';
   let raceLimit = 2;              // minutes, or laps in 'laps' mode
+
+  // ---- Knockout (v0.8.96, experimentell) ----
+  // Jeder menschliche Fahrer hat KO_Leben Leben; ein Abkommen kostet eins. Ein Geist ist
+  // raus, wenn er von der Bahn ist (der Sensor meldet Offtrack). Sieg = alle Geister raus,
+  // Niederlage = alle Menschen raus.
+  const KO_LEBEN = 3;
+  let knockoutLeben = KO_LEBEN;    // Leben des Spielers (Spieler 1)
+  let knockoutLeben2 = KO_LEBEN;   // Leben von Spieler 2 (nur im 2-Spieler-Modus)
+  let knockoutGeister = 0;         // noch im Rennen befindliche Geister
+  let knockoutLaeuft = false;      // Wertung nur waehrend eines Knockout-Rennens aktiv
+  let knockoutSieger = null;       // null | 'menschen' | 'geister'
+
+  // ---- Demolition Derby (v0.8.96, experimentell) ----
+  const DERBY_MAX = 100;
+  let derbyLaeuft = false;
+  let derbyHealth = DERBY_MAX;     // Health von Spieler 1
+  let derbyHealth2 = DERBY_MAX;    // Health von Spieler 2
+  let derbyKills = 0;              // Abschuesse von Spieler 1
+  let derbyKills2 = 0;             // Abschuesse von Spieler 2
+  let derbySieger = null;          // null | 'p1' | 'p2' | 'geist'
+  let derbyTitel = null;           // gesperrt: Anzeige "Derby beendet"
+  let derbyTot1 = false;           // Spieler 1 bei 0 %: Auto steht, Lichter flackern
+  let derbyTot2 = false;           // Spieler 2 bei 0 %
 
   // ---- Race options: weather, mandatory stops, starting fuel ----
   let raceWxStart = 'dry';
@@ -105,6 +141,7 @@
   // which is what "sobald das erste Auto über Start fährt" means literally.
   let raceFlying = false;
   let raceGridOrder = [];      // device ids, first = pole
+let gridSelbst = false;      // Autos fahren selbst in Position (experimentell)
   let raceFormationLap = false;
   let raceStartedAt = null;
   let raceClockTimer = null;
@@ -132,6 +169,196 @@
     return raceStartedAt !== null && (Date.now() - raceStartedAt) >= raceLimit * 60000;
   }
 
+  // ---- Knockout-Wertung (experimentell) ----
+  function knockoutGeisterZaehlen() {
+    let n = 0;
+    for (const c of garage) if (c && c.role === 'ghost' && c.ghost && c.ghost.running && !c.ghost.eliminated) n++;
+    return n;
+  }
+  // Ein Geist ist raus (von der Bahn gerammt): im Knockout stoppen und Wertung pruefen.
+  function knockoutGeistRaus(car) {
+    if (!knockoutLaeuft || !car || !car.ghost || car.ghost.eliminated) return;
+    car.ghost.eliminated = true;
+    if (typeof stopGhost === 'function') stopGhost(car);
+    knockoutGeister = knockoutGeisterZaehlen();
+    if (typeof playTone === 'function') {   // positiver Ton
+      playTone(880, 0.06, 'sine', 0.2);
+      setTimeout(() => playTone(1320, 0.09, 'sine', 0.2), 45);
+    }
+    showHudToast('Geist raus · noch ' + knockoutGeister + ' Geister');
+    knockoutPruefen();
+  }
+  // Ein Mensch verliert ein Leben (Abkommen von der Bahn).
+  function knockoutLebenVerlieren(wer) {
+    if (!knockoutLaeuft) return;
+    if (wer === 2) knockoutLeben2 = Math.max(0, knockoutLeben2 - 1);
+    else knockoutLeben = Math.max(0, knockoutLeben - 1);
+    showHudToast('Leben ' + (wer === 2 ? '2' : '1') + ': noch ' + (wer === 2 ? knockoutLeben2 : knockoutLeben));
+    knockoutPruefen();
+  }
+  // Ende: alle Geister raus -> Sieg; alle Menschen raus -> Niederlage.
+  function knockoutPruefen() {
+    if (!knockoutLaeuft) return;
+    const menschen = (typeof zweiSpieler !== 'undefined' && zweiSpieler) ? 2 : 1;
+    const menschenRaus = knockoutLeben <= 0 && (menschen < 2 || knockoutLeben2 <= 0);
+    if (knockoutGeister <= 0) knockoutEnde('menschen');
+    else if (menschenRaus) knockoutEnde('geister');
+  }
+  function knockoutEnde(sieger) {
+    if (!knockoutLaeuft || knockoutSieger) return;
+    knockoutSieger = sieger;
+    knockoutLaeuft = false;
+    if (sieger === 'menschen') {
+      if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare();
+      showHudToast('Knockout: Menschen gewinnen!');
+    } else {
+      if (typeof playTone === 'function') {   // dunkler Abwaertston
+        playTone(200, 0.12, 'square', 0.16);
+        setTimeout(() => playTone(140, 0.16, 'square', 0.14), 70);
+        setTimeout(() => playTone(110, 0.2, 'square', 0.12), 160);
+      }
+      showHudToast('Knockout: Geister gewinnen.');
+    }
+    if (typeof finishRace === 'function') finishRace(false);
+  }
+
+  // ---- Demolition-Derby-Wertung (experimentell) ----
+  // Sieg nach Kills (meiste Abschuesse). Health 0-100; frontal -10 %, von der Seite gerammt
+  // -20 %. Bei 0 % bleibt das Auto stehen, die Lichter flackern nur noch. Geister haben
+  // ebenfalls Health.
+  function derbyGeisterZaehlen() {
+    let n = 0;
+    for (const c of garage) if (c && c.role === 'ghost' && c.ghost && !c.ghost.derbyAus) n++;
+    return n;
+  }
+  // Schaden fuer ein Derby-Auto (wer 1/2 = Spieler, wer = car-Objekt = Geist). `schuetze`
+  // ist der Urheber (1 oder 2) fuer die Abschuss-Zuschreibung.
+  function derbySchaden(wer, wert, schuetze) {
+    if (!derbyLaeuft) return;
+    let car = null;
+    if (wer === 1) { derbyHealth = Math.max(0, derbyHealth - wert); if (derbyHealth <= 0 && !derbyTot1) { derbyTot1 = true; physEngine.state.speedKmh = 0; } }
+    else if (wer === 2) { derbyHealth2 = Math.max(0, derbyHealth2 - wert); if (derbyHealth2 <= 0 && !derbyTot2) { derbyTot2 = true; physEngine2.state.speedKmh = 0; } }
+    else if (wer && wer.ghost) { car = wer; }
+    if (car) {
+      car.ghost.derbyHealth = Math.max(0, (car.ghost.derbyHealth || DERBY_MAX) - wert);
+      if (car.ghost.derbyHealth <= 0 && !car.ghost.derbyAus) derbyGeistRaus(car, schuetze);
+    }
+    derbyPruefen();
+  }
+  // Ein Geist ist ausgeschaltet: Abschuss fuer den Spieler, der ihn getroffen hat.
+  function derbyGeistRaus(car, schuetze) {
+    if (!car || !car.ghost || car.ghost.derbyAus) return;
+    car.ghost.derbyAus = true;
+    if (typeof stopGhost === 'function') stopGhost(car);
+    if (schuetze === 2) derbyKills2++; else derbyKills++;
+    if (typeof playTone === 'function') {   // positiver Ton fuer den Abschuss
+      playTone(880, 0.06, 'sine', 0.2);
+      setTimeout(() => playTone(1320, 0.09, 'sine', 0.2), 45);
+    }
+    showHudToast('Geist aus · Kills ' + derbyKills);
+    derbyPruefen();
+  }
+  // Aufprall-Schaden fuer den Spieler (head-on 10 %, sonst 20 %).
+  function derbyAufprall(wer) {
+    if (!derbyLaeuft) return;
+    const frontal = derbyFrontal();
+    derbySchaden(wer, frontal ? 10 : 20);
+  }
+  // Head-on, wenn der Gyro stark nach vorne ausschlaegt (x-Achse dominiert). Sonst Seite/Ramme.
+  function derbyFrontal() {
+    if (typeof gyroRaw !== 'undefined' && gyroRaw) {
+      return Math.abs(gyroRaw.x) >= Math.abs(gyroRaw.y) * 1.3;
+    }
+    return false;
+  }
+  // Ende: der Spieler mit den meisten Kills gewinnt. Bei Gleichstand: der mit mehr Health.
+  function derbyPruefen() {
+    if (!derbyLaeuft) return;
+    const geister = derbyGeisterZaehlen();
+    const geistKills = Math.max(0, ...garage.filter(c => c.role === 'ghost' && c.ghost)
+      .map(c => c.ghost.derbyKills || 0));
+    // Rennen endet, wenn nur noch einer faehrt (alle anderen raus) ODER ein Geist alle Kills
+    // hat. Einfachheit: Ende, wenn ein menschlicher Fahrer 0 Health hat und alle Geister raus
+    // sind, oder wenn alle Gegner raus sind.
+    const alleGeister = geister <= 0;
+    const p1Aus = derbyHealth <= 0, p2Aus = derbyHealth2 <= 0;
+    const alleMenschen = (typeof zweiSpieler !== 'undefined' && zweiSpieler) ? (p1Aus && p2Aus) : p1Aus;
+    // KILLS-ZIEL (v0.8.126, Voreinstellung 1): wer das Ziel erreicht, beendet das Derby sofort.
+    const ziel = raceLimit;
+    if (ziel > 0) {
+      if (derbyKills >= ziel) { derbyEnde('p1'); return; }
+      if (typeof zweiSpieler !== 'undefined' && zweiSpieler && derbyKills2 >= ziel) { derbyEnde('p2'); return; }
+    }
+    if (alleGeister) {
+      // Sieger nach Kills (dann Health als Tiebreaker).
+      const k = [['p1', derbyKills, derbyHealth], ['p2', derbyKills2, derbyHealth2]];
+      k.sort((a, b) => b[1] - a[1] || b[2] - a[2]);
+      derbyEnde(k[0][0]);
+    } else if (alleMenschen) {
+      derbyEnde('geist');
+    }
+  }
+  function derbyEnde(sieger) {
+    if (!derbyLaeuft || derbySieger) return;
+    derbySieger = sieger; derbyLaeuft = false;
+    if (sieger === 'p1') { if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare(); showHudToast('Derby: Spieler 1 gewinnt!'); }
+    else if (sieger === 'p2') { if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare(); showHudToast('Derby: Spieler 2 gewinnt!'); }
+    else { if (typeof playTone === 'function') { playTone(200, 0.12, 'square', 0.16); setTimeout(() => playTone(140, 0.16, 'square', 0.14), 70); setTimeout(() => playTone(110, 0.2, 'square', 0.12), 160); } showHudToast('Derby: Geist gewinnt.'); }
+    if (typeof finishRace === 'function') finishRace(false);
+  }
+  // ---- DERBY-COCKPIT (v0.8.126) ----
+  // BESTELLT: "nur der Mittelteil (Gang, Tempo, Drehzahl), die Lichter darueber und
+  // Health-Balken aller Teilnehmer." Die Klasse `derby` auf #race-dash blendet die
+  // Seitenteile und die Reifenleiste aus (CSS in 00-index.head.html); hier wird nur der
+  // Balkeninhalt geschrieben. Aufgerufen aus updateRaceScreen() (50-drive.js).
+  function derbyCockpitMalen() {
+    const dash = $('race-dash');
+    const host = $('derby-health');
+    if (!dash || !host) return;
+    const aktiv = derbyLaeuft && (raceState === 'racing' || raceState === 'countdown');
+    dash.classList.toggle('derby', !!aktiv);
+    if (!aktiv) { host.innerHTML = ''; return; }
+    const nameFarbe = (c) => {
+      try { return { name: garageLabel(c), farbe: carColor(c).hex }; }
+      catch (e) { return { name: '?', farbe: '#8b99b4' }; }
+    };
+    const teile = [];
+    teile.push({ name: 'Du', farbe: '#2ee06a', health: derbyHealth, kills: derbyKills,
+                 aus: derbyHealth <= 0 });
+    if (typeof zweiSpieler !== 'undefined' && zweiSpieler) {
+      teile.push({ name: 'Spieler 2', farbe: '#ffb02e', health: derbyHealth2, kills: derbyKills2,
+                   aus: derbyHealth2 <= 0 });
+    }
+    for (const c of garage) {
+      if (c && c.role === 'ghost' && c.ghost) {
+        const nf = nameFarbe(c);
+        teile.push({ name: nf.name, farbe: nf.farbe, health: c.ghost.derbyHealth || 0,
+                     kills: c.ghost.derbyKills || 0, aus: !!c.ghost.derbyAus });
+      }
+    }
+    const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    host.innerHTML = teile.map((t) =>
+      '<div class="derby-balken' + (t.aus ? ' aus' : '') + '">'
+      + '<div class="db-kopf"><span class="db-name" style="color:' + esc(t.farbe) + '">'
+      + esc(t.name) + '</span><span class="db-wert">' + Math.round(t.health) + '% · ' + t.kills
+      + '</span></div>'
+      + '<div class="db-leiste"><i style="width:' + Math.max(0, Math.min(100, t.health))
+      + '%;background:' + esc(t.farbe) + '"></i></div></div>').join('');
+  }
+  // Im Derby: nahe Geister werden vom fahrenden Spieler gerammt (sie verlieren 20 % Health).
+  const DERBY_RAM_TILES = 4, DERBY_RAM_KMH = 30;
+  function derbyTick() {
+    if (!derbyLaeuft || raceState !== 'racing') return;
+    const ort = typeof spielerOrtGes === 'function' ? spielerOrtGes() : null;
+    const tempo = Math.abs(physEngine.state.speedKmh);
+    if (ort === null) return;
+    for (const c of garage) {
+      if (c.role !== 'ghost' || !c.ghost || c.ghost.derbyAus) continue;
+      const dist = Math.abs(ghostOrtGes(c) - ort);
+      if (dist < DERBY_RAM_TILES && tempo > DERBY_RAM_KMH) derbySchaden(c, 20, 1);
+    }
+  }
+
   // ---- Die erste Bewegung nach Gruen -------------------------------------------------
   //
   // BESTELLT: "Zeit soll anfangen zu zaehlen, sobald das erste Auto sich in Bewegung
@@ -152,6 +379,54 @@
     return false;
   }
 
+  // ---- FRUEHSTART: kurz ausbremsen statt Zeitstrafe (v0.8.38/39) -----------------------
+  // BESTELLT: "Bei allen Rennen / Challenges mit Ampel ... fuer Fruehstarts - mach keine
+  // Zeitstrafe, sondern bremse das Auto dann nochmal kurz ab, nachdem es angefahren ist."
+  // Faehrt ein Auto waehrend des Countdowns an (dieselbe Schwelle wie raceMoveErkannt), ist es
+  // ein Fruehstart. Die Ampel laeuft weiter. Nach Gruen, sobald das Auto faehrt, gibt es 2 s
+  // kein Gas und eine Bremsung (50-drive.js, physicsStep). Je Auto getrennt.
+  const FRUEHSTART_KMH = 3, FRUEHSTART_STRAFE_MS = 2000, FRUEHSTART_BREMSE = 0.6;
+  const fruehstart = { 1: { frueh: false, warten: false, bis: 0 }, 2: { frueh: false, warten: false, bis: 0 } };
+  let fruehstartTimer = null;
+  function fruehstartTempo(w) {
+    try { return Math.abs((w === 2 ? physEngine2 : physEngine).state.speedKmh || 0); } catch (e) { return 0; }
+  }
+  function fruehstartReset() {
+    if (fruehstartTimer) { clearInterval(fruehstartTimer); fruehstartTimer = null; }
+    [1, 2].forEach((w) => Object.assign(fruehstart[w], { frueh: false, warten: false, bis: 0 }));
+  }
+  function fruehstartBeginnen() {
+    fruehstartReset();
+    fruehstartTimer = setInterval(() => {
+      if (raceState !== 'countdown') return;
+      [1, 2].forEach((w) => {
+        if (w === 2 && !(zweiSpieler && playerCar2)) return;
+        if (!fruehstart[w].frueh && fruehstartTempo(w) > FRUEHSTART_KMH) {
+          fruehstart[w].frueh = true;
+          showHudToast(w === 2 ? t('Frühstart Spieler 2!') : t('Frühstart!'));
+        }
+      });
+    }, 100);
+  }
+  function fruehstartGruen() {
+    if (fruehstartTimer) { clearInterval(fruehstartTimer); fruehstartTimer = null; }
+    [1, 2].forEach((w) => { if (fruehstart[w].frueh) fruehstart[w].warten = true; });
+  }
+  // Aus dem Fahrtakt: gilt die Strafe fuer Auto w gerade? Startet sie, sobald das Auto nach
+  // Gruen faehrt.
+  function fruehstartStrafeAktiv(w) {
+    const f = fruehstart[w];
+    if (!f) return false;
+    const jetzt = Date.now();
+    if (f.warten && (raceState === 'racing' || raceState === 'finishing') && fruehstartTempo(w) > FRUEHSTART_KMH) {
+      f.warten = false;
+      f.bis = jetzt + FRUEHSTART_STRAFE_MS;
+      showHudToast(w === 2 ? t('Frühstart Spieler 2: Strafe') : t('Frühstart: Strafe'));
+    }
+    return jetzt < f.bis;
+  }
+  function fruehstartGab(w) { const f = fruehstart[w || 1]; return !!(f && f.frueh); }
+
   function raceClockTick() {
     if (raceState !== 'racing') return;
     if (raceAwaitingMove) {
@@ -166,6 +441,7 @@
     }
     maybeSwitchRaceWeather();
     wxWechselTick();
+    if (typeof derbyTick === 'function') derbyTick();
     const el = $('race-clock');
     if (el) {
       if (!RACE_MODES[raceMode].timed) {
@@ -242,7 +518,7 @@
     playTone(1046, 0.30, 'square', 0.22);
     showHudToast(t('Frei, volle Fahrt!'));
     log('Einführungsrunde beendet, Rennen freigegeben.', 'info');
-    $('race-status').textContent = `${RACE_MODES[raceMode].label} läuft`;
+    $('race-status').textContent = t('{m} läuft').replace('{m}', t(RACE_MODES[raceMode].label));
     setTimeout(() => setRaceLights(0), 900);
   }
 
@@ -339,7 +615,8 @@
     // eine Art Tabelle". Bisher gab es Sektoren nur fuer das Spielerauto (sectorCrossed);
     // hier zaehlte bei eingeschalteten Sektoren JEDE Ueberfahrt als Runde. Jetzt dieselbe
     // Regel je Auto: sectorCount Kontakte sind eine Runde, dazwischen Sektorgrenzen.
-    if (sectorCount > 1) {
+    const sektorZahl = sektorZiel();
+    if (sektorZahl > 1) {
       if (!r.sek) r.sek = { start: null, zeiten: [], hist: [], n: 0 };
       const k = r.sek;
       if (k.start === null) k.start = r.lapStart !== null ? r.lapStart : now;
@@ -349,7 +626,7 @@
       }
       k.start = now;
       if (r.lapStart === null) r.lapStart = now;
-      if (k.n < sectorCount) return;
+      if (k.n < sektorZahl) return;
       k.hist.push(k.zeiten.slice());
       k.zeiten = [];
       k.n = 0;
@@ -360,7 +637,11 @@
       r.laps.push({ lap: r.laps.length + 1, ms, off: offs });
       if (typeof playerCar2 !== 'undefined' && car === playerCar2) {
         const beste2 = r.laps.every((l) => l.ms >= ms);
-        playLapChime(beste2 && r.laps.length > 1, P2_TON_HOEHE);
+        const istBest2 = beste2 && r.laps.length > 1;
+        playLapChime(istBest2, P2_TON_HOEHE);
+        // BESTELLT: "rundenzeiten von beiden ansagen". Spieler 2 bekommt dieselbe Ansage
+        // wie Spieler 1, nur mit dem hoeheren Ton.
+        speakLap(ms, istBest2);
       }
       // Genau hier liegen Rundenzeit und Abgangszahl zusammen vor, und beides braucht die
       // Annahmeregel des Lernens: schneller UND heil. Eine Runde ist eine Auswertung.
@@ -631,6 +912,25 @@
     if (beste) stimme(f0 * 2, 0.34);
   }
 
+  // Ungueltige Runde (Challenge: Strecke nicht erkannt oder zu schnell). Ein tiefer, dumpfer
+  // Ton statt des hellen Runden-/Bestzeit-Klangs - so hoert man sofort, dass die Runde nicht
+  // zaehlt, ohne dass ein Fehler-Dialog den Fahrtablauf stoert.
+  function playLapChimeUngueltig() {
+    if (!soundEnabled || !audioCtx) return;
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(190, t);
+    o.frequency.linearRampToValueAtTime(140, t + 0.22);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.linearRampToValueAtTime(0.16, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t);
+    o.stop(t + 0.3);
+  }
+
   // ---- Tempolimit: eine Stelle, drei Quellen ----
   // Boxengasse, gelbe Flagge und Einfuehrungsrunde wollen alle das Tempo begrenzen, und
   // vorher schrieb jede von ihnen direkt in speedLimitFactor. Wer waehrend einer gelben
@@ -747,11 +1047,11 @@
       // Die beste je gefahrene Zeit JE SEKTOR wird mitgerechnet und hervorgehoben - das ist
       // die Zahl, wegen der man Sektorzeiten ueberhaupt ansieht: sie sagt, WO eine Runde
       // verloren ging, und nicht nur dass sie es tat.
-      const mehrere = typeof sectorCount === 'number' && sectorCount > 1
+      const mehrere = typeof sectorCount === 'number' && sektorZiel() > 1
                       && sectorHistory.length > 0;
       const besteS = [];
       if (mehrere) {
-        for (let i = 0; i < sectorCount; i++) {
+        for (let i = 0; i < sektorZiel(); i++) {
           const werte = sectorHistory.map((r) => r[i]).filter((v) => v !== undefined);
           besteS.push(werte.length ? Math.min.apply(null, werte) : null);
         }
@@ -847,6 +1147,7 @@
   // schadet nicht: nach dem ersten Umschalten liegt wxWechselAt in der Zukunft.
   setInterval(() => { wxWechselTick(); }, 1000);
   function wxWechselTick() {
+    if (mpWetter) { mpWetterTick(); return; }
     if (raceWxStart !== 'wechsel' || wxWechselAt === null) return;
     if (Date.now() < wxWechselAt) return;
     const warNass = weather === 'rain';
@@ -857,7 +1158,48 @@
     wxWechselPlanen(!warNass);
   }
 
+  // ---- GEMEINSAMER WETTERPLAN (v0.8.42) ----
+  // BESTELLT: "Im Multiplayer muss das Wetter fuer das eingestellte Rennen bei anderen Spielern
+  // synchronisiert sein." Das startende Telefon wuerfelt den Plan mit denselben Regeln wie hier
+  // (wechselhaft: trocken 60-180 s, Regen 30-90 s; einmaliger Wechsel im mittleren Drittel) und
+  // schickt ihn mit; alle Telefone folgen ihm ab derselben Gruenzeit, statt selbst zu wuerfeln.
+  let mpWetter = null;   // { gruen, liste: [{ abMs, wetter }], i }
+  function wetterPlanBauen() {
+    const liste = [];
+    const zeitRennen = RACE_MODES[raceMode].timed && raceMode !== 'laps';
+    if (raceWxStart === 'wechsel') {
+      const total = zeitRennen ? raceLimit * 60000 : 2 * 3600000;
+      let t = 0, nass = false, erste = true;
+      while (t < total && liste.length < 200) {
+        const min = nass ? WX_REGEN_MIN_MS : WX_TROCKEN_MIN_MS;
+        const max = nass ? WX_REGEN_MAX_MS : WX_TROCKEN_MAX_MS;
+        let d = min + Math.random() * (max - min);
+        if (erste && zeitRennen) d = Math.min(d, raceLimit * 60000 * 0.5);
+        erste = false;
+        t += d;
+        nass = !nass;
+        liste.push({ abMs: Math.round(t), wetter: nass ? 'rain' : 'dry' });
+      }
+    } else if (raceWxChange) {
+      const total = zeitRennen ? raceLimit * 60000 : 5 * 60000;
+      liste.push({ abMs: Math.round(total * (0.35 + Math.random() * 0.3)), wetter: raceWxStart === 'rain' ? 'dry' : 'rain' });
+    }
+    return liste;
+  }
+  function mpWetterTick() {
+    if (!mpWetter || (raceState !== 'racing' && raceState !== 'finishing')) return;
+    const jetzt = Date.now();
+    while (mpWetter.i < mpWetter.liste.length && mpWetter.gruen + mpWetter.liste[mpWetter.i].abMs <= jetzt) {
+      const e = mpWetter.liste[mpWetter.i++];
+      if (e.wetter !== weather) {
+        setWeather(e.wetter);
+        showHudToast(e.wetter === 'rain' ? t('Es fängt an zu regnen') : t('Es trocknet ab'));
+      }
+    }
+  }
+
   function maybeSwitchRaceWeather() {
+    if (mpWetter) { mpWetterTick(); return; }
     if (raceWxSwitchAt === null || Date.now() < raceWxSwitchAt) return;
     raceWxSwitchAt = null;   // once per race
     const next = weather === 'rain' ? 'dry' : 'rain';
@@ -1005,11 +1347,8 @@
     raceGridOrder = raceGridCars().map(c => String(c.device.id));
   }
 
-  function renderRaceGrid() {
-    const wrap = $('race-grid-wrap'), host = $('race-grid');
-    if (!wrap || !host) return;
-    wrap.style.display = raceFlying ? '' : 'none';
-    if (!raceFlying) return;
+  function raceGridZeilen(host) {
+    if (!host) return;
     const cars = raceGridCars();
     if (!cars.length) {
       host.innerHTML = '<p class="muted" style="margin:0">Keine Autos verbunden.</p>';
@@ -1038,7 +1377,7 @@
           if (to < 0 || to >= order.length) return;
           order.splice(to, 0, order.splice(from, 1)[0]);
           raceGridOrder = order;
-          renderRaceGrid();
+          raceGridZeilen(host);
         };
       });
       const handle = row.querySelector('.grid-handle');
@@ -1060,10 +1399,86 @@
         if (from < 0 || to < 0) return;
         order.splice(to, 0, order.splice(from, 1)[0]);
         raceGridOrder = order;
-        renderRaceGrid();
+        raceGridZeilen(host);
       });
       host.appendChild(row);
     });
+  }
+
+  function renderRaceGrid() {
+    const wrap = $('race-grid-wrap'), host = $('race-grid');
+    if (!wrap || !host) return;
+    wrap.style.display = raceFlying ? '' : 'none';
+    if (!raceFlying) return;
+    raceGridZeilen(host);
+  }
+
+  // ---- AUTOS IN POSITION (v0.8.52): Deckfenster vor dem Countdown ----------------------
+  // BESTELLT: "Vor jedem Rennen ein Fenster, das alle teilnehmenden Autos und ihre
+  // Reihenfolge zeigt, mit der Moeglichkeit die Reihenfolge zu aendern." Titel oben,
+  // Streckenbild, Liste mit Sortierpfeilen, Start-Knopf unten. Der Start ruft dann
+  // startRaceCountdown() - das eigentliche Rennen beginnt erst nach dem Klick.
+  let raceGridWeiter = null;
+  function gridBildMalen() {
+    const host = $('grid-bild');
+    if (!host) return;
+    const bahn = ($('setting-ontrack') || {}).checked;
+    if (bahn) {
+      // Auf der Bahn: das Layout aus Editor oder Challenge (renderTrackPreview).
+      const tiles = currentTrackTiles;
+      if (tiles && tiles.length >= 2) {
+        const r = renderTrackPreview(tiles, null, { detailed: true, cars: [] });
+        if (host.innerHTML !== r.html) host.innerHTML = r.html;
+      } else if (host.innerHTML) host.innerHTML = '';
+      return;
+    }
+    // Frei: das hochgeladene Streckenfoto, sonst das Bordstein-Foto.
+    const foto = konsoleFoto();
+    host.innerHTML = '';
+    const img = document.createElement('img');
+    img.alt = 'Streckenfoto';
+    img.src = foto || 'img/strecke-frei.jpg';
+    host.appendChild(img);
+  }
+  function raceGridAnzeigen(weiter) {
+    raceGridWeiter = typeof weiter === 'function' ? weiter : null;
+    const gs = $('race-gridscreen');
+    if (!gs) { if (raceGridWeiter) raceGridWeiter(); return; }
+    raceGridZeilen($('grid-liste'));
+    gridBildMalen();
+    if ($('grid-kopf-info')) $('grid-kopf-info').textContent = '';
+    gs.hidden = false;
+  }
+  function raceGridStart() {
+    const gs = $('race-gridscreen');
+    if (gs) gs.hidden = true;
+    syncRaceGridOrder();
+    const w = raceGridWeiter; raceGridWeiter = null;
+    if (w) w();
+  }
+  // BESTELLT: "X auf dem Controller soll auf dem Autos-in-Position-Schirm funktionieren".
+  // flagTasteTick() fragt das ab, bevor es den normalen Cockpit-Weg (Boxenstopp/Gelb) nimmt.
+  function raceGridOffen() {
+    const gs = $('race-gridscreen');
+    return !!(gs && !gs.hidden);
+  }
+  function raceGridAbbrechen() {
+    const gs = $('race-gridscreen');
+    if (gs) gs.hidden = true;
+    raceGridWeiter = null;
+    // Hing die Challenge gerade in der Ampel-Phase (Autos-in-Position war ihr Start),
+    // bricht Abbrechen sie ab - sonst bliebe sie auf Stillstand warten.
+    if (typeof challengeAbbrechen === 'function' && typeof challengeLaeuft === 'function'
+        && challengeLaeuft()) challengeAbbrechen();
+  }
+  if ($('grid-start')) $('grid-start').addEventListener('click', raceGridStart);
+  if ($('grid-abbrechen')) $('grid-abbrechen').addEventListener('click', raceGridAbbrechen);
+  // BESTELLT: "eine option, dass die autos selbst in position fahren ... (als experimentell
+  // kennzeichnen)". Der Schalter setzt gridSelbst, das die Ghosts auf ihre Startplaetze
+  // (abwechselnd links/rechts, max Querlage) faehrt statt sie von Hand aufzustellen.
+  if ($('grid-selbst')) {
+    gridSelbst = $('grid-selbst').checked;
+    $('grid-selbst').addEventListener('change', (e) => { gridSelbst = e.target.checked; });
   }
 
   $('race-flying').addEventListener('change', (e) => {
@@ -1072,7 +1487,17 @@
     renderRaceGrid();
   });
 
-  function startRaceCountdown() {
+  // ---- AMPEL NACH FRIST (v0.8.42) ----
+  // BESTELLT: "Im Multiplayer muss die Ampel ueberall gleichzeitig kommen." Die Lichter haengen
+  // an festen Zeitpunkten vor Gruen statt an einem 1-s-Intervall - so kommt Gruen auf allen
+  // Telefonen im selben Moment, wenn alle dieselbe (abgeglichene) Gruenzeit haben. Lokal ist
+  // Gruen einfach jetzt + 3 s.
+  function ampelZeitplan(gruen) {
+    return [[gruen - 3000, 3], [gruen - 2000, 2], [gruen - 1000, 1], [gruen, 0]];
+  }
+  // gruenZiel: lokale Uhrzeit (ms) fuer Gruen, sonst in 3 s. mpPlan: Wetterplan und Wind eines
+  // gemeinsamen Mehrspieler-Rennens (97-sessions.js).
+  function startRaceCountdown(gruenZiel, mpPlan) {
     // launchGhosts() is called from the green-light step below, not here.
     if (raceState !== 'idle' && raceState !== 'finished') return; // ignore while armed/racing
     // EINSCHALTRAMPE: der Schirm zieht in 300 ms von schwarz auf Wert hoch, wie ein TFT beim
@@ -1100,6 +1525,19 @@
     // hier direkt danach steht es, weil beides zur selben "was fuer ein Rennen wird das"-
     // Ansage am Start gehoert.
     wxWindWuerfeln();
+    const gruenBei = typeof gruenZiel === 'number' && gruenZiel > Date.now() + 200 ? gruenZiel : null;
+    // Mehrspieler: Wind und Wetterplan fuer alle gleich (v0.8.42).
+    mpWetter = null;
+    if (mpPlan && gruenBei) {
+      if (mpPlan.wind && Number.isFinite(mpPlan.wind.x)) { WX_WIND.x = mpPlan.wind.x; WX_WIND.y = mpPlan.wind.y; }
+      mpWetter = { gruen: gruenBei, liste: Array.isArray(mpPlan.wetterPlan) ? mpPlan.wetterPlan : [], i: 0 };
+    }
+    // BESTELLT (Balkonia): ein Challenge-Wetterfenster (z. B. "Regen von Minute 2 bis 4")
+    // laeuft ueber denselben Plan-Mechanismus, den auch der Mehrspieler benutzt. Nur wenn
+    // kein Mehrspieler-Plan vorliegt und die Challenge einen mitbringt.
+    if (chWetterPlan && gruenBei) {
+      mpWetter = { gruen: gruenBei, liste: chWetterPlan, i: 0 };
+    }
     fuel = Math.max(0, Math.min(100, raceFuelStartL / FUEL_TANK_LITERS * 100));
     // BEIDE Autos mit derselben Startmenge und beide schadenfrei. Ein Rennen, in dem das
     // eine Auto voll und das andere halb leer startet, waere kein Rennen - das ist die
@@ -1143,7 +1581,7 @@
     // losfahren muesste. Drei Sekunden Warten vor einer Trainingsrunde sind nur Wartezeit.
     // CHALLENGE "Beste Runde" laeuft als freies Training, aber MIT Ampel: "Auto muss stehen,
     // dann kommt eine Ampel" (72-challenges.js).
-    if (raceMode === 'practice' && !(typeof challengeLaeuft === 'function' && challengeLaeuft())) {
+    if (raceMode === 'practice' && !gruenBei && !(typeof challengeLaeuft === 'function' && challengeLaeuft())) {
       raceState = 'racing';
       $('race-start-btn').disabled = true;
       $('race-stop-btn').disabled = false;
@@ -1162,28 +1600,33 @@
       finishSeitenZaehlerZuruecksetzen();
     }
     raceState = 'countdown';
+    fruehstartBeginnen();
     $('race-start-btn').disabled = true;
     // Abbrechen muss schon im Countdown gehen: requestRaceStop() raeumt den Zaehler mit
     // auf, und ein Countdown, aus dem man nicht herauskommt, ist eine Falle.
     $('race-stop-btn').disabled = false;
     $('race-status').textContent = 'Countdown…';
-    let step = 3;
-    setRaceLights(step);
-    playTone(440, 0.18, 'square', 0.18);
-    clearInterval(raceCountdownTimer);
-    raceCountdownTimer = setInterval(() => {
-      step--;
-      if (step > 0) {
-        setRaceLights(step);
-        playTone(440 + (3 - step) * 60, 0.18, 'square', 0.18);
-      } else {
-        clearInterval(raceCountdownTimer);
-        setRaceLights('go');
-        playTone(880, 0.35, 'square', 0.22);
-        raceGreen();
-        setTimeout(() => setRaceLights(0), 900);
+    const plan = ampelZeitplan(gruenBei || Date.now() + 3000);
+    clearTimeout(raceCountdownTimer);
+    const schritt = (k) => {
+      if (raceState !== 'countdown') return;
+      const [bei, stufe] = plan[k];
+      const warte = bei - Date.now();
+      if (warte > 4) { raceCountdownTimer = setTimeout(() => schritt(k), warte); return; }
+      // Kommt der Plan spaet an, werden verpasste Lichter uebersprungen - nur Gruen zaehlt.
+      if (stufe > 0 && warte < -400 && k + 1 < plan.length) { schritt(k + 1); return; }
+      if (stufe > 0) {
+        setRaceLights(stufe);
+        playTone(440 + (3 - stufe) * 60, 0.18, 'square', 0.18);
+        schritt(k + 1);
+        return;
       }
-    }, 1000);
+      setRaceLights('go');
+      playTone(880, 0.35, 'square', 0.22);
+      raceGreen();
+      setTimeout(() => setRaceLights(0), 900);
+    };
+    schritt(0);
   }
 
   // Alles, was beim Gruen passiert. Eine Funktion, zwei Aufrufer: der Countdown und das
@@ -1192,6 +1635,7 @@
     // A flying start goes to the formation lap first: the cars roll at pit-lane speed
     // and no laps count until the field crosses the line.
     raceFormationLap = raceFlying;
+    fruehstartGruen();
     // FRISCH ZAEHLEN. Ohne das traegt ein zweites Rennen die Ueberfahrten des ersten mit
     // sich, und dann ist die Einfuehrungsrunde beim naechsten Start sofort vorbei.
     formationZaehler = new Map();
@@ -1205,6 +1649,24 @@
     // In einer Challenge faehrt man allein: keine Ghosts.
     const imChallenge = typeof challengeLaeuft === 'function' && challengeLaeuft();
     if (!imChallenge) launchGhosts();   // green means green for everyone
+    // Knockout-Wertung (experimentell): Leben und Geisterstand zuruecksetzen. Geister zaehlen
+    // nach launchGhosts(), weil sie erst dort gestartet werden.
+    if (raceMode === 'knockout') {
+      knockoutLeben = KO_LEBEN; knockoutLeben2 = KO_LEBEN;
+      knockoutSieger = null; knockoutLaeuft = true;
+      for (const c of garage) if (c && c.ghost) c.ghost.eliminated = false;
+      knockoutGeister = knockoutGeisterZaehlen();
+      showHudToast('Knockout: ' + knockoutGeister + ' Geister · ' + KO_LEBEN + ' Leben');
+    }
+    if (raceMode === 'derby') {
+      derbyLaeuft = true; derbySieger = null; derbyTitel = null;
+      derbyHealth = DERBY_MAX; derbyHealth2 = DERBY_MAX;
+      derbyKills = 0; derbyKills2 = 0; derbyTot1 = false; derbyTot2 = false;
+      for (const c of garage) if (c && c.ghost) {
+        c.ghost.derbyHealth = DERBY_MAX; c.ghost.derbyAus = false; c.ghost.derbyKills = 0;
+      }
+      showHudToast('Derby: ' + derbyGeisterZaehlen() + ' Gegner · Health 100');
+    }
     if (raceFormationLap) {
       // formationPace() und nicht PIT_SPEED_FACTOR: der Deckel muss zum Ziel des
       // Autopiloten passen, sonst regelt der gegen eine Wand.
@@ -1231,7 +1693,7 @@
     raceClockTimer = setInterval(raceClockTick, 250);
     $('race-status').textContent = raceFormationLap
       ? 'Einführungsrunde, Limit bis Start/Ziel'
-      : RACE_MODES[raceMode].label + ' läuft';
+      : t('{m} läuft').replace('{m}', t(RACE_MODES[raceMode].label));
     $('race-stop-btn').disabled = false;
     updateRaceActButtons();
   }
@@ -1273,6 +1735,8 @@
   // requestRaceStop() uebergibt ausdruecklich false.
   function finishRace(auslaufen) {
     raceState = 'finished';
+    fruehstartReset();
+    mpWetter = null;
     // Die laufende Runde festhalten und die Uhr anhalten. Ohne das Nullsetzen von
     // raceLapStart rechnet die Anzeige weiter gegen Date.now() und die Runde waechst nach
     // dem Ende einfach weiter.
@@ -1413,10 +1877,12 @@
     $('race-start-btn').textContent = `\u{1F3C1} ${m.label} starten`;
     // Free practice has no limit, so the field would be a lie. Disabled, not hidden:
     // a control that vanishes makes people wonder whether they broke something.
-    $('race-limit').disabled = !m.timed;
+    // DERBY (v0.8.126): das Limit ist das KILLS-ZIEL und wird deshalb aktiviert - sonst
+    // koennte man es nicht auf 1 setzen. Die Voreinstellung setzt der Moduswechsel unten.
+    $('race-limit').disabled = !m.timed && raceMode !== 'derby';
     // 0.7, not 0.45. On white 0.45 was a legible grey; on black it collapsed to 2.7:1,
     // and this label still has to be readable while it says which unit is NOT in use.
-    $('race-limit-label').style.opacity = m.timed ? '' : '0.7';
+    $('race-limit-label').style.opacity = (m.timed || raceMode === 'derby') ? '' : '0.7';
   }
   // Kacheln und Wetterknoepfe schreiben in das versteckte Auswahlfeld und loesen change
   // aus. Damit gibt es weiter genau EINE Stelle, die auf eine Aenderung reagiert, und die
@@ -1454,7 +1920,8 @@
   $('race-mode').addEventListener('change', (e) => {
     raceMode = e.target.value;
     // Sensible default per mode rather than carrying a minute count over into a lap count.
-    raceLimit = raceMode === 'laps' ? 10 : 2;
+    // DERBY (v0.8.126): das Limit ist das KILLS-ZIEL, Voreinstellung 1.
+    raceLimit = raceMode === 'laps' ? 10 : (raceMode === 'derby' ? 1 : 2);
     $('race-limit').value = raceLimit;
     applyRaceModeUi();
   });
@@ -1482,6 +1949,26 @@
     const v = parseInt(e.target.value, 10);
     if (Number.isFinite(v) && v >= 1) raceFuelStartL = Math.min(FUEL_TANK_LITERS, v);
   });
+  // Zahleneingaben wie "Meine Teile": Minus/Plus-Knoepfe neben dem Feld schalten je einen
+  // Schritt (stepUp/stepDown respektiert min/max/step) und loesen dasselbe 'input'-Ereignis
+  // aus wie getippte Werte - die Listener oben bleiben die einzige Wahrheit.
+  function numSteuer(id) {
+    const input = $(id);
+    const steuer = input && input.closest('.num-steuer');
+    if (!steuer) return;
+    const steuern = (schritt) => {
+      if (schritt < 0) input.stepDown(); else input.stepUp();
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const minus = steuer.querySelector('.num-minus');
+    const plus = steuer.querySelector('.num-plus');
+    if (minus) minus.onclick = () => steuern(-1);
+    if (plus) plus.onclick = () => steuern(1);
+  }
+  numSteuer('race-limit');
+  numSteuer('race-pit-penalty');
+  numSteuer('race-fuel-start');
   applyRaceModeUi();
 
   // ---- Touch controls on the racing screen ----
@@ -1494,8 +1981,11 @@
     // Wartet eine Challenge noch auf Stillstand, bricht die Rennen-Taste sie ab, statt die Ampel
     // ohne Pruefung zu starten.
     if (typeof challengeToggle === 'function' && challengeToggle()) { updateRaceActButtons(); return; }
+    // Im Mehrspieler fragen: fuer alle zugleich oder nur fuer mich (97-sessions.js).
+    const laeuft = raceState === 'racing' || raceState === 'countdown' || raceState === 'finishing';
+    if (!laeuft && typeof mpRennenFrage === 'function' && mpRennenFrage()) { updateRaceActButtons(); return; }
     const live = raceState === 'racing' || raceState === 'countdown' || raceState === 'finishing';
-    if (live) requestRaceStop(); else startRaceCountdown();
+    if (live) requestRaceStop(); else raceGridAnzeigen(startRaceCountdown);
     updateRaceActButtons();
   }
   $('race-act-start').onclick = toggleRace;
@@ -1718,7 +2208,7 @@
   }
   setInterval(updateRaceActButtons, 400);
 
-  $('race-start-btn').onclick = startRaceCountdown;
+  $('race-start-btn').onclick = () => raceGridAnzeigen(startRaceCountdown);
   $('race-stop-btn').onclick = requestRaceStop;
   $('race-export-csv').onclick = () => {
     // Semicolon delimiter + comma decimals: opens directly (no import wizard) in a
@@ -1913,10 +2403,14 @@
       }
     }
 
+    // Werkstatt-Anzeigen: im Cockpit unsichtbar, also dort nicht bei jeder Meldung beschreiben.
+    const imCockpit = !!document.querySelector('#tab-race.active');
     const badge = $('dash-offtrack');
-    badge.textContent = dashOnMarker ? 'Über Muster' : 'Kein Muster';
-    badge.style.background = dashOnMarker ? 'rgba(70,209,127,.12)' : 'var(--panel-2)';
-    badge.style.borderColor = dashOnMarker ? 'var(--good)' : 'var(--border)';
+    if (!imCockpit) {
+      badge.textContent = dashOnMarker ? 'Über Muster' : 'Kein Muster';
+      badge.style.background = dashOnMarker ? 'rgba(70,209,127,.12)' : 'var(--panel-2)';
+      badge.style.borderColor = dashOnMarker ? 'var(--good)' : 'var(--border)';
+    }
 
     // Bytes 1 and 3 fluctuate only once the car moves and byte 3 flipped sign with turn
     // direction in one capture — hence "motion-ish". Unconfirmed.
@@ -2025,6 +2519,8 @@
       if (ms > 60 && ms < 20000) dashTileMs = dashTileMs ? dashTileMs * 0.7 + ms * 0.3 : ms;
     }
     dashTileAt = jetztT;
+    // Challenges: jedes bestaetigte Teil fuer die Rundenpruefung (72-challenges.js).
+    if (typeof challengeTeilGelesen === 'function') challengeTeilGelesen(type);
 
     // Guard 2 applies only to the two codes that trigger something irreversible; the
     // ordinary straight and curve codes may repeat as often as the track says.
@@ -2120,10 +2616,28 @@
     sectorTimes = [];
   }
 
+  // BESTELLT: "im editor weitere start/ziel geraden einbauen, die dann als sektor gelten".
+  // Die Zahl der Start/Ziel-Kacheln der Editor-Strecke bestimmt die Sektorzahl: die erste
+  // ist die Rundenlinie, die weiteren sind Sektorgrenzen (Zwischenzeit).
+  //
+  // Hat die Strecke MEHRERE Start/Ziel-Kacheln, gilt das Layout (Bahn-Modus, Editor).
+  // Sonst bleibt der manuelle Regler (sector-count) massgeblich - er deckt den
+  // Ausdruck-Modus ab, wo die Muster auf der Schiene liegen, und eine einzelne
+  // Start/Ziel-Kachel (jede Ueberfahrt eine Runde).
+  function sektorZiel() {
+    let n = 1;
+    if (typeof trackSektorAnzahl === 'function' && currentTrackTiles && currentTrackTiles.length) {
+      try { n = trackSektorAnzahl(currentTrackTiles); } catch (e) { n = 1; }
+    }
+    if (n > 1) return n;
+    return sectorCount > 1 ? sectorCount : 1;
+  }
+
   // Gibt true zurueck, wenn dieser Kontakt eine RUNDE vollendet - dann laeuft die normale
   // Rundenlogik. Sonst war es eine Sektorgrenze und die Runde laeuft weiter.
   function sectorCrossed(now) {
-    if (sectorCount <= 1) return true;
+    const ziel = sektorZiel();
+    if (ziel <= 1) return true;
     if (sectorStart === null) {
       // Der erste Kontakt ueberhaupt: er beginnt den ersten Sektor und ist noch keine
       // Sektorgrenze. Ohne diesen Fall waere der erste Sektor die Zeit seit dem Rennstart
@@ -2135,13 +2649,11 @@
     sectorTimes.push(now - sectorStart);
     sectorStart = now;
     sectorIndex += 1;
-    if (sectorIndex < sectorCount) {
+    if (sectorIndex < ziel) {
       renderSectors();
-      showHudToast('SEKTOR ' + sectorIndex + ': '
-                   + formatLapTime(sectorTimes[sectorTimes.length - 1]));
-      // Ein eigener, tieferer Ton fuer die Sektorgrenze: derselbe wie fuer die Runde waere
-      // eine Falschmeldung, denn die Runde ist nicht vorbei.
-      playTone(300, 0.07, 'sine', 0.12);
+      // BESTELLT: "zwischenzeit soll nicht angesagt werden". Die Sektorgrenze misst die
+      // Zwischenzeit still - kein Toast, kein Ton, keine Stimme. Die Zeiten stehen in der
+      // Sektorentabelle (renderSectors) und im Diagramm.
       return false;
     }
     // Runde voll.
@@ -2155,7 +2667,8 @@
   function renderSectors() {
     const host = $('sector-list');
     if (!host) return;
-    if (sectorCount <= 1) { host.innerHTML = ''; return; }
+    const ziel = sektorZiel();
+    if (ziel <= 1) { host.innerHTML = ''; return; }
     const teile = [];
     if (sectorTimes.length) {
       teile.push('<div class="sess-row"><b>jetzt</b> '
@@ -2167,7 +2680,7 @@
     // gefahrene Runde, und die Differenz sagt, wieviel noch drin ist.
     if (sectorHistory.length) {
       const beste = [];
-      for (let i = 0; i < sectorCount - 1 + 1; i++) {
+      for (let i = 0; i < ziel - 1 + 1; i++) {
         const werte = sectorHistory.map(r => r[i]).filter(v => v !== undefined);
         if (werte.length) beste.push(Math.min.apply(null, werte));
       }
@@ -2217,6 +2730,10 @@
       const besteBisher = raceLapTimes.length
         ? Math.min.apply(null, raceLapTimes.map(l => l.ms)) : Infinity;
       raceLapTimes.push({ lap: raceLapTimes.length + 1, ms: rundeMs });
+      // Challenge: Runde gegen die Strecke pruefen. Liefert true, wenn die Runde NICHT zaehlt
+      // (Strecke nicht erkannt oder zu schnell) - dann tiefer Ton statt des hellen Rundenklangs.
+      const challengeUngueltig = typeof challengeRundeFertig === 'function'
+        ? challengeRundeFertig(raceLapTimes.length - 1) : false;
       // Die Ereignisse DIESER Runde festhalten und den Zaehler leeren. Dieselbe Reihenfolge
       // wie raceLapTimes, damit der Index die Rundennummer bleibt.
       raceLapEvents.push({ pit: lapEventAkku.pit, crash: lapEventAkku.crash });
@@ -2225,10 +2742,11 @@
       // Die erste Runde ist nicht "die beste" - sie ist die einzige, und ein Bestzeit-Ton
       // beim ersten Mal nimmt ihm die Bedeutung fuer alle weiteren.
       const istBest = raceLapTimes.length > 1 && rundeMs < besteBisher;
-      playLapChime(istBest);
+      if (challengeUngueltig) playLapChimeUngueltig();
+      else playLapChime(istBest);
       // Die Ansage NEBEN dem Ton und nicht statt ihm: der Ton kommt sofort, die Stimme
       // braucht eine Sekunde. Wer sie abschaltet, hoert weiter, dass eine Runde voll ist.
-      speakLap(rundeMs, istBest);
+      if (!challengeUngueltig) speakLap(rundeMs, istBest);
       if (wasFinishing) finishRace();
       // Runde 0, nicht 1: das Feld steht auf der Startgeraden und ueberfaehrt Start/Ziel
       // erst am Ende der ersten Runde. Vor der ersten Ueberfahrt ist also noch keine Runde
@@ -2637,8 +3155,11 @@
       applySurface();
     }
     wxBlobsWeiter(dt);
-    wxRadarDraw();
+    // Gezeichnet wird jeden dritten Takt (etwa 4 Hz, v0.8.41): das Radar erzwingt beim Zeichnen
+    // ein Layout, und in der App bremst das den Faden, auf dem auch die Funkantworten laufen.
+    if ((wxZeichenZaehler = (wxZeichenZaehler + 1) % 3) === 0) wxRadarDraw();
   }
+  let wxZeichenZaehler = 0;
   setInterval(wxTick, 80);
 
   // ---- Die vier Zustandsansagen ------------------------------------------------------
@@ -3044,7 +3565,9 @@
       pitTyreTarget = Math.max(1.5, gaussian(PIT_TYRE_CHANGE_S, PIT_TYRE_CHANGE_SD));
       // MINIGAME: alles, was simuliert wird, und die Tastenfolge (siehe pitSpielStart).
       pitSpiel = null;
-      if (pitModus === 'minigame') pitSpielStart();
+      // BESTELLT: "2spielermodus: kein pitgame machen". Im Zwei-Spieler-Modus faehrt
+      // jeder seine eigenen Stopps ohne Minispiel.
+      if (pitModus === 'minigame' && !zweiSpieler) pitSpielStart();
       // The plan was chosen while rolling down the pit lane; only now is it locked in.
       if (!pitPlan) pitPlan = makePitPlan();
       if (pitPlan.tyres) {
@@ -3313,9 +3836,13 @@
     const T = pitSpielDauer(pitPlan);
     const folge = [];
     for (let i = 0; i < PIT_SPIEL_ANZAHL; i++) folge.push(Math.random() < 0.5 ? 'quad' : 'kreis');
-    // Fenster etwa 100 ms laenger als ein Zehntel (BESTELLT: "Mach die Zeiten im Pitstop
-    // ca. 100 ms laenger").
-    pitSpiel = { T, bonus: 0, folge, i: 0, fensterAb: 0, fensterS: T / PIT_SPIEL_ANZAHL + 0.1,
+    // BESTELLT: "the last button is always circle, otherwise I shift into rear gear". Der
+    // letzte Knopf im Spiel ist immer Kreis, damit ein danach gedruecktes Quadrat (K) nicht
+    // aus Versehen in den Rueckwaertsgang schaltet.
+    if (folge.length) folge[folge.length - 1] = 'kreis';
+    // Fenster 200 ms laenger als ein Zehntel. Zuerst 100 ms (BESTELLT: "Mach die Zeiten im
+    // Pitstop ca. 100 ms laenger"), seit v0.8.38 200 ms (BESTELLT: "nicht 600 ms sondern 200 ms").
+    pitSpiel = { T, bonus: 0, folge, i: 0, fensterAb: 0, fensterS: T / PIT_SPIEL_ANZAHL + 0.2,
                  treffer: 0, fehler: 0, blitz: '', blitzBis: 0, fuel0: fuel, dmg0: damage };
     showHudToast(t('Boxen-Minigame: Quadrat und Kreis!'));
   }
@@ -3326,13 +3853,25 @@
     if (sp.i >= sp.folge.length) return true;
     // BESTELLT: "Wenn ich die falsche Taste druecke, fuege Zeit hinzu. Wenn ich richtig
     // druecke, ziehe Zeit ab." Beides um 5 % der Grundzeit.
-    if (welche === sp.folge[sp.i]) { sp.bonus += PIT_SPIEL_BONUS * sp.T; sp.treffer++; sp.blitz = 'ok'; }
-    else { sp.bonus -= PIT_SPIEL_BONUS * sp.T; sp.fehler++; sp.blitz = 'falsch'; }
+    if (welche === sp.folge[sp.i]) { sp.bonus += PIT_SPIEL_BONUS * sp.T; sp.treffer++; sp.blitz = 'ok'; pitSpielTon(true); }
+    else { sp.bonus -= PIT_SPIEL_BONUS * sp.T; sp.fehler++; sp.blitz = 'falsch'; pitSpielTon(false); }
     sp.blitzBis = pitStandElapsed + 0.3;
     sp.i++;
     sp.fensterAb = pitStandElapsed;
     pitSpielMalen();
     return true;
+  }
+  // BESTELLT: "give positive and negative feedback noises for button presses". Richtig: ein
+  // heller, aufsteigender Ton. Falsch: ein dunkler, abfallender Brummton. playTone() schaltet
+  // sich selbst aus, wenn der Ton aus oder audioCtx noch nicht da ist.
+  function pitSpielTon(gut) {
+    if (gut) {
+      playTone(880, 0.06, 'sine', 0.2);
+      setTimeout(() => playTone(1320, 0.09, 'sine', 0.2), 45);
+    } else {
+      playTone(200, 0.12, 'square', 0.16);
+      setTimeout(() => playTone(140, 0.14, 'square', 0.14), 70);
+    }
   }
   function pitSpielTick(dt) {
     const sp = pitSpiel, pl = pitPlan || {};
@@ -3403,13 +3942,19 @@
     sectorHistory = [];
     renderSectors();
     if (sectorCount > 1 && trackMode === 'on') {
-      // Kein stiller Fehlschlag: mit Bahn ist die Einstellung nicht falsch, sondern
-      // bedeutungslos, und das gehoert gesagt statt dass man auf Sektorzeiten wartet, die
-      // nie kommen.
-      showHudToast('SEKTOREN BRAUCHEN DEN AUSDRUCK-MODUS');
-      log('Sektoren sind auf ' + sectorCount + ' gestellt, aber die Leseart ist "Bahn". '
-          + 'Auf der Schiene gibt es genau ein Start/Ziel, also bleibt jede Ueberfahrt eine '
-          + 'Runde. Im Cockpit auf "Ausdruck" umschalten.', 'err');
+      // Im Bahn-Modus bestimmt die Strecke die Sektorzahl: die Zahl der Start/Ziel-Kacheln
+      // im Editor. Der manuelle Regler gilt dort nur fuer den Ausdruck-Modus.
+      const imEditor = (typeof trackSektorAnzahl === 'function')
+        ? trackSektorAnzahl(currentTrackTiles || []) : 1;
+      if (imEditor > 1) {
+        log('Bahn: ' + imEditor + ' Start/Ziel-Kacheln = ' + imEditor + ' Sektoren '
+            + '(der Regler gilt hier nur fuer den Ausdruck-Modus).', 'info');
+      } else {
+        showHudToast('SEKTOREN BRAUCHEN DEN AUSDRUCK-MODUS');
+        log('Sektoren sind auf ' + sectorCount + ' gestellt, aber die Leseart ist "Bahn". '
+            + 'Lege mehrere Start/Ziel-Geraden im Editor an, oder schalte im Cockpit auf '
+            + '"Ausdruck" um.', 'err');
+      }
     } else {
       log('Sektoren: ' + (sectorCount <= 1 ? 'aus'
           : sectorCount + ' Ueberfahrten je Runde'), 'info');
@@ -3827,6 +4372,10 @@
   let crashThreshold = 40;
   const CRASH_ROLLING_ALPHA = 0.15;
   const CRASH_REFRACTORY_MS = 1000; // avoid re-triggering repeatedly off one jolt
+  // Anzeige-km/h, unter denen ein Auto als "stehend" gilt und (mit dem Schalter) keinen
+  // Schaden nimmt. Dieselbe Schwelle, mit der crashEnd() einen stehenden Einschlag hinten
+  // einordnet; dort ist es 12, hier dieselbe Grenze fuer "nicht in Fahrt".
+  const CRASH_STATIONARY_KMH = 12;
   // ---- 1,0 %/s, UND DAS IST GEMESSEN -----------------------------------------------
   //
   // BESTELLT: "Tank und Schaden standardmaessig einschalten. Tankverbrauch wieder etwas
@@ -3892,6 +4441,14 @@
     if ($('setting-crash-count')) {
       $('setting-crash-count').disabled = !crashDetectionEnabled;
     }
+  }
+  // KEIN SCHADEN IM STAND (BESTELLT, ab Werk AN): solange das Auto nicht faehrt (0 km/h),
+  // zaehlt kein Stoss als Crash - man kann es aufheben, ohne dass es simulierten Schaden
+  // nimmt. Genau die Hand, die das stehende Auto hochhebt, erzeugt auf den Bytes 1 und 3
+  // dieselbe Abweichung wie ein Aufprall. Ab Werk AN, weil das die haeufigste Beschwerde war.
+  let crashStationarySafe = true;
+  if ($('setting-crash-stationary')) {
+    crashStationarySafe = $('setting-crash-stationary').checked;
   }
   // Total time (s) to repair 100% damage down to 0, non-linear: the schedule is fixed
   // proportions of that total (1/10, 2/10, 3/10, 4/10 for the four 25%-damage quarters,
@@ -3964,11 +4521,26 @@
     if (now < L.gnadeBis) return;
 
     if (dev > crashThreshold && now - L.letzter > CRASH_REFRACTORY_MS) {
+      // KEIN SCHADEN IM STAND: ein stehendes Auto (0 km/h) bekommt keinen Crash angerechnet.
+      // Die Hand, die es aufhebt, erzeugt auf den Bytes 1 und 3 genau die Abweichung, die
+      // diese Funktion sonst als Aufprall wertet - nur dass das Auto dabei eben nicht faehrt.
+      // DERBY (v0.8.126): hier nimmt auch ein stehendes Auto Schaden - die Ausnahme gilt nur
+      // im normalen Betrieb, nicht im Demolition-Derby.
+      if (crashStationarySafe && stationaer(wer) && !(typeof derbyLaeuft !== 'undefined' && derbyLaeuft)) return;
       L.letzter = now;
       // Der Rundenzaehler der Ereignisse gehoert dem Rennen, und das Rennen faehrt Auto 1.
       if (wer !== 2) lapEventAkku.crash += 1;
       registerCrash(wer);
     }
+  }
+
+  // Ist das Auto (noch) nicht in Fahrt? Ab Werk gilt: wer steht, wird nicht beschadigt.
+  // Die gleiche Schwelle, mit der crashEnd() einen stehenden Einschlag hinten einordnet.
+  function stationaer(wer) {
+    const motor = (wer === 2 ? physEngine2 : physEngine);
+    const st = motor && motor.state ? motor.state : null;
+    if (!st) return true;
+    return Math.abs(st.speedKmh) * REAL_SCALE < CRASH_STATIONARY_KMH;
   }
 
   // Front or rear, decided from the gear and the speed rather than from a sensor byte.
@@ -3993,6 +4565,17 @@
     const motor = zwei ? physEngine2 : physEngine;
     const licht = zwei ? schadenZwei.licht : lightDamage;
     const pre = zwei ? 'P2: ' : '';
+    // DEMOLITION DERBY (experimentell): kein normaler Schaden, sondern Derby-Health. Der
+    // Aufprall stoppt wie ueblich das Tempo, die Health-Regel (frontal 10 %, sonst 20 %)
+    // macht der Derby-Block. Bei 0 % wird das Auto gestoppt (siehe derbyTot).
+    if (typeof derbyLaeuft !== 'undefined' && derbyLaeuft) {
+      if (typeof derbyAufprall === 'function') derbyAufprall(wer);
+      motor.state.speedKmh *= 0.3;
+      if (!zwei) updateDamageFuelUI();
+      if (!playCrashFx()) playCrashSound();
+      padRumble(0.65 + 0.35 * Math.max(0, Math.min(1, Math.abs(motor.state.speedKmh) / Math.max(0.01, motor.config.topSpeedKmh))), 0.5, 260);
+      return;
+    }
     if (zwei) schadenZwei.wert = Math.min(100, schadenZwei.wert + 100 / crashesToTotal);
     else damage = Math.min(100, damage + 100 / crashesToTotal);
     const stand = zwei ? schadenZwei.wert : damage;
@@ -5098,7 +5681,7 @@
   // erhoehen - und links/rechts kann den Schirm weiterblaettern, solange nichts angewaehlt
   // ist.
   let raceScreenLimitArmed = false;
-  const RACE_MODE_ORDER = ['practice', 'endurance', 'qualifying', 'laps'];
+  const RACE_MODE_ORDER = ['practice', 'endurance', 'qualifying', 'laps', 'knockout', 'derby'];
 
   // NUR WENN DAS COCKPIT AUCH ZU SEHEN IST. cockpitScreen bleibt beim Tabwechsel stehen -
   // ohne diese Bedingung schluckte der Schirm auf JEDEM Tab die Pfeiltasten, und Fahren
@@ -5125,8 +5708,10 @@
       return true;
     }
     if (dir === 'left' || dir === 'right') {
-      if (!raceScreenLimitArmed) return false;
       const zeile = RACE_SETTINGS_ROWS[raceScreenSel];
+      // Der Renntyp schaltet mit links/rechts DIREKT (v0.8.41) - vorher erst nach X, und ohne X
+      // blaetterte dieselbe Taste zum naechsten Cockpit-Schirm.
+      if (zeile.id !== 'mode' && !raceScreenLimitArmed) return false;
       // BESTELLT: "rennmodi lassen sich noch nicht gut anwaehlen" - der Rennmodus geht jetzt
       // wie die Rundenzahl: anwaehlen, dann links/rechts in BEIDE Richtungen, je ein Schritt.
       if (zeile.id === 'mode') {
@@ -5264,7 +5849,7 @@
         luecke = '\u2014';
       }
       return { pos: i + 1, name: x.c.name, farbe: x.c.farbe, rolle: x.c.role,
-               runden: x.n, luecke, letzte: x.letzte, beste: x.beste,
+               runden: x.n, summe: x.summe, luecke, letzte: x.letzte, beste: x.beste,
                // Die schnellste Runde des ganzen Feldes wird hervorgehoben, wie auf einer
                // Zeittafel. Verglichen wird SPAETER, wenn alle Zeilen vorliegen.
                istBeste: false };
@@ -5330,9 +5915,50 @@
   }
   if ($('ov-nochmal')) $('ov-nochmal').addEventListener('click', () => { ovNochmal(); });
 
+  // PODEST DER DREI BESTEN (BESTELLT: "Rennende-Mock-up umsetzen"). Nach dem Rennen steht es
+  // ueber der Ergebnistabelle: links Platz 2, Mitte Platz 1 (am hoechsten), rechts Platz 3.
+  // Der Sieger bekommt die GESAMTZEIT, Platz 2 und 3 den Rueckstand (luecke) - so liest sich
+  // ein Podest, und die Gesamtzeit ist hier die vergleichbare Zahl. Waehrend eines Rennens
+  // bleibt das Podest leer und verborgen.
+  function ovPodestMalen() {
+    const host = $('ov-podest');
+    if (!host) return;
+    const zeilen = ovDaten();
+    const fertig = raceState === 'finished';
+    if (!fertig || zeilen.length < 2) {
+      host.hidden = true;
+      if (host.innerHTML) host.innerHTML = '';
+      return;
+    }
+    host.hidden = false;
+    const felder = [1, 0, 2].map((i) => zeilen[i] || null);
+    const html = felder.map((z, i) => {
+      const klasse = i === 1 ? 'platz-1' : i === 0 ? 'platz-2' : 'platz-3';
+      const nr = i === 1 ? 1 : i === 0 ? 2 : 3;
+      const name = z
+        ? '<span class="name"><i class="ov-farbe" style="background:'
+          + (z.farbe || 'transparent') + '"></i>' + z.name + '</span>'
+        : '<span class="name leer"></span>';
+      // Platz 1: Gesamtzeit; die anderen: Rueckstand. Ohne abgeschlossene Runde leer.
+      const zeit = !z ? '<span class="zeit"></span>'
+        : (nr === 1
+            ? (z.summe > 0 ? '<span class="zeit zeit-1">' + formatLapTime(z.summe) + '</span>'
+                           : '<span class="zeit"></span>')
+            : '<span class="zeit">' + (z.luecke || '&ndash;') + '</span>');
+      return '<div class="platz ' + klasse + '">' + name + zeit
+        + '<span class="block"><b>' + nr + '</b></span></div>';
+    }).join('');
+    if (host.innerHTML !== html) host.innerHTML = html;
+  }
+
   function ovScreenRender() {
     const tab = $('ov-tab');
     if (!tab) return;
+    ovPodestMalen();
+    // NACH DEM RENNEN: die Spalte "letzte" wird ausgeblendet (nur die beste zaehlt dann noch),
+    // und das eigene Auto bekommt eine Akzentleiste statt einer Umrandung (90-CSS).
+    const ovSchirm = $('race-ovscreen');
+    if (ovSchirm) ovSchirm.classList.toggle('ov-fertig', raceState === 'finished');
     if ($('ov-nochmal')) $('ov-nochmal').hidden = raceState !== 'finished';
     ovKarteMalen();
     const zeilen = ovDaten();
@@ -5383,18 +6009,49 @@
         + '<span class="ov-runden">' + z.runden + '</span>'
         + '<span class="ov-pit">' + p + '</span>'
         + mix
-        + '<span class="ov-zeit">' + (z.letzte === null ? '&ndash;' : formatLapTime(z.letzte)) + '</span>'
+        + '<span class="ov-zeit ov-letzte">' + (z.letzte === null ? '&ndash;' : formatLapTime(z.letzte)) + '</span>'
         + '<span class="ov-zeit' + (z.istBeste ? ' ov-feldbeste' : '') + '">'
         + (z.beste === null ? '&ndash;' : formatLapTime(z.beste)) + '</span>'
         + '<span class="ov-luecke">' + z.luecke + '</span>'
         + '</div>';
     }).join('');
+    // BESTELLT: "im Mehrspieler alle Spieler mit ihren Zeiten und Positionen zeigen". Die
+    // lokalen Zeilen (eigene Autos/Ghosts) bleiben; die anderen Geraete aus der Rangliste
+    // kommen als zusaetzliche Zeilen dazu - jede mit ihren gemeldeten Runden/Zeiten.
+    let mpHtml = '';
+    if (typeof mpStand === 'function') {
+      const stand = mpStand();
+      const leute = (stand && stand.fahrer) || [];
+      const lokale = new Set();
+      if (typeof raceAllCars === 'function') {
+        raceAllCars().forEach((c) => { if (c && c.name) lokale.add(c.name); });
+      }
+      const zeit = (x) => (x === null || x === undefined) ? '&ndash;'
+        : formatLapTime(Math.round((x || 0) * 1000));
+      leute.forEach((f, i) => {
+        if (lokale.has(f.name)) return;
+        const best = f.beste === null || f.beste === undefined;
+        mpHtml += '<div class="ov-zeile ov-mp' + (f.id === mp.id ? ' ov-ich' : '') + '">'
+          + '<span class="ov-pos">' + (i + 1) + '</span>'
+          + '<span class="ov-farbe" style="background:#8b99b4"></span>'
+          + '<span class="ov-name" data-i18n-skip>' + String(f.name).replace(/</g, '&lt;') + '</span>'
+          + '<span class="ov-runden">' + f.laps + '</span>'
+          + '<span class="ov-pit"></span>'
+          + '<span class="ov-mix ov-mix-leer"></span>'
+          + '<span class="ov-zeit ov-letzte">' + (f.letzte === null || f.letzte === undefined ? '&ndash;' : formatLapTime(Math.round(f.letzte * 1000))) + '</span>'
+          + '<span class="ov-zeit' + (best ? '' : ' ov-feldbeste') + '">' + (best ? '&ndash;' : formatLapTime(Math.round(f.beste * 1000))) + '</span>'
+          + '<span class="ov-luecke"></span>'
+          + '</div>';
+      });
+    }
+    const zusammen = html + mpHtml;
     // Die Mischungsfarbe steht als eigener Balken NEBEN der Zeile, weil sie eine Farbe und
     // keine Zahl ist. Sie wird hier eingesetzt, damit die Spaltenbreiten fest bleiben.
-    if (tab.innerHTML !== html) tab.innerHTML = html;
+    if (tab.innerHTML !== zusammen) tab.innerHTML = zusammen;
     const fuss = $('ov-fuss');
     if (fuss) {
-      fuss.textContent = 'Platz \u00b7 Runden \u00b7 Stopps \u00b7 Mischung \u00b7 letzte'
+      fuss.textContent = 'Platz \u00b7 Runden \u00b7 Stopps \u00b7 Mischung'
+        + (raceState === 'finished' ? '' : ' \u00b7 letzte')
         + ' \u00b7 beste \u00b7 R\u00fcckstand \u2014 Reifen und Stopps nur f\u00fcr das'
         + ' eigene Auto simuliert';
     }
@@ -5421,7 +6078,7 @@
   function ovDiagrammMalen() {
     const host = $('ov-diagramm');
     if (!host) return;
-    if (ovDiagrammArt > 0 && sectorCount <= 1) ovDiagrammArt = 0;
+    if (ovDiagrammArt > 0 && sektorZiel() <= 1) ovDiagrammArt = 0;
     const reihen = ovDiagrammReihen();
     const alle = reihen.flatMap((r) => r.werte).sort((a, b) => a - b);
     if (!alle.length) { if (host.innerHTML) host.innerHTML = ''; return; }
@@ -5473,7 +6130,7 @@
   }
   if ($('ov-diagramm')) {
     $('ov-diagramm').addEventListener('click', () => {
-      ovDiagrammArt = sectorCount > 1 ? (ovDiagrammArt + 1) % (sectorCount + 1) : 0;
+      ovDiagrammArt = sektorZiel() > 1 ? (ovDiagrammArt + 1) % (sektorZiel() + 1) : 0;
       ovDiagrammMalen();
     });
   }
@@ -5487,10 +6144,11 @@
   function ovSektorenMalen() {
     const host = $('ov-sektoren');
     if (!host) return;
-    if (sectorCount <= 1) { if (host.innerHTML) host.innerHTML = ''; return; }
+    const sz = sektorZiel();
+    if (sz <= 1) { if (host.innerHTML) host.innerHTML = ''; return; }
     const autos = raceAllCars().map((c) => {
       const beste = [];
-      for (let k = 0; k < sectorCount; k++) {
+      for (let k = 0; k < sz; k++) {
         const v = (c.sektoren || []).map((sek) => sek[k]).filter((x) => x > 0);
         beste.push(v.length ? Math.min.apply(null, v) : null);
       }
@@ -5499,13 +6157,13 @@
       return { name: c.name, farbe: c.farbe, werte: beste };
     });
     if (!autos.length) { if (host.innerHTML) host.innerHTML = ''; return; }
-    const spalten = sectorCount + 1;
+    const spalten = sz + 1;
     const grenzen = [];
     for (let k = 0; k < spalten; k++) {
       const v = autos.map((a) => a.werte[k]).filter((x) => x !== null);
       grenzen.push(v.length > 1 ? [Math.min.apply(null, v), Math.max.apply(null, v)] : null);
     }
-    const kopf = '<tr><th></th>' + Array.from({ length: sectorCount }, (_, k) => '<th>S' + (k + 1) + '</th>').join('')
+    const kopf = '<tr><th></th>' + Array.from({ length: sz }, (_, k) => '<th>S' + (k + 1) + '</th>').join('')
       + '<th>' + t('Runde') + '</th></tr>';
     const zeilen = autos.map((a) => '<tr><td><span class="ov-farbe" style="background:'
       + (a.farbe || 'transparent') + '"></span> ' + a.name + '</td>'
@@ -5666,6 +6324,12 @@
   // Sichtbar gemacht wird es am Knopf: er ist im Doppelausdruck-Modus abgeblendet, solange
   // nichts laeuft (updateRaceActButtons).
   function requestPitStop() {
+    // DERBY (v0.8.126): kein Boxenstopp - das Derby ist ein Ramm-Modus, der Stopp gaebe
+    // nur eine Pause, in der man keine Gegner rammt.
+    if (typeof derbyLaeuft !== 'undefined' && derbyLaeuft) {
+      showHudToast('Derby: kein Boxenstopp');
+      return;
+    }
     const now = Date.now();
     pitLastPress = now;
 

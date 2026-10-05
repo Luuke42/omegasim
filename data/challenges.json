@@ -48,6 +48,1264 @@
    "anzahl": 0,
    "zeiten": []
   },
+  "wa01-imolina|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa01-imolina|hotlap|pro": {
+   "anzahl": 3,
+   "zeiten": [
+    {
+     "auto": "Alpha",
+     "fahrer": "Luuke2",
+     "geraet": "g8tpdtco9glbi",
+     "runden": 5,
+     "runden_ms": [
+      6814,
+      8863,
+      4771,
+      4639,
+      4724
+     ],
+     "zeit_ms": 4639,
+     "zeitpunkt": "2026-09-30T18:31:42.785Z"
+    },
+    {
+     "auto": "Alpha",
+     "fahrer": "Luuke",
+     "geraet": "g8tpdtco9glbi",
+     "runden": 3,
+     "runden_ms": [
+      6964,
+      5223,
+      4996
+     ],
+     "zeit_ms": 4996,
+     "zeitpunkt": "2026-09-30T17:33:01.889Z"
+    },
+    {
+     "auto": "Alpha",
+     "fahrer": "Luuke",
+     "geraet": "g8tpdtco9glbi",
+     "runden": 3,
+     "runden_ms": [
+      6964,
+      5223,
+      4996
+     ],
+     "zeit_ms": 4996,
+     "zeitpunkt": "2026-09-30T17:33:36.249Z"
+    }
+   ]
+  },
+  "wa01-imolina|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa01-imolina|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa02-zandwoorde|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa02-zandwoorde|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa02-zandwoorde|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa02-zandwoorde|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa03-hockenhain|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa03-hockenhain|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa03-hockenhain|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa03-hockenhain|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa04-brandsby|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa04-brandsby|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa04-brandsby|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa04-brandsby|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa05-oultonia|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa05-oultonia|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa05-oultonia|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa05-oultonia|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa06-magnycour|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa06-magnycour|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa06-magnycour|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa06-magnycour|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa07-estorilla|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa07-estorilla|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa07-estorilla|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa07-estorilla|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa08-jerezito|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa08-jerezito|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa08-jerezito|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa08-jerezito|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa09-assenburg|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa09-assenburg|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa09-assenburg|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa09-assenburg|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa10-mugellino|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa10-mugellino|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa10-mugellino|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa10-mugellino|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa11-donningham|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa11-donningham|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa11-donningham|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa11-donningham|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa12-knockhilly|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa12-knockhilly|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa12-knockhilly|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa12-knockhilly|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa13-zolderen|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa13-zolderen|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa13-zolderen|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa13-zolderen|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa14-oscherlingen|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa14-oscherlingen|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa14-oscherlingen|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa14-oscherlingen|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa15-sachsenried|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa15-sachsenried|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa15-sachsenried|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa15-sachsenried|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa16-anderstrup|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa16-anderstrup|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa16-anderstrup|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa16-anderstrup|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa17-hungarella|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa17-hungarella|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa17-hungarella|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa17-hungarella|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa18-misanello|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa18-misanello|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa18-misanello|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa18-misanello|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa19-kyalamo|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa19-kyalamo|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa19-kyalamo|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa19-kyalamo|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa20-salzbergring|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa20-salzbergring|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa20-salzbergring|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wa20-salzbergring|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb03-interlagoa|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb03-interlagoa|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb03-interlagoa|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb03-interlagoa|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb04-montrealle|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb04-montrealle|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb04-montrealle|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb04-montrealle|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb05-barcelonetta|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb05-barcelonetta|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb05-barcelonetta|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb05-barcelonetta|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb06-castelletto|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb06-castelletto|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb06-castelletto|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb06-castelletto|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb07-sepangga|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb07-sepangga|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb07-sepangga|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb07-sepangga|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb08-fujimoro|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb08-fujimoro|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb08-fujimoro|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb08-fujimoro|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb09-laguna-sekka|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb09-laguna-sekka|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb09-laguna-sekka|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb09-laguna-sekka|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb10-watkins-dale|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb10-watkins-dale|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb10-watkins-dale|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb10-watkins-dale|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb11-road-atlantica|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb11-road-atlantica|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb11-road-atlantica|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb11-road-atlantica|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb12-sebringa|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb12-sebringa|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb12-sebringa|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb12-sebringa|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb13-daytonella|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb13-daytonella|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb13-daytonella|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb13-daytonella|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb14-bathursta|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb14-bathursta|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb14-bathursta|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb14-bathursta|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb15-phillip-isle|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb15-phillip-isle|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb15-phillip-isle|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb15-phillip-isle|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb16-portimanta|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb16-portimanta|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb16-portimanta|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb16-portimanta|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb17-aragonita|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb17-aragonita|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb17-aragonita|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb17-aragonita|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb18-shanghaio|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb18-shanghaio|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb18-shanghaio|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb18-shanghaio|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb19-istanbella|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb19-istanbella|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb19-istanbella|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb19-istanbella|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb20-losaya|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb20-losaya|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb20-losaya|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wb20-losaya|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc02-macaolo|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc02-macaolo|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc02-macaolo|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc02-macaolo|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc03-bakuna|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc03-bakuna|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc03-bakuna|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc03-bakuna|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc04-singaporta|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc04-singaporta|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc04-singaporta|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc04-singaporta|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc05-long-beacho|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc05-long-beacho|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc05-long-beacho|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc05-long-beacho|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc06-adelaina|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc06-adelaina|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc06-adelaina|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc06-adelaina|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc07-pauvilla|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc07-pauvilla|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc07-pauvilla|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc07-pauvilla|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc08-detroita|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc08-detroita|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc08-detroita|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc08-detroita|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc09-jeddara|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc09-jeddara|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc09-jeddara|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc09-jeddara|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc10-norisburg|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc10-norisburg|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc10-norisburg|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc10-norisburg|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc11-villa-reala|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc11-villa-reala|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc11-villa-reala|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc11-villa-reala|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc12-surfers-parada|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc12-surfers-parada|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc12-surfers-parada|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc12-surfers-parada|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc13-montjuicita|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc13-montjuicita|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc13-montjuicita|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc13-montjuicita|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc14-pedralbia|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc14-pedralbia|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc14-pedralbia|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc14-pedralbia|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc15-avusa|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc15-avusa|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc15-avusa|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc15-avusa|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc16-monsanta|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc16-monsanta|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc16-monsanta|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc16-monsanta|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc17-boavistella|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc17-boavistella|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc17-boavistella|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc17-boavistella|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc18-miamira|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc18-miamira|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc18-miamira|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc18-miamira|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc19-vegasina|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc19-vegasina|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc19-vegasina|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc19-vegasina|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc20-marinella-bay|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc20-marinella-bay|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc20-marinella-bay|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wc20-marinella-bay|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd02-francorella|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd02-francorella|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd02-francorella|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd02-francorella|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd03-le-mansard|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd03-le-mansard|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd03-le-mansard|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd03-le-mansard|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd04-reimsville|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd04-reimsville|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd04-reimsville|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd04-reimsville|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd05-oesterwald|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd05-oesterwald|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd05-oesterwald|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd05-oesterwald|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd06-mosporto|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd06-mosporto|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd06-mosporto|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd06-mosporto|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd07-road-amerigo|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd07-road-amerigo|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd07-road-amerigo|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd07-road-amerigo|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd08-talladina|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd08-talladina|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd08-talladina|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd08-talladina|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd09-brookfeld|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd09-brookfeld|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd09-brookfeld|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd09-brookfeld|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd10-montlherine|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd10-montlherine|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd10-montlherine|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd10-montlherine|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd11-rouenna|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd11-rouenna|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd11-rouenna|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd11-rouenna|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd12-nivella|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd12-nivella|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd12-nivella|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd12-nivella|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd13-zeltbach|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd13-zeltbach|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd13-zeltbach|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd13-zeltbach|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd14-pergusella|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd14-pergusella|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd14-pergusella|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd14-pergusella|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd15-charadella|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd15-charadella|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd15-charadella|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd15-charadella|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd16-crystal-parc|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd16-crystal-parc|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd16-crystal-parc|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd16-crystal-parc|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd17-goodwald|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd17-goodwald|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd17-goodwald|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd17-goodwald|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd18-thruxford|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd18-thruxford|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd18-thruxford|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd18-thruxford|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd19-jaramilla|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd19-jaramilla|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd19-jaramilla|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd19-jaramilla|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd20-nuerbelberg|hotlap|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd20-nuerbelberg|hotlap|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd20-nuerbelberg|rennen|arcade": {
+   "anzahl": 0,
+   "zeiten": []
+  },
+  "wd20-nuerbelberg|rennen|pro": {
+   "anzahl": 0,
+   "zeiten": []
+  },
   "weitblick|hotlap|arcade": {
    "anzahl": 0,
    "zeiten": []
@@ -65,5 +1323,5 @@
    "zeiten": []
   }
  },
- "stand": "2026-09-29T14:15:30Z"
+ "stand": "2026-10-04T21:32:33Z"
 }

@@ -177,6 +177,10 @@
   function chIdee(def) {
     if (def.idee) return t(def.idee);
     const tiles = chTiles(def);
+    if (def.community) {
+      return t('Community-Strecke mit {n} Teilen, gefahren mit der Abstimmung {p}.')
+        .replace('{n}', tiles.length).replace('{p}', communityPresetName(def.preset));
+    }
     const gerade = tiles.map((x) => x.type === TILE_TYPE.STRAIGHT || x.type === TILE_TYPE.START);
     let g = 0;
     for (let i = 0; i < gerade.length; i++) {
@@ -607,7 +611,18 @@
         return communityOnline;
       })
       .catch(() => { communityFehler = true; communityOnlineAt = Date.now(); return communityOnline; })
-      .then((j) => { communityHolt = false; return j; });
+      .then((j) => {
+        communityHolt = false;
+        // v0.9.49: WER GERADE HINSCHAUT, bekommt das Ergebnis zu sehen. Lief beim Oeffnen der
+        // Liste schon eine Abfrage (etwa von der Seite einer Strecke), startete communityZeichnen
+        // keine zweite - und nach dem Ende der ersten zeichnete niemand neu: "Lade ..." blieb
+        // stehen. Ohne Schleife, denn communityZeichnen holt nur, wenn nichts mehr laeuft und
+        // die Liste veraltet ist.
+        const liste = $('sub-ch-community');
+        if (liste && liste.classList.contains('on')) communityZeichnen();
+        if (typeof chCommunitySeiteOffen === 'function' && chCommunitySeiteOffen()) chZeichneListe();
+        return j;
+      });
   }
   // Online-Liste + lokale Daten zu EINER Sicht. Online-Strecken haben ihre Server-Kennung; eine
   // lokale Strecke, die (auch gespiegelt) online schon steht, wird unter deren Kennung gefuehrt.
@@ -791,6 +806,13 @@
     for (const tr of liste) {
       const row = document.createElement('div');
       row.className = 'community-zeile';
+      // v0.9.49: Bild und Name sind EIN Knopf, der die eigene Seite der Strecke oeffnet
+      // (grosse Karte, Spiegeln, Bestenliste). "Zeit fahren" daneben startet direkt.
+      const auf = document.createElement('button');
+      auf.type = 'button';
+      auf.className = 'community-oeffnen';
+      auf.setAttribute('aria-label', t('Strecke öffnen') + ': ' + tr.id + ' ' + tr.name);
+      auf.onclick = () => challengeSeiteZeigen(tr.id);
       // BESTELLT: "community strecken: layout in der vorschau zeigen".
       const mini = document.createElement('span');
       mini.className = 'community-mini';
@@ -799,7 +821,7 @@
         const p = codeToTrack(tr.code);
         if (p) { const merk = trackRotationDeg; trackRotationDeg = 0; try { mini.innerHTML = renderTrackPreview(p.tiles, null, {}).html; } finally { trackRotationDeg = merk; } }
       } catch (e) { /* ohne Bild */ }
-      row.appendChild(mini);
+      auf.appendChild(mini);
       const links = document.createElement('div');
       links.className = 'community-text';
       const b = document.createElement('b');
@@ -823,7 +845,8 @@
       const z = document.createElement('button');
       z.textContent = t('Zeit fahren');
       z.onclick = () => communityStarten(tr);
-      row.appendChild(links); row.appendChild(z);
+      auf.appendChild(links);
+      row.appendChild(auf); row.appendChild(z);
       wrap.appendChild(row);
     }
     bereich.appendChild(wrap);
@@ -840,9 +863,9 @@
       return;
     }
     if (kRennenLaeuft()) { showHudToast(t('Erst das laufende Rennen beenden')); return; }
+    if (chWahl !== tr.id) chSpiegel = false;
     chWahl = tr.id;
     chModus = 'hotlap';
-    chSpiegel = false;
     if (typeof challengeStarten === 'function') challengeStarten();
   }
 
@@ -1071,6 +1094,11 @@
     return chAuffrischenLaeuft;
   }
   function chListeLaden(schl, frisch) {
+    const idC = schl.split('|')[0], defC = chDef(idC);
+    if (defC && defC.community && defC.id === idC) {
+      if (chSeiteOffen()) chZeichneListe();
+      return communityHolen(!!frisch).then(() => { if (chSeiteOffen()) chZeichneListe(); });
+    }
     const o = chOnline();
     if (!o.url) { chListen[schl] = { zeiten: null, online: false }; return Promise.resolve(); }
     if (o.url === CH_STANDARD_URL) {
@@ -1370,7 +1398,11 @@
       if (lauf.community) {
         communityZeit(communityLesen(), erg.id, erg.zeit, erg.fahrer);
         hochgeladen = communityPost({ art: 'community-zeit', id: erg.id, zeit_ms: Math.round(erg.zeit), fahrer: erg.fahrer || '' })
-          .then((r) => { hochgeladen = !!(r && r.ok); communityHolen(true).then(() => communityZeichnen()); return hochgeladen; })
+          .then((r) => {
+            hochgeladen = !!(r && r.ok);
+            communityHolen(true).then(() => { communityZeichnen(); if (chSeiteOffen()) chZeichneListe(); });
+            return hochgeladen;
+          })
           .catch(() => { hochgeladen = false; return false; });
         communityZeichnen();
       } else {
@@ -1407,7 +1439,8 @@
         }
       }
       const knoepfe = lauf.community
-        ? [[t('Nochmal'), () => { chWahl = erg.id; chModus = erg.modus; challengeStarten(); }],
+        ? [[t('Ergebnis ansehen'), () => { showTab('challenges'); challengeSeiteZeigen(erg.id); }],
+           [t('Nochmal'), () => { chWahl = erg.id; chModus = erg.modus; challengeStarten(); }],
            [t('Schließen'), null]]
         : [[t('Ergebnis ansehen'), () => konsoleZeige('challenges', 'ch-' + erg.id)],
            [t('Nochmal'), () => { chWahl = erg.id; chModus = erg.modus; challengeStarten(); }],
@@ -1423,6 +1456,15 @@
   // noch fehlen - so steht ein eben gefahrener Lauf sofort in der Liste, auch wenn der
   // Schnappschuss eine Stunde alt ist.
   function chAlleZeiten(schl) {
+    // v0.9.49: eine Community-Strecke hat ihre Zeiten in der Community-Liste (online und
+    // lokal zusammengefuehrt, communitySicht), nicht in der Challenge-Bestenliste.
+    const idC = schl.split('|')[0], defC = chDef(idC);
+    if (defC && defC.community && defC.id === idC) {
+      const data = communitySicht();
+      const eintraege = (data.times[idC] || []).map((z) => ({ zeit_ms: +z.zeit, fahrer: z.fahrer || '',
+        geraet: z.geraet, auto: '' }));
+      return { zeiten: eintraege.map((z) => z.zeit_ms), online: !!data.online, eintraege };
+    }
     const l = chListen[schl];
     const lok = chLokal(schl).map((z) => ({ zeit_ms: z.zeit, auto: z.auto, fahrer: z.fahrer,
       geraet: z.geraet, runden: Array.isArray(z.runden) ? z.runden.length : undefined,
@@ -1472,6 +1514,7 @@
     if (k < 0) {
       const def = chDef(id);
       if (!def || def.id !== id) return;
+      if (def.community) { chCommunitySeite(def); return; }
       const kat = def.kat.toLowerCase();
       // 'e' = Dauerrennen (sub-ch-e), sonst die Wochenkategorien a-d.
       if ('abcde'.indexOf(kat) < 0) return;
@@ -1502,16 +1545,57 @@
     chZeichneDetail();
     chListeLaden(chSchluessel(chWahl, chModus, chPreset));
   }
+  // ---- EINE COMMUNITY-STRECKE ALS EIGENE SEITE (v0.9.49) ----------------------------
+  // BESTELLT: "Fuer die Community-Strecken jeweils so ein Menue machen wie fuer die anderen
+  // Strecken, also eine eigene Ansicht mit Zeiten, groesserem Layout (aus dem kleinen
+  // Thumbnail ist das nicht gut zu erkennen), Strecke-spiegeln-Funktion, etc. Es muss nicht
+  // in den Tabs angezeigt werden, da sich die ja aendern."
+  // Dieselbe Detailansicht (ch-detail) wie die Wochenstrecken, in einer eigenen Unterseite
+  // ohne Kachel: sie wird aus der Liste geoeffnet, und Zurueck fuehrt in die Liste. Gefahren
+  // wird nur "Beste Runde" (die Community-Liste kennt keine Rennen), mit der eingereichten
+  // Abstimmung.
+  function chCommunitySeite(def) {
+    if (chWahl !== def.id) chSpiegel = false;
+    if ($('ch-spiegel')) $('ch-spiegel').checked = chSpiegel;
+    if ($('ch-spiegel-knopf')) {
+      $('ch-spiegel-knopf').setAttribute('aria-pressed', chSpiegel ? 'true' : 'false');
+      $('ch-spiegel-knopf').classList.toggle('an', chSpiegel);
+    }
+    chWahl = def.id;
+    chModus = 'hotlap';
+    document.querySelectorAll('.subpage').forEach(p => p.classList.remove('on'));
+    document.querySelectorAll('.subpage-home').forEach(h => { h.style.display = 'none'; });
+    const sp = $('sub-ch-strecke');
+    if (sp) sp.classList.add('on');
+    const titel = document.querySelector('#sub-ch-strecke .ch-titel');
+    if (titel) titel.textContent = def.id + ' \u00b7 ' + def.name;
+    const platz = document.querySelector('#sub-ch-strecke .ch-platz');
+    const d = $('ch-detail');
+    if (platz && d && d.parentNode !== platz) platz.appendChild(d);
+    if (d) d.hidden = false;
+    chZeichneDetail();
+    chListeLaden(chSchluessel(chWahl, chModus, def.preset));
+    window.scrollTo(0, 0);
+    if (typeof konsoleNachSubpage === 'function') konsoleNachSubpage('ch-strecke');
+  }
+  function chCommunitySeiteOffen() {
+    const sp = $('sub-ch-strecke');
+    return !!(sp && sp.classList.contains('on'));
+  }
   function chZeichneDetail() {
     const d = $('ch-detail');
     if (!d) return;
     const def = chDef(chWahl), tiles = chTiles(def);
+    if (def.community) chModus = 'hotlap';
     $('ch-karte').innerHTML = chKarte(def, true);
     $('ch-idee').textContent = chIdee(def);
     const [bw, bh] = chFlaeche(tiles);
     const m = trackLaengeM(tiles);
     $('ch-fakten').textContent = t('Länge') + ' ' + chZahl(m, 2) + ' m · '
-      + t('Platzbedarf') + ' ' + chZahl(bw, 2) + ' × ' + chZahl(bh, 2) + ' m · ' + chSetsText(def);
+      + t('Platzbedarf') + ' ' + chZahl(bw, 2) + ' × ' + chZahl(bh, 2) + ' m · '
+      + (def.community ? t('Abstimmung') + ' ' + communityPresetName(def.preset) : chSetsText(def));
+    // Community: kein Rennmodus, der Umschalter faellt weg.
+    if ($('ch-modus')) $('ch-modus').hidden = !!def.community;
     document.querySelectorAll('#ch-modus [data-m]').forEach((b) => b.classList.toggle('an', b.dataset.m === chModus));
     const mh = $('ch-medaille-hinweis');
     if (mh) mh.innerHTML = chMedailleHinweis(def, chModus);
@@ -1532,7 +1616,8 @@
     if (chLetzt && chLetzt.id === chWahl) {
       e.hidden = false;
       const schl = chSchluessel(chLetzt.id, chLetzt.modus, chLetzt.preset);
-      $('ch-erg-titel').textContent = t(CH_MODUS_NAME[chLetzt.modus]) + ' · Pro';
+      $('ch-erg-titel').textContent = t(CH_MODUS_NAME[chLetzt.modus]) + ' · '
+        + (def.community ? communityPresetName(chLetzt.preset) : 'Pro');
       $('ch-erg-zeit').textContent = chLetzt.gueltig ? chZeit(chLetzt.zeit) : t('Nicht gewertet');
       $('ch-erg-text').textContent = chLetzt.gueltig ? chRangText(schl, chLetzt.zeit) : chGrundText(chLetzt);
       const ergSterne = chLetzt.gueltig ? chSterne(chDef(chWahl), chLetzt.modus, chLetzt.zeit) : 0;
@@ -1551,12 +1636,17 @@
   }
   function chZeichneListe() {
     const def = chDef(chWahl);
-    const schl = chSchluessel(chWahl, chModus, chPreset);
+    const schl = chSchluessel(chWahl, chModus, def.community ? def.preset : chPreset);
     const l = chListen[schl] || {};
     const a = chAlleZeiten(schl);
     const o = chOnline();
     const st = $('ch-liste-status');
-    st.textContent = l.laedt ? t('Lade Bestenliste …')
+    st.textContent = def.community
+      ? (communityHolt && !communityOnline ? t('Lade Bestenliste …')
+         : a.zeiten.length === 0 ? t('Noch keine Zeiten eingetragen. Fahr die Strecke, dann erscheint deine Zeit hier.')
+         : a.online ? t('Community-Bestenliste') + ': ' + a.zeiten.length + ' ' + t('Zeiten')
+         : t('Gemeinsame Liste nicht erreichbar, hier deine eigenen Zeiten.'))
+      : l.laedt ? t('Lade Bestenliste …')
       : a.zeiten.length === 0 ? t('Noch keine Zeiten eingetragen. Fahr die Challenge, dann erscheint deine Zeit hier.')
       : a.online ? t('Online-Bestenliste') + ': ' + a.zeiten.length + ' ' + t('Zeiten')
         + (l.stand ? ' · ' + t('Stand') + ' ' + new Date(l.stand).toLocaleTimeString(lang === 'en' ? 'en-GB' : 'de-DE', { hour: '2-digit', minute: '2-digit' }) : '')
@@ -1679,11 +1769,13 @@
     if (!tb) return;
     const modus = schl.split('|')[1];
     // Ueberschrift und Hinweis gehoeren zur 3er-Serie: nur bei Beste-Runde zeigen.
-    const h3 = $('ch-zweite-3er'), hinweis = $('ch-hinweis-3er');
-    if (h3) h3.hidden = modus !== 'hotlap';
-    if (hinweis) hinweis.hidden = modus !== 'hotlap';
-    if (modus !== 'hotlap') { tb.innerHTML = ''; return; }
     const def = chDef(schl.split('|')[0]);
+    // Community-Zeiten kommen ohne Rundenzeiten an: keine 3er-Serie.
+    const ohne = modus !== 'hotlap' || !!def.community;
+    const h3 = $('ch-zweite-3er'), hinweis = $('ch-hinweis-3er');
+    if (h3) h3.hidden = ohne;
+    if (hinweis) hinweis.hidden = ohne;
+    if (ohne) { tb.innerHTML = ''; return; }
     const minMs = chMinRundeMs(def);
     const beste = new Map();
     a.eintraege.forEach((z) => {
@@ -1905,6 +1997,7 @@
     });
   }
   $('ch-start').addEventListener('click', () => { if (chLauf) challengeAbbrechen(); else challengeStartenDialog(); });
+  if ($('ch-strecke-zurueck')) $('ch-strecke-zurueck').addEventListener('click', () => showSubpage('ch-community'));
   ['ch-url', 'ch-fahrer', 'ch-hochladen'].forEach((id) => $(id).addEventListener('change', chOnlineSpeichern));
   // Derselbe Name direkt auf der Strecken-Seite (BESTELLT: "im Challenges-Bildschirm nochmal
   // erlauben, dass ich meinen Username fuer die Bestenliste festlege").

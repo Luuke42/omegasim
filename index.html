@@ -3654,6 +3654,11 @@
   .community-zeile b { font-size: 13px; }
   .community-zeile em { font-style: normal; font-size: 11px; color: var(--muted); }
   .community-zeile button { white-space: nowrap; }
+  /* v0.9.49: Bild + Text als ein Knopf, der die Seite der Strecke oeffnet. */
+  .community-zeile .community-oeffnen { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+    background: none; border: 1px solid transparent; padding: 2px; text-align: left; color: inherit;
+    white-space: normal; cursor: pointer; border-radius: 8px; }
+  .community-zeile .community-oeffnen:hover, .community-zeile .community-oeffnen:focus-visible { border-color: var(--info); }
   /* Etwas Abstand zwischen Teilen und Aktionen, damit "Leeren" nicht neben "Haarnadel"
      steht und aussieht wie ein weiteres Streckenteil. */
   .tp-actions { margin-bottom: 4px; }
@@ -4457,7 +4462,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">0.9.48</span></span>
+        <span class="foot-ver">v<span id="app-version">0.9.50</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -5296,6 +5301,13 @@
       <h2>Community-Bestzeiten <span class="wip-tag">experimentell</span></h2>
       <div id="community-bereich"></div>
     </div>
+    <!-- v0.9.49: EINE Community-Strecke (chCommunitySeite). Keine Kachel und kein Reiter -
+         die Strecken wechseln; geoeffnet wird aus der Liste, Zurueck fuehrt dorthin. -->
+    <div class="card subpage" id="sub-ch-strecke">
+      <button class="misc-back" id="ch-strecke-zurueck" type="button">&larr; Community-Bestzeiten</button>
+      <h2><span class="ch-titel" data-i18n-skip></span> <span class="wip-tag">experimentell</span></h2>
+      <div class="ch-platz"></div>
+    </div>
     <div class="card subpage" id="sub-ch-online">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
       <h2>Online-Bestenliste</h2>
@@ -5573,6 +5585,7 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>0.9</span></b></p>
       <ul class="muted" id="patchnotes-09" style="padding-left:20px; line-height:1.7">
+        <li>Community-Bestzeiten: Jede Strecke hat jetzt eine eigene Seite wie die Wochenstrecken, ge&#246;ffnet mit einem Tipp auf Bild oder Namen in der Liste: gro&#223;e Karte (Tipp f&#252;r Vollbild), Spiegeln, L&#228;nge, Platzbedarf und Abstimmung, Teilepr&#252;fung, Medaillen, Start und die Bestenliste mit allen Zeiten. Zur&#252;ck (oder Kreis) f&#252;hrt in die Liste. Die Liste bleibt nicht mehr bei &#8222;Lade &#8230;&#8220; stehen. Auf luuke42.github.io/omegasim f&#252;hrt der APK-Link immer zum Release, damit jeder Download gez&#228;hlt wird.</li>
         <li>T&#246;ne nach echten Aufnahmen nachgestimmt (gerechnet, keine Aufnahme in der App): Reifenquietschen h&#246;her (um 800 Hz statt 620) und mit zitternder Tonh&#246;he wie haftendes und rutschendes Gummi; Schalten mit rauschendem Metall-Klacken statt Ton; Abblasventil l&#228;nger (0,6 s) und mit langsamem Flattern; Auspuffknaller tiefer und voller; Laderpfeifen endet bei 5,8 kHz statt 7. Neu unter den Motorton-Zus&#228;tzen (experimentell): Abrollger&#228;usch, Reifen und Fahrtwind werden mit dem Tempo lauter und heller.</li>
         <li>Raum hat ein eigenes Men&#252; (Strecke &#8594; Raum, und &#8222;Raum&#8220; in der FAHREN-Streckenkachel auf der Bahn): Gr&#246;&#223;e, Raumgestalter, Tutorial und gespeicherte R&#228;ume mit Namen zum Laden und L&#246;schen. Im Editor blendet der Schalter &#8222;Raum&#8220; den Raum aus; ausgeblendet z&#228;hlt er auch f&#252;r Zufallsstrecken nicht. Ziehen im Editor: die Strecke folgt jetzt Finger, Maus und rechtem Stick, der Raum bleibt liegen. Alle Streckenbilder (Fahren-Kachel, &#220;bersicht, Startaufstellung, Listen) zeigen die Originalteile mit Pfeilen. Neue Ladeanimation: ein Streckenteil dreht sich, abwechselnd Gerade und Rechtskurve. Community-Bestzeiten (vorher Community-Strecken): beim Einreichen w&#228;hlt man die Abstimmung (Arcade, Pro, GT3, F1, Realismus GT3), die Liste zeigt sie, und gefahren wird damit. Einzelrennen nach einem Mehrspieler-Rennen fragt nicht mehr &#8222;f&#252;r alle?&#8220;, wenn niemand sonst da ist.</li>
         <li>Behoben: 0.9.43 startete auf Ger&#228;ten mit eingetragenem Raum nicht (&#8222;Cannot access 'RAUM_ZELLE_CM' before initialization&#8220;) &#8211; die Editor-Vorschau zeichnete beim Laden schon die M&#246;bel, bevor deren Konstanten angelegt waren; die neue Start-Diagnose hat den Fehler angezeigt. Schalten klingt jetzt mechanisch: Schaltwalze und Klauenring rasten metallisch ein, darunter der Ruck im Antriebsstrang (statt des dumpfen &#8222;d&#252;b&#8220;). Lichthupe: Vorder- und R&#252;cklicht gehen gemeinsam aus und an, das Bremslicht leuchtet nicht mehr mit.</li>
@@ -12939,6 +12952,7 @@
     "Select bzw. Share (Strg+Z) nimmt den letzten Strich zurück, auch mehrmals.": "Select or Share (Ctrl+Z) undoes the last stroke, also several times.",
     "Zeigt die Strecke aus dem Editor im Raum, gedreht und verschoben, so dass die ganze Bahn mit 2 cm Abstand hineinpasst.": "Shows the editor track in the room, rotated and shifted so the whole track fits with 2 cm clearance.",
     "Kreis oder Esc schließt. Unter Strecke, Raum speicherst du den Raum mit Namen und lädst ihn später wieder.": "Circle or Esc closes. Under Track, Room you save the room with a name and load it again later.",
+    "Community-Bestzeiten: Jede Strecke hat jetzt eine eigene Seite wie die Wochenstrecken, geöffnet mit einem Tipp auf Bild oder Namen in der Liste: große Karte (Tipp für Vollbild), Spiegeln, Länge, Platzbedarf und Abstimmung, Teileprüfung, Medaillen, Start und die Bestenliste mit allen Zeiten. Zurück (oder Kreis) führt in die Liste. Die Liste bleibt nicht mehr bei „Lade …“ stehen. Auf luuke42.github.io/omegasim führt der APK-Link immer zum Release, damit jeder Download gezählt wird.": "Community best times: every track now has its own page like the weekly tracks, opened by tapping its picture or name in the list: large map (tap for full screen), mirroring, length, footprint and setup, parts check, medals, start and the leaderboard with all times. Back (or circle) returns to the list. The list no longer gets stuck on “Loading …”. On luuke42.github.io/omegasim the APK link always goes to the release, so every download is counted.",
     "Töne nach echten Aufnahmen nachgestimmt (gerechnet, keine Aufnahme in der App): Reifenquietschen höher (um 800 Hz statt 620) und mit zitternder Tonhöhe wie haftendes und rutschendes Gummi; Schalten mit rauschendem Metall-Klacken statt Ton; Abblasventil länger (0,6 s) und mit langsamem Flattern; Auspuffknaller tiefer und voller; Laderpfeifen endet bei 5,8 kHz statt 7. Neu unter den Motorton-Zusätzen (experimentell): Abrollgeräusch, Reifen und Fahrtwind werden mit dem Tempo lauter und heller.": "Sounds retuned against real recordings (still synthesised, no recording in the app): tyre squeal higher (around 800 Hz instead of 620) with a jittering pitch like rubber gripping and slipping; gearshift with a noisy metal clack instead of a tone; blow-off valve longer (0.6 s) with a slow flutter; exhaust pops lower and fuller; turbo whistle tops out at 5.8 kHz instead of 7. New among the engine sound extras (experimental): rolling noise, tyres and wind get louder and brighter with speed.",
     "Raum hat ein eigenes Menü (Strecke → Raum, und „Raum“ in der FAHREN-Streckenkachel auf der Bahn): Größe, Raumgestalter, Tutorial und gespeicherte Räume mit Namen zum Laden und Löschen. Im Editor blendet der Schalter „Raum“ den Raum aus; ausgeblendet zählt er auch für Zufallsstrecken nicht. Ziehen im Editor: die Strecke folgt jetzt Finger, Maus und rechtem Stick, der Raum bleibt liegen. Alle Streckenbilder (Fahren-Kachel, Übersicht, Startaufstellung, Listen) zeigen die Originalteile mit Pfeilen. Neue Ladeanimation: ein Streckenteil dreht sich, abwechselnd Gerade und Rechtskurve. Community-Bestzeiten (vorher Community-Strecken): beim Einreichen wählt man die Abstimmung (Arcade, Pro, GT3, F1, Realismus GT3), die Liste zeigt sie, und gefahren wird damit. Einzelrennen nach einem Mehrspieler-Rennen fragt nicht mehr „für alle?“, wenn niemand sonst da ist.": "Room has its own menu (Track → Room, and “Room” in the DRIVE track tile on the rail): size, room designer, tutorial and saved rooms with names to load and delete. In the editor the “Room” switch hides the room; hidden, it is also ignored for random tracks. Dragging in the editor: the track now follows finger, mouse and right stick, the room stays put. All track pictures (drive tile, overview, starting grid, lists) show the original pieces with arrows. New loading animation: a track piece spins, alternating straight and right curve. Community best times (formerly community tracks): when submitting you choose the setup (Arcade, Pro, GT3, F1, Realism GT3), the list shows it, and it is driven with it. A single-player race after a multiplayer race no longer asks “for everyone?” when nobody else is there.",
     "Behoben: 0.9.43 startete auf Geräten mit eingetragenem Raum nicht („Cannot access 'RAUM_ZELLE_CM' before initialization“) – die Editor-Vorschau zeichnete beim Laden schon die Möbel, bevor deren Konstanten angelegt waren; die neue Start-Diagnose hat den Fehler angezeigt. Schalten klingt jetzt mechanisch: Schaltwalze und Klauenring rasten metallisch ein, darunter der Ruck im Antriebsstrang (statt des dumpfen „düb“). Lichthupe: Vorder- und Rücklicht gehen gemeinsam aus und an, das Bremslicht leuchtet nicht mehr mit.": "Fixed: 0.9.43 did not start on devices with a room set (“Cannot access 'RAUM_ZELLE_CM' before initialization”) – the editor preview already drew the furniture while loading, before its constants existed; the new start diagnostics showed the error. Gear changes now sound mechanical: shift drum and dog ring engage with a metallic click, with the driveline jolt underneath (instead of the dull “dub”). Headlight flash: front and rear lights go off and on together, the brake light no longer lights up.",
@@ -13733,6 +13747,12 @@
     "Name der Aufnahme": "Recording name",
     "Name der Strecke": "Track name",
     "Community-Bestzeiten": "Community best times",
+    "Community-Strecke mit {n} Teilen, gefahren mit der Abstimmung {p}.": "Community track with {n} pieces, driven with the {p} setup.",
+    "Noch keine Zeiten eingetragen. Fahr die Strecke, dann erscheint deine Zeit hier.": "No times yet. Drive the track and your time appears here.",
+    "Community-Bestenliste": "Community leaderboard",
+    "Gemeinsame Liste nicht erreichbar, hier deine eigenen Zeiten.": "Shared list unreachable, showing your own times.",
+    "Strecke öffnen": "Open track",
+    "← Community-Bestzeiten": "← Community best times",
     "Eigene Strecken mit Abstimmung einreichen und Bestzeiten teilen.": "Submit your own tracks with a setup and share best times.",
     "Eigene Strecke einreichen": "Submit my track",
     "Noch keine Community-Strecken. Reiche deine Strecke ein.": "No community tracks yet. Submit your track.",
@@ -23669,6 +23689,8 @@
     const lb = $('lb-wrap');
     if (lb && lb.classList.contains('on') && $('lb-close')) { $('lb-close').click(); return true; }
     const tab = kAktiverTab();
+    // Eine Community-Strecke (v0.9.49) geht zurueck in ihre Liste, nicht auf die Kacheln.
+    if (typeof chCommunitySeiteOffen === 'function' && chCommunitySeiteOffen()) { showSubpage('ch-community'); return true; }
     if (tab === 'info' && document.querySelector('#tab-info .subpage.on')) { konsoleZeige('fahren'); return true; }
     if (document.querySelector('.tabpage.active .subpage.on')) { showSubpage(''); return true; }
     if (tab === 'home' || tab === 'fahren') return false;
@@ -23705,7 +23727,7 @@
           // derselben Ebene wie die Wochenkategorien - BESTELLT: "wöchentliche Challenges und
           // Dauerrennen sind auf verschiedenen menü-ebenen, bitte angleichen".
           an: k.dataset.ch ? k.dataset.ch === chWahl
-              : k.dataset.sub === offen.id.replace(/^sub-/, ''),
+              : k.dataset.sub === (offen.id === 'sub-ch-strecke' ? 'ch-community' : offen.id.replace(/^sub-/, '')),
           wahl: () => {
             if (k.dataset.ch && typeof challengeSeiteZeigen === 'function') challengeSeiteZeigen(k.dataset.ch);
             else showSubpage(k.dataset.sub);
@@ -38395,6 +38417,10 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   function chIdee(def) {
     if (def.idee) return t(def.idee);
     const tiles = chTiles(def);
+    if (def.community) {
+      return t('Community-Strecke mit {n} Teilen, gefahren mit der Abstimmung {p}.')
+        .replace('{n}', tiles.length).replace('{p}', communityPresetName(def.preset));
+    }
     const gerade = tiles.map((x) => x.type === TILE_TYPE.STRAIGHT || x.type === TILE_TYPE.START);
     let g = 0;
     for (let i = 0; i < gerade.length; i++) {
@@ -38825,7 +38851,18 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
         return communityOnline;
       })
       .catch(() => { communityFehler = true; communityOnlineAt = Date.now(); return communityOnline; })
-      .then((j) => { communityHolt = false; return j; });
+      .then((j) => {
+        communityHolt = false;
+        // v0.9.49: WER GERADE HINSCHAUT, bekommt das Ergebnis zu sehen. Lief beim Oeffnen der
+        // Liste schon eine Abfrage (etwa von der Seite einer Strecke), startete communityZeichnen
+        // keine zweite - und nach dem Ende der ersten zeichnete niemand neu: "Lade ..." blieb
+        // stehen. Ohne Schleife, denn communityZeichnen holt nur, wenn nichts mehr laeuft und
+        // die Liste veraltet ist.
+        const liste = $('sub-ch-community');
+        if (liste && liste.classList.contains('on')) communityZeichnen();
+        if (typeof chCommunitySeiteOffen === 'function' && chCommunitySeiteOffen()) chZeichneListe();
+        return j;
+      });
   }
   // Online-Liste + lokale Daten zu EINER Sicht. Online-Strecken haben ihre Server-Kennung; eine
   // lokale Strecke, die (auch gespiegelt) online schon steht, wird unter deren Kennung gefuehrt.
@@ -39009,6 +39046,13 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     for (const tr of liste) {
       const row = document.createElement('div');
       row.className = 'community-zeile';
+      // v0.9.49: Bild und Name sind EIN Knopf, der die eigene Seite der Strecke oeffnet
+      // (grosse Karte, Spiegeln, Bestenliste). "Zeit fahren" daneben startet direkt.
+      const auf = document.createElement('button');
+      auf.type = 'button';
+      auf.className = 'community-oeffnen';
+      auf.setAttribute('aria-label', t('Strecke öffnen') + ': ' + tr.id + ' ' + tr.name);
+      auf.onclick = () => challengeSeiteZeigen(tr.id);
       // BESTELLT: "community strecken: layout in der vorschau zeigen".
       const mini = document.createElement('span');
       mini.className = 'community-mini';
@@ -39017,7 +39061,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
         const p = codeToTrack(tr.code);
         if (p) { const merk = trackRotationDeg; trackRotationDeg = 0; try { mini.innerHTML = renderTrackPreview(p.tiles, null, {}).html; } finally { trackRotationDeg = merk; } }
       } catch (e) { /* ohne Bild */ }
-      row.appendChild(mini);
+      auf.appendChild(mini);
       const links = document.createElement('div');
       links.className = 'community-text';
       const b = document.createElement('b');
@@ -39041,7 +39085,8 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       const z = document.createElement('button');
       z.textContent = t('Zeit fahren');
       z.onclick = () => communityStarten(tr);
-      row.appendChild(links); row.appendChild(z);
+      auf.appendChild(links);
+      row.appendChild(auf); row.appendChild(z);
       wrap.appendChild(row);
     }
     bereich.appendChild(wrap);
@@ -39058,9 +39103,9 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       return;
     }
     if (kRennenLaeuft()) { showHudToast(t('Erst das laufende Rennen beenden')); return; }
+    if (chWahl !== tr.id) chSpiegel = false;
     chWahl = tr.id;
     chModus = 'hotlap';
-    chSpiegel = false;
     if (typeof challengeStarten === 'function') challengeStarten();
   }
 
@@ -39289,6 +39334,11 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     return chAuffrischenLaeuft;
   }
   function chListeLaden(schl, frisch) {
+    const idC = schl.split('|')[0], defC = chDef(idC);
+    if (defC && defC.community && defC.id === idC) {
+      if (chSeiteOffen()) chZeichneListe();
+      return communityHolen(!!frisch).then(() => { if (chSeiteOffen()) chZeichneListe(); });
+    }
     const o = chOnline();
     if (!o.url) { chListen[schl] = { zeiten: null, online: false }; return Promise.resolve(); }
     if (o.url === CH_STANDARD_URL) {
@@ -39588,7 +39638,11 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       if (lauf.community) {
         communityZeit(communityLesen(), erg.id, erg.zeit, erg.fahrer);
         hochgeladen = communityPost({ art: 'community-zeit', id: erg.id, zeit_ms: Math.round(erg.zeit), fahrer: erg.fahrer || '' })
-          .then((r) => { hochgeladen = !!(r && r.ok); communityHolen(true).then(() => communityZeichnen()); return hochgeladen; })
+          .then((r) => {
+            hochgeladen = !!(r && r.ok);
+            communityHolen(true).then(() => { communityZeichnen(); if (chSeiteOffen()) chZeichneListe(); });
+            return hochgeladen;
+          })
           .catch(() => { hochgeladen = false; return false; });
         communityZeichnen();
       } else {
@@ -39625,7 +39679,8 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
         }
       }
       const knoepfe = lauf.community
-        ? [[t('Nochmal'), () => { chWahl = erg.id; chModus = erg.modus; challengeStarten(); }],
+        ? [[t('Ergebnis ansehen'), () => { showTab('challenges'); challengeSeiteZeigen(erg.id); }],
+           [t('Nochmal'), () => { chWahl = erg.id; chModus = erg.modus; challengeStarten(); }],
            [t('Schließen'), null]]
         : [[t('Ergebnis ansehen'), () => konsoleZeige('challenges', 'ch-' + erg.id)],
            [t('Nochmal'), () => { chWahl = erg.id; chModus = erg.modus; challengeStarten(); }],
@@ -39641,6 +39696,15 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // noch fehlen - so steht ein eben gefahrener Lauf sofort in der Liste, auch wenn der
   // Schnappschuss eine Stunde alt ist.
   function chAlleZeiten(schl) {
+    // v0.9.49: eine Community-Strecke hat ihre Zeiten in der Community-Liste (online und
+    // lokal zusammengefuehrt, communitySicht), nicht in der Challenge-Bestenliste.
+    const idC = schl.split('|')[0], defC = chDef(idC);
+    if (defC && defC.community && defC.id === idC) {
+      const data = communitySicht();
+      const eintraege = (data.times[idC] || []).map((z) => ({ zeit_ms: +z.zeit, fahrer: z.fahrer || '',
+        geraet: z.geraet, auto: '' }));
+      return { zeiten: eintraege.map((z) => z.zeit_ms), online: !!data.online, eintraege };
+    }
     const l = chListen[schl];
     const lok = chLokal(schl).map((z) => ({ zeit_ms: z.zeit, auto: z.auto, fahrer: z.fahrer,
       geraet: z.geraet, runden: Array.isArray(z.runden) ? z.runden.length : undefined,
@@ -39690,6 +39754,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     if (k < 0) {
       const def = chDef(id);
       if (!def || def.id !== id) return;
+      if (def.community) { chCommunitySeite(def); return; }
       const kat = def.kat.toLowerCase();
       // 'e' = Dauerrennen (sub-ch-e), sonst die Wochenkategorien a-d.
       if ('abcde'.indexOf(kat) < 0) return;
@@ -39720,16 +39785,57 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     chZeichneDetail();
     chListeLaden(chSchluessel(chWahl, chModus, chPreset));
   }
+  // ---- EINE COMMUNITY-STRECKE ALS EIGENE SEITE (v0.9.49) ----------------------------
+  // BESTELLT: "Fuer die Community-Strecken jeweils so ein Menue machen wie fuer die anderen
+  // Strecken, also eine eigene Ansicht mit Zeiten, groesserem Layout (aus dem kleinen
+  // Thumbnail ist das nicht gut zu erkennen), Strecke-spiegeln-Funktion, etc. Es muss nicht
+  // in den Tabs angezeigt werden, da sich die ja aendern."
+  // Dieselbe Detailansicht (ch-detail) wie die Wochenstrecken, in einer eigenen Unterseite
+  // ohne Kachel: sie wird aus der Liste geoeffnet, und Zurueck fuehrt in die Liste. Gefahren
+  // wird nur "Beste Runde" (die Community-Liste kennt keine Rennen), mit der eingereichten
+  // Abstimmung.
+  function chCommunitySeite(def) {
+    if (chWahl !== def.id) chSpiegel = false;
+    if ($('ch-spiegel')) $('ch-spiegel').checked = chSpiegel;
+    if ($('ch-spiegel-knopf')) {
+      $('ch-spiegel-knopf').setAttribute('aria-pressed', chSpiegel ? 'true' : 'false');
+      $('ch-spiegel-knopf').classList.toggle('an', chSpiegel);
+    }
+    chWahl = def.id;
+    chModus = 'hotlap';
+    document.querySelectorAll('.subpage').forEach(p => p.classList.remove('on'));
+    document.querySelectorAll('.subpage-home').forEach(h => { h.style.display = 'none'; });
+    const sp = $('sub-ch-strecke');
+    if (sp) sp.classList.add('on');
+    const titel = document.querySelector('#sub-ch-strecke .ch-titel');
+    if (titel) titel.textContent = def.id + ' \u00b7 ' + def.name;
+    const platz = document.querySelector('#sub-ch-strecke .ch-platz');
+    const d = $('ch-detail');
+    if (platz && d && d.parentNode !== platz) platz.appendChild(d);
+    if (d) d.hidden = false;
+    chZeichneDetail();
+    chListeLaden(chSchluessel(chWahl, chModus, def.preset));
+    window.scrollTo(0, 0);
+    if (typeof konsoleNachSubpage === 'function') konsoleNachSubpage('ch-strecke');
+  }
+  function chCommunitySeiteOffen() {
+    const sp = $('sub-ch-strecke');
+    return !!(sp && sp.classList.contains('on'));
+  }
   function chZeichneDetail() {
     const d = $('ch-detail');
     if (!d) return;
     const def = chDef(chWahl), tiles = chTiles(def);
+    if (def.community) chModus = 'hotlap';
     $('ch-karte').innerHTML = chKarte(def, true);
     $('ch-idee').textContent = chIdee(def);
     const [bw, bh] = chFlaeche(tiles);
     const m = trackLaengeM(tiles);
     $('ch-fakten').textContent = t('Länge') + ' ' + chZahl(m, 2) + ' m · '
-      + t('Platzbedarf') + ' ' + chZahl(bw, 2) + ' × ' + chZahl(bh, 2) + ' m · ' + chSetsText(def);
+      + t('Platzbedarf') + ' ' + chZahl(bw, 2) + ' × ' + chZahl(bh, 2) + ' m · '
+      + (def.community ? t('Abstimmung') + ' ' + communityPresetName(def.preset) : chSetsText(def));
+    // Community: kein Rennmodus, der Umschalter faellt weg.
+    if ($('ch-modus')) $('ch-modus').hidden = !!def.community;
     document.querySelectorAll('#ch-modus [data-m]').forEach((b) => b.classList.toggle('an', b.dataset.m === chModus));
     const mh = $('ch-medaille-hinweis');
     if (mh) mh.innerHTML = chMedailleHinweis(def, chModus);
@@ -39750,7 +39856,8 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     if (chLetzt && chLetzt.id === chWahl) {
       e.hidden = false;
       const schl = chSchluessel(chLetzt.id, chLetzt.modus, chLetzt.preset);
-      $('ch-erg-titel').textContent = t(CH_MODUS_NAME[chLetzt.modus]) + ' · Pro';
+      $('ch-erg-titel').textContent = t(CH_MODUS_NAME[chLetzt.modus]) + ' · '
+        + (def.community ? communityPresetName(chLetzt.preset) : 'Pro');
       $('ch-erg-zeit').textContent = chLetzt.gueltig ? chZeit(chLetzt.zeit) : t('Nicht gewertet');
       $('ch-erg-text').textContent = chLetzt.gueltig ? chRangText(schl, chLetzt.zeit) : chGrundText(chLetzt);
       const ergSterne = chLetzt.gueltig ? chSterne(chDef(chWahl), chLetzt.modus, chLetzt.zeit) : 0;
@@ -39769,12 +39876,17 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   }
   function chZeichneListe() {
     const def = chDef(chWahl);
-    const schl = chSchluessel(chWahl, chModus, chPreset);
+    const schl = chSchluessel(chWahl, chModus, def.community ? def.preset : chPreset);
     const l = chListen[schl] || {};
     const a = chAlleZeiten(schl);
     const o = chOnline();
     const st = $('ch-liste-status');
-    st.textContent = l.laedt ? t('Lade Bestenliste …')
+    st.textContent = def.community
+      ? (communityHolt && !communityOnline ? t('Lade Bestenliste …')
+         : a.zeiten.length === 0 ? t('Noch keine Zeiten eingetragen. Fahr die Strecke, dann erscheint deine Zeit hier.')
+         : a.online ? t('Community-Bestenliste') + ': ' + a.zeiten.length + ' ' + t('Zeiten')
+         : t('Gemeinsame Liste nicht erreichbar, hier deine eigenen Zeiten.'))
+      : l.laedt ? t('Lade Bestenliste …')
       : a.zeiten.length === 0 ? t('Noch keine Zeiten eingetragen. Fahr die Challenge, dann erscheint deine Zeit hier.')
       : a.online ? t('Online-Bestenliste') + ': ' + a.zeiten.length + ' ' + t('Zeiten')
         + (l.stand ? ' · ' + t('Stand') + ' ' + new Date(l.stand).toLocaleTimeString(lang === 'en' ? 'en-GB' : 'de-DE', { hour: '2-digit', minute: '2-digit' }) : '')
@@ -39897,11 +40009,13 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     if (!tb) return;
     const modus = schl.split('|')[1];
     // Ueberschrift und Hinweis gehoeren zur 3er-Serie: nur bei Beste-Runde zeigen.
-    const h3 = $('ch-zweite-3er'), hinweis = $('ch-hinweis-3er');
-    if (h3) h3.hidden = modus !== 'hotlap';
-    if (hinweis) hinweis.hidden = modus !== 'hotlap';
-    if (modus !== 'hotlap') { tb.innerHTML = ''; return; }
     const def = chDef(schl.split('|')[0]);
+    // Community-Zeiten kommen ohne Rundenzeiten an: keine 3er-Serie.
+    const ohne = modus !== 'hotlap' || !!def.community;
+    const h3 = $('ch-zweite-3er'), hinweis = $('ch-hinweis-3er');
+    if (h3) h3.hidden = ohne;
+    if (hinweis) hinweis.hidden = ohne;
+    if (ohne) { tb.innerHTML = ''; return; }
     const minMs = chMinRundeMs(def);
     const beste = new Map();
     a.eintraege.forEach((z) => {
@@ -40123,6 +40237,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     });
   }
   $('ch-start').addEventListener('click', () => { if (chLauf) challengeAbbrechen(); else challengeStartenDialog(); });
+  if ($('ch-strecke-zurueck')) $('ch-strecke-zurueck').addEventListener('click', () => showSubpage('ch-community'));
   ['ch-url', 'ch-fahrer', 'ch-hochladen'].forEach((id) => $(id).addEventListener('change', chOnlineSpeichern));
   // Derselbe Name direkt auf der Strecken-Seite (BESTELLT: "im Challenges-Bildschirm nochmal
   // erlauben, dass ich meinen Username fuer die Bestenliste festlege").
@@ -72371,6 +72486,11 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     const subs = [...document.querySelectorAll('.subpage[id^="sub-"]')].map((e) => e.id.slice(4));
     const oeffner = new Set([...document.querySelectorAll('[data-sub], [data-k-sub]')]
       .map((e) => e.dataset.sub || e.dataset.kSub));
+    // Unterseiten, die aus ERZEUGTEN Listenzeilen aufgehen, haben keinen festen Oeffner im
+    // Dokument. Sie gelten als erreichbar, wenn ihre Liste es ist. v0.9.49: eine
+    // Community-Strecke oeffnet sich aus jeder Zeile der Community-Liste (communityZeichnen).
+    const AUS_LISTE = { 'ch-strecke': 'ch-community' };
+    Object.keys(AUS_LISTE).forEach((x) => { if (oeffner.has(AUS_LISTE[x])) oeffner.add(x); });
     const ohne = subs.filter((x) => !oeffner.has(x));
     return { ok: !fehlt.length && !ohne.length,
              mass: tabs.length + ' Seiten, ' + subs.length + ' Unterseiten'
@@ -80105,6 +80225,62 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   });
 
   // ---- v0.9.45: Raum-Menue, Raum-Schalter im Editor, Mehrspieler-Frage ----
+  // ---- v0.9.49: Community-Strecke als eigene Seite ----
+  stAdd('Community: eigene Seite je Strecke (Karte, Spiegeln, Zeiten, Zurueck in die Liste)', () => {
+    const f = [];
+    const KEY = 'omegasim-community';
+    const merkLs = localStorage.getItem(KEY);
+    const merk = { wahl: chWahl, modus: chModus, spiegel: chSpiegel, online: communityOnline };
+    const onVorher = [...document.querySelectorAll('.subpage.on')];
+    const homeVorher = [...document.querySelectorAll('.subpage-home')].map((h) => h.style.display);
+    const detailVorher = { eltern: $('ch-detail').parentNode, hidden: $('ch-detail').hidden };
+    try {
+      communityOnline = null;
+      // Eine Strecke mit Haarnadeln: gespiegelt sieht sie anders aus als ungespiegelt.
+      const vorlage = CH_ALLE.find((d) => d.kat === 'C') || CH_ALLE[0];
+      localStorage.setItem(KEY, JSON.stringify({ nextId: 10000,
+        tracks: [{ id: '9999', code: vorlage.code, name: 'Probe', preset: 'gt3' }],
+        times: { 9999: [{ zeit: 5400, fahrer: 'A', geraet: 'x1', datum: 1 },
+                        { zeit: 6100, fahrer: 'B', geraet: 'x2', datum: 2 }] } }));
+      chSpiegel = true; chWahl = 'oval';
+      challengeSeiteZeigen('9999');
+      if (!chCommunitySeiteOffen()) f.push('Seite geht nicht auf');
+      if (chSpiegel) f.push('Spiegeln einer anderen Strecke bleibt stehen');
+      const titel = document.querySelector('#sub-ch-strecke .ch-titel').textContent;
+      if (titel.indexOf('Probe') < 0) f.push('Titel: ' + titel);
+      if (!$('ch-detail').closest('#sub-ch-strecke')) f.push('Detail nicht in der Seite');
+      if (!$('ch-karte').querySelector('svg')) f.push('keine Karte');
+      if (!$('ch-modus').hidden) f.push('Rennmodus waehlbar');
+      if ($('ch-fakten').textContent.indexOf(communityPresetName('gt3')) < 0) f.push('Abstimmung fehlt: ' + $('ch-fakten').textContent);
+      const zeilen = $('ch-liste').querySelectorAll('tr').length;
+      if (zeilen !== 2) f.push('Bestenliste ' + zeilen + ' statt 2 Zeilen');
+      const vorher = $('ch-karte').innerHTML;
+      $('ch-spiegel-knopf').click();
+      if (!chSpiegel || $('ch-karte').innerHTML === vorher) f.push('Spiegeln wirkt nicht');
+      $('ch-spiegel-knopf').click();
+      // Kreis fuehrt in die Liste, nicht auf die Kacheln.
+      konsoleZurueck();
+      if (!$('sub-ch-community').classList.contains('on')) f.push('Zurueck fuehrt nicht in die Liste');
+      if (!document.querySelector('#community-bereich .community-oeffnen')) f.push('Liste ohne Oeffnen-Knopf');
+      // Und eine normale Wochenstrecke zeigt den Rennmodus wieder.
+      chWahl = CHALLENGES[0].id; chZeichneDetail();
+      if ($('ch-modus').hidden) f.push('Rennmodus bleibt bei Wochenstrecken versteckt');
+    } finally {
+      if (merkLs === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, merkLs);
+      chWahl = merk.wahl; chModus = merk.modus; chSpiegel = merk.spiegel;
+      if (!communityOnline) communityOnline = merk.online;
+      $('ch-spiegel').checked = chSpiegel;
+      $('ch-spiegel-knopf').classList.toggle('an', chSpiegel);
+      document.querySelectorAll('.subpage.on').forEach((p) => p.classList.remove('on'));
+      onVorher.forEach((p) => p.classList.add('on'));
+      document.querySelectorAll('.subpage-home').forEach((h, i) => { h.style.display = homeVorher[i]; });
+      if (detailVorher.eltern && $('ch-detail').parentNode !== detailVorher.eltern) detailVorher.eltern.appendChild($('ch-detail'));
+      $('ch-detail').hidden = detailVorher.hidden;
+      try { chZeichneDetail(); } catch (e) { /* egal */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Seite mit Karte, Abstimmung, 2 Zeiten, Spiegeln, Kreis zurueck in die Liste' };
+  });
+
   stAdd('Raum: speichern, laden, loeschen; Editor-Schalter blendet ihn fuer Zufallsstrecken aus', () => {
     const f = [];
     const keys = ['omegasim-raum', 'omegasim-raum-form', 'omegasim-raeume', 'omegasim-raum-aktiv'];
@@ -81657,18 +81833,15 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     const a = $('home-apk');
     if (!a || (window.OMEGA_APP && window.OMEGA_APP.nativ)) return;
     if (/iPhone|iPad|iPod/.test(navigator.userAgent)) return;
+    // v0.9.49: DIREKT aufs Release, ohne Rueckfrage bei der API. Der Rueckfall auf die Datei
+    // im Repo zaehlte nicht mit, und genau er griff oft: die GitHub-API erlaubt ohne Anmeldung
+    // 60 Abfragen je Stunde und Adresse (ein Uni- oder Firmennetz ist schnell darueber), und
+    // wer klickte, bevor die Antwort da war, bekam ebenfalls die Datei. Releases gibt es seit
+    // v0.9.6, der Rueckfall wird also nicht mehr gebraucht.
     if (/(^|\.)luuke42\.github\.io$/i.test(location.hostname)) {
       const info = $('app-apk-link');
-      a.href = 'apk/OmegaSim.apk';
-      if (info) info.href = 'apk/OmegaSim.apk';
-      fetch('https://api.github.com/repos/Luuke42/omegasim/releases/latest', { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((j) => {
-          if (!j || !(j.assets || []).some((x) => x.name === 'OmegaSim.apk')) return;
-          a.href = 'https://github.com/Luuke42/omegasim/releases/latest/download/OmegaSim.apk';
-          if (info) info.href = 'https://github.com/Luuke42/omegasim/releases/latest';
-        })
-        .catch(() => { /* Datei im Repo bleibt */ });
+      a.href = 'https://github.com/Luuke42/omegasim/releases/latest/download/OmegaSim.apk';
+      if (info) info.href = 'https://github.com/Luuke42/omegasim/releases/latest';
     }
     a.hidden = false;
   })();

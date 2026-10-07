@@ -22,18 +22,15 @@
     const a = $('home-apk');
     if (!a || (window.OMEGA_APP && window.OMEGA_APP.nativ)) return;
     if (/iPhone|iPad|iPod/.test(navigator.userAgent)) return;
+    // v0.9.49: DIREKT aufs Release, ohne Rueckfrage bei der API. Der Rueckfall auf die Datei
+    // im Repo zaehlte nicht mit, und genau er griff oft: die GitHub-API erlaubt ohne Anmeldung
+    // 60 Abfragen je Stunde und Adresse (ein Uni- oder Firmennetz ist schnell darueber), und
+    // wer klickte, bevor die Antwort da war, bekam ebenfalls die Datei. Releases gibt es seit
+    // v0.9.6, der Rueckfall wird also nicht mehr gebraucht.
     if (/(^|\.)luuke42\.github\.io$/i.test(location.hostname)) {
       const info = $('app-apk-link');
-      a.href = 'apk/OmegaSim.apk';
-      if (info) info.href = 'apk/OmegaSim.apk';
-      fetch('https://api.github.com/repos/Luuke42/omegasim/releases/latest', { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((j) => {
-          if (!j || !(j.assets || []).some((x) => x.name === 'OmegaSim.apk')) return;
-          a.href = 'https://github.com/Luuke42/omegasim/releases/latest/download/OmegaSim.apk';
-          if (info) info.href = 'https://github.com/Luuke42/omegasim/releases/latest';
-        })
-        .catch(() => { /* Datei im Repo bleibt */ });
+      a.href = 'https://github.com/Luuke42/omegasim/releases/latest/download/OmegaSim.apk';
+      if (info) info.href = 'https://github.com/Luuke42/omegasim/releases/latest';
     }
     a.hidden = false;
   })();

@@ -9728,6 +9728,11 @@
     const subs = [...document.querySelectorAll('.subpage[id^="sub-"]')].map((e) => e.id.slice(4));
     const oeffner = new Set([...document.querySelectorAll('[data-sub], [data-k-sub]')]
       .map((e) => e.dataset.sub || e.dataset.kSub));
+    // Unterseiten, die aus ERZEUGTEN Listenzeilen aufgehen, haben keinen festen Oeffner im
+    // Dokument. Sie gelten als erreichbar, wenn ihre Liste es ist. v0.9.49: eine
+    // Community-Strecke oeffnet sich aus jeder Zeile der Community-Liste (communityZeichnen).
+    const AUS_LISTE = { 'ch-strecke': 'ch-community' };
+    Object.keys(AUS_LISTE).forEach((x) => { if (oeffner.has(AUS_LISTE[x])) oeffner.add(x); });
     const ohne = subs.filter((x) => !oeffner.has(x));
     return { ok: !fehlt.length && !ohne.length,
              mass: tabs.length + ' Seiten, ' + subs.length + ' Unterseiten'
@@ -17462,6 +17467,62 @@
   });
 
   // ---- v0.9.45: Raum-Menue, Raum-Schalter im Editor, Mehrspieler-Frage ----
+  // ---- v0.9.49: Community-Strecke als eigene Seite ----
+  stAdd('Community: eigene Seite je Strecke (Karte, Spiegeln, Zeiten, Zurueck in die Liste)', () => {
+    const f = [];
+    const KEY = 'omegasim-community';
+    const merkLs = localStorage.getItem(KEY);
+    const merk = { wahl: chWahl, modus: chModus, spiegel: chSpiegel, online: communityOnline };
+    const onVorher = [...document.querySelectorAll('.subpage.on')];
+    const homeVorher = [...document.querySelectorAll('.subpage-home')].map((h) => h.style.display);
+    const detailVorher = { eltern: $('ch-detail').parentNode, hidden: $('ch-detail').hidden };
+    try {
+      communityOnline = null;
+      // Eine Strecke mit Haarnadeln: gespiegelt sieht sie anders aus als ungespiegelt.
+      const vorlage = CH_ALLE.find((d) => d.kat === 'C') || CH_ALLE[0];
+      localStorage.setItem(KEY, JSON.stringify({ nextId: 10000,
+        tracks: [{ id: '9999', code: vorlage.code, name: 'Probe', preset: 'gt3' }],
+        times: { 9999: [{ zeit: 5400, fahrer: 'A', geraet: 'x1', datum: 1 },
+                        { zeit: 6100, fahrer: 'B', geraet: 'x2', datum: 2 }] } }));
+      chSpiegel = true; chWahl = 'oval';
+      challengeSeiteZeigen('9999');
+      if (!chCommunitySeiteOffen()) f.push('Seite geht nicht auf');
+      if (chSpiegel) f.push('Spiegeln einer anderen Strecke bleibt stehen');
+      const titel = document.querySelector('#sub-ch-strecke .ch-titel').textContent;
+      if (titel.indexOf('Probe') < 0) f.push('Titel: ' + titel);
+      if (!$('ch-detail').closest('#sub-ch-strecke')) f.push('Detail nicht in der Seite');
+      if (!$('ch-karte').querySelector('svg')) f.push('keine Karte');
+      if (!$('ch-modus').hidden) f.push('Rennmodus waehlbar');
+      if ($('ch-fakten').textContent.indexOf(communityPresetName('gt3')) < 0) f.push('Abstimmung fehlt: ' + $('ch-fakten').textContent);
+      const zeilen = $('ch-liste').querySelectorAll('tr').length;
+      if (zeilen !== 2) f.push('Bestenliste ' + zeilen + ' statt 2 Zeilen');
+      const vorher = $('ch-karte').innerHTML;
+      $('ch-spiegel-knopf').click();
+      if (!chSpiegel || $('ch-karte').innerHTML === vorher) f.push('Spiegeln wirkt nicht');
+      $('ch-spiegel-knopf').click();
+      // Kreis fuehrt in die Liste, nicht auf die Kacheln.
+      konsoleZurueck();
+      if (!$('sub-ch-community').classList.contains('on')) f.push('Zurueck fuehrt nicht in die Liste');
+      if (!document.querySelector('#community-bereich .community-oeffnen')) f.push('Liste ohne Oeffnen-Knopf');
+      // Und eine normale Wochenstrecke zeigt den Rennmodus wieder.
+      chWahl = CHALLENGES[0].id; chZeichneDetail();
+      if ($('ch-modus').hidden) f.push('Rennmodus bleibt bei Wochenstrecken versteckt');
+    } finally {
+      if (merkLs === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, merkLs);
+      chWahl = merk.wahl; chModus = merk.modus; chSpiegel = merk.spiegel;
+      if (!communityOnline) communityOnline = merk.online;
+      $('ch-spiegel').checked = chSpiegel;
+      $('ch-spiegel-knopf').classList.toggle('an', chSpiegel);
+      document.querySelectorAll('.subpage.on').forEach((p) => p.classList.remove('on'));
+      onVorher.forEach((p) => p.classList.add('on'));
+      document.querySelectorAll('.subpage-home').forEach((h, i) => { h.style.display = homeVorher[i]; });
+      if (detailVorher.eltern && $('ch-detail').parentNode !== detailVorher.eltern) detailVorher.eltern.appendChild($('ch-detail'));
+      $('ch-detail').hidden = detailVorher.hidden;
+      try { chZeichneDetail(); } catch (e) { /* egal */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Seite mit Karte, Abstimmung, 2 Zeiten, Spiegeln, Kreis zurueck in die Liste' };
+  });
+
   stAdd('Raum: speichern, laden, loeschen; Editor-Schalter blendet ihn fuer Zufallsstrecken aus', () => {
     const f = [];
     const keys = ['omegasim-raum', 'omegasim-raum-form', 'omegasim-raeume', 'omegasim-raum-aktiv'];

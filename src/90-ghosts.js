@@ -130,49 +130,30 @@
   // angefasst und das Tauschen ist gefahrlos. Wer selbst zugewiesen hat, behaelt seine
   // Zuweisung - den Speicherschluessel zu erhoehen waere billiger gewesen und haette jede
   // eigene Zuweisung weggeworfen.
+  // v0.9.37, GEMELDET: "Kann es sein, dass die Tastenbelegung nicht gespeichert wird?"
+  // Gespeichert wurde sie - aber diese Aufraeumregel lief bei JEDEM Laden und setzte einzelne
+  // Tasten zurueck, sobald sie auf einer ALTEN Vorgabe lagen: Rennstart auf Kreuz (0) oder
+  // Select (8), gelbe Flagge auf Quadrat (2), Streckenansicht auf 10. Wer sich genau so eine
+  // Taste gelegt hatte, fand nach dem Neustart wieder die Werksbelegung vor.
+  // Jetzt: eine Versionsmarke (__v) in jeder gespeicherten Belegung. Die beiden PAAR-Regeln
+  // (alte Werksbelegungen aus der Zeit vor v0.5) greifen nur bei einer Belegung ohne Marke,
+  // also hoechstens einmal; die Einzeltasten-Regeln entfallen ganz - sie trafen seit
+  // Wochen nur noch eigene Wahl.
+  const BINDINGS_V = 2;
   function migrateBindings(b) {
+    if (b && b.__v >= BINDINGS_V) return b;
     const ist = (x, i) => x && x.type === 'button' && x.index === i;
     if (ist(b.pitstop, 4) && ist(b.trackview, 9)) {
       b.pitstop = { ...DEFAULT_BINDINGS.pitstop };
       b.trackview = { ...DEFAULT_BINDINGS.trackview };
       b.__migrated = true;
     }
-    // v0.5: LB und RB werden Leseart und Getriebe. Verschoben wird nur, wenn Rennstart und
-    // Streckenansicht noch genau auf den ALTEN Vorgaben liegen (RB=5 und LB=4) - dann hat
-    // sie niemand angefasst. Wer selbst zugewiesen hat, behaelt seine Zuweisung; die drei
-    // neuen Aktionen bekommt er trotzdem, weil loadBindings die Vorgaben untermischt.
     if (ist(b.racestart, 5) && ist(b.trackview, 4)) {
       b.racestart = { ...DEFAULT_BINDINGS.racestart };
       b.trackview = { ...DEFAULT_BINDINGS.trackview };
       b.__migrated2 = true;
     }
-    // v0.5.1: gelbe Flagge auf Kreuz, Rennstart auf Select, Streckenansicht und Wetter
-    // unbelegt. JE AKTION UNABHAENGIG und nicht gekoppelt - die gekoppelte Fassung darueber
-    // ist zweimal danebengegangen, und genau daran lag, dass L1 zwei Bedeutungen hatte: wer
-    // trackview gespeichert hatte und racestart nicht, wurde von ihr nicht erfasst.
-    //
-    // Verschoben wird nur, wer noch auf SEINER alten Vorgabe liegt. Wer selbst zugewiesen
-    // hat, behaelt seine Zuweisung, und der Kollisionsaufloeser faengt, was dabei doppelt
-    // liegen bleibt.
-    const ALT = { yellowflag: 2, racestart: 0, trackview: 10 };
-    for (const n of Object.keys(ALT)) {
-      if (ist(b[n], ALT[n])) {
-        b[n] = { ...DEFAULT_BINDINGS[n] };
-        b.__migrated3 = true;
-      }
-    }
-    // v0.4.50: Select traegt das Wetter, Rennstart bekommt ab Werk keine Taste.
-    //
-    // JE AKTION UNABHAENGIG, wie darueber, und aus demselben Grund: die gekoppelte Fassung
-    // ist in diesem Projekt zweimal danebengegangen. Wer racestart noch auf Select hat, wird
-    // entlastet - Select traegt seit v0.7 den Bahn-Lesemodus (trackReadMode), nicht mehr
-    // das Wetter; ein gespeichertes altes "weather" bleibt als toter Schluessel liegen
-    // (die Aktion gibt es nicht mehr, resolveBindingCollisions() liest nur Namen aus
-    // DEFAULT_BINDINGS und sieht ihn deshalb gar nicht).
-    if (ist(b.racestart, 8)) {
-      b.racestart = { ...DEFAULT_BINDINGS.racestart };
-      b.__migrated4 = true;
-    }
+    b.__v = BINDINGS_V;
     return b;
   }
 
@@ -340,9 +321,11 @@
     for (let nr = 1; nr <= SPIELER_MAX; nr++) {
       const pad = spieler['p' + nr] || null;
       const id = pad && pad.id ? String(pad.id).slice(0, 120) : null;
-      if (id === padBelegungFuer[nr]) continue;
+      // v0.9.37: faellt ein Bluetooth-Pad kurz aus (id null), bleibt der zuletzt bekannte
+      // Controller stehen. Vorher wurde er vergessen; eine Aenderung in diesem Moment landete
+      // nicht in SEINER Kopie, und beim Wiederverbinden kam die alte Belegung zurueck.
+      if (!id || id === padBelegungFuer[nr]) continue;
       padBelegungFuer[nr] = id;
-      if (!id) continue;
       let roh = null;
       try { roh = localStorage.getItem(PAD_BELEGUNG_PRAEFIX + id); } catch (e) { /* privat */ }
       if (!roh) continue;
@@ -366,13 +349,6 @@
   let bindEditSpieler = 1;
   function activeBindings() { return bindingsVon(bindEditSpieler); }
   function activeSaveBindings() { return saveBindingsVon(bindEditSpieler); }
-  if (bindings.__migrated3) {
-    delete bindings.__migrated3;
-    saveBindings();
-    log('Controller: gelbe Flagge liegt jetzt auf Kreuz (PS) bzw. A (Xbox), Rennstart auf '
-        + 'Select. Streckenansicht und Wetter sind ab Werk unbelegt - der linke Stick soll '
-        + 'beim Lenken nichts ausloesen.', 'info');
-  }
   if (bindings.__migrated) {
     delete bindings.__migrated;
     saveBindings();
@@ -689,6 +665,7 @@
       }
     }
     if (!bester) return;
+    const vorher = ziel[action] ? { ...ziel[action] } : null;
     if (bester.art === 'axis') {
       // Die Richtung: hat sich die Achse nach unten bewegt, ist sie invertiert. Gemessen
       // wird gegen die RUHELAGE und nicht gegen null.
@@ -710,10 +687,29 @@
       log(`Zuordnung gesetzt (Spieler ${bindEditSpieler}): ${BIND_ACTION_LABELS[action]} `
           + `-> Knopf ${bester.i}`, 'info');
     }
+    bindingKollisionTauschen(ziel, action, vorher);
     activeSaveBindings();
     listeningFor = null;
     bindRuhe = null;
     renderBindTable();
+  }
+  // v0.9.37, GEMELDET: "Kann es sein, dass die Tastenbelegung nicht gespeichert wird?" - Lag die
+  // neue Taste schon auf einer anderen Aktion, wurden BEIDE so gespeichert. Beim naechsten Laden
+  // loeste resolveBindingCollisions() das zugunsten der Aktion auf ihrer Werkstaste - die neue
+  // Zuweisung fiel zurueck und sah ungespeichert aus. Jetzt wird sofort getauscht: die andere
+  // Aktion bekommt die bisherige Taste der neuen (oder ist unbelegt, wenn es keine gab).
+  function bindingKollisionTauschen(ziel, action, vorher) {
+    const k = bindingKey(ziel[action]);
+    if (!k) return [];
+    const getauscht = [];
+    for (const n of Object.keys(BIND_ACTION_LABELS)) {
+      if (n === action || bindingKey(ziel[n]) !== k) continue;
+      ziel[n] = vorher && bindingKey(vorher) !== k ? { ...vorher } : null;
+      getauscht.push(n);
+      log('Controller: ' + BIND_ACTION_LABELS[n] + ' lag auf derselben Taste - '
+          + (ziel[n] ? 'jetzt auf der bisherigen von ' + BIND_ACTION_LABELS[action] : 'jetzt unbelegt') + '.', 'info');
+    }
+    return getauscht;
   }
 
   // ---- Eine Achse auf ihre gelernte Spanne umrechnen ----------------------------------
@@ -1302,7 +1298,11 @@
     // Das FAHRERAUTO geht durch dasselbe Schloss wie der Sendetakt (20-protocol.js): Blinken,
     // Stopp und Latenzprobe schrieben sonst neben dem Takt her ans selbe Merkmal - genau die
     // Ueberlappung, bei der das Plugin der App eine Antwort verliert (v0.8.41).
-    if (car === playerCar) {
+    // v0.9.28: auch Spieler 2 und 3 ueber funkSchreiben - dort ERSETZT ein neuer Befehl den
+    // wartenden, statt verworfen zu werden (der Ghost-Weg unten verwirft, solange einer
+    // unterwegs ist). Auf dem Rueckfallweg ohne OmegaBle hiess das bisher: jedes zweite
+    // Lenkpaket von Auto 2 fiel weg, und die Eingabe kam einen Takt spaeter an.
+    if (car === playerCar || (typeof spielerNrVon === 'function' && spielerNrVon(car) >= 2)) {
       const pkt = buildCommandPacket(steer, throttle, lightBits, modeBytes,
                                      typeof lichtSchadenVon === 'function' ? lichtSchadenVon(car) : undefined);
       recWrite(pkt, garageLabel(car));
@@ -1551,6 +1551,8 @@
     try { return (car && car.device && localStorage.getItem(AUTO_FOTO + car.device.id)) || ''; } catch (e) { return ''; }
   }
   function autoFotoSetzen(car, daten) {
+    // Fokus aus der Garage nehmen, damit renderGarage() das Foto sofort zeigt.
+    try { if (document.activeElement && $('gar-list') && $('gar-list').contains(document.activeElement)) document.activeElement.blur(); } catch (e) { /* egal */ }
     try {
       if (daten) localStorage.setItem(AUTO_FOTO + car.device.id, daten);
       else localStorage.removeItem(AUTO_FOTO + car.device.id);
@@ -1670,7 +1672,15 @@
     // wird beim Verlassen des Feldes gerendert (change-Handler).
     const aktiv = document.activeElement;
     if (aktiv && list.contains(aktiv)
-        && (aktiv.tagName === 'INPUT' || aktiv.tagName === 'TEXTAREA')) return;
+        && (aktiv.tagName === 'INPUT' || aktiv.tagName === 'TEXTAREA')) {
+      // v0.9.31: nicht still verwerfen - nach dem Verlassen des Feldes nachholen. Vorher
+      // blieb z. B. ein neues Foto unsichtbar, solange das Namensfeld den Fokus hatte.
+      if (!aktiv.dataset.garNach) {
+        aktiv.dataset.garNach = '1';
+        aktiv.addEventListener('blur', () => { delete aktiv.dataset.garNach; setTimeout(renderGarage, 0); }, { once: true });
+      }
+      return;
+    }
     // Ueber das Fenster und nicht direkt: 98-presets.js wird NACH dieser Datei gebaut, die
     // Funktion existiert zur Deklarationszeit hier also noch nicht. Zur Laufzeit ist sie
     // da. Genau dieser Unterschied hat in dieser Datei schon fuenf Ladeabbrueche gekostet.
@@ -9157,6 +9167,11 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     if (typeof konsolePadTitel === 'function' && konsolePadTitel(pad)) return;
     // Steuerungs-Fuehrung offen: jede Taste wird dort angezeigt, gefahren wird nicht.
     if (typeof konsoleTourPad === 'function' && konsoleTourPad(pad)) {
+      releaseInput(SRC.PAD);
+      return;
+    }
+    // Raumdesigner offen (60b-raum.js): Stick, Kreuz und Tasten gehoeren ihm.
+    if (typeof raumPad === 'function' && raumPad(pad)) {
       releaseInput(SRC.PAD);
       return;
     }

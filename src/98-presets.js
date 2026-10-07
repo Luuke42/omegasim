@@ -147,7 +147,13 @@
       text: 'Von Hand schalten, 2,9 s auf 100, Reifenverschleiß und Tankgewicht knapp zur Hälfte. Bremsfading, Windschatten und ungleicher Verschleiß sind voll an. Die harte, gegen echte Werte kalibrierte Fassung steht daneben als Realismus GT3.',
       v: { 'setting-grip': 0.87, 'setting-brakepower': 1.15, 'setting-autoshift': false,
            'setting-zero-to-top': 2.9, 'setting-coast-drag': 0.9, 'setting-fuelweight': 0.45,
-           'setting-tyres': 0.9, 'phys-steerresp': 1.9, 'setting-brakebias': 60,
+           // v0.9.42 GEMELDET: "Realismus GT3 laesst sich nicht fahren, weil das Auto kaum lenkt -
+           // auch wenn es fast nicht faehrt." Seit dem neuen Lenkweg (v0.8.40, steerVoll) ist
+           // phys-steerresp eine TRIMMUNG mit Bezug 3,0: der groesste Einschlag ist resp/3. 1,3
+           // hiess also hoechstens 43 % - gemessen 19 von 45 Grad bei 10 km/h, mit kalten Reifen
+           // 11. Die Werte stammten aus dem alten Weg, in dem resp x Kalibrierung bei 1 gedeckelt
+           // wurde. 3,0: voller Einschlag bei vollem Stick, wie an einem echten Auto im Stand.
+           'setting-tyres': 0.9, 'phys-steerresp': 3.0, 'setting-brakebias': 60,
            // Lenkkalibrierung 1,0 heisst: der uebertragene Winkel ist genau der gerechnete.
            // Die Klassen ab GT3 sind gegen gemessenes Verhalten abgestimmt, und eine
            // Kalibrierung darauf waere ein Aufschlag auf eine Messung.
@@ -180,7 +186,8 @@
       text: 'Von Hand schalten, 2,5 s auf 100, stärkster Reifenverschleiß der drei Klassen und die kürzeste Bremse. Die am feinsten dosierbare Lenkung, langes Ausrollen, und Windschatten wirkt am stärksten. Reifenwärmer an.',
       v: { 'setting-grip': 0.97, 'setting-brakepower': 1.45, 'setting-autoshift': false,
            'setting-zero-to-top': 2.5, 'setting-coast-drag': 1.2, 'setting-fuelweight': 0.6,
-           'setting-tyres': 1.2, 'phys-steerresp': 1.6, 'setting-brakebias': 63,
+           // v0.9.42: Lenkansprechen 3,0 statt 1,6 - Begruendung bei GT3.
+           'setting-tyres': 1.2, 'phys-steerresp': 3.0, 'setting-brakebias': 63,
            // Lenkkalibrierung 1,0 heisst: der uebertragene Winkel ist genau der gerechnete.
            // Die Klassen ab GT3 sind gegen gemessenes Verhalten abgestimmt, und eine
            // Kalibrierung darauf waere ein Aufschlag auf eine Messung.
@@ -220,11 +227,15 @@
       text: 'Von Hand schalten, 3,2 s auf 100 – die gemessene Reihe, gegen die die Physik gefittet ist –, voller Reifenverschleiß und volles Tankgewicht. Wenig Grip, schwache Bremse, langes Ausrollen, keine Reifenwärmer. Das ist die haerteste der sechs Abstimmungen und die einzige, deren Zahlen aus Messungen kommen und nicht aus einer Anpassung. Ein Fahrfehler kostet hier Zeit.',
       v: { 'setting-grip': 0.72, 'setting-brakepower': 0.85, 'setting-autoshift': false,
            'setting-zero-to-top': 3.2, 'setting-coast-drag': 1.25, 'setting-fuelweight': 1.0,
-           'setting-tyres': 2.0, 'phys-steerresp': 1.3, 'setting-brakebias': 62,
+           // v0.9.42: Lenkansprechen 3,0 statt 1,3 - Begruendung bei GT3.
+           'setting-tyres': 2.0, 'phys-steerresp': 3.0, 'setting-brakebias': 62,
+           // v0.9.42: 1,6 statt 1,0. Kalte Reifen (jeder Start, keine Waermer) greifen zu 58 %,
+           // und steerGrip wirkt auch im Schritttempo - mit 1,0 kamen dort 11 Grad an. 1,6 gibt
+           // kalt im Langsamen ~42 Grad, beim Anbremsen aus 120 km/h bleibt Untersteuern.
            // Lenkkalibrierung 1,0 heisst: der uebertragene Winkel ist genau der gerechnete.
            // Die Klassen ab GT3 sind gegen gemessenes Verhalten abgestimmt, und eine
            // Kalibrierung darauf waere ein Aufschlag auf eine Messung.
-           'setting-steer-calib': 1.0,
+           'setting-steer-calib': 1.6,
            'phys-accel': 1.0,
            'setting-crash-threshold': 30,
            // Bei Kalibrierung 1,0 wirkt schon 1,0 deutlich: 25 Grad statt 41 bei 100 km/h.

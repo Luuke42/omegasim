@@ -7,6 +7,10 @@
   // Es gibt keinen zweiten Detektor in der App, und das ist Absicht.
 
   let dashOnMarker = false;   // byte 15 bit 3: the car is physically over a marker
+  // v0.9.37: Ziellinie auf der Schiene (siehe handleDashboardBytes).
+  let dashZielGesehen = false, dashZielAt = 0, dashStartLapAt = 0, dashZielAuto = null;
+  // v0.9.39: der Kachelzaehler an der letzten Rundengrenze (siehe die Ziellinie).
+  let dashLapZaehler = null;
   // Vorheriger Stand des Musterkontakts, fuer die Flankenerkennung im Ausdruck-Modus.
   let dashMarkerPrev = false;
   // Debounce state for the tile code. See dashboardNotifyHandler for why both guards exist.
@@ -90,7 +94,7 @@
     // rundenzahlbasiert (timed:false), sondern eliminiert: Geister fliegen bei Abkommen von
     // der Bahn, Menschen verlieren ein Leben. Ende, wenn alle Geister weg (Sieg) oder alle
     // Menschen raus (Niederlage) sind.
-    knockout:   { label: 'Knockout', unit: 'Leben', timed: false,
+    knockout:   { label: 'NPC Knockout', unit: 'Leben', timed: false,
                   hint: 'Experimentell: Geister von der Bahn rammen, 3 Leben.' },
     // BESTELLT: "weiteren experimentellen rennmodus: demolition derby." Jedes Auto hat Health
     // 0-100; ein Aufprall kostet 10 % (frontal) bzw. 20 % (von der Seite gerammt). Bei 0 %
@@ -277,9 +281,10 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     derbyPruefen();
   }
   // Aufprall-Schaden fuer den Spieler (head-on 10 %, sonst 20 %).
-  function derbyAufprall(wer) {
+  function derbyAufprall(wer, richtung) {
     if (!derbyLaeuft) return;
-    const frontal = derbyFrontal(wer);
+    // v0.9.36: mit gemessener Richtung - vorn eingeschlagen kostet 10 %, getroffen 20 %.
+    const frontal = richtung && richtung !== 'unbekannt' ? richtung === 'vorn' : derbyFrontal(wer);
     derbySchaden(wer, frontal ? 10 : 20);
   }
   // Head-on, wenn der Gyro stark nach vorne ausschlaegt (x-Achse dominiert). Sonst Seite/Ramme.
@@ -299,31 +304,40 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     if (u) derbyEnde(u);
   }
   // Die Entscheidung allein, ohne Folgen (v0.9.16, fuer den Selbsttest): null = weiter.
+  // Alle, die im Derby mitfahren: Spieler 1, die Mitspieler und JEDES Ghost-Auto der Garage
+  // (auch eines, dessen Ghost-Zustand noch nicht gebaut ist - dann mit voller Health).
+  function derbyTeilnehmer() {
+    const tn = [{ id: 'p1', health: derbyHealth, kills: derbyKills, lebt: derbyHealth > 0 }];
+    for (const z of wertungsMitspieler()) {
+      tn.push({ id: 'p' + z.nr, health: z.derbyHealth, kills: z.derbyKills, lebt: z.derbyHealth > 0 });
+    }
+    for (const c of garage) {
+      if (!c || c.role !== 'ghost') continue;
+      const g = c.ghost || {};
+      tn.push({ id: 'geist', health: g.derbyHealth === undefined ? DERBY_MAX : g.derbyHealth,
+                kills: g.derbyKills || 0, lebt: !g.derbyAus });
+    }
+    return tn;
+  }
+  // GEMELDET (v0.9.28): "Wenn ein Auto gegen die Wand faehrt, kommt sofort der Spiel-zu-Ende-
+  // Sound." Ohne Ghosts in der Garage galt "alle Geister raus" schon beim ersten Crash als
+  // erfuellt, und das erste derbyPruefen() beendete das Derby. Jetzt: Ende nur, wenn jemand
+  // das Kill-Ziel hat oder hoechstens noch EIN Teilnehmer faehrt - und allein (ohne Gegner)
+  // endet ein Derby nie von selbst, nur von Hand.
   function derbyUrteil() {
-    const geister = derbyGeisterZaehlen();
-    const geistKills = Math.max(0, ...garage.filter(c => c.role === 'ghost' && c.ghost)
-      .map(c => c.ghost.derbyKills || 0));
-    // Rennen endet, wenn nur noch einer faehrt (alle anderen raus) ODER ein Geist alle Kills
-    // hat. Einfachheit: Ende, wenn ein menschlicher Fahrer 0 Health hat und alle Geister raus
-    // sind, oder wenn alle Gegner raus sind.
-    const alleGeister = geister <= 0;
-    const mit = wertungsMitspieler();
-    const alleMenschen = derbyHealth <= 0 && mit.every((z) => z.derbyHealth <= 0);
-    // KILLS-ZIEL (v0.8.126, Voreinstellung 1): wer das Ziel erreicht, beendet das Derby sofort.
+    const tn = derbyTeilnehmer();
     const ziel = raceLimit;
     if (ziel > 0) {
-      if (derbyKills >= ziel) return 'p1';
-      for (const z of mit) if (z.derbyKills >= ziel) return 'p' + z.nr;
+      const mensch = tn.find((x) => x.id !== 'geist' && x.kills >= ziel);
+      if (mensch) return mensch.id;
+      if (tn.some((x) => x.id === 'geist' && x.kills >= ziel)) return 'geist';
     }
-    if (alleGeister) {
-      // Sieger nach Kills (dann Health als Tiebreaker).
-      const k = [['p1', derbyKills, derbyHealth]];
-      for (const z of mit) k.push(['p' + z.nr, z.derbyKills, z.derbyHealth]);
-      k.sort((a, b) => b[1] - a[1] || b[2] - a[2]);
-      return k[0][0];
-    }
-    if (alleMenschen) return 'geist';
-    return null;
+    if (tn.length < 2) return null;
+    const lebend = tn.filter((x) => x.lebt);
+    if (lebend.length >= 2) return null;
+    if (lebend.length === 1) return lebend[0].id;
+    const reihe = tn.slice().sort((x, y) => y.kills - x.kills || y.health - x.health);
+    return reihe[0].id;
   }
   function derbyEnde(sieger) {
     if (!derbyLaeuft || derbySieger) return;
@@ -409,7 +423,12 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // 2") gibt es keine Reaktion, auf die zu warten waere - dieselbe Bedingung wie bei der
   // Zielflagge weiter oben (finishRace() ohne Fahrer im Feld).
   function raceMoveErkannt() {
-    const SCHWELLE_KMH = 3;   // etwas ueber dem Standrauschen des Sensors
+    // v0.9.43: 3 ANGEZEIGTE km/h. Hier stand 3 - verglichen mit speedKmh, und das ist das
+    // MODELLTEMPO (Vollgas 4,0). Die Rennuhr startete also erst bei 75 % der
+    // Hoechstgeschwindigkeit (rund 220 km/h auf dem Tacho); wer das auf einer kurzen Strecke
+    // nie erreichte, fuhr Runden, die nicht zaehlten - und das Rennen endete nie. GEMELDET:
+    // "Ende des Rennens wird immer noch nicht getriggert ... 3 Runden".
+    const SCHWELLE_KMH = 3 / REAL_SCALE;
     const fahrer = (c) => c.role === 'player' || (zweiSpieler && /^player[2-9]$/.test(c.role));
     if (!garage.some(fahrer)) return true;
     if (playerCar && Math.abs(physEngine.state.speedKmh) > SCHWELLE_KMH) return true;
@@ -423,7 +442,9 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // Faehrt ein Auto waehrend des Countdowns an (dieselbe Schwelle wie raceMoveErkannt), ist es
   // ein Fruehstart. Die Ampel laeuft weiter. Nach Gruen, sobald das Auto faehrt, gibt es 2 s
   // kein Gas und eine Bremsung (50-drive.js, physicsStep). Je Auto getrennt.
-  const FRUEHSTART_KMH = 3, FRUEHSTART_STRAFE_MS = 2000, FRUEHSTART_BREMSE = 0.6;
+  // v0.9.43: 3 angezeigte km/h im Modelltempo (siehe raceMoveErkannt) - vorher 3 Modell-km/h,
+  // also 75 % der Hoechstgeschwindigkeit, und damit wurde praktisch kein Fruehstart erkannt.
+  const FRUEHSTART_KMH = 3 / REAL_SCALE, FRUEHSTART_STRAFE_MS = 2000, FRUEHSTART_BREMSE = 0.6;
   const fruehstart = { 1: { frueh: false, warten: false, bis: 0 }, 2: { frueh: false, warten: false, bis: 0 },
                       3: { frueh: false, warten: false, bis: 0 } };
   const FRUEH_SPIELER = [1, 2, 3];
@@ -493,6 +514,9 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       raceAwaitingMove = false;
       raceLapStart = Date.now();
       raceStartedAt = Date.now();
+      // Die Kachel, auf der das Auto beim Start steht: eine Ziellinie darauf ist keine Runde.
+      dashLapZaehler = dashLastTileCounter;
+      sectorReset();
     }
     maybeSwitchRaceWeather();
     wxWechselTick();
@@ -602,16 +626,30 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
                                 lastActed: 0, lastCount: null };
     const r = car.race;
     const now = Date.now();
+    // Die Kachel, auf der das Auto stand, als diese Wertung begann (tileCount wird erst
+    // NACH diesem Aufruf auf das neue Paket gesetzt).
+    if (r.lapZaehler === undefined) r.lapZaehler = car.tileCount === undefined ? null : car.tileCount;
 
     // DIE SPERRE HAT VORRANG, und sobald ein Auto sie einmal gezeigt hat, gilt nur noch
     // sie. Die alte Regel bleibt fuer Autos, die sie nie melden - sie einfach zu loeschen
     // hiesse, ein Verhalten wegzunehmen, das auf anderen Bahnen vielleicht das einzige ist.
+    // v0.9.39: wie bei Spieler 1 (handleDashboardBytes) - eine Linie auf der Kachel der
+    // letzten Rundengrenze zieht nur die Uhr nach. Ob das Auto die Linie meldet, merkt sich das AUTO
+    // (car.zielGesehen), nicht die Wertung: car.race wird bei jedem Rennstart neu angelegt.
     if (zielSperreFlanke(r, b)) {
+      // Im Ausdruck-Modus steigt das Bit auf JEDEM Muster - Runde nur am Startmuster.
+      if (trackMode === 'off' && !isStartCode(b[12])) return;
       r.sperreGesehen = true;
-      if (now - r.lastActed >= TILE_REPEAT_BLOCK_MS) {
-        r.lastActed = now;
-        carLapCrossed(car);
+      car.zielGesehen = true;
+      if (now - r.lastActed < TILE_REPEAT_BLOCK_MS) return;
+      r.lastActed = now;
+      if (trackMode !== 'off' && r.lapZaehler !== null && b[11] === r.lapZaehler) {
+        if (r.lapStart !== null) r.lapStart = now;
+        if (r.sek && r.sek.start !== null) r.sek.start = now;
+        return;
       }
+      r.lapZaehler = b[11];
+      carLapCrossed(car);
       return;
     }
 
@@ -624,12 +662,13 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // Der Rueckfall zaehlt nur, solange dieses Auto die Sperre noch nie gemeldet hat.
     // Sonst laege die Runde zweimal: einmal am Anfang des Startbereichs und einmal am
     // Streifen, und die Rundenzeiten wuerden abwechselnd zu kurz und zu lang.
-    if (r.sperreGesehen) return;
+    if (r.sperreGesehen || car.zielGesehen) return;
     // isStartCode und nicht der Vergleich mit einem Wert: das Originalblatt meldet 0x0a,
     // die frueher angenommene 0x01 bleibt daneben gueltig.
     if (!isStartCode(code)) return;
     if (now - r.lastActed < TILE_REPEAT_BLOCK_MS) return;
     r.lastActed = now;
+    r.lapZaehler = count;
     carLapCrossed(car);
   }
 
@@ -1503,6 +1542,8 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     raceGridZeilen($('grid-liste'));
     gridBildMalen();
     if ($('grid-kopf-info')) $('grid-kopf-info').textContent = '';
+    // v0.9.31: im freien Training gibt es keine Startaufstellung - also auch keinen Knopf.
+    if ($('grid-auto')) $('grid-auto').hidden = raceMode === 'practice';
     gs.hidden = false;
   }
   function raceGridStart() {
@@ -1556,9 +1597,27 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   }
   // gruenZiel: lokale Uhrzeit (ms) fuer Gruen, sonst in 3 s. mpPlan: Wetterplan und Wind eines
   // gemeinsamen Mehrspieler-Rennens (97-sessions.js).
-  function startRaceCountdown(gruenZiel, mpPlan) {
     // launchGhosts() is called from the green-light step below, not here.
+  // BESTELLT (v0.9.31): "Bei Knockout Bahnmodus 'auf der Bahn' erzwingen, da es sonst gar
+  // nicht funktioniert, und mindestens 1 Ghost erfordern. Menschen fahren gegen KI."
+  // Gibt true zurueck, wenn gestartet werden darf.
+  function knockoutBereit(melden) {
+    if (raceMode !== 'knockout') return true;
+    if (!garage.some((c) => c && c.role === 'ghost')) {
+      if (melden) showHudToast(t('NPC Knockout braucht mindestens einen Ghost'));
+      return false;
+    }
+    const cb = $('setting-ontrack');
+    if (cb && !cb.checked) {
+      cb.checked = true;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+      if (melden) showHudToast(t('NPC Knockout: Bahnmodus „Auf der Bahn“'));
+    }
+    return true;
+  }
+  function startRaceCountdown(gruenZiel, mpPlan) {
     if (raceState !== 'idle' && raceState !== 'finished') return; // ignore while armed/racing
+    if (!knockoutBereit(true)) return;
     // EINSCHALTRAMPE: der Schirm zieht in 300 ms von schwarz auf Wert hoch, wie ein TFT beim
     // Einschalten. Hier und nicht in raceGreen(), weil der Schirm mit dem Knopfdruck
     // "angeht" und nicht erst bei Gruen - im Countdown will man ihn schon lesen.
@@ -1669,6 +1728,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     clearTimeout(raceCountdownTimer);
     const schritt = (k) => {
       if (raceState !== 'countdown') return;
+      ampelK = k;
       const [bei, stufe] = plan[k];
       const warte = bei - Date.now();
       if (warte > 4) { raceCountdownTimer = setTimeout(() => schritt(k), warte); return; }
@@ -1685,7 +1745,19 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       raceGreen();
       setTimeout(() => setRaceLights(0), 900);
     };
+    ampelPlan = plan; ampelSchritt = schritt;
     schritt(0);
+  }
+  // v0.9.32: die laufende Ampel um delta ms verschieben (WLAN-Mehrspieler: feinerer
+  // Uhrabgleich waehrend des Vorlaufs). Nur solange noch keine Lampe leuchtet.
+  let ampelPlan = null, ampelSchritt = null, ampelK = 0;
+  function ampelVerschieben(delta) {
+    if (!ampelPlan || !ampelSchritt || raceState !== 'countdown' || ampelK > 0) return false;
+    if (ampelPlan[0][0] + delta < Date.now() + 300) return false;
+    for (const p of ampelPlan) p[0] += delta;
+    clearTimeout(raceCountdownTimer);
+    ampelSchritt(ampelK);
+    return true;
   }
 
   // Alles, was beim Gruen passiert. Eine Funktion, zwei Aufrufer: der Countdown und das
@@ -1755,6 +1827,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       raceAwaitingMove = false;
       raceLapStart = Date.now();
       raceStartedAt = raceLapStart;
+      dashLapZaehler = dashLastTileCounter;
     }
     if (raceClockTimer) clearInterval(raceClockTimer);
     raceClockTimer = setInterval(raceClockTick, 250);
@@ -1994,6 +2067,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     raceLimit = raceMode === 'laps' ? 10 : (raceMode === 'derby' ? 1 : 2);
     $('race-limit').value = raceLimit;
     applyRaceModeUi();
+    if (raceMode === 'knockout') knockoutBereit(true);
   });
   $('race-limit').addEventListener('input', (e) => {
     const v = parseInt(e.target.value, 10);
@@ -2420,11 +2494,10 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // darunter schrieb in #dash-battery, ein Element der entfernten alten Karte.
     dashBattery = bytes[10];
 
-    // Byte 15 was read as "off track". The 2026-08-19 snoop logs disprove that: it is 0x08
-    // for exactly as long as the car sits on a printed marker (~1s at driving speed), in the
-    // same packet in which the crossing counter increments, in every capture. So the old
-    // warning lit up precisely when the car crossed start/finish. It is a marker-contact
-    // flag, and that is what it now says.
+    // Byte 15 was read as "off track". The 2026-08-19 snoop logs disprove that: on a PRINTED
+    // sheet it rises in the same packet as the start pattern. On the RAIL (logs 16.-21.08.)
+    // it rises at the finish line, ~455 ms after the barcode, and is then held ~1 s by a
+    // timer in the car - only the rising edge is a place (v0.9.37).
     const markerVorher = dashMarkerPrev;
     dashOnMarker = (bytes[15] & 0x08) !== 0;
     dashMarkerPrev = dashOnMarker;
@@ -2476,6 +2549,45 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       } else if (frei && code === pitMarkerCode) {
         dashLastActedCode = code; dashLastActedAt = jetzt;
         onPitMarkerCrossed();
+      }
+    }
+
+    // ---- DIE ZIELLINIE AUF DER SCHIENE (v0.9.37) ---------------------------------------
+    // BESTELLT: "Bei Start/Ziel gibt es (nicht am Anfang beim Barcode, sondern spaeter) eine
+    // Ziellinie. An der sollte Zeit gemessen und angesagt werden, nicht beim Barcode." Die
+    // btsnoop-Mitschnitte der Original-App (13.-21.08.) zeigen: das Auto meldet sie selbst -
+    // Byte 15 Bit 3 steigt im Mittel 455 ms nach dem Barcode (78-84 % des Startteils, rund
+    // 35 cm weiter) und haelt dann ~1 s. Nur die STEIGENDE Flanke ist ein Ort; das Fallen ist
+    // ein Zeitgeber. Ghosts und Spieler 2/3 zaehlen schon so (carRaceNotify); hier jetzt
+    // auch Spieler 1. Hat das Auto die Ziellinie einmal gemeldet, zaehlt der Barcode nicht
+    // mehr; bis dahin bleibt er der Rueckfall (Autos, die das Bit nie melden).
+    //
+    // v0.9.39 (gegengeprueft an 44 Ziellinien der Mitschnitte): Barcode und Ziellinie sind
+    // EINE Durchfahrt desselben Teils; jede Runde hatte genau eine Linie, auch wenn der
+    // Barcode einmal als 0x00 misslesen war. Liegt die Ziellinie auf DERSELBEN Kachel wie die letzte
+    // Rundengrenze (Kachelzaehler unveraendert), war das keine neue Runde: entweder hat der
+    // Barcode-Rueckfall sie gerade gezaehlt, oder das Auto stand beim Rennstart auf dem
+    // Startteil vor dem Streifen. Dann wird nur die Uhr an die Linie nachgezogen. Vorher
+    // gab es dort eine Runde von unter einer Sekunde bzw. eine doppelte Runde, wenn das
+    // Auto zwischen Barcode und Linie stehen blieb.
+    if (dashZielAuto !== playerCar) {
+      dashZielAuto = playerCar; dashZielGesehen = false; dashZielAt = 0;
+      dashLapZaehler = null;
+    }
+    if (trackMode !== 'off' && dashOnMarker && !markerVorher) {
+      const jetzt = Date.now(), zaehler = bytes[11];
+      if (!dashZielGesehen) {
+        dashZielGesehen = true;
+        log('Ziellinie: das Auto meldet sie selbst (Byte 15) - ab jetzt wird dort gemessen.', 'info');
+      }
+      if (jetzt - dashZielAt < TILE_REPEAT_BLOCK_MS) {
+        // Flackern derselben Linie.
+      } else if (dashLapZaehler !== null && zaehler === dashLapZaehler) {
+        dashZielAt = jetzt;
+        zielUhrNachziehen(jetzt);
+      } else {
+        dashZielAt = jetzt;
+        if (!pitDoubleCheck(jetzt)) { dashLapZaehler = zaehler; playerLapCrossed(); }
       }
     }
 
@@ -2618,7 +2730,11 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       // Die Doppelpruefung auch hier, und genau wie auf dem Ausdruck-Weg VOR dem Zaehlen:
       // bewegt sich der Kachelzaehler zwischen den beiden Kontakten eines Paares, laeuft
       // der zweite ueber DIESEN Weg.
+      // Auf der Schiene zaehlt die Ziellinie, sobald das Auto sie meldet (siehe oben).
+      if (trackMode !== 'off' && dashZielGesehen) return;
       if (pitDoubleCheck(nowCode)) return;
+      dashStartLapAt = nowCode;
+      dashLapZaehler = counter;
       const gezaehlt = playerLapCrossed();
       if (gezaehlt) return;
     }
@@ -2714,6 +2830,14 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   function sectorCrossed(now) {
     const ziel = sektorZiel();
     if (ziel <= 1) return true;
+    // v0.9.39: Im Rennen beginnt der erste Sektor mit dem Start, wie in carLapCrossed() je
+    // Auto. Vorher war der erste Kontakt nur der Anfang - mit einer zweiten Start/Ziel-
+    // Geraden zaehlte Runde 1 dann erst an der zweiten Ueberfahrt der Rundenlinie.
+    if (sectorStart === null && (raceState === 'racing' || raceState === 'finishing')
+        && !raceFormationLap && raceLapStart !== null) {
+      sectorStart = raceLapStart;
+      sectorIndex = 0;
+    }
     if (sectorStart === null) {
       // Der erste Kontakt ueberhaupt: er beginnt den ersten Sektor und ist noch keine
       // Sektorgrenze. Ohne diesen Fall waere der erste Sektor die Zeit seit dem Rennstart
@@ -2781,8 +2905,25 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     host.innerHTML = teile.join('');
   }
 
+  // Die Uhr an die Ziellinie nachziehen, ohne eine Runde zu zaehlen (siehe die Ziellinie in
+  // handleDashboardBytes): die laufende Runde beginnt an der Linie.
+  function zielUhrNachziehen(jetzt) {
+    if (dashLapStart !== null) dashLapStart = jetzt;
+    if (sectorStart !== null) sectorStart = jetzt;
+    if ((raceState === 'racing' || raceState === 'finishing') && raceLapStart !== null
+        && !raceAwaitingMove) raceLapStart = jetzt;
+  }
+
   function playerLapCrossed() {
     const now = Date.now();
+    // v0.9.43: Wartet die Rennuhr noch auf die erste Bewegung, BEWEIST eine Ueberfahrt die
+    // Bewegung - die Uhr startet hier, und diese Ueberfahrt ist der Anfang der ersten Runde.
+    if ((raceState === 'racing' || raceState === 'finishing') && raceAwaitingMove && !raceFormationLap) {
+      raceAwaitingMove = false;
+      raceLapStart = now; raceStartedAt = now;
+      if (dashLapStart !== null) dashLapStart = now;
+      return false;
+    }
     // Sektoren zuerst: war das nur eine Sektorgrenze, ist die Runde nicht vorbei und alles
     // Weitere darf nicht laufen - weder die Rundenzeit noch der Ton noch das Rennende.
     if (!sectorCrossed(now)) return false;
@@ -2823,7 +2964,12 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       // Die Ansage NEBEN dem Ton und nicht statt ihm: der Ton kommt sofort, die Stimme
       // braucht eine Sekunde. Wer sie abschaltet, hoert weiter, dass eine Runde voll ist.
       if (!challengeUngueltig) speakLap(rundeMs, istBest);
-      if (wasFinishing) finishRace();
+      // v0.9.41 GEMELDET: "Das Multiplayer Renn-Ende wird nicht getriggert ... 5-Runden-Rennen."
+      // Die Zielrunde schaltete nur auf 'finishing' (raceClockTick), beendet wurde erst bei der
+      // NAECHSTEN Ueberfahrt - ein 5-Runden-Rennen ging also ueber 6 Runden. Wer die Zielzahl
+      // selbst erreicht, ist im Ziel; die anderen fahren ihre Runde zu Ende (Auslauf/finishing).
+      const zielErreicht = !wasFinishing && raceMode === 'laps' && raceLapTimes.length >= raceLimit;
+      if (wasFinishing || zielErreicht) finishRace();
       // Runde 0, nicht 1: das Feld steht auf der Startgeraden und ueberfaehrt Start/Ziel
       // erst am Ende der ersten Runde. Vor der ersten Ueberfahrt ist also noch keine Runde
       // voll, und raceLapTimes.length ist genau diese Zahl.
@@ -3587,7 +3733,8 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   let pitMarkerCode = null;
   // 80 km/h on the racing display, the speed a real pit lane limiter holds. The display
   // reads speedKmh * REAL_SCALE (71.25), so 80 / 71.25 / 4.0 top speed = 0.2807.
-  const PIT_SPEED_FACTOR = 80 / REAL_SCALE / 4.0;
+  // v0.9.39: in TACHO-km/h, damit die Box auf dem Tacho 80 zeigt (siehe TACHO_SCALE).
+  const PIT_SPEED_FACTOR = 80 / TACHO_SCALE / 4.0;
   let pitState = 'off';        // off | limited | servicing
   let pitModus = 'minigame';   // Boxen-Minigame, siehe pitSpielStart()
   let pitSpiel = null;
@@ -4336,6 +4483,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     z.box.lage = 'aus';
     z.box.fertig = false;
     z.box.letzterTick = null;
+    stopPitLoopsFuer(z.nr);
     if (warum === 'abgebrochen') {
       showHudToast('P' + z.nr + ': BOXENSTOPP ABGEBROCHEN');
       log('P' + z.nr + ': Boxenstopp abgebrochen.', 'info');
@@ -4375,6 +4523,11 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
         }
         z.mischungWunsch = null;
         resetTyres(z.motor);
+        // Toene wie bei Auto 1: Schrauber kurz, Tanken und Reparatur, solange sie laufen.
+        setPitLoopFuer(z.nr, 'wrench', true);
+        setTimeout(() => setPitLoopFuer(z.nr, 'wrench', false), PIT_TYRE_CHANGE_S * 1000);
+        if (z.tank.stand < z.tankZiel - 0.05) setPitLoopFuer(z.nr, 'fuel', true);
+        if (schadenVon(z.nr) > 0.05) setPitLoopFuer(z.nr, 'repair', true);
       }
       return;
     }
@@ -4402,6 +4555,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
         z.box.getankt += dazu;
         if (tank + dazu >= z.tankZiel - 0.05) {
           z.box.tankFertig = true;
+          setPitLoopFuer(z.nr, 'fuel', false);
           pitChimeFuel();
         }
       }
@@ -4417,6 +4571,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
         z.box.repariert += weg;
         if (schaden - weg <= 0.05) {
           z.box.reparaturFertig = true;
+          setPitLoopFuer(z.nr, 'repair', false);
           pitChimeRepair();
         }
       }
@@ -4433,6 +4588,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     }
     if (fertig && genug && !z.box.fertig) {
       z.box.fertig = true;
+      stopPitLoopsFuer(z.nr);
       rammStrafeAbsitzen(z.car);
       showHudToast('P' + z.nr + ': FERTIG, LOSFAHREN!');
       pitChimeReady();
@@ -4600,9 +4756,6 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // Die Richtung des Stosses (v0.9.21, siehe 71-rammen.js): Abweichung je Achse VOR dem
     // Nachziehen des Mittels, und nebenbei lernen, welche Richtung von Byte 1 "vorn" ist.
     const d1 = v1 - L.avg1, d3 = v3 - L.avg3;
-    const tempo = motorVon(wer || 1).state.speedKmh;
-    if (L.vPrev !== undefined) crashVorLernen(L, d1, tempo - L.vPrev, dev);
-    L.vPrev = tempo;
     L.avg1 += (v1 - L.avg1) * CRASH_ROLLING_ALPHA;
     L.avg3 += (v3 - L.avg3) * CRASH_ROLLING_ALPHA;
     const now = Date.now();
@@ -4641,10 +4794,9 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       // Der Rundenzaehler der Ereignisse gehoert dem Rennen, und das Rennen faehrt Auto 1.
       L.letzter = now;
       if (!(wer >= 2)) lapEventAkku.crash += 1;
-      const vonHinten = crashVonHinten(L, d1, d3);
-      const vz = crashVorZeichen(L);
-      crashEreignis(wer >= 2 ? zusatzPlatz(wer).car : playerCar, vz ? Math.sign(d1) === vz : null);
-      registerCrash(wer, { vonHinten });
+      const richtung = crashRichtung(d1, d3);
+      crashEreignis(wer >= 2 ? zusatzPlatz(wer).car : playerCar, richtung);
+      registerCrash(wer, { richtung });
     }
   }
 
@@ -4675,8 +4827,13 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     const zPl = wer >= 2 ? zusatzPlatz(wer) : null;
     // BESTELLT (v0.9.21): Bremsen und Schaden getrennt schaltbar, und kein Bremsen fuer den,
     // auf den von hinten aufgefahren wurde.
-    const vonHinten = !!(stoss && stoss.vonHinten) && crashAuffahrSchutzAn();
-    const bremsen = crashBremseAn() && !vonHinten;
+    // v0.9.36, BESTELLT: "Abbremsen nur fuer Rammer, nicht fuer Gerammte." Gerammt heisst:
+    // von hinten oder von der Seite getroffen (crashRichtung in 71-rammen.js).
+    const richtung = (stoss && stoss.richtung) || 'unbekannt';
+    const getroffen = richtung === 'hinten' || richtung === 'seite';
+    const geschont = getroffen && crashNurRammerBremst();
+    const vonHinten = richtung === 'hinten';
+    const bremsen = crashBremseAn() && !geschont;
     const zwei = !!zPl;
     // EINE Funktion fuer beide Autos und nicht zwei: die Schadensrechnung ist dieselbe, nur
     // der Ablageort und der Adressat der Rueckmeldungen unterscheiden sich. Zwei Kopien
@@ -4688,7 +4845,12 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // Aufprall stoppt wie ueblich das Tempo, die Health-Regel (frontal 10 %, sonst 20 %)
     // macht der Derby-Block. Bei 0 % wird das Auto gestoppt (siehe derbyTot).
     if (typeof derbyLaeuft !== 'undefined' && derbyLaeuft) {
-      if (typeof derbyAufprall === 'function') derbyAufprall(wer);
+      // v0.9.41 GEMELDET: "Im Derby nehmen die Autos keinen Schaden. Die Controller ruckeln,
+      // aber es bleibt bei 100 %." Auto 1 meldet seinen Crash OHNE Nummer (detectCrash(bytes)
+      // in handleDashboardBytes) - derbySchaden() kennt aber nur 1, 2/3 oder einen Geist, und
+      // ein undefined traf keinen davon. Ausserhalb des Derbys fiel das nie auf, weil dort
+      // jedes "nicht 2/3" als Auto 1 gilt.
+      if (typeof derbyAufprall === 'function') derbyAufprall(wer >= 2 ? wer : 1, richtung);
       if (bremsen) motor.state.speedKmh *= 0.3;
       if (!zwei) updateDamageFuelUI();
       if (!playCrashFx()) playCrashSound();
@@ -4740,9 +4902,9 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     //
     // Rueckmeldung gibt es genug - Schadensbalken, Geraeusch, Rumble, Protokoll -, nur nicht
     // auf dem Rennschirm. Also dort eine Meldung.
-    showHudToast(pre + (vonHinten ? t('AUFFAHRUNFALL') : 'CRASH')
+    showHudToast(pre + (geschont ? (vonHinten ? t('AUFFAHRUNFALL') : t('SEITLICH GETROFFEN')) : 'CRASH')
                  + (schadenAn ? ' · SCHADEN ' + Math.round(stand) + ' %' : ''));
-    log(pre + 'Crash erkannt' + (vonHinten ? ' (von hinten, kein Bremsen)' : '')
+    log(pre + 'Crash erkannt (Stoss ' + richtung + ')' + (geschont ? ', gerammt: kein Bremsen' : '')
         + (schadenAn ? `, Schaden +${Math.round(100 / crashesToTotal)}%.` : ', ohne Schaden.'), 'err');
   }
 
@@ -4787,13 +4949,13 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       // eingeschaltetem Licht waere "an" nichts Sichtbares. Ein kurzes Aus ist das, was ein
       // Ein-Bit-System an dieser Stelle zeigen kann.
       head = on ? !baseHead : baseHead;
-      // GEMELDET: "bei Lichthupe blinkt auch das Ruecklicht, soll es aber nicht." Das
-      // Protokoll kennt kein eigenes Ruecklicht-Bit (Byte 14, CARRERA_HYBRID.md: nur
-      // Scheinwerfer 0x02, Bremse 0x01, Blinken 0x04) - die Firmware schaltet das
-      // Ruecklicht offenbar mit dem Scheinwerfer. Solange die Hupe den Scheinwerfer
-      // AUSschaltet, haelt deshalb das Bremslicht-Bit das Heck hell. Am echten Auto zu
-      // bestaetigen.
-      if (baseHead && !head) brake = true;
+      // v0.9.44 GEMELDET: "Bei der Lichthupe blinken nun die Bremslichter. Mach es so, dass
+      // beide Lichter an und aus gehen und nicht das Bremslicht an und das Vorderlicht aus."
+      // Hier stand bis v0.9.43 ein erzwungenes Bremslicht-Bit, solange der Scheinwerfer aus
+      // war (auf eine fruehere Meldung, das Heck solle nicht mitblinken). Das Protokoll hat
+      // kein eigenes Ruecklicht-Bit - die Firmware schaltet das Ruecklicht mit dem
+      // Scheinwerfer. Ohne den Eingriff gehen also vorn und hinten GEMEINSAM aus und an;
+      // das Bremslicht bleibt beim echten Bremsen. Wie bei Auto 2 (headlichtVon).
     } else if (lightFx.damage) {
       head = Math.floor(now / 90) % 2 === 0;    // fast, agitated flicker
     } else if (lightFx.fuel) {
@@ -4955,15 +5117,16 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   let trackTimeOn = 0, trackTimeOff = 0, trackTimeLast = null, trackTimeUiLast = 0;
 
   // ---- Actual ground speed, measured rather than scaled ----
-  // The displayed speed is simulated: internal units times REAL_SCALE (71.25), a factor
-  // chosen so full throttle reads 285 km/h. It was never checked against the car. Measuring
+  // The displayed speed is simulated: internal units times TACHO_SCALE (68.1, v0.9.39), so
+  // full throttle reads 272 km/h. It was never checked against the car. Measuring
   // the btsnoop logs says a lap of 3 straights and 8 curves is 4.39 m and takes 7.2 s, i.e.
   // the car really does about 2.2 km/h, and roughly 2 km/h at the moment the display says
   // 100. So a fixed divisor would be somewhere around 1:50 - but the two are not
   // proportional, because the real car saturates with throttle while the simulation does
   // not. Hence no divisor: the tile crossings give the true speed directly and calibrate
   // themselves, and any future drift in REAL_SCALE shows up here instead of hiding.
-  const TILE_LEN_M = { 0x01: 0.43, 0x02: 0.43 };     // start/finish and straight
+  // Start/Ziel ~40 cm: in gleichen Computerrunden 6 % kuerzer als eine Gerade (v0.9.39).
+  const TILE_LEN_M = { 0x01: 0.40, 0x02: 0.43 };
   const CURVE_LEN_M = TRACK_RADIUS_CM / 100 * (TRACK_TURN_DEG * Math.PI / 180);
   const REAL_SPEED_WINDOW = 3;                       // tiles to average over
   let realTileCount = null, realTileTime = null, realTileType = null;
@@ -4972,8 +5135,10 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   function tileLengthM(type) {
     if (TILE_LEN_M[type] !== undefined) return TILE_LEN_M[type];
     if (type === TILE_TYPE.CURVE_LEFT || type === TILE_TYPE.CURVE_RIGHT) return CURVE_LEN_M;
-    if (type === TILE_TYPE.HAIRPIN) {
-      return TRACK_HAIRPIN_RADIUS_CM / 100 * (TRACK_HAIRPIN_DEG * Math.PI / 180);
+    // v0.9.39: beide Haarnadeln, MIT der geraden Sektion davor (21,9 cm).
+    if (type === TILE_TYPE.HAIRPIN || type === TILE_TYPE.HAIRPIN_LEFT) {
+      return TRACK_HAIRPIN_RADIUS_CM / 100 * (TRACK_HAIRPIN_DEG * Math.PI / 180)
+           + TRACK_HAIRPIN_LEAD_CM / 100;
     }
     return null;                                     // off track, or a code we cannot size
   }
@@ -5024,7 +5189,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // constant. The two curves have different shapes - the real car is linear in throttle,
     // the simulation has drag - so expect it to wander either side of 50 rather than sit on
     // it. A steady offset in one direction is the signal worth acting on.
-    const sim = Math.abs(physEngine.state.speedKmh) * REAL_SCALE;
+    const sim = Math.abs(physEngine.state.speedKmh) * TACHO_SCALE;
     const el2 = $('dash-real-ratio');
     if (sim > 5 && realSpeedKmh > 0.05) {
       const f = sim / realSpeedKmh;
@@ -5470,6 +5635,38 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   }
 
   function stopAllPitLoops() { Object.keys(PIT_LOOP_SPEC).forEach(k => setPitLoop(k, false)); }
+  // BESTELLT (v0.9.28): "2-Spieler-Modus: spiele auch fuer Auto 2 die Boxenstopp-Toene ab."
+  // Dieselben Schleifen wie bei Auto 1, je Spielerplatz eigene Quellen und auf SEINER
+  // Stereoseite (spielerPan) - zwei Stopps gleichzeitig sollen sich nicht abschalten.
+  const pitLoopsZ = {};
+  function setPitLoopFuer(nr, which, on) {
+    const spec = PIT_LOOP_SPEC[which];
+    if (!spec) return;
+    const l = pitLoopsZ[nr] || (pitLoopsZ[nr] = {});
+    if (on) {
+      if (l[which] || !audioCtx || !soundEnabled) return;
+      const buf = spec.buf();
+      if (!buf) return;
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf; src.loop = true;
+      const g = audioCtx.createGain();
+      g.gain.value = spec.gain;
+      let ziel = audioCtx.destination;
+      if (audioCtx.createStereoPanner && typeof spielerPan === 'function') {
+        const p = audioCtx.createStereoPanner();
+        p.pan.value = spielerPan(nr);
+        p.connect(audioCtx.destination);
+        ziel = p;
+      }
+      src.connect(g).connect(ziel);
+      src.start();
+      l[which] = src;
+    } else if (l[which]) {
+      try { l[which].stop(); } catch { /* schon gestoppt */ }
+      l[which] = null;
+    }
+  }
+  function stopPitLoopsFuer(nr) { Object.keys(PIT_LOOP_SPEC).forEach((k) => setPitLoopFuer(nr, k, false)); }
 
   // Kept as a thin alias: the tyre change is the one loop other code refers to by name.
   // setPitWrench(on) stand hier und war ein Einzeiler um setPitLoop('wrench', on), den
@@ -6002,7 +6199,10 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     if (!host) return;
     // AUSDRUCK-MODUS MIT EIGENEM FOTO (51-konsole.js): das Foto statt des Editor-Layouts.
     // Ohne Autopunkte - auf einem Foto gibt es keine Geometrie, an die man sie setzen koennte.
-    const foto = typeof konsoleStreckenfotoAktiv === 'function' ? konsoleStreckenfotoAktiv() : '';
+    // v0.9.31, BESTELLT: "wenn ich nicht auf der Bahn fahre, nicht das Carrera-Hybrid-
+    // Streckenlayout anzeigen, sondern das Foto von der Bahn bzw. den Platzhalter".
+    const frei = !(($('setting-ontrack') || {}).checked);
+    const foto = frei ? ((typeof konsoleFoto === 'function' && konsoleFoto()) || 'img/strecke-frei.jpg') : '';
     if (foto) {
       const s = 'foto:' + foto.length + ':' + foto.slice(-24);
       if (s !== ovKarteSchluessel) {
@@ -6050,34 +6250,74 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // Der Sieger bekommt die GESAMTZEIT, Platz 2 und 3 den Rueckstand (luecke) - so liest sich
   // ein Podest, und die Gesamtzeit ist hier die vergleichbare Zahl. Waehrend eines Rennens
   // bleibt das Podest leer und verborgen.
+  // BESTELLT (v0.9.31): "Namen groesser, nur Plaetze 1 und 2, wenn keine weiteren Autos da
+  // sind, und denk dir was Gutes fuer Rennen mit nur einem Auto aus." Allein gibt es ein
+  // Solo-Podest: Gesamtzeit, Runden, beste Runde und der Vergleich mit deiner bisherigen
+  // Bestzeit auf derselben Strecke (aus den gespeicherten Sitzungen).
+  function ovSoloBestzeit() {
+    try {
+      const code = currentTrackTiles && currentTrackTiles.length > 1 ? trackToCode(currentTrackTiles) : '';
+      if (!code) return null;
+      const s = sessionStore().sessions;
+      // Die gerade gespeicherte Sitzung (dieses Rennen) zaehlt nicht mit.
+      const alt = s.length && Date.now() - Date.parse(s[s.length - 1].zeit) < 120000 ? s.slice(0, -1) : s;
+      let best = null;
+      for (const e of alt) {
+        if (e.strecke !== code) continue;
+        for (const a of (e.autos || [])) {
+          if (a.rolle !== 'player') continue;
+          for (const ms of (a.laps || [])) if (best === null || ms < best) best = ms;
+        }
+      }
+      return best;
+    } catch (e) { return null; }
+  }
   function ovPodestMalen() {
     const host = $('ov-podest');
     if (!host) return;
     const zeilen = ovDaten();
     const fertig = raceState === 'finished';
-    if (!fertig || zeilen.length < 2) {
+    if (!fertig || zeilen.length < 1) {
       host.hidden = true;
       if (host.innerHTML) host.innerHTML = '';
       return;
     }
     host.hidden = false;
-    const felder = [1, 0, 2].map((i) => zeilen[i] || null);
-    const html = felder.map((z, i) => {
-      const klasse = i === 1 ? 'platz-1' : i === 0 ? 'platz-2' : 'platz-3';
-      const nr = i === 1 ? 1 : i === 0 ? 2 : 3;
-      const name = z
-        ? '<span class="name"><i class="ov-farbe" style="background:'
-          + (z.farbe || 'transparent') + '"></i>' + z.name + '</span>'
-        : '<span class="name leer"></span>';
-      // Platz 1: Gesamtzeit; die anderen: Rueckstand. Ohne abgeschlossene Runde leer.
-      const zeit = !z ? '<span class="zeit"></span>'
-        : (nr === 1
-            ? (z.summe > 0 ? '<span class="zeit zeit-1">' + formatLapTime(z.summe) + '</span>'
-                           : '<span class="zeit"></span>')
-            : '<span class="zeit">' + (z.luecke || '&ndash;') + '</span>');
-      return '<div class="platz ' + klasse + '">' + name + zeit
-        + '<span class="block"><b>' + nr + '</b></span></div>';
-    }).join('');
+    const nameHtml = (z) => '<span class="name"><i class="ov-farbe" style="background:'
+      + (z.farbe || 'transparent') + '"></i>' + z.name + '</span>';
+    let html;
+    if (zeilen.length === 1) {
+      const z = zeilen[0];
+      const alt = ovSoloBestzeit();
+      let vergleich = '';
+      if (z.beste !== null && z.beste !== undefined) {
+        if (alt === null) vergleich = t('Erste Wertung auf dieser Strecke');
+        else if (z.beste < alt) vergleich = '★ ' + t('Neue Bestzeit!') + ' −' + ((alt - z.beste) / 1000).toFixed(2) + ' s';
+        else vergleich = '+' + ((z.beste - alt) / 1000).toFixed(2) + ' s ' + t('auf deine Bestzeit') + ' (' + formatLapTime(alt) + ')';
+      }
+      html = '<div class="platz platz-solo">' + nameHtml(z)
+        + '<span class="solo-zeit">' + (z.summe > 0 ? formatLapTime(z.summe) : '–') + '</span>'
+        + '<span class="solo-werte">' + z.runden + ' ' + t('Runden') + (z.beste ? ' · ' + t('Beste Runde') + ' ' + formatLapTime(z.beste) : '') + '</span>'
+        + (vergleich ? '<span class="solo-vergleich' + (alt !== null && z.beste < alt ? ' neu' : '') + '">' + vergleich + '</span>' : '')
+        + '<span class="block"><b>SOLO</b></span></div>';
+      host.classList.add('solo'); host.classList.remove('zwei');
+    } else {
+      const reihe = zeilen.length === 2 ? [1, 0] : [1, 0, 2];
+      html = reihe.map((zi) => {
+        const z = zeilen[zi] || null;
+        const nr = zi + 1;
+        const klasse = 'platz-' + nr;
+        const name = z ? nameHtml(z) : '<span class="name leer"></span>';
+        const zeit = !z ? '<span class="zeit"></span>'
+          : (nr === 1
+              ? (z.summe > 0 ? '<span class="zeit zeit-1">' + formatLapTime(z.summe) + '</span>'
+                             : '<span class="zeit"></span>')
+              : '<span class="zeit">' + (z.luecke || '&ndash;') + '</span>');
+        return '<div class="platz ' + klasse + '">' + name + zeit
+          + '<span class="block"><b>' + nr + '</b></span></div>';
+      }).join('');
+      host.classList.toggle('zwei', zeilen.length === 2); host.classList.remove('solo');
+    }
     if (host.innerHTML !== html) host.innerHTML = html;
   }
 
@@ -6163,7 +6403,10 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       const zeit = (x) => (x === null || x === undefined) ? '&ndash;'
         : formatLapTime(Math.round((x || 0) * 1000));
       leute.forEach((f, i) => {
-        if (lokale.has(f.name)) return;
+        // v0.9.41: der EIGENE Eintrag steht schon als lokale Zeile da (das eigene Auto). Der
+        // Abgleich ueber den Namen griff nicht, weil der Fahrername nicht der Autoname ist -
+        // GEMELDET: "es werden 3 Autos angezeigt: ich mit meinem Namen und dann das Auto".
+        if (f.id === mp.id || lokale.has(f.name)) return;
         const best = f.beste === null || f.beste === undefined;
         mpHtml += '<div class="ov-zeile ov-mp' + (f.id === mp.id ? ' ov-ich' : '') + '">'
           + '<span class="ov-pos">' + (i + 1) + '</span>'
@@ -6242,6 +6485,20 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
          + ' class="ov-dia-text">' + (i + 1) + '</text>';
     }
     let linien = '';
+    // v0.9.43 GEMELDET: "In den Linienplots sieht man das Auto mit der schwarzen Farbe nicht."
+    // Erst fuer ALLE Reihen ein weisser, halbdurchsichtiger Saum (wie im Positionsdiagramm),
+    // dann die Linien darueber - sonst deckte ein spaeterer Saum eine fruehere Linie zu.
+    const SAUM = 'rgba(255,255,255,0.55)';
+    for (const r of reihen) {
+      const pts = r.werte.map((v, i) => [sx(i), sy(v)]);
+      if (pts.length > 1) {
+        linien += '<polyline fill="none" stroke="' + SAUM + '" stroke-width="4" stroke-linejoin="round" '
+          + 'stroke-linecap="round" points="' + pts.map((q) => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ') + '"/>';
+      }
+      for (const q of pts) {
+        linien += '<circle class="ov-dia-saum" cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="3.4" fill="' + SAUM + '"/>';
+      }
+    }
     for (const r of reihen) {
       const pts = r.werte.map((v, i) => [sx(i), sy(v), v > y1]);
       linien += '<polyline fill="none" stroke="' + r.farbe + '" stroke-width="1.6" points="'
@@ -6338,6 +6595,8 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   setInterval(() => {
     if (typeof cockpitScreenIst !== 'function') return;
     const s = cockpitScreenIst();
+    // Der Beide-Schirm malt im Sendetakt (cockpitNachSenden), solange gesendet wird.
+    if (s && s.id === 'main' && beideSchirmOffen() && performance.now() - cockpitGemaltAt < 400) return;
     if (s && s.malen) s.malen();
   }, 120);
 

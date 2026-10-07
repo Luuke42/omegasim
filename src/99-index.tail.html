@@ -17,7 +17,35 @@
   // Element dort, mitten im Code, ohne Ruecksicht darauf, dass zwei Schrägstriche davor
   // stehen. Der Klammerpruefer in build.py hat es gemeldet (er zerlegt das gebaute
   // Dokument mit derselben Regel), und deshalb ist es nie in den Browser gekommen.
+  // Das Hauptskript ist bis zum Ende gelaufen (siehe START-DIAGNOSE in 00-index.head.html).
+  window.__omegaFertig = true;
 })();
+</script>
+<script>
+  // START-DIAGNOSE, zweiter Teil: lief das Hauptskript nicht durch, den Fehler anzeigen und
+  // merken, statt dass die App nach 25 s still zurueckrollt. ES5, siehe erster Teil.
+  (function () {
+    if (window.__omegaFertig) return;
+    var f = window.__omegaStartFehler || { m: 'kein Fehlerereignis', z: 0, s: 0, st: '' };
+    var v = '';
+    try { v = (document.getElementById('app-version') || {}).textContent || ''; } catch (e) { v = ''; }
+    var ua = navigator.userAgent || '';
+    try {
+      localStorage.setItem('omegasim-startfehler', JSON.stringify({ v: v, f: f, ua: ua, at: Date.now() }));
+    } catch (e) { /* privat */ }
+    var d = document.createElement('div');
+    d.setAttribute('role', 'alert');
+    d.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#0b0c0f;color:#f4f6fb;'
+      + 'padding:18px;font:14px/1.45 system-ui,sans-serif;overflow:auto';
+    var esc = function (x) { return String(x).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+    d.innerHTML = '<h2 style="margin:0 0 8px;color:#ff5c5c">OmegaSim ' + esc(v) + ' konnte nicht starten</h2>'
+      + '<p style="margin:0 0 10px">Bitte einen Screenshot davon an den Entwickler schicken. '
+      + 'Die App kehrt beim n&auml;chsten Start zur vorigen Fassung zur&uuml;ck.</p>'
+      + '<p style="margin:0 0 6px"><b>' + esc(f.m) + '</b> (Zeile ' + esc(f.z) + ', Spalte ' + esc(f.s) + ')</p>'
+      + (f.st ? '<pre style="white-space:pre-wrap;font-size:11px;color:#c9d1e0;margin:0 0 8px">' + esc(f.st) + '</pre>' : '')
+      + '<p style="font-size:11px;color:#a9b2c4;margin:0">' + esc(ua) + '</p>';
+    (document.body || document.documentElement).appendChild(d);
+  })();
 </script>
 </body>
 </html>

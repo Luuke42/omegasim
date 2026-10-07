@@ -506,6 +506,16 @@
   // /mp/state); ist keiner da, bleibt es bei Rundenschluss und Lebenszeichen wie bisher.
   // Mit Zuschauer drei Berichte je Sekunde - der Info-Screen rechnet dazwischen weiter.
   const MP_POS_MS = 330;
+  // v0.9.41 GEMELDET: "Latenz bei aelterem Geraet ist im Multiplayer etwas hoch." Jeder Abruf
+  // ist Netz, JSON und DOM auf demselben Faden wie der 45-ms-Steuertakt. Waehrend das Rennen
+  // laeuft, also seltener: Rangliste alle 3 s statt 1,5 s (eine Runde dauert laenger, das
+  // Rennende kommt also weiter rechtzeitig an), Positionen fuer Zuschauer alle 500 ms, und die
+  // Ranglisten-Tabelle im Mehrspieler-Reiter wird erst nach dem Rennen wieder gezeichnet.
+  const MP_POLL_RENNEN_MS = 3000, MP_POS_RENNEN_MS = 500;
+  function mpImRennen() {
+    return typeof raceState !== 'undefined' && (raceState === 'racing' || raceState === 'finishing');
+  }
+  mp.abrufAt = 0; mp.posAt = 0;
 
   function mpLaden() {
     try {
@@ -552,7 +562,11 @@
   // Der eigene Stand. Er kommt aus DENSELBEN Variablen, aus denen das Cockpit liest -
   // dashLapTimes und die Rundenzahl. Eine zweite Zaehlung waere eine zweite Wahrheit.
   function mpEigenerStand() {
-    const zeiten = (typeof dashLapTimes !== 'undefined' && dashLapTimes) || [];
+    // Im Rennen die RENNRUNDEN (mit Fruehstart-Strafe auf Runde 1), sonst die Ueberfahrten.
+    const imRennen = typeof raceLapTimes !== 'undefined' && raceLapTimes.length
+      && ['racing', 'finishing', 'finished'].indexOf(raceState) >= 0;
+    const zeiten = imRennen ? raceLapTimes.map((l) => l.ms)
+      : ((typeof dashLapTimes !== 'undefined' && dashLapTimes) || []);
     const beste = zeiten.length ? Math.min.apply(null, zeiten) / 1000 : null;
     const letzte = zeiten.length ? zeiten[zeiten.length - 1] / 1000 : null;
     return { id: mp.id, name: mp.name || 'ohne Namen', laps: zeiten.length,
@@ -602,6 +616,8 @@
 
   function mpPosBerichten() {
     if (!mp.an || mp.zuschauer <= 0) return;
+    if (mpImRennen() && Date.now() - mp.posAt < MP_POS_RENNEN_MS - 40) return;
+    mp.posAt = Date.now();
     fetch(mpUrl('/mp/report'), {
       method: 'POST', cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
@@ -643,6 +659,73 @@
   // Neustart des Hosts wieder bei 1, und ohne die Kennung (`boot`) hielte ein Telefon das neue
   // Rennen fuer ein schon gefahrenes und liesse es still aus. Die Bereitschaftsphase hat noch
   // keine Startzeit und wird hier nicht genommen (alte Hosts kennen keine `phase`).
+  // ---- FEINABGLEICH IM VORLAUF (v0.9.32) ---------------------------------------------
+  // Nach der Startankuendigung bleiben zwoelf Sekunden. In denen misst jedes Telefon die
+  // Host-Uhr acht Mal im Abstand von 300 ms nach (kuerzester Weg gewinnt, siehe mpUhrProbe)
+  // und verschiebt die laufende Ampel um die Abweichung - solange noch keine Lampe brennt.
+  mp.startHost = null;
+  async function mpStartFeinabgleich(lokal) {
+    const startHost = lokal + mp.offset;          // dieselbe Startzeit in Host-Uhr
+    let benutzt = lokal;
+    for (let i = 0; i < 8; i++) {
+      await new Promise((ok) => setTimeout(ok, 300));
+      if (!mp.an || raceState !== 'countdown') return;
+      try {
+        const t0 = Date.now();
+        const r = await fetch(mpUrl('/mp/state'), { cache: 'no-store' });
+        const t1 = Date.now();
+        const d = await r.json();
+        mpUhrProbe(t0, t1, d.zeitMs);
+      } catch (e) { /* naechste Probe */ }
+      const neu = startHost - mp.offset;
+      const delta = neu - benutzt;
+      if (Math.abs(delta) >= 8 && typeof ampelVerschieben === 'function' && ampelVerschieben(delta)) {
+        log('Mehrspieler: Ampel um ' + Math.round(delta) + ' ms nachgestellt (Uhrabgleich).', 'info');
+        benutzt = neu;
+      }
+    }
+  }
+  // ---- RENNENDE FUER ALLE (v0.9.32) ------------------------------------------------
+  // GEMELDET: "Wenn bei 2 Autos, Rundenrennen ueber 10 Runden, eines die 10 hat und das andere
+  // ueber Start/Ziel faehrt, sollte das Rennende getriggert werden." Jedes Telefon zaehlt nur
+  // seine eigenen Autos; die Runden der anderen stehen in der Rangliste des Hosts. Hat dort
+  // jemand das Ziel, gilt hier "letzte Runde" - die naechste Ueberfahrt beendet das Rennen.
+  function mpZielPruefen(d) {
+    if (!mp.an || !mp.rennenId || raceState !== 'racing' || raceMode !== 'laps') return;
+    const andere = ((d && d.fahrer) || []).filter((f) => f.id && f.id !== mp.id && mpAktiv(f));
+    const fertig = andere.find((f) => (f.laps || 0) >= raceLimit);
+    if (!fertig) return;
+    raceState = 'finishing';
+    if ($('race-status')) $('race-status').textContent = t('Ein Mitspieler ist im Ziel, laufende Runde zählt noch');
+    showHudToast(t('Letzte Runde') + ' · ' + (fertig.name || ''));
+  }
+  // "Genauso sollte ich das Rennen fuer alle beenden koennen." Der Host kennt keine eigene
+  // Ende-Phase; eine Bereitschaftsrunde mit plan.ende traegt die Nachricht aber ohne neue
+  // APK zu allen Telefonen, und nach vier Sekunden wird sie wieder abgeraeumt.
+  async function mpRennenBeendenFuerAlle() {
+    if (!mp.an) { mpSay(t('Erst mitmachen'), true); return; }
+    try {
+      await fetch(mpUrl('/mp/race'), { method: 'POST', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: { ende: true, von: mp.name || '' }, phase: 'bereit', initiator: mp.id }) });
+      if (typeof kRennenLaeuft === 'function' && kRennenLaeuft()) requestRaceStop();
+      showHudToast(t('Rennen für alle beendet'));
+      setTimeout(() => { fetch(mpUrl('/mp/race/cancel'), { method: 'POST', cache: 'no-store' }).catch(() => {}); }, 4000);
+    } catch (e) { mpSay(t('kein Kontakt zum Host') + ': ' + e.message, true); }
+  }
+  mp.endeGesehen = null;
+  function mpEndePruefen(d) {
+    const r = d && d.rennen;
+    if (!r || r.phase !== 'bereit' || !r.plan || !r.plan.ende) return;
+    const schl = (d.boot || '') + ':' + r.id;
+    if (mp.endeGesehen === schl) return;
+    mp.endeGesehen = schl;
+    if (r.initiator === mp.id) return;
+    if (typeof kRennenLaeuft === 'function' && kRennenLaeuft()) {
+      requestRaceStop();
+      showHudToast(t('Rennen für alle beendet') + (r.plan.von ? ' (' + r.plan.von + ')' : ''));
+    }
+  }
   function mpRennenPruefen(r, boot) {
     if (!r || !r.id || !r.startAt || !r.plan) return false;
     if (r.phase && r.phase !== 'start') return false;
@@ -678,6 +761,7 @@
     }
     showTab('race');
     startRaceCountdown(lokal, plan);
+    mpStartFeinabgleich(lokal);
     showHudToast(t('Rennen für alle: Ampel kommt gleich'));
     log('Mehrspieler: gemeinsamer Start in ' + Math.round((lokal - Date.now()) / 100) / 10 + ' s.', 'info');
   }
@@ -745,7 +829,7 @@
     const screen = $('mp-ready-screen');
     if (!screen) return;
     const rennen = d && d.rennen ? d.rennen : {};
-    if (rennen.phase !== 'bereit') { screen.hidden = true; return; }
+    if (rennen.phase !== 'bereit' || (rennen.plan && rennen.plan.ende)) { screen.hidden = true; return; }
     const initiator = rennen.initiator;
     const bereitListe = Array.isArray(rennen.bereit) ? rennen.bereit : [];
     const leute = ((d && d.fahrer) || []).filter(mpAktiv);
@@ -770,6 +854,11 @@
         ? (alleBereit ? t('Alle bereit, du kannst starten.') : t('Warte, bis alle anderen bereit sind.'))
         : (bereitListe.indexOf(mp.id) >= 0 ? t('Du bist bereit. Warte, bis gestartet wird.')
            : t('Tippe auf „Bereit“, sobald du soweit bist.'));
+    }
+    // v0.9.42 BESTELLT: Ladeanimation, solange auf die anderen Handys gewartet wird - beim
+    // Starter, bis alle bereit sind, bei den anderen, bis gestartet wird (59-lade.js).
+    if (typeof ladeAnimationSetzen === 'function') {
+      ladeAnimationSetzen($('mp-ready-lade'), istInitiator ? !alleBereit : bereitListe.indexOf(mp.id) >= 0);
     }
     if ($('mp-ready-bereit')) $('mp-ready-bereit').hidden = istInitiator || bereitListe.indexOf(mp.id) >= 0;
     if ($('mp-ready-start')) {
@@ -824,6 +913,13 @@
   // Aus toggleRace (70-race.js): im Mehrspieler erst fragen. true = Dialog offen.
   function mpRennenFrage() {
     if (!mp.an || mp.frageUmgehen) return false;
+    // v0.9.45 GEMELDET: "Nach Multiplayer-Rennen ein Einspielerrennen starten ist komisch:
+    // obwohl ich MP beendet habe, werde ich gefragt, ob ich das Rennen fuer alle starten will."
+    // Gefragt wird nur noch, wenn wirklich ANDERE da sind: aktive Fahrer ausser mir in der
+    // letzten Rangliste des Hosts. Allein im Raum (oder ohne Kontakt) startet es einfach.
+    const andere = ((mpLetzterStand && mpLetzterStand.fahrer) || [])
+      .filter((f) => f && f.id && f.id !== mp.id && mpAktiv(f));
+    if (!andere.length) return false;
     konsoleFrage(t('Mehrspieler-Rennen'),
       t('Für alle zugleich starten (gemeinsame Ampel, gleiches Wetter) oder nur für dich?'),
       [[t('Für alle'), () => mpRennenFuerAlle()],
@@ -832,22 +928,30 @@
     return true;
   }
 
-  async function mpHolen() {
+  async function mpHolen(sofort) {
     if (!mp.an) return;
+    if (sofort !== true && mpImRennen() && Date.now() - mp.abrufAt < MP_POLL_RENNEN_MS - 100) return;
+    mp.abrufAt = Date.now();
     // Lebenszeichen, wenn lange kein Rundenschluss war: ohne das wird die eigene Zeile im
     // Ueberblicksschirm nach zehn Sekunden blass, obwohl man faehrt.
     if (Date.now() - mp.letzterBericht > MP_HEARTBEAT_MS) mpBerichten();
     try {
       const t0 = Date.now();
       const r = await fetch(mpUrl('/mp/state'), { cache: 'no-store' });
+      // v0.9.32: die Rueckkehr ZAEHLT HIER, beim Eintreffen der Antwort - nicht nach dem
+      // Einlesen. Vorher lag die Mitte der Anfrage um die Lesezeit zu spaet, der Versatz war
+      // zu klein, und das andere Telefon startete nach dem Host (GEMELDET: ~200 ms).
+      const t1 = Date.now();
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
-      mpUhrProbe(t0, Date.now(), d.zeitMs);
+      mpUhrProbe(t0, t1, d.zeitMs);
       mpRennenPruefen(d.rennen, d.boot);
       mp.zuschauer = d.zuschauer || 0;
       mpLetzterStand = d;
       mpPosTakt();
       mpZeichnen(d);
+      mpEndePruefen(d);
+      mpZielPruefen(d);
       mpBereitSchirm(d);
       mpSay(t('verbunden') + ', ' + (d.fahrer || []).length + ' '
             + t('Fahrer'));
@@ -864,6 +968,7 @@
     // schon dabei einen leisen Zwei-Ton. Der erste Abruf setzt nur den Grundstock, damit
     // nicht beim Anmelden gleich der ganze Raum tutet.
     mpSpielerWechsel(leute);
+    if (mpImRennen()) return;        // v0.9.41: Tabelle erst nach dem Rennen (siehe MP_POLL_RENNEN_MS)
     if (!leute.length) {
       host.innerHTML = '<tr><td colspan="5" class="muted">' + t('keine Daten') + '</td></tr>';
       return;
@@ -1126,6 +1231,7 @@
   if ($('mp-join')) $('mp-join').addEventListener('click', mpJoin);
   if ($('mp-leave')) $('mp-leave').addEventListener('click', mpLeave);
   if ($('mp-rennen-alle')) $('mp-rennen-alle').addEventListener('click', mpRennenFuerAlle);
+  if ($('mp-rennen-ende')) $('mp-rennen-ende').addEventListener('click', mpRennenBeendenFuerAlle);
   // BEREITSCHAFTSSCHIRM (v0.8.126).
   if ($('mp-ready-bereit')) $('mp-ready-bereit').addEventListener('click', mpBereitMelden);
   if ($('mp-ready-start')) $('mp-ready-start').addEventListener('click', mpBereitStarten);

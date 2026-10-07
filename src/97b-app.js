@@ -170,7 +170,13 @@
           // Nicht noch einmal anbieten, bis eine NOCH neuere Fassung da ist.
           einstellung.verworfen = s.zurueckgerollt;
           merken();
-          meldung(t('Die Fassung') + ' ' + s.zurueckgerollt + ' ' + t('startete nicht und wurde verworfen.'), true);
+          // v0.9.42: mit dem Fehler, den die START-DIAGNOSE (00-index.head.html) gemerkt hat.
+          let grund = '';
+          try {
+            const sf = JSON.parse(localStorage.getItem('omegasim-startfehler') || 'null');
+            if (sf && sf.v === s.zurueckgerollt && sf.f) grund = ' ' + sf.f.m + ' (' + sf.f.z + ':' + sf.f.s + ')';
+          } catch (e) { /* ohne Speicher */ }
+          meldung(t('Die Fassung') + ' ' + s.zurueckgerollt + ' ' + t('startete nicht und wurde verworfen.') + grund, true);
           showHudToast(t('Update verworfen'));
           upd('vergessen').catch(() => {});
         }

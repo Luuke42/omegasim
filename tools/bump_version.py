@@ -44,9 +44,18 @@ def git(*args):
     return subprocess.check_output(['git'] + list(args), cwd=REPO, text=True).strip()
 
 
+# FESTER PROJEKTSTART (v0.9.30): am 05.10.2026 wurde die Historie auf einen Commit
+# zusammengefasst. Danach war der "erste Commit" von heute, und die Rechnung lieferte 0.0.2
+# statt 0.9.29. Woche 0 ist deshalb jetzt fest verankert (jedes Datum in der Woche vor dem
+# 03.08.2026 ergibt dieselben Wochennummern), und der Pushzaehler dieser einen Woche bekommt
+# die 27 Commits zurueck, die mit der alten Historie verschwunden sind.
+PROJEKT_START = datetime.date(2026, 8, 3)
+PUSH_VERSATZ = {datetime.date(2026, 10, 5): 27}
+
+
 def version():
     first = git('log', '--reverse', '--format=%aI').splitlines()[0]
-    start = datetime.datetime.fromisoformat(first).date()
+    start = min(datetime.datetime.fromisoformat(first).date(), PROJEKT_START)
     today = datetime.date.today()
     # Blockgrenze ist der Montag der laufenden Woche, nicht der Wochentag des ersten
     # Commits. weekday(): Montag = 0, also ziehen wir genau so viele Tage ab, dass der
@@ -59,7 +68,7 @@ def version():
     n = int(git('rev-list', '--count', 'HEAD',
                 '--since=%s 00:00:00' % block.isoformat()))
     # +1, weil der Commit, fuer den diese Nummer gilt, noch nicht existiert.
-    return '0.%d.%d' % (week, n + 1), start, block
+    return '0.%d.%d' % (week, n + 1 + PUSH_VERSATZ.get(block, 0)), start, block
 
 
 def main():

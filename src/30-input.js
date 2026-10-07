@@ -531,6 +531,20 @@
   // defined. The cockpit shows the measured factor live, so any drift is visible rather than
   // assumed.
   const REAL_SCALE = 50 * 5.9 / 4.0;   // 73.75
+  // ---- NACHGEMESSEN (v0.9.39) ---------------------------------------------------------
+  // Die 5,9 km/h oben waren falsch abgelesen: die 2,46 km/h gehoeren zu Gasbyte 56 von 127,
+  // also 44 % und nicht 40 %. Neu ausgewertet (alle Geraden der Mitschnitte 16.-21.08.):
+  //     Byte 43  0,86 s je 43-cm-Gerade   1,81 km/h
+  //     Byte 50  0,74 s                    2,11 km/h
+  //     Byte 56  0,63 s                    2,46 km/h
+  // Proportional zum Gas, 0,0119 m/s je Schritt, Vollgas (127) also 1,51 m/s = 5,45 km/h,
+  // im Massstab 1:50 rund 272 km/h (Hochrechnung, +-10 %; 31 ganze Runden bestaetigen die
+  // Steigung). REAL_SCALE bleibt die Einheit, in der die PHYSIK abgestimmt ist (Anfahrhilfe,
+  // Luftwiderstand, Schwellen) - sie zu aendern hiesse, das Fahrverhalten zu aendern. Der
+  // TACHO rechnet mit dem gemessenen Faktor: Simulations-Hoechstgeschwindigkeit (4,0) bei
+  // Gasfaktor 100 % = Byte 127 = 272 km/h. Das stimmt genau bei Gasfaktor 100 % (ab Werk);
+  // ueber 100 % bekommt das Auto Vollgas, bevor der Tacho oben ist.
+  const TACHO_SCALE = 50 * 5.45 / 4.0;   // 68.1
 
   const IDLE_RPM = 1500, REDLINE_RPM = 9000, LIMITER_SOFT_RPM = 400;
   const GT3_GEARS = [

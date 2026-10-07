@@ -342,7 +342,7 @@
       // Dieselbe Rechnung, die die Doku fuer ihre Gangtabelle benutzt: topFrac mal
       // Hoechstgeschwindigkeit, hier in Tacho-Kilometern, also mit REAL_SCALE.
       const gaenge = cfg.gears.map((g, i) => (i + 1) + '. '
-        + Math.round(g.topFrac * cfg.topSpeedKmh * REAL_SCALE)).join(' \u00b7 ');
+        + Math.round(g.topFrac * cfg.topSpeedKmh * TACHO_SCALE)).join(' \u00b7 ');
       el.textContent = cfg.gears.length + ' ' + t('G\u00e4nge') + ' \u00b7 '
         + gaenge + ' km/h \u00b7 ' + t('Schaltzeit') + ' ' + cfg.shiftMs + ' ms';
     };
@@ -810,7 +810,7 @@
     const v = parseFloat(el.value);
     physEngine.config.minMoveThrottle = v;
     // Im Massstab, nicht als Anteil: 0,16 sagt niemandem etwas, 47 km/h schon.
-    const kmh = Math.round(v * physEngine.config.topSpeedKmh * REAL_SCALE);
+    const kmh = Math.round(v * physEngine.config.topSpeedKmh * TACHO_SCALE);
     $('setting-minmove-val').textContent = Math.round(v * 100) + '% \u00b7 ' + kmh + ' km/h';
   }
   if ($('setting-throttle-gamma')) {
@@ -1700,7 +1700,7 @@
     // Die Schaltlichter aus SEINER Drehzahl. Dieselbe Funktion wie die grosse Leiste im
     // Cockpit - siehe schaltLampen(), dort steht auch die Farbregel.
     schaltLampen($(pre + '-shift'), st.rpmFrac, st.onLimiter);
-    schreibeWert($(pre + '-speed'), Math.round(Math.abs(st.speedKmh) * REAL_SCALE));
+    schreibeWert($(pre + '-speed'), Math.round(Math.abs(st.speedKmh) * TACHO_SCALE));
     schreibeWert($(pre + '-gear'), gearLabel(st));
     schreibeWert($(pre + '-name'), car ? garageLabel(car) : 'kein Auto');
     // Tank in Litern, wie ueberall sonst in dieser App.
@@ -1805,8 +1805,8 @@
       if (z3.box.lage === 'angefordert') {
         fuss.textContent = t('P{n} Boxenstopp: bremsen und anhalten – {a} km/h, nötig unter {b}, dann Finger vom Gas.')
           .replace('{n}', 3)
-          .replace('{a}', Math.round(Math.abs(z3.motor.state.speedKmh) * REAL_SCALE))
-          .replace('{b}', Math.round(PIT_STANDSTILL_KMH * REAL_SCALE));
+          .replace('{a}', Math.round(Math.abs(z3.motor.state.speedKmh) * TACHO_SCALE))
+          .replace('{b}', Math.round(PIT_STANDSTILL_KMH * TACHO_SCALE));
       } else {
         const offen = [];
         if (z3.tank.stand < 100 - 0.05) offen.push('tankt');
@@ -2031,7 +2031,7 @@
     // top speed instead of deriving the top speed from the known scale. The cars are 1:50,
     // the measured ground speed at full throttle is about 5.9 km/h, so the dash reads
     // 5.9 x 50 = 295 km/h flat out. See the derivation at REAL_SCALE.
-    $('race-speed').textContent = Math.round(Math.abs(st.speedKmh) * REAL_SCALE);
+    $('race-speed').textContent = Math.round(Math.abs(st.speedKmh) * TACHO_SCALE);
 
     // Shift LEDs. Green, then red, then BLUE for the last two. The blue pair above red,
     // not below it, is what real GT3 wheels use for "shift now", and it makes the strip
@@ -2303,7 +2303,7 @@
       pit.classList.add('on');
       $('race-pit-text').textContent = pitState === 'limited'
         ? 'PIT LIMITER ENGAGED \u00b7 '
-          + Math.round(PIT_SPEED_FACTOR * physEngine.config.topSpeedKmh * REAL_SCALE) + ' KM/H'
+          + Math.round(PIT_SPEED_FACTOR * physEngine.config.topSpeedKmh * TACHO_SCALE) + ' KM/H'
         : (pitSpielAktiv()
           ? 'PIT GAME \u00b7 ' + pitSpielRest().toFixed(1) + 's \u00b7 \u2713 ' + pitSpiel.treffer
             + '/' + PIT_SPIEL_ANZAHL
@@ -2377,6 +2377,13 @@
     cockpitGemaltAt = jetzt;
     cockpitMalFaellig = false;
     updateRaceScreen(physEngine.state);
+    // v0.9.28: im Zwei-Spieler-Modus auch der Beide-Schirm HIER, direkt nach dem Senden -
+    // der eigene 120-ms-Takt unten malte ihn zu beliebiger Zeit, auch kurz vor dem Paket.
+    if (beideSchirmOffen()) p2ScreenRender();
+  }
+  function beideSchirmOffen() {
+    const el = $('race-dash');
+    return !!(el && el.dataset.screen === 'auto2' && typeof zweiSpielerAktiv === 'function' && zweiSpielerAktiv());
   }
   function updateDashboard(out) {
     const st = physEngine.state;

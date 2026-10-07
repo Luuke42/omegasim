@@ -136,7 +136,7 @@
         e.state.isShifting = false; shiftedAt = null;
       }
       trace.push({ t, want: sTarget, got: out.servoAngle,
-                   kmh: e.state.speedKmh * REAL_SCALE, gear: e.state.currentGear });
+                   kmh: e.state.speedKmh * TACHO_SCALE, gear: e.state.currentGear });
     }
     psLastRun = trace;
     psRenderResult();

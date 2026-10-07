@@ -1377,6 +1377,35 @@
   /* Rammstrafe (v0.9.21): rot auf dem Boxenknopf und im Ergebnis. */
   .gt3-act.strafe { color: #ff5252; box-shadow: inset 0 0 0 2px #ff5252; }
   .rammer-tag { color: #ff5252; font-weight: 700; letter-spacing: .04em; margin-left: .4em; }
+  /* Groesse der Reiterleisten (v0.9.37): ein Faktor je Leiste, 1 = bisher. */
+  #k-leiste .k-reiter button { zoom: var(--reiter1, 1); }
+  .k-leiste2 .k-reiter button { zoom: var(--reiter2, 1); }
+  .ch-ausgang { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px;
+    padding: 8px 10px; border-radius: 8px; background: rgba(255, 176, 46, .14); color: #ffcf7a; font-size: 13px; }
+  /* Challenges: Spiegel-Knopf unter der Karte (v0.9.33) */
+  .ch-karte-knoepfe { display: flex; justify-content: center; gap: 8px; margin: 6px 0 4px; }
+  .ch-spiegel-knopf { width: 48px; height: 40px; padding: 0; display: grid; place-items: center;
+    border-radius: 10px; }
+  .ch-spiegel-knopf svg { width: 26px; height: 26px; }
+  .ch-spiegel-knopf.an { background: var(--k-blau, #0b84d6); color: #fff; border-color: transparent; }
+  /* Fahren: Fahrgefuehl-Kachel mit groesserer Schrift (v0.9.31) */
+  .k-fahren-unten #fa-profil .k-kt { font-size: clamp(14px, 2.6vh, 22px); }
+  .k-fahren-unten #fa-profil .k-kk { font-size: clamp(11px, 2vh, 15px); }
+  /* Galerie: Auto ohne Foto als Farbflaeche mit Zeichen */
+  .k-auto-zelle.k-auto-ohne-foto { position: relative; }
+  .k-auto-zelle.k-auto-ohne-foto::before { content: attr(data-zeichen); position: absolute; inset: 0;
+    display: grid; place-items: center; font-size: clamp(22px, 6vh, 46px); font-weight: 900; opacity: .85; }
+  /* Podium: groessere Namen, zwei Plaetze, Solo */
+  .ov-podest .name { font-size: clamp(13px, 2.2vw, 22px) !important; font-weight: 800; }
+  .ov-podest.zwei { grid-template-columns: repeat(2, 1fr); }
+  .ov-podest.solo { grid-template-columns: 1fr; }
+  .ov-podest .platz-solo { gap: 4px; }
+  .ov-podest .solo-zeit { font: 800 clamp(20px, 4vw, 40px)/1 monospace; color: #f5c518; }
+  .ov-podest .solo-werte { font-size: clamp(11px, 1.6vw, 15px); color: var(--gt3-strip-ink, #a9b2c4); }
+  .ov-podest .solo-vergleich { font-size: clamp(12px, 1.8vw, 17px); font-weight: 700; color: #c9d1e0; }
+  .ov-podest .solo-vergleich.neu { color: #2ee06a; }
+  .ov-podest .platz-solo .block { height: clamp(34px, 8vh, 60px); color: #f5c518; width: 60%; }
+  .ov-podest .platz-solo .block b { font-size: clamp(16px, 3vw, 30px); letter-spacing: .2em; }
   /* Statistiken (v0.9.25) */
   .stat-raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 8px; margin: 6px 0 14px; }
@@ -2426,8 +2455,9 @@
   .k-arrow:hover, .k-arrow:active, .k-arrow:focus-visible { background: transparent;
     color: var(--k-blau); outline: 0; }
 
-  .k-fahren { grid-template-columns: repeat(3, 1fr); grid-template-rows: minmax(300px, 56vh) minmax(96px, 20vh); }
-  .k-fahren-unten { grid-column: 1 / -1; grid-template-columns: 1fr 1fr 2fr; }
+  .k-fahren { grid-template-columns: repeat(3, 1fr); grid-template-rows: minmax(300px, 52vh) minmax(120px, 25vh); }
+  /* v0.9.31: Motorsound steht nur noch in der Garage; Fahrgefuehl und Start teilen sich die Reihe. */
+  .k-fahren-unten { grid-column: 1 / -1; grid-template-columns: 1fr 2fr; }
   /* BESTELLT v0.8.126: mehrere verbundene Autos mit Fotos gemeinsam zeigen (Garage auf dem
      Fahren-Schirm). Erst ab zwei Fotos; dann ist die Abdunklung aus, sonst waere das Foto zu
      dunkel. Die Kacheln stehen in der .k-kb-Flaeche (Auto-Bild). */
@@ -2530,7 +2560,7 @@
       padding: clamp(6px, 1.6vh, 22px) clamp(8px, 2vw, 28px); }
     body.k-kacheln .tabpage.active { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
     body.k-kacheln .k-fahren { flex: 1 1 0; min-height: 0; }
-    .k-fahren { grid-template-rows: minmax(0, 1fr) minmax(40px, 21%); }
+    .k-fahren { grid-template-rows: minmax(0, 1fr) minmax(48px, 27%); }
     .k-fahren-unten { min-height: 0; }
     .k-kachel { min-height: 0; overflow: hidden; }
     .k-kb { height: clamp(26px, 11vh, 120px); }
@@ -2660,7 +2690,10 @@
   #race-act-start, #race-act-sound { display: none !important; }
   .gt3-right .gt3-times .gt3-val { font-size: clamp(26px, 5.2vw, 54px); line-height: 1.05; }
   .gt3-right .gt3-times .gt3-lbl { font-size: clamp(9px, 1.4vw, 12px); }
-  .gt3-right .gt3-laps { font-size: clamp(16px, 2.4vw, 24px); max-height: none; }
+  /* v0.9.31, GEMELDET: "bei vielen Runden werden die unteren Kacheln vom Bildschirm
+     geschoben". Die Liste zeigt die neuesten Runden oben und hoechstens fuenf - mehr
+     schneidet sie ab, statt das Cockpit zu strecken. */
+  .gt3-right .gt3-laps { font-size: clamp(16px, 2.4vw, 24px); max-height: 6.4em; overflow: hidden; }
   /* ---- v0.9.22, BESTELLT: "Rundenanzeige links oben so gross wie die Zeiten rechts und
      Buttons darunter etwas kleiner; die Lichter oben rechteckig und so etwas groesser,
      damit ich sie im Augenwinkel gut erkenne." ---- */
@@ -2980,6 +3013,9 @@
   body:not(.track-fs) #track-fs-host > .tp-bar { display: none; }
   /* Im Editor-Vollbild kein Menuekopf: er lag ueber der Aktionsleiste (gesehen bei 800 x 370). */
   body.track-fs header#k-kopf { display: none !important; }
+  /* v0.9.45: im Vollbild gehoert jede Geste der Karte (Strecke im Raum ziehen) - ohne das bricht
+     der Browser einen Fingerzug nach wenigen Pixeln als Bildlauf ab. */
+  body.track-fs #track-preview-svg { touch-action: none; }
   .tp-info { font-size: 12px; color: #eef0f4; margin-left: 10px; white-space: nowrap; }
   .tp-info .tp-fehlt { color: var(--bad); font-weight: 700; }
   .tp-info .tp-da { color: var(--good); }
@@ -3036,6 +3072,48 @@
   .raum-knopf:hover { background: var(--panel-2); filter: brightness(1.1); }
   .raum-knopf:active { background: rgba(0,163,224,.2); }
   .raum-zeile.menu-nav-sel { border-radius: 8px; }
+  /* RAUMDESIGNER (v0.9.39) */
+  .raum-ds-zeile { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+  .raum-mini { width: 150px; height: 90px; cursor: pointer; }
+  .raum-mini svg { width: 100%; height: 100%; display: block; }
+  /* v0.9.43: wie das Editor-Vollbild - drei Rasterzeilen, die Flaeche in der mittleren mit
+     min-height 0, damit sie nie ueber Leiste oder Fuss waechst; der Menuekopf ist weg. */
+  .raum-ds { position: fixed; inset: 0; z-index: 9000; display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto; gap: 6px; padding: 8px; box-sizing: border-box;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    background: linear-gradient(rgba(6,8,12,.9), rgba(6,8,12,.9)), url(img/asphalt-bg.jpg) center / cover, var(--bg); }
+  .raum-ds[hidden] { display: none; }
+  body.raum-ds-offen header#k-kopf { display: none !important; }
+  .raum-ds-leiste { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .raum-ds-titel { font-weight: 800; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; }
+  .raum-ds-gruppe { display: flex; gap: 3px; }
+  .raum-ds-gruppe button { padding: 6px 9px; font-size: 12.5px; min-height: 32px; }
+  .raum-ds-gruppe button.an { background: rgba(0,163,224,.28); border-color: var(--info); color: var(--ink); }
+  .raum-ds-vorlagen button { font-size: 15px; font-weight: 700; min-width: 34px; }
+  .raum-ds-fertig { margin-left: auto; min-height: 34px; padding: 6px 16px; font-weight: 700; }
+  .raum-ds-flaeche { min-height: 0; min-width: 0; overflow: hidden; display: flex; align-items: center;
+    justify-content: center; touch-action: none; user-select: none; }
+  .raum-ds-flaeche svg { width: 100%; height: 100%; display: block; cursor: crosshair; }
+  .raum-ds-fuss { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; justify-content: space-between; }
+  .raum-ds-info { font-size: 12px; color: var(--ink-2); }
+  .raum-ds-info.schlecht { color: var(--warn); }
+  .raum-ds-tasten { font-size: 10.5px; color: var(--muted); }
+  .raum-ds-hilfe { margin-left: auto; min-height: 34px; min-width: 34px; padding: 4px 10px; font-weight: 800; }
+  .raum-ds-hilfe + .raum-ds-fertig { margin-left: 0; }
+  body.raum-ds-offen .k-tour { z-index: 9500; }
+  .raum-gespeichert-titel { margin: 18px 0 6px; font-size: 14px; }
+  .raum-speichern-zeile { gap: 8px; align-items: center; }
+  .raum-speichern-zeile input { flex: 1 1 180px; max-width: 260px; }
+  .raum-liste { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-width: 560px; }
+  .raum-eintrag { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px;
+    border: 1px solid transparent; background: rgba(255,255,255,.03); }
+  .raum-eintrag.aktiv { border-color: var(--info); background: rgba(0,163,224,.10); }
+  .raum-eintrag .raum-eintrag-bild { width: 64px; height: 40px; flex: 0 0 auto; }
+  .raum-eintrag .raum-eintrag-bild svg { width: 100%; height: 100%; display: block; }
+  .raum-eintrag .raum-eintrag-name { flex: 1 1 auto; min-width: 0; color: var(--ink); }
+  .raum-eintrag .raum-eintrag-mass { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .raum-eintrag button { min-height: 30px; padding: 4px 10px; }
+  .raum-eintrag .raum-weg { width: 30px; aspect-ratio: 1; padding: 0; border-radius: 50%; }
   /* HOCHFORMAT, schmal (Telefon im Browser): untereinander, mit Bildlauf. */
   @media (max-width: 760px) and (orientation: portrait) {
     header#k-kopf { grid-template-columns: 1fr auto; }
@@ -3376,6 +3454,25 @@
        500 ms begrenzt und laeuft nicht bei jedem normalen Neuzeichnen. */
   }
   #track-preview-svg.track-baut { animation: trackBaut .5s ease-out; }
+  /* LADEANIMATION (v0.9.42, 59-lade.js): drei Streckenteile leuchten nacheinander auf. */
+  .lade-traeger { position: relative; }
+  .lade-ueber { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px; background: rgba(0,0,0,.78); }
+  /* v0.9.45: ein Teil dreht sich in 500 ms einmal im Uhrzeigersinn, abwechselnd Gerade und
+     Rechtskurve (59-lade.js). steps(1): die Ebene springt zur Haelfte des Takts um. */
+  .lade-dreh { position: relative; width: 96px; height: 96px; }
+  .lade-ebene { position: absolute; inset: 0; display: grid; place-items: center; }
+  .lade-ebene svg, .lade-ebene .tp-karte { width: 100%; height: 100%; max-width: none; max-height: none; }
+  .lade-a { animation: ladeDreh .5s linear infinite, ladeWechselA 1s steps(1, end) infinite; }
+  .lade-b { animation: ladeDreh .5s linear infinite, ladeWechselB 1s steps(1, end) infinite; }
+  @keyframes ladeDreh { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes ladeWechselA { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 0; } }
+  @keyframes ladeWechselB { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .lade-a, .lade-b { animation-duration: 2s, 4s; }
+  }
+  .lade-text { font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: .03em; }
+  .mp-ready-lade { margin: 6px 0 10px; }
   @keyframes trackBaut {
     0% { opacity: 0; transform: scale(.92); }
     60% { opacity: 1; }
@@ -3541,7 +3638,10 @@
     border-radius: 50%; font-size: 13px; line-height: 1; padding: 0 !important; display: grid;
     place-items: center; background: var(--danger, #c0392b);
     color: #fff; border: none; cursor: pointer; }
-  /* Community Strecken: Liste der eingereichten Strecken. */
+  /* Community-Bestzeiten: Liste der eingereichten Strecken. */
+  .community-modus { display: inline-block; font-size: 10.5px; font-weight: 800; letter-spacing: .05em;
+    text-transform: uppercase; padding: 1px 6px; border-radius: 4px; vertical-align: 1px;
+    background: rgba(0,163,224,.18); color: var(--info); border: 1px solid rgba(0,163,224,.45); }
   .community-liste { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
   .community-mini { flex: none; width: 74px; height: 52px; display: grid; place-items: center; background: rgba(0,0,0,.25); border-radius: 6px; overflow: hidden; }
   .community-mini svg { width: 100%; height: 100%; }
@@ -4357,7 +4457,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">0.9.28</span></span>
+        <span class="foot-ver">v<span id="app-version">0.9.48</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -4398,6 +4498,7 @@
           <button type="button" class="k-knopf" id="fa-scan">Scan</button>
           <button type="button" class="k-knopf" id="fa-editor">Editor</button>
           <button type="button" class="k-knopf" id="fa-laden">Laden</button>
+          <button type="button" class="k-knopf" id="fa-raum">Raum</button>
           <button type="button" class="k-knopf" id="fa-druck" hidden>Druckvorlagen</button>
           <button type="button" class="k-knopf" id="fa-foto" hidden title="Optimal: quer, z. B. 4:3 oder 16:9">Foto</button>
           <button type="button" class="k-knopf" id="fa-foto-weg" hidden>Foto löschen</button>
@@ -4413,13 +4514,6 @@
       <div class="k-kachel k-klein" id="fa-profil" role="button" tabindex="0" data-quad="profil">
         <span class="k-kk">Fahrgefühl</span>
         <span class="k-kopf"><span class="k-kt" id="fa-profil-titel"></span><span class="k-quad-punkte" id="fa-profil-punkte" aria-hidden="true"></span></span>
-        <span class="k-ki"></span>
-      </div>
-      <!-- BESTELLT: "Statt Gegnerhärte Motorsound einstellen lassen im Fahren Menü". Quadrat
-           blaettert die Motoren durch (#sound-profile), Kreuz oeffnet Optionen, Ton. -->
-      <div class="k-kachel k-klein" id="fa-motor" role="button" tabindex="0" data-quad="motor">
-        <span class="k-kk">Motorsound</span>
-        <span class="k-kopf k-kopf-wechsel"><button type="button" class="k-arrow" data-quad="motor" data-dir="-1" aria-label="vorheriger Motorsound"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3v10L4 8z"/></svg></button><span class="k-kt" id="fa-motor-titel"></span><button type="button" class="k-arrow" data-quad="motor" data-dir="1" aria-label="naechster Motorsound"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10l7-5z"/></svg></button></span>
         <span class="k-ki"></span>
       </div>
         <div class="k-kachel k-start" id="fa-start" role="button" tabindex="0">
@@ -5161,12 +5255,12 @@
           <span>Gemeinsame Bestenliste &uuml;ber ein Google Sheet.</span>
         </button>
       </div>
-      <h3 class="k-zwischen">Community Strecken</h3>
+      <h3 class="k-zwischen">Community-Bestzeiten</h3>
       <div class="misc-grid">
         <button class="misc-tile subpage-open" data-sub="ch-community">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 34c0-4 3-8 8-8s8 3 8 8M20 14a6 6 0 1 1 0 12 6 6 0 0 1 0-12z"/><path d="M28 14c4-2 10-1 12 4M36 26c-2 4-6 6-10 6" stroke="var(--accent)"/></svg>
-          <b>Community Strecken</b>
-          <span>Eigene Strecken eintragen und Bestzeiten teilen.</span>
+          <b>Community-Bestzeiten</b>
+          <span>Eigene Strecken mit Abstimmung einreichen und Bestzeiten teilen.</span>
         </button>
       </div>
     </div>
@@ -5199,7 +5293,7 @@
     </div>
     <div class="card subpage" id="sub-ch-community">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
-      <h2>Community Strecken</h2>
+      <h2>Community-Bestzeiten <span class="wip-tag">experimentell</span></h2>
       <div id="community-bereich"></div>
     </div>
     <div class="card subpage" id="sub-ch-online">
@@ -5229,6 +5323,14 @@
       <div class="ch-links">
         <div class="ch-karte" id="ch-karte" tabindex="0" role="button" data-ch-voll
              title="Vergr&ouml;&szlig;ern (X) / Verkleinern (X oder Kreis)" aria-label="Streckenkarte vergr&ouml;&szlig;ern"></div>
+        <!-- v0.9.33: Spiegeln als Knopf mit Symbol direkt unter der Karte; das Kaestchen bleibt
+             unsichtbar als Zustand (chSpiegel, Speicherung). -->
+        <div class="ch-karte-knoepfe">
+          <button type="button" class="ch-spiegel-knopf" id="ch-spiegel-knopf" aria-pressed="false"
+                  title="Strecke spiegeln: Kurven links/rechts tauschen und die Schleife r&uuml;ckw&auml;rts fahren"
+                  aria-label="Strecke spiegeln"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18" stroke-dasharray="2 2.5"/><path d="M9 6 3 18h6z"/><path d="M15 6l6 12h-6z" fill="currentColor" fill-opacity=".35"/></svg></button>
+        </div>
         <p class="muted" id="ch-idee"></p>
         <p class="ch-fakten" id="ch-fakten" data-i18n-skip></p>
         <p class="ch-teile" id="ch-teile" data-i18n-skip></p>
@@ -5239,9 +5341,7 @@
           <div class="muted" id="ch-erg-text" data-i18n-skip></div>
         </div>
         <button type="button" class="ch-umschalter" id="ch-modus" aria-label="Modus umschalten"><span data-m="hotlap">Beste Runde</span><span data-m="rennen">Rennen</span></button>
-        <label class="tgl" id="ch-spiegel-zeile" title="Strecke spiegeln: Kurven links/rechts tauschen und die Schleife rueckwaerts fahren">
-          <input type="checkbox" id="ch-spiegel"> Strecke spiegeln
-        </label>
+        <input type="checkbox" id="ch-spiegel" hidden data-preset-skip>
         <p class="ch-medaille-hinweis" id="ch-medaille-hinweis" data-i18n-skip></p>
         <div class="ch-name-zeile"><label for="ch-name">Name in der Bestenliste</label>
           <input type="text" id="ch-name" maxlength="16" data-preset-skip></div>
@@ -5249,6 +5349,10 @@
       </div>
       <div class="ch-rechts">
         <h3>Bestenliste</h3>
+        <div class="ch-ausgang" id="ch-ausgang-lage" hidden>
+          <span id="ch-ausgang-text" data-i18n-skip></span>
+          <button type="button" id="ch-ausgang-senden">Jetzt senden</button>
+        </div>
         <p class="muted" id="ch-liste-status" data-i18n-skip></p>
         <p class="muted ch-stats" id="ch-stats" data-i18n-skip></p>
         <div class="ch-perz" id="ch-perz" data-i18n-skip></div>
@@ -5469,6 +5573,21 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>0.9</span></b></p>
       <ul class="muted" id="patchnotes-09" style="padding-left:20px; line-height:1.7">
+        <li>T&#246;ne nach echten Aufnahmen nachgestimmt (gerechnet, keine Aufnahme in der App): Reifenquietschen h&#246;her (um 800 Hz statt 620) und mit zitternder Tonh&#246;he wie haftendes und rutschendes Gummi; Schalten mit rauschendem Metall-Klacken statt Ton; Abblasventil l&#228;nger (0,6 s) und mit langsamem Flattern; Auspuffknaller tiefer und voller; Laderpfeifen endet bei 5,8 kHz statt 7. Neu unter den Motorton-Zus&#228;tzen (experimentell): Abrollger&#228;usch, Reifen und Fahrtwind werden mit dem Tempo lauter und heller.</li>
+        <li>Raum hat ein eigenes Men&#252; (Strecke &#8594; Raum, und &#8222;Raum&#8220; in der FAHREN-Streckenkachel auf der Bahn): Gr&#246;&#223;e, Raumgestalter, Tutorial und gespeicherte R&#228;ume mit Namen zum Laden und L&#246;schen. Im Editor blendet der Schalter &#8222;Raum&#8220; den Raum aus; ausgeblendet z&#228;hlt er auch f&#252;r Zufallsstrecken nicht. Ziehen im Editor: die Strecke folgt jetzt Finger, Maus und rechtem Stick, der Raum bleibt liegen. Alle Streckenbilder (Fahren-Kachel, &#220;bersicht, Startaufstellung, Listen) zeigen die Originalteile mit Pfeilen. Neue Ladeanimation: ein Streckenteil dreht sich, abwechselnd Gerade und Rechtskurve. Community-Bestzeiten (vorher Community-Strecken): beim Einreichen w&#228;hlt man die Abstimmung (Arcade, Pro, GT3, F1, Realismus GT3), die Liste zeigt sie, und gefahren wird damit. Einzelrennen nach einem Mehrspieler-Rennen fragt nicht mehr &#8222;f&#252;r alle?&#8220;, wenn niemand sonst da ist.</li>
+        <li>Behoben: 0.9.43 startete auf Ger&#228;ten mit eingetragenem Raum nicht (&#8222;Cannot access 'RAUM_ZELLE_CM' before initialization&#8220;) &#8211; die Editor-Vorschau zeichnete beim Laden schon die M&#246;bel, bevor deren Konstanten angelegt waren; die neue Start-Diagnose hat den Fehler angezeigt. Schalten klingt jetzt mechanisch: Schaltwalze und Klauenring rasten metallisch ein, darunter der Ruck im Antriebsstrang (statt des dumpfen &#8222;d&#252;b&#8220;). Lichthupe: Vorder- und R&#252;cklicht gehen gemeinsam aus und an, das Bremslicht leuchtet nicht mehr mit.</li>
+        <li>Rennende: Die Rennuhr startete erst bei 75 % der H&#246;chstgeschwindigkeit (die Schwelle &#8222;3 km/h&#8220; wurde mit dem Modelltempo verglichen) &#8211; wer das nie erreichte, fuhr Runden, die nicht z&#228;hlten, und das Rennen endete nie. Jetzt startet sie bei 3 km/h auf dem Tacho oder sp&#228;testens an der ersten Ziellinie; die Fr&#252;hstart-Erkennung hatte denselben Fehler. Raumgestalter wie der Editor: &#8222;Raumgestalter starten&#8220; &#246;ffnet das Vollbild, oben die Werkzeugleiste mit &#8222;Schlie&#223;en&#8220;, die Fl&#228;che in einer eigenen Zeile darunter, der Men&#252;kopf liegt nicht mehr &#252;ber den Kn&#246;pfen. Rundenzeiten-Diagramm: wei&#223;er Saum unter jeder Linie, damit auch ein schwarzes Auto sichtbar ist.</li>
+        <li>Lenkung GT3, F1 und Realismus GT3: voller Einschlag ist wieder erreichbar. Seit dem neuen Lenkweg begrenzte das &#8222;Lenkansprechen&#8220; dieser Voreinstellungen den gr&#246;&#223;ten Einschlag (Realismus GT3 gemessen 19 von 45&#176; im Schritttempo, mit kalten Reifen 11&#176;); jetzt 3,0 wie Pro, und Realismus GT3 gleicht kalte Reifen mit Lenkkalibrierung 1,6 aus. Pro und Arcade unver&#228;ndert. Zufallsstrecke: Ladeanimation (Gerade, Kurve, Haarnadel) im Editor, die Suche l&#228;uft daf&#252;r in kleinen St&#252;cken. Mehrspieler: dieselbe Animation im Bereitschaftsschirm, solange auf die anderen gewartet wird.</li>
+        <li>Rundenrennen enden jetzt mit der Zielrunde: Wer die eingestellte Rundenzahl f&#228;hrt, ist sofort im Ziel (Ende-Ton und Ergebnis); vorher endete ein 5-Runden-Rennen erst bei der &#220;berfahrt nach Runde 5, im Mehrspieler also scheinbar nie. Die Renn&#252;bersicht zeigt dich im Mehrspieler nicht mehr doppelt (Name und Auto). Derby: Auto 1 nimmt wieder Schaden (seitlich &#8722;20 %, vorn &#8722;10 %), vorher ging der Treffer ins Leere und nur der Controller r&#252;ttelte. Mehrspieler auf schwachen Handys: im Rennen fragt das Handy den Host nur noch alle 3 s ab, meldet Positionen f&#252;r Zuschauer alle 0,5 s und zeichnet die Ranglisten-Tabelle erst nach dem Rennen, damit der Steuertakt Luft hat.</li>
+        <li>Raumdesigner (experimentell) unter Strecke &#8594; Meine Teile: den Raum in 10-cm-Feldern als Boden oder M&#246;bel malen, mit Pinsel (10/30/60 cm) oder Rechteck, Vorlagen Rechteck, L, U und Oval, R&#252;ckg&#228;ngig und &#8222;Strecke einpassen&#8220;. Geht mit Finger, Maus, Tastatur und Gamepad (Stick/Steuerkreuz bewegt, &#10005; malt, &#9633; M&#246;bel/Boden, &#9651; Pinsel/Rechteck, L1/R1 Gr&#246;&#223;e, &#9675; fertig). Zufallsstrecken passen jetzt wirklich hinein: gepr&#252;ft wird mit der vollen Bahnbreite plus 2 cm Abstand statt nur mit der Mittellinie, um M&#246;bel herum, und der Raum wird im Editor gleich richtig um die Strecke gelegt.</li>
+        <li>Streckenteile wie die Originalschienen: wei&#223;er Randstreifen mit gef&#252;llten Pfeilen in gleichem Abstand auf beiden Seiten (links blau, rechts rot), Steckzapfen an den Teilenden, matt schwarze Fahrbahn. Tempo nachgemessen (btsnoop): Vollgas sind real 5,45 km/h, im Ma&#223;stab 272 km/h; der Tacho rechnet jetzt damit, und bei Gasfaktor 100 % (Realismus GT3) stimmt er genau; Pro und Arcade behalten ihren Faktor und fahren sich wie vorher. Rundenz&#228;hlung auf der Schiene: keine Doppelrunde mehr, wenn ein Auto zwischen Barcode und Ziellinie h&#228;lt, keine Mini-Runde beim Start vor dem Streifen, keine Phantomrunde bei Ghosts und Spieler 2/3 beim Losfahren; mit einer zweiten Start/Ziel-Geraden z&#228;hlt Runde 1 richtig.</li>
+        <li>Rundenzeit an der Ziellinie: Auf der Schiene misst und sagt Spieler 1 die Runde jetzt an der Ziellinie an, die das Auto selbst meldet (Byte 15, etwa 35 cm nach dem Barcode, aus den btsnoop-Mitschnitten), nicht mehr am Barcode; der Barcode bleibt R&#252;ckfall f&#252;r Autos ohne diese Meldung. Tastenbelegung: Eine neue Zuweisung auf eine schon belegte Taste tauscht jetzt die beiden Aktionen, statt beim n&#228;chsten Start zur&#252;ckzufallen, und eine alte Aufr&#228;umregel setzt eigene Tasten (z. B. Rennstart auf Kreuz) nicht mehr bei jedem Laden zur&#252;ck. Optionen &#8594; Allgemein: zwei Regler f&#252;r die Gr&#246;&#223;e der Haupttabs und der Unter-Tabs (60&#8211;180 %, 100 % wie bisher).</li>
+        <li>Crash-Richtung jetzt gemessen statt gelernt: Beim Beschleunigen wandert der Gyro-Punkt im Cockpit nach vorn, also hei&#223;t Byte 1 f&#228;llt &#8222;von hinten geschoben&#8220;, Byte 1 steigt &#8222;vorne eingeschlagen&#8220;, &#252;berwiegendes Byte 3 &#8222;von der Seite&#8220; (45&#176; Toleranz). &#8222;Nur der Rammer bremst&#8220; (fr&#252;her &#8222;Kein Bremsen bei Auffahrunfall&#8220;): Gebremst wird nur, wer vorne einschl&#228;gt; wer von hinten oder von der Seite getroffen wird, f&#228;hrt weiter. Rammer-Strafe: Rammer ist, wer vorne eingeschlagen ist, w&#228;hrend der andere von hinten oder der Seite getroffen wurde (frontal z&#228;hlt nicht); das gilt auch f&#252;r Ghosts. Im Derby kostet vorn einschlagen 10 %, getroffen werden 20 %.</li>
+        <li>Bestenliste: Kann eine Zeit nicht hochgeladen werden, kommt ein Hinweis mit Strecke und Grund (z. B. &#8222;keine Verbindung zum Server&#8220; oder die Ablehnung durch die Bestenliste), nie mitten im Rennen und nie &#252;ber einem anderen Dialog. Auf der Challenge-Seite steht, wie viele Zeiten noch warten, mit &#8222;Jetzt senden&#8220;. Hoch- und Herunterladen der Bestenliste laufen nur, wenn gerade kein Rennen l&#228;uft, damit das Steuern nicht verz&#246;gert wird.</li>
+        <li>Bestenliste: Die Listen liegen im Zwischenspeicher und erscheinen sofort, beim App-Start und alle 10 Minuten wird im Hintergrund nachgeladen; eine Strecke ohne Zeiten zeigt das sofort, statt lange zu laden. Hochgeladene Zeiten bleiben in einer Warteschlange, bis das Sheet sie best&#228;tigt, und eine Ablehnung wird mit Grund gemeldet. W&#246;chentliche Challenges: Die Resttage stehen oben neben &#8222;Woche X/20&#8220;, unter jeder Strecke stehen Spieler und Ergebnisse. Spiegeln ist jetzt ein Knopf mit Symbol unter der Karte. FAHREN, Strecke: Druckvorlagen nur bei FREI, Editor nur bei AUF DER BAHN. Wischen wechselt den Reiter nicht mehr, wenn die Geste am Bildschirmrand beginnt (Systemleiste).</li>
+        <li>WLAN-Mehrspieler: genauerer gemeinsamer Start. Die Zeit wird beim Eintreffen der Antwort gemessen, nicht erst nach dem Einlesen, und im Vorlauf gleicht jedes Telefon die Host-Uhr acht Mal nach und stellt die Ampel nach. Rennende f&#252;r alle: Hat ein Mitspieler die Rundenzahl erreicht, ist bei allen die laufende Runde die letzte. Neu: &#8222;Rennen f&#252;r alle beenden&#8220; (WLAN-Reiter und R&#252;ckfrage beim Verlassen des Rennens). An den Host gehen jetzt die Rennrunden inklusive Fr&#252;hstart-Strafe.</li>
+        <li>FAHREN: Die Autos-Kachel zeigt ab zwei verbundenen Autos alle (ohne Foto als Farbfl&#228;che), die Motorsound-Kachel ist weg (Motor jetzt nur in der Garage), Fahrgef&#252;hl und Start sind gr&#246;&#223;er. Garage: ein neues Foto erscheint sofort links in der Auto-Kachel. Podium: gr&#246;&#223;ere Namen, bei zwei Autos nur Platz 1 und 2, allein ein Solo-Podest mit Gesamtzeit, bester Runde und Vergleich mit deiner Bestzeit auf der Strecke. Cockpit: die Rundenliste zeigt h&#246;chstens f&#252;nf Runden und schiebt nichts mehr aus dem Bild. Ohne Bahn zeigt die Renn&#252;bersicht dein Streckenfoto bzw. den Platzhalter statt des Layouts. Freies Training: kein &#8222;Automatisch aufstellen&#8220;. Knockout hei&#223;t jetzt &#8222;NPC Knockout&#8220;, braucht mindestens einen Ghost und schaltet &#8222;Auf der Bahn&#8220; ein.</li>
+        <li>Derby: Ein Crash gegen die Wand beendet das Spiel nicht mehr. Es endet erst, wenn jemand das Kill-Ziel erreicht oder nur noch ein Teilnehmer f&#228;hrt; allein ohne Gegner nur von Hand. 2 Spieler: Auto 2 und 3 haben beim Boxenstopp dieselben T&#246;ne wie Auto 1 (Tanken, Reparatur, Schrauber), auf ihrer Stereoseite. Latenz: Spieler 2 und 3 senden &#252;ber denselben Weg wie Auto 1 (der neueste Befehl ersetzt den wartenden), und der Schirm &#8222;Beide&#8220; wird direkt nach dem Senden gezeichnet.</li>
         <li>Behoben: Nach einem abgebrochenen Derby blieb das Cockpit im n&#228;chsten normalen Rennen im Derby-Modus. Behoben: Gespiegelte Strecken mit beiden Haarnadeltypen (z. B. Balkonia) gingen nicht mehr zu, weil das gerade St&#252;ck der Haarnadel r&#252;ckw&#228;rts gefahren am Ausgang liegt. Jetzt schlie&#223;en alle 83 Challenge-Strecken auch gespiegelt. Neu in den Renneinstellungen: &#8222;Gelbe Flagge deaktivieren&#8220; (ab Werk aus). Die Motorwahl von Auto 2 und 3 wird jetzt gespeichert und gesichert.</li>
         <li>Latenz: Im Cockpit liest der 45-ms-Sendetakt das Gamepad jetzt direkt vor der Physik statt den Wert vom letzten Bildschirmbild zu nehmen (spart im Schnitt etwa einen halben Frame, auf schwachen Handys mehr). Die Live-Anzeigen des Pads werden nur noch bei &#196;nderung geschrieben.</li>
         <li>Neu: Optionen &#8594; Statistiken. Zu sehen sind gefahrene Kilometer (simuliert und auf der Bahn), Sitzungen, Fahrzeit, beste Runde, Rennen, Siege (Rennen mit mehreren Autos), Boxenstopps, Crashs, Medaillen, gefahrene Strecken, Sitzungen je Modus und ein Kilometer-Ranking je Auto, alles aus den Daten, die die App ohnehin speichert. Behoben: Die gespeicherten Kilometer waren seit Ende August 73,75-fach zu gro&#223; und werden beim ersten Start einmalig korrigiert; die Sicherungs&#252;bersicht zeigt wieder die Zahl der Sitzungen.</li>
@@ -8295,6 +8414,7 @@
             <button class="primary" id="mp-join">Mitmachen</button>
             <button id="mp-info-join" title="Ohne eigenes Auto: zeigt Strecke, Autos und Rangliste">Als Info-Screen <span class="wip-tag">experimentell</span></button>
             <button id="mp-rennen-alle">Rennen für alle starten <span class="wip-tag">experimentell</span></button>
+            <button id="mp-rennen-ende">Rennen für alle beenden <span class="wip-tag">experimentell</span></button>
             <label class="small mp-force" title="Tempo, Handling, Beschleunigung, Schaden und Reifenverschleiss auf alle setzen (Controller, Tasten, Empfindlichkeit, Rumble und Sound bleiben unberührt)">Renneinstellungen erzwingen <input type="checkbox" id="mp-force-preset" checked></label>
             <button id="mp-leave" class="warn">Verlassen</button>
           </div>
@@ -8419,7 +8539,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M7 7h10M7 17h10M12 7v10"/><circle cx="12" cy="12" r="3"/>
-          </svg><b>Knockout</b><span class="wip-tag">experimentell</span></button>
+          </svg><b>NPC Knockout</b><span class="wip-tag">experimentell</span></button>
         <button type="button" class="mode-tile kachelbild derby" data-mode="derby">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -8431,7 +8551,7 @@
         <option value="endurance">Endurance</option>
         <option value="qualifying">Qualifying</option>
         <option value="laps">Runden</option>
-        <option value="knockout">Knockout</option>
+        <option value="knockout">NPC Knockout</option>
         <option value="derby">Demolition Derby</option>
       </select></div>
       <p class="muted" id="race-mode-hint" style="font-size:11.5px; margin:8px 0 0 0"></p>
@@ -8793,6 +8913,24 @@
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
       <h2>Allgemein</h2>
 <div class="opt-head">Allgemein</div>
+      <!-- v0.9.37, BESTELLT: "Slider fuer Groesse der Haupttabs und der Sub-Tabs, Standard die
+           aktuellen Werte, aber beide noch groesser und kleiner erlauben." -->
+      <div class="opt-row"><div class="opt-label">Größe der Haupttabs<small>FAHREN, CHALLENGES,
+          WLAN MEHRSPIELER, OPTIONEN. 100&nbsp;% ist die bisherige Größe.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-reiter1" min="0.6" max="1.8" step="0.1" value="1" data-preset-skip>
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-reiter1-val">100%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Größe der Unter-Tabs<small>Die zweite Leiste je
+          Menü, z.&nbsp;B. Allgemein, Fahrgefühl, Ton in den Optionen. 100&nbsp;% ist die bisherige Größe.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-reiter2" min="0.6" max="1.8" step="0.1" value="1" data-preset-skip>
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-reiter2-val">100%</span>
+        </div></div>
       <div class="opt-row"><div class="opt-label">Cockpit-Ansicht<small>Nur das Aussehen des
           Cockpit-Schirms &ndash; Anzeigen, Tasten und Physik bleiben, wie sie sind.
           &bdquo;GT3&ldquo; ist die Vorgabe: Carbon und wei&szlig;e Schrift auf
@@ -9079,12 +9217,10 @@
           (Leistung, Licht). Ab Werk an, bei Arcade aus.</small></div><label class="tgl"><input type="checkbox" id="setting-crash-schaden" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Bremsen bei Crash<small>Ein Crash nimmt dem Auto
           sofort den Gro&szlig;teil seines Tempos.</small></div><label class="tgl"><input type="checkbox" id="setting-crash-bremse" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Kein Bremsen bei Auffahrunfall<span class="wip-tag">experimentell</span><small>Gilt,
-          wenn &bdquo;Bremsen bei Crash&ldquo; an ist: f&auml;hrt dir jemand von hinten drauf
-          (Sto&szlig; nach vorn, bis 45&deg; nach hinten links oder rechts), bremst nur der
-          Auffahrende. Die Richtung kommt aus dem Bewegungssensor; welche Richtung &bdquo;vorn&ldquo;
-          ist, lernt die App beim Gasgeben und Bremsen. Bis sie es wei&szlig;, wird wie bisher
-          gebremst.</small></div><label class="tgl"><input type="checkbox" id="setting-crash-auffahr" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Nur der Rammer bremst<span class="wip-tag">experimentell</span><small>Gilt,
+          wenn &bdquo;Bremsen bei Crash&ldquo; an ist: Gebremst wird nur, wer vorne einschl&auml;gt
+          (der Auffahrende oder ein Auto an der Wand). Wer von hinten oder von der Seite getroffen
+          wird, f&auml;hrt weiter. Die Richtung kommt aus dem Bewegungssensor, mit 45&deg; Toleranz.</small></div><label class="tgl"><input type="checkbox" id="setting-crash-auffahr" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Kein Schaden im Stand
           <small>Solange das Auto steht (0&nbsp;km/h), z&auml;hlt kein Sto&szlig; als
           Crash &ndash; du kannst es aufheben, ohne dass es simulierten Schaden
@@ -9214,15 +9350,14 @@
           durch Simulations-H&ouml;chstgeschwindigkeit; bei 100 % bekommt das Auto also erst
           volle Leistung, wenn die Simulation ihre H&ouml;chstgeschwindigkeit erreicht hat,
           und das dauert gemessen fast 25 Sekunden Vollgas. &Uuml;ber 100 % erreicht es die
-          volle Leistung fr&uuml;her, ohne dass der Tacho anders skaliert. Das ist auch
-          ehrlicher als es klingt: das Modellauto f&auml;hrt real 5,9 km/h, egal was die
-          Simulation glaubt &ndash; dieser Faktor ist die Abbildung zwischen beidem, und dass
-          er fr&uuml;her genau 1 war, war eine Annahme und keine Messung.</small></div>
+          volle Leistung fr&uuml;her, ohne dass der Tacho anders skaliert. Nur bei 100 % (Realismus
+          GT3) zeigt der Tacho genau das 50-fache des echten Tempos (gemessen: Vollgas
+          5,45 km/h, im Ma&szlig;stab 272 km/h). Pro und Arcade fahren mit eigenem Faktor.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="setting-topspeed" min="0.2" max="2" step="0.05" value="1.8">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="setting-topspeed-val">160%</span>
+          <span class="opt-val" id="setting-topspeed-val">180%</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Reifengrip</div>
         <div class="opt-slider">
@@ -9568,14 +9703,15 @@
 <div class="opt-head">Ton</div>
       <div class="opt-row"><div class="opt-label">Motorsound</div><label class="tgl"><input type="checkbox" id="sound-enable" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Motorton-Zus&auml;tze
-          <small>Sechs mechanische Ger&auml;usche &uuml;ber dem Motorton, alle an diesem
+          <small>Sieben mechanische Ger&auml;usche &uuml;ber dem Motorton, alle an diesem
           einen Schalter &ndash; zum Vergleichen einfach ausschalten. Nichts davon ist eine
-          Aufnahme, alle sechs sind gerechnet und h&auml;ngen an Werten, die die Simulation
+          Aufnahme, alle sieben sind gerechnet und h&auml;ngen an Werten, die die Simulation
           ohnehin f&uuml;hrt: die H&ouml;hen laufen mit der Last (ein Motor im Schub ist
           dunkler und nicht nur leiser), am Begrenzer stottert die Z&uuml;ndung mit 28 Hz,
           beim Gaswegnehmen knallt es im Auspuff, beim Hochschalten unter Last einmal
           kr&auml;ftig, das Getriebe heult mit der Raddrehzahl statt mit der Motordrehzahl,
-          und die drei aufgeladenen Motoren bekommen ein Laderpfeifen samt Abblasen.
+          die drei aufgeladenen Motoren bekommen ein Laderpfeifen samt Abblasen, und beim
+          Rollen rauschen Reifen und Fahrtwind, lauter und heller mit dem Tempo.
           Wie stark ein Motor knallt, steht je Motor in den Tondaten &ndash; der Formel 1
           mit Turbo knallt kaum, der Flat-Plane-V8 ohne Lader am meisten. Was hier
           absichtlich NICHT drin ist: eine H&ouml;rposition. Cockpit gegen
@@ -10874,6 +11010,11 @@
           <b>Meine Teile</b>
           <span>Wie viele Teile du von jeder Sorte hast. Der Editor zeigt, was fehlt.</span>
         </button>
+        <button class="misc-tile subpage-open" data-sub="raum">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8h36v32H6z" stroke-dasharray="4 3"/><path d="M28 8v14h14" stroke="var(--bad)"/><path d="M14 33V24a6 6 0 0 1 12 0v9"/></svg>
+          <b>Raum</b>
+          <span>Gr&ouml;&szlig;e und Form des Platzes f&uuml;r die Bahn, mit gespeicherten R&auml;umen.</span>
+        </button>
         <button class="misc-tile subpage-open" data-sub="print">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V8h20v10"/><rect x="8" y="18" width="32" height="14" rx="2"/><path d="M14 32h20v10H14z" stroke="var(--bad)"/></svg>
@@ -10924,6 +11065,11 @@
                  stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3.5"/>
               <path class="tp-akzent" d="M9 9l6 6M15 9l-6 6" stroke-width="2.4"/></svg>
             <span class="tp-cap">Tasten</span></button>
+          <button class="tp-btn tp-schalter" id="track-opt-raum" title="Raum anzeigen" aria-label="Raum anzeigen" aria-pressed="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z" stroke-dasharray="3 2.2" stroke-opacity=".6"/>
+              <path class="tp-akzent" d="M8 16V11a4 4 0 0 1 8 0v5" stroke-width="2.4"/></svg>
+            <span class="tp-cap">Raum</span></button>
           <button class="tp-btn" id="track-undo" title="R&uuml;ckg&auml;ngig" aria-label="R&uuml;ckg&auml;ngig">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                  stroke-linecap="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/>
@@ -11048,11 +11194,20 @@
         <button id="teile-enge">+ Engstelle</button>
         <button id="teile-leer">Alles auf 0</button>
       </div>
+      <div class="teile-liste" id="teile-liste"></div>
+    </div>
+    <!-- v0.9.45 BESTELLT: "Schiebe den Raumdesigner in ein eigenes Menue ... Erlaube mir,
+         Raeume abzuspeichern mit Namen und im selben Menue auszuwaehlen." -->
+    <div class="card subpage" id="sub-raum">
+      <button class="misc-back subpage-back" data-sub="">&larr; Strecke</button>
+      <h2>Raum <span class="wip-tag">experimentell</span></h2>
+      <p class="muted">Der Platz, auf dem deine Bahn liegt: Gr&ouml;&szlig;e, Form und M&ouml;bel.
+        Zufallsstrecken aus dem Editor passen dann hinein. 0 hei&szlig;t: keine Grenze.</p>
       <!-- BESTELLT: "let me determine the maximum size of the room as a rectangle (x and y, in
            meters, format X.Y). The generated track must fit into that rectangle. Remember that
            you can turn the track in 45° steps." 0 x 0 = keine Begrenzung. -->
       <div class="row" style="gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px">
-        <span class="muted">Zufallsstrecke: max. Raum (m)</span>
+        <span class="muted">Raumgröße (m)</span>
         <span class="raum-zeile" data-achse="x">
           <label for="teile-raum-x">Breite</label>
           <button class="raum-knopf" id="raum-x-minus" type="button" aria-label="Breite weniger">&#8722;</button>
@@ -11066,7 +11221,19 @@
           <button class="raum-knopf" id="raum-y-plus" type="button" aria-label="Tiefe mehr">+</button>
         </span>
       </div>
-      <div class="teile-liste" id="teile-liste"></div>
+      <!-- v0.9.39 BESTELLT: "Raumdesigner ... mit dem ich auch andere Formen erstellen kann"
+           (60b-raum.js); seit v0.9.45 im eigenen Menue. -->
+      <div class="raum-ds-zeile">
+        <button id="raum-designer-auf" type="button" class="primary te-start">Raumgestalter starten</button>
+        <button id="raum-tour" type="button">Tutorial</button>
+        <div class="raum-mini" id="raum-mini" role="button" aria-label="Raum gestalten"></div>
+      </div>
+      <h3 class="raum-gespeichert-titel">Gespeicherte R&auml;ume</h3>
+      <div class="row raum-speichern-zeile">
+        <input type="text" id="raum-name" placeholder="Name des Raums" maxlength="32">
+        <button id="raum-speichern" type="button">Speichern</button>
+      </div>
+      <div class="raum-liste" id="raum-liste"></div>
     </div>
     <div class="card subpage" id="sub-scan">
       <button class="misc-back subpage-back" data-sub="">&larr; Strecke</button>
@@ -11403,6 +11570,45 @@
   <button type="button" class="k-ergebnis" id="k-ergebnis" hidden>Rennen beendet – Ergebnis ansehen</button>
   <!-- FRAGE-DIALOG (51-konsole.js, konsoleFrage). Zuerst fuer "trotzdem starten": BESTELLT
        "erlaube mir zum Debuggen auch auf Starten zu drücken, wenn kein Auto verbunden ist". -->
+  <!-- RAUMDESIGNER (v0.9.39, 60b-raum.js): Vollbild ueber allem. -->
+  <div class="raum-ds" id="raum-ds" hidden>
+    <!-- v0.9.43 wie der Editor: oben die Leiste mit "Schliessen", darunter die Flaeche in
+         einer EIGENEN Rasterzeile, unten Info und Tasten. GEMELDET: "Aus dem Raum-Gestalter
+         komme ich nicht mehr raus ... das Layout liegt vor den Tasten." -->
+    <div class="raum-ds-leiste">
+      <span class="raum-ds-titel">Raumgestalter <span class="wip-tag">experimentell</span></span>
+      <div class="raum-ds-gruppe">
+        <button type="button" data-rd-modus="moebel">M&ouml;bel</button>
+        <button type="button" data-rd-modus="boden">Boden</button>
+      </div>
+      <div class="raum-ds-gruppe">
+        <button type="button" data-rd-werkzeug="pinsel">Pinsel</button>
+        <button type="button" data-rd-werkzeug="rechteck">Rechteck</button>
+      </div>
+      <div class="raum-ds-gruppe">
+        <button type="button" data-rd-groesse="10">10 cm</button>
+        <button type="button" data-rd-groesse="30">30 cm</button>
+        <button type="button" data-rd-groesse="60">60 cm</button>
+      </div>
+      <div class="raum-ds-gruppe raum-ds-vorlagen">
+        <button type="button" data-rd-vorlage="rechteck" aria-label="Vorlage Rechteck">&#9645;</button>
+        <button type="button" data-rd-vorlage="l" aria-label="Vorlage L-Form">L</button>
+        <button type="button" data-rd-vorlage="u" aria-label="Vorlage U-Form">U</button>
+        <button type="button" data-rd-vorlage="oval" aria-label="Vorlage Oval">&#9711;</button>
+      </div>
+      <div class="raum-ds-gruppe">
+        <button type="button" id="raum-ds-undo">R&uuml;ckg&auml;ngig</button>
+        <button type="button" id="raum-ds-probe">Strecke einpassen</button>
+      </div>
+      <button type="button" id="raum-ds-hilfe" class="raum-ds-hilfe" aria-label="Tutorial">?</button>
+      <button type="button" id="raum-ds-fertig" class="raum-ds-fertig">Schlie&szlig;en</button>
+    </div>
+    <div class="raum-ds-flaeche" id="raum-ds-flaeche"></div>
+    <div class="raum-ds-fuss">
+      <span class="raum-ds-info" id="raum-ds-info" data-i18n-skip></span>
+      <span class="raum-ds-tasten">&#10005; malen &middot; &#9633; M&ouml;bel/Boden &middot; &#9651; Pinsel/Rechteck &middot; L1/R1 Gr&ouml;&szlig;e &middot; Select r&uuml;ckg&auml;ngig &middot; Start einpassen &middot; &#9675; schlie&szlig;en</span>
+    </div>
+  </div>
   <div class="k-pause" id="k-frage" hidden>
     <div class="k-pause-dialog">
       <h2 id="k-frage-titel"></h2>
@@ -11423,6 +11629,7 @@
     <div class="k-pause-dialog">
       <h2>Rennen für alle: bereit? <span class="wip-tag">experimentell</span></h2>
       <p class="muted" id="mp-ready-info" data-i18n-skip></p>
+      <div class="mp-ready-lade" id="mp-ready-lade" hidden></div>
       <div class="grid-liste" id="mp-ready-liste"></div>
       <div class="k-frage-knoepfe">
         <button type="button" class="primary" id="mp-ready-bereit" hidden>Bereit</button>
@@ -11446,4 +11653,21 @@
   </div>
 </div>
 
+<!-- START-DIAGNOSE (v0.9.42). GEMELDET: "Apk-Fassung 0.9.41 startete nicht und wurde verworfen
+     auf einem von 2 Geraeten." Der ganze Code ist EIN Skript; bricht er beim Laden irgendwo ab,
+     erreicht er die Bestaetigung an den Update-Waechter nie, und die App rollt nach 25 s still
+     zurueck - ohne dass irgendwo steht, warum. Dieser Block merkt sich den ERSTEN Fehler, der
+     Block nach dem Hauptskript zeigt ihn an. Absichtlich ES5: er muss auch dort laufen, wo das
+     Hauptskript an der Syntax scheitert. -->
+<script>
+  window.__omegaStartFehler = null;
+  window.addEventListener('error', function (e) {
+    if (window.__omegaFertig || window.__omegaStartFehler) return;
+    window.__omegaStartFehler = {
+      m: String((e && e.message) || (e && e.error) || '?'),
+      z: (e && e.lineno) || 0, s: (e && e.colno) || 0,
+      st: (e && e.error && e.error.stack) ? String(e.error.stack).slice(0, 700) : ''
+    };
+  });
+</script>
 <script>

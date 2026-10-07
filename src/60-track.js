@@ -2675,8 +2675,79 @@
   // Als Modulkonstante, weil karteAutosSetzen() denselben Wert braucht.
   const PUNKT_R = 3.2;
 
+  // ---- Der Randstreifen der Originalteile -------------------------------------------
+  //
+  // Masse aus den Produktfotos, relativ zur Bahnbreite: Streifen ~9,5 % (wie
+  // TRACK_KERB_RATIO), Pfeil ~75 % der Streifenhoehe hoch und gut doppelt so lang, Luecke
+  // ein Drittel des Pfeils. Der Abstand gilt je SEITE nach Bogenlaenge auf der
+  // Streifenmitte; je Teil wird er so gestreckt, dass eine ganze Zahl Pfeile passt.
+  const ECHT_STREIFEN = TRACK_KERB_W;
+  const ECHT_PFEIL_H = 0.75, ECHT_PFEIL_L = 2.3, ECHT_TAKT = 3.1;   // je Streifenhoehe
+  const ECHT_BLAU = '#2f9fe6', ECHT_ROT = '#ff4d22', ECHT_WEISS = '#f3f5f8';
+  function echtRandstreifen(pts, nrm, half, kachelTab, nTeile, P2) {
+    const bw = ECHT_STREIFEN, mitte = half - bw / 2;
+    const ph = bw * ECHT_PFEIL_H, pl = ph * ECHT_PFEIL_L, kerbe = ph / 2;
+    const takt = ph * ECHT_TAKT;
+    let out = '';
+    for (const [seite, farbe] of [[1, ECHT_BLAU], [-1, ECHT_ROT]]) {
+      const linie = offsetPath(pts, nrm, mitte * seite);
+      out += `<path d="M ${linie.map(P2).join(' L ')}" fill="none" stroke="${ECHT_WEISS}" `
+           + `stroke-width="${bw.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="round"/>`;
+      let d = '', zapfen = '';
+      for (let k = 0; k < nTeile; k++) {
+        const i0 = kachelTab.start[k];
+        const i1 = k + 1 < nTeile ? kachelTab.start[k + 1] : pts.length - 1;
+        if (i0 === undefined || i1 === undefined || i1 <= i0) continue;
+        // Bogenlaenge entlang DIESER Seite.
+        const seg = linie.slice(i0, i1 + 1), acc = [0];
+        for (let q = 1; q < seg.length; q++) {
+          acc.push(acc[q - 1] + Math.hypot(seg[q][0] - seg[q - 1][0], seg[q][1] - seg[q - 1][1]));
+        }
+        const L = acc[acc.length - 1];
+        const rand = bw * 0.9;                       // Platz fuer die Steckzapfen
+        if (L < pl + 2 * rand) continue;
+        const n = Math.max(1, Math.round((L - 2 * rand) / takt)), schritt = (L - 2 * rand) / n;
+        const bei = (sv) => {
+          let q = 1;
+          while (q < acc.length - 1 && acc[q] < sv) q++;
+          const t = (sv - acc[q - 1]) / Math.max(1e-9, acc[q] - acc[q - 1]);
+          const x = seg[q - 1][0] + (seg[q][0] - seg[q - 1][0]) * t;
+          const y = seg[q - 1][1] + (seg[q][1] - seg[q - 1][1]) * t;
+          const dl = Math.hypot(seg[q][0] - seg[q - 1][0], seg[q][1] - seg[q - 1][1]) || 1;
+          return { x, y, ux: (seg[q][0] - seg[q - 1][0]) / dl, uy: (seg[q][1] - seg[q - 1][1]) / dl };
+        };
+        for (let j = 0; j < n; j++) {
+          const m = bei(rand + (j + 0.5) * schritt);
+          const vx = -m.uy, vy = m.ux;
+          const P = (u, v) => [m.x + m.ux * u + vx * v, m.y + m.uy * u + vy * v];
+          const h = ph / 2, l = pl / 2;
+          // Gefuellter Pfeil mit gekerbtem Ende: Spitze vorn, Kerbe hinten.
+          const ecken = [P(-l, -h), P(l - kerbe, -h), P(l, 0), P(l - kerbe, h), P(-l, h), P(-l + kerbe, 0)];
+          d += ` M ${ecken.map(P2).join(' L ')} Z`;
+        }
+        // Steckzapfen an beiden Enden des Teils.
+        for (const sv of [rand * 0.45, L - rand * 0.45]) {
+          const m = bei(sv);
+          const [cx, cy] = P2([m.x, m.y]).split(' ');
+          zapfen += `<circle cx="${cx}" cy="${cy}" r="${(bw * 0.18).toFixed(2)}" fill="#1b1d22"/>`;
+        }
+      }
+      out += `<path d="${d.trim()}" fill="${farbe}" stroke="none"/>` + zapfen;
+    }
+    return out;
+  }
+
   function renderTrackPreview(tiles, currentIndex, opts) {
-    const o = opts || {};
+    const o = Object.assign({}, opts || {});
+    // v0.9.45 BESTELLT: "Die Vorschaubilder aller Strecken sollten im CH-Streckendesign sein
+    // und nicht einfach graue Linien. Und nicht nur im Editor sollte das mit den Pfeilen auf
+    // dem Randstreifen korrekt sein, sondern ueberall (z.B. FAHREN-Menue in der
+    // Streckenkachel)." Also: Originalteile (echt) sind die Vorgabe, und wer gar nichts
+    // angibt - bisher die graue Linie -, bekommt sie auch. Fuer diese Vorschaubilder wird die
+    // Ideallinie NICHT gerechnet (sie kostet den Grossteil der ~94 ms und wird dort nie
+    // gezeigt). Wer den alten Stil will, sagt echt: false.
+    if (o.detailed === undefined) { o.detailed = true; o.ohneLinieRechnen = true; }
+    if (o.echt === undefined) o.echt = true;
     if (!tiles || tiles.length === 0) {
       return { html: '<p class="muted">Keine Streckenteile.</p>', closed: false };
     }
@@ -2696,7 +2767,8 @@
     const closed = schluss.closed;
 
     const half = TRACK_HALF_W;
-    const pad = o.detailed ? half + 14 : 30;
+    // o.rand: eigener Rand in Kartenpunkten (Ladeanimation: das Teil soll den Platz fuellen).
+    const pad = o.rand !== undefined ? o.rand : (o.detailed ? half + 14 : 30);
     const all = [...pts.map(p => [p.x, p.y])];
     if (o.detailed) {
       all.push(...offsetPath(pts, nrm, half + 6), ...offsetPath(pts, nrm, -(half + 6)));
@@ -2733,7 +2805,7 @@
     let body = '';
     if (o.detailed) {
       // 1) The roadway itself: one very wide black stroke along the centreline.
-      body += `<path d="${poly(centre)}" fill="none" stroke="#14181f" stroke-width="${half * 2}" stroke-linecap="butt" stroke-linejoin="round"/>`;
+      body += `<path d="${poly(centre)}" fill="none" stroke="${o.echt ? '#0d0f13' : '#14181f'}" stroke-width="${half * 2}" stroke-linecap="butt" stroke-linejoin="round"/>`;
 
       // 2) Pit bulge, on the driver's RIGHT — the blue side, as on the real track. It used
       //    to be drawn on the positive normal, which the sign check above shows is the LEFT.
@@ -2804,7 +2876,9 @@
         const i = kachelTab.start[k];
         const A = [pts[i].x + nrm[i].x * half, pts[i].y + nrm[i].y * half];
         const B = [pts[i].x - nrm[i].x * half, pts[i].y - nrm[i].y * half];
-        body += `<path d="M ${P2(A)} L ${P2(B)}" stroke="#ffffff" stroke-width="1.6" opacity=".85"/>`;
+        body += o.echt
+          ? `<path d="M ${P2(A)} L ${P2(B)}" stroke="#3a404b" stroke-width="0.6"/>`
+          : `<path d="M ${P2(A)} L ${P2(B)}" stroke="#ffffff" stroke-width="1.6" opacity=".85"/>`;
       }
 
       // 4) Kerbs. Left = blue/white, right = red/white, both relative to travel direction.
@@ -2828,28 +2902,20 @@
         });
       } else {
         // WIE DIE ECHTEN TEILE (Editor). BESTELLT: "Die Teile sollen wie die echten aussehen
-        // (also an den Raendern muessen so leichte Pfeile in die Fahrtrichtung sein)". Ein
-        // weisser Randstreifen, darauf Pfeilspitzen in Fahrtrichtung: links blau, rechts rot
-        // - dieselben Farben wie die Randsteine. Als einzelne Pfade und NICHT als
-        // <g transform>: der Selbsttest zaehlt jede verschobene Gruppe als Auto.
-        const kw2 = kw * 2.2;
-        const kL = offsetPath(pts, nrm, half + kw2 / 2), kR = offsetPath(pts, nrm, -(half + kw2 / 2));
-        [[kL, 1, '#5aa9ff'], [kR, -1, '#ff5c5c']].forEach(([path, seite, col]) => {
-          body += `<path d="${poly(path)}" fill="none" stroke="#f3f5f8" stroke-width="${kw2}" stroke-linecap="butt"/>`;
-          let d = '';
-          for (let q = 1; q < pts.length - 1; q += 2) {
-            const p = pts[q], n = nrm[q];
-            const rad = p.heading * Math.PI / 180;
-            const vx = Math.sin(rad), vy = -Math.cos(rad);
-            const cx = p.x + n.x * seite * (half + kw2 / 2), cy = p.y + n.y * seite * (half + kw2 / 2);
-            const s = kw2 * 0.5;
-            const tip = [cx + vx * s, cy + vy * s];
-            const a = [cx - vx * s * 0.5 + n.x * s * 0.8, cy - vy * s * 0.5 + n.y * s * 0.8];
-            const b = [cx - vx * s * 0.5 - n.x * s * 0.8, cy - vy * s * 0.5 - n.y * s * 0.8];
-            d += ` M ${P2(a)} L ${P2(tip)} L ${P2(b)}`;
-          }
-          body += `<path d="${d.trim()}" fill="none" stroke="${col}" stroke-width="${(kw2 * 0.28).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`;
-        });
+        // (also an den Raendern muessen so leichte Pfeile in die Fahrtrichtung sein)".
+        //
+        // v0.9.39, BESTELLT: "Die Pfeile sind aktuell auf der Innenseite von Kurven enger und
+        // aussen weiter gefaechert. Die Teile sollten genau wie die Originalschienen aussehen."
+        // Die Pfeile sassen an jedem zweiten Abtastpunkt der MITTELLINIE - in einer Kurve
+        // liegen die innen dichter und aussen weiter auseinander. Auf den Originalteilen
+        // (Produktfotos) ist es anders: matt schwarze Fahrbahn, ein weisser Randstreifen
+        // INNERHALB der 25 cm, darauf gefuellte Pfeile mit gekerbtem Ende, links blau, rechts
+        // rot, und zwar in GLEICHEM ABSTAND auf jeder Seite - der Aussenrand einer Kurve hat
+        // deshalb mehr Pfeile, nicht weitere. Jedes Teil beginnt seine Pfeilreihe neu und hat
+        // an den Enden die Steckzapfen (schwarze Punkte auf dem Streifen).
+        // Als einzelne Pfade und NICHT als <g transform>: der Selbsttest zaehlt jede
+        // verschobene Gruppe als Auto.
+        body += echtRandstreifen(pts, nrm, half, kachelTab, tiles.length, P2);
       }
       // DAS GEWAEHLTE TEIL (Editor): gelb ueberzogen, damit man sieht, wo eingefuegt und was
       // entfernt wird.
@@ -2876,10 +2942,10 @@
       //    the centreline would colour a corner the car no longer takes that tightly.
       // tiles MIT: der Kurvenausgang braucht die Kacheltypen, um Scheitel und Ausgang
       // zu finden - siehe formLine().
-      const line = buildLine(pts, nrm, { closed, tiles });
-      const ideal = pts.map((p, i) => [p.x + nrm[i].x * line.alpha[i],
-                                       p.y + nrm[i].y * line.alpha[i]]);
-      const brake = brakeProfile(ideal, closed);
+      const line = o.ohneLinieRechnen ? null : buildLine(pts, nrm, { closed, tiles });
+      const ideal = line ? pts.map((p, i) => [p.x + nrm[i].x * line.alpha[i],
+                                              p.y + nrm[i].y * line.alpha[i]]) : [];
+      const brake = line ? brakeProfile(ideal, closed) : [];
       // One short segment per sample pair, each with its own colour. A single path with a
       // gradient cannot follow an arbitrary curve, so the curve is cut instead.
       const IDEAL_W = 1.1;   // was 2.2; halved on request, the line was heavier than the kerbs
@@ -2999,11 +3065,24 @@
       const fs = Math.max(8, Math.min(w, h) * 0.035);
       const mass = (raumRect.mx > 0 ? String(raumRect.mx).replace('.', ',') : '–') + ' × '
                  + (raumRect.my > 0 ? String(raumRect.my).replace('.', ',') : '–') + ' m';
-      body += `<g class="tp-raum"><rect x="${(raumRect.x + ox).toFixed(1)}" y="${(raumRect.y + oy).toFixed(1)}" `
+      // v0.9.39: UNTER die Strecke (vorne in body) und mit den Moebeln aus dem Raumdesigner.
+      // Die Flaechen sind <rect>, damit raumRechteckSchieben() sie beim Ziehen mitnimmt.
+      // try: eine Zeichnung, die beim Laden scheitert, darf nie wieder die ganze App anhalten.
+      let moebel = '';
+      try {
+        if (typeof raumMoebelSvg === 'function' && raumRect.mx > 0 && raumRect.my > 0) {
+          moebel = raumMoebelSvg(raumRect.x + ox, raumRect.y + oy, TRACK_UNITS_PER_CM);
+        }
+      } catch (e) { moebel = ''; }
+      body = `<g class="tp-raum">${moebel}<rect x="${(raumRect.x + ox).toFixed(1)}" y="${(raumRect.y + oy).toFixed(1)}" `
         + `width="${raumRect.w.toFixed(1)}" height="${raumRect.h.toFixed(1)}" fill="none" `
         + `stroke="rgba(110,160,255,.7)" stroke-width="2" stroke-dasharray="7 5"/>`
         + `<text x="${(raumRect.x + ox + fs * 0.4).toFixed(1)}" y="${(raumRect.y + oy + fs * 1.2).toFixed(1)}" `
-        + `font-size="${fs.toFixed(1)}" fill="rgba(140,180,255,.85)">${mass}</text></g>`;
+        + `font-size="${fs.toFixed(1)}" fill="rgba(140,180,255,.85)">${mass}</text></g>`
+        // Die Strecke als EINE Gruppe darueber: beim Ziehen verschiebt sich nur sie, per
+        // CSS-transform (kein transform-Attribut - der Selbsttest zaehlt solche Gruppen als
+        // Autos), und der Raum bleibt liegen.
+        + '<g class="tp-strecke">' + body + '</g>';
     }
     const html = `<svg class="tp-karte" viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}">${gridSvg}${body}</svg>`;
     // DIE GEOMETRIE MIT HERAUS, damit ein Aufrufer Punkte setzen kann, ohne die Strecke neu
@@ -3322,16 +3401,18 @@
   var editorSchalter = (function () {
     // Ideallinie ab v0.9.22 AUS, bis man sie anklickt; ein frueher gespeichertes "an" (ohne
     // v: 2) zaehlt nicht, sonst bliebe sie bei allen an, die den Editor je geoeffnet haben.
-    const z = { linie: false, tasten: true, v: 2 };
+    const z = { linie: false, tasten: true, raum: true, v: 2 };
     try {
       const s = JSON.parse(localStorage.getItem('omegasim-editor-schalter') || '{}');
       if (typeof s.linie === 'boolean' && s.v === 2) z.linie = s.linie;
       if (typeof s.tasten === 'boolean') z.tasten = s.tasten;
+      if (typeof s.raum === 'boolean') z.raum = s.raum;
     } catch (e) { /* ohne Speicher: an */ }
     return z;
   })();
   function editorSchalterZeigen() {
-    [['track-opt-linie', editorSchalter.linie], ['track-opt-tasten', editorSchalter.tasten]].forEach(([id, an]) => {
+    [['track-opt-linie', editorSchalter.linie], ['track-opt-tasten', editorSchalter.tasten],
+     ['track-opt-raum', editorSchalter.raum]].forEach(([id, an]) => {
       const b = $(id);
       if (b) { b.classList.toggle('an', an); b.setAttribute('aria-pressed', an ? 'true' : 'false'); }
     });
@@ -3342,7 +3423,7 @@
     editorSchalter[was] = !editorSchalter[was];
     try { localStorage.setItem('omegasim-editor-schalter', JSON.stringify(editorSchalter)); } catch (e) { /* egal */ }
     editorSchalterZeigen();
-    if (was === 'linie') refreshTrackPreview();
+    if (was === 'linie' || was === 'raum') refreshTrackPreview();
   }
 
   // DIE STRECKE IM EDITOR UEBERLEBT EINEN NEUSTART (v0.9.6). Vorher stand nach dem Neuladen
@@ -3373,6 +3454,9 @@
     return true;
   }
   function refreshTrackPreview() {
+    // Waehrend die Strecke im Raum gezogen wird, nicht neu zeichnen - das setzte den Zug
+    // zurueck (GEMELDET: "bewegt sich immer nur ein kleines bisschen"). Nach dem Loslassen.
+    if (raumZug) { raumZug.nachher = true; return; }
     editorStreckeMerken();
     // Die Kachelzahl entscheidet, ob der Windschatten ueberhaupt rechnen kann. Hier gerufen
     // und nicht in 50-drive.js beim Laden: dort ist currentTrackTiles noch in der temporalen
@@ -3383,7 +3467,7 @@
     // Start/Ziel-Linie.
     if (trackSel !== null && trackSel >= currentTrackTiles.length) trackSel = null;
     const imEditor = document.body.classList.contains('track-fs');
-    const raum = teileRaum();
+    const raum = editorSchalter.raum ? teileRaum() : { x: 0, y: 0 };
     const result = renderTrackPreview(currentTrackTiles, null,
       { detailed: true, cars: trackCarMarks(), echt: true, auswahl: imEditor ? trackSelIndex() : null,
         ohneLinie: !editorSchalter.linie, grid: true,
@@ -3555,6 +3639,17 @@
   // Default 0 m x 0 m = keine Begrenzung: die Zufallsstrecke ignoriert den Raum, bis der
   // Nutzer eine Groesse eintraegt. Ein Wert 0 je Achse heisst "diese Richtung unbegrenzt".
   const RAUM_KEY = 'omegasim-raum';
+  // ---- RAUMGESTALTER-KONSTANTEN, HIER und nicht in 60b-raum.js (v0.9.44) -------------
+  // GEMELDET (Start-Diagnose, APK 0.9.43): "Uncaught ReferenceError: Cannot access
+  // 'RAUM_ZELLE_CM' before initialization". Die Editor-Vorschau zeichnet beim LADEN schon den
+  // Raum mit Moebeln (raumMoebelSvg -> raumFormLaden), und das lief, bevor 60b-raum.js seine
+  // const angelegt hatte - temporale Todeszone, die ganze App stand. Die Funktionen sind
+  // hochgezogen, die Konstanten nicht; deshalb gehoeren sie vor den ersten Aufruf.
+  const RAUM_FORM_KEY = 'omegasim-raum-form';
+  const RAUM_ZELLE_CM = 10;
+  const RAUM_FIT_CM = 5;                    // Raster der Einpassung
+  const RAUM_RAND_CM = 2;                   // Abstand der Bahnkante zu Wand und Moebeln
+  const RAUM_STANDARD = { x: 3, y: 2.5 };
   // ---- DIE STRECKE IM RAUM VERSCHIEBEN (v0.9.11) ---------------------------------------
   // Der Versatz (cm) legt das Raum-Rechteck gegen die Strecke - fuers Aufbauen auf dem Boden:
   // wo im Zimmer liegt die Strecke? Er aendert die Strecke nicht. var, weil refreshTrackPreview()
@@ -3590,8 +3685,33 @@
     clearTimeout(raumNeuZeichnen);
     raumNeuZeichnen = setTimeout(() => { raumVersatzSpeichern(); refreshTrackPreview(); }, 350);
   }
+  // ---- DIE STRECKE IM RAUM ZIEHEN (v0.9.45) -------------------------------------------
+  // GEMELDET: "Im Editor klappt das Druecken und Ziehen des Raumumrisses bzw. der Strecke im
+  // Raum nicht. Das bewegt sich immer nur ein kleines bisschen." Drei Ursachen: der Zug
+  // verschob das Raumrechteck GEGEN die Fingerrichtung, auf Touch brach der Browser die
+  // Geste nach wenigen Pixeln ab (kein touch-action: none), und jedes Neuzeichnen mitten im
+  // Zug setzte ihn zurueck. Jetzt bleibt der Raum (der Boden) liegen und die STRECKE folgt
+  // Finger, Maus und rechtem Stick; neu gezeichnet wird erst nach dem Loslassen.
+  var raumZug = null;   // { x, y } Verschiebung in Kartenpunkten, solange gezogen wird
+  function streckeImRaumSchieben(dxEinh, dyEinh) {
+    const g = document.querySelector('#track-preview-svg .tp-strecke');
+    if (!g || !document.querySelector('#track-preview-svg .tp-raum')) return false;
+    if (!raumZug) raumZug = { x: 0, y: 0, nachher: false };
+    raumZug.x += dxEinh; raumZug.y += dyEinh;
+    g.style.transform = 'translate(' + raumZug.x.toFixed(1) + 'px,' + raumZug.y.toFixed(1) + 'px)';
+    // Strecke nach rechts = Raum relativ zur Strecke nach links.
+    raumVersatz.x -= dxEinh / TRACK_UNITS_PER_CM;
+    raumVersatz.y -= dyEinh / TRACK_UNITS_PER_CM;
+    return true;
+  }
+  function raumZugEnde() {
+    if (!raumZug) return;
+    raumZug = null;
+    raumVersatzSpeichern();
+    refreshTrackPreview();
+  }
   // Rechter Stick im Editor-Vollbild (aus pollGamepad): schiebt mit bis zu 60 cm/s; R3 zentriert.
-  let raumStickAt = 0, raumR3Vor = false;
+  let raumStickAt = 0, raumR3Vor = false, raumStickZiel = null;
   function raumVersatzStick(ax, ay, r3) {
     const jetzt = performance.now();
     const dt = Math.min(0.1, (jetzt - (raumStickAt || jetzt)) / 1000);
@@ -3600,11 +3720,15 @@
     raumR3Vor = r3;
     const tot = 0.2;
     const x = Math.abs(ax) > tot ? ax : 0, y = Math.abs(ay) > tot ? ay : 0;
-    if (!x && !y) return;
-    // Der Stick bewegt die STRECKE: nach rechts gedrueckt wandert sie nach rechts, also der
-    // Raum nach links.
+    if (!x && !y) {
+      if (raumZug && raumStickZiel) { clearTimeout(raumStickZiel); raumStickZiel = setTimeout(raumZugEnde, 250); }
+      return;
+    }
     const cm = 60 * dt;
-    if (raumRechteckSchieben(-x * cm * TRACK_UNITS_PER_CM, -y * cm * TRACK_UNITS_PER_CM)) raumSpaeterZeichnen();
+    if (streckeImRaumSchieben(x * cm * TRACK_UNITS_PER_CM, y * cm * TRACK_UNITS_PER_CM)) {
+      clearTimeout(raumStickZiel);
+      raumStickZiel = setTimeout(raumZugEnde, 250);
+    }
   }
   (function raumZiehenAnbinden() {
     const host = $('track-preview-svg');
@@ -3622,7 +3746,8 @@
     host.addEventListener('pointermove', (e) => {
       if (!a || e.pointerId !== a.id) return;
       const dx = e.clientX - a.x, dy = e.clientY - a.y;
-      if (!gezogen && Math.hypot(dx, dy) < 8) return;
+      if (!gezogen && Math.hypot(dx, dy) < 6) return;
+      if (!gezogen) { try { host.setPointerCapture(e.pointerId); } catch (x) { /* egal */ } }
       gezogen = true;
       e.preventDefault();
       if (a.pan) {
@@ -3630,8 +3755,7 @@
         editorPan.x += dx; editorPan.y += dy;
         trackZoomAnwenden();
       } else {
-        // Finger nach rechts = Strecke nach rechts = Raum nach links.
-        raumRechteckSchieben(-dx * a.k, -dy * a.k);
+        streckeImRaumSchieben(dx * a.k, dy * a.k);
       }
       a.x = e.clientX; a.y = e.clientY;
     });
@@ -3641,9 +3765,10 @@
       e.preventDefault();
       trackZoom(e.deltaY < 0 ? 0.1 : -0.1);
     }, { passive: false });
-    const ende = () => { if (a && gezogen) raumSpaeterZeichnen(); a = null; };
+    const ende = () => { if (a && gezogen) raumZugEnde(); a = null; };
     host.addEventListener('pointerup', ende);
-    host.addEventListener('pointercancel', () => { a = null; });
+    host.addEventListener('pointercancel', ende);
+    host.addEventListener('lostpointercapture', ende);
     // Ein Zug ist kein Antippen: den Klick danach nicht als Kachelwahl werten.
     host.addEventListener('click', (e) => { if (gezogen) { e.stopPropagation(); e.preventDefault(); gezogen = false; } }, true);
   })();
@@ -4065,6 +4190,7 @@
     { id: 'track-save-toolbar' },
     { id: 'track-opt-linie' },
     { id: 'track-opt-tasten' },
+    { id: 'track-opt-raum' },
     { id: 'track-undo' },
     { id: 'track-delete-sel' },
     { id: 'track-rotate-left' },
@@ -4168,6 +4294,12 @@
   // (0, 45, ...) oder -1, wenn keine Lage in den Raum passt. Die Drehung ist dieselbe wie
   // trackRotationDeg (Startkurs), sodass man die Strecke direkt in die passende Lage drehen kann.
   function trackZufallPasstRaum(tiles) {
+    // v0.9.39: mit Bahnbreite, Raumform und Lage - siehe raumEinpassen() (60b-raum.js). Der
+    // alte Weg unten verglich nur die Mittellinie, und die Bahn stand bis zu 12,5 cm ueber.
+    if (typeof raumEinpassen === 'function') {
+      const fit = raumEinpassen(tiles);
+      return fit ? fit.rot : -1;
+    }
     const r = teileRaum();
     const raumX = r.x * 100, raumY = r.y * 100;  // cm
     // 0 x 0 (oder eine Achse 0): keine Begrenzung in dieser Richtung. Beide 0: gar keine.
@@ -4464,25 +4596,23 @@
     ]);
   }
 
-  function trackZufall() {
+  function trackZufallVorbereiten() {
     const b = teileBestand();
-    if (trackZufallTotalLeer(b)) { trackZufallKeineTeile(); return false; }
+    if (trackZufallTotalLeer(b)) { trackZufallKeineTeile(); return null; }
     const hat = (typ) => Math.max(0, Math.floor(+b[typ] || 0));
     if (!(hat(TILE_TYPE.START) > 0)) {
       showHudToast(t('Zufall: Kein Startteil vorhanden'));
-      return false;
+      return null;
     }
     if (hat(TILE_TYPE.STRAIGHT) + hat(TILE_TYPE.ENGE) + hat(TILE_TYPE.PIT) * 2 < 1) {
       showHudToast(t('Zufall: Nicht genug Geraden'));
-      return false;
+      return null;
     }
     // Beste Kandidaten: einer, der nicht in den letzten Codes vorkommt (Dedup ueber ein Fenster,
     // nicht nur die letzte Strecke), einer, der nur nicht der allerletzte ist (Rueckfall, damit
     // "nicht zweimal dieselbe in Folge" trotzdem gilt), und einer, der es egal ist. Ueber viele
     // Versuche wird der mit den wenigsten ungenutzten Teilen behalten - so naehert sich die
     // Zufallsstrecke dem Ziel, den ganzen Bestand zu verbrauchen.
-    let beste = null, besteAnders = null, besteGleich = null;
-    let raumZuKlein = false;
     const letzte = trackZufallCodes.length ? trackZufallCodes[trackZufallCodes.length - 1] : null;
     // Wenigste uebrige Teile gewinnt; zwei Haarnadeln am Stueck zaehlen dabei wie 1,5 weitere
     // uebrige Teile (v0.9.13) - getrennte Haarnadeln gehen damit vor, ohne dass Strecken ganz
@@ -4492,61 +4622,81 @@
     const startZeit = performance.now();
     const zufallSchritt = [TILE_TYPE.WEIT_LEFT, TILE_TYPE.WEIT_RIGHT, TILE_TYPE.KLEIN_LEFT, TILE_TYPE.KLEIN_RIGHT]
       .some((t) => hat(t) > 0) ? 30 : 60;
-    for (let versuch = 0; versuch < 400; versuch++) {
-      if (performance.now() - startZeit > 3000) break;
-      const dir = Math.random() < 0.5 ? 1 : -1;
-      const r = Math.random();
-      const nc = r < 0.05 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : r < 0.93 ? 4 : 5;
-      const used = {};
-      const turns = trackZufallRunTurns(dir, nc, zufallSchritt);
-      if (!turns) continue;
-      trackZufallGegenlauf(turns, dir, b);
-      const runs = [];
-      let gut = true;
-      for (const t of turns) {
-        const run = trackZufallRun(t, used, b);
-        if (!run) { gut = false; break; }
-        runs.push(run);
-      }
-      if (!gut) continue;
-      // Netto-0-Schikanen einsetzen, solange welche passen: verbraucht uebrige Kurvenpaare,
-      // damit die Strecke mehr vom Bestand nutzt. Jede Einsetzung muss den Schluss halten.
-      for (let wi = 0; wi < 3; wi++) {
-        const wig = trackZufallWiggle(used, b);
-        if (!wig) break;
-        const pos = Math.floor(Math.random() * (runs.length + 1));
-        const test = runs.slice();
-        test.splice(pos, 0, wig);
-        const g = trackZufallSolveGaps(test, 3, TRACK_SCHLUSS_STRENG_CM);
-        if (!g) continue;
-        runs.splice(pos, 0, wig);
-        for (const t of wig) used[t] = (used[t] || 0) + 1;
-      }
-      const gaps = trackZufallSolveGaps(runs, 3, TRACK_SCHLUSS_STRENG_CM);
-      if (!gaps) continue;
-      const tiles = trackZufallBaueTiles(runs, gaps, b);
-      if (!tiles) continue;
-      trackRotationDeg = 0;
-      if (!trackZufallPasst(tiles)) continue;
-      // Fussabdruck: die Strecke muss in den angegebenen Raum passen (45°-Schritte).
-      const rot = trackZufallPasstRaum(tiles);
-      if (rot < 0) { raumZuKlein = true; continue; }
-      const rest = trackZufallRest(tiles, b);
-      const code = trackToCode(tiles, 0);
-      // Haarnadeln direkt nacheinander (auch ueber das Rundenende)?
-      const nadel = (x) => x.type === TILE_TYPE.HAIRPIN || x.type === TILE_TYPE.HAIRPIN_LEFT;
-      const nadelPaar = tiles.some((x, i) => nadel(x) && nadel(tiles[(i + 1) % tiles.length]));
-      const kandidat = { tiles, rest, code, rot, nadelPaar };
-      if (!trackZufallCodeKennt(code) && besser(beste, kandidat)) beste = kandidat;
-      if (code !== letzte && besser(besteAnders, kandidat)) besteAnders = kandidat;
-      if (besser(besteGleich, kandidat)) besteGleich = kandidat;
+    return { b, letzte, besser, startZeit, zufallSchritt, versuch: 0,
+             beste: null, besteAnders: null, besteGleich: null, raumZuKlein: false };
+  }
+  // Ein einzelner Versuch der Suche (v0.9.42 aus der Schleife geloest, damit die Suche in
+  // Haeppchen laufen und dabei eine Ladeanimation zeigen kann).
+  function trackZufallVersuch(z) {
+    const b = z.b, zufallSchritt = z.zufallSchritt;
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const r = Math.random();
+    const nc = r < 0.05 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : r < 0.93 ? 4 : 5;
+    const used = {};
+    const turns = trackZufallRunTurns(dir, nc, zufallSchritt);
+    if (!turns) return;
+    trackZufallGegenlauf(turns, dir, b);
+    const runs = [];
+    let gut = true;
+    for (const t of turns) {
+      const run = trackZufallRun(t, used, b);
+      if (!run) { gut = false; break; }
+      runs.push(run);
     }
-    const wahl = beste || besteAnders;
+    if (!gut) return;
+    // Netto-0-Schikanen einsetzen, solange welche passen: verbraucht uebrige Kurvenpaare,
+    // damit die Strecke mehr vom Bestand nutzt. Jede Einsetzung muss den Schluss halten.
+    for (let wi = 0; wi < 3; wi++) {
+      const wig = trackZufallWiggle(used, b);
+      if (!wig) break;
+      const pos = Math.floor(Math.random() * (runs.length + 1));
+      const test = runs.slice();
+      test.splice(pos, 0, wig);
+      const g = trackZufallSolveGaps(test, 3, TRACK_SCHLUSS_STRENG_CM);
+      if (!g) continue;
+      runs.splice(pos, 0, wig);
+      for (const t of wig) used[t] = (used[t] || 0) + 1;
+    }
+    const gaps = trackZufallSolveGaps(runs, 3, TRACK_SCHLUSS_STRENG_CM);
+    if (!gaps) return;
+    const tiles = trackZufallBaueTiles(runs, gaps, b);
+    if (!tiles) return;
+    trackRotationDeg = 0;
+    if (!trackZufallPasst(tiles)) return;
+    // Fussabdruck: die Strecke muss in den angegebenen Raum passen (45°-Schritte).
+    const rot = trackZufallPasstRaum(tiles);
+    if (rot < 0) { z.raumZuKlein = true; return; }
+    const rest = trackZufallRest(tiles, b);
+    const code = trackToCode(tiles, 0);
+    // Haarnadeln direkt nacheinander (auch ueber das Rundenende)?
+    const nadel = (x) => x.type === TILE_TYPE.HAIRPIN || x.type === TILE_TYPE.HAIRPIN_LEFT;
+    const nadelPaar = tiles.some((x, i) => nadel(x) && nadel(tiles[(i + 1) % tiles.length]));
+    const kandidat = { tiles, rest, code, rot, nadelPaar };
+    if (!trackZufallCodeKennt(code) && z.besser(z.beste, kandidat)) z.beste = kandidat;
+    if (code !== z.letzte && z.besser(z.besteAnders, kandidat)) z.besteAnders = kandidat;
+    if (z.besser(z.besteGleich, kandidat)) z.besteGleich = kandidat;
+  }
+  function trackZufallRunde(z, bisMs) {
+    while (z.versuch < 400) {
+      const jetzt = performance.now();
+      if (jetzt - z.startZeit > z.budgetMs) return true;
+      if (jetzt >= bisMs) return false;
+      z.versuch++;
+      trackZufallVersuch(z);
+    }
+    return true;
+  }
+  function trackZufallAbschluss(z) {
+    const wahl = z.beste || z.besteAnders;
     if (wahl) {
       trackMerken();
       currentTrackTiles = wahl.tiles;
       trackSel = null;
       trackRotationDeg = wahl.rot || 0;
+      // Den Raum so um die Strecke legen, wie sie hineinpasst (v0.9.39). Vorher blieb ein
+      // alter Versatz stehen, und die Strecke lag sichtbar ueber dem Rand.
+      const fit = typeof raumEinpassen === 'function' ? raumEinpassen(wahl.tiles) : null;
+      if (fit && fit.versatz) { raumVersatz = { x: fit.versatz.x, y: fit.versatz.y }; raumVersatzSpeichern(); }
       refreshTrackPreview();
       trackZufallCodeMerken(wahl.code);
       // BESTELLT: "beim zufälliger strecke wenn möglich eine Animation abspielen (max 500ms
@@ -4557,16 +4707,72 @@
       showHudToast(t('Zufällige Strecke gebaut'));
       return true;
     }
-    if (besteGleich) {
+    if (z.besteGleich) {
       showHudToast(t('Zufall: Keine neue Variante möglich'));
       return false;
     }
-    if (raumZuKlein) {
+    if (z.raumZuKlein) {
       showHudToast(t('Zufall: Raum zu klein für einen Rundkurs'));
       return false;
     }
     showHudToast(t('Zufall: Nicht genug Kurventeile für einen Rundkurs'));
     return false;
+  }
+  // Am Stueck, wie bisher (Selbsttests und alles, was ein Ergebnis sofort braucht).
+  function trackZufall() {
+    const z = trackZufallVorbereiten();
+    if (!z) return false;
+    z.budgetMs = 3000;
+    while (!trackZufallRunde(z, Infinity)) { /* bis fertig */ }
+    return trackZufallAbschluss(z);
+  }
+  // ---- MIT LADEANIMATION (v0.9.42) ---------------------------------------------------
+  // BESTELLT: "Zeige im Editorfeld eine Ladeanimation (zB ein sich drehendes Carrera Hybrid
+  // Streckenteil, oder durchlaufende Streckenteile [gerade, kurve, haarnadel]) waehrend der
+  // Zufallsalgorithmus laeuft." Die Suche lief bisher bis zu 3 s am Stueck auf dem
+  // Hauptfaden - in der Zeit haette keine Animation laufen koennen. Jetzt in Haeppchen von
+  // 40 ms mit einer Pause dazwischen. Das Rechenbudget bleibt 3 s REINE Rechenzeit; die
+  // Animation steht mindestens 450 ms, sonst blitzt sie nur auf.
+  let trackZufallLaeuft = false;
+  async function trackZufallMitAnimation() {
+    if (trackZufallLaeuft) return false;
+    const z = trackZufallVorbereiten();
+    if (!z) return false;
+    trackZufallLaeuft = true;
+    const host = $('track-preview-svg');
+    const lade = typeof ladeAnimationZeigen === 'function' && host
+      ? ladeAnimationZeigen(host, t('Strecke wird gesucht …')) : null;
+    const anfang = performance.now();
+    let gerechnet = 0;
+    try {
+      z.budgetMs = Infinity;                      // Budget hier selbst nach Rechenzeit
+      await ladePause();
+      for (;;) {
+        const t0 = performance.now();
+        const fertig = trackZufallRunde(z, t0 + 40);
+        gerechnet += performance.now() - t0;
+        if (fertig || gerechnet > 3000) break;
+        await ladePause();
+      }
+      const rest = 450 - (performance.now() - anfang);
+      if (rest > 0) await new Promise((ok) => setTimeout(ok, rest));
+    } finally {
+      if (lade) lade.remove();
+      trackZufallLaeuft = false;
+    }
+    return trackZufallAbschluss(z);
+  }
+  // Eine Pause, die der Browser auch im verborgenen Reiter nicht auf 1 s streckt
+  // (MessageChannel statt setTimeout) - und trotzdem einen Bildaufbau zulaesst.
+  function ladePause() {
+    return new Promise((ok) => {
+      let erledigt = false;
+      const weiter = () => { if (!erledigt) { erledigt = true; ok(); } };
+      requestAnimationFrame(weiter);
+      const k = new MessageChannel();
+      k.port1.onmessage = weiter;
+      k.port2.postMessage(0);
+    });
   }
   // Nur der Endpunkt der Strecke - billig, ohne die 14 Abtastungen je Kachel. Wird als
   // Vorfilter genutzt (doppelte Toleranz), damit nicht jede Kandidaten-Strecke die teure
@@ -4643,7 +4849,7 @@
     const u = ((c.x - a.x) * d1y - (c.y - a.y) * d1x) / den;
     return t > 0 && t < 1 && u > 0 && u < 1;
   }
-  $('track-random').onclick = () => trackZufall();
+  $('track-random').onclick = () => trackZufallMitAnimation();
 
   // Hier standen sechs Bindungen auf Knopf-ids, die es seit dem Umbau auf die Bildleiste
   // nicht mehr gibt (track-add-start und fuenf weitere). Sie prueften auf Vorhandensein und
@@ -4654,6 +4860,9 @@
   $('track-undo').onclick = () => { trackRueckgaengig(); };
   $('track-opt-linie').onclick = () => { editorSchalterUm('linie'); };
   $('track-opt-tasten').onclick = () => { editorSchalterUm('tasten'); };
+  // v0.9.45 BESTELLT: "im Editor Option (Toggle) zum Raum ein- und ausblenden (bei
+  // ausgeblendet wird er auch nicht beruecksichtigt bei Zufallsstrecken)" - raumEinpassen().
+  $('track-opt-raum').onclick = () => { editorSchalterUm('raum'); };
   $('track-delete-sel').onclick = () => { trackTeilEntfernen(); };
   $('track-clear').onclick = () => { trackMerken(); currentTrackTiles = freshTrackTiles(); trackSel = null; refreshTrackPreview(); };
 

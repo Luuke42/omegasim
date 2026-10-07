@@ -126,6 +126,8 @@
   // Im Browser dasselbe ueber einen Verlaufseintrag: Zurueck landet auf popstate statt die
   // Seite zu verlassen, und auf dem Startbildschirm geht es wie gewohnt zurueck.
   function omegaZurueck() {
+    // Raumgestalter offen: die Zurueck-Taste schliesst ihn (v0.9.45, "komme nicht mehr raus").
+    if (typeof raumDsOffen === 'function' && raumDsOffen()) { raumDsSchliessen(); return true; }
     if ($('mp-info') && !$('mp-info').hidden && typeof mpiStop === 'function') { mpiStop(); return true; }
     const imEditor = document.body.classList.contains('track-fs');
     const tour = typeof konsoleTourOffen === 'function' && konsoleTourOffen();
@@ -267,6 +269,7 @@
   // Wischgeste dem Inhalt. Mindestens 60 px, deutlich waagrecht, in hoechstens 0,7 s.
   (function wischenAnbinden() {
     const NICHT = '.tp-karte, input, select, textarea, canvas, .k-pause, .lb-wrap, #mp-info, .k-kein-wischen';
+    const WISCH_RAND_PX = 48;
     let a = null;
     document.addEventListener('touchstart', (e) => {
       a = null;
@@ -279,7 +282,13 @@
           if (ox === 'auto' || ox === 'scroll') return;
         }
       }
-      a = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: performance.now() };
+      // v0.9.33, GEMELDET: "Swipen passiert auch, wenn ich rechts nur meine Handy-Buttons haben
+      // moechte und dazu vom Rand aus 1 cm nach innen wische." Eine Geste, die am Rand
+      // beginnt, gehoert dem System (Navigationsleiste, Zurueck-Geste) - quer liegt die
+      // Unterkante des Telefons links oder rechts. Rund 1,2 cm (48 px) an allen Seiten ausser oben.
+      const x0 = e.touches[0].clientX, y0 = e.touches[0].clientY;
+      if (x0 < WISCH_RAND_PX || x0 > window.innerWidth - WISCH_RAND_PX || y0 > window.innerHeight - WISCH_RAND_PX) return;
+      a = { x: x0, y: y0, t: performance.now() };
     }, { passive: true });
     document.addEventListener('touchend', (e) => {
       if (!a || !e.changedTouches.length) return;
@@ -542,8 +551,11 @@
     // haelt nichts an; Weiterfahren ist vorgewaehlt, damit ein versehentlicher Druck nichts
     // beendet.
     if (!bestaetigt && typeof kRennenLaeuft === 'function' && kRennenLaeuft()) {
-      konsoleFrage(t('Ein Wechsel ins Menü beendet das Rennen.'), '',
-        [[t('Weiterfahren'), null], [t('Rennen beenden'), () => konsoleZumMenue(true)]]);
+      const knoepfe = [[t('Weiterfahren'), null], [t('Rennen beenden'), () => konsoleZumMenue(true)]];
+      if (typeof mp !== 'undefined' && mp.an && mp.rennenId && typeof mpRennenBeendenFuerAlle === 'function') {
+        knoepfe.push([t('Rennen für alle beenden'), () => { mpRennenBeendenFuerAlle(); konsoleZumMenue(true); }]);
+      }
+      konsoleFrage(t('Ein Wechsel ins Menü beendet das Rennen.'), '', knoepfe);
       return;
     }
     kCockpitVollbild = document.body.classList.contains('race-fs');
@@ -659,7 +671,7 @@
   function kAutos() {
     try { return garage.filter((c) => c.device); } catch (e) { return []; }
   }
-  const K_ROLLE = { player: 'Steuern', player2: 'Spieler 2', ghost: 'Ghost', none: 'Aus' };
+  const K_ROLLE = { player: 'Steuern', player2: 'Spieler 2', player3: 'Spieler 3', ghost: 'Ghost', none: 'Aus' };
   function kPunkt(farbe, text) {
     const s = document.createElement('span');
     const p = document.createElement('i'); p.className = 'k-punkt'; p.style.background = farbe;
@@ -679,7 +691,10 @@
     $('fa-auto-titel').textContent = autos.length ? autos.length + ' ' + t('verbunden') : t('Autos verbinden');
     // BESTELLT v0.8.126: mehrere verbundene Autos mit Fotos gemeinsam zeigen (die Garage auf dem
     // Fahren-Schirm). Erst ab zwei Fotos, sonst bleibt es beim einen Bild des Fahrer-Autos.
-    const mitFotos = autos.filter((c) => typeof autoFoto === 'function' && autoFoto(c));
+    // v0.9.31, GEMELDET: "mit 2 Autos 'Steuern' und 'Spieler 2' wurde nur eins angezeigt" -
+    // die Galerie kam erst ab ZWEI FOTOS. Jetzt ab zwei verbundenen Autos; eines ohne Foto
+    // steht als Farbflaeche mit seinem Zeichen darin.
+    const mitFotos = autos.filter((c) => c.role !== 'none').slice(0, 4);
     const galerieAn = mitFotos.length >= 2;
     const faAuto = $('fa-auto');
     if (faAuto) faAuto.classList.toggle('k-auto-mehr', galerieAn);
@@ -689,7 +704,7 @@
     const ab = $('fa-auto-bild');
     let abNeu;
     if (galerieAn) {
-      abNeu = 'galerie:' + mitFotos.map((c) => (c.device ? c.device.id : '') + ':' + autoFoto(c).length).join('|');
+      abNeu = 'galerie:' + mitFotos.map((c) => (c.device ? c.device.id : '') + ':' + c.role + ':' + autoFoto(c).length).join('|');
     } else {
       abNeu = afoto ? 'foto:' + afoto.length : 'auto';
     }
@@ -702,7 +717,13 @@
         mitFotos.forEach((c) => {
           const zelle = document.createElement('div');
           zelle.className = 'k-auto-zelle';
-          zelle.style.backgroundImage = 'url("' + autoFoto(c) + '")';
+          const f = autoFoto(c);
+          if (f) zelle.style.backgroundImage = 'url("' + f + '")';
+          else {
+            zelle.style.background = 'linear-gradient(135deg,' + carColor(c).hex + ' 0%,' + carColor(c).hex + ' 55%,rgba(0,0,0,.55) 100%)';
+            zelle.dataset.zeichen = c.tagChar || '';
+            zelle.classList.add('k-auto-ohne-foto');
+          }
           zelle.title = garageLabel(c);
           const lab = document.createElement('span');
           const dot = document.createElement('i');
@@ -781,16 +802,17 @@
     kZeilen($('fa-strecke-info'), bahn
       ? [[t('Teile'), String(kTeile())], ['Code', kCode() || '–']]
       : [[t('Modus'), t('Ausdruck, ohne Bahn')], [t('Streckenfoto'), foto ? t('hochgeladen') : t('keins')]]);
-    ['fa-scan', 'fa-laden'].forEach((id) => { if ($(id)) $(id).hidden = !bahn; });
-    // BESTELLT: "wenn ich auf TRACK klicke, sollen alle Optionen sichtbar sein" - auch im
-    // Bahn-Modus sollen die Druckvorlagen erreichbar bleiben.
-    if ($('fa-druck')) $('fa-druck').hidden = false;
+    // v0.9.45 BESTELLT: "zeige im FAHREN-Menue in der Streckenkachel (wenn sie auf Bahn
+    // eingestellt ist) 'Raum' an".
+    ['fa-scan', 'fa-laden', 'fa-raum'].forEach((id) => { if ($(id)) $(id).hidden = !bahn; });
+    // v0.9.33, BESTELLT: Druckvorlagen und Editor je nach Modus - die Vorlagen sind fuer die
+    // gedruckte Strecke (FREI), der Editor baut die Carrera-Bahn nach (AUF DER BAHN).
+    if ($('fa-druck')) $('fa-druck').hidden = bahn;
+    if ($('fa-editor')) $('fa-editor').hidden = !bahn;
     if ($('fa-foto')) $('fa-foto').hidden = bahn;
     if ($('fa-foto-weg')) $('fa-foto-weg').hidden = bahn || !foto;
     $('fa-profil-titel').textContent = ($('race-act-mode-txt') || {}).textContent || '–';
-    const sp = $('sound-profile');
-    const motor = sp && sp.selectedOptions[0] ? sp.selectedOptions[0].textContent.split(':')[0].trim() : '–';
-    $('fa-motor-titel').textContent = motor;
+
     const training = rm.value === 'practice';
     $('fa-start-titel').textContent = kRennenLaeuft() ? t('Zurück ins Rennen')
       : (training ? t('Training starten') : t('Rennen starten'));
@@ -991,12 +1013,13 @@
     kn('fa-scan', () => konsoleZeige('track', 'scan'));
     kn('fa-editor', () => konsoleZeige('track', 'edit'));
     kn('fa-laden', () => konsoleZeige('track', 'laden'));
+    kn('fa-raum', () => konsoleZeige('track', 'raum'));
     kn('fa-druck', () => konsoleZeige('track', 'print'));
     kn('fa-profil', () => konsoleZeige('options', 'opt-feel'));
     // BESTELLT: "wenn ich auf den Header tippe, soll es zur naechsten Option schalten".
     // Der Kachelkopf (Titel + Wert) dreht die Schaltstellung weiter, der Rest der Kachel
     // oeffnet wie bisher die Unterseite. Das Gamepad bleibt unveraendert (Quadrat/links/rechts).
-    [['fa-strecke', 'bahn'], ['fa-renn', 'renntyp'], ['fa-profil', 'profil'], ['fa-motor', 'motor']]
+    [['fa-strecke', 'bahn'], ['fa-renn', 'renntyp'], ['fa-profil', 'profil']]
       .forEach(([tileId, quad]) => {
         const tile = $(tileId);
         if (!tile) return;
@@ -1019,7 +1042,6 @@
     kn('mp-erkl-knopf', (e) => { e.stopPropagation(); optInfoOeffnen(t('Beitreten und Rangliste'), $('mp-erkl').innerHTML); });
     kn('mp-app-erkl-knopf', (e) => { e.stopPropagation(); optInfoOeffnen(t('Host'), $('mp-app-erkl').innerHTML); });
     kn('k-ergebnis', () => { kErgebnisWartet = true; konsoleInsCockpit(); });
-    kn('fa-motor', () => konsoleZeige('options', 'opt-sound'));
     kn('fa-foto', () => { const d = $('fa-foto-datei'); if (d) { d.value = ''; d.click(); } });
     kn('fa-foto-weg', () => {
       konsoleFrage(t('Streckenfoto löschen?'), '', [[t('Löschen'), () => { konsoleFotoSetzen(''); }], [t('Abbrechen'), null]]);
@@ -1055,4 +1077,25 @@
     konsoleZeichnen();
   }
   setTimeout(konsoleEinrichten, 0);
+
+  // ---- GROESSE DER REITERLEISTEN (v0.9.37) ----------------------------------------------
+  // Zwei Regler unter Optionen > Allgemein; der Wert ist ein Zoom auf die Reiterknoepfe (Schrift,
+  // Abstaende und Hoehe zusammen). Gespeichert wird er wie jeder Regler (98b-sicherung.js).
+  (function reiterGroesse() {
+    const setzen = (id, varName) => {
+      const el = $(id);
+      if (!el) return;
+      const v = Math.max(0.6, Math.min(1.8, parseFloat(el.value) || 1));
+      document.documentElement.style.setProperty(varName, String(v));
+      if ($(id + '-val')) $(id + '-val').textContent = Math.round(v * 100) + '%';
+    };
+    [['setting-reiter1', '--reiter1'], ['setting-reiter2', '--reiter2']].forEach(([id, v]) => {
+      const el = $(id);
+      if (!el) return;
+      ['input', 'change'].forEach((art) => el.addEventListener(art, () => setzen(id, v)));
+      setzen(id, v);
+      // Nach dem Wiederherstellen der gespeicherten Regler (98b) noch einmal.
+      setTimeout(() => setzen(id, v), 300);
+    });
+  })();
 

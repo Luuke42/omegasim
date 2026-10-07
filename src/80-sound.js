@@ -1778,6 +1778,7 @@
   //   4. Schaltknall                 isShifting    -> ein lauterer Knaller
   //   5. Getriebeheulen              Tempo x Gang  -> Saegezahn, RADdrehzahl
   //   6. Lader: Pfeifen und Abblasen Ladedruck     -> Sinus und Rauschflattern
+  //   7. Abrollgeraeusch (v0.9.46)   Tempo         -> langes Rauschen durch Tief-/Hochpass
   //
   // ALLE AN EINEM SCHALTER, damit man den Unterschied hoeren kann. "Aus" heisst dabei
   // NEUTRAL und nicht umgangen: der Tiefpass geht auf 20 kHz, die Zusatzquellen auf Null.
@@ -1794,6 +1795,7 @@
                whine: null, whineGain: null, whineFilter: null,
                pfeif: null, pfeifGain: null,
                pfeifQuelle: null,
+               roll: null, rollGain: null, rollQuelle: null, rauschLang: null,
                letzteLast: 0, schaltAn: false, ladedruck: 0, letzterTakt: 0,
                cutTiefe: 0,
                knaller: 0, boGezaehlt: 0 };
@@ -1807,6 +1809,19 @@
     const d = b.getChannelData(0);
     for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
     xs.rausch = b;
+    return b;
+  }
+
+  // EIN LANGES RAUSCHEN fuer das Abrollgeraeusch. Nicht der halbe Sekunde lange Puffer der
+  // Knaller: ein Rauschen, das zweimal je Sekunde dieselben Werte wiederholt, hoert man als
+  // Takt, sobald es ununterbrochen laeuft. 2,7 s liegen weit genug auseinander.
+  function xRauschLang() {
+    if (xs.rauschLang) return xs.rauschLang;
+    const n = Math.floor(audioCtx.sampleRate * 2.7);
+    const b = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    xs.rauschLang = b;
     return b;
   }
 
@@ -1876,6 +1891,26 @@
     xs.pfeifGain.gain.value = 0;
     xs.pfeifQuelle.connect(xs.pfeif).connect(xs.pfeifGain).connect(xs.add);
     xs.pfeifQuelle.start();
+    // ABROLLGERAEUSCH (v0.9.46): Reifen auf Asphalt und Fahrtwind, ein Rauschen, das mit dem
+    // Tempo lauter und heller wird. Bisher war ein rollendes Auto ohne Gas stumm bis auf den
+    // Motor - und genau dieses Bett unter allem anderen macht eine Aufnahme nach "Fahren"
+    // klingen. Die Referenz (eine Abroll-Aufnahme, nur lokal vermessen) hat ihren
+    // Schwerpunkt bei 1,5-2,2 kHz; der Hochpass nimmt das Brummen, das ein Handylautsprecher
+    // ohnehin nicht spielt.
+    xs.rollQuelle = audioCtx.createBufferSource();
+    xs.rollQuelle.buffer = xRauschLang();
+    xs.rollQuelle.loop = true;
+    const rollHoch = audioCtx.createBiquadFilter();
+    rollHoch.type = 'highpass';
+    rollHoch.frequency.value = 160;
+    xs.roll = audioCtx.createBiquadFilter();
+    xs.roll.type = 'lowpass';
+    xs.roll.Q.value = 0.5;
+    xs.roll.frequency.value = 400;
+    xs.rollGain = audioCtx.createGain();
+    xs.rollGain.gain.value = 0;
+    xs.rollQuelle.connect(rollHoch).connect(xs.roll).connect(xs.rollGain).connect(xs.add);
+    xs.rollQuelle.start();
     xs.gebaut = true;
     xs.ein = xs.ton;
     return xs.ein;
@@ -1893,12 +1928,15 @@
     const off = Math.random() * 0.4;
     const bp = audioCtx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.value = 170 + Math.random() * 130;
+    // v0.9.46 nach einer Referenz vermessen (Hochschalt-Knaller eines GT3, nur lokal
+    // angehoert): 45-120 ms lang, Schwerpunkt 120-290 Hz, Anstieg 6-11 ms. Vorher 170-300 Hz
+    // und 35-80 ms mit 4 ms Anstieg - das war eher ein Klopfen als ein Knall.
+    bp.frequency.value = 120 + Math.random() * 170;
     bp.Q.value = 1.1;
     const g = audioCtx.createGain();
-    const dauer = 0.035 + Math.random() * 0.045;
+    const dauer = 0.045 + Math.random() * 0.07;
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(staerke, t + 0.004);
+    g.gain.linearRampToValueAtTime(staerke, t + 0.007);
     g.gain.exponentialRampToValueAtTime(0.0008, t + dauer);
     src.connect(bp).connect(g).connect(xs.add);
     src.start(t, off, dauer + 0.02);
@@ -1906,32 +1944,44 @@
     xs.knaller++;
   }
 
-  // Abblasen: Rauschen, mit etwa 35 Hz flatternd, wie ein Wastegate.
+  // Abblasen: Rauschen, flatternd, wie ein Schubumluftventil.
+  //
+  // v0.9.46 NACH EINER REFERENZ VERMESSEN (das Abblasen eines M4 GT3, nur lokal angehoert):
+  // 0,74 s lang, -20 dB erst nach knapp einer halben Sekunde, Energie breit von 1 bis 16 kHz
+  // mit Schwerpunkt 1,6-3 kHz, und ein Flattern von etwa 14 Hz - drei, vier deutliche
+  // Stoesse, kein Schnarren. Vorher: 0,22 s mit 34 Hz Rechteck, also ein kurzes Zischen.
+  // Das Flattern jetzt als DREIECK: ein Rechteck schaltet hart und ist der Klick, der hier
+  // schon einmal als Fehler gemeldet wurde.
   function xAbblasen(staerke) {
     if (!audioCtx || !extrasOn) return;
     xBus();
     const t = audioCtx.currentTime;
+    const dauer = 0.6;
     const src = audioCtx.createBufferSource();
-    src.buffer = xRausch();
-    src.loop = true;
-    const hp = audioCtx.createBiquadFilter();
-    hp.type = 'bandpass';
-    hp.frequency.value = 3200;
-    hp.Q.value = 0.8;
+    src.buffer = xRauschLang();
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 0.6;
+    // Die Luft rauscht beim Auslaufen dunkler: der Bandpass faellt mit.
+    bp.frequency.setValueAtTime(2600, t);
+    bp.frequency.exponentialRampToValueAtTime(1500, t + dauer);
     const g = audioCtx.createGain();
     const flat = audioCtx.createOscillator();
-    flat.type = 'square';
-    flat.frequency.value = 34;
+    flat.type = 'triangle';
+    flat.frequency.setValueAtTime(14, t);
+    flat.frequency.linearRampToValueAtTime(11, t + dauer);
     const flatG = audioCtx.createGain();
-    flatG.gain.value = staerke * 0.5;
+    flatG.gain.setValueAtTime(staerke * 0.45, t);
+    flatG.gain.exponentialRampToValueAtTime(0.0004, t + dauer);
     flat.connect(flatG).connect(g.gain);
-    g.gain.setValueAtTime(staerke, t);
-    g.gain.exponentialRampToValueAtTime(0.0008, t + 0.22);
-    src.connect(hp).connect(g).connect(xs.add);
-    src.start(t);
+    g.gain.setValueAtTime(0.0008, t);
+    g.gain.exponentialRampToValueAtTime(staerke, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + dauer);
+    src.connect(bp).connect(g).connect(xs.add);
+    src.start(t, Math.random() * 2);
     flat.start(t);
-    src.stop(t + 0.24);
-    flat.stop(t + 0.24);
+    src.stop(t + dauer + 0.02);
+    flat.stop(t + dauer + 0.02);
     xs.boGezaehlt++;
   }
 
@@ -1953,7 +2003,8 @@
       xs.cutTiefe = 0;
       // NEUTRAL, nicht umgangen: derselbe Signalweg, nur ohne Wirkung.
       return { aus: true, tonHz: 20000, cutTiefe: 0, addGain: 0,
-               whineHz: 140, whineGain: 0, pfeifHz: 1700, pfeifGain: 0,
+               whineHz: 140, whineGain: 0, pfeifHz: 2000, pfeifGain: 0,
+               rollHz: 400, rollGain: 0,
                knaller: 0, knallStaerke: 0, abblasen: 0, ladedruck: 0 };
     }
 
@@ -2012,7 +2063,7 @@
 
     // 6. Der Lader. Ein Ladedruck baut sich AUF und faellt nicht mit dem Gas zusammen -
     //    genau diese Verzoegerung ist das Turboloch, und ohne sie klingt es nach Sirene.
-    let pfeifHz = 1700, pfeifGain = 0, abblasen = 0;
+    let pfeifHz = 2000, pfeifGain = 0, abblasen = 0;
     if (xs.turbo) {
       // DER DRUCK VOR DEM ABBAU entscheidet ueber das Abblasen. Ein Wastegate laesst den
       // Druck heraus, der beim Gaswegnehmen NOCH DA WAR - nicht den Rest, der nach einem
@@ -2022,7 +2073,9 @@
       const ziel = Math.max(0, Math.min(1, load * (0.35 + 0.65 * rpmFrac)));
       xs.ladedruck += (ziel - xs.ladedruck) * (1 - Math.exp(-Math.max(0, dt) / 0.45));
       const b = xs.ladedruck;
-      pfeifHz = 1700 + 5300 * b;
+      // v0.9.46: bis 5,8 kHz statt 7. Die Referenz (ein M4-GT3-Lader, nur lokal vermessen)
+      // pfeift unter vollem Druck bei 5,7 kHz; darueber wurde es duenn und spitz.
+      pfeifHz = 2000 + 3800 * b;
       // Leiser als der frueher hier stehende Sinus: Bandpass-Rauschen traegt Energie
       // ueber eine Bandbreite und nicht auf einer Linie, klingt bei gleicher Verstaerkung
       // also lauter.
@@ -2034,8 +2087,14 @@
       xs.ladedruck = 0;
     }
 
+    // 7. Abrollgeraeusch: Tempo allein, kein Gas. Heller mit dem Tempo, weil Profil und
+    //    Fahrtwind mit ihm nach oben wandern, und lauter mit gut der 1,3. Potenz - im Stand
+    //    nichts, bei Schritttempo kaum etwas, bei Vmax ein Bett unter dem Motor.
+    const rollHz = 400 + 2600 * vAnteil;
+    const rollGain = vAnteil > 0.03 ? 0.034 * Math.pow(vAnteil, 1.3) : 0;
+
     return { aus: false, tonHz, cutTiefe, addGain: 1, whineHz, whineGain,
-             pfeifHz, pfeifGain, knaller, knallStaerke, schaltKnall, abblasen,
+             pfeifHz, pfeifGain, rollHz, rollGain, knaller, knallStaerke, schaltKnall, abblasen,
              ladedruck: xs.ladedruck, dLast };
   }
 
@@ -2058,6 +2117,8 @@
     xs.whineGain.gain.setTargetAtTime(w.whineGain, t, 0.08);
     xs.pfeif.frequency.setTargetAtTime(w.pfeifHz, t, 0.06);
     xs.pfeifGain.gain.setTargetAtTime(w.pfeifGain, t, 0.08);
+    xs.roll.frequency.setTargetAtTime(w.rollHz, t, 0.15);
+    xs.rollGain.gain.setTargetAtTime(w.rollGain, t, 0.15);
     if (w.aus) return;
     for (let i = 0; i < w.knaller; i++) xKnall(w.knallStaerke, Math.random() * 0.22);
     if (w.schaltKnall) xKnall(w.schaltKnall, 0.012);

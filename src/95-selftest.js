@@ -2633,8 +2633,10 @@
     // welche Farbe traegt, prueft diese Stelle nicht - siehe kerbLeft/kerbRight in
     // 60-track.js fuer die Zuordnung selbst).
     const f = mitte.farben || [];
-    for (const [farbe, was] of [['#14181f', 'Fahrbahn'], ['#ff5c5c', 'roter Randstein'],
-                                ['#5aa9ff', 'blauer Randstein'], ['#ffffff', 'Stossfugen']]) {
+    // v0.9.45: Originalteile sind die Vorgabe (mattschwarze Fahrbahn, Pfeile in Blau und Rot,
+    // dunkle Naht) - siehe echtRandstreifen in 60-track.js.
+    for (const [farbe, was] of [['#0d0f13', 'Fahrbahn'], ['#ff4d22', 'rote Pfeile'],
+                                ['#2f9fe6', 'blaue Pfeile'], ['#3a404b', 'Stossfugen']]) {
       if (f.indexOf(farbe) < 0) schlecht.push(was + ' fehlt (' + farbe + ')');
     }
     teile.push(f.length + ' Farben im Bild');
@@ -4253,8 +4255,11 @@
       // 4. Und die gezeichneten Stossfugen: genau eine je Kachel.
       const html = OMEGA_TEST.trackMarks(code).html;
       const doc = new DOMParser().parseFromString(html, 'text/html');
+      // Seit v0.9.45 sind die Originalteile die Vorgabe: die Fuge ist eine feine dunkle Naht
+      // (#3a404b, 0,6); der alte weisse Strich gilt weiter fuer echt: false.
       const n = [...doc.querySelectorAll('path')].filter((x) =>
-        x.getAttribute('stroke') === '#ffffff' && x.getAttribute('stroke-width') === '1.6').length;
+        (x.getAttribute('stroke') === '#ffffff' && x.getAttribute('stroke-width') === '1.6')
+        || (x.getAttribute('stroke') === '#3a404b' && x.getAttribute('stroke-width') === '0.6')).length;
       fugen += n;
       if (n !== p.tiles.length) {
         schlecht.push(code + ': ' + n + ' Stossfugen fuer ' + p.tiles.length + ' Kacheln');
@@ -5687,6 +5692,18 @@
     if (!(rollt > 0)) schlecht.push('kein Heulen beim Rollen');
     if (!(kurz > lang * 1.5)) schlecht.push('Heulen haengt nicht am Gang');
 
+    // 5b. ABROLLGERAEUSCH (v0.9.46): im Stand still, mit dem Tempo lauter UND heller, und
+    //     unabhaengig vom Gas - ein rollendes Auto rollt hoerbar, auch ohne Last.
+    const rStand = eins([{ load: 0, speedKmh: 0 }]);
+    const rHalb = eins([{ load: 0, speedKmh: top * 0.5 }]);
+    const rVoll = eins([{ load: 0, speedKmh: top }]);
+    const rVollGas = eins([{ load: 1, speedKmh: top }]);
+    teile.push('Abrollen ' + rHalb.rollGain + '/' + rVoll.rollGain + ' bei ' + rHalb.rollHz + '/' + rVoll.rollHz + ' Hz');
+    if (rStand.rollGain !== 0) schlecht.push('Abrollen im Stand');
+    if (!(rVoll.rollGain > rHalb.rollGain && rHalb.rollGain > 0)) schlecht.push('Abrollen waechst nicht mit dem Tempo');
+    if (!(rVoll.rollHz > rHalb.rollHz)) schlecht.push('Abrollen wird nicht heller');
+    if (rVollGas.rollGain !== rVoll.rollGain) schlecht.push('Abrollen haengt am Gas');
+
     // 6. Der Lader: NUR bei aufgeladenen Motoren, und mit Verzoegerung. Der Ladedruck darf
     //    nicht im ersten Takt stehen - genau diese Verzoegerung ist das Turboloch.
     const sauger = eins([{ load: 1, rpmFrac: 0.9 }], { turbo: false }).pfeifGain;
@@ -5733,6 +5750,7 @@
     if (aus.cut !== 0) reste.push('Stottern');
     if (aus.whineGain !== 0) reste.push('Heulen');
     if (aus.pfeifGain !== 0) reste.push('Pfeifen');
+    if (aus.rollGain !== 0) reste.push('Abrollen');
     if (aus.knaller !== 0) reste.push('Knaller');
     if (!aus.aus) reste.push('Kennzeichnung');
     if (reste.length) schlecht.push('ausgeschaltet bleibt: ' + reste.join(', '));
@@ -11204,27 +11222,13 @@
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Karte, 2 Zeilen, Histogramm, Warten abgebrochen' };
   });
 
-  stAdd('ACC-Menü: Motorsound-Kachel blättert die Motoren, Quadrat', () => {
-    const s2 = $('sound-profile');
-    if (!s2 || !$('fa-motor')) return { ok: false, mass: 'Kachel oder Auswahl fehlt' };
-    const merk = kAktiverTab();
-    const merkWert = s2.value;
+  stAdd('Fahren: Motorsound nur noch in der Garage, Fahrgefuehl und Start fuellen die Reihe', () => {
     const f = [];
-    try {
-      showTab('fahren');
-      menuNavEnsureContext();
-      konsoleFokusAuf('fa-motor');
-      konsoleQuadrat();
-      if (s2.value === merkWert) f.push('Quadrat aendert den Motor nicht');
-      konsoleZeichnen();
-      const titel = $('fa-motor-titel').textContent;
-      if (!titel || s2.selectedOptions[0].textContent.indexOf(titel) !== 0) f.push('Titel "' + titel + '" passt nicht zum Motor');
-    } finally {
-      s2.value = merkWert;
-      s2.dispatchEvent(new Event('change', { bubbles: true }));
-      if (merk) showTab(merk);
-    }
-    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Motor weitergeschaltet und zurueck' };
+    if (document.getElementById(['fa', 'motor'].join('-'))) f.push('Motorsound-Kachel noch da');
+    if (!$('fa-profil') || !$('fa-start')) f.push('Fahrgefuehl oder Start fehlt');
+    const unten = document.querySelector('.k-fahren-unten');
+    if (unten && getComputedStyle(unten).gridTemplateColumns.split(' ').length !== 2) f.push('Reihe hat nicht zwei Spalten');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Fahrgefuehl 1/3, Start 2/3' };
   });
 
   stAdd('ACC-Menü: Streckenfoto ersetzt im Ausdruck-Modus die Karte im Cockpit', () => {
@@ -11280,9 +11284,13 @@
       if (!gal) f.push('keine Galerie bei zwei Fotos');
       else if (gal.querySelectorAll('.k-auto-zelle').length !== 2) f.push('Galerie hat nicht 2 Kacheln');
       if (!$('fa-auto').classList.contains('k-auto-mehr')) f.push('Kachel traegt k-auto-mehr nicht');
+      // v0.9.31: die Galerie bleibt bei zwei Autos, auch wenn eines kein Foto hat - es steht
+      // dann als Farbflaeche mit seinem Zeichen darin (GEMELDET: "es wurde nur eins angezeigt").
       autoFotoSetzen(a2, '');
       konsoleFahrenZeichnen();
-      if ($('fa-auto-bild').querySelector('.k-auto-galerie')) f.push('Galerie bleibt bei einem Foto');
+      const gal2 = $('fa-auto-bild').querySelector('.k-auto-galerie');
+      if (!gal2 || gal2.querySelectorAll('.k-auto-zelle').length !== 2) f.push('Galerie verschwindet, wenn ein Auto kein Foto hat');
+      else if (!gal2.querySelector('.k-auto-ohne-foto')) f.push('Auto ohne Foto nicht als Farbflaeche');
     } finally {
       garage.splice(0, garage.length);
       for (const c of merk) garage.push(c);
@@ -11290,7 +11298,7 @@
       try { localStorage.setItem('omegasim-autofoto:' + a2.device.id, alt2); } catch (e) { /* egal */ }
       konsoleFahrenZeichnen();
     }
-    return { ok: !f.length, mass: f.length ? f.join('; ') : 'zwei Fotos gemeinsam, eines wieder einzeln' };
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'zwei Autos gemeinsam, auch ohne Foto' };
   });
 
   // BESTELLT v0.8.126: ist eine Strecke eingegeben und der Modus steht auf "auf der Bahn",
@@ -16684,83 +16692,76 @@
   });
 
   // v0.9.21: Schaden, Bremsen und Auffahrunfall getrennt.
-  stAdd('Crash: Schaden, Bremsen und Auffahrunfall getrennt schaltbar', () => {
+  stAdd('Crash: Schaden und Bremsen getrennt, nur der Rammer bremst (Richtung aus Byte 1)', () => {
     const f = [];
     const ids = ['setting-crash-schaden', 'setting-crash-bremse', 'setting-crash-auffahr'];
     const merk = { dmg: damage, v: physEngine.state.speedKmh, schalter: ids.map((id) => $(id).checked),
                    licht: { front: lightDamage.front, rear: lightDamage.rear }, derby: derbyLaeuft };
-    const L = crashLageVon(1);
-    const vor = L.vorSumme;
     try {
       derbyLaeuft = false;
-      const lauf = (schaden, bremse, auffahr, stoss) => {
-        $(ids[0]).checked = schaden; $(ids[1]).checked = bremse; $(ids[2]).checked = auffahr;
+      const lauf = (schaden, bremse, nurRammer, richtung) => {
+        $(ids[0]).checked = schaden; $(ids[1]).checked = bremse; $(ids[2]).checked = nurRammer;
         damage = 0; physEngine.state.speedKmh = 2;
-        registerCrash(1, stoss);
+        registerCrash(1, { richtung });
         return { dmg: damage, v: physEngine.state.speedKmh };
       };
-      let r = lauf(true, true, true, { vonHinten: false });
+      let r = lauf(true, true, true, 'vorn');
       if (!(r.dmg > 0)) f.push('Schaden an: kein Schaden');
-      if (!(r.v < 1)) f.push('Bremsen an: nicht gebremst (' + r.v + ')');
-      r = lauf(false, true, true, { vonHinten: false });
+      if (!(r.v < 1)) f.push('Rammer (vorn) nicht gebremst');
+      r = lauf(false, true, true, 'vorn');
       if (r.dmg !== 0) f.push('Schaden aus: trotzdem ' + r.dmg + ' %');
-      r = lauf(true, false, true, { vonHinten: false });
+      r = lauf(true, false, true, 'vorn');
       if (r.v !== 2) f.push('Bremsen aus: Tempo ' + r.v);
-      r = lauf(true, true, true, { vonHinten: true });
-      if (r.v !== 2) f.push('Auffahrunfall: trotzdem gebremst');
-      r = lauf(true, true, false, { vonHinten: true });
-      if (!(r.v < 1)) f.push('Auffahr-Schutz aus: nicht gebremst');
-      // Richtung: ungelernt nie "von hinten"; gelernt +: Stoss + mit wenig Querteil ja, 50 Grad nein.
-      L.vorSumme = 0;
-      if (crashVonHinten(L, 30, 5)) f.push('ungelernt als Auffahrunfall gewertet');
-      L.vorSumme = 100;
-      if (!crashVonHinten(L, 30, 25)) f.push('von hinten (40 Grad) nicht erkannt');
-      if (crashVonHinten(L, 30, 36)) f.push('50 Grad noch als von hinten gewertet');
-      if (crashVonHinten(L, -30, 5)) f.push('Stoss nach hinten als Auffahrunfall gewertet');
-      // Lernen: Gasgeben mit positivem Byte-1-Ausschlag lernt "+".
-      L.vorSumme = 0;
-      for (let i = 0; i < 80; i++) crashVorLernen(L, 6, 0.3, 10);
-      if (crashVorZeichen(L) !== 1) f.push('Lernen: Vorzeichen ' + crashVorZeichen(L));
+      r = lauf(true, true, true, 'hinten');
+      if (r.v !== 2) f.push('von hinten gerammt: gebremst');
+      r = lauf(true, true, true, 'seite');
+      if (r.v !== 2) f.push('seitlich gerammt: gebremst');
+      r = lauf(true, true, false, 'hinten');
+      if (!(r.v < 1)) f.push('Schalter aus: Gerammter nicht gebremst');
+      // Richtung: Byte 1 faellt (wie Gasgeben) = von hinten; steigt = vorn; quer ueber 45 Grad = Seite.
+      if (crashRichtung(-30, 5) !== 'hinten') f.push('Byte 1 faellt: nicht "hinten"');
+      if (crashRichtung(30, 5) !== 'vorn') f.push('Byte 1 steigt: nicht "vorn"');
+      if (crashRichtung(-30, 25) !== 'hinten') f.push('40 Grad nicht mehr laengs');
+      if (crashRichtung(-30, 36) !== 'seite') f.push('50 Grad nicht Seite');
     } finally {
       ids.forEach((id, i) => { $(id).checked = merk.schalter[i]; });
-      damage = merk.dmg; physEngine.state.speedKmh = merk.v; L.vorSumme = vor;
+      damage = merk.dmg; physEngine.state.speedKmh = merk.v;
       lightDamage.front = merk.licht.front; lightDamage.rear = merk.licht.rear; derbyLaeuft = merk.derby;
       updateDamageFuelUI();
     }
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Schaden/Bremsen/Auffahrunfall wirken einzeln, 45-Grad-Kegel stimmt' };
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Rammer bremst, Gerammte (hinten/Seite) nicht, Richtung mit 45 Grad' };
   });
 
-  stAdd('Rammen: zwei Crashs gleichzeitig = Rammer, Strafe nach N, Label im Ergebnis', () => {
+  stAdd('Rammen: Rammer nach Stossrichtung, Strafe nach N, Label im Ergebnis', () => {
     const f = [];
     const merk = { rs: raceState, ab: $('race-ramm-ab').value, st: $('race-ramm-strafe').value };
-    const a = { device: { id: 'probe-ramm-a' }, role: 'ghost', alias: 'A', ghost: { running: true, lastThrottle: 0.9 } };
-    const b = { device: { id: 'probe-ramm-b' }, role: 'ghost', alias: 'B', ghost: { running: true, lastThrottle: 0.3 } };
+    const a = { device: { id: 'probe-ramm-a' }, role: 'ghost', alias: 'A', ghost: { running: true, lastThrottle: 0.3 } };
+    const b = { device: { id: 'probe-ramm-b' }, role: 'ghost', alias: 'B', ghost: { running: true, lastThrottle: 0.9 } };
     try {
       raceState = 'racing'; $('race-ramm-ab').value = '2'; $('race-ramm-strafe').value = '5';
       rammReset();
-      if (crashEreignis(a, null) !== null) f.push('ein Crash allein ist schon ein Rammen');
-      if (crashEreignis(b, null) !== a) f.push('Schnellerer nicht als Rammer erkannt');
+      if (crashEreignis(a, 'vorn') !== null) f.push('ein Crash allein ist schon ein Rammen');
+      if (crashEreignis(b, 'hinten') !== a) f.push('vorn eingeschlagener (langsamerer) nicht als Rammer');
       if (rammStrafeOffen(a) !== 0) f.push('Strafe schon nach 1x');
-      rammReset();
-      crashEreignis(a, null); crashEreignis(b, null);
-      crashEreignis(a, null); crashEreignis(b, null);
+      crashEreignis(b, 'seite'); crashEreignis(a, 'vorn');
       if (rammStrafeOffen(a) !== 5) f.push('nach 2x keine 5 s Strafe (' + rammStrafeOffen(a) + ')');
       if (rammStrafeOffen(b) !== 0) f.push('Opfer bestraft');
       if (!/RAMMER/.test(rammerLabel(a))) f.push('kein [RAMMER]-Label');
-      // Richtung schlaegt Tempo: wer nach vorn geschoben wurde, ist das Opfer.
       rammReset();
-      if (crashEreignis(a, true) !== null) f.push('Paarung zu frueh');
-      if (crashEreignis(b, false) !== b) f.push('nach vorn geschobenes Auto als Rammer gewertet');
-      // Abgesessen: kein Label mehr.
-      rammReset(); crashEreignis(a, null); crashEreignis(b, null); crashEreignis(a, null); crashEreignis(b, null);
+      crashEreignis(a, 'vorn');
+      if (crashEreignis(b, 'vorn') !== null) f.push('frontal (beide vorn) als Rammen gewertet');
+      rammReset();
+      crashEreignis(a, 'hinten');
+      if (crashEreignis(b, 'seite') !== null) f.push('keiner vorn als Rammen gewertet');
+      rammReset(); crashEreignis(a, 'vorn'); crashEreignis(b, 'hinten'); crashEreignis(a, 'vorn'); crashEreignis(b, 'hinten');
       if (rammStrafeAbsitzen(a) !== 5 || rammerLabel(a)) f.push('Absitzen loescht die Strafe nicht');
       $('race-ramm-ab').value = '0'; rammReset();
-      crashEreignis(a, null);
-      if (crashEreignis(b, null) !== null) f.push('Option aus: trotzdem gewertet');
+      crashEreignis(a, 'vorn');
+      if (crashEreignis(b, 'hinten') !== null) f.push('Option aus: trotzdem gewertet');
     } finally {
       raceState = merk.rs; $('race-ramm-ab').value = merk.ab; $('race-ramm-strafe').value = merk.st; rammReset();
     }
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Paarung, Rammer, Strafe nach 2x, Label, Absitzen' };
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Rammer = vorn eingeschlagen, frontal/keiner vorn zaehlt nicht, Strafe nach 2x' };
   });
 
   stAdd('Derby: Licht flackert ab 50 % Schaden, aus und Ruckeln ab 75 %, ohne Tank/Reifen', () => {
@@ -16929,6 +16930,596 @@
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Derby raeumt auf, Schalter sperrt Gelb' };
   });
 
+  stAdd('Derby: Wand-Crash ohne Gegner beendet nichts, letzter Fahrer gewinnt', () => {
+    const f = [];
+    const merk = { lauf: derbyLaeuft, h: derbyHealth, k: derbyKills, zwei: zweiSpieler, lim: raceLimit,
+                   h2: derbyHealth2, k2: derbyKills2 };
+    const geister = garage.filter((c) => c.role === 'ghost');
+    const rollen = geister.map((c) => c.role);
+    try {
+      geister.forEach((c) => { c.role = 'none'; });
+      derbyLaeuft = true; zweiSpieler = false; raceLimit = 0;
+      derbyHealth = 80; derbyKills = 0;
+      if (derbyUrteil() !== null) f.push('allein: Ende nach Crash (' + derbyUrteil() + ')');
+      derbyHealth = 0;
+      if (derbyUrteil() !== null) f.push('allein bei 0 %: trotzdem Ende');
+      zweiSpieler = true; derbyHealth = 60; derbyHealth2 = 40; derbyKills2 = 0;
+      if (derbyUrteil() !== null) f.push('zu zweit, beide fahren: Ende');
+      derbyHealth2 = 0;
+      if (derbyUrteil() !== 'p1') f.push('zu zweit, P2 raus: nicht p1 (' + derbyUrteil() + ')');
+      const g = { device: { id: 'probe-derby-g' }, role: 'ghost', ghost: undefined };
+      garage.push(g);
+      try {
+        zweiSpieler = false; derbyHealth = 70;
+        if (derbyUrteil() !== null) f.push('mit Ghost ohne Zustand: Ende ohne Grund');
+      } finally { garage.splice(garage.indexOf(g), 1); }
+    } finally {
+      geister.forEach((c, i) => { c.role = rollen[i]; });
+      derbyLaeuft = merk.lauf; derbyHealth = merk.h; derbyKills = merk.k; zweiSpieler = merk.zwei;
+      raceLimit = merk.lim; derbyHealth2 = merk.h2; derbyKills2 = merk.k2;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'allein nie Ende, zu zweit gewinnt der Letzte, Ghost zaehlt ab Start' };
+  });
+
+  stAdd('Mehrspieler: Ampel verschiebbar, Rennende von Mitspieler, Ende-Signal', () => {
+    const f = [];
+    const merk = { rs: raceState, rm: raceMode, lim: raceLimit, an: mp.an, id: mp.rennenId, mpid: mp.id, ende: mp.endeGesehen };
+    const status = $('race-status') ? $('race-status').textContent : '';
+    try {
+      // Rennende: ein anderer Fahrer hat das Ziel -> letzte Runde.
+      mp.an = true; mp.rennenId = 'probe:1'; mp.id = 'ich'; raceState = 'racing'; raceMode = 'laps'; raceLimit = 10;
+      mpZielPruefen({ fahrer: [{ id: 'ich', laps: 7 }, { id: 'du', name: 'Du', laps: 9 }] });
+      if (raceState !== 'racing') f.push('9 von 10 Runden schon Ende');
+      mpZielPruefen({ fahrer: [{ id: 'ich', laps: 7 }, { id: 'du', name: 'Du', laps: 10 }] });
+      if (raceState !== 'finishing') f.push('Mitspieler mit 10 Runden loest kein Rennende aus');
+      raceState = 'racing';
+      mpZielPruefen({ fahrer: [{ id: 'ich', laps: 10 }] });
+      if (raceState !== 'racing') f.push('eigene Runden aus dem Host zaehlen doppelt');
+      // Ende-Signal anderer: ohne laufendes Rennen nichts tun, kein Bereitschaftsschirm.
+      raceState = 'idle'; mp.endeGesehen = null;
+      mpEndePruefen({ boot: 'b', rennen: { id: 5, phase: 'bereit', plan: { ende: true }, initiator: 'du' } });
+      if (mp.endeGesehen !== 'b:5') f.push('Ende-Signal nicht erkannt');
+      mpBereitSchirm({ rennen: { id: 5, phase: 'bereit', plan: { ende: true }, initiator: 'du' }, fahrer: [] });
+      if ($('mp-ready-screen') && !$('mp-ready-screen').hidden) f.push('Ende-Signal zeigt den Bereitschaftsschirm');
+      // Ampel verschieben ohne laufenden Countdown: nichts.
+      if (ampelVerschieben(50)) f.push('Ampel ohne Countdown verschoben');
+    } finally {
+      raceState = merk.rs; raceMode = merk.rm; raceLimit = merk.lim; mp.an = merk.an; mp.rennenId = merk.id;
+      mp.id = merk.mpid; mp.endeGesehen = merk.ende;
+      if ($('race-status')) $('race-status').textContent = status;
+      if ($('mp-ready-screen')) $('mp-ready-screen').hidden = true;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Mitspieler im Ziel -> letzte Runde, Ende-Signal erkannt, Ampel nur im Countdown' };
+  });
+
+  stAdd('Bestenliste: aus dem Zwischenspeicher sofort, fehlende Strecke = leer, Warteschlange haelt', () => {
+    const f = [];
+    const merk = { stand: chGesamtStand, geholt: chGeholtAt, listen: JSON.stringify(chListen),
+                   cache: localStorage.getItem(CH_CACHE), aus: localStorage.getItem(CH_AUSGANG) };
+    try {
+      chGeholtAt = Date.now();                       // kein Netzabruf in diesem Test
+      chGesamtStand = 0;
+      chGesamtUebernehmen({ 'wa01-imolina|hotlap|pro': { anzahl: 1, zeiten: [{ zeit_ms: 4639, geraet: 'x' }] } }, Date.now(), false);
+      delete chListen['oval|hotlap|pro'];
+      chListeLaden('oval|hotlap|pro');
+      const l = chListen['oval|hotlap|pro'];
+      if (!l || l.laedt || !l.online || !Array.isArray(l.zeiten) || l.zeiten.length) f.push('fehlende Strecke laedt statt sofort leer: ' + JSON.stringify(l));
+      if (!chListen['wa01-imolina|hotlap|pro'] || chListen['wa01-imolina|hotlap|pro'].zeiten.length !== 1) f.push('Liste aus dem Satz fehlt');
+      if (chGesamtUebernehmen({}, chGesamtStand - 1000, false)) f.push('aelterer Stand ueberschreibt neueren');
+      chAusgangSchreiben([{ nr: 'a', challenge: 'oval' }, { nr: 'b', challenge: 'oval' }]);
+      chAusgangRaus('a');
+      const a = chAusgangLesen();
+      if (a.length !== 1 || a[0].nr !== 'b') f.push('Warteschlange: ' + JSON.stringify(a));
+    } finally {
+      chGesamtStand = merk.stand; chGeholtAt = merk.geholt;
+      Object.keys(chListen).forEach((k) => delete chListen[k]);
+      Object.assign(chListen, JSON.parse(merk.listen));
+      if (merk.cache === null) localStorage.removeItem(CH_CACHE); else localStorage.setItem(CH_CACHE, merk.cache);
+      if (merk.aus === null) localStorage.removeItem(CH_AUSGANG); else localStorage.setItem(CH_AUSGANG, merk.aus);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'sofort leer statt Laden, neuerer Stand gewinnt, Schlange haelt bis zur Bestaetigung' };
+  });
+
+  stAdd('Bestenliste: kein Netz im Rennen, verstaendliche Upload-Gruende', () => {
+    const f = [];
+    const merk = raceState;
+    try {
+      for (const z of ['countdown', 'racing', 'finishing']) { raceState = z; if (chNetzErlaubt()) f.push('Netz erlaubt bei ' + z); }
+      for (const z of ['idle', 'finished']) { raceState = z; if (!chNetzErlaubt()) f.push('Netz gesperrt bei ' + z); }
+      if (chUploadGrund(new TypeError('Failed to fetch')) !== t('keine Verbindung zum Server')) f.push('Netzfehler ohne Klartext');
+      const se = new SyntaxError('Unexpected token <');
+      if (chUploadGrund(se) !== t('der Server hat nicht richtig geantwortet')) f.push('Echo-Seite ohne Klartext');
+      if (chUploadGrund(Object.assign(new Error('Rundenzahl stimmt nicht'), { endgueltig: true })) !== t('Rundenzahl stimmt nicht')) f.push('Ablehnung ohne Grund');
+    } finally { raceState = merk; }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Rennen sperrt den Netzverkehr, Gruende im Klartext' };
+  });
+
+  stAdd('Tastenbelegung: eigene Wahl ueberlebt das Laden (auch alte Vorgabe-Tasten)', () => {
+    const f = [];
+    const roh = localStorage.getItem(GAMEPAD_BINDINGS_KEY);
+    const merk = JSON.parse(JSON.stringify(bindings));
+    try {
+      // Wie beim Zuweisen in der Tabelle: neue Taste setzen, dann Doppelbelegung tauschen.
+      const setze = (action, idx) => {
+        const vorher = bindings[action] ? { ...bindings[action] } : null;
+        bindings[action] = { type: 'button', index: idx, label: 'Knopf ' + idx };
+        bindingKollisionTauschen(bindings, action, vorher);
+      };
+      setze('racestart', 0);      // Kreuz: ab Werk die gelbe Flagge
+      setze('yellowflag', 2);     // Quadrat: ab Werk Runterschalten
+      saveBindings();
+      const neu = loadBindings();
+      if (!neu.racestart || neu.racestart.index !== 0) f.push('Rennstart auf Kreuz geht beim Laden verloren');
+      if (!neu.yellowflag || neu.yellowflag.index !== 2) f.push('gelbe Flagge auf Quadrat geht beim Laden verloren');
+      const keys = Object.keys(BIND_ACTION_LABELS).map((n) => bindingKey(neu[n])).filter(Boolean);
+      if (new Set(keys).size !== keys.length) f.push('Doppelbelegung gespeichert');
+      const zweimal = loadBindings();
+      if (JSON.stringify(zweimal) !== JSON.stringify(neu)) f.push('zweites Laden aendert die Belegung');
+      // Eine Belegung ohne Versionsmarke (alte Werksbelegung 4/9) wird genau einmal umgestellt.
+      const alt = migrateBindings({ ...DEFAULT_BINDINGS, pitstop: { type: 'button', index: 4 }, trackview: { type: 'button', index: 9 } });
+      if (alt.pitstop.index === 4) f.push('alte Werksbelegung nicht umgestellt');
+      if (alt.__v !== BINDINGS_V) f.push('keine Versionsmarke');
+    } finally {
+      bindings = merk;
+      if (roh === null) localStorage.removeItem(GAMEPAD_BINDINGS_KEY); else localStorage.setItem(GAMEPAD_BINDINGS_KEY, roh);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'eigene Tasten bleiben, Aufraeumen nur einmal mit Versionsmarke' };
+  });
+
+  stAdd('Ziellinie auf der Schiene: Spieler 1 misst an Byte 15, nicht am Barcode', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.feedNotify) return { skip: true, mass: 'feedNotify nicht vorhanden' };
+    const f = [];
+    const sw = $('setting-ontrack');
+    const uhr = Date.now;
+    const g = { state: raceState, laps: raceLapTimes.slice(), start: raceLapStart, dash: dashLapStart,
+                part: racePartialMs, form: raceFormationLap, rail: sw ? sw.checked : true, sp: playerCar,
+                mp: dashMarkerPrev, ac: dashLastActedCode, aa: dashLastActedAt, pc: dashPendingCode,
+                ps: dashPendingSeen, lc: dashLastTileCounter, zg: dashZielGesehen, za: dashZielAt,
+                sa: dashStartLapAt, zauto: dashZielAuto, lz: dashLapZaehler, aw: raceAwaitingMove,
+                tiles: currentTrackTiles, sc: sectorCount, ss: sectorStart, si: sectorIndex,
+                st: sectorTimes.slice(), sh: sectorHistory.slice() };
+    let jetzt = uhr.call(Date);
+    try {
+      Date.now = () => jetzt;
+      if (sw && !sw.checked) { sw.checked = true; sw.dispatchEvent(new Event('change', { bubbles: true })); }
+      const auto = { device: { id: 'st-ziel', name: 'Pruefwagen' }, role: 'player', rx: null, tx: null,
+                     tileCode: 0xff, tileCount: null, lastCodeAt: 0, yaw: 0, ghost: null, timer: null, race: null };
+      const START = [0x01, 0x0a].find((c) => isStartCode(c));
+      const paket = (zaehler, code, ziel) => { const a = new Array(19).fill(0); a[11] = zaehler; a[12] = code; a[14] = 0x82; a[15] = ziel ? 0x08 : 0; return a; };
+      const sende = (z, c, ziel, n) => { for (let i = 0; i < (n || 2); i++) OMEGA_TEST.feedNotify(paket(z, c, ziel), { car: auto }); };
+      const neu = () => {
+        playerCar = auto; raceState = 'racing'; raceFormationLap = false; raceLapTimes = [];
+        raceAwaitingMove = false; raceLapStart = jetzt; dashLapStart = jetzt; racePartialMs = null;
+        dashMarkerPrev = false; dashLastActedCode = null; dashLastActedAt = 0;
+        dashPendingCode = null; dashPendingSeen = 0; dashLastTileCounter = null;
+        dashZielAuto = null; dashLapZaehler = null; sectorCount = 1; sectorReset(); sectorHistory = [];
+        currentTrackTiles = [{ type: TILE_TYPE.START }, { type: TILE_TYPE.STRAIGHT }];
+      };
+      const ms = (i) => raceLapTimes[i] ? raceLapTimes[i].ms : null;
+
+      // A) Rueckfall, Uebergang, Messen an der Linie, Flackern, Auto parkt vor der Linie.
+      neu(); raceLapStart = jetzt - 5000; dashLapStart = jetzt - 5000;
+      sende(6, 0x04, false);
+      jetzt += 600; sende(7, START, false);  // Barcode, Linie noch nie gesehen: Rueckfall zaehlt
+      if (raceLapTimes.length !== 1) f.push('Rueckfall ueber den Barcode zaehlt nicht (' + raceLapTimes.length + ')');
+      jetzt += 455; sende(7, START, true);   // Linie derselben Durchfahrt: Uhr nachziehen
+      if (raceLapTimes.length !== 1) f.push('erste Linie direkt nach der Barcode-Runde doppelt gezaehlt');
+      jetzt += 1000; sende(8, 0x04, false);
+      jetzt += 4000; sende(9, START, false); // naechster Barcode: zaehlt NICHT mehr
+      if (raceLapTimes.length !== 1) f.push('Barcode zaehlt trotz gemeldeter Ziellinie');
+      jetzt += 455; sende(9, START, true);   // Linie: zaehlt, ab der Linie gemessen
+      if (raceLapTimes.length !== 2) f.push('Ziellinie zaehlt die Runde nicht (' + raceLapTimes.length + ')');
+      else if (Math.abs(ms(1) - 5455) > 5) f.push('Rundenzeit nicht Linie zu Linie: ' + ms(1));
+      jetzt += 300; sende(9, START, false); sende(9, START, true);  // Flackern
+      if (raceLapTimes.length !== 2) f.push('Flackern zaehlt doppelt');
+      jetzt += 1000; sende(10, 0x04, false);
+      jetzt += 4000; sende(11, START, false); // Barcode ...
+      jetzt += 11000;                        // ... Auto steht 11 s vor der Linie (wie im Mitschnitt)
+      sende(11, START, true);
+      if (raceLapTimes.length !== 3) f.push('geparktes Auto: ' + raceLapTimes.length + ' statt 3 Runden');
+      else if (Math.abs(ms(2) - 16300) > 5) f.push('geparktes Auto: Runde ' + ms(2) + ' statt 16300');
+
+      // B) Rennstart AUF dem Startteil vor dem Streifen: keine Runde von unter einer Sekunde.
+      neu(); dashZielAuto = auto; dashZielGesehen = true; dashZielAt = 0;
+      sende(20, START, false);
+      dashLapZaehler = dashLastTileCounter;   // wie raceClockTick beim Losfahren
+      jetzt += 700; sende(20, START, true);
+      if (raceLapTimes.length) f.push('Start vor dem Streifen zaehlt eine Runde von ' + ms(0) + ' ms');
+      jetzt += 1000; sende(21, 0x04, false);
+      jetzt += 4000; sende(22, START, false);
+      jetzt += 455; sende(22, START, true);
+      if (raceLapTimes.length !== 1 || Math.abs(ms(0) - 5455) > 5) {
+        f.push('Runde 1 nach Start vor dem Streifen: ' + ms(0) + ' statt 5455 ms');
+      }
+
+      // C) Zweite Start/Ziel-Gerade (Sektor): Runde 1 endet an der Rundenlinie, nicht eine
+      //    Runde spaeter, und die Sektorgrenze zaehlt keine Runde.
+      neu(); dashZielAuto = auto; dashZielGesehen = true; dashZielAt = 0;
+      currentTrackTiles = [{ type: TILE_TYPE.START }, { type: TILE_TYPE.STRAIGHT },
+                           { type: TILE_TYPE.START }, { type: TILE_TYPE.STRAIGHT }];
+      sende(30, 0x04, false);
+      dashLapZaehler = dashLastTileCounter;
+      jetzt += 2000; sende(31, START, false);
+      jetzt += 455; sende(31, START, true);  // Sektorgrenze
+      if (raceLapTimes.length) f.push('Sektorgrenze zaehlt als Runde');
+      jetzt += 2000; sende(32, 0x04, false);
+      jetzt += 2000; sende(33, START, false);
+      jetzt += 455; sende(33, START, true);  // Rundenlinie
+      if (raceLapTimes.length !== 1) f.push('zweite Start/Ziel-Gerade: ' + raceLapTimes.length + ' statt 1 Runde');
+      else if (Math.abs(ms(0) - 6910) > 5) f.push('zweite Start/Ziel-Gerade: Runde ' + ms(0) + ' statt 6910');
+      if (sectorHistory.length !== 1 || sectorHistory[0].length !== 2) f.push('Sektoren: ' + JSON.stringify(sectorHistory));
+    } finally {
+      Date.now = uhr;
+      raceState = g.state; raceLapTimes = g.laps; raceLapStart = g.start; dashLapStart = g.dash;
+      racePartialMs = g.part; raceFormationLap = g.form; playerCar = g.sp;
+      dashMarkerPrev = g.mp; dashLastActedCode = g.ac; dashLastActedAt = g.aa; dashPendingCode = g.pc;
+      dashPendingSeen = g.ps; dashLastTileCounter = g.lc; dashZielGesehen = g.zg; dashZielAt = g.za;
+      dashStartLapAt = g.sa; dashZielAuto = g.zauto; dashLapZaehler = g.lz; raceAwaitingMove = g.aw;
+      currentTrackTiles = g.tiles; sectorCount = g.sc; sectorStart = g.ss; sectorIndex = g.si;
+      sectorTimes = g.st; sectorHistory = g.sh;
+      if (sw && sw.checked !== g.rail) { sw.checked = g.rail; sw.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Linie zu Linie, geparktes Auto, Start vor dem Streifen und zweite Start/Ziel-Gerade richtig' };
+  });
+
+  // ---- RAUMDESIGNER (v0.9.39) ----------------------------------------------------------
+  // Gemeinsamer Rahmen: Raum, Form, Versatz, Teile und Editor-Strecke sichern und zurueck.
+  const raumTestRahmen = (fn) => {
+    const keys = ['omegasim-raum', 'omegasim-raum-form', 'omegasim-raum-versatz', 'omegasim-teile'];
+    const ls = {};
+    for (const k of keys) { try { ls[k] = localStorage.getItem(k); } catch (e) { ls[k] = null; } }
+    const g = { tiles: currentTrackTiles, rot: trackRotationDeg, v: { ...raumVersatz }, codes: trackZufallCodes.slice(), sel: trackSel };
+    try { return fn(); } finally {
+      for (const k of keys) { try { if (ls[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, ls[k]); } catch (e) { /* privat */ } }
+      currentTrackTiles = g.tiles; trackRotationDeg = g.rot; raumVersatz = g.v; trackZufallCodes = g.codes; trackSel = g.sel;
+      raumDsSchliessen();
+      refreshTrackPreview();
+    }
+  };
+  const raumOval = () => [TILE_TYPE.START, TILE_TYPE.STRAIGHT, TILE_TYPE.CURVE_RIGHT, TILE_TYPE.CURVE_RIGHT,
+    TILE_TYPE.CURVE_RIGHT, TILE_TYPE.STRAIGHT, TILE_TYPE.STRAIGHT, TILE_TYPE.CURVE_RIGHT,
+    TILE_TYPE.CURVE_RIGHT, TILE_TYPE.CURVE_RIGHT].map(type => ({ type }));
+  // Die Strecke so, wie der Editor sie zeichnet (Drehung + Raumlage), in Raum-cm.
+  const raumLage = (tiles, rot, versatz, W, H) => {
+    const merk = trackRotationDeg;
+    let pts;
+    try { trackRotationDeg = rot; pts = trackCenterline(tiles); } finally { trackRotationDeg = merk; }
+    const P = pts.map(p => [p.x / TRACK_UNITS_PER_CM, p.y / TRACK_UNITS_PER_CM]);
+    const xs = P.map(p => p[0]), ys = P.map(p => p[1]);
+    const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2;
+    // Raumecke wie renderTrackPreview: Mitte - halbe Raumgroesse + Versatz.
+    const x0 = mx - W / 2 + versatz.x, y0 = my - H / 2 + versatz.y;
+    return P.map(([x, y]) => [x - x0, y - y0]);
+  };
+  // Kleinster Abstand der Mittellinie zu Wand und Moebeln (cm). >= 12,5 heisst: die ganze Bahn liegt im Raum.
+  const raumAbstand = (Q, W, H, form) => {
+    let min = Infinity;
+    for (const [x, y] of Q) {
+      min = Math.min(min, x, W - x, y, H - y);
+      if (form) {
+        for (let zy = 0; zy < form.h; zy++) {
+          for (let zx = 0; zx < form.w; zx++) {
+            if (!form.g[zy * form.w + zx]) continue;
+            const ax = zx * 10, ay = zy * 10;
+            const dx = Math.max(ax - x, 0, x - ax - 10), dy = Math.max(ay - y, 0, y - ay - 10);
+            min = Math.min(min, Math.hypot(dx, dy));
+          }
+        }
+      }
+    }
+    return min;
+  };
+
+  stAdd('Raum: Strecke passt mit voller Bahnbreite, nicht nur mit der Mittellinie', () => raumTestRahmen(() => {
+    const f = [];
+    const tiles = raumOval();
+    localStorage.removeItem('omegasim-raum-form');
+    const Q0 = raumLage(tiles, 0, { x: 0, y: 0 }, 0, 0);
+    const spanX = Math.max(...Q0.map(p => p[0])) - Math.min(...Q0.map(p => p[0]));
+    const spanY = Math.max(...Q0.map(p => p[1])) - Math.min(...Q0.map(p => p[1]));
+    // 1. Genug Platz (Spannweite + Bahnbreite + 2 x 2 cm + 1): passt, und die Bahn liegt drin.
+    let W = Math.ceil(spanX + 30), H = Math.ceil(spanY + 30);
+    teileRaumSpeichern({ x: W / 100, y: H / 100 });
+    let fit = raumEinpassen(tiles);
+    if (!fit) f.push('passt nicht, obwohl Platz ist');
+    else {
+      const a = raumAbstand(raumLage(tiles, fit.rot, fit.versatz, W, H), W, H, null);
+      if (a < 12.5) f.push('Bahn ragt ' + (12.5 - a).toFixed(1) + ' cm ueber den Rand');
+    }
+    // 2. Mittellinie passt, Bahn nicht (der alte Fehler): darf in DIESER Lage nicht passen.
+    W = Math.ceil(spanX + 15); H = Math.ceil(spanY + 15);
+    teileRaumSpeichern({ x: W / 100, y: H / 100 });
+    fit = raumEinpassen(tiles);
+    if (fit) {
+      const a = raumAbstand(raumLage(tiles, fit.rot, fit.versatz, W, H), W, H, null);
+      if (a < 12.5) f.push('zu enger Raum angenommen, Bahn ragt ' + (12.5 - a).toFixed(1) + ' cm ueber');
+    }
+    // 3. Drehung: dieselbe Rechnung wie trackCenterline mit trackRotationDeg.
+    teileRaumSpeichern({ x: spanY / 100 + 0.4, y: spanX / 100 + 0.4 });
+    fit = raumEinpassen(tiles);
+    if (!fit || fit.rot % 180 !== 90) f.push('quer liegender Raum: Drehung ' + (fit ? fit.rot : 'keine'));
+    else {
+      const a = raumAbstand(raumLage(tiles, fit.rot, fit.versatz, spanY + 40, spanX + 40), spanY + 40, spanX + 40, null);
+      if (a < 12.5) f.push('gedreht ragt die Bahn ueber (' + a.toFixed(1) + ')');
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'mit Bahnbreite, zu enger Raum abgelehnt, Drehung stimmt' };
+  }));
+
+  stAdd('Raum: Strecke wird um Moebel herum eingepasst (L-Form)', () => raumTestRahmen(() => {
+    const f = [];
+    const tiles = raumOval();
+    teileRaumSpeichern({ x: 3, y: 2.5 });
+    const form = raumFormLaden();
+    // Rechte obere Ecke ab 1,65 m x 1,1 m gesperrt.
+    for (let y = 0; y < form.h; y++) for (let x = 0; x < form.w; x++) if (x >= 17 && y < 11) form.g[y * form.w + x] = 1;
+    raumFormSpeichern(form);
+    const zurueck = raumFormLaden();
+    if (raumFormKodieren(zurueck.g) !== raumFormKodieren(form.g)) f.push('Form kommt nicht gleich zurueck');
+    const fit = raumEinpassen(tiles);
+    if (!fit) f.push('passt nicht');
+    else {
+      const a = raumAbstand(raumLage(tiles, fit.rot, fit.versatz, 300, 250), 300, 250, form);
+      if (a < 12.5) f.push('Bahn beruehrt Moebel oder Wand (' + a.toFixed(1) + ' cm)');
+    }
+    // Groesse aendern: Ecke oben links bleibt, Neues ist Boden.
+    teileRaumSpeichern({ x: 3.5, y: 2.5 });
+    const gross = raumFormLaden();
+    if (gross.w !== 35 || !gross.g[0 * 35 + 17] || gross.g[0 * 35 + 34]) f.push('Groessenwechsel verliert die Form');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Abstand zu Moebeln und Wand >= halbe Bahnbreite, Form bleibt beim Vergroessern' };
+  }));
+
+  stAdd('Raum: Zufallsstrecke liegt im Editor ganz im Raum', () => raumTestRahmen(() => {
+    const f = [];
+    const b = {};
+    b[TILE_TYPE.START] = 1; b[TILE_TYPE.STRAIGHT] = 8; b[TILE_TYPE.CURVE_RIGHT] = 10; b[TILE_TYPE.CURVE_LEFT] = 4;
+    b[TILE_TYPE.HAIRPIN] = 1; b[TILE_TYPE.HAIRPIN_LEFT] = 1;
+    localStorage.setItem('omegasim-teile', JSON.stringify(b));
+    localStorage.removeItem('omegasim-raum-form');
+    teileRaumSpeichern({ x: 3.2, y: 2.4 });
+    raumVersatz = { x: 37, y: -21 };      // ein alter Versatz darf nicht stehen bleiben
+    let gebaut = 0, schlechtest = Infinity;
+    for (let i = 0; i < 2; i++) {
+      trackZufallCodes = [];
+      if (!trackZufall()) continue;
+      gebaut++;
+      const a = raumAbstand(raumLage(currentTrackTiles, trackRotationDeg, raumVersatz, 320, 240), 320, 240, null);
+      schlechtest = Math.min(schlechtest, a);
+    }
+    if (!gebaut) f.push('keine Zufallsstrecke gebaut');
+    else if (schlechtest < 12.5) f.push('Bahn ragt ' + (12.5 - schlechtest).toFixed(1) + ' cm ueber den Rand');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : gebaut + ' Strecken, kleinster Randabstand der Mitte ' + schlechtest.toFixed(1) + ' cm' };
+  }));
+
+  stAdd('Raumdesigner: Gamepad malt, schaltet um und schliesst ohne Nachwirkung', () => raumTestRahmen(() => {
+    const f = [];
+    localStorage.removeItem('omegasim-raum-form');
+    teileRaumSpeichern({ x: 2, y: 2 });
+    const knopf = $('raum-designer-auf');
+    if (!knopf) return { ok: false, mass: 'Knopf fehlt' };
+    knopf.click();
+    if (!raumDsOffen()) return { ok: false, mass: 'Designer geht nicht auf' };
+    const pad = (an) => ({ axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: an.indexOf(i) >= 0, value: an.indexOf(i) >= 0 ? 1 : 0 })) });
+    raumPad(pad([0]));                       // erster Takt: Kreuz vom Oeffnen noch gehalten, nichts tun
+    if (raumFormHatMoebel(rd.form)) f.push('das Kreuz vom Oeffnen hat gemalt');
+    raumPad(pad([]));
+    const x0 = rd.cursor.x;
+    raumPad(pad([15])); raumPad(pad([]));    // rechts: eine Zelle
+    if (Math.abs(rd.cursor.x - x0 - 10) > 0.01) f.push('Steuerkreuz bewegt nicht um 10 cm (' + (rd.cursor.x - x0) + ')');
+    raumPad(pad([0])); raumPad(pad([]));     // malen (Moebel, Pinsel 30 cm)
+    const zx = Math.floor(rd.cursor.x / 10), zy = Math.floor(rd.cursor.y / 10);
+    if (!rd.form.g[zy * rd.form.w + zx]) f.push('Kreuz malt kein Moebel');
+    raumPad(pad([2])); raumPad(pad([]));     // Quadrat: Boden
+    if (rd.modus !== 'boden') f.push('Quadrat schaltet nicht auf Boden');
+    raumPad(pad([3])); raumPad(pad([]));     // Dreieck: Rechteck
+    if (rd.werkzeug !== 'rechteck') f.push('Dreieck schaltet nicht auf Rechteck');
+    raumPad(pad([8])); raumPad(pad([]));     // Select: rueckgaengig
+    if (raumFormHatMoebel(rd.form)) f.push('Select nimmt das Malen nicht zurueck');
+    raumPad(pad([1]));                       // Kreis: schliessen
+    if (raumDsOffen()) f.push('Kreis schliesst nicht');
+    if (!raumPad(pad([1]))) f.push('gehaltener Kreis geht nach dem Schliessen ans Menue');
+    if (raumPad(pad([]))) f.push('nach dem Loslassen bleibt das Pad gesperrt');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'bewegen, malen, umschalten, rueckgaengig, schliessen ohne Nachwirkung' };
+  }));
+
+  // v0.9.41 GEMELDET: "Das Multiplayer Renn-Ende wird nicht getriggert ... 5-Runden-Rennen."
+  stAdd('Rundenrennen endet mit der Zielrunde, nicht eine Runde spaeter', () => {
+    const f = [];
+    const merk = { rs: raceState, rm: raceMode, lim: raceLimit, laps: raceLapTimes.slice(), ls: raceLapStart,
+                   dl: dashLapStart, dt: dashLapTimes.slice(), form: raceFormationLap, aw: raceAwaitingMove,
+                   tiles: currentTrackTiles, sc: sectorCount, ev: raceLapEvents.slice(),
+                   status: $('race-status') ? $('race-status').textContent : '' };
+    const echt = { fin: finishRace, sp: speakLap, ch: playLapChime };
+    let ende = 0;
+    try {
+      finishRace = () => { ende++; raceState = 'finished'; };
+      speakLap = () => {}; playLapChime = () => {};
+      raceMode = 'laps'; raceLimit = 3; raceState = 'racing'; raceFormationLap = false; raceAwaitingMove = false;
+      raceLapTimes = []; raceLapStart = Date.now() - 5000; dashLapStart = raceLapStart; sectorCount = 1; sectorReset();
+      currentTrackTiles = [{ type: TILE_TYPE.START }, { type: TILE_TYPE.STRAIGHT }];
+      playerLapCrossed(); playerLapCrossed();
+      if (ende) f.push('nach 2 von 3 Runden schon zu Ende');
+      playerLapCrossed();
+      if (ende !== 1) f.push('nach 3 von 3 Runden nicht zu Ende (' + raceState + ')');
+      // Hat ein anderer das Ziel (finishing), beendet die naechste eigene Ueberfahrt.
+      ende = 0; raceState = 'finishing'; raceLapTimes = [{ lap: 1, ms: 5000 }]; raceLapStart = Date.now() - 4000;
+      playerLapCrossed();
+      if (ende !== 1) f.push('finishing: die naechste Ueberfahrt beendet nicht');
+    } finally {
+      finishRace = echt.fin; speakLap = echt.sp; playLapChime = echt.ch;
+      raceState = merk.rs; raceMode = merk.rm; raceLimit = merk.lim; raceLapTimes = merk.laps; raceLapStart = merk.ls;
+      dashLapStart = merk.dl; dashLapTimes = merk.dt; raceFormationLap = merk.form; raceAwaitingMove = merk.aw;
+      currentTrackTiles = merk.tiles; sectorCount = merk.sc; raceLapEvents = merk.ev; sectorReset();
+      if ($('race-status')) $('race-status').textContent = merk.status;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Ende genau mit Runde 3 von 3; nach fremdem Ziel mit der naechsten Ueberfahrt' };
+  });
+
+  // v0.9.41 GEMELDET: "Im Derby-Modus nehmen die Autos keinen Schaden. Die Controller ruckeln,
+  // aber es bleibt bei 100 %."
+  stAdd('Derby: Crash von Auto 1 ohne Nummer kostet Health', () => {
+    const f = [];
+    const merk = { dl: derbyLaeuft, h: derbyHealth, k: derbyKills, tot: derbyTot1, rs: raceState, rm: raceMode,
+                   v: physEngine.state.speedKmh };
+    const echt = { fin: finishRace };
+    try {
+      finishRace = () => {};
+      derbyLaeuft = true; raceState = 'racing'; raceMode = 'derby'; derbyHealth = DERBY_MAX; derbyTot1 = false;
+      registerCrash(undefined, { richtung: 'seite' });
+      if (derbyHealth !== DERBY_MAX - 20) f.push('seitlich: Health ' + derbyHealth + ' statt ' + (DERBY_MAX - 20));
+      registerCrash(undefined, { richtung: 'vorn' });
+      if (derbyHealth !== DERBY_MAX - 30) f.push('vorn: Health ' + derbyHealth + ' statt ' + (DERBY_MAX - 30));
+    } finally {
+      finishRace = echt.fin;
+      derbyLaeuft = merk.dl; derbyHealth = merk.h; derbyKills = merk.k; derbyTot1 = merk.tot; raceState = merk.rs;
+      raceMode = merk.rm; physEngine.state.speedKmh = merk.v;
+      if (typeof derbyCockpitMalen === 'function') derbyCockpitMalen();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'seitlich -20, vorn -10, wie angezeigt' };
+  });
+
+  stAdd('Mehrspieler: im Rennen seltener abfragen, Tabelle erst danach', () => {
+    const f = [];
+    const merk = { rs: raceState, an: mp.an, at: mp.abrufAt };
+    const echtFetch = window.fetch;
+    let abrufe = 0;
+    try {
+      window.fetch = () => { abrufe++; return Promise.reject(new Error('probe')); };
+      mp.an = true;
+      raceState = 'racing'; mp.abrufAt = Date.now() - 1600;
+      mpHolen();
+      if (abrufe) f.push('im Rennen nach 1,6 s schon wieder abgefragt');
+      mp.abrufAt = Date.now() - 3100;
+      mpHolen();
+      if (!abrufe) f.push('im Rennen nach 3,1 s nicht abgefragt');
+      abrufe = 0; raceState = 'idle'; mp.abrufAt = Date.now() - 1600;
+      mpHolen();
+      if (!abrufe) f.push('ausserhalb des Rennens gedrosselt');
+    } finally {
+      window.fetch = echtFetch;
+      raceState = merk.rs; mp.an = merk.an; mp.abrufAt = merk.at;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Rennen 3 s, sonst 1,5 s' };
+  });
+
+  // v0.9.43 GEMELDET: "Ende des Rennens wird bei 0.9.41 immer noch nicht getriggert ... 3 Runden."
+  // Ueber ECHTE Pakete wie ein Auto auf der Schiene (Barcode, Ziellinie, Geraden), nicht
+  // ueber playerLapCrossed() direkt - genau der Weg, der beim Nutzer nicht ankam.
+  stAdd('Rundenrennen ueber die Schiene: 3 Runden, dann Ende', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.feedNotify) return { skip: true, mass: 'feedNotify nicht vorhanden' };
+    const f = [];
+    const sw = $('setting-ontrack');
+    const uhr = Date.now;
+    const g = { state: raceState, laps: raceLapTimes.slice(), start: raceLapStart, dash: dashLapStart,
+                form: raceFormationLap, rail: sw ? sw.checked : true, sp: playerCar, rm: raceMode, lim: raceLimit,
+                mp: dashMarkerPrev, ac: dashLastActedCode, aa: dashLastActedAt, pc: dashPendingCode,
+                ps: dashPendingSeen, lc: dashLastTileCounter, zg: dashZielGesehen, za: dashZielAt,
+                sa: dashStartLapAt, zauto: dashZielAuto, lz: dashLapZaehler, aw: raceAwaitingMove,
+                tiles: currentTrackTiles, sc: sectorCount, ev: raceLapEvents.slice(), dt: dashLapTimes.slice(),
+                status: $('race-status') ? $('race-status').textContent : '' };
+    const echt = { fin: finishRace, sp: speakLap, ch: playLapChime };
+    let jetzt = uhr.call(Date), ende = 0, endeBeiRunden = null;
+    try {
+      Date.now = () => jetzt;
+      finishRace = () => { ende++; endeBeiRunden = raceLapTimes.length; raceState = 'finished'; };
+      speakLap = () => {}; playLapChime = () => {};
+      if (sw && !sw.checked) { sw.checked = true; sw.dispatchEvent(new Event('change', { bubbles: true })); }
+      const auto = { device: { id: 'st-ende', name: 'Pruefwagen' }, role: 'player', rx: null, tx: null,
+                     tileCode: 0xff, tileCount: null, lastCodeAt: 0, yaw: 0, ghost: null, timer: null, race: null };
+      playerCar = auto;
+      raceMode = 'laps'; raceLimit = 3; raceState = 'racing'; raceFormationLap = false; raceAwaitingMove = false;
+      raceLapTimes = []; raceLapStart = jetzt; dashLapStart = jetzt; sectorCount = 1; sectorReset();
+      dashMarkerPrev = false; dashLastActedCode = null; dashLastActedAt = 0; dashPendingCode = null;
+      dashPendingSeen = 0; dashLastTileCounter = null; dashZielAuto = null; dashLapZaehler = null;
+      currentTrackTiles = [{ type: TILE_TYPE.START }, { type: TILE_TYPE.STRAIGHT }, { type: TILE_TYPE.STRAIGHT }];
+      const START = [0x01, 0x0a].find((c) => isStartCode(c));
+      const paket = (z, c, ziel) => { const a = new Array(19).fill(0); a[11] = z; a[12] = c; a[14] = 0x82; a[15] = ziel ? 0x08 : 0; return a; };
+      const sende = (z, c, ziel) => { for (let i = 0; i < 3; i++) { OMEGA_TEST.feedNotify(paket(z, c, ziel), { car: auto }); jetzt += 15; } };
+      // Das Auto steht hinter der Linie auf einer Geraden (wie nach der Aufstellung).
+      let z = 10;
+      sende(z, 0x02, false);
+      dashLapZaehler = dashLastTileCounter;          // wie raceClockTick beim Losfahren
+      for (let runde = 1; runde <= 4 && !ende; runde++) {
+        jetzt += 1500; sende(++z, 0x02, false);
+        jetzt += 1500; sende(++z, START, false);     // Barcode
+        jetzt += 455;  sende(z, START, true);        // Ziellinie: Runde
+        jetzt += 600;  sende(z, START, false);       // Bit faellt
+      }
+      if (ende !== 1) f.push('kein Rennende (Runden ' + raceLapTimes.length + ', Zustand ' + raceState + ')');
+      else if (endeBeiRunden !== 3) f.push('Ende erst nach ' + endeBeiRunden + ' Runden');
+    } finally {
+      Date.now = uhr;
+      finishRace = echt.fin; speakLap = echt.sp; playLapChime = echt.ch;
+      raceState = g.state; raceLapTimes = g.laps; raceLapStart = g.start; dashLapStart = g.dash;
+      raceFormationLap = g.form; playerCar = g.sp; raceMode = g.rm; raceLimit = g.lim;
+      dashMarkerPrev = g.mp; dashLastActedCode = g.ac; dashLastActedAt = g.aa; dashPendingCode = g.pc;
+      dashPendingSeen = g.ps; dashLastTileCounter = g.lc; dashZielGesehen = g.zg; dashZielAt = g.za;
+      dashStartLapAt = g.sa; dashZielAuto = g.zauto; dashLapZaehler = g.lz; raceAwaitingMove = g.aw;
+      currentTrackTiles = g.tiles; sectorCount = g.sc; raceLapEvents = g.ev; dashLapTimes = g.dt; sectorReset();
+      if ($('race-status')) $('race-status').textContent = g.status;
+      if (sw && sw.checked !== g.rail) { sw.checked = g.rail; sw.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Ende genau nach der 3. Ziellinie' };
+  });
+
+  // ---- v0.9.45: Raum-Menue, Raum-Schalter im Editor, Mehrspieler-Frage ----
+  stAdd('Raum: speichern, laden, loeschen; Editor-Schalter blendet ihn fuer Zufallsstrecken aus', () => {
+    const f = [];
+    const keys = ['omegasim-raum', 'omegasim-raum-form', 'omegasim-raeume', 'omegasim-raum-aktiv'];
+    const ls = {};
+    keys.forEach((k) => { ls[k] = localStorage.getItem(k); });
+    const merkSchalter = editorSchalter.raum;
+    try {
+      keys.forEach((k) => localStorage.removeItem(k));
+      teileRaumSpeichern({ x: 2, y: 1.5 });
+      if (!raumSpeichernUnter('Probe A')) f.push('Speichern scheitert');
+      teileRaumSpeichern({ x: 3.5, y: 2.5 });
+      raumSpeichernUnter('Probe B');
+      raumLadenName('Probe A');
+      const r = teileRaum();
+      if (r.x !== 2 || r.y !== 1.5) f.push('Laden setzt die Groesse nicht: ' + JSON.stringify(r));
+      if (raumAktivName() !== 'Probe A') f.push('aktiver Raum: ' + raumAktivName());
+      raumLoeschenName('Probe B');
+      if (raeumeLesen()['Probe B']) f.push('Loeschen wirkt nicht');
+      // Schalter aus: kein Raum fuer Zufallsstrecken; der Gestalter fragt trotzdem.
+      const tiles = [TILE_TYPE.START, TILE_TYPE.STRAIGHT, TILE_TYPE.CURVE_RIGHT, TILE_TYPE.CURVE_RIGHT,
+        TILE_TYPE.CURVE_RIGHT, TILE_TYPE.STRAIGHT, TILE_TYPE.STRAIGHT, TILE_TYPE.CURVE_RIGHT,
+        TILE_TYPE.CURVE_RIGHT, TILE_TYPE.CURVE_RIGHT].map((type) => ({ type }));
+      teileRaumSpeichern({ x: 0.5, y: 0.5 });              // viel zu klein
+      editorSchalter.raum = true;
+      if (raumEinpassen(tiles)) f.push('zu kleiner Raum wird angenommen');
+      editorSchalter.raum = false;
+      const aus = raumEinpassen(tiles);
+      if (!aus || aus.t !== null) f.push('ausgeblendeter Raum zaehlt trotzdem');
+      if (raumEinpassen(tiles, true)) f.push('Gestalter (immer) ignoriert den Raum');
+    } finally {
+      editorSchalter.raum = merkSchalter;
+      keys.forEach((k) => { if (ls[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, ls[k]); });
+      raumListeZeichnen();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Raeume unter Namen, Schalter aus = keine Grenze, Gestalter prueft trotzdem' };
+  });
+
+  stAdd('Mehrspieler: Einzelrennen fragt nur, wenn andere da sind', () => {
+    const f = [];
+    const merk = { an: mp.an, id: mp.id, stand: mpLetzterStand, um: mp.frageUmgehen };
+    const echtFrage = konsoleFrage;
+    let gefragt = 0;
+    try {
+      konsoleFrage = () => { gefragt++; };
+      mp.an = true; mp.id = 'ich'; mp.frageUmgehen = false;
+      mpLetzterStand = { fahrer: [{ id: 'ich', name: 'Ich' }] };
+      if (mpRennenFrage() || gefragt) f.push('fragt, obwohl nur ich da bin');
+      mpLetzterStand = { fahrer: [{ id: 'ich' }, { id: 'du', alter: 40 }] };
+      if (mpRennenFrage() || gefragt) f.push('fragt wegen eines abgemeldeten Fahrers');
+      mpLetzterStand = { fahrer: [{ id: 'ich' }, { id: 'du', alter: 2 }] };
+      if (!mpRennenFrage() || gefragt !== 1) f.push('fragt nicht, obwohl jemand da ist');
+    } finally {
+      konsoleFrage = echtFrage;
+      mp.an = merk.an; mp.id = merk.id; mpLetzterStand = merk.stand; mp.frageUmgehen = merk.um;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'allein oder mit Abgemeldeten keine Frage, mit Mitspieler schon' };
+  });
+
   stAdd('Woerterbuch ohne doppelte Schluessel', () => {
     const imObjekt = Object.keys(I18N_EN).length;
     // Die Quelle steht im eigenen <script>. Sie zu lesen ist billiger und ehrlicher als die
@@ -16983,11 +17574,15 @@
     const rows = $('st-rows');
     $('st-run').disabled = true;
     $('st-status').textContent = 'laeuft …';
-    rows.innerHTML = ST_TESTS.map(t =>
+    // ?st=Teilstring laesst nur passende Tests laufen (v0.9.43, zum gezielten Nachpruefen).
+    let nur = null;
+    try { nur = new URLSearchParams(location.search).get('st'); } catch (e) { nur = null; }
+    const liste = nur ? ST_TESTS.filter((x) => x.name.toLowerCase().indexOf(nur.toLowerCase()) >= 0) : ST_TESTS;
+    rows.innerHTML = liste.map(t =>
       '<tr class="st-run"><td>' + t.name + '</td><td>…</td><td></td></tr>').join('');
     let gut = 0, schlecht = 0, offen = 0;
-    for (let i = 0; i < ST_TESTS.length; i++) {
-      const t = ST_TESTS[i];
+    for (let i = 0; i < liste.length; i++) {
+      const t = liste[i];
       let r;
       try {
         r = await t.fn();

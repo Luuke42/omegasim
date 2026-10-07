@@ -1905,7 +1905,7 @@
     fahrgefuehlWerte() {
       return { throttleGamma: physEngine.config.throttleGamma,
                minMoveThrottle: physEngine.config.minMoveThrottle,
-               topSpeedKmh: physEngine.config.topSpeedKmh, massstab: REAL_SCALE,
+               topSpeedKmh: physEngine.config.topSpeedKmh, massstab: TACHO_SCALE,
                steerExpo: physEngine.config.steerExpo };
     },
 
@@ -2749,7 +2749,7 @@
         ovDiagrammMalen();
         ovSektorenMalen();
         const dia = $('ov-diagramm'), sek = $('ov-sektoren');
-        return { punkte: dia ? dia.querySelectorAll('circle').length : -1,
+        return { punkte: dia ? dia.querySelectorAll('circle:not(.ov-dia-saum)').length : -1,
                  pfeile: dia ? dia.querySelectorAll('path').length : -1,
                  gitter: dia ? dia.querySelectorAll('.ov-dia-gitter').length : -1,
                  spalten: sek ? sek.querySelectorAll('th').length : -1 };
@@ -5155,7 +5155,8 @@
                // Die Randsteinfarben, damit ein Test das CH-Aussehen nachpruefen kann:
                // schwarze Fahrbahn, rot-weiss links, blau-weiss rechts.
                farben: [...new Set([...doc.querySelectorAll('path')]
-                 .map(e => e.getAttribute('stroke')).filter(Boolean))],
+                 // Strich UND Fuellung: die Pfeile der Originalteile sind gefuellt (v0.9.45).
+                 .flatMap(e => [e.getAttribute('stroke'), e.getAttribute('fill')]).filter((x) => x && x !== 'none'))],
                echte: trackCarMarks ? trackCarMarks().length : null };
     },
 
@@ -5197,6 +5198,7 @@
           return { tonHz: Math.round(w.tonHz), cut: w.cutTiefe,
                    whineHz: Math.round(w.whineHz), whineGain: +w.whineGain.toFixed(4),
                    pfeifHz: Math.round(w.pfeifHz), pfeifGain: +w.pfeifGain.toFixed(4),
+                   rollHz: Math.round(w.rollHz), rollGain: +w.rollGain.toFixed(4),
                    knaller: w.knaller, schaltKnall: +(w.schaltKnall || 0).toFixed(3),
                    abblasen: +(w.abblasen || 0).toFixed(3),
                    druck: +(w.ladedruck || 0).toFixed(3), aus: !!w.aus };

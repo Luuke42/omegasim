@@ -24,8 +24,8 @@
       text: 'Auf der Bahn liest das Auto die Schiene. Scanne deine Strecke oder bau sie im Editor nach. Ohne Bahn druckst du Vorlagen aus.' },
     { tab: 'fahren', ziel: ['#fa-renn'], bild: 'rennen', titel: 'Rennoptionen',
       text: 'Training, Qualifying, Rennen oder Endurance. Dazu Wetter, Pflichtstopps, Tank und Reifenverschleiß.' },
-    { tab: 'fahren', ziel: ['#fa-profil', '#fa-motor'], bild: 'optionen', titel: 'Fahrgefühl und Motorsound',
-      text: 'Links die Abstimmung, rechts der Motor. Jeder Klang kommt aus einer Motorsimulation.' },
+    { tab: 'fahren', ziel: ['#fa-profil'], bild: 'optionen', titel: 'Fahrgefühl',
+      text: 'Die Abstimmung deines Autos. Den Motorsound wählst du je Auto in der Garage; jeder Klang kommt aus einer Motorsimulation.' },
     { tab: 'fahren', ziel: ['#fa-start'], bild: 'start', titel: 'Losfahren',
       text: 'Ein Druck startet die Ampel. Im Cockpit fordert Kreuz den Boxenstopp an, Options öffnet das Menü.' },
     { tab: 'fahren', ziel: null, bild: 'box', titel: 'Boxenstopp als Minigame',
@@ -90,6 +90,29 @@
       text: 'L3 oder Esc schließt den Editor. Die Strecke bleibt, speichern kannst du sie unter Strecke laden.' },
   ];
 
+  // v0.9.45 BESTELLT: "Baue ein Tutorial fuer den Raum-Editor mit ein, so wie beim
+  // Streckeneditor." Die Ziele liegen im Raumgestalter (Vollbild, 60b-raum.js).
+  const K_RAUM = [
+    { tab: 'track', sub: 'raum', ziel: null, bild: 'strecke-bahn', titel: 'Der Raumgestalter',
+      text: 'Hier zeichnest du den Platz, auf dem deine Bahn liegt: Boden, auf dem sie stehen darf, und Möbel, die im Weg sind. Zufallsstrecken aus dem Editor passen dann hinein.' },
+    { tab: 'track', sub: 'raum', ziel: ['#raum-ds-flaeche'], taste: '✕', titel: 'Malen',
+      text: 'Tippen oder ziehen malt. Am Gamepad bewegen Stick oder Steuerkreuz den Cursor, Kreuz (Leertaste) malt, gehalten weiter.' },
+    { tab: 'track', sub: 'raum', ziel: ['[data-rd-modus="moebel"]', '[data-rd-modus="boden"]'], taste: '□', titel: 'Möbel oder Boden',
+      text: 'Möbel sperrt Fläche, Boden gibt sie wieder frei. Quadrat (M) schaltet um.' },
+    { tab: 'track', sub: 'raum', ziel: ['[data-rd-werkzeug="pinsel"]', '[data-rd-werkzeug="rechteck"]'], taste: '△', titel: 'Pinsel oder Rechteck',
+      text: 'Der Pinsel malt, solange du drückst. Beim Rechteck ziehst du von Ecke zu Ecke, am Gamepad Kreuz für die erste und Kreuz für die zweite Ecke. Dreieck (R) schaltet um.' },
+    { tab: 'track', sub: 'raum', ziel: ['[data-rd-groesse="10"]', '[data-rd-groesse="60"]'], taste: 'L1 · R1', titel: 'Pinselgröße',
+      text: '10, 30 oder 60 cm. L1 und R1 wechseln die Größe.' },
+    { tab: 'track', sub: 'raum', ziel: ['.raum-ds-vorlagen'], bild: 'strecke-frei', titel: 'Vorlagen',
+      text: 'Rechteck, L, U und Oval als schneller Anfang. Danach mit dem Pinsel anpassen.' },
+    { tab: 'track', sub: 'raum', ziel: ['#raum-ds-undo'], taste: 'SHARE', titel: 'Rückgängig',
+      text: 'Select bzw. Share (Strg+Z) nimmt den letzten Strich zurück, auch mehrmals.' },
+    { tab: 'track', sub: 'raum', ziel: ['#raum-ds-probe'], taste: 'OPTIONS', titel: 'Strecke einpassen',
+      text: 'Zeigt die Strecke aus dem Editor im Raum, gedreht und verschoben, so dass die ganze Bahn mit 2 cm Abstand hineinpasst.' },
+    { tab: 'track', sub: 'raum', ziel: ['#raum-ds-fertig'], taste: '○', titel: 'Schließen',
+      text: 'Kreis oder Esc schließt. Unter Strecke, Raum speicherst du den Raum mit Namen und lädst ihn später wieder.' },
+  ];
+
   const K_PAD_NAMEN = { 0: '✕', 1: '○', 2: '□', 3: '△', 4: 'L1', 5: 'R1', 6: 'L2', 7: 'R2', 8: 'SHARE',
     9: 'OPTIONS', 10: 'L3', 11: 'R3', 12: '▲', 13: '▼', 14: '◀', 15: '▶', 16: 'PS' };
   const kTourPadVorher = [];
@@ -99,7 +122,7 @@
   function konsoleTourPad(pad) {
     if (!kTourOffen) return false;
     // Editor-Fuehrung: im Vollbild bedient sonst der Editor den Pad; hier blaettert er nur.
-    if (kTourListe === K_EDITOR) {
+    if (kTourListe === K_EDITOR || kTourListe === K_RAUM) {
       const neu = [];
       for (let i = 0; i < pad.buttons.length; i++) {
         const n = !!(pad.buttons[i] && pad.buttons[i].pressed);
@@ -138,7 +161,7 @@
     return true;
   }
   // Wo eine Fuehrung endet: das Tutorial auf Fahren, die Steuerung dort, wo sie hinfuehrt.
-  const K_TOUR_ENDE = new Map([[K_TOUR, 'fahren'], [K_STEUERUNG, 'bleiben'], [K_EDITOR, 'bleiben']]);
+  const K_TOUR_ENDE = new Map([[K_TOUR, 'fahren'], [K_STEUERUNG, 'bleiben'], [K_EDITOR, 'bleiben'], [K_RAUM, 'bleiben']]);
 
   let kTourOffen = false;
   let kTourSchritt = 0;

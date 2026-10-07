@@ -4,46 +4,35 @@
   // BESTELLT: "Mache aus Bremsen beim Crash mehrere Funktionen":
   //   Schaden bei Crash      ja/nein (Vorgabe ja, Arcade nein)
   //   Bremsen bei Crash      ja/nein (Vorgabe ja)
-  //   Kein Bremsen bei Auffahrunfall  ja/nein (Vorgabe ja): "wenn mir von hinten jemand drauf
-  //                          faehrt, soll der bremsen, aber nicht ich. Laesst sich ueber Gyro
-  //                          messen. Von hinten mit 45 Grad Toleranz."
+  //   Nur der Rammer bremst  ja/nein (Vorgabe ja; v0.9.36, vorher "Kein Bremsen bei
+  //                          Auffahrunfall"): "Abbremsen nur fuer Rammer, nicht fuer Gerammte."
   // und, experimentell in den Renneinstellungen: Pitstrafen fuer Rammer.
   //
   // DIE RICHTUNG DES STOSSES kommt aus den Bewegungsbytes 1 und 3, mit denen auch der Crash
-  // erkannt wird (Abweichung vom gleitenden Mittel, siehe detectCrash). Welche Richtung von
-  // Byte 1 "nach vorn" ist, ist nirgends bestaetigt - deshalb wird es GELERNT: beim normalen
-  // Beschleunigen und Bremsen zeigt die Abweichung von Byte 1 mit bzw. gegen die
-  // Tempoaenderung. Ein Stoss von hinten schiebt das Auto nach vorn, also in dieselbe Richtung
-  // wie Gasgeben. Solange nicht genug gelernt ist, gilt kein Stoss als Auffahrunfall (es wird
-  // gebremst wie bisher) - die sichere Seite.
-  const CRASH_VOR_LERN_MIN = 40;         // so viel Beleg, bevor die Richtung gilt
+  // erkannt wird (Abweichung vom gleitenden Mittel, siehe detectCrash). Bis v0.9.35 wurde
+  // gelernt, welche Richtung von Byte 1 "vorn" ist; seit v0.9.36 steht sie fest, weil sie
+  // gemessen ist (siehe CRASH_BYTE1_VORWAERTS).
   function crashSchalter(id, vorgabe) {
     const el = typeof $ === 'function' ? $(id) : null;
     return el ? !!el.checked : vorgabe;
   }
   function crashSchadenAn() { return crashSchalter('setting-crash-schaden', true); }
   function crashBremseAn() { return crashSchalter('setting-crash-bremse', true); }
-  function crashAuffahrSchutzAn() { return crashBremseAn() && crashSchalter('setting-crash-auffahr', true); }
+  function crashNurRammerBremst() { return crashBremseAn() && crashSchalter('setting-crash-auffahr', true); }
 
-  // Lernschritt je Paket (aus detectCrash): d1 = Abweichung von Byte 1, dv = Tempoaenderung
-  // des Modells seit dem letzten Paket (km/h), dev = Gesamtabweichung (kein Crash-Stoss).
-  function crashVorLernen(L, d1, dv, dev) {
-    if (L.vorSumme === undefined) L.vorSumme = 0;
-    if (!(Math.abs(dv) > 0.02) || dev > crashThreshold * 0.8) return;
-    const gewicht = Math.min(1, Math.abs(dv) / 0.2);
-    L.vorSumme = L.vorSumme * 0.998 + Math.max(-20, Math.min(20, d1)) * Math.sign(dv) * gewicht;
-  }
-  // +1 / -1: welches Vorzeichen von Byte 1 "nach vorn geschoben" heisst; 0 = noch unbekannt.
-  function crashVorZeichen(L) {
-    if (!L || !(Math.abs(L.vorSumme || 0) >= CRASH_VOR_LERN_MIN)) return 0;
-    return Math.sign(L.vorSumme);
-  }
-  // Auffahrunfall: der Stoss schiebt nach vorn, hoechstens 45 Grad zur Seite
-  // (|quer| <= |laengs|). Ohne gelernte Richtung: nein.
-  function crashVonHinten(L, d1, d3) {
-    const vz = crashVorZeichen(L);
-    if (!vz || !d1) return false;
-    return Math.sign(d1) === vz && Math.abs(d3) <= Math.abs(d1);
+  // ---- DIE RICHTUNG DES STOSSES (v0.9.36, gemessen statt gelernt) ----------------------
+  // GEMELDET: "Beim Vorwaertsbeschleunigen geht der gemessene Gyro nach vorne im Cockpit."
+  // Der Punkt im Cockpit (race-g-real, cy = 50 + gyroRaw.y) wandert dabei nach OBEN, also
+  // wird gyroRaw.y - Byte 1 - KLEINER. Daraus:
+  //   Byte 1 faellt (wie Gasgeben)  -> das Auto wurde nach vorn geschoben: von HINTEN getroffen
+  //   Byte 1 steigt (wie Bremsen)   -> das Auto ist VORN eingeschlagen: der Rammer (oder die Wand)
+  //   Byte 3 ueberwiegt             -> von der SEITE getroffen
+  // 45 Grad Toleranz: laengs, solange |quer| <= |laengs|.
+  const CRASH_BYTE1_VORWAERTS = -1;
+  function crashRichtung(d1, d3) {
+    if (!d1 && !d3) return 'unbekannt';
+    if (Math.abs(d3) > Math.abs(d1)) return 'seite';
+    return Math.sign(d1) === CRASH_BYTE1_VORWAERTS ? 'hinten' : 'vorn';
   }
 
   // ---- RAMMEN: zwei Crashs zur selben Zeit ---------------------------------------------
@@ -80,9 +69,12 @@
     }
     return car && car.ghost ? Math.abs(car.ghost.lastThrottle || 0) : 0;
   }
-  // Ein Crash eines Autos. vorwaerts: true = nach vorn geschoben, false = nach hinten,
-  // null = unbekannt.
-  function crashEreignis(car, vorwaerts) {
+  // Ein Crash eines Autos mit der Richtung, aus der der Stoss kam (crashRichtung).
+  // RAMMER ist, wer VORN eingeschlagen ist, waehrend der andere von hinten oder der Seite
+  // getroffen wurde. Beide vorn (frontal) oder keiner vorn: keine Wertung. Nur ohne
+  // Richtung (unbekannt) entscheidet wie bisher das hoehere Tempo.
+  function crashEreignis(car, richtung) {
+    const vorwaerts = richtung;
     if (!car || raceState !== 'racing' || !(rammAb() > 0)) return null;
     const jetzt = Date.now();
     rammEreignisse = rammEreignisse.filter((e) => jetzt - e.at <= RAMM_FENSTER_MS);
@@ -91,9 +83,11 @@
     rammEreignisse.push(neu);
     if (!anderer) return null;
     let rammer = null, opfer = null;
-    if (neu.vorwaerts === true && anderer.vorwaerts !== true) { rammer = anderer; opfer = neu; }
-    else if (anderer.vorwaerts === true && neu.vorwaerts !== true) { rammer = neu; opfer = anderer; }
-    else if (Math.abs(neu.tempo - anderer.tempo) > 0.05) {
+    const vorn = (e) => e.vorwaerts === 'vorn';
+    const bekannt = (e) => e.vorwaerts && e.vorwaerts !== 'unbekannt';
+    if (vorn(neu) && bekannt(anderer) && !vorn(anderer)) { rammer = neu; opfer = anderer; }
+    else if (vorn(anderer) && bekannt(neu) && !vorn(neu)) { rammer = anderer; opfer = neu; }
+    else if ((!bekannt(neu) || !bekannt(anderer)) && Math.abs(neu.tempo - anderer.tempo) > 0.05) {
       rammer = neu.tempo > anderer.tempo ? neu : anderer;
       opfer = rammer === neu ? anderer : neu;
     }
@@ -121,12 +115,13 @@
     const v1 = s8signed(bytes[1]), v3 = s8signed(bytes[3]);
     if (L.avg1 === null) { L.avg1 = v1; L.avg3 = v3; return; }
     const dev = Math.abs(v1 - L.avg1) + Math.abs(v3 - L.avg3);
+    const d1 = v1 - L.avg1, d3 = v3 - L.avg3;
     L.avg1 += (v1 - L.avg1) * CRASH_ROLLING_ALPHA;
     L.avg3 += (v3 - L.avg3) * CRASH_ROLLING_ALPHA;
     const jetzt = Date.now();
     if (dev > crashThreshold && jetzt - L.letzter > CRASH_REFRACTORY_MS) {
       L.letzter = jetzt;
-      crashEreignis(car, null);
+      crashEreignis(car, crashRichtung(d1, d3));
     }
   }
   // Rotes Label im Rennergebnis: Strafe nicht abgesessen.

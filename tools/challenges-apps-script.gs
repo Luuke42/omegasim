@@ -175,7 +175,11 @@ function zeileZuEintrag(sp, z) {
 // an: "Community" (eine Zeile je Strecke) und "CommunityZeiten" (eine Zeile je Lauf). Ob eine
 // Strecke schon da ist (auch gespiegelt), prueft die App vor dem Einreichen - dafuer braucht es
 // die Streckengeometrie, und die steht in der App.
-const C_BLATT = 'Community', C_KOPF = ['zeitpunkt', 'id', 'code', 'name', 'geraet'];
+// v0.9.45: sechste Spalte "preset" (Abstimmung, mit der die Strecke gefahren wird: arcade, pro,
+// gt3, f1, realgt3). Alte Zeilen haben sie nicht und gelten als pro. Eine vorhandene Tabelle
+// bekommt die Kopfzelle beim ersten Eintrag nachgetragen.
+const C_BLATT = 'Community', C_KOPF = ['zeitpunkt', 'id', 'code', 'name', 'geraet', 'preset'];
+const C_PRESETS = ['arcade', 'pro', 'gt3', 'f1', 'realgt3'];
 const CZ_BLATT = 'CommunityZeiten', CZ_KOPF = ['zeitpunkt', 'id', 'zeit_ms', 'fahrer', 'geraet'];
 function blattMit(name, kopf) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -185,7 +189,8 @@ function blattMit(name, kopf) {
 }
 function communityStrecken() {
   return blattMit(C_BLATT, C_KOPF).getDataRange().getValues().slice(1)
-    .map((z) => ({ zeitpunkt: z[0], id: String(z[1]), code: String(z[2]), name: String(z[3]) }))
+    .map((z) => ({ zeitpunkt: z[0], id: String(z[1]), code: String(z[2]), name: String(z[3]),
+                   preset: C_PRESETS.indexOf(String(z[5] || '')) >= 0 ? String(z[5]) : 'pro' }))
     .filter((t) => t.id && t.code);
 }
 function communityPost(d) {
@@ -201,8 +206,11 @@ function communityPost(d) {
       if (gleich) return { ok: true, id: gleich.id, schonDa: true };
       const max = alle.reduce((m, t) => Math.max(m, parseInt(t.id, 10) || 0), 0);
       const id = String(max + 1).padStart(4, '0');
-      blattMit(C_BLATT, C_KOPF).appendRow([new Date(), id, code, String(d.name || ('Strecke ' + id)).slice(0, 32),
-        String(d.geraet).slice(0, 40)]);
+      const sh = blattMit(C_BLATT, C_KOPF);
+      if (sh.getRange(1, 6).getValue() !== 'preset') sh.getRange(1, 6).setValue('preset');
+      const preset = C_PRESETS.indexOf(String(d.preset || '')) >= 0 ? String(d.preset) : 'pro';
+      sh.appendRow([new Date(), id, code, String(d.name || ('Strecke ' + id)).slice(0, 32),
+        String(d.geraet).slice(0, 40), preset]);
       return { ok: true, id: id };
     }
     if (d.art === 'community-zeit') {

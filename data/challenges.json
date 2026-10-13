@@ -751,16 +751,55 @@
    "zeiten": []
   },
   "wc02-macaolo|hotlap|pro": {
-   "anzahl": 0,
-   "zeiten": []
+   "anzahl": 1,
+   "zeiten": [
+    {
+     "auto": "BMW RAM",
+     "fahrer": "Luuke",
+     "geraet": "gxy3gdht5llfq",
+     "runden": 6,
+     "runden_ms": [
+      12534,
+      11492,
+      12694,
+      11301,
+      11411,
+      11477
+     ],
+     "zeit_ms": 11301,
+     "zeitpunkt": "2026-10-08T10:25:17.608Z"
+    }
+   ]
   },
   "wc02-macaolo|rennen|arcade": {
    "anzahl": 0,
    "zeiten": []
   },
   "wc02-macaolo|rennen|pro": {
-   "anzahl": 0,
-   "zeiten": []
+   "anzahl": 1,
+   "zeiten": [
+    {
+     "auto": "BMW RAM",
+     "fahrer": "Luuke",
+     "geraet": "gxy3gdht5llfq",
+     "runden": 11,
+     "runden_ms": [
+      12150,
+      11643,
+      11341,
+      12172,
+      12075,
+      12045,
+      12078,
+      12449,
+      12235,
+      11546,
+      12053
+     ],
+     "zeit_ms": 95953,
+     "zeitpunkt": "2026-10-08T10:29:15.883Z"
+    }
+   ]
   },
   "wc03-bakuna|hotlap|arcade": {
    "anzahl": 0,
@@ -1371,5 +1410,5 @@
    "zeiten": []
   }
  },
- "stand": "2026-10-07T16:34:12Z"
+ "stand": "2026-10-13T09:28:45Z"
 }

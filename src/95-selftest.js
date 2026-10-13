@@ -1231,11 +1231,10 @@
   stAdd('Uebersetzung: kein Deutsch im englischen Modus', () => {
     const knopf = $('lang-toggle');
     if (!knopf) return { skip: true, mass: 'kein Sprachumschalter' };
-    const vorher = document.documentElement.getAttribute('lang');
-    const warEnglisch = vorher === 'en';
+    const vorher = lang;
     try {
-      if (!warEnglisch) knopf.click();
-      if (document.documentElement.getAttribute('lang') !== 'en') {
+      if (lang !== 'en') setLang('en');
+      if (lang !== 'en') {
         return { skip: true, mass: 'Umschalten auf Englisch hat nicht gegriffen' };
       }
       const DE = /(?:^|[\s(])(?:werden|wurde|wird|nicht|damit|deshalb|jedoch|welche|meldet|liegt|steht|braucht|dieselbe|derselbe|jedes|jeder|Werte|Blatt|Aufnahmen|Strecken|gespeichert|Ausdruck|Reifen|Bremse|Lenkung|Boxengasse)(?:[\s.,;:!?)]|$)|[\u00e4\u00f6\u00fc\u00df\u00c4\u00d6\u00dc]/;
@@ -1272,7 +1271,7 @@
     } finally {
       // Die Sprache MUSS zurueck: ein Test, der die Oberflaeche umstellt und so stehen
       // laesst, ist selbst der naechste Fehlerbericht.
-      if (!warEnglisch && document.documentElement.getAttribute('lang') === 'en') knopf.click();
+      if (lang !== vorher) setLang(vorher);
     }
   });
 
@@ -1430,7 +1429,7 @@
   // liegen auf verschiedenen Seiten. Was WEGFAELLT: "alle n verschieden" und "Summe null" -
   // mit zwei Spuren sind bei ungerader Anzahl zwangslaeufig mehr Autos auf einer Seite, und
   // das ist eine Folge der bestellten Obergrenze und kein Fehler.
-  stAdd('Ghost-Spuren: volle Breite, Nachbarn auf verschiedenen Seiten', () => {
+  stAdd('NPC-Spuren: volle Breite, Nachbarn auf verschiedenen Seiten', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.spurenProbe) {
       return { skip: true, mass: 'spurenProbe nicht vorhanden' };
     }
@@ -1463,10 +1462,61 @@
     // Ein einzelner Ghost faehrt die Mitte: ein Versatz waere dort ein Lenkfehler und keine
     // Linie.
     const einer = OMEGA_TEST.spurenProbe(1);
-    if (einer && einer.spuren[0] !== 0) schlecht.push('ein Ghost faehrt nicht die Mitte');
+    if (einer && einer.spuren[0] !== 0) schlecht.push('ein NPC faehrt nicht die Mitte');
     return { ok: !schlecht.length,
              mass: zeilen.join(' | ')
                  + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Ghost-Seiten aus der Startaufstellung (v0.9.56) ----
+  //
+  // ghostLane() soll die Startseite (ghost.seite) liefern und nicht die Garagen-Paritaet.
+  // Sonst dreht ein Zwei-Spur-Paar bei jedem Takt um, sobald die Positionen jittern. Die
+  // Startseite wechselt je Platz (gerade rechts, ungerade links), und sie muss in der
+  // abgefragten Spur wieder auftauchen.
+  stAdd('NPC-Seiten: Startseite bleibt (v0.9.56)', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.seitenProbe) {
+      return { skip: true, mass: 'seitenProbe nicht vorhanden' };
+    }
+    const schlecht = [];
+    for (const n of [2, 3, 4, 6]) {
+      const r = OMEGA_TEST.seitenProbe(n);
+      if (!r) { schlecht.push(n + ': kein Lauf'); continue; }
+      for (let i = 0; i < n; i++) {
+        const erwartet = (i % 2 ? -1 : 1);
+        if (Math.abs(r.spuren[i] - erwartet) > 1e-9) {
+          schlecht.push(n + ': Platz ' + i + ' Spur ' + r.spuren[i] + ' statt ' + erwartet);
+        }
+      }
+    }
+    return { ok: !schlecht.length,
+             mass: schlecht.length ? schlecht.join('; ') : 'alle Startseiten bleiben' };
+  });
+
+  // ---- Ghost-Presets: Stufe aendert nur das Geradentempo (v0.9.56) ----
+  //
+  // Drei Stufen (Einfach/Mittel/Schnell) mit 45/55/65 Prozent auf der Geraden. In der
+  // Kurve und Haarnadel gilt immer das Mittel-Tempo, damit alle Stufen in der Kurve gleich
+  // schnell sind und die Kurvendrosselung dieselbe bleibt.
+  stAdd('NPC-Presets: Kurventempo gleich, Geradentempo 45/55/65 (v0.9.64)', () => {
+    const f = [];
+    const merkSpeed = ghostCfg.speed;
+    const geraden = [], kurven = [];
+    try {
+      ghostCfg.speed = 0.55;
+      for (let stufe = 0; stufe < GHOST_TEMPO_STUFEN.length; stufe++) {
+        const aufGerade = ghostStufeFaktor({ ghostStufe: stufe, tileCode: TILE_TYPE.STRAIGHT });
+        const inKurve = ghostStufeFaktor({ ghostStufe: stufe, tileCode: TILE_TYPE.CURVE_RIGHT });
+        geraden.push(Math.round(aufGerade * 100));
+        kurven.push(Math.round(inKurve * 100));
+      }
+      if (geraden[0] !== 45 || geraden[1] !== 55 || geraden[2] !== 65) f.push('Gerade: ' + geraden.join('/'));
+      if (kurven[0] !== 55 || kurven[1] !== 55 || kurven[2] !== 55) f.push('Kurve: ' + kurven.join('/'));
+    } finally {
+      ghostCfg.speed = merkSpeed;
+    }
+    return { ok: !f.length,
+             mass: f.length ? f.join('; ') : 'Gerade 45/55/65, Kurve 55/55/55' };
   });
 
   // ---- Reifenwaermer ----
@@ -1863,19 +1913,19 @@
   // Teilhaber, ein neues Array haette den Verweis gekappt - und ein fahrender Ghost waere
   // still im alten Getriebe geblieben. Ohne Ghost im Feld prueft der Test nur, dass der
   // Aufbau laeuft, und sagt das.
-  stAdd('Getriebe: Ghosts teilen die Uebersetzungen', () => {
+  stAdd('Getriebe: NPCs teilen die Uebersetzungen', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.physGearboxShare) {
       return { skip: true, mass: 'Messaufbau nicht vorhanden' };
     }
     const p = OMEGA_TEST.physGearboxShare('p412');
     if (!p.ghosts.length) {
       return { ok: p.gaenge === 5,
-               mass: 'kein Ghost verbunden, Wechsel selbst ok: ' + p.gaenge + ' Gaenge' };
+               mass: 'kein NPC verbunden, Wechsel selbst ok: ' + p.gaenge + ' Gaenge' };
     }
     const lose = p.ghosts.filter(g => !g.geteilt);
     const zuHoch = p.ghosts.filter(g => g.gang >= g.gaenge);
     return { ok: lose.length === 0 && zuHoch.length === 0,
-             mass: p.ghosts.length + ' Ghosts, ' + p.gaenge + ' Gaenge'
+             mass: p.ghosts.length + ' NPCs, ' + p.gaenge + ' Gaenge'
                    + (lose.length ? ' || NICHT GETEILT: ' + lose.map(g => g.alias).join(', ') : '')
                    + (zuHoch.length ? ' || Gang ausserhalb: ' + zuHoch.map(g => g.alias).join(', ') : '') };
   });
@@ -3451,7 +3501,7 @@
     // Ohne gemeldete Kachel gibt es keinen Ort - und ausdruecklich nicht 0, denn 0 ist die
     // Start-Ziel-Kachel und waere eine Behauptung.
     if (ghostOrt({ ghost: { tileIndex: null } }) !== null) schlecht.push('ohne Kachel nicht null');
-    if (ghostOrt({}) !== null) schlecht.push('ohne Ghost nicht null');
+    if (ghostOrt({}) !== null) schlecht.push('ohne NPC nicht null');
 
     // AUF DER KACHEL BLEIBEN, auch wenn die geschaetzte Dauer weit ueberschritten ist. Die
     // Phase deckelt bei 1 - das braucht die Ideallinie -, also SAETTIGT der Ort am
@@ -3707,7 +3757,7 @@
   //
   // Bestellt: "bei Regen soll die Geschwindigkeit der KI-Gegner gedrosselt sein". Geprueft
   // am gefahrenen Tempo und nicht an der Existenz einer Konstante.
-  stAdd('Ghosts fahren im Regen langsamer', async () => {
+  stAdd('NPCs fahren im Regen langsamer', async () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostDriveProbe) {
       return { skip: true, mass: 'ghostDriveProbe nicht vorhanden' };
     }
@@ -4421,7 +4471,7 @@
   // Kurve durch drei Punkte der Mittellinie und vergleicht die Radien. Ein Vorzeichentest
   // waere hier wertlos - er waere algebraisch immer wahr, weil beide Groessen aus demselben
   // alpha kommen. Der Radius ist die Frage, die der Nutzer stellt.
-  stAdd('Ghost in der Kurve: innen und nicht aussen', () => {
+  stAdd('NPC in der Kurve: innen und nicht aussen', () => {
     const merkTiles = currentTrackTiles;
     const schlecht = [];
     const zeilen = [];
@@ -4855,6 +4905,68 @@
                    + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
   });
 
+  // ---- Akku: einmal unter 25 %, erst nach der Erholung wieder ----
+  //
+  // BESTELLT "Akku-Ansage < 25 %". Die Schwelle liegt bewusst ueber der 10 % der anderen
+  // Zustandsansagen (ANSAGE_SCHWELLE), deshalb eine eigene.
+  stAdd('Ansagen: Akku meldet einmal unter 25 %, erst nach Erholung wieder', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ansagenFolge) {
+      return { skip: true, mass: 'ansagenFolge nicht vorhanden' };
+    }
+    const folge = [
+      { health: 1, fuel: 1, tyre: 1, rain: false, battery: 1 },
+      { health: 1, fuel: 1, tyre: 1, rain: false, battery: 0.30 },  // ueber 25 %: nichts
+      { health: 1, fuel: 1, tyre: 1, rain: false, battery: 0.24 },  // unter 25 %: melden
+      { health: 1, fuel: 1, tyre: 1, rain: false, battery: 0.20 },  // Gegenprobe: nicht nochmal
+      { health: 1, fuel: 1, tyre: 1, rain: false, battery: 0.50 },  // Erholung
+      { health: 1, fuel: 1, tyre: 1, rain: false, battery: 0.20 },  // wieder scharf: melden
+    ];
+    const r = OMEGA_TEST.ansagenFolge(folge);
+    const fiel = r.folge.map(x => x.fiel.join(','));
+    const soll = ['', '', 'battery', '', '', 'battery'];
+    const schlecht = [];
+    for (let i = 0; i < soll.length; i++) {
+      if (fiel[i] !== soll[i]) schlecht.push('Schritt ' + i + ': "' + fiel[i] + '" statt "' + soll[i] + '"');
+    }
+    return { ok: schlecht.length === 0,
+             mass: fiel.map(x => x || '-').join(' ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Akku JE AUTO: jedes Auto unter 25 % meldet, mit Autonummer ----
+  //
+  // BESTELLT "Akku-Ansage < 25 % mit Autonummer". Der Test darueber prueft den einen
+  // `battery`-Wert; dieser hier die Liste `batteries` (alle Autos). Zwei Autos: eines unter,
+  // eines ueber der Schwelle, dann beide unter, Erholung, beide wieder unter. `blinking: true`
+  // haelt blinkCar() still - geprueft wird die Ansage, nicht der Lichtblink.
+  stAdd('Ansagen: Akku je Auto unter 25 % (Autonummer)', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ansagenFolge) {
+      return { skip: true, mass: 'ansagenFolge nicht vorhanden' };
+    }
+    const a = { blinking: true }, b = { blinking: true };
+    const folge = [
+      { health: 1, fuel: 1, tyre: 1, rain: false,
+        batteries: [{ car: a, label: 'Alpha', value: 0.20 }, { car: b, label: 'Beta', value: 0.30 }] },
+      { health: 1, fuel: 1, tyre: 1, rain: false,
+        batteries: [{ car: a, label: 'Alpha', value: 0.20 }, { car: b, label: 'Beta', value: 0.20 }] },
+      { health: 1, fuel: 1, tyre: 1, rain: false,
+        batteries: [{ car: a, label: 'Alpha', value: 0.50 }, { car: b, label: 'Beta', value: 0.50 }] },
+      { health: 1, fuel: 1, tyre: 1, rain: false,
+        batteries: [{ car: a, label: 'Alpha', value: 0.20 }, { car: b, label: 'Beta', value: 0.20 }] },
+    ];
+    const r = OMEGA_TEST.ansagenFolge(folge);
+    const fiel = r.folge.map(x => x.fiel.join(','));
+    const soll = ['battery', 'battery', '', 'battery,battery'];
+    const schlecht = [];
+    for (let i = 0; i < soll.length; i++) {
+      if (fiel[i] !== soll[i]) schlecht.push('Schritt ' + i + ': "' + fiel[i] + '" statt "' + soll[i] + '"');
+    }
+    const gesagt = r.gesagt.filter(s => /Alpha|Beta/.test(s));
+    const nennt = gesagt.length >= 3 && gesagt.every(s => /Alpha|Beta/.test(s));
+    return { ok: schlecht.length === 0 && nennt,
+             mass: fiel.map(x => x || '-').join(' ') + ' | ' + gesagt.join(' ; ')
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
   // ---- Und die fuenf Schalter schalten wirklich ab ----
   //
   // Die Gegenprobe zum Test darueber: mit allen Kaestchen AUS darf keine einzige Meldung
@@ -4941,13 +5053,13 @@
                  + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
   });
 
-  // ---- Jede der fuenf Meldungen hat eine Aufnahme in beiden Sprachen ----------------
+  // ---- Jede der Meldungen hat eine Aufnahme in beiden Sprachen --------------------
   //
   // Statischer Gegencheck zur Regel oben: die Regel kann den richtigen SCHLUESSEL
   // ziehen und trotzdem leer ausgehen, wenn audio/voice.json eine Sprache oder eine
   // Meldung vergisst. tools/voice_synth.py schreibt die Datei; dieser Test haelt sie
-  // gegen die fuenf Schluessel, die ansage()/ansagenPruefen() tatsaechlich benutzen.
-  stAdd('Ansage-Aufnahmen: fuenf Meldungen, beide Sprachen, im Manifest', async () => {
+  // gegen die Schluessel, die ansage()/ansagenPruefen() tatsaechlich benutzen.
+  stAdd('Ansage-Aufnahmen: alle Meldungen, beide Sprachen, im Manifest', async () => {
     if (location.protocol === 'file:') {
       return { skip: true, mass: 'ohne Server kein Manifest' };
     }
@@ -4955,7 +5067,7 @@
     try {
       man = await fetch('audio/voice.json', { cache: 'reload' }).then((r) => r.json());
     } catch (e) { return { skip: true, mass: 'Manifest nicht ladbar: ' + e.message }; }
-    const erwartet = ['damage', 'fuel', 'tyre', 'rainstart', 'rainstop'];
+    const erwartet = ['damage', 'fuel', 'tyre', 'rainstart', 'rainstop', 'battery'];
     const schlecht = [];
     for (const k of erwartet) {
       if (!man[k]) { schlecht.push(k + ' fehlt ganz'); continue; }
@@ -5324,7 +5436,7 @@
   // als Unterscheider. BESTELLT "stumpf, keine Querlage, bleiben einfach stehen": ein Ghost
   // soll anhalten, sobald die 0x00-Strecke ueber der Schwelle steht - die Kachelrate ist
   // dabei egal. Deshalb parken jetzt auch die Faelle mit laufendem Zaehler.
-  stAdd('Ghost haelt an, sobald 0x00 steht - auch mit laufendem Zaehler', () => {
+  stAdd('NPC haelt an, sobald 0x00 steht - auch mit laufendem Zaehler', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostParkProbe) {
       return { skip: true, mass: 'ghostParkProbe nicht vorhanden' };
     }
@@ -5350,13 +5462,41 @@
              mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
   });
 
+  // ---- Ghosts und Sektoren: die Sektorgrenze zaehlt keine Runde (v0.9.74) ----
+  //
+  // GEMELDET: "Ghosts verstehen nicht, dass es zwei Sektoren gibt." Die Rundenlinie ist die
+  // ERSTE Startkachel, jede weitere eine Sektorgrenze - beide melden denselben Startcode.
+  // Bis v0.9.74 setzte ortAbgleich den Ort bei JEDEM Startcode auf die erste Kachel und
+  // zaehlte eine Runde. Geprueft wird: Sektorgrenze -> keine Runde, Rundenlinie -> eine.
+  stAdd('NPC: zwei Sektoren, Sektorgrenze zaehlt keine Runde', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.sectorProbe) {
+      return { skip: true, mass: 'sectorProbe nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.sectorProbe({});
+    const schlecht = [];
+    if (!r || !r.nachSektor) return { ok: false, mass: 'kein Lauf' };
+    if (r.nachSektor.laps !== 0) {
+      schlecht.push('Sektorgrenze zaehlt ' + r.nachSektor.laps + ' Runde(n)');
+    }
+    if (r.nachSektor.tileIndex === 0 && r.anzahl > 1) {
+      schlecht.push('Sektorgrenze setzt den Ort auf die Rundenlinie (Kachel 0)');
+    }
+    if (r.nachLinie.laps !== 1) {
+      schlecht.push('Rundenlinie zaehlt ' + r.nachLinie.laps + ' statt 1 Runde');
+    }
+    return { ok: schlecht.length === 0,
+             mass: 'Sektor: Kachel ' + r.nachSektor.tileIndex + ', Runden ' + r.nachSektor.laps
+                   + ' | Linie: Kachel ' + r.nachLinie.tileIndex + ', Runden ' + r.nachLinie.laps
+                   + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
   // ---- Ghosts: ein Neustart kommt aus dem Kreis heraus ----
   //
   // Geparkt heisst Gas 0, also keine Fahrt, also kein gelesenes Muster, also parkt der
   // Neustart sofort wieder ein. Die Startgnade ist der Ausweg - und sie ist eine FRIST,
   // kein Loch: danach muss das Auto wieder stehen, sonst faehrt es neben der Bahn weiter.
   // Beide Haelften werden geprueft; ohne die zweite waere "nie anhalten" auch gruen.
-  stAdd('Ghost: Neustart hebt den Halt, aber nur auf Zeit', () => {
+  stAdd('NPC: Neustart hebt den Halt, aber nur auf Zeit', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostNeustartProbe) {
       return { skip: true, mass: 'ghostNeustartProbe nicht vorhanden' };
     }
@@ -5424,7 +5564,7 @@
   // Geprueft wird deshalb, was die Original-App wirklich belegt: dass die Bahnbreite
   // GENUTZT wird. Spanne und beide Vorzeichen - und die Spitze bleibt, unveraendert bei 70
   // von 127 gegen die gemessenen 127 des Originals.
-  stAdd('Ghost-Querlage: im Mass der Original-App', () => {
+  stAdd('NPC-Querlage: im Mass der Original-App', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostDriveProbe) {
       return { skip: true, mass: 'ghostDriveProbe nicht vorhanden' };
     }
@@ -5508,13 +5648,13 @@
     let ohne = null;
     for (const n of [0, 2]) {
       const r = OMEGA_TEST.taktKosten({ ghosts: n, takte: 150 });
-      teile.push(n + ' Ghosts: ' + r.ganzerTakt.med + ' ms (p95 ' + r.ganzerTakt.p95 + ')');
+      teile.push(n + ' NPCs: ' + r.ganzerTakt.med + ' ms (p95 ' + r.ganzerTakt.p95 + ')');
       if (n === 0) ohne = r.ganzerTakt.med;
       if (r.ganzerTakt.p95 > 5) {
-        schlecht.push(n + ' Ghosts brauchen ' + r.ganzerTakt.p95 + ' ms von 45');
+        schlecht.push(n + ' NPCs brauchen ' + r.ganzerTakt.p95 + ' ms von 45');
       }
       if (n > 0 && r.ghostAnteil.p95 > 2) {
-        schlecht.push('ein Ghost kostet ' + r.ghostAnteil.p95 + ' ms');
+        schlecht.push('ein NPC kostet ' + r.ghostAnteil.p95 + ' ms');
       }
     }
     return { ok: schlecht.length === 0,
@@ -5567,9 +5707,9 @@
   //      ein Selbsttestlauf hinterliess 35 davon.
   //
   // Beide mit Gegenprobe: ohne sie waere ein Takt, der GAR nicht laeuft, ebenfalls gruen.
-  stAdd('Ghost-Takt: versetzt gesendet, und ein Halt haelt', async () => {
+  stAdd('NPC-Takt: versetzt gesendet, und ein Halt haelt', async () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostTaktVersatz || !OMEGA_TEST.ghostHaltProbe) {
-      return { skip: true, mass: 'Ghost-Takt-Aufbauten nicht vorhanden' };
+      return { skip: true, mass: 'NPC-Takt-Aufbauten nicht vorhanden' };
     }
     const schlecht = [], teile = [];
     const T = 45, ziel = OMEGA_TEST.ghostTaktVersatz;
@@ -5598,16 +5738,16 @@
     teile.push('Phase Platz 1: ' + phasen.map(x => x.toFixed(1)).join('/') + ' ms');
     // Und die zwei Ghosts liegen auseinander, nicht uebereinander.
     const d = Math.abs(ziel(2, 3, 12) - ziel(1, 3, 12));
-    teile.push('Ghosts ' + d.toFixed(1) + ' ms auseinander');
-    if (Math.abs(d - T / 3) > 0.01) schlecht.push('Ghosts liegen ' + d.toFixed(1) + ' ms auseinander');
+    teile.push('NPCs ' + d.toFixed(1) + ' ms auseinander');
+    if (Math.abs(d - T / 3) > 0.01) schlecht.push('NPCs liegen ' + d.toFixed(1) + ' ms auseinander');
 
     // (b) EIN HALT HAELT. Anhalten, BEVOR der wartende setTimeout den Zeitgeber angelegt
     //     hat - der Fall, der 35 Phantom-Zeitgeber je Selbsttestlauf hinterliess.
     const h = await OMEGA_TEST.ghostHaltProbe({});
     teile.push('nach Halt ' + h.nachHalt + ' Pakete, laufend ' + h.laufend);
-    if (h.nachHalt !== 0) schlecht.push('angehaltener Ghost sendet weiter (' + h.nachHalt + ')');
+    if (h.nachHalt !== 0) schlecht.push('angehaltener NPC sendet weiter (' + h.nachHalt + ')');
     // Gegenprobe: ohne sie waere ein Ghost-Takt, der GAR nicht laeuft, ebenfalls gruen.
-    if (h.laufend < 1) schlecht.push('laufender Ghost sendet nicht');
+    if (h.laufend < 1) schlecht.push('laufender NPC sendet nicht');
     return { ok: schlecht.length === 0,
              mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
   });
@@ -6209,7 +6349,7 @@
   // Zweierkolonne. Geprueft wird, dass es EINE Definition ist - zwei Abschriften derselben
   // zwei Konstanten waeren die naechste Abweichung, und sie faellt erst auf, wenn das Feld
   // anders schlaengelt als der Fahrer.
-  stAdd('Einfuehrungsrunde: Fahrer und Ghosts teilen den Versatz', () => {
+  stAdd('Einfuehrungsrunde: Fahrer und NPCs teilen den Versatz', () => {
     if (typeof formationOffset !== 'function' || typeof formationDriverOffset !== 'function') {
       return { skip: true, mass: 'formationOffset nicht erreichbar' };
     }
@@ -7390,7 +7530,7 @@
     const r = OMEGA_TEST.ghostUnparkOnStart();
     const ok = r.vor && !r.nach && r.ghostNeu && r.cutOut === false;
     return { ok, mass: 'vorher "' + r.vor + '", nachher ' + JSON.stringify(r.nach)
-                     + ', Ghost neu ' + r.ghostNeu + ', cutOut ' + r.cutOut };
+                     + ', NPC neu ' + r.ghostNeu + ', cutOut ' + r.cutOut };
   });
 
   // ---- Ghost-Boxenstopp ----
@@ -7409,7 +7549,7 @@
   // meldet 0x00, sobald das Auto steht - genau wie ein Auto, das nichts mehr liest. Eine
   // Nachbildung der Zustandsmaschine wuerde den Melder nicht enthalten und waere gruen,
   // waehrend das Auto auf dem Teppich blinkt.
-  stAdd('Ghost-Boxenstopp: Phasen, rechter Rand, und kein Parken', () => {
+  stAdd('NPC-Boxenstopp: Phasen, rechter Rand, und kein Parken', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostPitProbe) {
       return { skip: true, mass: 'ghostPitProbe nicht vorhanden' };
     }
@@ -7470,7 +7610,7 @@
   // nurEiner: die zwei anderen sind NICHT faellig. Ohne das nehmen sie sich seit der
   // Boxengasse selbst einen Platz, und dann gibt es keine Umstehenden mehr - der Test waere
   // gruen, weil er nichts mehr prueft.
-  stAdd('Ghost-Boxenstopp: einer pittet, die anderen gehen links', () => {
+  stAdd('NPC-Boxenstopp: einer pittet, die anderen gehen links', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostPitProbe) {
       return { skip: true, mass: 'ghostPitProbe nicht vorhanden' };
     }
@@ -7518,7 +7658,7 @@
   // Befehl. Ein Auto, das mit rechter Ideallinie in die Gasse einfaehrt, steht dort einige
   // Takte lang noch rechts, obwohl der Befehl schon links lautet. Gemessen wird deshalb der
   // BEFEHL - er ist die Zusage, der Filter ihre Physik.
-  stAdd('Ghost-Boxengasse: nur einer gleichzeitig, keiner faehrt dem anderen ins Heck', () => {
+  stAdd('NPC-Boxengasse: nur einer gleichzeitig, keiner faehrt dem anderen ins Heck', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostReifenProbe) {
       return { skip: true, mass: 'ghostReifenProbe nicht vorhanden' };
     }
@@ -7573,7 +7713,7 @@
   //
   // Folge waere gewesen: wer ein Rennen beendet, waehrend ein Ghost in der Box steht, sieht
   // danach nie wieder einen Boxenstopp - und die Ursache steht nirgends.
-  stAdd('Ghost-Boxenstopp: der Platz wird nach einem Abbruch frei', () => {
+  stAdd('NPC-Boxenstopp: der Platz wird nach einem Abbruch frei', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.pitAbbruchProbe) {
       return { skip: true, mass: 'pitAbbruchProbe nicht vorhanden' };
     }
@@ -7598,7 +7738,7 @@
   //
   // Zwei Regler, ein Band, und die Ziehung muss beide Grenzen erreichen - eine Ziehung, die
   // nur die Mitte trifft, waere ein Band ohne Wirkung.
-  stAdd('Ghost-Boxenstopp: die Faelligkeit liegt im Band', () => {
+  stAdd('NPC-Boxenstopp: die Faelligkeit liegt im Band', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.pitFaelligProbe) {
       return { skip: true, mass: 'pitFaelligProbe nicht vorhanden' };
     }
@@ -7627,7 +7767,7 @@
   // Verschlechterung, die niemand bestellt hat - deshalb wird der abgeleitete Griff als
   // VERHAELTNIS angewandt und nicht absolut, und deshalb steht hier ein Gleichheitstest auf
   // GHOST_REGEN_TEMPO und nicht ein Band.
-  stAdd('Ghost-Regenreifen: der Tempofaktor, und die zwei bekannten Faelle bleiben', () => {
+  stAdd('NPC-Regenreifen: der Tempofaktor, und die zwei bekannten Faelle bleiben', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.reifenTempoProbe) {
       return { skip: true, mass: 'reifenTempoProbe nicht vorhanden' };
     }
@@ -7664,7 +7804,7 @@
   // zurueck ist ein Stopp, und den hat er gerade verboten. Also gilt bei ausgeschaltetem
   // Stopp ueberall der passende Reifen, und das Verhalten faellt BITGLEICH auf das zurueck,
   // was vor diesem Feature da war.
-  stAdd('Ghost-Regenreifen: ohne Boxenstopp genau das alte Verhalten', () => {
+  stAdd('NPC-Regenreifen: ohne Boxenstopp genau das alte Verhalten', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.reifenTempoProbe) {
       return { skip: true, mass: 'reifenTempoProbe nicht vorhanden' };
     }
@@ -7698,7 +7838,7 @@
   // kopiert das ganze Konfigurationsobjekt des Spielers, gripScale eingeschlossen - ein
   // Ghost erbte also die Reifenwahl des Spielers und behielt sie ueber jeden
   // Wetterwechsel.
-  stAdd('Ghost-Regenreifen: Griff und Aquaplaning wie beim Spieler-Auto', () => {
+  stAdd('NPC-Regenreifen: Griff und Aquaplaning wie beim Spieler-Auto', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.reifenGriffProbe) {
       return { skip: true, mass: 'reifenGriffProbe nicht vorhanden' };
     }
@@ -7743,7 +7883,7 @@
   // WARUM DAS EINE PRUEFUNG WERT IST: wer den Faktor spaeter "aufraeumt" und den falschen
   // Reifen pauschal langsamer macht, loescht diese Eigenschaft, ohne es zu merken. Sie steht
   // hier als Zusicherung, nicht als Kuriositaet.
-  stAdd('Ghost-Regenreifen: bei leichtem Regen sind Slicks noch vorn', () => {
+  stAdd('NPC-Regenreifen: bei leichtem Regen sind Slicks noch vorn', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.reifenTempoProbe) {
       return { skip: true, mass: 'reifenTempoProbe nicht vorhanden' };
     }
@@ -7784,7 +7924,7 @@
   // Warteschlange nicht zustande: alle waeren im selben Takt an der Einfahrt, einer bekaeme
   // den Platz, und die anderen haetten ihre Gelegenheit fuer diese Runde verpasst, ohne je
   // eine gehabt zu haben.
-  stAdd('Ghost-Regenreifen: alle ruesten um, einer nach dem anderen', () => {
+  stAdd('NPC-Regenreifen: alle ruesten um, einer nach dem anderen', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostReifenProbe) {
       return { skip: true, mass: 'ghostReifenProbe nicht vorhanden' };
     }
@@ -7854,7 +7994,7 @@
   // "genau so mit Wetterwechsel zu sonnig" - bestellt, also geprueft. Nicht dasselbe wie der
   // Test darueber: der Rueckweg braucht ZWEI Stopps je Auto, und beim zweiten ist der
   // gezogene Planstopp langst nicht faellig - er kann also nur an den Reifen liegen.
-  stAdd('Ghost-Regenreifen: der Rueckweg auf trocken zaehlt genauso', () => {
+  stAdd('NPC-Regenreifen: der Rueckweg auf trocken zaehlt genauso', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostReifenProbe) {
       return { skip: true, mass: 'ghostReifenProbe nicht vorhanden' };
     }
@@ -9161,7 +9301,7 @@
   // der Aufteilung und keine Pruefung, die irgendwo greifen muss.
   //
   // GEPRUEFT MIT SECHS AUTOS: bei zwei oder drei waere auch die alte Rechnung unauffaellig.
-  stAdd('Ghost-Spuren: hoechstens zwei, und sie liegen aussen', () => {
+  stAdd('NPC-Spuren: hoechstens zwei, und sie liegen aussen', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.spurenProbe) {
       return { skip: true, mass: 'spurenProbe nicht vorhanden' };
     }
@@ -9641,10 +9781,12 @@
     if (!(r.tempo.formation > 0.2 && r.tempo.formation < 0.6)) {
       fehler.push('Formationstempo ' + r.tempo.formation);
     }
-    // 5. UND ER ENDET BEI DER DRITTEN UEBERFAHRT IRGENDEINES AUTOS - nicht frueher.
+    // 5. v0.9.87 BESTELLT: "bis das erste Auto ueber Start/Ziel zum 2. Mal faehrt". Ohne
+    //    Sektoren also die zweite Ueberfahrt irgendeines Autos (Folge a,b,c,d,a: Index 4).
     const ende = r.verlauf.findIndex((v) => v.beendet);
-    if (ende !== 8) {
-      fehler.push('endet nach ' + (ende + 1) + ' Ueberfahrten statt nach 9');
+    const soll = formationNoetig() * 4 - 4;
+    if (ende !== soll) {
+      fehler.push('endet nach ' + (ende + 1) + ' Ueberfahrten statt nach ' + (soll + 1));
     }
     if (r.nochFormation) fehler.push('Einfuehrungsrunde endet gar nicht');
     return { ok: !fehler.length,
@@ -10258,7 +10400,7 @@
   // BESTELLT: "Garage: Implementiere Vorschlag B ... und fuege jeweils einen Button hinzu,
   // bei dem ich ein Foto dafuer hochladen kann. Der 'Ghosts anhalten'-Button soll gleichzeitig
   // ein 'Ghosts starten'-Button sein, wenn sie noch nicht fahren."
-  stAdd('Garage: Karten mit Rolle, Foto und Aufklappzeile, ein Knopf startet und hält die Ghosts', () => {
+  stAdd('Garage: Karten mit Rolle, Foto und Aufklappzeile, ein Knopf startet und hält die NPCs', () => {
     const att = { role: 'ghost', device: { id: 'probe-karte' }, alias: '', colorId: 'rot', sim: false, testSenke: [] };
     const f = [];
     let altFoto = '';
@@ -10279,7 +10421,7 @@
       try {
         const frei = garRollenFrei(att).map((r) => r.id);
         if (frei.indexOf('player') >= 0) f.push('Spieler 1 angeboten, obwohl vergeben');
-        if (frei.indexOf('ghost') < 0 || frei.indexOf('none') < 0) f.push('Ghost/Aus fehlen in den freien Rollen');
+        if (frei.indexOf('ghost') < 0 || frei.indexOf('none') < 0) f.push('NPC/Aus fehlen in den freien Rollen');
       } finally { garage.splice(garage.indexOf(anderer), 1); }
       setCarRole(att, 'ghost');
       renderGarage();
@@ -10291,10 +10433,10 @@
       if (!$('gar-list').querySelector('.gar-a-rechts [data-act="foto-weg"]')) f.push('kein Knopf zum Entfernen');
       const auf = $('gar-list').querySelector('.gar-a-rechts .gk-aufzeile');
       if (!auf) f.push('Einstellen klappt nichts auf');
-      else if (![...auf.querySelectorAll('.gk-l')].some((l) => /Tempo/.test(l.textContent))) f.push('kein Ghost-Tempo in der Aufklappzeile');
+      else if (![...auf.querySelectorAll('.gk-l')].some((l) => /Tempo/.test(l.textContent))) f.push('kein NPC-Tempo in der Aufklappzeile');
       refreshGarageGo();
       const b = $('gar-stop-ghosts');
-      if (b.disabled || b.dataset.lage !== 'starten') f.push('Ghost-Knopf zeigt nicht "starten" (' + b.dataset.lage + (b.disabled ? ', gesperrt' : '') + ')');
+      if (b.disabled || b.dataset.lage !== 'starten') f.push('NPC-Knopf zeigt nicht "starten" (' + b.dataset.lage + (b.disabled ? ', gesperrt' : '') + ')');
     } finally {
       try { autoFotoSetzen(att, altFoto); } catch (e) { /* egal */ }
       const i = garage.indexOf(att);
@@ -10302,7 +10444,53 @@
       garAufAuto = null;
       renderGarage();
     }
-    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Karte mit Farbbild, Rolle mit Pfeil, Foto, Aufklappzeile, Ghost-Knopf auf Starten' };
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Karte mit Farbbild, Rolle mit Pfeil, Foto, Aufklappzeile, NPC-Knopf auf Starten' };
+  });
+
+  stAdd('Garage: NPC-Tempo als drei Stufen (einfach/mittel/schnell), Blaettern setzt sie', () => {
+    const att = { role: 'ghost', device: { id: 'probe-tempo' }, alias: '', colorId: 'rot', sim: false, testSenke: [] };
+    const f = [];
+    if (typeof GHOST_TEMPO_STUFEN !== 'object' || GHOST_TEMPO_STUFEN.length !== 3) return { ok: false, mass: 'GHOST_TEMPO_STUFEN fehlt' };
+    if (GHOST_TEMPO_STUFEN[0].speed !== 0.45 || GHOST_TEMPO_STUFEN[1].speed !== 0.55 || GHOST_TEMPO_STUFEN[2].speed !== 0.65) {
+      f.push('Stufen-Werte falsch');
+    }
+    const merkRollen = localStorage.getItem('chc.rollen.v1');
+    garage.push(att);
+    const finde = () => [...$('gar-list').querySelectorAll('.gar-a-rechts .gk-zeile')].find((z) => {
+      const l = z.querySelector('.gk-l');
+      return l && /NPC-Tempo/.test(l.textContent);
+    });
+    const klick = (d) => { const z = finde(); if (z) z.querySelector('[data-d="' + d + '"]').click(); };
+    const wert = () => { const z = finde(); return z ? z.querySelector('b').textContent : ''; };
+    try {
+      att.ghostStufe = 1;
+      garAufAuto = att;
+      renderGarage();
+      if (!finde()) return { ok: false, mass: 'keine NPC-Tempo-Zeile' };
+      if (!/mittel/.test(wert()) || !/55/.test(wert())) f.push('Mittel zeigt nicht 55 %: ' + wert());
+      klick(1);
+      if (att.ghostStufe !== 2) f.push('Rechts setzt nicht schnell (' + att.ghostStufe + ')');
+      if (!/schnell/.test(wert())) f.push('zeigt nicht schnell: ' + wert());
+      if (!/65/.test(wert())) f.push('schnell zeigt nicht 65 %: ' + wert());
+      klick(1);
+      if (att.ghostStufe !== 0) f.push('Nochmal rechts setzt nicht einfach (' + att.ghostStufe + ')');
+      klick(1);
+      if (att.ghostStufe !== 1) f.push('Mittel setzt nicht auf Stufe 1 (' + att.ghostStufe + ')');
+      if (!/mittel/.test(wert())) f.push('Mittel zeigt nicht: ' + wert());
+      klick(-1);
+      if (att.ghostStufe !== 0) f.push('Links von mittel setzt nicht einfach (' + att.ghostStufe + ')');
+      if (!/45/.test(wert())) f.push('einfach zeigt nicht 45 %: ' + wert());
+      const z = finde();
+      if (z && z.querySelector('.gar-speed-reset')) z.querySelector('.gar-speed-reset').click();
+      if (att.ghostStufe !== 1) f.push('Reset stellt Mittel nicht her (' + att.ghostStufe + ')');
+    } finally {
+      const i = garage.indexOf(att);
+      if (i >= 0) garage.splice(i, 1);
+      garAufAuto = null;
+      try { if (merkRollen === null) localStorage.removeItem('chc.rollen.v1'); else localStorage.setItem('chc.rollen.v1', merkRollen); } catch (e) { /* egal */ }
+      renderGarage();
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'einfach/mittel/schnell blatteln, Reset zu Mittel' };
   });
 
   stAdd('Steuerung: läuft auf dem Cockpit, zeigt gedrückte Tasten, fährt dabei nicht', () => {
@@ -10494,7 +10682,7 @@
     if (!drin('laden', 'track-kacheln') || drin('edit', 'track-kacheln')) f.push('gespeicherte Strecken nicht (nur) unter Laden');
     if (!drin('edit', 'track-preview-svg')) f.push('Editor-Karte nicht im Editor');
     if (drin('laden', 'track-preview-svg')) f.push('Editor unter Laden');
-    if (!drin('scan', 'track-scan-start') || drin('edit', 'track-scan-start')) f.push('Live-Scan nicht (nur) im Scan');
+    if (!drin('scan', 'gar-scan-start')) f.push('Streckenscan nicht im Scan');
     if (!drin('teile', 'teile-liste')) f.push('Meine Teile fehlt');
     const kacheln = [...document.querySelectorAll('#sub-home-track .subpage-open')].map((k) => k.dataset.sub);
     if (new Set(kacheln).size !== kacheln.length) f.push('zwei Kacheln oeffnen dieselbe Unterseite: ' + kacheln.join(','));
@@ -10754,10 +10942,10 @@
     const merkR = localStorage.getItem(CAR_ROLLEN_STORE), merkE = localStorage.getItem(EDITOR_STRECKE_STORE);
     const merkTiles = currentTrackTiles, merkRot = trackRotationDeg, merkB = bindings, merkFuer = padBelegungFuer[1];
     try {
-      const auto = { role: 'ghost', ghostSpeed: 0.6, device: { id: 'probe-rolle' } };
+      const auto = { role: 'ghost', ghostStufe: 2, device: { id: 'probe-rolle' } };
       carRolleMerken(auto);
       const r = carRollenLesen()['probe-rolle'];
-      if (!r || r.role !== 'ghost' || r.ghostSpeed !== 0.6) f.push('Rolle/Tempo nicht gemerkt');
+      if (!r || r.role !== 'ghost' || r.ghostStufe !== 2) f.push('Rolle/Tempo nicht gemerkt');
       currentTrackTiles = [{ type: TILE_TYPE.START }, { type: TILE_TYPE.STRAIGHT }, { type: TILE_TYPE.CURVE_RIGHT }];
       localStorage.setItem(EDITOR_STRECKE_STORE, JSON.stringify({ tiles: currentTrackTiles.map((x) => x.type), rotation: 90 }));
       currentTrackTiles = [{ type: TILE_TYPE.START }];
@@ -10775,7 +10963,7 @@
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Rolle+Tempo, Strecke+Drehung, Pad-Belegung' };
   });
 
-  stAdd('Ghosts: Tempo-Streuung (0 = gleich), Startversatz je Reihe, Paar in der Kurve', () => {
+  stAdd('NPCs: Tempo-Streuung (0 = gleich), Startversatz je Reihe, Paar in der Kurve', () => {
     const f = [];
     const merk = { p: ghostCfg.tempoStreuung, s: ghostCfg.staffelStart, ms: ghostCfg.staffelMs, k: ghostCfg.paarKurve, ord: raceGridOrder };
     try {
@@ -11113,6 +11301,26 @@
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Pro gesetzt, danach alles wie vorher' };
   });
 
+  // v0.9.64: Pro-Pacejka ist Pro plus der Steuerungsmodus "pacejka". Wer Pro-Pacejka
+  // gewaehlt hat, erfuellt damit auch den ganzen Pro-Satz - der erste Treffer waere "Pro".
+  // Die Anzeige (Fahrmodus-Knopf, Kachel "N/6") muss aber den SPEZIFISCHEREN Satz zeigen.
+  // v0.9.72: Pro setzt den Modus ausdruecklich auf "physik" - sonst bliebe nach dem
+  // Wechsel von Pro-Pacejka der alte Modus stehen und "Pro" erschiene wieder als "6/6".
+  stAdd('Voreinstellungen: Pro-Pacejka und Pro sind getrennt erkennbar (v0.9.64)', () => {
+    const f = [];
+    const vorher = chMerken();
+    try {
+      window.__applyPreset('propacejka');
+      if (window.__presetActive() !== 'propacejka') f.push('Pro-Pacejka -> ' + window.__presetActive());
+      window.__applyPreset('pro');
+      if ($('phys-mode').value !== 'physik') f.push('Pro laesst Steuerungsmodus ' + $('phys-mode').value);
+      if (window.__presetActive() !== 'pro') f.push('Pro -> ' + window.__presetActive());
+    } finally {
+      chZuruecksetzen(vorher);
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Pro-Pacejka und Pro getrennt erkannt' };
+  });
+
   stAdd('Challenges: Balkonia hat 1 Pflichtstopp und ein Regenfenster Minute 2-4', () => {
     const f = [];
     const def = chDef('dauer-balkonia');
@@ -11153,7 +11361,9 @@
     const k = chKalibrierFaktor();
     if (Math.abs(chGeoGold(def) * k - 16000) > 1) f.push('Faktor trifft Balkonia nicht (' + Math.round(chGeoGold(def) * k) + ')');
     const imo = chDef('wa01-imolina');
-    if (chSterneSchwellen(imo).gold !== Math.round(chGeoGold(imo) * k)) f.push('Imolina nicht mit demselben Faktor');
+    // v0.10.6: die anderen Strecken folgen der Gold-Geraden (zwei Bezugspunkte, siehe
+    // chGoldFormel), nicht mehr dem reinen Faktor.
+    if (chSterneSchwellen(imo).gold !== Math.round(chGoldFormel(chGeoGold(imo)))) f.push('Imolina nicht nach der Gold-Formel');
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Faktor ' + k.toFixed(3) + ', Imolina Gold ' + chSterneSchwellen(imo).gold + ' ms' };
   });
 
@@ -11997,10 +12207,10 @@
     //    Unterschied: faehrt er rechts, geht der Ghost links vorbei, und umgekehrt.
     //    Ohne diese zwei Zeilen waere der Test auch mit der alten, festen Seite gruen.
     if (rechts.ersterVersuch && rechts.ersterVersuch.seite !== -1) {
-      fehler.push('Fahrer rechts, Ghost geht ' + rechts.ersterVersuch.seite);
+      fehler.push('Fahrer rechts, NPC geht ' + rechts.ersterVersuch.seite);
     }
     if (links.ersterVersuch && links.ersterVersuch.seite !== 1) {
-      fehler.push('Fahrer links, Ghost geht ' + links.ersterVersuch.seite);
+      fehler.push('Fahrer links, NPC geht ' + links.ersterVersuch.seite);
     }
     return { ok: !fehler.length,
              mass: 'Fahrer rechts -> Seite ' + (rechts.ersterVersuch || {}).seite
@@ -12272,7 +12482,7 @@
   // ist jetzt das Gegenteil, und der Unterschied ist der Wechsel: "alle nach rechts" war der
   // Fehler, "abwechselnd links und rechts" ist der Zweck - zwei Autos, die entgegengesetzt
   // einschlagen, gehen auseinander. Welche Seite welches Auto bekommt, prueft die Nachbarin
-  // "Zieleinlauf: abwechselnd links und rechts an den Rand"; hier geht es nur darum, dass
+  // "Zieleinlauf: in Kacheln gestaffelt, abwechselnd links und rechts"; hier geht es nur darum, dass
   // ueberhaupt ein Ausschlag hinausgeht und in beiden Fahrphasen derselbe.
   stAdd('Zieleinlauf: zur Seite ausrollen, anhalten, dreimal blinken', async () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostFinishTimeline) {
@@ -12764,7 +12974,7 @@
   // nicht als Zusicherung im Code: sie gegen feste Werte zu pruefen hiesse, dass jede
   // gewollte Aenderung am Ghost-Verhalten diesen Test rot macht - und ein Test, der bei
   // gewollten Aenderungen rot wird, wird abgeschaltet.
-  stAdd('Ghosts: bei gesetztem Zufall rechnet die Simulation reproduzierbar', async () => {
+  stAdd('NPCs: bei gesetztem Zufall rechnet die Simulation reproduzierbar', async () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostSweep) {
       return { skip: true, mass: 'ghostSweep nicht vorhanden' };
     }
@@ -13051,6 +13261,78 @@
                  + (maengel.length ? ' | ' + maengel.join(', ') : '') };
   });
 
+  // ---- Ghost-Motorsound (v0.9.61, D8) -------------------------------------------
+  //
+  // BESTELLT: je Ghost eine eigene Motorstimme, 40 % leiser und je Garagenplatz auf die
+  // Stereobuehne verteilt. Geprueft wird die VERWENDETE Stereoseite (ghostStimmePan liest
+  // die Garage) und der Leisefaktor aus dem Ghost-Zustand - nicht die eigentlichen
+  // Audioknoten, die nur mit Tonkontext und geladenen Schleifen entstehen.
+  stAdd('NPC-Motorsound: Stereoseite je Garagenplatz, 40 % leiser', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.ghostSoundPan) {
+      return { skip: true, mass: 'ghostSoundPan nicht vorhanden' };
+    }
+    const r = OMEGA_TEST.ghostSoundPan(5);
+    if (!r || r.n !== 5) return { ok: false, mass: 'kein Lauf' };
+    const fehler = [];
+    // 1. Das Feld breitet sich ueber die Buehne aus: erster links, letzter rechts.
+    if (!(r.pan[0] < 0 && r.pan[r.n - 1] > 0)) {
+      fehler.push('Richtung: ' + r.pan.join(','));
+    }
+    // 2. Symmetrisch um die Mitte.
+    const mitte = (r.pan[0] + r.pan[r.n - 1]) / 2;
+    if (Math.abs(mitte) > 1e-9) fehler.push('nicht mittig: ' + mitte);
+    // 3. Der mittlere Ghost sitzt in der Mitte.
+    if (r.n % 2 === 1 && Math.abs(r.pan[(r.n - 1) / 2]) > 0.05) {
+      fehler.push('Mittel-NPC nicht mittig');
+    }
+    // 4. 40 % leiser: Faktor 0.6.
+    if (Math.abs(r.leise - 0.6) > 1e-9) fehler.push('Leisefaktor ' + r.leise + ' statt 0.6');
+    return { ok: !fehler.length,
+             mass: fehler.length ? fehler.join(' | ') : 'Pan ' + r.pan.join(',')
+                   + ', Faktor ' + r.leise };
+  });
+
+  // ---- Ghost-Motorsound: Knoten-Lebenszyklus (v0.9.64) ---------------------------
+  //
+  // BESTELLT: "nach langer Laufzeit Ruckler". startGhost() ersetzt car.ghost.stimme bei
+  // jedem Rennstart, aber ein Neustart DERSELBEN Stimme (Motorenwechsel, Ghost-Sound an/aus)
+  // benutzt denselben master weiter. Ohne disconnect der Band-gains sammelten sich die alten
+  // gains am master an. Geprueft wird der Lebenszyklus: starten, stoppen, nochmal starten -
+  // die Knotenzahl muss jedes Mal stimmen und der master nach dem Stoppen losgeloest sein.
+  stAdd('NPC-Motorsound: Knoten-Lebenszyklus (start/stop/restart ohne Anwachsen)', () => {
+    if (!window.OMEGA_TEST || !audioCtx || !sampleEngine.ready) {
+      return { skip: true, mass: 'kein Tonkontext oder Schleifen noch nicht geladen' };
+    }
+    const geladen = SAMPLE_CARS.filter((c) => sampleEngine.buffers[c]);
+    if (!geladen.length) return { skip: true, mass: 'kein Motor geladen' };
+    const modell = geladen[0];
+    const car = { role: 'ghost', alias: 'Probe', device: { id: 'probe-sound-xyz' },
+                  ghost: { stimme: { master: null, pan: null, nodes: null, over: null, car: null, laut: 0.6 },
+                           running: true } };
+    const merkCar = sampleEngine.car, merkSound = ghostSound, merkEnabled = soundEnabled;
+    try {
+      sampleEngine.car = modell;
+      ghostSound = true; soundEnabled = true;
+      const fehler = [];
+      let vorher = 0;
+      for (let i = 0; i < 3; i++) {
+        if (!ghostStimmeStarten(car)) { fehler.push('Start ' + (i + 1) + ' fehlgeschlagen'); break; }
+        const lage = stimmeLage(car.ghost.stimme, car.ghost.stimme.pan);
+        if (i === 0) vorher = lage.baender;
+        else if (lage.baender !== vorher) fehler.push('Baender gewachsen: ' + vorher + ' -> ' + lage.baender);
+        ghostStimmeStoppen(car);
+        const nach = stimmeLage(car.ghost.stimme, null);
+        if (nach.baender !== 0) fehler.push('Nach Stopp nicht leer: ' + nach.baender);
+        if (car.ghost.stimme.pan !== null) fehler.push('Panner nicht losgeloest');
+      }
+      return { ok: !fehler.length,
+               mass: fehler.length ? fehler.join(' | ') : 'Baender ' + vorher + ', 3x start/stop' };
+    } finally {
+      ghostSound = merkSound; soundEnabled = merkEnabled; sampleEngine.car = merkCar;
+      ghostStimmeStoppen(car);
+    }
+  });
+
   // ---- Zwei Spieler DUERFEN verschiedene Motoren fahren ----------------------------
   //
   // BESTELLT: "Spieler 1 und Spieler 2 sollen verschiedene Motorsounds haben duerfen."
@@ -13187,7 +13469,7 @@
   // Die Lampe wird ueber VIERZIG Zeitpunkte gemessen und nicht an einem: lampFlicker()
   // macht einen Wackelkontakt - ueberwiegend dunkel mit kurzen Zuckungen -, und ein
   // einzelner Zeitpunkt faengt zufaellig einen Zucker.
-  stAdd('Zwei Spieler: Auto 2 nimmt eigenen Schaden, der Ghost bleibt hell', () => {
+  stAdd('Zwei Spieler: Auto 2 nimmt eigenen Schaden, der NPC bleibt hell', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.schadenZweiProbe) {
       return { skip: true, mass: 'schadenZweiProbe nicht vorhanden' };
     }
@@ -13204,7 +13486,7 @@
     // Der Ghost muss an JEDEM der vierzig Zeitpunkte hell sein - sein Lampenschaden ist
     // nicht "selten", sondern nicht vorhanden.
     if (r.hellGhost !== r.zeitpunkte) {
-      maengel.push('Ghost nur ' + r.hellGhost + '/' + r.zeitpunkte + ' hell');
+      maengel.push('NPC nur ' + r.hellGhost + '/' + r.zeitpunkte + ' hell');
     }
     // Und Auto 2 muss ueberwiegend dunkel sein. Die Grenze ist grosszuegig, weil der
     // Wackelkontakt ein Zeitanteil ist und kein festes Muster - gemessen 5 von 40.
@@ -13215,7 +13497,7 @@
              mass: r.schadenNachStoss + ' % nach 3 Stoessen (Auto 1: ' + r.schadenAutoEins
                  + ' %) | Lampe hinten ' + (r.lichtAuto2.rear ? 'aus' : 'an')
                  + ' | hell: Auto 2 ' + r.hellAuto2 + '/' + r.zeitpunkte
-                 + ', Ghost ' + r.hellGhost + '/' + r.zeitpunkte
+                 + ', NPC ' + r.hellGhost + '/' + r.zeitpunkte
                  + (maengel.length ? ' | ' + maengel.join(', ') : '') };
   });
 
@@ -13234,7 +13516,7 @@
   // Die Gegenprobe gehoert dazu und ist die wichtigere: mit abgeschaltetem Modus darf
   // Auto 2 NICHT im Feld stehen. Sonst wichen die Ghosts im Einzelspiel einem Auto aus,
   // das niemand fuehrt.
-  stAdd('Zwei Spieler: die Ghosts haben Auto 2 im Feld', () => {
+  stAdd('Zwei Spieler: die NPCs haben Auto 2 im Feld', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.zweiSpielerFeldProbe) {
       return { skip: true, mass: 'zweiSpielerFeldProbe nicht vorhanden' };
     }
@@ -13275,7 +13557,7 @@
     if (!window.OMEGA_TEST || !OMEGA_TEST.garagenZeileProbe) {
       return { skip: true, mass: 'garagenZeileProbe nicht vorhanden' };
     }
-    const SOLL = ['player', 'player2', 'player3', 'ghost', 'none'];
+    const SOLL = ['player', 'player2', 'player3', 'safetycar', 'challenger', 'ghost', 'none'];
     const aus = OMEGA_TEST.garagenZeileProbe({ zwei: false });
     const an = OMEGA_TEST.garagenZeileProbe({ zwei: true, role: 'player2' });
     const maengel = [];
@@ -13694,7 +13976,7 @@
   // gibt es keinen Zug - das Auto hing nach dem ersten Hochschalten dauerhaft bei 24 Prozent,
   // bei JEDEM Ziel. Daraus wurde erst eine Beharrungsabweichung von 58 Prozent geschlossen.
   // Sie war der Prueflauf. Er setzt die Unterbrechung jetzt auf seine eigene Uhr.
-  stAdd('Ghost erreicht sein eingestelltes Tempo', async () => {
+  stAdd('NPC erreicht sein eingestelltes Tempo', async () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostDriveProbe) {
       return { skip: true, mass: 'ghostDriveProbe nicht vorhanden' };
     }
@@ -13836,7 +14118,7 @@
   // Geprueft wird, dass ueber mehrere Runden VERSUCHE GEZAEHLT werden und die Schrittweite
   // sich bewegt. Nicht, dass der Ghost schneller wird: eine (1+1)-Strategie verwirft die
   // meisten Versuche, und das ist ihre Aufgabe.
-  stAdd('Ghost-Lernen zieht je Runde Bilanz', async () => {
+  stAdd('NPC-Lernen zieht je Runde Bilanz', async () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostDriveProbe) {
       return { skip: true, mass: 'ghostDriveProbe nicht vorhanden' };
     }
@@ -14476,7 +14758,42 @@
              mass: teile.join(' | ') + (fehler.length ? ' || ' + fehler.join('; ') : '') };
   });
 
-  // ---- Zieleinlauf: abwechselnd links und rechts ----
+  // ---- Haarnadel: langsam, liest 0x00, wird aber nicht geparkt (v0.9.64) ----
+  //
+  // GEMELDET: "Ghosts bleiben in der Haarnadel stehen und blinken." Die Haarnadel faehrt der
+  // Ghost mit 33 % - unter GHOST_READ_MIN (35 %), also unter der Leseschwelle. Dort meldet
+  // das Auto 0x00, obwohl es auf der Bahn ist, und wird nach 900 ms als "Bahn verlassen"
+  // geparkt. Der Abgangsmelder darf nur zuschlagen, wenn der letzte GUELTIGE Code eine
+  // Gerade war (Ziel ueber der Leseschwelle). In der Kurve/Haarnadel liest 0x00 "langsam",
+  // nicht "neben der Bahn".
+  stAdd('Haarnadel: langsamer NPC liest 0x00, wird aber nicht geparkt', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.recoveryProbe) {
+      return { skip: true, mass: 'recoveryProbe nicht vorhanden' };
+    }
+    const fehler = [], teile = [];
+    // 1. In der Haarnadel (letzter Code 0x05), 0x00 steht: NICHT parken.
+    const hp = OMEGA_TEST.recoveryProbe({ dauerMs: 1500, an: false, code: 'SG3H2G3R2',
+                                          tileIndex: 5, lastCode: 0x05 });
+    teile.push('Haarnadel: geparkt ' + !!hp.geparkt);
+    if (hp.geparkt) fehler.push('Haarnadel wird als "Bahn verlassen" geparkt');
+    // 2. Kontrolle: derselbe Lauf, aber der letzte Code war eine Gerade (0x02) - das ist
+    //    ein echter Abgang und muss parken.
+    const ge = OMEGA_TEST.recoveryProbe({ dauerMs: 1500, an: false, code: 'SG4R4G4',
+                                          tileIndex: 2, lastCode: 0x02 });
+    teile.push('Gerade: geparkt ' + !!ge.geparkt);
+    if (!ge.geparkt) fehler.push('Gerade (echter Abgang) parkt nicht');
+    // 3. v0.9.74: derselbe Kurvenfall, aber 0x00 laenger als GHOST_OFFTRACK_KURVE_MS. Eine
+    //    Haarnadel raeumt in unter einer Sekunde - wer nach 3 s immer noch 0x00 liest, liegt
+    //    neben der Bahn, auch wenn er langsam geplant war (frueher blieb er stehen).
+    const hpl = OMEGA_TEST.recoveryProbe({ dauerMs: 4500, an: false, code: 'SG3H2G3R2',
+                                           tileIndex: 5, lastCode: 0x05 });
+    teile.push('Kurve lang 0x00: geparkt ' + !!hpl.geparkt);
+    if (!hpl.geparkt) fehler.push('Kurve mit langem 0x00 parkt nicht (liegt neben der Bahn)');
+    return { ok: fehler.length === 0,
+             mass: teile.join(' | ') + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- Zieleinlauf: abwechselnd links und rechts (v0.9.59) ----
   //
   // GEMELDET: "Nach dem Rennen rammen die Ghosts alle ineinander hinein. Mache es so, dass
   // sie abwechselnd links und rechts am Rand stehen bleiben."
@@ -14485,7 +14802,7 @@
   // Bahn: wo ein Auto wirklich stehen bleibt, kann diese App nicht wissen - es meldet seine
   // Querlage nicht. Was sie zusichern kann, ist, dass zwei aufeinanderfolgende Autos
   // ENTGEGENGESETZT einschlagen und dass die Hinteren laenger rollen.
-  stAdd('Zieleinlauf: in Kacheln gestaffelt, alle links an den Rand', () => {
+  stAdd('Zieleinlauf: in Kacheln gestaffelt, abwechselnd links und rechts', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.finishSeiten) {
       return { skip: true, mass: 'finishSeiten nicht vorhanden' };
     }
@@ -14501,15 +14818,24 @@
     // Zwei Autos konnten dieselbe Stelle treffen.
     //
     // Jetzt zaehlt jedes Auto KACHELWECHSEL, und eine Kachel ist 43 cm bei 9,5 cm
-    // Fahrzeuglaenge - mehr als vier Fahrzeuglaengen Abstand, unabhaengig vom Tempo. Damit
-    // braucht es keine wechselnden Seiten mehr, und alle stehen links, wie bestellt: das
-    // Feld in einer Reihe, die andere Bahnhaelfte frei fuer das Auto des Fahrers.
+    // Fahrzeuglaenge - mehr als vier Fahrzeuglaengen Abstand, unabhaengig vom Tempo.
+    //
+    // v0.9.59 (D7): die Staffel allein reichte nicht mehr. Mit "alle links" stauten sich
+    // beide Bahnhaelfte-nach der eine Rand, und bei mehr als zwei Autos fuhren die Nach-
+    // zuegler auf die Vorderen auf. Jetzt wechselt die Seite je Startplatz (g.seite: ungerade
+    // links, gerade rechts), und weil zwei gleiche Seiten dadurch immer ZWEI Plaetze
+    // auseinanderliegen, parken sie doppelt so weit auseinander.
     const r = OMEGA_TEST.finishSeiten(6);
     const fehler = [];
     if (!r || r.length !== 6) return { ok: false, mass: 'kein Lauf' };
-    // 1. ALLE LINKS. Byte 7 negativ ist links.
+    // 1. ABWECHSELND NACH STARTPLATZ. Gerader Platz rechts, ungerader links.
     for (let i = 0; i < r.length; i++) {
-      if (!(r[i].seite < 0)) fehler.push('Auto ' + i + ': Seite ' + r[i].seite);
+      const soll = i % 2 ? -1 : 1;
+      if (r[i].seite !== soll) fehler.push('Auto ' + i + ': Seite ' + r[i].seite + ' statt ' + soll);
+      // Und benachbarte Plaetze (auch die beiden eines Zweierzugs) gehen auseinander.
+      if (i > 0 && r[i].seite === r[i - 1].seite) {
+        fehler.push('Auto ' + i + ' und ' + (i - 1) + ' stehen auf derselben Seite');
+      }
     }
     // 2. STRENG ABNEHMEND, und jetzt darf es streng sein: die Kachelstaffel hat keinen
     //    Boden, der zwei Autos denselben Wert gibt. Der Letzte kommt auf null heraus.
@@ -15353,7 +15679,9 @@
     try {
       raceState = 'racing';
       raceLapTimes = [];
-      raceLapStart = Date.now();
+      // Eine Minute gefahren: seit v0.9.51 ist eine erste Ueberfahrt kurz nach dem Start nur
+      // die Startlinie (eigener Test unten), und genau das soll dieser Test nicht pruefen.
+      raceLapStart = Date.now() - 60000;
       dashLapStart = Date.now();
       racePartialMs = null;
       const bei0 = raceLapTimes.length;
@@ -15509,7 +15837,7 @@
   // ---- Die Annahmeregel des Lernens ----
   // Der Kern: eine SCHNELLERE Runde mit einem Abgang darf nicht angenommen werden. Wird das
   // je umgedreht, lernt das Verfahren, dass Abfliegen sich lohnt.
-  stAdd('Ghost-Lernen nimmt keine Runde mit Abgang', () => {
+  stAdd('NPC-Lernen nimmt keine Runde mit Abgang', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.learnSim) {
       return { skip: true, mass: 'learnSim nicht vorhanden' };
     }
@@ -16276,7 +16604,7 @@
   // Vier Behauptungen, die vorher nur im Kommentar standen. Die erste ist die, die der
   // Benutzer gemeldet hat: nach dem Zurueckstellen eines abgeflogenen Autos wurde es ihm
   // mit Vollgas aus der Hand gerissen. Ursache war throttle = err * 4 bei v = 0.
-  stAdd('Ghost-Regler: Rampe, Totband, Ratenbegrenzung', () => {
+  stAdd('NPC-Regler: Rampe, Totband, Ratenbegrenzung', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ghostSpeedControl) {
       return { skip: true, mass: 'ghostSpeedControl nicht vorhanden' };
     }
@@ -16885,6 +17213,43 @@
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'rollt an, Bremse des Fahrers gilt, haelt am Platz, gibt nach dem Start frei' };
   });
 
+  // v0.9.58 (D6): die Aufstellung faehrt mit der MAXIMALEN Querlage und mit Spur-Bytes, und
+  // sie wird ein autopilotGrund. Vorher schaltete das Kästchen gridSelbst die Breite nur um,
+  // und die Autos fuhren gar nicht von selbst los, weil `armed` die Aufstellung nicht kannte.
+  stAdd('Aufstellung v0.9.58: max. Querlage, Spur-Bytes, autopilotGrund', () => {
+    const f = [];
+    const merk = { p1: playerCar, tm: trackMode, fl: flagState, rfl: raceFormationLap, rgo: raceGridOrder };
+    const auto = { device: { id: 'probe-aufst-2' }, role: 'player', alias: 'P2', testSenke: [] };
+    try {
+      trackMode = 'on'; flagState = 'green'; raceFormationLap = false; raceGridOrder = ['probe-aufst-2'];
+      // Max. Querlage: benachbarte Plaetze gehen auseinander und deutlich ueber den
+      // Einfuehrungsrunden-Versatz hinaus (GHOST_GRID_MAX statt GHOST_GRID_OFFSET).
+      const a = {}; a.weavePhase = 1.234; const t = 1000000;
+      const m0 = formationOffset(a, 0, t, GHOST_GRID_MAX), m1 = formationOffset(a, 1, t, GHOST_GRID_MAX);
+      if (!(m0 > 0 && m1 < 0)) f.push('max. Querlage ohne Vorzeichenwechsel ' + m0.toFixed(3) + '/' + m1.toFixed(3));
+      if (!(Math.abs(m0) <= GHOST_WEAVE + GHOST_GRID_MAX + 1e-9)) f.push('max. Querlage zu gross: ' + m0.toFixed(3));
+      if (!(Math.abs(m0) > GHOST_GRID_OFFSET + GHOST_WEAVE)) f.push('nicht max. Querlage angesteuert: ' + m0.toFixed(3));
+      // Die Aufstellung wird ein autopilotGrund, also laeuft die Fahrhilfe und der
+      // Cockpit-Schriftzug kann sie zeigen.
+      playerCar = auto;
+      aufstellSpieler.clear();
+      aufstellSpieler.set(auto, { ziel: 5, seit: Date.now(), fertig: false });
+      if (autopilotGrund() !== 'aufstellen') f.push('autopilotGrund meldet die Aufstellung nicht');
+      if (!driverAssistAktiv()) f.push('Fahrhilfe nicht aktiv waehrend der Aufstellung');
+      // Der Autopilot sendet Spur-Bytes (Querlage), nicht Lenkung null.
+      const r = autopilot(0, 1);
+      if (!r || r.grund !== 'aufstellen') f.push('Autopilot uebernimmt nicht (' + (r && r.grund) + ')');
+      if (r && !(Math.abs(r.steer) > 1e-6)) f.push('kein Spur-Byte (steer=0) waehrend der Aufstellung');
+      if (r && !(Math.abs(r.steer) <= GHOST_WEAVE + GHOST_GRID_MAX + 1e-9)) f.push('Spur-Byte ausserhalb des Rahmens: ' + r.steer);
+      aufstellenStoppen(false);
+    } finally {
+      aufstellSpieler.clear(); playerCar = merk.p1; trackMode = merk.tm; flagState = merk.fl;
+      raceFormationLap = merk.rfl; raceGridOrder = merk.rgo; autopilotZuruecksetzen();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ')
+              : 'max. Breite abwechselnd, Spur-Bytes gesendet, Grund + Fahrhilfe aktiv' };
+  });
+
   stAdd('Statistik: Sieger, Medaillen, Kilometer-Korrektur', () => {
     const f = [];
     const s1 = { modus: 'laps', autos: [{ rolle: 'player', laps: [5000, 5000, 5000] }, { rolle: 'ghost', laps: [4000, 4000] }] };
@@ -16956,14 +17321,14 @@
       garage.push(g);
       try {
         zweiSpieler = false; derbyHealth = 70;
-        if (derbyUrteil() !== null) f.push('mit Ghost ohne Zustand: Ende ohne Grund');
+        if (derbyUrteil() !== null) f.push('mit NPC ohne Zustand: Ende ohne Grund');
       } finally { garage.splice(garage.indexOf(g), 1); }
     } finally {
       geister.forEach((c, i) => { c.role = rollen[i]; });
       derbyLaeuft = merk.lauf; derbyHealth = merk.h; derbyKills = merk.k; zweiSpieler = merk.zwei;
       raceLimit = merk.lim; derbyHealth2 = merk.h2; derbyKills2 = merk.k2;
     }
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'allein nie Ende, zu zweit gewinnt der Letzte, Ghost zaehlt ab Start' };
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'allein nie Ende, zu zweit gewinnt der Letzte, NPC zaehlt ab Start' };
   });
 
   stAdd('Mehrspieler: Ampel verschiebbar, Rennende von Mitspieler, Ende-Signal', () => {
@@ -17327,6 +17692,772 @@
   }));
 
   // v0.9.41 GEMELDET: "Das Multiplayer Renn-Ende wird nicht getriggert ... 5-Runden-Rennen."
+  // ---- v0.9.51: Start hinter der Linie ergibt keine Kurzrunde ----
+  stAdd('Start hinter der Linie: erste Ueberfahrt ist keine Runde, Kurzrunden nie Bestzeit', () => {
+    const f = [];
+    const merk = { rs: raceState, rm: raceMode, lim: raceLimit, laps: raceLapTimes.slice(), ls: raceLapStart,
+                   dl: dashLapStart, dt: dashLapTimes.slice(), form: raceFormationLap, aw: raceAwaitingMove,
+                   tiles: currentTrackTiles, sc: sectorCount, ev: raceLapEvents.slice(),
+                   status: $('race-status') ? $('race-status').textContent : '' };
+    const echt = { fin: finishRace, sp: speakLap, ch: playLapChime };
+    const besteTon = [];
+    try {
+      finishRace = () => { raceState = 'finished'; };
+      speakLap = () => {}; playLapChime = (b) => { besteTon.push(!!b); };
+      raceMode = 'laps'; raceLimit = 20; raceState = 'racing'; raceFormationLap = false; raceAwaitingMove = false;
+      sectorCount = 1; sectorReset();
+      const vorlage = CH_ALLE.find((d) => d.id === 'oval') || CH_ALLE[0];
+      currentTrackTiles = codeToTrack(vorlage.code).tiles;
+      const min = rundeMinMs();
+      // Platz 4: zwei Kacheln bis zur Linie, nach gut einer Sekunde.
+      raceLapTimes = []; raceLapStart = Date.now() - 1100;
+      const start = raceLapStart;
+      playerLapCrossed();
+      if (raceLapTimes.length) f.push('Startlinie als Runde gebucht (' + raceLapTimes[0].ms + ' ms)');
+      if (raceLapStart !== start) f.push('Uhr neu gestartet statt weiterzulaufen');
+      // Die erste volle Runde: Zeit ab dem Start, inklusive Anlauf.
+      raceLapStart = Date.now() - (min + 4000);
+      playerLapCrossed();
+      if (raceLapTimes.length !== 1) f.push('erste volle Runde fehlt');
+      // Eine Kurzrunde mitten im Rennen (Zaehlfehler) verdeckt keine echte Bestzeit.
+      raceLapTimes = [{ lap: 1, ms: min + 4000 }, { lap: 2, ms: 600 }];
+      raceLapStart = Date.now() - (min + 2000);
+      besteTon.length = 0;
+      playerLapCrossed();
+      if (besteTon[0] !== true) f.push('echte Bestzeit nach einer Kurzrunde nicht als Bestzeit erkannt');
+      if (!(min >= 1500)) f.push('Mindestzeit ' + min);
+    } finally {
+      finishRace = echt.fin; speakLap = echt.sp; playLapChime = echt.ch;
+      raceState = merk.rs; raceMode = merk.rm; raceLimit = merk.lim; raceLapTimes = merk.laps; raceLapStart = merk.ls;
+      dashLapStart = merk.dl; dashLapTimes = merk.dt; raceFormationLap = merk.form; raceAwaitingMove = merk.aw;
+      currentTrackTiles = merk.tiles; sectorCount = merk.sc; raceLapEvents = merk.ev; sectorReset();
+      if ($('race-status')) $('race-status').textContent = merk.status;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Startlinie keine Runde, Uhr laeuft weiter, Bestzeit trotz Kurzrunde erkannt' };
+  });
+
+  // ---- v0.9.51: Rennstart setzt alle Autos zurueck ----
+  stAdd('Rennstart: Tank voll, Schaden null, Reifen kalt fuer Spieler 1 bis 3', () => {
+    const f = [];
+    const z2 = zusatzPlatz(2), z3 = zusatzPlatz(3);
+    const merk = { dmg: damage, lf: lightDamage.front, t2: z2.tank.stand, s2: z2.schaden.wert, t3: z3.tank.stand,
+                   s3: z3.schaden.wert, tyre: physEngine.state.tyreTempC, tyre2: physEngine2.state.tyreTempC };
+    try {
+      damage = 0.6; lightDamage.front = true;
+      z2.tank.stand = 20; z2.schaden.wert = 0.5; z3.tank.stand = 10; z3.schaden.wert = 0.7;
+      physEngine2.state.tyreTempC = 70;
+      // Genau der Block aus startRaceCountdown, ohne Countdown und Wetter.
+      raceStartZuruecksetzen(80);
+      if (damage !== 0 || lightDamage.front) f.push('Spieler 1 behaelt Schaden');
+      if (z2.tank.stand !== 80 || z2.schaden.wert !== 0) f.push('Spieler 2: Tank ' + z2.tank.stand + ', Schaden ' + z2.schaden.wert);
+      if (z3.tank.stand !== 80 || z3.schaden.wert !== 0) f.push('Spieler 3: Tank ' + z3.tank.stand + ', Schaden ' + z3.schaden.wert);
+      const soll2 = physEngine2.config.tyreBlankets ? physEngine2.config.tyreOptimalC : physEngine2.config.tyreAmbientC;
+      if (physEngine2.state.tyreTempC !== soll2) f.push('Spieler 2: Reifen ' + physEngine2.state.tyreTempC + ' statt ' + soll2);
+    } finally {
+      damage = merk.dmg; lightDamage.front = merk.lf; z2.tank.stand = merk.t2; z2.schaden.wert = merk.s2;
+      z3.tank.stand = merk.t3; z3.schaden.wert = merk.s3; physEngine.state.tyreTempC = merk.tyre;
+      physEngine2.state.tyreTempC = merk.tyre2; updateDamageFuelUI();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'alle drei Plaetze voll, schadenfrei, Reifen nach Waermer-Einstellung' };
+  });
+
+  // ---- v0.9.51: Knockout ueber den echten Weg (parkCar) ----
+  stAdd('Knockout: geparkter NPC ist raus, Toene fuer Leben, Game over und Sieg', () => {
+    const f = [];
+    const merk = { lauf: knockoutLaeuft, geister: knockoutGeister, sieger: knockoutSieger, leben: knockoutLeben,
+                   garage: garage.slice(), rs: raceState };
+    const echt = { stop: stopGhost, fin: finishRace, ton: playTone, fan: playRaceEndFanfare };
+    const toene = [];
+    let fanfare = 0, ende = 0;
+    const fake = (id) => ({ device: { id, name: id }, role: 'ghost', tag: id,
+                             ghost: { running: true, eliminated: false } });
+    try {
+      stopGhost = (c) => { if (c.ghost) c.ghost.running = false; };
+      finishRace = () => { ende++; };
+      playTone = (hz) => { toene.push(hz); };
+      playRaceEndFanfare = () => { fanfare++; };
+      const a = fake('ko-a'), b = fake('ko-b');
+      garage.length = 0; garage.push(a, b);
+      raceState = 'racing';
+      knockoutLaeuft = true; knockoutSieger = null; knockoutLeben = 3; knockoutGeister = knockoutGeisterZaehlen();
+      parkCar(a, 'Bahn verlassen');
+      if (!a.ghost.eliminated) f.push('geparkter NPC nicht raus');
+      if (knockoutGeister !== 1) f.push('Geister ' + knockoutGeister + ' statt 1');
+      if (ende) f.push('Rennen nach dem ersten NPC schon zu Ende');
+      parkCar(b, 'Bahn verlassen');
+      if (knockoutSieger !== 'menschen' || !fanfare || ende !== 1) f.push('nach dem letzten NPC: ' + knockoutSieger + ', Fanfare ' + fanfare + ', Ende ' + ende);
+      // Leben: trauriger Ton, beim letzten der Game-over-Ton statt des traurigen.
+      a.parked = null; b.parked = null; a.ghost.eliminated = false; b.ghost.eliminated = false;
+      a.ghost.running = true; b.ghost.running = true;
+      knockoutLaeuft = true; knockoutSieger = null; knockoutLeben = 2; knockoutGeister = knockoutGeisterZaehlen();
+      toene.length = 0; ende = 0;
+      knockoutLebenVerlieren(1);
+      if (toene[0] !== 392) f.push('kein trauriger Ton beim Lebensverlust: ' + JSON.stringify(toene));
+      toene.length = 0;
+      knockoutLebenVerlieren(1);
+      if (knockoutSieger !== 'geister' || ende !== 1) f.push('letztes Leben: ' + knockoutSieger + ', Ende ' + ende);
+      if (toene.indexOf(392) >= 0) f.push('trauriger Ton zusaetzlich zum Game over');
+    } finally {
+      stopGhost = echt.stop; finishRace = echt.fin; playTone = echt.ton; playRaceEndFanfare = echt.fan;
+      garage.length = 0; merk.garage.forEach((c) => garage.push(c));
+      knockoutLaeuft = merk.lauf; knockoutGeister = merk.geister; knockoutSieger = merk.sieger;
+      knockoutLeben = merk.leben; raceState = merk.rs;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'geparkt = raus, Sieg mit Fanfare, Leben mit traurigem Ton, Game over beim letzten' };
+  });
+
+  // ---- v0.9.51: Gelbe Flagge mit dem Tempo der Ghosts ----
+  stAdd('Gelb: Fahrerauto darf so schnell wie die NPCs, Kurven gedrosselt', () => {
+    const f = [];
+    const merk = { tm: trackMode, ly: limitYellow, lim: physEngine.config.speedLimitFactor };
+    try {
+      trackMode = 'on';
+      const grenze = gelbGrenze();
+      if (grenze < GHOST_READ_MIN) f.push('Grenze ' + grenze.toFixed(3) + ' unter der Lese-Mindestgeschwindigkeit');
+      limitYellow = grenze; applySpeedLimit();
+      if (physEngine.config.speedLimitFactor < GHOST_READ_MIN) f.push('Physik gedeckelt auf ' + physEngine.config.speedLimitFactor.toFixed(3));
+      // v0.10.5: auch im Ausdruck-Modus 35 % (BESTELLT "alle Autos auf ca. 35 % drosseln").
+      trackMode = 'off';
+      if (gelbGrenze() < GHOST_READ_MIN) f.push('im Ausdruck-Modus unter der Lese-Mindestgeschwindigkeit');
+      const gerade = autopilotKurvenFaktor({ tileCode: TILE_TYPE.STRAIGHT });
+      const kurve = autopilotKurvenFaktor({ tileCode: TILE_TYPE.CURVE_RIGHT });
+      const nadel = autopilotKurvenFaktor({ tileCode: TILE_TYPE.HAIRPIN });
+      if (gerade !== 1) f.push('Gerade gedrosselt: ' + gerade);
+      if (!(kurve < 1 && nadel < kurve)) f.push('Kurve ' + kurve + ', Haarnadel ' + nadel);
+    } finally {
+      trackMode = merk.tm; limitYellow = merk.ly; applySpeedLimit();
+      physEngine.config.speedLimitFactor = merk.lim;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Grenze >= ' + GHOST_READ_MIN + ', Kurve und Haarnadel gedrosselt wie bei den NPCs' };
+  });
+
+  // ---- v0.9.55: Ueberholrate als Kontingent ----
+  stAdd('Ueberholrate: 0.1 je Runde je 4 Autos ergibt bei 6 Autos und 10 Runden 1 bis 2 Angriffe', () => {
+    const f = [];
+    const merk = { rs: raceState, feld: ghostFieldRacing, prog: ghostProgress, tiles: currentTrackTiles,
+                   rate: ghostCfg.ueberholRate, konto: Object.assign({}, ueberholKonto) };
+    let angriffe = 0;
+    try {
+      const autos = [1, 2, 3, 4, 5, 6].map((i) => ({ id: i, tiles: 0 }));
+      ghostFieldRacing = () => autos;
+      ghostProgress = (c) => c.tiles;
+      currentTrackTiles = new Array(10).fill(0).map(() => ({ type: TILE_TYPE.STRAIGHT }));
+      raceState = 'racing'; ghostCfg.ueberholRate = 0.1;
+      ueberholKonto.guthaben = 0; ueberholKonto.stand = null; ueberholKonto.at = 0;
+      let uhr = 1e6;
+      for (let schritt = 0; schritt <= 1000; schritt++) {       // 10 Runden in 1000 Schritten
+        autos.forEach((a) => { a.tiles = schritt / 10; });
+        uhr += 250;
+        ueberholKontoTick(uhr);
+        if (ueberholKonto.guthaben >= 1) { ueberholKonto.guthaben -= 1; angriffe++; }
+      }
+      if (angriffe < 1 || angriffe > 2) f.push(angriffe + ' Angriffe');
+    } finally {
+      raceState = merk.rs; ghostFieldRacing = merk.feld; ghostProgress = merk.prog; currentTrackTiles = merk.tiles;
+      ghostCfg.ueberholRate = merk.rate; Object.assign(ueberholKonto, merk.konto);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : angriffe + ' Angriff(e) in 10 Runden mit 6 Autos' };
+  });
+
+  // ---- v0.9.87: Block 1 (Fehler aus der Pruefung) ----
+  stAdd('NPC-Seiten: nahes Paar gegensaetzlich, Reihenfolge nach Querlage, kein Kreuzen', () => {
+    const f = [];
+    const a = { device: { id: 'a' }, ghost: { seite: 1 } }, b = { device: { id: 'b' }, ghost: { seite: 1 } };
+    // Gleiche Startseite, beide mittig: trotzdem gegensaetzlich.
+    let q = { a: 0, b: 0 }, o = { a: 5.2, b: 5.0 };
+    let m = ghostSeitenVergeben([a, b], (c) => q[c.device.id], ghostSeiteVorzug, (c) => o[c.device.id]);
+    if (m.get(a) === m.get(b)) f.push('gleiche Startseite -> gleiche Seite');
+    // Wer weiter links faehrt, bleibt links - auch wenn der Ort rauscht und sich vertauscht.
+    q = { a: -0.4, b: 0.3 };
+    for (const rausch of [[5.0, 5.3], [5.3, 5.0], [4.9, 5.1]]) {
+      o = { a: rausch[0], b: rausch[1] };
+      m = ghostSeitenVergeben([a, b], (c) => q[c.device.id], ghostSeiteVorzug, (c) => o[c.device.id]);
+      if (!(m.get(a) < m.get(b))) { f.push('Ortsrauschen vertauscht die Seiten'); break; }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'gegensaetzlich, stabil gegen Ortsrauschen' };
+  });
+
+  stAdd('Rollenwechsel: Ex-NPC als Fahrerauto ohne NPC-Zustand und ohne Spur-Bytes', () => {
+    const f = [];
+    const car = { device: { id: 'rw-test', name: 'RW' }, role: 'ghost', tag: 'RW',
+                  ghost: { running: false, tileIndex: 3 }, modeBytes: { 10: 0x20 }, railLight: 0x0a, parked: null };
+    const merk = { garage: garage.slice(), player: playerCar, rend: renderGarage, merken: carRolleMerken };
+    try {
+      renderGarage = () => {}; carRolleMerken = () => {};
+      garage.length = 0; garage.push(car);
+      setCarRole(car, 'none');
+      if (car.ghost !== null) f.push('NPC-Zustand bleibt');
+      if (car.modeBytes !== null) f.push('Spur-Bytes bleiben');
+      if (car.railLight !== null) f.push('Leitplanken-Licht bleibt');
+    } finally {
+      renderGarage = merk.rend; carRolleMerken = merk.merken; playerCar = merk.player;
+      garage.length = 0; merk.garage.forEach((c) => garage.push(c));
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'NPC-Zustand, Spur-Bytes und Licht geloescht' };
+  });
+
+  stAdd('Akku: geglaettet (Maximum 5 s), Warnblinken nur ueber die Lichter', () => {
+    const f = [];
+    const h = {};
+    akkuGlaetten(h, 150, 1000); akkuGlaetten(h, 141, 1500);
+    if (akkuGlaetten(h, 143, 2000) !== 150) f.push('Einbruch unter Gas nicht geglaettet');
+    if (akkuGlaetten(h, 144, 7000) !== 144) f.push('altes Maximum haelt laenger als 5 s');
+    if (h.akkuMinRoh !== 141) f.push('Minimum ' + h.akkuMinRoh);
+    const car = { role: 'ghost', ghost: { running: true } };
+    akkuBlinken(car);
+    if (!car.akkuBlinkBis) f.push('fahrender NPC: kein Lichtfenster');
+    let aus = 0;
+    for (let tt = 0; tt < 1500; tt += 50) if (akkuBlinkAus(car, car.akkuBlinkBis - 1500 + tt)) aus++;
+    if (!aus || aus > 20) f.push('Lichtmaske ' + aus + ' von 30');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Maximum ueber 5 s, Lichtfenster statt Fahrpakete' };
+  });
+
+
+  // ---- v0.10.5: Block 3 ----
+  stAdd('RC-Modus: Gas laeuft in 2 s aus, Bremse sofort, zweiter Bremsdruck im Stand = rueckwaerts', () => {
+    const f = [];
+    rcZuruecksetzen();
+    let t0 = 1000;
+    // In 45-ms-Takten wie der Herzschlag (rcGas begrenzt einen Takt auf 200 ms).
+    const schritt = (y, ms) => { let v = 0; for (let x = 0; x < ms; x += 45) { t0 += Math.min(45, ms - x); v = rcGas(y, t0); } return v; };
+    schritt(1, 45);
+    let v = schritt(0, 1000);
+    if (!(v > 0.4 && v < 0.6)) f.push('nach 1 s ohne Gas ' + v.toFixed(2) + ' statt ~0,5');
+    v = schritt(0, 1100);
+    if (v !== 0) f.push('nach 2 s nicht ausgelaufen: ' + v);
+    schritt(1, 45);
+    v = schritt(-1, 45);
+    if (!(v < 0)) f.push('Bremse greift nicht sofort');
+    v = schritt(-1, 700);
+    if (v !== 0) f.push('erste Bremse faehrt nach 600 ms weiter rueckwaerts: ' + v);
+    schritt(0, 500);                       // loslassen, Auto "steht"
+    v = schritt(-0.8, 45);                 // zweiter Druck
+    if (!(v < -0.5)) f.push('zweiter Bremsdruck im Stand faehrt nicht rueckwaerts: ' + v);
+    v = schritt(0, 45);
+    if (v !== 0) f.push('Rueckwaerts haelt nach dem Loslassen an: ' + v);
+    rcZuruecksetzen();
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Auslaufen 2 s, Bremse sofort, Rueckwaerts erst beim zweiten Druck' };
+  });
+
+  stAdd('Abstimmungen: FAHREN zeigt Arcade, Sim+, Pro, Pacejka, RC; Lenkeinschlag erreichbar ausser Realismus GT3', () => {
+    const f = [];
+    const fahren = window.__presetKeysFahren ? window.__presetKeysFahren() : [];
+    if (fahren.join(',') !== 'arcade,simplus,pro,propacejka,rc') f.push('FAHREN: ' + fahren.join(','));
+    for (const k of ['arcade', 'simplus', 'gt3', 'f1']) {
+      const v = window.__presetValues(k) || {};
+      const resp = v['phys-steerresp'] === undefined ? 3 : v['phys-steerresp'];
+      if (resp < 3) f.push(k + ': Lenkansprechen ' + resp + ' (voller Einschlag nie erreichbar)');
+      if (v['setting-steer-calib'] !== undefined && v['setting-steer-calib'] < 2) f.push(k + ': Kalibrierung ' + v['setting-steer-calib']);
+    }
+    const sim = window.__presetValues('simplus') || {}, pro = window.__presetValues('pro') || {};
+    if (!(sim['setting-brakepower'] > pro['setting-brakepower'] + 0.5)) f.push('Sim+ bremst nicht viel staerker als Pro');
+    if (!(sim['phys-accel'] > pro['phys-accel'])) f.push('Sim+ beschleunigt nicht staerker');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'fuenf im FAHREN-Menue, Sim+ staerker als Pro, Einschlag erreichbar' };
+  });
+
+  stAdd('Training: Zeitlimit 0 laeuft ohne Ende, ein Limit beendet es', () => {
+    const f = [];
+    const merk = { m: raceMode, l: raceLimit, s: raceState, st: raceStartedAt };
+    try {
+      raceMode = 'practice'; raceState = 'racing'; raceStartedAt = Date.now() - 5 * 60000;
+      raceLimit = 0;
+      if (raceLimitReached()) f.push('Limit 0 beendet das Training');
+      raceLimit = 3;
+      if (!raceLimitReached()) f.push('3 min Limit nach 5 min nicht erreicht');
+      raceLimit = 10;
+      if (raceLimitReached()) f.push('10 min Limit nach 5 min schon erreicht');
+    } finally { raceMode = merk.m; raceLimit = merk.l; raceState = merk.s; raceStartedAt = merk.st; }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '0 = ohne Ende, sonst nach Minuten' };
+  });
+
+  // ---- v0.10.6: Gold-Formel und Bestzeit-Modus ----
+  stAdd('Gold-Formel: Balkonia 16 s und Omega Testing Track 2 7,2 s, laengere Strecken langsamer', () => {
+    const f = [];
+    const balk = CH_ALLE.find((d) => d.id === 'dauer-balkonia');
+    const g1 = chSterneSchwellen({ id: 'x', code: balk.code }).gold;
+    const g2 = chSterneSchwellen({ id: 'x', code: 'SGR4LGHG' }).gold;
+    if (Math.abs(g1 - 16000) > 5) f.push('Balkonia ' + g1);
+    if (Math.abs(g2 - 7200) > 5) f.push('Track 2 ' + g2);
+    let ab = 0;
+    const liste = CH_ALLE.map((d) => ({ g: chGeoGold(d), gold: chSterneSchwellen(Object.assign({}, d, { id: 'x' })).gold }))
+      .sort((a, b) => a.g - b.g);
+    for (let i = 1; i < liste.length; i++) if (liste[i].gold + 1 < liste[i - 1].gold) ab++;
+    if (ab) f.push(ab + ' Strecken nicht monoton');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Balkonia ' + (g1 / 1000).toFixed(2) + ' s, Track 2 ' + (g2 / 1000).toFixed(2) + ' s' };
+  });
+
+  stAdd('Bestzeit-Modus: nur mit Bahn, Zeiten je Strecke (gespiegelt gleich), Medaille nach Gold-Formel', () => {
+    const f = [];
+    const merk = { m: raceMode, tm: trackMode, tiles: currentTrackTiles, ls: localStorage.getItem(BESTZEIT_STORE) };
+    try {
+      raceMode = 'bestzeit';
+      trackMode = 'off';
+      if (bestzeitBereit(false)) f.push('ohne Bahn bereit');
+      trackMode = 'on';
+      const tiles = codeToTrack('SGR4LGHG').tiles;
+      currentTrackTiles = tiles;
+      if (!bestzeitBereit(false)) f.push('mit Bahn und Strecke nicht bereit');
+      localStorage.removeItem(BESTZEIT_STORE);
+      const auto = { device: { id: 'bz-test' }, tag: 'BZ' };
+      const r1 = bestzeitRunde(9000, auto, tiles);
+      const r2 = bestzeitRunde(7000, auto, chSpiegelTiles(tiles));   // gespiegelt = dieselbe
+      if (!r1 || !r1.neu || !r2 || !r2.neu) f.push('neue Bestzeit nicht erkannt');
+      if (r2.sterne !== 3) f.push('7,0 s auf Track 2 ist kein Gold (' + r2.sterne + ')');
+      const alle = bestzeitLesen();
+      if (Object.keys(alle).length !== 1) f.push(Object.keys(alle).length + ' Eintraege statt 1 (Spiegel nicht zusammengelegt)');
+      const b = bestzeitAktuell(auto);
+      if (!b || b.beste !== 7000 || b.medaille !== 3) f.push('Bestzeit/Medaille: ' + JSON.stringify(b));
+    } finally {
+      raceMode = merk.m; trackMode = merk.tm; currentTrackTiles = merk.tiles;
+      if (merk.ls === null) localStorage.removeItem(BESTZEIT_STORE); else localStorage.setItem(BESTZEIT_STORE, merk.ls);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Bahn noetig, Spiegel = gleiche Strecke, Gold bei 7,0 s' };
+  });
+
+  // ---- v0.10.7: Safety Car ----
+  stAdd('Safety Car: eine Rolle, nie ueberholt, aufschliessen ~45 % dann 35 % (Option)', () => {
+    const f = [];
+    const merk = { garage: garage.slice(), tiles: currentTrackTiles, flag: flagState, ly: limitYellow };
+    const echt = { start: startGhost };
+    try {
+      currentTrackTiles = codeToTrack('SG4R4G4').tiles;
+      const sc = { device: { id: 'sc' }, role: 'safetycar', tag: 'SC', ghost: { running: true, tileIndex: 6, tilesTotal: 6 } };
+      const nah = { device: { id: 'g1' }, role: 'ghost', tag: 'G1', ghost: { running: true, tileIndex: 5, tilesTotal: 5 } };
+      const weit = { device: { id: 'g2' }, role: 'ghost', tag: 'G2', ghost: { running: true, tileIndex: 1, tilesTotal: 1 } };
+      garage.length = 0; garage.push(sc, nah, weit);
+      if (garRollenFrei(nah).some((r) => r.id === 'safetycar')) f.push('zweites Safety Car waehlbar');
+      if (!safetyCarFaehrt()) f.push('Safety Car faehrt nicht');
+      if (!nahAmSafetyCar(nah)) f.push('1 Kachel dahinter gilt nicht als nah');
+      if (nahAmSafetyCar(weit)) f.push('5 Kacheln dahinter gilt als nah');
+      if (ghostFieldRacing().indexOf(sc) < 0) f.push('Safety Car ist kein Hindernis im Feld');
+      if (raceAllCars().some((c) => c.role === 'safetycar')) f.push('Safety Car im Ergebnis');
+      // v1.0.12: Option "erst aufschliessen": weit weg ~45 %, nah 35 %; aus: alle 35 %.
+      const cb = $('race-sc-aufschliessen'), cbMerk = cb ? cb.checked : true;
+      try {
+        if (cb) cb.checked = true;
+        if (Math.abs(gelbZielFuer(weit) - Math.max(0.45, gelbGrenze())) > 1e-9) f.push('weit weg nicht ~45 %: ' + gelbZielFuer(weit));
+        if (Math.abs(gelbZielFuer(nah) - gelbGrenze()) > 1e-9) f.push('nah dran nicht 35 %: ' + gelbZielFuer(nah));
+        if (Math.abs(gelbZielFuer(sc) - gelbGrenze()) > 1e-9) f.push('Safety Car selbst nicht 35 %');
+        startGhost = () => {};
+        flagState = 'green';
+        setFlag('yellow');
+        if (limitYellow < 0.449) f.push('Fahrerauto auf ' + limitYellow + ' gedeckelt, kann nicht aufschliessen');
+        if (cb) cb.checked = false;
+        if (Math.abs(gelbZielFuer(weit) - gelbGrenze()) > 1e-9) f.push('Option aus: weit weg nicht 35 %');
+      } finally { if (cb) cb.checked = cbMerk; }
+      // v1.0.21: Safety Car nur auf der Bahn - im Ausdruck-Modus nicht waehlbar, beim Wechsel Aus.
+      const tmMerk = trackMode, tmSc = sc.role;
+      const stellen = setCarRole, sr = [];
+      try {
+        trackMode = 'off';
+        const frei = { device: { id: 'f' }, role: 'none' };
+        if (garRollenFrei(frei).some((r) => r.id === 'safetycar')) f.push('Safety Car im Ausdruck-Modus waehlbar');
+        setCarRole = (c, r) => { sr.push(r); c.role = r; };
+        bahnRollenPruefen();
+        if (sr[0] !== 'none') f.push('Safety Car faellt im Ausdruck-Modus nicht auf Aus');
+      } finally { trackMode = tmMerk; setCarRole = stellen; sc.role = tmSc; }
+      // v1.0.21: das Safety Car bekommt einen Sendetakt (vorher nur Rolle 'ghost' - es stand).
+      ghostPhasenSetzen();
+      if (!sc.imTakt) f.push('Safety Car bekommt keinen Sendetakt');
+      ghostTaktLoeschen(sc); ghostTaktLoeschen(nah); ghostTaktLoeschen(weit);
+      // v1.0.21: der Autopilot des Fahrerautos drosselt VOR der Haarnadel, nicht erst auf ihr.
+      currentTrackTiles = codeToTrack('SG2H2G2J2').tiles;
+      const hi = currentTrackTiles.findIndex((t) => tileTightness(t.type) >= 2);
+      const ich = { tileCode: TILE_TYPE.STRAIGHT, ghost: { nurOrt: true, tileIndex: hi - 1 } };
+      const soll = 1 - Math.min(0.85, ghostCfg.curveSlow * 2);
+      if (Math.abs(autopilotKurvenFaktor(ich) - soll) > 1e-9) f.push('Fahrerauto drosselt vor der Haarnadel nicht: ' + autopilotKurvenFaktor(ich));
+    } finally {
+      startGhost = echt.start;
+      garage.length = 0; merk.garage.forEach((c) => garage.push(c));
+      currentTrackTiles = merk.tiles; flagState = merk.flag; limitYellow = merk.ly;
+      if (typeof applySpeedLimit === 'function') applySpeedLimit();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'eine Rolle, Hindernis, nicht im Ergebnis, 45 % weit / 35 % nah, Option aus 35 %, Sendetakt, Vorausblick' };
+  });
+
+  // ---- v1.0.21: "Ghost" heisst sichtbar "NPC" ----
+  // BESTELLT: "Nenne die aktuellen Rollen um: 'GHOSTs' sollen 'NPCs' heissen." Geprueft werden die
+  // Textknoten und Attribute der Seite (ohne die Patchnotes, die Geschichte sind) und die
+  // englischen/spanischen Woerterbuchwerte ausser denen alter Patchnotes.
+  stAdd('NPC-Namen in allen sichtbaren Texten (DE, EN, ES)', () => {
+    const f = [];
+    const pn = $('sub-patchnotes');
+    const alt = new Set(pn ? [...pn.querySelectorAll('li')].map((li) => i18nNorm(li.textContent)) : []);
+    const stKarte = $('st-status') ? $('st-status').closest('.card') : null;
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = w.nextNode())) {
+      const el = n.parentElement;
+      if (!el || el.closest('script,style,#sub-patchnotes,#log,.log') || el.closest('.card') === stKarte) continue;
+      if (/\bGhosts?\b/.test(n.nodeValue)) f.push('Text: ' + n.nodeValue.trim().slice(0, 60));
+    }
+    document.querySelectorAll('[title],[placeholder],[aria-label],optgroup[label]').forEach((el) => {
+      ['title', 'placeholder', 'aria-label', 'label'].forEach((a) => {
+        const v = el.getAttribute(a);
+        if (v && /\bGhosts?\b/.test(v)) f.push(a + ': ' + v.slice(0, 60));
+      });
+    });
+    for (const [k, v] of Object.entries(I18N_EN)) {
+      if (alt.has(k)) continue;
+      if (/\b[Gg]hosts?\b/.test(v)) f.push('EN: ' + v.slice(0, 60));
+    }
+    for (const [k, v] of Object.entries(I18N_ES)) {
+      if (alt.has(k)) continue;
+      if (/\bGhosts?\b|\b[Ff]antasmas?\b/.test(v)) f.push('ES: ' + v.slice(0, 60));
+    }
+    return { ok: !f.length, mass: f.length ? f.length + ': ' + f.slice(0, 4).join(' | ') : 'nirgends der alte Name' };
+  });
+
+  // ---- v1.0.21: Telemetrie - Runden als Zwischenzeiten je Teil (70b-telemetrie.js) ----
+  stAdd('Telemetrie: Spur je Runde, ungueltig ohne alle Teile, gespiegelt ausgerichtet, Delta', () => {
+    const f = [];
+    const tiles = codeToTrack('SG2H2G2J2').tiles, n = tiles.length;
+    const code = trackToCode(tiles, 0);
+    // n-1 Wechsel plus der Wechsel auf Start/Ziel am Ende (gehoert zur naechsten Runde).
+    const ev = [];
+    for (let k = 1; k < n; k++) ev.push([k * 1000, 2]);
+    ev.push([n * 1000 - 1, 0x0a]);
+    const sp = teleSpurBauen(ev, n * 1000, n, code);
+    if (!sp) f.push('gueltige Runde ergibt keine Spur');
+    else {
+      if (sp.teile.length !== n || sp.teile[0] !== 0 || sp.teile[n - 1] !== (n - 1) * 1000) f.push('Zwischenzeiten falsch: ' + sp.teile.join(','));
+    }
+    if (teleSpurBauen(ev.slice(1), n * 1000, n, code)) f.push('Runde mit fehlendem Teil ergibt eine Spur');
+    const rueck = ev.slice(); rueck[3] = [500, 2];
+    if (teleSpurBauen(rueck, n * 1000, n, code)) f.push('fallende Zeiten ergeben eine Spur');
+    // Gespiegelt: Start bleibt, die uebrigen Dauern laufen rueckwaerts.
+    if (sp) {
+      const ung = Object.assign({}, sp, { teile: [0, 100, 300, 600, 1000, 1500, 2100, 2800, 3600], ms: 4500 });
+      const gl = teleAusrichten(ung, tiles);
+      if (!gl || gl.join() !== ung.teile.join()) f.push('gleiche Richtung veraendert die Spur');
+      const sp2 = teleAusrichten(ung, chSpiegelTiles(tiles));
+      // Dauern 100,200,300,400,500,600,700,800,900 -> 100,900,800,...,200
+      const soll = [0, 100, 1000, 1800, 2500, 3100, 3600, 4000, 4300];
+      if (!sp2 || sp2.join() !== soll.join()) f.push('gespiegelt: ' + (sp2 ? sp2.join(',') : 'null'));
+      if (teleAusrichten(ung, codeToTrack('SG4R4G4').tiles)) f.push('fremde Strecke ausgerichtet');
+      const d = teleDelta(ung.teile, 3, 650);
+      if (d !== 50) f.push('Delta ' + d + ' statt 50');
+      if (teleDeltaText(-320) !== '\u22120.32' || teleDeltaText(50) !== '+0.05') f.push('Delta-Text ' + teleDeltaText(-320));
+    }
+    // Ablauf ueber die Haken: teleKachel / teleRunde mit Speicher.
+    const merk = { rs: raceState, ls: raceLapStart, fl: raceFormationLap, tiles: currentTrackTiles,
+                   st: localStorage.getItem(TELE_STORE), lauf: teleLauf, mode: raceMode };
+    try {
+      localStorage.removeItem(TELE_STORE);
+      currentTrackTiles = tiles; raceState = 'racing'; raceFormationLap = false; raceMode = 'bestzeit';
+      raceLapStart = 10000; teleLauf = null;
+      for (let k = 1; k < n; k++) teleKachel(2, 10000 + k * 900);
+      teleKachel(0x0a, 10000 + n * 900);
+      const r = teleRunde(10000, 10000 + n * 900, true);
+      if (!r) f.push('teleRunde ohne Spur');
+      const b = teleBeste(null, tiles);
+      if (!b || b.ms !== n * 900) f.push('beste Spur nicht gespeichert');
+      // Naechste Runde: Delta gegen die gespeicherte Bestrunde.
+      raceLapStart = 10000 + n * 900;
+      teleKachel(2, raceLapStart + 1000);
+      const el = $('race-lap-delta');
+      if (el && el.textContent !== '+0.10') f.push('Live-Delta zeigt "' + el.textContent + '" statt +0.10');
+    } finally {
+      raceState = merk.rs; raceLapStart = merk.ls; raceFormationLap = merk.fl; currentTrackTiles = merk.tiles;
+      raceMode = merk.mode; teleLauf = merk.lauf;
+      if (merk.st === null) localStorage.removeItem(TELE_STORE); else localStorage.setItem(TELE_STORE, merk.st);
+      const el = $('race-lap-delta'); if (el) el.textContent = '';
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Spur ' + n + ' Teile, Luecken/Rueckschritte abgelehnt, Spiegel, Delta, Speicher' };
+  });
+
+  stAdd('Telemetrie-Seite: Karte, Balken und Tempo aus zwei Runden, Rundenweg steigt', () => {
+    const f = [];
+    const code = 'SG2H2G2J2', n = 9;
+    const mach = (k) => {
+      const teile = [0];
+      for (let i = 1; i < n; i++) teile.push(teile[i - 1] + 800 * k);
+      const ms = teile[n - 1] + 800 * k;
+      const proben = [];
+      for (let t0 = 0; t0 < ms; t0 += 100) proben.push([t0, 50, 80, 0, 3, 0]);
+      return { v: 1, code, n, ms, teile, proben, datum: 1, auto: 'Test' };
+    };
+    const merk = { st: localStorage.getItem(TELE_STORE), wahl: Object.assign({}, teleWahl) };
+    try {
+      localStorage.setItem(TELE_STORE, JSON.stringify({ [code]: { datum: 1, fahrer: { spieler1: { beste: mach(1), letzte: mach(1.1) } } } }));
+      teleWahl.strecke = code; teleWahl.a = 'letzte'; teleWahl.b = 'beste';
+      teleSeiteZeichnen();
+      const box = $('tele-inhalt');
+      const svgs = box ? box.querySelectorAll('svg').length : 0;
+      if (svgs !== 3) f.push(svgs + ' Grafiken statt 3');
+      if (box && box.querySelectorAll('.tele-balken rect').length !== n) f.push('nicht ' + n + ' Balken');
+      if (box && !/\+0\.72/.test(box.textContent)) f.push('Unterschied A-B fehlt: ' + box.textContent.slice(0, 120));
+      const sp = mach(1);
+      let vor = -1;
+      for (let t0 = 0; t0 <= sp.ms; t0 += 50) {
+        const wg = teleWeg(sp.teile, sp.ms, t0);
+        if (wg < vor) { f.push('Rundenweg faellt bei ' + t0); break; }
+        vor = wg;
+      }
+      if (Math.abs(vor - n) > 1e-6) f.push('Rundenweg endet bei ' + vor + ' statt ' + n);
+    } finally {
+      if (merk.st === null) localStorage.removeItem(TELE_STORE); else localStorage.setItem(TELE_STORE, merk.st);
+      Object.assign(teleWahl, merk.wahl);
+      if ($('tele-inhalt')) $('tele-inhalt').innerHTML = '';
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '3 Grafiken, ' + n + ' Balken, A-B +0.72 s, Rundenweg 0..' + n };
+  });
+
+  stAdd('Spuren online: Upload nimmt die schnellste Runde, fremde Spur als B, Knopf in der Bestenliste', () => {
+    const f = [];
+    const code = 'SG2H2G2J2', n = 9;
+    const mach = (ms) => ({ v: 1, code, n, ms, teile: Array.from({ length: n }, (_, k) => Math.round(k * ms / n)),
+      proben: Array.from({ length: 500 }, (_, k) => [k * 20, 50, 80, 0, 3, 0]), auto: 'X' });
+    const merk = { rs: teleRennSpuren, st: localStorage.getItem(TELE_STORE), wahl: Object.assign({}, teleWahl),
+                   sl: spurListen, oeffnen: teleSeiteOeffnen };
+    try {
+      teleRennSpuren = [mach(9300), mach(9000), null];
+      const up = teleSpurFuerUpload([9300, 9000, 9100]);
+      if (!up || up.ms !== 9000) f.push('Upload nimmt nicht die schnellste Runde');
+      else if (up.proben.length > TELE_UPLOAD_PROBEN) f.push('Upload nicht ausgeduennt: ' + up.proben.length);
+      if (teleSpurFuerUpload([9300, 9000, 8800])) f.push('Upload schickt eine langsamere Spur, wenn die schnellste keine hat');
+      // Fremde Spur: in den Speicher und als B auswaehlbar.
+      localStorage.removeItem(TELE_STORE);
+      const m = spurFremdMerken({ spur: mach(8500), fahrer: 'Rekord', geraet: 'gX', zeit_ms: 8500 });
+      const d = teleLesen();
+      if (!d[m.strecke] || !d[m.strecke].fahrer['fremd:gX']) f.push('fremde Spur nicht gespeichert');
+      const tiles = codeToTrack(code).tiles;
+      d[m.strecke].fahrer.spieler1 = { beste: mach(9000), letzte: mach(9400) };
+      teleSchreiben(d);
+      teleWahl.strecke = m.strecke; teleWahl.a = 'beste'; teleWahl.b = m.wahl;
+      teleSeiteZeichnen();
+      const box = $('tele-inhalt');
+      const opts = box ? [...box.querySelectorAll('#tele-b option')].map((o) => o.value) : [];
+      if (opts.indexOf('fremd:gX|beste') < 0) f.push('fremde Spur fehlt in der Auswahl B: ' + opts.join(','));
+      if (box && !/\+0\.50/.test(box.textContent)) f.push('A-B gegen die fremde Spur nicht +0.50');
+      // Knopf in der Bestenliste, aus einer (vorgegebenen) Spurliste.
+      spurListen = { 'L': { at: Date.now(), map: { gX: { zeit_ms: 8500 } }, laeuft: null } };
+      const tb = document.createElement('tbody');
+      ['gX', 'gY'].forEach((g) => { const tr = document.createElement('tr'); tr.dataset.geraet = g; const td = document.createElement('td'); td.className = 'ch-spur'; tr.appendChild(td); tb.appendChild(tr); });
+      spurKnoepfe('L', tb);
+      const kn = tb.querySelectorAll('.ch-spur-knopf');
+      if (kn.length !== 1 || kn[0].closest('tr').dataset.geraet !== 'gX') f.push('Knopf nicht genau bei der Zeile mit Spur');
+      if (bestzeitSchluessel(tiles) !== m.strecke) f.push('Schluessel der fremden Spur passt nicht zur Strecke');
+    } finally {
+      teleRennSpuren = merk.rs; spurListen = merk.sl;
+      if (merk.st === null) localStorage.removeItem(TELE_STORE); else localStorage.setItem(TELE_STORE, merk.st);
+      Object.assign(teleWahl, merk.wahl);
+      if ($('tele-inhalt')) $('tele-inhalt').innerHTML = '';
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'schnellste Runde, ausgeduennt, fremde Spur als B (+0.50 s), Knopf nur mit Spur' };
+  });
+
+  // ---- v1.0.21: Challenger (90d-challenger.js) ----
+  stAdd('Challenger: eine Rolle nur auf der Bahn, folgt Spur oder dir, Takt, Soll-Punkt', () => {
+    const f = [];
+    const merk = { garage: garage.slice(), tm: trackMode, rs: raceState, fl: flagState, form: raceFormationLap,
+                   start: raceStartedAt, tiles: currentTrackTiles, ort: ghostOrtGes, pc: playerCar };
+    try {
+      currentTrackTiles = codeToTrack('SG2H2G2J2').tiles;
+      const n = currentTrackTiles.length;
+      const ch = { device: { id: 'ch' }, role: 'challenger', tag: 'CH', tileCode: TILE_TYPE.STRAIGHT, _ort: 0,
+                   ghost: { running: true, tileIndex: 0, laps: 0, challenger: { art: 'beste', teile: Array.from({ length: n }, (_, k) => k * 1000), ms: n * 1000, ortStart: null, soll: null } } };
+      const frei = { device: { id: 'f' }, role: 'none' };
+      garage.length = 0; garage.push(ch, frei);
+      trackMode = 'on';
+      if (garRollenFrei(frei).some((r) => r.id === 'challenger')) f.push('zweiter Challenger waehlbar');
+      trackMode = 'off';
+      const frei2 = { device: { id: 'f2' }, role: 'none' };
+      if (garRollenFrei(frei2).some((r) => r.id === 'challenger')) f.push('Challenger im Ausdruck-Modus waehlbar');
+      trackMode = 'on';
+      ghostPhasenSetzen();
+      if (!ch.imTakt) f.push('Challenger bekommt keinen Sendetakt');
+      ghostTaktLoeschen(ch);
+      // Spur: nach 3 s soll er 3 Kacheln weit sein.
+      ghostOrtGes = (c) => (c && c._ort !== undefined ? c._ort : null);
+      raceState = 'racing'; flagState = 'green'; raceFormationLap = false;
+      raceStartedAt = Date.now() - 3000;
+      const basis = 0.5;
+      const hinten = challengerZiel(ch, basis);
+      if (!(hinten > basis)) f.push('hinter der Spur nicht schneller: ' + hinten);
+      if (Math.abs(ch.ghost.challenger.soll - 3) > 0.1) f.push('Sollort ' + ch.ghost.challenger.soll + ' statt 3');
+      ch._ort = 5;
+      const vorn = challengerZiel(ch, basis);
+      if (!(vorn < basis)) f.push('vor der Spur nicht langsamer: ' + vorn);
+      if (vorn < GHOST_READ_MIN - 1e-9) f.push('unter der Leseschwelle: ' + vorn);
+      const m = challengerSollMarke();
+      if (!m || m.index !== 3) f.push('Soll-Punkt nicht auf Kachel 3');
+      // Gummiband: dein Ort statt der Spur.
+      ch.ghost.challenger = { art: 'gummiband', soll: null };
+      playerCar = { ghost: { nurOrt: true }, _ort: 8 };
+      ch._ort = 6;
+      if (!(challengerZiel(ch, basis) > basis)) f.push('Gummiband: hinter dir nicht schneller');
+      ch._ort = 10;
+      if (!(challengerZiel(ch, basis) < basis)) f.push('Gummiband: vor dir nicht langsamer');
+      if (challengerSollMarke()) f.push('Gummiband zeigt einen Soll-Punkt');
+      // Unter Gelb gilt die Gelb-Regel, nicht der Challenger.
+      flagState = 'yellow';
+      if (challengerZiel(ch, basis) !== basis) f.push('unter Gelb uebersteuert');
+      // In der Kurve enger gedeckelt.
+      flagState = 'green'; ch._ort = 0; ch.tileCode = TILE_TYPE.HAIRPIN;
+      if (challengerZiel(ch, basis) > basis + 1e-9) f.push('in der Haarnadel schneller als ein NPC');
+      // NPCs fahren die Haarnadel mit 33 % - die Untergrenze darf ihn nicht darueber heben.
+      if (challengerZiel(ch, 0.33) > 0.33 + 1e-9) f.push('Haarnadel: Untergrenze hebt ueber 33 %: ' + challengerZiel(ch, 0.33));
+      // Auf der Geraden holt er auf - ausser er haelt gerade Abstand (z. B. hinter dir).
+      ch.tileCode = TILE_TYPE.STRAIGHT; ch.ghost.tileIndex = 0;
+      const gerade = challengerZiel(ch, basis);
+      if (!(gerade > basis)) f.push('auf der Geraden kein Aufholen: ' + gerade);
+      if (challengerZiel(ch, basis, { haeltAbstand: true }) > basis + 1e-9) f.push('Aufholen trotz Abstandhalten');
+    } finally {
+      garage.length = 0; merk.garage.forEach((c) => garage.push(c));
+      trackMode = merk.tm; raceState = merk.rs; flagState = merk.fl; raceFormationLap = merk.form;
+      raceStartedAt = merk.start; currentTrackTiles = merk.tiles; ghostOrtGes = merk.ort; playerCar = merk.pc;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'eine Rolle, nur Bahn, Takt, Spur hinten schneller/vorn langsamer, Gummiband, Gelb, Kurvendeckel, Soll-Punkt' };
+  });
+
+  // ---- v1.0.22: NPC-Motor waehlbar, und die Drehzahl folgt Gas und Bremse ----
+  stAdd('NPC-Motor: Wahl je Auto vor der Vorgabe, Drehzahl steigt beim Beschleunigen und faellt beim Bremsen', () => {
+    const f = [];
+    const el = $('ghost-motor');
+    if (!el || el.options.length < 5) f.push('Liste des NPC-Motors leer');
+    const merk = el ? el.value : '';
+    try {
+      if (el) el.value = 'sd_v10';
+      if (ghostMotorWunsch({}) !== 'sd_v10') f.push('Vorgabe aus Optionen nicht genommen');
+      if (ghostMotorWunsch({ ghostMotor: 'mustang' }) !== 'mustang') f.push('Wahl je Auto nicht vorrangig');
+    } finally { if (el) el.value = merk; }
+    // Die Ghost-Physik wie in startGhost: Automatik, Drehzahl aus dem eigenen Zustand.
+    const e = new CarreraPhysicsEngine();
+    Object.assign(e.config, physEngine.config);
+    e.config.gears = physEngine.config.gears;
+    e.config.autoShift = true; e.config.speedLimitFactor = 1;
+    if (typeof e.calibrateAccel === 'function') e.calibrateAccel();
+    e.state.driveMode = 'forward';
+    const rpm = [];
+    const schritt = (gas, bremse, sek) => {
+      for (let t0 = 0; t0 < sek; t0 += 0.045) {
+        e.update({ steering: 0, throttle: gas, brake: bremse, headlights: false }, 0.045);
+        rpm.push(motorDrehzahl(e.state, 'mustang'));
+      }
+    };
+    schritt(0.2, 0, 1); const leerlaufNah = rpm[rpm.length - 1];
+    schritt(1, 0, 2.5); const nachGas = Math.max(...rpm.slice(-30));
+    schritt(0, 1, 1.5); const nachBremse = rpm[rpm.length - 1];
+    const verschieden = new Set(rpm.map((x) => Math.round(x / 100))).size;
+    if (!(nachGas > leerlaufNah + 1000)) f.push('Drehzahl steigt beim Beschleunigen kaum: ' + Math.round(leerlaufNah) + ' -> ' + Math.round(nachGas));
+    if (!(nachBremse < nachGas - 1000)) f.push('Drehzahl faellt beim Bremsen kaum: ' + Math.round(nachGas) + ' -> ' + Math.round(nachBremse));
+    if (verschieden < 15) f.push('nur ' + verschieden + ' verschiedene Drehzahlstufen');
+    return { ok: !f.length, mass: f.length ? f.join(' | ')
+      : 'Wahl je Auto > Vorgabe; Drehzahl ' + Math.round(leerlaufNah) + ' -> ' + Math.round(nachGas) + ' -> ' + Math.round(nachBremse) + ' U/min, ' + verschieden + ' Stufen' };
+  });
+
+  // ---- v1.0.14: SIMULATOR-Linie (61-simlinie.js) ----
+  stAdd('SIMULATOR-Linie: drei Runden in der Physik, Querrate begrenzt, Beulen bleiben in der Bahn', () => {
+    const f = [];
+    const tiles = (codeToTrack(TRACK_VORGABE_CODE) || {}).tiles;
+    const pts = trackCenterline(tiles), nrm = trackNormals(pts, true);
+    const o = { closed: trackSchluss(pts).closed, tiles };
+    const gz = fahrGrenzen();
+    Object.assign(o, { aLat: gz.aLat, aAcc: gz.aAcc, aBrk: gz.aBrk, vMax: gz.vMax });
+    const luuke = buildLine(pts, nrm, Object.assign({}, o, { model: 'luuke' })).alpha;
+    const r = simFahren(luuke, pts, nrm, o);
+    if (!r.ok) f.push('Luuke-Linie faehrt keine drei Runden: ' + r.grund);
+    else {
+      if (r.runden.length !== 3) f.push(r.runden.length + ' Runden statt 3');
+      if (Math.abs(r.runden[1] - r.runden[2]) > 0.3) f.push('Runde 2 und 3 weichen ab: ' + r.runden.join('/'));
+      if (!(r.runden[0] > r.runden[1])) f.push('Runde 1 (stehender Start) nicht langsamer: ' + r.runden.join('/'));
+    }
+    const lim = TRACK_HALF_W - 3;
+    const zick = pts.map((_, i) => (i % 2 ? lim : -lim));
+    const rz = simFahren(zick, pts, nrm, o);
+    if (rz.ok) f.push('Zickzack-Linie trotz Querrate angenommen (lim ' + lim.toFixed(2) + ', n ' + pts.length + ', ' + JSON.stringify(rz).slice(0, 120) + ')');
+    const b = simBeule(luuke, lim);
+    if (b.some((x) => Math.abs(x) > lim + 1e-9)) f.push('Beule verlaesst die Bahn');
+    // v1.0.19: Die Sehne bleibt in der Bahn, und wo sie gelingt, liegen ihre Punkte auf einer Geraden.
+    let sehnen = 0;
+    for (let v = 0; v < 40; v++) {
+      const sh = simSehne(luuke, pts, nrm, lim, true);
+      if (!sh) continue;
+      sehnen++;
+      if (sh.some((x) => Math.abs(x) > lim + 1e-9)) { f.push('Sehne verlaesst die Bahn'); break; }
+    }
+    if (!sehnen) f.push('keine einzige Sehne gelingt');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Luuke ' + (r.runden || []).join(' / ') + ' s, Zickzack verworfen, Sehnen ok' };
+  });
+
+  // ---- v1.0: Studie (98f-studie.js) ----
+  stAdd('Studie: NARQ-Facetten nach Back et al. (2013), Median der Reaktionszeiten', () => {
+    const f = [];
+    const a = new Array(18).fill(1);
+    [1, 2, 3, 5, 7, 8, 15, 16, 18].forEach((i) => { a[i - 1] = 6; });
+    const w = narqWerte(a);
+    if (w.bewunderung !== 6 || w.rivalitaet !== 1) f.push('Facetten vertauscht: ' + JSON.stringify(w));
+    if (narqWerte(a.slice(0, 17)).bewunderung !== null) f.push('unvollstaendig ergibt einen Wert');
+    if (NARQ_ADM.concat(NARQ_RIV).sort((x, y) => x - y).join() !== Array.from({ length: 18 }, (_, i) => i + 1).join()) f.push('Items nicht genau einmal verteilt');
+    if (rtMedian([300, 200, 250]) !== 250 || rtMedian([200, 300]) !== 250) f.push('Median falsch');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '9 Bewunderung / 9 Rivalitaet, Median ok' };
+  });
+
+  // ---- v1.0: Meisterschaft (73-meisterschaft.js) ----
+  stAdd('Meisterschaft: Wertung, Punkte, schnellste Runde, Gleichstand', () => {
+    const f = [];
+    const feld = [{ key: 'a', laps: 5, total: 50000, beste: 9000 }, { key: 'b', laps: 5, total: 49000, beste: 9500 },
+                  { key: 'c', laps: 4, total: 30000, beste: 8000 }, { key: 'd', laps: 0, total: 0, beste: Infinity }];
+    if (meisterKlassieren(feld, false).join() !== 'b,a,c') f.push('Rennen: ' + meisterKlassieren(feld, false).join());
+    if (meisterKlassieren(feld, true).join() !== 'c,a,b') f.push('Qualifying: ' + meisterKlassieren(feld, true).join());
+    const p = meisterPunkteVergeben(['b', 'a', 'c'], 'f1', 'a', true);
+    if (p.b.pkt !== 25 || p.a.pkt !== 19 || !p.a.fl || p.c.pkt !== 15) f.push('F1 mit FL: ' + JSON.stringify(p));
+    const l = meisterPunkteVergeben(['b', 'a', 'c'], 'linear', 'a', false);
+    if (l.b.pkt !== 3 || l.a.pkt !== 2 || l.c.pkt !== 1 || l.a.fl) f.push('linear: ' + JSON.stringify(l));
+    const tab = meisterTabelle({ fahrer: {
+      x: { name: 'X', pkt: 30, je: [{ pos: 2, pkt: 18 }, { pos: 3, pkt: 12 }] },
+      y: { name: 'Y', pkt: 30, je: [{ pos: 1, pkt: 25 }, { pos: 6, pkt: 5 }] },
+      z: { name: 'Z', pkt: 40, je: [{ pos: 1, pkt: 25 }, { pos: 3, pkt: 15 }] } } });
+    if (tab.map((x) => x.key).join() !== 'z,y,x') f.push('Gleichstand nach Siegen: ' + tab.map((x) => x.key).join());
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Runden vor Zeit, Pole nach bester Runde, 25-18+1-15, Siege entscheiden' };
+  });
+
+  stAdd('Meisterschaft im Mehrspieler: eigene NPCs per Anker in die Host-Reihenfolge', () => {
+    const fern = [{ key: 'r1', laps: 5 }, { key: 'me', laps: 5 }, { key: 'r2', laps: 5 }, { key: 'r3', laps: 4 }];
+    const lokal = [{ key: 'me', laps: 5, total: 50000 }, { key: 'g1', laps: 5, total: 49000 }, { key: 'g2', laps: 5, total: 52000 },
+                   { key: 'g3', laps: 4, total: 40000 }, { key: 'g4', laps: 6, total: 61000 }];
+    const r = meisterMischen(fern, lokal, 'me', false).join();
+    const soll = 'g4,r1,g1,me,r2,g2,r3,g3';
+    return { ok: r === soll, mass: r === soll ? soll : 'ist ' + r + ', soll ' + soll };
+  });
+
+  stAdd('Meisterschaft: automatische Aufstellung, Event werten, naechste Startreihe nach Punkten', () => {
+    const f = [];
+    const merk = { m: meister, garage: garage.slice(), store: localStorage.getItem(MEISTER_STORE), rac: raceAllCars, oeff: meisterOeffnen, rm: raceMode };
+    try {
+      meisterOeffnen = () => {};
+      meister = { plan: meisterPlanVorgabe(), lauf: null };
+      meister.plan.events = [Object.assign(meisterEventNeu(), { format: 'qualifying', umfang: 5 }), meisterEventNeu(), meisterEventNeu()];
+      if (meisterAufstAufgeloest(0) !== null) f.push('Qualifying hat eine Aufstellung');
+      if (meisterAufstAufgeloest(1) !== 'quali') f.push('nach Qualifying nicht nach Qualifying: ' + meisterAufstAufgeloest(1));
+      if (meisterAufstAufgeloest(2) !== 'punkte_hinten') f.push('drittes Event nicht nach Punkten: ' + meisterAufstAufgeloest(2));
+      meister.plan.events[0].format = 'runden'; meister.plan.events[0].aufst = 'quali';
+      if (!meisterAufstFehler(0)) f.push('Qualifying-Aufstellung ohne Qualifying nicht gemeldet');
+      meister.plan.events[0].aufst = 'auto';
+      if (meisterAufstAufgeloest(0) !== 'erst') f.push('erstes Rennen nicht global: ' + meisterAufstAufgeloest(0));
+      garage.length = 0;
+      garage.push({ device: { id: 'a' }, role: 'ghost', tag: 'A' }, { device: { id: 'b' }, role: 'ghost', tag: 'B' });
+      raceAllCars = () => [{ name: 'A', role: 'ghost', id: 'a', farbe: '#f00', laps: [{ ms: 1000 }, { ms: 1000 }] },
+                           { name: 'B', role: 'ghost', id: 'b', farbe: '#0f0', laps: [{ ms: 900 }, { ms: 1100 }, { ms: 1100 }] }];
+      meister.lauf = Object.assign(meisterLaufNeu(), { laeuft: { idx: 1, modus: raceMode, seit: Date.now() }, idx: 1 });
+      meisterWerten();
+      const a = meister.lauf.fahrer['c:a'], b = meister.lauf.fahrer['c:b'];
+      if (!a || !b) f.push('Fahrer fehlen: ' + Object.keys(meister.lauf.fahrer).join());
+      else {
+        if (b.pkt !== 26) f.push('Sieger B (mehr Runden, schnellste Runde) hat ' + b.pkt + ' statt 26');
+        if (a.pkt !== 18) f.push('A hat ' + a.pkt + ' statt 18');
+      }
+      if (meister.lauf.idx !== 2) f.push('naechstes Event ' + meister.lauf.idx + ' statt 2');
+      if (meisterStartReihe(2).join() !== 'a,b') f.push('Fuehrender nicht hinten: ' + meisterStartReihe(2).join());
+    } finally {
+      meister = merk.m; raceAllCars = merk.rac; meisterOeffnen = merk.oeff; raceMode = merk.rm;
+      garage.length = 0; merk.garage.forEach((c) => garage.push(c));
+      try { if (merk.store === null) localStorage.removeItem(MEISTER_STORE); else localStorage.setItem(MEISTER_STORE, merk.store); } catch (e) { /* privat */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Q -> Aufstellung, Fehler gemeldet, 26/18 Punkte, Fuehrender hinten' };
+  });
+
   stAdd('Rundenrennen endet mit der Zielrunde, nicht eine Runde spaeter', () => {
     const f = [];
     const merk = { rs: raceState, rm: raceMode, lim: raceLimit, laps: raceLapTimes.slice(), ls: raceLapStart,
@@ -17521,6 +18652,57 @@
       try { chZeichneDetail(); } catch (e) { /* egal */ }
     }
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Seite mit Karte, Abstimmung, 2 Zeiten, Spiegeln, Kreis zurueck in die Liste' };
+  });
+
+  // v0.9.62: Die 3er-Serie (beste Summe aus drei gueltigen Runden) gilt jetzt auch fuer
+  // Community-Strecken; die Rundenzeiten kommen mit dem Eintrag (runden/runden_ms).
+  stAdd('Community: 3er-Serie aus drei gueltigen Runden', () => {
+    const f = [];
+    const KEY = 'omegasim-community';
+    const merkLs = localStorage.getItem(KEY);
+    const merk = { wahl: chWahl, modus: chModus, spiegel: chSpiegel, online: communityOnline };
+    const onVorher = [...document.querySelectorAll('.subpage.on')];
+    const homeVorher = [...document.querySelectorAll('.subpage-home')].map((h) => h.style.display);
+    const detailVorher = { eltern: $('ch-detail').parentNode, hidden: $('ch-detail').hidden };
+    try {
+      communityOnline = null;
+      const vorlage = CH_ALLE.find((d) => d.kat === 'C') || CH_ALLE[0];
+      const minMs = chMinRundeMs({ code: vorlage.code, runden: vorlage.runden });
+      const l = Math.round(minMs * 1.5), l2 = Math.round(minMs * 2.0);
+      localStorage.setItem(KEY, JSON.stringify({ nextId: 10000,
+        tracks: [{ id: '9999', code: vorlage.code, name: 'Probe', preset: 'gt3' }],
+        times: { 9999: [
+          { zeit: l, fahrer: 'A', geraet: 'x1', datum: 1, runden: [l, l, l] },
+          { zeit: l2, fahrer: 'B', geraet: 'x2', datum: 2, runden: [l2, l2, l2] }
+        ] } }));
+      chSpiegel = false; chWahl = '9999'; chModus = 'hotlap';
+      challengeSeiteZeigen('9999');
+      if (!$('ch-detail').closest('#sub-ch-strecke')) f.push('Seite geht nicht auf');
+      // 3er-Serie wird jetzt angezeigt (vorher bei Community ausgeblendet).
+      if ($('ch-zweite-3er').hidden) f.push('3er-Ueberschrift bleibt versteckt');
+      if ($('ch-hinweis-3er').hidden) f.push('3er-Hinweis bleibt versteckt');
+      const z3 = [...$('ch-liste-3er').querySelectorAll('tr')];
+      if (z3.length !== 2) f.push('3er-Serie ' + z3.length + ' statt 2 Zeilen');
+      else {
+        const zell = (r) => [...r.querySelectorAll('td')].map((td) => td.textContent);
+        const erste = zell(z3[0]), zweite = zell(z3[1]);
+        if (erste[1].indexOf('A') < 0) f.push('A nicht zuerst: ' + erste[1]);
+        if (zweite[1].indexOf('B') < 0) f.push('B nicht zweit: ' + zweite[1]);
+      }
+    } finally {
+      if (merkLs === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, merkLs);
+      chWahl = merk.wahl; chModus = merk.modus; chSpiegel = merk.spiegel;
+      if (!communityOnline) communityOnline = merk.online;
+      $('ch-spiegel').checked = chSpiegel;
+      $('ch-spiegel-knopf').classList.toggle('an', chSpiegel);
+      document.querySelectorAll('.subpage.on').forEach((p) => p.classList.remove('on'));
+      onVorher.forEach((p) => p.classList.add('on'));
+      document.querySelectorAll('.subpage-home').forEach((h, i) => { h.style.display = homeVorher[i]; });
+      if (detailVorher.eltern && $('ch-detail').parentNode !== detailVorher.eltern) detailVorher.eltern.appendChild($('ch-detail'));
+      $('ch-detail').hidden = detailVorher.hidden;
+      try { chZeichneDetail(); } catch (e) { /* egal */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '3er-Serie sichtbar, A vor B, 2 Zeilen' };
   });
 
   stAdd('Raum: speichern, laden, loeschen; Editor-Schalter blendet ihn fuer Zufallsstrecken aus', () => {

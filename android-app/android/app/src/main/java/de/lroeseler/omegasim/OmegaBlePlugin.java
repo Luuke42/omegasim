@@ -8,6 +8,9 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.SystemClock;
+import android.os.Looper;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -70,6 +73,9 @@ public class OmegaBlePlugin extends Plugin {
     }
 
     private final Map<String, Platz> plaetze = new ConcurrentHashMap<>();
+    // v0.10.4: Brueckenzeit (Date.now() der Seite bis Ankunft hier), fuer "Funk-Rundlauf".
+    private final AtomicLong brueckeSumme = new AtomicLong(), brueckeN = new AtomicLong(),
+                             brueckeMax = new AtomicLong();
     private volatile long pauseBis = 0;
     private HandlerThread writeThread;
     private volatile Handler writeHandler;
@@ -79,6 +85,55 @@ public class OmegaBlePlugin extends Plugin {
         writeThread = new HandlerThread("OmegaBle-Write");
         writeThread.start();
         writeHandler = new Handler(writeThread.getLooper());
+        // ---- DER DIREKTE WEG (v0.10.4) --------------------------------------------------
+        // GEMELDET: "Latenz in der APK ist langsamer als im Browser." Jeder Befehl lief als
+        // JSON ueber den Android-Hauptthread und den gemeinsamen Capacitor-Thread, bevor er
+        // hier ankam - derselbe Hauptthread, ueber den jede Bluetooth-Meldung jedes Autos zur
+        // Seite zurueckkommt. Ein JavascriptInterface wird auf dem JavaBridge-Thread
+        // aufgerufen, ohne beides. Angemeldet VOR dem Laden der Seite (load() laeuft beim
+        // Registrieren der Plugins), sonst saehe die Seite es erst nach einem Neuladen.
+        // Dazu das Gamepad direkt (OmegaPadNativ).
+        Runnable anmelden = () -> {
+            try {
+                WebView wv = getBridge().getWebView();
+                wv.addJavascriptInterface(new Direkt(), "OmegaDirekt");
+                wv.addJavascriptInterface(new OmegaPadNativ.Js(), "OmegaPad");
+            } catch (Throwable e) { /* dann bleibt der Plugin-Weg */ }
+        };
+        if (Looper.myLooper() == Looper.getMainLooper()) anmelden.run();
+        else getActivity().runOnUiThread(anmelden);
+    }
+
+    /** Von der Seite synchron gerufen (window.OmegaDirekt.schreibe). */
+    private final class Direkt {
+        @JavascriptInterface
+        public void schreibe(String deviceId, String service, String characteristic, String value, double tJs) {
+            brueckeMessen(tJs);
+            einreihen(deviceId, service, characteristic, value);
+        }
+    }
+
+    private void brueckeMessen(double tJs) {
+        if (!(tJs > 0)) return;
+        long d = Math.max(0, System.currentTimeMillis() - (long) tJs);
+        if (d > 5000) return;                               // Uhrsprung, kein Messwert
+        brueckeSumme.addAndGet(d);
+        brueckeN.incrementAndGet();
+        long m;
+        do { m = brueckeMax.get(); } while (d > m && !brueckeMax.compareAndSet(m, d));
+    }
+
+    private void einreihen(String deviceId, String service, String characteristic, String value) {
+        Handler h = writeHandler;
+        if (deviceId == null || service == null || characteristic == null || value == null || h == null) return;
+        Platz p = platz(deviceId);
+        if (!service.equals(p.dienst) || !characteristic.equals(p.merkmal)) {
+            p.dienst = service;
+            p.merkmal = characteristic;
+            p.ziel = null;
+        }
+        if (p.neu.getAndSet(hexZuBytes(value)) != null) p.ersetzt.incrementAndGet();
+        if (p.laeuft.compareAndSet(false, true)) h.post(() -> abarbeiten(deviceId, p));
     }
 
     private Platz platz(String id) {
@@ -97,16 +152,9 @@ public class OmegaBlePlugin extends Plugin {
         String service = call.getString("service");
         String characteristic = call.getString("characteristic");
         String value = call.getString("value");
-        Handler h = writeHandler;
-        if (deviceId == null || service == null || characteristic == null || value == null || h == null) return;
-        Platz p = platz(deviceId);
-        if (!service.equals(p.dienst) || !characteristic.equals(p.merkmal)) {
-            p.dienst = service;
-            p.merkmal = characteristic;
-            p.ziel = null;
-        }
-        if (p.neu.getAndSet(hexZuBytes(value)) != null) p.ersetzt.incrementAndGet();
-        if (p.laeuft.compareAndSet(false, true)) h.post(() -> abarbeiten(deviceId, p));
+        Double t = call.getDouble("t");
+        if (t != null) brueckeMessen(t);
+        einreihen(deviceId, service, characteristic, value);
     }
 
     /** Ehrliche Auskunft fuer die Web-Seite: findet OmegaBle die Verbindung? Dazu die Zaehler. */
@@ -127,8 +175,11 @@ public class OmegaBlePlugin extends Plugin {
             r.put("verworfen", p.verworfen.get());
             r.put("ersetzt", p.ersetzt.get());
         }
+        long n = brueckeN.get();
+        r.put("brueckeMittel", n > 0 ? (double) brueckeSumme.get() / n : -1);
+        r.put("brueckeMax", brueckeMax.getAndSet(0));
         r.put("bereit", bereit);
-        r.put("version", 2);
+        r.put("version", 3);
         call.resolve(r);
     }
 

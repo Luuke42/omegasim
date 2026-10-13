@@ -1430,5 +1430,46 @@
    "upshifts": 5,
    "downshifts": 5
   }
+ },
+ "offroad": {
+  "file": "sd_offroad.ogg",
+  "loop": true,
+  "seconds": 5.7,
+  "source": "Speed Dreams 2.4 data/sound/grass_ride.wav: Bidone, Freesound 66048 (CC0)"
+ },
+ "crash_sd": {
+  "files": [
+   {
+    "file": "sd_crash_0.ogg",
+    "seconds": 0.9,
+    "source": "Speed Dreams 2.4 data/sound/crash1.wav"
+   },
+   {
+    "file": "sd_crash_1.ogg",
+    "seconds": 0.9,
+    "source": "Speed Dreams 2.4 data/sound/crash2.wav"
+   },
+   {
+    "file": "sd_crash_2.ogg",
+    "seconds": 0.9,
+    "source": "Speed Dreams 2.4 data/sound/crash3.wav"
+   },
+   {
+    "file": "sd_crash_3.ogg",
+    "seconds": 0.9,
+    "source": "Speed Dreams 2.4 data/sound/crash4.wav"
+   }
+  ],
+  "source": "SuperSouper 681461, Feedbackdesignz 245714, BehanSean 422438, fiezewarthog 504921 (Freesound, CC0)"
+ },
+ "backfire": {
+  "files": [
+   {
+    "file": "sd_backfire_0.ogg",
+    "seconds": 0.137,
+    "source": "Speed Dreams 2.4 data/sound/backfire.wav"
+   }
+  ],
+  "source": "Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en)"
  }
 }

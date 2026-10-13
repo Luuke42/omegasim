@@ -7,7 +7,7 @@ android {
         applicationId "de.lroeseler.omegasim"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Aus dem Tag, siehe .github/workflows/android.yml (apk-v0.8.12 -> 0.8.12, 8012).
+        // Aus dem Tag, siehe .github/workflows/android.yml (apk-v1.0.7 -> 1.0.7, 100007).
         // Jeder neue versionCode setzt die geladene Web-Fassung zurueck (Bridge.isNewBinary),
         // die mitgelieferte gilt, bis die naechste Aktualisierung kommt.
         versionCode((project.findProperty('omegaVersionCode') ?: '1') as int)

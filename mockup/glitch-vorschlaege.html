@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glitch-Vorschläge</title>
+<style>
+  /* Vorschlaege fuer den Titel-Glitch (BESTELLT v1.0.22: "Mach Vorschlaege mit alternativen
+     Glitch-Effekten. Gerne einen RGB-Glitch-Effekt, der nicht seitlich, sondern nach oben und
+     unten geht? Oder einen, der oben staerker als unten ist?"). Farben wie in der App. */
+  :root {
+    --glitch-r: rgba(255,42,96,.75);
+    --glitch-c: rgba(0,214,255,.7);
+    --ink: #f4f6fb;
+    --bg: #0b0d12;
+    --panel: rgba(14,16,22,.88);
+    --muted: #a3acbd;
+    --font: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg) radial-gradient(ellipse at 50% 0%, #1a2233 0%, transparent 60%);
+    color: var(--ink); font-family: var(--font); padding: 16px; }
+  h1 { font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; }
+  p.intro { color: var(--muted); font-size: 14px; margin: 0 0 16px; max-width: 70ch; }
+  .raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 14px; }
+  .karte { background: var(--panel); border: 1px solid rgba(255,255,255,.1); padding: 0; overflow: hidden; }
+  .karte header { display: flex; gap: 10px; align-items: baseline; padding: 8px 12px; background: #252a35; }
+  .karte header b { font-size: 18px; letter-spacing: .1em; }
+  .karte header span { font-size: 13px; color: var(--muted); }
+  .buehne { height: 150px; display: grid; place-items: center; position: relative; overflow: hidden;
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 3px); }
+  .karte p { margin: 0; padding: 8px 12px 12px; font-size: 13.5px; color: #c9cfdb; line-height: 1.45; }
+  .wort { position: relative; display: inline-block; font-weight: 900; letter-spacing: .18em;
+    font-size: clamp(30px, 8vw, 54px); color: var(--ink); line-height: 1; }
+  .wort > i { font-style: normal; position: absolute; inset: 0; pointer-events: none; }
+  .steuer { margin: 0 0 14px; display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); }
+  .steuer button { font: inherit; background: #252a35; color: var(--ink); border: 1px solid rgba(255,255,255,.2); padding: 6px 12px; cursor: pointer; }
+  .steuer button.an { background: #00a3e0; color: #04070c; }
+  body.ruhig .wort > i, body.ruhig .wort { animation-play-state: paused !important; }
+
+  /* ---- A: HEUTE (zum Vergleich) - Schnipsel seitlich versetzt ---- */
+  .a { text-shadow: 3px 0 0 var(--glitch-r), -3px 0 0 var(--glitch-c); }
+  .a > .o { color: var(--glitch-c); clip-path: inset(18% 0 58% 0); transform: translate(-4px, 0); animation: a1 3.2s steps(1) infinite; }
+  .a > .u { color: var(--glitch-r); clip-path: inset(62% 0 12% 0); transform: translate(4px, 0); animation: a2 2.7s steps(1) infinite; }
+  @keyframes a1 { 0%, 86%, 100% { transform: translate(-4px, 0); clip-path: inset(18% 0 58% 0); }
+    88% { transform: translate(6px, -1px); clip-path: inset(40% 0 38% 0); } 92% { transform: translate(-8px, 1px); clip-path: inset(8% 0 80% 0); } }
+  @keyframes a2 { 0%, 80%, 100% { transform: translate(4px, 0); clip-path: inset(62% 0 12% 0); }
+    83% { transform: translate(-7px, 1px); clip-path: inset(70% 0 5% 0); } 90% { transform: translate(9px, 0); clip-path: inset(30% 0 52% 0); } }
+
+  /* ---- B: VERTIKALER RGB-VERSATZ - die Farbkanaele ruecken nach oben und unten ---- */
+  .b { text-shadow: 0 -3px 0 var(--glitch-c), 0 3px 0 var(--glitch-r); }
+  .b > .o { color: var(--glitch-c); mix-blend-mode: screen; clip-path: inset(0 52% 0 22%); animation: b1 3s steps(1) infinite; }
+  .b > .u { color: var(--glitch-r); mix-blend-mode: screen; clip-path: inset(0 8% 0 70%); animation: b2 2.6s steps(1) infinite; }
+  @keyframes b1 { 0%, 84%, 100% { transform: translateY(-4px); clip-path: inset(0 52% 0 22%); }
+    87% { transform: translateY(7px); clip-path: inset(0 30% 0 44%); } 92% { transform: translateY(-9px); clip-path: inset(0 78% 0 4%); } }
+  @keyframes b2 { 0%, 78%, 100% { transform: translateY(4px); clip-path: inset(0 8% 0 70%); }
+    82% { transform: translateY(-8px); clip-path: inset(0 40% 0 38%); } 89% { transform: translateY(10px); clip-path: inset(0 2% 0 86%); } }
+
+  /* ---- C: OBEN STAERKER ALS UNTEN - vier Baender, Versatz nimmt nach unten ab ---- */
+  .c { text-shadow: 3px 0 0 var(--glitch-r), -3px 0 0 var(--glitch-c); }
+  .c > i { color: var(--ink); }
+  .c > .b1 { clip-path: inset(0 0 75% 0); color: var(--glitch-c); animation: c1 2.4s steps(1) infinite; }
+  .c > .b2 { clip-path: inset(25% 0 50% 0); color: var(--glitch-r); animation: c2 2.4s steps(1) infinite; }
+  .c > .b3 { clip-path: inset(50% 0 25% 0); color: var(--glitch-c); animation: c3 2.4s steps(1) infinite; }
+  .c > .b4 { clip-path: inset(75% 0 0 0); color: var(--glitch-r); animation: c4 2.4s steps(1) infinite; }
+  @keyframes c1 { 0%, 82%, 100% { transform: translateX(-9px); } 85% { transform: translateX(14px); } 90% { transform: translateX(-16px); } }
+  @keyframes c2 { 0%, 82%, 100% { transform: translateX(5px); } 85% { transform: translateX(-8px); } 90% { transform: translateX(9px); } }
+  @keyframes c3 { 0%, 82%, 100% { transform: translateX(-2px); } 85% { transform: translateX(4px); } 90% { transform: translateX(-4px); } }
+  @keyframes c4 { 0%, 82%, 100% { transform: translateX(0); } 85% { transform: translateX(-1px); } 90% { transform: translateX(1px); } }
+
+  /* ---- D: VERTIKAL UND OBEN STAERKER - die Kombination aus B und C ---- */
+  .d { text-shadow: 0 -2px 0 var(--glitch-c), 0 2px 0 var(--glitch-r); }
+  .d > .k1 { color: rgba(0,214,255,.9); mix-blend-mode: screen; clip-path: inset(0 0 55% 0); animation: d1 2.8s steps(1) infinite; }
+  .d > .k2 { color: rgba(255,42,96,.9); mix-blend-mode: screen; clip-path: inset(0 0 55% 0); animation: d2 2.8s steps(1) infinite; }
+  .d > .k3 { color: var(--glitch-c); mix-blend-mode: screen; clip-path: inset(45% 0 0 0); animation: d3 2.8s steps(1) infinite; }
+  @keyframes d1 { 0%, 80%, 100% { transform: translateY(-9px); } 84% { transform: translateY(-18px); } 90% { transform: translateY(6px); } }
+  @keyframes d2 { 0%, 80%, 100% { transform: translateY(9px); } 84% { transform: translateY(16px); } 90% { transform: translateY(-7px); } }
+  @keyframes d3 { 0%, 80%, 100% { transform: translateY(-1px); } 84% { transform: translateY(-3px); } 90% { transform: translateY(1px); } }
+
+  /* ---- E: ABTASTZEILE - ein heller Streifen wandert von oben nach unten, wo er ist, reisst
+     der Text kurz nach oben/unten auf ---- */
+  .e { text-shadow: 0 -2px 0 var(--glitch-c), 0 2px 0 var(--glitch-r); }
+  .e > .s { color: var(--ink); background: linear-gradient(transparent, rgba(0,214,255,.25), transparent);
+    animation: e1 2.2s linear infinite; }
+  @keyframes e1 {
+    0% { clip-path: inset(0 0 100% 0); transform: translateY(0); }
+    20% { clip-path: inset(0 0 80% 0); transform: translateY(-5px); }
+    40% { clip-path: inset(20% 0 60% 0); transform: translateY(5px); }
+    60% { clip-path: inset(45% 0 35% 0); transform: translateY(-4px); }
+    80% { clip-path: inset(70% 0 10% 0); transform: translateY(3px); }
+    100% { clip-path: inset(100% 0 0 0); transform: translateY(0); } }
+
+  /* ---- F: TROPFEN - einzelne Spalten sacken nach unten, oben bleibt ein Farbrest ---- */
+  .f { text-shadow: 0 -3px 0 var(--glitch-c); }
+  .f > .t1 { color: var(--glitch-r); clip-path: inset(0 70% 0 12%); animation: f1 3.4s steps(1) infinite; }
+  .f > .t2 { color: var(--glitch-c); clip-path: inset(0 30% 0 55%); animation: f2 2.9s steps(1) infinite; }
+  @keyframes f1 { 0%, 76%, 100% { transform: translateY(0); opacity: 0; } 78% { transform: translateY(6px); opacity: 1; }
+    82% { transform: translateY(14px); opacity: 1; } 86% { transform: translateY(22px); opacity: .5; } }
+  @keyframes f2 { 0%, 70%, 100% { transform: translateY(0); opacity: 0; } 72% { transform: translateY(5px); opacity: 1; }
+    77% { transform: translateY(12px); opacity: 1; } 81% { transform: translateY(19px); opacity: .5; } }
+
+  @media (prefers-reduced-motion: reduce) { .wort > i { animation: none !important; } }
+</style>
+</head>
+<body>
+<h1>Glitch-Vorschläge für OmegaSim</h1>
+<p class="intro">A ist der heutige Titel-Glitch zum Vergleich. B bis F sind Alternativen; jede lässt sich auf den Titel, die Kachelbilder und die Überschriften übertragen. Sag mir einfach den Buchstaben (oder „B, aber langsamer“).</p>
+<div class="steuer"><button type="button" id="ruhig">Anhalten</button><span>friert alle Effekte ein, um den Ruhezustand zu vergleichen</span></div>
+<div class="raster">
+  <section class="karte"><header><b>A</b><span>heute: seitlich versetzt</span></header>
+    <div class="buehne"><span class="wort a">OMEGA SIM<i class="o">OMEGA SIM</i><i class="u">OMEGA SIM</i></span></div>
+    <p>Zwei Schnipsel (oben cyan, unten rot) springen nach links und rechts, dazu ein fester Farbsaum links/rechts.</p></section>
+  <section class="karte"><header><b>B</b><span>vertikaler RGB-Versatz</span></header>
+    <div class="buehne"><span class="wort b">OMEGA SIM<i class="o">OMEGA SIM</i><i class="u">OMEGA SIM</i></span></div>
+    <p>Die Farbkanäle liegen über und unter der Schrift statt daneben. Senkrechte Streifen (einzelne Buchstabengruppen) springen kurz nach oben bzw. unten.</p></section>
+  <section class="karte"><header><b>C</b><span>oben stärker als unten</span></header>
+    <div class="buehne"><span class="wort c">OMEGA SIM<i class="b1">OMEGA SIM</i><i class="b2">OMEGA SIM</i><i class="b3">OMEGA SIM</i><i class="b4">OMEGA SIM</i></span></div>
+    <p>Vier waagerechte Bänder: das oberste reißt am weitesten aus, nach unten wird es immer ruhiger, die Unterkante steht fast still.</p></section>
+  <section class="karte"><header><b>D</b><span>vertikal und oben stärker</span></header>
+    <div class="buehne"><span class="wort d">OMEGA SIM<i class="k1">OMEGA SIM</i><i class="k2">OMEGA SIM</i><i class="k3">OMEGA SIM</i></span></div>
+    <p>Die Kombination aus B und C: die obere Hälfte spaltet sich in Cyan nach oben und Rot nach unten, die untere zittert nur leicht.</p></section>
+  <section class="karte"><header><b>E</b><span>Abtastzeile von oben nach unten</span></header>
+    <div class="buehne"><span class="wort e">OMEGA SIM<i class="s">OMEGA SIM</i></span></div>
+    <p>Ein heller Streifen läuft wie bei einem alten Monitor von oben nach unten durch; wo er gerade ist, springt die Schrift kurz nach oben oder unten.</p></section>
+  <section class="karte"><header><b>F</b><span>Tropfen</span></header>
+    <div class="buehne"><span class="wort f">OMEGA SIM<i class="t1">OMEGA SIM</i><i class="t2">OMEGA SIM</i></span></div>
+    <p>Selten sacken einzelne Spalten in Rot oder Cyan nach unten ab und verblassen, oben bleibt ein schmaler Farbsaum.</p></section>
+</div>
+<script>
+  document.getElementById('ruhig').addEventListener('click', (e) => {
+    const an = document.body.classList.toggle('ruhig');
+    e.target.classList.toggle('an', an);
+    e.target.textContent = an ? 'Weiter' : 'Anhalten';
+  });
+</script>
+</body>
+</html>

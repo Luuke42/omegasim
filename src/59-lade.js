@@ -16,23 +16,21 @@
   let ladeTeileCache = null;
   function ladeTeileSvg() {
     if (ladeTeileCache) return ladeTeileCache;
-    const teil = (typ) => {
+    const gerade = (() => {
       try {
         // Enger Rand und ohne die Kartenklasse (die bringt Grund und Rahmen mit): nur das Teil.
-        return renderTrackPreview([{ type: typ }], null,
+        return renderTrackPreview([{ type: TILE_TYPE.STRAIGHT }], null,
           { detailed: true, echt: true, ohneLinie: true, ohneLinieRechnen: true, rand: 3 }).html
           .replace('class="tp-karte"', 'class="lade-teil"');
       } catch (e) { return ''; }
-    };
-    const gerade = teil(TILE_TYPE.STRAIGHT), kurve = teil(TILE_TYPE.CURVE_RIGHT);
-    if (gerade && kurve) ladeTeileCache = [gerade, kurve];
-    return [gerade, kurve];
+    })();
+    ladeTeileCache = [gerade];
+    return [gerade];
   }
   function ladeAnimationHtml(text) {
-    const [gerade, kurve] = ladeTeileSvg();
+    const [gerade] = ladeTeileSvg();
     return '<div class="lade-dreh" aria-hidden="true">'
-      + '<div class="lade-ebene lade-a">' + gerade + '</div>'
-      + '<div class="lade-ebene lade-b">' + kurve + '</div></div>'
+      + '<div class="lade-ebene lade-a">' + gerade + '</div></div>'
       + (text ? '<div class="lade-text">' + String(text).replace(/</g, '&lt;') + '</div>' : '');
   }
   // Als Einblendung UEBER einem Feld (Editor). Rueckgabe: das Element, .remove() beendet sie.

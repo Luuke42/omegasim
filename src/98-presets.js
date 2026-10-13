@@ -29,7 +29,7 @@
       // BESTELLT (v0.9.21): "Hoechstgeschwindigkeit drosseln, dafuer Bremsstaerke sehr stark".
       v: { 'setting-grip': 1.0, 'setting-brakepower': 2.5, 'setting-autoshift': true,
            'setting-zero-to-top': 2.0, 'setting-coast-drag': 0.4, 'setting-fuelweight': 0,
-           'setting-tyres': 0, 'phys-steerresp': 2.6, 'setting-brakebias': 56,
+           'setting-tyres': 0, 'phys-steerresp': 3.4, 'setting-brakebias': 56,
            // Die engste Lenkung von allen: bei 250 Prozent liegt der volle Anschlag schon
            // bei einem Viertel Stick an. Weiter als 45 Grad kommt auch das nicht - das ist
            // die Mechanik des Autos.
@@ -83,7 +83,12 @@
       // Vorgabe, und wer beim ersten Start von Hand schalten muss und es nicht weiss, bleibt
       // im 1. Gang haengen - dann ist das Auto genau so traege, wie gemeldet wurde. Von Hand
       // schalten steht ab GT3 zur Verfuegung, und der Knopf RB schaltet es jederzeit um.
-      v: { 'setting-grip': 1.0, 'setting-brakepower': 1.4, 'setting-autoshift': true,
+      // Der Steuerungsmodus gehoert ausdruecklich zu Pro: es ist die Pro-Abstimmung im
+      // normalen Modell. Ohne diese Zeile bleibt beim Wechsel von Pro-Pacejka zurueck auf
+      // Pro der alte Modus "pacejka" stehen, und die Anzeige erkennt dann Pro-Pacejka
+      // (die spezifischere Tabelle) statt Pro - die Kachel zeigt "6/6" statt "2/6".
+      v: { 'phys-mode': 'physik', 'setting-grip': 1.0, 'setting-brakepower': 1.4,
+           'setting-autoshift': true,
            // 2,6 statt 3,2 s: gemessen brauchte das Motorbyte mit den alten Werten 24,9 s
            // Vollgas bis 90 %. Pro ist die Vorgabe und muss sich wie ein Auto anfuehlen,
            // nicht wie ein Anfahrversuch.
@@ -153,11 +158,11 @@
            // hiess also hoechstens 43 % - gemessen 19 von 45 Grad bei 10 km/h, mit kalten Reifen
            // 11. Die Werte stammten aus dem alten Weg, in dem resp x Kalibrierung bei 1 gedeckelt
            // wurde. 3,0: voller Einschlag bei vollem Stick, wie an einem echten Auto im Stand.
-           'setting-tyres': 0.9, 'phys-steerresp': 3.0, 'setting-brakebias': 60,
+           'setting-tyres': 0.9, 'phys-steerresp': 3.2, 'setting-brakebias': 60,
            // Lenkkalibrierung 1,0 heisst: der uebertragene Winkel ist genau der gerechnete.
            // Die Klassen ab GT3 sind gegen gemessenes Verhalten abgestimmt, und eine
            // Kalibrierung darauf waere ein Aufschlag auf eine Messung.
-           'setting-steer-calib': 1.55,
+           'setting-steer-calib': 2.0,
            'phys-accel': 1.0,
            'setting-crash-threshold': 35,
            // Bei Kalibrierung 1,0 wirkt schon 1,0 deutlich: 25 Grad statt 41 bei 100 km/h.
@@ -187,11 +192,11 @@
       v: { 'setting-grip': 0.97, 'setting-brakepower': 1.45, 'setting-autoshift': false,
            'setting-zero-to-top': 2.5, 'setting-coast-drag': 1.2, 'setting-fuelweight': 0.6,
            // v0.9.42: Lenkansprechen 3,0 statt 1,6 - Begruendung bei GT3.
-           'setting-tyres': 1.2, 'phys-steerresp': 3.0, 'setting-brakebias': 63,
+           'setting-tyres': 1.2, 'phys-steerresp': 3.2, 'setting-brakebias': 63,
            // Lenkkalibrierung 1,0 heisst: der uebertragene Winkel ist genau der gerechnete.
            // Die Klassen ab GT3 sind gegen gemessenes Verhalten abgestimmt, und eine
            // Kalibrierung darauf waere ein Aufschlag auf eine Messung.
-           'setting-steer-calib': 1.4,
+           'setting-steer-calib': 2.0,
            'phys-accel': 1.0,
            'setting-crash-threshold': 30,
            // Der schaerfste Reibkreis, aber nicht am Notboden: bei Kalibrierung 1,0 gibt 1,15
@@ -259,6 +264,61 @@
            'setting-topspeed': 1.0 },
     },
   };
+  // v0.9.64: Pro-Pacejka - die Pro-Abstimmung, aber mit dem Pacejka-Lenkmodell. Es ist
+  // dieselbe Tabelle wie Pro plus der Steuerungsmodus "pacejka", damit man die Magic
+  // Formula als EINEN Namen anwaehlen kann, statt zwei Stellen zu bedienen.
+  PRESETS.propacejka = {
+    label: 'Pacejka',
+    kurz: 'Pro mit Pacejka-Lenkmodell',
+    text: 'Die Pro-Abstimmung (Automatik, 2,6 s auf 100, voller Grip, Reifenmodell an, '
+        + 'kein Tankgewicht) mit dem experimentellen Pacejka-Lenkmodell: unterhalb der '
+        + 'Haftgrenze f\u00e4hrt es sich wie Physik, dar\u00fcber sp\u00fcrbar \u00dcbersteuern und '
+        + 'Untersteuern, beides vibriert und quietscht. Zum Ausprobieren der Magic Formula, '
+        + 'ohne die Klassen-Abstimmung.',
+    v: Object.assign({}, PRESETS.pro.v, { 'phys-mode': 'pacejka' }),
+  };
+  // ---- SIM+ (v0.10.5) ---------------------------------------------------------------
+  // BESTELLT: "Sim+ (so wie Pro, aber mit etwas staerkerer Lenkung, staerkerer Beschleunigung,
+  // viel staerkerer Bremse)". Und: "Ueberall ausser bei GT3 Realismus den maximalen Lenkwinkel
+  // erhoehen" - der Servo erreicht den vollen Einschlag, solange Lenkansprechen >= 3 und
+  // Lenkkalibrierung x Griff >= 1; Arcade stand mit 2,6 darunter (nie voller Einschlag), GT3
+  // und F1 verloren ihn mit 1,55/1,4 schon bei leicht kalten Reifen. Pro bleibt, wie bestellt.
+  PRESETS.simplus = {
+    label: 'Sim+',
+    kurz: 'Pro mit mehr Lenkung, Beschleunigung und Bremse',
+    text: 'Wie Pro (Automatik, voller Grip, Reifenmodell an), aber mit direkterer Lenkung, '
+        + '2,3 s auf 100 und einer deutlich kr\u00e4ftigeren Bremse. F\u00fcr alle, denen Pro '
+        + 'etwas zu tr\u00e4ge ist, ohne in Arcade zu wechseln.',
+    v: Object.assign({}, PRESETS.pro.v, { 'phys-steerresp': 3.3, 'phys-accel': 1.15,
+                                          'setting-zero-to-top': 2.3, 'setting-brakepower': 2.2 }),
+  };
+  // ---- RC (v1.0.22) -----------------------------------------------------------------
+  // BESTELLT: "Hatte ich nicht auch mal einen RC Fahrgefuehl-Modus gewuenscht? Der soll so wie
+  // Arcade sein, nur viel extremer und 'RC' heissen und auch fuer Spielerautos anwaehlbar sein.
+  // Da Pacejka ja auch inzwischen in die Fahrgefuehl-Optionen integriert ist, wuerde das die
+  // Steuerungsmodus-Einstellung unnoetig machen." Also: Arcade mit allen Reglern am Anschlag
+  // (Lenkung, Bremse, Anzug) und dem Steuerungsmodus RC - Stick direkt wie bei einer
+  // Fernsteuerung, Gas weg laeuft in 2 s aus, Bremse sofort, zweiter Bremsdruck im Stand
+  // rueckwaerts. Der Steuerungsmodus haengt damit nur noch am Fahrgefuehl.
+  PRESETS.rc = {
+    label: 'RC',
+    kurz: 'Arcade, nur viel extremer: wie ein Fernsteuerungsauto',
+    text: 'Der Stick geht direkt ans Auto wie bei einer Fernsteuerung, ohne G\u00e4nge: Gas weg '
+        + 'l\u00e4uft in zwei Sekunden aus, die Bremse greift sofort, ein zweiter Bremsdruck im '
+        + 'Stand f\u00e4hrt r\u00fcckw\u00e4rts. Lenkung, Bremse und Anzug stehen am Anschlag, kein '
+        + 'Reifenverschlei\u00df, kein Tankgewicht, Crashs ohne Schaden.',
+    v: Object.assign({}, PRESETS.arcade.v, { 'phys-mode': 'aus', 'phys-steerresp': 4,
+      'setting-steer-calib': 3, 'setting-brakepower': 2.5, 'setting-zero-to-top': 1.5,
+      'phys-accel': 1.6, 'setting-topspeed': 1.5, 'setting-coast-drag': 0.3, 'setting-brake-steal': 0.2 }),
+  };
+  // Jedes Fahrgefuehl setzt seinen Steuerungsmodus SELBST: die Einstellung dafuer ist seit
+  // v1.0.22 ausgeblendet, und wer von RC oder Pacejka wechselt, muss wieder in "Physik" landen.
+  Object.keys(PRESETS).forEach((k) => {
+    if (!Object.prototype.hasOwnProperty.call(PRESETS[k].v, 'phys-mode')) PRESETS[k].v['phys-mode'] = 'physik';
+  });
+  // Im FAHREN-Menue und am Cockpit-Knopf nur diese (BESTELLT: "die anderen Modi noch im
+  // Optionen-Menue lassen, aber nicht im FAHREN-Menue in der Kachel anzeigen").
+  const PRESETS_FAHREN = ['arcade', 'simplus', 'pro', 'propacejka', 'rc'];
   // Bis v0.4 hiess GT3 "real". Aeltere exportierte Abstimmungen und der Knopf im
   // Garagenschirm duerfen den alten Namen weiter benutzen.
   const PRESET_ALIAS = { real: 'gt3', realismus: 'gt3' };
@@ -378,6 +438,7 @@
   // gekostet, deshalb steht er als Kommentar an beiden Enden.
   window.__applyPreset = applyPreset;
   window.__presetKeys = () => Object.keys(PRESETS);
+  window.__presetKeysFahren = () => PRESETS_FAHREN.filter((k) => PRESETS[k]);
   // Fuer den Cockpit-Knopf: er soll ab der EINGESTELLTEN Variante weiterschalten und nicht
   // immer bei der ersten anfangen. Ein Knopf, der aus "GT3" ein "Arcade" macht, wirkt wie
   // ein Ruecksprung. Als Funktion und nicht als Wert, weil sich die Antwort mit jedem
@@ -416,17 +477,25 @@
 
   function presetAktiv() {
     const ist = presetRead();
+    // Nicht die ERSTE passende Variante, sondern die SPEZIFISCHSTE. Pro-Pacejka ist Pro
+    // plus der Steuerungsmodus "pacejka", und seit Pro den Modus ausdruecklich auf "physik"
+    // setzt, schliessen sich die beiden aus: wer Pro-Pacejka eingestellt hat, erfuellt den
+    // Pro-Satz nicht mehr (der Modus weicht ab). Der erste Treffer waere sonst trotzdem
+    // "Pro", wenn beide passen wuerden; bei gleicher Erfuellung gewinnt die mit der
+    // groesseren Tabelle (die spezifischere).
+    let bester = null, besteN = -1;
     for (const [key, p] of Object.entries(PRESETS)) {
-      let passt = true;
+      let passt = true, n = 0;
       for (const [id, soll] of Object.entries(p.v)) {
         // Ein Schluessel, dessen Element es nicht (mehr) gibt, darf die Variante nicht
         // stillschweigend passend machen: dann waere jede Voreinstellung "aktiv", sobald
         // genug Regler fehlen.
         if (!(id in ist) || !presetGleich(ist[id], soll)) { passt = false; break; }
+        n++;
       }
-      if (passt) return key;
+      if (passt && n > besteN) { bester = key; besteN = n; }
     }
-    return null;
+    return bester;
   }
 
   function renderPresetLegende() {
@@ -441,7 +510,7 @@
     if (!host) return;
     if (!key) {
       host.innerHTML = '<div class="preset-leg"><b>Eigene Abstimmung</b> <span class="muted">'
-        + 'kein fertiger Satz</span><small>Mindestens ein Regler weicht von allen f\u00fcnf '
+        + 'kein fertiger Satz</span><small>Mindestens ein Regler weicht von allen sechs '
         + 'Voreinstellungen ab. Ein Klick oben setzt wieder einen ganzen Satz.</small></div>';
       return;
     }

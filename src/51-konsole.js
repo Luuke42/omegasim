@@ -129,6 +129,8 @@
     // Raumgestalter offen: die Zurueck-Taste schliesst ihn (v0.9.45, "komme nicht mehr raus").
     if (typeof raumDsOffen === 'function' && raumDsOffen()) { raumDsSchliessen(); return true; }
     if ($('mp-info') && !$('mp-info').hidden && typeof mpiStop === 'function') { mpiStop(); return true; }
+    // v1.0.22: die Zurueck-Taste schliesst auch die Meisterschaft (vorher kam man nur ueber das Kreuz raus).
+    if (typeof meisterOffen === 'function' && meisterOffen()) { meisterSchliessen(); return true; }
     const imEditor = document.body.classList.contains('track-fs');
     const tour = typeof konsoleTourOffen === 'function' && konsoleTourOffen();
     if (kAktiverTab() === 'home' && !imEditor && !tour && !kFrageOffen) return false;
@@ -224,7 +226,9 @@
         text: t(text), an: i === (konsoleReiter.renn || 0),
         wahl: () => {
           konsoleReiter.renn = i;
-          const el = $(id);
+          let el = $(id);
+          // Noch kein Rennen: der Platzhalter "Aktuell keine Ergebnisse verfuegbar" (v1.0.22).
+          if (id === 'race-results' && el && el.style.display === 'none' && $('race-results-leer')) el = $('race-results-leer');
           if (el && !el.hidden) el.scrollIntoView({ block: 'start' });
           konsoleZeichnen();
         },
@@ -354,7 +358,8 @@
       return { anzahl: s ? s.options.length : 0, index: s ? s.selectedIndex : -1 };
     }
     if (quad === 'profil') {
-      const keys = window.__presetKeys ? window.__presetKeys() : [];
+      const keys = window.__presetKeysFahren ? window.__presetKeysFahren()
+        : (window.__presetKeys ? window.__presetKeys() : []);
       const aktiv = window.__presetActive ? window.__presetActive() : null;
       return { anzahl: keys.length, index: aktiv ? keys.indexOf(aktiv) : -1 };
     }
@@ -673,7 +678,8 @@
   function kAutos() {
     try { return garage.filter((c) => c.device); } catch (e) { return []; }
   }
-  const K_ROLLE = { player: 'Steuern', player2: 'Spieler 2', player3: 'Spieler 3', ghost: 'Ghost', none: 'Aus' };
+  const K_ROLLE = { player: 'Steuern', player2: 'Spieler 2', player3: 'Spieler 3', ghost: 'NPC',
+                    safetycar: 'Safety Car', challenger: 'Challenger', none: 'Aus' };
   function kPunkt(farbe, text) {
     const s = document.createElement('span');
     const p = document.createElement('i'); p.className = 'k-punkt'; p.style.background = farbe;
@@ -737,7 +743,7 @@
         });
         ab.appendChild(gal);
       } else {
-        ab.style.backgroundImage = afoto ? 'url("' + afoto + '")' : 'url(img/auto.jpg)';
+        ab.style.backgroundImage = afoto ? 'url("' + afoto + '")' : 'url(img/garage.jpg)';   // v1.0.15: Garagenfoto (BESTELLT)
         ab.innerHTML = '';
       }
       ab.dataset.bild = abNeu;
@@ -751,7 +757,7 @@
     // Rennoptionen-Kachel wechselt mit dem Rennmodus das Bild (BESTELLT v0.8.53).
     const rmBild = { practice: 'rennoptionen-practice', endurance: 'rennoptionen-endurance',
                      qualifying: 'rennoptionen-qualifying', laps: 'rennoptionen-laps',
-                     knockout: 'knockout', derby: 'derby' }[rm.value];
+                     knockout: 'knockout', derby: 'derby', bestzeit: 'rennoptionen-bestzeit' }[rm.value];
     const rb = $('fa-renn-bild');
     if (rb && rmBild && rb.dataset.bild !== rmBild) {
       rb.style.backgroundImage = 'url(img/' + rmBild + '.jpg)';
@@ -760,7 +766,11 @@
     const wx = $('race-wx-start');
     kZeilen($('fa-renn-info'), [
       // Freies Training laeuft ohne Ende: dort steht das Unendlich statt einer Minutenzahl.
-      rm.value === 'practice' ? [t('Dauer'), '∞']
+      rm.value === 'bestzeit' ? [t('Bestzeit'), (() => {
+        const b = typeof bestzeitAktuell === 'function' ? bestzeitAktuell(playerCar) : null;
+        return b ? formatLapTime(b.beste) + ' ' + (typeof chSterneZeichen === 'function' ? chSterneZeichen(b.medaille) : '') : '–';
+      })()]
+      : rm.value === 'practice' ? [t('Dauer'), (+(($('race-limit') || {}).value) > 0 ? $('race-limit').value + ' min' : '∞')]
         : [($('race-limit-label') || {}).textContent || t('Dauer'), ($('race-limit') || {}).value || '–'],
       [t('Wetter'), wx && wx.selectedOptions[0] ? wx.selectedOptions[0].textContent : '–'],
       [t('Pflichtboxenstopps'), ($('race-pit-required') || {}).value || '0'],
@@ -813,7 +823,7 @@
     if ($('fa-editor')) $('fa-editor').hidden = !bahn;
     if ($('fa-foto')) $('fa-foto').hidden = bahn;
     if ($('fa-foto-weg')) $('fa-foto-weg').hidden = bahn || !foto;
-    $('fa-profil-titel').textContent = ($('race-act-mode-txt') || {}).textContent || '–';
+    // (fa-profil ist seit v0.10.5 die Meisterschaft-Kachel, ohne Abstimmungsanzeige.)
 
     const training = rm.value === 'practice';
     $('fa-start-titel').textContent = kRennenLaeuft() ? t('Zurück ins Rennen')
@@ -824,8 +834,7 @@
     // 27 Motoren) wuerden die Punkte nicht mehr passen - dort stehen Pfeile im Markup.
     // Fuer 6..10 Stellungen ohne Pfeile reicht auch der Platz nicht mehr: dann eine kompakte
     // "N/M"-Anzeige statt der Punkte (BESTELLT: "N/8"-Readout, wenn die Punkte drangeln).
-    [['fa-strecke-punkte', 'bahn'], ['fa-renn-punkte', 'renntyp'],
-     ['fa-profil-punkte', 'profil']].forEach(([id, quad]) => {
+    [['fa-strecke-punkte', 'bahn'], ['fa-renn-punkte', 'renntyp']].forEach(([id, quad]) => {
       const host = $(id);
       if (!host) return;
       const p = kQuadPunkte(quad);
@@ -916,7 +925,7 @@
       return false;
     }
     if (kAktiverTab() !== 'home') return false;
-    if (neu === 14 || neu === 15 || neu === 4 || neu === 5) { setLang(lang === 'de' ? 'en' : 'de'); return true; }
+    if (neu === 14 || neu === 15 || neu === 4 || neu === 5) { wechsleSprache(); return true; }
     // BESTELLT: "'Press any key' und 'press triangle for tutorial' ist auch etwas
     // verwirrend. Ich wuerde sagen: X zum Starten, Dreieck fuer Tutorial, Kreis fuer
     // Steuerung." Alle anderen Tasten tun auf dem Titel nichts mehr.
@@ -953,10 +962,14 @@
   window.addEventListener('keydown', (e) => {
     const k = (e.key || '').toLowerCase();
     if (e.target && e.target.closest && e.target.closest('input[type="text"], input[type="number"], textarea, select')) return;
+    // Der Meisterschaftsschirm hat seine eigene Tastatur (73-meisterschaft.js).
+    if (typeof meisterOffen === 'function' && meisterOffen() && !kFrageOffen) return;
+    // Reaktionstest der Studie (98f-studie.js): jede Taste ist dort ein Druck.
+    if (typeof studieTestAktiv === 'function' && studieTestAktiv()) return;
     if (kAktiverTab() === 'home' && !e.ctrlKey && !e.altKey && !e.metaKey && k !== 'tab' && k !== 'shift') {
       e.preventDefault(); e.stopImmediatePropagation();
       // Tastatur wie am Pad: Enter, Leertaste oder X starten, T das Tutorial, S die Steuerung.
-      if (k === 'arrowleft' || k === 'arrowright') setLang(lang === 'de' ? 'en' : 'de');
+      if (k === 'arrowleft' || k === 'arrowright') wechsleSprache();
       else if (k === 't') konsoleTourStart(K_TOUR);
       else if (k === 's') konsoleTourStart(K_STEUERUNG);
       else if (k === 'enter' || k === ' ' || k === 'x') konsoleTitelWeiter();
@@ -1017,11 +1030,11 @@
     kn('fa-laden', () => konsoleZeige('track', 'laden'));
     kn('fa-raum', () => konsoleZeige('track', 'raum'));
     kn('fa-druck', () => konsoleZeige('track', 'print'));
-    kn('fa-profil', () => konsoleZeige('options', 'opt-feel'));
+    kn('fa-profil', () => meisterOeffnen());
     // BESTELLT: "wenn ich auf den Header tippe, soll es zur naechsten Option schalten".
     // Der Kachelkopf (Titel + Wert) dreht die Schaltstellung weiter, der Rest der Kachel
     // oeffnet wie bisher die Unterseite. Das Gamepad bleibt unveraendert (Quadrat/links/rechts).
-    [['fa-strecke', 'bahn'], ['fa-renn', 'renntyp'], ['fa-profil', 'profil']]
+    [['fa-strecke', 'bahn'], ['fa-renn', 'renntyp']]
       .forEach(([tileId, quad]) => {
         const tile = $(tileId);
         if (!tile) return;

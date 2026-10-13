@@ -43,7 +43,21 @@
   // leerfahren und den kleinsten je gemeldeten Rohwert festhalten. Bis dahin ist die
   // vorsichtigere Skala die richtige - eine Anzeige, die zu wenig verspricht, kostet
   // nichts, eine die zu viel verspricht kostet das Rennen.
-  const AKKU_LEER = 131, AKKU_VOLL = 155;
+  // v0.9.87: 138 statt 131. GEMELDET: "Autos blinken und verlieren die Verbindung, bevor
+  // der Akku als leer angezeigt wird." Der kleinste Rohwert je Auto wird mitgeschrieben
+  // (akkuMinRoh, Garage) - damit laesst sich die Zahl spaeter nachmessen.
+  const AKKU_LEER = 138, AKKU_VOLL = 155;
+  const AKKU_FENSTER_MS = 5000;
+  function akkuGlaetten(halter, roh, now) {
+    const h = halter.akkuHist || (halter.akkuHist = []);
+    h.push({ t: now, v: roh });
+    while (h.length && now - h[0].t > AKKU_FENSTER_MS) h.shift();
+    if (halter.akkuMinRoh === undefined || roh < halter.akkuMinRoh) halter.akkuMinRoh = roh;
+    let m = 0;
+    for (const e of h) if (e.v > m) m = e.v;
+    return m;
+  }
+  const dashAkkuHalter = {};
 
   function batteryPercent(raw) {
     return Math.max(0, Math.min(100,
@@ -85,9 +99,20 @@
     // `timed: false` is what makes practice different: no limit is checked, so it runs
     // until it is stopped. Everything else about it is an ordinary session — the ghosts
     // drive, laps are recorded, the results table fills.
-    practice:   { label: 'Freies Training', unit: 'Minuten', timed: false,
-                  hint: 'Läuft, bis du beendest.' },
+    // v0.10.5 BESTELLT: "freies Fahren (= umbenennen in Training) braucht ein Zeitlimit; baue
+    // das ein und mach es standardmaessig auf 0 (= unendlich)". timed bleibt false: ohne Limit
+    // laeuft es weiter, mit Limit gilt raceLimitReached() wie bei Endurance.
+    practice:   { label: 'Training', unit: 'Minuten', timed: false,
+                  hint: 'Zeitlimit in Minuten, 0 = bis du beendest.' },
     endurance:  { label: 'Endurance', unit: 'Minuten', timed: true, hint: 'Meiste Runden in der Zeit.' },
+    // v0.10.6 BESTELLT: "Medaillen fuer eigene Strecken: einen siebten Modus, der nur geht,
+    // wenn ich eine Bahn habe (sonst Meldung wie bei NPC Knockout): Bestzeit fuer die
+    // eingegebene Strecke mit Medaillen nach der Gold-Formel. Die Strecke wird gespeichert,
+    // sodass man bei derselben Strecke wieder seine alten Zeiten hat. Hier fahren nur vom
+    // Spieler gesteuerte Autos, keine Ghosts - auch wenn sie verbunden sind, bleiben sie stehen."
+    // v1.0.19 BESTELLT: "Den Modus umbenennen in 'Time Attack' (auch auf Deutsch)."
+    bestzeit:   { label: 'Time Attack', unit: 'Minuten', timed: false,
+                  hint: 'Nur gesteuerte Autos, Medaillen nach der Gold-Formel. Zeitlimit in Minuten, 0 = bis du beendest.' },
     qualifying: { label: 'Qualifying', unit: 'Minuten', timed: true, hint: 'Schnellste Einzelrunde zählt.' },
     laps:       { label: 'Runden', unit: 'Runden', timed: true, hint: 'Wer zuerst die Rundenzahl hat.' },
     // BESTELLT: "neuer rennmodus (experimentell): knockout." Die Wertung ist nicht zeit- oder
@@ -105,7 +130,7 @@
                   hint: 'Experimentell: rammen, Health 0-100, Sieg nach Kills.' },
   };
   let raceMode = 'practice';
-  let raceLimit = 2;              // minutes, or laps in 'laps' mode
+  let raceLimit = 0;              // minutes, or laps in 'laps' mode; Training: 0 = ohne Ende
 
   // ---- Knockout (v0.8.96, experimentell) ----
   // Jeder menschliche Fahrer hat KO_Leben Leben; ein Abkommen kostet eins. Ein Geist ist
@@ -145,11 +170,10 @@
   // which is what "sobald das erste Auto über Start fährt" means literally.
   let raceFlying = false;
   let raceGridOrder = [];      // device ids, first = pole
-let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentell). Hiess bis v0.9.2
-                            // "Autos fahren selbst in Position" - das tat er nie, er aendert nur den
-                            // Querversatz der Startaufstellung in der Einfuehrungsrunde.
   let raceFormationLap = false;
   let raceStartedAt = null;
+  // Zeitpunkt von Gruen (stehender Start). Die Reihenstaffel der Ghosts zaehlt davon.
+  let raceGreenAt = null;
   let raceClockTimer = null;
 
   // Was in der Rundenkachel steht. Drei Faelle, und der dritte ist der Grund fuer diese
@@ -168,7 +192,11 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
 
   function raceLimitReached() {
     if (raceState !== 'racing') return false;
-    if (!RACE_MODES[raceMode].timed) return false;   // free practice: only a human ends it
+    // Training: mit Zeitlimit (> 0) endet es nach der Zeit, mit 0 nur von Hand.
+    if (raceMode === 'practice' || raceMode === 'bestzeit') {
+      return raceLimit > 0 && raceStartedAt !== null && (Date.now() - raceStartedAt) >= raceLimit * 60000;
+    }
+    if (!RACE_MODES[raceMode].timed) return false;
     if (raceMode === 'laps') {
       return raceAllCars().some(c => c.laps.length >= raceLimit);
     }
@@ -202,13 +230,32 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     knockoutPruefen();
   }
   // Ein Mensch verliert ein Leben (Abkommen von der Bahn).
+  // v0.9.51 BESTELLT: "Leben werden korrekt abgezogen, spiele dazu noch einen traurigen
+  // kurzen Ton ab. Wenn alle Leben weg sind, dann Game-over-Ton abspielen und Rennende
+  // anzeigen." Der traurige Ton nur, wenn es WEITERGEHT - beim letzten Leben kommt der
+  // Game-over-Ton aus knockoutEnde, zwei Toene uebereinander waeren Brei.
   function knockoutLebenVerlieren(wer) {
     if (!knockoutLaeuft) return;
     const z = wer >= 2 ? zusatzPlatz(wer) : null;
     if (z) z.koLeben = Math.max(0, z.koLeben - 1);
     else knockoutLeben = Math.max(0, knockoutLeben - 1);
     showHudToast(t('Spieler {s}: noch {n} Leben').replace('{s}', z ? String(wer) : '1').replace('{n}', z ? z.koLeben : knockoutLeben));
+    if (knockoutUrteil() !== 'geister') playLebenWeg();
     knockoutPruefen();
+  }
+  // Ein Leben weg: zwei fallende Sinustoene, G4 nach Es4 - kurz, traurig, nicht schrill.
+  function playLebenWeg() {
+    if (typeof playTone !== 'function') return;
+    playTone(392, 0.16, 'sine', 0.24);
+    setTimeout(() => playTone(311, 0.26, 'sine', 0.24), 170);
+  }
+  // Game over: vier absteigende Halbtoene, der letzte lang - das bekannte "wah wah wah
+  // waaah". Rechteck, damit es auch aus dem Handylautsprecher kommt (alles ueber 250 Hz).
+  const GAME_OVER_NOTEN = [{ hz: 330, ab: 0, dauer: 0.22 }, { hz: 311, ab: 0.26, dauer: 0.22 },
+                           { hz: 294, ab: 0.52, dauer: 0.22 }, { hz: 277, ab: 0.78, dauer: 0.8 }];
+  function playGameOver() {
+    if (typeof playTone !== 'function') return;
+    for (const n of GAME_OVER_NOTEN) setTimeout(() => playTone(n.hz, n.dauer, 'square', 0.15), n.ab * 1000);
   }
   // Ende: alle Geister raus -> Sieg; alle Menschen raus -> Niederlage.
   // Die Entscheidung allein, ohne Folgen (v0.9.16, fuer den Selbsttest): null = weiter.
@@ -231,11 +278,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       if (typeof playRaceEndFanfare === 'function') playRaceEndFanfare();
       showHudToast(t('Knockout: Menschen gewinnen!'));
     } else {
-      if (typeof playTone === 'function') {   // dunkler Abwaertston
-        playTone(200, 0.12, 'square', 0.16);
-        setTimeout(() => playTone(140, 0.16, 'square', 0.14), 70);
-        setTimeout(() => playTone(110, 0.2, 'square', 0.12), 160);
-      }
+      playGameOver();
       showHudToast(t('Knockout: Geister gewinnen.'));
     }
     if (typeof finishRace === 'function') finishRace(false);
@@ -572,12 +615,21 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // zwei ankommt, IST der Erste. Eine Rangliste waere ein zweiter Ort fuer dieselbe Aussage.
   // Der Schluessel ist die Geraete-id, fuer das eigene Auto der feste String 'spieler'.
   let formationZaehler = new Map();
+  // v0.9.87 BESTELLT: "Fliegender Start: Ghosts und Spieler sollen wie bei gelber Flagge so
+  // lange fahren, bis das erste Auto ueber Start/Ziel zum 2. Mal faehrt." Das Feld steht vor
+  // der Linie: die erste Ueberfahrt ist die Startlinie, die zweite das Ende der Runde. Mit
+  // Sektoren meldet jede Sektorgrenze eine Ueberfahrt - eine Runde sind dann sektorZiel()
+  // Kontakte. Vorher endete die Runde mit Sektoren schon nach dem ersten Drittel.
+  function formationNoetig() {
+    const k = typeof sektorZiel === 'function' ? Math.max(1, sektorZiel()) : 1;
+    return 1 + k;
+  }
 
   function formationUeberfahrt(schluessel) {
     if (!raceFormationLap) return;
     const n = (formationZaehler.get(schluessel) || 0) + 1;
     formationZaehler.set(schluessel, n);
-    if (n < FORMATION_UEBERFAHRTEN) {
+    if (n < formationNoetig()) {
       // Ein Zwischenstand, kein Ereignis: die Meldung sagt, dass es noch eine Runde ist,
       // sonst haelt man die stille Vorbeifahrt fuer einen Fehler.
       showHudToast(t('Einführungsrunde: noch eine Runde'));
@@ -675,6 +727,11 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // Derselbe Grund wie bei playerLapCrossed(): eine Stelle, die eine Runde zaehlt, und die
   // Testtaste nimmt sie mit.
   function carLapCrossed(car) {
+    // v0.10.7: das Safety Car faehrt keine Runden - es wartet nur auf Start/Ziel nach Gruen.
+    if (car.role === 'safetycar') {
+      if (car.ghost && car.ghost.scHeim && typeof safetyCarAbstellen === 'function') safetyCarAbstellen(car);
+      return;
+    }
     if (!car.race) car.race = { laps: [], lapStart: null, pending: null, seen: 0,
                                 lastActed: 0, lastCount: null };
     const r = car.race, now = Date.now();
@@ -730,6 +787,10 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       const nrSp = spielerNrVon(car);
       const ms = now - r.lapStart + (nrSp >= 2 ? fruehstartZuschlag(nrSp, r.laps.length) : 0), offs = r.offLap || 0;
       r.laps.push({ lap: r.laps.length + 1, ms, off: offs });
+      // v0.10.6: Bestzeit-Modus - auch Spieler 2/3 sammeln Zeiten und Medaillen.
+      if (raceMode === 'bestzeit' && spielerNrVon(car) >= 2 && ms >= rundeMinMs()) {
+        bestzeitMeldung(bestzeitRunde(ms, car), ms, spielerNrVon(car));
+      }
       if (spielerNrVon(car) >= 2) {
         const beste2 = r.laps.every((l) => l.ms >= ms);
         const istBest2 = beste2 && r.laps.length > 1;
@@ -817,7 +878,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // diesen Fix blieb c.race.laps beim Spieler auf 0 stehen, raceLimitReached() konnte nur
     // ueber einen GHOST ausloesen, und ein Rundenrennen ohne (oder mit zu langsamen) Ghosts
     // endete nie.
-    const out = garage.map(c => ({ name: garageLabel(c), role: c.role,
+    const out = garage.filter(c => c.role !== 'safetycar').map(c => ({ name: garageLabel(c), role: c.role, id: String(c.device && c.device.id),
                                    farbe: carColor(c).hex, kennung: c.tag,
                                    // Der Ort auf der Schiene. Auto 2 geht ueber
                                    // ghostOrtGes(): es hat seit v0.6.46 einen eigenen
@@ -1010,20 +1071,37 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // Ungueltige Runde (Challenge: Strecke nicht erkannt oder zu schnell). Ein tiefer, dumpfer
   // Ton statt des hellen Runden-/Bestzeit-Klangs - so hoert man sofort, dass die Runde nicht
   // zaehlt, ohne dass ein Fehler-Dialog den Fahrtablauf stoert.
+  // v0.9.51 BESTELLT: "Spiele den Sound fuer ungueltige Runde so ab, dass man ihn besser
+  // hoert." Vorher ein Sinus von 190 auf 140 Hz bei 0,16: das liegt unter dem, was ein
+  // Handylautsprecher ueberhaupt wiedergibt (ab etwa 250 Hz), und war halb so laut wie der
+  // Rundenton. Jetzt zwei kurze Summstoesse, die abwaerts gehen - "aeh-aeh", das bekannte
+  // Zeichen fuer "falsch" -, als Rechteck mit Obertoenen bis in den Bereich, den kleine
+  // Lautsprecher gut spielen, und lauter als der Rundenton.
+  const UNGUELTIG_STOESSE = [{ ab: 0, von: 330, bis: 294, dauer: 0.17 },
+                             { ab: 0.22, von: 262, bis: 233, dauer: 0.24 }];
   function playLapChimeUngueltig() {
     if (!soundEnabled || !audioCtx) return;
-    const t = audioCtx.currentTime;
-    const o = audioCtx.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(190, t);
-    o.frequency.linearRampToValueAtTime(140, t + 0.22);
-    const g = audioCtx.createGain();
-    g.gain.setValueAtTime(0.001, t);
-    g.gain.linearRampToValueAtTime(0.16, t + 0.03);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
-    o.connect(g).connect(audioCtx.destination);
-    o.start(t);
-    o.stop(t + 0.3);
+    const t0 = audioCtx.currentTime;
+    const tp = audioCtx.createBiquadFilter();
+    tp.type = 'lowpass';
+    tp.frequency.value = 1800;
+    tp.Q.value = 0.7;
+    tp.connect(audioCtx.destination);
+    for (const s of UNGUELTIG_STOESSE) {
+      const t = t0 + s.ab;
+      const o = audioCtx.createOscillator();
+      o.type = 'square';
+      o.frequency.setValueAtTime(s.von, t);
+      o.frequency.linearRampToValueAtTime(s.bis, t + s.dauer);
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(0.34, t + 0.012);
+      g.gain.setValueAtTime(0.34, t + s.dauer - 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, t + s.dauer);
+      o.connect(g).connect(tp);
+      o.start(t);
+      o.stop(t + s.dauer + 0.02);
+    }
   }
 
   // ---- Tempolimit: eine Stelle, drei Quellen ----
@@ -1116,7 +1194,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       const st = x.st, isBest = st.best === fastest;
       return `<tr>
         <td style="${td}">${i + 1}</td>
-        <td style="${td}">${ergDot(x.c)}${x.c.name}${x.c.role === 'ghost' ? ' <span class="muted">(Ghost)</span>' : ''}${rammerLabel(x.c)}</td>
+        <td style="${td}">${ergDot(x.c)}${x.c.name}${x.c.role === 'ghost' ? ' <span class="muted">(NPC)</span>' : x.c.role === 'challenger' ? ' <span class="muted">(Challenger)</span>' : ''}${rammerLabel(x.c)}</td>
         <td style="${tdr}">${st.n}</td>
         <td style="${tdr}${isBest ? '; color:var(--good); font-weight:700' : ''}">${formatLapTime(st.best)}</td>
         <td style="${tdr}">${formatLapTime(Math.round(st.mean))}</td>
@@ -1542,9 +1620,47 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     raceGridZeilen($('grid-liste'));
     gridBildMalen();
     if ($('grid-kopf-info')) $('grid-kopf-info').textContent = '';
+    // Time Attack: Medaillenzeiten, bisher Gewonnenes und Bestzeit dieser Strecke.
+    const ta = $('grid-timeattack');
+    if (ta) {
+      const html = raceMode === 'bestzeit' ? bestzeitStartHtml() : '';
+      ta.innerHTML = html;
+      ta.hidden = !html;
+      const tb = ta.querySelector('.ta-tele');
+      if (tb) tb.addEventListener('click', () => teleSeiteOeffnen());
+      const cs = ta.querySelector('.ta-challenger');
+      if (cs) cs.addEventListener('change', () => {
+        if ($('race-challenger')) $('race-challenger').value = cs.value;
+        if (typeof challengerVorbereiten === 'function') challengerVorbereiten();
+      });
+    }
+    if (typeof challengerVorbereiten === 'function') {
+      try { challengerVorbereiten(); } catch (e) { /* ohne Netz */ }
+    }
     // v0.9.31: im freien Training gibt es keine Startaufstellung - also auch keinen Knopf.
     if ($('grid-auto')) $('grid-auto').hidden = raceMode === 'practice';
     gs.hidden = false;
+    gridFokusIdx = -1;
+    raceGridFokus(0);
+  }
+  // v0.10.5 BESTELLT: "Rennstartmenue: mach Abbrechen und Start anwaehlbar, dann mit X
+  // bestaetigen." Steuerkreuz links/rechts (oder hoch/runter) waehlt, X drueckt den gewaehlten
+  // Knopf. Ab Werk steht die Auswahl auf Start - wer nur X drueckt, startet wie bisher.
+  let gridFokusIdx = -1;
+  function gridKnoepfe() {
+    return ['grid-abbrechen', 'grid-auto', 'grid-start'].map((id) => $(id)).filter((b) => b && !b.hidden);
+  }
+  function raceGridFokus(d) {
+    const k = gridKnoepfe();
+    if (!k.length) return;
+    if (gridFokusIdx < 0 || gridFokusIdx >= k.length) gridFokusIdx = k.length - 1;
+    gridFokusIdx = Math.max(0, Math.min(k.length - 1, gridFokusIdx + d));
+    k.forEach((b, i) => b.classList.toggle('pad-fokus', i === gridFokusIdx));
+  }
+  function raceGridBestaetigen() {
+    const k = gridKnoepfe();
+    const b = k.length ? k[gridFokusIdx >= 0 && gridFokusIdx < k.length ? gridFokusIdx : k.length - 1] : null;
+    if (b) b.click(); else raceGridStart();
   }
   function raceGridStart() {
     const gs = $('race-gridscreen');
@@ -1573,13 +1689,6 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   if ($('grid-start')) $('grid-start').addEventListener('click', raceGridStart);
   if ($('grid-abbrechen')) $('grid-abbrechen').addEventListener('click', raceGridAbbrechen);
   if ($('grid-auto')) $('grid-auto').addEventListener('click', () => aufstellenStarten());
-  // BESTELLT: "eine option, dass die autos selbst in position fahren ... (als experimentell
-  // kennzeichnen)". Der Schalter setzt gridSelbst, das die Ghosts auf ihre Startplaetze
-  // (abwechselnd links/rechts, max Querlage) faehrt statt sie von Hand aufzustellen.
-  if ($('grid-selbst')) {
-    gridSelbst = $('grid-selbst').checked;
-    $('grid-selbst').addEventListener('change', (e) => { gridSelbst = e.target.checked; });
-  }
 
   $('race-flying').addEventListener('change', (e) => {
     raceFlying = e.target.checked;
@@ -1604,7 +1713,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   function knockoutBereit(melden) {
     if (raceMode !== 'knockout') return true;
     if (!garage.some((c) => c && c.role === 'ghost')) {
-      if (melden) showHudToast(t('NPC Knockout braucht mindestens einen Ghost'));
+      if (melden) showHudToast(t('NPC Knockout braucht mindestens einen NPC'));
       return false;
     }
     const cb = $('setting-ontrack');
@@ -1615,9 +1724,108 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     }
     return true;
   }
+  // ---- BESTZEIT-MODUS (v0.10.6) --------------------------------------------------------
+  function bestzeitBereit(melden) {
+    if (raceMode !== 'bestzeit') return true;
+    const tiles = (typeof currentTrackTiles !== 'undefined' && currentTrackTiles) || [];
+    if (trackMode !== 'on' || tiles.length < 3) {
+      if (melden) showHudToast(t('Time Attack braucht die Bahn: „Auf der Bahn“ und eine eingescannte Strecke'));
+      return false;
+    }
+    return true;
+  }
+  // Die Strecke als Schluessel: gespiegelt gilt als dieselbe (wie bei den Community-Strecken).
+  const BESTZEIT_STORE = 'omegasim-bestzeiten';
+  function bestzeitSchluessel(tiles) {
+    const a = trackToCode(tiles, 0);
+    let b = a;
+    try { b = trackToCode(chSpiegelTiles(tiles), 0); } catch (e) { /* ohne Spiegel */ }
+    return a < b ? a : b;
+  }
+  function bestzeitLesen() {
+    try { return JSON.parse(localStorage.getItem(BESTZEIT_STORE) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function bestzeitSchreiben(d) {
+    try { localStorage.setItem(BESTZEIT_STORE, JSON.stringify(d)); } catch (e) { /* voll */ }
+  }
+  function bestzeitDef(tiles) { return { id: 'eigen', code: trackToCode(tiles, 0), runden: 1 }; }
+  // Eine gueltige Runde eines gesteuerten Autos. Rueckgabe: { sterne, neu } fuer Ton/Anzeige.
+  function bestzeitRunde(ms, car, tilesOpt) {
+    const tiles = tilesOpt || currentTrackTiles;
+    if (!tiles || tiles.length < 3 || !(ms > 0)) return null;
+    const sterne = chSterne(bestzeitDef(tiles), 'hotlap', ms);
+    const alle = bestzeitLesen();
+    const k = bestzeitSchluessel(tiles);
+    const e = alle[k] || (alle[k] = { code: trackToCode(tiles, 0), fahrer: {} });
+    const wer = car && car.device ? String(car.device.id) : 'spieler1';
+    const f = e.fahrer[wer] || (e.fahrer[wer] = { name: '', beste: null, medaille: 0, runden: 0 });
+    f.name = car ? garageLabel(car) : t('Spieler 1');
+    f.runden += 1;
+    const neu = f.beste === null || ms < f.beste;
+    if (neu) { f.beste = Math.round(ms); f.datum = Date.now(); }
+    if (sterne > f.medaille) f.medaille = sterne;
+    bestzeitSchreiben(alle);
+    return { sterne, neu };
+  }
+  // Fuer die FAHREN-Kachel und das Ergebnis: die Bestzeit auf der aktuellen Strecke.
+  function bestzeitAktuell(car) {
+    const tiles = currentTrackTiles;
+    if (!tiles || tiles.length < 3) return null;
+    const e = bestzeitLesen()[bestzeitSchluessel(tiles)];
+    if (!e) return null;
+    const wer = car && car.device ? String(car.device.id) : null;
+    const liste = Object.entries(e.fahrer).filter(([id]) => !wer || id === wer).map(([, f]) => f)
+      .filter((f) => f.beste);
+    if (!liste.length) return null;
+    return liste.reduce((a, b) => (a.beste <= b.beste ? a : b));
+  }
+  // ---- TIME ATTACK AUF DEM STARTSCHIRM (v1.0.19) ---------------------------------------
+  // BESTELLT: "Bei Bestzeit bitte noch auf dem Startbildschirm anzeigen, welche Medaillen bei
+  // welcher Zeit gewonnen werden. Bitte ausserdem anzeigen, welche Medaillen fuer diese Strecke
+  // schon gewonnen wurden und was die Bestzeit ist." Die Schwellen sind dieselben wie beim
+  // Werten (chSterneSchwellen ueber bestzeitDef), die Zeiten aus omegasim-bestzeiten.
+  function bestzeitStartHtml() {
+    const tiles = currentTrackTiles;
+    if (!tiles || tiles.length < 3 || typeof chMedailleHinweis !== 'function') return '';
+    const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    let h = '<div class="ta-kopf">' + esc(t('Medaillen auf dieser Strecke')) + '</div>'
+      + '<div class="ta-schwellen">' + chMedailleHinweis(bestzeitDef(tiles), 'hotlap') + '</div>';
+    const e = bestzeitLesen()[bestzeitSchluessel(tiles)];
+    const fahrer = e ? Object.values(e.fahrer).filter((f) => f && f.beste) : [];
+    fahrer.sort((a, b) => a.beste - b.beste);
+    if (!fahrer.length) {
+      h += '<div class="ta-stand">' + esc(t('Noch keine Zeit auf dieser Strecke.')) + '</div>';
+    } else {
+      h += '<div class="ta-kopf">' + esc(t('Bisher gewonnen')) + '</div><table class="ta-stand">'
+        + fahrer.map((f) => '<tr><td>' + esc(f.name || '?') + '</td><td>' + esc(formatLapTime(f.beste)) + '</td><td>'
+          + (typeof chSterneText === 'function' ? chSterneText(f.medaille) : '') + ' '
+          + esc(typeof chSterneName === 'function' ? chSterneName(f.medaille) : '') + '</td></tr>').join('')
+        + '</table>';
+    }
+    // v1.0.21: zur Telemetrie dieser Strecke, sobald es eine aufgezeichnete Runde gibt.
+    // v1.0.21: steht ein Challenger in der Garage, hier auch sein Modus.
+    if (typeof challenger === 'function' && challenger()) {
+      const m = typeof challengerModus === 'function' ? challengerModus() : 'beste';
+      h += '<div class="ta-kopf">Challenger</div><select class="ta-challenger">'
+        + [['beste', t('Gegen meine Bestzeit')], ['rekord', t('Gegen den Rekord')], ['gummiband', t('Gummiband')]]
+          .map(([v, txt]) => '<option value="' + v + '"' + (v === m ? ' selected' : '') + '>' + esc(txt) + '</option>').join('')
+        + '</select>';
+    }
+    if (typeof teleBeste === 'function' && teleBeste(playerCar, tiles)) {
+      h += '<button type="button" class="ta-tele">' + esc(t('Telemetrie ansehen')) + '</button>';
+    }
+    return h;
+  }
+  function bestzeitMeldung(r, ms, nr) {
+    if (!r) return;
+    const name = typeof chSterneName === 'function' ? chSterneName(r.sterne) : '';
+    showHudToast((nr >= 2 ? 'P' + nr + ': ' : '') + (r.neu ? t('Neue Bestzeit auf dieser Strecke!') + ' ' : '')
+      + formatLapTime(ms) + (name ? ' · ' + name : ''));
+  }
   function startRaceCountdown(gruenZiel, mpPlan) {
     if (raceState !== 'idle' && raceState !== 'finished') return; // ignore while armed/racing
     if (!knockoutBereit(true)) return;
+    if (!bestzeitBereit(true)) return;
     // EINSCHALTRAMPE: der Schirm zieht in 300 ms von schwarz auf Wert hoch, wie ein TFT beim
     // Einschalten. Hier und nicht in raceGreen(), weil der Schirm mit dem Knopfdruck
     // "angeht" und nicht erst bei Gruen - im Countdown will man ihn schon lesen.
@@ -1660,10 +1868,15 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // BEIDE Autos mit derselben Startmenge und beide schadenfrei. Ein Rennen, in dem das
     // eine Auto voll und das andere halb leer startet, waere kein Rennen - das ist die
     // Zusage, unter der der Zwei-Spieler-Modus gebaut ist.
-    tankZweiFuellen(fuel);
-    schadenZweiZuruecksetzen();
+    // v0.9.51 BESTELLT: "Wenn ich ein Rennen starte, setze die Autos zurueck (voller Tank,
+    // kein Schaden, kalte Reifen [wenn kein Reifenwaermer])." Der Kommentar oben versprach
+    // "beide schadenfrei", gesetzt wurde aber nur Auto 2 - Auto 1 behielt seinen Schaden,
+    // und Spieler 3 behielt Tank und Schaden. Jetzt alle Plaetze.
+    raceStartZuruecksetzen(fuel);
     updateDamageFuelUI();
     racePitDone = 0;
+    // v1.0.12 BESTELLT: "Pflichtstopps bitte fuer alle spieler gesteuerten Autos zaehlen."
+    if (typeof zusatzPlaetze === 'function') zusatzPlaetze().forEach((z) => { z.pitDone = 0; });
     syncRaceGridOrder();
     scheduleRaceWeatherChange();
     raceLapEvents = [];
@@ -1693,6 +1906,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     learnReset();
     raceLapStart = null;
     $('race-results').style.display = 'none';
+    if ($('race-results-leer')) $('race-results-leer').hidden = false;
     $('race-lap-current-row').style.display = '';
     $('race-lap-current').textContent = '-';
     // Freies Training braucht keine Ampel: es gibt niemanden, gegen den man gleichzeitig
@@ -1766,6 +1980,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // A flying start goes to the formation lap first: the cars roll at pit-lane speed
     // and no laps count until the field crosses the line.
     raceFormationLap = raceFlying;
+    raceGreenAt = raceFlying ? null : Date.now();
     fruehstartGruen();
     rammReset();
     // FRISCH ZAEHLEN. Ohne das traegt ein zweites Rennen die Ueberfahrten des ersten mit
@@ -1863,6 +2078,18 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     const missed = Math.max(0, racePitRequired - racePitDone);
     return missed * racePitPenaltyS * 1000;
   }
+  // Dieselbe Strafe fuer Spieler 2/3 (v1.0.12): je verpasstem Pflichtstopp racePitPenaltyS.
+  function strafeMsVon(wer) {
+    if (!wer || wer === 1) return racePenaltyMs();
+    const z = typeof zusatzPlatz === 'function' ? zusatzPlatz(wer) : null;
+    if (!z) return 0;
+    return Math.max(0, racePitRequired - (z.pitDone || 0)) * racePitPenaltyS * 1000;
+  }
+  // Welcher Spielerplatz faehrt dieses Auto (Rolle player, player2, player3)? 0 = keiner.
+  function spielerPlatzVonRolle(rolle) {
+    const m = /^player(\d?)$/.exec(rolle || '');
+    return m ? (parseInt(m[1], 10) || 1) : 0;
+  }
 
   // Wie lange ein Ghost hoechstens noch faehrt, um seine Runde zu beenden. 90 s ist
   // grosszuegig - eine Runde auf einer Wohnzimmerbahn dauert gemessen unter 20 s -, und die
@@ -1875,6 +2102,9 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // requestRaceStop() uebergibt ausdruecklich false.
   function finishRace(auslaufen) {
     raceState = 'finished';
+    // Das Safety Car steht beim Rennende - es hat in keinem Ergebnis etwas zu suchen.
+    garage.forEach((c) => { if (c.role === 'safetycar' && c.ghost && c.ghost.running) stopGhost(c); });
+    raceGreenAt = null;
     fruehstartReset();
     derbyEinstellungenZurueck();
     derbyLaeuft = false; knockoutLaeuft = false;
@@ -1936,8 +2166,13 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       if (!willAuslaufen) { stopGhost(c); return; }
       finishGhost(c);
     });
+    // v1.0.21: der Challenger rollt aus (Zielflagge) bzw. haelt sofort (Abbruch).
+    garage.forEach(c => {
+      if (c.role !== 'challenger' || !c.ghost || !c.ghost.running || c.ghost.finish) return;
+      if (willAuslaufen) finishGhost(c); else stopGhost(c);
+    });
     if (willAuslaufen && garage.some(c => c.role === 'ghost' && c.ghost && c.ghost.auslauf)) {
-      showHudToast(t('Ghosts fahren die Runde zu Ende'));
+      showHudToast(t('NPCs fahren die Runde zu Ende'));
     }
     const missed = Math.max(0, racePitRequired - racePitDone);
     $('race-status').textContent =
@@ -1945,7 +2180,11 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       + (racePartialMs !== null
          ? `, letzte Runde unvollendet nach ${formatLapTime(racePartialMs)}` : '')
       + (missed > 0 ? `, ${missed} Pflichtstopp${missed === 1 ? '' : 's'} verpasst, `
-                      + `+${missed * racePitPenaltyS} s Strafe` : '');
+                      + `+${missed * racePitPenaltyS} s Strafe` : '')
+      + ((typeof zusatzAktiv === 'function' ? zusatzAktiv() : []).map((z) => {
+        const s = strafeMsVon(z.nr) / 1000;
+        return s > 0 ? `, P${z.nr}: +${s} s Strafe` : '';
+      }).join(''));
     // DER RUNDENZAEHLER, aber nur bei einer echten Zielflagge. Wer von Hand abbricht,
     // bekommt keine Fanfare - dieselbe Ueberlegung, mit der die Ghosts dann auch nicht
     // auslaufen: ein Abbruch ist kein Zieleinlauf.
@@ -1953,6 +2192,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     $('race-start-btn').disabled = false;
     $('race-lap-current-row').style.display = 'none';
     $('race-results').style.display = '';
+    if ($('race-results-leer')) $('race-results-leer').hidden = true;
     renderRaceResults();
     renderPositionPlot();
     // Und einmal sichtbar dort, wo gerade gedrueckt wurde. Ohne das erschien das Ergebnis
@@ -1965,6 +2205,9 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // Uebersicht; sonst eine Einblendung "Rennen beendet - Ergebnis ansehen", und Options
     // bzw. ein Klick fuehrt dann ins Cockpit auf die Uebersicht (51-konsole.js).
     // Eine Challenge zeigt ihr Ergebnis selbst (Wertung, Bestenliste, Nochmal).
+    // Meisterschaft (73-meisterschaft.js): wertet, sobald alle im Ziel sind, und zeigt danach
+    // den Zwischenstand. Das normale Ergebnis kommt trotzdem zuerst.
+    if (typeof meisterRennenEnde === 'function') meisterRennenEnde(willAuslaufen);
     if (typeof challengeRennenEnde === 'function' && challengeRennenEnde(willAuslaufen)) { /* erledigt */ }
     else if (typeof konsoleRennenBeendet === 'function') konsoleRennenBeendet();
     else {
@@ -2022,7 +2265,9 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     // a control that vanishes makes people wonder whether they broke something.
     // DERBY (v0.8.126): das Limit ist das KILLS-ZIEL und wird deshalb aktiviert - sonst
     // koennte man es nicht auf 1 setzen. Die Voreinstellung setzt der Moduswechsel unten.
-    $('race-limit').disabled = !m.timed && raceMode !== 'derby';
+    const ohneEnde = raceMode === 'practice' || raceMode === 'bestzeit';
+    $('race-limit').disabled = !m.timed && raceMode !== 'derby' && !ohneEnde;
+    $('race-limit').min = ohneEnde ? '0' : '1';
     // 0.7, not 0.45. On white 0.45 was a legible grey; on black it collapsed to 2.7:1,
     // and this label still has to be readable while it says which unit is NOT in use.
     $('race-limit-label').style.opacity = (m.timed || raceMode === 'derby') ? '' : '0.7';
@@ -2064,14 +2309,16 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     raceMode = e.target.value;
     // Sensible default per mode rather than carrying a minute count over into a lap count.
     // DERBY (v0.8.126): das Limit ist das KILLS-ZIEL, Voreinstellung 1.
-    raceLimit = raceMode === 'laps' ? 10 : (raceMode === 'derby' ? 1 : 2);
+    raceLimit = raceMode === 'laps' ? 10 : (raceMode === 'derby' ? 1
+      : ((raceMode === 'practice' || raceMode === 'bestzeit') ? 0 : 2));
     $('race-limit').value = raceLimit;
     applyRaceModeUi();
     if (raceMode === 'knockout') knockoutBereit(true);
+    if (raceMode === 'bestzeit') bestzeitBereit(true);
   });
   $('race-limit').addEventListener('input', (e) => {
     const v = parseInt(e.target.value, 10);
-    if (Number.isFinite(v) && v >= 1) raceLimit = v;
+    if (Number.isFinite(v) && (v >= 1 || (v === 0 && (raceMode === 'practice' || raceMode === 'bestzeit')))) raceLimit = v;
   });
 
   $('race-wx-start').addEventListener('change', (e) => {
@@ -2492,7 +2739,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     }
     // dashBattery wird weiter gebraucht: die Akkukachel im Cockpit liest ihn. Die Zeile
     // darunter schrieb in #dash-battery, ein Element der entfernten alten Karte.
-    dashBattery = bytes[10];
+    dashBattery = akkuGlaetten(dashAkkuHalter, bytes[10], Date.now());
 
     // Byte 15 was read as "off track". The 2026-08-19 snoop logs disprove that: on a PRINTED
     // sheet it rises in the same packet as the start pattern. On the RAIL (logs 16.-21.08.)
@@ -2707,6 +2954,8 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       if (ms > 60 && ms < 20000) dashTileMs = dashTileMs ? dashTileMs * 0.7 + ms * 0.3 : ms;
     }
     dashTileAt = jetztT;
+    // Telemetrie (70b-telemetrie.js): jeder bestaetigte Teilwechsel mit Zeit.
+    if (typeof teleKachel === 'function') teleKachel(type, jetztT);
     // Challenges: jedes bestaetigte Teil fuer die Rundenpruefung (72-challenges.js).
     if (typeof challengeTeilGelesen === 'function') challengeTeilGelesen(type);
 
@@ -2914,6 +3163,26 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
         && !raceAwaitingMove) raceLapStart = jetzt;
   }
 
+  // Die kuerzeste Zeit, in der eine ganze Runde ueberhaupt gefahren werden kann: die Strecke
+  // mit 2,5 m/s, rund 50 % ueber dem gemessenen Hoechsttempo der Autos (1,64 m/s) - dieselbe
+  // Regel wie chMinRundeMs der Challenges. Ohne bekannte Strecke 1,5 s.
+  function rundeMinMs() {
+    const tiles = (typeof currentTrackTiles !== 'undefined' && currentTrackTiles) || [];
+    if (tiles.length < 3 || typeof trackLaengeM !== 'function') return 1500;
+    return Math.max(1500, Math.round(trackLaengeM(tiles) / 2.5 * 1000));
+  }
+  function raceStartZuruecksetzen(tankProzent) {
+    if (typeof distanceReset === 'function') distanceReset();   // Statistik: je Rennen neu
+    damage = 0;
+    lightDamage.front = false; lightDamage.rear = false;
+    zusatzPlaetze().forEach((z) => {
+      tankFuellenVon(z, tankProzent);
+      schadenZuruecksetzenVon(z);
+      // Reifen nur, wo es den Motor schon gibt (Platz 2 immer, weitere wenn belegt): der
+      // Zugriff auf z.motor legt sonst einen Motor fuer einen leeren Platz an.
+      if (z.nr === 2 || z.car) resetTyres(z.motor);
+    });
+  }
   function playerLapCrossed() {
     const now = Date.now();
     // v0.9.43: Wartet die Rennuhr noch auf die erste Bewegung, BEWEIST eine Ueberfahrt die
@@ -2924,6 +3193,23 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       if (dashLapStart !== null) dashLapStart = now;
       return false;
     }
+    // v0.9.51 GEMELDET: "Wenn ich vor der Startgeraden losfahre (z. B. von Platz 4), wird bei
+    // der Geraden und dem Strich gezaehlt und ich kriege eine absurd schnelle Runde (2 s).
+    // Meine eigentlichen Bestzeiten werden dann nicht mehr als solche angesagt."
+    // Die Aufstellung stellt das Feld VOR die Linie (aufstellZielKachel: Reihe 1 auf der
+    // Kachel vor Start/Ziel, jede weitere eine Kachel dahinter). Die erste Ueberfahrt nach dem
+    // Losfahren ist dann nur das Ueberqueren der Startlinie, wie bei einem echten Rennen: die
+    // Uhr laeuft weiter, Runde 1 geht vom Start bis zum Ende der ersten VOLLEN Runde.
+    // Erkannt an der Zeit: schneller als die kuerzeste moegliche Runde (rundeMinMs) kann keine
+    // ganze Runde gewesen sein.
+    if ((raceState === 'racing' || raceState === 'finishing') && !raceFormationLap
+        && raceLapStart !== null && raceLapTimes.length === 0 && now - raceLapStart < rundeMinMs()) {
+      log('Startlinie ueberquert nach ' + (now - raceLapStart) + ' ms: das war keine Runde, die Uhr laeuft weiter.', 'info');
+      return false;
+    }
+    // Einfuehrungsrunde: JEDER Kontakt zaehlt, wie bei den Ghosts (formationNoetig rechnet
+    // die Sektoren ein). Vor dem Sektorfilter, damit beide dieselbe Zaehlweise haben.
+    if (raceFormationLap) { formationUeberfahrt('spieler'); return true; }
     // Sektoren zuerst: war das nur eine Sektorgrenze, ist die Runde nicht vorbei und alles
     // Weitere darf nicht laufen - weder die Rundenzeit noch der Ton noch das Rennende.
     if (!sectorCrossed(now)) return false;
@@ -2938,14 +3224,19 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
 
     // Race mode: only count laps while a race is armed. "finishing" means RB/R1 was
     // pressed already — this crossing completes the last lap, then the race ends.
-    if (raceFormationLap) { formationUeberfahrt('spieler'); return true; }
+    // (Die Einfuehrungsrunde zaehlt seit v0.9.87 weiter oben, vor dem Sektorfilter.)
     if ((raceState === 'racing' || raceState === 'finishing') && raceLapStart !== null) {
       const wasFinishing = raceState === 'finishing';
       const rundeMs = now - raceLapStart + fruehstartZuschlag(1, raceLapTimes.length);
       // Beste Zeit? VOR dem Einfuegen geprueft, sonst vergleicht die Runde sich mit sich
       // selbst und jede waere die beste.
-      const besteBisher = raceLapTimes.length
-        ? Math.min.apply(null, raceLapTimes.map(l => l.ms)) : Infinity;
+      // Nur PLAUSIBLE Runden zaehlen als Bestzeit (v0.9.51): eine Runde unter der kuerzest
+      // moeglichen Zeit ist ein Zaehlfehler, und als "beste" haette sie jede echte Bestzeit
+      // fuer den Rest des Rennens verdeckt.
+      const minMs = rundeMinMs();
+      const plausibel = raceLapTimes.filter(l => l.ms >= minMs);
+      const besteBisher = plausibel.length
+        ? Math.min.apply(null, plausibel.map(l => l.ms)) : Infinity;
       raceLapTimes.push({ lap: raceLapTimes.length + 1, ms: rundeMs });
       // Challenge: Runde gegen die Strecke pruefen. Liefert true, wenn die Runde NICHT zaehlt
       // (Strecke nicht erkannt oder zu schnell) - dann tiefer Ton statt des hellen Rundenklangs.
@@ -2955,15 +3246,20 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       // wie raceLapTimes, damit der Index die Rundennummer bleibt.
       raceLapEvents.push({ pit: lapEventAkku.pit, crash: lapEventAkku.crash });
       lapEventAkku = { pit: 0, crash: 0 };
+      // Telemetrie: die Spur dieser Runde, gemerkt nur, wenn die Runde selbst zaehlt.
+      if (typeof teleRunde === 'function') teleRunde(raceLapStart, now, !challengeUngueltig && rundeMs >= minMs);
       raceLapStart = now;
       // Die erste Runde ist nicht "die beste" - sie ist die einzige, und ein Bestzeit-Ton
       // beim ersten Mal nimmt ihm die Bedeutung fuer alle weiteren.
-      const istBest = raceLapTimes.length > 1 && rundeMs < besteBisher;
+      const istBest = raceLapTimes.length > 1 && rundeMs >= minMs && rundeMs < besteBisher;
       if (challengeUngueltig) playLapChimeUngueltig();
       else playLapChime(istBest);
       // Die Ansage NEBEN dem Ton und nicht statt ihm: der Ton kommt sofort, die Stimme
       // braucht eine Sekunde. Wer sie abschaltet, hoert weiter, dass eine Runde voll ist.
       if (!challengeUngueltig) speakLap(rundeMs, istBest);
+      if (raceMode === 'bestzeit' && !challengeUngueltig && rundeMs >= minMs) {
+        bestzeitMeldung(bestzeitRunde(rundeMs, playerCar), rundeMs, 1);
+      }
       // v0.9.41 GEMELDET: "Das Multiplayer Renn-Ende wird nicht getriggert ... 5-Runden-Rennen."
       // Die Zielrunde schaltete nur auf 'finishing' (raceClockTick), beendet wurde erst bei der
       // NAECHSTEN Ueberfahrt - ein 5-Runden-Rennen ging also ueber 6 Runden. Wer die Zielzahl
@@ -2997,8 +3293,9 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       // Runde zur besten. Genau dieser Fehler ist im Rennzweig darueber ausdruecklich
       // vermieden, und hier gilt er genauso.
       const rundeMs = dashLapTimes[dashLapTimes.length - 1];
-      const frueher = dashLapTimes.slice(0, -1);
-      const istBest = frueher.length > 0 && rundeMs < Math.min.apply(null, frueher);
+      const minMs = rundeMinMs();
+      const frueher = dashLapTimes.slice(0, -1).filter(ms => ms >= minMs);
+      const istBest = frueher.length > 0 && rundeMs >= minMs && rundeMs < Math.min.apply(null, frueher);
       playLapChime(istBest);
       speakLap(rundeMs, istBest);
     }
@@ -3409,7 +3706,17 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
              tyre: reifen,
              // Es gibt genau zwei Wetter, 'dry' und 'rain'. Ein drittes hier zu erlauben
              // waere ein Zustand, den niemand setzt, und beim naechsten Lesen eine Frage.
-             rain: weather === 'rain' };
+             rain: weather === 'rain',
+             // Akku als Anteil (0..1); ohne Auto (dashBattery === null) keine Meldung.
+             battery: dashBattery === null ? null : batteryPercent(dashBattery) / 100,
+             // JEDES Auto mit einem Akku-Wert, nicht nur der Fahrer (BESTELLT "Akku-Ansage
+             // < 25 % mit Autonummer"). Das Fahrer-Auto steht auch hier drin, der eine Wert
+             // `battery` oben bleibt fuer alte Aufrufer.
+             batteries: (typeof garage !== 'undefined' ? garage : []).filter((c) => c
+               && c.battery !== undefined && c.battery !== null)
+               .map((c) => ({ car: c,
+                              label: typeof garageLabel === 'function' ? garageLabel(c) : '',
+                              value: batteryPercent(c.battery) / 100 })) };
   }
   setInterval(() => {
     if (typeof ansagenPruefen !== 'function') return;
@@ -3435,11 +3742,12 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // waere ausgerechnet die Mischung, die man nicht erkennt. Das ist ein gemessener Grund und
   // keine Vorliebe.
   const TYRE_MIX = {
-    weich:  { griff: 1.12, nass: 0.45, verschleiss: 1.8, aqua: true,
+    // v0.10.5 BESTELLT: "Unterschied zwischen Reifenmischungen staerker machen."
+    weich:  { griff: 1.20, nass: 0.45, verschleiss: 2.2, aqua: true,
               farbe: '#e5261e', name: 'weich' },
     mittel: { griff: 1.00, nass: 0.45, verschleiss: 1.0, aqua: true,
               farbe: '#f7d117', name: 'mittel' },
-    hart:   { griff: 0.92, nass: 0.45, verschleiss: 0.6, aqua: true,
+    hart:   { griff: 0.85, nass: 0.45, verschleiss: 0.5, aqua: true,
               farbe: '#f2f4f8', name: 'hart' },
     regen:  { griff: 0.88, nass: 0.80, verschleiss: 1.0, aqua: false,
               farbe: '#2f6fd0', name: 'Regen' },
@@ -3796,7 +4104,10 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       pitSpiel = null;
       // BESTELLT: "2spielermodus: kein pitgame machen". Im Zwei-Spieler-Modus faehrt
       // jeder seine eigenen Stopps ohne Minispiel.
-      if (pitModus === 'minigame' && !zweiSpieler) pitSpielStart();
+      // v0.9.87: "kein zweiter Spieler aktiv" statt "Mehrspieler-Schalter aus". GEMELDET:
+      // "Pit-Minigame geht nicht mehr." Der Schalter bleibt gespeichert an, sobald einmal eine
+      // Spieler-2-Rolle vergeben war - danach gab es das Minispiel auch allein nicht mehr.
+      if (pitModus === 'minigame' && !(typeof zusatzAktiv === 'function' && zusatzAktiv().length)) pitSpielStart();
       // The plan was chosen while rolling down the pit lane; only now is it locked in.
       if (!pitPlan) pitPlan = makePitPlan();
       if (pitPlan.tyres) {
@@ -4489,6 +4800,12 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       log('P' + z.nr + ': Boxenstopp abgebrochen.', 'info');
       return;
     }
+    if (raceState === 'racing' || raceState === 'finishing') {
+      z.pitDone = (z.pitDone || 0) + 1;
+      if (racePitRequired > 0 && z.pitDone <= racePitRequired) {
+        showHudToast('P' + z.nr + ': ' + t('Pflichtstopp') + ' ' + z.pitDone + '/' + racePitRequired);
+      }
+    }
     log('P' + z.nr + ': Boxenstopp beendet nach ' + stand.toFixed(1) + ' s, '
         + fuelLiters(getankt) + ' l getankt, ' + Math.round(rep) + ' % repariert.', 'info');
   }
@@ -4920,7 +5237,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // FLAG, and this function derives both the on-screen lamps and byte 14 from them in a
   // fixed priority order. Blink phases come from the clock rather than from timers, so
   // nothing can fall out of step.
-  const lightFx = { flashUntil: 0, damage: false, fuel: false, rain: false };
+  const lightFx = { flashUntil: 0, damage: false, fuel: false, rain: false, batteryUntil: 0 };
   // Drei Impulse in der Taktung, die sich bewaehrt hat. Zwei Anlaeufe davor: zuerst
   // 80-ms-Umschlaege ueber 480 ms, also ein Stroboskop mit 12,5 Hz, das sich als Warnblinken
   // liest; dann ein einzelner Impuls von 280 ms, dessen LAENGE stimmte, der aber nur einmal
@@ -4930,6 +5247,13 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // Entscheidungen sind und beim naechsten Mal einzeln nachgezogen werden sollen.
   const FLASH_ON_MS = 220;
   const FLASH_OFF_MS = 130;
+  // Akku-Warnblinken: dieselbe Taktung wie blinkCar() in 90-ghosts.js (150 ms je
+  // Umschaltphase, zehn Mal an/aus), damit das Fahrerauto und ein anderes Auto dieselbe
+  // Warnung zeigen. Ein eigener Zustand statt einer Erweiterung des Blitzes: die Lichthupe
+  // ist die Absicht eines Fahrers, die Akku-Warnung eine Meldung des Systems.
+  const BATT_BLINK_HALF_MS = 150;
+  const BATT_BLINK_TOGGLES = 10;
+  const BATT_BLINK_MS = BATT_BLINK_HALF_MS * BATT_BLINK_TOGGLES;
   const FLASH_PULSES = 3;
   const FLASH_PERIOD_MS = FLASH_ON_MS + FLASH_OFF_MS;
   // Die letzte Pause zaehlt nicht mit: nach dem dritten Impuls ist es vorbei, und eine
@@ -4960,6 +5284,10 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
       head = Math.floor(now / 90) % 2 === 0;    // fast, agitated flicker
     } else if (lightFx.fuel) {
       head = Math.floor(now / 350) % 2 === 0;   // slow, deliberate blink
+    } else if (now < lightFx.batteryUntil) {
+      // Akku-Warnblinken: zehn Umschaltphasen wie blinkCar(), aus der Uhr abgeleitet.
+      const elapsed = BATT_BLINK_MS - (lightFx.batteryUntil - now);
+      head = (Math.floor(elapsed / BATT_BLINK_HALF_MS) % 2 === 0) ? !baseHead : baseHead;
     } else if (pitState !== 'off') {
       // ---- BOXENMODUS: DASSELBE BLINKEN WIE BEI EINEM GHOST -----------------------
       //
@@ -5002,6 +5330,13 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
     lightFx.flashUntil = Date.now() + FLASH_MS;
     showHudToast('Lichthupe');
     playFlashSound();
+  }
+
+  // Akku-Warnblinken fuer das Fahrerauto: zehn Umschaltphasen, ohne Gas oder Lenkung zu
+  // beruehren. Andere Autos nutzen blinkCar() aus 90-ghosts.js.
+  function lichtBatterieBlink() {
+    if (Date.now() < lightFx.batteryUntil) return;
+    lightFx.batteryUntil = Date.now() + BATT_BLINK_MS;
   }
 
   // ---- DIESELBE LICHTHUPE FUER AUTO 2 -----------------------------------------------
@@ -6008,7 +6343,7 @@ let gridSelbst = false;      // Aufstellung mit groesster Querlage (experimentel
   // erhoehen - und links/rechts kann den Schirm weiterblaettern, solange nichts angewaehlt
   // ist.
   let raceScreenLimitArmed = false;
-  const RACE_MODE_ORDER = ['practice', 'endurance', 'qualifying', 'laps', 'knockout', 'derby'];
+  const RACE_MODE_ORDER = ['practice', 'endurance', 'qualifying', 'laps', 'knockout', 'derby', 'bestzeit'];
 
   // NUR WENN DAS COCKPIT AUCH ZU SEHEN IST. cockpitScreen bleibt beim Tabwechsel stehen -
   // ohne diese Bedingung schluckte der Schirm auf JEDEM Tab die Pfeiltasten, und Fahren

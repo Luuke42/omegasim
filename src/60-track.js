@@ -1642,7 +1642,9 @@
   // danach: die Ghosts "sind tuer an tuer gefahren" - innen3 kommt nie auf die Aussenseite
   // (siehe dort), alle Ghosts draengen sich also auf dieselbe Bahnhaelfte. Und: "Luuke-
   // Modus ist gut". Zurueck auf Luuke - Innen bleibt waehlbar.
-  let lineModel = 'luuke';
+  // v1.0.15 BESTELLT: "Mach die neue Ideallinie zum Default." Bis die Suche fertig ist (wenige
+  // Sekunden), faehrt simulatorLinie() die Luuke-Linie.
+  let lineModel = 'simulator';
 
   // Die gueltigen Modellnamen an EINER Stelle. Vorher stand die Liste als zwei
   // Vergleiche in setLineModel und ein weiteres Mal als Bedingung in buildLine - beim
@@ -1650,7 +1652,7 @@
   // 'dreistufig' ist KEINE Optimierung und steht deshalb am Ende: die drei davor suchen
   // ein Optimum, dieses folgt einer Vorschrift. Die Begruendung steht bei dreiStufenLine().
   const LINE_MODELLE = ['curvature', 'laptime', 'lateapex', 'dreistufig', 'mitte', 'innen3',
-                        'aussenin', 'luuke'];
+                        'aussenin', 'luuke', 'simulator'];
 
   function setLineModel(m) {
     if (LINE_MODELLE.indexOf(m) < 0) return;
@@ -2294,6 +2296,8 @@
       : m === 'innen3' ? innenGemitteltLine(pts, nrm, o)
       : m === 'aussenin' ? aussenInnenLine(pts, nrm, o)
       : m === 'luuke' ? luukeLinie(pts, nrm, o)
+      // v1.0.14: gefahren statt gerechnet (61-simlinie.js); bis die Suche fertig ist, die Luuke-Linie.
+      : m === 'simulator' ? simulatorLinie(pts, nrm, o)
       : formLine(pts, nrm, o, 'zeit', 0.15, 0.85);
     line.model = m;
     line.grenzen = g;
@@ -2684,16 +2688,206 @@
   const ECHT_STREIFEN = TRACK_KERB_W;
   const ECHT_PFEIL_H = 0.75, ECHT_PFEIL_L = 2.3, ECHT_TAKT = 3.1;   // je Streifenhoehe
   const ECHT_BLAU = '#2f9fe6', ECHT_ROT = '#ff4d22', ECHT_WEISS = '#f3f5f8';
-  function echtRandstreifen(pts, nrm, half, kachelTab, nTeile, P2) {
+  // ---- HAARNADEL-KERBS (v1.0.18, dritter Versuch) -------------------------------------------
+  // BESTELLT: "Haarnadel-Kerbs passend zu photos/haarnadel.png" - und nach zwei Entwuerfen: "Die
+  // Form der Pfeile passt nicht. Es sind keine Pfeile mehr sondern verzerrte Pfeile, der weisse
+  // Hintergrund ist breiter an verschiedenen Stellen. Versuche, die Abbildungen exakt
+  // nachzuzeichnen."
+  //
+  // DESHALB NICHT MEHR GERECHNET, SONDERN ABGEMESSEN: Jeder Pfeil und jeder Keil im Bogen ist
+  // als Kontur aus dem Foto gelesen (OpenCV: Bogenmittelpunkt, Radius der Aussen- und der
+  // Innenkante, Konturen je Farbflaeche). NADEL_FORMEN haelt je Seite die Formen in einem
+  // Bahn-Koordinatensystem: a = Winkel im Bogen (0 Eingang, 180 Ausgang), u = laengs in
+  // Fahrtrichtung, v = weg von der Bahn, beides in Einheiten des Kantenradius. Gezeichnet wird
+  // jede Form STARR (nur gleichmaessig skaliert) an ihrem Winkel - so bleibt jede Form so, wie
+  // sie auf dem Teil aussieht. Die weisse Flaeche folgt ebenfalls dem Foto: aussen eine Huelle
+  // knapp um die Pfeile, innen der ganze Kreis. Der gewoehnliche weisse Streifen faellt auf
+  // Haarnadelteilen weg. Mitte der linken Haarnadel = Spiegelbild: das ergibt sich von selbst,
+  // weil u immer in Fahrtrichtung und v immer von der Bahn weg zeigt.
+  // v1.0.20 freigegeben ("Haarnadel sieht jetzt super aus"); ?nadel=0 zeigt zum Vergleich die
+  // alten kleinen Pfeile.
+  const NADEL_KERBS_AN = !/[?&]nadel=0\b/.test(location.search);
+  const NADEL_FORMEN = {"aussen":{"formen":[{"a":10.32,"p":[[0.0727,0.0499],[0.0408,0.0841],[-0.0709,0.0866],[-0.0456,0.057],[-0.0714,0.0266],[0.038,0.0208]]},{"a":23.49,"p":[[0.0728,0.0397],[0.0458,0.0739],[-0.0711,0.0751],[-0.0437,0.0473],[-0.0694,0.0147],[0.0387,0.0127]]},{"a":36.78,"p":[[0.0723,0.0401],[0.0449,0.0721],[-0.0736,0.0712],[-0.0456,0.0431],[-0.0687,0.0083],[0.042,0.0104]]},{"a":50.05,"p":[[0.0735,0.0423],[0.0427,0.0754],[-0.0745,0.0711],[-0.0444,0.0459],[-0.0671,0.0099],[0.0421,0.0136]]},{"a":63.26,"p":[[0.0719,0.0496],[0.0431,0.0798],[-0.0749,0.0764],[-0.0461,0.0462],[-0.065,0.0149],[0.0405,0.0183]]},{"a":76.3,"p":[[0.0735,0.0524],[0.0276,0.1012],[-0.0778,0.0835],[-0.0422,0.0518],[-0.0645,0.0196],[0.0431,0.0223]]},{"a":88.69,"p":[[0.085,0.0551],[0.0112,0.1439],[-0.0961,0.1154],[-0.0301,0.055],[-0.0561,0.0246],[0.059,0.0248]]},{"a":100.84,"p":[[-0.1166,0.1565],[-0.0146,0.056],[-0.0396,0.0227],[0.0667,0.0202],[0.1016,0.0468],[-0.0014,0.1815]]},{"a":113.19,"p":[[-0.1325,0.1906],[-0.0009,0.0546],[-0.0256,0.0196],[0.0835,0.0144],[0.1178,0.0413],[-0.0083,0.2072]]},{"a":125.99,"p":[[-0.1412,0.2104],[0.0056,0.0465],[-0.0212,0.0165],[0.0921,0.0086],[0.1245,0.0356],[-0.013,0.2203]]},{"a":139.05,"p":[[-0.1489,0.2095],[0.0099,0.0456],[-0.0155,0.012],[0.0962,0.008],[0.128,0.0361],[-0.0119,0.2132]]},{"a":152.77,"p":[[-0.1459,0.1916],[0.0005,0.0468],[-0.0224,0.0144],[0.0868,0.0119],[0.1185,0.0366],[0.0058,0.1798]]},{"a":167.12,"p":[[-0.1269,0.1511],[-0.0215,0.0578],[-0.0418,0.0193],[0.0656,0.0236],[0.0978,0.0508],[0.0316,0.1263]]},{"a":181.41,"p":[[-0.0817,0.1034],[-0.0415,0.0679],[-0.0631,0.0337],[0.0517,0.0449],[0.0762,0.0764],[0.0474,0.1038]]}],"huelle":[[0,0.1131],[3,0.1131],[6,0.1131],[9,0.1131],[12,0.1131],[15,0.1126],[18,0.1121],[21,0.1098],[24,0.1075],[27,0.105],[30,0.1029],[33,0.1005],[36,0.1006],[39,0.1007],[42,0.1012],[45,0.1017],[48,0.1032],[51,0.1041],[54,0.1057],[57,0.1071],[60,0.1121],[63,0.1164],[66,0.1235],[69,0.1299],[72,0.1419],[75,0.1505],[78,0.1615],[81,0.1698],[84,0.183],[87,0.1905],[90,0.1998],[93,0.2067],[96,0.2168],[99,0.2219],[102,0.2277],[105,0.2317],[108,0.2376],[111,0.2402],[114,0.2429],[117,0.2448],[120,0.2468],[123,0.2468],[126,0.2468],[129,0.2468],[132,0.2468],[135,0.2454],[138,0.244],[141,0.2426],[144,0.2411],[147,0.2354],[150,0.2311],[153,0.2244],[156,0.2177],[159,0.211],[162,0.2029],[165,0.1948],[168,0.1841],[171,0.1734],[174,0.1627],[177,0.159],[180,0.1528]]},"innen":{"formen":[{"a":15.67,"p":[[0.4003,0.2432],[0.3344,0.1138],[0.2668,0.0835],[-0.1922,0.0643],[-0.061,0.1458],[-0.4252,0.5341],[-0.1545,0.6553]]},{"a":94.66,"p":[[0.1486,0.063],[-0.203,0.0725],[-0.3788,0.1345],[-0.2314,0.1891],[-0.1051,0.9216],[0.1638,0.8331],[0.2468,0.2168]]},{"a":163.07,"p":[[-0.3941,0.1397],[-0.2488,0.1837],[0.0361,0.5187],[0.1412,0.4018],[0.2806,0.3349],[0.2096,0.1448],[0.09,0.0487],[-0.2037,0.0684]]}],"huelle":[[0,0.995],[4,0.995],[8,0.995],[12,0.995],[16,0.995],[20,0.995],[24,0.995],[28,0.995],[32,0.995],[36,0.995],[40,0.995],[44,0.995],[48,0.995],[52,0.995],[56,0.995],[60,0.995],[64,0.995],[68,0.995],[72,0.995],[76,0.995],[80,0.995],[84,0.995],[88,0.995],[92,0.995],[96,0.995],[100,0.995],[104,0.995],[108,0.995],[112,0.995],[116,0.995],[120,0.995],[124,0.995],[128,0.995],[132,0.995],[136,0.995],[140,0.995],[144,0.995],[148,0.995],[152,0.995],[156,0.995],[160,0.995],[164,0.995],[168,0.995],[172,0.995],[176,0.995],[180,0.995]]}};
+  // Zeichnet die Kerbs EINER Seite eines Haarnadelteils. kante: Punkte der Bahnkante dieser
+  // Seite, mitte: die Mittellinie (fuer "weg von der Bahn"). Rueckgabe { weiss, farbe } als
+  // SVG-Pfaddaten, oder null, wenn das Teil gar nicht wie eine Haarnadel dreht.
+  function nadelKerbs(kante, mitte, i0, i1, aussen, versatz, bw, P2) {
+    const n = i1 - i0;
+    if (n < 4) return null;
+    // Winkel und Laenge an der MITTELLINIE gemessen: die innere Kante ist bei diesem engen
+    // Radius zu unruhig (der erste Versuch verklumpte dort alle Keile an einer Stelle).
+    const dreh = [0], lang = [0];
+    let vorher = null;
+    for (let q = 1; q <= n; q++) {
+      const a = mitte[i0 + q - 1], b = mitte[i0 + q];
+      const h = Math.atan2(b.y - a.y, b.x - a.x);
+      lang.push(lang[q - 1] + Math.hypot(b.x - a.x, b.y - a.y));
+      if (vorher !== null) {
+        let dd = h - vorher;
+        while (dd > Math.PI) dd -= 2 * Math.PI;
+        while (dd < -Math.PI) dd += 2 * Math.PI;
+        dreh.push(dreh[q - 1] + Math.abs(dd));
+      } else dreh.push(0);
+      vorher = h;
+    }
+    const gesamt = dreh[n];
+    if (gesamt < Math.PI * 0.6) return null;
+    // Wo der Bogen beginnt und endet (Indizes ab i0): davor und danach ist das Teil gerade, und
+    // dort gelten die gewoehnlichen Pfeile und der weisse Streifen - wie auf dem Foto.
+    let von = 0, bis = n;
+    while (von < n && dreh[von + 1] <= 1e-6) von++;
+    while (bis > 0 && dreh[bis - 1] >= gesamt - 1e-6) bis--;
+    // Radius NUR ueber den Bogen (das gerade Stueck wuerde ihn sonst aufblaehen).
+    const rMitte = (lang[bis] - lang[von]) / gesamt;
+    // Der Radius der GEZEICHNETEN Bahnkante (aussen wie innen): die Formen sitzen auf der Kante,
+    // die man sieht. Das gezeichnete Teil hat innen etwas mehr Platz als das Foto.
+    const R = Math.max(1e-3, aussen ? rMitte + versatz : rMitte - versatz);
+    // Ort auf der Kante, Fahrtrichtung und "weg von der Bahn" beim Winkel alpha (Grad, 0..180).
+    const bei = (alpha) => {
+      const ziel = Math.max(1e-6, Math.min(gesamt - 1e-6, alpha / 180 * gesamt));
+      let q = 1;
+      while (q < n && dreh[q] < ziel) q++;
+      const f = (ziel - dreh[q - 1]) / Math.max(1e-9, dreh[q] - dreh[q - 1]);
+      const ma = mitte[i0 + q - 1], mb = mitte[i0 + q];
+      const mx = ma.x + (mb.x - ma.x) * f, my = ma.y + (mb.y - ma.y) * f;
+      const dl = Math.hypot(mb.x - ma.x, mb.y - ma.y) || 1;
+      const tx = (mb.x - ma.x) / dl, ty = (mb.y - ma.y) / dl;
+      const a = kante[i0 + q - 1], b = kante[i0 + q];
+      const kx = a[0] + (b[0] - a[0]) * f, ky = a[1] + (b[1] - a[1]) * f;
+      const nl = Math.hypot(kx - mx, ky - my) || 1;
+      const nx = (kx - mx) / nl, ny = (ky - my) / nl;
+      // Die Kante als Mittelpunkt plus Abstand, nicht die versetzte Linie selbst (glatter):
+      // aussen um den Versatz nach aussen, innen bis auf R an den Bogenmittelpunkt heran.
+      const ab = aussen ? versatz : rMitte - R;
+      return { x: mx + nx * ab, y: my + ny * ab, tx, ty, nx, ny };
+    };
+    const tab = NADEL_FORMEN[aussen ? 'aussen' : 'innen'];
+    // NUR SO WEIT WIE DAS TEIL (v1.0.21, GEMELDET: "Haarnadel-Randstreifen ragt auf das naechste
+    // Teil rueber. Bitte Rand nur so weit wie Schiene machen"). Das Foto-Teil hat hinter dem Bogen
+    // noch ein kurzes gerades Stueck, unser Teil (gerader Vorlauf + 180 Grad) nicht - der letzte
+    // Pfeil (bis 185,5 Grad) und der letzte Keil innen (bis 185,9 Grad) lagen deshalb schon auf
+    // dem naechsten Teil, und der weisse Uebergang lief ganz hinueber. Jetzt:
+    //   - Platz vor und hinter dem Bogen = die geraden Stuecke DIESES Teils (lang[von], Rest);
+    //   - die Winkel der Formen werden linear gestaucht, nur so weit, dass alle in diesen Platz
+    //     passen (am Ausgang rund 3 %); jede Form bleibt starr, wie abgemessen;
+    //   - der weisse Uebergang in die Gerade endet am Teilende.
+    const sg = aussen ? 1 : -1;
+    const ausdehnung = tab.formen.map((fo) => {
+      const th = fo.p.map(([u, v]) => Math.atan2(u, 1 + sg * v) * 180 / Math.PI);
+      return { lo: Math.min(...th), hi: Math.max(...th), vmax: Math.max(...fo.p.map((q) => q[1])) };
+    });
+    const grad = (l) => Math.min(60, l / R * 180 / Math.PI);
+    const platzVor = lang[von], platzNach = lang[n] - lang[bis];
+    const loA = -grad(platzVor) + 0.5, hiA = 180 + grad(platzNach) - 0.5;
+    const lo = Math.min(...tab.formen.map((fo, k) => fo.a + ausdehnung[k].lo));
+    const hi = Math.max(...tab.formen.map((fo, k) => fo.a + ausdehnung[k].hi));
+    const lo2 = Math.max(lo, loA), hi2 = Math.min(hi, hiA);
+    const abb = (a) => lo2 + (a - lo) * (hi2 - lo2) / Math.max(1e-9, hi - lo);
+    let farbe = '';
+    for (const fo of tab.formen) {
+      const m = bei(abb(fo.a));
+      const ecken = fo.p.map(([u, v]) => [m.x + (m.tx * u + m.nx * v) * R, m.y + (m.ty * u + m.ny * v) * R]);
+      farbe += ` M ${ecken.map(P2).join(' L ')} Z`;
+    }
+    const vor = [], zurueck = [];
+    // UEBERGANG IN DIE GERADE (v1.0.20, GEMELDET: "der Innenrand ist noch etwas komisch und die
+    // Stelle, wo der Aussenrand wieder die normale Breite annimmt, da ist ein komischer Schnitt").
+    // Die weisse Flaeche laeuft ein Stueck in die Gerade hinein und verjuengt sich dort weich
+    // (S-Kurve) auf die Streifenbreite - seit v1.0.21 nur so weit, wie DIESES Teil gerade ist.
+    // Fehlt das gerade Stueck (Ausgang), endet die Flaeche am Teilende: aussen laeuft sie auf den
+    // letzten 16 Grad auf die Breite aus, die der letzte Pfeil braucht; innen endet der Kreis
+    // mit der Teilgrenze (ein Halbkreis bis zur Mitte).
+    const band = bw / R;
+    const weich = (x) => x * x * (3 - 2 * x);
+    const lt = R * (aussen ? 0.75 : 2.2);                        // Laenge des Uebergangs
+    const ltVor = Math.min(lt, platzVor), ltNach = Math.min(lt, platzNach);
+    const ecke = (m, s, v) => {
+      const x = m.x + m.tx * s, y = m.y + m.ty * s;
+      vor.push([x, y]);
+      zurueck.push([x + m.nx * v * R, y + m.ny * v * R]);
+    };
+    // Die abgemessene Huelle, mit den Formen gestaucht; ausserhalb ihres Bereichs der Randwert.
+    const h = tab.huelle.map(([a, va]) => [abb(a), va]);
+    const huelleBei = (a) => {
+      if (a <= h[0][0]) return h[0][1];
+      for (let k = 1; k < h.length; k++) {
+        if (a <= h[k][0]) {
+          const f = (a - h[k - 1][0]) / Math.max(1e-9, h[k][0] - h[k - 1][0]);
+          return h[k - 1][1] + (h[k][1] - h[k - 1][1]) * f;
+        }
+      }
+      return h[h.length - 1][1];
+    };
+    // Am Teilende ohne gerades Stueck: so breit, wie die Formen dort brauchen (Pfeil plus Saum),
+    // weich ueber die letzten AUSLAUF Grad. Der kleine Absatz zum naechsten Teil liegt damit
+    // genau auf der Teilgrenze - wie bei den echten Teilen.
+    const AUSLAUF = 16;
+    const endBreite = (a0, a1) => {
+      let v = band;
+      tab.formen.forEach((fo, k) => {
+        const am = abb(fo.a), e = ausdehnung[k];
+        if (am + e.hi >= a0 && am + e.lo <= a1) v = Math.max(v, e.vmax + 0.015);
+      });
+      return v;
+    };
+    const vEndeVor = endBreite(0, 6), vEndeNach = endBreite(174, 180);
+    const huelleV = (a) => {
+      let v = Math.max(huelleBei(a), band);
+      if (aussen) {
+        if (ltVor < lt * 0.5 && a < AUSLAUF) v = vEndeVor + (v - vEndeVor) * weich(a / AUSLAUF);
+        if (ltNach < lt * 0.5 && a > 180 - AUSLAUF) v = vEndeNach + (v - vEndeNach) * weich((180 - a) / AUSLAUF);
+      }
+      return v;
+    };
+    const m0 = bei(0), m1 = bei(180);
+    const v0 = huelleV(0), v1 = huelleV(180);
+    if (ltVor > 1e-6) {
+      for (let k = 8; k >= 1; k--) {                             // vor dem Bogen, auf die Gerade zurueck
+        const f = k / 8;
+        ecke(m0, -ltVor * f, band + (v0 - band) * weich(1 - f));
+      }
+    }
+    for (let a = 0; a <= 180; a += 2) ecke(bei(a), 0, huelleV(a));
+    if (ltNach > 1e-6) {
+      for (let k = 1; k <= 8; k++) {                             // nach dem Bogen, in die Gerade hinein
+        const f = k / 8;
+        ecke(m1, ltNach * f, band + (v1 - band) * weich(1 - f));
+      }
+    }
+    const weiss = `M ${vor.concat(zurueck.reverse()).map(P2).join(' L ')} Z`;
+    return { weiss, farbe, von, bis };
+  }
+  function echtRandstreifen(pts, nrm, half, kachelTab, nTeile, P2, tiles) {
     const bw = ECHT_STREIFEN, mitte = half - bw / 2;
     const ph = bw * ECHT_PFEIL_H, pl = ph * ECHT_PFEIL_L, kerbe = ph / 2;
     const takt = ph * ECHT_TAKT;
+    const istNadel = (k) => NADEL_KERBS_AN && !!(tiles && tiles[k]
+      && (tiles[k].type === TILE_TYPE.HAIRPIN || tiles[k].type === TILE_TYPE.HAIRPIN_LEFT));
+    const mitNadeln = NADEL_KERBS_AN && tiles && tiles.some((x, k) => istNadel(k));
     let out = '';
     for (const [seite, farbe] of [[1, ECHT_BLAU], [-1, ECHT_ROT]]) {
       const linie = offsetPath(pts, nrm, mitte * seite);
-      out += `<path d="M ${linie.map(P2).join(' L ')}" fill="none" stroke="${ECHT_WEISS}" `
-           + `stroke-width="${bw.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="round"/>`;
-      let d = '', zapfen = '';
+      if (!mitNadeln) {
+        out += `<path d="M ${linie.map(P2).join(' L ')}" fill="none" stroke="${ECHT_WEISS}" `
+             + `stroke-width="${bw.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="round"/>`;
+      } else {
+        // Der weisse Streifen in Stuecken: ueber Haarnadelteilen nicht (dort die Huelle).
+        let stuecke = '', lauf = null;
+        for (let k = 0; k <= nTeile; k++) {
+          const ende = k === nTeile || istNadel(k);
+          const i0 = k < nTeile ? kachelTab.start[k] : pts.length - 1;
+          if (!ende && lauf === null) lauf = i0;
+          if (ende && lauf !== null) {
+            const bis = k < nTeile ? kachelTab.start[k] : pts.length - 1;
+            if (bis > lauf) stuecke += ` M ${linie.slice(lauf, bis + 1).map(P2).join(' L ')}`;
+            lauf = null;
+          }
+        }
+        if (stuecke) out += `<path d="${stuecke.trim()}" fill="none" stroke="${ECHT_WEISS}" `
+             + `stroke-width="${bw.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="round"/>`;
+      }
+      const kante = mitNadeln ? offsetPath(pts, nrm, (half - bw) * seite) : null;
+      let d = '', zapfen = '', weissNadel = '', streifenGerade = '';
       for (let k = 0; k < nTeile; k++) {
         const i0 = kachelTab.start[k];
         const i1 = k + 1 < nTeile ? kachelTab.start[k + 1] : pts.length - 1;
@@ -2716,8 +2910,25 @@
           const dl = Math.hypot(seg[q][0] - seg[q - 1][0], seg[q][1] - seg[q - 1][1]) || 1;
           return { x, y, ux: (seg[q][0] - seg[q - 1][0]) / dl, uy: (seg[q][1] - seg[q - 1][1]) / dl };
         };
+        // Haarnadel: die abgemessenen Formen statt der kleinen Pfeile. Die laengere Seite
+        // (gegen die Mittellinie) ist die Aussenseite.
+        let nadelBogen = null;
+        if (istNadel(k)) {
+          let lc = 0;
+          for (let q = i0 + 1; q <= i1; q++) lc += Math.hypot(pts[q].x - pts[q - 1].x, pts[q].y - pts[q - 1].y);
+          const r = nadelKerbs(kante, pts, i0, i1, L > lc, half - bw, bw, P2);
+          if (r) {
+            weissNadel += ' ' + r.weiss; d += r.farbe;
+            // Gerade Stuecke des Teils: weisser Streifen und kleine Pfeile wie sonst.
+            if (r.von > 0) streifenGerade += ` M ${linie.slice(i0, i0 + r.von + 1).map(P2).join(' L ')}`;
+            if (r.bis < i1 - i0) streifenGerade += ` M ${linie.slice(i0 + r.bis, i1 + 1).map(P2).join(' L ')}`;
+            nadelBogen = [acc[r.von], acc[r.bis]];
+          }
+        }
         for (let j = 0; j < n; j++) {
-          const m = bei(rand + (j + 0.5) * schritt);
+          const svj = rand + (j + 0.5) * schritt;
+          if (nadelBogen && svj > nadelBogen[0] - pl * 0.6 && svj < nadelBogen[1] + pl * 0.6) continue;
+          const m = bei(svj);
           const vx = -m.uy, vy = m.ux;
           const P = (u, v) => [m.x + m.ux * u + vx * v, m.y + m.uy * u + vy * v];
           const h = ph / 2, l = pl / 2;
@@ -2732,6 +2943,9 @@
           zapfen += `<circle cx="${cx}" cy="${cy}" r="${(bw * 0.18).toFixed(2)}" fill="#1b1d22"/>`;
         }
       }
+      if (streifenGerade) out += `<path d="${streifenGerade.trim()}" fill="none" stroke="${ECHT_WEISS}" `
+           + `stroke-width="${bw.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="round"/>`;
+      if (weissNadel) out += `<path d="${weissNadel.trim()}" fill="${ECHT_WEISS}" stroke="none"/>`;
       out += `<path d="${d.trim()}" fill="${farbe}" stroke="none"/>` + zapfen;
     }
     return out;
@@ -2915,7 +3129,7 @@
         // an den Enden die Steckzapfen (schwarze Punkte auf dem Streifen).
         // Als einzelne Pfade und NICHT als <g transform>: der Selbsttest zaehlt jede
         // verschobene Gruppe als Auto.
-        body += echtRandstreifen(pts, nrm, half, kachelTab, tiles.length, P2);
+        body += echtRandstreifen(pts, nrm, half, kachelTab, tiles.length, P2, tiles);
       }
       // DAS GEWAEHLTE TEIL (Editor): gelb ueberzogen, damit man sieht, wo eingefuegt und was
       // entfernt wird.
@@ -2970,7 +3184,16 @@
     let ersteStart = true;
     for (let ti = 0; ti < tiles.length; ti++) {
       if (tiles[ti].type !== TILE_TYPE.START) continue;
-      const pi = kachelTab && kachelTab.start ? kachelTab.start[ti] : 0;
+      let pi = kachelTab && kachelTab.start ? kachelTab.start[ti] : 0;
+      // Die gruene Start/Ziel-Linie liegt bei ~66 % der Startkachel, nicht an ihrer Kante.
+      // Eine Linie ganz am Rand eines Teils sagt nicht, wo genau sie liegt (BESTELLT: "nicht
+      // am Anfang des Teils, sondern ein Stueck spaeter, sonst weiss man nicht, ob Start
+      // oder Ziel"). Die gelben Sektorgrenzen bleiben an der Kante.
+      if (ersteStart && kachelTab && kachelTab.zahl) {
+        pi = kachelTab.start[ti] + Math.round(kachelTab.zahl[ti] * 0.66);
+        const maxP = kachelTab.start[ti] + kachelTab.zahl[ti] - 1;
+        if (pi > maxP) pi = maxP;
+      }
       const p = pts[pi] || pts[0];
       if (!p) continue;
       const sA = [p.x + nrm[pi].x * half, p.y + nrm[pi].y * half];
@@ -3356,6 +3579,9 @@
                      kuerzel: garageLabel(c).slice(0, 3), quer: 0, rolle: 'player' });
         }
       });
+      // v1.0.21: der Soll-Punkt des Challengers (seine Spur), neben dem echten Auto.
+      const soll = typeof challengerSollMarke === 'function' ? challengerSollMarke() : null;
+      if (soll) out.push(soll);
     } catch (e) { return out; }
     return out;
   }
@@ -3458,6 +3684,10 @@
     // zurueck (GEMELDET: "bewegt sich immer nur ein kleines bisschen"). Nach dem Loslassen.
     if (raumZug) { raumZug.nachher = true; return; }
     editorStreckeMerken();
+    // v1.0.17: SIMULATOR-Linie fuer die neue Strecke im Hintergrund anstossen (61-simlinie.js).
+    // Beim Laden laeuft das VOR 61-simlinie.js: simVorrechnen ist hochgezogen, und alles, was
+    // es sofort anfasst, ist var - der Rest laeuft erst im Zeitgeber nach dem Aufbau.
+    if (typeof simVorrechnen === 'function') simVorrechnen();
     // Die Kachelzahl entscheidet, ob der Windschatten ueberhaupt rechnen kann. Hier gerufen
     // und nicht in 50-drive.js beim Laden: dort ist currentTrackTiles noch in der temporalen
     // Todeszone, siehe den Kommentar bei dirtyAirVerfuegbar().
@@ -5090,85 +5320,6 @@
   }
   refreshTrackList();
 
-  // ---- Live track scan: subscribe to NUS TX, watch byte 11 (tile counter) for
-  // changes, majority-vote byte 12 (tile type) across samples seen during that tile's
-  // dwell to reject transition noise ----
-  let trackScanning = false;
-  let trackScanLastCounter = null;
-  let trackScanTypeVotes = {};
-
-  // Zwei Einspeiser, ein Verarbeiter. Der Ereignis-Weg bleibt fuer den Entwickler-Tab, der
-  // Byte-Weg kommt aus onCarNotify - siehe startTrackScan, warum das noetig ist.
-  function trackScanNotifyHandler(e) {
-    trackScanBytes(notifyBytes(e.target.value));
-  }
-
-  function trackScanBytes(bytes) {
-    if (!trackScanning) return;
-    if (bytes.length < 16) return;
-    // BUGFIX: byte 9 is the free-running per-PACKET counter (changes on ~every notify,
-    // every ~45-70ms) — using it here treated almost every packet as a new tile
-    // boundary, flooding the track with bogus single-sample tiles. Byte 11 is the
-    // actual per-TILE counter (only changes when the car enters a new physical piece).
-    const counter = bytes[11];
-    const type = bytes[12];
-    if (trackScanLastCounter === null) {
-      trackScanLastCounter = counter;
-      trackScanTypeVotes = {};
-    }
-    if (counter !== trackScanLastCounter) {
-      // Mehrheit NUR unter echten Streckencodes. Das war der Fehler: 0xff heisst "gerade
-      // keine Lesung" und ist der haeufigste Wert von allen - in einem Mitschnitt 16719 von
-      // 16719 Paketen, im Dreiwagenrennen 7066 von 9623. Die Mehrheit war also fast immer
-      // 0xff, fiel durch die Typpruefung, und die Kachel wurde STILL verworfen. Die
-      // Streckenanzeige blieb bei "S", ohne dass irgendwo stand, warum.
-      let bestType = null, bestCount = -1, dropped = 0;
-      for (const [t, c] of Object.entries(trackScanTypeVotes)) {
-        const ty = parseInt(t, 10);
-        if (ty === 0xff || ty === TILE_OFFTRACK) { dropped += c; continue; }
-        if (c > bestCount) { bestCount = c; bestType = ty; }
-      }
-      // FERTIG BEI DER ZWEITEN START/ZIEL-UEBERFAHRT (v0.9.4). BESTELLT: "wenn livescan fertig,
-      // dann auto anhalten". Vorher lief der Live-Scan, bis man von Hand stoppte - und schrieb
-      // dabei die zweite Runde hinten an. Jetzt: Start/Ziel nach mindestens vier Teilen ist das
-      // Ende der Runde; die Strecke bleibt, das Auto haelt an.
-      if (bestType != null && isStartCode(bestType) && currentTrackTiles.length >= 5) {
-        const auto = trackScanCar;
-        refreshTrackPreview();
-        stopTrackScan();
-        $('track-scan-status').textContent = t('Scan fertig: {n} Teile, Runde geschlossen.').replace('{n}', currentTrackTiles.length);
-        showHudToast(t('STRECKE GESCANNT: {n} TEILE').replace('{n}', currentTrackTiles.length));
-        if (typeof scanAnhalten === 'function') scanAnhalten(auto || playerCar);
-        try { trackFertigKlang(); } catch (err) { /* ohne Ton */ }
-        return;
-      }
-      if (bestType != null && Object.values(TILE_TYPE).includes(bestType)) {
-        currentTrackTiles.push({ type: bestType });
-        refreshTrackPreview();
-        $('track-scan-status').textContent = t('Scan läuft: {n} Teile (zuletzt: {t})')
-          .replace('{n}', currentTrackTiles.length)
-          .replace('{t}', TILE_LABEL[bestType] ? t(TILE_LABEL[bestType]) : bestType);
-      } else {
-        // Nicht mehr stumm: eine Kachel ohne einen einzigen echten Code ist eine Auskunft
-        // und kein Nichts. Genau dieses Schweigen hat den Fehler oben verdeckt.
-        trackScanSkipped++;
-        const scanStatusVorlage = dropped
-          ? 'Scan läuft: {n} Teile, {k} ohne lesbaren Code ({p} Pakete ohne Lesung)'
-          : 'Scan läuft: {n} Teile, {k} ohne lesbaren Code';
-        $('track-scan-status').textContent = t(scanStatusVorlage)
-          .replace('{n}', currentTrackTiles.length)
-          .replace('{k}', trackScanSkipped)
-          .replace('{p}', dropped);
-      }
-      trackScanLastCounter = counter;
-      trackScanTypeVotes = {};
-    }
-    trackScanTypeVotes[type] = (trackScanTypeVotes[type] || 0) + 1;
-  }
-
-  let trackScanSkipped = 0;
-  let trackScanCar = null;
-
   // ---- Rohcode-Monitor ----
   // Absichtlich getrennt vom Streckenscan: der Scan interpretiert (Mehrheit je Kachel,
   // unbekannte Werte verworfen), dieser hier zaehlt nur. Fuer die Frage "welchen Code hat
@@ -5420,50 +5571,13 @@
     currentTrackTiles = got;
     refreshTrackPreview();
     log('Strecke beim Fahren gelernt: ' + got.length + ' Teile, '
-        + got.filter(t => tileIsCurve(t.type)).length + ' davon Kurven. Ghosts haben ab '
+        + got.filter(t => tileIsCurve(t.type)).length + ' davon Kurven. NPCs haben ab '
         + 'jetzt Vorausblick.', 'info');
     showHudToast('STRECKE GELERNT: ' + got.length + ' TEILE');
   }
-  async function startTrackScan() {
-    trackScanSkipped = 0;
-    // Zuerst das Auto aus der Garage: dessen Meldungen laufen schon durch onCarNotify, es
-    // braucht also gar keine zweite Anmeldung. Nur wenn keines da ist, wird der Weg ueber
-    // den BLE-Explorer versucht - der funktioniert weiterhin, ist aber nicht mehr die
-    // Voraussetzung.
-    trackScanCar = playerCar || garage.find(c => c.tx) || null;
-    if (!trackScanCar) {
-      const entry = charByUuid.get(NUS_TX);
-      if (!entry) {
-        alert('Kein Auto verbunden. Erst in der Garage verbinden, dann scannen.');
-        return;
-      }
-      try {
-        if (!entry._trackScanSubscribed) {
-          await entry.char.startNotifications();
-          entry.char.addEventListener('characteristicvaluechanged', trackScanNotifyHandler);
-          entry._trackScanSubscribed = true;
-        }
-      } catch (err) { alert('Notify-Fehler: ' + err.message); return; }
-    }
-    currentTrackTiles = freshTrackTiles();
-    trackScanLastCounter = null;
-    trackScanTypeVotes = {};
-    trackScanning = true;
-    refreshTrackPreview();
-    $('track-scan-start').disabled = true;
-    $('track-scan-stop').disabled = false;
-    $('track-scan-status').textContent = t('Scan läuft: 0 Teile ({q})')
-      .replace('{q}', trackScanCar ? garageLabel(trackScanCar) : 'BLE-Explorer');
-  }
-  function stopTrackScan() {
-    trackScanning = false;
-    trackScanCar = null;
-    $('track-scan-start').disabled = false;
-    $('track-scan-stop').disabled = true;
-    $('track-scan-status').textContent = `Scan gestoppt (${currentTrackTiles.length} Teile).`;
-  }
-  $('track-scan-start').onclick = startTrackScan;
-  $('track-scan-stop').onclick = stopTrackScan;
+  // v0.9.64: der Live-Scan-Knopf ist aus der Scan-Unterseite entfernt (nur der automatische
+  // Streckenscan bleibt). Der Live-Scan (mitlesen waehrend man selbst faehrt) ist damit aus
+  // der Oberflaeche verschwunden; trackScanning/trackScanCar existieren nicht mehr.
 
   // ---- STRECKENSCAN AUS DER GARAGE: MIT AUTOPILOT, MIT SCHLUSSPRUEFUNG ---------------
   //
@@ -5508,10 +5622,6 @@
   }
 
   function garageScanStart() {
-    if (trackScanning) {
-      alert('Der manuelle Streckeneditor-Scan läuft noch – dort zuerst stoppen.');
-      return;
-    }
     const car = playerCar || garage.find((c) => c.role === 'player') || garage[0];
     if (!car) { alert('Kein Auto verbunden. Erst in der Garage verbinden.'); return; }
     garageScan.aktiv = true;

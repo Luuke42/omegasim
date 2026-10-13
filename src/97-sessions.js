@@ -110,9 +110,15 @@
   // vorbei ist. Er greift auf raceAllCars() zu, also auf dieselbe Funktion, aus der auch
   // die Ergebnistabelle und der CSV-Export lesen - damit gibt es keine zweite Wahrheit
   // darueber, wer welche Runden gefahren hat.
+  // Zaehler auf null beim Rennstart (70-race.js) - vorher lief er seit dem letzten
+  // gespeicherten Rennen weiter, auch ohne Auto und ohne Bahn.
+  function distanceReset() { simMeters = 0; realMeters = 0; }
   function sessionRecord() {
-    const autos = raceAllCars().filter(c => c.laps.length);
-    if (!autos.length) return null;
+    // v0.9.87: auch Autos ohne vollendete Runde, solange sie mitgefahren sind (gesteuert
+    // oder Ghost) - GEMELDET: "es wird ein Auto nicht angezeigt".
+    const alle = raceAllCars();
+    if (!alle.some(c => c.laps.length)) return null;
+    const autos = alle.filter(c => c.laps.length || /^player|^ghost$/.test(c.role || ''));
     const o = sessionStore();
     const weg = distanceSnapshot();
 
@@ -159,9 +165,17 @@
 
     // Und die Summen je Auto. Sie stehen NEBEN den Sitzungen und werden nicht daraus
     // gerechnet: die Sitzungsliste ist begrenzt, die Summen sollen es nicht sein.
+    const streckeM = (typeof trackLaengeM === 'function' && currentTrackTiles && currentTrackTiles.length > 2)
+      ? trackLaengeM(currentTrackTiles) : 0;
     for (const c of autos) {
-      const auto = garage.find(g => garageLabel(g) === c.name);
+      // v0.9.87: ueber die Geraetekennung, nicht ueber den Namen - zwei Autos mit gleichem
+      // Namen wurden sonst zusammengelegt.
+      const auto = c.id ? garage.find(g => String(g.device.id) === c.id) : garage.find(g => garageLabel(g) === c.name);
       const id = auto ? String(auto.device.id) : ('name:' + c.name);
+      // Die eigene Strecke je Auto: Spieler 1 aus der Physik, alle anderen aus ihren Runden
+      // (Runden x Streckenlaenge). Vorher bekam jedes Auto die des Fahrerautos.
+      const eigenReal = c.role === 'player' ? weg.realKm : +(c.laps.length * streckeM / 1000).toFixed(4);
+      const eigenSim = c.role === 'player' ? weg.simKm : +(eigenReal * REAL_SCALE).toFixed(3);
       const e = o.cars[id] || { name: c.name, km: 0, realKm: 0, runden: 0, besteMs: null,
                                 sitzungen: 0 };
       e.name = c.name;
@@ -170,10 +184,12 @@
       // Die Strecke wird auf ALLE Autos gebucht, weil nur das Fahrerauto eine Physik hat und
       // die Ghosts dieselbe Runde fahren. Das ist eine Naeherung, und sie steht hier als
       // solche: ein Ghost fuhr nicht genau dieselbe Linie.
-      e.km = +(e.km + weg.simKm).toFixed(3);
-      e.realKm = +(e.realKm + weg.realKm).toFixed(4);
-      const beste = Math.min.apply(null, c.laps.map(l => l.ms));
-      if (e.besteMs === null || beste < e.besteMs) e.besteMs = beste;
+      e.km = +(e.km + eigenSim).toFixed(3);
+      e.realKm = +(e.realKm + eigenReal).toFixed(4);
+      if (c.laps.length) {
+        const beste = Math.min.apply(null, c.laps.map(l => l.ms));
+        if (e.besteMs === null || beste < e.besteMs) e.besteMs = beste;
+      }
       o.cars[id] = e;
     }
 
@@ -569,8 +585,11 @@
       : ((typeof dashLapTimes !== 'undefined' && dashLapTimes) || []);
     const beste = zeiten.length ? Math.min.apply(null, zeiten) / 1000 : null;
     const letzte = zeiten.length ? zeiten[zeiten.length - 1] / 1000 : null;
+    // v1.0.12: Gesamtzeit und Strafe fuer verpasste Pflichtstopps (Meisterschaft des Leiters).
+    const summe = imRennen ? zeiten.reduce((a, b) => a + b, 0) : null;
+    const strafe = imRennen && typeof racePenaltyMs === 'function' ? racePenaltyMs() : null;
     return { id: mp.id, name: mp.name || 'ohne Namen', laps: zeiten.length,
-             letzte, beste,
+             letzte, beste, summe, strafe,
              abgaenge: (typeof offtrackZaehler !== 'undefined') ? offtrackZaehler : 0 };
   }
 
@@ -751,6 +770,7 @@
     chSetzen('race-flying', !!plan.fliegend);
     chSetzen('race-pit-required', String(plan.pit || 0));
     if (plan.tank) chSetzen('race-fuel-start', plan.tank);
+    if (plan.meister && typeof meisterMpUebernehmen === 'function') meisterMpUebernehmen(plan);
     // BESTELLT: "der Host kann die Renneinstellungen (Tempo, Handling, Beschleunigung,
     // Schaden, Reifenverschleiss) auf alle erzwingen, wie es die Arcade/Pro-Presets bei den
     // Challenges tun." Der Host schickt `preset` (Arcade/Pro ...) im Plan; die Mitglieder
@@ -784,6 +804,16 @@
         && typeof window.__presetActive === 'function') {
       const p = window.__presetActive();
       if (p) plan.preset = p;
+    }
+    // Meisterschaft (73-meisterschaft.js): Event, Strecke und Zwischenstand fuer die anderen,
+    // und ein erzwungenes Fahrgefuehl, wenn der Leiter eins gewaehlt hat.
+    if (typeof meisterMpInfo === 'function') {
+      const m = meisterMpInfo();
+      if (m) {
+        plan.meister = m;
+        const p = meisterMpPreset();
+        if (p) plan.preset = p;
+      }
     }
     return plan;
   }
@@ -835,6 +865,11 @@
     const leute = ((d && d.fahrer) || []).filter(mpAktiv);
     const istInitiator = mp.id === initiator;
     const andere = leute.filter((f) => f.id && f.id !== initiator);
+    // Meisterschaft: Event und Stand des Leiters; nach dem letzten Event nur der Endstand.
+    const ms = $('mp-ready-meister');
+    const msHtml = (typeof meisterMpBereitHtml === 'function') ? meisterMpBereitHtml(rennen.plan) : '';
+    if (ms) { if (ms.innerHTML !== msHtml) ms.innerHTML = msHtml; ms.hidden = !msHtml; }
+    const msEnde = !!(rennen.plan && rennen.plan.meister && rennen.plan.meister.fertig);
     const alleBereit = andere.every((f) => bereitListe.indexOf(f.id) >= 0);
     const host = $('mp-ready-liste');
     if (host) {
@@ -860,9 +895,9 @@
     if (typeof ladeAnimationSetzen === 'function') {
       ladeAnimationSetzen($('mp-ready-lade'), istInitiator ? !alleBereit : bereitListe.indexOf(mp.id) >= 0);
     }
-    if ($('mp-ready-bereit')) $('mp-ready-bereit').hidden = istInitiator || bereitListe.indexOf(mp.id) >= 0;
+    if ($('mp-ready-bereit')) $('mp-ready-bereit').hidden = msEnde || istInitiator || bereitListe.indexOf(mp.id) >= 0;
     if ($('mp-ready-start')) {
-      $('mp-ready-start').hidden = !istInitiator;
+      $('mp-ready-start').hidden = msEnde || !istInitiator;
       $('mp-ready-start').disabled = !alleBereit;
     }
     if ($('mp-ready-abbrechen')) $('mp-ready-abbrechen').hidden = !istInitiator;

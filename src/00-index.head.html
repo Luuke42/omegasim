@@ -239,6 +239,8 @@
     background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(img/rennoptionen-qualifying.jpg) center / cover; }
   .mode-tile.kachelbild.laps {
     background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(img/rennoptionen-laps.jpg) center / cover; }
+  .mode-tile.kachelbild.bestzeit {
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)), url(img/rennoptionen-bestzeit.jpg) center / cover; }
   .mode-tile.kachelbild:hover, .mode-tile.kachelbild.sel { color: #fff; background-color: transparent; }
   .mode-tile.kachelbild.sel { border-color: var(--bad); box-shadow: inset 3px 0 0 var(--bad); }
   .wx-pick { display: flex; gap: 6px; }
@@ -371,10 +373,21 @@
      hinter dem Text (z-index 0, die Woerter kommen danach im DOM) und faellt nur auf, wenn
      man hinsieht - kein Bild, ein Zeichen. */
   .home-titel { position: relative; text-align: center; padding: 18px 16px 4px; }
-  .home-titel::before {
-    content: 'Ω'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    font-size: clamp(120px, 34vw, 480px); font-weight: 900; line-height: 1;
-    color: rgba(244,246,251,.045); pointer-events: none; z-index: 0; }
+  /* v1.0.23 BESTELLT: "denselben Effekt beim Omega im Hintergrund und das Omega etwas
+     deutlicher (aktuell sehr schwach und kaum erkennbar)". Vorher ::before mit 4,5 % Deckkraft;
+     jetzt ein eigenes Element (die zwei Glitch-Ebenen brauchen ::before und ::after) mit 13 %. */
+  .home-omega { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font-size: clamp(110px, min(34vw, 50vh), 480px); font-weight: 700; line-height: 1;
+    /* Eine normal breite Schrift: die schmale Titelschrift zog das Omega in die Laenge
+       (GEMELDET: "das Omega ist sehr langgezogen"). */
+    font-family: "Segoe UI", Roboto, Arial, "Helvetica Neue", sans-serif; letter-spacing: 0;
+    color: rgba(244,246,251,.11); pointer-events: none; z-index: 0;
+    text-shadow: 0 -.025em 0 rgba(0,214,255,.12), 0 .025em 0 rgba(255,42,96,.12); }
+  .home-omega::before, .home-omega::after { content: attr(data-t); position: absolute; inset: 0; mix-blend-mode: screen; }
+  .home-omega::before { color: rgba(0,214,255,.13); clip-path: inset(0 52% 0 18%); transform: translateY(-.03em);
+    animation: gl-v-a 3.6s steps(1) infinite; }
+  .home-omega::after { color: rgba(255,42,96,.13); clip-path: inset(0 12% 0 62%); transform: translateY(.03em);
+    animation: gl-v-b 3.1s steps(1) infinite; }
   .home-titel-text { position: relative; z-index: 1; display: inline-block; font-weight: 900;
     font-size: clamp(30px, 8vw, 72px); letter-spacing: .18em; color: #f4f6fb;
     text-shadow: 3px 0 0 var(--glitch-r), -3px 0 0 var(--glitch-c); }
@@ -404,15 +417,26 @@
      Schatten), --gl-u (unterer Schnipsel und rechter Schatten) und einen Versatz der Animation. */
   .home-titel-text.gl-zerlegt { text-shadow: none; }
   .home-titel-text.gl-zerlegt::before, .home-titel-text.gl-zerlegt::after { content: none; }
+  /* v1.0.23 BESTELLT: "Nimm Version 2" aus mockup/glitch-vorschlaege.html - der vertikale
+     RGB-Versatz. Die Farbkanaele liegen ueber (--gl-o) und unter (--gl-u) dem Buchstaben statt
+     daneben; senkrechte Streifen springen kurz nach oben bzw. unten. In em, damit es bei jeder
+     Titelgroesse gleich aussieht. */
+  /* v1.0.24 BESTELLT: "Glitch-Effekt nur beim Omega im Hintergrund und das Logo ansonsten wie
+     in der Vorschau im Vorschlag 2." Der Schriftzug steht ruhig: Cyan darueber, Rot darunter,
+     ohne springende Streifen - die springen nur noch im Omega (.home-omega, gl-v-a/b). */
   .gl-b { position: relative; display: inline-block;
-    text-shadow: -3px 0 0 var(--gl-o), 3px 0 0 var(--gl-u); }
-  .gl-b::before, .gl-b::after { content: attr(data-t); position: absolute; inset: 0; pointer-events: none; }
-  .gl-b::before { color: var(--gl-o); clip-path: inset(18% 0 58% 0); transform: translate(-4px, 0);
-    animation: titel-glitch-a 3.2s steps(1) infinite; animation-delay: var(--gl-d, 0s); }
-  .gl-b::after { color: var(--gl-u); clip-path: inset(62% 0 12% 0); transform: translate(4px, 0);
-    animation: titel-glitch-b 2.7s steps(1) infinite; animation-delay: var(--gl-e, 0s); }
+    text-shadow: 0 -.055em 0 var(--glitch-c), 0 .055em 0 var(--glitch-r); }
+  @keyframes gl-v-a {
+    0%, 84%, 100% { transform: translateY(-.06em); clip-path: inset(0 52% 0 0); }
+    87% { transform: translateY(.12em); clip-path: inset(0 25% 0 30%); }
+    92% { transform: translateY(-.16em); clip-path: inset(0 70% 0 0); } }
+  @keyframes gl-v-b {
+    0%, 78%, 100% { transform: translateY(.06em); clip-path: inset(0 0 0 55%); }
+    82% { transform: translateY(-.14em); clip-path: inset(0 30% 0 35%); }
+    89% { transform: translateY(.18em); clip-path: inset(0 0 0 78%); } }
   @media (prefers-reduced-motion: reduce) {
-    .home-titel-text::before, .home-titel-text::after, .gl-b::before, .gl-b::after { animation: none; } }
+    .home-titel-text::before, .home-titel-text::after, .gl-b::before, .gl-b::after,
+    .home-omega::before, .home-omega::after { animation: none; } }
   .home-feat { margin: 0 auto; max-width: 1100px; }
   .home-legal p:last-of-type { margin-bottom: 10px; }
   .home-legal-links { display: flex; gap: 18px; flex-wrap: wrap; }
@@ -564,10 +588,8 @@
     .home-topbar .foot-brand { display: none; }
     #lang-toggle { min-width: 104px; }
   }
-  /* Die aktive Sprache steht hell, die andere gedimmt - ein Umschalter, der zeigt, was
-     gerade gilt, statt nur was man anklicken kann. */
-  #lang-toggle b { font-weight: 700; opacity: .45; }
-  #lang-toggle b.on { opacity: 1; color: var(--ink);
+  /* Ein einziger Knopf, der durch die Sprachen zykelt; die aktuelle steht drauf. */
+  #lang-toggle b { font-weight: 700; color: var(--ink);
     text-shadow: 1px 0 0 var(--glitch-r), -1px 0 0 var(--glitch-c); }
   /* DAS hidden-ATTRIBUT WIRKT WIEDER. Die Vorgabe des Browsers dafuer ist
      `[hidden] { display: none }`, und die verliert gegen JEDE Autoren-Regel, die display
@@ -1242,6 +1264,10 @@
     0%   { transform: translateY(1px); }
     100% { transform: translateY(0); }
   }
+  /* v1.0.21: Live-Delta gegen die beste eigene Spur (Time Attack). */
+  .gt3-delta { font-size: .8em; font-weight: 800; font-variant-numeric: tabular-nums; min-height: 1em; }
+  .gt3-delta.schneller { color: #3ddc84; }
+  .gt3-delta.langsamer { color: #ff5a4e; }
   .gt3-val.big, .gt3-gearnum, .gt3-rpm {
     text-shadow: 0 0 clamp(5px, 1.4vw, 13px) rgba(210, 226, 255, .20); }
 
@@ -1390,6 +1416,8 @@
   .ch-spiegel-knopf.an { background: var(--k-blau, #0b84d6); color: #fff; border-color: transparent; }
   /* Fahren: Fahrgefuehl-Kachel mit groesserer Schrift (v0.9.31) */
   .k-fahren-unten #fa-profil .k-kt { font-size: clamp(14px, 2.6vh, 22px); }
+  #fa-profil.k-meister { background: linear-gradient(90deg, rgba(8,10,14,.88) 0%, rgba(8,10,14,.45) 70%),
+    url(img/meisterschaft.jpg) center 40% / cover no-repeat; }
   .k-fahren-unten #fa-profil .k-kk { font-size: clamp(11px, 2vh, 15px); }
   /* Galerie: Auto ohne Foto als Farbflaeche mit Zeichen */
   .k-auto-zelle.k-auto-ohne-foto { position: relative; }
@@ -1419,6 +1447,21 @@
   .stat-tabelle th, .stat-tabelle td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--line); }
   .stat-tabelle th { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .stat-fuss { font-size: 12px; margin-top: 12px; }
+  /* Telemetrie (v1.0.21) */
+  .tele-wahl { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 4px 0 12px; font-size: 14px; }
+  .tele-wahl select { margin-left: 4px; max-width: 60vw; }
+  .tele-kopf { font-size: 14px; margin: 14px 0 6px; }
+  .tele-karte { display: block; width: 100%; max-height: 300px; }
+  .tele-balken, .tele-tempo { display: block; width: 100%; height: 140px; }
+  .tele-tempo { height: 180px; }
+  .tele-achse { display: flex; justify-content: space-between; font-size: 11.5px; }
+  .tele-gut { color: var(--good); } .tele-schlecht { color: var(--bad); }
+  .tele-a { color: var(--k-blau, #3d8bff); } .tele-b { color: var(--muted); }
+  .tele-gas { color: var(--good); } .tele-bremse { color: var(--bad); }
+  .tele-legende { font-size: 12px; }
+  .grid-timeattack .ta-tele { margin-top: 6px; }
+  .ch-tabelle .ch-spur-knopf { font-size: 11px; padding: 2px 8px; }
+  .grid-timeattack .ta-challenger { margin: 2px 0 4px; }
   .stat-kachel.stat-medaille b { font-size: clamp(16px, 2.3vw, 22px); white-space: nowrap; }
   /* Acht Spalten auf 375 px sind 40 px je Kachel, und darin passt keine Beschriftung:
      gemessen lief der Reifentext ueber die Akkukachel. Unter 560 px deshalb zweireihig. */
@@ -1897,8 +1940,20 @@
      .vgl-aktionen buendelt beide und traegt das margin-top: auto, das vorher am
      Boxenstopp-Knopf selbst stand - so ruecken sie als Gruppe ans Ende der Spalte, statt
      dass der Motorklang-Knopf allein absackt. */
-  .vgl-aktionen { display: flex; flex-direction: column; gap: clamp(3px, .6vw, 7px);
-    margin-top: auto; }
+  /* v0.9.87: in EINER Zeile. GEMELDET: "bei 2 und 3 Spielern war der untere Button unsichtbar."
+     Drei Knoepfe untereinander machten die Spalte hoeher als den Schirm, und .gt3-schirm
+     schneidet ab (overflow: hidden) - der Motor-Knopf fiel unten heraus. */
+  .vgl-aktionen { display: flex; flex-direction: row; gap: clamp(3px, .6vw, 7px);
+    margin-top: auto; min-width: 0; }
+  .vgl-aktionen > .gt3-act { flex: 1 1 0; min-width: 0; padding-left: 2px; padding-right: 2px; }
+  .vgl-spalte { min-height: 0; }
+  /* v0.9.87 BESTELLT: "2/3-Spieler-Screen anpassen, sodass Rundenzeiten (zumindest die
+     letzte) gut sichtbar sind." Letzte und beste Runde je Spalte, gross. */
+  .vgl-zeiten { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(4px, .8vw, 10px); min-width: 0; }
+  .vgl-zeiten > div { display: flex; flex-direction: column; min-width: 0; }
+  .vgl-zeiten b { font: 700 clamp(18px, 3.6vw, 34px)/1.05 var(--mono, ui-monospace, monospace);
+    color: var(--gt3-tile-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vgl-zeiten > div + div b { color: #c77dff; }
   .vgl-box { margin-top: 0; }
   .vgl-fuss { min-width: 0; }
   /* ---- EINE ZEILE, UND SIE MUSS ES AUCH BLEIBEN -----------------------------------
@@ -2374,7 +2429,14 @@
 
   /* Buehne */
   main { max-width: 1320px; }
-  .card { background: rgba(14,16,22,.9); }
+  /* v1.0.22 BESTELLT: "Transparenz der dunklen Hintergruende zwischen den Optionen und dem
+     Bild-Hintergrund erhoehen" (die grosse Flaeche mit der weissen L-Ecke). Die Kacheln selbst
+     bleiben dunkel, nur die Flaeche dazwischen laesst das Bild durch. */
+  .card { background: rgba(14,16,22,.58); }
+  .misc-grid.mp-wege { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .mp-wege .misc-tile b { font-size: 17px; padding: 11px 10px; }
+  .mp-wege .misc-tile svg { width: 84px; height: 84px; margin: 22px auto 22px; }
+  .mp-wege .misc-tile span { display: block; font-size: 15px; padding: 0 14px 18px; text-align: center; }
   .card .card { background: rgba(255,255,255,.035); }
 
 
@@ -2498,9 +2560,8 @@
   .k-titel .home-titel-text { font-size: clamp(40px, 8.2vw, 150px); }
   .k-slogan { font-size: clamp(14px, 2vw, 28px); letter-spacing: .06em; font-weight: 400; margin: 0; max-width: 900px; }
   #tab-home #lang-toggle { display: flex; gap: 0; padding: 0; background: transparent; border: 0; }
-  #tab-home #lang-toggle b { padding: 8px 22px; font-size: 15px; letter-spacing: .14em; color: var(--k-dim);
-    background: rgba(10,12,18,.7); border: 2px solid rgba(255,255,255,.4); }
-  #tab-home #lang-toggle b.on { background: #fff; color: var(--k-tinte); border-color: #fff; }
+  #tab-home #lang-toggle b { padding: 8px 22px; font-size: 15px; letter-spacing: .14em; color: var(--k-tinte);
+    background: #fff; border: 2px solid #fff; }
   .k-druecken { font-size: clamp(14px, 1.8vw, 24px); letter-spacing: .3em; text-transform: uppercase;
     animation: k-blink 1.6s ease-in-out infinite; margin-top: 3vh; }
   @keyframes k-blink { 50% { opacity: .3; } }
@@ -2740,7 +2801,6 @@
   .gt3-gridschirm .grid-bild { grid-area: bild; max-height: none; height: 100%; }
   .gt3-gridschirm .grid-bild .tp-karte, .gt3-gridschirm .grid-bild img { max-height: 100%; width: 100%; height: 100%; }
   .gt3-gridschirm .grid-hinweis { grid-area: hinweis; font-size: clamp(13px, 2vw, 19px); }
-  .gt3-gridschirm .grid-selbst { grid-area: selbst; font-size: clamp(12px, 1.8vw, 17px); margin: 4px 0; }
   .gt3-gridschirm .grid-liste { grid-area: liste; font-size: clamp(13px, 2vw, 19px); }
   .gt3-gridschirm .grid-fuss { grid-area: fuss; flex-wrap: wrap; }
   .gt3-gridschirm .grid-fuss button { font-size: clamp(15px, 2.4vw, 24px);
@@ -2803,6 +2863,11 @@
   .k-tutorial-knopf { font-family: var(--k-font); letter-spacing: .12em; text-transform: uppercase; font-size: 13px;
     background: rgba(10,12,18,.7); color: #fff; border: 2px solid var(--k-blau); border-radius: 0; padding: 6px 16px; }
   .k-tutorial-knopf:hover { background: var(--k-blau); color: var(--k-blau-text); }
+  /* v1.0.15 BESTELLT: "Startknopf auf Startbildschirm farblich anders hinterlegen, damit er klarer wird." */
+  .k-tutorial-knopf.k-starten-haupt { background: var(--k-blau, #00a3e0); color: var(--k-blau-text, #04070c);
+    border-color: var(--k-blau, #00a3e0); font-weight: 800; }
+  .k-tutorial-knopf.k-starten-haupt .k-tutorial-taste { color: inherit; opacity: .75; }
+  .k-tutorial-knopf.k-starten-haupt:hover { background: #fff; border-color: #fff; color: #04070c; }
   .k-tutorial-taste { margin-left: 8px; color: var(--k-dim); font-size: 11px; letter-spacing: .04em; }
   .k-tour { position: fixed; inset: 0; z-index: 450; font-family: var(--k-font); }
   body.track-fs .k-tour { z-index: 900; }
@@ -2893,10 +2958,151 @@
   .gar-a-zeile .gk-text { display: flex; flex-direction: column; min-width: 0; }
   .gar-a-zeile .gk-text b { font-size: 14px; letter-spacing: .05em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .gar-a-zeile .gar-id { font-size: 10.5px; color: var(--k-dim); padding: 0; }
-  .gar-a-zeile .gk-rolle { margin: 0; min-width: 132px; }
+  /* v0.10.5 BESTELLT: "Pfeile immer an derselben Stelle." Feste Spalten statt Fliesstext:
+     links Pfeil, Mitte der Name (fest breit, mittig), rechts Pfeil; der Hinweis
+     "experimentell" in einer eigenen Zeile darunter. */
+  .gar-a-zeile .gk-rolle { margin: 0; width: 176px; min-width: 176px; display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) 30px; align-items: center; }
+  .gar-a-zeile .gk-rolle > button[data-d="-1"] { grid-column: 1; grid-row: 1; }
+  .gar-a-zeile .gk-rolle > b { grid-column: 2; grid-row: 1; text-align: center; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  .gar-a-zeile .gk-rolle > button[data-d="1"] { grid-column: 3; grid-row: 1; }
+  .gar-a-zeile .gk-rolle > .wip-tag { grid-column: 1 / -1; grid-row: 2; justify-self: center;
+    font-size: 9px; margin: 0; }
+  /* v1.0.22 GEMELDET: "Die Namen von Holden Commodore und Lamborghini Murciélago R-GT sind so
+     breit, dass sie nicht auf den Bildschirm passen." Feste Breite (die Pfeile bleiben an ihrer
+     Stelle), lange Werte brechen in eine zweite Zeile um statt die Zeile zu sprengen. */
+  .gk-w > b { display: inline-block; width: 10em; text-align: center; white-space: normal;
+    overflow-wrap: anywhere; line-height: 1.15; }
+  #race-act-sound-txt, #vgl1-act-sound-txt, #vgl-act-sound-txt, #vgl3-act-sound-txt {
+    white-space: normal; overflow-wrap: anywhere; line-height: 1.1; }
+  .gar-akku { white-space: nowrap; }
+  #race-gridscreen button.pad-fokus { outline: 3px solid var(--k-blau, #3d8bff); outline-offset: 2px; }
+  /* v1.0.19: Time Attack auf dem Startschirm - Medaillenzeiten und bisher Gewonnenes. */
+  .gt3-gridschirm .grid-timeattack:not([hidden]) { grid-area: hinweis; font-size: clamp(12px, 1.8vw, 17px); line-height: 1.45;
+    background: rgba(0,0,0,.35); padding: 6px 10px; border-left: 3px solid var(--gold, #f5c542); }
+  .gt3-gridschirm .grid-timeattack:not([hidden]) ~ .grid-hinweis { display: none; }
+  .grid-timeattack .ta-kopf { font-weight: 800; letter-spacing: .06em; text-transform: uppercase; font-size: .8em; opacity: .8; margin-top: 4px; }
+  .grid-timeattack .ta-stand { border-collapse: collapse; }
+  .grid-timeattack .ta-stand td { padding: 1px 10px 1px 0; }
+  /* ---- STUDIE (98f-studie.js) ---- */
+  .studie-text p { line-height: 1.45; margin: 4px 0 8px; }
+  .studie-text code, #studie-inhalt code { font-size: .9em; }
+  .studie-knoepfe { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .studie-frage { font-size: clamp(17px, 3vw, 24px); font-weight: 700; margin: 10px 0 14px; line-height: 1.3; }
+  .studie-skala { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+  .studie-skala.sieben { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .studie-skala button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 2px; min-height: 64px; }
+  .studie-skala button b { font-size: 1.4em; }
+  .studie-skala button small { font-size: 10px; line-height: 1.15; opacity: .8; text-align: center; }
+  .studie-rt { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 52vh;
+    background: #3b3f48; color: #fff; user-select: none; touch-action: manipulation; cursor: pointer; }
+  .studie-rt b { font-size: clamp(26px, 6vw, 56px); letter-spacing: .06em; }
+  .studie-rt[data-zustand="jetzt"] { background: #19c26b; }
+  .studie-rt[data-zustand="frueh"] { background: #b3263f; }
+  .studie-rt[data-zustand="gut"] { background: #1d4f8a; }
+  /* ---- MEISTERSCHAFT (73-meisterschaft.js), nach mockup/meisterschaft.html ---- */
+  .meister-schirm:not([hidden]) { position: fixed; inset: 0; z-index: 390; display: flex; flex-direction: column;
+    background: #0c0e14 url(img/meisterschaft-bg.jpg) center/cover; color: #eef0f4;
+    font-family: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+    font-size: clamp(11px, 1.7vw, 15px); padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  .meister-schirm::before { content: ""; position: absolute; inset: 0; background: rgba(8,10,15,.86); pointer-events: none; }
+  .meister-schirm > * { position: relative; }
+  .ms-kopf { display: flex; align-items: center; gap: 8px; padding: max(6px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left));
+    border-bottom: 1px solid rgba(255,255,255,.1); background: rgba(5,7,12,.6); }
+  .ms-kopf b { letter-spacing: .12em; text-transform: uppercase; font-size: 1.1em; }
+  .ms-hint { margin-left: auto; font-size: .8em; color: #a3acbd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ms-zu { flex: 0 0 auto; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.35); color: #fff;
+    font-size: 1.3em; line-height: 1; min-width: 2.2em; min-height: 2.2em; padding: 4px 8px; cursor: pointer; }
+  .ms-zu:hover { background: rgba(255,255,255,.2); }
+  .ms-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 10px; padding: 8px 10px 10px; flex: 1; min-height: 0; }
+  .ms-liste { position: relative; display: flex; flex-direction: column; gap: 5px; overflow-y: auto; min-height: 0; padding: 2px; }
+  .ms-trenner { margin: 6px 0 1px; font-size: .78em; letter-spacing: .14em; text-transform: uppercase; color: #a3acbd; display: flex; align-items: center; gap: 8px; }
+  .ms-trenner::after { content: ""; flex: 1; height: 1px; background: rgba(255,255,255,.12); }
+  .ms-ev { display: grid; grid-template-columns: 6px 1.6em 3.6em minmax(0,1fr) 10.5em; gap: 8px; align-items: center; background: #151821;
+    padding: 4px 8px 4px 0; border: 2px solid transparent; cursor: pointer; }
+  .ms-ev i { align-self: stretch; }
+  .ms-nr { font-size: 1.35em; font-weight: 900; text-align: center; color: #a3acbd; }
+  .ms-bild { height: 2.6em; background: #0b0d12; display: grid; place-items: center; overflow: hidden; }
+  .ms-bild svg { width: 100%; height: 100%; }
+  .ms-frei { font-size: .7em; color: #a3acbd; font-weight: 800; }
+  .ms-name { min-width: 0; }
+  .ms-name b { display: block; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ms-name span { display: block; font-size: .82em; color: #a3acbd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meister-schirm .sel { border-color: #fff !important; }
+  .ms-grid.detail-aktiv .ms-liste .sel { border-color: rgba(255,255,255,.35) !important; }
+  .ms-wert { display: grid; grid-template-columns: 1.1em minmax(0,1fr) 1.1em; align-items: center; gap: 2px; font-weight: 800; letter-spacing: .05em;
+    font-size: .9em; text-transform: uppercase; }
+  .ms-pf { color: #00a3e0; text-align: center; cursor: pointer; user-select: none; }
+  .ms-w { text-align: center; padding: 2px 4px; background: #3b3f48; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .f-qualifying .ms-w { background: #6b5bd6; }
+  .f-runden .ms-w { background: #00a3e0; color: #04070c; }
+  .f-endurance .ms-w { background: #ffb02e; color: #1a1100; }
+  .f-training .ms-w { background: #2c6e49; }
+  .ms-knopf { background: #1d212b; border: 2px solid transparent; color: #fff; padding: 7px 10px; font-family: inherit; font-size: .95em;
+    letter-spacing: .05em; text-transform: uppercase; font-weight: 700; cursor: pointer; text-align: center; }
+  .ms-knopf.primary { background: #00a3e0; color: #04070c; }
+  .ms-neu { background: transparent; border: 2px dashed rgba(255,255,255,.22); color: #a3acbd; }
+  .ms-neu.sel { border-style: solid; color: #fff; }
+  .ms-gz, .ms-wz { display: grid; grid-template-columns: minmax(0,1fr) 14em; align-items: center; gap: 6px; background: #181c25;
+    padding: 4px 8px; border: 2px solid transparent; cursor: pointer; }
+  .ms-l { color: #a3acbd; font-size: .82em; text-transform: uppercase; letter-spacing: .06em; }
+  .ms-detail { background: rgba(17,20,27,.92); border-top: 3px solid #00a3e0; padding: 7px 8px; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; }
+  .ms-detail h3 { margin: 0 0 2px; font-size: 1em; letter-spacing: .1em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .ms-detail h3 small { color: #a3acbd; font-weight: 400; letter-spacing: .03em; text-transform: none; font-size: .82em; }
+  .ms-wz.aus { opacity: .38; cursor: default; }
+  .ms-wz.aus .ms-pf { visibility: hidden; }
+  .ms-wz.fehlt .ms-w { outline: 1px solid #ff2b5e; }
+  .ms-info { display: block; font-size: .85em; color: #a3acbd; line-height: 1.4; margin: 2px 0 0; }
+  .ms-info b { color: #eef0f4; }
+  .ms-rot { color: #ff8fa8; } .ms-gelb { color: #ffd166; }
+  .ms-fuss { display: flex; gap: 6px; margin-top: auto; flex-wrap: wrap; }
+  .ms-fuss .ms-knopf { flex: 1; font-size: .85em; padding: 6px; }
+  .ms-fuss-senk { flex-direction: column; }
+  .ms-weg { color: #ffb3c4; }
+  .ms-fuss .ms-symbol { flex: 0 0 auto; min-width: 2.8em; font-size: 1.05em; }
+  .ms-tonne { width: 1.25em; height: 1.25em; vertical-align: -0.2em; fill: none; stroke: #ff5a6e; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round; }
+  .ms-punkte { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin-top: 4px; }
+  .ms-punkte div { background: #181c25; text-align: center; padding: 3px 0; font-size: .82em; }
+  .ms-punkte div b { display: block; font-size: 1.1em; }
+  .ms-stand { width: 100%; border-collapse: collapse; }
+  .ms-stand th { color: #a3acbd; font-size: .78em; text-transform: uppercase; letter-spacing: .06em; text-align: center; padding: 3px 6px; font-weight: 400; }
+  .ms-stand th:nth-child(2) { text-align: left; } .ms-stand th.r { text-align: right; }
+  .ms-stand td { padding: 4px 6px; background: #151821; border-bottom: 2px solid #0c0e14; white-space: nowrap; }
+  .ms-stand td.pos { font-weight: 900; font-size: 1.15em; width: 1.8em; text-align: center; }
+  .ms-stand td.p1 { color: #f5c542; } .ms-stand td.p2 { color: #c9d1dc; } .ms-stand td.p3 { color: #d08a4f; }
+  .ms-stand td.e { color: #a3acbd; text-align: center; }
+  .ms-stand td.pkt { font-weight: 900; font-size: 1.15em; text-align: right; }
+  .ms-stand sup { font-size: .65em; color: #c08cff; margin-left: 2px; }
+  .ms-band { display: inline-block; width: 5px; height: 1em; vertical-align: middle; margin-right: 6px; }
+  .ms-rl { font-size: .7em; padding: 1px 4px; background: #6b5bd6; margin-left: 6px; letter-spacing: .05em; text-transform: uppercase; }
+  .ms-titel { display: block; font-size: 1.15em; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+  .ms-meister { font-size: 1.3em; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; color: #f5c542; padding: 4px 0; }
+  .ms-aufst { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; font-size: .9em; margin-top: 3px; }
+  .ms-aufst div { background: #181c25; padding: 3px 6px; }
+  .ms-aufst div:nth-child(even) { transform: translateY(.6em); }
+  .ms-toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: #f3f4f6; color: #0b0c10; padding: 6px 12px;
+    font-weight: 700; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90%; text-align: center; }
+  .ms-toast.an { opacity: 1; }
+  .ms-mp { margin: 6px 0; }
+  .ms-mp-kopf { font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .ms-mp-titel { color: var(--muted, #a3acbd); margin: 2px 0 4px; }
+  .ms-mp-stand { border-collapse: collapse; width: 100%; }
+  .ms-mp-stand td { padding: 2px 6px; border-bottom: 1px solid rgba(255,255,255,.1); }
+  .ms-mp-stand td:last-child { text-align: right; font-weight: 800; }
+  @media (max-width: 640px), (orientation: portrait) {
+    .ms-grid { grid-template-columns: 1fr; overflow-y: auto; }
+    .ms-liste, .ms-detail { overflow: visible; }
+    .ms-ev { grid-template-columns: 6px 1.4em 3em minmax(0,1fr) 8.5em; }
+    .ms-gz, .ms-wz { grid-template-columns: minmax(0,1fr) 11em; }
+    .ms-hint { display: none; }
+  }
+  .gar-akku.knapp { color: var(--bad); font-weight: 800; }
   .gar-a-zeile.is-player .gk-rolle { background: var(--k-blau); color: var(--k-blau-text); }
   .gar-a-zeile.is-zwei .gk-rolle { background: #ffb02e; color: #1a1100; }
   .gar-a-zeile.is-ghost .gk-rolle { background: #6b5bd6; color: #fff; }
+  .gar-a-zeile.is-safety .gk-rolle { background: #f5c400; color: #1a1500; }
   .gar-a-zeile.is-ghost .gk-rolle button, .gar-a-zeile.is-player .gk-rolle button { color: inherit; }
   .gar-a-aktion > button { width: 100%; text-align: left; }
   /* v0.9.24: die Knoepfe ganz unten groesser (Motorsound steht jetzt nur noch hier). */
@@ -3395,8 +3601,6 @@
   .grid-liste .grid-row { background: var(--panel); margin-bottom: 0; }
 .grid-fuss { flex: 0 0 auto; justify-content: flex-end; gap: 10px; }
 .grid-start-gross { font-size: clamp(16px, 2.4vw, 26px); padding: clamp(10px, 1.8vw, 18px) clamp(28px, 6vw, 70px); }
-.grid-selbst { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px 0;
-  font-size: clamp(10px, 1.2vw, 13px); color: var(--muted); }
 .grid-hinweis { flex: 0 0 auto; margin: 0; font-size: clamp(10px, 1.2vw, 13px);
     line-height: 1.35; color: var(--gt3-strip-ink); opacity: .9; }
   .grid-pos { font-family: monospace; font-weight: 700; min-width: 26px; color: var(--muted); }
@@ -3458,18 +3662,20 @@
   .lade-traeger { position: relative; }
   .lade-ueber { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 12px; background: rgba(0,0,0,.78); }
-  /* v0.9.45: ein Teil dreht sich in 500 ms einmal im Uhrzeigersinn, abwechselnd Gerade und
-     Rechtskurve (59-lade.js). steps(1): die Ebene springt zur Haelfte des Takts um. */
+  /* v0.9.64: ein Gerade-Teil dreht sich in 1 s einmal im Uhrzeigersinn (59-lade.js). */
   .lade-dreh { position: relative; width: 96px; height: 96px; }
+  /* v1.0.17: kleine Einblendung am Rand, solange die SIMULATOR-Linie gesucht wird. */
+  .sim-lade:not([hidden]) { position: fixed; left: calc(10px + env(safe-area-inset-left)); bottom: calc(10px + env(safe-area-inset-bottom));
+    z-index: 380; display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 6px; background: rgba(5,7,12,.85);
+    border: 1px solid rgba(255,255,255,.15); border-radius: 6px; color: #eef0f4; font-size: 12.5px; font-weight: 600;
+    letter-spacing: .03em; pointer-events: none; }
+  .sim-lade .lade-dreh { width: 30px; height: 30px; }
   .lade-ebene { position: absolute; inset: 0; display: grid; place-items: center; }
   .lade-ebene svg, .lade-ebene .tp-karte { width: 100%; height: 100%; max-width: none; max-height: none; }
-  .lade-a { animation: ladeDreh .5s linear infinite, ladeWechselA 1s steps(1, end) infinite; }
-  .lade-b { animation: ladeDreh .5s linear infinite, ladeWechselB 1s steps(1, end) infinite; }
+  .lade-a { animation: ladeDreh 1s linear infinite; }
   @keyframes ladeDreh { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  @keyframes ladeWechselA { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 0; } }
-  @keyframes ladeWechselB { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) {
-    .lade-a, .lade-b { animation-duration: 2s, 4s; }
+    .lade-a { animation-duration: 2s; }
   }
   .lade-text { font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: .03em; }
   .mp-ready-lade { margin: 6px 0 10px; }
@@ -4418,6 +4624,7 @@
          (51-konsole.js). #lang-toggle, #app-version und #home-install behalten ihre ids. -->
     <div class="k-titel">
     <div class="home-titel" aria-label="OMEGA SIM" data-i18n-skip>
+      <span class="home-omega" data-t="&Omega;" aria-hidden="true">&Omega;</span>
       <!-- BESTELLT: "OMEGA blaue glitches und SIM rote (links blau, rechts rot, wie die
            Strecke). Sonst sieht es aus wie die Niederländische Flagge" - vorher lag oben ein
            blauer und unten ein roter Streifen quer ueber beiden Woertern. -->
@@ -4425,8 +4632,8 @@
         class="home-titel-text k-glitch-rot" data-text="SIM">SIM</span>
     </div>
       <h2 class="k-slogan">Vollst&auml;ndige Gestaltungsfreiheit f&uuml;r deine Carrera Hybrid&nbsp;Bahn</h2>
-      <button type="button" id="lang-toggle" aria-label="Sprache wechseln / switch language">
-        <b id="lang-de">DEUTSCH</b><b id="lang-en">ENGLISH</b>
+      <button type="button" id="lang-toggle" aria-label="Sprache wechseln / switch language / cambiar idioma">
+        <b id="lang-label">DEUTSCH</b>
       </button>
       <!-- TUTORIAL (51b-tutorial.js): Klick, Dreieck oder T. -->
       <div class="k-tutorial-reihe">
@@ -4437,8 +4644,12 @@
              Controller mit allen Tasten sieht und die Belegung aendern kann". -->
         <button type="button" id="k-steuerung-start" class="k-tutorial-knopf">Steuerung
           <span class="k-tutorial-taste" data-i18n-skip>&#9675; / S</span></button>
+        <!-- v0.10.5 BESTELLT: "Auf dem Startscreen 'Starten' als dritten Button neben Tutorial
+             und Steuerung." Derselbe Weg wie X / Enter. -->
+        <button type="button" id="k-starten-start" class="k-tutorial-knopf k-starten-haupt">Starten
+          <span class="k-tutorial-taste" data-i18n-skip>&#10005; / Enter</span></button>
       </div>
-      <div class="k-druecken"><span data-i18n-skip>&#10005;</span> zum Starten</div>
+      <!-- v0.10.6: "✕ zum Starten" entfernt - der Knopf "Starten" daneben sagt dasselbe (BESTELLT). -->
       <!-- BESTELLT: "auf der Titelseite zur .apk verlinken, falls die App nicht darueber
            geoeffnet ist, mit direktem Download der neuesten APK". Sichtbar nur im Browser und
            nicht auf iPhone/iPad (97b-app.js). Die Adresse zeigt auf die feste Datei OmegaSim.apk
@@ -4462,7 +4673,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">0.9.50</span></span>
+        <span class="foot-ver">v<span id="app-version">1.0.24</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -4485,7 +4696,7 @@
       <div class="k-kachel " id="fa-auto" role="button" tabindex="0">
         <span class="k-kk">Autos</span>
         <span class="k-kt" id="fa-auto-titel"></span>
-        <span class="k-kb" id="fa-auto-bild" style="background-image:url(img/auto.jpg)"></span>
+        <span class="k-kb" id="fa-auto-bild" style="background-image:url(img/garage.jpg)"></span>
         <span class="k-ki" id="fa-auto-info"></span>
         <!-- BESTELLT: "Autos-Menü sollte auch Option für Garage haben zum Einstellen" - auch
              ohne verbundenes Auto (gemerkte Autos, Farben, Rollen). -->
@@ -4516,9 +4727,12 @@
         <span class="k-ki" id="fa-renn-info"></span>
       </div>
       <div class="k-gitter k-fahren-unten">
-      <div class="k-kachel k-klein" id="fa-profil" role="button" tabindex="0" data-quad="profil">
-        <span class="k-kk">Fahrgefühl</span>
-        <span class="k-kopf"><span class="k-kt" id="fa-profil-titel"></span><span class="k-quad-punkte" id="fa-profil-punkte" aria-hidden="true"></span></span>
+      <!-- v0.10.5 BESTELLT: "Meisterschaft-Button unten links im FAHREN-Menue, Bild im Ordner
+           (Ford und BMW von hinten), statt Fahrgefuehl (das ist ja in Garage und Optionen)."
+           Die Kennung bleibt fa-profil, weil Menuefuehrung und Tutorial sie kennen. -->
+      <div class="k-kachel k-klein k-meister" id="fa-profil" role="button" tabindex="0">
+        <span class="k-kk">Meisterschaft <span class="wip-tag">experimentell</span></span>
+        <span class="k-kopf"><span class="k-kt">Meisterschaft erstellen</span></span>
         <span class="k-ki"></span>
       </div>
         <div class="k-kachel k-start" id="fa-start" role="button" tabindex="0">
@@ -4670,7 +4884,8 @@
         <div class="gt3-box">
           <div class="gt3-times">
             <div><div class="gt3-lbl">Aktuelle Runde</div>
-              <div class="gt3-val" id="race-lap-now">&ndash;</div></div>
+              <div class="gt3-val" id="race-lap-now">&ndash;</div>
+              <div class="gt3-delta" id="race-lap-delta" data-i18n-skip></div></div>
             <div><div class="gt3-lbl">Letzte Zeit</div>
               <div class="gt3-val" id="race-lap-last">&ndash;</div></div>
             <div><div class="gt3-lbl">Beste Zeit</div>
@@ -5032,6 +5247,8 @@
             <div class="vgl-tempo"><span class="gt3-val big" id="vgl1-speed"
                  data-i18n-skip>0</span><span class="vgl-einheit">km/h</span>
               <span class="vgl-gang" id="vgl1-gear" data-i18n-skip>N</span></div>
+            <div class="vgl-zeiten"><div><span class="vgl-einheit">Letzte</span><b id="vgl1-letzte" data-i18n-skip>&ndash;</b></div>
+              <div><span class="vgl-einheit">Beste</span><b id="vgl1-beste" data-i18n-skip>&ndash;</b></div></div>
             <div class="vgl-werte">
               <div class="gt3-box"><div class="gt3-lbl">Tank</div>
                 <div class="gt3-val sm" id="vgl1-fuel" data-i18n-skip>110 l</div>
@@ -5077,6 +5294,8 @@
             <div class="vgl-tempo"><span class="gt3-val big" id="vgl2-speed"
                  data-i18n-skip>0</span><span class="vgl-einheit">km/h</span>
               <span class="vgl-gang" id="vgl2-gear" data-i18n-skip>N</span></div>
+            <div class="vgl-zeiten"><div><span class="vgl-einheit">Letzte</span><b id="vgl2-letzte" data-i18n-skip>&ndash;</b></div>
+              <div><span class="vgl-einheit">Beste</span><b id="vgl2-beste" data-i18n-skip>&ndash;</b></div></div>
             <div class="vgl-werte">
               <div class="gt3-box"><div class="gt3-lbl">Tank</div>
                 <div class="gt3-val sm" id="vgl2-fuel" data-i18n-skip>110 l</div>
@@ -5117,6 +5336,8 @@
             <div class="vgl-tempo"><span class="gt3-val big" id="vgl3-speed"
                  data-i18n-skip>0</span><span class="vgl-einheit">km/h</span>
               <span class="vgl-gang" id="vgl3-gear" data-i18n-skip>N</span></div>
+            <div class="vgl-zeiten"><div><span class="vgl-einheit">Letzte</span><b id="vgl3-letzte" data-i18n-skip>&ndash;</b></div>
+              <div><span class="vgl-einheit">Beste</span><b id="vgl3-beste" data-i18n-skip>&ndash;</b></div></div>
             <div class="vgl-werte">
               <div class="gt3-box"><div class="gt3-lbl">Tank</div>
                 <div class="gt3-val sm" id="vgl3-fuel" data-i18n-skip>110 l</div>
@@ -5163,15 +5384,12 @@
         <div class="schirm-kopf"><b>Bringe die Autos in Position</b>
           <span id="grid-kopf-info" data-i18n-skip></span></div>
         <div class="grid-bild" id="grid-bild" data-i18n-skip></div>
+        <div class="grid-timeattack" id="grid-timeattack" data-i18n-skip hidden></div>
         <p class="grid-hinweis" id="grid-hinweis">Alle Autos stehen auf den Teilen <b>vor</b> Start/Ziel. Erst wenn du Start/Ziel zum ersten Mal &uuml;berf&auml;hrst, beginnt Runde&nbsp;1.</p>
-        <label class="grid-selbst" id="grid-selbst-wrap">
-          <input type="checkbox" id="grid-selbst">
-          <span class="wip-tag">experimentell</span> Aufstellung mit gr&ouml;&szlig;ter Querlage (links/rechts)
-        </label>
         <div class="grid-liste" id="grid-liste"></div>
         <div class="schirm-fuss grid-fuss">
           <button type="button" id="grid-abbrechen">Abbrechen</button>
-          <button type="button" id="grid-auto" title="Die Ghosts fahren langsam auf ihre Startpl&auml;tze und halten dort">Automatisch aufstellen<span class="wip-tag">experimentell</span></button>
+          <button type="button" id="grid-auto" title="Die NPCs fahren langsam auf ihre Startpl&auml;tze und halten dort">Automatisch aufstellen<span class="wip-tag">experimentell</span></button>
           <button type="button" class="primary grid-start-gross" id="grid-start">Start</button>
         </div>
       </div>
@@ -5370,7 +5588,7 @@
         <div class="ch-perz" id="ch-perz" data-i18n-skip></div>
         <div class="ch-histo" id="ch-histo"></div>
         <table class="ch-tabelle">
-          <thead><tr><th>#</th><th>Fahrer</th><th>Zeit</th><th>Abstand</th><th aria-label="Sterne"></th></tr></thead>
+          <thead><tr><th>#</th><th>Fahrer</th><th>Zeit</th><th>Abstand</th><th aria-label="Sterne"></th><th aria-label="Telemetrie"></th></tr></thead>
           <tbody id="ch-liste"></tbody>
         </table>
         <p class="muted ch-sterne-hinweis" id="ch-sterne-hinweis"></p>
@@ -5583,8 +5801,41 @@
     <div class="card subpage" id="sub-patchnotes">
       <button class="misc-back goto-tab" data-tab="options">&larr; Optionen</button>
       <h2>Patchnotes</h2>
+      <p class="muted"><b><span data-i18n-skip>1.0</span></b></p>
+      <ul class="muted" id="patchnotes-10" style="padding-left:20px; line-height:1.7">
+        <li>Titelschirm: Der Schriftzug steht jetzt ruhig &#8211; Cyan &#252;ber, Rot unter jedem Buchstaben, ohne springende Streifen. Der Glitch l&#228;uft nur noch im Omega dahinter.</li>
+        <li>Titelschirm: neuer Glitch-Effekt &#8211; die Farbkan&#228;le liegen &#252;ber und unter den Buchstaben statt daneben, und einzelne senkrechte Streifen springen kurz nach oben oder unten. Das Omega im Hintergrund ist deutlicher, rund statt langgezogen, passt auf den Bildschirm und glitcht genauso.</li>
+        <li>Neues Fahrgef&#252;hl RC (auch f&#252;r Spielerautos, in FAHREN, Garage, Cockpit und Meisterschaft): wie Arcade, nur viel extremer &#8211; der Stick geht direkt ans Auto wie bei einer Fernsteuerung, Gas weg l&#228;uft aus, zweimal Bremse im Stand f&#228;hrt r&#252;ckw&#228;rts. Der Steuerungsmodus h&#228;ngt jetzt am Fahrgef&#252;hl; die Einstellung Steuerungsmodus und die Pacejka-Regler sind ausgeblendet. NPC-Motor w&#228;hlbar: Vorgabe unter Optionen &#8250; Ton, je NPC in der Garage. Renntypen in der Reihenfolge Training, Time Attack, Qualifying, Runden, Endurance, NPC Knockout, Demolition Derby, Time Attack mit eigenem Kachelbild. Meisterschaft: Event fr&#252;her/sp&#228;ter nur mit &#9650;/&#9660;, L&#246;schen als rote M&#252;lltonne, das Schlie&#223;en-Kreuz steht links und ist gr&#246;&#223;er, die Zur&#252;ck-Taste schlie&#223;t auch. WLAN-Mehrspieler: Android-App zuerst, beide Kacheln gr&#246;&#223;er. Die dunklen Fl&#228;chen zwischen den Kacheln sind durchsichtiger. Lange Motornamen (Holden, Murci&#233;lago) brechen um. Renneinstellungen &#8250; Ergebnisse zeigt vor dem ersten Rennen einen Hinweis.</li>
+        <li>Challenger (experimentell): neue Garagenrolle, nur beim Fahren auf der Bahn. Ein echtes Auto f&#228;hrt gegen dich, auch in Time Attack. Drei Modi (Renneinstellungen oder Time-Attack-Startschirm): Gegen meine Bestzeit &#8211; er f&#228;hrt deine beste aufgezeichnete Runde dieser Strecke Teil f&#252;r Teil nach; Gegen den Rekord &#8211; die Runde der Online-Bestzeit der Challenge bzw. Community-Strecke; Gummiband &#8211; er bleibt ungef&#228;hr auf deiner H&#246;he, vorn langsamer, hinten schneller. Kurven und Haarnadeln f&#228;hrt er wie die NPCs gedrosselt, unter Gelb gelten die Gelb-Regeln. Ein wei&#223;er Punkt auf der Karte zeigt, wo die nachgefahrene Runde gerade ist; ohne passende Runde f&#228;hrt er Gummiband.</li>
+        <li>Telemetrie online (WIP, braucht ein neu bereitgestelltes Apps Script): Jede hochgeladene Challenge- oder Community-Zeit nimmt jetzt automatisch die Spur ihrer schnellsten Runde mit (Zwischenzeiten je Teil, Tempo, Gas, Bremse). Der Server beh&#228;lt je Bestenliste und Ger&#228;t nur die schnellste. In der Challenge-Bestenliste hat jede Zeile mit Spur einen Knopf &#8222;Telemetrie&#8220;: Er l&#228;dt die Runde und zeigt sie auf der Telemetrie-Seite als Vergleich B neben deinen eigenen Runden.</li>
+        <li>Neue Seite Telemetrie (WIP, Optionen &#8250; Telemetrie, auch aus der Statistik und vom Time-Attack-Startschirm): Zwei deiner Runden einer Strecke im Vergleich, A gegen B (beste oder letzte). Die Strecke ist Teil f&#252;r Teil gr&#252;n oder rot gef&#228;rbt, je nachdem, wo A Zeit gewinnt oder verliert; darunter Balken mit dem Unterschied je Teil und die Tempokurve beider Runden &#252;ber den Rundenweg, dazu Gas und Bremse von A.</li>
+        <li>Telemetrie (WIP): Jede Rennrunde wird jetzt als Zwischenzeiten je Streckenteil aufgezeichnet, dazu etwa zehnmal pro Sekunde Tempo, Gas, Bremse, Gang und Lenkung. Gemerkt werden je Strecke (gespiegelt z&#228;hlt als dieselbe) deine beste und deine letzte g&#252;ltige Runde; daf&#252;r m&#252;ssen alle Teile der Runde gelesen worden sein. In Time Attack zeigt das Cockpit unter &#8222;Aktuelle Runde&#8220; an jedem Teil den Abstand zu deiner Bestrunde: gr&#252;n schneller, rot langsamer.</li>
+        <li>Ghosts hei&#223;en jetzt NPCs &#8211; in Garage, Optionen, Doku und Meldungen (auch auf Englisch und Spanisch). Das Safety Car gibt es nur noch beim Fahren auf der Bahn: im Ausdruck-Modus ist die Rolle nicht w&#228;hlbar, und beim Wechsel dorthin wird sie auf &#8222;Aus&#8220; gestellt.</li>
+        <li>Safety Car: Es blieb am Rand stehen, weil es nie einen Sendetakt bekam (den bekamen nur Ghosts) &#8211; behoben. Dein Auto drosselt unter Gelb jetzt wie die Ghosts schon vor Kurven und Haarnadeln (vor einer Haarnadel zwei Teile vorher) statt erst darauf und fliegt nicht mehr mit etwa 45 % aus der Haarnadel. Haarnadel-Kerbs enden an der Teilgrenze: kein wei&#223;er Rand mehr auf dem n&#228;chsten Teil; die Formen am Ausgang sind daf&#252;r um rund 3 % gestaucht (das Foto-Teil hat dort noch ein kurzes gerades St&#252;ck, unser Teil nicht). Speed-Dreams-Motoren (WIP): Bei V10, den beiden V12 und dem Toro R-GT war die Aufnahmedrehzahl 2- bis 4-fach zu niedrig gesch&#228;tzt, sie klangen deshalb oben bis zu anderthalb Oktaven zu hoch &#8211; neu gerechnet. Neu (WIP): echte Crash-Aufnahmen (CC0) statt der gerechneten und ein Auspuffknall (Free Art License) f&#252;r die Schubknaller der Motorton-Zus&#228;tze; Quellen in audio/CREDITS.md. Die Speed-Dreams-Motoren hei&#223;en jetzt nach den Autos, denen sie entsprechen, mit deren Leerlauf und Begrenzer: Nissan GT-R GT500 2013 (bis 9000/min), Audi R8 LMS (8500), Holden Commodore VF V8 Supercar (7500), Shelby GT350 1965 (6500), Ferrari 575 GTC (8000), Ferrari 599 GTB Fiorano (8400), Lamborghini Murci&#233;lago R-GT (8000).</li>
+        <li>Haarnadeln sehen jetzt aus wie das Originalteil: Pfeile und Keile im Bogen sind direkt aus dem Foto abgemessen und unverzerrt gesetzt &#8211; au&#223;en werden die Pfeile &#252;ber den Bogen l&#228;nger und drehen sich zur Bahn, innen f&#252;llen Keile den Scheitel. Die wei&#223;e Fl&#228;che folgt dem Foto und l&#228;uft an beiden Enden weich in den normalen Streifen der Geraden aus. Gilt in Editor, Vorschauen und Streckenbild.</li>
+        <li>Der Modus &#8222;Bestzeit&#8220; hei&#223;t jetzt Time Attack. Der Startschirm zeigt dort die Medaillenzeiten der Strecke (Gold, Silber, Bronze), die bisher gewonnenen Medaillen und die Bestzeit je Auto. Ideallinie: die SIMULATOR-Suche probiert jetzt auch Sehnen &#8211; gerade Verbindungen &#252;ber bis zu knapp drei Teile &#8211;, damit z. B. eine Links-Rechts-Folge als gerade Diagonale gefahren wird, wenn das schneller ist; auf der Vorgabestrecke 10,7 statt 11,5 s je Runde in der Physik. Die Doku (Info &#8250; Streckengeometrie und Ideallinie) erkl&#228;rt die SIMULATOR-Linie.</li>
+        <li>Neuer Motor aus Speed Dreams: Toro R-GT (V12), in der Gruppe &#8222;Speed Dreams, Aufnahmen&#8220;. Die Aufnahme stammt aus den Speed-Dreams-Spieldaten und steht unter der Free Art License; Quellen in audio/CREDITS.md.</li>
+        <li>Hotfix: 1.0.16 startete nicht, wenn im Editor eine Strecke gemerkt war (die SIMULATOR-Linie wurde beim Laden zu fr&#252;h angefragt) &#8211; behoben. Die Ideallinie wird jetzt gleich nach jeder &#196;nderung an der Strecke im Hintergrund berechnet; solange das l&#228;uft, zeigt ein drehendes Streckenteil am Rand &#8222;Ideallinie wird berechnet &#8230;&#8220;. Die neuen Haarnadel-Kerbs sind vorerst wieder aus.</li>
+        <li>Haarnadeln sehen jetzt aus wie das Originalteil: im Bogen au&#223;en lange, breite Pfeile schr&#228;g zur Bahn, innen am Scheitel kurze Keile; auf den geraden Schenkeln bleiben die kleinen Pfeile. Gilt f&#252;r Editor, Vorschaubilder und das Streckenbild.</li>
+        <li>Streckenbild: neuer Knopf &#8222;Bild&#8220; in der Editorleiste speichert ein PNG mit Strecke (Ideallinie und Raum wie gerade eingeschaltet), Name, Streckencode, L&#228;nge, Platzbedarf, Teilezahl und Link; in der App unter Bilder/OmegaSim (neue APK n&#246;tig). SIMULATOR ist jetzt die Standard-Ideallinie. Meisterschaft: Vorgabe sind zwei Events (Qualifying, Runden), &#8222;Meisterschaft starten&#8220; ist als WIP gekennzeichnet, und eine pausierte Meisterschaft l&#228;sst sich fortsetzen &#8211; die FAHREN-Kachel zeigt &#8222;Fortsetzen: Event X/Y&#8220; und &#246;ffnet direkt den Zwischenstand mit &#8222;Weiter&#8220;, im Planer steht oben &#8222;Meisterschaft fortsetzen&#8220;. Titelschirm: &#8222;Starten&#8220; ist farbig hinterlegt. Die Kachel mit dem Garage-Knopf zeigt das Garagenfoto.</li>
+        <li>Neues Linienmodell SIMULATOR (WIP): f&#228;hrt bis zu 200 Linien &#8211; die acht vorhandenen und glatte Abwandlungen davon &#8211; je drei Runden mit derselben Fahrphysik wie dein Auto (Getriebe, Reifen, Zug im Reibkreis) und beh&#228;lt die schnellste. Die Mindestgeschwindigkeit der Ghosts (35 %) und eine Grenze f&#252;r schnelle Querwechsel gelten als Schranken. Die Suche dauert wenige Sekunden im Hintergrund, pausiert im Rennen und wird je Strecke gespeichert; bis dahin gilt die Luuke-Linie. Ein getestetes Beispiel, keine bewiesene Bestlinie.</li>
+        <li>Motorkl&#228;nge aus Speed Dreams (WIP): sechs echte Aufnahmen (CC0) als neue Gruppe im Motormen&#252; &#8211; Japanischer GT-V8, Deutscher V10, Australischer Muscle-V8, Alter amerikanischer V8 und zwei italienische V12. Neben der Bahn rollt dein Auto jetzt h&#246;rbar &#252;ber Gras und Schotter, lauter mit dem Tempo (Lautst&#228;rke mit dem Reifenregler). Quellen in audio/CREDITS.md.</li>
+        <li>Pflichtstopps z&#228;hlen jetzt f&#252;r alle gesteuerten Autos: Spieler 2 und 3 bekommen dieselbe Zeitstrafe je verpasstem Stopp, und im WLAN-Mehrspieler melden die Telefone Gesamtzeit und Strafe an den Host (neue APK bzw. neuer Host n&#246;tig), damit die Meisterschaft sie wertet. Safety Car: neue Option &#8222;erst aufschlie&#223;en&#8220; (Vorgabe an): unter Gelb fahren alle mit etwa 45 % heran und ab zwei Kacheln Abstand mit 35 % weiter, in Kurven und Haarnadeln gedrosselt. Die Studie ist vorerst nur im Entwicklermodus sichtbar.</li>
+        <li>Studie (experimentell, Optionen): freiwillige Teilnahme ab 18 mit Einwilligung, Alter und Geschlecht; 18 Aussagen des NARQ (Bewunderung und Rivalit&#228;t), Selbsteinsch&#228;tzung des Fahrk&#246;nnens und ein Reaktionstest mit dem Controller (10 Durchg&#228;nge, Fr&#252;hstarts z&#228;hlen). Gesendet wird erst am Ende, in ein eigenes, nicht &#246;ffentlich abrufbares Blatt; verkn&#252;pft &#252;ber die Ger&#228;tekennung. Der Reaktionstest l&#228;sst sich danach ohne Senden &#252;ben.</li>
+        <li>Meisterschaft (experimentell, 8. Modus): Die Kachel unten links in FAHREN &#246;ffnet den Planer. Jede Zeile ist ein Event mit Strecke (aktuell im Editor, gespeicherte Strecke oder freie Bahn), Format (Training, Qualifying, Runden, Endurance), Umfang, Wetter, stehendem oder fliegendem Start, Startaufstellung und Pflichtstopps; darunter Fahrgef&#252;hl, Aufstellung des ersten Rennens, Punkteschema, Punkt f&#252;r die schnellste Runde und Teilnehmer. Nach jedem Event kommt der Zwischenstand mit der n&#228;chsten Startaufstellung, pausieren und sp&#228;ter fortsetzen geht. Im WLAN-Mehrspieler leitet das planende Telefon: jedes Event startet f&#252;r alle, die anderen sehen Event und Stand auf dem Bereitschaftsschirm. Safety Car: unter Gelb &#252;bernimmt der Autopilot sofort, alle fahren etwa 35 %, niemand &#252;berholt. Pflichtstopps bis 3.</li>
+        <li>Safety Car (experimentell): In der Garage gibt es neben &#8222;Ghost&#8220; die Rolle &#8222;Safety Car&#8220; (eines je Rennen). Es parkt am Rand, f&#228;hrt bei gelber Flagge los und blinkt alle 750 ms kurz auf. Die anderen Autos fahren unter Gelb normal weiter, bis sie bis auf zwei Kacheln aufgeschlossen haben, dann 35 % (dein Auto &#252;bernimmt dann der Autopilot). Ghosts &#252;berholen das Safety Car nie. Nach Gr&#252;n f&#228;hrt es bis Start/Ziel und h&#228;lt dort rechts am Rand. Es z&#228;hlt keine Runden und steht nicht im Ergebnis.</li>
+      </ul>
       <p class="muted"><b><span data-i18n-skip>0.9</span></b></p>
       <ul class="muted" id="patchnotes-09" style="padding-left:20px; line-height:1.7">
+        <li>Neuer Modus &#8222;Bestzeit&#8220; (experimentell): Bestzeit auf deiner eigenen Strecke mit Medaillen nach der Gold-Formel. Geht nur auf der Bahn mit eingescannter Strecke (sonst ein Hinweis wie bei NPC Knockout), es fahren nur gesteuerte Autos, Ghosts bleiben stehen. Zeiten und Medaillen werden je Strecke gespeichert (gespiegelt z&#228;hlt als dieselbe): Wer die Strecke wieder aufbaut, hat seine alten Zeiten. Die FAHREN-Kachel zeigt die Bestzeit, die Statistik z&#228;hlt die Medaillen mit. Gold-Formel neu kalibriert: Balkonia 16 s und Omega Testing Track 2 7,2 s, alle anderen Strecken dazwischen und dar&#252;ber.</li>
+        <li>Fahrgef&#252;hl und Men&#252;s: Neue Abstimmung Sim+ (wie Pro mit direkterer Lenkung, mehr Beschleunigung und viel st&#228;rkerer Bremse). Im FAHREN-Men&#252; und am Cockpit-Knopf stehen nur noch Arcade, Sim+, Pro und Pacejka; GT3, F1 und Realismus GT3 bleiben in den Optionen. Arcade lenkt st&#228;rker und erreicht jetzt den vollen Einschlag, GT3 und F1 behalten ihn auch mit kalten Reifen (der Lenkregler reicht bis 400 %). Drift-Modus entfernt; &#8222;Aus&#8220; hei&#223;t jetzt RC: Gas l&#228;uft in 2 s aus, die Bremse greift sofort, ein zweiter Bremsdruck im Stand f&#228;hrt r&#252;ckw&#228;rts. Gelbe Flagge: alle Autos etwa 35 %, auch im Ausdruck-Modus. Reifenmischungen unterscheiden sich st&#228;rker (weich 120 % Griff und schneller Verschlei&#223;, hart 85 % und langlebig). Bremsquietschen leiser. Garage: Rollenpfeile immer an derselben Stelle, Akkustand je Auto, Fahrgef&#252;hl je gesteuertem Auto w&#228;hlbar, neues Garagenbild. Startaufstellung: Abbrechen, Automatisch aufstellen und Start mit dem Steuerkreuz w&#228;hlbar, X best&#228;tigt. Titelschirm mit &#8222;Starten&#8220;. Unten links im FAHREN-Men&#252; die Kachel Meisterschaft (kommt bald). &#8222;Freies Training&#8220; hei&#223;t &#8222;Training&#8220; und hat ein Zeitlimit (0 = ohne Ende). &#8222;Controller tauschen&#8220; entfernt.</li>
+        <li>App-Latenz (neue APK n&#246;tig, &#228;ltere fahren wie bisher): Befehle an die Autos gehen in der App jetzt direkt an den Bluetooth-Schreibthread, ohne den Umweg &#252;ber den Android-Hauptthread, &#252;ber den auch alle Meldungen der Autos laufen. Das Gamepad wird bei einem Controller direkt aus der App gelesen (Sticks und Trigger), Android b&#252;ndelt die Stick-Ereignisse nicht mehr im Bildtakt, und der Ton l&#228;uft mit kleinem Puffer. Die Verbindungspriorit&#228;t wird nicht mehr alle 10 s neu ausgehandelt (kleine H&#228;nger). &#8222;Funk-Rundlauf&#8220; zeigt jetzt die echten Werte: Br&#252;ckenzeit, Takt des Steuerherzschlags, Gamepad direkt, Tonverz&#246;gerung; der alte Wert ist in der App als &#8222;nur JS&#8220; gekennzeichnet.</li>
+        <li>Fehler behoben (Pr&#252;fung der &#196;nderungen seit 0.9.56): Ghosts, die die Bahn verlassen, halten wieder an (Gerade 0,9 s, Kurve 1,2 s, Haarnadel 1,8 s, sofort wenn sie auf dem Teppich weiterz&#228;hlen). Nah nebeneinander bekommen zwei Ghosts immer gegens&#228;tzliche Seiten und behalten ihre Reihenfolge von links nach rechts, statt sich anzuschieben. Ghost-Motorsound spielt auch ohne Sample des eigenen Autos, und die Garage zeigt, ob er wirklich an ist. Automatisch aufstellen h&#228;lt erst nach dem Startteil am richtigen Platz und geht erst kurz davor ganz an den Rand. Ein Auto, das Ghost war, lenkt als gesteuertes Auto nicht mehr selbst. Das Boxen-Minispiel kommt wieder, wenn kein zweiter Spieler f&#228;hrt. Fliegender Start: Einf&#252;hrungsrunde mit Kurvendrosselung, Ende beim zweiten &#220;berfahren des ersten Autos. Akku: Wert gegl&#228;ttet, leer schon bei h&#246;herem Rohwert, Warnblinken nur noch mit den Lichtern (vorher kurz ohne Gas und Lenkung). Statistik: gespeicherte Strecken werden gez&#228;hlt, jedes Auto erscheint mit eigenen Kilometern, Spieler 2/3 z&#228;hlen mit, Kilometer nur mit verbundenem Auto, &#8222;Beste Runde&#8220; entfernt. 2/3-Spieler-Schirm: letzte und beste Runde gro&#223;, alle Kn&#246;pfe sichtbar.</li>
+        <li>Community-Bestzeiten: Die 3er-Serie (bester Durchschnitt aus drei aufeinanderfolgenden Runden) gilt jetzt auch f&#252;r Community-Strecken. Daf&#252;r speichert die App die Rundenzeiten zu jedem Eintrag und l&#228;dt sie mit hoch; das Apps Script muss neu bereitgestellt werden, damit es die Rundenzeiten auch f&#252;r die Online-Zeiten &#252;bernimmt.</li>
+        <li>Ghosts: Die &#220;berholrate ist jetzt eine echte Rate (Vorgabe 0,1 &#220;berholman&#246;ver je Runde je 4 Autos, bei 6 Autos und 10 Runden also 1 bis 2). Vorher &#228;nderte der Regler nur die Reichweite, und jede Ann&#228;herung wurde zum Angriff. Die Startreihen fahren gestaffelt ab Gr&#252;n los, 250 ms je Zweierreihe. Vorher z&#228;hlte die Staffel erst ab deiner ersten Bewegung und wirkte praktisch nicht.</li>
+        <li>Gelbe Flagge auf der Bahn: Dein Auto f&#228;hrt jetzt im Tempo der Ghosts weiter und lenkt selbst. Die Tempogrenze lag unter dem Tempo, ab dem das Auto die Bahn liest, deshalb fiel es aus der Selbstf&#252;hrung und fuhr geradeaus. In Kurven und Haarnadeln drosselt es wie die Ghosts, und die Selbstf&#252;hrung greift auch direkt nach dem Hinstellen, bevor die Kachel verortet ist.</li>
+        <li>NPC Knockout: Ghosts, die die Bahn verlassen, sind jetzt wirklich raus. Ein Ghost, der steht und blinkt, z&#228;hlt als &#8222;Bahn verlassen&#8220;, ebenso einer, der 5 s keine Kachel mehr schafft (vorher konnte nie ein Ghost ausscheiden). Sind alle Ghosts raus, kommt die Siegesfanfare und das Ergebnis. Ein verlorenes Leben spielt einen kurzen traurigen Ton, das letzte den Game-over-Ton, danach das Rennende mit Ergebnis.</li>
+        <li>Rundenz&#228;hlung: Wer von hinter der Startlinie losf&#228;hrt (z. B. Platz 4), bekam beim ersten &#220;berqueren eine Runde von etwa 2 s, die danach jede echte Bestzeit verdeckte. Jetzt ist das erste &#220;berqueren nur die Startlinie, Runde 1 l&#228;uft vom Start bis zum Ende der ersten vollen Runde, und unm&#246;glich kurze Runden z&#228;hlen nie als Bestzeit. Rennstart setzt alle Autos zur&#252;ck: Tank voll, Schaden null (auch Spieler 1 und 3), Reifen kalt oder mit Reifenw&#228;rmer warm. Der Ton f&#252;r eine ung&#252;ltige Runde ist lauter und f&#252;r Handylautsprecher h&#246;rbar (zwei kurze, fallende Summt&#246;ne).</li>
         <li>Community-Bestzeiten: Jede Strecke hat jetzt eine eigene Seite wie die Wochenstrecken, ge&#246;ffnet mit einem Tipp auf Bild oder Namen in der Liste: gro&#223;e Karte (Tipp f&#252;r Vollbild), Spiegeln, L&#228;nge, Platzbedarf und Abstimmung, Teilepr&#252;fung, Medaillen, Start und die Bestenliste mit allen Zeiten. Zur&#252;ck (oder Kreis) f&#252;hrt in die Liste. Die Liste bleibt nicht mehr bei &#8222;Lade &#8230;&#8220; stehen. Auf luuke42.github.io/omegasim f&#252;hrt der APK-Link immer zum Release, damit jeder Download gez&#228;hlt wird.</li>
         <li>T&#246;ne nach echten Aufnahmen nachgestimmt (gerechnet, keine Aufnahme in der App): Reifenquietschen h&#246;her (um 800 Hz statt 620) und mit zitternder Tonh&#246;he wie haftendes und rutschendes Gummi; Schalten mit rauschendem Metall-Klacken statt Ton; Abblasventil l&#228;nger (0,6 s) und mit langsamem Flattern; Auspuffknaller tiefer und voller; Laderpfeifen endet bei 5,8 kHz statt 7. Neu unter den Motorton-Zus&#228;tzen (experimentell): Abrollger&#228;usch, Reifen und Fahrtwind werden mit dem Tempo lauter und heller.</li>
         <li>Raum hat ein eigenes Men&#252; (Strecke &#8594; Raum, und &#8222;Raum&#8220; in der FAHREN-Streckenkachel auf der Bahn): Gr&#246;&#223;e, Raumgestalter, Tutorial und gespeicherte R&#228;ume mit Namen zum Laden und L&#246;schen. Im Editor blendet der Schalter &#8222;Raum&#8220; den Raum aus; ausgeblendet z&#228;hlt er auch f&#252;r Zufallsstrecken nicht. Ziehen im Editor: die Strecke folgt jetzt Finger, Maus und rechtem Stick, der Raum bleibt liegen. Alle Streckenbilder (Fahren-Kachel, &#220;bersicht, Startaufstellung, Listen) zeigen die Originalteile mit Pfeilen. Neue Ladeanimation: ein Streckenteil dreht sich, abwechselnd Gerade und Rechtskurve. Community-Bestzeiten (vorher Community-Strecken): beim Einreichen w&#228;hlt man die Abstimmung (Arcade, Pro, GT3, F1, Realismus GT3), die Liste zeigt sie, und gefahren wird damit. Einzelrennen nach einem Mehrspieler-Rennen fragt nicht mehr &#8222;f&#252;r alle?&#8220;, wenn niemand sonst da ist.</li>
@@ -5680,7 +5931,7 @@
         <li>Renneinstellungen als eigene Kachel mit eigenem Cockpit-Screen, dazu ein Regler f&uuml;r Rennh&auml;rte und eine Recovery-Funktion nach einem Abgang.</li>
         <li>Cockpit-Balken (Tank/Schaden/Akku) jetzt vertikal, Gyro-Anzeige verbessert.</li>
         <li>Lenkkennlinie einstellbar, neuer GT7-Fahrmodus, zwei neue Motoren (Ford Tudor 1937, VW K&auml;fer 1300) und ein Vergleichsprofil mit echter Anlasser-Aufnahme f&uuml;r den Porsche.</li>
-        <li>F&uuml;nf neue Ghost-Ideallinien-Modi, dazu die Luuke-Linie: ein neuer Modus, von Hand aus Beispiel-Streckenverl&auml;ufen hergeleitet. Ghost-Verhalten in der Einf&uuml;hrungsrunde und beim &Uuml;berholen verfeinert.</li>
+        <li>F&uuml;nf neue NPC-Ideallinien-Modi, dazu die Luuke-Linie: ein neuer Modus, von Hand aus Beispiel-Streckenverl&auml;ufen hergeleitet. NPC-Verhalten in der Einf&uuml;hrungsrunde und beim &Uuml;berholen verfeinert.</li>
         <li>Men&uuml;s komplett mit Gamepad/Tastatur navigierbar, inklusive Info-Popups und mehreren Feinschliffen an der Tastenbelegung (D-Pad-Fixes, Select schaltet jetzt den Bahn-Lesemodus).</li>
         <li>Info-Tab jetzt als Kacheln (Wozu, Danksagungen, Patchnotes).</li>
         <li>Regen-&Uuml;bergang nachgemessen: kein Griff-Sprung, auch nicht beim erneuten Regenbeginn.</li>
@@ -5892,7 +6143,7 @@
       <h2>Streckenzeichnung aus der Aufnahme <span class="wip-tag">WIP</span></h2>
       <p class="muted">
         Rechnet die gefahrene Linie rein rechnerisch aus &ndash; &uuml;ber dieselbe Physik,
-        die auch ein Ghost bekommt, nicht aus echten Streckencodes. Funktioniert deshalb
+        die auch ein NPC bekommt, nicht aus echten Streckencodes. Funktioniert deshalb
         AUCH ohne CH-Bahn, nur mit einem Ausdruck darunter. Braucht trotzdem Start/Ziel-
         &Uuml;berfahrten in der Aufnahme f&uuml;r Rundengrenzen und Rundenzeiten &ndash;
         ohne sie bleibt es bei einer einzigen offenen Linie. Eine Ann&auml;herung: ohne
@@ -5983,19 +6234,19 @@
     </div>
 
     <div class="card">
-      <h2>Weiter gedacht: Ghostcars selbst programmieren</h2>
+      <h2>Weiter gedacht: NPC-Autos selbst programmieren</h2>
       <p class="muted">
         Dieselbe Idee, eine Stufe gr&ouml;&szlig;er. Ein autonomes Auto braucht keine
         Zeitkurve, sondern eine <b>Ortskurve</b>: was tue ich, wenn ich auf Kachel 3 bin?
         Aus dem Rennmitschnitt der Original-App wissen wir, dass genau das reicht:
-        bei einem ihrer Ghosts waren <b>85&nbsp;%</b> der Lenkvarianz allein aus
+        bei einem ihrer NPCs waren <b>85&nbsp;%</b> der Lenkvarianz allein aus
         Kachelindex und Position innerhalb der Kachel erkl&auml;rt.
       </p>
       <ul class="muted">
         <li><b>Gegen die Referenz antreten.</b> Zeichne den Lenkwinkel &uuml;ber den
-          Kachelindex und lass den Ghost damit fahren. Wie nah kommst du an die
+          Kachelindex und lass den NPC damit fahren. Wie nah kommst du an die
           85&nbsp;%?</li>
-        <li><b>Zwei eigene Ghosts gegeneinander.</b> Zwei Kurven, zwei Autos, dieselbe
+        <li><b>Zwei eigene NPCs gegeneinander.</b> Zwei Kurven, zwei Autos, dieselbe
           Strecke: und die Rundenzeiten sagen, welche Kurve die bessere war.</li>
         <li><b>Bremspunkte finden.</b> Nur die Gaskurve ist einstellbar, die Lenkung macht
           das Auto selbst. Einzige R&uuml;ckmeldung ist die Rundenzeit. Genau so haben
@@ -6091,7 +6342,7 @@
         Ortung die Querausnutzung des Reibkreises. Der gr&uuml;ne ist das echte Drehsignal.
       </p>
       <p class="muted">
-        <b>Au&szlig;erdem:</b> Ghosts mit Ideallinie und &Uuml;berholen, Boxengasse mit
+        <b>Au&szlig;erdem:</b> NPCs mit Ideallinie und &Uuml;berholen, Boxengasse mit
         Reifen- und Tankwahl (auch f&uuml;r Spieler&nbsp;2), wechselhaftes Wetter mit Schauern,
         die k&uuml;rzer sind als die Trockenphasen, Rennen mit Sektorzeiten und
         Rundenzeit-Diagramm, und ein Zwei-Spieler-Modus auf demselben Sendetakt.
@@ -6585,7 +6836,7 @@
         <em>keinen</em> eigenen Takt, sondern wird im selben 45-ms-Herzschlag direkt nach dem ersten
         beschickt. Jedes Auto hat seine eigene Sperre (<code>writeInFlight</code>), ein langsamer Funkweg
         l&auml;sst also nur beim eigenen Auto einen Takt aus und h&auml;lt das andere nicht auf &ndash;
-        genau das Verhalten, das die Ghosts schon haben.
+        genau das Verhalten, das die NPCs schon haben.
       </p>
       <p class="muted">
         Der Eingang von Spieler&nbsp;2 geht bewusst <em>nicht</em> durch die Eingabeschlichtung. Sie
@@ -6596,7 +6847,7 @@
       <p class="muted">
         Auto&nbsp;2 hat inzwischen fast alles, was Auto&nbsp;1 hat: eine eigene Fahrphysik samt
         eigener G&auml;nge und Temperaturen, eine eigene Ortung auf der Strecke (davon h&auml;ngen
-        das Ausweichen der Ghosts, die Fahrhilfe und der Leitplanken-Modus ab), eigenen Schaden,
+        das Ausweichen der NPCs, die Fahrhilfe und der Leitplanken-Modus ab), eigenen Schaden,
         eigenen Tank, eine eigene Motorstimme auf der anderen Stereoseite, die Rundenz&auml;hlung
         und einen eigenen Cockpit-Schirm. Die Gangtabelle wird beim Anschalten <em>kopiert</em>
         und nicht geteilt, sonst schriebe ein Schaltvorgang von Auto&nbsp;2 in die G&auml;nge von
@@ -6613,7 +6864,7 @@
     </div>
 
     <div class="card">
-      <h2>Mehrere Autos, Ghosts, Mustererkennung</h2>
+      <h2>Mehrere Autos, NPCs, Mustererkennung</h2>
 
       <h3 style="font-size:14px; margin:0 0 6px 0">Garage und Rollen</h3>
       <p class="muted">
@@ -6627,7 +6878,7 @@
         beh&auml;lt den bestehenden Pfad vollst&auml;ndig: <code>sendControlValue()</code>,
         den einen 45-ms-Takt, Optionen, HUD. Dieser Zustand steckt in etwa 20
         Modulvariablen mit &uuml;ber hundert Verwendungen; ein Umbau auf ein Fahrzeugobjekt
-        h&auml;tte jede davon angefasst. Ghosts sind stattdessen Objekte mit eigener
+        h&auml;tte jede davon angefasst. NPCs sind stattdessen Objekte mit eigener
         Verbindung, eigener Schreibsperre und <strong>eigener
         <code>CarreraPhysicsEngine</code>-Instanz</strong>. Letzteres erledigt
         &bdquo;gleich stark beschleunigen wie das Spielerauto&ldquo; von selbst,
@@ -6635,14 +6886,14 @@
         Byte-Herleitung und Bremslicht mit, statt sie nachzubauen.
       </p>
 
-      <h3 style="font-size:14px; margin:16px 0 6px 0">Wie ein Ghost f&auml;hrt</h3>
+      <h3 style="font-size:14px; margin:16px 0 6px 0">Wie ein NPC f&auml;hrt</h3>
       <p class="muted">
         Byte&nbsp;12 sagt <em>Kurve</em>, aber <strong>nicht in welche Richtung</strong>, und
         das Vorzeichen von Byte&nbsp;3 h&auml;ngt an der Fahrtrichtung &uuml;ber das
-        Streckenteil. Ein falsch geratenes Vorzeichen lenkt den Ghost sofort von der Bahn.
+        Streckenteil. Ein falsch geratenes Vorzeichen lenkt den NPC sofort von der Bahn.
         Die Richtung kommt deshalb aus dem <strong>Streckenlayout</strong> im Strecke-Tab,
         wo Links- und Rechtskurven unterschieden sind; Byte&nbsp;11 sagt, auf welchem Teil
-        man ist. <em>Ohne Layout kann ein Ghost nur geradeaus halten</em> und wird an der
+        man ist. <em>Ohne Layout kann ein NPC nur geradeaus halten</em> und wird an der
         ersten Kurve von der Abschaltregel gestoppt. Das ist eine echte Grenze, kein Fehler.
       </p>
       <div class="doc-table-wrap"><table class="doc-table">
@@ -6657,7 +6908,7 @@
         Die 1,5&nbsp;s sind aus den Mitschnitten begr&uuml;ndet: auf der Strecke folgt Code
         auf Code ohne <code>0xff</code> dazwischen, und ein Teil liegt 0,4 bis 2,7&nbsp;s
         unter dem Sensor. L&auml;nger als 1,5&nbsp;s ohne Code hei&szlig;t also wirklich
-        &bdquo;nicht auf der Strecke&ldquo;. <strong>Nur Ghosts halten dann an</strong>:
+        &bdquo;nicht auf der Strecke&ldquo;. <strong>Nur NPCs halten dann an</strong>:
         das vom Spieler gesteuerte Auto f&auml;hrt weiter, wohin gelenkt wird.
       </p>
 
@@ -6725,9 +6976,9 @@
         geh&ouml;ren zum gesamten Bluetooth-Verkehr des Telefons). Der vom <b>21.08.</b>
         ist ein Rennen auf &bdquo;az2108&ldquo; mit <b>drei Autos</b>: einem gesteuerten,
         das wegen eines nicht verbundenen Gamepads stand, und <b>zwei von der App selbst
-        gefahrenen</b>. Das macht ihn wertvoll, bei den Ghosts ist die App der
+        gefahrenen</b>. Das macht ihn wertvoll, bei den NPCs ist die App der
         Fahrer, die Schreibpakete sind also die Ausgabe des Original-Reglers und nicht die
-        eines Daumens. Erkennbar ist das sofort: die Ghost-Lenkung hat 119 bis 126
+        eines Daumens. Erkennbar ist das sofort: die NPC-Lenkung hat 119 bis 126
         verschiedene Werte und nur 2,7&ndash;3,6&nbsp;% Vollausschlag, w&auml;hrend in den
         handgefahrenen Aufnahmen 196 von 235 Befehlen genau &plusmn;127 waren.
       </p>
@@ -6788,7 +7039,7 @@
 
       <h3 style="font-size:14px; margin:16px 0 6px 0">Die Modus-Bytes f&uuml;r eigene Autos</h3>
       <p class="muted">
-        Bei beiden Ghosts konstant &uuml;ber 2496 bzw. 2457 Pakete: <b>Byte&nbsp;10 =
+        Bei beiden NPCs konstant &uuml;ber 2496 bzw. 2457 Pakete: <b>Byte&nbsp;10 =
         <code>0x20</code></b> und <b>Byte&nbsp;15 mit Bit&nbsp;3</b>
         (<code>0x0c</code>/<code>0x0e</code>). Das gesteuerte Auto bekam dagegen
         <code>0x60</code> und <code>0x04</code>. Bit&nbsp;1 von Byte&nbsp;15 folgt dem
@@ -6817,16 +7068,16 @@
 
       <h3 style="font-size:14px; margin:16px 0 6px 0">Es geht auch ohne Querlage, die App macht es vor</h3>
       <div class="doc-table-wrap"><table class="doc-table">
-        <tr><th>Ghost</th><th>Reststreuung der Lenkung je (Kachelindex, Phase)</th><th>ohne Positionswissen</th><th>erkl&auml;rter Anteil</th></tr>
+        <tr><th>NPC</th><th>Reststreuung der Lenkung je (Kachelindex, Phase)</th><th>ohne Positionswissen</th><th>erkl&auml;rter Anteil</th></tr>
         <tr><td>0x201</td><td>21,7</td><td>56,7</td><td><b>85&nbsp;%</b></td></tr>
         <tr><td>0x202</td><td>39,2</td><td>58,6</td><td>55&nbsp;%</td></tr>
       </table></div>
       <p class="muted">
-        Bei einem der beiden Ghosts sind <b>85&nbsp;% der Lenkvarianz allein aus der
+        Bei einem der beiden NPCs sind <b>85&nbsp;% der Lenkvarianz allein aus der
         Streckenposition</b> erkl&auml;rt. Die App f&auml;hrt ihre autonomen Autos also
         weitgehend als <em>Vorsteuerung</em> aus Kachelindex und Phase innerhalb der Kachel,
         nicht aus einer Rückmeldung, denn sie hat genauso wenig eine wie wir. Im
-        Rest steckt das gegenseitige Reagieren; der zweite Ghost mit 55&nbsp;% war der
+        Rest steckt das gegenseitige Reagieren; der zweite NPC mit 55&nbsp;% war der
         st&auml;rker verwickelte.
       </p>
       <p class="muted">
@@ -6839,9 +7090,9 @@
       </p>
       <p class="muted">
         Gegenprobe zum Ganzen: aus Kachelz&auml;hler und Start-Kachel rekonstruiert ergibt
-        das Rennen <b>16 Runden je Ghost</b>, nach der Anfangsphase stabil bei
+        das Rennen <b>16 Runden je NPC</b>, nach der Anfangsphase stabil bei
         7,07&ndash;7,31&nbsp;s, die beiden Autos im Median 0,03&nbsp;s auseinander:
-        was zwei gleich eingestellte Ghosts auch tun sollten.
+        was zwei gleich eingestellte NPCs auch tun sollten.
       </p>
     </div>
 
@@ -7187,6 +7438,21 @@
         werden <em>sollte</em>; ob es geschieht, wei&szlig; niemand.
       </p>
       <p class="muted">
+        <strong>Die SIMULATOR-Linie (Standard seit 1.0.15).</strong> Die Linienmodelle oben rechnen eine Linie aus einer Regel (Kr&uuml;mmung, Rundenzeit im Punktmassenmodell, Scheitelvorschriften). SIMULATOR f&auml;hrt stattdessen Linien und beh&auml;lt die schnellste. Ausgangspunkt sind die acht vorhandenen Modelle; daraus entstehen bis zu 200 Kandidaten durch zwei Arten von Abwandlung: die Beule (ein glatter Buckel, der ein Kurvenst&uuml;ck seitlich verschiebt) und die Sehne (ein St&uuml;ck von bis zu knapp drei Teilen wird durch die gerade Verbindung seiner Endpunkte ersetzt, solange die in der Bahn bleibt &ndash; so entsteht die gerade Diagonale durch ein S statt zweier Lenkbewegungen).
+      </p>
+      <p class="muted">
+        <strong>Gefahren wird jeder Kandidat drei Runden</strong> mit einer stummen Kopie der Fahrphysik deines Autos: Getriebe (Automatik), Reifen und Temperatur, Masse und Tank wie eingestellt. Gas und Bremse folgen dem Tempoplan der Linie; der Lenkeinschlag folgt aus der Kr&uuml;mmung beim Radstand des Autos und kostet &uuml;ber den Reibkreis Zug &ndash; eine weitere Linie beschleunigt also fr&uuml;her heraus. Gewertet wird der Schnitt der Runden 2 und 3 (Runde 1 hat den stehenden Start).
+      </p>
+      <p class="muted">
+        <strong>Die Schranken der NPCs gelten mit:</strong> wo der Tempoplan unter die Leseschwelle (35 %) fallen m&uuml;sste, f&auml;hrt ein NPC trotzdem 35 % &ndash; das kostet die Linie eine halbe Sekunde je Runde. Und keine Linie darf schneller quer wechseln als die steilste der vorhandenen, die die NPCs schon fahren.
+      </p>
+      <p class="muted">
+        <strong>Wann gerechnet wird:</strong> gleich nach jeder &Auml;nderung an einer geschlossenen Strecke, im Hintergrund (ein drehendes Teil am Rand zeigt &bdquo;Ideallinie wird berechnet&ldquo;), in wenigen Sekunden, pausiert w&auml;hrend eines Rennens. Das Ergebnis wird je Strecke und Fahrzeug gespeichert; bis es da ist, gilt die Luuke-Linie. Auf offenen Strecken gilt immer die Luuke-Linie.
+      </p>
+      <p class="muted">
+        <strong>Was sie nicht ist:</strong> eine bewiesene Bestlinie. Die Physik kennt keine Querbeschleunigung (kein Byte meldet sie); wie schnell eine Kurve geht, bleibt die Annahme aus den Fahrwerten. SIMULATOR ist die beste von bis zu 200 gefahrenen Linien &ndash; ein getestetes Beispiel. Ob es auf dem Teppich stimmt, sagen Rundenzeit und Abg&auml;nge.
+      </p>
+      <p class="muted">
         <strong>Welche Stelle der Linie gilt gerade?</strong> Das Auto meldet nur, <em>dass</em>
         es eine neue Kachel betreten hat &ndash; nicht, wo darauf. Die Phase darin kam deshalb
         aus der verstrichenen <em>Zeit</em>, geteilt durch die gemessene mittlere Dauer dieses
@@ -7214,7 +7480,7 @@
     </div>
 
     <div class="card">
-      <h2>Wie ein Ghost &uuml;berholt</h2>
+      <h2>Wie ein NPC &uuml;berholt</h2>
       <p class="muted">
         Vier Phasen: <b>ansage</b> (570&nbsp;ms, zwei Lichthupenimpulse, das Auto bewegt sich
         noch nicht) &rarr; <b>raus</b> (400&nbsp;ms zur Seite) &rarr; <b>vorbei</b> (volle Seite,
@@ -7311,11 +7577,17 @@
         <div class="snd-row"><audio controls preload="none" src="audio/shift_up.ogg"></audio><div><b>Hochschalten</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, Anstieg 8&ndash;14&nbsp;ms, damit es klunkt statt zu klicken</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/shift_down.ogg"></audio><div><b>Runterschalten</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/brake_squeal.ogg"></audio><div><b>Bremsenquietschen</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, als Schleife nach Bremsdruck eingeblendet</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_offroad.ogg"></audio><div><b>Neben der Bahn (Gras/Schotter)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4: Bidone, Freesound 66048 (CC0), als Schleife nach Tempo eingeblendet</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/tyre_squeal.ogg"></audio><div><b>Reifenquietschen</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, als Schleife nach Reibkreis-Ausnutzung eingeblendet. Eine Gr&ouml;&szlig;enordnung tiefer und breiter als das Bremsenquietschen: Schwerpunkt 1473 statt 3382 Hz</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/crash_0.ogg"></audio><div><b>Crash, Variante 1</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert: vier Varianten, weil dieselbe Aufnahme bei mehreren Ber&uuml;hrungen als Fehler klingt</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/crash_1.ogg"></audio><div><b>Crash, Variante 2</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/crash_2.ogg"></audio><div><b>Crash, Variante 3</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/crash_3.ogg"></audio><div><b>Crash, Variante 4</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_crash_0.ogg"></audio><div><b>Crash, Aufnahme 1</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (CC0), ersetzt die gerechneten Varianten, wenn geladen (WIP)</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_crash_1.ogg"></audio><div><b>Crash, Aufnahme 2</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (CC0), ersetzt die gerechneten Varianten, wenn geladen (WIP)</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_crash_2.ogg"></audio><div><b>Crash, Aufnahme 3</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (CC0), ersetzt die gerechneten Varianten, wenn geladen (WIP)</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_crash_3.ogg"></audio><div><b>Crash, Aufnahme 4</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (CC0), ersetzt die gerechneten Varianten, wenn geladen (WIP)</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_backfire_0.ogg"></audio><div><b>Auspuffknall</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4, Free Art License 1.3; bei den Schubknallern statt des Rauschsto&szlig;es, leicht verstimmt (WIP)</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/pit_wrench.ogg"></audio><div><b>Schlagschrauber</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, gleichm&auml;&szlig;iger Hammerzug um 26&nbsp;Hz</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/pit_fuel.ogg"></audio><div><b>Tanken</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, Schleife</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/pit_repair.ogg"></audio><div><b>Karosseriereparatur</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, Abklingzeit 1,9&nbsp;ms im Median, also D&auml;mpfer statt Note</span></div></div>
@@ -7519,6 +7791,47 @@
         <div class="snd-row"><audio controls preload="none" src="audio/kaefer1300_mid.ogg"></audio><div><b>VW K&auml;fer 1300 (1.3 Boxer-4, luftgek&uuml;hlt), Mittelband (2800/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, Geometrie recherchiert statt aus einer Tabelle uebernommen, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/kaefer1300_high.ogg"></audio><div><b>VW K&auml;fer 1300 (1.3 Boxer-4, luftgek&uuml;hlt), oberes Band (4200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, Geometrie recherchiert statt aus einer Tabelle uebernommen, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/kaefer1300_over.ogg"></audio><div><b>VW K&auml;fer 1300 (1.3 Boxer-4, luftgek&uuml;hlt), Schub (2800/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, Geometrie recherchiert statt aus einer Tabelle uebernommen, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8gt_idle.ogg"></audio><div><b>Speed Dreams: Nissan GT-R GT500 2013 (3,4 l V8, Vorbeifahrt), Leerlauf (1800/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8_formula.wav): Heigh-hoo, Freesound 128611 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8gt_low.ogg"></audio><div><b>Speed Dreams: Nissan GT-R GT500 2013 (3,4 l V8, Vorbeifahrt), Zwischenband (3078/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8_formula.wav): Heigh-hoo, Freesound 128611 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8gt_mid.ogg"></audio><div><b>Speed Dreams: Nissan GT-R GT500 2013 (3,4 l V8, Vorbeifahrt), Mittelband (5263/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8_formula.wav): Heigh-hoo, Freesound 128611 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8gt_high.ogg"></audio><div><b>Speed Dreams: Nissan GT-R GT500 2013 (3,4 l V8, Vorbeifahrt), oberes Band (9000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8_formula.wav): Heigh-hoo, Freesound 128611 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8gt_over.ogg"></audio><div><b>Speed Dreams: Nissan GT-R GT500 2013 (3,4 l V8, Vorbeifahrt), Schub (5263/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8_formula.wav): Heigh-hoo, Freesound 128611 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v10_idle.ogg"></audio><div><b>Speed Dreams: Audi R8 LMS (5,2 l V10), Leerlauf (1400/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v10_raw.wav): kevp888, Freesound 649889 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v10_low.ogg"></audio><div><b>Speed Dreams: Audi R8 LMS (5,2 l V10), Zwischenband (2198/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v10_raw.wav): kevp888, Freesound 649889 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v10_low2.ogg"></audio><div><b>Speed Dreams: Audi R8 LMS (5,2 l V10), zweites Zwischenband (3450/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v10_raw.wav): kevp888, Freesound 649889 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v10_mid.ogg"></audio><div><b>Speed Dreams: Audi R8 LMS (5,2 l V10), Mittelband (5415/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v10_raw.wav): kevp888, Freesound 649889 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v10_high.ogg"></audio><div><b>Speed Dreams: Audi R8 LMS (5,2 l V10), oberes Band (8500/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v10_raw.wav): kevp888, Freesound 649889 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v10_over.ogg"></audio><div><b>Speed Dreams: Audi R8 LMS (5,2 l V10), Schub (3450/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v10_raw.wav): kevp888, Freesound 649889 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8muscle_idle.ogg"></audio><div><b>Speed Dreams: Holden Commodore VF V8 Supercar (5,0 l V8), Leerlauf (1100/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-ears68.wav): Ears68, Freesound 260445 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8muscle_low.ogg"></audio><div><b>Speed Dreams: Holden Commodore VF V8 Supercar (5,0 l V8), Zwischenband (1778/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-ears68.wav): Ears68, Freesound 260445 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8muscle_low2.ogg"></audio><div><b>Speed Dreams: Holden Commodore VF V8 Supercar (5,0 l V8), zweites Zwischenband (2872/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-ears68.wav): Ears68, Freesound 260445 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8muscle_mid.ogg"></audio><div><b>Speed Dreams: Holden Commodore VF V8 Supercar (5,0 l V8), Mittelband (4641/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-ears68.wav): Ears68, Freesound 260445 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8muscle_high.ogg"></audio><div><b>Speed Dreams: Holden Commodore VF V8 Supercar (5,0 l V8), oberes Band (7500/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-ears68.wav): Ears68, Freesound 260445 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8muscle_over.ogg"></audio><div><b>Speed Dreams: Holden Commodore VF V8 Supercar (5,0 l V8), Schub (2872/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-ears68.wav): Ears68, Freesound 260445 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8alt_idle.ogg"></audio><div><b>Speed Dreams: Shelby GT350 1965 (289 Hi-Po, 4,7 l V8), Leerlauf (800/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-cr4sht3st.wav): cr4sht3st, Freesound 157144 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8alt_low.ogg"></audio><div><b>Speed Dreams: Shelby GT350 1965 (289 Hi-Po, 4,7 l V8), Zwischenband (1351/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-cr4sht3st.wav): cr4sht3st, Freesound 157144 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8alt_low2.ogg"></audio><div><b>Speed Dreams: Shelby GT350 1965 (289 Hi-Po, 4,7 l V8), zweites Zwischenband (2280/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-cr4sht3st.wav): cr4sht3st, Freesound 157144 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8alt_mid.ogg"></audio><div><b>Speed Dreams: Shelby GT350 1965 (289 Hi-Po, 4,7 l V8), Mittelband (3850/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-cr4sht3st.wav): cr4sht3st, Freesound 157144 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8alt_high.ogg"></audio><div><b>Speed Dreams: Shelby GT350 1965 (289 Hi-Po, 4,7 l V8), oberes Band (6500/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-cr4sht3st.wav): cr4sht3st, Freesound 157144 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v8alt_over.ogg"></audio><div><b>Speed Dreams: Shelby GT350 1965 (289 Hi-Po, 4,7 l V8), Schub (2280/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8-cr4sht3st.wav): cr4sht3st, Freesound 157144 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12_idle.ogg"></audio><div><b>Speed Dreams: Ferrari 575 GTC (6,0 l V12), Leerlauf (1100/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_raw.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12_low.ogg"></audio><div><b>Speed Dreams: Ferrari 575 GTC (6,0 l V12), Zwischenband (1806/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_raw.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12_low2.ogg"></audio><div><b>Speed Dreams: Ferrari 575 GTC (6,0 l V12), zweites Zwischenband (2966/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_raw.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12_mid.ogg"></audio><div><b>Speed Dreams: Ferrari 575 GTC (6,0 l V12), Mittelband (4872/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_raw.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12_high.ogg"></audio><div><b>Speed Dreams: Ferrari 575 GTC (6,0 l V12), oberes Band (8000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_raw.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12_over.ogg"></audio><div><b>Speed Dreams: Ferrari 575 GTC (6,0 l V12), Schub (2966/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_raw.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12weich_idle.ogg"></audio><div><b>Speed Dreams: Ferrari 599 GTB Fiorano (6,0 l V12), Leerlauf (1000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_smooth2.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12weich_low.ogg"></audio><div><b>Speed Dreams: Ferrari 599 GTB Fiorano (6,0 l V12), Zwischenband (1702/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_smooth2.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12weich_low2.ogg"></audio><div><b>Speed Dreams: Ferrari 599 GTB Fiorano (6,0 l V12), zweites Zwischenband (2898/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_smooth2.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12weich_mid.ogg"></audio><div><b>Speed Dreams: Ferrari 599 GTB Fiorano (6,0 l V12), Mittelband (4934/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_smooth2.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12weich_high.ogg"></audio><div><b>Speed Dreams: Ferrari 599 GTB Fiorano (6,0 l V12), oberes Band (8400/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_smooth2.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v12weich_over.ogg"></audio><div><b>Speed Dreams: Ferrari 599 GTB Fiorano (6,0 l V12), Schub (2898/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v12_smooth2.wav): cheesepuff, Freesound 112075 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_toro_idle.ogg"></audio><div><b>Speed Dreams: Lamborghini Murci&eacute;lago R-GT (Toro R-GT, 6,0 l V12), Leerlauf (1100/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/toro-rgt.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_toro_low.ogg"></audio><div><b>Speed Dreams: Lamborghini Murci&eacute;lago R-GT (Toro R-GT, 6,0 l V12), Zwischenband (1806/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/toro-rgt.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_toro_low2.ogg"></audio><div><b>Speed Dreams: Lamborghini Murci&eacute;lago R-GT (Toro R-GT, 6,0 l V12), zweites Zwischenband (2966/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/toro-rgt.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_toro_mid.ogg"></audio><div><b>Speed Dreams: Lamborghini Murci&eacute;lago R-GT (Toro R-GT, 6,0 l V12), Mittelband (4872/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/toro-rgt.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_toro_high.ogg"></audio><div><b>Speed Dreams: Lamborghini Murci&eacute;lago R-GT (Toro R-GT, 6,0 l V12), oberes Band (8000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/toro-rgt.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_toro_over.ogg"></audio><div><b>Speed Dreams: Lamborghini Murci&eacute;lago R-GT (Toro R-GT, 6,0 l V12), Schub (2966/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/toro-rgt.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
       </div>
       <p class="muted" style="font-size:11.5px">
         Vollst&auml;ndige Herkunftsangaben in <code>audio/CREDITS.md</code>.
@@ -7908,10 +8221,10 @@
               Kurve misst du die Kurve mit und nicht den Lenkanteil.</li>
             <li>Genug Platz neben der Bahn lassen: das Auto soll abfliegen d&uuml;rfen, ohne
               gegen ein Tischbein zu fahren.</li>
-            <li>In der Garage genau ein Auto auf &bdquo;Ghost&ldquo; stellen. Bei zwei Autos
+            <li>In der Garage genau ein Auto auf &bdquo;NPC&ldquo; stellen. Bei zwei Autos
               mischen sich Ausweichversatz und Messung.</li>
             <li>Sonst nichts abschalten. Der Messstand sendet mit eigenem Takt, also sind
-              Tempo, Ideallinie und W&uuml;rze der Ghosts w&auml;hrend der Messung ohne
+              Tempo, Ideallinie und W&uuml;rze der NPCs w&auml;hrend der Messung ohne
               Wirkung.</li>
             <li>Auf &bdquo;Messung starten&ldquo; dr&uuml;cken. Nach jeder Stufe f&auml;hrt
               das Auto weiter und der Lenkanteil steigt; beim ersten Abflug ist die Messung
@@ -7994,7 +8307,7 @@
       </div>
 
     <div class="card">
-      <h2>Lenkmessung Ghosts <span class="wip-tag">die offene Frage</span></h2>
+      <h2>Lenkmessung NPCs <span class="wip-tag">die offene Frage</span></h2>
       <!-- Absichtlich OHNE <b>, <em> und <code> im Inneren: jedes davon teilt den Satz in
            einen eigenen Textknoten, und das Woerterbuch schlaegt Textknoten nach. Mit
            Auszeichnung zerfielen diese vier Absaetze in 14 Bruchstuecke, neun davon
@@ -8003,14 +8316,14 @@
         Wertet das Auto im Bahn-Modus einen gesendeten Lenkbefehl &uuml;berhaupt aus?
       </p>
       <p class="muted" style="font-size:11.5px">
-        Davon h&auml;ngt ab, ob Ghost-Ideallinie und Querversatz je mehr als Zierde werden.
+        Davon h&auml;ngt ab, ob NPC-Ideallinie und Querversatz je mehr als Zierde werden.
         Sie erreichen zusammen gemessen h&ouml;chstens 22 von 127 Lenkschritten, und der
         Kommentar im Code sagt selbst, dass sich das Auto im Bahn-Modus selbst auf der
         Strecke h&auml;lt. Die Kippwert-Messung dar&uuml;ber beantwortet das nicht: sie sagt,
         wann es zu viel ist, nicht ob wenig etwas tut.
       </p>
       <p class="muted" style="font-size:11.5px">
-        Der Versuch: dieselbe Strecke, dieselben Ghosts, seitlicher Versatz einmal auf 0 %
+        Der Versuch: dieselbe Strecke, dieselben NPCs, seitlicher Versatz einmal auf 0 %
         und einmal auf 100 %. Gez&auml;hlt werden zwei Zahlen und nicht der Eindruck &ndash;
         Abg&auml;nge, also Byte 12 wechselt auf 0x00, und Rundenzeiten. &Auml;ndert sich
         keines von beiden, ignoriert die Firmware die Lenkung.
@@ -8035,8 +8348,8 @@
       </tbody></table>
       <p class="muted" style="font-size:11.5px">
         Was der Knopf pr&uuml;ft, bevor er startet: mindestens drei Streckenteile, mindestens
-        zwei Ghosts, und Bahn-Modus. Unter drei Kacheln liefern die Linienfunktionen null,
-        mit einem Ghost bleibt der Querversatz null, und im Ausdruck-Modus h&auml;lt sich das
+        zwei NPCs, und Bahn-Modus. Unter drei Kacheln liefern die Linienfunktionen null,
+        mit einem NPC bleibt der Querversatz null, und im Ausdruck-Modus h&auml;lt sich das
         Auto nicht selbst auf der Bahn. Wer den Versuch so f&uuml;hrt, misst garantiert
         &bdquo;keine Wirkung&ldquo; &ndash; aus Gr&uuml;nden, die mit der Frage nichts zu tun
         haben.
@@ -8197,7 +8510,7 @@
         <!-- BESTELLT: "streckenscan soll ein button in der garage sein neben dem ersten
              auto. Es soll dann mit querlage = 0 in mittlerem Tempo über die strecke
              fahren und anhalten, wenn ein geschlossener rundkurs gemessen wurde." -->
-        <button id="gar-stop-ghosts" disabled>Ghosts anhalten</button>
+        <button id="gar-stop-ghosts" disabled>NPCs anhalten</button>
         <button class="primary" id="gar-go" hidden disabled>Losfahren</button>
       </div>
       <p class="muted" style="font-size:12px; margin:-6px 0 10px 0">
@@ -8279,16 +8592,17 @@
            Entwicklung und funktioniert nicht fehlerfrei." -->
       <p class="mp-warnung">Mehrspieler ist aktuell noch in der Entwicklung und funktioniert nicht fehlerfrei.</p>
 
-      <div class="misc-grid">
-        <button class="misc-tile subpage-open" data-sub="mp-pc">
-          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="9" width="36" height="23" rx="2"/><path d="M18 40h12M24 32v8" stroke="var(--bad)"/></svg>
-          <b>&Uuml;ber PC mit Python</b>
-          <span>Der PC tr&auml;gt die Rangliste, die Telefone treten im WLAN bei.</span>
-        </button>
+      <!-- v1.0.22 BESTELLT: "Android App an erster Stelle und beides groesser". -->
+      <div class="misc-grid mp-wege">
         <button class="misc-tile subpage-open" data-sub="mp-app">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="15" y="4" width="18" height="40" rx="3"/><path d="M21 38h6" stroke="var(--bad)"/></svg>
           <b>&Uuml;ber Android-App</b>
           <span>Ein Telefon mit der App ist Host, ganz ohne PC.</span>
+        </button>
+        <button class="misc-tile subpage-open" data-sub="mp-pc">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="9" width="36" height="23" rx="2"/><path d="M18 40h12M24 32v8" stroke="var(--bad)"/></svg>
+          <b>&Uuml;ber PC mit Python</b>
+          <span>Der PC tr&auml;gt die Rangliste, die Telefone treten im WLAN bei.</span>
         </button>
       </div>
     </div>
@@ -8528,16 +8842,18 @@
            versteckte Auswahlfeld, die Kacheln ziehen nach. -->
       <div class="opt-row opt-breit" id="race-mode-zeile"><div class="opt-label">Renntyp</div>
       <div class="mode-grid" id="race-mode-tiles">
+        <!-- v1.0.22 BESTELLT: Reihenfolge Training, Time Attack, Qualifying, Runden, Endurance,
+             NPC Knockout, Demolition Derby. -->
         <button type="button" class="mode-tile kachelbild practice" data-mode="practice">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" aria-hidden="true">
             <circle cx="12" cy="13" r="8"/><path d="M12 13V8.5M12 2h0M9 3h6"/>
-          </svg><b>Freies Training</b></button>
-        <button type="button" class="mode-tile kachelbild endurance" data-mode="endurance">
+          </svg><b>Training</b></button>
+        <button type="button" class="mode-tile kachelbild bestzeit" data-mode="bestzeit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-               stroke-linecap="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="9"/><path d="M12 12V6M12 12l4.5 3"/>
-          </svg><b>Endurance</b></button>
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="14" r="5"/><path d="M9 3l3 6 3-6M12 12v4"/>
+          </svg><b>Time Attack</b><span class="wip-tag">experimentell</span></button>
         <button type="button" class="mode-tile kachelbild qualifying" data-mode="qualifying">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -8548,6 +8864,11 @@
                stroke-linecap="round" aria-hidden="true">
             <path d="M4 8a8 5 0 1 0 16 0 8 5 0 1 0-16 0"/><path d="M12 3v3M12 13v-3"/>
           </svg><b>Runden</b></button>
+        <button type="button" class="mode-tile kachelbild endurance" data-mode="endurance">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/><path d="M12 12V6M12 12l4.5 3"/>
+          </svg><b>Endurance</b></button>
         <button type="button" class="mode-tile kachelbild knockout" data-mode="knockout">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -8560,10 +8881,11 @@
           </svg><b>Demolition Derby</b><span class="wip-tag">experimentell</span></button>
       </div>
       <select id="race-mode" hidden style="display:none">
-        <option value="practice" selected>Freies Training</option>
-        <option value="endurance">Endurance</option>
+        <option value="practice" selected>Training</option>
+        <option value="bestzeit">Time Attack</option>
         <option value="qualifying">Qualifying</option>
         <option value="laps">Runden</option>
+        <option value="endurance">Endurance</option>
         <option value="knockout">NPC Knockout</option>
         <option value="derby">Demolition Derby</option>
       </select></div>
@@ -8573,8 +8895,8 @@
            Beschriftung links, Bedienelement rechts. Vorher standen acht Einstellungen in
            zwei waagerechten Reihen, und auf dem Telefon brachen sie unvorhersehbar um. -->
       <div class="opt-row"><div class="opt-label"><span id="race-limit-label">Minuten</span>
-          <small>Bei freiem Training ohne Bedeutung.</small></div>
-        <span class="num-steuer"><button class="num-minus" type="button" aria-label="Minus eins">&#8722;</button><input type="number" id="race-limit" value="2" min="1" max="120" step="1" style="width:84px"><button class="num-plus" type="button" aria-label="Plus eins">+</button></span></div>
+          <small>Beim Training und bei Bestzeit: 0 hei&szlig;t ohne Ende.</small></div>
+        <span class="num-steuer"><button class="num-minus" type="button" aria-label="Minus eins">&#8722;</button><input type="number" id="race-limit" value="0" min="0" max="120" step="1" style="width:84px"><button class="num-plus" type="button" aria-label="Plus eins">+</button></span></div>
       <div class="opt-row"><div class="opt-label">Sektoren
           <span class="wip-tag">experimentell</span>
           <small>&Uuml;berfahrten je Runde. <b>Im Bahn-Modus</b> (Editor) bestimmt die Strecke
@@ -8600,12 +8922,12 @@
       <div class="opt-row"><div class="opt-label">Fliegender Start
           <span class="wip-tag">experimentell</span>
           <small>Einf&uuml;hrungsrunde mit Boxengassen-Tempo. Dein Auto f&auml;hrt sie
-          selbst, genau wie die Ghosts: es rollt mit an, schl&auml;ngelt zum Reifenw&auml;rmen
+          selbst, genau wie die NPCs: es rollt mit an, schl&auml;ngelt zum Reifenw&auml;rmen
           und h&auml;lt die Seite seines Startplatzes, ohne dass du etwas anfassen musst
           &ndash; die Bremse gilt trotzdem, damit du anhalten kannst, wenn vor dir jemand
           steht. Im Cockpit steht dann &bdquo;Einf&uuml;hrungsrunde &middot;
           Autopilot&ldquo;. Frei ist es, wenn das erste Auto Start/Ziel zum zweiten
-          Mal &uuml;berf&auml;hrt &ndash; ein Ghost darf es sein. Warum zweimal: zwischen
+          Mal &uuml;berf&auml;hrt &ndash; ein NPC darf es sein. Warum zweimal: zwischen
           der ersten und der zweiten &Uuml;berfahrt desselben Autos liegt immer eine
           volle Runde, egal wo es gestanden hat. Bei einer einzigen &Uuml;berfahrt war die
           Einf&uuml;hrungsrunde vorbei, bevor sie anfing, wenn ein Auto auf oder kurz vor dem
@@ -8623,6 +8945,23 @@
       <div class="opt-row"><div class="opt-label">Gelbe Flagge deaktivieren<small>An: Der Knopf
           &bdquo;Gelbe Flagge&ldquo; und das Halten der Boxentaste rufen kein Gelb mehr aus.</small></div>
         <label class="tgl"><input type="checkbox" id="race-gelb-aus"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Safety Car: erst aufschlie&szlig;en<span class="wip-tag">experimentell</span><small>An:
+          Unter Gelb mit Safety Car fahren alle mit etwa 45&nbsp;% heran und ab zwei Kacheln Abstand
+          mit 35&nbsp;% weiter, in Kurven und Haarnadeln gedrosselt. Aus: alle sofort 35&nbsp;%.
+          &Uuml;berholt wird unter Gelb nie.</small></div>
+        <label class="tgl"><input type="checkbox" id="race-sc-aufschliessen" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Challenger<span class="wip-tag">experimentell</span><small>Ein
+          Auto mit der Garagenrolle &bdquo;Challenger&ldquo; f&auml;hrt gegen dich, nur auf der Bahn und
+          auch in Time Attack. Gegen meine Bestzeit: es f&auml;hrt deine beste aufgezeichnete Runde
+          dieser Strecke nach. Gegen den Rekord: die Runde der Online-Bestzeit der Challenge oder
+          Community-Strecke. Gummiband: es h&auml;lt sich ungef&auml;hr auf deiner H&ouml;he &ndash; vorn
+          langsamer, hinten schneller. Fehlt die Runde, f&auml;hrt es Gummiband. Auf der Karte zeigt
+          ein wei&szlig;er Punkt, wo die Runde gerade ist.</small></div>
+        <select id="race-challenger">
+          <option value="beste" selected>Gegen meine Bestzeit</option>
+          <option value="rekord">Gegen den Rekord</option>
+          <option value="gummiband">Gummiband</option>
+        </select></div>
 
       <div id="race-grid-wrap" style="display:none; margin-top:12px">
         <label class="small">Startaufstellung, ziehen oder mit den Pfeilen sortieren</label>
@@ -8632,7 +8971,7 @@
           Zweierkolonne. Die Runde l&auml;uft mit Boxengassen-Tempo; sobald das erste Auto
           Start/Ziel zum zweiten Mal &uuml;berf&auml;hrt, ist das Limit weg. Aufstellen musst du von Hand
           &ndash; ein Auto auf die Bahn setzen kann die App nicht. Dein eigenes Auto steht
-          mit in der Liste und verschiebt damit, auf welche Seite die Ghosts hinter dir
+          mit in der Liste und verschiebt damit, auf welche Seite die NPCs hinter dir
           gehen.
         </p>
       </div>
@@ -8683,6 +9022,7 @@
           <option value="0" selected>keine</option>
           <option value="1">1</option>
           <option value="2">2</option>
+          <option value="3">3</option>
         </select></div>
       <div class="opt-row"><div class="opt-label">Strafe je verpasstem Stopp (s)</div>
         <span class="num-steuer"><button class="num-minus" type="button" aria-label="Minus eins">&#8722;</button><input type="number" id="race-pit-penalty" value="10" min="0" max="300" step="1" style="width:84px"><button class="num-plus" type="button" aria-label="Plus eins">+</button></span></div>
@@ -8713,6 +9053,9 @@
         Eine Runde zählt, sobald das Auto das Start/Ziel-Muster auf der Strecke überfährt
         (dasselbe Signal, das auch der Streckenscanner ausliest): kein eigener Sensor in der App.
       </p>
+      <!-- v1.0.22 GEMELDET: "Wenn ich in Renneinstellungen auf Ergebnisse klicke, wird nichts
+           angezeigt." Bis zum ersten Rennen steht hier dieser Platzhalter. -->
+      <p class="muted" id="race-results-leer" style="margin-top:14px">Aktuell keine Ergebnisse verf&uuml;gbar. Nach einem Rennen stehen sie hier.</p>
       <div id="race-results" style="display:none; margin-top:14px">
         <h3 style="margin:0 0 8px 0; font-size:14px">Ergebnis, alle verbundenen Autos</h3>
         <div class="doc-table-wrap" style="max-height:280px; overflow-y:auto; border:1px solid var(--border); border-radius:6px">
@@ -8834,7 +9177,7 @@
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 42V18a13 13 0 0 1 26 0v24l-4.33-4-4.34 4-4.33-4-4.33 4-4.34-4z"/><circle cx="19.5" cy="19" r="2.4" fill="currentColor"/><circle cx="28.5" cy="19" r="2.4" fill="currentColor"/></svg>
           <b>Autonome Gegner</b>
-          <span>Ghosts: Tempo, Linie, Rennw&uuml;rze, Lernen. Teilweise noch im Aufbau.</span>
+          <span>NPCs: Tempo, Linie, Rennw&uuml;rze, Lernen. Teilweise noch im Aufbau.</span>
         </button>
         <button class="misc-tile subpage-open" data-sub="opt-pad">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
@@ -8861,6 +9204,18 @@
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 42h36"/><rect x="9" y="26" width="7" height="12"/><rect x="20.5" y="16" width="7" height="22"/><rect x="32" y="8" width="7" height="30" stroke="var(--bad)"/></svg>
           <b>Statistiken</b>
           <span>Kilometer, Sitzungen, Fahrzeit, Rennen, Siege, Medaillen und das Ranking deiner Autos.</span>
+        </button>
+        <button class="misc-tile subpage-open" data-sub="opt-telemetrie">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 34l9-12 8 6 9-14 12 10"/><path d="M5 42h38" stroke="var(--bad)"/></svg>
+          <b>Telemetrie <span class="wip-tag">WIP</span></b>
+          <span>Deine Runden Teil f&uuml;r Teil: wo du Zeit gewinnst und verlierst, Tempo, Gas und Bremse.</span>
+        </button>
+        <button class="misc-tile subpage-open" data-sub="opt-studie" id="opt-studie-kachel" hidden>
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6h12M20 6v12L9 38a3 3 0 0 0 3 4h24a3 3 0 0 0 3-4L28 18V6"/><path d="M14 30h20" stroke="var(--bad)"/></svg>
+          <b>Studie <span class="wip-tag">experimentell</span></b>
+          <span>Persönlichkeit, Reaktionszeit und Fahrkönnen. Freiwillig, etwa 5 Minuten, ab 18.</span>
         </button>
       </div>
       <!-- INFO OHNE EIGENE EBENE (v0.8.35). BESTELLT: "Die Kacheln aus INFO alles einzeln
@@ -8976,12 +9331,14 @@
           Am 26.08. mit der Original-App gemessen: ein Ausdruck wird nur in der Stellung Aus
           erkannt. Beides zugleich gibt es nicht.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-ontrack" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Steuerungsmodus
-          <small>Physik: Drehmoment, G&auml;nge, Reibkreis &ndash; die Vorgabe. Aus: rohe
-          Stickstellung ohne G&auml;nge, wie ein Fernsteuerungsauto. Drift: rohes Gas wie
-          bei &bdquo;Aus&ldquo;, dazu ein automatisches Gegensteuern gegen das gemessene
-          Drehsignal des Autos und eine weichere Lenkung. Der Drift-Modus ist experimentell,
-          und die Zeile darunter sagt, warum.</small>
+      <!-- v1.0.22: Steuerungsmodus und Pacejka-Regler ausgeblendet - der Modus haengt am
+           Fahrgefuehl (Arcade/Sim+/Pro = Physik, Pacejka, RC). Die Elemente bleiben fuer die
+           Presets und die Sicherung im Dokument. -->
+      <div class="opt-row" hidden><div class="opt-label">Steuerungsmodus
+          <small>Physik: Drehmoment, G&auml;nge, Reibkreis &ndash; die Vorgabe. RC: die
+          Stickstellung direkt wie bei einem Fernsteuerungsauto, ohne G&auml;nge. Gas wegnehmen
+          l&auml;uft in zwei Sekunden aus, die Bremse greift sofort, und ein zweiter Druck auf
+          die Bremse, wenn das Auto steht, f&auml;hrt r&uuml;ckw&auml;rts.</small>
           <small>Pacejka: wie Physik, dazu Reifen mit Haftgrenze nach der Magic Formula. Das
           Einspurmodell beschreibt, wie sich das Auto dreht; Pacejka beschreibt, wie viel
           Seitenkraft ein Reifen h&auml;lt, bevor er rutscht. Unterhalb der Grenze f&auml;hrt es
@@ -8993,19 +9350,18 @@
         <select id="phys-mode">
           <option value="physik" selected>Physik</option>
           <option value="pacejka">Pacejka (experimentell)</option>
-          <option value="aus">Aus, rohe Stickstellung</option>
-          <option value="drift">Drift (experimentell)</option>
+          <option value="aus">RC (experimentell)</option>
         </select></div>
       <!-- BESTELLT: "Eventuell sage ich spaeter, dass das Uebersteuern abgeschaltet werden
            soll" - deshalb von Anfang an ein eigener Schalter. -->
-      <div class="opt-row"><div class="opt-label">&Uuml;bersteuern (Pacejka)
+      <div class="opt-row" hidden><div class="opt-label">&Uuml;bersteuern (Pacejka)
           <span class="wip-tag">experimentell</span>
           <small>Nur im Modus Pacejka. An: unter Vollgas in der Kurve und beim Anbremsen
           kommt das Heck, das Auto lenkt von selbst weiter ein und verliert Vortrieb, bis du
           gegenlenkst oder vom Pedal gehst (h&ouml;chstens 2 s). Aus: das Heck bricht nie aus,
           nur das Schieben &uuml;ber die Vorderr&auml;der bleibt.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-pac-ueber" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Haftgrenze (Pacejka)
+      <div class="opt-row" hidden><div class="opt-label">Haftgrenze (Pacejka)
           <span class="wip-tag">experimentell</span>
           <small>Nur im Modus Pacejka. Wo der Scheitel der Reifenkurve liegt, gemessen an der
           Querausnutzung des Reibkreises. Kleiner hei&szlig;t fr&uuml;her am Limit. Bei 70 %
@@ -9017,7 +9373,7 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-pac-grenze-val">70%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Gegensteuern im Drift
+      <div class="opt-row" hidden><div class="opt-label">Gegensteuern im Drift
           <span class="wip-tag">experimentell</span>
           <small>Wie stark gegen das Ausbrechen gelenkt wird, gemessen am Drehsignal aus
           Byte 3 der Meldungen. 50 Prozent entspricht der Vorgabe, nach der gefragt wurde.
@@ -9269,7 +9625,7 @@
           <small>Aus (Vorgabe): du steuerst ganz normal, dein Lenk-Input ist der
           Lenkwinkel &ndash; wie ohne diese App.
           <br>Querlage: das Auto h&auml;lt sich selbst auf der Bahn, so wie ein autonomer
-          Ghost. Dein Lenk-Input bestimmt dabei nur noch, wo auf der Bahn &ndash; nach
+          NPC. Dein Lenk-Input bestimmt dabei nur noch, wo auf der Bahn &ndash; nach
           rechts hei&szlig;t weiter rechts, nicht &bdquo;mehr einschlagen&ldquo;.
           <br>Voll: wie Querlage, aber das Auto bestimmt auch die Querlage selbst. Lenken
           tut dann nichts mehr, Gas und Bremse bleiben bei dir.
@@ -9513,7 +9869,7 @@
       <div class="opt-row"><div class="opt-label">Lenkansprechen<small>Auch auf dem Steuerkreuz hoch/runter &ndash; links/rechts bl&auml;ttert seit v0.5.18 die Cockpit-Schirme. Der volle Lenkeinschlag ist mechanisch 45&nbsp;Grad; bei 100&nbsp;% fordert voller Stick genau ihn an.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="phys-steerresp" min="0.5" max="3" step="0.05" value="3">
+          <input type="range" id="phys-steerresp" min="0.5" max="4" step="0.05" value="3">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="phys-steerresp-val">150%</span>
         </div></div>
@@ -9715,10 +10071,21 @@
       <h2>Ton</h2>
 <div class="opt-head">Ton</div>
       <div class="opt-row"><div class="opt-label">Motorsound</div><label class="tgl"><input type="checkbox" id="sound-enable" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">NPC-Motorsound
+          <small>Jeder NPC bekommt eine eigene Motorstimme: 40&nbsp;% leiser als dein Auto und
+          je Garagenplatz auf die Stereob&uuml;hne verteilt, damit ein Feld aus mehreren Motoren
+          nicht wie ein verstimmter Motor klingt. Standardm&auml;&szlig;ig aus.</small></div>
+        <label class="tgl"><input type="checkbox" id="ghost-sound"><span></span></label></div>
+      <!-- v1.0.22 BESTELLT: "Lass mich den Motorensound von Ghosts einstellen". Die Liste fuellt
+           80-sound.js aus #sound-profile (nur Motoren mit Aufnahmen/Schleifen). -->
+      <div class="opt-row"><div class="opt-label">NPC-Motor
+          <small>Welcher Motor bei den NPCs klingt, wenn in der Garage f&uuml;r das Auto nichts anderes
+          eingestellt ist. &bdquo;Wie Spieler 1&ldquo; nimmt deinen Motor.</small></div>
+        <select id="ghost-motor"><option value="">Wie Spieler 1</option></select></div>
       <div class="opt-row"><div class="opt-label">Motorton-Zus&auml;tze
           <small>Sieben mechanische Ger&auml;usche &uuml;ber dem Motorton, alle an diesem
-          einen Schalter &ndash; zum Vergleichen einfach ausschalten. Nichts davon ist eine
-          Aufnahme, alle sieben sind gerechnet und h&auml;ngen an Werten, die die Simulation
+          einen Schalter &ndash; zum Vergleichen einfach ausschalten. Bis auf den Auspuffknall
+          (seit 1.0.21 eine Aufnahme aus Speed Dreams, WIP) sind alle sieben gerechnet und h&auml;ngen an Werten, die die Simulation
           ohnehin f&uuml;hrt: die H&ouml;hen laufen mit der Last (ein Motor im Schub ist
           dunkler und nicht nur leiser), am Begrenzer stottert die Z&uuml;ndung mit 28 Hz,
           beim Gaswegnehmen knallt es im Auspuff, beim Hochschalten unter Last einmal
@@ -9752,6 +10119,8 @@
         <label class="tgl"><input type="checkbox" id="setting-announce-rain" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Boxenstopp ansagen<small>Wenn der Stopp &uuml;ber den doppelten Start-Ausdruck ausgel&ouml;st wird: &bdquo;Boxenstopp eingeleitet&ldquo;. Nicht beim Knopf.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce-pit" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Akku ansagen<small>Einmal, wenn der Akku unter 25&nbsp;% f&auml;llt. Erst nach dem Laden wieder scharf.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-battery"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Regen<small>Select oder W. Reifen kommen beim Boxenstopp passend.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-rain"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Strecken-Ambience<small>Vorbeifahrten, Regen, Donner.</small></div>
@@ -9782,9 +10151,9 @@
           getrennt leiser zu bekommen.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="brake-volume" min="0" max="1" step="0.05" value="0.3">
+          <input type="range" id="brake-volume" min="0" max="1" step="0.05" value="0.2">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="brake-volume-val">30%</span>
+          <span class="opt-val" id="brake-volume-val">20%</span>
         </div></div>
       <div class="opt-row" id="sound-profile-zeile" hidden style="display:none" data-motor-garage="1"><div class="opt-label">Motorsound-Profil<small>Alle sind aus
           Zylinderzahl, Kurbelwelle, Bankaufteilung und Z&uuml;ndfolge gerechnet &ndash; keine
@@ -9856,6 +10225,17 @@
           <optgroup label="Alltagsklassiker vor 1970 (WIP)">
           <option value="fordtudor37">Ford Tudor Slantback 1937: Flathead-V8, 3,6 l</option>
           <option value="kaefer1300">VW K&auml;fer 1300: Boxer-4, luftgek&uuml;hlt</option>
+          </optgroup>
+          <!-- v1.0.13 BESTELLT: Klaenge aus Speed Dreams. Echte Aufnahmen (CC0), anders als alle
+               Gruppen darueber - deshalb eine eigene Gruppe. tools/sd_engines.py, audio/CREDITS.md. -->
+          <optgroup label="Speed Dreams, Aufnahmen (WIP)">
+          <option value="sd_v8gt">Nissan GT-R GT500 2013: 3,4 l V8 (Vorbeifahrt)</option>
+          <option value="sd_v10">Audi R8 LMS: 5,2 l V10</option>
+          <option value="sd_v8muscle">Holden Commodore VF V8 Supercar: 5,0 l V8</option>
+          <option value="sd_v8alt">Shelby GT350 1965: 289 Hi-Po, 4,7 l V8</option>
+          <option value="sd_v12">Ferrari 575 GTC: 6,0 l V12</option>
+          <option value="sd_v12weich">Ferrari 599 GTB Fiorano: 6,0 l V12</option>
+          <option value="sd_toro">Lamborghini Murci&eacute;lago R-GT (Toro R-GT): 6,0 l V12</option>
           </optgroup>
         </select></div>
       <!-- BESTELLT: "Spieler 1 und Spieler 2 sollen verschiedene Motorsounds haben
@@ -10056,7 +10436,7 @@
            Kontrollkaestchen ist raus, ghostCfg.railMode (90-ghosts.js) bleibt fest auf
            true - ein Ghost ohne Leitplanken-Modus lenkt ueberhaupt nicht (nur Gas plus
            Anti-Rammen-Versatz), und dafuer gab es keinen einzigen Grund, ihn zu waehlen. -->
-      <div class="opt-row"><div class="opt-label">Ghost-Tempo<small>Rundentempo der autonomen Autos. Gefahren brauchbar zwischen 40 und 60 Prozent. Der Regler beginnt bei 35 und nicht tiefer: darunter f&auml;hrt das Auto so langsam, dass es die gedruckte Strecke nicht mehr zuverl&auml;ssig &bdquo;liest&ldquo; &ndash; und dann fallen Vorausblick, Ideallinie und Kurvendrosselung alle drei aus.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC-Tempo<small>Rundentempo der autonomen Autos. Gefahren brauchbar zwischen 40 und 60 Prozent. Der Regler beginnt bei 35 und nicht tiefer: darunter f&auml;hrt das Auto so langsam, dass es die gedruckte Strecke nicht mehr zuverl&auml;ssig &bdquo;liest&ldquo; &ndash; und dann fallen Vorausblick, Ideallinie und Kurvendrosselung alle drei aus.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-speed" min="0.35" max="1" step="0.05" value="0.55">
@@ -10068,7 +10448,7 @@
            hintereinander sind." EIN Regler fuer fuenf schon bestehende, einzeln gemessene
            Werte (siehe ghostRennhaerteAnwenden() in 90-ghosts.js) - bei 50% (Vorgabe)
            unveraendert gegenueber vorher. -->
-      <div class="opt-row"><div class="opt-label">Ghost: Rennhärte<small>Wie oft und wie schnell Ghosts einen Überholversuch starten. Weich: seltener, geduldiger, mehr Abstand - ein Feld, das sauber und leicht versetzt hintereinanderfährt. Hart: häufiger, schneller, eine kleinere Lücke reicht schon. 50% ist die bisherige, gemessene Abstimmung.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: Rennhärte<small>Wie oft und wie schnell NPCs einen Überholversuch starten. Weich: seltener, geduldiger, mehr Abstand - ein Feld, das sauber und leicht versetzt hintereinanderfährt. Hart: häufiger, schneller, eine kleinere Lücke reicht schon. 50% ist die bisherige, gemessene Abstimmung.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-hardness" min="0" max="100" step="5" value="50">
@@ -10078,24 +10458,24 @@
       <!-- BESTELLT: "das Feld noch etwas auffächern, indem die Abstände zwischen allen Autos
            vergrößert werden (dazu slider)" und "Pro 4 Autos ... wie viele Überholmanöver pro
            Runde ... auf 0m5 setzen ... in 0.1er schritten". Beide experimentell. -->
-      <div class="opt-row"><div class="opt-label">Ghost: Feld auffächern<span class="wip-tag">experimentell</span><small>Vergrößert die Abstände zwischen den Autos. 0% = wie bisher.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: Feld auffächern<span class="wip-tag">experimentell</span><small>Vergrößert die Abstände zwischen den Autos. 0% = wie bisher.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-feld" min="0" max="100" step="5" value="0">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-feld-val">0%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Überholmanöver je Runde<span class="wip-tag">experimentell</span><small>Pro 4 Autos, wie viele Überholmanöver pro Runde. 0.5 = eines alle 2 Runden.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: Überholmanöver je Runde<span class="wip-tag">experimentell</span><small>Pro 4 Autos, wie viele Überholmanöver pro Runde. 0.1 = eines alle 10 Runden; bei 6 Autos und 10 Runden also etwa 1 bis 2.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="ghost-ueber" min="0" max="2" step="0.1" value="0.5">
+          <input type="range" id="ghost-ueber" min="0" max="1" step="0.05" value="0.1">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="ghost-ueber-val">0.5</span>
+          <span class="opt-val" id="ghost-ueber-val">0.1</span>
         </div></div>
       <!-- v0.9.5. BESTELLT: "gibt es fuer ghosts schon einen slider, der die heterogenitaet der
            geschwindigkeiten angibt, also dass manche autos im schnitt minimal schneller sind auf
            der geraden? Ansonsten einbauen, als experimentell, erstmal bei 0 varianz lassen" -->
-      <div class="opt-row"><div class="opt-label">Ghost: Tempo-Streuung<span class="wip-tag">experimentell</span><small>Jedes Auto bekommt je Rennen ein eigenes Grundtempo auf der Geraden, bis zu so viel Prozent schneller oder langsamer. 0&nbsp;% = alle gleich.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: Tempo-Streuung<span class="wip-tag">experimentell</span><small>Jedes Auto bekommt je Rennen ein eigenes Grundtempo auf der Geraden, bis zu so viel Prozent schneller oder langsamer. 0&nbsp;% = alle gleich.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-streuung" min="0" max="10" step="1" value="0">
@@ -10107,18 +10487,18 @@
            fahren, mach es so, dass in den kurven eins innen und eins in der mitte faehrt (nicht
            aussen, dann riskiert es einen abflug). Diese einstellungen als toggles die
            standardmaessig an sind einbauen" -->
-      <div class="opt-row"><div class="opt-label">Ghost: Start je Startreihe versetzt<span class="wip-tag">experimentell</span><small>Startplatz 1 und 2 fahren sofort los, 3 und 4 etwas später, 5 und 6 noch etwas später – so kommt Luft in die erste Kurve.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: Start je Startreihe versetzt<span class="wip-tag">experimentell</span><small>Startplatz 1 und 2 fahren sofort los, 3 und 4 etwas später, 5 und 6 noch etwas später – so kommt Luft in die erste Kurve.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-staffel" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Versatz je Startreihe<span class="wip-tag">experimentell</span><small>Wie viel später jede weitere Zweierreihe losfährt.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: Versatz je Startreihe<span class="wip-tag">experimentell</span><small>Wie viel später jede weitere Zweierreihe losfährt.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="ghost-staffel-ms" min="50" max="600" step="50" value="200">
+          <input type="range" id="ghost-staffel-ms" min="50" max="600" step="50" value="250">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="ghost-staffel-ms-val">200 ms</span>
+          <span class="opt-val" id="ghost-staffel-ms-val">250 ms</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Zu zweit in Kurven innen/Mitte<span class="wip-tag">experimentell</span><small>Fahren zwei Autos nebeneinander in eine Kurve, nimmt das vordere die Innenseite und das hintere die Mitte, statt außen zu fahren und abzufliegen.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: Zu zweit in Kurven innen/Mitte<span class="wip-tag">experimentell</span><small>Fahren zwei Autos nebeneinander in eine Kurve, nimmt das vordere die Innenseite und das hintere die Mitte, statt außen zu fahren und abzufliegen.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-paar-kurve" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Kurvendrosselung<small>Wie viel Tempo in Kurven abgegeben wird. <b>Braucht ein Streckenlayout</b>: ohne gelesene oder gebaute Kacheln wei&szlig; der Ghost nicht, wo eine Kurve ist, und der Regler multipliziert eine Null.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: Kurvendrosselung<small>Wie viel Tempo in Kurven abgegeben wird. <b>Braucht ein Streckenlayout</b>: ohne gelesene oder gebaute Kacheln wei&szlig; der NPC nicht, wo eine Kurve ist, und der Regler multipliziert eine Null.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-curve" min="0" max="0.6" step="0.05" value="0.2">
@@ -10158,7 +10538,7 @@
           &ndash; das ist derselbe Platz.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-w-pass" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Abstand halten
-          <small>Ein Ghost lupft das Gas, wenn er zu schnell auflaufen w&uuml;rde. Gerechnet
+          <small>Ein NPC lupft das Gas, wenn er zu schnell auflaufen w&uuml;rde. Gerechnet
           als Zeitl&uuml;cke und nicht als fester Abstand: eine Kachel bei gleichem Tempo ist
           unbegrenzt viel Zeit, eine Kachel bei schneller Ann&auml;herung ist eine Sekunde bis
           zur Ber&uuml;hrung. Ohne das fahren sie Sto&szlig;stange an Sto&szlig;stange.
@@ -10172,7 +10552,7 @@
           von selbst um.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-w-form"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Fahrfehler
-          <small>Beim Anbremsen einer Kurve verbremst sich ein Ghost gelegentlich: 5,5&nbsp;%
+          <small>Beim Anbremsen einer Kurve verbremst sich ein NPC gelegentlich: 5,5&nbsp;%
           Wahrscheinlichkeit je angebremster Kurve, dann 0,4 bis 0,9&nbsp;s mit 45&nbsp;%
           weniger Tempo. Gew&uuml;rfelt wird einmal je Kurve und nicht je Takt &ndash; sonst
           h&auml;ngt die Fehlerrate an der Rechenfrequenz statt am Rennen.</small></div>
@@ -10181,7 +10561,7 @@
           <small>Wer auf einer Geraden dicht hinter einem anderen h&auml;ngt, f&auml;hrt bis
           zu 11&nbsp;% schneller, linear abnehmend bis 1,3 Kacheln Abstand. Nur auf der
           Geraden: in der Kurve w&auml;re es Abtriebsverlust, also das Gegenteil, und das
-          bildet die Physik der Ghosts nicht ab.</small></div>
+          bildet die Physik der NPCs nicht ab.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-w-slip"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Verteidigen
           <small>Bisher gibt der Vorausfahrende immer nach. Mit dieser Einstellung deckt er
@@ -10200,7 +10580,7 @@
           bekommt die Ideallinie, kein Vier-Phasen-Man&ouml;ver n&ouml;tig.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-w-blau"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Fahrercharakter
-          <small>Bisher sind alle Ghosts derselbe Fahrer: ein globaler Satz Regler f&uuml;r
+          <small>Bisher sind alle NPCs derselbe Fahrer: ein globaler Satz Regler f&uuml;r
           jeden. Mit dieser Einstellung w&uuml;rfelt jedes Auto zu Rennbeginn vier Faktoren
           in einer Spanne von &plusmn;25&nbsp;% &ndash; Angriffslust, Verteidigung,
           Fehlerneigung und Kurvenabzug &ndash; und ein eigenes Boxenfenster von bis zu zwei
@@ -10221,20 +10601,20 @@
         <label class="tgl"><input type="checkbox" id="ghost-w-start"><span></span></label></div>
       <!-- BESTELLT (Phase 12, Punkt 8): "mach einen Schalter in die Ghost Optionen, wo ich
            es abschalten kann." Standard AUS - ungeprueft an einem echten Auto. -->
-      <div class="opt-row"><div class="opt-label">Ghost: Rückweg nach einem Abgang<small>Statt sofort zu parken, versucht das Auto bis zu 3 Sekunden, selbst auf die Strecke zurückzufahren - anhand der zuletzt bekannten Stelle und der Ideallinie dort. Kommt es dabei nicht voran (vermutlich ein Hindernis), oder gelingt es in 3 Sekunden nicht, parkt es wie bisher. Es muss nicht an derselben Stelle wieder auffahren.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: Rückweg nach einem Abgang<small>Statt sofort zu parken, versucht das Auto bis zu 3 Sekunden, selbst auf die Strecke zurückzufahren - anhand der zuletzt bekannten Stelle und der Ideallinie dort. Kommt es dabei nicht voran (vermutlich ein Hindernis), oder gelingt es in 3 Sekunden nicht, parkt es wie bisher. Es muss nicht an derselben Stelle wieder auffahren.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-w-recovery"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Ideallinie
+      <div class="opt-row"><div class="opt-label">NPC: Ideallinie
           <!-- Seit v0.5.9 wirkt dieser Regler deutlich staerker: der Deckel aus
                learnSteerCap() ging von 0,55 auf 1,0, gemessen an dem, was die Original-App
                ihren eigenen Ghosts schickt. Am Auto ist das nicht geprueft. -->
-          <small>Au&szlig;en anstellen, innen scheiteln, au&szlig;en heraus. Gemessen am mittleren Lenkbyte &uuml;ber 600 Takte: die Vorgabe ergibt 36 von 127, 100 Prozent ergeben 50, 200 Prozent ergeben 81 mit Spitzen am vollen Anschlag. Zum Vergleich schickt die Original-App ihren eigenen Ghosts im Mittel 32 und 47. &Uuml;ber 100 Prozent wirkt die Linie zus&auml;tzlich auch auf der Geraden voll statt nur zu einem Drittel &ndash; das Anbremsen von au&szlig;en ist die H&auml;lfte einer Ideallinie, und genau dort sieht man sie. Ohne gebaute oder gelernte Strecke f&auml;llt sie auf eine gr&ouml;bere Regel je Kachel zur&uuml;ck. Ganz ohne gelesene Streckencodes wirkt sie nicht, weil niemand wei&szlig;, wo das Auto ist. Ob es hilft, sagen Rundenzeit und Abg&auml;nge.</small></div>
+          <small>Au&szlig;en anstellen, innen scheiteln, au&szlig;en heraus. Gemessen am mittleren Lenkbyte &uuml;ber 600 Takte: die Vorgabe ergibt 36 von 127, 100 Prozent ergeben 50, 200 Prozent ergeben 81 mit Spitzen am vollen Anschlag. Zum Vergleich schickt die Original-App ihren eigenen NPCs im Mittel 32 und 47. &Uuml;ber 100 Prozent wirkt die Linie zus&auml;tzlich auch auf der Geraden voll statt nur zu einem Drittel &ndash; das Anbremsen von au&szlig;en ist die H&auml;lfte einer Ideallinie, und genau dort sieht man sie. Ohne gebaute oder gelernte Strecke f&auml;llt sie auf eine gr&ouml;bere Regel je Kachel zur&uuml;ck. Ganz ohne gelesene Streckencodes wirkt sie nicht, weil niemand wei&szlig;, wo das Auto ist. Ob es hilft, sagen Rundenzeit und Abg&auml;nge.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-line" min="0" max="2" step="0.05" value="2">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-line-val">100%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Kurven &ouml;ffnen
+      <div class="opt-row"><div class="opt-label">NPC: Kurven &ouml;ffnen
           <small>Wie weit au&szlig;en eine Kurve angefahren und verlassen wird und wie
           tief der Scheitel innen liegt, als Anteil des Weges zum Rand. Seit v0.5.43 ist das
           eine Schranke f&uuml;r die Optimierung und kein Nachlauf mehr: die Suche darf
@@ -10268,8 +10648,8 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-exit-val">80%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Quertr&auml;gheit
-          <small>Wie schnell ein Ghost seine Querlage &auml;ndern darf, in Bahnbreiten je
+      <div class="opt-row"><div class="opt-label">NPC: Quertr&auml;gheit
+          <small>Wie schnell ein NPC seine Querlage &auml;ndern darf, in Bahnbreiten je
           Sekunde. Die Ideallinie ist eine Funktion des Ortes und nicht der Zeit
           &ndash; beim Wechsel des Kacheltyps &auml;ndert sich der Sollwert in einem Takt um
           bis zu 0,4 der Bahnbreite, und ein Servo, der das in einem Takt nachf&uuml;hrt,
@@ -10290,13 +10670,13 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-quertempo-val">2.0</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Brems- und Gasverhalten
-          <small>Wie entschlossen ein Ghost Gas gibt und bremst. Ghost und Fahrer gehen durch
+      <div class="opt-row"><div class="opt-label">NPC: Brems- und Gasverhalten
+          <small>Wie entschlossen ein NPC Gas gibt und bremst. NPC und Fahrer gehen durch
           dasselbe Fahrzeugmodell, bekommen ihr Gas aber aus verschiedenen Quellen:
-          der Fahrer dr&uuml;ckt einen Trigger und ist sofort am Anschlag, der Ghost hat einen
+          der Fahrer dr&uuml;ckt einen Trigger und ist sofort am Anschlag, der NPC hat einen
           Regler auf ein Zieltempo, dessen Ausgang ratenbegrenzt ist.
           <br>Nachrechenbar: bei 1,0 braucht voller Gasbefehl 0,63&nbsp;s, ein Trigger etwa
-          0,15&nbsp;s &ndash; der Ghost ist also rund viermal langsamer im Aufbau, und genau
+          0,15&nbsp;s &ndash; der NPC ist also rund viermal langsamer im Aufbau, und genau
           das sieht man am Kurvenausgang. Bei 4,0 liegt er bei 0,16&nbsp;s und damit dort, wo
           ein Trigger liegt.
           <br>1,0 ist der gemessene, stabile Zustand: alle Tempopr&uuml;fungen dieser App sind
@@ -10310,9 +10690,9 @@
           <span class="opt-val" id="ghost-gasdyn-val">1.0</span>
         </div></div>
 
-      <div class="opt-row"><div class="opt-label">Ghost: Boxenstopp
+      <div class="opt-row"><div class="opt-label">NPC: Boxenstopp
           <span class="wip-tag">experimentell</span>
-          <small>Ein Ghost f&auml;hrt auf der Start/Ziel-Kachel rechts an den Rand, bleibt
+          <small>Ein NPC f&auml;hrt auf der Start/Ziel-Kachel rechts an den Rand, bleibt
           ein paar Sekunden stehen und f&auml;hrt wieder los. Die Anfahrt beginnt schon auf
           der Kachel davor, im Formationstempo &ndash; ein Auto, das mit Renntempo &uuml;ber
           die Linie kommt, braucht eine Kachel zum Verz&ouml;gern. Standardm&auml;&szlig;ig AUS: ein Auto, das mitten
@@ -10326,7 +10706,7 @@
           eine Kachel dahinter; wer als F&uuml;nfter kommt, wartet, bis eine frei wird.
           Auf dem Weg zur eigenen Box f&auml;hrt er am Gegenrand vorbei &ndash; sonst
           w&uuml;rde er dem Stehenden ins Heck fahren. Gemessen bei einem Wetterwechsel
-          mit sechs Ghosts: vier stehen gleichzeitig, keine Doppelbelegung, und in
+          mit sechs NPCs: vier stehen gleichzeitig, keine Doppelbelegung, und in
           555 Takten Vorbeifahrt kein einziger Takt mit rechter Anforderung. Vier
           Kacheln sind 1,72&nbsp;m &ndash; mehr Boxen w&uuml;rden auf einem kleinen Layout
           einen merklichen Teil der Bahn f&uuml;llen.
@@ -10338,17 +10718,17 @@
           Querlage nicht, voller Ausschlag ist ein Befehl und keine Messung. Die Zusage ist
           nicht die Randlage, sondern dass die anderen auf der anderen Seite
           sind.
-          <br>Regenreifen: setzt Regen ein, kommt jeder Ghost so früh wie möglich herein und rüstet um &ndash; und beim Wechsel zurück auf trocken genauso. Solange die falschen Reifen drauf sind, fährt er langsamer: 0,64 gegen 0,85 mit Regenreifen im Regen, abgeleitet aus derselben Grifftabelle, die dein Auto benutzt. Bei leichtem Regen ist der Slick noch vorn &ndash; der Nachteil kommt mit dem Wasser, nicht mit der Meldung. Ist dieser Schalter aus, können Ghosts keine falschen Reifen haben, sonst kröchen sie nach dem ersten Regen ohne Ausweg.</small></div>
+          <br>Regenreifen: setzt Regen ein, kommt jeder NPC so früh wie möglich herein und rüstet um &ndash; und beim Wechsel zurück auf trocken genauso. Solange die falschen Reifen drauf sind, fährt er langsamer: 0,64 gegen 0,85 mit Regenreifen im Regen, abgeleitet aus derselben Grifftabelle, die dein Auto benutzt. Bei leichtem Regen ist der Slick noch vorn &ndash; der Nachteil kommt mit dem Wasser, nicht mit der Meldung. Ist dieser Schalter aus, können NPCs keine falschen Reifen haben, sonst kröchen sie nach dem ersten Regen ohne Ausweg.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-pit"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Boxenstopp im freien Fahren
+      <div class="opt-row"><div class="opt-label">NPC: Boxenstopp im freien Fahren
           <small>Ob auch au&szlig;erhalb eines Rennens gepittet wird. Beim Losfahren aus der
           Garage stellt man meist Regler ein, und ein Auto, das dabei zehn Sekunden steht,
           sieht nach einem Fehler aus &ndash; deshalb getrennt abschaltbar. Im Rennen und in
           der Rennsimulation gilt der Schalter dar&uuml;ber.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-pit-free" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Boxenstopp-L&auml;nge
+      <div class="opt-row"><div class="opt-label">NPC: Boxenstopp-L&auml;nge
           <span class="wip-tag">experimentell</span>
-          <small>Wie lange ein Ghost steht. 5&nbsp;s ist die Mitte des Bandes und keine
+          <small>Wie lange ein NPC steht. 5&nbsp;s ist die Mitte des Bandes und keine
           Messung &ndash; wie lang ein Boxenstopp aussehen soll, ist Geschmack. Der eigene
           Boxenstopp braucht zum Vergleich 4&nbsp;s f&uuml;r die Reifen und mindestens
           3&nbsp;s Standzeit, wenn er vorgeschrieben ist.</small></div>
@@ -10358,9 +10738,9 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-pit-sec-val">5.0 s</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Boxenstopp fr&uuml;hestens nach
+      <div class="opt-row"><div class="opt-label">NPC: Boxenstopp fr&uuml;hestens nach
           <span class="wip-tag">experimentell</span>
-          <small>Die untere Grenze des Bandes, aus dem jeder Ghost seine n&auml;chste
+          <small>Die untere Grenze des Bandes, aus dem jeder NPC seine n&auml;chste
           F&auml;lligkeit zieht &ndash; in Runden, nach jedem Stopp neu gezogen. Dieselbe
           Bauform wie der Wetterwechsel, damit nicht alle im Gleichschritt pitten. Schiebt
           man diesen Regler &uuml;ber den n&auml;chsten, geht der mit.</small></div>
@@ -10370,12 +10750,12 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-pit-min-val">5</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Boxenstopp sp&auml;testens nach
+      <div class="opt-row"><div class="opt-label">NPC: Boxenstopp sp&auml;testens nach
           <span class="wip-tag">experimentell</span>
           <small>Die obere Grenze desselben Bandes, in Runden. Bei gleichen Werten pittet
-          jeder Ghost genau nach dieser Rundenzahl &ndash; dann ist nichts mehr zuf&auml;llig,
+          jeder NPC genau nach dieser Rundenzahl &ndash; dann ist nichts mehr zuf&auml;llig,
           und das ist eine g&uuml;ltige Einstellung. Nicht an den Reifenverschlei&szlig;
-          gebunden: Ghosts haben keinen, ihre Motoren werden ohne Reifen- und Tankmodell
+          gebunden: NPCs haben keinen, ihre Motoren werden ohne Reifen- und Tankmodell
           gebaut.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
@@ -10383,7 +10763,7 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-pit-max-val">9</span>
         </div></div>
-      <div class="opt-row opt-breit"><div class="opt-label">Ghost: Linienmodell
+      <div class="opt-row opt-breit"><div class="opt-label">NPC: Linienmodell
           <small>Alle drei benutzen seit v0.5.43 dieselbe Form &ndash; vier Zahlen
           je Kurve: Eingang, Scheitel, Ausgang und Scheitellage, dazwischen eine Kubik in der
           Wegl&auml;nge, auf Geraden eine Gerade. Die Wahl ist damit eine Wahl der
@@ -10401,7 +10781,11 @@
           <br>Die Zeiten kommen aus den eingestellten Fahrwerten &ndash; Spitze, Zug und
           Bremse aus der aktiven Simulationsklasse; nur die Querbeschleunigung bleibt eine
           Annahme, weil kein Byte sie meldet. Ob es auf dem Teppich stimmt, sagen Rundenzeit
-          und Abg&auml;nge.</small></div>
+          und Abg&auml;nge.
+          <br>SIMULATOR (WIP) f&auml;hrt bis zu 200&nbsp;Linien je drei Runden mit derselben Fahrphysik
+          wie dein Auto und beh&auml;lt die schnellste &ndash; ein getestetes Beispiel, keine bewiesene
+          Bestlinie. Die Suche l&auml;uft im Hintergrund (pausiert im Rennen); bis sie fertig ist, gilt
+          die Luuke-Linie.</small></div>
         <div class="row" style="gap:6px; flex-wrap:wrap">
           <button type="button" class="mw-preset" data-linemodel="curvature">Kr&uuml;mmung</button>
           <button type="button" class="mw-preset" data-linemodel="laptime">Rundenzeit</button>
@@ -10410,43 +10794,44 @@
           <button type="button" class="mw-preset" data-linemodel="mitte">Fahrbahnmitte</button>
           <button type="button" class="mw-preset" data-linemodel="innen3">Innen (gemittelt)</button>
           <button type="button" class="mw-preset" data-linemodel="aussenin">Außen-Innen</button>
-          <button type="button" class="mw-preset sel" data-linemodel="luuke">Luuke-Linie</button>
+          <button type="button" class="mw-preset" data-linemodel="luuke">Luuke-Linie</button>
+          <button type="button" class="mw-preset sel" data-linemodel="simulator">SIMULATOR<span class="wip-tag">WIP</span></button>
         </div></div>
       <!-- DIE LINIE DIREKT NEBEN DER WAHL. Gemeldet: "ich habe 2 Ideallinie Modi, aber wenn
            ich dazwischen waehle, aendert sich die eingezeichnete Linie nicht." Sie aendert
            sich - gemessen wandert der Start/Ziel-Punkt der Linie von x=45,9 auf x=50,5 -,
            nur war sie nirgends zu sehen: die Knoepfe stehen in #tab-options, die einzige
            gezeichnete Linie in #tab-track, also einen Tab weiter. -->
-      <div class="opt-row opt-breit"><div class="opt-label">Ghost: so f&auml;hrt das gew&auml;hlte Modell
+      <div class="opt-row opt-breit"><div class="opt-label">NPC: so f&auml;hrt das gew&auml;hlte Modell
           <small>Die Linie, die aus der Wahl dar&uuml;ber folgt, mit der Bremsampel: gr&uuml;n
           freie Fahrt, rot voll anbremsen. Es ist dieselbe Linie, die der Streckeneditor
-          zeichnet und die die Ghosts fahren &ndash; alle drei gehen durch denselben
+          zeichnet und die die NPCs fahren &ndash; alle drei gehen durch denselben
           Aufruf.</small></div>
         <div class="lm-vorschau">
           <div id="linemodel-karte" class="tp-karte-halter"></div>
           <span class="muted" id="linemodel-info" data-i18n-skip></span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: lernt von Runde zu Runde
+      <div class="opt-row"><div class="opt-label">NPC: lernt von Runde zu Runde
           <small>Probiert jede Runde eine kleine &Auml;nderung an Tempo und Linie und
           beh&auml;lt sie nur, wenn die Runde schneller war <b>und</b> kein Abgang dabei.
           Nach einem Abgang wird zur&uuml;ckgenommen und vorsichtiger weiterprobiert.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-learn-pace"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: seitlicher Versatz<small>Autos nebeneinander gehen auseinander, gleichm&auml;&szlig;ig &uuml;ber die Bahnbreite: bei zwei nach links und rechts, bei drei bleibt das mittlere mittig, bei vier auf Viertel. Vorher gab es nur zwei Seiten, und dann standen sich bei vier Autos zwei Paare weiter im Weg. Beim &Uuml;berholen weicht auch der Vorausfahrende aus, zur anderen Seite. Zwei Autos auf 25&nbsp;cm Bahnbreite brauchen beide H&auml;lften. Dieser Regler bestimmt auch, wie weit der Angreifer zur Seite geht: das ist ein Ausweichen und keine Linienwahl, h&auml;ngt also nicht an der Ideallinie. &Uuml;ber 100 Prozent geht die Anforderung bis an den vollen Anschlag &ndash; die Mitschnitte zeigen, dass das Auto die Schiene auch dort noch liest.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: seitlicher Versatz<small>Autos nebeneinander gehen auseinander, gleichm&auml;&szlig;ig &uuml;ber die Bahnbreite: bei zwei nach links und rechts, bei drei bleibt das mittlere mittig, bei vier auf Viertel. Vorher gab es nur zwei Seiten, und dann standen sich bei vier Autos zwei Paare weiter im Weg. Beim &Uuml;berholen weicht auch der Vorausfahrende aus, zur anderen Seite. Zwei Autos auf 25&nbsp;cm Bahnbreite brauchen beide H&auml;lften. Dieser Regler bestimmt auch, wie weit der Angreifer zur Seite geht: das ist ein Ausweichen und keine Linienwahl, h&auml;ngt also nicht an der Ideallinie. &Uuml;ber 100 Prozent geht die Anforderung bis an den vollen Anschlag &ndash; die Mitschnitte zeigen, dass das Auto die Schiene auch dort noch liest.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-lateral" min="0" max="2" step="0.05" value="2">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-lateral-val">80%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: eigene Spuren<small>Jeder Ghost h&auml;lt eine eigene, feste Linie &uuml;ber die Bahnbreite. Auf der Geraden gilt die Spur, in der Kurve die Ideallinie &ndash; so f&auml;hrt das Feld hintereinander, aber auf verschiedenen Linien, und sucht im Bogen trotzdem den Scheitel. Der &Uuml;bergang l&auml;uft mit 350&nbsp;ms nach, damit an der Kachelgrenze kein Ruck entsteht. Bis 100 Prozent bleibt in der Kurve die halbe Spur stehen: alle auf denselben Scheitel zu schicken w&auml;re realistisch, w&uuml;rde sie aber zusammenf&uuml;hren, und Ber&uuml;hrungen sind ohne R&uuml;ckmeldung zur Querlage nicht zur&uuml;ckzuregeln. &Uuml;ber 100 Prozent gilt die eigene Spur auch in der Kurve ganz &ndash; auf eigene Gefahr, denn dann bleiben sie sich auch im Bogen im Weg.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: eigene Spuren<small>Jeder NPC h&auml;lt eine eigene, feste Linie &uuml;ber die Bahnbreite. Auf der Geraden gilt die Spur, in der Kurve die Ideallinie &ndash; so f&auml;hrt das Feld hintereinander, aber auf verschiedenen Linien, und sucht im Bogen trotzdem den Scheitel. Der &Uuml;bergang l&auml;uft mit 350&nbsp;ms nach, damit an der Kachelgrenze kein Ruck entsteht. Bis 100 Prozent bleibt in der Kurve die halbe Spur stehen: alle auf denselben Scheitel zu schicken w&auml;re realistisch, w&uuml;rde sie aber zusammenf&uuml;hren, und Ber&uuml;hrungen sind ohne R&uuml;ckmeldung zur Querlage nicht zur&uuml;ckzuregeln. &Uuml;ber 100 Prozent gilt die eigene Spur auch in der Kurve ganz &ndash; auf eigene Gefahr, denn dann bleiben sie sich auch im Bogen im Weg.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
           <input type="range" id="ghost-lanes" min="0" max="2" step="0.05" value="1">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-lanes-val">aus</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Querlage festhalten
-          <small>Alle Ghosts halten einen festen Versatz, statt zu fahren, was Ideallinie,
+      <div class="opt-row"><div class="opt-label">NPC: Querlage festhalten
+          <small>Alle NPCs halten einen festen Versatz, statt zu fahren, was Ideallinie,
           Spur und Ausweichen sagen. Links ist links, rechts ist rechts, Mitte ist aus &ndash;
           und in der Mitte l&auml;uft alles wie sonst. Wozu das gut ist: Byte&nbsp;7
           tr&auml;gt einen Lenkwinkel und keine Position. Dass daraus eine gehaltene Lage
@@ -10465,13 +10850,13 @@
           <small>Setzt das Layout aus den gemeldeten Kacheln zusammen und &uuml;bernimmt es
           nach der ersten geschlossenen Runde, nur wenn noch keine Strecke liegt.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-learn"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost braucht Streckencode
+      <div class="opt-row"><div class="opt-label">NPC braucht Streckencode
           <small>Aus: f&auml;hrt auch ohne gedruckte Strecke. An: nur mit gelesenem
           Muster.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-needcode"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: Feld zusammenhalten<small>Gestaffelt &uuml;ber den ganzen Platz: der Erste f&auml;hrt um den Abschlag langsamer, der Letzte um denselben Betrag schneller, die Feldmitte unver&auml;ndert. Damit bleibt das mittlere Tempo gleich &ndash; w&uuml;rde nur gebremst, w&auml;re dies in Wahrheit ein Schalter, der alle langsamer macht. Vorher wirkte es nur auf den Erstplatzierten, und dann waren die ersten beiden beieinander und der Rest blieb, wo er war. Wirkt auch ohne Rennen, aber erst ab zwei Ghosts: mit einem einzigen ist dieser eine gleichzeitig Erster und Letzter.</small></div>
+      <div class="opt-row"><div class="opt-label">NPC: Feld zusammenhalten<small>Gestaffelt &uuml;ber den ganzen Platz: der Erste f&auml;hrt um den Abschlag langsamer, der Letzte um denselben Betrag schneller, die Feldmitte unver&auml;ndert. Damit bleibt das mittlere Tempo gleich &ndash; w&uuml;rde nur gebremst, w&auml;re dies in Wahrheit ein Schalter, der alle langsamer macht. Vorher wirkte es nur auf den Erstplatzierten, und dann waren die ersten beiden beieinander und der Rest blieb, wo er war. Wirkt auch ohne Rennen, aber erst ab zwei NPCs: mit einem einzigen ist dieser eine gleichzeitig Erster und Letzter.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-leader" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Ghost: St&auml;rke der Staffel
+      <div class="opt-row"><div class="opt-label">NPC: St&auml;rke der Staffel
           <small>Um wie viel der Erste langsamer und der Letzte schneller f&auml;hrt.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
@@ -10489,7 +10874,7 @@
            ============================================================================== -->
       <div class="opt-head">Rennen simulieren</div>
       <div class="opt-row"><div class="opt-label">Was hier passiert
-          <small>Die eingestellten Ghosts fahren die eingetragene Strecke &ndash; mit
+          <small>Die eingestellten NPCs fahren die eingetragene Strecke &ndash; mit
           derselben Logik, die sie am echten Auto benutzen: Ideallinie, Kurvendrosselung,
           Querversatz, Staffel und die zugeschalteten Zutaten. Statt Funkbefehle bekommt ein
           Fahrzeugmodell das Gas, und aus seinem Tempo wird die Position auf der Bahn. Man
@@ -10497,7 +10882,7 @@
           <br>Was das nicht ersetzt: Reibung, Staub, ein Auto, das aus der Kurve fliegt. Wer
           hier vorne ist, ist es im Modell &ndash; nicht auf dem Teppich.</small></div>
         <span class="muted" style="font-size:11px">&#9660;</span></div>
-      <div class="opt-row"><div class="opt-label">Anzahl Ghosts</div>
+      <div class="opt-row"><div class="opt-label">Anzahl NPCs</div>
         <select id="sim-ghosts">
           <option value="2">2</option>
           <option value="3">3</option>
@@ -10774,7 +11159,7 @@
       <h2>System</h2>
       <div class="opt-row"><div class="opt-label">Sprache
           <small>Dieselbe Wahl wie auf dem Titelbildschirm.</small></div>
-        <select id="setting-sprache" data-preset-skip><option value="de">Deutsch</option><option value="en">English</option></select></div>
+        <select id="setting-sprache" data-preset-skip><option value="de">Deutsch</option><option value="en">English</option><option value="es">Español</option></select></div>
       <div class="opt-row"><div class="opt-label">Entwicklertools zeigen
           <small>Blendet im Hauptmen&uuml; die Kachel Entwickler ein: Doku, Programmierschule, BLE-Werkbank, Selbsttest, Code-Sonde, Zahlensysteme, Aufnahme-Modus. Auch mit ?dev in der Adresse.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-dev" data-preset-skip><span></span></label></div>
@@ -10843,10 +11228,23 @@
     </div>
 
     </div>
+    <!-- TELEMETRIE (98g-telemetrie-seite.js): Inhalt entsteht im Code, mit t() uebersetzt. -->
+    <div class="card subpage" id="sub-opt-telemetrie">
+      <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
+      <h2>Telemetrie <span class="wip-tag">WIP</span></h2>
+      <div id="tele-inhalt" data-i18n-skip></div>
+    </div>
     <div class="card subpage" id="sub-opt-stats">
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
       <h2>Statistiken</h2>
       <div id="stat-inhalt"></div>
+    </div>
+    <!-- STUDIE (98f-studie.js): Einwilligung, NARQ, Selbsteinschaetzung, Reaktionstest. Der Inhalt
+         entsteht im Code und wird dort mit t() uebersetzt. -->
+    <div class="card subpage" id="sub-opt-studie">
+      <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
+      <h2>Studie <span class="wip-tag">experimentell</span></h2>
+      <div id="studie-inhalt" data-i18n-skip></div>
     </div>
 
     <div class="card subpage" id="sub-opt-zwei">
@@ -10864,7 +11262,8 @@
           getrennte Takte waren die Ursache des Stotterns mit echtem Controller, und dieser
           Modus wiederholt den Fehler nicht.</small></div>
         <label class="tgl"><input type="checkbox" id="opt-zwei-an" data-preset-skip></label></div>
-      <div class="opt-row"><div class="opt-label">Controller tauschen<small>Welcher der
+      <!-- v0.10.5 BESTELLT: "Mehrspieler-Optionen: Controller-tauschen-Funktion entfernen." -->
+      <div class="opt-row" hidden><div class="opt-label">Controller tauschen<small>Welcher der
           beiden erkannten Controller Auto&nbsp;1 f&auml;hrt. Die Reihenfolge kommt vom
           Browser und ist nicht w&auml;hlbar: hier ist der Schalter daf&uuml;r.</small></div>
         <label class="tgl"><input type="checkbox" id="opt-zwei-tausch"></label></div>
@@ -10885,10 +11284,10 @@
       <p class="muted">Ehrlicher als es zu verschweigen &ndash; jeder Punkt h&auml;ngt an
         einem Z&auml;hler oder einer Ortung, die es nur einmal gibt:</p>
       <div class="help-grid">
-        <kbd>Box</kbd><span>Der Boxenstopp von Auto&nbsp;2 ist schmal: er tankt voll und
-          repariert ganz, ohne Vorwahl und ohne Reifenwechsel. Die Reifenwahl ist eine
-          globale Einstellung &ndash; &bdquo;auf weich&ldquo; f&uuml;r ein einzelnes Auto
-          ist eine Aussage, die das Modell nicht trennen kann.</span>
+        <kbd>Box</kbd><span>Der Boxenstopp von Auto&nbsp;2 und 3 tankt auf die gew&auml;hlte
+          Menge, repariert und zieht die gew&auml;hlte Reifenmischung auf (Wahlkacheln auf dem
+          Schirm &bdquo;Beide&ldquo;). Ausgel&ouml;st wird er per Knopf, nicht &uuml;ber die
+          Boxengasse der Strecke.</span>
         <kbd>Ton</kbd><span>Das Motormodell selbst darf Auto&nbsp;2 seit Kurzem frei
           w&auml;hlen (eigener Knopf auf dem Vergleichsschirm &bdquo;Beide&ldquo;). Was
           es weiterhin nicht hat, ist eine eigene Zusatzkette: kein Turbopfeifen, keine
@@ -10955,7 +11354,7 @@
         ausgefallene Lampen &ndash; und die Kontrollleuchten des einen sagen nichts mehr
         &uuml;ber das andere Auto.</p>
       <p class="muted">Dazu eine eigene Ortung auf der Strecke, und daran h&auml;ngt mehr,
-        als es klingt: die Ghosts weichen Auto&nbsp;2 aus und w&auml;hlen ihre
+        als es klingt: die NPCs weichen Auto&nbsp;2 aus und w&auml;hlen ihre
         &Uuml;berholseite nach seiner Querlage, es erscheint auf der Streckenkarte, die
         Fahrhilfe und der Leitplanken-Modus gelten auch f&uuml;r ihn, und neben der Bahn
         wird sein Gas gedrosselt und sein Controller brummt &ndash; sein eigener,
@@ -11062,6 +11461,13 @@
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/>
               <path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>
             <span class="tp-cap">Speichern</span></button>
+          <!-- v1.0.15 BESTELLT: "Editor-Screenshot: huebsches PNG mit Strecke, Code, Link, Massen,
+               Laenge." Ideallinie und Raum folgen den Schaltern daneben (60c-streckenbild.js). -->
+          <button class="tp-btn" id="track-bild" title="Streckenbild speichern (PNG)" aria-label="Streckenbild speichern">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/>
+              <circle cx="12" cy="13" r="3.5"/></svg>
+            <span class="tp-cap">Bild</span></button>
           <!-- BESTELLT: "oben links eine Checkbox (so gross wie die Zurueck- und Entfernen-
                Buttons) fuer Ideallinie und eine fuer Tastenkuerzel anzeigen ... ein
                Idealliniensymbol mit farbigem Rand wenn aktiv und grauem Rand wenn inaktiv und
@@ -11133,6 +11539,9 @@
           <span class="tp-tasten" id="track-fs-tasten"></span>
         </div>
         <div id="track-preview-svg"></div>
+        <!-- v1.0.17 BESTELLT: "sobald die Strecke fertig ist ein Ladesymbol am Rand (die drehende
+             Gerade) mit 'Ideallinie wird berechnet'" - solange die SIMULATOR-Suche laeuft. -->
+        <div class="sim-lade" id="sim-lade" role="status" hidden><span class="sim-lade-dreh" id="sim-lade-dreh"></span><span>Ideallinie wird berechnet &hellip;</span></div>
         <div class="tp-bar" id="track-palette"></div>
         <span class="tp-space" id="track-space"></span>
       </div>
@@ -11251,21 +11660,12 @@
     <div class="card subpage" id="sub-scan">
       <button class="misc-back subpage-back" data-sub="">&larr; Strecke</button>
       <h2>Streckenscan</h2>
-      <!-- Der Live-Scan stand im Editor; er ist ein Scan und gehoert hierher. -->
-      <div class="row" style="margin-top:10px">
-        <button class="primary" id="track-scan-start">Live-Scan starten</button>
-        <button id="track-scan-stop" disabled>Scan stoppen</button>
-        <span class="muted" id="track-scan-status">bereit</span>
-      </div>
-
-
       <p class="muted">Das Auto f&auml;hrt mit mittlerem Tempo &uuml;ber die Bahn und h&auml;lt an, sobald ein geschlossener Rundkurs gemessen ist. Die Strecke steht danach im Editor.</p>
       <div class="row" style="gap:8px; flex-wrap:wrap">
-        <button id="gar-scan-start" title="Faehrt automatisch eine Runde und uebernimmt sie, sobald sie als geschlossener Rundkurs erkannt ist">Streckenscan</button>
+        <button class="primary" id="gar-scan-start" title="Faehrt automatisch eine Runde und uebernimmt sie, sobald sie als geschlossener Rundkurs erkannt ist">Streckenscan</button>
         <button id="gar-scan-stop" hidden>Scan abbrechen</button>
       </div>
       <p class="muted" id="gar-scan-status" style="font-size:11.5px; margin:-6px 0 10px 0" data-i18n-skip></p>
-      <p class="muted" style="font-size:11.5px">Live mitlesen, w&auml;hrend du selbst f&auml;hrst: im Streckeneditor, &bdquo;Live-Scan starten&ldquo;.</p>
     </div>
     <div class="card subpage" id="sub-print">
       <button class="misc-back subpage-back" data-sub="">&larr; Strecke</button>
@@ -11638,11 +12038,22 @@
        ein Rennen "fuer alle" startet, sehen alle Telefone diesen Schirm, egal auf welchem Reiter.
        Vorher lag er im Cockpit, der Knopf aber im Mehrspieler-Reiter - niemand sah ihn. Jeder
        meldet sich bereit; der Initiator startet, sobald alle anderen bereit sind. -->
+  <!-- MEISTERSCHAFT (73-meisterschaft.js): Planer und Zwischenstand, ueber allem ausser den Dialogen.
+       Der Inhalt entsteht im Code und wird dort mit t() uebersetzt. -->
+  <div class="meister-schirm" id="meister-schirm" data-i18n-skip hidden>
+    <!-- v1.0.22 GEMELDET: "Aus dem Meisterschaftsmenue komme ich nicht raus, weil das Kreuz oben rechts
+         hinter dem Tab ist." Das Kreuz steht jetzt links vorn, gross, und die Zurueck-Taste schliesst auch. -->
+    <div class="ms-kopf"><button type="button" class="ms-zu" id="ms-zu" aria-label="Schließen">&#10005;</button>
+      <b id="ms-titel"></b><span class="wip-tag" id="ms-wip"></span><span class="ms-hint" id="ms-hint"></span></div>
+    <div class="ms-grid" id="ms-grid"><div class="ms-liste" id="ms-liste"></div><div class="ms-detail" id="ms-detail"></div></div>
+    <div class="ms-toast" id="ms-toast"></div>
+  </div>
   <div class="k-pause" id="mp-ready-screen" hidden>
     <div class="k-pause-dialog">
       <h2>Rennen für alle: bereit? <span class="wip-tag">experimentell</span></h2>
       <p class="muted" id="mp-ready-info" data-i18n-skip></p>
       <div class="mp-ready-lade" id="mp-ready-lade" hidden></div>
+      <div class="ms-mp" id="mp-ready-meister" data-i18n-skip hidden></div>
       <div class="grid-liste" id="mp-ready-liste"></div>
       <div class="k-frage-knoepfe">
         <button type="button" class="primary" id="mp-ready-bereit" hidden>Bereit</button>

@@ -342,6 +342,43 @@
   // dreiwertiger Zustand, damit die neun bestehenden Verzweigungen auf physicsEnabled
   // unveraendert bleiben.
   let driftModus = false;
+  // ---- RC-MODUS (v0.10.5) -------------------------------------------------------------
+  // BESTELLT: "Drift-Modus weg, Roh-Input-Modus aendern: wenn ich vom Gas gehe, dann nicht
+  // direkt auf 0, sondern nur sehr schnell (in 2 s), und beim Bremse-Druecken sofort. Wenn
+  // das Auto steht und ich nochmal Bremse druecke, dann Rueckwaertsgang. Nenn den Modus RC."
+  // Das Auto meldet sein Tempo nicht; "steht" heisst deshalb: der Befehl ist seit RC_STEHT_MS
+  // null. Die Bremse ist im Rohmodus der negative Befehl (Motor gegen die Fahrtrichtung) -
+  // beim ersten Druck nur RC_BREMS_MS lang, danach null, damit das Auto nicht von selbst
+  // rueckwaerts losfaehrt.
+  const RC_AUSLAUF_MS = 2000, RC_BREMS_MS = 600, RC_STEHT_MS = 400;
+  const rcLage = { wert: 0, at: 0, bremseVorher: false, bremsBis: 0, rueck: false, nullSeit: 0 };
+  function rcGas(y, jetztTest) {
+    const jetzt = jetztTest === undefined ? performance.now() : jetztTest;
+    const dt = rcLage.at ? Math.min(200, Math.max(0, jetzt - rcLage.at)) : 45;
+    rcLage.at = jetzt;
+    const gas = Math.max(0, y || 0), bremse = Math.max(0, -(y || 0));
+    const gedrueckt = bremse > 0.05;
+    const flanke = gedrueckt && !rcLage.bremseVorher;
+    rcLage.bremseVorher = gedrueckt;
+    if (gas > 0.02) {
+      rcLage.rueck = false; rcLage.bremsBis = 0;
+      rcLage.wert = gas >= rcLage.wert ? gas : Math.max(gas, rcLage.wert - dt / RC_AUSLAUF_MS);
+    } else if (gedrueckt) {
+      if (flanke) {
+        const steht = rcLage.wert === 0 && rcLage.nullSeit && jetzt - rcLage.nullSeit >= RC_STEHT_MS;
+        if (steht) rcLage.rueck = true;
+        else if (!rcLage.rueck) rcLage.bremsBis = jetzt + RC_BREMS_MS;
+      }
+      rcLage.wert = (rcLage.rueck || jetzt < rcLage.bremsBis) ? -bremse : 0;
+    } else {
+      rcLage.rueck = false; rcLage.bremsBis = 0;
+      rcLage.wert = rcLage.wert > 0 ? Math.max(0, rcLage.wert - dt / RC_AUSLAUF_MS) : 0;
+    }
+    if (rcLage.wert !== 0) rcLage.nullSeit = 0;
+    else if (!rcLage.nullSeit) rcLage.nullSeit = jetzt;
+    return rcLage.wert;
+  }
+  function rcZuruecksetzen() { Object.assign(rcLage, { wert: 0, at: 0, bremseVorher: false, bremsBis: 0, rueck: false, nullSeit: 0 }); }
   let gegenlenkStaerke = 0.5;
   // DER QUERLAGE-PRUEFSTAND. Er wird in 90-ghosts.js gelesen und von einem Regler in
   // 80-sound.js geschrieben - und 80 kommt VOR 90. Eine Deklaration bei der Leseseite waere
@@ -394,8 +431,31 @@
     return Math.max(-1, Math.min(1, steer + zu));
   }
 
+  // v0.10.4: TAKTMESSUNG fuer "Funk-Rundlauf". Wie weit liegen zwei Herzschlaege wirklich
+  // auseinander (Soll 45 ms)? Ein ueberlasteter Hauptthread (App: Bluetooth-Meldungen ueber
+  // die Bruecke) zeigt sich hier als Ausreisser - eine Eingabe wartet dann bis zum naechsten.
+  const herzMess = { werte: [], dauer: [] };
+  function herzStatistik() {
+    const w = herzMess.werte.slice().sort((a, b) => a - b);
+    if (!w.length) return null;
+    const d = herzMess.dauer.slice().sort((a, b) => a - b);
+    return { mittel: w.reduce((a, b) => a + b, 0) / w.length, p95: w[Math.floor(w.length * 0.95)] || w[w.length - 1],
+             max: w[w.length - 1], ueber60: w.filter((x) => x > 60).length / w.length,
+             arbeitP95: d.length ? d[Math.floor(d.length * 0.95)] || d[d.length - 1] : 0 };
+  }
   function controlHeartbeat() {
-    herzschlagAt = performance.now();
+    const herzJetzt = performance.now();
+    if (herzschlagAt) {
+      herzMess.werte.push(herzJetzt - herzschlagAt);
+      if (herzMess.werte.length > 400) herzMess.werte.shift();
+    }
+    herzschlagAt = herzJetzt;
+    try { controlHeartbeatInnen(); } finally {
+      herzMess.dauer.push(performance.now() - herzJetzt);
+      if (herzMess.dauer.length > 400) herzMess.dauer.shift();
+    }
+  }
+  function controlHeartbeatInnen() {
     // The calibration runner drives its own carefully-timed sequence; stay out of its way.
     if (typeof calibRunning !== 'undefined' && calibRunning) return;
     // Safety watchdog: gamepad sampling runs on rAF, which the browser suspends while the
@@ -415,13 +475,32 @@
     if (padLoopRunning && typeof kAktiverTab === 'function' && kAktiverTab() === 'race') {
       try { pollGamepad(); } catch (e) { /* der Bildtakt liest weiter */ }
     }
-    physicsStep();
-    pitLaneTick();
-    let steer = physicsEnabled ? physOutSteer : steerX;
-    let throttle = physicsEnabled ? physOutThrottle : throttleY;
-    if (driftModus) steer = driftGegenlenken(steer);
-    sendControlValue(steer, throttle);
-    spielerZweiSenden();
+    // v0.9.57: der Spielerort wird im Herzschlag gesetzt, VOR der Physik - sonst laeuft der
+    // Vorausblick einen Takt hinterher. Vorher sass das in einem eigenen setInterval in
+    // 90-ghosts.js und konnte das Paket dieses Takts verpassen.
+    // v0.9.87: in try/finally. Eine Ausnahme im Spielerteil (Physik, Senden) liess sonst
+    // den ganzen Rest aus - die Ghosts bekamen keinen Takt und fuhren mit ihrem letzten
+    // Befehl weiter, auch neben der Bahn.
+    try {
+      if (typeof spielerOrtTick === 'function') {
+        spielerOrtTick(playerCar);
+        if (typeof zusatzAktiv === 'function') {
+          for (const z of zusatzAktiv()) spielerOrtTick(z.car);
+        }
+      }
+      physicsStep();
+      pitLaneTick();
+      let steer = physicsEnabled ? physOutSteer : steerX;
+      // v0.10.5: der Rohmodus heisst jetzt RC und laeuft durch rcGas() (Auslaufen, Bremse,
+      // Rueckwaerts nach zweitem Druck). Drift gibt es nicht mehr.
+      let throttle = physicsEnabled ? physOutThrottle : rcGas(throttleY);
+      if (driftModus) steer = driftGegenlenken(steer);
+      sendControlValue(steer, throttle);
+      spielerZweiSenden();
+    } finally {
+      // v0.9.57: die Ghost-Takte aus demselben Herzschlag, NACH dem Spielerpaket.
+      if (typeof ghostHerzschlag === 'function') ghostHerzschlag();
+    }
     // ERST SENDEN, DANN MALEN (v0.8.41): das Cockpit wird nach dem Absetzen gezeichnet und
     // gedrosselt - in der App zeichnet die WebView auf dem UI-Thread, und jede Malarbeit vor
     // dem Senden verzoegert dort die Bluetooth-Antworten (50-drive.js, cockpitNachSenden).
@@ -517,7 +596,8 @@
     // es fuer Auto 1 mit headlightsOn tut - defensiv gerufen, weil headlichtZwei() in
     // 70-race.js steht, einer SPAETEREN Datei; zur Laufzeit (dieser Takt laeuft erst nach
     // dem vollstaendigen Aufbau) ist sie da.
-    const kopflicht2 = headlichtVon(z, z.licht);
+    const kopflicht2 = headlichtVon(z, z.licht)
+      && !(typeof akkuBlinkAus === 'function' && akkuBlinkAus(z.car, Date.now()));
     writeToCar(z.car, steer, throttle,
                trackModeBit() | (kopflicht2 ? LIGHT_HEAD : 0)
                  | (z.outBrake ? LIGHT_BRAKE : 0),

@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.bluetooth.BluetoothGatt;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.InputDevice;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -73,11 +75,26 @@ public class MainActivity extends BridgeActivity {
             getWindow().setAttributes(lp);
         }
         zurueckTasteAnbinden();
+        // v0.10.4: Gamepad-Ereignisse NICHT im Bildtakt buendeln (Android 11+). Ohne das
+        // haelt Android Joystick-Bewegungen bis zum naechsten Bild zurueck (bis 16 ms).
+        if (Build.VERSION.SDK_INT >= 30) {
+            try {
+                WebView wv = getBridge() != null ? getBridge().getWebView() : null;
+                if (wv != null) wv.requestUnbufferedDispatch(InputDevice.SOURCE_JOYSTICK | InputDevice.SOURCE_GAMEPAD);
+            } catch (Throwable e) { /* aeltere WebView: dann gebuendelt */ }
+        }
         vollbild();
         View d = getWindow().getDecorView();
         d.postDelayed(this::vollbild, 400);
         d.postDelayed(this::vollbild, 1500);
         d.postDelayed(this::vollbild, 4000);
+    }
+
+    // v0.10.4: jedes Achsereignis zuerst in OmegaPadNativ, dann wie gewohnt an die WebView.
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent ev) {
+        try { OmegaPadNativ.aufnehmen(ev); } catch (Throwable e) { /* nie den Eingabeweg stoeren */ }
+        return super.dispatchGenericMotionEvent(ev);
     }
 
     @Override

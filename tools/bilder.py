@@ -49,7 +49,10 @@ MOTIVE = {
     # BESTELLT (v0.8.35): "FAHREN Hintergrundbild: rangezoomte Version auf das Ruecklicht".
     'fahren': ('fcfd5041-9934-4ffc-ae13-c784316066ed.jpg', 0, (110, 150, 640, 430)),
     'auto': '24276.jpg',                    # M4 GT3 von hinten
-    'garage': ('24273.jpg', 90),            # M4 GT3 von oben, quer gelegt
+    # v0.10.5 BESTELLT: "Garage-Thumbnail durch Bild von leerer Garage ersetzen".
+    'garage': 'garage_leer.jpg',            # leere Boxengarage
+    # v0.10.5: Meisterschaft-Kachel im FAHREN-Menue (Ford und BMW von hinten).
+    'meisterschaft': 'meisterschaft.jpg',
     # BESTELLT (v0.8.53): TRACK-Kachel im Fahren-Menue - "Auf der Bahn" zeigt 24282 (Carrera
     # Hybrid), "Frei" das neu dazugekommene 744468c1. Beide dienen auch als Tab-Hintergrund
     # und in der Startaufstellung.
@@ -75,6 +78,9 @@ MOTIVE = {
     'rennoptionen-endurance': ('eb15c751-2d72-41aa-af6c-8e5bc54bee18.jpg', 0, (330, 170, 860, 470)),
     'rennoptionen-qualifying': '03a18c66-3e7f-4c80-a5f6-94465b9d43c7.jpg',
     'rennoptionen-laps': 'Gemini_Generated_Image_t5r42rt5r42rt5r4.jpg',
+    # v1.0.22 BESTELLT: "Thumbnail fuer Time Attack auch einfuegen wie bei den anderen Renntypen."
+    # Lichtspuren bei Nacht - schnell gegen die Uhr.
+    'rennoptionen-bestzeit': '6200027413_b0d71daac1_b.jpg',
     'asphalt': ('03a18c66-3e7f-4c80-a5f6-94465b9d43c7.jpg', 0, (0, 238, 420, 345)),
 }
 GROESSEN = {'-bg': 1920, '': 720}
@@ -91,6 +97,24 @@ GROESSEN = {'-bg': 1920, '': 720}
 #                           (Median), so bleibt ihr Farbverlauf und die Schrift geht
 #   ('zuschnitt', box)      nur diesen Ausschnitt behalten (als letzter Schritt)
 RETUSCHE = {
+    # v0.10.5 Meisterschaft (1408x768): Banden, Heckfluegel-Schriften, kleine Plaketten
+    'meisterschaft.jpg': [
+        ('weich', (296, 196, 524, 292), 20), ('weich', (0, 256, 96, 338), 16),
+        ('weich', (1146, 214, 1408, 308), 28), ('weich', (1046, 28, 1344, 208), 18),
+        ('flaeche', (104, 292, 598, 316)), ('flaeche', (912, 282, 1258, 304)),
+        ('weich', (1060, 398, 1112, 442), 10), ('weich', (1162, 404, 1254, 430), 8),
+        ('weich', (1046, 508, 1136, 552), 12), ('weich', (940, 398, 984, 436), 8),
+        ('weich', (582, 400, 650, 452), 8), ('weich', (318, 430, 378, 462), 8),
+        ('weich', (786, 522, 838, 564), 8), ('weich', (1326, 522, 1364, 564), 8),
+        ('weich', (592, 532, 648, 572), 8), ('weich', (78, 532, 118, 572), 8),
+        ('weich', (120, 128, 276, 182), 10),
+        ('zuschnitt', (0, 120, 1408, 720)),
+    ],
+    # v0.10.5 leere Garage: Banden hinten links unleserlich
+    'garage_leer.jpg': [
+        ('weich', (58, 344, 334, 374), 5), ('weich', (262, 250, 336, 282), 5),
+        ('weich', (494, 290, 560, 312), 4),
+    ],
     # BMW-Scheinwerfer: "M PERFORMANCE", "BMW LASERLIGHT ...", kleines M-Logo
     '9371f406-4cdb-461a-93c5-497aa62b5b9a.jpg': [
         ('schrift', (350, 417, 498, 441), 15, 28),
@@ -204,11 +228,14 @@ def retusche(bild, schritte):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--ziel', default=os.path.join('mockup', 'img'))
+    ap.add_argument('--nur', nargs='*', help='nur diese Motive erzeugen')
     a = ap.parse_args()
     ziel = os.path.join(REPO, a.ziel)
     os.makedirs(ziel, exist_ok=True)
     summe = 0
     for name, eintrag in MOTIVE.items():
+        if a.nur and name not in a.nur:
+            continue
         if not isinstance(eintrag, tuple):
             eintrag = (eintrag,)
         datei, drehung, zuschnitt = (tuple(eintrag) + (0, None))[:3]

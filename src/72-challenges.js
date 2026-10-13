@@ -369,8 +369,31 @@
       const gold = Math.round(fest * 1000);
       return { silber: Math.round(gold * CH_STERNE_SILBER_FAKTOR), gold };
     }
-    const gold = chGeoGold(def) * chKalibrierFaktor();
+    const gold = chGoldFormel(chGeoGold(def));
     return { silber: Math.round(gold * CH_STERNE_SILBER_FAKTOR), gold: Math.round(gold) };
+  }
+  // ---- GOLD = FESTER ANTEIL + FAKTOR x GEOMETRIE (v0.10.6) ---------------------------
+  // BESTELLT: "Bestzeiten nochmal kalibrieren. Fuer Omega Testing Track 2 ist es schwierig,
+  // unter 7 s zu kommen. Gold sollte 7,2 sein." Mit dem reinen Faktor (Balkonia 16 s) kam
+  // Track 2 auf 6,4 s - eine kurze Strecke hat einen festen Anteil (Anfahren aus der Kurve,
+  // Haarnadel), der nicht mit der Laenge schrumpft. Zwei Bezugspunkte legen eine Gerade fest:
+  // Balkonia 16 s, Track 2 (SGR4LGHG) 7,2 s. Beide werden genau getroffen.
+  const CH_GOLD_PUNKTE = [{ id: 'dauer-balkonia', s: 16 }, { code: 'SGR4LGHG', s: 7.2 }];
+  let chGoldGerade = null;
+  function chGoldFormel(geoMs) {
+    if (chGoldGerade === null) {
+      const p = CH_GOLD_PUNKTE.map((x) => {
+        const def = x.id ? CH_ALLE.find((d) => d.id === x.id) : { code: x.code };
+        return { g: def ? chGeoGold(def) : 0, s: x.s * 1000 };
+      }).filter((x) => x.g > 0);
+      if (p.length >= 2 && p[1].g !== p[0].g) {
+        const f = (p[1].s - p[0].s) / (p[1].g - p[0].g);
+        chGoldGerade = { f, c: p[0].s - f * p[0].g };
+      } else {
+        chGoldGerade = { f: chKalibrierFaktor(), c: 0 };
+      }
+    }
+    return chGoldGerade.c + chGoldGerade.f * geoMs;
   }
   // Die reine Geometrie-Zeit einer Runde (ms): Geraden bei Vollgas, Kurven langsamer.
   function chGeoGold(def) {
@@ -636,7 +659,7 @@
       sicht.tracks.push({ id: tr.id, code: tr.code, name: tr.name, online: true,
                           preset: communityPresetGueltig(tr.preset || (lokalGleich && lokalGleich.preset)) });
       sicht.times[tr.id] = (on.zeiten[tr.id] || []).map((z) => ({ zeit: z.zeit_ms, fahrer: z.fahrer || '', geraet: z.geraet,
-        datum: Date.parse(z.zeitpunkt) || 0 }));
+        datum: Date.parse(z.zeitpunkt) || 0, runden_ms: Array.isArray(z.runden_ms) ? z.runden_ms.map(Number) : undefined }));
     }
     for (const tr of lokal.tracks) {
       const p = codeToTrack(tr.code);
@@ -664,7 +687,8 @@
       communityPost({ art: 'community-strecke', code: tr.code, name: tr.name, preset: communityPresetGueltig(tr.preset) }).then((r) => {
         if (!r || !r.ok || !r.id) return;
         const meine = (lokal.times[tr.id] || []).filter((z) => z.geraet === chGeraet());
-        if (meine.length) setTimeout(() => communityPost({ art: 'community-zeit', id: r.id, zeit_ms: meine[0].zeit, fahrer: meine[0].fahrer }), 11000);
+        if (meine.length) setTimeout(() => communityPost({ art: 'community-zeit', id: r.id, zeit_ms: meine[0].zeit, fahrer: meine[0].fahrer,
+          runden_ms: Array.isArray(meine[0].runden) ? meine[0].runden.map(Math.round) : undefined }), 11000);
         communityHolen(true).then(() => { if ($('community-bereich')) communityZeichnen(); });
       });
     }, i * 11000));
@@ -708,11 +732,14 @@
     communitySchreiben(data);
     return id;
   }
-  // Tragt eine Zeit ein (beste je Geraet bleibt bestehen, die Liste ist sortiert).
-  function communityZeit(data, trackId, zeit, fahrer) {
+  // Tragt eine Zeit ein (beste je Geraet bleibt bestehen, die Liste ist sortiert). Die
+  // Rundenzeiten (runden, ms) kommen mit, damit die 3er-Serie auch fuer Community-Strecken
+  // rechnen kann; aeltere Eintraege ohne sie werden bei der 3er-Serie uebersprungen.
+  function communityZeit(data, trackId, zeit, fahrer, runden) {
     const geraet = chGeraet();
     const liste = data.times[trackId] = data.times[trackId] || [];
-    liste.push({ zeit: Math.round(zeit), fahrer: (fahrer || '').slice(0, 16), geraet, datum: Date.now() });
+    liste.push({ zeit: Math.round(zeit), fahrer: (fahrer || '').slice(0, 16), geraet, datum: Date.now(),
+      runden: Array.isArray(runden) ? runden.map(Math.round) : undefined });
     liste.sort((a, b) => a.zeit - b.zeit);
     if (liste.length > 50) liste.length = 50;
     communitySchreiben(data);
@@ -880,6 +907,9 @@
       zeit_ms: Math.round(erg.zeit), runden_ms: erg.runden.map(Math.round), auto: erg.auto,
       fahrer: o.fahrer || '', geraet: chGeraet(), version: ($('app-version') || {}).textContent || '',
     };
+    // v1.0.21: die Spur der schnellsten Runde geht immer mit (Telemetrie, Challenger).
+    const spur = typeof teleSpurFuerUpload === 'function' ? teleSpurFuerUpload(erg.runden) : null;
+    if (spur) eintrag.spur = spur;
     // text/plain und kein JSON-Kopf: so schickt der Browser keinen CORS-Vorabruf, den ein
     // Apps Script nicht beantworten kann.
     //
@@ -1396,8 +1426,10 @@
       // woechentliche Challenge-Bestenliste. Alles andere (Ampel, Teilepruefung, Zeitmessung)
       // ist dieselbe Challenge-Maschinerie.
       if (lauf.community) {
-        communityZeit(communityLesen(), erg.id, erg.zeit, erg.fahrer);
-        hochgeladen = communityPost({ art: 'community-zeit', id: erg.id, zeit_ms: Math.round(erg.zeit), fahrer: erg.fahrer || '' })
+        communityZeit(communityLesen(), erg.id, erg.zeit, erg.fahrer, erg.runden);
+        hochgeladen = communityPost({ art: 'community-zeit', id: erg.id, zeit_ms: Math.round(erg.zeit), fahrer: erg.fahrer || '',
+          runden_ms: Array.isArray(erg.runden) ? erg.runden.map(Math.round) : undefined,
+          spur: typeof teleSpurFuerUpload === 'function' ? (teleSpurFuerUpload(erg.runden) || undefined) : undefined })
           .then((r) => {
             hochgeladen = !!(r && r.ok);
             communityHolen(true).then(() => { communityZeichnen(); if (chSeiteOffen()) chZeichneListe(); });
@@ -1461,8 +1493,11 @@
     const idC = schl.split('|')[0], defC = chDef(idC);
     if (defC && defC.community && defC.id === idC) {
       const data = communitySicht();
+      // Online-Eintraege tragen runden_ms, lokale runden; beides auf runden_ms vereinheitlichen,
+      // damit die 3er-Serie rechnen kann (chZeichneDreier liest z.runden_ms).
       const eintraege = (data.times[idC] || []).map((z) => ({ zeit_ms: +z.zeit, fahrer: z.fahrer || '',
-        geraet: z.geraet, auto: '' }));
+        geraet: z.geraet, auto: '', runden_ms: Array.isArray(z.runden_ms) ? z.runden_ms
+          : (Array.isArray(z.runden) ? z.runden : undefined) }));
       return { zeiten: eintraege.map((z) => z.zeit_ms), online: !!data.online, eintraege };
     }
     const l = chListen[schl];
@@ -1593,6 +1628,7 @@
     const m = trackLaengeM(tiles);
     $('ch-fakten').textContent = t('Länge') + ' ' + chZahl(m, 2) + ' m · '
       + t('Platzbedarf') + ' ' + chZahl(bw, 2) + ' × ' + chZahl(bh, 2) + ' m · '
+      + def.runden + ' ' + t('Runden') + ' · '
       + (def.community ? t('Abstimmung') + ' ' + communityPresetName(def.preset) : chSetsText(def));
     // Community: kein Rennmodus, der Umschalter faellt weg.
     if ($('ch-modus')) $('ch-modus').hidden = !!def.community;
@@ -1720,8 +1756,15 @@
       st.innerHTML = chSterneText(sterne);
       st.setAttribute('data-i18n-skip', '');
       tr.appendChild(st);
+      // v1.0.21: Platz fuer den Telemetrie-Knopf, gefuellt von spurKnoepfe (72b-spuren.js).
+      const sp = document.createElement('td');
+      sp.className = 'ch-spur';
+      tr.appendChild(sp);
+      tr.dataset.geraet = z.geraet || '';
+      tr.dataset.fahrer = z.fahrer || '';
       tb.appendChild(tr);
     });
+    if (typeof spurKnoepfe === 'function') spurKnoepfe(schl, tb);
     // Histogramm, oben schnell, die eigene Klasse markiert.
     const h = $('ch-histo');
     h.innerHTML = '';
@@ -1770,8 +1813,9 @@
     const modus = schl.split('|')[1];
     // Ueberschrift und Hinweis gehoeren zur 3er-Serie: nur bei Beste-Runde zeigen.
     const def = chDef(schl.split('|')[0]);
-    // Community-Zeiten kommen ohne Rundenzeiten an: keine 3er-Serie.
-    const ohne = modus !== 'hotlap' || !!def.community;
+    // Community-Strecken tragen ihre Rundenzeiten jetzt selbst (runden_ms), also doch eine
+    // 3er-Serie. Nur Rennen (feste Runden) nicht.
+    const ohne = modus !== 'hotlap';
     const h3 = $('ch-zweite-3er'), hinweis = $('ch-hinweis-3er');
     if (h3) h3.hidden = ohne;
     if (hinweis) hinweis.hidden = ohne;

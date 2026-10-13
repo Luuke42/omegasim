@@ -180,7 +180,9 @@ function zeileZuEintrag(sp, z) {
 // bekommt die Kopfzelle beim ersten Eintrag nachgetragen.
 const C_BLATT = 'Community', C_KOPF = ['zeitpunkt', 'id', 'code', 'name', 'geraet', 'preset'];
 const C_PRESETS = ['arcade', 'pro', 'gt3', 'f1', 'realgt3'];
-const CZ_BLATT = 'CommunityZeiten', CZ_KOPF = ['zeitpunkt', 'id', 'zeit_ms', 'fahrer', 'geraet'];
+// v0.9.62: runden_ms (Rundenzeiten je Lauf) mit, damit die 3er-Serie auch fuer Community
+// Strecken rechnen kann. Alte Zeilen haben die Spalte nicht und gelten als leer.
+const CZ_BLATT = 'CommunityZeiten', CZ_KOPF = ['zeitpunkt', 'id', 'zeit_ms', 'fahrer', 'geraet', 'runden_ms'];
 function blattMit(name, kopf) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(name);
@@ -218,8 +220,16 @@ function communityPost(d) {
       if (!communityStrecken().some((t) => t.id === id)) return { ok: false, fehler: 'unbekannte Strecke' };
       const z = Number(d.zeit_ms);
       if (!isFinite(z) || z < 1000 || z > 3600000) return { ok: false, fehler: 'Zeit unplausibel' };
+      const runden = Array.isArray(d.runden_ms) ? d.runden_ms.map(Number).filter((x) => isFinite(x)) : [];
       blattMit(CZ_BLATT, CZ_KOPF).appendRow([new Date(), id, Math.round(z), String(d.fahrer || '').slice(0, 16),
-        String(d.geraet).slice(0, 40)]);
+        String(d.geraet).slice(0, 40), runden.length ? JSON.stringify(runden) : '']);
+      // v1.0.21: Spur der schnellsten Runde (die App schickt nur gewertete Runden).
+      if (d.spur) {
+        try {
+          const r = runden.filter((x) => x >= 1000);
+          spurSpeichern('community|' + id, d, r.length ? Math.min.apply(null, r) : z, 40);
+        } catch (e) { /* die Zeit zaehlt auch ohne Spur */ }
+      }
       return { ok: true };
     }
     return { ok: false, fehler: 'unbekannte Art' };
@@ -229,15 +239,120 @@ function communityGet() {
   const zeiten = {};
   blattMit(CZ_BLATT, CZ_KOPF).getDataRange().getValues().slice(1).forEach((z) => {
     const id = String(z[1]);
-    (zeiten[id] = zeiten[id] || []).push({ zeitpunkt: z[0], zeit_ms: Number(z[2]), fahrer: z[3], geraet: z[4] });
+    let rundenMs = [];
+    try { rundenMs = JSON.parse(z[5] || '[]'); } catch (e) { rundenMs = []; }
+    (zeiten[id] = zeiten[id] || []).push({ zeitpunkt: z[0], zeit_ms: Number(z[2]), fahrer: z[3], geraet: z[4],
+      runden_ms: Array.isArray(rundenMs) ? rundenMs : [] });
   });
   Object.keys(zeiten).forEach((id) => { zeiten[id] = zeiten[id].sort((a, b) => a.zeit_ms - b.zeit_ms).slice(0, 100); });
   return { ok: true, community: true, tracks: communityStrecken(), zeiten: zeiten };
 }
 
+// ---- SPUREN (v1.0.21): Telemetrie einer Runde, je Liste und Geraet die beste ----
+// BESTELLT: "Upload immer, ohne Wahl". Die App haengt an jede gewertete Zeit die Spur ihrer
+// schnellsten Runde (Zwischenzeiten je Streckenteil, ~10 Proben je Sekunde). Gespeichert wird je
+// Liste (challenge|modus|preset oder community|id) und Geraet nur die schnellste. Eine kaputte
+// oder unplausible Spur kostet die Zeit NICHT - sie wird nur weggelassen.
+const SP_BLATT = 'Spuren', SP_KOPF = ['zeitpunkt', 'liste', 'geraet', 'fahrer', 'zeit_ms', 'spur'];
+const SP_MAX_ZEICHEN = 20000;
+function spurPruefen(spur, rundeMs, minTeilMs) {
+  if (!spur || typeof spur !== 'object') return 'keine Spur';
+  const n = Number(spur.n), ms = Number(spur.ms), teile = spur.teile;
+  if (!(n >= 3 && n <= 200) || !Array.isArray(teile) || teile.length !== n) return 'Teilzahl stimmt nicht';
+  if (!/^[A-Z0-9@]{3,200}$/.test(String(spur.code || ''))) return 'Streckencode unplausibel';
+  if (Math.abs(ms - rundeMs) > 50) return 'Spur passt nicht zur Runde';
+  if (Number(teile[0]) !== 0) return 'Spur beginnt nicht bei 0';
+  for (let k = 1; k <= n; k++) {
+    const vor = Number(teile[k - 1]), nach = k < n ? Number(teile[k]) : ms;
+    if (!isFinite(nach) || nach - vor < minTeilMs) return 'Teil zu schnell';
+  }
+  if (spur.proben && !Array.isArray(spur.proben)) return 'Proben unplausibel';
+  return '';
+}
+function spurSpeichern(liste, d, rundeMs, minTeilMs) {
+  const spur = d.spur;
+  if (!spur) return '';
+  const f = spurPruefen(spur, rundeMs, minTeilMs);
+  if (f) return f;
+  const roh = JSON.stringify({ v: 1, code: String(spur.code), n: Number(spur.n), ms: Math.round(Number(spur.ms)),
+    teile: spur.teile.map((x) => Math.round(Number(x))),
+    proben: (spur.proben || []).slice(0, 400).map((p) => (Array.isArray(p) ? p.slice(0, 6).map((x) => Math.round(Number(x) * 10) / 10) : [])) });
+  if (roh.length > SP_MAX_ZEICHEN) return 'Spur zu gross';
+  const sh = blattMit(SP_BLATT, SP_KOPF);
+  const werte = sh.getDataRange().getValues();
+  const geraet = String(d.geraet).slice(0, 40);
+  for (let i = 1; i < werte.length; i++) {
+    if (String(werte[i][1]) === liste && String(werte[i][2]) === geraet) {
+      if (Number(werte[i][4]) <= Math.round(rundeMs)) return '';           // die alte ist schneller
+      sh.getRange(i + 1, 1, 1, SP_KOPF.length).setValues([[new Date(), liste, geraet,
+        String(d.fahrer || '').slice(0, 16), Math.round(rundeMs), roh]]);
+      return '';
+    }
+  }
+  sh.appendRow([new Date(), liste, geraet, String(d.fahrer || '').slice(0, 16), Math.round(rundeMs), roh]);
+  return '';
+}
+// ?spurliste=<liste>: welche Geraete haben eine Spur (schnellste zuerst). ?spur=<liste>&geraet=<g>:
+// die Spur selbst. Ohne Blatt einfach leer.
+function spurGet(p) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss ? ss.getSheetByName(SP_BLATT) : null;
+  const werte = sh ? sh.getDataRange().getValues().slice(1) : [];
+  const liste = String(p.spurliste || p.spur || '');
+  const zeilen = werte.filter((z) => String(z[1]) === liste).sort((a, b) => Number(a[4]) - Number(b[4]));
+  if (p.spurliste) {
+    return { ok: true, spurliste: liste, spuren: zeilen.slice(0, MAX_ZEILEN_ANTWORT)
+      .map((z) => ({ geraet: String(z[2]), fahrer: String(z[3]), zeit_ms: Number(z[4]) })) };
+  }
+  const z = p.geraet ? zeilen.find((x) => String(x[2]) === String(p.geraet)) : zeilen[0];
+  if (!z) return { ok: false, fehler: 'keine Spur' };
+  let spur = null;
+  try { spur = JSON.parse(z[5]); } catch (e) { return { ok: false, fehler: 'Spur kaputt' }; }
+  return { ok: true, liste: liste, geraet: String(z[2]), fahrer: String(z[3]), zeit_ms: Number(z[4]), spur: spur };
+}
+
+// ---- STUDIE (v1.0) ----
+const S_BLATT = 'Studie';
+const S_KOPF = ['zeitpunkt', 'geraet', 'alter', 'geschlecht', 'volljaehrig', 'einwilligung', 'narq', 'bewunderung',
+  'rivalitaet', 'selbst', 'rt_ms', 'rt_median', 'fruehstarts', 'verpasst', 'quelle', 'controller', 'version', 'sprache'];
+function studiePost(d) {
+  if (!d.geraet) return { ok: false, fehler: 'keine Geräte-Kennung' };
+  const alter = Number(d.alter);
+  if (!(alter >= 18 && alter <= 99 && Math.round(alter) === alter)) return { ok: false, fehler: 'Alter unplausibel' };
+  if (['w', 'm', 'd', 'k'].indexOf(d.geschlecht) < 0) return { ok: false, fehler: 'Geschlecht unbekannt' };
+  if (d.volljaehrig !== true || d.einwilligung !== true) return { ok: false, fehler: 'ohne Einwilligung' };
+  const narq = Array.isArray(d.narq) ? d.narq.map(Number) : [];
+  if (narq.length !== 18 || narq.some((x) => !(x >= 1 && x <= 6 && Math.round(x) === x))) return { ok: false, fehler: 'NARQ unvollständig' };
+  const selbst = Number(d.selbst);
+  if (!(selbst >= 1 && selbst <= 7)) return { ok: false, fehler: 'Selbsteinschätzung fehlt' };
+  const rt = Array.isArray(d.rt_ms) ? d.rt_ms.map(Number) : [];
+  if (rt.length !== 10 || rt.some((x) => !(x >= 50 && x <= 3000))) return { ok: false, fehler: 'Reaktionszeiten unplausibel' };
+  const mw = (nr) => nr.reduce((a, i) => a + narq[i - 1], 0) / nr.length;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    // Die Facettenwerte rechnet der Server selbst nach, statt sie dem Telefon zu glauben.
+    blattMit(S_BLATT, S_KOPF).appendRow([new Date(), String(d.geraet).slice(0, 40), alter, d.geschlecht, true, true,
+      JSON.stringify(narq), mw([1, 2, 3, 5, 7, 8, 15, 16, 18]), mw([4, 6, 9, 10, 11, 12, 13, 14, 17]), selbst,
+      JSON.stringify(rt), Number(d.rt_median) || '', Math.max(0, Number(d.fruehstarts) || 0), Math.max(0, Number(d.verpasst) || 0),
+      String(d.quelle || '').slice(0, 20), String(d.controller || '').slice(0, 80), String(d.version || '').slice(0, 20),
+      String(d.sprache || '').slice(0, 5)]);
+  } finally { lock.releaseLock(); }
+  return { ok: true };
+}
+
 function doPost(e) {
   let d;
   try { d = JSON.parse(e.postData.contents); } catch (err) { return antwort({ ok: false, fehler: 'kein JSON' }); }
+  // STUDIE (v1.0): eigenes Blatt, nur Schreiben. doGet liest dieses Blatt NIE - die Web-App ist
+  // oeffentlich, und hier stehen Alter, Geschlecht und Fragebogenantworten.
+  if (d && d.art === 'studie') {
+    const cache = CacheService.getScriptCache();
+    const cs = 's_' + String(d.geraet).slice(0, 40);
+    if (cache.get(cs)) return antwort({ ok: false, fehler: 'zu schnell hintereinander' });
+    cache.put(cs, '1', 60);
+    return antwort(studiePost(d));
+  }
   if (d && (d.art === 'community-strecke' || d.art === 'community-zeit')) {
     const cache = CacheService.getScriptCache();
     const cs = 'c_' + String(d.geraet).slice(0, 40);
@@ -272,6 +387,15 @@ function doPost(e) {
       return '';
     });
     sh.appendRow(zeile);
+    // v1.0.21: die Spur der schnellsten Runde (hotlap: zeit_ms, Rennen: beste Einzelrunde).
+    if (d.spur) {
+      try {
+        const c = CHALLENGES[d.challenge];
+        const r = Array.isArray(d.runden_ms) ? d.runden_ms.map(Number).filter((x) => isFinite(x) && x >= c.min) : [];
+        const runde = d.modus === 'hotlap' ? Number(d.zeit_ms) : (r.length ? Math.min.apply(null, r) : 0);
+        spurSpeichern(d.challenge + '|' + d.modus + '|' + d.preset, d, runde, c.min / Math.max(3, Number(d.spur.n) || 3) * 0.3);
+      } catch (e) { /* die Zeit zaehlt auch ohne Spur */ }
+    }
   } finally { lock.releaseLock(); }
   return antwort({ ok: true });
 }
@@ -329,6 +453,7 @@ function doGet(e) {
       kopf: kopf, zeilen: zeilen, challenges: challenges });
   }
   if (p.community) return antwort(communityGet());
+  if (p.spurliste || p.spur) return antwort(spurGet(p));
   const sp = spalten();
   const werte = blatt().getDataRange().getValues().slice(1);
   if (p.alle) {

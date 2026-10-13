@@ -51,6 +51,7 @@ PHRASES = {
     'tyre': {'de': 'Reifen abgefahren', 'en': 'Tyres worn out'},
     'rainstart': {'de': 'Es regnet', 'en': 'Rain has started'},
     'rainstop': {'de': 'Der Regen hört auf', 'en': 'The rain is stopping'},
+    'battery': {'de': 'Akku fast leer', 'en': 'Battery low'},
 }
 
 # Dieselben zwei Stimmen, die GetInstalledVoices() auf diesem Rechner meldet. Ein anderer

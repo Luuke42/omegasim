@@ -1289,5 +1289,369 @@
   },
   "idleRpm": 850,
   "limiterRpm": 4200
+ },
+ "sd_v8gt": {
+  "label": "Speed Dreams: Nissan GT-R GT500 2013 (3,4 l V8, Vorbeifahrt)",
+  "cylinders": 8,
+  "source": "Aufnahme aus Speed Dreams 2.4 (data/sound/v8_formula.wav): Heigh-hoo, Freesound 128611 (CC0)",
+  "crackle": 0.45,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "sd_v8gt_idle.ogg",
+    "baseRpm": 1800,
+    "firingHz": 120.0,
+    "seconds": 4.3779,
+    "load": 1.0
+   },
+   "low": {
+    "file": "sd_v8gt_low.ogg",
+    "baseRpm": 3078,
+    "firingHz": 205.2,
+    "seconds": 2.5602,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "sd_v8gt_mid.ogg",
+    "baseRpm": 5263,
+    "firingHz": 350.9,
+    "seconds": 1.4973,
+    "load": 1.0
+   },
+   "high": {
+    "file": "sd_v8gt_high.ogg",
+    "baseRpm": 9000,
+    "firingHz": 600.0,
+    "seconds": 0.8756,
+    "load": 1.0
+   },
+   "over": {
+    "file": "sd_v8gt_over.ogg",
+    "baseRpm": 5263,
+    "firingHz": 350.9,
+    "seconds": 1.4973,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1800,
+  "limiterRpm": 9000
+ },
+ "sd_v10": {
+  "label": "Speed Dreams: Audi R8 LMS (5,2 l V10)",
+  "cylinders": 10,
+  "source": "Aufnahme aus Speed Dreams 2.4 (data/sound/v10_raw.wav): kevp888, Freesound 649889 (CC0)",
+  "crackle": 0.35,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "sd_v10_idle.ogg",
+    "baseRpm": 1400,
+    "firingHz": 116.7,
+    "seconds": 3.9319,
+    "load": 1.0
+   },
+   "low": {
+    "file": "sd_v10_low.ogg",
+    "baseRpm": 2198,
+    "firingHz": 183.2,
+    "seconds": 2.5044,
+    "load": 1.0
+   },
+   "low2": {
+    "file": "sd_v10_low2.ogg",
+    "baseRpm": 3450,
+    "firingHz": 287.5,
+    "seconds": 1.5956,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "sd_v10_mid.ogg",
+    "baseRpm": 5415,
+    "firingHz": 451.2,
+    "seconds": 1.0166,
+    "load": 1.0
+   },
+   "high": {
+    "file": "sd_v10_high.ogg",
+    "baseRpm": 8500,
+    "firingHz": 708.3,
+    "seconds": 0.6476,
+    "load": 1.0
+   },
+   "over": {
+    "file": "sd_v10_over.ogg",
+    "baseRpm": 3450,
+    "firingHz": 287.5,
+    "seconds": 1.5956,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1400,
+  "limiterRpm": 8500
+ },
+ "sd_v8muscle": {
+  "label": "Speed Dreams: Holden Commodore VF V8 Supercar (5,0 l V8)",
+  "cylinders": 8,
+  "source": "Aufnahme aus Speed Dreams 2.4 (data/sound/v8-ears68.wav): Ears68, Freesound 260445 (CC0)",
+  "crackle": 0.7,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "sd_v8muscle_idle.ogg",
+    "baseRpm": 1100,
+    "firingHz": 73.3,
+    "seconds": 9.6362,
+    "load": 1.0
+   },
+   "low": {
+    "file": "sd_v8muscle_low.ogg",
+    "baseRpm": 1778,
+    "firingHz": 118.5,
+    "seconds": 5.9617,
+    "load": 1.0
+   },
+   "low2": {
+    "file": "sd_v8muscle_low2.ogg",
+    "baseRpm": 2872,
+    "firingHz": 191.5,
+    "seconds": 3.6907,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "sd_v8muscle_mid.ogg",
+    "baseRpm": 4641,
+    "firingHz": 309.4,
+    "seconds": 2.2839,
+    "load": 1.0
+   },
+   "high": {
+    "file": "sd_v8muscle_high.ogg",
+    "baseRpm": 7500,
+    "firingHz": 500.0,
+    "seconds": 1.4133,
+    "load": 1.0
+   },
+   "over": {
+    "file": "sd_v8muscle_over.ogg",
+    "baseRpm": 2872,
+    "firingHz": 191.5,
+    "seconds": 3.6907,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1100,
+  "limiterRpm": 7500
+ },
+ "sd_v8alt": {
+  "label": "Speed Dreams: Shelby GT350 1965 (289 Hi-Po, 4,7 l V8)",
+  "cylinders": 8,
+  "source": "Aufnahme aus Speed Dreams 2.4 (data/sound/v8-cr4sht3st.wav): cr4sht3st, Freesound 157144 (CC0)",
+  "crackle": 0.6,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "sd_v8alt_idle.ogg",
+    "baseRpm": 800,
+    "firingHz": 53.3,
+    "seconds": 6.1587,
+    "load": 1.0
+   },
+   "low": {
+    "file": "sd_v8alt_low.ogg",
+    "baseRpm": 1351,
+    "firingHz": 90.1,
+    "seconds": 3.6469,
+    "load": 1.0
+   },
+   "low2": {
+    "file": "sd_v8alt_low2.ogg",
+    "baseRpm": 2280,
+    "firingHz": 152.0,
+    "seconds": 2.161,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "sd_v8alt_mid.ogg",
+    "baseRpm": 3850,
+    "firingHz": 256.7,
+    "seconds": 1.2797,
+    "load": 1.0
+   },
+   "high": {
+    "file": "sd_v8alt_high.ogg",
+    "baseRpm": 6500,
+    "firingHz": 433.3,
+    "seconds": 0.758,
+    "load": 1.0
+   },
+   "over": {
+    "file": "sd_v8alt_over.ogg",
+    "baseRpm": 2280,
+    "firingHz": 152.0,
+    "seconds": 2.161,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 800,
+  "limiterRpm": 6500
+ },
+ "sd_v12": {
+  "label": "Speed Dreams: Ferrari 575 GTC (6,0 l V12)",
+  "cylinders": 12,
+  "source": "Aufnahme aus Speed Dreams 2.4 (data/sound/v12_raw.wav): cheesepuff, Freesound 112075 (CC0)",
+  "crackle": 0.35,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "sd_v12_idle.ogg",
+    "baseRpm": 1100,
+    "firingHz": 110.0,
+    "seconds": 3.3413,
+    "load": 1.0
+   },
+   "low": {
+    "file": "sd_v12_low.ogg",
+    "baseRpm": 1806,
+    "firingHz": 180.6,
+    "seconds": 2.0351,
+    "load": 1.0
+   },
+   "low2": {
+    "file": "sd_v12_low2.ogg",
+    "baseRpm": 2966,
+    "firingHz": 296.6,
+    "seconds": 1.2392,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "sd_v12_mid.ogg",
+    "baseRpm": 4872,
+    "firingHz": 487.2,
+    "seconds": 0.7544,
+    "load": 1.0
+   },
+   "high": {
+    "file": "sd_v12_high.ogg",
+    "baseRpm": 8000,
+    "firingHz": 800.0,
+    "seconds": 0.4594,
+    "load": 1.0
+   },
+   "over": {
+    "file": "sd_v12_over.ogg",
+    "baseRpm": 2966,
+    "firingHz": 296.6,
+    "seconds": 1.2392,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1100,
+  "limiterRpm": 8000
+ },
+ "sd_v12weich": {
+  "label": "Speed Dreams: Ferrari 599 GTB Fiorano (6,0 l V12)",
+  "cylinders": 12,
+  "source": "Aufnahme aus Speed Dreams 2.4 (data/sound/v12_smooth2.wav): cheesepuff, Freesound 112075 (CC0)",
+  "crackle": 0.25,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "sd_v12weich_idle.ogg",
+    "baseRpm": 1000,
+    "firingHz": 100.0,
+    "seconds": 5.8544,
+    "load": 1.0
+   },
+   "low": {
+    "file": "sd_v12weich_low.ogg",
+    "baseRpm": 1702,
+    "firingHz": 170.2,
+    "seconds": 3.4397,
+    "load": 1.0
+   },
+   "low2": {
+    "file": "sd_v12weich_low2.ogg",
+    "baseRpm": 2898,
+    "firingHz": 289.8,
+    "seconds": 2.0202,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "sd_v12weich_mid.ogg",
+    "baseRpm": 4934,
+    "firingHz": 493.4,
+    "seconds": 1.1865,
+    "load": 1.0
+   },
+   "high": {
+    "file": "sd_v12weich_high.ogg",
+    "baseRpm": 8400,
+    "firingHz": 840.0,
+    "seconds": 0.697,
+    "load": 1.0
+   },
+   "over": {
+    "file": "sd_v12weich_over.ogg",
+    "baseRpm": 2898,
+    "firingHz": 289.8,
+    "seconds": 2.0202,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1000,
+  "limiterRpm": 8400
+ },
+ "sd_toro": {
+  "label": "Speed Dreams: Lamborghini Murci\u00e9lago R-GT (Toro R-GT, 6,0 l V12)",
+  "cylinders": 12,
+  "source": "Aufnahme aus Speed Dreams 2.4 (data/sound/toro-rgt.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en)",
+  "crackle": 0.4,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "sd_toro_idle.ogg",
+    "baseRpm": 1100,
+    "firingHz": 110.0,
+    "seconds": 13.5536,
+    "load": 1.0
+   },
+   "low": {
+    "file": "sd_toro_low.ogg",
+    "baseRpm": 1806,
+    "firingHz": 180.6,
+    "seconds": 8.2552,
+    "load": 1.0
+   },
+   "low2": {
+    "file": "sd_toro_low2.ogg",
+    "baseRpm": 2966,
+    "firingHz": 296.6,
+    "seconds": 5.0266,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "sd_toro_mid.ogg",
+    "baseRpm": 4872,
+    "firingHz": 487.2,
+    "seconds": 3.0601,
+    "load": 1.0
+   },
+   "high": {
+    "file": "sd_toro_high.ogg",
+    "baseRpm": 8000,
+    "firingHz": 800.0,
+    "seconds": 1.8636,
+    "load": 1.0
+   },
+   "over": {
+    "file": "sd_toro_over.ogg",
+    "baseRpm": 2966,
+    "firingHz": 296.6,
+    "seconds": 5.0266,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1100,
+  "limiterRpm": 8000
  }
 }

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meisterschaft planen</title>
+<!--
+  MOCK-UP ZUM ABSEGNEN, nicht die App. BESTELLT: "Wie bei Garage, nur dass jede Zeile ein Rennen ist.
+  Ich kann aus meinen geladenen Strecken aber auch freies Fahren wählen, standardmäßig ist immer das,
+  was aktuell gerade im Streckeneditor ist, gewählt. Je Event wähle ich dann das Format [...], Wetter,
+  und Umfang [...] Je Rennen außerdem Startaufstellung, Pflichtboxenstopps, fliegender oder stehender
+  Start wählen. Globale Optionen unten drunter: Presets [...], Startaufstellung [...]"
+  Platzhalterdaten. Die Bedienung (Steuerkreuz = Pfeiltasten, X = Enter, O = Esc) ist echt.
+-->
+<style>
+  :root { --blau: #00a3e0; --blau-text: #04070c; --grau: #3b3f48; --dim: #a3acbd; --gut: #3ddc84;
+    --rot: #ff2b5e; --warn: #ffb400; --gold: #f5c542; --silber: #c9d1dc; --bronze: #d08a4f;
+    --font: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+    color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #05070c; color: #eef0f4; font-family: var(--font); font-size: 13px; }
+  main { padding: 12px 16px 40px; max-width: 1240px; margin: 0 auto; }
+  h1 { margin: 6px 0 4px; letter-spacing: .1em; text-transform: uppercase; font-size: 20px; }
+  h2 { margin: 22px 0 6px; letter-spacing: .1em; text-transform: uppercase; font-size: 15px; }
+  p { line-height: 1.45; margin: 4px 0 8px; max-width: 95ch; }
+  .muted { color: var(--dim); }
+  .wip { background: var(--warn); color: #1a1100; font-size: 10px; font-weight: 800; padding: 0 5px; margin-left: 6px; vertical-align: middle; letter-spacing: .05em; }
+  .k { display: inline-block; min-width: 18px; padding: 0 4px; border: 1px solid var(--dim); border-radius: 3px; font-size: 10px; text-align: center; margin: 0 2px; }
+  ul.punkte { margin: 4px 0 0 18px; padding: 0; line-height: 1.6; max-width: 95ch; }
+
+  /* Der Schirm hat Telefon-Querformat (800 x 370), wie die App */
+  .schirm { position: relative; width: 100%; max-width: 820px; aspect-ratio: 800 / 370; min-height: 370px; background: #0c0e14;
+    border: 1px solid rgba(255,255,255,.12); display: flex; flex-direction: column; overflow: hidden; }
+  .schirm::before { content: ""; position: absolute; inset: 0; background: url(img/meisterschaft.jpg) center/cover; opacity: .13; pointer-events: none; }
+  .schirm > * { position: relative; }
+  .kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,.1); background: rgba(5,7,12,.6); }
+  .kopf b { letter-spacing: .12em; text-transform: uppercase; font-size: 14px; }
+  .hint { font-size: 11px; color: var(--dim); white-space: nowrap; }
+  .grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 10px; padding: 8px 10px 10px; flex: 1; min-height: 0; }
+  .liste { position: relative; display: flex; flex-direction: column; gap: 5px; overflow-y: auto; min-height: 0; padding: 2px; scrollbar-width: thin; }
+  .trenner { margin: 6px 0 1px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); display: flex; align-items: center; gap: 8px; }
+  .trenner::after { content: ""; flex: 1; height: 1px; background: rgba(255,255,255,.12); }
+
+  /* Eventzeile wie die Garagenzeile: Band, Bild, Name, Wert mit Pfeilen */
+  .ev { display: grid; grid-template-columns: 6px 22px 46px minmax(0,1fr) 150px; gap: 8px; align-items: center; background: #151821;
+    padding: 4px 8px 4px 0; border: 2px solid transparent; cursor: pointer; }
+  .ev i { align-self: stretch; }
+  .ev .nr { font-size: 18px; font-weight: 900; text-align: center; color: var(--dim); }
+  .ev .bild { width: 46px; height: 32px; background: #0b0d12; display: grid; place-items: center; }
+  .ev .bild svg { width: 42px; height: 28px; }
+  .ev .name { min-width: 0; }
+  .ev .name b { display: block; font-size: 13.5px; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev .name span { display: block; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sel { border-color: #fff !important; }
+  .detail-aktiv .liste .sel { border-color: rgba(255,255,255,.35) !important; }
+  .wert { display: grid; grid-template-columns: 16px minmax(0,1fr) 16px; align-items: center; gap: 2px; font-weight: 800; letter-spacing: .05em; font-size: 12px; text-transform: uppercase; }
+  .wert .pf { color: var(--blau); font-size: 14px; text-align: center; cursor: pointer; user-select: none; }
+  .wert .w { text-align: center; padding: 2px 4px; background: var(--grau); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .f-qualifying .w { background: #6b5bd6; }
+  .f-runden .w { background: var(--blau); color: var(--blau-text); }
+  .f-endurance .w { background: #ffb02e; color: #1a1100; }
+  .f-training .w { background: #2c6e49; }
+  .knopf { background: #1d212b; border: 2px solid transparent; color: #fff; padding: 7px 10px; text-align: left; font-family: var(--font); font-size: 12.5px;
+    letter-spacing: .05em; text-transform: uppercase; font-weight: 700; cursor: pointer; }
+  .knopf.primary { background: var(--blau); color: var(--blau-text); }
+  .knopf.neu { background: transparent; border: 2px dashed rgba(255,255,255,.22); color: var(--dim); text-align: center; }
+  .knopf.neu.sel { border-style: solid; color: #fff; }
+  /* Globale Zeilen: wie die Optionenzeilen der App */
+  .gz { display: grid; grid-template-columns: minmax(0,1fr) 196px; align-items: center; gap: 6px; background: #181c25; padding: 4px 8px; border: 2px solid transparent; cursor: pointer; }
+  .gz .l { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+
+  /* rechts: Einstellungen des markierten Events */
+  .detail { background: rgba(17,20,27,.92); border-top: 3px solid var(--blau); padding: 7px 8px; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; }
+  .detail h3 { margin: 0 0 2px; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .detail h3 small { color: var(--dim); font-weight: 400; letter-spacing: .03em; text-transform: none; font-size: 11px; }
+  .wz { display: grid; grid-template-columns: minmax(0,1fr) 190px; align-items: center; gap: 6px; background: #181c25; padding: 4px 8px; border: 2px solid transparent; cursor: pointer; }
+  .wz .l { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .wz.aus { opacity: .38; cursor: default; }
+  .wz.aus .pf { visibility: hidden; }
+  .wz.fehlt .w { outline: 1px solid var(--rot); }
+  .info { font-size: 11px; color: var(--dim); line-height: 1.4; margin: 2px 0 0; }
+  .info b { color: #eef0f4; }
+  .fuss { display: flex; gap: 6px; margin-top: auto; }
+  .fuss .knopf { flex: 1; text-align: center; font-size: 11.5px; padding: 6px; }
+  .knopf.weg { color: #ffb3c4; }
+  .punkte-tab { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin-top: 4px; }
+  .punkte-tab div { background: #181c25; text-align: center; padding: 3px 0; font-size: 11px; }
+  .punkte-tab div b { display: block; font-size: 14px; }
+
+  /* Zwischenstand */
+  .stand { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .stand th { color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; text-align: left; padding: 3px 6px; font-weight: 400; }
+  .stand td { padding: 4px 6px; background: #151821; border-bottom: 2px solid #0c0e14; white-space: nowrap; }
+  .stand td.pos { font-weight: 900; font-size: 15px; width: 30px; text-align: center; }
+  .stand tr:nth-child(2) td.pos { color: var(--gold); }
+  .stand tr:nth-child(3) td.pos { color: var(--silber); }
+  .stand tr:nth-child(4) td.pos { color: var(--bronze); }
+  .stand td.pkt { font-weight: 900; font-size: 15px; text-align: right; }
+  .stand td.ev-p { color: var(--dim); text-align: center; }
+  .band { display: inline-block; width: 5px; height: 14px; vertical-align: middle; margin-right: 6px; }
+  .rl { font-size: 10px; padding: 1px 4px; background: var(--grau); margin-left: 6px; letter-spacing: .05em; }
+  .rl.p1 { background: var(--blau); color: var(--blau-text); } .rl.p2 { background: #ffb02e; color: #1a1100; } .rl.p3 { background: #e84bb0; color: #1a0010; } .rl.gh { background: #6b5bd6; }
+  .naechstes { background: rgba(17,20,27,.92); border-top: 3px solid #ffb02e; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
+  .naechstes .titel { font-size: 15px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+  .aufst { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; font-size: 12px; }
+  .aufst div { background: #181c25; padding: 3px 6px; }
+  .aufst div:nth-child(even) { transform: translateY(9px); }
+
+  .cmp { width: 100%; max-width: 820px; border-collapse: collapse; margin-top: 8px; }
+  .cmp td, .cmp th { border-bottom: 1px solid rgba(255,255,255,.1); padding: 6px; text-align: left; vertical-align: top; line-height: 1.45; }
+  .cmp th { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); background: #f3f4f6; color: #0b0c10; padding: 6px 12px; font-weight: 700;
+    font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90%; text-align: center; }
+  .toast.an { opacity: 1; }
+
+  @media (max-width: 760px) {
+    .schirm { aspect-ratio: auto; }
+    .grid { grid-template-columns: 1fr; }
+    .ev { grid-template-columns: 6px 20px 40px minmax(0,1fr) 120px; }
+    .wz, .gz { grid-template-columns: minmax(0,1fr) 150px; }
+    .hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+<h1>Meisterschaft <span class="wip">ENTWURF</span></h1>
+<p>Der 8. Modus. Aufgebaut wie die Garage: <b>jede Zeile ist ein Event</b>, rechts stehen die Einstellungen des markierten Events, darunter die Optionen für die ganze Meisterschaft. <span class="muted">Platzhalterdaten, aber bedienbar: Pfeiltasten = Steuerkreuz, Enter = <span class="k">✕</span>, Esc = <span class="k">○</span>, Entf = Event löschen. Klicken geht auch.</span></p>
+
+<h2>1 · Meisterschaft planen</h2>
+<div class="schirm" id="plan">
+  <div class="kopf"><b>Meisterschaft planen</b><span class="hint" id="hint"></span></div>
+  <div class="grid" id="plan-grid">
+    <div class="liste" id="liste"></div>
+    <div class="detail" id="detail"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+<ul class="punkte">
+  <li><span class="k">▲▼</span> wählt die Zeile, <span class="k">◀▶</span> schaltet auf einer Eventzeile direkt das <b>Format</b> (so wie die Rolle in der Garage), <span class="k">✕</span> springt rechts in die Einstellungen des Events, <span class="k">○</span> zurück.</li>
+  <li><b>Strecke:</b> Vorgabe ist immer das, was gerade im Editor liegt. Dazu alle gespeicherten Strecken und „Freie Bahn“ (Fahren ohne Streckenplan). Das Bild in der Zeile zeigt die Strecke.</li>
+  <li><b>Umfang ist Pflicht</b> (Runden oder Minuten), auch beim Training. 0 gibt es hier nicht, jedes Event hat eine klare Dauer.</li>
+  <li><b>Startaufstellung „Automatisch“:</b> nach dem letzten Qualifying, wenn eins direkt davor lag; sonst nach Punkten mit dem Führenden hinten. Beim ersten Event gilt die globale Einstellung unten.</li>
+  <li><b>Pflichtstopps</b> gibt es nur bei Runden und Endurance, Start stehend/fliegend nur bei Rennen. Training und Qualifying vergeben keine Punkte.</li>
+</ul>
+
+<h2>2 · Zwischen den Events</h2>
+<div class="schirm">
+  <div class="kopf"><b>Zwischenstand · nach Event 2 von 3</b><span class="hint"><span class="k">✕</span> zur Startaufstellung <span class="k">○</span> Menü</span></div>
+  <div class="grid">
+    <div class="liste">
+      <table class="stand">
+        <tr><th></th><th>Auto</th><th style="text-align:center">Q</th><th style="text-align:center">R1</th><th style="text-align:right">Punkte</th></tr>
+        <tr><td class="pos">1</td><td><span class="band" style="background:#2ee06a"></span>Porsche 911<span class="rl p1">P1</span></td><td class="ev-p">P2</td><td class="ev-p">25</td><td class="pkt">25</td></tr>
+        <tr><td class="pos">2</td><td><span class="band" style="background:#ffb02e"></span>BMW M4<span class="rl gh">GHOST</span></td><td class="ev-p">P1</td><td class="ev-p">18 +1</td><td class="pkt">19</td></tr>
+        <tr><td class="pos">3</td><td><span class="band" style="background:#e84bb0"></span>Ford GT<span class="rl p2">P2</span></td><td class="ev-p">P3</td><td class="ev-p">15</td><td class="pkt">15</td></tr>
+        <tr><td class="pos">4</td><td><span class="band" style="background:#00a3e0"></span>Mustang<span class="rl gh">GHOST</span></td><td class="ev-p">P4</td><td class="ev-p">12</td><td class="pkt">12</td></tr>
+      </table>
+      <p class="info" style="margin-top:6px">„+1“ = schnellste Runde. Q zeigt nur den Platz, Qualifying zählt keine Punkte.</p>
+    </div>
+    <div class="naechstes">
+      <span class="info">Nächstes Event · 3 von 3</span>
+      <span class="titel">Imolina · Endurance 20 Min</span>
+      <span class="info">Wechselhaft · Stehender Start · <b>1 Pflichtstopp</b> · Fahrgefühl je Garage</span>
+      <span class="info" style="margin-top:4px">Startaufstellung nach Punkten, Führender hinten:</span>
+      <div class="aufst"><div>1 · Mustang</div><div>2 · Ford GT</div><div>3 · BMW M4</div><div>4 · Porsche 911</div></div>
+      <div class="fuss" style="margin-top:14px"><button class="knopf primary">Zur Startaufstellung</button><button class="knopf">Pause · später weiter</button></div>
+    </div>
+  </div>
+</div>
+<ul class="punkte">
+  <li>Erscheint nach jedem Event statt des normalen Endschirms. Danach geht es auf den bekannten Startaufstellungsschirm; die Reihenfolge ist vorbelegt und lässt sich dort noch ändern.</li>
+  <li>Wechselt die Strecke, fordert der Schirm vorher zum Umbauen auf (bei gespeicherten Strecken mit Bild). Bei einer gescannten Strecke prüft die App beim ersten Überfahren, ob sie passt.</li>
+  <li>„Pause“ speichert den Zwischenstand. Die FAHREN-Kachel bietet dann „Meisterschaft fortsetzen“ an.</li>
+</ul>
+
+<h2>Fragen an dich</h2>
+<table class="cmp">
+  <tr><th style="width:34%">Frage</th><th>Mein Vorschlag</th></tr>
+  <tr><td>„Freies Fahren“ in der Streckenwahl</td><td>Heißt <b>Freie Bahn</b>: Fahren ohne Streckenplan (wie „Strecke aus“). Das Format „Training“ ist davon getrennt. Gemeint so?</td></tr>
+  <tr><td>Fahren Ghosts in der Wertung mit?</td><td>Ja, alle verbundenen Autos werden gewertet. Unten umschaltbar auf „Nur Spieler“.</td></tr>
+  <tr><td>NPC Knockout und Demolition Derby als Event?</td><td>Nein: sie haben keine feste Dauer. Bestzeit auch nicht, weil dort nur Spieler fahren.</td></tr>
+  <tr><td>Punkte fürs Qualifying (Pole)?</td><td>Keine. Das Qualifying legt nur die Startaufstellung fest.</td></tr>
+  <tr><td>Startaufstellung „Beste zuerst / zuletzt“ beim ersten Rennen</td><td>„Beste“ = schnellste eigene Bestzeit auf der Strecke, bei Ghosts ihr Tempo. Ohne Daten gilt Zufall.</td></tr>
+  <tr><td>Speichern</td><td>Der Plan bleibt erhalten (letzte Meisterschaft wird vorgeschlagen), dazu ein laufender Zwischenstand.</td></tr>
+</table>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var STRECKEN = [
+    { n: 'Aktuell im Editor', s: 'SGR4LGHG · 6,4 m', form: 'M8,6 H34 A6,6 0 0 1 34,22 H8 A6,6 0 0 1 8,6 Z' },
+    { n: 'Balkonia', s: 'gespeichert · 9,1 m', form: 'M6,8 H24 L36,4 A5,5 0 0 1 38,14 L30,22 H8 A4,4 0 0 1 6,8 Z' },
+    { n: 'Imolina', s: 'gespeichert · 7,2 m', form: 'M6,6 H36 V14 H22 V22 H6 Z' },
+    { n: 'Wohnzimmer-Oval', s: 'gespeichert · 4,8 m', form: 'M12,5 H30 A9,9 0 0 1 30,23 H12 A9,9 0 0 1 12,5 Z' },
+    { n: 'Freie Bahn', s: 'ohne Streckenplan', form: null }
+  ];
+  var FORMATE = [
+    { id: 'training', n: 'Training', einheit: 'Min', punkte: false },
+    { id: 'qualifying', n: 'Qualifying', einheit: 'Min', punkte: false },
+    { id: 'runden', n: 'Runden', einheit: 'Runden', punkte: true },
+    { id: 'endurance', n: 'Endurance', einheit: 'Min', punkte: true }
+  ];
+  var WETTER = ['Sonnig', 'Regen', 'Wechselhaft'];
+  var START = ['Stehend', 'Fliegend'];
+  var AUFST = ['Automatisch', 'Nach Punkten · Führender hinten', 'Nach Punkten · Führender vorn', 'Nach letztem Qualifying', 'Wie letztes Ergebnis', 'Zufall'];
+  var FARBEN = ['#2ee06a', '#ffb02e', '#00a3e0', '#e84bb0', '#9c8cff', '#ff6b4a'];
+  var GLOBAL = [
+    { l: 'Fahrgefühl', w: ['Je Auto aus der Garage', 'Alle wie Spieler 1', 'Alle: Arcade', 'Alle: Sim+', 'Alle: Pro', 'Alle: Pacejka'], i: 0 },
+    { l: 'Startaufstellung 1. Event', w: ['Zufall', 'Beste zuletzt', 'Beste zuerst', 'Garagen-Reihenfolge'], i: 0 },
+    { l: 'Punkte', w: ['F1 · 25-18-15-12-10', 'Klassisch · 10-6-4-3-2', 'Linear · N … 1'], i: 0 },
+    { l: 'Schnellste Runde', w: ['+1 Punkt', 'Keine Punkte'], i: 0 },
+    { l: 'Teilnehmer', w: ['Alle verbundenen Autos', 'Nur Spieler (P1–P3)'], i: 0 }
+  ];
+  var PUNKTE = [[25, 18, 15, 12, 10, 8, 6, 4, 2, 1], [10, 6, 4, 3, 2, 1], null];
+
+  var events = [
+    { strecke: 0, format: 1, umfang: 5, wetter: 0, start: 0, aufst: 0, stopps: 0 },
+    { strecke: 0, format: 2, umfang: 15, wetter: 0, start: 0, aufst: 0, stopps: 0 },
+    { strecke: 2, format: 3, umfang: 20, wetter: 2, start: 0, aufst: 0, stopps: 1 }
+  ];
+  var zeile = 0;          // Zeile links: Events, "+ Event", globale Zeilen, Starten
+  var dZeile = -1;        // >= 0: Fokus rechts im Detail
+  var detailIdx = 0;      // welches Event rechts steht
+
+  function $(id) { return document.getElementById(id); }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function zeilen() {
+    var z = events.map(function (e, i) { return { art: 'ev', i: i }; });
+    z.push({ art: 'neu' });
+    GLOBAL.forEach(function (g, i) { z.push({ art: 'gl', i: i }); });
+    z.push({ art: 'los' });
+    return z;
+  }
+  function fmt(e) { return FORMATE[e.format]; }
+  function istRennen(e) { return fmt(e).punkte; }
+  function umfangText(e) { return e.umfang + ' ' + fmt(e).einheit; }
+  function aufstAufgeloest(i) {
+    var e = events[i];
+    if (!istRennen(e)) return 'entfällt';
+    var a = AUFST[e.aufst];
+    if (a !== 'Automatisch') return a;
+    if (i > 0 && FORMATE[events[i - 1].format].id === 'qualifying') return 'nach Qualifying (Event ' + i + ')';
+    var vorRennen = events.slice(0, i).some(istRennen);
+    return vorRennen ? 'nach Punkten, Führender hinten' : GLOBAL[1].w[GLOBAL[1].i] + ' (erstes Rennen)';
+  }
+  function aufstFehler(i) {
+    var e = events[i];
+    if (!istRennen(e) || AUFST[e.aufst] !== 'Nach letztem Qualifying') return '';
+    var q = events.slice(0, i).some(function (x) { return FORMATE[x.format].id === 'qualifying'; });
+    return q ? '' : 'Vorher fehlt ein Qualifying.';
+  }
+  function bild(s) {
+    var st = STRECKEN[s];
+    if (!st.form) return '<svg viewBox="0 0 42 28"><text x="21" y="18" fill="#a3acbd" font-size="9" text-anchor="middle" font-family="sans-serif">FREI</text></svg>';
+    return '<svg viewBox="0 0 42 28"><path d="' + st.form + '" fill="none" stroke="#5b6170" stroke-width="5" stroke-linejoin="round"/>' +
+      '<path d="' + st.form + '" fill="none" stroke="#eef0f4" stroke-width="1" stroke-dasharray="2 2"/></svg>';
+  }
+  function wert(text, klasse) {
+    return '<span class="wert ' + (klasse || '') + '"><span class="pf" data-d="-1">◀</span><span class="w">' + esc(text) + '</span><span class="pf" data-d="1">▶</span></span>';
+  }
+
+  function zeichneListe() {
+    var z = zeilen(), h = '';
+    z.forEach(function (r, k) {
+      var sel = (k === zeile) ? ' sel' : '';
+      if (r.art === 'ev') {
+        var e = events[r.i], st = STRECKEN[e.strecke], f = fmt(e);
+        var unter = umfangText(e) + ' · ' + WETTER[e.wetter] + (istRennen(e) ? ' · ' + START[e.start] + (e.stopps ? ' · ' + e.stopps + ' Stopp' + (e.stopps > 1 ? 's' : '') : '') : ' · keine Punkte');
+        h += '<div class="ev' + sel + '" data-k="' + k + '"><i style="background:' + FARBEN[r.i % FARBEN.length] + '"></i><span class="nr">' + (r.i + 1) + '</span>' +
+          '<span class="bild">' + bild(e.strecke) + '</span><span class="name"><b>' + esc(st.n) + '</b><span>' + esc(unter) + '</span></span>' +
+          wert(f.n, 'f-' + f.id) + '</div>';
+      } else if (r.art === 'neu') {
+        h += '<button class="knopf neu' + sel + '" data-k="' + k + '">+ Event hinzufügen</button>';
+        h += '<div class="trenner">Für die ganze Meisterschaft</div>';
+      } else if (r.art === 'gl') {
+        var g = GLOBAL[r.i];
+        h += '<div class="gz' + sel + '" data-k="' + k + '"><span class="l">' + esc(g.l) + '</span>' + wert(g.w[g.i]) + '</div>';
+      } else {
+        h += '<button class="knopf primary' + sel + '" data-k="' + k + '" style="margin-top:4px;text-align:center">Meisterschaft starten · ' + events.length + ' Events</button>';
+      }
+    });
+    $('liste').innerHTML = h;
+    var s = $('liste').querySelector('.sel');
+    var l = $('liste');
+    if (s) {
+      if (s.offsetTop < l.scrollTop) l.scrollTop = s.offsetTop - 4;
+      else if (s.offsetTop + s.offsetHeight > l.scrollTop + l.clientHeight) l.scrollTop = s.offsetTop + s.offsetHeight - l.clientHeight + 4;
+    }
+  }
+
+  function detailZeilen(i) {
+    var e = events[i], f = fmt(e), r = istRennen(e);
+    return [
+      { l: 'Strecke', w: STRECKEN[e.strecke].n, feld: 'strecke', n: STRECKEN.length },
+      { l: 'Format', w: f.n, feld: 'format', n: FORMATE.length },
+      { l: 'Umfang', w: umfangText(e), feld: 'umfang' },
+      { l: 'Wetter', w: WETTER[e.wetter], feld: 'wetter', n: WETTER.length },
+      { l: 'Start', w: r ? START[e.start] : 'entfällt', feld: 'start', n: START.length, aus: !r },
+      { l: 'Startaufstellung', w: r ? AUFST[e.aufst] : 'entfällt', feld: 'aufst', n: AUFST.length, aus: !r, fehlt: !!aufstFehler(i) },
+      { l: 'Pflichtstopps', w: r ? (e.stopps ? e.stopps : 'Keine') : 'entfällt', feld: 'stopps', n: 4, aus: !r }
+    ];
+  }
+
+  function zeichneDetail() {
+    var z = zeilen()[zeile], h = '';
+    if (z && z.art === 'ev') detailIdx = z.i;
+    if (z && z.art === 'gl') {
+      var g = GLOBAL[z.i];
+      h += '<h3>' + esc(g.l) + '</h3>';
+      if (z.i === 0) h += '<p class="info"><b>Je Auto aus der Garage:</b> jedes gesteuerte Auto fährt mit dem Fahrgefühl, das in der Garage für es eingestellt ist. <b>Alle wie Spieler 1</b> oder ein festes Preset gleicht das Feld an, etwa wenn ein Gast sonst mit Arcade gegen Pro fährt. Ghosts betrifft das nicht.</p>';
+      if (z.i === 1) h += '<p class="info">Gilt nur fürs erste Event, wenn davor kein Qualifying liegt. <b>Beste</b> heißt: schnellste eigene Bestzeit auf dieser Strecke, bei Ghosts ihr Tempo. Ab dem zweiten Event bestimmen die Punkte die Aufstellung (je Event änderbar).</p>';
+      if (z.i === 2 || z.i === 3) {
+        var tab = PUNKTE[GLOBAL[2].i] || [6, 5, 4, 3, 2, 1];
+        h += '<p class="info">Punkte je Platz bei 6 Autos' + (GLOBAL[3].i === 0 ? ', <b>+1</b> für die schnellste Runde eines Rennens' : '') + ':</p><div class="punkte-tab">';
+        tab.slice(0, 10).forEach(function (p, k) { h += '<div>P' + (k + 1) + '<b>' + p + '</b></div>'; });
+        h += '</div><p class="info">Gleichstand: mehr Siege, dann mehr zweite Plätze, dann das letzte Rennen.</p>';
+      }
+      if (z.i === 4) h += '<p class="info"><b>Alle verbundenen Autos</b>: Spieler 1–3 und Ghosts werden gewertet. <b>Nur Spieler</b>: Ghosts fahren als Verkehr mit, bekommen aber keine Punkte und tauchen im Stand nicht auf. Das Safety Car fährt nie in der Wertung.</p>';
+    } else if (z && z.art === 'los') {
+      h += '<h3>Bereit?</h3>';
+      var fehler = events.map(function (e, i) { var f = aufstFehler(i); return f ? 'Event ' + (i + 1) + ': ' + f : ''; }).filter(Boolean);
+      var rennen = events.filter(istRennen).length;
+      if (!rennen) fehler.push('Mindestens ein Event muss Runden oder Endurance sein.');
+      h += '<p class="info">' + events.length + ' Events, davon <b>' + rennen + ' mit Punkten</b>. Verbunden: Porsche 911 (P1), Ford GT (P2), BMW M4, Mustang.</p>';
+      h += fehler.length ? '<p class="info" style="color:#ff8fa8">' + fehler.map(esc).join('<br>') + '</p>' : '<p class="info">✕ startet Event 1. Zwischen den Events kommt der Zwischenstand.</p>';
+    } else {
+      var e = events[detailIdx];
+      h += '<h3>Event ' + (detailIdx + 1) + '<small>' + esc(fmt(e).punkte ? 'mit Punkten' : 'ohne Punkte') + '</small></h3>';
+      detailZeilen(detailIdx).forEach(function (r, k) {
+        h += '<div class="wz' + (k === dZeile ? ' sel' : '') + (r.aus ? ' aus' : '') + (r.fehlt ? ' fehlt' : '') + '" data-d="' + k + '"><span class="l">' + esc(r.l) + '</span>' + wert(r.w) + '</div>';
+      });
+      var info = istRennen(e) ? 'Aufstellung: ' + aufstAufgeloest(detailIdx) + '.' : (fmt(e).id === 'qualifying' ? 'Bestimmt die Aufstellung des nächsten Rennens.' : 'Zum Einfahren, ohne Wertung.');
+      var f2 = aufstFehler(detailIdx);
+      h += '<p class="info">' + esc(info) + (f2 ? ' <span style="color:#ff8fa8">' + esc(f2) + '</span>' : '') + '</p>';
+      h += '<div class="fuss"><button class="knopf" data-akt="hoch">▲ Früher</button><button class="knopf" data-akt="kopie">Kopieren</button><button class="knopf weg" data-akt="weg">Löschen</button></div>';
+    }
+    $('detail').innerHTML = h;
+    $('plan-grid').classList.toggle('detail-aktiv', dZeile >= 0);
+    $('hint').innerHTML = dZeile >= 0
+      ? '<span class="k">▲▼</span> Einstellung <span class="k">◀▶</span> Wert <span class="k">○</span> zurück'
+      : '<span class="k">▲▼</span> Zeile <span class="k">◀▶</span> ' + (z && z.art === 'gl' ? 'Wert' : 'Format') + ' <span class="k">✕</span> Event einstellen';
+  }
+  function zeichne() { zeichneListe(); zeichneDetail(); }
+
+  var toastT = 0;
+  function toast(t) { var el = $('toast'); el.textContent = t; el.classList.add('an'); clearTimeout(toastT); toastT = setTimeout(function () { el.classList.remove('an'); }, 1800); }
+  function rund(v, n) { return (v + n) % n; }
+
+  function aendern(feld, d) {
+    var e = events[detailIdx];
+    if (feld === 'umfang') {
+      var schritt = fmt(e).einheit === 'Runden' ? 1 : (e.umfang >= 10 ? 5 : 1);
+      e.umfang = Math.max(1, Math.min(fmt(e).einheit === 'Runden' ? 200 : 240, e.umfang + d * schritt));
+      if (e.umfang === 1 && d < 0) toast('Mindestens 1 – jedes Event braucht eine klare Dauer.');
+      return;
+    }
+    if (feld === 'format') {
+      var alt = fmt(e).einheit; e.format = rund(e.format + d, FORMATE.length);
+      if (fmt(e).einheit !== alt) e.umfang = fmt(e).einheit === 'Runden' ? 15 : (fmt(e).id === 'endurance' ? 20 : 5);
+      return;
+    }
+    var n = { strecke: STRECKEN.length, wetter: WETTER.length, start: START.length, aufst: AUFST.length, stopps: 4 }[feld];
+    e[feld] = rund(e[feld] + d, n);
+  }
+
+  function links(d) {
+    if (dZeile >= 0) {
+      var r = detailZeilen(detailIdx)[dZeile];
+      if (r.aus) return;
+      aendern(r.feld, d); return zeichne();
+    }
+    var z = zeilen()[zeile];
+    if (z.art === 'ev') { detailIdx = z.i; aendern('format', d); }
+    else if (z.art === 'gl') { var g = GLOBAL[z.i]; g.i = rund(g.i + d, g.w.length); }
+    zeichne();
+  }
+  function hoch(d) {
+    if (dZeile >= 0) {
+      var dz = detailZeilen(detailIdx), k = dZeile;
+      do { k = Math.max(0, Math.min(dz.length - 1, k + d)); } while (dz[k].aus && k > 0 && k < dz.length - 1);
+      if (!dz[k].aus) dZeile = k;
+    } else zeile = Math.max(0, Math.min(zeilen().length - 1, zeile + d));
+    zeichne();
+  }
+  function bestaetigen() {
+    if (dZeile >= 0) return;
+    var z = zeilen()[zeile];
+    if (z.art === 'ev') { detailIdx = z.i; dZeile = 0; }
+    else if (z.art === 'neu') neu();
+    else if (z.art === 'los') toast(aufstFehlerAlle() || 'Event 1 startet … (im Entwurf ohne Funktion)');
+    zeichne();
+  }
+  function aufstFehlerAlle() { for (var i = 0; i < events.length; i++) if (aufstFehler(i)) return 'Event ' + (i + 1) + ': ' + aufstFehler(i); return ''; }
+  function neu() {
+    if (events.length >= 10) return toast('Höchstens 10 Events.');
+    events.push({ strecke: 0, format: 2, umfang: 15, wetter: 0, start: 0, aufst: 0, stopps: 0 });
+    detailIdx = events.length - 1; zeile = detailIdx; dZeile = 0; toast('Event ' + events.length + ' angelegt – Strecke: aktuell im Editor');
+  }
+  function aktion(a) {
+    var i = detailIdx;
+    if (a === 'weg') {
+      if (events.length <= 1) return toast('Eine Meisterschaft braucht mindestens ein Event.');
+      events.splice(i, 1); detailIdx = Math.min(i, events.length - 1); zeile = detailIdx; dZeile = -1; toast('Event ' + (i + 1) + ' gelöscht');
+    } else if (a === 'kopie') {
+      if (events.length >= 10) return toast('Höchstens 10 Events.');
+      events.splice(i + 1, 0, JSON.parse(JSON.stringify(events[i]))); detailIdx = i + 1; zeile = i + 1; toast('Kopiert als Event ' + (i + 2));
+    } else if (a === 'hoch' && i > 0) {
+      var t = events[i - 1]; events[i - 1] = events[i]; events[i] = t; detailIdx = i - 1; zeile = i - 1;
+    }
+    zeichne();
+  }
+
+  document.addEventListener('keydown', function (ev) {
+    var k = ev.key, ok = true;
+    if (k === 'ArrowUp') hoch(-1); else if (k === 'ArrowDown') hoch(1);
+    else if (k === 'ArrowLeft') links(-1); else if (k === 'ArrowRight') links(1);
+    else if (k === 'Enter') bestaetigen();
+    else if (k === 'Escape' || k === 'Backspace') { if (dZeile >= 0) { dZeile = -1; zeile = detailIdx; zeichne(); } }
+    else if (k === 'Delete') aktion('weg');
+    else ok = false;
+    if (ok) ev.preventDefault();
+  });
+  $('liste').addEventListener('click', function (ev) {
+    var el = ev.target.closest('[data-k]'); if (!el) return;
+    var k = +el.getAttribute('data-k'), pf = ev.target.closest('.pf');
+    dZeile = -1; zeile = k;
+    if (pf) return links(+pf.getAttribute('data-d'));
+    var z = zeilen()[k];
+    if (z.art === 'neu' || z.art === 'los') return bestaetigen();
+    zeichne();
+  });
+  $('detail').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-akt]'); if (b) return aktion(b.getAttribute('data-akt'));
+    var el = ev.target.closest('[data-d].wz'); if (!el || el.classList.contains('aus')) return;
+    dZeile = +el.getAttribute('data-d');
+    var pf = ev.target.closest('.pf');
+    if (pf) return links(+pf.getAttribute('data-d'));
+    zeichne();
+  });
+  zeichne();
+})();
+</script>
+</body>
+</html>

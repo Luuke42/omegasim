@@ -164,6 +164,9 @@ class HostServer extends NanoHTTPD {
             o.put("letzte", f.has("letzte") ? f.get("letzte") : JSONObject.NULL);
             o.put("beste", f.has("beste") ? f.get("beste") : JSONObject.NULL);
             o.put("abgaenge", f.optInt("abgaenge"));
+            // v1.0.12: Gesamtzeit und Strafe (ms) fuer die Meisterschaft (Pflichtstopps).
+            if (f.has("summe")) o.put("summe", f.get("summe"));
+            if (f.has("strafe")) o.put("strafe", f.get("strafe"));
             o.put("alter", Math.round((t - f.optDouble("aktualisiert", t)) * 10) / 10.0);
             o.put("letzteZeitpunkt", f.optDouble("letzteZeitpunkt", 0));
             if (f.has("pos")) {
@@ -221,6 +224,9 @@ class HostServer extends NanoHTTPD {
             if (d.has(k) && !d.isNull(k)) f.put(k, Math.round(d.getDouble(k) * 1000) / 1000.0);
         }
         if (d.has("abgaenge")) f.put("abgaenge", d.optInt("abgaenge"));
+        for (String k : new String[] {"summe", "strafe"}) {
+            if (d.has(k) && !d.isNull(k)) f.put(k, Math.max(0, Math.round(d.optDouble(k, 0))));
+        }
         if (d.has("pos")) {
             f.put("pos", d.getJSONArray("pos"));
             f.put("posZeit", t);
@@ -276,6 +282,8 @@ class HostServer extends NanoHTTPD {
                 f.put("laps", 0);
                 f.remove("letzte");
                 f.remove("beste");
+                f.remove("summe");
+                f.remove("strafe");
                 f.put("letzteZeitpunkt", t);
             }
             o.put("ok", true);

@@ -206,9 +206,9 @@
     if (startKnopf) startKnopf.disabled = true;
 
     simState.timer = setInterval(simTakt, SIM_TAKT_MS);
-    simLage(anzahl + ' Ghosts, ' + runden + (runden === 1 ? ' Runde' : ' Runden')
+    simLage(anzahl + ' NPCs, ' + runden + (runden === 1 ? ' Runde' : ' Runden')
             + (doppelt ? ', doppelt' : '') + ' - laeuft');
-    log('Simulation gestartet: ' + anzahl + ' Ghosts, ' + runden + ' Runden auf '
+    log('Simulation gestartet: ' + anzahl + ' NPCs, ' + runden + ' Runden auf '
         + tiles.length + ' Kacheln.', 'info');
     simZeichnen();
   }

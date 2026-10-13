@@ -112,13 +112,23 @@
     }
     return l.bereit === true;
   }
+  // v0.10.4: DER DIREKTE WEG zuerst (window.OmegaDirekt, ab APK 0.10.4): synchron auf dem
+  // JavaBridge-Thread, ohne JSON ueber den Android-Hauptthread. Aeltere APKs haben ihn nicht,
+  // dann wie bisher ueber Capacitor. Date.now() geht mit: die APK misst daran die Brueckenzeit.
   function omegaBleSchreiben(z, hex) {
     try {
+      const d = window.OmegaDirekt;
+      if (d && typeof d.schreibe === 'function') {
+        d.schreibe(z.deviceId, z.service, z.characteristic, hex, Date.now());
+        omegaDirektBenutzt = true;
+        return true;
+      }
       C.toNative('OmegaBle', 'writeControl', { deviceId: z.deviceId, service: z.service,
-                                               characteristic: z.characteristic, value: hex });
+                                               characteristic: z.characteristic, value: hex, t: Date.now() });
       return true;
     } catch (e) { return false; }
   }
+  let omegaDirektBenutzt = false;
   // Waehrend das Community-Plugin selbst ans GATT geht (Abo, Lesen, Schreiben mit Antwort),
   // schreibt OmegaBle nicht: Android erlaubt nur EINEN GATT-Vorgang zugleich. Gezaehlt, weil
   // mehrere Vorgaenge ueberlappen koennen; das Plugin hebt die Pause nach 1,5 s selbst auf.
@@ -134,7 +144,8 @@
   window.OMEGA_BRUECKE.omegaInfo = () => {
     if (!omegaBleVerfuegbar()) return { weg: 'Plugin' };
     const l = [...omegaLage.values()][0];
-    return { weg: l && l.bereit ? 'OmegaBle' : 'Plugin', alt: !!(l && l.alt), zaehler: l && l.zaehler };
+    return { weg: l && l.bereit ? (omegaDirektBenutzt ? 'OmegaBle direkt' : 'OmegaBle') : 'Plugin',
+             alt: !!(l && l.alt), zaehler: l && l.zaehler };
   };
 
   let bereit = null;
@@ -249,13 +260,13 @@
       // SCHNELLES VERBINDUNGSINTERVALL. Android waehlt sonst 30-50 ms, und der Sendetakt ist
       // 45 ms - dann faellt jedes zweite Paket auf das naechste Intervall. 1 = HIGH.
       ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 }).catch(() => {});
-      // Und alle 10 s nachlegen (v0.9.2): manche Autos/Telefone handeln das Intervall spaeter
-      // wieder hoch, und ein langsames Intervall fuehlt sich genau wie Eingabeverzoegerung an.
-      clearInterval(this._prio);
-      this._prio = setInterval(() => {
-        if (!this.connected) { clearInterval(this._prio); return; }
-        ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 }).catch(() => {});
-      }, 10000);
+      // v0.10.4: EINMAL nachlegen, nach 5 s, statt alle 10 s. Jede Anfrage kann eine neue
+      // Aushandlung des Verbindungsintervalls ausloesen - und waehrend der stockt der Funk
+      // kurz. Alle zehn Sekunden war das ein regelmaessiger kleiner Haenger je Auto.
+      clearTimeout(this._prio);
+      this._prio = setTimeout(() => {
+        if (this.connected) ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 }).catch(() => {});
+      }, 5000);
       return this;
     }
     disconnect() {

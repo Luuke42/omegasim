@@ -4,6 +4,48 @@ Drei klar getrennte Gruppen. Der Unterschied ist wichtig, weil nur eine davon
 fremdes Aufnahmematerial enthaelt, und eine dritte weder das eine noch das
 andere ist - eine Systemstimme, kein Mensch und keine Physik.
 
+## Aufnahmen aus Speed Dreams (CC0) — seit v1.0.13
+
+Sechs Motoren sind echte Aufnahmen. Sie stammen aus den Spieldaten von Speed Dreams 2.4
+(`data/sound/`), und verwendet werden nur die Proben, die dort in `SoundCredits.txt`
+ausdruecklich als CC0 gekennzeichnet sind (Zusammenstellung June Ravenmoon, 29.11.2024,
+nach den Freesound-Nutzungsbedingungen fuer CC0-Werke):
+
+| Motor in der App | Datei in Speed Dreams | Quelle |
+|---|---|---|
+| Nissan GT-R GT500 2013, 3,4 l V8 (Vorbeifahrt; Freesound: japanischer GT-V8) | `v8_formula.wav` | Heigh-hoo, https://freesound.org/people/Heigh-hoo/sounds/128611/ (CC0) |
+| Audi R8 LMS, 5,2 l V10 (Freesound: deutscher V10-Sportwagen) | `v10_raw.wav` | kevp888, https://freesound.org/people/kevp888/sounds/649889/ (CC0) |
+| Holden Commodore VF V8 Supercar, 5,0 l V8 (Freesound: australische Muscle Cars) | `v8-ears68.wav` | Ears68, https://freesound.org/people/Ears68/sounds/260445/ (CC0) |
+| Shelby GT350 1965, 4,7 l V8 (Freesound: alter amerikanischer V8) | `v8-cr4sht3st.wav` | cr4sht3st, https://freesound.org/people/cr4sht3st/sounds/157144/ (CC0) |
+| Ferrari 575 GTC / Ferrari 599 GTB Fiorano, 6,0 l V12 (Freesound: italienische V12, roh / weich) | `v12_raw.wav`, `v12_smooth2.wav` | cheesepuff, https://freesound.org/people/cheesepuff/sounds/112075/ (CC0) |
+| Rollen neben der Bahn (Gras/Schotter, `sd_offroad.ogg`) | `grass_ride.wav` | Bidone, https://freesound.org/people/Bidone/sounds/66048/ (CC0) |
+| Aufprall (`sd_crash_0..3.ogg`, seit v1.0.21) | `crash1.wav` .. `crash4.wav` | SuperSouper https://freesound.org/people/SuperSouper/sounds/681461/, Feedbackdesignz https://freesound.org/people/Feedbackdesignz/sounds/245714/, BehanSean https://freesound.org/people/BehanSean/sounds/422438/, fiezewarthog https://freesound.org/people/fiezewarthog/sounds/504921/ (alle CC0) |
+
+`tools/sd_engines.py` macht aus jeder Schleife mehrere Drehzahlbaender: dieselbe Aufnahme
+mit veraenderter Abspielrate (wie Speed Dreams selbst es zur Laufzeit tut), dazu ein
+gedaempftes Schubband und eine Lautstaerkeangleichung an die uebrigen Motoren. Seit v1.0.21
+steht jede Aufnahme fuer ein bestimmtes Auto (vom Nutzer zugeordnet); Leerlauf und Begrenzer
+sind die dieses Autos. Die Aufnahmen selbst stammen nicht nachweislich von genau diesen Autos. Die
+Aufnahmedrehzahl ist aus der Zuendfrequenz geschaetzt (seit v1.0.21 die staerkste Linie des
+Spektrums); die Motoren sind deshalb WIP.
+
+### Toro R-GT und Auspuffknall (Free Art License 1.3) — seit v1.0.18 / v1.0.21
+
+| Motor in der App | Datei in Speed Dreams | Quelle und Lizenz |
+|---|---|---|
+| Lamborghini Murciélago R-GT (Toro R-GT), 6,0 l V12 | `data/sound/toro-rgt.wav` | Speed-Dreams-Team; ohne Einzelangabe, also nach der Vorgabe der Speed-Dreams-Daten unter der **Free Art License 1.3** (https://artlibre.org/licence/lal/en/) |
+| Auspuffknall (`sd_backfire_0.ogg`, seit v1.0.21) | `data/sound/backfire.wav` | ebenso: ohne Einzelangabe, **Free Art License 1.3** |
+
+Die Dateien `audio/sd_toro_*.ogg` und `audio/sd_backfire_0.ogg` sind aus dieser Aufnahme gerechnet (Abspielrate je
+Drehzahlband, Schubband gedaempft, Lautstaerke angeglichen; `tools/sd_engines.py`) und
+stehen damit ebenfalls unter der Free Art License 1.3. Das Original liegt in den
+Spieldaten von Speed Dreams 2.4 (https://www.speed-dreams.net). Der Code von OmegaSim
+bleibt MIT; die Klangdateien werden nur mitgeliefert und geladen.
+
+Nicht verwendet: `v6_raw.wav` und `rotary2.wav` (als "CC-BY" aus YouTube-Videos
+angegeben, Rechte unklar), `skid_metal.wav` (ohne Lizenzangabe) und die uebrigen
+aelteren Fahrzeugklaenge der Spieldaten.
+
 ## Vollstaendig synthetisch — kein Aufnahmematerial
 
 Siebenundzwanzig Motoren, und jeder gehoert zu einem wirklichen Auto (oder in zwei

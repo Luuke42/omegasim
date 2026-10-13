@@ -136,6 +136,70 @@ public class OmegaSicherungPlugin extends Plugin {
         return f.getAbsolutePath();
     }
 
+    // ---- STRECKENBILD (v1.0.15) ----------------------------------------------------------
+    // BESTELLT: "Editor-Screenshot: huebsches PNG mit Strecke, Code, OmegaSim-Link, Massen,
+    // Laenge." Die WebView laedt keine Blob-Downloads; darum schreibt die App das Bild selbst
+    // nach Bilder/OmegaSim (in der Galerie sichtbar).
+    //   bild({name, base64})   name ohne Endung, base64 ohne "data:"-Vorspann
+    @PluginMethod
+    public void bild(PluginCall call) {
+        String b64 = call.getString("base64");
+        String name = call.getString("name", "OmegaSim-Strecke");
+        if (b64 == null) { call.reject("base64 fehlt"); return; }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                && getPermissionState("speicher") != PermissionState.GRANTED) {
+            requestPermissionForAlias("speicher", call, "nachRechtBild");
+            return;
+        }
+        bildSchreiben(call, name, b64);
+    }
+
+    @PermissionCallback
+    private void nachRechtBild(PluginCall call) {
+        if (getPermissionState("speicher") != PermissionState.GRANTED) {
+            call.reject("Keine Erlaubnis, in Bilder zu schreiben.");
+            return;
+        }
+        bildSchreiben(call, call.getString("name", "OmegaSim-Strecke"), call.getString("base64"));
+    }
+
+    private void bildSchreiben(PluginCall call, String name, String b64) {
+        new Thread(() -> {
+            try {
+                byte[] daten = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                String datei = name.replaceAll("[^A-Za-z0-9._-]", "_") + ".png";
+                String ort;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentValues v = new ContentValues();
+                    v.put(MediaStore.MediaColumns.DISPLAY_NAME, datei);
+                    v.put(MediaStore.MediaColumns.MIME_TYPE, "image/png");
+                    v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/" + ORDNER);
+                    ContentResolver cr = getContext().getContentResolver();
+                    Uri uri = cr.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+                    if (uri == null) throw new IllegalStateException("MediaStore lehnt ab");
+                    try (OutputStream o = cr.openOutputStream(uri, "w")) {
+                        if (o == null) throw new IllegalStateException("nicht beschreibbar");
+                        o.write(daten);
+                    }
+                    ort = Environment.DIRECTORY_PICTURES + "/" + ORDNER + "/" + datei;
+                } else {
+                    @SuppressWarnings("deprecation")
+                    File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), ORDNER);
+                    if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("Ordner nicht anlegbar");
+                    File f = new File(dir, datei);
+                    try (FileOutputStream o = new FileOutputStream(f, false)) { o.write(daten); }
+                    ort = f.getAbsolutePath();
+                }
+                JSObject r = new JSObject();
+                r.put("ok", true);
+                r.put("ort", ort);
+                call.resolve(r);
+            } catch (Exception e) {
+                call.reject("Bild nicht gespeichert: " + e.getMessage());
+            }
+        }, "OmegaBild").start();
+    }
+
     @PluginMethod
     public void oeffnen(PluginCall call) {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);

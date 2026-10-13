@@ -49,11 +49,11 @@
       d.realKm += e.realKm || 0;
       if (e.strecke) codes.add(e.strecke);
       const ich = (e.autos || []).findIndex((a) => a.rolle === 'player');
-      const a = ich >= 0 ? e.autos[ich] : null;
-      if (a && Array.isArray(a.laps)) {
+      // v0.9.87: alle gesteuerten Autos (Spieler 1 bis 3), nicht nur Spieler 1.
+      for (const a of (e.autos || [])) {
+        if (!/^player/.test(a.rolle || '') || !Array.isArray(a.laps)) continue;
         d.runden += a.laps.length;
         d.fahrMs += a.laps.reduce((x, y) => x + y, 0);
-        for (const ms of a.laps) if (d.besteMs === null || ms < d.besteMs) d.besteMs = ms;
         for (const ev of (a.ereignisse || [])) { d.boxen += ev.pit || 0; d.crashs += ev.crash || 0; }
       }
       if (STAT_RENNMODI.indexOf(e.modus) >= 0) {
@@ -78,9 +78,20 @@
         if (n >= 1 && n <= 3) d.medaillen[n] += 1;
       }
     } catch (e) { /* ohne Challenge-Daten keine Medaillen */ }
+    // v0.10.6: die Medaillen aus dem Bestzeit-Modus (je Strecke und Fahrer die beste).
     try {
-      const t = JSON.parse(localStorage.getItem('carrera-hybrid-tracks') || '[]');
-      d.strecken = Array.isArray(t) ? t.length : 0;
+      const bz = bestzeitLesen();
+      for (const k of Object.keys(bz)) {
+        for (const f of Object.values(bz[k].fahrer || {})) {
+          if (f.medaille >= 1 && f.medaille <= 3) d.medaillen[f.medaille] += 1;
+        }
+      }
+    } catch (e) { /* ohne Bestzeiten */ }
+    try {
+      // v0.9.87: die Ablage ist ein OBJEKT (Name -> Strecke), kein Feld - gezaehlt wurde
+      // deshalb immer 0 ("gespeicherte Strecken gehen nicht").
+      const t = JSON.parse(localStorage.getItem('carrera-hybrid-tracks') || '{}');
+      d.strecken = Array.isArray(t) ? t.length : (t && typeof t === 'object' ? Object.keys(t).length : 0);
     } catch (e) { d.strecken = 0; }
     return d;
   }
@@ -108,7 +119,6 @@
       + kachel(km(d.simKm) + ' km', 'Gefahren (simuliert)', (d.realKm * 1000).toFixed(0) + ' m ' + t('auf der Bahn'))
       + kachel(d.sitzungen, 'Sitzungen', d.seit ? t('seit') + ' ' + new Date(d.seit).toLocaleDateString() : '')
       + kachel(statDauer(d.fahrMs), 'Fahrzeit', d.runden + ' ' + t('Runden'))
-      + kachel(d.besteMs !== null ? formatLapTime(d.besteMs) : '–', 'Beste Runde')
       + kachel(d.rennen, 'Rennen', d.rennenMehr + ' ' + t('mit mehreren Autos'))
       + kachel(d.siege, 'Siege', d.rennenMehr ? Math.round(100 * d.siege / d.rennenMehr) + ' %' : '')
       + kachel(d.boxen, 'Boxenstopps')
@@ -125,12 +135,15 @@
     if (d.autos.length) {
       html += '<h3 class="k-zwischen">' + esc(t('Ranking: Kilometer je Auto')) + '</h3>'
         + '<table class="stat-tabelle"><thead><tr><th>#</th><th>' + esc(t('Auto')) + '</th><th>km</th><th>'
-        + esc(t('Runden')) + '</th><th>' + esc(t('Beste Runde')) + '</th><th>' + esc(t('Sitzungen')) + '</th></tr></thead><tbody>'
+        + esc(t('Runden')) + '</th><th>' + esc(t('Sitzungen')) + '</th></tr></thead><tbody>'
         + d.autos.map((a, i) => '<tr><td data-i18n-skip>' + (i + 1) + '</td><td data-i18n-skip>' + esc(a.name || '?')
           + '</td><td data-i18n-skip>' + km(a.km || 0) + '</td><td data-i18n-skip>' + (a.runden || 0) + '</td><td data-i18n-skip>'
-          + (a.besteMs ? formatLapTime(a.besteMs) : '–') + '</td><td data-i18n-skip>' + (a.sitzungen || 0) + '</td></tr>').join('')
+          + (a.sitzungen || 0) + '</td></tr>').join('')
         + '</tbody></table>';
     }
-    html += '<p class="muted stat-fuss">' + esc(t('Gespeichert werden die letzten 200 Sitzungen; die Kilometer und Runden je Auto zählen ohne Grenze. Die Höchstgeschwindigkeit zeichnet die App nicht auf. Ghosts werden die Strecke des Fahrerautos gutgeschrieben.')) + '</p>';
+    html += '<p class="muted stat-fuss">' + esc(t('Gespeichert werden die letzten 200 Sitzungen; die Kilometer und Runden je Auto zählen ohne Grenze. Die Höchstgeschwindigkeit zeichnet die App nicht auf. NPCs werden die Strecke des Fahrerautos gutgeschrieben.')) + '</p>';
+    // v1.0.21: Rundenvergleich Teil fuer Teil steht auf einer eigenen Seite.
+    html += '<p class="stat-fuss"><button type="button" id="stat-tele">' + esc(t('Telemetrie ansehen')) + '</button></p>';
     host.innerHTML = html;
+    if ($('stat-tele')) $('stat-tele').addEventListener('click', () => teleSeiteOeffnen());
   }

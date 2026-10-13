@@ -1740,7 +1740,7 @@
       const merk = {};
       const kaesten = { lap: 'setting-announce', damage: 'setting-announce-damage',
                         fuel: 'setting-announce-fuel', tyre: 'setting-announce-tyre',
-                        rain: 'setting-announce-rain' };
+                        rain: 'setting-announce-rain', battery: 'setting-announce-battery' };
       // Die Kaestchen setzen und hinterher zuruecklegen: der Test darf die Einstellung
       // des Nutzers nicht behalten.
       try {
@@ -1762,7 +1762,12 @@
         // und der naechste Test in der Datei erbte ein bereits 'rain: true' geflanktes
         // Latch - eine Meldung fiel, die zur eigenen Zustandsfolge gar nicht gehoerte.
         const merkLatch = Object.assign({}, ansageLatch);
-        Object.assign(ansageLatch, { damage: false, fuel: false, tyre: false, rain: null });
+        Object.assign(ansageLatch, { damage: false, fuel: false, tyre: false, rain: null, battery: false });
+        // Das Akku-Latch ist JE AUTO (batteryLatchSet in 80-sound.js) und genauso geteilt -
+        // dieselbe Vorsicht wie oben: eine vorangegangene Probe darf kein Auto-Latch
+        // hinterlassen.
+        const merkBatt = new Set(batteryLatchSet);
+        batteryLatchSet.clear();
         // BESTELLT: die Aufnahme hat jetzt IMMER Vorrang vor der Live-Stimme (ansage()),
         // nicht nur ohne speechSynthesis. Diese Probe will aber ausdruecklich den
         // Live-Pfad beobachten (ueber die Attrappe unten) - ist der Browser, in dem der
@@ -1786,6 +1791,8 @@
             delete window.speechSynthesis;
           }
           Object.assign(ansageLatch, merkLatch);
+          batteryLatchSet.clear();
+          merkBatt.forEach((c) => batteryLatchSet.add(c));
           Object.keys(voiceBuffers).forEach((k) => delete voiceBuffers[k]);
           Object.assign(voiceBuffers, echtBuffers);
         }
@@ -1809,7 +1816,7 @@
     ansagenFunkProbe(schritte) {
       const kaesten = { lap: 'setting-announce', damage: 'setting-announce-damage',
                         fuel: 'setting-announce-fuel', tyre: 'setting-announce-tyre',
-                        rain: 'setting-announce-rain' };
+                        rain: 'setting-announce-rain', battery: 'setting-announce-battery' };
       const merk = {};
       try {
         Object.keys(kaesten).forEach((art) => {
@@ -1833,7 +1840,9 @@
         // Zustand, eine vorangegangene Probe kann eine Flanke hinterlassen haben, die
         // zu DIESER Zustandsfolge nicht gehoert.
         const merkLatch = Object.assign({}, ansageLatch);
-        Object.assign(ansageLatch, { damage: false, fuel: false, tyre: false, rain: null });
+        Object.assign(ansageLatch, { damage: false, fuel: false, tyre: false, rain: null, battery: false });
+        const merkBatt = new Set(batteryLatchSet);
+        batteryLatchSet.clear();
         try {
           delete window.speechSynthesis;
           const folge = schritte.map((w) => ({ w, fiel: ansagenPruefen(w) }));
@@ -1847,6 +1856,8 @@
                                   { configurable: true, value: echtSpeech });
           }
           Object.assign(ansageLatch, merkLatch);
+          batteryLatchSet.clear();
+          merkBatt.forEach((c) => batteryLatchSet.add(c));
         }
       } finally {
         Object.keys(merk).forEach((art) => {
@@ -1875,7 +1886,7 @@
       playFx = (puffer) => { abgespielt.push(puffer && puffer.markiert); return true; };
       const gesagt = [];
       const merkLatch = Object.assign({}, ansageLatch);
-      Object.assign(ansageLatch, { damage: false, fuel: false, tyre: false, rain: null });
+      Object.assign(ansageLatch, { damage: false, fuel: false, tyre: false, rain: null, battery: false });
       try {
         Object.defineProperty(window, 'speechSynthesis', {
           configurable: true,
@@ -1972,6 +1983,64 @@
         Date.now = echtNow;
         ghostCfg.needCode = merkNeed;
         garage.forEach(c => { if (String(c.alias || '') === 'Parkprobe') {
+          ghostTaktLoeschen(c); if (c.ghost) c.ghost.running = false; } });
+        garage.splice(0, garage.length, ...merkGarage);
+        currentTrackTiles = keepTiles;
+        lineCache = null;
+      }
+    },
+
+    // ---- Zwei Sektoren: die Sektorgrenze zaehlt keine Runde (v0.9.74) ----------------
+    //
+    // Die Rundenlinie ist die ERSTE Startkachel, jede weitere ist eine Sektorgrenze (gelb).
+    // Ein Ghost liest an beiden denselben Startcode. Bis v0.9.74 setzte ortAbgleich den Ort
+    // bei JEDEM Startcode auf die erste Kachel und zaehlte eine Runde - auf einer
+    // Zwei-Sektor-Strecke also zwei Runden pro physischer Runde. Geprueft wird: ueberfaehrt
+    // der Ghost die Sektorgrenze, bleibt der Ort dort und es zaehlt keine Runde; an der
+    // Rundenlinie zaehlt genau eine.
+    sectorProbe(o) {
+      const opt = o || {};
+      const merkGarage = garage.slice();
+      const keepTiles = currentTrackTiles;
+      const echtNow = Date.now;
+      try {
+        currentTrackTiles = codeToTrack(opt.code || 'SG2SG2R2').tiles;
+        lineCache = null;
+        let uhr = echtNow();
+        Date.now = () => uhr;
+        const car = { role: 'ghost', alias: 'Sektorprobe', writeInFlight: false,
+                      tileCode: 0x02, tileCount: 0, lastCodeAt: uhr, lastCode: 0x02, yaw: 0,
+                      rx: { properties: { writeWithoutResponse: true },
+                            writeValueWithoutResponse() { return Promise.resolve(); } } };
+        garage.push(car);
+        startGhost(car);
+        ghostTaktLoeschen(car);
+        car.ghost.freeRun = true;
+        car.ghost.gnadeBis = 0;
+        const g = car.ghost;
+        // Der Ghost steht kurz vor der Sektorgrenze (Kachel 3 in 'SG2SG2R2').
+        g.tileIndex = 2;
+        g.lastCount = null;
+        g.tileStart = uhr;
+        // Der Kachelwechsel loest ortAbgleich aus: der Zaehler springt auf die naechste
+        // Kachel, und das Auto meldet dort den START-Code der Sektorgrenze.
+        car.tileCount = 1;
+        car.tileCode = 0x0a;
+        uhr += CONTROL_SEND_INTERVAL_MS;
+        ghostTick(car);
+        const nachSektor = { tileIndex: g.tileIndex, laps: g.laps };
+        // Und eine Runde spaeter an der Rundenlinie (Kachel 0) muss EINE Runde zaehlen.
+        g.tileIndex = 7;
+        g.lastCount = 1;
+        car.tileCount = 2;
+        car.tileCode = 0x0a;
+        uhr += CONTROL_SEND_INTERVAL_MS;
+        ghostTick(car);
+        const nachLinie = { tileIndex: g.tileIndex, laps: g.laps };
+        return { nachSektor, nachLinie, anzahl: currentTrackTiles.length };
+      } finally {
+        Date.now = echtNow;
+        garage.forEach(c => { if (String(c.alias || '') === 'Sektorprobe') {
           ghostTaktLoeschen(c); if (c.ghost) c.ghost.running = false; } });
         garage.splice(0, garage.length, ...merkGarage);
         currentTrackTiles = keepTiles;
@@ -5450,7 +5519,8 @@
         // soll - ausdruecklich geloescht, sonst maskiert sie die ersten drei Sekunden
         // jedes Laufs.
         car.ghost.gnadeBis = 0;
-        car.ghost.tileIndex = 2;
+        car.ghost.tileIndex = opt.tileIndex === undefined ? 2 : opt.tileIndex;
+        car.lastCode = opt.lastCode;
         car.tileCode = 0x02;
         car.tileCount = 5;
         // attrappeGhost() liefert die Physik unkalibriert (topSpeedKmh im einstelligen
@@ -5481,7 +5551,8 @@
               * car.ghost.engine.config.topSpeedKmh;
           }
           ghostTick(car);
-          verlauf.push({ t, parked: car.parked, versucht: !!car.ghost.recoverUntil });
+          verlauf.push({ t, parked: car.parked, versucht: !!car.ghost.recoverUntil,
+                         lastTarget: car.ghost.lastTarget, tileCode: car.tileCode });
           if (car.parked) break;
         }
         return { geparkt: car.parked, versuchLief: verlauf.some((v) => v.versucht),
@@ -5603,7 +5674,10 @@
           const gesendet = [];
           autos.push({ role: 'ghost', alias: 'F' + i, tileCode: 0x02,
                        tileCount: 0, testSenke: gesendet,
-                       ghost: { tileIndex: 0, engine: null } });
+                       ghost: { tileIndex: 0, engine: null,
+                                // Startplatz-Seite, wie sie startGhost() setzt (v0.9.59):
+                                // ungerader Platz links, gerader rechts.
+                                seite: i % 2 ? -1 : 1 } });
         }
         for (const c of autos) garage.push(c);
         for (const car of autos) {
@@ -5635,6 +5709,31 @@
         return raus;
       } finally {
         Date.now = echtNow;
+        garage.splice(0, garage.length);
+        for (const c of merkGarage) garage.push(c);
+      }
+    },
+
+    // ---- GHOST-MOTORSOUND (v0.9.61, D8): Stereoseite und Lautstaerke -----------------
+    //
+    // Die Stereoseite haengt am Garagenplatz. Geprueft wird die VERWENDETE Zahl, nicht eine
+    // Absicht: ghostStimmePan() liest die Garage und verteilt das Feld ueber die Buehne.
+    // Der Leisefaktor kommt aus dem Ghost-Zustand, wie ihn startGhost() anlegt.
+    ghostSoundPan(n) {
+      const merkGarage = garage.splice(0, garage.length);
+      try {
+        const zahl = n || 3;
+        const autos = [];
+        for (let i = 0; i < zahl; i++) {
+          autos.push({ role: 'ghost', alias: 'G' + i,
+                       ghost: { stimme: { master: null, pan: null, nodes: null, over: null,
+                                          car: null, laut: 0.6 } } });
+        }
+        for (const c of autos) garage.push(c);
+        return { n: zahl,
+                 pan: autos.map((c) => +ghostStimmePan(c).toFixed(3)),
+                 leise: autos[0].ghost.stimme.laut };
+      } finally {
         garage.splice(0, garage.length);
         for (const c of merkGarage) garage.push(c);
       }
@@ -6387,6 +6486,7 @@
           role: 'ghost', alias: 'Sonde', writeInFlight: false,
           tileCode: 0x02, tileCount: (lage === 'ohne') ? null : 0,
           lastCodeAt: (lage === 'ohne') ? 0 : uhr, yaw: 0,
+          ghostStufe: opt.stufe,
           rx: { properties: { writeWithoutResponse: true },
                 writeValueWithoutResponse(b) {
                   bytes.push([b[7] > 127 ? b[7] - 256 : b[7],
@@ -6816,6 +6916,25 @@
         const spuren = autos.map((c) => ghostLane(c));
         const eindeutig = [...new Set(spuren.map((x) => +x.toFixed(6)))].sort((a, b) => a - b);
         return { spuren, eindeutig, autos: autos.length };
+      } finally {
+        garage.splice(0, garage.length);
+        merkGarage.forEach((c) => garage.push(c));
+      }
+    },
+
+    // v0.9.56: ghostLane() soll die Startseite (ghost.seite) liefern, nicht die
+    // Garagen-Paritaet. Diese Sonde setzt die Startseite nach dem Aufstellungsmuster
+    // (gerader Platz rechts +1, ungerader links -1) und fragt ghostLane() ab.
+    seitenProbe(n) {
+      const merkGarage = garage.splice(0, garage.length);
+      try {
+        const autos = [];
+        for (let i = 0; i < (n || 6); i++) {
+          autos.push({ role: 'ghost', alias: 'S' + i,
+                       ghost: { tileIndex: 0, seite: (i % 2 ? -1 : 1) } });
+        }
+        for (const c of autos) garage.push(c);
+        return { spuren: autos.map((c) => ghostLane(c)) };
       } finally {
         garage.splice(0, garage.length);
         merkGarage.forEach((c) => garage.push(c));

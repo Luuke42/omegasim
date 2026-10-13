@@ -285,6 +285,37 @@
         } catch (e) { /* dann eben nur fuer diese Sitzung */ }
       }
     }
+    // ---- EINMALIG (v0.10.5): Bremston leiser, Drift-Modus entfernt -----------------------
+    {
+      let erledigt = false;
+      try { erledigt = localStorage.getItem('chc.migrate.v0105.v1') === '1'; } catch (e) { /* privat */ }
+      if (!erledigt) {
+        let geaendert = false;
+        if (cfg['brake-volume'] === 0.3) { cfg['brake-volume'] = 0.2; geaendert = true; }
+        if (cfg['phys-mode'] === 'drift') { cfg['phys-mode'] = 'physik'; geaendert = true; }
+        try {
+          localStorage.setItem('chc.migrate.v0105.v1', '1');
+          if (geaendert) localStorage.setItem(AUTO_STORE, JSON.stringify(cfg));
+        } catch (e) { /* dann eben nur fuer diese Sitzung */ }
+      }
+    }
+    // ---- EINMALIG (v0.9.55): neue Vorgaben fuer Ueberholrate und Reihenstaffel ----------
+    // Dieselbe Regel wie darueber: nur wer noch genau auf der alten Vorgabe steht.
+    {
+      let erledigt = false;
+      try { erledigt = localStorage.getItem('chc.migrate.ghost55.v1') === '1'; } catch (e) { /* privat */ }
+      if (!erledigt) {
+        const alt = { 'ghost-ueber': [0.5, 0.1], 'ghost-staffel-ms': [200, 250] };
+        let geaendert = false;
+        for (const [id, [von, nach]] of Object.entries(alt)) {
+          if (cfg[id] === von) { cfg[id] = nach; geaendert = true; }
+        }
+        try {
+          localStorage.setItem('chc.migrate.ghost55.v1', '1');
+          if (geaendert) localStorage.setItem(AUTO_STORE, JSON.stringify(cfg));
+        } catch (e) { /* dann eben nur fuer diese Sitzung */ }
+      }
+    }
     // AUCH HIER GEPRUEFT. Die eigene Ablage ist nicht vertrauenswuerdiger als eine Datei:
     // sie kann aus einer aelteren Fassung stammen, in der ein Regler andere Grenzen hatte.
     const { bad } = presetPruefen(cfg);
@@ -316,7 +347,8 @@
     // Schluessel, Name, und wie man den Inhalt zaehlt. `zahl` gibt null zurueck, wenn es
     // nichts zu zaehlen gibt - dann wird die Zeile weggelassen.
     ['chc.layout.v1', 'Fahrzeug-Layout', (v) => (v && Object.keys(v).length) || null],
-    ['carrera-hybrid-tracks', 'Strecken', (v) => (Array.isArray(v) ? v.length : null)],
+    ['carrera-hybrid-tracks', 'Strecken', (v) => (Array.isArray(v) ? v.length
+                                                 : (v && typeof v === 'object' ? Object.keys(v).length : null))],
     ['chc.sessions.v1', 'Sitzungen', (v) => (Array.isArray(v) ? v.length
                                              : (v && Array.isArray(v.sessions) ? v.sessions.length : null))],
     ['carrera-hybrid-macros', 'Aufnahmen', (v) => (Array.isArray(v) ? v.length

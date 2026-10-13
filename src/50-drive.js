@@ -56,6 +56,10 @@
     // umgeschaltet, das gesendete Byte noch alt. Nur die zwei Modusbits werden angefasst,
     // Scheinwerfer und Bremslicht bleiben stehen - daher die Maske.
     lightBits = (lightBits & ~(TRACK_BIT_RAIL | TRACK_BIT_PRINT)) | trackModeBit();
+    // v1.0.21: Safety Car (und Challenger) nur auf der Bahn - beim Wechsel auf "Aus".
+    if (!rail && typeof bahnRollenPruefen === 'function') {
+      try { bahnRollenPruefen(); } catch (e) { /* beim Laden: Garage noch nicht da */ }
+    }
     const b = $('race-act-scan');
     if (b) {
       // NUR die Spanne, nicht der Knopf: er traegt jetzt ein Sensorbild, und textContent
@@ -95,7 +99,9 @@
     $('race-act-mode').addEventListener('click', () => {
       // In einer Challenge ist die Abstimmung festgelegt (72-challenges.js).
       if (typeof challengeLaeuft === 'function' && challengeLaeuft()) { showHudToast(t('Während der Challenge gesperrt')); return; }
-      const keys = window.__presetKeys ? window.__presetKeys() : [];
+      // v0.10.5: nur die vier Fahren-Abstimmungen (Arcade, Sim+, Pro, Pacejka).
+      const keys = window.__presetKeysFahren ? window.__presetKeysFahren()
+        : (window.__presetKeys ? window.__presetKeys() : []);
       if (!keys.length) return;
       // Beim ersten Druck da anfangen, wo die Regler stehen: sonst springt der Knopf von
       // einer eingestellten GT3-Abstimmung auf Arcade zurueck. Ist gar keine Variante
@@ -412,8 +418,7 @@
     if (melden) {
       log('Steuerungsmodus: ' + (v === 'physik' ? 'Physik'
                              : v === 'pacejka' ? 'Pacejka (experimentell)'
-                             : v === 'drift' ? 'Drift (experimentell)'
-                             : 'Aus, rohe Stickstellung'), 'info');
+                             : 'RC (Auslaufen, Bremse zweimal = rueckwaerts)'), 'info');
     }
   }
   if ($('phys-mode')) {
@@ -1763,17 +1768,18 @@
     // auf Hoehe von "Spieler 1"/"Spieler 2".
     const car2 = typeof playerCar2 !== 'undefined' ? playerCar2 : null;
     const lage = typeof boxZweiLage === 'function' ? boxZweiLage() : 'aus';
+    // v0.9.87: Spieler 1 aus raceLapTimes - dieselbe Quelle wie Ergebnis und Cockpit (vorher
+    // car.race.laps, und die Zaehlungen konnten auseinanderlaufen). Dazu letzte und beste
+    // Runde je Spalte.
+    const runden1 = (typeof raceLapTimes !== 'undefined' && raceLapTimes.length) ? raceLapTimes
+      : ((typeof playerCar !== 'undefined' && playerCar && playerCar.race && playerCar.race.laps) || []);
     const r1z = $('vgl1-runde');
-    if (r1z) {
-      const r1 = ((typeof playerCar !== 'undefined' && playerCar && playerCar.race
-                   && playerCar.race.laps) || []).length;
-      r1z.textContent = 'Runde ' + r1;
-    }
+    if (r1z) r1z.textContent = t('Runde') + ' ' + runden1.length;
+    vglZeiten('vgl1', runden1);
+    const runden2 = (car2 && car2.race && car2.race.laps) || [];
     const r2z = $('vgl2-runde');
-    if (r2z) {
-      const r2 = ((car2 && car2.race && car2.race.laps) || []).length;
-      r2z.textContent = 'Runde ' + r2;
-    }
+    if (r2z) r2z.textContent = t('Runde') + ' ' + runden2.length;
+    vglZeiten('vgl2', runden2);
 
     // ---- DIE FUSSZEILE SAGT, WAS DER BOXENSTOPP GERADE BRAUCHT -----------------------
     //
@@ -1795,8 +1801,10 @@
     if ($('vgl3-spalte')) $('vgl3-spalte').hidden = !drei;
     if (drei) {
       vglSpalte('vgl3', z3.car, z3.motor, z3.tank.stand, z3.schaden.wert);
+      const runden3 = (z3.car.race && z3.car.race.laps) || [];
       const r3z = $('vgl3-runde');
-      if (r3z) r3z.textContent = 'Runde ' + ((z3.car.race && z3.car.race.laps) || []).length;
+      if (r3z) r3z.textContent = t('Runde') + ' ' + runden3.length;
+      vglZeiten('vgl3', runden3);
     }
     const fuss = $('p2s-fuss');
     // Steht Spieler 3 gerade in der Box, gehoert die Fusszeile ihm (Spieler 2 hat Vorrang).
@@ -1955,6 +1963,12 @@
   // Und NICHT am Tacho. Der aendert sich jeden Takt - dort ist der Versatz ein Dauerzittern
   // und keine Rueckmeldung. Verwendet wird sie fuer die Werte, die SPRINGEN: Gang,
   // Rundenzahl, Rundenzeiten.
+  // Letzte und beste Runde einer Spalte des Vergleichsschirms. `runden`: [{ms}] oder [ms].
+  function vglZeiten(pre, runden) {
+    const ms = (runden || []).map((l) => (typeof l === 'number' ? l : l && l.ms)).filter((x) => x > 0);
+    schreibeWert($(pre + '-letzte'), ms.length ? formatLapTime(ms[ms.length - 1]) : '\u2013');
+    schreibeWert($(pre + '-beste'), ms.length ? formatLapTime(Math.min.apply(null, ms)) : '\u2013');
+  }
   function schreibeWert(el, txt) {
     if (!el) return;
     const neu = String(txt);
@@ -2364,8 +2378,22 @@
     const z = ob && ob.zaehler;
     const weg = ob ? ' · ' + t('Weg') + ' ' + ob.weg + (ob.alt ? ' (' + t('alte APK') + ')' : '')
       + (z ? ' · ' + z.geschrieben + ' ' + t('geschrieben') + ', ' + z.wiederholt + ' ' + t('wiederholt') + ', ' + z.verworfen + ' ' + t('verworfen') : '') : '';
-    el.textContent = (s ? Math.round(s.mittel) + ' / ' + Math.round(s.p95) + ' ms' + (s.haenger ? ' · ' + s.haenger + '× hing' : '')
-      : t('noch keine Befehle')) + weg + (wv ? ' · WebView ' + wv : '');
+    // v0.10.4: In der App misst der Schreibwert nur JS (der Aufruf kehrt sofort zurueck) -
+    // so gekennzeichnet. Dazu, was wirklich zaehlt: Brueckenzeit (APK), Takt des Herzschlags,
+    // Gamepad direkt, Ausgabelatenz des Tons.
+    const h = typeof herzStatistik === 'function' ? herzStatistik() : null;
+    const takt = h ? ' · ' + t('Takt') + ' ' + Math.round(h.mittel) + '/' + Math.round(h.p95) + '/' + Math.round(h.max) + ' ms'
+      + (h.ueber60 ? ' (' + Math.round(h.ueber60 * 100) + ' % > 60)' : '') + ', ' + t('Arbeit') + ' ' + h.arbeitP95.toFixed(1) + ' ms' : '';
+    const br = z && typeof z.brueckeMittel === 'number' && z.brueckeMittel >= 0
+      ? ' · ' + t('Brücke') + ' ' + z.brueckeMittel.toFixed(1) + '/' + z.brueckeMax + ' ms' : '';
+    const ersetzt = z && z.ersetzt ? ', ' + z.ersetzt + ' ' + t('ersetzt') : '';
+    const pn = typeof padNativInfo === 'function' ? padNativInfo() : null;
+    const pad = pn ? ' · ' + t('Pad direkt') + ' ' + (pn.an ? t('an') : t('aus')) + (pn.zustellMs !== null ? ' (' + pn.zustellMs + ' ms)' : '') : '';
+    const ton = (typeof audioCtx !== 'undefined' && audioCtx && typeof audioCtx.baseLatency === 'number')
+      ? ' · ' + t('Ton') + ' +' + Math.round(((audioCtx.baseLatency || 0) + (audioCtx.outputLatency || 0)) * 1000) + ' ms' : '';
+    const nurJs = ob ? ' (' + t('nur JS') + ')' : '';
+    el.textContent = (s ? Math.round(s.mittel) + ' / ' + Math.round(s.p95) + ' ms' + nurJs + (s.haenger ? ' · ' + s.haenger + '× hing' : '')
+      : t('noch keine Befehle')) + weg + ersetzt + br + takt + pad + ton + (wv ? ' · WebView ' + wv : '');
   }, 1000);
   // COCKPIT GEDROSSELT (v0.8.41): hoechstens alle COCKPIT_MAL_MS, nach dem Senden.
   const COCKPIT_MAL_MS = 90;
@@ -2600,13 +2628,21 @@
     // trackMode ist ein STRING ('on'/'off') und kein Boolean - ein !trackMode waere hier
     // immer falsch gewesen.
     if (trackMode !== 'on') return null;
+    // v0.9.58 (D6): die Aufstellung wird ein Grund. Sie laeuft VOR dem Rennen, also ohne
+    // Einfuehrungsrunde und ohne Gelb - das Fahrerauto faehrt mit Spur-Bytes zu seinem
+    // Startplatz und wird dort gehalten. Nur wenn SEIN Auto in der Aufstellung steht, sonst
+    // wuerde ein fremdes Feld den Cockpit-Schriftzug zeigen.
+    if (typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(playerCar)) return 'aufstellen';
     if (raceFormationLap) {
       // Beides kann gelten: wenn in der Einfuehrungsrunde jemand abfliegt. Dann gewinnt der
       // LANGSAMERE, und das ist keine Rangfolge, sondern eine Rechnung.
       return (flagState === 'yellow' && yellowFactor() < formationPace())
         ? 'yellow' : 'formation';
     }
-    return flagState === 'yellow' ? 'yellow' : null;
+    if (flagState !== 'yellow') return null;
+    // v1.0.9 BESTELLT: "Bei meinem Auto sollte bei Safetycar sofort der Autopilot uebernehmen,
+    // nicht erst, wenn ich nah am Safetycar bin." Also wie jede gelbe Flagge.
+    return 'yellow';
   }
 
   // ---- UND ER GILT SEIT v0.6.53 FUER BEIDE AUTOS -------------------------------------
@@ -2642,6 +2678,12 @@
       return { grund: 'scan', throttle: 0, brake: 1, steer: 0, lenkt: false };
     }
     if (typeof garageScan !== 'undefined' && garageScan.aktiv && garageScan.car === meinAuto) {
+      // v0.9.64: beim automatischen Streckenscan soll ein Auto, das von der Bahn kommt,
+      // ANHALTEN statt weiterzufahren - sonst faehrt es die Kurve hinaus und der Scan liest
+      // nichts mehr. Erst wieder Gas, wenn es wieder auf der Bahn ist.
+      if (abseitsJetztFuer(wer || 1)) {
+        return { grund: 'scan', throttle: 0, brake: 1, steer: 0, lenkt: false };
+      }
       const v = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
       const dt = Math.max(0.01, Math.min(0.25, (Date.now() - (regler.at || Date.now())) / 1000));
       regler.at = Date.now();
@@ -2662,7 +2704,8 @@
                steer: 0, lenkt: !abseitsJetztFuer(wer || 1) };
     }
     // Automatische Aufstellung (v0.9.24, 90-ghosts.js): zum Startplatz, dort halten.
-    if (typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(meinAuto)) {
+    // v0.9.87: nur auf der Bahn - im Ausdruck-Modus wuerde die Querlage als Radwinkel gelesen.
+    if (trackMode === 'on' && typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(meinAuto)) {
       if (aufstellenSpielerAngekommen(meinAuto)) {
         return { grund: 'aufstellen', throttle: 0, brake: 1, steer: 0, lenkt: false };
       }
@@ -2670,8 +2713,12 @@
       const dtS = Math.max(0.01, Math.min(0.25, (Date.now() - (regler.at || Date.now())) / 1000));
       regler.at = Date.now();
       const g = ghostSpeedControl(regler, formationPace(), vA, dtS);
-      if (fahrerBremse > 0.05) return { grund: 'aufstellen', throttle: 0, brake: fahrerBremse, steer: 0, lenkt: false };
-      return { grund: 'aufstellen', throttle: g.throttle, brake: g.brake, steer: 0,
+      // v0.9.58 (D6): mit Spur-Bytes - dieselbe Querlage wie die Ghosts, in maximaler
+      // Breite, damit das Auto von selbst auf die Seite seines Startplatzes faellt.
+      const lenk = typeof formationDriverOffset === 'function'
+        ? formationDriverOffset(meinAuto, aufstellenSpielerBreite(meinAuto)) : 0;
+      if (fahrerBremse > 0.05) return { grund: 'aufstellen', throttle: 0, brake: fahrerBremse, steer: lenk, lenkt: false };
+      return { grund: 'aufstellen', throttle: g.throttle, brake: g.brake, steer: lenk,
                lenkt: !abseitsJetztFuer(wer || 1) };
     }
     const grund = autopilotGrund();
@@ -2703,9 +2750,14 @@
     // dieser Autopilot ueberhaupt - braucht das Auto genau diese Lesung, um sich auf der
     // Bahn zu halten. Ohne den Boden waere der Autopilot also die Ursache dafuer, dass das
     // Auto abfliegt. Dieselbe Zeile steht seit v0.5.51 auch bei den Ghosts.
-    const ziel = grund === 'formation'
-      ? formationPace()
-      : Math.max(yellowFactor(), GHOST_READ_MIN);
+    // v0.9.51: unter Gelb mit der Kurvendrosselung der Ghosts (autopilotKurvenFaktor) -
+    // "mit dem Tempo der Ghosts", nicht mit Geradentempo durch die Haarnadel.
+    // v0.9.87: auch die Einfuehrungsrunde mit der Kurvendrosselung der Ghosts - "wie bei
+    // gelber Flagge" (BESTELLT fuer den fliegenden Start).
+    // v1.0.12: unter Gelb mit Safety Car erst ~45 % zum Aufschliessen (gelbZielFuer).
+    const ziel = (grund === 'formation' ? formationPace()
+      : (typeof gelbZielFuer === 'function' ? gelbZielFuer(meinAuto) : Math.max(yellowFactor(), GHOST_READ_MIN)))
+      * autopilotKurvenFaktor(meinAuto);
     const v = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
     const dtA = Math.max(0.01, Math.min(0.25,
       (Date.now() - (regler.at || Date.now())) / 1000));
@@ -3002,6 +3054,8 @@
     const out = physEngine.update({ steering: steer, throttle: rawThrottle, brake: rawBrake,
                                     headlights: headlightsOn }, dt);
     pacejkaRueckmeldung(physEngine, 1);
+    // Telemetrie: etwa 10 Proben je Sekunde (Tempo, Gas, Bremse, Gang, Lenkung).
+    if (typeof teleProbe === 'function') teleProbe(rawThrottle, rawBrake);
     // Nur die LICHTER hier - sie gehen ins Paket. Das Cockpit malt cockpitNachSenden() nach
     // dem Absetzen (20-protocol.js, controlHeartbeat).
     const lamp = resolveLights(out.lights.head, out.lights.brake);
@@ -3012,7 +3066,8 @@
     // Speicherzugriff: localStorage ist synchron und wuerde den 45-ms-Sendetakt stoeren.
     // v0.9.25: das Modelltempo (km/h auf der Bahn), NICHT mal REAL_SCALE - trackDistance()
     // skaliert selbst (siehe sessionKmKorrigieren in 97-sessions.js).
-    trackDistance(physEngine.state.speedKmh, dt);
+    // v0.9.87: nur mit verbundenem Auto - ohne zaehlte die Simulation im Leerlauf mit.
+    if (typeof playerCar !== 'undefined' && playerCar) trackDistance(physEngine.state.speedKmh, dt);
     physOutSteer = out.servoAngle;
     physOutThrottle = out.motorPWM;
   }

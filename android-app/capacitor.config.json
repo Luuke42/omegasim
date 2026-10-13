@@ -8,6 +8,7 @@
   "android": {
     "allowMixedContent": true
   },
+  "loggingBehavior": "none",
   "plugins": {
     "BluetoothLe": {
       "displayStrings": {

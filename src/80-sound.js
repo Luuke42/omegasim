@@ -14,7 +14,11 @@
 
   function initEngineSound() {
     if (audioCtx) return;
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // v0.10.4: 'interactive' ausdruecklich. Ohne Angabe waehlt eine Android-WebView gern
+    // einen grossen Puffer - der Motorton kommt dann 100 ms und mehr nach dem Gas, und das
+    // fuehlt sich an wie Eingabeverzoegerung, obwohl das Auto laengst reagiert hat.
+    const AC = window.AudioContext || window.webkitAudioContext;
+    try { audioCtx = new AC({ latencyHint: 'interactive' }); } catch (e) { audioCtx = new AC(); }
     engineOsc = audioCtx.createOscillator();
     engineOsc.type = soundProfile.wave;
     engineOsc.frequency.value = soundProfile.baseFreq;
@@ -125,6 +129,14 @@
     // sondern auch die Geometrie (Zylinderzahl, Zuendfolge, Bankaufteilung) recherchiert
     // statt einer mitgelieferten technischen Tabelle entnommen - siehe audio/CREDITS.md.
     'fordtudor37', 'kaefer1300',
+    // ---- SECHS AUFNAHMEN AUS SPEED DREAMS, v1.0.13, WIP ------------------------------
+    //
+    // BESTELLT: Motorklaenge aus Speed Dreams. Nur die CC0-Proben aus data/sound (siehe
+    // audio/CREDITS.md); tools/sd_engines.py rechnet aus jeder Schleife die Baender. Damit
+    // spielt die App zum ersten Mal wieder Aufnahmen statt gerechneter Motoren.
+    'sd_v8gt', 'sd_v10', 'sd_v8muscle', 'sd_v8alt', 'sd_v12', 'sd_v12weich',
+    // v1.0.18 BESTELLT: "Toro R-GT einbauen" - aus den Speed-Dreams-Spieldaten, Free Art License.
+    'sd_toro',
   ];
   // KEINE FESTE LISTE MEHR. Bis v0.4.55 stand hier ['idle','mid','high'], und genau diese
   // Liste war die Annahme, die den Ton kaputt gemacht hat: sie kannte drei Namen, also konnte
@@ -298,7 +310,7 @@
 
   // ---- One-shot and looping effect samples ----
   const fxBuffers = { crash: [], brake: null, pit: null, pitFuel: null, pitRepair: null,
-                      start: {}, shift: {}, horns: {} };
+                      start: {}, shift: {}, horns: {}, backfire: [] };
   let brakeNode = null, brakeGain = null;
 
   async function loadFxSamples() {
@@ -322,10 +334,24 @@
         fxBuffers.start[vorrangAuto] = await grab(fx.start[vorrangAuto].file);
       }
       fxBuffers.crash = await Promise.all(fx.crash.map(c => grab(c.file)));
+      // v1.0.21 (WIP), BESTELLT: "Weitere Speed-Dreams-Sounds? Auspuffblubbern vielleicht?
+      // Crash?" Echte Aufprall-Aufnahmen (CC0) statt der gerechneten, wenn vorhanden; und ein
+      // Auspuffknall (Free Art License) fuer die Schubknaller. Duldsam: ein aelteres audio/ hat
+      // die Eintraege nicht, dann bleibt es bei den gerechneten Klaengen.
+      if (fx.crash_sd && fx.crash_sd.files) {
+        const echt = await Promise.all(fx.crash_sd.files.map(c => grab(c.file)));
+        if (echt.length) fxBuffers.crash = echt;
+      }
+      if (fx.backfire && fx.backfire.files) {
+        fxBuffers.backfire = await Promise.all(fx.backfire.files.map(c => grab(c.file)));
+      }
       fxBuffers.brake = await grab(fx.brake.file);
       // Duldsam gegenueber einem aelteren audio/: fehlt der Eintrag, bleibt der Ton weg und
       // der Ladevorgang laeuft weiter. Genau daran hing schon einmal der Schaltton.
       if (fx.tyre) fxBuffers.tyre = await grab(fx.tyre.file);
+      // v1.0.13: Rollen ueber Gras/Schotter neben der Bahn (Speed Dreams, CC0). Duldsam: ein
+      // aelteres audio/ hat den Eintrag nicht.
+      if (fx.offroad) fxBuffers.offroad = await grab(fx.offroad.file);
       fxBuffers.pit = await grab(fx.pit.file);
       // Both are loops: they run for as long as their job does. Missing files are tolerated
       // (grab returns null) and the sound is simply absent rather than the load failing.
@@ -403,8 +429,10 @@
         if (!res.ok) throw new Error('HTTP ' + res.status);
         zahlenManifest = await res.json();
       }
+      // Spanisch hat keine eigenen Aufnahmen: die englischen als Platzhalter.
+      const sprQuelle = spr === 'es' ? 'en' : spr;
       const satz = {};
-      for (const [k, datei] of Object.entries(zahlenManifest[spr] || {})) {
+      for (const [k, datei] of Object.entries(zahlenManifest[sprQuelle] || {})) {
         const r = await fetch('audio/' + datei);
         if (!r.ok) throw new Error(datei);
         satz[k] = await audioCtx.decodeAudioData(await r.arrayBuffer());
@@ -459,7 +487,8 @@
   // 'rain' hat zwei Aufnahmen (an/aus) und braucht den spezifischeren Schluessel.
   function playAnsageClip(key) {
     const satz = voiceBuffers[key];
-    const puffer = satz && satz[lang];
+    // Spanisch hat keine eigene Aufnahme: die englische als Platzhalter.
+    const puffer = satz && (satz[lang] || satz.en);
     if (!puffer) return false;
     return playFx(puffer, 1.0);
   }
@@ -626,8 +655,14 @@
   // steigt - beim Tank also nach dem Tanken, beim Schaden nach der Reparatur.
   const ANSAGE_SCHWELLE = 0.10;   // 10 %, wie in der Aufgabe
   const ANSAGE_HYSTERESE = 0.18;  // erst darueber ist die Meldung wieder scharf
-  const ansageAn = { lap: true, damage: false, fuel: false, tyre: false, rain: false, pit: true };
-  const ansageLatch = { damage: false, fuel: false, tyre: false, rain: null };
+  // Akku: BESTELLT "Akku-Ansage < 25 %" - eine eigene Schwelle, nicht die 10 % oben.
+  const AKKU_SCHWELLE = 0.25;
+  const AKKU_HYSTERESE = 0.32;
+  const ansageAn = { lap: true, damage: false, fuel: false, tyre: false, rain: false, pit: true, battery: false };
+  const ansageLatch = { damage: false, fuel: false, tyre: false, rain: null, battery: false };
+  // JE Auto ein Latch fuer die Akku-Meldung: jedes Auto meldet unter 25 % einmal, erst nach
+  // der Erholung wieder scharf. Ein gemeinsames Latch wuerde nur das ERSTE Auto melden.
+  const batteryLatchSet = new Set();
 
   // HIER STAND DER FUNKFILTER als Live-Effekt auf der Browserstimme, und er ist auf Bitte
   // des Nutzers wieder heraus. Was er konnte: Knacken beim Aufschalten, ein Rauschteppich
@@ -737,6 +772,46 @@
         if (ansage('rain', t, w.rain ? 'rainstart' : 'rainstop')) raus.push('rain');
       }
     }
+    // Akku: unter 25 % einmal JE Auto melden, erst ueber der Hysterese wieder scharf.
+    // `batteries` ist die Liste aller Autos mit Akku (BESTELLT "Akku-Ansage < 25 % mit
+    // Autonummer"); ohne sie (Selbsttest/alter Aufrufer) der einzelne `battery`-Wert.
+    const bts = w.batteries;
+    if (Array.isArray(bts) && bts.length) {
+      for (const b of bts) {
+        if (b.value <= AKKU_SCHWELLE && !batteryLatchSet.has(b.car)) {
+          batteryLatchSet.add(b.car);
+          // Ansage UND Blinken haengen an demselben Kaestchen: ausgeschaltet heisst keine
+          // Meldung. Ohne Stimme (App-WebView) faellt ansage() auf die Aufnahme zurueck.
+          if (ansageAn.battery) {
+            const name = b.label || '';
+            const text = de ? name + ': Akku fast leer' : name + ': battery low';
+            // Die Aufnahme "Akku fast leer" kennt das Auto nicht. Mit Stimme wird der Name
+            // mitgesagt; ohne (App-WebView) faellt die Meldung auf die Aufnahme zurueck.
+            const ok = ('speechSynthesis' in window)
+              ? ansage('battery', text, 'battery-named')
+              : ansage('battery', text);
+            if (ok) raus.push('battery');
+            // Lichter des Autos zehn Mal blinken lassen. Das Fahrerauto ueber die
+            // Lichtaufloesung (nur Lichter, kein Gas), andere Autos ueber blinkCar().
+            if (typeof blinkCar === 'function') {
+              if (typeof playerCar !== 'undefined' && b.car === playerCar
+                  && typeof lichtBatterieBlink === 'function') lichtBatterieBlink();
+              else if (typeof akkuBlinken === 'function') akkuBlinken(b.car);
+              else blinkCar(b.car);
+            }
+          }
+        } else if (b.value > AKKU_HYSTERESE) {
+          batteryLatchSet.delete(b.car);
+        }
+      }
+    } else if (w.battery !== null && w.battery !== undefined) {
+      if (w.battery <= AKKU_SCHWELLE && !ansageLatch.battery) {
+        ansageLatch.battery = true;
+        if (ansage('battery', de ? 'Akku fast leer' : 'Battery low')) raus.push('battery');
+      } else if (w.battery > AKKU_HYSTERESE) {
+        ansageLatch.battery = false;
+      }
+    }
     return raus;
   }
 
@@ -754,7 +829,8 @@
   // toten Schalter ergeben hat.
   const ANSAGE_KAESTCHEN = { 'setting-announce': 'lap', 'setting-announce-damage': 'damage',
                              'setting-announce-fuel': 'fuel', 'setting-announce-tyre': 'tyre',
-                             'setting-announce-rain': 'rain', 'setting-announce-pit': 'pit' };
+                             'setting-announce-rain': 'rain', 'setting-announce-pit': 'pit',
+                             'setting-announce-battery': 'battery' };
   Object.keys(ANSAGE_KAESTCHEN).forEach((id) => {
     const el = $(id);
     if (!el) return;
@@ -880,6 +956,33 @@
     }
   }
 
+  // ---- NEBEN DER BAHN (v1.0.13) ---------------------------------------------------------
+  // BESTELLT: Klaenge aus Speed Dreams. Solange das eigene Auto neben der Bahn faehrt (die
+  // Schiene meldet 0xff), rollt es hoerbar ueber Gras und Schotter; lauter mit dem Tempo.
+  // Lautstaerke mit dem Reifenregler, weil es dasselbe ist: Reifen auf Untergrund.
+  let offroadNode = null, offroadGain = null;
+  function setOffroad(menge) {
+    if (!fxBuffers.offroad || !audioCtx || !soundEnabled) return;
+    menge = Math.max(0, Math.min(1, menge || 0));
+    if (menge > 0.02 && !offroadNode) {
+      offroadNode = audioCtx.createBufferSource();
+      offroadNode.buffer = fxBuffers.offroad;
+      offroadNode.loop = true;
+      offroadGain = audioCtx.createGain();
+      offroadGain.gain.value = 0;
+      offroadNode.connect(offroadGain).connect(audioCtx.destination);
+      offroadNode.start();
+    }
+    if (!offroadGain) return;
+    offroadGain.gain.setTargetAtTime(menge * 0.9 * tyreVolume / 0.35, audioCtx.currentTime, 0.06);
+    if (offroadNode) offroadNode.playbackRate.setTargetAtTime(0.8 + 0.4 * menge, audioCtx.currentTime, 0.1);
+    if (menge <= 0.02 && offroadNode) {
+      const node = offroadNode;
+      offroadNode = null; offroadGain = null;
+      setTimeout(() => { try { node.stop(); } catch (e) { /* schon gestoppt */ } }, 500);
+    }
+  }
+
   // ---- Ambience: a quiet bed plus scattered one-off events ----
   // Two beds (trackside, rain) loop continuously behind their own gains, and a single timer
   // sprinkles pass-bys and thunder at random intervals. A lone loop, however long, becomes
@@ -893,7 +996,7 @@
   // 0,3 statt 0,6: halbiert. Der Startwert steht hier UND im Markup - zwei Orte fuer
   // eine Zahl, und beim Nachziehen muessen beide mit. Genau diese Klasse hat bei den
   // Voreinstellungen siebzehn Abweichungen ergeben.
-  let brakeVolume = 0.3;       // rain and thunder: own control, weather stays audible
+  let brakeVolume = 0.2;      // v0.10.5: leiser (BESTELLT "Bremse noch etwas leiser")       // rain and thunder: own control, weather stays audible
   // Eigene Lautstaerke, aus demselben Grund wie beim Bremsenquietschen: an engineVolume
   // gehaengt liesse es sich nur zusammen mit dem Motor leiser stellen, also gar nicht.
   // Der Startwert steht hier UND im Markup - beim Nachziehen muessen beide mit.
@@ -1124,12 +1227,32 @@
 
   function stopSampleEngineIn(store) {
     if (!store.nodes) return;
-    for (const n of store.nodes) { try { n.src.stop(); } catch (e) { /* already stopped */ } }
-    if (store.over) { try { store.over.src.stop(); } catch (e) { /* already stopped */ } }
+    for (const n of store.nodes) {
+      try { n.src.stop(); } catch (e) { /* already stopped */ }
+      // v0.9.64: auch die Band-Verstaerkung vom master LOESEN. Vorher blieben die gain-Knoten
+      // mit dem master verbunden, und weil startSampleEngineIn() denselben master weiter
+      // benutzt (nur der Ausgang wird neu verbunden), sammelten sich bei jedem Neustart
+      // (Motorenwechsel, Ghost-Sound an/aus) die alten gains am master an - eine immer
+      // laengere Kette, die im Hintergrund weiter rechnet. Der master ist bei einem
+      // Rennstart ohnehin ein frisches Objekt (startGhost), aber ein Neustart DERSELBEN
+      // Stimme haette sonst weiter gewachsen.
+      try { n.gain.disconnect(); } catch (e) { /* war nicht verbunden */ }
+    }
+    if (store.over) {
+      try { store.over.src.stop(); } catch (e) { /* already stopped */ }
+      try { store.over.gain.disconnect(); } catch (e) { /* war nicht verbunden */ }
+    }
     store.nodes = null;
     store.over = null;
     store.car = null;
-    if (store.master) store.master.gain.setTargetAtTime(0, audioCtx.currentTime, 0.03);
+    if (store.master) {
+      // v0.9.64: den Ausgang LOESEN, sonst bleibt eine verwaiste Gain-Kette am Ziel haengen.
+      // startGhost() ersetzt car.ghost.stimme bei jedem Rennstart durch ein frisches Objekt;
+      // ohne disconnect blieben die alten master/pan-Knoten verbunden und sammelten sich
+      // ueber viele Rennen im Audiographen an - die Ruckler nach langer Laufzeit.
+      try { store.master.disconnect(); } catch (e) { /* war nicht verbunden */ }
+      store.master.gain.setTargetAtTime(0, audioCtx.currentTime, 0.03);
+    }
   }
 
   // `modell` ist der Motorname aus dem Menue (die Schluessel von loops.json), NICHT ein
@@ -1253,6 +1376,139 @@
     updateSampleEngineIn(z.stimme, motorDrehzahl(st, z.stimme.car), load, leise, z.motor, 1);
   }
 
+  // ---- GHOST-MOTORSOUND (v0.9.61, D8) ---------------------------------------------
+  //
+  // Die Ghosts hatten bisher keinen eigenen Motorsound - nur die Fahrerautos. Diese Stimme
+  // gibt jedem Ghost einen eigenen Klang nach dem Muster von z.stimme: dieselben Schleifen
+  // (geteilt, keine zweite Kopie von 132 Dateien), aber ein eigener Ausgang mit eigener
+  // Stereoseite und 40 % leiser. So klingt ein Feld aus mehreren Motoren nicht wie ein
+  // ver-stimmter Motor aus der Mitte.
+  let ghostSound = false;   // Standard: aus (Optionen -> Ton)
+  const GHOST_LEISE = 0.6;  // 40 % leiser als das Fahrerauto
+  function ghostStimmePan(car) {
+    // Stereoseite nach Garagenplatz: das Feld breitet sich ueber die Buehne aus statt aus
+    // der Mitte zu klingen. Gezaehlt wird unter den GHOSTS, damit Leerplaetze (Spieler-
+    // autos) keine Luecke reissen.
+    if (typeof garage === 'undefined') return 0;
+    const ghosts = garage.filter((c) => c.role === 'ghost');
+    const n = ghosts.length;
+    if (n <= 1) return 0;
+    const i = ghosts.indexOf(car);
+    return -0.8 + 1.6 * (i / (n - 1));
+  }
+  function ghostStimmeAusgang(car) {
+    if (!audioCtx || !audioCtx.createStereoPanner) return audioCtx.destination;
+    const st = car.ghost.stimme;
+    if (!st.pan) {
+      st.pan = audioCtx.createStereoPanner();
+      st.pan.connect(audioCtx.destination);
+    }
+    st.pan.pan.value = ghostStimmePan(car);
+    return st.pan;
+  }
+  // v1.0.22: der NPC-Motor - je Auto (Garage), sonst die Vorgabe in Optionen -> Ton, sonst
+  // wie Spieler 1. Ein noch nicht geladenes Modell faellt bis zum Laden auf den Rueckfall.
+  function ghostMotorWunsch(car) {
+    if (car && car.ghostMotor) return car.ghostMotor;
+    const el = $('ghost-motor');
+    return el && el.value ? el.value : '';
+  }
+  function ghostStimmeStarten(car) {
+    if (!ghostSound || !soundEnabled || !audioCtx || !car.ghost) return false;
+    // v0.9.64: je Ghost abschaltbar (der Schalter in Optionen -> Ton bleibt der Hauptschalter).
+    if (car.ghostSound === false) return false;
+    // v0.9.64: nur ein laufender Ghost bekommt eine Stimme. Ein geparkter hat keinen Takt,
+    // der sie aktualisiert - er startete sonst stille Sources, die im Hintergrund weiterrechnen.
+    if (!car.ghost.running) return false;
+    const modell = ghostStimmeModell(car);
+    if (!modell) return false;
+    return startSampleEngineIn(car.ghost.stimme, modell, () => ghostStimmeAusgang(car));
+  }
+  // v0.9.87: DAS MODELL HAENGT NICHT MEHR AM SPIELER-SAMPLE. GEMELDET: "Ghost-Sound geht
+  // nicht." Die Stimme nahm sampleEngine.car - das ist null, solange das Fahrerauto ein
+  // gerechnetes Profil faehrt oder sein Sample noch nicht spielt, und dann blieb jeder
+  // Ghost stumm. Jetzt: das Fahrer-Sample, sonst das gewaehlte Profil, sonst das erste
+  // vollstaendig geladene Modell. Geladen wird dafuer bei Bedarf.
+  function ghostStimmeModell(car) {
+    const geladen = (k) => !!(k && sampleEngine.buffers[k] && powerBands(k).length);
+    const wunsch = ghostMotorWunsch(car);
+    if (geladen(wunsch)) return wunsch;
+    if (geladen(sampleEngine.car)) return sampleEngine.car;
+    const sel = $('sound-profile');
+    if (sel && geladen(sel.value)) return sel.value;
+    for (const k of Object.keys(sampleEngine.buffers)) if (geladen(k)) return k;
+    if (!sampleEngine.ready && !sampleEngine.loading && typeof loadEngineSamples === 'function') loadEngineSamples();
+    return null;
+  }
+  function ghostStimmeStoppen(car) {
+    if (!audioCtx || !car.ghost || !car.ghost.stimme) return;
+    const st = car.ghost.stimme;
+    stopSampleEngineIn(st);
+    // v0.9.64: auch den Panner loesen, sonst bleibt er (verbunden mit dem Ziel) als Leiche
+    // im Graphen, wenn startGhost() das stimme-Objekt beim naechsten Rennstart ersetzt.
+    if (st.pan) { try { st.pan.disconnect(); } catch (e) { /* egal */ } st.pan = null; }
+  }
+  function updateGhostSound(car) {
+    if (!ghostSound || !soundEnabled || !audioCtx || !car.ghost || !car.ghost.stimme) return;
+    // v0.9.64: ein je Auto abgeschalteter Ghost soll auch still sein.
+    if (car.ghostSound === false) { ghostStimmeStoppen(car); return; }
+    const st = car.ghost.stimme;
+    // Folgt dem Motor des Fahrerautos: hat der Fahrer umgestellt, startet die Ghost-Stimme
+    // mit dem neuen Modell neu (st.car wird von ghostStimmeStarten gesetzt).
+    // Neu starten nur, wenn sich das Modell wirklich aendert - nicht, weil das Fahrer-Sample
+    // gerade fehlt (dann blieb die alte Stimme vorher stehen oder brach ab).
+    const soll = ghostStimmeModell(car);
+    if (!st.nodes || (soll && st.car !== soll)) { if (!ghostStimmeStarten(car)) return; }
+    const eng = car.ghost.engine;
+    if (!eng || !eng.state) return;
+    const load = Math.max(0, Math.min(1, eng.state.engineLoad || 0));
+    const leise = load <= 0.01 && (eng.state.virtualSpeed || 0) <= 0.01
+                  && Math.abs(eng.state.speedKmh || 0) < 0.05;
+    updateSampleEngineIn(st, motorDrehzahl(eng.state, st.car), load, leise, eng, 1);
+  }
+  // Die Liste des NPC-Motors: dieselben Gruppen wie #sound-profile, nur Motoren mit Schleifen.
+  function ghostMotorListeFuellen() {
+    const el = $('ghost-motor'), quelle = $('sound-profile');
+    if (!el || !quelle || el.options.length > 1) return;
+    const merk = el.getAttribute('data-wert') || '';
+    for (const kind of quelle.children) {
+      if (kind.tagName === 'OPTGROUP') {
+        const g = document.createElement('optgroup');
+        g.label = kind.label;
+        for (const o of kind.children) if (SAMPLE_CARS.indexOf(o.value) >= 0) g.appendChild(o.cloneNode(true));
+        if (g.children.length) el.appendChild(g);
+      } else if (kind.tagName === 'OPTION' && SAMPLE_CARS.indexOf(kind.value) >= 0) {
+        el.appendChild(kind.cloneNode(true));
+      }
+    }
+    [...el.querySelectorAll('option')].forEach((o) => { o.selected = false; o.removeAttribute('selected'); });
+    el.value = merk;
+  }
+  ghostMotorListeFuellen();
+  // Die NPC-Motoren, die die Garage durchblaettert: "" (wie Spieler 1) und jeder Motor der Liste.
+  function ghostMotorWerte() {
+    const el = $('ghost-motor');
+    return el ? [...el.options].map((o) => ({ v: o.value, name: o.value ? motorNamen(o) : t('Wie Spieler 1') })) : [{ v: '', name: '' }];
+  }
+  if ($('ghost-motor')) $('ghost-motor').addEventListener('change', () => {
+    if (typeof garage === 'undefined') return;
+    for (const c of garage) if (c.role === 'ghost' && c.ghost && c.ghost.stimme && c.ghost.stimme.nodes && !c.ghostMotor) ghostStimmeStoppen(c);
+  });
+  // Der Schalter in Optionen -> Ton. Anschalten startet jede laufende Ghost-Stimme,
+  // Abschalten haelt sie an.
+  $('ghost-sound').addEventListener('change', (e) => {
+    ghostSound = e.target.checked;
+    if (typeof garage === 'undefined') return;
+    for (const c of garage) {
+      if (c.role !== 'ghost' || !c.ghost) continue;
+      // v0.9.64: nur laufende Ghosts besorgen sich eine Stimme. Ein geparkter Ghost hat
+      // keine Stimme, die jemand aktualisiert (updateGhostSound haengt am Sendetakt) - er
+      // wuerde sonst stille Buffer-Sources starten, die im Hintergrund weiterrechnen.
+      if (ghostSound && c.ghost.running) ghostStimmeStarten(c);
+      else ghostStimmeStoppen(c);
+    }
+  });
+
   // ---- Was die Knoten gerade tun, fuer den Pruefstand ------------------------------
   //
   // Herausgegeben werden ZAHLEN und keine Knoten: ein Prueflauf, der einen GainNode in die
@@ -1361,6 +1617,8 @@
     // down — the quieter, crackling sound does that itself. Ducking it as hard as before
     // would just hide the loop that was made for this.
     let vol = engineVolume * (over ? 0.55 + 0.45 * load : 0.25 + 0.75 * load);
+    // v0.9.61 (D8): eine Stimme darf leiser sein als die Fahrerauto-Stimme (Ghosts: 0.6).
+    if (store.laut) vol *= store.laut;
     if (motor.state.onLimiter) vol *= 0.8 + 0.2 * Math.sign(Math.sin(Date.now() / 18));
     store.master.gain.setTargetAtTime(silent ? 0 : vol, t, 0.05);
   }
@@ -1622,7 +1880,7 @@
 
   $('ghost-needcode').addEventListener('change', (e) => {
     ghostCfg.needCode = e.target.checked;
-    log('Ghost ' + (e.target.checked ? 'braucht' : 'braucht keinen') + ' Streckencode.', 'info');
+    log('NPC ' + (e.target.checked ? 'braucht' : 'braucht keinen') + ' Streckencode.', 'info');
   });
 
   $('setting-rain').addEventListener('change', (e) => {
@@ -1916,12 +2174,27 @@
     return xs.ein;
   }
 
+  // Pegel der Knall-Aufnahme je Einheit Knallstaerke (0,05-0,21 aus extrasWerte).
+  const KNALL_AUFNAHME = 1.6;
   // Ein Knaller: ein kurzer Rauschstoss durch ein Rohr. Breitbandig mit Tiefmittenbetonung,
   // wie ein Auspuffschlag - kein Klick und kein Zischen.
   function xKnall(staerke, verzoegerung) {
     if (!audioCtx || !extrasOn) return;
     xBus();
     const t = audioCtx.currentTime + (verzoegerung || 0);
+    // v1.0.21 (WIP): mit geladenem Speed-Dreams-Knall die Aufnahme statt des Rauschstosses, je
+    // Knaller leicht verstimmt (0,8-1,25), damit eine Serie nicht wie ein Echo klingt.
+    if (fxBuffers.backfire.length) {
+      const q = audioCtx.createBufferSource();
+      q.buffer = fxBuffers.backfire[Math.floor(Math.random() * fxBuffers.backfire.length)];
+      q.playbackRate.value = 0.8 + Math.random() * 0.45;
+      const gq = audioCtx.createGain();
+      gq.gain.value = Math.min(1, staerke * KNALL_AUFNAHME);
+      q.connect(gq).connect(xs.add);
+      q.start(t);
+      xs.knaller++;
+      return;
+    }
     const src = audioCtx.createBufferSource();
     src.buffer = xRausch();
     // Zufaelliger Ausschnitt: derselbe Puffer klingt sonst bei jedem Knaller gleich.
@@ -2168,6 +2441,10 @@
     const pacQuietsch = physEngine.config.pacejka
       ? Math.max(pst.pacNutzV || 0, pst.pacNutzH || 0) * 0.8 : 0;
     setTyreSqueal(Math.max(pst.latUse || 0, pacQuietsch));
+    // Neben der Bahn: nur auf der Bahn messbar (Schiene meldet 0xff), lauter mit dem Tempo.
+    const neben = typeof trackMode !== 'undefined' && trackMode === 'on'
+      && typeof abseitsJetzt === 'function' && abseitsJetzt();
+    setOffroad(neben ? Math.min(1, Math.abs(st.speedKmh) / (physEngine.config.topSpeedKmh * 0.5)) : 0);
 
     // VOR dem fruehen Ausstieg: die Zusaetze gelten in beiden Tonarten, nicht nur im
     // Schleifenzweig.

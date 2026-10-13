@@ -151,6 +151,7 @@ def zustand_lesen(zuschauer_id=None):
                 'id': fid, 'name': f['name'], 'laps': f['laps'],
                 'letzte': f['letzte'], 'beste': f['beste'],
                 'abgaenge': f.get('abgaenge', 0),
+                'summe': f.get('summe'), 'strafe': f.get('strafe'),
                 'alter': round(_jetzt() - f['aktualisiert'], 1),
                 # Der Zeitpunkt der letzten Ueberfahrt ist das ZWEITE Sortierkriterium und
                 # muss deshalb mit ins Dict. Er stand nur im internen Zustand, und die
@@ -220,6 +221,8 @@ def rennen_starten(daten):
                 f['laps'] = 0
                 f['letzte'] = None
                 f['beste'] = None
+                f.pop('summe', None)
+                f.pop('strafe', None)
                 f['letzteZeitpunkt'] = _jetzt()
             return {'ok': True, 'id': _rennen['id'], 'startAt': _rennen['startAt'],
                     'zeitMs': jetzt_ms, 'plan': plan}
@@ -298,6 +301,13 @@ def melden(daten):
                 f['abgaenge'] = int(daten['abgaenge'])
             except (TypeError, ValueError):
                 pass
+        # v1.0.12: Gesamtzeit und Strafe (ms) fuer die Meisterschaft (Pflichtstopps).
+        for k in ('summe', 'strafe'):
+            if k in daten and daten[k] is not None:
+                try:
+                    f[k] = max(0, int(round(float(daten[k]))))
+                except (TypeError, ValueError):
+                    pass
         if isinstance(daten.get('pos'), list):
             f['pos'] = daten['pos'][:8]
             f['posZeit'] = _jetzt()

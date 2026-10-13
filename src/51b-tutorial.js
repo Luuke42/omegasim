@@ -19,13 +19,13 @@
     { tab: 'fahren', ziel: null, bild: 'titel', titel: 'Willkommen bei OmegaSim',
       text: 'OmegaSim steuert deine Carrera-Hybrid-Autos per Bluetooth. Mit echter Fahrphysik, simuliertem Motorsound und einem Cockpit wie im Rennsimulator.' },
     { tab: 'fahren', ziel: ['#fa-auto'], bild: 'auto', titel: 'Autos verbinden',
-      text: 'Verbinde hier dein Auto. Das erste steuerst du selbst, jedes weitere fährt als Ghost gegen dich. Namen, Farben und Fotos stellst du in der Garage ein.' },
+      text: 'Verbinde hier dein Auto. Das erste steuerst du selbst, jedes weitere fährt als NPC gegen dich. Namen, Farben und Fotos stellst du in der Garage ein.' },
     { tab: 'fahren', ziel: ['#fa-strecke'], bild: 'strecke-frei', titel: 'Deine Strecke',
       text: 'Auf der Bahn liest das Auto die Schiene. Scanne deine Strecke oder bau sie im Editor nach. Ohne Bahn druckst du Vorlagen aus.' },
     { tab: 'fahren', ziel: ['#fa-renn'], bild: 'rennen', titel: 'Rennoptionen',
       text: 'Training, Qualifying, Rennen oder Endurance. Dazu Wetter, Pflichtstopps, Tank und Reifenverschleiß.' },
-    { tab: 'fahren', ziel: ['#fa-profil'], bild: 'optionen', titel: 'Fahrgefühl',
-      text: 'Die Abstimmung deines Autos. Den Motorsound wählst du je Auto in der Garage; jeder Klang kommt aus einer Motorsimulation.' },
+    { tab: 'fahren', ziel: ['#fa-profil'], bild: 'rennen', titel: 'Meisterschaft',
+      text: 'Bald: mehrere Rennen hintereinander, mit Punkten und Startaufstellung. Die Abstimmung (Fahrgefühl) und den Motorsound wählst du je Auto in der Garage.' },
     { tab: 'fahren', ziel: ['#fa-start'], bild: 'start', titel: 'Losfahren',
       text: 'Ein Druck startet die Ampel. Im Cockpit fordert Kreuz den Boxenstopp an, Options öffnet das Menü.' },
     { tab: 'fahren', ziel: null, bild: 'box', titel: 'Boxenstopp als Minigame',
@@ -282,6 +282,7 @@
     const kn = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
     kn('k-tutorial-start', (e) => { e.stopPropagation(); konsoleTourStart(K_TOUR); });
     kn('k-steuerung-start', (e) => { e.stopPropagation(); konsoleTourStart(K_STEUERUNG); });
+    kn('k-starten-start', (e) => { e.stopPropagation(); konsoleTitelWeiter(); });
     kn('k-tour-weiter', () => konsoleTourWeiter());
     kn('k-tour-zurueck', () => konsoleTourZurueck());
     kn('k-tour-ende', () => konsoleTourZu(false));

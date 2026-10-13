@@ -18,5 +18,9 @@
  "rainstop": {
   "de": "voice_rainstop_de.ogg",
   "en": "voice_rainstop_en.ogg"
+ },
+ "battery": {
+  "de": "voice_battery_de.ogg",
+  "en": "voice_battery_en.ogg"
  }
 }

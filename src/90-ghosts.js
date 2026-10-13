@@ -824,6 +824,7 @@
   const prevDpad = { up: false, down: false, left: false, right: false };
   let prevLightFlash = false, prevPitstop = false, prevTrackReadMode = false;
   let prevRaceStart = false, prevTrackView = false, prevResetCar = false;
+  let gridPadVorher = false;
 
   function padButtonPressed(pad, index) {
     const btn = pad.buttons[index];
@@ -977,7 +978,12 @@
     if (!car || !car.device || car.sim) return;
     const alle = carRollenLesen();
     alle[String(car.device.id)] = { role: car.role,
-      ghostSpeed: car.ghostSpeed === undefined ? null : car.ghostSpeed };
+      ghostStufe: car.ghostStufe === undefined || car.ghostStufe === null
+        ? 1 : car.ghostStufe,
+      // v0.9.64: Ghost-Sound je Auto. Vorgabe an (true); explizit ausgeschaelt bleibt false.
+      ghostSound: car.ghostSound === false ? false : true,
+      // v1.0.22: der NPC-Motor je Auto ("" = Vorgabe aus Optionen -> Ton).
+      ghostMotor: car.ghostMotor || '' };
     try { localStorage.setItem(CAR_ROLLEN_STORE, JSON.stringify(alle)); } catch (e) { /* voll */ }
   }
   function carStoreSchreiben(all) {
@@ -1335,6 +1341,23 @@
   }
 
   // Identify: blink the headlights of ONE car so it can be matched to its row.
+  // ---- AKKU-WARNBLINKEN NUR UEBER DIE LICHTER (v0.9.87) -----------------------------
+  // blinkCar() schickt zehn Pakete mit Gas 0 und Lenkung 0 - fuer einen fahrenden Ghost oder
+  // Spieler 2/3 hiess das: mitten im Rennen kurz ohne Gas und ohne Spur, also Abflug. Jetzt
+  // setzt die Warnung nur ein Zeitfenster, und der normale Sendeweg schaltet darin die
+  // Lichter im 150-ms-Takt aus. Nur ein Auto, das gerade nichts faehrt, blinkt wie bisher.
+  const AKKU_BLINK_MS = 150, AKKU_BLINK_PHASEN = 10;
+  function akkuBlinken(car) {
+    if (!car) return;
+    const faehrt = (car.role === 'ghost' && car.ghost && car.ghost.running)
+      || (typeof spielerNrVon === 'function' && spielerNrVon(car) >= 2);
+    if (faehrt) car.akkuBlinkBis = Date.now() + AKKU_BLINK_MS * AKKU_BLINK_PHASEN;
+    else blinkCar(car);
+  }
+  function akkuBlinkAus(car, now) {
+    if (!car || !car.akkuBlinkBis || now >= car.akkuBlinkBis) return false;
+    return Math.floor((car.akkuBlinkBis - now) / AKKU_BLINK_MS) % 2 === 1;
+  }
   function blinkCar(car) {
     if (car.blinking) return;
     car.blinking = true;
@@ -1408,11 +1431,24 @@
       zNeu.car = car;
     }
     car.role = role;
-    if (role !== 'ghost') stopGhost(car);
+    if (role !== 'ghost') {
+      stopGhost(car);
+      // (Auch der Challenger beginnt ohne Ghost-Zustand; startGhost legt ihn beim Start an.)
+      // v0.9.87 GEMELDET: "Wenn ein Auto ein Ghost war und danach gesteuert wird, lenkt es
+      // von alleine." stopGhost haelt nur an; der volle Ghost-Zustand blieb am Auto, und mit
+      // ihm die Spur-Bytes (modeBytes) und das Leitplanken-Licht. spielerOrt() erkennt einen
+      // Ghost-Zustand nicht als Ortungssatz und kehrte frueh zurueck - die alten Bytes gingen
+      // weiter hinaus und das Auto hielt sich selbst in der Spur. Jetzt alles weg; ein
+      // Fahrerauto bekommt seinen Ortungssatz beim naechsten Takt neu.
+      car.ghost = null;
+      car.modeBytes = null;
+      car.railLight = null;
+      car.parked = null;
+    }
     carRolleMerken(car);
     renderGarage();
     const name = role === 'player' ? 'Spieler 1' : zNeu ? 'Spieler ' + zNeu.nr
-               : role === 'ghost' ? 'Ghost' : 'keine';
+               : role === 'ghost' ? 'NPC' : role === 'challenger' ? 'Challenger' : role === 'safetycar' ? 'Safety Car' : 'keine';
     log(`${garageLabel(car)}: Rolle ${name}`, 'info');
   }
 
@@ -1435,13 +1471,39 @@
     { id: 'player', name: 'Spieler 1', kurz: 'SPIELER 1' },
     { id: 'player2', name: 'Spieler 2', kurz: 'SPIELER 2' },
     { id: 'player3', name: 'Spieler 3', kurz: 'SPIELER 3' },
-    { id: 'ghost', name: 'Ghost', kurz: 'GHOST' },
+    // v1.0 BESTELLT: "Safetycar-Funktion (experimentell): neben 'Ghost' kann ich Safetycar
+    // einstellen." Hoechstens eines - wie die Spielerrollen. Vor "Ghost", damit der Pfeil von
+    // Ghost wie bisher zu "Aus" fuehrt.
+    { id: 'safetycar', name: 'Safety Car', kurz: 'SAFETY CAR' },
+    // v1.0.21 BESTELLT: "Nenne diese Rolle 'Challenger'" - siehe 90d-challenger.js.
+    { id: 'challenger', name: 'Challenger', kurz: 'CHALLENGER' },
+    { id: 'ghost', name: 'NPC', kurz: 'NPC' },
     { id: 'none', name: 'Aus', kurz: 'AUS' },
   ];
+  // v1.0.21 BESTELLT: Safety Car (und der kommende Challenger) "sollten nur fuer Fahren auf
+  // Bahn existieren" - beide fahren mit Spur-Bytes, im Ausdruck-Modus haelt sich kein Auto
+  // selbst auf der Bahn.
+  const BAHN_ROLLEN = ['safetycar', 'challenger'];
   // Die Rollen, die dieses Auto bekommen darf: Spieler-Rollen nur, wenn kein ANDERES Auto sie hat.
   function garRollenFrei(car) {
-    return GAR_ROLLEN.filter((r) => !/^player\d?$/.test(r.id)
-      || !garage.some((c) => c !== car && c.role === r.id));
+    return GAR_ROLLEN.filter((r) => (!/^player\d?$|^safetycar$|^challenger$/.test(r.id)
+      || !garage.some((c) => c !== car && c.role === r.id))
+      && (trackMode === 'on' || BAHN_ROLLEN.indexOf(r.id) < 0 || (car && car.role === r.id)));
+  }
+  // Beim Wechsel in den Ausdruck-Modus: Bahn-Rollen auf "Aus" (gerufen aus applyScanMode).
+  function bahnRollenPruefen() {
+    if (trackMode === 'on') return 0;
+    let n = 0;
+    garage.forEach((c) => {
+      if (BAHN_ROLLEN.indexOf(c.role) >= 0) {
+        const name = (GAR_ROLLEN.find((r) => r.id === c.role) || {}).name || c.role;
+        setCarRole(c, 'none');
+        log(garageLabel(c) + ': ' + name + ' gibt es nur auf der Bahn, Rolle jetzt Aus.', 'info');
+        n++;
+      }
+    });
+    if (n) showHudToast(t('Safety Car und Challenger gibt es nur auf der Bahn'));
+    return n;
   }
   let garAufAuto = null;
   let garFotoFuer = null;
@@ -1453,6 +1515,14 @@
     renderRaceGrid();
   }
   // Eine Wertzeile im Stil der Menues: Beschriftung .... < Wert >
+  // v0.10.5 BESTELLT: "In der Garage Akkustand je Auto anzeigen." Geglaettet (akkuGlaetten),
+  // dazu der kleinste je gemeldete Rohwert - mit ihm laesst sich AKKU_LEER nachmessen.
+  function garAkkuText(car) {
+    if (car.battery === null || car.battery === undefined || typeof batteryPercent !== 'function') return '';
+    const p = batteryPercent(car.battery);
+    return ' &middot; <span class="gar-akku' + (p < 25 ? ' knapp' : '') + '">' + t('Akku') + ' ' + p + '&nbsp;%'
+      + (car.akkuMinRoh !== undefined ? ' (min ' + car.akkuMinRoh + ')' : '') + '</span>';
+  }
   function garWertZeile(titel, wert, zurueck, vor, extra) {
     const z = document.createElement('div');
     // Optionszeile mit einem versteckten Schieber von -1 bis 1 (v0.9.12): so verstellt das
@@ -1473,6 +1543,18 @@
     z.appendChild(rg);
     return z;
   }
+  // BESTELLT: "baue ghost presets, die dann statt den 55% gewaehlt werden in der garage:
+  // mittel (so wie aktuell), schnell (...60%), und einfach (...50%)". Statt einer feinen
+  // Prozentzahl waehlt man je Ghost eine von drei Stufen. v0.9.56: die Stufe aendert nur das
+  // GERADENTEMPO (45/55/65 %); in der Kurve und Haarnadel gilt immer das Mittel-Tempo. Die
+  // Werte sind relativ zur Vorgabe aus den Optionen (ghostCfg.speed): Mittel folgt ihr,
+  // Einfach und Schnell skalieren sie. Der Reset-Knopf stellt Mittel wieder her.
+  // v0.9.64: die Spannweite groesser - 45/55/65 %, damit die Stufen deutlicher zu hoeren sind.
+  const GHOST_TEMPO_STUFEN = [
+    { label: 'einfach', speed: 0.45 },
+    { label: 'mittel',  speed: 0.55 },
+    { label: 'schnell', speed: 0.65 },
+  ];
   function garageAufZeile(car) {
     const box = document.createElement('div');
     box.className = 'gk-aufzeile';
@@ -1481,10 +1563,12 @@
     const farbe = (d) => garageFarbeSetzen(car, CAR_COLORS[(fi + d + CAR_COLORS.length) % CAR_COLORS.length].id);
     box.appendChild(garWertZeile('Farbe ' + garageLabel(car), f.name, () => farbe(-1), () => farbe(1)));
     if (car.role === 'ghost') {
-      const eigen = car.ghostSpeed !== undefined && car.ghostSpeed !== null;
-      const v = eigen ? car.ghostSpeed : ghostCfg.speed;
+      const st = GHOST_TEMPO_STUFEN;
+      let stufe = (car.ghostStufe === undefined || car.ghostStufe === null)
+        ? 1 : car.ghostStufe;
       const tempo = (d) => {
-        car.ghostSpeed = Math.round(Math.max(GHOST_READ_MIN, Math.min(1, v + 0.05 * d)) * 100) / 100;
+        stufe = (stufe + d + st.length) % st.length;
+        car.ghostStufe = stufe;
         carRolleMerken(car);
         renderGarage();
       };
@@ -1492,21 +1576,69 @@
       rst.type = 'button';
       rst.className = 'gar-speed-reset';
       rst.innerHTML = '&#8635;';
-      rst.title = 'Zurueck auf die Vorgabe aus den Optionen';
-      rst.style.visibility = eigen ? '' : 'hidden';
+      rst.title = 'Zurueck auf Mittel (Vorgabe)';
       rst.onclick = (e) => {
         e.stopPropagation();
-        car.ghostSpeed = null;
+        car.ghostStufe = 1;
         carRolleMerken(car);
-        showHudToast(garageLabel(car).toUpperCase() + ' FOLGT DER VORGABE');
+        showHudToast(garageLabel(car).toUpperCase() + ' TEMPO: MITTEL');
         renderGarage();
       };
-      box.appendChild(garWertZeile('Ghost-Tempo', Math.round(v * 100) + ' %' + (eigen ? '' : ' (Vorgabe)'),
-                                   () => tempo(-1), () => tempo(1), rst));
+      const stufeS = st[stufe];
+      const anzeige = t(stufeS.label) + ' \u00b7 ' + Math.round(stufeS.speed * 100) + ' %';
+      box.appendChild(garWertZeile('NPC-Tempo', anzeige, () => tempo(-1), () => tempo(1), rst));
+      // v0.9.64: Ghost-Sound je Auto (der Schalter in Optionen -> Ton bleibt der Hauptschalter;
+      // hier ist es das einzelne Auto). Ein Klick toggelt an/aus, wie links/rechts in der Zeile.
+      // v0.9.87: Die Zeile zeigt, was zu HOEREN ist - Hauptschalter UND Auto. Vorher stand
+      // "An", waehrend der Hauptschalter (ab Werk aus) alles stumm hielt, und ein Klick
+      // aenderte daran nichts. Anschalten hier schaltet den Hauptschalter mit an.
+      const hauptSchalter = $('ghost-sound');
+      const hoerbar = !!(hauptSchalter && hauptSchalter.checked) && car.ghostSound !== false;
+      const soundUmschalten = () => {
+        const neu = !hoerbar;
+        car.ghostSound = neu;
+        carRolleMerken(car);
+        if (neu && hauptSchalter && !hauptSchalter.checked) {
+          hauptSchalter.checked = true;
+          hauptSchalter.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (neu) { if (typeof ghostStimmeStarten === 'function') ghostStimmeStarten(car); }
+        else if (typeof ghostStimmeStoppen === 'function') ghostStimmeStoppen(car);
+        renderGarage();
+      };
+      box.appendChild(garWertZeile('NPC-Sound', t(hoerbar ? 'An' : 'Aus'),
+        soundUmschalten, soundUmschalten));
+      // v1.0.22 BESTELLT: "Lass mich den Motorensound von Ghosts einstellen." Je NPC; "Vorgabe"
+      // nimmt die Einstellung aus Optionen -> Ton.
+      if (typeof ghostMotorWerte === 'function') {
+        const werte = [{ v: '', name: t('Vorgabe') }].concat(ghostMotorWerte().filter((w) => w.v));
+        const j = Math.max(0, werte.findIndex((w) => w.v === (car.ghostMotor || '')));
+        const motorWahl = (d) => {
+          car.ghostMotor = werte[(j + d + werte.length) % werte.length].v;
+          carRolleMerken(car);
+          if (car.ghost && car.ghost.stimme && typeof ghostStimmeStoppen === 'function') ghostStimmeStoppen(car);
+          renderGarage();
+        };
+        box.appendChild(garWertZeile('NPC-Motor', werte[j].name, () => motorWahl(-1), () => motorWahl(1)));
+      }
       const ch = document.createElement('div');
       ch.innerHTML = charakterZeile(car);
       if (ch.firstElementChild) box.appendChild(ch.firstElementChild);
     } else {
+      // v0.10.5 BESTELLT: "Lass mich in der Garage bei gesteuerten Autos das Fahrgefuehl ueber
+      // Preset einstellen." Dieselben vier wie im FAHREN-Menue. Die Abstimmung gilt fuer alle
+      // gesteuerten Autos zugleich (Spieler 2/3 uebernehmen die von Spieler 1).
+      if (/^player/.test(car.role) && window.__presetKeysFahren && window.__applyPreset) {
+        const keys = window.__presetKeysFahren();
+        const aktiv = window.__presetActive ? window.__presetActive() : null;
+        const i = keys.indexOf(aktiv);
+        const wahl = (d) => {
+          const k = keys[((i < 0 ? (d > 0 ? -1 : 0) : i) + d + keys.length) % keys.length];
+          window.__applyPreset(k);
+          renderGarage();
+        };
+        box.appendChild(garWertZeile('Fahrgefühl', i >= 0 ? window.__presetLabel(keys[i]) : t('eigene'),
+                                     () => wahl(-1), () => wahl(1)));
+      }
       // BESTELLT: "garage bedienfreundlich machen, je auto (wenn gesteuert) auch presets
       // anzeigen und motorsound." Presets stehen in der Leiste darunter (#gar-preset); hier
       // kommt der Motorsound des gesteuerten Autos dazu (pro Spieler: sound-profile bzw.
@@ -1516,7 +1648,7 @@
       h.className = 'gk-hinweis';
       h.textContent = /^player\d?$/.test(car.role)
         ? 'Abstimmung und Fahrgefühl stehen unten und unter Optionen.'
-        : 'Tempo und Charakter gibt es nur für Ghosts.';
+        : 'Tempo und Charakter gibt es nur für NPCs.';
       box.appendChild(h);
     }
     return box;
@@ -1727,7 +1859,7 @@
       const row = document.createElement('div');
       row.className = 'opt-row gar-row gar-karte gar-a-zeile' + (car.role === 'player' ? ' is-player'
                                  : zusatzPlatzVonRolle(car.role) ? ' is-zwei'
-                                 : car.role === 'ghost' ? ' is-ghost' : '')
+                                 : car.role === 'ghost' ? ' is-ghost' : car.role === 'safetycar' ? ' is-safety' : car.role === 'challenger' ? ' is-challenger' : '')
                     + (garAufAuto === car ? ' gk-auf' : '');
       row.dataset.xSprung = '.gar-a-rechts .opt-row';
       const f = carColor(car);
@@ -1742,7 +1874,7 @@
         <i class="gk-streifen" style="background:${f.hex}"></i>
         <div class="gk-bild${foto ? ' mit-foto' : ''}" style='${bild}'>${foto ? '' : `<span class="gk-zeichen">${car.tagChar || ''}</span>`}</div>
         <div class="gk-text"><b data-i18n-skip>${esc(name)}</b>
-          <span class="gar-id" data-i18n-skip>${esc(car.tag || '')} &middot; ${esc(String(car.device.id).slice(0, 10))}${car.blinking ? ' &middot; ' + t('blinkt') : ''}</span></div>
+          <span class="gar-id" data-i18n-skip>${esc(car.tag || '')} &middot; ${esc(String(car.device.id).slice(0, 10))}${car.blinking ? ' &middot; ' + t('blinkt') : ''}${garAkkuText(car)}</span></div>
         <div class="gk-rolle" data-rollen="${GAR_ROLLEN.map((r) => r.id).join(',')}" data-rolle="${rolle.id}">
           <button type="button" data-act="rolle" data-d="-1" aria-label="Rolle zurück">&#9664;</button>
           <b>${t(rolle.name)}</b>${zusatzPlatzVonRolle(rolle.id) ? '<span class="wip-tag">experimentell</span>' : ''}
@@ -1867,11 +1999,11 @@
     // genau das ein sinnvoller Fall: zusehen, wie sie fahren.
     btn.disabled = !player && !ghosts;
     btn.title = !player && !ghosts
-      ? (garage.length ? 'Erst ein Auto auf "Steuern" oder "Ghost" stellen'
+      ? (garage.length ? 'Erst ein Auto auf "Steuern" oder "NPC" stellen'
                        : 'Erst ein Auto verbinden')
-      : (player ? 'Ins Cockpit' : 'Ghosts starten')
-        + (ghosts ? ', ' + ghosts + ' Ghost' + (ghosts === 1 ? '' : 's') : '');
-    btn.textContent = player ? 'Losfahren' : (ghosts ? 'Ghosts starten' : 'Losfahren');
+      : (player ? 'Ins Cockpit' : 'NPCs starten')
+        + (ghosts ? ', ' + ghosts + ' NPC' + (ghosts === 1 ? '' : 's') : '');
+    btn.textContent = player ? 'Losfahren' : (ghosts ? 'NPCs starten' : 'Losfahren');
     // Anhalten ist nur scharf, wenn wirklich einer faehrt. Gepruefte Bedingung ist der
     // ZEITGEBER und nicht die Rolle: ein Auto auf "Ghost" zu stellen laesst es nicht
     // fahren, und ein Knopf, der dann etwas anzuhalten verspricht, luegt.
@@ -1881,14 +2013,14 @@
     if (stop) {
       const fahren = garage.filter(c => c.role === 'ghost' && c.ghost && c.ghost.running);
       stop.disabled = !fahren.length && !ghosts;
-      stop.textContent = fahren.length ? 'Ghosts anhalten' : 'Ghosts starten';
+      stop.textContent = fahren.length ? 'NPCs anhalten' : 'NPCs starten';
       stop.dataset.lage = fahren.length ? 'anhalten' : 'starten';
       if (typeof garAktionenAbgleichen === 'function') setTimeout(garAktionenAbgleichen, 0);
       stop.title = fahren.length
-        ? fahren.length + ' Ghost' + (fahren.length === 1 ? '' : 's')
+        ? fahren.length + ' NPC' + (fahren.length === 1 ? '' : 's')
           + ' ausrollen lassen und anhalten'
-        : (ghosts ? ghosts + ' Ghost' + (ghosts === 1 ? '' : 's') + ' losfahren lassen'
-                  : 'Erst ein Auto auf "Ghost" stellen');
+        : (ghosts ? ghosts + ' NPC' + (ghosts === 1 ? '' : 's') + ' losfahren lassen'
+                  : 'Erst ein Auto auf "NPC" stellen');
     }
   }
 
@@ -1910,11 +2042,11 @@
     const laufend = ghosts.filter(c => c.ghost.finish);
     if (laufend.length) {
       for (const c of laufend) { c.ghost.finish = null; c.ghost.freeRun = false; stopGhost(c); }
-      log(laufend.length + ' Ghost' + (laufend.length === 1 ? '' : 's') + ' sofort gestoppt.',
+      log(laufend.length + ' NPC' + (laufend.length === 1 ? '' : 's') + ' sofort gestoppt.',
           'info');
     } else {
       for (const c of ghosts) { c.ghost.freeRun = false; finishGhost(c); }
-      log(ghosts.length + ' Ghost' + (ghosts.length === 1 ? '' : 's')
+      log(ghosts.length + ' NPC' + (ghosts.length === 1 ? '' : 's')
           + ': ausrollen, anhalten, dreimal blinken.', 'info');
     }
     refreshGarageGo();
@@ -1941,8 +2073,8 @@
       c.ghost.freeRun = true;
       n++;
     }
-    log((player ? garageLabel(player) + ' im Cockpit' : 'Nur Ghosts')
-        + (n ? ', ' + n + ' Ghost' + (n === 1 ? '' : 's') + ' gestartet' : ''), 'info');
+    log((player ? garageLabel(player) + ' im Cockpit' : 'Nur NPCs')
+        + (n ? ', ' + n + ' NPC' + (n === 1 ? '' : 's') + ' gestartet' : ''), 'info');
     refreshGarageGo();
   }
 
@@ -2019,7 +2151,14 @@
       // von selbst den Zwei-Spieler-Modus an, siehe dort).
       // Gemerkte Rolle zuerst (v0.9.6) - wenn sie frei ist; sonst wie bisher.
       const gemerkt = carRollenLesen()[String(car.device.id)];
-      if (gemerkt && typeof gemerkt.ghostSpeed === 'number') car.ghostSpeed = gemerkt.ghostSpeed;
+      // v0.9.56: Ghost-Stufe aus dem Speicher, mit Migration vom alten ghostSpeed-Wert.
+      if (gemerkt) {
+        if (typeof gemerkt.ghostStufe === 'number') car.ghostStufe = gemerkt.ghostStufe;
+        else if (typeof gemerkt.ghostSpeed === 'number') car.ghostStufe = ghostStufeAusSpeed(gemerkt.ghostSpeed);
+        // v0.9.64: Ghost-Sound je Auto.
+        if (typeof gemerkt.ghostSound === 'boolean') car.ghostSound = gemerkt.ghostSound;
+        if (typeof gemerkt.ghostMotor === 'string') car.ghostMotor = gemerkt.ghostMotor;
+      }
       const frei = gemerkt && garRollenFrei(car).some((r) => r.id === gemerkt.role);
       if (frei && gemerkt.role !== 'none') setCarRole(car, gemerkt.role);
       else if (!playerCar) setCarRole(car, 'player');
@@ -2072,7 +2211,13 @@
     shakeNotify(car, b);
     // 0x00 is a valid REPORT but not a valid READING, so it must not refresh the
     // last-seen-code timestamp — otherwise a car sitting beside the track looks alive.
-    if (code !== 0xff && code !== TILE_OFFTRACK) car.lastCodeAt = Date.now();
+    if (code !== 0xff && code !== TILE_OFFTRACK) {
+      car.lastCodeAt = Date.now();
+      // v0.9.64: der letzte GUELTIGE Code. Der Abgangsmelder braucht ihn als Gegenprobe:
+      // war der zuletzt gelesene Code eine Kurve/Haarnadel, liest der Ghost dort 0x00, weil
+      // er (unter der Leseschwelle) langsam ist - nicht, weil er neben der Bahn liegt.
+      car.lastCode = code;
+    }
     if (code !== car.tileCode) { car.tileCode = code; }
     if (car.tileCount !== b[11]) { car.tileCount = b[11]; car.tileAt = Date.now(); }
     // ---- DAS ABSEITS VON AUTO 2, aus SEINEN Bytes --------------------------------
@@ -2100,25 +2245,17 @@
     } else if (car.role === 'ghost' && typeof rammMessenGeist === 'function') {
       rammMessenGeist(car, b);
     }
-    // Der Streckenscan haengt jetzt an DIESEM Strom. Er hatte eine eigene Anmeldung ueber
-    // charByUuid, und die wird nur von exploreServices() im Entwickler-Tab gefuellt - nach
-    // einer Verbindung ueber die Garage war sie leer und der Scan brach mit "NUS TX nicht
-    // gefunden" ab. Genau derselbe Fehler war beim Armaturenbrett schon einmal gefunden und
-    // dort behoben worden (siehe den Kommentar oben), beim Scan blieb er stehen.
-    if (trackScanning && trackScanCar === car) trackScanBytes(b);
     // BESTELLT: "Streckenscan ... button in der garage." Eigener Verbraucher, siehe die
-    // Begruendung bei garageScan in 60-track.js - laeuft nur fuer SEIN Auto und nur,
-    // solange nicht auch noch von Hand gescannt wird (derselbe Wettlauf-Grund wie unten).
-    if (typeof garageScan !== 'undefined' && garageScan.aktiv && garageScan.car === car
-        && !trackScanning) {
+    // Begruendung bei garageScan in 60-track.js - laeuft nur fuer SEIN Auto.
+    if (typeof garageScan !== 'undefined' && garageScan.aktiv && garageScan.car === car) {
       garageScanTick(b);
     }
-    // Lernen laeuft nur, wenn nicht gerade von Hand ODER aus der Garage gescannt wird -
-    // alle drei gleichzeitig in dieselbe Karte schreiben zu lassen waere ein Wettlauf.
-    // Sonst haette der Garagenscan seine eigene, GEPRUEFTE Runde noch nicht fertig, waehrend
-    // learnTick() schon eine UNGEPRUEFTE committet - genau die Pruefung, die bestellt wurde.
+    // Lernen laeuft nur, wenn nicht gerade aus der Garage gescannt wird - beide gleichzeitig
+    // in dieselbe Karte schreiben zu lassen waere ein Wettlauf. Sonst haette der Garagenscan
+    // seine eigene, GEPRUEFTE Runde noch nicht fertig, waehrend learnTick() schon eine
+    // UNGEPRUEFTE committet - genau die Pruefung, die bestellt wurde.
     const garagenscanLaeuft = typeof garageScan !== 'undefined' && garageScan.aktiv;
-    if (!trackScanning && !garagenscanLaeuft && (car === playerCar || car.role === 'ghost')) {
+    if (!garagenscanLaeuft && (car === playerCar || car.role === 'ghost')) {
       // Das erste passende Auto bekommt das Lernen und behaelt es, bis zurueckgesetzt wird.
       // Der Fahrer hat Vorrang: er faehrt die Runde bewusst, ein Ghost faehrt, was er kann.
       if (!learn.car || (car === playerCar && learn.car !== playerCar)) {
@@ -2127,11 +2264,15 @@
       if (learn.car === car) learnTick(b);
     }
     car.yaw = b[3] > 127 ? b[3] - 256 : b[3];
-    car.battery = b[10];
+    // v0.9.87: geglaettet (Maximum der letzten 5 s) - unter Gas sackt die Spannung ab, und
+    // der Rohwert sprang dann um bis zu zehn Prozent.
+    car.battery = akkuGlaetten(car, b[10], Date.now());
   }
 
   function stopGhost(car) {
     if (car.ghost) car.ghost.aufstellZiel = null;      // v0.9.22: Aufstellung endet mit
+    // v0.9.61 (D8): die Motorstimme des Ghosts mit anhalten.
+    if (car.ghost && typeof ghostStimmeStoppen === 'function') ghostStimmeStoppen(car);
     // AUCH den wartenden setTimeout, nicht nur den laufenden Zeitgeber - siehe
     // ghostTaktLoeschen(). Ein Halt in den ersten Millisekunden nach dem Start liess sonst
     // einen Zeitgeber zurueck, den niemand mehr kannte.
@@ -2278,6 +2419,31 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // wird. Der Ort kommt aus derselben Ortung (car.ghost) wie bei den Ghosts.
   const aufstellSpieler = new Map();   // car -> { ziel, seit, fertig }
   function aufstellZielKachel(platz, n) { return (((-1 - Math.floor(platz / 2)) % n) + n) % n; }
+  // v0.9.87: ERST NACH DEM STARTTEIL ANHALTEN. startGhost() legt den Ort neu an, und die
+  // erste gemeldete Kachel gilt dann als Kachel 0 - der Halt "auf Kachel ziel" traf also
+  // eine beliebige Kachel. Ueber das Startteil gefahren ist der Ort sicher abgeglichen.
+  function aufstellStartPruefen(halter, car) {
+    if (!halter.startGesehen && car && typeof isStartCode === 'function' && isStartCode(car.tileCode)) {
+      halter.startGesehen = true;
+    }
+    return !!halter.startGesehen;
+  }
+  function aufstellRest(car, ziel) {
+    const n = currentTrackTiles ? currentTrackTiles.length : 0;
+    const o = car && car.ghost ? ghostOrt(car) : null;
+    if (o === null || !n) return null;
+    return ((ziel - Math.floor(o)) % n + n) % n;
+  }
+  // Volle Querlage erst auf den letzten zwei Kacheln vor dem Platz - vorher ganz aussen durch
+  // jede Kurve war ein Abflug mit Ansage.
+  function aufstellBreite(halter, car, ziel) {
+    const rest = aufstellRest(car, ziel);
+    return halter.startGesehen && rest !== null && rest <= 2 ? GHOST_GRID_MAX : GHOST_GRID_OFFSET;
+  }
+  function aufstellenSpielerBreite(car) {
+    const a = aufstellSpieler.get(car);
+    return a ? aufstellBreite(a, car, a.ziel) : GHOST_GRID_OFFSET;
+  }
   function aufstellenLaeuft() {
     return garage.some((c) => c.ghost && c.ghost.aufstellZiel !== null && c.ghost.aufstellZiel !== undefined
                               && c.role === 'ghost')
@@ -2289,6 +2455,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     const a = aufstellSpieler.get(car);
     if (!a) return false;
     if (a.fertig) return true;
+    if (!aufstellStartPruefen(a, car)) return false;
     const o = car.ghost ? ghostOrt(car) : null;
     if (o !== null && Math.floor(o) === a.ziel && Date.now() - a.seit > 1200) {
       a.fertig = true;
@@ -2328,6 +2495,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   }
   function aufstellenPruefen(car) {
     const g = car.ghost;
+    if (!aufstellStartPruefen(g, car)) return false;
     const o = ghostOrt(car);
     if (o === null || Math.floor(o) !== g.aufstellZiel || Date.now() - (g.aufstellSeit || 0) < 1200) return false;
     stopGhost(car);
@@ -2366,16 +2534,16 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // Ghost ist das sein Ghost-Zustand, fuer den Fahrer ein eigenes Objekt. Er wird beim
   // ersten Aufruf gesetzt und nicht im Konstruktor - ein Auto, das nie in einer
   // Einfuehrungsrunde faehrt, braucht keine Phase.
-  function formationOffset(halter, gridPos, now) {
+  function formationOffset(halter, gridPos, now, breite) {
     if (halter.weavePhase === undefined) halter.weavePhase = Math.random() * 6.283;
     let v = Math.sin(now / 700 + halter.weavePhase) * GHOST_WEAVE;
     if (gridPos >= 0) {
       const seit = gridPos % 2 ? -1 : 1;
-      // BESTELLT: "alle abwechselnd link und rechts (max querlage) anhalten". Bei "Autos
-      // fahren selbst in Position" (gridSelbst, experimentell) wird die maximale Querlage
-      // angesteuert, sonst der bisherige Versatz.
-      const breite = (typeof gridSelbst !== 'undefined' && gridSelbst) ? GHOST_GRID_MAX : GHOST_GRID_OFFSET;
-      v += seit * breite;
+      // v0.9.58 (D6): die Querlage kommt als Parameter. Die Einfuehrungsrunde nimmt den
+      // bisherigen Versatz (GHOST_GRID_OFFSET), die Positionsfahrt der Aufstellung die
+      // maximale Breite (GHOST_GRID_MAX) - abwechselnd links/rechts nach Startplatz. Das
+      // experimentelle Kästchen gridSelbst entfaellt, die maximale Breite gilt immer.
+      v += seit * (breite === undefined ? GHOST_GRID_OFFSET : breite);
     }
     return v;
   }
@@ -2396,11 +2564,11 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   const formationFahrer = {};
   const formationFahrerZwei = {};
   const formationFahrerJe = { 2: formationFahrerZwei, 3: {} };
-  function formationDriverOffset(car) {
+  function formationDriverOffset(car, breite) {
     const c = car || garage.find(x => x.role === 'player');
     const nr = c ? spielerNrVon(c) : 0;
     const halter = nr >= 2 ? (formationFahrerJe[nr] || formationFahrerZwei) : formationFahrer;
-    return formationOffset(halter, gridPosOf(c), Date.now());
+    return formationOffset(halter, gridPosOf(c), Date.now(), breite);
   }
   const GHOST_OFFTRACK_MS = 1500;   // measured: tiles last 0.4-2.7 s with no 0xff between
   // Wie lange 0x00 stehen muss, bevor der Ghost anhaelt. Vorher hielt ein EINZIGES 0x00-Paket
@@ -2420,6 +2588,19 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // was Byte 12 dazwischen meldet. Das unterscheidet, was Zeit allein nicht unterscheiden
   // kann, naemlich einen Ausfall der Lesung von einem Abflug.
   const GHOST_OFFTRACK_CONFIRM_MS = 900;
+  // v0.9.74: In einer Kurve/Haarnadel liest der langsame Ghost 0x00, weil er unter der
+  // Leseschwelle ist - das ist KEIN Abgang. Aber ein Auto, das wirklich neben der Bahn liegt
+  // und gerade aus einer Kurve gekommen ist, liest ebenfalls 0x00 und wurde mit der normalen
+  // Schwelle (GHOST_OFFTRACK_CONFIRM_MS) dauerhaft nicht geparkt. Darum gilt in der Kurve
+  // eine laengere Frist: wer nach so langer Zeit immer noch 0x00 liest, ist raus.
+  // v0.9.87: 1200 statt 3000 - die 3 s liessen jeden Abflug aus einer Kurve weiterfahren
+  // (GEMELDET: "Ghosts hoeren nicht auf zu fahren, wenn sie die Bahn verlassen"). Die
+  // Haarnadel, in der ein langsamer Ghost auf der Bahn 0x00 liest, hat ihre eigene Frist.
+  const GHOST_OFFTRACK_KURVE_MS = 1200;
+  const GHOST_OFFTRACK_HAARNADEL_MS = 1800;   // 80 cm bei Schritttempo
+  // Laeuft der Kachelzaehler bei 0x00 schneller als jede je gefahrene Kachel, faehrt das
+  // Auto auf dem Teppich (die Firmware zaehlt dort weiter): dann nicht lange warten.
+  const GHOST_OFFTRACK_RAST_MS = 300;
   // BESTELLT (Phase 12, Punkt 8): "auf Basis der bekannten Strecke und des bekannten
   // Ortes... zurueckfahren, zumindest fuer 3s versuchen - ausser es faehrt in der Zeit
   // irgendwo gegen." Drei Sekunden ab dem bestaetigten Abgang (GHOST_OFFTRACK_CONFIRM_MS
@@ -2607,7 +2788,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // vergrößert werden (dazu slider)" und "Pro 4 Autos ... wie viele Überholmanöver pro
     // Runde ... auf 0m5 setzen". Beide experimentell.
     feldAbstand: 0,        // 0-100 %: vergroessert die Abstaende zwischen den Autos
-    ueberholRate: 0.5,     // Ueberholmanoever pro Runde pro 4 Autos (0.1er Schritte)
+    ueberholRate: 0.1,     // Ueberholmanoever pro Runde pro 4 Autos (v0.9.55: echte Rate)
     // ---- GHOST-BOXENSTOPP ----------------------------------------------------------
     //
     // pitAn steht auf AN, obwohl es neu und experimentell ist: bestellt war ein Feature, das
@@ -2652,13 +2833,13 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // ghostPaarKurve.
     tempoStreuung: 0,
     staffelStart: true,
-    staffelMs: 200,
+    staffelMs: 250,
     paarKurve: true,
     // Lernen von Runde zu Runde, standardmaessig aus: es aendert das Fahrverhalten ueber
     // ein Rennen hinweg, und das soll niemand ungefragt bekommen.
     learnPace: false,
     leaderBrake: true,  // gestaffelt ueber das ganze Feld, siehe ghostFeldStaffel()
-    leaderBrakePct: 0.10,
+    leaderBrakePct: 0.14,
     // Default ON: the measurement says this is the mode in which the car holds the track by
     // itself, which is the only configuration in which a ghost works at all today.
     railMode: true,
@@ -2787,6 +2968,19 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     return -1;
   }
 
+  // ALLE Start/Ziel-Kacheln, nicht nur die erste. Seit v0.9.64 sind weitere START-Kacheln
+  // Sektorgrenzen (gelb), nur die erste ist die Rundenlinie (gruen). Ein Ghost, der eine
+  // Sektorgrenze ueberfaehrt, liest denselben START-Code wie an der Rundenlinie - und darf
+  // den Ort nicht auf die ERSTE Kachel zuruecksetzen und eine Runde zaehlen.
+  function ortStartIndices(tiles) {
+    const out = [];
+    for (let i = 0; i < tiles.length; i++) {
+      const t = tiles[i];
+      if (t && (t.type === TILE_TYPE.START || isStartCode(t.type))) out.push(i);
+    }
+    return out;
+  }
+
   // Mindestens so viele Stimmen, und mindestens so viel Vorsprung vor JEDEM anderen Versatz.
   const ORT_STIMMEN_MIN = 4;
   const ORT_VORSPRUNG = 3;
@@ -2809,8 +3003,19 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // es gilt jede Runde neu: verliert der Zaehler unterwegs eine Kachel, ist es beim
     // naechsten Zieldurchgang wieder in Ordnung.
     if (isStartCode(code)) {
-      const ziel = ortStartIndex(tiles);
-      if (ziel >= 0 && g.tileIndex !== ziel) {
+      // v0.9.74: nicht mehr blind auf die ERSTE Start-Kachel. Bei mehreren Start-Kacheln
+      // (Rundenlinie + Sektorgrenzen) ist der Ort nur dann eindeutig, wenn man die Kachel
+      // nimmt, die der laufende Kachelzaehler gerade meldet - sonst setzt eine Sektorgrenze
+      // den Ghost auf die Rundenlinie zurueck und zaehlt ihm eine Runde zu viel.
+      const ziele = ortStartIndices(tiles);
+      if (!ziele.length) return;
+      let ziel = ziele[0], besterD = Infinity;
+      for (const z of ziele) {
+        let d = Math.abs(z - g.tileIndex);
+        d = Math.min(d, n - d);
+        if (d < besterD) { besterD = d; ziel = z; }
+      }
+      if (g.tileIndex !== ziel) {
         const vor = g.tileIndex;
         g.tileIndex = ziel;
         // DIE RUNDENZAEHLUNG haengt am Index 0 (siehe die Ueberfahrt in ghostTick). Wurde
@@ -3423,6 +3628,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // Streckencode kam. Auf dem Tisch heisst das: er dreht sich neben der Bahn im Kreis, und
   // wer ihn zurueckstellt, muss ihn im Fahren treffen. Jetzt bleibt er stehen, bis man ihn
   // schuettelt - dieselbe Handbewegung, mit der man ihn ohnehin zurueckstellt.
+  const KO_STEHT_MS = 5000;   // Knockout: so lange ohne neue Kachel = steckt fest = raus
   function parkCar(car, reason) {
     if (car.parked === reason) return;
     car.parked = reason;
@@ -3437,6 +3643,18 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       pitPlatzRaeumen(car);
     }
     if (car.rx) writeToCar(car, 0, 0, trackModeBit() | LIGHT_HEAD);
+    // v0.9.51: ABGANG ZAEHLEN UND KNOCKOUT HIER, an der einen Stelle, an der ein Ghost
+    // wirklich als "neben der Bahn" stehen bleibt. Beides stand im ghostTick hinter
+    // `offTrack && !g.cutOut` - aber offTrack ist car.parked, und parkCar setzt cutOut im
+    // selben Zug: der Zweig lief NIE. GEMELDET: "Es wird nicht korrekt erkannt, wenn
+    // Geister die Bahn verlassen. Wenn ein Auto steht und blinkt, soll es zaehlen als
+    // 'Bahn verlassen'." Ein geparkter Ghost ist genau dieses Auto (er blinkt im 260-ms-Takt).
+    if (car.ghost && reason === 'Bahn verlassen') {
+      if (!car.race) car.race = { laps: [], lapStart: null, pending: null, seen: 0,
+                                  lastActed: 0, lastCount: null };
+      car.race.offLap = (car.race.offLap || 0) + 1;
+      if (typeof knockoutGeistRaus === 'function') knockoutGeistRaus(car);
+    }
     log(garageLabel(car) + ': steht (' + reason + '). Auto anheben, zur\u00fcckstellen und '
         + 'kurz sch\u00fctteln, dann f\u00e4hrt es weiter.', 'err');
     // ---- UND WORAN ES LAG, MIT ZAHLEN ----------------------------------------------
@@ -3685,17 +3903,21 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   const FINISH_BLINKS = 3;
   const FINISH_BLINK_MS = 260;
   const FINISH_RAND = 1.0;          // voller Versatz zur Seite, mehr kann Byte 7 nicht
-  // ---- ALLE NACH LINKS, UND ZWAR ALLE ---------------------------------------------
+  // ---- ABWECHSELND LINKS UND RECHTS (v0.9.59) -------------------------------------
   //
-  // Vorher wechselten sich die Seiten ab (rechts, links, rechts ...), damit zwei
-  // hintereinander einlaufende Autos nicht dieselbe Stelle treffen. Mit der Kachelstaffel
-  // ist der Abstand laengs gesichert, und dann ist EINE Seite besser: das Feld steht in
-  // einer Reihe am selben Rand, und die andere Haelfte der Bahn bleibt frei - auch fuer das
-  // Auto des Fahrers, das ja noch faehrt.
+  // Vorher rollten alle an DENSELBEN Rand und standen dort in einer Reihe. Gemeldet: "2
+  // gehen gut, alle weiteren fahren auf die anderen auf." Die Kachelstaffel sichert zwar den
+  // Abstand LAENGS, aber bei mehr als zwei Autos staut sich eine Seite voll, und die
+  // Nachzuegler fahren auf die Vorderen auf.
   //
-  // LINKS, wie bestellt. Byte 7 negativ ist links (positiv ist rechts, geometrisch
-  // nachgemessen: +4 gibt einen Bahnradius von 38,8 Einheiten, -4 nur 30,7).
-  const FINISH_SEITE = -1;
+  // Jetzt wechselt die Seite je Startplatz (g.seite: ungerader Platz links, gerader rechts,
+  // dieselbe Konvention wie formationOffset), und die Staffel liegt darunter. Damit stehen
+  // zwei gleichseitige Autos nie direkt hintereinander - sie sind immer zwei Plaetze ausein-
+  // ander und haben doppelt so viel Abstand. Die andere Bahnhaelfte bleibt fuer das Auto des
+  // Fahrers frei, das ja noch faehrt.
+  //
+  // LINKS ist Byte 7 negativ (positiv ist rechts, geometrisch nachgemessen: +4 gibt einen
+  // Bahnradius von 38,8 Einheiten, -4 nur 30,7).
 
   // ====================================================================================
   // GHOST-BOXENSTOPP (experimentell)
@@ -4316,15 +4538,26 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     const kacheln = platz < 0
       ? 0
       : Math.max(0, Math.min(FINISH_KACHELN_MAX, feld - 1 - platz));
+    // v0.9.59 (D7): abwechselnd maximal weit links und rechts statt alle links. Vorher
+    // rollten alle an denselben Rand und fuhren bei mehr als zwei Autos aufeinander auf.
+    // Die Seite kommt aus der Startaufstellung (g.seite: ungerader Platz links, gerader
+    // rechts - dieselbe Konvention wie formationOffset); ein Auto ohne Aufstellplatz nimmt
+    // die Seite seines Einlaufs (Finish-Reihenfolge), damit die Reihe trotzdem abwechselt.
+    // Mit der Kachelstaffel darunter sind zwei gleiche Seiten nie direkte Nachbarn, und die
+    // Autos parken weiter auseinander.
+    // v0.9.87: nach EINLAUFREIHENFOLGE, nicht nach Startseite - zwei Autos, die direkt
+    // nacheinander ankamen, konnten sonst dieselbe Seite haben und aufeinander auffahren.
+    const seite = platz >= 0 ? (platz % 2 ? -1 : 1) : (g.seite || 1);
     g.finish = { phase: 'roll', at: Date.now(),
-                 seite: FINISH_SEITE,
+                 seite,
                  kacheln,
                  // Der Zaehlerstand beim Einlauf. Byte 11 laeuft ueber, deshalb wird die
                  // Differenz mit & 0xff gerechnet und nicht als Subtraktion zweier Zahlen.
                  kachelStart: car.tileCount === null || car.tileCount === undefined
                    ? null : car.tileCount };
     log(garageLabel(car) + ': rollt ' + kacheln
-        + (kacheln === 1 ? ' Kachel' : ' Kacheln') + ' aus und h\u00e4lt links am Rand.',
+        + (kacheln === 1 ? ' Kachel' : ' Kacheln') + ' aus und h\u00e4lt ' + (seite < 0 ? 'links' : 'rechts')
+        + ' am Rand.',
         'info');
   }
 
@@ -4525,7 +4758,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // ALLERERSTE STUFE: ist das Autos-in-Position-Fenster offen (70-race.js), startet dieselbe
     // Taste das Rennen (X statt Touch). Alles dahinter bleibt unberuehrt.
     if (typeof raceGridOffen === 'function' && raceGridOffen()) {
-      if (flagNow && !prevYellowFlag) raceGridStart();
+      if (flagNow && !prevYellowFlag) raceGridBestaetigen();
       prevYellowFlag = flagNow;
       return;
     }
@@ -4580,6 +4813,102 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // BESTELLT (v0.9.27): "Option in den Renneinstellungen: gelbe Flagge deaktivieren
   // (Standard: aus)". An: weder Knopf noch Taste rufen Gelb aus.
   function gelbDeaktiviert() { const el = $('race-gelb-aus'); return !!(el && el.checked); }
+  // ---- SAFETY CAR (v0.10.7, experimentell) -------------------------------------------
+  // BESTELLT: "Das parkt am Streckenrand und faehrt los, wenn Gelb aktiviert wird. Danach
+  // faehrt es bei der Startgeraden rechts ran. Es darf nie von Ghosts ueberholt werden."
+  // Gefahren wird es von der Ghost-Logik (startGhost/ghostTick): unter Gelb im Gelb-Tempo mit
+  // Kurvendrosselung. Nach Gruen faehrt es bis Start/Ziel und haelt dort rechts am Rand
+  // (dieselbe Abstellfolge wie der Zieleinlauf: ausrollen, bremsen, blinken, stehen).
+  const SC_BLINK_MS = 750, SC_BLINK_AN_MS = 250, SC_NAH_KACHELN = 2;
+  function safetyCar() { return garage.find((c) => c.role === 'safetycar') || null; }
+  function safetyCarFaehrt() {
+    const sc = safetyCar();
+    return !!(sc && sc.ghost && sc.ghost.running && !sc.ghost.finish);
+  }
+  function safetyCarRaus() {
+    const sc = safetyCar();
+    if (!sc || (sc.ghost && sc.ghost.running)) return;
+    startGhost(sc);
+    if (sc.ghost) { sc.ghost.freeRun = true; sc.ghost.scHeim = false; }
+    showHudToast(t('Safety Car auf der Strecke'));
+    log(garageLabel(sc) + ': Safety Car faehrt los.', 'info');
+  }
+  function safetyCarHeim() {
+    const sc = safetyCar();
+    if (sc && sc.ghost && sc.ghost.running) {
+      sc.ghost.scHeim = true;
+      showHudToast(t('Safety Car kommt an Start/Ziel herein'));
+    }
+  }
+  // An Start/Ziel nach Gruen: rechts ran, eine Kachel ausrollen, stehen.
+  function safetyCarAbstellen(sc) {
+    const g = sc.ghost;
+    if (!g || g.finish) return;
+    g.scHeim = false;
+    g.finish = { phase: 'roll', at: Date.now(), seite: 1, kacheln: 1,
+                 kachelStart: sc.tileCount === null || sc.tileCount === undefined ? null : sc.tileCount };
+    log(garageLabel(sc) + ': Safety Car faehrt rechts ran.', 'info');
+  }
+  // Ist dieses Auto nah hinter dem Safety Car (hoechstens SC_NAH_KACHELN)?
+  function nahAmSafetyCar(car) {
+    const sc = safetyCar();
+    if (!sc || sc === car || !sc.ghost || !car || !car.ghost) return false;
+    const n = currentTrackTiles ? currentTrackTiles.length : 0;
+    const a = ghostOrt(car), b = ghostOrt(sc);
+    if (!n || a === null || b === null) return true;      // ohne Ort: vorsichtig
+    const d = ((b - a) % n + n) % n;
+    return d <= SC_NAH_KACHELN;
+  }
+  // ---- DIE GRENZE DES FAHRERAUTOS UNTER GELB (v0.9.51) -----------------------------
+  //
+  // GEMELDET: "Gelbe Flagge soll mein Auto mit dem Tempo der Ghosts weiterfahren lassen und
+  // auch richtig lenken, das klappt nicht."
+  //
+  // Der Autopilot zielte auf max(Gelb-Tempo, GHOST_READ_MIN) = 0,35 - wie die Ghosts -,
+  // aber die Physik des Fahrerautos war auf yellowFactor() = 0,244 gedeckelt. Das Auto kam
+  // also nie ueber 0,244, der Regler stand auf Vollgas, und unter 0,35 liest es die Bahn
+  // nicht mehr: es fiel aus der Selbstfuehrung und fuhr geradeaus. Auf der Bahn, wo der
+  // Autopilot greift, gilt deshalb dieselbe Grenze wie fuer die Ghosts. Im Ausdruck-Modus
+  // faehrt man selbst, dort bleibt es beim Gelb-Tempo.
+  // v0.10.5 BESTELLT: "Bei gelber Flagge alle Autos auf ca. 35 % drosseln (so koennen sie
+  // gerade noch um die Strecke fahren, ohne anzuhalten)." Also auch im Ausdruck-Modus und fuer
+  // jedes Auto dieselbe Grenze - darunter liest das Auto die Bahn nicht mehr.
+  function gelbGrenze() {
+    return Math.max(yellowFactor(), GHOST_READ_MIN);
+  }
+  // ---- AUFSCHLIESSEN ZUM SAFETY CAR (v1.0.12, Option, Vorgabe an) ----------------------
+  // BESTELLT: "Mach das Ranfahren zum Safetycar als eine Option (Standard = an), also alle mit
+  // ~45 % ranfahren und dann mit 35 % weiter. Dabei auch Kurvendrosselung beruecksichtigen,
+  // damit sie nicht mit 45 % aus der Haarnadel fliegen." Die Kurvendrosselung kommt danach:
+  // bei den Ghosts das Tempoprofil in ghostTick, beim Fahrerauto autopilotKurvenFaktor.
+  const SC_AUFSCHLUSS = 0.45;
+  function scAufschliessenAn() { const el = $('race-sc-aufschliessen'); return el ? !!el.checked : true; }
+  function gelbZielFuer(car) {
+    if (car && car.role !== 'safetycar' && scAufschliessenAn() && safetyCarFaehrt() && !nahAmSafetyCar(car)) {
+      return Math.max(SC_AUFSCHLUSS, gelbGrenze());
+    }
+    return gelbGrenze();
+  }
+  // Die Kurvendrosselung der Ghosts fuer ein Fahrerauto im Autopiloten: dieselbe Regel wie
+  // die Kachelregel in ghostTick (curveSlow in der 60-Grad-Kurve, doppelt in Haarnadel und
+  // Engstelle, hoechstens 85 %), an der GEMELDETEN Kachel unter dem Auto. So faehrt es
+  // unter Gelb wirklich im Tempo der Ghosts und nicht mit Geradentempo durch die Kurve.
+  // v1.0.21 GEMELDET: "Gibt mein Auto ploetzlich ziemlich Gas und faehrt viel zu schnell und
+  // kommt dann von der Bahn." Hier zaehlte nur die Kachel UNTER dem Auto: mit ~45 % zum
+  // Aufschliessen kam es ungebremst in die Haarnadel und wurde erst auf ihr langsamer. Jetzt
+  // derselbe Vorausblick wie bei den Ghosts (ghostTick): vor einer Haarnadel zwei Kacheln,
+  // vor einer normalen Kurve eine - aber nur, wenn der Ort zur gemeldeten Schiene passt.
+  function autopilotKurvenFaktor(car) {
+    if (!car || car.tileCode === undefined || car.tileCode === null) return 1;
+    const here = ghostTileInfo(car.tileCode).curve;
+    let tight = here;
+    if (car.ghost && ortStimmt(car) !== false) {
+      const ahead = ghostAheadTightest(car, 2);
+      const reach = ahead.tight >= 2 ? 2 : 1;
+      tight = Math.max(here, ahead.dist <= reach ? ahead.tight : 0);
+    }
+    return tight > 0 ? 1 - Math.min(0.85, ghostCfg.curveSlow * tight) : 1;
+  }
   function setFlag(next) {
     if (next === flagState) return;
     if (next === 'yellow' && gelbDeaktiviert()) {
@@ -4588,7 +4917,12 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     }
     flagState = next;
     if (next === 'yellow') {
-      limitYellow = yellowFactor();
+      // Mit Safety Car faehrt das Feld normal, bis es aufschliesst; die Grenze fuer das
+      // Fahrerauto setzt dann der Autopilot (autopilotGrund), nicht die Physik.
+      // v1.0.9 BESTELLT: "~35 % Geschwindigkeit bei allen ohne Messung der Naehe zum
+      // Safetycar und keine Ueberholmanoever" - mit und ohne Safety Car dieselbe Grenze.
+      limitYellow = (safetyCar() && scAufschliessenAn()) ? Math.max(SC_AUFSCHLUSS, gelbGrenze()) : gelbGrenze();
+      safetyCarRaus();
       applySpeedLimit();
       // Angriffe abbrechen: waehrend Gelb wird nicht ueberholt.
       garage.forEach(c => { if (c.ghost) { c.ghost.attackUntil = 0; c.ghost.attackSide = 0; } });
@@ -4599,6 +4933,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       setRaceLights(0);
     } else if (next === 'green') {
       limitYellow = 1;
+      safetyCarHeim();
       applySpeedLimit();
       log('Gr\u00fcn. Volle Kontrolle.', 'info');
       showHudToast('GR\u00dcN');
@@ -4642,6 +4977,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       const flaggenText = flagState === 'yellow' ? (grund === 'yellow' ? 'GELB · AUTOPILOT' : 'GELB')
                      : flagState === 'restart' ? 'ANFAHRT'
                      : grund === 'formation' ? 'EINFÜHRUNGSRUNDE · AUTOPILOT'
+                     : grund === 'aufstellen' ? 'AUFSTELLUNG · AUTOPILOT'
                      : raceFormationLap ? 'EINFÜHRUNGSRUNDE' : '';
       el.textContent = flaggenText ? t(flaggenText) : '';
       el.style.display = el.textContent ? '' : 'none';
@@ -5018,6 +5354,35 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     if (ghostTurnOf(car.tileCode)) return 1;          // in Kurven gleich
     return 1 + (p / 100) * g.tempoZ;
   }
+  // ---- Ghost-Presets (v0.9.56): Stufe statt feiner Prozentzahl ---------------------
+  //
+  // Drei Stufen je Auto - Einfach/Mittel/Schnell -, die nur das GERADENTEMPO aendern.
+  // In Kurven und Haarnadeln gilt immer das Mittel-Tempo (0,55), damit alle Stufen in der
+  // Kurve gleich schnell sind und die Kurvendrosselung dieselbe bleibt. Zurueckkommt ein
+  // Faktor auf der Geraden (0,45/0,55/0,65) und sonst das Mittel-Tempo.
+  function ghostStufeFaktor(car) {
+    const stufe = car.ghostStufe === undefined || car.ghostStufe === null
+      ? 1 : car.ghostStufe;
+    const s = GHOST_TEMPO_STUFEN[stufe];
+    const stufenTempo = s ? s.speed : 0.55;
+    // Stufe aendert nur das Geradentempo; in der Kurve gilt immer das Mittel-Tempo.
+    // Die Stufen sind relativ zur Vorgabe (ghostCfg.speed): Mittel folgt ihr, Einfach und
+    // Schnell skalieren sie um den Stufenwert gegenueber dem Mittelwert 0,55. Bei der
+    // Vorgabe 0,55 ergeben sich damit genau die 45/55/65 Prozent auf der Geraden.
+    const basis = ghostCfg.speed || 0.55;
+    if (ghostTurnOf(car.tileCode) !== 0) return basis;
+    return stufenTempo / 0.55 * basis;
+  }
+  // Alten ghostSpeed-Wert der naechsten Stufe zuordnen (Migration v0.9.56).
+  function ghostStufeAusSpeed(speed) {
+    if (speed === undefined || speed === null) return 1;
+    let bester = 1, besterD = Infinity;
+    for (let i = 0; i < GHOST_TEMPO_STUFEN.length; i++) {
+      const d = Math.abs(GHOST_TEMPO_STUFEN[i].speed - speed);
+      if (d < besterD) { besterD = d; bester = i; }
+    }
+    return bester;
+  }
   // Wartezeit nach Gruen fuer dieses Auto: Reihe = Startplatz / 2 (abgerundet).
   function ghostStaffelMs(car) {
     if (!ghostCfg.staffelStart) return 0;
@@ -5037,9 +5402,14 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       if (o !== car && o.ghost && ghostNahe(car, o)) { nb = o; break; }
     }
     if (!nb) return null;
-    const a = ghostOrtGes(car), b = ghostOrtGes(nb);
-    const vorn = (a === null || b === null) ? garage.indexOf(car) < garage.indexOf(nb) : a >= b;
-    return vorn ? dir * GHOST_PAAR_INNEN : 0;
+    // v0.9.56: Innen bekommt das Auto, dessen Startseite zur Kurveninnenseite passt, statt
+    // immer das vordere. So bleibt ein Paar in seiner Aufstellungs-Seite, und wer innen
+    // liegt, haengt nicht vom Zufall ab, wer gerade voraus ist.
+    // v0.9.87: dieselbe Seite wie die Ausweichverteilung (bias), sonst die Startseite. Vorher
+    // nur die Startseite - zwei Autos mit gleicher Startseite waren dann BEIDE innen.
+    const b = car.ghost.bias || 0;
+    const meine = Math.abs(b) > 0.05 ? Math.sign(b) : ghostSeiteVorzug(car);
+    return meine === dir ? dir * GHOST_PAAR_INNEN : 0;
   }
 
   const GHOST_START_REAKTION_MS = [80, 300];
@@ -5512,10 +5882,13 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // fahren kann".
     const wer = spielerNrVon(c) || 1;
     if (trackMode === 'on' && driverAssistAktiv() && !abseitsJetztFuer(wer)) {
+      // v0.9.51: AUCH OHNE VORAUSBLICK, wie bei den Ghosts (ghostTick). Ohne Vorausblick -
+      // das Auto stand oder wurde gerade zurueckgestellt, die Kachel ist noch nicht verortet -
+      // gingen gar keine Spur-Bytes hinaus, und der Autopilot schickte steer = 0 als
+      // RADWINKEL: das Auto fuhr unter Gelb geradeaus aus der Kurve. Die Bytes 10/15 allein
+      // schalten die Selbstfuehrung ein; 16-18 (die Ansage) kommen, sobald der Ort steht.
       const la = ghostLookahead(c);
-      c.modeBytes = la
-        ? Object.assign({ 10: AUTO_MODE.b10, 15: AUTO_MODE.b15 }, la)
-        : null;
+      c.modeBytes = Object.assign({ 10: AUTO_MODE.b10, 15: AUTO_MODE.b15 }, la || {});
     } else {
       c.modeBytes = null;
     }
@@ -5523,20 +5896,17 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
 
   // Im Sendetakt, damit der Vorausblick zu dem Paket passt, mit dem er hinausgeht. Ein
   // eigener, langsamerer Takt waere ein Vorausblick, der der Lenkung nachlaeuft.
-  // EIN Takt fuer beide Autos, und die Reihenfolge ist fest. Ein zweiter setInterval waere
-  // dieselbe Falle wie zwei Sendewege: zwei Buchfuehrungen, die sich im Wechsel
-  // ueberschreiben koennten, wo eine Schleife genuegt.
-  setInterval(() => {
-    spielerOrtTick(playerCar);
-    for (const z of zusatzAktiv()) spielerOrtTick(z.car);
-  }, CONTROL_SEND_INTERVAL_MS);
+  // v0.9.57: spielerOrtTick laeuft jetzt im Herzschlag (controlHeartbeat in 20-protocol.js)
+  // VOR der Physik, damit der Vorausblick zum Paket passt. Dieser eigene setInterval faellt
+  // weg - ein zweiter Takt waere dieselbe Falle wie zwei Sendewege.
 
   function ghostFieldRacing() {
     // Auto 2 gehoert ins Feld, sobald es fuehrt UND einen Ortungssatz hat. Beides
     // geprueft und nicht nur die Rolle: ohne eingescannte Strecke gibt es keinen Satz, und
     // ein Auto ohne Ort im Feld waere fuer jeden Abstand eine Null.
     return garage.filter(c => c.ghost && (c.role === 'ghost' || c === playerCar
-                                          || (zweiSpieler && spielerNrVon(c) >= 2)));
+                                          || (zweiSpieler && spielerNrVon(c) >= 2)
+                                          || ((c.role === 'safetycar' || c.role === 'challenger') && c.ghost.running)));
   }
 
   // ---- Die beste bekannte Querlage EINES Autos, egal welcher Art -------------------
@@ -5602,6 +5972,30 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       if (o.ghost.attackUntil && (o.ghost.passPhase === 'raus' || o.ghost.passPhase === 'vorbei')) n++;
     }
     return n;
+  }
+  // ---- DIE UEBERHOLRATE ALS KONTINGENT (v0.9.55) -----------------------------------
+  //
+  // GEMELDET: "Setze Anzahl Ueberholmanoever standardmaessig auf 0.1 pro Runde pro 4 Autos.
+  // Bei einem 10-Runden-Rennen waren es immer noch eher 1 pro Runde bei 6 Autos."
+  // Der Regler skalierte nur die REICHWEITE, ab der angegriffen wird - jede Annaeherung
+  // wurde trotzdem nach gut drei Sekunden zum Angriff. Jetzt ein Guthaben: je gefahrener
+  // Feldrunde kommt Rate x (Autos/4) dazu, jeder Angriff kostet eins. 0,1 bei 6 Autos und
+  // 10 Runden sind 1,5 Angriffe. Nur im Rennen; ausserhalb wird wie bisher gewuerfelt.
+  const ueberholKonto = { guthaben: 0, stand: null, at: 0 };
+  function ueberholKontoGilt() { return raceState === 'racing' || raceState === 'finishing'; }
+  function ueberholKontoTick(now) {
+    if (!ueberholKontoGilt()) { ueberholKonto.guthaben = 0; ueberholKonto.stand = null; return; }
+    if (now - ueberholKonto.at < 200) return;
+    ueberholKonto.at = now;
+    const feld = ghostFieldRacing();
+    const L = (currentTrackTiles && currentTrackTiles.length) || 0;
+    if (feld.length < 2 || L < 3) return;
+    const mittel = feld.reduce((s, c) => s + ghostProgress(c), 0) / feld.length / L;
+    if (ueberholKonto.stand === null) { ueberholKonto.stand = mittel; return; }
+    const d = Math.max(0, Math.min(0.5, mittel - ueberholKonto.stand));
+    ueberholKonto.stand = mittel;
+    ueberholKonto.guthaben = Math.min(1.5, ueberholKonto.guthaben
+      + (ghostCfg.ueberholRate || 0) * (feld.length / 4) * d);
   }
   function ghostAttackeErlaubt(car) {
     const feld = ghostFieldRacing();
@@ -5830,7 +6224,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // Angriff beginnt - kleinere Reichweite = weniger Ueberholmanoever.
     const feldF = 1 + (ghostCfg.feldAbstand || 0) / 100;
     // 0.5 ist die bisherige Abstimmung: bei der Vorgabe bleibt die Reichweite unveraendert.
-    const ueberF = Math.max(0.1, (ghostCfg.ueberholRate || 0.5) / 0.5);
+    // Seit v0.9.55 steuert die Rate das Guthaben (ueberholKonto), nicht mehr die Reichweite.
+    const ueberF = 1;
+    ueberholKontoTick(now);
     const onStraight = aheadTight.tight === 0;
     // DIE ANNAEHERUNGSRATE GENAU EINMAL JE TAKT, und deshalb steht sie hier oben. Sie ist
     // eine ABLEITUNG mit Zustand (g.gapLast, g.gapAt): ein zweiter Aufruf im selben Takt
@@ -5987,11 +6383,14 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // genau diese Kolonne aufloesen, und bei Boxentempo ist dafuer kein Grund: dort geht
     // es nicht um Position, sondern darum, geordnet zur Ziellinie zu kommen.
     if (ghostCfg.wuerzeUeberholen && !raceFormationLap
+        && flagState !== 'yellow'                             // unter Gelb (auch Safety Car) nie
+        && !(ah && ah.car && ah.car.role === 'safetycar')     // das Safety Car wird nie ueberholt
         && !g.attackUntil && g.closeSince && now - g.closeSince > SPICE_ATTACK_ARM_MS
         && platz >= SPICE_PASS_PLATZ_MIN
         && !haarnadelVoraus
         && irgendeineSeiteFrei
         && ghostAttackeErlaubt(car)
+        && (!ueberholKontoGilt() || ueberholKonto.guthaben >= 1)
         && now > (g.passBlockUntil || 0)
         && now - (g.attackTriedAt || 0) > SPICE_ATTACK_RETRY_MS) {
       g.attackTriedAt = now;
@@ -6004,6 +6403,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         // frueh abgelaufen.
         g.attackUntil = now + SPICE_ANSAGE_MS + SPICE_PASS_MAX_MS + SPICE_PASS_TUCK_MS;
         g.passSince = now;
+        if (ueberholKontoGilt()) ueberholKonto.guthaben -= 1;
         // ---- ERST ANSAGEN, DANN AUSSCHWENKEN --------------------------------------
         g.passPhase = 'ansage';
         g.ansageSeit = now;
@@ -6876,6 +7276,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // Lenkung, Gas UND die Geschwindigkeit auf null - der Knopf startete also nachweislich
     // einen Ghost, der sich nicht bewegen konnte, obwohl der Kommentar daneben "freies
     // Fahren mit Begleitung" behauptete.
+    const gp = gridPosOf(car);
     car.ghost = { engine: e, tileIndex: null, lastCount: car.tileCount,
                   lastTick: 0, bias: 0, laps: 0, cutOut: false, freeRun: false,
                   // Recovery-Versuch nach einem Abgang - siehe ghostRecoveryTick().
@@ -6913,7 +7314,13 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
                   // Aufstellung laeuft sonst 22 Mal je Sekunde je Auto. -1 heisst "steht
                   // nicht in der Liste", und dann gibt es keinen Versatz - eine Paritaet aus
                   // -1 waere geraten und keine Aufstellung.
-                  gridPos: gridPosOf(car),
+                  gridPos: gp,
+                  // Die Seite aus der Startaufstellung, v0.9.56: dieselbe Konvention wie
+                  // formationOffset (gerader Platz links, ungerader rechts). Sie haelt die
+                  // Zwei-Spur-Aufteilung stabil - ghostLane() und ghostAssignBias() lesen
+                  // sie, und ghostPaarKurve() gibt damit die Kurveninnenseite dem Auto, das
+                  // schon auf der richtigen Seite liegt. 0 heisst "nicht in der Aufstellung".
+                  seite: gp >= 0 ? (gp % 2 ? -1 : 1) : 0,
                   // Die Kachelabstaende der letzten Wechsel, fuer die Plausibilitaet des
                   // Zaehlers. Leer heisst "noch nichts gesehen", und dann zaehlt er nicht.
                   tileRing: [],
@@ -6945,6 +7352,10 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
                   // beim ECHTEN Anfahren gilt - nach einem Zwischenstopp (parken/wieder
                   // anfahren) wuerde sie sonst die Boxen-Ausfahrt mit steer=0 ueberschreiben.
                   startLenkBis: 0, armedVorher: false, startLenkEinmalig: true,
+                  // v0.9.61 (D8): eigene Motorstimme. Gleiches Muster wie z.stimme, nur
+                  // leiser (laut 0.6 = 40 % leiser) und je Garagenplatz auf der Buehne
+                  // verteilt. Entsteht erst, wenn der Schalter in Optionen->Ton an ist.
+                  stimme: { master: null, pan: null, nodes: null, over: null, car: null, laut: 0.6 },
                   running: true };
     // Die erste Faelligkeit ziehen. Ohne sie steht pitFaellig auf 0 und der Ghost pittet in
     // der ersten Runde - ein Boxenstopp, bevor jemand eine Runde gefahren ist.
@@ -6993,6 +7404,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   //    ein ghostTick sind 0,05 ms -, aber jeder von ihnen schreibt weiter an sein Auto,
   //    und ein Ghost, den man angehalten hat, soll nicht weiterfahren.
   function ghostTaktLoeschen(car) {
+    car.imTakt = false;
+    car.taktPlatz = 0;
+    car.taktTeile = 0;
     if (car.startTimer) { clearTimeout(car.startTimer); car.startTimer = null; }
     if (car.timer) { clearInterval(car.timer); car.timer = null; }
   }
@@ -7016,24 +7430,35 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // Einen Ghost auf seinen Platz im Takt setzen. platz von 1 an, teile = Zahl der Autos.
   function ghostTaktSetzen(car, platz, teile) {
     ghostTaktLoeschen(car);
-    // herzschlagAt steht in 20-protocol.js. Ohne bisherigen Herzschlag (0) ist es der
-    // Versatz vom Seitenstart - dieselbe Auskunft wie vorher, nur ohne falschen Kommentar.
-    const warten = ghostTaktVersatz(platz, teile, performance.now() - herzschlagAt);
-    car.startTimer = setTimeout(() => {
-      car.startTimer = null;
-      // Die Wache fragt jetzt, ob dieses Auto ueberhaupt noch faehrt, und nicht nur, ob es
-      // ein Ghost ist. Ein angehaltener Ghost behaelt seine Rolle.
-      if (car.role !== 'ghost' || !car.ghost || !car.ghost.running) return;
-      car.timer = setInterval(() => ghostTick(car), CONTROL_SEND_INTERVAL_MS);
-    }, Math.round(warten));
+    // v0.9.57: der Takt kommt jetzt aus dem Herzschlag (ghostHerzschlag in 90-ghosts.js,
+    // gerufen aus controlHeartbeat in 20-protocol.js) statt aus einem eigenen setInterval.
+    // car.imTakt meldet den Ghost dort an; der Herzschlag selbst sorgt fuer die Reihenfolge
+    // (Spieler zuerst, dann die Ghosts) und writeToCar() fuer das "verwerfen, wenn noch
+    // einer laeuft". Platz und Teile bleiben als Beleg der Staffelung erhalten.
+    car.imTakt = true;
+    car.taktPlatz = platz;
+    car.taktTeile = teile;
+  }
+
+  // v0.9.57: die Ghost-Takte laufen im selben 45-ms-Herzschlag wie der Spieler, damit der
+  // Jitter eigener setInterval nicht mehr in den Spielertakt hineinfunkt. Gerufen aus
+  // controlHeartbeat() in 20-protocol.js NACH spielerZweiSenden(). Das Schreiben selbst
+  // bleibt beim "verwerfen, wenn noch einer laeuft" in writeToCar().
+  function ghostHerzschlag() {
+    for (const car of garage) {
+      if (car.imTakt && car.ghost && car.ghost.running) ghostTick(car);
+    }
   }
 
   // Alle fahrenden Ghosts neu verteilen. Gerufen aus startGhost, also immer dann, wenn sich
   // die Zahl der Autos aendert. NICHT aus stopGhost: startGhost ruft stopGhost als erstes,
   // und dann verteilte jeder Start zweimal. Ein Ghost, der aussteigt, hinterlaesst eine
   // Luecke im Takt, und eine Luecke kostet nichts.
+  // v1.0.21 GEMELDET: "Das Safety Car an der Strecke bleibt stehen." startGhost() legte den
+  // Ghost-Zustand an, aber den Takt bekamen hier nur Autos mit der Rolle 'ghost' - das Safety
+  // Car lief also auf dem Papier (safetyCarFaehrt() war wahr) und bekam nie ein Paket.
   function ghostPhasenSetzen() {
-    const fahren = garage.filter(c => c.role === 'ghost' && c.ghost && c.ghost.running);
+    const fahren = garage.filter(c => (c.role === 'ghost' || c.role === 'safetycar' || c.role === 'challenger') && c.ghost && c.ghost.running);
     fahren.forEach((c, i) => ghostTaktSetzen(c, i + 1, fahren.length + 1));
   }
 
@@ -7132,7 +7557,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
                  + (currentTrackTiles ? currentTrackTiles.length : 0) + ')');
     }
     if (lmGhosts().length < 2) {
-      fehlt.push('mindestens zwei Ghosts (jetzt ' + lmGhosts().length + ')');
+      fehlt.push('mindestens zwei NPCs (jetzt ' + lmGhosts().length + ')');
     }
     if (trackMode !== 'on') fehlt.push('Bahn-Modus (jetzt Ausdruck)');
     return fehlt;
@@ -7435,10 +7860,10 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // Kacheln regelmaessig vorkommen (Median 32 ms), blieb er unterwegs immer wieder stehen.
     if (car.tileCode === TILE_OFFTRACK) {
       if (!g.offSince) g.offSince = now;
-    } else {
+    } else if (car.tileCode !== 0xff) {
+      // 0xff ist "kein Wert", keine Lesung: es darf die Abgangsuhr nicht zuruecksetzen.
       g.offSince = 0;
     }
-    const offSteht = g.offSince > 0 && (now - g.offSince) >= GHOST_OFFTRACK_CONFIRM_MS;
     // Ein bestaetigter Abgang STELLT AB. Vorher war das ein Zustand, der von selbst wieder
     // wegging, sobald ein Code kam - das Auto fuhr dann neben der Bahn weiter, statt auf
     // die Hand zu warten, die es zurueckstellt.
@@ -7473,12 +7898,11 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     const zaehlerPlausibel = ring.length > 0
       && (ring.reduce((a, b) => a + b, 0) / ring.length) >= GHOST_TILE_MS_MIN;
     const zaehlerLaeuft = !!(zaehlerFrisch && zaehlerPlausibel);
-    // offConfirmed steht jetzt ALLEIN, ohne das Zaehler-Veto. Das Veto war die Gegenprobe
+    // offSteht steht jetzt ALLEIN, ohne das Zaehler-Veto. Das Veto war die Gegenprobe
     // gegen "ein fahrendes Auto steht und blinkt" - aber ein Auto, das 900 ms lang 0x00
     // liest, ist nicht auf der Bahn, sondern neben ihr (eine einzelne 0x00-Luecke zwischen
     // zwei Kacheln dauert im Median 32 ms). Der Kachelzaehler laeuft neben der Bahn weiter,
     // weil die Firmware ihn nicht anhaelt, und taugt deshalb nicht als Unterscheider.
-    const offConfirmed = offSteht;
     // DIE BEWEISLAGE ENTSCHEIDET, und bis v0.4.55 tat sie es nicht - der Ghost blieb neben
     // der Bahn nicht stehen. Zwei Vetos konnten den Halt verhindern, und mindestens eines
     // griff immer:
@@ -7494,7 +7918,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     //
     // Also nach der Beweislage getrennt, statt die Vetos zu raten:
     //
-    //   offConfirmed ist ein POSITIVES ZEUGNIS - 0x00 steht 900 ms, und einzelne 0x00-Pakete
+    //   offSteht ist ein POSITIVES ZEUGNIS - 0x00 steht 900 ms, und einzelne 0x00-Pakete
     //   zwischen zwei Kacheln dauern im Median 32 ms. Das genuegt allein.
     //   noCode ist das FEHLEN eines Zeugnisses und behaelt beide Gegenproben: nur mit
     //   needCode, und nur wenn der Kachelzaehler auch steht.
@@ -7525,8 +7949,38 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // GHOST_UNPARK_RAMP_MS = 2500 ms, das Auto rollt in diesen drei Sekunden also kaum an.
     // Liegt es wirklich neben der Bahn, meldet es weiter 0x00 und steht danach wieder.
     const gnade = g.gnadeBis && now < g.gnadeBis;
+    // v0.9.64: Die Haarnadel faehrt der Ghost mit 33 % - unter GHOST_READ_MIN (35 %), also
+    // unter der Leseschwelle. Dort meldet das Auto 0x00, obwohl es auf der Bahn ist, und
+    // wurde nach 900 ms als "Bahn verlassen" geparkt. Die damalige Gegenprobe (letzter Code
+    // eine Kurve / Zieltempo unter der Schwelle) war aber zu grob: ein Ghost, der wirklich
+    // neben der Bahn lag, aber gerade aus einer Kurve kam oder langsam geplant war, wurde
+    // damit dauerhaft NICHT geparkt und fuhr weiter - genau der gemeldete "sie hoeren nicht
+    // auf zu fahren".
+    //
+    // v0.9.74: Die Frist wird kurvenbewusst. Auf der Geraden (letzter Code keine Kurve) parkt
+    // der bestaetigte Abgang nach GHOST_OFFTRACK_CONFIRM_MS wie bisher - und nur, wenn das
+    // Zieltempo nicht ohnehin unter der Leseschwelle lag (sonst ist es ein langsamer
+    // Bremsbereich, kein Abgang). In einer Kurve liest auch ein Auto auf der Bahn 0x00, weil
+    // es unter der Leseschwelle ist - dort erst nach GHOST_OFFTRACK_KURVE_MS parken, und die
+    // Zieltempo-Bedingung entfaellt: die laengere Frist ist der Schutz der Haarnadel, und wer
+    // nach ihr immer noch 0x00 liest, liegt neben der Bahn - egal wie langsam er geplant war.
+    // v0.9.87: DIE FRIST NACH DER KACHEL, OHNE ZIELTEMPO-VETO. Die Bedingung
+    // "lastTarget >= GHOST_READ_MIN" (v0.9.64) blockierte das Parken, sobald das geplante
+    // Tempo darunter lag - und das wird es neben der Bahn laufend neu gerechnet (vor einer
+    // Haarnadel, im Regen, mit Staffel). Jetzt: Gerade 900 ms, Kurve 1,2 s, Haarnadel 1,8 s,
+    // und sofort (300 ms), wenn der Zaehler rast. Waehrend der Aufstellung die doppelte Frist.
+    const kurvenGrad = ghostTileInfo(car.lastCode).curve;
+    const aufstellung = g.aufstellZiel !== undefined && g.aufstellZiel !== null;
+    const offSchwelle = (kurvenGrad >= 2 ? GHOST_OFFTRACK_HAARNADEL_MS
+                         : kurvenGrad > 0 ? GHOST_OFFTRACK_KURVE_MS : GHOST_OFFTRACK_CONFIRM_MS)
+                        * (aufstellung ? 2 : 1);
+    const offSeit = g.offSince > 0 ? now - g.offSince : 0;
+    const ringMs = ring.length ? ring.reduce((a, b) => a + b, 0) / ring.length : null;
+    const zaehlerRast = !!(zaehlerFrisch && ringMs !== null && ringMs < GHOST_TILE_MS_MIN);
+    const offBestaetigt = g.offSince > 0
+      && (offSeit >= offSchwelle || (zaehlerRast && offSeit >= GHOST_OFFTRACK_RAST_MS));
     const parken = !gnade && !raceFormationLap
-                   && (offConfirmed || (ghostCfg.needCode && noCode && !zaehlerLaeuft));
+                   && (offBestaetigt || (ghostCfg.needCode && noCode && !zaehlerLaeuft));
     // ---- RECOVERY: erst versuchen zurueckzufahren, dann erst parken ------------------
     //
     // BESTELLT (Phase 12, Punkt 8): "Auf Basis der bekannten Strecke und des bekannten
@@ -7589,7 +8043,10 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // noch zu Ende. Ohne diesen Zweig steht es in dem Moment still, in dem die Flagge
     // faellt - und genau das war der Bericht.
     const armed = (raceState === 'racing' || raceState === 'finishing'
-                   || g.freeRun || g.auslauf)
+                   || g.freeRun || g.auslauf
+                   // v0.9.58 (D6): auch die Positionsfahrt der Aufstellung ist "scharf" -
+                   // so rollen alle Ghosts und Spielerautos gleichzeitig zu ihren Plaetzen.
+                   || (g.aufstellZiel !== undefined && g.aufstellZiel !== null))
                   && !car.parked;
     // Startlenkung gerade: die Frist beginnt an der FLANKE zum Anfahren (armed), nicht beim
     // startGhost-Aufruf - beim Rennstart liegt der lange vor der Ampel. Einmalig: nur der
@@ -7604,16 +8061,17 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // oder "die Linie schmeisst ihn raus" nicht entscheidbar, und dann wird der Regler nach
     // Gefuehl gedreht. Gezaehlt wird die FLANKE, nicht das Paket - ein zwei Sekunden langer
     // Abgang ist ein Abgang, nicht vierzig.
-    if (offTrack && !g.cutOut) {
-      if (!car.race) car.race = { laps: [], lapStart: null, pending: null, seen: 0,
-                                  lastActed: 0, lastCount: null };
-      car.race.offLap = (car.race.offLap || 0) + 1;
-      // Knockout (experimentell): ein Geist, der von der Bahn ist, ist raus.
-      if (typeof knockoutGeistRaus === 'function') knockoutGeistRaus(car);
+    // (Die Zaehlung der Abgaenge und das Knockout-Aus stehen seit v0.9.51 in parkCar.)
+    // Knockout: ein Ghost, der faehrt, aber KOS_STEHT_MS lang keine Kachel mehr schafft,
+    // steckt fest (an der Wand, quer in der Haarnadel) - auch das ist raus, nicht nur das
+    // geparkte Auto. Nach der Startgnade, damit das Anrollen nicht zaehlt.
+    if (armed && !gnade && !g.pit && !g.finish && raceState === 'racing' && g.tileStart && now - g.tileStart > KO_STEHT_MS
+        && typeof knockoutGeistRaus === 'function') {
+      knockoutGeistRaus(car);
     }
     if (offTrack !== g.cutOut) {
       g.cutOut = offTrack;
-      log(`${garageLabel(car)}: ${offTrack ? 'kein Streckencode, Ghost hält' : 'Streckencode wieder da'}`,
+      log(`${garageLabel(car)}: ${offTrack ? 'kein Streckencode, NPC hält' : 'Streckencode wieder da'}`,
           offTrack ? 'err' : 'info');
     }
 
@@ -7622,12 +8080,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // ---- speed ----
       // Eigenes Tempo je Auto, sonst das globale. So laesst sich ein Feld mit
       // unterschiedlich schnellen Gegnern aufstellen, statt dass alle gleich schnell fahren.
-      // Eigenes Tempo, wenn eines gesetzt ist, sonst die Vorgabe. Der Unterschied ist in
-      // der Garage jetzt sichtbar und zuruecknehmbar - er rastete vorher beim ersten
-      // Antippen dauerhaft ein und machte den globalen Regler fuer dieses Auto stumm, ohne
-      // dass irgendwo stand, dass das passiert ist.
-      let target = (car.ghostSpeed === undefined || car.ghostSpeed === null)
-        ? ghostCfg.speed : car.ghostSpeed;
+      // v0.9.56: die Ghost-Presets (Einfach/Mittel/Schnell) ersetzen die feine Prozentzahl.
+      // Die Stufe aendert nur das Geradentempo, in der Kurve gilt immer das Mittel-Tempo.
+      let target = ghostStufeFaktor(car);
       // Der gelernte Tempofaktor. Er steht VOR der gelben Flagge, damit das Limit unter
       // Gelb wirklich das Limit ist: ein lernender Ghost darf sich nicht ueber eine
       // Neutralisierung hinwegsetzen.
@@ -7651,8 +8106,12 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // Ghosts ist nach unten nicht frei waehlbar: es ist durch das Fahrzeug begrenzt und
       // nicht durch Geschmack. Wer langsamer will, muss YELLOW_KMH erhoehen koennen - kann
       // er nicht, weil das Auto dann nicht mehr liest.
+      // v0.10.7: Faehrt ein Safety Car, drosseln die anderen erst in seiner Naehe auf das
+      // Gelb-Tempo (BESTELLT: "normal fahren, bis sie nah am Safety Car sind, dann auf 35 %").
+      // v1.0.9: unter Gelb faehrt jeder ~35 %. v1.0.12: mit der Option "aufschliessen" bis
+      // zum Safety Car ~45 %, dann 35 % (gelbZielFuer); die Kurvendrosselung folgt unten.
       if (underYellow) {
-        target = Math.min(target, Math.max(yellowFactor(), GHOST_READ_MIN));
+        target = Math.min(target, gelbZielFuer(car));
       }
       // ---- Tempoprofil statt eines einzigen Kurvenabschlags ----
       // Vorher gab es genau zwei Zustaende: "Kurve in Sicht" oder nicht, und beide bekamen
@@ -7744,6 +8203,15 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // 20 Prozent in der Kurve und 40 in der Haarnadel oder Engstelle.
       const abzugKachel = tight > 0 ? Math.min(0.85, curveSlowIch * tight) : 0;
       target *= 1 - Math.max(abzugProfil, abzugKachel);
+      // v0.9.64: In der Kurve gilt das Mittel-Tempo, nicht das Stufen-Tempo. Der Kachelabzug
+      // wirkt bisher auf das GERADENTempo (schnell = 0,65 -> 0,52 vor der Kurve), und der
+      // Ghost kommt damit heisser in die Kurve als das Mittel-Tempo (0,44) - er kann sie
+      // verlassen. Der Boden nimmt das Kurvenziel (Mittel-Tempo * Abzug) als Obergrenze,
+      // damit alle Stufen gleich schnell in die Kurve gehen. Nur wenn ueberhaupt ein Abzug
+      // greift - auf einer reinen Geraden bleibt das Stufen-Tempo.
+      if (Math.max(abzugProfil, abzugKachel) > 0) {
+        target = Math.min(target, (ghostCfg.speed || 0.55) * (1 - Math.max(abzugProfil, abzugKachel)));
+      }
       // BESTELLT: "wenn sie nah beieinander fahren ... 5% langsamer fahren in den kurven."
       // Nur in der Kurve (Abzug aktiv) und nur bei nahem Nachbarn.
       if ((tight > 0 || bd !== null) && ghostNah(car)) target *= 1 - 0.05;
@@ -7798,10 +8266,13 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // Startphase - und vor der Anfahrrampe, die ihre eigene Aufgabe hat.
       // STARTVERSATZ JE REIHE (v0.9.5): Reihe 1 (Platz 1/2) sofort, jede weitere ghostCfg.staffelMs
       // spaeter. Unabhaengig von der Startreaktion und vor ihr - beide addieren sich.
-      const reihenWarten = raceStartedAt ? ghostStaffelMs(car) : 0;
-      if (reihenWarten && now - raceStartedAt < reihenWarten) target = 0;
-      if (ghostCfg.wuerzeStart && raceStartedAt && g.startReaktion) {
-        const seitGruen = now - raceStartedAt;
+      // v0.9.55: AB GRUEN gezaehlt (raceGreenAt), nicht ab der ersten Bewegung des Fahrers
+      // (raceStartedAt) - die steht bei Gruen noch auf null, die Staffel wirkte also nicht,
+      // und wenn der Fahrer dann losfuhr, wurden schon rollende hintere Reihen gestoppt.
+      const reihenWarten = raceGreenAt ? ghostStaffelMs(car) : 0;
+      if (reihenWarten && now - raceGreenAt < reihenWarten) target = 0;
+      if (ghostCfg.wuerzeStart && raceGreenAt && g.startReaktion) {
+        const seitGruen = now - raceGreenAt;
         if (seitGruen < g.startReaktion) target = 0;
         else if (seitGruen < g.startReaktion + GHOST_START_VORSICHT_MS) {
           target *= GHOST_START_VORSICHT;
@@ -7843,6 +8314,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // sich mit Kurvenabzug und Staffel verrechnen laesst, sondern eine Ansage. Vor der
       // Rampe zu stehen waere falsch - die Rampe ist genau das, was den Ghost nach dem Stopp
       // wieder hochfaehrt.
+      // v1.0.21: der Challenger folgt seiner Spur oder dir (90d-challenger.js).
+      if (car.role === 'challenger' && typeof challengerZiel === 'function') target = challengerZiel(car, target, spice);
       const pz = pitZiel(car);
       if (pz !== null) target = pz;
       const v = Math.abs(e.state.speedKmh) / cfg.topSpeedKmh;
@@ -7960,6 +8433,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // Auf die Bahn stellen muss man von Hand - das kann die App nicht -, aber wer fahrend
       // nebeneinander liegt, ist damit gesagt.
       if (raceFormationLap) weave = formationOffset(g, g.gridPos, now);
+      else if (g.aufstellZiel !== undefined && g.aufstellZiel !== null) {
+        weave = formationOffset(g, g.gridPos, now, aufstellBreite(g, car, g.aufstellZiel));
+      }
       if (ghostCfg.railMode) {
         // Zero steering plus the anti-ramming offset. There is no lateral feedback to close
         // a loop with, so this is deliberately the conservative choice rather than a guess.
@@ -8043,11 +8519,18 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         const passSeite = (spice.attack || 0) !== 0 ? Math.sign(spice.attack)
                         : (weiche !== 0 ? Math.sign(weiche) : 0);
         const paar = pq === null && !underYellow && passSeite === 0 ? ghostPaarKurve(car) : null;
+        // v0.9.74: Nebeneinander (g.bias wurde von ghostAssignBias gesetzt) soll die
+        // SEITENZUTEILUNG gewinnen, nicht die Ideallinie. GEMELDET: "die Autos schieben sich
+        // an, wenn sie nah beieinander sind." Die Ideallinie steht seit v0.5.54 auf 200 %
+        // und kann den seitlichen Versatz (bias) wieder auslöschen - beide Autos landen auf
+        // derselben Linie und schieben. Waehrend einer Gruppe wird die Linie deshalb auf
+        // einen kleinen Rest gefahren, damit der Versatz die Seite bestimmt.
+        const linieNah = (g.bias !== 0) ? 0.15 : 1;
         const quer = pq !== null ? pq
           : underYellow ? 0
           : passSeite !== 0 ? passSeite * passAussen()
           : paar !== null ? paar * GHOST_LINE_STEER
-          : ghostLineOffset(car) * ghostCfg.line * GHOST_LINE_STEER * linieGewicht;
+          : ghostLineOffset(car) * ghostCfg.line * GHOST_LINE_STEER * linieGewicht * linieNah;
         // BESTELLT (diese Runde): "querlage bei boxenstopps klappt nicht, die autos
         // bleiben mitten auf der strecke stehen." Der Kommentar zwei Absaetze ueber pq
         // sagt es schon: "waehrend eines Stopps gibt es keine Linie, keine Wuerze und
@@ -8219,6 +8702,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     if (!ghostQuerTestAn() && now < (g.startLenkBis || 0)) steer = 0;
 
     const out = e.update({ steering: steer, throttle, brake, headlights: true }, dt);
+    // v0.9.61 (D8): die Motorstimme des Ghosts. Sie liest die frische Drehzahl/Last aus
+    // e.state und stellt sie auf die eigene Stereoseite - derselbe Takt wie der Ghost.
+    if (typeof updateGhostSound === 'function') updateGhostSound(car);
     // Put the car into the mode where it keeps itself on the track: bit 5 of byte 14, plus
     // the three-tile lookahead in bytes 16-18. Bit 7 stays CLEAR, because it was clear
     // throughout the guard-rail capture; the headlight bit and the brake bit are as sent
@@ -8272,9 +8758,14 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // sie nicht dem Zufall gehoert.
     pitBlinkSetzen(g, now);
     if (g.pitBlink) lights &= ~LIGHT_HEAD & 0xff;
+    if (akkuBlinkAus(car, now)) lights &= ~(LIGHT_HEAD | LIGHT_BRAKE) & 0xff;
     // Unter Gelb blinken alle, und ein stehendes Auto blinkt schneller - so findet man auf
     // dem Tisch sofort, welches gemeint ist.
-    if (flagState !== 'green' || car.parked) {
+    if (car.role === 'safetycar' && !car.parked) {
+      // BESTELLT: "Safetycar-Lichter blinken bei gelber Flagge alle 750 ms fuer 250 ms auf."
+      const on = flagState !== 'green' && (Date.now() % SC_BLINK_MS) < SC_BLINK_AN_MS;
+      lights = trackModeBit() | (on ? LIGHT_HEAD : 0);
+    } else if (flagState !== 'green' || car.parked) {
       const period = car.parked ? 260 : 520;
       const on = Math.floor(Date.now() / period) % 2 === 0;
       lights = trackModeBit() | (on ? LIGHT_HEAD : 0) | (on ? 0 : LIGHT_BRAKE);
@@ -8587,57 +9078,18 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   const GHOST_START_ENG_MS = 2500;
 
   function ghostLane(car) {
-    const gs = garage.filter(c => c.role === 'ghost' && c.ghost);
+    // ZWEI SPUREN, dauerhaft (siehe die Begruendung in der Fassung bis v0.9.86: zwei Kolonnen
+    // an den Raendern sind die groesste Quertrennung, die 25 cm Bahn hergeben).
+    // v0.9.87: Die Spur folgt der aktuellen Ausweichseite (bias), sonst der Startseite. Vorher
+    // zog die Spur mit der Startseite gegen den Ausweichversatz, sobald der in die andere
+    // Richtung zeigte - zwei Kraefte gegeneinander sind ein Auto in der Mitte.
+    const gs = garage.filter(c => (c.role === 'ghost' || c.role === 'challenger') && c.ghost);
     if (gs.length < 2) return 0;
     const k = gs.indexOf(car);
     if (k < 0) return 0;
-    // ---- AM START NUR ZWEI NEBENEINANDER -----------------------------------------
-    //
-    // BESTELLT: "Beim Start eines Rennens gut aufpassen, dass Autos nicht zu eng fahren
-    // (nur 2 nebeneinander und Abstand halten)."
-    //
-    // Die gleichmaessige Verteilung darunter nutzt die ganze Bahnbreite: bei sechs Autos
-    // sind das sechs Spuren auf 25 cm, also gut 4 cm je Auto bei 3,8 cm Fahrzeugbreite.
-    // Im Rennen ist das richtig - die Autos sind dann ueber die Runde verteilt und stehen
-    // nie alle gleichzeitig nebeneinander. IN DEN ERSTEN SEKUNDEN stehen sie es aber
-    // genau: sie starten zusammen und fahren dieselbe Linie.
-    //
-    // Also am Start nur ZWEI Spuren, links und rechts abwechselnd. Zwei Autos nebeneinander
-    // brauchen gemessen 30,4 Prozent der Bahnbreite (AUTO_BREIT in 60-track.js) - da ist
-    // Platz. Der LAENGSabstand kommt aus der Aufstellung selbst: die Startplaetze sind
-    // gestaffelt, und der Abstandhalter wirkt ab dem ersten Takt.
-    //
-    // ---- ZWEI SPUREN, UND ZWAR DAUERHAFT -----------------------------------------
-    //
-    // HIER STAND DAS GEGENTEIL, und der Satz lautete: "Nach GHOST_START_ENG_MS gilt wieder
-    // die volle Verteilung - eine dauerhafte Beschraenkung auf zwei Spuren waere ein Feld,
-    // das sich nie auffaechert." Diese Entscheidung ist zurueckgenommen, auf ausdrueckliche
-    // Ansage:
-    //
-    //   "Abstaende weiter vergroessern zwischen Ghosts, sowohl beim hintereinander als auch
-    //    nebeneinander fahren, max 2 Autos nebeneinander."
-    //
-    // Das Auffaechern war die Absicht, aber es rechnet sich nicht: die gleichmaessige
-    // Verteilung legt bei sechs Autos sechs Spuren auf 25 cm Bahnbreite, also gut 4 cm je
-    // Auto bei 3,8 cm Fahrzeugbreite. Zwei Nachbarn haben damit 2 mm Luft - rechnerisch
-    // nebeneinander, praktisch aneinander.
-    //
-    // ZWEI Spuren auf +1 und -1 sind dagegen die GROESSTMOEGLICHE Quertrennung, die die
-    // Bahn hergibt: die beiden Kolonnen liegen an den Raendern, zwischen ihnen steht die
-    // ganze Mitte. Und mehr als zwei Autos koennen dann per Konstruktion nicht auf einer
-    // Hoehe nebeneinander liegen, ohne dieselbe Spur zu teilen - das ist die bestellte
-    // Obergrenze, und sie ist eine Eigenschaft der Aufteilung und keine Pruefung, die
-    // irgendwo greifen muss.
-    //
-    // WAS DAS NICHT ANTASTET: die Ideallinie. Sie hat weiterhin ihre drei Stufen
-    // (60-track.js), und das Ueberholen benutzt weiterhin nur die beiden aeusseren. Hier
-    // geht es um den EIGENEN Spurversatz der Autos, eine andere Groesse an einem anderen
-    // Regler ("Eigene Spuren").
-    //
-    // Die Startbedingung faellt damit weg - sie tat genau das, was jetzt immer gilt.
-    // GHOST_START_ENG_MS bleibt als Konstante stehen, weil sie dokumentiert, woher die
-    // Zweierregel kommt.
-    return k % 2 === 0 ? -1 : 1;
+    const b = car.ghost.bias || 0;
+    if (Math.abs(b) > 0.05) return Math.sign(b);
+    return ghostSeiteVorzug(car) || (k % 2 === 0 ? -1 : 1);
   }
 
   // ---- Die Seiten einer Gruppe --------------------------------------------------------
@@ -8686,27 +9138,10 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // explizit mit ihrem eigenen dt, also reicht das.
   function ghostAssignBias(dtSek) {
     if (dtSek === undefined && typeof simAn === 'function' && simAn()) return;
-    // Der Schritt skaliert mit der wirklich vergangenen Zeit, bezogen auf GHOST_BIAS_MS -
-    // bei dtSek === GHOST_BIAS_MS/1000 (der echte Zeitgeber) kommt exakt GHOST_BIAS_STEP
-    // heraus wie bisher.
     const schritt = GHOST_BIAS_STEP
       * ((dtSek === undefined ? GHOST_BIAS_MS / 1000 : Math.max(0, dtSek)) / (GHOST_BIAS_MS / 1000));
-    const gs = garage.filter(c => c.role === 'ghost' && c.ghost);
-    // ---- DAS FAHRERAUTO ZAEHLT BEI DER VERTEILUNG MIT, bekommt aber keinen Wert -----
-    //
-    // GEFRAGT: "Weichen die Ghosts dann auch meinem gesteuerten Auto aus?" Beim Ueberholen
-    // ja (ghostSpice liest seine Querlage), bei der Querverteilung gegen Rammen war es
-    // NICHT so: diese Liste hiess `role === 'ghost'`, das Fahrerauto war unsichtbar. Die
-    // Ghosts faecherten also untereinander auf und fuhren dabei durch die Stelle, an der
-    // der Fahrer lag.
-    //
-    // Es geht in die SEITENVERGABE ein und bekommt selbst keinen Versatz geschrieben: ein
-    // Mensch laesst sich nicht verteilen. Sein Platz in der Reihe belegt eine Seite, die
-    // Ghosts nehmen die anderen - genau das, was "ausweichen" heisst.
-    // Beide Fahrerautos gehoeren ins Feld, wenn sie einen Ortungssatz haben. Die Pruefung
-    // auf gs.indexOf ist keine Vorsicht, sondern notwendig: ghostFieldRacing() gibt sie
-    // inzwischen selbst mit heraus, und ein Auto zweimal im Feld waere fuer den
-    // Abstandhalter ein Auto, das sich selbst blockiert.
+    const gs = garage.filter(c => (c.role === 'ghost' || c.role === 'challenger') && c.ghost);
+    // Das Fahrerauto (und Spieler 2/3) belegt eine Seite, bekommt selbst aber keinen Wert.
     let feld = gs;
     const dazu = (auto) => {
       if (auto && auto.ghost && feld.indexOf(auto) < 0) feld = feld.concat([auto]);
@@ -8714,41 +9149,78 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     if (typeof playerCar !== 'undefined') dazu(playerCar);
     for (const z of zusatzAktiv()) dazu(z.car);
     const want = new Map(gs.map(c => [c, 0]));
-    // Erst die Gruppen bilden, dann die Seiten verteilen. Paarweise zuzuweisen war bei drei
-    // Autos auf derselben Kachel falsch: die Paare (A,B), (A,C) und (B,C) schrieben
-    // nacheinander, der letzte gewann, und A und B landeten beide auf derselben Seite - sie
-    // waeren sich weiter in die Quere gekommen.
-    // Am Start stehen alle auf derselben Stelle, also gilt "nebeneinander" fuer alle -
-    // und zwar unabhaengig davon, ob schon eine Kachel gemeldet wurde. Vorher hing das an
-    // tileIndex, und der ist beim Start null: das Feld fuhr die ersten Sekunden auf einer
-    // Spur, genau dort, wo es am dichtesten ist.
+    // ---- v0.9.87: GRUPPEN JE ORT, SEITEN NACH DER AKTUELLEN QUERLAGE ------------------
+    //
+    // GEMELDET (seit langem): "Ghosts halten nicht den seitlichen Abstand, wenn sie nah
+    // aneinander sind, und schieben sich an."
+    //
+    // Zwei Fehler. (1) "Nah" war EINE Liste ueber die ganze Bahn: zwei Paare an zwei Stellen
+    // wurden zusammen auf -1, -1/3, +1/3, +1 verteilt, also jedes Paar nur zur Haelfte
+    // getrennt. (2) v0.9.56 setzte bei Naehe jedes Auto auf seine STARTSEITE (Paritaet des
+    // Startplatzes) - zwei Autos mit gleicher Paritaet (Platz 1 und 3) fuhren damit an
+    // denselben Rand, genau im Moment der groessten Naehe.
+    //
+    // Jetzt: zusammenhaengende Gruppen (wer nah an wem ist), und in jeder Gruppe die Seiten
+    // nach der aktuellen QUERLAGE verteilt. Wer gerade weiter links faehrt, bleibt links -
+    // so kreuzt niemand den anderen. Die Startseite entscheidet nur, wenn zwei gleich liegen.
     const fresh = raceStartedAt && (Date.now() - raceStartedAt) < GHOST_GRID_MS;
-    // `feld` statt `gs` auf BEIDEN Seiten: wer nebeneinander faehrt, entscheidet sich
-    // gegen das ganze Feld einschliesslich des Fahrerautos - siehe oben.
-    const near = fresh ? feld : feld.filter(c => feld.some(o => o !== c && ghostNahe(c, o)));
-    // Nach dem Ort sortiert, damit die Seiten stabil bleiben, solange sie nebeneinander
-    // fahren, und nicht bei jedem Aufruf tauschen. Der Ort statt der Kachelnummer: auf
-    // derselben Kachel gab die Kachelnummer keine Ordnung her, und dann entschied der
-    // Namensvergleich darunter - also die Gerätekennung und nicht, wer vorn ist.
-    near.sort((a, b) => (ghostOrtGes(a) || 0) - (ghostOrtGes(b) || 0)
-                        || String(a.device && a.device.id).localeCompare(String(b.device && b.device.id)));
-    const seiten = ghostSeiten(near.length);
-    near.forEach((c, k) => want.set(c, seiten[k]));
-    // Nachgezogen statt gesetzt. Ein Sprung von 0 auf den vollen Versatz ist ein Ruck am
-    // Lenkservo, und der sieht aus wie ein Fehler statt wie ein Ausweichen.
+    const gruppen = fresh ? [feld] : ghostNahGruppen(feld);
+    for (const gruppe of gruppen) {
+      if (gruppe.length < 2) continue;
+      const seiten = ghostSeitenVergeben(gruppe, ghostQuerVon, ghostSeiteVorzug,
+                                         (c) => ghostOrtGes(c) || 0);
+      for (const [c, s] of seiten) if (want.has(c)) want.set(c, s);
+    }
+    // Nachgezogen statt gesetzt: ein Sprung waere ein Ruck am Lenkservo.
     for (const c of gs) {
       const t = want.get(c) || 0;
-      const cur = c.ghost.bias || 0;
+      const g = c.ghost;
+      const cur = g.bias || 0;
       const d = t - cur;
-      c.ghost.bias = Math.abs(d) <= schritt ? t : cur + Math.sign(d) * schritt;
-      // Einmal melden, wenn es greift - sonst sieht man nicht, ob die Logik ueberhaupt
-      // ausloest, und "die fahren nicht versetzt" bleibt eine Vermutung.
-      const near = t !== 0;
-      if (near !== !!c.ghost.wasNear) {
-        c.ghost.wasNear = near;
-        if (near) log(garageLabel(c) + ': nebeneinander, weicht aus.', 'info');
+      g.bias = Math.abs(d) <= schritt ? t : cur + Math.sign(d) * schritt;
+      const nearFlag = t !== 0;
+      if (nearFlag !== !!g.wasNear) {
+        g.wasNear = nearFlag;
+        if (nearFlag) log(garageLabel(c) + ': nebeneinander, weicht aus.', 'info');
       }
     }
+  }
+  // Zusammenhaengende Gruppen ueber ghostNahe (Abstand in Sekunden, sonst Kacheln).
+  function ghostNahGruppen(feld) {
+    const offen = feld.slice(), gruppen = [];
+    while (offen.length) {
+      const gruppe = [offen.shift()];
+      for (let i = 0; i < gruppe.length; i++) {
+        for (let k = offen.length - 1; k >= 0; k--) {
+          if (ghostNahe(gruppe[i], offen[k])) gruppe.push(offen.splice(k, 1)[0]);
+        }
+      }
+      gruppen.push(gruppe);
+    }
+    return gruppen;
+  }
+  // Die aktuelle Querlage eines Autos: die gesendete (querSoll), sonst der Ausweichversatz.
+  function ghostQuerVon(c) {
+    const q = ghostQuerLage(c);
+    return q !== null ? q : ((c.ghost && c.ghost.bias) || 0);
+  }
+  // Die bevorzugte Seite: Startseite (g.seite), sonst die Paritaet des Startplatzes.
+  function ghostSeiteVorzug(c) {
+    if (c.ghost && c.ghost.seite) return c.ghost.seite;
+    const p = gridPosOf(c);
+    return p >= 0 ? (p % 2 ? -1 : 1) : 0;
+  }
+  // REINE RECHNUNG (pruefbar): Seiten einer Gruppe nach Querlage, Gleichstand nach Vorzug,
+  // dann nach Ort. Liefert eine Map Auto -> Seite (-1 .. +1).
+  function ghostSeitenVergeben(gruppe, querVon, vorzug, ort) {
+    const liste = gruppe.slice().sort((a, b) => {
+      const d = querVon(a) - querVon(b);
+      if (Math.abs(d) > 0.1) return d;
+      return (vorzug(a) - vorzug(b)) || (ort(a) - ort(b))
+        || String(a.device && a.device.id).localeCompare(String(b.device && b.device.id));
+    });
+    const seiten = ghostSeiten(liste.length);
+    return new Map(liste.map((c, k) => [c, seiten[k]]));
   }
   setInterval(ghostAssignBias, GHOST_BIAS_MS);
 
@@ -8771,7 +9243,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   const LINIENMODELL_NAME = {
     curvature: 'Kr\u00fcmmung', laptime: 'Rundenzeit', lateapex: 'Late Apex',
     dreistufig: '3-stufig', mitte: 'Fahrbahnmitte', innen3: 'Innen (gemittelt)',
-    aussenin: 'Außen-Innen', luuke: 'Luuke-Linie',
+    aussenin: 'Außen-Innen', luuke: 'Luuke-Linie', simulator: 'SIMULATOR',
   };
 
   // ---- Die gewaehlte Linie zeigen, direkt neben der Wahl ----
@@ -8838,7 +9310,22 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       + ' ' + teile.join(' \u00b7 ') + '. '
       + t('Die Zeiten kommen aus den eingestellten Fahrwerten; die Querbeschleunigung ist '
           + 'darin eine Annahme.')
-      + (eigene ? '' : ' ' + t('Gezeigt ist die Vorgabestrecke; im Editor steht noch keine.'));
+      + (eigene ? '' : ' ' + t('Gezeigt ist die Vorgabestrecke; im Editor steht noch keine.'))
+      + (getLineModel() === 'simulator' ? ' ' + simInfoText() : '');
+  }
+  // v1.0.14: Stand der SIMULATOR-Linie fuer die Vorschau (61-simlinie.js).
+  function simInfoText() {
+    const s = typeof simStand === 'function' ? simStand() : { laeuft: false };
+    if (s.laeuft) return t('SIMULATOR rechnet: {a} von {b} Linien gefahren, bis dahin gilt die Luuke-Linie.')
+      .replace('{a}', s.auswertungen).replace('{b}', s.von);
+    const e = s.letztes;
+    if (e && e.zeit) {
+      const luuke = e.saat && e.saat.luuke;
+      return t('SIMULATOR: getestetes Beispiel, keine bewiesene Bestlinie. In der Physik gefahren: {z} s je Runde.')
+        .replace('{z}', e.zeit.toFixed(2))
+        + (luuke ? ' ' + t('Luuke-Linie dort: {l} s.').replace('{l}', luuke.toFixed(2)) : '');
+    }
+    return t('SIMULATOR: getestetes Beispiel, keine bewiesene Bestlinie.');
   }
 
   // ---- Linienmodell und Lernen bedienen ----
@@ -8881,13 +9368,13 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         // Ausschalten heisst zurueck auf Werk: sonst bliebe ein gelernter Faktor stehen,
         // ohne dass irgendwo sichtbar waere, dass er wirkt.
         garage.forEach(c => { c.learn = null; });
-        log('Ghost-Lernen aus, Faktoren zur\u00fcckgesetzt.', 'info');
+        log('NPC-Lernen aus, Faktoren zur\u00fcckgesetzt.', 'info');
       } else {
         // NICHT fuer den Ortungssatz des Fahrerautos: der hat kein Fahrzeugmodell, und
         // eine Tempo-Lernkurve fuer ein Auto, das ein Mensch faehrt, waere eine Kurve ohne
         // Gegenstand. Siehe spielerOrt().
         garage.forEach(c => { if (c.ghost && !c.ghost.nurOrt) learnPropose(c); });
-        log('Ghost-Lernen an: je Runde ein Versuch, behalten nur wenn schneller und ohne '
+        log('NPC-Lernen an: je Runde ein Versuch, behalten nur wenn schneller und ohne '
             + 'Abgang. Lenkgrenze ' + learnSteerCap().toFixed(2)
             + ((lat.rows && lat.rows.length) ? ' (gemessen).' : ' (Vorgabe, nicht gemessen).'),
             'info');
@@ -8909,6 +9396,13 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
 
   // Ghosts launch on green, not before.
   function launchGhosts() {
+    // v1.0.21: der Challenger faehrt in jedem Modus, auch in Time Attack (90d-challenger.js).
+    if (typeof challengerStarten === 'function') challengerStarten();
+    // v0.10.6: im Bestzeit-Modus fahren nur gesteuerte Autos - die Ghosts bleiben stehen.
+    if (typeof raceMode !== 'undefined' && raceMode === 'bestzeit') {
+      log('Bestzeit-Modus: NPCs bleiben stehen.', 'info');
+      return;
+    }
     // Die Seiten des Zieleinlaufs von vorn. Bisher geschah das nur beim Rennstart - wer
     // zweimal "Ghosts losfahren" und "anhalten" drueckt, lief den Zaehler hoch, und ab dem
     // fuenften Einlauf steht die Rollzeit auf ihrem Boden. Dann staffelt nichts mehr.
@@ -8923,14 +9417,14 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     const blind = garage.filter(c => c.role === 'ghost' && !c.lastCodeAt);
     if (blind.length && ghostCfg.needCode) {
       const msg = blind.length === n
-        ? 'Ghosts stehen: kein Streckencode gelesen. Optionen \u2192 "Ghost braucht '
+        ? 'NPCs stehen: kein Streckencode gelesen. Optionen \u2192 "NPC braucht '
           + 'Streckencode" ausschalten, dann fahren sie auch ohne gedruckte Strecke.'
-        : blind.length + ' von ' + n + ' Ghosts stehen: kein Streckencode gelesen.';
+        : blind.length + ' von ' + n + ' NPCs stehen: kein Streckencode gelesen.';
       log(msg, 'err');
-      showHudToast('GHOST OHNE STRECKENCODE');
+      showHudToast('NPC OHNE STRECKENCODE');
     }
     if (n && !currentTrackTiles.some(t => tileIsCurve(t.type))) {
-      log('Warnung: kein Streckenlayout mit Kurven geladen, Ghosts können nur geradeaus halten.', 'err');
+      log('Warnung: kein Streckenlayout mit Kurven geladen, NPCs können nur geradeaus halten.', 'err');
     }
   }
 
@@ -8951,7 +9445,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // Achsnummern. Deshalb werden erst die gemappten genommen und die rohen nur, wenn sonst
   // keine da sind - vorher entschied `find()` das fuer ein Pad, jetzt fuer die Liste.
   let padTauschen = false;
-  function padTauschenSetzen(v) { padTauschen = !!v; }
+  // v0.10.5: "Controller tauschen" ist entfernt (BESTELLT) - auch ein gespeichertes "an"
+  // greift nicht mehr. Die Reihenfolge der Pads ergibt sich aus der Rollenvergabe.
+  function padTauschenSetzen(v) { padTauschen = false; }
   function padTauschenLesen() { return padTauschen; }
   function padsSortiert() {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -9138,8 +9634,42 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     }
   }
 
+  // ---- DAS GAMEPAD DIREKT AUS DER APP (v0.10.4) -----------------------------------
+  //
+  // GEMELDET: "Latenz in der APK ist langsamer als im Browser." In der App kommt das Web-
+  // Gamepad ueber den Android-Hauptthread, den sich die WebView mit allen Bluetooth-Meldungen
+  // teilt. Die APK legt die Achsen jedes Stick-Ereignisses direkt ab (OmegaPadNativ.java);
+  // hier werden die vier Stickachsen und die zwei Trigger des EINEN Controllers damit
+  // ueberschrieben. Knoepfe und Steuerkreuz bleiben beim Web-Gamepad (sie sind
+  // Flankenereignisse, keine Dauerwerte). Mit zwei Controllern (Spieler 2/3) nicht - die
+  // Zuordnung Android-Geraet -> Web-Gamepad-Nummer ist nicht sicher.
+  const padNativLage = { an: false, letzte: null };
+  function padNativ(pad) {
+    padNativLage.an = false;
+    const o = window.OmegaPad;
+    if (!pad || !o || typeof o.lesen !== 'function' || pad.mapping !== 'standard') return pad;
+    if (typeof zweiSpieler !== 'undefined' && zweiSpieler) return pad;
+    let w;
+    try { w = String(o.lesen()).split(',').map(Number); } catch (e) { return pad; }
+    padNativLage.letzte = w;
+    if (w.length < 8 || w[7] !== 1 || !(w[6] >= 0)) return pad;
+    padNativLage.an = true;
+    const axes = Array.from(pad.axes || []);
+    axes[0] = w[0]; axes[1] = w[1]; axes[2] = w[2]; axes[3] = w[3];
+    const buttons = Array.from(pad.buttons || []);
+    const trig = (i, v) => { if (buttons[i]) buttons[i] = { pressed: v > 0.1, touched: v > 0, value: v }; };
+    trig(6, w[4]); trig(7, w[5]);
+    return { id: pad.id, index: pad.index, mapping: pad.mapping, connected: pad.connected,
+             timestamp: pad.timestamp, axes, buttons, vibrationActuator: pad.vibrationActuator };
+  }
+  function padNativInfo() {
+    const w = padNativLage.letzte;
+    if (!window.OmegaPad) return null;
+    return { an: padNativLage.an, geraete: w ? w[7] : 0, ereignisse: w ? w[8] : 0, zustellMs: w ? w[9] : null };
+  }
   function pollGamepad() {
     const spieler = padsFuerSpieler();
+    if (spieler.p1) spieler.p1 = padNativ(spieler.p1);
     padBelegungAbgleichen(spieler);
     // Spieler 2 zuerst, und ohne Bedingung auf `pad`: sein Eingang muss auch dann auf null
     // gehen, wenn Spieler 1 gar kein Pad hat (der Rumpf darunter kehrt dann frueh zurueck).
@@ -9161,6 +9691,17 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     }
     padConnected = true;
     padLastPollTime = performance.now();
+    // Startaufstellung offen: das Steuerkreuz waehlt den Knopf (X bestaetigt, flagTasteTick).
+    if (typeof raceGridOffen === 'function' && raceGridOffen()) {
+      const r = (padDpad(pad, 'left') || padDpad(pad, 'up')) ? -1
+        : ((padDpad(pad, 'right') || padDpad(pad, 'down')) ? 1 : 0);
+      if (r && !gridPadVorher) raceGridFokus(r);
+      gridPadVorher = !!r;
+    } else gridPadVorher = false;
+    // Meisterschaft offen: Steuerkreuz und Tasten gehoeren ihrem Schirm (73-meisterschaft.js).
+    if (typeof meisterPad === 'function' && meisterPad(pad)) return;
+    // Reaktionstest der Studie: das Pad gehoert dem Test (er fragt es selbst ab).
+    if (typeof studieTestAktiv === 'function' && studieTestAktiv()) return;
     // TITELBILDSCHIRM (ACC-Menue): jede Taste fuehrt ins Hauptmenue, links/rechts wechselt die
     // Sprache. Solange danach noch eine Taste gehalten wird, tut dieser Takt nichts weiter -
     // sonst oeffnete dasselbe gehaltene Kreuz im Hauptmenue gleich die naechste Kachel.

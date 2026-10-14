@@ -11,6 +11,9 @@
   let dashZielGesehen = false, dashZielAt = 0, dashStartLapAt = 0, dashZielAuto = null;
   // v0.9.39: der Kachelzaehler an der letzten Rundengrenze (siehe die Ziellinie).
   let dashLapZaehler = null;
+  // v1.0.36: der Kachelzaehler beim Losfahren - fuer die Frage, ob die erste Ueberfahrt nur
+  // der Anlauf zur Linie war (siehe playerLapCrossed).
+  let raceAnlaufZaehler = null;
   // Vorheriger Stand des Musterkontakts, fuer die Flankenerkennung im Ausdruck-Modus.
   let dashMarkerPrev = false;
   // Debounce state for the tile code. See dashboardNotifyHandler for why both guards exist.
@@ -559,6 +562,7 @@
       raceStartedAt = Date.now();
       // Die Kachel, auf der das Auto beim Start steht: eine Ziellinie darauf ist keine Runde.
       dashLapZaehler = dashLastTileCounter;
+      raceAnlaufZaehler = trackMode === 'on' ? dashLastTileCounter : null;
       sectorReset();
     }
     maybeSwitchRaceWeather();
@@ -729,7 +733,7 @@
   function carLapCrossed(car) {
     // v0.10.7: das Safety Car faehrt keine Runden - es wartet nur auf Start/Ziel nach Gruen.
     if (car.role === 'safetycar') {
-      if (car.ghost && car.ghost.scHeim && typeof safetyCarAbstellen === 'function') safetyCarAbstellen(car);
+      if (car.ghost && (car.ghost.scHeim || car.ghost.randHalt) && typeof safetyCarAbstellen === 'function') safetyCarAbstellen(car);
       return;
     }
     if (!car.race) car.race = { laps: [], lapStart: null, pending: null, seen: 0,
@@ -953,75 +957,67 @@
   //
   // Der Teilton ist LEISER als der Grundton, nicht lauter. Die Bestzeit soll heller klingen,
   // nicht lauter - lauter waere die naheliegende Wahl und die falsche.
-  // ---- Der Rundenzaehler am Rennende -------------------------------------------------
+  // ---- Die Rennende-Fanfare: Arcade-Jingle ----------------------------------------------
   //
-  // Die Lautmalerei aus dem Wunsch IST die Partitur:
+  // BESTELLT: "Baue den Arcade-Jingle ein" (aus mockup/fanfare-vorschlaege.html), als Ersatz
+  // fuer den Rundenzaehler (du-di-di ... daaaa), der ueber 4,9 s dauerte und eher nach Zaehler
+  // als nach Sieg klang. "Stage clear" wie am Spielautomaten, rund 2,2 s:
   //
-  //     du-di-di   drei kurze, steigende Toene
-  //     dueue      ein langer, hoher
-  //     dumm       einer kurz und tief darunter
-  //     daaaa      am Ende einer, der stehenbleibt
+  //     drei Dreiklangslaeufe, je eine Stufe hoeher   C - F - G (je vier Sechzehntel)
+  //     dann ein Treffer                              C-Dur ueber zwei Oktaven, gehalten
+  //     Glitzern obendrauf                            C7 E7 G7
   //
-  // Drei Takte: zweimal derselbe, dann ein dritter mit doppeltem Lauf und Schlusston.
-  //
-  // ALS TABELLE und nicht als Folge von Aufrufen: so laesst sich die Melodie aendern, ohne
-  // die Wiedergabe anzufassen, und man sieht sie beim Lesen. [Startzeit s, Frequenz Hz,
-  // Dauer s, Lautstaerke].
-  //
-  // Die Frequenzen sind eine C-Dur-Dreiklangsfolge - C5 E5 G5 hinauf, C6 als Spitze, G3 als
-  // "dumm" darunter, C4 als Schluss. Gewaehlt und nicht gemessen: ein Rundenzaehler von
-  // 1978 spielt keine bestimmte Tonart, er spielt, was sein Teiler hergibt.
-  const ZAEHLER_TON = { C4: 261.6, G3: 196.0, C5: 523.3, E5: 659.3, G5: 784.0, C6: 1046.5 };
-  function zaehlerTakt(t0, mitLauf) {
-    const T = ZAEHLER_TON, n = [];
-    const lauf = (t) => {
-      n.push([t + 0.00, T.C5, 0.075, 0.16]);
-      n.push([t + 0.09, T.E5, 0.075, 0.16]);
-      n.push([t + 0.18, T.G5, 0.075, 0.16]);
+  // Lead ist eine Pulswelle mit 25 % Tastverhaeltnis (der schnarrende 8-Bit-Klang), der Bass
+  // ein Dreieck. ALS TABELLE [Startzeit s, Frequenz Hz, Dauer s, Lautstaerke]: so laesst sich
+  // die Melodie aendern, ohne die Wiedergabe anzufassen. Die Lautstaerken sind auf die Spitze
+  // der alten Fanfare (~0,2) abgeglichen - gemessen im Mock-up, nicht geschaetzt.
+  const FANFARE_TON = { C2: 65.41, C4: 261.63, C5: 523.25, E5: 659.26, F5: 698.46, G5: 783.99,
+    A5: 880.00, B5: 987.77, C6: 1046.50, D6: 1174.66, F6: 1396.91, G6: 1567.98,
+    C7: 2093.00, E7: 2637.02, G7: 3135.96 };
+  function fanfarePartitur() {
+    const T = FANFARE_TON, n = [], S = 0.065, V = 0.4;     // V: Abgleich auf die alte Lautheit
+    const q = (t, f, d, v) => n.push([t, f, d, (v || 0.13) * V]);
+    const lauf = (t, a, b, c, dd) => {
+      q(t, a, 0.07); q(t + S, b, 0.07); q(t + 2 * S, c, 0.07); q(t + 3 * S, dd, 0.11, 0.15);
     };
-    lauf(t0);
-    lauf(t0 + 0.27);
-    if (mitLauf) { lauf(t0 + 0.54); lauf(t0 + 0.81); }
-    const nach = t0 + (mitLauf ? 1.08 : 0.54);
-    n.push([nach, T.C6, mitLauf ? 0.26 : 0.30, 0.20]);       // dueue
-    n.push([nach + (mitLauf ? 0.30 : 0.34), T.G3, 0.20, 0.22]); // dumm
-    return { noten: n, ende: nach + (mitLauf ? 0.50 : 0.54) };
+    lauf(0.00, T.C5, T.E5, T.G5, T.C6);
+    lauf(0.30, T.F5, T.A5, T.C6, T.F6);
+    lauf(0.60, T.G5, T.B5, T.D6, T.G6);
+    const H = 0.98;                                        // der Treffer
+    q(H, T.C4, 1.10, 0.15); q(H, T.E5, 1.10); q(H, T.G5, 1.10); q(H, T.C6, 1.10);
+    q(H + 0.03, T.C7, 0.10, 0.09); q(H + 0.16, T.E7, 0.10, 0.07); q(H + 0.29, T.G7, 0.20, 0.07);
+    q(H, T.C2, 1.20, 0.26);                                // Bass auf Dreieck (f < 120 Hz)
+    return n;
   }
-
+  let fanfareWelle = null;
   function playRaceEndFanfare() {
     if (!soundEnabled || !audioCtx) return null;
     const t0 = audioCtx.currentTime + 0.05;
-    const a = zaehlerTakt(t0, false);
-    const b = zaehlerTakt(a.ende, false);
-    const c = zaehlerTakt(b.ende, true);
-    const noten = a.noten.concat(b.noten, c.noten);
-    // "daaaa": der Schluss bleibt stehen, tief und lang. Er ist der einzige Ton, der nicht
-    // aus dem Takt kommt - deshalb steht er hier und nicht in der Tabelle.
-    noten.push([c.ende + 0.06, ZAEHLER_TON.C4, 1.10, 0.24]);
-
-    // EIN Tiefpass fuer alles: der Rundenzaehler ist ein Piezosummer an einer einfachen
-    // Schaltung, also ein gefiltertes Rechteck. Ein Sinus waere zu weich und traefe das
-    // Vorbild nicht; ein ungefiltertes Rechteck waere zu scharf.
-    const lp = audioCtx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 2400;
-    lp.Q.value = 0.7;
-    lp.connect(audioCtx.destination);
-
-    for (const [t, f, d, v] of noten) {
+    const noten = fanfarePartitur();
+    // Fourierreihe einer Pulswelle mit Tastverhaeltnis 25 %: Cosinus-Glieder 2/(k*pi) * sin(k*pi*d).
+    if (!fanfareWelle) {
+      const N = 32, re = new Float32Array(N), im = new Float32Array(N);
+      for (let k = 1; k < N; k++) re[k] = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * 0.25);
+      fanfareWelle = audioCtx.createPeriodicWave(re, im);
+    }
+    let ende = 0;
+    for (const [t0n, f, d, v] of noten) {
+      const t = t0 + t0n;
       const osc = audioCtx.createOscillator();
-      osc.type = 'square';
+      if (f < 120) osc.type = 'triangle'; else osc.setPeriodicWave(fanfareWelle);
       osc.frequency.value = f;
       const g = audioCtx.createGain();
       g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(v, t + 0.008);
+      g.gain.linearRampToValueAtTime(v, t + 0.004);
+      g.gain.setValueAtTime(v, t + Math.min(d * 0.5, 0.12));
       g.gain.exponentialRampToValueAtTime(0.0008, t + d);
-      osc.connect(g).connect(lp);
+      osc.connect(g).connect(audioCtx.destination);
       osc.start(t);
       osc.stop(t + d + 0.02);
+      ende = Math.max(ende, t0n + d);
     }
     // Zurueck kommt die Partitur, damit ein Test sie nachrechnen kann, ohne zu hoeren.
-    return { noten: noten.length, dauer: +(noten[noten.length - 1][0] + noten[noten.length - 1][2] - t0).toFixed(2) };
+    return { noten: noten.length, dauer: +ende.toFixed(2) };
   }
 
   // `hoehe`: Faktor auf die Tonhoehe. BESTELLT: "Rundenton fuer Spieler 2 auch abspielen,
@@ -1194,7 +1190,7 @@
       const st = x.st, isBest = st.best === fastest;
       return `<tr>
         <td style="${td}">${i + 1}</td>
-        <td style="${td}">${ergDot(x.c)}${x.c.name}${x.c.role === 'ghost' ? ' <span class="muted">(NPC)</span>' : x.c.role === 'challenger' ? ' <span class="muted">(Challenger)</span>' : ''}${rammerLabel(x.c)}</td>
+        <td style="${td}">${ergDot(x.c)}${x.c.name}${x.c.role === 'ghost' ? ' <span class="muted">(NPC)</span>' : ''}${rammerLabel(x.c)}</td>
         <td style="${tdr}">${st.n}</td>
         <td style="${tdr}${isBest ? '; color:var(--good); font-weight:700' : ''}">${formatLapTime(st.best)}</td>
         <td style="${tdr}">${formatLapTime(Math.round(st.mean))}</td>
@@ -1508,8 +1504,11 @@
 
   // The grid is stored as device ids, not as indices into `garage`: cars connect and
   // disconnect between races, and an index would silently point at a different car.
+  // v1.0.28 BESTELLT: "Das Safety Car sollte bei der Startaufstellung nicht bei den zu
+  // sortierenden Autos sein, aber separat als Safety Car unter der Liste angezeigt werden."
+  // Es nimmt also keinen Startplatz ein (gridPosOf -1) und faehrt nicht mit auf.
   function raceGridCars() {
-    const byId = new Map(garage.map(c => [String(c.device.id), c]));
+    const byId = new Map(garage.filter(c => c.role !== 'safetycar').map(c => [String(c.device.id), c]));
     const ordered = [];
     raceGridOrder.forEach(id => { const c = byId.get(id); if (c) { ordered.push(c); byId.delete(id); } });
     byId.forEach(c => ordered.push(c));   // newly connected cars join at the back
@@ -1533,9 +1532,11 @@
       row.className = 'grid-row';
       row.draggable = false;
       row.dataset.id = String(car.device.id);
+      // v1.0.25: dazu, wo der Platz liegt (Reihe, Seite) - so stellt man von Hand richtig auf.
+      const wo = t('Reihe {r}').replace('{r}', Math.floor(i / 2) + 1) + ' · ' + (i % 2 ? t('links') : t('rechts'));
       row.innerHTML = `<span class="grid-pos">${i + 1}.</span>`
         + `<span class="grid-handle" draggable="true" title="Ziehen zum Umsortieren">&#8942;&#8942;</span>`
-        + `<span class="grid-name">${carDot(car)}${garageLabel(car)}</span>`
+        + `<span class="grid-name">${carDot(car)}${garageLabel(car)} <small class="grid-wo">${wo}</small></span>`
         + `<span class="grid-move">`
         + `<button data-mv="up" ${i === 0 ? 'disabled' : ''} aria-label="nach vorn">&#9650;</button>`
         + `<button data-mv="down" ${i === cars.length - 1 ? 'disabled' : ''} aria-label="nach hinten">&#9660;</button>`
@@ -1576,6 +1577,14 @@
       });
       host.appendChild(row);
     });
+    const sc = garage.find(c => c.role === 'safetycar' && c.device);
+    if (sc) {
+      const row = document.createElement('div');
+      row.className = 'grid-row grid-sc';
+      row.innerHTML = `<span class="grid-pos">SC</span>`
+        + `<span class="grid-name">${carDot(sc)}${garageLabel(sc)} <small class="grid-wo">${t('Safety Car · steht rechts am Rand, fährt bei Gelb')}</small></span>`;
+      host.appendChild(row);
+    }
   }
 
   function renderRaceGrid() {
@@ -1617,9 +1626,13 @@
     raceGridWeiter = typeof weiter === 'function' ? weiter : null;
     const gs = $('race-gridscreen');
     if (!gs) { if (raceGridWeiter) raceGridWeiter(); return; }
+    // v1.0.29: die angezeigte Reihenfolge IST die Startreihenfolge - auch fuer Autos, die seit
+    // dem letzten Start dazukamen (sonst kennt sie die automatische Aufstellung nicht).
+    syncRaceGridOrder();
     raceGridZeilen($('grid-liste'));
     gridBildMalen();
-    if ($('grid-kopf-info')) $('grid-kopf-info').textContent = '';
+    // v1.0.25: im Meisterschafts-Event steht oben, welches Event und nach welcher Regel aufgestellt wird.
+    if ($('grid-kopf-info')) $('grid-kopf-info').textContent = typeof meisterGridInfo === 'function' ? meisterGridInfo() : '';
     // Time Attack: Medaillenzeiten, bisher Gewonnenes und Bestzeit dieser Strecke.
     const ta = $('grid-timeattack');
     if (ta) {
@@ -1804,9 +1817,10 @@
     }
     // v1.0.21: zur Telemetrie dieser Strecke, sobald es eine aufgezeichnete Runde gibt.
     // v1.0.21: steht ein Challenger in der Garage, hier auch sein Modus.
+    // v1.0.28: alle NPCs fahren in Time Attack als Challenger.
     if (typeof challenger === 'function' && challenger()) {
       const m = typeof challengerModus === 'function' ? challengerModus() : 'beste';
-      h += '<div class="ta-kopf">Challenger</div><select class="ta-challenger">'
+      h += '<div class="ta-kopf">' + esc(t('NPCs als Challenger')) + '</div><select class="ta-challenger">'
         + [['beste', t('Gegen meine Bestzeit')], ['rekord', t('Gegen den Rekord')], ['gummiband', t('Gummiband')]]
           .map(([v, txt]) => '<option value="' + v + '"' + (v === m ? ' selected' : '') + '>' + esc(txt) + '</option>').join('')
         + '</select>';
@@ -1822,10 +1836,78 @@
     showHudToast((nr >= 2 ? 'P' + nr + ': ' : '') + (r.neu ? t('Neue Bestzeit auf dieser Strecke!') + ' ' : '')
       + formatLapTime(ms) + (name ? ' · ' + name : ''));
   }
+  // ---- ZUSAMMENFASSUNG AM ENDE VON TIME ATTACK (v1.0.25, WIP) -----------------------
+  // BESTELLT: "Zeige mir eine Zusammenfassung meiner Ergebnisse, wenn Time Attack vorbei ist."
+  // Ein Fenster nach dem Stopp: Runden, beste Runde mit Medaille, Vergleich mit der Bestzeit
+  // von VOR dieser Fahrt (darum beim Start gemerkt - waehrend der Fahrt schreibt
+  // bestzeitRunde() sie schon fort), Schnitt und Streuung, was zur naechsten Medaille fehlt,
+  // und was die Telemetrie aufgezeichnet hat - mit dem Weg dorthin.
+  let bestzeitVorher = null;
+  function bestzeitVorherMerken() {
+    bestzeitVorher = null;
+    if (raceMode !== 'bestzeit') return;
+    const b = bestzeitAktuell(typeof playerCar !== 'undefined' ? playerCar : null);
+    bestzeitVorher = b ? { beste: b.beste, medaille: b.medaille || 0 } : { beste: null, medaille: 0 };
+  }
+  function bestzeitZusammenfassungText() {
+    const tiles = currentTrackTiles;
+    if (!tiles || tiles.length < 3) return null;
+    const minMs = rundeMinMs();
+    const alle = raceLapTimes.map((l) => l.ms);
+    const gueltig = alle.filter((ms) => ms >= minMs);
+    const z = [];
+    z.push(t('Runden') + ': ' + alle.length
+      + (gueltig.length !== alle.length ? ' (' + t('{n} gewertet').replace('{n}', gueltig.length) + ')' : ''));
+    if (!gueltig.length) { z.push(t('Keine gewertete Runde.')); return z.join('\n'); }
+    const beste = Math.min.apply(null, gueltig);
+    const nr = alle.indexOf(beste) + 1;
+    const def = bestzeitDef(tiles);
+    const sterne = chSterne(def, 'hotlap', beste);
+    z.push(t('Beste Runde') + ': ' + formatLapTime(beste) + ' (' + t('Runde') + ' ' + nr + ') · '
+      + chSterneName(sterne) + ' ' + chSterneZeichen(sterne));
+    const v = bestzeitVorher;
+    if (v && v.beste) {
+      z.push((beste < v.beste ? t('Neue Bestzeit auf dieser Strecke!') + ' ' + t('Vorher') : t('Deine Bestzeit hier'))
+        + ': ' + formatLapTime(v.beste) + ' (' + teleDeltaText(beste - v.beste) + ' s)');
+      if (sterne > (v.medaille || 0)) z.push(t('Neue Medaille') + ': ' + chSterneName(sterne));
+    } else {
+      z.push(t('Erste Zeit auf dieser Strecke.'));
+    }
+    if (gueltig.length >= 2) {
+      const mittel = gueltig.reduce((a, b) => a + b, 0) / gueltig.length;
+      const sd = Math.sqrt(gueltig.reduce((a, b) => a + (b - mittel) * (b - mittel), 0) / (gueltig.length - 1));
+      z.push(t('Schnitt') + ': ' + formatLapTime(mittel) + ' · ' + t('Streuung') + ' ±' + (sd / 1000).toFixed(2) + ' s');
+    }
+    if (sterne < 3) {
+      const sch = chSterneSchwellen(def);
+      const ziel = sterne >= 2 ? sch.gold : sch.silber;
+      z.push(t('Bis {m} fehlen {d} s').replace('{m}', chSterneName(sterne + 1))
+        .replace('{d}', ((beste - ziel) / 1000).toFixed(2)));
+    }
+    if (typeof teleSitzung !== 'undefined') {
+      const ts = teleSitzung;
+      z.push(t('Telemetrie') + ': ' + t('{n} Runden aufgezeichnet').replace('{n}', ts.gespeichert)
+        + (ts.geschaetzt ? ', ' + t('{n} davon mit geschätzten Teilen').replace('{n}', ts.geschaetzt) : '')
+        + (ts.verworfen ? ', ' + t('{n} nicht zuzuordnen').replace('{n}', ts.verworfen) : ''));
+    }
+    return z.join('\n');
+  }
+  function bestzeitZusammenfassungZeigen() {
+    if (raceMode !== 'bestzeit' || typeof konsoleFrage !== 'function') return;
+    const text = bestzeitZusammenfassungText();
+    if (text === null) return;
+    const knoepfe = [];
+    if (typeof teleBeste === 'function' && teleBeste(playerCar, currentTrackTiles)) {
+      knoepfe.push([t('Telemetrie ansehen'), () => teleSeiteOeffnen()]);
+    }
+    knoepfe.push([t('Schließen'), null]);
+    setTimeout(() => konsoleFrage(t('Time Attack beendet'), text, knoepfe, true), 900);
+  }
   function startRaceCountdown(gruenZiel, mpPlan) {
     if (raceState !== 'idle' && raceState !== 'finished') return; // ignore while armed/racing
     if (!knockoutBereit(true)) return;
     if (!bestzeitBereit(true)) return;
+    bestzeitVorherMerken();
     // EINSCHALTRAMPE: der Schirm zieht in 300 ms von schwarz auf Wert hoch, wie ein TFT beim
     // Einschalten. Hier und nicht in raceGreen(), weil der Schirm mit dem Knopfdruck
     // "angeht" und nicht erst bei Gruen - im Countdown will man ihn schon lesen.
@@ -1993,6 +2075,7 @@
     // null, bis raceClockTick() ueber raceMoveErkannt() die erste Bewegung sieht.
     raceLapStart = null;
     raceAwaitingMove = true;
+    raceAnlaufZaehler = null;
     // In einer Challenge faehrt man allein: keine Ghosts.
     const imChallenge = typeof challengeLaeuft === 'function' && challengeLaeuft();
     if (!imChallenge) launchGhosts();   // green means green for everyone
@@ -2103,7 +2186,12 @@
   function finishRace(auslaufen) {
     raceState = 'finished';
     // Das Safety Car steht beim Rennende - es hat in keinem Ergebnis etwas zu suchen.
-    garage.forEach((c) => { if (c.role === 'safetycar' && c.ghost && c.ghost.running) stopGhost(c); });
+    garage.forEach((c) => {
+      if (c.role === 'safetycar' && c.ghost && c.ghost.running) {
+        stopGhost(c);
+        if (typeof safetyCarLichtAus === 'function') safetyCarLichtAus(c);
+      }
+    });
     raceGreenAt = null;
     fruehstartReset();
     derbyEinstellungenZurueck();
@@ -2166,11 +2254,8 @@
       if (!willAuslaufen) { stopGhost(c); return; }
       finishGhost(c);
     });
-    // v1.0.21: der Challenger rollt aus (Zielflagge) bzw. haelt sofort (Abbruch).
-    garage.forEach(c => {
-      if (c.role !== 'challenger' || !c.ghost || !c.ghost.running || c.ghost.finish) return;
-      if (willAuslaufen) finishGhost(c); else stopGhost(c);
-    });
+    // v1.0.30: mit dem Rennende verstummen die NPCs (80-sound.js).
+    if (typeof ghostStimmenRennende === 'function') ghostStimmenRennende();
     if (willAuslaufen && garage.some(c => c.role === 'ghost' && c.ghost && c.ghost.auslauf)) {
       showHudToast(t('NPCs fahren die Runde zu Ende'));
     }
@@ -2214,6 +2299,8 @@
       if (typeof showTab === 'function') showTab('race');
       if (typeof cockpitScreenZu === 'function') cockpitScreenZu('uebersicht');
     }
+    // v1.0.25: Time Attack bekommt dazu seine Zusammenfassung.
+    bestzeitZusammenfassungZeigen();
     // Und ablegen. Hier, weil dies die eine Stelle ist, an der ein Rennen wirklich vorbei
     // ist - und nach showRaceSummary(), damit ein Fehlschlag beim Speichern das Ergebnis
     // nicht verdeckt.
@@ -3203,9 +3290,30 @@
     // Erkannt an der Zeit: schneller als die kuerzeste moegliche Runde (rundeMinMs) kann keine
     // ganze Runde gewesen sein.
     if ((raceState === 'racing' || raceState === 'finishing') && !raceFormationLap
-        && raceLapStart !== null && raceLapTimes.length === 0 && now - raceLapStart < rundeMinMs()) {
+        && raceLapStart !== null && raceLapTimes.length === 0 && now - raceLapStart < rundeMinMs()
+        // v1.0.36: mit Kachelzaehler entscheidet die Anlauf-Regel darunter (Runde 1 ab der Linie).
+        && raceAnlaufZaehler === null) {
       log('Startlinie ueberquert nach ' + (now - raceLapStart) + ' ms: das war keine Runde, die Uhr laeuft weiter.', 'info');
       return false;
+    }
+    // v1.0.36 BESTELLT: "Rundenzeiten erst ab Runde 2 zaehlen, damit nicht Runden mit 1 oder 2 s
+    // dabei sind." Die Zeitgrenze oben reicht nicht: rundeMinMs ist auf kurzen Strecken 1,5 s,
+    // und wer aus Reihe 2 oder 3 nach 2 s die Linie erreicht, bekam eine 2-s-Runde. Jetzt
+    // zaehlen die KACHELN seit dem Losfahren (nur auf der Bahn, dort laeuft der Zaehler): weniger
+    // als eine halbe Strecke heisst Anlauf, und Runde 1 beginnt an der Linie. Wer hinter der
+    // Linie startet, faehrt eine ganze Runde bis zur ersten Ueberfahrt - die zaehlt wie bisher.
+    if ((raceState === 'racing' || raceState === 'finishing') && !raceFormationLap
+        && raceLapStart !== null && raceLapTimes.length === 0 && raceAnlaufZaehler !== null
+        && dashLastTileCounter !== null && dashLastTileCounter !== undefined) {
+      const nK = currentTrackTiles ? currentTrackTiles.length : 0;
+      const gefahren = (dashLastTileCounter - raceAnlaufZaehler) & 0xff;
+      raceAnlaufZaehler = null;
+      if (nK >= 3 && gefahren < nK / 2) {
+        log('Startlinie nach ' + gefahren + ' Kacheln: Anlauf, Runde 1 beginnt jetzt.', 'info');
+        raceLapStart = now;
+        if (dashLapStart !== null) dashLapStart = now;
+        return false;
+      }
     }
     // Einfuehrungsrunde: JEDER Kontakt zaehlt, wie bei den Ghosts (formationNoetig rechnet
     // die Sektoren ein). Vor dem Sektorfilter, damit beide dieselbe Zaehlweise haben.

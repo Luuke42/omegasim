@@ -378,7 +378,9 @@
   // Track 2 auf 6,4 s - eine kurze Strecke hat einen festen Anteil (Anfahren aus der Kurve,
   // Haarnadel), der nicht mit der Laenge schrumpft. Zwei Bezugspunkte legen eine Gerade fest:
   // Balkonia 16 s, Track 2 (SGR4LGHG) 7,2 s. Beide werden genau getroffen.
-  const CH_GOLD_PUNKTE = [{ id: 'dauer-balkonia', s: 16 }, { code: 'SGR4LGHG', s: 7.2 }];
+  // v1.0.25 BESTELLT: "Die Medaillenzeiten sind zu hart, ich schaffe minimal 7,1 s auf SGR4LGHG.
+  // Gold waere hier fuer 7,3 angemessen (PRO)." Der zweite Bezugspunkt also 7,3 statt 7,2.
+  const CH_GOLD_PUNKTE = [{ id: 'dauer-balkonia', s: 16 }, { code: 'SGR4LGHG', s: 7.3 }];
   let chGoldGerade = null;
   function chGoldFormel(geoMs) {
     if (chGoldGerade === null) {

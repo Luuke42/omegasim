@@ -277,6 +277,29 @@
         + 'ohne die Klassen-Abstimmung.',
     v: Object.assign({}, PRESETS.pro.v, { 'phys-mode': 'pacejka' }),
   };
+  // ---- OMEGA (v1.0.36): Pro, EINGEFROREN -------------------------------------------------
+  // BESTELLT: "'Omega'-Fahrgefuehlmodus ergaenzen: so wie das Pro, was so lange bitgleich
+  // bleiben sollte (z. B. v0.9.x), nach Pacejka in den Presets einordnen." Die Werte sind die
+  // von Pro in v0.9.50, Wert fuer Wert (aus der damaligen APK gelesen; seitdem kam nur der
+  // Steuerungsmodus "physik" ausdruecklich dazu). ABSICHTLICH als Abschrift und nicht als
+  // Object.assign(PRESETS.pro.v): wird Pro spaeter verstellt, bleibt Omega stehen. Der
+  // Selbsttest "Omega bleibt bitgleich" haelt dieselbe Liste noch einmal fest.
+  PRESETS.omega = {
+    label: 'Omega',
+    kurz: 'Pro, wie es in v0.9 war - eingefroren',
+    text: 'Die Pro-Abstimmung aus v0.9 (Automatik, 2,6 s auf 100, voller Grip, Reifenmodell '
+        + 'an, kein Tankgewicht, Lenkkalibrierung 250 Prozent) und bleibt so: wird Pro '
+        + 'künftig angepasst, ändert sich Omega nicht.',
+    v: { 'phys-mode': 'physik', 'setting-grip': 1, 'setting-brakepower': 1.4, 'setting-autoshift': true,
+         'setting-zero-to-top': 2.6, 'setting-coast-drag': 0.6, 'setting-fuelweight': 1, 'setting-tyres': 1,
+         'phys-steerresp': 3, 'setting-brakebias': 62, 'setting-steer-calib': 2.5, 'setting-brake-steal': 1.15,
+         'setting-tyre-blankets': false, 'phys-accel': 1, 'setting-fuel-drain': 1, 'setting-crash-count': 4,
+         'setting-crash-damage': true, 'setting-crash-schaden': true, 'setting-crash-bremse': true,
+         'setting-crash-auffahr': true, 'setting-crash-threshold': 40, 'setting-repair-time': 4,
+         'setting-brake-fade': true, 'setting-brake-fade-strength': 1.5, 'setting-dirtyair': false,
+         'setting-dirtyair-strength': 1, 'setting-tyre-asym': true, 'setting-tyre-pressure': 1.8,
+         'setting-topspeed': 1.8 },
+  };
   // ---- SIM+ (v0.10.5) ---------------------------------------------------------------
   // BESTELLT: "Sim+ (so wie Pro, aber mit etwas staerkerer Lenkung, staerkerer Beschleunigung,
   // viel staerkerer Bremse)". Und: "Ueberall ausser bei GT3 Realismus den maximalen Lenkwinkel
@@ -301,7 +324,8 @@
   // Fernsteuerung, Gas weg laeuft in 2 s aus, Bremse sofort, zweiter Bremsdruck im Stand
   // rueckwaerts. Der Steuerungsmodus haengt damit nur noch am Fahrgefuehl.
   PRESETS.rc = {
-    label: 'RC',
+    // v1.0.25 BESTELLT: "Safety Car und RC-Modus beides als WIP labeln."
+    label: 'RC (WIP)',
     kurz: 'Arcade, nur viel extremer: wie ein Fernsteuerungsauto',
     text: 'Der Stick geht direkt ans Auto wie bei einer Fernsteuerung, ohne G\u00e4nge: Gas weg '
         + 'l\u00e4uft in zwei Sekunden aus, die Bremse greift sofort, ein zweiter Bremsdruck im '
@@ -318,7 +342,7 @@
   });
   // Im FAHREN-Menue und am Cockpit-Knopf nur diese (BESTELLT: "die anderen Modi noch im
   // Optionen-Menue lassen, aber nicht im FAHREN-Menue in der Kachel anzeigen").
-  const PRESETS_FAHREN = ['arcade', 'simplus', 'pro', 'propacejka', 'rc'];
+  const PRESETS_FAHREN = ['arcade', 'simplus', 'pro', 'propacejka', 'omega', 'rc'];
   // Bis v0.4 hiess GT3 "real". Aeltere exportierte Abstimmungen und der Knopf im
   // Garagenschirm duerfen den alten Namen weiter benutzen.
   const PRESET_ALIAS = { real: 'gt3', realismus: 'gt3' };
@@ -376,9 +400,16 @@
 
   function presetSay(t) { $('preset-status').textContent = t; }
 
+  // v1.0.36: welches Preset zuletzt gesetzt wurde. Omega und Pro haben (noch) dieselben Werte -
+  // gemessen allein waere die Anzeige dann immer "Pro". Bei Gleichstand gewinnt das gewaehlte.
+  const PRESET_ZULETZT_STORE = 'omegasim-preset-zuletzt';
+  let presetZuletzt = null;
+  try { presetZuletzt = localStorage.getItem(PRESET_ZULETZT_STORE); } catch (e) { /* privat */ }
   function applyPreset(key) {
     const p = PRESETS[key] || PRESETS[PRESET_ALIAS[key]];
     if (!p) return;
+    presetZuletzt = PRESETS[key] ? key : PRESET_ALIAS[key];
+    try { localStorage.setItem(PRESET_ZULETZT_STORE, presetZuletzt); } catch (e) { /* privat */ }
     let n = 0;
     const missing = [];
     for (const [id, val] of Object.entries(p.v)) {
@@ -493,7 +524,7 @@
         if (!(id in ist) || !presetGleich(ist[id], soll)) { passt = false; break; }
         n++;
       }
-      if (passt && n > besteN) { bester = key; besteN = n; }
+      if (passt && (n > besteN || (n === besteN && key === presetZuletzt))) { bester = key; besteN = n; }
     }
     return bester;
   }

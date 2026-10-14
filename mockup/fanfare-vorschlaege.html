@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OmegaSim · Rennende-Fanfare (Vorschläge)</title>
+<!--
+  VORSCHLAEGE fuer eine Rennende-Fanfare als Alternative zum Rundenzaehler.
+  BESTELLT: "Generiere 2 Vorschlaege fuer eine 'Rennen-Zuende' Fanfare als Alternative zur aktuellen."
+
+  EIGENSTAENDIG: fasst die App nicht an. Variante 0 ist die aktuelle Fanfare (Partitur aus
+  src/70-race.js, zaehlerTakt/playRaceEndFanfare), 1 und 2 sind die Vorschlaege. Klang kommt
+  aus Web Audio, ohne Samples - wie in der App. Zum Hoeren auf "Abspielen" druecken.
+
+  Jede Variante ist eine Tabelle [Startzeit s, Frequenz Hz, Dauer s, Lautstaerke] plus eine
+  Stimme (Klangfarbe). Dieselbe Form wie in der App, damit ein Vorschlag 1:1 uebernommen
+  werden kann: nur die Stimme und die Tabelle tauschen.
+-->
+<style>
+  :root {
+    --bg: #000; --panel: #0b0c0f; --panel-2: #14161c; --ink: #f4f6fb; --muted: #a9b2c4;
+    --border: #262a33; --good: #3ddc84; --info: #5aa9ff; --gold: #f5c518;
+    --font: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); }
+  .rahmen { max-width: 880px; margin: 0 auto; padding: clamp(16px, 3vw, 36px); }
+  h1 { margin: 0 0 4px; font-size: clamp(22px, 4vw, 38px); font-weight: 900; letter-spacing: .06em; }
+  .unter { color: var(--muted); margin: 0 0 22px; font-size: 14px; }
+  .karte { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; margin: 0 0 14px; }
+  .karte.neu { border-color: #2d4a6e; }
+  .kopf { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .kopf h2 { margin: 0; font-size: 20px; letter-spacing: .04em; flex: 1 1 auto; }
+  .marke { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 99px; padding: 2px 9px; }
+  .marke.neu { color: var(--info); border-color: #2d4a6e; }
+  button { font: inherit; cursor: pointer; background: var(--panel-2); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 8px; padding: 9px 18px; font-weight: 700;
+    letter-spacing: .06em; min-height: 40px; }
+  button:hover { border-color: var(--info); }
+  button.spielt { background: #12301f; border-color: var(--good); color: var(--good); }
+  p { margin: 8px 0 0; font-size: 14px; line-height: 1.45; color: var(--muted); }
+  p b { color: var(--ink); }
+  canvas { display: block; width: 100%; height: 74px; margin-top: 10px; background: #07080b;
+    border: 1px solid var(--border); border-radius: 8px; }
+  .leiste { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+  .leiste input { accent-color: var(--info); }
+  .fuss { color: var(--muted); font-size: 12px; margin-top: 18px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="rahmen">
+  <h1>Rennende-Fanfare</h1>
+  <p class="unter">Die aktuelle und zwei Vorschläge zum Vergleichen. Alle klingen am Zielflaggen-Ende, nach Zielflagge, Derby-Sieg und NPC-Knockout-Sieg.</p>
+
+  <div class="leiste">
+    <label>Lautstärke <input type="range" id="vol" min="0" max="1" step="0.05" value="0.7"></label>
+    <button id="alle">Alle nacheinander</button>
+    <span id="status"></span>
+  </div>
+
+  <div id="karten"></div>
+
+  <div class="fuss">
+    Einbau, falls einer gefällt: <b>playRaceEndFanfare()</b> in <code>src/70-race.js</code> bekommt die neue Tabelle und Stimme;
+    die vier Aufrufstellen (Zielflagge, zwei Derby-Sieger, NPC-Knockout) bleiben unverändert. Wahlweise auch als Einstellung
+    „Rennende-Fanfare“ mit den drei Klängen zur Auswahl.
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  let ctx = null, laufend = null;
+  const $ = (id) => document.getElementById(id);
+
+  // ---- Tonleiter: Notennamen -> Hz (gleichstufig, A4 = 440) -------------------------------
+  const NAME = { C: -9, D: -7, E: -5, F: -4, G: -2, A: 0, B: 2 };
+  function hz(n) {                       // 'C#5', 'G4', 'Bb3'
+    const m = /^([A-G])([#b]?)(\d)$/.exec(n);
+    return 440 * Math.pow(2, (NAME[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) + (m[3] - 4) * 12) / 12);
+  }
+
+  // ---- 0: AKTUELL - der Rundenzaehler, Partitur 1:1 aus der App ----------------------------
+  const ZT = { C4: 261.6, G3: 196.0, C5: 523.3, E5: 659.3, G5: 784.0, C6: 1046.5 };
+  function zaehlerTakt(t0, mitLauf) {
+    const n = [];
+    const lauf = (t) => { n.push([t, ZT.C5, .075, .16], [t + .09, ZT.E5, .075, .16], [t + .18, ZT.G5, .075, .16]); };
+    lauf(t0); lauf(t0 + .27);
+    if (mitLauf) { lauf(t0 + .54); lauf(t0 + .81); }
+    const nach = t0 + (mitLauf ? 1.08 : .54);
+    n.push([nach, ZT.C6, mitLauf ? .26 : .30, .20]);
+    n.push([nach + (mitLauf ? .30 : .34), ZT.G3, .20, .22]);
+    return { noten: n, ende: nach + (mitLauf ? .50 : .54) };
+  }
+  function partiturAktuell() {
+    const a = zaehlerTakt(0, false), b = zaehlerTakt(a.ende, false), c = zaehlerTakt(b.ende, true);
+    const n = a.noten.concat(b.noten, c.noten);
+    n.push([c.ende + .06, ZT.C4, 1.10, .24]);
+    return n;
+  }
+  function stimmeZaehler(c, ziel, t, f, d, v) {          // gefiltertes Rechteck wie in der App
+    const o = c.createOscillator(); o.type = 'square'; o.frequency.value = f;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .008);
+    g.gain.exponentialRampToValueAtTime(.0008, t + d);
+    o.connect(g).connect(ziel); o.start(t); o.stop(t + d + .02);
+  }
+
+  // ---- 1: TROMPETEN-FANFARE ---------------------------------------------------------------
+  // "ta-ta-ta TAAA, ta-ta-ta TAAAAA": die klassische Siegesfanfare in C-Dur. Zwei Saegezaehne,
+  // leicht gegeneinander verstimmt (Chorus), durch einen Tiefpass, der beim Anblasen von dumpf
+  // nach hell aufgeht - das ist das, was ein Blech nach Blech klingen laesst und keine Orgel.
+  // Zum Schluss ein Akkord (C-E-G-C) mit Bass.
+  function partiturTrompete() {
+    const n = [], q = (t, name, d, v) => n.push([t, hz(name), d, v || .20]);
+    // Auftakt, drei kurze auf G, dann der lange C
+    q(0.00, 'G4', .12); q(0.15, 'G4', .12); q(0.30, 'G4', .12);
+    q(0.45, 'C5', .38, .24);
+    // zweite Phrase, hinaufgeschoben
+    q(0.92, 'G4', .12); q(1.07, 'C5', .12); q(1.22, 'E5', .12);
+    // Schlussakkord: Bass, Quinte, Terz, Oktave, Spitze - lang, mit leichtem Nachklang
+    const T = 1.42, D = 1.55;
+    q(T, 'C3', D, .26); q(T, 'C4', D, .20);
+    q(T, 'G4', D, .17); q(T, 'C5', D, .20); q(T, 'E5', D, .17); q(T, 'G5', D, .13);
+    return n;
+  }
+  function stimmeTrompete(c, ziel, t, f, d, v) {
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 1.1;
+    // Anblasen: Filter oeffnet sich in 70 ms, dann bleibt er; hohe Toene bekommen mehr Luft.
+    const auf = Math.min(4200, 900 + f * 4);
+    lp.frequency.setValueAtTime(500, t);
+    lp.frequency.exponentialRampToValueAtTime(auf, t + .07);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(700, auf * .55), t + d);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .035);
+    g.gain.setValueAtTime(v, t + Math.max(.04, d - .09));
+    g.gain.exponentialRampToValueAtTime(.0008, t + d);
+    lp.connect(g).connect(ziel);
+    for (const cent of [-7, 7]) {
+      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = cent;
+      // Vibrato erst nach dem Anblasen, nur auf langen Toenen
+      if (d > .3) {
+        const lfo = c.createOscillator(), lg = c.createGain();
+        lfo.frequency.value = 5.2; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(f * .006, t + d * .7);
+        lfo.connect(lg).connect(o.frequency); lfo.start(t); lfo.stop(t + d + .05);
+      }
+      o.connect(lp); o.start(t); o.stop(t + d + .05);
+    }
+  }
+  function nachhallTrompete(c, ausgang) {
+    // zwei Echos wie eine Halle: 120 ms und 230 ms, schwacher als das Direkte
+    const eing = c.createGain();
+    eing.connect(ausgang);
+    for (const [dz, pegel] of [[.12, .30], [.23, .16]]) {
+      const dl = c.createDelay(1); dl.delayTime.value = dz;
+      const gg = c.createGain(); gg.gain.value = pegel;
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
+      eing.connect(dl).connect(lp).connect(gg).connect(ausgang);
+    }
+    return eing;
+  }
+
+  // ---- 2: ARCADE-JINGLE -------------------------------------------------------------------
+  // "Stage clear" wie auf einem Spielautomaten: Pulswelle mit 25 % Tastverhaeltnis (der
+  // typische schnarrende 8-Bit-Klang), Dreiklangslaeufe, die jeweils eine Stufe hoeher
+  // anfangen (C - F - G), dann ein Treffer mit Bass und Dreieck-Welle. Kuerzer und
+  // lebhafter als die Trompete.
+  function partiturArcade() {
+    const n = [], q = (t, name, d, v) => n.push([t, hz(name), d, v || .13]);
+    const s = .065;                                    // Sechzehntel
+    const lauf = (t, a, b, c, dd) => {
+      q(t, a, .07); q(t + s, b, .07); q(t + 2 * s, c, .07); q(t + 3 * s, dd, .11, .15);
+    };
+    lauf(0.00, 'C5', 'E5', 'G5', 'C6');
+    lauf(0.30, 'F5', 'A5', 'C6', 'F6');
+    lauf(0.60, 'G5', 'B5', 'D6', 'G6');
+    // Pause, dann der Treffer: Akkord C-Dur ueber zwei Oktaven, kurz angestossen und gehalten
+    const T = 0.98;
+    q(T, 'C4', 1.10, .15); q(T, 'E5', 1.10, .13); q(T, 'G5', 1.10, .13); q(T, 'C6', 1.10, .13);
+    q(T + .03, 'C7', .10, .09);                        // Glitzern oben drauf
+    q(T + .16, 'E7', .10, .07);
+    q(T + .29, 'G7', .20, .07);
+    // Bass auf Dreieck: C2 darunter (extra gekennzeichnet in der Stimme ueber f < 100)
+    q(T, 'C2', 1.20, .26);
+    return n;
+  }
+  let pulsWelle = null;
+  function stimmeArcade(c, ziel, t, f, d, v) {
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .004);
+    g.gain.setValueAtTime(v, t + Math.min(d * .5, .12));
+    g.gain.exponentialRampToValueAtTime(.0008, t + d);
+    const o = c.createOscillator();
+    if (f < 120) {                                     // Bass: Dreieck
+      o.type = 'triangle';
+    } else {                                           // Lead: 25 %-Puls
+      if (!pulsWelle) {
+        const N = 32, re = new Float32Array(N), im = new Float32Array(N);
+        // Fourierreihe einer Pulswelle mit Tastverhaeltnis 25 %: Cosinus-Glieder 2/(k*pi) * sin(k*pi*d)
+        for (let k = 1; k < N; k++) re[k] = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * .25);
+        pulsWelle = c.createPeriodicWave(re, im);
+      }
+      o.setPeriodicWave(pulsWelle);
+    }
+    o.frequency.value = f;
+    o.connect(g).connect(ziel); o.start(t); o.stop(t + d + .02);
+  }
+
+  // ---- Wiedergabe -------------------------------------------------------------------------
+  const VARIANTEN = [
+    { id: 'aktuell', titel: 'Aktuell: Rundenzähler', neu: false, partitur: partiturAktuell, stimme: stimmeZaehler,
+      filter: 2400, text: '<b>du-di-di · du-di-di · du-di-di-di-di · dueue · dumm · daaaa</b> – gefiltertes Rechteck wie ein Piezosummer. Lang (rund 5 s) und ohne Aufbau; wer es nicht kennt, hört darin keinen Sieg, sondern einen Zähler.' },
+    { id: 'trompete', titel: 'Vorschlag 1: Trompeten-Fanfare', neu: true, partitur: partiturTrompete, stimme: stimmeTrompete,
+      filter: null, pegel: .33, nachhall: nachhallTrompete, text: '<b>ta-ta-ta TAAA · ta-ta-ta TAAAAA</b> – klassische Siegesfanfare in C-Dur, Blechsound aus zwei leicht verstimmten Sägezähnen mit öffnendem Filter, Vibrato auf den langen Tönen, Halle dahinter. Etwa 3 s; passt zu Zielflagge, Derby- und Knockout-Sieg gleichermaßen.' },
+    { id: 'arcade', titel: 'Vorschlag 2: Arcade-Jingle', neu: true, partitur: partiturArcade, stimme: stimmeArcade,
+      filter: null, pegel: .4, text: '<b>Stage clear</b> – 8-Bit-Pulswelle, drei aufsteigende Dreiklangsläufe (C – F – G), dann ein Akkordtreffer mit Dreieck-Bass und Glitzern obendrauf. Etwa 2,2 s, knackig und passend zur Retro-Anmutung des Rundenzählers.' },
+  ];
+
+  function dauer(n) { return Math.max(...n.map((x) => x[0] + x[2])); }
+
+  function spielen(v, c, ziel, t0) {
+    const n = v.partitur();
+    let aus = ziel;
+    if (v.filter) {
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = v.filter; lp.Q.value = .7;
+      lp.connect(ziel); aus = lp;
+    }
+    if (v.nachhall) aus = v.nachhall(c, aus);
+    // gleiche Lautheit wie die aktuelle Fanfare (Spitze ~0,2), sonst gewinnt im Vergleich der Lautere
+    for (const [t, f, d, g] of n) v.stimme(c, aus, t0 + t, f, d, g * (v.pegel || 1));
+    return dauer(n);
+  }
+
+  function pegel(c) {
+    const m = c.createGain(); m.gain.value = parseFloat($('vol').value);
+    const k = c.createDynamicsCompressor();            // damit ein Akkord nicht uebersteuert
+    k.threshold.value = -14; k.ratio.value = 6;
+    m.connect(k).connect(c.destination);
+    return m;
+  }
+
+  function stopp() {
+    if (laufend) { try { laufend.close(); } catch (e) {} laufend = null; }
+    document.querySelectorAll('button.spielt').forEach((b) => { b.classList.remove('spielt'); b.textContent = b.dataset.text; });
+    $('status').textContent = '';
+  }
+
+  function abspielen(liste, knopf) {
+    stopp();
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    laufend = ctx;
+    const ziel = pegel(ctx);
+    let t = ctx.currentTime + .1;
+    liste.forEach((v) => { t += spielen(v, ctx, ziel, t) + 1.0; });
+    const ende = t - ctx.currentTime;
+    if (knopf) { knopf.classList.add('spielt'); knopf.textContent = '■ Stopp'; }
+    $('status').textContent = liste.length > 1 ? 'spielt alle drei …' : '';
+    setTimeout(() => { if (laufend === ctx) stopp(); }, ende * 1000);
+  }
+
+  // ---- Klaviatur-Skizze: eine Zeile je Variante, damit man die Form sieht ------------------
+  function zeichnen(cv, n) {
+    const w = cv.width = cv.clientWidth * 2, h = cv.height = 148;
+    const x = cv.getContext('2d'); x.clearRect(0, 0, w, h);
+    const D = dauer(n), lo = Math.log2(Math.min(...n.map((q) => q[1]))), hi = Math.log2(Math.max(...n.map((q) => q[1])));
+    x.fillStyle = '#5aa9ff';
+    for (const [t, f, d, v] of n) {
+      const px = 8 + (t / D) * (w - 16), pw = Math.max(4, (d / D) * (w - 16));
+      const py = h - 14 - ((Math.log2(f) - lo) / (hi - lo || 1)) * (h - 28);
+      x.globalAlpha = .45 + v * 2;
+      x.fillRect(px, py - 4, Math.min(pw, w - px - 4), 8);
+    }
+  }
+
+  const wurzel = $('karten');
+  VARIANTEN.forEach((v) => {
+    const k = document.createElement('div'); k.className = 'karte' + (v.neu ? ' neu' : '');
+    const dz = dauer(v.partitur()).toFixed(1).replace('.', ',');
+    k.innerHTML = `<div class="kopf"><h2>${v.titel}</h2><span class="marke ${v.neu ? 'neu' : ''}">${v.neu ? 'neu' : 'aktuell'} · ${dz} s</span><button>▶ Abspielen</button></div><p>${v.text}</p><canvas></canvas>`;
+    wurzel.appendChild(k);
+    const b = k.querySelector('button'); b.dataset.text = b.textContent;
+    b.addEventListener('click', () => { if (b.classList.contains('spielt')) stopp(); else abspielen([v], b); });
+    requestAnimationFrame(() => zeichnen(k.querySelector('canvas'), v.partitur()));
+  });
+  $('alle').addEventListener('click', () => abspielen(VARIANTEN, null));
+  window.addEventListener('resize', () => document.querySelectorAll('canvas').forEach((cv, i) => zeichnen(cv, VARIANTEN[i].partitur())));
+
+  // Fuer die Pruefung ohne Ohr (Spitzenpegel, Dauer): offline rendern.
+  window.FANFARE_PROBE = async function () {
+    const aus = {};
+    for (const v of VARIANTEN) {
+      const n = v.partitur(), len = dauer(n) + 1.5;
+      const oc = new OfflineAudioContext(1, Math.ceil(44100 * len), 44100);
+      const m = oc.createGain(); m.gain.value = .7; m.connect(oc.destination);
+      spielen(v, oc, m, 0.05);
+      const buf = await oc.startRendering(), d = buf.getChannelData(0);
+      let pk = 0; for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+      aus[v.id] = { dauer: +dauer(n).toFixed(2), noten: n.length, spitze: +pk.toFixed(2) };
+    }
+    return aus;
+  };
+})();
+</script>
+</body>
+</html>

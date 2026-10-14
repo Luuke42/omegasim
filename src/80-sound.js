@@ -1440,6 +1440,15 @@
     if (!sampleEngine.ready && !sampleEngine.loading && typeof loadEngineSamples === 'function') loadEngineSamples();
     return null;
   }
+  // v1.0.30 BESTELLT: "Wenn das Rennen beendet wird, stoppe auch die Ghost-Sounds." Alle
+  // NPC-Stimmen aus, auch bei denen, die noch ihre Auslaufrunde fahren oder abstellen.
+  function ghostStimmenRennende() {
+    for (const c of garage) {
+      if (!c.ghost || c.ghost.nurOrt) continue;
+      c.ghost.stumm = true;
+      ghostStimmeStoppen(c);
+    }
+  }
   function ghostStimmeStoppen(car) {
     if (!audioCtx || !car.ghost || !car.ghost.stimme) return;
     const st = car.ghost.stimme;
@@ -1450,6 +1459,9 @@
   }
   function updateGhostSound(car) {
     if (!ghostSound || !soundEnabled || !audioCtx || !car.ghost || !car.ghost.stimme) return;
+    // v1.0.30: nach dem Rennende stumm (ghostStimmenRennende), bis startGhost einen neuen
+    // Zustand anlegt.
+    if (car.ghost.stumm) return;
     // v0.9.64: ein je Auto abgeschalteter Ghost soll auch still sein.
     if (car.ghostSound === false) { ghostStimmeStoppen(car); return; }
     const st = car.ghost.stimme;

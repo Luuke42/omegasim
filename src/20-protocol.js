@@ -262,8 +262,17 @@
     // Hoechstgeschwindigkeit bremste das Auto mit einem Fuenftel. Das ist nicht, was ein
     // Regler namens "Geschwindigkeit" verspricht, und es fuehlte sich an, als stimme mit
     // ihm etwas nicht - was es auch tat, nur nicht in der Richtung.
-    if (throttle > 0) throttle *= topSpeedScale;
-    throttle *= batteryCompensationScale();
+    // v1.0.25 GEMELDET: "Spieler-1-Auto faehrt bei gelber Flagge schneller als die NPCs,
+    // sollte aber genauso schnell fahren." Jedes Fahrgefuehl setzt diesen Faktor (1,1 bis
+    // 1,8), und er lag auch auf dem Gas, das der Autopilot gerechnet hat - die NPCs bekommen
+    // ihn nicht. Faehrt der Autopilot (Gelb, Einfuehrungsrunde, Aufstellung, Scan), geht das
+    // Gas also ungestreckt hinaus, wie bei einem NPC.
+    const apFaehrt = overrideThrottle !== undefined && typeof autopilotGreiftFuer === 'function'
+      && autopilotGreiftFuer(1);
+    if (throttle > 0 && !apFaehrt) throttle *= topSpeedScale;
+    // v1.0.28: unter Autopilot auch ohne Akku-Ausgleich - den haben die NPCs nicht, und er nimmt
+    // bei vollem Akku Gas weg (GEMELDET: "bei gelber Flagge ist mein Auto langsamer als der NPC").
+    if (!apFaehrt) throttle *= batteryCompensationScale();
     // NUR den Verbrauch zaehlen. Die Drosselung sitzt in physicsStep(), also vor der
     // Physik - sonst zeigt der Tacho die Simulation und das Auto bekommt weniger.
     fuelTankTick(throttle);
@@ -387,6 +396,9 @@
   // Datei, die ihn braucht, kann das nicht passieren.
   let ghostQuerTest = 0;
   let physOutSteer = 0, physOutThrottle = 0;
+  // v1.0.25: true, wenn physicsStep() diesen Takt NUR fuer den Autopiloten gerechnet hat
+  // (Steuerungsmodus "Aus", z. B. Fahrgefuehl RC, unter Gelb oder beim Scan).
+  let physApTakt = false;
   // Und dasselbe Paar fuer Spieler 2. Es steht neben dem ersten, weil es dieselbe Rolle
   // hat: der geformte Ausgang der Physik, den der Herzschlag verschickt.
   let physOut2Steer = 0, physOut2Throttle = 0, physOut2Brake = false;
@@ -490,10 +502,13 @@
       }
       physicsStep();
       pitLaneTick();
-      let steer = physicsEnabled ? physOutSteer : steerX;
+      // v1.0.25: im Modus "Aus" (RC) rechnet physicsStep() nur, wenn der Autopilot faehrt -
+      // dann gilt dessen Ausgabe (physApTakt), sonst der rohe Stick.
+      const physJetzt = physicsEnabled || physApTakt;
+      let steer = physJetzt ? physOutSteer : steerX;
       // v0.10.5: der Rohmodus heisst jetzt RC und laeuft durch rcGas() (Auslaufen, Bremse,
       // Rueckwaerts nach zweitem Druck). Drift gibt es nicht mehr.
-      let throttle = physicsEnabled ? physOutThrottle : rcGas(throttleY);
+      let throttle = physJetzt ? physOutThrottle : rcGas(throttleY);
       if (driftModus) steer = driftGegenlenken(steer);
       sendControlValue(steer, throttle);
       spielerZweiSenden();
@@ -540,8 +555,10 @@
   function spielerSendenVon(z) {
     if (!z.car) return;
     physicsStepVon(z);
-    let steer = physicsEnabled ? z.outSteer : z.steer;
-    let throttle = physicsEnabled ? z.outThrottle : z.throttle;
+    // v1.0.25: auch im Modus "Aus" (RC) die Physik-Ausgabe, solange der Autopilot faehrt.
+    const physJetzt = physicsEnabled || !!z.apTakt;
+    let steer = physJetzt ? z.outSteer : z.steer;
+    let throttle = physJetzt ? z.outThrottle : z.throttle;
     // ---- DIE ZWEI GLOBALEN, DIE NICHT IN config STEHEN -----------------------------
     //
     // BESTELLT: "Globale einstellungen gelten für beide autos gleichermaßen."
@@ -559,8 +576,9 @@
     //                             eine gemeinsame Naeherung ist hier besser als gar keine -
     //                             zwei Autos mit verschieden kompensierten Akkus waeren im
     //                             Rennen ungleich schnell, ohne dass man den Grund sieht.
-    if (throttle > 0) throttle *= topSpeedScale;
-    throttle *= batteryCompensationScale();
+    // Unter Autopilot ungestreckt, wie bei Auto 1 (sendControlValue).
+    if (throttle > 0 && !(typeof autopilotGreiftFuer === 'function' && autopilotGreiftFuer(z.nr))) throttle *= topSpeedScale;
+    if (!(typeof autopilotGreiftFuer === 'function' && autopilotGreiftFuer(z.nr))) throttle *= batteryCompensationScale();
     // Kein Drift-Gegenlenken fuer Auto 2 (v0.9.15): driftGegenlenken liest den Kreisel und das
     // Tempo von AUTO 1 - fuer Auto 2 lenkte es also nach den Daten des falschen Autos.
     // ---- MIT VORAUSBLICK, seit v0.6.46 ---------------------------------------------

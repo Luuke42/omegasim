@@ -2657,6 +2657,33 @@
   const SCAN_TEMPO = 0.6, SCAN_TEMPO_HAARNADEL = 0.4;
   const scanStopp = { car: null, bis: 0 };
   function scanAnhalten(car) { if (car) { scanStopp.car = car; scanStopp.bis = Date.now() + 1500; } }
+  // ---- GREIFT DER AUTOPILOT GERADE? (v1.0.25) --------------------------------------
+  //
+  // GEMELDET: "Streckenscan: das Spielerauto faehrt einfach geradeaus" und "Meine
+  // Geschwindigkeit, wenn das Safety Car aktiviert ist, ist viel zu gross." Gemeinsame
+  // Ursache: autopilot() wird aus physicsStep() gerufen, und die steigt im Steuerungsmodus
+  // "Aus" sofort aus - den setzt das neue Fahrgefuehl RC (v1.0.22). Mit RC gab es also weder
+  // Scan noch Aufstellung noch Gelb-Tempo; das Auto fuhr den rohen Stick.
+  //
+  // Diese Frage beantwortet dieselben Bedingungen wie autopilot(), ohne dessen Regler
+  // anzufassen. Ist sie wahr, rechnet physicsStep() auch im Modus "Aus" einen Takt, und der
+  // Sendeweg nimmt dessen Ausgabe.
+  // Startwert des Modells, wenn es im Modus "Aus" fuer den Autopiloten einsteigt: das Tempo,
+  // das der rohe Stick gerade verlangt (bei RC ist das Gas der Tempoanteil).
+  function apEinstieg(motor, gas) {
+    const st = motor.state, v = Math.max(0, Math.min(1, gas || 0)) * motor.config.topSpeedKmh;
+    st.speedKmh = v;
+    if ('virtualSpeed' in st) st.virtualSpeed = v;
+  }
+  function autopilotGreiftFuer(wer) {
+    const zPl = wer >= 2 ? zusatzPlatz(wer) : null;
+    const car = zPl ? zPl.car : playerCar;
+    if (!car) return false;
+    if (scanStopp.car === car && Date.now() < scanStopp.bis) return true;
+    if (typeof garageScan !== 'undefined' && garageScan.aktiv && garageScan.car === car) return true;
+    if (trackMode === 'on' && typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(car)) return true;
+    return !!autopilotGrund();
+  }
   function autopilot(fahrerBremse, wer) {
     const zPl = wer >= 2 ? zusatzPlatz(wer) : null;
     const zwei = !!zPl;
@@ -2706,17 +2733,41 @@
     // Automatische Aufstellung (v0.9.24, 90-ghosts.js): zum Startplatz, dort halten.
     // v0.9.87: nur auf der Bahn - im Ausdruck-Modus wuerde die Querlage als Radwinkel gelesen.
     if (trackMode === 'on' && typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(meinAuto)) {
-      if (aufstellenSpielerAngekommen(meinAuto)) {
-        return { grund: 'aufstellen', throttle: 0, brake: 1, steer: 0, lenkt: false };
-      }
-      const vA = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
-      const dtS = Math.max(0.01, Math.min(0.25, (Date.now() - (regler.at || Date.now())) / 1000));
-      regler.at = Date.now();
-      const g = ghostSpeedControl(regler, formationPace(), vA, dtS);
       // v0.9.58 (D6): mit Spur-Bytes - dieselbe Querlage wie die Ghosts, in maximaler
       // Breite, damit das Auto von selbst auf die Seite seines Startplatzes faellt.
       const lenk = typeof formationDriverOffset === 'function'
         ? formationDriverOffset(meinAuto, aufstellenSpielerBreite(meinAuto)) : 0;
+      // v1.0.31: gestaffelter Start der Aufstellung - bis zu seinem Zeitpunkt steht das Auto.
+      const aA = aufstellenSpielerZiel(meinAuto);
+      if (aA && aA.ab && Date.now() < aA.ab) {
+        return { grund: 'aufstellen', throttle: 0, brake: fahrerBremse > 0.05 ? fahrerBremse : 1, steer: 0, lenkt: false };
+      }
+      // v1.0.28: angekommen erst langsam auf der Seite weiter, damit das Auto gerade steht
+      // (aufstellenSpielerAusrichten, 90-ghosts.js), dann halten.
+      if (aufstellenSpielerAngekommen(meinAuto) && typeof aufstellenSpielerAusrichten === 'function'
+          && aufstellenSpielerAusrichten(meinAuto)) {
+        const platzR = typeof gridPosOf === 'function' ? gridPosOf(meinAuto) : -1;
+        const seiteR = platzR >= 0 ? (platzR % 2 ? -1 : 1) * GHOST_GRID_MAX : lenk;
+        const vR = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
+        const dtR = Math.max(0.01, Math.min(0.25, (Date.now() - (regler.at || Date.now())) / 1000));
+        regler.at = Date.now();
+        const gR = ghostSpeedControl(regler, formationPace() * AUFSTELL_GERADE_TEMPO, vR, dtR);
+        return { grund: 'aufstellen', throttle: gR.throttle, brake: gR.brake, steer: seiteR, lenkt: !abseitsJetztFuer(wer || 1) };
+      }
+      if (aufstellenSpielerAngekommen(meinAuto)) {
+        // v1.0.25 GEMELDET: "die Querlage beim Stehenbleiben passt nicht." Hier stand
+        // steer 0 und lenkt false: im Bremsen kam der Stick des Fahrers (meist 0 = Mitte)
+        // als Querlage an, und das Auto rollte zur Bahnmitte. Die Seite bleibt bis zum Stand.
+        // Ohne das Schlaengeln: nur die Seite des Startplatzes, wie beim NPC (aufstellenPruefen).
+        const platzA = typeof gridPosOf === 'function' ? gridPosOf(meinAuto) : -1;
+        const seiteA = platzA >= 0 ? (platzA % 2 ? -1 : 1) * GHOST_GRID_MAX : lenk;
+        return { grund: 'aufstellen', throttle: 0, brake: 1, steer: seiteA, lenkt: !abseitsJetztFuer(wer || 1) };
+      }
+      const vA = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
+      const dtS = Math.max(0.01, Math.min(0.25, (Date.now() - (regler.at || Date.now())) / 1000));
+      regler.at = Date.now();
+      // v1.0.25: mit Kurven- und Haarnadeldrosselung wie die NPCs (aufstellTempo, 90-ghosts.js).
+      const g = ghostSpeedControl(regler, typeof aufstellTempo === 'function' ? aufstellTempo(meinAuto) : formationPace(), vA, dtS);
       if (fahrerBremse > 0.05) return { grund: 'aufstellen', throttle: 0, brake: fahrerBremse, steer: lenk, lenkt: false };
       return { grund: 'aufstellen', throttle: g.throttle, brake: g.brake, steer: lenk,
                lenkt: !abseitsJetztFuer(wer || 1) };
@@ -2757,7 +2808,9 @@
     // v1.0.12: unter Gelb mit Safety Car erst ~45 % zum Aufschliessen (gelbZielFuer).
     const ziel = (grund === 'formation' ? formationPace()
       : (typeof gelbZielFuer === 'function' ? gelbZielFuer(meinAuto) : Math.max(yellowFactor(), GHOST_READ_MIN)))
-      * autopilotKurvenFaktor(meinAuto);
+      * autopilotKurvenFaktor(meinAuto)
+      // v1.0.28: unter Gelb Abstand zum Vordermann, wie die NPCs (gelbAbstandFaktor).
+      * (grund === 'yellow' && typeof gelbAbstandFaktor === 'function' ? gelbAbstandFaktor(meinAuto) : 1);
     const v = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
     const dtA = Math.max(0.01, Math.min(0.25,
       (Date.now() - (regler.at || Date.now())) / 1000));
@@ -2779,7 +2832,9 @@
              // Der Kolonnenversatz SEINES Autos: er haengt am Startplatz
              // (gridPosOf) und an einer eigenen Schlaengelphase - zwei Autos in
              // einer Zweierkolonne sollen nicht auf derselben Spur rollen.
-             steer: grund === 'formation' && typeof formationDriverOffset === 'function'
+             // v1.0.32: am geparkten Safety Car links vorbei (scVorbeiQuer, 90-ghosts.js).
+             steer: (typeof scVorbeiQuer === 'function' && scVorbeiQuer(meinAuto) !== null) ? scVorbeiQuer(meinAuto)
+               : grund === 'formation' && typeof formationDriverOffset === 'function'
                ? formationDriverOffset(meinAuto) : 0,
              // ---- OB ER UEBERHAUPT LENKEN DARF -------------------------------------
              //
@@ -2974,7 +3029,15 @@
   let fuelCut = 1;
 
   function physicsStep() {
-    if (!physicsEnabled) { physLastTime = null; return; }
+    // v1.0.25: im Modus "Aus" (Fahrgefuehl RC) nur dann rechnen, wenn der Autopilot faehrt -
+    // siehe autopilotGreiftFuer(). Beim Einstieg steht das Modell noch auf dem Tempo von
+    // vorher; es bekommt deshalb das, was der Stick gerade verlangt, als Startwert.
+    physApTakt = false;
+    if (!physicsEnabled) {
+      if (!autopilotGreiftFuer(1)) { physLastTime = null; return; }
+      physApTakt = true;
+      if (physLastTime === null) apEinstieg(physEngine, typeof rcLage !== "undefined" ? rcLage.wert : throttleY);
+    }
     const now = performance.now();
     const dt = physLastTime ? Math.min(0.25, (now - physLastTime) / 1000) : CONTROL_SEND_INTERVAL_MS / 1000;
     physLastTime = now;
@@ -3096,7 +3159,12 @@
   // Was er HAT: eine eigene Physikinstanz, also eigene Gaenge, eigene Drehzahl, eigenes
   // Tempo, eigene Reifen- und Bremsentemperatur - alles, was den Wagen fahren laesst.
   function physicsStepVon(z) {
-    if (!physicsEnabled) { z.lastTime = null; return; }
+    z.apTakt = false;
+    if (!physicsEnabled) {
+      if (!autopilotGreiftFuer(z.nr)) { z.lastTime = null; return; }
+      z.apTakt = true;
+      if (z.lastTime === null) apEinstieg(z.motor, Math.max(0, z.throttle || 0));
+    }
     const now = performance.now();
     const dt = z.lastTime ? Math.min(0.25, (now - z.lastTime) / 1000)
                              : CONTROL_SEND_INTERVAL_MS / 1000;

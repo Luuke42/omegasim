@@ -3584,6 +3584,9 @@
     border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px;
     background: var(--panel); }
   .grid-row.dragging { opacity: .45; }
+  /* v1.0.27/28: wo der Startplatz liegt; das Safety Car steht abgesetzt unter der Liste. */
+  .grid-wo { color: var(--muted); font-size: .85em; margin-left: 6px; font-weight: 400; }
+  .grid-row.grid-sc { margin-top: 10px; border-style: dashed; opacity: .9; }
   .grid-row.over { border-color: var(--accent); border-style: dashed; }
   /* ---- AUTOS IN POSITION: Deckfenster vor dem Countdown -------------------------- */
   .gt3-gridschirm { position: absolute; inset: 0; z-index: 10; display: flex;
@@ -4673,7 +4676,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.0.24</span></span>
+        <span class="foot-ver">v<span id="app-version">1.0.36</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -5803,6 +5806,34 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>1.0</span></b></p>
       <ul class="muted" id="patchnotes-10" style="padding-left:20px; line-height:1.7">
+        <li>Neues Fahrgef&#252;hl Omega (nach Pacejka): die Pro-Abstimmung, wie sie in v0.9 war, Wert f&#252;r Wert &#8211; und eingefroren. Wird Pro k&#252;nftig angepasst, bleibt Omega gleich; ein Selbsttest wacht dar&#252;ber. Die Anzeige zeigt bei gleichen Werten das zuletzt gew&#228;hlte Fahrgef&#252;hl.</li>
+        <li>Rundenzeiten: F&#228;hrst du aus der Startaufstellung vor der Linie los, z&#228;hlt die erste &#220;berfahrt nicht mehr als Runde (vorher gab es Runden von 1 bis 2 s) &#8211; Runde 1 beginnt an der Linie. Erkannt an den gefahrenen Kacheln (weniger als eine halbe Strecke = Anlauf); wer hinter der Linie startet, bekommt seine erste volle Runde wie bisher.</li>
+        <li>Safety Car (WIP): Autos, die zu ihrem Startplatz fahren, werden nicht mehr links am geparkten Safety Car vorbeigeschickt &#8211; die erste Startreihe steht direkt vor Start/Ziel, und ihr rechtes Auto wurde sonst auf die falsche Seite gezwungen.</li>
+        <li>Nach Rennende (WIP): Die NPCs fahren nach dem Zieleinlauf im Aufstelltempo eine Runde zur&#252;ck in die Startaufstellung &#8211; in der Reihenfolge des Zieleinlaufs, die vorderen Pl&#228;tze bleiben f&#252;r die Fahrerautos frei. Dort stehen sie auf ihrer Seite und blinken. Ohne eingescannte Strecke (Ausdruck-Modus) rollen sie wie bisher aus.</li>
+        <li>Neue Option Einparken: Lenkimpuls (WIP, Renneinstellungen): wie viele Millisekunden ein Auto beim Einparken zuletzt mit vollem Einschlag zu seiner Seite lenkt und danach gleich lange zur&#252;ck &#8211; zum Kalibrieren, dass die Autos am Rand stehen, ohne von der Bahn zu fahren. Gilt f&#252;r die Startaufstellung vor und nach dem Rennen und das Safety Car; 0 = kein Impuls, Vorgabe 10 ms.</li>
+        <li>Gelbe Flagge: Alle Autos fahren 15 % schneller als bisher (knapp &#252;ber der Lesegrenze statt genau darauf), und dicht hinter dem Vordermann wird nur noch auf 70 % statt 55 % gedrosselt &#8211; damit niemand mehr verhungert und stehen bleibt.</li>
+        <li>Safety Car (WIP): Beim Abstellen lenkt es nur noch kurz nach rechts (ein Befehl, rund 10 ms) und gleich lang zur&#252;ck nach links, dann h&#228;lt es mit geraden R&#228;dern. Solange es an Start/Ziel steht oder abstellt, fahren alle anderen Autos auf der Kachel davor, auf Start/Ziel und der Folgeschiene mit Querlage links daran vorbei.</li>
+        <li>NPCs nebeneinander (WIP): Liegen zwei Autos h&#246;chstens eine Kachel auseinander, fahren sie als Paar links und rechts statt beide auf der Ideallinie &#8211; die Seite ersetzt jetzt die Linie, statt nur ein kleiner Zuschlag zu sein. Wer gerade weiter links liegt, bleibt links; in Kurven darf der &#196;u&#223;ere etwas nach innen. Ein drittes Auto und alle in der Haarnadel fahren hintereinander mit etwa einer Kachel Abstand. Dein Auto z&#228;hlt als Partner mit.</li>
+        <li>Automatische Aufstellung: Die Autos fahren jetzt nacheinander in der Reihenfolge der Startaufstellung los, je 1 s versetzt; bis dahin stehen sie.</li>
+        <li>Safety Car (WIP): Es f&#228;hrt unter Gelb etwas langsamer als das Feld (85 % des Gelb-Tempos) und h&#228;lt selbst Abstand zum Vordermann, statt aufzufahren. Wer vor ihm liegt, f&#228;hrt davon, kommt von hinten wieder heran und reiht sich dahinter ein.</li>
+        <li>Rennende: Die Motorger&#228;usche der NPCs verstummen sofort, auch w&#228;hrend der Auslaufrunde.</li>
+        <li>Automatische Aufstellung: Ein NPC, der seit dem letzten Start dazukam (sp&#228;ter verbunden oder Rolle gewechselt, etwa vom Safety Car), bekam keinen Startplatz und blieb stehen &#8211; behoben. Ob ein Auto schon auf seinem Platz steht, wird nur noch aus einer frischen Ortung geschlossen.</li>
+        <li>Safety Car (WIP): Zum Abstellen rollt es zuletzt mit nach rechts eingeschlagenen R&#228;dern an den Rand und h&#228;lt so &#8211; weiter rechts, als die Querlage allein erlaubt.</li>
+        <li>Challenger und NPC zusammengelegt (WIP): Die Garagenrolle &#8222;Challenger&#8220; gibt es nicht mehr. In Time Attack auf der Bahn fahren jetzt alle NPCs als Challenger (gegen deine Bestzeit, gegen den Rekord oder Gummiband, in den Renneinstellungen und am Startschirm w&#228;hlbar); im Gummiband h&#228;lt sich jeder NPC eine Kachel versetzt an dir. In allen anderen Modi fahren NPCs wie bisher.</li>
+        <li>Telemetrie (WIP): Gespeichert werden jetzt alle gewerteten Runden der letzten Fahrt auf einer Strecke, nicht nur die letzte und die beste. A und B lassen sich aus diesen Runden und der besten aller Fahrten w&#228;hlen; ist die letzte Runde zugleich die beste, zeigt A die davor.</li>
+        <li>Gelbe Flagge: Unter Gelb halten NPCs und dein Auto jetzt Abstand zum Vordermann (ab 1,5 Kacheln langsamer, dicht dahinter etwa halbes Gelb-Tempo) &#8211; kein Anschieben und kein &#220;berholen hinter dem Safety Car mehr. Dein Auto bekommt unter Autopilot au&#223;erdem keinen Akku-Ausgleich mehr, der es bei vollem Akku langsamer als die NPCs machte.</li>
+        <li>Safety Car (WIP): Es zieht schon zwei Kacheln vor Start/Ziel ganz nach rechts und h&#228;lt an der Linie, statt erst dahinter mitten auf der Bahn. In der Startaufstellung ist es kein Startplatz mehr, sondern steht separat unter der Liste.</li>
+        <li>Startaufstellung: Die Autos fahren nach dem Erreichen der Seite noch eine halbe Sekunde langsam weiter, damit sie gerade stehen und nicht schr&#228;g. Kurven und Haarnadeln wieder etwas schneller (90 % bzw. 80 % des Formationstempos), damit kein Auto den Kontakt zur Bahn verliert.</li>
+        <li>Streckenscan: Das Spielerauto fuhr geradeaus statt &#252;ber die Bahn, sobald schon eine Strecke im Editor lag (die Spur-Bytes des Scans wurden im selben Takt wieder gel&#246;scht) &#8211; behoben. Mit dem Fahrgef&#252;hl RC griff au&#223;erdem der Autopilot gar nicht: kein Scan, keine Aufstellung, kein Gelb-Tempo. Jetzt rechnet er auch dort, solange er f&#228;hrt.</li>
+        <li>Gelbe Flagge: Dein Auto f&#228;hrt jetzt genauso schnell wie die NPCs. Vorher lag der Tempofaktor des Fahrgef&#252;hls (1,1 bis 1,8) auch auf dem Autopiloten.</li>
+        <li>Safety Car (WIP): Nach der gelben Phase f&#228;hrt es die letzten 2 s ganz rechts am Rand und h&#228;lt dort statt mitten auf der Bahn; geparkt ist das Licht aus. Nach einem Rempler startet es nach 1,5 s selbst neu, statt stehen zu bleiben. Boxenstopps fahren ebenfalls 2 s statt 1 s am Rand, bevor sie bremsen.</li>
+        <li>Startaufstellung: In Kurven und Haarnadeln deutlich langsamer (dieselben Anteile wie beim Streckenscan, mit Vorausblick), damit niemand mehr aus der Haarnadel fliegt. Beim Anhalten bleibt die Seite des Startplatzes stehen, statt zur Mitte zu rollen. Der Startschirm zeigt je Auto Reihe und Seite.</li>
+        <li>Challenger Gummiband (WIP): reagierte nach der ersten Runde nicht mehr auf dich, weil die Ortung deines Autos keine Runden z&#228;hlt &#8211; behoben. Es z&#228;hlt jetzt nur der Abstand auf der Runde, auch wenn bei dir einmal eine Runde nicht gez&#228;hlt wird.</li>
+        <li>Telemetrie (WIP): Runden wurden verworfen, sobald ein einziges Teil nicht gelesen wurde &#8211; auf der echten Bahn fast immer. Jetzt werden die Lesungen &#252;ber ihre Art der Strecke zugeordnet und fehlende Teile gesch&#228;tzt (mindestens drei Viertel m&#252;ssen passen). Die Telemetrie-Seite zeigt, wie viele Teile gesch&#228;tzt sind.</li>
+        <li>Time Attack (WIP): Am Ende kommt eine Zusammenfassung mit Runden, bester Runde und Medaille, Vergleich mit deiner bisherigen Bestzeit, Schnitt und Streuung, was zur n&#228;chsten Medaille fehlt, und was die Telemetrie aufgezeichnet hat (mit Knopf dorthin). Die Medaillen sind etwas leichter: Gold auf SGR4LGHG ab 7,3 s statt 7,2 s, die &#252;brigen Strecken entsprechend.</li>
+        <li>Meisterschaft: Ein von Hand beendetes Event z&#228;hlt mit 0 Punkten, und es geht beim n&#228;chsten weiter (vorher musste es neu gefahren werden). Die Startreihe des n&#228;chsten Events wird einmal festgelegt und im Zwischenstand mit Reihe und Seite gezeigt &#8211; auch bei Zufall stimmt sie jetzt mit dem Start &#252;berein. Der Startschirm nennt Event und Aufstellungsregel.</li>
+        <li>Fahrgef&#252;hl RC und Safety Car sind als WIP gekennzeichnet.</li>
+        <li>Neue Rennende-Fanfare: ein Arcade-Jingle (&#8222;Stage clear&#8220;) statt des Rundenz&#228;hler-Tons. Drei aufsteigende Dreiklangsl&#228;ufe und ein Akkordtreffer, rund 2 Sekunden statt knapp 5. Gespielt bei Zielflagge, Derby-Sieg und NPC-Knockout-Sieg, wie bisher.</li>
         <li>Titelschirm: Der Schriftzug steht jetzt ruhig &#8211; Cyan &#252;ber, Rot unter jedem Buchstaben, ohne springende Streifen. Der Glitch l&#228;uft nur noch im Omega dahinter.</li>
         <li>Titelschirm: neuer Glitch-Effekt &#8211; die Farbkan&#228;le liegen &#252;ber und unter den Buchstaben statt daneben, und einzelne senkrechte Streifen springen kurz nach oben oder unten. Das Omega im Hintergrund ist deutlicher, rund statt langgezogen, passt auf den Bildschirm und glitcht genauso.</li>
         <li>Neues Fahrgef&#252;hl RC (auch f&#252;r Spielerautos, in FAHREN, Garage, Cockpit und Meisterschaft): wie Arcade, nur viel extremer &#8211; der Stick geht direkt ans Auto wie bei einer Fernsteuerung, Gas weg l&#228;uft aus, zweimal Bremse im Stand f&#228;hrt r&#252;ckw&#228;rts. Der Steuerungsmodus h&#228;ngt jetzt am Fahrgef&#252;hl; die Einstellung Steuerungsmodus und die Pacejka-Regler sind ausgeblendet. NPC-Motor w&#228;hlbar: Vorgabe unter Optionen &#8250; Ton, je NPC in der Garage. Renntypen in der Reihenfolge Training, Time Attack, Qualifying, Runden, Endurance, NPC Knockout, Demolition Derby, Time Attack mit eigenem Kachelbild. Meisterschaft: Event fr&#252;her/sp&#228;ter nur mit &#9650;/&#9660;, L&#246;schen als rote M&#252;lltonne, das Schlie&#223;en-Kreuz steht links und ist gr&#246;&#223;er, die Zur&#252;ck-Taste schlie&#223;t auch. WLAN-Mehrspieler: Android-App zuerst, beide Kacheln gr&#246;&#223;er. Die dunklen Fl&#228;chen zwischen den Kacheln sind durchsichtiger. Lange Motornamen (Holden, Murci&#233;lago) brechen um. Renneinstellungen &#8250; Ergebnisse zeigt vor dem ersten Rennen einen Hinweis.</li>
@@ -8945,18 +8976,30 @@
       <div class="opt-row"><div class="opt-label">Gelbe Flagge deaktivieren<small>An: Der Knopf
           &bdquo;Gelbe Flagge&ldquo; und das Halten der Boxentaste rufen kein Gelb mehr aus.</small></div>
         <label class="tgl"><input type="checkbox" id="race-gelb-aus"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: erst aufschlie&szlig;en<span class="wip-tag">experimentell</span><small>An:
+      <div class="opt-row"><div class="opt-label">Safety Car: erst aufschlie&szlig;en<span class="wip-tag">WIP</span><small>An:
           Unter Gelb mit Safety Car fahren alle mit etwa 45&nbsp;% heran und ab zwei Kacheln Abstand
           mit 35&nbsp;% weiter, in Kurven und Haarnadeln gedrosselt. Aus: alle sofort 35&nbsp;%.
           &Uuml;berholt wird unter Gelb nie.</small></div>
         <label class="tgl"><input type="checkbox" id="race-sc-aufschliessen" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Challenger<span class="wip-tag">experimentell</span><small>Ein
-          Auto mit der Garagenrolle &bdquo;Challenger&ldquo; f&auml;hrt gegen dich, nur auf der Bahn und
-          auch in Time Attack. Gegen meine Bestzeit: es f&auml;hrt deine beste aufgezeichnete Runde
-          dieser Strecke nach. Gegen den Rekord: die Runde der Online-Bestzeit der Challenge oder
-          Community-Strecke. Gummiband: es h&auml;lt sich ungef&auml;hr auf deiner H&ouml;he &ndash; vorn
-          langsamer, hinten schneller. Fehlt die Runde, f&auml;hrt es Gummiband. Auf der Karte zeigt
-          ein wei&szlig;er Punkt, wo die Runde gerade ist.</small></div>
+      <div class="opt-row"><div class="opt-label">Einparken: Lenkimpuls<span class="wip-tag">WIP</span><small>Beim
+          Einparken (Startaufstellung vor und nach dem Rennen, Safety Car) lenkt das Auto zuletzt so
+          viele Millisekunden mit vollem Einschlag zu seiner Seite und danach gleich lange zur&uuml;ck.
+          Damit kalibrierst du, dass die Autos am Rand stehen &ndash; nicht im Weg, aber auch nicht
+          neben der Bahn. 0 = kein Impuls. Ein Befehl dauert mindestens einen Sendetakt (rund
+          45&nbsp;ms).</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="race-einpark-ms" min="0" max="400" step="10" value="10" data-preset-skip>
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="race-einpark-ms-val">10 ms</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Time Attack: NPCs als Challenger<span class="wip-tag">WIP</span><small>In
+          Time Attack auf der Bahn fahren alle NPCs als Challenger gegen dich. Gegen meine Bestzeit:
+          sie fahren deine beste aufgezeichnete Runde dieser Strecke nach, jeder ab seinem Startplatz.
+          Gegen den Rekord: die Runde der Online-Bestzeit der Challenge oder Community-Strecke.
+          Gummiband: sie halten sich ungef&auml;hr auf deiner H&ouml;he &ndash; vorn langsamer, hinten
+          schneller, mehrere NPCs je eine Kachel versetzt. Fehlt die Runde, fahren sie Gummiband. Auf
+          der Karte zeigt ein wei&szlig;er Punkt, wo die Runde gerade ist.</small></div>
         <select id="race-challenger">
           <option value="beste" selected>Gegen meine Bestzeit</option>
           <option value="rekord">Gegen den Rekord</option>

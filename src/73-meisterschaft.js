@@ -36,7 +36,7 @@
     ['letztes', 'Wie letztes Ergebnis'], ['zufall', 'Zufall']];
   const MEISTER_GLOBAL = [
     { id: 'fahrgefuehl', l: 'Fahrgefühl', w: [['garage', 'Wie in der Garage'], ['p1', 'Alle wie Spieler 1'],
-      ['arcade', 'Alle: Arcade'], ['simplus', 'Alle: Sim+'], ['pro', 'Alle: Pro'], ['propacejka', 'Alle: Pacejka'], ['rc', 'Alle: RC']] },
+      ['arcade', 'Alle: Arcade'], ['simplus', 'Alle: Sim+'], ['pro', 'Alle: Pro'], ['propacejka', 'Alle: Pacejka'], ['omega', 'Alle: Omega'], ['rc', 'Alle: RC (WIP)']] },
     { id: 'start1', l: 'Startaufstellung 1. Event', w: [['zufall', 'Zufall'], ['beste_zuletzt', 'Beste zuletzt'],
       ['beste_zuerst', 'Beste zuerst'], ['garage', 'Garagen-Reihenfolge']] },
     { id: 'punkte', l: 'Punkte', w: [['f1', 'F1 · 25-18-15-12-10'], ['klassisch', 'Klassisch · 10-6-4-3-2'],
@@ -255,6 +255,16 @@
     return beste;
   }
   // Die Reihenfolge der LOKALEN Autos (Geraetekennungen) fuer raceGridOrder.
+  // v1.0.25 BESTELLT: "vor dem Start des naechsten Rennens nochmal den Startbildschirm mit
+  // Startaufstellungsknopf und Anzeige, welches Auto wo stehen muesste". Bei Zufall wurde die
+  // Reihe beim Anzeigen und beim Start je neu gewuerfelt - die Anzeige stimmte also nicht.
+  // Jetzt wird sie je Event EINMAL festgelegt (lauf.reihe) und bis zum Start behalten.
+  function meisterStartReiheFest(i) {
+    const lauf = meister.lauf;
+    if (!lauf) return meisterStartReihe(i);
+    if (!lauf.reihe || lauf.reihe.idx !== i) lauf.reihe = { idx: i, ids: meisterStartReihe(i) };
+    return lauf.reihe.ids.slice();
+  }
   function meisterStartReihe(i) {
     const lauf = meister.lauf;
     const autos = garage.filter((c) => c.device && c.role !== 'safetycar' && c.role !== 'challenger' && c.role !== 'none');
@@ -281,6 +291,21 @@
       return mit.map((x) => id(x.c));
     }
     return meisterMischeln(autos.map(id));
+  }
+
+  // Wo ein Startplatz liegt: Reihe 1 auf der Kachel vor Start/Ziel, jede weitere eine dahinter;
+  // gerade Plaetze rechts, ungerade links (wie formationOffset und die automatische Aufstellung).
+  function meisterPlatzText(i) {
+    return t('Reihe {r}').replace('{r}', Math.floor(i / 2) + 1) + ' · ' + (i % 2 ? t('links') : t('rechts'));
+  }
+  // Fuer den Startschirm (raceGridAnzeigen): laeuft ein Meisterschafts-Event, welches.
+  function meisterGridInfo() {
+    const lauf = meister && meister.lauf;
+    if (!lauf || !lauf.laeuft) return '';
+    const ev = meister.plan.events[lauf.laeuft.idx];
+    if (!ev) return '';
+    return t('Meisterschaft') + ' · ' + t('Event') + ' ' + (lauf.laeuft.idx + 1) + '/' + meister.plan.events.length
+      + (meisterIstRennen(ev) ? ' · ' + t('Startaufstellung') + ': ' + meisterAufstText(lauf.laeuft.idx) : '');
   }
 
   // ---- EVENT STARTEN ---------------------------------------------------------------------
@@ -344,7 +369,7 @@
     if (fg !== 'garage' && fg !== 'p1' && typeof applyPreset === 'function') {
       try { applyPreset(fg); } catch (e) { /* bleibt */ }
     }
-    raceGridOrder = meisterStartReihe(lauf.idx);
+    raceGridOrder = meisterStartReiheFest(lauf.idx);
     lauf.laeuft = { idx: lauf.idx, modus: f.modus, seit: Date.now() };
     meisterSpeichern();
     meisterSchliessen();
@@ -367,13 +392,15 @@
     // Ein Training von Hand beenden ist normal (es vergibt keine Punkte), ein Rennen nicht.
     const ev = meister.plan.events[lauf.laeuft.idx];
     if (!regulaer && ev && ev.format === 'training') regulaer = true;
+    // v1.0.25 BESTELLT: "Wenn ich ein Rennen beende, wird es als 0 gezaehlt und ich kann beim
+    // naechsten Rennen weitermachen." Vorher blieb das Event offen und musste neu gefahren
+    // werden. Jetzt: alle bekommen fuer dieses Event 0 Punkte, und es geht zum naechsten.
     if (!regulaer) {
-      lauf.laeuft = null;
-      meisterSpeichern();
-      msMeldung(t('Event abgebrochen, es wird nicht gewertet'));
-      setTimeout(() => meisterOeffnen('stand'), 2500);
+      meisterWerten(true);
+      msMeldung(t('Event abgebrochen: zählt mit 0 Punkten'));
       return true;
     }
+    msMeldung(t('Wertung, sobald alle im Ziel sind …'));
     const bis = Date.now() + 95000, ab = Date.now() + (meisterMpAndere().length ? 3500 : 0);
     if (meisterWarten) clearInterval(meisterWarten);
     meisterWarten = setInterval(() => {
@@ -387,13 +414,15 @@
     }, 500);
     return true;
   }
-  function meisterWerten() {
+  function meisterWerten(abgebrochen) {
     const lauf = meister.lauf;
     if (!lauf || !lauf.laeuft) return;
     const idx = lauf.laeuft.idx, ev = meister.plan.events[idx];
     lauf.laeuft = null;
+    lauf.reihe = null;                 // die naechste Startreihe wird neu festgelegt
     if (!ev) return;
     const m = meisterFeldMessen(ev);
+    if (abgebrochen) { m.reihe = []; m.lokal = []; }
     // Jeder, der mitfuhr, bekommt eine Zeile, auch ohne Punkte.
     Object.keys(m.info).forEach((k) => {
       if (!lauf.fahrer[k]) lauf.fahrer[k] = { name: m.info[k].name, farbe: m.info[k].farbe, rolle: m.info[k].rolle, pkt: 0, je: [] };
@@ -412,15 +441,16 @@
       }
       m.reihe.forEach((k) => { if (besteVon[k] < fl) { fl = besteVon[k]; flKey = k; } });
       ergebnis = meisterPunkteVergeben(m.reihe, meisterGlobalWert('punkte'), flKey, meisterGlobalWert('fl') === 'ja');
-      lauf.letztes = m.reihe.slice();
+      if (!abgebrochen) lauf.letztes = m.reihe.slice();
     } else {
       m.reihe.forEach((k, i) => { ergebnis[k] = { pos: i + 1 }; });
-      if (ev.format === 'qualifying') lauf.quali = m.reihe.slice();
+      if (ev.format === 'qualifying' && !abgebrochen) lauf.quali = m.reihe.slice();
     }
     Object.keys(lauf.fahrer).forEach((k) => {
       const f = lauf.fahrer[k];
       while (f.je.length < idx) f.je.push(null);
-      const e = ergebnis[k] || (m.info[k] ? { pos: null, pkt: meisterIstRennen(ev) ? 0 : undefined } : null);
+      const e = abgebrochen ? { pos: null, pkt: meisterIstRennen(ev) ? 0 : undefined, ab: true }
+        : ergebnis[k] || (m.info[k] ? { pos: null, pkt: meisterIstRennen(ev) ? 0 : undefined } : null);
       f.je[idx] = e;
       if (e && e.pkt) f.pkt += e.pkt;
     });
@@ -705,6 +735,7 @@
           + spalten.map((i) => {
             const e = x.je[i];
             if (!e) return '<td class="e">–</td>';
+            if (e.ab) return '<td class="e" title="' + msEsc(t('abgebrochen')) + '">' + (e.pkt === undefined ? '✕' : '0') + '</td>';
             if (e.pkt === undefined) return '<td class="e">' + (e.pos ? 'P' + e.pos : '–') + '</td>';
             return '<td class="e">' + e.pkt + (e.fl ? '<sup>FL</sup>' : '') + '</td>';
           }).join('') + '<td class="pkt">' + x.pkt + '</td></tr>';
@@ -721,9 +752,10 @@
         + '<span class="ms-info">' + msEsc(msUnterzeile(ev)) + '</span>';
       if (meisterIstRennen(ev)) {
         d += '<span class="ms-info">' + msEsc(t('Startaufstellung')) + ': ' + msEsc(meisterAufstText(lauf.idx)) + '</span>';
-        const reihe = meisterStartReihe(lauf.idx).map((id) => garage.find((c) => String(c.device.id) === id)).filter(Boolean);
-        if (reihe.length && !/zufall|erst/.test(String(meisterAufstAufgeloest(lauf.idx))))
-          d += '<div class="ms-aufst">' + reihe.map((c, i) => '<div>' + (i + 1) + ' · ' + msEsc(garageLabel(c)) + '</div>').join('') + '</div>';
+        const reihe = meisterStartReiheFest(lauf.idx).map((id) => garage.find((c) => String(c.device.id) === id)).filter(Boolean);
+        if (reihe.length)
+          d += '<div class="ms-aufst">' + reihe.map((c, i) => '<div>' + (i + 1) + ' · ' + msEsc(garageLabel(c))
+            + ' <small>' + msEsc(meisterPlatzText(i)) + '</small></div>').join('') + '</div>';
       }
       if (ev.strecke !== 'aktuell' && ev.strecke !== 'frei') d += '<span class="ms-info ms-gelb">' + msEsc(t('Strecke umbauen')) + ': ' + msEsc(ev.strecke) + '</span>';
     } else d += '<span class="ms-titel">' + msEsc(t('Meisterschaft beendet')) + '</span>';

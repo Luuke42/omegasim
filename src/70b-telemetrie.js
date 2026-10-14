@@ -64,18 +64,62 @@
   // Die reine Rechnung: aus den Teilwechseln einer Runde die Spur, oder null.
   // ev: [[t, code]] seit Rundenstart; der Wechsel auf Start/Ziel, der diese Ueberfahrt
   // ausgeloest hat, steht am Ende und gehoert zur naechsten Runde.
-  function teleSpurBauen(ev, ms, n, code) {
+  // soll (optional): die Teilecodes der Strecke, tiles[k].type.
+  //
+  // v1.0.25 GEMELDET: "Telemetrie klappt gar nicht. Ich bin Time Attack gefahren, aber finde
+  // die Daten nirgends." Verlangt waren GENAU n-1 Teilwechsel - auf der echten Bahn faellt
+  // aber oft ein Teil aus oder ein Wechsel kommt doppelt (dieselbe Erfahrung, nach der die
+  // Challenge-Pruefung 10 % Fehllesungen erlaubt). Dann wurde jede Runde verworfen.
+  // Jetzt: stimmt die Zahl nicht, werden die Lesungen ueber ihre ART (Gerade/rechts/links,
+  // chKlasse) der Strecke zugeordnet - laengste gemeinsame Folge wie bei chRundePruefen -,
+  // und fehlende Teile bekommen eine Zeit zwischen ihren Nachbarn. Gilt, solange mindestens
+  // TELE_ZUORDNUNG_MIN der Teile zugeordnet sind; `geschaetzt` sagt, wie viele es nicht waren.
+  function teleSpurBauen(ev, ms, n, code, soll) {
     if (!(ms > 0) || !(n >= 3)) return null;
-    const e = ev.slice();
+    const e = ev.filter((x) => x[1] !== 0x00 && x[1] !== 0xff);
     while (e.length && e[e.length - 1][0] >= ms - 5) e.pop();
-    if (e.length !== n - 1) return null;
-    const teile = [0];
-    for (const [t] of e) {
-      if (!(t > teile[teile.length - 1]) || t >= ms) return null;
-      teile.push(Math.round(t));
+    const fertig = (teile, geschaetzt) => {
+      for (let k = 1; k < teile.length; k++) if (!(teile[k] > teile[k - 1]) || teile[k] >= ms) return null;
+      const sp = { v: 1, code, n, ms: Math.round(ms), teile: teile.map(Math.round) };
+      if (geschaetzt) sp.geschaetzt = geschaetzt;
+      return sp;
+    };
+    if (e.length === n - 1) {
+      const sp = fertig([0].concat(e.map((x) => x[0])), 0);
+      if (sp) return sp;
     }
-    return { v: 1, code, n, ms: Math.round(ms), teile };
+    if (!Array.isArray(soll) || soll.length !== n || typeof chKlasse !== 'function') return null;
+    const a = soll.slice(1).map(chKlasse), b = e.map((x) => chKlasse(x[1]));
+    if (b.length > a.length * 1.5) return null;
+    // LCS mit Rueckverfolgung: Paare (Teil j, Lesung i).
+    const m = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+    for (let j = 1; j <= a.length; j++) {
+      for (let i = 1; i <= b.length; i++) {
+        m[j][i] = a[j - 1] === b[i - 1] ? m[j - 1][i - 1] + 1 : Math.max(m[j - 1][i], m[j][i - 1]);
+      }
+    }
+    const zeit = new Array(n).fill(null);
+    zeit[0] = 0;
+    let j = a.length, i = b.length, paare = 0;
+    while (j > 0 && i > 0) {
+      if (a[j - 1] === b[i - 1] && m[j][i] === m[j - 1][i - 1] + 1) { zeit[j] = e[i - 1][0]; paare++; j--; i--; }
+      else if (m[j - 1][i] >= m[j][i - 1]) j--;
+      else i--;
+    }
+    if (paare < Math.max(2, Math.ceil(TELE_ZUORDNUNG_MIN * (n - 1)))) return null;
+    // Luecken linear zwischen den Nachbarn; hinter dem letzten zugeordneten Teil bis ms.
+    for (let k = 1; k < n; k++) {
+      if (zeit[k] !== null) continue;
+      let r = k + 1;
+      while (r < n && zeit[r] === null) r++;
+      const tr = r < n ? zeit[r] : ms;
+      zeit[k] = zeit[k - 1] + (tr - zeit[k - 1]) / (r - k + 1);
+    }
+    return fertig(zeit, (n - 1) - paare);
   }
+  var TELE_ZUORDNUNG_MIN = 0.75;
+  // Was mit den Runden der laufenden Fahrt passiert ist - fuer die Zusammenfassung am Ende.
+  var teleSitzung = { gespeichert: 0, geschaetzt: 0, verworfen: 0 };
 
   // Aus playerLapCrossed, nach dem Einfuegen der Runde: Spur fertigstellen und merken.
   function teleRunde(start, jetzt, gewertet) {
@@ -83,13 +127,21 @@
     teleLauf = null;
     // Je Runde des Rennens eine Stelle, damit der Upload die Spur der schnellsten findet.
     const i = typeof raceLapTimes !== 'undefined' ? raceLapTimes.length - 1 : -1;
-    if (i === 0) teleRennSpuren = [];
+    if (i === 0) { teleRennSpuren = []; teleSitzung = { gespeichert: 0, geschaetzt: 0, verworfen: 0 }; teleFahrtId = Date.now(); }
     if (i >= 0) teleRennSpuren[i] = null;
     if (!l || l.start !== start) return null;
     const tiles = currentTrackTiles;
     if (!tiles || tiles.length < 3) return null;
-    const spur = teleSpurBauen(l.ev, jetzt - start, tiles.length, trackToCode(tiles, 0));
-    if (!spur) return null;
+    const spur = teleSpurBauen(l.ev, jetzt - start, tiles.length, trackToCode(tiles, 0), tiles.map((x) => x.type));
+    if (!spur) {
+      if (gewertet) {
+        teleSitzung.verworfen++;
+        log('Telemetrie: Runde nicht gespeichert - ' + l.ev.length + ' Teilwechsel gelesen, die Strecke hat '
+            + tiles.length + ' Teile, zu wenige liessen sich zuordnen.', 'info');
+      }
+      return null;
+    }
+    if (gewertet) { teleSitzung.gespeichert++; if (spur.geschaetzt) teleSitzung.geschaetzt++; }
     let pr = l.pr;
     if (pr.length > TELE_PROBEN_MAX) {
       const k = pr.length / TELE_PROBEN_MAX;
@@ -97,6 +149,7 @@
     }
     spur.proben = pr;
     spur.datum = Date.now();
+    spur.runde = i + 1;
     spur.auto = typeof playerCar !== 'undefined' && playerCar ? garageLabel(playerCar) : '';
     if (i >= 0) teleRennSpuren[i] = spur;
     if (gewertet) teleMerken(spur, typeof playerCar !== 'undefined' ? playerCar : null);
@@ -131,6 +184,14 @@
       try { localStorage.setItem(TELE_STORE, JSON.stringify(d)); } catch (e2) { /* aufgegeben */ }
     }
   }
+  var teleFahrtId = 0;                 // eine Fahrt = ein Rennen/Time Attack, gesetzt bei Runde 1
+  var TELE_FAHRT_MAX = 30;             // so viele Runden einer Fahrt
+  function teleDuenn(spur, max) {
+    const pr = spur.proben || [];
+    if (pr.length <= max) return spur;
+    const k = pr.length / max;
+    return Object.assign({}, spur, { proben: Array.from({ length: max }, (_, j) => pr[Math.floor(j * k)]) });
+  }
   function teleWer(car) { return car && car.device ? String(car.device.id) : 'spieler1'; }
   // Beste und letzte Spur je Strecke (gespiegelt = gleich, wie Time Attack) und Fahrer.
   function teleMerken(spur, car) {
@@ -141,6 +202,17 @@
     e.datum = Date.now();
     const f = e.fahrer[teleWer(car)] || (e.fahrer[teleWer(car)] = {});
     f.letzte = spur;
+    // v1.0.28 GEMELDET: "In der Telemetrie wird nur letzte = beste Runde angezeigt." Gemerkt
+    // waren nur diese zwei. Jetzt dazu ALLE gewerteten Runden der letzten Fahrt auf dieser
+    // Strecke (f.fahrt), mit ausgeduennten Proben; die Fahrten anderer Strecken werden dabei
+    // geloescht - der Speicher reicht nicht fuer alle Runden aller Strecken.
+    if (!f.fahrt || f.fahrt.id !== teleFahrtId) f.fahrt = { id: teleFahrtId, runden: [] };
+    f.fahrt.runden.push(teleDuenn(spur, TELE_UPLOAD_PROBEN));
+    if (f.fahrt.runden.length > TELE_FAHRT_MAX) f.fahrt.runden.shift();
+    Object.keys(d).forEach((x) => {
+      if (x === k || !d[x].fahrer) return;
+      Object.values(d[x].fahrer).forEach((ff) => { if (ff) delete ff.fahrt; });
+    });
     if (!f.beste || spur.ms < f.beste.ms) f.beste = spur;
     const alle = Object.keys(d);
     if (alle.length > TELE_STRECKEN_MAX) {

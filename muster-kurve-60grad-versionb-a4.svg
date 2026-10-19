@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="297.01mm" height="210.02mm" viewBox="0 0 297.01 210.02">
+  <!--
+    RECHTSKURVE, 60 GRAD, RADIALE TRAPEZ-KEILE + STRICHCODE-BAND. A4 QUER,
+    1 SVG-Einheit = 1 mm. Experimentell, zum Auslegen und Vergleichen mit
+    einer Infrarot-Aufnahme.
+
+        Version B, echte Groesse (Radius 370 mm, Breite 250 mm aus 60-track.js,
+    UNSKALIERT) - deutlich groesser als A4 quer, das Blatt zeigt nur den
+    Ausschnitt, der hineinpasst. Der Rest ist ABSICHTLICH abgeschnitten, nicht
+    verkleinert wie in Version A.
+    Aussenradius 495.0 mm, Innenradius 245.0 mm.
+
+    14 Keile ueber 50.7 der 60 Grad, jeder ein TRAPEZ mit unabhaengig
+    vorgegebener Innenbreite (5 mm) und Aussenbreite (20 mm) -
+    dieselben zwei Zahlen wie bei der Geraden (5/20 mm), grob am Foto
+    geschaetzt (CARRERA_HYBRID.md: eine genauere Herleitung ist dort
+    bereits gescheitert dokumentiert, 31.08.). Anders als ein Kreissektor
+    bei konstantem Winkel trifft das beide Breiten unabhaengig, nicht nur
+    die eine mit der anderen rechnerisch aus dem Radienverhaeltnis.
+
+    DIE VERBLEIBENDEN 9.3 GRAD am Sektoranfang tragen statt Trapezen ein
+    STRICHCODE-BAND ueber die volle Radialbreite: das Start/Ziel-Wort aus
+    make_track_sheets.py/startziel-a4.svg (Balken dDddDd, Luecken LlLLl), mit
+    konstanter Bogenlaenge auf dem Mittelradius 370.0 mm dieses Blattes -
+    NACHGETRAGEN, weil genau dieser Code am Auto die Start/Ziel-Sperre
+    setzt (ZIEL_SPERRE_BIT, Byte 15 Bit 3, src/70-race.js) und damit die
+    Rundenzaehlung im Ausdruck-Modus antreibt. Ohne ihn zaehlt eine
+    zusammengeklebte Ausdruck-Schleife keine Runde mehr.
+
+    DRUCKEN: 100 % / "Tatsaechliche Groesse", NICHT "an Seite anpassen".
+  -->
+  <rect x="0" y="0" width="297.01" height="210.02" fill="#ffffff"/>
+  <g fill="#000000">
+    <path d="M 271.005 -72.804 L 268.936 -71.623 L 391.825 146.089 L 396.005 143.703 Z"/>
+    <path d="M 265.152 -69.530 L 261.288 -67.483 L 376.373 154.453 L 384.179 150.316 Z"/>
+    <path d="M 259.218 -66.422 L 257.087 -65.356 L 367.886 158.751 L 372.190 156.597 Z"/>
+    <path d="M 253.195 -63.474 L 251.036 -62.466 L 355.659 164.589 L 360.021 162.553 Z"/>
+    <path d="M 247.093 -60.691 L 243.074 -58.967 L 339.573 171.658 L 347.693 168.175 Z"/>
+    <path d="M 240.924 -58.080 L 238.713 -57.192 L 330.763 175.245 L 335.229 173.451 Z"/>
+    <path d="M 238.713 -57.192 L 236.494 -56.325 L 326.279 176.996 L 330.763 175.245 Z"/>
+    <path d="M 230.360 -54.058 L 225.630 -52.436 L 299.624 186.388 L 318.541 179.899 Z"/>
+    <path d="M 216.174 -49.510 L 211.355 -48.179 L 270.698 194.701 L 289.974 189.374 Z"/>
+    <path d="M 201.738 -45.833 L 196.847 -44.797 L 241.319 201.241 L 260.884 197.095 Z"/>
+    <path d="M 187.106 -43.040 L 182.161 -42.303 L 211.598 205.983 L 231.378 203.033 Z"/>
+    <path d="M 172.331 -41.141 L 167.350 -40.706 L 181.643 208.910 L 201.566 207.168 Z"/>
+    <path d="M 157.467 -40.144 L 152.469 -40.012 L 151.566 210.011 L 171.558 209.483 Z"/>
+    <path d="M 142.571 -40.052 L 137.574 -40.224 L 121.477 209.282 L 141.464 209.970 Z"/>
+    <path d="M 127.697 -40.865 L 122.719 -41.341 L 91.489 206.725 L 111.397 208.627 Z"/>
+    <path d="M 112.899 -42.581 L 107.960 -43.358 L 61.711 202.351 L 81.466 205.459 Z"/>
+    <path d="M 98.233 -45.193 L 93.350 -46.269 L 32.254 196.176 L 51.784 200.479 Z"/>
+    <path d="M 83.753 -48.692 L 78.945 -50.062 L 3.227 188.221 L 22.459 193.703 Z"/>
+    <path d="M 69.512 -53.064 L 64.796 -54.724 L -25.263 178.517 L -6.400 185.158 Z"/>
+    <path d="M 55.564 -58.293 L 50.957 -60.237 L -53.111 167.100 L -34.686 174.874 Z"/>
+    <path d="M 41.959 -64.361 L 37.479 -66.581 L -80.214 154.011 L -62.295 162.891 Z"/>
+  </g>
+</svg>

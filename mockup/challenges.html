@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Challenges</title>
+<!--
+  MOCK-UP UND PLAN, nicht die App. BESTELLT: "Challenges: Mach einen Plan und Mock-Up fuer
+  einen neuen Challenges-Modus mit Beispielstrecken ... 4 Strecken, die passende Namen
+  erhalten (2 mit Grundpackungen baubar (8 rechts, 2 links, 4 Geraden, 1x Start), fuer 1
+  braucht man das Haarnadel-Set, fuer 1 das 30-Grad-Aussenkurven-Set). Jede Strecke hat 2
+  Presets (Pro und Arcade) und eine festgelegte Rundenzahl. ... Auto muss stehen, dann kommt
+  eine Ampel ... Zeit wird gespeichert ... Leaderboard mit allen Zeiten und Differenzen sowie
+  ein horizontales Histogramm (oben = schnell), eigene Zeit markiert, Perzentil."
+  Die Strecken sind mit der Geometrie der App gerechnet und geschlossen (Streckencode steht
+  an jeder Karte, er laesst sich im Editor uebernehmen). Bestenliste mit Platzhalterdaten.
+-->
+<style>
+  :root { --blau: #00a3e0; --blau-text: #04070c; --grau: #3b3f48; --weiss: #f3f4f6; --tinte: #0b0c10;
+    --dim: #a3acbd; --gut: #3ddc84; --rot: #ff2b5e; --warn: #ffb400;
+    --font: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+    color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body { background: #05070c; color: #eef0f4; font-family: var(--font); font-size: 13px; }
+  body::before { content: ''; position: fixed; inset: 0; z-index: -1;
+    background: linear-gradient(rgba(5,7,12,.75), rgba(5,7,12,.93)), url(../img/challenges-bg.jpg) center / cover; }
+  button { font-family: var(--font); cursor: pointer; }
+  header { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center;
+    padding: 1px 12px; background: #05070c; border-bottom: 1px solid rgba(255,255,255,.12); }
+  .reiter { display: flex; }
+  .reiter button { flex: 1; background: transparent; border: 0; color: var(--dim); text-transform: uppercase; letter-spacing: .08em;
+    font-size: 10px; padding: 1px 6px; font-weight: 700; clip-path: polygon(6% 0, 100% 0, 94% 100%, 0 100%); }
+  .reiter button.an { background: var(--weiss); color: var(--tinte); }
+  main { padding: 10px 14px 30px; max-width: 1100px; margin: 0 auto; }
+  .seite { display: none; } .seite.an { display: block; }
+  h2 { margin: 4px 0 8px; letter-spacing: .1em; text-transform: uppercase; font-size: 16px; }
+  h3 { margin: 12px 0 6px; font-size: 12px; letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
+  p { line-height: 1.45; margin: 4px 0 8px; }
+  .muted { color: var(--dim); }
+  .wip { background: var(--warn); color: #1a1100; font-size: 10px; font-weight: 800; padding: 0 5px; margin-left: 6px; letter-spacing: .06em; }
+  /* Karten der vier Challenges */
+  .karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .karte { background: rgba(14,16,22,.94); border: 2px solid transparent; display: flex; flex-direction: column; cursor: pointer; }
+  .karte:hover, .karte.sel { border-color: #fff; }
+  .karte .kk { display: flex; justify-content: space-between; background: var(--grau); padding: 2px 8px; font-weight: 800; letter-spacing: .1em; font-size: 11px; }
+  .karte.sel .kk, .karte:hover .kk { background: var(--blau); color: var(--blau-text); }
+  .karte .name { font-size: 17px; font-weight: 900; letter-spacing: .05em; padding: 6px 10px 0; text-transform: uppercase; }
+  .karte .bild { height: 130px; display: grid; place-items: center; padding: 4px; }
+  .karte .bild svg { max-width: 100%; max-height: 100%; }
+  .karte .zeilen { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 4px 10px 8px; font-size: 12px; }
+  .karte .zeilen span:nth-child(odd) { color: var(--dim); text-transform: uppercase; font-size: 10.5px; letter-spacing: .06em; align-self: center; }
+  .karte .zeilen b { font-weight: 800; }
+  .set { display: inline-block; font-size: 10px; letter-spacing: .06em; padding: 1px 6px; border: 1px solid var(--blau); color: var(--blau); margin-right: 4px; }
+  .set.extra { border-color: var(--warn); color: var(--warn); }
+  /* Detail */
+  .detail { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; }
+  .kasten { background: rgba(14,16,22,.94); border-top: 2px solid var(--grau); padding: 10px 12px; }
+  .kasten.blau { border-top-color: var(--blau); }
+  .wahl { display: flex; margin: 4px 0 10px; }
+  .wahl button { flex: 1; padding: 8px; background: var(--grau); color: #fff; border: 2px solid transparent; border-radius: 0;
+    font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  .wahl button.an { background: var(--blau); color: var(--blau-text); border-color: #fff; }
+  .zeile { display: grid; grid-template-columns: minmax(0, 1fr) auto; padding: 4px 2px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .zeile b { font-weight: 800; }
+  .ok { color: var(--gut); } .fehlt { color: var(--rot); }
+  .gross { font-size: 16px; padding: 12px 20px; letter-spacing: .1em; text-transform: uppercase; background: var(--blau); color: var(--blau-text);
+    border: 2px solid #fff; border-radius: 0; font-weight: 900; width: 100%; margin-top: 10px; }
+  /* Lauf */
+  .lauf { display: grid; place-items: center; min-height: 300px; background: rgba(14,16,22,.94); border-top: 2px solid var(--blau); gap: 10px; padding: 14px; text-align: center; }
+  .ampel { display: flex; gap: 10px; background: #111; padding: 10px 14px; border-radius: 10px; }
+  .ampel i { width: 34px; height: 34px; border-radius: 50%; background: #2a0b0e; box-shadow: inset 0 0 6px #000; }
+  .ampel i.an { background: #ff2b2b; box-shadow: 0 0 18px #ff2b2b; }
+  .ampel.gruen i { background: #22e06b; box-shadow: 0 0 18px #22e06b; }
+  .uhr { font-size: 44px; font-weight: 900; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+  .status { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+  /* Ergebnis */
+  .ergebnis { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+  .perzentil { font-size: 18px; font-weight: 900; letter-spacing: .03em; margin: 2px 0 8px; }
+  .perzentil b { color: var(--blau); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: var(--dim); font-weight: 700; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 4px; }
+  td { padding: 3px 4px; border-top: 1px solid rgba(255,255,255,.06); }
+  tr.du td { background: rgba(0,163,224,.2); font-weight: 800; }
+  .liste { max-height: 340px; overflow: auto; }
+  .histo { display: grid; grid-template-columns: 74px minmax(0, 1fr) 30px; gap: 3px 8px; align-items: center; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .histo .bar { height: 14px; background: var(--grau); position: relative; }
+  .histo .bar.du { background: var(--blau); }
+  .histo .bar.du::after { content: 'DU'; position: absolute; right: -24px; top: -1px; font-size: 10px; font-weight: 900; color: var(--blau); }
+  .histo .lbl { color: var(--dim); text-align: right; }
+  /* Plan */
+  .plan table td, .plan table th { vertical-align: top; }
+  .plan code { background: #0b0e15; padding: 1px 5px; font-size: 11.5px; }
+  .plan ol { padding-left: 20px; line-height: 1.5; }
+  .empf { border-left: 3px solid var(--gut); padding: 6px 10px; background: rgba(61,220,132,.07); margin: 8px 0; }
+  @media (max-width: 760px) { .detail, .ergebnis { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <b style="letter-spacing:.14em">&#937; CHALLENGES <span class="wip">MOCK-UP</span></b>
+  <nav class="reiter" id="reiter">
+    <button data-s="uebersicht" class="an">Übersicht</button>
+    <button data-s="detail">Challenge</button>
+    <button data-s="lauf">Lauf</button>
+    <button data-s="ergebnis">Ergebnis</button>
+    <button data-s="plan">Plan</button>
+  </nav>
+</header>
+<main>
+  <section class="seite an" id="s-uebersicht">
+    <h2>Challenges</h2>
+    <div class="karten" id="karten"></div>
+  </section>
+
+  <section class="seite" id="s-detail">
+    <div class="detail">
+      <div class="kasten blau">
+        <h2 id="d-name"></h2>
+        <div id="d-bild" style="height:230px; display:grid; place-items:center"></div>
+        <p class="muted" id="d-text"></p>
+        <div class="zeile"><span>Streckencode (im Editor übernehmen)</span><b id="d-code" style="font-family:ui-monospace,monospace"></b></div>
+        <div class="zeile"><span>Länge</span><b id="d-laenge"></b></div>
+      </div>
+      <div class="kasten">
+        <h3>Modus</h3>
+        <div class="wahl" id="d-modus"><button data-m="hotlap" class="an">Beste Runde</button><button data-m="rennen">Rennen</button></div>
+        <p class="muted" id="d-modus-text"></p>
+        <h3>Preset</h3>
+        <div class="wahl" id="d-preset"><button data-p="pro" class="an">Pro</button><button data-p="arcade">Arcade</button></div>
+        <div id="d-regeln"></div>
+        <h3>Teile (aus „Meine Teile“)</h3>
+        <div id="d-teile"></div>
+        <h3>Ablauf</h3>
+        <p class="muted" id="d-ablauf"></p>
+        <button class="gross" id="d-start">Challenge starten</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="seite" id="s-lauf">
+    <div class="lauf">
+      <div class="status" id="l-status">Warte, bis das Auto steht …</div>
+      <div class="ampel" id="l-ampel"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="uhr" id="l-uhr">0:00,000</div>
+      <div class="status" id="l-runde">Runde – / –</div>
+      <p class="muted" style="max-width:460px">Im echten Modus steuert hier das Cockpit. Während der Challenge sind Einstellungen gesperrt, Boxenstopp und Pflichtstopps gibt es nicht. Abbruch: Options.</p>
+    </div>
+  </section>
+
+  <section class="seite" id="s-ergebnis">
+    <div class="ergebnis">
+      <div class="kasten blau">
+        <h2 id="e-titel"></h2>
+        <div class="uhr" id="e-zeit" style="font-size:36px"></div>
+        <div class="perzentil" id="e-perz"></div>
+        <p class="muted" id="e-info"></p>
+        <h3>Verteilung aller Zeiten (oben schnell)</h3>
+        <div class="histo" id="e-histo"></div>
+      </div>
+      <div class="kasten">
+        <h3 id="e-listentitel">Bestenliste</h3>
+        <div class="liste"><table><thead><tr><th>#</th><th>Auto / Fahrer</th><th>Zeit</th><th>Abstand</th></tr></thead><tbody id="e-liste"></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="seite plan" id="s-plan">
+    <h2>Plan: Challenges</h2>
+    <h3>Die vier Strecken</h3>
+    <table><thead><tr><th>Name</th><th>Teile</th><th>Rennen</th><th>Länge / Platz</th><th>Idee</th></tr></thead><tbody id="p-strecken"></tbody></table>
+
+    <h3>Zwei Modi je Strecke</h3>
+    <p><b>Beste Runde</b>: beliebig viele Runden, gewertet wird die schnellste. Die Runde aus dem Stand zählt mit, ist aber naturgemäß langsamer. Schluss mit Options, dann wird die beste Runde gespeichert.
+      <b>Rennen</b>: feste Rundenzahl ab stehendem Start, gewertet wird die Gesamtzeit. Jede Kombination aus Strecke, Modus und Preset hat ihre eigene Bestenliste (4 × 2 × 2 = 16 Listen).</p>
+
+    <h3>Presets</h3>
+    <p><b>Pro</b>: Physik (Modus Physik, Abstimmung Pro), Reifenverschleiß und Schaden an, keine Fahrhilfe, trocken.
+      <b>Arcade</b>: Fahrhilfe an, Abstimmung Einsteiger, ohne Schaden und Verschleiß, trocken.
+      Beide ohne Tank, ohne Ghosts, ohne Boxenstopp. Das Preset setzt diese Werte für die Dauer der Challenge und stellt danach die eigenen wieder her.
+      In der Bestenliste zählen Zeiten nur innerhalb derselben Challenge und desselben Presets.</p>
+
+    <h3>Ablauf in der App</h3>
+    <ol>
+      <li>Reiter <b>Challenges</b>: Kacheln der vier Strecken mit eigener Bestzeit und Platz.</li>
+      <li>Challenge wählen, Modus und Preset wählen. Die App prüft Streckenmodus und „Meine Teile“ und lädt die Strecke in den Editor.</li>
+      <li><b>Challenge starten</b>: ins Cockpit. Solange das Auto rollt (Tempo &gt; 0 oder Gas), steht „Auto anhalten“. Steht es 1 s, läuft die Ampel wie beim Rennstart. Frühstart = Abbruch.</li>
+      <li>Rennen: nach der festen Rundenzahl. Beste Runde: wenn du mit Options aufhörst. Dann Zeit, Rundenzeiten, Perzentil. Gespeichert wird lokal immer, online nur wenn eingeschaltet.</li>
+      <li>Ergebnis-Schirm mit Bestenliste und Histogramm, ✕ Nochmal, ○ zurück.</li>
+    </ol>
+
+    <h3>Was gespeichert wird</h3>
+    <p>Ein Eintrag je Lauf: <code>challenge</code> (z. B. <code>oval</code>), <code>modus</code> (<code>hotlap</code>/<code>rennen</code>), <code>preset</code> (<code>pro</code>/<code>arcade</code>), <code>runden</code>,
+      <code>zeit_ms</code> (beste Runde bzw. Gesamtzeit), <code>rundenzeiten_ms[]</code>, <code>auto</code> (Name aus der Garage), <code>fahrer</code> (freiwillig, Kürzel),
+      <code>bahnmodus</code> (Bahn/Ausdruck), <code>app_version</code>, <code>geraet</code> (zufällige Kennung, kein Name, keine E-Mail), <code>zeitpunkt</code>.
+      Keine echten Namen nötig, keine Konten.</p>
+
+    <h3>Backend: Vergleich</h3>
+    <table>
+      <thead><tr><th>Lösung</th><th>Kosten</th><th>Wartung</th><th>Skalierung</th><th>Daten ansehen</th></tr></thead>
+      <tbody>
+        <tr><td><b>Google Sheet + Apps Script</b> (Web-App mit doPost/doGet)</td><td>kostenlos</td><td>fast keine, pausiert nie</td><td>für Hobby-Maß gut (tausende Einträge am Tag); Antwort 1 bis 3 s</td><td>direkt als Tabelle, Export per Klick</td></tr>
+        <tr><td><b>Cloudflare Worker + D1</b></td><td>kostenlos bis 100.000 Anfragen am Tag</td><td>fast keine, pausiert nie</td><td>sehr gut, schnell weltweit</td><td>nur über Endpunkt oder Konsole</td></tr>
+        <tr><td><b>Supabase</b> (Postgres + REST)</td><td>kostenlos</td><td>Free-Projekte pausieren nach einer Woche ohne Zugriff und müssen aufgeweckt werden</td><td>gut</td><td>Tabellen-Editor im Browser</td></tr>
+        <tr><td><b>Firebase Firestore</b></td><td>kostenlos (Spark)</td><td>gering</td><td>gut</td><td>Konsole</td></tr>
+      </tbody>
+    </table>
+    <div class="empf"><b>Empfehlung:</b> mit dem <b>Google Sheet + Apps Script</b> anfangen, wie gewünscht: kostenlos, pausiert nie, und du siehst jede Zeit sofort in der Tabelle.
+      Die App spricht nur mit zwei Funktionen (<code>zeitSenden(eintrag)</code>, <code>bestenliste(challenge, modus, preset)</code>). Wird es mehr,
+      ziehen nur diese zwei auf Cloudflare D1 um, ohne dass sich an der App sonst etwas ändert. Supabase würde ich wegen des Pausierens nicht nehmen.</div>
+
+    <h3>Das Apps-Script in Kürze</h3>
+    <p><code>doPost</code> nimmt einen Eintrag an (als <code>text/plain</code>, damit kein CORS-Vorabruf nötig ist), prüft ihn und hängt eine Zeile an (mit <code>LockService</code> gegen gleichzeitige Schreiber).
+      <code>doGet?challenge=oval&amp;modus=hotlap&amp;preset=pro</code> liefert die besten 500 Zeiten plus die Anzahl aller Läufe als JSON. Das Perzentil rechnet die App selbst aus der Liste.
+      Bereitstellen: „Als Web-App“, ausführen als du, Zugriff „Jeder“. Die URL kommt in die App-Einstellungen.</p>
+
+    <h3>Gegen Unsinn in der Liste</h3>
+    <ol>
+      <li>Plausibel: Rundenzahl stimmt (im Rennen), keine Runde schneller als die Physik bei Höchsttempo erlaubt (aus Streckenlänge), keine Runde 10× langsamer als der Median.</li>
+      <li>Nur echte Läufe: im Simulationsmodus ohne Auto wird nicht hochgeladen.</li>
+      <li>Drossel: höchstens ein Eintrag je Gerät und Minute.</li>
+      <li>Ehrlich gesagt: Die Seite läuft im Browser, völlig fälschungssicher wird eine offene Bestenliste nie. Für eine Hobby-Community reicht das.</li>
+    </ol>
+
+    <h3>Umsetzung in Schritten</h3>
+    <ol>
+      <li>Challenges lokal: Definitionen, Preset setzen und zurücksetzen, Stillstand-Prüfung, Ampel, Zeit, lokale Bestenliste.</li>
+      <li>Ergebnis-Schirm mit Histogramm und Perzentil (lokal).</li>
+      <li>Online: Apps-Script und Sheet anlegen (das machst du mit deinem Google-Konto), URL in die App, Senden und Laden.</li>
+      <li>Selbsttests: Preset setzt und stellt zurück, Frühstart bricht ab, Perzentil und Histogramm rechnen richtig.</li>
+    </ol>
+  </section>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  // Strecken aus der Geometrie der App (Mittellinie, jeder zweite Punkt, gerundet).
+  const STRECKEN = [
+    { id: 'oval', name: 'Monzetta', code: 'SGR2GR2LGR3G', runden: 10, sets: ['Grundpackung'], m: 5.25, gross: '1,36 × 2,28 m',
+      idee: 'Zum Warmwerden: lange Gerade, ein kleiner Knick nach links, Bremspunkte lernen.', vb: '0 0 167 252',
+      p: '32,146 32,141 32,135 32,129 32,124 32,118 32,112 32,106 32,101 32,95 32,89 32,84 32,78 32,72 32,66 32,61 34,55 36,50 39,46 43,42 47,38 52,35 57,33 62,32 68,32 73,33 79,34 84,37 89,39 94,42 98,45 103,48 108,51 113,54 118,57 123,60 127,64 130,68 133,73 134,78 135,84 135,89 134,95 133,100 130,105 127,109 123,113 118,116 114,119 110,123 106,128 104,133 102,138 101,143 101,149 101,155 101,160 101,166 101,172 101,177 101,183 101,189 100,194 98,199 96,204 92,209 88,213 84,216 79,218 74,220 68,220 62,220 57,219 52,217 47,214 43,211 39,207 36,202 34,197 33,192 32,186 32,180 32,175 32,169 32,163 32,157 32,152 32,146', s: [20.4, 146.4, 43.6, 146.4] },
+    { id: 'schlange', name: 'Suzuna', code: 'SRRRGLLRRRRGGGR', runden: 8, sets: ['Grundpackung'], m: 6.02, gross: '2,11 × 2,06 m',
+      idee: 'Die zwei Linkskurven bilden ein S. Wer dort sauber umlenkt, gewinnt.', vb: '0 0 259 255',
+      p: '44,118 44,112 44,106 44,101 44,95 44,89 44,83 44,78 44,73 45,68 47,63 50,58 53,54 57,51 61,48 66,46 71,44 76,43 81,43 86,44 91,46 96,48 100,51 104,54 107,58 109,63 111,68 112,73 113,78 113,83 113,89 113,95 113,101 113,106 113,112 113,118 113,123 114,128 116,133 119,137 122,141 126,145 130,148 135,150 140,151 145,152 150,152 155,151 160,150 164,148 169,145 174,144 179,143 184,143 189,144 194,145 199,148 203,150 207,154 210,158 213,162 215,167 216,172 216,177 216,182 215,187 213,192 210,197 207,201 203,204 199,207 194,209 189,211 184,212 179,212 174,211 169,209 164,207 159,204 155,201 150,199 145,196 140,193 135,190 130,187 125,184 120,181 115,179 110,176 105,173 100,170 95,167 90,164 85,161 80,159 75,156 70,153 65,150 61,147 56,144 52,141 49,137 47,132 45,127 44,122 43,117', s: [32.3, 117.7, 55.5, 117.7] },
+    { id: 'kehre', name: 'Monte Carlito', code: 'SGRRRLHJRRRRG', runden: 8, sets: ['Grundpackung', 'Haarnadel-Set'], m: 5.99, gross: '1,46 × 2,27 m',
+      idee: 'Die zwei Haarnadeln liegen direkt hintereinander als enges S: voll in die Bremse, umlegen, sauber raus.', vb: '0 0 176 252',
+      p: '32,146 32,141 32,135 32,129 32,124 32,118 32,112 32,106 32,101 32,95 32,89 32,84 32,78 32,72 32,66 32,61 34,55 36,50 39,46 43,42 47,38 52,35 57,33 62,32 68,32 73,33 79,34 84,37 88,40 92,44 96,48 98,53 100,58 101,64 101,69 102,75 104,80 106,85 109,89 113,93 118,96 123,99 128,102 133,105 138,108 142,112 144,118 144,123 143,129 139,133 135,137 129,138 124,138 118,136 113,133 108,130 103,127 98,125 93,124 87,124 82,127 78,131 76,136 75,142 76,147 79,152 84,156 88,159 92,163 96,167 98,172 100,177 101,183 101,188 100,194 98,199 96,204 92,208 88,212 84,215 79,218 73,219 68,220 62,220 57,219 52,217 47,214 43,210 39,206 36,202 34,197 32,191 32,186 32,180 32,174 32,168 32,163 32,157 32,151 32,146', s: [20.4, 146.4, 43.6, 146.4] },
+    { id: 'weitblick', name: 'Silverbrook', code: 'SQRRRWGQRRRW', runden: 8, sets: ['Grundpackung', '30°-Außenkurven-Set'], m: 5.53, gross: '1,29 × 2,54 m',
+      idee: 'Lang und schmal: die weiten 30°-Bögen machen die Längsseiten schnell, wer dort Tempo mitnimmt, gewinnt.', vb: '0 0 161 277',
+      p: '51,176 51,170 51,164 51,159 51,153 51,147 51,141 51,136 50,130 50,125 49,119 48,114 47,109 45,104 44,98 42,93 39,88 37,84 34,79 33,73 32,68 32,62 33,57 35,52 38,47 42,43 46,39 50,36 55,34 61,32 66,32 72,32 77,34 82,36 87,39 91,43 95,47 98,52 100,56 102,61 104,67 106,72 107,77 108,82 109,88 110,93 110,99 110,104 110,110 110,116 110,121 110,127 110,133 110,138 110,144 110,149 111,155 112,160 113,166 114,171 116,176 118,181 120,186 123,191 125,196 127,201 128,206 129,212 128,217 126,223 124,228 121,232 117,236 113,240 108,242 103,244 97,245 92,245 86,244 81,242 76,240 71,236 68,232 64,228 62,223 60,218 57,213 56,208 54,203 53,197 52,192 51,187 51,181 51,176', s: [38.9, 175.7, 62.2, 175.7] },
+  ];
+  const PRESETS = {
+    pro: [['Physik', 'Modus Physik, Abstimmung Pro'], ['Fahrhilfe', 'aus'], ['Schaden, Verschleiß', 'an'], ['Wetter', 'trocken'], ['Tank, Box, Ghosts', 'aus']],
+    arcade: [['Physik', 'Abstimmung Einsteiger'], ['Fahrhilfe', 'an'], ['Schaden, Verschleiß', 'aus'], ['Wetter', 'trocken'], ['Tank, Box, Ghosts', 'aus']],
+  };
+  const DU = { auto: 'Porsche 911 GT3 R', fahrer: 'Luuke' };
+  let wahl = STRECKEN[0], preset = 'pro', modus = 'hotlap', deineZeit = null;
+
+  const $ = (id) => document.getElementById(id);
+  const fmt = (ms) => { const m = Math.floor(ms / 60000), s = (ms % 60000) / 1000; return m + ':' + s.toFixed(3).padStart(6, '0').replace('.', ','); };
+  const km = (m) => (m * 50 / 1000).toFixed(2).replace('.', ',');
+  const karte = (st, hoehe) => {
+    const [x1, y1, x2, y2] = st.s;
+    return `<svg viewBox="${st.vb}" style="height:${hoehe}px"><polyline points="${st.p}" fill="none" stroke="#f3f5f8" stroke-width="27" stroke-linejoin="round"/>`
+      + `<polyline points="${st.p}" fill="none" stroke="#14181f" stroke-width="23" stroke-linejoin="round"/>`
+      + `<polyline points="${st.p}" fill="none" stroke="#00a3e0" stroke-width="1.2" stroke-dasharray="4 5" opacity=".7"/>`
+      + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#3ddc84" stroke-width="4"/></svg>`;
+  };
+  // Platzhalter-Bestenliste: gleichmaessig gestreute Zeiten je Strecke, deterministisch.
+  function feld(st, pr) {
+    let seed = st.id.length * 97 + (pr === 'pro' ? 13 : 7) + (modus === 'hotlap' ? 5 : 0);
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const basis = st.m / 1.1 * (modus === 'hotlap' ? 0.88 : st.runden) * 1000 * (pr === 'pro' ? 1.15 : 1.0);
+    const autos = ['BMW M4 GT3', 'Porsche 911 GT3 R', 'Ferrari 296 GT3', 'Mustang GT3', 'AMG GT3', 'Corvette Z06'];
+    const namen = ['SeV', 'Mia', 'Tom', 'Jo', 'Kai', 'Lea', 'Ben', 'Ida', 'Max', 'Eli', 'Noa', 'Pia', 'Ole', 'Ari', 'Liv'];
+    const out = [];
+    for (let i = 0; i < 46; i++) {
+      const z = basis * (1 + Math.pow(rnd(), 1.6) * 0.55 + rnd() * 0.03);
+      out.push({ auto: autos[Math.floor(rnd() * autos.length)], fahrer: namen[Math.floor(rnd() * namen.length)], zeit: Math.round(z) });
+    }
+    return out;
+  }
+  function zeichneKarten() {
+    $('karten').innerHTML = STRECKEN.map((st) => `<div class="karte ${st === wahl ? 'sel' : ''}" data-id="${st.id}">
+      <div class="kk"><span>${st.sets.length > 1 ? 'SET NÖTIG' : 'GRUNDPACKUNG'}</span><span>BESTE RUNDE · ${st.runden} RD.</span></div>
+      <div class="name">${st.name}</div>
+      <div class="bild">${karte(st, 120)}</div>
+      <div class="zeilen"><span>Teile</span><b>${st.sets.map((x, i) => `<span class="set ${i ? 'extra' : ''}">${x}</span>`).join('')}</b>
+        <span>Länge</span><b>${st.m.toFixed(2).replace('.', ',')} m · 1:50 ${km(st.m)} km</b>
+        <span>Platz</span><b>${st.gross}</b>
+        <span>Beste Runde</span><b>${st.id === 'oval' ? '0:03,641 · Platz 4' : '–'}</b>
+        <span>Rennen</span><b>${st.id === 'oval' ? '0:39,812 · Platz 7' : '–'}</b></div></div>`).join('');
+  }
+  function zeichneDetail() {
+    $('d-name').textContent = wahl.name;
+    $('d-bild').innerHTML = karte(wahl, 220);
+    $('d-text').textContent = wahl.idee;
+    $('d-code').textContent = wahl.code;
+    $('d-laenge').textContent = wahl.m.toFixed(2).replace('.', ',') + ' m · 1:50 ' + km(wahl.m) + ' km · Platz ' + wahl.gross;
+    document.querySelectorAll('#d-preset button').forEach((b) => b.classList.toggle('an', b.dataset.p === preset));
+    document.querySelectorAll('#d-modus button').forEach((b) => b.classList.toggle('an', b.dataset.m === modus));
+    $('d-modus-text').textContent = modus === 'hotlap'
+      ? 'Fahr so viele Runden du willst. Gewertet wird deine schnellste Runde.'
+      : wahl.runden + ' Runden ab stehendem Start. Gewertet wird die Gesamtzeit.';
+    $('d-ablauf').textContent = modus === 'hotlap'
+      ? 'Stell das Auto auf Start/Ziel. Erst wenn es steht, läuft die Ampel. Jede Runde wird gemessen, die beste bleibt stehen. Schluss mit Options, dann wird die beste Runde gespeichert.'
+      : 'Stell das Auto auf Start/Ziel. Erst wenn es steht, läuft die Ampel. Bei Grün läuft die Uhr, nach der letzten Runde wird die Gesamtzeit gespeichert.';
+    $('d-regeln').innerHTML = PRESETS[preset].map(([a, b]) => `<div class="zeile"><span>${a}</span><b>${b}</b></div>`).join('');
+    const braucht = {};
+    for (const ch of wahl.code) braucht[ch] = (braucht[ch] || 0) + 1;
+    const NAME = { S: 'Start/Ziel', G: 'Gerade', R: 'Kurve rechts', L: 'Kurve links', H: 'Haarnadel rechts', J: 'Haarnadel links', W: '30° außen rechts', Q: '30° außen links' };
+    const HAT = { S: 1, G: 4, R: 8, L: 2, H: 0, J: 0, W: 0, Q: 0 };  // Beispiel: nur die Grundpackung eingetragen
+    $('d-teile').innerHTML = Object.entries(braucht).map(([k, n]) => {
+      const ok = HAT[k] >= n;
+      return `<div class="zeile"><span>${n}× ${NAME[k]}</span><b class="${ok ? 'ok' : 'fehlt'}">${ok ? '✓ da' : 'fehlt ' + (n - HAT[k])}</b></div>`;
+    }).join('');
+  }
+  function zeige(s) {
+    document.querySelectorAll('.seite').forEach((x) => x.classList.toggle('an', x.id === 's-' + s));
+    document.querySelectorAll('#reiter button').forEach((b) => b.classList.toggle('an', b.dataset.s === s));
+    if (s === 'detail') zeichneDetail();
+    if (s === 'ergebnis') zeichneErgebnis();
+    if (s === 'plan') zeichnePlan();
+    window.scrollTo(0, 0);
+  }
+  function lauf() {
+    zeige('lauf');
+    const lampen = [...$('l-ampel').querySelectorAll('i')];
+    $('l-ampel').classList.remove('gruen'); lampen.forEach((l) => l.classList.remove('an'));
+    $('l-status').textContent = 'Warte, bis das Auto steht …';
+    $('l-uhr').textContent = '0:00,000'; $('l-runde').textContent = modus === 'hotlap' ? 'Runde –  ·  Beste –' : 'Runde – / ' + wahl.runden;
+    let k = 0;
+    setTimeout(() => {
+      $('l-status').textContent = 'Auto steht ✓  ·  Ampel';
+      const iv = setInterval(() => {
+        if (k < 5) { lampen[k].classList.add('an'); k++; return; }
+        clearInterval(iv);
+        $('l-ampel').classList.add('gruen'); lampen.forEach((l) => l.classList.remove('an'));
+        $('l-status').textContent = 'Los!';
+        const ziel = feld(wahl, preset)[9].zeit * 0.97;
+        if (modus === 'hotlap') {
+          // Fuenf Runden im Zeitraffer; die erste aus dem Stand ist langsamer, die beste bleibt stehen.
+          const runden = [1.14, 1.03, 0.99, 1.0, 1.01].map((f) => Math.round(ziel * f));
+          let r = 0, beste = Infinity;
+          const naechste = () => {
+            if (r >= runden.length) { deineZeit = beste; $('l-status').textContent = 'Options: Schluss, beste Runde wird gespeichert'; setTimeout(() => zeige('ergebnis'), 1100); return; }
+            const t0 = performance.now(), dauer = 700;
+            const tick = () => {
+              const f = Math.min(1, (performance.now() - t0) / dauer);
+              $('l-uhr').textContent = fmt(Math.round(runden[r] * f));
+              if (f < 1) { requestAnimationFrame(tick); return; }
+              beste = Math.min(beste, runden[r]); r++;
+              $('l-runde').textContent = 'Runde ' + r + '  ·  Beste ' + fmt(beste) + (runden[r - 1] === beste ? '  ·  NEUE BESTE' : '');
+              setTimeout(naechste, 250);
+            };
+            requestAnimationFrame(tick);
+          };
+          naechste();
+          return;
+        }
+        const t0 = performance.now(), dauer = 3500;
+        const tick = () => {
+          const f = Math.min(1, (performance.now() - t0) / dauer);
+          $('l-uhr').textContent = fmt(Math.round(ziel * f));
+          $('l-runde').textContent = 'Runde ' + Math.min(wahl.runden, 1 + Math.floor(f * wahl.runden)) + ' / ' + wahl.runden;
+          if (f < 1) requestAnimationFrame(tick);
+          else { deineZeit = Math.round(ziel); $('l-status').textContent = 'Ziel!'; setTimeout(() => zeige('ergebnis'), 700); }
+        };
+        requestAnimationFrame(tick);
+      }, 700);
+    }, 1200);
+  }
+  function zeichneErgebnis() {
+    const alle = feld(wahl, preset);
+    const du = { auto: DU.auto, fahrer: DU.fahrer, zeit: deineZeit || alle[9].zeit, du: true };
+    const liste = alle.concat([du]).sort((a, b) => a.zeit - b.zeit);
+    const platz = liste.indexOf(du) + 1;
+    const langsamer = liste.filter((x) => x.zeit > du.zeit).length;
+    const perz = Math.round(100 * langsamer / (liste.length - 1));
+    $('e-titel').textContent = wahl.name + ' · ' + (modus === 'hotlap' ? 'Beste Runde' : wahl.runden + ' Runden') + ' · ' + (preset === 'pro' ? 'Pro' : 'Arcade');
+    $('e-zeit').textContent = fmt(du.zeit);
+    $('e-listentitel').textContent = 'Bestenliste · ' + (modus === 'hotlap' ? 'beste Runde' : 'Gesamtzeit');
+    $('e-perz').innerHTML = 'Du warst schneller als <b>' + perz + ' %</b> der Spieler.';
+    $('e-info').textContent = 'Platz ' + platz + ' von ' + liste.length + ' · Abstand zur Bestzeit +' + ((du.zeit - liste[0].zeit) / 1000).toFixed(3).replace('.', ',') + ' s';
+    $('e-liste').innerHTML = liste.map((x, i) => `<tr class="${x.du ? 'du' : ''}"><td>${i + 1}</td><td>${x.auto} · ${x.fahrer}</td><td>${fmt(x.zeit)}</td>`
+      + `<td>${i ? '+' + ((x.zeit - liste[0].zeit) / 1000).toFixed(3).replace('.', ',') : '–'}</td></tr>`).join('');
+    // Horizontales Histogramm: Klassen von schnell (oben) nach langsam (unten).
+    const min = liste[0].zeit, max = liste[liste.length - 1].zeit, n = 10, w = (max - min) / n || 1;
+    const klassen = Array.from({ length: n }, (_, i) => ({ von: min + i * w, bis: min + (i + 1) * w, anz: 0, du: false }));
+    liste.forEach((x) => { const i = Math.min(n - 1, Math.floor((x.zeit - min) / w)); klassen[i].anz++; if (x.du) klassen[i].du = true; });
+    const hoch = Math.max(...klassen.map((k) => k.anz));
+    $('e-histo').innerHTML = klassen.map((k) => `<span class="lbl">${fmt(Math.round(k.von)).slice(0, -2)}</span>`
+      + `<div style="position:relative"><div class="bar ${k.du ? 'du' : ''}" style="width:${Math.max(3, 100 * k.anz / hoch)}%"></div></div><span>${k.anz}</span>`).join('');
+  }
+  function zeichnePlan() {
+    $('p-strecken').innerHTML = STRECKEN.map((st) => `<tr><td><b>${st.name}</b><br><code>${st.code}</code></td><td>${st.sets.join(' + ')}</td><td>${st.runden} Runden</td>`
+      + `<td>${st.m.toFixed(2).replace('.', ',')} m<br>${st.gross}</td><td>${st.idee}</td></tr>`).join('');
+  }
+  document.addEventListener('click', (e) => {
+    const r = e.target.closest('#reiter button'); if (r) { zeige(r.dataset.s); return; }
+    const k = e.target.closest('.karte'); if (k) { wahl = STRECKEN.find((x) => x.id === k.dataset.id); zeichneKarten(); zeige('detail'); return; }
+    const p = e.target.closest('#d-preset button'); if (p) { preset = p.dataset.p; zeichneDetail(); return; }
+    const mo = e.target.closest('#d-modus button'); if (mo) { modus = mo.dataset.m; zeichneDetail(); return; }
+    if (e.target.closest('#d-start')) lauf();
+  });
+  zeichneKarten();
+})();
+</script>
+</body>
+</html>

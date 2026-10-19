@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="210.02mm" height="297.01mm" viewBox="0 0 210.02 297.01">
+  <!--
+    SCHNEIDEBOGEN: 4 Start/Ziel-Marken auf einem Blatt. A4 HOCHKANT,
+    1 SVG-Einheit = 1 mm.
+
+    WARUM MEHRERE AUF EIN BLATT: am Auto gemessen genuegt EIN Wort ohne
+    Vorlauf. Das vollstaendige Muster ist 75.55 mm lang, ohne die drei
+    fuehrenden duennen Balken sind es 54.22 mm - und davon passen 4
+    uebereinander, je Streifen 71.22 mm mit Pfeil und Schnittluft.
+
+    Balken dDddDd, Luecken LlLLl, in Leserichtung (D = dick, L = breit).
+    Modul: duenn 3.598 / dick 6.604 mm, Luecke 3.513 / 6.530 mm, aus
+    target_finish.pdf ueber startziel-a4.svg zurueckgelesen, nicht
+    nachgemessen.
+
+    Die Balken sind 176 mm breit statt der 276 mm des Originals - so breit,
+    wie A4 hochkant mit Rand fuer die Massprobe zulaesst. Dass diese Breite
+    reicht, ist gemessen: der Sensor sitzt mittig unter dem Auto und braucht
+    nicht die ganze Bahnbreite.
+
+    DRUCKEN: 100 % / "Tatsaechliche Groesse", NICHT "an Seite anpassen". Das
+    Kontrollmass steht SENKRECHT im linken Rand, also in Fahrtrichtung - dort
+    liegen die Modulmasse, und ein ungleich skalierender Drucker faellt nur auf
+    dieser Achse auf.
+
+    Der Pfeil zeigt in die Fahrtrichtung. Rueckwaerts ueberfahren ist das
+    Muster eine andere Folge und damit ein anderer Code.
+  -->
+  <rect x="0" y="0" width="210.02" height="297.01" fill="#ffffff"/>
+  <g fill="#000000">
+    <rect x="26.000" y="7.000" width="176.000" height="3.598"/>
+    <rect x="26.000" y="17.128" width="176.000" height="6.604"/>
+    <rect x="26.000" y="27.245" width="176.000" height="3.598"/>
+    <rect x="26.000" y="37.373" width="176.000" height="3.598"/>
+    <rect x="26.000" y="47.501" width="176.000" height="6.604"/>
+    <rect x="26.000" y="57.618" width="176.000" height="3.598"/>
+    <rect x="26.000" y="78.216" width="176.000" height="3.598"/>
+    <rect x="26.000" y="88.344" width="176.000" height="6.604"/>
+    <rect x="26.000" y="98.461" width="176.000" height="3.598"/>
+    <rect x="26.000" y="108.589" width="176.000" height="3.598"/>
+    <rect x="26.000" y="118.717" width="176.000" height="6.604"/>
+    <rect x="26.000" y="128.834" width="176.000" height="3.598"/>
+    <rect x="26.000" y="149.432" width="176.000" height="3.598"/>
+    <rect x="26.000" y="159.560" width="176.000" height="6.604"/>
+    <rect x="26.000" y="169.677" width="176.000" height="3.598"/>
+    <rect x="26.000" y="179.805" width="176.000" height="3.598"/>
+    <rect x="26.000" y="189.933" width="176.000" height="6.604"/>
+    <rect x="26.000" y="200.050" width="176.000" height="3.598"/>
+    <rect x="26.000" y="220.648" width="176.000" height="3.598"/>
+    <rect x="26.000" y="230.776" width="176.000" height="6.604"/>
+    <rect x="26.000" y="240.893" width="176.000" height="3.598"/>
+    <rect x="26.000" y="251.021" width="176.000" height="3.598"/>
+    <rect x="26.000" y="261.149" width="176.000" height="6.604"/>
+    <rect x="26.000" y="271.266" width="176.000" height="3.598"/>
+  </g>
+  <path d="M 110.90 62.26 L 117.10 62.26 L 117.10 66.60 L 120.20 66.60 L 114.00 72.18 L 107.80 66.60 L 110.90 66.60 Z" fill="#000000"/>
+  <path d="M 4 75.72 H 206.02" stroke="#000000" stroke-width="0.2"
+        stroke-dasharray="3 3" fill="none"/>
+  <path d="M 110.90 133.47 L 117.10 133.47 L 117.10 137.81 L 120.20 137.81 L 114.00 143.39 L 107.80 137.81 L 110.90 137.81 Z" fill="#000000"/>
+  <path d="M 4 146.93 H 206.02" stroke="#000000" stroke-width="0.2"
+        stroke-dasharray="3 3" fill="none"/>
+  <path d="M 110.90 204.69 L 117.10 204.69 L 117.10 209.03 L 120.20 209.03 L 114.00 214.61 L 107.80 209.03 L 110.90 209.03 Z" fill="#000000"/>
+  <path d="M 4 218.15 H 206.02" stroke="#000000" stroke-width="0.2"
+        stroke-dasharray="3 3" fill="none"/>
+  <path d="M 110.90 275.90 L 117.10 275.90 L 117.10 280.24 L 120.20 280.24 L 114.00 285.82 L 107.80 280.24 L 110.90 280.24 Z" fill="#000000"/>
+  <g stroke="#000000" stroke-width="0.25" fill="none">
+    <path d="M 8.00 98.50 h 4"/>
+    <path d="M 8.00 198.50 h 4"/>
+    <path d="M 10.00 98.50 v 100"/>
+  </g>
+  <text x="14.00" y="148.50" text-anchor="middle" transform="rotate(90 14.00 148.50)"
+        font-family="Arial, Helvetica, sans-serif" font-size="3.0"
+        fill="#000000">100 mm senkrecht nachmessen</text>
+  <text x="205.02" y="148.50" text-anchor="middle"
+        transform="rotate(-90 205.02 148.50)"
+        font-family="Arial, Helvetica, sans-serif" font-size="3.0"
+        fill="#000000">Start/Ziel &#183; Ausdruck-Modus &#183; Code 0x01</text>
+</svg>

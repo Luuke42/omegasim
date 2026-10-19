@@ -1,0 +1,7 @@
+node_modules/
+# Wird von tools/apk_www.py aus dem Repo erzeugt - eine zweite Kopie im Repo waere eine
+# zweite Wahrheit.
+www/
+*.jks
+*.keystore
+keystore.properties

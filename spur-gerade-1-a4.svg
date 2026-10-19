@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="297.01mm" height="210.02mm" viewBox="0 0 297.01 210.02">
+  <!--
+    GERADE, Blatt 1 von 2. A4 QUER, 1 SVG-Einheit = 1 mm.
+
+    EXPERIMENTELL, und zwar aus zwei Gruenden, die beide dazugesagt gehoeren:
+
+    1. Das Wort ist das von START/ZIEL (0x01). Das Wort der GERADEN (0x02) ist
+       nicht entziffert - der Versuch, es aus Infrarot-Videobildern der echten
+       Schiene zu lesen, ist gescheitert. Eine Bahn mit diesem Aufdruck meldet
+       also ueberall Start/Ziel und ist als Strecke falsch. Sie ist ein
+       Versuchsblatt.
+    2. Ob eine PAPIERbahn ueberhaupt wie die echte gelesen wird, haengt an der
+       Infrarot-Rueckstrahlung von Toner und Papier und ist erst am Auto
+       entschieden. Ein Blatt, das gedruckt aussieht wie die Bahn, ist noch
+       keine Bahn.
+
+    Fortlaufend wiederholtes Wort ueber die Blattgrenze hinweg: weil sich das
+    Wort wiederholt, ist eine Schnittkante mitten im Wort unschaedlich. Genau
+    das macht das Aneinanderlegen ueberhaupt moeglich.
+
+    JE BLATT 202 mm Fahrweg, zwei also 404 mm. Eine Kachel des Editors
+    ist 430 mm lang - es fehlen 26 mm, und das ist kein Fehler, sondern das
+    Papierformat: mehr als 202 mm Fahrweg passen mit Rand nicht auf A4
+    quer. Weil sich das Wort wiederholt, ist es unschaedlich - man legt
+    so viele Blaetter, wie man braucht, und die Kachelgrenze liegt dort,
+    wo man sie haben will.
+
+    Bahnbreite laut Editor 250 mm; die Balken sind 277 mm breit, also etwas
+    breiter - Rand zum Beschneiden.
+
+    Fuer den AUSDRUCK-Modus ist diese Fassung Verschwendung: nach einem
+    Erkennen bleibt der Leser eine Sekunde stumm, das sind bei 4 km/h
+    Massstabstempo 1,1 m Fahrweg. Sie ist fuer den BAHN-Modus gebaut, wo
+    Byte 12 fortlaufend latcht.
+  -->
+  <rect x="0" y="0" width="297.01" height="210.02" fill="#ffffff"/>
+  <g fill="#000000">
+    <rect x="10.005" y="4.000" width="277.000" height="3.598"/>
+    <rect x="10.005" y="14.128" width="277.000" height="6.604"/>
+    <rect x="10.005" y="24.245" width="277.000" height="3.598"/>
+    <rect x="10.005" y="34.373" width="277.000" height="3.598"/>
+    <rect x="10.005" y="44.501" width="277.000" height="6.604"/>
+    <rect x="10.005" y="54.618" width="277.000" height="3.598"/>
+    <rect x="10.005" y="58.216" width="277.000" height="3.598"/>
+    <rect x="10.005" y="68.344" width="277.000" height="6.604"/>
+    <rect x="10.005" y="78.461" width="277.000" height="3.598"/>
+    <rect x="10.005" y="88.589" width="277.000" height="3.598"/>
+    <rect x="10.005" y="98.717" width="277.000" height="6.604"/>
+    <rect x="10.005" y="108.834" width="277.000" height="3.598"/>
+    <rect x="10.005" y="112.432" width="277.000" height="3.598"/>
+    <rect x="10.005" y="122.560" width="277.000" height="6.604"/>
+    <rect x="10.005" y="132.677" width="277.000" height="3.598"/>
+    <rect x="10.005" y="142.805" width="277.000" height="3.598"/>
+    <rect x="10.005" y="152.933" width="277.000" height="6.604"/>
+    <rect x="10.005" y="163.050" width="277.000" height="3.598"/>
+    <rect x="10.005" y="166.648" width="277.000" height="3.598"/>
+    <rect x="10.005" y="176.776" width="277.000" height="6.604"/>
+    <rect x="10.005" y="186.893" width="277.000" height="3.598"/>
+    <rect x="10.005" y="197.021" width="277.000" height="3.598"/>
+    <rect x="10.005" y="207.149" width="277.000" height="0.871"/>
+  </g>
+  <path d="M -2.00 1.00 h 10" stroke="#000000" stroke-width="0.2"/>
+  <path d="M 289.00 1.00 h 10" stroke="#000000" stroke-width="0.2"/>
+  <path d="M -2.00 209.02 h 10" stroke="#000000" stroke-width="0.2"/>
+  <path d="M 289.00 209.02 h 10" stroke="#000000" stroke-width="0.2"/>
+  <g stroke="#000000" stroke-width="0.25" fill="none">
+    <path d="M 6.00 55.00 h 4"/>
+    <path d="M 6.00 155.00 h 4"/>
+    <path d="M 8.00 55.00 v 100"/>
+  </g>
+  <text x="12.00" y="105.00" text-anchor="middle" transform="rotate(90 12.00 105.00)"
+        font-family="Arial, Helvetica, sans-serif" font-size="3.0"
+        fill="#000000">100 mm senkrecht nachmessen</text>
+  <text x="148.50" y="206.02" text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="3.0"
+        fill="#000000">Gerade, Blatt 1/2 &#183; EXPERIMENTELL, tr&#228;gt das Start/Ziel-Wort</text>
+</svg>

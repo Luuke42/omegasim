@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OmegaSim · Rennende-Mock-up (Podest + Ergebnis)</title>
+<!--
+  MOCK-UP des Rennende-Schirms: erst das Podest der drei Besten, darunter die gewohnte
+  Ergebnistabelle. BESTELLT: "make a html mockup for race-ending screen that shows the podium
+  (3 best players) and afterwards the standard results".
+
+  Diese Datei ist EIGENSTAENDIG: sie fasst die App nicht an, alle Namen/Zeiten sind Platzhalter.
+  Oeffnen im Browser, ggf. im Querformat (App erzwingt auf dem Telefon Querformat).
+-->
+<style>
+  :root {
+    --bg: #000000; --panel: #0b0c0f; --panel-2: #14161c; --panel-3: #1d2028;
+    --ink: #f4f6fb; --muted: #a9b2c4; --border: #262a33;
+    --good: #3ddc84; --bad: #ff5c5c; --warn: #ffb02e; --info: #5aa9ff;
+    --gold: #f5c518; --silver: #c9d1e0; --bronze: #cd7f32;
+    --font: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
+    font-family: var(--font); }
+  body { background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(90,169,255,.12), transparent 60%),
+      radial-gradient(900px 500px at 85% 110%, rgba(61,220,132,.08), transparent 55%),
+      var(--bg); }
+
+  .rahmen { max-width: 1000px; margin: 0 auto; padding: clamp(16px, 3vw, 40px); }
+
+  /* ---- Kopf ---- */
+  .kopf { text-align: center; margin-bottom: clamp(16px, 3vw, 28px); }
+  .kopf .label { color: var(--muted); letter-spacing: .22em; text-transform: uppercase; font-size: 12px; }
+  .kopf h1 { margin: 6px 0 2px; font-size: clamp(26px, 5vw, 52px); font-weight: 900; letter-spacing: .08em;
+    text-shadow: 2px 0 0 rgba(255,42,77,.5), -2px 0 0 rgba(34,211,238,.5); }
+  .kopf .strecke { color: var(--muted); font-size: 13px; letter-spacing: .1em; }
+
+  /* ---- Podest ---- */
+  .podest { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(8px, 2vw, 18px);
+    align-items: end; margin: clamp(20px, 4vw, 44px) 0; }
+  .platz { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .platz .name { text-align: center; font-size: clamp(13px, 2vw, 18px); font-weight: 800;
+    letter-spacing: .04em; line-height: 1.2; }
+  .platz .zeit { color: var(--muted); font-size: clamp(11px, 1.5vw, 14px); }
+  .platz .farbe { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+  .block { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    padding: clamp(8px, 1.6vw, 16px) 6px; border: 2px solid var(--border); background: var(--panel-2);
+    border-radius: 6px 6px 0 0; }
+  .block .rang { font-size: clamp(30px, 6vw, 64px); font-weight: 900; line-height: 1; opacity: .9; }
+  .block .medaille { font-size: clamp(13px, 2vw, 20px); letter-spacing: .14em; font-weight: 700; }
+  .platz-1 .block { height: clamp(150px, 30vh, 230px); background: linear-gradient(180deg, rgba(245,197,24,.14), var(--panel-2) 70%); border-color: var(--gold); }
+  .platz-1 .block .rang, .platz-1 .medaille { color: var(--gold); }
+  .platz-2 .block { height: clamp(118px, 24vh, 185px); border-color: var(--silver); }
+  .platz-2 .block .rang, .platz-2 .medaille { color: var(--silver); }
+  .platz-3 .block { height: clamp(92px, 19vh, 150px); border-color: var(--bronze); }
+  .platz-3 .block .rang, .platz-3 .medaille { color: var(--bronze); }
+  .platz-1 .name { color: var(--gold); }
+
+  /* ---- Ergebnis ---- */
+  .zwischen { display: flex; align-items: center; gap: 14px; margin: clamp(20px, 4vw, 40px) 0 12px; }
+  .zwischen h2 { font-size: clamp(16px, 2.4vw, 22px); letter-spacing: .16em; text-transform: uppercase; margin: 0; }
+  .zwischen .linie { flex: 1; height: 1px; background: var(--border); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); }
+  th, td { padding: clamp(7px, 1.3vw, 12px) clamp(8px, 1.6vw, 14px); text-align: left; }
+  thead th { background: var(--panel-3); color: var(--muted); letter-spacing: .1em; text-transform: uppercase;
+    font-size: 11px; }
+  tbody tr + tr td { border-top: 1px solid var(--border); }
+  tbody tr.ich { background: rgba(61,220,132,.08); }
+  .pos { font-weight: 800; width: 44px; }
+  .pos-1 { color: var(--gold); } .pos-2 { color: var(--silver); } .pos-3 { color: var(--bronze); }
+  .fah { display: flex; align-items: center; gap: 8px; }
+  .punkt { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+  .num { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .beste { color: var(--good); font-variant-numeric: tabular-nums; }
+
+  .fuss { text-align: center; color: var(--muted); font-size: 12px; margin-top: clamp(16px, 3vw, 28px); }
+  .fuss button { font-family: inherit; font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    background: var(--panel-3); color: var(--ink); border: 1px solid var(--border); padding: 8px 18px; cursor: pointer; }
+  .fuss button:hover { border-color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="rahmen">
+
+  <div class="kopf">
+    <div class="label">Rennen beendet</div>
+    <h1>ZIEL</h1>
+    <div class="strecke">Monzetta · 12 Runden · Wetter: trocken</div>
+  </div>
+
+  <!-- PODEST: 2. links, 1. mittig (am hoechsten), 3. rechts -->
+  <div class="podest">
+    <div class="platz platz-2">
+      <div class="name"><span class="farbe" style="background:#5aa9ff"></span>Kimi</div>
+      <div class="zeit">12:34.10</div>
+      <div class="block"><div class="rang">2</div><div class="medaille">Silber</div></div>
+    </div>
+    <div class="platz platz-1">
+      <div class="name"><span class="farbe" style="background:#3ddc84"></span>Luuke</div>
+      <div class="zeit">12:31.85</div>
+      <div class="block"><div class="rang">1</div><div class="medaille">Gold</div></div>
+    </div>
+    <div class="platz platz-3">
+      <div class="name"><span class="farbe" style="background:#ffb02e"></span>Nora</div>
+      <div class="zeit">12:36.72</div>
+      <div class="block"><div class="rang">3</div><div class="medaille">Bronze</div></div>
+    </div>
+  </div>
+
+  <!-- DANACH: die gewohnte Ergebnistabelle -->
+  <div class="zwischen"><h2>Ergebnis</h2><div class="linie"></div></div>
+  <table>
+    <thead><tr><th>Pos</th><th>Fahrer</th><th>Runden</th><th>Letzte</th><th>Beste</th><th>Abgänge</th></tr></thead>
+    <tbody>
+      <tr class="ich"><td class="pos pos-1">1</td><td class="fah"><span class="punkt" style="background:#3ddc84"></span>Luuke</td><td class="num">12</td><td class="num">1:01.42</td><td class="beste">1:00.18</td><td class="num">0</td></tr>
+      <tr><td class="pos pos-2">2</td><td class="fah"><span class="punkt" style="background:#5aa9ff"></span>Kimi</td><td class="num">12</td><td class="num">1:02.10</td><td class="beste">1:00.91</td><td class="num">1</td></tr>
+      <tr><td class="pos pos-3">3</td><td class="fah"><span class="punkt" style="background:#ffb02e"></span>Nora</td><td class="num">12</td><td class="num">1:02.55</td><td class="beste">1:01.04</td><td class="num">2</td></tr>
+      <tr><td class="pos">4</td><td class="fah"><span class="punkt" style="background:#ff5c5c"></span>Alex</td><td class="num">12</td><td class="num">1:03.18</td><td class="beste">1:01.33</td><td class="num">3</td></tr>
+      <tr><td class="pos">5</td><td class="fah"><span class="punkt" style="background:#c9d1e0"></span>Ghost (Pro)</td><td class="num">11</td><td class="num">1:02.87</td><td class="beste">1:01.20</td><td class="num">4</td></tr>
+    </tbody>
+  </table>
+
+  <div class="fuss">
+    <button>Nochmal</button>
+    <button>Zur Übersicht</button>
+    <button>CSV</button>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,32 @@
+name: APK-Release
+# Legt aus apk/OmegaSim.apk ein Release an. Ausloeser: ein Tag v* (z. B. v0.9.2) oder von Hand.
+# Die Releases zaehlen die Downloads (Badge in der README).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, z. B. 0.9.2'
+        required: true
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        id: v
+        run: |
+          V="${{ github.event.inputs.version }}"
+          if [ -z "$V" ]; then V="${GITHUB_REF_NAME#v}"; fi
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+      - name: Release anlegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.v.outputs.v }}"
+          cp apk/OmegaSim.apk "OmegaSim-$V.apk"
+          gh release create "v$V" apk/OmegaSim.apk "OmegaSim-$V.apk" \
+            --title "OmegaSim $V" --notes "Android app (APK). Open it on your phone and install it." --latest

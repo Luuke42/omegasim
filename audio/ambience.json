@@ -1,0 +1,48 @@
+{
+ "bed": {
+  "file": "amb_bed.ogg",
+  "seconds": 7.88
+ },
+ "passby": [
+  {
+   "file": "amb_pass_0.ogg",
+   "seconds": 3.0
+  },
+  {
+   "file": "amb_pass_1.ogg",
+   "seconds": 3.0
+  },
+  {
+   "file": "amb_pass_2.ogg",
+   "seconds": 3.0
+  },
+  {
+   "file": "amb_pass_3.ogg",
+   "seconds": 3.0
+  },
+  {
+   "file": "amb_pass_4.ogg",
+   "seconds": 3.0
+  }
+ ],
+ "rain": {
+  "bed": {
+   "file": "rain_bed.ogg",
+   "seconds": 5.88
+  },
+  "thunder": [
+   {
+    "file": "thunder_0.ogg",
+    "seconds": 2.5
+   },
+   {
+    "file": "thunder_1.ogg",
+    "seconds": 2.5
+   },
+   {
+    "file": "thunder_2.ogg",
+    "seconds": 2.5
+   }
+  ]
+ }
+}

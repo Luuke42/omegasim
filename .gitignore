@@ -1,0 +1,48 @@
+# Raw source recordings: ~46MB of long-form YouTube rips used only as analysis input.
+# They must never enter git history — once committed, large binaries cannot practically
+# be removed again, and republishing third-party recordings is not the intent.
+# Only the heavily-processed short loops in audio/ are published, with attribution.
+sounds/
+
+# Intermediate analysis output: candidate clips, metrics, the local audition page.
+audio-work/
+
+# Bluetooth-HCI-Mitschnitte. Ausdrueckliche Anweisung: nirgendwo hochladen. Sie liegen
+# ohnehin ausserhalb dieses Ordners, aber ein versehentliches Hineinkopieren soll nicht
+# committebar sein - einmal in der Historie sind sie praktisch nicht mehr entfernbar,
+# und sie enthalten Geraeteadressen und den vollstaendigen Funkverkehr des Telefons.
+*.cfa
+btsnoop*/
+btsnoop*
+
+# Rohmaterial fuer die Motorklaenge, wie sounds/ - nur die geschnittenen Ableitungen
+# in audio/ werden veroeffentlicht.
+porschesound/
+
+# Original-Druckvorlage von Carrera (target_finish.pdf). Aus ihr wird startziel-a4.svg
+# erzeugt (tools/make_pattern.py); die Vorlage selbst ist fremdes Material und wird
+# nicht mitverteilt.
+target_finish.pdf
+
+# Geklontes Fremd-Repo als Nachschlagequelle fuer die Klangsynthese
+# (ange-yaghi/engine-sim, MIT). Ein Repo im Repo waere ohnehin nicht committebar, und
+# es ist Fremdmaterial - die Herkunft steht in audio/CREDITS.md.
+tools/ref/
+
+# Rohausgabe der Protokollanalyse, Zwischenstand wie audio-work/
+tools/parsed_full.txt
+tools/__pycache__/
+
+# Bildschirmfotos der Original-App von Carrera. Fremdmaterial, ausdruecklich nicht auf
+# GitHub. Sie dienen als Vorlage fuer die fehlenden Kurvenkacheln im Streckeneditor.
+app_screenshots/
+
+# Arbeitsdatei zu den Druckvorlagen, nicht Teil der Auslieferung.
+target_practice.pptx
+
+# src/ wird getrackt: es ist die Quelle. index.html ist das Ergebnis von
+# tools/build.py und wird ebenfalls getrackt, damit die Datei per file:// und ueber
+# GitHub Pages ohne Bauschritt laeuft.
+
+# Originalfotos (bis 4080 px). Ins Repo kommen nur die verkleinerten Fassungen aus tools/bilder.py.
+photos/

@@ -1,0 +1,26 @@
+{
+  "appId": "de.lroeseler.omegasim",
+  "appName": "OmegaSim",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  },
+  "loggingBehavior": "none",
+  "plugins": {
+    "BluetoothLe": {
+      "displayStrings": {
+        "scanning": "Suche Autos ...",
+        "cancel": "Abbrechen",
+        "availableDevices": "Gefundene Autos",
+        "noDeviceFound": "Kein Auto gefunden"
+      }
+    },
+    "SystemBars": {
+      "hidden": true,
+      "insetsHandling": "css"
+    }
+  }
+}

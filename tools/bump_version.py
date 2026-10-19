@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Versionsnummer aus der Git-Historie in index.html schreiben.
+
+Format:  0.<Woche>.<Push>
+  Woche  vollendete 7-Tage-Bloecke seit dem ersten Commit, ausgerichtet auf
+         Kalenderwochen: jeder Block beginnt an einem Montag
+  Push   Commits seit Beginn des laufenden Blocks (also seit dem Montag der
+         laufenden Woche), einschliesslich des gerade entstehenden - deshalb +1
+
+Vor jedem Commit aufrufen:
+
+    python tools/bump_version.py
+
+Geschrieben wird in die QUELLE (src/00-index.head.html), danach wird index.html gleich
+mitgebaut.
+
+Warum aus der Historie und nicht von Hand: eine Zahl, die man selbst pflegt, ist nach dem
+dritten Push falsch. Der 7-Tage-Block wird ab dem ERSTEN Commit gezaehlt, aber an Kalenderwochen
+ausgerichtet, also an Montagen. GEMELDET: der Block rollte vorher am Wochentag des ersten Commits
+(Freitag), daraus wurde an einem Freitag mitten in der Woche 0.8.1 statt 0.7.62 - ein Wochensprung,
+der zur echten Wochenmitte drei Tage zu frueh kam. Erst ein Montag als Blockgrenze macht den
+Wochenzaehler mit der Kalenderwoche gleich.
+"""
+import datetime
+import io
+import os
+import re
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
+# In die QUELLE schreiben, nicht in das Ergebnis.
+#
+# index.html wird von build.py erzeugt. Ein Stempel dort waere beim naechsten Bau
+# wieder weg, und `build.py --check` hat genau das binnen einer Minute gemeldet:
+# "UNTERSCHIED ab Zeichen 263000", weil die Version in der einen Datei stand und in
+# der anderen nicht. Deshalb: Quelle stempeln, dann bauen.
+TARGET = os.path.join(REPO, 'src', '00-index.head.html')
+
+
+def git(*args):
+    return subprocess.check_output(['git'] + list(args), cwd=REPO, text=True).strip()
+
+
+# FESTER PROJEKTSTART (v0.9.30): am 05.10.2026 wurde die Historie auf einen Commit
+# zusammengefasst. Danach war der "erste Commit" von heute, und die Rechnung lieferte 0.0.2
+# statt 0.9.29. Woche 0 ist deshalb jetzt fest verankert (jedes Datum in der Woche vor dem
+# 03.08.2026 ergibt dieselben Wochennummern), und der Pushzaehler dieser einen Woche bekommt
+# die 27 Commits zurueck, die mit der alten Historie verschwunden sind.
+PROJEKT_START = datetime.date(2026, 8, 3)
+# 12.10.2026 (v1.0.19): wieder zusammengefasst (BESTELLT: "Mach spaeter wieder einen Force Push,
+# sodass nur die neueste Version bei btsr liegt"). Diese Woche hatte 19 Commits; danach steht
+# einer (der zusammengefasste), also bekommt der Zaehler 18 zurueck - der naechste Push ist 1.0.20.
+# 13.10.2026 (v1.0.21): noch einmal zusammengefasst (BESTELLT: "Wenn alles klappt, mach einen
+# Force-Push auf btsr") - 20 zurueck. Am selben Tag nach 1.0.24 ein drittes Mal (BESTELLT:
+# "force push mit lokalem Backup wieder bitte"): wieder ein Commit, und er ist 1.0.24 - also 23
+# zurueck, der naechste Push wird 1.0.25.
+# 19.10.2026 (v1.1.3): wieder zusammengefasst (BESTELLT: "Pushe so, dass nur die neuesten Staende da
+# sind"). Vorher standen 2 Commits in dieser Woche, der zusammengefasste ist 1.1.3 - also 2 zurueck,
+# der naechste Push wird 1.1.4.
+PUSH_VERSATZ = {datetime.date(2026, 10, 5): 27, datetime.date(2026, 10, 12): 23, datetime.date(2026, 10, 19): 2}
+
+
+VERSION1_WOCHE = 10
+
+
+def version():
+    first = git('log', '--reverse', '--format=%aI').splitlines()[0]
+    start = min(datetime.datetime.fromisoformat(first).date(), PROJEKT_START)
+    today = datetime.date.today()
+    # Blockgrenze ist der Montag der laufenden Woche, nicht der Wochentag des ersten
+    # Commits. weekday(): Montag = 0, also ziehen wir genau so viele Tage ab, dass der
+    # Montag herauskommt.
+    monday = today - datetime.timedelta(days=today.weekday())
+    week = (monday - start).days // 7
+    if week < 0:
+        week = 0
+    block = monday
+    n = int(git('rev-list', '--count', 'HEAD',
+                '--since=%s 00:00:00' % block.isoformat()))
+    # +1, weil der Commit, fuer den diese Nummer gilt, noch nicht existiert.
+    push = n + 1 + PUSH_VERSATZ.get(block, 0)
+    # VERSION 1 (BESTELLT am 12.10.2026, Woche 10): "Versionierung ab jetzt 1.0.[commitnumber]
+    # und ab naechster Woche dann 1.1.x". Ab Woche 10 zaehlt die Mittelzahl die Wochen seit
+    # 1.0; davor bleibt die alte Form 0.<Woche>.<Push>.
+    if week >= VERSION1_WOCHE:
+        return '1.%d.%d' % (week - VERSION1_WOCHE, push), start, block
+    return '0.%d.%d' % (week, push), start, block
+
+
+def main():
+    v, start, block = version()
+    s = io.open(TARGET, encoding='utf-8').read()
+    pat = re.compile(r'(<span id="app-version">)[^<]*(</span>)')
+    if not pat.search(s):
+        print('FEHLER: <span id="app-version"> nicht in %s gefunden' % TARGET,
+              file=sys.stderr)
+        return 1
+    new = pat.sub(lambda m: m.group(1) + v + m.group(2), s, count=1)
+    # OHNE frueher Ausstieg, und das ist eine Berichtigung. Hier stand `return 0`, sobald die
+    # Nummer schon stimmte - dann wurde auch nicht gebaut. Genau in dem Fall kann aber sw.js
+    # hinterherhaengen (siehe unten), und ein Werkzeug, das die Lage nicht herstellt, weil sie
+    # halb schon da ist, ist ein Werkzeug, dem man nicht ansehen kann, ob es gelaufen ist.
+    if new == s:
+        print('Version unveraendert: %s' % v)
+    else:
+        io.open(TARGET, 'w', encoding='utf-8', newline='').write(new)
+        print('Version %s  (Projektbeginn %s, Block ab %s)' % (v, start, block))
+    # Gleich mitbauen. Wer nur stempelt und das Bauen vergisst, hinterlaesst eine Quelle und
+    # ein Ergebnis, die auseinanderliegen - und merkt es erst beim naechsten --check.
+    #
+    # HERE in den Suchpfad, damit der Aufruf aus JEDEM Verzeichnis geht. Ohne diese Zeile
+    # fand `python tools/bump_version.py` das Nachbarmodul nicht, und der Fehler kam erst
+    # nach dem Stempeln - also mit halb erledigter Arbeit.
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import build
+    gebaut = build.build()
+    io.open(os.path.join(REPO, 'index.html'), 'w', encoding='utf-8',
+            newline='').write(gebaut)
+    print('index.html neu gebaut')
+    # UND sw.js, denn dessen Cachename traegt dieselbe Version. Diese Zeile fehlte, und der
+    # Schaden stand die ganze Zeit im Kommentar von build_sw(): "der Cachename MUSS sich mit
+    # jedem Build aendern, sonst liefert der Service Worker nach einem Push die alte Fassung
+    # aus". Genau das ist passiert - in jedem Commit von 0.5.34 bis 0.5.38 stand in sw.js
+    # die VORHERIGE Version:
+    #
+    #     index=0.5.34  sw=0.5.33
+    #     index=0.5.35  sw=0.5.34
+    #     ...
+    #     index=0.5.38  sw=0.5.37
+    #
+    # Bemerkt hat es niemand, weil die Selbstpruefung "Cacheversion in sw.js passt" VOR dem
+    # Stempeln lief - da passte sie, und danach sah niemand mehr hin. Ein Aufruf mehr hier
+    # ist die Behebung; die Reihenfolge (erst stempeln, dann beides bauen) ist der Grund,
+    # warum sie hier steht und nicht in build.build().
+    # NICHT `version` als Name: das ist hier oben die Funktion, die die Nummer bildet, und
+    # eine lokale Zuweisung macht sie in der GANZEN Funktion lokal - der Aufruf in Zeile 57
+    # fiel damit auf eine noch nicht belegte Variable.
+    swver, meldung = build.build_sw(gebaut)
+    print('  ' + meldung)
+    if swver is None:
+        print('FEHLER: sw.js nicht geschrieben', file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Dark Radial Glow Background -->
+    <radialGradient id="bg-glow" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#0a0b0e" />
+      <stop offset="100%" stop-color="#000000" />
+    </radialGradient>
+
+    <!-- PERFECT, INSTANTLY RECOGNIZABLE GREEK OMEGA (Ω) PATH -->
+    <path id="classic-omega" d="
+      M 112 370 
+      L 200 370 
+      C 192 328, 172 290, 172 236 
+      C 172 150, 210 102, 256 102 
+      C 302 102, 340 150, 340 236 
+      C 340 290, 320 328, 312 370 
+      L 400 370 
+      L 400 310 
+      C 368 310, 350 286, 388 236 
+      C 410 200, 412 160, 388 116 
+      C 358 62, 308 42, 256 42 
+      C 204 42, 154 62, 124 116 
+      C 100 160, 102 200, 124 236 
+      C 162 286, 144 310, 112 310 
+      Z" 
+      fill-rule="evenodd" />
+
+    <!-- Displaced Cutout Slice Masks -->
+    <mask id="slice-1">
+      <rect x="0" y="115" width="512" height="20" fill="#FFFFFF" />
+    </mask>
+    <mask id="slice-2">
+      <rect x="0" y="210" width="512" height="35" fill="#FFFFFF" />
+    </mask>
+    <mask id="slice-3">
+      <rect x="0" y="305" width="512" height="22" fill="#FFFFFF" />
+    </mask>
+
+    <!-- Overlay Text Glitch Slice Masks -->
+    <mask id="text-mask-slice1">
+      <rect x="0" y="180" width="512" height="25" fill="#FFFFFF" />
+    </mask>
+    <mask id="text-mask-slice2">
+      <rect x="0" y="270" width="512" height="18" fill="#FFFFFF" />
+    </mask>
+  </defs>
+
+  <!-- 1. PURE BLACK BACKGROUND -->
+  <rect width="512" height="512" fill="url(#bg-glow)" />
+
+  <!-- Background Grid Effect -->
+  <path d="M 0 128 L 512 128 M 0 256 L 512 256 M 0 384 L 512 384 M 128 0 L 128 512 M 256 0 L 256 512 M 384 0 L 384 512" stroke="#ffffff" stroke-width="1" opacity="0.03" />
+
+  <!-- 2. CHROMATIC ABERRATION OFFSET LAYERS (Semi-transparent / Glitch Channel Shifts) -->
+  
+  <!-- CYAN / BLUE CHANNEL (Shifted Top-Left) -->
+  <use href="#classic-omega" x="-18" y="-12" fill="#00E5FF" opacity="0.45" style="mix-blend-mode: screen;" />
+
+  <!-- MAGENTA / RED CHANNEL (Shifted Bottom-Right) -->
+  <use href="#classic-omega" x="22" y="14" fill="#FF0055" opacity="0.5" style="mix-blend-mode: screen;" />
+
+  <!-- GREEN CHANNEL (Echo / Side Shift) -->
+  <use href="#classic-omega" x="32" y="-6" fill="#00FF66" opacity="0.25" style="mix-blend-mode: screen;" />
+
+  <!-- 3. SPIDER-VERSE GLITCH SLICES (Transparent Offset Displacements) -->
+
+  <!-- Top Slice (Displaced Left + Cyan Laser Edge) -->
+  <g mask="url(#slice-1)" transform="translate(-32, 0)">
+    <use href="#classic-omega" fill="#FFFFFF" opacity="0.3" />
+    <use href="#classic-omega" x="14" y="0" fill="#FF0055" opacity="0.6" />
+    <line x1="0" y1="115" x2="512" y2="115" stroke="#00E5FF" stroke-width="3" opacity="0.9" />
+  </g>
+
+  <!-- Middle Slice (Displaced Far Right + Magenta & Green Laser Edges) -->
+  <g mask="url(#slice-2)" transform="translate(42, 0)">
+    <use href="#classic-omega" fill="#FFFFFF" opacity="0.35" />
+    <use href="#classic-omega" x="-20" y="0" fill="#00E5FF" opacity="0.6" />
+    <line x1="0" y1="210" x2="512" y2="210" stroke="#FF0055" stroke-width="4" opacity="0.95" />
+    <line x1="0" y1="245" x2="512" y2="245" stroke="#00FF66" stroke-width="2.5" opacity="0.85" />
+  </g>
+
+  <!-- Lower Slice (Displaced Left) -->
+  <g mask="url(#slice-3)" transform="translate(-24, 0)">
+    <use href="#classic-omega" fill="#FFFFFF" opacity="0.3" />
+    <line x1="0" y1="305" x2="512" y2="305" stroke="#00FF66" stroke-width="3" opacity="0.85" />
+  </g>
+
+  <!-- 4. FLOATING DIGITAL GLITCH PIXELS & NOISE -->
+  <g opacity="0.9">
+    <!-- Cyan Blocks -->
+    <rect x="60" y="130" width="55" height="5" fill="#00E5FF" />
+    <rect x="370" y="280" width="70" height="7" fill="#00E5FF" />
+    <rect x="190" y="395" width="45" height="4" fill="#00E5FF" />
+
+    <!-- Magenta Blocks -->
+    <rect x="390" y="118" width="50" height="6" fill="#FF0055" />
+    <rect x="75" y="215" width="80" height="8" fill="#FF0055" />
+    <rect x="320" y="370" width="60" height="5" fill="#FF0055" />
+
+    <!-- Green & White Sparks -->
+    <rect x="235" y="85" width="35" height="4" fill="#00FF66" />
+    <rect x="290" y="320" width="45" height="4" fill="#00FF66" />
+    <rect x="120" y="340" width="30" height="3" fill="#FFFFFF" opacity="0.8" />
+    <rect x="350" y="185" width="22" height="3" fill="#FFFFFF" opacity="0.8" />
+  </g>
+
+  <!-- 5. GLITCHED OMEGA TEXT CHANNEL SLICES -->
+  <g opacity="0.4" style="mix-blend-mode: screen;">
+    <!-- Cyan Aberration Shift -->
+    <text x="246" y="306" font-family="Calibri, Arial, sans-serif" font-size="280" font-weight="bold" fill="#00E5FF" text-anchor="middle">Ω</text>
+    
+    <!-- Magenta Aberration Shift -->
+    <text x="264" y="316" font-family="Calibri, Arial, sans-serif" font-size="280" font-weight="bold" fill="#FF0055" text-anchor="middle">Ω</text>
+
+    <!-- Displaced Text Slice 1 -->
+    <g mask="url(#text-mask-slice1)" transform="translate(18, 0)">
+      <text x="256" y="312" font-family="Calibri, Arial, sans-serif" font-size="280" font-weight="bold" fill="#FFFFFF" text-anchor="middle" opacity="0.5">Ω</text>
+    </g>
+
+    <!-- Displaced Text Slice 2 -->
+    <g mask="url(#text-mask-slice2)" transform="translate(-15, 0)">
+      <text x="256" y="312" font-family="Calibri, Arial, sans-serif" font-size="280" font-weight="bold" fill="#FFFFFF" text-anchor="middle" opacity="0.5">Ω</text>
+    </g>
+  </g>
+</svg>

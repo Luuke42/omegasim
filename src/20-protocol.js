@@ -537,6 +537,9 @@
       // Rueckwaerts nach zweitem Druck). Drift gibt es nicht mehr.
       let throttle = physJetzt ? physOutThrottle : rcGas(throttleY);
       if (driftModus) steer = driftGegenlenken(steer);
+      // v1.1.26: eine laufende Fahrtenwiedergabe sendet genau das Aufgenommene (siehe runPlayback).
+      const mw = typeof macroWiedergabeWert === 'function' ? macroWiedergabeWert() : null;
+      if (mw) { steer = mw.steer; throttle = mw.throttle; }
       sendControlValue(steer, throttle);
       spielerZweiSenden();
     } finally {

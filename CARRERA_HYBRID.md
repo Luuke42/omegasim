@@ -283,6 +283,70 @@ umgesetzt: die Ghosts rollten von selbst im Boxentempo, das Auto des Fahrers wur
 GEDROSSELT (`limitFormation` -> `speedLimitFactor`) und musste weiter von Hand gelenkt und
 gegast werden. `raceFormationLap` kam in `50-drive.js` an keiner Stelle vor.
 
+### Tempo-Grenzen: was die Zahlen im Code wirklich bedeuten (Stand v1.1.40)
+
+**Eine Basis für alle.** Jede Tempozahl im Code (0,35, 0,37, 0,1645 …) ist ein **Anteil des
+Gasbytes**, nicht der Höchstgeschwindigkeit eines bestimmten Autos. Gesendet wird
+`0xDF + Δ` mit **Δ = round(Anteil × 127)** (`buildCommandPacket`, `src/20-protocol.js`). Das gilt
+gleich für NPCs (`ghostTick` → `out.motorPWM` → `writeToCar`) und für dein Auto unter Autopilot
+(Gelb, Einführungsrunde, Scan, Aufstellung): beide regeln ihr Physikmodell auf den Sollwert, und
+das Modell gibt `speedKmh / topSpeedKmh` als Gas aus – im eingeschwungenen Zustand also genau den
+Sollwert. Unter Autopilot und bei NPCs wirken **weder** der Fahrgefühl-Faktor (`topSpeedScale`)
+**noch** der Akkuausgleich. Beim Beschleunigen liegt das gesendete Gas kurz darunter (das Modell
+braucht Weg), das ist der einzige Unterschied.
+
+Darum stehen unten **Gasschritte Δ (von 127)** als die eindeutige Größe. Prozentzahlen sind nur
+eindeutig, solange man dazusagt „von Byte 127“. Gemessen ist die Umrechnung in echte
+Geschwindigkeit: **0,0119 m/s je Gasschritt**, proportional (Mitschnitte 16.–21.08., Bytes 43/50/56
+auf 43-cm-Geraden; `TACHO_SCALE`, `src/30-input.js`). Der Tacho zeigt Anteil × 272,5 km/h.
+
+| Größe (Konstante, Datei) | Anteil | Δ von 127 | echt (m/s) | Tacho | Wer |
+|---|---|---|---|---|---|
+| Scan, Haarnadel: `SCAN_TEMPO_HAARNADEL` 0,47 × Formationstempo | 0,1645 | 21 | 0,25 | 45 | Scan (Spieler und NPC) |
+| Scan, Gerade: `SCAN_TEMPO` 0,67 × Formationstempo | 0,2345 | 30 | 0,36 | 64 | Scan |
+| Aufstellung Haarnadel / Kurve: 0,8 bzw. 0,9 × Formationstempo | 0,28 / 0,315 | 36 / 40 | 0,43 / 0,48 | 76 / 86 | Aufstellung (alle), ohne Boden |
+| Boxentempo `PIT_SPEED_FACTOR` (80 km/h Tacho) | 0,2936 | 37 | 0,44 | 80 | Boxengasse Spieler |
+| „Leseschwelle“ `GHOST_READ_MIN` = Formationstempo `formationPace()` | 0,35 | 44 | 0,52 | 95 | alle |
+| Haarnadel-Obergrenze `haarnadelMax` (Regler) | 0,35 | 44 | 0,52 | 95 | NPC; Spieler unter Gelb |
+| Mindesttempo im Rennen `GHOST_FAHR_MIN` | 0,37 | 47 | 0,56 | 101 | NPC; Spieler unter Gelb |
+| Safety Car unter Gelb `SC_MIN_TEMPO` | 0,37 | 47 | 0,56 | 101 | Safety Car |
+| Gelb-Tempo `gelbGrenze()` = max(0,271; 0,35) × 1,15 | 0,4025 | 51 | 0,61 | 110 | alle auf der Geraden |
+| Lese-Schub nach 250–700 ms 0x00 `GHOST_LESE_SCHUB` | 0,40 | 51 | 0,61 | 109 | NPC |
+| Aufschließen zum Safety Car `SC_AUFSCHLUSS` | 0,45 | 57 | 0,68 | 123 | alle weit hinter dem SC |
+| NPC-Stufen einfach / mittel / schnell (Gerade) | 0,45 / 0,55 / 0,65 | 57 / 70 / 83 | 0,68 / 0,83 / 0,99 | 123 / 150 / 177 | NPC |
+| NPC in der 60°-Kurve: mittel × (1 − 0,2) | 0,44 | 56 | 0,67 | 120 | NPC |
+
+**Unter Gelb, tatsächlich gefahren** (NPCs und dein Autopilot gleich, seit v1.1.39): Gerade 0,4025
+(Δ 51), Kurve 0,322 → vom Boden auf **0,37 (Δ 47)**, Haarnadel 0,2415 → vom Boden 0,37 und von
+der Obergrenze auf **0,35 (Δ 44)**.
+
+**Woher die Zahlen kommen, die genannt wurden:**
+
+- **„Scan 16 %“** ist der Scan in der Haarnadel: 0,1645, also **Δ 21**. Gemeldet (v1.1.15): dort
+  liest das Auto „gerade so“ noch Balken und Querlage.
+- **„Boden unter Gelb 17–22 %“** war **kein Boden**, sondern das, was vor v1.1.3 in Kurven
+  herauskam: Gelb-Tempo × Kurvenabzug × Abstandsfaktor 0,7 – Haarnadel 0,2415 × 0,7 = 0,169
+  (Δ 21), Kurve 0,322 × 0,7 = 0,225 (Δ 29). Seit v1.1.3 hebt der Boden das auf 0,37.
+- **„Mindesttempo 37 %“** ist `GHOST_FAHR_MIN` = 0,37 = **Δ 47**, gewählt als „knapp über 0,35“.
+
+**Die Leseschwelle 0,35 ist NICHT gemessen.** Sie ist die alte Untergrenze des NPC-Tempo-Reglers
+(`ghost-speed`, `min="0.35"`), später als „Leseschwelle“ benannt und an viele Stellen übernommen.
+Es gibt keine Messung „Lesequalität gegen Gas“. Dagegen sprechen drei Beobachtungen auf der Bahn:
+der Scan liest in der Haarnadel mit **Δ 21** (gemeldet v1.1.15); in den Mitschnitten der
+Original-App laufen Teilewechsel auch bei rund **Δ 25** (Gas „0,2“, n = 6 – die Zuordnung zum Byte
+ist dort nicht nachgeprüft, die zweite Zahl derselben Auswertung war falsch abgelesen); und alle
+nachgemessenen Geraden liefen mit Δ 43–56, also teils unter Δ 44. Die
+echte Lesegrenze liegt also deutlich tiefer, vermutlich um Δ 20–25. Die Ausfälle (0x00) in Kurven,
+die früher dem Tempo zugeschrieben wurden, hängen wahrscheinlich auch an Querlage und Lenkung.
+**0,35 ist damit eine vorsichtige Betriebsgrenze, keine Messgröße.** Wer sie senken will, muss
+messen: die 0x00-Rate in Byte 12 gegen das gesendete Δ mitschreiben, je Teiletyp.
+
+**Gleich schnell (behoben in v1.1.41):** Das Safety Car fährt unter Gelb jetzt dasselbe wie das Feld
+(Gerade Δ 51, Kurve Δ 47, Haarnadel Δ 44) – vorher überall Δ 47, weil sein Anteil 0,85 × 0,4025 = 0,342
+unter seinem Mindesttempo lag. In der Einführungsrunde fährt dein Autopilot dieselbe Formel wie die NPCs
+(min(Formationstempo, Grundtempo × Kurvenabzug): Gerade und Kurve Δ 44, Haarnadel Δ 42), und die
+Feld-Staffel ist dort aus.
+
 ### Der Steuerweg: wo die Eingabeverzögerung wirklich sitzt
 
 Gemeldet als „mit zwei Ghosts gibt es eine leichte Eingabeverzögerung, lässt sich die

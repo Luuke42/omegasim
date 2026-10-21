@@ -464,6 +464,182 @@
     $('setting-pac-ueber').addEventListener('change', ueber);
     ueber();
   }
+  // ---- RUECKWAERTSGANG: GAS UND BREMSE ZUSAMMEN (WIP) ------------------------------------
+  // BESTELLT: "Rueckwaertsgang ausloesen, wenn im Stand Gas und Bremse gleichzeitig gedrueckt werden, wie in der
+  // Original-App. Ich fahre nur rueckwaerts, wenn beide Tasten gedrueckt sind. Ich fahre wieder vorwaerts, wenn
+  // ich beide Tasten fuer zum Beispiel 200 ms nicht betaetige - dazu derselbe Parameter, die Haltezeit."
+  //
+  // Gas und Bremse laufen in dieser App technisch als EINE vorzeichenbehaftete Zahl (throttleY = Gas minus
+  // Bremse): "beides voll" hebt sich darin zu 0 auf und ist von "nichts gedrueckt" nicht zu unterscheiden. Die
+  // rohen, UNVERRECHNETEN Werte beider Pedale gibt es nur an der jeweiligen Eingabequelle selbst (Gamepad-
+  // Trigger in pollGamepad/pollPadZusatz, Pfeiltasten in der Tastaturabfrage) - dort ruft jede Quelle diese
+  // Funktion mit ihren rohen Werten auf, BEVOR sie zu throttleY verrechnet werden.
+  //
+  // DER ABLAUF, wenn diese Funktion den Rueckwaertsgang eingelegt hat (gbRueck[nr]):
+  //   beide Pedale gedrueckt   -> Gas nach hinten (der Rueckgabewert ist der Gaswert; "Gas minus Bremse" waere 0)
+  //   nur ein Pedal            -> kein Antrieb (Rueckgabe 0 bzw. die Bremse); die Bremse bremst weiter
+  //   beide ganz los           -> nach der Haltezeit zurueck in den 1. Gang, wie die Vorwaerts-Schalttaste (Kreis/B)
+  // Ein Rueckwaertsgang, den die Schalttaste eingelegt hat, bleibt unberuehrt: dort gilt wie bisher Gas = rueckwaerts.
+  // Nur Automatik, nicht RC, nicht unter Autopilot.
+  //
+  // JE SPIELER UND JE EINGABEQUELLE EINE EIGENE HALTEZEIT-UHR zum Einlegen (Schluessel "1/pad", "1/tast", "2/pad", ...).
+  // GEMELDET: im Cockpit kam das R nie, auf der Optionsseite schon. Die Tastaturabfrage laeuft im Cockpit alle
+  // 30 ms auch ohne Taste und meldete dann "kein Pedal" - das setzte die Uhr zurueck, die das Gamepad gerade
+  // hochzaehlte. Eine ruhige Quelle darf eine andere nie stoeren. Fuers ZURUECKSCHALTEN gilt dasselbe andersherum:
+  // "beide los" heisst, dass ALLE Quellen des Spielers ruhig sind - dafuer merkt sich gbAktivAm[nr] den letzten
+  // Zeitpunkt, an dem irgendeine Quelle ein Pedal gedrueckt hatte.
+  const gbHaltSeit = Object.create(null);
+  const gbToast = Object.create(null);
+  const gbRueck = Object.create(null);
+  const gbAktivAm = Object.create(null);
+  const gbAus = Object.create(null);        // je Spieler: Zeitpunkt des letzten Ausroll-Schritts (0 = nicht am Ausrollen)
+  const GB_LOS = 0.1;                       // darunter gilt ein Pedal als ganz losgelassen
+  const GB_STEHT_KMH = 0.5;                 // darunter gilt das Auto beim Ausrollen als stehend (Byte dann praktisch 0)
+  function gasBremseAn() { const el = $('setting-gasbrake-reverse'); return !!(el && el.checked); }
+  function gasBremseDruck() {
+    const el = $('setting-gasbrake-reverse-druck');
+    const v = el ? parseFloat(el.value) : 50;
+    return Number.isFinite(v) ? Math.max(0.1, Math.min(1, v / 100)) : 0.5;
+  }
+  function gasBremseHaltMs() {
+    const el = $('setting-gasbrake-reverse-ms');
+    const v = el ? parseFloat(el.value) : 100;
+    return Number.isFinite(v) ? Math.max(0, Math.min(500, v)) : 100;
+  }
+  function gasBremseKmh() {
+    const el = $('setting-gasbrake-reverse-kmh');
+    const v = el ? parseFloat(el.value) : 10;
+    return Number.isFinite(v) ? Math.max(0, Math.min(40, v)) : 10;
+  }
+  function gasBremseAusMs() {
+    const el = $('setting-gasbrake-reverse-aus');
+    const v = el ? parseFloat(el.value) : 600;
+    return Number.isFinite(v) ? Math.max(0, Math.min(3000, v)) : 600;
+  }
+  for (const [id, lies, einheit] of [
+    ['setting-gasbrake-reverse-druck', () => Math.round(gasBremseDruck() * 100), ' %'],
+    ['setting-gasbrake-reverse-ms', () => Math.round(gasBremseHaltMs()), ' ms'],
+    ['setting-gasbrake-reverse-kmh', () => Math.round(gasBremseKmh()), ' km/h'],
+    ['setting-gasbrake-reverse-aus', () => Math.round(gasBremseAusMs()), ' ms'],
+  ]) {
+    const reg = $(id);
+    if (!reg) continue;
+    const zeigen = () => { const v = $(id + '-val'); if (v) v.textContent = lies() + einheit; };
+    reg.addEventListener('input', zeigen); zeigen();
+  }
+  // Live-Anzeige unter der Option (nur Spieler 1): was die App gerade sieht und warum sie (noch) nicht
+  // einlegt. Geschrieben wird hoechstens alle 150 ms und nur, solange die Seite sichtbar ist
+  // (offsetParent), damit der Takt davon nichts merkt. HINWEIS: kein <small> - optInfoEinrichten()
+  // (98c-opt-info.js) versteckt jedes <small> in einem Zeilenlabel hinter dem i-Knopf.
+  let gbAufrufe = 0, gbStatusAt = 0;
+  function gbStatus(gasRoh, bremsRoh, kmhAnz, grund) {
+    const el = $('setting-gasbrake-reverse-status');
+    if (!el || !el.offsetParent) return;
+    const jetzt = Date.now();
+    // Springt die Uhr zurueck (jetzt < gbStatusAt), wird trotzdem geschrieben - sonst bliebe die Anzeige
+    // stumm, bis die Uhr den alten Zeitpunkt wieder erreicht hat.
+    if (jetzt >= gbStatusAt && jetzt - gbStatusAt < 150) return;
+    gbStatusAt = jetzt;
+    const st = physEngine.state;
+    const aus = (typeof physOutThrottle === 'number') ? physOutThrottle : 0;
+    el.textContent = t('Gas') + ' ' + Math.round(gasRoh * 100) + ' % · ' + t('Bremse') + ' ' + Math.round(bremsRoh * 100) + ' % · '
+                   + Math.round(st.speedKmh * REAL_SCALE) + ' km/h · ' + t('Gang') + ' ' + gearLabel(st) + ' · '
+                   + t('Ausgabe') + ' ' + aus.toFixed(2) + ' · ' + t(grund) + ' · #' + gbAufrufe;
+  }
+  // gasRoh/bremsRoh: 0..1, UNVERRECHNET. Digitale Quellen (Tastatur) duerfen 0 oder 1 uebergeben.
+  // z: der Zusatzplatz von Spieler 2 oder 3 (zusatzPlatz(nr)); ohne z gilt Spieler 1. Jeder Spieler hat seine
+  // eigene Physik-Instanz (physEngine bzw. z.motor), eigene Uhren und seinen eigenen Autopilot-Zustand.
+  // quelle: 'pad' (Vorgabe) oder 'tast' (Pfeiltasten).
+  // RUECKGABE: null = nichts zu aendern (der Aufrufer rechnet wie bisher Gas minus Bremse), sonst die logische
+  // Gaszahl (-1..1), die der Aufrufer STATTDESSEN an die Physik gibt.
+  function gasBremseRueckwaertsPruefen(gasRoh, bremsRoh, z, quelle) {
+    const nr = z ? z.nr : 1;
+    const uhrKey = nr + '/' + (quelle || 'pad');
+    const motor = z ? z.motor : physEngine;
+    const cfg = motor.config, st = motor.state;
+    const kmhAnz = Math.abs(st.speedKmh) * REAL_SCALE;
+    if (!z) gbAufrufe++;
+    if (st.driveMode !== 'reverse') { gbRueck[nr] = false; gbAus[nr] = 0; }   // per Schalttaste oder Reset verlassen: nicht mehr unser Gang
+    if (!gasBremseAn()) {
+      gbHaltSeit[uhrKey] = 0; gbToast[uhrKey] = null; gbRueck[nr] = false; gbAus[nr] = 0;
+      if (!z) gbStatus(gasRoh, bremsRoh, kmhAnz, 'Option aus');
+      return null;
+    }
+    const jetzt = Date.now();
+    // Das gilt fuer BEIDE Richtungen: RC unberuehrt, nicht unter Autopilot, nur Automatik.
+    const frei = physicsEnabled && !driftModus && cfg.autoShift
+                 && !(typeof autopilotGreiftFuer === 'function' && autopilotGreiftFuer(nr));
+    const schwelle = gasBremseDruck();
+    const beide = gasRoh >= schwelle && bremsRoh >= schwelle;
+
+    // ---- IM RUECKWAERTSGANG, DEN DIESE FUNKTION EINGELEGT HAT -------------------------------------
+    if (gbRueck[nr] && frei) {
+      if (gasRoh >= GB_LOS || bremsRoh >= GB_LOS) { gbAktivAm[nr] = jetzt; gbAus[nr] = 0; }   // Pedal wieder betaetigt: kein Ausrollen mehr
+      else if (!st.isShifting && jetzt - (gbAktivAm[nr] || 0) >= gasBremseHaltMs()) {
+        // Beide Pedale (und alle Quellen) waren fuer die Haltezeit ganz los. ZUERST AUSROLLEN, dann vorwaerts.
+        // GEMELDET: "er bleibt beim Loslassen abrupt stehen". Das Modell rollt von selbst weich aus, aber
+        // triggerShift(1) setzt das Tempo SOFORT auf null (wie beim Druck auf die Schalttaste) - das Auto bekam
+        // schlagartig das Byte 0. Darum laeuft das Modelltempo hier ueber die eingestellte Ausrollzeit weich
+        // (exponentiell, Zeitkonstante = Ausrollzeit / 3) auf null, und erst wenn es steht, geht es in den
+        // 1. Gang. Das Byte folgt dem Tempo, faellt also ohne Sprung. Mit 0 wie vorher: sofort.
+        const ausMs = gasBremseAusMs();
+        const vAnz = Math.abs(st.speedKmh) * REAL_SCALE;
+        if (ausMs > 0 && vAnz > GB_STEHT_KMH) {
+          const dt = gbAus[nr] ? Math.max(0, Math.min(200, jetzt - gbAus[nr])) : 0;     // erster Schritt: noch nichts abziehen
+          gbAus[nr] = jetzt;
+          st.speedKmh *= Math.exp(-dt / (ausMs / 3));
+          if (!z) gbStatus(gasRoh, bremsRoh, kmhAnz, 'Rückwärtsgang: rollt aus');
+          return 0;
+        }
+        gbRueck[nr] = false; gbHaltSeit[uhrKey] = 0; gbAus[nr] = 0;
+        motor.triggerShift(1);
+        if (!z) gbStatus(gasRoh, bremsRoh, kmhAnz, 'vorwärts eingelegt');
+        return 0;
+      }
+      if (!z) {
+        gbStatus(gasRoh, bremsRoh, kmhAnz, beide ? 'Rückwärtsfahrt: beide Pedale'
+          : (gasRoh >= GB_LOS || bremsRoh >= GB_LOS) ? 'Rückwärtsgang: nur ein Pedal, kein Antrieb' : 'Rückwärtsgang: Pedale los, Haltezeit läuft');
+      }
+      return beide ? gasRoh : -bremsRoh;                              // nur bei BEIDEN Pedalen Gas nach hinten
+    }
+
+    // ---- RUECKWAERTSGANG EINLEGEN: im Stand Gas und Bremse zugleich -------------------------------
+    if (!beide) {
+      gbHaltSeit[uhrKey] = 0; gbToast[uhrKey] = null;
+      if (!z) gbStatus(gasRoh, bremsRoh, kmhAnz, 'ein Pedal fehlt oder unter der Druckschwelle');
+      return null;
+    }
+    // Die Haltezeit-Uhr laeuft NUR, solange auch alle anderen Bedingungen erfuellt sind. Sonst zaehlte sie
+    // waehrend eines Autopiloten (Gelb, Scan) oder bei zu hohem Tempo mit, und beim Ende des Autopiloten
+    // haette das Auto bei noch gehaltenen Pedalen sofort eingelegt.
+    let grund = null;
+    if (!physicsEnabled || driftModus) grund = 'Fahrgefühl RC';
+    else if (typeof autopilotGreiftFuer === 'function' && autopilotGreiftFuer(nr)) grund = 'Autopilot fährt';
+    else if (!cfg.autoShift) grund = 'Automatikgetriebe aus';
+    else if (st.driveMode === 'reverse') grund = 'Rückwärtsgang liegt schon an';
+    else if (kmhAnz >= gasBremseKmh()) grund = 'zu schnell';
+    if (grund) {
+      gbHaltSeit[uhrKey] = 0;
+      if (!z) {
+        gbStatus(gasRoh, bremsRoh, kmhAnz, grund);
+        // Im Cockpit ist die Optionsseite nicht zu sehen: ein Grund, der das Einlegen verhindert, wird dort
+        // einmal je Druck (und bei jedem Wechsel des Grundes) kurz eingeblendet, statt stumm zu bleiben.
+        if (grund !== gbToast[uhrKey]) {
+          gbToast[uhrKey] = grund;
+          if (typeof showHudToast === 'function') showHudToast(t('Gas') + '+' + t('Bremse') + ': ' + t(grund));
+        }
+      }
+      return null;
+    }
+    if (!gbHaltSeit[uhrKey]) gbHaltSeit[uhrKey] = jetzt;
+    if (jetzt - gbHaltSeit[uhrKey] < gasBremseHaltMs()) { if (!z) gbStatus(gasRoh, bremsRoh, kmhAnz, 'Haltezeit läuft'); return null; }
+    st.driveMode = 'reverse'; st.currentGear = 0; st.speedKmh = 0; st.neutralRpm = 0;
+    motor.meldung('R\u00fcckw\u00e4rtsgang'); motor.ruck(0.3, 0.2, 90, 'schalt'); motor.schaltTon(-1);
+    gbHaltSeit[uhrKey] = 0; gbRueck[nr] = true; gbAktivAm[nr] = jetzt; gbAus[nr] = 0;
+    if (!z) gbStatus(gasRoh, bremsRoh, kmhAnz, 'eingelegt');
+    return gasRoh;                                                   // beide gedrueckt: gleich Gas nach hinten
+  }
+
   if ($('setting-pac-grenze')) {
     const grenze = (v) => {
       physEngine.config.pacejkaGrenze = physEngine2.config.pacejkaGrenze = v;
@@ -1464,7 +1640,7 @@
   }
 
   ['phys-steerresp', 'phys-accel', 'setting-steer-calib', 'setting-brake-steal',
-   'setting-throttle-steer-relief', 'phys-brake-tau'].forEach(id => {
+   'setting-throttle-steer-relief', 'phys-brake-tau', 'phys-rueck-tempo'].forEach(id => {
     const input = $(id);
     const readout = $(id + '-val');
     const apply = () => {
@@ -1496,6 +1672,12 @@
       if (id === 'phys-brake-tau') {
         physEngine.config.useTauBrems = v;
         readout.textContent = v.toFixed(2).replace('.', ',') + ' s';
+      }
+      // v1.1.11 BESTELLT: "Drossele die Geschwindigkeit im Rueckwaertsgang auf 50 % der aktuellen und
+      // fuege einen Fahrgefuehl-Regler hinzu." Wirkt in 40-physics.js auf die Tempogrenze rueckwaerts.
+      if (id === 'phys-rueck-tempo') {
+        physEngine.config.reverseTempo = v / 100;
+        readout.textContent = Math.round(v) + '%';
       }
       if (id === 'setting-throttle-steer-relief') {
         physEngine.config.throttleSteerRelief = v;
@@ -2360,6 +2542,12 @@
       : raceMode === 'derby'
         ? 'Health ' + Math.round(derbyHealth) + '% · Kills ' + derbyKills + ' · ' + t('Gegner') + ' ' + derbyGeisterZaehlen()
         : raceLapTarget(laps.length);
+    const posEl = $('race-pos');
+    if (posEl) {
+      const p = raceCockpitPosition();
+      posEl.hidden = !p;
+      if (p) posEl.textContent = 'P' + p.pos + '/' + p.von;
+    }
     $('race-lap-list').innerHTML = laps.slice().reverse().slice(0, 10).map(l =>
       `<li><span>${l.lap}</span><span${l.ms === best ? ' class="gt3-ok"' : ''}>${formatLapTime(l.ms)}</span></li>`
     ).join('');
@@ -2383,6 +2571,7 @@
       ? window.OMEGA_BRUECKE.omegaInfo() : null;
     const z = ob && ob.zaehler;
     const weg = ob ? ' · ' + t('Weg') + ' ' + ob.weg + (ob.alt ? ' (' + t('alte APK') + ')' : '')
+      + (ob.gesperrt ? ' (' + t('{n} Auto(s) fest auf Plugin').replace('{n}', ob.gesperrt) + ')' : '')
       + (z ? ' · ' + z.geschrieben + ' ' + t('geschrieben') + ', ' + z.wiederholt + ' ' + t('wiederholt') + ', ' + z.verworfen + ' ' + t('verworfen') : '') : '';
     // v0.10.4: In der App misst der Schreibwert nur JS (der Aufruf kehrt sofort zurueck) -
     // so gekennzeichnet. Dazu, was wirklich zaehlt: Brueckenzeit (APK), Takt des Herzschlags,
@@ -2404,6 +2593,26 @@
     el.textContent = (s ? Math.round(s.mittel) + ' / ' + Math.round(s.p95) + ' ms' + nurJs + (s.haenger ? ' · ' + s.haenger + '× hing' : '')
       : t('noch keine Befehle')) + weg + fehlt + ersetzt + br + takt + pad + ton + (wv ? ' · WebView ' + wv : '');
   }, 1000);
+  // ---- DIE EIGENE POSITION IM COCKPIT (v1.1.40) ---------------------------------------
+  // BESTELLT: "Im Haupt-Cockpit-Screen oben links neben der Runde auch meine Position (bezogen auf das
+  // Rennen, also bei Rundenrennen und Endurance nach Runde, bei Quali nach Zeit, bei den anderen Modi
+  // nicht)." Rundenrennen und Endurance: dieselbe Reihenfolge wie die Rennuebersicht (ovDaten: Runden,
+  // dann Gesamtzeit, dann Ort), damit Cockpit, Uebersicht und Ergebnis denselben Platz nennen.
+  // Qualifying: die beste Runde, ohne Runde hinten (dort nach dem Ort). Gezaehlt wird Auto 1.
+  function raceCockpitPosition() {
+    if (raceState !== 'racing' && raceState !== 'finished') return null;
+    if (raceMode !== 'laps' && raceMode !== 'endurance' && raceMode !== 'qualifying') return null;
+    let reihe;
+    if (raceMode === 'qualifying') {
+      const ortVon = (c) => (typeof c.ort === 'number' ? c.ort : -Infinity);
+      reihe = raceAllCars().map((c) => ({ rolle: c.role, beste: c.laps.length ? Math.min.apply(null, c.laps.map((l) => l.ms)) : Infinity, ort: ortVon(c) }))
+        .sort((a, b) => (a.beste - b.beste) || (b.ort - a.ort));
+    } else {
+      reihe = typeof ovDaten === 'function' ? ovDaten() : [];
+    }
+    const i = reihe.findIndex((x) => x.rolle === 'player');
+    return i < 0 || reihe.length < 1 ? null : { pos: i + 1, von: reihe.length };
+  }
   // COCKPIT GEDROSSELT (v0.8.41): hoechstens alle COCKPIT_MAL_MS, nach dem Senden.
   const COCKPIT_MAL_MS = 90;
   let cockpitMalFaellig = false, cockpitGemaltAt = 0;
@@ -2636,6 +2845,7 @@
     fahrhilfeModus = FAHRHILFE_MODI.indexOf(v) >= 0 ? v : 'aus';
   }
 
+  function aufstellRennenLaeuft() { return raceState === 'racing' || raceState === 'countdown' || raceState === 'finishing'; }
   function autopilotGrund() {
     // Ausdruck-Stellung: nicht lenkfaehig. Ohne Leitplanken haelt sich das Auto nicht selbst
     // auf der Bahn, und ein Autopilot ohne Querregelung faehrt es geradeaus in die Bande.
@@ -2646,7 +2856,11 @@
     // Einfuehrungsrunde und ohne Gelb - das Fahrerauto faehrt mit Spur-Bytes zu seinem
     // Startplatz und wird dort gehalten. Nur wenn SEIN Auto in der Aufstellung steht, sonst
     // wuerde ein fremdes Feld den Cockpit-Schriftzug zeigen.
-    if (typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(playerCar)) return 'aufstellen';
+    // v1.1.20 GEMELDET: "Nach der gelben Flagge konnte ich mein Auto nicht mehr steuern, es ist random
+    // losgefahren und hat komisch gelenkt." Die Aufstellung hat hier Vorrang vor allem anderen - im laufenden
+    // Rennen darf sie aber nie greifen (eine liegengebliebene Aufstellung fuhr das Auto zum Startplatz).
+    if (typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(playerCar)
+        && !aufstellRennenLaeuft()) return 'aufstellen';
     if (raceFormationLap) {
       // Beides kann gelten: wenn in der Einfuehrungsrunde jemand abfliegt. Dann gewinnt der
       // LANGSAMERE, und das ist keine Rangfolge, sondern eine Rechnung.
@@ -2671,7 +2885,11 @@
   // Moeglich wurde es durch die Ortung aus v0.6.46: autopilotGrund() ist global (Flagge,
   // Einfuehrungsrunde, Bahn/Ausdruck-Stellung), der Rest haengt am Auto - Motor, Regler,
   // Kolonnenversatz, Abseits-Antwort. `wer` ist 1, wenn nichts dasteht.
-  const SCAN_TEMPO = 0.6, SCAN_TEMPO_HAARNADEL = 0.4;
+  // v1.1.15 GEMELDET: "Die Geschwindigkeit zum Streckenscan ist am unteren Ende der Mindestgeschwindigkeit.
+  // In der Haarnadel ist das Auto gerade so schnell genug, dass es noch Balken und Querlage bestimmen
+  // kann. Schiebe die Mindestgeschwindigkeit leicht ueber das (2-3 %)." Mal formationPace (0,35):
+  // gerade 0,21 -> 0,235, Haarnadel 0,14 -> 0,165 der Hoechstgeschwindigkeit (je 2,5 Prozentpunkte).
+  const SCAN_TEMPO = 0.67, SCAN_TEMPO_HAARNADEL = 0.47;
   const scanStopp = { car: null, bis: 0 };
   function scanAnhalten(car) { if (car) { scanStopp.car = car; scanStopp.bis = Date.now() + 1500; } }
   // ---- GREIFT DER AUTOPILOT GERADE? (v1.0.25) --------------------------------------
@@ -2720,7 +2938,7 @@
     if (!car) return false;
     if (scanStopp.car === car && Date.now() < scanStopp.bis) return true;
     if (typeof garageScan !== 'undefined' && garageScan.aktiv && garageScan.car === car) return true;
-    if (trackMode === 'on' && typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(car)) return true;
+    if (trackMode === 'on' && typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(car) && !aufstellRennenLaeuft()) return true;
     return !!autopilotGrund();
   }
   function autopilot(fahrerBremse, wer) {
@@ -2771,15 +2989,16 @@
     }
     // Automatische Aufstellung (v0.9.24, 90-ghosts.js): zum Startplatz, dort halten.
     // v0.9.87: nur auf der Bahn - im Ausdruck-Modus wuerde die Querlage als Radwinkel gelesen.
-    if (trackMode === 'on' && typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(meinAuto)) {
+    if (trackMode === 'on' && typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(meinAuto) && !aufstellRennenLaeuft()) {
       // v0.9.58 (D6): mit Spur-Bytes - dieselbe Querlage wie die Ghosts, in maximaler
       // Breite, damit das Auto von selbst auf die Seite seines Startplatzes faellt.
       // v1.0.37 BESTELLT: "Die Autos sollen fuer die automatische Aufstellung mittig fahren und
       // erst kurz vor ihrer Zielposition in die jeweilige Richtung einlenken und dann
       // zuruecklenken." Anfahrt also mit Querlage 0.
+      // Anfahrt mittig bis zum Platz (v1.1.19, wie die NPCs).
+      const aA = aufstellenSpielerZiel(meinAuto);
       const lenk = 0;
       // v1.0.31: gestaffelter Start der Aufstellung - bis zu seinem Zeitpunkt steht das Auto.
-      const aA = aufstellenSpielerZiel(meinAuto);
       if (aA && aA.ab && Date.now() < aA.ab) {
         return { grund: 'aufstellen', throttle: 0, brake: fahrerBremse > 0.05 ? fahrerBremse : 1, steer: 0, lenkt: false };
       }
@@ -2787,8 +3006,21 @@
       // ohne Spur-Bytes (spielerOrtTick), dann stehen. radLenk geht am Fahrzeugmodell vorbei
       // direkt aufs Lenkbyte (physicsStep).
       if (aufstellenSpielerAngekommen(meinAuto)) {
-        const rad = typeof aufstellenSpielerEinlenken === 'function' ? aufstellenSpielerEinlenken(meinAuto) : 0;
-        return { grund: 'aufstellen', throttle: 0, brake: rad ? 0 : 1, steer: 0, lenkt: false, radLenk: rad || 0 };
+        // v1.1.21: Impuls hin und zurueck mit dem Einparktempo (aufstellenSpielerEinlenken), dann Tempo 0.
+        const fo = typeof aufstellenSpielerEinlenken === 'function' ? aufstellenSpielerEinlenken(meinAuto) : null;
+        // v1.1.30: die aufgenommene Folge - Lenkung und Gas direkt aufs Byte, am Modell vorbei.
+        if (fo && fo.gas === 'skript') {
+          return { grund: 'aufstellen', throttle: 0, brake: 0, steer: 0, lenkt: false, radLenk: fo.lenk, radGas: fo.drive };
+        }
+        if (fo && fo.gas === 'fahrt') {
+          const vI = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
+          const gI = ghostSpeedControl(regler, typeof einparkTempo === 'function' ? einparkTempo() : 0.3, vI, 0.045);
+          return { grund: 'aufstellen', throttle: gI.throttle, brake: gI.brake, steer: 0, lenkt: false, radLenk: fo.lenk };
+        }
+        // v1.1.11 BESTELLT: nach dem Impuls DIREKT Tempo 0. Nur bremsen liess das simulierte Tempo (und
+        // damit das Gasbyte) erst abklingen, und das Auto rollte weiter - das erste ueber die Ziellinie.
+        st.speedKmh = 0;
+        return { grund: 'aufstellen', throttle: 0, brake: 1, steer: 0, lenkt: false, radLenk: fo ? fo.lenk : 0 };
       }
       const vA = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
       const dtS = Math.max(0.01, Math.min(0.25, (Date.now() - (regler.at || Date.now())) / 1000));
@@ -2833,14 +3065,20 @@
     // v0.9.87: auch die Einfuehrungsrunde mit der Kurvendrosselung der Ghosts - "wie bei
     // gelber Flagge" (BESTELLT fuer den fliegenden Start).
     // v1.0.12: unter Gelb mit Safety Car erst ~45 % zum Aufschliessen (gelbZielFuer).
-    const zielBasis = (grund === 'formation' ? formationPace()
-      : (typeof gelbZielFuer === 'function' ? gelbZielFuer(meinAuto) : Math.max(yellowFactor(), GHOST_READ_MIN)))
-      * autopilotKurvenFaktor(meinAuto)
+    // v1.1.41 BESTELLT ("auf gleich schnell bringen"): in der Einfuehrungsrunde dieselbe Formel wie die NPCs -
+    // Kurventempo aus dem Grundtempo (ghostCfg.speed x Kurvenabzug), gedeckelt auf das Formationstempo. Vorher
+    // Formationstempo x Kurvenabzug: Kurve 0,28 und Haarnadel 0,21 statt 0,35 und 0,33 wie die NPCs.
+    const zielBasis = (grund === 'formation'
+      ? Math.min(formationPace(), (typeof ghostCfg !== 'undefined' && ghostCfg.speed ? ghostCfg.speed : 0.55) * autopilotKurvenFaktor(meinAuto))
+      : (typeof gelbZielFuer === 'function' ? gelbZielFuer(meinAuto) : Math.max(yellowFactor(), GHOST_READ_MIN))
+        * autopilotKurvenFaktor(meinAuto))
       // v1.0.28: unter Gelb Abstand zum Vordermann, wie die NPCs (gelbAbstandFaktor).
       * (grund === 'yellow' && typeof gelbAbstandFaktor === 'function' ? gelbAbstandFaktor(meinAuto) : 1);
     // Nie schneller als das Safety Car, wenn dicht dahinter - harte Grenze, siehe scFolgeDeckel (90-ghosts.js).
-    const ziel = (grund === 'yellow' && typeof scFolgeDeckel === 'function')
+    const zielSc = (grund === 'yellow' && typeof scFolgeDeckel === 'function')
       ? Math.min(zielBasis, scFolgeDeckel(meinAuto)) : zielBasis;
+    // v1.1.39: unter Gelb Mindesttempo und Haarnadel-Obergrenze wie die NPCs (autopilotGelbGrenzen).
+    const ziel = grund === 'yellow' && typeof autopilotGelbGrenzen === 'function' ? autopilotGelbGrenzen(meinAuto, zielSc) : zielSc;
     const v = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
     const dtA = Math.max(0.01, Math.min(0.25,
       (Date.now() - (regler.at || Date.now())) / 1000));
@@ -3148,7 +3386,7 @@
     const ps = physEngine.state;
     ps.dirtyAir += (ziel - ps.dirtyAir) * Math.min(1, dt * 4);
     const out = physEngine.update({ steering: steer, throttle: rawThrottle, brake: rawBrake,
-                                    headlights: headlightsOn }, dt);
+                                    headlights: headlightsOn, apFaehrt: !!ap }, dt);
     pacejkaRueckmeldung(physEngine, 1);
     // Telemetrie: etwa 10 Proben je Sekunde (Tempo, Gas, Bremse, Gang, Lenkung).
     if (typeof teleProbe === 'function') teleProbe(rawThrottle, rawBrake);
@@ -3170,6 +3408,12 @@
     physOutThrottle = out.motorPWM;
     // v1.0.37: Einlenk-Takt beim Einparken direkt aufs Lenkbyte (am Modell vorbei).
     if (ap && typeof ap.radLenk === 'number') physOutSteer = ap.radLenk;
+    // v1.1.30: das Gas der aufgenommenen Einparkfolge, das Modelltempo laeuft mit.
+    if (ap && typeof ap.radGas === 'number') {
+      physOutThrottle = ap.radGas;
+      physEngine.state.speedKmh = ap.radGas * physEngine.config.topSpeedKmh;
+      physEngine.state.virtualSpeed = ap.radGas;
+    }
   }
 
   // ====================================================================================
@@ -3576,14 +3820,21 @@
     runPlayback();
   };
 
+  // v1.1.26 GEMELDET: "Wenn ich sie abspiele, gibt das Auto kein Gas, sondern lenkt nur." Aufgenommen wird
+  // in sendControlValue(), also was NACH Fahrgefuehl und Physik ans Auto ging. Die Wiedergabe gab das aber als
+  // Stick und Pedal wieder hinein - es lief ein zweites Mal durch Physik/RC-Kennlinie, und vom Gas blieb so
+  // wenig, dass das Auto nicht anfuhr. Jetzt sendet der Herzschlag (20-protocol.js) den aufgenommenen Wert
+  // unveraendert (macroWiedergabeWert), genau wie aufgenommen.
+  let macroWert = null;
+  function macroWiedergabeWert() { return playing ? macroWert : null; }
   function runPlayback() {
     playTimers.forEach(clearTimeout);
     playTimers = [];
     const startedAt = Date.now();
+    macroWert = { steer: 0, throttle: 0 };
     macro.forEach((step, i) => {
       const timer = setTimeout(() => {
-        applySteerInput(SRC.MACRO, step.steer);
-        applyThrottleInput(SRC.MACRO, step.throttle);
+        macroWert = { steer: step.steer, throttle: step.throttle };
         playLog(`Schritt ${i + 1}/${macro.length}  t=${step.t}ms  steer=${step.steer.toFixed(2)}  throttle=${step.throttle.toFixed(2)}`);
         if (i === macro.length - 1) {
           if ($('chk-loop').checked && playing) {
@@ -3601,6 +3852,8 @@
     playTimers.forEach(clearTimeout);
     playTimers = [];
     playing = false; // must be cleared BEFORE releasing, or playbackLocked blocks it
+    macroWert = null;
+    if (typeof physEngine !== 'undefined' && physEngine && typeof physEngine.reset === 'function') physEngine.reset();
     $('btn-play').disabled = macro.length === 0;
     $('btn-stop-play').disabled = true;
     releaseInput(SRC.MACRO);
@@ -3644,6 +3897,29 @@
     saveMacroStore(store);
     refreshMacroList();
     log(`Aufnahme "${name}" gelöscht.`, 'info');
+  };
+
+  // v1.1.26: Teilen oder in die Zwischenablage - in der APK laedt "Export" keine Datei herunter.
+  if ($('btn-share-macro')) $('btn-share-macro').onclick = async () => {
+    if (macro.length === 0) { alert(t('Keine Aufnahme vorhanden. Erst eine gespeicherte Fahrt laden.')); return; }
+    const name = ($('macro-name').value.trim() || ($('macro-list') && $('macro-list').value) || 'aufnahme').replace(/[^\w.-]+/g, '_');
+    const text = JSON.stringify({ name, fahrgefuehl: ($('phys-mode') || {}).value || '', schritte: macro });
+    try {
+      const datei = typeof File === 'function' ? new File([text], name + '.json', { type: 'application/json' }) : null;
+      if (datei && navigator.canShare && navigator.canShare({ files: [datei] })) {
+        await navigator.share({ files: [datei], title: name });
+        return;
+      }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      showHudToast(t('Aufnahme kopiert - zum Beispiel in eine Mail einfügen'));
+      log('Aufnahme "' + name + '" in die Zwischenablage kopiert (' + text.length + ' Zeichen).', 'info');
+    } catch (e) {
+      const feld = $('macro-teilen-text');
+      if (feld) { feld.hidden = false; feld.value = text; feld.select(); }
+      showHudToast(t('Kopieren nicht erlaubt - Text unten markiert, bitte selbst kopieren'));
+    }
   };
 
   $('btn-export-macro').onclick = () => {

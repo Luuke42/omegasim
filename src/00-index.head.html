@@ -2142,6 +2142,10 @@
     font-size: clamp(10px, 1.5vw, 15px); font-weight: 800; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; }
   .ov-podest .name.leer { opacity: 0; }
+  /* v1.1.25: Autobild ueber dem Namen; der Sieger etwas groesser. */
+  .ov-podest .ov-auto { width: auto; aspect-ratio: 1.65 / 1; height: clamp(22px, 8vh, 62px); font-size: clamp(11px, 3vh, 20px); }
+  .ov-podest .platz-1 .ov-auto, .ov-podest .platz-solo .ov-auto { height: clamp(26px, 10vh, 78px);
+    box-shadow: 0 0 0 2px #f5c518, 0 4px 14px rgba(0,0,0,.45); }
   .ov-podest .zeit { color: var(--gt3-strip-ink, #a9b2c4); font-family: monospace;
     font-size: clamp(9px, 1.2vw, 12px); }
   /* Die Gesamtzeit des Siegers: groesser und in der Goldfarbe, damit der Blick dort landet. */
@@ -2772,6 +2776,9 @@
      damit ich sie im Augenwinkel gut erkenne." ---- */
   #race-lap-count { font-size: clamp(26px, 5.2vw, 54px); line-height: 1.05; }
   .gt3-left > .gt3-box:first-child > .gt3-lbl { font-size: clamp(9px, 1.4vw, 12px); }
+  /* v1.1.40: die eigene Position neben "Runde" (raceCockpitPosition, 50-drive.js). */
+  .gt3-pos { margin-left: .6em; font-family: var(--gt3-font); font-weight: 700; letter-spacing: .02em;
+             font-size: clamp(13px, 2.2vw, 22px); color: var(--gt3-ink, inherit); text-shadow: var(--gt3-glow); vertical-align: -.12em; }
   .gt3-left .gt3-act { min-height: 34px; padding: clamp(3px, .5vw, 5px) 2px;
     font-size: clamp(9px, 1.4vw, 12.5px); }
   .gt3-left .gt3-half .gt3-act svg { width: clamp(13px, 2.6vw, 17px); height: clamp(13px, 2.6vw, 17px); }
@@ -3133,6 +3140,19 @@
   .gar-a-zeile.is-ghost .gk-rolle { background: #6b5bd6; color: #fff; }
   .gar-a-zeile.is-safety .gk-rolle { background: #f5c400; color: #1a1500; }
   .gar-a-zeile.is-ghost .gk-rolle button, .gar-a-zeile.is-player .gk-rolle button { color: inherit; }
+  /* v1.1.25: links nur das Etikett, eingestellt wird rechts in der ersten Zeile (gar-a-rolle). */
+  .gar-a-zeile .gk-rolle.gk-rolle-nur { grid-template-columns: minmax(0, 1fr); padding: 6px 4px; }
+  .gar-a-zeile .gk-rolle.gk-rolle-nur > b { grid-column: 1; }
+  .gar-a-rolle .gk-rolle { margin: 0; min-width: 190px; display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px;
+    align-items: center; font-size: 14px; padding: 4px; }
+  .gar-a-rolle .gk-rolle > b { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gar-a-rolle .gk-rolle > .wip-tag { grid-column: 1 / -1; justify-self: center; margin: 0; }
+  .gar-a-rolle .gk-rolle button { font-size: 15px; padding: 4px 8px; }
+  .gar-a-rolle.is-player .gk-rolle { background: var(--k-blau); color: var(--k-blau-text); }
+  .gar-a-rolle.is-zwei .gk-rolle { background: #ffb02e; color: #1a1100; }
+  .gar-a-rolle.is-ghost .gk-rolle { background: #6b5bd6; color: #fff; }
+  .gar-a-rolle.is-safety .gk-rolle { background: #f5c400; color: #1a1500; }
+  .gar-a-rolle.is-ghost .gk-rolle button, .gar-a-rolle.is-player .gk-rolle button { color: inherit; }
   .gar-a-aktion > button { width: 100%; text-align: left; }
   /* v0.9.24: die Knoepfe ganz unten groesser (Motorsound steht jetzt nur noch hier). */
   .gar-a-rechts .gar-a-aktion > button { min-height: 50px; font-size: clamp(14px, 1.8vw, 17px);
@@ -3625,6 +3645,35 @@
     border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px;
     background: var(--panel); }
   .grid-row.dragging { opacity: .45; }
+  /* v1.1.3: virtuelle Fahrt (60d-virtuell.js), ueber allem ausser der Pause. */
+  .vf-schicht { position: fixed; inset: 0; z-index: 300; background: #8ca8c6; }
+  /* v1.1.11: Streckenbild gross zeigen (Screenshot oder lange druecken), statt nur herunterzuladen. */
+  .sb-schau { position: fixed; inset: 0; z-index: 500; background: rgba(5,7,12,.95); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 12px 12px; }
+  .sb-schau .sb-bild { max-width: 100%; max-height: 74vh; object-fit: contain; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.6); }
+  .sb-schau .sb-hinweis { margin: 0; color: #cfd5e0; font-size: 14px; text-align: center; }
+  .sb-schau .sb-knoepfe { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .sb-schau .sb-knoepfe button { min-height: 44px; padding: 8px 18px; }
+  /* v1.1.11: waehrend der virtuellen Fahrt ruht die Seite darunter (nichts wird neu gezeichnet); was
+     dabei zu sehen sein muss - Startaufstellung, Ampel, Meldungen -, kommt ueber die 3D-Schicht. */
+  /* main liegt dabei UEBER der 3D-Schicht (eigener Stapel, z 301): unsichtbar und ohne Treffer fuer
+     Klicks, aber die sichtbar geschalteten Kinder darin stehen ueber dem Bild. Ein z-index allein
+     auf den Kindern half nicht - ein Vorfahr bildet seinen eigenen Stapel. */
+  body.vf-an main { visibility: hidden; position: relative; z-index: 301; }
+  body.vf-an #race-gridscreen, body.vf-an #ampel-overlay, body.vf-an #hud-toast-wrap { visibility: visible; }
+  body.vf-an #race-gridscreen { position: fixed; z-index: 400; }
+  body.vf-an #ampel-overlay { z-index: 400; }
+  body.vf-an #hud-toast-wrap { position: fixed; z-index: 400; top: max(52px, env(safe-area-inset-top)); left: 50%; right: auto;
+    transform: translateX(-50%); pointer-events: none; }
+  .vf-bild { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .vf-hud { position: absolute; left: max(10px, env(safe-area-inset-left)); top: max(8px, env(safe-area-inset-top)); display: grid; gap: 2px;
+    background: rgba(5,7,12,.62); color: #f3f4f6; padding: 6px 10px; border-radius: 8px; font-variant-numeric: tabular-nums;
+    font-family: "Bahnschrift SemiCondensed", "Roboto Condensed", system-ui, sans-serif; font-size: clamp(12px, 1.8vw, 16px); }
+  .vf-hud b { font-size: 1.6em; line-height: 1; }
+  .vf-abseits { color: #ffb02e; font-weight: 700; }
+  .vf-knoepfe { position: absolute; right: max(10px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); display: flex; gap: 6px; }
+  .vf-knoepfe button { background: rgba(5,7,12,.62); color: #fff; border: 1px solid rgba(255,255,255,.35); padding: 6px 12px; min-height: 2.2em; }
+  .vf-wip { position: absolute; left: 10px; bottom: 8px; color: #0b0c10; font-weight: 700; font-size: 12px; }
   /* v1.1.3: Autobild und Versatz - rechts stehende Autos (P1, P3 ...) nach rechts, links stehende
      nach links geschoben, wie auf einem Startplan. */
   .grid-auto { flex: 0 0 auto; width: clamp(56px, 9vw, 104px); height: clamp(34px, 5.6vw, 62px);
@@ -3661,8 +3710,16 @@
   .grid-handle:active { cursor: grabbing; }
   .grid-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; }
-  .grid-move { display: flex; gap: 4px; }
+  .grid-move { display: flex; gap: 6px; }
   .grid-move button { width: 30px; height: 30px; padding: 0; font-size: 13px; }
+  /* v1.1.25 BESTELLT: "Mache die Bilder der Autos und die Tasten mit den Pfeilen etwas groesser." */
+  .gt3-gridschirm .grid-auto { width: clamp(72px, 12vw, 136px); height: clamp(44px, 7.4vw, 82px); }
+  .gt3-gridschirm .grid-move button { width: clamp(40px, 5.6vw, 54px); height: clamp(40px, 5.6vw, 54px); font-size: clamp(16px, 2.2vw, 22px); }
+  .gt3-gridschirm .grid-row { cursor: pointer; }
+  .grid-row.grid-bewegt { animation: gridBewegt 900ms ease-out; }
+  @keyframes gridBewegt { 0%, 35% { box-shadow: 0 0 0 2px var(--accent, #0b84d6); } 100% { box-shadow: 0 0 0 0 transparent; } }
+  .grid-row.grid-blinkt .grid-auto { animation: gridBlinkt 1.5s steps(1, end); }
+  @keyframes gridBlinkt { 0%, 20%, 40%, 60%, 80% { filter: brightness(1.8); } 10%, 30%, 50%, 70%, 90%, 100% { filter: none; } }
 
   /* ---- Track editor: fullscreen and the symbol palette ----
      In fullscreen the map takes the whole screen and the palette sits UNDER it, small, so
@@ -4769,7 +4826,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.1.3</span></span>
+        <span class="foot-ver">v<span id="app-version">1.1.41</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -4921,7 +4978,7 @@
       </div>
 
       <div class="gt3-left">
-        <div class="gt3-box"><div class="gt3-lbl">Runde</div>
+        <div class="gt3-box"><div class="gt3-lbl">Runde<span class="gt3-pos" id="race-pos" data-i18n-skip hidden></span></div>
           <div class="gt3-val" id="race-lap-count">0</div></div>
         <!-- BESTELLT: "Boxenstopp und Gelbe Flagge Knoepfe nebeneinander und so gross wie
              Bahn und Fahrmodus (Pro) und dafuer Rundenzahl und Zeit vergroessern." Dieselbe
@@ -5922,6 +5979,62 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>1.1</span></b></p>
       <ul class="muted" id="patchnotes-11" style="padding-left:20px; line-height:1.7">
+        <li>Automatische Aufstellung: Jedes Auto parkt jetzt mit genau der Einparkfolge des Safety Cars &#8211; gleiche Zeiten und Lenkwerte, f&#252;r die linke Spalte gespiegelt, mit weniger Gas (neuer Regler, Standard 75 %), damit es weiter innen steht. Immer diese Folge, auch auf Kurventeilen; in der Haarnadel parkt weiterhin niemand. Das Log nennt f&#252;r jedes Auto Seite und Gas.</li>
+        <li>Reinigungsfahrzeug: Nach der ersten Start/Ziel-&#220;berfahrt f&#228;hrt es je eine volle Runde mittig, links (Querlage 90 %) und rechts (90 %) und h&#228;lt dann an. Die Querlage kommt allein aus dieser Vorgabe, ohne Ideallinie; die Runden werden &#252;ber den gefahrenen Weg gez&#228;hlt.</li>
+        <li>Gleich schnell: Das Safety Car f&#228;hrt unter Gelb dasselbe Tempo wie das Feld (Gerade, Kurve und Haarnadel mit denselben Grenzen) &#8211; vorher &#252;berall gleich, also auf der Geraden langsamer und in der Haarnadel schneller. In der Einf&#252;hrungsrunde f&#228;hrt dein Autopilot in Kurven so schnell wie die NPCs (vorher deutlich langsamer), und die Feld-Staffel ist dort aus.</li>
+        <li>Spieler 2 und 3 sind nicht mehr als experimentell gekennzeichnet (Garage und Optionen).</li>
+        <li>Cockpit (WIP): Oben links neben der Runde steht jetzt deine Position, z. B. P2/5 &#8211; bei Rundenrennen und Endurance nach Runden und Gesamtzeit (wie die Renn&#252;bersicht), im Qualifying nach Bestzeit, in den anderen Modi nicht.</li>
+        <li>Automatische Aufstellung: Die Autos parken wieder mit Aufnahme am Rand. Die Einparkfolge ist jetzt Takt f&#252;r Takt der Mittelwert aus deiner Aufnahme links/rechts und dem Einparken des Safety Cars (Lenkung und Gas) &#8211; kr&#228;ftiger an den Rand als bisher, weniger weit als das Safety Car. Der kurze Lenkimpuls statt der Aufnahme gilt nur noch, wenn der Platz selbst auf einer Kurve liegt (vorher auch bei einer Kurve dahinter &#8211; dann blieben die Autos mittig stehen).</li>
+        <li>Garage: Blinken ist jetzt ein Knopf rechts direkt unter der Rolle. Das Antippen oder Anw&#228;hlen eines Autos links blinkt nicht mehr &#8211; das Blinken baute die Garage alle 150 ms neu und lie&#223; die linke Spalte springen.</li>
+        <li>Tempo-Grenzen dokumentiert (CARRERA_HYBRID.md): Alle Tempozahlen im Code sind Anteile des Gasbytes (0xDF + Anteil &#215; 127), f&#252;r NPCs und den Autopiloten gleich. Die Tabelle nennt jede Grenze in Gasschritten und m/s (Scan Haarnadel &#916; 21, Leseschwelle &#916; 44, Mindesttempo &#916; 47, Gelb &#916; 51). Die &#8222;Leseschwelle&#8220; 0,35 ist keine Messung, sondern eine vorsichtige Betriebsgrenze &#8211; der Scan liest auch mit &#916; 21.</li>
+        <li>Gummiband neu (WIP, Time Attack): Hat ein NPC viel Vorsprung (ein Viertel Runde, mindestens zwei Teile), wird er an jeder Start/Ziel-Durchfahrt langsamer, bis du ihn &#252;berholt hast; danach Runde f&#252;r Runde schneller, bis er wieder vorn ist. Neuer Regler &#8222;Gummiband: Schritt je Runde&#8220; (2&#8211;10 %, Standard 4 %). Das Tempo bleibt zwischen 60 und 140 % seines Garagentempos, in Kurven h&#246;chstens 110 %, vor und in der Haarnadel nie &#252;ber dem Garagentempo; Mindesttempo und Haarnadel-Obergrenze gelten weiter. Der Vorsprung wird &#252;ber Runden mitgez&#228;hlt, ohne den Rundenz&#228;hler deines Autos.</li>
+        <li>Automatische Aufstellung: Kein Startplatz mehr in der Haarnadel oder Engstelle &#8211; f&#228;llt einer dorthin, r&#252;cken er und alle dahinter um ganze Teile zur&#252;ck (andere Kurven bleiben erlaubt). Das Safety Car h&#228;lt beim Aufstellen Abstand wie unter Gelb und f&#228;hrt im selben Tempo wie alle (sein Mindest- und Heimweg-Tempo greifen dort nicht mehr). Einparken links/rechts: die Aufnahme lenkt 45 ms l&#228;nger nach au&#223;en, die Autos stehen etwas weiter am Rand und halten die Mitte frei.</li>
+        <li>Gelbe Flagge: alle gleich schnell. Die Feld-Staffel schob hintere NPCs auch unter Gelb um bis zu 10 % an &#8211; unter Gelb ist sie jetzt aus. Dein Autopilot f&#228;hrt unter Gelb mit demselben Mindesttempo und derselben Haarnadel-Obergrenze wie die NPCs (vorher war er in Kurven langsamer als sie). Das NPC-Tempo aus der Garage spielt unter Gelb keine Rolle.</li>
+        <li>Verbindungston ohne Piepen: Der Anlassklang beim Verbinden beginnt jetzt dort, wo der Motor anspringt &#8211; das hohe Anlasser-Surren der ersten Sekunde f&#228;llt weg. Garage: Die linke Spalte bleibt beim Umstellen rechts auf ihrer H&#246;he (die Position wird beim Scrollen mitgeschrieben und nach dem Neuaufbau zweimal gesetzt).</li>
+        <li>Aufstellung: Jede Reihe steht jetzt eine halbe Kachel hinter der vorigen, vier Autos je Teil (zwei links, zwei rechts). Liegt ein Platz in einer Kurve oder direkt davor, parkt das Auto mit dem kurzen Lenkimpuls statt mit der Aufnahme. Das Tempo der Aufstellung h&#228;ngt nicht mehr an Schwierigkeit oder Grundtempo. Safety Car: f&#228;hrt die erste Runde ganz hinter dem Feld mit und parkt erst danach; neuer Regler &#8222;Gas beim Ausparken&#8220; (WIP, Standard 1,5 &#215; der Aufnahme).</li>
+        <li>NPCs in der Haarnadel: Das H&#246;chsttempo dort gilt jetzt zuletzt. Bisher hoben die Feld-Staffel (bis +10 %) und das Mindesttempo (37 %) jede Haarnadel &#252;ber die Grenze. Neuer Regler NPC &#8594; &#8222;H&#246;chsttempo in der Haarnadel&#8220; (WIP, Standard 35 %, gilt auch auf den zwei Teilen davor). Ab vier Teilen vor der Haarnadel gibt es keinen &#220;berholschub mehr.</li>
+        <li>Ansagen: Statt &#8222;Autonamen ansagen&#8220; w&#228;hlst du jetzt, was die Namen in der Garage sind (WIP). Autobezeichnungen (Standard): &#8222;Gewonnen hat der rote Porsche&#8220;. Fahrernamen: &#8222;Gewonnen hat Max Mustermann&#8220;, ohne Farbe.</li>
+        <li>Rennstand- und Ergebnisansage (WIP): Neue Kachel Optionen &#8594; Ansagen mit allen Ansagen, die bisher unter Ton standen. Das Rennergebnis wird nach der Zielflagge angesagt (Standard an), der Zwischenstand alle paar Runden ist Standard aus. Mit &#8222;Autonamen ansagen&#8220; (Standard an) hei&#223;t es &#8222;Es f&#252;hrt Max Mustermann&#8220; statt &#8222;der rote &#8230;&#8220;; Autos ohne Namen hei&#223;en weiter nach Farbe und Marke. In der Garage gibt es dazu Marke/Modell je Auto.</li>
+        <li>Garage: Nach einem Tipp bleibt die Liste auf ihrer H&#246;he stehen, statt nach oben zu springen.</li>
+        <li>Einparken nach deinen Aufnahmen (WIP, Vorgabe): Die automatische Aufstellung (rechts und links je eine Aufnahme) und das Safety Car (Einparken auf dem Randstreifen, Ausparken) fahren jetzt deine von Hand aufgenommenen Folgen. Fl&#252;ssig aus der Fahrt: auf dem Platz gleitet das Tempo in 0,3 s auf das der Aufnahme, kein Anhalten davor; das Anfahren aus dem Stand aus den Aufnahmen ist weggelassen. Das Safety Car f&#228;hrt nach dem Ausparken ohne Halt normal weiter. Umschalten auf den bisherigen Lenkimpuls: Renneinstellungen &#8222;Einparken in der Aufstellung&#8220; bzw. Safety-Car-Men&#252; &#8222;Ein- und Ausparken&#8220;.</li>
+        <li>Fahrten-Aufnahme: Die Wiedergabe sendet jetzt genau das Aufgenommene. Vorher lief es ein zweites Mal durch Fahrgef&#252;hl und Physik, und vom Gas blieb so wenig, dass das Auto nur lenkte. Neu: &#8222;Teilen / Kopieren&#8220; &#246;ffnet das Teilen-Men&#252; des Handys oder kopiert die Aufnahme in die Zwischenablage (Aufnahmen liegen in der App, nicht als Datei).</li>
+        <li>Gewinnerschirm: Auf dem Podest steht &#252;ber jedem Namen das Autobild (Foto oder Farbe), der Sieger etwas gr&#246;&#223;er.</li>
+        <li>Aufstellungsschirm vor dem Rennstart: Beim Umsortieren gleiten die Autos an ihren neuen Platz, das bewegte Auto leuchtet kurz auf. Autobilder und Pfeiltasten sind gr&#246;&#223;er, und ein Tipp auf ein Auto l&#228;sst seine Lichter blinken.</li>
+        <li>Garage: Links steht je Auto nur noch die Rolle als Etikett; eingestellt wird sie rechts in der ersten Zeile (&#8222;Rolle&#8220;, mit Pfeilen bzw. Steuerkreuz links/rechts).</li>
+        <li>Pacejka: &#220;bersteuern ist ab Werk aus &#8211; das Auto lenkt nicht mehr von selbst weiter, wenn du nicht lenkst. Wieder anstellen: Optionen &#8594; Allgemein &#8594; &#8222;&#220;bersteuern (Pacejka)&#8220;. Ein gespeichertes &#8222;an&#8220; wird einmalig auf aus gestellt.</li>
+        <li>Funkweg (APK): 1.1.23 schaltete ein Auto schon aufs Plugin, wenn OmegaBle wegen &#220;berlast mehr verwarf als schrieb &#8211; das ist aber Last und kein toter Weg. Jetzt nur noch, wenn zwei Pr&#252;fungen in Folge gar nichts mehr geschrieben wurde.</li>
+        <li>Funklast mit mehreren NPCs (gemeldet: &#8222;Mit einem NPC klappt es gut&#8220;, mit mehreren halten Autos nicht, fahren chaotisch, das eigene Auto reagiert nicht): Jedes fahrende Auto schrieb alle 45 ms &#8211; mit vier NPCs und dir rund 110 Pakete pro Sekunde &#252;ber einen Bluetooth-Adapter, der dann belegt war, wiederholte und verwarf, auch deine Pakete. Jetzt teilen sich die NPCs zusammen etwa 30 Pakete pro Sekunde (ein NPC allein f&#228;hrt weiter im vollen Takt, bei vier schreibt jeder etwa alle 0,1 s; ein unver&#228;nderter Befehl nur alle 0,2 s). Halt (Gas auf 0) und Einparkman&#246;ver gehen weiter sofort und im vollen Takt. Der Halt nach Rennende wird alle 135 ms statt alle 45 ms nachgeschickt.</li>
+        <li>Automatische Aufstellung: Wer seinen Ort schon &#252;ber Start/Ziel abgesichert hat, f&#228;hrt wieder direkt auf seinen Platz (wie bis 1.1.20) statt erst noch einmal &#252;ber Start/Ziel &#8211; das sparte bis zu einer ganzen Runde.</li>
+        <li>Anhalten: Rennen beenden schickt den Halt jetzt 3 s lang nach (vorher 1,5 s). Abbrechen nach &#8222;Automatische Aufstellung&#8220; h&#228;lt alle fahrenden NPCs und das Safety Car an.</li>
+        <li>NPC-Fahrmodus &#8222;Realistisch&#8220; (aus 1.1.3) wieder entfernt: Die NPCs beschleunigen wieder wie vorher und verlieren beim Anfahren nicht mehr die Orientierung. Der Lese-Schub (mehr Gas, wenn ein NPC kurz keinen Code liest) wirkt nur noch bis 0,7 s &#8211; danach schob er Autos neben der Bahn weiter.</li>
+        <li>Funkweg in der App kippt nicht mehr hin und her: Schrieb OmegaBle f&#252;r ein Auto nicht mehr, ging es nach ~4 s aufs Plugin und 2 s sp&#228;ter wieder zur&#252;ck &#8211; in rund zwei Dritteln der Zeit gingen alle Befehle an dieses Auto verloren, auch die Haltebefehle. Jetzt bleibt so ein Auto 30 s auf dem Plugin, dann wird OmegaBle kurz gepr&#252;ft; klappt es wieder nicht, verdoppelt sich die Sperre (bis 10 min). Im Funkrundlauf steht, wie viele Autos gerade fest auf dem Plugin sind.</li>
+        <li>Wetter sprang st&#228;ndig zwischen Regen und trocken (gemeldet von einem Tester): Die Taste W war eine immer aktive Testtaste f&#252;rs Wetter &#8211; wer mit WASD fuhr, schaltete bei jedem Gasgeben um. Jetzt f&#228;hrt die Tastatur auch mit WASD (WIP: W Gas, S Bremse, A/D lenken); die Testtasten (Wetter jetzt Shift+W, Crash C, Tank F/R, Runde Q) gelten nur noch im Entwicklermodus. Challenges (auch die der Studie) schalten au&#223;erdem &#8222;Wetter &#228;ndert sich&#8220; immer aus.</li>
+        <li>Automatische Aufstellung: Die H&#246;he der Startpl&#228;tze ist wieder wie in 1.1.19 (Reihe 1 auf dem Teil vor Start/Ziel, rechts etwas weiter vorn als links) &#8211; das hatte gestimmt. Die neue Querlage (mittig, dann Impuls hin und zur&#252;ck) bleibt.</li>
+        <li>Automatische Aufstellung neu: Die Autos fahren gestaffelt los, jedes erst &#252;ber Start/Ziel (damit klar ist, wo es ist), dann mittig zu seinem Platz &#8211; die ersten beiden auf Start/Ziel, die n&#228;chsten auf das Teil davor und so weiter. Auf ihrem Teil lenken sie mit 30 % Tempo voll zur eigenen Seite und wieder zur&#252;ck (das zweite Auto erst links, dann rechts) und bleiben sofort stehen; die Mitte bleibt frei, damit sp&#228;tere Autos vorbeikommen. Regler &#8222;Einparken: Dauer/Tempo&#8220; wieder da (100 ms, 30 %).</li>
+        <li>Safety Car parkt neu: Nach Gr&#252;n f&#228;hrt es erst &#252;ber Start/Ziel (damit es wei&#223;, wo es ist), dann mittig bis auf sein Einpark-Teil (experimentell, Vorgabe Start/Ziel) und parkt dort mit 30 % Tempo: voll rechts, voll links, sofort stehen &#8211; auf der Fahrbahn am Rand, ohne R&#252;ckw&#228;rtsschub. Beim Losfahren 30 % statt 37 %. &#8222;Neben der Strecke von Hand&#8220; und seine Regler (Anfahrt, Rand-Vorlauf, Ausfahrt-Zeitpunkt, Gegenschub) sind nicht mehr w&#228;hlbar. Vorher parkte es nach einem Neustart oft an der falschen Stelle.</li>
+        <li>Fahrerauto: Eine liegengebliebene automatische Aufstellung (z. B. Rennen mit R1 statt &#252;ber den Startschirm gestartet) konnte mitten im Rennen den Autopiloten anwerfen &#8211; das Auto fuhr selbst los und lenkte die Einparkimpulse. Jedes Rennen beendet jetzt eine laufende Aufstellung, und w&#228;hrend eines Rennens greift sie nie.</li>
+        <li>NPCs halten zuverl&#228;ssig an (Rennen beenden, &#8222;NPCs anhalten&#8220;, Boxen- und Parkende): Der Halt ging bisher nur einmal hinaus, und war das vorige Paket noch unterwegs, wurde er verworfen &#8211; das Auto fuhr mit seinem letzten Befehl weiter. Jetzt wird der Halt 1,5 s lang im Sendetakt nachgeschickt.</li>
+        <li>Automatische Aufstellung (und R&#252;ckfahrt nach dem Rennen): Die Autos fahren bis zu ihrem Platz genau mittig und parken dann mit derselben Folge wie das Safety Car &#8211; Impuls zur eigenen Seite, Gegenschub, Impuls zur&#252;ck, Gegenschub und Ausrollen, R&#228;der am Ende leicht zur Bahn; f&#252;r linke Pl&#228;tze gespiegelt. Die Werte kommen aus Optionen > Safety Car. Das Ziehen an den Rand aus 1.1.17 ist wieder raus; die Regler &#8222;Einparken: Dauer/Tempo&#8220; entfallen, die Einlenkst&#228;rke bleibt.</li>
+        <li>Automatische Aufstellung und R&#252;ckfahrt nach dem Rennen: Die Code-Pr&#252;fung vor dem Halt aus 1.1.17 ist wieder raus &#8211; bei mehreren gleichen Teilen half sie nicht, und nach dem Rennen hielten NPCs mit unpassendem Code gar nicht mehr an. Das Fahren an den Rand bleibt.</li>
+        <li>Funk mit mehreren Autos (APK): Der Sendeweg wechselte mit NPCs st&#228;ndig zwischen OmegaBle und dem Plugin. W&#228;hrend das Plugin ein Auto verbindet oder abonniert, pausiert OmegaBle f&#252;r alle Autos; das galt bisher jedes Mal als Ausfall. Jetzt z&#228;hlt Verworfenes w&#228;hrend einer Pause nicht, und erst zwei Ausf&#228;lle in Folge schalten auf das Plugin um.</li>
+        <li>Automatische Aufstellung: Die Autos fahren jetzt wie das Safety Car erst an den Rand (ab der zweiten H&#228;lfte der Kachel vor ihrem Platz, fast so weit wie das Safety Car) und lenken dann den Impuls &#8211; vorher kamen sie aus der Mitte und standen nicht weit genug au&#223;en. Gehalten wird nur, wenn der gerade gelesene Code zur Zielkachel passt; sonst f&#228;hrt das Auto weiter und gleicht an Start/Ziel neu ab, statt mitten auf der Strecke zu parken (passiert, wenn Funkpakete verloren gehen).</li>
+        <li>Automatische Aufstellung: Lenkimpuls wie beim Safety Car (100 ms bei 40 % Tempo statt 45 ms bei 30 %); weil die Autos aus der Mittelgasse kommen, stehen sie damit weiter innen als das Safety Car. Der rechte Haltepunkt r&#252;ckt daf&#252;r noch etwas vor. Beide Regler stehen auf den neuen Werten (auch wenn vorher anders eingestellt).</li>
+        <li>Streckenscan etwas schneller: gerade 23,5 % statt 21 %, Haarnadel 16,5 % statt 14 % der H&#246;chstgeschwindigkeit &#8211; in der Haarnadel war das Auto gerade an der Grenze, an der es Balken und Querlage noch liest.</li>
+        <li>Safety Car: alle Einstellungen in einem eigenen Men&#252; (neue Kachel &#8222;Safety Car&#8220; in den Optionen) statt verteilt auf NPCs und Renneinstellungen. Neue Vorgaben aus dem Test: Anfahrt 3, Rechts-Impuls 90 ms (minimal n&#228;her an der Fahrbahn), Gegenschub nach rechts 100 ms, Links-Impuls 100 ms, Einpark-Teil Start/Ziel. Auf der Fahrbahn parkt es etwas weniger weit am Rand. Beim Losfahren macht es jetzt immer einen kurzen Links-Rechts-Impuls (falls es am Rand ein St&#252;ck daneben steht). Kommt Gelb, w&#228;hrend es schon einparkt, parkt es zu Ende und f&#228;hrt dann neu los &#8211; vorher fuhr es dann schr&#228;g von der Bahn.</li>
+        <li>Editor: &#8222;Bild speichern&#8220; zeigt das Streckenbild jetzt gro&#223; an &#8211; Screenshot machen oder lange dr&#252;cken; dazu Teilen (wo das Handy es kann), Speichern und Schlie&#223;en. Vorher passierte auf dem Handy oft nichts.</li>
+        <li>Studie: Die Fahrverhaltens-Challenge geht jetzt auch virtuell &#8211; dieselbe Strecke (Homington), dieselben 5 Runden, ohne Bahn und Auto; auf Wunsch zus&#228;tzlich zur Fahrt auf der Bahn. Vorher steht, wie lange alles dauert (Fragen etwa 3, Bahn etwa 10, virtuell etwa 5 Minuten). Die virtuelle Fahrt wird getrennt gespeichert (Apps Script neu bereitstellen).</li>
+        <li>R&#252;ckw&#228;rtsgang: halb so schnell wie bisher, und neu der Regler &#8222;Tempo r&#252;ckw&#228;rts&#8220; im Fahrgef&#252;hl (10&#8211;100 %, Vorgabe 50 %). Das Auto f&#228;hrt wirklich langsamer, auch mit Gas und Bremse zusammen; der Autopilot (gelbe Flagge, Aufstellung) ist ausgenommen.</li>
+        <li>Boxen-Minigame: nur noch 5 Tasten; nach jeder ist das Feld 250 ms leer. Jedes Fenster ist ein F&#252;nftel der Standzeit minus diese Pause, so passt alles in die Zeit; ein Treffer spart 8 % (f&#252;nf zusammen wie bisher 40 %).</li>
+        <li>Virtuell fahren: fl&#252;ssiger und direkter &#8211; gelenkt wird direkt mit dem Stick (voller Einschlag in 0,12 s) statt &#252;ber die Servod&#228;mpfung des echten Autos, die Kamera folgt nach der Zeit statt je Bild, die Seite darunter ruht, auf dem Handy etwas geringere Aufl&#246;sung. Neu: R3 (rechten Stick dr&#252;cken) oder C schaltet die Kamera: Verfolger, nahe Verfolger, Motorhaube. Startaufstellung, Ampel und Meldungen sind jetzt auch w&#228;hrend der virtuellen Fahrt zu sehen.</li>
+        <li>Garage: Die Abstimmungsleiste unten ist weg (die Abstimmung steht rechts beim gesteuerten Auto). Mit dem Controller wie in der Meisterschaft: X auf einem markierten Auto w&#228;hlt es und springt in die rechte Spalte, hoch/runter bleibt in der Spalte, Kreis geht zur&#252;ck zum Auto.</li>
+        <li>Automatische Aufstellung: Die Autos halten fr&#252;her (rechts nach knapp einem Drittel der Kachel, links am Kachelanfang), und direkt nach dem Lenkimpuls steht das Tempo auf 0 &#8211; das erste Auto rollte bisher &#252;ber die Ziellinie.</li>
+        <li>Virtuell fahren (WIP): Das Auto ist jetzt der Vulture V5.R aus Speed Dreams &#8211; echtes 3D-Modell mit Lackierung, R&#228;dern (vorn eingeschlagen, alle drehen) und Schatten. Scheinwerfer mit Lichtkegel, R&#252;ck- und Bremslichter leuchten (Licht &#252;ber den neuen Knopf &#8222;Licht&#8220; oder Dreieck). Federung mit den Federn, D&#228;mpfern und Stabilisatoren des Autos: Bremsen nickt die Nase, Gas dr&#252;ckt das Heck, Kurven legen das Auto zur Seite, neben der Bahn r&#252;ttelt es. Gefahren wird mit seinen Daten (1180 kg, Schwerpunkt, Radstand, 21&#176; Einschlag, Bremsbalance, Abtrieb). In der Garage w&#228;hlbar: Auto (V5.R oder einfaches Modell) und &#8222;Neigung sichtbar&#8220; (1&#215; bis 8&#215;). Neuer Motorklang: Vulture V5.R, 7,0 l V8.</li>
+        <li>Studie: Die Schalter &#8222;mindestens 18&#8220; und &#8222;einverstanden&#8220; lie&#223;en sich nicht antippen (der sichtbare Schalter fehlte) &#8211; jetzt geht es weiter.</li>
+        <li>R&#252;ckw&#228;rtsgang mit Gas und Bremse zusammen (experimentell, Optionen > Steuerung, PR #5 von Playdater1974): beide Pedale kurz zugleich dr&#252;cken legt im Stand den R&#252;ckw&#228;rtsgang ein, Loslassen rollt aus und schaltet wieder vor. Regler f&#252;r Pedalweg, Haltezeit, Tempogrenze und Ausrollzeit, mit Live-Anzeige. Gilt auch f&#252;r Spieler 2 und 3.</li>
+        <li>Men&#252; FAHREN: Bei den Kacheln Strecke und Rennoptionen schaltet ein Tipp auf Titel oder Wert um (z. B. &#8222;Auf der Bahn&#8220;), nur das Bild &#246;ffnet das Men&#252; dazu. Mit Gamepad und Tastatur &#246;ffnet die Kachel weiter das Men&#252;.</li>
+        <li>Studie (WIP, jetzt f&#252;r alle sichtbar): NARQ-S, Selbsteinsch&#228;tzung, Reaktionstest und danach die Fahrverhaltens-Challenge &#8211; 5 Runden Homington (Grundpackung) mit Sim+, ohne Bestenliste. Danach siehst du deine Werte neben dem Mittel aller und den aktuellen Stand der Hypothesen, ohne Namen. Teilnahme freiwillig, ab 18, Alter und Geschlecht werden abgefragt, die Daten werden anonymisiert &#246;ffentlich zug&#228;nglich gemacht.</li>
+        <li>Automatische Aufstellung: Alle Autos fahren genau mittig zu ihren Pl&#228;tzen, auch an schon geparkten vorbei. Am eigenen Haltepunkt &#8211; rechts weiter vorn in der Kachel, links weiter hinten &#8211; lenkt das Auto 45 ms zu seiner Seite und 45 ms zur&#252;ck, bei 30 % Tempo, und bremst dann sofort voll. Neue Regler f&#252;r Dauer und Tempo des Lenkimpulses.</li>
+        <li>Virtuell fahren (WIP, Garage, ganz unten): ein Auto ohne Bluetooth f&#228;hrt frei auf der Editor-Strecke (ohne Strecke auf Balkonia), in 3D mit Verfolgerkamera. Fahrmodell wie ein GT3 in Assetto Corsa Competizione: Pacejka-Reifen, Gewichtsverlagerung, Reibkreis mit ABS und Traktionskontrolle &#8211; am Limit leichtes Untersteuern, Anbremsen dreht das Auto ein, Vollgas in engen Kurven l&#228;sst das Heck kommen, Gegenlenken f&#228;ngt es. Mit Motorsound aus den Aufnahmen (statt des hohen Ersatztons). Ein Tipp auf &#8222;Virtuell fahren&#8220; zeigt rechts die Optionen: Motorsound (dieselbe Liste wie in Optionen > Ton, eigene Wahl) mit Anzeige, ob die Aufnahme spielt, l&#228;dt oder fehlt, und &#8222;Losfahren&#8220;. Nach dem Beenden geht es zur&#252;ck in die Garage. Pfeiltasten, Tastatur und Gamepad (auch in der App) steuern, Escape oder Options beenden. Rundenzeiten, Rennen und Time Attack laufen wie mit einem echten Auto.</li>
         <li>Meisterschaft: Die obere Zeile mit dem Schlie&#223;en-Knopf liegt jetzt &#252;ber der Reiterleiste (vorher musste man erst auf Omega tippen). In der Startaufstellung der Meisterschaft steht P1 jetzt auch im Bild rechts.</li>
         <li>Garage: Im Querformat scrollen die linke Liste und die rechten Einstellungen unabh&#228;ngig voneinander, wie in der Meisterschaft. Neu je gesteuertem Auto: Selbstlenkung (wie Optionen, aus, h&#228;lt die Spur, lenkt selbst) &#8211; gilt auch f&#252;r Spieler 2 und 3 und wird gemerkt.</li>
         <li>Startaufstellung: gr&#246;&#223;ere Autobilder (Foto aus der Garage oder Farbe) und ein seitlicher Versatz &#8211; wer rechts steht, ist nach rechts ger&#252;ckt, wer links steht, nach links.</li>
@@ -6293,10 +6406,12 @@
         <button id="btn-load-macro">Laden</button>
         <button id="btn-delete-macro">Löschen</button>
         <button id="btn-export-macro">Export (JSON)</button>
+        <button id="btn-share-macro">Teilen / Kopieren</button>
         <input type="file" id="macro-import" accept="application/json" style="display:none">
         <button id="btn-import-macro">Import (JSON)</button>
       </div>
-      <p class="muted" style="margin-top:8px">Aufnahmen werden lokal im Browser gespeichert (localStorage).</p>
+      <textarea id="macro-teilen-text" hidden readonly rows="4" style="width:100%; margin-top:8px"></textarea>
+      <p class="muted" style="margin-top:8px">Aufnahmen werden in der App auf diesem Ger&auml;t gespeichert (nicht als Datei). Zum Verschicken: Fahrt laden, dann &bdquo;Teilen / Kopieren&ldquo; &ndash; das &ouml;ffnet das Teilen-Men&uuml; oder kopiert die Aufnahme in die Zwischenablage.</p>
     </div>
 
     <div class="card">
@@ -8020,6 +8135,12 @@
         <div class="snd-row"><audio controls preload="none" src="audio/sd_toro_mid.ogg"></audio><div><b>Speed Dreams: Lamborghini Murci&eacute;lago R-GT (Toro R-GT, 6,0 l V12), Mittelband (4872/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/toro-rgt.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/sd_toro_high.ogg"></audio><div><b>Speed Dreams: Lamborghini Murci&eacute;lago R-GT (Toro R-GT, 6,0 l V12), oberes Band (8000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/toro-rgt.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/sd_toro_over.ogg"></audio><div><b>Speed Dreams: Lamborghini Murci&eacute;lago R-GT (Toro R-GT, 6,0 l V12), Schub (2966/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/toro-rgt.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v5r_idle.ogg"></audio><div><b>Speed Dreams: Vulture V5.R (7,0 l V8), Leerlauf (1000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/ls1-vulture-v5r/v5r-v8.wav): Speed-Dreams-Team, GPL-2.0 oder sp&auml;ter, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v5r_low.ogg"></audio><div><b>Speed Dreams: Vulture V5.R (7,0 l V8), Zwischenband (1612/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/ls1-vulture-v5r/v5r-v8.wav): Speed-Dreams-Team, GPL-2.0 oder sp&auml;ter, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v5r_low2.ogg"></audio><div><b>Speed Dreams: Vulture V5.R (7,0 l V8), zweites Zwischenband (2598/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/ls1-vulture-v5r/v5r-v8.wav): Speed-Dreams-Team, GPL-2.0 oder sp&auml;ter, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v5r_mid.ogg"></audio><div><b>Speed Dreams: Vulture V5.R (7,0 l V8), Mittelband (4188/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/ls1-vulture-v5r/v5r-v8.wav): Speed-Dreams-Team, GPL-2.0 oder sp&auml;ter, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v5r_high.ogg"></audio><div><b>Speed Dreams: Vulture V5.R (7,0 l V8), oberes Band (6750/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/ls1-vulture-v5r/v5r-v8.wav): Speed-Dreams-Team, GPL-2.0 oder sp&auml;ter, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_v5r_over.ogg"></audio><div><b>Speed Dreams: Vulture V5.R (7,0 l V8), Schub (2598/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/ls1-vulture-v5r/v5r-v8.wav): Speed-Dreams-Team, GPL-2.0 oder sp&auml;ter, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/amg_gt3_idle.ogg"></audio><div><b>AMG GT3 (V8, Cross-Plane), Leerlauf (2000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme des Nutzers (photos/newaudio/amg_gt3.mp4), Drehzahl aus der Video-Anzeige</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/amg_gt3_low.ogg"></audio><div><b>AMG GT3 (V8, Cross-Plane), Zwischenband (3700/min)</b><br><span class="muted" style="font-size:11px">Aufnahme des Nutzers (photos/newaudio/amg_gt3.mp4), Drehzahl aus der Video-Anzeige</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/amg_gt3_mid.ogg"></audio><div><b>AMG GT3 (V8, Cross-Plane), Mittelband (5700/min)</b><br><span class="muted" style="font-size:11px">Aufnahme des Nutzers (photos/newaudio/amg_gt3.mp4), Drehzahl aus der Video-Anzeige</span></div></div>
@@ -9145,34 +9266,76 @@
       <div class="opt-row"><div class="opt-label">Gelbe Flagge deaktivieren<small>An: Der Knopf
           &bdquo;Gelbe Flagge&ldquo; und das Halten der Boxentaste rufen kein Gelb mehr aus.</small></div>
         <label class="tgl"><input type="checkbox" id="race-gelb-aus"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: erst aufschlie&szlig;en<small>An:
-          Unter Gelb mit Safety Car fahren alle mit etwa 45&nbsp;% heran und ab zwei Kacheln Abstand
-          mit 35&nbsp;% weiter, in Kurven und Haarnadeln gedrosselt. Aus: alle sofort 35&nbsp;%.
-          &Uuml;berholt wird unter Gelb nie.</small></div>
-        <label class="tgl"><input type="checkbox" id="race-sc-aufschliessen" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Einparken: Einlenkst&auml;rke<span class="wip-tag">WIP</span><small>Beim
-          Einparken (Startaufstellung vor und nach dem Rennen, Safety Car) f&auml;hrt das Auto mittig
-          bis zu seinem Platz, lenkt dort einen kurzen Takt (rund 10&nbsp;ms) zu seiner Seite und
-          einen zur&uuml;ck und h&auml;lt. Hier stellst du ein, wie stark es einlenkt: 100&nbsp;% ist der
-          volle Einschlag, kleiner, wenn die Autos neben die Bahn rutschen. 0 = gar nicht.</small></div>
+      <div class="opt-row"><div class="opt-label">Einparken in der Aufstellung<span class="wip-tag">WIP</span><small>Aufnahme (Vorgabe):
+          Das Auto f&auml;hrt genau die Einparkfolge des Safety Cars &ndash; auf dem Startplatz gleitet es in 0,3&nbsp;s auf
+          ihr Tempo, lenkt zur eigenen Seite und zur&uuml;ck und rollt aus, ohne vorher anzuhalten. Lenkung und Zeiten
+          sind die des Safety Cars, f&uuml;r die linke Spalte gespiegelt; das Gas ist kleiner (Regler darunter), damit
+          die Autos weiter innen stehen. Lenkimpuls: die alte Folge mit den Reglern weiter unten.</small></div>
+        <select id="race-einpark-art" data-preset-skip>
+          <option value="aufnahme" selected>Aufnahme</option>
+          <option value="impuls">Lenkimpuls</option>
+        </select></div>
+      <div class="opt-row"><div class="opt-label">Einparken: Gas der Safety-Car-Folge<span class="wip-tag">WIP</span><small>Wie viel
+          vom Gas der Safety-Car-Einparkfolge die Autos in der Aufstellung bekommen. Weniger Gas: sie rollen weniger weit
+          zur Seite und stehen weiter innen; mehr: weiter am Rand. Lenkung und Zeiten bleiben genau die der Aufnahme.
+          Standard 75&nbsp;%.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="race-einpark-staerke" min="0" max="1" step="0.05" value="0" data-preset-skip>
+          <input type="range" id="race-einpark-sc-gas" min="0.4" max="1" step="0.05" value="0.75" data-preset-skip>
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="race-einpark-staerke-val">0 %</span>
+          <span class="opt-val" id="race-einpark-sc-gas-val">75 %</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Einparken: Einlenkst&auml;rke<span class="wip-tag">WIP</span><small>Bei der
+          automatischen Aufstellung (vor und nach dem Rennen) fahren alle Autos genau mittig, auch an
+          schon geparkten vorbei. Am eigenen Haltepunkt &ndash; rechts weiter vorn in der Kachel, links
+          weiter hinten &ndash; lenkt das Auto kurz zu seiner Seite und genauso lang zur&uuml;ck und bremst
+          dann sofort voll. Hier stellst du ein, wie stark es einlenkt: 100&nbsp;% ist der volle
+          Einschlag, kleiner, wenn die Autos neben die Bahn rutschen. 0 = gar nicht.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="race-einpark-staerke" min="0" max="1" step="0.05" value="1" data-preset-skip>
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="race-einpark-staerke-val">100 %</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Einparken: Dauer des Lenkimpulses<span class="wip-tag">WIP</span><small>Wie
+          viele Millisekunden das Auto zu seiner Seite lenkt &ndash; und danach genauso lang zur&uuml;ck.
+          Vorgabe 45&nbsp;ms, das ist ein Sendetakt. Bleibt das Auto zu weit in der Mitte stehen, erh&ouml;he
+          den Wert; rutscht es neben die Bahn, senke ihn.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="race-einpark-ms" min="10" max="300" step="5" value="100" data-preset-skip>
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="race-einpark-ms-val">100 ms</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Einparken: Tempo beim Lenkimpuls<span class="wip-tag">WIP</span><small>Wie
+          schnell das Auto w&auml;hrend der beiden Lenkimpulse f&auml;hrt, in Prozent der H&ouml;chstgeschwindigkeit.
+          Vorgabe 30&nbsp;%. Schneller hei&szlig;t: derselbe Impuls bringt das Auto weiter zur Seite, und es
+          rollt nach dem Bremsen etwas weiter.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="race-einpark-tempo" min="0.15" max="0.6" step="0.01" value="0.3" data-preset-skip>
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="race-einpark-tempo-val">30 %</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Time Attack: NPCs als Challenger<span class="wip-tag">WIP</span><small>In
           Time Attack auf der Bahn fahren alle NPCs als Challenger gegen dich. Gegen meine Bestzeit:
           sie fahren deine beste aufgezeichnete Runde dieser Strecke nach, jeder ab seinem Startplatz.
           Gegen den Rekord: die Runde der Online-Bestzeit der Challenge oder Community-Strecke.
-          Gummiband: sie halten sich ungef&auml;hr auf deiner H&ouml;he &ndash; vorn langsamer, hinten
-          schneller, mehrere NPCs je eine Kachel versetzt. Fehlt die Runde, fahren sie Gummiband. Auf
-          der Karte zeigt ein wei&szlig;er Punkt, wo die Runde gerade ist.</small></div>
+          Gummiband: hat ein NPC viel Vorsprung, wird er Runde f&uuml;r Runde langsamer, bis du ihn
+          &uuml;berholt hast, danach Runde f&uuml;r Runde schneller, bis er wieder vorn ist. Fehlt die
+          Runde, fahren sie Gummiband. Auf der Karte zeigt ein wei&szlig;er Punkt, wo die Runde gerade ist.</small></div>
         <select id="race-challenger">
           <option value="beste" selected>Gegen meine Bestzeit</option>
           <option value="rekord">Gegen den Rekord</option>
           <option value="gummiband">Gummiband</option>
         </select></div>
+      <div class="opt-row"><div class="opt-label">Gummiband: Schritt je Runde <span class="wip-tag">WIP</span><small>Um so viel &auml;ndert ein NPC im Gummiband sein Tempo an jeder Start/Ziel-Durchfahrt: langsamer, solange er vorn liegt (ab einem Viertel Runde Vorsprung, mindestens zwei Teile, bis du ihn &uuml;berholt hast), schneller, solange er hinter dir liegt. Sein Garagentempo ist 100&nbsp;%; das Gummiband bleibt zwischen 60 und 140&nbsp;% davon. In Kurven h&ouml;chstens 110&nbsp;%, vor und in der Haarnadel nie schneller als sein Garagentempo, und Mindesttempo und H&ouml;chsttempo in der Haarnadel gelten weiter. Standard 4&nbsp;%.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="race-gummiband-schritt" min="0.02" max="0.1" step="0.01" value="0.04" data-preset-skip>
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="race-gummiband-schritt-val">4 %</span>
+        </div></div>
 
       <div id="race-grid-wrap" style="display:none; margin-top:12px">
         <label class="small">Startaufstellung, ziehen oder mit den Pfeilen sortieren</label>
@@ -9367,6 +9530,12 @@
           <b>Ton</b>
           <span>Motorsound, Ambience, Lautst&auml;rken &ndash; und die Motorwerkstatt.</span>
         </button>
+        <button class="misc-tile subpage-open" data-sub="opt-ansagen">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10h32v20H22l-8 7v-7H8z"/><path d="M15 18h18M15 23h11" stroke="var(--bad)"/></svg>
+          <b>Ansagen</b>
+          <span>Rundenzeiten, Rennstand, Ergebnis und Warnungen zu Schaden, Tank, Reifen, Regen und Akku.</span>
+        </button>
         <button class="misc-tile subpage-open" data-sub="opt-ghosts">
           <!-- SYMMETRISCH NEU GEZEICHNET. Der alte Pfad war an drei Stellen schief, und
                eine davon war ein Fehler und keine Geschmacksfrage:
@@ -9389,6 +9558,12 @@
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 42V18a13 13 0 0 1 26 0v24l-4.33-4-4.34 4-4.33-4-4.33 4-4.34-4z"/><circle cx="19.5" cy="19" r="2.4" fill="currentColor"/><circle cx="28.5" cy="19" r="2.4" fill="currentColor"/></svg>
           <b>NPCs</b>
           <span>NPCs: Tempo, Linie, Rennw&uuml;rze, Lernen. Teilweise noch im Aufbau.</span>
+        </button>
+        <button class="misc-tile subpage-open" data-sub="opt-safetycar">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 30l3-9a4 4 0 0 1 4-3h18a4 4 0 0 1 4 3l3 9v6H8z"/><path d="M8 30h32"/><circle cx="15" cy="36" r="3"/><circle cx="33" cy="36" r="3"/><path d="M19 13h10" stroke="#ffb020"/><path d="M21 13v-3h6v3" stroke="#ffb020"/></svg>
+          <b>Safety Car</b>
+          <span>Unter Gelb, Parken und Losfahren &ndash; alles an einem Ort.</span>
         </button>
         <button class="misc-tile subpage-open" data-sub="opt-pad">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
@@ -9431,8 +9606,8 @@
         <button class="misc-tile subpage-open" data-sub="opt-studie" id="opt-studie-kachel" hidden>
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6h12M20 6v12L9 38a3 3 0 0 0 3 4h24a3 3 0 0 0 3-4L28 18V6"/><path d="M14 30h20" stroke="var(--bad)"/></svg>
-          <b>Studie <span class="wip-tag">experimentell</span></b>
-          <span>Persönlichkeit, Reaktionszeit und Fahrkönnen. Freiwillig, etwa 5 Minuten, ab 18.</span>
+          <b>Studie <span class="wip-tag">WIP</span></b>
+          <span>Persönlichkeit, Reaktionszeit und Fahrverhalten. Freiwillig, ab 18, Daten anonymisiert öffentlich.</span>
         </button>
         <button class="misc-tile subpage-open" data-sub="opt-tutorials">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
@@ -9584,13 +9759,13 @@
         </select></div>
       <!-- BESTELLT: "Eventuell sage ich spaeter, dass das Uebersteuern abgeschaltet werden
            soll" - deshalb von Anfang an ein eigener Schalter. -->
-      <div class="opt-row" hidden><div class="opt-label">&Uuml;bersteuern (Pacejka)
+      <div class="opt-row"><div class="opt-label">&Uuml;bersteuern (Pacejka)
           <span class="wip-tag">experimentell</span>
           <small>Nur im Modus Pacejka. An: unter Vollgas in der Kurve und beim Anbremsen
           kommt das Heck, das Auto lenkt von selbst weiter ein und verliert Vortrieb, bis du
-          gegenlenkst oder vom Pedal gehst (h&ouml;chstens 2 s). Aus: das Heck bricht nie aus,
-          nur das Schieben &uuml;ber die Vorderr&auml;der bleibt.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-pac-ueber" checked><span></span></label></div>
+          gegenlenkst oder vom Pedal gehst (h&ouml;chstens 2 s). Aus (Vorgabe): das Auto lenkt nie
+          von selbst weiter, nur das Schieben &uuml;ber die Vorderr&auml;der bleibt.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-pac-ueber"><span></span></label></div>
       <div class="opt-row" hidden><div class="opt-label">Haftgrenze (Pacejka)
           <span class="wip-tag">experimentell</span>
           <small>Nur im Modus Pacejka. Wo der Scheitel der Reifenkurve liegt, gemessen an der
@@ -9985,6 +10160,44 @@
         Getriebe &amp; Fahrleistung
       </div>
       <div class="opt-row"><div class="opt-label">Automatikgetriebe<small>An: Quadrat/X legt unter 10 km/h den Rückwärtsgang, Kreis/B holt ihn heraus. Aus: von Hand schalten, unter dem 1. Gang liegt der Leerlauf und darunter im Stand der Rückwärtsgang.</small></div><label class="tgl"><input type="checkbox" id="setting-autoshift" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">R&uuml;ckw&auml;rtsgang: Gas und Bremse zusammen <span class="wip-tag">experimentell</span>
+          <small>R&uuml;ckw&auml;rtsgang wie am Original-Controller: Sind im Stand Gas und Bremse zugleich gedr&uuml;ckt, legt das Auto den R&uuml;ckw&auml;rtsgang ein und f&auml;hrt r&uuml;ckw&auml;rts, solange beide gedr&uuml;ckt bleiben. L&auml;sst du beide f&uuml;r die Haltezeit los, rollt das Auto aus (siehe Ausrollen), schaltet danach wieder in den 1. Gang und f&auml;hrt vorw&auml;rts. Nur Gas oder nur Bremse fahren im R&uuml;ckw&auml;rtsgang nicht r&uuml;ckw&auml;rts (die Bremse bremst weiter). Gilt nur in der Automatik (Automatikgetriebe an) und nicht im Fahrgef&uuml;hl RC. Wirkt nicht im Autopiloten (Gelbe Flagge, Einf&uuml;hrungsrunde, Streckenscan). Die Regler darunter stellen ein, wie fest gedr&uuml;ckt werden muss, wie lange, bis zu welchem Tempo und wie das Auto ausrollt. Experimentell.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-gasbrake-reverse"><span></span></label></div>
+      <!-- KEIN <small>: optInfoEinrichten() (98c-opt-info.js) versteckt jedes <small> in einem .opt-label hinter dem i-Knopf,
+           und diese Zeile soll sichtbar bleiben und sich laufend aendern. -->
+      <div class="opt-row"><div class="opt-label">Live-Anzeige<br><span id="setting-gasbrake-reverse-status" style="display:block; margin-top:3px; font-size:12px; color:var(--muted, #8a93a6)">noch kein Signal</span></div></div>
+      <div class="opt-row"><div class="opt-label">R&uuml;ckw&auml;rtsgang: Druckschwelle
+          <small>Ab wie viel Auslenkung Gas und Bremse jeweils als &bdquo;gedr&uuml;ckt&ldquo; z&auml;hlen, in Prozent des vollen Wegs. Niedriger l&ouml;st leichter aus, auch bei leichtem Antippen beider Pedale. Gilt nur bei &bdquo;Gas und Bremse zusammen&ldquo;.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-gasbrake-reverse-druck" min="10" max="100" step="5" value="50">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-gasbrake-reverse-druck-val">50 %</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">R&uuml;ckw&auml;rtsgang: Haltezeit
+          <small>Wie lange Gas und Bremse zugleich gedr&uuml;ckt bleiben m&uuml;ssen, bevor der R&uuml;ckw&auml;rtsgang einlegt, in Millisekunden. Dieselbe Zeit gilt umgekehrt: Sind beide Pedale so lange ganz losgelassen (unter 10 %), rollt das Auto aus der R&uuml;ckw&auml;rtsfahrt aus und schaltet danach wieder in den 1. Gang. 0 = sofort. H&ouml;her sch&uuml;tzt vor einem zuf&auml;lligen kurzen &Uuml;berschneiden und vor einem versehentlichen Wechsel nach vorn, wenn du kurz beide Pedale losl&auml;sst. Gilt nur bei &bdquo;Gas und Bremse zusammen&ldquo;.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-gasbrake-reverse-ms" min="0" max="500" step="10" value="100">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-gasbrake-reverse-ms-val">100 ms</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">R&uuml;ckw&auml;rtsgang: Geschwindigkeitsgrenze
+          <small>Bis zu welchem Tempo der R&uuml;ckw&auml;rtsgang auf diesem Weg einlegt, in km/h. Dar&uuml;ber passiert nichts, auch wenn beide Pedale gedr&uuml;ckt sind - dieselbe Grenze gilt auch f&uuml;r die Schalttasten im Automatikgetriebe. Gilt nur bei &bdquo;Gas und Bremse zusammen&ldquo;.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-gasbrake-reverse-kmh" min="0" max="40" step="1" value="10">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-gasbrake-reverse-kmh-val">10 km/h</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">R&uuml;ckw&auml;rtsgang: Ausrollen
+          <small>Wie lange das Auto nach dem Loslassen beider Pedale noch r&uuml;ckw&auml;rts ausrollt, bevor es wieder in den 1. Gang schaltet, in Millisekunden (grob: bis es steht). Das Modelltempo l&auml;uft dabei weich auf null, das Auto bleibt also nicht abrupt stehen. 0 = sofort stehen bleiben und nach vorn schalten. Dr&uuml;ckst du in dieser Zeit wieder beide Pedale, f&auml;hrst du weiter r&uuml;ckw&auml;rts. Gilt nur bei &bdquo;Gas und Bremse zusammen&ldquo;.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-gasbrake-reverse-aus" min="0" max="3000" step="50" value="600">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-gasbrake-reverse-aus-val">600 ms</span>
+        </div></div>
       <div class="opt-row"><div class="opt-label">Höchstgeschwindigkeit (km/h)</div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
@@ -10228,6 +10441,13 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="phys-accel-val">1.00</span>
         </div></div>
+      <div class="opt-row"><div class="opt-label">Tempo r&uuml;ckw&auml;rts<small>H&ouml;chsttempo im R&uuml;ckw&auml;rtsgang, in Prozent des bisherigen Werts. 50&nbsp;% ist die Vorgabe seit 1.1.11 (vorher 100&nbsp;%). Gilt auch f&uuml;r &bdquo;Gas und Bremse zusammen&ldquo;; das Auto f&auml;hrt dabei wirklich langsamer, nicht nur die Anzeige. Wenn das Auto selbst f&auml;hrt (gelbe Flagge, Aufstellung), gilt der Regler nicht.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="phys-rueck-tempo" min="10" max="100" step="5" value="50">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="phys-rueck-tempo-val">50%</span>
+        </div></div>
       <div class="opt-row"><div class="opt-label">Gaskennlinie <span class="wip-tag">WIP</span>
           <small>Wie der Gasweg des Controllers auf die Beschleunigung abgebildet wird. Die Enden liegen immer fest: kein Gas hei&szlig;t keine Beschleunigung, Vollgas hei&szlig;t volle Beschleunigung &ndash; ge&auml;ndert wird nur, was dazwischen passiert. 1,0 ist die Gerade und &auml;ndert nichts. &Uuml;ber 1,0 streckt den unteren Bereich: ein Viertel Gasweg gibt bei 1,8 nur noch 8&nbsp;% statt 25&nbsp;%. Genau das braucht ein Trigger mit gro&szlig;er Totzone &ndash; ein DualShock&nbsp;4 oder DualSense gibt schon bei leichtem Druck viel ab, und dann l&auml;sst sich kein Tempo halten. Unter 1,0 macht es umgekehrt spitzer, f&uuml;r Pedale mit langem Weg.</small></div>
         <div class="opt-slider">
@@ -10357,28 +10577,6 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-knall-volume-val">100%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Rundenzeiten ansagen
-          <small>Nach jeder Runde die Zeit, und bei einer eigenen Bestzeit ein Wort dazu.
-          Gesprochen von der eingebauten Stimme des Browsers &ndash; kein Dienst, kein Netz,
-          nichts verl&auml;sst das Ger&auml;t. Absichtlich kurz gehalten, damit die Ansage
-          vor der n&auml;chsten Kurve fertig ist. Kommt eine zweite Runde herein, w&auml;hrend
-          noch geredet wird, bricht die alte Ansage ab: die Zeit der Gegenwart ist
-          wichtiger. Ob es &uuml;berhaupt spricht, h&auml;ngt an den Stimmen des Systems
-          &ndash; unter Windows sind sie lokal vorhanden, auf Android k&ouml;nnen sie fehlen.
-          Fehlt eine, steht das einmal im Protokoll und nicht bei jeder Runde.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Schaden ansagen<small>Einmal, wenn der Schadensbalken auf 10&nbsp;% gefallen ist. Erst nach einer Reparatur wieder scharf.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce-damage" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Tank ansagen<small>Einmal, wenn noch 10&nbsp;% im Tank sind. Erst nach dem Tanken wieder scharf.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce-fuel" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Reifen ansagen<small>Einmal, wenn der schlechteste der vier Reifen nur noch 10&nbsp;% hat. Der schlechteste z&auml;hlt: ein Auto mit drei guten Reifen und einem abgefahrenen f&auml;hrt nicht drei Viertel gut.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce-tyre" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Regen ansagen<small>Wenn es anf&auml;ngt zu regnen und wenn es aufh&ouml;rt. Beim Laden wird nichts gesagt, erst beim Wechsel.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce-rain" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Boxenstopp ansagen<small>Wenn der Stopp &uuml;ber den doppelten Start-Ausdruck ausgel&ouml;st wird: &bdquo;Boxenstopp eingeleitet&ldquo;. Nicht beim Knopf.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce-pit" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Akku ansagen<small>Einmal, wenn der Akku unter 25&nbsp;% f&auml;llt. Erst nach dem Laden wieder scharf.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-announce-battery"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Regen<small>Select oder W. Reifen kommen beim Boxenstopp passend.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-rain"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Strecken-Ambience<small>Vorbeifahrten, Regen, Donner.</small></div>
@@ -10495,6 +10693,7 @@
           <option value="sd_v12">Ferrari 575 GTC: 6,0 l V12</option>
           <option value="sd_v12weich">Ferrari 599 GTB Fiorano: 6,0 l V12</option>
           <option value="sd_toro">Lamborghini Murci&eacute;lago R-GT (Toro R-GT): 6,0 l V12</option>
+          <option value="sd_v5r">Vulture V5.R (Speed Dreams): 7,0 l V8</option>
           </optgroup>
           <!-- BESTELLT: eigene Aufnahmen des Nutzers aus photos/newaudio; Drehzahlen aus der
                Video-Anzeige. tools/sd_engines.py-Verfahren, audio/loops.json. -->
@@ -10682,6 +10881,76 @@
       </div>
     </div>
     </div>
+    <div class="card subpage" id="sub-opt-ansagen">
+      <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
+      <h2>Ansagen</h2>
+<div class="opt-head">Ansagen</div>
+      <div class="opt-row"><div class="opt-label">Rundenzeiten ansagen
+          <small>Nach jeder Runde die Zeit, und bei einer eigenen Bestzeit ein Wort dazu.
+          Gesprochen von der eingebauten Stimme des Browsers &ndash; kein Dienst, kein Netz,
+          nichts verl&auml;sst das Ger&auml;t. Absichtlich kurz gehalten, damit die Ansage
+          vor der n&auml;chsten Kurve fertig ist. Kommt eine zweite Runde herein, w&auml;hrend
+          noch geredet wird, bricht die alte Ansage ab: die Zeit der Gegenwart ist
+          wichtiger. Ob es &uuml;berhaupt spricht, h&auml;ngt an den Stimmen des Systems
+          &ndash; unter Windows sind sie lokal vorhanden, auf Android k&ouml;nnen sie fehlen.
+          Fehlt eine, steht das einmal im Protokoll und nicht bei jeder Runde.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Rennstand alle paar Runden ansagen <span class="wip-tag">WIP</span>
+          <small>Die ersten drei Fahrzeuge des lokalen Rennfelds, mit Runde, Wagenfarbe und Marke / Modell.
+          Nach jeder eingestellten Zahl vollendeter Runden des f&uuml;hrenden Fahrzeugs.
+          Die Ansage wartet auf die ersten drei Durchfahrten derselben Messrunde.
+          Sekundenr&uuml;ckst&auml;nde stammen aus diesen Durchfahrtszeiten, nicht aus Live-Abst&auml;nden.
+          Nur Rundenrennen und Endurance. Vorproduzierte Clips, auch in der Android-App.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-stand" data-preset-skip><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Rennstand alle X Runden
+          <small>1 bis 20, Standard 5. Zum Beispiel nach Runde 5, 10 und 15.</small></div>
+        <span class="num-steuer"><button class="num-minus" type="button" aria-label="Minus eins">&#8722;</button><input type="number" id="setting-announce-stand-interval" value="5" min="1" max="20" step="1" style="width:84px" data-preset-skip><button class="num-plus" type="button" aria-label="Plus eins">+</button></span></div>
+      <div class="opt-row"><div class="opt-label">Rennstand maximale Wartezeit
+          <small>5 bis 30 Sekunden, Standard 30. Ab der ersten Durchfahrt der Messrunde. Sobald die Top 3 durch sind, wird früher angesagt. Sonst nur die bereits gemessenen Fahrzeuge.</small></div>
+        <span class="num-steuer"><button class="num-minus" type="button" aria-label="Minus eins">&#8722;</button><input type="number" id="setting-announce-stand-wait" value="30" min="5" max="30" step="1" style="width:84px" data-preset-skip><button class="num-plus" type="button" aria-label="Plus eins">+</button></span></div>
+      <div class="opt-row"><div class="opt-label">Rennergebnis ansagen <span class="wip-tag">WIP</span>
+          <small>Einmal nach der Zielflagge: der Sieger und die n&auml;chsten zwei mit R&uuml;ckstand. Nur Rundenrennen und Endurance. Standard an.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-result" checked data-preset-skip><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Namen in der Garage sind <span class="wip-tag">WIP</span>
+          <small>Wie Rennstand und Ergebnis ein Auto mit eigenem Namen nennen. Autobezeichnungen: der Name steht statt der Marke hinter der Farbe, aus &bdquo;Porsche&ldquo; wird &bdquo;Gewonnen hat der rote Porsche&ldquo;. Fahrernamen: nur der Name, ohne Farbe, &bdquo;Gewonnen hat Max Mustermann&ldquo;. Autos ohne eigenen Namen hei&szlig;en immer nach Farbe und Marke. Eigene Namen spricht die Stimme des Ger&auml;ts, nicht die Aufnahmen; der Hall und Lautst&auml;rken &uuml;ber 100&nbsp;% wirken dann nicht. Hat das Ger&auml;t keine Stimme (Android-App), kommen Farbe und Marke. Standard: Autobezeichnungen.</small></div>
+        <select id="setting-announce-stand-namensart" data-preset-skip><option value="auto" selected>Autobezeichnungen</option><option value="fahrer">Fahrernamen</option></select></div>
+      <div class="opt-row"><div class="opt-label">Rennstand-Sprechgeschwindigkeit
+          <small>100 bis 175 %. Gilt ab der nächsten Ansage. Höheres Tempo erhöht auch die Tonhöhe.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-announce-stand-speed" min="1" max="1.75" step="0.05" value="1" data-preset-skip>
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-announce-stand-speed-val">100%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Rennstand-Lautstärke
+          <small>Nur die Rennstand-Ansagen. Bis 200 % mit Boost; 0 % stumm. Regen, Motoren und Warnungen bleiben unverändert.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-announce-stand-volume" min="0" max="2" step="0.05" value="1" data-preset-skip>
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-announce-stand-volume-val">100%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Rennstand-Stadionhall
+          <small>Nur Rennstand und Ergebnis. 0 % ist trocken; dezenter Hall ab 20 %.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-announce-stand-reverb" min="0" max="1" step="0.05" value="0" data-preset-skip>
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-announce-stand-reverb-val">0%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Schaden ansagen<small>Einmal, wenn der Schadensbalken auf 10&nbsp;% gefallen ist. Erst nach einer Reparatur wieder scharf.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-damage" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Tank ansagen<small>Einmal, wenn noch 10&nbsp;% im Tank sind. Erst nach dem Tanken wieder scharf.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-fuel" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Reifen ansagen<small>Einmal, wenn der schlechteste der vier Reifen nur noch 10&nbsp;% hat. Der schlechteste z&auml;hlt: ein Auto mit drei guten Reifen und einem abgefahrenen f&auml;hrt nicht drei Viertel gut.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-tyre" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Regen ansagen<small>Wenn es anf&auml;ngt zu regnen und wenn es aufh&ouml;rt. Beim Laden wird nichts gesagt, erst beim Wechsel.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-rain" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Boxenstopp ansagen<small>Wenn der Stopp &uuml;ber den doppelten Start-Ausdruck ausgel&ouml;st wird: &bdquo;Boxenstopp eingeleitet&ldquo;. Nicht beim Knopf.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-pit" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Akku ansagen<small>Einmal, wenn der Akku unter 25&nbsp;% f&auml;llt. Erst nach dem Laden wieder scharf.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-battery"><span></span></label></div>
+    </div>
     <div class="card subpage" id="sub-opt-ghosts">
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
       <h2>NPCs</h2>
@@ -10769,6 +11038,13 @@
           <input type="range" id="ghost-curve" min="0" max="0.6" step="0.05" value="0.2">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-curve-val">20%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">NPC: H&ouml;chsttempo in der Haarnadel <span class="wip-tag">WIP</span><small>Das h&ouml;chste Tempo eines NPCs in der Haarnadel, in der Engstelle und auf den zwei Teilen davor, in Prozent der H&ouml;chstgeschwindigkeit. Es gilt zuletzt: &Uuml;berholschub, Feld-Staffel und Mindesttempo k&ouml;nnen es nicht &uuml;berschreiten. Ab vier Teilen vor der Haarnadel gibt es au&szlig;erdem keinen &Uuml;berholschub mehr. Unter 35&nbsp;% liest ein Auto den Ausdruck nicht mehr sicher; auf der Bahn geht weniger. Standard 35&nbsp;%.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-haarnadel-max" min="0.2" max="0.5" step="0.01" value="0.35">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-haarnadel-max-val">35%</span>
         </div></div>
       <!-- DIE RENNWUERZE, IN EINZELNE SCHALTER ZERLEGT. Vorher ein Regler fuer sechs
            Bausteine: wer ihn aufdrehte, bekam alle sechs und wusste danach nicht, welcher
@@ -10985,12 +11261,6 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-quertempo-val">2.0</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">NPC: Fahrmodus <span class="wip-tag">WIP</span>
-          <small>Standard: Der NPC f&auml;hrt mit dem Fahrgef&uuml;hl, das du gew&auml;hlt hast, und h&auml;lt sein Zieltempo mit einem Regler, der das Pedal sehr fein dosiert. Realistisch: Beschleunigen und Bremsen wie bei Sim+, egal welches Fahrgef&uuml;hl du f&auml;hrst, und gefahren wird wie mit Triggern &ndash; deutlich zu langsam hei&szlig;t Vollgas, deutlich zu schnell hei&szlig;t bremsen, je mehr, desto st&auml;rker. Gas baut in etwa 0,15&nbsp;s auf, die Bremse in 0,1&nbsp;s. Gilt ab dem n&auml;chsten Start der NPCs.</small></div>
-        <select id="ghost-fahrmodus" data-preset-skip>
-          <option value="standard" selected>Standard</option>
-          <option value="realistisch">Realistisch</option>
-        </select></div>
       <div class="opt-row"><div class="opt-label">NPC: Brems- und Gasverhalten
           <small>Wie entschlossen ein NPC Gas gibt und bremst. NPC und Fahrer gehen durch
           dasselbe Fahrzeugmodell, bekommen ihr Gas aber aus verschiedenen Quellen:
@@ -11185,96 +11455,6 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-leader-pct-val">10%</span>
         </div></div>
-      <div class="opt-head">Safety Car</div>
-      <div class="opt-row"><div class="opt-label">Wo parkt das Safety Car? <span class="wip-tag">experimentell</span>
-          <small>Fahrbahn: Das Safety Car f&auml;hrt beim Start die erste Runde hinter dem Feld mit und h&auml;lt nach der Gelbphase rechts am Rand der Strecke an Start/Ziel. Fahrbahn, wartet bis Gelb: Wie Fahrbahn, aber es f&auml;hrt beim Start nicht mit und wartet, bis Gelb kommt. Neben der Strecke von Hand: Du stellst das Safety Car vor dem Rennen neben die Strecke, zum Beispiel in eine Boxengasse, und zwar schr&auml;g zur Bahn hin in einem Winkel von etwa 40 Grad, damit es beim Losfahren sauber auf die Bahn kommt. Es wartet dort und f&auml;hrt bei Gelb los. Sein Startpunkt ist die Kachel, auf der es nach dem Losfahren zuerst gelesen wird. Er wird einmal je Rennen gemessen, sobald das Auto Start/Ziel passiert hat. Nach Gr&uuml;n f&auml;hrt es zur&uuml;ck, wird langsamer und verl&auml;sst die Bahn am Startpunkt in dieser Reihenfolge: Rechts-Impuls, Gegenschub, Links-Impuls, Gegenschub, Ausrollen, Halt mit leicht nach links eingeschlagenen R&auml;dern. Die Regler darunter stellen diesen Ablauf ein und wirken nur bei dieser Auswahl. Die Vorgaben stammen aus einem Test am Tisch. Bei anderem Auto oder Untergrund m&uuml;ssen sie angepasst werden.</small></div>
-        <select id="sc-parkplatz">
-          <option value="fahrbahn" selected>Fahrbahn</option>
-          <option value="neben">Neben der Strecke von Hand</option>
-          <option value="wartet">Fahrbahn, wartet bis Gelb</option>
-        </select></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: Einpark-Teil
-          <small>Das Streckenteil, an dem das Safety Car neben der Strecke parkt und von dem aus die Ausfahrt gerechnet wird (Regler &bdquo;Ausfahrt-Zeitpunkt&ldquo;). Automatisch: die Kachel, auf der es nach dem Losfahren zuerst gelesen wird, einmal je Rennen gemessen. Mit einem gew&auml;hlten Teil braucht es diese Messung nicht. Die Wahl gilt nur f&uuml;r die gerade geladene Strecke und nur bei &bdquo;Neben der Strecke von Hand&ldquo;. Ein- und Ausparken laufen als feste Folge mit weichen Lenk&uuml;berg&auml;ngen.</small></div>
-        <select id="sc-ausfahrt-teil" data-preset-skip><option value="">automatisch (gemessen)</option></select></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: Heimtempo
-          <small>H&ouml;chsttempo des Safety Cars nach Gr&uuml;n auf dem Weg zur Box, in Prozent der H&ouml;chstgeschwindigkeit. 100 = unbegrenzt, so schnell wie die &uuml;brigen NPCs. Niedriger hei&szlig;t, es muss vor der Anfahrt weniger Tempo abbauen, ist aber ein Hindernis f&uuml;r schnellere Autos, die dahinter auflaufen. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="sc-heimtempo" min="30" max="100" step="5" value="50">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="sc-heimtempo-val">50 %</span>
-        </div></div>      <div class="opt-row"><div class="opt-label">Safety Car: Anfahrt
-          <small>Wie viele Kacheln vor der Ausfahrt das Safety Car vom Heimtempo auf das Einfahrtstempo langsamer wird und an den rechten Rand f&auml;hrt. Mehr: es wird fr&uuml;her langsam. Zu wenig: Es ist beim Einfahren noch zu schnell. Die Anfahrt beginnt nur, wenn sie voll vor dem Auto liegt und der Kachelz&auml;hler an Start/Ziel abgeglichen ist. Sonst f&auml;hrt das Safety Car eine Runde weiter, damit jede Einfahrt gleich abl&auml;uft. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="sc-einfahrt-kacheln" min="1" max="6" step="1" value="5">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="sc-einfahrt-kacheln-val">5</span>
-        </div></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: Rand-Vorlauf
-          <small>Wie viele Kacheln VOR der Anfahrt das Safety Car schon an den rechten Rand f&auml;hrt, ohne dabei langsamer zu werden. Je fr&uuml;her es am Rand f&auml;hrt, desto ruhiger liegt es vor dem Rechts-Impuls, weil die Querbewegung bei h&ouml;herem Tempo mehr Weg zur&uuml;cklegt. Das Tempo bleibt bis zur Anfahrt beim Heimtempo. 0 = die Randfahrt beginnt erst mit der Anfahrt. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="sc-rand-vorlauf" min="0" max="6" step="1" value="2">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="sc-rand-vorlauf-val">2</span>
-        </div></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: Einfahrtstempo
-          <small>Tempo des Safety Cars auf der Anfahrt zur Ausfahrt, in Prozent der H&ouml;chstgeschwindigkeit. F&auml;hrt es zu schnell ein, senke den Wert. In Kurven f&auml;hrt es nie schneller als die Kurvendrosselung erlaubt, wie in der Gelbphase. Unter 30 % liest das Auto die Bahn nicht mehr zuverl&auml;ssig, deshalb geht der Regler nicht tiefer. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="sc-einfahrt-tempo" min="30" max="100" step="5" value="40">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="sc-einfahrt-tempo-val">40 %</span>
-        </div></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: Ausfahrt-Zeitpunkt
-          <small>Ab welcher Stelle das Safety Car nach rechts von der Bahn lenkt, vom Startpunkt aus gerechnet in Kacheln, einstellbar in Viertelschritten: 0 ist der Anfang der Kachel des Startpunkts, negative Werte liegen davor (fr&uuml;her), positive dahinter (sp&auml;ter). Meist braucht es negative Werte, weil das Auto nach dem Einlenken noch ein St&uuml;ck weiterrollt, bis es die Bahn verl&auml;sst. F&auml;hrt es zu fr&uuml;h von der Bahn, erh&ouml;he den Wert, zu sp&auml;t: senke ihn. Die Stelle innerhalb einer Kachel wird aus dem zur&uuml;ckgelegten Weg gesch&auml;tzt. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="sc-ausfahrt-kachel" min="-5" max="5" step="0.25" value="-2.75">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="sc-ausfahrt-kachel-val">-2,75</span>
-        </div></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: Rechts-Impuls
-          <small>Wie lange das Safety Car beim Verlassen der Bahn mit voll nach rechts eingeschlagenen R&auml;dern f&auml;hrt, in Millisekunden. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;. Zu wenig: Es bleibt am Rand der Bahn stehen. Zu viel: Es f&auml;hrt zu weit von der Strecke weg. Zum Kalibrieren schrittweise erh&ouml;hen.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="sc-ausfahrt-ms" min="0" max="2000" step="50" value="400">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="sc-ausfahrt-ms-val">400 ms</span>
-        </div></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: Gegenschub nach Rechts-Impuls
-          <small>Wie lange das Safety Car direkt nach dem Rechts-Impuls kurz r&uuml;ckw&auml;rts schiebt, in Millisekunden, um schon vor dem Links-Impuls Tempo abzubauen. Dreht sich das Auto danach weniger, m&uuml;ssen Rechts- und Links-Impuls neu abgestimmt werden. 0 = aus. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="sc-gegenschub-rad-ms" min="0" max="500" step="25" value="0">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="sc-gegenschub-rad-ms-val">0 ms</span>
-        </div></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: Links-Impuls
-          <small>Wie lange das Safety Car nach dem Rechts-Impuls mit voll nach links eingeschlagenen R&auml;dern f&auml;hrt, in Millisekunden, damit es sich wieder gerade stellt. Gleich lang wie der Rechts-Impuls ist ein guter Startwert. K&uuml;rzer: Das Auto steht am Ende schr&auml;g, mit der Front von der Bahn weg. L&auml;nger: schr&auml;g zur Bahn hin. Ein Sendetakt dauert rund 45 ms, kleinere Schritte als 50 ms wirken nicht. 0 = kein Gegenlenken, die R&auml;der bleiben bis zum Halt rechts. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="sc-ausfahrt-links-ms" min="0" max="2000" step="50" value="700">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="sc-ausfahrt-links-ms-val">700 ms</span>
-        </div></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: Gegenschub nach Links-Impuls
-          <small>Wie lange das Safety Car nach dem Links-Impuls kurz r&uuml;ckw&auml;rts schiebt, in Millisekunden. Das Auto hat keine echte Bremse, Gas weg hei&szlig;t nur Ausrollen. Ein kurzer R&uuml;ckw&auml;rtsimpuls bremst es wirklich ab. Zu lang, und es rollt r&uuml;ckw&auml;rts. Danach rollt es noch etwa 0,3 s mit geraden R&auml;dern aus, dann stehen die R&auml;der leicht links. 0 = aus. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="sc-gegenschub-ms" min="0" max="500" step="25" value="450">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="sc-gegenschub-ms-val">450 ms</span>
-        </div></div>
-      <div class="opt-row"><div class="opt-label">Safety Car: R&auml;der am Ende
-          <small>Wie stark die R&auml;der am Ende, wenn das Auto steht, nach links eingeschlagen sind, in Prozent des vollen Einschlags. So steht das Auto bereit, um beim n&auml;chsten Einsatz sauber aus der Box zu fahren. 0 = R&auml;der gerade. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="sc-endlenk-pct" min="0" max="100" step="5" value="20">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="sc-endlenk-pct-val">20 %</span>
-        </div></div>
       
       <!-- ================================================================================
            RENNEN SIMULIEREN
@@ -11326,6 +11506,125 @@
       </div>
 
     </div>
+    <!-- v1.1.15 BESTELLT: "Sammle alle Safety-Car-Optionen in einem eigenen Menue, das ist gerade voellig
+         chaotisch an verschiedenen Orten. Es soll eine eigene Kachel in den Optionen bekommen." Vorher NPCs
+         (Parken, Impulse) und Renneinstellungen (erst aufschliessen). -->
+    <div class="card subpage" id="sub-opt-safetycar">
+      <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
+      <h2>Safety Car</h2>
+      <p class="muted">Das Safety Car ist eine Rolle in der Garage (eines je Rennen). Hier steht alles, was es tut: unter Gelb, beim Parken und beim Losfahren. Beim Losfahren macht es immer einen kurzen Links-Rechts-Impuls, damit es wieder auf die Bahn kommt, falls es am Rand ein St&uuml;ck daneben steht.</p>
+      <div class="opt-head">Unter Gelb</div>
+      <div class="opt-row"><div class="opt-label">Safety Car: erst aufschlie&szlig;en<small>An:
+          Unter Gelb mit Safety Car fahren alle mit etwa 45&nbsp;% heran und ab zwei Kacheln Abstand
+          mit 35&nbsp;% weiter, in Kurven und Haarnadeln gedrosselt. Aus: alle sofort 35&nbsp;%.
+          &Uuml;berholt wird unter Gelb nie.</small></div>
+        <label class="tgl"><input type="checkbox" id="race-sc-aufschliessen" checked><span></span></label></div>
+      <div class="opt-head">Parken und Losfahren</div>
+      <div class="opt-row"><div class="opt-label">Wo parkt das Safety Car? <span class="wip-tag">experimentell</span>
+          <small>Fahrbahn: Das Safety Car f&auml;hrt beim Start die erste Runde hinter dem Feld mit und parkt danach und nach jeder Gelbphase rechts am Rand auf dem Einpark-Teil. Fahrbahn, wartet bis Gelb: wie Fahrbahn, nur ohne Mitfahren beim Start.</small></div>
+        <select id="sc-parkplatz">
+          <option value="fahrbahn" selected>Fahrbahn</option>
+          <option value="neben" hidden>Neben der Strecke von Hand</option>
+          <option value="wartet">Fahrbahn, wartet bis Gelb</option>
+        </select></div>
+      <div class="opt-row"><div class="opt-label">Safety Car: Ein- und Ausparken <span class="wip-tag">WIP</span>
+          <small>Aufnahme (Vorgabe): Das Safety Car parkt mit der von Hand aufgenommenen Folge auf dem Randstreifen
+          ein (fl&uuml;ssig aus der Fahrt, ohne vorher anzuhalten) und f&auml;hrt mit der aufgenommenen Ausparkfolge wieder
+          los, danach geht es ohne Halt ins normale Fahren &uuml;ber. Lenkimpuls: die bisherige Folge mit den Reglern.</small></div>
+        <select id="sc-park-art">
+          <option value="aufnahme" selected>Aufnahme</option>
+          <option value="impuls">Lenkimpuls</option>
+        </select></div>
+      <div class="opt-row"><div class="opt-label">Gas beim Ausparken <span class="wip-tag">WIP</span><small>Mal so viel Gas wie in der Aufnahme, wenn das Safety Car vom Rand losf&auml;hrt. Lenkung und Zeiten bleiben die der Aufnahme. Die Aufnahme beginnt mit sehr wenig Gas; f&auml;hrt das Safety Car zu sp&auml;t los und dann nach der Rechtslenkung von der Bahn, hier erh&ouml;hen. Standard 1,5.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="sc-aus-gas" min="1" max="3" step="0.1" value="1.5">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="sc-aus-gas-val">1,5&times;</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Safety Car: Einpark-Teil <span class="wip-tag">experimentell</span>
+          <small>Das Streckenteil, auf dem das Safety Car rechts am Rand parkt. Vorgabe Start/Ziel. Es f&auml;hrt dorthin erst, wenn es seit dem Losfahren &uuml;ber Start/Ziel gefahren ist &ndash; sonst stimmt die Z&auml;hlung der Teile nicht. Die Wahl einer bestimmten Nummer gilt nur f&uuml;r die gerade geladene Strecke.</small></div>
+        <select id="sc-ausfahrt-teil" data-preset-skip><option value="">automatisch (gemessen)</option></select></div>
+      <div class="opt-row"><div class="opt-label">Safety Car: Heimtempo
+          <small>H&ouml;chsttempo des Safety Cars nach Gr&uuml;n auf dem Weg zu seinem Einpark-Teil, in Prozent der H&ouml;chstgeschwindigkeit. 100 = unbegrenzt, so schnell wie die &uuml;brigen NPCs.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="sc-heimtempo" min="30" max="100" step="5" value="50">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="sc-heimtempo-val">50 %</span>
+        </div></div>      <div class="opt-row" hidden><div class="opt-label">Safety Car: Anfahrt
+          <small>Wie viele Kacheln vor der Ausfahrt das Safety Car vom Heimtempo auf das Einfahrtstempo langsamer wird und an den rechten Rand f&auml;hrt. Mehr: es wird fr&uuml;her langsam. Zu wenig: Es ist beim Einfahren noch zu schnell. Die Anfahrt beginnt nur, wenn sie voll vor dem Auto liegt und der Kachelz&auml;hler an Start/Ziel abgeglichen ist. Sonst f&auml;hrt das Safety Car eine Runde weiter, damit jede Einfahrt gleich abl&auml;uft. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="sc-einfahrt-kacheln" min="1" max="6" step="1" value="3">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="sc-einfahrt-kacheln-val">3</span>
+        </div></div>
+      <div class="opt-row" hidden><div class="opt-label">Safety Car: Rand-Vorlauf
+          <small>Wie viele Kacheln VOR der Anfahrt das Safety Car schon an den rechten Rand f&auml;hrt, ohne dabei langsamer zu werden. Je fr&uuml;her es am Rand f&auml;hrt, desto ruhiger liegt es vor dem Rechts-Impuls, weil die Querbewegung bei h&ouml;herem Tempo mehr Weg zur&uuml;cklegt. Das Tempo bleibt bis zur Anfahrt beim Heimtempo. 0 = die Randfahrt beginnt erst mit der Anfahrt. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="sc-rand-vorlauf" min="0" max="6" step="1" value="2">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="sc-rand-vorlauf-val">2</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Safety Car: Einparktempo
+          <small>Tempo beim Einparken (Rechts- und Links-Impuls), in Prozent der H&ouml;chstgeschwindigkeit. Vorgabe 30 %. Unter 30 % liest das Auto die Bahn nicht mehr zuverl&auml;ssig, deshalb geht der Regler nicht tiefer.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="sc-einfahrt-tempo" min="30" max="100" step="5" value="30">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="sc-einfahrt-tempo-val">30 %</span>
+        </div></div>
+      <div class="opt-row" hidden><div class="opt-label">Safety Car: Ausfahrt-Zeitpunkt
+          <small>Ab welcher Stelle das Safety Car nach rechts von der Bahn lenkt, vom Startpunkt aus gerechnet in Kacheln, einstellbar in Viertelschritten: 0 ist der Anfang der Kachel des Startpunkts, negative Werte liegen davor (fr&uuml;her), positive dahinter (sp&auml;ter). Meist braucht es negative Werte, weil das Auto nach dem Einlenken noch ein St&uuml;ck weiterrollt, bis es die Bahn verl&auml;sst. F&auml;hrt es zu fr&uuml;h von der Bahn, erh&ouml;he den Wert, zu sp&auml;t: senke ihn. Die Stelle innerhalb einer Kachel wird aus dem zur&uuml;ckgelegten Weg gesch&auml;tzt. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="sc-ausfahrt-kachel" min="-5" max="5" step="0.25" value="-2.75">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="sc-ausfahrt-kachel-val">-2,75</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Safety Car: Rechts-Impuls
+          <small>Wie lange das Safety Car beim Einparken aus der Fahrbahnmitte mit voll nach rechts eingeschlagenen R&auml;dern f&auml;hrt, in Millisekunden. Zu wenig: Es steht zu weit innen. Zu viel: Es f&auml;hrt &uuml;ber den Rand. Vorgabe 100 ms.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="sc-ausfahrt-ms" min="0" max="2000" step="10" value="100">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="sc-ausfahrt-ms-val">100 ms</span>
+        </div></div>
+      <div class="opt-row" hidden><div class="opt-label">Safety Car: Gegenschub nach Rechts-Impuls
+          <small>Wie lange das Safety Car direkt nach dem Rechts-Impuls kurz r&uuml;ckw&auml;rts schiebt, in Millisekunden, um schon vor dem Links-Impuls Tempo abzubauen. Dreht sich das Auto danach weniger, m&uuml;ssen Rechts- und Links-Impuls neu abgestimmt werden. 0 = aus. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="sc-gegenschub-rad-ms" min="0" max="500" step="25" value="100">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="sc-gegenschub-rad-ms-val">100 ms</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Safety Car: Links-Impuls
+          <small>Wie lange es danach voll nach links lenkt, damit es wieder gerade steht, in Millisekunden. Gleich lang wie der Rechts-Impuls ist ein guter Startwert; danach steht es sofort.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="sc-ausfahrt-links-ms" min="0" max="2000" step="10" value="100">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="sc-ausfahrt-links-ms-val">100 ms</span>
+        </div></div>
+      <div class="opt-row" hidden><div class="opt-label">Safety Car: Gegenschub nach Links-Impuls
+          <small>Wie lange das Safety Car nach dem Links-Impuls kurz r&uuml;ckw&auml;rts schiebt, in Millisekunden. Das Auto hat keine echte Bremse, Gas weg hei&szlig;t nur Ausrollen. Ein kurzer R&uuml;ckw&auml;rtsimpuls bremst es wirklich ab. Zu lang, und es rollt r&uuml;ckw&auml;rts. Danach rollt es noch etwa 0,3 s mit geraden R&auml;dern aus, dann stehen die R&auml;der leicht links. 0 = aus. Gilt nur bei &bdquo;Neben der Strecke von Hand&ldquo;.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="sc-gegenschub-ms" min="0" max="500" step="25" value="450">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="sc-gegenschub-ms-val">450 ms</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Safety Car: R&auml;der am Ende
+          <small>Wie stark die R&auml;der am Ende nach links (zur Bahn) eingeschlagen sind, in Prozent des vollen Einschlags. 0 = gerade. Beim Losfahren macht es au&szlig;erdem einen kurzen Links-Rechts-Impuls.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="sc-endlenk-pct" min="0" max="100" step="5" value="20">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="sc-endlenk-pct-val">20 %</span>
+        </div></div>
+    </div>
     <div class="card subpage" id="sub-opt-pad">
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
       <h2>Controller</h2>
@@ -11375,10 +11674,10 @@
 
     <div class="opt-head" style="margin-top:16px">Tastatur, Fahren</div>
     <div class="help-grid">
-      <kbd>&uarr;</kbd><span>Gas</span>
-      <kbd>&darr;</kbd><span>Bremse</span>
-      <kbd>&larr;</kbd> <span>lenken links</span>
-      <kbd>&rarr;</kbd><span>lenken rechts</span>
+      <kbd>&uarr;</kbd><span>Gas (auch W)</span>
+      <kbd>&darr;</kbd><span>Bremse (auch S)</span>
+      <kbd>&larr;</kbd> <span>lenken links (auch A)</span>
+      <kbd>&rarr;</kbd><span>lenken rechts (auch D)</span>
       <kbd>Leertaste</kbd><span>Not-Halt, alle Eingaben los, Momentum auf null</span>
       <kbd>I</kbd><span>hochschalten, und aus dem Rückwärtsgang wieder heraus</span>
       <kbd>K</kbd><span>runterschalten. In Automatik: unter 10 km/h Rückwärtsgang, von Hand aus dem 1. Gang in N und aus N in R</span>
@@ -11387,7 +11686,8 @@
 
     <div class="opt-head">Tastatur: Test und Fehlersuche am PC</div>
     <div class="help-grid">
-      <kbd>W</kbd><span>Wetter umschalten (Regen / trocken)</span>
+      <kbd>Shift</kbd><span>+ W, C, F, R, Q gelten nur im Entwicklermodus</span>
+      <kbd>W</kbd><span>mit Shift: Wetter umschalten (Regen / trocken)</span>
       <kbd>P</kbd><span>Boxenstopp an, erneut dr&uuml;cken bricht ab. Bei der Ausl&ouml;sung &bdquo;doppelter Ausdruck&ldquo; l&ouml;st die Taste nicht aus &ndash; dort z&auml;hlt nur das zweimalige &Uuml;berfahren.</span>
       <kbd>C</kbd><span>Crash ausl&ouml;sen: Schaden, Ger&auml;usch und Rumble wie im Betrieb</span>
       <kbd>F</kbd><span>Tank auf 5&nbsp;% setzen, um den Notlauf zu pr&uuml;fen</span>
@@ -11670,8 +11970,7 @@
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
       <h2>Mehrspieler</h2>
       <div class="opt-head">Der Modus</div>
-      <div class="opt-row"><div class="opt-label">Mehrspieler-Modus (2&ndash;3 Spieler)<span
-          class="wip-tag">WIP</span><small>Zwei oder drei Autos, je ein Controller, ein
+      <div class="opt-row"><div class="opt-label">Mehrspieler-Modus (2&ndash;3 Spieler)<small>Zwei oder drei Autos, je ein Controller, ein
           Rennen auf derselben Strecke. In der Garage gibt es die Rollen &bdquo;Spieler&nbsp;2&ldquo;
           und &bdquo;Spieler&nbsp;3&ldquo; (die Wahl schaltet den Modus ein). Das erste Pad
           f&auml;hrt Auto&nbsp;1, das zweite Auto&nbsp;2, das dritte Auto&nbsp;3. Im Cockpit

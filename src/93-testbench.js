@@ -22,6 +22,51 @@
   //      sie und stellt sie von Hand.
 
   window.OMEGA_TEST = {
+    // ---- Motorton-Zustand (v1.1.3): was gerade spielt und warum nicht.
+    tonZustand() {
+      return { an: soundEnabled, ctx: audioCtx ? audioCtx.state : null, bereit: sampleEngine.ready,
+        laedt: sampleEngine.loading, laeuft: !!sampleEngine.nodes, auto: sampleEngine.car || null,
+        geladen: Object.keys(sampleEngine.buffers).filter((k) => Object.keys(sampleEngine.buffers[k]).length),
+        wahl: $('sound-profile') ? $('sound-profile').value : null, physik: physicsEnabled,
+        last: physEngine.state.engineLoad, drehzahl: physEngine.state.rpm, gang: physEngine.state.driveMode,
+        master: sampleEngine.master ? sampleEngine.master.gain.value : null,
+        osz: engineGain ? engineGain.gain.value : null, virtuell: typeof vfAktiv === 'function' && vfAktiv(),
+        pegel: (() => {
+          // Am Ausgang der Zusatzkette gemessen (dort laeuft der Aufnahme-Motor durch).
+          if (!audioCtx || !xs.gebaut) return null;
+          if (!xs.messer) { xs.messer = audioCtx.createAnalyser(); xs.cut.connect(xs.messer); }
+          const d = new Float32Array(xs.messer.fftSize);
+          xs.messer.getFloatTimeDomainData(d);
+          return Math.sqrt(d.reduce((s, v) => s + v * v, 0) / d.length);
+        })(), cut: xs.gebaut ? xs.cut.gain.value : null };
+    },
+    // Studie (98f-studie.js): direkt auf einen Schritt springen, ohne Fragebogen und Reaktionstest.
+    studieSpringen(schritt) { if (!st) st = studieNeu(); st.schritt = schritt; studieZeichnen(); return st.schritt; },
+    studieStand() { return st ? { schritt: st.schritt, art: st.fahrtArt || null, bahn: !!st.fahrt, virtuell: !!st.fahrtVirtuell } : null; },
+    vfStand() { return { aktiv: vfAktiv(), kamera: vfKameraId(), studie: !!VF.studie, chLauf: !!chLauf, phase: chLauf ? chLauf.phase : null }; },
+    motorLesen() {
+      const s = physEngine.state;
+      return { rpm: Math.round(s.rpm), md: Math.round(motorDrehzahl(s)), gang: s.currentGear, kmh: +(s.speedKmh * REAL_SCALE).toFixed(0),
+        last: +(s.engineLoad || 0).toFixed(2), begr: !!s.onLimiter, schalt: !!s.isShifting, lat: +(s.latUse || 0).toFixed(2) };
+    },
+    // Je Knoten der Zusatzkette: wie viele Abtastwerte keine Zahl sind (NaN vergiftet den Ausgang).
+    xsMessen() {
+      if (!audioCtx || !xs.gebaut) return null;
+      const namen = ['whine', 'whineFilter', 'whineGain', 'pfeifQuelle', 'pfeif', 'pfeifGain', 'rollQuelle', 'roll', 'rollGain', 'add', 'ton', 'cut'];
+      if (!xs.messKnoten) {
+        xs.messKnoten = {};
+        for (const n of namen) if (xs[n]) { const a = audioCtx.createAnalyser(); a.fftSize = 1024; xs[n].connect(a); xs.messKnoten[n] = a; }
+        return 'angelegt';
+      }
+      const erg = {};
+      for (const n of Object.keys(xs.messKnoten)) {
+        const d = new Float32Array(1024); xs.messKnoten[n].getFloatTimeDomainData(d);
+        let nan = 0, s = 0; for (const v of d) { if (!Number.isFinite(v)) nan++; else s += v * v; }
+        erg[n] = nan ? 'NaN ' + nan : +Math.sqrt(s / d.length).toFixed(4);
+      }
+      erg.werte = { whineHz: xs.whine.frequency.value, pfeifHz: xs.pfeif.frequency.value, rollHz: xs.roll.frequency.value, tonHz: xs.ton.frequency.value };
+      return erg;
+    },
     // ---- Garage mit Schein-Autos (v0.9.12): fuer Sichtpruefung und Selbsttests der Garage.
     // Die Autos haben keine Verbindung (rx/tx fehlen); garageProbeWeg() nimmt sie wieder heraus.
     garageProbe(n) {
@@ -33,6 +78,23 @@
       }
       carRetag(); renderGarage();
       return garage.filter((c) => c.probe).length;
+    },
+    // v1.1.25: Aufstellungsschirm und Podest fuer die Sichtpruefung (mit garageProbe-Autos).
+    gridZeigen() { raceGridAnzeigen(null); return $('race-gridscreen') ? !$('race-gridscreen').hidden : false; },
+    gridZu() { const gs = $('race-gridscreen'); if (gs) gs.hidden = true; },
+    podestProbe(an) {
+      const autos = garage.filter((c) => c.probe);
+      if (an) {
+        autos.forEach((c, i) => { c.race = c.race || {}; c.race.laps = [{ ms: 9000 + i * 400 }, { ms: 9100 + i * 300 }]; });
+        this._podestMerk = raceState; raceState = 'finished';
+      } else {
+        autos.forEach((c) => { if (c.race) c.race.laps = []; });
+        raceState = this._podestMerk || 'idle';
+      }
+      ovPodestMalen();
+      if (an) { showTab('race'); cockpitScreenZu('uebersicht'); ovScreenRender(); }
+      const h = $('ov-podest');
+      return h ? { sichtbar: !h.hidden, bilder: h.querySelectorAll('.ov-auto').length } : null;
     },
     garageProbeWeg() {
       for (let i = garage.length - 1; i >= 0; i--) if (garage[i].probe) garage.splice(i, 1);

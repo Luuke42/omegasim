@@ -38,6 +38,7 @@
       loadEngineSamples(); // needs the AudioContext, so it can only start from here
       loadFxSamples();
       loadVoiceSamples();
+      rennstandClipsLaden(lang);
       if (!('speechSynthesis' in window)) zahlenClipsLaden(lang);
       loadAmbience();
     }
@@ -55,10 +56,12 @@
       loadEngineSamples();
       loadFxSamples();
       loadVoiceSamples();
+      rennstandClipsLaden(lang);
       if (!('speechSynthesis' in window)) zahlenClipsLaden(lang);
       loadAmbience();
       refreshAmbienceGains();
     } else if (engineGain) {
+      rennstandAbbrechen();
       refreshAmbienceGains();
       engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
       if (sampleEngine.master) sampleEngine.master.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
@@ -137,6 +140,8 @@
     'sd_v8gt', 'sd_v10', 'sd_v8muscle', 'sd_v8alt', 'sd_v12', 'sd_v12weich',
     // v1.0.18 BESTELLT: "Toro R-GT einbauen" - aus den Speed-Dreams-Spieldaten, Free Art License.
     'sd_toro',
+    // v1.1.9 BESTELLT: der Vulture V5R aus Speed Dreams (virtuelle Fahrt), sein eigener V8 (GPL-2+).
+    'sd_v5r',
     // ---- ZWEI AUFNAHMEN DES NUTZERS, aus photos/newaudio --------------------------
     // BESTELLT: eigene Aufnahmen; Drehzahlen aus der Video-Anzeige (siehe loops.json).
     // DIESELBE REIHENFOLGE wie im Menue (am Ende der Liste).
@@ -462,6 +467,7 @@
     return folge;
   }
   function lapClipsSpielen(ms, istBest) {
+    if (!rennstandVorRundenzeit()) return false;
     const satz = zahlenBuffers[lang];
     if (!satz) { zahlenClipsLaden(lang); return false; }
     if (!audioCtx || !soundEnabled) return false;
@@ -477,6 +483,11 @@
       const g = audioCtx.createGain();
       g.gain.value = 1.0;
       src.connect(g).connect(audioCtx.destination);
+      src.onended = () => {
+        const warAktiv = zahlenQuellen.includes(src);
+        zahlenQuellen = zahlenQuellen.filter((q) => q !== src);
+        if (warAktiv && !zahlenQuellen.length) lapAnsageBeendet();
+      };
       src.start(t0);
       zahlenQuellen.push(src);
       t0 += satz[k].duration + (k === 'komma' ? 0.02 : 0.06);
@@ -499,7 +510,7 @@
 
   // `seite` ist -1..1 und optional. Sie dient EINEM Zweck: einen Einmalklang dem Auto
   // zuzuordnen, das ihn erzeugt hat. Ohne Angabe bleibt er mittig, also genau wie bisher.
-  function playFx(buffer, gainVal, seite) {
+  function playFx(buffer, gainVal, seite, ab) {
     if (!buffer || !audioCtx || !soundEnabled) return false;
     const src = audioCtx.createBufferSource();
     src.buffer = buffer;
@@ -516,8 +527,19 @@
     } else {
       src.connect(g).connect(audioCtx.destination);
     }
-    src.start();
+    // `ab` (Sekunden, optional): erst ab dieser Stelle im Puffer spielen.
+    src.start(0, ab > 0 && ab < buffer.duration ? ab : 0);
     return true;
+  }
+
+  // v1.1.39 GEMELDET: "Es kommt immer erst ein Piepen. Mach das weg." Jeder Anlassklang in
+  // audio/fx.json beginnt mit 0,95 s Anlasser - bei den meisten Autos ein 1150-Hz-Surren aus
+  // tools/engine_fx.py (bei Mustang und Blazer die echte Aufnahme, die genauso piepsig klingt).
+  // Wir springen an die Stelle, an der der Motor anspringt (crank_end dort), statt alle
+  // Dateien neu zu erzeugen.
+  const START_FX_AB = 0.95;
+  function playStartFx() {
+    return playFx(fxBuffers.start[$('sound-profile').value] || fxBuffers.start.p992gt3r, 0.85, 0, START_FX_AB);
   }
 
   // Fuel warning, built like a modern seatbelt reminder rather than like a falling chime.
@@ -625,6 +647,19 @@
   // einer Rennstrecke braucht eine Zeit keine Einheit - und rate 1,15.
   let announceOn = true;
   let announceCalls = 0, announceCancels = 0, announceFailLogged = false;
+  let lapAnsageAktuell = null, lapAnsageRuheBis = 0;
+  const LAP_ANSAGE_ABSTAND_MS = 300;
+
+  function lapAnsageBeendet(u) {
+    if (u && lapAnsageAktuell !== u) return;
+    lapAnsageAktuell = null;
+    lapAnsageRuheBis = performance.now() + LAP_ANSAGE_ABSTAND_MS;
+  }
+  function lapAnsageBeschaeftigt() {
+    const synth = 'speechSynthesis' in window ? window.speechSynthesis : null;
+    return !!(lapAnsageAktuell || zahlenQuellen.length
+      || (synth && (synth.speaking || synth.pending)));
+  }
 
   function lapSpeechText(ms, istBest) {
     const s = ms / 1000;
@@ -688,6 +723,14 @@
   // die Aufnahme selbst fehlt (Datei nicht geladen, Sprache ohne Aufnahme).
   function ansage(art, text, klangSchluessel) {
     if (!ansageAn[art]) return false;
+    // Waehrend einer Rennstand-/Ergebnisansage entfaellt diese Spielerzeit.
+    if (art === 'lap' && !rennstandVorRundenzeit()) return false;
+    if (art !== 'lap') {
+      rennstandAbbrechen();
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      for (const q of zahlenQuellen) { try { q.stop(); } catch (e) {} }
+      zahlenQuellen = []; lapAnsageBeendet();
+    }
     if (art !== 'lap' && playAnsageClip(klangSchluessel || art)) return true;
     if (!('speechSynthesis' in window)) return false;
     try {
@@ -695,13 +738,17 @@
       // stapeln - sonst laeuft die Stimme der Gegenwart nach und meldet den Tank, waehrend
       // man schon in der naechsten Runde ist.
       window.speechSynthesis.cancel();
+      lapAnsageBeendet();
       announceCancels++;
       const u = new SpeechSynthesisUtterance(text);
+      if (art === 'lap') lapAnsageAktuell = u;
+      u.onend = () => { if (art === 'lap') lapAnsageBeendet(u); };
       u.lang = lang === 'de' ? 'de-DE' : 'en-US';
       // Funk spricht schneller und flacher. Beides ist an der Stimme einstellbar, und mehr
       // gibt die Schnittstelle nicht her.
       u.rate = 1.15;
       u.onerror = (ev) => {
+        if (art === 'lap') lapAnsageBeendet(u);
         if (announceFailLogged) return;
         announceFailLogged = true;
         log('Ansage: keine Stimme verfuegbar (' + (ev && ev.error ? ev.error : '?')
@@ -711,6 +758,7 @@
       announceCalls++;
       return true;
     } catch (e) {
+      lapAnsageBeendet();
       if (!announceFailLogged) {
         announceFailLogged = true;
         log('Ansage nicht moeglich: ' + e.message, 'info');
@@ -820,6 +868,7 @@
   }
 
   function speakLap(ms, istBest) {
+    if (!ansageAn.lap || !rennstandVorRundenzeit()) return;
     // Ohne Sprachausgabe (App-WebView): die Zahlen-Clips.
     if (!('speechSynthesis' in window)) {
       if (ansageAn.lap) lapClipsSpielen(ms, istBest);
@@ -847,10 +896,12 @@
       ansageAn[art] = e.target.checked;
       if (art === 'lap') announceOn = e.target.checked;
       // Beim Ausschalten sofort still sein und nicht den Satz noch beenden.
-      if (!e.target.checked && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (!e.target.checked && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); lapAnsageBeendet();
+      }
       if (!e.target.checked && art === 'lap') {
         for (const q of zahlenQuellen) { try { q.stop(); } catch (e2) {} }
-        zahlenQuellen = [];
+        zahlenQuellen = []; lapAnsageBeendet();
       }
     });
   });
@@ -1941,6 +1992,10 @@
   $('ghost-curve').addEventListener('input', (e) => {
     ghostCfg.curveSlow = parseFloat(e.target.value);
     $('ghost-curve-val').textContent = Math.round(ghostCfg.curveSlow * 100) + '%';
+  });
+  if ($('ghost-haarnadel-max')) $('ghost-haarnadel-max').addEventListener('input', (e) => {
+    ghostCfg.haarnadelMax = parseFloat(e.target.value);
+    $('ghost-haarnadel-max-val').textContent = Math.round(ghostCfg.haarnadelMax * 100) + '%';
   });
   // BESTELLT: Feld auffächern + Überholmanöver je Runde (experimentell).
   $('ghost-feld').addEventListener('input', (e) => {

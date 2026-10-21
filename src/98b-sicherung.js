@@ -285,6 +285,55 @@
         } catch (e) { /* dann eben nur fuer diese Sitzung */ }
       }
     }
+    // ---- EINMALIG (v1.1.21): Safety Car parkt neu -------------------------------------------
+    // "Neben der Strecke" ist nicht mehr waehlbar (-> Fahrbahn); Rechts-Impuls 100 ms und Einparktempo
+    // 30 % ("mit den Werten von vorhin hat es gut geklappt", "Reinfahren langsamer").
+    {
+      let erledigt = false;
+      try { erledigt = localStorage.getItem('chc.migrate.sc1121.v1') === '1'; } catch (e) { /* privat */ }
+      if (!erledigt) {
+        let geaendert = false;
+        if (cfg['sc-parkplatz'] === 'neben') { cfg['sc-parkplatz'] = 'fahrbahn'; geaendert = true; }
+        if (Number(cfg['sc-ausfahrt-ms']) === 90) { cfg['sc-ausfahrt-ms'] = 100; geaendert = true; }
+        if (cfg['sc-einfahrt-tempo'] !== undefined && Number(cfg['sc-einfahrt-tempo']) > 30) { cfg['sc-einfahrt-tempo'] = 30; geaendert = true; }
+        try {
+          localStorage.setItem('chc.migrate.sc1121.v1', '1');
+          if (geaendert) localStorage.setItem(AUTO_STORE, JSON.stringify(cfg));
+        } catch (e) { /* dann eben nur fuer diese Sitzung */ }
+      }
+    }
+    // ---- EINMALIG (v1.1.25): Uebersteuern im Pacejka-Modus aus ------------------------------
+    // BESTELLT: "Schalte bei den Pacejka-Presets aus, dass das Auto uebersteuert." Die neue Vorgabe ist aus;
+    // ein gespeichertes "an" aus der Zeit, als der Schalter verborgen und ab Werk an war, wird einmal auf aus
+    // gestellt. Wer es danach wieder anstellt, behaelt es.
+    {
+      let erledigt = false;
+      try { erledigt = localStorage.getItem('chc.migrate.pac1125.v1') === '1'; } catch (e) { /* privat */ }
+      if (!erledigt) {
+        let geaendert = false;
+        if (cfg['setting-pac-ueber'] === true || cfg['setting-pac-ueber'] === 'true') { cfg['setting-pac-ueber'] = false; geaendert = true; }
+        try {
+          localStorage.setItem('chc.migrate.pac1125.v1', '1');
+          if (geaendert) localStorage.setItem(AUTO_STORE, JSON.stringify(cfg));
+        } catch (e) { /* dann eben nur fuer diese Sitzung */ }
+      }
+    }
+    // ---- EINMALIG (v1.1.15): Safety Car minimal naeher auf der Fahrbahn --------------------
+    // BESTELLT: "Das einzige Problem war, dass es 5 mm zu weit am Rand war ... uebernimm die Werte, nur
+    // minimal naeher auf der Fahrbahn." Wer genau den getesteten Rechts-Impuls (100 ms) stehen hat,
+    // bekommt 90 ms; jeder andere Wert bleibt, wie er ist.
+    {
+      let erledigt = false;
+      try { erledigt = localStorage.getItem('chc.migrate.sc1115.v1') === '1'; } catch (e) { /* privat */ }
+      if (!erledigt) {
+        let geaendert = false;
+        if (Number(cfg['sc-ausfahrt-ms']) === 100) { cfg['sc-ausfahrt-ms'] = 90; geaendert = true; }
+        try {
+          localStorage.setItem('chc.migrate.sc1115.v1', '1');
+          if (geaendert) localStorage.setItem(AUTO_STORE, JSON.stringify(cfg));
+        } catch (e) { /* dann eben nur fuer diese Sitzung */ }
+      }
+    }
     // ---- EINMALIG (v0.10.5): Bremston leiser, Drift-Modus entfernt -----------------------
     {
       let erledigt = false;

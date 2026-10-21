@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Motoren aus Speed Dreams (nur CC0-Aufnahmen) als Baender fuer audio/loops.json.
 
-    python tools/sd_engines.py <Ordner mit data/sound aus Speed Dreams 2.4>
+    python tools/sd_engines.py <Ordner mit data/sound aus Speed Dreams 2.4> [Kennung ...]
 
 BESTELLT: Motorklaenge aus Speed Dreams. Verwendet werden die Proben, die
 data/sound/SoundCredits.txt ausdruecklich als CC0 ausweist (Freesound, Nov. 2024), und seit
@@ -56,7 +56,14 @@ MOTOREN = [
      'cheesepuff, Freesound 112075 (CC0)'),
     ('sd_toro', 'toro-rgt.wav', 'Speed Dreams: Lamborghini Murciélago R-GT (Toro R-GT, 6,0 l V12)', 12, 1100, 8000, 0.4,
      'Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en)'),
+    # v1.1.9 BESTELLT: der Vulture V5R fuer die virtuelle Fahrt (img/autos/v5r). Sein Motorklang liegt im
+    # Ordner des Autos (data/cars/models/ls1-vulture-v5r/v5r-v8.wav), Lizenz wie das Auto: GPL-2+.
+    # Leerlauf und Begrenzer aus der .xml des Autos.
+    ('sd_v5r', 'v5r-v8.wav', 'Speed Dreams: Vulture V5.R (7,0 l V8)', 8, 1000, 6750, 0.5,
+     'Speed-Dreams-Team (ls1-vulture-v5r), GPL-2.0-or-later'),
 ]
+# Wo die Aufnahme in Speed Dreams liegt, wenn nicht in data/sound/.
+QUELLORDNER = {'sd_v5r': 'data/cars/models/ls1-vulture-v5r/'}
 
 
 def lesen(p):
@@ -194,7 +201,7 @@ def effekte(snd):
     json.dump(fx, open(fx_p, 'w', encoding='utf-8', newline='\n'), indent=1)
 
 
-def main(quelle):
+def main(quelle, nur=None):
     snd = quelle
     for kand in (os.path.join(quelle, 'data', 'sound'), os.path.join(quelle, 'sound')):
         if os.path.isdir(kand):
@@ -212,6 +219,8 @@ def main(quelle):
     namen4 = ['idle', 'low', 'mid', 'high']
     namen5 = ['idle', 'low', 'low2', 'mid', 'high']
     for mid, datei, label, zyl, leer, begr, knall, herkunft in MOTOREN:
+        if nur and mid not in nur:
+            continue
         x, sr = lesen(os.path.join(snd, datei))
         x = x - np.mean(x)
         f0 = zuend_hz(x, sr, f0_hps(x, sr))
@@ -240,15 +249,17 @@ def main(quelle):
         loops['over'] = {'file': '%s_over.ogg' % mid, 'baseRpm': mitte, 'firingHz': round(mitte / 60 * zyl / 2, 1),
                          'seconds': round(len(y) / SR_OUT, 4), 'load': 0.0}
         manifest[mid] = {'label': label, 'cylinders': zyl,
-                         'source': 'Aufnahme aus Speed Dreams 2.4 (data/sound/%s): %s' % (datei, herkunft),
+                         'source': 'Aufnahme aus Speed Dreams 2.4 (%s%s): %s' % (QUELLORDNER.get(mid, 'data/sound/'), datei, herkunft),
                          'crackle': knall, 'turbo': False, 'loops': loops,
                          'idleRpm': leer, 'limiterRpm': begr}
         print('%-12s f0 %6.1f Hz -> Aufnahme bei ~%5d U/min, Baender %s' % (mid, f0, auf_rpm, stufen))
     json.dump(manifest, open(manifest_p, 'w', encoding='utf-8', newline='\n'), indent=1)
-    effekte(snd)
+    if not nur:
+        effekte(snd)
 
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
-    main(sys.argv[1])
+    # Optional: nur diese Kennungen rechnen (z. B. sd_v5r aus dem Ordner des Autos), ohne die Effekte.
+    main(sys.argv[1], sys.argv[2:] or None)

@@ -42,6 +42,16 @@ stehen damit ebenfalls unter der Free Art License 1.3. Das Original liegt in den
 Spieldaten von Speed Dreams 2.4 (https://www.speed-dreams.net). Der Code von OmegaSim
 bleibt MIT; die Klangdateien werden nur mitgeliefert und geladen.
 
+### Vulture V5.R (GPL-2.0 oder spaeter) — seit v1.1.9
+
+| Motor in der App | Datei in Speed Dreams | Quelle und Lizenz |
+|---|---|---|
+| Vulture V5.R, 7,0 l V8 (`sd_v5r_*.ogg`) | `data/cars/models/ls1-vulture-v5r/v5r-v8.wav` | Speed-Dreams-Team, mit dem Auto unter der **GNU GPL, Version 2 oder spaeter** |
+
+Gerechnet wie die anderen mit `tools/sd_engines.py <Ordner des Autos> sd_v5r`. Das Auto selbst (Modell,
+Texturen, Fahrzeugdaten) liegt umgewandelt in `img/autos/v5r/` mit eigener `LIZENZ.txt`
+(`tools/sd_auto.py`). Der Code von OmegaSim bleibt MIT.
+
 Nicht verwendet: `v6_raw.wav` und `rotary2.wav` (als "CC-BY" aus YouTube-Videos
 angegeben, Rechte unklar), `skid_metal.wav` (ohne Lizenzangabe) und die uebrigen
 aelteren Fahrzeugklaenge der Spieldaten.
@@ -477,3 +487,20 @@ erzeugt mit `tools/voice_zahlen.py`, danach band-begrenzt wie die anderen Ansage
 
 Beide Stimmmodelle stammen von https://huggingface.co/rhasspy/piper-voices und sind nicht
 im Repository, nur die erzeugten Clips.
+
+## Rennstand-Ansage
+
+78 vorproduzierte Clips (`rennstand_ext_*.ogg`, 39 pro Sprache DE/EN).
+Erzeugung: `tools/voice_rennstand_erweitert.py`; Manifest:
+`audio/rennstand-erweitert.json`. Zahlenclips aus `audio/zahlen.json`
+werden wiederverwendet. Keine Stimmmodelle oder Roh-WAVs im PR.
+
+Stimmen und Funkfilter wie bei der Rundenzeit-Ansage: Piper,
+`de_DE-thorsten-medium` und `en_US-ljspeech-medium`. Die vorstehenden
+Herkunfts- und Lizenzhinweise zu Piper, Thorsten/lessac und LJ Speech gelten
+auch fuer diese erzeugten Aufnahmen. Modelle:
+https://huggingface.co/rhasspy/piper-voices
+
+Der deutsche Rundenanfang wird mit „Nach Runde.“ erzeugt. Fahrzeugmodelle
+umfassen auch VW Kaefer. Herstellerbezeichnungen dienen nur der vom Benutzer
+gewaehlten Fahrzeugkennung; keine Beteiligung oder Unterstuetzung der Hersteller.

@@ -357,7 +357,11 @@
       physEngine.triggerShift(k === 'i' ? 1 : -1);
     }
     if (k === 'l' && !e.repeat) triggerHeadlightFlash();
-    if (k === 'w' && !e.repeat) setWeather(weather === 'rain' ? 'dry' : 'rain');
+    // v1.1.22: W ist jetzt Gas (WASD). GEMELDET von einem Tester: "es ist sehr oft zwischen Regen /
+    // kein Regen gewechselt" - W schaltete bei jedem Druck das Wetter um, auch in der virtuellen
+    // Fahrt. Die Testtasten (Wetter jetzt Shift+W, C, F, R, Q) gelten nur noch im Entwicklermodus.
+    const testTaste = typeof konsoleDev === 'function' && konsoleDev() && !(typeof vfAktiv === 'function' && vfAktiv());
+    if (testTaste && k === 'w' && e.shiftKey && !e.repeat) setWeather(weather === 'rain' ? 'dry' : 'rain');
     // Tastatur-Gegenstueck zu Dreieck ausserhalb des Cockpits (90-ghosts.js): oeffnet die
     // Erklaerung der fokussierten Menuezeile. Noetig, seit der Info-Knopf (B2) keinen
     // eigenen Navigationsschritt mehr hat - "alles, was das Pad kann, muss auch von der
@@ -369,10 +373,10 @@
     // Test keys. Everything the pad can do should be reachable from a keyboard, otherwise
     // half the app can only be exercised with a controller plugged in.
     if (k === 'p' && !e.repeat) requestPitStop();
-    if (k === 'c' && !e.repeat) { registerCrash(); showHudToast('Testcrash'); }
-    if (k === 'f' && !e.repeat) { fuel = 5; updateDamageFuelUI(); showHudToast(`Tank ${fuelLiters(5)} l`); }
+    if (testTaste && k === 'c' && !e.repeat) { registerCrash(); showHudToast('Testcrash'); }
+    if (testTaste && k === 'f' && !e.repeat) { fuel = 5; updateDamageFuelUI(); showHudToast(`Tank ${fuelLiters(5)} l`); }
     // Die Taste nimmt Auto 2 mit, sonst setzt sie nur das halbe Feld zurueck.
-    if (k === 'r' && !e.repeat) { fuel = 100; damage = 0;
+    if (testTaste && k === 'r' && !e.repeat) { fuel = 100; damage = 0;
                                   schadenZweiZuruecksetzen();
                                   tankZweiFuellen(100);
                                   updateDamageFuelUI();
@@ -395,7 +399,7 @@
       else flagHoldPress();
     }
     // Q ist in den Menues L1 (51-konsole.js); die Test-Runde gibt es nur noch im Cockpit.
-    if (k === 'q' && !e.repeat && !konsoleMenue()) debugCountLap(e.shiftKey);
+    if (testTaste && k === 'q' && !e.repeat && !konsoleMenue()) debugCountLap(e.shiftKey);
     if (k === 'm' && !e.repeat) {
       // Next unused section, so one key walks the whole protocol in order.
       const label = REC_SECTIONS[rec.next] || ('Markierung ' + (rec.next + 1));
@@ -437,16 +441,19 @@
     // Auto. raceScreenPad() prueft selbst, ob der Schirm offen ist, und verstellt bei der
     // angewaehlten Dauer/Runden-Zeile - sonst bleibt links/rechts beim Schirmblaettern.
     if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)
-        && typeof raceScreenOffen === 'function' && raceScreenOffen()) {
+        && typeof raceScreenOffen === 'function' && raceScreenOffen()
+        && !(typeof vfAktiv === 'function' && vfAktiv())) {
       const dir = e.key === 'ArrowUp' ? 'up' : e.key === 'ArrowDown' ? 'down'
                 : e.key === 'ArrowLeft' ? 'left' : 'right';
       raceScreenPad(dir);
       return;
     }
-    keys.add(e.key);
+    keys.add(tasteName(e));
   });
+  // Buchstaben klein, damit Shift zwischen Druecken und Loslassen keine Taste haengen laesst.
+  function tasteName(e) { const n = e.key || ''; return n.length === 1 ? n.toLowerCase() : n; }
   window.addEventListener('keyup', (e) => {
-    keys.delete(e.key);
+    keys.delete(tasteName(e));
     // Loslassen der Halten-Geste. Zu frueh losgelassen heisst ausdruecklich: nichts
     // passiert - ein halber Druck darf keine halbe Wirkung haben.
     const kUp = (e.key || '').toLowerCase();
@@ -468,15 +475,22 @@
     // duerfen sie nicht GLEICHZEITIG das Auto steuern - auch nicht aus einer Taste, die
     // noch aus der Zeit VOR dem Wechsel auf den Optionen-Tab in `keys` haengt (z.B. ein
     // Klick mit der Maus auf den Tab waehrend eine Pfeiltaste physisch gehalten wird).
+    // v1.1.22: WASD wie die Pfeiltasten (W Gas, S Bremse, A/D lenken).
+    const links = keys.has('ArrowLeft') || keys.has('a'), rechts = keys.has('ArrowRight') || keys.has('d');
+    const gas = keys.has('ArrowUp') || keys.has('w'), bremse = keys.has('ArrowDown') || keys.has('s');
     if (!menuNavActive()) {
-      if (keys.has('ArrowLeft')) sx -= 1;
-      if (keys.has('ArrowRight')) sx += 1;
-      if (keys.has('ArrowUp')) ty += 1;
-      if (keys.has('ArrowDown')) ty -= 1;
+      if (links) sx -= 1;
+      if (rechts) sx += 1;
+      if (gas) ty += 1;
+      if (bremse) ty -= 1;
     }
     if (keys.has(' ')) { sx = 0; ty = 0; }
+    let gbUeber = null;
+    if (typeof gasBremseRueckwaertsPruefen === 'function' && !menuNavActive()) {
+      gbUeber = gasBremseRueckwaertsPruefen(gas ? 1 : 0, bremse ? 1 : 0, null, 'tast');
+    }
     applySteerInput(SRC.KEY, sx);
-    applyThrottleInput(SRC.KEY, ty);
+    applyThrottleInput(SRC.KEY, (gbUeber !== null && !keys.has(' ')) ? gbUeber : ty);
   }, 30);
 
   function emergencyStop() {

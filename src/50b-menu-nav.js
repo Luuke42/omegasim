@@ -252,6 +252,8 @@
   }
 
   function menuNavActive() {
+    // v1.1.3: in der virtuellen Fahrt fahren die Pfeiltasten (60d-virtuell.js).
+    if (typeof vfAktiv === 'function' && vfAktiv()) return false;
     menuNavEnsureContext();
     return menuNavRows().length > 0;
   }
@@ -350,12 +352,34 @@
     // Der ERSTE Tastendruck in einem frischen Menue zeigt nur Zeile 0 - er bewegt noch
     // nicht. Sonst huepft "runter" sofort zur zweiten Zeile, ohne dass die erste je zu
     // sehen war.
-    if (menuNavGezeigt) {
+    // v1.1.11 Garage wie die Meisterschaft: links (Autos, Aktionen) und rechts (Einstellungen) sind zwei
+    // Listen; hoch/runter bleibt in der Spalte, in der der Fokus steht.
+    const spalte = (r) => (r && r.el && r.el.closest) ? r.el.closest('.gar-a-links, .gar-a-rechts') : null;
+    const sp = spalte(rows[menuNavIndex]);
+    if (menuNavGezeigt && sp) {
+      const idx = rows.map((r, i) => i).filter((i) => spalte(rows[i]) === sp);
+      const k = idx.indexOf(menuNavIndex);
+      menuNavIndex = idx[((k + (dir === 'up' ? -1 : 1)) % idx.length + idx.length) % idx.length];
+    } else if (menuNavGezeigt) {
       menuNavIndex = ((menuNavIndex + (dir === 'up' ? -1 : 1)) % rows.length + rows.length) % rows.length;
     }
     menuNavGezeigt = true;
     menuNavRender();
     menuNavTonBewegen();
+  }
+  // Kreis in der rechten Garagenspalte: zurueck auf das gewaehlte Auto (oder "Virtuell fahren") links,
+  // statt die Garage zu verlassen. true = erledigt.
+  function menuNavGarageZurueck() {
+    if (typeof kAktiverTab !== 'function' || kAktiverTab() !== 'garage') return false;
+    const rows = menuNavRows();
+    const cur = rows[menuNavIndex];
+    if (!cur || !cur.el || !cur.el.closest || !cur.el.closest('.gar-a-rechts')) return false;
+    const ziel = rows.findIndex((r) => r.el.matches && r.el.matches('.gar-a-links .gk-auf'));
+    if (ziel < 0) return false;
+    menuNavIndex = ziel; menuNavArmed = false; menuNavGezeigt = true;
+    menuNavRender();
+    menuNavTonBewegen();
+    return true;
   }
 
   // X/Enter auf der fokussierten Zeile: Kachel/Knopf -> klicken, Kontrollkaestchen ->
@@ -370,14 +394,17 @@
       menuNavTonAktivieren();
       return;
     }
-    const rows = menuNavRows();
+    let rows = menuNavRows();
     if (!rows.length) return;
     menuNavGezeigt = true;
     const row = rows[menuNavIndex];
     // Sprungziel (v0.9.12, Garage): X auf einer Zeile mit data-x-sprung springt zur ersten
-    // passenden Zeile, statt das Feld zu "bewaffnen".
+    // passenden Zeile, statt das Feld zu "bewaffnen". v1.1.11: vorher waehlt die Zeile sich selbst
+    // (_vorSprung, z. B. das markierte Auto), dann ist rechts schon das Richtige zu sehen.
     if (row.el && row.el.dataset && row.el.dataset.xSprung) {
-      const ziel = rows.findIndex((r) => r.el.matches && r.el.matches(row.el.dataset.xSprung));
+      const sprung = row.el.dataset.xSprung;
+      if (typeof row.el._vorSprung === 'function') { row.el._vorSprung(); rows = menuNavRows(); }
+      const ziel = rows.findIndex((r) => r.el.matches && r.el.matches(sprung));
       if (ziel >= 0) { menuNavIndex = ziel; menuNavArmed = false; menuNavRender(); menuNavTonAktivieren(); return; }
     }
     if (row.kind === 'range' || row.kind === 'select') {

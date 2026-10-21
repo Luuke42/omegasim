@@ -1,0 +1,6 @@
+Vulture V5.R aus Speed Dreams (Speed Dreams, data/cars/models/v5r_dl).
+
+Modell, Texturen und Fahrzeugdaten: GNU General Public License, Version 2 oder
+spaeter (siehe den Kopf der Speed-Dreams-Datei ls1-vulture-v5r.xml). Umgewandelt mit tools/sd_auto.py:
+Innenraum entfernt, Texturen verkleinert, Koordinaten gedreht.
+https://www.gnu.org/licenses/old-licenses/gpl-2.0.html

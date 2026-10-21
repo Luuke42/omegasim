@@ -111,7 +111,7 @@
       if (c) return c.hex;
     } catch (e) { /* ohne Ablage */ }
     if (a.farbe) return a.farbe;
-    return CAR_COLORS[i % CAR_COLORS.length].hex;
+    return CAR_AUTO_COLORS[i % CAR_AUTO_COLORS.length].hex;
   }
   function statFoto(id) {
     try { return id ? localStorage.getItem('omegasim-autofoto:' + id) : null; } catch (e) { return null; }

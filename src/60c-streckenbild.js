@@ -131,11 +131,52 @@
     } finally { halter.remove(); }
   }
 
+  // v1.1.11 GEMELDET: "Bild speichern im Editor klappt auf dem Handy nicht. Bitte ueber einen anderen
+  // Weg (ggf. einfach das Bild einblenden, sodass man selbst einen Screenshot macht)." Der Knopf zeigt
+  // das Bild jetzt gross an: Screenshot oder lange druecken geht immer; dazu Teilen (wo das Handy es
+  // kann), Speichern (der bisherige Weg) und Schliessen (auch Kreis/Escape).
   async function streckenbildSpeichern() {
     let bild = null;
     try { bild = await streckenbildErzeugen(); } catch (e) { showHudToast(t('Bild ging nicht') + ': ' + e.message); return; }
     if (!bild) return;
+    streckenbildZeigen(bild);
+  }
+  function streckenbildOffen() { return !!document.querySelector('.sb-schau'); }
+  function streckenbildZu() { const o = document.querySelector('.sb-schau'); if (o) o.remove(); }
+  function streckenbildZeigen(bild) {
+    streckenbildZu();
     const name = 'OmegaSim-' + bild.code.replace(/[^A-Za-z0-9]/g, '').slice(0, 40);
+    const o = document.createElement('div');
+    o.className = 'sb-schau';
+    o.innerHTML = '<p class="sb-hinweis">' + t('Screenshot machen oder das Bild lange drücken, um es zu speichern.') + '</p>'
+      + '<img class="sb-bild" alt="">'
+      + '<div class="sb-knoepfe">' + (navigator.share ? '<button type="button" data-sb="teilen">' + t('Teilen') + '</button>' : '')
+      + '<button type="button" data-sb="speichern">' + t('Speichern') + '</button>'
+      + '<button type="button" class="primary" data-sb="zu">' + t('Schließen') + '</button></div>';
+    o.querySelector('img').src = bild.url;
+    o.addEventListener('click', (e) => {
+      const k = e.target.closest('[data-sb]');
+      if (!k) { if (e.target === o) streckenbildZu(); return; }
+      if (k.dataset.sb === 'zu') streckenbildZu();
+      else if (k.dataset.sb === 'speichern') streckenbildAblegen(bild, name);
+      else if (k.dataset.sb === 'teilen') streckenbildTeilen(bild, name);
+    });
+    document.body.appendChild(o);
+  }
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && streckenbildOffen()) { e.preventDefault(); e.stopImmediatePropagation(); streckenbildZu(); }
+  }, true);
+  async function streckenbildTeilen(bild, name) {
+    try {
+      const blob = await (await fetch(bild.url)).blob();
+      const datei = new File([blob], name + '.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [datei] })) await navigator.share({ files: [datei], title: name });
+      else await navigator.share({ title: name, text: t('Streckencode') + ': ' + bild.code });
+    } catch (e) {
+      if (e && e.name !== 'AbortError') showHudToast(t('Teilen geht hier nicht – bitte einen Screenshot machen'));
+    }
+  }
+  async function streckenbildAblegen(bild, name) {
     const C = window.Capacitor;
     // v1.1.3: in der App ohne Plugin ehrlich melden - ein Daten-URL-Download tut in der WebView
     // nichts, und vorher hiess es trotzdem "Bild gespeichert".

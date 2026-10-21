@@ -311,10 +311,32 @@ function spurGet(p) {
   return { ok: true, liste: liste, geraet: String(z[2]), fahrer: String(z[3]), zeit_ms: Number(z[4]), spur: spur };
 }
 
-// ---- STUDIE (v1.0) ----
-const S_BLATT = 'Studie';
-const S_KOPF = ['zeitpunkt', 'geraet', 'alter', 'geschlecht', 'volljaehrig', 'einwilligung', 'narq', 'bewunderung',
-  'rivalitaet', 'selbst', 'rt_ms', 'rt_median', 'fruehstarts', 'verpasst', 'quelle', 'controller', 'version', 'sprache'];
+// ---- STUDIE (v1.1.3: NARQ-S und Fahrverhaltens-Challenge) ----
+// Eigenes Blatt "Studie2": die Spalten haben sich gegenueber v1.0 (18 NARQ-Items, Blatt "Studie")
+// geaendert, und ein Anhaengen nach Position an die alte Kopfzeile wuerde die Spalten verschieben.
+// Das alte Blatt bleibt unangetastet (nur Testdaten aus dem Entwicklermodus).
+//
+// LESEN: doGet gibt dieses Blatt NIE roh heraus. Es gibt genau zwei Wege:
+//   ?studie=zusammenfassung   Anzahl, Mittel/Spanne je Kennwert und die Korrelationen der
+//                             Hypothesen - Kennwerte erst ab 5 Teilnehmenden.
+//   ?studie=daten             die anonymisierten Daten (OHNE Geraetekennung, Zeitpunkt, Controller,
+//                             App-Version und Sprache), je Geraet nur die erste Teilnahme, in
+//                             zufaelliger Reihenfolge. So steht es im Einwilligungstext der App.
+const S2_BLATT = 'Studie2';
+const S2_NARQ = 6, S2_ADM = [1, 2, 4], S2_RIV = [3, 5, 6];
+const S2_STIL = ['sekunden', 'vollgas', 'gas', 'bremse', 'bremsungen', 'bremsKurve', 'lenkUnruhe', 'abfluege', 'rundenStreu'];
+// v1.1.11: die virtuelle Fahrt (dieselbe Strecke in der App) in eigenen Spalten mit v_ davor - am ENDE
+// angehaengt, damit schon vorhandene Zeilen nicht verrutschen (die Kopfzeile wird ergaenzt).
+const S2_VIRTUELL = ['v_fahrt', 'v_fahrt_gueltig', 'v_fahrt_grund', 'v_runden_ms', 'v_beste_ms', 'v_gesamt_ms'].concat(S2_STIL.map((k) => 'v_' + k));
+const S2_KOPF = ['zeitpunkt', 'geraet', 'alter', 'geschlecht', 'narq_version', 'narq_1', 'narq_2', 'narq_3', 'narq_4', 'narq_5',
+  'narq_6', 'bewunderung', 'rivalitaet', 'selbst', 'rt_ms', 'rt_median', 'fruehstarts', 'verpasst', 'quelle', 'controller',
+  'version', 'sprache', 'fahrt', 'fahrt_gueltig', 'fahrt_grund', 'preset', 'runden_ms', 'beste_ms', 'gesamt_ms'].concat(S2_STIL).concat(S2_VIRTUELL);
+const S2_OEFFENTLICH = ['alter', 'geschlecht', 'narq_1', 'narq_2', 'narq_3', 'narq_4', 'narq_5', 'narq_6', 'bewunderung',
+  'rivalitaet', 'selbst', 'rt_median', 'fruehstarts', 'verpasst', 'quelle', 'fahrt', 'fahrt_gueltig', 'preset', 'runden_ms',
+  'beste_ms', 'gesamt_ms'].concat(S2_STIL).concat(S2_VIRTUELL.filter((k) => k !== 'v_fahrt_grund'));
+const S2_MIN_N = 5;
+
+function zahlIn(x, lo, hi) { const n = Number(x); return isFinite(n) && n >= lo && n <= hi ? n : ''; }
 function studiePost(d) {
   if (!d.geraet) return { ok: false, fehler: 'keine Geräte-Kennung' };
   const alter = Number(d.alter);
@@ -322,30 +344,128 @@ function studiePost(d) {
   if (['w', 'm', 'd', 'k'].indexOf(d.geschlecht) < 0) return { ok: false, fehler: 'Geschlecht unbekannt' };
   if (d.volljaehrig !== true || d.einwilligung !== true) return { ok: false, fehler: 'ohne Einwilligung' };
   const narq = Array.isArray(d.narq) ? d.narq.map(Number) : [];
-  if (narq.length !== 18 || narq.some((x) => !(x >= 1 && x <= 6 && Math.round(x) === x))) return { ok: false, fehler: 'NARQ unvollständig' };
+  if (narq.length !== S2_NARQ || narq.some((x) => !(x >= 1 && x <= 6 && Math.round(x) === x))) return { ok: false, fehler: 'NARQ-S unvollständig' };
   const selbst = Number(d.selbst);
   if (!(selbst >= 1 && selbst <= 7)) return { ok: false, fehler: 'Selbsteinschätzung fehlt' };
   const rt = Array.isArray(d.rt_ms) ? d.rt_ms.map(Number) : [];
   if (rt.length !== 10 || rt.some((x) => !(x >= 50 && x <= 3000))) return { ok: false, fehler: 'Reaktionszeiten unplausibel' };
   const mw = (nr) => nr.reduce((a, i) => a + narq[i - 1], 0) / nr.length;
+  const f = d.fahrt && typeof d.fahrt === 'object' ? d.fahrt : null;
+  const stil = f && f.stil && typeof f.stil === 'object' ? f.stil : {};
+  const runden = f && Array.isArray(f.runden_ms) ? f.runden_ms.map(Number).filter((x) => x >= 500 && x <= 600000).slice(0, 12) : [];
+  const grenzen = { sekunden: [0, 7200], vollgas: [0, 1], gas: [0, 1], bremse: [0, 1], bremsungen: [0, 600], bremsKurve: [0, 1],
+                    lenkUnruhe: [0, 50], abfluege: [0, 60], rundenStreu: [0, 5] };
+  const v = d.fahrt_virtuell && typeof d.fahrt_virtuell === 'object' ? d.fahrt_virtuell : null;
+  const vStil = v && v.stil && typeof v.stil === 'object' ? v.stil : {};
+  const vRunden = v && Array.isArray(v.runden_ms) ? v.runden_ms.map(Number).filter((x) => x >= 500 && x <= 600000).slice(0, 12) : [];
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     // Die Facettenwerte rechnet der Server selbst nach, statt sie dem Telefon zu glauben.
-    blattMit(S_BLATT, S_KOPF).appendRow([new Date(), String(d.geraet).slice(0, 40), alter, d.geschlecht, true, true,
-      JSON.stringify(narq), mw([1, 2, 3, 5, 7, 8, 15, 16, 18]), mw([4, 6, 9, 10, 11, 12, 13, 14, 17]), selbst,
-      JSON.stringify(rt), Number(d.rt_median) || '', Math.max(0, Number(d.fruehstarts) || 0), Math.max(0, Number(d.verpasst) || 0),
-      String(d.quelle || '').slice(0, 20), String(d.controller || '').slice(0, 80), String(d.version || '').slice(0, 20),
-      String(d.sprache || '').slice(0, 5)]);
+    const zeile = [new Date(), String(d.geraet).slice(0, 40), alter, d.geschlecht, String(d.narqVersion || 'S6').slice(0, 8)]
+      .concat(narq)
+      .concat([mw(S2_ADM), mw(S2_RIV), selbst, JSON.stringify(rt), Number(d.rt_median) || '',
+        Math.max(0, Number(d.fruehstarts) || 0), Math.max(0, Number(d.verpasst) || 0),
+        String(d.quelle || '').slice(0, 20), String(d.controller || '').slice(0, 80), String(d.version || '').slice(0, 20),
+        String(d.sprache || '').slice(0, 5),
+        f ? 1 : 0, f && f.gueltig === true ? 1 : 0, f ? String(f.grund || '').slice(0, 60) : '', f ? String(f.preset || '').slice(0, 12) : '',
+        JSON.stringify(runden), f ? zahlIn(f.beste_ms, 500, 600000) : '', f ? zahlIn(f.gesamt_ms, 500, 3600000) : ''])
+      .concat(S2_STIL.map((k) => (f && stil[k] !== null && stil[k] !== undefined) ? zahlIn(stil[k], grenzen[k][0], grenzen[k][1]) : ''))
+      .concat([v ? 1 : 0, v && v.gueltig === true ? 1 : 0, v ? String(v.grund || '').slice(0, 60) : '', JSON.stringify(vRunden),
+        v ? zahlIn(v.beste_ms, 500, 600000) : '', v ? zahlIn(v.gesamt_ms, 500, 3600000) : ''])
+      .concat(S2_STIL.map((k) => (v && vStil[k] !== null && vStil[k] !== undefined) ? zahlIn(vStil[k], grenzen[k][0], grenzen[k][1]) : ''));
+    const blatt = blattMit(S2_BLATT, S2_KOPF);
+    // Aeltere Blaetter haben die v_-Spalten noch nicht in der Kopfzeile: ergaenzen.
+    if (blatt.getLastColumn() < S2_KOPF.length) blatt.getRange(1, 1, 1, S2_KOPF.length).setValues([S2_KOPF]);
+    blatt.appendRow(zeile);
   } finally { lock.releaseLock(); }
   return { ok: true };
+}
+
+// Die Zeilen von Studie2 als Objekte, je Geraet nur die erste Teilnahme.
+function studieZeilen() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(S2_BLATT);
+  if (!sh) return [];
+  const werte = sh.getDataRange().getValues();
+  const kopf = werte[0].map(String);
+  const gesehen = {};
+  const out = [];
+  werte.slice(1).forEach((z) => {
+    const o = {};
+    kopf.forEach((k, i) => { o[k] = z[i]; });
+    const g = String(o.geraet || '');
+    if (!g || gesehen[g]) return;
+    gesehen[g] = true;
+    out.push(o);
+  });
+  return out;
+}
+function studieZahl(x) { return x === '' || x === null || x === undefined || !isFinite(Number(x)) ? null : Number(x); }
+function pearson(paare) {
+  const n = paare.length;
+  if (n < 3) return { r: null, n: n };
+  const mx = paare.reduce((a, p) => a + p[0], 0) / n, my = paare.reduce((a, p) => a + p[1], 0) / n;
+  let sxy = 0, sxx = 0, syy = 0;
+  paare.forEach((p) => { sxy += (p[0] - mx) * (p[1] - my); sxx += (p[0] - mx) * (p[0] - mx); syy += (p[1] - my) * (p[1] - my); });
+  return { r: sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : null, n: n };
+}
+function studieMitUeberschaetzung(zeilen) {
+  // Selbstueberschaetzung: Selbsteinschaetzung (1-7, als Anteil 0-1) minus Leistungsrang unter allen
+  // gueltigen Fahrten (schnellste beste Runde = 1, langsamste = 0).
+  const mitZeit = zeilen.filter((o) => Number(o.fahrt_gueltig) === 1 && studieZahl(o.beste_ms));
+  const sortiert = mitZeit.map((o) => Number(o.beste_ms)).sort((a, b) => a - b);
+  zeilen.forEach((o) => {
+    o.ueberschaetzung = null;
+    if (Number(o.fahrt_gueltig) !== 1 || !studieZahl(o.beste_ms) || sortiert.length < 2) return;
+    const rang = sortiert.indexOf(Number(o.beste_ms));
+    const leistung = 1 - rang / (sortiert.length - 1);
+    o.ueberschaetzung = (Number(o.selbst) - 1) / 6 - leistung;
+  });
+  return zeilen;
+}
+const S2_HYPOTHESEN = { H1a: ['rivalitaet', 'bremsKurve'], H1b: ['rivalitaet', 'abfluege'], H2: ['bewunderung', 'ueberschaetzung'],
+  H3: ['rivalitaet', 'vollgas'], H4: ['rt_median', 'beste_ms'], H5: ['lenkUnruhe', 'rundenStreu'] };
+const S2_FAHRWERTE = ['beste_ms', 'vollgas', 'bremsKurve', 'abfluege', 'lenkUnruhe', 'rundenStreu', 'ueberschaetzung'];
+function studieZusammenfassung() {
+  const zeilen = studieMitUeberschaetzung(studieZeilen());
+  const n = zeilen.length;
+  // Fahrwerte nur aus gueltigen Fahrten (richtige Strecke, alle Runden gezaehlt).
+  const wert = (o, k) => (S2_FAHRWERTE.indexOf(k) >= 0 && Number(o.fahrt_gueltig) !== 1) ? null : studieZahl(o[k]);
+  const kennwerte = {};
+  ['rivalitaet', 'bewunderung', 'rt_median', 'beste_ms', 'vollgas', 'bremsKurve', 'abfluege', 'lenkUnruhe', 'rundenStreu'].forEach((k) => {
+    const v = zeilen.map((o) => wert(o, k)).filter((x) => x !== null);
+    if (v.length < S2_MIN_N) return;
+    kennwerte[k] = { n: v.length, mittel: v.reduce((a, b) => a + b, 0) / v.length, min: Math.min.apply(null, v), max: Math.max.apply(null, v) };
+  });
+  const hypothesen = {};
+  Object.keys(S2_HYPOTHESEN).forEach((h) => {
+    const [x, y] = S2_HYPOTHESEN[h];
+    const paare = zeilen.map((o) => [wert(o, x), wert(o, y)]).filter((p) => p[0] !== null && p[1] !== null);
+    const r = pearson(paare);
+    hypothesen[h] = paare.length >= S2_MIN_N ? r : { r: null, n: paare.length };
+  });
+  return { ok: true, n: n, kennwerte: kennwerte, hypothesen: hypothesen };
+}
+function studieDatenOeffentlich() {
+  const zeilen = studieZeilen().map((o) => {
+    const x = {};
+    S2_OEFFENTLICH.forEach((k) => { x[k] = o[k] === undefined ? '' : o[k]; });
+    return x;
+  });
+  // Zufaellige Reihenfolge, damit die Position nichts ueber den Zeitpunkt verraet.
+  for (let i = zeilen.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = zeilen[i]; zeilen[i] = zeilen[j]; zeilen[j] = t;
+  }
+  return { ok: true, n: zeilen.length, spalten: S2_OEFFENTLICH, daten: zeilen };
 }
 
 function doPost(e) {
   let d;
   try { d = JSON.parse(e.postData.contents); } catch (err) { return antwort({ ok: false, fehler: 'kein JSON' }); }
-  // STUDIE (v1.0): eigenes Blatt, nur Schreiben. doGet liest dieses Blatt NIE - die Web-App ist
-  // oeffentlich, und hier stehen Alter, Geschlecht und Fragebogenantworten.
+  // STUDIE (v1.1.3): eigenes Blatt Studie2. doGet gibt es nur zusammengefasst oder anonymisiert
+  // heraus (ohne Geraetekennung, Zeitpunkt, Controller) - siehe studieZusammenfassung.
   if (d && d.art === 'studie') {
     const cache = CacheService.getScriptCache();
     const cs = 's_' + String(d.geraet).slice(0, 40);
@@ -453,6 +573,9 @@ function doGet(e) {
       kopf: kopf, zeilen: zeilen, challenges: challenges });
   }
   if (p.community) return antwort(communityGet());
+  // v1.1.3: Studie nur zusammengefasst oder anonymisiert (siehe studieZusammenfassung).
+  if (p.studie === 'zusammenfassung') return antwort(studieZusammenfassung());
+  if (p.studie === 'daten') return antwort(studieDatenOeffentlich());
   if (p.spurliste || p.spur) return antwort(spurGet(p));
   const sp = spalten();
   const werte = blatt().getDataRange().getValues().slice(1);

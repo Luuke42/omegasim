@@ -357,7 +357,11 @@
           a.zaehler = (a.zaehler + 1) & 0xff;
           a.car.tileCount = a.zaehler;
           a.car.tileAt = st.uhr;
-          a.car.tileCode = st.tiles[ort.kachel].type;
+          // v1.1.37: Start/Ziel so, wie das Auto es LIEST. Der Kacheltyp START ist 0x0a, und auf der
+          // Schiene meldet das Auto dort 0x01 - 0x0a heisst dort Engstelle (codeZuTyp), und die
+          // Haarnadel-Obergrenze griff in der Simulation auf jedem Start/Ziel.
+          const typ = st.tiles[ort.kachel].type;
+          a.car.tileCode = typ === TILE_TYPE.START && trackMode === 'on' ? START_CODE_RAIL : typ;
         }
       }
     } finally {

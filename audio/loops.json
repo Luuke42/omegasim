@@ -671,27 +671,27 @@
   "crackle": 0.45,
   "turbo": false,
   "loops": {
-    "idle": {
-     "file": "huracan_gt3_evo_idle.ogg",
-     "baseRpm": 1730,
-     "firingHz": 144.2,
-     "seconds": 1.7,
-     "load": 1.0
-    },
-    "low2": {
-     "file": "huracan_gt3_evo_low2.ogg",
-     "baseRpm": 3200,
-     "firingHz": 266.7,
-     "seconds": 1.7,
-     "load": 1.0
-    },
-    "low": {
-     "file": "huracan_gt3_evo_low.ogg",
-     "baseRpm": 4200,
-     "firingHz": 350.0,
-     "seconds": 1.7,
-     "load": 1.0
-    },
+   "idle": {
+    "file": "huracan_gt3_evo_idle.ogg",
+    "baseRpm": 1730,
+    "firingHz": 144.2,
+    "seconds": 1.7,
+    "load": 1.0
+   },
+   "low2": {
+    "file": "huracan_gt3_evo_low2.ogg",
+    "baseRpm": 3200,
+    "firingHz": 266.7,
+    "seconds": 1.7,
+    "load": 1.0
+   },
+   "low": {
+    "file": "huracan_gt3_evo_low.ogg",
+    "baseRpm": 4200,
+    "firingHz": 350.0,
+    "seconds": 1.7,
+    "load": 1.0
+   },
    "mid": {
     "file": "huracan_gt3_evo_mid.ogg",
     "baseRpm": 6000,
@@ -1798,5 +1798,58 @@
   },
   "idleRpm": 1300,
   "limiterRpm": 8600
+ },
+ "sd_v5r": {
+  "label": "Speed Dreams: Vulture V5.R (7,0 l V8)",
+  "cylinders": 8,
+  "source": "Aufnahme aus Speed Dreams 2.4 (data/cars/models/ls1-vulture-v5r/v5r-v8.wav): Speed-Dreams-Team (ls1-vulture-v5r), GPL-2.0-or-later",
+  "crackle": 0.5,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "sd_v5r_idle.ogg",
+    "baseRpm": 1000,
+    "firingHz": 66.7,
+    "seconds": 12.3068,
+    "load": 1.0
+   },
+   "low": {
+    "file": "sd_v5r_low.ogg",
+    "baseRpm": 1612,
+    "firingHz": 107.5,
+    "seconds": 7.6345,
+    "load": 1.0
+   },
+   "low2": {
+    "file": "sd_v5r_low2.ogg",
+    "baseRpm": 2598,
+    "firingHz": 173.2,
+    "seconds": 4.7371,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "sd_v5r_mid.ogg",
+    "baseRpm": 4188,
+    "firingHz": 279.2,
+    "seconds": 2.9386,
+    "load": 1.0
+   },
+   "high": {
+    "file": "sd_v5r_high.ogg",
+    "baseRpm": 6750,
+    "firingHz": 450.0,
+    "seconds": 1.8232,
+    "load": 1.0
+   },
+   "over": {
+    "file": "sd_v5r_over.ogg",
+    "baseRpm": 2598,
+    "firingHz": 173.2,
+    "seconds": 4.7371,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 1000,
+  "limiterRpm": 6750
  }
 }

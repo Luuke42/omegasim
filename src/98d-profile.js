@@ -21,7 +21,9 @@
     { id: 'general', root: 'sub-opt-general', titel: 'Allgemein' },
     { id: 'feel', root: 'sub-opt-feel', titel: 'Fahrgefühl', werks: true },
     { id: 'sound', root: 'sub-opt-sound', titel: 'Ton' },
+    { id: 'ansagen', root: 'sub-opt-ansagen', titel: 'Ansagen' },
     { id: 'ghosts', root: 'sub-opt-ghosts', titel: 'NPCs' },
+    { id: 'safetycar', root: 'sub-opt-safetycar', titel: 'Safety Car' },
     { id: 'pad', root: 'sub-opt-pad', titel: 'Controller', pad: true },
     { id: 'race', root: 'tab-control', titel: 'Renneinstellungen' },
   ];

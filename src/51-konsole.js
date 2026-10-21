@@ -64,6 +64,8 @@
   // MENUE statt FAHREN: ueberall ausser im Cockpit, und im Cockpit, solange dessen Menue
   // offen ist. Daran haengt, ob Kreuz/Kreis/Quadrat/L1/R1/Options Menue- oder Fahrtasten sind.
   function konsoleMenue() {
+    // v1.1.3: in der virtuellen Fahrt faehrt das Pad, kein Menue (60d-virtuell.js).
+    if (typeof vfAktiv === 'function' && vfAktiv()) return false;
     return kAktiverTab() !== 'race' || kFrageOffen
       || (typeof konsoleTourOffen === 'function' && konsoleTourOffen());
   }
@@ -166,6 +168,8 @@
     if (typeof konsoleTourOffen === 'function' && konsoleTourOffen()) { konsoleTourZurueck(); return true; }
     const lb = $('lb-wrap');
     if (lb && lb.classList.contains('on') && $('lb-close')) { $('lb-close').click(); return true; }
+    if (typeof streckenbildOffen === 'function' && streckenbildOffen()) { streckenbildZu(); return true; }
+    if (typeof menuNavGarageZurueck === 'function' && menuNavGarageZurueck()) return true;
     const tab = kAktiverTab();
     // Eine Community-Strecke (v0.9.49) geht zurueck in ihre Liste, nicht auf die Kacheln.
     if (typeof chCommunitySeiteOffen === 'function' && chCommunitySeiteOffen()) { showSubpage('ch-community'); return true; }
@@ -954,6 +958,10 @@
         // zeigt den Ergebnis-Dialog. Nichts zaehlt mehr, auch der Abbruch in die Rennmaschine.
         if (typeof challengeLaeuft === 'function' && challengeLaeuft() && kRennenLaeuft()) {
           requestRaceStop();
+        } else if (typeof vfAktiv === 'function' && vfAktiv()) {
+          // Virtuelle Fahrt: Options beendet sie wie Escape (zurueck in die Garage), statt das Menue
+          // unter der 3D-Schicht zu oeffnen.
+          virtuellBeenden();
         } else {
           konsoleZumMenue();
         }
@@ -968,6 +976,13 @@
   // sie sehen, und damit Esc/Q/E/Leertaste in Menues nicht zusaetzlich fahren.
   window.addEventListener('keydown', (e) => {
     const k = (e.key || '').toLowerCase();
+    // v1.1.3: waehrend der virtuellen Fahrt (60d-virtuell.js) gehoeren die Tasten dem Fahren; Escape beendet sie.
+    // Dieser Zuhoerer laeuft in der Capture-Phase vor allen anderen - ohne diese Zeile oeffnete Escape das Menue.
+    if (typeof vfAktiv === 'function' && vfAktiv()) {
+      if (k === 'escape') { e.preventDefault(); e.stopImmediatePropagation(); virtuellBeenden(); }
+      else if (k === 'c' && !e.repeat) { e.preventDefault(); vfKameraWechseln(); }
+      return;
+    }
     if (e.target && e.target.closest && e.target.closest('input[type="text"], input[type="number"], textarea, select')) return;
     // Der Meisterschaftsschirm hat seine eigene Tastatur (73-meisterschaft.js).
     if (typeof meisterOffen === 'function' && meisterOffen() && !kFrageOffen) return;
@@ -1030,8 +1045,22 @@
     kn('fa-verbinden', () => { konsoleVerbinden(); });
     kn('fa-garage', () => konsoleZeige('garage'));
     kn('fa-start', () => { konsoleLosfahren(); });
-    kn('fa-renn', () => konsoleZeige('control'));
-    kn('fa-strecke', (e) => { if (!e.target.closest('.k-knopf')) konsoleZeige('track'); });
+    // v1.1.3 BESTELLT: "Tippe ich bei der Kachel STRECKE auf STRECKE oder AUF DER BAHN, soll
+    // umgeschaltet werden; tippe ich auf das Bild, oeffnet sich das Menue dazu." Vorher schaltete nur
+    // der Text selbst um, ein Tipp daneben in der Kopfzeile oeffnete das Menue. Jetzt oeffnet nur das
+    // Bild (und Gamepad/Tastatur, die die Kachel als Ganzes ausloesen: e.target ist dann die Kachel),
+    // alles andere ausser den Knoepfen schaltet um.
+    // v1.1.15 GEMELDET: "Wenn ich auf das Bild klicke, fuehre mich zu den Optionen. Wenn ich auf eine der
+    // beiden Ueberschriften druecke, aendere den Modus." Die Infozeile (.k-ki) liegt ueber dem groessten
+    // Teil des Bildes, und ein Tipp dort schaltete bisher um. Jetzt umgekehrt: NUR die beiden
+    // Ueberschriften (.k-kk, .k-kopf) schalten, alles andere auf der Kachel oeffnet die Optionen.
+    const kachelKlick = (quad, oeffnen) => (e) => {
+      if (e.target.closest('.k-knopf')) return;
+      if (e.target.closest('.k-kk, .k-kopf')) { konsoleQuadWechsel(quad, 1); return; }
+      oeffnen();
+    };
+    kn('fa-renn', kachelKlick('renntyp', () => konsoleZeige('control')));
+    kn('fa-strecke', kachelKlick('bahn', () => konsoleZeige('track')));
     kn('fa-scan', () => konsoleZeige('track', 'scan'));
     kn('fa-editor', () => konsoleZeige('track', 'edit'));
     kn('fa-laden', () => konsoleZeige('track', 'laden'));
@@ -1044,17 +1073,7 @@
     // BESTELLT: "wenn ich auf den Header tippe, soll es zur naechsten Option schalten".
     // Der Kachelkopf (Titel + Wert) dreht die Schaltstellung weiter, der Rest der Kachel
     // oeffnet wie bisher die Unterseite. Das Gamepad bleibt unveraendert (Quadrat/links/rechts).
-    [['fa-strecke', 'bahn'], ['fa-renn', 'renntyp']]
-      .forEach(([tileId, quad]) => {
-        const tile = $(tileId);
-        if (!tile) return;
-        tile.querySelectorAll('.k-kk, .k-kt').forEach((el) => {
-          el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            konsoleQuadWechsel(quad, 1);
-          });
-        });
-      });
+    // (v1.1.3: das Umschalten steckt jetzt in kachelKlick oben - fuer die ganze Kachel ausser dem Bild.)
     // Die Pfeile des Motorsound-Kachelkopfs blaettern vor und zurueck (nicht das Gamepad).
     document.querySelectorAll('.k-arrow').forEach((el) => {
       el.addEventListener('click', (e) => {

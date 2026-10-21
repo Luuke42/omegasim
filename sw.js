@@ -31,7 +31,7 @@
  *     Ursprung; ihn zu cachen hiesse, alte Rundenzahlen als neue auszugeben.
  */
 
-const VERSION = '1.1.3';
+const VERSION = '1.1.41';
 const CACHE = 'omegasim-' + VERSION;
 
 // Nur die Huelle. Die Tonschleifen (1,8 MB) werden NICHT vorab geladen: wer die App nur
@@ -78,6 +78,26 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;        // fremder Ursprung: nie cachen
 
   e.respondWith((async () => {
+    // Rennstand-Clips werden auch innerhalb derselben App-Version neu erzeugt.
+    // Netz zuerst, ohne HTTP-Cache; offline die zuletzt gespeicherte Aufnahme.
+    // Motorsounds und andere grosse OGGs behalten ihre Cache-first-Strategie.
+    if (/\/audio\/rennstand_ext_[^/]+\.ogg$/.test(url.pathname)) {
+      const c = await caches.open(CACHE);
+      try {
+        const fresh = await fetch(new Request(req, { cache: 'reload' }));
+        if (fresh.ok) {
+          await c.put(req, fresh.clone());
+          return fresh;
+        }
+        const stored = await c.match(req);
+        return stored || fresh;
+      } catch (err) {
+        const stored = await c.match(req);
+        if (stored) return stored;
+        throw err;
+      }
+    }
+
     // TONDATEIEN (die .ogg) sind versioniert - der Cachename traegt die Version -, und
     // innerhalb einer Version aendern sie sich nicht. Cache zuerst: eine installierte App
     // soll die Megabyte Motorgeraeusch nicht bei jedem Start neu vom Netz holen. Die kleinen

@@ -510,7 +510,9 @@
         // Aus heisst: kein einziger Rechenschritt davon laeuft, und "Physik" ist bitgleich
         // mit dem Stand davor (Selbsttest "Physik bitgleich").
         pacejka: false,
-        pacejkaUebersteuern: true,   // BESTELLT: "evtl. sage ich spaeter, Uebersteuern aus"
+        // v1.1.25 BESTELLT: "Schalte bei den Pacejka-Presets aus, dass das Auto uebersteuert, also weiterlenkt,
+        // obwohl ich selbst nicht lenke, und gib mir die Option, das wieder anzustellen." Ab Werk aus.
+        pacejkaUebersteuern: false,
         // Die Haftgrenze in Einheiten der Querausnutzung (latUse ohne Deckel). 0,7 heisst:
         // voller Einschlag ist ab etwa 115 km/h am Limit, halber ab 230 - dieselbe Skala,
         // die auch das Quietschen benutzt (TYRE_SQUEAL_START 0,6 liegt knapp darunter).
@@ -871,6 +873,9 @@
         // display is plenty. reverseOutputSpan below caps the byte on top of this, which
         // makes R both slower and weaker than forward.
         reverseTopFrac: 0.11,
+        // v1.1.11: Anteil davon, den der Fahrer rueckwaerts bekommt (Regler "Tempo rueckwaerts",
+        // Vorgabe 50 %). Der Autopilot faehrt mit dem vollen Wert (inputs.apFaehrt).
+        reverseTempo: 0.5,
         reverseRatio: 3.00,
         reverseOutputSpan: 0.50,
       };
@@ -1924,7 +1929,10 @@
       if (reversing) {
         // In R the THROTTLE drives backwards and the brake slows down.
         st.engineLoad = inputs.throttle;
-        const revCeiling = revTopKmh * cfg.speedLimitFactor;
+        // Die Grenze sinkt, die Ausgabe bleibt Tempo / revTopKmh: halbe Grenze heisst halbes Byte, das
+        // Auto faehrt also wirklich langsamer und nicht nur die Anzeige.
+        const revAnteil = inputs.apFaehrt ? 1 : Math.max(0.05, Math.min(1, cfg.reverseTempo === undefined ? 1 : cfg.reverseTempo));
+        const revCeiling = revTopKmh * revAnteil * cfg.speedLimitFactor;
         if (inputs.brake > 0.02) {
           isBraking = true;
           const uR = Math.abs(st.speedKmh) / cfg.topSpeedKmh;

@@ -745,12 +745,12 @@
 
   // Sichtbar nur, wenn ein Auto gesteuert wird. renderGarage() ruft das mit; ausserdem
   // einmal beim Laden, damit die Leiste nicht sichtbar startet.
+  // v1.1.11 BESTELLT: "im Garagenmenue sind jetzt 3 scrollbare Fenster. Das untere soll weg." Die
+  // Abstimmung steht seit v0.10.5 rechts beim gesteuerten Auto (garageAufZeile); die Leiste darunter
+  // bleibt im Dokument (die Optionen ziehen ueber sie mit), wird aber nicht mehr gezeigt.
   function updateGaragePresetRow() {
     const host = $('gar-preset');
-    if (!host) return;
-    const fahrer = typeof playerCar !== 'undefined' && playerCar
-                   && garage.some(c => c === playerCar && c.role === 'player');
-    host.style.display = fahrer ? '' : 'none';
+    if (host) host.style.display = 'none';
   }
   window.__updateGaragePresetRow = updateGaragePresetRow;
   updateGaragePresetRow();

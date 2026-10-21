@@ -748,7 +748,7 @@
     if (raceState === 'finished' && car.ghost && car.ghost.auslauf) {
       car.ghost.auslauf = false;
       if (r.lapStart !== null) {
-        r.laps.push({ lap: r.laps.length + 1, ms: now - r.lapStart, off: r.offLap || 0 });
+        r.laps.push({ lap: r.laps.length + 1, ms: now - r.lapStart, off: r.offLap || 0, crossedAt: now });
       }
       r.lapStart = null;
       finishGhost(car);
@@ -792,7 +792,7 @@
     if (r.lapStart !== null) {
       const nrSp = spielerNrVon(car);
       const ms = now - r.lapStart + (nrSp >= 2 ? fruehstartZuschlag(nrSp, r.laps.length) : 0), offs = r.offLap || 0;
-      r.laps.push({ lap: r.laps.length + 1, ms, off: offs });
+      r.laps.push({ lap: r.laps.length + 1, ms, off: offs, crossedAt: now });
       // v0.10.6: Bestzeit-Modus - auch Spieler 2/3 sammeln Zeiten und Medaillen.
       if (raceMode === 'bestzeit' && spielerNrVon(car) >= 2 && ms >= rundeMinMs()) {
         bestzeitMeldung(bestzeitRunde(ms, car), ms, spielerNrVon(car));
@@ -805,6 +805,9 @@
         // wie Spieler 1, nur mit dem hoeheren Ton.
         speakLap(ms, istBest2);
       }
+      // Jedes NPC-/Zusatzspieler-Rundenereignis prueft die Fuehrungsrunde.
+      // Spieler 1 erst im akzeptierten Dashboard-Zaehler (kein Doppeltrigger).
+      if (car !== playerCar && car.role !== 'player') rennstandRunde();
       // Genau hier liegen Rundenzeit und Abgangszahl zusammen vor, und beides braucht die
       // Annahmeregel des Lernens: schneller UND heil. Eine Runde ist eine Auswertung.
       learnSettle(car, ms, offs);
@@ -885,7 +888,7 @@
     // ueber einen GHOST ausloesen, und ein Rundenrennen ohne (oder mit zu langsamen) Ghosts
     // endete nie.
     const out = garage.filter(c => c.role !== 'safetycar' && c.role !== 'reinig').map(c => ({ name: garageLabel(c), role: c.role, id: String(c.device && c.device.id),
-                                   farbe: carColor(c).hex, kennung: c.tag,
+                                   farbe: carColor(c).hex, farbeId: carColor(c).id, kennung: c.tag, modellId: carModellWert(c.modellId), alias: c.alias || '',
                                    // Der Ort auf der Schiene. Auto 2 geht ueber
                                    // ghostOrtGes(): es hat seit v0.6.46 einen eigenen
                                    // Ortungssatz, und der ist genau der, aus dem ein Ghost
@@ -1573,13 +1576,37 @@
       : 'background:linear-gradient(135deg,' + f.hex + ' 0%,' + f.hex + ' 60%,rgba(0,0,0,.5) 100%);color:' + f.ink;
     return '<span class="grid-auto" style="' + stil + '" aria-hidden="true">' + (foto ? '' : (car.tagChar || '')) + '</span>';
   }
-  function raceGridZeilen(host) {
+  // v1.1.25 BESTELLT: "Mach eine kleine Animation, wenn ich die Autos neu sortiere, dann ist es einfacher,
+  // das nachzuvollziehen." FLIP: vor dem Neuzeichnen die Lage jeder Zeile merken, danach jede verschobene
+  // Zeile von ihrer alten Lage an ihren neuen Platz gleiten lassen; das bewegte Auto leuchtet kurz auf.
+  function gridLagenMerken(host) {
+    const m = new Map();
+    host.querySelectorAll('.grid-row[data-id]').forEach((r) => m.set(r.dataset.id, r.getBoundingClientRect()));
+    return m;
+  }
+  function gridGleiten(host, alt, bewegt) {
+    if (!alt || !alt.size || typeof Element.prototype.animate !== 'function') return;
+    host.querySelectorAll('.grid-row[data-id]').forEach((r) => {
+      const a = alt.get(r.dataset.id);
+      if (!a) return;
+      const n = r.getBoundingClientRect();
+      const dx = a.left - n.left, dy = a.top - n.top;
+      if (r.dataset.id === bewegt) r.classList.add('grid-bewegt');
+      // Auch bei "Bewegung reduzieren" im System: die Animation ist ausdruecklich bestellt und kurz.
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      r.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px)' }, { transform: 'none' }],
+                { duration: GRID_GLEITEN_MS, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    });
+  }
+  const GRID_GLEITEN_MS = 320;
+  function raceGridZeilen(host, bewegt) {
     if (!host) return;
     const cars = raceGridCars();
     if (!cars.length) {
       host.innerHTML = '<p class="muted" style="margin:0">Keine Autos verbunden.</p>';
       return;
     }
+    const alt = bewegt ? gridLagenMerken(host) : null;
     host.innerHTML = '';
     cars.forEach((car, i) => {
       const row = document.createElement('div');
@@ -1609,8 +1636,19 @@
           if (to < 0 || to >= order.length) return;
           order.splice(to, 0, order.splice(from, 1)[0]);
           raceGridOrder = order;
-          raceGridZeilen(host);
+          raceGridZeilen(host, row.dataset.id);
+          // Der Fokus bleibt auf dem Pfeil des bewegten Autos, damit man es mehrmals weiterschieben kann.
+          const neu = host.querySelector('.grid-row[data-id="' + CSS.escape(row.dataset.id) + '"] button[data-mv="' + b.dataset.mv + '"]');
+          if (neu && !neu.disabled && document.activeElement === document.body) neu.focus({ preventScroll: true });
         };
+      });
+      // v1.1.25 BESTELLT: "Wenn ich dort auf ein Auto druecke, mach, dass es die Lichter blinkt."
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('button, .grid-handle')) return;
+        if (typeof blinkCar === 'function' && car.rx) blinkCar(car);
+        row.classList.remove('grid-blinkt');
+        void row.offsetWidth;
+        row.classList.add('grid-blinkt');
       });
       const handle = row.querySelector('.grid-handle');
       handle.addEventListener('dragstart', (e) => {
@@ -1631,10 +1669,11 @@
         if (from < 0 || to < 0) return;
         order.splice(to, 0, order.splice(from, 1)[0]);
         raceGridOrder = order;
-        raceGridZeilen(host);
+        raceGridZeilen(host, dragged);
       });
       host.appendChild(row);
     });
+    gridGleiten(host, alt, bewegt);
     const sc = garage.find(c => c.role === 'safetycar' && c.device);
     if (sc) {
       const row = document.createElement('div');
@@ -1751,6 +1790,14 @@
     const gs = $('race-gridscreen');
     if (gs) gs.hidden = true;
     if (typeof aufstellenStoppen === 'function') aufstellenStoppen(false);
+    // v1.1.23 GEMELDET: "Genauso, wenn ich abbreche, nachdem ich auf automatische Aufstellung gedrueckt
+    // habe - es klappt einfach gar nicht." Abbrechen haelt jetzt ALLE fahrenden NPCs und das Safety Car an,
+    // nicht nur die, die gerade noch einen Startplatz suchen.
+    if (raceState !== 'racing' && raceState !== 'finishing') {
+      garage.forEach((c) => {
+        if ((c.role === 'ghost' || c.role === 'safetycar') && c.ghost && c.ghost.running) stopGhost(c);
+      });
+    }
     raceGridWeiter = null;
     // Hing die Challenge gerade in der Ampel-Phase (Autos-in-Position war ihr Start),
     // bricht Abbrechen sie ab - sonst bliebe sie auf Stillstand warten.
@@ -1975,6 +2022,9 @@
     bestzeitVorherMerken();
     // v1.1.3: ein neues Rennen beginnt nie unter Gelb (stand vorher aus dem letzten Rennen).
     if (flagState !== 'green') gelbBeenden();
+    // v1.1.20: auch nie mit einer noch laufenden Aufstellung (gestartet ohne den Startschirm, z. B. R1):
+    // deren Autopilot haette das Fahrerauto mitten im Rennen zu seinem Startplatz gesteuert.
+    if (typeof aufstellenStoppen === 'function') aufstellenStoppen(false);
     // EINSCHALTRAMPE: der Schirm zieht in 300 ms von schwarz auf Wert hoch, wie ein TFT beim
     // Einschalten. Hier und nicht in raceGreen(), weil der Schirm mit dem Knopfdruck
     // "angeht" und nicht erst bei Gruen - im Countdown will man ihn schon lesen.
@@ -2036,6 +2086,7 @@
     garage.forEach(c => { c.race = { laps: [], lapStart: null, pending: null, seen: 0,
                                      lastActed: 0, lastCount: null }; });
     raceLapTimes = [];
+    rennstandReset();
     // ---- UND DIE COCKPIT-RUNDEN AUCH, und das ist ein gemeldeter Fehler ------------
     //
     // dashLapTimes wurde beim Rennstart NIE zurueckgesetzt. Es ist die Liste der
@@ -2264,6 +2315,8 @@
   // `auslaufen` = die Ghosts duerfen ihre angefangene Runde zu Ende fahren. Vorgabe ja;
   // requestRaceStop() uebergibt ausdruecklich false.
   function finishRace(auslaufen) {
+    if (raceState === 'finished') return; // Ergebnisansage nur einmal planen.
+    rennstandAbbrechen();
     raceState = 'finished';
     // v1.1.3 GEMELDET: "Rennende sollte auch die gelbe Flagge beenden". Nicht ueber
     // setFlag('green') - das zeigt "GRUEN" und schickt das Safety Car heim; es steht hier
@@ -2358,7 +2411,8 @@
     // DER RUNDENZAEHLER, aber nur bei einer echten Zielflagge. Wer von Hand abbricht,
     // bekommt keine Fanfare - dieselbe Ueberlegung, mit der die Ghosts dann auch nicht
     // auslaufen: ein Abbruch ist kein Zieleinlauf.
-    if (willAuslaufen) playRaceEndFanfare();
+    const ergebnisFanfare = willAuslaufen ? playRaceEndFanfare() : null;
+    if (willAuslaufen) rennstandRennende(ergebnisFanfare);
     $('race-start-btn').disabled = false;
     $('race-lap-current-row').style.display = 'none';
     $('race-results').style.display = '';
@@ -3223,6 +3277,7 @@
       // Datei - dieselbe Vorsicht wie an der Stelle, die eine gefahrene Runde meldet.
       if (typeof mpRundeGefahren === 'function') mpRundeGefahren();
     }
+    if (weg) rennstandAbbrechen(); // Ein zurueckgenommener Rundenschluss ist kein Zwischenstand.
     if (weg) $('race-status').textContent = t('Rennen läuft, Runde') + ' ' + raceLapTimes.length;
     log('Runde zurueckgenommen' + (weg ? ' (' + formatLapTime(weg.ms) + ')' : '') + ': '
         + warum, 'info');
@@ -3458,7 +3513,7 @@
       const plausibel = raceLapTimes.filter(l => l.ms >= minMs);
       const besteBisher = plausibel.length
         ? Math.min.apply(null, plausibel.map(l => l.ms)) : Infinity;
-      raceLapTimes.push({ lap: raceLapTimes.length + 1, ms: rundeMs });
+      raceLapTimes.push({ lap: raceLapTimes.length + 1, ms: rundeMs, crossedAt: now });
       // Challenge: Runde gegen die Strecke pruefen. Liefert true, wenn die Runde NICHT zaehlt
       // (Strecke nicht erkannt oder zu schnell) - dann tiefer Ton statt des hellen Rundenklangs.
       const challengeUngueltig = typeof challengeRundeFertig === 'function'
@@ -3481,6 +3536,7 @@
       if (raceMode === 'bestzeit' && !challengeUngueltig && rundeMs >= minMs) {
         bestzeitMeldung(bestzeitRunde(rundeMs, playerCar), rundeMs, 1);
       }
+      rennstandRunde();
       // v0.9.41 GEMELDET: "Das Multiplayer Renn-Ende wird nicht getriggert ... 5-Runden-Rennen."
       // Die Zielrunde schaltete nur auf 'finishing' (raceClockTick), beendet wurde erst bei der
       // NAECHSTEN Ueberfahrt - ein 5-Runden-Rennen ging also ueber 6 Runden. Wer die Zielzahl
@@ -4267,14 +4323,22 @@
   let pitState = 'off';        // off | limited | servicing
   let pitModus = 'minigame';   // Boxen-Minigame, siehe pitSpielStart()
   let pitSpiel = null;
-  const PIT_SPIEL_ANZAHL = 8;
-  const PIT_SPIEL_BONUS = 0.05;
+  // v1.1.11 BESTELLT: "Pit-Minigame: mach nur 5 Button-Events, nach jedem 250 ms ausblenden. Sieh zu,
+  // dass es mit der Zeit noch ungefaehr passt." Fuenf Tasten statt acht; nach jeder (gedrueckt oder
+  // abgelaufen) ist das Feld 250 ms leer. Jedes Fenster ist ein Fuenftel der Standzeit minus diese
+  // Pause, so passen alle fuenf in die Zeit. Ein Treffer bringt 8 % statt 5 %: fuenf Treffer sparen
+  // wie bisher acht zusammen 40 %.
+  const PIT_SPIEL_ANZAHL = 5;
+  const PIT_SPIEL_BONUS = 0.08;
+  const PIT_SPIEL_PAUSE = 0.25;
   // v1.0.45 BESTELLT: nach dem letzten Knopf mindestens 1 s Erholung, laenger als Strafzeit
   // bei falschen Tasten. Erholung zusaetzlich zur Bonus-Strafe (5 % je falsche Taste).
   const PIT_ERHOL_BASE = 1.0;
   const PIT_ERHOL_PRO_FEHLER = 0.3;
-  // v1.0.45 BESTELLT: die Zeit zum Druecken 0,5 s laenger. Das Fenster war T/Anzahl + 0,2 s.
-  const PIT_SPIEL_FENSTER_EXTRA = 0.2 + 0.5;
+  // v1.0.45 BESTELLT: die Zeit zum Druecken 0,5 s laenger (T/Anzahl + 0,7 s). Seit v1.1.11 statt
+  // dessen T/Anzahl minus die Pause (siehe oben), mindestens PIT_SPIEL_FENSTER_MIN.
+  const PIT_SPIEL_FENSTER_MIN = 0.7;
+  function pitSpielFenster(T) { return Math.max(PIT_SPIEL_FENSTER_MIN, T / PIT_SPIEL_ANZAHL - PIT_SPIEL_PAUSE); }
   let pitServiceStart = null;
   let pitFuelGained = 0, pitDamageRepaired = 0;
   const PIT_FUEL_PER_SEC = 22;
@@ -4420,7 +4484,7 @@
       setPitState('limited');
       // Nur HIER abbrechen: eine noch laufende Rundenansage der ersten Ueberfahrt soll der
       // Boxen-Ansage nicht im Weg stehen.
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      if ('speechSynthesis' in window) { window.speechSynthesis.cancel(); lapAnsageBeendet(); }
       ansage('pit', t('Boxenstopp eingeleitet'));
       playTone(880, 0.12, 'square', 0.16);
       setTimeout(() => playTone(880, 0.12, 'square', 0.16), 180);
@@ -4614,7 +4678,7 @@
     if (folge.length) folge[folge.length - 1] = 'kreis';
     // Fenster 0,7 s laenger als ein Zehntel: erst 100 ms, dann 200 ms (v0.8.38), seit v1.0.45
     // 0,5 s mehr (BESTELLT: "Mach die Zeit, die ich zum Druecken habe nochmal 0,5 s laenger").
-    pitSpiel = { T, bonus: 0, folge, i: 0, fensterAb: 0, fensterS: T / PIT_SPIEL_ANZAHL + PIT_SPIEL_FENSTER_EXTRA,
+    pitSpiel = { T, bonus: 0, folge, i: 0, fensterAb: 0, fensterS: pitSpielFenster(T),
                  treffer: 0, fehler: 0, blitz: '', blitzBis: 0, erholBis: 0, fuel0: fuel, dmg0: damage };
     showHudToast(t('Boxen-Minigame: Quadrat und Kreis!'));
   }
@@ -4623,13 +4687,15 @@
     if (!pitSpielAktiv()) return false;
     const sp = pitSpiel;
     if (sp.i >= sp.folge.length) return true;
+    // In der Pause nach einer Taste ist nichts zu druecken (die Taste gehoert trotzdem dem Spiel).
+    if (pitStandElapsed < sp.fensterAb) return true;
     // BESTELLT: "Wenn ich die falsche Taste druecke, fuege Zeit hinzu. Wenn ich richtig
     // druecke, ziehe Zeit ab." Beides um 5 % der Grundzeit.
     if (welche === sp.folge[sp.i]) { sp.bonus += PIT_SPIEL_BONUS * sp.T; sp.treffer++; sp.blitz = 'ok'; pitSpielTon(true, sp.i); }
     else { sp.bonus -= PIT_SPIEL_BONUS * sp.T; sp.fehler++; sp.blitz = 'falsch'; pitSpielTon(false, sp.i); }
     sp.blitzBis = pitStandElapsed + 0.3;
     sp.i++;
-    sp.fensterAb = pitStandElapsed;
+    sp.fensterAb = pitStandElapsed + PIT_SPIEL_PAUSE;    // das naechste Fenster beginnt nach der Pause
     pitSpielMalen();
     return true;
   }
@@ -4659,7 +4725,7 @@
     pitStandElapsed += dt;
     if (sp.i < sp.folge.length && pitStandElapsed - sp.fensterAb >= sp.fensterS) {
       sp.i++;
-      sp.fensterAb = pitStandElapsed;
+      sp.fensterAb = pitStandElapsed + PIT_SPIEL_PAUSE;
     }
     const anteil = Math.min(1, (pitStandElapsed + sp.bonus) / sp.T);
     if (pl.refuel) {
@@ -4701,7 +4767,8 @@
     el.hidden = !an;
     if (!an) return;
     const sp = pitSpiel;
-    const sym = sp.i < sp.folge.length ? sp.folge[sp.i] : '';
+    // In der Pause (vor fensterAb) ist das Feld leer.
+    const sym = sp.i < sp.folge.length && pitStandElapsed >= sp.fensterAb ? sp.folge[sp.i] : '';
     el.dataset.symbol = sym;
     el.dataset.blitz = pitStandElapsed < sp.blitzBis ? sp.blitz : '';
     el.style.setProperty('--fenster', sym
@@ -6754,7 +6821,7 @@
       } else if (fuehrer && x === fuehrer) {
         luecke = '\u2014';
       }
-      return { pos: i + 1, name: x.c.name, farbe: x.c.farbe, rolle: x.c.role,
+      return { pos: i + 1, name: x.c.name, farbe: x.c.farbe, rolle: x.c.role, id: x.c.id,
                runden: x.n, summe: x.summe, luecke, letzte: x.letzte, beste: x.beste,
                // Die schnellste Runde des ganzen Feldes wird hervorgehoben, wie auf einer
                // Zeittafel. Verglichen wird SPAETER, wenn alle Zeilen vorliegen.
@@ -6862,7 +6929,13 @@
       return;
     }
     host.hidden = false;
-    const nameHtml = (z) => '<span class="name"><i class="ov-farbe" style="background:'
+    // v1.1.25 BESTELLT: "Zeige die Autobildchen auf dem Gewinnerbildschirm." Ueber dem Namen das Bild aus der
+    // Garage (Foto oder Farbe mit Kennbuchstabe), wie auf dem Aufstellungsschirm.
+    const bildHtml = (z) => {
+      const car = z && z.id ? garage.find((c) => c.device && String(c.device.id) === z.id) : null;
+      return car ? gridAutoBild(car).replace('class="grid-auto"', 'class="grid-auto ov-auto"') : '';
+    };
+    const nameHtml = (z) => bildHtml(z) + '<span class="name"><i class="ov-farbe" style="background:'
       + (z.farbe || 'transparent') + '"></i>' + z.name + '</span>';
     let html;
     if (zeilen.length === 1) {

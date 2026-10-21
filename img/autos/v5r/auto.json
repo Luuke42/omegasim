@@ -1,0 +1,298 @@
+{
+ "name": "Vulture V5.R",
+ "kennung": "v5r",
+ "quelle": "Speed Dreams, data/cars/models/v5r_dl",
+ "lizenz": "GPL-2.0-or-later (Speed Dreams)",
+ "koordinaten": "m; +x links, +y oben, +z vorn",
+ "ecken": 7262,
+ "indizes": 38682,
+ "indexAb": 232384,
+ "schritt": 32,
+ "teile": [
+  {
+   "name": "BDYWIPERBRUSH_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "ls1-vulture-v5r.jpg",
+   "ecke0": 0,
+   "ecken": 68,
+   "index0": 0,
+   "indizes": 513
+  },
+  {
+   "name": "BDYWIPERARM_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "ls1-vulture-v5r.jpg",
+   "ecke0": 68,
+   "ecken": 76,
+   "index0": 513,
+   "indizes": 543
+  },
+  {
+   "name": "WIOUTSIDEWINDOWS_s_2",
+   "rolle": "glas",
+   "gruppe": "auto",
+   "tex": "windows.png",
+   "ecke0": 144,
+   "ecken": 128,
+   "index0": 1056,
+   "indizes": 693
+  },
+  {
+   "name": "WIHEADLIGHTS_s_1",
+   "rolle": "scheinwerferglas",
+   "gruppe": "auto",
+   "tex": "headlightscover.png",
+   "ecke0": 272,
+   "ecken": 50,
+   "index0": 1749,
+   "indizes": 267
+  },
+  {
+   "name": "RLREARLIGHTS_s_3",
+   "rolle": "ruecklicht",
+   "gruppe": "auto",
+   "tex": "rearlights.jpg",
+   "ecke0": 322,
+   "ecken": 220,
+   "index0": 2016,
+   "indizes": 1305
+  },
+  {
+   "name": "MIRMIRRORS_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "ls1-vulture-v5r.jpg",
+   "ecke0": 542,
+   "ecken": 36,
+   "index0": 3321,
+   "indizes": 117
+  },
+  {
+   "name": "METEXHAUST_s_5",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "ls1-vulture-v5r.jpg",
+   "ecke0": 578,
+   "ecken": 216,
+   "index0": 3438,
+   "indizes": 714
+  },
+  {
+   "name": "HLHEADLIGHTS_s_15",
+   "rolle": "scheinwerfer",
+   "gruppe": "auto",
+   "tex": "frontlights.png",
+   "ecke0": 794,
+   "ecken": 340,
+   "index0": 4152,
+   "indizes": 2064
+  },
+  {
+   "name": "CFOUTSIDE_s_43",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "carbon.jpg",
+   "ecke0": 1134,
+   "ecken": 723,
+   "index0": 6216,
+   "indizes": 3198
+  },
+  {
+   "name": "BDYREARWING_s_9",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "ls1-vulture-v5r.jpg",
+   "ecke0": 1857,
+   "ecken": 319,
+   "index0": 9414,
+   "indizes": 1479
+  },
+  {
+   "name": "BDYOUTERBANNER_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "ls1-vulture-v5r.jpg",
+   "ecke0": 2176,
+   "ecken": 27,
+   "index0": 10893,
+   "indizes": 105
+  },
+  {
+   "name": "BDYCARBODYDET_s_60",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "ls1-vulture-v5r.jpg",
+   "ecke0": 2203,
+   "ecken": 572,
+   "index0": 10998,
+   "indizes": 2808
+  },
+  {
+   "name": "BDYCARBODY_s_47",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "ls1-vulture-v5r.jpg",
+   "ecke0": 2775,
+   "ecken": 3671,
+   "index0": 13806,
+   "indizes": 20484
+  },
+  {
+   "name": "TYRE_s_3",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "tyre.jpg",
+   "ecke0": 6446,
+   "ecken": 317,
+   "index0": 34290,
+   "indizes": 1611
+  },
+  {
+   "name": "RIM_s_34",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "rim.jpg",
+   "ecke0": 6763,
+   "ecken": 457,
+   "index0": 35901,
+   "indizes": 2535
+  },
+  {
+   "name": "NUT_s_10",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "rim.jpg",
+   "ecke0": 7220,
+   "ecken": 42,
+   "index0": 38436,
+   "indizes": 246
+  }
+ ],
+ "schatten": "shadow.png",
+ "lichter": {
+  "brems": [
+   [
+    0.65,
+    0.676,
+    -2.24,
+    0.2
+   ],
+   [
+    -0.41,
+    0.76,
+    -2.26,
+    0.2
+   ],
+   [
+    -0.65,
+    0.676,
+    -2.24,
+    0.2
+   ],
+   [
+    0.41,
+    0.76,
+    -2.26,
+    0.2
+   ]
+  ],
+  "rueck": [
+   [
+    -0.41,
+    0.76,
+    -2.26,
+    0.2
+   ],
+   [
+    0.41,
+    0.76,
+    -2.26,
+    0.2
+   ]
+  ],
+  "front": [
+   [
+    0.73,
+    0.48,
+    1.71,
+    0.14
+   ],
+   [
+    -0.73,
+    0.48,
+    1.71,
+    0.14
+   ],
+   [
+    0.62,
+    0.47,
+    1.76,
+    0.08
+   ],
+   [
+    -0.62,
+    0.47,
+    1.76,
+    0.08
+   ]
+  ]
+ },
+ "physik": {
+  "masse": 1180.0,
+  "schwerpunktHoehe": 0.255,
+  "radstand": 2.641,
+  "a": 1.2941,
+  "b": 1.3469,
+  "vorderachse": 1.225,
+  "hinterachse": -1.416,
+  "laenge": 4.643,
+  "breite": 1.999,
+  "hoehe": 1.163,
+  "massenVerteilung": 0.85,
+  "lenkGrad": 21.0,
+  "bremsVorn": 0.59,
+  "cx": 0.31,
+  "stirnflaeche": 2.02,
+  "auftriebVorn": 0.403,
+  "auftriebHinten": 0.443,
+  "fluegelVorn": 0.18059410477360754,
+  "fluegelHinten": 0.4079024325749306,
+  "leerlauf": 1000.0,
+  "begrenzer": 6750.0,
+  "reifen": {
+   "vorn": {
+    "radius": 0.3278,
+    "breite": 0.31,
+    "spur": 1.6,
+    "bodenfreiheit": 0.065,
+    "mu": 1.214
+   },
+   "hinten": {
+    "radius": 0.3433,
+    "breite": 0.31,
+    "spur": 1.56,
+    "bodenfreiheit": 0.076,
+    "mu": 1.214
+   }
+  },
+  "feder": {
+   "vorn": {
+    "k": 170000.0,
+    "druck": 15000.0,
+    "zug": 22000.0,
+    "weg": 0.1,
+    "stab": 75000.0
+   },
+   "hinten": {
+    "k": 130000.0,
+    "druck": 10000.0,
+    "zug": 20000.0,
+    "weg": 0.1,
+    "stab": 25000.0
+   }
+  },
+  "gefedert": 1055.8
+ }
+}

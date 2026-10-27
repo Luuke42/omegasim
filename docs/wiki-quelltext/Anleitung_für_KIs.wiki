@@ -1,0 +1,84 @@
+{{Stand|app=1.2.5|appdatum=26.10.2026}}
+Die '''Anleitung für KIs''' richtet sich an KI-Assistenten (und die Menschen, die sie anleiten), die Artikel in diesem Wiki schreiben oder am Quellcode von [[OmegaSim]] arbeiten. Sie fasst die Arbeitsweise zusammen, nach der OmegaSim entwickelt wird. Für Menschen gelten dieselben Regeln, siehe auch [[Mitmachen]].
+
+== Für Wiki-Artikel ==
+=== Pflichtbestandteile ===
+# Erste Zeile: <code><nowiki>{{Stand|app=<Version>|appdatum=<TT.MM.JJJJ>}}</nowiki></code>. Die Version ist die, deren Quellcode bzw. App du beschreibst. Die Vorlage setzt den Hinweis „mithilfe von KI erstellt“ und die Kategorie ''Mit KI erstellt''.
+# Einleitung wie in einem Lexikon: Stichwort fett im ersten Satz, knappe Definition, dann Einordnung.
+# Abschnitte <code>== … ==</code>; Bedienung vor Technik. Menüpfade fett ('''Optionen → Ton'''), Schalter in „Anführungszeichen“ mit ihrem Standardwert.
+# Am Ende: ''Siehe auch'' (interne Links), ''Weblinks'' (mindestens [https://github.com/Luuke42/omegasim Luuke42/omegasim]) und Kategorien (<code><nowiki>[[Kategorie:OmegaSim]]</nowiki></code> plus passende).
+
+=== Inhalt ===
+* '''Nur Belegtes.''' Fakten aus dem Quellcode, der Doku (<code>CARRERA_HYBRID.md</code>), den Patchnotes in der App oder aus Versuchen am Tisch. Nichts erfinden, keine geschätzten Zahlen. Wenn etwas unklar ist: weglassen oder „noch nicht gesichert“ schreiben.
+* '''In Arbeit kennzeichnen.''' Funktionen, die in der App das Etikett ''WIP'' oder ''experimentell'' tragen, im Text als „(in Arbeit)“ bzw. „(experimentell)“ führen.
+* '''Bestehende Seiten respektieren.''' Seiten anderer Autoren (z. B. [[CH ControlBox]], [[Startampel]]) nur ergänzen oder berichtigen, nicht umschreiben, und in der Zusammenfassung sagen, was sich geändert hat.
+* '''Stil:''' sachlich, Präsens, keine Werbung, keine Geviertstriche (—); Halbgeviertstrich (–) ist in Ordnung.
+
+=== Bilder ===
+* Screenshots von OmegaSim sind MIT-lizenziert und erlaubt. Beschreibung mit Version, Datum, Quelle und Lizenz; Kategorie ''Screenshots''.
+* Fotos nur mit Quelle und passender Lizenz. Im Zweifel nicht hochladen, sondern den Menschen fragen.
+
+=== Grenzen ===
+* Keine Passwörter oder Zugangsdaten eingeben. Der Mensch meldet sich selbst an.
+* Keine Seiten löschen oder verschieben, ohne dass ein Mensch es ausdrücklich will.
+* Das Wiki begrenzt Bearbeitungen und Uploads je Minute. Lieber langsam arbeiten als viele Fehlversuche erzeugen.
+
+== Für Arbeit am Quellcode ==
+=== Aufbau ===
+{| class="wikitable"
+! Ort !! Inhalt
+|-
+| <code>src/00-index.head.html</code> || gesamtes Markup und CSS, inklusive Optionen, Hilfetexte und Patchnotes
+|-
+| <code>src/*.js</code> || die Logik, nummeriert in Ladereihenfolge; alle Dateien teilen sich einen Gültigkeitsbereich
+|-
+| <code>index.html</code>, <code>sw.js</code>, <code>app-update.json</code> || '''erzeugt''' – nie von Hand ändern
+|-
+| <code>tools/build.py</code> || baut <code>index.html</code> aus <code>src/</code>
+|-
+| <code>tools/bump_version.py</code> || setzt die Version und baut <code>sw.js</code> und <code>app-update.json</code> neu
+|-
+| <code>android-app/</code> || native Android-Hülle mit dem Bluetooth-Plugin [[OmegaBle]]
+|-
+| <code>CARRERA_HYBRID.md</code> || Technik-Doku: Protokoll, Messungen, Begründungen
+|}
+
+=== Ablauf einer Änderung ===
+# Änderung in <code>src/</code> machen.
+# Neue sichtbare Texte auch übersetzen: Englisch und Spanisch stehen als Wörterbücher in <code>src/10-ble-explorer.js</code>.
+# Neue Funktionen von Anfang an mit dem Etikett <code><nowiki><span class="wip-tag">WIP</span></nowiki></code> kennzeichnen.
+# Erklärungen zu Optionen gehören in das ⓘ-Fenster (<code><nowiki><small></nowiki></code> im <code>.opt-label</code>), nicht als Text unter die Zeile.
+# Selbsttest schreiben: <code>stAdd('Name vX.Y.Z: …', () => ({ ok, mass }))</code> in <code>src/95-selftest.js</code>.
+# <code>python tools/build.py</code> ausführen.
+# Selbsttest in der App laufen lassen (Kachel ''Selbsttest'' im Bereich ''Sonstiges''; der Adresszusatz <code>?st=Name</code> beschränkt den Lauf auf passende Tests). Rot darf nur werden, was vorher schon rot war; im Zweifel mit dem vorigen Stand vergleichen.
+# Patchnotes ergänzen (Abschnitt je Nebenversion, mit englischer Übersetzung).
+# Version mit <code>python tools/bump_version.py</code> setzen. Das Schema ist ''1.<Woche>.<Push>''; die gültige Nummer ist die, die das Werkzeug ausgibt.
+
+=== Was man nicht kaputt machen darf ===
+* '''Den Sendeweg.''' Die App schickt jedem Auto alle 45 ms ein Fahrpaket. Alles, was diesen Takt verzögert oder Pakete unterdrückt, macht das Fahren schlechter. Änderungen daran nur mit Messung (Funk-Rundlauf, Zähler „gesperrt“).
+* '''Bluetooth-Verbindungen.''' Jede fehlgeschlagene Verbindung muss sauber getrennt werden, sonst bleibt das Auto in einem Zustand wie unter [[Keine Reaktion des Fahrzeugs]].
+* '''Gespeicherte Einstellungen.''' Neue Speicherschlüssel statt alte umdeuten.
+
+=== Testen im Browser ===
+* Beim automatischen Testen den Ton stummschalten (AudioContext-Ausgänge auf Lautstärke 0, Sprachausgabe abschalten), nach jedem Neuladen erneut.
+* In einem verborgenen Browserfenster drosselt der Browser Zeitgeber auf etwa einen Takt je Sekunde. Für Wartezeiten in Tests ist ein <code>MessageChannel</code>-Takt zuverlässiger als <code>setTimeout</code>.
+* Nach dem Testen Testserver und Tabs schließen, damit keine Seite im Hintergrund weiterläuft und Bluetooth hält.
+* Alles mit echten Autos (Kopplung, Latenz, Klang) lässt sich nur am Tisch prüfen. Das in der Rückmeldung ausdrücklich sagen.
+
+=== Pull Requests ===
+* Nur <code>src/</code>, <code>tools/</code>, <code>android-app/</code> und Doku ändern; erzeugte Dateien nicht mitschicken oder beim Übernehmen neu bauen lassen.
+* Beschreiben, was getestet wurde und was nicht (insbesondere am echten Auto).
+* Änderungen an der nativen App (<code>android-app/</code>) brauchen eine neue APK und einen Test am Auto.
+
+== Siehe auch ==
+* [[Mitmachen]]
+* [[OmegaSim]]
+* [[OmegaBle]]
+* [[Vorlage:Stand]]
+
+== Weblinks ==
+* [https://github.com/Luuke42/omegasim OmegaSim auf GitHub (Luuke42)]
+* [https://luuke42.github.io/omegasim/ OmegaSim im Browser spielen]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Mitmachen]]

@@ -312,9 +312,75 @@
     }
   }
 
+  // ---- VERWAISTE VERBINDUNGEN (v1.1.45) --------------------------------------------------
+  // GEMELDET: das Auto zeigt das helle "verbunden"-Licht, die App ist aber nicht verbunden, und erst das
+  // Ladegeraet hilft. Ursachen im Plugin: zwei ueberlappende connect-Aufrufe (der zweite ueberschreibt den
+  // Rueckruf des ersten), eine gescheiterte Dienstsuche ohne Trennen, und disconnect, das nur bei einer
+  // Trennmeldung wirklich schliesst. Darum: je Geraet nur EIN Verbindungsaufbau, bei jedem Fehler hart
+  // aufraeumen (Plugin-disconnect UND OmegaBle.schliessen), und disconnect() immer nativ.
+  const verbindetJe = new Map();
+  function omegaSchliessen(deviceId) {
+    if (!omegaBleVerfuegbar()) return Promise.resolve();
+    return C.nativePromise('OmegaBle', 'schliessen', { deviceId }).catch(() => {});
+  }
+  function omegaAlleSchliessen() {
+    if (!omegaBleVerfuegbar()) return Promise.resolve(null);
+    return C.nativePromise('OmegaBle', 'alleSchliessen', {}).catch(() => null);
+  }
+  window.OMEGA_BRUECKE.alleSchliessen = omegaAlleSchliessen;
+  window.OMEGA_BRUECKE.prioritaetHoch = (deviceId) =>
+    ruf('requestConnectionPriority', { deviceId, connectionPriority: 1 }).catch(() => {});
+  window.OMEGA_BRUECKE.schliessen = omegaSchliessen;
+  // Haengende Verbindungen: vom System als verbunden gemeldete HYBRID-Autos, die nicht in der Garage stehen.
+  // Erst trennen und schliessen; ist eines danach immer noch verbunden (Verbindung ohne eigenen Griff), einmal
+  // kurz verbinden und sauber trennen. Rueckgabe: wie viele es waren.
+  window.OMEGA_BRUECKE.verwaisteTrennen = async (behalten) => {
+    const keep = new Set((behalten || []).map(String));
+    const liste = async () => {
+      try {
+        const v = await ruf('getConnectedDevices', { services: [] });
+        return ((v && v.devices) || []).filter((d) => d && d.deviceId && !keep.has(String(d.deviceId))
+          && String(d.name || '').indexOf('HYBRID') === 0);
+      } catch (e) { return []; }
+    };
+    const erste = await liste();
+    for (const d of erste) {
+      await ruf('disconnect', { deviceId: d.deviceId, timeout: 2000 }).catch(() => {});
+      await omegaSchliessen(d.deviceId);
+    }
+    for (const d of await liste()) {
+      try {
+        await ruf('connect', { deviceId: d.deviceId, timeout: 5000 });
+        await ruf('disconnect', { deviceId: d.deviceId, timeout: 2000 });
+      } catch (e) { /* nicht erreichbar */ }
+      await omegaSchliessen(d.deviceId);
+    }
+    return erste.length;
+  };
+
   class Gatt {
     constructor(geraet) { this.device = geraet; this.connected = false; this._dienste = null; }
     async connect() {
+      const id = this.device.id;
+      const laeuft = verbindetJe.get(id);
+      if (laeuft) {
+        try { await laeuft; } catch (e) { /* der eigene Versuch folgt */ }
+        if (this.connected) return this;
+      }
+      const p = this._verbinden();
+      verbindetJe.set(id, p);
+      try { return await p; } finally { if (verbindetJe.get(id) === p) verbindetJe.delete(id); }
+    }
+    async _aufraeumen() {
+      const id = this.device.id;
+      this.connected = false;
+      this._dienste = null;
+      clearTimeout(this._prio);
+      await ruf('disconnect', { deviceId: id, timeout: 2000 }).catch(() => {});
+      await omegaSchliessen(id);
+      omegaLage.delete(id);
+    }
+    async _verbinden() {
       await starten();
       const id = this.device.id;
       if (!this.device._trennAbo) {
@@ -324,7 +390,17 @@
           this.device.dispatchEvent(new Event('gattserverdisconnected'));
         });
       }
-      await ruf('connect', { deviceId: id, timeout: 15000 });
+      // Neue Verbindung, neue Dienste - eine alte (oder leere) Liste nie weiterverwenden.
+      this._dienste = null;
+      // v1.1.45 (Latenz): die Weg-Sperre gehoert zur alten Verbindung. GEMELDET: nach Neuverbinden war es
+      // erst nach einer Runde wieder fluessig - die Sperre auf den langsamen Plugin-Weg lief noch.
+      omegaLage.delete(id);
+      try {
+        await ruf('connect', { deviceId: id, timeout: 15000 });
+      } catch (e) {
+        await this._aufraeumen();
+        throw e;
+      }
       this.connected = true;
       // SCHNELLES VERBINDUNGSINTERVALL. Android waehlt sonst 30-50 ms, und der Sendetakt ist
       // 45 ms - dann faellt jedes zweite Paket auf das naechste Intervall. 1 = HIGH.
@@ -348,17 +424,25 @@
       return this;
     }
     disconnect() {
-      if (!this.connected) return;
-      ruf('disconnect', { deviceId: this.device.id }).catch(() => {});
+      // v1.1.45: IMMER nativ trennen - auch wenn wir uns fuer getrennt halten (gescheiterter oder
+      // abgelaufener Aufbau). Genau dann haelt das Plugin oft noch eine Verbindung, und das Auto leuchtet hell.
+      const war = this.connected;
+      const id = this.device.id;
+      ruf('disconnect', { deviceId: id, timeout: 2000 }).catch(() => {}).then(() => omegaSchliessen(id));
       // Web Bluetooth meldet die Trennung auch dann, wenn man selbst trennt.
       this.connected = false;
       this._dienste = null;
-      setTimeout(() => this.device.dispatchEvent(new Event('gattserverdisconnected')), 0);
+      clearTimeout(this._prio);
+      if (war) setTimeout(() => this.device.dispatchEvent(new Event('gattserverdisconnected')), 0);
     }
     async _laden() {
       if (!this._dienste) {
         const r = await ruf('getServices', { deviceId: this.device.id });
-        this._dienste = ((r && r.services) || []).map((s) => new Dienst(this.device, s));
+        const liste = ((r && r.services) || []).map((s) => new Dienst(this.device, s));
+        // v1.1.45: eine leere Liste nicht merken - sie kam aus einer noch laufenden Dienstsuche, und gemerkt
+        // scheiterte danach jeder Versuch mit "Dienst nicht gefunden", bis die Seite neu lud.
+        if (!liste.length) return liste;
+        this._dienste = liste;
       }
       return this._dienste;
     }

@@ -35,12 +35,13 @@
 
   function statDaten() {
     const o = sessionStore();
+    const autosMitDaten = typeof statCleanAutos === 'function' ? statCleanAutos(o) : null;
     const s = o.sessions;
     const d = {
       sitzungen: s.length, rennen: 0, siege: 0, rennenMehr: 0, simKm: 0, realKm: 0, fahrMs: 0,
       runden: 0, besteMs: null, boxen: 0, crashs: 0, jeModus: {}, seit: s.length ? s[0].zeit : null,
       // v1.1.3: mit Kennung (Foto, Farbe).
-      autos: Object.keys(o.cars).map((id) => Object.assign({ id }, o.cars[id])).sort((a, b) => (b.km || 0) - (a.km || 0)),
+      autos: Object.keys(o.cars).filter(id => !autosMitDaten || autosMitDaten.has(id)).map((id) => Object.assign({ id }, o.cars[id])).sort((a, b) => (b.km || 0) - (a.km || 0)),
       medaillen: { 3: 0, 2: 0, 1: 0 }, strecken: 0, streckenGefahren: 0,
     };
     const codes = new Set();
@@ -173,7 +174,7 @@
     if (min < 60) return min + ' min';
     return Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0') + ' min';
   }
-  function statZeichnen() {
+  function statZeichnen(bereinigung = true) {
     const host = $('stat-inhalt');
     if (!host) return;
     const d = statDaten();
@@ -242,4 +243,5 @@
     html += '<p class="stat-fuss"><button type="button" id="stat-tele">' + esc(t('Telemetrie ansehen')) + '</button></p>';
     host.innerHTML = html;
     if ($('stat-tele')) $('stat-tele').addEventListener('click', () => teleSeiteOeffnen());
+    if (bereinigung && typeof statBereinigungZeichnen === 'function') statBereinigungZeichnen();
   }

@@ -2443,8 +2443,10 @@
   // "Neben der Bahn" und "Meldungen" sind die zwei, die nicht auf ein Ereignis am Auto
   // zeigen, sondern auf einen Zustand bzw. eine Nachricht - ein Dauerbrummen im Gelaende
   // ist Geschmackssache, und ein Wetterwechsel ist keine Kraft.
+  // v1.1.42: 'rutschen' ist nur noch das Uebersteuern; dazu 'untersteuern' und 'quietschen' (Kachel Vibration).
   const RUMBLE_ARTEN = { schalt: true, abs: true, crash: true,
-                         abseits: false, box: true, meldung: false, rutschen: true };
+                         abseits: false, box: true, meldung: false, rutschen: true,
+                         untersteuern: true, quietschen: true };
 
   // ---- Trigger-Vibration, und WELCHER Trigger zu welcher Art gehoert -----------------
   //

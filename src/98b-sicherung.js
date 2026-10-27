@@ -71,7 +71,10 @@
       const el = document.getElementById(id);
       if (el && els.indexOf(el) < 0) els.push(el);
     }
-    return els;
+    // v1.1.45 BESTELLT: "Wetter standardmaessig sonnig und nicht wechselhaft." Das Startwetter und "Wetter aendert
+    // sich" kamen aus der Sicherung zurueck - einmal "wechselhaft" gewaehlt, galt es fuer immer. Jetzt beginnt jede
+    // Sitzung trocken und ohne Wechsel; gewaehlt wird je Rennen.
+    return els.filter((el) => el.id !== 'race-wx-start' && el.id !== 'race-wx-change');
   }
 
   function sicherungReglerLesen() {

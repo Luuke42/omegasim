@@ -61,9 +61,18 @@ MOTOREN = [
     # Leerlauf und Begrenzer aus der .xml des Autos.
     ('sd_v5r', 'v5r-v8.wav', 'Speed Dreams: Vulture V5.R (7,0 l V8)', 8, 1000, 6750, 0.5,
      'Speed-Dreams-Team (ls1-vulture-v5r), GPL-2.0-or-later'),
+    # v1.1.44 BESTELLT: die Lynx 220 (Jaguar XJ220) aus dem Katalog der Datenquelle, ihr eigener Sound.
+    ('sd_lynx', 'sc-lynx-220.wav', 'Speed Dreams: Lynx 220 (Jaguar XJ220, 3,5 l V6 Turbo)', 6, 1000, 7200, 0.4,
+     'Speed-Dreams-Team (sc-lynx-220), Free Art License 1.3 (artlibre.org/licence/lal/en)'),
+    # v1.1.44 BESTELLT: zwei weitere Speed-Dreams-Autos (Ferrari F40 und Porsche 911 GT3).
+    ('sd_fmc', 'sc-fmc-gt4.wav', 'Speed Dreams: FMC GT4 (Ferrari F40, 4,7 l V8)', 8, 1000, 7000, 0.45,
+     'Speed-Dreams-Team (sc-fmc-gt4), GPL-2.0-or-later'),
+    ('sd_boxer', 'sc-boxer-96.wav', 'Speed Dreams: Boxer 96 (Porsche 911 GT3, 3,6 l Boxer-6)', 6, 2000, 8500, 0.4,
+     'Speed-Dreams-Team (sc-boxer-96), GPL-2.0-or-later'),
 ]
 # Wo die Aufnahme in Speed Dreams liegt, wenn nicht in data/sound/.
-QUELLORDNER = {'sd_v5r': 'data/cars/models/ls1-vulture-v5r/'}
+QUELLORDNER = {'sd_v5r': 'data/cars/models/ls1-vulture-v5r/', 'sd_lynx': 'data/cars/models/sc-lynx-220/',
+               'sd_fmc': 'data/cars/models/sc-fmc-gt4/', 'sd_boxer': 'data/cars/models/sc-boxer-96/'}
 
 
 def lesen(p):
@@ -227,6 +236,11 @@ def main(quelle, nur=None):
         auf_rpm = f0 * 60 * 2 / zyl
         x = auf_rate(x, sr, SR_OUT)
         x *= ziel_rms / max(1e-6, np.sqrt(np.mean(x ** 2)))
+        # Verhindert Clipping bei Motoren mit hohem Crest-Faktor (z. B. der Boxer-6): sonst
+        # schneidet die Begrenzung asymmetrisch ab und der Gleichanteil (Selbsttest) steigt.
+        p = np.max(np.abs(x))
+        if p > 0.9:
+            x *= 0.9 / p
         stufen = leiter(leer, begr)
         loops = {}
         for k, rpm in enumerate(stufen):
@@ -237,6 +251,7 @@ def main(quelle, nur=None):
             else:
                 raise SystemExit('%s: %d Stufen, Bandnamen fehlen' % (mid, len(stufen)))
             y = umlauf_rate(x, rpm / auf_rpm)
+            y = y - np.mean(y)
             datei_aus = '%s_%s.ogg' % (mid, band)
             schreiben_ogg(y, os.path.join(AUDIO, datei_aus))
             loops[band] = {'file': datei_aus, 'baseRpm': rpm, 'firingHz': round(rpm / 60 * zyl / 2, 1),
@@ -245,6 +260,7 @@ def main(quelle, nur=None):
         mitte = stufen[len(stufen) // 2]
         b, a = signal.butter(2, 1200 / (SR_OUT / 2))
         y = signal.filtfilt(b, a, umlauf_rate(x, mitte / auf_rpm)) * 0.6
+        y = y - np.mean(y)
         schreiben_ogg(y, os.path.join(AUDIO, '%s_over.ogg' % mid))
         loops['over'] = {'file': '%s_over.ogg' % mid, 'baseRpm': mitte, 'firingHz': round(mitte / 60 * zyl / 2, 1),
                          'seconds': round(len(y) / SR_OUT, 4), 'load': 0.0}

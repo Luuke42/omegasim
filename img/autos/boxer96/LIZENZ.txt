@@ -1,0 +1,6 @@
+Boxer 96 aus Speed Dreams (Speed Dreams, data/cars/models/sc-boxer-96).
+
+Modell, Texturen und Fahrzeugdaten: GNU General Public License, Version 2 oder
+spaeter (siehe den Kopf der Speed-Dreams-Datei sc-boxer-96.xml). Umgewandelt mit tools/sd_auto.py:
+Innenraum entfernt, Texturen verkleinert, Koordinaten gedreht.
+https://www.gnu.org/licenses/old-licenses/gpl-2.0.html

@@ -1,0 +1,185 @@
+{{Stand|app=1.2.9|appdatum=26.10.2026}}
+'''Vibe-Coding''' (englisch, etwa „Programmieren nach Gefühl“) ist eine Arbeitsweise, bei der Software entsteht, indem ein Mensch in natürlicher Sprache beschreibt, was er haben will, ein KI-Sprachmodell den Quelltext schreibt und der Mensch das Ergebnis vor allem durch Ausprobieren beurteilt, statt jede Zeile selbst zu lesen. Der Begriff wurde Anfang 2025 von dem Informatiker Andrej Karpathy geprägt und hat sich seitdem für ein ganzes Spektrum von Arbeitsweisen eingebürgert, vom reinen „Wünschen und Ausprobieren“ bis zu KI-gestützter Entwicklung mit Tests und Prüfungen. [[OmegaSim]] ist auf diese Weise entstanden: Der Autor formuliert Wünsche und Fehlerberichte in Alltagssprache, KI-Assistenten (Claude) setzen sie im Code um, und abgesichert wird das Ergebnis durch Selbsttests, Messungen am Tisch mit echten Autos, Patchnotes und ein festes Versionsschema. Dieser Artikel beschreibt den Begriff neutral und zeigt, welche Spuren die Arbeitsweise im Quellcode hinterlassen hat.
+
+== Auf einen Blick ==
+{| class="wikitable"
+! Merkmal !! Wert
+|-
+| Begriff || ''vibe coding'', geprägt Anfang 2025 (Andrej Karpathy)
+|-
+| Kern || Beschreiben in natürlicher Sprache → KI schreibt Code → Mensch prüft durch Ausprobieren
+|-
+| Bei OmegaSim || Wünsche des Autors, Umsetzung durch KI-Assistenten (Claude), Prüfung durch Selbsttest und Versuche am Tisch
+|-
+| Spuren im Code (Stand 26.10.2026) || 832 Kommentare „BESTELLT:“ und 284 „GEMELDET:“ in <code>src/</code>
+|-
+| Absicherung || 522 Selbsttests, Bauprüfungen in <code>tools/build.py</code>, WIP-Kennzeichnung (97 Etiketten im Markup), Patchnotes je Nebenversion, Version aus der Git-Historie
+|-
+| Regeln || [[Anleitung für KIs]], [[Mitmachen]]
+|}
+
+== Grundlagen ==
+* Ein '''Sprachmodell''' (''large language model'', LLM) ist ein KI-Programm, das aus sehr vielen Texten gelernt hat, wahrscheinliche Fortsetzungen zu erzeugen. Weil dazu auch viel Quellcode gehört, kann es auf eine Beschreibung hin Programme schreiben, ändern und erklären.
+* Ein '''Prompt''' ist die Eingabe an das Modell: der Wunsch, die Fehlermeldung, die Rückfrage.
+* Ein '''KI-Assistent''' oder '''Code-Agent''' ist ein Sprachmodell, das nicht nur antwortet, sondern selbst Dateien lesen, ändern, Befehle ausführen und Tests starten darf. So arbeiten die Assistenten an OmegaSim: Sie lesen den Quellcode, ändern ihn, bauen <code>index.html</code>, lassen den Selbsttest laufen und schlagen einen Commit vor.
+* Ein '''Commit''' ist ein gespeicherter Änderungsschritt in der Versionsverwaltung Git; ein '''Push''' lädt ihn auf den Server. Die Versionsnummer von OmegaSim zählt Pushes (siehe [[Aufbau von OmegaSim]]).
+* Ein '''Test''' ist ein Stück Programm, das prüft, ob ein anderes Stück Programm das Erwartete tut. Bei Vibe-Coding ersetzen Tests einen Teil der Prüfung, die sonst durch Lesen des Codes geschähe.
+
+=== Abgrenzung ===
+Karpathys ursprüngliche Beschreibung meinte ein Programmieren, bei dem man den erzeugten Code kaum noch ansieht und Fehlermeldungen einfach an das Modell zurückgibt. Im heutigen Sprachgebrauch reicht der Begriff weiter. Man kann drei Formen unterscheiden:
+
+{| class="wikitable"
+! Form !! Wer schreibt den Code? !! Wie wird geprüft?
+|-
+| klassisch || Mensch || Lesen, Tests, Review
+|-
+| KI-gestützt || KI schlägt vor, Mensch übernimmt Zeile für Zeile || Mensch liest jede Änderung
+|-
+| Vibe-Coding im engeren Sinn || KI || Ausprobieren des Ergebnisses
+|}
+
+OmegaSim liegt zwischen den beiden letzten: Der Autor beurteilt vor allem das Verhalten der App, aber die KI ist durch Projektregeln angehalten, Tests mitzuschreiben, Messwerte zu nennen und Unsicheres zu kennzeichnen.
+
+== Funktionsweise ==
+=== Wie eine Änderung an OmegaSim entsteht ===
+# '''Wunsch oder Meldung''': Der Autor schreibt in Alltagssprache, was er will oder was ihm aufgefallen ist, zum Beispiel: „Drift-Modus weg, Roh-Input-Modus ändern: wenn ich vom Gas gehe, dann nicht direkt auf 0, sondern nur sehr schnell (in 2 s), und beim Bremse-Drücken sofort. … Nenn den Modus RC.“
+# '''Umsetzung''': Ein KI-Assistent liest die betroffenen Dateien in <code>src/</code>, ändert sie und hält den Wunsch wörtlich als Kommentar „BESTELLT:“ an der Stelle fest, an der er umgesetzt ist.
+# '''Kennzeichnung''': Neue Funktionen bekommen sofort das Etikett „WIP“ oder „experimentell“, nicht erst auf Nachfrage.
+# '''Selbsttest''': Für die Änderung wird eine Prüfung mit <code>stAdd(…)</code> geschrieben, die mit denselben Funktionen rechnet wie die App und ein Maß ausgibt.
+# '''Bau''': <code>tools/build.py</code> setzt die Datei zusammen und prüft Verweise, Wörterbuch, Element-Kennungen und Klammern.
+# '''Prüfung''': Der Selbsttest läuft im Browser. Rot darf nur werden, was vorher schon rot war.
+# '''Texte''': Patchnotes werden ergänzt (Abschnitt je Nebenversion, mit englischer Übersetzung), neue Oberflächentexte in die Wörterbücher für Englisch und Spanisch eingetragen, Erklärungen in die ⓘ-Fenster der Optionen.
+# '''Version und Commit''': <code>tools/bump_version.py</code> setzt die Nummer, der Commit trägt den Hinweis auf die beteiligte KI.
+# '''Versuch am Tisch''': Alles, was echte Autos betrifft (Bluetooth, Latenz, Lesen der Streckenteile, Klang), prüft der Autor selbst mit den Autos. Was dabei auffällt, kommt als neue Meldung zurück in Schritt 1.
+
+=== Spuren im Quellcode ===
+Die Arbeitsweise lässt sich im Code nachzählen. Gezählt am 26.10.2026 mit <code>grep -o "BESTELLT" src/*.js src/*.html | wc -l</code> und entsprechend:
+
+{| class="wikitable"
+! Markierung !! Bedeutung !! Anzahl in <code>src/</code>
+|-
+| <code>BESTELLT:</code> || wörtlich zitierter Wunsch des Autors || 832 (davon 140 in <code>00-index.head.html</code>, der Rest in den JavaScript-Dateien)
+|-
+| <code>GEMELDET:</code> || wörtlich zitierte Fehlermeldung aus dem Gebrauch || 284
+|}
+
+Dazu kommen 39 „BESTELLT“ in <code>tools/</code> und 5 im Java-Code der Android-Hülle. Am häufigsten sind sie in <code>90-ghosts.js</code> (NPCs, Garage) und <code>70-race.js</code> (Rennen). Weil das Repository weiter wächst, ändern sich die Zahlen mit jedem Push.
+
+Typisch ist, dass der Kommentar nicht nur den Wunsch zitiert, sondern auch den Grund der Lösung und frühere Irrwege nennt, oft mit Messwerten. Ein Beispiel aus <code>src/20-protocol.js</code> zum RC-Modus:
+
+<syntaxhighlight lang="javascript">
+// v1.1.3 BESTELLT: "RC-Modus: linker Trigger soll auf 0 runterbremsen. Wenn
+// Geschwindigkeit = 0 und ich nochmal druecke, dann rueckwaerts fahren. Lenkwinkel
+// nie begrenzen." Vorher bremste der erste Druck fest RC_BREMS_MS (600 ms) lang -
+// aus voller Fahrt zu kurz, aus langsamer Fahrt zu lang. Jetzt fuehrt rcGas eine
+// GESCHAETZTE Geschwindigkeit mit (das Auto meldet keine) ...
+const RC_AUSLAUF_MS = 2000, RC_STEHT_MS = 150, RC_BREMS_VOLL_MS = 700,
+      RC_V_AUF_S = 0.5, RC_V_AB_S = 0.8;
+</syntaxhighlight>
+
+Aus dem Satz „wenn ich vom Gas gehe, dann … in 2 s“ ist die Konstante <code>RC_AUSLAUF_MS = 2000</code> geworden; aus „Wenn Geschwindigkeit = 0 und ich nochmal drücke, dann rückwärts“ eine kleine Zustandsmaschine, die eine geschätzte Geschwindigkeit mitführt, weil das Auto seine Geschwindigkeit nicht meldet.
+
+Die Commits tragen den Hinweis „Co-Authored-By: Claude …“: Von den 71 Commits, die seit dem letzten Zusammenfassen der Historie (19.10.2026) im Repository stehen, sind es 37. Von den übrigen 34 sind 21 automatische Aktualisierungen der Challenges-Bestenliste durch GitHub Actions; der Rest sind Zusammenführungen und Commits ohne diesen Hinweis, deren Entstehung aus dem Repository nicht hervorgeht. Auch die Wiki-Artikel tragen über die Vorlage ''Stand'' den Hinweis „mithilfe von KI erstellt“.
+
+=== Absicherung ===
+{| class="wikitable"
+! Mittel !! Was es abfängt !! Wo
+|-
+| Selbsttest (522 Prüfungen) || dass eine Änderung etwas Bestehendes bricht; jede Zeile nennt ihr Maß || <code>src/95-selftest.js</code>, '''Entwickler → Selbsttest'''
+|-
+| Bauprüfungen || Syntaxfehler, die die ganze App leer lassen (Klammern, verwaistes Wörterbuch), fehlende Dateien, Zugriffe auf nicht vorhandene Elemente || <code>tools/build.py</code>
+|-
+| Versuche am Tisch || alles, was nur mit echten Autos sichtbar wird || Mitschnitte des Bluetooth-Verkehrs, Messzeile Funk-Rundlauf, Code-Sonde
+|-
+| WIP-Etikett || dass Unfertiges als fertig gilt || <code>&lt;span class="wip-tag"&gt;</code> im Markup
+|-
+| Patchnotes || dass Nutzer nicht wissen, was sich geändert hat || '''Optionen → Patchnotes''', je Nebenversion ein Abschnitt
+|-
+| Versionsschema || dass Fehlerberichte keiner Fassung zugeordnet werden können || <code>tools/bump_version.py</code>, Nummer unten auf dem Startbildschirm
+|-
+| Dokumentation der Messungen || dass Annahmen als Fakten gelten || <code>CARRERA_HYBRID.md</code>
+|}
+
+=== Regeln, die sich bewährt haben ===
+Die Regeln stehen ausführlich in der [[Anleitung für KIs]]. Aus dem Code und der Projektgeschichte lassen sich diese Gründe ablesen:
+* '''Messen statt vermuten.''' Der teuerste Fehler des Projekts war eine Deutung, die nicht gemessen war: Bit 7 in Byte 14 wurde als „in jedem Paket gesetzt“ übernommen, schaltete aber die Leseart auf gedruckte Muster um. Zwölf Aufzeichnungen lang las kein Auto ein Streckenteil.<ref><code>src/20-protocol.js</code>, Kommentar „Byte 14 Bit 7 und Bit 5“</ref> Bei Problemen mit mehreren NPCs gilt deshalb: erst Funklast messen oder eine Aufnahme anfordern, dann die Logik ändern.
+* '''Neues sofort als WIP kennzeichnen.''' Sonst sieht ein Nutzer nicht, was erprobt ist.
+* '''Erklärungen in das ⓘ-Fenster''', nicht als Text unter eine Option. Weil ⓘ-Texte und Code auseinanderlaufen können, gilt im Zweifel der Code; ein Beispiel ist der ⓘ-Text zu „Funk-Rundlauf“, der noch das Verhalten vor Version 0.5.8 beschreibt (siehe [[Bluetooth Low Energy]]).
+* '''Erzeugte Dateien nie von Hand ändern''' (<code>index.html</code>, <code>sw.js</code>, <code>app-update.json</code>), sondern bauen.
+* '''Eine Zahl nur an einem Ort.''' Die Versionsnummer steht nur in der Quelle; <code>sw.js</code> und <code>app-update.json</code> werden daraus erzeugt. Als sie an zwei Orten gepflegt wurde, lieferte der Service Worker fünf Fassungen lang die jeweils vorige aus.
+* '''Nach Tests aufräumen.''' Testserver und Browser-Tabs schließen; eine verborgen weiterlaufende Seite kann Bluetooth halten und an Autos schreiben.
+* '''Ehrlich über Grenzen berichten.''' Was nur mit echten Autos prüfbar ist, sagt die KI ausdrücklich, statt es als erledigt zu melden.
+
+== Chancen und Risiken ==
+=== Chancen ===
+* '''Niedrige Einstiegshürde''': Wer kein Programmierer ist, kann eine Idee in eine laufende Anwendung verwandeln.
+* '''Tempo''': Kleine Wünsche sind oft in Minuten umgesetzt. OmegaSim zählt seit Projektbeginn im August 2026 laut Versionsnummer zwölf Wochen und erreichte in dieser Zeit Version 1.2 mit Fahrphysik, NPCs, Editor, Mehrspieler und Android-App.
+* '''Fachfragen statt Syntax''': Der Mensch kann sich auf das Verhalten konzentrieren (Wie soll das Auto bremsen?), die Umsetzung übernimmt das Modell.
+* '''Dokumentation nebenbei''': Weil die KI begründende Kommentare schreibt, ist der Code ausführlich erklärt; rund 31 % der JavaScript-Zeilen sind Kommentare.
+
+=== Risiken ===
+* '''Code, den niemand ganz versteht''': Wer den Code nicht liest, merkt Fehler erst, wenn sie sichtbar werden. Bei einem Fahrzeug, das auf dem Tisch losfahren kann, ist das mehr als ein Schönheitsfehler; OmegaSim begrenzt deshalb etwa den Rückwärtswert auf einen beobachteten sicheren Bereich.
+* '''Selbstsichere Fehler''': Sprachmodelle formulieren falsche Annahmen ebenso überzeugt wie richtige. Beispiele aus OmegaSim sind die vertauschten Spalten einer Codetabelle (bis Fassung 0.6.14) und die falsche Deutung von Byte 14.
+* '''Wachsender Umfang''': Jede Änderung fügt Code und Kommentare hinzu; zusammenfassende Umbauten sind seltener. Das zeigt sich an Dateien mit über 12 000 Zeilen.
+* '''Abweichende Erklärtexte''': Hilfetexte, Patchnotes und Code werden an verschiedenen Stellen gepflegt und können sich widersprechen.
+* '''Sicherheit und Geheimnisse''': Eine KI mit Schreibzugriff darf keine Zugangsdaten sehen oder veröffentlichen; Schlüssel für das Signieren der APK liegen deshalb nur in den geheimen Einstellungen des Repositorys.
+* '''Lizenzfragen''': Ob erzeugter Code fremde Werke wiedergibt, ist schwer zu prüfen. OmegaSim erzeugt seine Motorklänge bewusst synthetisch, um Fragen zu Aufnahmen zu vermeiden.
+
+== Beispiele ==
+=== Von der Meldung zur Messung: Eingabeverzögerung ===
+# '''Gemeldet''': „Mit zwei Ghosts gibt es eine leichte Eingabeverzögerung, lässt sich die Berechnung beschleunigen?“
+# Die naheliegende Antwort (Rechnung optimieren) wurde nicht umgesetzt, sondern '''gemessen''': Ein Takt kostet 0,3 ms ohne und 0,4 ms mit zwei NPCs, unter 2 % des 45-ms-Budgets.
+# Die Ursache lag im '''Schreibweg''': Ein laufender Schreibvorgang ließ den nächsten Befehl ersatzlos ausfallen. Eine Messreihe zeigte, dass eine Millisekunde über dem Takt die Befehlsrate halbierte.
+# Die Lösung (neuestes Paket merken, Tiefe eins) ist seit 0.5.8 im Code und mit einer Tabelle in <code>CARRERA_HYBRID.md</code> belegt.<ref><code>CARRERA_HYBRID.md</code>, Abschnitt „Der Steuerweg“</ref>
+
+=== Von der Meldung zur Regel: Funklast ===
+# '''Gemeldet''': „Mit einem NPC klappt es gut“, mit mehreren halten Autos nicht und das eigene Auto reagiert nicht.
+# Messung in der App: Über einen Bluetooth-Adapter gingen rund 110 Pakete je Sekunde; OmegaBle zählte in einer Sitzung rund 4000 geschriebene, 2400 wiederholte und 1200 verworfene Pakete.
+# Umsetzung in 1.1.24: Die NPCs teilen sich ein Budget von etwa 30 Paketen je Sekunde.
+# Daraus wurde eine Arbeitsregel: Bei Fehlern mit mehreren NPCs zuerst an Funklast denken und messen.
+
+== Grenzen und bekannte Probleme ==
+* Die Zählung der „BESTELLT“-Kommentare misst die Spur der Arbeitsweise, nicht ihren Umfang: Manche Wünsche stehen an mehreren Stellen, andere gar nicht.
+* Welcher Anteil des Codes von KI und welcher von Menschen geschrieben ist, lässt sich aus dem Repository nicht genau bestimmen; die Commit-Hinweise zeigen nur, an welchen Commits eine KI beteiligt war.
+* Die Prüfung durch Ausprobieren deckt nur ab, was jemand ausprobiert. Der Selbsttest läuft ohne Autos; alles, was am Auto hängt, bleibt Handarbeit.
+* Die Begriffsgeschichte (Prägung durch Karpathy Anfang 2025) ist hier ohne Quelle wiedergegeben.
+
+== Versionsgeschichte ==
+{| class="wikitable"
+! Version !! Änderung an der Arbeitsweise
+|-
+| August 2026 || Protokoll aus Mitschnitten entschlüsselt; Messungen werden in <code>CARRERA_HYBRID.md</code> dokumentiert
+|-
+| früh || Aufteilung der Quelle in <code>src/</code>, Bau mit <code>tools/build.py</code>; Selbsttest mit zunächst dreizehn Messungen
+|-
+| nach 0.5.38 || Version, Service Worker und Bau in einem Schritt (<code>bump_version.py</code>)
+|-
+| 1.0 (12.10.2026) || Versionsschema 1.<Woche>.<Push>; Patchnotes je Nebenversion
+|-
+| 26.10.2026 || Wiki mit KI-Artikeln, Vorlage ''Stand'' und [[Anleitung für KIs]]
+|}
+
+== Einzelnachweise ==
+<references />
+
+== Siehe auch ==
+* [[Aufbau von OmegaSim]]
+* [[Anleitung für KIs]]
+* [[Mitmachen]]
+* [[OmegaSim]]
+* [[Glossar]]
+
+== Quellen im Code ==
+* <code>src/*.js</code>, <code>src/00-index.head.html</code> – Kommentare „BESTELLT:“, „GEMELDET:“
+* <code>src/20-protocol.js</code> – RC-Modus (<code>rcGas()</code>), Kommentar zu Byte 14
+* <code>src/95-selftest.js</code> – <code>stAdd()</code>
+* <code>tools/build.py</code>, <code>tools/bump_version.py</code>
+* <code>src/90-ghosts.js</code> – <code>npcSendeAbstand()</code> (Funklast)
+* <code>CARRERA_HYBRID.md</code> – „Der Steuerweg“
+
+== Weblinks ==
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Grundlagen]]
+[[Kategorie:Mitmachen]]

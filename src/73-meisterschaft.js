@@ -355,6 +355,8 @@
     const ev = meister.plan.events[lauf.idx];
     if (!ev) return;
     if (kRennenLaeuft()) { msMeldung(t('Erst das laufende Rennen beenden')); return; }
+    // v1.2.4 BESTELLT: Warnung, wenn im Ausdruck-Modus NPCs oder ein Safety Car mitfahren sollen.
+    if (typeof ausdruckNpcWarnung === 'function' && ausdruckNpcWarnung()) msMeldung(ausdruckNpcWarnung());
     const f = meisterFormat(ev);
     const rennen = meisterIstRennen(ev);
     meisterStreckeMp = meisterStreckeAnwenden(ev);

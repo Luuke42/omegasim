@@ -1,0 +1,614 @@
+{
+ "name": "Boxer 96",
+ "kennung": "boxer96",
+ "quelle": "Speed Dreams, data/cars/models/sc-boxer-96",
+ "lizenz": "GPL-2.0-or-later (Speed Dreams)",
+ "koordinaten": "m; +x links, +y oben, +z vorn",
+ "ecken": 4217,
+ "indizes": 17874,
+ "indexAb": 134944,
+ "schritt": 32,
+ "teile": [
+  {
+   "name": "WIPER_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 0,
+   "ecken": 31,
+   "index0": 0,
+   "indizes": 213
+  },
+  {
+   "name": "STEERING001_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96-int.png",
+   "ecke0": 31,
+   "ecken": 120,
+   "index0": 213,
+   "indizes": 744
+  },
+  {
+   "name": "STEERING_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 151,
+   "ecken": 10,
+   "index0": 957,
+   "indizes": 30
+  },
+  {
+   "name": "SIDESKIRT_s_5",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 161,
+   "ecken": 66,
+   "index0": 987,
+   "indizes": 333
+  },
+  {
+   "name": "SIDERIB_s_7",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 227,
+   "ecken": 50,
+   "index0": 1320,
+   "indizes": 132
+  },
+  {
+   "name": "SEAT_s_5",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96-int.png",
+   "ecke0": 277,
+   "ecken": 84,
+   "index0": 1452,
+   "indizes": 330
+  },
+  {
+   "name": "RVMIRRORP2_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 361,
+   "ecken": 206,
+   "index0": 1782,
+   "indizes": 1149
+  },
+  {
+   "name": "RVMIRRORP1_s_5",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 567,
+   "ecken": 134,
+   "index0": 2931,
+   "indizes": 459
+  },
+  {
+   "name": "RUBBERWISID_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 701,
+   "ecken": 104,
+   "index0": 3390,
+   "indizes": 387
+  },
+  {
+   "name": "RUBBERWIREA_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 805,
+   "ecken": 30,
+   "index0": 3777,
+   "indizes": 105
+  },
+  {
+   "name": "RUBBERWIFRO_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 835,
+   "ecken": 77,
+   "index0": 3882,
+   "indizes": 345
+  },
+  {
+   "name": "REARAIRDAM_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 912,
+   "ecken": 36,
+   "index0": 4227,
+   "indizes": 114
+  },
+  {
+   "name": "REAR002_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 948,
+   "ecken": 66,
+   "index0": 4341,
+   "indizes": 246
+  },
+  {
+   "name": "RBMPAIRDAM_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 1014,
+   "ecken": 60,
+   "index0": 4587,
+   "indizes": 219
+  },
+  {
+   "name": "RBMP_s_16",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 1074,
+   "ecken": 192,
+   "index0": 4806,
+   "indizes": 654
+  },
+  {
+   "name": "PLATEIN_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 1266,
+   "ecken": 66,
+   "index0": 5460,
+   "indizes": 216
+  },
+  {
+   "name": "PARTWIREAR_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 1332,
+   "ecken": 20,
+   "index0": 5676,
+   "indizes": 60
+  },
+  {
+   "name": "MAIN002_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 1352,
+   "ecken": 18,
+   "index0": 5736,
+   "indizes": 36
+  },
+  {
+   "name": "MAIN001_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 1370,
+   "ecken": 18,
+   "index0": 5772,
+   "indizes": 42
+  },
+  {
+   "name": "MAIN_s_54",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 1388,
+   "ecken": 922,
+   "index0": 5814,
+   "indizes": 4146
+  },
+  {
+   "name": "INNER_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96-int.png",
+   "ecke0": 2310,
+   "ecken": 31,
+   "index0": 9960,
+   "indizes": 108
+  },
+  {
+   "name": "HEAD_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-boxer-96.jpg",
+   "ecke0": 2341,
+   "ecken": 41,
+   "index0": 10068,
+   "indizes": 309
+  },
+  {
+   "name": "FRONT_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 2382,
+   "ecken": 44,
+   "index0": 10377,
+   "indizes": 129
+  },
+  {
+   "name": "FLCASEP2_s_7",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 2426,
+   "ecken": 128,
+   "index0": 10506,
+   "indizes": 564
+  },
+  {
+   "name": "FLCASEP1_s_7",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 2554,
+   "ecken": 196,
+   "index0": 11070,
+   "indizes": 690
+  },
+  {
+   "name": "FFENDERFWIN_s_6",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 2750,
+   "ecken": 114,
+   "index0": 11760,
+   "indizes": 336
+  },
+  {
+   "name": "FBMP_s_5",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 2864,
+   "ecken": 48,
+   "index0": 12096,
+   "indizes": 117
+  },
+  {
+   "name": "FBMPPLTEPLA_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 2912,
+   "ecken": 14,
+   "index0": 12213,
+   "indizes": 42
+  },
+  {
+   "name": "FAIRDAMLIP_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 2926,
+   "ecken": 96,
+   "index0": 12255,
+   "indizes": 468
+  },
+  {
+   "name": "FAIRDAMINF_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 3022,
+   "ecken": 50,
+   "index0": 12723,
+   "indizes": 168
+  },
+  {
+   "name": "FAIDAMIN_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 3072,
+   "ecken": 56,
+   "index0": 12891,
+   "indizes": 195
+  },
+  {
+   "name": "FAIDAMDIVIS_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 3128,
+   "ecken": 60,
+   "index0": 13086,
+   "indizes": 297
+  },
+  {
+   "name": "CONSOLE001_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96-int.png",
+   "ecke0": 3188,
+   "ecken": 21,
+   "index0": 13383,
+   "indizes": 69
+  },
+  {
+   "name": "CONSOLE_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96-int.png",
+   "ecke0": 3209,
+   "ecken": 12,
+   "index0": 13452,
+   "indizes": 51
+  },
+  {
+   "name": "CAR002_s_4",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 3221,
+   "ecken": 94,
+   "index0": 13503,
+   "indizes": 345
+  },
+  {
+   "name": "CAR001_s_4",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 3315,
+   "ecken": 156,
+   "index0": 13848,
+   "indizes": 654
+  },
+  {
+   "name": "CAR_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96-int.png",
+   "ecke0": 3471,
+   "ecken": 110,
+   "index0": 14502,
+   "indizes": 525
+  },
+  {
+   "name": "CABIN_s_12",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96-int.png",
+   "ecke0": 3581,
+   "ecken": 76,
+   "index0": 15027,
+   "indizes": 222
+  },
+  {
+   "name": "BRAKELIGHTS_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 3657,
+   "ecken": 54,
+   "index0": 15249,
+   "indizes": 189
+  },
+  {
+   "name": "BOTTOM_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 3711,
+   "ecken": 74,
+   "index0": 15438,
+   "indizes": 360
+  },
+  {
+   "name": "ANTENNA_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 3785,
+   "ecken": 12,
+   "index0": 15798,
+   "indizes": 78
+  },
+  {
+   "name": "WIO2EXHAUST_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 3797,
+   "ecken": 141,
+   "index0": 15876,
+   "indizes": 708
+  },
+  {
+   "name": "WIO2CLOSE2_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 3938,
+   "ecken": 12,
+   "index0": 16584,
+   "indizes": 30
+  },
+  {
+   "name": "WIFRONT_s_5",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 3950,
+   "ecken": 89,
+   "index0": 16614,
+   "indizes": 327
+  },
+  {
+   "name": "WI001_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-boxer-96.png",
+   "ecke0": 4039,
+   "ecken": 64,
+   "index0": 16941,
+   "indizes": 327
+  },
+  {
+   "name": "DRIVERHAND_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-boxer-96.jpg",
+   "ecke0": 4103,
+   "ecken": 38,
+   "index0": 17268,
+   "indizes": 270
+  },
+  {
+   "name": "DRIVER_s_6",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-boxer-96.jpg",
+   "ecke0": 4141,
+   "ecken": 76,
+   "index0": 17538,
+   "indizes": 336
+  }
+ ],
+ "schatten": "shadow.png",
+ "lichter": {
+  "brems": [
+   [
+    0.5,
+    0.5,
+    -2.12,
+    0.15
+   ],
+   [
+    -0.5,
+    0.5,
+    -2.12,
+    0.15
+   ],
+   [
+    0.07,
+    0.82,
+    -1.61,
+    0.05
+   ],
+   [
+    -0.07,
+    0.82,
+    -1.61,
+    0.05
+   ],
+   [
+    0.0,
+    0.82,
+    -1.61,
+    0.05
+   ]
+  ],
+  "rueck": [
+   [
+    0.5,
+    0.5,
+    -2.12,
+    0.13
+   ],
+   [
+    -0.5,
+    0.5,
+    -2.12,
+    0.13
+   ]
+  ],
+  "front": [
+   [
+    0.63,
+    0.58,
+    1.75,
+    0.25
+   ],
+   [
+    -0.63,
+    0.58,
+    1.75,
+    0.25
+   ],
+   [
+    0.48,
+    0.5,
+    1.9,
+    0.15
+   ],
+   [
+    -0.48,
+    0.5,
+    1.9,
+    0.15
+   ]
+  ]
+ },
+ "physik": {
+  "masse": 1265.0,
+  "schwerpunktHoehe": 0.3,
+  "radstand": 2.37,
+  "a": 1.3509,
+  "b": 1.0191,
+  "vorderachse": 1.19,
+  "hinterachse": -1.18,
+  "laenge": 4.46,
+  "breite": 1.852,
+  "hoehe": 1.17,
+  "massenVerteilung": 0.7,
+  "lenkGrad": 45.0,
+  "bremsVorn": 0.5,
+  "cx": 0.53,
+  "stirnflaeche": 2.0,
+  "auftriebVorn": 0.62,
+  "auftriebHinten": 0.64,
+  "fluegelVorn": 0.0,
+  "fluegelHinten": 0.0,
+  "leerlauf": 2000.0,
+  "begrenzer": 8500.0,
+  "reifen": {
+   "vorn": {
+    "radius": 0.3179,
+    "breite": 0.255,
+    "spur": 1.58,
+    "bodenfreiheit": 0.105,
+    "mu": 1.3
+   },
+   "hinten": {
+    "radius": 0.3306,
+    "breite": 0.3,
+    "spur": 1.54,
+    "bodenfreiheit": 0.105,
+    "mu": 1.3
+   }
+  },
+  "feder": {
+   "vorn": {
+    "k": 67000.0,
+    "druck": 9980.0,
+    "zug": 7940.0,
+    "weg": 0.15,
+    "stab": 0.0
+   },
+   "hinten": {
+    "k": 71000.0,
+    "druck": 10170.0,
+    "zug": 8700.0,
+    "weg": 0.17,
+    "stab": 0.0
+   }
+  },
+  "gefedert": 1165.0
+ }
+}

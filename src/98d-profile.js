@@ -22,6 +22,7 @@
     { id: 'feel', root: 'sub-opt-feel', titel: 'Fahrgefühl', werks: true },
     { id: 'sound', root: 'sub-opt-sound', titel: 'Ton' },
     { id: 'ansagen', root: 'sub-opt-ansagen', titel: 'Ansagen' },
+    { id: 'vibration', root: 'sub-opt-vibration', titel: 'Vibration' },
     { id: 'ghosts', root: 'sub-opt-ghosts', titel: 'NPCs' },
     { id: 'safetycar', root: 'sub-opt-safetycar', titel: 'Safety Car' },
     { id: 'pad', root: 'sub-opt-pad', titel: 'Controller', pad: true },

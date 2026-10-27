@@ -18,10 +18,10 @@
     arcade: {
       label: 'Arcade',
       kurz: 'Der ursprüngliche Sim-Modus',
-      text: 'Automatik, 2,0 s auf 100, voller Grip, kein Reifenverschleiß und kein '
+      text: 'Automatik, 1,6 s auf 100, voller Grip, kein Reifenverschleiß und kein '
           + 'Tankgewicht. Das Tempo ist gedrosselt, die Bremse dafür die kräftigste von allen, '
-          + 'also der kürzeste Bremsweg, und die Lenkkalibrierung auf 250 Prozent: der volle '
-          + 'Einschlag liegt schon bei einem Viertel Stick an. Crashs bremsen, machen aber '
+          + 'also der kürzeste Bremsweg, und die Lenkkalibrierung auf 300 Prozent: der volle '
+          + 'Einschlag liegt schon bei einem Drittel Stick an. Crashs bremsen, machen aber '
           + 'keinen Schaden. Zum Fahren ohne Nachdenken.',
       // BESTELLT: "bei arcade die bremskraft verstaerken um 50%" - von 1.5 (dem alten
       // Deckel des Reglers) auf 2.25. Der Regler selbst hat jetzt Platz bis 2.5, siehe
@@ -81,9 +81,9 @@
     pro: {
       label: 'Pro',
       kurz: 'Halb so weit zwischen Arcade und Realismus GT3',
-      text: 'Automatik, 2,6 s auf 100, voller Grip, Reifenmodell an und kein '
-          + 'Tankgewicht. Lenkkalibrierung 200 Prozent, damit auch enge Strecken gehen '
-          + '– der volle Einschlag liegt bei etwa einem Drittel Stick an. Fading und '
+      text: 'Automatik, 2,6 s auf 100, voller Grip, Reifenmodell und Tankgewicht an. '
+          + 'Lenkkalibrierung 250 Prozent, damit auch enge Strecken gehen '
+          + '– der volle Einschlag liegt bei zwei Fünfteln Stick an. Fading und '
           + 'Windschatten sind aus; sie stehen ab GT3 zur Verfügung.',
       // AUTOMATIK, obwohl Pro sonst die Zwischenstufe zu GT3 ist. Pro ist seit v0.5 die
       // Vorgabe, und wer beim ersten Start von Hand schalten muss und es nicht weiss, bleibt
@@ -280,8 +280,8 @@
   PRESETS.propacejka = {
     label: 'Pacejka',
     kurz: 'Pro mit Pacejka-Lenkmodell',
-    text: 'Die Pro-Abstimmung (Automatik, 2,6 s auf 100, voller Grip, Reifenmodell an, '
-        + 'kein Tankgewicht) mit dem experimentellen Pacejka-Lenkmodell: unterhalb der '
+    text: 'Die Pro-Abstimmung (Automatik, 2,6 s auf 100, voller Grip, Reifenmodell und '
+        + 'Tankgewicht an) mit dem experimentellen Pacejka-Lenkmodell: unterhalb der '
         + 'Haftgrenze f\u00e4hrt es sich wie Physik, dar\u00fcber sp\u00fcrbar \u00dcbersteuern und '
         + 'Untersteuern, beides vibriert und quietscht. Zum Ausprobieren der Magic Formula, '
         + 'ohne die Klassen-Abstimmung.',
@@ -298,7 +298,7 @@
     label: 'Omega',
     kurz: 'Pro, wie es in v0.9 war - eingefroren',
     text: 'Die Pro-Abstimmung aus v0.9 (Automatik, 2,6 s auf 100, voller Grip, Reifenmodell '
-        + 'an, kein Tankgewicht, Lenkkalibrierung 250 Prozent) und bleibt so: wird Pro '
+        + 'und Tankgewicht an, Lenkkalibrierung 250 Prozent) und bleibt so: wird Pro '
         + 'künftig angepasst, ändert sich Omega nicht.',
     v: { 'phys-mode': 'physik', 'setting-grip': 1, 'setting-brakepower': 1.4, 'setting-autoshift': true,
          'setting-zero-to-top': 2.6, 'setting-coast-drag': 0.6, 'setting-fuelweight': 1, 'setting-tyres': 1,
@@ -534,6 +534,54 @@
   window.__presetTexts = (k) => (PRESETS[k]
     ? { label: PRESETS[k].label, kurz: PRESETS[k].kurz, text: PRESETS[k].text } : null);
   window.__presetLabel = (k) => (PRESETS[k] || {}).label || k;
+
+  // ---- FAHRGEFUEHL JE SPIELER (v1.2.4) -----------------------------------------------------
+  // BESTELLT: "Ich moechte fuer verschiedene Spieler verschiedene Schwierigkeitsstufen zulassen (z. B. Spieler 1
+  // Pacejka, Spieler 2 Arcade). Aktuell schaltet ein Knopf auch den anderen um." Die Regler unter Optionen gelten
+  // fuer Spieler 1; Spieler 2 und 3 uebernahmen sie (physEngine2Abgleichen). Jetzt kann jeder Zusatzspieler ein
+  // EIGENES Preset haben. Seine Abstimmung entsteht, indem das Preset kurz auf die Regler gelegt, die entstandene
+  // Konfiguration abgeschrieben und Spieler 1s Stand sofort zurueckgelegt wird (presetSchnappschuss) - so rechnet
+  // jedes Preset durch dieselben Handler wie sonst, ohne eine zweite Umrechnung von Regler auf Physikwert.
+  const SPIELER_PRESET_STORE = 'omegasim-preset-spieler-';
+  const presetSchnappCache = {};
+  let presetSchnappLaeuft = false;
+  function presetSchnappschuss(key) {
+    if (presetSchnappCache[key]) return presetSchnappCache[key];
+    const p = PRESETS[key];
+    if (!p || presetSchnappLaeuft) return null;
+    const vorher = presetRead();
+    const merkZuletzt = presetZuletzt;
+    presetSchnappLaeuft = true;
+    try {
+      for (const [id, val] of Object.entries(p.v)) presetSet(id, val);
+      setzeBrakeStealLast();
+      const snap = { config: JSON.parse(JSON.stringify(physEngine.config)),
+                     modus: $('phys-mode') ? $('phys-mode').value : 'physik' };
+      presetSchnappCache[key] = snap;
+      return snap;
+    } finally {
+      for (const [id, val] of Object.entries(vorher)) presetSet(id, val);
+      setzeBrakeStealLast();
+      presetZuletzt = merkZuletzt;
+      presetSchnappLaeuft = false;
+    }
+  }
+  function spielerPreset(nr) {
+    try { const k = localStorage.getItem(SPIELER_PRESET_STORE + nr); return k && PRESETS[k] ? k : null; }
+    catch (e) { return null; }
+  }
+  function spielerPresetSetzen(nr, key) {
+    try {
+      if (key && PRESETS[key]) localStorage.setItem(SPIELER_PRESET_STORE + nr, key);
+      else localStorage.removeItem(SPIELER_PRESET_STORE + nr);
+    } catch (e) { /* privat */ }
+    if (typeof physEngine2Abgleichen === 'function') physEngine2Abgleichen();
+  }
+  window.__presetSchnappschuss = presetSchnappschuss;
+  window.__presetSchnappLaeuft = () => presetSchnappLaeuft;
+  window.__presetSchnappLeeren = () => { for (const k of Object.keys(presetSchnappCache)) delete presetSchnappCache[k]; };
+  window.__spielerPreset = spielerPreset;
+  window.__spielerPresetSetzen = spielerPresetSetzen;
 
   // Der Erklaertext der EINGESTELLTEN Variante, aus demselben Objekt. Bis v0.5 standen alle
   // fuenf untereinander; das war eine Wand aus Text, in der man den eigenen Zustand nicht

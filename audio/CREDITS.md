@@ -408,10 +408,25 @@ liefert.
   IST so kurz.
 - **Regen und Donner** (`rain_bed.ogg`, `thunder_0..2.ogg`) — aus
   `pwlpl-heavy-thunderstorm-sound-effect-473418.mp3`, nach demselben Verfahren.
+- **Boxenstopp-Schlagschrauber je Radpaar** (`pit_wrench_paar.ogg`, seit v1.1.42) — aus
+  `soundeffectsparty-pneumatic-impact-wrench-loosening-bolts-502995.mp3`:
+  Sound Effect by [Jun Su](https://pixabay.com/de/users/soundeffectsparty-54949351/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=502995)
+  from [Pixabay](https://pixabay.com//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=502995),
+  Pixabay-Inhaltslizenz (https://pixabay.com/service/license-summary/).
+  Bearbeitet mit `tools/pit_wrench_pixabay.py`: vier der fuenf Schrauberstoesse ausgeschnitten
+  (7,27 s, 11,25 s, 13,39 s, 17,28 s der Quelle), Hochpass 120 Hz und Tiefpass 9 kHz, Blenden
+  4 ms/60 ms, je zwei Stoesse leicht versetzt uebereinandergelegt (zwei Mechaniker: loesen bei 0 s,
+  anziehen bei 1,28 s), auf -3 dBFS. Die App spielt die 2-s-Folge je Radpaar einmal (erst hinten,
+  dann vorn). Die Lizenz erlaubt Nutzung und Bearbeitung ohne Namensnennung, verbietet aber die
+  Weitergabe als Einzeldatei: das Original liegt deshalb NICHT im Repo, und `pit_wrench_paar.ogg` ist
+  nur als Teil von OmegaSim gedacht, nicht zur Weitergabe fuer sich allein.
 
 Die unbearbeiteten Quelldateien sind nicht Teil dieses Repos.
 
 ### Boxenstopp-Schleifen (`pit_wrench`, `pit_fuel`, `pit_repair`)
+
+Seit v1.1.42 ersetzt der aufgenommene Schrauber je Radpaar (`pit_wrench_paar.ogg`, oben unter
+Pixabay) die gerechnete Schleife `pit_wrench`; die bleibt als Rueckfall, falls die Datei fehlt.
 
 Erzeugt von `tools/pit_sounds.py` (Tanken und Reparatur) bzw. `tools/engine_fx.py`
 (Schlagschrauber). Alle drei sind Schleifen, weil sie so lange laufen wie ihre

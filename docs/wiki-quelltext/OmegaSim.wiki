@@ -1,0 +1,469 @@
+{{Stand|app=1.2.9|appdatum=26.10.2026}}
+[[Datei:OmegaSim-Startseite.png|mini|Titelbildschirm von OmegaSim]]
+'''OmegaSim''' ist eine freie, quelloffene App zur Steuerung von [[Carrera HYBRID]]-Autos per [[Bluetooth Low Energy]]. Sie läuft im Browser (Chrome, Edge) und als Android-App und ergänzt die Autos um ein eigenes Fahrmodell, simulierte Motorgeräusche, computergesteuerte Gegner (NPCs), Rennarten, einen Strecken- und Raum-Editor, Challenges mit Online-Bestenliste und Mehrspieler. OmegaSim ist unabhängig vom Hersteller Carrera; es spricht dieselbe Funkschnittstelle wie die [[Original-App]], deren Protokoll für das Projekt aus Mitschnitten rekonstruiert wurde. Technisch ist OmegaSim eine einzige HTML-Datei mit JavaScript, die ohne Server läuft; die Android-Fassung legt eine dünne Java-Hülle darum. Der Titelbildschirm nennt als Leitsatz „Vollständige Gestaltungsfreiheit für deine Carrera Hybrid Bahn“. In älteren Dateien des Repositorys heißt das Projekt noch „CH Control“.
+
+== Auf einen Blick ==
+{| class="wikitable"
+! Merkmal !! Wert
+|-
+| Autor || Luuke (GitHub: Luuke42); weitere Beiträge unter anderem von Playdater1974 (Bambi007)
+|-
+| Lizenz || MIT; mitgelieferte Tonaufnahmen und Druckmuster haben eigene Bedingungen (siehe <code>audio/CREDITS.md</code>)
+|-
+| Aktuelle Version || 1.2.9 vom 26.10.2026 (Schema 1.&lt;Woche&gt;.&lt;Push&gt;)
+|-
+| Plattformen || Browser mit Web Bluetooth (Chrome, Edge) am PC und unter Android; Android-App (APK, ab Android 7); auf iPhone/iPad nur Streckenbau und Doku
+|-
+| Sprachen der Oberfläche || Deutsch (Quelle), Englisch, Spanisch
+|-
+| Programmiersprachen || JavaScript, HTML, CSS; Java (Android-Hülle); Python (Bau, Werkzeuge, Mehrspieler-Host); Google Apps Script (Bestenliste, Studie); siehe [[Aufbau von OmegaSim]]
+|-
+| Umfang || 46 JavaScript-Dateien und 2 HTML-Teile in <code>src/</code>, rund 92&nbsp;500 Zeilen JavaScript; ausgeliefert als <code>index.html</code> mit rund 6,6 MB
+|-
+| Android-Kennung || <code>de.lroeseler.omegasim</code>, Capacitor 8.5.2
+|-
+| Selbsttest || 522 Prüfungen in <code>src/95-selftest.js</code>
+|-
+| Hauptmenü || FAHREN · Challenges · WLAN Mehrspieler · Optionen · (Entwickler)
+|-
+| Status || stabil; einzelne Funktionen als WIP oder experimentell gekennzeichnet
+|}
+
+== Grundlagen ==
+=== Was eine Web-App ist ===
+Eine '''Web-App''' ist ein Programm, das im Browser läuft. Sie besteht aus '''HTML''' (dem Gerüst: Knöpfe, Regler, Texte), '''CSS''' (dem Aussehen) und '''JavaScript''' (der Programmlogik). OmegaSim braucht keinen Server, der für jeden Klick rechnet: Die ganze App wird einmal geladen und läuft dann im Browser des Nutzers, sogar von der Festplatte (<code>file://</code>). Mit '''Web Bluetooth''' kann eine solche Seite in Chrome oder Edge direkt mit Bluetooth-Geräten sprechen, nach einem ausdrücklichen Klick des Nutzers für jedes Gerät. Safari und Firefox bieten Web Bluetooth nicht an.
+
+=== Programmiersprachen in OmegaSim ===
+{| class="wikitable"
+! Sprache !! Wofür !! Wo
+|-
+| JavaScript || die gesamte App: Fahrphysik, Bluetooth-Protokoll, NPCs, Ton, Editor, Menüs || <code>src/*.js</code>
+|-
+| HTML || Markup aller Menüs, Optionen mit ⓘ-Texten, Doku, Patchnotes || <code>src/00-index.head.html</code>, <code>src/99-index.tail.html</code>
+|-
+| CSS || Aussehen, im Kopf der HTML-Datei || <code>src/00-index.head.html</code>
+|-
+| Java || Android-Hülle: Bluetooth-Schreibweg [[OmegaBle]], Selbstaktualisierung, Mehrspieler-Host, Sicherungsdatei, Gamepad || <code>android-app/…/*.java</code>
+|-
+| Python || Bau (<code>build.py</code>, <code>bump_version.py</code>, <code>app_update.py</code>), Ton- und Druckvorlagen-Erzeugung, Auswertung von Mitschnitten, WLAN-Host für den PC || <code>tools/*.py</code>
+|-
+| Google Apps Script || Online-Bestenliste der Challenges und Speicherung der Studie in einem Google Sheet || <code>tools/challenges-apps-script.gs</code>
+|-
+| YAML, PowerShell, Batch || Bauaufträge für GitHub Actions, Hilfsskripte unter Windows || <code>.github/workflows/</code>, <code>tools/*.ps1</code>, <code>*.bat</code>
+|}
+Wie diese Teile zusammenspielen, wie viel Code auf jede Sprache entfällt und wie die App „aufbereitet“ wird, beschreibt ausführlich der Artikel [[Aufbau von OmegaSim]].
+
+=== Quelle, Bau und Auslieferung ===
+Der '''Quelltext''' ist das, was Entwickler schreiben: hier rund 50 nummerierte Dateien in <code>src/</code>. Ein '''Bauschritt''' (''build'') setzt daraus das aus, was Nutzer bekommen: eine einzige Datei <code>index.html</code>. Bei OmegaSim ist der Bau bewusst einfach: Die Dateien werden in Namensreihenfolge Byte für Byte aneinandergehängt, ohne Bundler und ohne Umwandlung. Die '''Versionsnummer''' wird bei jedem Push aus der Git-Historie berechnet. '''Git''' ist das Versionsverwaltungssystem, das jede Änderung als '''Commit''' speichert; ein '''Push''' lädt Commits auf den Server (GitHub).
+
+=== Gültigkeitsbereich und Ladereihenfolge ===
+Fast alle JavaScript-Dateien bilden zusammen '''eine''' Funktion, die sofort ausgeführt wird (''IIFE'', „immediately invoked function expression“): Sie wird am Anfang von <code>10-ble-explorer.js</code> geöffnet und in <code>99-index.tail.html</code> geschlossen. Alles darin sieht sich gegenseitig, nach außen ist nichts sichtbar. Weil JavaScript eine mit <code>let</code> oder <code>const</code> angelegte Variable vor ihrer Zeile nicht lesen darf („temporale Todeszone“), zählt die Reihenfolge: Ein Zugriff zu früh bricht die ganze Funktion ab, und die App bleibt leer. Die Zahlen vor den Dateinamen machen diese Reihenfolge im Verzeichnis sichtbar. <code>05-app-bruecke.js</code> ist eine eigene Funktion davor, weil sie <code>navigator.bluetooth</code> bereitstellen muss, bevor der Rest es abfragt.
+
+=== Service Worker und PWA ===
+Eine '''PWA''' (Progressive Web App) ist eine Web-App, die sich wie eine installierte App verhält: eigenes Symbol, Vollbild, Start ohne Netz. Dafür sorgt ein '''Service Worker''', ein kleines Hintergrundskript des Browsers, das Dateien zwischenspeichert (''Cache'').
+
+=== Lokaler Speicher ===
+Der Browser stellt jeder Seite einen kleinen Schlüssel-Wert-Speicher bereit, '''localStorage'''. Er überlebt das Neuladen, gehört aber zum Browser (bzw. zur Installation der App) und kann beim Aufräumen von Websitedaten verloren gehen. Deshalb gibt es eine Sicherungsdatei.
+
+=== Wie der Quelltext entstanden ist ===
+Viele Kommentare im Code beginnen mit „BESTELLT:“ oder „GEMELDET:“ und zitieren den Wunsch oder Fehlerbericht wörtlich, auf den die Stelle zurückgeht; Messungen stehen mit Zahlen daneben. Wie diese Arbeitsweise mit KI-Werkzeugen funktioniert, beschreibt [[Vibe-Coding]]; Hinweise für KI-gestützte Beiträge stehen in [[Anleitung für KIs]].
+
+== Bedienung ==
+=== Im Browser ===
+# OmegaSim in Chrome oder Edge öffnen (Link auf der [[Hauptseite]]) oder <code>index.html</code> von der Festplatte starten.
+# Auf dem Titelbildschirm '''Starten''' wählen; '''Tutorial''' führt durch die ersten Schritte, '''Steuerung''' zeigt die Tastenbelegung.
+# '''FAHREN → Autos''': Auto verbinden (für jedes Auto ein Klick im Auswahlfenster des Browsers).
+# '''FAHREN → Strecke''': Leseart wählen (Auf der Bahn / Ausdruck), Strecke scannen oder im Editor bauen (siehe [[Strecke]], [[Strecken- und Raum-Editor]]).
+# '''FAHREN → Rennoptionen''': Renntyp wählen (siehe [[Rennarten]]), dann '''Rennen starten'''.
+# Gefahren wird im '''Cockpit''' mit Drehzahl, Gang, Rundenzeiten und Zustand des Autos.
+# Optional: Über das Symbol in der Adresszeile oder den Knopf '''Als App installieren''' als PWA installieren; dann startet OmegaSim auch ohne Netz.
+
+=== In der Android-App ===
+# Die APK von der Titelseite der Browserfassung herunterladen und installieren („Unbekannte Quellen“ für den Browser erlauben).
+# Die App fragt beim Start nach Updates (Optionen → App & Updates); eine neue APK ist nur nötig, wenn die App das meldet.
+# Autos verbinden wie im Browser; bekannte Autos verbindet die App beim Start selbst.
+# Daten liegen zusätzlich in einer Sicherungsdatei in ''Dokumente/OmegaSim''.
+
+=== Navigation ===
+Mit dem Gamepad wechseln L1/R1 die Reiter, das Steuerkreuz wählt, Kreuz bestätigt, Kreis geht zurück. Die Zurück-Taste des Handys führt zum Titelbildschirm.
+
+{| class="wikitable"
+! Reiter !! Inhalt
+|-
+| '''FAHREN''' || Kacheln '''Autos''' (Garage), '''Strecke''' (Leseart, Scan, Editor, Laden, Raum, Druckvorlagen), '''Rennoptionen''', '''Meisterschaft''', '''Rennen starten'''
+|-
+| '''Challenges''' || feste Strecken und Wochenstrecken mit Online-Bestenliste (siehe [[Challenges]])
+|-
+| '''WLAN Mehrspieler''' || gemeinsame Rennen mehrerer Geräte, Host am PC oder in der Android-App (siehe [[Mehrspieler]])
+|-
+| '''Optionen''' || Allgemein, Fahrgefühl, Renneinstellungen, Ton, Ansagen, Vibration, NPCs, Safety Car, Controller, System, Daten sichern, Mehrspieler, Statistiken, Telemetrie (WIP), OmegaLab (WIP), Tutorials, Info-Seiten mit Patchnotes
+|-
+| '''Entwickler''' || nur mit Optionen → System → Entwicklertools zeigen: Doku, Programmierschule, BLE-Werkbank, Selbsttest, Code-Sonde, Zahlensysteme, Aufnahme-Modus
+|}
+
+== Einstellungen ==
+Hier stehen nur die Einstellungen, die OmegaSim als Ganzes betreffen; die übrigen stehen in den Fachartikeln.
+
+{| class="wikitable"
+! Name in der App !! Bereich/Werte !! Standard !! Wirkung (aus dem Code) !! Interner Schlüssel/ID
+|-
+| Sprache (Optionen → System, auch auf dem Titelbildschirm) || Deutsch, English, Español || Deutsch || übersetzt alle Texte der Oberfläche; der Knopf auf dem Titelbildschirm schaltet reihum || <code>setting-sprache</code>, gespeichert in <code>omegasim-lang</code>
+|-
+| Entwicklertools zeigen (System) || an/aus || aus || blendet den Reiter Entwickler ein; auch mit <code>?dev</code> in der Adresse || <code>setting-dev</code>
+|-
+| Bekannte Autos beim Start verbinden (System, nur App) || an/aus || an || verbindet gemerkte Autos über die MAC-Adresse || <code>setting-autoverbinden</code>
+|-
+| Beim Start nach Updates suchen (App & Updates, nur App) || an/aus || an || fragt 3 s nach dem Start einmal die Projektseite; geladen wird erst nach Tipp auf „Jetzt laden“ || <code>app-auto</code>, gespeichert in <code>chc.app.v1</code>
+|-
+| Mitgelieferte Fassung verwenden (App & Updates) || Knopf || – || schaltet auf die in der APK eingebaute Web-Fassung zurück || <code>OmegaUpdate.eingebaut()</code>
+|-
+| Sicherung speichern / einlesen (Optionen → Daten sichern) || Knöpfe || – || eine Datei mit allem, was die App sich merkt || <code>src/98b-sicherung.js</code>
+|-
+| Profil (System) || benannte Profile || – || vollständiger Stand aller Menüs und der Tastenbelegung je Person || <code>chc.profile.v1</code>
+|}
+
+== Funktionsweise ==
+=== Architektur: Module in Ladereihenfolge ===
+<code>tools/build.py</code> hängt alle Dateien in <code>src/</code> alphabetisch aneinander. Die Reihenfolge ist damit die Ladereihenfolge.
+
+{| class="wikitable"
+! Datei !! Zweck
+|-
+| <code>00-index.head.html</code> || Kopf der Seite: CSS, alle Menüs und Optionen mit ⓘ-Texten, Doku-Seiten, Patchnotes, Startdiagnose.
+|-
+| <code>05-app-bruecke.js</code> || Eigene Funktion, nur in der Android-App aktiv: baut Web Bluetooth auf dem Community-Plugin nach und bindet [[OmegaBle]] an.
+|-
+| <code>10-ble-explorer.js</code> || Öffnet den gemeinsamen Gültigkeitsbereich; BLE-Werkbank, <code>crc8()</code>, Wörterbücher Englisch/Spanisch und Übersetzungsmechanik.
+|-
+| <code>20-protocol.js</code> || Das 20-Byte-Befehlspaket, der 45-ms-Herzschlag, das Schreibschloss je Merkmal und der RC-Gasverlauf.
+|-
+| <code>30-input.js</code> || Eingabe: wer darf steuern (Tastatur, Gamepad, Touch, Neigung), Tempo-Skalen, Mitschrift.
+|-
+| <code>40-physics.js</code> || Die Fahrphysik als Klasse: Gänge, Reifen, Reibkreis, Gewichtsverlagerung, Einspurmodell (siehe [[Fahrverhalten]]).
+|-
+| <code>49-spieler.js</code> || Spielerplätze 2 und 3 für Mehrspieler an einem Gerät.
+|-
+| <code>50-drive.js</code> || Fahren: Regler, Kalibrierung, Autopilot, Abseits-Erkennung, Aufnahme und Wiedergabe von Fahrten.
+|-
+| <code>50b-menu-nav.js</code> || Menüführung mit Steuerkreuz und Pfeiltasten im Cockpit und in den Optionen.
+|-
+| <code>51-konsole.js</code> || Menü im Konsolenstil mit Kacheln, Titelbildschirm und PS5-Tastenlogik.
+|-
+| <code>51b-tutorial.js</code> || Geführte Einführung vom Titelbildschirm aus.
+|-
+| <code>59-lade.js</code> || Ladeanimation: ein sich drehendes Streckenteil.
+|-
+| <code>60-track.js</code> || Strecke: Modell, Geometrie, Codes, Editor, Ideallinie, Scan (siehe [[Strecke]]).
+|-
+| <code>60b-raum.js</code> || Raumdesigner und Platzierung der Strecke im Raum (siehe [[Strecken- und Raum-Editor]]).
+|-
+| <code>60c-streckenbild.js</code> || Export der Strecke als PNG-Bild.
+|-
+| <code>60d-virtuell.js</code> || [[Virtuelles Fahren]]: ein Auto ohne Bluetooth in 3D auf der Editor-Strecke.
+|-
+| <code>61-simlinie.js</code> || SIMULATOR-Ideallinie: Suche über Linien und Tempopläne mit derselben Physik.
+|-
+| <code>70-race.js</code> || Rennen: Cockpit, Meldungsauswertung, Rundenzählung, Renntypen, [[Boxenstopp]], Wetter, Akku (siehe [[Rennarten]]).
+|-
+| <code>70b-telemetrie.js</code> || Zwischenzeiten je Streckenteil für jede Runde (WIP).
+|-
+| <code>71-rammen.js</code> || Crash-Arten, Rammen und Rammer-Strafen.
+|-
+| <code>72-challenges.js</code> || [[Challenges]] mit Online-Bestenliste.
+|-
+| <code>72b-spuren.js</code> || Telemetrie-Spuren der Bestenlisten (WIP).
+|-
+| <code>73-meisterschaft.js</code> || Meisterschaft aus mehreren Rennen.
+|-
+| <code>80-sound.js</code> || Der Ton: Motorklang aus Aufnahmen, Effekte, Reifenquietschen.
+|-
+| <code>80b-dualsense.js</code> || Trigger-Effekt des DualSense-Controllers bei ABS (WIP, WebHID).
+|-
+| <code>80c-rennstand.js</code> || Ansagen zum Rennstand aus vorproduzierten Sprachclips.
+|-
+| <code>90-ghosts.js</code> || Garage und Verbindungen, NPCs, Ortung auf der Strecke, Gamepad-Belegung (siehe [[NPC-Fahrverhalten]], [[Safety Car und Reinigungswagen]]).
+|-
+| <code>90b-sim.js</code> || „Rennen simulieren“: ein Rennen ohne Autos im Modell.
+|-
+| <code>90c-macro-track.js</code> || Strecke aus einer Aufnahme lernen (WIP).
+|-
+| <code>90d-challenger.js</code> || Challenger: ein echtes Auto fährt eine Bestzeit gegen dich (experimentell).
+|-
+| <code>91-pwa.js</code> || Installierbarkeit als PWA, Anmeldung des Service Workers.
+|-
+| <code>92-coding-school.js</code> || Programmierschule: Kurven ziehen statt Code schreiben.
+|-
+| <code>92b-num-trainer.js</code> || Binär- und Hex-Trainer (siehe [[Hexadezimalsystem]]).
+|-
+| <code>93-testbench.js</code> || Messstände für Selbsttest und Konsole (<code>OMEGA_TEST</code>).
+|-
+| <code>94-engine-workshop.js</code> || Motorwerkstatt: elf Größen des Motormodells zum Drehen.
+|-
+| <code>95-selftest.js</code> || Der Selbsttest mit 522 Prüfungen.
+|-
+| <code>96-home.js</code> || Gezählte Angaben für die Info-Seite (Zahl der Einstellungen).
+|-
+| <code>97-sessions.js</code> || Sitzungsdaten: Rundenzeiten aller Rennen, am Rennende gespeichert.
+|-
+| <code>97b-app.js</code> || Nur in der App: Selbstaktualisierung (OmegaUpdate) und Host ohne PC (OmegaHost).
+|-
+| <code>97b-fahrstil.js</code> || Fahrstil-Kennwerte der letzten Sitzung (WIP).
+|-
+| <code>98-presets.js</code> || Voreinstellungen (Presets) der Abstimmung.
+|-
+| <code>98b-sicherung.js</code> || Sicherung: alles Gemerkte in einer Datei.
+|-
+| <code>98c-opt-info.js</code> || ⓘ-Knöpfe: Hilfetexte der Optionen im Pop-up.
+|-
+| <code>98d-profile.js</code> || Profile und Presets je Menü.
+|-
+| <code>98e-statistik.js</code> || Statistiken (Kilometer, Ranglisten).
+|-
+| <code>98f-studie.js</code> || OmegaLab: Studie mit Fragebogen und Fahr-Challenge (WIP).
+|-
+| <code>98g-telemetrie-seite.js</code> || Seite Optionen → Telemetrie (WIP).
+|-
+| <code>99-index.tail.html</code> || Schließt den gemeinsamen Gültigkeitsbereich und das Skript-Element.
+|}
+
+=== Der Herzschlag ===
+Das zentrale Bauprinzip: Eingaben senden nicht selbst. Tastatur, Gamepad, Touch und Neigung setzen nur Zustand; ein einziger Zeitgeber, <code>controlHeartbeat()</code>, läuft alle 45 ms (<code>CONTROL_SEND_INTERVAL_MS</code>, dem beobachteten Takt der Original-App) und erledigt in fester Reihenfolge: Gamepad frisch lesen, Ort der Spielerautos bestimmen, Physik rechnen, Boxengasse, Paket von Spieler 1 senden, Spieler 2 und 3 senden, NPC-Takte, zuletzt das Cockpit zeichnen („erst senden, dann malen“). Vor 0.5.8 schrieben fünf Quellen ungeordnet ans Auto; überlappende Schreibvorgänge gingen verloren, und das Auto stotterte<ref>Kommentar „SINGLE WRITER“, <code>src/20-protocol.js</code>.</ref>. Gemessen kostet der ganze Takt im Median 0,3 ms (mit zwei NPCs 0,4 ms), unter 2 % des Budgets.
+
+=== Bau: tools/build.py ===
+# Alle Dateien in <code>src/</code> mit Endung <code>.js</code> oder <code>.html</code> alphabetisch sortieren.
+# Byte für Byte aneinanderhängen, ohne Trenner: Das Ergebnis ist <code>index.html</code>.
+# Prüfen: Klammern zählen (außerhalb von Zeichenketten und Kommentaren), doppelte IDs, lokale Verweise auf fehlende Dateien, Wörterbuch.
+# <code>sw.js</code> aus <code>tools/sw.js.in</code> schreiben und dabei die Version in den Cachenamen einsetzen; fehlt die Platzhalterzeile, bricht der Bau ab.
+# <code>app-update.json</code> schreiben (<code>tools/app_update.py</code>): Version, APK-Stufe und für jede Datei Pfad, SHA-256 und Größe.
+<code>python tools/build.py --check</code> baut nichts, sondern prüft, ob <code>index.html</code> dem Bau entspricht. Die Auslieferung bleibt bewusst '''eine''' Datei: Sie soll per <code>file://</code> laufen, ohne Installation, ohne Bundler, ohne Netz<ref>Kopfkommentar, <code>tools/build.py</code>.</ref>.
+
+=== Versionsschema: tools/bump_version.py ===
+Vor jedem Commit berechnet <code>bump_version.py</code> die Nummer aus der Git-Historie, schreibt sie in <code>&lt;span id="app-version"&gt;</code> der Quelle und baut <code>index.html</code>, <code>sw.js</code> und <code>app-update.json</code> neu<ref><code>version()</code>, <code>tools/bump_version.py</code>.</ref>:
+<pre>
+Start   = 03.08.2026 (PROJEKT_START, Woche 0)
+Montag  = Montag der laufenden Woche
+Woche   = (Montag − Start) in Tagen ÷ 7  (ganzzahlig)
+Push    = Commits seit Montag 00:00 + 1 + PUSH_VERSATZ[Montag]
+Version = 1.(Woche − 10).Push     ab Woche 10 (12.10.2026)
+          0.Woche.Push            davor
+</pre>
+* ''+1'': Die Nummer gilt für den Commit, der gerade entsteht.
+* ''PUSH_VERSATZ'': Wurde die Historie zusammengefasst (Force-Push), fehlen Commits; der Versatz gibt sie dem Zähler zurück (Wochen ab 05.10.: 27, ab 12.10.: 23, ab 19.10.: 2).
+* Die Woche beginnt am Montag, nicht am Wochentag des ersten Commits; früher sprang die Wochenzahl deshalb an einem Freitag.
+Die Patchnotes haben je Nebenversion (1.2, 1.1, …) einen Abschnitt. Für die APK wird daraus ein streng steigender Android-<code>versionCode</code>: Haupt × 100&nbsp;000 + Neben × 1000 + Push.
+
+=== Service Worker: sw.js ===
+Im Browser hält ein Service Worker die Hülle bereit (<code>index.html</code>, Manifest, Symbole). Er holt '''Netz zuerst''': online immer die neueste Fassung, offline die zuletzt gesehene. Der übliche Rat „Cache zuerst“ wäre hier falsch, weil mehrmals am Tag neu gebaut wird; ein Cache-zuerst-Arbeiter lieferte dann eine alte Fassung aus. Der Cachename trägt die Version (<code>omegasim-1.2.9</code>), alte Caches werden beim Aktivieren gelöscht. Nicht gecacht werden Anfragen, die nicht GET sind, und fremde Herkünfte (etwa der Mehrspieler-Host). Die Tonschleifen werden nicht vorab geladen, sondern beim ersten Hören. In der Android-App wird kein Service Worker angemeldet, weil OmegaUpdate die Dateien selbst verwaltet<ref><code>tools/sw.js.in</code>; <code>src/91-pwa.js</code>.</ref>.
+
+=== Android-App und APK ===
+Die APK ist dieselbe <code>index.html</code> in einer Capacitor-Hülle. Was die App nativ anders macht, steht in <code>index.html</code> hinter <code>window.Capacitor</code> und schläft im Browser. Eigene Plugins der Hülle:
+{| class="wikitable"
+! Plugin !! Aufgabe
+|-
+| <code>OmegaBle</code> || schneller Schreibweg und Aufräumen von Verbindungen, siehe [[OmegaBle]]
+|-
+| <code>OmegaUpdate</code> || Selbstaktualisierung der Web-Fassung
+|-
+| <code>OmegaHost</code> || Mehrspieler-Host auf dem Telefon, Vollbild
+|-
+| <code>OmegaSicherung</code> || Sicherungsdatei in ''Dokumente/OmegaSim''
+|-
+| <code>OmegaPadNativ</code> (kein Plugin, JavascriptInterface) || Gamepad direkt lesen
+|}
+'''Bau der APK.''' Ein Git-Tag <code>apk-v&lt;Version&gt;</code> (oder ein Start von Hand) löst den Bauauftrag <code>.github/workflows/android.yml</code> aus: <code>build.py</code> baut <code>index.html</code>, <code>tools/apk_www.py</code> kopiert genau die Dateien aus <code>app-update.json</code> nach <code>android-app/www</code>, <code>npx cap sync android</code> überträgt sie, Gradle baut eine signierte Release-APK (Schlüssel aus Repository-Secrets, nie im Repository), und sie wird als <code>OmegaSim-&lt;Version&gt;.apk</code> und unter dem festen Namen <code>OmegaSim.apk</code> an ein GitHub-Release gehängt. Eine neue APK ist nur nötig, wenn sich die native Schicht ändert.
+
+=== Update-Mechanismus der App (OmegaUpdate) ===
+Die APK trägt eine eingebaute Web-Fassung. Neuere Fassungen kommen von der Projektseite auf GitHub Pages; <code>app-update.json</code> nennt Version, APK-Stufe und Dateien (Fassung 1.2.9: 638 Einträge mit Pfad <code>p</code>, SHA-256 <code>h</code>, Größe <code>g</code>)<ref><code>OmegaUpdatePlugin.java</code>; <code>tools/app_update.py</code>; <code>src/97b-app.js</code>.</ref>.
+
+{| class="wikitable"
+! Methode !! Wirkung
+|-
+| <code>stand</code> || APK-Version, APK-Stufe, aktive Web-Fassung, ob eingebaut oder geladen, offene oder zurückgerollte Fassung
+|-
+| <code>pruefen</code> || lädt <code>app-update.json</code> und zählt, welche Dateien sich nach Prüfsumme unterscheiden; meldet Version, Zahl, Bytes und <code>apkNoetig</code>
+|-
+| <code>laden</code> || lädt die neue Fassung in einen eigenen Ordner und schaltet um
+|-
+| <code>bestaetigen</code> || die neue Fassung meldet sich; alte Ordner außer der aktiven und der vorigen werden gelöscht
+|-
+| <code>eingebaut</code> || zurück zur Fassung in der APK
+|-
+| <code>abbrechen</code> || laufenden Download abbrechen
+|-
+| <code>vergessen</code> || Merker „zurückgerollt“ löschen
+|}
+
+Ablauf einer Aktualisierung:
+# 3 s nach dem Start fragt <code>97b-app.js</code> still <code>pruefen</code>. Ist die Version nicht neuer als die laufende, passiert nichts. Eine Fassung, die schon einmal zurückgerollt wurde, wird nicht erneut angeboten.
+# Ist die APK-Stufe der neuen Fassung (<code>apk</code>) größer als die der installierten APK (<code>APK_STUFE</code> = 2), heißt das Angebot „Neue APK nötig“ und führt zum Download der APK.
+# Sonst zeigt die App „Update verfügbar: Version (Größe)“. Ein Tipp auf „Jetzt laden“ startet <code>laden</code>.
+# <code>laden</code> legt einen neuen Ordner <code>files/www/&lt;Version&gt;-&lt;Zeit&gt;</code> an. Für jede Datei: Ist die Prüfsumme gleich der laufenden Fassung, wird kopiert; sonst geladen und nachgeprüft. Eine falsche Prüfsumme bricht ab, der Ordner wird gelöscht. Pfade mit <code>..</code> oder führendem <code>/</code> sind verboten. Fortschritt geht als Ereignis an den Ladebalken.
+# Danach merkt sich die App die vorige Fassung und die neue als „offen“, setzt den Pfad und schaltet die WebView nach 400 ms um (<code>setServerBasePath</code>). Die Herkunft bleibt <code><nowiki>https://localhost</nowiki></code>, also bleiben alle Einstellungen in <code>localStorage</code> erhalten.
+# Die neue Fassung ruft beim Hochkommen <code>bestaetigen</code>. Kommt diese Bestätigung nicht binnen 25 s (<code>WACHHUND_MS</code>), schaltet der Wachhund zurück. Wurde die App vorher beendet, erledigt das <code>beimStart()</code> beim nächsten Öffnen, noch bevor die Seite lädt.
+# Eine neue APK setzt alles zurück: Capacitor erkennt die neue Binärfassung und nimmt wieder die eingebaute Web-Fassung.
+
+Textdateien werden für die Prüfsumme mit LF-Zeilenenden gerechnet, weil GitHub Pages sie so ausliefert; sonst passte keine Prüfsumme.
+
+=== Speicherorte ===
+Alles liegt im <code>localStorage</code> des Browsers bzw. der App-WebView, unter Schlüsseln mit drei Präfixen<ref><code>SICHERUNG_PRAEFIXE</code>, <code>src/98b-sicherung.js</code>.</ref>:
+{| class="wikitable"
+! Präfix / Schlüssel !! Inhalt (Auswahl)
+|-
+| <code>chc.cars.v1</code> || Name und Farbe je Auto (nach Gerätekennung)
+|-
+| <code>chc.rollen.v1</code> || gemerkte Rolle, NPC-Stufe, NPC-Motor, Selbstlenkung je Auto
+|-
+| <code>chc.sessions.v1</code> || Sitzungshistorie: Rennen mit allen Rundenzeiten (bis 200 Rennen)
+|-
+| <code>chc.auto.v1</code> || Selbstsicherung aller Regler
+|-
+| <code>chc.presets.v1</code>, <code>chc.menupresets.v1</code>, <code>chc.profile.v1</code> || Presets und Profile
+|-
+| <code>chc.layout.v1</code>, <code>chc.gearbox.v1</code>, <code>chc.cockpit.v1</code>, <code>chc.motorwerkstatt.v1</code> || Fahrzeuglayout, Getriebe, Cockpit, Motorwerkstatt
+|-
+| <code>chc.mp.v1</code>, <code>chc.app.v1</code> || Mehrspieler, App-Update-Einstellung
+|-
+| <code>chc.migrate.*</code> || Merker für einmalige Umstellungen alter Werte
+|-
+| <code>carrera-hybrid-tracks</code> || gespeicherte Strecken
+|-
+| <code>carrera-hybrid-macros</code> || aufgenommene Fahrten
+|-
+| <code>carrera-hybrid-gamepad-bindings-v2</code> (und <code>-p2</code>, <code>-p…</code>, <code>…-pad:</code>) || Tastenbelegung je Spieler und Controller
+|-
+| <code>omegasim-lang</code> || Sprache
+|-
+| <code>omegasim-raum…</code>, <code>omegasim-editor-…</code> || Raum und Editor
+|-
+| <code>omegasim-challenges</code>, <code>omegasim-ch-…</code>, <code>omegasim-bestzeiten</code> || Challenges, Zwischenspeicher der Bestenliste, eigene Bestzeiten
+|-
+| <code>omegasim-meisterschaft</code>, <code>omegasim-studie</code>, <code>omegasim-telemetrie</code>, <code>omegasim-vf-…</code> || Meisterschaft, Studie, Telemetrie, virtuelles Fahren
+|}
+'''Sicherungsdatei.''' Optionen → Daten sichern schreibt alle Schlüssel mit diesen Präfixen in eine JSON-Datei vom Typ <code>omegasim-sicherung</code> (Version 1), dazu den Stand der Regler aus Optionen und Steuerung. Eine Präfixregel statt einer Schlüsselliste ist Absicht: Beim Sammeln fanden sich zwölf Schlüssel im Quelltext und ein dreizehnter (die Tastenbelegung, 1223 Byte Handarbeit) erst im laufenden Browser; eine Liste hätte ihn vergessen. Ein Selbsttest prüft, dass jede bekannte Schlüsselkonstante unter die Regel fällt. In der App schreibt <code>OmegaSicherung</code> die Datei zusätzlich nach ''Dokumente/OmegaSim/OmegaSim-Sicherung.json''; sie überlebt eine Deinstallation, und eine neue Installation öffnet sie über den Dateiwähler. Seit 0.8.96 bittet die App den Browser außerdem, den Speicher dauerhaft zu halten (<code>navigator.storage.persist()</code>).
+
+=== Sprachen (i18n) ===
+Übersetzt wird mit dem '''deutschen Text als Schlüssel'''<ref>Kommentare zu <code>I18N_EN</code>, <code>i18nLookup()</code>, <code>t()</code>, <code>src/10-ble-explorer.js</code>.</ref>:
+# Zwei Wörterbücher: <code>I18N_EN</code> (Deutsch → Englisch, rund 3000 Einträge) und <code>I18N_ES</code> (Deutsch → Spanisch, rund 1100 Einträge).
+# Beim Umschalten läuft ein Baumdurchlauf über Kopfzeile, Hauptteil und Lightbox: Jeder Textknoten wird normalisiert (Leerraum zusammengefasst) und nachgeschlagen; dazu die Attribute <code>title</code>, <code>aria-label</code>, <code>placeholder</code>. Der Originaltext wird in einer <code>WeakMap</code> gemerkt, damit der Weg zurück nach Deutsch exakt ist.
+# Ein Beobachter (<code>MutationObserver</code>) übersetzt jeden später eingefügten Knoten.
+# Text, der im Code entsteht, läuft durch <code>t(deutsch)</code>, dieselbe Tabelle.
+# Spanisch fällt auf Englisch zurück, wo noch keine spanische Übersetzung steht; fehlt beides, bleibt der deutsche Text stehen. Ein fehlender Eintrag fällt so auf, ein leerer Text nicht.
+# Nicht übersetzt werden <code>script</code>, <code>style</code>, <code>code</code>, <code>kbd</code>, alles mit <code>data-i18n-skip</code>, Log-Zeilen und Bytewerte der Protokoll-Doku.
+Der Preis dieser Bauform: Zwei gleiche deutsche Sätze bekommen immer dieselbe Übersetzung; kurze mehrdeutige Wörter stehen deshalb nur mit Zusammenhang im Wörterbuch. Der Vorteil: Am Markup muss nichts ausgezeichnet werden, bei rund 1460 Textstellen.
+
+=== Selbsttest ===
+'''Entwickler → Selbsttest → Selbsttest starten''' führt alle mit <code>stAdd(name, fn)</code> angemeldeten Prüfungen der Reihe nach aus (Fassung 1.2.9: 522). Drei Grundsätze stehen im Kopf der Datei<ref>Kopfkommentar, <code>src/95-selftest.js</code>.</ref>:
+# Jede Zeile nennt ihr '''Maß''', nicht nur „grün“ oder „rot“, damit man sieht, wie knapp es war.
+# „nicht prüfbar“ ist ein eigenes Ergebnis und kein Fehler (etwa Tonschleifen über <code>file://</code>).
+# Die Prüfungen benutzen dieselben Funktionen wie die App, keine nachgebauten.
+Zwischen zwei Prüfungen gibt der Test dem Browser über einen <code>MessageChannel</code> (oder <code>scheduler.yield()</code>) kurz Luft, ohne Zeitgeber, die in einem verborgenen Tab gedrosselt würden. Beispiele: „Aufbau durchgelaufen“ (mehr als 30 Regler, mehr als 400 Wörterbucheinträge), „Protokoll: CRC-8“ (Leerlaufpaket ergibt <code>0x33</code>). Messstände für die Konsole liegen unter <code>OMEGA_TEST</code> (<code>src/93-testbench.js</code>), etwa <code>taktKosten()</code>, <code>sendeUnterLast()</code>, <code>ghostDriveProbe()</code>.
+
+=== Meilensteine ===
+{| class="wikitable"
+! Zeit / Version !! Meilenstein
+|-
+| 03.08.2026 || Projektbeginn (Woche 0 des Versionsschemas)
+|-
+| 13.–26.08.2026 || Mitschnitte der Original-App; Rahmen, CRC-8, Licht- und Bremsbit, Leitplanken-Modus, Streckencodes, die zwei Lesearten
+|-
+| 0.4 || Autopilot bei gelber Flagge, ab 0.4.54 auch in der Einführungsrunde; drei Getriebe
+|-
+| 0.5 || fünf Fahrzeuglayouts, Einspurmodell als Instrument; 0.5.8 ein einziger Sender mit „neuestes Paket merken“
+|-
+| 0.6 || Leseart als eigener Schalter (0.6.14); Zwei-Spieler-Modus auf einem Gerät (ab 0.6.44)
+|-
+| 0.7 || Garage, Menüs komplett mit Gamepad, Druckmuster, Strecke aus einer Aufnahme lernen, Binär-/Hex-Trainer
+|-
+| 0.8 || Menü im Konsolenstil; Android-App (experimentell) mit Bluetooth-Brücke, Host ohne PC und Updates ohne Neuinstallation; Challenges mit Online-Bestenliste; erste Fassung von OmegaBle (0.8.124)
+|-
+| 0.9 || OmegaBle neu gebaut (0.9.2), Sicherungsdatei (0.9.6), Drei-Spieler-Modus (0.9.17), Ziellinie aus Byte 15 (0.9.37), Tempo nachgemessen (0.9.39)
+|-
+| 0.10 || Direktweg in der App und Gamepad direkt (0.10.4), RC-Modus (0.10.5)
+|-
+| 1.0 (ab 12.10.2026) || neues Versionsschema; Ghosts heißen NPCs; Meisterschaft; Fahrgefühle Omega und RC; „Bestzeit“ heißt Time Attack
+|-
+| 1.1 (ab 19.10.2026) || [[Virtuelles Fahren]] (WIP), Studie (heute OmegaLab), NPC-Stufe MAX, automatische Aufstellung, Funklast mit mehreren NPCs verringert, stabiler Funkweg-Rückfall
+|-
+| 1.2 (ab 26.10.2026) || sauberes Trennen von Bluetooth-Verbindungen (1.2.3), Renntypen je Leseart und Fahrgefühl je Spieler (1.2.4), schnellerer Streckenscan (1.2.5), Karten-Autos als Silhouetten (1.2.9)
+|}
+
+== Beispiele ==
+=== Die Versionsnummer 1.2.9 ===
+# Heute ist Montag, 26.10.2026; der Montag der laufenden Woche ist also der 26.10.
+# Tage seit dem 03.08.2026: 84. Woche = 84 ÷ 7 = 12.
+# Woche 12 ≥ 10, also Schema 1.(12 − 10) = '''1.2'''.
+# Push = Zahl der Commits seit Montag 00:00 plus eins (für den 26.10. ist kein Versatz eingetragen). 1.2.9 ist damit die neunte Nummer dieser Woche; welche Commits genau mitgezählt wurden, hängt an der Historie zum Zeitpunkt des Pushs (zusammengefasste oder automatisch erzeugte Commits zählen mit).
+# Ergebnis: '''1.2.9'''. Der <code>versionCode</code> einer APK dieser Fassung wäre 1 × 100&nbsp;000 + 2 × 1000 + 9 = 102&nbsp;009.
+
+=== Was eine Aktualisierung lädt ===
+Angenommen, zwischen zwei Fassungen hat sich nur <code>index.html</code> (rund 6,6 MB) geändert und alle übrigen 637 Dateien (Klänge, Bilder, Symbole) haben dieselbe Prüfsumme. <code>pruefen</code> meldet dann „1 Datei, 6,6 MB“, und <code>laden</code> kopiert 637 Dateien aus der laufenden Fassung und lädt nur eine. Startet die neue Fassung nicht (etwa wegen eines Syntaxfehlers), fehlt nach 25 s die Bestätigung, und die App schaltet auf die vorige zurück; diese Version wird danach nicht mehr angeboten.
+
+=== Ein Text in drei Sprachen ===
+Der Optionsname „Funk-Rundlauf“ steht nur deutsch im HTML. In Englisch findet <code>i18nLookup()</code> den Eintrag „Radio round trip“, in Spanisch „Ronda de radio“. Ein neuer Satz ohne Eintrag bleibt in beiden Sprachen deutsch stehen, bis jemand ihn ins Wörterbuch aufnimmt.
+
+=== Wie viele Pakete im Herzschlag ===
+Ein Rennen mit Spieler 1 und vier NPCs: Spieler 1 sendet alle 45 ms, also 22,2 Pakete je Sekunde. Die NPCs teilen sich ein Budget von rund 30 Paketen je Sekunde (jeder etwa alle 128 ms). Zusammen gehen rund 52 Pakete je Sekunde über den Funkadapter, statt rund 110 wie vor 1.1.24 (siehe [[OmegaBle#Funklast mit mehreren Autos]]).
+
+== Grenzen und bekannte Probleme ==
+* Web Bluetooth gibt es nur in Chrome und Edge; auf iPhone und iPad kann OmegaSim keine Autos fahren.
+* Im Browser verlangt Bluetooth für jedes Auto einen Klick; automatisches Verbinden gibt es nur in der App.
+* Ein künftiges Firmware-Update der Autos kann OmegaSim unbrauchbar machen (siehe [[Firmware]]).
+* <code>localStorage</code> kann vom Browser geräumt werden; ohne Sicherungsdatei sind Rundenzeiten und Strecken dann weg.
+* Die Installation als PWA löst die Mehrspieler-Sperre nicht: Web Bluetooth verlangt einen sicheren Kontext (<code><nowiki>https://</nowiki></code>, <code>localhost</code> oder <code>file://</code>), und eine Adresse wie <code><nowiki>http://192.168.x.x</nowiki></code> im WLAN ist keiner (siehe [[Mehrspieler]]).
+* Viele NPCs belasten den Funkadapter; Probleme mit mehreren NPCs sind bisher Funklast (siehe [[OmegaBle]]).
+* Spanisch ist weniger vollständig als Englisch und fällt dort auf Englisch zurück.
+
+== Versionsgeschichte ==
+{| class="wikitable"
+! Version !! Änderung (Auswahl aus den Patchnotes)
+|-
+| 0.7 || Navigation aufgeräumt, Auto-Verwaltung in der Garage, Info-Seiten als Kacheln
+|-
+| 0.8 || Android-App (experimentell); Titelseite verlinkt die neueste APK
+|-
+| 0.9 || alles bleibt gespeichert, Sicherungsdatei in der App; Auswahlfelder als „◀ Wert ▶“
+|-
+| 0.9.30 || Versionsschema mit festem Projektstart nach Zusammenfassen der Historie
+|-
+| 1.0 || Versionsschema 1.&lt;Woche&gt;.&lt;Push&gt;; Ghosts heißen NPCs, auch auf Englisch und Spanisch
+|-
+| 1.1 || Tastatur mit WASD, Testtasten nur im Entwicklermodus; Studie für alle sichtbar
+|-
+| 1.2 || Studie heißt OmegaLab; Bluetooth sauber trennen; Renntypen je Leseart
+|}
+
+== Einzelnachweise ==
+<references />
+
+== Siehe auch ==
+* [[Aufbau von OmegaSim]]
+* [[Carrera HYBRID]]
+* [[Original-App]]
+* [[OmegaBle]]
+* [[Firmware]]
+* [[Fahrverhalten]]
+* [[Rennarten]]
+* [[Mehrspieler]]
+* [[Mitmachen]]
+* [[Vibe-Coding]]
+* [[Glossar]]
+
+== Quellen im Code ==
+* <code>tools/build.py</code>: <code>pieces()</code>, <code>build()</code>, <code>build_sw()</code>, <code>check_klammern()</code>
+* <code>tools/bump_version.py</code>: <code>version()</code>, <code>PROJEKT_START</code>, <code>PUSH_VERSATZ</code>, <code>VERSION1_WOCHE</code>
+* <code>tools/app_update.py</code>, <code>tools/apk_www.py</code>, <code>tools/sw.js.in</code>, <code>app-update.json</code>
+* <code>.github/workflows/android.yml</code>
+* <code>android-app/…/OmegaUpdatePlugin.java</code>: <code>beimStart()</code>, <code>pruefen()</code>, <code>laden()</code>, <code>wachhund()</code>, <code>bestaetigen()</code>, <code>APK_STUFE</code>, <code>WACHHUND_MS</code>
+* <code>android-app/…/OmegaSicherungPlugin.java</code>, <code>MainActivity.java</code>
+* <code>src/97b-app.js</code>: <code>appAnbinden()</code>, <code>pruefen()</code>
+* <code>src/98b-sicherung.js</code>: <code>SICHERUNG_PRAEFIXE</code>, <code>SICHERUNG_TYP</code>
+* <code>src/10-ble-explorer.js</code>: <code>I18N_EN</code>, <code>I18N_ES</code>, <code>i18nApply()</code>, <code>setLang()</code>, <code>t()</code>
+* <code>src/95-selftest.js</code>: <code>stAdd()</code>, <code>ST_TESTS</code>; <code>src/93-testbench.js</code>: <code>OMEGA_TEST</code>
+* <code>src/20-protocol.js</code>: <code>controlHeartbeat()</code>, <code>CONTROL_SEND_INTERVAL_MS</code>
+* <code>src/91-pwa.js</code>
+
+== Weblinks ==
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Software]]

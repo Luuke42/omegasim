@@ -71,6 +71,8 @@
       // selbst haelt. Sie wird angeschrieben, damit man nicht versehentlich darin faehrt.
       b.classList.toggle('warn', !rail);
     }
+    // v1.2.4: die Renntypen folgen dem Sensormodus (70-race.js, zur Laufzeit da).
+    if (typeof renntypenFiltern === 'function') { try { renntypenFiltern(); } catch (e) { /* beim Laden */ } }
     return rail;
   }
 
@@ -674,8 +676,12 @@
       if (ok && st.pacLeistung) setTimeout(() => padRumble(0.2, 0.9, 60, 'rutschen', wer), 90);
       return ok;
     }
+    // v1.1.42 GEMELDET: "Mein Gamepad rumbled dauerhaft beim Gas geben." pacUnter enthaelt auch die
+    // Lenkentlastung unter Gas (pacGasFaktor) - ohne jede Kurve stand der Zustand bei Gas auf 'unter'. Gebrummt
+    // wird jetzt nur, wenn die Front wirklich ueber der Haftgrenze ist (pacNutzV > 1), eigene Art 'untersteuern'.
+    if (!(st.pacNutzV > 1)) return false;
     const k = Math.min(1, (1 - st.pacUnter) * 4);
-    return padRumble(0, 0.18 + 0.4 * k, 260, 'rutschen', wer);
+    return padRumble(0, 0.18 + 0.4 * k, 260, 'untersteuern', wer);
   }
 
   if ($('setting-countersteer')) {
@@ -795,7 +801,8 @@
   // Schalter ergeben, und mit sechs Kaestchen waeren es sechs.
   const VIB_KAESTCHEN = { 'vib-schalt': 'schalt', 'vib-abs': 'abs', 'vib-crash': 'crash',
                           'vib-abseits': 'abseits', 'vib-box': 'box',
-                          'vib-meldung': 'meldung', 'vib-rutschen': 'rutschen' };
+                          'vib-meldung': 'meldung', 'vib-rutschen': 'rutschen',
+                          'vib-untersteuern': 'untersteuern', 'vib-quietschen': 'quietschen' };
   Object.keys(VIB_KAESTCHEN).forEach((id) => {
     const el = $(id);
     if (!el) return;
@@ -2405,11 +2412,11 @@
       // Welches Rad gerade abgebaut ist. Beim Boxenstopp laeuft der Schrauberton ueber die
       // ganze Wechseldauer und man hoert darin vier Ansaetze - also zeigt die Anzeige vier
       // Ausfaelle, einen je Rad. Ohne das sieht man vier Toene und keine Bewegung.
-      const abIdx = typeof pitWheelOff === 'function' ? pitWheelOff() : -1;
+      const abListe = typeof pitWheelsOff === 'function' ? pitWheelsOff() : [];
       for (let i = 0; i < 4; i++) {
         const el = $(REIFEN[i]);
         if (el && el.firstChild) {
-          const ab = i === abIdx;
+          const ab = abListe.includes(i);
           el.classList.toggle('t4-ab', ab);
           const w = aus ? 0 : (st.tyreWear4 ? st.tyreWear4[i] : st.tyreWear);
           // Abgebaut heisst leer: es ist kein Reifen da, dessen Profil man zeigen koennte.
@@ -2546,7 +2553,8 @@
     if (posEl) {
       const p = raceCockpitPosition();
       posEl.hidden = !p;
-      if (p) posEl.textContent = 'P' + p.pos + '/' + p.von;
+      // v1.2.12 BESTELLT: "#X/Y format" statt P3/6.
+      if (p) posEl.textContent = '#' + p.pos + '/' + p.von;
     }
     $('race-lap-list').innerHTML = laps.slice().reverse().slice(0, 10).map(l =>
       `<li><span>${l.lap}</span><span${l.ms === best ? ' class="gt3-ok"' : ''}>${formatLapTime(l.ms)}</span></li>`
@@ -2599,11 +2607,12 @@
   // nicht)." Rundenrennen und Endurance: dieselbe Reihenfolge wie die Rennuebersicht (ovDaten: Runden,
   // dann Gesamtzeit, dann Ort), damit Cockpit, Uebersicht und Ergebnis denselben Platz nennen.
   // Qualifying: die beste Runde, ohne Runde hinten (dort nach dem Ort). Gezaehlt wird Auto 1.
+  // v1.2.12: Time Attack ebenso nach Bestzeit (gefragt: "Auch dort, nach Bestzeit").
   function raceCockpitPosition() {
     if (raceState !== 'racing' && raceState !== 'finished') return null;
-    if (raceMode !== 'laps' && raceMode !== 'endurance' && raceMode !== 'qualifying') return null;
+    if (raceMode !== 'laps' && raceMode !== 'endurance' && raceMode !== 'qualifying' && raceMode !== 'bestzeit') return null;
     let reihe;
-    if (raceMode === 'qualifying') {
+    if (raceMode === 'qualifying' || raceMode === 'bestzeit') {
       const ortVon = (c) => (typeof c.ort === 'number' ? c.ort : -Infinity);
       reihe = raceAllCars().map((c) => ({ rolle: c.role, beste: c.laps.length ? Math.min.apply(null, c.laps.map((l) => l.ms)) : Infinity, ort: ortVon(c) }))
         .sort((a, b) => (a.beste - b.beste) || (b.ort - a.ort));
@@ -2889,7 +2898,10 @@
   // In der Haarnadel ist das Auto gerade so schnell genug, dass es noch Balken und Querlage bestimmen
   // kann. Schiebe die Mindestgeschwindigkeit leicht ueber das (2-3 %)." Mal formationPace (0,35):
   // gerade 0,21 -> 0,235, Haarnadel 0,14 -> 0,165 der Hoechstgeschwindigkeit (je 2,5 Prozentpunkte).
-  const SCAN_TEMPO = 0.67, SCAN_TEMPO_HAARNADEL = 0.47;
+  // v1.2.5 BESTELLT: "Streckenscan-Geschwindigkeit etwas erhoehen (ausser in der Haarnadel), da es sonst zu Fehllesungen
+  // kommt." Gerade 0,80 statt 0,67 (Delta 36 statt 30), normale Kurven bleiben bei 0,67 (SCAN_TEMPO_KURVE), die
+  // Haarnadel bei 0,47 (Delta 21).
+  const SCAN_TEMPO = 0.80, SCAN_TEMPO_KURVE = 0.67, SCAN_TEMPO_HAARNADEL = 0.47;
   const scanStopp = { car: null, bis: 0 };
   function scanAnhalten(car) { if (car) { scanStopp.car = car; scanStopp.bis = Date.now() + 1500; } }
   // ---- GREIFT DER AUTOPILOT GERADE? (v1.0.25) --------------------------------------
@@ -2982,7 +2994,7 @@
       // Haarnadel ist erst zu erkennen, wenn das Auto schon auf ihr steht. Deshalb ueberall
       // langsamer (60 statt 85 %, in der Haarnadel 40 statt 65 %); auf der Bahn liest das Auto
       // die Codes auch darunter (die Schwelle 0,35 gilt fuer das gedruckte Muster).
-      const ziel = formationPace() * (scanInHaarnadel(meinAuto) ? SCAN_TEMPO_HAARNADEL : SCAN_TEMPO);
+      const ziel = formationPace() * scanTempoFaktor(meinAuto);
       const geregelt = ghostSpeedControl(regler, ziel, v, dt);
       return { grund: 'scan', throttle: geregelt.throttle, brake: geregelt.brake,
                steer: 0, lenkt: !abseitsJetztFuer(wer || 1) };
@@ -3441,7 +3453,8 @@
   // Tempo, eigene Reifen- und Bremsentemperatur - alles, was den Wagen fahren laesst.
   function physicsStepVon(z) {
     z.apTakt = false;
-    if (!physicsEnabled) {
+    // v1.2.4: eigener Modus je Spieler (spielerPhysikAn, 49-spieler.js).
+    if (!spielerPhysikAn(z)) {
       if (!autopilotGreiftFuer(z.nr)) { z.lastTime = null; return; }
       z.apTakt = true;
       if (z.lastTime === null) apEinstieg(z.motor, Math.max(0, z.throttle || 0));
@@ -3543,10 +3556,14 @@
   // dieselben Objekte. Sonst schriebe ein Schaltvorgang von Spieler 2 in die Gaenge von
   // Spieler 1 (genau diese Falle steht bei den Ghosts schon einmal beschrieben).
   function physEngine2Abgleichen() {
+    // v1.2.4: waehrend ein Preset fuer einen Zusatzspieler durchgerechnet wird (presetSchnappschuss), stehen
+    // die Regler kurz auf einem fremden Stand - nicht abgleichen.
+    if (typeof window.__presetSchnappLaeuft === 'function' && window.__presetSchnappLaeuft()) return;
     Object.assign(physEngine2.config, physEngine.config);
     if (Array.isArray(physEngine.config.gears)) {
       physEngine2.config.gears = physEngine.config.gears.map(g => Object.assign({}, g));
     }
+    spielerGefuehlUeberlagern(2, physEngine2);
     // Und die weiteren Plaetze (v0.9.17): dieselbe Abstimmung fuer alle.
     for (let n = 3; n <= SPIELER_MAX; n++) zusatzMotorAbgleichen(zusatzPlatz(n).motor);
   }
@@ -3574,12 +3591,21 @@
   // WAS NICHT UEBER config LAEUFT, steht weiter unten in spielerZweiSenden(): die
   // Hoechstgeschwindigkeit und die Batteriekompensation sitzen im Sendeweg von Auto 1, den
   // Auto 2 gar nicht nimmt.
+  let abgleichUhr = null;
   for (const art of ['input', 'change']) {
     document.addEventListener(art, (e) => {
       if (!zweiSpieler) return;
+      if (typeof window.__presetSchnappLaeuft === 'function' && window.__presetSchnappLaeuft()) return;
       const el = e.target;
       if (!el || !el.closest || !el.closest('#tab-options, #tab-race')) return;
-      physEngine2Abgleichen();
+      // v1.2.4: hat ein Zusatzspieler ein eigenes Preset, ist dessen Abstimmung nach einer Aenderung neu zu rechnen -
+      // gesammelt nach 250 ms, damit ein gezogener Schieber nicht bei jedem Schritt alle Regler zweimal setzt.
+      const eigen = typeof window.__spielerPreset === 'function'
+        && [2, 3].some((n) => window.__spielerPreset(n));
+      if (!eigen) { physEngine2Abgleichen(); return; }
+      if (typeof window.__presetSchnappLeeren === 'function') window.__presetSchnappLeeren();
+      clearTimeout(abgleichUhr);
+      abgleichUhr = setTimeout(physEngine2Abgleichen, 250);
     }, true);
   }
 

@@ -586,7 +586,7 @@
     if (!z.car) return;
     physicsStepVon(z);
     // v1.0.25: auch im Modus "Aus" (RC) die Physik-Ausgabe, solange der Autopilot faehrt.
-    const physJetzt = physicsEnabled || !!z.apTakt;
+    const physJetzt = spielerPhysikAn(z) || !!z.apTakt;   // v1.2.4: eigener Modus je Spieler
     // v1.1.3: RC wie Auto 1 - Lenkung roh, Gas durch rcGas (vorher fuhr die Bremse sofort rueckwaerts).
     let steer = physJetzt ? z.outSteer : z.steer;
     if (!z.rcLage) z.rcLage = rcLageNeu();

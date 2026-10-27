@@ -179,7 +179,8 @@ function zeileZuEintrag(sp, z) {
 // gt3, f1, realgt3). Alte Zeilen haben sie nicht und gelten als pro. Eine vorhandene Tabelle
 // bekommt die Kopfzelle beim ersten Eintrag nachgetragen.
 const C_BLATT = 'Community', C_KOPF = ['zeitpunkt', 'id', 'code', 'name', 'geraet', 'preset'];
-const C_PRESETS = ['arcade', 'pro', 'gt3', 'f1', 'realgt3'];
+// v1.2.4: 'propacejka' (Pacejka) dazu - dieselbe Liste wie COMMUNITY_PRESETS in src/72-challenges.js.
+const C_PRESETS = ['arcade', 'pro', 'gt3', 'f1', 'realgt3', 'propacejka'];
 // v0.9.62: runden_ms (Rundenzeiten je Lauf) mit, damit die 3er-Serie auch fuer Community
 // Strecken rechnen kann. Alte Zeilen haben die Spalte nicht und gelten als leer.
 const CZ_BLATT = 'CommunityZeiten', CZ_KOPF = ['zeitpunkt', 'id', 'zeit_ms', 'fahrer', 'geraet', 'runden_ms'];

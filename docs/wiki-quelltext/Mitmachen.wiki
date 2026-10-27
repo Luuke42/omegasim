@@ -1,0 +1,48 @@
+{{Stand|app=1.2.5|appdatum=26.10.2026}}
+'''Mitmachen''' im {{SITENAME}}-Wiki heißt: Artikel schreiben, Fehler verbessern, Screenshots ergänzen oder Erfahrungen vom Tisch eintragen. Jeder angemeldete Nutzer kann Seiten bearbeiten. Diese Seite erklärt die Regeln und den Ablauf, einmal ohne und einmal mit KI-Unterstützung.
+
+== Grundsätze ==
+* '''Belegt statt vermutet.''' Was in einem Artikel steht, sollte sich in der App, im Quellcode oder durch einen Versuch am Tisch nachprüfen lassen. Unsicheres als solches kennzeichnen („noch nicht gesichert“).
+* '''Stand angeben.''' Jede Seite beginnt mit der Vorlage <code><nowiki>{{Stand|app=…|appdatum=…}}</nowiki></code>. Die App-Version steht unten auf dem Startbildschirm von OmegaSim. Wer einen Artikel inhaltlich überarbeitet, aktualisiert die Angabe.
+* '''Sachlich wie ein Lexikon.''' Erster Satz mit dem fett gesetzten Stichwort und einer kurzen Erklärung, danach Abschnitte. Bedienschritte als nummerierte Liste, Menüpfade fett: '''Optionen → Fahrgefühl'''.
+* '''KI offenlegen.''' Wurde ein Text ganz oder teilweise mit KI erstellt, bleibt der Hinweis der Vorlage <code>Stand</code> stehen (Parameter <code>ki=</code> für das Werkzeug).
+* '''Fremde Inhalte nur mit Erlaubnis.''' Keine Bilder oder Texte ohne klare Lizenz.
+
+== Ohne KI ==
+# '''Konto anlegen''' und anmelden (oben rechts).
+# '''Seite suchen''' oder über einen roten Link eine neue anlegen. Gewünschte, noch fehlende Seiten stehen unter [[Spezial:Gewünschte Seiten]].
+# '''Bearbeiten''' wählen, Text ändern, unten kurz zusammenfassen, was geändert wurde, und speichern.
+# Bei größeren Umbauten zuerst auf der '''Diskussionsseite''' des Artikels fragen.
+
+=== Bilder ===
+* '''Screenshots''' von OmegaSim stehen wie die App unter der MIT-Lizenz und dürfen hochgeladen werden ([[Spezial:Hochladen]]). In der Beschreibung angeben: App-Version, Datum, was zu sehen ist.
+* '''Eigene Fotos''' (Auto, Bahn, Zubehör): in der Beschreibung Urheber und Lizenz nennen, z. B. „eigenes Foto, CC BY 4.0“.
+* '''Fremde Fotos''' nur mit Quelle und einer Lizenz, die die Weitergabe erlaubt. Produktfotos von Herstellern gehören nicht dazu.
+* Auf Fotos keine Personen ohne deren Einverständnis, keine Kennzeichen, keine privaten Daten.
+* Bilder in Artikeln: <code><nowiki>[[Datei:Name.png|mini|Bildunterschrift]]</nowiki></code>.
+
+== Mit KI ==
+KI-Assistenten (Claude, ChatGPT, Gemini …) können Entwürfe schreiben, Quellcode durchsuchen und Texte vereinheitlichen. Damit das Wiki verlässlich bleibt:
+# '''Die KI aus Quellen arbeiten lassen.''' Am besten gibt man ihr den Quellcode ([https://github.com/Luuke42/omegasim Luuke42/omegasim]) oder die Patchnotes in der App (unter '''Optionen''') und lässt sie nur beschreiben, was dort steht.
+# '''Ihr diese Seite und die [[Anleitung für KIs]] geben.''' Dort stehen Stil, Pflichtbestandteile und Grenzen.
+# '''Selbst prüfen.''' Mindestens Menüpfade, Namen von Schaltern und Standardwerte in der App nachsehen. Zahlen, die die KI nennt, im Code oder in der App wiederfinden.
+# '''Hinweis stehen lassen.''' Die Vorlage <code>Stand</code> kennzeichnet den Artikel als mit KI erstellt.
+# '''Keine Zugangsdaten an die KI geben.''' Anmelden und Speichern macht man selbst.
+
+== Zur App beitragen ==
+* '''Fehler melden:''' [https://github.com/Luuke42/omegasim/issues Issues auf GitHub] oder in der Community. Hilfreich sind App-Version, Gerät, Browser bzw. Android-App, Fahrgefühl und die genauen Schritte.
+* '''Code beitragen:''' Pull Request auf GitHub. Wie das Projekt aufgebaut ist (Quellen in <code>src/</code>, Bauen mit <code>tools/build.py</code>, Selbsttest), steht in der [[Anleitung für KIs]] und gilt genauso für Menschen.
+* '''Zubehör:''' Eigene Hardware wie [[CH ControlBox]] oder [[Startampel]] bekommt eine eigene Seite mit Funktion, Bedienung, Fehlersuche und Credits.
+
+== Siehe auch ==
+* [[Anleitung für KIs]]
+* [[OmegaSim]]
+* [[Vorlage:Stand]]
+
+== Weblinks ==
+* [https://github.com/Luuke42/omegasim OmegaSim auf GitHub (Luuke42)]
+* [https://luuke42.github.io/omegasim/ OmegaSim im Browser spielen]
+* [https://www.mediawiki.org/wiki/Help:Formatting/de Hilfe zur Textgestaltung (MediaWiki)]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Mitmachen]]

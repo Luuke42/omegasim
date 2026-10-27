@@ -101,14 +101,14 @@ def check_dict(quelle):
     zeilen = quelle.split(chr(10))
     start = None
     for n, z in enumerate(zeilen):
-        if 'I18N_EN' in z and '=' in z:
+        if re.match(r'^\s*(?:const|let|var)\s+I18N_EN\s*=\s*\{', z):
             start = n
             break
     if start is None:
         return []
     ende = len(zeilen)
     for n in range(start + 1, len(zeilen)):
-        if zeilen[n] == '  };':
+        if zeilen[n].strip() == '};':
             ende = n
             break
 

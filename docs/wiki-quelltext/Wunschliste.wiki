@@ -1,0 +1,89 @@
+{{Stand|app=1.2.14|appdatum=27.10.2026}}
+Die '''Wunschliste''' sammelt Funktionen, die für [[OmegaSim]] gewünscht, aber noch nicht gebaut sind, und dazu die Funktionen, die schon in der App stecken, aber noch als ''WIP'' (in Arbeit) oder ''experimentell'' gekennzeichnet sind. Wünsche aus der Community können hier ergänzt werden, siehe [[Mitmachen]].
+
+== Auf einen Blick ==
+{| class="wikitable"
+! Status !! Bedeutung
+|-
+| gewünscht || noch nicht begonnen
+|-
+| in Planung || Lösungsweg beschrieben, noch nicht gebaut
+|-
+| eingereicht || als Pull Request vorgeschlagen, noch nicht übernommen
+|-
+| zurückgestellt || bewusst vorerst nicht verfolgt
+|-
+| WIP / experimentell || in der App vorhanden, aber noch nicht fertig geprüft
+|}
+
+== Grundlagen ==
+* '''WIP''' (englisch ''work in progress'') heißt: Die Funktion ist eingebaut, aber Verhalten, Texte oder Standardwerte können sich noch ändern. In der App steht dann ein gelbes Etikett „WIP“ oder „experimentell“ neben der Option.
+* Neue Funktionen bekommen dieses Etikett von Anfang an und verlieren es erst, wenn sie am echten Auto geprüft sind.
+* Wünsche werden in den Patchnotes und im Quellcode als „BESTELLT:“ vermerkt, siehe [[Vibe-Coding]].
+
+== Gewünschte Funktionen ==
+{| class="wikitable sortable"
+! Wunsch !! Status !! Beschreibung
+|-
+| Fahrermodell nach Art des Drivatars || gewünscht || Ein NPC lernt aus 30 bis 50 sauberen Runden je Strecke Tempo je Teiltyp, Bremspunkte, Querlinie und Fehlerrate eines echten Fahrers und fährt danach wie dieser.
+|-
+| Challenger mit Seitengewohnheiten || gewünscht || Der Challenger in Time Attack lernt, auf welcher Seite der Spieler über mehrere Runden fährt, und wählt daraus seine Überholstellen.
+|-
+| Rennpause || eingereicht || Rennen anhalten mit Overlay, Pausentaste am Controller und Wiederanlauf-Ampel (Pull Request von Playdater1974; braucht noch Fixes und einen Test am Auto).
+|-
+| Rennintro || eingereicht || Gesprochene Vorstellung von Modus, Startaufstellung und Wetter vor der Startampel (Pull Request von Playdater1974, wird gerade übernommen).
+|-
+| Statistikbereinigung || eingereicht || Fahrzeugstatistiken, einzelne Sitzungen und zu kurze Runden löschen, mit Vorschau und Rückgängig (Pull Request von Playdater1974, wird gerade übernommen).
+|-
+| Autowechsel mitten im Spiel || gewünscht || Ein Spieler wechselt während einer Sitzung auf ein anderes Auto. Dafür müssten Physik, Ortung, Runden und Dashboard umziehen; ob die Firmware ein ungenutztes Auto abdunkelt, ist am Tisch zu prüfen.
+|-
+| Silhouetten für weitere Modelle || gewünscht || Audi, McLaren, Mercedes und VW Käfer haben auf der Karte noch ein Rechteck; Porsche, Ford, BMW, Ferrari und der Formelwagen haben seit 1.2.9 eigene Silhouetten.
+|-
+| Tieferes Schaltgeräusch || in Planung || Ein dumpferes Geräusch beim Runterschalten und für alle Motoren, wie beim Hochschalten des Mustang v2. Vorschläge liegen zum Anhören vor.
+|-
+| Live-Gegner über das Internet || zurückgestellt || Ein Gegner fährt in Echtzeit von einem anderen Ort aus mit.
+|-
+| Meisterschaft im WLAN-Mehrspieler || in Planung || Gebaut, aber auf echten Geräten noch nicht getestet.
+|-
+| Firmware-Version auslesen || gewünscht || OmegaSim liest die Firmware-Version der Autos nicht aus; damit ließe sich der Stand jedes Artikels genauer angeben, siehe [[Firmware]].
+|}
+
+== In Arbeit (WIP und experimentell) ==
+Stand 1.2.14, gesammelt aus allen Etiketten der App.
+{| class="wikitable"
+! Bereich !! Funktionen
+|-
+| Fahren und Garage || Automatisch aufstellen; Reinigungsfahrzeug; NPC-Stufe MAX; Virtuell fahren; Fahrgefühl RC; Meisterschaft „Alle: RC“; Strecke im Regenradar
+|-
+| Renneinstellungen || ganze Seite; Time Attack, Knockout, Demolition Derby; Sektoren; Fliegender Start; Weiche Reifen verboten; Einparken (Art, Gas der Safety-Car-Folge, Einlenkstärke, Impulsdauer, Tempo); Challenger und Gummiband; Strafe für Rammer
+|-
+| Allgemein || Cockpit „GT3: schwarze Kacheln“; Pacejka- und RC-Modus mit Übersteuern, Haftgrenze und Gegensteuern; Akku-Ausgleich; Boxen-Auslöser „Doppelter Ausdruck“; Boxen-Minigame; Nur der Rammer bremst
+|-
+| Fahrgefühl || Fahrhilfe; Rückwärts mit Gas und Bremse; Mischungsunterschied; Windschatten in Kurven; Lenkkennlinie, voller Einschlag, Lenkkraft unter Gas, Lenkdämpfung; Gas- und Bremskennlinie; Anfahrschub; Gewichtsverlagerung und ihre Trägheit
+|-
+| Ton, Vibration, Ansagen || Schaltklang alt; NPC-Motorklang alt; acht Motorgruppen mit ungeprüften Klängen; Trigger-Vibration; DualSense-Trigger; Rennstand- und Ergebnisansage; Namensart
+|-
+| NPCs || Feld auffächern; Überholmanöver je Runde; Tempo-Streuung; Staffelstart; zu zweit in Kurven; Höchsttempo in der Haarnadel; MAX-Profil; Rückweg mit Lenkung; NPC-Boxenstopp; Linienmodell SIMULATOR
+|-
+| Safety Car || Parkplatz; Ein- und Ausparken; Gas beim Ausparken; Einpark-Teil
+|-
+| Weitere Seiten || Telemetrie; OmegaLab; Presets je Menü; Profile; Fahrstil-Statistik
+|-
+| Strecke || Raum; Raumgestalter; Druckvorlagen (Bahn zum Auslegen, Trapez-Muster)
+|-
+| Challenges, Mehrspieler, App || Challenges, Community-Bestzeiten und Community-Strecken; WLAN-Mehrspieler (Host, Info-Schirm, Rennen für alle, Bereit-Abfrage); App und Updates; Entwicklertools (Zahlensysteme, Aufnahme-Modus, Strecke aus der Aufnahme)
+|}
+
+== Wunsch eintragen ==
+Neue Zeile in die Tabelle „Gewünschte Funktionen“: kurzer Name, Status „gewünscht“ und ein bis zwei Sätze, was die Funktion tun soll und warum. Wer den Wunsch auch an den Autor schicken will, meldet ihn als Issue auf GitHub (Link auf der [[Hauptseite]]).
+
+== Siehe auch ==
+* [[OmegaSim]]
+* [[Andere Apps und Initiativen]]
+* [[Mitmachen]]
+
+== Weblinks ==
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Mitmachen]]

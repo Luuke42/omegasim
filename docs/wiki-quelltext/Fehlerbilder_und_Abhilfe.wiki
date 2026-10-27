@@ -1,0 +1,104 @@
+{{Stand|app=1.2.14|appdatum=27.10.2026}}
+'''Fehlerbilder und Abhilfe''' sammelt typische Störungen, die beim Fahren mit [[OmegaSim]] auftreten können, mit ihren Ursachen und dem, was man dagegen tun kann. Die meisten haben mit der Funkverbindung zum [[Carrera HYBRID|Auto]] zu tun: Ein Auto, das verspätet reagiert, auf der Karte springt oder nicht mehr erreichbar ist, ist fast immer ein Funkproblem und kein Fehler im Fahrmodell.
+
+== Auf einen Blick ==
+{| class="wikitable"
+! Fehlerbild !! zuerst prüfen !! Abschnitt
+|-
+| Auto reagiert spürbar verspätet || '''Optionen → System → Funk-Rundlauf''': Zähler „gesperrt“, „verworfen“, Weg „OmegaBle direkt“ || [[#Hohe Latenz|Hohe Latenz]]
+|-
+| Autos springen auf der Karte vor und zurück || Streckenscan aktuell? Teile im Editor wie auf dem Tisch? || [[#Hin- und herspringende Autos|Springen auf der Karte]]
+|-
+| Mit einem NPC gut, mit mehreren chaotisch || Anzahl gleichzeitig verbundener Autos || [[#Funklast|Funklast]]
+|-
+| Auto leuchtet hell, ist aber nicht verbunden || '''Garage → Alle trennen''' || [[Keine Reaktion des Fahrzeugs]]
+|-
+| Kein Verbinden möglich, Knopf fehlt || Browser (Chrome oder Edge) || [[#Kompatible Browser|Browser]]
+|-
+| Nach Neuverbinden eine Weile langsam || App-Version (ab 1.2.3 behoben) || [[#Hohe Latenz|Hohe Latenz]]
+|}
+
+== Grundlagen ==
+* '''Latenz''' ist die Zeit zwischen einer Eingabe (Gas, Lenkung) und der Reaktion des Autos. OmegaSim schickt jedem Auto alle 45&nbsp;ms ein Fahrpaket. Kommt ein Paket zu spät oder gar nicht an, fährt das Auto mit dem letzten Befehl weiter, und das fühlt sich wie Verzögerung an. Mehr dazu unter [[Bluetooth Low Energy]].
+* '''Ortung ohne Messung:''' Das Auto meldet nicht, wo es ist. Es meldet nur, welches Streckenmuster es gerade liest, und zählt die überfahrenen Teile. Wo genau auf einem Teil es steht, schätzt OmegaSim aus der Zeit seit dem Teilwechsel und der gemessenen Dauer dieses Teiltyps. Fällt eine Meldung aus oder stimmt die Karte nicht mit der Bahn überein, liegt der Punkt auf der Karte daneben.
+* '''Verbindungspriorität:''' Android entscheidet, wie oft es mit einem Bluetooth-Gerät spricht (Verbindungsintervall). OmegaSim fordert hohe Priorität an. Fällt das Handy auf ein langsameres Intervall zurück, steigt die Latenz.
+
+== Hohe Latenz ==
+=== Woran man sie erkennt ===
+* Das Auto lenkt oder bremst erst einen Moment nach der Eingabe.
+* Unter '''Optionen → System''' zeigt der '''Funk-Rundlauf''' hohe Werte, viele „verworfen“ oder „wiederholt“, oder der Zähler „gesperrt“ steigt.
+
+=== Ursachen ===
+{| class="wikitable"
+! Ursache !! Erklärung !! seit wann behoben bzw. Abhilfe
+|-
+| Browser statt Android-App || Im Browser läuft jeder Befehl über Web Bluetooth und den Hauptthread der Seite. Die App schreibt über das Plugin [[OmegaBle]] direkt. || Android-App nutzen
+|-
+| Sendesperre nach Neuverbinden || Schreibversuche ins Leere lösten eine Sperre aus, die nach dem Neuverbinden weiterlief. || 1.2.3: kein Schreiben während des Neuverbindens, Sperre wird beim Verbinden gelöscht
+|-
+| Langsames Verbindungsintervall || Android fiel mit mehreren Autos auf ein langsames Intervall zurück. || 1.2.3: OmegaSim beobachtet den Meldetakt und fordert die Priorität neu an
+|-
+| Funklast || siehe [[#Funklast|Funklast]] || weniger gleichzeitig verbundene Autos
+|-
+| Hintergrund und Energiesparen || Android drosselt Apps, die nicht im Vordergrund sind oder deren Akku-Nutzung optimiert wird. || siehe [[#Android-Einstellungen für mehr Tempo|Android-Einstellungen]]
+|}
+
+=== Funklast ===
+Alle Autos teilen sich einen Bluetooth-Adapter im Handy. Mit einem Spieler und mehreren NPCs sind das rund 110 Pakete je Sekunde. Seit 1.1.24 begrenzt OmegaSim die NPCs auf zusammen etwa 30 Pakete je Sekunde. Zeigen sich Probleme erst ab dem zweiten oder dritten NPC, ist das fast immer die Funklast: Dann hilft es, einen NPC weniger zu verbinden, andere Bluetooth-Geräte zu trennen und die Fehlermeldung mit den Werten aus dem Funk-Rundlauf zu schicken.
+
+== Hin- und herspringende Autos ==
+=== Woran man es erkennt ===
+Ein Auto auf der Karte (Rennübersicht oder Regenradar im Cockpit) springt ein Stück zurück, bleibt stehen und holt dann auf, oder es steht in einer Kurve, obwohl es auf der Geraden fährt.
+
+=== Ursachen ===
+* '''Die Karte passt nicht zur Bahn.''' Ist die Strecke im Editor anders aufgebaut als auf dem Tisch, zählt OmegaSim richtig, zeichnet aber am falschen Ort. Abhilfe: '''Strecke → Streckenscan''' neu fahren.
+* '''Ausgefallene Kachelmeldungen.''' Bei Funklast kann eine Meldung fehlen. Seit 1.2.3 zählt OmegaSim den Unterschied des Kachelzählers aus dem Auto, also auch zwei oder drei Teile auf einmal, statt bei jeder Meldung um eins weiterzuzählen.
+* '''Geschätzte Lage auf dem Teil.''' Seit 1.2.3 nimmt der Punkt des eigenen Autos die gemessene Dauer je Teiltyp statt fester 800&nbsp;ms, und NPC-Punkte warten am Ende des alten Teils, bis der Zähler nachzieht, statt zurückzuspringen.
+* '''Engstelle als zweites Start/Ziel.''' Bis 1.2.13 hat der Streckenscan auf der Bahn eine Engstelle (Code 0x0A) als zusätzliches Start/Ziel eingetragen, siehe [[Strecke]]. Seit 1.2.14 wird jedes Teil nach Leseart übersetzt. Wer eine Strecke mit Engstelle vorher gescannt hat, sollte neu scannen.
+
+== Verbindungsprobleme ==
+* '''Helles Licht, aber nicht verbunden:''' Meist hält das Handy noch eine alte Verbindung. Seit 1.2.3 trennt OmegaSim bei jedem Fehler sauber und räumt beim Start auf. '''Garage → Alle trennen''' trennt auch Autos, die verbunden, aber nicht in der Garage sind. Hilft das nicht, siehe [[Keine Reaktion des Fahrzeugs]].
+* '''Auto nach Schließen der App unsichtbar:''' Ein alter Vorgang hält die Verbindung. Bluetooth am Handy aus und wieder an.
+* '''Auto reagiert nach Mehrspieler-Beitritt nicht:''' In alten Fassungen hielt eine verlorene Antwort eine Sperre fest; seit 0.8.41 behoben. Aktuelle Version nutzen.
+
+== Android-Einstellungen für mehr Tempo ==
+Die folgenden Punkte sind allgemeine Android-Einstellungen, die die Funkverbindung stabiler machen können. Sie sind nicht in OmegaSim gemessen und die Namen der Menüs unterscheiden sich je nach Hersteller.
+# '''Akku-Optimierung für OmegaSim ausschalten:''' Einstellungen → Apps → OmegaSim → Akku → „Nicht eingeschränkt“ bzw. „Nicht optimieren“.
+# '''Energiesparmodus aus''' während des Fahrens.
+# '''Bildschirm an lassen''' und OmegaSim im Vordergrund halten.
+# '''Andere Bluetooth-Geräte trennen''' (Kopfhörer, Uhren) und andere Apps schließen, die Bluetooth nutzen.
+# '''Bluetooth- und WLAN-Suche aus:''' Einstellungen → Standort → Standortdienste → „Bluetooth-Suche“ und „WLAN-Suche“. Diese Suchen laufen sonst nebenher über denselben Funk.
+# '''Entwickleroptionen:''' Ist „Bluetooth-HCI-Snoop-Protokoll“ an (zum Mitschneiden), ausschalten.
+# '''Die Android-App statt des Browsers nutzen''' (siehe oben).
+# '''Handy nah an der Bahn''' halten; Wände und der eigene Körper dämpfen das 2,4-GHz-Signal.
+
+== Kompatible Browser ==
+OmegaSim braucht für die Verbindung zum Auto '''Web Bluetooth'''. Ohne Web Bluetooth lassen sich Strecken bauen und Seiten lesen, aber keine Autos verbinden.
+{| class="wikitable"
+! Browser !! Web Bluetooth !! Hinweis
+|-
+| Chrome (Windows, Android, ChromeOS, macOS) || ja || empfohlen; in der App heißt es „Chrome oder Edge auf Windows, Android oder ChromeOS“
+|-
+| Microsoft Edge || ja || wie Chrome
+|-
+| Firefox || nein || laut App nicht unterstützt
+|-
+| Safari (macOS, iPhone, iPad) || nein || auf iPhone und iPad deshalb nur Streckenbau und Doku
+|-
+| Android-App OmegaSim || ja (eigene Bluetooth-Brücke) || schnellster Weg, nötig für WLAN-Mehrspieler
+|}
+
+== Fehler melden ==
+Hilfreich sind: App-Version (unten auf dem Startbildschirm), Gerät und Android-Version, Browser oder App, Fahrgefühl, Anzahl der Autos und NPCs, die Zeile aus dem Funk-Rundlauf und die genauen Schritte. Siehe [[Mitmachen]].
+
+== Siehe auch ==
+* [[OmegaBle]] – das Bluetooth-Plugin, mit allen Fehlerbildern im Detail
+* [[Bluetooth Low Energy]]
+* [[Keine Reaktion des Fahrzeugs]]
+* [[Strecke]] – Streckenscan und Codes
+
+== Weblinks ==
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Fehlerbehebung]]

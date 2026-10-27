@@ -195,6 +195,11 @@
         const beste = Math.min.apply(null, c.laps.map(l => l.ms));
         if (e.besteMs === null || beste < e.besteMs) e.besteMs = beste;
       }
+      // Exakte Buchung fuer selektives Loeschen: nicht aus den letzten 200
+      // Sitzungen neu summieren, weil die Lebenszeit-Summen weiter zurueckreichen.
+      eintrag.autos[autos.indexOf(c)].statistikBuchung = {
+        id, km: eigenSim, realKm: eigenReal, runden: c.laps.length, sitzungen: 1
+      };
       o.cars[id] = e;
     }
 
@@ -394,7 +399,8 @@
     // Ergebnisse zeichnet, und zwei Darstellungen desselben Speichers.
     plotAuswahl();
     const o = sessionStore();
-    const autos = Object.values(o.cars);
+    const datenAutos = typeof statCleanAutos === 'function' ? statCleanAutos(o) : null;
+    const autos = Object.keys(o.cars).filter(id => !datenAutos || datenAutos.has(id)).map(id => o.cars[id]);
     const kopf = $('sess-summary');
     if (kopf) {
       kopf.textContent = o.sessions.length

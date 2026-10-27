@@ -131,4 +131,27 @@
   function zusatzMotorAbgleichen(m) {
     Object.assign(m.config, physEngine.config);
     if (Array.isArray(physEngine.config.gears)) m.config.gears = physEngine.config.gears.map((g) => Object.assign({}, g));
+    if (m.spieler >= 2) spielerGefuehlUeberlagern(m.spieler, m);
+  }
+  // v1.2.4: das eigene Preset eines Zusatzspielers (98-presets.js) ueber die kopierte Abstimmung legen, und seine
+  // eigene Reifenmischung wieder einsetzen (die Kopie brachte Grip und Verschleiss von Spieler 1 mit).
+  function spielerGefuehlUeberlagern(nr, motor) {
+    if (!motor) return;
+    const key = typeof window.__spielerPreset === 'function' ? window.__spielerPreset(nr) : null;
+    const snap = key && typeof window.__presetSchnappschuss === 'function' ? window.__presetSchnappschuss(key) : null;
+    if (snap) {
+      Object.assign(motor.config, JSON.parse(JSON.stringify(snap.config)));
+      motor.config.physModus = snap.modus;
+    } else {
+      motor.config.physModus = null;
+    }
+    const z = typeof zusatzPlatz === 'function' ? zusatzPlatz(nr) : null;
+    if (z && z.reifen && typeof mischungAnwenden === 'function' && typeof wxRainLevel === 'function') {
+      try { mischungAnwenden(motor, z.reifen, wxRainLevel() * wxRainLevel()); } catch (e) { /* beim Laden */ }
+    }
+  }
+  // Rechnet dieser Spieler mit Physik (Physik/Pacejka) oder RC? Ohne eigenes Preset wie Spieler 1.
+  function spielerPhysikAn(z) {
+    const m = z && z.motor && z.motor.config.physModus;
+    return m ? (m === 'physik' || m === 'pacejka') : physicsEnabled;
   }

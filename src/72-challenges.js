@@ -724,7 +724,9 @@
   // der Strecke in der Vorschau und im jeweiligen Challenge-Submenue an."
   // Nur die festen Voreinstellungen, keine eigene Abstimmung. Unbekannt oder alt = Pro, wie
   // alle Challenges bisher.
-  const COMMUNITY_PRESETS = ['arcade', 'pro', 'gt3', 'f1', 'realgt3'];
+  // v1.2.4 BESTELLT: "Bei Community-Challenges bitte die Schwierigkeitsgrade anpassen, zumindest Pacejka ergaenzen."
+  // Dieselbe Liste steht im Apps Script (tools/challenges-apps-script.gs, C_PRESETS) - beide muessen gleich sein.
+  const COMMUNITY_PRESETS = ['arcade', 'pro', 'gt3', 'f1', 'realgt3', 'propacejka'];
   function communityPresetGueltig(p) { return COMMUNITY_PRESETS.indexOf(p) >= 0 ? p : 'pro'; }
   function communityPresetName(p) {
     const k = communityPresetGueltig(p);
@@ -1201,7 +1203,10 @@
   }
   function chAnwenden(def, modus, preset) {
     applyPreset(preset);
-    chSetzen('phys-mode', 'physik');
+    // v1.2.4: Challenges fahren mit Physik - ausser das Preset ist Pacejka, dann bleibt es Pacejka (vorher stellte
+    // diese Zeile jede Pacejka-Abstimmung zurueck auf Physik).
+    const pv = typeof window.__presetValues === 'function' ? window.__presetValues(preset) : null;
+    chSetzen('phys-mode', pv && pv['phys-mode'] === 'pacejka' ? 'pacejka' : 'physik');
     chSetzen('race-mode', modus === 'rennen' ? 'laps' : 'practice');
     // Rennen: bis CH_EXTRA_LAPS mehr als die Soll-Rundenzahl, damit eine verpatzte Runde mit
     // einer extra ausgeglichen werden kann (siehe challengeRundeFertig).

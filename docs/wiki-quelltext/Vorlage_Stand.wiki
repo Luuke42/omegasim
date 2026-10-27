@@ -1,0 +1,27 @@
+<div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+'''Stand dieses Artikels:''' OmegaSim '''{{{app|?}}}''' vom {{{appdatum|?}}} · Firmware des Autos: {{{firmware|nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)}}}{{{firmwaredatum|}}}<br />
+<small>Dieser Text wurde '''mithilfe von KI erstellt''' ({{{ki|Claude}}}) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe [[Mitmachen]]. Die öffentliche Fassung auf [https://luuke42.github.io/omegasim/ luuke42.github.io/omegasim] kann älter sein als der hier beschriebene Stand.</small>
+</div><includeonly>[[Kategorie:Mit KI erstellt]]</includeonly><noinclude>
+== Verwendung ==
+Gehört als erste Zeile in jeden Artikel, damit Leser sehen, auf welchen Stand sich der Text bezieht.
+
+<pre>{{Stand|app=1.2.5|appdatum=26.10.2026}}</pre>
+
+{| class="wikitable"
+! Parameter !! Bedeutung !! Standard
+|-
+| <code>app</code> || OmegaSim-Version, auf die sich der Text bezieht (steht unten auf dem Startbildschirm) || ?
+|-
+| <code>appdatum</code> || Datum dieser Version || ?
+|-
+| <code>firmware</code> || Firmware-Stand des Autos, falls bekannt || „nicht bekannt …“
+|-
+| <code>firmwaredatum</code> || Datum des Firmware-Stands, mit führendem Leerzeichen und Klammer, z. B. <code><nowiki>|firmwaredatum= (Okt. 2026)</nowiki></code> || leer
+|-
+| <code>ki</code> || welches KI-Werkzeug beteiligt war || Claude
+|}
+
+Wer einen Artikel vollständig selbst geprüft und überarbeitet hat, aktualisiert die Versionsangaben. Den KI-Hinweis entfernt man nur, wenn der Text komplett von Menschen neu geschrieben wurde.
+
+[[Kategorie:Vorlagen]]
+</noinclude>

@@ -1,0 +1,153 @@
+__NOTOC__
+<div style="border:1px solid #a2a9b1; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:14px 18px; margin-bottom:14px;">
+<div style="font-size:150%; font-weight:bold; margin-bottom:4px;">Willkommen bei {{SITENAME}}</div>
+Dieses Wiki sammelt Wissen und Hilfe rund um '''[[OmegaSim]]''', eine freie App, mit der man '''[[Carrera HYBRID]]'''-Autos per Bluetooth steuert: mit eigenem [[Fahrverhalten|Fahrgefühl]], [[Rennarten|Rennen]], [[NPC-Fahrverhalten|NPC-Gegnern]], [[Safety Car und Reinigungswagen|Safety Car]], [[Boxenstopp|Boxenstopps]] und [[Mehrspieler|Mehrspieler]]. Derzeit gibt es hier '''{{NUMBEROFARTICLES}}''' Artikel.
+
+<div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;">
+<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''▶ [https://luuke42.github.io/omegasim/ Jetzt im Browser spielen]'''<br /><small>Chrome oder Edge mit Web Bluetooth, am PC oder Android-Handy</small></div>
+<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''⬇ [https://github.com/Luuke42/omegasim/releases Android-App (APK)]'''<br /><small>nötig für WLAN-Mehrspieler und den schnellsten Funkweg</small></div>
+<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''⌨ [https://github.com/Luuke42/omegasim Quellcode auf GitHub (Luuke42/omegasim)]'''<br /><small>MIT-Lizenz, Fehler melden über „Issues“</small></div>
+</div>
+</div>
+
+<div style="display:flex; flex-wrap:wrap; gap:14px;">
+<div style="flex:1 1 320px; min-width:0;">
+== Erste Schritte ==
+# [[OmegaSim]] im Browser öffnen oder die Android-App installieren.
+# Auto einschalten und in der '''Garage''' mit '''+ Auto verbinden''' koppeln.
+# Unter '''Optionen → Fahrgefühl''' eine Voreinstellung wählen, für den Anfang '''Arcade'''.
+# Im '''Cockpit''' losfahren oder unter '''Rennen''' eine [[Rennarten|Rennart]] starten.
+# Hängt das Auto: [[Keine Reaktion des Fahrzeugs]].
+
+[[Datei:OmegaSim-Garage.png|mini|ohne|360px|Die Garage, hier werden Autos verbunden.]]
+
+== Hardware ==
+* [[Carrera HYBRID]] – das Auto: Aufbau, Sensor, Akku, Bluetooth
+* [[Strecke]] – Bahnteile, Ausdruck-Strecke und Streckenscan
+
+== Software ==
+* [[Firmware]] – was über die Software im Auto bekannt ist
+* [[Original-App]] – die Hersteller-App und was OmegaSim anders macht
+* [[OmegaSim]] – Überblick über die App
+* [[OmegaBle]] – das Bluetooth-Plugin der Android-App
+</div>
+<div style="flex:1 1 320px; min-width:0;">
+== OmegaSim im Detail ==
+{| class="wikitable" style="width:100%;"
+|-
+! Fahren
+| [[Fahrverhalten]] · [[Verschleiß]] · [[Virtuelles Fahren]]
+|-
+! Rennen
+| [[Rennarten]] · [[Boxenstopp]] · [[Challenges]]
+|-
+! Gegner
+| [[NPC-Fahrverhalten]] · [[Safety Car und Reinigungswagen]]
+|-
+! Strecke
+| [[Strecken- und Raum-Editor]]
+|-
+! Zusammen
+| [[Mehrspieler]] (WLAN und mehrere Spieler an einem Gerät)
+|-
+! Grundlagen
+| [[Hexadezimalsystem]] · [[Bluetooth Low Energy]] · [[Aufbau von OmegaSim]] · [[Vibe-Coding]] · [[Glossar]]
+|}
+
+== Rund um OmegaSim ==
+* [[Wunschliste]] – gewünschte Funktionen und alles, was noch in Arbeit ist
+* [[Andere Apps und Initiativen]] – Original-App, Community-Apps, Zubehör
+
+== Zubehör ==
+* [[CH ControlBox]] – RC-Funke als Bluetooth-Gamepad für OmegaSim
+* [[Startampel]] – echte Startampel am Tisch (Raspberry Pi / Pico)
+
+== Fehlerbehebung ==
+* [[Fehlerbilder und Abhilfe]] – hohe Latenz, springende Autos, Android-Einstellungen, kompatible Browser
+* [[Keine Reaktion des Fahrzeugs]] – Auto steht mit Licht und eingeschlagenen Rädern und lässt sich nicht koppeln
+
+== Mitmachen ==
+* [[Mitmachen]] – Artikel schreiben und verbessern, mit und ohne KI
+* [[Anleitung für KIs]] – Arbeitsweise für KI-Assistenten, die am Wiki oder an OmegaSim arbeiten
+* [[Spezial:Alle Seiten|Alle Seiten]] · [[Spezial:Kategorien|Kategorien]] · [[Spezial:Gewünschte Seiten|Gewünschte Seiten]]
+</div>
+</div>
+
+== Zuletzt bearbeitet ==
+<templatestyles src="Hauptseite/styles.css" />
+Ganz oben steht die zuletzt bearbeitete Seite.
+<div class="hauptseite-rc">
+{{Special:RecentChanges|namespace=0|limit=5|days=90|hidebots=1|enhanced=0}}
+</div>
+<small>Alle Änderungen: [[Spezial:Letzte Änderungen|Letzte Änderungen]] · Neue Artikel: [[Spezial:Neue Seiten|Neue Seiten]]</small>
+
+== Seitenübersicht ==
+Alle Seiten des Wikis mit Bereich, Inhalt, letzter Änderung, letztem Bearbeiter und Größe in Byte. Die drei letzten Spalten liest das Wiki bei jedem Aufruf selbst aus.
+
+{| class="wikitable sortable" style="width:100%;"
+! Bereich !! Seite !! Inhalt !! Zuletzt geändert !! von !! Byte
+|-
+| Grundlagen || [[Hexadezimalsystem]] || Zahlensysteme, Bits und Bytes, Hex-Codes in OmegaSim || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Hexadezimalsystem}}}} || {{REVISIONUSER:Hexadezimalsystem}} || {{formatnum:{{PAGESIZE:Hexadezimalsystem}}}}
+|-
+| Grundlagen || [[Bluetooth Low Energy]] || Funk, GATT, Charakteristiken, Latenz – wie die Übertragung funktioniert || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Bluetooth Low Energy}}}} || {{REVISIONUSER:Bluetooth Low Energy}} || {{formatnum:{{PAGESIZE:Bluetooth Low Energy}}}}
+|-
+| Grundlagen || [[Aufbau von OmegaSim]] || Programmiersprachen, Architektur, Build, Updates || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Aufbau von OmegaSim}}}} || {{REVISIONUSER:Aufbau von OmegaSim}} || {{formatnum:{{PAGESIZE:Aufbau von OmegaSim}}}}
+|-
+| Grundlagen || [[Vibe-Coding]] || Programmieren durch Beschreiben – wie OmegaSim entsteht || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Vibe-Coding}}}} || {{REVISIONUSER:Vibe-Coding}} || {{formatnum:{{PAGESIZE:Vibe-Coding}}}}
+|-
+| Grundlagen || [[Glossar]] || Alle Fachbegriffe von A bis Z || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Glossar}}}} || {{REVISIONUSER:Glossar}} || {{formatnum:{{PAGESIZE:Glossar}}}}
+|-
+| Hardware || [[Carrera HYBRID]] || Das Auto: Aufbau, Sensor, Akku, Protokoll || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Carrera HYBRID}}}} || {{REVISIONUSER:Carrera HYBRID}} || {{formatnum:{{PAGESIZE:Carrera HYBRID}}}}
+|-
+| Hardware || [[Strecke]] || Alle Streckenteile mit Bild und Code, Bahn- und Ausdruck-Modus, Streckenscan || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Strecke}}}} || {{REVISIONUSER:Strecke}} || {{formatnum:{{PAGESIZE:Strecke}}}}
+|-
+| Software || [[Firmware]] || Die Software im Auto: was bekannt ist und was nicht || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Firmware}}}} || {{REVISIONUSER:Firmware}} || {{formatnum:{{PAGESIZE:Firmware}}}}
+|-
+| Software || [[Original-App]] || Die Hersteller-App und der Unterschied zu OmegaSim || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Original-App}}}} || {{REVISIONUSER:Original-App}} || {{formatnum:{{PAGESIZE:Original-App}}}}
+|-
+| Software || [[OmegaSim]] || Überblick über die App || {{#time:d.m.Y|{{REVISIONTIMESTAMP:OmegaSim}}}} || {{REVISIONUSER:OmegaSim}} || {{formatnum:{{PAGESIZE:OmegaSim}}}}
+|-
+| Software || [[OmegaBle]] || Das native Bluetooth-Plugin der Android-App || {{#time:d.m.Y|{{REVISIONTIMESTAMP:OmegaBle}}}} || {{REVISIONUSER:OmegaBle}} || {{formatnum:{{PAGESIZE:OmegaBle}}}}
+|-
+| Fahren || [[Fahrverhalten]] || Physikmodell, Pacejka, Fahrgefühle, Getriebe || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Fahrverhalten}}}} || {{REVISIONUSER:Fahrverhalten}} || {{formatnum:{{PAGESIZE:Fahrverhalten}}}}
+|-
+| Fahren || [[Verschleiß]] || Reifen, Tank, Schaden, Wetter || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Verschleiß}}}} || {{REVISIONUSER:Verschleiß}} || {{formatnum:{{PAGESIZE:Verschleiß}}}}
+|-
+| Fahren || [[Virtuelles Fahren]] || Fahren ohne echtes Auto || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Virtuelles Fahren}}}} || {{REVISIONUSER:Virtuelles Fahren}} || {{formatnum:{{PAGESIZE:Virtuelles Fahren}}}}
+|-
+| Rennen || [[Rennarten]] || Alle Renntypen, Start, Aufstellung, Meisterschaft || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Rennarten}}}} || {{REVISIONUSER:Rennarten}} || {{formatnum:{{PAGESIZE:Rennarten}}}}
+|-
+| Rennen || [[Boxenstopp]] || Ablauf, Minigame, NPC-Boxenstopp || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Boxenstopp}}}} || {{REVISIONUSER:Boxenstopp}} || {{formatnum:{{PAGESIZE:Boxenstopp}}}}
+|-
+| Rennen || [[Challenges]] || Wöchentliche Challenges und Community-Bestzeiten || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Challenges}}}} || {{REVISIONUSER:Challenges}} || {{formatnum:{{PAGESIZE:Challenges}}}}
+|-
+| Gegner || [[NPC-Fahrverhalten]] || Computergegner: Tempo, Ideallinie, Überholen, MAX-Stufe || {{#time:d.m.Y|{{REVISIONTIMESTAMP:NPC-Fahrverhalten}}}} || {{REVISIONUSER:NPC-Fahrverhalten}} || {{formatnum:{{PAGESIZE:NPC-Fahrverhalten}}}}
+|-
+| Gegner || [[Safety Car und Reinigungswagen]] || Gelbphasen, Parken, Einparkfolge || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Safety Car und Reinigungswagen}}}} || {{REVISIONUSER:Safety Car und Reinigungswagen}} || {{formatnum:{{PAGESIZE:Safety Car und Reinigungswagen}}}}
+|-
+| Strecke || [[Strecken- und Raum-Editor]] || Editor, Zufallsstrecke mit Formel, Raumgestalter || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Strecken- und Raum-Editor}}}} || {{REVISIONUSER:Strecken- und Raum-Editor}} || {{formatnum:{{PAGESIZE:Strecken- und Raum-Editor}}}}
+|-
+| Zusammen || [[Mehrspieler]] || WLAN-Mehrspieler und mehrere Spieler an einem Gerät || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Mehrspieler}}}} || {{REVISIONUSER:Mehrspieler}} || {{formatnum:{{PAGESIZE:Mehrspieler}}}}
+|-
+| Zubehör || [[CH ControlBox]] || RC-Funke als Bluetooth-Gamepad || {{#time:d.m.Y|{{REVISIONTIMESTAMP:CH ControlBox}}}} || {{REVISIONUSER:CH ControlBox}} || {{formatnum:{{PAGESIZE:CH ControlBox}}}}
+|-
+| Zubehör || [[Startampel]] || Echte Startampel am Tisch || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Startampel}}}} || {{REVISIONUSER:Startampel}} || {{formatnum:{{PAGESIZE:Startampel}}}}
+|-
+| Hilfe || [[Keine Reaktion des Fahrzeugs]] || Auto hängt mit Licht und eingeschlagenen Rädern || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Keine Reaktion des Fahrzeugs}}}} || {{REVISIONUSER:Keine Reaktion des Fahrzeugs}} || {{formatnum:{{PAGESIZE:Keine Reaktion des Fahrzeugs}}}}
+|-
+| Mitmachen || [[Mitmachen]] || Artikel schreiben und verbessern, mit und ohne KI || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Mitmachen}}}} || {{REVISIONUSER:Mitmachen}} || {{formatnum:{{PAGESIZE:Mitmachen}}}}
+|-
+| Mitmachen || [[Anleitung für KIs]] || Arbeitsweise für KI-Assistenten || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Anleitung für KIs}}}} || {{REVISIONUSER:Anleitung für KIs}} || {{formatnum:{{PAGESIZE:Anleitung für KIs}}}}
+|-
+| Mitmachen || [[Vorlage:Stand]] || Versionskasten oben auf jeder Seite || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Vorlage:Stand}}}} || {{REVISIONUSER:Vorlage:Stand}} || {{formatnum:{{PAGESIZE:Vorlage:Stand}}}}
+|-
+| Hilfe || [[Fehlerbilder und Abhilfe]] || Hohe Latenz, springende Autos, Android-Einstellungen, Browser || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Fehlerbilder und Abhilfe}}}} || {{REVISIONUSER:Fehlerbilder und Abhilfe}} || {{formatnum:{{PAGESIZE:Fehlerbilder und Abhilfe}}}}
+|-
+| Mitmachen || [[Wunschliste]] || Gewünschte Funktionen und alles in Arbeit || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Wunschliste}}}} || {{REVISIONUSER:Wunschliste}} || {{formatnum:{{PAGESIZE:Wunschliste}}}}
+|-
+| Software || [[Andere Apps und Initiativen]] || Original-App, Community-Apps, Zubehör || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Andere Apps und Initiativen}}}} || {{REVISIONUSER:Andere Apps und Initiativen}} || {{formatnum:{{PAGESIZE:Andere Apps und Initiativen}}}}
+|}
+
+'''Zahlen:''' {{NUMBEROFARTICLES}} Artikel · {{NUMBEROFFILES}} Dateien · {{NUMBEROFEDITS}} Bearbeitungen · {{NUMBEROFUSERS}} angemeldete Benutzer. Weitere Listen: [[Spezial:Alle Seiten|Alle Seiten]] · [[Spezial:Dateien|Alle Dateien]] · [[Spezial:Kategorien|Kategorien]] · [[Spezial:Gewünschte Seiten|Gewünschte Seiten]].
+
+[[Kategorie:OmegaSim]]

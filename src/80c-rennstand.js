@@ -4,9 +4,13 @@
   // =========================================================================
   let rennstandAn = false, rennstandIntervall = 5;
   let rennstandTempo = 1, rennstandLautstaerke = 1, rennstandBus = null;
+  // UI-/Speicherparameter fuer die tempo-unabhaengige Tonhoehenverarbeitung.
+  let rennstandTonhoehe = 0;
   let rennstandHall = 0, rennstandHallWet = null, rennstandHallDry = null;
   let rennstandHallNodes = [];
   const RENNSTAND_HALL_DAUER = 1.2;
+  const RENNSTAND_PITCH_CACHE = new WeakMap();
+  let rennstandTestTimer = null, rennstandTestGeneration = 0;
   let rennstandKompressor = null, rennstandWartend = null, rennstandSatzRunde = null;
   let rennstandErgebnisGeplant = false, rennstandErgebnisGesprochen = false;
   let rennstandGeneration = 0, rennstandTimer = null, rennstandBis = 0;
@@ -20,6 +24,8 @@
   // AUTOBEZEICHNUNG ("Porsche" -> "der rote Porsche") oder ein FAHRERNAME
   // ("Max Mustermann" -> "Max Mustermann", ohne Farbe). Standard: Autobezeichnung.
   let rennstandErgebnisAn = true, rennstandNamensart = 'auto', rennstandSprache = null;
+  // Stimme: bisheriges Auto-Verhalten beibehalten, optional Clips oder System-TTS erzwingen.
+  let rennstandStimmenModus = 'auto', rennstandBrowserStimme = '';
 
   function rennstandWarteWert(wert) {
     if (wert === null || String(wert).trim() === '') return 30;
@@ -40,6 +46,11 @@
     for (const q of rennstandQuellen) { try { q.stop(); } catch (e) {} }
     rennstandQuellen = [];
     rennstandBis = 0;
+    rennstandTestGeneration++;
+    if (rennstandTestTimer !== null) clearTimeout(rennstandTestTimer);
+    rennstandTestTimer = null;
+    rennstandTestSetBusy(false);
+    rennstandTestStatus('');
     if (rennstandSprache) {
       rennstandSprache = null;
       try { window.speechSynthesis.cancel(); } catch (e) {}
@@ -197,6 +208,28 @@
     return n <= 60 ? ['n:' + n] : String(n).split('').map((z) => 'n:' + z);
   }
 
+  // Die Browser-TTS liest eine deutsche Ziffer mit abschliessendem Punkt als Ordinalzahl
+  // ("3." -> "dritte"). Deshalb Rundenzahlen fuer diesen Pfad ausschreiben, parallel zu
+  // den vorproduzierten Zahlclips: 0..60 als Grundzahl, darueber ziffernweise.
+  function rennstandRundenzahlText(wert) {
+    const zahl = Number(wert);
+    const n = Number.isFinite(zahl) ? Math.max(0, Math.round(zahl)) : 0;
+    const bisZwanzig = ['null', 'eins', 'zwei', 'drei', 'vier', 'fünf', 'sechs',
+      'sieben', 'acht', 'neun', 'zehn', 'elf', 'zwölf', 'dreizehn', 'vierzehn',
+      'fünfzehn', 'sechzehn', 'siebzehn', 'achtzehn', 'neunzehn', 'zwanzig'];
+    const einheiten = ['', 'ein', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben',
+      'acht', 'neun'];
+    const zehner = { 2: 'zwanzig', 3: 'dreißig', 4: 'vierzig',
+      5: 'fünfzig', 6: 'sechzig' };
+    if (n <= 20) return bisZwanzig[n];
+    if (n <= 60) {
+      const rest = n % 10, dekade = Math.floor(n / 10);
+      return rest ? einheiten[rest] + 'und' + zehner[dekade] : zehner[dekade];
+    }
+    const ziffern = ['null', 'eins', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben', 'acht', 'neun'];
+    return String(n).split('').map((z) => ziffern[Number(z)]).join(' ');
+  }
+
   function rennstandFarbe(hex) {
     const c = CAR_COLORS.find((x) => String(x.hex).toLowerCase() === String(hex || '').toLowerCase());
     return c ? 'r:farbe_' + c.id : null;
@@ -268,9 +301,25 @@
   // Satz zu wechseln klingt nach zwei Sprechern. Ohne einen einzigen Namen unter den drei
   // bleiben die Aufnahmen; ohne Systemstimme (Android-App) auch.
   function rennstandNameVon(x) { return String((x && x.alias) || '').trim(); }
+  function rennstandWebSpeechVerfuegbar() {
+    return typeof window !== 'undefined' && !!window.speechSynthesis
+      && typeof window.speechSynthesis.speak === 'function'
+      && typeof window.SpeechSynthesisUtterance === 'function';
+  }
+  function rennstandBrowserVoiceKey(stimme) {
+    return String(stimme.voiceURI || (stimme.name + '|' + stimme.lang));
+  }
+  function rennstandBrowserStimmeFinden() {
+    if (!rennstandBrowserStimme || !rennstandWebSpeechVerfuegbar()) return null;
+    try {
+      return window.speechSynthesis.getVoices().find((v) =>
+        rennstandBrowserVoiceKey(v) === rennstandBrowserStimme) || null;
+    } catch (e) { return null; }
+  }
   function rennstandStimmeNoetig(rows) {
-    return ('speechSynthesis' in window)
-      && rows.slice(0, 3).some((x) => rennstandNameVon(x));
+    if (!rennstandWebSpeechVerfuegbar() || rennstandStimmenModus === 'clips') return false;
+    if (rennstandStimmenModus === 'browser') return true;
+    return rows.slice(0, 3).some((x) => rennstandNameVon(x));
   }
   const RENNSTAND_FARBWORT = {
     de: { weiss: 'der weiße', schwarz: 'der schwarze', rot: 'der rote', blau: 'der blaue',
@@ -325,7 +374,8 @@
       return teil + (de ? ' Rückstand' : ' behind');
     };
     const saetze = [];
-    if (!ergebnis) saetze.push((de ? 'Nach Runde ' : 'After lap ') + runde + '.');
+    if (!ergebnis) saetze.push((de ? 'Nach Runde ' + rennstandRundenzahlText(runde)
+      : 'After lap ' + runde) + '.');
     for (const x of rows.slice(0, 3)) {
       if (x.platz === 1) {
         saetze.push((ergebnis ? (de ? 'Gewonnen hat ' : 'The winner is ')
@@ -343,7 +393,11 @@
       const text = rennstandText(rows, runde, ergebnis, lang);
       const u = new SpeechSynthesisUtterance(text);
       u.lang = lang === 'de' ? 'de-DE' : 'en-US';
+      const browserStimme = rennstandBrowserStimmeFinden();
+      if (browserStimme) u.voice = browserStimme;
       u.rate = rennstandTempoWert(rennstandTempo);
+      // Web Speech kann die Stimme unabhaengig von der Sprechrate transponieren.
+      u.pitch = rennstandPitchRatio(rennstandTonhoehe);
       u.volume = Math.min(1, rennstandLautstaerke);
       const fertig = () => {
         if (rennstandSprache !== u) return;
@@ -365,8 +419,8 @@
     }
   }
 
-  async function rennstandClipsLaden(spr) {
-    if (!audioCtx || !(rennstandAn || rennstandErgebnisAn)) return null;
+  async function rennstandClipsLaden(spr, force = false) {
+    if (!audioCtx || (!force && !(rennstandAn || rennstandErgebnisAn))) return null;
     const quelle = spr === 'de' ? 'de' : 'en'; // Spanisch wie vorhandene Clips: Englisch.
     if (rennstandBuffers[quelle]) return rennstandBuffers[quelle];
     if (rennstandLaden[quelle]) return rennstandLaden[quelle];
@@ -412,6 +466,14 @@
     // Auch nach dem asynchronen Laden erneut pruefen. Keine Rundenzeit abbrechen.
     if (rennstandBeschaeftigt() || lapAnsageBeschaeftigt()
         || performance.now() < lapAnsageRuheBis) return false;
+    // Pitch-Shift vor dem Einplanen berechnen. Er veraendert nicht die Clipdauer;
+    // die Sprechgeschwindigkeit wird erst bei playbackRate angewandt.
+    if (token !== rennstandGeneration || spr !== lang || !soundEnabled
+        || rennstandLautstaerke <= 0 || !['laps', 'endurance'].includes(raceMode)
+        || !audioCtx || !(ergebnis ? raceState === 'finished'
+          : ['racing', 'finishing'].includes(raceState)) || (!perStimme && !satz)
+        || rennstandBeschaeftigt() || lapAnsageBeschaeftigt()
+        || performance.now() < lapAnsageRuheBis) return false;
     // Den eingefrorenen Messstand der benannten Runde sprechen, nicht die
     // inzwischen aktuelle Rundenzahl oder Ortung nach dem asynchronen Clip-Laden.
     if (!rows.length || (messung && !rennstandMessstandGueltig(messung))) return false;
@@ -424,16 +486,20 @@
       return false;
     }
     const sprechtempo = rennstandTempoWert(rennstandTempo);
-    let t0 = audioCtx.currentTime + 0.03;
+    const pitch = rennstandTonhoeheWert(rennstandTonhoehe);
+    const pitchRatio = rennstandPitchRatio(pitch);
+    const effektivTempo = sprechtempo * pitchRatio;
     try {
-      for (const x of folge) {
+      const vorbereitet = folge.map((x) => ({ x, buffer: rennstandPitchBuffer(satz[x.key], pitch) }));
+      let t0 = audioCtx.currentTime + 0.03;
+      for (const item of vorbereitet) {
         const src = audioCtx.createBufferSource();
-        src.buffer = satz[x.key];
-        src.playbackRate.value = sprechtempo;
+        src.buffer = item.buffer;
+        src.playbackRate.value = effektivTempo;
         src.connect(rennstandGain());
         src.onended = () => { rennstandQuellen = rennstandQuellen.filter((q) => q !== src); };
         src.start(t0); rennstandQuellen.push(src);
-        t0 += (src.buffer.duration + x.pause) / sprechtempo;
+        t0 += (src.buffer.duration + item.x.pause * pitchRatio) / effektivTempo;
       }
       rennstandBis = t0 + (rennstandHall > 0 ? RENNSTAND_HALL_DAUER : 0); rennstandSatzRunde = ergebnis ? null : runde;
       announceCalls++;
@@ -445,6 +511,137 @@
     }
   }
 
+
+  function rennstandTestClipFolge() {
+    // Lokale Piper-Aufnahmen: der Test benutzt exakt denselben Effektpfad wie das Rennen.
+    return [
+      { key: 'e:runde', pause: 0.08 },
+      { key: 'n:5', pause: 0.42 },
+      { key: 'e:fuehrt_start', pause: 0.05 },
+      { key: 'e:farbe_rot', pause: 0.05 },
+      { key: 'e:modell_porsche911', pause: 0.32 },
+    ];
+  }
+
+  function rennstandTestSetBusy(busy) {
+    const button = $('setting-announce-stand-test');
+    if (button) {
+      button.disabled = !!busy;
+      button.textContent = busy
+        ? (lang === 'de' ? 'Spielt …' : lang === 'es' ? 'Reproduciendo …' : 'Playing …')
+        : (lang === 'de' ? 'Testen' : lang === 'es' ? 'Probar' : 'Test');
+    }
+  }
+
+  function rennstandTestStatus(text) {
+    const el = $('setting-announce-stand-test-status');
+    if (el) el.textContent = text || '';
+  }
+
+  function rennstandBrowserTestSprechen(token, spr) {
+    if (!rennstandWebSpeechVerfuegbar()) throw new Error('Browser-/Systemstimme ist nicht verfuegbar');
+    const text = spr === 'de'
+      ? 'Wir sind in Runde fünf. Es führt der rote Porsche.'
+      : 'We are on lap five. The red Porsche is leading.';
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = spr === 'de' ? 'de-DE' : 'en-US';
+    const browserStimme = rennstandBrowserStimmeFinden();
+    if (browserStimme) u.voice = browserStimme;
+    u.rate = rennstandTempoWert(rennstandTempo);
+    u.pitch = rennstandPitchRatio(rennstandTonhoehe);
+    u.volume = Math.min(1, rennstandLautstaerke);
+    const fertig = () => {
+      if (token !== rennstandTestGeneration || rennstandSprache !== u) return;
+      if (rennstandTestTimer !== null) clearTimeout(rennstandTestTimer);
+      rennstandTestTimer = null;
+      rennstandSprache = null;
+      rennstandTestSetBusy(false);
+      rennstandTestStatus('');
+    };
+    u.onend = fertig; u.onerror = fertig;
+    window.speechSynthesis.cancel();
+    rennstandSprache = u;
+    rennstandSatzRunde = null;
+    rennstandTestStatus(spr === 'de'
+      ? 'Browserstimme spielt; Hall und Lautstärke-Boost sind hier nicht verfügbar.'
+      : 'System voice playing; reverb and volume boost are unavailable here.');
+    rennstandTestTimer = setTimeout(fertig, 3000 + text.length * 110 / u.rate);
+    window.speechSynthesis.speak(u);
+    announceCalls++;
+    return true;
+  }
+
+  async function rennstandTesten() {
+    if (rennstandBeschaeftigt() || lapAnsageBeschaeftigt()
+        || performance.now() < lapAnsageRuheBis) {
+      rennstandTestStatus(lang === 'de' ? 'Bitte laufende Ansage abwarten.' : 'Please wait for the current announcement.');
+      return false;
+    }
+    if (!soundEnabled) {
+      rennstandTestStatus(lang === 'de' ? 'App-Ton ist ausgeschaltet.' : 'App sound is disabled.');
+      return false;
+    }
+    if (rennstandLautstaerke <= 0) {
+      rennstandTestStatus(lang === 'de' ? 'Rennstand-Lautstärke steht auf 0 %.' : 'Announcement volume is 0%.');
+      return false;
+    }
+    const token = ++rennstandTestGeneration, spr = lang;
+    rennstandTestSetBusy(true);
+    rennstandTestStatus(lang === 'de' ? 'Beispiel wird vorbereitet …' : 'Preparing sample …');
+    try {
+      // Der Modus Browserstimme muss keinen AudioContext fuer die Wiedergabe verwenden.
+      if (rennstandStimmenModus === 'browser') return await rennstandBrowserTestSprechen(token, spr);
+      // Der Klick ist die Nutzeraktion, die AudioContext auf Mobilgeraeten freischaltet.
+      if (typeof initEngineSound === 'function') initEngineSound();
+      if (!audioCtx) throw new Error('AudioContext nicht verfuegbar');
+      const ctx = audioCtx;
+      const resume = ctx.state === 'suspended' ? ctx.resume() : Promise.resolve();
+      const satzPromise = rennstandClipsLaden(spr, true);
+      await Promise.all([resume, satzPromise]);
+      const satz = await satzPromise;
+      if (token !== rennstandTestGeneration || spr !== lang || ctx !== audioCtx) return false;
+      if (!satz) throw new Error('Rennstand-Clips konnten nicht geladen werden');
+      const folge = rennstandTestClipFolge();
+      const fehlend = folge.filter((x) => !satz[x.key]).map((x) => x.key);
+      if (fehlend.length) throw new Error('Testclips fehlen: ' + fehlend.join(', '));
+
+      const pitch = rennstandTonhoeheWert(rennstandTonhoehe);
+      const pitchRatio = rennstandPitchRatio(pitch);
+      const tempo = rennstandTempoWert(rennstandTempo);
+      const effektivTempo = tempo * pitchRatio;
+      const vorbereitet = folge.map((x) => ({ x, buffer: rennstandPitchBuffer(satz[x.key], pitch) }));
+      let t0 = audioCtx.currentTime + 0.03;
+      for (const item of vorbereitet) {
+        const src = audioCtx.createBufferSource();
+        src.buffer = item.buffer;
+        src.playbackRate.value = effektivTempo;
+        src.connect(rennstandGain());
+        src.onended = () => { rennstandQuellen = rennstandQuellen.filter((q) => q !== src); };
+        src.start(t0); rennstandQuellen.push(src);
+        t0 += (src.buffer.duration + item.x.pause * pitchRatio) / effektivTempo;
+      }
+      rennstandTestStatus(lang === 'de'
+        ? 'Nach Runde 5 – Es führt aktuell der rote Porsche 911.' : 'Sample is playing with the current settings.');
+      rennstandBis = t0 + (rennstandHall > 0 ? RENNSTAND_HALL_DAUER : 0);
+      rennstandSatzRunde = null;
+      const dauer = Math.max(0, (rennstandBis - audioCtx.currentTime) * 1000);
+      rennstandTestTimer = setTimeout(() => {
+        if (token !== rennstandTestGeneration) return;
+        rennstandTestTimer = null;
+        rennstandTestSetBusy(false);
+        rennstandTestStatus('');
+      }, dauer);
+      announceCalls++;
+      return true;
+    } catch (err) {
+      if (token === rennstandTestGeneration) {
+        rennstandTestSetBusy(false);
+        rennstandTestStatus('Test fehlgeschlagen: ' + err.message);
+      }
+      log('Rennstand-Test fehlgeschlagen: ' + err.message, 'info');
+      return false;
+    }
+  }
 
   function rennstandErgebnisErlaubt() {
     return rennstandErgebnisAn && soundEnabled && rennstandLautstaerke > 0
@@ -629,6 +826,81 @@
     lesen();
   }
 
+  const rennstandStimmenModusWahl = $('setting-announce-stand-voice-mode');
+  if (rennstandStimmenModusWahl) {
+    const browserOption = [...rennstandStimmenModusWahl.options].find((o) => o.value === 'browser');
+    if (browserOption) browserOption.disabled = !rennstandWebSpeechVerfuegbar();
+    const lesen = () => {
+      let modus = ['auto', 'clips', 'browser'].includes(rennstandStimmenModusWahl.value)
+        ? rennstandStimmenModusWahl.value : 'auto';
+      if (modus === 'browser' && !rennstandWebSpeechVerfuegbar()) modus = 'clips';
+      rennstandStimmenModus = modus;
+      rennstandStimmenModusWahl.value = modus;
+      const hinweis = $('setting-announce-stand-voice-help');
+      if (hinweis)       hinweis.textContent = !rennstandWebSpeechVerfuegbar()
+        ? 'Diese Plattform bietet keine Browserstimme; es werden vorproduzierte Clips verwendet.'
+        : modus === 'browser'
+          ? 'Browserstimme für alle Rennstand-Ansagen. Tempo und Pitch gelten; Hall und Lautstärke-Boost nur bei Clips.'
+          : modus === 'clips'
+            ? 'Immer die vorproduzierten Clips verwenden. Eigene Garagennamen werden dabei nicht gesprochen.'
+            : 'Automatisch: bei eigenen Garagennamen Browserstimme, sonst vorproduzierte Clips.';
+    };
+    rennstandStimmenModusWahl.addEventListener('change', lesen);
+    lesen();
+  }
+
+  const rennstandBrowserStimmenWahl = $('setting-announce-stand-browser-voice');
+  const rennstandBrowserStimmenSchluessel = $('setting-announce-stand-browser-voice-key');
+  function rennstandBrowserStimmenAktualisieren() {
+    const select = rennstandBrowserStimmenWahl;
+    if (!select) return;
+    const gespeicherterSchluessel = (rennstandBrowserStimmenSchluessel && rennstandBrowserStimmenSchluessel.value)
+      || select.value || rennstandBrowserStimme;
+    let stimmen = [];
+    if (rennstandWebSpeechVerfuegbar()) {
+      try { stimmen = window.speechSynthesis.getVoices() || []; } catch (e) { stimmen = []; }
+    }
+    select.replaceChildren();
+    const standard = document.createElement('option');
+    standard.value = '';
+    standard.textContent = 'Systemstandardstimme';
+    select.appendChild(standard);
+    const gesehen = new Set();
+    for (const stimme of stimmen) {
+      const key = rennstandBrowserVoiceKey(stimme);
+      if (gesehen.has(key)) continue;
+      gesehen.add(key);
+      const option = document.createElement('option');
+      option.value = key;
+      option.textContent = stimme.name + (stimme.lang ? ' (' + stimme.lang + ')' : '')
+        + (stimme.default ? ' – Standard' : '');
+      select.appendChild(option);
+    }
+    const verfuegbar = gesehen.has(gespeicherterSchluessel);
+    select.value = verfuegbar ? gespeicherterSchluessel : '';
+    rennstandBrowserStimme = select.value;
+    select.disabled = !rennstandWebSpeechVerfuegbar() || stimmen.length === 0;
+    const hinweis = $('setting-announce-stand-browser-voice-help');
+    if (hinweis) hinweis.textContent = !rennstandWebSpeechVerfuegbar()
+      ? 'Keine Browserstimme verfügbar.'
+      : stimmen.length
+        ? 'Die Liste kommt vom Browser/Gerät; Stimmen können je nach Plattform variieren.'
+        : 'Stimmen werden vom Browser geladen. Falls die Liste leer bleibt, wird die Systemstandardstimme verwendet.';
+  }
+  if (rennstandBrowserStimmenWahl) {
+    rennstandBrowserStimmenWahl.addEventListener('change', () => {
+      rennstandBrowserStimme = rennstandBrowserStimmenWahl.value || '';
+      if (rennstandBrowserStimmenSchluessel) rennstandBrowserStimmenSchluessel.value = rennstandBrowserStimme;
+    });
+    if (rennstandBrowserStimmenSchluessel) {
+      rennstandBrowserStimmenSchluessel.addEventListener('change', rennstandBrowserStimmenAktualisieren);
+    }
+    rennstandBrowserStimmenAktualisieren();
+    if (rennstandWebSpeechVerfuegbar() && typeof window.speechSynthesis.addEventListener === 'function') {
+      window.speechSynthesis.addEventListener('voiceschanged', rennstandBrowserStimmenAktualisieren);
+    }
+  }
+
   // Selbstsicherung speichert den Parameter; laufende Messpunkte bleiben erhalten.
   const rennstandWarteRegler = $('setting-announce-stand-wait');
   if (rennstandWarteRegler) {
@@ -641,11 +913,150 @@
     numSteuer('setting-announce-stand-wait');
   }
 
+  const rennstandTonhoeheRegler = $('setting-announce-stand-pitch');
+  if (rennstandTonhoeheRegler) {
+    const anzeige = $('setting-announce-stand-pitch-val');
+    const lesen = () => {
+      rennstandTonhoehe = rennstandTonhoeheWert(rennstandTonhoeheRegler.value);
+      rennstandTonhoeheRegler.value = String(rennstandTonhoehe);
+      if (anzeige) anzeige.textContent = rennstandTonhoeheText(rennstandTonhoehe);
+    };
+    rennstandTonhoeheRegler.addEventListener('input', lesen);
+    rennstandTonhoeheRegler.addEventListener('change', lesen);
+    lesen();
+  }
+
   i18nOnLangChange(() => {
     rennstandAbbrechen();
     if (rennstandAn) rennstandClipsLaden(lang);
+    rennstandBrowserStimmenAktualisieren();
+    const anzeige = $('setting-announce-stand-pitch-val');
+    if (anzeige) anzeige.textContent = rennstandTonhoeheText(rennstandTonhoehe);
+    rennstandTestSetBusy(false);
   });
 
+  function rennstandTonhoeheWert(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(-6, Math.min(6, Math.round(n))) : 0;
+  }
+  function rennstandPitchRatio(v) {
+    return Math.pow(2, rennstandTonhoeheWert(v) / 12);
+  }
+
+  function rennstandFFT(real, imag, inverse = false) {
+    const n = real.length;
+    let j = 0;
+    for (let i = 1; i < n; i++) {
+      let bit = n >> 1;
+      while (j & bit) { j ^= bit; bit >>= 1; }
+      j ^= bit;
+      if (i < j) {
+        let value = real[i]; real[i] = real[j]; real[j] = value;
+        value = imag[i]; imag[i] = imag[j]; imag[j] = value;
+      }
+    }
+    for (let size = 2; size <= n; size <<= 1) {
+      const angle = (inverse ? 2 : -2) * Math.PI / size;
+      const stepReal = Math.cos(angle), stepImag = Math.sin(angle);
+      for (let base = 0; base < n; base += size) {
+        let wr = 1, wi = 0;
+        for (let k = 0; k < size / 2; k++) {
+          const even = base + k, odd = even + size / 2;
+          const tr = wr * real[odd] - wi * imag[odd];
+          const ti = wr * imag[odd] + wi * real[odd];
+          real[odd] = real[even] - tr; imag[odd] = imag[even] - ti;
+          real[even] += tr; imag[even] += ti;
+          const nextWr = wr * stepReal - wi * stepImag;
+          wi = wr * stepImag + wi * stepReal; wr = nextWr;
+        }
+      }
+    }
+    if (inverse) {
+      for (let i = 0; i < n; i++) { real[i] /= n; imag[i] /= n; }
+    }
+  }
+
+  function rennstandPitchBuffer(original, semitones) {
+    const pitch = rennstandTonhoeheWert(semitones);
+    if (!original || pitch === 0) return original;
+    const cached = RENNSTAND_PITCH_CACHE.get(original);
+    if (cached && cached.pitch === pitch) return cached.buffer;
+
+    // Phase-Vocoder: Zeitdehnung um das Pitch-Verhaeltnis, anschliessend
+    // Resampling mit demselben Faktor. Die Clipdauer bleibt dadurch unveraendert.
+    const ratio = rennstandPitchRatio(pitch);
+    const fftSize = 1024, hop = fftSize >> 2, half = fftSize >> 1;
+    const analysisHop = hop / ratio;
+    const frameCount = Math.ceil((original.length + half) / analysisHop) + 1;
+    const stretchedLength = frameCount * hop + fftSize;
+    const window = new Float64Array(fftSize);
+    for (let i = 0; i < fftSize; i++) window[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (fftSize - 1));
+    const norm = new Float64Array(stretchedLength);
+    const channels = [];
+
+    for (let channel = 0; channel < original.numberOfChannels; channel++) {
+      const input = original.getChannelData(channel);
+      const output = new Float64Array(stretchedLength);
+      const real = new Float64Array(fftSize), imag = new Float64Array(fftSize);
+      const previous = new Float64Array(half + 1), synthesis = new Float64Array(half + 1);
+      let first = true;
+      for (let frame = 0; frame < frameCount; frame++) {
+        const center = Math.round(frame * analysisHop), inputStart = center - half;
+        real.fill(0); imag.fill(0);
+        for (let i = 0; i < fftSize; i++) {
+          const sourceIndex = inputStart + i;
+          if (sourceIndex >= 0 && sourceIndex < input.length) real[i] = input[sourceIndex] * window[i];
+        }
+        rennstandFFT(real, imag);
+        for (let k = 0; k <= half; k++) {
+          const magnitude = Math.hypot(real[k], imag[k]);
+          const phase = Math.atan2(imag[k], real[k]);
+          if (first) synthesis[k] = phase;
+          else {
+            const expected = 2 * Math.PI * k * analysisHop / fftSize;
+            let delta = phase - previous[k] - expected;
+            delta = ((delta + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+            const omega = 2 * Math.PI * k / fftSize + delta / analysisHop;
+            synthesis[k] += omega * hop;
+          }
+          previous[k] = phase;
+          real[k] = magnitude * Math.cos(synthesis[k]);
+          imag[k] = magnitude * Math.sin(synthesis[k]);
+          if (k > 0 && k < half) {
+            real[fftSize - k] = real[k]; imag[fftSize - k] = -imag[k];
+          }
+        }
+        first = false;
+        rennstandFFT(real, imag, true);
+        const outputStart = frame * hop;
+        for (let i = 0; i < fftSize; i++) {
+          output[outputStart + i] += real[i] * window[i];
+          if (channel === 0) norm[outputStart + i] += window[i] * window[i];
+        }
+      }
+      channels.push(output);
+    }
+
+    const length = Math.max(1, Math.round(original.length * ratio));
+    const shifted = audioCtx.createBuffer(original.numberOfChannels, length, original.sampleRate);
+    for (let channel = 0; channel < original.numberOfChannels; channel++) {
+      const source = channels[channel], target = shifted.getChannelData(channel);
+      for (let i = 0; i < length; i++) {
+        const index = half + i;
+        target[i] = index < source.length && norm[index] > 1e-10 ? source[index] / norm[index] : 0;
+      }
+    }
+    RENNSTAND_PITCH_CACHE.set(original, { pitch, buffer: shifted });
+    return shifted;
+  }
+
+  function rennstandTonhoeheText(v) {
+    const n = rennstandTonhoeheWert(v), betrag = Math.abs(n);
+    const einheit = lang === 'de' ? (betrag === 1 ? 'Halbton' : 'Halbtöne')
+      : lang === 'es' ? (betrag === 1 ? 'semitono' : 'semitonos')
+      : (betrag === 1 ? 'semitone' : 'semitones');
+    return (n > 0 ? '+' : '') + n + ' ' + einheit;
+  }
   function rennstandTempoWert(v) {
     const n = Number(v);
     return Number.isFinite(n) ? Math.max(1, Math.min(1.75, n)) : 1;
@@ -728,3 +1139,9 @@
     el.addEventListener('change', lesen);
     lesen();
   });
+
+  const rennstandTestKnopf = $('setting-announce-stand-test');
+  if (rennstandTestKnopf) {
+    rennstandTestKnopf.addEventListener('click', () => { rennstandTesten(); });
+    i18nOnLangChange(() => rennstandTestSetBusy(false));
+  }

@@ -1,0 +1,329 @@
+{{Stand|app=1.2.9|appdatum=26.10.2026}}
+[[Datei:OmegaSim-Safety-Car.png|mini|Ein Auto mit der Rolle Safety Car in OmegaSim]]
+Das '''Safety Car''' ist in [[OmegaSim]] eine Garagenrolle, mit der ein echtes [[Carrera HYBRID]]-Auto selbstständig als Sicherheitsfahrzeug fährt: Es parkt am Rand der Bahn, fährt bei gelber Flagge los, das Feld schließt dahinter auf und überholt nicht, und nach Grün kehrt es auf sein Einpark-Teil zurück und parkt dort mit einer aufgenommenen Lenk- und Gasfolge. Der '''Reinigungswagen''' (in der App „Reinigungsfahrzeug“, in Arbeit) ist eine verwandte Rolle, die die Bahn in drei Runden mittig, links und rechts abfährt. Beide Rollen nutzen die Steuerung der NPCs (siehe [[NPC-Fahrverhalten]]) mit eigenen Zusatzregeln; sie gibt es nur beim Fahren auf der Bahn und jeweils nur für ein Auto.
+
+== Auf einen Blick ==
+{| class="wikitable"
+! Merkmal !! Wert
+|-
+| Menüpfad || Rolle: '''FAHREN → Autos → Garage''', erste Zeile rechts; Einstellungen: '''Optionen → Safety Car'''; Gelbe Flagge: Knopf im Cockpit oder Taste; Reinigung starten: Knopf '''Reinigungsfahrzeug starten''' im FAHREN-Menü
+|-
+| Wichtigste Schalter (Standard) || erst aufschließen: an · Parkplatz: Fahrbahn · Ein- und Ausparken: Aufnahme · Gas beim Ausparken: 1,5× · Einpark-Teil: Start/Ziel · Heimtempo 50&nbsp;% · Einparktempo 30&nbsp;%
+|-
+| Status || Safety Car stabil (Kennzeichnung „experimentell“ und „WIP“ im 1.0-Abschnitt entfernt); Ein-/Ausparken mit Aufnahme, Parkplatzwahl und Gas beim Ausparken: in Arbeit bzw. experimentell; Reinigungswagen: in Arbeit
+|-
+| Seit Version || Safety Car seit 0.10.7 (experimentell); Aufnahme-Parken seit 1.1.30; Parken auf kurzen Geraden seit 1.2.4; Reinigungswagen seit 1.0.45
+|-
+| Beteiligte Quelldateien || <code>src/90-ghosts.js</code> (alles Wesentliche), <code>src/70-race.js</code> (Rundenzählung, Gelb-Tempo, Knopf), <code>src/50-drive.js</code> (Autopilot des Fahrerautos), <code>src/51-konsole.js</code> (Knopf Reinigung), <code>src/00-index.head.html</code> (Optionen)
+|}
+
+== Grundlagen ==
+=== Safety Car im Motorsport ===
+Im echten Rennsport fährt ein Safety Car nach einem Unfall vor das Feld. Alle fahren langsam dahinter, überholt wird nicht, die Abstände schrumpfen. Mit Grün biegt es ab, und das Rennen geht weiter. OmegaSim bildet genau diese drei Teile nach: Gelbphase, Kolonnenfahrt, Rückkehr.
+
+=== Zustandsmaschine ===
+Das Verhalten ist eine '''Zustandsmaschine''': Die Flagge und das Safety Car haben jeweils benannte Zustände (zum Beispiel „gelb“, „Heimweg“, „einparken“), und feste Bedingungen schalten von einem in den nächsten. Unten stehen sie als Tabellen ''Zustand | Bedingung | nächster Zustand''. Der Vorteil: Jeder Moment ist eindeutig beschrieben, und ein Fehler lässt sich einem Übergang zuordnen.
+
+=== Gesteuert, nicht geregelt ===
+Das Auto meldet seine Querlage nicht (siehe [[NPC-Fahrverhalten#Grundlagen]]). „Rechts am Rand parken“ ist deshalb eine '''Steuerung ohne Rückmeldung''': Die App schickt eine Folge von Lenk- und Gaswerten, von der man weiß, dass sie beim Aufnehmen funktioniert hat, und hofft, dass das Auto sie gleich ausführt. Eine '''Aufnahme''' ist dabei eine Liste von Punkten ''[Zeit in ms, Lenkung −1 bis +1, Gas 0 bis 1]'', die von Hand gefahren und mitgeschrieben wurde.
+
+=== Kachel, Teil, Phase ===
+Die Bahn besteht aus Teilen (Kacheln) von 43&nbsp;cm Länge bei einer Geraden. Das Auto meldet beim Überfahren eines Teils einen Zählersprung und den Teilecode, etwa <code>0x01</code> für Start/Ziel auf der Bahn (Schreibweise siehe [[Hexadezimalsystem]]). Wo das Auto auf einem Teil steht, schätzt die App aus Zeit und Tempo. Deshalb fährt das Safety Car erst dann zum Parkplatz, wenn es seit dem Losfahren einmal über Start/Ziel gefahren ist: erst dann ist die Teilezählung sicher abgeglichen.
+
+=== Anteil des Gasbytes ===
+Alle Tempoangaben sind Anteile des Gasbytes (0 bis 1, gesendet als 0 bis 127 Gasschritte). 0,35 entspricht Δ&nbsp;44, rund 0,52&nbsp;m/s.
+
+== Bedienung ==
+=== Safety Car einrichten ===
+# Unter '''FAHREN → Autos → Garage''' das Auto wählen.
+# In der ersten Zeile rechts die '''Rolle''' mit den Pfeilen auf '''Safety Car''' stellen. Ein anderes Auto mit dieser Rolle verliert sie dabei nicht; die Rolle ist nur wählbar, solange kein anderes Auto sie hat.
+# Prüfen, dass auf der Bahn gefahren wird (Leseart „Bahn“) und ein Streckenlayout vorliegt (gebaut im [[Strecken- und Raum-Editor]] oder eingescannt).
+# Unter '''Optionen → Safety Car''' Parkplatz, Parkart und Tempi einstellen. Eine Führung steht unter '''Optionen → Tutorials → Safety Car'''.
+# Rennen starten. In der Stellung „Fahrbahn“ fährt das Safety Car vom letzten Startplatz aus die erste Runde hinter dem Feld mit und parkt danach.
+
+=== Gelbe Flagge ausrufen und freigeben ===
+# Im Cockpit auf '''Gelbe Flagge''' tippen (ein Tipp genügt) oder am Controller die Taste Kreuz/A eine Sekunde halten (kurz tippen fordert dagegen einen Boxenstopp an). Ein Ladebalken im Knopf zeigt das Halten an.
+# Das Safety Car fährt los, alle Autos drosseln, niemand überholt. Das eigene Auto übernimmt der Autopilot.
+# Zum Freigeben erneut tippen bzw. halten: Die Startampel läuft, danach ist Grün.
+# Der Schalter '''Gelbe Flagge deaktivieren''' in den Renneinstellungen sperrt das Ausrufen.
+
+=== Reinigungswagen ===
+# In der Garage einem Auto die Rolle '''Reinigungsfahrzeug (WIP)''' geben.
+# Im FAHREN-Menü auf der Autos- oder der Streckenkachel '''Reinigungsfahrzeug starten''' drücken.
+# Das Auto fährt bis Start/Ziel, dann drei Runden, und hält; die App meldet „Bahn gereinigt“.
+
+== Einstellungen ==
+=== Optionen → Safety Car ===
+{| class="wikitable"
+! Name in der App !! Bereich/Werte !! Standard !! Wirkung laut Code !! Schlüssel
+|-
+| Safety Car: erst aufschließen || an/aus || an || an: wer mehr als zwei Teile hinter dem fahrenden Safety Car liegt, fährt mit 0,45 heran; sonst Gelb-Tempo 0,4025 || <code>race-sc-aufschliessen</code>
+|-
+| Wo parkt das Safety Car? (experimentell) || Fahrbahn; Fahrbahn, wartet bis Gelb || Fahrbahn || Fahrbahn: fährt die erste Runde mit; „wartet“: ohne Startrunde. Die frühere Stellung „Neben der Strecke von Hand“ ist im Menü verborgen, alte Sicherungen werden auf „Fahrbahn“ umgestellt || <code>sc-parkplatz</code>
+|-
+| Safety Car: Ein- und Ausparken (WIP) || Aufnahme; Lenkimpuls || Aufnahme || Einparken mit <code>MANOEVER.scEin</code>, Ausparken mit <code>MANOEVER.scAus</code>; oder Rechts-/Links-Impuls aus den Reglern || <code>sc-park-art</code>
+|-
+| Gas beim Ausparken (WIP) || 1,0–3,0× || 1,5× || Faktor auf das Gas der Ausparkfolge (je Punkt höchstens 1), Lenkung und Zeiten bleiben || <code>sc-aus-gas</code>
+|-
+| Safety Car: Einpark-Teil (experimentell) || Start/Ziel (jede Strecke); automatisch (gemessen); Teil 1 … n der geladenen Strecke || Start/Ziel || Parkplatz <code>scParkKachel()</code>; eine Teilnummer gilt nur für eine Strecke mit derselben Teilezahl || <code>sc-ausfahrt-teil</code>
+|-
+| Safety Car: Heimtempo || 30–100&nbsp;% || 50&nbsp;% || Höchsttempo nach Grün auf dem Heimweg, mindestens 0,30 || <code>sc-heimtempo</code>
+|-
+| Safety Car: Einparktempo || 30–100&nbsp;% || 30&nbsp;% || Tempo der Lenkimpulse (nur Parkart „Lenkimpuls“) || <code>sc-einfahrt-tempo</code>
+|-
+| Safety Car: Rechts-Impuls || 0–2000&nbsp;ms || 100&nbsp;ms || Dauer voll rechts eingeschlagen (Lenkimpuls) || <code>sc-ausfahrt-ms</code>
+|-
+| Safety Car: Links-Impuls || 0–2000&nbsp;ms || 100&nbsp;ms || Dauer voll links danach (Lenkimpuls) || <code>sc-ausfahrt-links-ms</code>
+|-
+| Safety Car: Räder am Ende || 0–100&nbsp;% || 20&nbsp;% || Einschlag nach links in der Haltephase des Lenkimpulses || <code>sc-endlenk-pct</code>
+|}
+Nur in der verborgenen Stellung „Neben der Strecke von Hand“ wirken außerdem die ebenfalls verborgenen Regler Anfahrt (1–6 Teile, 3), Rand-Vorlauf (0–6, 2), Ausfahrt-Zeitpunkt (−5 bis +5 Teile in Vierteln, −2,75), Gegenschub nach Rechts-Impuls (0–500&nbsp;ms, 100) und Gegenschub nach Links-Impuls (0–500&nbsp;ms, 450) (<code>sc-einfahrt-kacheln</code>, <code>sc-rand-vorlauf</code>, <code>sc-ausfahrt-kachel</code>, <code>sc-gegenschub-rad-ms</code>, <code>sc-gegenschub-ms</code>).
+
+=== Zugehörige Renneinstellungen ===
+{| class="wikitable"
+! Name in der App !! Bereich/Werte !! Standard !! Wirkung laut Code !! Schlüssel
+|-
+| Gelbe Flagge deaktivieren || an/aus || aus || an: <code>setFlag('yellow')</code> zeigt nur „Gelbe Flagge ist deaktiviert“ || <code>race-gelb-aus</code>
+|-
+| Einparken in der Aufstellung || Aufnahme; Lenkimpuls || Aufnahme || Startaufstellung mit der Safety-Car-Folge (rechts) bzw. gespiegelt (links) || <code>race-einpark-art</code>
+|-
+| Einparken: Gas der Safety-Car-Folge (WIP) || 40–100&nbsp;% || 70&nbsp;% || Faktor auf das Gas von <code>scEin</code> beim Aufstellen || <code>race-einpark-sc-gas</code>
+|-
+| Einparken: Einlenkstärke || 0–100&nbsp;% || 100&nbsp;% || Stärke des Lenkimpulses beim Aufstellen || <code>race-einpark-staerke</code>
+|-
+| Einparken: Lenkimpuls || 10–300&nbsp;ms || 100&nbsp;ms || Impulsdauer beim Aufstellen (Parkart Lenkimpuls) || <code>race-einpark-ms</code>
+|-
+| Einparken: Tempo || 15–60&nbsp;% || 30&nbsp;% || Tempo des Impulses beim Aufstellen || <code>race-einpark-tempo</code>
+|}
+
+== Funktionsweise ==
+=== Rollen und Voraussetzungen ===
+* Die Rollen <code>safetycar</code> und <code>reinig</code> gehören zu den '''Bahnrollen''' (<code>BAHN_ROLLEN</code>). Im Ausdruck-Modus sind sie nicht wählbar; beim Wechsel dorthin werden sie auf „Aus“ gestellt, und Rennstart sowie Meisterschaft warnen, wenn dort noch ein Safety Car steht.
+* Je Rolle höchstens ein Auto (<code>garRollenFrei()</code>).
+* Das Safety Car zählt keine Runden und steht nicht im Ergebnis: Eine Start/Ziel-Überfahrt ruft für diese Rolle nur <code>safetyCarLinie()</code> auf.<ref><code>src/70-race.js</code>, <code>carLapCrossed()</code>.</ref>
+* Für Parkplatz und Teilezählung braucht die App ein Layout mit mindestens drei Teilen.
+* Beide Rollen fahren über <code>ghostTick()</code>. Das Safety Car steht im Feld (<code>ghostFieldRacing()</code>), damit die anderen ihm ausweichen und es nie überholen; der Reinigungswagen steht nicht darin.
+
+=== Gelbphase: Zustandsmaschine der Flagge ===
+Die Flagge hat drei Zustände (<code>flagState</code>):<ref><code>src/90-ghosts.js</code>, <code>setFlag()</code>, <code>yellowRestart()</code>, <code>flagHoldRelease()</code>.</ref>
+{| class="wikitable"
+! Zustand !! Bedingung !! nächster Zustand !! Was beim Übergang passiert
+|-
+| green || Knopf getippt oder Taste 1000&nbsp;ms gehalten, Gelb nicht deaktiviert || yellow || Tempogrenze des Fahrerautos auf 0,45 (mit Safety Car und „aufschließen“) bzw. 0,4025; <code>safetyCarRaus()</code>; laufende Angriffe aller NPCs werden abgebrochen; Ampel aus; Meldung „GELBE FLAGGE“
+|-
+| yellow || erneut getippt bzw. gehalten || restart || Startampel: Licht 1 bis 5 bei 600, 1600, 2600, 3600 und 4600&nbsp;ms (Töne 440 bis 680&nbsp;Hz); in dieser Zeit ist der Knopf gesperrt
+|-
+| restart || 4600&nbsp;ms + Zufall 1000 bis 3000&nbsp;ms || green || Ampel „Go“ (880&nbsp;Hz), Tempogrenze 1, <code>safetyCarHeim()</code>: das Safety Car fährt heim
+|}
+Das Rennende beendet eine laufende Gelbphase ebenfalls.
+
+=== Tempo unter Gelb ===
+Die Grundgröße ist das Gelb-Tempo
+<pre>
+gelbGrenze = max(80 km/h ÷ Höchsttempo, 0,35) × 1,15  =  max(0,271; 0,35) × 1,15  =  0,4025
+</pre>
+mit 0,35 als Leseschwelle und 1,15 als Anhebung, damit niemand mit Kurvendrosselung und Abstandsregel „verhungert“.<ref><code>gelbGrenze()</code>; <code>src/70-race.js</code>, <code>yellowFactor()</code>, <code>YELLOW_KMH = 80</code>.</ref> Für jedes Auto (NPC und Autopilot des Fahrerautos) gilt dann:
+<pre>
+Ziel_Gelb = min(Ziel, gelbZielFuer(Auto)) × gelbAbstandFaktor
+Ziel_Gelb = min(Ziel_Gelb, scFolgeDeckel)
+gelbZielFuer = 0,45         wenn „aufschließen“ an, Safety Car fährt und mehr als 2 Teile voraus
+             = 0,4025       sonst (auch für das Safety Car selbst)
+gelbAbstandFaktor = 1                                   Abstand zum Vordermann ≥ 1,5 Teile
+                  = 0,7 + 0,3 × clamp((Abstand − 0,5)/1,0, 0, 1)   sonst
+scFolgeDeckel = Ziel_SC × (0,9 + 0,1 × clamp((Abstand_SC − 0,5)/1,0, 0, 1))   wenn das SC < 1,5 Teile voraus
+</pre>
+Danach folgen die üblichen Schritte der NPC-Kette (Kurvendrosselung, Mindesttempo 0,37, Haarnadel-Höchsttempo 0,35); Staffel, Würze und Überholen sind unter Gelb aus, die Querlage ist 0 (mittig). Für das Safety Car selbst gelten seit 1.1.41 dieselben Grenzen (<code>autopilotGelbGrenzen()</code>: Boden min(0,37; Grundtempo), in Haarnadeln höchstens 0,35). Gemessen auf der Geraden ergibt das 0,4025 (Δ&nbsp;51), in Kurven 0,37 (Δ&nbsp;47), in der Haarnadel 0,35 (Δ&nbsp;44), für Feld und Safety Car gleich.<ref><code>CARRERA_HYBRID.md</code>, Tabelle „Tempo-Grenzen“, Absatz „Unter Gelb, tatsächlich gefahren“.</ref>
+
+Unter Gelb blinkt das Safety Car (Scheinwerfer 250&nbsp;ms an je 750&nbsp;ms); die übrigen Autos wechseln Scheinwerfer und Bremslicht im 520-ms-Takt. Am Ende der Phase bleibt das eigene Auto beim Autopiloten, bis der Ton-Countdown abgelaufen ist, und übernimmt dann sein aktuelles Tempo.
+
+=== Zustandsmaschine des Safety Cars ===
+{| class="wikitable"
+! Zustand !! Bedingung !! nächster Zustand
+|-
+| Startrunde (<code>scErsteRunde</code>; nur „Fahrbahn“) || Start/Ziel überfahren nach mindestens max(2; n/2) gezählten Teilen, oder spätestens nach n + 2 Teilen (n = Teilezahl); die Einführungsrunde zählt nicht || Heimweg
+|-
+| geparkt (Licht aus, <code>scGeparkt</code>) || gelbe Flagge || Losfahren
+|-
+| Losfahren || Ausparkfolge zu Ende || Gelb-Fahrt
+|-
+| Gelb-Fahrt || Grün || Heimweg
+|-
+| Heimweg (<code>scHeim</code>) || Teil = Parkplatz und Ort an Start/Ziel abgeglichen || Einparken
+|-
+| Einparken (<code>randHalt</code>) || Folge und Haltezeit zu Ende || geparkt
+|-
+| Einparken || gelbe Flagge || zu Ende einparken, 300&nbsp;ms danach Losfahren, falls noch Gelb
+|-
+| Heimweg || gelbe Flagge || Gelb-Fahrt (Heimweg wird abgebrochen)
+|-
+| beliebig fahrend, „Bahn verlassen“ geparkt || 1500&nbsp;ms vergangen, weniger als 4 Neustarts in dieser Gelbphase || weiterfahren (selbst neu gestartet)
+|}
+'''Startrunde.''' Das Safety Car startet vom letzten Startplatz (<code>gridPosOf()</code> gibt ihm die Nummer hinter allen anderen), fährt höchstens das Formationstempo 0,35 × Abstandsfaktor und setzt nie zum Überholen an. Beim fliegenden Start zählt die Einführungsrunde nicht mit.
+
+'''Heimtempo.''' Auf dem Heimweg gilt Ziel = max(0,30; min(Ziel; Heimtempo)). Ab zwei Teilen vor dem Parkteil fährt es mittig (<code>scVorParkMittig()</code>: Querlage 0), damit die Einparkfolge aus der Mitte beginnt.
+
+=== Parkplatz: scParkKachel ===
+<syntaxhighlight lang="javascript">
+// src/90-ghosts.js, scParkKachel()
+function scParkKachel() {
+  const n = currentTrackTiles ? currentTrackTiles.length : 0;
+  const w = n ? scTeilWahl(n) : null;           // Auswahl im Menü
+  if (w !== null) return w;
+  const s = ortStartIndices(currentTrackTiles || []);
+  return s.length ? s[0] : 0;                   // erstes Start/Ziel-Teil, sonst Teil 0
+}
+</syntaxhighlight>
+<code>scTeilWahl()</code> liefert bei „Start/Ziel (jede Strecke)“ das erste Teil mit Start/Ziel-Code, bei einer gemerkten Teilnummer ''i/n'' das Teil i, aber nur, wenn die geladene Strecke wieder n Teile hat, und bei „automatisch“ nichts, sodass das erste Start/Ziel-Teil aus der Ortung gilt. Die Wahl wird gespeichert.
+
+=== Einparkfolge: MANOEVER.scEin und scAusSkript ===
+Die Folgen wurden am 21.10.2026 von Hand im Pacejka-Modus aufgenommen und sind im Code als Punkte ''[ms, Lenkung, Gas]'' hinterlegt; das Gas ist dabei schon mit dem damaligen Höchstgeschwindigkeitsfaktor 1,8 multipliziert. Gelenkt wird mit Lenkbyte-Werten, positiv ist rechts.<ref><code>src/90-ghosts.js</code>, <code>MANOEVER</code>.</ref>
+
+'''scEin''' (Einparken, 1710&nbsp;ms):
+{| class="wikitable"
+! Zeit !! Lenkung !! Gas !! Bedeutung
+|-
+| 0–40&nbsp;ms || 0 || 0,233 || gerade
+|-
+| 41–402&nbsp;ms || +0,86 bis +0,997 || 0,231 → 0,215 || nach rechts an den Rand
+|-
+| 403–539&nbsp;ms || +0,51, dann 0 || 0,213 → 0,209 || Räder gerade
+|-
+| 540–760&nbsp;ms || −1, zuletzt −0,69 || 0,207 → 0,199 || gegenlenken, Auto parallel stellen
+|-
+| 761–1079&nbsp;ms || 0 (kurz −0,13) || 0,197 → 0,186 || geradeaus rollen
+|-
+| 1080–1211&nbsp;ms || −1 || 0,184 → 0,173 || Räder zur Bahn
+|-
+| 1212–1710&nbsp;ms || 0 || 0,164 → 0 || ausrollen bis Stillstand
+|}
+Davor gleitet das Gas in 300&nbsp;ms (<code>MANOEVER_ANPASS_MS</code>) linear vom zuletzt gesendeten Wert (höchstens 0,8) auf den ersten Wert der Folge, mit geraden Rädern. Nach der Folge folgen 800&nbsp;ms Halt mit voller Bremse, dann wird das Auto gestoppt, das Licht geht aus (<code>safetyCarFertig()</code>).
+
+'''scAus''' (Ausparken, 2208&nbsp;ms): 0–49&nbsp;ms Stillstand, dann bis 1488&nbsp;ms Lenkung −1 bis −0,87 (zur Bahn) bei Gas von 0 langsam bis 0,09, ab 1538&nbsp;ms Lenkung +0,24 bis +0,93 (Auto wieder gerade richten) bei Gas 0,09 bis 0,117, ab 2118&nbsp;ms Räder gerade. <code>scAusSkript()</code> multipliziert jedes Gas mit dem Regler „Gas beim Ausparken“:
+<pre>
+Gas_gesendet(t) = min(1, Gas_Aufnahme(t) × Gasfaktor)       Gasfaktor 1,0 … 3,0, Standard 1,5
+</pre>
+Grund: Die Aufnahme beginnt mit sehr wenig Gas (0,005 bis 0,04 in der ersten halben Sekunde), gefahren im Ausdruck-Modus mit einem anderen Auto; auf der Bahn kam das Safety Car damit zu spät in Fahrt und fuhr nach der Rechtslenkung von der Bahn. Nach der Folge fährt es ohne Halt normal weiter.
+
+Bei der Parkart '''Lenkimpuls''' läuft stattdessen eine Phasenfolge (<code>randHaltTick()</code>): '''rad''' (Räder voll rechts, Rechts-Impuls lang, Einparktempo) → '''gegen''' (voll links, Links-Impuls lang) → '''halt''' (800&nbsp;ms, volle Bremse, Räder „am Ende“ um den eingestellten Anteil nach links). Beim Losfahren ohne Aufnahme macht das Safety Car einen Links-Rechts-Impuls: 100&nbsp;ms voll links, 100&nbsp;ms voll rechts, bei Tempo 0,30 mit 200&nbsp;ms Anlauf.
+
+=== Stauchung auf kurzen Geraden: scEinPassend ===
+Die Einparkfolge rollt nach ihrem Beginn noch ein Stück weiter. Liegt in dieser Strecke eine Kurve, fährt das Auto mit geraden Rädern hinaus. Seit 1.2.4 schätzt die App den Rollweg und staucht das Gas, bis er hineinpasst:<ref><code>scRollweg()</code>, <code>scGeradenAb()</code>, <code>scEinPassend()</code>.</ref>
+<pre>
+W = Gas_0 × 0,3 s + Σ Gas_i × (t_(i+1) − t_i)            (Gas-Sekunden, Anpassphase + Folge)
+D = W × SC_GAS_MPS / SC_GERADE_M × SC_ROLL_KORREKTUR      (in Geradenlängen)
+G = Zahl der Geraden und Start/Ziel-Teile ab dem Parkteil (das Parkteil selbst mitgezählt)
+frei   = max(0,5; G − 0,2)
+Faktor = 1                      wenn D ≤ frei
+       = max(0,5; frei / D)     sonst
+</pre>
+* SC_GAS_MPS = 1,51&nbsp;m/s: Tempo bei Vollgas (0,0119&nbsp;m/s je Gasschritt × 127)
+* SC_GERADE_M = 0,43&nbsp;m: Länge einer Geraden
+* SC_ROLL_KORREKTUR = 1,7: aus Beobachtung. Gerechnet rollt <code>scEin</code> 1,3 Teile; gemeldet klappte es aber erst mit Start/Ziel plus zwei Geraden, also eher 2 bis 2,5 Teile (Schwung der Anfahrt, Nachrollen nach dem Bremsen).
+* 0,2: Reserve, damit die Folge vor dem Ende der letzten Geraden steht
+* 0,5: Mindestfaktor; mehr als halbieren wird das Gas nie
+Der Faktor multipliziert jedes Gas der Folge, Lenkung und Zeiten bleiben. Im Protokoll steht dann etwa „Gas x 0.80 – nur 2 Gerade(n) frei“.
+
+=== Vorbeifahren am geparkten Safety Car: scVorbeiQuer ===
+Solange das Safety Car parkt oder einparkt, bekommen alle anderen Autos (außer denen, die gerade zu ihrem Startplatz fahren) auf dem Teil vor dem Parkteil, auf dem Parkteil und den zwei Teilen dahinter die feste Querlage −0,8 (links):
+<pre>
+d = (Teil − Parkteil) mod n
+Querlage = −0,8   wenn d ≤ 2 oder d = n − 1,   sonst keine Vorgabe
+</pre>
+Diese Vorgabe hat Vorrang vor Ideallinie und Spur; nur Rückweg und eigener Boxenstopp gehen vor. Vor 1.2.4 galt sie fest um Start/Ziel. Ausgenommen sind Autos in der Startaufstellung, weil die erste Startreihe direkt vor Start/Ziel steht und das rechte Auto sonst auf die falsche Seite gezwungen würde.
+
+Steht ein Safety Car in der Garage und ist der NPC-Boxenstopp an, liegt die NPC-Box auf dem ersten Teil mindestens drei Teile hinter dem Parkplatz, auf dem zwei Geraden aufeinander folgen (siehe [[NPC-Fahrverhalten#NPC-Boxenstopp (in Arbeit)]]).
+
+=== Reinigungswagen ===
+<code>reinigStarten()</code> startet das Auto im freien Fahren, nur wenn auf der Bahn gefahren wird. <code>reinigTick()</code> schaltet die Phasen nach dem gefahrenen Weg (geschätzter Gesamtfortschritt in Teilen), nicht nach dem Rundenzähler:<ref><code>reinigStarten()</code>, <code>reinigTick()</code>, <code>reinigQuer()</code>, <code>REINIG_QUER = 0.9</code>.</ref>
+{| class="wikitable"
+! Zustand !! Querlage !! Bedingung !! nächster Zustand
+|-
+| anfahrt || 0 || Teil 0 (Start/Ziel) erreicht || mitte
+|-
+| mitte || 0 || n Teile seit Phasenbeginn || links
+|-
+| links || −0,9 || n Teile || rechts
+|-
+| rechts || +0,9 || n Teile || fertig: Auto hält, „Bahn gereinigt“
+|}
+Die Querlage kommt allein aus dieser Vorgabe: Ideallinie, Spur, Ausweichen und Gelb-Mitte wirken nicht. Das Tempo folgt der NPC-Kette mit der Garagenstufe des Autos. Der Reinigungswagen nimmt nicht an Rennen teil, erscheint in keiner Wertung und wird von den NPCs nicht als Teil des Feldes gesehen. Die App steuert nur die Fahrt; eine Reinigungsvorrichtung ist nicht Teil von OmegaSim.
+
+== Beispiele ==
+=== Stauchung: Start/Ziel und eine Gerade ===
+Parkteil ist Start/Ziel, danach folgt eine Gerade und dann eine Kurve.
+# Rollweg der Folge: Anpassphase 0,233 × 0,3&nbsp;s = 0,0699; Summe über die Folge 0,3051; W = 0,3750 Gas-Sekunden.
+# D = 0,3750 × 1,51 / 0,43 × 1,7 = 0,566&nbsp;m / 0,43&nbsp;m × 1,7 = 1,317 × 1,7 = '''2,24 Geradenlängen'''.
+# G = 2 (Start/Ziel + Gerade), frei = max(0,5; 2 − 0,2) = 1,8.
+# D &gt; frei, also Faktor = max(0,5; 1,8 / 2,24) = '''0,80'''. Jedes Gas der Folge wird mit 0,80 multipliziert, das erste also 0,233 → 0,187.
+Weitere Fälle mit demselben D:
+{| class="wikitable"
+! Geraden ab Parkteil (G) !! frei !! Faktor
+|-
+| 0 (Parkteil ist eine Kurve) || 0,5 || 0,50
+|-
+| 1 || 0,8 || 0,50 (0,36 wäre zu wenig, Mindestfaktor)
+|-
+| 2 || 1,8 || 0,80
+|-
+| 3 oder mehr || 2,8 und mehr || 1,00 (keine Stauchung)
+|}
+
+=== Gas beim Ausparken ===
+Punkt bei 954&nbsp;ms der Ausparkfolge: Gas 0,090. Mit Faktor 1,5 gesendet 0,135 (Δ&nbsp;17), mit 3,0 dann 0,270 (Δ&nbsp;34).
+
+=== Ein Auto unter Gelb ===
+„Aufschließen“ an, Safety Car fährt. Ein NPC liegt fünf Teile dahinter auf einer Geraden, Vordermann weit weg: Ziel min(0,55; 0,45) × 1 = 0,45. In der nächsten 60°-Kurve: 0,45 × (1 − 0,2) = 0,36, vom Mindesttempo auf '''0,37''' gehoben. Hat er bis auf zwei Teile aufgeschlossen, gilt 0,4025; folgt er dem Safety Car mit 1,0 Teilen Abstand, ist der Abstandsfaktor 0,7 + 0,3 × 0,5 = 0,85 → 0,342, und der Folgedeckel liegt bei 0,4025 × (0,9 + 0,1 × 0,5) = 0,382; das Mindesttempo hebt am Ende auf 0,37. Das Safety Car selbst fährt auf derselben Geraden 0,4025.
+
+=== Vorbeifahrt ===
+Strecke mit 12 Teilen, Parkteil 0. Die Querlage −0,8 gilt auf den Teilen 11, 0, 1 und 2.
+
+== Grenzen und bekannte Probleme ==
+* '''Keine Rückmeldung zur Querlage.''' Randlage und Parkposition sind Befehle. Ob das Auto wirklich am Rand steht, sieht die App nicht.
+* '''Aufnahmen hängen am Auto und Untergrund.''' Die Folgen wurden mit einem Auto im Ausdruck-Modus aufgenommen. Auf anderem Boden oder mit anderem Akkustand kann das Auto weiter oder weniger weit rollen; dafür gibt es den Gasfaktor und die Stauchung. Der Korrekturfaktor 1,7 stammt aus Beobachtung, nicht aus Messreihen.
+* '''Parkplatz braucht abgeglichene Ortung.''' Ohne Start/Ziel-Überfahrt seit dem Losfahren parkt das Safety Car nicht, sondern fährt weiter.
+* '''Neustarts begrenzt.''' Wird es mehr als viermal je Gelbphase von der Bahn gestoßen, bleibt es stehen.
+* '''Leseschwelle.''' Unter rund 30&nbsp;% liest das Auto die Bahn nicht mehr zuverlässig; deshalb beginnen Einpark- und Heimtempo bei 30&nbsp;%. Die genaue Grenze ist noch nicht gesichert.
+* '''Reinigungswagen''' (in Arbeit): Die NPCs weichen ihm nicht aus, weil er nicht zum Feld zählt; man startet ihn sinnvollerweise allein.
+
+== Versionsgeschichte ==
+{| class="wikitable"
+! Version !! Änderung
+|-
+| 0.10.7 || Rolle Safety Car (experimentell): parkt am Rand, fährt bei Gelb los, blinkt; andere drosseln erst in seiner Nähe
+|-
+| 1.0.12 || Option „erst aufschließen“ (Vorgabe an): 0,45 heran, dann Gelb-Tempo
+|-
+| 1.0 (Abschnitt) || Gelb-Tempo 15&nbsp;% über der Lesegrenze; Abstand unter Gelb; Neustart nach 1,5&nbsp;s; letzte 2&nbsp;s am Rand; Folgedeckel 90–100&nbsp;% hinter dem Safety Car; Start vom letzten Platz, erste Runde hinter dem Feld (1.0.38); Rolle nur auf der Bahn; Reinigungsfahrzeug (1.0.45)
+|-
+| 1.1.21 || Parken auf der Fahrbahn am Einpark-Teil mit 30&nbsp;%, „Neben der Strecke von Hand“ nicht mehr wählbar
+|-
+| 1.1.30 || Ein- und Ausparken nach Aufnahmen als Vorgabe, fließend aus der Fahrt
+|-
+| 1.1.38 || Regler „Gas beim Ausparken“ (1,5×)
+|-
+| 1.1.41 || Safety Car unter Gelb gleich schnell wie das Feld
+|-
+| 1.2.4 || Parken auf kurzen Geraden: mittig ab zwei Teilen vorher, Stauchung des Gases bis höchstens auf die Hälfte; Vorbeifahrt um das gewählte Parkteil statt fest um Start/Ziel; NPC-Box hinter dem Parkplatz
+|}
+
+== Einzelnachweise ==
+<references />
+
+== Siehe auch ==
+* [[NPC-Fahrverhalten]]
+* [[Rennarten]]
+* [[Boxenstopp]]
+* [[Strecken- und Raum-Editor]]
+* [[Strecke]]
+* [[Glossar]]
+
+== Quellen im Code ==
+* <code>src/90-ghosts.js</code>: <code>setFlag()</code>, <code>yellowRestart()</code>, <code>flagHoldPress()</code>, <code>flagHoldRelease()</code>, <code>flagTasteTick()</code>, <code>safetyCarRaus()</code>, <code>safetyCarHeim()</code>, <code>safetyCarStartrunde()</code>, <code>safetyCarLinie()</code>, <code>safetyCarHeimTick()</code>, <code>scParkKachel()</code>, <code>scTeilWahl()</code>, <code>scParkTick()</code>, <code>scRollweg()</code>, <code>scGeradenAb()</code>, <code>scEinPassend()</code>, <code>scVorParkMittig()</code>, <code>scVorbeiQuer()</code>, <code>scAusSkript()</code>, <code>scAusparkSchritt()</code>, <code>safetyCarFertig()</code>, <code>safetyCarNeustart()</code>, <code>gelbGrenze()</code>, <code>gelbZielFuer()</code>, <code>gelbAbstandFaktor()</code>, <code>scFolgeDeckel()</code>, <code>autopilotGelbGrenzen()</code>, <code>randHaltStarten()</code>, <code>randHaltTick()</code>, <code>skriptSchritt()</code>, <code>MANOEVER</code>, <code>reinigStarten()</code>, <code>reinigTick()</code>, <code>reinigQuer()</code>
+* <code>src/70-race.js</code>: <code>carLapCrossed()</code>, <code>yellowFactor()</code>, Knopf <code>race-act-flag</code>
+* <code>src/98b-sicherung.js</code>: Umstellung alter Parkplatz-Einstellungen
+
+== Weblinks ==
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Spielfunktionen]]

@@ -140,7 +140,7 @@ def main(quelle, kennung):
     if len(xmls) != 1:
         raise SystemExit('genau eine .xml erwartet, gefunden: %s' % xmls)
     w = xml_lesen(os.path.join(quelle, xmls[0]))
-    modell = w.get('Graphic Objects/env')
+    modell = w.get('Graphic Objects/env') or w.get('Graphic Objects/car') or w.get('Graphic Objects/Ranges/1/car')
     ziel = os.path.join(REPO, 'img', 'autos', kennung)
     os.makedirs(ziel, exist_ok=True)
 

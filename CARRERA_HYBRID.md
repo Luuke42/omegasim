@@ -605,12 +605,15 @@ PlayStation-Namen zuerst:
 | Kreis / B | Hochschalten |
 | Dreieck / Y | Licht an/aus |
 | R3 (rechten Stick druecken) | Lichthupe |
-| L1 / LB | Leseart: Bahn oder Ausdruck |
-| R1 / RB | Getriebe: Automatik oder von Hand |
+| L1 / LB | Reifenvorwahl fuer den naechsten Boxenstopp |
+| R1 / RB | Tankvorwahl fuer den naechsten Boxenstopp |
 | Kreuz / A, 1 s halten | Gelbe Flagge |
 | Options / Start | Boxenstopp |
-| Select / Share | Rennen starten oder abbrechen |
-| L3 (linken Stick druecken) | nichts |
+| Select / Share / Back | Leseart: Bahn oder Ausdruck |
+| L3 (linken Stick druecken) | Vollbild an/aus |
+| Rennen starten, Streckenansicht, Auto zuruecksetzen | ab Werk nicht belegt, zuweisbar |
+
+(Stand v1.2.10, abgeglichen mit `DEFAULT_BINDINGS` in `src/90-ghosts.js`.)
 | Steuerkreuz hoch / runter | Lenkansprechen groesser / kleiner |
 | Steuerkreuz links / rechts | Cockpit-Schirm vor / zurueck |
 

@@ -1,0 +1,61 @@
+{{Stand|app=1.2.14|appdatum=27.10.2026}}
+'''Andere Apps und Initiativen''' listet Software, Zubehör und Gemeinschaftsprojekte rund um [[Carrera HYBRID]] neben [[OmegaSim]]: die Hersteller-App, weitere Apps aus der Community und Bastelprojekte. Die Liste ist bewusst offen; wer ein Projekt kennt, ergänzt es, siehe [[Mitmachen]].
+
+== Auf einen Blick ==
+{| class="wikitable sortable"
+! Name !! Art !! Von !! Kurzbeschreibung
+|-
+| [[Original-App]] (Carrera HYBRID) || offizielle App || Carrera (Kooperation von Carrera und Sturmkind) || Steuerung der Autos per Smartphone, Streckenscan, Planer, Mehrspieler
+|-
+| [[OmegaSim]] || Community-App (Browser und Android) || Luuke42 || eigenes Fahrmodell, NPC-Gegner, Rennarten, Safety Car, Boxenstopps, Mehrspieler
+|-
+| TimTime || Community-App || Angaben folgen || Angaben folgen
+|-
+| Nanoracer || Community-App || Angaben folgen || Angaben folgen
+|-
+| Modded App || abgewandelte App || Angaben folgen || Angaben folgen
+|-
+| [[CH ControlBox]] || Zubehör (Hardware) || jogger86, Anpassungen für OmegaSim || RC-Funke als Bluetooth-Gamepad
+|-
+| [[Startampel]] || Zubehör (Hardware) || Gnen54 || echte Startampel am Tisch (Raspberry Pi / Pico), von OmegaSim gesteuert
+|}
+
+== Grundlagen ==
+Alle Apps für Carrera HYBRID sprechen mit dem Auto über [[Bluetooth Low Energy]] und dasselbe Protokoll aus 20-Byte-Paketen. Eine App, die dieses Protokoll kennt, kann ein Auto steuern, ohne dass am Auto etwas verändert wird. Unterschiede liegen darin, was die App daraus macht: Fahrmodell, Spielmodi, Gegner, Darstellung. Wie das Protokoll aussieht, steht unter [[Carrera HYBRID]].
+
+== Offizielle App ==
+Die Hersteller-App von Carrera ist kostenlos für iOS und Android. Nach Herstellerangaben und Berichten:
+* Lenken durch Neigen des Handys, Gas und Bremse über Tasten auf dem Bildschirm; später kam ein Controller mit Handyhalter hinzu.
+* Die App scannt die Strecke, simuliert Reifenverschleiß und erlaubt Tempo-Boosts.
+* Ein Planer baut neue Layouts aus den vorhandenen Teilen.
+* Im Mehrspieler sollen bis zu 30 Spieler antreten können.
+* Für die Nutzung ist eine Anmeldung nötig.
+Details aus Sicht von OmegaSim (Mitschnitte, Bytewerte) stehen unter [[Original-App]].
+
+== Community-Apps ==
+=== TimTime ===
+Angaben folgen. Wer Autor, Bezugsquelle und Funktionsumfang kennt, ergänzt sie hier.
+
+=== Nanoracer ===
+Angaben folgen.
+
+=== Modded App ===
+Angaben folgen. Gemeint ist eine abgewandelte Fassung einer bestehenden App.
+
+== Zubehör und Bastelprojekte ==
+* [[CH ControlBox]] – macht aus einer RC-Fernsteuerung ein Bluetooth-Gamepad; ursprünglich von jogger86, mit Anpassungen für OmegaSim.
+* [[Startampel]] – eine echte Ampel mit Raspberry Pi oder Pico W, die OmegaSim über Bluetooth steuert; von Gnen54.
+
+== Projekt eintragen ==
+Für jedes Projekt bitte angeben: Name, Art (App, Zubehör, Werkzeug), Autor oder Gruppe, Plattform, Bezugsquelle und zwei bis drei Sätze zum Funktionsumfang. Externe Links nur zu Seiten, deren Inhalt dauerhaft erreichbar ist.
+
+== Siehe auch ==
+* [[Original-App]]
+* [[OmegaSim]]
+* [[Wunschliste]]
+
+== Weblinks ==
+* Browserfassung, Android-App und Quellcode von OmegaSim: Links auf der [[Hauptseite]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Software]]

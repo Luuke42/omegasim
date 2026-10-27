@@ -1,0 +1,12 @@
+/* Startseite: Liste "Zuletzt bearbeitet" ohne Abkuerzungslegende, kompakt im Rahmen. */
+.hauptseite-rc {
+	border: 1px solid #a2a9b1;
+	padding: 2px 12px 6px;
+}
+.hauptseite-rc .mw-changeslist-legend {
+	display: none;
+}
+.hauptseite-rc h4 {
+	font-size: 90%;
+	margin: 0.5em 0 0.2em;
+}

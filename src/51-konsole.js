@@ -317,7 +317,14 @@
   function konsoleQuadWechsel(q, dir) {
     if (q === 'renntyp') {
       const s = $('race-mode');
-      s.selectedIndex = (s.selectedIndex + dir + s.options.length) % s.options.length;
+      // v1.2.4: nur erlaubte Renntypen (renntypenFiltern sperrt die anderen je Sensormodus).
+      const n = s.options.length;
+      let i = s.selectedIndex;
+      for (let k = 0; k < n; k++) {
+        i = (i + dir + n) % n;
+        if (!s.options[i].disabled) break;
+      }
+      s.selectedIndex = i;
       s.dispatchEvent(new Event('change', { bubbles: true }));
     } else if (q === 'bahn') {
       const cb = $('setting-ontrack');
@@ -359,7 +366,8 @@
     }
     if (quad === 'renntyp') {
       const s = $('race-mode');
-      return { anzahl: s ? s.options.length : 0, index: s ? s.selectedIndex : -1 };
+      const frei = s ? [...s.options].filter((o) => !o.disabled) : [];
+      return { anzahl: frei.length, index: s ? frei.indexOf(s.options[s.selectedIndex]) : -1 };
     }
     if (quad === 'profil') {
       const keys = window.__presetKeysFahren ? window.__presetKeysFahren()

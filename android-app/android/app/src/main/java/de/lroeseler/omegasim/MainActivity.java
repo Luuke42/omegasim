@@ -135,6 +135,8 @@ public class MainActivity extends BridgeActivity {
                     }
                 } catch (Throwable e) { /* naechstes Geraet */ }
             }
+            // v1.1.45: die Karte auch leeren - sonst haelt das Plugin geschlossene Griffe fuer verbunden.
+            try { ((Map<?, ?>) m).clear(); } catch (Throwable e) { /* unveraenderbar */ }
         } catch (Throwable e) { /* andere Plugin-Fassung: nichts zu tun */ }
     }
 

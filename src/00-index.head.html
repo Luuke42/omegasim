@@ -311,7 +311,18 @@
      der Klick weiter auf der Kachel landet - sie schaltet das Wetter. */
   .gt3-wx { position: relative; overflow: hidden; }
   .wx-radar { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
-    pointer-events: none; border-radius: inherit; }
+    pointer-events: none; border-radius: inherit; z-index: 1; }
+  /* v1.2.12: die Strecke mit den Autos UNTER dem Radar. Der Grund ist der des Radars, damit die
+     Kachel mit und ohne Karte gleich aussieht; das SVG behaelt sein Seitenverhaeltnis. */
+  .wx-karte { position: absolute; inset: 0; z-index: 0; pointer-events: none; display: grid;
+    place-items: center; background: var(--wx-grund, #0d1219); border-radius: inherit; overflow: hidden; }
+  .wx-karte[hidden] { display: none; }
+  .wx-karte .tp-karte { width: 100%; height: 100%; max-width: 100%; max-height: 100%;
+    background: none !important; border: 0 !important; border-radius: 0; }
+  .wx-karte img { width: 100%; height: 100%; object-fit: cover; opacity: .8; }
+  /* Die Fahrbahn ist im Editor fast schwarz - auf dem dunklen Radargrund unsichtbar. Hier
+     etwas heller, damit Strecke, Randsteine und Autos sich abheben. */
+  .wx-karte path[stroke="#0d0f13"] { stroke: #2c3442; }
   /* Das Symbol in die obere linke Ecke, klein. Es ist jetzt eine Marke und keine Anzeige:
      was das Wetter TUT, steht im Radar. */
   .wx-ico { position: absolute; top: 5px; left: 6px; z-index: 2; line-height: 0; }
@@ -1474,10 +1485,20 @@
   .stat-kachel.stat-medaille b { font-size: clamp(16px, 2.3vw, 22px); white-space: nowrap; }
   /* Acht Spalten auf 375 px sind 40 px je Kachel, und darin passt keine Beschriftung:
      gemessen lief der Reifentext ueber die Akkukachel. Unter 560 px deshalb zweireihig. */
+  /* v1.2.12 BESTELLT: Tank und Schaden schmaler, das Regenradar (mit der Strecke darin) breiter
+     und hoeher. Reihenfolge: Tank, Schaden, Reifen, Akku, Licht, Radar, Boxenwahl, G-Plot. */
   .gt3-strip { grid-area: strip; display: grid; gap: clamp(3px, .7vw, 8px);
-    grid-template-columns: repeat(8, minmax(0, 1fr)); }
+    grid-template-columns: .6fr .6fr 1fr 1fr .8fr 2.6fr 1fr 1fr; }
+  /* Hoeher nur, wo Platz ist: im Vollbild und auf niedrigen Schirmen rechnet cockpitPassung()
+     sonst einen kleineren Massstab fuer das ganze Cockpit (Selbsttest "Cockpit passt im Vollbild"). */
+  @media (min-height: 561px) {
+    body:not(.race-fs) .gt3-strip > .gt3-wx { min-height: clamp(64px, 10vw, 120px); }
+  }
   @media (max-width: 560px) {
-    .gt3-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    /* Zwei Reihen: oben Tank, Schaden, Reifen, Akku, Licht; unten das Radar ueber drei Spalten,
+       dann Boxenwahl und G-Plot. */
+    .gt3-strip { grid-template-columns: .7fr .7fr 1fr 1fr 1fr; }
+    .gt3-strip > .gt3-wx { grid-column: span 3; }
   }
 
   /* The captioned tile. Square and borderless: the reference dashes separate cells by
@@ -2866,8 +2887,24 @@
   .ps-sym { width: 58%; height: 58%; fill: none; stroke-width: 2.4; display: none; }
   .ps-quad { stroke: #ff8ad8; } .ps-kreis { stroke: #ff6b7a; }
   .pit-spiel[data-symbol="quad"] .ps-quad, .pit-spiel[data-symbol="kreis"] .ps-kreis { display: block; }
-  .ps-fertig { display: none; font-size: 40px; color: var(--good); }
-  .pit-spiel[data-symbol=""] .ps-fertig { display: block; }
+  /* v1.2.4 GEMELDET: "Der gruene Haken ist komisch, weil er auch kommt, wenn ich nichts druecke oder was Falsches."
+     Er stand in JEDER Pause. Jetzt: Haken nur nach einem richtigen Druck, Kreuz nach einem falschen, nichts nach
+     Zeitablauf. */
+  .ps-fertig, .ps-falsch { display: none; font-size: 40px; }
+  .ps-fertig { color: var(--good); } .ps-falsch { color: var(--bad); }
+  .pit-spiel[data-symbol=""][data-blitz="ok"] .ps-fertig { display: block; }
+  .pit-spiel[data-symbol=""][data-blitz="falsch"] .ps-falsch { display: block; }
+  /* Die Reihe: der aktuelle und die drei naechsten Knoepfe. Beim Weiterschalten rutscht sie um einen Platz nach
+     links (data-schieben setzt sie einen Platz nach rechts, dann gleitet sie zurueck). */
+  .ps-reihe { display: flex; gap: 8px; height: 30px; overflow: hidden; width: calc(4 * 30px + 3 * 8px); }
+  .ps-reihe-innen { display: flex; gap: 8px; transition: transform .22s ease-out; }
+  .pit-spiel[data-schieben="1"] .ps-reihe-innen { transform: translateX(38px); transition: none; }
+  .ps-slot { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 4px;
+    border: 1px solid rgba(255,255,255,.25); opacity: .55; }
+  .ps-slot:first-child { opacity: 1; border-color: var(--k-blau); box-shadow: 0 0 0 2px var(--k-blau); }
+  .ps-slot svg { width: 20px; height: 20px; fill: none; stroke-width: 2.4; display: none; }
+  .ps-slot[data-s="quad"] .ps-quad, .ps-slot[data-s="kreis"] .ps-kreis { display: block; }
+  .ps-slot[data-s=""] { border-color: transparent; box-shadow: none; }
   .pit-spiel[data-blitz="ok"] .ps-karte { border-color: var(--good); box-shadow: 0 0 0 3px var(--good), 0 10px 40px rgba(0,0,0,.7); }
   .pit-spiel[data-blitz="falsch"] .ps-karte { border-color: var(--bad); box-shadow: 0 0 0 3px var(--bad), 0 10px 40px rgba(0,0,0,.7); }
   .ps-fuss { display: flex; gap: 14px; align-items: center; font-size: 12px; }
@@ -3591,14 +3628,16 @@
     background-image:
       radial-gradient(0.9px 7px at 50% 30%, rgba(205,226,255,.80), rgba(205,226,255,0)),
       radial-gradient(0.8px 6px at 50% 70%, rgba(205,226,255,.55), rgba(205,226,255,0));
-    background-size: 24px 46px, 37px 71px;
+    /* v1.1.45 GEMELDET: "Bildschirmflackern beim Regen". Die Laufweite (276 px) muss ein Vielfaches BEIDER
+       Kachelhoehen sein, sonst springt das Muster bei jedem Neustart der Schleife (vorher 284 px gegen 46/71 px). */
+    background-size: 24px 46px, 37px 69px;
     background-position: 0 0, 11px 23px;
     animation: race-rain-a .46s linear infinite; }
   .race-rain > i:nth-child(2) {
     background-image:
       radial-gradient(0.8px 9px at 50% 40%, rgba(190,214,250,.55), rgba(190,214,250,0)),
       radial-gradient(0.7px 7px at 50% 80%, rgba(190,214,250,.38), rgba(190,214,250,0));
-    background-size: 31px 62px, 47px 95px;
+    background-size: 31px 62px, 47px 93px;   /* 372 px = 6 x 62 = 4 x 93 */
     background-position: 7px 0, 25px 31px;
     animation: race-rain-b .72s linear infinite; }
   .race-rain > i:nth-child(3) {
@@ -3616,10 +3655,10 @@
      different wobble sizes and directions so they never move in lockstep. */
   @keyframes race-rain-a { from  { transform: rotate(13deg) translate3d(0, 0, 0); }
                            45%   { transform: rotate(14.6deg) translate3d(0, 128px, 0); }
-                           to    { transform: rotate(13deg) translate3d(0, 284px, 0); } }
+                           to    { transform: rotate(13deg) translate3d(0, 276px, 0); } }
   @keyframes race-rain-b { from  { transform: rotate(11deg) translate3d(0, 0, 0); }
                            55%   { transform: rotate(9.2deg) translate3d(0, 209px, 0); }
-                           to    { transform: rotate(11deg) translate3d(0, 380px, 0); } }
+                           to    { transform: rotate(11deg) translate3d(0, 372px, 0); } }
   @keyframes race-rain-c { from  { transform: rotate(9deg)  translate3d(0, 0, 0); }
                            40%   { transform: rotate(10.8deg) translate3d(0, 211px, 0); }
                            to    { transform: rotate(9deg)  translate3d(0, 528px, 0); } }
@@ -3631,7 +3670,12 @@
   /* Lightning. NOT a white overlay and NOT brightness(): brightness is a multiplication and
      blows the highlights out. feComponentTransfer with type="gamma" lifts the midtones and
      leaves black black, which is what brief outside light actually looks like. */
-  #race-dash.race-flash { filter: url(#race-gamma); }
+  /* v1.1.45: KEIN Filter mehr auf dem ganzen Cockpit. Ein SVG-Filter auf #race-dash zwang die WebView, alles neu
+     zu zeichnen (auf Android in Software) - schwarze oder leere Bilder, gemeldet als Flackern bei Regen. Jetzt
+     eine helle Schicht darueber, deren Deckkraft kurz hochgeht ('screen' laesst Schwarz schwarz). */
+  #race-dash::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 4;
+    background: rgba(205,220,255,.22); mix-blend-mode: screen; opacity: 0; transition: opacity 40ms linear; }
+  #race-dash.race-flash::after { opacity: 1; }
   /* ---- Garage ---- */
   .gar-row { display: grid; gap: 10px 10px; align-items: center;
     grid-template-columns: minmax(0,1fr) auto auto;
@@ -3671,9 +3715,43 @@
     font-family: "Bahnschrift SemiCondensed", "Roboto Condensed", system-ui, sans-serif; font-size: clamp(12px, 1.8vw, 16px); }
   .vf-hud b { font-size: 1.6em; line-height: 1; }
   .vf-abseits { color: #ffb02e; font-weight: 700; }
+  .vf-modus { color: #8fd3ff; font-weight: 700; }
+  .vf-acc { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    display: grid; gap: 6px; background: rgba(5,7,12,.62); color: #f3f4f6; padding: 10px 16px; border-radius: 10px;
+    font-variant-numeric: tabular-nums; font-family: "Bahnschrift SemiCondensed", "Roboto Condensed", system-ui, sans-serif; }
+  .vf-acc .vf-tempo { font-size: clamp(30px, 6vw, 56px); line-height: 1; font-weight: 700; color: #fff; }
+  .vf-acc-zeile { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
+  .vf-lbl { color: #9aa3b2; font-size: 0.8em; text-transform: uppercase; letter-spacing: .06em; }
+  .vf-gang { font-size: 1.3em; font-weight: 700; color: #8fd3ff; }
+  .vf-rpm, .vf-reifen, .vf-tank { font-weight: 700; }
+  .vf-acc-dreh { height: 8px; background: #20303c; border-radius: 4px; overflow: hidden; }
+  .vf-dreh-stab { display: block; height: 100%; width: calc(var(--f, 0) * 100%); background: linear-gradient(90deg, #2ee06a, #ffb02e 60%, #ff5252); transition: width .08s linear; }
   .vf-knoepfe { position: absolute; right: max(10px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); display: flex; gap: 6px; }
   .vf-knoepfe button { background: rgba(5,7,12,.62); color: #fff; border: 1px solid rgba(255,255,255,.35); padding: 6px 12px; min-height: 2.2em; }
   .vf-wip { position: absolute; left: 10px; bottom: 8px; color: #0b0c10; font-weight: 700; font-size: 12px; }
+  /* v1.1.55: Auf dem Handy war das HUD zu gross und verdeckte das Auto. Das HUD wird flach und in
+     zwei Ecken unten aufgeteilt: links die Fahrwerte (Tempo/Gang/Drehzahl/Reifen/Tank), rechts die
+     Renn-Infos (Runde/Zeiten/Modus). Die Mitte bleibt fuer das Auto frei. Gilt fuer alle Mobil- und
+     Touch-Geraete (auch quer gehalten und Tablets), daher max-width 1000px plus (pointer: coarse). */
+  @media (max-width: 1000px), (pointer: coarse) {
+    /* Renn-Infos unten rechts, flach und rechtsbuendig; das grosse Tempo steht im ACC-Cluster links. */
+    .vf-hud { left: auto; right: max(5px, env(safe-area-inset-right)); bottom: max(5px, env(safe-area-inset-bottom)); top: auto;
+      font-size: 8px; padding: 2px 5px; gap: 0; max-width: min(44vw, 320px); justify-items: end; line-height: 1.1; }
+    .vf-hud b { font-size: 1.1em; }
+    .vf-hud .vf-tempo { display: none; }
+    /* Fahrwerte unten links, flach. */
+    .vf-acc { left: max(5px, env(safe-area-inset-left)); bottom: max(5px, env(safe-area-inset-bottom)); transform: none;
+      padding: 2px 5px; gap: 0; max-width: min(44vw, 320px); line-height: 1.1; }
+    .vf-acc .vf-tempo { font-size: clamp(14px, 3vw, 20px); }
+    .vf-acc-zeile { gap: 4px; }
+    .vf-lbl { font-size: 0.55em; }
+    .vf-gang { font-size: 0.95em; }
+    .vf-rpm, .vf-reifen, .vf-tank { font-size: 0.76em; }
+    .vf-acc-dreh { height: 3px; }
+    .vf-knoepfe { right: max(5px, env(safe-area-inset-right)); top: max(5px, env(safe-area-inset-top)); gap: 4px; }
+    .vf-knoepfe button { padding: 3px 7px; min-height: 1.5em; font-size: 10px; }
+    .vf-wip { left: max(5px, env(safe-area-inset-left)); right: auto; bottom: auto; top: max(5px, env(safe-area-inset-top)); font-size: 10px; }
+  }
   /* v1.1.3: Autobild und Versatz - rechts stehende Autos (P1, P3 ...) nach rechts, links stehende
      nach links geschoben, wie auf einem Startplan. */
   .grid-auto { flex: 0 0 auto; width: clamp(56px, 9vw, 104px); height: clamp(34px, 5.6vw, 62px);
@@ -4622,7 +4700,8 @@
   body.race-fs.race-turn #race-dash .gt3-marke,
   body.race-fs.race-turn #race-dash .gt3-foot { display: none; }
   body.race-fs.race-turn #race-dash .gt3-strip {
-    grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
+    grid-template-columns: .6fr .6fr 1fr 1fr .8fr 2.6fr 1fr 1fr; gap: 3px; }
+  body.race-fs.race-turn #race-dash .gt3-strip > .gt3-wx { grid-column: auto; }
   body.race-fs .race-bar { position: fixed; z-index: 201; top: 8px; left: 8px; }
   body.race-fs.race-turn .race-bar { top: auto; bottom: 8px; left: 8px; }
 
@@ -4677,6 +4756,18 @@
   @media (prefers-reduced-motion: reduce) {
     #ampel-overlay { transition: none; }
   }
+</style>
+<style>
+  .stat-clean { margin-top:20px; border:1px solid var(--line,#454b57); border-radius:8px; padding:12px; }
+  .stat-clean summary { cursor:pointer; font-weight:700; }
+  .stat-clean label { display:block; margin:16px 0 6px; font-weight:600; }
+  .stat-clean select { display:block; width:100%; min-width:0; box-sizing:border-box; }
+  .stat-clean code { overflow-wrap:anywhere; white-space:normal; }
+  .stat-clean-actions { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .stat-clean-preview { white-space:pre-line; overflow-wrap:anywhere; margin:8px 0; }
+  .stat-clean-note { font-size:14px; line-height:1.55; }
+  .stat-clean button { min-height:40px; margin-top:6px; }
+  .stat-clean .stat-clean-danger { border-color:var(--bad,#df4f4f); }
 </style>
 </head>
 <body>
@@ -4826,7 +4917,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.1.41</span></span>
+        <span class="foot-ver">v<span id="app-version">1.2.23</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -5143,6 +5234,7 @@
              wer nur "wechselhaft" sieht, weiss nicht, worauf er gerade faehrt. -->
         <div class="gt3-box gt3-click gt3-wx" id="race-wx-box"
              title="Wetter umschalten: sonnig, Regen, wechselhaft">
+          <div class="wx-karte" id="race-wx-karte" aria-hidden="true" hidden></div>
           <canvas id="race-wx-radar" class="wx-radar" width="200" height="150"
                   aria-hidden="true"></canvas>
           <div class="wx-ico"><svg class="gt3-ico" id="race-wx-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-label="Trocken"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg><svg class="gt3-ico" id="race-wx-rain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-label="Regen" style="display:none"><path d="M6.5 14a4 4 0 0 1 .4-8 5.5 5.5 0 0 1 10.5 1.4A3.6 3.6 0 0 1 17.5 14z"/><path d="M8 17.5l-1 2.5M12 17.5l-1 2.5M16 17.5l-1 2.5"/></svg><span class="wx-wechsel" id="race-wx-wechsel" aria-label="wechselhaft" style="display:none" data-i18n-skip>&#8646;</span></div></div>
@@ -5248,7 +5340,14 @@
             <svg class="ps-sym ps-quad" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg>
             <svg class="ps-sym ps-kreis" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5"/></svg>
             <span class="ps-fertig" data-i18n-skip>&#10003;</span>
+            <span class="ps-falsch" data-i18n-skip>&#10007;</span>
           </div>
+          <div class="ps-reihe" aria-hidden="true"><div class="ps-reihe-innen">
+            <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
+            <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
+            <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
+            <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
+          </div></div>
           <div class="ps-fuss"><button type="button" id="pit-spiel-quad" aria-label="Quadrat">&#9633;</button>
             <span id="pit-spiel-treffer" data-i18n-skip></span>
             <button type="button" id="pit-spiel-kreis" aria-label="Kreis">&#9675;</button></div>
@@ -5938,7 +6037,7 @@
       <p class="muted">Einige Bilder im Men&uuml; (Titel, Rennen, Start, Strecke, Optionen, Info, Challenges und Box) wurden mit KI generiert (Gemini Flash). Markenlogos darin sind entfernt. Die &uuml;brigen Bilder sind eigene Fotos.</p>
 
       <h3 style="font-size:14px; margin:18px 0 6px 0">Woher die Kl&auml;nge kommen</h3>
-      <p class="muted">Der allergr&ouml;&szlig;te Teil der Kl&auml;nge ist gerechnet und nicht aufgenommen: alle f&uuml;nfundzwanzig Motoren mit ihren 132 Schleifen, dazu Bremsen- und Reifenquietschen, die Crash-Varianten, Schlagschrauber, Tankger&auml;usch, Karosseriereparatur und der Motorstart. Dort wird nichts abgespielt, sondern aus Zylinderzahl, Z&uuml;ndfolge und Kr&uuml;mmerl&auml;nge erzeugt.</p>
+      <p class="muted">Der allergr&ouml;&szlig;te Teil der Kl&auml;nge ist gerechnet und nicht aufgenommen: alle f&uuml;nfundzwanzig Motoren mit ihren 132 Schleifen, dazu Bremsen- und Reifenquietschen, die Crash-Varianten, Tankger&auml;usch, Karosseriereparatur und der Motorstart. Dort wird nichts abgespielt, sondern aus Zylinderzahl, Z&uuml;ndfolge und Kr&uuml;mmerl&auml;nge erzeugt.</p>
       <p class="muted">Die folgenden Kl&auml;nge sind die Ausnahme: sie stammen aus echten Aufnahmen. Alle von Pixabay und unter der Pixabay-Lizenz. Die unbearbeiteten Quelldateien sind nicht Teil dieses Projekts.</p>
       <ul class="dank-liste">
         <li><span class="muted">Hupen f&uuml;r die Lichthupe &ndash; sechs Aufnahmen, in dieser Reihenfolge Autohupe, Schiffshupe, Esel, Ziege und zwei Furzt&ouml;ne. Der letzte stammt von freesound&nbsp;community &uuml;ber Pixabay.</span>
@@ -5947,6 +6046,8 @@
           <span class="dank-quelle" data-i18n-skip>pwlpl-heavy-thunderstorm-sound-effect-473418</span></li>
         <li><span class="muted">Strecken-Ambience, also der Teppich und die Vorbeifahrten.</span>
           <span class="dank-quelle" data-i18n-skip>fjc_media-sounds-of-nuerburgring-engines-of-classic-race-cars-234929</span></li>
+        <li><span class="muted">Der Schlagschrauber beim Boxenstopp (je Radpaar, geschnitten und gemischt).</span>
+          <span class="dank-quelle" data-i18n-skip>Sound Effect by <a href="https://pixabay.com/de/users/soundeffectsparty-54949351/?utm_source=link-attribution&amp;utm_medium=referral&amp;utm_campaign=music&amp;utm_content=502995" target="_blank" rel="noopener noreferrer">Jun Su</a> from <a href="https://pixabay.com//?utm_source=link-attribution&amp;utm_medium=referral&amp;utm_campaign=music&amp;utm_content=502995" target="_blank" rel="noopener noreferrer">Pixabay</a> &middot; soundeffectsparty-pneumatic-impact-wrench-loosening-bolts-502995</span></li>
         <li><span class="muted">Der Motorklang der Corvette C6.</span>
           <span class="dank-quelle" data-i18n-skip>astonmartinvantagev12-chevrolet-corvette-c6-sound-effect-360531</span></li>
       </ul>
@@ -5977,8 +6078,30 @@
     <div class="card subpage" id="sub-patchnotes">
       <button class="misc-back goto-tab" data-tab="options">&larr; Optionen</button>
       <h2>Patchnotes</h2>
+      <p class="muted"><b><span data-i18n-skip>1.2</span></b></p>
+      <ul class="muted" id="patchnotes-12" style="padding-left:20px; line-height:1.7">
+        <li>Neu von Playdater1974, &#252;bernommen mit Korrekturen: Rennintro (WIP) &#8211; auf Wunsch sagt eine Stimme vor der Startampel Modus, Limit, Pflichtstopps, Startaufstellung und Wetter an; fehlende Aufnahmen werden einzeln &#252;bersprungen, Fr&#252;hstarts z&#228;hlen schon ab dem Intro, in Challenges gibt es kein Intro. Statistikbereinigung (WIP) unter Optionen &#8594; Statistiken: Fahrzeugstatistiken, einzelne Sitzungen und zu kurze Rundenzeiten mit Vorschau l&#246;schen, mit Sicherung zum R&#252;ckg&#228;ngigmachen und JSON-Export; jetzt auch auf Englisch und Spanisch, und alte Sitzungen erscheinen nicht mehr doppelt.</li>
+        <li>Cockpit: Das Regenradar ist breiter und zeigt die Strecke mit allen Autos (WIP, Schalter &#8222;Strecke im Regenradar&#8220; unter Optionen &#8594; Allgemein); Wolken und Regen ziehen dar&#252;ber. Hochkant gezeichnete Strecken werden in der breiten Kachel gedreht, im Ausdruck-Modus steht dort das eigene Foto der Bahn. Tank und Schaden sind schmaler. Die Position oben links neben der Runde hei&#223;t jetzt #2/5 statt P2/5 und erscheint auch bei Time Attack (nach Bestzeit). Streckenscan: jede Kachel wird jetzt nach Leseart &#252;bersetzt, eine Engstelle auf der Bahn wurde vorher als zweites Start/Ziel eingetragen. Hinweistexte zu Lenkd&#228;mpfung (Vorgabe 0) und Bremskennlinie (Vorgabe 2,45) berichtigt.</li>
+        <li>Erkl&#228;rtexte berichtigt, die nicht mehr zum Verhalten passten: Boxen-Minigame (f&#252;nf Tasten, je 8 Prozent schneller, falsche 8 Prozent langsamer), Mischungsunterschied (weich 2,6-facher, hart 0,4-facher Verschlei&#223;), Regen-Schalter, NPC-Boxenstopp (eine Box, wie das Safety Car), wechselhaftes Wetter (Schauer von 30 bis 90 s alle 1 bis 3 min), Fahrgef&#252;hle Arcade, Pro, Pacejka und Omega (Werte wie eingestellt), Mehrspieler an einem Ger&#228;t (eigenes Fahrgef&#252;hl je Spieler) und die Codetabelle der Streckenteile (auf der Bahn 0x01 Start/Ziel, 0x0a Engstelle).</li>
+        <li>Karte: Die Autos sind jetzt Silhouetten in Draufsicht &#8211; Porsche 911 GT3 R, Ford Mustang GT3, BMW M4 GT3, Ferrari 296 GT3 und ein Formelwagen (Modell &#8222;Red Bull&#8220;), jeweils mit Heckfl&#252;gel und in der Farbe, die in der Garage f&#252;r das Auto gew&#228;hlt ist. Welche Form ein Auto bekommt, richtet sich nach &#8222;Marke / Modell&#8220; in der Garage; Audi, McLaren, Mercedes, VW K&#228;fer und nicht zugeordnete Autos bleiben Rechtecke mit Spoilerstreifen.</li>
+        <li>NPC-Stufe MAX beschleunigt auf Geraden deutlich schneller: eigenes Motormodell mit doppelter Beschleunigung (Regler &#8222;MAX: Beschleunigung&#8220;, 1&#8211;4&#215;) und ohne Schaltpause; auf Geraden bremsen Feld-Staffel, Lernfaktor und Streuung MAX nicht mehr. Der Streckenscan f&#228;hrt schneller: Geraden 80 % statt 67 %, Kurven 67 %, nur die Haarnadel bleibt bei 47 %.</li>
+        <li>Klang (WIP, Vorschlag): Beim Schalten bleibt der Motorklang jetzt bei allen Motoren stehen, bricht kurz ein wie bei einer Z&#252;ndunterbrechung, und die Tonh&#246;he gleitet statt zu springen &#8211; so wie bisher nur die Mustang-GT3-Aufnahme; der alte Klang kommt mit dem Schalter &#8222;Schaltklang: alt&#8220;. NPCs schalten fr&#252;her zur&#252;ck (ab 5200/min), sodass man ihre G&#228;nge h&#246;rt, knallen auch beim Bremsen aus dem Auspuff und etwas lauter; die alten Knaller gibt es mit &#8222;NPC-Motorklang: alt&#8220;.</li>
+        <li>Spieler und Renntypen: Spieler 2 und 3 k&#246;nnen in der Garage ein eigenes Fahrgef&#252;hl w&#228;hlen (z. B. Spieler 1 Pacejka, Spieler 2 Arcade) oder &#8222;wie Spieler 1&#8220;; ihre Reifenmischung wird nicht mehr von Spieler 1 &#252;berschrieben. Renntypen folgen dem Sensormodus: auf der Bahn kein Demolition Derby, im Ausdruck kein Time Attack (auch beim Durchschalten auf FAHREN); Rennstart und Meisterschaft warnen, wenn im Ausdruck-Modus NPCs oder ein Safety Car in der Garage stehen. Community-Challenges gibt es jetzt auch mit Pacejka (Apps Script neu bereitstellen).</li>
+        <li>Boxen: Im Minigame kommt der gr&#252;ne Haken nur noch nach einem richtigen Druck, ein rotes Kreuz nach einem falschen, nichts nach Zeitablauf; darunter stehen der aktuelle und die drei n&#228;chsten Kn&#246;pfe in einer Reihe, die animiert weiterrutscht. Die Signalt&#246;ne der Boxengasse (Bling, Blip, D&#252;&#252;t) sind jetzt mechanisch &#8211; kurze Ausschnitte aus Ratsche und Schlagschrauber; die alten T&#246;ne gibt es mit dem Schalter &#8222;Alte Boxen-Signalt&#246;ne&#8220;.</li>
+        <li>NPC-Boxenstopp wie das Safety Car (WIP): einparken mit der Einparkfolge des Safety Cars, im Stand l&#228;uft die Ratsche, ausparken mit der Ausparkfolge. Weiterhin immer nur ein Auto. Steht ein Safety Car in der Garage, liegt die NPC-Box auf dem ersten St&#252;ck mit zwei Geraden ab drei Teilen hinter dessen Parkplatz.</li>
+        <li>Safety Car parkt auch auf kurzen Geraden: Ab zwei Teilen vor dem Parkteil f&#228;hrt es mittig; reicht die Gerade ab dem Parkteil nicht f&#252;r den Rollweg der Einparkfolge, wird ihr Gas gestaucht (h&#246;chstens auf die H&#228;lfte), damit es auf der Geraden steht statt in die Kurve zu rollen. Andere Autos fahren um das gew&#228;hlte Parkteil links vorbei (vorher fest um Start/Ziel).</li>
+        <li>Bluetooth: Kein helles &#8222;verbunden&#8220;-Licht mehr ohne Verbindung. Ein Verbindungsaufbau, der nach dem Koppeln scheitert oder h&#228;ngt (h&#246;chstens 20 s), trennt jetzt sauber; zwei gleichzeitige Aufbauten zum selben Auto (automatisches Verbinden und Klick) gibt es nicht mehr; beim App-Start werden alte Verbindungen geschlossen; &#8222;Alle trennen&#8220; trennt in der App auch h&#228;ngende Verbindungen. Latenz: W&#228;hrend ein Auto neu verbindet, schreiben NPCs nicht mehr (das sperrte den schnellen Weg bis zu 10 Minuten), und meldet ein Auto dauerhaft langsamer, wird das schnelle Verbindungsintervall neu angefordert. Teile davon brauchen die neue APK.</li>
+        <li>Controller-Abgleich: &#196;nderungen sind jetzt ein Entwurf und werden erst mit &#8222;&#220;bernehmen&#8220; gespeichert (am Pad: Options 1 s halten), &#8222;Abbrechen&#8220; verwirft sie. Solange reagiert der Controller auf nichts anderes, und danach erst wieder, wenn alle Tasten losgelassen sind &#8211; vorher l&#246;ste eine gehaltene Taste nach der Erfassung Zur&#252;ck, Reiterwechsel oder Cockpit aus. Die Ruhelage wird erst bei losgelassenen Tasten genommen (X erfasste sich sonst selbst).</li>
+        <li>Karte und Aufstellung: Der eigene Punkt misst jetzt seine Kachelzeiten (vorher feste 800 ms, er blieb am Kachelende stehen und sprang), z&#228;hlt verlorene Meldungen mit und springt nicht mehr eine Kachel zur&#252;ck, solange der neue Z&#228;hlerstand noch nicht verarbeitet ist. Automatische Aufstellung: Ab Reihe 2 gilt ein knapp (bis eine halbe Kachel) &#252;berfahrener Platz &#8211; vorher drehten diese Autos eine weitere Runde. In der Schlange f&#228;llt kein Auto mehr unter die Lesegrenze. Gas der Safety-Car-Folge Standard 70 % statt 75 % (Reihe 1 stand etwas zu weit au&#223;en).</li>
+        <li>Regen: Das Flackern ist behoben. Der Blitz war ein Filter auf dem ganzen Cockpit, den das Handy jedes Mal neu zeichnete &#8211; jetzt eine helle Schicht dar&#252;ber (neuer Schalter &#8222;Blitz bei Gewitter&#8220;). Die Regenebenen springen nicht mehr beim Neustart ihrer Schleife, und die Regenst&#228;rke wird nur noch bei sp&#252;rbarer &#196;nderung gesetzt.</li>
+        <li>Kleinigkeiten: &#8222;Automatisch aufstellen&#8220; erscheint nur noch auf der Bahn. Die Studie hei&#223;t jetzt OmegaLab. Jede Sitzung beginnt trocken und ohne Wetterwechsel (Startwetter und &#8222;Wetter &#228;ndert sich&#8220; kommen nicht mehr aus der Sicherung). Reifenverschlei&#223;: weich st&#228;rker (2,6 statt 2,2), hart schw&#228;cher (0,4 statt 0,5).</li>
+      </ul>
       <p class="muted"><b><span data-i18n-skip>1.1</span></b></p>
       <ul class="muted" id="patchnotes-11" style="padding-left:20px; line-height:1.7">
+        <li>Boxenstopp: Tanken &#8222;nein&#8220; gilt jetzt. Das Boxen-Minigame (Standard) baute seinen eigenen Plan und tankte immer voll; au&#223;erdem kam eine &#196;nderung in der Boxengasse nicht im Plan an. Reifen: erst beide hinteren, dann beide vorderen R&#228;der; solange gewechselt wird, l&#228;sst sich der Stopp nicht abbrechen. Neuer Schlagschrauber je Radpaar aus einer Aufnahme (Sound Effect by Jun Su from Pixabay, Pixabay-Inhaltslizenz; Quelle in audio/CREDITS.md).</li>
+        <li>Reifen: Der Mischungsunterschied ist gr&#246;&#223;er &#8211; Standard 150 % statt 100 % (weich +30 % Grip, hart &#8722;22 %), Regler unter Fahrgef&#252;hl bis 300 %. Neue Renneinstellung &#8222;Weiche Reifen verboten&#8220; (Standard aus).</li>
+        <li>Vibration: eigene Kachel im Optionsmen&#252; mit einem Schalter je Ausl&#246;ser &#8211; Schalten, ABS, Aufprall, &#220;bersteuern, Untersteuern, neu Reifenquietschen (leicht, mit der Lautst&#228;rke des Quietschens), neben der Bahn, Boxenstopp, Meldungen, Trigger. Behoben: Im Pacejka-Modus brummte das Pad bei jedem Gasgeben dauerhaft (die Lenkentlastung unter Gas galt als Untersteuern); jetzt nur, wenn die Front wirklich schiebt.</li>
+        <li>NPC-Stufe MAX (WIP): In der Garage gibt es nach &#8222;schnell&#8220; die Stufe MAX. Solche NPCs fahren auf Geraden, in Radius-1-Kurven (60&#176; und kleine 30&#176;) und in Radius-2-Kurven (weite 30&#176;) mit eigenen Tempi aus dem NPC-Men&#252; (Standard 100 %, 52 %, 80 %) und bremsen eine Schiene vor der Kurve oder erst am Kurventeil (Auswahl). Haarnadel, Engstelle, Mindesttempo, Gelb und Einf&#252;hrungsrunde gelten wie f&#252;r alle.</li>
         <li>Automatische Aufstellung: Jedes Auto parkt jetzt mit genau der Einparkfolge des Safety Cars &#8211; gleiche Zeiten und Lenkwerte, f&#252;r die linke Spalte gespiegelt, mit weniger Gas (neuer Regler, Standard 75 %), damit es weiter innen steht. Immer diese Folge, auch auf Kurventeilen; in der Haarnadel parkt weiterhin niemand. Das Log nennt f&#252;r jedes Auto Seite und Gas.</li>
         <li>Reinigungsfahrzeug: Nach der ersten Start/Ziel-&#220;berfahrt f&#228;hrt es je eine volle Runde mittig, links (Querlage 90 %) und rechts (90 %) und h&#228;lt dann an. Die Querlage kommt allein aus dieser Vorgabe, ohne Ideallinie; die Runden werden &#252;ber den gefahrenen Weg gez&#228;hlt.</li>
         <li>Gleich schnell: Das Safety Car f&#228;hrt unter Gelb dasselbe Tempo wie das Feld (Gerade, Kurve und Haarnadel mit denselben Grenzen) &#8211; vorher &#252;berall gleich, also auf der Geraden langsamer und in der Haarnadel schneller. In der Einf&#252;hrungsrunde f&#228;hrt dein Autopilot in Kurven so schnell wie die NPCs (vorher deutlich langsamer), und die Feld-Staffel ist dort aus.</li>
@@ -6947,8 +7070,8 @@
         <b>Was hier <em>nicht</em> steht:</b> welche Zahl das Auto aus diesen 17 Bits bildet
         und wie es sie auf die Streckenart abbildet, ist nicht entschl&uuml;sselt. Bekannt
         ist nur, was am Ende in Byte&nbsp;12 ankommt &ndash; und das h&auml;ngt am Modus:
-        im Bahn-Modus 0x0a Start/Ziel, 0x02 Gerade, 0x03 Linkskurve, 0x04 Rechtskurve, im
-        Ausdruck-Modus 0x01 f&uuml;r Start/Ziel. Das Bild zeigt die Geometrie, nicht die
+        im Bahn-Modus 0x01 Start/Ziel, 0x02 Gerade, 0x03 Linkskurve, 0x04 Rechtskurve, 0x0a Engstelle, im
+        Ausdruck-Modus 0x0a (Originalblatt) oder 0x01 (Blätter der App) f&uuml;r Start/Ziel. Das Bild zeigt die Geometrie, nicht die
         Bedeutung.
       </p>
       <p class="muted">
@@ -6973,11 +7096,11 @@
 
       <h3 style="font-size:14px; margin:16px 0 6px 0">Was wir nicht wissen</h3>
       <p class="muted">
-        Die belegten Codes im <b>Bahn-Modus</b> sind <code>0x0a</code> Start/Ziel,
+        Die belegten Codes im <b>Bahn-Modus</b> sind <code>0x01</code> Start/Ziel,
         <code>0x02</code> Gerade, <code>0x03</code> Linkskurve, <code>0x04</code>
-        Rechtskurve, <code>0x05</code> Haarnadel links, <code>0x06</code> Haarnadel rechts
-        und <code>0x00</code> abseits der Bahn; im <b>Ausdruck-Modus</b> ist
-        <code>0x01</code> Start/Ziel. <b>Die Kodierungsregel selbst kennen wir nicht.</b> Aus
+        Rechtskurve, <code>0x05</code> Haarnadel links, <code>0x06</code> Haarnadel rechts,
+        <code>0x0a</code> Engstelle und <code>0x00</code> abseits der Bahn; im <b>Ausdruck-Modus</b> ist
+        <code>0x0a</code> Start/Ziel auf dem Originalblatt und <code>0x01</code> auf den Bl&auml;ttern der App. <b>Die Kodierungsregel selbst kennen wir nicht.</b> Aus
         <em>einem</em> exakt ausgemessenen Muster l&auml;sst sich nicht ableiten, wie die 17
         Elemente in die Zahl <code>0x01</code> &uuml;bersetzt werden, daf&uuml;r
         br&auml;uchte es die Muster der anderen Kacheln, senkrecht von oben fotografiert und
@@ -7092,7 +7215,7 @@
         <tr><td>9</td><td>freilaufender Paketz&auml;hler, 0&ndash;255, &auml;ndert sich in <em>jedem</em> Paket</td><td class="doc-sure">belegt</td></tr>
         <tr><td>10</td><td>Akkustand</td><td class="doc-sure">belegt</td></tr>
         <tr><td><strong>11</strong></td><td><strong>Z&auml;hler der Muster&uuml;berfahrten.</strong> Erh&ouml;ht sich um 1, sobald das Auto ein gedrucktes Muster &uuml;berf&auml;hrt, die Rundenz&auml;hlung passiert also in der Hardware</td><td class="doc-sure">belegt</td></tr>
-        <tr><td><strong>12</strong></td><td><strong>Mustercode.</strong> <code>0x0a</code> Start/Ziel, <code>0x02</code> Gerade, <code>0x03</code> Linkskurve, <code>0x04</code> Rechtskurve, <code>0x05</code> Haarnadel links, <code>0x06</code> Haarnadel rechts, <code>0x00</code> abseits der Bahn. <code>0xFF</code> hei&szlig;t &bdquo;noch nie eins gesehen&ldquo;. Der Wert bleibt <em>stehen</em>, er zeigt das zuletzt gelesene Muster</td><td class="doc-sure">belegt</td></tr>
+        <tr><td><strong>12</strong></td><td><strong>Mustercode.</strong> <code>0x01</code> Start/Ziel (Bahn; im Ausdruck-Modus <code>0x0a</code>), <code>0x02</code> Gerade, <code>0x03</code> Linkskurve, <code>0x04</code> Rechtskurve, <code>0x05</code> Haarnadel links, <code>0x06</code> Haarnadel rechts, <code>0x00</code> abseits der Bahn. <code>0xFF</code> hei&szlig;t &bdquo;noch nie eins gesehen&ldquo;. Der Wert bleibt <em>stehen</em>, er zeigt das zuletzt gelesene Muster</td><td class="doc-sure">belegt</td></tr>
         <tr><td>13</td><td><code>0x00</code></td><td class="doc-sure">belegt</td></tr>
         <tr><td>14</td><td>rollender Z&auml;hler (l&auml;uft &uuml;ber). Nicht zu verwechseln mit Byte&nbsp;14 der <em>Senderichtung</em>, das ist das Licht</td><td class="doc-sure">belegt</td></tr>
         <tr><td><strong>15</strong></td><td><code>0x08</code>, solange das Auto k&ouml;rperlich &uuml;ber einem Muster steht (~1&nbsp;s bei Fahrt), sonst <code>0x00</code></td><td class="doc-sure">belegt</td></tr>
@@ -7303,13 +7426,12 @@
              genau die Messung, die inzwischen als unbrauchbar verworfen ist. Der
              Belegstatus wird deshalb getrennt gehalten: ein Rennmitschnitt und eine
              Beobachtung sind nicht dasselbe. -->
-        <tr><td><code>0x01</code></td><td>Start/Ziel <b>im Ausdruck-Modus</b>, also am
-          gedruckten Blatt. Der Ausdruck hat seine eigene Codetabelle &ndash; dieselbe Zahl
-          bedeutet im Bahn-Modus etwas anderes</td><td class="doc-sure">am Auto
-          beobachtet</td></tr>
-        <tr><td><code>0x0a</code></td><td>Start/Ziel <b>im Bahn-Modus</b>, also von der
-          Kunststoffschiene. Belegt aus dem Rennmitschnitt, aus dem auch 0x02 bis 0x06
-          stammen</td><td class="doc-sure">belegt</td></tr>
+        <tr><td><code>0x01</code></td><td>Start/Ziel <b>im Bahn-Modus</b>, also von der
+          Kunststoffschiene (von seVen best&auml;tigt, seit v0.6.14 so gelesen); im Ausdruck-Modus
+          melden die Bl&auml;tter der App ebenfalls 0x01</td><td class="doc-sure">belegt</td></tr>
+        <tr><td><code>0x0a</code></td><td>Start/Ziel <b>im Ausdruck-Modus</b> auf dem Originalblatt
+          (gemessen 25.08.); im Bahn-Modus dagegen die <b>Engstelle</b>. Dieselbe Zahl, zwei
+          Bedeutungen &ndash; deshalb liest die App sie je nach Modus</td><td class="doc-sure">belegt</td></tr>
         <tr><td><code>0x02</code></td><td>Gerade</td><td class="doc-sure">belegt</td></tr>
         <tr><td><code>0x03</code></td><td><b>Linkskurve</b></td><td class="doc-sure">belegt (21.08.)</td></tr>
         <tr><td><code>0x04</code></td><td>Rechtskurve</td><td class="doc-sure">belegt</td></tr>
@@ -7886,7 +8008,8 @@
         <div class="snd-row"><audio controls preload="none" src="audio/sd_crash_2.ogg"></audio><div><b>Crash, Aufnahme 3</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (CC0), ersetzt die gerechneten Varianten, wenn geladen (WIP)</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/sd_crash_3.ogg"></audio><div><b>Crash, Aufnahme 4</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (CC0), ersetzt die gerechneten Varianten, wenn geladen (WIP)</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/sd_backfire_0.ogg"></audio><div><b>Auspuffknall</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4, Free Art License 1.3; bei den Schubknallern statt des Rauschsto&szlig;es, leicht verstimmt (WIP)</span></div></div>
-        <div class="snd-row"><audio controls preload="none" src="audio/pit_wrench.ogg"></audio><div><b>Schlagschrauber</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, gleichm&auml;&szlig;iger Hammerzug um 26&nbsp;Hz</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/pit_wrench_paar.ogg"></audio><div><b>Schlagschrauber je Radpaar</b><br><span class="muted" style="font-size:11px">Aufnahme: Sound Effect by <a href="https://pixabay.com/de/users/soundeffectsparty-54949351/?utm_source=link-attribution&amp;utm_medium=referral&amp;utm_campaign=music&amp;utm_content=502995" target="_blank" rel="noopener noreferrer">Jun Su</a> from <a href="https://pixabay.com//?utm_source=link-attribution&amp;utm_medium=referral&amp;utm_campaign=music&amp;utm_content=502995" target="_blank" rel="noopener noreferrer">Pixabay</a> (Pixabay-Inhaltslizenz), geschnitten und gemischt: zwei Muttern l&ouml;sen, zwei anziehen</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/pit_wrench.ogg"></audio><div><b>Schlagschrauber (R&uuml;ckfall)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, gleichm&auml;&szlig;iger Hammerzug um 26&nbsp;Hz</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/pit_fuel.ogg"></audio><div><b>Tanken</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, Schleife</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/pit_repair.ogg"></audio><div><b>Karosseriereparatur</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, Abklingzeit 1,9&nbsp;ms im Median, also D&auml;mpfer statt Note</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/porsche_start.ogg"></audio><div><b>Motorstart: Porsche</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert</span></div></div>
@@ -8141,6 +8264,23 @@
         <div class="snd-row"><audio controls preload="none" src="audio/sd_v5r_mid.ogg"></audio><div><b>Speed Dreams: Vulture V5.R (7,0 l V8), Mittelband (4188/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/ls1-vulture-v5r/v5r-v8.wav): Speed-Dreams-Team, GPL-2.0 oder sp&auml;ter, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/sd_v5r_high.ogg"></audio><div><b>Speed Dreams: Vulture V5.R (7,0 l V8), oberes Band (6750/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/ls1-vulture-v5r/v5r-v8.wav): Speed-Dreams-Team, GPL-2.0 oder sp&auml;ter, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/sd_v5r_over.ogg"></audio><div><b>Speed Dreams: Vulture V5.R (7,0 l V8), Schub (2598/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/ls1-vulture-v5r/v5r-v8.wav): Speed-Dreams-Team, GPL-2.0 oder sp&auml;ter, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_lynx_idle.ogg"></audio><div><b>Speed Dreams: Lynx 220 (Jaguar XJ220, 3,5 l V6 Turbo), Leerlauf (1000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-lynx-220/sc-lynx-220.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_lynx_low.ogg"></audio><div><b>Speed Dreams: Lynx 220 (Jaguar XJ220, 3,5 l V6 Turbo), Zwischenband (1638/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-lynx-220/sc-lynx-220.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_lynx_low2.ogg"></audio><div><b>Speed Dreams: Lynx 220 (Jaguar XJ220, 3,5 l V6 Turbo), zweites Zwischenband (2683/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-lynx-220/sc-lynx-220.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_lynx_mid.ogg"></audio><div><b>Speed Dreams: Lynx 220 (Jaguar XJ220, 3,5 l V6 Turbo), Mittelband (4395/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-lynx-220/sc-lynx-220.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_lynx_high.ogg"></audio><div><b>Speed Dreams: Lynx 220 (Jaguar XJ220, 3,5 l V6 Turbo), oberes Band (7200/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-lynx-220/sc-lynx-220.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_lynx_over.ogg"></audio><div><b>Speed Dreams: Lynx 220 (Jaguar XJ220, 3,5 l V6 Turbo), Schub (2683/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-lynx-220/sc-lynx-220.wav): Speed-Dreams-Team, Free Art License 1.3 (artlibre.org/licence/lal/en), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_fmc_idle.ogg"></audio><div><b>Speed Dreams: FMC GT4 (Ford GT40 Mk1, 4,7 l V8), Leerlauf (1000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-fmc-gt4/sc-fmc-gt4.wav): Speed-Dreams-Team, GPL-2.0-or-later, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_fmc_low.ogg"></audio><div><b>Speed Dreams: FMC GT4 (Ford GT40 Mk1, 4,7 l V8), Zwischenband (1627/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-fmc-gt4/sc-fmc-gt4.wav): Speed-Dreams-Team, GPL-2.0-or-later, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_fmc_low2.ogg"></audio><div><b>Speed Dreams: FMC GT4 (Ford GT40 Mk1, 4,7 l V8), zweites Zwischenband (2646/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-fmc-gt4/sc-fmc-gt4.wav): Speed-Dreams-Team, GPL-2.0-or-later, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_fmc_mid.ogg"></audio><div><b>Speed Dreams: FMC GT4 (Ford GT40 Mk1, 4,7 l V8), Mittelband (4304/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-fmc-gt4/sc-fmc-gt4.wav): Speed-Dreams-Team, GPL-2.0-or-later, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_fmc_high.ogg"></audio><div><b>Speed Dreams: FMC GT4 (Ford GT40 Mk1, 4,7 l V8), oberes Band (7000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-fmc-gt4/sc-fmc-gt4.wav): Speed-Dreams-Team, GPL-2.0-or-later, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_fmc_over.ogg"></audio><div><b>Speed Dreams: FMC GT4 (Ford GT40 Mk1, 4,7 l V8), Schub (2646/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-fmc-gt4/sc-fmc-gt4.wav): Speed-Dreams-Team, GPL-2.0-or-later, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_boxer_idle.ogg"></audio><div><b>Speed Dreams: Boxer 96 (Porsche 911 GT3, 3,6 l Boxer-6), Leerlauf (2000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-boxer-96/sc-boxer-96.wav): Speed-Dreams-Team, GPL-2.0-or-later, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_boxer_low.ogg"></audio><div><b>Speed Dreams: Boxer 96 (Porsche 911 GT3, 3,6 l Boxer-6), Zwischenband (3240/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-boxer-96/sc-boxer-96.wav): Speed-Dreams-Team, GPL-2.0-or-later, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_boxer_mid.ogg"></audio><div><b>Speed Dreams: Boxer 96 (Porsche 911 GT3, 3,6 l Boxer-6), Mittelband (5248/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-boxer-96/sc-boxer-96.wav): Speed-Dreams-Team, GPL-2.0-or-later, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_boxer_high.ogg"></audio><div><b>Speed Dreams: Boxer 96 (Porsche 911 GT3, 3,6 l Boxer-6), oberes Band (8500/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-boxer-96/sc-boxer-96.wav): Speed-Dreams-Team, GPL-2.0-or-later, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/sd_boxer_over.ogg"></audio><div><b>Speed Dreams: Boxer 96 (Porsche 911 GT3, 3,6 l Boxer-6), Schub (5248/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/cars/models/sc-boxer-96/sc-boxer-96.wav): Speed-Dreams-Team, GPL-2.0-or-later, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/amg_gt3_idle.ogg"></audio><div><b>AMG GT3 (V8, Cross-Plane), Leerlauf (2000/min)</b><br><span class="muted" style="font-size:11px">Aufnahme des Nutzers (photos/newaudio/amg_gt3.mp4), Drehzahl aus der Video-Anzeige</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/amg_gt3_low.ogg"></audio><div><b>AMG GT3 (V8, Cross-Plane), Zwischenband (3700/min)</b><br><span class="muted" style="font-size:11px">Aufnahme des Nutzers (photos/newaudio/amg_gt3.mp4), Drehzahl aus der Video-Anzeige</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/amg_gt3_mid.ogg"></audio><div><b>AMG GT3 (V8, Cross-Plane), Mittelband (5700/min)</b><br><span class="muted" style="font-size:11px">Aufnahme des Nutzers (photos/newaudio/amg_gt3.mp4), Drehzahl aus der Video-Anzeige</span></div></div>
@@ -9266,6 +9406,11 @@
       <div class="opt-row"><div class="opt-label">Gelbe Flagge deaktivieren<small>An: Der Knopf
           &bdquo;Gelbe Flagge&ldquo; und das Halten der Boxentaste rufen kein Gelb mehr aus.</small></div>
         <label class="tgl"><input type="checkbox" id="race-gelb-aus"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Weiche Reifen verboten<span class="wip-tag">WIP</span><small>An: In diesem
+          Rennen gibt es keine weichen Reifen. Die Reifenwahl im Boxenschirm &uuml;berspringt &bdquo;weich&ldquo;, und wer
+          beim Start weiche Reifen drauf hat, bekommt mittlere &ndash; auch Spieler&nbsp;2 und 3. Aus (Standard): alle
+          Mischungen erlaubt.</small></div>
+        <label class="tgl"><input type="checkbox" id="race-weich-verboten"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Einparken in der Aufstellung<span class="wip-tag">WIP</span><small>Aufnahme (Vorgabe):
           Das Auto f&auml;hrt genau die Einparkfolge des Safety Cars &ndash; auf dem Startplatz gleitet es in 0,3&nbsp;s auf
           ihr Tempo, lenkt zur eigenen Seite und zur&uuml;ck und rollt aus, ohne vorher anzuhalten. Lenkung und Zeiten
@@ -9278,12 +9423,12 @@
       <div class="opt-row"><div class="opt-label">Einparken: Gas der Safety-Car-Folge<span class="wip-tag">WIP</span><small>Wie viel
           vom Gas der Safety-Car-Einparkfolge die Autos in der Aufstellung bekommen. Weniger Gas: sie rollen weniger weit
           zur Seite und stehen weiter innen; mehr: weiter am Rand. Lenkung und Zeiten bleiben genau die der Aufnahme.
-          Standard 75&nbsp;%.</small></div>
+          Standard 70&nbsp;%.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="race-einpark-sc-gas" min="0.4" max="1" step="0.05" value="0.75" data-preset-skip>
+          <input type="range" id="race-einpark-sc-gas" min="0.4" max="1" step="0.05" value="0.7" data-preset-skip>
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="race-einpark-sc-gas-val">75 %</span>
+          <span class="opt-val" id="race-einpark-sc-gas-val">70 %</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Einparken: Einlenkst&auml;rke<span class="wip-tag">WIP</span><small>Bei der
           automatischen Aufstellung (vor und nach dem Rennen) fahren alle Autos genau mittig, auch an
@@ -9352,7 +9497,7 @@
 
       <div class="opt-row"><div class="opt-label">Wetter zu Beginn
           <small>Trocken, Regen &ndash; oder wechselhaft: dann beginnt es trocken, und alle
-          2 bis 6 Minuten f&auml;llt ein Schauer von 1 bis 3 Minuten. Beide Zeiten werden je
+          1 bis 3 Minuten f&auml;llt ein Schauer von 30 bis 90 Sekunden. Beide Zeiten werden je
           Phase neu gezogen. Bei einem kurzen Rennen kann es sein, dass man keinen Schauer
           sieht &ndash; ein Schauer h&auml;ngt nicht daran, wie viele Runden gefahren
           werden.</small></div>
@@ -9536,6 +9681,12 @@
           <b>Ansagen</b>
           <span>Rundenzeiten, Rennstand, Ergebnis und Warnungen zu Schaden, Tank, Reifen, Regen und Akku.</span>
         </button>
+        <button class="misc-tile subpage-open" data-sub="opt-vibration">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18h20a7 7 0 0 1 7 7v3a5 5 0 0 1-9 3l-2-3H18l-2 3a5 5 0 0 1-9-3v-3a7 7 0 0 1 7-7z"/><path d="M4 12l3 3M44 12l-3 3M24 8v4" stroke="var(--bad)"/></svg>
+          <b>Vibration</b>
+          <span>Wann der Controller r&uuml;ttelt: Schalten, ABS, Quietschen, Unter- und &Uuml;bersteuern, Aufprall, Box.</span>
+        </button>
         <button class="misc-tile subpage-open" data-sub="opt-ghosts">
           <!-- SYMMETRISCH NEU GEZEICHNET. Der alte Pfad war an drei Stellen schief, und
                eine davon war ein Fehler und keine Geschmacksfrage:
@@ -9606,7 +9757,7 @@
         <button class="misc-tile subpage-open" data-sub="opt-studie" id="opt-studie-kachel" hidden>
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6h12M20 6v12L9 38a3 3 0 0 0 3 4h24a3 3 0 0 0 3-4L28 18V6"/><path d="M14 30h20" stroke="var(--bad)"/></svg>
-          <b>Studie <span class="wip-tag">WIP</span></b>
+          <b>OmegaLab <span class="wip-tag">WIP</span></b>
           <span>Persönlichkeit, Reaktionszeit und Fahrverhalten. Freiwillig, ab 18, Daten anonymisiert öffentlich.</span>
         </button>
         <button class="misc-tile subpage-open" data-sub="opt-tutorials">
@@ -9719,6 +9870,10 @@
           <option value="modern">Modern, 2000er (hell)</option>
           <option value="klassiker">Klassiker: Walnuss und Chrom</option>
         </select></div>
+      <div class="opt-row"><div class="opt-label">Strecke im Regenradar <span class="wip-tag">WIP</span><small>Das Regenradar im
+          Cockpit zeigt die Strecke mit allen Autos, die Wolken und der Regen ziehen dar&uuml;ber. Im Ausdruck-Modus
+          steht dort das eigene Foto der Bahn, sonst das Radar allein. Aus: das Radar wie bisher.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-wx-karte" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Startampel
           <small>Wie die Startampel erscheint: als Bild &uuml;ber dem Cockpit mit T&ouml;nen (Vorgabe), nur mit den T&ouml;nen &ndash; das Cockpit bleibt frei &ndash;, oder nur als Bild ohne T&ouml;ne. Gilt f&uuml;r den Rennstart und den Neustart nach Gelb.</small></div>
         <select id="setting-ampel" data-preset-skip>
@@ -9826,81 +9981,6 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-offtrack-delay-val">1.0 s</span>
         </div></div>
-<div class="opt-head">Controller-Vibration <span class="wip-tag">WIP</span></div>
-      <div class="opt-row"><div class="opt-label">Vibration &uuml;berhaupt
-          <small>Der Hauptschalter. Steht er aus, brummt nichts, egal was darunter
-          angekreuzt ist. Seit v0.5.18 ist er standardm&auml;&szlig;ig an. Vorher stand er
-          aus, und damit kamen auch die Vorgaben darunter nie zum Tragen &ndash; gemeldet
-          wurde das als &bdquo;Vibration geht nicht&ldquo;. Wer keinen R&uuml;ttler hat,
-          merkt von einem angeschalteten Hauptschalter nichts. Das Handy vibriert nicht mit,
-          das Protokoll kennt daf&uuml;r nichts.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-vibration" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">R&uuml;tteln testen
-          <small>L&ouml;st einen Sto&szlig; aus und schreibt daneben, was dabei vorgefunden
-          wurde: wieviele Controller das System meldet, welche davon einen R&uuml;ttler
-          haben, welche Zuordnung sie tragen und ob der Sto&szlig; angenommen oder abgelehnt
-          wurde. Aus &bdquo;geht nicht&ldquo; wird damit eine Messung.</small></div>
-        <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end">
-          <button type="button" id="vib-test">Testen</button>
-          <span class="muted" id="vib-test-out" data-i18n-skip
-                style="font-size:11px; text-align:right; max-width:34ch"></span>
-        </div></div>
-      <div class="opt-row"><div class="opt-label">Gangwechsel
-          <small>Kurz und leicht bei jedem Schalten, beim Leerlauf und beim
-          R&uuml;ckw&auml;rtsgang. Sechs Gangwechsel in drei Sekunden mit einem langen
-          Muster w&auml;ren ein Presslufthammer in der Hand, deshalb 40&nbsp;ms.</small></div>
-        <label class="tgl"><input type="checkbox" id="vib-schalt" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">ABS
-          <small>Ein Puls alle 140&nbsp;ms, solange das ABS regelt &ndash; das ist die
-          R&uuml;ckmeldung, an der man merkt, dass die Bremse an der Grenze
-          arbeitet.</small></div>
-        <label class="tgl"><input type="checkbox" id="vib-abs" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Aufprall
-          <small>Der st&auml;rkste Sto&szlig;, und er h&auml;ngt seit v0.5.15 an der WUCHT:
-          gerechnet wird mit dem Tempo im Moment des Einschlags. Ein Einschlag bei
-          H&ouml;chstgeschwindigkeit soll sich nicht anf&uuml;hlen wie ein Anstupsen in der
-          Boxengasse. Auch der schw&auml;chste Aufprall brummt jetzt kr&auml;ftiger als
-          bisher.</small></div>
-        <label class="tgl"><input type="checkbox" id="vib-crash" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Neben der Bahn
-          <small>Ein schwaches Dauerbrummen, solange das Auto neben der Bahn meldet
-          &ndash; nach Schotter, nicht nach Aufprall. Standard aus: es ist ein ZUSTAND und
-          kein Ereignis, und nach f&uuml;nf Sekunden nervt es. Unabh&auml;ngig von der
-          Drosselung unter Allgemein.</small></div>
-        <label class="tgl"><input type="checkbox" id="vib-abseits"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Boxenstopp
-          <small>Einfahrt, Beginn der Arbeit, fertig, und ein leiser Puls, solange man in
-          der Gasse rollt.</small></div>
-        <label class="tgl"><input type="checkbox" id="vib-box" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Unter- und &Uuml;bersteuern
-          <small>Nur im Modus Pacejka. Leises Brummen, solange die Front schiebt; ein
-          kr&auml;ftiger Sto&szlig;, wenn das Heck kommt.</small></div>
-        <label class="tgl"><input type="checkbox" id="vib-rutschen" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Meldungen
-          <small>Wetterwechsel und leerer Tank. Standard aus: das sind Nachrichten und
-          keine Kr&auml;fte am Auto &ndash; wer sie will, bekommt sie hier.</small></div>
-        <label class="tgl"><input type="checkbox" id="vib-meldung"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Trigger-Vibration
-          <span class="wip-tag">experimentell</span>
-          <small>Zus&auml;tzlich zu den Griffmotoren: regelt das ABS, brummt der linke
-          Trigger &ndash; das ist die Bremse. Beim Schalten der rechte. Standard an. Warum
-          experimentell: die adaptiven Trigger eines DualSense sind &uuml;ber die
-          Gamepad-Schnittstelle gar nicht erreichbar, und die Effektart
-          &bdquo;trigger-rumble&ldquo; stellt Chrome vor allem f&uuml;r Xbox-Controller
-          bereit. Die Zeile darunter liest aus, was dein Controller wirklich annimmt. Kann
-          er es nicht, passiert nichts, und zwar ausdr&uuml;cklich ohne ersatzweises Brummen
-          in den Griffen &ndash; das w&uuml;rde vort&auml;uschen, die Trigger h&auml;tten
-          reagiert.</small></div>
-        <label class="tgl"><input type="checkbox" id="vib-trigger" checked><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Was dein Controller kann
-          <small>Ausgelesen, nicht angenommen. Leer, solange kein Controller gemeldet
-          ist &ndash; einmal eine Taste dr&uuml;cken.</small></div>
-        <span class="muted" id="vib-trigger-lage" data-i18n-skip
-              style="font-size:11px; text-align:right; max-width:34ch"></span></div>
-      <div class="opt-row"><div class="opt-label">DualSense: Trigger bei ABS <span class="wip-tag">WIP</span>
-          <small>Regelt das ABS, vibriert der linke Trigger eines DualSense &ndash; wenn die Bremse auf dem linken Trigger liegt und &bdquo;ABS&ldquo; oben an ist. Die adaptiven Trigger erreicht nur WebHID: Chrome oder Edge am Rechner, per USB oder Bluetooth, nach einmaligem Verbinden &uuml;ber diesen Knopf. In der Android-App geht das nicht.</small></div>
-        <button type="button" id="ds-verbinden">Verbinden</button>
-        <span class="muted" id="ds-lage" data-i18n-skip style="font-size:11px; text-align:right; max-width:34ch"></span></div>
 <div class="opt-head">Akku <span class="wip-tag">WIP</span></div>
       <div class="opt-row"><div class="opt-label">Leistung über Akkulaufzeit konstant halten<small>Drosselt bei vollem Akku. Der Akkuwert ist eine unkalibrierte Schätzung.</small></div><label class="tgl"><input type="checkbox" id="setting-battery-comp"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Referenz-Akkustand</div>
@@ -9953,9 +10033,10 @@
           <small>Standard: gemacht wird, was geplant ist, und losfahren beendet den Stopp.
           Minigame: gewechselt wird alles, was simuliert wird &ndash; Reifen, Tank voll,
           Reparatur &ndash;, und bis alles fertig ist, kommst du nicht los. In der Mitte
-          erscheinen nacheinander acht Tasten, Quadrat oder Kreis (Tastatur: K und I).
-          Jede richtig gedr&uuml;ckte k&uuml;rzt den Stopp um 5 Prozent, alle acht k&uuml;rzen ihn um
-          40 Prozent; wer nichts dr&uuml;ckt, wartet die volle Zeit. Am Ende wartest du noch
+          erscheinen nacheinander f&uuml;nf Tasten, Quadrat oder Kreis (Tastatur: K und I); darunter
+          stehen die aktuelle und die n&auml;chsten drei in einer Reihe. Jede richtig gedr&uuml;ckte
+          k&uuml;rzt den Stopp um 8 Prozent (gr&uuml;ner Haken), alle f&uuml;nf k&uuml;rzen ihn um 40 Prozent;
+          eine falsche verl&auml;ngert ihn um 8 Prozent (rotes Kreuz); wer nichts dr&uuml;ckt, wartet die volle Zeit. Am Ende wartest du noch
           mindestens eine Sekunde, bei falschen Tasten l&auml;nger. Abbrechen: Kreuz tippen.</small></div>
         <select id="pit-modus" data-preset-skip>
           <option value="standard">Standard</option>
@@ -10240,14 +10321,15 @@
           <small>Wie stark sich weich, mittel, hart und Regen unterscheiden. Der Regler bewegt
           alle Werte zugleich &ndash; Grip und Verschlei&szlig; &ndash; und zwar als
           Abstand zum Mittelreifen. Bei 0 rechnen alle drei Slicks wie mittel, bei 100 Prozent
-          gilt die Tabelle, dar&uuml;ber ist der Unterschied gr&ouml;&szlig;er als im
-          Rennsport. Steht die Reifensimulation dar&uuml;ber auf aus, fahren ohnehin alle den
-          Mittelreifen, egal was hier steht.</small></div>
+          gilt die Tabelle (weich +20&nbsp;% Grip und 2,6-facher Verschlei&szlig;, hart &minus;15&nbsp;% und 0,4-facher),
+          dar&uuml;ber ist der Unterschied gr&ouml;&szlig;er. Standard seit v1.1.42: 150&nbsp;%
+          (weich +30&nbsp;% Grip und 3,4-facher Verschlei&szlig;, hart &minus;22&nbsp;% und 0,1-facher), bis 300&nbsp;%. Steht die Reifensimulation dar&uuml;ber auf aus,
+          fahren ohnehin alle den Mittelreifen, egal was hier steht.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="setting-tyre-mix" min="0" max="2" step="0.05" value="1">
+          <input type="range" id="setting-tyre-mix" min="0" max="3" step="0.05" value="1.5">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="setting-tyre-mix-val">100%</span>
+          <span class="opt-val" id="setting-tyre-mix-val">150%</span>
         </div></div>
       
 
@@ -10393,7 +10475,7 @@
           die Hand die Rate vor, und eine zweite Begrenzung dahinter f&uuml;hlt sich wie
           Verz&ouml;gerung an. Am Gamepad ist ein Daumen in etwa 150&nbsp;ms von der Mitte am
           Anschlag, und ohne D&auml;mpfung wird daraus ein Sprung am Servo.
-          <br>83&nbsp;ms ist die Vorgabe und nicht gew&auml;hlt, sondern der bisherige Wert
+          <br>Die Vorgabe ist 0 (sofort). Die fr&uuml;heren 83&nbsp;ms waren nicht gew&auml;hlt, sondern der alte Wert
           nachgerechnet: 6,0&nbsp;Anschl&auml;ge je Sekunde mal dem kalibrierten
           Lenkansprechen von 200&nbsp;% sind 12 je Sekunde. Bis v0.5.40 hing die Zeit
           zus&auml;tzlich am Lenkansprechen &ndash; wer es auf 240&nbsp;% stellte, machte
@@ -10471,8 +10553,8 @@
            Anfangsbereich; soll so aussehen wie die fuers Gas geben)". Dieselbe Formel. -->
       <div class="opt-row"><div class="opt-label">Bremskennlinie <span class="wip-tag">WIP</span>
           <small>Wie der Bremsweg des Controllers auf die Bremskraft abgebildet wird, mit
-          derselben Formel wie die Gaskennlinie. 1,0 ist die Gerade. Die Vorgabe 1,3 macht
-          den Anfangsbereich etwas unempfindlicher: leichtes Antippen bremst sanft, voller
+          derselben Formel wie die Gaskennlinie. 1,0 ist die Gerade. Die Vorgabe 2,45 macht
+          den Anfangsbereich deutlich unempfindlicher: leichtes Antippen bremst sanft, voller
           Druck bleibt volle Bremse.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
@@ -10577,8 +10659,23 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-knall-volume-val">100%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">Regen<small>Select oder W. Reifen kommen beim Boxenstopp passend.</small></div>
+      <div class="opt-row"><div class="opt-label">Regen<small>Schaltet Regen sofort an oder aus (im Entwicklermodus auch Shift+W). Reifen kommen beim Boxenstopp passend.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-rain"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Schaltklang: alt<span class="wip-tag">WIP</span><small>Aus (Standard, neu): Beim
+          Schalten bleibt der Motorklang derselbe, bricht kurz ein wie bei einer Zündunterbrechung, und die Tonhöhe gleitet
+          statt zu springen &ndash; bei allen Motoren so, wie es bisher nur die Mustang-GT3-Aufnahme konnte. An: der
+          frühere Klang (Überblenden auf das Schubband).</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-schaltklang-alt"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">NPC-Motorklang: alt<span class="wip-tag">WIP</span><small>Aus (Standard, neu): NPCs
+          knallen auch beim Anbremsen aus dem Auspuff, und ihre Knaller sind etwas lauter. An: die früheren Knaller (nur
+          beim Gaswegnehmen, leiser). Dass man die Gänge der NPCs hört, gilt immer (sie schalten seit v1.2.5 früher zurück).</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-npc-klang-alt"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Alte Boxen-Signaltöne<small>Aus (Standard): In der Boxengasse klingen
+          fertig getankt, Reifen gewechselt, repariert und &bdquo;los&ldquo; mechanisch &ndash; kurze Ausschnitte aus Ratsche
+          und Schlagschrauber. An: die früheren Signaltöne (Bling, Blip, Düüt).</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-pit-alt-toene"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Blitz bei Gewitter<small>Bei Regen blitzt das Cockpit alle 20 bis 30&nbsp;s kurz auf. Aus: nur der Donner.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-blitz" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Strecken-Ambience<small>Vorbeifahrten, Regen, Donner.</small></div>
         <label class="tgl"><input type="checkbox" id="amb-enable" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Streckenlautstärke<small>Absichtlich leise, damit der Motor vorne bleibt.</small></div>
@@ -10694,6 +10791,9 @@
           <option value="sd_v12weich">Ferrari 599 GTB Fiorano: 6,0 l V12</option>
           <option value="sd_toro">Lamborghini Murci&eacute;lago R-GT (Toro R-GT): 6,0 l V12</option>
           <option value="sd_v5r">Vulture V5.R (Speed Dreams): 7,0 l V8</option>
+<option value="sd_lynx">Lynx 220 / Jaguar XJ220 (Speed Dreams): 3,5 l V6 Turbo</option>
+<option value="sd_fmc">FMC GT4 / Ford GT40 Mk1 (Speed Dreams): 4,7 l V8</option>
+<option value="sd_boxer">Boxer 96 / Porsche 911 GT3 (Speed Dreams): 3,6 l Boxer-6</option>
           </optgroup>
           <!-- BESTELLT: eigene Aufnahmen des Nutzers aus photos/newaudio; Drehzahlen aus der
                Video-Anzeige. tools/sd_engines.py-Verfahren, audio/loops.json. -->
@@ -10881,6 +10981,98 @@
       </div>
     </div>
     </div>
+    <div class="card subpage" id="sub-opt-vibration">
+      <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
+      <h2>Vibration</h2>
+      <p class="muted" style="font-size:12px">v1.1.42 BESTELLT: jede Vibration soll etwas &uuml;ber das Renngeschehen sagen.
+        Darum ein Schalter je Ausl&ouml;ser &ndash; leicht hei&szlig;t Hinweis (Quietschen, Untersteuern, Box), stark hei&szlig;t
+        Ereignis (Aufprall, Heck kommt).</p>
+<div class="opt-head">Controller-Vibration</div>
+      <div class="opt-row"><div class="opt-label">Vibration &uuml;berhaupt
+          <small>Der Hauptschalter. Steht er aus, brummt nichts, egal was darunter
+          angekreuzt ist. Seit v0.5.18 ist er standardm&auml;&szlig;ig an. Vorher stand er
+          aus, und damit kamen auch die Vorgaben darunter nie zum Tragen &ndash; gemeldet
+          wurde das als &bdquo;Vibration geht nicht&ldquo;. Wer keinen R&uuml;ttler hat,
+          merkt von einem angeschalteten Hauptschalter nichts. Das Handy vibriert nicht mit,
+          das Protokoll kennt daf&uuml;r nichts.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-vibration" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">R&uuml;tteln testen
+          <small>L&ouml;st einen Sto&szlig; aus und schreibt daneben, was dabei vorgefunden
+          wurde: wieviele Controller das System meldet, welche davon einen R&uuml;ttler
+          haben, welche Zuordnung sie tragen und ob der Sto&szlig; angenommen oder abgelehnt
+          wurde. Aus &bdquo;geht nicht&ldquo; wird damit eine Messung.</small></div>
+        <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end">
+          <button type="button" id="vib-test">Testen</button>
+          <span class="muted" id="vib-test-out" data-i18n-skip
+                style="font-size:11px; text-align:right; max-width:34ch"></span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Gangwechsel
+          <small>Kurz und leicht bei jedem Schalten, beim Leerlauf und beim
+          R&uuml;ckw&auml;rtsgang. Sechs Gangwechsel in drei Sekunden mit einem langen
+          Muster w&auml;ren ein Presslufthammer in der Hand, deshalb 40&nbsp;ms.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-schalt" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">ABS
+          <small>Ein Puls alle 140&nbsp;ms, solange das ABS regelt &ndash; das ist die
+          R&uuml;ckmeldung, an der man merkt, dass die Bremse an der Grenze
+          arbeitet.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-abs" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Aufprall
+          <small>Der st&auml;rkste Sto&szlig;, und er h&auml;ngt seit v0.5.15 an der WUCHT:
+          gerechnet wird mit dem Tempo im Moment des Einschlags. Ein Einschlag bei
+          H&ouml;chstgeschwindigkeit soll sich nicht anf&uuml;hlen wie ein Anstupsen in der
+          Boxengasse. Auch der schw&auml;chste Aufprall brummt jetzt kr&auml;ftiger als
+          bisher.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-crash" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Neben der Bahn
+          <small>Ein schwaches Dauerbrummen, solange das Auto neben der Bahn meldet
+          &ndash; nach Schotter, nicht nach Aufprall. Standard aus: es ist ein ZUSTAND und
+          kein Ereignis, und nach f&uuml;nf Sekunden nervt es. Unabh&auml;ngig von der
+          Drosselung unter Allgemein.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-abseits"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Boxenstopp
+          <small>Einfahrt, Beginn der Arbeit, fertig, und ein leiser Puls, solange man in
+          der Gasse rollt.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-box" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">&Uuml;bersteuern (Heck kommt)
+          <small>Nur im Modus Pacejka. Ein kr&auml;ftiger Sto&szlig;, wenn das Heck ausbricht &ndash; je weiter, desto
+          st&auml;rker; kam es unter Gas, ein kurzer zweiter Sto&szlig; hinterher. Sagt dir: gegenlenken oder vom Gas.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-rutschen" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Untersteuern (Front schiebt)
+          <small>Nur im Modus Pacejka. Leises Brummen im schwachen Motor, solange die Vorderr&auml;der wirklich
+          &uuml;ber der Haftgrenze sind &ndash; zu schnell in die Kurve, das Auto schiebt geradeaus. Seit v1.1.42 nicht
+          mehr bei blo&szlig;em Gasgeben (die Lenkentlastung unter Gas l&ouml;ste es vorher dauernd aus).</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-untersteuern" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Reifenquietschen
+          <small>Ein leichtes Brummen, solange die Reifen quietschen, mit der Lautst&auml;rke des Quietschens:
+          du bist an der Haftgrenze, aber noch nicht dar&uuml;ber. Kommt vor dem Untersteuern und dem
+          &Uuml;bersteuern &ndash; die Warnung davor.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-quietschen" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Meldungen
+          <small>Wetterwechsel und leerer Tank. Standard aus: das sind Nachrichten und
+          keine Kr&auml;fte am Auto &ndash; wer sie will, bekommt sie hier.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-meldung"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Trigger-Vibration
+          <span class="wip-tag">experimentell</span>
+          <small>Zus&auml;tzlich zu den Griffmotoren: regelt das ABS, brummt der linke
+          Trigger &ndash; das ist die Bremse. Beim Schalten der rechte. Standard an. Warum
+          experimentell: die adaptiven Trigger eines DualSense sind &uuml;ber die
+          Gamepad-Schnittstelle gar nicht erreichbar, und die Effektart
+          &bdquo;trigger-rumble&ldquo; stellt Chrome vor allem f&uuml;r Xbox-Controller
+          bereit. Die Zeile darunter liest aus, was dein Controller wirklich annimmt. Kann
+          er es nicht, passiert nichts, und zwar ausdr&uuml;cklich ohne ersatzweises Brummen
+          in den Griffen &ndash; das w&uuml;rde vort&auml;uschen, die Trigger h&auml;tten
+          reagiert.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-trigger" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Was dein Controller kann
+          <small>Ausgelesen, nicht angenommen. Leer, solange kein Controller gemeldet
+          ist &ndash; einmal eine Taste dr&uuml;cken.</small></div>
+        <span class="muted" id="vib-trigger-lage" data-i18n-skip
+              style="font-size:11px; text-align:right; max-width:34ch"></span></div>
+      <div class="opt-row"><div class="opt-label">DualSense: Trigger bei ABS <span class="wip-tag">WIP</span>
+          <small>Regelt das ABS, vibriert der linke Trigger eines DualSense &ndash; wenn die Bremse auf dem linken Trigger liegt und &bdquo;ABS&ldquo; oben an ist. Die adaptiven Trigger erreicht nur WebHID: Chrome oder Edge am Rechner, per USB oder Bluetooth, nach einmaligem Verbinden &uuml;ber diesen Knopf. In der Android-App geht das nicht.</small></div>
+        <button type="button" id="ds-verbinden">Verbinden</button>
+        <span class="muted" id="ds-lage" data-i18n-skip style="font-size:11px; text-align:right; max-width:34ch"></span></div>
+    </div>
     <div class="card subpage" id="sub-opt-ansagen">
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
       <h2>Ansagen</h2>
@@ -10895,6 +11087,13 @@
           &ndash; unter Windows sind sie lokal vorhanden, auf Android k&ouml;nnen sie fehlen.
           Fehlt eine, steht das einmal im Protokoll und nicht bei jeder Runde.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Rennintro vor der Ampel <span class="wip-tag">WIP</span>
+          <small>Lokale Starts: Modus, Runden- oder Zeitlimit, Pflichtstopps, Startaufstellung und Startwetter als Piper-Aufnahmen.
+          Die Ampel beginnt erst danach; wer w&auml;hrend des Intros losf&auml;hrt, macht einen Fr&uuml;hstart.
+          Standard aus; nicht in Challenges und nicht im WLAN-Mehrspieler.
+          Nutzt Sprache, Sprechgeschwindigkeit, Lautst&auml;rke und Hall der Rennstand-Ansagen.
+          Fehlende Aufnahmen werden ausgelassen, der Start bleibt m&ouml;glich.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-intro" data-preset-skip><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Rennstand alle paar Runden ansagen <span class="wip-tag">WIP</span>
           <small>Die ersten drei Fahrzeuge des lokalen Rennfelds, mit Runde, Wagenfarbe und Marke / Modell.
           Nach jeder eingestellten Zahl vollendeter Runden des f&uuml;hrenden Fahrzeugs.
@@ -10914,6 +11113,19 @@
       <div class="opt-row"><div class="opt-label">Namen in der Garage sind <span class="wip-tag">WIP</span>
           <small>Wie Rennstand und Ergebnis ein Auto mit eigenem Namen nennen. Autobezeichnungen: der Name steht statt der Marke hinter der Farbe, aus &bdquo;Porsche&ldquo; wird &bdquo;Gewonnen hat der rote Porsche&ldquo;. Fahrernamen: nur der Name, ohne Farbe, &bdquo;Gewonnen hat Max Mustermann&ldquo;. Autos ohne eigenen Namen hei&szlig;en immer nach Farbe und Marke. Eigene Namen spricht die Stimme des Ger&auml;ts, nicht die Aufnahmen; der Hall und Lautst&auml;rken &uuml;ber 100&nbsp;% wirken dann nicht. Hat das Ger&auml;t keine Stimme (Android-App), kommen Farbe und Marke. Standard: Autobezeichnungen.</small></div>
         <select id="setting-announce-stand-namensart" data-preset-skip><option value="auto" selected>Autobezeichnungen</option><option value="fahrer">Fahrernamen</option></select></div>
+      <div class="opt-row"><div class="opt-label">Ansagestimme
+          <small id="setting-announce-stand-voice-help">Automatisch: bei eigenen Garagennamen Browserstimme, sonst vorproduzierte Clips.</small></div>
+        <select id="setting-announce-stand-voice-mode" data-preset-skip>
+          <option value="auto" selected>Automatisch</option>
+          <option value="clips">Vorproduzierte Stimme</option>
+          <option value="browser">Browser-/Gerätestimme</option>
+        </select></div>
+      <div class="opt-row"><div class="opt-label">Browser-/Gerätestimme
+          <small id="setting-announce-stand-browser-voice-help">Die Liste kommt vom Browser/Gerät; Stimmen können je nach Plattform variieren.</small></div>
+        <div>
+          <select id="setting-announce-stand-browser-voice" data-preset-skip><option value="">Systemstandardstimme</option></select>
+          <input type="hidden" id="setting-announce-stand-browser-voice-key" data-preset-skip>
+        </div></div>
       <div class="opt-row"><div class="opt-label">Rennstand-Sprechgeschwindigkeit
           <small>100 bis 175 %. Gilt ab der nächsten Ansage. Höheres Tempo erhöht auch die Tonhöhe.</small></div>
         <div class="opt-slider">
@@ -10921,6 +11133,14 @@
           <input type="range" id="setting-announce-stand-speed" min="1" max="1.75" step="0.05" value="1" data-preset-skip>
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-announce-stand-speed-val">100%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Rennstand-Stimmhöhe
+          <small>Unabhängig vom Sprechtempo: −6 bis +6 Halbtöne; Standard 0 = Originalstimme. Nur Rennstand- und Ergebnisansagen.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="setting-announce-stand-pitch" min="-6" max="6" step="1" value="0" data-preset-skip>
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="setting-announce-stand-pitch-val" data-i18n-skip>0 Halbtöne</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Rennstand-Lautstärke
           <small>Nur die Rennstand-Ansagen. Bis 200 % mit Boost; 0 % stumm. Regen, Motoren und Warnungen bleiben unverändert.</small></div>
@@ -10937,6 +11157,12 @@
           <input type="range" id="setting-announce-stand-reverb" min="0" max="1" step="0.05" value="0" data-preset-skip>
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="setting-announce-stand-reverb-val">0%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">Beispielansage testen
+          <small>Spielt die ausgewählte Stimme mit Tempo und Stimmhöhe. Vorproduzierte Clips nutzen auch Hall; die Browserstimme nutzt den gewählten Geräteton, aber keinen Hall oder Lautstärke-Boost.</small></div>
+        <div class="row" style="gap:8px; align-items:center">
+          <button type="button" id="setting-announce-stand-test" data-i18n-skip>Testen</button>
+          <span class="muted" id="setting-announce-stand-test-status" aria-live="polite"></span>
         </div></div>
       <div class="opt-row"><div class="opt-label">Schaden ansagen<small>Einmal, wenn der Schadensbalken auf 10&nbsp;% gefallen ist. Erst nach einer Reparatur wieder scharf.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce-damage" checked><span></span></label></div>
@@ -11046,6 +11272,40 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-haarnadel-max-val">35%</span>
         </div></div>
+<div class="opt-head">Stufe MAX <span class="wip-tag">WIP</span></div>
+      <div class="opt-row"><div class="opt-label">MAX: Tempo auf der Geraden <span class="wip-tag">WIP</span><small>F&uuml;r NPCs mit der Garagenstufe &bdquo;MAX&ldquo;: das Tempo auf Geraden, als Anteil des Gasbytes. 100&nbsp;% ist Vollgas. Standard 100&nbsp;%.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-max-gerade" min="0.4" max="1" step="0.01" value="1">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-max-gerade-val">100%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">MAX: Tempo in Radius-1-Kurven <span class="wip-tag">WIP</span><small>Die 60-Grad-Kurve und die kleine 30-Grad-Kurve (gleicher Radius). Standard 52&nbsp;% &ndash; so schnell wie ein NPC der Stufe 65&nbsp;% mit 20&nbsp;% Kurvenabzug.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-max-r1" min="0.3" max="1" step="0.01" value="0.52">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-max-r1-val">52%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">MAX: Tempo in Radius-2-Kurven <span class="wip-tag">WIP</span><small>Die weite 30-Grad-Kurve (dreifacher Radius). Standard 80&nbsp;%. Haarnadel und Engstelle fahren MAX-NPCs nach den normalen Regeln: H&ouml;chsttempo in der Haarnadel und Mindesttempo gelten weiter.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-max-r2" min="0.3" max="1" step="0.01" value="0.8">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-max-r2-val">80%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">MAX: Beschleunigung <span class="wip-tag">WIP</span><small>Wie viel kräftiger das Motormodell eines MAX-NPCs beschleunigt als das von Spieler&nbsp;1, und ohne Schaltpause. Das gesendete Gas folgt diesem Modell &ndash; auf kurzen Geraden kam ein MAX-NPC sonst kaum über sein Kurventempo. Standard 2&times;.</small></div>
+        <div class="opt-slider">
+          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
+          <input type="range" id="ghost-max-beschl" min="1" max="4" step="0.1" value="2">
+          <button type="button" data-step="1" aria-label="mehr">+</button>
+          <span class="opt-val" id="ghost-max-beschl-val">200%</span>
+        </div></div>
+      <div class="opt-row"><div class="opt-label">MAX: Bremspunkt <span class="wip-tag">WIP</span><small>Wo ein MAX-NPC vom Geradentempo auf das Kurventempo geht: eine Schiene vor der Kurve (Standard) oder erst am Beginn des Kurventeils. Vor der Haarnadel bremsen alle NPCs wie bisher zwei Teile vorher.</small></div>
+        <select id="ghost-max-bremspunkt">
+          <option value="schiene" selected>Eine Schiene vor der Kurve</option>
+          <option value="teil">Beginn des Kurventeils</option>
+        </select></div>
       <!-- DIE RENNWUERZE, IN EINZELNE SCHALTER ZERLEGT. Vorher ein Regler fuer sechs
            Bausteine: wer ihn aufdrehte, bekam alle sechs und wusste danach nicht, welcher
            davon das Gesehene erklaert. Das Gummiband ist nicht mehr dabei - es ist
@@ -11283,32 +11543,18 @@
 
       <div class="opt-row"><div class="opt-label">NPC: Boxenstopp
           <span class="wip-tag">experimentell</span>
-          <small>Ein NPC f&auml;hrt auf der Start/Ziel-Kachel rechts an den Rand, bleibt
-          ein paar Sekunden stehen und f&auml;hrt wieder los. Die Anfahrt beginnt schon auf
-          der Kachel davor, im Formationstempo &ndash; ein Auto, das mit Renntempo &uuml;ber
-          die Linie kommt, braucht eine Kachel zum Verz&ouml;gern. Standardm&auml;&szlig;ig AUS: ein Auto, das mitten
-          im Rennen stehen bleibt, liest man beim ersten Start als Fehler und nicht als
-          Feature. Der Ablauf ist absichtlich hart &ndash; eine Sekunde am rechten Rand mit
-          voller Bremse (am Tempo-Regler vorbei, der braucht f&uuml;r einen sauberen Halt
-          1,1&nbsp;s), dann ruckartig heraus in 0,5&nbsp;s, das ist die Grenze der
-          Querf&uuml;hrung, und dabei blinken die Lichter doppelt.
-          Es gibt vier Boxen hintereinander: Platz 1 auf der Start/Ziel-Kachel,
-          Platz 2 eine Kachel sp&auml;ter und so weiter. Wer gleichzeitig f&auml;llig ist, nimmt den n&auml;chsten freien und h&auml;lt
-          eine Kachel dahinter; wer als F&uuml;nfter kommt, wartet, bis eine frei wird.
-          Auf dem Weg zur eigenen Box f&auml;hrt er am Gegenrand vorbei &ndash; sonst
-          w&uuml;rde er dem Stehenden ins Heck fahren. Gemessen bei einem Wetterwechsel
-          mit sechs NPCs: vier stehen gleichzeitig, keine Doppelbelegung, und in
-          555 Takten Vorbeifahrt kein einziger Takt mit rechter Anforderung. Vier
-          Kacheln sind 1,72&nbsp;m &ndash; mehr Boxen w&uuml;rden auf einem kleinen Layout
-          einen merklichen Teil der Bahn f&uuml;llen.
+          <small>Ein NPC parkt zum Stopp wie das Safety Car: Einfahrt mit dessen Einparkfolge an den
+          rechten Rand, im Stand l&auml;uft die Ratsche, Ausfahrt mit der Ausparkfolge (seit v1.2.4). Es steht
+          immer nur ein Auto in der Box; wer gleichzeitig f&auml;llig ist, wartet, bis sie frei ist. Die Box liegt
+          auf der Start/Ziel-Kachel &ndash; steht ein Safety Car in der Garage, auf dem ersten St&uuml;ck mit zwei
+          Geraden ab drei Teilen hinter dessen Parkplatz, damit sich beide nicht in die Quere kommen. Die
+          Anfahrt beginnt schon auf der Kachel davor, im Formationstempo. Standardm&auml;&szlig;ig AUS: ein Auto, das
+          mitten im Rennen stehen bleibt, liest man beim ersten Start als Fehler und nicht als Feature.
           <br>Die anderen weichen auf der Boxenkachel nach links aus, und ihre Querlage ist
-          dort nach rechts gesperrt &ndash; das Ausweichen allein w&auml;re nur die weiche
-          H&auml;lfte, die Sperre ist die Zusage. Dein eigenes Auto ist nicht steuerbar; es
+          dort nach rechts gesperrt. Dein eigenes Auto ist nicht steuerbar; es
           gibt eine Meldung und den Punkt auf der Karte, mehr geht nicht.
           <br>Was der Stopp nicht kann: wissen, wo der Rand ist. Das Auto meldet seine
-          Querlage nicht, voller Ausschlag ist ein Befehl und keine Messung. Die Zusage ist
-          nicht die Randlage, sondern dass die anderen auf der anderen Seite
-          sind.
+          Querlage nicht, voller Ausschlag ist ein Befehl und keine Messung.
           <br>Regenreifen: setzt Regen ein, kommt jeder NPC so früh wie möglich herein und rüstet um &ndash; und beim Wechsel zurück auf trocken genauso. Solange die falschen Reifen drauf sind, fährt er langsamer: 0,64 gegen 0,85 mit Regenreifen im Regen, abgeleitet aus derselben Grifftabelle, die dein Auto benutzt. Bei leichtem Regen ist der Slick noch vorn &ndash; der Nachteil kommt mit dem Wasser, nicht mit der Meldung. Ist dieser Schalter aus, können NPCs keine falschen Reifen haben, sonst kröchen sie nach dem ersten Regen ohne Ausweg.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-pit"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">NPC: Boxenstopp im freien Fahren
@@ -11655,6 +11901,9 @@
       </table>
       <div class="row" style="margin-top:12px">
         <button id="bind-reset">Auf Standard zurücksetzen</button>
+        <button id="bind-uebernehmen" class="primary" hidden>Übernehmen</button>
+        <button id="bind-abbrechen" hidden>Abbrechen</button>
+        <span class="muted" id="bind-sitzung-hinweis" hidden>Änderungen noch nicht gespeichert. Solange reagiert der Controller auf nichts anderes &ndash; Übernehmen auch mit Options 1&nbsp;s halten.</span>
       </div>
       <div class="row" style="margin-top:12px">
         <span class="muted">Gas: <b id="pad-live-throttle">0.00</b></span>
@@ -11957,12 +12206,13 @@
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
       <h2>Statistiken</h2>
       <div id="stat-inhalt"></div>
+      <div id="stat-bereinigen"></div>
     </div>
     <!-- STUDIE (98f-studie.js): Einwilligung, NARQ, Selbsteinschaetzung, Reaktionstest. Der Inhalt
          entsteht im Code und wird dort mit t() uebersetzt. -->
     <div class="card subpage" id="sub-opt-studie">
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
-      <h2>Studie <span class="wip-tag">experimentell</span></h2>
+      <h2>OmegaLab <span class="wip-tag">WIP</span></h2>
       <div id="studie-inhalt" data-i18n-skip></div>
     </div>
 
@@ -12020,7 +12270,9 @@
       <p class="muted">Was Auto&nbsp;2 <b>hat</b>: eine eigene Fahrphysik mit eigenen
         G&auml;ngen, eigener Drehzahl, eigenem Tempo und eigenen Temperaturen. Die
         Einstellungen aus &bdquo;Fahrgef&uuml;hl&ldquo; werden bei jedem Anschalten
-        &uuml;bernommen, damit beide Autos gleich fahren.</p>
+        &uuml;bernommen &ndash; au&szlig;er, in der Garage ist f&uuml;r diesen Spieler unter
+        &bdquo;Fahrgef&uuml;hl&ldquo; ein eigenes gew&auml;hlt (seit v1.2.4, z.&nbsp;B. Spieler&nbsp;1 Pacejka,
+        Spieler&nbsp;2 Arcade); dann f&auml;hrt er mit seinem.</p>
       <p class="muted">Und ein Vergleichsschirm: bl&auml;ttere im Cockpit mit dem Pfeil
         oben links oder dem Steuerkreuz auf &bdquo;Beide&ldquo;. Dort stehen beide Autos
         <em>nebeneinander</em> &ndash; Tempo, Schaltlichter, Gang, Tank, Zustand, Reifen-
@@ -12061,12 +12313,11 @@
         Regler wie Auto&nbsp;1, das Tankgewicht in seiner Fahrphysik, die Warnstufen als
         Meldung und den Notlauf des leeren Tanks &ndash; und der geht &uuml;ber eine Rampe
         zu, nicht in einem Takt.</p>
-      <p class="muted">Alle globalen Einstellungen gelten f&uuml;r beide Autos: die
-        Abstimmung aus &bdquo;Fahrgef&uuml;hl&ldquo; wandert bei jeder &Auml;nderung
-        sofort her&uuml;ber, und Tank, Schaden, Reifenverschlei&szlig;, Wetter, die
-        H&ouml;chstgeschwindigkeit und die Batteriekompensation wirken auf beide
-        gleicherma&szlig;en. Zwei Autos mit verschiedener Abstimmung w&auml;ren kein
-        faires Rennen.</p>
+      <p class="muted">Die globalen Einstellungen gelten f&uuml;r alle Autos: Tank, Schaden,
+        Reifenverschlei&szlig;, Wetter, die H&ouml;chstgeschwindigkeit und die Batteriekompensation
+        wirken auf alle gleicherma&szlig;en. Die Abstimmung aus &bdquo;Fahrgef&uuml;hl&ldquo; wandert bei
+        jeder &Auml;nderung sofort her&uuml;ber, solange der Spieler &bdquo;wie Spieler&nbsp;1&ldquo; f&auml;hrt;
+        mit eigenem Fahrgef&uuml;hl (Garage) beh&auml;lt er seine Abstimmung und seine Reifenmischung.</p>
       <p class="muted">Dazu einen eigenen Schaden: Crasherkennung aus seinen eigenen
         Sensorbytes, Leistungsverlust mit dem Schaden, Notlauf im Totalschaden und
         ausgefallene Lampen &ndash; und die Kontrollleuchten des einen sagen nichts mehr

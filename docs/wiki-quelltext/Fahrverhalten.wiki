@@ -1,0 +1,696 @@
+{{Stand|app=1.2.9|appdatum=26.10.2026}}
+[[Datei:OmegaSim-Fahrgefuehl.png|mini|Die Einstellungsseite Fahrgefühl in OmegaSim]]
+Das '''Fahrverhalten''' von [[OmegaSim]] ist die Art, wie die App aus den Eingaben am Controller (Gas, Bremse, Lenkung) die zwei Steuerwerte berechnet, die per [[Bluetooth Low Energy]] an ein [[Carrera HYBRID]]-Auto gehen: einen Gaswert und einen Lenkwert. Dazwischen liegt ein vollständiges Fahrzeugmodell mit Motor, Getriebe, Reibkreis, Gewichtsverlagerung, Reifen- und Bremsentemperatur, einem Einspurmodell und, im Fahrgefühl Pacejka, einer Reifenkennlinie nach der Magic Formula. Das echte Modellauto rutscht, bremst und lenkt dabei mit seiner eigenen [[Firmware]]; was das Modell der App berechnet, wirkt am Auto ausschließlich über diese zwei Bytes. Abgestimmt wird das Fahrverhalten über neun fertige Sätze von Reglerwerten, die '''Fahrgefühle''' (in der App auch Voreinstellungen oder Presets genannt), und über rund 45 einzelne Regler.
+
+== Auf einen Blick ==
+{| class="wikitable"
+! Merkmal !! Wert
+|-
+| Menüpfad || Optionen → Fahrgefühl; Kurzwahl in FAHREN, in der Garage und am Cockpit-Knopf
+|-
+| Fahrgefühle || Arcade, Sim+, Pacejka (in FAHREN, Garage, Cockpit); Pro, GT3, F1, Realismus GT3, Omega, RC (nur in den Optionen)
+|-
+| Vorgabe nach Neuinstallation || die Werte im Markup entsprechen dem Fahrgefühl '''Pacejka''' (Steuerungsmodus Pacejka, sonst Pro-Werte)
+|-
+| Steuerungsmodi || Physik, Pacejka, RC („Aus“)
+|-
+| Mechanischer Lenkanschlag || 45 Grad, Konstante <code>STEER_MAX_DEG</code>
+|-
+| Sendetakt || 45 ms (<code>CONTROL_SEND_INTERVAL_MS</code>), also gut 22 Pakete je Sekunde
+|-
+| Status || Physik stabil; Pacejka experimentell; RC in Arbeit (WIP); Fahrgefühl je Spieler seit 1.2.4
+|-
+| Seit Version || Physikmodell seit den 0.4-Fassungen, Pacejka seit 0.8, Omega seit 1.0.36, Sim+ seit 0.10.5, RC seit 1.0.22
+|-
+| Quelldateien || <code>src/40-physics.js</code>, <code>src/50-drive.js</code>, <code>src/98-presets.js</code>, <code>src/49-spieler.js</code>, <code>src/30-input.js</code>, <code>src/20-protocol.js</code>
+|}
+
+== Grundlagen ==
+Dieser Abschnitt erklärt die Begriffe, die weiter unten gebraucht werden. Wer sie kennt, kann ihn überspringen; Fachbegriffe stehen auch im [[Glossar]].
+
+=== Was ein Physikmodell ist ===
+Ein '''Physikmodell''' ist ein Programmteil, das ein reales Objekt mit Zahlen nachbildet. OmegaSim führt für jedes gesteuerte Auto eine solche Nachbildung: eine Geschwindigkeit, eine Motordrehzahl, einen eingelegten Gang, vier Reifentemperaturen und so weiter. Diese Zahlen heißen '''Zustand'''. Das Modell kennt Regeln, wie sich der Zustand ändert, zum Beispiel „Vollgas im 2. Gang erhöht die Geschwindigkeit um so und so viel je Sekunde“.
+
+=== Was ein Simulationsschritt ist ===
+Ein Computer kann nicht stetig rechnen, sondern nur in kleinen Zeitstücken. Ein '''Simulationsschritt''' (auch Takt) rechnet den Zustand um eine kurze Zeitspanne <code>dt</code> weiter. In OmegaSim läuft der Schritt im Sendetakt von 45 ms. Das einfachste Verfahren dafür ist das '''Euler-Verfahren''':
+<pre>neuer Wert = alter Wert + Änderungsrate × dt
+Beispiel: Tempo 2,0 + Beschleunigung 0,5 je s × 0,045 s = 2,0225</pre>
+Bei sehr schnellen Vorgängen kann dieses einfache Verfahren „überschießen“ und instabil werden. Das Einspurmodell verwendet deshalb ein '''halbimplizites''' Verfahren, bei dem die neuen Werte in der Gleichung schon mitstehen (siehe unten).
+
+=== Drehmoment und Übersetzung ===
+Das '''Drehmoment''' ist die Drehkraft des Motors. Ein Rennmotor hat bei niedriger Drehzahl wenig und bei mittlerer bis hoher Drehzahl am meisten Drehmoment; diese Abhängigkeit heißt '''Drehmomentkurve'''. Die '''Übersetzung''' eines Gangs sagt, wie oft sich der Motor dreht, während sich das Rad einmal dreht. Ein kurzer Gang (große Übersetzung, z. B. 3,75) bringt viel Kraft ans Rad, aber wenig Endgeschwindigkeit; ein langer Gang (z. B. 0,88) umgekehrt. Daraus folgt die Aufgabe des Schaltens: den Motor in dem Drehzahlbereich halten, in dem er viel Drehmoment hat.
+
+=== Reibkreis und Schlupf ===
+Ein Reifen kann nur eine begrenzte Gesamtkraft auf die Straße bringen. Diese Kraft lässt sich aufteilen: in Längskraft (Beschleunigen oder Bremsen) und Querkraft (Kurvenfahrt). Zeichnet man beide als Achsen, liegt die Grenze ungefähr auf einem Kreis, dem '''Reibkreis'''. Wer in der Kurve schon viel Querkraft braucht, hat für Gas oder Bremse nur noch den Rest:
+<pre>Längsanteil = √(1 − Queranteil²)
+Beispiel: Queranteil 0,6 → Längsanteil √(1 − 0,36) = 0,8</pre>
+'''Schlupf''' ist der Unterschied zwischen der Bewegung des Reifens und der Bewegung, die er ohne Rutschen hätte. Seitlich heißt der Winkel zwischen Fahrtrichtung des Rads und Ausrichtung des Rads '''Schräglaufwinkel'''. Ein Reifen baut Kraft über Schlupf auf: erst fast proportional, dann flacher, und hinter einem '''Scheitel''' sogar wieder weniger.
+
+=== Reifenkennlinie und Magic Formula ===
+Die '''Reifenkennlinie''' ist die Kurve „Seitenkraft über Schräglaufwinkel“. Die '''Magic Formula''' von Hans B. Pacejka (Pacejka und Bakker, 1992) ist eine bekannte Formel, die diese Kurve mit vier Zahlen nachbildet:
+<pre>y(u) = sin( C · atan( B·u − E·(B·u − atan(B·u)) ) )</pre>
+* <code>B</code> streckt die Kurve waagerecht (Steifigkeit),
+* <code>C</code> bestimmt ihre Form (Werte um 1,3 sind typisch für Seitenkraft),
+* <code>D</code> ist die Höhe des Scheitels, also die größte Kraft,
+* <code>E</code> formt den Bereich um den Scheitel (negativ: ausgeprägter Scheitel, danach stärkerer Abfall).
+Anschaulich: Bis zum Scheitel bringt mehr Einschlag mehr Kraft. Hinter dem Scheitel bringt mehr Einschlag nichts mehr oder sogar weniger, das Auto schiebt geradeaus (Untersteuern an der Vorderachse) oder das Heck bricht aus (Übersteuern an der Hinterachse).
+
+=== Gewichtsverlagerung ===
+Beim Bremsen verlagert sich Gewicht nach vorn, beim Beschleunigen nach hinten. Eine stärker belastete Achse kann mehr Kraft übertragen, allerdings nicht im selben Verhältnis (der Reifen ist „lastempfindlich“). Daraus entsteht das '''Trail-Braking''': Leichtes Bremsen beim Einlenken belastet die Vorderräder und macht die Lenkung kurz besser, starkes Bremsen braucht den Reibkreis dagegen auf.
+
+=== Wie aus einer Zahl ein Funkbefehl wird ===
+Das Auto versteht kein „Tempo 2,0“, sondern nur ein Datenpaket aus 20 '''Bytes'''. Ein Byte hat 8 '''Bits''' und kann 256 Werte darstellen, 0 bis 255, hexadezimal geschrieben <code>0x00</code> bis <code>0xFF</code> (siehe [[Hexadezimalsystem]]). Beispiel: <code>0x51</code> = 5·16 + 1 = 81 dezimal = <code>01010001</code> binär. Für Lenkung und Gas braucht man auch negative Zahlen. Dafür gibt es das '''Zweierkomplement''': −1 wird als 255 (<code>0xFF</code>) geschrieben, −63 als 193 (<code>0xC1</code>), +127 als 127 (<code>0x7F</code>). Am Ende jedes Pakets steht eine '''Prüfsumme''' (CRC-8), an der das Auto erkennt, ob das Paket unbeschädigt angekommen ist. Wie die App aus dem Modell genau diese Bytes macht, steht im Abschnitt [[#Vom Modell zum Funkbefehl|Vom Modell zum Funkbefehl]]; das Paket selbst beschreibt die Seite [[Carrera HYBRID]].
+
+== Bedienung ==
+=== Ein Fahrgefühl wählen ===
+# '''FAHREN''' öffnen und die Kachel Fahrgefühl antippen, oder in der '''Garage''' beim gesteuerten Auto die Zeile „Fahrgefühl“ benutzen. Dort stehen Arcade, Sim+ und Pacejka.
+# Für die übrigen sechs Sätze '''Optionen → Fahrgefühl → Voreinstellungen''' öffnen. Die Reihenfolge dort ist Arcade, Sim+, Pacejka, Pro, GT3, F1, Realismus GT3, Omega, RC.
+# Ein Tipp setzt alle Regler des Satzes auf einmal. Die Statuszeile meldet „Name: n Regler gesetzt“; fehlende Regler werden dort genannt.
+# Im Cockpit schaltet der Fahrmodus-Knopf zwischen Arcade, Sim+ und Pacejka weiter, und zwar ab dem gerade eingestellten Satz. Während einer [[Challenges|Challenge]] ist der Knopf gesperrt.
+# Unter den Knöpfen steht die Beschreibung des aktiven Satzes. Weicht ein einziger Regler von allen Sätzen ab, steht dort „Eigene Abstimmung“.
+
+=== Eine eigene Abstimmung sichern und weitergeben ===
+# Regler unter '''Optionen → Fahrgefühl''' einstellen.
+# Unter „Abstimmung ablegen“ einen Namen eintragen und '''Ablegen''' tippen (Speicher <code>chc.presets.v1</code> auf dem Gerät). Dieselbe Ablage gibt es in der Garage.
+# Zum Weitergeben '''In Text''' tippen: das Textfeld enthält dann alle Regler als JSON. Den Text kopieren und auf einem anderen Gerät einfügen, dann '''Übernehmen'''. Werte außerhalb eines Reglerbereichs werden abgelehnt, unbekannte Regler werden übergangen und gemeldet.
+# '''Standard wiederherstellen''' in der Garage setzt alle Regler auf die Werte zurück, mit denen sie ausgeliefert werden.
+
+=== Fahrgefühl je Spieler ===
+# In der Garage einem Auto die Rolle Spieler 2 oder Spieler 3 geben.
+# In dessen Zeile „Fahrgefühl“ zwischen „wie Spieler 1“ (Vorgabe), Arcade, Sim+ und Pacejka wählen.
+# Spieler 1 stellt weiterhin die Regler unter Optionen ein. Sie gelten für alle Spieler ohne eigenes Fahrgefühl.
+
+=== Rückwärts fahren ===
+# Mit Automatik: Quadrat (Xbox: X) legt unterhalb von 10 km/h den Rückwärtsgang ein, Kreis (B) holt ihn heraus.
+# Ohne Automatik: unter dem 1. Gang liegt der Leerlauf, darunter im Stand der Rückwärtsgang.
+# Wahlweise (experimentell): '''Rückwärtsgang: Gas und Bremse zusammen''' einschalten; dann im Stand beide Pedale zugleich drücken.
+
+== Einstellungen ==
+Alle Regler liegen unter '''Optionen → Fahrgefühl''', wenn nicht anders angegeben. „Standard“ ist der Wert im ausgelieferten Markup (der beim ersten Start gilt). Die Spalte „Wirkung“ beschreibt, was der Code mit dem Wert macht.
+
+{| class="wikitable sortable"
+! Name in der App !! Bereich !! Standard !! Wirkung (aus dem Code) !! Interne ID → Modellgröße
+|-
+| Voreinstellungen || 9 Knöpfe || – || setzt einen ganzen Satz von Reglern, siehe [[#Alle Fahrgefühle mit ihren Werten|Tabelle]] || <code>preset-buttons</code>
+|-
+| Steuerungsmodus (ausgeblendet seit 1.0.22) || Physik, Pacejka, RC || Pacejka || wählt den Rechenweg; hängt seitdem am Fahrgefühl || <code>phys-mode</code> → <code>physicsEnabled</code>, <code>config.pacejka</code>
+|-
+| Übersteuern (Pacejka), unter Optionen → Allgemein || an/aus || aus || erlaubt dem Pacejka-Modus, von sich aus in die Kurve einzulenken || <code>setting-pac-ueber</code> → <code>pacejkaUebersteuern</code>
+|-
+| Haftgrenze (Pacejka, ausgeblendet) || 40 bis 120 % || 70 % || Querausnutzung, bei der der Reifen am Scheitel ist || <code>setting-pac-grenze</code> → <code>pacejkaGrenze</code>
+|-
+| Layout || 5 Fahrzeuge || Neutral || Achslast vorn, Radstand, Gierträgheit; von Voreinstellungen nicht berührt || <code>setting-layout</code>
+|-
+| Getriebe || GT3, F1, 412P || GT3 || Gangzahl, Übersetzungen, Schaltdrehzahlen, Schaltzeit || <code>setting-gearbox</code>
+|-
+| Gasfaktor || 20 bis 200 % || 180 % || Faktor auf das ausgehende Gasbyte (nur vorwärts, nicht unter Autopilot) || <code>setting-topspeed</code> → <code>topSpeedScale</code>
+|-
+| Reifengrip || 0 bis 1 || 1,0 || Tempoabhängige Lenkbegrenzung: <code>speedSteerReduction = 0,20 + 0,30·(1 − Grip)</code> || <code>setting-grip</code>
+|-
+| Bremswirkung || 0,3 bis 5,0 || 1,4 || multipliziert die Grundverzögerung 0,72 || <code>setting-brakepower</code> → <code>brakeDecelBase</code>
+|-
+| Automatikgetriebe || an/aus || an || automatisches Hoch- und Herunterschalten || <code>setting-autoshift</code> → <code>autoShift</code>
+|-
+| Rückwärtsgang: Gas und Bremse zusammen || an/aus || aus || Rückwärtsgang wie am Original-Controller (experimentell) || <code>setting-gasbrake-reverse</code>
+|-
+| Rückwärtsgang: Druckschwelle || 10 bis 100 % || 50 % || ab diesem Pedalweg zählen beide als gedrückt || <code>setting-gasbrake-reverse-druck</code>
+|-
+| Rückwärtsgang: Haltezeit || 0 bis 500 ms || 100 ms || Zeit zum Einlegen und zum Zurückschalten || <code>setting-gasbrake-reverse-ms</code>
+|-
+| Rückwärtsgang: Geschwindigkeitsgrenze || 0 bis 40 km/h || 10 km/h || darüber wird nicht eingelegt || <code>setting-gasbrake-reverse-kmh</code>
+|-
+| Rückwärtsgang: Ausrollen || 0 bis 3000 ms || 600 ms || Ausrollzeit, Zeitkonstante = Wert / 3 || <code>setting-gasbrake-reverse-aus</code>
+|-
+| Höchstgeschwindigkeit (km/h) || 2 bis 8 || 4,0 || Modell-Höchsttempo; neu kalibriert bei jeder Änderung || <code>setting-topspeed-kmh</code> → <code>topSpeedKmh</code>
+|-
+| 0 → 100 km/h (s) || 1,5 bis 8 || 2,6 || Kalibrieranker der Beschleunigung, Anzeige in % von 3,2 s || <code>setting-zero-to-top</code> → <code>launchAnchorTimeS</code>
+|-
+| Ausrollen (Faktor) || 0,2 bis 2 || 0,6 || Faktor auf Roll-, Motor- und Luftwiderstand beim Ausrollen || <code>setting-coast-drag</code> → <code>coastDragPerS</code>
+|-
+| Tankgewicht || 0 bis 100 % || 100 % || voller Tank bis 30 % träger (siehe [[Verschleiß]]) || <code>setting-fuelweight</code> → <code>fuelWeightEffect</code>
+|-
+| Reifen: Temperatur & Verschleiß || 0 bis 200 % || 100 % || Reifenmodell, siehe [[Verschleiß]] || <code>setting-tyres</code> → <code>tyreEffect</code>
+|-
+| Mischungsunterschied (WIP) || 0 bis 300 % || 150 % || Abstand der Mischungen zum Mittelreifen || <code>setting-tyre-mix</code>
+|-
+| Reifenwärmer || an/aus || aus || Start und Wechsel auf 85 °C statt 20 °C || <code>setting-tyre-blankets</code>
+|-
+| Jedes Rad einzeln || an/aus || an || vier Radlasten statt einer || <code>setting-tyre-asym</code> → <code>tyreAsymEffect</code>
+|-
+| Reifendruck (bar) || 1,4 bis 2,2 || 1,8 || neutral bei 1,8 || <code>setting-tyre-pressure</code>
+|-
+| Bremstemperatur und Fading || an/aus || an || siehe [[Verschleiß#Bremsen]] || <code>setting-brake-fade</code>
+|-
+| Stärke des Fadings || 0 bis 200 % || 150 % || über 100 % nur schnelleres Aufheizen || <code>setting-brake-fade-strength</code> → <code>brakeFadeEffect</code>
+|-
+| Windschatten in Kurven (experimentell) || an/aus || aus || bis 18 % weniger Kurvengrip hinter einem Auto || <code>setting-dirtyair</code>
+|-
+| Stärke des Windschattens || 0 bis 200 % || 100 % || Faktor auf die 18 % || <code>setting-dirtyair-strength</code> → <code>dirtyAirEffect</code>
+|-
+| Lenkansprechen || 0,5 bis 4,0 (Anzeige 25 bis 200 %) || 3,0 (150 %) || Trimmung des Zielwinkels; Anzeige = Wert / 2,0 || <code>phys-steerresp</code> → <code>steerResponse</code>
+|-
+| Lenkkennlinie (WIP) || 0,6 bis 3,0 || 2,45 || Exponent der Stick-Kennlinie || <code>setting-steer-expo</code> → <code>steerExpo</code>
+|-
+| Voller Einschlag bei (experimentell) || 30 bis 100 % || 90 % || Stickweg, bei dem der volle Einschlag erreicht ist || <code>setting-steer-voll</code> → <code>steerVoll</code>
+|-
+| Lenkkraft unter Gas (WIP) || 0 bis 100 % || 75 % || mildert die Lenkabschwächung beim Beschleunigen || <code>setting-throttle-steer-relief</code> → <code>throttleSteerRelief</code>
+|-
+| Lenkdämpfung (WIP) || 0 bis 500 ms || 0 ms (sofort) || Zeit von Mitte bis zum möglichen Anschlag || <code>phys-steerdamp</code> → <code>steerDaempfungMs</code>
+|-
+| Bremsen nimmt Lenkung || 0 bis 150 % || 95 % || Anteil der Bremse am Reibkreis vorn || <code>setting-brake-steal</code> → <code>brakeUseGain</code>
+|-
+| Bremsaufbau || 0,05 bis 0,60 s || 0,12 s || Zeitkonstante, mit der die Bremskraft am Reifen ansteht || <code>phys-brake-tau</code> → <code>useTauBrems</code>
+|-
+| Lenkwinkel-Kalibrierung || 100 bis 300 % || 250 % || Verstärkung hinter dem Reibkreis, gedeckelt bei 45 Grad || <code>setting-steer-calib</code> → <code>steerCalib</code>
+|-
+| Beschleunigungsfaktor || 0,4 bis 2,0 || 1,0 || Faktor auf die kalibrierte Antriebskraft || <code>phys-accel</code> → <code>accelerationFactor</code>
+|-
+| Tempo rückwärts || 10 bis 100 % || 50 % || Anteil des Rückwärts-Höchsttempos (nicht unter Autopilot) || <code>phys-rueck-tempo</code> → <code>reverseTempo</code>
+|-
+| Gaskennlinie (WIP) || 0,6 bis 3,0 || 2,45 || Exponent auf den Gasweg || <code>setting-throttle-gamma</code> → <code>throttleGamma</code>
+|-
+| Bremskennlinie (WIP) || 0,6 bis 3,0 || 2,45 || Exponent auf den Bremsweg || <code>setting-brake-gamma</code> → <code>brakeGamma</code>
+|-
+| Anfahrschub (WIP) || 0 bis 35 % || 5 % || kleinstes Gasbyte beim Anfahren || <code>setting-minmove</code> → <code>minMoveThrottle</code>
+|-
+| Bremsbalance || 50 bis 80 % vorn || 62 % || Anteil der Bremskraft vorn; 62 % ist neutral || <code>setting-brakebias</code> → <code>brakeBias</code>
+|-
+| Gewichtsverlagerung (WIP) || 15 bis 50 % || 30 % || Lastanteil, der bei 1 g die Achse wechselt || <code>phys-transfer-k</code> → <code>transferK</code>
+|-
+| Trägheit der Gewichtsverlagerung (WIP) || 40 bis 250 ms || 80 ms || Zeitkonstante der Karosseriebewegung || <code>phys-load-tau</code> → <code>loadTau</code>
+|-
+| Fahrhilfe (experimentell), Optionen → Fahrgefühl || aus, Querlage, voll || aus || lässt das Auto die Spur halten oder selbst lenken || <code>driver-assist</code>
+|-
+| Leistung über Akkulaufzeit konstant halten (WIP), Optionen → Allgemein || an/aus || aus || drosselt bei vollem Akku || <code>setting-battery-comp</code>
+|-
+| Referenz-Akkustand || 20 bis 100 % || 50 % || Bezugswert der Drosselung || <code>setting-battery-ref</code>
+|}
+Hinweis: Die ⓘ-Texte einiger Regler nennen ältere Vorgaben (z. B. 83 ms Lenkdämpfung, Bremskennlinie 1,3). Gültig sind die Werte in dieser Tabelle, die aus dem Code und dem Markup stammen. Mit 1.2.11 wurden mehrere Erklärtexte an das Verhalten angeglichen, darunter die der Fahrgefühle Arcade, Pro, Pacejka und Omega.
+
+== Funktionsweise ==
+=== Überblick: ein Takt von der Eingabe zum Paket ===
+Alle 45 ms läuft der Herzschlag <code>controlHeartbeat()</code> (<code>src/20-protocol.js</code>). In ihm passiert für Spieler 1 der Reihe nach:
+# Das Gamepad wird frisch gelesen (nur im Cockpit), die Ortung auf der Bahn wird nachgeführt.
+# <code>physicsStep()</code> (<code>src/50-drive.js</code>) formt die Pedale mit den Kennlinien, zieht Tank, Schaden, Abseits, Frühstrafe und Autopilot ab und ruft <code>physEngine.update()</code>.
+# Das Modell liefert <code>motorPWM</code> (Gas, −1 bis 1) und <code>servoAngle</code> (Lenkung, −1 bis 1).
+# <code>sendControlValue()</code> multipliziert das Gas mit dem Gasfaktor und baut das Paket.
+# Danach senden Spieler 2 und 3 und die NPCs im selben Takt, und erst dann wird das Cockpit gezeichnet.
+
+=== Kennlinien für Gas, Bremse und Lenkung ===
+Alle drei Kennlinien benutzen dieselbe Formel (<code>kennlinie()</code> in <code>src/40-physics.js</code>):
+<pre>aus = sign(x) · |x|^g</pre>
+* <code>x</code>: Stick- oder Triggerweg, beim Gas und der Bremse 0 bis 1, bei der Lenkung −1 bis 1,
+* <code>g</code>: Exponent (Gaskennlinie <code>throttleGamma</code>, Bremskennlinie <code>brakeGamma</code>, Lenkkennlinie <code>steerExpo</code>), Standard je 2,45.
+Die Enden liegen für jeden Exponenten fest: 0 bleibt 0, 1 bleibt 1. Ein Exponent über 1 macht den Anfangsbereich feiner. Beispiel mit 2,45: ein Viertel Gasweg ergibt 0,25^2,45 ≈ 0,034, also gut 3 % Gas.
+
+Die Bremse ist in der App kein eigener Kanal: Gas und Bremse laufen als eine vorzeichenbehaftete Zahl <code>throttleY</code> (positiv Gas, negativ Bremse) und werden erst in <code>physicsStep()</code> getrennt.
+
+==== Der Lenkweg mit „Voller Einschlag bei“ ====
+Ist „Voller Einschlag bei“ gesetzt (Standard 0,9), gilt <code>lenkVollAnteil()</code>:
+<pre>a      = min(1, |x| / voll)
+s      = sign(x) · a^e
+Wunsch = clamp(s · Lenkansprechen / 3,0 ;  −1 … 1) · Lenkgrenze</pre>
+* <code>voll</code>: „Voller Einschlag bei“, 0,3 bis 1,
+* <code>e</code>: Lenkkennlinie,
+* 3,0: Bezugswert <code>STEER_VOLL_BEZUG</code>; bei Lenkansprechen 3,0 ist die Trimmung genau 1, darunter wird der volle Einschlag nie ganz erreicht,
+* Lenkgrenze: siehe nächster Abschnitt.
+Ist der Wert nicht gesetzt (alter Weg), gilt <code>Wunsch = clamp(x^e · Lenkgrenze · Lenkansprechen)</code>.
+
+==== Tempoabhängige Lenkgrenze ====
+<pre>Lenkgrenze = min(1, 1 − v_Anteil · speedSteerReduction · Gangindex/(Gangzahl − 1))</pre>
+Im 1. Gang ist der Faktor 0, die Grenze also 1. Erst in höheren Gängen wird der erlaubte Einschlag bei hohem Tempo kleiner. <code>speedSteerReduction</code> folgt aus dem Regler Reifengrip (<code>0,20 + 0,30·(1 − Grip)</code>). Arcade schaltet diese Grenze ab (<code>lenkKopplungAus</code>).
+
+=== Motor und Drehmomentkurve ===
+Das Modell rechnet die Geschwindigkeit intern in „Modell-km/h“ von 0 bis <code>topSpeedKmh</code> = 4,0. Für die Anzeige gibt es zwei Maßstäbe (<code>src/30-input.js</code>):
+* <code>REAL_SCALE</code> = 50 · 5,9 / 4,0 = 73,75. In dieser Einheit ist die Physik abgestimmt (Schwellen wie 10 km/h oder 80 km/h). Höchsttempo 4,0 entspricht 295 km/h.
+* <code>TACHO_SCALE</code> = 50 · 5,45 / 4,0 ≈ 68,1. Mit ihm rechnet seit 0.9.39 der Tacho, weil Nachmessungen 5,45 km/h echte Vollgasgeschwindigkeit ergaben (im Maßstab 1:50 rund 272 km/h).
+
+Die Drehmomentkurve ist eine Tabelle mit linearer Interpolation (<code>TORQUE_CURVE</code>, <code>torqueAt()</code>):
+{| class="wikitable"
+! Drehzahl (1/min) !! 1500 !! 2500 !! 3500 !! 4500 !! 5500 !! 6200 !! 7000 !! 8000 !! 9000
+|-
+! Drehmoment (1 = Spitze)
+| 0,42 || 0,52 || 0,62 || 0,72 || 0,88 || 1,00 || 0,985 || 0,955 || 0,90
+|}
+Leerlauf 1500/min, Begrenzer 9000/min (<code>IDLE_RPM</code>, <code>REDLINE_RPM</code>), weicher Begrenzer über 400/min (<code>LIMITER_SOFT_RPM</code>).
+
+Die Drehzahl folgt im Gang aus der Geschwindigkeit:
+<pre>Drehzahl = rpmScale · Übersetzung · (|v| / topSpeedKmh)
+rpmScale = 9000 / max(Übersetzung · topFrac)   (GT3: 9000 / 0,9525 ≈ 9449)</pre>
+
+Die Antriebsbeschleunigung (<code>thrustAt()</code>):
+<pre>a_Antrieb = Gas · M(n) · Begrenzer · (Übersetzung / 0,88) · A · Anfahrfaktor
+A         = (topSpeedKmh / 3,0) · Beschleunigungsfaktor · accelCalibration
+Begrenzer = 1 über 9000/min abfallend auf 0 bei 9400/min
+Anfahrfaktor = 0,95 + 0,05 · min(1, |v| / 0,6)</pre>
+* <code>M(n)</code>: Drehmoment bei Drehzahl n; im 1. Gang unter 6200/min wird mit 6200/min gerechnet (schleifende Kupplung beim Start, <code>launchClutchRpm</code>),
+* 0,88: Übersetzung des letzten Gangs (<code>ratioRef</code>), dort ist der Faktor 1,
+* <code>accelCalibration</code>: wird per Bisektion so gesucht, dass ein Vollgasstart die eingestellte Zeit „0 → 100 km/h“ trifft (<code>calibrateAccel()</code>, 30 Schritte, geometrische Mitte).
+Der Regler „0 → 100 km/h“ ist damit ein '''Kalibrieranker''' und keine exakte Zeitangabe: der Code vermerkt, dass die vereinfachte Kalibrierrechnung und der echte Takt bis zu 46 % auseinanderliegen.
+
+Widerstände (<code>resistAt()</code>), mit <code>u = |v| / topSpeedKmh</code>:
+<pre>unter Last:  A · (0,08·u + 0,25·u²)
+Ausrollen:   Ausrollfaktor · (0,030 + 0,065·(Übersetzung/0,88)²·u + 0,155·u²)</pre>
+Beim Ausrollen ist der Motorbremsanteil im 1. Gang (3,75/0,88)² ≈ 18-mal stärker als im 6. Gang. Unter 10 km/h (Anzeige) ohne Gas wird das Gasbyte auf 0 gesetzt und das Tempo mit 0,45 Modell-km/h je s auf null gebracht, damit das Auto nicht im Bereich zuckt, in dem das Byte zu klein zum Losbrechen ist.
+
+Bremsen (vorwärts):
+<pre>a_Bremse = −( Widerstand + 0,72·Bremswirkung · Bremse · Längsgrip · Untergrund · Eintauchen · Reifengrip · (1 − Fading) / Massefaktor )</pre>
+Über 80 % Bremse und über 15 % des Höchsttempos meldet das Modell „ABS“ (Anzeige und kurzes Rütteln); das Byte selbst wird nicht moduliert.
+
+=== Getriebe und Schaltlogik ===
+{| class="wikitable"
+! Getriebe !! Gänge !! Übersetzungen (topFrac) !! Hochschalten !! Herunterschalten !! Schaltzeit
+|-
+| GT3, 6-Gang sequenziell (Vorgabe) || 6 || 3,75 (0,2523) · 2,38 (0,40) · 1,72 (0,5538) · 1,34 (0,7108) · 1,08 (0,88) · 0,88 (1,0) || 8800/min || 4200/min || 120 ms
+|-
+| Formel 1, 8-Gang || 8 || 3,07 (0,31) · 2,26 (0,42) · 1,83 (0,52) · 1,51 (0,63) · 1,28 (0,74) · 1,13 (0,84) · 1,03 (0,92) · 0,88 (1,0) || 8850/min || 5600/min || 40 ms, wirksam 45 ms
+|-
+| Ferrari 412P, 5-Gang Transaxle || 5 || 3,17 (0,30) · 2,11 (0,45) · 1,53 (0,62) · 1,17 (0,81) · 0,88 (1,0) || 8600/min || 3400/min || 350 ms
+|}
+<code>topFrac</code> ist der Anteil der Höchstgeschwindigkeit, an dem der Gang endet. Bei allen Gängen außer dem letzten ist <code>Übersetzung · topFrac</code> etwa 0,9507 (<code>GEAR_PRODUCT</code>); der letzte Gang ist luftwiderstandsbegrenzt. Die Schaltzeit wird nie kürzer als ein Sendetakt (<code>shiftMs = max(45, Angabe)</code>), sonst fiele sie zwischen zwei Pakete.
+
+Die Automatik (<code>update()</code>) prüft in jedem Takt:
+{| class="wikitable"
+! Zustand !! Bedingung !! Folge
+|-
+| Leerlauf, Automatik an || Gas &gt; 2 % || 1. Gang, vorwärts
+|-
+| Gang n, nicht am Schalten || Drehzahl ≥ Hochschaltdrehzahl und Gas &gt; 5 % und n nicht der letzte || Gang n+1, Schaltpause beginnt
+|-
+| Gang n &gt; 1, nicht am Schalten || Drehzahl ≤ Herunterschaltdrehzahl || Gang n−1
+|-
+| am Schalten || Restzeit <code>shiftLeft</code> läuft über <code>dt</code> ab || während der Pause kein Antrieb, nur 25 % des Widerstands (<code>shiftDragFactor</code>)
+|}
+Die Herunterschaltschwelle ist so gewählt, dass nach einem Hochschalten die Drehzahl darüber bleibt: im GT3 fällt sie beim Wechsel 1→2 von 8800 auf 8800·2,38/3,75 ≈ 5585/min, also 1385/min über 4200.
+
+Von Hand (Automatik aus) gilt die Kette R ← N ← 1 ← 2 … Der Rückwärtsgang lässt sich nur im Stand einlegen (unter 0,05 Modell-km/h). Mit Automatik legt Quadrat den Rückwärtsgang ein, wenn das Tempo unter <code>0,034 · topSpeedKmh</code> liegt (10 km/h Anzeige); sonst meldet die App „ZU SCHNELL FÜR R“.
+
+Rückwärts zieht der Antrieb mit Übersetzung 3,00; die Grenze ist <code>0,11 · topSpeedKmh · Tempo rückwärts</code>. Das Gasbyte rückwärts ist auf −0,5 begrenzt (<code>reverseOutputSpan</code>), weil nur diese Tiefe am echten Auto als sicher bestätigt ist.
+
+=== Rückwärtsgang mit Gas und Bremse zusammen ===
+Zustandsmaschine in <code>gasBremseRueckwaertsPruefen()</code> (<code>src/50-drive.js</code>), je Spieler und je Eingabequelle (Gamepad, Tastatur) mit eigener Uhr:
+{| class="wikitable"
+! Zustand !! Bedingung !! nächster Zustand
+|-
+| vorwärts || Option an, Automatik an, nicht RC, kein Autopilot, Tempo &lt; Grenze, beide Pedale ≥ Druckschwelle für die Haltezeit || Rückwärtsgang (Meldung, Rütteln, Ton)
+|-
+| Rückwärtsgang || beide Pedale gedrückt || Gas geht nach hinten (Rückgabewert = Gasweg)
+|-
+| Rückwärtsgang || nur ein Pedal || kein Antrieb, die Bremse bremst
+|-
+| Rückwärtsgang || alle Pedale aller Quellen &lt; 10 % für die Haltezeit || Ausrollen: Tempo · e^(−dt/(Ausrollzeit/3))
+|-
+| Ausrollen || Tempo &lt; 0,5 km/h || 1. Gang (vorwärts)
+|}
+
+=== Reibkreis und Lenkung ===
+Die Querausnutzung des Reibkreises:
+<pre>latUse   = min(1, |Lenkung| · (|v| / topSpeedKmh) · 1,8)
+gripLong = √(1 − latUse²)</pre>
+Der Faktor 1,8 (<code>corneringLoad</code>) sorgt dafür, dass schon deutliches Lenken bei hohem Tempo einen großen Teil des Budgets verbraucht. <code>gripLong</code> begrenzt Antrieb und Bremse.
+
+Die Lenkfähigkeit der Vorderachse heißt im Code <code>steerGrip</code>. Es gibt zwei Rechenwege:
+
+'''Einfacher Reibkreis''' (Arcade, RC, Omega, eigene Abstimmungen):
+<pre>steerGrip = ( max(0,12·(1 − nass), min(1, √(frontCap² − frontUse²))) + TrailBonus ) · Reifengrip
+frontUse  = Bremsanteil · brakeUseGain · (Bremsbalance/0,62) · Tempoanteil · wf</pre>
+* <code>frontCap</code>: Kapazität der Vorderachse aus Achslast, Layout, Nässe und Windschatten,
+* Tempoanteil: 0 unter 5 % und 1 ab 22 % des Höchsttempos (<code>loadOnsetFrac</code>, <code>loadFullFrac</code>), damit Bremsen im Schritttempo die Lenkung nicht leert,
+* 0,12: Notboden im Trockenen, verschwindet mit Nässe,
+* TrailBonus: <code>0,08 · 4 · x · (1 − x)</code> mit <code>x = Bremsanteil / 0,7</code>, also am größten bei mittlerem Bremsdruck (nicht bei Arcade und Omega).
+
+'''Lenkung aus der Gewichtsverlagerung''' (seit 1.1.3 für Pro, Sim+, Pacejka, GT3, F1, Realismus GT3):
+<pre>uF   = Last vorn / statische Last vorn
+uFl  = 1 + (uF − 1) · 0,66 · Tempoanteil        (nur beim Bremsen, sonst 1)
+cap  = uFl^(1 − 0,15)
+use  = Bremsanteil · brakeUseGain · (Bremsbalance / statische Last vorn) · Tempoanteil
+Ziel = max(0,12·(1 − nass), min(1,12, √(cap² − use²)) · Gasfaktor) · Layout · Nässe · Windschatten · Reifengrip</pre>
+Das Ergebnis läuft durch einen Tiefpass mit 0,15 s (<code>lenkGlattTau</code>). Der Gasfaktor ist die stetige Lenkentlastung unter Gas:
+<pre>Gasfaktor = max(0,5 ; 1 − 0,10 · (1 − Lenkkraft unter Gas)/0,25 · g^1,74)</pre>
+mit <code>g</code> = Längsausnutzung beim Beschleunigen. Bei Reglerstand 75 % ergibt Vollgas 0,90 und Halbgas 0,97. Pacejka rechnet diesen Faktor im eigenen Schritt.
+
+==== Gewichtsverlagerung ====
+<pre>Last_vorn += ((statisch − Anforderung · transferK) − Last_vorn) · (1 − e^(−dt/loadTau))
+longUse   += (Anforderung − longUse) · (1 − e^(−dt/τ))</pre>
+* Anforderung: +Gas, −Bremse, beim Ausrollen −0,15 (<code>coastPitch</code>, die Motorbremse nickt die Nase etwas),
+* <code>loadTau</code> 0,08 s: die Karosserie nickt schnell,
+* τ = 0,45 s beim Gas, 0,12 s beim Bremsen (Bremsaufbau): die Reifenkraft folgt langsamer.
+Aus Längs- und Querlast entstehen vier Radlasten (vorne links, vorne rechts, hinten links, hinten rechts), die Reifentemperatur und Verschleiß je Rad treiben; eine Rechtskurve belastet die linken Räder.
+
+==== Lenkdämpfung und Ausgabe ====
+Der gedämpfte Lenkwert folgt dem Wunsch mit einer Ratenbegrenzung (nicht mit einer Glättung):
+<pre>maxSchritt = dt · 1000 / Lenkdämpfung_ms · Weg</pre>
+Bei 0 ms (Standard) ist der Schritt unbegrenzt, die Lenkung springt also sofort. Wählt man ein Layout, schlägt der Code einen Wert aus der Gierträgheit vor (<code>steerDaempfungFor()</code>): <code>round(1000 / (clamp(6·2000/Iz ; 4 … 9) · 2))</code>, das sind 83 ms neutral, 104 ms Frontmotor-GT3, 75 ms Mittelmotor, 92 ms Heckmotor und 56 ms Formel 1. Der Regler bleibt aber maßgeblich.
+
+Am Ende (neuer Weg):
+<pre>servoAngle = clamp( gedämpft · min(1, Lenkkalibrierung · Aquaplaning · steerGripRef) · (steerGrip/steerGripRef) + Zug ; −1 … 1 )</pre>
+* <code>steerGripRef</code>: der statische Grip (Untergrund, Windschatten, Reifen) ohne Brems- und Gaswirkung; die Kalibrierung gleicht nur diesen aus, die Wirkung von Bremse und Gas bleibt spürbar,
+* Zug: kleiner Lenkversatz aus ungleich abgefahrenen Reifen (höchstens 0,05),
+* Aquaplaning: über 60 % des Höchsttempos <code>1 − Aquaplaning · ((u − 0,6)/0,4)²</code>.
+Mehr als ±1 geht nicht: das ist der volle mechanische Anschlag von 45 Grad. Ein größerer Wert käme im vorzeichenbehafteten Byte als Einschlag in die Gegenrichtung an.
+
+=== Das Einspurmodell ===
+Ein '''Einspurmodell''' fasst die beiden Räder einer Achse zu einem zusammen und beschreibt, wie sich das Auto um die Hochachse dreht (Gierrate <code>r</code>) und wie schräg es zur Fahrtrichtung steht (Schwimmwinkel <code>β</code>). In OmegaSim ist es ein '''Instrument''': es speist Anzeigen im Cockpit, stellt aber nie die Lenkung (<code>yawStep()</code>).
+<pre>m·v·(β' + r) = Fv + Fh
+Iz·r'        = Fv·lv − Fh·lh
+Fv = −Cv·(β + lv·r/v − δ)        Fh = −Ch·(β − lh·r/v)
+Cv = 140000 · f^0,85             Ch = 140000 · (1 − f)^0,85
+lv = L·(1 − f)                   lh = L·f</pre>
+* <code>m</code> = 1300 kg, <code>v</code> in m/s (Modelltempo · 73,75 / 3,6), <code>δ</code> = servoAngle · 45 Grad,
+* <code>f</code> = statische Last vorn, <code>L</code> = Radstand, <code>Iz</code> = Gierträgheit (aus dem Layout),
+* Exponent 0,85: Lastempfindlichkeit. Mit Exponent 1 kürzte sich der Eigenlenkgradient für jedes Layout weg.
+Gelöst wird halbimplizit: <code>(I − dt·A) · x_neu = x_alt + dt·B·δ</code>, ein 2×2-Gleichungssystem je Takt. Unter 0,5 m/s steht das Modell still. Daraus folgen:
+<pre>Eigenlenkgradient  kU = m·f/Cv − m·(1−f)/Ch = (m/C)·(f^0,15 − (1−f)^0,15)
+stationäre Gierrate r_s = δ · v / (L + kU·v²)</pre>
+{| class="wikitable"
+! Layout !! Last vorn !! Radstand !! Iz (kg·m²) !! kU (s²/m) !! Verhalten
+|-
+| Neutral, kalibriert (Vorgabe) || 0,50 || 2,60 m || 2000 || 0 || neutral
+|-
+| GT3, Frontmotor (BMW M4 GT3) || 0,50 || 2,85 m || 2500 || 0 || neutral, träger
+|-
+| GT3, Mittelmotor (Ferrari 296 GT3) || 0,44 || 2,60 m || 1800 || −3,0·10⁻⁴ || leicht übersteuernd
+|-
+| GT3, Heckmotor (Porsche 911 GT3 R) || 0,39 || 2,50 m || 2200 || −5,6·10⁻⁴ || übersteuernd
+|-
+| Formel-1-Monoposto || 0,45 || 3,60 m || 1000 || −2,5·10⁻⁴ || leicht übersteuernd, flink
+|}
+Die Layoutwerte sind laut Code Schätzungen aus der Fahrzeugklasse. Der Betrag der berechneten Querbeschleunigung ist nicht aussagekräftig (45 Grad Lenkbereich eines Modellautos bei Tempi eines echten ergeben über 20 g); brauchbar ist nur das Verhältnis aus Ist- und stationärer Gierrate. Der G-Plot zeigt deshalb die Querausnutzung <code>latUse</code>. Auf die Lenkung wirkt das Layout nur über einen kleinen linearen Faktor <code>1 − 0,15·(1 − f/0,5)</code> auf die Vorderachskapazität.
+
+=== Pacejka-Modus ===
+Im Steuerungsmodus Pacejka (<code>pacejkaStep()</code>) bekommt die Vorderachse und, wenn „Übersteuern (Pacejka)“ an ist, die Hinterachse eine Haftgrenze nach der Magic Formula. Der Schritt läuft '''nach''' der normalen Lenkrechnung und formt nur den fertigen Lenkbefehl. Unterhalb der Grenze ändert sich nichts.
+
+Die Formel ist '''normiert''': <code>u = 1</code> ist der Scheitel und <code>y(1) = 1</code>. Dafür wird <code>B</code> einmal so gesucht, dass <code>C · atan(B − E·(B − atan B)) = π/2</code> gilt (<code>pacB()</code>, 60 Halbierungen). Die Höhe <code>D</code> ist damit fest 1; die tatsächliche Grenze steckt in der Haftgrenze.
+{| class="wikitable"
+! Größe !! Wert im Code !! Bedeutung
+|-
+| C || 1,3 (<code>pacejkaC</code>) || Formfaktor für Seitenkraft
+|-
+| E || −0,5 (<code>pacejkaE</code>) || ausgeprägter Scheitel
+|-
+| B || ≈ 2,1355 (gerechnet) || Scheitel genau bei u = 1
+|-
+| D || 1 (normiert) || größte Kraft
+|-
+| Haftgrenze || 0,7 (<code>pacejkaGrenze</code>) || Querausnutzung am Scheitel
+|-
+| Heckreserve || 1,2 (<code>pacejkaHeckReserve</code>) || hinten 20 % mehr Seitenhalt: ab Werk leicht untersteuernd
+|-
+| größter Übersteuer-Zuschlag || 0,35 Servoeinheiten (<code>pacejkaUeberMax</code>) || ≈ 16 Grad
+|-
+| Vortriebsverlust beim Rutschen || bis 55 % (<code>pacejkaRutschVortrieb</code>) ||
+|-
+| Leistungsübersteuern || bis Faktor 1 + 1,4 hinten (<code>pacejkaLeistung</code>) || ab 40 % Gas, Smoothstep bis Vollgas
+|-
+| Haltedauer eines Rutschs || höchstens 2 s (<code>pacejkaHaltMax</code>) || nicht unter 15 % des Höchsttempos
+|}
+Rechenweg je Takt:
+<pre>quer = |Lenkung| · v_Anteil · 1,8 / Haftgrenze
+vorn = clamp(statisch/Last_vorn ; 0,6 … 1)           (Bremsen belastet vorn → kleiner)
+hinten = clamp((1−statisch)/(1−Last_vorn) ; 0,6 … 1,6)
+uV = quer · vorn / Grip
+uH = quer · hinten / Grip / √(1 − (0,7·Antrieb)²) / 1,2   (· Leistungsfaktor bei viel Gas)
+Wirkfaktor(u) = 1 für u ≤ 1, sonst y(u)/u
+Untersteuern: pacUnter → Wirkfaktor(uV) · Gasfaktor, nachgeführt mit 80 ms
+Übersteuern:  nur wenn uH &gt; 1 und uH &gt; uV: Zuschlag = min(0,35 ; 1 − Wirkfaktor(uH))
+servoAngle = clamp(servoAngle · pacUnter + Richtung · pacUeber)</pre>
+Gegenlenken (Stick gegen die Rutschrichtung) baut den Zuschlag mit 0,1 s ab, sonst mit 0,25 s; der Aufbau dauert 0,12 s. Unter- und Übersteuern lösen Vibration aus (Untersteuern als leises Brummen nur, wenn die Vorderachse wirklich über der Grenze ist, Übersteuern als kräftiger Stoß alle 150 ms) und Reifenquietschen. Mit Haftgrenze 0,7 ist voller Einschlag ab etwa 115 km/h am Limit, halber Einschlag ab etwa 230 km/h.
+
+=== Steuerungsmodus RC ===
+Im Fahrgefühl RC (Steuerungsmodus „aus“) rechnet die App kein Fahrzeugmodell, solange kein Autopilot fährt. Der Lenkstick geht roh ans Auto, nie begrenzt. Das Gas läuft durch <code>rcGas()</code> (<code>src/20-protocol.js</code>):
+{| class="wikitable"
+! Lage !! Bedingung !! Gaswert
+|-
+| Gas || Gas &gt; 2 % || steigt sofort, fällt höchstens um 1 je 2000 ms (<code>RC_AUSLAUF_MS</code>)
+|-
+| losgelassen || kein Pedal || läuft in 2 s auf 0 aus
+|-
+| Bremsen || neuer Bremsdruck, geschätztes Tempo &gt; 0 || negativer Wert (Gegenstrom), bis die Schätzung 0 ist; Abbau Bremstiefe · dt / 700 ms
+|-
+| rückwärts || neuer Bremsdruck, Befehl seit 150 ms null und Schätzung &lt; 0,02 || −Bremsweg, solange gedrückt
+|}
+Das Tempo ist dabei geschätzt, denn das Auto meldet keines: die Schätzung folgt dem Gasbefehl mit 0,5 s beim Beschleunigen und 0,8 s beim Ausrollen.
+
+=== Drift-Modus (entfernt) ===
+Bis 0.10.5 gab es einen Drift-Modus, der gegen das gemessene Drehsignal aus Byte 3 der Meldungen gegenlenkte (<code>driftGegenlenken()</code>, Stärke 50 %). Er ist nicht mehr wählbar; die Stellung „Aus“ heißt seitdem RC. Der Code und der ausgeblendete Regler „Gegensteuern im Drift“ sind noch vorhanden.
+
+=== Fahrhilfe ===
+Die Fahrhilfe (<code>driver-assist</code>, je Auto auch in der Garage) hat drei Stellungen:
+* '''aus''': der Lenkwert ist der Radwinkel.
+* '''Querlage''': die App sendet zusätzlich Modus-Bytes mit einem Vorausblick über drei Streckenteile; derselbe Lenkwert bedeutet für das Auto dann die Lage auf der Bahn statt den Radwinkel.
+* '''voll''': wie Querlage, aber der Lenkwert geht als 0 hinaus, das Auto bestimmt die Lage selbst. Das gilt nur, wenn die Modus-Bytes wirklich gesendet werden, also mit eingescannter [[Strecke]] in der Stellung „Auf der Bahn“; sonst würde die 0 als gerade gestellte Räder gelesen.
+Unter gelber Flagge, in der Einführungsrunde und beim Aufstellen fährt ohnehin der Autopilot (siehe [[Safety Car und Reinigungswagen]]).
+
+=== Vom Modell zum Funkbefehl ===
+Der Gaswert ist '''nicht''' die Pedalstellung, sondern das simulierte Tempo:
+<pre>motorPWM = v / topSpeedKmh                          (vorwärts, 0 … 1)
+motorPWM = max(motorPWM, Anfahrschub · Gas)         (solange Gas gegeben wird)</pre>
+Würde die App den Pedalwert direkt senden, stünde das echte Auto bei Vollgas sofort auf Höchsttempo. So steigt das Byte mit dem Modelltempo über mehrere Sekunden.
+
+In <code>sendControlValue()</code>:
+<pre>x = motorPWM
+wenn x &gt; 0 und kein Autopilot:   x = x · Gasfaktor
+wenn kein Autopilot:              x = x · Akkuausgleich
+Δ_Gas    = clamp(round(x · 127) ; −64 … 127)
+Byte 6   = (0xDF + Δ_Gas) mod 256
+Δ_Lenk   = clamp(round(servoAngle · 127) ; −127 … 127)
+Byte 7 = Byte 9 = Δ_Lenk im Zweierkomplement
+Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
+* Gasfaktor: Regler <code>setting-topspeed</code>; bei 180 % erreicht das Byte schon bei 1/1,8 ≈ 56 % des Modelltempos den Höchstwert 127,
+* Akkuausgleich: <code>clamp(Referenz / Akkustand ; 0,2 … 1)</code>, nur wenn eingeschaltet,
+* −64 ist die tiefste Rückwärts-/Bremsstufe, die am echten Auto bestätigt ist (<code>MIN_THROTTLE_DELTA</code>); −127 fuhr im Test vorwärts.
+Die übrigen Bytes (Kopf <code>0xAF</code>, Lichtbits in Byte 14, Modus-Bytes) beschreibt die Seite [[Carrera HYBRID]]. Das Paket geht im 45-ms-Takt über eine Charakteristik von [[Bluetooth Low Energy]] hinaus; ist ein Schreibvorgang noch nicht fertig, wird der neueste Wert nachgereicht statt ein Takt verworfen.
+
+=== Alle Fahrgefühle mit ihren Werten ===
+Die Werte stammen aus <code>PRESETS</code> in <code>src/98-presets.js</code> (nicht aus den Beschreibungstexten). „Pro“ in der Spalte Sim+ und Pacejka heißt: gleicher Wert wie Pro. Der Crash-Regler ist ein Index in die Liste 1, 2, 3, 4, 5, 10, 20, 50.
+{| class="wikitable"
+! Regler (ID) !! Arcade !! Sim+ !! Pacejka !! Pro !! GT3 !! F1 !! Realismus GT3 !! Omega !! RC (WIP)
+|-
+| Steuerungsmodus (<code>phys-mode</code>) || Physik || Physik || '''Pacejka''' || Physik || Physik || Physik || Physik || Physik || '''RC'''
+|-
+| Automatik (<code>setting-autoshift</code>) || an || an || an || an || '''aus''' || '''aus''' || '''aus''' || an || an
+|-
+| 0 → 100 km/h, s (<code>setting-zero-to-top</code>) || 1,6 || 2,3 || 2,6 || 2,6 || 2,9 || 2,5 || 3,2 || 2,6 || 1,5
+|-
+| Beschleunigungsfaktor (<code>phys-accel</code>) || 1,5 || 1,15 || 1,0 || 1,0 || 1,0 || 1,0 || 1,0 || 1,0 || 1,6
+|-
+| Gasfaktor (<code>setting-topspeed</code>) || 1,1 || 1,8 || 1,8 || 1,8 || 1,45 || 1,6 || 1,0 || 1,8 || 1,5
+|-
+| Bremswirkung (<code>setting-brakepower</code>) || 4,0 || 2,2 || 1,4 || 1,4 || 1,15 || 1,45 || 0,85 || 1,4 || 2,5
+|-
+| Bremsaufbau, s (<code>phys-brake-tau</code>) || 0,12 || 0,12 || 0,12 || 0,12 || 0,12 || 0,12 || 0,12 || '''0,45''' || 0,12
+|-
+| Bremsbalance, % vorn (<code>setting-brakebias</code>) || 56 || 62 || 62 || 62 || 60 || 63 || 62 || 62 || 56
+|-
+| Bremsen nimmt Lenkung (<code>setting-brake-steal</code>) || 0,4 || 0,95 || 0,95 || 0,95 || 1,1 || 1,1 || 1,0 || 1,15 || 0,2
+|-
+| Reifengrip (<code>setting-grip</code>) || 1,0 || 1,0 || 1,0 || 1,0 || 0,87 || 0,97 || 0,72 || 1,0 || 1,0
+|-
+| Lenkansprechen (<code>phys-steerresp</code>) || 3,4 || 3,3 || 3,0 || 3,0 || 3,2 || 3,2 || 3,0 || 3,0 || 4,0
+|-
+| Lenkkalibrierung (<code>setting-steer-calib</code>) || 3,0 || 2,5 || 2,5 || 2,5 || 2,0 || 2,0 || 1,6 || 2,5 || 3,0
+|-
+| Ausrollen (<code>setting-coast-drag</code>) || 0,4 || 0,6 || 0,6 || 0,6 || 0,9 || 1,2 || 1,25 || 0,6 || 0,3
+|-
+| Tankgewicht (<code>setting-fuelweight</code>) || 0 || 1 || 1 || 1 || 0,45 || 0,6 || 1,0 || 1 || 0
+|-
+| Reifenmodell (<code>setting-tyres</code>) || 0 (aus) || 1 || 1 || 1 || 0,9 || 1,2 || 2,0 || 1 || 0 (aus)
+|-
+| Reifenwärmer (<code>setting-tyre-blankets</code>) || an || aus || aus || aus || aus || an || aus || aus || an
+|-
+| Reifendruck, bar (<code>setting-tyre-pressure</code>) || 1,8 || 1,8 || 1,8 || 1,8 || 1,8 || 1,75 || 1,8 || 1,8 || 1,8
+|-
+| Jedes Rad einzeln (<code>setting-tyre-asym</code>) || aus || an || an || an || an || an || an || an || aus
+|-
+| Tankverbrauch, %/s (<code>setting-fuel-drain</code>) || 0 || 1 || 1 || 1 || 1,3 || 2,7 || 3,0 || 1 || 0
+|-
+| Crashs bis 100 % (<code>setting-crash-count</code>) || 50 || 5 || 5 || 5 || 5 || 4 || 10 || 5 || 50
+|-
+| Schaden bei Crash (<code>setting-crash-schaden</code>) || aus || an || an || an || an || an || an || an || aus
+|-
+| Crash-Erkennung, Bremsen, Nur Rammer || an || an || an || an || an || an || an || an || an
+|-
+| Crash-Schwelle (<code>setting-crash-threshold</code>) || 60 || 40 || 40 || 40 || 35 || 30 || 30 || 40 || 60
+|-
+| Reparatur, s (<code>setting-repair-time</code>) || 2 || 4 || 4 || 4 || 11 || 16 || 20 || 4 || 2
+|-
+| Bremsfading (<code>setting-brake-fade</code>) || aus || an || an || an || an || an || an || an || aus
+|-
+| Stärke des Fadings || 1,0 || 1,5 || 1,5 || 1,5 || 1,0 || 1,25 || 1,0 || 1,5 || 1,0
+|-
+| Windschatten (<code>setting-dirtyair</code>) || aus || aus || aus || aus || an || an || an || aus || aus
+|-
+| Stärke des Windschattens || 1,0 || 1,0 || 1,0 || 1,0 || 1,0 || 1,35 || 1,0 || 1,0 || 1,0
+|-
+| Lenkung aus Gewichtsverlagerung (abgeleitet) || nein || ja || ja || ja || ja || ja || ja || nein || nein
+|-
+| Sonderweg (abgeleitet) || <code>lenkKopplungAus</code> || – || – || – || – || – || – || <code>lenkAlt</code> || –
+|}
+Nicht Teil der Sätze sind: Layout, Getriebe, Höchstgeschwindigkeit, Lenkkennlinie, Gas- und Bremskennlinie, „Voller Einschlag bei“, Lenkdämpfung, Lenkkraft unter Gas, Anfahrschub, Tempo rückwärts, Gewichtsverlagerung und deren Trägheit sowie alle Renneinstellungen (Renndauer, Wetter, [[Strecke]]).
+
+Die abgeleiteten Schalter setzt <code>setzeBrakeStealLast()</code> aus dem '''gemessenen''' aktiven Satz:
+* <code>brakeStealLast = 1</code> für Pro, Sim+, Pacejka, GT3, F1, Realismus GT3: Lenkung aus der Gewichtsverlagerung,
+* <code>lenkAlt = 1</code> für Omega: die Lenkung rechnet wie in 1.0.42 (fester Lastfaktor 0,15, kein Trail-Bonus, alte Gas-Formel <code>capRaw + 0,25·(1 − capRaw)</code>, Bremsaufbau 0,45 s),
+* <code>lenkKopplungAus = 1</code> für Arcade: Gas und Bremse wirken nicht auf die Lenkung, die tempoabhängige Lenkgrenze entfällt.
+
+Kurzcharakter:
+* '''Arcade''': nachsichtigste Abstimmung, stärkste Bremse (4,0), kein Reifen- und Tankmodell, Crashs bremsen ohne Schaden.
+* '''Sim+''': Pro mit mehr Lenkung (3,3), mehr Beschleunigung (2,3 s, Faktor 1,15) und deutlich kräftigerer Bremse (2,2).
+* '''Pacejka''': Pro mit dem Pacejka-Modus; ab Werk eingestellt.
+* '''Pro''': Grundabstimmung; wöchentliche Challenges und Dauerrennen fahren mit Pro.
+* '''GT3''', '''F1''': von Hand schalten, Fading und Windschatten an.
+* '''Realismus GT3''': das GT3 aus 0.4 Wert für Wert, gegen eine gemessene Reihe gefittet (3,2 s), härteste Stufe.
+* '''Omega''': Pro wie in 0.9.50, eingefroren; ein Selbsttest wacht darüber.
+* '''RC''': Arcade mit allen Reglern am Anschlag und rohem Stick.
+
+=== Fahrgefühl je Spieler ===
+Seit 1.2.4 kann ein Zusatzspieler ein eigenes Fahrgefühl haben (Speicher <code>omegasim-preset-spieler-2</code> bzw. <code>-3</code>). Seine Abstimmung entsteht in zwei Schritten (<code>src/98-presets.js</code>, <code>src/49-spieler.js</code>):
+# <code>presetSchnappschuss(key)</code> legt das Fahrgefühl kurz auf die Regler von Spieler 1, liest die entstandene Modellkonfiguration als Kopie ab und legt sofort den alten Stand von Spieler 1 zurück. So rechnet das Fahrgefühl durch dieselben Regler-Handler wie sonst; das Ergebnis wird je Satz zwischengespeichert. Während der Schnappschuss läuft, wird nicht abgeglichen.
+# <code>spielerGefuehlUeberlagern(nr, motor)</code> kopiert erst die Konfiguration von Spieler 1 auf den Motor des Zusatzspielers, legt dann den Schnappschuss darüber und setzt den Steuerungsmodus (<code>physModus</code>). Danach wird die eigene Reifenmischung des Spielers wieder eingesetzt, damit sie nicht die von Spieler 1 übernimmt.
+Ob ein Zusatzspieler mit Modell oder roh fährt, entscheidet <code>spielerPhysikAn()</code>: mit eigenem Fahrgefühl dessen Modus, sonst der von Spieler 1.
+<syntaxhighlight lang="javascript">
+// src/49-spieler.js, spielerGefuehlUeberlagern
+const key = window.__spielerPreset(nr);
+const snap = key ? window.__presetSchnappschuss(key) : null;
+if (snap) {
+  Object.assign(motor.config, JSON.parse(JSON.stringify(snap.config)));
+  motor.config.physModus = snap.modus;
+} else {
+  motor.config.physModus = null;   // wie Spieler 1
+}
+</syntaxhighlight>
+In der [[Rennarten#Meisterschaft|Meisterschaft]] kann zusätzlich ein Fahrgefühl für alle festgelegt werden.
+
+== Beispiele ==
+=== Beispiel 1: vom Daumen zum Gasbyte ===
+Fahrgefühl Pacejka (Gasfaktor 1,8), Gaskennlinie 2,45, Auto im 3. Gang bei halbem Modelltempo (v = 2,0 von 4,0), Tank und Schaden in Ordnung.
+# Trigger halb gedrückt: <code>throttleY = 0,5</code>.
+# Kennlinie: 0,5^2,45 ≈ 0,183. Das ist das Gas, das ins Modell geht; es beschleunigt das Modell nur sanft.
+# Modell: <code>motorPWM = 2,0 / 4,0 = 0,5</code> (das Tempo bestimmt das Byte, nicht der Trigger).
+# Gasfaktor: 0,5 · 1,8 = 0,9.
+# Δ = round(0,9 · 127) = round(114,3) = 114.
+# Byte 6 = (0xDF + 114) mod 256 = (223 + 114) − 256 = 81 = <code>0x51</code>.
+Bei vollem Modelltempo wäre x = 1,8, Δ wird auf 127 begrenzt, Byte 6 = (223 + 127) − 256 = 94 = <code>0x5E</code>. Ohne Gas und im Stand ist Δ = 0, Byte 6 = <code>0xDF</code>.
+
+=== Beispiel 2: Lenkbyte ===
+Lenkwert nach allen Schritten <code>servoAngle = 0,5</code>: Δ = round(63,5) = 64, Byte 7 = Byte 9 = <code>0x40</code> (64), etwa 22,5 Grad nach rechts. Bei −0,5 rundet JavaScript −63,5 auf −63 (Rundung zur größeren Zahl): Zweierkomplement 256 − 63 = 193 = <code>0xC1</code>. Voller Einschlag links (−1): −127 → 256 − 127 = 129 = <code>0x81</code>.
+
+=== Beispiel 3: Stickweg bei „Voller Einschlag bei“ ===
+Standard: voll = 0,9, Lenkkennlinie 2,45, Lenkansprechen 3,0, im Stand.
+* Stick 45 %: a = 0,45 / 0,9 = 0,5; s = 0,5^2,45 ≈ 0,183; Trimmung 3,0/3,0 = 1. Servo ≈ 0,183, also etwa 8 Grad.
+* Stick 90 %: a = 1, s = 1, Servo = 1, volle 45 Grad.
+* Mit Lenkansprechen 2,4 (80 % Trimmung): Stick 100 % ergibt nur 0,8, also 36 Grad.
+
+=== Beispiel 4: Schaltpunkt im GT3-Getriebe ===
+rpmScale ≈ 9449. Hochschalten aus dem 1. Gang bei 8800/min: v = 8800 / (9449 · 3,75) · 4,0 ≈ 0,993 Modell-km/h, angezeigt (Maßstab 73,75) etwa 73 km/h. Nach dem Schalten liegt die Drehzahl bei 8800 · 2,38/3,75 ≈ 5585/min, das Drehmoment dort ist rund 0,89. Während der 120 ms Schaltpause gibt es keinen Antrieb.
+
+=== Beispiel 5: Bremsen nimmt Lenkung (Pro, Lenkung aus Gewichtsverlagerung) ===
+Neutral-Layout, 100 km/h (Tempoanteil voll), eingeschwungener Zustand, Bremsbalance 62 %, Bremsen nimmt Lenkung 0,95. Vereinfachend ist die Last vorn 0,5 + Bremse · 0,30.
+{| class="wikitable"
+! Bremse !! uF !! cap !! use !! steerGrip (ohne Reifen, Nässe) !! Deutung
+|-
+| 0,2 || 1,12 || 1,067 || 0,236 || 1,04 || Trail-Braking: etwas mehr Lenkung als rollend
+|-
+| 0,5 || 1,30 || 1,166 || 0,589 || 1,01 || etwa wie rollend
+|-
+| 0,8 || 1,48 || 1,264 || 0,942 || 0,84 || spürbar weniger
+|-
+| 1,0 || 1,60 || 1,328 || 1,178 || 0,61 || deutlich weniger, aber nicht am Notboden
+|}
+Die Lenkwinkel-Kalibrierung gleicht nur den statischen Grip aus, diese Verhältnisse kommen also am Servo an.
+
+=== Beispiel 6: Pacejka am Limit ===
+Pacejka, Haftgrenze 0,7, voller Einschlag bei 60 % des Höchsttempos (177 km/h), rollend (Last vorn 0,545).
+# quer = 1 · 0,6 · 1,8 / 0,7 ≈ 1,543.
+# vorn = 0,5 / 0,545 ≈ 0,917; uV = 1,543 · 0,917 ≈ 1,415 (über dem Scheitel).
+# y(1,415) ≈ 0,99; Wirkfaktor = 0,99 / 1,415 ≈ 0,70.
+# Am Auto kommen statt 45 nur etwa 31 Grad an, das Cockpit meldet Untersteuern, das Pad brummt.
+Weitere Werte der normierten Kurve: Wirkfaktor 0,83 bei u = 1,2; 0,66 bei 1,5; 0,49 bei 2; 0,32 bei 3.
+
+== Grenzen und bekannte Probleme ==
+* Das Modell formt nur die zwei Befehlsbytes. Ob das echte Auto rutscht, hängt an Boden, Reifen und Firmware; das Einspurmodell kann keine echte Gierrate messen.
+* Der Tacho (Maßstab 68,1) und die Physik (Maßstab 73,75) benutzen verschiedene Faktoren. Schwellen, die „10 km/h“ heißen, sind in Physik-km/h gemeint.
+* Der Regler „0 → 100 km/h“ trifft die angezeigte Zeit nicht genau, weil die Kalibrierung gegen ein vereinfachtes Modell rechnet.
+* In 1.2.9 nannten die Erklärtexte einiger Fahrgefühle ältere Werte (z. B. Arcade „2,0 s“ und „250 %“, Pro „200 %“ Lenkkalibrierung); mit 1.2.11 sind sie berichtigt. Die ⓘ-Texte zu Lenkdämpfung (83 ms) und Bremskennlinie (1,3) nennen weiterhin die älteren Vorgaben. Die Tabelle oben gibt die gültigen Werte wieder.
+* Pro und Omega haben fast dieselben Werte (Unterschiede: Bremsen nimmt Lenkung 0,95 gegen 1,15, Bremsaufbau 0,12 gegen 0,45 s). Bei Gleichstand zeigt die App das zuletzt gewählte.
+* Rückwärts ergibt −0,5 wegen der Rundung Δ = −63 und nicht die bestätigten −64.
+* Die Layout-Daten (Achslast, Radstand, Trägheit) sind Schätzungen; die Lastempfindlichkeit 0,15 ist eine gemessene Abstimmung, keine Reifeneigenschaft.
+* Gasfaktor (<code>topSpeedScale</code>) und Akkuausgleich stehen nicht in der Modellkonfiguration, sondern im Sendeweg, und gelten für alle Spieler gemeinsam (<code>spielerSendenVon()</code>). Ein eigenes Fahrgefühl für Spieler 2 oder 3 bringt deshalb seinen eigenen Gasfaktor nicht mit: wählt Spieler 2 Arcade, während Spieler 1 Pacejka fährt, gilt für beide der Gasfaktor 1,8 statt 1,1. Ob das so gewollt ist, ist noch nicht gesichert.
+* Spieler 2 und 3 haben keinen Windschatten; der Akkuausgleich liest den Akkustand von Auto 1.
+* RC ist in Arbeit; das Tempo dort ist nur geschätzt.
+* Noch nicht gesichert: ob die Haftgrenze 0,7 und die Heckreserve 1,2 am echten Auto ein stimmiges Gefühl ergeben; der Regler ist ausgeblendet.
+
+== Versionsgeschichte ==
+{| class="wikitable"
+! Version !! Änderung
+|-
+| 0.5.10 || Gaskennlinie als Regler (Exponent; 1 = linear).
+|-
+| 0.5.13 || Schaltpause läuft über <code>dt</code> statt über einen Zeitgeber.
+|-
+| 0.5.18 || Reifenmodell in Pro ab Werk an; Drift-Modus (später entfernt).
+|-
+| 0.5.54 || Lenkdämpfung ab Werk 0 ms (sofort).
+|-
+| 0.8.40 || „Voller Einschlag bei“ (90 %); Gas-, Brems- und Lenkkennlinie ab Werk 2,45.
+|-
+| 0.9.39 || Tacho mit gemessenem Maßstab 68,1.
+|-
+| 0.9.64 || Fahrgefühl Pacejka (Pro mit Pacejka-Lenkmodell).
+|-
+| 0.10.5 || Sim+; Drift-Modus entfernt, Rohmodus heißt RC; FAHREN zeigt nur noch die gebräuchlichen Fahrgefühle.
+|-
+| 1.0.22 || Fahrgefühl RC; der Steuerungsmodus hängt am Fahrgefühl, die Einstellung ist ausgeblendet.
+|-
+| 1.0.36 || Fahrgefühl Omega (Pro wie 0.9.50, eingefroren).
+|-
+| 1.0.42 || Eigener Bremsaufbau 0,12 s (Omega 0,45 s), Regler Bremsaufbau.
+|-
+| 1.0.43 || Pro: Bremsen nimmt Lenkung 95 % statt 115 %.
+|-
+| 1.0.44 || Bremssteal an der simulierten Gewichtsverlagerung für die Realismus-Fahrgefühle; Arcade-Bremse stärker.
+|-
+| 1.1 (1.1.3) || Lenkung aus der Gewichtsverlagerung mit Tiefpass; stetige Lenkentlastung unter Gas; Omega rechnet wieder wie 1.0.42; Arcade ohne Kopplung von Gas/Bremse an die Lenkung; RC bremst bis zum geschätzten Stillstand.
+|-
+| 1.1 (1.1.11) || Rückwärtsgang halb so schnell, Regler „Tempo rückwärts“.
+|-
+| 1.1 (1.1.25) || Pacejka: Übersteuern ab Werk aus, eigener Schalter.
+|-
+| 1.1 || Rückwärtsgang mit Gas und Bremse zusammen (experimentell).
+|-
+| 1.1 (1.1.42) || Pacejka-Vibration nur bei echtem Untersteuern.
+|-
+| 1.2 (1.2.4) || Fahrgefühl je Spieler in der Garage.
+|-
+| 1.2 (1.2.11) || Erklärtexte der Fahrgefühle Arcade, Pro, Pacejka und Omega an die eingestellten Werte angeglichen.
+|}
+
+== Siehe auch ==
+* [[Verschleiß]]
+* [[Boxenstopp]]
+* [[Rennarten]]
+* [[Mehrspieler]]
+* [[Virtuelles Fahren]]
+* [[Carrera HYBRID]]
+* [[Bluetooth Low Energy]]
+* [[Hexadezimalsystem]]
+* [[Aufbau von OmegaSim]]
+* [[Glossar]]
+* [[Keine Reaktion des Fahrzeugs]]
+
+== Quellen im Code ==
+* <code>src/40-physics.js</code>: <code>CarreraPhysicsEngine</code> mit <code>update()</code>, <code>thrustAt()</code>, <code>resistAt()</code>, <code>calibrateAccel()</code>, <code>simulateLaunch()</code>, <code>triggerShift()</code>, <code>yawStep()</code>, <code>pacejkaStep()</code>, <code>applyLayout()</code>, <code>applyGearbox()</code>; freie Funktionen <code>kennlinie()</code>, <code>lenkVollAnteil()</code>, <code>steerDaempfungFor()</code>, <code>pacY()</code>, <code>pacB()</code>, <code>pacGasFaktor()</code>; Konstanten <code>STEER_MAX_DEG</code>, <code>LAYOUTS</code>
+* <code>src/30-input.js</code>: <code>REAL_SCALE</code>, <code>TACHO_SCALE</code>, <code>GT3_GEARS</code>, <code>F1_GEARS</code>, <code>P412_GEARS</code>, <code>GEARBOXES</code>, <code>TORQUE_CURVE</code>, <code>torqueAt()</code>
+* <code>src/50-drive.js</code>: <code>physicsStep()</code>, <code>physicsStepVon()</code>, <code>physModusAnwenden()</code>, <code>gasBremseRueckwaertsPruefen()</code>, <code>pacejkaRueckmeldung()</code>, <code>fahrhilfeVollGilt()</code>, Regler-Handler
+* <code>src/20-protocol.js</code>: <code>buildCommandPacket()</code>, <code>sendControlValue()</code>, <code>controlHeartbeat()</code>, <code>rcGas()</code>, <code>driftGegenlenken()</code>, <code>CONTROL_SEND_INTERVAL_MS</code>
+* <code>src/10-ble-explorer.js</code>: <code>crc8()</code>, <code>MIN_THROTTLE_DELTA</code>
+* <code>src/98-presets.js</code>: <code>PRESETS</code>, <code>applyPreset()</code>, <code>presetAktiv()</code>, <code>setzeBrakeStealLast()</code>, <code>presetSchnappschuss()</code>, <code>spielerPresetSetzen()</code>
+* <code>src/49-spieler.js</code>: <code>zusatzMotorAbgleichen()</code>, <code>spielerGefuehlUeberlagern()</code>, <code>spielerPhysikAn()</code>
+* <code>src/00-index.head.html</code>: Regler unter <code>#sub-opt-feel</code>
+
+== Weblinks ==
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Spielfunktionen]]
+[[Kategorie:Software]]

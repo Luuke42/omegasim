@@ -303,6 +303,74 @@ public class OmegaBlePlugin extends Plugin {
         }
     }
 
+    // ---- VERBINDUNGEN WIRKLICH SCHLIESSEN (v1.1.45) -------------------------------------------
+    // GEMELDET: "Manchmal hat das Auto das helle Licht, das es hat, wenn es erfolgreich verbunden wurde, aber es
+    // ist gar nicht verbunden. Ich muss es dann erst muehsam am Ladegeraet ausschalten." Das Community-Plugin
+    // laesst eine Verbindung stehen, wenn die Dienstsuche scheitert oder zwei connect-Aufrufe sich ueberlappen,
+    // und sein disconnect schliesst nur, wenn die Trennmeldung kommt. Diese zwei Methoden raeumen hart auf:
+    // disconnect + close, Feld leeren, Eintrag aus deviceMap entfernen - und unsere eigene Schreibstelle vergisst
+    // den Griff. Auf dem UI-Thread, auf dem auch das Plugin seine Karte anfasst.
+    @PluginMethod
+    public void schliessen(PluginCall call) {
+        String id = call.getString("deviceId");
+        getActivity().runOnUiThread(() -> {
+            JSObject r = new JSObject();
+            r.put("geschlossen", id != null && schliesseGeraet(id));
+            call.resolve(r);
+        });
+    }
+
+    @PluginMethod
+    public void alleSchliessen(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            int n = 0;
+            Map<?, ?> m = geraeteKarte();
+            if (m != null) {
+                for (Object k : new java.util.ArrayList<>(m.keySet())) {
+                    if (k instanceof String && schliesseGeraet((String) k)) n++;
+                }
+            }
+            JSObject r = new JSObject();
+            r.put("anzahl", n);
+            call.resolve(r);
+        });
+    }
+
+    private Map<?, ?> geraeteKarte() {
+        try {
+            PluginHandle h = getBridge().getPlugin("BluetoothLe");
+            Object plugin = h != null ? h.getInstance() : null;
+            if (plugin == null) return null;
+            Field karte = plugin.getClass().getDeclaredField("deviceMap");
+            karte.setAccessible(true);
+            Object m = karte.get(plugin);
+            return m instanceof Map ? (Map<?, ?>) m : null;
+        } catch (Throwable e) {
+            return null;
+        }
+    }
+
+    private boolean schliesseGeraet(String deviceId) {
+        Platz p = plaetze.get(deviceId);
+        if (p != null) { p.gatt = null; p.ziel = null; }
+        Map<?, ?> m = geraeteKarte();
+        if (m == null) return false;
+        Object geraet = m.get(deviceId);
+        if (geraet == null) return false;
+        try {
+            Field f = geraet.getClass().getDeclaredField("bluetoothGatt");
+            f.setAccessible(true);
+            Object gatt = f.get(geraet);
+            if (gatt instanceof BluetoothGatt) {
+                try { ((BluetoothGatt) gatt).disconnect(); } catch (Throwable e) { /* weiter */ }
+                try { ((BluetoothGatt) gatt).close(); } catch (Throwable e) { /* weiter */ }
+            }
+            try { f.set(geraet, null); } catch (Throwable e) { /* final? dann bleibt das Feld */ }
+        } catch (Throwable e) { /* andere Plugin-Fassung */ }
+        try { m.remove(deviceId); } catch (Throwable e) { /* unveraenderbare Karte */ }
+        return true;
+    }
+
     /** Die GATT-Verbindung aus dem Community-Plugin holen (deviceMap -> bluetoothGatt). */
     private BluetoothGatt findeGatt(String deviceId) {
         try {

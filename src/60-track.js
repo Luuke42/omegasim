@@ -2664,6 +2664,157 @@
   // Karte von 200 Einheiten Breite ist das der einzige Weg, sie zu erkennen.
   const AUTO_SPOILER = 1.4;
 
+  // ---- Die Silhouetten der Kartenautos (v1.2.9) ------------------------------------
+  //
+  // BESTELLT: "Erstelle Silhouetten (obere Draufsicht) fuer diese Autotypen: Porsche, Ford,
+  // BMW, Ferrari (siehe Bild) + die existierende F1-Silhouette ... und mach, dass sie die
+  // Farbe haben, die ich im Menue auswaehle". Vorlage sind die GT3-Wagen der HYBRID-Reihe:
+  // 911 GT3 R, Mustang GT3, M4 GT3, 296 GT3, alle mit grossem Heckfluegel.
+  //
+  // Gezeichnet in eigenen Einheiten: x von -50 (Heck) bis +50 (Front), y von -20 bis +20.
+  // Das Seitenverhaeltnis ist das des Autos (95 x 38 mm), also passt EIN Faktor fuer beide
+  // Achsen, und er steht mit im transform der Autogruppe - keine zweite Gruppe mit eigenem
+  // transform, denn die Sonden zaehlen Gruppen mit transform als Autos.
+  //
+  // Die Karosserie traegt class="auto-koerper" und die Autofarbe; alles Dunkle darauf
+  // (Scheiben, Fluegel, Luftauslaesse) ist halbdurchsichtiges Schwarz und nimmt so jede Farbe
+  // mit. Modelle ohne eigene Form behalten das Rechteck mit Spoiler.
+  const AUTO_FORM_SKALA = AUTO_LANG / 100;
+  const AUTO_DUNKEL = '#0b0c0f';
+
+  // Halbe Umrisslinie (y >= 0) von der Front zum Heck -> gespiegelt und als geschlossener
+  // Catmull-Rom-Pfad geglaettet. Einmal beim Laden gerechnet, nicht je Bild.
+  function autoGeschlossen(p) {
+    const n = p.length, f = (v) => +v.toFixed(2);
+    let d = 'M' + p[0][0] + ',' + p[0][1];
+    for (let i = 0; i < n; i++) {
+      const p0 = p[(i - 1 + n) % n], p1 = p[i], p2 = p[(i + 1) % n], p3 = p[(i + 2) % n];
+      d += 'C' + f(p1[0] + (p2[0] - p0[0]) / 6) + ',' + f(p1[1] + (p2[1] - p0[1]) / 6)
+         + ' ' + f(p2[0] - (p3[0] - p1[0]) / 6) + ',' + f(p2[1] - (p3[1] - p1[1]) / 6)
+         + ' ' + p2[0] + ',' + p2[1];
+    }
+    return d + 'Z';
+  }
+  const autoUmriss = (halb) => autoGeschlossen(halb.concat(halb.slice(1, -1).reverse().map(([x, y]) => [x, -y])));
+  const autoGespiegelt = (p) => p.map(([x, y]) => [x, -y]);
+  const autoPfad = (d, fill, op) => `<path d="${d}" fill="${fill}"${op ? ` opacity="${op}"` : ''}/>`;
+  const autoRechteck = (x, y, w, h, fill, op, rx) =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx || 0}" fill="${fill}"${op ? ` opacity="${op}"` : ''}/>`;
+  // Paarweise: oben und gespiegelt unten.
+  const autoPaar = (x, y, w, h, fill, op, rx) => autoRechteck(x, y, w, h, fill, op, rx) + autoRechteck(x, -y - h, w, h, fill, op, rx);
+  // Der GT3-Heckfluegel: Blatt quer ueber fast die ganze Breite, dazu Endplatten.
+  const autoFluegel = (x, breite, tiefe) =>
+    autoRechteck(x, -breite, tiefe, 2 * breite, AUTO_DUNKEL, 0.85, 1)
+    + autoPaar(x - 0.5, breite - 1.2, tiefe + 1, 2.4, AUTO_DUNKEL, 0.95, 0.6);
+
+  const AUTO_FORMEN = (() => {
+    const formen = {};
+    // ---- Porsche 911 GT3 R: runde Front mit den Scheinwerfern auf den Kotfluegeln, schmale
+    // Taille, breite Hueften hinten, langes Fliessheck bis zum Fluegel.
+    {
+      const k = autoUmriss([[49, 0], [49.4, 4], [48.6, 8.5], [46.6, 12.6], [43, 15.6], [37, 17.6], [30, 17.9],
+        [22, 16.6], [12, 16.0], [0, 16.4], [-10, 17.6], [-19, 19.4], [-30, 19.8], [-39, 19.0], [-45.5, 16.6],
+        [-49, 12], [-50, 6], [-50, 0]]);
+      const glas = autoUmriss([[16, 0], [15.4, 7], [13.2, 11.6], [8, 12.6], [-2, 12.4], [-12, 11.4], [-21, 9.2],
+        [-27, 5.6], [-29, 0]]);
+      const dach = autoUmriss([[8, 0], [7.4, 10.4], [-2, 11.4], [-12, 10.4], [-17.5, 7], [-19, 0]]);
+      const lichtP = [[47.6, 10.2], [46.2, 13.4], [43.6, 15.2], [41, 14.2], [41.4, 11.8], [44.2, 10]];
+      const licht = autoGeschlossen(lichtP), licht2 = autoGeschlossen(autoGespiegelt(lichtP));
+      formen.porsche911 = (farbe, rand) =>
+        `<path class="auto-koerper" d="${k}" fill="${farbe}" stroke="#fff" stroke-width="${rand}"/>`
+        + autoPfad(glas, AUTO_DUNKEL, 0.6) + autoPfad(dach, farbe)
+        + autoPfad(licht, '#fff', 0.85) + autoPfad(licht2, '#fff', 0.85)
+        // Motordeckel mit Luftschlitzen zwischen Heckscheibe und Fluegel.
+        + [0, 1, 2, 3].map((i) => autoRechteck(-33 - i * 2.2, -6.5, 1.1, 13, AUTO_DUNKEL, 0.5, 0.4)).join('')
+        + autoRechteck(47, -9, 2.4, 18, AUTO_DUNKEL, 0.5, 1)
+        + autoFluegel(-48.5, 18.6, 5.5);
+    }
+    // ---- Ford Mustang GT3: lange Haube mit zwei grossen Auslaessen, kantige Front,
+    // gerade Flanken, Kabine weit hinten, kurzes Heck mit hohem Fluegel.
+    {
+      const k = autoUmriss([[50, 0], [50, 8], [49.2, 13.4], [46.6, 17], [40, 18.8], [31, 19.2], [22, 18.4],
+        [10, 18.0], [-6, 18.0], [-18, 18.4], [-27, 19.4], [-37, 19.4], [-45, 18], [-49.2, 14], [-50, 8], [-50, 0]]);
+      const glas = autoUmriss([[4, 0], [3, 10.6], [-2, 13.8], [-12, 14.2], [-22, 13.6], [-28.5, 11.4], [-30.5, 0]]);
+      const dach = autoUmriss([[-3, 0], [-3.6, 12.8], [-12, 13.2], [-19.5, 12.4], [-21, 0]]);
+      formen.fordmustang = (farbe, rand) =>
+        `<path class="auto-koerper" d="${k}" fill="${farbe}" stroke="#fff" stroke-width="${rand}"/>`
+        + autoPfad(glas, AUTO_DUNKEL, 0.6) + autoPfad(dach, farbe)
+        // Haubenauslaesse und breiter Grill.
+        + autoPaar(22, 3.4, 13, 5.2, AUTO_DUNKEL, 0.6, 1.6)
+        + autoRechteck(47.4, -11, 2.6, 22, AUTO_DUNKEL, 0.6, 1)
+        // Scheinwerfer als schmale Schlitze an den Ecken.
+        + autoPaar(44, 13.2, 4.8, 2.4, '#fff', 0.85, 1)
+        + autoFluegel(-47.5, 18.8, 6);
+    }
+    // ---- BMW M4 GT3: kantig, grosse Doppelniere mitten in der Front, Haube mit Auslaessen,
+    // Kiemen hinter dem Vorderrad, Kabine mittig, breiter Fluegel.
+    {
+      const k = autoUmriss([[50, 0], [50, 9], [49, 14.4], [46, 17.8], [39, 19.4], [30, 19.6], [21, 18.6],
+        [10, 18.0], [-6, 18.0], [-18, 18.6], [-28, 19.6], [-38, 19.6], [-45.5, 18], [-49.4, 14], [-50, 8], [-50, 0]]);
+      const glas = autoUmriss([[9, 0], [7.6, 11.4], [2, 14.2], [-10, 14.4], [-21, 13.4], [-27, 10.6], [-28.6, 0]]);
+      const dach = autoUmriss([[1.5, 0], [1, 13], [-10, 13.4], [-18, 12.2], [-19.6, 0]]);
+      formen.bmw = (farbe, rand) =>
+        `<path class="auto-koerper" d="${k}" fill="${farbe}" stroke="#fff" stroke-width="${rand}"/>`
+        + autoPfad(glas, AUTO_DUNKEL, 0.6) + autoPfad(dach, farbe)
+        // Doppelniere: zwei hohe, dunkle Felder mitten vorn.
+        + autoPaar(44.6, 0.9, 5.4, 6.4, AUTO_DUNKEL, 0.8, 1.2)
+        + autoPaar(26, 2.2, 10, 3.6, AUTO_DUNKEL, 0.5, 1.2)
+        + autoPaar(19, 15.6, 4.4, 2.2, AUTO_DUNKEL, 0.55, 0.6)
+        + autoPaar(45.2, 13.4, 4, 3, '#fff', 0.85, 1)
+        + autoFluegel(-48, 19.2, 6);
+    }
+    // ---- Ferrari 296 GT3: Mittelmotor-Keil - spitze Nase mit Auslass, Kabine weit vorn,
+    // schmale Taille mit Lufteinlaessen, sehr breite Hueften, Motordeckel mit Lamellen.
+    {
+      const k = autoUmriss([[50, 0], [49.4, 4.4], [47.4, 9], [43.6, 13.4], [37.6, 16.8], [30, 18.2], [22, 17.2],
+        [14, 15.4], [5, 15.4], [-5, 17.6], [-15, 19.6], [-27, 20], [-38, 19.4], [-45.5, 17], [-49.4, 12], [-50, 6], [-50, 0]]);
+      const glas = autoUmriss([[24, 0], [22.6, 7], [18.4, 10.6], [10, 11.6], [0, 11], [-6, 8.4], [-8.4, 0]]);
+      const dach = autoUmriss([[12, 0], [11.2, 10.2], [2, 10.4], [-2.6, 7.6], [-3.6, 0]]);
+      formen.ferrari = (farbe, rand) =>
+        `<path class="auto-koerper" d="${k}" fill="${farbe}" stroke="#fff" stroke-width="${rand}"/>`
+        + autoPfad(glas, AUTO_DUNKEL, 0.6) + autoPfad(dach, farbe)
+        // Nasenauslass, Seiteneinlaesse, Lamellen auf dem Motordeckel.
+        + autoRechteck(33, -4.5, 9, 9, AUTO_DUNKEL, 0.55, 2)
+        + '<path d="M9,15.6 L-2,13.2 L-6,17.2 Z M9,-15.6 L-2,-13.2 L-6,-17.2 Z" fill="' + AUTO_DUNKEL + '" opacity=".7"/>'
+        + [0, 1, 2, 3, 4].map((i) => autoRechteck(-14 - i * 4, -8, 1.8, 16, AUTO_DUNKEL, 0.5, 0.6)).join('')
+        + '<path d="M47,9.4 L41,13.8 L42.6,10 Z M47,-9.4 L41,-13.8 L42.6,-10 Z" fill="#fff" opacity=".85"/>'
+        + autoFluegel(-48.5, 19, 5.5);
+    }
+    // ---- Formelwagen (Modell Red Bull): unveraendert aus dem Vorschlag, der gefiel.
+    {
+      const k = autoUmriss([[47, 0], [45, 2.6], [30, 4.2], [20, 5.8], [10, 9], [0, 12], [-14, 12.2], [-24, 8],
+        [-34, 5.5], [-42, 4.5], [-46, 0]]);
+      formen.redbull = (farbe, rand) =>
+        `<path class="auto-koerper" d="${k}" fill="${farbe}" stroke="#fff" stroke-width="${rand}"/>`
+        + (autoPaar(29, 12, 11, 7.5, '#000', 0, 2) + autoPaar(-43, 11, 13, 8.8, '#000', 0, 2))
+          .replace(/\/>/g, ` stroke="#fff" stroke-width="${(0.7 * rand).toFixed(2)}" stroke-opacity=".7"/>`)
+        + autoRechteck(43, -19, 7, 38, farbe, 0, 1) + autoPaar(43, 17, 7, 2, AUTO_DUNKEL, 0.7, 0.5)
+        + autoRechteck(-50, -12, 6, 24, farbe, 0, 1) + autoRechteck(-50, -12, 1.8, 24, AUTO_DUNKEL, 0.6, 0.5)
+        + `<ellipse cx="2" cy="0" rx="7" ry="4.2" fill="${AUTO_DUNKEL}" opacity=".75"/>`
+        + `<path d="M12,0 C9,-5 -2,-5.5 -5,-4.5 M12,0 C9,5 -2,5.5 -5,4.5" fill="none" stroke="${AUTO_DUNKEL}" stroke-width="1.6" opacity=".8"/>`;
+    }
+    return formen;
+  })();
+
+  // Das Innere einer Autogruppe: Silhouette des Modells oder das bisherige Rechteck. Der Rand
+  // ist 0,5 Karteneinheiten wie bisher, in Silhouetten-Einheiten also 0,5 / Faktor.
+  function autoFormInnen(modell, farbe) {
+    const f = AUTO_FORMEN[modell];
+    if (f) return f(farbe, +(0.5 / AUTO_FORM_SKALA).toFixed(2));
+    const L = AUTO_LANG, B = AUTO_BREIT;
+    return `<rect class="auto-koerper" x="${(-L / 2).toFixed(2)}" y="${(-B / 2).toFixed(2)}" `
+         + `width="${L.toFixed(2)}" height="${B.toFixed(2)}" rx="0.8" `
+         + `fill="${farbe}" stroke="#fff" stroke-width="0.5"/>`
+         + `<rect x="${(-L / 2).toFixed(2)}" y="${(-B / 2).toFixed(2)}" `
+         + `width="${AUTO_SPOILER.toFixed(2)}" height="${B.toFixed(2)}" `
+         + `fill="#0b0c0f" opacity="0.55"/>`;
+  }
+  // Der Massstab gehoert in den transform der Autogruppe, aber nur fuer Silhouetten.
+  const autoFormSkala = (modell, gross) => {
+    const k = (AUTO_FORMEN[modell] ? AUTO_FORM_SKALA : 1) * (gross || 1);
+    return k === 1 ? '' : ' scale(' + k.toFixed(4) + ')';
+  };
+
   // Die Fahrtrichtung an einem Abtastpunkt, in Grad. AUS DEN PUNKTEN und nicht aus der
   // Normalen: die Normale hat eine Vorzeichenkonvention, die in diesem Projekt schon zwei
   // Fehler gekostet hat. Zwei aufeinanderfolgende Punkte haben keine.
@@ -3215,7 +3366,7 @@
     // plus die Phase. Genauer geht es nicht: das Auto ortet sich nicht, es zaehlt Kacheln.
     // (PUNKT_R steht als Modulkonstante weiter oben - karteAutosSetzen() braucht denselben
     //  Wert, und zwei Zahlen fuer eine Punktgroesse waeren zwei Punktgroessen.)
-    const autoPunkt = (index, phase, farbe, kuerzel, quer) => {
+    const autoPunkt = (index, phase, farbe, kuerzel, quer, modell) => {
       if (index === null || index === undefined) return '';
       const i = trackPunktIndex(kachelTab, pts, index, phase);
       const p = pts[i];
@@ -3231,15 +3382,10 @@
       // Ein Rechteck von 8,84 x 3,54 Einheiten, also 95 x 38 mm im Massstab der Bahn, plus
       // ein Balken am Heck fuer den Spoiler. Der weisse Rand bleibt: er traegt das Auto auf
       // der schwarzen Bahn UND auf dem hellen Grund daneben.
+      // v1.2.9: mit Silhouette, wenn das Modell eine hat (autoFormInnen), sonst das Rechteck.
       const w = trackWinkelBei(pts, i).toFixed(1);
-      const L = AUTO_LANG, B = AUTO_BREIT;
-      let t = `<g transform="translate(${x} ${y}) rotate(${w})">`
-            + `<rect x="${(-L / 2).toFixed(2)}" y="${(-B / 2).toFixed(2)}" `
-            + `width="${L.toFixed(2)}" height="${B.toFixed(2)}" rx="0.8" `
-            + `fill="${farbe || '#ff5c5c'}" stroke="#fff" stroke-width="0.5"/>`
-            + `<rect x="${(-L / 2).toFixed(2)}" y="${(-B / 2).toFixed(2)}" `
-            + `width="${AUTO_SPOILER.toFixed(2)}" height="${B.toFixed(2)}" `
-            + `fill="#0b0c0f" opacity="0.55"/>`
+      let t = `<g transform="translate(${x} ${y}) rotate(${w})${autoFormSkala(modell)}">`
+            + autoFormInnen(modell, farbe || '#ff5c5c')
             + `</g>`;
       if (kuerzel) {
         t += `<text x="${x}" y="${(py + oy - 6).toFixed(1)}" text-anchor="middle" `
@@ -3251,7 +3397,7 @@
     };
     if (currentIndex != null) body += autoPunkt(currentIndex, 0, '#ff5c5c', null, 0);
     if (o.cars) {
-      for (const c of o.cars) body += autoPunkt(c.index, c.phase, c.farbe, c.kuerzel, c.quer);
+      for (const c of o.cars) body += autoPunkt(c.index, c.phase, c.farbe, c.kuerzel, c.quer, c.modell);
     }
 
     // KEIN style-ATTRIBUT MEHR, nur eine Klasse. Groesse, Grund und Rahmen entscheidet
@@ -3364,8 +3510,12 @@
   // nur an einem der beiden Orte zu berichtigen.
   function querSollAlsLage(v) { return -(v || 0); }
 
-  function karteAutosSetzen(svg, geo, cars) {
+  // opt (v1.2.12, Karte im Regenradar): { gross: Faktor fuer die Autos, ohneText: Kuerzel weglassen }.
+  // Auf einer Karte von wenigen Zentimetern waere ein Auto in Bahnmass nur ein Punkt.
+  function karteAutosSetzen(svg, geo, cars, opt) {
     if (!svg || !geo) return 0;
+    const gross = opt && opt.gross > 0 ? opt.gross : 1;
+    const ohneText = !!(opt && opt.ohneText);
     let g = svg.querySelector('g.karte-autos');
     if (!g) {
       g = document.createElementNS(NS_SVG, 'g');
@@ -3376,27 +3526,11 @@
     // Fehlende Knoten anlegen, ueberzaehlige verbergen. Nicht loeschen: die Zahl der Autos
     // wechselt selten, und ein verborgener Knoten kostet nichts.
     while (g.childNodes.length < liste.length * 2) {
-      // EINE GRUPPE JE AUTO, gedreht, mit Karosserie und Spoiler darin - und die
-      // Beschriftung DANEBEN und nicht darin: sie darf sich nicht mitdrehen, sonst steht
-      // das Kuerzel in einer Linkskurve auf dem Kopf.
+      // EINE GRUPPE JE AUTO, gedreht, mit Karosserie darin - und die Beschriftung DANEBEN
+      // und nicht darin: sie darf sich nicht mitdrehen, sonst steht das Kuerzel in einer
+      // Linkskurve auf dem Kopf. Den Inhalt (Silhouette oder Rechteck) setzt die Schleife
+      // unten, und nur, wenn sich Modell oder Farbe geaendert haben.
       const c = document.createElementNS(NS_SVG, 'g');
-      const body = document.createElementNS(NS_SVG, 'rect');
-      body.setAttribute('x', (-AUTO_LANG / 2).toFixed(2));
-      body.setAttribute('y', (-AUTO_BREIT / 2).toFixed(2));
-      body.setAttribute('width', AUTO_LANG.toFixed(2));
-      body.setAttribute('height', AUTO_BREIT.toFixed(2));
-      body.setAttribute('rx', '0.8');
-      body.setAttribute('stroke', '#fff');
-      body.setAttribute('stroke-width', '0.5');
-      const spoiler = document.createElementNS(NS_SVG, 'rect');
-      spoiler.setAttribute('x', (-AUTO_LANG / 2).toFixed(2));
-      spoiler.setAttribute('y', (-AUTO_BREIT / 2).toFixed(2));
-      spoiler.setAttribute('width', AUTO_SPOILER.toFixed(2));
-      spoiler.setAttribute('height', AUTO_BREIT.toFixed(2));
-      spoiler.setAttribute('fill', '#0b0c0f');
-      spoiler.setAttribute('opacity', '0.55');
-      c.appendChild(body);
-      c.appendChild(spoiler);
       const t = document.createElementNS(NS_SVG, 'text');
       t.setAttribute('text-anchor', 'middle');
       t.setAttribute('font-size', '9');
@@ -3426,11 +3560,17 @@
       const y = p.y + n.y * q * geo.half + geo.oy;
       const w = trackWinkelBei(geo.pts, i);
       c.setAttribute('transform',
-        'translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') rotate(' + w.toFixed(1) + ')');
-      if (c.firstChild) c.firstChild.setAttribute('fill', a.farbe || '#ff5c5c');
+        'translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') rotate(' + w.toFixed(1) + ')' + autoFormSkala(a.modell, gross));
+      // Neu zeichnen nur bei anderem Modell oder anderer Farbe: zehnmal je Sekunde den
+      // Inhalt zu ersetzen waere genau die Verwerfung, die diese Funktion vermeiden soll.
+      const form = (a.modell || '') + '|' + (a.farbe || '#ff5c5c');
+      if (c.getAttribute('data-form') !== form) {
+        c.innerHTML = autoFormInnen(a.modell, a.farbe || '#ff5c5c');
+        c.setAttribute('data-form', form);
+      }
       t.setAttribute('x', x.toFixed(1));
       t.setAttribute('y', (y - 6).toFixed(1));
-      t.textContent = a.kuerzel || '';
+      t.textContent = ohneText ? '' : (a.kuerzel || '');
     }
     return liste.length;
   }
@@ -3557,7 +3697,7 @@
           // zurueck. Gemeldet als "alle orange mit Fragezeichen daneben". Die Zuordnung war
           // nie unklar: jeder Ghost hat seine eigene Verbindung und seinen eigenen
           // Kachelzaehler - sie wurde nur nicht hingeschrieben.
-          out.push({ index: kachel, phase: ort - kachel, farbe: carColor(c).hex,
+          out.push({ index: kachel, phase: ort - kachel, farbe: carColor(c).hex, modell: carModellWert(c.modellId),
                      kuerzel: garageLabel(c).slice(0, 3),
                      // Die ANGEFORDERTE Querlage. Das Auto meldet keine; was hier steht,
                      // ist die Summe aus eigener Spur und Ideallinie, also die Lage, die
@@ -3575,7 +3715,7 @@
           // weit. dashTilePhase() war die ganze Zeit da und wurde nur nicht gefragt.
           out.push({ index: dashMinimapIndex,
                      phase: (typeof dashTilePhase === 'function') ? dashTilePhase() : 0.5,
-                     farbe: carColor(c).hex,
+                     farbe: carColor(c).hex, modell: carModellWert(c.modellId),
                      kuerzel: garageLabel(c).slice(0, 3), quer: 0, rolle: 'player' });
         }
       });
@@ -5547,7 +5687,10 @@
       learn.seq = [{ type: TILE_TYPE.START }];
       return;
     }
-    learn.seq.push({ type: best });
+    // v1.2.12: AUCH HIER uebersetzt (gefunden beim Wiki-Schreiben). Nur der Anker oben ging durch
+    // codeZuTyp(); jede andere Kachel landete roh - eine Engstelle der Schiene (0x0a) also als
+    // ZWEITES Start/Ziel in der Karte und eine Boxengasse (0x07) als Typ ohne Buchstaben.
+    learn.seq.push({ type: codeZuTyp(best) });
     // Eine Runde kann nicht beliebig lang sein. Laeuft es davon, ist die Start/Ziel-Kachel
     // nicht erkannt worden, und weiterzuzaehlen wuerde nur Unsinn ansammeln.
     if (learn.seq.length > 60) {
@@ -5717,7 +5860,7 @@
       garageScan.seq = [{ type: TILE_TYPE.START }];
       return;
     }
-    garageScan.seq.push({ type: best });
+    garageScan.seq.push({ type: codeZuTyp(best) });
     if (garageScan.seq.length > 60) {
       garageScanAbbrechen('Abgebrochen: 60 Teile ohne zweite Start/Ziel-Überfahrt.');
       log('Garagenscan verworfen: 60 Teile ohne zweite Start/Ziel-Ueberfahrt.', 'err');

@@ -1,0 +1,390 @@
+{{Stand|app=1.2.9|appdatum=26.10.2026}}
+Der '''Aufbau von OmegaSim''' beschreibt, woraus die App [[OmegaSim]] technisch besteht: in welchen Programmiersprachen sie geschrieben ist, wie aus rund 50 Quelldateien eine einzige auslieferbare HTML-Datei wird, wie dieselbe Datei als installierbare Web-App (PWA) und als Android-App läuft, wie sie sich selbst aktualisiert, wo sie Daten speichert, wie sie übersetzt und geprüft wird und wie der Motorklang entsteht. OmegaSim ist im Kern eine '''Web-Anwendung in JavaScript''', die ohne Server und ohne Installation im Browser läuft und mit dem [[Carrera HYBRID]] über [[Bluetooth Low Energy]] spricht. Die Android-Fassung legt um dieselbe Datei eine dünne Hülle aus Java. Der Quellcode steht unter der MIT-Lizenz.
+
+[[Datei:OmegaSim-Startseite.png|mini|Startseite von OmegaSim]]
+
+== Auf einen Blick ==
+{| class="wikitable"
+! Merkmal !! Wert
+|-
+| Hauptsprache || JavaScript (rund 79 % der gezählten Zeilen)
+|-
+| Weitere Sprachen || HTML, CSS, Python (Werkzeuge), Java (Android-Hülle), Google Apps Script (Bestenliste), YAML (Bauaufträge), PowerShell und Batch (Hilfsskripte)
+|-
+| Auslieferung || eine Datei <code>index.html</code> (Fassung 1.2.9: rund 6,6 MB) plus Bilder, Klänge und Symbole
+|-
+| Quellen || 46 JavaScript-Dateien und 2 HTML-Teile in <code>src/</code>, in Ladereihenfolge nummeriert
+|-
+| Bau || <code>python tools/build.py</code> (fügt <code>src/</code> zusammen, prüft, schreibt <code>sw.js</code> und <code>app-update.json</code>)
+|-
+| Version || <code>python tools/bump_version.py</code>, Schema 1.<Woche>.<Push>
+|-
+| Browser || Chrome oder Edge (Web Bluetooth); installierbar als PWA mit Service Worker
+|-
+| Android || Capacitor 8.5.2, App-Kennung <code>de.lroeseler.omegasim</code>, APK über GitHub Actions bei Git-Tag <code>apk-v*</code>
+|-
+| Speicher || <code>localStorage</code> (kein IndexedDB), Sicherungsdatei als JSON
+|-
+| Sprachen der Oberfläche || Deutsch (Quelle), Englisch, Spanisch
+|-
+| Selbsttest || 522 Prüfungen (<code>stAdd</code>) in <code>src/95-selftest.js</code>
+|-
+| Lizenz || MIT
+|}
+
+== Grundlagen ==
+=== Programmiersprache, Auszeichnungssprache, Stilsprache ===
+* '''HTML''' (''Hypertext Markup Language'') ist keine Programmiersprache, sondern eine '''Auszeichnungssprache''': Sie beschreibt, welche Teile eine Seite hat (Überschrift, Knopf, Regler, Tabelle). In OmegaSim stehen dort alle Menüs, Optionen mit ihren ⓘ-Texten und die Patchnotes.
+* '''CSS''' (''Cascading Style Sheets'') beschreibt das Aussehen: Farben, Abstände, Schriften, Anordnung, Animationen.
+* '''JavaScript''' ist die Programmiersprache der Webbrowser. Sie macht die Seite lebendig: Sie liest den Controller, rechnet die Fahrphysik, baut die Bluetooth-Pakete und zeichnet die Karte.
+* '''Java''' ist eine Programmiersprache, in der klassisch Android-Apps geschrieben werden. OmegaSim nutzt sie nur für die dünne Android-Hülle.
+* '''Python''' ist eine Programmiersprache, die hier nur am Rechner des Entwicklers läuft: zum Bauen, zum Erzeugen von Klängen und Druckvorlagen und zum Auswerten von Bluetooth-Mitschnitten.
+* '''Apps Script''' ist das JavaScript von Google für Tabellen; damit läuft die Online-Bestenliste der [[Challenges]] in einer Google-Tabelle.
+* '''YAML''' ist ein Textformat für Einstellungen; die Bauaufträge von GitHub Actions sind darin geschrieben. '''JSON''' ist ein Textformat für Daten (Sicherungsdatei, Abstimmungen, Aktualisierungsliste).
+
+=== Web-App, PWA und Service Worker ===
+Eine '''Web-App''' ist ein Programm, das im Browser läuft und als Webseite ausgeliefert wird. Eine '''Progressive Web App''' (PWA) ist eine Web-App, die man zusätzlich wie eine App „installieren“ kann: mit eigenem Symbol, im Vollbild und ohne Adresszeile. Dafür braucht sie eine '''Manifest-Datei''' (Name, Symbole, Farben) und meist einen '''Service Worker'''. Das ist ein kleines Skript, das der Browser neben der Seite laufen lässt und das Anfragen an den Server abfangen und aus einem Zwischenspeicher (''Cache'') beantworten kann; so startet die App auch ohne Netz.
+
+=== WebView und Capacitor ===
+Eine '''WebView''' ist ein Browserfenster ohne Adresszeile, das eine Android-App in sich einbettet. '''Capacitor''' ist ein Rahmenwerk, das eine Web-App in eine solche WebView packt und ihr über '''Plugins''' Fähigkeiten des Telefons gibt, die eine Webseite nicht hat. Ein Plugin besteht aus nativem Code (hier Java oder Kotlin) und einer Schnittstelle, die JavaScript aufrufen kann. So kann OmegaSim in der App Bluetooth nutzen, obwohl die Android-WebView kein Web Bluetooth kennt.
+
+=== Bauen, Version, Prüfsumme ===
+* '''Bauen''' (''build'') heißt, aus den Quelldateien das auslieferbare Ergebnis herzustellen. Bei OmegaSim ist das ein Zusammenfügen ohne Übersetzung: Die Dateien in <code>src/</code> werden in Namensreihenfolge aneinandergehängt.
+* Eine '''Versionsnummer''' benennt einen Stand eindeutig. OmegaSim zählt sie automatisch aus der Git-Historie.
+* Eine '''Prüfsumme''' (hier SHA-256, geschrieben als 64 [[Hexadezimalsystem|Hex-Ziffern]]) ist ein Fingerabdruck einer Datei: Ändert sich ein Byte, ändert sich die Prüfsumme. Die Selbstaktualisierung der App lädt nur Dateien, deren Prüfsumme sich geändert hat.
+
+=== Gültigkeitsbereich und „temporale Todeszone“ ===
+Alle JavaScript-Dateien ab <code>10-ble-explorer.js</code> bilden zusammen '''eine''' große Funktion, die sofort ausgeführt wird (eine ''IIFE'', ''immediately invoked function expression''). Sie teilen sich damit einen '''Gültigkeitsbereich''': Eine Variable aus Datei 20 ist in Datei 90 sichtbar. Der Preis ist die '''temporale Todeszone''': Wird eine mit <code>let</code> oder <code>const</code> angelegte Variable gelesen, bevor die Zeile mit ihrer Anlage durchlaufen wurde, bricht JavaScript die ganze Funktion ab, und die App bleibt leer. Laut <code>tools/build.py</code> hat das mindestens viermal zu Ladeabbrüchen geführt. Darum steht die Ladereihenfolge sichtbar im Dateinamen (<code>20-</code>, <code>40-</code>, <code>90-</code> …), und Variablen, die von mehreren Dateien gebraucht werden, stehen in der frühesten davon.
+
+== Bedienung ==
+Für Nutzer ist der Aufbau unsichtbar. Für Mitwirkende sieht der Ablauf einer Änderung so aus (Einzelheiten in der [[Anleitung für KIs]] und unter [[Mitmachen]]):
+# Quelltext in <code>src/</code> ändern, nie die erzeugten Dateien <code>index.html</code>, <code>sw.js</code>, <code>app-update.json</code>.
+# Neue sichtbare Texte in die Wörterbücher für Englisch und Spanisch in <code>src/10-ble-explorer.js</code> eintragen.
+# Einen Selbsttest mit <code>stAdd(…)</code> in <code>src/95-selftest.js</code> ergänzen.
+# <code>python tools/build.py</code> ausführen; der Bau meldet fehlende Verweise, verwaiste Wörterbucheinträge, Zugriffe auf nicht vorhandene Elemente und unausgeglichene Klammern.
+# Die App öffnen, '''Entwickler → Selbsttest''' laufen lassen.
+# Patchnotes ergänzen, <code>python tools/bump_version.py</code> ausführen, committen.
+# Für eine neue Android-App einen Git-Tag <code>apk-v…</code> setzen; GitHub Actions baut die APK.
+
+== Funktionsweise ==
+=== Programmiersprachen und ihr Anteil ===
+Gezählt wurden am 26.10.2026 im Repository mit einem kleinen Python-Skript die Zeilen aller Quelltextdateien (jede Zeile einschließlich Leer- und Kommentarzeilen). Bei den HTML-Teilen wurden die Zeilen zwischen <code>&lt;style&gt;</code> und <code>&lt;/style&gt;</code> als CSS und die zwischen <code>&lt;script&gt;</code> und <code>&lt;/script&gt;</code> als JavaScript gezählt, der Rest als HTML.
+
+{| class="wikitable" style="text-align:right"
+! style="text-align:left" | Sprache !! style="text-align:left" | Wo !! Dateien !! Zeilen !! Anteil
+|-
+| style="text-align:left" | JavaScript || style="text-align:left" | <code>src/*.js</code>, dazu <code>tools/sw.js.in</code> (131) und Skriptblöcke in den HTML-Teilen (41) || 47 || 91 173 || 78,9 %
+|-
+| style="text-align:left" | HTML || style="text-align:left" | <code>src/00-index.head.html</code>, <code>src/99-index.tail.html</code> || 2 || 8 341 || 7,2 %
+|-
+| style="text-align:left" | Python || style="text-align:left" | <code>tools/*.py</code> || 28 || 8 426 || 7,3 %
+|-
+| style="text-align:left" | CSS || style="text-align:left" | ein <code>&lt;style&gt;</code>-Block im Kopf von <code>00-index.head.html</code> || (1) || 4 699 || 4,1 %
+|-
+| style="text-align:left" | Java || style="text-align:left" | <code>android-app/android/app/src/main/java/…</code> || 8 || 2 026 || 1,8 %
+|-
+| style="text-align:left" | Apps Script || style="text-align:left" | <code>tools/challenges-apps-script.gs</code> || 1 || 602 || 0,5 %
+|-
+| style="text-align:left" | YAML || style="text-align:left" | <code>.github/workflows/*.yml</code> || 2 || 145 || 0,1 %
+|-
+| style="text-align:left" | PowerShell || style="text-align:left" | <code>tools/*.ps1</code>, <code>serve.ps1</code> || 3 || 129 || 0,1 %
+|-
+| style="text-align:left" | Batch || style="text-align:left" | <code>*.bat</code> im Hauptordner || 2 || 83 || 0,1 %
+|-
+! style="text-align:left" | Summe || || || 115 624 || 100 %
+|}
+
+Nicht mitgezählt: die erzeugten Dateien (<code>index.html</code>, <code>sw.js</code>, <code>app-update.json</code>, die Kopie in der APK), fremde Pakete (<code>node_modules</code>, darunter das in Kotlin geschriebene Bluetooth-Plugin), Gradle- und XML-Dateien der Android-Hülle, Daten (JSON, SVG), Entwürfe in <code>mockup/</code> und Dokumentation.
+
+Bemerkenswert:
+* '''Kommentare''': 27 857 der 91 001 Zeilen in <code>src/*.js</code> (30,6 %) beginnen mit <code>//</code>. Der Code erklärt sich ausführlich selbst, oft mit Messwerten und dem Anlass einer Änderung.
+* '''Prüfcode''': Allein der Selbsttest (<code>95-selftest.js</code>, 22 468 Zeilen) und die Messstände (<code>93-testbench.js</code>, 8 672 Zeilen) machen zusammen gut ein Drittel des JavaScript aus.
+* '''Größte Fachdateien''': <code>90-ghosts.js</code> (NPCs, Garage, Ortung; 12 656 Zeilen), <code>70-race.js</code> (Rennen; 7 588), <code>60-track.js</code> (Strecke; 5 869), <code>10-ble-explorer.js</code> (Werkbank und Wörterbücher; 5 342).
+
+=== Eine Datei aus vielen: tools/build.py ===
+Der Wert der App ist, dass <code>index.html</code> ohne Installation, ohne Server und ohne Bündelungswerkzeug läuft, auch direkt von der Festplatte. Die Quelle ist aber in Teile zerlegt. <code>build.py</code> hängt alle Dateien aus <code>src/</code> mit der Endung <code>.js</code> oder <code>.html</code> in '''alphabetischer''' Reihenfolge byteweise aneinander, ohne Trenner.<ref><code>tools/build.py</code>, <code>pieces()</code>, <code>build()</code></ref> Danach prüft es das Ergebnis:
+
+# '''Verweise''': Jedes lokale <code>src=</code> und <code>href=</code> muss auf eine vorhandene Datei zeigen, auch in auskommentierten Stellen.
+# '''Wörterbuch''': Eine verwaiste Zeile im englischen Wörterbuch wäre ein Syntaxfehler, der die ganze IIFE abbricht.
+# '''Element-Kennungen''': Zugriffe auf Elemente, die es im Dokument nicht gibt.
+# '''Klammern''': Zählung im gebauten JavaScript außerhalb von Zeichenketten, Kommentaren und regulären Ausdrücken. Eine Klammer zu viel ist ebenfalls ein Abbruch.
+# '''Service Worker''': <code>sw.js</code> wird aus der Vorlage <code>tools/sw.js.in</code> geschrieben; eine Marke in der Zeile <code>const VERSION = …</code> wird durch die Version aus <code>index.html</code> ersetzt.
+# '''Aktualisierungsliste''': <code>app-update.json</code> wird neu geschrieben (siehe unten).
+
+Mit <code>python tools/build.py --check</code> baut das Werkzeug nichts, sondern vergleicht nur und nennt bei Abweichung Zeichen und Zeile der ersten Differenz.
+
+=== Versionsnummer: tools/bump_version.py ===
+Die Nummer wird vor jedem Commit aus der Git-Historie berechnet und in die '''Quelle''' (<code>&lt;span id="app-version"&gt;</code> in <code>src/00-index.head.html</code>) geschrieben; danach baut das Werkzeug <code>index.html</code>, <code>sw.js</code> und <code>app-update.json</code> neu.<ref><code>tools/bump_version.py</code>, <code>version()</code>, <code>main()</code></ref>
+
+<pre>
+woche  = (Montag dieser Woche − PROJEKT_START) / 7 Tage, abgerundet
+push   = Commits seit Montag dieser Woche + 1 + PUSH_VERSATZ[Montag]
+Version = 1.(woche − 10).push       wenn woche ≥ 10
+Version = 0.woche.push               sonst
+</pre>
+
+* <code>PROJEKT_START</code> – fest der 03.08.2026 (Woche 0), weil die Historie mehrfach zu einem einzigen Commit zusammengefasst wurde
+* <code>PUSH_VERSATZ</code> – gibt einer Woche die Commits zurück, die beim Zusammenfassen verschwunden sind
+* <code>+ 1</code> – die Nummer gilt für den Commit, der gerade erst entsteht
+* <code>VERSION1_WOCHE = 10</code> – ab der Woche vom 12.10.2026 beginnt die Zählung 1.x
+
+=== Web-App und PWA ===
+* '''Manifest''' (<code>manifest.webmanifest</code>): Name „OmegaSim“, Start <code>./index.html</code>, Darstellung ''standalone'' (ohne Browserleisten), Hintergrund- und Themenfarbe <code>#000000</code>, Symbole in 192 und 512 Pixeln, eines davon „maskable“ für runde Symbolformen.
+* '''Service Worker''' (<code>sw.js</code>): Beim Installieren legt er die „Hülle“ ab (<code>index.html</code>, Manifest, Favicon, Symbole) im Cache <code>omegasim-<Version></code>; beim Aktivieren löscht er ältere OmegaSim-Caches. Die wichtigste Entscheidung: <code>index.html</code> wird '''Netz zuerst''' geholt, nicht Cache zuerst. Weil mehrmals am Tag neu veröffentlicht wird, würde ein Cache-zuerst-Arbeiter sonst eine alte Fassung zeigen, während die neue schon da ist. Nicht zwischengespeichert werden Anfragen, die nicht GET sind (etwa Meldungen an den Mehrspieler-Host), und Anfragen an fremde Ursprünge.<ref><code>tools/sw.js.in</code>, Kopfkommentar</ref>
+* '''Anmeldung''' (<code>src/91-pwa.js</code>): nur in einem sicheren Kontext, nicht über <code><nowiki>file://</nowiki></code> und '''nicht in der Android-App''', denn dort liefert die App ihre Dateien selbst und ein Service Worker wäre ein zweiter, veraltender Speicher. Der Knopf „Installieren“ erscheint nur, wenn der Browser die Installation anbietet (Ereignis <code>beforeinstallprompt</code>); auf iOS also nie, wo ohnehin kein Web Bluetooth zur Verfügung steht.
+
+=== Die Android-Hülle ===
+Die Android-App ist eine Capacitor-App mit der Kennung <code>de.lroeseler.omegasim</code>. Sie enthält dieselbe <code>index.html</code> unverändert (bestellt war eine APK, „die identisch zur HTML-App ist“); was nur in der App gebraucht wird, steht in der Seite hinter einer Abfrage von <code>window.Capacitor</code> und schläft im Browser.<ref><code>tools/apk_www.py</code>, Kopfkommentar; <code>src/05-app-bruecke.js</code></ref>
+
+{| class="wikitable"
+! Baustein !! Sprache !! Aufgabe
+|-
+| <code>MainActivity.java</code> || Java || Rückfall einer unbestätigten Aktualisierung vor dem Laden, eigene Plugins anmelden, Bildschirm anlassen, Vollbild, Bluetooth beim Schließen trennen
+|-
+| ''@capacitor-community/bluetooth-le'' 8.3.0 || Kotlin (fremdes Paket) || Suchen, Verbinden, Abonnieren, Lesen
+|-
+| [[OmegaBle]] (<code>OmegaBlePlugin.java</code>) || Java || schneller Schreibweg für Fahrbefehle, hartes Schließen von Verbindungen
+|-
+| <code>OmegaPadNativ.java</code> || Java || Gamepad direkt aus Android lesen
+|-
+| <code>OmegaUpdatePlugin.java</code> || Java || Selbstaktualisierung der Web-App
+|-
+| <code>OmegaHostPlugin.java</code>, <code>HostServer.java</code>, <code>OmegaHostService.java</code> || Java || Handy als Host für den WLAN-[[Mehrspieler]]
+|-
+| <code>OmegaSicherungPlugin.java</code> || Java || Sicherungsdatei in Dokumente/OmegaSim, die eine Neuinstallation überlebt
+|-
+| <code>src/05-app-bruecke.js</code> || JavaScript || baut <code>navigator.bluetooth</code> auf dem Plugin nach
+|}
+
+Die Einstellung <code>androidScheme: https</code> lässt die Seite unter dem Ursprung <code><nowiki>https://localhost</nowiki></code> laufen. Weil dieser Ursprung bei jeder Aktualisierung gleich bleibt, bleiben auch alle gespeicherten Daten erhalten.
+
+=== Bau der APK ===
+Der Bauauftrag <code>.github/workflows/android.yml</code> startet, wenn ein Git-Tag der Form <code>apk-v*</code> hochgeladen wird (oder von Hand):<ref><code>.github/workflows/android.yml</code></ref>
+# Rechner mit Java 21 und Node 22 vorbereiten.
+# <code>python3 tools/build.py</code> und <code>python3 tools/apk_www.py</code>: Web-App bauen und genau die Dateien aus <code>app-update.json</code> nach <code>android-app/www</code> kopieren.
+# Versionsname aus dem Tag (<code>apk-v1.2.9</code> → <code>1.2.9</code>), Versionscode als <code>Haupt × 100000 + Neben × 1000 + Push</code>.
+# <code>npm ci</code> und <code>npx cap sync android</code>: Web-Dateien und Plugins ins Android-Projekt übernehmen.
+# Signaturschlüssel aus den geheimen Einstellungen des Repositorys bereitstellen.
+# <code>./gradlew assembleRelease</code>: die APK bauen und signieren.
+# Ein GitHub-Release mit der APK unter zwei Namen anlegen (mit Versionsnummer und als <code>OmegaSim.apk</code>).
+
+Ein zweiter Bauauftrag (<code>challenges.yml</code>) holt stündlich zur Minute 17 die Bestenliste der [[Challenges]] und committet <code>data/challenges.json</code> nur, wenn sie sich geändert hat.
+
+=== Selbstaktualisierung der App ===
+Eine neue APK ist nur nötig, wenn sich die Android-Schicht ändert. Alles andere kommt als Web-Aktualisierung:<ref><code>tools/app_update.py</code>; <code>OmegaUpdatePlugin.java</code>, Kopfkommentar; <code>src/97b-app.js</code></ref>
+# Beim Bau schreibt <code>app_update.py</code> die Datei <code>app-update.json</code>: Version, die nötige '''APK-Stufe''' (<code>APK_STUFE = 2</code>) und für jede Datei Pfad, SHA-256-Prüfsumme und Größe. Für 1.2.9 sind das 638 Dateien mit zusammen rund 23,6 MB. Textdateien werden mit Unix-Zeilenenden gehasht, weil die Arbeitskopie Windows-Zeilenenden hat, die veröffentlichte Fassung aber nicht.
+# Beim Start fragt die App diese Liste von der veröffentlichten Seite ab. Ist die Version neuer, zeigt sie einen Hinweis.
+# Verlangt die Liste eine höhere APK-Stufe als die installierte, meldet sie „neue APK nötig“ statt eines Web-Updates.
+# Auf Tipp lädt das Plugin ''OmegaUpdate'' nur die Dateien mit geänderter Prüfsumme; alle anderen kopiert es aus der laufenden Fassung. Jede geladene Datei wird beim Schreiben nachgehasht.
+# Die WebView wird auf den neuen Ordner umgestellt (Capacitor: ''serverBasePath'').
+# Die neue Fassung muss sich binnen '''25 s''' als lauffähig melden (<code>bestaetigen()</code>). Tut sie das nicht, etwa wegen eines Syntaxfehlers, schaltet ein Wachhund auf die vorige Fassung zurück; wurde die App vorher beendet, geschieht das beim nächsten Start.
+# Eine neu installierte APK setzt den Pfad zurück; dann gilt die mitgelieferte Fassung bis zur nächsten Aktualisierung.
+
+=== Module in src/ in Ladereihenfolge ===
+{| class="wikitable"
+! Datei !! Inhalt
+|-
+| <code>00-index.head.html</code> || Kopf der Seite: CSS, das gesamte Markup aller Menüs und Optionen mit ⓘ-Texten, Doku-Seiten und Patchnotes.
+|-
+| <code>05-app-bruecke.js</code> || Eigene IIFE, nur in der Android-App aktiv: baut Web Bluetooth auf dem Capacitor-Plugin nach und bindet [[OmegaBle]] an.
+|-
+| <code>10-ble-explorer.js</code> || Beginn der gemeinsamen IIFE: BLE-Werkbank (GATT-Baum), <code>crc8()</code>, Protokoll-Hilfen und die Wörterbücher Englisch und Spanisch samt Übersetzungsmechanik.
+|-
+| <code>20-protocol.js</code> || Der 20-Byte-Fahrbefehl, der 45-ms-Herzschlag, das Schreibschloss je Charakteristik und der RC-Gasverlauf.
+|-
+| <code>30-input.js</code> || Vorrang zwischen Tastatur, Gamepad, Touch und Neigung, Mitschnitt der Telemetrie und Tastenkürzel.
+|-
+| <code>40-physics.js</code> || Die Fahrphysik als Klasse: Reibkreis, Gewichtsverlagerung, Gänge, Reifentemperatur, Ausrollen (siehe [[Fahrverhalten]]).
+|-
+| <code>49-spieler.js</code> || Spielerplätze für Spieler 2 und 3 im [[Mehrspieler]] an einem Gerät.
+|-
+| <code>50-drive.js</code> || Die Instanz der Physik, Regler der Optionen, Kalibrierungslauf, Aufnahme und Wiedergabe von Fahrten.
+|-
+| <code>50b-menu-nav.js</code> || Menüführung mit Steuerkreuz und Pfeiltasten (WIP).
+|-
+| <code>51-konsole.js</code> || Menü im Stil einer Rennspiel-Konsole mit Kacheln und PS5-Tastenlogik (WIP).
+|-
+| <code>51b-tutorial.js</code> || Geführte Einführung auf den echten Bildschirmen (experimentell).
+|-
+| <code>59-lade.js</code> || Ladeanimation mit sich drehendem Streckenteil.
+|-
+| <code>60-track.js</code> || Streckenmodell, Geometrie, Editor, Streckencode, Ideallinie, Live-Scan und Rohcode-Monitor (siehe [[Strecke]], [[Strecken- und Raum-Editor]]).
+|-
+| <code>60b-raum.js</code> || Der Raumdesigner für eigene Raumformen (experimentell).
+|-
+| <code>60c-streckenbild.js</code> || Export der Strecke als PNG-Bild.
+|-
+| <code>60d-virtuell.js</code> || [[Virtuelles Fahren]]: ein Auto ohne Bluetooth, das dieselben Meldungen erzeugt wie ein echtes (WIP).
+|-
+| <code>61-simlinie.js</code> || Die SIMULATOR-Ideallinie: Suche über Linien und Tempopläne mit derselben Physik (WIP).
+|-
+| <code>70-race.js</code> || Cockpit, Rundenzählung, Renntypen, Ampel, Ergebnisse, [[Boxenstopp]], Wetter und Reifen (siehe [[Rennarten]]).
+|-
+| <code>70b-telemetrie.js</code> || Jede Runde als Zwischenzeiten je Streckenteil (WIP).
+|-
+| <code>71-rammen.js</code> || Crash-Arten und Rammen.
+|-
+| <code>72-challenges.js</code> || [[Challenges]] mit Online-Bestenliste.
+|-
+| <code>72b-spuren.js</code> || Spuren der schnellsten Runden in der Online-Bestenliste (WIP).
+|-
+| <code>73-meisterschaft.js</code> || Meisterschaft aus mehreren Rennen (experimentell).
+|-
+| <code>80-sound.js</code> || Der Ton: Motorklang, Effekte, Streckenkulisse.
+|-
+| <code>80b-dualsense.js</code> || Trigger-Effekte des DualSense-Controllers über WebHID (WIP).
+|-
+| <code>80c-rennstand.js</code> || Sprachansagen zum Rennstand aus vorproduzierten Sprachclips.
+|-
+| <code>90-ghosts.js</code> || Garage und Bluetooth-Verbindungen, NPCs, Ortung auf der Strecke, gelbe Flagge, Gamepad-Belegung (siehe [[NPC-Fahrverhalten]], [[Safety Car und Reinigungswagen]]).
+|-
+| <code>90b-sim.js</code> || Ein Rennen ohne Autos simulieren und ablaufen lassen.
+|-
+| <code>90c-macro-track.js</code> || Strecke aus einer Aufnahme lernen (WIP).
+|-
+| <code>90d-challenger.js</code> || Rolle Challenger: ein echtes Auto fährt gegen eine Bestzeit (experimentell).
+|-
+| <code>91-pwa.js</code> || Anmeldung des Service Workers und Installationsknopf.
+|-
+| <code>92-coding-school.js</code> || Programmierschule: Gas- und Lenkkurven zeichnen, simulieren, an ein Auto schicken.
+|-
+| <code>92b-num-trainer.js</code> || Binär- und Hex-Trainer (siehe [[Hexadezimalsystem]]).
+|-
+| <code>93-testbench.js</code> || Messstände für Selbsttest und Konsole (<code>OMEGA_TEST</code>).
+|-
+| <code>94-engine-workshop.js</code> || Motorwerkstatt: das Klangmodell mit elf Stellgrößen zum Ausprobieren.
+|-
+| <code>95-selftest.js</code> || Der Selbsttest.
+|-
+| <code>96-home.js</code> || Startbildschirm; die Zahl der Einstellungen wird zur Laufzeit gezählt.
+|-
+| <code>97-sessions.js</code> || Sitzungsdaten: bis zu 200 beendete Sitzungen mit Rundenzeiten.
+|-
+| <code>97b-app.js</code> || Nur in der Android-App: Selbstaktualisierung, Host ohne PC, Vollbild.
+|-
+| <code>97b-fahrstil.js</code> || Fahrstil-Kennwerte aus Gas, Bremse und Lenkung je Takt (WIP).
+|-
+| <code>98-presets.js</code> || Voreinstellungen (Fahrgefühle) und Austausch von Abstimmungen als Text.
+|-
+| <code>98b-sicherung.js</code> || Sicherung aller gespeicherten Daten in einer Datei.
+|-
+| <code>98c-opt-info.js</code> || Die ⓘ-Fenster der Optionen.
+|-
+| <code>98d-profile.js</code> || Presets je Menü und globale Profile.
+|-
+| <code>98e-statistik.js</code> || Statistiken aus den gespeicherten Sitzungen.
+|-
+| <code>98f-studie.js</code> || Die Studie OmegaLab (experimentell).
+|-
+| <code>98g-telemetrie-seite.js</code> || Vergleich zweier Runden unter '''Optionen → Telemetrie''' (WIP).
+|-
+| <code>99-index.tail.html</code> || Schluss: schließt die IIFE und das Dokument.
+|}
+
+=== Daten und Speicher ===
+* '''localStorage''': Alles, was die App sich merkt (Einstellungen, Strecken, Autos, Rundenzeiten, Tastenbelegung, Sitzungen), liegt im <code>localStorage</code> des Browsers bzw. der WebView. Die Schlüssel beginnen mit <code>chc.</code>, <code>carrera-hybrid</code> oder <code>omegasim</code>; die Sitzungshistorie steht unter <code>chc.sessions.v1</code> (höchstens 200 Sitzungen). Seit 0.8.96 bittet die App mit <code>navigator.storage.persist()</code> darum, dass der Browser diese Daten nicht von selbst räumt.
+* '''Kein IndexedDB''': Ein Umzug auf die größere Browser-Datenbank IndexedDB ist im Code ausdrücklich erwogen und nicht gemacht.<ref><code>src/98b-sicherung.js</code>, Kopfkommentar</ref>
+* '''Sicherungsdatei''': Unter '''Optionen → Daten sichern''' schreibt die App alle Schlüssel mit den drei Präfixen in eine JSON-Datei <code>omegasim-sicherung-JJJJ-MM-TT.json</code> und liest sie wieder ein. Erfasst wird nach '''Präfixregel''' statt nach Liste, damit auch künftige Schlüssel mitkommen; ein Selbsttest prüft, dass jede bekannte Schlüsselkonstante unter die Regel fällt.
+* '''Android''': Zusätzlich schreibt die App eine Sicherung nach Dokumente/OmegaSim. Weil eine Neuinstallation die Datei der alten Installation ab Android 11 nicht einfach lesen darf, öffnet sie sie über den Dateiwähler des Systems.
+
+=== Übersetzungen ===
+Die Oberfläche ist auf Deutsch geschrieben. Übersetzt wird zur Laufzeit über zwei Wörterbücher in <code>src/10-ble-explorer.js</code>: <code>I18N_EN</code> (mindestens 2 824 einzeilige Einträge) und <code>I18N_ES</code> (mindestens 1 102; gezählt wurden Zeilen der Form <code>"…": "…"</code>).<ref><code>src/10-ble-explorer.js</code>, <code>I18N_EN</code>, <code>I18N_ES</code>, <code>i18nLookup()</code>, <code>i18nApply()</code>, <code>setLang()</code></ref>
+* '''Schlüssel ist der deutsche Text''' selbst (Leerraum zusammengefasst), nicht eine Kennung wie <code>options.rain.label</code>. So musste am Markup nichts ausgezeichnet werden, und ein noch nicht übersetzter Satz bleibt deutsch stehen, statt zu verschwinden.
+* '''Spanisch fällt auf Englisch zurück''', wenn ein Eintrag fehlt.
+* Ein Durchlauf ersetzt Textknoten und die Attribute <code>title</code>, <code>aria-label</code> und <code>placeholder</code>; ausgenommen sind <code>SCRIPT</code>, <code>STYLE</code>, <code>CODE</code>, <code>KBD</code> und alles mit <code>data-i18n-skip</code>. Ein <code>MutationObserver</code> übersetzt Inhalte, die später eingefügt werden.
+* Zusammengesetzte Texte („8 gemessene Runden, beste …“) laufen über die Funktion <code>t()</code>; Ansichten, die so zusammensetzen, melden sich an und werden beim Sprachwechsel '''vor''' der Übersetzung neu gezeichnet.
+* Nicht übersetzt werden Protokollzeilen und Bytewerte.
+
+=== Selbsttest ===
+Der Selbsttest misst die laufende App auf Knopfdruck ('''Entwickler → Selbsttest'''; mit <code>?st=Name</code> in der Adresse nur passende Tests). Jeder Test wird mit <code>stAdd(name, fn)</code> angemeldet; <code>fn</code> gibt <code>{ ok, mass }</code> zurück.<ref><code>src/95-selftest.js</code>, <code>stAdd()</code>, Kopfkommentar</ref> Drei Grundsätze stehen im Kopf der Datei:
+# Jede Zeile nennt ihr '''Maß''', nicht nur grün oder rot, damit man sieht, wie knapp es war.
+# '''„nicht prüfbar“''' ist ein eigenes Ergebnis, kein Fehler (etwa Tondateien, die über <code><nowiki>file://</nowiki></code> nicht ladbar sind).
+# Die Tests benutzen '''dieselben Funktionen''' wie die App, keine nachgebauten.
+
+Beispiele: „Aufbau durchgelaufen“ verlangt mehr als 30 Regler und mehr als 400 Wörterbucheinträge; „Protokoll: CRC-8“ rechnet die Prüfsumme eines aufgezeichneten Pakets der Original-App nach. Zwischen den Tests gibt der Lauf dem Browser über einen <code>MessageChannel</code> Luft statt über <code>setTimeout</code>, weil Zeitgeber in verborgenen Fenstern gedrosselt werden. Am 26.10.2026 enthielt die Datei 522 Aufrufe von <code>stAdd</code>.
+
+=== Klangerzeugung ===
+Der Ton läuft über die '''Web Audio API''' des Browsers.<ref><code>src/80-sound.js</code>; <code>tools/engine_synth.py</code>, Kopfkommentar</ref>
+* Der <code>AudioContext</code> darf erst nach einer Nutzerhandlung starten (Regel der Browser gegen Autoplay); OmegaSim legt ihn beim ersten Klick oder Tastendruck an und verlangt die Latenzklasse „interactive“, weil eine Android-WebView sonst einen großen Puffer wählt und der Motor 100 ms und mehr hinter dem Gas herklingt.
+* '''Motorklang''': Je Auto drei Schleifen (Leerlauf, mittel, hoch), deren Tonhöhe über <code>playbackRate</code> der Drehzahl folgt und zwischen denen überblendet wird. Die Schleifen liegen als Ogg-Dateien in <code>audio/</code> (insgesamt 532 Ogg-Dateien, Herkunft in <code>audio/CREDITS.md</code>).
+* '''Erzeugt, nicht aufgenommen''': Die Motorschleifen rechnet <code>tools/engine_synth.py</code> nach dem Ansatz des quelloffenen Projekts ''engine-sim'' (MIT-Lizenz): Ein Kolbenmotor klingt nach einer Folge von Verbrennungsstößen, geformt von der Resonanz des Auspuffs. Was Motoren unterscheidet, ist das '''Zündmuster''': Ein gleichmäßig zündender Sechszylinder klingt glatt, ein V8 mit Cross-Plane-Kurbelwelle zündet je Zylinderbank ungleichmäßig und „blubbert“. Die Schleifenlänge ist eine ganze Zahl von 720-Grad-Arbeitsspielen, und alle Filter werden zyklisch angewendet, damit die Schleife ohne Knacken nahtlos wiederholt. Abtastrate 22 050 Hz.
+* Weitere Python-Werkzeuge erzeugen Umgebungsgeräusche, Boxen- und Hupenklänge (<code>ambience.py</code>, <code>pit_sounds.py</code>, <code>horn_sounds.py</code>) und Sprachclips für die Ansagen.
+* Die '''Motorwerkstatt''' (<code>94-engine-workshop.js</code>) rechnet dasselbe Modell im Browser, sodass Änderungen an den elf Stellgrößen sofort hörbar sind.
+
+=== Lizenz ===
+Der Quellcode steht unter der '''MIT-Lizenz''' (Datei <code>LICENSE</code>): Er darf frei genutzt, verändert und weitergegeben werden, solange der Lizenzhinweis erhalten bleibt. Screenshots der App dürfen deshalb im Wiki verwendet werden. Für eingebundene Klänge gilt, was <code>audio/CREDITS.md</code> nennt.
+
+== Beispiele ==
+=== Die Versionsnummer 1.2.9 ===
+# Heute ist Montag, der 26.10.2026; Montag dieser Woche ist derselbe Tag.
+# Vom 03.08.2026 bis 26.10.2026 sind es 84 Tage, 84 / 7 = 12, also <code>woche = 12</code>.
+# 12 ≥ 10, also Hauptnummer 1 und Mittelzahl 12 − 10 = 2.
+# Vor dem Commit von 1.2.9 standen seit Montag 0:00 acht Commits in der Historie, und für diese Woche ist kein Versatz eingetragen: <code>push = 8 + 1 + 0 = 9</code> (aus der Nummer zurückgerechnet).
+# Ergebnis: '''1.2.9'''. Die APK dazu bekäme den Versionscode 1 × 100000 + 2 × 1000 + 9 = '''102009'''.
+
+=== Was eine Aktualisierung lädt ===
+Angenommen, zwischen zwei Fassungen ändert sich nur <code>index.html</code> (rund 6,6 MB). Die App vergleicht die 638 Prüfsummen der neuen Liste mit denen der laufenden Fassung, findet eine Abweichung, lädt nur diese eine Datei und kopiert die übrigen 637 (rund 17 MB) lokal. Ohne Prüfsummen müssten alle 23,6 MB erneut geladen werden.
+
+=== Ein Anteil nachgerechnet ===
+JavaScript: 91 001 Zeilen in <code>src/*.js</code> + 131 in <code>tools/sw.js.in</code> + 41 in Skriptblöcken = 91 173. Gesamtzahl 115 624. Anteil 91 173 / 115 624 = 0,7885, also 78,9 %.
+
+== Grenzen und bekannte Probleme ==
+* Die Zeilenzählung sagt wenig über Aufwand oder Schwierigkeit; ein Drittel des JavaScript ist Kommentar, ein weiteres Drittel Prüfcode.
+* Eine einzelne große IIFE ist empfindlich: Ein Syntaxfehler oder ein Lesezugriff in der temporalen Todeszone lässt die ganze App leer. Der Bau prüft deshalb Klammern und Wörterbuch, bevor die Datei ausgeliefert wird.
+* <code>localStorage</code> ist begrenzt und kann vom Browser geräumt werden (privater Modus, Aufräumen von Websitedaten, auf iPhones nach längerer Zeit ohne Besuch). Die Sicherungsdatei ist die Absicherung.
+* Web Bluetooth gibt es nur in Chrome und Edge; auf iPhone und iPad läuft die App nur als Info-Bildschirm.
+* Die Wörterbücher wachsen von Hand mit; Spanisch ist nicht vollständig und fällt dann auf Englisch zurück.
+
+== Versionsgeschichte ==
+{| class="wikitable"
+! Version !! Änderung
+|-
+| früh || Die Quelle war eine einzige HTML-Datei mit rund 14 000 Zeilen; Aufteilung in <code>src/</code> mit <code>build.py</code>, das die alte Datei Byte für Byte reproduzieren musste (genaue Fassung nicht gesichert)
+|-
+| nach 0.5.38 || <code>bump_version.py</code> baut auch <code>sw.js</code> mit (von 0.5.34 bis 0.5.38 trug der Cache die jeweils vorige Version)
+|-
+| 0.8 || Android-App (experimentell) mit Bluetooth-Brücke, Host ohne PC und Updates ohne Neuinstallation
+|-
+| 0.8.96 || Bitte um dauerhaften Speicher (<code>storage.persist()</code>)
+|-
+| 0.9.6 || Sicherungsdatei in der App, die eine Neuinstallation überlebt; APK-Releases
+|-
+| 0.9.30 || fester Projektstart für die Versionszählung nach dem Zusammenfassen der Historie
+|-
+| 1.0 (12.10.2026) || Versionsschema 1.<Woche>.<Push>
+|-
+| 1.0 || Kachel „Daten sichern“
+|}
+
+== Einzelnachweise ==
+<references />
+
+== Siehe auch ==
+* [[OmegaSim]]
+* [[OmegaBle]]
+* [[Bluetooth Low Energy]]
+* [[Vibe-Coding]]
+* [[Anleitung für KIs]]
+* [[Mitmachen]]
+* [[Glossar]]
+
+== Quellen im Code ==
+* <code>tools/build.py</code> – <code>pieces()</code>, <code>build()</code>, <code>check_refs()</code>, <code>check_dict()</code>, <code>check_ids()</code>, <code>check_klammern()</code>, <code>build_sw()</code>
+* <code>tools/bump_version.py</code> – <code>version()</code>, <code>PROJEKT_START</code>, <code>PUSH_VERSATZ</code>, <code>VERSION1_WOCHE</code>
+* <code>tools/app_update.py</code> – <code>schreiben()</code>, <code>APK_STUFE</code>
+* <code>tools/apk_www.py</code>, <code>tools/sw.js.in</code>, <code>manifest.webmanifest</code>
+* <code>.github/workflows/android.yml</code>, <code>.github/workflows/challenges.yml</code>
+* <code>android-app/capacitor.config.json</code>, <code>android-app/package.json</code>
+* <code>android-app/android/app/src/main/java/de/lroeseler/omegasim/*.java</code>
+* <code>src/91-pwa.js</code>, <code>src/97b-app.js</code>, <code>src/98b-sicherung.js</code>, <code>src/97-sessions.js</code>
+* <code>src/10-ble-explorer.js</code> – <code>I18N_EN</code>, <code>I18N_ES</code>, <code>setLang()</code>
+* <code>src/95-selftest.js</code> – <code>stAdd()</code>, <code>ST_TESTS</code>
+* <code>src/80-sound.js</code>, <code>src/94-engine-workshop.js</code>, <code>tools/engine_synth.py</code>, <code>audio/CREDITS.md</code>
+* <code>LICENSE</code>
+
+== Weblinks ==
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Grundlagen]]
+[[Kategorie:Software]]

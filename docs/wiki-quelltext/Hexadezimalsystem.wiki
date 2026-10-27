@@ -1,0 +1,445 @@
+{{Stand|app=1.2.9|appdatum=26.10.2026}}
+Das '''Hexadezimalsystem''' (kurz ''Hex'', von griechisch ''hexa'' „sechs“ und lateinisch ''decem'' „zehn“) ist ein Zahlensystem mit der Basis 16. Es verwendet die Ziffern 0 bis 9 und die Buchstaben A bis F für die Werte zehn bis fünfzehn. Programmierer benutzen es, weil eine Hex-Ziffer genau vier Bit darstellt und ein Byte deshalb immer mit genau zwei Hex-Ziffern geschrieben werden kann. In [[OmegaSim]] begegnet es überall dort, wo die App mit dem [[Carrera HYBRID]] spricht: Die Streckenteile melden sich mit Codes wie <code>0x01</code> oder <code>0x0A</code>, jeder Fahrbefehl beginnt mit dem Byte <code>0xAF</code>, und die Neutralstellung des Gases ist <code>0xDF</code>. Dieser Artikel erklärt das System von Grund auf und zeigt an Beispielen aus dem Quellcode, wie OmegaSim damit rechnet.
+
+== Auf einen Blick ==
+{| class="wikitable"
+! Merkmal !! Wert
+|-
+| Basis || 16 (dezimal: 10, binär: 2)
+|-
+| Ziffern || 0 1 2 3 4 5 6 7 8 9 A B C D E F
+|-
+| Schreibweisen || <code>0x0A</code> (C, JavaScript, Java, Python), <code>0Ah</code> (Assembler), <code>#0A</code> (Farben in HTML/CSS)
+|-
+| Ziffern je Byte || genau 2 (<code>00</code> bis <code>FF</code>, dezimal 0 bis 255)
+|-
+| Wichtige Werte in OmegaSim || <code>0xAF</code> Befehlskopf · <code>0xDF</code> Gas neutral · <code>0x01</code> Start/Ziel · <code>0x02</code> Gerade · <code>0x0A</code> Engstelle bzw. Start/Ziel auf Papier · <code>0x00</code> abseits · <code>0xFF</code> noch nichts gelesen
+|-
+| Übungsmöglichkeit in der App || '''Entwickler → Zahlensysteme''' (Binär- und Hex-Trainer, Status WIP, seit 0.7)
+|-
+| Beteiligte Quelldateien || <code>src/20-protocol.js</code>, <code>src/10-ble-explorer.js</code>, <code>src/05-app-bruecke.js</code>, <code>src/60-track.js</code>, <code>src/90-ghosts.js</code>, <code>src/92b-num-trainer.js</code>, <code>OmegaBlePlugin.java</code>
+|}
+
+== Grundlagen ==
+=== Was ein Stellenwertsystem ist ===
+Im Alltag schreiben wir Zahlen im '''Dezimalsystem''': Jede Stelle ist zehnmal so viel wert wie die Stelle rechts von ihr. Die Zahl 223 bedeutet
+
+<pre>
+223 = 2 × 100 + 2 × 10 + 3 × 1
+    = 2 × 10² + 2 × 10¹ + 3 × 10⁰
+</pre>
+
+Die Zahl 10 heißt hier '''Basis'''. Man kann jede andere ganze Zahl ab 2 als Basis nehmen. Dann braucht man genau so viele verschiedene Ziffern, wie die Basis groß ist: im Dezimalsystem zehn (0–9), im '''Binärsystem''' (Basis 2) zwei (0 und 1), im '''Hexadezimalsystem''' (Basis 16) sechzehn. Weil es nur zehn arabische Ziffern gibt, nimmt man für die Werte zehn bis fünfzehn die Buchstaben A bis F.
+
+Allgemein gilt für eine Ziffernfolge <code>z<sub>n</sub> … z<sub>1</sub> z<sub>0</sub></code> zur Basis <code>b</code>:
+
+<pre>
+Wert = z_n × b^n + … + z_1 × b^1 + z_0 × b^0
+</pre>
+
+* <code>z<sub>i</sub></code> – die Ziffer an Stelle <code>i</code> (von rechts, beginnend bei 0)
+* <code>b</code> – die Basis (10, 2 oder 16)
+* <code>b^i</code> – der Stellenwert, also „Basis hoch Stellennummer“
+
+=== Bit, Nibble, Byte ===
+* Ein '''Bit''' ist die kleinste Informationseinheit: 0 oder 1, aus oder an. Es ist eine Ziffer des Binärsystems.
+* Ein '''Nibble''' (auch Halbbyte) sind 4 Bit. Mit 4 Bit lassen sich 2<sup>4</sup> = 16 verschiedene Werte darstellen, also genau die Werte einer Hex-Ziffer.
+* Ein '''Byte''' sind 8 Bit, also zwei Nibble. Es kann 2<sup>8</sup> = 256 Werte annehmen, dezimal 0 bis 255, hexadezimal <code>00</code> bis <code>FF</code>.
+
+Die Bits eines Bytes werden von rechts nach links von 0 bis 7 nummeriert. '''Bit 0''' ist das niederwertigste (Wert 1), '''Bit 7''' das höchstwertige (Wert 128). Wenn in OmegaSim von „Byte 14, Bit 5“ die Rede ist, ist das Bit mit dem Wert 2<sup>5</sup> = 32 = <code>0x20</code> im fünfzehnten Byte gemeint (gezählt wird ab Byte 0).
+
+=== Die Tabelle 0 bis 15 ===
+Diese Tabelle ist der Schlüssel zu allem Weiteren. Wer sie kann, kann jedes Byte im Kopf umrechnen.
+
+{| class="wikitable" style="text-align:center"
+! Dezimal !! Binär (4 Bit) !! Hex !! Merkhilfe
+|-
+| 0 || 0000 || 0 ||
+|-
+| 1 || 0001 || 1 || Bit 0
+|-
+| 2 || 0010 || 2 || Bit 1
+|-
+| 3 || 0011 || 3 || 2 + 1
+|-
+| 4 || 0100 || 4 || Bit 2
+|-
+| 5 || 0101 || 5 || 4 + 1
+|-
+| 6 || 0110 || 6 || 4 + 2
+|-
+| 7 || 0111 || 7 || 4 + 2 + 1
+|-
+| 8 || 1000 || 8 || Bit 3
+|-
+| 9 || 1001 || 9 || 8 + 1
+|-
+| 10 || 1010 || A || 8 + 2
+|-
+| 11 || 1011 || B || 8 + 2 + 1
+|-
+| 12 || 1100 || C || 8 + 4
+|-
+| 13 || 1101 || D || 8 + 4 + 1
+|-
+| 14 || 1110 || E || 8 + 4 + 2
+|-
+| 15 || 1111 || F || alle vier Bits
+|}
+
+=== Schreibweisen ===
+Weil „10“ im Dezimalsystem zehn, im Hexadezimalsystem aber sechzehn bedeutet, muss man kennzeichnen, welches System gemeint ist:
+* '''<code>0x0A</code>''' – das Präfix <code>0x</code> stammt aus der Programmiersprache C und gilt auch in JavaScript, Java und Python. OmegaSim benutzt im Code ausschließlich diese Form (meist mit Kleinbuchstaben, etwa <code>0xdf</code>; Groß- und Kleinschreibung bedeuten dasselbe).
+* '''<code>0Ah</code>''' – das nachgestellte <code>h</code> ist in Assembler und in manchen Datenblättern üblich. Beginnt die Zahl mit einem Buchstaben, setzt man eine 0 davor (<code>0DFh</code>), damit sie nicht mit einem Namen verwechselt wird.
+* '''<code>#000000</code>''' – in HTML und CSS werden Farben als drei Bytes (Rot, Grün, Blau) in Hex geschrieben. Die Datei <code>manifest.webmanifest</code> von OmegaSim legt so die Hintergrundfarbe Schwarz fest.
+* '''<code>0b00001010</code>''' – das Präfix <code>0b</code> kennzeichnet Binärzahlen.
+* Ohne Präfix in Fließtext steht häufig „0A hex“ oder ein tiefgestelltes <code>0A<sub>16</sub></code>.
+
+Damit gilt: <code>0x0A</code> = 10 dezimal = <code>00001010</code> binär.
+
+=== Warum Programmierer Hex benutzen ===
+Der Computer rechnet binär. Binärzahlen sind aber lang und für Menschen fehleranfällig: <code>11011111</code> ist schwer zu lesen, und eine vertauschte Stelle fällt kaum auf. Dezimal (223) ist kurz, verbirgt aber die einzelnen Bits: Ob in 223 das Bit 5 gesetzt ist, sieht man der Zahl nicht an. Hex verbindet beide Vorteile:
+* '''Kurz''': Ein Byte sind immer genau zwei Zeichen. Ein 20-Byte-Befehl an das Auto passt in 40 Zeichen.
+* '''Bitgenau''': Jede Hex-Ziffer steht für genau ein Nibble. <code>0xDF</code> zerfällt ohne Rechnen in <code>D</code> = <code>1101</code> und <code>F</code> = <code>1111</code>, also <code>1101 1111</code>.
+* '''Ausrichtung''': Bitmasken wie <code>0x80</code> (nur Bit 7), <code>0x20</code> (nur Bit 5) oder <code>0x0F</code> (die unteren vier Bit) sind auf einen Blick erkennbar.
+
+Deshalb schreiben Protokollmitschnitte, Datenblätter, Speicheradressen, Farbwerte, Prüfsummen und Gerätekennungen fast immer Hex. Auch die Bluetooth-Kennungen ([[Bluetooth Low Energy#UUID|UUIDs]]) sind 128-Bit-Zahlen in Hex, und die Prüfsummen in <code>app-update.json</code> (SHA-256, 256 Bit) bestehen aus je 64 Hex-Ziffern, weil 256 / 4 = 64.
+
+== Bedienung ==
+OmegaSim enthält einen kleinen Übungsbereich für Zahlensysteme (Status WIP):
+# '''Optionen → System → Entwicklertools zeigen''' einschalten (oder <code>?dev</code> an die Adresse hängen).
+# Im Hauptmenü die Kachel '''Entwickler''' öffnen und dort '''Zahlensysteme''' wählen.
+# Der '''Binär-Trainer''' zeigt eine vierstellige Binärzahl (0000 bis 1111, dezimal 0 bis 15), der '''Hex-Trainer''' eine vierstellige Hexzahl (0000 bis FFFF, dezimal 0 bis 65 535).
+# Die Dezimalzahl in das Feld eintragen und '''Prüfen''' drücken (oder Eingabetaste).
+# Die App meldet „Richtig!“ oder nennt den richtigen Wert und zählt mit („… von … richtig“).
+# Mit '''Neue Zahl''' geht es weiter; eine zweite Antwort auf dieselbe Zahl wird nicht gezählt.
+
+Die Zufallszahl entsteht als <code>Math.floor(Math.random() × basis<sup>4</sup>)</code> und wird mit <code>toString(basis)</code> in Großbuchstaben und auf vier Stellen mit führenden Nullen angezeigt.<ref><code>src/92b-num-trainer.js</code>, <code>numTrainerNeueZahl()</code></ref>
+
+Wer Bytes am echten Auto sehen will, findet sie unter '''Entwickler → Code-Sonde''' (was der Sensor gerade liest) und im Protokoll der '''BLE-Werkbank''', das jeden geschriebenen Befehl als Hex-Folge ausgibt.
+
+== Funktionsweise ==
+=== Umrechnung dezimal → hexadezimal ===
+Verfahren: fortgesetzt durch 16 teilen und die Reste von unten nach oben lesen.
+
+<pre>
+223 : 16 = 13  Rest 15   → F   (niedrigste Stelle)
+ 13 : 16 =  0  Rest 13   → D
+Ergebnis von unten nach oben gelesen: DF   → 223 = 0xDF
+</pre>
+
+Zweites Beispiel, der Befehlskopf:
+
+<pre>
+175 : 16 = 10  Rest 15   → F
+ 10 : 16 =  0  Rest 10   → A
+Ergebnis: 0xAF
+</pre>
+
+=== Umrechnung hexadezimal → dezimal ===
+Jede Ziffer mit ihrem Stellenwert (16<sup>0</sup> = 1, 16<sup>1</sup> = 16, 16<sup>2</sup> = 256, 16<sup>3</sup> = 4096) malnehmen und addieren:
+
+<pre>
+0xDF   = 13 × 16 + 15 × 1   = 208 + 15 = 223
+0xAF   = 10 × 16 + 15       = 160 + 15 = 175
+0x0A   =  0 × 16 + 10       = 10
+0x5E   =  5 × 16 + 14       = 80 + 14  = 94
+0x3F2A =  3 × 4096 + 15 × 256 + 2 × 16 + 10
+       = 12288 + 3840 + 32 + 10 = 16170
+</pre>
+
+Die letzte Zeile ist die Beispielzahl, die auf der Kachel des Hex-Trainers abgebildet ist.
+
+=== Umrechnung binär ↔ hexadezimal ===
+Hier muss man nicht rechnen, nur gruppieren: Die Binärzahl von rechts in Vierergruppen teilen und jede Gruppe mit der Tabelle oben ersetzen.
+
+<pre>
+1101 1111   →   D F    →  0xDF
+1010 1111   →   A F    →  0xAF
+0010 0000   →   2 0    →  0x20  (nur Bit 5)
+1000 0010   →   8 2    →  0x82  (Bit 7 und Bit 1)
+</pre>
+
+Umgekehrt wird jede Hex-Ziffer durch ihre vier Bits ersetzt.
+
+=== Umrechnung binär → dezimal ===
+Die Stellenwerte eines Bytes sind 128, 64, 32, 16, 8, 4, 2, 1. Man addiert die Werte der gesetzten Bits:
+
+<pre>
+Bit:      7   6   5   4   3   2   1   0
+Wert:   128  64  32  16   8   4   2   1
+0xDF:     1   1   0   1   1   1   1   1   → 128+64+16+8+4+2+1 = 223
+0x0A:     0   0   0   0   1   0   1   0   → 8+2 = 10
+</pre>
+
+=== Bitmasken: einzelne Bits setzen, löschen, prüfen ===
+Ein Byte kann mehrere unabhängige Schalter enthalten. Byte 14 des Fahrbefehls ist so ein Feld: Bit 0 schaltet das Bremslicht, Bit 1 den Scheinwerfer, Bit 5 die Leseart „Auf der Bahn“, Bit 7 die Leseart „Ausdruck“ (siehe [[Strecke]]). Im Code stehen dafür Konstanten:<ref><code>src/20-protocol.js</code>, Konstanten <code>LIGHT_HEAD</code>, <code>LIGHT_BRAKE</code>, <code>TRACK_BIT_RAIL</code>, <code>TRACK_BIT_PRINT</code></ref>
+
+{| class="wikitable"
+! Konstante !! Hex !! Binär !! Bedeutung
+|-
+| <code>LIGHT_BRAKE</code> || <code>0x01</code> || 0000 0001 || Bremslicht (Bit 0)
+|-
+| <code>LIGHT_HEAD</code> || <code>0x02</code> || 0000 0010 || Scheinwerfer (Bit 1)
+|-
+| <code>TRACK_BIT_RAIL</code> || <code>0x20</code> || 0010 0000 || Leseart „Auf der Bahn“ (Bit 5)
+|-
+| <code>TRACK_BIT_PRINT</code> || <code>0x80</code> || 1000 0000 || Leseart „Ausdruck“ (Bit 7)
+|}
+
+Mit drei bitweisen Operatoren lässt sich jedes Bit einzeln bearbeiten:
+
+{| class="wikitable"
+! Operation !! Operator !! Wirkung !! Beispiel
+|-
+| Setzen || <code>a &#124; m</code> (ODER) || jedes Bit, das in <code>m</code> 1 ist, wird 1 || <code>0x20 &#124; 0x02 = 0x22</code> (Bahn + Scheinwerfer)
+|-
+| Löschen || <code>a & ~m</code> (UND mit Umkehrung) || jedes Bit, das in <code>m</code> 1 ist, wird 0 || <code>0x22 & ~0x02 = 0x20</code>
+|-
+| Prüfen || <code>(a & m) !== 0</code> || ist das Bit gesetzt? || <code>(0x0C & 0x08) !== 0</code> ergibt wahr
+|}
+
+Rechnung zum Löschen Bit für Bit:
+
+<pre>
+~0x02          = 1111 1101   (0xFD, nach & 0xff)
+ 0x22          = 0010 0010
+ 0x22 & 0xFD   = 0010 0000   = 0x20
+</pre>
+
+Genau so maskiert OmegaSim defekte Lampen: Bei einem Schaden an der Front wird im Paket <code>lb &= ~LIGHT_HEAD & 0xff</code> gerechnet, abgesehen von kurzen Zuckungen eines simulierten Wackelkontakts.<ref><code>src/20-protocol.js</code>, <code>buildCommandPacket()</code></ref> Das Prüfen ist im Meldekanal üblich: <code>(bytes[15] & 0x08) !== 0</code> fragt Bit 3 von Byte 15 ab, mit dem das Auto die Start/Ziel-Linie meldet.<ref><code>src/70-race.js</code>, <code>handleDashboardBytes()</code>, Konstante <code>ZIEL_SPERRE_BIT = 0x08</code></ref>
+
+=== Überlauf und „& 0xFF“ ===
+Ein Byte kann nur 0 bis 255 aufnehmen. Rechnet man darüber hinaus, '''läuft es über''': Nach 255 (<code>0xFF</code>) kommt wieder 0 (<code>0x00</code>), wie bei einem Kilometerzähler mit drei Stellen nach 999. Mathematisch ist das Rechnen '''modulo 256'''.
+
+JavaScript kennt keine Bytes, sondern rechnet mit Kommazahlen; bei bitweisen Operatoren wandelt es in 32-Bit-Ganzzahlen. Der Ausdruck <code>x & 0xFF</code> behält nur die untersten 8 Bit und wirkt deshalb wie „modulo 256“, und zwar auch für negative Zahlen. In OmegaSim steht er an vielen Stellen.
+
+==== Der Gaswert: 0xDF plus Ausschlag ====
+Byte 6 des Fahrbefehls trägt das Gas nicht als 0 bis 255, sondern als Abstand von der '''Neutralstellung <code>0xDF</code>''' (223):<ref><code>src/20-protocol.js</code>, <code>buildCommandPacket()</code></ref>
+
+<syntaxhighlight lang="javascript">
+const throttleDelta = Math.max(MIN_THROTTLE_DELTA,
+                               Math.min(127, Math.round(throttleFloat * 127)));
+const throttleByte = (0xdf + throttleDelta) & 0xff;
+</syntaxhighlight>
+
+* <code>throttleFloat</code> – Gaswunsch von −1 (voll rückwärts) bis +1 (Vollgas)
+* <code>throttleDelta</code> – derselbe Wunsch in Stufen, begrenzt auf −64 bis +127 (<code>MIN_THROTTLE_DELTA = -64</code>)
+* <code>throttleByte</code> – das gesendete Byte
+
+Bei Vollgas ist <code>0xDF + 127 = 223 + 127 = 350</code>. Das passt nicht in ein Byte; <code>350 & 0xFF = 350 − 256 = 94 = 0x5E</code>. Das Gas-Byte „läuft“ also beim Gasgeben über <code>0xFF</code> hinaus und beginnt wieder bei <code>0x00</code>. Eine Protokollbeschreibung von seVen nennt dazu die Bereiche <code>0xE0</code>–<code>0xFF</code> und weiter <code>0x00</code>–<code>0x6F</code> für vorwärts sowie <code>0x80</code>–<code>0xDE</code> für rückwärts. Das erklärt eine alte Beobachtung: Der volle Rückwärtswert <code>0xDF − 127 = 0x60</code> liegt im Vorwärtsbereich, und genau dieser Wert ließ das Auto im Versuch vorwärts fahren. OmegaSim begrenzt Rückwärts deshalb auf −64 (<code>0x9F</code>); ob −95 (<code>0x80</code>) sicher ist, ist am Auto noch nicht gesichert.<ref><code>CARRERA_HYBRID.md</code>, Abschnitt „Die Rückwärtsgrenze“; <code>src/10-ble-explorer.js</code>, Kommentar zu <code>MIN_THROTTLE_DELTA</code></ref>
+
+==== Der Kachelzähler: (neu − alt) & 0xFF ====
+In jeder Meldung des Autos steht in Byte 11 ein '''Kachelzähler''', der bei jedem neu befahrenen Streckenteil um eins steigt. Als Byte läuft er nach 255 auf 0 über. Wer wissen will, wie viele Teile zwischen zwei Meldungen lagen, rechnet deshalb nicht einfach <code>neu − alt</code>, sondern
+
+<pre>
+schritte = (neu − alt) & 0xFF
+</pre>
+
+* <code>alt</code> – Zählerstand der früheren Meldung (0 bis 255)
+* <code>neu</code> – Zählerstand der späteren Meldung (0 bis 255)
+* <code>schritte</code> – Zahl der Teile dazwischen (0 bis 255)
+
+So steht es etwa in der Ortung der NPCs (dort zusätzlich auf 1 bis 3 begrenzt) und in der Zählung des Anlaufs vor der ersten Runde.<ref><code>src/90-ghosts.js</code> (Ortung, „Byte 11 läuft über, also & 0xff“); <code>src/70-race.js</code> (<code>(dashLastTileCounter - raceAnlaufZaehler) & 0xff</code>)</ref> Das Beispiel steht unten unter [[#Kachelzähler über den Überlauf|Beispiele]].
+
+=== Vorzeichen und Zweierkomplement ===
+Ein Byte kann auch negative Zahlen tragen. Die übliche Regel heißt '''Zweierkomplement''': Die Werte <code>0x00</code>–<code>0x7F</code> bedeuten 0 bis 127, die Werte <code>0x80</code>–<code>0xFF</code> bedeuten −128 bis −1. Umrechnung:
+
+<pre>
+vorzeichenbehaftet = b ≥ 128 ? b − 256 : b
+</pre>
+
+So steht es wörtlich in OmegaSim (<code>function s8signed(b) { return b >= 128 ? b - 256 : b; }</code>).<ref><code>src/70-race.js</code>, <code>s8signed()</code></ref> Umgekehrt wird aus einer negativen Zahl mit <code>& 0xFF</code> das passende Byte: <code>−40 & 0xFF = 216 = 0xD8</code>, und <code>216 − 256 = −40</code> führt zurück.
+
+Die Lenkung in Byte 7 ist so ein vorzeichenbehaftetes Byte: <code>steerByte = steerDelta & 0xff</code> mit <code>steerDelta</code> von −127 bis +127. Positiv lenkt nach rechts, negativ nach links. Hier zeigt sich, warum die App den Ausschlag streng auf ±127 begrenzt: Ein Wunsch von 1,2 ergäbe 152, als Byte <code>0x98</code>, und das liest das Auto als 152 − 256 = −104, also als kräftigen Einschlag in die '''andere''' Richtung.<ref><code>CARRERA_HYBRID.md</code>, Abschnitt „Die Lenkgrenze“</ref>
+
+Auch Meldewerte des Autos werden so gelesen: Die Bytes 1 und 3 der Meldung (Bewegungssignale, die OmegaSim unter anderem für die Crash-Erkennung nutzt) werden mit <code>s8signed()</code> in −128 bis 127 umgerechnet.
+
+=== Prüfsummen ===
+Eine '''Prüfsumme''' ist eine kleine Zahl, die aus allen Bytes einer Nachricht berechnet und mitgeschickt wird. Der Empfänger rechnet dieselbe Zahl nach. Stimmen beide nicht überein, wurde die Nachricht unterwegs verfälscht (oder falsch gebaut) und wird verworfen.
+
+Die einfachste Form ist die Summe aller Bytes modulo 256 oder ein XOR über alle Bytes. Solche Verfahren übersehen aber manche Fehler, zum Beispiel zwei vertauschte Bytes. Besser ist eine '''CRC''' (zyklische Redundanzprüfung): Die Nachricht wird als lange Binärzahl aufgefasst und durch ein festes '''Polynom''' geteilt; der Rest der Division ist die Prüfsumme. Die Division läuft ohne Überträge, Subtraktion ist dabei XOR.
+
+Der Fahrbefehl an das Carrera HYBRID endet mit einer '''CRC-8''' über die Bytes 0 bis 18, mit Polynom <code>0x31</code> und Startwert <code>0xFF</code>:<ref><code>src/10-ble-explorer.js</code>, <code>crc8()</code></ref>
+
+<syntaxhighlight lang="javascript">
+function crc8(bytes) {
+  let crc = 0xff;
+  for (const b of bytes) {
+    crc ^= b;
+    for (let i = 0; i < 8; i++) {
+      crc = (crc & 0x80) ? ((crc << 1) ^ 0x31) & 0xff : (crc << 1) & 0xff;
+    }
+  }
+  return crc;
+}
+</syntaxhighlight>
+
+* <code>crc</code> – das laufende Register, ein Byte
+* <code>crc ^= b</code> – das nächste Nachrichtenbyte wird mit XOR eingemischt
+* <code>crc & 0x80</code> – ist das oberste Bit gesetzt?
+* <code>crc << 1</code> – alle Bits eine Stelle nach links schieben (mal 2), <code>& 0xff</code> wirft das herausgeschobene Bit weg
+* <code>^ 0x31</code> – wenn oben eine 1 herausfiel, das Polynom abziehen (XOR). <code>0x31</code> = <code>0011 0001</code> steht für x<sup>8</sup> + x<sup>5</sup> + x<sup>4</sup> + 1; das x<sup>8</sup> ist das herausgeschobene Bit und wird nicht mitgeschrieben.
+
+Dass diese Deutung stimmt, ist belegt: Für drei aufgezeichnete Leerlaufpakete der Original-App mit Byte 14 = <code>0x80</code>, <code>0x82</code> und <code>0x83</code> liefert <code>crc8()</code> genau die mitgeschnittenen Prüfsummen <code>0xA4</code>, <code>0x33</code> und <code>0xE0</code>.<ref><code>src/20-protocol.js</code>, Kommentar „Byte 14: the light field“</ref> Der Selbsttest „Protokoll: CRC-8“ prüft bei jedem Lauf den Fall <code>0x33</code>.<ref><code>src/95-selftest.js</code>, Test „Protokoll: CRC-8“</ref> Die Beschreibung von seVen nennt ein XOR über die Bytes 0 bis 18; das reproduziert die Mitschnitte nicht.
+
+Weil das Auto Pakete mit falscher Prüfsumme vermutlich verwirft, rechnet OmegaSim die CRC immer '''zuletzt''', nachdem alle Sonderbytes (Leitplanken-Modus, Versuchsvarianten der Byte-Werkbank) eingesetzt sind.
+
+=== Hex als Text auf dem Weg zum Bluetooth ===
+In der Android-App reisen die Befehle zwischen Webseite und Java-Code nicht als Bytes, sondern als Hex-Text, zum Beispiel <code>"af0000000000df008000600001002004000000ef"</code> (40 Zeichen für 20 Byte). Die Seite wandelt mit <code>zuHex()</code> jedes Byte in zwei Zeichen, das Plugin [[OmegaBle]] wandelt sie mit <code>hexZuBytes()</code> zurück:<ref><code>src/05-app-bruecke.js</code>, <code>zuHex()</code>, <code>ausHex()</code>; <code>OmegaBlePlugin.java</code>, <code>hexZuBytes()</code></ref>
+
+<syntaxhighlight lang="java">
+int hi = Character.digit(hex.charAt(i * 2), 16);
+int lo = Character.digit(hex.charAt(i * 2 + 1), 16);
+out[i] = (byte) ((hi << 4) | lo);
+</syntaxhighlight>
+
+Für <code>"df"</code> ist <code>hi = 13</code>, <code>lo = 15</code>; <code>13 << 4</code> schiebt um vier Bit (mal 16) auf 208, <code>| 15</code> setzt die unteren vier Bit, Ergebnis 223. Für den Rückweg (Meldungen des Autos) nutzt die Seite eine Nachschlagetabelle statt <code>parseInt</code>, weil rund 22 Meldungen je Sekunde und Auto durchlaufen.
+
+== Beispiele ==
+=== Ein ganzer Fahrbefehl in Hex ===
+Das Leerlaufpaket in der Leseart „Auf der Bahn“, ohne Licht, Gas und Lenkung neutral:
+
+<pre>
+Byte:  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
+Hex:  AF 00 00 00 00 00 DF 00 80 00 60 00 01 00 20 04 00 00 00 EF
+</pre>
+
+* <code>AF</code> (175) – Befehlskopf
+* <code>DF</code> (223) – Gas neutral
+* <code>00</code> – Lenkung gerade (Byte 7, Kopie in Byte 9)
+* <code>20</code> (32, Bit 5) – Leseart „Auf der Bahn“
+* <code>EF</code> – CRC-8 über die Bytes 0 bis 18
+
+Schaltet man den Scheinwerfer ein, wird Byte 14 zu <code>0x20 | 0x02 = 0x22</code>, und die Prüfsumme ändert sich von <code>0xEF</code> auf <code>0x78</code>. Ein einziges geändertes Bit ändert die ganze Prüfsumme; genau das soll eine CRC leisten. (Beide Prüfsummen sind mit der Funktion <code>crc8()</code> nachgerechnet.)
+
+=== Die ersten Schritte der CRC von Hand ===
+Startwert <code>0xFF</code>, erstes Byte <code>0xAF</code>:
+
+{| class="wikitable"
+! Schritt !! Register vorher !! oberstes Bit !! Rechnung !! Register nachher
+|-
+| Einmischen || <code>FF</code> || – || <code>FF XOR AF</code> || <code>50</code> = 0101 0000
+|-
+| 1 || 0101 0000 || 0 || nur schieben || 1010 0000 (<code>A0</code>)
+|-
+| 2 || 1010 0000 || 1 || schieben, XOR <code>31</code> || 0111 0001 (<code>71</code>)
+|-
+| 3 || 0111 0001 || 0 || nur schieben || 1110 0010 (<code>E2</code>)
+|-
+| 4 || 1110 0010 || 1 || schieben, XOR <code>31</code> || 1111 0101 (<code>F5</code>)
+|-
+| 5 || 1111 0101 || 1 || schieben, XOR <code>31</code> || 1101 1011 (<code>DB</code>)
+|-
+| 6 || 1101 1011 || 1 || schieben, XOR <code>31</code> || 1000 0111 (<code>87</code>)
+|-
+| 7 || 1000 0111 || 1 || schieben, XOR <code>31</code> || 0011 1111 (<code>3F</code>)
+|-
+| 8 || 0011 1111 || 0 || nur schieben || 0111 1110 (<code>7E</code>)
+|}
+
+Danach wird das nächste Byte (<code>0x00</code>) eingemischt, und so weiter bis Byte 18.
+
+=== Gas in Stufen ===
+{| class="wikitable"
+! Wunsch !! Ausschlag (Stufen) !! Rechnung !! Byte 6
+|-
+| neutral || 0 || 223 + 0 || <code>0xDF</code>
+|-
+| ein Hauch Gas || +1 || 223 + 1 = 224 || <code>0xE0</code>
+|-
+| etwa ein Viertel || +32 || 223 + 32 = 255 || <code>0xFF</code>
+|-
+| halb || +64 || 287 − 256 = 31 || <code>0x1F</code>
+|-
+| Vollgas || +127 || 350 − 256 = 94 || <code>0x5E</code>
+|-
+| halb rückwärts (Grenze in OmegaSim) || −64 || 223 − 64 = 159 || <code>0x9F</code>
+|-
+| voll rückwärts (nicht gesendet) || −127 || 223 − 127 = 96 || <code>0x60</code>, liegt im Vorwärtsbereich
+|}
+
+Zurück rechnet die Prüfbank so: <code>d = (b6 − 0xDF) & 0xFF</code>, und ist <code>d > 127</code>, dann <code>d − 256</code>. Für <code>0x9F</code>: (159 − 223) & 0xFF = −64 & 0xFF = 192, und 192 − 256 = −64.<ref><code>src/93-testbench.js</code>, Hilfsfunktion <code>gasVon</code></ref>
+
+=== Kachelzähler über den Überlauf ===
+Das Auto meldet zuletzt den Zählerstand 254 (<code>0xFE</code>), die nächste empfangene Meldung zeigt 2 (<code>0x02</code>), weil unter Funklast einige Meldungen verloren gingen.
+
+<pre>
+neu − alt          = 2 − 254 = −252
+−252 & 0xFF        = 4
+</pre>
+
+Probe: 254 → 255 → 0 → 1 → 2 sind vier Schritte. Ohne <code>& 0xFF</code> käme −252 heraus, und eine Rundenzählung würde rückwärts laufen. Die Ortung der NPCs nimmt den Wert anschließend höchstens als 3, weil mehr Sprünge auf einmal eher eine Störung als echte Fahrt sind.
+
+=== Streckencodes ===
+Die Codes, die der Sensor in Byte 12 meldet, sind kleine Zahlen; Hex wird hier nur aus Gewohnheit geschrieben:
+
+{| class="wikitable"
+! Hex !! Dezimal !! Binär !! Bedeutung (Leseart „Auf der Bahn“)
+|-
+| <code>0x00</code> || 0 || 0000 0000 || abseits der Bahn
+|-
+| <code>0x01</code> || 1 || 0000 0001 || Start/Ziel
+|-
+| <code>0x02</code> || 2 || 0000 0010 || Gerade
+|-
+| <code>0x03</code> / <code>0x04</code> || 3 / 4 || 0000 0011 / 0000 0100 || Kurve links / rechts
+|-
+| <code>0x05</code> / <code>0x06</code> || 5 / 6 || 0000 0101 / 0000 0110 || Haarnadel links / rechts
+|-
+| <code>0x0A</code> || 10 || 0000 1010 || Engstelle (nur nach seVen)
+|-
+| <code>0xFF</code> || 255 || 1111 1111 || noch nie ein Muster gelesen
+|}
+
+In der Leseart „Ausdruck“ bedeutet <code>0x0A</code> dagegen Start/Ziel auf dem Original-Druckblatt. Deshalb zählt OmegaSim auf der Bahn nur <code>0x01</code> als Ziellinie, sonst würde jede Engstelle eine zusätzliche Runde zählen.<ref><code>src/60-track.js</code>, <code>isStartCode()</code></ref> Einzelheiten stehen im Artikel [[Strecke]].
+
+=== Versionsnummer der APK ===
+Der Bau der Android-App macht aus der Version 1.2.9 die ganzzahlige Versionsnummer <code>1 × 100000 + 2 × 1000 + 9 = 102009</code>.<ref><code>.github/workflows/android.yml</code>, Schritt „Version bestimmen“</ref> Das ist ein Stellenwertsystem mit gemischten Stellenwerten, aber kein Hex: Android verlangt eine wachsende ganze Zahl, und dezimale Blöcke bleiben für Menschen lesbar.
+
+== Grenzen und bekannte Probleme ==
+* Der Hex-Trainer ist als WIP gekennzeichnet. Er übt nur die Richtung „fremdes System → dezimal“ und nur vierstellige Zahlen; Binärzahlen gehen damit nur bis 15.
+* Wie viele Bits der Gaswert wirklich auflöst und wo genau die Grenze zwischen Vorwärts und Rückwärts liegt, ist nicht am Auto gemessen; die Grenze −64 ist eine sichere, beobachtete Stelle, −95 nur ein Vorschlag aus der seVen-Beschreibung.
+* Ob das Auto Pakete mit falscher CRC verwirft oder anders behandelt, ist naheliegend, aber nicht eigens geprüft.
+* Ein Kachelzähler-Sprung von mehr als 255 Teilen zwischen zwei Meldungen ist mit <code>& 0xFF</code> nicht erkennbar; bei einer Meldung etwa alle 45 ms kommt das praktisch nicht vor.
+
+== Versionsgeschichte ==
+{| class="wikitable"
+! Version !! Änderung
+|-
+| 0.7 || Neu in den Entwicklertools: Binär- und Hex-Trainer
+|-
+| August 2026 || Byte 14 als Licht- und Lesearten-Feld entschlüsselt; CRC-8 anhand von drei Mitschnitten bestätigt
+|-
+| 0.6.14 || Codetabellen je Leseart; <code>0x0A</code> zählt auf der Bahn nicht mehr als Ziellinie
+|}
+
+== Einzelnachweise ==
+<references />
+
+== Siehe auch ==
+* [[Bluetooth Low Energy]]
+* [[Strecke]]
+* [[Carrera HYBRID]]
+* [[Original-App]]
+* [[Firmware]]
+* [[Glossar]]
+
+== Quellen im Code ==
+* <code>src/20-protocol.js</code> – <code>buildCommandPacket()</code>, Konstanten <code>LIGHT_HEAD</code>, <code>LIGHT_BRAKE</code>, <code>TRACK_BIT_RAIL</code>, <code>TRACK_BIT_PRINT</code>
+* <code>src/10-ble-explorer.js</code> – <code>crc8()</code>, <code>MIN_THROTTLE_DELTA</code>
+* <code>src/05-app-bruecke.js</code> – <code>zuHex()</code>, <code>ausHex()</code>, <code>uuid()</code>
+* <code>src/60-track.js</code> – <code>isStartCode()</code>, <code>TILE_OFFTRACK</code>
+* <code>src/70-race.js</code> – <code>s8signed()</code>, <code>handleDashboardBytes()</code>, <code>ZIEL_SPERRE_BIT</code>
+* <code>src/90-ghosts.js</code> – Kachelzähler in der NPC-Ortung
+* <code>src/92b-num-trainer.js</code> – Binär- und Hex-Trainer
+* <code>src/95-selftest.js</code> – Test „Protokoll: CRC-8“
+* <code>android-app/…/OmegaBlePlugin.java</code> – <code>hexZuBytes()</code>
+* <code>CARRERA_HYBRID.md</code> – Rückwärtsgrenze, Lenkgrenze, Abgleich mit seVen
+
+== Weblinks ==
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Grundlagen]]
+[[Kategorie:Technik]]

@@ -1,0 +1,516 @@
+{
+ "name": "FMC GT4",
+ "kennung": "fmcgt4",
+ "quelle": "Speed Dreams, data/cars/models/sc-fmc-gt4",
+ "lizenz": "GPL-2.0-or-later (Speed Dreams)",
+ "koordinaten": "m; +x links, +y oben, +z vorn",
+ "ecken": 3029,
+ "indizes": 14805,
+ "indexAb": 96928,
+ "schritt": 32,
+ "teile": [
+  {
+   "name": "WHEEL_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4-int.png",
+   "ecke0": 0,
+   "ecken": 150,
+   "index0": 0,
+   "indizes": 951
+  },
+  {
+   "name": "SUNSHADE180_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 150,
+   "ecken": 69,
+   "index0": 951,
+   "indizes": 213
+  },
+  {
+   "name": "SUNSHADE178_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 219,
+   "ecken": 13,
+   "index0": 1164,
+   "indizes": 39
+  },
+  {
+   "name": "SUNSHADE176_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 232,
+   "ecken": 31,
+   "index0": 1203,
+   "indizes": 93
+  },
+  {
+   "name": "SUNSHADE174_s_5",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 263,
+   "ecken": 130,
+   "index0": 1296,
+   "indizes": 555
+  },
+  {
+   "name": "SUNSHADE170_s_4",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 393,
+   "ecken": 110,
+   "index0": 1851,
+   "indizes": 444
+  },
+  {
+   "name": "SUNSHADE169_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 503,
+   "ecken": 11,
+   "index0": 2295,
+   "indizes": 45
+  },
+  {
+   "name": "SUNSHADE167_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 514,
+   "ecken": 46,
+   "index0": 2340,
+   "indizes": 135
+  },
+  {
+   "name": "SUNSHADE164_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 560,
+   "ecken": 34,
+   "index0": 2475,
+   "indizes": 96
+  },
+  {
+   "name": "SUNSHADE163_s_5",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 594,
+   "ecken": 108,
+   "index0": 2571,
+   "indizes": 423
+  },
+  {
+   "name": "SUNSHADE158_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 702,
+   "ecken": 59,
+   "index0": 2994,
+   "indizes": 255
+  },
+  {
+   "name": "SUNSHADE156_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 761,
+   "ecken": 32,
+   "index0": 3249,
+   "indizes": 177
+  },
+  {
+   "name": "SUNSHADE154_s_4",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 793,
+   "ecken": 67,
+   "index0": 3426,
+   "indizes": 252
+  },
+  {
+   "name": "SUNSHADE152_s_16",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 860,
+   "ecken": 717,
+   "index0": 3678,
+   "indizes": 3621
+  },
+  {
+   "name": "SUNSHADE151_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 1577,
+   "ecken": 94,
+   "index0": 7299,
+   "indizes": 681
+  },
+  {
+   "name": "SUNSHADE148_s_7",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 1671,
+   "ecken": 168,
+   "index0": 7980,
+   "indizes": 1092
+  },
+  {
+   "name": "SUNSHADE143_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 1839,
+   "ecken": 18,
+   "index0": 9072,
+   "indizes": 48
+  },
+  {
+   "name": "SUNSHADE141_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 1857,
+   "ecken": 14,
+   "index0": 9120,
+   "indizes": 54
+  },
+  {
+   "name": "SUNSHADE138_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 1871,
+   "ecken": 32,
+   "index0": 9174,
+   "indizes": 138
+  },
+  {
+   "name": "SUNSHADE137_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 1903,
+   "ecken": 94,
+   "index0": 9312,
+   "indizes": 438
+  },
+  {
+   "name": "SUNSHADE136_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 1997,
+   "ecken": 54,
+   "index0": 9750,
+   "indizes": 324
+  },
+  {
+   "name": "SUNSHADE026_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 2051,
+   "ecken": 60,
+   "index0": 10074,
+   "indizes": 207
+  },
+  {
+   "name": "SUNSHADE025_s_4",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 2111,
+   "ecken": 223,
+   "index0": 10281,
+   "indizes": 1293
+  },
+  {
+   "name": "SUNSHADE023_s_5",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 2334,
+   "ecken": 64,
+   "index0": 11574,
+   "indizes": 237
+  },
+  {
+   "name": "SUNSHADE021_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 2398,
+   "ecken": 17,
+   "index0": 11811,
+   "indizes": 81
+  },
+  {
+   "name": "SUNSHADE016_s_7",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 2415,
+   "ecken": 60,
+   "index0": 11892,
+   "indizes": 180
+  },
+  {
+   "name": "SUNSHADE013_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 2475,
+   "ecken": 8,
+   "index0": 12072,
+   "indizes": 12
+  },
+  {
+   "name": "SUNSHADE006_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 2483,
+   "ecken": 42,
+   "index0": 12084,
+   "indizes": 177
+  },
+  {
+   "name": "SUNSHADE001_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 2525,
+   "ecken": 87,
+   "index0": 12261,
+   "indizes": 471
+  },
+  {
+   "name": "RVMIRROR_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 2612,
+   "ecken": 32,
+   "index0": 12732,
+   "indizes": 129
+  },
+  {
+   "name": "HEAD_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-fmc-gt4.jpg",
+   "ecke0": 2644,
+   "ecken": 41,
+   "index0": 12861,
+   "indizes": 309
+  },
+  {
+   "name": "GEARSTICK_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4-int.png",
+   "ecke0": 2685,
+   "ecken": 36,
+   "index0": 13170,
+   "indizes": 219
+  },
+  {
+   "name": "CHAIRS_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4-int.png",
+   "ecke0": 2721,
+   "ecken": 41,
+   "index0": 13389,
+   "indizes": 207
+  },
+  {
+   "name": "WIGLASS_s_10",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-fmc-gt4.png",
+   "ecke0": 2762,
+   "ecken": 156,
+   "index0": 13596,
+   "indizes": 570
+  },
+  {
+   "name": "DRIVER003_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-fmc-gt4.jpg",
+   "ecke0": 2918,
+   "ecken": 26,
+   "index0": 14166,
+   "indizes": 150
+  },
+  {
+   "name": "DRIVER002_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-fmc-gt4.jpg",
+   "ecke0": 2944,
+   "ecken": 17,
+   "index0": 14316,
+   "indizes": 66
+  },
+  {
+   "name": "DRIVER001_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-fmc-gt4.jpg",
+   "ecke0": 2961,
+   "ecken": 12,
+   "index0": 14382,
+   "indizes": 27
+  },
+  {
+   "name": "DRIVER_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-fmc-gt4.jpg",
+   "ecke0": 2973,
+   "ecken": 18,
+   "index0": 14409,
+   "indizes": 114
+  },
+  {
+   "name": "DRIVERHAND_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-fmc-gt4.jpg",
+   "ecke0": 2991,
+   "ecken": 38,
+   "index0": 14523,
+   "indizes": 282
+  }
+ ],
+ "schatten": "shadow.png",
+ "lichter": {
+  "brems": [
+   [
+    0.6,
+    0.56,
+    -2.23,
+    0.15
+   ],
+   [
+    -0.6,
+    0.56,
+    -2.23,
+    0.15
+   ]
+  ],
+  "rueck": [
+   [
+    0.6,
+    0.56,
+    -2.23,
+    0.125
+   ],
+   [
+    -0.6,
+    0.56,
+    -2.23,
+    0.125
+   ]
+  ],
+  "front": [
+   [
+    0.6,
+    0.49,
+    1.96,
+    0.4
+   ],
+   [
+    -0.6,
+    0.49,
+    1.96,
+    0.4
+   ],
+   [
+    0.6,
+    0.23,
+    2.18,
+    0.15
+   ],
+   [
+    -0.59,
+    0.23,
+    2.18,
+    0.15
+   ]
+  ]
+ },
+ "physik": {
+  "masse": 1630.0,
+  "schwerpunktHoehe": 0.3,
+  "radstand": 2.71,
+  "a": 1.3821,
+  "b": 1.3279,
+  "vorderachse": 1.23,
+  "hinterachse": -1.48,
+  "laenge": 4.613,
+  "breite": 1.95,
+  "hoehe": 1.0,
+  "massenVerteilung": 0.7,
+  "lenkGrad": 45.0,
+  "bremsVorn": 0.54,
+  "cx": 0.34,
+  "stirnflaeche": 1.65,
+  "auftriebVorn": 0.635,
+  "auftriebHinten": 0.625,
+  "fluegelVorn": 0.0,
+  "fluegelHinten": 0.0,
+  "leerlauf": 1000.0,
+  "begrenzer": 7000.0,
+  "reifen": {
+   "vorn": {
+    "radius": 0.3343,
+    "breite": 0.235,
+    "spur": 1.6,
+    "bodenfreiheit": 0.11,
+    "mu": 1.3
+   },
+   "hinten": {
+    "radius": 0.3484,
+    "breite": 0.315,
+    "spur": 1.6,
+    "bodenfreiheit": 0.11,
+    "mu": 1.3
+   }
+  },
+  "feder": {
+   "vorn": {
+    "k": 45501.0,
+    "druck": 8125.400000000001,
+    "zug": 8589.6,
+    "weg": 0.11538,
+    "stab": 0.0
+   },
+   "hinten": {
+    "k": 45501.0,
+    "druck": 8125.400000000001,
+    "zug": 8357.6,
+    "weg": 0.10538,
+    "stab": 0.0
+   }
+  },
+  "gefedert": 1530.0
+ }
+}

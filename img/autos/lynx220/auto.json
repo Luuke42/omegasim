@@ -1,0 +1,385 @@
+{
+ "name": "Lynx 220",
+ "kennung": "lynx220",
+ "quelle": "Speed Dreams, data/cars/models/sc-lynx-220",
+ "lizenz": "GPL-2.0-or-later (Speed Dreams)",
+ "koordinaten": "m; +x links, +y oben, +z vorn",
+ "ecken": 3734,
+ "indizes": 18030,
+ "indexAb": 119488,
+ "schritt": 32,
+ "teile": [
+  {
+   "name": "SPOILERTOP_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 0,
+   "ecken": 86,
+   "index0": 0,
+   "indizes": 459
+  },
+  {
+   "name": "SPOILERSIDE_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 86,
+   "ecken": 92,
+   "index0": 459,
+   "indizes": 261
+  },
+  {
+   "name": "SPOILERHOLD_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 178,
+   "ecken": 24,
+   "index0": 720,
+   "indizes": 81
+  },
+  {
+   "name": "SPOILERBOTT_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 202,
+   "ecken": 78,
+   "index0": 801,
+   "indizes": 384
+  },
+  {
+   "name": "CTWALL_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220-int.jpg",
+   "ecke0": 280,
+   "ecken": 80,
+   "index0": 1185,
+   "indizes": 348
+  },
+  {
+   "name": "XJ220LOGOS0_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 360,
+   "ecken": 25,
+   "index0": 1533,
+   "indizes": 159
+  },
+  {
+   "name": "WIPERSS3_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 385,
+   "ecken": 85,
+   "index0": 1692,
+   "indizes": 600
+  },
+  {
+   "name": "WIINTERIORG_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220-int.jpg",
+   "ecke0": 470,
+   "ecken": 30,
+   "index0": 2292,
+   "indizes": 144
+  },
+  {
+   "name": "WIGLASS3S1_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 500,
+   "ecken": 20,
+   "index0": 2436,
+   "indizes": 69
+  },
+  {
+   "name": "WIGLASS2S1_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 520,
+   "ecken": 26,
+   "index0": 2505,
+   "indizes": 81
+  },
+  {
+   "name": "WIGLASS1S0_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 546,
+   "ecken": 100,
+   "index0": 2586,
+   "indizes": 582
+  },
+  {
+   "name": "STEERINGWHE_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 646,
+   "ecken": 141,
+   "index0": 3168,
+   "indizes": 954
+  },
+  {
+   "name": "SEATS12_s_21",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220-int.jpg",
+   "ecke0": 787,
+   "ecken": 201,
+   "index0": 4122,
+   "indizes": 819
+  },
+  {
+   "name": "REARLIGHTSS_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 988,
+   "ecken": 24,
+   "index0": 4941,
+   "indizes": 51
+  },
+  {
+   "name": "OBJECT002S0_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1012,
+   "ecken": 136,
+   "index0": 4992,
+   "indizes": 714
+  },
+  {
+   "name": "OBJECT001S1_s_9",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1148,
+   "ecken": 162,
+   "index0": 5706,
+   "indizes": 924
+  },
+  {
+   "name": "NUMBERPLATE_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1310,
+   "ecken": 12,
+   "index0": 6630,
+   "indizes": 87
+  },
+  {
+   "name": "MIRRORSS300_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1322,
+   "ecken": 16,
+   "index0": 6717,
+   "indizes": 48
+  },
+  {
+   "name": "MIRRORSS3_s_7",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1338,
+   "ecken": 172,
+   "index0": 6765,
+   "indizes": 801
+  },
+  {
+   "name": "HEADS1_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-lynx-220.jpg",
+   "ecke0": 1510,
+   "ecken": 41,
+   "index0": 7566,
+   "indizes": 330
+  },
+  {
+   "name": "GROUNDPLATE_s_4",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1551,
+   "ecken": 35,
+   "index0": 7896,
+   "indizes": 96
+  },
+  {
+   "name": "FRONTSPOILE_s_8",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1586,
+   "ecken": 53,
+   "index0": 7992,
+   "indizes": 165
+  },
+  {
+   "name": "EXHAUSTPART_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1639,
+   "ecken": 100,
+   "index0": 8157,
+   "indizes": 402
+  },
+  {
+   "name": "ENGINE9S0_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1739,
+   "ecken": 34,
+   "index0": 8559,
+   "indizes": 207
+  },
+  {
+   "name": "ENGINE8S1_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1773,
+   "ecken": 32,
+   "index0": 8766,
+   "indizes": 120
+  },
+  {
+   "name": "ENGINE7S0_s_0",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1805,
+   "ecken": 24,
+   "index0": 8886,
+   "indizes": 180
+  },
+  {
+   "name": "ENGINE6S2_s_2",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1829,
+   "ecken": 60,
+   "index0": 9066,
+   "indizes": 438
+  },
+  {
+   "name": "ENGINE5S1_s_3",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 1889,
+   "ecken": 80,
+   "index0": 9504,
+   "indizes": 429
+  },
+  {
+   "name": "DRIVERS9_s_9",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-lynx-220.jpg",
+   "ecke0": 1969,
+   "ecken": 83,
+   "index0": 9933,
+   "indizes": 339
+  },
+  {
+   "name": "DRIVERHANDS_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "driver-sc-lynx-220.jpg",
+   "ecke0": 2052,
+   "ecken": 38,
+   "index0": 10272,
+   "indizes": 267
+  },
+  {
+   "name": "CARBODYPART_s_1",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "sc-lynx-220.png",
+   "ecke0": 2090,
+   "ecken": 1644,
+   "index0": 10539,
+   "indizes": 7491
+  }
+ ],
+ "schatten": "shadow.png",
+ "lichter": {
+  "brems": [],
+  "rueck": [],
+  "front": []
+ },
+ "physik": {
+  "masse": 1470.0,
+  "schwerpunktHoehe": 0.24,
+  "radstand": 2.56,
+  "a": 1.3312,
+  "b": 1.2288,
+  "vorderachse": 1.26,
+  "hinterachse": -1.3,
+  "laenge": 4.86,
+  "breite": 2.0,
+  "hoehe": 1.05,
+  "massenVerteilung": 0.8,
+  "lenkGrad": 45.0,
+  "bremsVorn": 0.59,
+  "cx": 0.36,
+  "stirnflaeche": 1.98,
+  "auftriebVorn": 0.61,
+  "auftriebHinten": 0.65,
+  "fluegelVorn": 0.0,
+  "fluegelHinten": 0.0,
+  "leerlauf": 1000.0,
+  "begrenzer": 7200.0,
+  "reifen": {
+   "vorn": {
+    "radius": 0.3306,
+    "breite": 0.255,
+    "spur": 1.71,
+    "bodenfreiheit": 0.1,
+    "mu": 1.3
+   },
+   "hinten": {
+    "radius": 0.3493,
+    "breite": 0.345,
+    "spur": 1.6,
+    "bodenfreiheit": 0.1,
+    "mu": 1.3
+   }
+  },
+  "feder": {
+   "vorn": {
+    "k": 81000.0,
+    "druck": 8000.0,
+    "zug": 16000.0,
+    "weg": 0.095,
+    "stab": 0.0
+   },
+   "hinten": {
+    "k": 66000.0,
+    "druck": 7000.0,
+    "zug": 14000.0,
+    "weg": 0.095,
+    "stab": 0.0
+   }
+  },
+  "gefedert": 1354.2
+ }
+}

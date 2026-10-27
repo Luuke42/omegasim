@@ -34,6 +34,14 @@
   "down": {
    "file": "shift_down.ogg",
    "seconds": 0.26
+  },
+  "upTief": {
+   "file": "shift_up_tief.ogg",
+   "seconds": 0.24
+  },
+  "downTief": {
+   "file": "shift_down_tief.ogg",
+   "seconds": 0.3
   }
  },
  "start": {

@@ -4917,7 +4917,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.2.23</span></span>
+        <span class="foot-ver">v<span id="app-version">1.2.24</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -6080,6 +6080,7 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>1.2</span></b></p>
       <ul class="muted" id="patchnotes-12" style="padding-left:20px; line-height:1.7">
+        <li>Schaltklang (WIP): statt des hellen &#8222;Klack&#8220; jetzt bei allen Motoren ein tiefer, weicher Schaltschlag mit Auspuffknall &#8211; auch beim Runterschalten, so wie es bisher nur beim Hochschalten des Mustang v2 unter Last klang. Der helle Metallanteil ist fast weg. Der fr&#252;here Klang kommt mit &#8222;Schaltklang: alt&#8220; (Optionen &#8594; Ton).</li>
         <li>Neu von Playdater1974, &#252;bernommen mit Korrekturen: Rennintro (WIP) &#8211; auf Wunsch sagt eine Stimme vor der Startampel Modus, Limit, Pflichtstopps, Startaufstellung und Wetter an; fehlende Aufnahmen werden einzeln &#252;bersprungen, Fr&#252;hstarts z&#228;hlen schon ab dem Intro, in Challenges gibt es kein Intro. Statistikbereinigung (WIP) unter Optionen &#8594; Statistiken: Fahrzeugstatistiken, einzelne Sitzungen und zu kurze Rundenzeiten mit Vorschau l&#246;schen, mit Sicherung zum R&#252;ckg&#228;ngigmachen und JSON-Export; jetzt auch auf Englisch und Spanisch, und alte Sitzungen erscheinen nicht mehr doppelt.</li>
         <li>Cockpit: Das Regenradar ist breiter und zeigt die Strecke mit allen Autos (WIP, Schalter &#8222;Strecke im Regenradar&#8220; unter Optionen &#8594; Allgemein); Wolken und Regen ziehen dar&#252;ber. Hochkant gezeichnete Strecken werden in der breiten Kachel gedreht, im Ausdruck-Modus steht dort das eigene Foto der Bahn. Tank und Schaden sind schmaler. Die Position oben links neben der Runde hei&#223;t jetzt #2/5 statt P2/5 und erscheint auch bei Time Attack (nach Bestzeit). Streckenscan: jede Kachel wird jetzt nach Leseart &#252;bersetzt, eine Engstelle auf der Bahn wurde vorher als zweites Start/Ziel eingetragen. Hinweistexte zu Lenkd&#228;mpfung (Vorgabe 0) und Bremskennlinie (Vorgabe 2,45) berichtigt.</li>
         <li>Erkl&#228;rtexte berichtigt, die nicht mehr zum Verhalten passten: Boxen-Minigame (f&#252;nf Tasten, je 8 Prozent schneller, falsche 8 Prozent langsamer), Mischungsunterschied (weich 2,6-facher, hart 0,4-facher Verschlei&#223;), Regen-Schalter, NPC-Boxenstopp (eine Box, wie das Safety Car), wechselhaftes Wetter (Schauer von 30 bis 90 s alle 1 bis 3 min), Fahrgef&#252;hle Arcade, Pro, Pacejka und Omega (Werte wie eingestellt), Mehrspieler an einem Ger&#228;t (eigenes Fahrgef&#252;hl je Spieler) und die Codetabelle der Streckenteile (auf der Bahn 0x01 Start/Ziel, 0x0a Engstelle).</li>
@@ -10663,8 +10664,9 @@
         <label class="tgl"><input type="checkbox" id="setting-rain"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Schaltklang: alt<span class="wip-tag">WIP</span><small>Aus (Standard, neu): Beim
           Schalten bleibt der Motorklang derselbe, bricht kurz ein wie bei einer Zündunterbrechung, und die Tonhöhe gleitet
-          statt zu springen &ndash; bei allen Motoren so, wie es bisher nur die Mustang-GT3-Aufnahme konnte. An: der
-          frühere Klang (Überblenden auf das Schubband).</small></div>
+          statt zu springen &ndash; bei allen Motoren so, wie es bisher nur die Mustang-GT3-Aufnahme konnte. Dazu seit v1.2.24
+          ein tiefer Schaltschlag mit Auspuffknall statt des hellen Klacks, auch beim Runterschalten. An: der
+          frühere Klang (Überblenden auf das Schubband, heller Schaltklick).</small></div>
         <label class="tgl"><input type="checkbox" id="setting-schaltklang-alt"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">NPC-Motorklang: alt<span class="wip-tag">WIP</span><small>Aus (Standard, neu): NPCs
           knallen auch beim Anbremsen aus dem Auspuff, und ihre Knaller sind etwas lauter. An: die früheren Knaller (nur

@@ -519,3 +519,15 @@ https://huggingface.co/rhasspy/piper-voices
 Der deutsche Rundenanfang wird mit „Nach Runde.“ erzeugt. Fahrzeugmodelle
 umfassen auch VW Kaefer. Herstellerbezeichnungen dienen nur der vom Benutzer
 gewaehlten Fahrzeugkennung; keine Beteiligung oder Unterstuetzung der Hersteller.
+
+## Tiefer Schaltklang (v1.2.24)
+
+`shift_up_tief.ogg` und `shift_down_tief.ogg` erzeugt `tools/shift_tief.py`: der synthetische
+Schaltschlag `paddle_shift()` aus `tools/engine_fx.py` (eigene Rechnung, MIT wie OmegaSim) plus
+12 ms später der Auspuffknall `sd_backfire_0.ogg` (Speed Dreams, **Free Art License 1.3**, siehe
+oben). Die bisherigen `shift_up.ogg` / `shift_down.ogg` bleiben für den Schalter „Schaltklang: alt“.
+
+## Mustang v2 (`mustang2v_*.ogg`)
+
+Aus einer eigenen Aufnahme des Autors (Video eines Ford Mustang GT3, nicht Teil des Repos,
+`photos/` ist ausgeschlossen) geschnitten. Lizenz wie OmegaSim (MIT).

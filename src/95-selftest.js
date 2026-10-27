@@ -5431,6 +5431,35 @@
   // Menue, Kartenpunkte springen, Aufstellung ab Reihe 2, Regenflackern; dazu Kleinigkeiten.
   // v1.2.4 BESTELLT: Renntypen je Sensormodus, Fahrgefuehl je Spieler, Pacejka in Community-Challenges, Minigame-
   // Rueckmeldung, mechanische Boxensignale, NPC-Box wie Safety Car, Safety-Car-Parken auf kurzen Geraden.
+  // v1.2.24 BESTELLT (Variante C): tiefer Schaltklang statt des hellen Klacks, auch beim Runterschalten.
+  stAdd('Klang v1.2.24: tiefer Schaltklang mit Knall, Metall gedaempft, alt per Schalter', () => {
+    const f = [];
+    if (!fxBuffers.shift || !fxBuffers.shift.upTief || !fxBuffers.shift.downTief) return { skip: true, mass: 'Schaltdateien noch nicht geladen' };
+    const merk = schaltKlangAlt;
+    try {
+      schaltKlangAlt = false;
+      if (schaltPuffer(1) !== fxBuffers.shift.upTief || schaltPuffer(-1) !== fxBuffers.shift.downTief) f.push('neu spielt nicht die tiefen Dateien');
+      schaltKlangAlt = true;
+      if (schaltPuffer(1) !== fxBuffers.shift.up || schaltPuffer(-1) !== fxBuffers.shift.down) f.push('alt spielt nicht die alten Dateien');
+    } finally { schaltKlangAlt = merk; }
+    // Tief: Schwerpunkt der neuen Dateien deutlich unter dem der alten.
+    const schwer = (buf) => {
+      const d = buf.getChannelData(0), n = Math.min(4096, d.length);
+      let num = 0, den = 0;
+      for (let k = 1; k < 200; k++) {            // grobe DFT bis ~ k*SR/n
+        let re = 0, im = 0;
+        for (let i = 0; i < n; i++) { const w = 2 * Math.PI * k * i / n; re += d[i] * Math.cos(w); im -= d[i] * Math.sin(w); }
+        const a = Math.hypot(re, im); num += a * k; den += a;
+      }
+      return (num / (den || 1)) * buf.sampleRate / n;
+    };
+    const alt = schwer(fxBuffers.shift.up), neu = schwer(fxBuffers.shift.upTief);
+    if (!(neu < alt * 0.8)) f.push('neu nicht tiefer (' + Math.round(neu) + ' gegen ' + Math.round(alt) + ' Hz)');
+    if (!(SCHALT_METALL_NEU <= 0.2)) f.push('Metallteil nicht gedaempft');
+    if (String(extrasWerte).indexOf('(runter && !schaltKlangAlt)') < 0) f.push('Runterschalten ohne vollen Knall');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'tief (' + Math.round(neu) + ' statt ' + Math.round(alt) + ' Hz), Metall x' + SCHALT_METALL_NEU + ', Knall auch runter' };
+  });
+
   // v1.2.12 BESTELLT: Tank und Schaden schmaler, Regenradar groesser mit Strecke und Autos darin,
   // Wolken obenauf. Dazu: der Streckenscan uebersetzt jede Kachel (Engstelle war Start/Ziel).
   stAdd('Cockpit v1.2.12: Strecke im Regenradar, schmale Tank-/Schadenkachel, Scan uebersetzt jede Kachel', () => {

@@ -921,8 +921,15 @@
   // `spieler` kommt aus der Physikinstanz (siehe schaltTon() in 40-physics.js). Er
   // entscheidet nur ueber die Stereoseite: ein Schaltvorgang, den man nicht ausgeloest hat,
   // soll von der anderen Seite kommen, sonst haelt man ihn fuer den eigenen.
+  // v1.2.24 BESTELLT (Variante C aus drei Hoerproben): tiefer Schlag plus Auspuffknall statt des
+  // hellen "Klack" (tools/shift_tief.py). Mit "Schaltklang: alt" die bisherigen Dateien.
+  function schaltPuffer(direction) {
+    const s = fxBuffers.shift, alt = typeof schaltKlangAlt !== 'undefined' && schaltKlangAlt;
+    if (!alt && (direction >= 0 ? s.upTief : s.downTief)) return direction >= 0 ? s.upTief : s.downTief;
+    return direction >= 0 ? s.up : s.down;
+  }
   function playShiftSound(direction, spieler) {
-    const buf = direction >= 0 ? fxBuffers.shift.up : fxBuffers.shift.down;
+    const buf = schaltPuffer(direction);
     const seite = (typeof zweiSpieler !== 'undefined' && zweiSpieler)
       ? (spieler >= 2 ? spielerPan(spieler) : -PAN_ZWEI) : 0;
     // v1.1.3: am Regler "Knaller & Schalten" (knallVolume) und mit dem Schaltschlag darunter.
@@ -2403,6 +2410,7 @@
   // 90 ms, leise). Lautstaerke am Regler "Knaller & Schalten".
   const SCHALT_SCHLAG = { metallHz: 1600, metallMs: 18, stossVon: 95, stossBis: 45, stossMs: 70,
     laut: 0.16, blipVon: 180, blipBis: 320, blipMs: 90, blipLaut: 0.05 };
+  const SCHALT_METALL_NEU = 0.15;
   function xSchaltSchlag(richtung, pan, kv) {
     if (!audioCtx || !extrasOn || !soundEnabled || !(kv > 0)) return null;
     const S = SCHALT_SCHLAG, t = audioCtx.currentTime + 0.005;
@@ -2415,7 +2423,8 @@
     const bp = audioCtx.createBiquadFilter();
     bp.type = 'bandpass'; bp.Q.value = 2.2; bp.frequency.value = runter ? S.metallHz * 0.75 : S.metallHz;
     const g = audioCtx.createGain();
-    const lautM = S.laut * kv * (runter ? 0.8 : 1);
+    // v1.2.24: der Metallteil ist die helle Haelfte des "Klack" - im neuen Schaltklang nur noch ein Hauch.
+    const lautM = S.laut * kv * (runter ? 0.8 : 1) * (schaltKlangAlt ? 1 : SCHALT_METALL_NEU);
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(lautM, t + 0.002);
     g.gain.exponentialRampToValueAtTime(0.0006, t + S.metallMs / 1000);
@@ -2593,7 +2602,8 @@
     const flanke = st.isShifting && !xs.schaltAn;
     // v1.1.3: auch beim Runterschalten (Gang kleiner als beim letzten Takt) ein Knall, leiser.
     const runter = flanke && xs.letzterGang !== undefined && (st.currentGear || 0) < xs.letzterGang;
-    const schaltKnall = (flanke && load > 0.45) ? (0.13 + 0.1 * knallStark) * knallVolume
+    // v1.2.24: im neuen Schaltklang knallt das Runterschalten so tief wie das Hochschalten unter Last.
+    const schaltKnall = (flanke && (load > 0.45 || (runter && !schaltKlangAlt))) ? (0.13 + 0.1 * knallStark) * knallVolume
       : runter ? (0.07 + 0.06 * knallStark) * knallVolume : 0;
     xs.schaltAn = !!st.isShifting;
     xs.letzterGang = st.currentGear || 0;

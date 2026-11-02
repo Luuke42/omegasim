@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bluetooth Low Energy - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Bluetooth Low Energy</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p><b>Bluetooth Low Energy</b> (BLE, auch <i>Bluetooth Smart</i>) ist ein stromsparender Funkstandard für kurze Strecken im 2,4-GHz-Band, der seit Bluetooth 4.0 Teil der Bluetooth-Spezifikation ist. Anders als das klassische Bluetooth für Kopfhörer oder Dateiübertragung ist BLE auf kleine, häufige Datenpakete ausgelegt: Sensoren, Fitnessarmbänder, Spielzeug. Das <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a> wird ausschließlich über BLE gesteuert. <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> schickt jedem gesteuerten Auto etwa alle 45 ms einen Befehl von 20 Byte und empfängt laufend Meldungen über Akku, Streckenteil und Bewegung. Dieser Artikel erklärt zuerst die Begriffe von BLE allgemein und beschreibt dann genau, wie OmegaSim im Browser (Web Bluetooth) und in der Android-App (über die Brücke und <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a>) mit dem Auto spricht.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Wert in OmegaSim
+</th></tr>
+<tr>
+<td>Menüpfad</td>
+<td><b>FAHREN → Autos → Garage</b> → „Auto verbinden“ / „Alle trennen“; Diagnose unter <b>Optionen → System → Funk-Rundlauf</b>
+</td></tr>
+<tr>
+<td>Gerätename des Autos</td>
+<td>beginnt mit <code>HYBRID</code> (Filter <code>namePrefix: 'HYBRID'</code>)
+</td></tr>
+<tr>
+<td>Dienst</td>
+<td>Nordic UART Service (NUS), <code>6e400001-b5a3-f393-e0a9-e50e24dcca9e</code>
+</td></tr>
+<tr>
+<td>Schreiben (App → Auto)</td>
+<td>Charakteristik NUS RX <code>6e400002-…</code>, 20 Byte, „Schreiben ohne Antwort“
+</td></tr>
+<tr>
+<td>Meldungen (Auto → App)</td>
+<td>Charakteristik NUS TX <code>6e400003-…</code>, Notifications, mindestens 16 Byte
+</td></tr>
+<tr>
+<td>Sendetakt</td>
+<td>45 ms (<code>CONTROL_SEND_INTERVAL_MS</code>), rund 22 Pakete je Sekunde und Auto
+</td></tr>
+<tr>
+<td>Verbindungsintervall</td>
+<td>in der App „hoch“ angefordert (Android-Stufe HIGH), sonst wählt Android laut Code 30–50 ms
+</td></tr>
+<tr>
+<td>Zeitgrenzen</td>
+<td>Verbindungsaufbau 20 s (Garage), Schreib-Wachhund 300 ms, Neuverbinden bis 5 Versuche
+</td></tr>
+<tr>
+<td>Plattformen</td>
+<td>Browser: Web Bluetooth (Chrome/Edge auf Windows, Android, ChromeOS); Android-App: Capacitor-Plugin <i>bluetooth-le</i> plus <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a>
+</td></tr>
+<tr>
+<td>Status</td>
+<td>stabil; Funklast mit vielen Autos wird beobachtet
+</td></tr>
+<tr>
+<td>Beteiligte Quelldateien</td>
+<td><code>src/20-protocol.js</code>, <code>src/05-app-bruecke.js</code>, <code>src/10-ble-explorer.js</code>, <code>src/90-ghosts.js</code>, <code>src/70-race.js</code>, <code>android-app/…/OmegaBlePlugin.java</code>, <code>MainActivity.java</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Funk_im_2,4-GHz-Band"><span id="Funk_im_2.2C4-GHz-Band"></span>Funk im 2,4-GHz-Band</h3></div>
+<p>BLE funkt im lizenzfreien 2,4-GHz-Band (2402 bis 2480 MHz), das es sich mit WLAN, klassischem Bluetooth, Funkmäusen und Mikrowellen teilt. Das Band ist in <b>40 Kanäle</b> zu je 2 MHz geteilt. Drei davon (Nummer 37, 38 und 39) sind <b>Werbekanäle</b> für das Auffinden von Geräten; die übrigen 37 tragen die Daten bestehender Verbindungen. Während einer Verbindung springen beide Seiten nach einem gemeinsamen Muster von Kanal zu Kanal (<b>Frequenzsprungverfahren</b>), damit eine Störung auf einem Kanal nicht die ganze Verbindung trifft.
+</p><p>Ein Bluetooth-Adapter hat nur ein Funkteil. Hält ein Handy mehrere Verbindungen (mehrere Autos, dazu ein Gamepad oder Kopfhörer), muss es seine Sendezeit zwischen ihnen aufteilen. Das ist der Hintergrund der Funklast, die OmegaSim bei vielen NPCs beobachtet hat (siehe <a href="#Funklast_und_Sendebudget_der_NPCs">unten</a>).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Rollen:_Werbender_und_Suchender,_Zentrale_und_Peripherie"><span id="Rollen:_Werbender_und_Suchender.2C_Zentrale_und_Peripherie"></span>Rollen: Werbender und Suchender, Zentrale und Peripherie</h3></div>
+<ul><li>Ein <b>Peripheriegerät</b> (<i>peripheral</i>) macht durch <b>Advertising</b> (Werben) auf sich aufmerksam: Es sendet in regelmäßigen Abständen (zwischen 20 ms und 10,24 s) ein kurzes Paket mit Name und angebotenen Diensten auf den drei Werbekanälen. Das Carrera-Auto ist ein Peripheriegerät.</li>
+<li>Eine <b>Zentrale</b> (<i>central</i>) <b>scannt</b> (sucht), hört diese Werbepakete und baut auf Wunsch eine Verbindung auf. Das Handy oder der PC mit OmegaSim ist die Zentrale.</li>
+<li>Ein Peripheriegerät, das verbunden ist, wirbt in der Regel nicht mehr. Deshalb ist ein Auto, das noch an einer alten, vergessenen Verbindung hängt, für eine neue Suche unsichtbar.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="GATT:_Dienste,_Charakteristiken,_Deskriptoren"><span id="GATT:_Dienste.2C_Charakteristiken.2C_Deskriptoren"></span>GATT: Dienste, Charakteristiken, Deskriptoren</h3></div>
+<p>Die Daten eines BLE-Geräts sind nach dem <b>Generic Attribute Profile</b> (GATT) als Baum geordnet. Das Gerät mit den Daten ist der <b>GATT-Server</b> (hier das Auto), wer darauf zugreift, ist der <b>GATT-Client</b> (hier OmegaSim).
+</p>
+<ul><li>Ein <b>Dienst</b> (<i>service</i>) bündelt zusammengehörige Daten, etwa „Akkustand“ oder „serielle Leitung“.</li>
+<li>Eine <b>Charakteristik</b> (<i>characteristic</i>, im Code von OmegaSim auch <i>Merkmal</i>) ist ein einzelner Datenwert in einem Dienst, mit Eigenschaften, die sagen, was man mit ihm tun darf: lesen, schreiben, schreiben ohne Antwort, benachrichtigen.</li>
+<li>Ein <b>Deskriptor</b> beschreibt eine Charakteristik näher. Der wichtigste ist der <i>Client Characteristic Configuration Descriptor</i> (Kurzkennung <code>0x2902</code>): Schreibt der Client dort eine 1, schaltet er die Benachrichtigungen dieser Charakteristik ein. Web Bluetooth erledigt das mit <code>startNotifications()</code>.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="UUID">UUID</h3></div>
+<p>Jeder Dienst und jede Charakteristik hat eine Kennung, eine <b>UUID</b> (<i>Universally Unique Identifier</i>). Das ist eine 128-Bit-Zahl, geschrieben als 32 <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hex-Ziffern</a> in fünf Gruppen, zum Beispiel <code>6e400001-b5a3-f393-e0a9-e50e24dcca9e</code>. Für Dienste, die die Bluetooth-Organisation selbst festgelegt hat, gibt es Kurzformen mit 16 Bit, die in eine feste <b>Basis-UUID</b> eingesetzt werden:
+</p>
+<pre>0000xxxx-0000-1000-8000-00805f9b34fb
+</pre>
+<p>Aus dem Akkudienst <code>battery_service</code> = <code>0x180F</code> wird so <code>0000180f-0000-1000-8000-00805f9b34fb</code>. Die Android-Brücke von OmegaSim rechnet genau so, weil das Android-Plugin nur die volle, kleingeschriebene Form kennt.<sup id="cite&#95;ref-1" class="reference"><a href="#cite_note-1"><span class="cite-bracket">&#91;</span>1<span class="cite-bracket">&#93;</span></a></sup> Hersteller, die eigene Dienste anbieten, wählen eine eigene zufällige 128-Bit-UUID; der Nordic UART Service ist so ein Fall.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Lesen,_Schreiben,_Benachrichtigen"><span id="Lesen.2C_Schreiben.2C_Benachrichtigen"></span>Lesen, Schreiben, Benachrichtigen</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Vorgang</th>
+<th>Richtung</th>
+<th>Bestätigung</th>
+<th>Verwendung bei OmegaSim
+</th></tr>
+<tr>
+<td>Lesen (<i>read</i>)</td>
+<td>Client fragt, Server antwortet</td>
+<td>ja</td>
+<td>nur im BLE-Explorer der Entwicklertools
+</td></tr>
+<tr>
+<td>Schreiben mit Antwort (<i>write request</i>)</td>
+<td>Client → Server</td>
+<td>ja, der Server bestätigt jeden Wert</td>
+<td>Ausweichweg, falls ein Gerät kein Schreiben ohne Antwort anbietet
+</td></tr>
+<tr>
+<td>Schreiben ohne Antwort (<i>write command</i>)</td>
+<td>Client → Server</td>
+<td>nein</td>
+<td>jeder Fahrbefehl
+</td></tr>
+<tr>
+<td>Notification</td>
+<td>Server → Client, von sich aus</td>
+<td>nein</td>
+<td>jede Meldung des Autos
+</td></tr>
+<tr>
+<td>Indication</td>
+<td>Server → Client</td>
+<td>ja</td>
+<td>nicht verwendet
+</td></tr></tbody></table>
+<p>Ohne Antwort zu schreiben ist schneller, weil der Client nicht auf eine Rückmeldung warten muss und mehrere Pakete in kurzer Folge losschicken kann. Der Preis: Ein verlorenes Paket bemerkt niemand. Für Fahrbefehle ist das richtig, denn 45 ms später kommt ohnehin der nächste, und ein verspätet wiederholter Lenkbefehl wäre schlechter als keiner.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Verbindungsintervall,_Latenz_und_Durchsatz"><span id="Verbindungsintervall.2C_Latenz_und_Durchsatz"></span>Verbindungsintervall, Latenz und Durchsatz</h3></div>
+<p>Eine BLE-Verbindung funkt nicht ständig. Zentrale und Peripherie treffen sich in festen Abständen zu einem <b>Verbindungsereignis</b> (<i>connection event</i>), tauschen dort ihre wartenden Pakete aus und schweigen bis zum nächsten. Der Abstand heißt <b>Verbindungsintervall</b> und liegt nach Spezifikation zwischen 7,5 ms und 4 s, in Schritten von 1,25 ms.
+</p>
+<ul><li>Kurzes Intervall: geringe <b>Latenz</b> (Verzögerung vom Absenden bis zum Ankommen), aber mehr Stromverbrauch und mehr belegte Funkzeit.</li>
+<li>Langes Intervall: sparsam, aber ein Paket wartet im Mittel ein halbes Intervall, bis es hinaus darf.</li>
+<li>Die <b>Peripherie-Latenz</b> (<i>slave latency</i>) erlaubt dem Peripheriegerät, eine Zahl von Ereignissen auszulassen, wenn es nichts zu sagen hat. Die <b>Überwachungszeit</b> (<i>supervision timeout</i>) legt fest, nach wie langem Schweigen die Verbindung als abgerissen gilt.</li></ul>
+<p>Android kennt drei Stufen, die eine App anfordern kann: <i>LOW_POWER</i>, <i>BALANCED</i> und <i>HIGH</i>. Ohne Anforderung wählt Android laut einem Kommentar im Code von OmegaSim 30 bis 50 ms; die Stufe HIGH entspricht nach der Android-Dokumentation etwa 11,25 bis 15 ms.<sup id="cite&#95;ref-2" class="reference"><a href="#cite_note-2"><span class="cite-bracket">&#91;</span>2<span class="cite-bracket">&#93;</span></a></sup>
+</p><p>Der <b>Durchsatz</b> (Daten je Sekunde) ist für OmegaSim kein Engpass: 20 Byte × 22 Pakete ≈ 0,44 kB/s je Auto. Der Engpass ist die <b>Zahl der Vorgänge</b> je Sekunde, die ein Adapter für alle seine Verbindungen einplanen kann (siehe <a href="#Beispiele">Beispiele</a>).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="MTU">MTU</h3></div>
+<p>Die <b>MTU</b> (<i>Maximum Transmission Unit</i>) ist die größte Nachricht, die das Attributprotokoll in einem Stück überträgt. Ohne Aushandlung beträgt sie 23 Byte; davon gehen 3 Byte für Kopf und Kennung ab, es bleiben <b>20 Byte Nutzlast</b>. Der Fahrbefehl des Carrera HYBRID ist genau 20 Byte lang und passt damit ohne Aushandlung in ein Paket. Ob das bei der Entwicklung des Autos der Grund für diese Länge war, ist nicht bekannt. OmegaSim fordert keine größere MTU an.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Koppeln_und_Verbinden">Koppeln und Verbinden</h3></div>
+<ul><li><b>Verbinden</b> heißt: eine BLE-Verbindung aufbauen, um Daten auszutauschen. Sie endet beim Trennen.</li>
+<li><b>Koppeln</b> (<i>pairing</i>) heißt: Schlüssel austauschen, um die Verbindung zu verschlüsseln; <b>Bonding</b> heißt, diese Schlüssel dauerhaft zu speichern, damit das Gerät später wiedererkannt wird. Gekoppelte Geräte erscheinen in den Bluetooth-Einstellungen des Betriebssystems.</li></ul>
+<p>Für das Carrera HYBRID ist kein Koppeln im Betriebssystem nötig. OmegaSim ruft keine Kopplung auf; es wählt das Auto über das Auswahlfenster des Browsers bzw. des Plugins und verbindet direkt. In Nutzermeldungen und Patchnotes wird „koppeln“ manchmal umgangssprachlich für „verbinden“ benutzt. Ein Bluetooth-<b>Gamepad</b> dagegen wird im System gekoppelt und belegt dauerhaft einen Teil der Funkzeit desselben Adapters.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Web_Bluetooth_und_natives_Android-BLE">Web Bluetooth und natives Android-BLE</h3></div>
+<ul><li><b>Web Bluetooth</b> ist eine Schnittstelle, mit der eine Webseite BLE-Geräte nutzen kann (<code>navigator.bluetooth</code>). Sie gibt es in Chrome und Edge auf Windows, Android und ChromeOS, nicht in Safari und Firefox. Sie verlangt einen <b>sicheren Kontext</b>: <code>https://</code>, <code>http://localhost</code> oder eine Datei vom eigenen Rechner (<code>file://</code>), nicht aber eine Adresse wie <code>http://192.168.…</code> im WLAN. Für jedes Gerät muss der Nutzer einmal im Auswahlfenster klicken. Die Kennung eines Geräts ist im Browser eine zufällige, seitengebundene Zeichenfolge.<sup id="cite&#95;ref-3" class="reference"><a href="#cite_note-3"><span class="cite-bracket">&#91;</span>3<span class="cite-bracket">&#93;</span></a></sup></li>
+<li>Die <b>Android-WebView</b>, in der die Android-App läuft, hat kein Web Bluetooth. Dort spricht OmegaSim die Bluetooth-Schnittstelle von Android über das Plugin <i>@capacitor-community/bluetooth-le</i> (Fassung 8.3.0) und für das schnelle Schreiben über das eigene Plugin <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a> an. Die Kennung eines Geräts ist dort seine <b>MAC-Adresse</b> und bleibt über Neustarts gleich; deshalb kann die App bekannte Autos beim Start ohne Klick verbinden.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<ol><li><b>FAHREN → Autos → Garage</b> öffnen.</li>
+<li><b>Auto verbinden</b> drücken. Erscheint statt der Auswahl ein Hinweis, liegt eine der drei bekannten Lagen vor: unsicherer Ursprung, Browser ohne Web Bluetooth, Adapter aus (unter Android außerdem die Berechtigung „Geräte in der Nähe“ prüfen).</li>
+<li>Im Auswahlfenster das Auto wählen, dessen Name mit <i>HYBRID</i> beginnt. Gezeigt werden Geräte, deren Name mit <i>HYBRID</i> beginnt <b>oder</b> die den Nordic-UART-Dienst bewerben.</li>
+<li>Nach dem Verbinden leuchtet das Auto hell und erscheint als Zeile in der Garage; dort wird ihm eine Rolle gegeben (Fahrer, NPC usw.).</li>
+<li>Für jedes weitere Auto Schritt 2 und 3 wiederholen. In der Android-App verbindet sie bekannte Autos beim Start von selbst, solange <b>Optionen → System → Bekannte Autos beim Start verbinden</b> an ist.</li>
+<li>Zum Beenden <b>Alle trennen</b>. In der Android-App trennt das auch verwaiste Verbindungen zu HYBRID-Autos, die in keiner Garage stehen.</li></ol>
+<p>Reagiert ein Auto nicht, hilft der Artikel <a href="./Keine_Reaktion_des_Fahrzeugs.html" title="Keine Reaktion des Fahrzeugs">Keine Reaktion des Fahrzeugs</a>.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Werte</th>
+<th>Standard</th>
+<th>Wirkung (laut Code)</th>
+<th>Interner Schlüssel
+</th></tr>
+<tr>
+<td>Bekannte Autos beim Start verbinden</td>
+<td>an/aus</td>
+<td>an</td>
+<td>Nur Android-App: verbindet nacheinander alle schon einmal verbundenen, gerade erreichbaren Autos über ihre MAC-Adresse, ohne Auswahlfenster</td>
+<td><code>setting-autoverbinden</code>
+</td></tr>
+<tr>
+<td>Funk-Rundlauf</td>
+<td>Anzeige</td>
+<td>–</td>
+<td>Messzeile: Dauer der Schreibvorgänge (Mittel, 95&#160;%), Sendeweg, OmegaBle-Zähler, Takt des Herzschlags, Brückenzeit; Einzelheiten unter <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a></td>
+<td><code>funk-rundlauf</code>
+</td></tr>
+<tr>
+<td>Entwicklertools zeigen</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>blendet unter anderem die BLE-Werkbank (GATT-Baum, Protokoll aller Schreibvorgänge) und die Code-Sonde ein</td>
+<td><code>setting-dev</code>
+</td></tr></tbody></table>
+<p>Der ⓘ-Text zu „Funk-Rundlauf“ sagt, über 45 ms falle jeder zweite Befehl aus dem Takt. Das beschreibt den Stand vor Version 0.5.8; seither wird ein verspätetes Paket nicht mehr verworfen, sondern das jeweils neueste nachgereicht (siehe <a href="#Ein_Schloss_je_Charakteristik">unten</a>).
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Der_GATT-Baum_des_Carrera_HYBRID">Der GATT-Baum des Carrera HYBRID</h3></div>
+<p>Ermittelt wurde er über die Bluetooth-Diagnoseseite von Chrome; die BLE-Werkbank von OmegaSim zeigt ihn mit diesen Namen an:<sup id="cite&#95;ref-4" class="reference"><a href="#cite_note-4"><span class="cite-bracket">&#91;</span>4<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Dienst</th>
+<th>UUID</th>
+<th>Charakteristiken
+</th></tr>
+<tr>
+<td>Generic Access</td>
+<td><code>0x1800</code></td>
+<td>Device Name (<code>0x2A00</code>), Appearance (<code>0x2A01</code>), Preferred Connection Parameters (<code>0x2A04</code>), Central Address Resolution (<code>0x2AA6</code>)
+</td></tr>
+<tr>
+<td>Generic Attribute</td>
+<td><code>0x1801</code></td>
+<td>–
+</td></tr>
+<tr>
+<td><b>Nordic UART Service</b></td>
+<td><code>6e400001-b5a3-f393-e0a9-e50e24dcca9e</code></td>
+<td><b>RX</b> <code>6e400002-…</code> (App → Auto, Befehle) · <b>TX</b> <code>6e400003-…</code> (Auto → App, Notifications)
+</td></tr>
+<tr>
+<td>Nordic Secure DFU</td>
+<td><code>0xFE59</code> bzw. <code>8ec90001-f315-4f60-9fb8-838830daea50</code></td>
+<td>Firmware-Update; die Werkbank markiert diese Kennungen als gefährlich
+</td></tr></tbody></table>
+<p>Der <b>Nordic UART Service</b> (NUS) ist ein vom Chiphersteller Nordic Semiconductor vorgeschlagener Dienst, der eine serielle Leitung nachbildet: eine Charakteristik zum Hineinschreiben, eine zum Herausmelden. Die Namen RX und TX sind aus Sicht des Geräts gewählt: Das Auto <b>empfängt</b> auf RX und <b>sendet</b> auf TX. Der Dienst für Firmware-Updates gehört zum Standardverfahren von Nordic (siehe <a href="./Firmware.html" title="Firmware">Firmware</a>); OmegaSim schreibt dort nie.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Verbindungsaufbau_Schritt_für_Schritt"><span id="Verbindungsaufbau_Schritt_f.C3.BCr_Schritt"></span>Verbindungsaufbau Schritt für Schritt</h3></div>
+<p>Die Garage verbindet in dieser Reihenfolge:<sup id="cite&#95;ref-5" class="reference"><a href="#cite_note-5"><span class="cite-bracket">&#91;</span>5<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<ol><li><b>Lage prüfen</b> (<code>bluetoothLageGenau()</code>): Gibt es Web Bluetooth, ist der Ursprung sicher, ist der Adapter an?</li>
+<li><b>Gerät wählen</b>: <code>requestDevice</code> mit zwei Filtern, die ODER-verknüpft sind: Name beginnt mit <code>HYBRID</code>, <b>oder</b> das Gerät bewirbt den NUS-Dienst. Der zweite Filter fängt Autos auf, die ihren Namen nur in der Scan-Antwort und nicht im Werbepaket tragen.</li>
+<li><b>Verbinden</b> (<code>gatt.connect()</code>).</li>
+<li><b>Dienst holen</b>: <code>getPrimaryService(NUS)</code>.</li>
+<li><b>Charakteristiken holen</b>: RX zum Schreiben, TX zum Melden.</li>
+<li><b>Abonnieren</b>: <code>tx.startNotifications()</code> und ein Zuhörer <code>onCarNotify</code> für jede Meldung. Ein Zuhörer einer früheren Verbindung wird vorher abgemeldet, sonst liefe jede Meldung doppelt durch die Auswertung.</li>
+<li>Schritte 3 bis 6 laufen gegen eine Uhr von <b>20 s</b> (<code>VERBINDE_FRIST_MS</code>). Scheitert ein Schritt oder läuft die Zeit ab, wird die Verbindung <b>getrennt</b>; die Android-Brücke schließt dabei auch den nativen Griff.</li></ol>
+<p>In der Android-App kommt hinzu:<sup id="cite&#95;ref-6" class="reference"><a href="#cite_note-6"><span class="cite-bracket">&#91;</span>6<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<ul><li><b>Vor der Suche</b> fragt die Brücke das System, ob schon ein HYBRID-Auto verbunden ist, das keine eigene Verbindung in der Seite hat (etwa nach einem Neuladen). Dieses wird direkt genommen, denn es wirbt ja nicht mehr und wäre in der Suche unsichtbar.</li>
+<li><b>Ein Aufbau je Auto</b>: Laufen zwei Verbindungsversuche zum selben Auto (automatisches Verbinden und Klick), wartet der zweite auf den ersten.</li>
+<li>Das Plugin bekommt für <code>connect</code> 15 s Zeit; scheitert es, räumt die Brücke auf (<code>disconnect</code>, dann OmegaBle <code>schliessen</code>).</li>
+<li>Nach dem Verbinden fordert die Brücke sofort die Verbindungspriorität HIGH an (<code>requestConnectionPriority</code>, Wert 1) und nach 5 s noch einmal, weil Android nach der Dienstsuche oft auf 30–50 ms zurückgeht.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Der_Sendetakt_(Herzschlag)"><span id="Der_Sendetakt_.28Herzschlag.29"></span>Der Sendetakt (Herzschlag)</h3></div>
+<p>Alle Fahrbefehle der App laufen durch <b>einen</b> Zeitgeber: <code>setInterval(controlHeartbeat, 45)</code>.<sup id="cite&#95;ref-7" class="reference"><a href="#cite_note-7"><span class="cite-bracket">&#91;</span>7<span class="cite-bracket">&#93;</span></a></sup> Eingaben (Gamepad, Tastatur, Touch, Neigung) setzen nur einen Zustand; gesendet wird ausschließlich im Takt. Früher schrieben fünf Quellen unabhängig voneinander, und überlappende Schreibvorgänge führten zu Fehlern wie „GATT operation already in progress“, Lücken und Ruckeln.
+</p><p>Ablauf eines Takts:
+</p>
+<ol><li>Das Gamepad wird frisch gelesen (nur im Cockpit).</li>
+<li>Der Ort jedes gesteuerten Autos auf der Strecke wird nachgeführt (für den Vorausblick in den Bytes 16–18).</li>
+<li>Die Fahrphysik rechnet Gas und Lenkung (siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>).</li>
+<li>Das Paket für Auto 1 wird gebaut und geschrieben, danach die Pakete für Spieler 2 und 3.</li>
+<li>Danach die NPCs, Safety Car und Reinigungswagen, ebenfalls im selben Takt.</li>
+<li>Erst <b>nach</b> dem Senden wird das Cockpit gezeichnet, weil in der App das Zeichnen auf demselben Faden läuft wie die Bluetooth-Antworten.</li></ol>
+<p>Der 45-ms-Takt entspricht dem in Mitschnitten der <a href="./Original-App.html" title="Original-App">Original-App</a> beobachteten Abstand. Die Rechenarbeit eines Takts ist klein: gemessen 0,3 ms im Median ohne NPCs und 0,4 ms mit zwei NPCs (95&#160;%: 0,5 bzw. 0,9 ms).<sup id="cite&#95;ref-8" class="reference"><a href="#cite_note-8"><span class="cite-bracket">&#91;</span>8<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Der_Fahrbefehl_(20_Byte)"><span id="Der_Fahrbefehl_.2820_Byte.29"></span>Der Fahrbefehl (20 Byte)</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Byte</th>
+<th>Inhalt in OmegaSim</th>
+<th>Bedeutung
+</th></tr>
+<tr>
+<td>0</td>
+<td><code>0xAF</code></td>
+<td>Befehlskopf
+</td></tr>
+<tr>
+<td>1–5</td>
+<td><code>0x00</code></td>
+<td>
+</td></tr>
+<tr>
+<td>6</td>
+<td><code>(0xDF + Gas) &amp; 0xFF</code>, Gas −64 bis +127</td>
+<td>Gas um die Neutralstellung <code>0xDF</code>
+</td></tr>
+<tr>
+<td>7</td>
+<td><code>Lenkung &amp; 0xFF</code>, −127 bis +127</td>
+<td>Lenkung, positiv = rechts
+</td></tr>
+<tr>
+<td>8</td>
+<td><code>0x80</code></td>
+<td>konstant
+</td></tr>
+<tr>
+<td>9</td>
+<td>Kopie von Byte 7</td>
+<td>
+</td></tr>
+<tr>
+<td>10</td>
+<td><code>0x60</code> (selbst gefahrene Autos <code>0x20</code>)</td>
+<td>Betriebsart, genaue Bedeutung offen
+</td></tr>
+<tr>
+<td>11 / 12 / 13</td>
+<td><code>0x00</code> / <code>0x01</code> / <code>0x00</code></td>
+<td>konstant
+</td></tr>
+<tr>
+<td>14</td>
+<td>Bitfeld</td>
+<td>Bit 0 Bremslicht, Bit 1 Scheinwerfer, Bit 5 Leseart „Auf der Bahn“, Bit 7 Leseart „Ausdruck“
+</td></tr>
+<tr>
+<td>15</td>
+<td><code>0x04</code> (selbst gefahrene Autos <code>0x0C</code>)</td>
+<td>Betriebsart
+</td></tr>
+<tr>
+<td>16–18</td>
+<td><code>0x00</code> oder die Typen der nächsten drei Streckenteile</td>
+<td>Vorausblick im Leitplanken-Modus
+</td></tr>
+<tr>
+<td>19</td>
+<td>CRC-8 über Byte 0–18</td>
+<td>Prüfsumme
+</td></tr></tbody></table>
+<p>Rechenweg und Beispiele zu Gas-Byte, Bitfeld und Prüfsumme stehen im Artikel <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>; die Bedeutung der Lesearten im Artikel <a href="./Strecke.html" title="Strecke">Strecke</a>.<sup id="cite&#95;ref-9" class="reference"><a href="#cite_note-9"><span class="cite-bracket">&#91;</span>9<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Ein_Schloss_je_Charakteristik">Ein Schloss je Charakteristik</h3></div>
+<p><code>funkSchreiben()</code> sorgt dafür, dass zu jeder Charakteristik immer nur <b>ein</b> Schreibvorgang unterwegs ist:<sup id="cite&#95;ref-10" class="reference"><a href="#cite_note-10"><span class="cite-bracket">&#91;</span>10<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Zustand</th>
+<th>Bedingung</th>
+<th>Nächster Zustand
+</th></tr>
+<tr>
+<td>frei</td>
+<td>neues Paket</td>
+<td>unterwegs (schreiben)
+</td></tr>
+<tr>
+<td>unterwegs</td>
+<td>neues Paket, Schreiben läuft seit &lt; 300 ms</td>
+<td>unterwegs; das Paket wird als <i>wartend</i> gemerkt und ersetzt ein älteres wartendes
+</td></tr>
+<tr>
+<td>unterwegs</td>
+<td>Schreiben fertig, ein Paket wartet</td>
+<td>unterwegs (das wartende wird geschrieben)
+</td></tr>
+<tr>
+<td>unterwegs</td>
+<td>Schreiben fertig, nichts wartet</td>
+<td>frei
+</td></tr>
+<tr>
+<td>unterwegs</td>
+<td>neues Paket, Schreiben läuft seit ≥ 300 ms</td>
+<td>Wachhund: der alte Vorgang gilt als verloren, Zähler „Hänger“ +1, das neue Paket wird geschrieben
+</td></tr></tbody></table>
+<p>Der Warteplatz hat die <b>Tiefe eins</b>: Eine Warteschlange würde alte Stickstellungen nachliefern. Damit bleibt die Rate von selbst begrenzt, denn es startet nie ein zweiter Vorgang, bevor der erste fertig ist. Eine Zählung <code>gen</code> verhindert, dass ein verspätet doch noch fertig werdender Vorgang den neuen Zustand freigibt.
+</p><p>Wie viel das bringt, zeigt eine Messung an einem künstlichen Ziel mit einstellbarer Schreibdauer:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Schreibdauer</th>
+<th>vor 0.5.8 (verwerfen)</th>
+<th>seit 0.5.8 (neuestes merken)</th>
+<th>physikalische Obergrenze
+</th></tr>
+<tr>
+<td>5 ms</td>
+<td>22,4 Hz</td>
+<td>22,3 Hz</td>
+<td>22,2 Hz
+</td></tr>
+<tr>
+<td>46 ms</td>
+<td>11,2 Hz</td>
+<td>22,0 Hz</td>
+<td>21,7 Hz
+</td></tr>
+<tr>
+<td>60 ms</td>
+<td>11,2 Hz</td>
+<td>17,0 Hz</td>
+<td>16,7 Hz
+</td></tr>
+<tr>
+<td>100 ms</td>
+<td>7,6 Hz</td>
+<td>10,3 Hz</td>
+<td>10,0 Hz
+</td></tr></tbody></table>
+<p>Eine Millisekunde über dem Takt halbierte früher die Befehlsrate. Wie lange ein Schreibvorgang am echten Auto dauert, ist nicht gemessen.<sup id="cite&#95;ref-11" class="reference"><a href="#cite_note-11"><span class="cite-bracket">&#91;</span>11<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Der_Weg_in_der_Android-App">Der Weg in der Android-App</h3></div>
+<p>In der App gibt es kein <code>navigator.bluetooth</code>. Die Brücke <code>src/05-app-bruecke.js</code> baut genau den Teil von Web Bluetooth nach, den OmegaSim benutzt (<code>requestDevice</code>, <code>gatt.connect</code>, Dienste und Charakteristiken holen, schreiben, <code>startNotifications</code>, die Ereignisse <code>characteristicvaluechanged</code> und <code>gattserverdisconnected</code>). Der übrige Code merkt nicht, dass er in einer App läuft. Weil die Brücke in der Webseite und nicht in der APK steckt, kommt jede Berichtigung mit dem nächsten Web-Update aufs Handy.
+</p><p>Ein Fahrbefehl nimmt in der App diesen Weg:
+</p>
+<ol><li>Die Seite wandelt die 20 Byte in einen Hex-Text aus 40 Zeichen (<code>zuHex()</code>).</li>
+<li><b>Direktweg</b> (ab APK 0.10.4): Gibt es <code>window.OmegaDirekt</code>, ruft die Seite <code>schreibe(deviceId, service, characteristic, hex, Date.now())</code> auf. Das ist eine Java-Methode, die auf dem JavaBridge-Faden der WebView läuft, am Android-Hauptfaden vorbei.</li>
+<li>Sonst geht der Befehl über Capacitor an <code>OmegaBle.writeControl</code> (ohne Antwort).</li>
+<li>Fehlt OmegaBle oder ist es für dieses Auto gesperrt, schreibt das Community-Plugin mit <code>writeWithoutResponse</code> und einer Zeitgrenze von 300 ms statt der 5 s des Plugins.</li>
+<li>In OmegaBle legt der Befehl sich auf den <b>einen Platz</b> des Geräts; ein neuerer ersetzt ihn. Ein eigener Schreibfaden („OmegaBle-Write“) schreibt mit <i>WRITE_TYPE_NO_RESPONSE</i>, bei Ablehnung höchstens dreimal im Abstand von 3 ms, und verwirft den alten, sobald ein neuerer wartet.<sup id="cite&#95;ref-12" class="reference"><a href="#cite_note-12"><span class="cite-bracket">&#91;</span>12<span class="cite-bracket">&#93;</span></a></sup></li></ol>
+<p>Android erlaubt <b>einen</b> GATT-Vorgang zugleich. Während das Community-Plugin selbst etwas tut (Verbinden, Abonnieren, Lesen, Schreiben mit Antwort), setzt die Brücke OmegaBle auf Pause; die Pause hebt sich nach 1,5 s von selbst auf, falls die Seite das Ende vergisst. Wie OmegaBle prüft, ob es wirklich schreibt, und wann es auf das Plugin zurückfällt, steht im Artikel <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a>.
+</p><p>Meldungen kommen umgekehrt: Das Plugin meldet sie unter dem Ereignisnamen <code>notification|Gerät|Dienst|Charakteristik</code> als Hex-Text, die Brücke wandelt sie mit einer Nachschlagetabelle in Bytes zurück und löst <code>characteristicvaluechanged</code> aus.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Was_das_Auto_meldet">Was das Auto meldet</h3></div>
+<p>Jede Notification auf NUS TX ist eine Statusmeldung. OmegaSim verwirft Meldungen unter 16 Byte und liest diese Stellen:<sup id="cite&#95;ref-13" class="reference"><a href="#cite_note-13"><span class="cite-bracket">&#91;</span>13<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Byte</th>
+<th>Inhalt</th>
+<th>Verwendung
+</th></tr>
+<tr>
+<td>1, 3</td>
+<td>vorzeichenbehaftete Bewegungssignale; Byte 3 ein Drehsignal</td>
+<td>Crash-Erkennung, Rütteln; die genaue physikalische Größe ist nicht gesichert
+</td></tr>
+<tr>
+<td>10</td>
+<td>Akku-Rohwert</td>
+<td>Akkuanzeige, gerechnet mit 138 (leer) bis 155 (voll), geglättet
+</td></tr>
+<tr>
+<td>11</td>
+<td>Kachelzähler, +1 je neu befahrenem Streckenteil, läuft nach 255 über</td>
+<td>Ortung, Anlauf, Kachelzeiten
+</td></tr>
+<tr>
+<td>12</td>
+<td>Streckencode (<code>0x00</code> abseits, <code>0xFF</code> noch nichts gelesen)</td>
+<td>Rundenzählung, Abseits, Streckenscan
+</td></tr>
+<tr>
+<td>14</td>
+<td>nach seVen ein gemessenes Tempo</td>
+<td>von OmegaSim nicht gelesen
+</td></tr>
+<tr>
+<td>15, Bit 3</td>
+<td>Start/Ziel-Sperre, steigt kurz nach dem Überfahren der Ziellinie</td>
+<td>Zeitnahme an der Ziellinie
+</td></tr></tbody></table>
+<p>Ein Fehler, der lange unbemerkt blieb: <code>e.target.value</code> ist ein <i>DataView</i>, der nicht am Anfang seines Speicherblocks beginnen muss. <code>new Uint8Array(v.buffer)</code> las in so einem Fall stumm die falschen Bytes. Richtig ist <code>new Uint8Array(v.buffer, v.byteOffset, v.byteLength)</code>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Meldetakt_überwachen"><span id="Meldetakt_.C3.BCberwachen"></span>Meldetakt überwachen</h3></div>
+<p>Ein Auto meldet sich normalerweise etwa alle 45 ms. In einem Mitschnitt der Original-App im Leitplanken-Modus lag der Median dagegen bei 69 ms (14,6 Hz).<sup id="cite&#95;ref-14" class="reference"><a href="#cite_note-14"><span class="cite-bracket">&#91;</span>14<span class="cite-bracket">&#93;</span></a></sup> Weil Android das schnelle Intervall nach einiger Zeit oft wieder aufgibt, führt OmegaSim je Auto einen geglätteten Abstand der Meldungen mit:
+</p>
+<pre>d        = min(1000, jetzt − letzteMeldung)
+abstand ← abstand + (d − abstand) × 0,05
+</pre>
+<ul><li><code>d</code> – Abstand der letzten beiden Meldungen in ms, gedeckelt auf 1 s</li>
+<li><code>abstand</code> – gleitender Mittelwert (jede neue Meldung zählt 5&#160;%)</li></ul>
+<p>Liegt <code>abstand</code> über <b>75 ms</b> (<code>MELDE_LANGSAM_MS</code>) und ist die letzte Anforderung mehr als <b>20 s</b> her, fordert die App erneut die Priorität HIGH an und schreibt das ins Protokoll.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Trennen,_Neuverbinden,_Aufräumen"><span id="Trennen.2C_Neuverbinden.2C_Aufr.C3.A4umen"></span>Trennen, Neuverbinden, Aufräumen</h3></div>
+<ul><li><b>Neuverbinden</b>: Reißt eine Verbindung ab, versucht die Garage es bis zu fünfmal, mit wachsender Wartezeit 1 s × Versuch (1, 2, 3, 4, 5 s). Danach wird das Auto getrennt und aus der Garage genommen.<sup id="cite&#95;ref-15" class="reference"><a href="#cite_note-15"><span class="cite-bracket">&#91;</span>15<span class="cite-bracket">&#93;</span></a></sup> Während ein Auto neu verbindet, wird an es nichts gesendet.</li>
+<li><b>Trennen immer nativ</b>: In der App trennt die Brücke im System und schließt den Griff (<code>disconnect</code> und <code>close</code>), auch wenn die Seite das Auto schon für getrennt hält.</li>
+<li><b>Beim Schließen der App</b> trennt die Android-Hülle alle Verbindungen des Plugins, weil dieses seine Verbindungen beim Beenden sonst stehen lässt.<sup id="cite&#95;ref-16" class="reference"><a href="#cite_note-16"><span class="cite-bracket">&#91;</span>16<span class="cite-bracket">&#93;</span></a></sup></li>
+<li><b>Verwaiste Verbindungen</b>: „Alle trennen“ sucht vom System als verbunden gemeldete HYBRID-Autos, die in keiner Garage stehen, trennt und schließt sie; bleibt eines verbunden, verbindet die App es kurz neu (5 s Zeitgrenze) und trennt sauber.<sup id="cite&#95;ref-17" class="reference"><a href="#cite_note-17"><span class="cite-bracket">&#91;</span>17<span class="cite-bracket">&#93;</span></a></sup></li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Funklast_und_Sendebudget_der_NPCs">Funklast und Sendebudget der NPCs</h3></div>
+<p>Seit Version 1.1.24 teilen sich alle NPCs ein Budget von etwa 30 Paketen je Sekunde (<code>NPC_BUDGET_PRO_S</code>). Der Mindestabstand zwischen zwei Paketen eines NPC ist<sup id="cite&#95;ref-18" class="reference"><a href="#cite_note-18"><span class="cite-bracket">&#91;</span>18<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<pre>abstand(n) = 0                                   wenn n ≤ 1
+abstand(n) = max(45, round(1000 × n / 30)) − 5   sonst   (in ms)
+</pre>
+<ul><li><code>n</code> – Zahl der fahrenden NPCs (alle 0,5 s neu gezählt)</li>
+<li><code>45</code> – ein Herzschlag; schneller als der Takt geht ohnehin nichts</li>
+<li><code>− 5</code> – Spielraum, damit ein Paket nicht wegen Zeitgeber-Schwankungen einen ganzen Takt zu spät kommt</li></ul>
+<p>Ein <b>unveränderter</b> Befehl wird höchstens alle 200 ms wiederholt (<code>NPC_GLEICH_MS</code>). Ausnahmen im vollen Takt: der Wechsel auf Gas 0 (Halt), Einpark- und Haltefolgen sowie der Zieleinlauf, weil deren Lenkimpulse nur etwa 100 ms dauern. Spieler 1 bis 3 sind vom Budget nicht betroffen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Pakete_je_Sekunde">Pakete je Sekunde</h3></div>
+<p>Ein Takt von 45 ms ergibt <code>1000 / 45 ≈ 22,2</code> Pakete je Sekunde und Auto.
+</p>
+<ul><li><b>Vor 1.1.24</b>, Fahrer und vier NPCs: <code>5 × 22,2 ≈ 111</code> Pakete je Sekunde über einen Adapter. Gemeldet war: Mit einem NPC klappt es, mit mehreren halten Autos nicht und das eigene Auto reagiert nicht. In einer Sitzung zählte OmegaBle rund 4000 geschriebene, 2400 wiederholte und 1200 verworfene Pakete.</li>
+<li><b>Seit 1.1.24</b> mit vier NPCs: <code>abstand(4) = max(45, round(133,3)) − 5 = 128 ms</code>. Da nur im 45-ms-Takt gesendet wird, kommt das nächste Paket eines NPC im dritten Takt, also nach 135 ms: <code>1000 / 135 ≈ 7,4</code> Pakete je Sekunde und NPC, zusammen <code>4 × 7,4 ≈ 29,6</code>. Mit dem Fahrer sind es <code>22,2 + 29,6 ≈ 52</code> statt 111.</li>
+<li>Mit zwei NPCs: <code>abstand(2) = max(45, 67) − 5 = 62 ms</code>, also jeder zweite Takt (90 ms), je NPC 11,1, zusammen 22,2 Pakete je Sekunde.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Wartezeit_auf_das_Verbindungsereignis">Wartezeit auf das Verbindungsereignis</h3></div>
+<p>Ein Rechenmodell, keine Messung: Pakete entstehen alle 45 ms, Verbindungsereignisse alle <code>I</code> ms.
+</p>
+<ul><li><b><code>I</code> = 50 ms</b> (Android ohne Anforderung, obere Grenze): Die Pakete entstehen bei 0, 45, 90, 135 … ms, die Ereignisse bei 0, 50, 100, 150 … ms. Die Wartezeit wächst von Paket zu Paket um 5 ms: 0, 5, 10, … 45 ms, im Mittel etwa <b>22,5 ms</b>. Einmal je 450 ms fallen zwei Pakete auf dasselbe Ereignis.</li>
+<li><b><code>I</code> = 15 ms</b> (Stufe HIGH): 45 ist ein Vielfaches von 15. Jedes Paket wartet deshalb ungefähr gleich lang, je nach Lage der beiden Uhren zueinander irgendwo zwischen 0 und 15 ms, im Mittel über viele Verbindungen etwa <b>7,5 ms</b>.</li></ul>
+<p>Gesamtes Modell für einen Daumendruck (ohne Brücke, ohne Verarbeitung im Auto):
+</p>
+<pre>Wartezeit auf den nächsten Herzschlag:  0 … 45 ms   (Mittel 22,5 ms)
+Rechnung im Takt:                       ≈ 0,3 … 0,9 ms
+Wartezeit auf das Verbindungsereignis:  0 … I ms    (Mittel I/2)
+---------------------------------------------------------------
+Mittel bei I = 15 ms:   22,5 + 0,5 + 7,5  ≈ 31 ms
+Mittel bei I = 50 ms:   22,5 + 0,5 + 25   ≈ 48 ms
+</pre>
+<p>Darum fordert die App die Stufe HIGH an und legt nach, wenn das Auto langsamer meldet.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Wann_wird_neu_angefordert?"><span id="Wann_wird_neu_angefordert.3F"></span>Wann wird neu angefordert?</h3></div>
+<p>Ein Auto meldete bisher alle 45 ms, ab jetzt alle 90 ms. Der gleitende Mittelwert nähert sich so:
+</p>
+<pre>abstand_k = 90 − 45 × 0,95^k
+</pre>
+<p>Er überschreitet 75 ms, sobald <code>45 × 0,95^k &lt; 15</code>, also <code>0,95^k &lt; 1/3</code>, also <code>k &gt; ln 3 / (−ln 0,95) ≈ 21,4</code>. Nach 22 Meldungen, das sind rund 22 × 90 ms ≈ 2 s, fordert die App die hohe Priorität neu an.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li><b>Verwaiste Verbindung</b>: Das Auto leuchtet hell wie verbunden, die App ist es aber nicht; neu verbinden geht nicht, weil das Auto nicht mehr wirbt. Ursache waren Verbindungen, die das Community-Plugin nach einem gescheiterten Aufbau oder beim Schließen der App stehen ließ. Abhilfe in der App seit Version 1.2: hartes Schließen, Zeitgrenze 20 s, Aufräumen beim Start und „Alle trennen“. Im Browser hilft es, das Auto am Ladegerät auszuschalten.</li>
+<li><b>GATT-Fehler 133</b>: Android meldet beim Verbinden häufig den Sammelfehler 133 (hexadezimal <code>0x85</code>, <i>GATT_ERROR</i>). Er steht meist für einen hängenden Zustand im Bluetooth-Stapel, etwa eine nicht geschlossene alte Verbindung oder zu schnelle Wiederholungsversuche; übliche Abhilfe ist, die alte Verbindung zu schließen, kurz zu warten und erneut zu verbinden. OmegaSim wertet diesen Code nicht eigens aus; ob er bei Nutzern auftrat, ist nicht dokumentiert. Die Maßnahmen gegen verwaiste Verbindungen zielen auf dieselbe Ursache.</li>
+<li><b>Funklast</b>: Viele Autos auf einem Adapter teilen sich die Funkzeit; ein zusätzlich gekoppeltes Bluetooth-Gamepad belegt weitere. Gemeldet wurden Abrisse mit Xbox- und PS4-Controllern; laut Code-Kommentar traten diese unter Windows auf, wo die Android-Brücke nicht läuft.</li>
+<li><b>Dauer eines Schreibvorgangs am echten Auto</b> und die Verarbeitungszeit im Auto sind nicht gemessen; die Latenzrechnung oben ist ein Modell.</li>
+<li><b>Web Bluetooth</b> fehlt in Safari und Firefox und auf iOS; über eine WLAN-Adresse geladen ist es abgeschaltet (siehe <a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a>).</li>
+<li><b>Kein Koppeln, keine Verschlüsselung</b>: Die Verbindung zum Auto ist nach allem, was OmegaSim nutzt, unverschlüsselt. Ob das Auto Kopplung überhaupt anbietet, ist nicht untersucht.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version</th>
+<th>Änderung
+</th></tr>
+<tr>
+<td>0.5.8</td>
+<td>Neuestes Paket merken statt verwerfen; Spieler 2 im selben Herzschlag
+</td></tr>
+<tr>
+<td>0.8</td>
+<td>Android-App mit Bluetooth-Brücke (experimentell)
+</td></tr>
+<tr>
+<td>0.8.41</td>
+<td>Ein Schloss je Charakteristik mit Wachhund (300 ms); erst senden, dann zeichnen; Messzeile Funk-Rundlauf
+</td></tr>
+<tr>
+<td>0.9.2</td>
+<td>OmegaBle neu gebaut (eigener Schreibfaden, ehrlicher Status)
+</td></tr>
+<tr>
+<td>0.9.57</td>
+<td>NPCs senden im selben Herzschlag wie der Fahrer
+</td></tr>
+<tr>
+<td>0.10.4</td>
+<td>Direktweg OmegaDirekt; Priorität nur noch einmal nach 5 s nachlegen statt alle 10 s
+</td></tr>
+<tr>
+<td>1.0.73</td>
+<td>Automatisches Neuverbinden mit wachsender Wartezeit
+</td></tr>
+<tr>
+<td>1.1.3</td>
+<td>Bekannte Autos beim Start verbinden; Priorität wieder immer nachlegen
+</td></tr>
+<tr>
+<td>1.1.24</td>
+<td>Sendebudget der NPCs (rund 30 Pakete je Sekunde)
+</td></tr>
+<tr>
+<td>1.2</td>
+<td>Hartes Trennen, 20-s-Grenze, Aufräumen verwaister Verbindungen, Meldetakt-Überwachung (im Code als v1.1.45 vermerkt)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
+<div class="mw-references-wrap mw-references-columns"><ol class="references">
+<li id="cite&#95;note-1"><span class="mw-cite-backlink"><a href="#cite_ref-1">↑</a></span> <span class="reference-text"><code>src/05-app-bruecke.js</code>, <code>uuid()</code>, Tabelle <code>NAMEN</code></span>
+</li>
+<li id="cite&#95;note-2"><span class="mw-cite-backlink"><a href="#cite_ref-2">↑</a></span> <span class="reference-text"><code>src/05-app-bruecke.js</code>, <code>Gatt._verbinden()</code>, Kommentar „SCHNELLES VERBINDUNGSINTERVALL“</span>
+</li>
+<li id="cite&#95;note-3"><span class="mw-cite-backlink"><a href="#cite_ref-3">↑</a></span> <span class="reference-text"><code>src/10-ble-explorer.js</code>, <code>bluetoothLageText()</code>; <code>tools/omegasim_host.py</code>, Kopfkommentar</span>
+</li>
+<li id="cite&#95;note-4"><span class="mw-cite-backlink"><a href="#cite_ref-4">↑</a></span> <span class="reference-text"><code>src/10-ble-explorer.js</code>, Tabelle <code>KNOWN_UUIDS</code></span>
+</li>
+<li id="cite&#95;note-5"><span class="mw-cite-backlink"><a href="#cite_ref-5">↑</a></span> <span class="reference-text"><code>src/90-ghosts.js</code>, <code>garageConnect()</code>, <code>verbindeGatt()</code>, <code>verbindeGattSicher()</code></span>
+</li>
+<li id="cite&#95;note-6"><span class="mw-cite-backlink"><a href="#cite_ref-6">↑</a></span> <span class="reference-text"><code>src/05-app-bruecke.js</code>, <code>requestDevice()</code>, <code>Gatt.connect()</code>, <code>Gatt._verbinden()</code></span>
+</li>
+<li id="cite&#95;note-7"><span class="mw-cite-backlink"><a href="#cite_ref-7">↑</a></span> <span class="reference-text"><code>src/20-protocol.js</code>, <code>controlHeartbeat()</code>, <code>CONTROL_SEND_INTERVAL_MS = 45</code></span>
+</li>
+<li id="cite&#95;note-8"><span class="mw-cite-backlink"><a href="#cite_ref-8">↑</a></span> <span class="reference-text"><code>CARRERA_HYBRID.md</code>, Abschnitt „Der Steuerweg“</span>
+</li>
+<li id="cite&#95;note-9"><span class="mw-cite-backlink"><a href="#cite_ref-9">↑</a></span> <span class="reference-text"><code>src/20-protocol.js</code>, <code>buildCommandPacket()</code>; <code>src/60-track.js</code>, <code>AUTO_MODE</code></span>
+</li>
+<li id="cite&#95;note-10"><span class="mw-cite-backlink"><a href="#cite_ref-10">↑</a></span> <span class="reference-text"><code>src/20-protocol.js</code>, <code>funkSchreiben()</code>, <code>FUNK_HAENGT_MS = 300</code></span>
+</li>
+<li id="cite&#95;note-11"><span class="mw-cite-backlink"><a href="#cite_ref-11">↑</a></span> <span class="reference-text"><code>CARRERA_HYBRID.md</code>, Abschnitt „Der Steuerweg“</span>
+</li>
+<li id="cite&#95;note-12"><span class="mw-cite-backlink"><a href="#cite_ref-12">↑</a></span> <span class="reference-text"><code>OmegaBlePlugin.java</code>, <code>einreihen()</code>, <code>abarbeiten()</code>, <code>schreibenMitVersuchen()</code>, <code>schreibeGatt()</code></span>
+</li>
+<li id="cite&#95;note-13"><span class="mw-cite-backlink"><a href="#cite_ref-13">↑</a></span> <span class="reference-text"><code>src/90-ghosts.js</code>, <code>onCarNotify()</code>, <code>notifyBytes()</code>; <code>src/70-race.js</code>, <code>handleDashboardBytes()</code></span>
+</li>
+<li id="cite&#95;note-14"><span class="mw-cite-backlink"><a href="#cite_ref-14">↑</a></span> <span class="reference-text"><code>src/90-ghosts.js</code>, <code>meldetaktBeobachten()</code>; <code>src/60-track.js</code>, Kommentar zum Leitplanken-Modus</span>
+</li>
+<li id="cite&#95;note-15"><span class="mw-cite-backlink"><a href="#cite_ref-15">↑</a></span> <span class="reference-text"><code>src/90-ghosts.js</code>, <code>reconnectCar()</code>, <code>VERBINDE_NEU_MS</code>, <code>VERBINDE_NEU_MAX</code></span>
+</li>
+<li id="cite&#95;note-16"><span class="mw-cite-backlink"><a href="#cite_ref-16">↑</a></span> <span class="reference-text"><code>MainActivity.java</code>, Kopfkommentar Punkt 5</span>
+</li>
+<li id="cite&#95;note-17"><span class="mw-cite-backlink"><a href="#cite_ref-17">↑</a></span> <span class="reference-text"><code>src/05-app-bruecke.js</code>, <code>verwaisteTrennen</code></span>
+</li>
+<li id="cite&#95;note-18"><span class="mw-cite-backlink"><a href="#cite_ref-18">↑</a></span> <span class="reference-text"><code>src/90-ghosts.js</code>, <code>npcSendeAbstand()</code>, <code>writeToCar()</code></span>
+</li>
+</ol></div>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a></li>
+<li><a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a></li>
+<li><a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a></li>
+<li><a href="./Original-App.html" title="Original-App">Original-App</a></li>
+<li><a href="./Firmware.html" title="Firmware">Firmware</a></li>
+<li><a href="./Keine_Reaktion_des_Fahrzeugs.html" title="Keine Reaktion des Fahrzeugs">Keine Reaktion des Fahrzeugs</a></li>
+<li><a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a></li>
+<li><a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/20-protocol.js</code> – <code>controlHeartbeat()</code>, <code>buildCommandPacket()</code>, <code>funkSchreiben()</code>, <code>sendControlValue()</code></li>
+<li><code>src/05-app-bruecke.js</code> – Web-Bluetooth-Nachbau: <code>requestDevice()</code>, Klassen <code>Gatt</code>, Dienst, Merkmal; <code>omegaBleBereit()</code>, <code>mitOmegaPause()</code>, <code>verwaisteTrennen</code></li>
+<li><code>src/10-ble-explorer.js</code> – <code>KNOWN_UUIDS</code>, <code>crc8()</code>, <code>bluetoothLageText()</code></li>
+<li><code>src/90-ghosts.js</code> – <code>garageConnect()</code>, <code>verbindeGatt()</code>, <code>verbindeGattSicher()</code>, <code>reconnectCar()</code>, <code>onCarNotify()</code>, <code>meldetaktBeobachten()</code>, <code>writeToCar()</code>, <code>npcSendeAbstand()</code></li>
+<li><code>src/70-race.js</code> – <code>handleDashboardBytes()</code></li>
+<li><code>android-app/android/app/src/main/java/de/lroeseler/omegasim/OmegaBlePlugin.java</code></li>
+<li><code>android-app/android/app/src/main/java/de/lroeseler/omegasim/MainActivity.java</code></li>
+<li><code>CARRERA_HYBRID.md</code> – „Die Bluetooth-Verbindung“, „Der Steuerweg“, „Abgleich mit der Protokollbeschreibung von seVen“</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw213
+Cached time: 20261027053449
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.116 seconds
+Real time usage: 0.121 seconds
+Preprocessor visited node count: 299/1000000
+Revision size: 35483/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 7975/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.708      1 Vorlage:Stand
+100.00%    3.708      1 -total
+-->
+
+<!-- Render ID 204124c5-d1c8-11f1-885e-bc241137f7fa -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:54:|#|:idhash:canonical and timestamp 20261027053449 and revision id 77. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

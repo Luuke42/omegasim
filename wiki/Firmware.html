@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firmware - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Firmware</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p>Die <b>Firmware</b> eines <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Autos ist das Programm, das auf dem Funkchip im Auto selbst läuft. Sie empfängt die Befehlspakete per <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>, setzt die Zielwerte für Gas und Lenkung in Motor- und Servobewegungen um, liest den Streckensensor aus, hält das Auto in einer bestimmten Betriebsart selbst auf der Bahn und meldet seinen Zustand an die App. Die Firmware stammt vom Hersteller und ist nicht offengelegt; alles in diesem Artikel ist aus Mitschnitten des Funkverkehrs der <a href="./Original-App.html" title="Original-App">Original-App</a>, aus Fahrversuchen mit <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> und aus dem Abgleich mit einer unabhängigen Protokollbeschreibung („seVen“) erschlossen. Was belegt ist und was nicht, steht jeweils dabei.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Punkt</th>
+<th>Stand</th>
+<th>Beleg
+</th></tr>
+<tr>
+<td>Firmware-Version der eigenen Autos</td>
+<td>nicht bekannt, OmegaSim liest sie nicht aus</td>
+<td>kein Code dafür vorhanden
+</td></tr>
+<tr>
+<td>Bezugsstand</td>
+<td>„Firmware Stand August 2026“ (Optionen → Was du brauchst)</td>
+<td><code>src/00-index.head.html</code>
+</td></tr>
+<tr>
+<td>Update-Verfahren</td>
+<td>Nordic Secure DFU über Bluetooth (OTA)</td>
+<td>GATT-Dienste im Mitschnitt und im BLE-Explorer
+</td></tr>
+<tr>
+<td>Firmware-Update durch OmegaSim</td>
+<td>nein; der DFU-Kanal ist im BLE-Explorer als gefährlich markiert</td>
+<td><code>DANGER_UUIDS</code>, <code>src/10-ble-explorer.js</code>
+</td></tr>
+<tr>
+<td>Fahrdynamik</td>
+<td>im Auto; die App liefert nur Zielwerte</td>
+<td>CARRERA_HYBRID.md
+</td></tr>
+<tr>
+<td>Selbstführung auf der Bahn</td>
+<td>im Auto, eingeschaltet über Bytes 10, 14, 15 und Vorausblick 16–18</td>
+<td>Mitschnitte 20. und 21.08.2026
+</td></tr>
+<tr>
+<td>Status</td>
+<td>Verhalten teilweise belegt, Interna unbekannt</td>
+<td>–
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Was_Firmware_ist">Was Firmware ist</h3></div>
+<p>Ein Gerät wie das HYBRID-Auto hat keinen „Computer“ im üblichen Sinn, sondern einen <b>Mikrocontroller</b>: einen kleinen Chip mit Prozessor, Speicher und Funkteil. Das fest gespeicherte Programm darauf heißt Firmware („feste Ware“, zwischen Hardware und Software). Sie läuft ab dem Einschalten in einer Schleife: Funkpakete annehmen, Sensor lesen, Motor und Servo stellen, Meldung senden. Vermutet wird ein Chip der Familie Nordic nRF52, weil das Auto zwei typische Nordic-Dienste anbietet (Nordic UART Service und Nordic Secure DFU); gesichert ist der Chiptyp nicht.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Zielwert_und_Regelung">Zielwert und Regelung</h3></div>
+<p>Die App schickt keine Motorspannung, sondern einen <b>Zielwert</b>: „so viel Gas“, „so viel Lenkung“. Wie schnell das Auto diesen Wert erreicht, wie stark es beschleunigt und wie es Grip findet, entscheidet ein <b>Regler</b> in der Firmware. Ein Regler vergleicht ständig Soll und Ist und stellt nach. Deshalb sind zwei Autos mit gleicher Firmware und gleichem Befehl gleich schnell, auch wenn die App unterschiedlich ist.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="OTA_und_DFU">OTA und DFU</h3></div>
+<p><b>OTA</b> („over the air“) heißt: Die Firmware wird per Funk ausgetauscht, ohne Kabel. <b>DFU</b> (Device Firmware Update) ist das Verfahren dafür. Bei Nordic-Chips startet ein Schreibbefehl auf einen bestimmten Kanal einen <b>Bootloader</b>, ein kleines Startprogramm, das die neue Firmware entgegennimmt, prüft und einspielt. Ein falscher Befehl auf diesem Kanal kann das Auto in den Update-Modus versetzen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Bytes_und_Bits">Bytes und Bits</h3></div>
+<p>Die Befehle sind Folgen von Bytes, meist hexadezimal geschrieben (<code>0x20</code> = 32 = <code>0010 0000</code>). Ein einzelnes gesetztes Bit kann eine ganze Betriebsart umschalten; Einzelheiten in <a href="./Carrera_HYBRID.html#Grundlagen" title="Carrera HYBRID">Carrera HYBRID#Grundlagen</a> und <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<p>Mit OmegaSim lässt sich die Firmware weder auslesen noch aktualisieren. Was man tun kann:
+</p>
+<ol><li>Den Firmware-Stand in der <a href="./Original-App.html" title="Original-App">Original-App</a> des Herstellers prüfen und dort Updates einspielen.</li>
+<li>Nach einem Update in OmegaSim prüfen, ob Streckencodes noch ankommen: <b>Entwickler → Doku/Monitor</b> (Zeitleiste der Mustercodes) oder einfach eine Runde fahren und auf die Rundenzählung achten.</li>
+<li>Bei Auffälligkeiten den Selbsttest laufen lassen (Entwickler → Selbsttest) und das Ergebnis mit dem Datum des Updates melden (siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>).</li>
+<li>Den DFU-Kanal im BLE-Explorer (Entwickler → BLE-Werkbank) <b>nicht</b> beschreiben. Der Explorer fragt vor jedem Schreibzugriff dort nach.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<p>OmegaSim hat keine Einstellungen für die Firmware. Folgende Optionen wirken aber auf Firmware-Funktionen, weil sie Bytes setzen, die die Firmware auswertet:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich/Werte</th>
+<th>Standard</th>
+<th>Wirkung auf die Firmware</th>
+<th>Interner Schlüssel/ID
+</th></tr>
+<tr>
+<td>Leseart (FAHREN → Strecke)</td>
+<td>Auf der Bahn / Ausdruck</td>
+<td>Auf der Bahn</td>
+<td>wählt die Codetabelle des Sensors (Byte 14 Bit 5 oder Bit 7)</td>
+<td><code>trackMode</code>
+</td></tr>
+<tr>
+<td>Leitplanken-Modus der NPCs</td>
+<td>nicht abschaltbar (Schalter entfernt)</td>
+<td>immer an</td>
+<td>NPC-Pakete mit Selbstführungsbytes und Vorausblick; ein NPC ohne ihn würde gar nicht lenken</td>
+<td><code>ghostCfg.railMode = true</code>
+</td></tr>
+<tr>
+<td>Selbstlenkung je gesteuertem Auto (Garage)</td>
+<td>wie Optionen, aus, „hält die Spur, du lenkst mit“, „lenkt selbst“</td>
+<td>wie Optionen</td>
+<td>schickt Selbstführungsbytes für das Spielerauto</td>
+<td><code>car.fahrhilfe</code> (<code><i></i></code><i>, <code>aus</code>, <code>quer</code>, <code>voll</code>)</i>
+</td></tr>
+<tr>
+<td>Drosselung abseits beginnt nach (Optionen)</td>
+<td>Regler</td>
+<td>1,0 s</td>
+<td>so lange muss das Auto durchgehend abseits melden; dieselbe Entprellung nimmt die Selbstführung zurück</td>
+<td><code>offtrackEinMs</code>, <code>setting-offtrack-delay</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Was_belegt_ist">Was belegt ist</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Verhalten der Firmware</th>
+<th>Beleg</th>
+<th>Stand
+</th></tr>
+<tr>
+<td>Zwei Lesearten des Sensors (Bahn und Ausdruck) mit je eigener Codetabelle, gewählt über Byte 14 (Bit 5 bzw. Bit 7)</td>
+<td>Messungen 21., 24.–26.08.2026; mit Bit 7 auf der Schiene 0 Lesungen in 551 Fahrmeldungen, mit Bit 5 1103 Lesungen in 1194</td>
+<td>belegt
+</td></tr>
+<tr>
+<td>In der Leseart „Auf der Bahn“ hält sich das Auto selbst auf der Bahn; im Ausdruck-Modus nicht</td>
+<td>Kachelschritte 87&#160;% gegen 7&#160;% in derselben Aufnahme; Fahrversuche</td>
+<td>belegt
+</td></tr>
+<tr>
+<td>Die Bahn wird auch bei vollem Lenkanschlag gelesen</td>
+<td>67&#160;830 Meldungen mit Code, vier Abrisse, keiner am Anschlag</td>
+<td>belegt
+</td></tr>
+<tr>
+<td>Nach einem erkannten Muster ist der Leser etwa 1 s stumm</td>
+<td>Messung am Start/Ziel-Blatt; bestätigt den Wert <code>PIT_DOUBLE_MIN_MS</code> = 1000 ms</td>
+<td>belegt
+</td></tr>
+<tr>
+<td>Ein einzelnes Codewort von rund 54 mm genügt; der Vorlauf aus dünnen Strichen ist entbehrlich</td>
+<td>Messung mit gekürzten Blättern</td>
+<td>belegt
+</td></tr>
+<tr>
+<td>An der Ziellinie setzt das Auto Byte 15 Bit 3 der Meldung und hält es per Zeitglied (Median 981–1050 ms)</td>
+<td>Mitschnitt 21.08.2026, 16 Runden, 17 Blöcke</td>
+<td>belegt
+</td></tr>
+<tr>
+<td>Abseits der Bahn meldet Byte 12 sofort <code>0x00</code>, der Kachelzähler rast</td>
+<td>Mitschnitt 20.08.2026</td>
+<td>belegt
+</td></tr>
+<tr>
+<td>Das Rücklicht schaltet mit dem Scheinwerfer (Bit 1); Bit 0 ist das Bremslicht; Bit 2 lässt den Scheinwerfer blinken</td>
+<td>Mitschnitt 19.08.2026, Versuche am Auto</td>
+<td>belegt
+</td></tr>
+<tr>
+<td>Die Prüfsumme ist eine CRC-8 (Polynom <code>0x31</code>, Start <code>0xFF</code>); Pakete mit falscher Prüfsumme werden verworfen</td>
+<td>drei aufgezeichnete Prüfsummen reproduziert</td>
+<td>Rechnung belegt, Verwerfen angenommen
+</td></tr>
+<tr>
+<td>Ein Vollgas-Befehl bringt das Auto fast sofort auf Höchsttempo</td>
+<td>Fahrversuche</td>
+<td>belegt (qualitativ)
+</td></tr>
+<tr>
+<td>Tempo proportional zum Gas: 0,0119 m/s je Gasschritt</td>
+<td>Geraden der Mitschnitte 16.–21.08.2026</td>
+<td>belegt bis Gasbyte 56; darüber hochgerechnet
+</td></tr>
+<tr>
+<td>Volles Rückwärts (Δ −127, Byte <code>0x60</code>) fährt vorwärts, Δ −64 (<code>0x9F</code>) rückwärts</td>
+<td>Fahrversuch 20.08.2026</td>
+<td>belegt
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Was_nicht_belegt_ist">Was nicht belegt ist</h3></div>
+<ul><li>der Versionsstand der eigenen Autos (wird nicht ausgelesen)</li>
+<li>ob die Bytes 8, 10 und 12 des Befehls (nach seVen Fahrstil, Fahrassistent, Hersteller) das Fahrverhalten im Auto ändern</li>
+<li>ob die Meldung ein gemessenes Tempo enthält (nach seVen Byte 14)</li>
+<li>die genaue Rückwärtsgrenze (nach seVen Byte <code>0x80</code>)</li>
+<li>wie die Firmware aus einem Strichcode die gemeldete Zahl bildet</li>
+<li>mit welchem Verfahren das letzte Byte der Meldung gebildet wird (eine CRC-8 wie beim Befehl ist es nach Nachrechnung nicht)</li>
+<li>was das Auto tut, wenn keine Befehle mehr kommen; ein sicherer Halt ist vermutet, nicht gemessen</li>
+<li>ob die Firmware im Selbstführungsmodus den Lenkwert als gewünschte <b>Querlage</b> auf der Fahrbahn deutet oder weiter als <b>Radwinkel</b> (siehe <a href="#Wann_das_Auto_selbst_fährt">unten</a>)</li>
+<li>ob ein künftiges Update das Protokoll ändert</li></ul>
+<p>Die interne Dokumentation hält fest, dass sich die Firmware während der Untersuchung schon einmal geändert hat, mit unbekannter Auswirkung; Messungen zu Strichcodes tragen deshalb ein Datum.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Fahrphysik_im_Auto">Fahrphysik im Auto</h3></div>
+<p>Die App sendet zwei Werte: Gas um <code>0xDF</code> und Lenkung −127 … +127 (Byte 6 und 7). Alles Weitere entscheidet die Firmware. Daraus folgt für OmegaSim:
+</p>
+<ul><li>Ein eigenes Fahrmodell kann nur über diese zwei Bytes wirken. OmegaSim rampt das Gas über die Zeit hoch, rechnet Gänge, Reifen und Reibkreis und schneidet den Lenkwert, aber nichts davon erreicht das Auto anders als über Byte 6 und 7 (siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>).</li>
+<li>Unterschiede zwischen Autos (Akku, Mechanik) bleiben, weil die Firmware keine Tempo-Rückmeldung liefert, nach der die App regeln könnte.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Updates_über_Bluetooth_(OTA)"><span id="Updates_.C3.BCber_Bluetooth_.28OTA.29"></span>Updates über Bluetooth (OTA)</h3></div>
+<p>Das Auto bietet den Dienst <b>Nordic Secure DFU</b> an (<code>0000fe59-0000-1000-8000-00805f9b34fb</code>). Im Mitschnitt vom 13.08.2026 erscheint darunter das Merkmal <code>8ec90003-f315-4f60-9fb8-838830daea50</code> mit dem Eigenschaftsbyte <code>0x28</code> (schreiben und Indication), der „Bootloader-Trigger“ des Nordic-Verfahrens. Über ihn kann der Hersteller mit seiner App neue Firmware aufspielen.
+</p><p>OmegaSim spielt keine Firmware auf. Die vier DFU-UUIDs stehen in <code>DANGER_UUIDS</code>; der BLE-Explorer färbt sie rot und fragt vor jedem Schreiben ausdrücklich nach<sup id="cite&#95;ref-1" class="reference"><a href="#cite_note-1"><span class="cite-bracket">&#91;</span>1<span class="cite-bracket">&#93;</span></a></sup>:
+</p>
+<div class="mw-highlight mw-highlight-lang-javascript mw-content-ltr" dir="ltr"><pre><span></span><span class="c1">// src/10-ble-explorer.js, Merkmalsliste des BLE-Explorers</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">isDanger</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="nx">confirm</span><span class="p">(</span>
+<span class="w">  </span><span class="s1">&#39;Das ist der Nordic Secure DFU / Bootloader-Kanal für Firmware-Updates, ...\n&#39;</span><span class="w"> </span><span class="o">+</span>
+<span class="w">  </span><span class="s1">&#39;Ein falscher Schreibzugriff kann das Auto in den Update-Modus versetzen &#39;</span><span class="w"> </span><span class="o">+</span>
+<span class="w">  </span><span class="s1">&#39;oder die Firmware beschädigen.\n\nWirklich trotzdem schreiben?&#39;</span>
+<span class="p">))</span><span class="w"> </span><span class="k">return</span><span class="p">;</span>
+</pre></div>
+<p>Der normale Fahrbetrieb berührt den DFU-Dienst nie: Die Garage fordert beim Verbinden nur den Nordic UART Service an (<code>optionalServices: [NUS_SERVICE]</code>).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Wann_das_Auto_selbst_fährt"><span id="Wann_das_Auto_selbst_f.C3.A4hrt"></span>Wann das Auto selbst fährt</h3></div>
+<p>„Selbst fahren“ hat zwei Bedeutungen, und beide treffen sich in der Firmware.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="1._Selbstführung_in_der_Firmware"><span id="1._Selbstf.C3.BChrung_in_der_Firmware"></span>1. Selbstführung in der Firmware</h4></div>
+<p>In der Leseart „Auf der Bahn“ hält sich das Auto selbst auf der Bahn. Die Original-App schaltete im Leitplanken-Modus zusätzlich einen Vorausblick ein. Aus den Mitschnitten ergeben sich folgende Paketfelder für die Selbstführung<sup id="cite&#95;ref-2" class="reference"><a href="#cite_note-2"><span class="cite-bracket">&#91;</span>2<span class="cite-bracket">&#93;</span></a></sup>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Byte</th>
+<th>Wert</th>
+<th>Herkunft
+</th></tr>
+<tr>
+<td>10</td>
+<td><code>0x20</code></td>
+<td>Original-App an ihre selbst gefahrenen Gegner, konstant über 2496 und 2457 Pakete (Spielerauto: <code>0x60</code>; Leitplanken-Modus von Hand: <code>0x30</code>)
+</td></tr>
+<tr>
+<td>14</td>
+<td>Bit 5 (<code>0x20</code>)</td>
+<td>Leseart Bahn; im Leitplanken-Mitschnitt ging Byte 14 bei 37,8 s von <code>0x02</code> auf <code>0x22</code>
+</td></tr>
+<tr>
+<td>15</td>
+<td><code>0x0C</code> (Bit 3 gesetzt)</td>
+<td>Gegner der Original-App (<code>0x0C</code>/<code>0x0E</code>; Bit 1 folgt dem Gas, deshalb nicht übernommen); Spielerauto <code>0x04</code>
+</td></tr>
+<tr>
+<td>16–18</td>
+<td>Typen der nächsten drei Teile</td>
+<td>Leitplanken-Mitschnitt, 552 Pakete, Fenster rückt an jeder Teilegrenze weiter
+</td></tr></tbody></table>
+<p>Die Querregelung geschieht im Auto: Das Protokoll enthält keine Meldung der Querlage, und bei einem Meldetakt von rund 69 ms (14,6 Hz) könnte die App ohnehin nicht schnell genug nachregeln. Byte 10 ist nach den Mitschnitten <b>nicht</b> das, was das Lesen von Codes freischaltet: In einer Aufnahme vom 21.08. sendete die Original-App <code>0x60</code> und bekam 463 Codes.
+</p><p>OmegaSim setzt diese Bytes (<code>car.modeBytes</code>) in drei Lagen: für NPCs (der Leitplanken-Modus ist bei ihnen fest eingeschaltet), für das Spielerauto unter Autopilot oder Fahrhilfe, und beim Streckenscan. Es nimmt sie zurück, sobald das Auto die Bahn nicht mehr liest (entprellt über <code>abseitsJetzt()</code>, ab Werk 1 s): Dann deutet das Auto den Lenkwert wieder als Radstellung, und der Fahrer kann selbst zurück auf die Bahn lenken.
+</p><p><b>Noch nicht gesichert</b> ist, wie die Firmware den Lenkwert im Selbstführungsmodus genau deutet. Der Code von OmegaSim nimmt an, dass er dort eine gewünschte Querlage bedeutet; CARRERA_HYBRID.md weist darauf hin, dass das nie gemessen wurde. Der „Querlage-Prüfstand“ in den NPC-Optionen schickt deshalb einen festen Wert direkt auf Byte 7, damit sich am Auto prüfen lässt, ob es neben der Mitte bleibt.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="2._Autopilot_in_OmegaSim">2. Autopilot in OmegaSim</h4></div>
+<p>In zwei Rennlagen <b>ersetzt</b> OmegaSim die Eingabe des Fahrers, statt sie nur zu formen. Entschieden wird das in <code>autopilotGrund()</code><sup id="cite&#95;ref-3" class="reference"><a href="#cite_note-3"><span class="cite-bracket">&#91;</span>3<span class="cite-bracket">&#93;</span></a></sup>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Zustand</th>
+<th>Bedingung</th>
+<th>Ergebnis
+</th></tr>
+<tr>
+<td>Leseart Ausdruck</td>
+<td><code>trackMode&#160;!== 'on'</code></td>
+<td>kein Autopilot (ohne Selbstführung führe das Auto geradeaus in die Bande)
+</td></tr>
+<tr>
+<td>Aufstellung</td>
+<td>Spielerauto hat ein Aufstellungsziel und kein Rennen läuft</td>
+<td><code>'aufstellen'</code>
+</td></tr>
+<tr>
+<td>Einführungsrunde</td>
+<td><code>raceFormationLap</code></td>
+<td><code>'formation'</code>, oder <code>'yellow'</code>, wenn Gelb langsamer ist als das Formationstempo
+</td></tr>
+<tr>
+<td>Gelbe Flagge oder Neustart</td>
+<td><code>flagState</code> ist <code>'yellow'</code> oder <code>'restart'</code></td>
+<td><code>'yellow'</code>
+</td></tr>
+<tr>
+<td>sonst</td>
+<td>–</td>
+<td>kein Autopilot
+</td></tr></tbody></table>
+<table class="wikitable">
+<tbody><tr>
+<th>Lage</th>
+<th>Ziel</th>
+<th>Lenkung
+</th></tr>
+<tr>
+<td>Gelbe Flagge</td>
+<td>Gelb-Tempo (Gerade Δ 51, Kurve Δ 47, Haarnadel Δ 44), mittig</td>
+<td>null, damit die Spur vorhersagbar bleibt
+</td></tr>
+<tr>
+<td>Einführungsrunde</td>
+<td>Formationstempo (Gerade und Kurve Δ 44, Haarnadel Δ 42)</td>
+<td>Schlängeln plus Seite des Startplatzes; die Bremse des Fahrers gewinnt
+</td></tr>
+<tr>
+<td>dabei neben der Bahn</td>
+<td>unverändert</td>
+<td>beim Fahrer
+</td></tr></tbody></table>
+<p>Der Autopilot fährt über synthetische Eingaben in <code>physicsStep()</code>, nicht über einen zweiten Sender: Zwei Sender auf demselben Merkmal würden sich um den 45-ms-Takt streiten. Unter Autopilot gehen Fahrgefühl-Faktor und Akku-Ausgleich nicht ins Gas ein, damit das Spielerauto genau so schnell fährt wie die NPCs.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Abgleich_mit_seVen">Abgleich mit seVen</h3></div>
+<p>seVen hat eine byteweise Beschreibung des HYBRID-Protokolls geteilt. In den tragenden Teilen stimmt sie mit den eigenen Messungen überein: Rahmenlänge, Rahmenkennung <code>0xAF</code>, Byte 6 Tempo um <code>0xDF</code>, Byte 7 Servo, Byte 11 Zähler, Byte 12 Kachelcode. Die sieben Abweichungen aus CARRERA_HYBRID.md<sup id="cite&#95;ref-4" class="reference"><a href="#cite_note-4"><span class="cite-bracket">&#91;</span>4<span class="cite-bracket">&#93;</span></a></sup>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Nr.</th>
+<th>Punkt</th>
+<th>seVen</th>
+<th>OmegaSim / eigene Messung</th>
+<th>Stand und Folgerung
+</th></tr>
+<tr>
+<td>1</td>
+<td>Rückwärtsgrenze</td>
+<td>vorwärts <code>0xE0</code>–<code>0xFF</code>, <code>0x00</code>–<code>0x6F</code> (144 Stufen); rückwärts <code>0x80</code>–<code>0xDE</code> (95 Stufen)</td>
+<td><code>MIN_THROTTLE_DELTA</code> = −64, weil Δ −127 (<code>0x60</code>) vorwärts fuhr</td>
+<td>seVen erklärt die Beobachtung: <code>0x60</code> liegt im Vorwärtsbereich. Vorschlag Δ −95 (48&#160;% mehr Rückwärtsweg), am Auto noch nicht nachgefahren
+</td></tr>
+<tr>
+<td>2</td>
+<td>Befehlsbytes 8, 10, 12</td>
+<td>Byte 8 Fahrstil (<code>0x64</code> Arcade, <code>0x78</code> Realistisch); Byte 10 Fahrassistent (<code>0x22</code> hoch, <code>0x42</code> mittel, <code>0x52</code> niedrig, <code>0x62</code> aus); Byte 12 Hersteller (<code>0x01</code> Porsche, <code>0x02</code> BMW, <code>0x03</code> Ford)</td>
+<td>fest <code>0x80</code>, <code>0x60</code> (NPC <code>0x20</code>/<code>0x30</code>), <code>0x01</code> aus Mitschnitten der Original-App</td>
+<td>kein Widerspruch, vermutlich weitere gültige Werte oder andere Firmware-Fassung; nicht erprobt. Am risikoärmsten wäre Byte 12
+</td></tr>
+<tr>
+<td>3</td>
+<td>Byte 14 der Meldung</td>
+<td><code>speedFeedBack</code>, gemessenes Tempo, Kodierung wie Befehl</td>
+<td>nicht gelesen; OmegaSim liest Byte 3, 10, 11, 12 (und 1, 15)</td>
+<td>offen; wäre die größte Einzelverbesserung (echte Tempo-Regelung der NPCs)
+</td></tr>
+<tr>
+<td>4</td>
+<td>Kachelcodes</td>
+<td>zusätzlich <code>0x07</code> Boxengasse, <code>0x08</code>/<code>0x09</code> große 30°-Kurve, <code>0x0A</code> Engstelle, <code>0x0B</code>/<code>0x0C</code> kleine 30°-Kurve</td>
+<td>übernommen; <code>0x0A</code> war vorher als Start/Ziel geführt</td>
+<td>seVen bestätigte auf Rückfrage: seine Tabelle gilt im Bahn-Modus. Damit ist <code>0x01</code> Start/Ziel auf der Schiene, <code>0x0A</code> Start/Ziel nur auf Papier
+</td></tr>
+<tr>
+<td>5</td>
+<td>Akkuskala</td>
+<td>131 bis 155</td>
+<td>damals 111 bis 155, heute 138 bis 155</td>
+<td>beide geschätzt; bei Rohwert 131 zeigte die alte Skala 45&#160;%, seVen 0&#160;%. Nachmessen durch Leerfahren
+</td></tr>
+<tr>
+<td>6</td>
+<td>Prüfsumme und Ziellinie</td>
+<td>Prüfsumme „XOR über Bytes 0…18“; Ziellinie als Flanke <code>0x00</code> → <code>0x08</code> in Byte 15</td>
+<td>CRC-8, Polynom <code>0x31</code>, Start <code>0xFF</code>, reproduziert <code>0xA4</code>, <code>0x33</code>, <code>0x83</code>; Ziellinie deckt sich mit <code>ZIEL_SPERRE_BIT</code></td>
+<td>Prüfsumme: eigene Messung stärker (XOR ergibt für das Leerlaufpaket <code>0x17</code> statt <code>0x33</code>). Ziellinie: unabhängige Bestätigung in beide Richtungen
+</td></tr>
+<tr>
+<td>7</td>
+<td>Bytes 16–18</td>
+<td>im manuellen Profil werden <code>trackPosition</code>, <code>currentTile</code>, <code>previousTile</code> ans Auto zurückgespiegelt</td>
+<td>Nullen, nur bei Selbstführung der Vorausblick</td>
+<td>offen, ob das Auto die Rückspiegelung braucht; sie wäre die einfachste Erklärung, falls der Bahn-Modus ohne sie schlechter liest
+</td></tr></tbody></table>
+<p>Umgekehrt fehlte in seVens Beschreibung, dass der Sensor zwei Codetabellen hat, je eine pro Leseart.
+</p><p>Zur dritten aufgezeichneten Prüfsumme nennen die Quellen zwei Werte: CARRERA_HYBRID.md schreibt <code>0x83</code>, der Kommentar in <code>src/20-protocol.js</code> <code>0xE0</code>. Welcher Wert zu welchem Paket gehört, ist hier nicht nachgeprüft.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Das_Leerlaufpaket_und_seine_Prüfsumme"><span id="Das_Leerlaufpaket_und_seine_Pr.C3.BCfsumme"></span>Das Leerlaufpaket und seine Prüfsumme</h3></div>
+<p>Leerlaufpaket der Original-App: <code>AF 00 00 00 00 00 DF 00 80 00 60 00 01 00 82 04 00 00 00</code>.
+</p>
+<ol><li>CRC-8 nach OmegaSim: Startwert <code>0xFF</code>, über 19 Byte gerechnet → <code>0x33</code>. Das ist die aufgezeichnete Prüfsumme; die Firmware nimmt das Paket an.</li>
+<li>XOR über dieselben 19 Byte (seVen): <code>0xAF ⊕ 0xDF ⊕ 0x80 ⊕ 0x60 ⊕ 0x01 ⊕ 0x82 ⊕ 0x04 = 0x17</code>. Das passt nicht zur Aufzeichnung.</li>
+<li>Byte 14 = <code>0x82</code> = <code>1000 0010</code>: Bit 7 (Ausdruck) und Bit 1 (Scheinwerfer). Diese Aufzeichnung stammte also aus der Stellung „Ohne Bahn“; auf der Schiene hätte das Auto damit nichts gelesen.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Selbstführung_einschalten"><span id="Selbstf.C3.BChrung_einschalten"></span>Selbstführung einschalten</h3></div>
+<p>Ein NPC im Leitplanken-Modus, Gas 0,55 (Δ 70), Lenkung 0, Licht an, nächste drei Teile Gerade, Rechtskurve, Rechtskurve:
+</p>
+<ol><li>Byte 6 = (0xDF + 70) mod 256 = 293 − 256 = 37 = <code>0x25</code>.</li>
+<li>Byte 10 = <code>0x20</code>, Byte 15 = <code>0x0C</code> (statt <code>0x60</code>/<code>0x04</code>).</li>
+<li>Byte 14 = Bahn <code>0x20</code> | Scheinwerfer <code>0x02</code> = <code>0x22</code>.</li>
+<li>Bytes 16–18 = <code>02 04 04</code>.</li>
+<li>Der Rest wie beim Spielerpaket, dann CRC-8.</li></ol>
+<p>Fährt dieser NPC von der Bahn (Byte 12 <code>0x00</code> länger als die Entprellzeit), setzt OmegaSim <code>modeBytes</code> auf <code>null</code>, und das nächste Paket hat wieder <code>0x60</code>/<code>0x04</code> und Nullen in 16–18.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Was_eine_Rückwärtsgrenze_von_−95_bedeuten_würde"><span id="Was_eine_R.C3.BCckw.C3.A4rtsgrenze_von_.E2.88.9295_bedeuten_w.C3.BCrde"></span>Was eine Rückwärtsgrenze von −95 bedeuten würde</h3></div>
+<p>Heute: Δ min −64 → Byte <code>0x9F</code>. Vorschlag: Δ −95 → 223 − 95 = 128 = <code>0x80</code>, genau der Bereichsanfang nach seVen. Der Rückwärtsweg wüchse von 64 auf 95 Stufen, also um (95 − 64) / 64 = 48&#160;%. Δ −96 ergäbe <code>0x7F</code> und läge schon außerhalb des beschriebenen Rückwärtsbereichs.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li>OmegaSim kann nach einem Firmware-Update des Herstellers unbrauchbar werden; die Lizenzseite der App weist darauf hin.</li>
+<li>Alle Aussagen gelten für den Stand August 2026. Ein Update kann Codetabellen, Byte-Bedeutungen oder die Prüfsumme ändern.</li>
+<li>Ohne Versionsabfrage lassen sich Fehlermeldungen von Nutzern nicht einem Firmware-Stand zuordnen.</li>
+<li>Die Selbstführung ist eine Black Box: Wie stark die Firmware den Lenkwert berücksichtigt, ist offen; ein Versuch dazu (Versatz 0&#160;% gegen 100&#160;%, Abgänge und Rundenzeiten zählen) ist in der Doku beschrieben, aber nicht ausgewertet.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version (OmegaSim)</th>
+<th>Änderung mit Bezug zur Firmware
+</th></tr>
+<tr>
+<td>August 2026</td>
+<td>Mitschnitte der Original-App, Entschlüsselung von Rahmen, CRC-8 und Lesearten
+</td></tr>
+<tr>
+<td>0.4.54</td>
+<td>Autopilot auch für die Einführungsrunde (vorher nur Gelb)
+</td></tr>
+<tr>
+<td>0.6.14</td>
+<td>Codetabellen je Leseart; <code>0x0A</code> auf der Schiene ist keine Ziellinie mehr
+</td></tr>
+<tr>
+<td>0.6.28</td>
+<td>Autopilot gibt neben der Bahn die Lenkung an den Fahrer zurück
+</td></tr>
+<tr>
+<td>0.9.37</td>
+<td>Ziellinien-Bit der Firmware (Byte 15) als Rundenmarke
+</td></tr>
+<tr>
+<td>0.9.51</td>
+<td>Selbstführungsbytes auch ohne Vorausblick
+</td></tr>
+<tr>
+<td>1.1.40</td>
+<td>Tempo-Grenzen als Gasschritte dokumentiert
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
+<div class="mw-references-wrap"><ol class="references">
+<li id="cite&#95;note-1"><span class="mw-cite-backlink"><a href="#cite_ref-1">↑</a></span> <span class="reference-text">Rückfrage mit <code>confirm()</code> in der Merkmalsliste, <code>src/10-ble-explorer.js</code>.</span>
+</li>
+<li id="cite&#95;note-2"><span class="mw-cite-backlink"><a href="#cite_ref-2">↑</a></span> <span class="reference-text"><code>AUTO_MODE</code>, <code>RAIL_MODE</code> und Kommentare, <code>src/60-track.js</code>.</span>
+</li>
+<li id="cite&#95;note-3"><span class="mw-cite-backlink"><a href="#cite_ref-3">↑</a></span> <span class="reference-text"><code>autopilotGrund()</code>, <code>src/50-drive.js</code>.</span>
+</li>
+<li id="cite&#95;note-4"><span class="mw-cite-backlink"><a href="#cite_ref-4">↑</a></span> <span class="reference-text">CARRERA_HYBRID.md, Abschnitt „Abgleich mit der Protokollbeschreibung von seVen“, Punkte 1–7.</span>
+</li>
+</ol></div>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a></li>
+<li><a href="./Original-App.html" title="Original-App">Original-App</a></li>
+<li><a href="./Strecke.html" title="Strecke">Strecke</a></li>
+<li><a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a></li>
+<li><a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a></li>
+<li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
+<li><a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/10-ble-explorer.js</code>: <code>KNOWN_UUIDS</code>, <code>DANGER_UUIDS</code>, <code>crc8()</code>, <code>MIN_THROTTLE_DELTA</code></li>
+<li><code>src/20-protocol.js</code>: <code>buildCommandPacket()</code>, <code>TRACK_BIT_RAIL</code>, <code>TRACK_BIT_PRINT</code></li>
+<li><code>src/60-track.js</code>: <code>AUTO_MODE</code>, <code>RAIL_MODE</code>, <code>isStartCode()</code></li>
+<li><code>src/50-drive.js</code>: <code>autopilotGrund()</code>, <code>abseitsJetzt()</code>, <code>offtrackEinMs</code></li>
+<li><code>src/90-ghosts.js</code>: <code>ghostLookahead()</code>, Zuweisungen von <code>car.modeBytes</code></li>
+<li><code>src/70-race.js</code>: <code>ZIEL_SPERRE_BIT</code>, <code>AKKU_LEER</code></li>
+<li><code>CARRERA_HYBRID.md</code>, <code>tools/parse_btsnoop.py</code> (die Mitschnitte selbst sind nicht im Repository)</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw203
+Cached time: 20261027053452
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.065 seconds
+Real time usage: 0.069 seconds
+Preprocessor visited node count: 145/1000000
+Revision size: 22562/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 1/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 2675/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.213      1 Vorlage:Stand
+100.00%    3.213      1 -total
+-->
+
+<!-- Render ID 220aed36-d1c8-11f1-88fd-bc241191c1f4 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:24:|#|:idhash:canonical and timestamp 20261027053452 and revision id 83. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

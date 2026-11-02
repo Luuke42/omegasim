@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carrera HYBRID - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Carrera HYBRID</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:Carrera-HYBRID-Porsche-911-GT3-R.jpg" class="mw-file-description"><img src="images/250px-Carrera-HYBRID-Porsche-911-GT3-R.jpg" decoding="async" loading="lazy" width="250" height="188" class="mw-file-element" srcset="images/500px-Carrera-HYBRID-Porsche-911-GT3-R.jpg 2x" data-file-width="2000" data-file-height="1500" /></a><figcaption>Zwei Carrera-HYBRID-Autos (Porsche 911 GT3 R) mit eingeschaltetem Licht. Foto: Luuke42</figcaption></figure>
+<p><b>Carrera HYBRID</b> ist ein Spielsystem des Herstellers Carrera, bei dem kleine, per <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a> gesteuerte Rennautos im Maßstab 1:50 frei auf lose ausgelegten Streckenteilen fahren. Anders als bei einer klassischen Carrera-Bahn gibt es keine Führungsrille: Ein Sensor an der Unterseite liest einen Strichcode auf dem Streckenteil, und das Auto meldet der App, auf welchem Teil es gerade fährt. Gesteuert wird es von der <a href="./Original-App.html" title="Original-App">Original-App</a> des Herstellers oder von unabhängigen Programmen wie <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>, die dieselbe Funkschnittstelle sprechen. Dieser Artikel beschreibt das Auto und sein Funkprotokoll so, wie sie in der Dokumentation und im Quelltext von OmegaSim festgehalten sind; das Protokoll ist nicht offengelegt, sondern aus Mitschnitten rekonstruiert.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Wert</th>
+<th>Beleg
+</th></tr>
+<tr>
+<td>Funk</td>
+<td>Bluetooth Low Energy, Gerätename beginnt mit <code>HYBRID-</code></td>
+<td><code>src/10-ble-explorer.js</code>
+</td></tr>
+<tr>
+<td>Steuerkanal</td>
+<td>Nordic UART Service (NUS), Merkmal RX <code>6e400002-…</code></td>
+<td><code>src/50-drive.js</code>, <code>NUS_RX</code>
+</td></tr>
+<tr>
+<td>Meldekanal</td>
+<td>NUS TX <code>6e400003-…</code>, Notifications</td>
+<td><code>src/50-drive.js</code>, <code>NUS_TX</code>
+</td></tr>
+<tr>
+<td>Befehlspaket</td>
+<td>20 Byte, beginnt mit <code>0xAF</code>, endet mit CRC-8</td>
+<td><code>buildCommandPacket()</code>
+</td></tr>
+<tr>
+<td>Sendetakt in OmegaSim</td>
+<td>45 ms (rund 22 Pakete je Sekunde)</td>
+<td><code>CONTROL_SEND_INTERVAL_MS</code>
+</td></tr>
+<tr>
+<td>Gas</td>
+<td>Byte 6, Neutral <code>0xDF</code>, ±Δ Gasschritte</td>
+<td><code>src/20-protocol.js</code>
+</td></tr>
+<tr>
+<td>Lenkung</td>
+<td>Byte 7 (und Kopie in Byte 9), vorzeichenbehaftet −127 … +127</td>
+<td><code>src/20-protocol.js</code>
+</td></tr>
+<tr>
+<td>Licht und Leseart</td>
+<td>Byte 14, einzelne Bits</td>
+<td><code>LIGHT_HEAD</code>, <code>TRACK_BIT_RAIL</code>
+</td></tr>
+<tr>
+<td>Tempo</td>
+<td>0,0119 m/s je Gasschritt, Vollgas rund 1,51 m/s</td>
+<td><code>TACHO_SCALE</code>, <code>src/30-input.js</code>
+</td></tr>
+<tr>
+<td>Fahrbahn</td>
+<td>25 cm breit, Gerade rund 43 cm lang</td>
+<td>CARRERA_HYBRID.md
+</td></tr>
+<tr>
+<td>Firmware-Update</td>
+<td>Nordic Secure DFU vorhanden, OmegaSim nutzt es nicht</td>
+<td>siehe <a href="./Firmware.html" title="Firmware">Firmware</a>
+</td></tr>
+<tr>
+<td>Status der Entschlüsselung</td>
+<td>Kernbytes gesichert, einige Bytes offen</td>
+<td>siehe <a href="#Was_noch_nicht_gesichert_ist">unten</a>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<p>Wer das Protokoll lesen will, braucht ein paar Begriffe. Sie werden hier kurz erklärt; ausführlicher stehen sie im <a href="./Glossar.html" title="Glossar">Glossar</a> und in den Artikeln <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a> und <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Bit,_Byte_und_Hexadezimalzahl"><span id="Bit.2C_Byte_und_Hexadezimalzahl"></span>Bit, Byte und Hexadezimalzahl</h3></div>
+<p>Ein <b>Bit</b> ist die kleinste Informationseinheit: 0 oder 1. Acht Bits ergeben ein <b>Byte</b>, das Werte von 0 bis 255 annehmen kann. Weil lange Bitfolgen unhandlich sind, schreibt man Bytes meist <b>hexadezimal</b> (zur Basis 16, Ziffern 0–9 und A–F) mit dem Vorsatz <code>0x</code>. Eine Hex-Ziffer steht genau für vier Bits, ein Byte also für zwei Hex-Ziffern:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Hex</th>
+<th>Dezimal</th>
+<th>Binär</th>
+<th>Bedeutung im Auto
+</th></tr>
+<tr>
+<td><code>0x0A</code></td>
+<td>10</td>
+<td><code>0000 1010</code></td>
+<td>Streckencode „Engstelle“ (Bahn) oder Start/Ziel (Ausdruck)
+</td></tr>
+<tr>
+<td><code>0x20</code></td>
+<td>32</td>
+<td><code>0010 0000</code></td>
+<td>Bit 5 gesetzt: Leseart „Auf der Bahn“
+</td></tr>
+<tr>
+<td><code>0x22</code></td>
+<td>34</td>
+<td><code>0010 0010</code></td>
+<td>Bit 5 und Bit 1: Bahn plus Scheinwerfer
+</td></tr>
+<tr>
+<td><code>0xAF</code></td>
+<td>175</td>
+<td><code>1010 1111</code></td>
+<td>Rahmenkennung, erstes Byte jedes Befehls
+</td></tr>
+<tr>
+<td><code>0xDF</code></td>
+<td>223</td>
+<td><code>1101 1111</code></td>
+<td>Gas neutral
+</td></tr></tbody></table>
+<p>Bits zählt man von rechts: Bit 0 ist die Einerstelle (Wert 1), Bit 1 hat den Wert 2, Bit 5 den Wert 32 (<code>0x20</code>), Bit 7 den Wert 128 (<code>0x80</code>). Ein Byte, in dem mehrere Schalter stecken, heißt <b>Bitfeld</b>; man setzt einen Schalter mit ODER (<code>|</code>) und prüft ihn mit UND (<code>&amp;</code>).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Vorzeichenbehaftetes_Byte">Vorzeichenbehaftetes Byte</h3></div>
+<p>Ein Byte kann auch negative Zahlen tragen („Zweierkomplement“): 0 bis 127 bleiben positiv, 128 bis 255 bedeuten −128 bis −1. So steht <code>0x7F</code> für +127 (voll rechts), <code>0x81</code> für −127 (voll links). Das hat eine Falle: Rechnet man über 127 hinaus, „bricht“ der Wert in den negativen Bereich um. Ein Lenkwert von +128 käme als −128, also als Vollausschlag in die <b>andere</b> Richtung an. OmegaSim begrenzt deshalb jeden Lenkwert hart auf ±127.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Modulo-256-Rechnung">Modulo-256-Rechnung</h3></div>
+<p>Ein Byte kann nicht über 255 hinaus; was darüber liegt, läuft wieder bei 0 los (Rechnung „modulo 256“). Das Gasbyte nutzt das absichtlich: <code>0xDF + 56 = 0x117</code>, davon bleibt im Byte <code>0x17</code>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Prüfsumme"><span id="Pr.C3.BCfsumme"></span>Prüfsumme</h3></div>
+<p>Eine <b>Prüfsumme</b> ist ein aus allen übrigen Bytes errechnetes Kontrollbyte. Der Empfänger rechnet sie nach; stimmt sie nicht, verwirft er das Paket. Bei HYBRID ist es eine <b>CRC-8</b> (zyklische Redundanzprüfung mit 8 Bit), siehe <a href="#Prüfsumme_(CRC-8)">unten</a>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="GATT,_Dienst,_Merkmal,_Notification"><span id="GATT.2C_Dienst.2C_Merkmal.2C_Notification"></span>GATT, Dienst, Merkmal, Notification</h3></div>
+<p>Bluetooth-Low-Energy-Geräte ordnen ihre Daten in einem Baum namens <b>GATT</b> (Generic Attribute Profile). Ganz oben stehen <b>Dienste</b> (englisch <i>services</i>), darin <b>Merkmale</b> (<i>characteristics</i>), also einzelne Datenfelder mit einer weltweit eindeutigen Kennung (UUID). Ein Merkmal kann man lesen, beschreiben oder abonnieren. Beim <b>Schreiben mit Antwort</b> bestätigt das Auto jedes Paket; beim <b>Schreiben ohne Antwort</b> schickt die App das Paket einfach ab. Ein Abonnement heißt <b>Notification</b>: Das Auto schickt von sich aus neue Werte, ohne dass die App fragt. Wie oft gefunkt wird, legt das <b>Verbindungsintervall</b> fest, das Handy und Auto aushandeln; mehr dazu in <a href="./OmegaBle.html#Grundlagen" title="OmegaBle">OmegaBle</a>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Firmware">Firmware</h3></div>
+<p>Die <b><a href="./Firmware.html" title="Firmware">Firmware</a></b> ist das Programm im Auto. Sie setzt die empfangenen Zielwerte in Motor- und Servobewegung um, liest den Sensor aus und sendet die Meldungen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<p>So wird ein HYBRID-Auto mit OmegaSim in Betrieb genommen:
+</p>
+<ol><li>Auto einschalten und aufladen. Ein Auto, das bereits mit einem anderen Gerät verbunden ist, wirbt nicht und wird nicht gefunden.</li>
+<li>In OmegaSim <b>FAHREN → Autos → Auto verbinden</b> (in der Garage). Im Browser wählt man das Auto im Auswahlfenster des Browsers (Filter: Name beginnt mit „HYBRID“ oder Gerät bietet den Nordic UART Service an). In der Android-App öffnet sich die Suche des Bluetooth-Plugins.</li>
+<li>Nach dem Verbinden spielt OmegaSim einen Anlassklang; das erste verbundene Auto wird Spieler 1, jedes weitere ein NPC, sofern keine gemerkte Rolle vorliegt.</li>
+<li>Die <b>Leseart</b> wählen: <b>Auf der Bahn</b> für die Kunststoffteile, <b>Ausdruck</b> für gedruckte Muster (FAHREN → Strecke, am Gamepad L1). Siehe <a href="./Strecke.html" title="Strecke">Strecke</a>.</li>
+<li>Mit <b>Blinken</b> in der Garage lässt sich prüfen, welches physische Auto zu welcher Zeile gehört.</li>
+<li>Fahren. Gas, Lenkung und Licht schickt OmegaSim im 45-ms-Takt; die Meldungen des Autos (Akku, Streckencode, Teilezähler) erscheinen im Cockpit.</li>
+<li>Zum Trennen <b>Garage → Alle trennen</b>. Reagiert ein Auto nicht, hilft <a href="./Keine_Reaktion_des_Fahrzeugs.html" title="Keine Reaktion des Fahrzeugs">Keine Reaktion des Fahrzeugs</a>.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<p>Am Auto selbst gibt es keine Einstellungen; OmegaSim bietet die folgenden, die direkt Bytes des Protokolls betreffen.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich/Werte</th>
+<th>Standard</th>
+<th>Wirkung (aus dem Code)</th>
+<th>Interner Schlüssel/ID
+</th></tr>
+<tr>
+<td>Leseart (FAHREN → Strecke)</td>
+<td>Auf der Bahn / Ausdruck</td>
+<td>Auf der Bahn</td>
+<td>setzt in Byte 14 Bit 5 (<code>0x20</code>) oder Bit 7 (<code>0x80</code>)</td>
+<td><code>trackMode</code> (<code>'on'</code>/<code>'off'</code>)
+</td></tr>
+<tr>
+<td>Licht (Dreieck/Y)</td>
+<td>an/aus</td>
+<td>an</td>
+<td>Bit 1 in Byte 14 (<code>LIGHT_HEAD</code>)</td>
+<td><code>headlightsOn</code>
+</td></tr>
+<tr>
+<td>Marke / Modell (Garage)</td>
+<td>Nicht zugeordnet, BMW, Porsche 911, Ford Mustang, Ferrari, Audi, McLaren, Mercedes, Red Bull, VW Käfer</td>
+<td>Nicht zugeordnet</td>
+<td>nur Anzeige, Ansagen und Kartensymbol; ändert kein Byte</td>
+<td><code>car.modellId</code>
+</td></tr>
+<tr>
+<td>Leistung über Akkulaufzeit konstant halten (Optionen → Allgemein → Akku, WIP)</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>multipliziert das Vorwärtsgas mit dem Ausgleichsfaktor (siehe <a href="#Akku">Akku</a>)</td>
+<td><code>setting-battery-comp</code>
+</td></tr>
+<tr>
+<td>Referenz-Akkustand</td>
+<td>20–100&#160;% in 5er-Schritten</td>
+<td>50&#160;%</td>
+<td>Zielwert des Ausgleichs</td>
+<td><code>setting-battery-ref</code>
+</td></tr>
+<tr>
+<td>Bekannte Autos beim Start verbinden (System, nur App)</td>
+<td>an/aus</td>
+<td>an</td>
+<td>verbindet gemerkte Autos über ihre MAC-Adresse</td>
+<td><code>setting-autoverbinden</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Aufbau_des_Autos">Aufbau des Autos</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Bauteil</th>
+<th>Aufgabe</th>
+<th>Gesichert?
+</th></tr>
+<tr>
+<td>Motor</td>
+<td>treibt die Hinterräder an</td>
+<td>ja
+</td></tr>
+<tr>
+<td>Lenkservo</td>
+<td>dreht die Vorderräder; Lenkbereich in OmegaSims Rechnung bis 45 Grad</td>
+<td>ja (Winkel geschätzt)
+</td></tr>
+<tr>
+<td>Akku</td>
+<td>wiederaufladbar, im Fahrzeug</td>
+<td>ja
+</td></tr>
+<tr>
+<td>Bluetooth-Chip</td>
+<td>Funkverbindung zum Handy</td>
+<td>Typ vermutet: Nordic nRF52 (wegen Nordic UART und Nordic DFU)
+</td></tr>
+<tr>
+<td>Streckensensor</td>
+<td>liest den Strichcode an der Unterseite</td>
+<td>Bauart (Kamera oder Infrarot) noch nicht gesichert
+</td></tr>
+<tr>
+<td>Lichter</td>
+<td>Scheinwerfer, Rück- und Bremslicht</td>
+<td>Bremslicht seit 19.08.2026 belegt
+</td></tr>
+<tr>
+<td>Bewegungssensor</td>
+<td>liefert Rohwerte in Byte 1 und 3 der Meldung</td>
+<td>vermutet, Bedeutung unbestätigt
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Bluetooth-Schnittstelle_(GATT)"><span id="Bluetooth-Schnittstelle_.28GATT.29"></span>Bluetooth-Schnittstelle (GATT)</h3></div>
+<p>Ausgelesen mit dem BLE-Explorer von OmegaSim und aus der Auswertung des Mitschnitts vom 13.08.2026 mit <code>tools/parse_btsnoop.py</code> (Mitschnitte und Auswertung liegen nur lokal; sie werden absichtlich nicht veröffentlicht, weil sie Geräteadressen enthalten). Die Spalte „Eigenschaften“ gibt das Eigenschaftsbyte aus dem Mitschnitt wieder: <code>0x02</code> lesen, <code>0x04</code> schreiben ohne Antwort, <code>0x08</code> schreiben mit Antwort, <code>0x10</code> Notification, <code>0x20</code> Indication.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Dienst</th>
+<th>Merkmal</th>
+<th>UUID</th>
+<th>Eigenschaften</th>
+<th>Zweck
+</th></tr>
+<tr>
+<td>Generic Access</td>
+<td>Device Name</td>
+<td><code>00002a00-0000-1000-8000-00805f9b34fb</code></td>
+<td><code>0x0A</code> (lesen, schreiben)</td>
+<td>Name „HYBRID-…“
+</td></tr>
+<tr>
+<td>Generic Access</td>
+<td>Appearance</td>
+<td><code>00002a01-…</code></td>
+<td><code>0x02</code></td>
+<td>Gerätetyp
+</td></tr>
+<tr>
+<td>Generic Access</td>
+<td>Preferred Connection Params</td>
+<td><code>00002a04-…</code></td>
+<td><code>0x02</code></td>
+<td>gewünschte Verbindungsparameter des Autos
+</td></tr>
+<tr>
+<td>Generic Access</td>
+<td>Central Address Resolution</td>
+<td><code>00002aa6-…</code></td>
+<td><code>0x02</code></td>
+<td>Standardfeld
+</td></tr>
+<tr>
+<td>Generic Attribute</td>
+<td>–</td>
+<td><code>00001801-…</code></td>
+<td>–</td>
+<td>Standarddienst
+</td></tr>
+<tr>
+<td>Nordic UART Service</td>
+<td>–</td>
+<td><code>6e400001-b5a3-f393-e0a9-e50e24dcca9e</code></td>
+<td>–</td>
+<td>Fahrzeugsteuerung
+</td></tr>
+<tr>
+<td>Nordic UART Service</td>
+<td>RX (App → Auto)</td>
+<td><code>6e400002-b5a3-f393-e0a9-e50e24dcca9e</code></td>
+<td><code>0x0C</code> (mit und ohne Antwort)</td>
+<td>Befehlspakete
+</td></tr>
+<tr>
+<td>Nordic UART Service</td>
+<td>TX (Auto → App)</td>
+<td><code>6e400003-b5a3-f393-e0a9-e50e24dcca9e</code></td>
+<td><code>0x10</code> (Notification)</td>
+<td>Meldepakete
+</td></tr>
+<tr>
+<td>Nordic Secure DFU</td>
+<td>–</td>
+<td><code>0000fe59-…</code></td>
+<td>–</td>
+<td>Firmware-Update, siehe <a href="./Firmware.html" title="Firmware">Firmware</a>
+</td></tr>
+<tr>
+<td>Nordic Secure DFU</td>
+<td>Bootloader-Trigger</td>
+<td><code>8ec90003-f315-4f60-9fb8-838830daea50</code></td>
+<td><code>0x28</code> (schreiben, Indication)</td>
+<td>versetzt das Auto in den Update-Modus
+</td></tr></tbody></table>
+<p>Die Original-App schreibt im Mitschnitt mit „Write Command“, also ohne Antwort; OmegaSim tut dasselbe, wenn das Merkmal es anbietet (<code>funkSchreiben()</code>)<sup id="cite&#95;ref-1" class="reference"><a href="#cite_note-1"><span class="cite-bracket">&#91;</span>1<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Das_Befehlspaket_(App_→_Auto)"><span id="Das_Befehlspaket_.28App_.E2.86.92_Auto.29"></span>Das Befehlspaket (App → Auto)</h3></div>
+<p>Jeder Befehl ist 20 Byte lang. OmegaSim baut ihn an genau einer Stelle, <code>buildCommandPacket()</code><sup id="cite&#95;ref-bcp&#95;2-0" class="reference"><a href="#cite_note-bcp-2"><span class="cite-bracket">&#91;</span>2<span class="cite-bracket">&#93;</span></a></sup>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Byte</th>
+<th>OmegaSim sendet</th>
+<th>Bedeutung</th>
+<th>Stand
+</th></tr>
+<tr>
+<td>0</td>
+<td><code>0xAF</code></td>
+<td>Rahmenkennung</td>
+<td>gesichert
+</td></tr>
+<tr>
+<td>1–5</td>
+<td><code>0x00</code></td>
+<td>unbenutzt</td>
+<td>konstant aus Mitschnitten
+</td></tr>
+<tr>
+<td>6</td>
+<td><code>(0xDF + Δ) mod 256</code></td>
+<td>Gas/Bremse, Δ = Gasschritte</td>
+<td>gesichert
+</td></tr>
+<tr>
+<td>7</td>
+<td><code>Lenkwert &amp; 0xFF</code></td>
+<td>Lenkung, vorzeichenbehaftet, positiv = rechts</td>
+<td>gesichert (Rechtskurve im Mitschnitt bei <code>0x7F</code>)
+</td></tr>
+<tr>
+<td>8</td>
+<td><code>0x80</code></td>
+<td>nach seVen: Fahrstil</td>
+<td>Wert aus Mitschnitt der Original-App
+</td></tr>
+<tr>
+<td>9</td>
+<td>Kopie von Byte 7</td>
+<td>Lenkung (Doppel)</td>
+<td>die Original-App sendete hier teils andere Werte; Bedeutung offen
+</td></tr>
+<tr>
+<td>10</td>
+<td><code>0x60</code> (Spieler), <code>0x20</code> (Selbstführung)</td>
+<td>Betriebsart; nach seVen: Fahrassistent</td>
+<td>Bedeutung offen
+</td></tr>
+<tr>
+<td>11</td>
+<td><code>0x00</code></td>
+<td>–</td>
+<td>konstant
+</td></tr>
+<tr>
+<td>12</td>
+<td><code>0x01</code></td>
+<td>nach seVen: Hersteller (<code>0x01</code> Porsche)</td>
+<td>konstant
+</td></tr>
+<tr>
+<td>13</td>
+<td><code>0x00</code></td>
+<td>–</td>
+<td>konstant
+</td></tr>
+<tr>
+<td>14</td>
+<td>Bitfeld</td>
+<td>Licht und Leseart, siehe <a href="#Licht_und_Leseart:_Byte_14">unten</a></td>
+<td>gesichert für Bits 0, 1, 2, 5, 7
+</td></tr>
+<tr>
+<td>15</td>
+<td><code>0x04</code> (Spieler), <code>0x0C</code> (Selbstführung)</td>
+<td>Betriebsart</td>
+<td>aus Mitschnitt; Bedeutung offen
+</td></tr>
+<tr>
+<td>16–18</td>
+<td><code>0x00</code> oder Vorausblick</td>
+<td>Typen der nächsten drei Streckenteile, nur bei Selbstführung</td>
+<td>gesichert aus Mitschnitt 20.08.2026
+</td></tr>
+<tr>
+<td>19</td>
+<td>CRC-8 über Byte 0–18</td>
+<td>Prüfsumme</td>
+<td>gesichert
+</td></tr></tbody></table>
+<p>Die Bytes 10 und 15 wechseln OmegaSim auf <code>0x20</code>/<code>0x0C</code>, wenn das Auto sich selbst auf der Bahn halten soll (NPCs im Leitplanken-Modus, Autopilot, Fahrhilfe). Das sind genau die Werte, die die Original-App an ihre eigenen Gegner schickte: über 2496 und 2457 Pakete konstant<sup id="cite&#95;ref-3" class="reference"><a href="#cite_note-3"><span class="cite-bracket">&#91;</span>3<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Gasbyte">Gasbyte</h4></div>
+<p>Das Gasbyte rechnet modulo 256 um die Neutralstellung <code>0xDF</code>:
+</p>
+<pre>Δ     = round(Gasanteil × 127),  begrenzt auf  MIN_THROTTLE_DELTA … +127  (= −64 … +127)
+Byte6 = (0xDF + Δ) mod 256
+</pre>
+<ul><li><i>Gasanteil</i>: Ausgang des Fahrmodells, −1 bis +1.</li>
+<li><i>Δ</i>: Zahl der Gasschritte; positiv vorwärts, negativ Bremse bzw. rückwärts.</li>
+<li><i>MIN_THROTTLE_DELTA</i>: −64, die am Auto als sicher bestätigte Rückwärtsgrenze<sup id="cite&#95;ref-mtd&#95;4-0" class="reference"><a href="#cite_note-mtd-4"><span class="cite-bracket">&#91;</span>4<span class="cite-bracket">&#93;</span></a></sup>.</li></ul>
+<p>Die Byte-Bereiche nach der Protokollbeschreibung von seVen:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Byte-Bereich</th>
+<th>Bedeutung</th>
+<th>Δ
+</th></tr>
+<tr>
+<td><code>0xDF</code></td>
+<td>neutral</td>
+<td>0
+</td></tr>
+<tr>
+<td><code>0xE0</code>–<code>0xFF</code>, dann <code>0x00</code>–<code>0x6F</code></td>
+<td>vorwärts, 144 Stufen</td>
+<td>+1 … +144 (OmegaSim nutzt bis +127 = <code>0x5E</code>)
+</td></tr>
+<tr>
+<td><code>0x80</code>–<code>0xDE</code></td>
+<td>rückwärts/bremsen, 95 Stufen</td>
+<td>−95 … −1
+</td></tr>
+<tr>
+<td><code>0x70</code>–<code>0x7F</code></td>
+<td>nicht beschrieben</td>
+<td>–
+</td></tr></tbody></table>
+<p>Damit erklärt sich ein alter Befund: Δ = −127 ergibt Byte <code>0x60</code>, und das liegt im <b>Vorwärts</b>bereich. Am 20.08.2026 fuhr das Auto bei vollem Rückwärtswert tatsächlich vorwärts, bei Δ = −64 (<code>0x9F</code>) korrekt rückwärts<sup id="cite&#95;ref-mtd&#95;4-1" class="reference"><a href="#cite_note-mtd-4"><span class="cite-bracket">&#91;</span>4<span class="cite-bracket">&#93;</span></a></sup>. Die Grenze <code>0x80</code> (Δ = −95) ist am Auto noch nicht nachgefahren.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Lenkbyte">Lenkbyte</h4></div>
+<pre>steerDelta = clamp(round(Lenkanteil × 127), −127, +127)
+Byte7      = steerDelta &amp; 0xFF        (Zweierkomplement)
+</pre>
+<p>127 ist der größte Wert des vorzeichenbehafteten Bereichs, und OmegaSim sendet ihn bei Vollanforderung. Ein Regler kann das Auto also nicht weiter einschlagen lassen als seine Mechanik; ein Wert über 1,0 würde umbrechen und in die Gegenrichtung lenken, deshalb ist der Deckel bei 1,0 Pflicht<sup id="cite&#95;ref-5" class="reference"><a href="#cite_note-5"><span class="cite-bracket">&#91;</span>5<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Licht_und_Leseart:_Byte_14">Licht und Leseart: Byte 14</h4></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Bit</th>
+<th>Maske</th>
+<th>Wirkung</th>
+<th>Stand
+</th></tr>
+<tr>
+<td>0</td>
+<td><code>0x01</code></td>
+<td>Bremslicht (<code>LIGHT_BRAKE</code>)</td>
+<td>belegt seit Mitschnitt 19.08.2026
+</td></tr>
+<tr>
+<td>1</td>
+<td><code>0x02</code></td>
+<td>Scheinwerfer (<code>LIGHT_HEAD</code>); das Rücklicht schaltet die Firmware mit</td>
+<td>belegt
+</td></tr>
+<tr>
+<td>2</td>
+<td><code>0x04</code></td>
+<td>Scheinwerfer blinkt statt dauerhaft zu leuchten</td>
+<td>am Auto zweimal reproduziert, von OmegaSim ungenutzt
+</td></tr>
+<tr>
+<td>3, 4</td>
+<td><code>0x08</code>, <code>0x10</code></td>
+<td>kein sichtbarer Unterschied</td>
+<td>am Auto erprobt
+</td></tr>
+<tr>
+<td>5</td>
+<td><code>0x20</code></td>
+<td>Leseart „Auf der Bahn“: liest die Kunststoffschiene, Auto hält sich selbst darauf (<code>TRACK_BIT_RAIL</code>)</td>
+<td>gesichert
+</td></tr>
+<tr>
+<td>6</td>
+<td><code>0x40</code></td>
+<td>kam in beiden Betriebsarten der Original-App vor, Bedeutung offen; kein sichtbarer Lichtunterschied</td>
+<td>OmegaSim sendet 0
+</td></tr>
+<tr>
+<td>7</td>
+<td><code>0x80</code></td>
+<td>Leseart „Ausdruck“: liest gedruckte Muster (<code>TRACK_BIT_PRINT</code>)</td>
+<td>gesichert
+</td></tr></tbody></table>
+<p>Bit 5 und Bit 7 schließen sich aus. Gemessen in einer einzigen Aufzeichnung vom 21.08.2026, nur Meldungen während der Fahrt: mit Bit 7 kamen in 551 Meldungen 0 Lesungen, mit Bit 5 in 1194 Meldungen 1103 Lesungen und 1033 Kachelschritte (87&#160;%)<sup id="cite&#95;ref-6" class="reference"><a href="#cite_note-6"><span class="cite-bracket">&#91;</span>6<span class="cite-bracket">&#93;</span></a></sup>. Dass Bit 7 einmal als „Licht-Grundwert“ missverstanden und dauernd gesendet wurde, kostete das Projekt zwölf Aufzeichnungen ohne eine einzige Streckenlesung.
+</p><p>Eine defekte Lampe (Schadensmodell) wird ebenfalls in <code>buildCommandPacket()</code> ausgeblendet, nicht als hartes Aus, sondern als Wackelkontakt:
+</p>
+<pre>Abschnitt = floor(Zeit_ms / 70) + Saat × 977
+leuchtet  = ((Abschnitt × 2654435761) mod 2^32) / 2^32 &gt; 0,86
+</pre>
+<p>Die Lampe leuchtet also in rund 14&#160;% der 70-ms-Abschnitte kurz auf. Die Folge hängt an der Uhr und nicht an der Senderate, damit sie bei jedem Takt gleich aussieht<sup id="cite&#95;ref-7" class="reference"><a href="#cite_note-7"><span class="cite-bracket">&#91;</span>7<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Vorausblick:_Bytes_16–18"><span id="Vorausblick:_Bytes_16.E2.80.9318"></span>Vorausblick: Bytes 16–18</h4></div>
+<p>Im Mitschnitt vom 20.08.2026 (Leitplanken-Modus der Original-App, 67 s Verkehr) wurden im selben Paket, in dem Bit 5 in Byte 14 aufging, erstmals die Bytes 16–18 belegt: die Typen der nächsten drei Streckenteile als Fenster über die eingescannte Strecke, das an jeder Teilegrenze weiterrückt. Alle neun beobachteten Fenster waren aufeinanderfolgende Dreiergruppen desselben Rings; zufällig wäre das mit 1,3·10<sup>−6</sup> zu erwarten<sup id="cite&#95;ref-8" class="reference"><a href="#cite_note-8"><span class="cite-bracket">&#91;</span>8<span class="cite-bracket">&#93;</span></a></sup>. OmegaSim füllt die Bytes über <code>ghostLookahead()</code>, aber nur, wenn eine Strecke eingescannt ist und das Auto die Bahn liest.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Prüfsumme_(CRC-8)"><span id="Pr.C3.BCfsumme_.28CRC-8.29"></span>Prüfsumme (CRC-8)</h4></div>
+<div class="mw-highlight mw-highlight-lang-javascript mw-content-ltr" dir="ltr"><pre><span></span><span class="c1">// src/10-ble-explorer.js, crc8()</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">crc8</span><span class="p">(</span><span class="nx">bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nx">crc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0xff</span><span class="p">;</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kd">const</span><span class="w"> </span><span class="nx">b</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="nx">bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">crc</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="nx">b</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kd">let</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">8</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nx">crc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">crc</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0x80</span><span class="p">)</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="p">((</span><span class="nx">crc</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mf">1</span><span class="p">)</span><span class="w"> </span><span class="o">^</span><span class="w"> </span><span class="mh">0x31</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xff</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">crc</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mf">1</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xff</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">crc</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+<p>Ablauf in Worten:
+</p>
+<ol><li>Startwert <code>crc = 0xFF</code>.</li>
+<li>Für jedes Byte 0 bis 18: <code>crc = crc XOR Byte</code>.</li>
+<li>Achtmal: Ist das oberste Bit (Bit 7) gesetzt, wird <code>crc</code> um eins nach links geschoben und mit dem <b>Polynom</b> <code>0x31</code> (binär <code>0011 0001</code>, entspricht x<sup>8</sup>+x<sup>5</sup>+x<sup>4</sup>+1) verknüpft; sonst nur geschoben. Alles bleibt auf 8 Bit beschränkt.</li>
+<li>Das Ergebnis ist Byte 19.</li></ol>
+<p>Die Rechnung reproduziert drei aufgezeichnete Prüfsummen der Original-App exakt (<code>0xA4</code>, <code>0x33</code>, <code>0xE0</code>). Ein einfaches XOR über Byte 0–18, wie es seVen beschreibt, ergäbe für das Leerlaufpaket <code>0x17</code> statt der aufgezeichneten <code>0x33</code>. Der Selbsttest „Protokoll: CRC-8“ prüft genau dieses Leerlaufpaket<sup id="cite&#95;ref-9" class="reference"><a href="#cite_note-9"><span class="cite-bracket">&#91;</span>9<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Das_Meldepaket_(Auto_→_App)"><span id="Das_Meldepaket_.28Auto_.E2.86.92_App.29"></span>Das Meldepaket (Auto → App)</h3></div>
+<p>Das Auto schickt ständig Notifications auf NUS TX. Im Mitschnitt vom 13.08.2026 sind alle 670 Meldungen 19 Byte lang und beginnen ebenfalls mit <code>0xAF</code>. OmegaSim verwirft Meldungen unter 16 Byte (<code>onCarNotify()</code>). Gelesen werden:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Byte</th>
+<th>Inhalt</th>
+<th>Auswertung in OmegaSim</th>
+<th>Stand
+</th></tr>
+<tr>
+<td>0</td>
+<td><code>0xAF</code></td>
+<td>–</td>
+<td>aus Mitschnitt
+</td></tr>
+<tr>
+<td>1</td>
+<td>Rohwert, ändert sich erst in Fahrt</td>
+<td>Crash-Erkennung, Crashrichtung (vorn/hinten)</td>
+<td>vermutlich Bewegungssensor, unbestätigt
+</td></tr>
+<tr>
+<td>3</td>
+<td>Rohwert, wechselte in einer Aufnahme das Vorzeichen mit der Kurvenrichtung</td>
+<td>Drehsignal <code>gyroRaw.x</code>, Crash, Rammen</td>
+<td>„motion-ish. Unconfirmed“ (Code-Kommentar)
+</td></tr>
+<tr>
+<td>10</td>
+<td>Akkustand, Rohwert</td>
+<td>Prozentanzeige, siehe <a href="#Akku">Akku</a></td>
+<td>Skala geschätzt
+</td></tr>
+<tr>
+<td>11</td>
+<td>Kachelzähler, ein Schritt je Streckenteil</td>
+<td>Rundenzählung, Ortung, Phase der Ideallinie</td>
+<td>gesichert
+</td></tr>
+<tr>
+<td>12</td>
+<td>Streckencode des Teils unter dem Sensor</td>
+<td>Rundenzählung, Scan, NPC-Steuerung, Abseits</td>
+<td>gesichert, siehe <a href="./Strecke.html" title="Strecke">Strecke</a>
+</td></tr>
+<tr>
+<td>14</td>
+<td>nach seVen: gemessenes Tempo (Kodierung wie Befehlsbyte, <code>0xDF</code> neutral)</td>
+<td>nicht gelesen</td>
+<td>offen
+</td></tr>
+<tr>
+<td>15</td>
+<td>Bit 3 (<code>0x08</code>): Ziellinien-Sperre</td>
+<td>Rundenzeit an der Ziellinie</td>
+<td>gesichert
+</td></tr></tbody></table>
+<p>Ein Beispiel aus dem Mitschnitt vom 13.08.2026, Auto steht, kein Code gelesen:
+</p>
+<pre>AF 00 9C 00 00 00 00 00 00 00 95 00 FF 00 DF 00 00 00 B3
+                              ^^    ^^    ^^
+                         Byte 10  Byte 12  Byte 14
+                     Akku 0x95=149  0xFF=nichts gelesen  0xDF (neutral)
+</pre>
+<p>Das letzte Byte ist hier <b>keine</b> CRC-8 nach dem Befehlsverfahren (nachgerechnet ergäbe sich <code>0xF1</code>); welches Verfahren das Auto für seine Meldungen benutzt, ist noch nicht gesichert.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Streckencode_(Byte_12)"><span id="Streckencode_.28Byte_12.29"></span>Streckencode (Byte 12)</h4></div>
+<p>Das Auto liest je nach Leseart eine andere Codetabelle. Auf der Bahn:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Code</th>
+<th>Teil</th>
+<th>Code</th>
+<th>Teil
+</th></tr>
+<tr>
+<td><code>0x00</code></td>
+<td>abseits der Bahn</td>
+<td><code>0x07</code></td>
+<td>Boxengasse / lange Gerade
+</td></tr>
+<tr>
+<td><code>0x01</code></td>
+<td>Start/Ziel</td>
+<td><code>0x08</code> / <code>0x09</code></td>
+<td>weite 30-Grad-Kurve links / rechts
+</td></tr>
+<tr>
+<td><code>0x02</code></td>
+<td>Gerade</td>
+<td><code>0x0A</code></td>
+<td>Engstelle
+</td></tr>
+<tr>
+<td><code>0x03</code></td>
+<td>Linkskurve 60 Grad</td>
+<td><code>0x0B</code> / <code>0x0C</code></td>
+<td>kleine 30-Grad-Kurve links / rechts
+</td></tr>
+<tr>
+<td><code>0x04</code></td>
+<td>Rechtskurve 60 Grad</td>
+<td><code>0xFF</code></td>
+<td>nichts gelesen (z. B. Leseart Ausdruck auf der Schiene)
+</td></tr>
+<tr>
+<td><code>0x05</code> / <code>0x06</code></td>
+<td>Haarnadel links / rechts</td>
+<td></td>
+<td>
+</td></tr></tbody></table>
+<p>Im Ausdruck-Modus meldet das Original-Startblatt <code>0x0A</code>, die Blätter von OmegaSim <code>0x01</code>; <code>isStartCode()</code> akzeptiert dort beide, auf der Schiene nur <code>0x01</code>, damit eine Engstelle keine Phantomrunde zählt<sup id="cite&#95;ref-10" class="reference"><a href="#cite_note-10"><span class="cite-bracket">&#91;</span>10<span class="cite-bracket">&#93;</span></a></sup>. Wie das Auto aus dem Strichcode die Zahl bildet, ist offen; Einzelheiten zu Codes und Strichmaßen stehen in <a href="./Strecke.html#Streckencode" title="Strecke">Strecke#Streckencode</a>.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Kachelzähler_(Byte_11)"><span id="Kachelz.C3.A4hler_.28Byte_11.29"></span>Kachelzähler (Byte 11)</h4></div>
+<p>Byte 11 springt um eins, sobald das Auto ein neues Teil erkennt. Das ist das einzige echte Ortsereignis: Das Auto meldet, <b>dass</b> es auf einem neuen Teil ist, nicht <b>wo</b> darauf. Verlässt das Auto die Bahn, läuft der Zähler schnell weiter (im Mitschnitt vom 20.08.2026 von 6 über 8, 9, 15 auf 18 in drei Sekunden), während Byte 12 <code>0x00</code> meldet. OmegaSim rechnet deshalb die Position innerhalb eines Teils aus dem gefahrenen Weg seit dem letzten Zählersprung (siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>).
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Ziellinie_(Byte_15,_Bit_3)"><span id="Ziellinie_.28Byte_15.2C_Bit_3.29"></span>Ziellinie (Byte 15, Bit 3)</h4></div>
+<p>Auf dem Start/Ziel-Teil setzt das Auto Bit 3 in Byte 15 im Mittel 455 ms <b>nach</b> dem Strichcode (bei 78–84&#160;% der Teilelänge, rund 35 cm weiter) und hält es per Zeitglied rund eine Sekunde (Median 981–1050 ms). Nur die <b>steigende Flanke</b> ist ein Ort. Dass es keine Rückspiegelung des eigenen Befehls ist, zeigt die Statistik: In einer Verbindung schrieb die Original-App Bit 3 in 100&#160;% der Befehle, gemeldet war es nur in 12&#160;% der Meldungen<sup id="cite&#95;ref-11" class="reference"><a href="#cite_note-11"><span class="cite-bracket">&#91;</span>11<span class="cite-bracket">&#93;</span></a></sup>. Seit 0.9.37 misst OmegaSim die Rundenzeit an dieser Flanke; Autos, die sie nie melden, zählen weiter über den Strichcode.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Melde-Takt">Melde-Takt</h4></div>
+<p>Wie oft das Auto meldet, hängt am ausgehandelten Verbindungsintervall:
+</p>
+<ul><li>Mitschnitt 13.08.2026 (Original-App): Median 61 ms zwischen zwei Meldungen, Mittel 52 ms; Befehle der Original-App im Median alle 52 ms.</li>
+<li>Mitschnitt 20.08.2026: 14,6 Hz, Median 69 ms<sup id="cite&#95;ref-12" class="reference"><a href="#cite_note-12"><span class="cite-bracket">&#91;</span>12<span class="cite-bracket">&#93;</span></a></sup>.</li>
+<li>OmegaSim erwartet „etwa alle 45 ms“ und fordert das schnelle Verbindungsintervall neu an, wenn der geglättete Abstand über 75 ms steigt (siehe <a href="./OmegaBle.html#Verbindungspriorität" title="OmegaBle">OmegaBle#Verbindungspriorität</a>).</li></ul>
+<p>Ein Meldetakt von 69 ms ist langsamer als OmegaSims Sendetakt von 45 ms. Daraus folgt, dass die Querregelung im Leitplanken-Modus im Auto selbst laufen muss: Eine Rückmeldung zur Querlage gibt es im Protokoll nicht.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Tempo_und_Tempo-Grenzen">Tempo und Tempo-Grenzen</h3></div>
+<p>Jede Tempozahl im Code von OmegaSim (0,35, 0,37, 0,1645 …) ist ein <b>Anteil des Gasbytes</b>, nicht die Höchstgeschwindigkeit eines bestimmten Autos. Gemessen wurde die Umrechnung an den Geraden der Mitschnitte vom 16. bis 21.08.2026 (Gasbytes 43, 50 und 56 auf 43-cm-Geraden: 0,86 s, 0,74 s und 0,63 s je Gerade)<sup id="cite&#95;ref-13" class="reference"><a href="#cite_note-13"><span class="cite-bracket">&#91;</span>13<span class="cite-bracket">&#93;</span></a></sup>:
+</p>
+<pre>Δ          = round(Anteil × 127)
+v [m/s]    = 0,0119 × Δ
+v [km/h]   = 3,6 × v  = 0,0428 × Δ
+Tacho      = Anteil × 272,5 km/h  ≈ 2,146 × Δ km/h     (Maßstab 1:50)
+</pre>
+<ul><li><i>Anteil</i>: Wert zwischen 0 und 1, wie er im Code steht.</li>
+<li><i>0,0119 m/s</i>: gemessene Steigung je Gasschritt; das Auto ist im gemessenen Bereich proportional zum Gas.</li>
+<li><i>272,5 km/h</i>: Hochrechnung der gemessenen 1,51 m/s bei Δ = 127 auf den Maßstab 1:50 (5,45 km/h × 50), ±10&#160;%, weil kein Mitschnitt eine Vollgasfahrt enthält.</li></ul>
+<table class="wikitable">
+<tbody><tr>
+<th>Größe (Konstante)</th>
+<th>Anteil</th>
+<th>Δ</th>
+<th>echt (m/s)</th>
+<th>Tacho (km/h)</th>
+<th>Wer
+</th></tr>
+<tr>
+<td>Scan Haarnadel (<code>SCAN_TEMPO_HAARNADEL</code>)</td>
+<td>0,1645</td>
+<td>21</td>
+<td>0,25</td>
+<td>45</td>
+<td>Scan
+</td></tr>
+<tr>
+<td>Scan Gerade bis 1.2.4 (<code>SCAN_TEMPO</code>)</td>
+<td>0,2345</td>
+<td>30</td>
+<td>0,36</td>
+<td>64</td>
+<td>Scan
+</td></tr>
+<tr>
+<td>Boxentempo (<code>PIT_SPEED_FACTOR</code>)</td>
+<td>0,2936</td>
+<td>37</td>
+<td>0,44</td>
+<td>80</td>
+<td>Boxengasse
+</td></tr>
+<tr>
+<td>„Leseschwelle“ <code>GHOST_READ_MIN</code> = Formationstempo</td>
+<td>0,35</td>
+<td>44</td>
+<td>0,52</td>
+<td>95</td>
+<td>alle
+</td></tr>
+<tr>
+<td>Mindesttempo im Rennen <code>GHOST_FAHR_MIN</code></td>
+<td>0,37</td>
+<td>47</td>
+<td>0,56</td>
+<td>101</td>
+<td>NPC, Gelb
+</td></tr>
+<tr>
+<td>Gelb-Tempo auf der Geraden</td>
+<td>0,4025</td>
+<td>51</td>
+<td>0,61</td>
+<td>110</td>
+<td>alle
+</td></tr>
+<tr>
+<td>NPC-Stufen einfach / mittel / schnell</td>
+<td>0,45 / 0,55 / 0,65</td>
+<td>57 / 70 / 83</td>
+<td>0,68 / 0,83 / 0,99</td>
+<td>123 / 150 / 177</td>
+<td>NPC
+</td></tr></tbody></table>
+<p>Die „Leseschwelle“ 0,35 ist <b>nicht gemessen</b>, sondern die alte Untergrenze eines Reglers. Der Scan liest in der Haarnadel noch mit Δ 21, und in den Mitschnitten liefen Teilewechsel auch bei rund Δ 25. Die echte Lesegrenze liegt vermutlich bei Δ 20–25; 0,35 ist eine vorsichtige Betriebsgrenze<sup id="cite&#95;ref-14" class="reference"><a href="#cite_note-14"><span class="cite-bracket">&#91;</span>14<span class="cite-bracket">&#93;</span></a></sup>. Mit 1.2.5 fährt der Scan auf Geraden 80&#160;% statt 67&#160;% des Formationstempos.
+</p><p>Unter Autopilot und bei NPCs wirken weder der Fahrgefühl-Faktor (<code>topSpeedScale</code>) noch der Akku-Ausgleich; im eingeschwungenen Zustand geht also genau der Sollwert hinaus.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Akku">Akku</h3></div>
+<p>Byte 10 ist ein Rohwert ohne kalibrierte Skala. OmegaSim rechnet seit 0.9.87<sup id="cite&#95;ref-15" class="reference"><a href="#cite_note-15"><span class="cite-bracket">&#91;</span>15<span class="cite-bracket">&#93;</span></a></sup>:
+</p>
+<pre>roh_geglättet = Maximum aller Rohwerte der letzten 5 s
+Prozent       = clamp( round( (roh_geglättet − 138) / (155 − 138) × 100 ), 0, 100 )
+</pre>
+<ul><li><i>138</i> (<code>AKKU_LEER</code>): untere Grenze, angehoben, weil Autos schon „blinkten und die Verbindung verloren, bevor der Akku als leer angezeigt wurde“.</li>
+<li><i>155</i> (<code>AKKU_VOLL</code>): obere Grenze.</li>
+<li>Die Glättung nimmt das Maximum, nicht den Mittelwert: kurze Einbrüche unter Last sollen die Anzeige nicht nach unten reißen.</li></ul>
+<p>Je Auto merkt sich OmegaSim den kleinsten je gemeldeten Rohwert (<code>akkuMinRoh</code>, in der Garage angezeigt), damit die Untergrenze später nachgemessen werden kann. seVen nennt 131 bis 155, eine ältere Fassung von OmegaSim rechnete mit 111; alle drei Werte sind Schätzungen.
+</p><p>Der optionale Akku-Ausgleich<sup id="cite&#95;ref-16" class="reference"><a href="#cite_note-16"><span class="cite-bracket">&#91;</span>16<span class="cite-bracket">&#93;</span></a></sup>:
+</p>
+<pre>Faktor = clamp( Referenz / max(0,05, Prozent/100), 0,2, 1 )
+Gas_vorwärts_gesendet = Gas_vorwärts × Faktor
+</pre>
+<p>Er drosselt also nur bei vollem Akku und gibt nie mehr als 100&#160;%.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Fahrphysik:_im_Auto,_nicht_in_der_App"><span id="Fahrphysik:_im_Auto.2C_nicht_in_der_App"></span>Fahrphysik: im Auto, nicht in der App</h3></div>
+<p>Die eigentliche Fahrdynamik entsteht in der Firmware. Nach der Dokumentation ist das Auto bei einem Vollgas-Befehl fast sofort auf Höchsttempo; OmegaSim rechnet deshalb ein eigenes Modell (Gänge, Reifen, Gewichtsverlagerung), dessen einziger Zweck ist, die zwei gesendeten Bytes Gas und Lenkung zu formen (siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>). Die Fahrzeuglayouts in OmegaSim (etwa „GT3, Heckmotor (Porsche 911 GT3 R)“ mit Achslast 39:61, Radstand 2,50 m) sind Schätzungen aus der Fahrzeugklasse für dieses Modell; das echte HYBRID-Auto kennt sie nicht und meldet nichts davon zurück.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Streckensensor">Streckensensor</h3></div>
+<p>Der Sensor liest einen Strichcode aus breiten und schmalen Balken, der quer über die ganze Fahrbahn läuft. Weil der Code über die Breite gleich ist, sagt er nichts darüber, wo auf der Fahrbahn das Auto fährt. Gemessen am Start/Ziel-Blatt: Ein einzelnes Codewort von rund 54 mm in Fahrtrichtung genügt; nach einem Erkennen bleibt der Leser etwa eine Sekunde stumm (bei 4 km/h Maßstabstempo rund 1,1 m Fahrweg). Das Auto liest die Schiene auch bei vollem Lenkanschlag: In 67&#160;830 Meldungen mit Code gab es nur vier Abrisse, ohne Zusammenhang zum Lenkwert<sup id="cite&#95;ref-17" class="reference"><a href="#cite_note-17"><span class="cite-bracket">&#91;</span>17<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Ein_Befehl_Byte_für_Byte"><span id="Ein_Befehl_Byte_f.C3.BCr_Byte"></span>Ein Befehl Byte für Byte</h3></div>
+<p>Spieler gibt 44&#160;% Gas, lenkt halb rechts, Licht an, Leseart Bahn:
+</p>
+<ol><li>Gas: Δ = round(0,44 × 127) = round(55,9) = 56. Byte 6 = (0xDF + 56) mod 256 = (223 + 56) mod 256 = 279 − 256 = 23 = <code>0x17</code>.</li>
+<li>Lenkung: round(0,5 × 127) = round(63,5) = 64 = <code>0x40</code>. Byte 7 und Byte 9 = <code>0x40</code>.</li>
+<li>Byte 14: Bahn <code>0x20</code> ODER Scheinwerfer <code>0x02</code> = <code>0x22</code>.</li>
+<li>Rahmen: <code>AF 00 00 00 00 00 17 40 80 40 60 00 01 00 22 04 00 00 00</code>.</li>
+<li>CRC-8 darüber: <code>0x8C</code>. Gesendet wird <code>AF 00 00 00 00 00 17 40 80 40 60 00 01 00 22 04 00 00 00 8C</code>.</li></ol>
+<p>Echtes Tempo nach der Messung: 0,0119 × 56 = 0,67 m/s, im Maßstab 1:50 rund 120 km/h am Tacho.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Die_ersten_Schritte_der_CRC-8">Die ersten Schritte der CRC-8</h3></div>
+<p>Startwert <code>0xFF</code>, erstes Byte <code>0xAF</code>: <code>0xFF XOR 0xAF = 0x50</code> (<code>0101 0000</code>).
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Schritt</th>
+<th>Bit 7 vorher</th>
+<th>Rechnung</th>
+<th>Ergebnis
+</th></tr>
+<tr>
+<td>1</td>
+<td>0</td>
+<td>nur schieben</td>
+<td><code>0xA0</code>
+</td></tr>
+<tr>
+<td>2</td>
+<td>1</td>
+<td>schieben (<code>0x40</code>), XOR <code>0x31</code></td>
+<td><code>0x71</code>
+</td></tr>
+<tr>
+<td>3</td>
+<td>0</td>
+<td>nur schieben</td>
+<td><code>0xE2</code>
+</td></tr>
+<tr>
+<td>4</td>
+<td>1</td>
+<td>schieben, XOR <code>0x31</code></td>
+<td><code>0xF5</code>
+</td></tr>
+<tr>
+<td>5</td>
+<td>1</td>
+<td>schieben, XOR <code>0x31</code></td>
+<td><code>0xDB</code>
+</td></tr>
+<tr>
+<td>6</td>
+<td>1</td>
+<td>schieben, XOR <code>0x31</code></td>
+<td><code>0x87</code>
+</td></tr>
+<tr>
+<td>7</td>
+<td>1</td>
+<td>schieben, XOR <code>0x31</code></td>
+<td><code>0x3F</code>
+</td></tr>
+<tr>
+<td>8</td>
+<td>0</td>
+<td>nur schieben</td>
+<td><code>0x7E</code>
+</td></tr></tbody></table>
+<p>Mit diesem Zwischenwert geht es beim zweiten Byte weiter. Für das Leerlaufpaket der Original-App (<code>AF 00 00 00 00 00 DF 00 80 00 60 00 01 00 82 04 00 00 00</code>) ergibt die ganze Rechnung <code>0x33</code>, genau die aufgezeichnete Prüfsumme.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Bremsen_mit_Bremslicht">Bremsen mit Bremslicht</h3></div>
+<p>Vollbremsung aus Fahrt, voll links: Δ = −64 (Deckel) → Byte 6 = 223 − 64 = 159 = <code>0x9F</code>. Lenkung −127 → <code>0x81</code>. Byte 14 = <code>0x20 | 0x02 | 0x01 = 0x23</code>. Paket: <code>AF 00 00 00 00 00 9F 81 80 81 60 00 01 00 23 04 00 00 00 09</code>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Akkuanzeige">Akkuanzeige</h3></div>
+<p>Rohwert <code>0x95</code> = 149: (149 − 138) / 17 × 100 = 64,7 → <b>65&#160;%</b>. Mit Akku-Ausgleich und Referenz 50&#160;%: Faktor = 0,5 / 0,65 = 0,77; vom Vorwärtsgas gehen 77&#160;% hinaus. Bei Rohwert 155 (100&#160;%) wäre der Faktor 0,5, bei Rohwert 146 (47&#160;%) 1,06 → gedeckelt auf 1.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Tempo-Umrechnung">Tempo-Umrechnung</h3></div>
+<p>Gelb-Tempo 0,4025: Δ = round(0,4025 × 127) = round(51,1) = 51 → Byte <code>0x12</code>; v = 0,0119 × 51 = 0,61 m/s = 2,18 km/h echt; Tacho 0,4025 × 272,5 = 110 km/h.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li><b>Rückwärts:</b> OmegaSim nutzt nur Δ bis −64. Die Grenze nach seVen (Δ −95) ist nicht nachgefahren.</li>
+<li><b>Akkuskala:</b> unkalibriert; die Prozentangabe kann um mehrere zehn Prozent danebenliegen.</li>
+<li><b>Kein gemessenes Tempo:</b> Tacho, NPC-Regelung und Rundenschätzung sind gerechnet. Ob Byte 14 der Meldung ein Tempo trägt, ist ungeprüft.</li>
+<li><b>Keine Querlage:</b> Das Auto meldet nicht, wo es auf der Fahrbahn steht. Alles, was OmegaSim über Querlage weiß, ist das, was es selbst geschickt hat.</li>
+<li><b>Hängende Verbindung:</b> Ein Auto, das sich für verbunden hält, leuchtet hell, wirbt aber nicht mehr und lässt sich nicht finden; es musste dann am Ladegerät ausgeschaltet werden. Seit 1.2.3 räumt die Android-App solche Verbindungen auf (siehe <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a>).</li>
+<li><b>Firmware-Updates</b> des Herstellers können das Protokoll ändern; OmegaSim liest keine Firmware-Version aus.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Was_noch_nicht_gesichert_ist">Was noch nicht gesichert ist</h2></div>
+<ul><li>Bauart des Streckensensors (Kamera oder Infrarot)</li>
+<li>Bedeutung der Bytes 8, 9, 10, 12 und 15 im Befehl über die gemessenen Werte hinaus</li>
+<li>ob Byte 14 der Meldung ein gemessenes Tempo enthält</li>
+<li>Prüfverfahren des Meldepakets (letztes Byte)</li>
+<li>Skala des Akkuwerts</li>
+<li>wie das Auto aus dem Strichcode die gemeldete Zahl bildet</li>
+<li>was das Auto tut, wenn keine Befehle mehr kommen (ein sicherer Halt ist vermutet, nicht gemessen)</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version</th>
+<th>Änderung in OmegaSim, die das Auto betrifft
+</th></tr>
+<tr>
+<td>0.5.8</td>
+<td>ein einziger Sender je Auto; das neueste Paket wird gemerkt statt verworfen
+</td></tr>
+<tr>
+<td>0.6.14</td>
+<td>Leseart als eigener Schalter; Codetabellen je Leseart getrennt
+</td></tr>
+<tr>
+<td>0.9.37</td>
+<td>Rundenzeit an der Ziellinie (Byte 15 Bit 3) statt am Strichcode
+</td></tr>
+<tr>
+<td>0.9.39</td>
+<td>Tempo nachgemessen: 0,0119 m/s je Gasschritt, Tacho neu skaliert
+</td></tr>
+<tr>
+<td>0.9.87</td>
+<td>Akkuskala 138–155, Mindestwert je Auto in der Garage
+</td></tr>
+<tr>
+<td>1.1.40</td>
+<td>Tempo-Grenzen in Gasschritten dokumentiert
+</td></tr>
+<tr>
+<td>1.2.3</td>
+<td>Verbindungen werden sauber getrennt, kein helles Licht mehr ohne Verbindung
+</td></tr>
+<tr>
+<td>1.2.5</td>
+<td>schnellerer Streckenscan
+</td></tr>
+<tr>
+<td>1.2.9</td>
+<td>Karten-Autos als Silhouetten je Marke / Modell
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
+<div class="mw-references-wrap mw-references-columns"><ol class="references">
+<li id="cite&#95;note-1"><span class="mw-cite-backlink"><a href="#cite_ref-1">↑</a></span> <span class="reference-text">Auswahl <code>writeWithoutResponse</code>/<code>writeValueWithResponse</code> in <code>funkSchreiben()</code>, <code>src/20-protocol.js</code>.</span>
+</li>
+<li id="cite&#95;note-bcp-2"><span class="mw-cite-backlink"><a href="#cite_ref-bcp_2-0">↑</a></span> <span class="reference-text"><code>buildCommandPacket()</code>, <code>src/20-protocol.js</code>.</span>
+</li>
+<li id="cite&#95;note-3"><span class="mw-cite-backlink"><a href="#cite_ref-3">↑</a></span> <span class="reference-text">Konstante <code>AUTO_MODE = { b10: 0x20, b15: 0x0c }</code> mit Kommentar, <code>src/60-track.js</code>.</span>
+</li>
+<li id="cite&#95;note-mtd-4"><span class="mw-cite-backlink">↑ <sup><a href="#cite_ref-mtd_4-0">4,0</a></sup> <sup><a href="#cite_ref-mtd_4-1">4,1</a></sup></span> <span class="reference-text"><code>MIN_THROTTLE_DELTA = -64</code> mit Kommentar zum Fahrversuch vom 20.08.2026, <code>src/10-ble-explorer.js</code>.</span>
+</li>
+<li id="cite&#95;note-5"><span class="mw-cite-backlink"><a href="#cite_ref-5">↑</a></span> <span class="reference-text">CARRERA_HYBRID.md, Abschnitt „Die Lenkgrenze: 45 Grad“.</span>
+</li>
+<li id="cite&#95;note-6"><span class="mw-cite-backlink"><a href="#cite_ref-6">↑</a></span> <span class="reference-text">Kommentar zu <code>TRACK_BIT_RAIL</code>/<code>TRACK_BIT_PRINT</code>, <code>src/20-protocol.js</code>.</span>
+</li>
+<li id="cite&#95;note-7"><span class="mw-cite-backlink"><a href="#cite_ref-7">↑</a></span> <span class="reference-text"><code>lampFlicker()</code>, <code>src/20-protocol.js</code>.</span>
+</li>
+<li id="cite&#95;note-8"><span class="mw-cite-backlink"><a href="#cite_ref-8">↑</a></span> <span class="reference-text">Kommentar zu <code>RAIL_MODE</code>, <code>src/60-track.js</code>.</span>
+</li>
+<li id="cite&#95;note-9"><span class="mw-cite-backlink"><a href="#cite_ref-9">↑</a></span> <span class="reference-text">Selbsttest „Protokoll: CRC-8“, <code>src/95-selftest.js</code>.</span>
+</li>
+<li id="cite&#95;note-10"><span class="mw-cite-backlink"><a href="#cite_ref-10">↑</a></span> <span class="reference-text"><code>isStartCode()</code> und <code>codeZuTyp()</code>, <code>src/60-track.js</code>.</span>
+</li>
+<li id="cite&#95;note-11"><span class="mw-cite-backlink"><a href="#cite_ref-11">↑</a></span> <span class="reference-text"><code>ZIEL_SPERRE_BIT</code> und <code>zielSperreFlanke()</code>, <code>src/70-race.js</code>.</span>
+</li>
+<li id="cite&#95;note-12"><span class="mw-cite-backlink"><a href="#cite_ref-12">↑</a></span> <span class="reference-text">Kommentar zu <code>RAIL_MODE</code>, <code>src/60-track.js</code>.</span>
+</li>
+<li id="cite&#95;note-13"><span class="mw-cite-backlink"><a href="#cite_ref-13">↑</a></span> <span class="reference-text"><code>TACHO_SCALE</code> mit Messkommentar, <code>src/30-input.js</code>.</span>
+</li>
+<li id="cite&#95;note-14"><span class="mw-cite-backlink"><a href="#cite_ref-14">↑</a></span> <span class="reference-text">CARRERA_HYBRID.md, Abschnitt „Tempo-Grenzen“.</span>
+</li>
+<li id="cite&#95;note-15"><span class="mw-cite-backlink"><a href="#cite_ref-15">↑</a></span> <span class="reference-text"><code>AKKU_LEER</code>, <code>AKKU_VOLL</code>, <code>akkuGlaetten()</code>, <code>batteryPercent()</code>, <code>src/70-race.js</code>.</span>
+</li>
+<li id="cite&#95;note-16"><span class="mw-cite-backlink"><a href="#cite_ref-16">↑</a></span> <span class="reference-text"><code>batteryCompensationScale()</code>, <code>src/50-drive.js</code>.</span>
+</li>
+<li id="cite&#95;note-17"><span class="mw-cite-backlink"><a href="#cite_ref-17">↑</a></span> <span class="reference-text"><code>tools/querlage_messen.py</code>, Auswertung in CARRERA_HYBRID.md.</span>
+</li>
+</ol></div>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Strecke.html" title="Strecke">Strecke</a></li>
+<li><a href="./Firmware.html" title="Firmware">Firmware</a></li>
+<li><a href="./Original-App.html" title="Original-App">Original-App</a></li>
+<li><a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a></li>
+<li><a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a></li>
+<li><a href="./Keine_Reaktion_des_Fahrzeugs.html" title="Keine Reaktion des Fahrzeugs">Keine Reaktion des Fahrzeugs</a></li>
+<li><a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a></li>
+<li><a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/20-protocol.js</code>: <code>buildCommandPacket()</code>, <code>funkSchreiben()</code>, <code>LIGHT_HEAD</code>, <code>LIGHT_BRAKE</code>, <code>TRACK_BIT_RAIL</code>, <code>TRACK_BIT_PRINT</code>, <code>lampFlicker()</code>, <code>CONTROL_SEND_INTERVAL_MS</code></li>
+<li><code>src/10-ble-explorer.js</code>: <code>crc8()</code>, <code>MIN_THROTTLE_DELTA</code>, <code>KNOWN_UUIDS</code>, <code>DANGER_UUIDS</code></li>
+<li><code>src/30-input.js</code>: <code>REAL_SCALE</code>, <code>TACHO_SCALE</code></li>
+<li><code>src/60-track.js</code>: <code>TILE_TYPE</code>, <code>isStartCode()</code>, <code>codeZuTyp()</code>, <code>AUTO_MODE</code>, <code>RAIL_MODE</code></li>
+<li><code>src/70-race.js</code>: <code>batteryPercent()</code>, <code>akkuGlaetten()</code>, <code>ZIEL_SPERRE_BIT</code>, <code>handleDashboardBytes()</code>, <code>carRaceNotify()</code></li>
+<li><code>src/50-drive.js</code>: <code>NUS_RX</code>, <code>NUS_TX</code>, <code>batteryCompensationScale()</code></li>
+<li><code>src/90-ghosts.js</code>: <code>onCarNotify()</code>, <code>verbindeGatt()</code>, <code>ghostLookahead()</code>, <code>carModellName()</code></li>
+<li><code>CARRERA_HYBRID.md</code>, <code>tools/parse_btsnoop.py</code>, <code>tools/querlage_messen.py</code> (die Mitschnitte selbst sind nicht im Repository)</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw192
+Cached time: 20261027053451
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.136 seconds
+Real time usage: 0.142 seconds
+Preprocessor visited node count: 320/1000000
+Revision size: 35930/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 1/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 11106/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    2.770      1 Vorlage:Stand
+100.00%    2.770      1 -total
+-->
+
+<!-- Render ID 217254b8-d1c8-11f1-9875-bc24112bc008 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:22:|#|:idhash:canonical and timestamp 20261027053451 and revision id 81. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

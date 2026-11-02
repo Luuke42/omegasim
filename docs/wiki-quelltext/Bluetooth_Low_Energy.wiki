@@ -45,6 +45,8 @@ Die Daten eines BLE-Geräts sind nach dem '''Generic Attribute Profile''' (GATT)
 * Eine '''Charakteristik''' (''characteristic'', im Code von OmegaSim auch ''Merkmal'') ist ein einzelner Datenwert in einem Dienst, mit Eigenschaften, die sagen, was man mit ihm tun darf: lesen, schreiben, schreiben ohne Antwort, benachrichtigen.
 * Ein '''Deskriptor''' beschreibt eine Charakteristik näher. Der wichtigste ist der ''Client Characteristic Configuration Descriptor'' (Kurzkennung <code>0x2902</code>): Schreibt der Client dort eine 1, schaltet er die Benachrichtigungen dieser Charakteristik ein. Web Bluetooth erledigt das mit <code>startNotifications()</code>.
 
+[[Datei:OmegaSim-GATT-Baum.png|mini|Der GATT-Baum des Carrera HYBRID: OmegaSim (Client) schreibt Befehle in die Charakteristik RX und empfängt Meldungen über die Benachrichtigungen von TX.]]
+
 === UUID ===
 Jeder Dienst und jede Charakteristik hat eine Kennung, eine '''UUID''' (''Universally Unique Identifier''). Das ist eine 128-Bit-Zahl, geschrieben als 32 [[Hexadezimalsystem|Hex-Ziffern]] in fünf Gruppen, zum Beispiel <code>6e400001-b5a3-f393-e0a9-e50e24dcca9e</code>. Für Dienste, die die Bluetooth-Organisation selbst festgelegt hat, gibt es Kurzformen mit 16 Bit, die in eine feste '''Basis-UUID''' eingesetzt werden:
 

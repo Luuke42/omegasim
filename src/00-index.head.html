@@ -314,6 +314,7 @@
     pointer-events: none; border-radius: inherit; z-index: 1; }
   /* v1.2.12: die Strecke mit den Autos UNTER dem Radar. Der Grund ist der des Radars, damit die
      Kachel mit und ohne Karte gleich aussieht; das SVG behaelt sein Seitenverhaeltnis. */
+  body.wx-radar-aus .wx-radar { display: none; }
   .wx-karte { position: absolute; inset: 0; z-index: 0; pointer-events: none; display: grid;
     place-items: center; background: var(--wx-grund, #0d1219); border-radius: inherit; overflow: hidden; }
   .wx-karte[hidden] { display: none; }
@@ -523,7 +524,7 @@
     display: flex; flex-direction: row; align-items: center; gap: 12px;
     text-align: left; padding: 10px 14px; min-height: 0;
     background: var(--panel-2); border: 1px solid var(--border-strong); border-radius: 6px;
-    color: inherit; font: inherit; cursor: pointer;
+    color: inherit; font: inherit; cursor: pointer; text-decoration: none;
   }
   .misc-tile:hover { background: var(--panel-3); border-color: var(--bad); }
   .misc-tile svg { width: 26px; height: 26px; flex-shrink: 0; }
@@ -1426,6 +1427,10 @@
     border-radius: 10px; }
   .ch-spiegel-knopf svg { width: 26px; height: 26px; }
   .ch-spiegel-knopf.an { background: var(--k-blau, #0b84d6); color: #fff; border-color: transparent; }
+  /* Studie (98f-studie.js, v1.2.62): der Homington-Plan auf der Startseite, klickbar zum
+     Vergroessern (nutzt die .ch-karte-Vollbild-Regeln), mit Spiegel-Knopf. */
+  .studie-plan { margin: 12px 0 4px; }
+  #studie-spiegel-knopf.an { background: var(--k-blau, #0b84d6); color: #fff; border-color: transparent; }
   /* Fahren: Fahrgefuehl-Kachel mit groesserer Schrift (v0.9.31) */
   .k-fahren-unten #fa-profil .k-kt { font-size: clamp(14px, 2.6vh, 22px); }
   #fa-profil.k-meister { background: linear-gradient(90deg, rgba(8,10,14,.88) 0%, rgba(8,10,14,.45) 70%),
@@ -1491,9 +1496,6 @@
     grid-template-columns: .6fr .6fr 1fr 1fr .8fr 2.6fr 1fr 1fr; }
   /* Hoeher nur, wo Platz ist: im Vollbild und auf niedrigen Schirmen rechnet cockpitPassung()
      sonst einen kleineren Massstab fuer das ganze Cockpit (Selbsttest "Cockpit passt im Vollbild"). */
-  @media (min-height: 561px) {
-    body:not(.race-fs) .gt3-strip > .gt3-wx { min-height: clamp(64px, 10vw, 120px); }
-  }
   @media (max-width: 560px) {
     /* Zwei Reihen: oben Tank, Schaden, Reifen, Akku, Licht; unten das Radar ueber drei Spalten,
        dann Boxenwahl und G-Plot. */
@@ -2605,6 +2607,12 @@
   @media (prefers-reduced-motion: reduce) { .k-druecken { animation: none; } }
   .k-titel-fuss { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; align-items: center;
     font-size: 12px; color: var(--k-dim); margin-top: 4vh; }
+  /* Wiki-Knopf in der Startseiten-Knopfreihe: wie ein Tutorial-Knopf, aber komplett weiss
+     (BESTELLT: "so gross wie der Tutorial-Knopf, mit aktuellem Text und komplett weiss"),
+     mit Times New Roman und mittig ausgerichtetem Schriftzug. */
+  .k-tutorial-knopf.k-wiki { background: #fff; color: #141414; border-color: #fff; text-decoration: none;
+    font-family: 'Times New Roman', Times, serif; display: inline-flex; align-items: center; justify-content: center; }
+  .k-tutorial-knopf.k-wiki:hover { background: var(--k-blau); color: var(--k-blau-text); border-color: var(--k-blau); }
 
   /* Optionszeilen: die angewaehlte Zeile rot hinterlegt wie bei ACC */
   .opt-row.menu-nav-sel { outline: 2px solid #fff; background: rgba(0,163,224,.22); }
@@ -2894,14 +2902,14 @@
   .ps-fertig { color: var(--good); } .ps-falsch { color: var(--bad); }
   .pit-spiel[data-symbol=""][data-blitz="ok"] .ps-fertig { display: block; }
   .pit-spiel[data-symbol=""][data-blitz="falsch"] .ps-falsch { display: block; }
-  /* Die Reihe: der aktuelle und die drei naechsten Knoepfe. Beim Weiterschalten rutscht sie um einen Platz nach
-     links (data-schieben setzt sie einen Platz nach rechts, dann gleitet sie zurueck). */
-  .ps-reihe { display: flex; gap: 8px; height: 30px; overflow: hidden; width: calc(4 * 30px + 3 * 8px); }
-  .ps-reihe-innen { display: flex; gap: 8px; transition: transform .22s ease-out; }
-  .pit-spiel[data-schieben="1"] .ps-reihe-innen { transform: translateX(38px); transition: none; }
+  /* Die Reihe (v1.2.30): alle Knoepfe des Durchgangs an festen Plaetzen, der aktuelle markiert, erledigte
+     blenden aus. */
+  .ps-reihe { display: flex; gap: 8px; height: 30px; overflow: hidden; }
+  .ps-reihe-innen { display: flex; gap: 8px; }
   .ps-slot { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 4px;
-    border: 1px solid rgba(255,255,255,.25); opacity: .55; }
-  .ps-slot:first-child { opacity: 1; border-color: var(--k-blau); box-shadow: 0 0 0 2px var(--k-blau); }
+    border: 1px solid rgba(255,255,255,.25); opacity: .55; transition: opacity .25s ease-out, transform .25s ease-out; }
+  .ps-slot[data-zustand="jetzt"] { opacity: 1; border-color: var(--k-blau); box-shadow: 0 0 0 2px var(--k-blau); }
+  .ps-slot[data-zustand="fertig"] { opacity: 0; transform: scale(.6); }
   .ps-slot svg { width: 20px; height: 20px; fill: none; stroke-width: 2.4; display: none; }
   .ps-slot[data-s="quad"] .ps-quad, .ps-slot[data-s="kreis"] .ps-kreis { display: block; }
   .ps-slot[data-s=""] { border-color: transparent; box-shadow: none; }
@@ -3838,7 +3846,7 @@
      gerenderte Hoehe - die halbe Seite sprang bei jedem Klick. Jetzt skaliert die Karte
      INNERHALB eines stabilen Kastens. */
   #track-preview-svg {
-    height: clamp(240px, 42vh, 460px);
+    height: clamp(120px, 21vh, 230px);
     display: grid; place-items: center; overflow: hidden;
     /* BESTELLT: "beim zufälliger strecke ... Animation ... wie sich die strecke selbst
        zusammenbaut". trackZufall() setzt die Klasse; die Animation ist auf hoechstens
@@ -4056,6 +4064,17 @@
      steht und aussieht wie ein weiteres Streckenteil. */
   .tp-actions { margin-bottom: 4px; }
   .tp-actions .tp-btn { border-color: var(--border); }
+  /* Editor-Optionen (v1.2.61): "Optionen"-Knopf in der Aktionsleiste klappt dieses Feld
+     auf: Laenge/Teile-Slider, Linkslastig, Bruecken und Strecke spiegeln. */
+  .tp-opt { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 12px 16px; align-items: center; padding: 8px 10px;
+    background: rgba(10,12,18,.72); border: 1px solid var(--border); border-radius: 6px;
+    font-size: 12.5px; color: #eef0f4; margin-bottom: 6px; }
+  .tp-opt[hidden] { display: none; }
+  .tp-opt label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tp-opt input[type=range] { width: 150px; accent-color: var(--k-blau, #00a3e0); }
+  .tp-opt input[type=checkbox] { accent-color: var(--k-blau, #00a3e0); width: 16px; height: 16px; }
+  .tp-opt .tp-opt-wert { min-width: 3ch; text-align: right; font-weight: 700; color: var(--k-blau, #00a3e0); }
+  .tp-opt .tp-opt-knopf { margin-left: auto; }
   /* Aktionen oben, Karte in der Mitte, Teile unten - so liegt das Steuerkreuz auf dem
      Bildschirm genauso wie in der Hand: hoch zu den Aktionen, runter zu den Teilen. */
   /* minmax(0, 1fr) UND NICHT 1fr. `1fr` ist `minmax(auto, 1fr)`, und dieses `auto` ist
@@ -4586,6 +4605,14 @@
   /* Die linke Ecke traegt das Blaettern. Dieselbe Hoehe wie rechts, damit die zwei Ecken
      auf einer Linie liegen. */
   .race-corner-links { left: 6px; right: auto; }
+  /* Pause: klein und gedeckt, mit Luft zum Beenden-Knopf rechts daneben. */
+  .race-corner button.race-pause-knopf { position: relative; width: 28px; height: 34px; margin-right: 18px;
+    background: rgba(10, 14, 22, .45); opacity: .6; }
+  .race-corner button.race-pause-knopf:hover, .race-corner button.race-pause-knopf.an { opacity: 1; }
+  .race-corner button.race-pause-knopf:disabled { opacity: .25; cursor: default; }
+  .race-corner button.race-pause-knopf svg { width: 14px; height: 14px; }
+  .race-pause-knopf .wip-tag { position: absolute; top: -6px; left: -8px; font-size: 6px; padding: 0 2px;
+    letter-spacing: 0; line-height: 1.4; pointer-events: none; }
   /* SCHMALER UND GEDECKTER als die Vollbildknoepfe: eine Nebenbedienung. Sie werden erst
      beim Zeigen deutlich, damit sie im Fahren nicht ablenken. */
   .race-corner button.schirm-pfeil { width: 26px; height: 34px;
@@ -4881,6 +4908,10 @@
       </button>
       <!-- TUTORIAL (51b-tutorial.js): Klick, Dreieck oder T. -->
       <div class="k-tutorial-reihe">
+        <!-- BESTELLT: "Wiki" links neben Tutorial/Steuerung/Starten, so gross wie ein
+             Tutorial-Knopf und komplett weiss; Klick oeffnet das OmegaSim-Wiki im Browser. -->
+        <a class="k-tutorial-knopf k-wiki" href="https://omegasim.miraheze.org/wiki/Hauptseite"
+           target="_blank" rel="noopener noreferrer" aria-label="Wiki">Wiki</a>
         <button type="button" id="k-tutorial-start" class="k-tutorial-knopf">Tutorial
           <span class="k-tutorial-taste" data-i18n-skip>&#9651; / T</span></button>
         <!-- BESTELLT: "neben dem Tutorial-Button noch einen Button zur Steuerung ... dass es nur
@@ -4917,7 +4948,7 @@
       </div>
     </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.2.24</span></span>
+        <span class="foot-ver">v<span id="app-version">1.3.7</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -4947,7 +4978,6 @@
         <span class="k-knopfreihe">
           <button type="button" class="k-knopf" id="fa-verbinden">Verbinden</button>
           <button type="button" class="k-knopf" id="fa-garage">Garage</button>
-          <button type="button" class="k-knopf" id="fa-reinig" hidden>Reinigungsfahrzeug starten</button>
         </span>
       </div>
       <div class="k-kachel " id="fa-strecke" role="button" tabindex="0" data-quad="bahn">
@@ -5043,6 +5073,10 @@
         <span class="schirm-punkte" id="race-screen-dots" aria-hidden="true"></span>
       </div>
       <div class="race-corner">
+        <!-- v1.2.30 BESTELLT: "Pause-Button oben subtil und klein links neben den Beenden-Button und als
+             Piktogramm, mit etwas Abstand, damit ich nicht versehentlich auf Beenden druecke."
+             Das Symbol setzt rennPauseMalen() (15-pause.js): Pause, Fortsetzen, Wiederanlauf stoppen. -->
+        <button type="button" id="race-act-pause" class="race-pause-knopf" title="Pause (WIP)" aria-label="Pause"></button>
         <button type="button" id="race-menue" aria-label="Zurück zum Menü" title="Zurück zum Menü (Options, Esc)">
           <!-- BESTELLT: "selbe Funktion, aber das Icon soll ein klares Zurueck oder Beenden
                signalisieren": Pfeil aus einer offenen Tuer. -->
@@ -5234,7 +5268,6 @@
              wer nur "wechselhaft" sieht, weiss nicht, worauf er gerade faehrt. -->
         <div class="gt3-box gt3-click gt3-wx" id="race-wx-box"
              title="Wetter umschalten: sonnig, Regen, wechselhaft">
-          <div class="wx-karte" id="race-wx-karte" aria-hidden="true" hidden></div>
           <canvas id="race-wx-radar" class="wx-radar" width="200" height="150"
                   aria-hidden="true"></canvas>
           <div class="wx-ico"><svg class="gt3-ico" id="race-wx-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-label="Trocken"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg><svg class="gt3-ico" id="race-wx-rain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-label="Regen" style="display:none"><path d="M6.5 14a4 4 0 0 1 .4-8 5.5 5.5 0 0 1 10.5 1.4A3.6 3.6 0 0 1 17.5 14z"/><path d="M8 17.5l-1 2.5M12 17.5l-1 2.5M16 17.5l-1 2.5"/></svg><span class="wx-wechsel" id="race-wx-wechsel" aria-label="wechselhaft" style="display:none" data-i18n-skip>&#8646;</span></div></div>
@@ -5343,6 +5376,7 @@
             <span class="ps-falsch" data-i18n-skip>&#10007;</span>
           </div>
           <div class="ps-reihe" aria-hidden="true"><div class="ps-reihe-innen">
+            <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
             <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
             <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
             <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
@@ -6078,8 +6112,20 @@
     <div class="card subpage" id="sub-patchnotes">
       <button class="misc-back goto-tab" data-tab="options">&larr; Optionen</button>
       <h2>Patchnotes</h2>
+      <p class="muted"><b><span data-i18n-skip>1.3</span></b></p>
+      <ul class="muted" id="patchnotes-13" style="padding-left:20px; line-height:1.7">
+        <li>Das Fahrgef&#252;hl Gran Accelerato wird zu zwei Modi (WIP): &#8222;Gran Hybrismo&#8220; wie Gran Turismo Sport (viel Grip, weicher Reifenscheitel, kaum Lastwechsel, eine Stabilit&#228;tshilfe lenkt ein ausbrechendes Heck sanft gegen, beim Bremsen bleibt die Lenkung wie mit ABS, die Reifentemperatur wirkt wenig) und &#8222;Assetto Carrera&#8220; wie Assetto Corsa Competizione (leicht bremsen dreht ein, Lupfen l&#228;sst das Heck kommen, Gas schiebt, scharfe Haftgrenze mit Untersteuern beim &#220;berfahren, Reifenfenster: kalt und &#252;berhitzt deutlich weniger Grip, warm am meisten; keine Hilfen). Gespeicherte St&#228;nde mit Gran Accelerato laden als Gran Hybrismo. Behoben: Tempo-Lenkung und Selbstzentrierung kamen nie am Auto an, die Lastempfindlichkeit verst&#228;rkte die Lastwechsel statt sie zu d&#228;mpfen, der Schalter &#8222;&#220;bersteuern&#8220; wurde ignoriert, und beim virtuellen Fahren waren die Reifen nach wenigen Sekunden dauerhaft &#252;berhitzt (jetzt mit Abk&#252;hlung, und das Standardauto hat Abtrieb). NPCs: MAX beschleunigt und bremst wie Arcade, alle anderen Stufen wie Sim+, unabh&#228;ngig von der Abstimmung von Spieler 1; der Regler &#8222;MAX: Beschleunigung&#8220; entf&#228;llt.</li>
+        <li>Neue Option &#8222;NPC: Tankort&#8220; (WIP, Optionen &#8594; NPCs): Einparkfolge wie das Safety Car (Standard, wie bisher) oder &#8222;Streckenrand &#252;ber Querlage&#8220; &#8211; der NPC zieht auf dem Boxenteil per Querlage an den rechten Rand, bremst, steht mit Ratsche und zieht per Querlage wieder heraus, ohne Lenkfolge.</li>
+      </ul>
       <p class="muted"><b><span data-i18n-skip>1.2</span></b></p>
       <ul class="muted" id="patchnotes-12" style="padding-left:20px; line-height:1.7">
+        <li>Seit 1.2.47: Wiki-Knopf auf der Startseite und Wiki-Kachel in den Optionen. Das Safety Car parkt nach der ersten Runde. Boxen-Minigame ohne lange Wartezeit zwischen den Kn&#246;pfen; eine L&#252;cke von 90 ms bleibt, damit ein Wechsel auf dasselbe Symbol sichtbar ist und ein doppelter Druck nicht f&#252;r den n&#228;chsten Knopf z&#228;hlt. Pacejka hat eine eigene Abstimmung (Beschleunigungsfaktor 1,1, Lenkkalibrierung 280 %, Bremsen nimmt Lenkung 75 %); sie steht nur im Preset Pacejka, das beim ersten Start gesetzt wird, die Werkseinstellungen der Regler sind wieder die von vor 1.2.48. NPC-Einpark- und Haltefolgen laufen bei Simulationsautos mit der Physikzeit, bei echten Autos nach der Uhr. Der Challenger regelt sein Tempo additiv gegen die Bestzeit, und f&#252;r MAX gilt ein Deckel je Streckenteil statt des 60-%-Kurvendeckels. Streckeneditor-Optionen (WIP): L&#228;nge/Teile, Linkslastig, Br&#252;cken und Strecke spiegeln. Neues Fahrgef&#252;hl Gran Accelerato (WIP): Pacejka mit Abtrieb, Selbstzentrierung und dynamischer Gierregelung; es gilt jetzt auch f&#252;r Spieler 2 und 3 und in Challenges, und seine Werte h&#228;ngen am Modus, bleiben also nach dem Laden und beim Verstellen eines Reglers erhalten. OmegaLabs-Studie auf der Startseite, Layout spiegelbar (WIP, wird mit den Studiendaten gespeichert; nach der Studie ist Spiegeln wieder aus). Randstein-Rumpeln beim virtuellen Fahren (WIP). Latenz: Pakete von NPCs in Einpark- und Haltefolgen werden nur noch bei ge&#228;ndertem Befehl oder Phasenwechsel nachgereicht, sonst wie immer verworfen; virtuelles Fahren liest den Handling-Modus nicht mehr in jedem Bild und legt f&#252;r das Randstein-Rattern keinen neuen Tonpuffer mehr an.</li>
+        <li>Latenz: Das schnelle Verbindungsintervall wird nur noch einmal je Verbindung nachgefordert, und erst wenn ein Auto 5 s lang langsamer als alle 120 ms meldet (vorher alle 20 s je Auto ab 75 ms &#8211; mit vier Autos handelte das Handy etwa alle 5 s eine Verbindung neu aus). Linienmodell SIMULATOR: Die Linie wird nur noch im Strecken-Editor berechnet und gespeichert, beim Fahren nie mehr im Hintergrund; fehlt sie, fahren die NPCs die normale Linie.</li>
+        <li>Latenz: Die Strecke im Regenradar ist wieder entfernt, und das Radar zeichnet nur noch in einfacher Aufl&#246;sung (auf hochaufl&#246;senden Handys ein Viertel der Bildpunkte). Neuer Schalter &#8222;Regenradar&#8220; unter Optionen &#8594; Allgemein: aus, wird das Radar gar nicht gezeichnet. Der Knopf &#8222;Reinigungsfahrzeug starten&#8220; steht nur noch in der Bahn-Kachel, nicht mehr in der Garagen-Kachel.</li>
+        <li>NPCs: Start/Ziel gilt jetzt &#252;berall als Gerade. Die Linie h&#228;lt dort die Querlage wie auf jeder Geraden, statt hinter einer Kurve halb innen zu bleiben, und der Vorausblick ans Auto meldet auf der Bahn Start/Ziel (0x01) statt der Engstelle (0x0A). NPC-Stufe MAX: Ohne Schaltpause wurde der Schaltvorgang nach dem ersten Hochschalten nie beendet, das Auto hatte danach keinen Antrieb mehr &#8211; behoben, MAX f&#228;hrt auf Geraden etwa doppelt so schnell wie vorher. Ideallinie (Linienmodell SIMULATOR, WIP): Die Suche rechnet mit dem echten Kurventempo der NPCs und f&#228;hrt au&#223;en-innen-au&#223;en (Kurveneingang und -ausgang au&#223;en, Scheitel innen), statt nur die innere H&#228;lfte zu nutzen; die Haarnadel bleibt davon ausgenommen, gespeicherte Linien werden neu gesucht.</li>
+        <li>Virtuell fahren: Neben dem eigenen Auto stand im 3D-Bild ein kleines Kartenauto, die Silhouette aus dem Regenradar des Cockpits, das darunter eigentlich verborgen ist; es ist weg. Die NPCs fahren jetzt mit dem Tempo der Garagenstufe 1 (mittel, 55 %) statt mit rund 80 %, beschleunigen und bremsen mit demselben Fahrzeugmodell wie das eigene Auto und nehmen Kurven mit h&#246;chstens 1,3 g. Ihre Neigung in Kurven war durch einen Rechenfehler bis zu 34 Grad gro&#223; und ist jetzt so klein wie beim eigenen Auto (unter 1 Grad).</li>
+        <li>Cockpit: Die Rennpause ist jetzt ein kleines Symbol oben rechts, mit Abstand links neben dem Beenden-Knopf (Pause, Fortsetzen, Wiederanlauf stoppen). Boxen-Minigame: Alle f&#252;nf Kn&#246;pfe stehen von Anfang an in einer Reihe an festen Pl&#228;tzen, erledigte blenden aus. Streckeneditor: Mit einer Haarnadel in der Strecke fehlte an der letzten Fuge vor Start/Ziel ein St&#252;ck Randstreifen (rund 3 cm), sodass z. B. SHG3R4L nicht zusammenzupassen schien; die Ma&#223;e selbst stimmen und schlie&#223;en exakt.</li>
+        <li>Neu von Playdater1974, &#252;bernommen mit Korrekturen: Rennpause (WIP) &#8211; das Rennen l&#228;sst sich anhalten (Knopf im Cockpit oder frei belegbare Controllertaste), die Autos bleiben stehen, die Rennuhr steht still, weiter geht es mit einer kurzen Wiederanlauf-Ampel. Im WLAN-Mehrspieler ist die Pause gesperrt. Nach einem Neuladen der App bleibt kein Auto mehr in der Pause h&#228;ngen (braucht die neue APK).</li>
         <li>Schaltklang (WIP): statt des hellen &#8222;Klack&#8220; jetzt bei allen Motoren ein tiefer, weicher Schaltschlag mit Auspuffknall &#8211; auch beim Runterschalten, so wie es bisher nur beim Hochschalten des Mustang v2 unter Last klang. Der helle Metallanteil ist fast weg. Der fr&#252;here Klang kommt mit &#8222;Schaltklang: alt&#8220; (Optionen &#8594; Ton).</li>
         <li>Neu von Playdater1974, &#252;bernommen mit Korrekturen: Rennintro (WIP) &#8211; auf Wunsch sagt eine Stimme vor der Startampel Modus, Limit, Pflichtstopps, Startaufstellung und Wetter an; fehlende Aufnahmen werden einzeln &#252;bersprungen, Fr&#252;hstarts z&#228;hlen schon ab dem Intro, in Challenges gibt es kein Intro. Statistikbereinigung (WIP) unter Optionen &#8594; Statistiken: Fahrzeugstatistiken, einzelne Sitzungen und zu kurze Rundenzeiten mit Vorschau l&#246;schen, mit Sicherung zum R&#252;ckg&#228;ngigmachen und JSON-Export; jetzt auch auf Englisch und Spanisch, und alte Sitzungen erscheinen nicht mehr doppelt.</li>
         <li>Cockpit: Das Regenradar ist breiter und zeigt die Strecke mit allen Autos (WIP, Schalter &#8222;Strecke im Regenradar&#8220; unter Optionen &#8594; Allgemein); Wolken und Regen ziehen dar&#252;ber. Hochkant gezeichnete Strecken werden in der breiten Kachel gedreht, im Ausdruck-Modus steht dort das eigene Foto der Bahn. Tank und Schaden sind schmaler. Die Position oben links neben der Runde hei&#223;t jetzt #2/5 statt P2/5 und erscheint auch bei Time Attack (nach Bestzeit). Streckenscan: jede Kachel wird jetzt nach Leseart &#252;bersetzt, eine Engstelle auf der Bahn wurde vorher als zweites Start/Ziel eingetragen. Hinweistexte zu Lenkd&#228;mpfung (Vorgabe 0) und Bremskennlinie (Vorgabe 2,45) berichtigt.</li>
@@ -9825,6 +9871,13 @@
           <b>App &amp; Updates</b>
           <span>Version der Android-App, Updates ohne neue APK.</span>
         </button>
+        <a class="misc-tile" href="https://omegasim.miraheze.org/wiki/Hauptseite" target="_blank"
+           rel="noopener noreferrer">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M24 6a18 18 0 1 0 0 36 18 18 0 0 0 0-36z"/><path d="M6 24h36M24 6c-6 5-9 11-9 18s3 13 9 18c6-5 9-11 9-18s-3-13-9-18z"/></svg>
+          <b>Wiki</b>
+          <span>Das OmegaSim-Wiki: Idee von Gnen54, offene Artikel von Luuke42 unter CC BY-SA.</span>
+        </a>
       </div>
     </div>
     <div class="card subpage" id="sub-opt-general">
@@ -9871,10 +9924,9 @@
           <option value="modern">Modern, 2000er (hell)</option>
           <option value="klassiker">Klassiker: Walnuss und Chrom</option>
         </select></div>
-      <div class="opt-row"><div class="opt-label">Strecke im Regenradar <span class="wip-tag">WIP</span><small>Das Regenradar im
-          Cockpit zeigt die Strecke mit allen Autos, die Wolken und der Regen ziehen dar&uuml;ber. Im Ausdruck-Modus
-          steht dort das eigene Foto der Bahn, sonst das Radar allein. Aus: das Radar wie bisher.</small></div>
-        <label class="tgl"><input type="checkbox" id="setting-wx-karte" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Regenradar<small>Das Regenradar im Cockpit. Aus: die Kachel
+          bleibt leer und das Radar wird gar nicht gezeichnet &ndash; das spart Rechenzeit auf schwachen Handys.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-wx-radar" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Startampel
           <small>Wie die Startampel erscheint: als Bild &uuml;ber dem Cockpit mit T&ouml;nen (Vorgabe), nur mit den T&ouml;nen &ndash; das Cockpit bleibt frei &ndash;, oder nur als Bild ohne T&ouml;ne. Gilt f&uuml;r den Rennstart und den Neustart nach Gelb.</small></div>
         <select id="setting-ampel" data-preset-skip>
@@ -9911,6 +9963,8 @@
         <select id="phys-mode">
           <option value="physik">Physik</option>
           <option value="pacejka" selected>Pacejka (experimentell)</option>
+          <option value="gran">Gran Hybrismo (WIP)</option>
+          <option value="acc">Assetto Carrera (WIP)</option>
           <option value="aus">RC (experimentell)</option>
         </select></div>
       <!-- BESTELLT: "Eventuell sage ich spaeter, dass das Uebersteuern abgeschaltet werden
@@ -10035,7 +10089,7 @@
           Minigame: gewechselt wird alles, was simuliert wird &ndash; Reifen, Tank voll,
           Reparatur &ndash;, und bis alles fertig ist, kommst du nicht los. In der Mitte
           erscheinen nacheinander f&uuml;nf Tasten, Quadrat oder Kreis (Tastatur: K und I); darunter
-          stehen die aktuelle und die n&auml;chsten drei in einer Reihe. Jede richtig gedr&uuml;ckte
+          stehen alle f&uuml;nf in einer Reihe, die erledigten blenden aus. Jede richtig gedr&uuml;ckte
           k&uuml;rzt den Stopp um 8 Prozent (gr&uuml;ner Haken), alle f&uuml;nf k&uuml;rzen ihn um 40 Prozent;
           eine falsche verl&auml;ngert ihn um 8 Prozent (rotes Kreuz); wer nichts dr&uuml;ckt, wartet die volle Zeit. Am Ende wartest du noch
           mindestens eine Sekunde, bei falschen Tasten l&auml;nger. Abbrechen: Kreuz tippen.</small></div>
@@ -11049,6 +11103,11 @@
           du bist an der Haftgrenze, aber noch nicht dar&uuml;ber. Kommt vor dem Untersteuern und dem
           &Uuml;bersteuern &ndash; die Warnung davor.</small></div>
         <label class="tgl"><input type="checkbox" id="vib-quietschen" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Randsteine (Virtuell fahren) <span class="wip-tag">WIP</span>
+          <small>Ein kurzes R&auml;tteln und Brummen, wenn das Auto mit dem Rand &uuml;ber den
+          erhabenen Stein f&auml;hrt &ndash; das Rattern der Curbs-Schwelle. Nur im virtuellen
+          Fahren, wo die Randsteine als 3D-Objekt gezeichnet sind.</small></div>
+        <label class="tgl"><input type="checkbox" id="vib-kerb" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Meldungen
           <small>Wetterwechsel und leerer Tank. Standard aus: das sind Nachrichten und
           keine Kr&auml;fte am Auto &ndash; wer sie will, bekommt sie hier.</small></div>
@@ -11295,13 +11354,6 @@
           <input type="range" id="ghost-max-r2" min="0.3" max="1" step="0.01" value="0.8">
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-max-r2-val">80%</span>
-        </div></div>
-      <div class="opt-row"><div class="opt-label">MAX: Beschleunigung <span class="wip-tag">WIP</span><small>Wie viel kräftiger das Motormodell eines MAX-NPCs beschleunigt als das von Spieler&nbsp;1, und ohne Schaltpause. Das gesendete Gas folgt diesem Modell &ndash; auf kurzen Geraden kam ein MAX-NPC sonst kaum über sein Kurventempo. Standard 2&times;.</small></div>
-        <div class="opt-slider">
-          <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="ghost-max-beschl" min="1" max="4" step="0.1" value="2">
-          <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="ghost-max-beschl-val">200%</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">MAX: Bremspunkt <span class="wip-tag">WIP</span><small>Wo ein MAX-NPC vom Geradentempo auf das Kurventempo geht: eine Schiene vor der Kurve (Standard) oder erst am Beginn des Kurventeils. Vor der Haarnadel bremsen alle NPCs wie bisher zwei Teile vorher.</small></div>
         <select id="ghost-max-bremspunkt">
@@ -11559,6 +11611,14 @@
           Querlage nicht, voller Ausschlag ist ein Befehl und keine Messung.
           <br>Regenreifen: setzt Regen ein, kommt jeder NPC so früh wie möglich herein und rüstet um &ndash; und beim Wechsel zurück auf trocken genauso. Solange die falschen Reifen drauf sind, fährt er langsamer: 0,64 gegen 0,85 mit Regenreifen im Regen, abgeleitet aus derselben Grifftabelle, die dein Auto benutzt. Bei leichtem Regen ist der Slick noch vorn &ndash; der Nachteil kommt mit dem Wasser, nicht mit der Meldung. Ist dieser Schalter aus, können NPCs keine falschen Reifen haben, sonst kröchen sie nach dem ersten Regen ohne Ausweg.</small></div>
         <label class="tgl"><input type="checkbox" id="ghost-pit"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">NPC: Tankort <span class="wip-tag">WIP</span><small>Wie ein NPC zum
+          Boxenstopp an den Rand f&auml;hrt. Einparkfolge (Standard): wie das Safety Car mit der aufgenommenen Ein- und
+          Ausparkfolge. Streckenrand &uuml;ber Querlage: das Auto zieht auf dem Boxenteil per Querlage an den rechten Rand,
+          bremst dort, steht und zieht danach per Querlage wieder auf die Fahrbahn &ndash; ohne Lenkfolge.</small></div>
+        <select id="ghost-pit-ort">
+          <option value="folge" selected>Einparkfolge (wie Safety Car)</option>
+          <option value="rand">Streckenrand &uuml;ber Querlage</option>
+        </select></div>
       <div class="opt-row"><div class="opt-label">NPC: Boxenstopp im freien Fahren
           <small>Ob auch au&szlig;erhalb eines Rennens gepittet wird. Beim Losfahren aus der
           Garage stellt man meist Regler ein, und ein Auto, das dabei zehn Sekunden steht,
@@ -12502,6 +12562,11 @@
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M4 6h3l7 12h3M4 18h3l7-12h3"/><path d="M17 4l3 2-3 2M17 16l3 2-3 2"/></svg>
             <span class="tp-cap">Zufall</span></button>
+          <button class="tp-btn tp-schalter" id="track-opt-toggle" title="Editor-Optionen: L&auml;nge, Linkslastig, Br&uuml;cken, Spiegeln" aria-label="Editor-Optionen" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/>
+              <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+            <span class="tp-cap">Optionen</span></button>
           <button class="tp-btn" id="track-tour" title="Tutorial zum Editor" aria-label="Tutorial zum Editor">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                  stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01"/></svg>
@@ -12521,6 +12586,22 @@
                Tastenbelegung darfst du hier einblenden"). -->
           <span class="tp-info" id="track-fs-info" data-i18n-skip></span>
           <span class="tp-tasten" id="track-fs-tasten"></span>
+          <div class="tp-opt" id="track-opt-panel" hidden>
+            <!-- Korrektur nach 1.2.66: alle vier Editor-Optionen (v1.2.61) sind neu und als WIP
+                 gekennzeichnet - ein Schild fuer das ganze Feld. -->
+            <span class="wip-tag">WIP</span>
+            <label>L&auml;nge / Teile
+              <input type="range" id="track-opt-ziel" min="4" max="4" value="4">
+              <span class="tp-opt-wert" id="track-opt-ziel-wert">max</span>
+            </label>
+            <label>Linkslastig
+              <input type="checkbox" id="track-opt-links">
+            </label>
+            <label>Br&uuml;cken
+              <input type="checkbox" id="track-opt-bruecken">
+            </label>
+            <button class="tp-opt-knopf" id="track-spiegel" title="Strecke spiegeln: Kurven links/rechts tauschen und die Schleife r&uuml;ckw&auml;rts fahren">Strecke spiegeln</button>
+          </div>
         </div>
         <div id="track-preview-svg"></div>
         <!-- v1.0.17 BESTELLT: "sobald die Strecke fertig ist ein Ladesymbol am Rand (die drehende
@@ -12570,7 +12651,6 @@
         auf einem anderen Ger&auml;t dieselbe Strecke ein, ohne sie neu zu klicken.
       </p>
 
-      <ol class="muted" id="track-tile-list" style="padding-left:20px; line-height:1.9; max-height:200px; overflow-y:auto; margin-top:12px"></ol>
     </div>
     <div class="card subpage" id="sub-laden">
       <button class="misc-back subpage-back" data-sub="">&larr; Strecke</button>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ansagen - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Ansagen</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.50</b> vom 30.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Rennen.png" class="mw-file-description"><img src="images/250px-OmegaSim-Rennen.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Rennen.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Das Cockpit; die Ansagen begleiten das Rennen</figcaption></figure>
+<p>Die <b>Ansagen</b> von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> sind gesprochene Meldungen, die während eines Rennens erscheinen: die Rundenzeit, der Zwischenstand, das Rennintro vor der Ampel, die Rennergebnis-Ansage und feste <b>Funkmeldungen</b> (Schaden, Tank, Reifen, Regen, Akku, Boxenstopp). Sie lassen sich unter <b>Optionen → Ansagen</b> einzeln ein- und ausschalten, mit eigener Stimme, Tempo, Tonhöhe und Hall.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Menüpfad</td>
+<td>Optionen → Ansagen (Kachel „Ansagen“)
+</td></tr>
+<tr>
+<td>Stimmen</td>
+<td>Windows-Systemstimme für die festen Funkmeldungen; Piper-TTS-Clips für Rundenzeit, Rennstand und Rennintro
+</td></tr>
+<tr>
+<td>Sprachen</td>
+<td>Deutsch und Englisch
+</td></tr>
+<tr>
+<td>Live-Stimme</td>
+<td>Browser-/Gerätestimme über die Web Speech API (nur Rundenzeit und wahlweise Rennstand)
+</td></tr>
+<tr>
+<td>Auslösung</td>
+<td>zustandsgesteuert (Rundenende, Zustandsschwellen, Rennstand-Messung); manuell nur über den Test-Knopf
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Welche_Ansagen_es_gibt">Welche Ansagen es gibt</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Ansage</th>
+<th>Beispiel (DE)</th>
+<th>Wann
+</th></tr>
+<tr>
+<td><b>Rundenzeit</b></td>
+<td>„58,3“ / „1 Minute 2,3, Bestzeit“</td>
+<td>jede vollendete Runde, auch für Spieler 2 und 3
+</td></tr>
+<tr>
+<td><b>Rennstand</b> (Zwischenstand)</td>
+<td>„Nach Runde fünf. Es führt aktuell der rote Porsche 911 …“</td>
+<td>alle X Runden des Führenden, nur Runden- und Endurance-Rennen
+</td></tr>
+<tr>
+<td><b>Rennergebnis</b></td>
+<td>„Gewonnen hat der rote Porsche …“</td>
+<td>einmal nach der Zielflagge
+</td></tr>
+<tr>
+<td><b>Rennintro</b></td>
+<td>„Willkommen am Start. Das Rundenrennen beginnt gleich …“</td>
+<td>vor der Startampel (Countdown), nur lokale Starts
+</td></tr>
+<tr>
+<td><b>Schaden</b></td>
+<td>„Achtung, Schaden kritisch“</td>
+<td>Schadensbalken ≤ 10&#160;%, nach Reparatur wieder scharf
+</td></tr>
+<tr>
+<td><b>Tank</b></td>
+<td>„Tank fast leer“</td>
+<td>Tank ≤ 10&#160;%, nach Tanken wieder scharf
+</td></tr>
+<tr>
+<td><b>Reifen</b></td>
+<td>„Reifen abgefahren“</td>
+<td>schlechtester Reifen ≤ 10&#160;%
+</td></tr>
+<tr>
+<td><b>Regen</b></td>
+<td>„Es regnet“ / „Der Regen hört auf“</td>
+<td>beim Wechsel trocken ↔ Regen
+</td></tr>
+<tr>
+<td><b>Akku</b></td>
+<td>„Akku fast leer“</td>
+<td>Akku ≤ 25&#160;% je Auto, nach Laden wieder scharf
+</td></tr>
+<tr>
+<td><b>Boxenstopp</b></td>
+<td>„Boxenstopp eingeleitet“</td>
+<td>beim doppelten Start-Ausdruck (Boxeneinfahrt)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Wie_die_Stimmen_entstehen">Wie die Stimmen entstehen</h2></div>
+<p>Es gibt <b>zwei</b> Wege, und die App wählt je Ansage:
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Vorproduzierte_Clips_(Piper_TTS)"><span id="Vorproduzierte_Clips_.28Piper_TTS.29"></span>Vorproduzierte Clips (Piper TTS)</h3></div>
+<p>Für Rundenzeit, Rennstand, Ergebnis und Rennintro werden die Sätze aus einzelnen <b>Clips</b> zusammengesetzt. Sie sind mit <b>Piper TTS</b> erzeugt:
+</p>
+<ul><li>Deutsch: <b>Thorsten</b> (<code>de_DE-thorsten-medium.onnx</code>)</li>
+<li>Englisch: <b>LJ Speech</b> (<code>en_US-ljspeech-medium.onnx</code>)</li></ul>
+<p>Die Clips liegen als <code>audio/zahl_*.ogg</code>, <code>audio/rennintro_*.ogg</code>, <code>audio/rennstand_ext_*.ogg</code>. Der Vorteil: Sie funktionieren auch in der Android-App, wo es kein <code>speechSynthesis</code> gibt.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Feste_Funkmeldungen_(Windows-Systemstimme)"><span id="Feste_Funkmeldungen_.28Windows-Systemstimme.29"></span>Feste Funkmeldungen (Windows-Systemstimme)</h3></div>
+<p>Die fünf Funkmeldungen (Schaden, Tank, Reifen, Regen, Akku) sind vorproduzierte Aufnahmen, erzeugt über die Windows-Systemstimme:
+</p>
+<ul><li>Deutsch: <b>Microsoft Hedda Desktop</b></li>
+<li>Englisch: <b>Microsoft Zira Desktop</b></li></ul>
+<p>Sie liegen als <code>audio/voice_*.ogg</code>. Diese Aufnahmen haben immer Vorrang vor der Live-Stimme; die Live-Stimme ist nur der Fallback, wenn die Aufnahme fehlt.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Live-Stimme_(Web_Speech_API)"><span id="Live-Stimme_.28Web_Speech_API.29"></span>Live-Stimme (Web Speech API)</h3></div>
+<p>Die Rundenzeit wird standardmäßig von der <b>Browser- oder Gerätestimme</b> gesprochen (Web Speech API, Sprechrate 1,15). Bei den festen Meldungen und im Rennstand ist die vorproduzierte Aufnahme die Regel, damit man die Stimme bandbegrenzen kann – eine Live-<code>SpeechSynthesisUtterance</code> liefert nämlich keinen Audioknoten.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Stimme_einstellen">Stimme einstellen</h2></div>
+<p>Unter <b>Optionen → Ansagen</b> stehen folgende Schalter und Regler:
+</p>
+<ul><li><b>Rundenzeiten ansagen</b> (Standard: an)</li>
+<li><b>Rennintro vor der Ampel</b> (Standard: aus)</li>
+<li><b>Rennstand alle paar Runden ansagen</b> (Standard: aus), <b>alle X Runden</b> (1–20, Standard 5), <b>maximale Wartezeit</b> (5–30 s)</li>
+<li><b>Rennergebnis ansagen</b> (Standard: an)</li>
+<li><b>Namen in der Garage</b> – Autobezeichnungen oder Fahrernamen</li>
+<li><b>Ansagestimme</b> – <code>auto</code> / <code>clips</code> / <code>browser</code> (Standard: auto)</li>
+<li><b>Browser-/Gerätestimme</b> – Auswahl aus den Stimmen des Geräts (Standard: Systemstimme)</li>
+<li><b>Rennstand-Sprechgeschwindigkeit</b> (100–175&#160;%), <b>Stimmhöhe</b> (−6…+6 Halbtöne), <b>Lautstärke</b> (0–200&#160;%), <b>Stadionhall</b> (0–100&#160;%)</li>
+<li><b>Schaden / Tank / Reifen / Regen ansagen</b> (Standard: an), <b>Boxenstopp</b> (an), <b>Akku</b> (Standard: aus)</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Eine_Ansage_auslösen"><span id="Eine_Ansage_ausl.C3.B6sen"></span>Eine Ansage auslösen</h2></div>
+<p>Die Ansagen laufen rein <b>zustandsgesteuert</b> – sie werden beim Rundenende, bei den Zustandsschwellen oder nach der Rennstand-Messung automatisch gesprochen. Einen Befehl in der Konsole gibt es nicht.
+</p><p>Zum <b>Testen</b> dient der Knopf <b>Beispielansage testen</b> unter Optionen → Ansagen. Er spricht eine Beispielansage mit den aktuellen Einstellungen:
+</p>
+<ul><li>im <b>Clip-Modus</b>: „Nach Runde 5 – Es führt aktuell der rote Porsche 911“</li>
+<li>im <b>Browser-Modus</b>: „Wir sind in Runde fünf. Es führt der rote Porsche.“</li></ul>
+<p>Die Statuszeile daneben meldet, ob die Ansage vorbereitet wird, spielt oder ob sie stumm bleibt (Ton aus, Lautstärke 0 oder eine laufende Ansage).
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Rennarten.html" title="Rennarten">Rennarten</a></li>
+<li><a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a></li>
+<li><a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/80-sound.js</code>: <code>ansage()</code>, <code>ansagenPruefen()</code>, <code>speakLap()</code>, <code>lapClipFolge()</code>, <code>playAnsageClip()</code></li>
+<li><code>src/80c-rennstand.js</code>: <code>rennstandSpielen()</code>, <code>rennstandClipFolge()</code>, <code>rennstandTesten()</code>, <code>rennstandRennende()</code></li>
+<li><code>src/80d-rennintro.js</code>: <code>rennintroVorAmpel()</code>, <code>rennintroFolge()</code></li>
+<li><code>src/70-race.js</code>: <code>ansagenZustand()</code>, <code>speakLap()</code>, <code>ansage('pit', …)</code></li>
+<li><code>tools/voice_synth.py</code>, <code>tools/voice_zahlen.py</code>, <code>tools/voice_rennintro.py</code>, <code>tools/voice_rennstand_erweitert.py</code>, <code>tools/tts_render.ps1</code></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+
+<!-- 
+NewPP limit report
+Parsed by mw161
+Cached time: 20261030070857
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.028 seconds
+Real time usage: 0.033 seconds
+Preprocessor visited node count: 51/1000000
+Revision size: 6318/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.396      1 Vorlage:Stand
+100.00%    3.396      1 -total
+-->
+
+<!-- Render ID c5f6dcfa-d430-11f1-a3ec-bc2411247fc9 -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

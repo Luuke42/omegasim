@@ -1,0 +1,89 @@
+:root {
+  --wiki-bg: #ffffff;
+  --wiki-ink: #202122;
+  --wiki-muted: #54595d;
+  --wiki-line: #c8ccd1;
+  --wiki-accent: #36c;
+  --wiki-block: #f8f9fa;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  color: var(--wiki-ink);
+  background: var(--wiki-bg);
+  line-height: 1.55;
+}
+.wiki-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  background: var(--wiki-accent);
+  color: #fff;
+}
+.wiki-brand { font-weight: 700; font-size: 1.1rem; color: #fff; text-decoration: none; }
+.wiki-nav a { color: #fff; text-decoration: none; margin-left: 0.5rem; }
+.wiki-nav a:hover { text-decoration: underline; }
+.wiki-main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.2rem 1rem 3rem;
+}
+.wiki-title { margin: 0.2rem 0 1rem; font-size: 1.9rem; line-height: 1.25; }
+.wiki-foot {
+  text-align: center;
+  color: var(--wiki-muted);
+  font-size: 0.85rem;
+  padding: 1rem;
+  border-top: 1px solid var(--wiki-line);
+}
+.wiki-disclaimer {
+  border: 1px solid var(--wiki-line);
+  border-left: 4px solid var(--wiki-accent);
+  background: var(--wiki-block);
+  padding: 0.6rem 0.9rem;
+  margin: 0 0 1rem 0;
+  font-size: 0.9rem;
+}
+.wiki-disclaimer p { margin: 0; }
+.mw-parser-output h2 {
+  border-bottom: 1px solid var(--wiki-line);
+  padding-bottom: 0.15rem;
+  margin-top: 1.6rem;
+}
+.mw-parser-output h3 { margin-top: 1.3rem; }
+.mw-parser-output a { color: var(--wiki-accent); text-decoration: none; }
+.mw-parser-output a:hover { text-decoration: underline; }
+.mw-parser-output .mw-file-element { max-width: 100%; height: auto; }
+.mw-parser-output figure { margin: 1rem 0; }
+.mw-parser-output figcaption {
+  font-size: 0.85rem;
+  color: var(--wiki-muted);
+  margin-top: 0.3rem;
+}
+.wikitable {
+  border-collapse: collapse;
+  border: 1px solid var(--wiki-line);
+  margin: 1rem 0;
+  width: auto;
+}
+.wikitable th, .wikitable td {
+  border: 1px solid var(--wiki-line);
+  padding: 0.4rem 0.6rem;
+}
+.wikitable th { background: var(--wiki-block); }
+.mw-parser-output ul, .mw-parser-output ol { padding-left: 1.4rem; }
+.mw-parser-output blockquote { border-left: 3px solid var(--wiki-line); margin-left: 0; padding-left: 1rem; color: var(--wiki-muted); }
+.mw-parser-output code, .mw-parser-output pre {
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.9em;
+  background: var(--wiki-block);
+}
+.mw-parser-output pre { padding: 0.5rem; border: 1px solid var(--wiki-line); overflow-x: auto; }
+.mw-parser-output .mw-halign-none { text-align: center; }
+@media (max-width: 600px) {
+  .wiki-main { padding: 0.8rem 0.7rem 2rem; }
+  .wiki-title { font-size: 1.5rem; }
+}

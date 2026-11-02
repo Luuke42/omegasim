@@ -1206,7 +1206,11 @@
     // v1.2.4: Challenges fahren mit Physik - ausser das Preset ist Pacejka, dann bleibt es Pacejka (vorher stellte
     // diese Zeile jede Pacejka-Abstimmung zurueck auf Physik).
     const pv = typeof window.__presetValues === 'function' ? window.__presetValues(preset) : null;
-    chSetzen('phys-mode', pv && pv['phys-mode'] === 'pacejka' ? 'pacejka' : 'physik');
+    // Korrektur nach 1.2.66: Gran Accelerato ist Pacejka plus Gierregelung und wird genauso
+    // durchgereicht (vorher fiel es hier auf Physik zurueck). v1.3.5: Gran Hybrismo ('gran') und
+    // Assetto Carrera ('acc').
+    const pm = pv && pv['phys-mode'];
+    chSetzen('phys-mode', pm === 'pacejka' || GRAN_MODI.includes(pm) ? pm : 'physik');
     chSetzen('race-mode', modus === 'rennen' ? 'laps' : 'practice');
     // Rennen: bis CH_EXTRA_LAPS mehr als die Soll-Rundenzahl, damit eine verpatzte Runde mit
     // einer extra ausgeglichen werden kann (siehe challengeRundeFertig).
@@ -1291,13 +1295,29 @@
   // Fuer die Studie: die Studienstrecke als Rennen starten (Ampel, Teilepruefung wie jede Challenge).
   // virtuell (v1.1.11): erst die virtuelle Fahrt auf der Studienstrecke starten - ihr Auto ist dann das
   // gesteuerte -, dann dieselbe Challenge wie auf der Bahn (Ampel, Teilepruefung, Runden, Fahrstil).
-  function studieChallengeStarten(virtuell) {
-    if (virtuell) {
-      if (typeof virtuellStarten !== 'function' || !virtuellStarten({ tiles: chTiles(CH_STUDIE), studie: true })) return false;
+  // Korrektur nach 1.2.66: die Studie setzt chSpiegel fuer ihre Fahrt; danach muss es wieder
+  // aus sein, sonst startet die naechste normale Challenge unbemerkt gespiegelt, und der
+  // Umschalter in der Challenge-Seite muss denselben Stand zeigen.
+  function chSpiegelSetzen(an) {
+    chSpiegel = !!an;
+    if ($('ch-spiegel')) $('ch-spiegel').checked = chSpiegel;
+    if ($('ch-spiegel-knopf')) {
+      $('ch-spiegel-knopf').setAttribute('aria-pressed', chSpiegel ? 'true' : 'false');
+      $('ch-spiegel-knopf').classList.toggle('an', chSpiegel);
     }
-    chWahl = CH_STUDIE.id; chModus = 'rennen'; chSpiegel = false;
+  }
+  function studieChallengeStarten(virtuell) {
+    // v1.2.62: das gespiegelte Layout der Studie uebernehmen (fuer die linkslastige Grundpackung).
+    const spiegel = !!(st && st.spiegel);
+    chSpiegel = spiegel;
+    if (virtuell) {
+      const tiles = spiegel ? chSpiegelTiles(chTiles(CH_STUDIE)) : chTiles(CH_STUDIE);
+      if (typeof virtuellStarten !== 'function' || !virtuellStarten({ tiles, studie: true })) { chSpiegelSetzen(false); return false; }
+    }
+    chWahl = CH_STUDIE.id; chModus = 'rennen';
     challengeStarten();
     if (!chLauf && virtuell && typeof virtuellBeenden === 'function') virtuellBeenden();
+    if (!chLauf) chSpiegelSetzen(false);
     return !!chLauf;
   }
   function challengeStartenDialog() {
@@ -1379,8 +1399,9 @@
     return ungueltig;
   }
   function chWachen() {
+    if (rennPauseAktiv()) return;
     if (!chLauf) { clearInterval(chWaechter); chWaechter = null; return; }
-    const v = chTempo(), jetzt = Date.now();
+    const v = chTempo(), jetzt = rennZeitJetzt();
     // Einstellungen geaendert? Zweimal je Sekunde reicht.
     if (jetzt - chLauf.pruefAt > 500 && chLauf.soll) {
       chLauf.pruefAt = jetzt;
@@ -1420,7 +1441,9 @@
   function challengeAbbrechen() {
     if (!chLauf) return;
     const m = chLauf.merk;
+    const warStudie = !!(chDef(chLauf.id) || {}).studie;
     chLauf = null;
+    if (warStudie) chSpiegelSetzen(false);
     clearInterval(chWaechter); chWaechter = null;
     chSperre(false);
     chZuruecksetzen(m);
@@ -1446,6 +1469,7 @@
     chLetzt = erg;
     // v1.1.3: die Studienfahrt geht nur an die Studie (kein Speichern als Challenge-Zeit, kein Upload).
     if (def.studie) {
+      chSpiegelSetzen(false);
       const stil = typeof fahrstilWerte === 'function' ? fahrstilWerte(rundenMs) : null;
       if (typeof studieFahrtFertig === 'function') studieFahrtFertig(erg, stil);
       chZeichneDetail();

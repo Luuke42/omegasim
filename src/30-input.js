@@ -29,6 +29,7 @@
   }
 
   function applySteerInput(source, value) {
+    if (!rennPauseLenkung(source, value)) return;
     if (playbackLocked(source)) return; // playback is an explicit hands-off mode
     const live = Math.abs(value) > INPUT_NEUTRAL_EPS;
     if (!live && !steerClaim[source]) return;
@@ -38,6 +39,7 @@
 
   // Takes a LOGICAL throttle (forward positive), same convention as setThrottleLogical().
   function applyThrottleInput(source, value) {
+    if (!rennPauseInput(source, value)) return;
     if (playbackLocked(source)) return;
     const live = Math.abs(value) > INPUT_NEUTRAL_EPS;
     if (!live && !throttleClaim[source]) return;
@@ -46,11 +48,13 @@
   }
 
   function releaseSteerInput(source) {
+    rennPause.steerWarten.delete(source);
     if (!steerClaim[source]) return;
     steerClaim[source] = false;
     setStick(0, 0);
   }
   function releaseThrottleInput(source) {
+    rennPause.inputWarten.delete(source);
     if (!throttleClaim[source]) return;
     throttleClaim[source] = false;
     setThrottleLogical(0);

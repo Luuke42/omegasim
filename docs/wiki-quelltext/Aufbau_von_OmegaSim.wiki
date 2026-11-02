@@ -190,6 +190,8 @@ Eine neue APK ist nur nötig, wenn sich die Android-Schicht ändert. Alles ander
 |-
 | <code>10-ble-explorer.js</code> || Beginn der gemeinsamen IIFE: BLE-Werkbank (GATT-Baum), <code>crc8()</code>, Protokoll-Hilfen und die Wörterbücher Englisch und Spanisch samt Übersetzungsmechanik.
 |-
+| <code>15-pause.js</code> || Die lokale Rennpause: eigene Uhr, Wiederanlauf-Ampel und pausierbare Renn-Timeouts.
+|-
 | <code>20-protocol.js</code> || Der 20-Byte-Fahrbefehl, der 45-ms-Herzschlag, das Schreibschloss je Charakteristik und der RC-Gasverlauf.
 |-
 | <code>30-input.js</code> || Vorrang zwischen Tastatur, Gamepad, Touch und Neigung, Mitschnitt der Telemetrie und Tastenkürzel.
@@ -234,7 +236,7 @@ Eine neue APK ist nur nötig, wenn sich die Android-Schicht ändert. Alles ander
 |-
 | <code>80b-dualsense.js</code> || Trigger-Effekte des DualSense-Controllers über WebHID (WIP).
 |-
-| <code>80c-rennstand.js</code> || Sprachansagen zum Rennstand aus vorproduzierten Sprachclips.
+| <code>80c-rennstand.js</code> || Sprachansagen zum Rennstand aus vorproduzierten Sprachclips; <code>80d-rennintro.js</code> das Rennintro vor der Ampel.
 |-
 | <code>90-ghosts.js</code> || Garage und Bluetooth-Verbindungen, NPCs, Ortung auf der Strecke, gelbe Flagge, Gamepad-Belegung (siehe [[NPC-Fahrverhalten]], [[Safety Car und Reinigungswagen]]).
 |-
@@ -272,11 +274,13 @@ Eine neue APK ist nur nötig, wenn sich die Android-Schicht ändert. Alles ander
 |-
 | <code>98d-profile.js</code> || Presets je Menü und globale Profile.
 |-
-| <code>98e-statistik.js</code> || Statistiken aus den gespeicherten Sitzungen.
+| <code>98e-statistik.js</code> || Statistiken aus den gespeicherten Sitzungen; <code>98ea-statistik-bereinigen.js</code> und <code>98eb-statistik-zeiten.js</code> die Statistikbereinigung.
 |-
 | <code>98f-studie.js</code> || Die Studie OmegaLab (experimentell).
 |-
 | <code>98g-telemetrie-seite.js</code> || Vergleich zweier Runden unter '''Optionen → Telemetrie''' (WIP).
+|-
+| <code>98h-pause.js</code> || Die Rennpause im Cockpit (Symbol, Bedienung).
 |-
 | <code>99-index.tail.html</code> || Schluss: schließt die IIFE und das Dokument.
 |}

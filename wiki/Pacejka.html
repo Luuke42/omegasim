@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pacejka - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Pacejka</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.51</b> vom 30.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Reibkreis-MagicFormula.png" class="mw-file-description"><img src="images/250px-OmegaSim-Reibkreis-MagicFormula.png" decoding="async" loading="lazy" width="250" height="207" class="mw-file-element" srcset="images/500px-OmegaSim-Reibkreis-MagicFormula.png 2x" data-file-width="1334" data-file-height="1107" /></a><figcaption>Oben der Reibkreis, unten die Magic-Formula-Reifenkennlinie.</figcaption></figure>
+<p>Die <b>Magic Formula</b> („Zauberformel“) von <b>Hans B. Pacejka</b> beschreibt, wie viel Seitenkraft ein <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Reifen</a> in der Kurve überträgt. In <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> steckt sie im Fahrgefühl <b>Pacejka</b> und sorgt dafür, dass ein Auto am Haftgrenz-Limit nicht einfach weiterlenkt, sondern wirklich schiebt oder das Heck ausbrechen lässt.
+</p><p>Dieser Artikel erklärt die Formel von Grund auf – für alle, die noch nie davon gehört haben. Die technische Abrechnung in der App steht in <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Das_Problem:_Was_ein_Reifen_kann">Das Problem: Was ein Reifen kann</h2></div>
+<p>Das Einzige, was das Auto mit der Straße verbindet, sind die vier Reifen. Alles Fahren – Beschleunigen, Bremsen, Kurven – läuft über ihre Kraft. Ein Reifen kann die Straße aber nur mit einer <b>begrenzten</b> Kraft packen, und er teilt diese Kraft in zwei Richtungen auf:
+</p>
+<ul><li><b>Längs</b> (nach vorn/hinten): Beschleunigen und Bremsen.</li>
+<li><b>Quer</b> (seitlich): die Kraft, die das Auto in der Kurve auf der Bahn hält.</li></ul>
+<p>Wer beides gleichzeitig will – etwa in der Kurve bremsen –, muss die Kraft aufteilen. Dafür gibt es den <a href="#Der_Reibkreis">Reibkreis</a> (weiter unten).
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Der_Schräglaufwinkel:_der_„Eingang“_des_Reifens"><span id="Der_Schr.C3.A4glaufwinkel:_der_.E2.80.9EEingang.E2.80.9C_des_Reifens"></span>Der Schräglaufwinkel: der „Eingang“ des Reifens</h2></div>
+<p>Wenn man das Lenkrad dreht, zeigen die Vorderräder in eine Richtung. Das Auto fährt aber nicht sofort genau dorthin, sondern zunächst in die alte Richtung weiter. So entsteht ein <b>Winkel</b> zwischen zwei Richtungen:
+</p>
+<ul><li>der Richtung, in die das Rad zeigt, und</li>
+<li>der Richtung, in die das Auto tatsächlich fährt.</li></ul>
+<p>Dieser Winkel heißt <b>Schräglaufwinkel</b> (α). Er ist die Eingabe, auf die der Reifen antwortet. Wichtig: Ein Reifen braucht diesen kleinen Winkel, um überhaupt Kurvenkraft zu bilden. Ganz ohne Schräglauf gibt es keine Seitenkraft.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Die_Reifenkennlinie:_die_„Antwort“_des_Reifens"><span id="Die_Reifenkennlinie:_die_.E2.80.9EAntwort.E2.80.9C_des_Reifens"></span>Die Reifenkennlinie: die „Antwort“ des Reifens</h2></div>
+<p>Trägt man die Seitenkraft über den Schräglaufwinkel auf, erhält man immer dieselbe typische Kurve:
+</p>
+<ul><li>Bei kleinem Winkel steigt die Kraft fast <b>gerade</b> (der Reifen ist „steif“): etwas mehr Lenkung, etwas mehr Kraft.</li>
+<li>Bei größerem Winkel wird die Zunahme <b>flacher</b>, bis die Kraft ihr <b>Maximum</b> erreicht – das ist die Haftgrenze.</li>
+<li>Hinter dem Maximum fällt die Kraft <b>wieder ab</b>: noch mehr Lenkung bringt nichts mehr, das Auto beginnt zu rutschen.</li></ul>
+<p>Diese Kurve heißt <b>Reifenkennlinie</b>. Sie ist bei jedem Reifen etwas anders, hat aber immer diese S-Form.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Die_Magic_Formula:_eine_Formel_für_die_Kurve"><span id="Die_Magic_Formula:_eine_Formel_f.C3.BCr_die_Kurve"></span>Die Magic Formula: eine Formel für die Kurve</h2></div>
+<p>Hans B. Pacejka und Egbert Bakker (1992) fanden heraus, dass sich diese S-Kurve mit <b>einer</b> Formel und <b>vier</b> Zahlen nachbilden lässt. Deshalb „Zauberformel“ – sie passt wie eine Schablone auf viele gemessene Reifen:
+</p>
+<pre>y(u) = sin( C · atan( B·u − E·(B·u − atan(B·u)) ) )</pre>
+<p>Die vier Zahlen formen die Kurve:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Kürzel</th>
+<th>Name</th>
+<th>Was es bewirkt
+</th></tr>
+<tr>
+<td><code>B</code></td>
+<td>Steifigkeit</td>
+<td>wie steil die Kurve am Anfang steigt („steifer“ Reifen)
+</td></tr>
+<tr>
+<td><code>C</code></td>
+<td>Formfaktor</td>
+<td>die grundsätzliche Form und Höhe der Kurve (typisch ~1,3 für Seitenkraft)
+</td></tr>
+<tr>
+<td><code>D</code></td>
+<td>Scheitelhöhe</td>
+<td>die größte Kraft, also das Maximum
+</td></tr>
+<tr>
+<td><code>E</code></td>
+<td>Scheitelform</td>
+<td>wie spitz der Scheitel ist (negativ: ausgeprägter Scheitel, danach stärkerer Abfall)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Untersteuern_und_Übersteuern"><span id="Untersteuern_und_.C3.9Cbersteuern"></span>Untersteuern und Übersteuern</h2></div>
+<p>Der Bereich hinter dem Scheitel ist das eigentliche „Fahrgefühl“: Was passiert, wenn man über die Haftgrenze hinauslenkt?
+</p>
+<ul><li><b>Untersteuern</b> (Vorderachse am Limit): Das Auto will nicht mehr in die Kurve, es schiebt geradeaus – die Räder zeigen in die Kurve, aber das Auto fährt außen weiter.</li>
+<li><b>Übersteuern</b> (Hinterachse am Limit): Das Heck bricht aus, das Auto dreht sich schneller, als gelenkt wurde – es „schnappt“ ein.</li></ul>
+<p>Welche Achse zuerst ihre Grenze erreicht, entscheidet, ob das Auto unter- oder übersteuert. Das kann man im Fahrgefühl <b>Pacejka</b> einstellen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Der_Reibkreis">Der Reibkreis</h2></div>
+<p>Die Kraft des Reifens ist begrenzt und teilt sich zwischen Längs (Gas/Bremse) und Quer (Kurve) auf. Zeichnet man beide als Achsen, liegt die Grenze ungefähr auf einem <b>Kreis</b> – dem Reibkreis (auch Kamm-Kreis):
+</p>
+<pre>Längsanteil = √(1 − Queranteil²)</pre>
+<p>Wer in der Kurve schon viel Querkraft braucht, hat für Gas oder Bremse nur noch den Rest. Deshalb kann man nicht mit Vollgas und vollem Lenkeinschlag gleichzeitig das Maximum herausholen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="So_nutzt_OmegaSim_die_Pacejka">So nutzt OmegaSim die Pacejka</h2></div>
+<p>Im Fahrgefühl <b>Pacejka</b> (Steuerungsmodus „Pacejka“, seit 0.8) rechnet die App mit der Magic Formula, um die <b>Haftgrenze</b> der Achsen zu bestimmen. Unterhalb der Grenze fährt das Auto wie im normalen Physik-Modus; erst darüber greift die Formel ein:
+</p>
+<ul><li>Die Formel ist <b>normiert</b>: <code>u = 1</code> ist der Scheitel und <code>y(1) = 1</code>.</li>
+<li>Die Höhe <code>D</code> ist damit fest 1; die eigentliche Grenze steckt in der <b>Haftgrenze</b> (Vorgabe 0,7).</li>
+<li><b>Untersteuern</b>: Ist die Vorderachse über der Grenze, wird der Lenkbefehl <b>reduziert</b>.</li>
+<li><b>Übersteuern</b> (eigener Schalter): Ist die Hinterachse über der Grenze, lenkt das Auto <b>von selbst weiter ein</b>.</li></ul>
+<p>Die konkreten Werte im Code (<code>src/40-physics.js</code>):
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Größe</th>
+<th>Wert</th>
+<th>Bedeutung
+</th></tr>
+<tr>
+<td><code>pacejkaC</code></td>
+<td>1,3</td>
+<td>Formfaktor für Seitenkraft
+</td></tr>
+<tr>
+<td><code>pacejkaE</code></td>
+<td>−0,5</td>
+<td>ausgeprägter Scheitel
+</td></tr>
+<tr>
+<td><code>pacB()</code></td>
+<td>≈ 2,1355</td>
+<td>sorgt dafür, dass der Scheitel genau bei u = 1 liegt
+</td></tr>
+<tr>
+<td><code>pacejkaGrenze</code></td>
+<td>0,7</td>
+<td>Querausnutzung am Scheitel (Haftgrenze)
+</td></tr>
+<tr>
+<td><code>pacejkaHeckReserve</code></td>
+<td>1,2</td>
+<td>hinten 20&#160;% mehr Seitenhalt: ab Werk leicht untersteuernd
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Wo_man_das_einstellt">Wo man das einstellt</h2></div>
+<ul><li><b>FAHREN</b> → Kachel <b>Fahrgefühl</b> → <b>Pacejka</b> (ebenso in der <b>Garage</b> und am <b>Cockpit-Knopf</b>).</li>
+<li>Unter <b>Optionen → Fahrgefühl → Voreinstellungen</b> liegt Pacejka als einer der neun Sätze.</li>
+<li>Nach einer Neuinstallation ist <b>Pacejka</b> die Vorgabe.</li>
+<li>Der Schalter <b>Übersteuern (Pacejka)</b> liegt unter <b>Optionen → Allgemein</b> (ab Werk aus).</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a></li>
+<li><a href="./Fahrgefuehl.html" title="Fahrgefuehl">Fahrgefühl</a></li>
+<li><a href="./Virtuelles_Fahren.html" title="Virtuelles Fahren">Virtuelles Fahren</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li>
+<li><a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/40-physics.js</code>: <code>pacY()</code> (die Formel), <code>pacB()</code> (Scheitel suchen), <code>pacejkaStep()</code>, <code>pacGasFaktor()</code></li>
+<li><code>src/98-presets.js</code>: <code>PRESETS</code> – die Werte des Fahrgefühls Pacejka</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+
+<!-- 
+NewPP limit report
+Parsed by mw202
+Cached time: 20261030073505
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.031 seconds
+Real time usage: 0.036 seconds
+Preprocessor visited node count: 65/1000000
+Revision size: 6774/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 120/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    4.267      1 Vorlage:Stand
+100.00%    4.267      1 -total
+-->
+
+<!-- Render ID 6c90ac44-d434-11f1-ad68-bc24110065aa -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

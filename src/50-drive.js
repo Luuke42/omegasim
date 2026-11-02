@@ -378,6 +378,10 @@
           gc.downshiftRpm = pc.downshiftRpm;
           gc.shiftMs = pc.shiftMs;
           gc.rpmScale = pc.rpmScale;
+          // v1.3.5: der NPC-Motor (ghostMaxMotor) setzt Schaltzeit und Rueckschaltpunkt nur beim
+          // Stufenwechsel; hier neu anstossen, mit der Schaltzeit des neuen Getriebes als Grundwert.
+          c.ghost.basisShiftMs = pc.shiftMs;
+          gc.npcMotorArt = null;
           c.ghost.engine.state.currentGear =
             Math.min(c.ghost.engine.state.currentGear, gc.gears.length - 1);
         });
@@ -411,15 +415,78 @@
   // PACEJKA ist "Physik" plus ein Schritt: dieselbe Kette (Gaenge, Reibkreis, Kennlinien),
   // danach formt pacejkaStep() den Lenkbefehl am Limit. Deshalb physicsEnabled = true, und
   // der Unterschied sitzt allein in config.pacejka - fuer BEIDE Autos.
+  // GRAN ACCELERATO: die gran*-Stellschrauben (config, kein DOM-Regler) haengen am MODUS
+  // "gran" und nicht am Preset. Bis 1.2.66 leitete setzeGran() sie aus presetAktiv() ab:
+  // ein verstellter Regler (dann ist kein Preset mehr "aktiv") oder ein Laden aus der
+  // Selbstsicherung schaltete die Gierregelung ab, waehrend der Modus noch "gran" war, und
+  // wer "Gran Accelerato" direkt im Auswahlfeld waehlte, bekam sie gar nicht. EINE Stelle:
+  // physModusAnwenden() (laeuft bei jedem Wechsel des Auswahlfelds, also auch nach
+  // applyPreset() und nach dem Laden). AUS = die Grundwerte aus 40-physics.js.
+  // v1.3.5 BESTELLT: "Neues Fahrgefuehl Gran Accelerato pruefen und verbessern. Soll sich anfuehlen
+  // wie eine Kombination aus Gran Turismo Sport und Assetto Corsa Competizione. Wenn noetig, mach 2
+  // Modi draus (Gran Hybrismo und Assetto Carrera)." Zwei Modi, weil die Benchmarks sich in genau
+  // den Punkten widersprechen, die das Gefuehl ausmachen (Hilfen, Lastwechsel, Reifenfenster).
+  // Interner Wert bleibt 'gran' (= Gran Hybrismo, gespeicherte Stände laden weiter), neu ist 'acc'.
+  //   gran / Gran Hybrismo (GT Sport): viel Grip (granGripPlus, Abtrieb), flacher Reifenscheitel
+  //     (C 1,15, E 0), kaum Lastwechsel (starke degressive Lastempfindlichkeit, und granLastGier
+  //     -0,12 gleicht den Trail-Bonus der Grundphysik etwa aus: Gas und Bremse verdrehen das Auto kaum),
+  //     Stabilitaetshilfe (granStabi nimmt 60 % des Uebersteuerns weg, granGier faengt am
+  //     Schwimmwinkel), ABS-Gefuehl (beim Bremsen bleiben 85 % Einschlag), Reifenzustand nur zu
+  //     40 % an der Haftgrenze, sanfter Gieraufbau.
+  //   acc / Assetto Carrera (ACC): Gier aus der Lastverlagerung (granLastGier: Trail-Braking und
+  //     Lupfen drehen ein, Gas schiebt), lockere Lastkopplung (0,5/1,9 statt 0,6/1,6), das Heck
+  //     kommt im Modus selbst (granHeck, ohne Halten - das bleibt am Schalter), scharfer Scheitel
+  //     (C 1,7, E -1), Reifenfenster (Zustand zu 120 %, +6 % Griff um tyreOptimalC), keine Hilfen.
+  const GRAN_WERTE = {
+    gran: { granArt: 'gran', granAeroK: 0.2, granLenkTempo: 0.35, granZentrier: 0.12, granGier: 0.8,
+            granLastEmpf: 0.3, granTauUeber: 0.45, granYawTau: 0.34, granYawFeed: 0.15,
+            granC: 1.15, granE: 0, granGripPlus: 1.12, granHeckReserve: 1.35, granHeck: 0,
+            granStabi: 0.6, granLastGier: -0.12, granVornMin: 0.6, granHintenMax: 1.6, granAbs: 0.85,
+            granTempEinfluss: 0.4, granTempOpt: 0 },
+    acc: { granArt: 'acc', granAeroK: 0.15, granLenkTempo: 0.25, granZentrier: 0.06, granGier: 0.3,
+           granLastEmpf: 0.08, granTauUeber: 0.2, granYawTau: 0.22, granYawFeed: 0.3,
+           granC: 1.7, granE: -1.0, granGripPlus: 1.0, granHeckReserve: 1.08, granHeck: 1,
+           granStabi: 0, granLastGier: 0.5, granVornMin: 0.5, granHintenMax: 1.9, granAbs: 0,
+           granTempEinfluss: 1.2, granTempOpt: 0.06 },
+  };
+  // Bisheriger Name fuer die Hybrismo-Werte (Selbsttests, Schnappschuss-Pruefung).
+  const GRAN_AN = GRAN_WERTE.gran;
+  const GRAN_AUS = { granArt: '', granAeroK: 0, granLenkTempo: 0, granZentrier: 0, granGier: 0,
+                     granLastEmpf: 0, granTauUeber: 0.25, granYawTau: 0.28, granYawFeed: 0,
+                     granC: 0, granE: null, granGripPlus: 1, granHeckReserve: 0, granHeck: 0,
+                     granStabi: 0, granLastGier: 0, granVornMin: 0.6, granHintenMax: 1.6, granAbs: 0,
+                     granTempEinfluss: 1, granTempOpt: 0 };
+  // Die Physikmodi, die mit granStep() rechnen. Alias: der alte Anzeigename "Gran Accelerato"
+  // (und seine Schreibweisen) ist Gran Hybrismo.
+  const GRAN_MODI = ['gran', 'acc'];
+  const PHYS_MODUS_ALIAS = { 'Gran Accelerato': 'gran', 'gran accelerato': 'gran', granaccelerato: 'gran',
+                             'Gran Hybrismo': 'gran', 'Assetto Carrera': 'acc', assettocarrera: 'acc' };
+  function physModusNormal(v) { return PHYS_MODUS_ALIAS[v] || v; }
+  // Rechnet dieser Steuerungsmodus mit der Physik-Kette (Physik, Pacejka, Gran Hybrismo, Assetto Carrera)?
+  function physModusIstPhysik(v) { v = physModusNormal(v); return v === 'physik' || v === 'pacejka' || GRAN_MODI.includes(v); }
+  // an: 'gran' | 'acc' | true (= 'gran', alte Aufrufer) | false/'' (aus).
+  function granWerteSetzen(cfg, an) {
+    if (!cfg) return;
+    const art = an === true ? 'gran' : (GRAN_MODI.includes(physModusNormal(an)) ? physModusNormal(an) : '');
+    Object.assign(cfg, art ? GRAN_WERTE[art] : GRAN_AUS);
+    cfg.gran = !!art;
+    if (art) cfg.pacejka = true;
+  }
   function physModusAnwenden(melden) {
-    const v = $('phys-mode') ? $('phys-mode').value : 'physik';
+    let v = $('phys-mode') ? $('phys-mode').value : 'physik';
+    // Ein alter Name im Auswahlfeld (Sicherung, Profil) wird auf den Wert umgestellt.
+    if (PHYS_MODUS_ALIAS[v] && $('phys-mode')) { v = PHYS_MODUS_ALIAS[v]; $('phys-mode').value = v; }
     driftModus = (v === 'drift');
-    physicsEnabled = (v === 'physik' || v === 'pacejka');
-    physEngine.config.pacejka = physEngine2.config.pacejka = (v === 'pacejka');
+    physicsEnabled = physModusIstPhysik(v);
+    physEngine.config.pacejka = physEngine2.config.pacejka = (v === 'pacejka' || GRAN_MODI.includes(v));
+    granWerteSetzen(physEngine.config, v);
+    granWerteSetzen(physEngine2.config, v);
     physLastTime = null;
     if (melden) {
       log('Steuerungsmodus: ' + (v === 'physik' ? 'Physik'
                              : v === 'pacejka' ? 'Pacejka (experimentell)'
+                             : v === 'gran' ? 'Gran Hybrismo'
+                             : v === 'acc' ? 'Assetto Carrera'
                              : 'RC (Auslaufen, Bremse zweimal = rueckwaerts)'), 'info');
     }
   }
@@ -537,7 +604,7 @@
   function gbStatus(gasRoh, bremsRoh, kmhAnz, grund) {
     const el = $('setting-gasbrake-reverse-status');
     if (!el || !el.offsetParent) return;
-    const jetzt = Date.now();
+    const jetzt = rennZeitJetzt();
     // Springt die Uhr zurueck (jetzt < gbStatusAt), wird trotzdem geschrieben - sonst bliebe die Anzeige
     // stumm, bis die Uhr den alten Zeitpunkt wieder erreicht hat.
     if (jetzt >= gbStatusAt && jetzt - gbStatusAt < 150) return;
@@ -567,7 +634,7 @@
       if (!z) gbStatus(gasRoh, bremsRoh, kmhAnz, 'Option aus');
       return null;
     }
-    const jetzt = Date.now();
+    const jetzt = rennZeitJetzt();
     // Das gilt fuer BEIDE Richtungen: RC unberuehrt, nicht unter Autopilot, nur Automatik.
     const frei = physicsEnabled && !driftModus && cfg.autoShift
                  && !(typeof autopilotGreiftFuer === 'function' && autopilotGreiftFuer(nr));
@@ -802,7 +869,8 @@
   const VIB_KAESTCHEN = { 'vib-schalt': 'schalt', 'vib-abs': 'abs', 'vib-crash': 'crash',
                           'vib-abseits': 'abseits', 'vib-box': 'box',
                           'vib-meldung': 'meldung', 'vib-rutschen': 'rutschen',
-                          'vib-untersteuern': 'untersteuern', 'vib-quietschen': 'quietschen' };
+                          'vib-untersteuern': 'untersteuern', 'vib-quietschen': 'quietschen',
+                          'vib-kerb': 'kerb' };
   Object.keys(VIB_KAESTCHEN).forEach((id) => {
     const el = $(id);
     if (!el) return;
@@ -1211,7 +1279,7 @@
   let schirmKlickSperreBis = 0;
   if ($('race-screen-next')) {
     $('race-screen-next').addEventListener('click', () => {
-      const jetzt = Date.now();
+      const jetzt = rennZeitJetzt();
       if (jetzt < schirmKlickSperreBis) return;
       schirmKlickSperreBis = jetzt + 220;
       cockpitScreenStep(+1);
@@ -2206,7 +2274,7 @@
     }
     // On the limiter the whole strip flashes blue, which no steady pattern can be mistaken
     // for.
-    if (amBegrenzer && Math.floor(Date.now() / 90) % 2 === 0) {
+    if (amBegrenzer && Math.floor(rennZeitJetzt() / 90) % 2 === 0) {
       for (let i = 0; i < n; i++) {
         lamps[i].style.background = '#3d8bff';
         lamps[i].style.boxShadow = '0 0 8px #3d8bff';
@@ -2516,7 +2584,7 @@
         : (pitSpielAktiv()
           ? 'PIT GAME \u00b7 ' + pitSpielRest().toFixed(1) + 's \u00b7 \u2713 ' + pitSpiel.treffer
             + '/' + PIT_SPIEL_ANZAHL
-          : 'PIT STOP \u00b7 ' + ((Date.now() - (pitServiceStart || Date.now())) / 1000).toFixed(1) + 's'
+          : 'PIT STOP \u00b7 ' + ((rennZeitJetzt() - (pitServiceStart || rennZeitJetzt())) / 1000).toFixed(1) + 's'
           + ' \u00b7 TANK +' + fuelLiters(pitFuelGained) + 'l'
           + ' \u00b7 REP +' + Math.round(pitDamageRepaired) + '%');
     }
@@ -2528,8 +2596,8 @@
       return;
     }
     $('race-lap-now').textContent = raceLapStart !== null
-      ? formatLapTime(Date.now() - raceLapStart)
-      : (dashLapStart !== null ? formatLapTime(Date.now() - dashLapStart) : '\u2013');
+      ? formatLapTime(rennZeitJetzt() - raceLapStart)
+      : (dashLapStart !== null ? formatLapTime(rennZeitJetzt() - dashLapStart) : '\u2013');
     const laps = raceLapTimes.length ? raceLapTimes : dashLapTimes.map((ms, i) => ({ lap: i + 1, ms }));
     const best = laps.length ? Math.min(...laps.map(l => l.ms)) : null;
     schreibeWert($('race-lap-best'), best === null ? '\u2013' : formatLapTime(best));
@@ -2903,7 +2971,7 @@
   // Haarnadel bei 0,47 (Delta 21).
   const SCAN_TEMPO = 0.80, SCAN_TEMPO_KURVE = 0.67, SCAN_TEMPO_HAARNADEL = 0.47;
   const scanStopp = { car: null, bis: 0 };
-  function scanAnhalten(car) { if (car) { scanStopp.car = car; scanStopp.bis = Date.now() + 1500; } }
+  function scanAnhalten(car) { if (car) { scanStopp.car = car; scanStopp.bis = rennZeitJetzt() + 1500; } }
   // ---- GREIFT DER AUTOPILOT GERADE? (v1.0.25) --------------------------------------
   //
   // GEMELDET: "Streckenscan: das Spielerauto faehrt einfach geradeaus" und "Meine
@@ -2948,7 +3016,7 @@
     const zPl = wer >= 2 ? zusatzPlatz(wer) : null;
     const car = zPl ? zPl.car : playerCar;
     if (!car) return false;
-    if (scanStopp.car === car && Date.now() < scanStopp.bis) return true;
+    if (scanStopp.car === car && rennZeitJetzt() < scanStopp.bis) return true;
     if (typeof garageScan !== 'undefined' && garageScan.aktiv && garageScan.car === car) return true;
     if (trackMode === 'on' && typeof aufstellenSpielerZiel === 'function' && aufstellenSpielerZiel(car) && !aufstellRennenLaeuft()) return true;
     return !!autopilotGrund();
@@ -2970,7 +3038,7 @@
     const meinAuto = zwei ? zPl.car : playerCar;
     // NACH DEM SCAN ANHALTEN (v0.9.4). BESTELLT: "wenn livescan fertig, dann auto anhalten".
     // 1,5 s Bremse, danach wieder der Fahrer - steht der Gashebel auf null, bleibt das Auto stehen.
-    if (scanStopp.car && scanStopp.car === meinAuto && Date.now() < scanStopp.bis) {
+    if (scanStopp.car && scanStopp.car === meinAuto && rennZeitJetzt() < scanStopp.bis) {
       return { grund: 'scan', throttle: 0, brake: 1, steer: 0, lenkt: false };
     }
     if (typeof garageScan !== 'undefined' && garageScan.aktiv && garageScan.car === meinAuto) {
@@ -2981,8 +3049,8 @@
         return { grund: 'scan', throttle: 0, brake: 1, steer: 0, lenkt: false };
       }
       const v = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
-      const dt = Math.max(0.01, Math.min(0.25, (Date.now() - (regler.at || Date.now())) / 1000));
-      regler.at = Date.now();
+      const dt = Math.max(0.01, Math.min(0.25, (rennZeitJetzt() - (regler.at || rennZeitJetzt())) / 1000));
+      regler.at = rennZeitJetzt();
       // formationPace(): dasselbe Mindesttempo wie die Einfuehrungsrunde - hoch genug,
       // um die Streckencodes zuverlaessig zu lesen (siehe GHOST_READ_MIN dort).
       // BESTELLT: "Scan-Modus [...] das Auto faehrt so schnell, dass es aus der
@@ -3011,7 +3079,7 @@
       const aA = aufstellenSpielerZiel(meinAuto);
       const lenk = 0;
       // v1.0.31: gestaffelter Start der Aufstellung - bis zu seinem Zeitpunkt steht das Auto.
-      if (aA && aA.ab && Date.now() < aA.ab) {
+      if (aA && aA.ab && rennZeitJetzt() < aA.ab) {
         return { grund: 'aufstellen', throttle: 0, brake: fahrerBremse > 0.05 ? fahrerBremse : 1, steer: 0, lenkt: false };
       }
       // Angekommen: ein Takt Einschlag zur Seite, ein Takt zurueck (aufstellenSpielerEinlenken),
@@ -3035,8 +3103,8 @@
         return { grund: 'aufstellen', throttle: 0, brake: 1, steer: 0, lenkt: false, radLenk: fo ? fo.lenk : 0 };
       }
       const vA = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
-      const dtS = Math.max(0.01, Math.min(0.25, (Date.now() - (regler.at || Date.now())) / 1000));
-      regler.at = Date.now();
+      const dtS = Math.max(0.01, Math.min(0.25, (rennZeitJetzt() - (regler.at || rennZeitJetzt())) / 1000));
+      regler.at = rennZeitJetzt();
       // v1.0.25: mit Kurven- und Haarnadeldrosselung wie die NPCs (aufstellTempo, 90-ghosts.js).
       const g = ghostSpeedControl(regler, typeof aufstellTempo === 'function' ? aufstellTempo(meinAuto) : formationPace(), vA, dtS);
       if (fahrerBremse > 0.05) return { grund: 'aufstellen', throttle: 0, brake: fahrerBremse, steer: lenk, lenkt: false };
@@ -3093,8 +3161,8 @@
     const ziel = grund === 'yellow' && typeof autopilotGelbGrenzen === 'function' ? autopilotGelbGrenzen(meinAuto, zielSc) : zielSc;
     const v = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
     const dtA = Math.max(0.01, Math.min(0.25,
-      (Date.now() - (regler.at || Date.now())) / 1000));
-    regler.at = Date.now();
+      (rennZeitJetzt() - (regler.at || rennZeitJetzt())) / 1000));
+    regler.at = rennZeitJetzt();
     const geregelt = ghostSpeedControl(regler, ziel, v, dtA);
     let throttle = geregelt.throttle;
     let brake = geregelt.brake;
@@ -3190,7 +3258,7 @@
   // Gerufen aus dem Meldekanal in 70-race.js (Auto 1) und aus dem Meldestrom je Auto in
   // 90-ghosts.js (Auto 2), also je Paket. `wer` ist 1, wenn nichts dasteht.
   function offtrackMelden(abseits, wer) {
-    const jetzt = Date.now();
+    const jetzt = rennZeitJetzt();
     if (wer >= 2) {
       const a = zusatzPlatz(wer).abseits;
       if (abseits) {
@@ -3309,6 +3377,7 @@
   let fuelCut = 1;
 
   function physicsStep() {
+    if (rennPauseAktiv()) return;
     // v1.0.25: im Modus "Aus" (Fahrgefuehl RC) nur dann rechnen, wenn der Autopilot faehrt -
     // siehe autopilotGreiftFuer(). Beim Einstieg steht das Modell noch auf dem Tempo von
     // vorher; es bekommt deshalb das, was der Stick gerade verlangt, als Startwert.
@@ -3379,7 +3448,7 @@
     // ... und das Brummen an seinem. padRumble() prueft rumbleOn selbst, also steht hier nur
     // die Frage, OB gebrummt werden soll - nicht, ob der Nutzer Vibration will.
     if (abseitsJetzt()) {
-      const jetzt = Date.now();
+      const jetzt = rennZeitJetzt();
       if (jetzt - offtrackRumbleAt >= OFFTRACK_RUMBLE_MS - 40) {
         offtrackRumbleAt = jetzt;
         // Dauerhaft und schwach, nicht ein Stoss wie beim Crash: ein Dauerrumble in
@@ -3452,6 +3521,7 @@
   // Was er HAT: eine eigene Physikinstanz, also eigene Gaenge, eigene Drehzahl, eigenes
   // Tempo, eigene Reifen- und Bremsentemperatur - alles, was den Wagen fahren laesst.
   function physicsStepVon(z) {
+    if (rennPauseAktiv()) return;
     z.apTakt = false;
     // v1.2.4: eigener Modus je Spieler (spielerPhysikAn, 49-spieler.js).
     if (!spielerPhysikAn(z)) {
@@ -3526,7 +3596,7 @@
     // Und das Rumpeln, an seinen eigenen Pad. Bis v0.6.45 waere es der Pad von Spieler 1
     // gewesen; jetzt hat jeder Stoss eine Adresse.
     if (abseitsJetztFuer(z.nr)) {
-      const jetzt = Date.now();
+      const jetzt = rennZeitJetzt();
       if (jetzt - z.rumbleAt >= OFFTRACK_RUMBLE_MS - 40) {
         z.rumbleAt = jetzt;
         padRumble(0.12, 0.34, OFFTRACK_RUMBLE_MS, 'abseits', z.nr);
@@ -3711,7 +3781,7 @@
   let calibStepLog = [];
 
   function calibNotifyListener(e) {
-    calibNotifyLog.push({ t: Date.now(), bytes: notifyBytes(e.target.value) });
+    calibNotifyLog.push({ t: rennZeitJetzt(), bytes: notifyBytes(e.target.value) });
   }
 
   async function ensureCalibNotifySubscribed() {
@@ -3724,16 +3794,16 @@
     }
   }
 
-  function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+  function sleep(ms) { return new Promise(resolve => rennZeitTimeout(resolve, ms)); }
 
   async function runCalibrationStep(step) {
-    const tStart = Date.now();
+    const tStart = rennZeitJetzt();
     const endAt = tStart + step.ms;
-    while (Date.now() < endAt && calibRunning) {
+    while (rennZeitJetzt() < endAt && calibRunning) {
       await sendControlValue(step.steer, step.throttle);
       await sleep(45);
     }
-    calibStepLog.push({ ...step, tStart, tEnd: Date.now() });
+    calibStepLog.push({ ...step, tStart, tEnd: rennZeitJetzt() });
   }
 
   async function runCalibration() {
@@ -3830,7 +3900,7 @@
     $('btn-record').classList.toggle('primary', !recording);
     if (recording) {
       macro = [];
-      recordStartTime = Date.now();
+      recordStartTime = rennZeitJetzt();
       $('record-status').textContent = 'nimmt auf…';
     } else {
       $('record-status').textContent = `bereit (${macro.length} Schritte aufgezeichnet)`;
@@ -3854,12 +3924,12 @@
   let macroWert = null;
   function macroWiedergabeWert() { return playing ? macroWert : null; }
   function runPlayback() {
-    playTimers.forEach(clearTimeout);
+    playTimers.forEach(rennZeitTimeoutStop);
     playTimers = [];
-    const startedAt = Date.now();
+    const startedAt = rennZeitJetzt();
     macroWert = { steer: 0, throttle: 0 };
     macro.forEach((step, i) => {
-      const timer = setTimeout(() => {
+      const timer = rennZeitTimeout(() => {
         macroWert = { steer: step.steer, throttle: step.throttle };
         playLog(`Schritt ${i + 1}/${macro.length}  t=${step.t}ms  steer=${step.steer.toFixed(2)}  throttle=${step.throttle.toFixed(2)}`);
         if (i === macro.length - 1) {
@@ -3875,7 +3945,7 @@
   }
 
   function stopPlayback() {
-    playTimers.forEach(clearTimeout);
+    playTimers.forEach(rennZeitTimeoutStop);
     playTimers = [];
     playing = false; // must be cleared BEFORE releasing, or playbackLocked blocks it
     macroWert = null;

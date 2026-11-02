@@ -1,4 +1,4 @@
-{{Stand|app=1.2.14|appdatum=27.10.2026}}
+{{Stand|app=1.2.45|appdatum=29.10.2026}}
 Die '''Wunschliste''' sammelt Funktionen, die für [[OmegaSim]] gewünscht, aber noch nicht gebaut sind, und dazu die Funktionen, die schon in der App stecken, aber noch als ''WIP'' (in Arbeit) oder ''experimentell'' gekennzeichnet sind. Wünsche aus der Community können hier ergänzt werden, siehe [[Mitmachen]].
 
 == Auf einen Blick ==
@@ -10,6 +10,8 @@ Die '''Wunschliste''' sammelt Funktionen, die für [[OmegaSim]] gewünscht, aber
 | in Planung || Lösungsweg beschrieben, noch nicht gebaut
 |-
 | eingereicht || als Pull Request vorgeschlagen, noch nicht übernommen
+|-
+| gebaut || übernommen und in der App vorhanden, siehe den Fachartikel
 |-
 | zurückgestellt || bewusst vorerst nicht verfolgt
 |-
@@ -29,11 +31,11 @@ Die '''Wunschliste''' sammelt Funktionen, die für [[OmegaSim]] gewünscht, aber
 |-
 | Challenger mit Seitengewohnheiten || gewünscht || Der Challenger in Time Attack lernt, auf welcher Seite der Spieler über mehrere Runden fährt, und wählt daraus seine Überholstellen.
 |-
-| Rennpause || eingereicht || Rennen anhalten mit Overlay, Pausentaste am Controller und Wiederanlauf-Ampel (Pull Request von Playdater1974; braucht noch Fixes und einen Test am Auto).
+| Rennpause || gebaut || Rennen anhalten mit Overlay, Pausentaste am Controller und Wiederanlauf-Ampel (Pull Request von Playdater1974, übernommen seit 1.2.25; siehe [[Rennarten]]).
 |-
-| Rennintro || eingereicht || Gesprochene Vorstellung von Modus, Startaufstellung und Wetter vor der Startampel (Pull Request von Playdater1974, wird gerade übernommen).
+| Rennintro || gebaut || Gesprochene Vorstellung von Modus, Startaufstellung und Wetter vor der Startampel (Pull Request von Playdater1974, übernommen; siehe [[Rennarten]]).
 |-
-| Statistikbereinigung || eingereicht || Fahrzeugstatistiken, einzelne Sitzungen und zu kurze Runden löschen, mit Vorschau und Rückgängig (Pull Request von Playdater1974, wird gerade übernommen).
+| Statistikbereinigung || gebaut || Fahrzeugstatistiken, einzelne Sitzungen und zu kurze Runden löschen, mit Vorschau und Rückgängig (Pull Request von Playdater1974, übernommen; siehe [[OmegaSim]]).
 |-
 | Autowechsel mitten im Spiel || gewünscht || Ein Spieler wechselt während einer Sitzung auf ein anderes Auto. Dafür müssten Physik, Ortung, Runden und Dashboard umziehen; ob die Firmware ein ungenutztes Auto abdunkelt, ist am Tisch zu prüfen.
 |-

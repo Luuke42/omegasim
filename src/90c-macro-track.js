@@ -85,11 +85,12 @@
   let aufnahmeRState = null;
 
   function aufnahmeRundenTick(b) {
+    if (rennPauseAktiv()) return;
     if (!aufnahmeRState) {
       aufnahmeRState = { pending: null, seen: 0, lastCount: null, sperreVor: false,
                           sperreGesehen: false, lastActed: 0 };
     }
-    const r = aufnahmeRState, jetzt = Date.now();
+    const r = aufnahmeRState, jetzt = rennZeitJetzt();
     let ueberfahren = false;
     const sperreJetzt = (b[15] & ZIEL_SPERRE_BIT) !== 0;
     if (sperreJetzt && !r.sperreVor) {

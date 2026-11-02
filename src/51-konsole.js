@@ -840,7 +840,6 @@
     // v1.0.45 BESTELLT: "Reinigungsfahrzeug (WIP)" - der Knopf erscheint im Autos- und im
     // Strecken-Menue, nur auf der Bahn und nur wenn die Rolle 'reinig' gesetzt ist.
     const reinigAn = bahn && garage.some((c) => c.role === 'reinig');
-    if ($('fa-reinig')) $('fa-reinig').hidden = !reinigAn;
     if ($('fa-reinig-stre')) $('fa-reinig-stre').hidden = !reinigAn;
     // (fa-profil ist seit v0.10.5 die Meisterschaft-Kachel, ohne Abstimmungsanzeige.)
 
@@ -1076,7 +1075,6 @@
     kn('fa-druck', () => konsoleZeige('track', 'print'));
     kn('fa-profil', () => meisterOeffnen());
     // v1.0.45 BESTELLT: "Reinigungsfahrzeug starten" im Autos- und Strecken-Menue.
-    kn('fa-reinig', () => reinigStarten());
     kn('fa-reinig-stre', () => reinigStarten());
     // BESTELLT: "wenn ich auf den Header tippe, soll es zur naechsten Option schalten".
     // Der Kachelkopf (Titel + Wert) dreht die Schaltstellung weiter, der Rest der Kachel

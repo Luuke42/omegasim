@@ -539,6 +539,37 @@
         pacejkaLeistung: 1.4,
         pacejkaHaltMax: 2.0,
 
+        // ---- GRAN ACCELERATO (v1.2.62): ACC-/GT7-artiges Fahrgefuehl auf Pacejka-Basis ----
+        // Eigener Steuerungsmodus "gran": wie Pacejka, aber mit Abtrieb, tempoabhaengiger
+        // Lenkung, Selbstzentrierung, starker Lastempfindlichkeit, weicherem Uebersteuern und
+        // einer DYNAMISCHEN GIERREGELUNG (das Einspurmodell wird gefahren, nicht nur angezeigt).
+        // Die Stellschrauben stehen hier, die Voreinstellung ist das Preset "gran" (98-presets.js).
+        gran: false,
+        granAeroK: 0.0,          // Abtrieb: wie stark der Griff mit (v/Vmax)^2 waechst
+        granLenkTempo: 0.0,      // tempoabhaengige Lenkung: wie stark der Einschlag mit Tempo sinkt
+        granZentrier: 0.0,       // Selbstzentrierung: Kraft zur Mitte (0..1, je Takt bei 60 Hz)
+        granGier: 0.0,           // Gierdynamik-Rueckfuehrung: wie stark slipAngle stabilisiert
+        granLastEmpf: 0.0,       // zusaetzliche Lastempfindlichkeit (Reibwert sinkt mit Last)
+        granTauUeber: 0.25,      // weicherer Uebersteuern-Aufbau (Zeitkonstante in s)
+        granYawTau: 0.28,        // Traegheit des Gieraufbaus: wie schnell die Gier der Wunsch-Gier folgt (s)
+        granYawFeed: 0.0,        // Zuschlag beim Einlenken (0..1): wie stark das Auto "eindreht"
+        // v1.3.5: zwei Auspraegungen desselben Schritts, Gran Hybrismo (granArt 'gran', wie Gran
+        // Turismo Sport) und Assetto Carrera ('acc', wie Assetto Corsa Competizione). Die Werte je
+        // Modus stehen in GRAN_WERTE (50-drive.js); hier die Grundwerte = "aus".
+        granArt: '',             // '' | 'gran' | 'acc' (nur zur Anzeige und fuer Tests)
+        granC: 0,                // Magic Formula Formfaktor; 0 = pacejkaC
+        granE: null,             // Kruemmung; null = pacejkaE
+        granGripPlus: 1.0,       // Faktor auf den Grenzgrip (viel Grip = verzeihend)
+        granHeckReserve: 0,      // Seitenhalt hinten gegen vorn; 0 = pacejkaHeckReserve
+        granHeck: 0,             // 1 = das Heck kommt im Modus selbst, auch ohne Schalter "Uebersteuern"
+        granStabi: 0,            // Stabilitaetshilfe: Anteil des Uebersteuerns, den die App wegnimmt (sanftes Gegenlenken)
+        granLastGier: 0,         // Gier aus der Laengs-Lastverlagerung (Trail-Braking dreht ein, Gas schiebt)
+        granVornMin: 0.6,        // Deckel der Lastkopplung vorn (Pacejka: 0,6)
+        granHintenMax: 1.6,      // ... hinten (Pacejka: 1,6)
+        granAbs: 0,              // ABS-Gefuehl: so viel Einschlag bleibt beim Bremsen am Limit mindestens
+        granTempEinfluss: 1,     // wie stark der Reifenzustand (tyreGrip) auf die Haftgrenze wirkt
+        granTempOpt: 0,          // Griff-Zuschlag im warmen Fenster um tyreOptimalC (Glocke, +-12 Grad)
+
         // ---- Longitudinal weight transfer ----
         // Under braking the mass pitches onto the front axle, under power onto the rear.
         // TWO time constants on purpose, and the difference between them is the whole
@@ -1108,6 +1139,178 @@
         this.outputs.servoAngle * st.pacUnter + st.pacRichtung * st.pacUeber));
     }
 
+    // ---- GRAN HYBRISMO / ASSETTO CARRERA: der Pacejka-Schritt, verfeinert ------------------
+    // v1.2.62 als "Gran Accelerato" (ACC-/GT7-Vorschlaege: Abtrieb, Tempo-Lenkung,
+    // Selbstzentrierung, Lastempfindlichkeit, weicheres Uebersteuern, und die GIERRATE wird
+    // gefahren statt nur angezeigt). Seit v1.3.5 zwei Auspraegungen mit eigenen Werten
+    // (GRAN_WERTE, 50-drive.js):
+    //   Gran Hybrismo (granArt 'gran', wie Gran Turismo Sport): viel Grip, flacher Reifenscheitel,
+    //     kaum Lastwechsel, Stabilitaetshilfe (Uebersteuern wird sanft gegengelenkt), ABS-Gefuehl.
+    //   Assetto Carrera ('acc', wie Assetto Corsa Competizione): Gier aus der Lastverlagerung
+    //     (Trail-Braking dreht ein, Lupfen laesst das Heck kommen), scharfer Scheitel, Reifen
+    //     mit warmem Fenster, Untersteuern beim Ueberfahren, keine Hilfen.
+    // KORREKTUREN v1.3.5 (vorher wirkungslos oder verkehrt):
+    //   - Tempo-Lenkung und Selbstzentrierung formten nur die Rechengroesse lenk, NICHT
+    //     servoAngle - am Auto kam keins von beiden an. Jetzt Faktoren auf den Servo.
+    //   - granLastEmpf verstaerkte die Lastwechsel (1 + k*(vorn-1)), obwohl der Kommentar das
+    //     Gegenteil versprach. Jetzt degressiv: die entlastete Achse behaelt relativ mehr Griff.
+    //   - Der Schalter "Uebersteuern" (pacejkaUebersteuern) wurde ignoriert: das Heck kam immer,
+    //     und der Rutsch hielt auch ohne Stick. Jetzt nur mit Schalter oder im Modus selbst
+    //     (granHeck), und HALTEN nur mit Schalter (v1.1.25 BESTELLT: kein Weiterlenken ohne Stick).
+    //   - pacLeistung (Rumble "rutschen") stand bei jedem Uebersteuern auf true, auch ohne Gas.
+    granStep(dt, inputs) {
+      const st = this.state, cfg = this.config;
+      const gas = inputs ? Math.max(0, inputs.throttle || 0) : 0;
+      const bremse = inputs ? Math.max(0, inputs.brake || 0) : 0;
+      const kmhAnteil = Math.abs(st.speedKmh) / Math.max(0.1, cfg.topSpeedKmh);
+      const roh = inputs ? (inputs.steering === undefined ? 0 : inputs.steering) : 0;
+      const tempo = kmhAnteil * kmhAnteil;
+      // Tempoabhaengige Lenkung: mit Tempo wird der Einschlag feiner.
+      const tempoF = 1 / (1 + cfg.granLenkTempo * tempo);
+      // Selbstzentrierung (Nachlauf) als Zustand: ohne Lenkeingabe klingt der Faktor ab (bei
+      // Tempo schneller), mit Lenkeingabe steht er sofort wieder auf 1. Eine reine Rechnung je
+      // Takt (wie bis 1.3.4) sprang bei granZentrier 0,7 in einem Takt auf null.
+      if (st.granZentr === undefined) st.granZentr = 1;
+      if (Math.abs(roh) < 0.02 && cfg.granZentrier > 0) {
+        st.granZentr *= Math.exp(-cfg.granZentrier * 60 * (0.5 + 0.5 * kmhAnteil) * dt);
+      } else {
+        st.granZentr = 1;
+      }
+      const lenkF = tempoF * st.granZentr;
+      const lenk = st.dampedSteering * lenkF;
+
+      // ---- DYNAMISCHE GIERREGELUNG (Einspurmodell als Stellglied) -------------------------
+      // Der Wunsch-Gier folgt aus dem Eigenlenkgradienten des Layouts (vorn/mittel/heck),
+      // die Ist-Gier laeuft ihm mit der Traegheit nach. Das ist das "Einlenken" eines echten
+      // Autos: erst dreht es ein, dann haelt es. Der Fehler zwischen Wunsch und Ist gibt beim
+      // Einlenken einen kleinen Zuschlag (das Auto dreht EIN, statt zu springen); am Limit
+      // (vorn schiebt) verpufft er, weil mehr Einschlag dann nichts mehr bringt.
+      const v = Math.abs(st.speedKmh) * REAL_SCALE / 3.6;   // m/s, echtes Mass
+      let rZiel = 0, gierAufbau = 0;
+      if (v > 2) {
+        const L = cfg.wheelbaseM, m = cfg.vehicleMassKg, p = cfg.stiffnessLoadExp;
+        const Cv = cfg.corneringStiffness * Math.pow(cfg.loadFrontStatic, p);
+        const Ch = cfg.corneringStiffness * Math.pow(1 - cfg.loadFrontStatic, p);
+        const kU = (m * cfg.loadFrontStatic) / Cv - (m * (1 - cfg.loadFrontStatic)) / Ch;
+        const delta = lenk * STEER_MAX_DEG * Math.PI / 180;
+        rZiel = delta * v / Math.max(1e-6, L + kU * v * v);
+        if (st.granYaw === undefined) st.granYaw = 0;
+        const rAlt = st.granYaw;
+        st.granYaw = rAlt + (rZiel - rAlt) * Math.min(1, dt / cfg.granYawTau);
+        // Aufbauanteil: der Zuschlag, solange die Gier der Wunsch-Gier hinterherhinkt. Vorzeichen
+        // behalten, damit der Zuschlag auch in einer Linkskurve nach links lenkt (nicht nur rechts).
+        gierAufbau = Math.max(-0.3, Math.min(0.3, (rZiel - st.granYaw) / Math.max(0.1, Math.abs(rZiel))));
+      }
+
+      // ---- Reibkreis mit Abtrieb, Reifenfenster und Lastempfindlichkeit -----------------
+      const quer = Math.abs(lenk) * kmhAnteil * cfg.corneringLoad
+                   / Math.max(0.1, cfg.pacejkaGrenze);
+      // Abtrieb (Downforce): der Griff waechst mit dem Quadrat des Tempos.
+      const aero = 1 + cfg.granAeroK * tempo;
+      // Reifen: granTempEinfluss skaliert, wie stark der Reifenzustand (kalt, heiss, abgefahren)
+      // auf die Haftgrenze durchschlaegt (Hybrismo wenig, Assetto Carrera mehr als Pacejka), und
+      // granTempOpt legt im warmen Fenster um tyreOptimalC einen Griff-Zuschlag darauf.
+      const tg = st.tyreGrip === undefined ? 1 : st.tyreGrip;
+      let reifen = 1 + cfg.granTempEinfluss * (tg - 1);
+      if (cfg.granTempOpt > 0 && cfg.tyreEffect > 0 && typeof st.tyreTempC === 'number') {
+        const d = (st.tyreTempC - cfg.tyreOptimalC) / 12;
+        reifen *= 1 + cfg.granTempOpt * Math.min(1, cfg.tyreEffect) * Math.exp(-d * d);
+      }
+      const grip = Math.max(0.2, Math.max(0.3, reifen) * cfg.gripScale) * aero * (cfg.granGripPlus || 1);
+      const vorn = Math.max(cfg.granVornMin, Math.min(1, cfg.loadFrontStatic / Math.max(0.05, st.loadFront)));
+      const hinten = Math.max(0.6, Math.min(cfg.granHintenMax, (1 - cfg.loadFrontStatic) / Math.max(0.05, 1 - st.loadFront)));
+      // DEGRESSIVE Lastempfindlichkeit: der Reibwert sinkt mit der Radlast, mu = mu0*(1-k*(l-1))
+      // mit l = Last/Ruhelast = 1/vorn. Die Ausnutzung bekommt den Kehrwert davon: die belastete
+      // Achse gewinnt weniger, die entlastete verliert weniger - das Auto bleibt unter Last gutmuetig.
+      const k = cfg.granLastEmpf;
+      const lastF = 1 / Math.max(0.5, 1 - k * (1 / vorn - 1));
+      const lastH = 1 / Math.max(0.5, 1 - k * (1 / hinten - 1));
+      const antrieb = Math.max(0, Math.min(1, st.longUse)) * 0.7;
+      const rest = Math.sqrt(Math.max(0.2, 1 - antrieb * antrieb));
+      const uV = quer * vorn / grip * lastF;
+      let uH = quer * hinten / grip / rest
+               / Math.max(0.5, cfg.granHeckReserve || cfg.pacejkaHeckReserve) * lastH;
+      // Das Heck kommt nur mit dem Schalter "Uebersteuern" oder im Modus selbst (granHeck).
+      const heck = !!cfg.pacejkaUebersteuern || cfg.granHeck > 0;
+      const leistung = heck && gas > 0.4;
+      if (leistung) {
+        const x = Math.min(1, (gas - 0.4) / 0.6);
+        uH *= 1 + cfg.pacejkaLeistung * x * x * (3 - 2 * x);
+      }
+      st.pacNutzV = uV; st.pacNutzH = uH;
+      const C = cfg.granC || cfg.pacejkaC;
+      const E = (cfg.granE === null || cfg.granE === undefined) ? cfg.pacejkaE : cfg.granE;
+      const B = pacB(C, E);
+      const wirk = (u) => (u <= 1 ? 1 : pacY(u, B, C, E) / u);
+      let zielU = wirk(uV) * pacGasFaktor(cfg, st.longUse);
+      // ABS-Gefuehl: beim Bremsen bleibt am Limit mindestens granAbs vom Einschlag.
+      if (cfg.granAbs > 0 && bremse > 0.05) zielU = Math.max(zielU, Math.min(1, cfg.granAbs));
+      st.pacUnter += (zielU - st.pacUnter) * (1 - Math.exp(-dt / 0.08));
+      let zielO = 0;
+      const richtung = Math.sign(lenk);
+      const gegen = !!(st.pacRichtung && richtung && richtung !== st.pacRichtung);
+      if (heck && uH > 1 && uH > uV) {
+        if (!st.pacRichtung && richtung) st.pacRichtung = richtung;
+        if (!gegen) zielO = Math.min(cfg.pacejkaUeberMax, 1 - wirk(uH));
+        if (zielO > 0) st.pacLeistung = leistung;
+      }
+      // Gierdynamik-Rueckfuehrung (Einspurmodell-Instrument): der Schwimmwinkel stabilisiert
+      // das Heck - zu viel Rutsch wird sanft abgefangen, statt zu kippen.
+      if (cfg.granGier > 0 && Math.abs(st.slipAngle) > 0.04 && st.pacRichtung) {
+        const richtungSlip = Math.sign(st.slipAngle);
+        if (richtungSlip && richtungSlip === st.pacRichtung) {
+          zielO *= Math.max(0, 1 - Math.min(1, cfg.granGier * Math.abs(st.slipAngle)));
+        }
+      }
+      // DER RUTSCH HAELT nur mit dem Schalter (wie in pacejkaStep). Ohne ihn klingt er ab,
+      // sobald der Stick nicht mehr in die Kurve zeigt - kein Weiterlenken ohne eigene Eingabe.
+      const pedalHalt = Math.min(1, Math.max(gas, bremse) / 0.4);
+      if (cfg.pacejkaUebersteuern && st.pacUeber > 0.05 && st.pacRichtung && !gegen && pedalHalt > 0
+          && kmhAnteil > 0.15 && st.pacHaltSeit < cfg.pacejkaHaltMax) {
+        zielO = Math.max(zielO, st.pacUeber * pedalHalt);
+        st.pacHaltSeit += dt;
+      }
+      // Weicherer Aufbau (granTauUeber), schnelleres Abklingen beim Gegenlenken.
+      const tau = zielO > st.pacUeber ? cfg.granTauUeber : (gegen ? 0.1 : 0.25);
+      st.pacUeber += (zielO - st.pacUeber) * (1 - Math.exp(-dt / tau));
+      if (st.pacUeber < 0.005 && zielO === 0) {
+        st.pacUeber = 0; st.pacRichtung = 0; st.pacHaltSeit = 0; st.pacLeistung = false;
+      }
+      st.pacVortrieb = heck
+        ? 1 - cfg.pacejkaRutschVortrieb * Math.min(1, st.pacUeber / Math.max(0.01, cfg.pacejkaUeberMax))
+        : 1;
+      st.pacZustand = st.pacUeber > 0.03 ? 'ueber' : (st.pacUnter < 0.97 ? 'unter' : '');
+
+      // ---- Servo formen ---------------------------------------------------------------
+      // Tempo-Lenkung und Selbstzentrierung am uebertragenen Winkel (Korrektur v1.3.5).
+      let servo = this.outputs.servoAngle * lenkF;
+      // GIER AUS DER LASTVERLAGERUNG (granLastGier, Assetto Carrera): mehr Last vorn = mehr
+      // Seitenkraft vorn, weniger hinten = das Auto dreht ein. dl = Verlagerung in Einheiten von
+      // transferK (+1 Vollbremsung, -1 Vollgas). Bremsseite als Hoecker: leicht bremsen
+      // (Trail-Braking) und Lupfen drehen am meisten ein, voll bremsen nicht mehr (dann
+      // blockiert die Front - der Reibkreis kuerzt ohnehin). Gasseite mit 40 %: unter Zug
+      // schiebt das Auto etwas, statt sich aufzustellen. Unter 30 % Tempo eingeblendet.
+      if (cfg.granLastGier) {
+        const dl = Math.max(-1, Math.min(1, (st.loadFront - cfg.loadFrontStatic) / Math.max(0.05, cfg.transferK)));
+        const g = dl < 0 ? 0.4 * dl : (dl <= 0.4 ? dl : 0.4 * (1 - dl) / 0.6);
+        servo *= 1 + cfg.granLastGier * g * Math.min(1, kmhAnteil / 0.3);
+      }
+      // Untersteuern kuerzt, Uebersteuern ergaenzt - abzueglich der Stabilitaetshilfe
+      // (granStabi, Hybrismo): sie lenkt den Anteil sanft gegen, wie die Hilfe in GT Sport.
+      servo = servo * st.pacUnter
+              + st.pacRichtung * st.pacUeber * (1 - Math.max(0, Math.min(1, cfg.granStabi)));
+      // Gier-Aufbau: beim Einlenken ein kleiner Zuschlag (das Auto dreht EIN), mit dem
+      // Vorzeichen der Kurve. Er verpufft, sobald die Front ans Limit kommt (uV > 0,9) - dann
+      // schiebt das Auto, und mehr Einschlag hilft nicht mehr. Auch bei Uebersteuern (uH > 0,9)
+      // verpufft er: dann dreht das Auto schon zu viel, und der Zuschlag waere ein Fehler.
+      // UND nur, solange wirklich gelenkt wird (|roh| > 0,02): sonst lenkt die Rest-Gier aus
+      // der vorigen Kurve das Auto weiter, wenn man nur Gas gibt - der gemeldete Drift.
+      if (Math.abs(gierAufbau) > 0 && Math.abs(roh) > 0.02 && uV < 0.9 && uH < 0.9) {
+        servo += gierAufbau * cfg.granYawFeed * Math.max(0, 1 - Math.max(0, (uV - 0.7) / 0.2));
+      }
+      this.outputs.servoAngle = Math.max(-1, Math.min(1, servo));
+    }
+
     // ---- EINSPURMODELL, ein Schritt ---------------------------------------------------
     //
     // INSTRUMENT UND KEIN AKTOR. Nichts hiervon stellt die Lenkung.
@@ -1330,6 +1533,7 @@
       st.pacUnter = 1; st.pacUeber = 0; st.pacRichtung = 0;
       st.pacNutzV = 0; st.pacNutzH = 0; st.pacZustand = '';
       st.pacVortrieb = 1; st.pacHaltSeit = 0; st.pacLeistung = false;
+      st.granYaw = 0; st.granZentr = 1;
     }
 
     // rpm comes from the gear RATIO, not from the band edges. Consequence straight out of
@@ -1450,6 +1654,14 @@
       if (st.shiftLeft > 0) {
         st.shiftLeft = Math.max(0, st.shiftLeft - Math.max(0, dt));
         st.isShifting = st.shiftLeft > 0;
+      } else if (st.isShifting) {
+        // v1.2.32: OHNE SCHALTPAUSE (shiftMs = 0, seit v1.2.5 beim MAX-NPC, ghostMaxMotor) setzt
+        // triggerShift() isShifting = true und shiftLeft = 0 - und der Zweig darueber lief dann nie,
+        // der Gang wurde nie fertig geschaltet. Gemessen in der Rennsimulation auf SR3G2R3G: MAX-NPC
+        // mit Gas 1 und Ziel 1,0 auf der Geraden blieb nach dem ersten Hochschalten bei 0,24 der
+        // Spitze stehen (Drehzahl fallend, kein Antrieb), Stufe mittel fuhr 0,45. Ohne Pause ist der
+        // Schaltvorgang im selben Takt vorbei.
+        st.isShifting = false;
       }
 
       // Speed is simulated in real km/h and the throttle byte is DERIVED from it, rather
@@ -2187,7 +2399,8 @@
         : st.steerDemand * cfg.steerCalib + zug));
       // Pacejka formt den Befehl NACH dem Deckel, siehe dort. Nur hinter dem Schalter:
       // "Physik" rechnet keinen Schritt davon.
-      if (cfg.pacejka) this.pacejkaStep(dt, inputs);
+      if (cfg.gran) this.granStep(dt, inputs);
+      else if (cfg.pacejka) this.pacejkaStep(dt, inputs);
 
       // ---- EINSPURMODELL, ein Schritt --------------------------------------------------
       //
@@ -2446,7 +2659,7 @@
   // v1.1.42: 'rutschen' ist nur noch das Uebersteuern; dazu 'untersteuern' und 'quietschen' (Kachel Vibration).
   const RUMBLE_ARTEN = { schalt: true, abs: true, crash: true,
                          abseits: false, box: true, meldung: false, rutschen: true,
-                         untersteuern: true, quietschen: true };
+                         untersteuern: true, quietschen: true, kerb: true };
 
   // ---- Trigger-Vibration, und WELCHER Trigger zu welcher Art gehoert -----------------
   //

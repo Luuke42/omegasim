@@ -585,10 +585,24 @@
   if (autoGeladen) {
     log('Einstellungen aus der letzten Sitzung geladen: ' + autoGeladen + ' Regler.', 'info');
   }
+  // Korrektur nach 1.2.66: ERSTER START (keine Selbstsicherung, nie ein Preset gewaehlt) faehrt
+  // die Voreinstellung Pacejka (BESTELLT: "pacejka als standard"). Bis 1.2.47 erledigte das
+  // das Markup, weil Pacejka Wert fuer Wert Pro war. 1.2.48 gab Pacejka eine EIGENE Abstimmung
+  // (Anzug 1,1, Lenkkalibrierung 2,8, Bremsen nimmt Lenkung 0,75) und schrieb sie dafuer ins
+  // Markup - damit galt sie global (Werkseinstellung, neue Profile). Jetzt steht sie nur im
+  // Preset, das Markup ist wieder der Stand vor 1.2.48, und ein neuer Nutzer bekommt das
+  // Preset hier ausdruecklich, statt eine Mischung, die "Eigene Abstimmung" hiesse.
+  // Ohne Selbstsicherung heisst: nie etwas verstellt (jede Aenderung schreibt sie). Dann
+  // jedes Mal dasselbe Preset, bis der Nutzer etwas aendert.
+  if (!autoGeladen && typeof applyPreset === 'function') applyPreset('propacejka');
   // v1.0.44: Der gewichtsverlagerungs-gekoppelte Bremssteal haengt am AKTIVEN Preset
   // (98-presets.js setzeBrakeStealLast). Nachdem die Selbstsicherung die Regler
   // zurueckgeholt hat, stimmt das aktive Preset - also den Schalter jetzt setzen.
   if (typeof setzeBrakeStealLast === 'function') setzeBrakeStealLast();
+  // Gran Hybrismo/Assetto Carrera haengen am Modus (granWerteSetzen, 50-drive.js); nach dem Laden
+  // einmal nachziehen, auch wenn das Auswahlfeld schon auf 'gran'/'acc' stand und kein 'change' kam.
+  // Ein alter Modusname ("Gran Accelerato") wird dabei von presetSet()/physModusAnwenden() umgestellt.
+  if (typeof setzeGran === 'function') setzeGran();
   // ---- DIE ANZEIGETEXTE DER SCHIEBEREGLER, EINMAL BEIM LADEN --------------------
   //
   // GEMESSEN, und es war eine Ueberraschung: ZEHN Regler zeigten einen Text, der nicht zu

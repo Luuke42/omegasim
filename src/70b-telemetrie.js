@@ -50,9 +50,10 @@
 
   // Aus physicsStep, jeden Takt; gespeichert wird etwa alle 100 ms.
   function teleProbe(gas, bremse) {
+    if (rennPauseAktiv()) return;
     const l = teleLauf;
     if (!l || !teleRennenAktiv() || l.start !== raceLapStart) return;
-    const jetzt = Date.now();
+    const jetzt = rennZeitJetzt();
     if (jetzt - l.probeAt < TELE_PROBE_MS) return;
     l.probeAt = jetzt;
     const st = physEngine.state, top = physEngine.config.topSpeedKmh || 1;

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtuelles Fahren - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Virtuelles Fahren</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Garage.png" class="mw-file-description"><img src="images/250px-OmegaSim-Garage.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Garage.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Die Garage von OmegaSim, in der die virtuelle Fahrt gestartet wird</figcaption></figure>
+<p><b>Virtuelles Fahren</b> (in der App „Virtuell fahren“, in Arbeit) ist ein Modus von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>, in dem ein simuliertes Auto ohne Bluetooth-Verbindung in einer 3D-Ansicht über die Strecke aus dem <a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a> fährt. Das virtuelle Auto ist für die App ein gewöhnliches Garagenauto, das sich seine Funkmeldungen selbst erzeugt; dadurch laufen Rundenzeit, Rennen, Telemetrie und Motorklang unverändert mit. Gefahren wird mit dem Tempo des gewählten Fahrgefühls und einem Querdynamikmodell nach dem Vorbild eines GT3-Rennwagens. Verwandt, aber getrennt davon ist <b>Rennen simulieren</b>: Dort fahren NPC-Attrappen ohne Hardware mit der echten NPC-Steuerung (siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>); beides wird auf dieser Seite beschrieben, weil beide Autos ohne <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Hardware bewegen.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Menüpfad</td>
+<td><b>FAHREN → Autos → Garage</b>, ganz unten <b>Virtuell fahren</b> (Optionen rechts, dann <b>Losfahren</b>); Rennsimulation: <b>Optionen → NPCs → Rennen simulieren</b>
+</td></tr>
+<tr>
+<td>Wichtigste Optionen (Standard)</td>
+<td>Auto: Vulture V5.R · Schaltung: Automatik · Handling: GT3 · Geist folgt meiner Linie: an · NPCs: 3 · Neigung sichtbar: 1× · Motorsound: Motor des gewählten Autos
+</td></tr>
+<tr>
+<td>Status</td>
+<td>in Arbeit (WIP-Zeichen im Bild); Rennsimulation experimentell
+</td></tr>
+<tr>
+<td>Seit Version</td>
+<td>1.1.3 (Grundmodus), 1.1.9 (Speed-Dreams-Auto), 1.1.11 (direkte Lenkung, Kameras), 1.1.46 (virtuelle NPCs), 1.1.52 (Handling „Schnell“)
+</td></tr>
+<tr>
+<td>Beteiligte Quelldateien</td>
+<td><code>src/60d-virtuell.js</code> (virtuelle Fahrt), <code>src/90b-sim.js</code> (Rennen simulieren), <code>src/60-track.js</code> (Mittellinie, Maße, Fahrzeugmaße), <code>src/40-physics.js</code> (Fahrzeugmodell), <code>src/51-konsole.js</code> (Tasten), <code>src/90-ghosts.js</code> (Rollen, <code>onCarNotify</code>)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Simulation_mit_festem_Takt">Simulation mit festem Takt</h3></div>
+<p>Eine Simulation rechnet die Welt nicht stetig, sondern in kleinen <b>Zeitschritten</b> dt: Aus Ort und Tempo jetzt wird Ort und Tempo nach dt. Je kleiner dt, desto genauer, aber desto mehr Rechenarbeit. OmegaSim nutzt mehrere Takte nebeneinander:
+</p>
+<ul><li>den <b>Meldetakt</b> von 45&#160;ms, in dem auch ein echtes Auto seine Meldungen schickt,</li>
+<li>den <b>Bildtakt</b> des Browsers (meist 60 Bilder je Sekunde, also etwa 16&#160;ms), in dem das Auto bewegt und gezeichnet wird,</li>
+<li>einen <b>Feintakt</b> von 2&#160;ms innerhalb des Reifenmodells, weil die Reifenkräfte bei größeren Schritten schwingen würden.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Koordinaten_und_Transformation">Koordinaten und Transformation</h3></div>
+<p>Die Strecke liegt in einem ebenen <b>Koordinatensystem</b> mit x und y in „Streckeneinheiten“: Eine 43&#160;cm lange Gerade ist 40 Einheiten lang, also 0,930 Einheiten je Zentimeter. Die Fahrtrichtung ist ein Winkel h in Grad. Für die 3D-Ansicht wird jeder Punkt mit <b>Matrizen</b> umgerechnet (Transformation): erst an die Stelle und Drehung des Autos, dann in den Blick der Kamera, dann perspektivisch auf den Bildschirm.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Einspurmodell">Einspurmodell</h3></div>
+<p>Das <b>Einspurmodell</b> (auch Fahrradmodell) fasst die beiden Räder einer Achse zu einem zusammen. Mit Radstand L, Radeinschlag δ und Tempo v dreht sich das Auto mit der Gierrate ω = v · tan(δ) / L. Mehr Querkraft, als die Reifen übertragen können, gibt es nicht: Dann rutscht das Auto.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Reifenmodell_nach_Pacejka">Reifenmodell nach Pacejka</h3></div>
+<p>Die <b>Magic Formula</b> von Hans Pacejka (von Grund auf erklärt im Artikel <a href="./Pacejka.html" title="Pacejka">Pacejka</a>) beschreibt, wie viel Seitenkraft ein Reifen bei einem bestimmten <b>Schräglaufwinkel</b> α (Winkel zwischen Laufrichtung und Blickrichtung des Rads) überträgt. Die vereinfachte Form lautet F = D · sin(C · arctan(B · α)): Bei kleinem α steigt die Kraft fast linear, erreicht ein Maximum D und fällt dann leicht ab. Ein <b>Reibkreis</b> teilt die Haftung zwischen Bremsen/Antreiben und Kurvenkraft auf: Wer voll bremst, hat weniger Seitenhalt. Mehr dazu unter <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="WebGL">WebGL</h3></div>
+<p>WebGL ist die Schnittstelle des Browsers, mit der Programme die Grafikkarte nutzen. OmegaSim bringt dafür einen eigenen, kleinen Zeichner mit, ohne fremde Bibliothek (zum Aufbau der App siehe <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Kollisionsprüfung"><span id="Kollisionspr.C3.BCfung"></span>Kollisionsprüfung</h3></div>
+<p>Die Rennsimulation prüft Berührungen mit einem einfachen Rechteckvergleich: Zwei Autos berühren sich, wenn sie in Längsrichtung näher als eine Autolänge und quer näher als eine Autobreite beieinander sind. Das ist grob, aber schnell und für eine Zählung ausreichend.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<ol><li>Unter <b>FAHREN → Autos → Garage</b> ganz unten auf <b>Virtuell fahren</b> tippen. Rechts erscheinen die Optionen.</li>
+<li>Optionen nach Wunsch einstellen (Tabelle unten). Eine Zeile zeigt, ob die Motoraufnahme spielt, lädt oder fehlt.</li>
+<li>Renntyp unter <b>Renneinstellungen</b> wählen, falls gewünscht (Training, Runden, Endurance oder Qualifying).</li>
+<li><b>Losfahren</b> drücken. Das Auto steht eine halbe Kachel vor Start/Ziel; die Ansicht wechselt ins Cockpit mit der 3D-Schicht darüber.</li>
+<li>Fahren mit Gamepad, Tastatur oder Pfeiltasten wie mit einem echten Auto.</li>
+<li>Beenden mit dem Knopf <b>✕</b>, mit <b>Escape</b> oder mit <b>Options</b> am Controller. Danach geht es zurück in die Garage.</li></ol>
+<p><b>Tasten in der virtuellen Fahrt</b>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Aktion</th>
+<th>Bedienung
+</th></tr>
+<tr>
+<td>Kamera weiterschalten (Verfolger, nah, Motorhaube, von oben, statisch)</td>
+<td>Lichthupen-Belegung (Standard R3) oder Taste C
+</td></tr>
+<tr>
+<td>Licht an/aus</td>
+<td>Knopf <b>Licht</b> oder die Scheinwerfer-Belegung (Standard Dreieck)
+</td></tr>
+<tr>
+<td>Auf die Bahn zurücksetzen</td>
+<td>Knopf <b>Zurücksetzen</b>
+</td></tr>
+<tr>
+<td>Fahrt beenden</td>
+<td>✕, Escape oder Options
+</td></tr></tbody></table>
+<p><b>Rennen simulieren</b>:
+</p>
+<ol><li><b>Optionen → NPCs → Rennen simulieren</b> aufklappen.</li>
+<li>Anzahl NPCs (2–6) und Runden (1, 2, 3, 5, 10) wählen, bei Bedarf <b>Doppelte Geschwindigkeit</b>.</li>
+<li><b>Simulation starten</b>. Auf der Karte wandern die Punkte, darunter steht eine Zeitentabelle. <b>Abbrechen</b> beendet vorzeitig.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<p>Die Optionen der virtuellen Fahrt werden je Gerät im Browser gespeichert.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Werte</th>
+<th>Standard</th>
+<th>Wirkung laut Code</th>
+<th>Schlüssel
+</th></tr>
+<tr>
+<td>Motorsound</td>
+<td>„Wie in Optionen“ oder jeder Motor aus Optionen → Ton</td>
+<td>Motor des gewählten Autos (V5.R → <code>sd_v5r</code>, Lynx → <code>sd_lynx</code> …)</td>
+<td>startet die Aufnahme beim Losfahren, beim Beenden kommt der vorherige Motor zurück</td>
+<td><code>omegasim-vf-motor</code>
+</td></tr>
+<tr>
+<td>Auto</td>
+<td>Vulture V5.R, Lynx 220, FMC GT4, Boxer 96, Einfaches Modell</td>
+<td>Vulture V5.R</td>
+<td>3D-Modell und Fahrdaten (Masse, Schwerpunkt, Radstand, Einschlag, Bremsbalance, Abtrieb) aus Speed Dreams; „Einfaches Modell“ ist ein Kasten mit GT3-Grundwerten</td>
+<td><code>omegasim-vf-auto</code>
+</td></tr>
+<tr>
+<td>Schaltung</td>
+<td>Automatik, Manuell</td>
+<td>Automatik</td>
+<td>setzt <code>autoShift</code> des Fahrzeugmodells für die Dauer der Fahrt</td>
+<td><code>omegasim-vf-schaltung</code>
+</td></tr>
+<tr>
+<td>Handling</td>
+<td>GT3, Schnell</td>
+<td>GT3</td>
+<td>Schnell: Griff vorn und hinten × 1,35, Lenkeinschlag × 1,5 (höchstens 45°), Gierdämpfung × 0,6, Tempo × 1,15</td>
+<td><code>omegasim-vf-handling</code>
+</td></tr>
+<tr>
+<td>Geist folgt meiner Linie</td>
+<td>an, aus</td>
+<td>an</td>
+<td>zeichnet die erste Runde auf und spielt sie ab der zweiten als hellblaues Auto ab</td>
+<td><code>omegasim-vf-geist</code>
+</td></tr>
+<tr>
+<td>NPCs</td>
+<td>aus, 1, 2, 3</td>
+<td>3</td>
+<td>virtuelle Mitfahrer auf der Mittellinie (keine echte NPC-Logik)</td>
+<td><code>omegasim-vf-npc</code>
+</td></tr>
+<tr>
+<td>Neigung sichtbar</td>
+<td>1×, 2×, 3×, 5×, 8×</td>
+<td>1×</td>
+<td>vergrößert nur den sichtbaren Federweg, nicht das Fahrverhalten; fehlt beim einfachen Modell</td>
+<td><code>omegasim-vf-feder</code>
+</td></tr>
+<tr>
+<td>Kamera (über Taste)</td>
+<td>Verfolger, nah, Motorhaube, von oben, statisch</td>
+<td>Verfolger</td>
+<td>wird gemerkt</td>
+<td><code>omegasim-vf-kamera</code>
+</td></tr></tbody></table>
+<p>Für <b>Rennen simulieren</b> gelten die drei Felder Anzahl NPCs (<code>sim-ghosts</code>, Standard 4), Anzahl Runden (<code>sim-laps</code>, Standard 3) und Doppelte Geschwindigkeit (<code>sim-fast</code>, aus), dazu alle NPC-Regler.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Das_Garagenauto_ohne_Funk">Das Garagenauto ohne Funk</h3></div>
+<p><code>virtuellStarten()</code> baut ein Auto-Objekt mit der Kennung <code>virtuell</code>, dessen Sendekanal eine Attrappe ist, die nichts tut, legt es in die Garage und gibt ihm die Rolle Spieler&#160;1.<sup id="cite&#95;ref-1" class="reference"><a href="#cite_note-1"><span class="cite-bracket">&#91;</span>1<span class="cite-bracket">&#93;</span></a></sup> Ein verbundenes echtes Fahrerauto bekommt für die Dauer die Rolle „Aus“. Außerdem stellt die App die Leseart auf „Bahn“, merkt sich Strecke, Schaltung und Motor und stellt alles beim Beenden wieder her. Voraussetzungen: ein Fahrgefühl mit Physik (mit RC erscheint „Virtuell braucht ein Fahrgefühl mit Physik (nicht RC)“) und WebGL.
+</p><p><b>Strecke.</b> Liegt im Editor eine Strecke mit mindestens drei Teilen, wird sie gefahren, sonst die Challenge-Strecke Balkonia; die Editor-Strecke wird beim Beenden zurückgesetzt. Aus den Teilen entsteht die Mittellinie mit 14 Abtastpunkten je Teil und den Normalen (Querrichtungen), daraus Fahrbahn (25&#160;cm breit), Randsteine (links blau-weiß, rechts rot-weiß) und Teilegrenzen.
+</p><p><b>Renntypen.</b> Übernommen werden Training, Runden, Endurance und Qualifying; andere Renntypen fallen mit einem Hinweis auf Training zurück. Bei „Runden“ endet die Fahrt nach der eingestellten Rundenzahl, bei den Zeitrennen nach der eingestellten Minutenzahl, jeweils 1,6&#160;s nach der Meldung „Rennen beendet“.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Die_Meldungen_im_45-ms-Takt">Die Meldungen im 45-ms-Takt</h3></div>
+<p><code>vfPaket()</code> läuft alle 45&#160;ms (<code>VF_TAKT_MS</code>) und baut ein 19-Byte-Paket, wie es ein echtes Auto meldet, und gibt es an <code>onCarNotify()</code>, also an dieselbe Stelle, an der echte Funkmeldungen ankommen:<sup id="cite&#95;ref-2" class="reference"><a href="#cite_note-2"><span class="cite-bracket">&#91;</span>2<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-highlight mw-highlight-lang-javascript mw-content-ltr" dir="ltr"><pre><span></span><span class="c1">// src/60d-virtuell.js, vfPaket() (gekürzt)</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Uint8Array</span><span class="p">(</span><span class="mf">19</span><span class="p">);</span>
+<span class="nx">b</span><span class="p">[</span><span class="mf">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0xaf</span><span class="p">;</span><span class="w"> </span><span class="nx">b</span><span class="p">[</span><span class="mf">2</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x9c</span><span class="p">;</span><span class="w"> </span><span class="nx">b</span><span class="p">[</span><span class="mf">10</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">100</span><span class="p">;</span>
+<span class="nx">b</span><span class="p">[</span><span class="mf">11</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">VF</span><span class="p">.</span><span class="nx">zaehler</span><span class="p">;</span><span class="w">                                   </span><span class="c1">// Kachelzähler, +1 je neues Teil</span>
+<span class="nx">b</span><span class="p">[</span><span class="mf">12</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">VF</span><span class="p">.</span><span class="nx">abseits</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="nx">TILE_OFFTRACK</span><span class="w">                    </span><span class="c1">// 0x00 neben der Bahn</span>
+<span class="w">                   </span><span class="o">:</span><span class="w"> </span><span class="nx">vfCode</span><span class="p">(</span><span class="nx">VF</span><span class="p">.</span><span class="nx">tiles</span><span class="p">[</span><span class="nx">tile</span><span class="p">].</span><span class="nx">type</span><span class="p">);</span><span class="w">     </span><span class="c1">// Teilecode (Start/Ziel 0x01 auf der Bahn)</span>
+<span class="nx">b</span><span class="p">[</span><span class="mf">15</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">VF</span><span class="p">.</span><span class="nx">abseits</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="mf">0</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mh">0x08</span><span class="p">;</span>
+<span class="nx">onCarNotify</span><span class="p">(</span><span class="nx">VF</span><span class="p">.</span><span class="nx">car</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">target</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">value</span><span class="o">:</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">DataView</span><span class="p">(</span><span class="nx">b</span><span class="p">.</span><span class="nx">buffer</span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">});</span>
+</pre></div>
+<p>Der Zähler springt, sobald der nächste Abtastpunkt der Mittellinie zu einem anderen Teil gehört, und läuft modulo 256 (<code>&amp; 0xff</code>). Überfährt das Auto auf der Bahn ein Start/Ziel-Teil, zählt <code>vfPaket</code> zusätzlich eine eigene Runde für die Anzeige im Bild, das Geisterauto und das Rundenende. Rundenzeit, Sektoren, Rangliste und Telemetrie kommen dagegen aus der normalen Auswertung der Meldungen. Teilecodes: Start/Ziel wird zum Bahn-Startcode, Box zu <code>0x07</code>, Engstelle zu <code>0x0a</code>, alle anderen behalten ihren Typcode.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Bewegung_je_Bild">Bewegung je Bild</h3></div>
+<p><code>vfBild()</code> läuft je Bild mit dt = Zeit seit dem letzten Bild, höchstens 0,05&#160;s. Die Schritte:
+</p>
+<ol><li><b>Tempo</b> aus dem Fahrzeugmodell des Fahrgefühls: kmh = physEngine.speedKmh × Tempofaktor (1,0 bei GT3, 1,15 bei „Schnell“). Das ist das Modelltempo (Vollgas etwa 4&#160;km/h), das mit REAL_SCALE = 73,75 auf die angezeigten Rennwagen-km/h umgerechnet wird.</li>
+<li><b>Lenkung</b> direkt vom Stick, nicht über die Servodämpfung des echten Autos:</li></ol>
+<pre>v_GT3     = |kmh| × 73,75 / 3,6                        (m/s eines GT3)
+Lenk_Ziel = Stick / (1 + (v_GT3 / 55)²)
+Lenk      = Lenk_alt ± höchstens dt / 0,09
+</pre>
+<dl><dd>Von der Mitte auf vollen Einschlag dauert es also 0,09&#160;s (der Kommentar im Code und die Patchnotes nennen 0,12&#160;s; es gilt der Code). Bei hohem Tempo wird der Einschlag wie bei einem Spiel-Lenkfilter verkleinert.</dd></dl>
+<ol><li><b>Querdynamik</b>: vorwärts mit <code>vfDynamik()</code> (nächster Abschnitt), rückwärts rein kinematisch mit dem Einspurmodell <code>vfSchritt()</code>.</li>
+<li><b>Ort</b> weiterschreiben, mit Schwimmwinkel β = atan2(v_quer, v_längs):</li></ol>
+<pre>v_E = kmh / 3,6 × 100 × 0,930           (Streckeneinheiten je Sekunde)
+h   = h + r × dt × 180/π                (r = Gierrate in rad/s)
+x   = x + sin(h + β) × v_E × dt
+y   = y − cos(h + β) × v_E × dt
+</pre>
+<ol><li><b>Bahnbezug</b> (<code>vfOrt()</code>): Unter den Abtastpunkten von 12 hinter bis 40 vor dem letzten wird der nächste gesucht; seine Normale ergibt den Querabstand q.</li>
+<li><b>Neben der Bahn</b>, wenn |q| &gt; TRACK_HALF_W × 1,19 + Autobreite × 0,3 = 11,63 × 1,19 + 4,4 × 0,3 ≈ 15,2 Einheiten (rund 16&#160;cm von der Mitte). Dann fällt das Modelltempo mit e^(−3·dt) je Bild, der Griff sinkt auf 55&#160;%, das Auto rüttelt, das Paket meldet <code>0x00</code>; nach 2,5&#160;s daneben wird es auf den nächsten Punkt der Mittellinie zurückgesetzt, mit Tempo 0.</li>
+<li><b>Geist, NPCs, Federung</b> weiterrechnen, dann zeichnen.</li></ol>
+<p>Weil das Tempo aus dem Fahrzeugmodell der App stammt, fährt die virtuelle Fahrt mit denselben Gängen, Drehzahlen, dem Tank und dem Verschleiß wie ein echtes Auto; nur die Richtung rechnet <code>60d-virtuell.js</code>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Das_GT3-Modell:_vfDynamik">Das GT3-Modell: vfDynamik</h3></div>
+<p>Grundwerte <code>VF_GT3</code>: Masse m = 1300&#160;kg, Trägheit I_z = 2300&#160;kg·m², Schwerpunkt a = 1,20&#160;m hinter der Vorderachse und b = 1,50&#160;m vor der Hinterachse, Schwerpunkthöhe h = 0,38&#160;m, Haftbeiwert vorn 1,60, hinten 2,05, Pacejka-Steifigkeit B vorn 9,0, hinten 11,0, Formfaktor C = 1,35, Lenkeinschlag 16°, Bremsbalance 75&#160;% vorn, Antrieb bis 7&#160;m/s², Traktionskontrolle 0,60, ABS 0,80, Lastempfindlichkeit 0,15, Gierdämpfung 1,5. Mit einem Speed-Dreams-Auto ersetzt <code>vfPhysikAus()</code> diese Werte durch die Fahrdaten des Modells (Haftbeiwert der Vorderreifen × 1,3, hinten noch × 1,28, Abtrieb aus Flügeln und Auftriebsbeiwerten).<sup id="cite&#95;ref-3" class="reference"><a href="#cite_note-3"><span class="cite-bracket">&#91;</span>3<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<pre>unter 3 m/s:   kinematisch, r = v·tan(δ)/L
+ΔF_z      = m × a_x × h / L                          (Lastwechsel, a_x geklemmt auf −12 … 8 m/s²)
+F_z,vorn  = m·g·b/L − ΔF_z + k_V·v²,   F_z,hinten = m·g·a/L + ΔF_z + k_H·v²   (je mindestens 800 N)
+F_max     = μ × Griff × F_z × (1 − 0,15 × (F_z/F_z0 − 1))
+F_x,vorn  = min(0,80·F_max,vorn, 0,75 × Bremskraft)
+F_x,hinten= min((ABS 0,80 bzw. TC 0,60)·F_max,hinten, Rest der Bremse bzw. Antrieb × m × 7)
+D         = √(F_max² − F_x²)                         (Reibkreis)
+α_vorn    = atan2(v_y + a·r, v_x) − δ,   α_hinten = atan2(v_y − b·r, v_x)
+F_y       = −D × sin(1,35 × atan(B × α))
+dv_y/dt   = (F_y,vorn·cos δ + F_y,hinten)/m − v_x·r
+dr/dt     = (a·F_y,vorn·cos δ − b·F_y,hinten)/I_z − 1,5·r
+</pre>
+<p>Gerechnet in Teilschritten von höchstens 2&#160;ms; danach werden v_y auf ±v_x und r auf ±5&#160;rad/s begrenzt. Die Längsbeschleunigung a_x ist die Längs-G der App × 15 (also bis 1,5&#160;g), nicht die Ableitung des Modelltempos, weil dieses umgerechnet weit stärker beschleunigt als jedes echte Auto. Das Ergebnis: am Limit leichtes Untersteuern, Anbremsen dreht das Auto ein, Vollgas in engen Kurven lässt das Heck kommen.
+</p><p>Rückwärts gilt das Einspurmodell mit Radeinschlag 26° und Radstand 7 Einheiten (etwa 7,5&#160;cm), begrenzt durch die Haftgrenze ω ≤ μ·g/v.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Geist_und_virtuelle_NPCs">Geist und virtuelle NPCs</h3></div>
+<p>Der <b>Geist</b> schreibt in der ersten Runde je Bild Ort, Richtung und Zeit mit. Ab der ersten Start/Ziel-Überfahrt spielt er die Aufzeichnung in einer Schleife ab, zwischen zwei Punkten linear eingeblendet.
+</p><p>Die <b>virtuellen NPCs</b> (seit 1.1.46) sind <b>keine</b> echten NPCs. Jeder folgt seiner eigenen Spur, der Mittellinie mit festem Querversatz (+3, −3 und 0 Einheiten), mit eigenem Tempofaktor (0,97, 1,00, 1,03), gleichmäßig über die Runde verteilt gestartet. Seit 1.2.32 fahren sie mit dem Tempo der Garagenstufe 1 (mittel) und mit einem eigenen, stummen Fahrzeugmodell wie das eigene Auto:<sup id="cite&#95;ref-4" class="reference"><a href="#cite_note-4"><span class="cite-bracket">&#91;</span>4<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<pre>v_Gerade = Stufenwert / 0,55 × ghostCfg.speed × topSpeedKmh   (Stufe 1, Vorgabe: 0,55 × 4 = 2,2 Modell-km/h)
+k        = Richtungsänderung zwischen den Sehnen über ±3 Punkte / halbe Sehnenlänge   (1/Einheit)
+v_Kurve  = √(13 m/s² × 100 × 0,930 / (73,75 × k)) Einheiten/s                         (höchstens 1,3 g im GT3-Maß)
+v_i      = min(v_Gerade, v_Kurve, √(v_(i+1)² + 2 × 0,8 km/h/s × ds))                  (Bremspunkte, rückwärts um die Runde)
+Ziel     = min(v hier, v 0,5 s voraus) × Faktor;  Gas = Fehl / (0,06 × top), Bremse = −Fehl / (0,05 × top)
+a_quer   = v_GT3 × k × v_E   (für die Federung, Neigung 1×)
+</pre>
+<p>Vorher (bis 1.2.31) fuhren sie mit festem Geradentempo 3,2 Modell-km/h, beschleunigten mit 2,5 und bremsten mit 6,0 km/h je s, und die Querbeschleunigung für die Federung sprang zwischen zwei Mittellinienpunkten (bis 225 m/s², Rollen bis 34 Grad). Sie haben keine Berührungen mit dem eigenen Auto und keine Rundenwertung; es gibt in der virtuellen Fahrt überhaupt keine Kollisionsprüfung.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Rennen_simulieren">Rennen simulieren</h3></div>
+<p><code>simStart()</code> nimmt die eingetragene Strecke (ohne Strecke die Vorgabe SR3GLR2GR2G2, „geliehen“), legt die echte Garage beiseite und füllt sie mit 2 bis 6 Attrappen <code>S1</code> … <code>S6</code>; nach dem Ende kommt die Garage zurück. Jede Attrappe bekommt <code>startGhost()</code> und fährt mit der vollen NPC-Logik.<sup id="cite&#95;ref-5" class="reference"><a href="#cite_note-5"><span class="cite-bracket">&#91;</span>5<span class="cite-bracket">&#93;</span></a></sup>
+</p><p><b>Takt.</b> Ein Zeitgeber ruft alle 45&#160;ms (<code>SIM_TAKT_MS</code>) <code>simSchritt()</code>. Die tatsächlich vergangene Zeit (höchstens 250&#160;ms, bei „doppelt“ × 2) wird in Teilschritte von höchstens 60&#160;ms zerlegt. In jedem Teilschritt läuft eine eigene Simulationsuhr; <code>Date.now</code> wird dafür vorübergehend durch diese Uhr ersetzt, damit alle Zeitstempel der NPC-Logik zur Simulation passen.
+</p><p><b>Bewegung.</b> Je Teilschritt:
+</p>
+<ol><li><code>ghostTick()</code> für jede Attrappe (sie erzeugt Gas und Lenkung und rechnet ihr Fahrzeugmodell).</li>
+<li>Weg auf der Bahn: s = s + kmh × 27,78 × 0,930 × dt (Einheiten); über die Rundenlänge gewickelt, mit Rundenzeit.</li>
+<li>Aus s die Kachel und die Phase (Bahn als Folge der Kachellängen); bei Kachelwechsel Zähler + 1 (modulo 256), Zeitstempel und Teilecode zurück in die Attrappe, so wie es ein echtes Auto melden würde.</li></ol>
+<p>Damit weiß die NPC-Logik nicht mehr als am echten Auto, und Ortsabgleich, Phasenschätzung und Abstandsregel werden mitgeprüft. Gegenprobe im Code: halbes Gas sind rund 55&#160;cm/s, eine Gerade dauert damit 0,78&#160;s.
+</p><p><b>Kollisionsprüfung.</b> <code>simKontakteTick()</code> vergleicht nach jedem Teilschritt jedes Paar:
+</p>
+<pre>d_längs = |s_A − s_B| mod Rundenlänge   (über die Ziellinie gefaltet, höchstens halbe Runde)
+d_quer  = |querSoll_A − querSoll_B| × TRACK_HALF_W
+Berührung, wenn d_längs &lt; AUTO_LANG und d_quer &lt; AUTO_BREIT
+</pre>
+<ul><li>AUTO_LANG = 9,5&#160;cm × 0,930 = 8,84 Einheiten, AUTO_BREIT = 3,8&#160;cm × 0,930 = 3,53 Einheiten<sup id="cite&#95;ref-6" class="reference"><a href="#cite_note-6"><span class="cite-bracket">&#91;</span>6<span class="cite-bracket">&#93;</span></a></sup></li>
+<li>TRACK_HALF_W = 12,5&#160;cm × 0,930 = 11,63 Einheiten; querSoll ist die geschätzte Querlage des NPC (−1 bis +1)</li></ul>
+<p>Eine Berührung zählt neu, wenn das Paar vorher nicht in Berührung war und die letzte Zählung mehr als 1000&#160;ms zurückliegt; die Berührungsdauer und der engste Längsabstand werden mitgeschrieben. <b>Überholungen</b> zählt <code>simUeberholTick()</code>: Wechselt bei einem Paar mit mehr als einer Autolänge Abstand das Vorzeichen des Gesamtfortschritts, ist das ein Platztausch.
+</p><p><b>Ende.</b> Wenn alle Attrappen die Rundenzahl erreicht haben, nach 20 Minuten Simulationszeit oder mit „Abbrechen“.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Vom_Modelltempo_zur_Bewegung">Vom Modelltempo zur Bewegung</h3></div>
+<p>Das Fahrzeugmodell meldet 3,0 Modell-km/h (Handling GT3):
+</p>
+<ol><li>Angezeigt: 3,0 × 73,75 = 221&#160;km/h; v_GT3 = 61,5&#160;m/s.</li>
+<li>In der Strecke: v_E = 3,0 / 3,6 × 100 × 0,930 = 77,5 Einheiten/s, also 83&#160;cm/s; eine Gerade (40 Einheiten) dauert 0,52&#160;s, gut elf Meldetakte.</li>
+<li>Lenkung: voller Stick ergibt Lenk_Ziel = 1 / (1 + (61,5/55)²) = 1 / 2,25 = 0,44; bei 30&#160;m/s wären es 1 / (1 + 0,30) = 0,77.</li>
+<li>Bei 60 Bildern je Sekunde (dt = 0,0167&#160;s) wandert die Lenkung je Bild höchstens um 0,0167/0,09 = 0,19.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Neben_der_Bahn">Neben der Bahn</h3></div>
+<p>Das Auto steht mit q = 16 Einheiten neben der Mittellinie: über der Grenze 15,2, also „neben der Bahn“. Bei 60 Bildern je Sekunde schrumpft das Tempo je Bild auf e^(−3 × 0,0167) = 0,951, nach einer Sekunde auf e^(−3) ≈ 5&#160;%. Nach 2,5&#160;s daneben wird es zurückgesetzt.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Virtueller_NPC_vor_einer_Kurve">Virtueller NPC vor einer Kurve</h3></div>
+<p>Bei 14 Abtastpunkten je Teil ändert sich die Richtung in einer 60°-Kurve um etwa 60/14 ≈ 4,3° je Punkt (vereinfacht, gleichmäßige Verteilung angenommen). κ = 4,3 / 2,86 = 1,5; Ziel = 3,2 × (1 − 1,5/4,5 × 0,7) = 3,2 × 0,767 = 2,45 Modell-km/h (× 0,97 beim ersten NPC = 2,38). Auf der Geraden davor fährt er 3,2 × 0,97 = 3,10 und braucht zum Abbremsen auf 2,38 bei 6&#160;km/h je s rund 0,12&#160;s.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Eine_gezählte_Berührung"><span id="Eine_gez.C3.A4hlte_Ber.C3.BChrung"></span>Eine gezählte Berührung</h3></div>
+<p>Zwei Simulations-NPCs liegen 5&#160;cm hintereinander (d_längs = 4,65 Einheiten &lt; 8,84). Ihre Querlagen sind +0,2 und −0,1: d_quer = 0,3 × 11,63 = 3,49 Einheiten &lt; 3,53, also eine Berührung. Bei −0,2 statt −0,1 wären es 4,65 Einheiten, keine Berührung.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li><b>In Arbeit.</b> Der Modus trägt das WIP-Zeichen.</li>
+<li><b>Physik nötig, WebGL nötig.</b> Mit dem Fahrgefühl RC startet die Fahrt nicht; ohne WebGL erscheint „Dieses Gerät kann kein WebGL“.</li>
+<li><b>Keine Kollisionen in der virtuellen Fahrt.</b> Weder mit den virtuellen NPCs noch mit dem Geist; die virtuellen NPCs folgen nur der Mittellinie.</li>
+<li><b>Motoraufnahmen bei Dateiaufruf.</b> Wird OmegaSim direkt als Datei geöffnet, lassen sich die Aufnahmen nicht laden, es spielt ein Ersatzton; Abhilfe ist der Start über „Start OmegaSim.bat“.</li>
+<li><b>Rennsimulation ist ein Modell.</b> Reibung, Staub, abfliegende Autos und eine Schiene, die ein Auto nicht mehr hält, fehlen. Wer dort vorn liegt, ist es im Modell. Die Berührungszählung schwankt zwischen identischen Läufen stark (siehe <a href="./NPC-Fahrverhalten.html#Grenzen_und_bekannte_Probleme" title="NPC-Fahrverhalten">NPC-Fahrverhalten#Grenzen und bekannte Probleme</a>).</li>
+<li><b>Echtes Auto nach der virtuellen Fahrt.</b> Die Seite <a href="https://omegasim.miraheze.org/wiki/CH_ControlBox" title="CH ControlBox">CH ControlBox</a> beschreibt, dass ein echtes Auto nach einer virtuellen Fahrt hängen bleiben konnte. Weder Code noch Patchnotes bis 1.2.9 nennen dazu eine ausdrückliche Korrektur. Der aktuelle Code zeigt drei Stellen, an denen ein solches Verhalten entstehen kann; ob eine davon die beobachtete Ursache ist, ist noch nicht gesichert:
+<ul><li>Beim Start bekommt das echte Fahrerauto die Rolle „Aus“ (<code>setCarRole(playerCar, 'none')</code>). Dabei wird kein Halt-Befehl geschickt, und während der ganzen virtuellen Fahrt erhält das echte Auto überhaupt keine Pakete, weil die App nur an Spieler, NPCs und Sonderrollen sendet. Was die <a href="./Firmware.html" title="Firmware">Firmware</a> ohne Befehle tut, ist im Code nicht beschrieben.</li>
+<li>Beim Beenden bekommt das echte Auto seine Rolle nur zurück, wenn es noch in der Garage steht. Reißt seine Verbindung während der Fahrt endgültig ab (fünf vergebliche Wiederverbindungen) und wird es neu verbunden, ist zu diesem Zeitpunkt das virtuelle Auto Spieler&#160;1; das echte Auto wird deshalb als NPC aufgenommen und bleibt es auch nach dem Beenden.</li>
+<li>Die Rolle „Aus“ wird für das Auto gespeichert; beim nächsten Verbinden wird eine gespeicherte Rolle „Aus“ aber ignoriert, das Auto wird dann Spieler&#160;1 oder NPC.</li></ul></li></ul>
+<dl><dd>Reagiert das Auto nach dem Beenden nicht, in der Garage seine Rolle prüfen und gegebenenfalls auf Spieler&#160;1 setzen; sonst hilft die Seite <a href="./Keine_Reaktion_des_Fahrzeugs.html" title="Keine Reaktion des Fahrzeugs">Keine Reaktion des Fahrzeugs</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version</th>
+<th>Änderung
+</th></tr>
+<tr>
+<td>1.1.3</td>
+<td>Virtuell fahren (WIP): Garagenauto ohne Bluetooth auf der Editor-Strecke, Rückfall Balkonia, 3D-Ansicht, Fahrmodell wie ein GT3 in Assetto Corsa Competizione, Motorsound aus den Aufnahmen, Optionen in der Garage
+</td></tr>
+<tr>
+<td>1.1.9</td>
+<td>Vulture V5.R aus Speed Dreams mit Modell, Lichtern, Federung und Fahrdaten; Auswahl „Neigung sichtbar“
+</td></tr>
+<tr>
+<td>1.1.11</td>
+<td>Lenkung direkt vom Stick statt über die Servodämpfung, Kamera zeitbasiert, Kamerawechsel mit R3 oder C; Ampel und Meldungen während der Fahrt sichtbar
+</td></tr>
+<tr>
+<td>1.1 (Abschnitt)</td>
+<td>Studie: Fahrverhaltens-Challenge auch virtuell (Homington, fünf Runden)
+</td></tr>
+<tr>
+<td>1.1.46</td>
+<td>Virtuelle NPCs (0 bis 3)
+</td></tr>
+<tr>
+<td>1.1.52</td>
+<td>Handling-Modus „Schnell“
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
+<div class="mw-references-wrap"><ol class="references">
+<li id="cite&#95;note-1"><span class="mw-cite-backlink"><a href="#cite_ref-1">↑</a></span> <span class="reference-text"><code>src/60d-virtuell.js</code>, <code>virtuellStarten()</code>.</span>
+</li>
+<li id="cite&#95;note-2"><span class="mw-cite-backlink"><a href="#cite_ref-2">↑</a></span> <span class="reference-text"><code>vfPaket()</code>.</span>
+</li>
+<li id="cite&#95;note-3"><span class="mw-cite-backlink"><a href="#cite_ref-3">↑</a></span> <span class="reference-text"><code>VF_GT3</code>, <code>vfDynamik()</code>, <code>vfPhysikAus()</code>.</span>
+</li>
+<li id="cite&#95;note-4"><span class="mw-cite-backlink"><a href="#cite_ref-4">↑</a></span> <span class="reference-text"><code>vfNpcStufenTempo()</code>, <code>vfNpcBahn()</code>, <code>vfNpcSteuern()</code>, <code>vfNpcStarten()</code>.</span>
+</li>
+<li id="cite&#95;note-5"><span class="mw-cite-backlink"><a href="#cite_ref-5">↑</a></span> <span class="reference-text"><code>src/90b-sim.js</code>, <code>simStart()</code>, <code>simSchritt()</code>, <code>simTeilschritt()</code>.</span>
+</li>
+<li id="cite&#95;note-6"><span class="mw-cite-backlink"><a href="#cite_ref-6">↑</a></span> <span class="reference-text"><code>src/60-track.js</code>, <code>AUTO_LANG_CM = 9.5</code>, <code>AUTO_BREIT_CM = 3.8</code>.</span>
+</li>
+</ol></div>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a></li>
+<li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
+<li><a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a></li>
+<li><a href="./Rennarten.html" title="Rennarten">Rennarten</a></li>
+<li><a href="https://omegasim.miraheze.org/wiki/CH_ControlBox" title="CH ControlBox">CH ControlBox</a></li>
+<li><a href="./Keine_Reaktion_des_Fahrzeugs.html" title="Keine Reaktion des Fahrzeugs">Keine Reaktion des Fahrzeugs</a></li>
+<li><a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/60d-virtuell.js</code>: <code>virtuellStarten()</code>, <code>virtuellBeenden()</code>, <code>vfPaket()</code>, <code>vfBild()</code>, <code>vfDynamik()</code>, <code>vfSchritt()</code>, <code>vfOrt()</code>, <code>vfZuruecksetzen()</code>, <code>vfNpcSteuern()</code>, <code>vfNpcStarten()</code>, <code>vfPhysikAus()</code>, <code>vfHandlingProfil()</code>, <code>vfFederung()</code>, <code>vfKamera()</code>, <code>vfGarageOptionen()</code>, <code>VF_GT3</code></li>
+<li><code>src/90b-sim.js</code>: <code>simStart()</code>, <code>simSchritt()</code>, <code>simTeilschritt()</code>, <code>simKontakteTick()</code>, <code>simUeberholTick()</code>, <code>simStop()</code></li>
+<li><code>src/60-track.js</code>: <code>TRACK_TILE_CM</code>, <code>TRACK_UNITS_PER_CM</code>, <code>TRACK_HALF_W</code>, <code>AUTO_LANG</code>, <code>AUTO_BREIT</code>, <code>trackCenterline()</code></li>
+<li><code>src/90-ghosts.js</code>: <code>setCarRole()</code>, <code>removeCar()</code>, <code>onCarNotify()</code></li>
+<li><code>src/51-konsole.js</code>: Tasten Escape, C und Options in der virtuellen Fahrt</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+
+<!-- 
+NewPP limit report
+Parsed by mw201
+Cached time: 20261030073508
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.070 seconds
+Real time usage: 0.075 seconds
+Preprocessor visited node count: 187/1000000
+Revision size: 26132/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 1/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 8161/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.648      1 Vorlage:Stand
+100.00%    3.648      1 -total
+-->
+
+<!-- Render ID 6e5a6c06-d434-11f1-a4a7-bc2411441f04 -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

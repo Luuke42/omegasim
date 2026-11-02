@@ -20,6 +20,8 @@ Das '''Hexadezimalsystem''' (kurz ''Hex'', von griechisch ''hexa'' „sechs“ u
 | Beteiligte Quelldateien || <code>src/20-protocol.js</code>, <code>src/10-ble-explorer.js</code>, <code>src/05-app-bruecke.js</code>, <code>src/60-track.js</code>, <code>src/90-ghosts.js</code>, <code>src/92b-num-trainer.js</code>, <code>OmegaBlePlugin.java</code>
 |}
 
+[[Datei:OmegaSim-Byte-Hex.png|mini|Ein Byte aus 8 Bit und zwei Hex-Ziffern: 0x2F = 47.]]
+
 == Grundlagen ==
 === Was ein Stellenwertsystem ist ===
 Im Alltag schreiben wir Zahlen im '''Dezimalsystem''': Jede Stelle ist zehnmal so viel wert wie die Stelle rechts von ihr. Die Zahl 223 bedeutet

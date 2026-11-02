@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rennarten - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Rennarten</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.45</b> vom 29.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Rennen.png" class="mw-file-description"><img src="images/250px-OmegaSim-Rennen.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Rennen.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Das Cockpit während eines Rennens</figcaption></figure>
+<p>Die <b>Rennarten</b> (in der App „Renntyp“) von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> legen fest, wie eine Sitzung abläuft, wann sie endet und wie gewertet wird. Es gibt sieben Renntypen: Training, Time Attack, Qualifying, Runden, Endurance, NPC Knockout und Demolition Derby. Alle benutzen dieselbe Rennmaschine in <code>src/70-race.js</code>: Startaufstellung, <a href="https://omegasim.miraheze.org/wiki/Startampel" title="Startampel">Startampel</a>, Rundenzählung über das Start/Ziel-Muster der <a href="./Strecke.html" title="Strecke">Strecke</a>, Zielflagge und Ergebnis. Bis zu zehn Rennen lassen sich zu einer <b>Meisterschaft</b> mit Punktewertung verbinden. Welche Renntypen wählbar sind, hängt seit 1.2.4 davon ab, ob das Auto die Kunststoffschiene liest („Auf der Bahn“) oder gedruckte Muster („Ausdruck“).
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Menüpfad</td>
+<td>FAHREN → Kachel Renntyp; Optionen → Renneinstellungen; FAHREN → Kachel Meisterschaft (unten links)
+</td></tr>
+<tr>
+<td>Renntypen</td>
+<td>Training, Time Attack (experimentell), Qualifying, Runden, Endurance, NPC Knockout (experimentell), Demolition Derby (experimentell)
+</td></tr>
+<tr>
+<td>Vorgabe</td>
+<td>Training, Grenze 0 (ohne Ende)
+</td></tr>
+<tr>
+<td>Start</td>
+<td>stehend mit Ampel (5 Lampen im Sekundentakt, dann 1 bis 3 s Pause) oder fliegend (experimentell)
+</td></tr>
+<tr>
+<td>Frühstart</td>
+<td>ab Werk +5 s auf die erste Runde; sonst 2 s Ausbremsen
+</td></tr>
+<tr>
+<td>Meisterschaft</td>
+<td>bis 10 Events, Punkte F1, klassisch oder linear, +1 für schnellste Runde
+</td></tr>
+<tr>
+<td>Status</td>
+<td>Rennfunktion WIP; Time Attack, Knockout, Derby, fliegender Start, Sektoren, automatisches Aufstellen, Rennpause, Rennintro und Rennstand-Ansage experimentell
+</td></tr>
+<tr>
+<td>Quelldateien</td>
+<td><code>src/70-race.js</code>, <code>src/73-meisterschaft.js</code>, <code>src/90-ghosts.js</code>, <code>src/71-rammen.js</code>, <code>src/50-drive.js</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Renntyp_und_Rennzustand">Renntyp und Rennzustand</h3></div>
+<p>Der <b>Renntyp</b> (<code>raceMode</code>) beschreibt die Regeln: wann ist Schluss, und wer gewinnt. Der <b>Rennzustand</b> (<code>raceState</code>) beschreibt, wo das Rennen gerade steht. Er ist eine Zustandsmaschine mit diesen Werten:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Zustand</th>
+<th>Bedeutung</th>
+<th>Übergang
+</th></tr>
+<tr>
+<td><code>idle</code></td>
+<td>kein Rennen</td>
+<td>Start → <code>countdown</code> (Training ohne Ampel: sofort <code>racing</code>)
+</td></tr>
+<tr>
+<td><code>countdown</code></td>
+<td>Ampel läuft</td>
+<td>Lampen aus → <code>racing</code>
+</td></tr>
+<tr>
+<td><code>racing</code></td>
+<td>Rennen läuft</td>
+<td>Grenze erreicht → <code>finishing</code>; bei Runden mit Zielrunde direkt → <code>finished</code>
+</td></tr>
+<tr>
+<td><code>finishing</code></td>
+<td>letzte Runde</td>
+<td>nächste Überfahrt des Fahrers → <code>finished</code>
+</td></tr>
+<tr>
+<td><code>finished</code></td>
+<td>Ergebnis</td>
+<td>neuer Start → <code>countdown</code>
+</td></tr></tbody></table>
+<p>Bei fliegendem Start gibt es innerhalb von <code>racing</code> zusätzlich die Einführungsrunde (<code>raceFormationLap</code>), in der keine Runden zählen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Rundenzählung"><span id="Rundenz.C3.A4hlung"></span>Rundenzählung</h3></div>
+<p>Eine Runde ist die Zeit zwischen zwei Überfahrten des Start/Ziel-Musters. Das Auto meldet in jedem Paket den Code des Teils unter sich (Byte 12) und einen Zähler (Byte 11); seit 0.9.39 setzt es beim Lesen des Startmusters außerdem rund eine Sekunde lang Bit 3 von Byte 15. Die steigende Flanke dieses Bits ist der Zielstrich. Eine Flanke ist der Moment, in dem ein Bit von 0 auf 1 wechselt. Doppelte Meldungen innerhalb von 1000 ms (<code>TILE_REPEAT_BLOCK_MS</code>) werden ignoriert. Einen eigenen Rundensensor gibt es nicht.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Zufall_am_Start">Zufall am Start</h3></div>
+<p>Die Pause zwischen der fünften roten Lampe und dem Start ist zufällig, damit niemand den Start vorhersehen kann: <code>1000 ms + Zufall · 2000 ms</code>. Im <a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a> gibt das startende Telefon diesen Wert vor, damit alle gleichzeitig losfahren.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Punkteschema">Punkteschema</h3></div>
+<p>Ein <b>Punkteschema</b> ist eine Tabelle „Platz → Punkte“. Das bekannte F1-Schema vergibt 25 Punkte für den Sieg, 18 für Platz 2 und so weiter bis 1 Punkt für Platz 10.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Ein_Rennen_fahren">Ein Rennen fahren</h3></div>
+<ol><li>In <b>FAHREN</b> die Kachel Renntyp wählen und die Grenze (Minuten, Runden oder Kills) eintragen.</li>
+<li>Unter <b>Optionen → Renneinstellungen</b> bei Bedarf Wetter, Pflichtstopps, fliegenden Start, Sektoren, Frühstartstrafe und Tank beim Start einstellen.</li>
+<li><b>Rennen starten</b> (Kachel in FAHREN oder Knopf im Cockpit; am Controller ist ab Werk keine Taste belegt).</li>
+<li>Außer im Training erscheint der Schirm <b>Bringe die Autos in Position</b> mit der Startaufstellung und den Knöpfen Abbrechen, Automatisch aufstellen (nur „Auf der Bahn“) und Start. Steuerkreuz wählt, X bestätigt, vorausgewählt ist Start.</li>
+<li>Autos von Hand auf ihre Plätze stellen oder automatisch aufstellen lassen.</li>
+<li>Ampel abwarten: fünf rote Lampen, dann gehen alle aus. Das ist der Start.</li>
+<li>Zum Beenden das Rennen fahren, bis die Grenze erreicht ist, oder abbrechen. Ein Abbruch verwirft die laufende Runde.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Eine_Meisterschaft_fahren">Eine Meisterschaft fahren</h3></div>
+<ol><li>Kachel <b>Meisterschaft</b> in FAHREN öffnen.</li>
+<li>Je Zeile ein Event festlegen: Strecke, Format, Umfang, Wetter, Start, Aufstellung, Pflichtstopps.</li>
+<li>Darunter Fahrgefühl, Aufstellung des ersten Events, Punkte, schnellste Runde und Teilnehmer wählen.</li>
+<li><b>Meisterschaft starten</b>; nach jedem Event erscheint der Zwischenstand mit der nächsten Startaufstellung. Die Meisterschaft kann pausiert und über die Kachel fortgesetzt werden.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<table class="wikitable sortable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich</th>
+<th>Standard</th>
+<th>Wirkung (aus dem Code)</th>
+<th>Interne ID → Variable
+</th></tr>
+<tr>
+<td>Renntyp</td>
+<td>7 Typen</td>
+<td>Training</td>
+<td>Regeln und Ende</td>
+<td><code>race-mode</code> → <code>raceMode</code>
+</td></tr>
+<tr>
+<td>Minuten / Runden / Kills</td>
+<td>0 bis 120</td>
+<td>0</td>
+<td>Grenze; Training und Time Attack: 0 = ohne Ende; Derby: Kill-Ziel</td>
+<td><code>race-limit</code> → <code>raceLimit</code>
+</td></tr>
+<tr>
+<td>Sektoren (experimentell)</td>
+<td>1 (aus) bis 4</td>
+<td>1</td>
+<td>Überfahrten je Runde; auf der Bahn bestimmt die Strecke die Zahl</td>
+<td><code>sector-count</code>
+</td></tr>
+<tr>
+<td>Fliegender Start (experimentell)</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Einführungsrunde im Formationstempo, Autopilot fährt</td>
+<td><code>race-flying</code> → <code>raceFlying</code>
+</td></tr>
+<tr>
+<td>Frühstart: +5 s auf die erste Runde</td>
+<td>an/aus</td>
+<td>an</td>
+<td>aus: 2 s Ausbremsen nach Grün</td>
+<td><code>race-fruehstart-zeit</code>
+</td></tr>
+<tr>
+<td>Gelbe Flagge deaktivieren</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Knopf und Halten der Boxentaste rufen kein Gelb mehr aus</td>
+<td><code>race-gelb-aus</code>
+</td></tr>
+<tr>
+<td>Weiche Reifen verboten (WIP)</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>siehe <a href="./Boxenstopp.html#Weiche_Reifen_verboten" title="Boxenstopp">Boxenstopp</a></td>
+<td><code>race-weich-verboten</code>
+</td></tr>
+<tr>
+<td>Einparken in der Aufstellung (WIP)</td>
+<td>Aufnahme, Lenkimpuls</td>
+<td>Aufnahme</td>
+<td>Einparkfolge bei automatischer Aufstellung</td>
+<td><code>race-einpark-art</code>
+</td></tr>
+<tr>
+<td>Einparken: Gas der Safety-Car-Folge (WIP)</td>
+<td>40 bis 100&#160;%</td>
+<td>70&#160;%</td>
+<td>Gasfaktor auf die Safety-Car-Einparkfolge</td>
+<td><code>race-einpark-sc-gas</code> → <code>AUFSTELL_SC_GAS</code>
+</td></tr>
+<tr>
+<td>Einparken: Einlenkstärke, Dauer, Tempo (WIP)</td>
+<td>0 bis 100&#160;%; 10 bis 300 ms; 15 bis 60&#160;%</td>
+<td>100&#160;%; 100 ms; 30&#160;%</td>
+<td>nur beim Lenkimpuls</td>
+<td><code>race-einpark-staerke</code>, <code>-ms</code>, <code>-tempo</code>
+</td></tr>
+<tr>
+<td>Time Attack: NPCs als Challenger (WIP)</td>
+<td>Gegen meine Bestzeit, Gegen den Rekord, Gummiband</td>
+<td>Gegen meine Bestzeit</td>
+<td>Fahrweise der NPCs in Time Attack</td>
+<td><code>race-challenger</code>
+</td></tr>
+<tr>
+<td>Gummiband: Schritt je Runde (WIP)</td>
+<td>2 bis 10&#160;%</td>
+<td>4&#160;%</td>
+<td>Tempoänderung je Durchfahrt</td>
+<td><code>race-gummiband-schritt</code>
+</td></tr>
+<tr>
+<td>Wetter zu Beginn</td>
+<td>trocken, Regen, wechselhaft</td>
+<td>trocken</td>
+<td>siehe <a href="./Verschleiß.html#Wetter_und_Regen" title="Verschleiß">Verschleiß#Wetter und Regen</a></td>
+<td><code>race-wx-start</code>
+</td></tr>
+<tr>
+<td>Wetter ändert sich</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>ein zufälliger Wechsel</td>
+<td><code>race-wx-change</code>
+</td></tr>
+<tr>
+<td>Pflichtboxenstopps</td>
+<td>keine bis 3</td>
+<td>keine</td>
+<td>siehe <a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a></td>
+<td><code>race-pit-required</code>
+</td></tr>
+<tr>
+<td>Strafe je verpasstem Stopp (s)</td>
+<td>0 bis 300</td>
+<td>10</td>
+<td>Zeitstrafe am Ende</td>
+<td><code>race-pit-penalty</code>
+</td></tr>
+<tr>
+<td>Strafe für Rammer (experimentell), Länge</td>
+<td>aus, 1 bis 5; 3 bis 20 s</td>
+<td>nach 2; 5 s</td>
+<td>Zusatz-Standzeit in der Box</td>
+<td><code>race-ramm-ab</code>, <code>race-ramm-strafe</code>
+</td></tr>
+<tr>
+<td>Tank beim Start (l)</td>
+<td>5 bis 110</td>
+<td>110</td>
+<td>Startmenge aller Spielerautos</td>
+<td><code>race-fuel-start</code>
+</td></tr>
+<tr>
+<td>Startampel, Optionen → Allgemein</td>
+<td>Bild und Ton, nur Ton, nur Bild</td>
+<td>Bild und Ton</td>
+<td>Darstellung der Ampel</td>
+<td><code>setting-ampel</code>
+</td></tr>
+<tr>
+<td>Auf der Bahn, Optionen → Allgemein</td>
+<td>an/aus</td>
+<td>an</td>
+<td>Sensormodus; bestimmt die erlaubten Renntypen</td>
+<td><code>setting-ontrack</code> → <code>trackMode</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Die_Renntypen">Die Renntypen</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Renntyp</th>
+<th>Grenze</th>
+<th>Ende</th>
+<th>Wertung</th>
+<th>Besonderheiten
+</th></tr>
+<tr>
+<td>Training (<code>practice</code>)</td>
+<td>Minuten, 0 = ohne Ende</td>
+<td>nach der Zeit oder von Hand</td>
+<td>keine Platzierung, Tabelle nach Runden</td>
+<td>ohne Ampel und ohne Startschirm
+</td></tr>
+<tr>
+<td>Time Attack (<code>bestzeit</code>)</td>
+<td>Minuten, 0 = ohne Ende</td>
+<td>nach der Zeit oder von Hand</td>
+<td>Bestzeit je Strecke, Medaillen</td>
+<td>nur gesteuerte Autos; NPCs fahren als Challenger
+</td></tr>
+<tr>
+<td>Qualifying (<code>qualifying</code>)</td>
+<td>Minuten</td>
+<td>nach der Zeit, laufende Runde zählt</td>
+<td>schnellste Einzelrunde</td>
+<td>
+</td></tr>
+<tr>
+<td>Runden (<code>laps</code>)</td>
+<td>Runden</td>
+<td>wer die Zahl erreicht, ist im Ziel</td>
+<td>mehr Runden, dann kürzere Gesamtzeit</td>
+<td>
+</td></tr>
+<tr>
+<td>Endurance (<code>endurance</code>)</td>
+<td>Minuten</td>
+<td>nach der Zeit, laufende Runde zählt</td>
+<td>mehr Runden, dann kürzere Gesamtzeit</td>
+<td>
+</td></tr>
+<tr>
+<td>NPC Knockout (<code>knockout</code>)</td>
+<td>3 Leben</td>
+<td>alle NPCs oder alle Menschen raus</td>
+<td>Menschen oder NPCs gewinnen</td>
+<td>braucht einen NPC, schaltet auf „Auf der Bahn“
+</td></tr>
+<tr>
+<td>Demolition Derby (<code>derby</code>)</td>
+<td>Kill-Ziel</td>
+<td>Kill-Ziel erreicht oder höchstens ein Teilnehmer fährt</td>
+<td>meiste Kills, dann mehr Health</td>
+<td>kein Boxenstopp, nur im Ausdruck-Modus
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading4"><h4 id="Ende_eines_Rennens">Ende eines Rennens</h4></div>
+<p><code>raceLimitReached()</code> wird viermal je Sekunde geprüft (<code>raceClockTick()</code>, 250 ms):
+</p>
+<pre>Training, Time Attack: Grenze &gt; 0 und vergangene Zeit ≥ Grenze · 60 000 ms
+Runden:                irgendein Auto hat ≥ Grenze Runden
+Qualifying, Endurance: vergangene Zeit ≥ Grenze · 60 000 ms</pre>
+<p>Ist die Grenze erreicht, wird der Zustand <code>finishing</code>, das Cockpit zeigt „Letzte Runde“, und eine Glocke klingt. Die laufende Runde zählt noch; mit der nächsten Überfahrt des Fahrers fällt die Zielflagge. Im Renntyp Runden ist der Fahrer, der die Zielzahl selbst erreicht, sofort im Ziel. Fährt kein gesteuertes Auto, holt der erste NPC die Flagge. NPCs dürfen ihre angefangene Runde noch zu Ende fahren, höchstens 20 s nach dem Sieger (<code>GHOST_AUSLAUF_MAX_MS</code>).
+</p><p>Die Uhr startet nicht mit Grün, sondern mit der <b>ersten Bewegung</b> eines gesteuerten Autos (über 3 km/h, <code>raceMoveErkannt()</code>), damit die Reaktionszeit nicht in die erste Rundenzeit eingeht. In <a href="./Challenges.html" title="Challenges">Challenges</a> läuft die Uhr dagegen ab Grün.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Wertung">Wertung</h4></div>
+<p><code>renderRaceResults()</code> sortiert:
+</p>
+<pre>Qualifying:       nach bester Runde (aufsteigend)
+alle anderen:     nach Rundenzahl (absteigend), bei Gleichstand nach Gesamtzeit (aufsteigend)</pre>
+<p>Je Auto stehen Runden, beste, mittlere und schlechteste Runde sowie die Streuung in der Tabelle, darunter alle Einzelrunden. Eine Runde unter der kürzest möglichen Zeit zählt nicht als Bestzeit:
+</p>
+<pre>Mindestrunde = max(1500 ms&#160;; Streckenlänge / 2,5 m/s)     (rundeMinMs)</pre>
+<div class="mw-heading mw-heading4"><h4 id="Time_Attack">Time Attack</h4></div>
+<p>Time Attack braucht „Auf der Bahn“ und eine eingescannte Strecke mit mindestens 3 Teilen (<code>bestzeitBereit()</code>). Jede gültige Runde eines gesteuerten Autos wird je Strecke gespeichert (<code>omegasim-bestzeiten</code>); eine gespiegelte Strecke gilt als dieselbe (Schlüssel ist der kleinere der beiden Streckencodes). Medaillen vergibt dieselbe Gold-Formel wie bei den <a href="./Challenges.html#Medaillen" title="Challenges">Challenges</a> (Beste Runde, eine Runde). Am Startschirm stehen die Medaillenzeiten, bisher gewonnene Medaillen und Bestzeiten; am Ende kommt eine Zusammenfassung mit Bestzeitvergleich, Schnitt, Streuung und dem Abstand zur nächsten Medaille. Die NPCs fahren als Challenger: gegen die eigene Bestzeit, gegen den Rekord der Online-Bestenliste oder mit Gummiband (Tempo 60 bis 140&#160;% des Garagentempos, Schritt je Runde 4&#160;%).
+</p>
+<div class="mw-heading mw-heading4"><h4 id="NPC_Knockout">NPC Knockout</h4></div>
+<p>Menschliche Fahrer haben 3 Leben (<code>KO_LEBEN</code>); jedes Abkommen von der Bahn kostet eines (kurzer trauriger Ton, G4 nach Es4). Ein NPC ist raus, sobald er die Bahn verlässt; er bleibt dann stehen. Das Urteil (<code>knockoutUrteil()</code>):
+</p>
+<pre>keine NPCs mehr im Rennen                              → Menschen gewinnen (Fanfare)
+Spieler 1 und alle Mitspieler ohne Leben               → NPCs gewinnen (Game-over-Ton)</pre>
+<div class="mw-heading mw-heading4"><h4 id="Demolition_Derby">Demolition Derby</h4></div>
+<p>Jedes Auto, auch jeder NPC, hat eine Health von 100 (<code>DERBY_MAX</code>). Ein Aufprall kostet frontal 10, seitlich oder von hinten getroffen 20 (<code>derbyAufprall()</code>, Richtung aus dem Bewegungssensor). Fährt das eigene Auto mit mehr als 30 km/h bis auf vier Teile an einen NPC heran, verliert der NPC 20 Health, höchstens einmal je Sekunde (<code>DERBY_RAM_TILES</code>, <code>DERBY_RAM_KMH</code>, <code>DERBY_TREFFER_MS</code>). Bei 0 bleibt das Auto stehen, nur die Lichter flackern; ein ausgeschalteter NPC zählt als Kill für den, der ihn getroffen hat. Das Urteil (<code>derbyUrteil()</code>):
+</p>
+<pre>ein Teilnehmer hat ≥ Kill-Ziel Kills                     → er gewinnt (Menschen vor NPCs geprüft)
+weniger als 2 Teilnehmer                                  → läuft weiter (nur von Hand beendbar)
+genau 1 Teilnehmer fährt noch                             → er gewinnt
+sonst                                                     → läuft weiter</pre>
+<p>Im Derby nimmt auch ein stehendes Auto Schaden, und es gibt keinen Boxenstopp.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Startablauf">Startablauf</h3></div>
+<div class="mw-heading mw-heading4"><h4 id="Was_beim_Start_zurückgesetzt_wird"><span id="Was_beim_Start_zur.C3.BCckgesetzt_wird"></span>Was beim Start zurückgesetzt wird</h4></div>
+<p><code>startRaceCountdown()</code> setzt vor der Ampel: eine gelbe Flagge und eine liegengebliebene Aufstellung werden beendet, das Weich-Verbot angewandt, das Startwetter gesetzt (wechselhaft beginnt trocken), die Windrichtung neu gewürfelt, der Tank aller Spielerautos auf die Startmenge, kein Schaden, kalte Reifen (mit Reifenwärmer 85 °C), Pflichtstopp-Zähler auf 0, alle Rundenlisten leer. Im Ausdruck-Modus mit NPCs oder Safety Car in der Garage erscheint die Warnung „Ausdruck-Modus: NPCs und Safety Car fahren hier nicht“ mit der Zahl der Autos.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Die_Ampel">Die Ampel</h4></div>
+<p><code>ampelZeitplan(grün, Pause)</code> legt feste Zeitpunkte vor Grün fest:
+</p>
+<pre>Lampe i (i = 1 … 5) leuchtet bei   grün − Pause − (5 − i) · 1000 ms
+alle aus (Start)                    grün
+Pause = 1000 + Zufall · 2000 ms
+lokal: grün = jetzt + 4600 ms + Pause   (erste Lampe nach 600 ms)</pre>
+<p>Jede Lampe klingt mit einem Rechteckton von 440 + (i − 1) · 60 Hz, der Start mit 880 Hz. Kommt der Plan verspätet an (Mehrspieler), werden verpasste Lampen übersprungen; nur der Start zählt. Im Mehrspieler kann die Ampel vor der ersten Lampe noch um den Uhrabgleich verschoben werden (<code>ampelVerschieben()</code>). Näheres auf der Seite <a href="https://omegasim.miraheze.org/wiki/Startampel" title="Startampel">Startampel</a>.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Frühstart"><span id="Fr.C3.BChstart"></span>Frühstart</h4></div>
+<p>Während des Countdowns prüft ein Takt alle 100 ms, ob ein gesteuertes Auto (Spieler 1 bis 3) schneller als 3 km/h ist (<code>FRUEHSTART_KMH = 3 / REAL_SCALE</code>). Dann gilt es als Frühstarter; die Ampel läuft weiter.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Schalter</th>
+<th>Strafe</th>
+<th>Umsetzung
+</th></tr>
+<tr>
+<td>„Frühstart: +5 s auf die erste Runde“ an (Vorgabe)</td>
+<td>5000 ms auf die erste Runde (<code>FRUEHSTART_ZEIT_MS</code>)</td>
+<td><code>fruehstartZuschlag()</code> beim ersten Rundenschluss, auch für Spieler 2 und 3 und im WLAN-Mehrspieler
+</td></tr>
+<tr>
+<td>aus</td>
+<td>2 s kein Gas und mindestens 60&#160;% Bremse, sobald das Auto nach Grün fährt</td>
+<td><code>fruehstartStrafeAktiv()</code>, <code>FRUEHSTART_STRAFE_MS</code>, <code>FRUEHSTART_BREMSE</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading4"><h4 id="Fliegender_Start">Fliegender Start</h4></div>
+<p>Bei fliegendem Start beginnt nach Grün eine Einführungsrunde: Das Tempo ist auf das Formationstempo begrenzt, <code>formationPace() = max(Boxentempo 0,294&#160;; Leseschwelle 0,35)</code> des Höchsttempos, und das eigene Auto fährt im Autopiloten; die Bremse bleibt verfügbar. Runden zählen nicht. Frei ist das Rennen, wenn ein Auto Start/Ziel zum <code>1 + Sektorzahl</code>-ten Mal überfährt, ohne Sektoren also zum zweiten Mal (<code>formationNoetig()</code>): zwischen zwei Überfahrten desselben Autos liegt immer eine volle Runde, egal wo es stand. Nur in der Stellung „Auf der Bahn“, weil der Autopilot die Querregelung der Schiene braucht.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Startaufstellung">Startaufstellung</h4></div>
+<p>Die Reihenfolge der Startplätze wird im Startschirm durch Ziehen oder mit den Pfeilen sortiert; das eigene Auto steht mit in der Liste. Platz 0 ist rechts, Platz 1 links, je zwei bilden eine Reihe.
+</p><p><b>Automatisch aufstellen</b> (experimentell, nur „Auf der Bahn“, nicht im Training) lässt NPCs, Safety Car und Fahrerautos selbst zu ihren Plätzen fahren (<code>src/90-ghosts.js</code>):
+</p>
+<pre>Zielort(Platz) = Startkachel − 1 + Seitenbruch(Platz) − floor(Platz/2) · 0,5
+Seitenbruch    = 0,15 rechts (gerade Plätze), 0,0 links (ungerade Plätze)</pre>
+<p>Reihe 1 steht also auf der Kachel vor Start/Ziel, jede weitere Reihe eine halbe Kachel dahinter (<code>AUFSTELL_REIHE_KACHEL</code>), vier Autos je Teil. Fällt ein Platz auf eine Haarnadel oder Engstelle, rücken er und alle dahinter um ganze Teile zurück. Ob ein Auto seinen Platz erreicht hat, prüft <code>aufstellAmPunkt(o, ziel, platz)</code>:
+</p>
+<pre>auf der Zielkachel und Anteil in der Kachel ≥ Haltebruch(Platz)
+oder schon auf der nächsten Kachel, aber höchstens eine halbe Kachel weiter</pre>
+<p>Die zweite Bedingung (seit 1.2) verhindert, dass ein knapp vorbeigerollter Wagen eine weitere Runde dreht. Am Platz fährt das Auto die aufgenommene Einparkfolge des Safety Cars (<code>MANOEVER.scEin</code>), für die linke Spalte mit gespiegelter Lenkung, mit 300 ms Angleichen ans Aufnahmetempo und mit dem Gas der Folge mal 0,70 (<code>AUFSTELL_SC_GAS</code>; bis 1.2 0,75, Reihe 1 stand etwas zu weit außen). In der Schlange fällt das Tempo nie unter 0,28 des Höchsttempos (<code>AUFSTELL_BODEN</code>), sonst meldete das Auto die Bahn nicht mehr und würde als abgeflogen abgestellt. Zeitgrenze für die ganze Aufstellung: 60 s (<code>AUFSTELLEN_MAX_MS</code>). Mit „Lenkimpuls“ fährt das Auto stattdessen kurz voll zu seiner Seite und genauso lang zurück.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Rennpause">Rennpause</h3></div>
+<p>Die <b>Rennpause</b> (seit 1.2.25, übernommen aus PR #9 von Playdater1974; als WIP gekennzeichnet) hält ein laufendes Rennen an, ohne es zu beenden: Die Autos bleiben stehen, die Rennuhr steht still, der Rennzustand bleibt erhalten. Weiter geht es mit einer kurzen <b>Wiederanlauf-Ampel</b>. Der Ablauf ist im Code <code>src/15-pause.js</code> und <code>src/98h-pause.js</code> umgesetzt.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Menüpfad</td>
+<td>Cockpit-Symbol oben rechts (neben dem Beenden-Knopf); oder unter Optionen → Controller eine freie Taste mit „Pause / Fortsetzen“ belegen (anfangs unbelegt)
+</td></tr>
+<tr>
+<td>Wirkung</td>
+<td>Autos bleiben stehen, Rennuhr steht still (<code>rennZeitJetzt()</code>), Rennzustand bleibt
+</td></tr>
+<tr>
+<td>Fortsetzen</td>
+<td>erneuter Druck zeigt die Wiederanlauf-Ampel; ein weiterer Druck während der Ampel bricht den Wiederanlauf ab und bleibt pausiert
+</td></tr>
+<tr>
+<td>Nach Grün</td>
+<td>Gas/Bremse und Lenkung zuerst neutral stellen
+</td></tr>
+<tr>
+<td>Ausgenommen</td>
+<td>WLAN-Mehrspieler (Pause gesperrt) und Kalibrierung
+</td></tr>
+<tr>
+<td>Gilt für</td>
+<td>lokale Fahrmodi inkl. Training, Endurance, Time Attack, Qualifying, Runden, Knockout, Derby und virtuelles Fahren
+</td></tr></tbody></table>
+<p><b>Details aus dem Code:</b>
+</p>
+<ul><li>Die Pause verwendet eine eigene Uhr (<code>rennPause.uhrStop</code>); <code>Date.now()</code> und <code>performance.now()</code> bleiben für Funk-Wachhund und Netzwerk echt.</li>
+<li><code>verzug</code> (die Summe aller Pausen) wird beim Rennstart auf 0 gesetzt (<code>rennUhrNullen()</code>); damit gilt im Rennen <code>rennZeitJetzt() === Date.now()</code>, solange niemand pausiert, und die Wanduhr-Startzeit des WLAN-Mehrspielers liegt wieder exakt.</li>
+<li>Nach einem Neuladen der App bleibt kein Auto mehr in der Pause hängen: Beim Laden ruft die Seite <code>OMEGA_BRUECKE.rennPause(false)</code>, und das Plugin setzt sich selbst in <code>load()</code> und bei jedem Seitenstart der WebView zurück.</li>
+<li>Ein Druck im Countdown bricht ein laufendes Rennintro ab; Grün kommt über die Wiederanlauf-Ampel.</li>
+<li>Pausierbare Renn-Timeouts laufen über <code>rennZeitTimerStart()</code>, Browser-Timeouts bleiben unverändert.</li>
+<li>Selbsttest: „Rennpause v1.2.25“ in <code>src/95-selftest.js</code>.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Rennintro">Rennintro</h3></div>
+<p>Das <b>Rennintro</b> (Optionen → Ansagen → „Rennintro vor der Ampel“, <code>setting-announce-intro</code>; Standard aus, WIP) sagt vor der Startampel den Start an. Es verwendet vorproduzierte Piper-Aufnahmen und die Sprache, Sprechgeschwindigkeit, Lautstärke und den Hall der <a href="#Rennstand-Ansage">Rennstand-Ansagen</a>.
+</p>
+<ul><li>Gesagt werden: Willkommen, Modus, Rundendistanz bzw. Minutenlimit, Pflichtboxenstopps, Teilnehmerzahl, vollständige Startaufstellung (Position, Farbe, Modell), Startwetter und Bereitschaft.</li>
+<li>Teilnehmer und Reihenfolge entsprechen dem Startschirm (inklusive NPCs/Spielerautos, ohne Safety Car/Reinigungsauto); die Identitäten werden beim Introstart eingefroren.</li>
+<li>Ohne Farbzuordnung nur der Artikel, ohne Modellzuordnung „Wagen“. Ein Teilnehmer wird mit „einen Teilnehmer“ angekündigt, bei leerem Feld null Teilnehmer und keine Positionen.</li>
+<li>Die Ampel beginnt erst nach dem letzten Clip; die Frühstartüberwachung läuft schon ab Intro-Beginn (der Rennzustand ist dann bereits <code>countdown</code>).</li>
+<li>Nicht in <a href="./Challenges.html" title="Challenges">Challenges</a> (eigener Ablauf mit Ampel) und nicht im WLAN-Mehrspieler; dort gibt es kein Intro.</li>
+<li>Training mit aktivem Intro bekommt die Ampel, ohne Intro weiter den unmittelbaren Start.</li>
+<li>Einzelne fehlende Clips werden ausgelassen (einmal im Protokoll); nur wenn keiner ladbar ist oder der Audiokontext fehlt, Start ohne Ansage.</li>
+<li>Lade-Timeout 20 s (maximal sechs parallele Downloads, geladene Clips bleiben im Speicher), maximale Ansagedauer 180 s mit Wiedergabe-Watchdog.</li>
+<li>Abbrechen stoppt die Audios und verhindert nachträgliche Ampeln; Ausschalten während des Intros beendet die Ansage und geht zur Ampel weiter.</li>
+<li>Sprachaufnahmen: 94 Ogg-Clips unter <code>audio/rennintro_*.ogg</code> (Deutsch/Englisch; Spanisch nutzt Englisch). Erzeugt mit <code>tools/voice_rennintro.py</code>.</li>
+<li>Code: <code>src/80d-rennintro.js</code>; Selbsttest in <code>src/95-selftest.js</code>.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Rennstand-Ansage">Rennstand-Ansage</h3></div>
+<p>Die <b>Rennstand-Ansage</b> (Optionen → Ansagen; als WIP gekennzeichnet) sagt während eines Rennens den Zwischenstand des lokalen Rennfelds an, und nach der Zielflagge das Ergebnis. Sie verwendet vorproduzierte Sprachclips aus <code>src/80c-rennstand.js</code>.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Schalter</th>
+<th>Werte</th>
+<th>Standard</th>
+<th>Wirkung
+</th></tr>
+<tr>
+<td>Rennstand alle paar Runden ansagen (<code>setting-announce-stand</code>)</td>
+<td>an/aus</td>
+<td>an</td>
+<td>die ersten drei Fahrzeuge des lokalen Rennfelds, mit Runde, Wagenfarbe und Marke/Modell
+</td></tr>
+<tr>
+<td>Rennstand alle X Runden (<code>setting-announce-stand-interval</code>)</td>
+<td>1 bis 20</td>
+<td>5</td>
+<td>nach jeder eingestellten Zahl vollendeter Runden des führenden Fahrzeugs (z. B. nach Runde 5, 10 und 15)
+</td></tr>
+<tr>
+<td>Rennstand maximale Wartezeit (<code>setting-announce-stand-wait</code>)</td>
+<td>5 bis 30 s</td>
+<td>30</td>
+<td>ab der ersten Durchfahrt der Messrunde; sobald die Top 3 durch sind, wird früher angesagt
+</td></tr>
+<tr>
+<td>Rennergebnis ansagen (<code>setting-announce-result</code>)</td>
+<td>an/aus</td>
+<td>an</td>
+<td>einmal nach der Zielflagge: der Sieger und die nächsten zwei mit Rückstand
+</td></tr>
+<tr>
+<td>Namen in der Garage (<code>setting-announce-stand-namensart</code>)</td>
+<td>Autobezeichnungen, Fahrernamen</td>
+<td>Autobezeichnungen</td>
+<td>eigene Namen statt Marke; spricht die Stimme des Geräts, nicht die Aufnahmen
+</td></tr></tbody></table>
+<p><b>Messung</b> (Beispiel Intervall 5): Sobald das erste Auto Runde 5 beendet (Runde 6 beginnt), wird der Messstand vorgemerkt. Nach drei Durchfahrten derselben Runde erfolgt die Ansage; bei weniger als drei Autos werden alle abgewartet. Die ersten drei Durchfahrtszeitpunkte bestimmen die Reihenfolge und die Sekundenrückstände; spätere Runden ändern den eingefrorenen Messstand nicht. Nach Ablauf der Wartezeit werden nur die vorhandenen Messwerte gesprochen; fehlende Durchfahrten werden nicht als Überrundung ausgegeben.
+</p>
+<ul><li>Der Einstieg lautet „Nach Runde drei“. Farbe, Modell und gegebenenfalls die lokale Spielerkennung identifizieren die Fahrzeuge; ohne Zuordnung „Wagen“.</li>
+<li>Die Ergebnisansage beginnt mit „Gewonnen hat …“ und verwendet die finale Rennwertung; sie ist von der Zwischenstands-Messung getrennt.</li>
+<li>Nur lokale Teilnehmer in Rundenrennen und Endurance, keine entfernten Clients. Warnungen und Rennende haben Vorrang; am Rennende keine zusätzliche Zwischenstandsansage.</li>
+<li>Deutsch/Englisch; Spanisch verwendet Englisch. Zahlenclips werden wiederverwendet; keine Online-TTS und keine native Android-Erweiterung erforderlich.</li>
+<li>Die separate Rennstand-Lautstärke beeinflusst Zwischenstand und Ergebnis, nicht Motoren, Regen oder Warnungen (0&#160;% stumm, bis 200&#160;% mit Boost); optionaler Stadionhall liegt nur auf dem Rennstand-Bus.</li>
+<li>Code: <code>src/80c-rennstand.js</code>; automatische Rennstand-Tests im bestehenden Selbsttest.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Einschränkungen_je_Sensormodus"><span id="Einschr.C3.A4nkungen_je_Sensormodus"></span>Einschränkungen je Sensormodus</h3></div>
+<p>Seit 1.2.4 gilt (<code>renntypErlaubt()</code>):
+</p>
+<div class="mw-highlight mw-highlight-lang-javascript mw-content-ltr" dir="ltr"><pre><span></span><span class="c1">// src/70-race.js</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">renntypErlaubt</span><span class="p">(</span><span class="nx">modus</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">trackMode</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s1">&#39;on&#39;</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="nx">modus</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="s1">&#39;derby&#39;</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="nx">modus</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="s1">&#39;bestzeit&#39;</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+<p>Ein nicht erlaubter Typ verschwindet aus Kacheln, Liste und dem Durchschalten in FAHREN; war er gewählt, fällt die Wahl auf Training zurück, mit einer Meldung.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Funktion</th>
+<th>Auf der Bahn</th>
+<th>Ausdruck
+</th></tr>
+<tr>
+<td>Demolition Derby</td>
+<td>nein</td>
+<td>ja
+</td></tr>
+<tr>
+<td>Time Attack</td>
+<td>ja</td>
+<td>nein
+</td></tr>
+<tr>
+<td>NPC Knockout</td>
+<td>ja</td>
+<td>schaltet beim Start auf „Auf der Bahn“ um
+</td></tr>
+<tr>
+<td>Fliegender Start</td>
+<td>ja</td>
+<td>nein (kein Autopilot)
+</td></tr>
+<tr>
+<td>Automatisch aufstellen</td>
+<td>ja</td>
+<td>nein
+</td></tr>
+<tr>
+<td>NPCs und Safety Car</td>
+<td>fahren</td>
+<td>fahren nicht (Warnung beim Start)
+</td></tr>
+<tr>
+<td>Gelbe Flagge mit Autopilot</td>
+<td>ja</td>
+<td>nein
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Gelbphasen">Gelbphasen</h3></div>
+<p>Eine gelbe Flagge begrenzt das Tempo auf 80 km/h (<code>YELLOW_KMH</code>, Faktor <code>80 / (4,0 · 73,75) ≈ 0,27</code>). Das eigene Auto fährt dabei im Autopiloten, auch beim Neustart-Countdown; der Gasfaktor des Fahrgefühls gilt dann nicht, sodass es genauso schnell fährt wie die NPCs. Ausgerufen wird Gelb über den Knopf oder durch Halten der Boxentaste, außer „Gelbe Flagge deaktivieren“ ist an. Ein neues Rennen beginnt nie unter Gelb, und das Rennende beendet eine gelbe Phase. Safety Car und Reinigungswagen beschreibt die Seite <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Meisterschaft">Meisterschaft</h3></div>
+<p>Die Meisterschaft (<code>src/73-meisterschaft.js</code>, Speicher <code>omegasim-meisterschaft</code>) ist kein eigenes Rennen: ein Event setzt nur die vorhandenen Renneinstellungen (Modus, Länge, Wetter, fliegender Start, Pflichtstopps, Strecke, Aufstellung, ggf. Fahrgefühl) und startet den normalen Ablauf. „Wetter ändert sich“ wird für jedes Event ausgeschaltet.
+</p><p><b>Je Event</b>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Feld</th>
+<th>Werte</th>
+<th>Vorgabe
+</th></tr>
+<tr>
+<td>Strecke</td>
+<td>aktuell im Editor, gespeicherte Strecke, freie Bahn (Ausdruck)</td>
+<td>aktuell
+</td></tr>
+<tr>
+<td>Format</td>
+<td>Training, Qualifying, Runden, Endurance; Punkte nur für Runden und Endurance</td>
+<td>Runden
+</td></tr>
+<tr>
+<td>Umfang</td>
+<td>Minuten oder Runden, mindestens 1</td>
+<td>15
+</td></tr>
+<tr>
+<td>Wetter</td>
+<td>sonnig, Regen, wechselhaft</td>
+<td>sonnig
+</td></tr>
+<tr>
+<td>Start</td>
+<td>stehend, fliegend</td>
+<td>stehend
+</td></tr>
+<tr>
+<td>Startaufstellung</td>
+<td>automatisch, nach Punkten (Führender hinten), nach Punkten (Führender vorn), nach letztem Qualifying, wie letztes Ergebnis, Zufall</td>
+<td>automatisch
+</td></tr>
+<tr>
+<td>Pflichtstopps</td>
+<td>0 bis 3</td>
+<td>0
+</td></tr></tbody></table>
+<p>Ab Werk besteht der Plan aus zwei Events: Qualifying über 5 Minuten und Runden über 15 Runden.
+</p><p><b>Global</b>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Feld</th>
+<th>Werte</th>
+<th>Vorgabe
+</th></tr>
+<tr>
+<td>Fahrgefühl</td>
+<td>wie in der Garage, alle wie Spieler 1, alle: Arcade, Sim+, Pro, Pacejka, Omega, RC</td>
+<td>wie in der Garage
+</td></tr>
+<tr>
+<td>Startaufstellung 1. Event</td>
+<td>Zufall, Beste zuletzt, Beste zuerst, Garagen-Reihenfolge</td>
+<td>Zufall
+</td></tr>
+<tr>
+<td>Punkte</td>
+<td>F1 25-18-15-12-10-8-6-4-2-1; Klassisch 10-6-4-3-2-1; Linear N … 1</td>
+<td>F1
+</td></tr>
+<tr>
+<td>Schnellste Runde</td>
+<td>+1 Punkt, keine</td>
+<td>+1 Punkt
+</td></tr>
+<tr>
+<td>Teilnehmer</td>
+<td>alle verbundenen Autos, nur Spieler (P1 bis P3)</td>
+<td>alle
+</td></tr></tbody></table>
+<p>„Automatisch“ bei der Aufstellung löst sich so auf (<code>meisterAufstAufgeloest()</code>): direkt nach einem Qualifying nach dessen Ergebnis; sonst, wenn schon ein Rennen gewertet ist, nach Punkten mit dem Führenden hinten; beim ersten Rennen nach der Einstellung „Startaufstellung 1. Event“. Die Reihe wird je Event einmal festgelegt und bis zum Start behalten, auch bei Zufall.
+</p><p><b>Wertung</b> eines Events (<code>meisterKlassieren()</code>, <code>meisterPunkteVergeben()</code>):
+</p>
+<pre>gewertet:     wer mindestens eine Runde hat
+Qualifying:   nach bester Runde
+sonst:        nach Runden, dann Gesamtzeit + Strafe für verpasste Pflichtstopps
+Punkte F1:    Platz 1 bis 10: 25, 18, 15, 12, 10, 8, 6, 4, 2, 1; danach 0
+Klassisch:    10, 6, 4, 3, 2, 1; danach 0
+Linear:       Anzahl Gewertete − Platzindex   (Sieger N, Letzter 1)
+Schnellste Runde: +1 für den Gewerteten mit der besten Runde (nur Rennen)</pre>
+<p>Ein von Hand abgebrochenes Rennen zählt für alle mit 0 Punkten, und es geht beim nächsten Event weiter; ein von Hand beendetes Training gilt als regulär. Gewertet wird erst, wenn alle NPCs ihre Auslaufrunde beendet haben (höchstens 95 s). <b>Gesamtwertung</b> (<code>meisterTabelle()</code>): Punkte, dann mehr Siege, mehr zweite Plätze und so weiter bis Platz 10, dann das bessere Ergebnis im letzten Event.
+</p><p>Im <a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a> ist das planende Telefon der Leiter: es startet jedes Event für alle, wertet und verschickt den Zwischenstand. Die Menschen werden in der Reihenfolge des Hosts eingeordnet; die eigenen NPCs und Spieler 2/3 werden nach Runden dazwischen sortiert, bei gleicher Rundenzahl anhand des eigenen Autos als Anker.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_1:_Ampel">Beispiel 1: Ampel</h3></div>
+<p>Rennen gestartet um t = 0, gezogene Pause 1800 ms. Grün liegt bei 4600 + 1800 = 6400 ms.
+</p>
+<ol><li>Lampe 1: 6400 − 1800 − 4000 = 600 ms</li>
+<li>Lampe 2: 1600 ms, Lampe 3: 2600 ms, Lampe 4: 3600 ms, Lampe 5: 4600 ms</li>
+<li>alle aus: 6400 ms, also 1,8 s nach der fünften Lampe.</li></ol>
+<p>Fährt ein Auto bei 5000 ms los, ist es Frühstarter; seine erste Runde von 6,20 s wird mit 11,20 s gewertet.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_2:_Endurance-Wertung">Beispiel 2: Endurance-Wertung</h3></div>
+<p>10 Minuten. Auto A fährt 52 Runden in 9:58,3, Auto B 52 Runden in 10:01,0 (die letzte Runde nach Ablauf zählt), Auto C 51 Runden. Reihenfolge: A, B, C. Hat A einen Pflichtstopp verpasst (Strafe 10 s), wird seine Zeit in der Meisterschaft 10:08,3, und B liegt vorn.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_3:_Meisterschaftspunkte">Beispiel 3: Meisterschaftspunkte</h3></div>
+<p>Vorgabe-Plan, F1-Schema mit schnellster Runde, drei Teilnehmer. Qualifying: B, A, C (keine Punkte, Aufstellung des Rennens danach: B, A, C). Rennen: A gewinnt, B Zweiter mit schnellster Runde, C Dritter.
+</p>
+<ul><li>A: 25, B: 18 + 1 = 19, C: 15.</li>
+<li>Mit linearem Schema: A 3, B 2 + 1 = 3, C 1. Gleichstand A und B: A hat mehr Siege und liegt vorn.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_4:_Aufstellung_von_sechs_Autos">Beispiel 4: Aufstellung von sechs Autos</h3></div>
+<p>Startkachel 0, Strecke mit 12 Teilen. Zielorte: Platz 0 bei −1 + 0,15 = Kachel 11, Anteil 0,15 (rechts); Platz 1 bei Kachel 11, Anteil 0,0 (links); Platz 2 bei 10,65 (Kachel 10, Anteil 0,65, rechts); Platz 3 bei 10,5 (links); Platz 4 bei 10,15; Platz 5 bei 10,0. Ist Kachel 10 eine Haarnadel, rücken die Plätze 2 bis 5 um ein Teil auf Kachel 9 zurück.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li>Die Rennfunktion als Ganzes ist als WIP gekennzeichnet; Time Attack, Knockout, Derby, Sektoren, fliegender Start und automatisches Aufstellen sind experimentell.</li>
+<li>Autos muss man grundsätzlich selbst auf die Bahn setzen; die automatische Aufstellung fährt nur Autos, die schon auf der Bahn stehen.</li>
+<li>Die Einparkfolge ist eine Aufnahme von einem Boden; auf anderen Böden können die Autos weiter innen oder außen stehen (Regler Gas der Safety-Car-Folge).</li>
+<li>Im Derby wird die Richtung eines Stoßes für Spieler 2 und 3 nicht gemessen; ein Treffer zählt für sie immer als seitlich, wenn keine Richtung vorliegt.</li>
+<li>Die Mindestrunde nimmt 2,5 m/s an; auf sehr kurzen Strecken greift der Boden von 1,5 s.</li>
+<li>In der Meisterschaft fehlen GT3, F1 und Realismus GT3 in der Fahrgefühl-Auswahl.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version</th>
+<th>Änderung
+</th></tr>
+<tr>
+<td>0.4.54</td>
+<td>Fliegender Start entsperrt (experimentell).
+</td></tr>
+<tr>
+<td>0.8</td>
+<td>Frühstart: Ausbremsen statt Abbruch; NPC Knockout und Demolition Derby (experimentell).
+</td></tr>
+<tr>
+<td>0.9.22</td>
+<td>Frühstart als Zeitstrafe (+5 s, ab Werk an); automatische Aufstellung (experimentell).
+</td></tr>
+<tr>
+<td>0.9.39</td>
+<td>Runde an der Start/Ziel-Sperre (Byte 15, Bit 3).
+</td></tr>
+<tr>
+<td>0.9.41</td>
+<td>Runden-Rennen enden mit der Zielrunde.
+</td></tr>
+<tr>
+<td>0.9.43</td>
+<td>Rennuhr und Frühstarterkennung bei 3 km/h Anzeige statt Modelltempo.
+</td></tr>
+<tr>
+<td>0.9.87</td>
+<td>Fliegender Start endet bei der zweiten Überfahrt des ersten Autos.
+</td></tr>
+<tr>
+<td>0.10.5</td>
+<td>„Freies Fahren“ heißt Training, mit Zeitlimit (0 = ohne Ende).
+</td></tr>
+<tr>
+<td>0.10.6</td>
+<td>Modus „Bestzeit“ mit Medaillen.
+</td></tr>
+<tr>
+<td>1.0</td>
+<td>Meisterschaft (experimentell); 1.0.15 Vorgabe zwei Events; 1.0.19 „Bestzeit“ heißt Time Attack; 1.0.25 abgebrochenes Event zählt 0 Punkte, Startreihe je Event fest.
+</td></tr>
+<tr>
+<td>1.1 (1.1.3)</td>
+<td>Startampel wahlweise nur Ton oder nur Bild; Ton „letzte Runde“; NPCs stoppen 20 s nach dem Sieger.
+</td></tr>
+<tr>
+<td>1.1</td>
+<td>Aufstellung: halbe Kachel je Reihe, keine Plätze in der Haarnadel, Einparken mit der Safety-Car-Folge.
+</td></tr>
+<tr>
+<td>1.2</td>
+<td>Aufstellung: knapp überfahrene Plätze zählen, Boden in der Schlange, Gas der Safety-Car-Folge 70&#160;% statt 75&#160;%; „Automatisch aufstellen“ nur auf der Bahn.
+</td></tr>
+<tr>
+<td>1.2 (1.2.4)</td>
+<td>Renntypen je Sensormodus; Warnung bei NPCs im Ausdruck-Modus (Rennstart und Meisterschaft).
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="https://omegasim.miraheze.org/wiki/Startampel" title="Startampel">Startampel</a></li>
+<li><a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a></li>
+<li><a href="./Verschleiß.html" title="Verschleiß">Verschleiß</a></li>
+<li><a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a></li>
+<li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
+<li><a href="./Challenges.html" title="Challenges">Challenges</a></li>
+<li><a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a></li>
+<li><a href="./Strecke.html" title="Strecke">Strecke</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/70-race.js</code>: <code>RACE_MODES</code>, <code>raceLimitReached()</code>, <code>raceClockTick()</code>, <code>startRaceCountdown()</code>, <code>ampelZeitplan()</code>, <code>ampelVerschieben()</code>, <code>raceGreen()</code>, <code>finishRace()</code>, <code>requestRaceStop()</code>, <code>raceMoveErkannt()</code>, <code>fruehstartBeginnen()</code>, <code>fruehstartZuschlag()</code>, <code>fruehstartStrafeAktiv()</code>, <code>formationNoetig()</code>, <code>endFormationLap()</code>, <code>carRaceNotify()</code>, <code>carLapCrossed()</code>, <code>playerLapCrossed()</code>, <code>rundeMinMs()</code>, <code>renderRaceResults()</code>, <code>renntypErlaubt()</code>, <code>renntypenFiltern()</code>, <code>ausdruckNpcWarnung()</code>, <code>knockoutUrteil()</code>, <code>derbyUrteil()</code>, <code>derbyAufprall()</code>, <code>derbyTick()</code>, <code>bestzeitRunde()</code>, <code>applySpeedLimit()</code>, <code>yellowFactor()</code></li>
+<li><code>src/73-meisterschaft.js</code>: <code>MEISTER_FORMATE</code>, <code>MEISTER_GLOBAL</code>, <code>MEISTER_PUNKTE</code>, <code>meisterKlassieren()</code>, <code>meisterPunkteFuer()</code>, <code>meisterPunkteVergeben()</code>, <code>meisterTabelle()</code>, <code>meisterMischen()</code>, <code>meisterAufstAufgeloest()</code>, <code>meisterStartReihe()</code>, <code>meisterEventStarten()</code>, <code>meisterRennenEnde()</code>, <code>meisterWerten()</code></li>
+<li><code>src/90-ghosts.js</code>: <code>formationPace()</code>, <code>aufstellZielOrt()</code>, <code>aufstellHaltBruch()</code>, <code>aufstellAmPunkt()</code>, <code>aufstellSkript()</code>, <code>AUFSTELL_SC_GAS</code>, <code>AUFSTELL_BODEN</code>, <code>AUFSTELL_REIHE_KACHEL</code></li>
+<li><code>src/71-rammen.js</code>: <code>crashRichtung()</code>, Rammstrafe</li>
+<li><code>src/15-pause.js</code>, <code>src/98h-pause.js</code>: <code>rennPauseAktiv()</code>, <code>rennZeitJetzt()</code>, <code>rennUhrNullen()</code>, <code>rennZeitTimerStart()</code>, <code>rennPauseErlaubt()</code>, <code>rennPauseWache()</code>, <code>rennPauseMalen()</code></li>
+<li><code>src/80d-rennintro.js</code>: Rennintro; <code>src/80c-rennstand.js</code>: <code>rennstandAnwenden()</code>, <code>rennstandMessen()</code>, <code>rennstandSagen()</code>, Ergebnisansage</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+
+<!-- 
+NewPP limit report
+Parsed by mw201
+Cached time: 20261029081239
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.107 seconds
+Real time usage: 0.122 seconds
+Preprocessor visited node count: 203/1000000
+Revision size: 36301/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 1/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 3101/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    5.302      1 Vorlage:Stand
+100.00%    5.302      1 -total
+-->
+
+<!-- Render ID 81a4038b-d370-11f1-a4a7-bc2411441f04 -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

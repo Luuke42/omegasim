@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.2.45|appdatum=29.10.2026}}
 [[Datei:OmegaSim-Rennen.png|mini|Das Cockpit während eines Rennens]]
 Die '''Rennarten''' (in der App „Renntyp“) von [[OmegaSim]] legen fest, wie eine Sitzung abläuft, wann sie endet und wie gewertet wird. Es gibt sieben Renntypen: Training, Time Attack, Qualifying, Runden, Endurance, NPC Knockout und Demolition Derby. Alle benutzen dieselbe Rennmaschine in <code>src/70-race.js</code>: Startaufstellung, [[Startampel]], Rundenzählung über das Start/Ziel-Muster der [[Strecke]], Zielflagge und Ergebnis. Bis zu zehn Rennen lassen sich zu einer '''Meisterschaft''' mit Punktewertung verbinden. Welche Renntypen wählbar sind, hängt seit 1.2.4 davon ab, ob das Auto die Kunststoffschiene liest („Auf der Bahn“) oder gedruckte Muster („Ausdruck“).
 
@@ -18,7 +18,7 @@ Die '''Rennarten''' (in der App „Renntyp“) von [[OmegaSim]] legen fest, wie 
 |-
 | Meisterschaft || bis 10 Events, Punkte F1, klassisch oder linear, +1 für schnellste Runde
 |-
-| Status || Rennfunktion WIP; Time Attack, Knockout, Derby, fliegender Start, Sektoren, automatisches Aufstellen experimentell
+| Status || Rennfunktion WIP; Time Attack, Knockout, Derby, fliegender Start, Sektoren, automatisches Aufstellen, Rennpause, Rennintro und Rennstand-Ansage experimentell
 |-
 | Quelldateien || <code>src/70-race.js</code>, <code>src/73-meisterschaft.js</code>, <code>src/90-ghosts.js</code>, <code>src/71-rammen.js</code>, <code>src/50-drive.js</code>
 |}
@@ -199,6 +199,74 @@ Reihe 1 steht also auf der Kachel vor Start/Ziel, jede weitere Reihe eine halbe 
 oder schon auf der nächsten Kachel, aber höchstens eine halbe Kachel weiter</pre>
 Die zweite Bedingung (seit 1.2) verhindert, dass ein knapp vorbeigerollter Wagen eine weitere Runde dreht. Am Platz fährt das Auto die aufgenommene Einparkfolge des Safety Cars (<code>MANOEVER.scEin</code>), für die linke Spalte mit gespiegelter Lenkung, mit 300 ms Angleichen ans Aufnahmetempo und mit dem Gas der Folge mal 0,70 (<code>AUFSTELL_SC_GAS</code>; bis 1.2 0,75, Reihe 1 stand etwas zu weit außen). In der Schlange fällt das Tempo nie unter 0,28 des Höchsttempos (<code>AUFSTELL_BODEN</code>), sonst meldete das Auto die Bahn nicht mehr und würde als abgeflogen abgestellt. Zeitgrenze für die ganze Aufstellung: 60 s (<code>AUFSTELLEN_MAX_MS</code>). Mit „Lenkimpuls“ fährt das Auto stattdessen kurz voll zu seiner Seite und genauso lang zurück.
 
+=== Rennpause ===
+Die '''Rennpause''' (seit 1.2.25, übernommen aus PR #9 von Playdater1974; als WIP gekennzeichnet) hält ein laufendes Rennen an, ohne es zu beenden: Die Autos bleiben stehen, die Rennuhr steht still, der Rennzustand bleibt erhalten. Weiter geht es mit einer kurzen '''Wiederanlauf-Ampel'''. Der Ablauf ist im Code <code>src/15-pause.js</code> und <code>src/98h-pause.js</code> umgesetzt.
+
+{| class="wikitable"
+! Merkmal !! Wert
+|-
+| Menüpfad || Cockpit-Symbol oben rechts (neben dem Beenden-Knopf); oder unter Optionen → Controller eine freie Taste mit „Pause / Fortsetzen“ belegen (anfangs unbelegt)
+|-
+| Wirkung || Autos bleiben stehen, Rennuhr steht still (<code>rennZeitJetzt()</code>), Rennzustand bleibt
+|-
+| Fortsetzen || erneuter Druck zeigt die Wiederanlauf-Ampel; ein weiterer Druck während der Ampel bricht den Wiederanlauf ab und bleibt pausiert
+|-
+| Nach Grün || Gas/Bremse und Lenkung zuerst neutral stellen
+|-
+| Ausgenommen || WLAN-Mehrspieler (Pause gesperrt) und Kalibrierung
+|-
+| Gilt für || lokale Fahrmodi inkl. Training, Endurance, Time Attack, Qualifying, Runden, Knockout, Derby und virtuelles Fahren
+|}
+
+'''Details aus dem Code:'''
+* Die Pause verwendet eine eigene Uhr (<code>rennPause.uhrStop</code>); <code>Date.now()</code> und <code>performance.now()</code> bleiben für Funk-Wachhund und Netzwerk echt.
+* <code>verzug</code> (die Summe aller Pausen) wird beim Rennstart auf 0 gesetzt (<code>rennUhrNullen()</code>); damit gilt im Rennen <code>rennZeitJetzt() === Date.now()</code>, solange niemand pausiert, und die Wanduhr-Startzeit des WLAN-Mehrspielers liegt wieder exakt.
+* Nach einem Neuladen der App bleibt kein Auto mehr in der Pause hängen: Beim Laden ruft die Seite <code>OMEGA_BRUECKE.rennPause(false)</code>, und das Plugin setzt sich selbst in <code>load()</code> und bei jedem Seitenstart der WebView zurück.
+* Ein Druck im Countdown bricht ein laufendes Rennintro ab; Grün kommt über die Wiederanlauf-Ampel.
+* Pausierbare Renn-Timeouts laufen über <code>rennZeitTimerStart()</code>, Browser-Timeouts bleiben unverändert.
+* Selbsttest: „Rennpause v1.2.25“ in <code>src/95-selftest.js</code>.
+
+=== Rennintro ===
+Das '''Rennintro''' (Optionen → Ansagen → „Rennintro vor der Ampel“, <code>setting-announce-intro</code>; Standard aus, WIP) sagt vor der Startampel den Start an. Es verwendet vorproduzierte Piper-Aufnahmen und die Sprache, Sprechgeschwindigkeit, Lautstärke und den Hall der [[#Rennstand-Ansage|Rennstand-Ansagen]].
+
+* Gesagt werden: Willkommen, Modus, Rundendistanz bzw. Minutenlimit, Pflichtboxenstopps, Teilnehmerzahl, vollständige Startaufstellung (Position, Farbe, Modell), Startwetter und Bereitschaft.
+* Teilnehmer und Reihenfolge entsprechen dem Startschirm (inklusive NPCs/Spielerautos, ohne Safety Car/Reinigungsauto); die Identitäten werden beim Introstart eingefroren.
+* Ohne Farbzuordnung nur der Artikel, ohne Modellzuordnung „Wagen“. Ein Teilnehmer wird mit „einen Teilnehmer“ angekündigt, bei leerem Feld null Teilnehmer und keine Positionen.
+* Die Ampel beginnt erst nach dem letzten Clip; die Frühstartüberwachung läuft schon ab Intro-Beginn (der Rennzustand ist dann bereits <code>countdown</code>).
+* Nicht in [[Challenges]] (eigener Ablauf mit Ampel) und nicht im WLAN-Mehrspieler; dort gibt es kein Intro.
+* Training mit aktivem Intro bekommt die Ampel, ohne Intro weiter den unmittelbaren Start.
+* Einzelne fehlende Clips werden ausgelassen (einmal im Protokoll); nur wenn keiner ladbar ist oder der Audiokontext fehlt, Start ohne Ansage.
+* Lade-Timeout 20 s (maximal sechs parallele Downloads, geladene Clips bleiben im Speicher), maximale Ansagedauer 180 s mit Wiedergabe-Watchdog.
+* Abbrechen stoppt die Audios und verhindert nachträgliche Ampeln; Ausschalten während des Intros beendet die Ansage und geht zur Ampel weiter.
+* Sprachaufnahmen: 94 Ogg-Clips unter <code>audio/rennintro_*.ogg</code> (Deutsch/Englisch; Spanisch nutzt Englisch). Erzeugt mit <code>tools/voice_rennintro.py</code>.
+* Code: <code>src/80d-rennintro.js</code>; Selbsttest in <code>src/95-selftest.js</code>.
+
+=== Rennstand-Ansage ===
+Die '''Rennstand-Ansage''' (Optionen → Ansagen; als WIP gekennzeichnet) sagt während eines Rennens den Zwischenstand des lokalen Rennfelds an, und nach der Zielflagge das Ergebnis. Sie verwendet vorproduzierte Sprachclips aus <code>src/80c-rennstand.js</code>.
+
+{| class="wikitable"
+! Schalter !! Werte !! Standard !! Wirkung
+|-
+| Rennstand alle paar Runden ansagen (<code>setting-announce-stand</code>) || an/aus || an || die ersten drei Fahrzeuge des lokalen Rennfelds, mit Runde, Wagenfarbe und Marke/Modell
+|-
+| Rennstand alle X Runden (<code>setting-announce-stand-interval</code>) || 1 bis 20 || 5 || nach jeder eingestellten Zahl vollendeter Runden des führenden Fahrzeugs (z. B. nach Runde 5, 10 und 15)
+|-
+| Rennstand maximale Wartezeit (<code>setting-announce-stand-wait</code>) || 5 bis 30 s || 30 || ab der ersten Durchfahrt der Messrunde; sobald die Top 3 durch sind, wird früher angesagt
+|-
+| Rennergebnis ansagen (<code>setting-announce-result</code>) || an/aus || an || einmal nach der Zielflagge: der Sieger und die nächsten zwei mit Rückstand
+|-
+| Namen in der Garage (<code>setting-announce-stand-namensart</code>) || Autobezeichnungen, Fahrernamen || Autobezeichnungen || eigene Namen statt Marke; spricht die Stimme des Geräts, nicht die Aufnahmen
+|}
+
+'''Messung''' (Beispiel Intervall 5): Sobald das erste Auto Runde 5 beendet (Runde 6 beginnt), wird der Messstand vorgemerkt. Nach drei Durchfahrten derselben Runde erfolgt die Ansage; bei weniger als drei Autos werden alle abgewartet. Die ersten drei Durchfahrtszeitpunkte bestimmen die Reihenfolge und die Sekundenrückstände; spätere Runden ändern den eingefrorenen Messstand nicht. Nach Ablauf der Wartezeit werden nur die vorhandenen Messwerte gesprochen; fehlende Durchfahrten werden nicht als Überrundung ausgegeben.
+
+* Der Einstieg lautet „Nach Runde drei“. Farbe, Modell und gegebenenfalls die lokale Spielerkennung identifizieren die Fahrzeuge; ohne Zuordnung „Wagen“.
+* Die Ergebnisansage beginnt mit „Gewonnen hat …“ und verwendet die finale Rennwertung; sie ist von der Zwischenstands-Messung getrennt.
+* Nur lokale Teilnehmer in Rundenrennen und Endurance, keine entfernten Clients. Warnungen und Rennende haben Vorrang; am Rennende keine zusätzliche Zwischenstandsansage.
+* Deutsch/Englisch; Spanisch verwendet Englisch. Zahlenclips werden wiederverwendet; keine Online-TTS und keine native Android-Erweiterung erforderlich.
+* Die separate Rennstand-Lautstärke beeinflusst Zwischenstand und Ergebnis, nicht Motoren, Regen oder Warnungen (0 % stumm, bis 200 % mit Boost); optionaler Stadionhall liegt nur auf dem Rennstand-Bus.
+* Code: <code>src/80c-rennstand.js</code>; automatische Rennstand-Tests im bestehenden Selbsttest.
+
 === Einschränkungen je Sensormodus ===
 Seit 1.2.4 gilt (<code>renntypErlaubt()</code>):
 <syntaxhighlight lang="javascript">
@@ -356,6 +424,8 @@ Startkachel 0, Strecke mit 12 Teilen. Zielorte: Platz 0 bei −1 + 0,15 = Kachel
 * <code>src/73-meisterschaft.js</code>: <code>MEISTER_FORMATE</code>, <code>MEISTER_GLOBAL</code>, <code>MEISTER_PUNKTE</code>, <code>meisterKlassieren()</code>, <code>meisterPunkteFuer()</code>, <code>meisterPunkteVergeben()</code>, <code>meisterTabelle()</code>, <code>meisterMischen()</code>, <code>meisterAufstAufgeloest()</code>, <code>meisterStartReihe()</code>, <code>meisterEventStarten()</code>, <code>meisterRennenEnde()</code>, <code>meisterWerten()</code>
 * <code>src/90-ghosts.js</code>: <code>formationPace()</code>, <code>aufstellZielOrt()</code>, <code>aufstellHaltBruch()</code>, <code>aufstellAmPunkt()</code>, <code>aufstellSkript()</code>, <code>AUFSTELL_SC_GAS</code>, <code>AUFSTELL_BODEN</code>, <code>AUFSTELL_REIHE_KACHEL</code>
 * <code>src/71-rammen.js</code>: <code>crashRichtung()</code>, Rammstrafe
+* <code>src/15-pause.js</code>, <code>src/98h-pause.js</code>: <code>rennPauseAktiv()</code>, <code>rennZeitJetzt()</code>, <code>rennUhrNullen()</code>, <code>rennZeitTimerStart()</code>, <code>rennPauseErlaubt()</code>, <code>rennPauseWache()</code>, <code>rennPauseMalen()</code>
+* <code>src/80d-rennintro.js</code>: Rennintro; <code>src/80c-rennstand.js</code>: <code>rennstandAnwenden()</code>, <code>rennstandMessen()</code>, <code>rennstandSagen()</code>, Ergebnisansage
 
 == Weblinks ==
 * Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]

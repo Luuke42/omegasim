@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glossar - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Glossar</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p>Das <b>Glossar</b> erklärt die Fachbegriffe, die in <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>, beim <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a> und in den Artikeln dieses Wikis vorkommen, in alphabetischer Reihenfolge. Jeder Eintrag gibt eine kurze Erklärung und verweist auf den Artikel, in dem der Begriff ausführlich behandelt wird. Begriffe aus der Technik (Bluetooth, Zahlensysteme, Programmierung) sind so erklärt, dass sie ohne Vorwissen verständlich sind; Zahlen stammen aus dem Quellcode von OmegaSim 1.2.9.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Bereich</th>
+<th>Grundlagenartikel
+</th></tr>
+<tr>
+<td>Zahlen, Bytes, Prüfsummen</td>
+<td><a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>
+</td></tr>
+<tr>
+<td>Funk, Verbindung, GATT</td>
+<td><a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>, <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a>
+</td></tr>
+<tr>
+<td>Sprachen, Bau, Speicher, Selbsttest</td>
+<td><a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>
+</td></tr>
+<tr>
+<td>Arbeitsweise mit KI</td>
+<td><a href="./Vibe-Coding.html" title="Vibe-Coding">Vibe-Coding</a>, <a href="./Anleitung_für_KIs.html" title="Anleitung für KIs">Anleitung für KIs</a>
+</td></tr>
+<tr>
+<td>Auto, Bahn, Fahren, Rennen</td>
+<td><a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>, <a href="./Strecke.html" title="Strecke">Strecke</a>, <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>, <a href="./Rennarten.html" title="Rennarten">Rennarten</a>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="A">A</h2></div>
+<dl><dt>Abseits</dt>
+<dd>Zustand, in dem der Sensor des Autos kein gültiges Streckenteil liest; das Auto meldet dann den Code <code>0x00</code>. OmegaSim entprellt dieses Signal, weil ein einzelnes <code>0x00</code> zwischen guten Lesungen auch Rauschen sein kann. Siehe <a href="./Strecke.html" title="Strecke">Strecke</a>.</dd>
+<dt>Advertising</dt>
+<dd>Das „Werben“ eines Bluetooth-Geräts: Es sendet in festen Abständen ein kurzes Paket mit Name und Diensten, damit eine Zentrale es findet. Ein verbundenes Auto wirbt nicht mehr. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Akku-Rohwert</dt>
+<dd>Die Zahl, die das Auto in Byte 10 seiner Meldung als Akkustand schickt. OmegaSim rechnet sie mit 138 (leer) bis 155 (voll) in Prozent um; die Skala ist geschätzt. Siehe <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>.</dd>
+<dt>Anlauf</dt>
+<dd>Die Strecke vom Start bis zur ersten Überfahrt der Ziellinie, wenn ein Auto hinter der Linie startet. Sind es weniger als eine halbe Streckenlänge an Teilen, beginnt Runde 1 erst an der Linie. Siehe <a href="./Rennarten.html" title="Rennarten">Rennarten</a>.</dd>
+<dt>Arcade</dt>
+<dd>Das nachsichtigste Fahrgefühl: kurzer Bremsweg, Reifenwärmer an, Crashs bremsen, verursachen aber keinen Schaden. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd>
+<dt>Ausdruck-Modus</dt>
+<dd>Leseart des Streckensensors für gedruckte Muster auf Papier (Byte 14, Bit 7 = <code>0x80</code>), in OmegaSim auch „Frei“. Das Auto hält sich darin nicht selbst auf der Bahn; Streckenscan, NPCs und Safety Car gibt es dort nicht. Siehe <a href="./Strecke.html" title="Strecke">Strecke</a>.</dd>
+<dt>Autopilot</dt>
+<dd>Die Steuerung, mit der OmegaSim das Auto eines Spielers vorübergehend selbst fährt, etwa unter gelber Flagge, in der Einführungsrunde, beim Aufstellen und beim Streckenscan. Siehe <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="B">B</h2></div>
+<dl><dt>Bahn-Modus</dt>
+<dd>Leseart des Streckensensors für die Kunststoff-Streckenteile („Auf der Bahn“, Byte 14, Bit 5 = <code>0x20</code>). Das Auto liest die Teile und hält sich selbst auf der Bahn; die meisten Funktionen von OmegaSim setzen diese Leseart voraus. Siehe <a href="./Strecke.html" title="Strecke">Strecke</a>.</dd>
+<dt>Balkonia</dt>
+<dd>Name einer festen Challenge-Strecke; „Balkonia 50 Kilometers“ ist ein Dauerrennen über 100 Runden. Fehlt eine Strecke im Editor, fährt das virtuelle Auto auf Balkonia. Siehe <a href="./Challenges.html" title="Challenges">Challenges</a>, <a href="./Virtuelles_Fahren.html" title="Virtuelles Fahren">Virtuelles Fahren</a>.</dd>
+<dt>Bit</dt>
+<dd>Kleinste Informationseinheit, 0 oder 1. Acht Bit sind ein Byte; die Bits eines Bytes werden von 0 (Wert 1) bis 7 (Wert 128) gezählt. Siehe <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>.</dd>
+<dt>Bitmaske</dt>
+<dd>Eine Zahl, mit der man einzelne Bits eines Bytes setzt, löscht oder prüft, etwa <code>0x02</code> für den Scheinwerfer in Byte 14. Siehe <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>.</dd>
+<dt>BLE</dt>
+<dd>Abkürzung für <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>, den stromsparenden Funkstandard, über den das Auto gesteuert wird.</dd>
+<dt>BLE-Werkbank</dt>
+<dd>Werkzeug in den Entwicklertools, das den GATT-Baum eines Autos anzeigt und jeden geschriebenen Befehl als Hex-Folge protokolliert; früher „BLE-Explorer“. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Boxengasse</dt>
+<dd>Der Ort, an dem ein Boxenstopp stattfindet. Unter „Wo ist die Boxengasse?“ wählbar: überall halten (Vorgabe), neben der Strecke oder ein doppelter Start-Ausdruck (experimentell). Siehe <a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a>.</dd>
+<dt>Boxen-Minigame</dt>
+<dd>Ab Werk eingestellter Ablauf des Boxenstopps (experimentell): Nacheinander erscheinen fünf Tasten; jeder richtige Druck kürzt den Stopp um 8&#160;% der Grunddauer, jeder falsche verlängert ihn. Während des Stopps sind Gas und Bremse gesperrt. Siehe <a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a>.</dd>
+<dt>Byte</dt>
+<dd>Acht Bit, also eine Zahl von 0 bis 255 bzw. <code>0x00</code> bis <code>0xFF</code>. Ein Fahrbefehl an das Auto besteht aus 20 Byte. Siehe <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="C">C</h2></div>
+<dl><dt>Capacitor</dt>
+<dd>Rahmenwerk, das eine Web-App in eine Android-App mit WebView packt und ihr über Plugins Fähigkeiten des Telefons gibt. Die Android-App von OmegaSim nutzt Capacitor 8.5.2. Siehe <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>.</dd>
+<dt>Central</dt>
+<dd>Siehe <i>Zentrale</i>.</dd>
+<dt>Challenge</dt>
+<dd>Feste Zeitfahraufgabe: eine vorgegebene Strecke, nachgebaut mit echten Teilen und unter gleichen Bedingungen gefahren, mit lokaler und Online-Bestenliste. Siehe <a href="./Challenges.html" title="Challenges">Challenges</a>.</dd>
+<dt>Challenger</dt>
+<dd>Garagenrolle (in Arbeit), mit der ein echtes Auto im Time Attack gegen die eigene Bestzeit, die Rekordrunde oder mit Gummiband gegen den Spieler fährt; nur auf der Bahn. Siehe <a href="./Rennarten.html" title="Rennarten">Rennarten</a>.</dd>
+<dt>Charakteristik</dt>
+<dd>Ein einzelner Datenwert in einem Bluetooth-Dienst (im Code auch „Merkmal“), den man je nach Eigenschaften lesen, beschreiben oder abonnieren kann. Das Auto hat eine Charakteristik zum Schreiben (NUS RX) und eine für Meldungen (NUS TX). Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Code-Sonde</dt>
+<dd>Werkzeug in den Entwicklertools, das ungefiltert zeigt, was das Auto gerade unter sich liest, mit einer Zeitleiste der Codewechsel. Siehe <a href="./Strecke.html" title="Strecke">Strecke</a>.</dd>
+<dt>CRC-8</dt>
+<dd>Prüfsumme aus 8 Bit, die das letzte Byte (Byte 19) jedes Fahrbefehls bildet; OmegaSim rechnet sie mit Polynom <code>0x31</code> und Startwert <code>0xFF</code>. Siehe <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="D">D</h2></div>
+<dl><dt>Deskriptor</dt>
+<dd>Zusatzangabe zu einer Bluetooth-Charakteristik. Über den Deskriptor <code>0x2902</code> schaltet ein Client die Notifications einer Charakteristik ein. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Direktweg</dt>
+<dd>In der Android-App die Schnittstelle <i>OmegaDirekt</i>, über die die Seite Fahrbefehle am Android-Hauptfaden vorbei an <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a> übergibt (ab APK 0.10.4).</dd>
+<dt>Drift</dt>
+<dd>Fahrzustand, in dem das Heck ausbricht und das Auto quer zur Fahrtrichtung rutscht. OmegaSim hatte einen Drift-Modus mit Gegenlenken gegen das gemessene Drehsignal; er wurde entfernt, seine Stellung „Aus“ heißt seitdem RC. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="E">E</h2></div>
+<dl><dt>Einführungsrunde</dt>
+<dd>Runde vor dem Rennen beim fliegenden Start (experimentell): Das Feld fährt mit Boxengassen-Tempo, das eigene Auto im Autopiloten; frei ist das Rennen, wenn das erste Auto Start/Ziel erreicht. Siehe <a href="./Rennarten.html" title="Rennarten">Rennarten</a>.</dd>
+<dt>Einspurmodell</dt>
+<dd>Vereinfachtes Fahrzeugmodell, das beide Räder einer Achse zu einem zusammenfasst und daraus Gierrate, Schwimmwinkel und Eigenlenkverhalten berechnet. In OmegaSim dient es als Anzeige im Cockpit und stellt die Lenkung nicht. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd>
+<dt>Engstelle</dt>
+<dd>Streckenteil mit verengter Fahrbahn, Code <code>0x0A</code> auf der Bahn (nach der Protokollbeschreibung von seVen). Weil derselbe Code im Ausdruck-Modus Start/Ziel bedeutet, zählt OmegaSim ihn auf der Bahn nicht als Ziellinie. Siehe <a href="./Strecke.html" title="Strecke">Strecke</a>.</dd>
+<dt>Entwicklertools</dt>
+<dd>Bereich mit Werkzeugen wie BLE-Werkbank, Selbsttest, Code-Sonde und Zahlensysteme; sichtbar mit <b>Optionen → System → Entwicklertools zeigen</b>. Siehe <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="F">F</h2></div>
+<dl><dt>Fahrgefühl</dt>
+<dd>Voreinstellung, die mit einem Klick einen ganzen Satz von Reglern setzt (Getriebe, Beschleunigung, Bremse, Lenkung, Reifen, Tank, Crash-Verhalten). Es gibt neun: Arcade, Sim+, Pacejka, Pro, GT3, F1, Realismus GT3, Omega und RC. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd>
+<dt>Fahrhilfe</dt>
+<dd>Option (experimentell), mit der das Auto selbst die Spur hält („Querlage“) oder ganz selbst lenkt („voll“); braucht eine eingescannte Strecke und den Bahn-Modus. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd>
+<dt>Firmware</dt>
+<dd>Die Software im Auto selbst. Sie setzt Gas und Lenkung in Motor- und Servobewegungen um, liest den Sensor und meldet den Zustand. Siehe <a href="./Firmware.html" title="Firmware">Firmware</a>.</dd>
+<dt>Funklast</dt>
+<dd>Überlastung des einen Bluetooth-Adapters, wenn er für viele Autos zugleich schreiben muss; Pakete werden dann wiederholt oder verworfen. Seit 1.1.24 teilen sich die NPCs ein Budget von rund 30 Paketen je Sekunde. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Funk-Rundlauf</dt>
+<dd>Messzeile unter <b>Optionen → System</b>, die Dauer der Schreibvorgänge, Sendeweg, Takt und Zähler von OmegaBle zeigt. Siehe <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="G">G</h2></div>
+<dl><dt>Garage</dt>
+<dd>Bereich unter <b>FAHREN → Autos</b>, in dem Autos verbunden, benannt und mit einer Rolle versehen werden (Fahrer, NPC, Safety Car usw.). Siehe <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>.</dd>
+<dt>GATT</dt>
+<dd><i>Generic Attribute Profile</i>: die Ordnung der Daten eines Bluetooth-Geräts in Dienste, Charakteristiken und Deskriptoren. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Gelbe Flagge</dt>
+<dd>Rennphase, in der das Feld langsam hinter dem Safety Car fährt; gesteuerte Autos fahren dabei unter Autopilot. Siehe <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a>.</dd>
+<dt>Ghost</dt>
+<dd>Frühere Bezeichnung für <i>NPC</i>. Seit Version 1.0 heißen Ghosts in der App NPCs; im Quellcode (etwa <code>90-ghosts.js</code>) steht der alte Name weiter. Siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>.</dd>
+<dt>Gummiband</dt>
+<dd>Einstellung für Challenger und NPCs, bei der ein Gegner langsamer fährt, wenn er vorn liegt, und schneller, wenn er zurückliegt, damit das Rennen eng bleibt. Siehe <a href="./Rennarten.html" title="Rennarten">Rennarten</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="H">H</h2></div>
+<dl><dt>Haarnadel</dt>
+<dd>Sehr enge Kurve, die die Fahrtrichtung umkehrt; Codes <code>0x05</code> (links) und <code>0x06</code> (rechts). NPCs fahren dort mit begrenztem Tempo. Siehe <a href="./Strecke.html" title="Strecke">Strecke</a>, <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>.</dd>
+<dt>Herzschlag</dt>
+<dd>Der 45-ms-Zeitgeber, in dem OmegaSim alle Fahrbefehle verschickt (<code>controlHeartbeat()</code>). Eingaben setzen nur einen Zustand; gesendet wird ausschließlich im Takt. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Hex</dt>
+<dd>Kurz für Hexadezimalzahl: Zahl zur Basis 16 mit den Ziffern 0–9 und A–F, geschrieben etwa <code>0x0A</code> (= 10). Siehe <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>.</dd>
+<dt>Host</dt>
+<dd>Gerät, das im WLAN-Mehrspieler die gemeinsame Rangliste führt: die Android-App oder ein PC mit einem Python-Programm. Siehe <a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="I">I</h2></div>
+<dl><dt>Ideallinie</dt>
+<dd>Die schnellste Fahrlinie durch eine Strecke. OmegaSim berechnet sie nach einem wählbaren Linienmodell (Standard SIMULATOR) und lässt NPCs ihr folgen; der Editor zeichnet sie ein. Siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>, <a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a>.</dd>
+<dt>IIFE</dt>
+<dd><i>Immediately invoked function expression</i>: eine Funktion, die sofort ausgeführt wird. Fast alle JavaScript-Dateien von OmegaSim bilden zusammen eine solche Funktion und teilen sich damit einen Gültigkeitsbereich. Siehe <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="K">K</h2></div>
+<dl><dt>Kachel</dt>
+<dd>Im Code und in diesem Wiki übliches Wort für ein einzelnes Streckenteil (Gerade, Kurve, Haarnadel, Start/Ziel). Eine Gerade ist rund 43 cm lang, die Fahrbahn 25 cm breit. Siehe <a href="./Strecke.html" title="Strecke">Strecke</a>.</dd>
+<dt>Kachelzähler</dt>
+<dd>Byte 11 der Meldung des Autos; es steigt bei jedem neu befahrenen Streckenteil um eins und läuft nach 255 auf 0 über. Abstände rechnet OmegaSim deshalb als <code>(neu − alt) &amp; 0xFF</code>. Siehe <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>.</dd>
+<dt>Koppeln</dt>
+<dd>Austausch von Schlüsseln zwischen zwei Bluetooth-Geräten zur Verschlüsselung (<i>pairing</i>). Für das Carrera HYBRID nicht nötig; OmegaSim verbindet, ohne zu koppeln. Gamepads dagegen werden gekoppelt. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="L">L</h2></div>
+<dl><dt>Latenz</dt>
+<dd>Verzögerung zwischen Ursache und Wirkung, etwa zwischen Daumendruck und Reaktion des Autos. Sie entsteht unter anderem durch das Warten auf den nächsten Herzschlag (bis 45 ms) und auf das nächste Bluetooth-Verbindungsereignis. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Leitplanken-Modus</dt>
+<dd>Betriebsart der Original-App, in der die App dem Auto die Typen der nächsten drei Streckenteile mitschickt (Bytes 16–18); OmegaSim nutzt diesen Vorausblick ebenfalls. Siehe <a href="./Original-App.html" title="Original-App">Original-App</a>.</dd>
+<dt>Leseart</dt>
+<dd>Betriebsart des Streckensensors: Bahn-Modus oder Ausdruck-Modus, gewählt mit jedem Fahrbefehl. Siehe <a href="./Strecke.html" title="Strecke">Strecke</a>.</dd>
+<dt>localStorage</dt>
+<dd>Kleiner Datenspeicher des Browsers je Webseite. OmegaSim legt alle Einstellungen, Strecken und Zeiten dort ab; gesichert werden sie über eine Sicherungsdatei. Siehe <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>.</dd>
+<dt>Luuke-Linie</dt>
+<dd>Linienmodell für die Ideallinie, von Hand aus Beispiel-Streckenverläufen hergeleitet; gilt, bis die SIMULATOR-Suche fertig ist. Siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="M">M</h2></div>
+<dl><dt>Magic Formula</dt>
+<dd>Reifenformel nach Hans B. Pacejka, die die Seitenkraft eines Reifens aus seinem Schräglauf berechnet; sie steigt erst an, erreicht ein Maximum und fällt dann ab. OmegaSim nutzt sie im Fahrgefühl Pacejka als Haftgrenze. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd>
+<dt>MAX-Stufe</dt>
+<dd>Tempostufe für NPCs (in Arbeit) mit eigenem Tempoprofil und eigenem Motormodell mit doppelter Beschleunigung und ohne Schaltpause. Siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>.</dd>
+<dt>Meisterschaft</dt>
+<dd>Folge mehrerer Rennen mit Punktewertung, jedes mit eigener Strecke, eigenem Format und Wetter. Siehe <a href="./Rennarten.html" title="Rennarten">Rennarten</a>.</dd>
+<dt>Minigame</dt>
+<dd>Kleines Geschicklichkeitsspiel innerhalb der App; gemeint ist meist das Boxen-Minigame. Siehe <a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a>.</dd>
+<dt>MTU</dt>
+<dd><i>Maximum Transmission Unit</i>: größte Nachricht, die Bluetooth in einem Stück überträgt. Ohne Aushandlung bleiben 20 Byte Nutzlast, genau die Länge des Fahrbefehls. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="N">N</h2></div>
+<dl><dt>Nibble</dt>
+<dd>Halbes Byte, also vier Bit; es entspricht genau einer Hex-Ziffer. Siehe <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>.</dd>
+<dt>Nordic UART Service</dt>
+<dd>Dienst nach Vorschlag des Chipherstellers Nordic Semiconductor, der eine serielle Leitung über Bluetooth nachbildet (Kurzform NUS). Über ihn laufen alle Befehle und Meldungen des Autos. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Notification</dt>
+<dd>Bluetooth-Meldung, die ein Gerät von sich aus und ohne Bestätigung an den Client schickt. Das Auto meldet so laufend Akku, Streckencode, Kachelzähler und Bewegungswerte. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>NPC</dt>
+<dd><i>Non-player character</i>: ein echtes, per Bluetooth verbundenes Auto, das die App selbst fährt (Garagenrolle NPC). Die App berechnet Gas und Lenkung aus Streckenlayout, Ideallinie und den anderen Autos. Bis Version 1.0 „Ghost“. Siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="O">O</h2></div>
+<dl><dt>OmegaBle</dt>
+<dd>Eigenes Bluetooth-Plugin der Android-App, das die Fahrbefehle auf einem eigenen Faden schnell ohne Antwort schreibt und hängende Verbindungen schließt. Siehe <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a>.</dd>
+<dt>OmegaLab</dt>
+<dd>Name der Studie in OmegaSim (in Arbeit), mit Fragebogen, Reaktionstest und einer Fahrverhaltens-Challenge. Siehe <a href="./Challenges.html" title="Challenges">Challenges</a>.</dd>
+<dt>Omega</dt>
+<dd>Fahrgefühl, das die Pro-Abstimmung aus Version 0.9 unverändert festhält. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd>
+<dt>Original-App</dt>
+<dd>Die App des Herstellers Carrera für das HYBRID; ihre Mitschnitte waren die Grundlage für die Entschlüsselung des Protokolls. Siehe <a href="./Original-App.html" title="Original-App">Original-App</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="P">P</h2></div>
+<dl><dt>Pacejka</dt>
+<dd>Fahrgefühl und Lenkmodell (experimentell) mit einer Reifen-Haftgrenze nach der Magic Formula: Über der Grenze kommt weniger Einschlag an (Untersteuern). Benannt nach Hans B. Pacejka. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd>
+<dt>Patchnotes</dt>
+<dd>Liste der Änderungen je Version unter <b>Optionen → Patchnotes</b>, mit einem Abschnitt je Nebenversion und englischer Übersetzung. Siehe <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>.</dd>
+<dt>Peripheral</dt>
+<dd>Siehe <i>Zentrale</i>.</dd>
+<dt>Pflichtstopp</dt>
+<dd>Vorgeschriebener Boxenstopp in einem Rennen; wer ihn auslässt, bekommt eine Zeitstrafe. Siehe <a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a>.</dd>
+<dt>Preset</dt>
+<dd>Gespeicherter Satz von Einstellungen, etwa ein Fahrgefühl oder eine Tastenbelegung, mit Namen ablegbar und als Text austauschbar. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd>
+<dt>Prüfsumme</dt>
+<dd>Zahl, die aus allen Bytes einer Nachricht oder Datei berechnet wird, um Fehler zu erkennen: CRC-8 im Fahrbefehl, SHA-256 bei der Selbstaktualisierung. Siehe <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>, <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>.</dd>
+<dt>PWA</dt>
+<dd><i>Progressive Web App</i>: Web-App, die man wie eine App mit Symbol und im Vollbild installieren kann und die dank Service Worker auch ohne Netz startet. Siehe <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="Q">Q</h2></div>
+<dl><dt>Querlage</dt>
+<dd>Seitliche Lage des Autos auf der Fahrbahn. Das Auto meldet sie nicht; die Querregelung findet im Auto statt. OmegaSim führt für jedes Auto eine angeforderte Querlage aus seinen Lenkbefehlen mit, damit NPCs beim Überholen die richtige Seite wählen. Auch Name einer Stufe der Fahrhilfe. Siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>, <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="R">R</h2></div>
+<dl><dt>RC</dt>
+<dd>Fahrgefühl und Steuerungsmodus (in Arbeit), der den Stick direkt wie bei einer Fernsteuerung an das Auto gibt: ohne Gänge, Gas weg läuft in 2 s aus, die Bremse greift sofort, ein zweiter Bremsdruck im Stand fährt rückwärts. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd>
+<dt>Reibkreis</dt>
+<dd>Modell dafür, dass ein Reifen nur eine begrenzte Gesamtkraft übertragen kann: Was die Bremse verbraucht, fehlt der Lenkung. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd>
+<dt>Reinigungswagen</dt>
+<dd>Garagenrolle (in der App „Reinigungsfahrzeug“, in Arbeit), mit der ein Auto die Bahn in drei Runden über ihre ganze Breite abfährt. Siehe <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a>.</dd>
+<dt>Rennwürze</dt>
+<dd>Sammlung zuschaltbarer Verhaltensweisen der NPCs, etwa Überholmanöver, Abstand halten, Tagesform, Fahrfehler, Windschatten und Verteidigen. Siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="S">S</h2></div>
+<dl><dt>Safety Car</dt>
+<dd>Garagenrolle, mit der ein echtes Auto bei gelber Flagge selbstständig als Sicherheitsfahrzeug vor dem Feld fährt; nur auf der Bahn. Siehe <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a>.</dd>
+<dt>Selbsttest</dt>
+<dd>Eingebaute Prüfung der laufenden App mit 522 Einzeltests (<code>stAdd</code>), die jeweils ihr Maß angeben; zu finden unter <b>Entwickler → Selbsttest</b>. Siehe <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>.</dd>
+<dt>Service Worker</dt>
+<dd>Skript, das der Browser neben einer Webseite laufen lässt und das Anfragen aus einem Zwischenspeicher beantworten kann. OmegaSim holt <code>index.html</code> damit „Netz zuerst“ und startet so auch ohne Netz. Siehe <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>.</dd>
+<dt>SIMULATOR-Linie</dt>
+<dd>Linienmodell (in Arbeit, Standard), das bis zu 200 Linien je drei Runden mit derselben Fahrphysik wie das Fahrerauto ausprobiert und die schnellste behält. Siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>.</dd>
+<dt>Staffel</dt>
+<dd>Kurz für Feld-Staffel: Ausgleich unter den NPCs, bei dem der Erste langsamer und der Letzte um denselben Betrag schneller fährt (Standard 10&#160;%), damit das Feld zusammenbleibt. Siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>.</dd>
+<dt>Startampel</dt>
+<dd>Lichtsignal für den Rennstart, in der App als Bild und Ton; auch ein Zubehör mit eigenem Artikel. Siehe <a href="https://omegasim.miraheze.org/wiki/Startampel" title="Startampel">Startampel</a>.</dd>
+<dt>Streckencode</dt>
+<dd>Zwei Bedeutungen: (1) die Zahl, die das Auto für ein gelesenes Streckenteil meldet (Byte 12, etwa <code>0x02</code> für eine Gerade); (2) ein kurzer Text, mit dem der Editor eine gebaute Strecke zum Weitergeben verschlüsselt. Siehe <a href="./Strecke.html" title="Strecke">Strecke</a>, <a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a>.</dd>
+<dt>Streckenscan</dt>
+<dd>Einmaliges Abfahren der Strecke, bei dem das Auto jedes erkannte Teil meldet und die App daraus eine Karte baut. Seit 1.2.5 fährt der Scan Geraden mit 80&#160;%, Kurven mit 67&#160;% und Haarnadeln mit 47&#160;%. Siehe <a href="./Strecke.html" title="Strecke">Strecke</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="T">T</h2></div>
+<dl><dt>Tempostufe</dt>
+<dd>Wahl für jeden NPC in der Garage: einfach, mittel (Standard), schnell oder MAX. Siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>.</dd>
+<dt>Time Attack</dt>
+<dd>Renntyp (experimentell), in dem auf Bestzeit gefahren wird, mit Medaillen nach der Gold-Formel; früher „Bestzeit“. Siehe <a href="./Rennarten.html" title="Rennarten">Rennarten</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="U">U</h2></div>
+<dl><dt>UUID</dt>
+<dd><i>Universally Unique Identifier</i>: 128-Bit-Kennung, geschrieben als 32 Hex-Ziffern, mit der Bluetooth Dienste und Charakteristiken benennt, etwa <code>6e400001-b5a3-f393-e0a9-e50e24dcca9e</code> für den Nordic UART Service. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="V">V</h2></div>
+<dl><dt>Verbindungsintervall</dt>
+<dd>Abstand zwischen zwei Treffen einer Bluetooth-Verbindung, bei denen Daten fließen (7,5 ms bis 4 s). OmegaSim fordert in der App das schnelle Intervall an, weil Android sonst 30–50 ms wählt. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Verschleiß</dt>
+<dd>Die simulierten Zustände, die sich während der Fahrt ändern: Reifen, Tank, Schaden, Bremstemperatur. Siehe <a href="./Verschleiß.html" title="Verschleiß">Verschleiß</a>.</dd>
+<dt>Vibe-Coding</dt>
+<dd>Programmieren, indem man einer KI in natürlicher Sprache beschreibt, was man haben will, und das Ergebnis vor allem durch Ausprobieren prüft; Begriff von Anfang 2025. OmegaSim entsteht so. Siehe <a href="./Vibe-Coding.html" title="Vibe-Coding">Vibe-Coding</a>.</dd>
+<dt>Virtuelles Fahren</dt>
+<dd>Modus (in Arbeit), in dem ein simuliertes Auto ohne Bluetooth in 3D über die Editor-Strecke fährt. Siehe <a href="./Virtuelles_Fahren.html" title="Virtuelles Fahren">Virtuelles Fahren</a>.</dd>
+<dt>Vorausblick</dt>
+<dd>Die Typen der nächsten drei Streckenteile, die OmegaSim im Leitplanken-Modus in den Bytes 16–18 des Fahrbefehls mitschickt. Siehe <a href="./Original-App.html" title="Original-App">Original-App</a>, <a href="./Strecke.html" title="Strecke">Strecke</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="W">W</h2></div>
+<dl><dt>Web Bluetooth</dt>
+<dd>Browserschnittstelle, mit der eine Webseite Bluetooth-Geräte nutzen kann; vorhanden in Chrome und Edge, nur in einem sicheren Kontext. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>WebView</dt>
+<dd>In eine App eingebettetes Browserfenster ohne Adresszeile. Die Android-App zeigt OmegaSim in einer WebView; Web Bluetooth gibt es dort nicht, daher die Brücke und <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a>. Siehe <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>.</dd>
+<dt>Windschatten</dt>
+<dd>Effekt, dass ein dicht hinter einem anderen fahrendes Auto weniger Luftwiderstand hat und schneller wird; in OmegaSim simuliert in den Fahrgefühlen GT3, F1 und Realismus GT3 und als Zutat der Rennwürze. Siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.</dd>
+<dt>WIP</dt>
+<dd><i>Work in progress</i>, „in Arbeit“: Etikett für Funktionen, die noch nicht fertig erprobt sind; neue Funktionen tragen es von Anfang an. Siehe <a href="./Anleitung_für_KIs.html" title="Anleitung für KIs">Anleitung für KIs</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="Z">Z</h2></div>
+<dl><dt>Zentrale</dt>
+<dd>Die Rolle eines Bluetooth-Geräts, das sucht und Verbindungen aufbaut (<i>central</i>), hier das Handy oder der PC. Ihr Gegenstück ist das Peripheriegerät (<i>peripheral</i>), hier das Auto. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Zufallsstrecke</dt>
+<dd>Strecke, die der Editor nach Zufall aus den vorhandenen Teilen erzeugt; ist ein Raum eingetragen, muss sie hineinpassen. Siehe <a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a>.</dd>
+<dt>Zustandsmaschine</dt>
+<dd>Modell eines Ablaufs aus festen Zuständen und Regeln für den Übergang zwischen ihnen, etwa „frei → unterwegs → frei“ beim Schreiben eines Befehls oder „Gas → Bremsen → Stand → Rückwärts“ im RC-Modus. Siehe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.</dd>
+<dt>Zweierkomplement</dt>
+<dd>Übliche Darstellung negativer Zahlen in einem Byte: <code>0x80</code>–<code>0xFF</code> stehen für −128 bis −1. So ist die Lenkung in Byte 7 kodiert, etwa −40 als <code>0xD8</code>. Siehe <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>.</dd></dl>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a></li>
+<li><a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a></li>
+<li><a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a></li>
+<li><a href="./Vibe-Coding.html" title="Vibe-Coding">Vibe-Coding</a></li>
+<li><a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a></li>
+<li><a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw191
+Cached time: 20261027053450
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.056 seconds
+Real time usage: 0.059 seconds
+Preprocessor visited node count: 217/1000000
+Revision size: 22378/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.054      1 Vorlage:Stand
+100.00%    3.054      1 -total
+-->
+
+<!-- Render ID 20d9c0ee-d1c8-11f1-b9bb-bc24110d777b -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:57:|#|:idhash:canonical and timestamp 20261027053450 and revision id 80. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

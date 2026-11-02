@@ -55,9 +55,20 @@
   function studieNeu() {
     return { schritt: 'start', alter: '', geschlecht: '', volljaehrig: false, einwilligung: false,
              narq: new Array(NARQ_ITEMS.length).fill(0), item: 0, selbst: 0, rt: [], frueh: 0, verpasst: 0,
-             quelle: '', controller: '', nurUeben: false };
+             quelle: '', controller: '', nurUeben: false, spiegel: false };
   }
   function stEsc(s) { return String(s === undefined || s === null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
+
+  // v1.2.62: der Homington-Plan fuer die Startseite der Studienfahrt. Spiegelt, wenn st.spiegel.
+  function studieKarteHtml() {
+    const def = CH_STUDIE;
+    const tiles = st.spiegel ? chSpiegelTiles(chTiles(def)) : chTiles(def);
+    const merk = trackRotationDeg;
+    trackRotationDeg = 0;
+    try {
+      return renderTrackPreview(tiles, null, { detailed: true, echt: true, ohneLinie: true }).html;
+    } finally { trackRotationDeg = merk; }
+  }
 
   function studieZeichnen() {
     const host = $('studie-inhalt');
@@ -111,10 +122,17 @@
     } else if (st.schritt === 'fahrt-info') {
       // v1.1.11 BESTELLT: "In der Studie erlaube mir, virtuell zu fahren (selbe Strecke, selbe
       // Rundenanzahl zusaetzlich zur physischen Bahn); erklaere vorher, wie lange das alles dauert."
+      // v1.2.62: Layout der Strecke direkt hier, klickbar zum Vergroessern, mit Spiegel-Knopf fuer
+      // die linkslastige Grundpackung.
       h += '<div class="studie-text"><p><b>' + stEsc(t('Fahrverhaltens-Challenge')) + '</b></p>'
-        + '<p>' + stEsc(t('Auf der Bahn: Baue Homington aus der Grundpackung auf (der Plan erscheint beim Start), stelle dein Auto auf Start/Ziel und fahre 5 Runden – etwa 10 Minuten.')) + '</p>'
+        + '<p><b>' + stEsc(t('Die Strecke')) + ':</b> ' + stEsc(t('Homington – der Plan steht hier daneben. Baue ihn aus der Grundpackung auf (spiegeln geht, wenn deine Packung linkslastig ist), stelle dein Auto auf Start/Ziel und fahre 5 Runden.')) + '</p>'
+        + '<p>' + stEsc(t('Auf der Bahn: Baue Homington aus der Grundpackung auf, stelle dein Auto auf Start/Ziel und fahre 5 Runden – etwa 10 Minuten.')) + '</p>'
         + '<p>' + stEsc(t('Virtuell: dieselbe Strecke und dieselben 5 Runden in der App, ohne Bahn und Auto – etwa 5 Minuten. Du kannst beides fahren, nacheinander.')) + '</p>'
         + '<p class="muted">' + stEsc(t('Fahrgefühl Sim+, trocken, keine Bestenliste. Gemessen werden Rundenzeiten, Gas, Bremse, Lenkung und Abflüge. Ohne Fahrt kannst du auch gleich abschließen.')) + '</p></div>'
+        + '<div class="studie-plan">'
+        + '<div class="ch-karte" id="studie-karte" title="' + stEsc(t('Zum Vergrößern klicken')) + '">' + studieKarteHtml() + '</div>'
+        + '<div class="ch-karte-knoepfe"><button type="button" id="studie-spiegel-knopf" data-st="spiegel">' + stEsc(t('Layout spiegeln')) + ' <span class="wip-tag">WIP</span></button></div>'
+        + '</div>'
         + '<div class="studie-knoepfe"><button type="button" class="primary" data-st="fahren">' + stEsc(t('Auf der Bahn fahren')) + '</button>'
         + '<button type="button" class="primary" data-st="fahren-virtuell">' + stEsc(t('Virtuell fahren')) + '</button>'
         + '<button type="button" data-st="ohne-fahrt">' + stEsc(t('Ohne Fahrt abschließen')) + '</button></div>';
@@ -274,6 +292,9 @@
       rt_ms: st.rt, rt_median: rtMedian(st.rt), fruehstarts: st.frueh, verpasst: st.verpasst,
       quelle: st.quelle, controller: String(st.controller).slice(0, 80),
       version: (($('app-version') || {}).textContent || '').slice(0, 20), sprache: typeof lang === 'string' ? lang : '' };
+    // Korrektur nach 1.2.66: ob das Layout gespiegelt war (linkslastige Grundpackung). Je Fahrt
+    // steht der Stand beim Fahren (fahrt.spiegel), hier der zuletzt gewaehlte.
+    daten.spiegel = !!st.spiegel;
     if (st.fahrt) daten.fahrt = st.fahrt;
     if (st.fahrtVirtuell) daten.fahrt_virtuell = st.fahrtVirtuell;
     return daten;
@@ -292,7 +313,7 @@
     const fahrt = { strecke: 'studie-homington', art: virtuell ? 'virtuell' : 'bahn', preset: erg.preset || 'simplus', gueltig: !!erg.gueltig,
                     grund: erg.gueltig ? '' : String(erg.grund || '').slice(0, 60), runden_ms: r.slice(0, 12),
                     beste_ms: r.length ? Math.min.apply(null, r) : null, gesamt_ms: erg.gueltig ? Math.round(erg.zeit) : null,
-                    stil: stil || null };
+                    stil: stil || null, spiegel: !!st.spiegel };
     if (virtuell) st.fahrtVirtuell = fahrt; else st.fahrt = fahrt;
     st.fahrtArt = null;
     // Die virtuelle Fahrt endet mit der Challenge (einen Takt spaeter: die Challenge raeumt noch auf).
@@ -386,6 +407,9 @@
   }
 
   function studieKlick(ev) {
+    // v1.2.62: Tap auf den Streckenplan vergroessert/verkleinert ihn (wie die Challenge-Karte).
+    const karte = ev.target.closest('#studie-karte');
+    if (karte) { karte.classList.toggle('ch-voll'); return; }
     const b = ev.target.closest('[data-st]');
     if (!b || b.disabled) return;
     const a = b.dataset.st, v = parseInt(b.dataset.v, 10);
@@ -394,6 +418,13 @@
       st.narq[st.item] = v;
       if (st.item < NARQ_ITEMS.length - 1) st.item++; else st.schritt = 'selbst';
     } else if (a === 'selbst') { st.selbst = v; st.schritt = 'rt-info'; }
+    else if (a === 'spiegel') {
+      st.spiegel = !st.spiegel;
+      const k = $('studie-karte');
+      if (k) k.innerHTML = studieKarteHtml();
+      b.classList.toggle('an', st.spiegel);
+      return;
+    }
     else if (a === 'zurueck') {
       if (st.schritt === 'selbst') { st.schritt = 'narq'; st.item = NARQ_ITEMS.length - 1; }
       else if (st.item > 0) st.item--; else st.schritt = 'start';

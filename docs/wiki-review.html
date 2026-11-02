@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wiki-Review: Motorsound-Hörbeispiele &amp; Pacejka-Animation</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #f4f6f8; color: #1c2733; margin: 0; padding: 24px; line-height: 1.5; }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .sub { color: #55606b; font-size: 14px; margin-bottom: 22px; }
+  h2 { font-size: 17px; margin: 26px 0 10px; border-bottom: 2px solid #d7dee4; padding-bottom: 6px; }
+  .card { background: #fff; border: 1px solid #d7dee4; border-radius: 10px; padding: 16px 18px; margin: 10px 0; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .card h3 { margin: 0 0 6px; font-size: 15px; }
+  .card p { margin: 4px 0; font-size: 14px; color: #3a4651; }
+  audio { width: 100%; margin: 8px 0 4px; }
+  .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 20px; margin-left: 6px; vertical-align: middle; }
+  .tag-synth { background: #e6f4ea; color: #1a6b3c; }
+  .tag-rec { background: #e8f0fe; color: #1a4f9c; }
+  .tag-cc { background: #f3e8fd; color: #6a2f9c; }
+  .gifwrap { text-align: center; }
+  .gifwrap img { max-width: 100%; border: 1px solid #d7dee4; border-radius: 8px; }
+  .note { font-size: 13px; color: #6a7681; }
+  a { color: #1a5fb4; }
+  .files { font-size: 13px; color: #55606b; }
+  .files code { background: #eef1f4; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Wiki-Review: Hörbeispiele &amp; Animation</h1>
+  <p class="sub">Noch nichts veröffentlicht – nur die neuen Dateien zum Anschauen und Anhören. Quellen liegen in <code>docs/wiki-quelltext/*.wiki</code>, Medien in <code>docs/wiki-audio/</code> und <code>docs/wiki-bilder/</code>.</p>
+
+  <h2>Motorsound: Hörbeispiele</h2>
+  <p class="note">In den Artikel <code>Motorsound.wiki</code> kommen diese vier Klänge als <code>[[Datei:…]]</code> (MediaWiki-Abspieler). Hier direkt als HTML5-Audio zum Anhören.</p>
+
+  <div class="card">
+    <h3>Porsche 911 GT3 R <span class="tag tag-synth">Synthese (engine-sim)</span></h3>
+    <p>Boxer-6, gleichmäßige Zündung → glattes Kreischen. Beschleunigung aus dem Stand mit Gangwechseln (0 → Höchsttempo).</p>
+    <audio controls preload="none" src="wiki-audio/p992gt3r_demo.ogg"></audio>
+    <div class="files">Datei: <code>docs/wiki-audio/p992gt3r_demo.ogg</code></div>
+  </div>
+
+  <div class="card">
+    <h3>Ford Mustang GT3 <span class="tag tag-synth">Synthese (engine-sim)</span></h3>
+    <p>Cross-Plane-V8, ungleichmäßige Zündung → das typische „Blubbern“. Hochdrehen mit 5 Gangwechseln.</p>
+    <audio controls preload="none" src="wiki-audio/mustang_demo.ogg"></audio>
+    <div class="files">Datei: <code>docs/wiki-audio/mustang_demo.ogg</code></div>
+  </div>
+
+  <div class="card">
+    <h3>Nissan GT-R GT500 <span class="tag tag-rec">Aufnahme</span><span class="tag tag-cc">Speed Dreams, CC0</span></h3>
+    <p>3,4-l-V8. Aus der Aufnahme als Beschleunigung mit Gangwechseln berechnet (Drehzahl wird hoch- und beim Schalten kurz heruntergefahren).</p>
+    <audio controls preload="none" src="wiki-audio/sd_v8gt_demo.ogg"></audio>
+    <div class="files">Datei: <code>docs/wiki-audio/sd_v8gt_demo.ogg</code></div>
+  </div>
+
+  <div class="card">
+    <h3>Audi R8 LMS <span class="tag tag-rec">Aufnahme</span><span class="tag tag-cc">Speed Dreams, CC0</span></h3>
+    <p>5,2-l-V10. Aus der Aufnahme als Beschleunigung mit Gangwechseln berechnet (hochdrehend bis zum Begrenzer).</p>
+    <audio controls preload="none" src="wiki-audio/sd_v10_demo.ogg"></audio>
+    <div class="files">Datei: <code>docs/wiki-audio/sd_v10_demo.ogg</code></div>
+  </div>
+
+  <h2>Pacejka: Animation „Lenken unter Bremsen“</h2>
+  <div class="card gifwrap">
+    <img src="wiki-bilder/OmegaSim-Bremsen-Lenken-Trajektorie.gif" alt="Animation: Auto lenkt unter Bremsen">
+    <p class="note">Links die Trajektorie (Geradeaus → Bremsen → Kurve), rechts der Reibkreis mit dem Kraftpfeil. Datei: <code>docs/wiki-bilder/OmegaSim-Bremsen-Lenken-Trajektorie.gif</code> (1100×520, 60 Frames).</p>
+  </div>
+
+  <h2>Hexadezimalsystem: Diagramm Byte → Hex</h2>
+  <div class="card gifwrap">
+    <img src="wiki-bilder/OmegaSim-Byte-Hex.png" alt="Diagramm: Ein Byte aus 8 Bit und zwei Hex-Ziffern" style="max-width:640px;">
+    <p class="note">Datei: <code>docs/wiki-bilder/OmegaSim-Byte-Hex.png</code> (1430×806).</p>
+  </div>
+
+  <h2>Bluetooth Low Energy: GATT-Baum</h2>
+  <div class="card gifwrap">
+    <img src="wiki-bilder/OmegaSim-GATT-Baum.png" alt="Diagramm: Der GATT-Baum des Carrera HYBRID" style="max-width:640px;">
+    <p class="note">Datei: <code>docs/wiki-bilder/OmegaSim-GATT-Baum.png</code> (1560×910).</p>
+  </div>
+
+  <h2>Geänderte Wiki-Quellen</h2>
+  <div class="card files">
+    <p><code>docs/wiki-quelltext/Motorsound.wiki</code> – Version 1.2.51, Hörbeispiele, Crossplane-Wikipedia-Link</p>
+    <p><code>docs/wiki-quelltext/Pacejka.wiki</code> – Animation, Hans-B.-Pacejka-Wikipedia-Link</p>
+    <p><code>docs/wiki-quelltext/Hexadezimalsystem.wiki</code> – Byte/Hex-Diagramm</p>
+    <p><code>docs/wiki-quelltext/Bluetooth_Low_Energy.wiki</code> – GATT-Baum-Diagramm</p>
+  </div>
+</div>
+</body>
+</html>

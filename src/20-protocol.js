@@ -140,6 +140,9 @@
     }
     // Per-car mode bytes (a ghost in guard-rail mode). Same rule: before the checksum.
     if (byteOverride) for (const k in byteOverride) body[k | 0] = byteOverride[k] & 0xff;
+    if (rennPauseAktiv()) {
+      body[6] = 0xdf; body[7] = 0; body[9] = 0; body[14] |= LIGHT_BRAKE;
+    }
     body.push(crc8(body));
     return new Uint8Array(body);
   }
@@ -219,6 +222,7 @@
     return { n: w.length, mittel, p95: w[Math.min(w.length - 1, Math.floor(w.length * 0.95))], haenger: funkMess.haenger };
   }
   async function funkSchreiben(ziel, payload, notiz) {
+    payload = rennPausePaket(payload);
     // v1.1.3: getrennt, Neuverbinden laeuft (reconnectCar) - nichts senden.
     if (ziel && ziel.verbindungWeg) return;
     const z = funkZustand(ziel);
@@ -233,6 +237,8 @@
     writeInFlight = true;
     let auf = { payload, notiz };
     while (auf) {
+      // Auch ein vor der Pause wartendes Gas-Paket muss neutral werden.
+      auf.payload = rennPausePaket(auf.payload);
       z.seit = performance.now();
       try {
         if (ziel.properties.writeWithoutResponse) await ziel.writeValueWithoutResponse(auf.payload);
@@ -254,7 +260,7 @@
     const steer = overrideSteer !== undefined ? overrideSteer : steerX;
     let throttle = overrideThrottle !== undefined ? overrideThrottle : throttleY;
     if (recording) {
-      macro.push({ t: Date.now() - recordStartTime, steer, throttle });
+      macro.push({ t: rennZeitJetzt() - recordStartTime, steer, throttle });
     }
     // "Geschwindigkeit" setting — a simple top-speed cap applied at this single choke
     // point so every input source respects it consistently. Defaults to 1 (no effect).
@@ -518,6 +524,14 @@
     // v0.9.87: in try/finally. Eine Ausnahme im Spielerteil (Physik, Senden) liess sonst
     // den ganzen Rest aus - die Ghosts bekamen keinen Takt und fuhren mit ihrem letzten
     // Befehl weiter, auch neben der Bahn.
+    if (rennPauseAktiv() && !rennPauseWache()) {
+      physLastTime = null;
+      rennPauseSenden();
+      if (typeof cockpitNachSenden === 'function') {
+        cockpitMalFaellig = true; cockpitNachSenden();
+      }
+      return;
+    }
     try {
       if (typeof spielerOrtTick === 'function') {
         spielerOrtTick(playerCar);

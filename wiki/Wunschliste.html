@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wunschliste - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Wunschliste</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.45</b> vom 29.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p>Die <b>Wunschliste</b> sammelt Funktionen, die für <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> gewünscht, aber noch nicht gebaut sind, und dazu die Funktionen, die schon in der App stecken, aber noch als <i>WIP</i> (in Arbeit) oder <i>experimentell</i> gekennzeichnet sind. Wünsche aus der Community können hier ergänzt werden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Status</th>
+<th>Bedeutung
+</th></tr>
+<tr>
+<td>gewünscht</td>
+<td>noch nicht begonnen
+</td></tr>
+<tr>
+<td>in Planung</td>
+<td>Lösungsweg beschrieben, noch nicht gebaut
+</td></tr>
+<tr>
+<td>eingereicht</td>
+<td>als Pull Request vorgeschlagen, noch nicht übernommen
+</td></tr>
+<tr>
+<td>gebaut</td>
+<td>übernommen und in der App vorhanden, siehe den Fachartikel
+</td></tr>
+<tr>
+<td>zurückgestellt</td>
+<td>bewusst vorerst nicht verfolgt
+</td></tr>
+<tr>
+<td>WIP / experimentell</td>
+<td>in der App vorhanden, aber noch nicht fertig geprüft
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<ul><li><b>WIP</b> (englisch <i>work in progress</i>) heißt: Die Funktion ist eingebaut, aber Verhalten, Texte oder Standardwerte können sich noch ändern. In der App steht dann ein gelbes Etikett „WIP“ oder „experimentell“ neben der Option.</li>
+<li>Neue Funktionen bekommen dieses Etikett von Anfang an und verlieren es erst, wenn sie am echten Auto geprüft sind.</li>
+<li>Wünsche werden in den Patchnotes und im Quellcode als „BESTELLT:“ vermerkt, siehe <a href="./Vibe-Coding.html" title="Vibe-Coding">Vibe-Coding</a>.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Gewünschte_Funktionen"><span id="Gew.C3.BCnschte_Funktionen"></span>Gewünschte Funktionen</h2></div>
+<table class="wikitable sortable">
+<tbody><tr>
+<th>Wunsch</th>
+<th>Status</th>
+<th>Beschreibung
+</th></tr>
+<tr>
+<td>Fahrermodell nach Art des Drivatars</td>
+<td>gewünscht</td>
+<td>Ein NPC lernt aus 30 bis 50 sauberen Runden je Strecke Tempo je Teiltyp, Bremspunkte, Querlinie und Fehlerrate eines echten Fahrers und fährt danach wie dieser.
+</td></tr>
+<tr>
+<td>Challenger mit Seitengewohnheiten</td>
+<td>gewünscht</td>
+<td>Der Challenger in Time Attack lernt, auf welcher Seite der Spieler über mehrere Runden fährt, und wählt daraus seine Überholstellen.
+</td></tr>
+<tr>
+<td>Rennpause</td>
+<td>gebaut</td>
+<td>Rennen anhalten mit Overlay, Pausentaste am Controller und Wiederanlauf-Ampel (Pull Request von Playdater1974, übernommen seit 1.2.25; siehe <a href="./Rennarten.html" title="Rennarten">Rennarten</a>).
+</td></tr>
+<tr>
+<td>Rennintro</td>
+<td>gebaut</td>
+<td>Gesprochene Vorstellung von Modus, Startaufstellung und Wetter vor der Startampel (Pull Request von Playdater1974, übernommen; siehe <a href="./Rennarten.html" title="Rennarten">Rennarten</a>).
+</td></tr>
+<tr>
+<td>Statistikbereinigung</td>
+<td>gebaut</td>
+<td>Fahrzeugstatistiken, einzelne Sitzungen und zu kurze Runden löschen, mit Vorschau und Rückgängig (Pull Request von Playdater1974, übernommen; siehe <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>).
+</td></tr>
+<tr>
+<td>Autowechsel mitten im Spiel</td>
+<td>gewünscht</td>
+<td>Ein Spieler wechselt während einer Sitzung auf ein anderes Auto. Dafür müssten Physik, Ortung, Runden und Dashboard umziehen; ob die Firmware ein ungenutztes Auto abdunkelt, ist am Tisch zu prüfen.
+</td></tr>
+<tr>
+<td>Silhouetten für weitere Modelle</td>
+<td>gewünscht</td>
+<td>Audi, McLaren, Mercedes und VW Käfer haben auf der Karte noch ein Rechteck; Porsche, Ford, BMW, Ferrari und der Formelwagen haben seit 1.2.9 eigene Silhouetten.
+</td></tr>
+<tr>
+<td>Tieferes Schaltgeräusch</td>
+<td>in Planung</td>
+<td>Ein dumpferes Geräusch beim Runterschalten und für alle Motoren, wie beim Hochschalten des Mustang v2. Vorschläge liegen zum Anhören vor.
+</td></tr>
+<tr>
+<td>Live-Gegner über das Internet</td>
+<td>zurückgestellt</td>
+<td>Ein Gegner fährt in Echtzeit von einem anderen Ort aus mit.
+</td></tr>
+<tr>
+<td>Meisterschaft im WLAN-Mehrspieler</td>
+<td>in Planung</td>
+<td>Gebaut, aber auf echten Geräten noch nicht getestet.
+</td></tr>
+<tr>
+<td>Firmware-Version auslesen</td>
+<td>gewünscht</td>
+<td>OmegaSim liest die Firmware-Version der Autos nicht aus; damit ließe sich der Stand jedes Artikels genauer angeben, siehe <a href="./Firmware.html" title="Firmware">Firmware</a>.
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="In_Arbeit_(WIP_und_experimentell)"><span id="In_Arbeit_.28WIP_und_experimentell.29"></span>In Arbeit (WIP und experimentell)</h2></div>
+<p>Stand 1.2.14, gesammelt aus allen Etiketten der App.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Bereich</th>
+<th>Funktionen
+</th></tr>
+<tr>
+<td>Fahren und Garage</td>
+<td>Automatisch aufstellen; Reinigungsfahrzeug; NPC-Stufe MAX; Virtuell fahren; Fahrgefühl RC; Meisterschaft „Alle: RC“; Strecke im Regenradar
+</td></tr>
+<tr>
+<td>Renneinstellungen</td>
+<td>ganze Seite; Time Attack, Knockout, Demolition Derby; Sektoren; Fliegender Start; Weiche Reifen verboten; Einparken (Art, Gas der Safety-Car-Folge, Einlenkstärke, Impulsdauer, Tempo); Challenger und Gummiband; Strafe für Rammer
+</td></tr>
+<tr>
+<td>Allgemein</td>
+<td>Cockpit „GT3: schwarze Kacheln“; Pacejka- und RC-Modus mit Übersteuern, Haftgrenze und Gegensteuern; Akku-Ausgleich; Boxen-Auslöser „Doppelter Ausdruck“; Boxen-Minigame; Nur der Rammer bremst
+</td></tr>
+<tr>
+<td>Fahrgefühl</td>
+<td>Fahrhilfe; Rückwärts mit Gas und Bremse; Mischungsunterschied; Windschatten in Kurven; Lenkkennlinie, voller Einschlag, Lenkkraft unter Gas, Lenkdämpfung; Gas- und Bremskennlinie; Anfahrschub; Gewichtsverlagerung und ihre Trägheit
+</td></tr>
+<tr>
+<td>Ton, Vibration, Ansagen</td>
+<td>Schaltklang alt; NPC-Motorklang alt; acht Motorgruppen mit ungeprüften Klängen; Trigger-Vibration; DualSense-Trigger; Rennstand- und Ergebnisansage; Namensart
+</td></tr>
+<tr>
+<td>NPCs</td>
+<td>Feld auffächern; Überholmanöver je Runde; Tempo-Streuung; Staffelstart; zu zweit in Kurven; Höchsttempo in der Haarnadel; MAX-Profil; Rückweg mit Lenkung; NPC-Boxenstopp; Linienmodell SIMULATOR
+</td></tr>
+<tr>
+<td>Safety Car</td>
+<td>Parkplatz; Ein- und Ausparken; Gas beim Ausparken; Einpark-Teil
+</td></tr>
+<tr>
+<td>Weitere Seiten</td>
+<td>Telemetrie; OmegaLab; Presets je Menü; Profile; Fahrstil-Statistik
+</td></tr>
+<tr>
+<td>Strecke</td>
+<td>Raum; Raumgestalter; Druckvorlagen (Bahn zum Auslegen, Trapez-Muster)
+</td></tr>
+<tr>
+<td>Challenges, Mehrspieler, App</td>
+<td>Challenges, Community-Bestzeiten und Community-Strecken; WLAN-Mehrspieler (Host, Info-Schirm, Rennen für alle, Bereit-Abfrage); App und Updates; Entwicklertools (Zahlensysteme, Aufnahme-Modus, Strecke aus der Aufnahme)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Wunsch_eintragen">Wunsch eintragen</h2></div>
+<p>Neue Zeile in die Tabelle „Gewünschte Funktionen“: kurzer Name, Status „gewünscht“ und ein bis zwei Sätze, was die Funktion tun soll und warum. Wer den Wunsch auch an den Autor schicken will, meldet ihn als Issue auf GitHub (Link auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a>).
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a></li>
+<li><a href="./Andere_Apps_und_Initiativen.html" title="Andere Apps und Initiativen">Andere Apps und Initiativen</a></li>
+<li><a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+
+<!-- 
+NewPP limit report
+Parsed by mw151
+Cached time: 20261029081241
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.020 seconds
+Real time usage: 0.025 seconds
+Preprocessor visited node count: 44/1000000
+Revision size: 5927/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    4.246      1 Vorlage:Stand
+100.00%    4.246      1 -total
+-->
+
+<!-- Render ID 82d52462-d370-11f1-98ba-bc2411ac95a6 -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

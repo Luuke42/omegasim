@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OmegaBle - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">OmegaBle</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p><b>OmegaBle</b> ist ein natives Bluetooth-Plugin der Android-App von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>. Es schreibt die Steuerbefehle an die <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Autos auf einem eigenen Java-Thread direkt an die Bluetooth-Schnittstelle von Android, ohne Umweg über den Hauptthread, ersetzt dabei wartende Befehle durch neuere („neuester gewinnt“) und räumt Verbindungen hart auf, die das allgemeine Bluetooth-Plugin der App sonst hängen lässt. OmegaBle ist ein Baustein der Latenzarbeit in der App: Es entstand, weil Nutzer in der APK eine spürbare Verzögerung meldeten, die es im Browser nicht gab. Im Browser gibt es OmegaBle nicht; dort spricht Chrome oder Edge über Web Bluetooth direkt mit dem Auto.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Punkt</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Name im Code</td>
+<td>Capacitor-Plugin <code>OmegaBle</code>, Klasse <code>de.lroeseler.omegasim.OmegaBlePlugin</code>
+</td></tr>
+<tr>
+<td>Plattform</td>
+<td>nur Android-App (APK), Android 7 und neuer (<code>minSdkVersion 24</code>, Ziel 36)
+</td></tr>
+<tr>
+<td>Grundlage</td>
+<td>Capacitor 8.5.2; die Verbindung selbst gehört dem Community-Plugin <code>@capacitor-community/bluetooth-le</code> 8.3.0
+</td></tr>
+<tr>
+<td>Aufgaben</td>
+<td>Steuerbefehle schreiben (ohne Antwort, eigener Thread), Direktweg ohne Hauptthread, Verbindungen schließen, Zähler für die Diagnose
+</td></tr>
+<tr>
+<td>Menüpfad der Diagnose</td>
+<td>Optionen → System → Funk-Rundlauf
+</td></tr>
+<tr>
+<td>Schalter</td>
+<td>keiner für OmegaBle selbst; es wird automatisch benutzt, wenn die APK es enthält
+</td></tr>
+<tr>
+<td>Status</td>
+<td>stabil; Teile seit 1.2.3 brauchen eine neue APK
+</td></tr>
+<tr>
+<td>seit</td>
+<td>0.8.124 (erste Fassung), neu gebaut in 0.9.2, Direktweg seit 0.10.4
+</td></tr>
+<tr>
+<td>Quelldateien</td>
+<td><code>android-app/…/OmegaBlePlugin.java</code>, <code>MainActivity.java</code>, <code>OmegaPadNativ.java</code>, <code>src/05-app-bruecke.js</code>, <code>src/20-protocol.js</code>, <code>src/90-ghosts.js</code>, <code>src/50-drive.js</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<p>Dieser Abschnitt erklärt die Technik, die man braucht, um OmegaBle zu verstehen. Ausführlicher: <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>, <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>, <a href="./Glossar.html" title="Glossar">Glossar</a>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Wie_Bluetooth_Low_Energy_überträgt"><span id="Wie_Bluetooth_Low_Energy_.C3.BCbertr.C3.A4gt"></span>Wie Bluetooth Low Energy überträgt</h3></div>
+<p><b>Funk:</b> Bluetooth Low Energy (BLE) funkt im 2,4-GHz-Band, wie WLAN. Damit es stromsparend bleibt, sind Sender und Empfänger nicht dauernd aktiv, sondern treffen sich in festen Abständen zu kurzen <b>Verbindungsereignissen</b>. Nur dann können Pakete fließen.
+</p><p><b>Verbindung:</b> Ein Auto, das nicht verbunden ist, sendet regelmäßig <b>Werbung</b> (<i>advertising</i>): „Ich bin HYBRID-…“. Das Handy sucht (<i>scan</i>), findet die Werbung und baut eine Verbindung auf. Ein verbundenes Auto hört auf zu werben. Deshalb ist ein Auto, das sich fälschlich für verbunden hält, für jede neue Suche unsichtbar.
+</p><p><b>GATT, Dienst, Merkmal:</b> Nach dem Verbinden fragt das Handy den Datenbaum des Autos ab (<i>service discovery</i>): Dienste mit Merkmalen. Für das Fahren zählen zwei Merkmale des Nordic UART Service: <b>RX</b> (<code>6e400002-…</code>), auf das die App schreibt, und <b>TX</b> (<code>6e400003-…</code>), über das das Auto meldet.
+</p><p><b>Schreiben mit und ohne Antwort:</b> Beim <b>Schreiben mit Antwort</b> (<i>write request</i>) bestätigt das Auto jedes Paket im nächsten Verbindungsereignis; erst dann ist der Vorgang fertig. Beim <b>Schreiben ohne Antwort</b> (<i>write command</i>) legt das Handy das Paket in den Sendepuffer seines Funkchips und ist sofort fertig. Für Steuerbefehle, die ohnehin alle 45 ms neu kommen, ist „ohne Antwort“ richtig: Eine Bestätigung kostet Zeit und nützt nichts, weil der nächste Befehl den alten sowieso ersetzt.
+</p><p><b>Notifications:</b> Das Auto schickt Meldungen von sich aus, wenn die App das Merkmal TX abonniert hat. Jede Meldung (Akku, Streckencode, Teilezähler) kommt beim Handy als Ereignis an.
+</p><p><b>Verbindungsintervall und Latenz:</b> Der Abstand der Verbindungsereignisse heißt <b>Verbindungsintervall</b>. Er wird beim Verbinden ausgehandelt und kann sich später ändern. Er bestimmt die <b>Latenz</b> (Verzögerung) direkt: Ein Paket, das kurz nach einem Ereignis fertig wird, wartet bis zum nächsten. Der Code von OmegaSim hält fest: „Android wählt sonst 30–50 ms, und der Sendetakt ist 45 ms – dann fällt jedes zweite Paket auf das nächste Intervall.“ Deshalb fordert die App mit <code>requestConnectionPriority(HIGH)</code> ein kürzeres Intervall an. Mehrere Autos teilen sich einen Funkadapter im Handy; wird er voll, lehnt Android Schreibvorgänge ab.
+</p><p><b>Ein Vorgang zugleich:</b> Android erlaubt je Verbindung nur <b>einen</b> GATT-Vorgang zur selben Zeit (Verbinden, Dienstsuche, Abonnieren, Lesen, Schreiben mit Antwort). Ein zweiter wird abgelehnt, solange der erste läuft.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="WebView,_Capacitor_und_natives_Plugin"><span id="WebView.2C_Capacitor_und_natives_Plugin"></span>WebView, Capacitor und natives Plugin</h3></div>
+<p><b>WebView:</b> Die Android-App von OmegaSim ist dieselbe HTML-Seite wie im Browser, angezeigt in einer <b>WebView</b>, einem in die App eingebauten Browserfenster (Android System WebView, technisch Chrome). Der WebView fehlt aber <b>Web Bluetooth</b>, die Schnittstelle, mit der Chrome im Browser Bluetooth-Geräte anspricht.
+</p><p><b>Capacitor:</b> Ein Rahmenwerk, das eine Web-App in eine Android-App verpackt und eine <b>Brücke</b> zwischen JavaScript (in der WebView) und Java (in Android) baut. JavaScript ruft eine Methode eines <b>Plugins</b> auf; Capacitor verpackt den Aufruf als JSON-Text, schickt ihn in die Java-Welt, führt dort die Methode aus und schickt die Antwort wieder zurück.
+</p><p><b>Natives Plugin:</b> Ein Plugin ist ein Stück Java- (oder Kotlin-)Code mit Methoden, die die Web-Seite aufrufen kann. „Nativ“ heißt: Es läuft direkt in Android und darf alles, was Android-Apps dürfen, etwa Bluetooth. OmegaSim nutzt zwei Bluetooth-Plugins: das <b>Community-Plugin</b> <code>@capacitor-community/bluetooth-le</code> für Suchen, Verbinden, Abonnieren und Lesen, und das eigene <b>OmegaBle</b> für das schnelle Schreiben und Aufräumen.
+</p><p><b>Threads:</b> Ein <b>Thread</b> (Faden) ist ein eigenständiger Ablauf in einem Programm. Android hat einen <b>Hauptthread</b> (UI-Thread), der Bildschirm, Eingaben und viele Rückmeldungen erledigt. Muss ein Befehl dort anstehen, wartet er hinter allem anderen. Ein eigener Thread für das Schreiben umgeht diese Schlange.
+</p><p><b>JavascriptInterface:</b> Ein Java-Objekt, das Android direkt als JavaScript-Objekt in die Seite hängt (hier <code>window.OmegaDirekt</code>). Ein Aufruf darauf läuft synchron auf dem „JavaBridge“-Thread der WebView, nicht auf dem Hauptthread und ohne JSON-Umweg über Capacitor.
+</p><p><b>Reflexion:</b> Java kann zur Laufzeit in fremde Objekte hineinsehen und auch private Felder lesen. OmegaBle liest so aus dem Community-Plugin dessen Liste offener Verbindungen (<code>deviceMap</code>) und darin je Auto das Android-Objekt <code>BluetoothGatt</code>.
+</p><p><b>Atomare Variablen:</b> Wenn mehrere Threads dieselbe Variable benutzen, können sie sich gegenseitig überschreiben. <code>AtomicReference</code>, <code>AtomicBoolean</code> und <code>AtomicLong</code> bieten Operationen, die unteilbar sind (z. B. „lies den alten Wert und setze zugleich einen neuen“: <code>getAndSet</code>; „setze nur, wenn der Wert noch X ist“: <code>compareAndSet</code>). <code>volatile</code> sorgt dafür, dass ein Thread immer den aktuellen Wert sieht, den ein anderer geschrieben hat.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<p>OmegaBle arbeitet von selbst. Was man als Nutzer tun kann:
+</p>
+<ol><li>Die aktuelle APK installieren. Teile von OmegaBle (Direktweg seit 0.10.4, Schließen seit 1.2.3) stecken in der Android-Schicht und kommen nur mit einer neuen APK; die Brücke in der Seite kommt mit jedem Web-Update.</li>
+<li>Autos in der <b>Garage</b> verbinden. Mit <b>Optionen → System → Bekannte Autos beim Start verbinden</b> (Vorgabe an) verbindet die App gemerkte Autos selbst.</li>
+<li>Unter <b>Optionen → System → Funk-Rundlauf</b> prüfen, welcher Weg aktiv ist. Gut: „Weg OmegaBle direkt“ und „Pad direkt an“.</li>
+<li>Steht dort „Direktweg fehlt“: App einmal schließen und neu öffnen; auf älteren Handys „Android System WebView“ im Play Store aktualisieren.</li>
+<li>Reagiert ein Auto nicht oder leuchtet hell ohne Verbindung: <b>Garage → Alle trennen</b>. Das schließt auch verwaiste Verbindungen. Danach neu verbinden.</li>
+<li>Probleme nur mit mehreren NPCs: Zähler „verworfen“ im Funk-Rundlauf beobachten (siehe <a href="#Fehlerbilder_und_ihre_Ursachen">Fehlerbilder</a>).</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<p>OmegaBle hat keine eigenen Schalter. Wirksam sind diese Optionen und festen Werte:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Name</th>
+<th>Bereich/Werte</th>
+<th>Standard</th>
+<th>Wirkung (aus dem Code)</th>
+<th>Interner Schlüssel/ID
+</th></tr>
+<tr>
+<td>Bekannte Autos beim Start verbinden (Optionen → System)</td>
+<td>an/aus</td>
+<td>an</td>
+<td>verbindet nacheinander gemerkte Autos über ihre MAC-Adresse, ohne Auswahlfenster; vorher <code>alleSchliessen</code>, wenn die Garage leer ist</td>
+<td><code>setting-autoverbinden</code>, <code>autoVerbindenStart()</code>
+</td></tr>
+<tr>
+<td>Funk-Rundlauf (Optionen → System)</td>
+<td>Anzeige</td>
+<td>–</td>
+<td>Messzeile, jede Sekunde neu, nur wenn sichtbar</td>
+<td><code>#funk-rundlauf</code>
+</td></tr>
+<tr>
+<td>Entwicklertools zeigen (Optionen → System)</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>BLE-Werkbank mit eigenem Verbindungsweg</td>
+<td><code>setting-dev</code>
+</td></tr>
+<tr>
+<td>Schreibversuche je Befehl</td>
+<td>fest</td>
+<td>3</td>
+<td>danach „verworfen“</td>
+<td><code>VERSUCHE</code>
+</td></tr>
+<tr>
+<td>Pause zwischen Versuchen</td>
+<td>fest</td>
+<td>3 ms</td>
+<td><code>SystemClock.sleep</code> auf dem Schreib-Thread</td>
+<td><code>VERSUCH_PAUSE_MS</code>
+</td></tr>
+<tr>
+<td>Höchstdauer einer Schreibpause</td>
+<td>fest</td>
+<td>1500 ms</td>
+<td>hebt <code>pause()</code> selbst auf, falls die Seite das Ende vergisst</td>
+<td><code>PAUSE_HOECHSTENS_MS</code>
+</td></tr>
+<tr>
+<td>Wachhund je Merkmal (Seite)</td>
+<td>fest</td>
+<td>300 ms</td>
+<td>ein Schreibvorgang, der länger hängt, gilt als verloren</td>
+<td><code>FUNK_HAENGT_MS</code>
+</td></tr>
+<tr>
+<td>Plugin-Zeitgrenze Schreiben</td>
+<td>fest</td>
+<td>300 ms (statt 5 s des Plugins)</td>
+<td>für den Rückfallweg über das Community-Plugin</td>
+<td><code>timeout: 300</code>
+</td></tr>
+<tr>
+<td>Sperre auf das Plugin</td>
+<td>fest</td>
+<td>30 s, verdoppelnd bis 600 s</td>
+<td>siehe <a href="#Die_omegaLage-Sperre">omegaLage-Sperre</a></td>
+<td><code>OMEGA_SPERRE_MS</code>, <code>OMEGA_SPERRE_MAX_MS</code>
+</td></tr>
+<tr>
+<td>Probezeit nach Sperre</td>
+<td>fest</td>
+<td>1500 ms, Blick alle 500 ms</td>
+<td>OmegaBle wird genau beobachtet</td>
+<td><code>OMEGA_PROBE_MS</code>
+</td></tr>
+<tr>
+<td>Verbindungsaufbau gesamt</td>
+<td>fest</td>
+<td>20 s</td>
+<td>danach trennen und schließen</td>
+<td><code>VERBINDE_FRIST_MS</code>
+</td></tr>
+<tr>
+<td>Plugin-connect</td>
+<td>fest</td>
+<td>15 s</td>
+<td>Zeitgrenze des eigentlichen Verbindens</td>
+<td><code>timeout: 15000</code>
+</td></tr>
+<tr>
+<td>Neu verbinden nach Abriss</td>
+<td>fest</td>
+<td>Wartezeit 1 s × Versuch, höchstens 5 Versuche</td>
+<td>danach Auto entfernen</td>
+<td><code>VERBINDE_NEU_MS</code>, <code>VERBINDE_NEU_MAX</code>
+</td></tr>
+<tr>
+<td>Meldetakt-Schwelle</td>
+<td>fest</td>
+<td>75 ms, höchstens alle 20 s</td>
+<td>fordert das schnelle Verbindungsintervall neu an</td>
+<td><code>MELDE_LANGSAM_MS</code>, <code>MELDE_PRIO_PAUSE_MS</code>
+</td></tr>
+<tr>
+<td>NPC-Sendebudget</td>
+<td>fest</td>
+<td>30 Pakete/s für alle NPCs zusammen, unveränderte Befehle höchstens alle 200 ms</td>
+<td>entlastet den Funkadapter</td>
+<td><code>NPC_BUDGET_PRO_S</code>, <code>NPC_GLEICH_MS</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Schichten">Schichten</h3></div>
+<pre> Seite (JavaScript, WebView)
+   controlHeartbeat() alle 45 ms → sendControlValue() → buildCommandPacket() → funkSchreiben()
+        │
+   Brücke src/05-app-bruecke.js: baut navigator.bluetooth nach
+        │                                   │
+   OmegaBle (eigenes Plugin)          Community-Plugin BluetoothLe
+   writeControl / OmegaDirekt         connect, getServices, startNotifications,
+   status, pause, schliessen …        read, write mit Antwort, disconnect
+        │                                   │
+        └──────── dasselbe BluetoothGatt-Objekt (per Reflexion geliehen) ───┘
+                              │
+                     Android-Bluetooth-Stapel → Funkchip → Auto
+</pre>
+<p>Der übrige Code von OmegaSim merkt nicht, dass er in einer App läuft: Die Brücke stellt genau die Teile von Web Bluetooth bereit, die er benutzt (<code>requestDevice</code>, <code>gatt.connect</code>, <code>getPrimaryService</code>, <code>getCharacteristic</code>, <code>writeValueWithoutResponse</code>, <code>writeValueWithResponse</code>, <code>startNotifications</code>, die Ereignisse <code>characteristicvaluechanged</code> und <code>gattserverdisconnected</code>). Sie steht in der Seite und nicht in der APK, damit jede Berichtigung mit dem nächsten Web-Update aufs Telefon kommt<sup id="cite&#95;ref-1" class="reference"><a href="#cite_note-1"><span class="cite-bracket">&#91;</span>1<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Schnittstelle:_alle_Methoden">Schnittstelle: alle Methoden</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Methode</th>
+<th>Art</th>
+<th>Parameter</th>
+<th>Rückgabe</th>
+<th>Thread</th>
+<th>Zweck
+</th></tr>
+<tr>
+<td><code>writeControl</code></td>
+<td><code>@PluginMethod(returnType = RETURN_NONE)</code></td>
+<td><code>deviceId</code>, <code>service</code>, <code>characteristic</code>, <code>value</code> (Hex-Text), <code>t</code> (<code>Date.now()</code> der Seite, optional)</td>
+<td>keine (es wird nie geantwortet)</td>
+<td>Capacitor-Plugin-Thread, dann Schreib-Thread</td>
+<td>Befehl einreihen; Rückfall, wenn der Direktweg fehlt
+</td></tr>
+<tr>
+<td><code>status</code></td>
+<td><code>@PluginMethod</code></td>
+<td><code>deviceId</code>, <code>service</code>, <code>characteristic</code></td>
+<td><code>bereit</code>, <code>geschrieben</code>, <code>wiederholt</code>, <code>verworfen</code>, <code>ersetzt</code> (je Gerät), <code>brueckeMittel</code> (ms, −1 ohne Messung), <code>brueckeMax</code> (ms, wird beim Lesen auf 0 gesetzt), <code>direkt</code>, <code>direktFehler</code>, <code>version</code> (= 4)</td>
+<td>Plugin-Thread</td>
+<td>ehrliche Auskunft: findet OmegaBle die Verbindung?
+</td></tr>
+<tr>
+<td><code>pause</code></td>
+<td><code>@PluginMethod</code></td>
+<td><code>an</code> (boolean)</td>
+<td>leer</td>
+<td>Plugin-Thread</td>
+<td>Schreiben anhalten, solange das Community-Plugin einen GATT-Vorgang macht; höchstens 1500 ms
+</td></tr>
+<tr>
+<td><code>schliessen</code></td>
+<td><code>@PluginMethod</code></td>
+<td><code>deviceId</code></td>
+<td><code>geschlossen</code> (boolean)</td>
+<td>UI-Thread</td>
+<td>eine Verbindung hart schließen (seit 1.2.3)
+</td></tr>
+<tr>
+<td><code>alleSchliessen</code></td>
+<td><code>@PluginMethod</code></td>
+<td>–</td>
+<td><code>anzahl</code> (Zahl geschlossener Verbindungen)</td>
+<td>UI-Thread</td>
+<td>alle Verbindungen des Community-Plugins schließen (seit 1.2.3)
+</td></tr>
+<tr>
+<td><code>direktNeu</code></td>
+<td><code>@PluginMethod</code></td>
+<td>–</td>
+<td><code>direkt</code>, <code>direktFehler</code>; danach lädt die Seite nach 150 ms neu</td>
+<td>UI-Thread</td>
+<td>Direktwege neu anmelden (seit 1.0.40)
+</td></tr>
+<tr>
+<td><code>OmegaDirekt.schreibe</code></td>
+<td><code>@JavascriptInterface</code> (kein Capacitor)</td>
+<td><code>deviceId</code>, <code>service</code>, <code>characteristic</code>, <code>value</code>, <code>tJs</code></td>
+<td>keine, synchron</td>
+<td>JavaBridge-Thread</td>
+<td>der Direktweg für Steuerbefehle (seit 0.10.4)
+</td></tr>
+<tr>
+<td><code>OmegaPad.lesen</code></td>
+<td><code>@JavascriptInterface</code> (Klasse <code>OmegaPadNativ.Js</code>)</td>
+<td>–</td>
+<td>Text mit 10 Zahlen: lx, ly, rx, ry, lt, rt, Alter des letzten Ereignisses (ms), Geräte (0/1/2), Ereigniszahl, Zustellzeit (ms)</td>
+<td>JavaBridge-Thread</td>
+<td>Gamepad direkt (seit 0.10.4)
+</td></tr></tbody></table>
+<p>Dazu kommen zwei Lebenszyklus-Methoden: <code>load()</code> startet den Schreib-Thread „OmegaBle-Write“ und meldet die Direktwege auf dem UI-Thread an, bevor die Seite lädt; <code>handleOnDestroy()</code> leert die Warteschlange des Threads und beendet ihn.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Threading-Modell">Threading-Modell</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Thread</th>
+<th>Wer läuft dort</th>
+<th>Was er mit OmegaBle zu tun hat
+</th></tr>
+<tr>
+<td>JavaScript der Seite (WebView-Renderer)</td>
+<td>Herzschlag, Physik, Brücke</td>
+<td>baut Pakete, ruft <code>OmegaDirekt.schreibe</code> oder <code>writeControl</code>
+</td></tr>
+<tr>
+<td>JavaBridge (WebView)</td>
+<td>alle <code>@JavascriptInterface</code>-Aufrufe</td>
+<td><code>Direkt.schreibe()</code> → <code>einreihen()</code>; <code>OmegaPad.lesen()</code>
+</td></tr>
+<tr>
+<td>Android-Hauptthread (UI)</td>
+<td>Capacitor nimmt dort Nachrichten der Seite an und schickt Antworten und Plugin-Ereignisse (auch jede Bluetooth-Meldung) zurück</td>
+<td><code>schliessen</code>, <code>alleSchliessen</code>, <code>direktNeu</code>; ohne Direktweg läuft jeder Steuerbefehl hier durch
+</td></tr>
+<tr>
+<td>„CapacitorPlugins“ (HandlerThread von Capacitor)</td>
+<td>Ausführung der <code>@PluginMethod</code>s</td>
+<td><code>writeControl</code>, <code>status</code>, <code>pause</code>
+</td></tr>
+<tr>
+<td>„OmegaBle-Write“ (eigener HandlerThread)</td>
+<td>nur OmegaBle</td>
+<td><code>abarbeiten()</code>, <code>schreibenMitVersuchen()</code>, <code>schreibeGatt()</code>
+</td></tr>
+<tr>
+<td>Binder-Threads von Android</td>
+<td>Rückmeldungen des Bluetooth-Stapels an das Community-Plugin</td>
+<td>Notifications und Verbindungsereignisse
+</td></tr></tbody></table>
+<p>Gemeinsame Daten und wie sie geschützt sind<sup id="cite&#95;ref-2" class="reference"><a href="#cite_note-2"><span class="cite-bracket">&#91;</span>2<span class="cite-bracket">&#93;</span></a></sup>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Feld</th>
+<th>Typ</th>
+<th>Geschrieben von</th>
+<th>Bedeutung
+</th></tr>
+<tr>
+<td><code>plaetze</code></td>
+<td><code>ConcurrentHashMap&lt;String, Platz&gt;</code></td>
+<td>alle (über <code>putIfAbsent</code>)</td>
+<td>ein Platz je Gerätekennung
+</td></tr>
+<tr>
+<td><code>Platz.neu</code></td>
+<td><code>AtomicReference&lt;byte[]&gt;</code></td>
+<td>JavaBridge/Plugin-Thread setzen, Schreib-Thread holt</td>
+<td>der <b>eine</b> Warteplatz: der neueste ungeschriebene Befehl
+</td></tr>
+<tr>
+<td><code>Platz.laeuft</code></td>
+<td><code>AtomicBoolean</code></td>
+<td>beide</td>
+<td>ob für dieses Gerät gerade ein Abarbeiten eingeplant ist
+</td></tr>
+<tr>
+<td><code>Platz.dienst</code>, <code>merkmal</code>, <code>gatt</code>, <code>ziel</code></td>
+<td><code>volatile</code></td>
+<td>alle</td>
+<td>Ziel des Schreibens und geliehenes GATT-Objekt
+</td></tr>
+<tr>
+<td><code>Platz.fehlInFolge</code></td>
+<td><code>int</code></td>
+<td>nur Schreib-Thread</td>
+<td>Fehlschläge hintereinander
+</td></tr>
+<tr>
+<td><code>geschrieben</code>, <code>wiederholt</code>, <code>verworfen</code>, <code>ersetzt</code></td>
+<td><code>AtomicLong</code></td>
+<td>Schreib-Thread bzw. <code>einreihen()</code></td>
+<td>Zähler für die Diagnose
+</td></tr>
+<tr>
+<td><code>pauseBis</code></td>
+<td><code>volatile long</code></td>
+<td><code>pause()</code></td>
+<td>Uhrzeit (<code>uptimeMillis</code>), bis zu der nicht geschrieben wird
+</td></tr>
+<tr>
+<td><code>brueckeSumme</code>, <code>brueckeN</code>, <code>brueckeMax</code></td>
+<td><code>AtomicLong</code></td>
+<td>JavaBridge/Plugin-Thread</td>
+<td>Brückenzeit; das Maximum per <code>compareAndSet</code>-Schleife
+</td></tr></tbody></table>
+<p><b>Generationen.</b> Im Java-Teil gibt es keinen Generationszähler, weil dort der Platz atomar geleert wird. Auf der Seite dagegen schützt ein Zähler <code>gen</code> je Merkmal den Wachhund in <code>funkSchreiben()</code>: Hängt ein Schreibvorgang länger als 300 ms, beginnt der nächste mit <code>++z.gen</code>; kommt das Ende des alten doch noch an, sieht es <code>gen&#160;!== z.gen</code> und gibt den neuen Zustand nicht frei<sup id="cite&#95;ref-3" class="reference"><a href="#cite_note-3"><span class="cite-bracket">&#91;</span>3<span class="cite-bracket">&#93;</span></a></sup>. Für NPCs gilt dasselbe mit <code>car.writeGen</code> in <code>writeToCar()</code>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Der_Schreibweg_eines_Pakets">Der Schreibweg eines Pakets</h3></div>
+<p>Ein Steuerbefehl des Spielerautos, Schritt für Schritt:
+</p>
+<ol><li><b>Herzschlag (Seite).</b> <code>controlHeartbeat()</code> läuft alle 45 ms (<code>setInterval</code>). Es liest das Gamepad frisch (in der App direkt über <code>OmegaPad.lesen()</code>), rechnet <code>physicsStep()</code> und ruft <code>sendControlValue()</code>.</li>
+<li><b>Paket bauen.</b> <code>buildCommandPacket()</code> erzeugt die 20 Byte samt CRC-8 (siehe <a href="./Carrera_HYBRID.html#Das_Befehlspaket_(App_→_Auto)" title="Carrera HYBRID">Carrera HYBRID#Das Befehlspaket (App → Auto)</a>).</li>
+<li><b>Schloss je Merkmal (Seite).</b> <code>funkSchreiben()</code>: Ist für dieses Merkmal noch ein Schreibvorgang unterwegs (jünger als 300 ms), wird das Paket als <code>wartendes</code> gemerkt und ein älteres wartendes überschrieben. Tiefe eins. Sonst beginnt ein neuer Vorgang mit <code>gen = ++z.gen</code>.</li>
+<li><b>Brücke.</b> Weil das Merkmal „ohne Antwort“ anbietet, ruft <code>funkSchreiben()</code> <code>writeValueWithoutResponse()</code> der Brücke. Die prüft: Ist OmegaBle registriert (<code>isPluginAvailable('OmegaBle')</code>, einmal gemerkt)? Ist es für dieses Auto bereit (<code>omegaBleBereit()</code>, siehe <a href="#Die_omegaLage-Sperre">Sperre</a>)?</li>
+<li><b>Direktweg.</b> Gibt es <code>window.OmegaDirekt</code>, ruft die Brücke synchron <code>schreibe(deviceId, service, characteristic, hex, Date.now())</code> und gibt sofort <code>Promise.resolve()</code> zurück. Sonst schickt sie <code>writeControl</code> mit <code>C.toNative</code> ohne Rückruf („Feuer und weg“).</li>
+<li><b>Brückenzeit.</b> In Java misst <code>brueckeMessen()</code> den Abstand zwischen <code>Date.now()</code> der Seite und der Ankunft; Werte über 5000 ms gelten als Uhrsprung und werden verworfen.</li>
+<li><b>Einreihen.</b> <code>einreihen()</code> wandelt den Hex-Text in Bytes, setzt sie mit <code>neu.getAndSet()</code> auf den Platz und zählt <code>ersetzt</code>, wenn dort noch ein ungeschriebener Befehl lag. Hat sich Dienst oder Merkmal geändert, wird das gemerkte Ziel vergessen.</li>
+<li><b>Abarbeiten anstoßen.</b> Nur wenn <code>laeuft.compareAndSet(false, true)</code> gelingt, wird <code>abarbeiten()</code> auf den Schreib-Thread gelegt. So läuft je Gerät höchstens ein Abarbeiten.</li>
+<li><b>Pause prüfen (Schreib-Thread).</b> Liegt <code>pauseBis</code> in der Zukunft, legt sich <code>abarbeiten()</code> nach höchstens 5 ms erneut an und bleibt „laufend“.</li>
+<li><b>Neuesten holen.</b> <code>neu.getAndSet(null)</code> nimmt den neuesten Befehl und leert den Platz.</li>
+<li><b>Schreiben mit Versuchen.</b> <code>schreibenMitVersuchen()</code>: bis zu 3 Versuche. Vor dem 2. und 3. Versuch: wartet inzwischen ein neuerer Befehl, wird der alte als <code>verworfen</code> gezählt und aufgegeben; sonst <code>wiederholt</code> zählen und 3 ms schlafen.</li>
+<li><b>Ziel holen.</b> <code>zielHolen()</code> nimmt das gemerkte <code>BluetoothGatt</code> und Merkmal oder sucht beides per Reflexion im Community-Plugin neu.</li>
+<li><b>GATT-Schreibbefehl.</b> <code>schreibeGatt()</code>: Ab Android 13 <code>gatt.writeCharacteristic(c, bytes, WRITE_TYPE_NO_RESPONSE)</code>, Erfolg bei <code>BluetoothStatusCodes.SUCCESS</code>. Davor über das geteilte Merkmal-Objekt: <code>synchronized (c) { setWriteType(NO_RESPONSE); setValue(bytes); writeCharacteristic(c) }</code>. Ergebnis 0 = angenommen, 1 = abgelehnt (belegt, getrennt), −1 = keine Berechtigung.</li>
+<li><b>Auswerten.</b> 0: <code>geschrieben</code> +1, <code>fehlInFolge</code> = 0, fertig. −1: abbrechen (zwecklos). 1: <code>fehlInFolge</code> +1; ab 3 in Folge wird das gemerkte GATT-Objekt vergessen (vermutlich wurde neu verbunden). Nach drei erfolglosen Versuchen: <code>verworfen</code> +1.</li>
+<li><b>Weiter oder aufhören.</b> Wartet schon wieder ein Befehl, legt sich <code>abarbeiten()</code> sofort neu an. Sonst <code>laeuft = false</code> – und dann wird <b>noch einmal</b> nachgesehen: Kam genau zwischen Prüfen und Freigeben ein Befehl, konnte <code>einreihen()</code> den Lauf nicht starten, also startet ihn <code>abarbeiten()</code> selbst.</li>
+<li><b>Seite.</b> Die Promise ist schon erfüllt; <code>funkSchreiben()</code> misst die Zeit (nur JavaScript, in der Anzeige „nur JS“), holt ein inzwischen wartendes Paket und schickt es auf demselben Weg.</li></ol>
+<div class="mw-highlight mw-highlight-lang-java mw-content-ltr" dir="ltr"><pre><span></span><span class="c1">// OmegaBlePlugin.java, abarbeiten()</span>
+<span class="kt">byte</span><span class="o">[]</span><span class="w"> </span><span class="n">wert</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="na">neu</span><span class="p">.</span><span class="na">getAndSet</span><span class="p">(</span><span class="kc">null</span><span class="p">);</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wert</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="n">schreibenMitVersuchen</span><span class="p">(</span><span class="n">deviceId</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">wert</span><span class="p">);</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="p">.</span><span class="na">neu</span><span class="p">.</span><span class="na">get</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">h</span><span class="p">.</span><span class="na">post</span><span class="p">(()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">abarbeiten</span><span class="p">(</span><span class="n">deviceId</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">));</span><span class="w"> </span><span class="k">return</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="n">p</span><span class="p">.</span><span class="na">laeuft</span><span class="p">.</span><span class="na">set</span><span class="p">(</span><span class="kc">false</span><span class="p">);</span>
+<span class="c1">// Kam genau jetzt ein Befehl, hat writeControl den Lauf nicht neu starten koennen.</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="p">.</span><span class="na">neu</span><span class="p">.</span><span class="na">get</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="na">laeuft</span><span class="p">.</span><span class="na">compareAndSet</span><span class="p">(</span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="kc">true</span><span class="p">))</span><span class="w"> </span><span class="n">h</span><span class="p">.</span><span class="na">post</span><span class="p">(()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">abarbeiten</span><span class="p">(</span><span class="n">deviceId</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">));</span>
+</pre></div>
+<p><b>Was bei vollem Puffer passiert.</b> Ist der Funkadapter belegt (anderer GATT-Vorgang, Sendepuffer voll, viele Autos), lehnt Android den Schreibbefehl ab: <code>writeCharacteristic</code> liefert <code>false</code> bzw. einen Status ungleich <code>SUCCESS</code>. OmegaBle versucht es nach 3 ms erneut, höchstens dreimal, und gibt sofort auf, sobald ein neuerer Befehl wartet. Ein <b>verworfener</b> Befehl ist also entweder einer, der dreimal abgelehnt wurde, oder einer, der von einem neueren überholt wurde, während er wiederholt werden sollte. Eine Warteschlange gibt es absichtlich nicht: Sie würde alte Stickstellungen nachliefern, und „ein verspäteter Lenkbefehl ist schlimmer als gar keiner“.
+</p><p><b>Warum nicht „ersetzt“ und „verworfen“ verwechseln.</b> <code>ersetzt</code> zählt Befehle, die schon beim Einreihen überschrieben wurden, weil der vorige noch nicht abgeholt war (normal bei kurzzeitiger Last). <code>verworfen</code> zählt Befehle, die der Schreib-Thread schon in der Hand hatte und nicht losbekam.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Schreiben_mit_und_ohne_Antwort_in_der_App">Schreiben mit und ohne Antwort in der App</h4></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Weg</th>
+<th>Wer schreibt</th>
+<th>Wartet auf</th>
+<th>Zeitgrenze</th>
+<th>Pause für OmegaBle
+</th></tr>
+<tr>
+<td><code>writeValueWithoutResponse</code>, OmegaBle bereit</td>
+<td>OmegaBle</td>
+<td>nichts</td>
+<td>–</td>
+<td>–
+</td></tr>
+<tr>
+<td><code>writeValueWithoutResponse</code>, Rückfall</td>
+<td>Community-Plugin <code>writeWithoutResponse</code></td>
+<td><code>onCharacteristicWrite</code> von Android</td>
+<td>300 ms</td>
+<td>nein
+</td></tr>
+<tr>
+<td><code>writeValueWithResponse</code></td>
+<td>Community-Plugin <code>write</code></td>
+<td>Bestätigung des Autos</td>
+<td>300 ms</td>
+<td>ja (<code>mitOmegaPause</code>)
+</td></tr>
+<tr>
+<td><code>readValue</code>, <code>startNotifications</code>, <code>stopNotifications</code></td>
+<td>Community-Plugin</td>
+<td>Antwort</td>
+<td>Plugin-Vorgabe</td>
+<td>ja
+</td></tr></tbody></table>
+<p>Das Community-Plugin hält je Merkmal <b>eine</b> offene Antwort (<code>callbackMap["write|svc|char"]</code>). Überlappten früher zwei Schreibvorgänge, wurde die erste Antwort überschrieben, ihr Promise endete nie und eine globale Sperre blieb für immer gesetzt („Auto reagiert nach Mehrspieler-Beitritt nicht“). Seit 0.8.41 gibt es deshalb das Schloss je Merkmal mit Wachhund<sup id="cite&#95;ref-4" class="reference"><a href="#cite_note-4"><span class="cite-bracket">&#91;</span>4<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Pause_während_anderer_GATT-Vorgänge"><span id="Pause_w.C3.A4hrend_anderer_GATT-Vorg.C3.A4nge"></span>Pause während anderer GATT-Vorgänge</h4></div>
+<p><code>mitOmegaPause(fn)</code> zählt laufende Vorgänge des Community-Plugins (<code>omegaPausen</code>). Beim ersten ruft es <code>pause({an: true})</code>, beim letzten <code>pause({an: false})</code>. In Java setzt <code>pause</code> <code>pauseBis = jetzt + 1500 ms</code> bzw. 0. Die Seite merkt sich den Zeitpunkt (<code>omegaPauseZuletzt</code>), damit Verworfenes in dieser Zeit nicht als Ausfall zählt.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Die_omegaLage-Sperre">Die omegaLage-Sperre</h3></div>
+<p>OmegaBle sagt über <code>status()</code> ehrlich, ob es die Verbindung findet. Die Brücke fragt je Auto im Hintergrund nach und entscheidet, ob dieses Auto über OmegaBle oder über das langsamere Community-Plugin fährt<sup id="cite&#95;ref-5" class="reference"><a href="#cite_note-5"><span class="cite-bracket">&#91;</span>5<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Zustand</th>
+<th>Bedingung</th>
+<th>nächster Zustand
+</th></tr>
+<tr>
+<td>unbekannt</td>
+<td>erster Befehl; Statusabfrage läuft</td>
+<td>bereit oder nicht bereit (bis dahin schreibt das Plugin)
+</td></tr>
+<tr>
+<td>bereit</td>
+<td>Blick alle 2 s: <code>tot</code> = seit dem letzten Blick mehr als 0 verworfen <b>und</b> 0 geschrieben <b>und</b> keine Pause im Fenster (2,5 s)</td>
+<td>bleibt bereit; bei <code>tot</code> zweimal in Folge → gesperrt
+</td></tr>
+<tr>
+<td>gesperrt</td>
+<td><code>sperreMs</code> = 30 s beim ersten Mal, sonst verdoppelt, höchstens 600 s</td>
+<td>nach Ablauf → Probe
+</td></tr>
+<tr>
+<td>Probe</td>
+<td>1500 ms lang Blick alle 500 ms</td>
+<td>ein Blick mit <code>tot</code> → wieder gesperrt (doppelte Zeit); etwas geschrieben → bereit
+</td></tr>
+<tr>
+<td>alte APK</td>
+<td><code>status()</code> wirft einen Fehler (APK 0.8.124–0.8.126)</td>
+<td><code>bereit = true</code>, „(alte APK)“; OmegaBle schreibt wie früher
+</td></tr>
+<tr>
+<td>beliebig</td>
+<td>neuer Verbindungsaufbau oder Aufräumen des Autos</td>
+<td>Lage gelöscht, alles neu
+</td></tr></tbody></table>
+<pre>tot(Blick)   = (verworfen_jetzt − verworfen_vorher &gt; 0)
+             ∧ (geschrieben_jetzt − geschrieben_vorher = 0)
+             ∧ ¬(Pause läuft ∨ letzte Pause vor &lt; 2500 ms)
+kaputt       = tot ∧ (tot im vorigen Blick ∨ in der Probe)
+sperreMs_neu = sperreMs_alt = 0&#160;? 30 000&#160;: min(600 000, 2 × sperreMs_alt)
+</pre>
+<p>Die Regel „gar nichts geschrieben“ ist bewusst streng: Bei vielen Autos verwirft OmegaBle auch im Normalbetrieb, weil der Adapter belegt ist. Das ist Funklast, kein toter Weg, und das Plugin wäre dort nur langsamer. Bis 1.1.22 kippte der Weg im Kreis (nach ~4 s aufs Plugin, 2 s später zurück), und in rund zwei Dritteln der Zeit gingen alle Befehle an dieses Auto verloren, auch Haltebefehle.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Verbindungsaufbau">Verbindungsaufbau</h3></div>
+<ol><li><b>Auswahl.</b> <code>garageConnect()</code> ruft <code>navigator.bluetooth.requestDevice</code> mit zwei Filtern (Name beginnt mit „HYBRID“ oder Nordic UART Service). Die Brücke prüft zuerst mit <code>getConnectedDevices</code>, ob das System schon ein passendes Auto verbunden hat, das die Seite nicht kennt, und nimmt es dann direkt; sonst öffnet das Community-Plugin seine Suche (nur mit dem Namensfilter, weil es nur einen Filter kennt).</li>
+<li><b>Nur ein Aufbau je Auto.</b> <code>garVerbindetGerade</code> (Seite) und <code>verbindetJe</code> (Brücke) verhindern, dass automatisches Verbinden und ein Klick gleichzeitig dasselbe Auto aufbauen.</li>
+<li><b>Zeitgrenze.</b> <code>verbindeGattSicher()</code> lässt <code>verbindeGatt()</code> gegen eine 20-s-Uhr laufen. Bei jedem Fehler oder Ablauf: <code>gatt.disconnect()</code>.</li>
+<li><b>Verbinden (Brücke).</b> <code>Gatt._verbinden()</code>: Plugin initialisieren, Trennmeldung abonnieren, alte Weg-Sperre löschen, <code>connect</code> mit 15 s. Scheitert das, <code>_aufraeumen()</code>: Plugin-<code>disconnect</code>, <code>OmegaBle.schliessen</code>, Sperre löschen.</li>
+<li><b>Priorität.</b> Sofort <code>requestConnectionPriority(1)</code> (1 = HIGH), nach 5 s noch einmal.</li>
+<li><b>Dienste.</b> <code>getServices</code>; eine leere Liste (aus einer noch laufenden Dienstsuche) wird nicht gemerkt, sonst scheiterte jeder weitere Versuch mit „Dienst nicht gefunden“.</li>
+<li><b>Abonnieren.</b> <code>startNotifications</code> mit OmegaBle-Pause. Das Ereignis heißt beim Plugin <code>notification|Gerät|Dienst|Merkmal</code>; ein altes Abo unter demselben Namen wird vorher entfernt (sonst lief nach einem Neuverbinden jedes Paket doppelt).</li>
+<li><b>Aufnahme.</b> Auto in die Garage, Rolle zuweisen, Anlassklang.</li></ol>
+<p>In der App ist die Gerätekennung die MAC-Adresse und bleibt über Neustarts gleich; deshalb funktioniert das automatische Verbinden über <code>bekanntesGeraet(id)</code> ohne Auswahlfenster.
+</p><p><b>Abriss im Betrieb.</b> Meldet das Plugin <code>disconnected|Gerät</code>, setzt die Seite <code>rx.verbindungWeg = true</code>: Ab sofort schreibt weder der Spieler (<code>funkSchreiben</code>) noch ein NPC (<code>writeToCar</code>) an dieses Auto. Dann <code>reconnectCar()</code>: Wartezeit 1 s × Versuchsnummer, höchstens 5 Versuche, danach trennen und aus der Garage entfernen. Dass während des Neuverbindens nicht mehr geschrieben wird, verhindert seit 1.2.3 auch, dass die Fehlschläge die Weg-Sperre bis zu 10 Minuten auslösen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Verbindungsabbau_und_Aufräumen"><span id="Verbindungsabbau_und_Aufr.C3.A4umen"></span>Verbindungsabbau und Aufräumen</h3></div>
+<p>Anlass war die Meldung, ein Auto leuchte hell wie nach erfolgreichem Verbinden, die App sei aber nicht verbunden, und es helfe nur das Ladegerät. Ursachen im Community-Plugin: zwei überlappende <code>connect</code>-Aufrufe (der zweite überschreibt den Rückruf des ersten), eine gescheiterte Dienstsuche ohne Trennen und ein <code>disconnect</code>, das nur schließt, wenn die Trennmeldung kommt.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Auslöser</th>
+<th>Was passiert</th>
+<th>Code
+</th></tr>
+<tr>
+<td>Auto trennen (Garage)</td>
+<td><code>stopGhost</code>, <code>trennend = true</code>, <code>gatt.disconnect()</code> – <b>immer</b> nativ, auch wenn die Seite sich für getrennt hält; Plugin-<code>disconnect</code> (2 s), dann <code>OmegaBle.schliessen</code></td>
+<td><code>disconnectCar()</code>, <code>Gatt.disconnect()</code>
+</td></tr>
+<tr>
+<td>Garage → Alle trennen</td>
+<td>alle Autos trennen, dann <code>verwaisteTrennen([])</code></td>
+<td><code>gar-disconnect-all</code>
+</td></tr>
+<tr>
+<td>App-Start</td>
+<td>1,5 s nach dem Laden: ist die Garage leer, <code>alleSchliessen()</code>; wurde etwas geschlossen, 1,5 s warten (das Auto wirbt erst wieder, wenn es die Trennung bemerkt), dann automatisch verbinden</td>
+<td><code>src/90-ghosts.js</code>
+</td></tr>
+<tr>
+<td>Seite verlassen (Neuladen, Update)</td>
+<td>alle Autos trennen</td>
+<td><code>pagehide</code>
+</td></tr>
+<tr>
+<td>App beenden</td>
+<td><code>MainActivity.onDestroy()</code> → <code>bluetoothTrennen()</code>: per Reflexion jedes <code>BluetoothGatt</code> trennen und schließen, die Karte leeren</td>
+<td><code>MainActivity.java</code>
+</td></tr></tbody></table>
+<p><code>schliesseGeraet(id)</code> in OmegaBle, auf dem UI-Thread, auf dem auch das Community-Plugin seine Karte anfasst:
+</p>
+<ol><li>den eigenen Platz vergessen (<code>gatt = null</code>, <code>ziel = null</code>);</li>
+<li>aus dem Community-Plugin per Reflexion <code>deviceMap</code> holen, darin das Gerät;</li>
+<li>dessen Feld <code>bluetoothGatt</code> lesen, <code>disconnect()</code> und <code>close()</code> rufen (jedes für sich abgesichert);</li>
+<li>das Feld auf <code>null</code> setzen und den Eintrag aus <code>deviceMap</code> entfernen.</li></ol>
+<p><code>alleSchliessen</code> tut das für jeden Schlüssel der Karte und gibt die Zahl zurück.
+</p><p><code>verwaisteTrennen(behalten)</code> in der Brücke findet Verbindungen, die zu keinem Auto der Garage gehören:
+</p>
+<ol><li><code>getConnectedDevices</code>: alle Geräte, deren Name mit „HYBRID“ beginnt und die nicht behalten werden sollen.</li>
+<li>Für jedes: Plugin-<code>disconnect</code> (2 s) und <code>OmegaBle.schliessen</code>.</li>
+<li>Noch einmal fragen. Wer immer noch verbunden ist (eine Verbindung ohne eigenen Griff), wird kurz verbunden (5 s) und sauber getrennt (2 s), dann geschlossen.</li>
+<li>Zurück kommt die Zahl aus Schritt 1; die App meldet „n hängende Verbindung(en) getrennt“.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Verbindungspriorität"><span id="Verbindungspriorit.C3.A4t"></span>Verbindungspriorität</h3></div>
+<pre>beim Verbinden:          requestConnectionPriority(HIGH)
+nach 5 s:                requestConnectionPriority(HIGH)      (einmal)
+bei jeder Meldung:       d = min(1000, jetzt − letzteMeldung)
+                         meldeAbstand ← meldeAbstand + (d − meldeAbstand) × 0,05
+wenn meldeAbstand &gt; 75 ms und letzte Anforderung &gt; 20 s her:
+                         requestConnectionPriority(HIGH)
+</pre>
+<ul><li><i>meldeAbstand</i>: gleitender Mittelwert (Glättungsfaktor 0,05) des Abstands zwischen zwei Meldungen dieses Autos.</li>
+<li><i>75 ms</i> (<code>MELDE_LANGSAM_MS</code>): Schwelle; normal meldet ein Auto etwa alle 45 ms.</li>
+<li><i>20 s</i> (<code>MELDE_PRIO_PAUSE_MS</code>): Mindestabstand zweier Anforderungen.</li></ul>
+<p>Hintergrund: Android geht nach einiger Zeit oft vom schnellen Intervall zurück, und angefordert wurde vor 1.2.3 nur beim Verbinden. Jede Anforderung kann eine Neuaushandlung auslösen, während der der Funk kurz stockt; deshalb wird sie nicht dauernd wiederholt (bis 0.10.4 alle 10 s, was regelmäßige kleine Hänger erzeugte). Mit gekoppeltem Gamepad wurde die 5-s-Anforderung in 1.0.73 ausgelassen und in 1.1.3 wieder eingeführt, weil alte Handys ohne sie stockten<sup id="cite&#95;ref-6" class="reference"><a href="#cite_note-6"><span class="cite-bracket">&#91;</span>6<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Funklast_mit_mehreren_Autos">Funklast mit mehreren Autos</h3></div>
+<p>Jedes fahrende Auto schrieb bis 1.1.23 alle 45 ms: mit vier NPCs und dem Fahrer rund 110 Pakete je Sekunde über einen Adapter. Gemessen in 1.1.16: 4000 geschrieben, 2400 wiederholt, 1200 verworfen, auch Pakete des Fahrers. Seitdem teilen sich die NPCs ein Budget<sup id="cite&#95;ref-7" class="reference"><a href="#cite_note-7"><span class="cite-bracket">&#91;</span>7<span class="cite-bracket">&#93;</span></a></sup>:
+</p>
+<pre>n = Zahl fahrender NPCs (alle 500 ms neu gezählt)
+Abstand(n) = 0                                   für n ≤ 1
+Abstand(n) = max(45, round(1000 × n / 30)) − 5   ms, sonst
+unveränderter Befehl:  höchstens alle max(Abstand, 200) ms
+</pre>
+<p>Ein Halt (Gas wechselt auf 0), Einpark- und Haltefolgen und der Zieleinlauf gehen immer sofort im vollen Takt.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Direktweg_und_Gamepad_direkt">Direktweg und Gamepad direkt</h3></div>
+<p><code>load()</code> meldet <code>OmegaDirekt</code> und <code>OmegaPad</code> auf dem UI-Thread an, bevor die Seite lädt; ein JavascriptInterface gilt erst ab dem nächsten Laden der Seite. Fehlt <code>window.OmegaDirekt</code> beim Start, ruft die Brücke einmal je Sitzung <code>direktNeu</code> (gemerkt in <code>sessionStorage</code> unter <code>omegaDirektNeu</code>), und die Seite lädt einmal neu. <code>OmegaPadNativ</code> nimmt jedes Achsereignis eines Controllers in <code>MainActivity.dispatchGenericMotionEvent()</code> auf und legt sechs Werte in <code>volatile</code>-Felder; der Herzschlag liest sie synchron. Ab Android 11 bittet <code>MainActivity</code> die WebView, Joystick-Ereignisse nicht im Bildtakt zu bündeln (<code>requestUnbufferedDispatch</code>), was bis zu 16 ms spart. Bei zwei Controllern bleibt die Seite beim Web-Gamepad, weil sich die Geräte nicht sicher zuordnen lassen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Browser_gegen_App:_woher_die_Latenz_kommt">Browser gegen App: woher die Latenz kommt</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Schritt</th>
+<th>Browser (Chrome/Edge, Web Bluetooth)</th>
+<th>App ohne OmegaBle</th>
+<th>App mit OmegaBle direkt
+</th></tr>
+<tr>
+<td>Gamepad lesen</td>
+<td>eigener Prozess des Browsers</td>
+<td>Android-Hauptthread, gebündelt im Bildtakt</td>
+<td><code>OmegaPad.lesen()</code>, ungebündelt
+</td></tr>
+<tr>
+<td>Befehl an Java</td>
+<td>–</td>
+<td>JSON über Hauptthread und Plugin-Thread</td>
+<td>synchron über JavaBridge
+</td></tr>
+<tr>
+<td>Schreiben</td>
+<td>Browser-Prozess, ohne Antwort</td>
+<td>Plugin wartet auf <code>onCharacteristicWrite</code>, Antwort zurück über Hauptthread</td>
+<td>eigener Schreib-Thread, keine Antwort
+</td></tr>
+<tr>
+<td>Meldungen der Autos</td>
+<td>Browser-Prozess</td>
+<td>je Meldung JSON über den Hauptthread (rund 22 je Sekunde und Auto)</td>
+<td>unverändert über das Community-Plugin
+</td></tr>
+<tr>
+<td>Folge</td>
+<td>kein Engpass</td>
+<td>jeder Befehl steht hinter allen Meldungen aller Autos in der Schlange</td>
+<td>Befehle umgehen die Schlange
+</td></tr></tbody></table>
+<p>Gemessen ist, dass die Rechnung selbst nicht der Engpass ist: Der ganze Takt kostet im Median 0,3 ms ohne und 0,4 ms mit zwei NPCs, unter 2&#160;% des 45-ms-Budgets. Wie lange ein Schreibvorgang auf echter Hardware dauert, ist nicht gemessen. Gemessen ist, was passiert, wenn er länger als ein Takt dauert: Bei 46 ms Schreibdauer halbierte sich die Befehlsrate vor 0.5.8 auf 11,2 Hz; seit dem Prinzip „neuestes Paket merken“ bleibt sie bei 22,0 Hz<sup id="cite&#95;ref-8" class="reference"><a href="#cite_note-8"><span class="cite-bracket">&#91;</span>8<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Diagnose:_der_Funk-Rundlauf">Diagnose: der Funk-Rundlauf</h3></div>
+<p>Die Zeile unter <b>Optionen → System → Funk-Rundlauf</b> wird jede Sekunde neu geschrieben, solange sie sichtbar ist<sup id="cite&#95;ref-9" class="reference"><a href="#cite_note-9"><span class="cite-bracket">&#91;</span>9<span class="cite-bracket">&#93;</span></a></sup>. Ihre Teile in der Reihenfolge der Anzeige (die Zahlen in der ersten Spalte sind Beispiele, keine Messwerte):
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Teil der Anzeige</th>
+<th>Bedeutung</th>
+<th>Quelle
+</th></tr>
+<tr>
+<td><code>12 / 20 ms</code></td>
+<td>Mittelwert und 95. Perzentil der Dauer eines Steuerschreibens auf der Seite, über die letzten 200 Vorgänge. In der App mit „(nur JS)“ markiert: Dort kehrt der Aufruf sofort zurück, die Zahl sagt also nichts über den Funk</td>
+<td><code>funkStatistik()</code>
+</td></tr>
+<tr>
+<td><code>n× hing</code></td>
+<td>wie oft der Wachhund einen Vorgang nach 300 ms freigeben musste</td>
+<td><code>funkMess.haenger</code>
+</td></tr>
+<tr>
+<td><code>noch keine Befehle</code></td>
+<td>seit dem Laden wurde noch nichts geschrieben</td>
+<td>–
+</td></tr>
+<tr>
+<td><code>Weg OmegaBle direkt</code> / <code>OmegaBle</code> / <code>Plugin</code></td>
+<td>welcher Schreibweg für das <b>erste</b> Auto der Liste gilt: Direktweg, OmegaBle über Capacitor, oder Rückfall auf das Community-Plugin</td>
+<td><code>omegaInfo().weg</code>
+</td></tr>
+<tr>
+<td><code>(alte APK)</code></td>
+<td>die APK kennt <code>status()</code> nicht</td>
+<td><code>l.alt</code>
+</td></tr>
+<tr>
+<td><code>(n Auto(s) fest auf Plugin)</code></td>
+<td>wie viele Autos gerade gesperrt sind</td>
+<td><code>omegaInfo().gesperrt</code>
+</td></tr>
+<tr>
+<td><code>x geschrieben, y wiederholt, z verworfen</code></td>
+<td>Zähler von OmegaBle für das erste Auto seit dem Verbinden: angenommene Schreibbefehle, zweite und dritte Versuche, aufgegebene Befehle</td>
+<td><code>status()</code>
+</td></tr>
+<tr>
+<td><code>Direktweg fehlt (nach Neuladen)</code></td>
+<td><code>window.OmegaDirekt</code> fehlt; „nach Neuladen“, wenn <code>direktNeu</code> schon versucht wurde</td>
+<td><code>omegaInfo().direkt</code>
+</td></tr>
+<tr>
+<td><code>Pad direkt fehlt</code></td>
+<td><code>window.OmegaPad</code> fehlt</td>
+<td><code>omegaInfo().pad</code>
+</td></tr>
+<tr>
+<td>Fehlertext</td>
+<td>warum die Anmeldung der Direktwege scheiterte (Java-Ausnahme)</td>
+<td><code>direktFehler</code>
+</td></tr>
+<tr>
+<td><code>, n ersetzt</code></td>
+<td>Befehle, die beim Einreihen von einem neueren überschrieben wurden</td>
+<td><code>status().ersetzt</code>
+</td></tr>
+<tr>
+<td><code>Brücke 1,2/4 ms</code></td>
+<td>Zeit von <code>Date.now()</code> der Seite bis zur Ankunft in OmegaBle: Mittel seit Start / Maximum seit der letzten Abfrage</td>
+<td><code>brueckeMittel</code>, <code>brueckeMax</code>
+</td></tr>
+<tr>
+<td><code>Takt 45/48/60 ms (x&#160;% &gt; 60), Arbeit 0,6 ms</code></td>
+<td>Abstand zweier Herzschläge (Soll 45 ms): Mittel, 95. Perzentil, Maximum über die letzten 400; Anteil über 60 ms; 95. Perzentil der Rechenzeit eines Herzschlags. Ausreißer zeigen einen überlasteten Hauptthread</td>
+<td><code>herzStatistik()</code>
+</td></tr>
+<tr>
+<td><code>Pad direkt an (3 ms)</code></td>
+<td>ob das Gamepad direkt gelesen wird, und die mittlere Zustellzeit eines Achsereignisses im Android-Eingabeweg</td>
+<td><code>padNativInfo()</code>
+</td></tr>
+<tr>
+<td><code>Ton +40 ms</code></td>
+<td>Ausgabeverzögerung des Tons (<code>baseLatency + outputLatency</code>)</td>
+<td>Web Audio
+</td></tr>
+<tr>
+<td><code>WebView 130</code></td>
+<td>Hauptversion der WebView (Chrome)</td>
+<td>User-Agent
+</td></tr></tbody></table>
+<p>Der ⓘ-Text nennt die ersten Zahlen „bis zur Bestätigung durch das Bluetooth“; das gilt nur im Browser. In der App messen sie, wie gesagt, nur JavaScript.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Fehlerbilder_und_ihre_Ursachen">Fehlerbilder und ihre Ursachen</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Fehlerbild</th>
+<th>Ursache</th>
+<th>Abhilfe / Behebung
+</th></tr>
+<tr>
+<td>Auto leuchtet hell wie verbunden, App ist es nicht; nur das Ladegerät hilft</td>
+<td>Community-Plugin ließ eine Verbindung stehen (überlappende Aufbauten, gescheiterte Dienstsuche, <code>disconnect</code> ohne Schließen)</td>
+<td>seit 1.2.3: ein Aufbau je Auto, 20-s-Grenze, Schließen beim Start, „Alle trennen“ räumt verwaiste Verbindungen
+</td></tr>
+<tr>
+<td>Nach Schließen und Öffnen der App ist das Auto unsichtbar</td>
+<td>alter Prozess hielt die Verbindung; Auto wirbt nicht</td>
+<td><code>MainActivity.bluetoothTrennen()</code>; die Brücke übernimmt ein noch verbundenes Auto über <code>getConnectedDevices</code>
+</td></tr>
+<tr>
+<td>Spürbare Eingabeverzögerung nur in der App</td>
+<td>Befehle über den Hauptthread, Bluetooth-Meldungen aller Autos davor in der Schlange</td>
+<td>OmegaBle direkt, Pad direkt (0.10.4); Anzeige prüfen
+</td></tr>
+<tr>
+<td>„Weg OmegaBle“ statt „OmegaBle direkt“, kein „Pad direkt“</td>
+<td>Direktwege nicht in der Seite angekommen</td>
+<td><code>direktNeu</code> und einmal neu laden (1.0.40); WebView aktualisieren
+</td></tr>
+<tr>
+<td>Weg wechselt ständig zwischen OmegaBle und Plugin</td>
+<td>Rückfallregel kippte (bis 1.1.22); Pausen des Plugins zählten als Ausfall (bis 1.1.17)</td>
+<td>Sperre mit Verdopplung (1.1.23), Pausen ausgenommen (1.1.18), nur „gar nichts geschrieben“ (1.1.24)
+</td></tr>
+<tr>
+<td>Mit einem NPC gut, mit mehreren halten Autos nicht, fahren chaotisch</td>
+<td>Funklast: rund 110 Pakete/s auf einem Adapter, viel „wiederholt“ und „verworfen“</td>
+<td>NPC-Sendebudget 30 Pakete/s (1.1.24); bei weiteren Meldungen erst messen
+</td></tr>
+<tr>
+<td>Nach Neuverbinden eine Runde lang Verzögerung</td>
+<td>Schreibversuche ins Leere lösten die Sperre aus; Sperre lief nach dem Neuverbinden weiter</td>
+<td>1.2.3: kein Schreiben während des Neuverbindens, Sperre wird beim Verbinden gelöscht
+</td></tr>
+<tr>
+<td>Mit 3 NPCs und Safety Car wieder Verzögerung, nach Neuverbinden gut</td>
+<td>Android fiel auf ein langsames Verbindungsintervall zurück</td>
+<td>Meldetakt-Überwachung, Priorität neu anfordern (1.2.3)
+</td></tr>
+<tr>
+<td>Altes Handy: Auto stockt, reagiert kaum (mit gekoppeltem Pad)</td>
+<td>5-s-Prioritätsanforderung war mit Pad ausgelassen</td>
+<td>wieder immer nachgelegt (1.1.3)
+</td></tr>
+<tr>
+<td>Jedes Paket läuft doppelt durch die Auswertung</td>
+<td>altes Notification-Abo blieb nach Neuverbinden</td>
+<td>Abo je Ereignisname, altes wird entfernt (1.1.3)
+</td></tr>
+<tr>
+<td>Auto reagiert nach Mehrspieler-Beitritt nicht mehr</td>
+<td>eine verlorene Plugin-Antwort hielt eine globale Sperre für immer</td>
+<td>Schloss je Merkmal mit 300-ms-Wachhund (0.8.41)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Ersetzt,_geschrieben,_verworfen"><span id="Ersetzt.2C_geschrieben.2C_verworfen"></span>Ersetzt, geschrieben, verworfen</h3></div>
+<p>Ein Auto, der Adapter ist kurz belegt. Zeit in ms, Befehle A, B, C kommen im 45-ms-Takt:
+</p>
+<ol><li>t = 0: A kommt, Platz leer → A liegt auf dem Platz; <code>laeuft</code> war false → Abarbeiten startet. Schreib-Thread holt A, Versuch 1 wird abgelehnt (belegt).</li>
+<li>t = 3: kein neuerer Befehl → <code>wiederholt</code> = 1, Versuch 2 abgelehnt. t = 6: <code>wiederholt</code> = 2, Versuch 3 abgelehnt. → <code>verworfen</code> = 1.</li>
+<li>t = 45: B kommt, Platz leer, Abarbeiten startet, Versuch 1 gelingt → <code>geschrieben</code> = 1.</li>
+<li>Angenommen, der Schreib-Thread hängt beim Versuch für B länger (z. B. Android-interne Wartezeit), und C kommt bei t = 90 und D bei t = 135, bevor B fertig ist: C liegt auf dem Platz, D ersetzt C → <code>ersetzt</code> = 1. Danach holt der Thread D.</li></ol>
+<p>Ein gesundes Bild bei einem Auto: „verworfen“ und „ersetzt“ bleiben nahe null. Mit vielen Autos sind einige Prozent „verworfen“ normal.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Verdopplung_der_Sperre">Verdopplung der Sperre</h3></div>
+<p>Ein Auto, dessen OmegaBle-Weg dauerhaft nicht schreibt:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Sperre Nr.</th>
+<th>Dauer</th>
+<th>Plugin-Zeit bis dahin (Summe)
+</th></tr>
+<tr>
+<td>1</td>
+<td>30 s</td>
+<td>30 s
+</td></tr>
+<tr>
+<td>2</td>
+<td>60 s</td>
+<td>1,5 min
+</td></tr>
+<tr>
+<td>3</td>
+<td>120 s</td>
+<td>3,5 min
+</td></tr>
+<tr>
+<td>4</td>
+<td>240 s</td>
+<td>7,5 min
+</td></tr>
+<tr>
+<td>5</td>
+<td>480 s</td>
+<td>15,5 min
+</td></tr>
+<tr>
+<td>6 und folgende</td>
+<td>600 s (Deckel)</td>
+<td>je weitere 10 min
+</td></tr></tbody></table>
+<p>Zwischen zwei Sperren liegt jeweils eine Probe von 1,5 s mit Blicken im 500-ms-Takt. Ein neuer Verbindungsaufbau setzt alles zurück.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="NPC-Sendebudget">NPC-Sendebudget</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>fahrende NPCs n</th>
+<th>Abstand je NPC</th>
+<th>Pakete je NPC und Sekunde</th>
+<th>NPC-Pakete gesamt
+</th></tr>
+<tr>
+<td>1</td>
+<td>0 (voller Takt 45 ms)</td>
+<td>22</td>
+<td>22
+</td></tr>
+<tr>
+<td>2</td>
+<td>max(45, 67) − 5 = 62 ms</td>
+<td>16</td>
+<td>32
+</td></tr>
+<tr>
+<td>3</td>
+<td>max(45, 100) − 5 = 95 ms</td>
+<td>10,5</td>
+<td>32
+</td></tr>
+<tr>
+<td>4</td>
+<td>max(45, 133) − 5 = 128 ms</td>
+<td>7,8</td>
+<td>31
+</td></tr></tbody></table>
+<p>Ein unveränderter Befehl geht bei n ≥ 2 höchstens alle 200 ms hinaus. Dazu kommt der Spieler mit 22 Paketen je Sekunde.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Wann_die_Priorität_neu_angefordert_wird"><span id="Wann_die_Priorit.C3.A4t_neu_angefordert_wird"></span>Wann die Priorität neu angefordert wird</h3></div>
+<p>Ein Auto meldete bisher stabil alle 45 ms, plötzlich alle 90 ms. Nach k Meldungen gilt für den gleitenden Mittelwert: <code>90 − 45 × 0,95^k</code>. Er überschreitet 75 ms, sobald <code>0,95^k &lt; 1/3</code>, also ab k = 22 Meldungen. Bei 90 ms Abstand sind das rund 2 s. Danach wird frühestens nach 20 s erneut angefordert.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Brückenzeit_lesen"><span id="Br.C3.BCckenzeit_lesen"></span>Brückenzeit lesen</h3></div>
+<p>Anzeige „Brücke 0,8/3 ms“: Ein Befehl braucht von der Seite bis OmegaBle im Mittel 0,8 ms, der langsamste seit dem letzten Blick 3 ms. Liegen hier Werte von 20 ms und mehr, wartet der Befehl vor OmegaBle; das deutet auf den Weg über Capacitor statt den Direktweg.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li>OmegaBle <b>leiht</b> sich die Verbindung per Reflexion aus den privaten Feldern <code>deviceMap</code> und <code>bluetoothGatt</code> des Community-Plugins. Ändert eine neue Plugin-Fassung diese Namen, findet OmegaBle nichts mehr; die Seite fällt dann über <code>status()</code> = nicht bereit auf das Plugin zurück, und das Schließen bleibt wirkungslos.</li>
+<li>Die Diagnosezähler zeigen nur das <b>erste</b> Auto der Liste; welches das ist, hängt an der Reihenfolge der Abfragen.</li>
+<li>Wie lange ein Schreibvorgang am echten Auto dauert und welches Verbindungsintervall Android tatsächlich wählt, ist nicht gemessen.</li>
+<li>Probleme mit mehreren NPCs gehen nach bisherigem Stand auf Funklast zurück; bei neuen Meldungen gilt: erst messen (Funk-Rundlauf, Mitschnitt), dann die Logik ändern.</li>
+<li>Ein gekoppeltes Bluetooth-Gamepad teilt sich den Funk mit den Autos; Abrisse mit Xbox- und PS4-Controllern wurden gemeldet (unter Windows, wo OmegaBle nicht läuft).</li>
+<li>Teile des Aufräumens (<code>schliessen</code>, <code>alleSchliessen</code>) gibt es nur mit einer APK ab 1.2.3; ältere fangen den Aufruf ab und tun nichts.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version</th>
+<th>Änderung
+</th></tr>
+<tr>
+<td>0.5.8</td>
+<td>ein Sender, „neuestes Paket merken“ statt verwerfen (Grundlage, noch ohne OmegaBle)
+</td></tr>
+<tr>
+<td>0.8</td>
+<td>Android-App (experimentell) mit Bluetooth-Brücke auf dem Community-Plugin
+</td></tr>
+<tr>
+<td>0.8.41</td>
+<td>Schloss je Merkmal mit 300-ms-Wachhund, kurzes Plugin-Timeout, erst senden dann malen, Anzeige Funk-Rundlauf
+</td></tr>
+<tr>
+<td>0.8.124</td>
+<td>erste Fassung von OmegaBle
+</td></tr>
+<tr>
+<td>0.9.2</td>
+<td>OmegaBle neu gebaut: höchstens 3 Versuche mit 3 ms Pause statt Dauerschleife, GATT-Griff erst nach 3 Fehlschlägen vergessen, atomares Freigeben, ehrliches <code>status()</code>, <code>pause()</code>
+</td></tr>
+<tr>
+<td>0.9.6</td>
+<td>Sicherungsdatei; in der App MAC-Adresse als stabile Kennung
+</td></tr>
+<tr>
+<td>0.9.28</td>
+<td>Spieler 2 und 3 schreiben über denselben Weg wie Spieler 1 (Ersetzen statt Verwerfen)
+</td></tr>
+<tr>
+<td>0.10.4</td>
+<td>Direktweg <code>OmegaDirekt</code>, Gamepad direkt, ungebündelte Joystick-Ereignisse, Priorität nur noch einmal nach 5 s statt alle 10 s, echte Werte im Funk-Rundlauf
+</td></tr>
+<tr>
+<td>1.0.40</td>
+<td>fehlender Direktweg wird neu angemeldet, Anzeige nennt den Grund
+</td></tr>
+<tr>
+<td>1.0.73</td>
+<td>automatisches Neuverbinden mit Wartezeit; 5-s-Priorität mit Pad ausgelassen
+</td></tr>
+<tr>
+<td>1.1.3</td>
+<td>bekannte Autos beim Start verbinden; Priorität wieder immer; kein doppeltes Abo; kein Senden während des Neuverbindens
+</td></tr>
+<tr>
+<td>1.1.18</td>
+<td>Verworfenes während einer Plugin-Pause zählt nicht als Ausfall
+</td></tr>
+<tr>
+<td>1.1.23</td>
+<td>Sperre mit Verdopplung (30 s bis 10 min) statt Hin- und Herkippen
+</td></tr>
+<tr>
+<td>1.1.24</td>
+<td>Rückfall nur, wenn gar nichts mehr geschrieben wird; NPC-Sendebudget
+</td></tr>
+<tr>
+<td>1.2.3</td>
+<td>hartes Schließen (<code>schliessen</code>, <code>alleSchliessen</code>, <code>verwaisteTrennen</code>), 20-s-Grenze, ein Aufbau je Auto, Meldetakt-Überwachung, NPCs schreiben nicht während des Neuverbindens (neue APK nötig)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
+<div class="mw-references-wrap"><ol class="references">
+<li id="cite&#95;note-1"><span class="mw-cite-backlink"><a href="#cite_ref-1">↑</a></span> <span class="reference-text">Kopfkommentar, <code>src/05-app-bruecke.js</code>.</span>
+</li>
+<li id="cite&#95;note-2"><span class="mw-cite-backlink"><a href="#cite_ref-2">↑</a></span> <span class="reference-text">Klasse <code>Platz</code> und Felder, <code>OmegaBlePlugin.java</code>.</span>
+</li>
+<li id="cite&#95;note-3"><span class="mw-cite-backlink"><a href="#cite_ref-3">↑</a></span> <span class="reference-text"><code>funkSchreiben()</code>, <code>FUNK_HAENGT_MS</code>, <code>src/20-protocol.js</code>.</span>
+</li>
+<li id="cite&#95;note-4"><span class="mw-cite-backlink"><a href="#cite_ref-4">↑</a></span> <span class="reference-text">Kommentar „EIN SCHLOSS JE MERKMAL, MIT WACHHUND“, <code>src/20-protocol.js</code>.</span>
+</li>
+<li id="cite&#95;note-5"><span class="mw-cite-backlink"><a href="#cite_ref-5">↑</a></span> <span class="reference-text"><code>omegaBleBereit()</code>, <code>OMEGA_SPERRE_MS</code>, <code>src/05-app-bruecke.js</code>.</span>
+</li>
+<li id="cite&#95;note-6"><span class="mw-cite-backlink"><a href="#cite_ref-6">↑</a></span> <span class="reference-text"><code>meldetaktBeobachten()</code>, <code>src/90-ghosts.js</code>; <code>Gatt._verbinden()</code>, <code>src/05-app-bruecke.js</code>.</span>
+</li>
+<li id="cite&#95;note-7"><span class="mw-cite-backlink"><a href="#cite_ref-7">↑</a></span> <span class="reference-text"><code>npcSendeAbstand()</code>, <code>writeToCar()</code>, <code>src/90-ghosts.js</code>.</span>
+</li>
+<li id="cite&#95;note-8"><span class="mw-cite-backlink"><a href="#cite_ref-8">↑</a></span> <span class="reference-text">CARRERA_HYBRID.md, Abschnitt „Der Steuerweg“.</span>
+</li>
+<li id="cite&#95;note-9"><span class="mw-cite-backlink"><a href="#cite_ref-9">↑</a></span> <span class="reference-text">Anzeige-Intervall in <code>src/50-drive.js</code>; <code>funkStatistik()</code>, <code>herzStatistik()</code>, <code>src/20-protocol.js</code>; <code>omegaInfo()</code>, <code>src/05-app-bruecke.js</code>.</span>
+</li>
+</ol></div>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Keine_Reaktion_des_Fahrzeugs.html" title="Keine Reaktion des Fahrzeugs">Keine Reaktion des Fahrzeugs</a></li>
+<li><a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a></li>
+<li><a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a></li>
+<li><a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a></li>
+<li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
+<li><a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a></li>
+<li><a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>android-app/android/app/src/main/java/de/lroeseler/omegasim/OmegaBlePlugin.java</code>: <code>load()</code>, <code>direktAnmelden()</code>, <code>direktNeu()</code>, <code>Direkt.schreibe()</code>, <code>einreihen()</code>, <code>writeControl()</code>, <code>status()</code>, <code>pause()</code>, <code>abarbeiten()</code>, <code>schreibenMitVersuchen()</code>, <code>zielHolen()</code>, <code>schreibeGatt()</code>, <code>schliessen()</code>, <code>alleSchliessen()</code>, <code>schliesseGeraet()</code>, <code>findeGatt()</code></li>
+<li><code>…/MainActivity.java</code>: <code>onCreate()</code>, <code>dispatchGenericMotionEvent()</code>, <code>onDestroy()</code>, <code>bluetoothTrennen()</code></li>
+<li><code>…/OmegaPadNativ.java</code>: <code>aufnehmen()</code>, <code>Js.lesen()</code></li>
+<li><code>src/05-app-bruecke.js</code>: <code>omegaBleBereit()</code>, <code>omegaBleSchreiben()</code>, <code>mitOmegaPause()</code>, <code>omegaInfo()</code>, <code>verwaisteTrennen()</code>, Klassen <code>Merkmal</code>, <code>Dienst</code>, <code>Gatt</code>, <code>Geraet</code>, <code>requestDevice()</code></li>
+<li><code>src/20-protocol.js</code>: <code>funkSchreiben()</code>, <code>funkStatistik()</code>, <code>controlHeartbeat()</code>, <code>herzStatistik()</code></li>
+<li><code>src/90-ghosts.js</code>: <code>verbindeGatt()</code>, <code>verbindeGattSicher()</code>, <code>reconnectCar()</code>, <code>garageGeraetAufnehmen()</code>, <code>autoVerbindenStart()</code>, <code>meldetaktBeobachten()</code>, <code>writeToCar()</code>, <code>npcSendeAbstand()</code>, <code>disconnectCar()</code></li>
+<li><code>src/50-drive.js</code>: Anzeige <code>#funk-rundlauf</code></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw163
+Cached time: 20261027053453
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.152 seconds
+Real time usage: 0.157 seconds
+Preprocessor visited node count: 215/1000000
+Revision size: 51069/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 1/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 8744/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.724      1 Vorlage:Stand
+100.00%    3.724      1 -total
+-->
+
+<!-- Render ID 22a3875b-d1c8-11f1-865d-bc241192f7ce -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:27:|#|:idhash:canonical and timestamp 20261027053453 and revision id 86. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

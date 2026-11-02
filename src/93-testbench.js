@@ -7266,7 +7266,7 @@
         mpi.spur.clear();
         mpiAufnehmen(d);
         const autos = karte ? [...karte.querySelectorAll('g.karte-autos > g')]
-          .filter((g) => g.getAttribute('visibility') === 'visible').length : 0;
+          .filter((g) => g.getAttribute('visibility') !== 'hidden').length : 0;   // v1.2.32: sichtbar = ohne Attribut (erbt)
         const texte = karte ? [...karte.querySelectorAll('g.karte-autos text')].map((t) => t.textContent) : [];
         const zeilen = $('mpi-rows') ? $('mpi-rows').rows.length : 0;
         return { svg: !!(karte && karte.querySelector('svg')), autos, texte, zeilen,
@@ -8281,7 +8281,9 @@
           // Mit curveSlow 0,15 sind das rund 1,18; die Haarnadel bekommt das Doppelte,
           // also rund 1,4.
           const vorTile = g.tileIndex;
-          const istKurve = currentTrackTiles[g.tileIndex].type !== 2;
+          // v1.2.32: Start/Ziel ist eine Gerade - vorher zaehlte hier alles ausser 0x02 als Kurve,
+          // also auch START (0x0a), PIT und ENGE, und bekam den Kurvenfaktor.
+          const istKurve = tileIsCurve(currentTrackTiles[g.tileIndex].type);
           const kf = (istKurve && opt.kurvenFaktor) ? opt.kurvenFaktor : 1;
           const echtMs = (opt.tileMs || 700) * kf
             * (opt.echteLaenge === false ? 1 : ghostTileLenFactor(g.tileIndex));
@@ -8338,7 +8340,7 @@
       // KONSTANTER Schraeglage. Das ist die Zahl, die "stumpf ihre Spur" beziffert.
       const geklebt = reihe.filter((r) => r.phase >= 0.995).length / Math.max(1, reihe.length);
       const geklebtKurve = (() => {
-        const k = reihe.filter((r) => r.typ !== 2);
+        const k = reihe.filter((r) => tileIsCurve(r.typ));
         return k.length ? k.filter((r) => r.phase >= 0.995).length / k.length : null;
       })();
       const mitWunsch = reihe.filter((r) => Math.abs(r.wunsch) > 0.05);

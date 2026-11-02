@@ -16,6 +16,7 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginHandle;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.WebViewListener;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.lang.reflect.Field;
 import java.util.Map;
@@ -85,6 +86,23 @@ public class OmegaBlePlugin extends Plugin {
         writeThread = new HandlerThread("OmegaBle-Write");
         writeThread.start();
         writeHandler = new Handler(writeThread.getLooper());
+        // RENNPAUSE NICHT UEBER EIN NEULADEN HINWEG: rennPausiert lebt hier im Plugin, die Seite
+        // aber nicht. Nach Pause + Neuladen (Update, Absturz, direktNeu) wuerde sonst jedes
+        // 0xAF-Paket weiter neutralisiert, und das Auto fuhre nicht mehr. Deshalb beim Laden des
+        // Plugins UND bei jedem Seitenstart der WebView zuruecksetzen; die Seite ruft beim Laden
+        // ausserdem selbst rennPause(false).
+        // Der Zuhoerer wird NACHGEREICHT: load() laeuft noch im Konstruktor der Bridge, und
+        // Bridge.Builder.create() ersetzt danach mit setWebViewListeners() die ganze Liste - ein
+        // hier direkt angemeldeter Zuhoerer waere verloren. Der Hauptthread ist erst danach frei.
+        rennPauseSetzen(false);
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try {
+                getBridge().addWebViewListener(new WebViewListener() {
+                    @Override
+                    public void onPageStarted(WebView webView) { rennPauseSetzen(false); }
+                });
+            } catch (Throwable e) { /* ohne Zuhoerer bleibt der Ruecksetzer der Seite */ }
+        });
         // ---- DER DIREKTE WEG (v0.10.4) --------------------------------------------------
         // GEMELDET: "Latenz in der APK ist langsamer als im Browser." Jeder Befehl lief als
         // JSON ueber den Android-Hauptthread und den gemeinsamen Capacitor-Thread, bevor er
@@ -141,6 +159,9 @@ public class OmegaBlePlugin extends Plugin {
     /** Von der Seite synchron gerufen (window.OmegaDirekt.schreibe). */
     public final class Direkt {
         @JavascriptInterface
+        public void rennPause(boolean an) { rennPauseSetzen(an); }
+
+        @JavascriptInterface
         public void schreibe(String deviceId, String service, String characteristic, String value, double tJs) {
             brueckeMessen(tJs);
             einreihen(deviceId, service, characteristic, value);
@@ -157,6 +178,38 @@ public class OmegaBlePlugin extends Plugin {
         do { m = brueckeMax.get(); } while (d > m && !brueckeMax.compareAndSet(m, d));
     }
 
+    // Nicht die kurze GATT-Serialisierungspause: eigene lokale Rennpause.
+    private volatile boolean rennPausiert = false;
+    private final AtomicLong rennPauseGeneration = new AtomicLong();
+
+    private byte[] rennPauseWert(byte[] wert) {
+        if (!rennPausiert || wert == null || wert.length != 20 || (wert[0] & 0xff) != 0xaf) return wert;
+        byte[] halt = wert.clone();
+        halt[6] = (byte) 0xdf; halt[7] = 0; halt[9] = 0;
+        halt[14] = (byte) (halt[14] | 0x01);
+        int crc = 0xff;
+        for (int k = 0; k < 19; k++) {
+            crc ^= halt[k] & 0xff;
+            for (int bit = 0; bit < 8; bit++) {
+                crc = (crc & 0x80) != 0 ? ((crc << 1) ^ 0x31) & 0xff : (crc << 1) & 0xff;
+            }
+        }
+        halt[19] = (byte) crc;
+        return halt;
+    }
+
+    private void rennPauseSetzen(boolean an) {
+        rennPausiert = an;
+        if (!an) return;
+        rennPauseGeneration.incrementAndGet();
+        // Ein schon an Android/GATT uebergebenes Paket ist nicht rueckrufbar.
+        // Aber alle noch wartenden/retry-Pakete werden sofort neutralisiert.
+        for (Map.Entry<String, Platz> e : plaetze.entrySet()) {
+            Platz p = e.getValue();
+            p.neu.updateAndGet(this::rennPauseWert);
+        }
+    }
+
     private void einreihen(String deviceId, String service, String characteristic, String value) {
         Handler h = writeHandler;
         if (deviceId == null || service == null || characteristic == null || value == null || h == null) return;
@@ -166,7 +219,7 @@ public class OmegaBlePlugin extends Plugin {
             p.merkmal = characteristic;
             p.ziel = null;
         }
-        if (p.neu.getAndSet(hexZuBytes(value)) != null) p.ersetzt.incrementAndGet();
+        if (p.neu.getAndSet(rennPauseWert(hexZuBytes(value))) != null) p.ersetzt.incrementAndGet();
         if (p.laeuft.compareAndSet(false, true)) h.post(() -> abarbeiten(deviceId, p));
     }
 
@@ -236,15 +289,16 @@ public class OmegaBlePlugin extends Plugin {
             h.postDelayed(() -> abarbeiten(deviceId, p), Math.min(warte, 5));
             return;
         }
+        long pauseGeneration = rennPauseGeneration.get();
         byte[] wert = p.neu.getAndSet(null);
-        if (wert != null) schreibenMitVersuchen(deviceId, p, wert);
+        if (wert != null) schreibenMitVersuchen(deviceId, p, wert, pauseGeneration);
         if (p.neu.get() != null) { h.post(() -> abarbeiten(deviceId, p)); return; }
         p.laeuft.set(false);
         // Kam genau jetzt ein Befehl, hat writeControl den Lauf nicht neu starten koennen.
         if (p.neu.get() != null && p.laeuft.compareAndSet(false, true)) h.post(() -> abarbeiten(deviceId, p));
     }
 
-    private void schreibenMitVersuchen(String deviceId, Platz p, byte[] wert) {
+    private void schreibenMitVersuchen(String deviceId, Platz p, byte[] wert, long pauseGeneration) {
         for (int versuch = 0; versuch < VERSUCHE; versuch++) {
             if (versuch > 0) {
                 if (p.neu.get() != null) { p.verworfen.incrementAndGet(); return; }   // Neueres wartet
@@ -252,7 +306,15 @@ public class OmegaBlePlugin extends Plugin {
                 SystemClock.sleep(VERSUCH_PAUSE_MS);
             }
             if (!zielHolen(deviceId, p, false)) continue;
-            int erg = schreibeGatt(p.gatt, p.ziel, wert);
+            // Keine vor der Pause entnommene Fahrt nach Wiederaufnahme nachsenden.
+            // Bereits an GATT uebergebene Befehle bleiben physisch nicht rueckrufbar.
+            // NUR wenn seit der Entnahme eine Rennpause begann (Generation erhoeht): ohne Pause
+            // bleibt der heisse 45-ms-Pfad exakt wie vorher, der erste Versuch wird immer
+            // geschrieben, und "verworfen" zaehlt nur echte Verwuerfe.
+            if (pauseGeneration != rennPauseGeneration.get()) {
+                p.verworfen.incrementAndGet(); return;
+            }
+            int erg = schreibeGatt(p.gatt, p.ziel, rennPauseWert(wert));
             if (erg == 0) { p.fehlInFolge = 0; p.geschrieben.incrementAndGet(); return; }
             if (erg < 0) break;                             // SecurityException: zwecklos
             if (++p.fehlInFolge >= VERSUCHE) {              // vermutlich neu verbunden

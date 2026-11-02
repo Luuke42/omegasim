@@ -76,7 +76,7 @@
   function crashEreignis(car, richtung) {
     const vorwaerts = richtung;
     if (!car || raceState !== 'racing' || !(rammAb() > 0)) return null;
-    const jetzt = Date.now();
+    const jetzt = rennZeitJetzt();
     rammEreignisse = rammEreignisse.filter((e) => jetzt - e.at <= RAMM_FENSTER_MS);
     const anderer = rammEreignisse.find((e) => e.car !== car && !e.gepaart);
     const neu = { car, at: jetzt, vorwaerts, tempo: rammTempo(car), gepaart: false };
@@ -118,7 +118,7 @@
     const d1 = v1 - L.avg1, d3 = v3 - L.avg3;
     L.avg1 += (v1 - L.avg1) * CRASH_ROLLING_ALPHA;
     L.avg3 += (v3 - L.avg3) * CRASH_ROLLING_ALPHA;
-    const jetzt = Date.now();
+    const jetzt = rennZeitJetzt();
     if (dev > crashThreshold && jetzt - L.letzter > CRASH_REFRACTORY_MS) {
       L.letzter = jetzt;
       crashEreignis(car, crashRichtung(d1, d3));
@@ -151,7 +151,7 @@
     if (h <= 25) return DERBY_LICHT_AUS;
     if (h <= 50) {
       // Unregelmaessig wie ein Wackelkontakt: zwei ueberlagerte Takte.
-      const ms = Date.now();
+      const ms = rennZeitJetzt();
       return ((ms % 330) < 110) !== ((ms % 770) < 160) ? DERBY_LICHT_AUS : DERBY_LICHT_AN;
     }
     return null;
@@ -160,7 +160,7 @@
     if (typeof derbyLaeuft === 'undefined' || !derbyLaeuft || !(gas > 0)) return gas;
     const h = wer >= 2 ? zusatzPlatz(wer).derbyHealth : derbyHealth;
     if (h > 25) return gas;
-    return (Date.now() % 500) < 160 ? gas * 0.55 : gas;
+    return (rennZeitJetzt() % 500) < 160 ? gas * 0.55 : gas;
   }
   // Derby ohne Tank und Reifenverschleiss; nach dem Rennen kommt alles zurueck.
   let derbyMerk = null;

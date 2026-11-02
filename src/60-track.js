@@ -1950,7 +1950,7 @@
   //   5. EIN LAUF DER LAENGE 1, UNMITTELBAR (ohne Gerade dazwischen) einem gegensinnigen
   //      Lauf folgend, ist "gedaempft": seine einzige Kachel wird 0 statt des Scheitels,
   //      und der volle Scheitelwert wandert auf die naechste Kachel weiter, WENN diese
-  //      eine einfache Gerade ist (keine Startkachel, keine weitere Kurve) - belegt an
+  //      eine einfache Gerade ist (seit v1.2.32 auch Start/Ziel, keine weitere Kurve) - belegt an
   //      SRLG (R triftt L ohne Puffer: R selbst bleibt bei +100, L wird zu 0, die
   //      folgende Gerade traegt den vollen Linksscheitel -100). Nur ein Beleg, als
   //      Sonderfall uebernommen.
@@ -1972,6 +1972,9 @@
   //      Rampen auf, statt zusaetzlich ueber die Mitte zu erzwingen. Berechnet NACH allen
   //      anderen Ankern; siehe der Kommentar an der Berechnung selbst, warum das keine
   //      Ringabhaengigkeit ist.
+  //      v1.2.32 ABGELOEST: Start/Ziel ist eine Gerade und bekommt die Geradenregel (Punkt 6);
+  //      der Mittelwert liess sie hinter einem Scheitel innen stehen. Begruendung und Zahlen
+  //      an der Berechnung in luukeLinieAnker().
   //
   //   ZWEI OFFENE RESTFRAGEN, nicht stillschweigend festgelegt (an Luuke zurueckspielen):
   //     - SGR3G und SR2GL2G haben je EINE Gerade unmittelbar vor der Startkachel (nach
@@ -2029,11 +2032,18 @@
   // enthaelt eine Weitkurve.
   function luukeBase(tightness) { return tightness === 0 ? 50 : 100; }
 
-  // Geraden - NICHT die Startkachel, die bekommt ihren eigenen Anker separat (Punkt 7
-  // oben) - siehe Punkt 6 oben.
-  function luukeGeradenWert(i, tiles, runOf, closed, at) {
+  // Geraden - seit v1.2.32 AUCH die Startkachel (siehe Punkt 7 oben) - siehe Punkt 6 oben.
+  //
+  // startWert: der Anker der Startkachel unmittelbar davor (nur fuer die Kachel nach Start/Ziel).
+  // Die Halbregel "unmittelbar nach der Startkachel" stammt aus Luukes Beispielen, in denen die
+  // Startkachel auf 0 stand - sie ist die Rampe von dieser Mitte zur naechsten Kurve. Sie gilt
+  // deshalb nur noch, wenn die Startkachel tatsaechlich in der Mitte steht; steht sie (als
+  // gewoehnliche Gerade) schon aussen, faehrt die Kachel danach wie jede andere Gerade weiter,
+  // statt auf halbem Weg zur Mitte zurueckzufallen.
+  function luukeGeradenWert(i, tiles, runOf, closed, at, startWert) {
     const n = tiles.length;
-    const justAfterS = (closed || i > 0) && tiles[at(i - 1)].type === TILE_TYPE.START;
+    const justAfterS = (closed || i > 0) && tiles[at(i - 1)].type === TILE_TYPE.START
+      && tiles[at(i)].type !== TILE_TYPE.START && !startWert;
     let prevRun = null;
     for (let back = 1; back <= n; back++) {
       if (!closed && i - back < 0) break;
@@ -2123,7 +2133,8 @@
         if (gedaempft && p === apexPos) {
           anker[idx] = 0;
           const naechsterIdx = at(lauf.bis + 1);
-          if (!runOf[naechsterIdx] && tiles[naechsterIdx].type !== TILE_TYPE.START) {
+          // v1.2.32: Start/Ziel ist eine Gerade und traegt den Scheitel genauso weiter.
+          if (!runOf[naechsterIdx]) {
             override.set(naechsterIdx, wert);
           }
         } else {
@@ -2132,27 +2143,39 @@
       }
     });
 
-    const startIdxListe = [];
+    // ---- START/ZIEL IST EINE GERADE (v1.2.32) ------------------------------------------
+    //
+    // BESTELLT: "Pruefe, ob beim NPC-Verhalten klar ist, dass Start/Ziel eine Gerade ist [...] Ich habe
+    // ausserdem das Gefuehl, dass die Autos dort tendenziell nicht ihre Querlage halten, sondern etwas
+    // weiter innen fahren."
+    //
+    // Hier stand bis v1.2.31 eine eigene Regel fuer die Startkachel: der MITTELWERT ihrer beiden
+    // Nachbarn (BESTELLT damals: "nicht bei Start immer in der Mitte, sondern so, dass man von der
+    // Schiene davor und danach moeglichst wenig lenken muss"). Folgt Start/Ziel direkt auf einen
+    // Kurvenlauf, dessen letzte Kachel der Scheitel ist (Lauflaenge 2), erbt sie damit den halben
+    // Scheitel - eine gewoehnliche Gerade an derselben Stelle geht dagegen nach aussen. Gemessen auf
+    // dem gleichseitigen Dreieck SR2GR2GR2, wo Start/Ziel und die zwei Geraden dieselbe Lage haben:
+    //
+    //                  Start/Ziel                   Gerade nach R2 (beide)
+    //     v1.2.31      0,00 [-0,99 .. +0,99]        -0,85 [-1,00 .. -0,03]    (Befehl, + = rechts = innen)
+    //     v1.2.32      wie die Gerade               -0,85
+    //
+    // Also 0,85 Bahnhaelften weiter innen, genau die Beobachtung. Jetzt laeuft die Startkachel durch
+    // dieselbe Geradenregel (luukeGeradenWert) wie jede Gerade, in einem ersten Durchgang, damit die
+    // Kachel danach den Anker der Startkachel kennt (siehe startWert dort). Die alte Absicht bleibt
+    // erfuellt: die Geradenregel ist an beiden Nachbarn ausgerichtet und zwingt nicht ueber die Mitte.
+    // Mehrere Startkacheln (Sektoren) werden alle so behandelt.
+    const istStart = (i) => tiles[i].type === TILE_TYPE.START;
     for (let i = 0; i < n; i++) {
-      if (runOf[i]) continue;
-      if (tiles[i].type === TILE_TYPE.START) { startIdxListe.push(i); continue; }
-      if (override.has(i)) { anker[i] = override.get(i); continue; }
-      anker[i] = luukeGeradenWert(i, tiles, runOf, closed, at);
+      if (runOf[i] || !istStart(i)) continue;
+      anker[i] = override.has(i) ? override.get(i) : luukeGeradenWert(i, tiles, runOf, closed, at);
     }
-    // DIE STARTKACHEL NICHT MEHR FEST AUF 0: BESTELLT, "nicht bei Start immer in der
-    // Mitte, sondern so, dass man von der Schiene davor und danach moeglichst wenig
-    // lenken muss." Der Mittelwert der beiden Nachbarn teilt die noetige Lenkbewegung
-    // gleichmaessig auf die Rampe davor UND danach auf, statt zusaetzlich ueber die
-    // Mitte zu erzwingen - eine dritte, unnoetige Wende. Erst NACH allen anderen Ankern
-    // berechnet: luukeGeradenWert() und die gedaempfte Uebergabe oben pruefen nur den
-    // TYP der Startkachel (TILE_TYPE.START), nie ihren Zahlenwert - keine Ringabhaengigkeit.
-    // BESTELLT: mehrere Start/Ziel-Geraden als Sektoren - JEDE Startkachel wird so
-    // gesetzt, nicht nur die letzte.
-    if (startIdxListe.length && n > 1) {
-      startIdxListe.forEach((si) => {
-        const vorIdx = at(si - 1), nachIdx = at(si + 1);
-        anker[si] = (anker[vorIdx] + anker[nachIdx]) / 2;
-      });
+    for (let i = 0; i < n; i++) {
+      if (runOf[i] || istStart(i)) continue;
+      if (override.has(i)) { anker[i] = override.get(i); continue; }
+      const vor = at(i - 1);
+      const startWert = ((closed || i > 0) && istStart(vor)) ? anker[vor] : 0;
+      anker[i] = luukeGeradenWert(i, tiles, runOf, closed, at, startWert);
     }
     return anker;
   }
@@ -3015,6 +3038,12 @@
     const istNadel = (k) => NADEL_KERBS_AN && !!(tiles && tiles[k]
       && (tiles[k].type === TILE_TYPE.HAIRPIN || tiles[k].type === TILE_TYPE.HAIRPIN_LEFT));
     const mitNadeln = NADEL_KERBS_AN && tiles && tiles.some((x, k) => istNadel(k));
+    // v1.2.30: Teil 0 beginnt HIER beim Ursprung pts[0]. trackCenterline() legt ihn mit Kachel -1 an,
+    // die Kacheltabelle laesst Teil 0 deshalb erst bei pts[1] beginnen (fuer Ortung und Linie richtig
+    // so). Fuer die Zeichnung fehlte damit das Stueck pts[0] -> pts[1]: gemeldet als "bei SHG3R4L
+    // passen die Teile am Ende nicht perfekt zusammen", rund 3 cm Luecke im Randstreifen an der
+    // letzten Fuge. Die Geometrie schliesst exakt (Haarnadel-Anfahrt 21,91 cm, TRACK_HAIRPIN_LEAD_CM).
+    const anfang = (k) => (k === 0 ? 0 : kachelTab.start[k]);
     let out = '';
     for (const [seite, farbe] of [[1, ECHT_BLAU], [-1, ECHT_ROT]]) {
       const linie = offsetPath(pts, nrm, mitte * seite);
@@ -3026,7 +3055,7 @@
         let stuecke = '', lauf = null;
         for (let k = 0; k <= nTeile; k++) {
           const ende = k === nTeile || istNadel(k);
-          const i0 = k < nTeile ? kachelTab.start[k] : pts.length - 1;
+          const i0 = k < nTeile ? anfang(k) : pts.length - 1;
           if (!ende && lauf === null) lauf = i0;
           if (ende && lauf !== null) {
             const bis = k < nTeile ? kachelTab.start[k] : pts.length - 1;
@@ -3040,7 +3069,7 @@
       const kante = mitNadeln ? offsetPath(pts, nrm, (half - bw) * seite) : null;
       let d = '', zapfen = '', weissNadel = '', streifenGerade = '';
       for (let k = 0; k < nTeile; k++) {
-        const i0 = kachelTab.start[k];
+        const i0 = anfang(k);
         const i1 = k + 1 < nTeile ? kachelTab.start[k + 1] : pts.length - 1;
         if (i0 === undefined || i1 === undefined || i1 <= i0) continue;
         // Bogenlaenge entlang DIESER Seite.
@@ -3238,7 +3267,8 @@
       // trackKachelTabelle(): eine Haarnadel hat 49 Abtastpunkte, eine Gerade 14, und mit
       // der Multiplikation lagen die Fugen falsch und fehlten im letzten Drittel ganz.
       for (let k = 0; k < tiles.length; k++) {
-        const i = kachelTab.start[k];
+        // v1.2.30: die Fuge von Teil 0 am Ursprung pts[0], nicht bei pts[1] (siehe echtRandstreifen).
+        const i = k === 0 ? 0 : kachelTab.start[k];
         const A = [pts[i].x + nrm[i].x * half, pts[i].y + nrm[i].y * half];
         const B = [pts[i].x - nrm[i].x * half, pts[i].y - nrm[i].y * half];
         body += o.echt
@@ -3552,7 +3582,16 @@
         t.textContent = '';
         continue;
       }
-      c.setAttribute('visibility', 'visible');
+      // v1.2.32 GEMELDET: "Im virtuellen Fahren ist die Autoposition als Silhouette mit im
+      // Bild. Da ist irgendwo ein Fehler." Hier stand setAttribute('visibility', 'visible').
+      // visible ist kein "nicht mehr verborgen", sondern ein eigener Wert, und der schlaegt
+      // das geerbte hidden der Vorfahren: das virtuelle Fahren verbirgt die ganze Seite
+      // (body.vf-an main { visibility: hidden }), das Auto im Regenradar des Cockpits stand
+      // aber trotzdem ueber dem 3D-Bild - in Bildschirmlage der verborgenen Karte, gemessen
+      // 15 x 18 px bei (807, 414) neben dem Auto, mit der Fahrtrichtung der Karte gedreht.
+      // Dasselbe gilt fuer jeden anderen verborgenen Vorfahren (eingeklappte Kachel, Tab).
+      // Das Attribut entfernen heisst: wieder erben, sichtbar genau dann, wenn die Karte es ist.
+      c.removeAttribute('visibility');
       const i = trackPunktIndex(geo.kachelTab, geo.pts, a.index, a.phase);
       const p = geo.pts[i], n = geo.nrm[i] || { x: 0, y: 0 };
       const q = Math.max(-0.85, Math.min(0.85, a.quer || 0));
@@ -3887,23 +3926,9 @@
     } else {
       badge.textContent = t('Offen');
     }
-    const list = $('track-tile-list');
-    // The first tile is the Start/Finish anchor and is not deletable.
-    list.innerHTML = currentTrackTiles.map((t, i) =>
-      `<li>${TILE_LABEL[t.type] || ('0x' + t.type.toString(16))}
-        ${i === 0 ? '<span class="muted" style="font-size:11px">(fest)</span>'
-                  : `<button data-idx="${i}" class="track-del-btn" style="padding:1px 6px;font-size:11px;margin-left:6px">×</button>`}</li>`
-    ).join('');
-    list.querySelectorAll('.track-del-btn').forEach(btn => {
-      btn.onclick = () => {
-        // Der Knopf wird fuer Index 0 gar nicht erst gezeichnet; der Riegel steht trotzdem
-        // hier, weil die Liste die einzige Stelle ist, die nach Index loescht.
-        const i = parseInt(btn.dataset.idx, 10);
-        if (!(i > 0)) return;
-        trackSel = i;
-        trackTeilEntfernen();
-      };
-    });
+    // Die Teile-Liste unter dem Editor ist seit v1.2.61 entfernt (BESTELLT): die Strecke
+    // wird direkt in der Karte gebaut, die Liste war nur ein Abbild davon.
+    editorOptZeigen();
     $('track-rotation-val').textContent = trackRotationDeg + '°';
   }
 
@@ -4657,7 +4682,10 @@
     if (!trackEndeNah(tiles)) return false;
     const pts = trackCenterline(tiles);
     const s = trackSchluss(pts);
-    return s.closed && s.lueckeCm <= TRACK_SCHLUSS_STRENG_CM && trackKreuzungsfrei(pts);
+    // Bruecken (v1.2.61): erlaubt Strecken, die uebereinander gehen - die
+    // Kreuzungsfrei-Pruefung faellt dann weg.
+    return s.closed && s.lueckeCm <= TRACK_SCHLUSS_STRENG_CM &&
+      (trackEditorOpt.bruecken || trackKreuzungsfrei(pts));
   }
   // Passt die Strecke in den angegebenen Raum? Die Strecke darf in 45°-Schritten gedreht
   // werden, deshalb wird jede der 8 Lagen geprueft. Rueckgabe: die passende Drehung in Grad
@@ -4993,13 +5021,17 @@
     const zufallSchritt = [TILE_TYPE.WEIT_LEFT, TILE_TYPE.WEIT_RIGHT, TILE_TYPE.KLEIN_LEFT, TILE_TYPE.KLEIN_RIGHT]
       .some((t) => hat(t) > 0) ? 30 : 60;
     return { b, letzte, besser, startZeit, zufallSchritt, versuch: 0,
-             beste: null, besteAnders: null, besteGleich: null, raumZuKlein: false };
+             beste: null, besteAnders: null, besteGleich: null, raumZuKlein: false,
+             ziel: trackEditorOpt.ziel };
   }
   // Ein einzelner Versuch der Suche (v0.9.42 aus der Schleife geloest, damit die Suche in
   // Haeppchen laufen und dabei eine Ladeanimation zeigen kann).
   function trackZufallVersuch(z) {
     const b = z.b, zufallSchritt = z.zufallSchritt;
-    const dir = Math.random() < 0.5 ? 1 : -1;
+    // Linkslastig (v1.2.61): 75 % der Versuche drehen nach links statt 50/50.
+    const dir = trackEditorOpt.linkslastig
+      ? (Math.random() < 0.75 ? 1 : -1)
+      : (Math.random() < 0.5 ? 1 : -1);
     const r = Math.random();
     const nc = r < 0.05 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : r < 0.93 ? 4 : 5;
     const used = {};
@@ -5031,6 +5063,9 @@
     if (!gaps) return;
     const tiles = trackZufallBaueTiles(runs, gaps, b);
     if (!tiles) return;
+    // Laenge begrenzen (v1.2.61): "max" = unbegrenzt (Ziel Infinity), sonst hoechstens
+    // so viele Teile wie der Schieber verlangt.
+    if (z.ziel !== Infinity && tiles.length > z.ziel) return;
     trackRotationDeg = 0;
     if (!trackZufallPasst(tiles)) return;
     // Fussabdruck: die Strecke muss in den angegebenen Raum passen (45°-Schritte).
@@ -5220,6 +5255,62 @@
     return t > 0 && t < 1 && u > 0 && u < 1;
   }
   $('track-random').onclick = () => trackZufallMitAnimation();
+
+  // ---- Editor-Optionen (v1.2.61) ----
+  // Der "Optionen"-Knopf in der Aktionsleiste klappt ein Feld auf: Laenge/Teile-Slider,
+  // Linkslastig, Bruecken und "Strecke spiegeln". Die ersten drei wirken auf den Zufallsknopf.
+  const trackEditorOpt = { ziel: Infinity, linkslastig: false, bruecken: false };
+  function editorOptGesamtTeile() {
+    const b = teileBestand() || {};
+    let n = 0;
+    for (const k in b) n += (+b[k] || 0);
+    return n;
+  }
+  function editorOptMax() { return Math.max(4, editorOptGesamtTeile()); }
+  function editorOptZeigen() {
+    const ziel = $('track-opt-ziel');
+    if (!ziel) return;
+    const max = editorOptMax();
+    ziel.max = String(max);
+    // "max" heisst: der Schieber steht ganz rechts (Wert = max) und ziel = Infinity.
+    const akt = trackEditorOpt.ziel === Infinity ? max : Math.min(max, trackEditorOpt.ziel);
+    ziel.value = String(Math.max(4, akt));
+    const wert = $('track-opt-ziel-wert');
+    if (wert) wert.textContent = trackEditorOpt.ziel === Infinity ? 'max' : String(Math.max(4, akt));
+  }
+  function trackOptionenToggle(an) {
+    const p = $('track-opt-panel'), b = $('track-opt-toggle');
+    if (b) { b.setAttribute('aria-pressed', an ? 'true' : 'false'); b.classList.toggle('an', an); }
+    if (p) p.hidden = !an;
+    if (an) editorOptZeigen();
+  }
+  if ($('track-opt-toggle')) {
+    $('track-opt-toggle').onclick = () => { trackOptionenToggle($('track-opt-panel').hidden); };
+  }
+  if ($('track-opt-ziel')) {
+    $('track-opt-ziel').oninput = () => {
+      const v = +$('track-opt-ziel').value;
+      trackEditorOpt.ziel = (v >= editorOptMax()) ? Infinity : v;
+      editorOptZeigen();
+    };
+  }
+  if ($('track-opt-links')) {
+    $('track-opt-links').onchange = () => { trackEditorOpt.linkslastig = $('track-opt-links').checked; };
+  }
+  if ($('track-opt-bruecken')) {
+    $('track-opt-bruecken').onchange = () => { trackEditorOpt.bruecken = $('track-opt-bruecken').checked; };
+  }
+  // "Strecke spiegeln": links/rechts tauschen und die Schleife rueckwaerts fahren (chSpiegelTiles).
+  if ($('track-spiegel')) {
+    $('track-spiegel').onclick = () => {
+      if (!currentTrackTiles.length) { showHudToast(t('Erst die Strecke bauen')); return; }
+      if (typeof chSpiegelTiles !== 'function') { showHudToast(t('Spiegeln nicht verfügbar')); return; }
+      trackMerken();
+      currentTrackTiles = chSpiegelTiles(currentTrackTiles);
+      trackSel = null;
+      refreshTrackPreview();
+    };
+  }
 
   // Hier standen sechs Bindungen auf Knopf-ids, die es seit dem Umbau auf die Bildleiste
   // nicht mehr gibt (track-add-start und fuenf weitere). Sie prueften auf Vorhandensein und

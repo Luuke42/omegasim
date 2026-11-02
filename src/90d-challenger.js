@@ -18,14 +18,15 @@
   var CHALLENGER_MODI = ['beste', 'rekord', 'gummiband'];
   var CHALLENGER_K = 0.45;             // Tempo je Kachel Abweichung
   // GEFRAGT: "Hast du Sicherheiten eingebaut, damit die Autos in der Haarnadel nicht zu schnell
-  // fahren und dafuer auf der Geraden kompensieren?" Jetzt ja, und strenger als vorher:
+  // fahren und dafuer auf der Geraden kompensieren?" Jetzt ja, und gegen die Bestzeit geregelt:
   //   Haarnadel (darauf oder in den naechsten zwei Teilen): nie schneller als ein NPC (1,0) -
   //     aufgeholt wird nur auf der Geraden;
-  //   normale Kurve (darauf oder im naechsten Teil): hoechstens 10 % ueber dem NPC-Kurventempo;
-  //   Gerade: bis 60 % darueber.
+  //   Kurve/Gerade: Deckel ist das MAX-Tempo dieses Teils (ghostMaxTempo), also das Profil der
+  //     schnellsten Ghost-Stufe - damit ein schnelles Bestzeit-Tempo erreichbar wird, ohne aus
+  //     der Kurve zu fliegen.
   // Und die Untergrenze hebt ihn nie UEBER das NPC-Tempo: die NPCs fahren die Haarnadel mit
   // 33 %, unter der Leseschwelle - vorher zog die Untergrenze den Challenger dort auf 35 %.
-  var CHALLENGER_MIN = 0.55, CHALLENGER_MAX = 1.6, CHALLENGER_MAX_KURVE = 1.1, CHALLENGER_MAX_HAARNADEL = 1.0;
+  var CHALLENGER_MIN = 0.55;
   var challengerVorrat = { liste: null, r: null, holt: false };
 
   // v1.0.28 BESTELLT: "Koennen wir Challenger und NPC zusammenlegen, und beim Time Attack gelten
@@ -122,7 +123,7 @@
       return challengerDeckeln(car, basis, ch.stufe || 1, !!(spice && spice.haeltAbstand));
     } else {
       if (raceStartedAt === null || raceStartedAt === undefined) return basis;
-      const tMs = Date.now() - raceStartedAt;
+      const tMs = rennZeitJetzt() - raceStartedAt;
       if (tMs < 0) return basis;
       if (ch.ortStart === null) ch.ortStart = ist;
       const n = ch.teile.length;
@@ -143,18 +144,21 @@
   function challengerFaktorAnwenden(car, basis, abw, haeltAbstand) {
     return challengerDeckeln(car, basis, 1 + CHALLENGER_K * abw, haeltAbstand);
   }
-  // Ein Tempofaktor auf das NPC-Zieltempo, je Teil gedeckelt: Haarnadel (darauf oder in den
-  // naechsten zwei Teilen) 1,0, Kurve 1,1, Gerade 1,6. Danach in ghostTick noch Mindesttempo und
-  // Haarnadel-Obergrenze.
+  // Regelt das Zieltempo gegen die Bestzeit-Spur: additiv zum NPC-Tempo (basis + CHALLENGER_K*abw),
+  // denn das multiplikative `basis*f` blieb bei basis*MAX haengen (0,55*1,6=0,88) und konnte ein
+  // schnelles Bestzeit-Tempo nicht erreichen. Der Sicherheitsdeckel ist das MAX-Tempo dieses Teils
+  // (ghostMaxTempo: das Profil der schnellsten Ghost-Stufe, das ohne aus der Kurve zu fliegen
+  // gefahren wird) - in der Haarnadel und beim Abstandhalten nie schneller als das NPC-Tempo.
   function challengerDeckeln(car, basis, faktor, haeltAbstand) {
     const hier = ghostTileInfo(car.tileCode).curve;
     const voraus = ghostAheadTightest(car, 2);
     const haarnadel = hier >= 2 || voraus.tight >= 2;
-    const kurve = hier > 0 || (voraus.tight > 0 && voraus.dist <= 1);
-    let max = haarnadel ? CHALLENGER_MAX_HAARNADEL : kurve ? CHALLENGER_MAX_KURVE : CHALLENGER_MAX;
-    if (haeltAbstand) max = Math.min(max, 1);
-    const f = Math.max(CHALLENGER_MIN, Math.min(max, faktor));
-    return Math.max(Math.min(basis, GHOST_READ_MIN), Math.min(1, basis * f));
+    let max = ghostMaxTempo(car);
+    if (haarnadel) max = Math.min(max, basis);
+    if (haeltAbstand) max = Math.min(max, basis);
+    const f = Math.max(CHALLENGER_MIN, faktor);
+    const soll = basis + (f - 1);
+    return Math.max(Math.min(basis, GHOST_READ_MIN), Math.min(max, soll));
   }
 
   // ---- GUMMIBAND IN STUFEN (v1.1.39, WIP) ------------------------------------------------

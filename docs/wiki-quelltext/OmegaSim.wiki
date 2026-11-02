@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.2.45|appdatum=29.10.2026}}
 [[Datei:OmegaSim-Startseite.png|mini|Titelbildschirm von OmegaSim]]
 '''OmegaSim''' ist eine freie, quelloffene App zur Steuerung von [[Carrera HYBRID]]-Autos per [[Bluetooth Low Energy]]. Sie läuft im Browser (Chrome, Edge) und als Android-App und ergänzt die Autos um ein eigenes Fahrmodell, simulierte Motorgeräusche, computergesteuerte Gegner (NPCs), Rennarten, einen Strecken- und Raum-Editor, Challenges mit Online-Bestenliste und Mehrspieler. OmegaSim ist unabhängig vom Hersteller Carrera; es spricht dieselbe Funkschnittstelle wie die [[Original-App]], deren Protokoll für das Projekt aus Mitschnitten rekonstruiert wurde. Technisch ist OmegaSim eine einzige HTML-Datei mit JavaScript, die ohne Server läuft; die Android-Fassung legt eine dünne Java-Hülle darum. Der Titelbildschirm nennt als Leitsatz „Vollständige Gestaltungsfreiheit für deine Carrera Hybrid Bahn“. In älteren Dateien des Repositorys heißt das Projekt noch „CH Control“.
 
@@ -10,7 +10,7 @@
 |-
 | Lizenz || MIT; mitgelieferte Tonaufnahmen und Druckmuster haben eigene Bedingungen (siehe <code>audio/CREDITS.md</code>)
 |-
-| Aktuelle Version || 1.2.9 vom 26.10.2026 (Schema 1.&lt;Woche&gt;.&lt;Push&gt;)
+| Aktuelle Version || 1.2.45 vom 29.10.2026 (Schema 1.&lt;Woche&gt;.&lt;Push&gt;)
 |-
 | Plattformen || Browser mit Web Bluetooth (Chrome, Edge) am PC und unter Android; Android-App (APK, ab Android 7); auf iPhone/iPad nur Streckenbau und Doku
 |-
@@ -135,6 +135,8 @@ Hier stehen nur die Einstellungen, die OmegaSim als Ganzes betreffen; die übrig
 |-
 | <code>10-ble-explorer.js</code> || Öffnet den gemeinsamen Gültigkeitsbereich; BLE-Werkbank, <code>crc8()</code>, Wörterbücher Englisch/Spanisch und Übersetzungsmechanik.
 |-
+| <code>15-pause.js</code> || Lokale [[Rennarten#Rennpause|Rennpause]]: eigene Uhr, Wiederanlauf-Ampel, pausierbare Renn-Timeouts.
+|-
 | <code>20-protocol.js</code> || Das 20-Byte-Befehlspaket, der 45-ms-Herzschlag, das Schreibschloss je Merkmal und der RC-Gasverlauf.
 |-
 | <code>30-input.js</code> || Eingabe: wer darf steuern (Tastatur, Gamepad, Touch, Neigung), Tempo-Skalen, Mitschrift.
@@ -179,7 +181,9 @@ Hier stehen nur die Einstellungen, die OmegaSim als Ganzes betreffen; die übrig
 |-
 | <code>80b-dualsense.js</code> || Trigger-Effekt des DualSense-Controllers bei ABS (WIP, WebHID).
 |-
-| <code>80c-rennstand.js</code> || Ansagen zum Rennstand aus vorproduzierten Sprachclips.
+| <code>80c-rennstand.js</code> || Ansagen zum Rennstand aus vorproduzierten Sprachclips (siehe [[Rennarten#Rennstand-Ansage]]).
+|-
+| <code>80d-rennintro.js</code> || Rennintro vor der Startampel (siehe [[Rennarten#Rennintro]]).
 |-
 | <code>90-ghosts.js</code> || Garage und Verbindungen, NPCs, Ortung auf der Strecke, Gamepad-Belegung (siehe [[NPC-Fahrverhalten]], [[Safety Car und Reinigungswagen]]).
 |-
@@ -217,11 +221,13 @@ Hier stehen nur die Einstellungen, die OmegaSim als Ganzes betreffen; die übrig
 |-
 | <code>98d-profile.js</code> || Profile und Presets je Menü.
 |-
-| <code>98e-statistik.js</code> || Statistiken (Kilometer, Ranglisten).
+| <code>98e-statistik.js</code> || Statistiken (Kilometer, Ranglisten); <code>98ea-statistik-bereinigen.js</code> und <code>98eb-statistik-zeiten.js</code> zur [[OmegaSim#Statistikbereinigung|Statistikbereinigung]].
 |-
 | <code>98f-studie.js</code> || OmegaLab: Studie mit Fragebogen und Fahr-Challenge (WIP).
 |-
 | <code>98g-telemetrie-seite.js</code> || Seite Optionen → Telemetrie (WIP).
+|-
+| <code>98h-pause.js</code> || Rennpause: Anzeige und Bedienung im Cockpit (siehe [[Rennarten#Rennpause]]).
 |-
 | <code>99-index.tail.html</code> || Schließt den gemeinsamen Gültigkeitsbereich und das Skript-Element.
 |}
@@ -315,6 +321,8 @@ Alles liegt im <code>localStorage</code> des Browsers bzw. der App-WebView, unte
 |-
 | <code>chc.sessions.v1</code> || Sitzungshistorie: Rennen mit allen Rundenzeiten (bis 200 Rennen)
 |-
+| <code>chc.statistics.undo.v1</code> || Sicherung des vorherigen Statistikstands für „Letzte Bereinigung rückgängig“ (seit einem Folgepatch in IndexedDB)
+|-
 | <code>chc.auto.v1</code> || Selbstsicherung aller Regler
 |-
 | <code>chc.presets.v1</code>, <code>chc.menupresets.v1</code>, <code>chc.profile.v1</code> || Presets und Profile
@@ -340,6 +348,32 @@ Alles liegt im <code>localStorage</code> des Browsers bzw. der App-WebView, unte
 | <code>omegasim-meisterschaft</code>, <code>omegasim-studie</code>, <code>omegasim-telemetrie</code>, <code>omegasim-vf-…</code> || Meisterschaft, Studie, Telemetrie, virtuelles Fahren
 |}
 '''Sicherungsdatei.''' Optionen → Daten sichern schreibt alle Schlüssel mit diesen Präfixen in eine JSON-Datei vom Typ <code>omegasim-sicherung</code> (Version 1), dazu den Stand der Regler aus Optionen und Steuerung. Eine Präfixregel statt einer Schlüsselliste ist Absicht: Beim Sammeln fanden sich zwölf Schlüssel im Quelltext und ein dreizehnter (die Tastenbelegung, 1223 Byte Handarbeit) erst im laufenden Browser; eine Liste hätte ihn vergessen. Ein Selbsttest prüft, dass jede bekannte Schlüsselkonstante unter die Regel fällt. In der App schreibt <code>OmegaSicherung</code> die Datei zusätzlich nach ''Dokumente/OmegaSim/OmegaSim-Sicherung.json''; sie überlebt eine Deinstallation, und eine neue Installation öffnet sie über den Dateiwähler. Seit 0.8.96 bittet die App den Browser außerdem, den Speicher dauerhaft zu halten (<code>navigator.storage.persist()</code>).
+
+=== Statistikbereinigung ===
+Die '''Statistikbereinigung''' (Optionen → Statistiken → „Statistiken bereinigen“, übernommen aus dem PR von Playdater1974; als WIP gekennzeichnet) entfernt gezielt Teile der Statistikablage, mit Vorschau, Rückfrage und Rückgängig. Sie liegt in <code>src/98ea-statistik-bereinigen.js</code> und <code>src/98eb-statistik-zeiten.js</code>.
+
+{| class="wikitable"
+! Löschart !! Was entfernt wird
+|-
+| Auto (Name und Kennung) || seine Lebenszeit-Statistik und seine Anteile aus gespeicherten Sitzungen; Mitfahrer und Garagenkonfiguration (Foto, Name, Farbe) bleiben erhalten
+|-
+| Einzelne Sitzung (Datum/ISO-Zeit, Modus, Autos, Runden, Bestzeit, Streckencode) || nur diese Sitzung
+|-
+| Zu kurze Zeiten je Strecke || alle gespeicherten Sitzungsrunden mit Zeiten strikt unter dem Grenzwert in Sekunden, samt ihrer indexbezogenen Boxen-/Crash-Ereignisse
+|}
+
+* Umfang und Sonderfälle werden vor dem Löschen angezeigt und nochmals bestätigt. Falls durch eine Auto-Löschung keine Teilnehmer übrigbleiben, wird die Sitzung entfernt.
+* Beim Löschen von Spieler 1 werden auch seine sitzungsweiten Kilometer, Fahrstil- und Strafdaten entfernt; bei NPC-Löschung bleiben diese Spielerwerte erhalten.
+* Beide Ansichten (Statistiken und die Sitzungsliste in Renneinstellungen) sowie CSV-Exports verwenden danach die bereinigte Statistikablage.
+* Bereinigung und Undo sind im laufenden Rennen/Training oder virtuellen Fahren gesperrt.
+* Zu kurze Runden: Strecke über ihren Code; Drehung und gespiegeltes Layout gehören wie bei den Bestzeiten zur gleichen Strecke. Rundenanzahl und betroffene Fahrzeugrekorde werden korrigiert; Kilometer, Sitzungsanzahl und Kilometerbuchungen bleiben bewusst unverändert. Zusätzlich werden zu kurze lokale Time-Attack-Bestzeiten samt Medaille zurückgesetzt; lokale Telemetrie-Einträge unter dem Grenzwert werden entfernt.
+* Nach jeder Bereinigung und nach Rückgängig werden Auswahl- und Statistiklisten sofort neu aufgebaut; der Bereich bleibt aufgeklappt.
+
+'''Sicherung und Rückgängig:''' Vor jeder Löschung wird der vorherige Statistikstand automatisch und bytegetreu unter <code>chc.statistics.undo.v1</code> gesichert (seit einem Folgepatch asynchron in IndexedDB, Datenbank <code>omegasim-statistics-backups</code>). Schlägt die Sicherung fehl, wird nicht gelöscht. „Letzte Bereinigung rückgängig“ funktioniert auch nach Neuladen, solange die Ablagen seit der Löschung unverändert sind. „Statistik-Sicherung als JSON“ exportiert den VORHERIGEN Stand im Format des Sicherungsimports.
+
+'''Altdaten:''' Die Lebenszeit-Summen sind unabhängig von den letzten maximal 200 Sitzungen und werden bewusst nicht aus diesem begrenzten Archiv neu aufgebaut. Neu gespeicherte Sitzungen erhalten pro Auto <code>statistikBuchung</code> mit dem exakt gebuchten Schlüssel und den km-/Runden-/Sitzungsbeiträgen; beim Löschen werden nur diese exakten Beiträge abgezogen. Alte Sitzungen ohne diese Buchung: Runden und Sitzungsanzahl werden abgezogen, soweit die Zuordnung eindeutig ist, die Lebenszeit-Kilometer bleiben unverändert (Vorschau und Rückfrage weisen darauf hin). Gerätekennungen haben Vorrang vor Namen; mehrdeutige Altdaten erscheinen als eigene <code>name:…</code>-Gruppe.
+
+* Selbsttest „Statistikbereinigung v1.2.15“ in <code>src/95-selftest.js</code>.
 
 === Sprachen (i18n) ===
 Übersetzt wird mit dem '''deutschen Text als Schlüssel'''<ref>Kommentare zu <code>I18N_EN</code>, <code>i18nLookup()</code>, <code>t()</code>, <code>src/10-ble-explorer.js</code>.</ref>:
@@ -457,6 +491,9 @@ Ein Rennen mit Spieler 1 und vier NPCs: Spieler 1 sendet alle 45 ms, also 22,2 P
 * <code>android-app/…/OmegaSicherungPlugin.java</code>, <code>MainActivity.java</code>
 * <code>src/97b-app.js</code>: <code>appAnbinden()</code>, <code>pruefen()</code>
 * <code>src/98b-sicherung.js</code>: <code>SICHERUNG_PRAEFIXE</code>, <code>SICHERUNG_TYP</code>
+* <code>src/98e-statistik.js</code>, <code>src/98ea-statistik-bereinigen.js</code>, <code>src/98eb-statistik-zeiten.js</code>: Statistik, Bereinigung, Zeitbereinigung
+* <code>src/15-pause.js</code>, <code>src/98h-pause.js</code>: Rennpause
+* <code>src/80c-rennstand.js</code>, <code>src/80d-rennintro.js</code>: Rennstand-Ansage und Rennintro
 * <code>src/10-ble-explorer.js</code>: <code>I18N_EN</code>, <code>I18N_ES</code>, <code>i18nApply()</code>, <code>setLang()</code>, <code>t()</code>
 * <code>src/95-selftest.js</code>: <code>stAdd()</code>, <code>ST_TESTS</code>; <code>src/93-testbench.js</code>: <code>OMEGA_TEST</code>
 * <code>src/20-protocol.js</code>: <code>controlHeartbeat()</code>, <code>CONTROL_SEND_INTERVAL_MS</code>

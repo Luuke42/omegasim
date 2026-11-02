@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motorsound - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Motorsound</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.50</b> vom 30.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Ton.png" class="mw-file-description"><img src="images/250px-OmegaSim-Ton.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Ton.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Die Seite Optionen → Ton in OmegaSim</figcaption></figure>
+<p>Der <b>Motorsound</b> von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> ist der Klang, den das <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Auto über die Web Audio API erzeugt, während es fährt. Er folgt der Drehzahl und dem Gas des Fahrzeugs und besteht aus mehreren nahtlos aneinandergereihten <b>Drehzahlbändern</b>. Es gibt zwei Wege, wie die Klänge entstehen: eine <b>Synthese</b> nach dem Modell von <i>engine-sim</i> und echte <b>Aufnahmen</b>. Beides wird in der App gleich abgespielt.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Menüpfad</td>
+<td>Optionen → Ton → Motorsound-Profil; Motorwerkstatt für eigene Klänge
+</td></tr>
+<tr>
+<td>Motoren</td>
+<td>41 Profile (GT3, Formel 1, Tourenwagen, historische Rennwagen, Straßenklassiker, Aufnahmen)
+</td></tr>
+<tr>
+<td>Klangerzeugung</td>
+<td>Synthese (engine-sim) und Aufnahmen; beides als Ogg-Drehzahlbänder
+</td></tr>
+<tr>
+<td>Werkzeug</td>
+<td><b>Motorwerkstatt</b> (Optionen → Ton): zwölf Regler, Drehzahl-Slider, drei Diagramme, „Als Profil übernehmen“
+</td></tr>
+<tr>
+<td>Quelle</td>
+<td><code>tools/engine_synth.py</code>, <code>tools/engine_fx.py</code>, <code>tools/engine_loops.py</code>, <code>src/80-sound.js</code>, <code>src/94-engine-workshop.js</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Wie_der_Motorsound_entsteht">Wie der Motorsound entsteht</h2></div>
+<p>Der Klang eines Motors ist kein einzelner Ton, sondern ein Zug von <b>Zündimpulsen</b>, die durch die <b>Resonanz des Auspuffs</b> geformt werden. Entscheidend ist dabei nicht die Tonhöhe, sondern das <b>Muster der Zündung</b>: Ein gleichmäßig zündender Reihen- oder Boxer-Sechser klingt wie ein glattes Kreischen, ein <b>Cross-Plane-V8</b> zündet innerhalb jeder Bank ungleichmäßig – das ist das „Blubbern“, das man von amerikanischen V8 kennt.
+</p><p>Die Zündrate ist physikalisch bestimmt:
+</p>
+<pre>Zündrate [Hz] = Umdrehungen/min ÷ 60 × Zylinder ÷ 2</pre>
+<p>Für jede Drehzahl wird eine eigene Schleife gerechnet. Damit die Abspielrate nie mehr als eine Oktave streckt, baut die App eine <b>Bandleiter</b> aus den Ankern Leerlauf, Mitte, Vollgas und geometrischen Zwischenstufen. Jede Schleife ist ein ganzzahliges Vielfaches eines 720°-Arbeitszyklus und alle Filter sind zirkulär gefaltet – die Schleife ist also exakt periodisch und hat keine Naht.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Die_verfügbaren_Motoren"><span id="Die_verf.C3.BCgbaren_Motoren"></span>Die verfügbaren Motoren</h2></div>
+<p>Unter <b>Optionen → Ton → Motorsound-Profil</b> (<code>#sound-profile</code>) stehen 41 Profile, gruppiert:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Gruppe</th>
+<th>Beispiele
+</th></tr>
+<tr>
+<td>GT3 / GT-Rennmotoren</td>
+<td>Porsche 911 GT3 R (Boxer-6), BMW M4 GT3, Ford Mustang GT3 (Cross-Plane), Ferrari 296 GT3 (V6), Mercedes-AMG GT3, Corvette C6.R/C5-R, Corvette Z06 GT3.R, Aston Martin Vantage GT3, Huracan GT3/R8 LMS (V10)
+</td></tr>
+<tr>
+<td>Formel 1</td>
+<td>F1 2026 (1,6-l-V6 Turbo-Hybrid)
+</td></tr>
+<tr>
+<td>Langstrecken-Prototyp</td>
+<td>Lister Storm LMP (Jaguar-V12)
+</td></tr>
+<tr>
+<td>Tourenwagen, DTM, NASCAR</td>
+<td>Audi RS5 DTM 2019, Chevrolet Impala SS NASCAR
+</td></tr>
+<tr>
+<td>Historische Rennwagen</td>
+<td>Ford GT40 Mk I, Lola T70 Mk3B, Ferrari 330 P4, Maserati MC12, Ford Capri Zakspeed, Porsche 935 K4
+</td></tr>
+<tr>
+<td>Straßen- und Rallyeklassiker</td>
+<td>Lamborghini Countach LP500, Subaru Impreza WRX STI 1999
+</td></tr>
+<tr>
+<td>Amerikanische Straßenmotoren</td>
+<td>Dodge Challenger SRT Demon, Ford Mustang 390 GT, Chevrolet Blazer 1990
+</td></tr>
+<tr>
+<td>Alltagsklassiker vor 1970</td>
+<td>Ford Tudor Slantback 1937, VW Käfer 1300
+</td></tr>
+<tr>
+<td>Speed Dreams (Aufnahmen)</td>
+<td>sd_v8gt, sd_v10, sd_v8muscle, sd_v8alt, sd_v12, sd_toro, sd_v5r, sd_lynx, sd_fmc, sd_boxer
+</td></tr>
+<tr>
+<td>Aufnahmen des Nutzers</td>
+<td>AMG GT3, Huracán GT3 Evo
+</td></tr></tbody></table>
+<p>Jeder Motor führt sein eigenes Drehzahlband. Zum Beispiel dreht der Porsche 911 GT3 R von Leerlauf 1200 bis Begrenzer 8800 U/min, der Formel-1-Motor von 4200 bis 12500, und der Blazer von 650 bis 5000 – damit Anzeige und Ton dieselbe Drehzahl zeigen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Beispielklänge"><span id="Beispielkl.C3.A4nge"></span>Beispielklänge</h2></div>
+<p>Zum Anhören liegen die fertigen Ogg-Dateien im <code>audio/</code>-Ordner der App:
+</p>
+<ul><li><b>Drehzahlbänder</b> eines Motors, z. B. <code>audio/p992gt3r_idle.ogg</code>, <code>p992gt3r_mid.ogg</code>, <code>p992gt3r_high.ogg</code> (Leerlauf, Mitte, Vollgas) oder <code>audio/mustang_idle.ogg</code>/<code>_mid</code>/<code>_high</code> (Cross-Plane-V8).</li>
+<li><b>Beschleunigungs-Demo</b>: <code>audio/p992gt3r_demo.ogg</code> – ein voller Fahrzyklus mit Gangwechseln.</li>
+<li><b>Motorstart</b>: <code>audio/p992gt3r_start.ogg</code> – Anlasser, Anspringen, Leerlauf.</li>
+<li><b>Effekte</b>: <code>audio/brake_squeal.ogg</code>, <code>audio/tyre_squeal.ogg</code>, <code>audio/crash_*.ogg</code>, <code>audio/shift_up/down.ogg</code>, <code>audio/pit_wrench.ogg</code>.</li></ul>
+<p>Am besten hört man die Unterschiede aber in der <b>Motorwerkstatt</b>, wo man den Drehzahl-Slider zieht und den Motor bei jeder Drehzahl anhört.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Die_Motorwerkstatt:_das_Drehzahl-Werkzeug">Die Motorwerkstatt: das Drehzahl-Werkzeug</h2></div>
+<p>Unter <b>Optionen → Ton → Motorwerkstatt</b> läuft der komplette Synthese-Kern live im Browser. Jede Änderung ist sofort hörbar, ohne dass eine Datei entsteht.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Regler">Regler</h3></div>
+<p>Zwölf Regler und Auswahlen:
+</p>
+<ul><li><b>Zylinder</b> (3–12), <b>Bauart</b> (Reihe / V / Boxer), <b>Kurbelwelle</b> (gleichmäßig/Flat-Plane oder Cross-Plane)</li>
+<li><b>Drehzahl</b> (<code>#mw-rpm</code>, 700–18000, Schritt 50) – der <b>Drehzahl-Regler</b></li>
+<li><b>Primärrohr</b> (6–60″), <b>Impulslänge</b>, <b>Auspuffnachhall</b>, <b>Sättigung</b>, <b>Ventiltrieb</b>, <b>Zündstreuung</b>, <b>Ansauganteil</b>, <b>Last</b> (Zug/Schub)</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Anhören"><span id="Anh.C3.B6ren"></span>Anhören</h3></div>
+<p>Der Knopf <b>Anhören</b> rendert eine nahtlose Schleife bei der eingestellten Drehzahl und spielt sie in einer Schleife ab. Das Rendern läuft über einen <code>OfflineAudioContext</code> mit Faltungsnachhall, damit der Regler nicht hakt. Wird ein Regler bewegt, während eine Schleife läuft, wird automatisch neu gerendert – der Drehzahl-Regler wirkt also wie ein <b>Rev-Regler</b>, der den Motor bei der gewählten Drehzahl vorführt.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Diagramme">Diagramme</h3></div>
+<p>Drei Live-Diagramme aus demselben Modell:
+</p>
+<ul><li>die <b>Zündfolge über 720°</b> (Bank A/B, Abstände in Grad),</li>
+<li>ein <b>Zündimpuls mit Nachhall</b> (roh grau, nach Rohr und Sättigung orange),</li>
+<li>die <b>Resonanz des Rohrs</b> (blaue Marke <code>c/(4L)</code>, rote Marke = Zündrate).</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Als_Profil_übernehmen"><span id="Als_Profil_.C3.BCbernehmen"></span>Als Profil übernehmen</h3></div>
+<p>Der Knopf <b>Als Profil übernehmen</b> rendert drei Bänder (Leerlauf, Mitte, Vollgas bei 30&#160;%, 100&#160;%, 175&#160;% der Drehzahl) und fügt das Ergebnis als neues Profil in die Motorsound-Liste ein – der eigene Motor ist dann im Cockpit fahrbar. Daneben lassen sich Klänge in <code>localStorage</code> ablegen und als JSON exportieren/importieren.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a></li>
+<li><a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>tools/engine_synth.py</code>: <code>CARS</code>, <code>synth_loop()</code>, <code>band_ladder()</code>, <code>cross_plane_v8()</code>, <code>main()</code></li>
+<li><code>tools/engine_fx.py</code>: <code>render_rpm_curve()</code>, <code>engine_start()</code>, <code>brake_squeal()</code>, <code>tyre_squeal()</code>, <code>crash()</code></li>
+<li><code>src/80-sound.js</code>: <code>loadEngineSamples()</code>, <code>startSampleEngineIn()</code>, <code>updateSampleEngineIn()</code>, <code>sampleWeights()</code>, <code>extrasWerte()</code></li>
+<li><code>src/94-engine-workshop.js</code>: <code>mwListen()</code>, <code>mwRender()</code>, <code>mwAdopt()</code></li>
+<li><code>audio/loops.json</code>, <code>audio/fx.json</code>, <code>audio/CREDITS.md</code></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+
+<!-- 
+NewPP limit report
+Parsed by mw183
+Cached time: 20261030070857
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.037 seconds
+Real time usage: 0.044 seconds
+Preprocessor visited node count: 59/1000000
+Revision size: 7389/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 66/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.945      1 Vorlage:Stand
+100.00%    3.945      1 -total
+-->
+
+<!-- Render ID c5f6dcff-d430-11f1-9d0c-bc2411058fd2 -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boxenstopp - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Boxenstopp</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Rennen.png" class="mw-file-description"><img src="images/250px-OmegaSim-Rennen.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Rennen.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Das Cockpit; der Boxenschirm ist einer seiner Schirme</figcaption></figure>
+<p>Der <b>Boxenstopp</b> ist die Funktion von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>, mit der ein Fahrzeug während einer Sitzung getankt, mit neuen Reifen versehen und repariert wird. Er setzt die simulierten Zustände aus dem Artikel <a href="./Verschleiß.html" title="Verschleiß">Verschleiß</a> zurück und kostet dafür Standzeit. Eine echte Boxengasse braucht es nicht: In der Vorgabe wird ein angeforderter Stopp dadurch bedient, dass das Auto an beliebiger Stelle anhält. Technisch ist der Boxenstopp eine <b>Zustandsmaschine</b> mit drei Zuständen (aus, Anfahrt mit Tempolimit, Service), die im 45-ms-Takt der Steuerung läuft. Ab Werk ist das <b>Boxen-Minigame</b> eingestellt, bei dem Tastendrücke den Stopp verkürzen. Auch NPCs können an die Box fahren; sie parken dafür mit derselben aufgenommenen Einparkfolge wie das <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car</a>.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Menüpfade</td>
+<td>Optionen → Allgemein → Tank &amp; Schaden (Boxengasse, Modus); Optionen → Renneinstellungen (Pflichtstopps, Strafe, Weich-Verbot); Optionen → NPCs (NPC-Boxenstopp); Optionen → Ton (Signaltöne)
+</td></tr>
+<tr>
+<td>Anfordern</td>
+<td>Knopf Boxenstopp im Cockpit oder Boxentaste des Controllers
+</td></tr>
+<tr>
+<td>Boxenmodus</td>
+<td>Minigame (Vorgabe, experimentell) oder Standard
+</td></tr>
+<tr>
+<td>Boxengasse</td>
+<td>Überall halten (Vorgabe), Neben der Strecke, Doppelter Start-Ausdruck (experimentell)
+</td></tr>
+<tr>
+<td>Tempolimit</td>
+<td>80 km/h auf dem Tacho, 60 km/h beim doppelten Ausdruck
+</td></tr>
+<tr>
+<td>Reifenwechsel</td>
+<td>im Mittel 4,0 s (Streuung 0,2 s), erst hinten, dann vorn
+</td></tr>
+<tr>
+<td>Tanken</td>
+<td>22&#160;% je Sekunde (24,2 l/s)
+</td></tr>
+<tr>
+<td>Minigame</td>
+<td>5 Tasten, je richtige Taste 8&#160;% der Grunddauer weniger
+</td></tr>
+<tr>
+<td>Pflichtstopp zählt</td>
+<td>ab 3 s Standzeit im Rennen
+</td></tr>
+<tr>
+<td>NPC-Boxenstopp</td>
+<td>experimentell, ab Werk aus, 5 s, alle 5 bis 9 Runden
+</td></tr>
+<tr>
+<td>Status</td>
+<td>Grundablauf stabil; Minigame und doppelter Ausdruck experimentell; NPC-Box WIP; Weich-Verbot WIP
+</td></tr>
+<tr>
+<td>Quelldateien</td>
+<td><code>src/70-race.js</code>, <code>src/90-ghosts.js</code>, <code>src/71-rammen.js</code>, <code>src/50-drive.js</code>, <code>audio/CREDITS.md</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Zustandsmaschine">Zustandsmaschine</h3></div>
+<p>Eine <b>Zustandsmaschine</b> (auch Automat) ist eine Beschreibung eines Ablaufs als feste Liste von Zuständen und Regeln, wann man von einem in den nächsten wechselt. Ein Beispiel aus dem Alltag ist eine Ampel: rot → rot-gelb → grün → gelb → rot. Jeder Wechsel hat eine Bedingung, zum Beispiel „Zeit abgelaufen“. Der Vorteil: Der Ablauf ist eindeutig, und das Programm muss sich nur den aktuellen Zustand merken. Beim Boxenstopp heißt der Zustand <code>pitState</code> und hat die Werte <code>off</code> (aus), <code>limited</code> (angefordert, Tempolimit aktiv) und <code>servicing</code> (Service läuft).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Takt_und_Ereignis">Takt und Ereignis</h3></div>
+<p>Manche Wechsel geschehen durch ein <b>Ereignis</b> (ein Tastendruck, das Überfahren eines Musters), andere werden in jedem <b>Takt</b> geprüft (steht das Auto schon?). <code>pitLaneTick()</code> läuft im Steuertakt von 45 ms und rechnet Tanken, Reparatur und Reifenwechsel mit der verstrichenen Zeit <code>dt</code> weiter.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Plan_und_Arbeit">Plan und Arbeit</h3></div>
+<p>Ein Boxenstopp hat einen <b>Plan</b>: drei Aufgaben (Tanken, Reifen, Reparatur), jede an oder aus, das Tanken mit einer Zielmenge. Jede Aufgabe ist fertig, wenn ihr Ziel erreicht ist. Der Stopp ist fertig, wenn alle geplanten Aufgaben fertig sind. Laufen mehrere Aufgaben gleichzeitig, bestimmt die längste die Dauer.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Normalverteilung">Normalverteilung</h3></div>
+<p>Die Dauer des Reifenwechsels ist nicht fest, sondern wird je Stopp <b>gezogen</b>: aus einer Normalverteilung (Glockenkurve) mit Mittelwert 4,0 s und Standardabweichung 0,2 s. Rund zwei Drittel aller Wechsel liegen zwischen 3,8 und 4,2 s. Der Code erzeugt den Wert mit dem Box-Muller-Verfahren aus zwei Zufallszahlen: <code>4,0 + 0,2 · √(−2·ln u) · cos(2π·v)</code>.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Stopp_mit_dem_eigenen_Auto">Stopp mit dem eigenen Auto</h3></div>
+<ol><li>Während der Fahrt den Knopf <b>Boxenstopp</b> im Cockpit oder die Boxentaste am Controller drücken. Die Boxengasse ist jetzt aktiv, das Tempolimit von 80 km/h (Tacho) gilt.</li>
+<li>Während der Anfahrt planen: L1/LB schaltet die Reifenmischung durch (weich, mittel, hart, Regen; Vorgabe die montierte), R1/RB die Tankmenge (nein, 55 l, voll). Der Boxenschirm im Cockpit zeigt die Aufgaben und lässt sich mit dem Steuerkreuz bedienen.</li>
+<li>Anhalten. Unter 10 km/h und ohne Pedal beginnt der Service (bei „Neben der Strecke“ erst, wenn das Auto neben der Bahn steht).</li>
+<li>Im <b>Minigame</b> erscheinen nacheinander fünf Tasten, Quadrat oder Kreis (Tastatur: K und I). Die richtige drücken. Darunter stehen die aktuelle und die drei nächsten Tasten.</li>
+<li>Nach „Fertig, losfahren!“ losfahren. Im Standardmodus beendet Losfahren den Stopp jederzeit; im Minigame geht es erst, wenn alles fertig ist.</li>
+<li>Abbrechen: ein weiterer Druck auf den Boxenknopf (nicht, solange die Räder ab sind), im Minigame Tippen auf das Kreuz.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="NPC-Boxenstopp_einschalten">NPC-Boxenstopp einschalten</h3></div>
+<ol><li><b>Optionen → NPCs → NPC: Boxenstopp</b> einschalten (ab Werk aus).</li>
+<li>Länge, frühesten und spätesten Stopp in Runden einstellen.</li>
+<li>Mit „NPC: Boxenstopp im freien Fahren“ (ab Werk an) gilt es auch außerhalb von Rennen.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<table class="wikitable sortable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich</th>
+<th>Standard</th>
+<th>Wirkung (aus dem Code)</th>
+<th>Interne ID → Variable
+</th></tr>
+<tr>
+<td>Boxengasse aktiv</td>
+<td>an/aus</td>
+<td>an</td>
+<td>aus: kein Tempolimit, kein Service, ein laufender Stopp wird beendet</td>
+<td><code>pit-enable</code> → <code>pitLaneEnabled</code>
+</td></tr>
+<tr>
+<td>Wo ist die Boxengasse?</td>
+<td>Überall halten, Neben der Strecke, Doppelter Start-Ausdruck</td>
+<td>Überall halten</td>
+<td>bestimmt Auslöser und Ort des Service</td>
+<td><code>pit-trigger</code> → <code>pitTrigger</code>
+</td></tr>
+<tr>
+<td>Boxenstopp-Modus (experimentell)</td>
+<td>Standard, Minigame</td>
+<td>Minigame</td>
+<td>siehe <a href="#Ablauf_im_Minigame">Minigame</a></td>
+<td><code>pit-modus</code> → <code>pitModus</code>
+</td></tr>
+<tr>
+<td>Boxeneinfahrt zählt</td>
+<td>1 Runde, 0 Runden</td>
+<td>1 Runde</td>
+<td>nur beim doppelten Ausdruck: ob die erste Überfahrt eine Runde bleibt</td>
+<td><code>pit-double-laps</code> → <code>pitDoubleRunden</code>
+</td></tr>
+<tr>
+<td>Zeitfenster des Doppel-Ausdrucks</td>
+<td>3 bis 10 s</td>
+<td>3 s</td>
+<td>so lange nach dem ersten Kontakt zählt ein zweiter als Einfahrt</td>
+<td><code>setting-pit-double-window</code> → <code>PIT_DOUBLE_WINDOW_MS</code>
+</td></tr>
+<tr>
+<td>Vollständige Reparatur dauert (s)</td>
+<td>2 bis 30</td>
+<td>4</td>
+<td>Gesamtzeit 100&#160;% → 0&#160;% Schaden, nicht linear</td>
+<td><code>setting-repair-time</code> → <code>pitFullRepairS</code>
+</td></tr>
+<tr>
+<td>Tankverbrauch, Crash-Regler</td>
+<td>siehe <a href="./Verschleiß.html" title="Verschleiß">Verschleiß</a></td>
+<td></td>
+<td>ohne Tanksimulation wird nicht getankt, ohne Reifenmodell nicht gewechselt, ohne Crash-Erkennung nicht repariert</td>
+<td>
+</td></tr>
+<tr>
+<td>Pflichtboxenstopps, Renneinstellungen</td>
+<td>keine, 1, 2, 3</td>
+<td>keine</td>
+<td>Zahl der vorgeschriebenen Stopps</td>
+<td><code>race-pit-required</code> → <code>racePitRequired</code>
+</td></tr>
+<tr>
+<td>Strafe je verpasstem Stopp (s)</td>
+<td>0 bis 300</td>
+<td>10</td>
+<td>Zeitstrafe am Rennende</td>
+<td><code>race-pit-penalty</code> → <code>racePitPenaltyS</code>
+</td></tr>
+<tr>
+<td>Strafe für Rammer (experimentell)</td>
+<td>aus, nach 1 bis 5 Rammstößen</td>
+<td>nach 2</td>
+<td>Rammer steht beim nächsten Stopp zusätzlich</td>
+<td><code>race-ramm-ab</code>
+</td></tr>
+<tr>
+<td>Länge der Rammstrafe</td>
+<td>3, 5, 10, 15, 20 s</td>
+<td>5 s</td>
+<td>zusätzliche Standzeit</td>
+<td><code>race-ramm-strafe</code>
+</td></tr>
+<tr>
+<td>Weiche Reifen verboten (WIP)</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>weich ist nicht wählbar; beim Start wird mittel montiert</td>
+<td><code>race-weich-verboten</code>
+</td></tr>
+<tr>
+<td>Alte Boxen-Signaltöne, Optionen → Ton</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>elektronische statt mechanischer Signale</td>
+<td><code>setting-pit-alt-toene</code>
+</td></tr>
+<tr>
+<td>NPC: Boxenstopp (experimentell)</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>NPCs fahren an die Box</td>
+<td><code>ghost-pit</code> → <code>ghostCfg.pitAn</code>
+</td></tr>
+<tr>
+<td>NPC: Boxenstopp im freien Fahren</td>
+<td>an/aus</td>
+<td>an</td>
+<td>auch außerhalb eines Rennens</td>
+<td><code>ghost-pit-free</code> → <code>ghostCfg.pitFrei</code>
+</td></tr>
+<tr>
+<td>NPC: Boxenstopp-Länge (experimentell)</td>
+<td>3 bis 10 s</td>
+<td>5 s</td>
+<td>Standzeit eines NPC</td>
+<td><code>ghost-pit-sec</code> → <code>ghostCfg.pitSek</code>
+</td></tr>
+<tr>
+<td>NPC: Boxenstopp frühestens nach</td>
+<td>2 bis 20 Runden</td>
+<td>5</td>
+<td>untere Grenze des Bandes</td>
+<td><code>ghost-pit-min</code> → <code>ghostCfg.pitRundenMin</code>
+</td></tr>
+<tr>
+<td>NPC: Boxenstopp spätestens nach</td>
+<td>2 bis 20 Runden</td>
+<td>9</td>
+<td>obere Grenze des Bandes</td>
+<td><code>ghost-pit-max</code> → <code>ghostCfg.pitRundenMax</code>
+</td></tr>
+<tr>
+<td>Vibration: Boxenstopp, Optionen → Vibration</td>
+<td>an/aus</td>
+<td>an</td>
+<td>Brummen, solange gearbeitet wird</td>
+<td><code>vib-box</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Zustandsmaschine_des_eigenen_Autos">Zustandsmaschine des eigenen Autos</h3></div>
+<p><code>setPitState()</code> und <code>pitLaneTick()</code> in <code>src/70-race.js</code>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Zustand</th>
+<th>Bedingung</th>
+<th>nächster Zustand</th>
+<th>was passiert
+</th></tr>
+<tr>
+<td><code>off</code></td>
+<td>Boxenknopf (nicht bei doppeltem Ausdruck, nicht im Derby)</td>
+<td><code>limited</code></td>
+<td>Plan wird aus der Vorwahl gebaut, Tempolimit an
+</td></tr>
+<tr>
+<td><code>off</code></td>
+<td>zweiter Start-Kontakt im Zeitfenster (doppelter Ausdruck)</td>
+<td><code>limited</code></td>
+<td>60 km/h für 4 s, Ansage „Boxenstopp eingeleitet“
+</td></tr>
+<tr>
+<td><code>off</code></td>
+<td>Boxenmarker-Code überfahren, nicht innerhalb von 2,5 s nach einem Abbruch</td>
+<td><code>limited</code></td>
+<td>„Boxengasse, Tempolimit“
+</td></tr>
+<tr>
+<td><code>limited</code></td>
+<td>steht (unter 10 km/h, Pedal unter 10&#160;%) und ist am Ort</td>
+<td><code>servicing</code></td>
+<td>Reifendauer wird gezogen, Schleifenklänge starten, ggf. Minigame
+</td></tr>
+<tr>
+<td><code>limited</code></td>
+<td>steht, aber nicht neben der Bahn (Modus „Neben der Strecke“)</td>
+<td>bleibt</td>
+<td>einmal „NEBEN DIE STRECKE FAHREN“
+</td></tr>
+<tr>
+<td><code>limited</code></td>
+<td>doppelter Ausdruck: 4 s ohne Anhalten</td>
+<td><code>off</code></td>
+<td>„BOXENGASSE VORBEI“
+</td></tr>
+<tr>
+<td><code>limited</code> oder <code>servicing</code></td>
+<td>Boxenknopf (nicht während Reifenwechsel)</td>
+<td><code>off</code></td>
+<td>Abbruch, 2,5 s Sperre gegen sofortiges Wiedereinfahren
+</td></tr>
+<tr>
+<td><code>servicing</code></td>
+<td>Auto rollt wieder (nicht im Minigame vor dem Ende)</td>
+<td><code>off</code></td>
+<td>Stopp endet, Erledigtes bleibt erledigt
+</td></tr>
+<tr>
+<td><code>servicing</code></td>
+<td>alle Aufgaben fertig und Rammstrafe abgesessen</td>
+<td>bleibt (fertig)</td>
+<td>„Fertig, losfahren!“, Signalton
+</td></tr></tbody></table>
+<p>Das Tempolimit setzt <code>speedLimitFactor</code> im Modell. Es gilt immer das strengste von Box, gelber Flagge und Einführungsrunde (<code>applySpeedLimit()</code>). Die Faktoren:
+</p>
+<pre>Box:               80 / TACHO_SCALE / 4,0 = 80 / 68,1 / 4 ≈ 0,294
+doppelter Ausdruck: 60 / REAL_SCALE / 4,0 = 60 / 73,75 / 4 ≈ 0,203</pre>
+<p>Liegt das Auto beim Einfahren über dem Limit, bremst der Begrenzer mit 0,35 Modell-km/h je Sekunde herunter (<code>pitLimiterDecel</code>), statt auf das Limit zu springen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Der_Plan">Der Plan</h3></div>
+<p><code>makePitPlan()</code> baut ihn beim Anfordern:
+</p>
+<pre>Tanken     = 100&#160;%, wenn Tanksimulation an und Tank &lt; 99,5&#160;%, sonst 0
+Reifen     = an, wenn Reifenmodell an
+Reparatur  = an, wenn Schaden &gt; 0,5&#160;%</pre>
+<p>Was im Boxenschirm vorgewählt wurde (<code>pitVorwahl</code>), ersetzt den jeweiligen Wert. Tankstufen sind 0, 50 und 100&#160;% (<code>TANK_STUFEN</code>; 50&#160;% = 55 l). Abtanken gibt es nicht: steht der Tank schon über dem Ziel, ist das Tanken erledigt. Angeboten wird nur, was simuliert wird (<code>pitJobAvailable()</code>). Ist nichts zu tun, steht das Auto 5 s (<code>PIT_EMPTY_STOP_S</code>).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Ablauf_im_Standardmodus">Ablauf im Standardmodus</h3></div>
+<p>Alle Aufgaben laufen gleichzeitig. Je Takt:
+</p>
+<pre>Tanken:    Tank += min(Ziel − Tank, 22 · dt)                         (PIT_FUEL_PER_SEC)
+Reparatur: Schaden −= min(Schaden, Rate(Schaden) · dt)
+           Rate = 25 / (Anteil · Gesamtzeit/10), Anteil 1/2/3/4 je Viertel
+Reifen:    Uhr += dt, fertig bei der gezogenen Dauer max(1,5&#160;; N(4,0&#160;; 0,2))</pre>
+<p>Neue Reifen werden schon beim Beginn montiert (<code>fitTyresForWeather()</code>, <code>resetTyres()</code>): Abnutzung 0, 20 °C (mit Reifenwärmer 85 °C). Die Bremsscheiben kühlen nicht. Solange der Reifenwechsel läuft, ist das Gas gesperrt (<code>pitThrottleLock</code>) und der Stopp nicht abbrechbar. Ist alles fertig, wird eine offene Rammstrafe zusätzlich im Stand abgesessen.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Reifen_paarweise">Reifen paarweise</h4></div>
+<p>Seit 1.1.42 werden erst beide hinteren, dann beide vorderen Räder gewechselt, jedes Paar von zwei Mechanikern zugleich (<code>PIT_RAD_PAARE = [[2, 3], [0, 1]]</code>, Index 0 vorne links bis 3 hinten rechts). Die Reifendauer wird in zwei Fenster geteilt; in jedem ist das Paar während der ersten 66&#160;% ab (<code>PIT_RAD_AB_ANTEIL</code>), im letzten Drittel werden die neuen Räder angezogen. Das Cockpit blendet die abgebauten Räder aus.
+</p>
+<pre>Fenster  = floor(Fortschritt · 2)          (0 = hinten, 1 = vorn)
+ab       = (Fortschritt · 2 − Fenster) ≤ 0,66</pre>
+<div class="mw-heading mw-heading3"><h3 id="Ablauf_im_Minigame">Ablauf im Minigame</h3></div>
+<p>Im Minigame (<code>pitSpielStart()</code>, <code>pitSpielTick()</code>, <code>pitSpielTaste()</code>) wird alles erledigt, was geplant und möglich ist, und Gas und Bremse sind bis zum Ende gesperrt (<code>pitVollSperre</code>). Es gibt das Minigame nur, solange kein zweiter oder dritter Spieler fährt.
+</p><p><b>Grunddauer</b>:
+</p>
+<pre>T = max(5 s&#160;; Reifendauer&#160;; (Ziel − Tank)/22&#160;; Reparaturdauer) + offene Rammstrafe</pre>
+<p><b>Tastenfolge</b>: 5 Tasten (<code>PIT_SPIEL_ANZAHL</code>), jede mit 50&#160;% Wahrscheinlichkeit Quadrat oder Kreis; die letzte ist immer Kreis, damit ein nachfolgendes Quadrat nicht in den Rückwärtsgang schaltet.
+</p><p><b>Zeitfenster</b> je Taste und Pause:
+</p>
+<pre>Fenster = max(0,7 s&#160;; T/5 − 0,25 s)        (PIT_SPIEL_FENSTER_MIN, PIT_SPIEL_PAUSE)
+nach jeder Taste (gedrückt oder abgelaufen) 0,25 s leeres Feld</pre>
+<p><b>Wertung</b> je Taste (<code>PIT_SPIEL_BONUS</code> = 0,08):
+</p>
+<pre>richtig:  Bonus += 0,08 · T      (grüner Haken)
+falsch:   Bonus −= 0,08 · T      (rotes Kreuz)
+abgelaufen: nichts               (seit 1.2.4 weder Haken noch Kreuz)</pre>
+<p><b>Fortschritt</b> und Ende:
+</p>
+<pre>Anteil = min(1, (Standzeit + Bonus) / T)
+Tank    = Tank_Start + (Ziel − Tank_Start) · Anteil
+Schaden = Schaden_Start · (1 − Anteil)
+bei Anteil = 1: Erholung 1,0 s + 0,3 s je Fehler (PIT_ERHOL_BASE, PIT_ERHOL_PRO_FEHLER), dann fertig</pre>
+<p>Alle fünf richtig sparen 40&#160;% der Grunddauer. Der Erfolgston steigt mit jeder Taste (660 Hz + 55 Hz je Taste, die letzte als Dreiklang bis 2400 Hz); ein Fehler klingt als tiefer, fallender Rechteckton.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Spieler_2_und_3">Spieler 2 und 3</h3></div>
+<p>Zusatzspieler haben eine eigene, einfachere Zustandsmaschine (<code>boxAnfordernVon()</code>, <code>boxTickVon()</code>): <code>aus</code> → <code>angefordert</code> (Tempolimit) → <code>service</code> (steht) → <code>aus</code> (losgefahren). Beim Beginn wird die gewählte Mischung montiert, getankt wird auf das eigene Tankziel (100, 75, 50 oder 25&#160;%, <code>TANK_ZIELE_2</code>), repariert wird nach derselben Rate. Fertig ist der Stopp frühestens nach 5 s und nach der Rammstrafe. Ein Minigame gibt es für sie nicht; ihre Klänge laufen auf ihrer Stereoseite.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Regeln_im_Rennen">Regeln im Rennen</h3></div>
+<div class="mw-heading mw-heading4"><h4 id="Pflichtstopps">Pflichtstopps</h4></div>
+<p>Ein Stopp zählt, wenn das Auto beim Verlassen der Box im Rennen (Zustand racing oder finishing) mindestens 3 s gestanden hat (<code>PIT_MANDATORY_STAND_S</code>); ob alle Arbeiten fertig waren, spielt keine Rolle. Am Rennende gilt:
+</p>
+<pre>Strafe = max(0, Pflichtstopps − gezählte Stopps) · Strafe_je_Stopp</pre>
+<p>Die Strafe wird getrennt von den Rundenzeiten ausgewiesen; in der <a href="./Rennarten.html#Meisterschaft" title="Rennarten">Meisterschaft</a> wird sie auf die Gesamtzeit addiert. Sie gilt seit 1.0.12 für alle gesteuerten Autos. In <a href="./Challenges.html" title="Challenges">Challenges</a> mit Pflichtstopp werden Minigame und „Überall halten“ erzwungen.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Weiche_Reifen_verboten">Weiche Reifen verboten</h4></div>
+<p>Ist die Renneinstellung an, überspringt die Reifenwahl „weich“ (<code>mischungNaechste()</code>), und beim Rennstart wird jeder weiche Reifen, montiert oder gewählt, auf mittel gesetzt, auch bei Spieler 2 und 3 (<code>weichVerbotAnwenden()</code>). NPCs kennen ohnehin nur Trocken- und Regenreifen.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Rammstrafe">Rammstrafe</h4></div>
+<p>Zwei Crashs verschiedener Autos innerhalb von 400 ms gelten als Rammen (<code>RAMM_FENSTER_MS</code> in <code>src/71-rammen.js</code>). Nach der eingestellten Zahl von Rammstößen bekommt der Rammer eine Strafe, die er beim nächsten Stopp zusätzlich steht. Wird sie nicht abgesessen, steht im Ergebnis [RAMMER].
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Ausnahmen">Ausnahmen</h4></div>
+<p>Im Demolition Derby gibt es keinen Boxenstopp. Im Modus „Doppelter Start-Ausdruck“ löst der Knopf keinen Stopp aus, nur das zweimalige Überfahren; abbrechen geht trotzdem.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Doppelter_Start-Ausdruck">Doppelter Start-Ausdruck</h3></div>
+<p><code>pitDoubleCheck()</code> prüft jede Start/Ziel-Überfahrt:
+</p>
+<pre>Einfahrt, wenn   1 s ≤ Abstand zum vorigen Kontakt ≤ Zeitfenster
+          und    Abstand &lt; halbe beste Runde (beste Runde ab 2 s)</pre>
+<p>Der zweite Kontakt zählt dann nicht als Runde; bei „0 Runden“ wird auch der erste zurückgenommen. Danach gilt 4 s lang 60 km/h (<code>PIT_DOUBLE_LIMIT_MS</code>); wer in dieser Zeit anhält, bekommt den Service.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Signaltöne"><span id="Signalt.C3.B6ne"></span>Signaltöne</h3></div>
+<p>Jede Aufgabe hat eine <b>Schleife</b>, die läuft, solange sie läuft, und ein <b>Signal</b> für ihr Ende. Seit 1.2.4 sind die Signale mechanisch: kurze Ausschnitte aus den Aufnahmen von Ratsche und Schlagschrauber (<code>pitSignalMechanisch()</code>). Der Schalter „Alte Boxen-Signaltöne“ holt die elektronischen Töne zurück, ebenso fällt die App auf sie zurück, wenn eine Aufnahme fehlt.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Ereignis</th>
+<th>mechanisch (Vorgabe)</th>
+<th>alt (Bling, Blip, Düüt)
+</th></tr>
+<tr>
+<td>fertig getankt</td>
+<td>Ratsche, 0,16 s</td>
+<td>Sinus 520 Hz, dann 780 Hz
+</td></tr>
+<tr>
+<td>Reifen gewechselt</td>
+<td>Schlagschrauber ab 1,30 s, 0,32 s</td>
+<td>Dreieck 300 Hz, zweimal
+</td></tr>
+<tr>
+<td>repariert</td>
+<td>Ratsche, 0,34 s</td>
+<td>Sinus 660, 880, 1170 Hz
+</td></tr>
+<tr>
+<td>fertig, los</td>
+<td>Schlagschrauber 0,36 s, nach 380 ms Ratsche 0,16 s</td>
+<td>Rechteck 880 Hz, dann 1320 Hz
+</td></tr>
+<tr>
+<td>Box verlassen, Boxengasse aktiv</td>
+<td>Ratsche, 0,2 s</td>
+<td>Sinus 440/660 Hz bzw. Rechteck 880 Hz zweimal
+</td></tr></tbody></table>
+<p><b>Schleifen</b>: Tanken (<code>pit_fuel</code>, Lautstärke 0,40) und Reparatur (<code>pit_repair</code>, 0,45) laufen in Schleife. Der Schlagschrauber (<code>pit_wrench_paar.ogg</code>, 0,55) spielt seine 2-s-Folge einmal je Radpaar: zu Beginn und zur Hälfte des Reifenwechsels (<code>schrauberPaare()</code>). Fehlt die Datei, läuft die gerechnete Schleife <code>pit_wrench</code>.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Herkunft_der_Klänge"><span id="Herkunft_der_Kl.C3.A4nge"></span>Herkunft der Klänge</h4></div>
+<p>Laut <code>audio/CREDITS.md</code> stammt der Schlagschrauber je Radpaar aus einer Aufnahme bei Pixabay („Sound Effect by Jun Su from Pixabay“), verwendet unter der Pixabay-Inhaltslizenz und bearbeitet mit <code>tools/pit_wrench_pixabay.py</code>: vier der fünf Schrauberstöße wurden ausgeschnitten, gefiltert (Hochpass 120 Hz, Tiefpass 9 kHz), je zwei leicht versetzt übereinandergelegt (zwei Mechaniker: lösen bei 0 s, anziehen bei 1,28 s) und auf −3 dBFS gebracht. Die Lizenz erlaubt Nutzung und Bearbeitung ohne Namensnennung, verbietet aber die Weitergabe als Einzeldatei; das Original liegt deshalb nicht im Repository, und die Datei ist nur als Teil von OmegaSim gedacht. Die Schleifen für Tanken und Reparatur sind synthetisch erzeugt (<code>tools/pit_sounds.py</code>); alle Reparaturschläge liegen auf einer Grundfrequenz (196 Hz), damit die Schleife nicht wie eine Melodie klingt.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="NPC-Boxenstopp">NPC-Boxenstopp</h3></div>
+<p>NPCs haben keinen Reifen- und Tankverschleiß. Sie kommen aus zwei Gründen herein (<code>src/90-ghosts.js</code>):
+</p>
+<ul><li><b>Plan</b>: ihre gezogene Fälligkeit ist erreicht. Nach jedem Stopp wird neu gezogen: <code>Runden + max(1, min + Zufall · (max − min + 1) + Versatz)</code>, wobei der Versatz aus dem Fahrercharakter kommt.</li>
+<li><b>Reifen</b>: das Wetter passt nicht zur Mischung (Regenbeginn oder -ende); dieser Grund wartet nicht auf die Fälligkeit.</li></ul>
+<p><b>Wo</b>: <code>pitKachel()</code> ist die Start/Ziel-Kachel. Steht ein Safety Car in der Garage, ist es <code>npcBoxNeben(scParkKachel())</code>: das erste Teil ab drei Teilen hinter dem Safety-Car-Parkplatz, auf das zwei Geraden folgen (Rückfall: drei Teile dahinter). Es steht immer nur ein Auto in der Box (<code>pitInhaberSetzen()</code>); bei einem Wetterwechsel kommt also etwa ein NPC je Runde herein.
+</p><p><b>Wann darf er</b> (<code>pitErlaubt()</code>): Schalter an, nicht schon im Stopp, nicht im Ziel, keine Einführungsrunde, grüne Flagge, Strecke mit mindestens 3 Teilen, im Rennen oder im freien Fahren mit „im freien Fahren“, und der Platz ist frei. Ausgelöst wird auf der Kachel vor der Box.
+</p><p><b>Phasen</b> (seit 1.2.4, <code>pitTick()</code>):
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Phase</th>
+<th>Bedingung</th>
+<th>nächste Phase</th>
+<th>was passiert
+</th></tr>
+<tr>
+<td><code>anfahrt</code></td>
+<td>Kachel = eigene Boxenkachel</td>
+<td><code>einparken</code></td>
+<td>Formationstempo; auf der Boxenkachel startet die Einparkfolge des Safety Cars (<code>MANOEVER.scEin</code>), mit 300 ms Angleichen ans Aufnahmetempo
+</td></tr>
+<tr>
+<td><code>einparken</code></td>
+<td>Folge zu Ende, 500 ms gehalten</td>
+<td><code>stand</code></td>
+<td>das Auto steht (<code>npcBoxStehen()</code>)
+</td></tr>
+<tr>
+<td><code>stand</code></td>
+<td>Standzeit (5 s + Rammstrafe) abgelaufen</td>
+<td><code>raus</code></td>
+<td>Ratsche in Schleife auf der Stereoseite des NPC; am Ende passende Reifen fürs aktuelle Wetter
+</td></tr>
+<tr>
+<td><code>raus</code></td>
+<td>Ausparkfolge (<code>scAus</code>, Gas × 1,5) zu Ende</td>
+<td>–</td>
+<td>Platz frei, neue Fälligkeit gezogen; Rückfall nach fester Zeit
+</td></tr></tbody></table>
+<p>Die alten Phasen <code>rand</code> und <code>halt</code> (an den Rand fahren, dann abbremsen) sind im Code noch vorhanden. Während des Stopps weichen die anderen auf der Boxenkachel nach links aus. Weitere Einzelheiten stehen bei <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a> und <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a>.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_1:_Standardstopp">Beispiel 1: Standardstopp</h3></div>
+<p>Tank 40&#160;%, Ziel voll; Schaden 40&#160;%, Reparaturzeit 4 s; Reifenwechsel gezogen 4,1 s.
+</p>
+<ol><li>Tanken: (100 − 40) / 22 ≈ 2,73 s.</li>
+<li>Reparatur: 40 → 25&#160;% mit 25/(3 · 0,4) ≈ 20,8&#160;%/s (0,72 s), dann 25 → 0&#160;% mit 15,6&#160;%/s (1,60 s), zusammen 2,32 s.</li>
+<li>Reifen: 4,1 s; hinten ab von 0 bis 1,35 s, vorne ab von 2,05 bis 3,40 s.</li>
+<li>Fertig nach 4,1 s. Wer nach 3,0 s losfahren will, kann nicht: das Gas ist bis zum Ende des Reifenwechsels gesperrt.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_2:_derselbe_Stopp_im_Minigame">Beispiel 2: derselbe Stopp im Minigame</h3></div>
+<ol><li>Grunddauer T = max(5&#160;; 4,1&#160;; 2,73&#160;; 2,32) = 5 s (die Untergrenze 5 s greift).</li>
+<li>Fenster je Taste: max(0,7&#160;; 5/5 − 0,25) = 0,75 s, danach 0,25 s Pause.</li>
+<li>Alle fünf richtig: Bonus 5 · 0,08 · 5 = 2,0 s. Anteil 1 ist bei Standzeit 3,0 s erreicht, dann 1,0 s Erholung: fertig nach etwa 4,0 s.</li>
+<li>Drei richtig, zwei falsch: Bonus 0,4 s, Anteil 1 bei 4,6 s, Erholung 1,6 s: fertig nach 6,2 s.</li>
+<li>Keine Taste: Anteil 1 bei 5,0 s, Erholung 1,0 s: fertig nach 6,0 s.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_3:_Pflichtstopps">Beispiel 3: Pflichtstopps</h3></div>
+<p>Zwei Pflichtstopps, Strafe 10 s. Ein Stopp mit 4,2 s Standzeit zählt, ein „Durchfahrstopp“ mit 2,1 s nicht (Meldung „Boxenstopp zu kurz“). Am Ende fehlt einer: 10 s Strafe.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_4:_NPC-Band">Beispiel 4: NPC-Band</h3></div>
+<p>Band 5 bis 9 Runden, kein Versatz. Nach dem Start zieht ein NPC zum Beispiel 7; er fährt in Runde 7 auf der Kachel vor der Box in die Anfahrt. Nach dem Stopp zieht er neu, etwa 5: der nächste Stopp kommt nach weiteren 5 Runden.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li>Die Boxengasse kennt den echten Ort nur in den Modi „Neben der Strecke“ (Byte 12 meldet abseits) und „Doppelter Start-Ausdruck“; sonst ist jeder Halt eine Box.</li>
+<li>Für einen eigenen Boxenmarker-Code gibt es keinen gesicherten Wert; die Vorgabe ist leer, der Marker löst also ab Werk nie aus.</li>
+<li>Das Minigame gibt es nur ohne Zusatzspieler; mit Spieler 2 oder 3 fährt jeder seinen Stopp ohne Minigame.</li>
+<li>Wer im Minigame nichts drückt, steht wegen der Erholungszeit länger als die Grunddauer.</li>
+<li>Der NPC kann nicht messen, wo der Rand ist; die Querlage eines Autos wird nicht gemeldet. Die Einparkfolge ist eine Aufnahme, die auf anderen Böden anders ausfallen kann.</li>
+<li>Der NPC-Boxenstopp ist in Arbeit und ab Werk aus.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version</th>
+<th>Änderung
+</th></tr>
+<tr>
+<td>0.4.43</td>
+<td>„Neben der Strecke“ löst nicht mehr von selbst aus, sondern nur nach Anforderung.
+</td></tr>
+<tr>
+<td>0.6.57</td>
+<td>Kein Zeitgeber mehr, der die Anfahrt nach 5 s beendete; Abbrechen mit einem Druck.
+</td></tr>
+<tr>
+<td>0.8</td>
+<td>Boxen-Minigame (experimentell, ab Werk an, damals acht Tasten).
+</td></tr>
+<tr>
+<td>0.9.21</td>
+<td>Rammstrafe, im Stand zusätzlich abgesessen.
+</td></tr>
+<tr>
+<td>0.9.28</td>
+<td>Klänge auch für Spieler 2 und 3.
+</td></tr>
+<tr>
+<td>1.0.12</td>
+<td>Pflichtstopps für alle gesteuerten Autos.
+</td></tr>
+<tr>
+<td>1.0.45</td>
+<td>Minigame: mindestens 1 s Erholung, 0,3 s je Fehler; steigender Erfolgston.
+</td></tr>
+<tr>
+<td>1.1 (1.1.11)</td>
+<td>Minigame mit 5 statt 8 Tasten, 250 ms Pause, 8&#160;% je Treffer.
+</td></tr>
+<tr>
+<td>1.1 (1.1.42)</td>
+<td>Tanken „nein“ gilt auch im Minigame; Reifen paarweise, hinten zuerst; kein Abbruch während des Reifenwechsels; Schlagschrauber aus Pixabay-Aufnahme; „Weiche Reifen verboten“.
+</td></tr>
+<tr>
+<td>1.2 (1.2.4)</td>
+<td>Minigame: Haken nur bei richtig, Kreuz bei falsch, nichts bei Zeitablauf; Reihe der nächsten Tasten. Mechanische Signaltöne, Schalter für die alten. NPC-Boxenstopp wie das Safety Car, eigene Box hinter dem Safety-Car-Parkplatz.
+</td></tr>
+<tr>
+<td>1.2 (1.2.11)</td>
+<td>Erklärtext des Minigames berichtigt (fünf Tasten, je 8&#160;%); NPC-Boxenstopp: eine Box, wie das Safety Car.
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Verschleiß.html" title="Verschleiß">Verschleiß</a></li>
+<li><a href="./Rennarten.html" title="Rennarten">Rennarten</a></li>
+<li><a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a></li>
+<li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
+<li><a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a></li>
+<li><a href="./Challenges.html" title="Challenges">Challenges</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/70-race.js</code>: <code>setPitState()</code>, <code>pitLaneTick()</code>, <code>requestPitStop()</code>, <code>makePitPlan()</code>, <code>pitToggle()</code>, <code>pitSpielStart()</code>, <code>pitSpielTick()</code>, <code>pitSpielTaste()</code>, <code>pitSpielDauer()</code>, <code>pitSpielFenster()</code>, <code>pitWheelsOff()</code>, <code>refreshPitThrottleLock()</code>, <code>pitDoubleCheck()</code>, <code>pitSignalMechanisch()</code>, <code>schrauberPaare()</code>, <code>setPitLoop()</code>, <code>setPitLoopFuer()</code>, <code>boxTickVon()</code>, <code>racePenaltyMs()</code>, <code>strafeMsVon()</code>, <code>weichVerbotAnwenden()</code>, <code>repairRateAt()</code>, <code>gaussian()</code>; Konstanten <code>PIT_*</code>, <code>TANK_STUFEN</code></li>
+<li><code>src/90-ghosts.js</code>: <code>pitKachel()</code>, <code>npcBoxNeben()</code>, <code>pitErlaubt()</code>, <code>pitFaelligZiehen()</code>, <code>pitTick()</code>, <code>npcBoxStehen()</code>, <code>npcBoxKlang()</code>, <code>MANOEVER</code>, <code>scAusSkript()</code></li>
+<li><code>src/71-rammen.js</code>: <code>rammStrafeOffen()</code>, <code>rammStrafeAbsitzen()</code>, <code>RAMM_FENSTER_MS</code></li>
+<li><code>audio/CREDITS.md</code>: Herkunft und Lizenz der Boxenklänge</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw183
+Cached time: 20261027053455
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.068 seconds
+Real time usage: 0.073 seconds
+Preprocessor visited node count: 192/1000000
+Revision size: 26461/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 1693/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    2.351      1 Vorlage:Stand
+100.00%    2.351      1 -total
+-->
+
+<!-- Render ID 23d4bc00-d1c8-11f1-9d0c-bc2411058fd2 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:31:|#|:idhash:canonical and timestamp 20261027053455 and revision id 90. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

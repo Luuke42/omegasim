@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strecken- und Raum-Editor - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Strecken- und Raum-Editor</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Strecke.png" class="mw-file-description"><img src="images/250px-OmegaSim-Strecke.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Strecke.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Der Streckeneditor</figcaption></figure>
+<p>Der <b>Strecken- und Raum-Editor</b> ist das Werkzeug im Reiter <b>Strecke</b> von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>, mit dem sich eine <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Bahn aus einzelnen Teilen nachbauen, als kurzer <a href="./Strecke.html#Streckencode" title="Strecke">Streckencode</a> weitergeben, als Bild speichern und in einen gezeichneten Raum mit Möbeln einpassen lässt. Dazu gehören der <b>Streckeneditor</b> (Vollbild, Bedienung mit Finger, Maus, Tastatur und Controller), die <b>Zufallsstrecke</b> (der Streckenrandomisator, der aus dem eigenen Teilebestand einen geschlossenen, kreuzungsfreien Rundkurs baut, der in den Raum passt), <b>Meine Teile</b> (der Bestand im Karton), der <b>Raumgestalter</b> (Raster aus 10-cm-Feldern für Boden und Möbel) und die berechnete <b>Ideallinie</b>. Die gebaute Strecke ist das Streckenlayout der ganzen App: Kartendarstellung, Ortung der Autos, Kurvendrosselung der <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPCs</a>, Startaufstellung und <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car</a> greifen darauf zurück. Teile, Codes und das Lesen der Bahn durch das Auto beschreibt der Artikel <a href="./Strecke.html" title="Strecke">Strecke</a>.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Inhalt
+</th></tr>
+<tr>
+<td>Menüpfad</td>
+<td><b>Strecke → Editor → Editor starten</b> (Vollbild); <b>Strecke → Strecke laden</b> (Meine Strecken); <b>Strecke → Meine Teile</b>; <b>Strecke → Raum</b> (Raumgröße, <b>Raumgestalter starten</b>, gespeicherte Räume); im Bahn-Modus auch über <b>Fahren → Strecke → Editor / Laden / Raum</b>
+</td></tr>
+<tr>
+<td>Wichtigste Schalter</td>
+<td>Editorleiste: <b>Linie</b> (Ideallinie, Standard aus), <b>Tasten</b> (Tastenkürzel, Standard an), <b>Raum</b> (Standard an); Raumgröße <b>Breite × Tiefe</b> in m (Standard 0 × 0 = keine Grenze); Optionen → NPC → <b>Linienmodell</b> (Standard SIMULATOR)
+</td></tr>
+<tr>
+<td>Status</td>
+<td>Editor, Streckencode, Meine Teile, Zufallsstrecke: stabil. Raum und Raumgestalter: experimentell. SIMULATOR-Linie: WIP
+</td></tr>
+<tr>
+<td>Seit Version</td>
+<td>Editor im Vollbild mit Auswahl und Drehung 0.8.28; Zufallsstrecke mit Rückgrat-Verfahren 0.9.13; Raumgestalter 0.9.39; eigenes Raum-Menü 0.9.45; SIMULATOR-Linie 1.0.14 (Standard seit 1.0.15); Streckenbild 1.0.15
+</td></tr>
+<tr>
+<td>Quelldateien</td>
+<td><code>src/60-track.js</code> (Editor, Zufallsstrecke, Meine Teile, Raumgröße, Ideallinienmodelle, Zeichnung), <code>src/60b-raum.js</code> (Raumgestalter, <code>raumEinpassen()</code>), <code>src/60c-streckenbild.js</code> (PNG-Export), <code>src/61-simlinie.js</code> (SIMULATOR-Linie), <code>src/51b-tutorial.js</code> (Tutorials), <code>src/72-challenges.js</code> (<code>chFlaeche()</code>)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<p>Ein grafischer Streckeneditor beruht auf wenigen Ideen, die hier ohne Vorwissen erklärt sind. Fachbegriffe stehen auch im <a href="./Glossar.html" title="Glossar">Glossar</a>; wie die App insgesamt aufgebaut ist (JavaScript, eine HTML-Datei, Build-Schritt), beschreibt <a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Kacheln_und_Turtle-Grafik">Kacheln und Turtle-Grafik</h3></div>
+<p>Die Strecke ist keine Zeichnung, sondern eine <b>Liste von Teilen</b> („Kacheln“), z. B. Start, Rechtskurve, Rechtskurve, Gerade. Die Form entsteht erst beim Zeichnen nach dem Prinzip der <b>Turtle-Grafik</b>: Eine gedachte Schildkröte startet im Ursprung mit Blick nach oben. Für eine Gerade läuft sie 43 cm geradeaus, für eine Rechtskurve läuft sie einen Kreisbogen mit 37 cm Radius und dreht sich dabei um 60°. Jedes Teil beginnt exakt dort, wo das vorige endet. Deshalb passen die Teile immer aneinander, und eine Änderung an einem Teil verschiebt alles dahinter. Die Teile haben keine eigene Lage oder Richtung; die Richtung ergibt sich aus der Reihenfolge.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Koordinatensystem_und_Einheiten">Koordinatensystem und Einheiten</h3></div>
+<p>Gezeichnet wird in einem <b>Koordinatensystem</b> mit x nach rechts und y nach <b>unten</b> (so zählen Bildschirme). Die Fahrtrichtung h wird in Grad im Uhrzeigersinn von „oben“ gemessen; ein Schritt der Länge L in Richtung h ändert den Ort um (L · sin h, −L · cos h). Die App rechnet in <b>Zeichnungseinheiten</b>: 40 Einheiten sind eine Kachellänge von 43 cm, also
+</p>
+<pre>TRACK_UNITS_PER_CM = 40 / 43 = 0,9302 Einheiten je cm        1 Einheit = 1,075 cm
+</pre>
+<p>Raummaße kommen in Metern herein und werden mit 100 × 0,9302 in Einheiten umgerechnet; Prüfungen gegen den Raum laufen dagegen in Zentimetern (Einheiten ÷ 0,9302).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Drehung_und_Verschiebung_als_Transformation">Drehung und Verschiebung als Transformation</h3></div>
+<p>Eine <b>Transformation</b> bildet jeden Punkt nach derselben Regel auf einen neuen Punkt ab. Eine <b>Verschiebung</b> addiert einen festen Vektor (t<sub>x</sub>, t<sub>y</sub>). Eine <b>Drehung</b> um den Winkel a um den Ursprung ist
+</p>
+<pre>x' = x · cos a − y · sin a
+y' = x · sin a + y · cos a
+</pre>
+<p>Der Editor dreht die ganze Strecke in 45°-Schritten, indem er die Startrichtung der Schildkröte ändert (<code>trackRotationDeg</code>); das Einpassen in den Raum benutzt dieselbe Drehung als Formel auf die fertigen Punkte. Beides ergibt dasselbe Bild. Bei 45° sind cos a = sin a = 0,7071.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Zeichnen_als_SVG">Zeichnen als SVG</h3></div>
+<p>Die Karte ist eine <b>SVG</b>-Grafik (Scalable Vector Graphics): Text, der Linien, Flächen und Pfade beschreibt, statt eines Pixelbildes. Sie bleibt in jeder Zoomstufe scharf. Die Fahrbahn ist ein breiter, fast schwarzer Strich entlang der Mittellinie, die Randsteine sind Streifen in festem Abstand daneben (Breite 9,5&#160;% der Fahrbahn, aus den Karten der <a href="./Original-App.html" title="Original-App">Original-App</a> ausgemessen), die Kachelgrenzen weiße Querstriche. Die SVG wird als Zeichenkette gebaut und eingesetzt, ohne das Dokument auszumessen; deshalb kann dieselbe Funktion (<code>renderTrackPreview()</code>) auch in verborgene Reiter und Vorschaubilder zeichnen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Kollisionsprüfung"><span id="Kollisionspr.C3.BCfung"></span>Kollisionsprüfung</h3></div>
+<p>Ob eine Strecke sich selbst überlappt oder an ein Möbel stößt, wird geometrisch geprüft:
+</p>
+<ul><li><b>Schnitt zweier Strecken</b> (Segmente AB und CD): Man löst A + t · (B − A) = C + u · (D − C). Gibt es eine Lösung mit 0 &lt; t &lt; 1 und 0 &lt; u &lt; 1, kreuzen sich die Segmente.</li>
+<li><b>Abstand</b>: Zwei Punkte der Mittellinie, die entlang der Strecke weit auseinanderliegen, dürfen sich räumlich nicht zu nahe kommen.</li>
+<li><b>Freiraumkarte</b> (Distanzkarte): Für jedes Feld eines Rasters wird vorab der Abstand zur nächsten Wand oder Möbelkante berechnet. Dann genügt ein Nachschlagen je Streckenpunkt.</li>
+<li><b>Bounding Box</b>: das kleinste achsenparallele Rechteck um alle Punkte; ein schneller Vortest, ob etwas überhaupt in ein Rechteck passen kann.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Zufallsgenerator_und_Startwert">Zufallsgenerator und Startwert</h3></div>
+<p>Ein Computer erzeugt „Zufall“ mit einem <b>Pseudozufallsgenerator</b>: einer Rechenvorschrift, die aus einem <b>Startwert</b> (englisch <i>seed</i>) eine Zahlenfolge macht, die zufällig aussieht. Mit demselben Startwert kommt dieselbe Folge heraus, was Ergebnisse wiederholbar macht. OmegaSim benutzt dafür <code>Math.random()</code> des Browsers <b>ohne festen Startwert</b>; jede Zufallsstrecke ist also neu. Wiederholbar wird eine Strecke trotzdem über ihren <b>Streckencode</b>, und damit dieselbe Strecke nicht gleich wiederkommt, merkt sich die App die letzten 12 gebauten Codes.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Suche_mit_Rückverfolgung"><span id="Suche_mit_R.C3.BCckverfolgung"></span>Suche mit Rückverfolgung</h3></div>
+<p>Mehrere Schritte der Zufallsstrecke sind eine <b>Suche mit Rückverfolgung</b> (Backtracking): Man probiert eine Wahl, geht weiter, und wenn es nicht aufgeht, nimmt man die letzte Wahl zurück und probiert die nächste. Eine <b>Schranke</b> (Pruning) bricht einen Zweig früh ab, wenn er das Ziel gar nicht mehr erreichen kann.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Strecke_bauen">Strecke bauen</h3></div>
+<ol><li><b>Strecke → Editor → Editor starten</b> öffnet den Editor im Vollbild. Verweigert der Browser das echte Vollbild, gilt trotzdem die Vollbild-Anordnung: oben Aktionen, Mitte Karte, unten Teile. <b>Tutorial</b> führt durch die Grundschritte (auch unter Optionen → Tutorials → Streckeneditor).</li>
+<li>Ein Teil aus der unteren Leiste antippen. Es wird <b>hinter dem gewählten Teil</b> eingefügt und danach selbst gewählt; wer nie wählt, baut hinten an. Die Leiste ist wie ein Lenkrad angeordnet: links drehende Teile links, Geraden (Gerade, Engstelle, Boxengasse) in der Mitte, rechts drehende rechts, die Haarnadeln ganz außen; feine Striche trennen die drei Gruppen. Jedes Einfügen klickt (660 Hz, 45 ms).</li>
+<li>Ein Teil auswählen: auf die Karte tippen (es zählt der nächste Abtastpunkt innerhalb von drei halben Bahnbreiten, rund 37,5 cm), oder L1/R1 bzw. Q/E. Das gewählte Teil ist gelb.</li>
+<li><b>Entfernen</b> nimmt das gewählte Teil heraus. Die erste Start/Ziel-Kachel bleibt („Start/Ziel bleibt“). Weitere Start/Ziel-Kacheln sind erlaubt und gelten als Sektorgrenzen.</li>
+<li><b>45° L / 45° R</b> dreht die ganze Strecke. <b>Zurück</b> nimmt die letzte Änderung zurück (bis zu 80 Stände). <b>Leeren</b> setzt auf die Start/Ziel-Kachel zurück (am Controller mit Rückfrage).</li>
+<li>Schließt sich die Runde zum ersten Mal, ertönt ein dreistufiges „Klack“ (520, 780, 1040 Hz). Die Statuszeile zeigt „Geschlossen ✓“ oder „Offen (Lücke cm, Winkel °)“.</li>
+<li><b>Speichern</b> (oben links, damit man nicht versehentlich „Schließen“ trifft) fragt nach einem Namen und schlägt einen vor. <b>Bild</b> erzeugt ein PNG. <b>Vollbild/Schließen</b> oder Esc/L3 verlässt den Editor; die Strecke bleibt erhalten, auch über einen Neustart.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Zufallsstrecke_bauen">Zufallsstrecke bauen</h3></div>
+<ol><li>Unter <b>Strecke → Meine Teile</b> den Bestand eintragen (Pakete oder einzeln mit −/+).</li>
+<li>Optional unter <b>Strecke → Raum</b> Breite und Tiefe eintragen und im Raumgestalter Möbel malen.</li>
+<li>Im Editor den Schalter <b>Raum</b> an lassen, wenn der Raum berücksichtigt werden soll; ausgeblendet zählt er für die Zufallsstrecke nicht.</li>
+<li><b>Zufall</b> drücken. Während der Suche dreht sich ein Streckenteil („Strecke wird gesucht …“), mindestens 450 ms lang. Danach baut sich die Strecke in einer kurzen Animation auf, und der Raum wird passend um sie gelegt.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Raum_einrichten">Raum einrichten</h3></div>
+<ol><li><b>Strecke → Raum</b>: Breite und Tiefe in Metern eintragen (Komma oder Punkt; −/+ ändern um 0,1 m, gehalten nach 500 ms um 0,5 m). 0 heißt „in dieser Richtung keine Grenze“.</li>
+<li><b>Raumgestalter starten</b>: Ist keine Größe eingetragen, setzt die App 3,0 × 2,5 m ein. Im Raster Möbel oder Boden malen, mit Pinsel (10, 30 oder 60 cm) oder Rechteck; Vorlagen Rechteck, L, U und Oval.</li>
+<li><b>Strecke einpassen</b> (Start am Controller) zeigt, ob und wie gedreht die aktuelle Editorstrecke hineinpasst.</li>
+<li>Den Raum unter einem Namen (höchstens 32 Zeichen) speichern; gespeicherte Räume lassen sich mit Vorschaubild laden und mit Rückfrage löschen.</li>
+<li>Im Editor lässt sich die <b>Strecke im Raum</b> mit Finger oder Maus ziehen (ab 6 Pixeln Weg) oder mit dem rechten Stick schieben (bis 60 cm/s); rechten Stick drücken zentriert.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Tastatur,_Controller,_Touch"><span id="Tastatur.2C_Controller.2C_Touch"></span>Tastatur, Controller, Touch</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Aktion</th>
+<th>Tastatur</th>
+<th>Controller</th>
+<th>Touch / Maus
+</th></tr>
+<tr>
+<td>Teil in der Leiste wählen</td>
+<td>← / →</td>
+<td>Steuerkreuz links/rechts</td>
+<td>Antippen (fügt sofort ein)
+</td></tr>
+<tr>
+<td>zwischen Aktionsleiste und Teileleiste wechseln</td>
+<td>↑ / ↓</td>
+<td>Steuerkreuz hoch/runter</td>
+<td>–
+</td></tr>
+<tr>
+<td>einfügen bzw. Aktion auslösen</td>
+<td>Enter, Leertaste</td>
+<td>✕ (A)</td>
+<td>Antippen
+</td></tr>
+<tr>
+<td>gewähltes Teil entfernen</td>
+<td>Entf, Rücktaste</td>
+<td>□ (X)</td>
+<td>Knopf Entfernen
+</td></tr>
+<tr>
+<td>rückgängig</td>
+<td>Z</td>
+<td>○ (B)</td>
+<td>Knopf Zurück
+</td></tr>
+<tr>
+<td>um 45° drehen</td>
+<td>R (mit Umschalt andersherum)</td>
+<td>△ (Y)</td>
+<td>Knöpfe 45° L / 45° R
+</td></tr>
+<tr>
+<td>voriges / nächstes Teil wählen</td>
+<td>Q / E (auch , und .)</td>
+<td>L1 / R1</td>
+<td>auf die Karte tippen
+</td></tr>
+<tr>
+<td>zoomen</td>
+<td>+ / −, 0 = zurück</td>
+<td>–</td>
+<td>Mausrad (Schritt 0,1), Zwei-Finger-Geste
+</td></tr>
+<tr>
+<td>Ansicht verschieben (bei Zoom über 1)</td>
+<td>–</td>
+<td>–</td>
+<td>ziehen
+</td></tr>
+<tr>
+<td>Strecke im Raum schieben</td>
+<td>–</td>
+<td>rechter Stick, R3 zentriert</td>
+<td>ziehen (bei Zoom 1)
+</td></tr>
+<tr>
+<td>Hilfe</td>
+<td>H oder&#160;?</td>
+<td>–</td>
+<td>Knopf Hilfe
+</td></tr>
+<tr>
+<td>Editor schließen</td>
+<td>Esc</td>
+<td>L3</td>
+<td>Knopf Schließen
+</td></tr></tbody></table>
+<p>Die Controller-Tasten gelten nur, solange der Editor im Vollbild ist; beim Fahren bedeuten dieselben Tasten Gas und Schalten. Bei der Zwei-Finger-Geste ändert sich der Zoom um round((b − a) / 40 · 10) / 10, wobei a und b der Fingerabstand vorher und nachher in Pixeln sind; der Zoom bleibt zwischen 0,5 und 3.
+</p>
+<table class="wikitable">
+<caption>Raumgestalter
+</caption>
+<tbody><tr>
+<th>Aktion</th>
+<th>Tastatur</th>
+<th>Controller</th>
+<th>Touch / Maus
+</th></tr>
+<tr>
+<td>Cursor bewegen</td>
+<td>Pfeile (10 cm, mit Umschalt 50 cm)</td>
+<td>Stick (bis 120 cm/s, quadratische Kennlinie, Totzone 0,18); Steuerkreuz eine Zelle, gehalten nach 300 ms alle 70 ms</td>
+<td>Zeiger
+</td></tr>
+<tr>
+<td>malen / Ecke setzen</td>
+<td>Leertaste, Enter</td>
+<td>✕ (gehalten malt der Pinsel weiter)</td>
+<td>tippen, ziehen
+</td></tr>
+<tr>
+<td>Möbel / Boden umschalten</td>
+<td>M</td>
+<td>□</td>
+<td>Knopf
+</td></tr>
+<tr>
+<td>Pinsel / Rechteck umschalten</td>
+<td>R</td>
+<td>△</td>
+<td>Knopf
+</td></tr>
+<tr>
+<td>Pinselgröße</td>
+<td>–</td>
+<td>L1 / R1</td>
+<td>Knöpfe 10 / 30 / 60 cm
+</td></tr>
+<tr>
+<td>rückgängig (bis 40 Schritte)</td>
+<td>Strg+Z</td>
+<td>Select</td>
+<td>Knopf
+</td></tr>
+<tr>
+<td>Strecke einpassen</td>
+<td>–</td>
+<td>Start</td>
+<td>Knopf
+</td></tr>
+<tr>
+<td>halbes Rechteck abbrechen, sonst schließen</td>
+<td>Esc</td>
+<td>○</td>
+<td>Knopf Fertig
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich</th>
+<th>Standard</th>
+<th>Wirkung (aus dem Code)</th>
+<th>Schlüssel / ID
+</th></tr>
+<tr>
+<td>Linie (Editorleiste)</td>
+<td>an / aus</td>
+<td>aus (seit 0.9.22)</td>
+<td>zeichnet die Ideallinie mit Bremsfarbe in die Karte und ins Streckenbild</td>
+<td><code>track-opt-linie</code>, Speicher <code>omegasim-editor-schalter</code>
+</td></tr>
+<tr>
+<td>Tasten (Editorleiste)</td>
+<td>an / aus</td>
+<td>an</td>
+<td>blendet die Tastenübersicht ein</td>
+<td><code>track-opt-tasten</code>
+</td></tr>
+<tr>
+<td>Raum (Editorleiste)</td>
+<td>an / aus</td>
+<td>an</td>
+<td>zeichnet Raum und Möbel; <b>aus</b> heißt auch: <code>raumEinpassen()</code> meldet sofort „passt, Drehung 0“, die Zufallsstrecke ignoriert den Raum</td>
+<td><code>track-opt-raum</code>
+</td></tr>
+<tr>
+<td>Zoom</td>
+<td>0,5 bis 3, Schritt 0,1</td>
+<td>1</td>
+<td>vergrößert die Karte; ab über 1 lässt sie sich verschieben</td>
+<td><code>editorZoom</code>, mit der Strecke gespeichert
+</td></tr>
+<tr>
+<td>Ausrichtung</td>
+<td>0° bis 315°, 45°-Schritte</td>
+<td>0°</td>
+<td>Startrichtung der Strecke; Teil des Streckencodes (<code>@</code>)</td>
+<td><code>trackRotationDeg</code>
+</td></tr>
+<tr>
+<td>Breite / Tiefe (Raum)</td>
+<td>0 bis 99 m, 0,1 m</td>
+<td>0 / 0</td>
+<td>0 = keine Grenze in dieser Richtung; beide größer 0 schalten den Raumgestalter frei</td>
+<td>Speicher <code>omegasim-raum</code>, Felder <code>teile-raum-x</code>, <code>teile-raum-y</code>
+</td></tr>
+<tr>
+<td>Raumform</td>
+<td>Raster 10 cm, Boden oder Möbel</td>
+<td>alles Boden</td>
+<td>Möbelzellen sind für die Strecke gesperrt</td>
+<td>Speicher <code>omegasim-raum-form</code>
+</td></tr>
+<tr>
+<td>Gespeicherte Räume</td>
+<td>Name bis 32 Zeichen</td>
+<td>keine</td>
+<td>Größe und Form unter einem Namen</td>
+<td>Speicher <code>omegasim-raeume</code>, <code>omegasim-raum-aktiv</code>
+</td></tr>
+<tr>
+<td>Lage des Raums</td>
+<td>cm</td>
+<td>0 / 0</td>
+<td>Versatz des Raumrechtecks gegen die Strecke; ändert die Strecke nicht</td>
+<td>Speicher <code>omegasim-raum-versatz</code>
+</td></tr>
+<tr>
+<td>Meine Teile</td>
+<td>je Sorte 0 bis 9999</td>
+<td>nicht gezählt</td>
+<td>Grundlage für Teilebilanz und Zufallsstrecke</td>
+<td>Speicher <code>omegasim-teile</code>
+</td></tr>
+<tr>
+<td>NPC: Linienmodell (Optionen → NPC)</td>
+<td>Krümmung, Rundenzeit, Late Apex, 3-stufig, Fahrbahnmitte, Innen (gemittelt), Außen-Innen, Luuke-Linie, SIMULATOR</td>
+<td>SIMULATOR</td>
+<td>bestimmt die Linie, die der Editor zeichnet und die NPCs fahren (beides geht durch <code>buildLine()</code>)</td>
+<td><code>lineModel</code>, Knöpfe <code>data-linemodel</code>
+</td></tr>
+<tr>
+<td>Gespeicherte Strecken</td>
+<td>–</td>
+<td>–</td>
+<td>Name, Kacheln, Drehung, Zeitstempel</td>
+<td>Speicher <code>carrera-hybrid-tracks</code>
+</td></tr>
+<tr>
+<td>Editorstrecke</td>
+<td>–</td>
+<td>nur Start/Ziel</td>
+<td>wird 800 ms nach jeder Änderung gemerkt und beim Start wiederhergestellt</td>
+<td>Speicher <code>omegasim-editor-strecke</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Mittellinie,_Länge_und_Platzbedarf"><span id="Mittellinie.2C_L.C3.A4nge_und_Platzbedarf"></span>Mittellinie, Länge und Platzbedarf</h3></div>
+<p>Die Mittellinie (<code>trackCenterline()</code>) ist die eine Geometriequelle für Karte, Ideallinie, Ortung und Einpassen. Die Teilmaße stehen im Artikel <a href="./Strecke.html#Streckenteile" title="Strecke">Strecke</a>; die wichtigsten Konstanten:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Konstante</th>
+<th>Wert</th>
+<th>in Einheiten</th>
+<th>Bedeutung
+</th></tr>
+<tr>
+<td><code>TRACK_TILE_CM</code></td>
+<td>43 cm</td>
+<td>40 (<code>TRACK_STEP</code>)</td>
+<td>Kachellänge
+</td></tr>
+<tr>
+<td><code>TRACK_WIDTH_CM</code></td>
+<td>25 cm</td>
+<td>23,26</td>
+<td>Bahnbreite; halbe Breite <code>TRACK_HALF_W</code> = 11,63
+</td></tr>
+<tr>
+<td><code>TRACK_RADIUS_CM</code></td>
+<td>37 cm</td>
+<td>34,42</td>
+<td>60°- und kleine 30°-Kurve
+</td></tr>
+<tr>
+<td><code>TRACK_HAIRPIN_RADIUS_CM</code></td>
+<td>18,5 cm</td>
+<td>17,21</td>
+<td>Haarnadel
+</td></tr>
+<tr>
+<td><code>TRACK_HAIRPIN_LEAD_CM</code></td>
+<td>21,914 cm</td>
+<td>20,39</td>
+<td>gerade Sektion der Haarnadel
+</td></tr>
+<tr>
+<td><code>TRACK_R2_CM</code></td>
+<td>112 cm</td>
+<td>104,19</td>
+<td>weite 30°-Kurve
+</td></tr>
+<tr>
+<td><code>TRACK_SAMPLES_PER_TILE</code></td>
+<td>14</td>
+<td>–</td>
+<td>Abtastpunkte je Kachel
+</td></tr></tbody></table>
+<ul><li><b>Länge</b> (<code>trackLaengeM()</code>): Summe der Weglängen aller Kacheln (<code>tileLength()</code>), in Metern; dazu das 50-Fache in km, weil die Autos im Maßstab 1:50 gebaut sind.</li>
+<li><b>Platzbedarf</b> (<code>updateTrackSpace()</code>): Bounding Box der beiden Fahrbahnkanten (Mittellinie ± halbe Bahnbreite entlang der Normalen) in der aktuellen Drehung, Anzeige „B × T cm · n Teile“. Das Streckenbild nimmt denselben Wert ohne Drehung (<code>chFlaeche()</code>).</li>
+<li><b>Geschlossen</b>: Lücke ≤ 15 cm und Winkel ≤ 12° (<code>trackSchluss()</code>); Herleitung unter <a href="https://omegasim.miraheze.org/wiki/Strecke#Geschlossen_oder_offen?" title="Strecke">Strecke</a>.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Die_Zufallsstrecke_(Streckenrandomisator)"><span id="Die_Zufallsstrecke_.28Streckenrandomisator.29"></span>Die Zufallsstrecke (Streckenrandomisator)</h3></div>
+<p>Die Zufallsstrecke (<code>trackZufallMitAnimation()</code> und die Funktionen <code>trackZufall*</code> in <code>src/60-track.js</code>) baut aus dem Bestand unter <b>Meine Teile</b> einen Rundkurs, der sich <b>streng</b> schließt, sich nicht selbst kreuzt, nirgends zu dicht an sich selbst vorbeiführt, nicht langweilig ist und in den Raum passt. Die Idee stammt aus einem Entwurf für Wochenstrecken (<code>mockup/wochenstrecken.html</code>): Man wählt eine Folge von <b>Kurvenläufen</b> (zusammenhängende, gleichsinnige Kurven, die zusammen wie eine Ecke wirken), deren Drehungen sich zu 360° addieren, und <b>löst</b> danach die Längen der Geradenstücke dazwischen so, dass der Ring zusammenkommt.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Die_Schließbedingung_als_Formel"><span id="Die_Schlie.C3.9Fbedingung_als_Formel"></span>Die Schließbedingung als Formel</h4></div>
+<p>Eine Runde besteht aus der Start-Kachel, n Kurvenläufen und n + 1 Lücken für Geraden (eine nach der Start-Kachel, eine nach jedem Lauf). Kurven verschieben den Endpunkt unabhängig davon, wie viele Geraden dazwischen liegen; jede Gerade verschiebt ihn um einen festen Vektor in der aktuellen Fahrtrichtung. Der Endpunkt ist deshalb <b>linear</b> in den Geradenzahlen:
+</p>
+<pre>E = C + Σ  k_g · v_g            g = 0 … n
+          g
+
+v_g = 40 · ( sin θ_g , −cos θ_g )         Verschiebung einer Geraden in Lücke g (Einheiten)
+θ_g = Fahrtrichtung vor Lücke g           (θ_0 = 0°, danach nach jedem Kurvenlauf)
+C   = Summe der Verschiebungen aller Kurven + v_0   (die Start-Kachel ist selbst eine Gerade)
+k_g ∈ {0, 1, 2, 3}                        Zahl der Geraden-Längen in Lücke g (maxg = 3)
+
+gesucht: |E| ≤ 3 cm · 0,9302 = 2,79 Einheiten
+Wahl:    kleinstes |E| (auf 0,001 Einheiten gerundet), bei Gleichstand kleinstes Σ k_g
+</pre>
+<p>Die Verschiebung einer einzelnen Kurve mit Drehwinkel Δ, Radius R, Startrichtung h und Seite s (+1 rechts, −1 links) ist s · R · (cos h − cos(h + Δ), sin h − sin(h + Δ)); eine Haarnadel hat davor noch ihre gerade Sektion von 20,39 Einheiten (<code>trackZufallSpineInfo()</code>).
+</p><p>Die Lösung sucht <code>trackZufallSolveGaps()</code> ganzzahlig mit Rückverfolgung über alle 4<sup>n+1</sup> Kombinationen, mit einer Schranke: Ist der Abstand zum Ziel minus der größtmöglichen restlichen Strecke ((n + 1 − g) · 3 · 40 Einheiten) schon größer als die Toleranz, wird der Zweig abgebrochen. So muss nicht für jeden Kandidaten die teure Mittellinie mit 14 Punkten je Kachel gerechnet werden; die kommt erst bei der Endabnahme.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Ablauf_eines_Versuchs_(Pseudocode)"><span id="Ablauf_eines_Versuchs_.28Pseudocode.29"></span>Ablauf eines Versuchs (Pseudocode)</h4></div>
+<pre>Vorbereitung (einmal je Knopfdruck):
+  Bestand leer                              -&gt; Dialog „Erst die Streckenteile eingeben“, Ende
+  kein Start/Ziel im Bestand                -&gt; „Zufall: Kein Startteil vorhanden“, Ende
+  Geraden + Engstellen + 2 · Boxengassen &lt; 1 -&gt; „Zufall: Nicht genug Geraden“, Ende
+  Schritt = 30°, wenn eine weite oder kleine 30°-Kurve im Bestand ist, sonst 60°
+
+Versuch:
+  1 Richtung   dir = +1 (rechts herum) oder −1 (links herum), je 50&#160;%
+  2 Laufzahl   nc  = 1 (5&#160;%), 2 (45&#160;%), 3 (25&#160;%), 4 (18&#160;%), 5 (7&#160;%)
+  3 Drehungen  teile dir · 360° auf nc Läufe auf, jeder ein Vielfaches des Schritts
+               (die ersten nc−1 gleichverteilt aus dem erlaubten Bereich, der letzte = Rest),
+               mit 50&#160;% danach zufällig gemischt                        [trackZufallRunTurns]
+  4 Gegenlauf  mit 85&#160;%: füge einen Lauf +m und einen Lauf −m ein, möglichst nicht benachbart;
+               m = 180°, wenn die Gegen-Haarnadel da ist (dann mit 90&#160;%),
+               sonst 120° (mit 40&#160;%, wenn ≥ 2 Gegenkurven da sind) oder 60°  [trackZufallGegenlauf]
+  5 Läufe      baue jeden Lauf aus gleichsinnigen Teilen des Bestands, höchstens 8 Teile,
+               Rückverfolgung über die Teilarten; mit 45&#160;% große Teile zuerst (Haarnadel vor
+               60° vor 30°), sonst 60°-Kurven zuerst                     [trackZufallRun]
+               ein Lauf nicht baubar -&gt; Versuch verworfen
+  6 Schikanen  bis zu 3-mal: ein Kurvenpaar mit Netto-Drehung 0 (R+L, L+R, W+Q, Q+W, K+M,
+               M+K, K+Q, M+W; H+J nur mit 10&#160;%) an zufälliger Stelle einsetzen,
+               nur wenn die Runde danach noch lösbar ist                 [trackZufallWiggle]
+  7 Lücken     löse k_g wie oben; keine Lösung -&gt; verworfen               [trackZufallSolveGaps]
+  8 Füllen     jede Lücke mit k Längen füllen: erst Boxengassen (2 Längen), dann Engstellen,
+               dann Geraden; reicht der Bestand nicht -&gt; verworfen        [trackZufallFuellGap]
+  9 Abnahme    nicht „SR3GR3“/„SL3GL3“; Endpunkt ≤ 6 cm (Vortest); Mittellinie: Lücke ≤ 3 cm
+               und Winkel ≤ 12°; kreuzungsfrei und Abstand ≥ 30 cm      [trackZufallPasst]
+ 10 Raum       passt in einer der 8 Drehungen? nein -&gt; Merker „Raum zu klein“, verworfen
+ 11 Wertung    Rest = ungenutzte Teile des Bestands; Wert = Rest + 1,5, falls zwei Haarnadeln
+               direkt aufeinander folgen; niedriger Wert gewinnt, Gleichstand mit 40&#160;% Wechsel
+</pre>
+<p>Geführt werden drei Bestenlisten zu je einem Kandidaten: <b>beste</b> (Code nicht unter den letzten 12 gebauten), <b>beste andere</b> (nur nicht gleich der allerletzten), <b>beste überhaupt</b>. Die Suche endet nach <b>400 Versuchen</b> oder <b>3000 ms reiner Rechenzeit</b> und läuft in Häppchen von 40 ms mit Pausen dazwischen, damit die Ladeanimation laufen kann. Ergebnis:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Lage am Ende</th>
+<th>Meldung</th>
+<th>Folge
+</th></tr>
+<tr>
+<td>„beste“ oder „beste andere“ vorhanden</td>
+<td>„Zufällige Strecke gebaut“</td>
+<td>Strecke übernehmen, Drehung setzen, Raum darum legen, Code merken, Klack
+</td></tr>
+<tr>
+<td>nur „beste überhaupt“ (also eine schon gebaute)</td>
+<td>„Zufall: Keine neue Variante möglich“</td>
+<td>nichts ändern
+</td></tr>
+<tr>
+<td>keine, aber mindestens einmal „Raum zu klein“</td>
+<td>„Zufall: Raum zu klein für einen Rundkurs“</td>
+<td>nichts ändern
+</td></tr>
+<tr>
+<td>keine</td>
+<td>„Zufall: Nicht genug Kurventeile für einen Rundkurs“</td>
+<td>nichts ändern
+</td></tr></tbody></table>
+<p>Ein neuer Bestand unter Meine Teile löscht die Liste der gemerkten Codes, damit die Sperre gegen Wiederholungen die Erzeugung nicht dauerhaft blockiert.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Was_aus_dem_Code_folgt_(Befunde)"><span id="Was_aus_dem_Code_folgt_.28Befunde.29"></span>Was aus dem Code folgt (Befunde)</h4></div>
+<ul><li><b>Links herum ist selten.</b> Für dir = −1 rechnet <code>trackZufallRunTurns()</code> mit Rest −360°, die Auswahl beginnt aber bei +Schritt; für nc ≥ 2 ist der erlaubte Bereich deshalb leer und der Versuch endet sofort. Linksherum laufende Strecken entstehen nur aus nc = 1, also in 0,5 × 0,05 = 2,5&#160;% der Versuche, und brauchen dann einen Lauf von −360° aus Linksteilen. Mit der Grundpackung (2 Linkskurven) baut der Zufall damit praktisch nur Strecken, die rechts herum laufen. Das ist eine Ableitung aus dem Code, nicht am Gerät beobachtet.</li>
+<li><b>Ein einzelner Lauf schließt nie von selbst.</b> Bei nc = 1 zeigen Start-Kachel und alle Geraden nach oben (θ = 0° und 360°); E = C + Σ k · v hat nur Anteile in derselben Richtung und kann die Start-Kachel nicht ausgleichen. Lösbar wird es erst durch den Gegenlauf aus Schritt 4.</li>
+<li>Die kleinen 30°-Kurven (K/M) sind entgegen einem Kommentar in der Kandidatenliste von <code>trackZufallRun()</code> enthalten.</li>
+<li>Die Lückenlösung kennt den Bestand nicht. Verlangt sie mehr Geraden, als da sind, scheitert der Kandidat erst beim Füllen.</li>
+<li>Die Drehung der Strecke wird vor der Abnahme auf 0 gesetzt; die passende Raumdrehung wird danach als Ausrichtung übernommen.</li></ul>
+<div class="mw-heading mw-heading4"><h4 id="Abnahme:_Kreuzungen_und_Abstand">Abnahme: Kreuzungen und Abstand</h4></div>
+<p><code>trackKreuzungsfrei(pts, 30, 40)</code> prüft die Mittellinie (alle Abtastpunkte, als Ring):
+</p>
+<pre>für alle Segmente i, j mit j ≥ i + 2 (außer erstem gegen letztes):  kein Schnitt (0 &lt; t &lt; 1, 0 &lt; u &lt; 1)
+für alle Punktpaare i &lt; j mit Bogenabstand min(j − i, m − (j − i)) ≥ 40 Punkte:
+      |p_i − p_j| / 0,9302 ≥ 30 cm
+</pre>
+<p>40 Abtastpunkte sind knapp drei gerade Kacheln (14 Punkte je Kachel). Näher beieinander liegende Punkte gehören zum selben Streckenabschnitt und dürfen natürlich nah sein. 30 cm Mittellinienabstand heißt 5 cm Luft zwischen zwei 25 cm breiten Fahrbahnen.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Wie_der_eingetragene_Raum_eingeht">Wie der eingetragene Raum eingeht</h4></div>
+<p>Die Raumprüfung macht <code>raumEinpassen(tiles)</code> in <code>src/60b-raum.js</code>; die Zufallsstrecke ruft sie über <code>trackZufallPasstRaum()</code> für jeden Kandidaten. Sie liefert die Drehung (<code>rot</code>), die Verschiebung der Strecke im Raum (<code>t</code>, cm, Ecke oben links = 0,0) und den Versatz des Raumrechtecks für die Zeichnung (<code>versatz</code>), oder „passt nicht“.
+</p><p><b>Schritt 1, Abkürzungen.</b>
+</p>
+<ul><li>Schalter „Raum“ im Editor aus → passt, Drehung 0 (seit 0.9.45).</li>
+<li>Breite und Tiefe beide 0 → passt, Drehung 0.</li></ul>
+<p><b>Schritt 2, Umrechnung und Sicherheitsabstand.</b>
+</p>
+<pre>W = Breite · 100 cm,  H = Tiefe · 100 cm         (0 = in dieser Richtung unbegrenzt)
+R = 25 / 2 + 2 = 14,5 cm                         halbe Bahnbreite + RAUM_RAND_CM
+P = Mittellinie bei Drehung 0, in cm             (Einheiten / 0,9302)
+</pre>
+<p><b>Schritt 3, acht Drehungen.</b> Die Drehungen werden in der Reihenfolge 0°, 90°, 180°, 270°, 45°, 135°, 225°, 315° probiert, die geraden zuerst; die erste passende gewinnt. Für jede: Q = P gedreht (Formel oben), Bounding Box minX … maxX, minY … maxY, Mitte (m<sub>x</sub>, m<sub>y</sub>).
+</p><p><b>Schritt 4a, Raum ohne Möbel</b> (oder nur eine Richtung begrenzt):
+</p>
+<pre>passt, wenn  (W ≤ 0 oder maxX − minX + 2R ≤ W)  und  (H ≤ 0 oder maxY − minY + 2R ≤ H)
+Lage:        t = (W/2 − m_x , H/2 − m_y)      Strecke mittig, versatz = (0, 0)
+</pre>
+<p>Die Mittellinie braucht also an jeder Seite 14,5 cm Luft: in jeder Richtung 29 cm mehr als ihre eigene Ausdehnung.
+</p><p><b>Schritt 4b, Raum mit Möbeln</b> (beide Maße größer 0 und mindestens eine Möbelzelle):
+</p>
+<ol><li><b>Erlaubter Bereich</b> für die Verschiebung: t<sub>x</sub> von R − minX bis W − R − maxX, t<sub>y</sub> von R − minY bis H − R − maxY. Ist er leer, ist das Rechteck zu klein.</li>
+<li><b>Kandidatenlagen</b> im 5-cm-Raster (<code>RAUM_FIT_CM</code>) über diesen Bereich, sortiert nach dem Abstand zur Mitte des Bereichs: Die erste passende Lage liegt so zentral wie möglich.</li>
+<li><b>Freiraumkarte</b> (<code>raumFreiKarte()</code>): Für jedes 5-cm-Feld der Abstand zur nächsten Wand oder Möbelkante. Zwei Durchläufe über das Raster (vorwärts und rückwärts, Schachbrett-Gewichte 5 cm gerade und 7,07 cm schräg) ergeben den Abstand zur nächsten Möbelzellen-Mitte; davon gehen 5 cm (halbe 10-cm-Zelle) ab, die Wand wird exakt gerechnet, und vom Ergebnis werden noch 5 · √½ = 3,54 cm abgezogen, damit der Wert für jeden Punkt im Feld sicher ist:</li></ol>
+<pre>frei(Feld) = min( d_Möbelmitte − 5 cm ,  Abstand zur Wand ) − 3,54 cm
+</pre>
+<ol><li><b>Prüfen</b>: erst jeder sechste Punkt (grob), dann alle Punkte; eine Lage passt, wenn für jeden Punkt frei(Punkt + t) ≥ R = 14,5 cm. Punkte außerhalb des Rasters gelten als −1, also belegt.</li>
+<li><b>Versatz für die Zeichnung</b>: versatz = (−t<sub>x</sub> − m<sub>x</sub> + W/2, −t<sub>y</sub> − m<sub>y</sub> + H/2). Der Editor legt das Raumrechteck mittig auf die Bounding Box der Mittellinie und verschiebt es um diesen Versatz; so liegt es genau so um die Strecke, wie sie hineinpasst.</li></ol>
+<p><b>Schritt 5, keine Drehung passt</b> → „passt nicht“; die Zufallsstrecke verwirft den Kandidaten und merkt sich „Raum zu klein“.
+</p><p>Die Raumform passt sich der Raumgröße an: w = round(Breite · 100 / 10) Zellen, h = round(Tiefe · 100 / 10). Ändert sich die Größe, bleibt die Ecke oben links stehen, und neue Zellen sind Boden. Gespeichert wird das Raster als <b>Lauflängen</b>: abwechselnd Anzahl Boden- und Möbelzellen, Boden zuerst, z. B. „0,9,21,9,…“.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Meine_Teile">Meine Teile</h3></div>
+<p>Der Bestand wird je Teiltyp gezählt (zwölf Sorten, <code>TEILE_SORTEN</code>). Ein nicht eingetragener Typ gilt als „nicht gezählt“ und erscheint nicht in der Bilanz.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Knopf</th>
+<th>Inhalt (<code>TEILE_PAKETE</code>)
+</th></tr>
+<tr>
+<td>+ Grundpackung</td>
+<td>8 Rechtskurven, 2 Linkskurven, 4 Geraden, 1 Start/Ziel
+</td></tr>
+<tr>
+<td>+ Linkskurven-Set</td>
+<td>8 Linkskurven, 2 Rechtskurven, 4 Geraden (bewusst ohne Start/Ziel)
+</td></tr>
+<tr>
+<td>+ Haarnadel-Set</td>
+<td>je 1 Haarnadel links und rechts
+</td></tr>
+<tr>
+<td>+ 30°-Außenkurven-Set</td>
+<td>je 2 weite 30°-Kurven links und rechts
+</td></tr>
+<tr>
+<td>+ Engstelle</td>
+<td>1 Engstelle
+</td></tr>
+<tr>
+<td>Alles auf 0</td>
+<td>alle Sorten auf 0
+</td></tr></tbody></table>
+<p>Für jede Sorte rechnet <code>teileBilanz()</code>: vorhanden, gebraucht, Rest = vorhanden − gebraucht. Die Teileleiste zeigt den Rest als kleine Zahl (rot, wenn negativ), die Infozeile „Fehlt: n× Teil“ oder „Alle Teile da“ und die Summe der übrigen Teile. Die Zufallsstrecke wertet denselben Rest: je weniger ungenutzte Teile, desto besser.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Raumgestalter">Raumgestalter</h3></div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Raum-Editor.png" class="mw-file-description"><img src="images/250px-OmegaSim-Raum-Editor.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Raum-Editor.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Der Raumgestalter mit Boden und Möbeln</figcaption></figure>
+<p>Der Raum ist das Rechteck „Breite × Tiefe“, geteilt in Zellen von 10 cm (<code>RAUM_ZELLE_CM</code>); jede Zelle ist Boden (0) oder Möbel (1). Ein Raster statt freier Vielecke wurde gewählt, weil es sich mit dem Steuerkreuz genauso bedienen lässt wie mit dem Finger und weil die Einpassung darauf exakt rechnen kann. Alle Eingaben bewegen denselben Cursor.
+</p>
+<ul><li><b>Pinsel</b>: füllt ein Quadrat der Kantenlänge max(10 cm, Pinselgröße) um den Cursor; eine Zelle zählt, wenn ihr Mittelpunkt im Quadrat liegt.</li>
+<li><b>Rechteck</b>: erste Ecke setzen, zweite Ecke setzen (beim Ziehen Anfang und Ende); ein bloßes Antippen (unter 2 cm Weg) füllt nichts.</li>
+<li><b>Vorlagen</b> (setzen erst alles auf Boden): <b>L</b> sperrt x 55–100&#160;%, y 0–45&#160;%; <b>U</b> sperrt x 36–64&#160;%, y 0–50&#160;%; <b>Oval</b> sperrt jede Zelle außerhalb der Ellipse u² + v² ≤ 1 (u, v = Zellmitte relativ zur Raummitte, geteilt durch die halbe Breite bzw. Tiefe); <b>Rechteck</b> ist alles Boden.</li>
+<li>Die Anzeige nennt Größe und Bodenfläche: Zahl der Bodenzellen × 0,01 m².</li>
+<li>Im Editor erscheinen Möbel als rote Flächen im Raumrechteck; das Raster der Karte hat 50-cm-Linien.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Ideallinie">Ideallinie</h3></div>
+<p>Die Ideallinie ist eine <b>Rechnung, keine Messung</b>: Kein Byte des Autos meldet die Querlage. Sie wird als seitlicher Versatz α<sub>i</sub> je Abtastpunkt beschrieben:
+</p>
+<pre>Linienpunkt_i = p_i + α_i · n_i
+n_i  = Einheitsnormale nach links (Tangente aus den Nachbarpunkten, um −90° gedreht)
+|α_i| ≤ Grenze = TRACK_HALF_W − 3 = 11,63 − 3 = 8,63 Einheiten = 9,27 cm
+</pre>
+<p>Die Anzeige „Ideallinie nutzt a cm von 9,3 cm möglichem Versatz“ nennt den größten Ausschlag. Achtung Vorzeichen: Positives α ist <b>links</b>; im Lenkbefehl dagegen ist rechts positiv.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Die_Modelle">Die Modelle</h4></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Modell</th>
+<th>Prinzip
+</th></tr>
+<tr>
+<td>Krümmung</td>
+<td>ohne Layout: Relaxation α<sub>i</sub> ← clamp(α<sub>i</sub> + 0,35 · ((p'<sub>i−1</sub> + p'<sub>i+1</sub>)/2 − p'<sub>i</sub>) · n<sub>i</sub>), 2000 Durchläufe (<code>idealLine()</code>); mit Layout eine Kurvenform aus Eingang, Scheitel und Ausgang, die die Krümmungsenergie minimiert (<code>formLine()</code>)
+</td></tr>
+<tr>
+<td>Rundenzeit</td>
+<td>dieselbe Form, minimiert die Modell-Rundenzeit, Scheitel frei (0,15 bis 0,85 des Kurvenwegs)
+</td></tr>
+<tr>
+<td>Late Apex</td>
+<td>wie Rundenzeit, Scheitel aber erst zwischen 0,55 und 0,85
+</td></tr>
+<tr>
+<td>3-stufig, Fahrbahnmitte, Innen (gemittelt), Außen-Innen</td>
+<td>Vorschriften statt Optimierung
+</td></tr>
+<tr>
+<td>Luuke-Linie</td>
+<td>Anker je Kachel auf einer Skala −100 … 100, aus Beispielstrecken hergeleitet
+</td></tr>
+<tr>
+<td>SIMULATOR (Standard, WIP)</td>
+<td>fährt Kandidatenlinien mit der Fahrphysik und behält die schnellste
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading4"><h4 id="Das_Rundenzeitmodell">Das Rundenzeitmodell</h4></div>
+<p>Alle Modelle werden mit derselben quasistationären Rechnung bewertet (<code>lapTimeOf()</code>):
+</p>
+<pre>κ_i  = 2 · Fläche(p_{i−1}, p_i, p_{i+1}) / (a · b · c)        Krümmung aus drei Punkten
+v_i  = min( v_max , sqrt( a_quer / κ_i ) )                       Kurvengrenze
+vorwärts:   v_{i+1} ≤ sqrt( v_i² + 2 · a_zug   · ds_i )         (auf Ringen 2 Durchläufe)
+rückwärts:  v_i     ≤ sqrt( v_{i+1}² + 2 · a_brems · ds_i )
+T = Σ ds_i / ((v_i + v_{i+1}) / 2)
+</pre>
+<p>v<sub>max</sub>, a<sub>zug</sub> und a<sub>brems</sub> kommen aus der eingestellten Fahrphysik (<code>fahrGrenzen()</code>: Höchsttempo, Bremsverzögerung, Zug aus einem simulierten Start 0 auf den Ankerwert); a<sub>quer</sub> bleibt eine Annahme im Verhältnis 1,0&#160;: 1,10 zur Bremse, weil kein Byte sie meldet. Die Bremsfarbe der Linie kommt aus dem Anstieg der Krümmung voraus: roh = clamp((κ<sub>i+6</sub> − κ<sub>i</sub>) / (0,55 · κ<sub>max</sub>)), gleitend über ±4 Punkte gemittelt, Farbe von Grün (gas) über Gelb nach Rot (bremsen).
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Die_Luuke-Linie">Die Luuke-Linie</h4></div>
+<p>Jede Kachel bekommt einen Ankerwert (<code>luukeLinieAnker()</code>). In einem Kurvenlauf der Länge len mit Drehsinn d und Grundwert base (100 für 60°-, kleine Kurve, Haarnadel und Engstelle, 50 für die weite Kurve) gilt: erste Kachel −base · d (außen), Scheitelkachel (Index min(1, len − 1)) +base · d (innen), danach volle Innenlage bis zwei Kacheln vor dem Ende, die vorletzte 0,25 · base · d, die letzte −0,5 · base · d. Geraden bekommen Werte aus dem Blick nach vorn und zurück, die Start-Kachel den Mittelwert ihrer Nachbarn. Aus dem Anker wird α = −(Wert / 100) · Grenze; zwischen Kachelmitte und Kachelgrenze wird mit der Glättung 3u² − 2u³ übergeblendet, an jeder Grenze auf den Mittelwert der beiden Nachbaranker. In der Haarnadel geht die Linie bis u = 0,2 von der Mitte nach innen, hält bis 0,8 und kehrt dann zur Mitte zurück.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Die_SIMULATOR-Linie">Die SIMULATOR-Linie</h4></div>
+<p><code>src/61-simlinie.js</code> (seit 1.0.14) sucht die Linie, indem es Kandidaten <b>fährt</b>:
+</p>
+<ol><li><b>Saat</b>: die Linien der acht Modelle Luuke, Rundenzeit, Late Apex, Krümmung, 3-stufig, Außen-Innen, Innen (gemittelt), Fahrbahnmitte.</li>
+<li><b>Fahren</b> (<code>simFahren()</code>): eine stumme Instanz der Fahrphysik mit der eingestellten Konfiguration fährt den Tempoplan aus <code>lapTimeOf()</code> mit Gas und Bremse, Zeitschritt 0,02 s, drei Runden. Gewertet wird das Mittel der Runden 2 und 3 (Runde 1 hat den stehenden Start). Unterschreitet der Plan irgendwo die Leseschwelle (0,35 der Höchstgeschwindigkeit), gibt es 0,5 s Strafe je Runde. Die Lenkung ist der Einschlag, den die Krümmung verlangt: δ = atan(Radstand · κ) / 45°, Radstand = Fahrzeugradstand (Vorgabe 2,6 m) im Maßstab 1:50.</li>
+<li><b>Querrate</b>: Ein Kandidat, der die Querlage schneller ändert als die steilste Saatlinie (ohne Saat: die ganze Bahnbreite in 0,35 s), scheidet aus.</li>
+<li><b>Abwandeln</b>: Aus den besten drei eines Felds von sechs wird ein Elternteil gewählt; je zur Hälfte entsteht eine <b>Beule</b> (erhobener Kosinus über 6, 10 oder 18 Punkte, Höhe ±Grenze · 0,15 bis 0,40) oder eine <b>Sehne</b> (seit 1.0.19: ein Stück von 8 bis 41 Punkten wird durch die gerade Verbindung seiner Enden ersetzt, wenn sie in der Bahn bleibt; so wird z. B. ein Links-Rechts-Wechsel als gerade Diagonale gefahren).</li>
+<li><b>Ende</b> nach 200 gefahrenen Linien (gemessen etwa 13 ms je Linie, rund 2,5 s im Hintergrund). Während eines Rennens pausiert die Suche. Das Ergebnis wird je Streckencode, Schluss und Fahrgrenzen gespeichert (höchstens 10 Einträge, <code>omegasim-simlinie</code>).</li></ol>
+<p>Bis die Suche fertig ist, gilt die Luuke-Linie, und am Kartenrand dreht sich ein Streckenteil („Ideallinie wird berechnet …“). Die Suche startet 600 ms nach jeder Änderung, auch wenn die Linie ausgeblendet ist. Laut Patchnotes ergab die Sehne auf der Vorgabestrecke 10,7 statt 11,5 s je Runde in der Physik. Die SIMULATOR-Linie ist ein getestetes Beispiel, keine bewiesene Bestlinie.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Die_Engstelle">Die Engstelle</h4></div>
+<p>Über allen Modellen schreibt die Engstelle ihre eigene Linie: bis 30&#160;% der Kachel ganz rechts, ab 70&#160;% ganz links, dazwischen linear: α = Grenze · (2f − 1), f = clamp((u − 0,30) / 0,40).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Streckenbild">Streckenbild</h3></div>
+<p>Der Knopf <b>Bild</b> (<code>src/60c-streckenbild.js</code>, seit 1.0.15) erzeugt ein PNG von 1600 × 1000 Pixeln:
+</p>
+<ol><li>Dieselbe Karte wie im Editor wird ohne Autos gezeichnet; Ideallinie und Raum folgen den Schaltern <b>Linie</b> und <b>Raum</b>.</li>
+<li>Weil ein als Bild geladenes SVG das Stylesheet der Seite nicht sieht, bekommt jedes Element seine berechneten Stilwerte (28 Eigenschaften, etwa Füllung, Strichbreite, Schrift) als <code>style</code>-Attribut.</li>
+<li>Das SVG wird direkt in Zielgröße gerastert (Fläche 1480 × 670 Pixel ab x = 60, y = 140), auf eine abgerundete Kartenfläche gesetzt und mit Kopf und Fuß versehen: Streckenname (Schrift wird bis zur passenden Breite verkleinert), „OMEGA SIM“, Streckencode, Länge, Platzbedarf, Teilezahl, „Nachbauen und fahren“ und der Link zur Browserfassung.</li>
+<li>Seit 1.1.11 erscheint das Bild groß zum Bildschirmfoto oder langen Drücken, mit <b>Teilen</b> (wo das Gerät es kann), <b>Speichern</b> und <b>Schließen</b>. Im Browser speichert „Speichern“ als Download, in der Android-App über die Sicherungsschnittstelle unter Bilder/OmegaSim (neue APK nötig). Dateiname: „OmegaSim-“ und der Streckencode ohne Sonderzeichen, höchstens 40 Zeichen.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Speichern_und_Laden">Speichern und Laden</h3></div>
+<p><b>Speichern</b> legt unter dem Namen Kacheln, Drehung, Anlege- und Änderungszeit ab. Der Namensvorschlag kombiniert eines von 36 Anfangswörtern (etwa Silver, Thunder, Apex) mit einer von 15 Endungen (etwa ring, park, speedway), also 540 Möglichkeiten, und probiert bis zu 30-mal, keinen vorhandenen Namen zu treffen. <b>Strecke laden</b> (Meine Strecken) zeigt die Strecken als Kacheln mit Vorschaubild; Antippen lädt mit Klack, das Kreuz löscht nach Rückfrage. Beim Laden stellt die App fehlende Start/Ziel-Kacheln voran und wandert alte Startcodes um (siehe <a href="./Strecke.html#Künstliche_Typen_und_die_Übersetzung_codeZuTyp" title="Strecke">Strecke</a>).
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_1:_Raum_0_×_0_m"><span id="Beispiel_1:_Raum_0_.C3.97_0_m"></span>Beispiel 1: Raum 0 × 0 m</h3></div>
+<p>Breite und Tiefe sind 0. <code>raumEinpassen()</code> endet in Schritt 1: passt, Drehung 0, Versatz 0. Jede Zufallsstrecke, die die Abnahme besteht, wird genommen, und zwar in der Ausrichtung 0°. Im Editor erscheint kein Raumrechteck.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_2:_Raum_2,0_×_1,2_m"><span id="Beispiel_2:_Raum_2.2C0_.C3.97_1.2C2_m"></span>Beispiel 2: Raum 2,0 × 1,2 m</h3></div>
+<p>W = 200 cm, H = 120 cm, R = 14,5 cm. Die Mittellinie darf also höchstens 200 − 29 = 171 cm breit und 120 − 29 = 91 cm tief sein (in irgendeiner der acht Drehungen).
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Strecke</th>
+<th>Drehung</th>
+<th>Mittellinie B × T</th>
+<th>+ 2R</th>
+<th>passt?
+</th></tr>
+<tr>
+<td rowspan="2"><code>SR3G2R3G</code> (Oval)</td>
+<td>0°</td>
+<td>74,0 × 160,0 cm</td>
+<td>103,0 × 189,0</td>
+<td>nein (189 &gt; 120)
+</td></tr>
+<tr>
+<td>90°</td>
+<td>160,0 × 74,0 cm</td>
+<td>189,0 × 103,0</td>
+<td><b>ja</b> → Drehung 90°, Strecke mittig
+</td></tr>
+<tr>
+<td rowspan="5"><code>SR3GLR2GR2G2</code> (Vorgabe)</td>
+<td>0° / 180°</td>
+<td>111,2 × 202,6</td>
+<td>140,2 × 231,6</td>
+<td>nein
+</td></tr>
+<tr>
+<td>90° / 270°</td>
+<td>202,6 × 111,2</td>
+<td>231,6 × 140,2</td>
+<td>nein
+</td></tr>
+<tr>
+<td>45° / 225°</td>
+<td>165,0 × 175,8</td>
+<td>194,0 × 204,8</td>
+<td>nein
+</td></tr>
+<tr>
+<td>135° / 315°</td>
+<td>175,8 × 165,0</td>
+<td>204,8 × 194,0</td>
+<td>nein
+</td></tr>
+<tr>
+<td>Ergebnis</td>
+<td>–</td>
+<td>–</td>
+<td>passt nicht; als Zufallskandidat verworfen („Raum zu klein“)
+</td></tr></tbody></table>
+<p>Das Oval ist 74 cm breit, weil drei Rechtskurven zusammen einen Halbkreis mit 37 cm Radius bilden (Durchmesser 74 cm), und 160 cm lang (zwei Halbkreisradien 2 × 37 = 74 cm plus 86 cm Geraden: Start/Ziel und G auf der einen, G2 auf der anderen Seite). Der Platzbedarf mit voller Bahnbreite ist 99 × 185 cm, im Raum also 185 × 99 cm, zuzüglich je 2 cm Wandabstand.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_3:_Raum_3,0_×_2,0_m,_erst_leer,_dann_mit_Sessel"><span id="Beispiel_3:_Raum_3.2C0_.C3.97_2.2C0_m.2C_erst_leer.2C_dann_mit_Sessel"></span>Beispiel 3: Raum 3,0 × 2,0 m, erst leer, dann mit Sessel</h3></div>
+<p>Strecke: Vorgabe <code>SR3GLR2GR2G2</code>, Mittellinie bei 0° 111,2 × 202,6 cm, Länge 5,25 m.
+</p><p><b>Ohne Möbel.</b> W = 300, H = 200.
+</p>
+<ol><li>0°: 111,2 + 29 = 140,2 ≤ 300, aber 202,6 + 29 = 231,6 &gt; 200 → nein.</li>
+<li>90°: 231,6 ≤ 300 und 140,2 ≤ 200 → <b>passt</b>. Drehung 90°, Strecke mittig: t = (W/2 − m<sub>x</sub>, H/2 − m<sub>y</sub>), rechts und links bleiben je (300 − 231,6) / 2 = 34,2 cm Reserve, oben und unten je (200 − 140,2) / 2 = 29,9 cm.</li></ol>
+<p><b>Mit Sessel 90 × 60 cm in der Ecke oben links</b> (Zellen x 0–90 cm, y 0–60 cm als Möbel gemalt). Jetzt gilt Schritt 4b mit der Freiraumkarte.
+</p>
+<ol><li>0°: erlaubter Bereich für t<sub>y</sub> leer (231,6 &gt; 200) → zu klein.</li>
+<li>90°: erlaubter Bereich t<sub>x</sub> 137,1 … 205,5 cm (14 Rasterwerte), t<sub>y</sub> 14,7 … 74,5 cm (12 Rasterwerte) → 168 Lagen. <b>Keine</b> ist frei. Geometrisch käme die Mittellinie in der besten dieser Lagen auf 16,5 cm an den Sessel heran, also mehr als 14,5 cm; die Freiraumkarte zieht aber zur Sicherheit 3,54 cm ab (und rundet über das Raster), und 16,5 − 3,54 ≈ 13,0 cm &lt; 14,5 cm. Die Prüfung ist bewusst konservativ.</li>
+<li>180°: zu klein.</li>
+<li>270°: erlaubter Bereich t<sub>x</sub> 94,5 … 162,9, t<sub>y</sub> 125,5 … 185,3; Mitte (128,7; 155,4). Die erste Lage nach Abstand zur Mitte ist t = (129,5; 155,5), und sie <b>passt</b>: Der nächste Punkt der Mittellinie (in der ersten Rechtskurve) liegt 21,5 cm vom Sessel entfernt, abzüglich Sicherheitsabzug immer noch über 14,5 cm. Die Linkskurve der Strecke liegt dabei bei y ≈ 82 cm zwischen x ≈ 90 und 129 cm, die Einbuchtung der Strecke also genau neben dem Sessel.</li>
+<li>Ergebnis: Drehung 270°, t = (129,5; 155,5) cm, Versatz des Raumrechtecks (−0,8; −0,1) cm. Die Bounding Box der Strecke samt Abstand reicht im Raum von x = 35,0 bis 266,6 cm und y = 30,0 bis 170,2 cm; dass sie den Sesselbereich (bis x = 90, y = 60) überlappt, ist kein Widerspruch, denn geprüft wird jeder einzelne Punkt, nicht das Rechteck.</li></ol>
+<p>Liegt dagegen ein 60 cm tiefes Regal an der ganzen oberen Wand (x 0–300, y 0–60), passt die Strecke in keiner Drehung: Bei 90° und 270° sind je 168 Lagen belegt, bei 45° bis 315° je 40 Lagen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_4:_nur_eine_Richtung_begrenzt">Beispiel 4: nur eine Richtung begrenzt</h3></div>
+<p>Breite 0, Tiefe 1,5 m. Die Raumform wird nicht geladen (nur bei beiden Maßen größer 0), es gilt Schritt 4a mit W ≤ 0 („unbegrenzt“). Für die Vorgabestrecke: 0° braucht 231,6 cm Tiefe &gt; 150 → nein; 90° braucht 140,2 ≤ 150 → passt, Drehung 90°. Das Raumrechteck im Editor nimmt in der unbegrenzten Richtung die Ausdehnung der Strecke plus je 11,63 + 20 Einheiten an.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_5:_ein_Versuch_der_Zufallsstrecke_mit_der_Grundpackung">Beispiel 5: ein Versuch der Zufallsstrecke mit der Grundpackung</h3></div>
+<p>Bestand: Grundpackung (8 R, 2 L, 4 G, 1 S), keine 30°-Teile → Schritt 60°.
+</p>
+<ol><li>Gewürfelt: dir = +1, nc = 3. Drehungen: erster Lauf aus {60, 120, 180, 240} → 120; zweiter aus {60, 120, 180} → 120; dritter = Rest 120. Gegenlauf übersprungen (15&#160;%).</li>
+<li>Läufe: 120° aus Rechtsteilen → jeweils R, R. Verbraucht: 6 R.</li>
+<li>Ohne Schikane: C = (0; −43 cm), denn drei Läufe zu je 120° bilden ein gleichseitiges Dreieck, dessen Kurven sich gegenseitig aufheben, und die Start-Kachel schiebt 43 cm nach oben. Die Geradenvektoren in cm: v<sub>0</sub> = (0; −43), v<sub>1</sub> = (37,2; 21,5) bei 120°, v<sub>2</sub> = (−37,2; 21,5) bei 240°, v<sub>3</sub> = (0; −43) bei 360°. Gesucht Σ k · v = (0; 43): k<sub>1</sub> = k<sub>2</sub> = 1 ergibt (37,2 − 37,2; 21,5 + 21,5) = (0; 43). Lösung k = (0, 1, 1, 0), |E| = 0, Σ k = 2 → <code>SR2GR2GR2</code>, Rest = 2 R + 2 L + 2 G = 6 ungenutzte Teile.</li>
+<li>Schikane: Übrig sind 2 R und 2 L, also passen R+L oder L+R. Angenommen L+R an Position 2: Läufe RR, RR, LR, RR. Lösung k = (0, 1, 0, 0, 1), |E| = 0,445 Einheiten = 0,48 cm ≤ 2,79 Einheiten → angenommen. Code <code>SR2GR2LR3G</code> (11 Teile).</li>
+<li>Abnahme: Lücke 0,48 cm ≤ 3 cm, Winkel 0°, keine Kreuzung, kein Abstand unter 30 cm; nicht langweilig.</li>
+<li>Wertung: verbraucht 7 R, 1 L, 2 G, 1 S → Rest = 1 + 1 + 2 + 0 = 4, besser als die 6 der Dreiecksstrecke. Länge 4,39 m, Platzbedarf 136 × 185 cm.</li></ol>
+<p>Andere Einsetzstellen derselben Schikane ergeben z. B. k = (0, 2, 3, 0, 0) mit 5 Geraden; die gibt der Bestand (4 G) nicht her, und der Kandidat scheitert beim Füllen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_6:_das_ausgeschlossene_Mini-Oval">Beispiel 6: das ausgeschlossene Mini-Oval</h3></div>
+<p>Mit dir = +1, nc = 2 und den Drehungen 180° + 180° entstehen zwei Läufe R, R, R. C = (0; −43 cm), Lösung k = (0, 1, 0) mit Σ k = 1, also <code>SR3GR3</code>: drei Kurven, eine Gerade, drei Kurven. Diese Strecke (und ihr Spiegelbild <code>SL3GL3</code>) verwirft <code>trackLangweilig()</code> ausdrücklich. Ein Oval entsteht trotzdem, wenn eine Schikane eingesetzt wird oder die Lücken anders gelöst werden müssen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li>Die Zufallsstrecke baut fast nur rechts herum laufende Strecken (siehe Befunde); mit vielen Linkskurven im Bestand bleibt ein großer Teil davon ungenutzt.</li>
+<li>Die Freiraumkarte ist konservativ (bis rund 3,5 cm Sicherheitsabzug plus Rasterfehler). In knappen Räumen kann eine Lage abgelehnt werden, die geometrisch noch passen würde.</li>
+<li>Die Raumprüfung kennt nur acht Drehungen in 45°-Schritten und Verschiebungen im 5-cm-Raster.</li>
+<li>Möbel wirken nur, wenn Breite und Tiefe beide eingetragen sind; mit nur einer Grenze zählt allein das Rechteck.</li>
+<li>Die Raumprüfung läuft nur für Zufallsstrecken und „Strecke einpassen“; eine von Hand gebaute Strecke darf über den Raum hinausragen.</li>
+<li>Die Ideallinie ist gerechnet, nicht gemessen; die Querbeschleunigung ist eine Annahme. Die SIMULATOR-Linie ist ein getestetes Beispiel aus höchstens 200 Versuchen.</li>
+<li>Die Breite der Engstelle ist nicht gemessen, die Kurvenradien der 30°-Teile stammen aus Bildern des Original-Editors.</li>
+<li>Der Editor warnt selbst, dass die gemeldeten Hex-Codes noch nicht für alle Teile stimmen (Beispiel Schikane); siehe <a href="./Strecke.html#Grenzen_und_bekannte_Probleme" title="Strecke">Strecke</a>.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version</th>
+<th>Änderung
+</th></tr>
+<tr>
+<td>0.8.28</td>
+<td>Editor im Vollbild mit Tutorial: Teile auswählen, mittendrin einfügen und entfernen, Rückgängig, 45°-Drehung, Länge in m und 1:50; Meine Teile
+</td></tr>
+<tr>
+<td>0.8.29</td>
+<td>Schalter für Ideallinie und Tastenkürzel; Teile nach Typ getrennt
+</td></tr>
+<tr>
+<td>0.9.6</td>
+<td>Editorstrecke übersteht einen Neustart (mit Drehung und Zoom)
+</td></tr>
+<tr>
+<td>0.9.11</td>
+<td>Raumrechteck auch mit nur einer Grenze, verschiebbar mit Finger, Maus und rechtem Stick
+</td></tr>
+<tr>
+<td>0.9.13</td>
+<td>Zufallsstrecke: Gegenlauf, die beiden Haarnadeln meist getrennt, Schrittweite 60° ohne 30°-Teile; Speichern-Knopf aus Meine Strecken entfernt
+</td></tr>
+<tr>
+<td>0.9.16</td>
+<td>gezoomte Karte verschiebbar
+</td></tr>
+<tr>
+<td>0.9.22</td>
+<td>Ideallinie im Editor standardmäßig aus
+</td></tr>
+<tr>
+<td>0.9.39</td>
+<td>Raumgestalter (experimentell); Zufallsstrecken passen mit voller Bahnbreite plus 2 cm Abstand und um Möbel herum; Raum wird gleich richtig um die Strecke gelegt
+</td></tr>
+<tr>
+<td>0.9.42</td>
+<td>Ladeanimation, Suche in 40-ms-Häppchen
+</td></tr>
+<tr>
+<td>0.9.44</td>
+<td>Startfehler behoben (Raumkonstanten vor ihrem ersten Gebrauch)
+</td></tr>
+<tr>
+<td>0.9.45</td>
+<td>eigenes Menü Raum mit gespeicherten Räumen und Tutorial; Schalter „Raum“ (ausgeblendet zählt nicht für Zufallsstrecken); Ziehen bewegt die Strecke statt des Raums
+</td></tr>
+<tr>
+<td>1.0.14</td>
+<td>SIMULATOR-Linie (WIP)
+</td></tr>
+<tr>
+<td>1.0.15</td>
+<td>SIMULATOR wird Standard; Knopf „Bild“ (Streckenbild)
+</td></tr>
+<tr>
+<td>1.0.17</td>
+<td>Ideallinie wird nach jeder Änderung im Hintergrund berechnet, mit Ladesymbol
+</td></tr>
+<tr>
+<td>1.0.19</td>
+<td>SIMULATOR probiert Sehnen
+</td></tr>
+<tr>
+<td>1.1.3</td>
+<td>Streckenbild: Fahrbahn auf der Kartenfläche, schärfer, lange Codes passen
+</td></tr>
+<tr>
+<td>1.1.11</td>
+<td>Streckenbild wird groß angezeigt, mit Teilen, Speichern, Schließen
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Strecke.html" title="Strecke">Strecke</a></li>
+<li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
+<li><a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a></li>
+<li><a href="./Virtuelles_Fahren.html" title="Virtuelles Fahren">Virtuelles Fahren</a></li>
+<li><a href="./Challenges.html" title="Challenges">Challenges</a></li>
+<li><a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/60-track.js</code>: <code>trackCenterline()</code>, <code>trackSchluss()</code>, <code>renderTrackPreview()</code>, <code>refreshTrackPreview()</code>, <code>addTile()</code>, <code>trackTeilEntfernen()</code>, <code>trackRueckgaengig()</code>, <code>rotateTrack()</code>, <code>trackZoom()</code>, <code>trackEditorPad()</code>, <code>updateTrackSpace()</code>, <code>trackLaengeM()</code>, <code>teileBilanz()</code>, <code>TEILE_PAKETE</code>, <code>teileRaum()</code>, <code>raumAendern()</code>, <code>streckeImRaumSchieben()</code>, <code>trackZufallVorbereiten()</code>, <code>trackZufallVersuch()</code>, <code>trackZufallRunTurns()</code>, <code>trackZufallGegenlauf()</code>, <code>trackZufallRun()</code>, <code>trackZufallWiggle()</code>, <code>trackZufallSpineInfo()</code>, <code>trackZufallSolveGaps()</code>, <code>trackZufallFuellGap()</code>, <code>trackZufallPasst()</code>, <code>trackZufallPasstRaum()</code>, <code>trackKreuzungsfrei()</code>, <code>segKreuz()</code>, <code>trackZufallAbschluss()</code>, <code>idealLine()</code>, <code>lapTimeOf()</code>, <code>fahrGrenzen()</code>, <code>buildLine()</code>, <code>luukeLinieAnker()</code>, <code>luukeLinie()</code>, <code>brakeProfile()</code>, <code>trackSpeichern()</code>, <code>trackNameVorschlag()</code></li>
+<li><code>src/60b-raum.js</code>: <code>raumFormLaden()</code>, <code>raumFormKodieren()</code>, <code>raumFreiKarte()</code>, <code>raumEinpassen()</code>, <code>rdFuellen()</code>, <code>rdVorlage()</code>, <code>rdProbe()</code>, <code>raumPad()</code>, <code>raumSpeichernUnter()</code></li>
+<li><code>src/60c-streckenbild.js</code>: <code>streckenbildErzeugen()</code>, <code>streckenbildStileUebertragen()</code>, <code>streckenbildAblegen()</code></li>
+<li><code>src/61-simlinie.js</code>: <code>simulatorLinie()</code>, <code>simFahren()</code>, <code>simBeule()</code>, <code>simSehne()</code>, <code>simSuche()</code></li>
+<li><code>src/51b-tutorial.js</code>: <code>K_EDITOR</code>, <code>K_RAUM</code></li>
+<li><code>src/72-challenges.js</code>: <code>chFlaeche()</code></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw213
+Cached time: 20261027053456
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [prevent‐selective‐update, show‐toc]
+CPU time usage: 0.094 seconds
+Real time usage: 0.101 seconds
+Preprocessor visited node count: 219/1000000
+Revision size: 50092/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 4665/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    2.250      1 Vorlage:Stand
+100.00%    2.250      1 -total
+-->
+
+<!-- Render ID 246d4245-d1c8-11f1-885e-bc241137f7fa -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:33:|#|:idhash:canonical and timestamp 20261027053456 and revision id 92. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

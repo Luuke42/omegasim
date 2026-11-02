@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verschleiß - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Verschleiß</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Rennen.png" class="mw-file-description"><img src="images/250px-OmegaSim-Rennen.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Rennen.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Das Cockpit mit Reifen-, Tank- und Schadensanzeige</figcaption></figure>
+<p>Der <b>Verschleiß</b> in <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> umfasst die simulierten Zustände eines Fahrzeugs, die sich während der Fahrt verändern: Temperatur und Abnutzung der vier Reifen, die Tankfüllung und ihr Gewicht, der Schaden durch Crashs und die Temperatur der vier Bremsscheiben. Hinzu kommt das Wetter, das über die Reifenhaftung wirkt. Das echte <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Auto nutzt sich dabei nicht ab: alle Werte entstehen im Modell der App (siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>) und wirken am Auto nur über den gesendeten Gas- und Lenkwert. Kalte, überhitzte oder abgefahrene Reifen lenken und bremsen schlechter, ein voller Tank macht das Auto träger, ein leerer Tank und Schaden drosseln das Gas. Behoben wird der Verschleiß beim <a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a>.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Menüpfade</td>
+<td>Optionen → Fahrgefühl (Masse &amp; Reifen, Bremsen); Optionen → Allgemein → Tank &amp; Schaden; Optionen → Renneinstellungen (Wetter, Tank beim Start)
+</td></tr>
+<tr>
+<td>Reifenmodell</td>
+<td>Regler „Reifen: Temperatur &amp; Verschleiß“, Standard 100&#160;%
+</td></tr>
+<tr>
+<td>Reifenmischungen</td>
+<td>weich, mittel, hart, Regen; Mischungsunterschied Standard 150&#160;%
+</td></tr>
+<tr>
+<td>Tank</td>
+<td>110 Liter im Modell, Verbrauch Standard 1,0&#160;%/s bei Gaswert 1
+</td></tr>
+<tr>
+<td>Schaden</td>
+<td>Standard 5 Crashs bis 100&#160;%, Crash-Schwelle 40
+</td></tr>
+<tr>
+<td>Bremsen</td>
+<td>Fading ab 520 °C, höchstens 35&#160;% bei 780 °C
+</td></tr>
+<tr>
+<td>Wetter</td>
+<td>trocken, Regen, wechselhaft (trocken 60 bis 180 s, Schauer 30 bis 90 s)
+</td></tr>
+<tr>
+<td>Status</td>
+<td>Reifen, Tank, Schaden, Bremsen stabil; Mischungsunterschied WIP; Windschatten experimentell
+</td></tr>
+<tr>
+<td>Seit Version</td>
+<td>Reifentemperatur seit 0.4; vier Mischungen seit 0.5.18; vier Räder einzeln seit 0.4.55; Bremsfading Block 4.1 (0.5)
+</td></tr>
+<tr>
+<td>Quelldateien</td>
+<td><code>src/40-physics.js</code>, <code>src/70-race.js</code>, <code>src/50-drive.js</code>, <code>src/80-sound.js</code>, <code>src/90-ghosts.js</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Zustandsgrößen"><span id="Zustandsgr.C3.B6.C3.9Fen"></span>Zustandsgrößen</h3></div>
+<p>Ein Simulationsmodell führt <b>Zustandsgrößen</b>: Zahlen, die sich mit der Zeit ändern und sich das Modell von Takt zu Takt merkt. Für den Verschleiß sind das zum Beispiel <code>tyreTemp4</code> (vier Reifentemperaturen in °C), <code>tyreWear4</code> (vier Abnutzungen von 0 = neu bis 1 = völlig abgefahren), <code>fuel</code> (Tank in Prozent) und <code>damage</code> (Schaden in Prozent). Jeder Takt von 45 ms rechnet sie mit der verstrichenen Zeit <code>dt</code> weiter.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Rate,_Gleichgewicht_und_Zeitkonstante"><span id="Rate.2C_Gleichgewicht_und_Zeitkonstante"></span>Rate, Gleichgewicht und Zeitkonstante</h3></div>
+<p>Viele Formeln unten haben die Form „Änderung je Sekunde = Zufuhr − Abfuhr“. Die Reifentemperatur steigt zum Beispiel mit der Arbeit der Reifen und fällt umso schneller, je wärmer sie schon sind. Steigen und Fallen gleichen sich irgendwann aus: das ist das <b>Gleichgewicht</b>. Die <b>Zeitkonstante</b> τ sagt, wie schnell ein Wert sich seinem Ziel nähert: nach τ Sekunden ist rund zwei Drittel (63&#160;%) des Weges geschafft, nach 3τ etwa 95&#160;%.
+</p>
+<pre>Wert += (Ziel − Wert) · (1 − e^(−dt/τ))
+Beispiel τ = 0,6 s, dt = 0,045 s: je Takt gut 7&#160;% des Restwegs</pre>
+<div class="mw-heading mw-heading3"><h3 id="Haftung,_Grip_und_Mischung"><span id="Haftung.2C_Grip_und_Mischung"></span>Haftung, Grip und Mischung</h3></div>
+<p><b>Grip</b> ist die Haftung des Reifens auf der Fahrbahn. Im Modell ist er ein Faktor: 1,0 ist der warme, neue Mittelreifen auf trockener Bahn. Eine weiche <b>Mischung</b> (Gummisorte) haftet besser, nutzt sich aber schneller ab; eine harte Mischung umgekehrt. <b>Aquaplaning</b> heißt, dass ein Reifen auf einem Wasserfilm aufschwimmt und kaum noch lenkt; Regenreifen haben Rillen, die das Wasser abführen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Interpolation">Interpolation</h3></div>
+<p>Mehrere Formeln <b>interpolieren</b> zwischen zwei Werten: <code>a + (b − a) · t</code> mit <code>t</code> zwischen 0 und 1. Bei t = 0 gilt a, bei t = 1 gilt b, dazwischen ein Mischwert. Beispiel: trockener Grip 1,0, nasser Grip 0,45, Regenstärke t = 0,5 → 1,0 + (0,45 − 1,0) · 0,5 = 0,725. OmegaSim nimmt für das Wetter allerdings t², siehe unten.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Zufall">Zufall</h3></div>
+<p>Wetterwechsel und Reifenwechselzeiten werden mit Zufallszahlen gezogen (<code>Math.random()</code>, gleichverteilt zwischen 0 und 1). Ein Wert „zwischen 60 und 180 s“ heißt: <code>60 + Zufall · 120</code>.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<ol><li>Das Fahrgefühl wählen (siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>). Es setzt Reifenmodell, Tankverbrauch, Tankgewicht, Crash- und Fading-Einstellungen mit.</li>
+<li>Unter <b>Optionen → Renneinstellungen</b> das Wetter zu Beginn (trocken, Regen, wechselhaft), „Wetter ändert sich“ und „Tank beim Start“ festlegen. Im Cockpit schaltet ein Tipp auf das Wettersymbol das Wetter um.</li>
+<li>Im Cockpit zeigen vier Reifenfelder Temperatur (blau kalt, grün im Fenster, rot zu heiß) und Abnutzung, ihr Rahmen die Mischung (rot weich, gelb mittel, weiß hart, blau Regen). Dazu Tank in Litern und Schaden in Prozent.</li>
+<li>Mit L1/LB im Cockpit die Mischung für den nächsten <a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a> durchschalten. Eine Warnung erscheint, wenn die Wahl nicht zum Wetter passt.</li>
+<li>Bei 20&#160;% Tank kommt ein Warnton, bei 10&#160;% zwei; bei 10&#160;% Rest meldet die Sprachansage außerdem Tank, Zustand oder den schlechtesten Reifen.</li>
+<li>Zum Beheben in die Box fahren.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<table class="wikitable sortable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich</th>
+<th>Standard</th>
+<th>Wirkung (aus dem Code)</th>
+<th>Interne ID → Modellgröße
+</th></tr>
+<tr>
+<td>Reifen: Temperatur &amp; Verschleiß</td>
+<td>0 bis 200&#160;%</td>
+<td>100&#160;%</td>
+<td>0 = aus (alle fahren Mittelreifen, Reifen werden zurückgesetzt); bis 100&#160;% blendet es das Griffdefizit ein; über 100&#160;% erhöht es nur die Raten (Erwärmen, Verschleiß)</td>
+<td><code>setting-tyres</code> → <code>tyreEffect</code>
+</td></tr>
+<tr>
+<td>Mischungsunterschied (WIP)</td>
+<td>0 bis 300&#160;%</td>
+<td>150&#160;%</td>
+<td>Abstand aller Mischungen zum Mittelreifen</td>
+<td><code>setting-tyre-mix</code> → <code>tyreMixStaerke</code>
+</td></tr>
+<tr>
+<td>Reifenwärmer</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>neue Reifen starten mit 85 °C statt 20 °C</td>
+<td><code>setting-tyre-blankets</code> → <code>tyreBlankets</code>
+</td></tr>
+<tr>
+<td>Jedes Rad einzeln</td>
+<td>an/aus</td>
+<td>an</td>
+<td>vier Radlasten treiben vier Temperaturen und Abnutzungen; Lenkzug zur abgefahrenen Seite</td>
+<td><code>setting-tyre-asym</code> → <code>tyreAsymEffect</code>
+</td></tr>
+<tr>
+<td>Reifendruck (bar)</td>
+<td>1,4 bis 2,2</td>
+<td>1,8</td>
+<td>weniger Druck: wärmer, mehr Verschleiß, besserer Kaltgrip; jede Abweichung kostet bis 6&#160;% Spitzengrip</td>
+<td><code>setting-tyre-pressure</code> → <code>tyrePressureBar</code>
+</td></tr>
+<tr>
+<td>Tankgewicht</td>
+<td>0 bis 100&#160;%</td>
+<td>100&#160;%</td>
+<td>voller Tank bis 30&#160;% träger</td>
+<td><code>setting-fuelweight</code> → <code>fuelWeightEffect</code>
+</td></tr>
+<tr>
+<td>Tankverbrauch (%/s bei Vollgas), Optionen → Allgemein</td>
+<td>0 bis 10</td>
+<td>1,0</td>
+<td>0 schaltet den Tank ab und füllt ihn auf</td>
+<td><code>setting-fuel-drain</code> → <code>fuelDrainPerSec</code>
+</td></tr>
+<tr>
+<td>Tank beim Start (l), Renneinstellungen</td>
+<td>5 bis 110</td>
+<td>110</td>
+<td>Tankstand bei Rennstart</td>
+<td><code>race-fuel-start</code> → <code>raceFuelStartL</code>
+</td></tr>
+<tr>
+<td>Crash-Erkennung</td>
+<td>an/aus</td>
+<td>an</td>
+<td>ohne sie kein Crash, kein Schaden, kein Bremsen; aus setzt den Schaden auf 0</td>
+<td><code>setting-crash-damage</code> → <code>crashDetectionEnabled</code>
+</td></tr>
+<tr>
+<td>Schaden bei Crash</td>
+<td>an/aus</td>
+<td>an</td>
+<td>jeder Crash kostet Zustand</td>
+<td><code>setting-crash-schaden</code>
+</td></tr>
+<tr>
+<td>Bremsen bei Crash</td>
+<td>an/aus</td>
+<td>an</td>
+<td>Tempo × 0,3 beim Aufprall</td>
+<td><code>setting-crash-bremse</code>
+</td></tr>
+<tr>
+<td>Nur der Rammer bremst (experimentell)</td>
+<td>an/aus</td>
+<td>an</td>
+<td>wer von hinten oder seitlich getroffen wird, wird nicht gebremst</td>
+<td><code>setting-crash-auffahr</code>
+</td></tr>
+<tr>
+<td>Kein Schaden im Stand</td>
+<td>an/aus</td>
+<td>an</td>
+<td>unter 12 km/h zählt kein Stoß als Crash (außer im Derby)</td>
+<td><code>setting-crash-stationary</code>
+</td></tr>
+<tr>
+<td>Crashs, bis Fahrzeug ruckelt</td>
+<td>Index 0 bis 7 = 1, 2, 3, 4, 5, 10, 20, 50</td>
+<td>5</td>
+<td>Crashs bis 100&#160;% Schaden</td>
+<td><code>setting-crash-count</code> → <code>crashesToTotal</code>
+</td></tr>
+<tr>
+<td>Crash-Schwelle</td>
+<td>10 bis 100</td>
+<td>40</td>
+<td>nötige Abweichung der Bewegungsbytes</td>
+<td><code>setting-crash-threshold</code> → <code>crashThreshold</code>
+</td></tr>
+<tr>
+<td>Vollständige Reparatur dauert (s)</td>
+<td>2 bis 30</td>
+<td>4</td>
+<td>Gesamtzeit für 100&#160;% → 0&#160;%</td>
+<td><code>setting-repair-time</code> → <code>pitFullRepairS</code>
+</td></tr>
+<tr>
+<td>Bremstemperatur und Fading</td>
+<td>an/aus</td>
+<td>an</td>
+<td>Scheiben heizen, über 520 °C weniger Bremswirkung</td>
+<td><code>setting-brake-fade</code>
+</td></tr>
+<tr>
+<td>Stärke des Fadings</td>
+<td>0 bis 200&#160;%</td>
+<td>150&#160;%</td>
+<td>unter 100&#160;% weniger Verlust; über 100&#160;% schnelleres Aufheizen</td>
+<td><code>setting-brake-fade-strength</code> → <code>brakeFadeEffect</code>
+</td></tr>
+<tr>
+<td>Windschatten in Kurven (experimentell)</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>bis 18&#160;% weniger Kurvengrip hinter einem Gegner; braucht mindestens 3 Streckenteile</td>
+<td><code>setting-dirtyair</code>, <code>setting-dirtyair-strength</code>
+</td></tr>
+<tr>
+<td>Wetter zu Beginn, Renneinstellungen</td>
+<td>trocken, Regen, wechselhaft</td>
+<td>trocken</td>
+<td>Startwetter; „wechselhaft“ beginnt trocken</td>
+<td><code>race-wx-start</code> → <code>raceWxStart</code>
+</td></tr>
+<tr>
+<td>Wetter ändert sich</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>ein einzelner Wechsel zu einem zufälligen Zeitpunkt; wirkungslos bei wechselhaft</td>
+<td><code>race-wx-change</code> → <code>raceWxChange</code>
+</td></tr>
+<tr>
+<td>Weiche Reifen verboten (WIP), Renneinstellungen</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>siehe <a href="./Boxenstopp.html#Weiche_Reifen_verboten" title="Boxenstopp">Boxenstopp</a></td>
+<td><code>race-weich-verboten</code>
+</td></tr>
+<tr>
+<td>Blitz bei Gewitter, Optionen → Ton</td>
+<td>an/aus</td>
+<td>an</td>
+<td>nur Darstellung</td>
+<td><code>setting-blitz</code>
+</td></tr></tbody></table>
+<p>Die Fahrgefühle setzen Reifenmodell, Wärmer, „Jedes Rad einzeln“, Druck, Tankgewicht, Verbrauch, Crash-Regler, Reparaturzeit und Fading unterschiedlich; die vollständige Tabelle steht unter <a href="./Fahrverhalten.html#Alle_Fahrgefühle_mit_ihren_Werten" title="Fahrverhalten">Fahrverhalten#Alle Fahrgefühle mit ihren Werten</a>. Seit 1.2 beginnt jede Sitzung trocken und ohne Wetterwechsel: Startwetter und „Wetter ändert sich“ werden nicht aus der Sicherung übernommen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Reifen:_Arbeit,_Temperatur,_Abnutzung"><span id="Reifen:_Arbeit.2C_Temperatur.2C_Abnutzung"></span>Reifen: Arbeit, Temperatur, Abnutzung</h3></div>
+<p>Grundlage ist die <b>Arbeit</b> der Reifen, eine Zahl von 0 bis 1 aus Querausnutzung, Längsausnutzung und Tempo (<code>update()</code> in <code>src/40-physics.js</code>):
+</p>
+<pre>Arbeit = min(1, (latUse + |longUse|) · |v| / topSpeedKmh)</pre>
+<ul><li><code>latUse</code>: Querausnutzung des Reibkreises (Lenkung · Tempoanteil · 1,8, höchstens 1),</li>
+<li><code>longUse</code>: Längsanforderung (Gas positiv, Bremse negativ, mit Verzögerung nachgeführt).</li></ul>
+<p>Im Stand ist die Arbeit null, auf einer geraden Strecke mit konstantem Tempo klein.
+</p><p><b>Temperatur</b>, je Rad i (vorne links, vorne rechts, hinten links, hinten rechts):
+</p>
+<pre>dT_i/dt = 7,0 · (1/pRel) · max(1, Reifenmodell) · Arbeit · Last_i  −  3,4 · (T_i − 20) / 65
+T_i     ≥ 20 °C</pre>
+<ul><li>7,0 °C/s: Heizrate bei voller Arbeit (<code>tyreHeatRate</code>),</li>
+<li>3,4 °C/s: Kühlrate am Optimum (<code>tyreCoolRate</code>); die Zeitkonstante der Abkühlung ist 65/3,4 ≈ 19 s,</li>
+<li>20 °C Umgebung, 85 °C Optimum, 103 °C Grenze zur Überhitzung,</li>
+<li><code>pRel</code> = Druck / 1,8 (höchstens bis 0,5 nach unten),</li>
+<li><code>Last_i</code>: Radlast, im Mittel 1; mit „Jedes Rad einzeln“ aus gilt 1 für alle.</li></ul>
+<p>Im Gleichgewicht gilt <code>T = 20 + 7/3,4 · 65 · Arbeit · Last</code>. Bei Arcade und RC ist das Reifenmodell aus.
+</p><p><b>Abnutzung</b>, je Rad:
+</p>
+<pre>dW_i/dt = 0,0096 · Mischungsfaktor · (1/pRel) · Reifenmodell · Arbeit · Heißfaktor · Last_i
+Heißfaktor = 1 + max(0, (T_mittel − 85) / 65)
+W_i ≤ 1</pre>
+<ul><li>0,0096: Grundrate (<code>tyreWearRate</code>, seit 0.6.2 das Dreifache von 0,0032),</li>
+<li>Mischungsfaktor: siehe nächster Abschnitt,</li>
+<li>Der Heißfaktor macht einen überhitzten Stint teurer: bei 105 °C 1,31.</li></ul>
+<p>Die Seitenmittel und der Gesamtwert werden aus den vier Rädern gerechnet; der Mittelwert ist mit und ohne „Jedes Rad einzeln“ derselbe. Aus der Ungleichheit folgt ein Lenkzug <code>0,05 · (W_links − W_rechts)</code> in Servoeinheiten, nur bei Fahrt.
+</p><p><b>Grip aus Temperatur und Abnutzung</b>:
+</p>
+<pre>warm   = clamp((T − 20) / 65&#160;; 0 … 1)
+g      = 1 − 0,35 · pRel · (1 − warm)²                         (kalt)
+g      = g · (1 − 0,38 · over²),  over = min(1, (T − 85)/18)    (über 85 °C)
+g      = g · (1 − 0,35 · W)                                     (abgefahren)
+g      = g · (1 − 0,06 · min(1, |pRel − 1| / 0,25))              (Druckabweichung)
+Reifengrip = 1 + min(1, Reifenmodell) · (g − 1)</pre>
+<p>Der Reifengrip multipliziert die Lenkfähigkeit, den Antrieb und die Bremse. Über 100&#160;% Reifenmodell wird das Defizit nicht größer, nur die Raten.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Reifenmischungen">Reifenmischungen</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Mischung</th>
+<th>Farbe</th>
+<th>Grip trocken</th>
+<th>Grip nass</th>
+<th>Verschleiß</th>
+<th>Aquaplaning</th>
+<th>bei 150&#160;% Mischungsunterschied
+</th></tr>
+<tr>
+<td>weich</td>
+<td>rot</td>
+<td>1,20</td>
+<td>0,45</td>
+<td>2,6</td>
+<td>ja</td>
+<td>Grip 1,30, Verschleiß 3,4
+</td></tr>
+<tr>
+<td>mittel</td>
+<td>gelb</td>
+<td>1,00</td>
+<td>0,45</td>
+<td>1,0</td>
+<td>ja</td>
+<td>unverändert
+</td></tr>
+<tr>
+<td>hart</td>
+<td>weiß</td>
+<td>0,85</td>
+<td>0,45</td>
+<td>0,4</td>
+<td>ja</td>
+<td>Grip 0,775, Verschleiß 0,1
+</td></tr>
+<tr>
+<td>Regen</td>
+<td>blau</td>
+<td>0,88</td>
+<td>0,80</td>
+<td>1,0</td>
+<td>nein</td>
+<td>Grip trocken 0,82
+</td></tr></tbody></table>
+<p>Umgerechnet wird gegen den Mittelreifen (<code>mischungWert()</code> in <code>src/70-race.js</code>):
+</p>
+<pre>Wert = max(0,1&#160;; 1 + (Tabellenwert − 1) · Mischungsunterschied)</pre>
+<p>Der Boden 0,1 verhindert negativen Verschleiß bei sehr großem Unterschied. Ist das Reifenmodell aus, ist der Mischungsunterschied 0, alle fahren den Mittelreifen. Der Nasswert wird nicht umgerechnet. Aus der Mischung und der Regenstärke entsteht der Oberflächengrip:
+</p>
+<pre>gripScale   = Grip_trocken + (Grip_nass − Grip_trocken) · Regen²
+aquaplaning = Regen²  (nur Slicks; Regenreifen 0)</pre>
+<div class="mw-heading mw-heading3"><h3 id="Wetter_und_Regen">Wetter und Regen</h3></div>
+<p>Das Wetter ist eine <b>Front</b> mit einer Lage <code>wxFront</code> von −1 (im Anmarsch) über 0 (über uns) bis +1 (durchgezogen). Die Regenstärke ist <code>Regen = max(0, 1 − |wxFront|)</code>. Ein Wetterwechsel setzt nur das Ziel; die Front wandert mit <code>dt / 10 s</code> (<code>WX_RAMP_S</code>), braucht also 10 Sekunden von trocken bis voll nass. Beim Abtrocknen läuft sie weiter auf +1 oder, wenn sie noch nicht angekommen war, auf dem kürzeren Weg zurück auf −1.
+</p><p>Weil der Grip mit Regen² geht, fährt es sich anfangs fast trocken, während Regen schon zu sehen und zu hören ist (Tropfen und Regenlicht erscheinen ab Regenstärke 0,12).
+</p><p>Auf die <b>Lenkung</b> wirkt die Nässe zusätzlich erst mit dem Tempo: unter 17&#160;% des Höchsttempos gar nicht, ab 55&#160;% voll (angezeigt etwa 50 und 160 km/h, <code>wetOnsetFrac</code>, <code>wetFullFrac</code>). Der trockene Notboden der Lenkung (12&#160;%) verschwindet mit der Nässe. <b>Aquaplaning</b> wirkt über 60&#160;% des Höchsttempos auf den gesendeten Lenkwinkel: <code>Faktor = 1 − aquaplaning · ((u − 0,6)/0,4)²</code>.
+</p><p><b>Wetterverlauf</b> (<code>src/70-race.js</code>):
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Einstellung</th>
+<th>Ablauf</th>
+<th>Zeiten im Code
+</th></tr>
+<tr>
+<td>trocken</td>
+<td>bleibt trocken</td>
+<td>
+</td></tr>
+<tr>
+<td>Regen</td>
+<td>beginnt nass</td>
+<td>
+</td></tr>
+<tr>
+<td>wechselhaft</td>
+<td>beginnt trocken; dann wechseln Trockenphasen und Schauer, jede Dauer wird neu gezogen</td>
+<td>trocken 60 bis 180 s (<code>WX_TROCKEN_MIN_MS</code>, <code>_MAX_MS</code>), Regen 30 bis 90 s (<code>WX_REGEN_MIN_MS</code>, <code>_MAX_MS</code>); in einem Zeitrennen kommt der erste Schauer spätestens zur Hälfte der Renndauer
+</td></tr>
+<tr>
+<td>„Wetter ändert sich“</td>
+<td>ein einziger Wechsel</td>
+<td>Zeitpunkt = Dauer · (0,35 + Zufall · 0,3), Dauer = Renndauer in Zeitrennen, sonst 5 Minuten
+</td></tr></tbody></table>
+<p>Der Takt für „wechselhaft“ läuft jede Sekunde, auch im freien Fahren. Im <a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a> würfelt das startende Telefon einen gemeinsamen Wetterplan (Liste aus Zeitpunkten und Wetter) mit denselben Regeln und schickt ihn mit; alle folgen ihm ab derselben Grünzeit. <a href="./Challenges.html" title="Challenges">Challenges</a> fahren trocken, außer eine Strecke bringt ein festes Wetterfenster mit (Balkonia: Regen von Minute 2 bis 4). Auch die Windrichtung des Regenradars wird je Rennstart neu gewürfelt.
+</p><p><b>NPCs</b> haben kein Reifenmodell, aber Trocken- und Regenreifen (<code>REIFEN_GRIFF</code> in <code>src/90-ghosts.js</code>: trocken 1,00/0,45, Regen 0,88/0,80). Ihr Tempofaktor ist <code>(1 + (0,85 − 1) · Regen²) · √(Grip / Grip_passend)</code>; auf Slicks im vollen Regen also 0,85 · √(0,45/0,80) ≈ 0,64, mit Regenreifen 0,85. Bei Regenbeginn und -ende kommen sie an die Box, wenn der NPC-Boxenstopp an ist; ist er aus, haben NPCs nie falsche Reifen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Tank">Tank</h3></div>
+<p>Der Tank ist intern 0 bis 100&#160;%, angezeigt werden Liter (<code>FUEL_TANK_LITERS</code> = 110). Verbrauch je Takt (<code>fuelTankTick()</code>):
+</p>
+<pre>Tank −= |gesendeter Gaswert| · dt · Tankverbrauch</pre>
+<p>Gemessen wird am <b>ausgehenden</b> Gaswert, also nach Gasfaktor und Akkuausgleich (<code>sendControlValue()</code>). Dieser Wert kann über 1 liegen: mit Gasfaktor 1,8 verbraucht ein Auto bei Höchsttempo 1,8-mal so viel wie der Reglerwert sagt. Auch negative Werte (Rückwärts) zählen. Während des Boxenservice wird nichts verbraucht. Bei 0 schaltet der Regler den Tank ab und füllt ihn auf.
+</p><p>Warnungen: bei 20&#160;% ein Ton, bei 10&#160;% zwei (<code>FUEL_WARNINGS</code>), jede Stufe einmal je Unterschreiten; bei 10&#160;% zusätzlich die Sprachansage.
+</p><p><b>Leerer Tank</b>: Das Gas wird auf 0,15 begrenzt (<code>FUEL_CUT_EMPTY</code>), mit einer Zeitkonstante von 0,6 s (<code>FUEL_CUT_TAU</code>); nach etwa 1,8 s ist der Deckel fast erreicht. Nach dem Tanken ist das Gas sofort wieder frei. Die Drosselung wirkt <b>vor</b> dem Modell, Tacho und Byte sagen also dasselbe.
+</p><p><b>Tankgewicht</b>:
+</p>
+<pre>Massefaktor = 1 + Tankgewicht · 0,30 · (Tank / 100)</pre>
+<p>Antrieb und Bremskraft werden durch den Massefaktor geteilt. Die Kalibrierung „0 → 100 km/h“ gilt für das leere Auto.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Schaden">Schaden</h3></div>
+<p><b>Erkennung</b> (<code>detectCrash()</code>): Das Auto meldet in seinen Meldungen Bewegungsbytes (Byte 1 und Byte 3, vorzeichenbehaftet). Die App führt für beide ein gleitendes Mittel und rechnet die Abweichung:
+</p>
+<pre>Mittel  += (Wert − Mittel) · 0,15
+Abweichung = |b1 − Mittel1| + |b3 − Mittel3|
+Crash, wenn Abweichung &gt; Crash-Schwelle und letzter Crash &gt; 1000 ms her</pre>
+<p>Ausnahmen: Unter 12 km/h (Anzeige) zählt kein Stoß, wenn „Kein Schaden im Stand“ an ist (die Hand, die ein stehendes Auto aufhebt, erzeugt dieselbe Abweichung); während das Auto neben der Bahn steht und 1,2 s danach wird nicht gewertet (<code>OFFTRACK_GNADE_MS</code>). Die Stoßrichtung (vorn, hinten, Seite) bestimmt <code>crashRichtung()</code> in <code>src/71-rammen.js</code> aus den Abweichungen mit 45 Grad Toleranz.
+</p><p><b>Folgen</b> (<code>registerCrash()</code>):
+</p>
+<pre>Schaden += 100 / Crashs_bis_100       (höchstens 100)
+Tempo   ×= 0,3                         (wenn Bremsen bei Crash an und nicht geschont)</pre>
+<p>Ab 50&#160;% Schaden (<code>LIGHT_DEAD_DAMAGE</code>) fällt je nach Stoßende ein Licht aus: Scheinwerfer bei einem Stoß vorn, Rückleuchten bei einem Stoß hinten oder im Stand. Das Lichtbit wird dann im Paket ausgeblendet, mit einem unregelmäßigen Flackern (70-ms-Abschnitte, Trefferquote 14&#160;%).
+</p><p><b>Leistungsverlust</b> (<code>fuelDamageDerate()</code>):
+</p>
+<pre>Gas = Gas · (1 − 0,3 · Schaden/100)
+Gas = Gas · 0,5                         (bei 100&#160;% Schaden zusätzlich)
+Gas ≥ 1,05 · Anfahrschub                (solange Gas gegeben wird)</pre>
+<p>Der Boden sorgt dafür, dass das Auto im Notlauf fährt statt zu zucken.
+</p><p><b>Reparatur</b> in der Box ist nicht linear (<code>repairRateAt()</code>): Für die vier Viertel des Schadens gelten feste Anteile der Gesamtzeit.
+</p>
+<pre>Rate (%/s) = 25 / (Anteil · Gesamtzeit/10)
+Anteil = 1 über 75&#160;%, 2 über 50&#160;%, 3 über 25&#160;%, 4 darunter</pre>
+<p>Bei 10 s Gesamtzeit dauern die Viertel 1, 2, 3 und 4 s. Der Schaden ist ab 0,05&#160;% als behoben gerechnet. Im Demolition Derby gilt statt des Schadens eine eigene Health (siehe <a href="./Rennarten.html#Demolition_Derby" title="Rennarten">Rennarten#Demolition Derby</a>).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Bremsen">Bremsen</h3></div>
+<p>Vier Scheiben (<code>brakeTemp4</code>), geheizt nach Bremsarbeit, Bremsbalance und Seitenlast:
+</p>
+<pre>Bremsarbeit = Bremsanteil · min(1, |v| / topSpeedKmh)
+Heizen_i    = 85 · max(1, Fadingstärke) · Bremsarbeit · 2·Achsanteil_i · (1 + (Seite_i − 1)·0,5)
+Kühlen_i    = (0,005 + 0,035 · Tempoanteil) · (T_i − 25)
+dT_i/dt     = Heizen_i − Kühlen_i</pre>
+<ul><li>Achsanteil: Bremsbalance vorn, 1 − Bremsbalance hinten (der Faktor 2 normiert 50:50 auf die volle Rate),</li>
+<li>Kühlung: Zeitkonstante 200 s im Stand, rund 25 s bei voller Fahrt.</li></ul>
+<p>Fading je Achse:
+</p>
+<pre>Fading(T) = clamp((T − 520) / 260&#160;; 0 … 1) · 0,35
+Fading    = min(1, Fadingstärke · (Balance · Fading(vorn) + (1 − Balance) · Fading(hinten)))
+Bremskraft · (1 − Fading)</pre>
+<p>Gemessen im Code: eine Vollbremsung aus 250 km/h mit kalten Scheiben erreicht 241 °C und fadet nicht; acht Bremsungen hintereinander erreichen 710 °C, 15,9&#160;% Fading und 9&#160;% längeren Bremsweg (mit Stärke 100&#160;%). Ein Boxenstopp kühlt die Scheiben nicht.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Windschatten">Windschatten</h3></div>
+<p>Fährt ein Auto dicht hinter einem anderen, sinkt in Kurven der Abtrieb (<code>dirtyAir</code>, von <code>src/90-ghosts.js</code> gemessen und mit Zeitkonstante übernommen). Die Vorderachskapazität wird mit <code>1 − 0,18 · Stärke · dirtyAir</code> multipliziert. Der Schalter ist gesperrt, solange die Strecke weniger als drei Teile hat.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Zurücksetzen"><span id="Zur.C3.BCcksetzen"></span>Zurücksetzen</h3></div>
+<ul><li><b>Boxenstopp</b> mit Reifenwechsel: <code>resetTyres()</code> setzt alle vier Räder auf Abnutzung 0 und auf 20 °C (oder 85 °C mit Reifenwärmer). Tanken und Reparatur siehe <a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a>.</li>
+<li><b>Rennstart</b>: alle Spielerautos bekommen die Startmenge, keinen Schaden und neue, kalte Reifen.</li>
+<li><b>Regler auf 0</b>: Tankverbrauch 0 füllt den Tank, Crash-Erkennung aus setzt den Schaden auf 0, Reifenmodell 0 setzt die Reifen zurück.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_1:_Reifentemperatur">Beispiel 1: Reifentemperatur</h3></div>
+<p>Pro (Reifenmodell 100&#160;%, Druck 1,8), mittlere Arbeit 0,3, Last 1:
+</p>
+<ol><li>Gleichgewicht: 20 + 7/3,4 · 65 · 0,3 ≈ 60 °C. Der Reifen bleibt unter dem Fenster: warm = 40/65 ≈ 0,62, Kaltabzug 0,35 · (0,38)² ≈ 0,05, Grip etwa 0,95.</li>
+<li>Bei Arbeit 0,486 erreicht er genau 85 °C, Grip 1,0.</li>
+<li>Ab Arbeit 0,62 liegt das Gleichgewicht über 103 °C: über = 1, Grip 1 − 0,38 = 0,62.</li></ol>
+<p>Ein kalter Reifen (20 °C) hat 0,65, bei 50 °C sind es 0,90, bei 94 °C 0,905.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_2:_Verschleiß_über_eine_Runde_und_einen_Stint"><span id="Beispiel_2:_Verschlei.C3.9F_.C3.BCber_eine_Runde_und_einen_Stint"></span>Beispiel 2: Verschleiß über eine Runde und einen Stint</h3></div>
+<p>Angenommen: Rundenzeit 6 s, mittlere Arbeit 0,5, Temperatur unter 85 °C, Druck neutral, Reifenmodell 100&#160;%, Mischungsunterschied 150&#160;%.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Mischung</th>
+<th>Rate je s (0,0096 · Faktor · 0,5)</th>
+<th>je Runde (6 s)</th>
+<th>bis völlig abgefahren</th>
+<th>Grip abgefahren (· 0,65)
+</th></tr>
+<tr>
+<td>weich (Faktor 3,4)</td>
+<td>0,0163</td>
+<td>9,8&#160;%</td>
+<td>etwa 10 Runden (61 s)</td>
+<td>1,30 → 0,85
+</td></tr>
+<tr>
+<td>mittel (Faktor 1,0)</td>
+<td>0,0048</td>
+<td>2,9&#160;%</td>
+<td>etwa 35 Runden (208 s)</td>
+<td>1,00 → 0,65
+</td></tr>
+<tr>
+<td>hart (Faktor 0,1)</td>
+<td>0,00048</td>
+<td>0,3&#160;%</td>
+<td>etwa 350 Runden</td>
+<td>0,775 → 0,50
+</td></tr></tbody></table>
+<p>Die tatsächliche Arbeit hängt stark vom Fahrstil ab. Der Code nennt eigene Messwerte (Gas 0,85, wechselnder Lenkeinschlag, Mischungsunterschied 100&#160;%): weich 86 s, mittel 137 s, hart 213 s bis zum abgefahrenen Satz.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_3:_Tank_über_eine_Runde_und_ein_Rennen"><span id="Beispiel_3:_Tank_.C3.BCber_eine_Runde_und_ein_Rennen"></span>Beispiel 3: Tank über eine Runde und ein Rennen</h3></div>
+<p>Pro: Tankverbrauch 1,0&#160;%/s, Gasfaktor 1,8. Angenommen der mittlere gesendete Gaswert ist 1,2 (das Auto fährt meist über 2/3 des Modelltempos):
+</p>
+<ol><li>Verbrauch je Sekunde: 1,2 · 1,0 = 1,2&#160;% = 1,32 l.</li>
+<li>Je Runde zu 6 s: 7,2&#160;% = 7,9 l.</li>
+<li>Voller Tank (110 l) reicht für 100/7,2 ≈ 13,9 Runden. Bei 20&#160;% (nach etwa 11 Runden) kommt der Warnton.</li>
+<li>Gewicht: voll ist der Massefaktor 1,3, Beschleunigung und Bremse sind also um 23&#160;% schwächer; bei halbem Tank 1,15.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_4:_Schaden_und_Reparatur">Beispiel 4: Schaden und Reparatur</h3></div>
+<p>Pro: 5 Crashs bis 100&#160;%, Reparatur 4 s.
+</p>
+<ol><li>Ein Crash: Schaden 20&#160;%, Gas × 0,94.</li>
+<li>Drei Crashs: 60&#160;%, Gas × 0,82; ab dem dritten Crash (über 50&#160;%) fällt je nach Stoß ein Licht aus.</li>
+<li>Fünf Crashs: 100&#160;%, Gas × 0,7 × 0,5 = 0,35.</li>
+<li>Reparatur von 40&#160;%: das Viertel 40 → 25&#160;% mit 25/(3 · 0,4) ≈ 20,8&#160;%/s (0,72 s), dann 25 → 0&#160;% mit 25/(4 · 0,4) = 15,6&#160;%/s (1,6 s), zusammen etwa 2,3 s.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Beispiel_5:_Regen_kommt">Beispiel 5: Regen kommt</h3></div>
+<p>Mittelreifen, Mischungsunterschied 150&#160;%, Wechsel auf Regen. Die Front braucht 10 s.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Zeit nach Wechsel</th>
+<th>Regenstärke</th>
+<th>Regen²</th>
+<th>Grip mittel</th>
+<th>Grip weich</th>
+<th>Grip Regenreifen
+</th></tr>
+<tr>
+<td>2,5 s</td>
+<td>0,25</td>
+<td>0,06</td>
+<td>0,97</td>
+<td>1,25</td>
+<td>0,82
+</td></tr>
+<tr>
+<td>5 s</td>
+<td>0,5</td>
+<td>0,25</td>
+<td>0,86</td>
+<td>1,09</td>
+<td>0,82
+</td></tr>
+<tr>
+<td>7,5 s</td>
+<td>0,75</td>
+<td>0,56</td>
+<td>0,69</td>
+<td>0,82</td>
+<td>0,81
+</td></tr>
+<tr>
+<td>10 s</td>
+<td>1,0</td>
+<td>1,0</td>
+<td>0,45</td>
+<td>0,45</td>
+<td>0,80
+</td></tr></tbody></table>
+<p>Erst nach etwa 7 s ist der Regenreifen besser als der Slick. Ein Schauer bei „wechselhaft“ dauert 30 bis 90 s, ein Wechsel lohnt sich also nur bei längeren Schauern.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li>Der Tankverbrauch hängt am gesendeten Gaswert einschließlich Gasfaktor. Fahrgefühle mit hohem Gasfaktor (Pro 1,8) verbrauchen deshalb bei hohem Tempo mehr als der Reglerwert „%/s bei Vollgas“ vermuten lässt. Ob das gewollt ist, ist noch nicht gesichert.</li>
+<li>Die Arbeit der Reifen ist aus den Befehlen berechnet, nicht gemessen; das echte Auto meldet weder Querbeschleunigung noch Raddrehzahl.</li>
+<li>Die Gleichgewichtstemperatur bei zügigem Fahren liegt mit der Heizrate 7,0 höher als der Code-Kommentar mit den älteren Werten (82 °C) angibt; harte Fahrweise überhitzt die Reifen schnell.</li>
+<li>Die Crash-Erkennung beruht auf den Bewegungsbytes 1 und 3, deren genaue Bedeutung nicht vollständig gesichert ist; Hochheben und Zurücksetzen werden über Stillstand und Abseits ausgeschlossen.</li>
+<li>Links und rechts lassen sich bei Lichtschäden nicht unterscheiden: das Protokoll hat nur je ein Bit für vorn und hinten.</li>
+<li>NPCs haben weder Reifen- noch Tankverschleiß und keinen Schaden; ihre Motoren laufen mit Reifenmodell 0 und Tankgewicht 0.</li>
+<li>Der Mischungsunterschied ist in Arbeit.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version</th>
+<th>Änderung
+</th></tr>
+<tr>
+<td>0.4</td>
+<td>Reifentemperatur und Verschleiß; engeres Temperaturfenster (Überhitzung 103 °C).
+</td></tr>
+<tr>
+<td>0.4.55</td>
+<td>Verschleiß links und rechts getrennt, später vier Räder.
+</td></tr>
+<tr>
+<td>0.5</td>
+<td>Bremstemperatur und Fading, Windschatten, Reifendruck (Block 4); Tank und Schaden ab Werk an, Verbrauch 1,0&#160;%/s.
+</td></tr>
+<tr>
+<td>0.5.13</td>
+<td>Bremsen-Heizrate 85 statt 62 °C/s nach berichtigtem Prüflauf.
+</td></tr>
+<tr>
+<td>0.5.18</td>
+<td>Vier Mischungen statt Slick/Regen; Reifenmodell in Pro ab Werk an.
+</td></tr>
+<tr>
+<td>0.6.2</td>
+<td>Verschleißrate verdreifacht (0,0096).
+</td></tr>
+<tr>
+<td>0.8.42</td>
+<td>Gemeinsamer Wetterplan im Mehrspieler.
+</td></tr>
+<tr>
+<td>0.10.5</td>
+<td>Mischungsunterschied stärker.
+</td></tr>
+<tr>
+<td>1.1</td>
+<td>Wechselhaft: trocken 60 bis 180 s, Schauer 30 bis 90 s, eigener Takt auch im freien Fahren.
+</td></tr>
+<tr>
+<td>1.1 (1.1.42)</td>
+<td>Mischungsunterschied Standard 150&#160;% (Regler bis 300&#160;%); weich 2,6 statt 2,2, hart 0,4 statt 0,5; „Weiche Reifen verboten“.
+</td></tr>
+<tr>
+<td>1.2</td>
+<td>Jede Sitzung beginnt trocken und ohne Wetterwechsel; Regenflackern behoben, Schalter „Blitz bei Gewitter“.
+</td></tr>
+<tr>
+<td>1.2 (1.2.11)</td>
+<td>Erklärtexte berichtigt: Mischungsunterschied (weich 2,6-facher, hart 0,4-facher Verschleiß) und wechselhaftes Wetter (Schauer von 30 bis 90 s alle 1 bis 3 min).
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a></li>
+<li><a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a></li>
+<li><a href="./Rennarten.html" title="Rennarten">Rennarten</a></li>
+<li><a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a></li>
+<li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
+<li><a href="./Challenges.html" title="Challenges">Challenges</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/40-physics.js</code>: <code>update()</code> (Reifen, Bremsen, Massefaktor, Nässe), Konfiguration <code>tyreHeatRate</code>, <code>tyreCoolRate</code>, <code>tyreWearRate</code>, <code>tyreColdPenalty</code>, <code>tyreHotPenalty</code>, <code>tyreWearPenalty</code>, <code>brakeHeatRate</code>, <code>brakeCoolBase</code>, <code>brakeCoolAir</code>, <code>brakeFadeStartC</code>, <code>brakeFadeFullC</code>, <code>brakeFadeMax</code>, <code>fuelMassSpan</code>, <code>wetOnsetFrac</code>, <code>wetFullFrac</code></li>
+<li><code>src/70-race.js</code>: <code>TYRE_MIX</code>, <code>mischungWert()</code>, <code>mischungAnwenden()</code>, <code>applySurface()</code>, <code>setWeather()</code>, <code>wxRainLevel()</code>, <code>wxTick()</code>, <code>wxWechselPlanen()</code>, <code>wetterPlanBauen()</code>, <code>scheduleRaceWeatherChange()</code>, <code>fuelTankTick()</code>, <code>fuelCutTarget()</code>, <code>fuelDamageDerate()</code>, <code>resetTyres()</code>, <code>detectCrash()</code>, <code>registerCrash()</code>, <code>repairRateAt()</code></li>
+<li><code>src/71-rammen.js</code>: <code>crashRichtung()</code>, Crash-Schalter</li>
+<li><code>src/50-drive.js</code>: <code>physicsStep()</code> (Tankrampe), Regler-Handler</li>
+<li><code>src/80-sound.js</code>: <code>ansagenPruefen()</code> (Ansagen bei 10&#160;%), Reifen- und Tankgewichtsregler</li>
+<li><code>src/90-ghosts.js</code>: <code>REIFEN_GRIFF</code>, <code>ghostReifenTempo()</code>, <code>ghostOberflaecheSetzen()</code></li>
+<li><code>src/20-protocol.js</code>: <code>buildCommandPacket()</code> (Lichtmaske), <code>lampFlicker()</code></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw172
+Cached time: 20261027053454
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.082 seconds
+Real time usage: 0.090 seconds
+Preprocessor visited node count: 194/1000000
+Revision size: 28433/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 2358/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.723      1 Vorlage:Stand
+100.00%    3.723      1 -total
+-->
+
+<!-- Render ID 233c1a0a-d1c8-11f1-93dc-bc2411bb8d18 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:29:|#|:idhash:canonical and timestamp 20261027053454 and revision id 88. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

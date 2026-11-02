@@ -64,6 +64,24 @@
   // ohne Telefon pruefen soll. Sie tun nichts, solange niemand sie ruft.
   window.OMEGA_BRUECKE = { uuid, zuHex, ausHex };
 
+  // Neue APK: native Queue unmittelbar sperren. Alte APKs bleiben kompatibel:
+  // der JS-Egress ersetzt dort jeden wartenden Befehl durch Neutralgas.
+  window.OMEGA_BRUECKE.rennPause = an => {
+    try {
+      if (window.OmegaDirekt && typeof window.OmegaDirekt.rennPause === 'function') {
+        window.OmegaDirekt.rennPause(!!an);
+      }
+    } catch (_) { /* JS-Paketsperre bleibt aktiv */ }
+  };
+  // ---- BEIM LADEN IMMER LOESEN (v1.2.25) -------------------------------------------
+  // rennPausiert lebt im Plugin (OmegaBlePlugin.java), nicht in der Seite. Wurde die Seite
+  // waehrend einer Pause neu geladen (Web-Aktualisierung, Absturz, direktNeu), hat niemand
+  // rennPause(false) gerufen - das Plugin neutralisierte danach jedes Fahrpaket, und das Auto
+  // fuhr nicht mehr. Eine frisch geladene Seite hat nie eine Pause, also hier sofort frei.
+  // Das Plugin setzt sich bei jedem Seitenstart ausserdem selbst zurueck (neue APK).
+  window.OMEGA_BRUECKE.rennPauseLadenFrei = () => window.OMEGA_BRUECKE.rennPause(false);
+  window.OMEGA_BRUECKE.rennPauseLadenFrei();
+
   const C = window.Capacitor;
   if (!C || typeof C.isNativePlatform !== 'function' || !C.isNativePlatform()
       || typeof C.nativePromise !== 'function') return;

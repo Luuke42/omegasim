@@ -1,0 +1,96 @@
+{{Stand|app=1.2.50|appdatum=30.10.2026}}
+[[Datei:OmegaSim-Fahrgefuehl.png|mini|Die Einstellungsseite Fahrgefühl in OmegaSim]]
+Das '''Fahrgefühl''' ist in [[OmegaSim]] der fertige Satz von Reglerwerten, der bestimmt, wie sich ein [[Carrera HYBRID]]-Auto fährt: wie stark es beschleunigt, bremst, lenkt und in der Kurve hält. Es gibt neun solche Sätze (Voreinstellungen oder Presets). Drei davon stehen im '''FAHREN'''-Menü, in der '''Garage''' und am '''Cockpit-Knopf''' – '''Arcade''', '''Sim+''' und '''Pacejka''' – die übrigen sechs liegen unter '''Optionen → Fahrgefühl → Voreinstellungen'''.
+
+== Auf einen Blick ==
+{| class="wikitable"
+! Merkmal !! Wert
+|-
+| Menüpfad || Optionen → Fahrgefühl; Kurzwahl in FAHREN, in der Garage und am Cockpit-Knopf
+|-
+| Fahrgefühle in FAHREN || Arcade, Sim+, Pacejka
+|-
+| Übrige Fahrgefühle || Pro, GT3, F1, Realismus GT3, Omega, RC (WIP)
+|-
+| Vorgabe nach Neuinstallation || die Werte im Markup entsprechen dem Fahrgefühl '''Pacejka''' (Steuerungsmodus Pacejka, sonst Pro-Werte)
+|-
+| Steuerungsmodus || Physik, Pacejka, RC („Aus“); seit 1.0.22 ausgeblendet, hängt am Fahrgefühl
+|-
+| Quelle || <code>src/98-presets.js</code> (Reglerwerte), <code>src/40-physics.js</code> (Rechenweg), <code>src/50-drive.js</code> (Umschaltung)
+|}
+
+== Die drei Fahrgefühle im FAHREN-Menü ==
+Die drei Sätze, die man beim Fahren direkt umschalten kann, unterscheiden sich am deutlichsten im Rechenweg und in der Nachsicht:
+
+=== Arcade ===
+Das '''Arcade'''-Fahrgefühl ist der einfachste und nachsichtigste Satz. Es schaltet die Kopplung von Gas und Bremse an die Lenkung ab (<code>lenkKopplungAus</code>): Beim Beschleunigen oder Bremsen wird das Auto nicht nervös, und die tempoabhängige Lenkgrenze entfällt. Der Reifengrip steht auf dem vollen Wert, Reifenverschleiß und Tankgewicht sind aus, die Bremse ist die stärkste (Faktor 4,0) und das Auto beschleunigt in 1,6 s auf 100. Kurz: „zum Fahren ohne Nachdenken“. Es entspricht dem ursprünglichen Sim-Modus der frühen Fassungen.
+
+=== Sim+ ===
+'''Sim+''' („Pro mit mehr Lenkung, Beschleunigung und Bremse“) übernimmt die komplette Pro-Abstimmung, ändert aber drei Werte: eine direktere Lenkung (<code>phys-steerresp</code> 3,3 statt 2,5), einen höheren Beschleunigungsfaktor (1,15) und eine stärkere Bremse (2,2). Der Rechenweg ist identisch mit Pro – es fühlt sich nur agiler und leichter an.
+
+=== Pacejka ===
+'''Pacejka''' ist Pro plus der Reifenkennlinie nach der '''Magic Formula''' (von Grund auf erklärt im Artikel [[Pacejka]], Abrechnung siehe [[Fahrverhalten]]). Der Rechenweg läuft genauso wie bei Physik, aber die Lenkung wird am Limit von der Pacejka-Kurve geformt. Unterhalb der Haftgrenze fährt sich Pacejka wie Physik; darüber reduziert es den Einschlag (Untersteuern) oder – bei eingeschaltetem Übersteuern – lenkt es von selbst weiter ein. Pacejka ist '''experimentell''' und die '''Vorgabe nach Neuinstallation'''.
+
+== Die übrigen sechs Fahrgefühle ==
+Die übrigen Sätze liegen unter '''Optionen → Fahrgefühl → Voreinstellungen''' (Reihenfolge dort):
+
+{| class="wikitable"
+! Fahrgefühl !! Kurzcharakteristik
+|-
+| '''Pro''' || die Grundabstimmung: Automatik, 2,6 s auf 100, Reifenmodell und Tankgewicht an, Lenkkalibrierung 250 %, Steuerungsmodus Physik
+|-
+| '''GT3''' || sportlich mit Simulationstiefe: von Hand schalten, 2,9 s auf 100, Bremsfading, Windschatten und ungleicher Verschleiß voll an
+|-
+| '''F1''' || das schärfste der fahrbaren: von Hand schalten, 2,5 s, stärkster Verschleiß, kürzeste Bremse, feinste Lenkung, längstes Ausrollen, Reifenwärmer an
+|-
+| '''Realismus GT3''' || gegen echte Werte kalibriert (3,2 s gemessene Reihe, RMSE 7,3 %), härteste Stufe
+|-
+| '''Omega''' || Pro, wie es in v0.9 war – eingefroren, bleibt bei künftigen Pro-Änderungen stehen
+|-
+| '''RC (WIP)''' || wie ein Fernsteuerungsauto: Arcade mit allen Reglern am Anschlag, Steuerungsmodus „Aus“ – Gas läuft in 2 s aus, Bremse sofort, zweiter Bremsdruck im Stand = rückwärts
+|}
+
+== Der Steuerungsmodus ==
+Hinter jedem Fahrgefühl steht ein '''Steuerungsmodus''' (Rechenweg der Fahrphysik). Er ist seit 1.0.22 ausgeblendet und hängt am Fahrgefühl, ist aber der eigentliche Unterschied zwischen den Sätzen:
+
+{| class="wikitable"
+! Modus !! Anzeige !! Bedeutung
+|-
+| <code>physik</code> || „Physik“ || Drehmoment, Gänge, Reibkreis, Gewichtsverlagerung, Reifen- und Bremsentemperatur, Einspurmodell. Die Vorgabe der Rechenschritte.
+|-
+| <code>pacejka</code> || „Pacejka (experimentell)“ || wie Physik, zusätzlich Reifenkennlinie nach der Magic Formula. Der Standard im Markup.
+|-
+| <code>aus</code> || „RC (experimentell)“ || kein Fahrzeugmodell – der Stick geht roh ans Auto. Entspricht dem Fahrgefühl RC.
+|}
+
+== Gibt es „SETA“? ==
+'''Nein.''' Ein Fahrhilfe- oder Stabilitätsmodul namens „SETA“ gibt es in OmegaSim nicht – es ist weder ein Fahrgefühl noch ein Regler. Was man darunter verstehen könnte, ist die '''Fahrhilfe''' (''driver-assist'', experimentell): unter '''Optionen → Fahrgefühl → Fahrhilfe''' mit den Stellungen '''aus''', '''Querlage''' und '''voll'''. Sie lässt das Auto die Spur halten oder selbst lenken, braucht aber eine eingescannte Strecke und den Bahn-Modus. Die Fahrhilfe ist von den Fahrphysik-Modellen getrennt; die Fahrgefühle regeln nur, wie das Auto auf Gas, Bremse und Lenkung reagiert.
+
+== Diagramm: Reibkreis und Reifenkennlinie ==
+[[Datei:OmegaSim-Reibkreis-MagicFormula.png|mini|Oben: der Reibkreis (Querausnutzung gegen Längsausnutzung). Unten: die Magic-Formula-Kennlinie (Seitenkraft über Schräglaufausnutzung) mit Untersteuern hinter dem Scheitel.]]
+Zwei Kurven erklären das Fahrgefühl am besten:
+
+* '''Reibkreis''' (Kamm-Kreis): Die Querkraft für die Kurve und die Längskraft für Gas/Bremse teilen sich die maximale Kraft des Reifens. Wer in der Kurve viel Querkraft braucht, hat für Gas oder Bremse nur den Rest:
+<pre>Längsanteil = √(1 − Queranteil²)</pre>
+* '''Magic Formula''': Die Reifenkennlinie „Seitenkraft über Schräglaufwinkel“ folgt der Pacejka-Formel <code>y(u) = sin(C·atan(B·u − E·(B·u − atan(B·u))))</code>. Bis zum Scheitel bringt mehr Einschlag mehr Kraft; dahinter schiebt das Auto (Untersteuern) oder das Heck bricht aus (Übersteuern).
+
+== Siehe auch ==
+* [[Fahrverhalten]]
+* [[Verschleiß]]
+* [[Boxenstopp]]
+* [[Virtuelles Fahren]]
+* [[Carrera HYBRID]]
+* [[Glossar]]
+
+== Quellen im Code ==
+* <code>src/98-presets.js</code>: <code>PRESETS</code>, <code>PRESETS_FAHREN</code>, <code>applyPreset()</code>, <code>setzeBrakeStealLast()</code>
+* <code>src/40-physics.js</code>: <code>pacejkaStep()</code>, <code>pacY()</code>, <code>pacB()</code>, Reibkreis
+* <code>src/50-drive.js</code>: <code>physModusAnwenden()</code>
+* <code>src/00-index.head.html</code>: Regler unter <code>#sub-opt-feel</code>
+
+== Weblinks ==
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Spielfunktionen]]
+[[Kategorie:Software]]

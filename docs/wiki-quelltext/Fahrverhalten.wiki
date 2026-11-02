@@ -47,7 +47,7 @@ Beispiel: Queranteil 0,6 → Längsanteil √(1 − 0,36) = 0,8</pre>
 '''Schlupf''' ist der Unterschied zwischen der Bewegung des Reifens und der Bewegung, die er ohne Rutschen hätte. Seitlich heißt der Winkel zwischen Fahrtrichtung des Rads und Ausrichtung des Rads '''Schräglaufwinkel'''. Ein Reifen baut Kraft über Schlupf auf: erst fast proportional, dann flacher, und hinter einem '''Scheitel''' sogar wieder weniger.
 
 === Reifenkennlinie und Magic Formula ===
-Die '''Reifenkennlinie''' ist die Kurve „Seitenkraft über Schräglaufwinkel“. Die '''Magic Formula''' von Hans B. Pacejka (Pacejka und Bakker, 1992) ist eine bekannte Formel, die diese Kurve mit vier Zahlen nachbildet:
+Die '''Reifenkennlinie''' ist die Kurve „Seitenkraft über Schräglaufwinkel“. Die '''Magic Formula''' von Hans B. Pacejka (Pacejka und Bakker, 1992) ist eine bekannte Formel, die diese Kurve mit vier Zahlen nachbildet – von Grund auf erklärt im Artikel [[Pacejka]]:
 <pre>y(u) = sin( C · atan( B·u − E·(B·u − atan(B·u)) ) )</pre>
 * <code>B</code> streckt die Kurve waagerecht (Steifigkeit),
 * <code>C</code> bestimmt ihre Form (Werte um 1,3 sind typisch für Seitenkraft),

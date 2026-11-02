@@ -366,9 +366,10 @@
   // und SR2GL2G (+100 belegt, die Regel sagt 0 vorher) - beides offene Fragen an Luuke,
   // keine stillschweigend geratenen Sonderregeln - UND die Startkachel selbst (Index 0):
   // ihr Anker wird seit "nicht bei Start immer in der Mitte, sondern so, dass man von der
-  // Schiene davor und danach moeglichst wenig lenken muss" BERECHNET (Mittelwert der
-  // Nachbarn), nicht mehr aus den Beispielen abgeschrieben - dort stand zufaellig immer 0,
-  // weil niemand sie absichtlich anders vorgegeben hatte.
+  // Schiene davor und danach moeglichst wenig lenken muss" BERECHNET (bis v1.2.31 Mittelwert
+  // der Nachbarn, seit v1.2.32 die Geradenregel: Start/Ziel ist eine Gerade), nicht mehr aus
+  // den Beispielen abgeschrieben - dort stand zufaellig immer 0, weil niemand sie absichtlich
+  // anders vorgegeben hatte.
   stAdd('Luuke-Linie: trifft die fuenf verlaesslichen Beispiele', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.luukeLinieAnker || !OMEGA_TEST.codeToTrack) {
       return { skip: true, mass: 'Pruefzugang nicht vorhanden' };
@@ -377,9 +378,13 @@
     // { code, erwartet, offen: [Kachelindizes, die nicht hart geprueft werden] } - Index 0
     // (Startkachel) steht in jedem Beispiel mit in "offen", aus dem oben genannten Grund.
     const beispiele = [
-      { code: 'SGR3G', erwartet: [0, -50, -100, 100, -50, 100], offen: [0, 5] },
+      // v1.2.32: Kachel 1 (die Gerade nach Start/Ziel) in SGR3G und SGHG offen. Ihre -50 sind die
+      // Rampe von der Startkachel auf 0 zur naechsten Kurve; seit Start/Ziel eine gewoehnliche
+      // Gerade ist und hier schon aussen (-100) steht, faehrt die Kachel danach wie jede Gerade
+      // weiter aussen, statt halb zur Mitte zurueckzufallen (siehe luukeGeradenWert).
+      { code: 'SGR3G', erwartet: [0, -50, -100, 100, -50, 100], offen: [0, 1, 5] },
       { code: 'SRLG', erwartet: [0, 100, 0, -100], offen: [0] },
-      { code: 'SGHG', erwartet: [0, -50, 100, 0], offen: [0, 2] },
+      { code: 'SGHG', erwartet: [0, -50, 100, 0], offen: [0, 1, 2] },
       { code: 'SR2GL2G', erwartet: [0, -100, 100, 0, 100, -100, 100], offen: [0, 6] },
       { code: 'SR2G2RG2', erwartet: [0, -100, 100, -100, -100, 100, 0, -100], offen: [0] },
     ];
@@ -398,13 +403,15 @@
         const diff = Math.abs(anker[i] - b.erwartet[i]);
         if (diff > TOLERANZ) abweichungen.push('Kachel ' + i + ': ' + anker[i] + ' statt ' + b.erwartet[i]);
       }
-      // Die Startkachel selbst NICHT gegen die (zufaellige) Beispielzahl gepruft,
-      // sondern gegen die eigentliche Vorschrift: Mittelwert der beiden Nachbarn -
-      // "moeglichst wenig lenken" ist damit eine echte Rechnung und keine Behauptung.
-      const erwarteterStart = (anker[anker.length - 1] + anker[1]) / 2;
+      // Die Startkachel selbst NICHT gegen die (zufaellige) Beispielzahl gepruft, sondern gegen
+      // die Vorschrift: seit v1.2.32 die Geradenregel wie fuer jede Gerade (vorher der
+      // Mittelwert der Nachbarn, der sie hinter einem Scheitel innen stehen liess).
+      const tl = p.tiles, nT = tl.length, atT = (i) => ((i % nT) + nT) % nT;
+      const runOfT = new Array(nT).fill(null);
+      luukeLaeufe(tl, true).forEach((l) => { for (let q = l.von; q <= l.bis; q++) runOfT[atT(q)] = l; });
+      const erwarteterStart = luukeGeradenWert(0, tl, runOfT, true, atT);
       if (Math.abs(anker[0] - erwarteterStart) > 0.01) {
-        abweichungen.push('Startkachel: ' + anker[0] + ' statt Mittelwert ' + erwarteterStart
-          + ' aus Nachbarn ' + anker[anker.length - 1] + '/' + anker[1]);
+        abweichungen.push('Startkachel: ' + anker[0] + ' statt Geradenwert ' + erwarteterStart);
       }
       teile.push(b.code + ': ' + anker.join(','));
       if (abweichungen.length) schlecht.push(b.code + ' || ' + abweichungen.join('; '));
@@ -1344,7 +1351,7 @@
       + (spiegel ? '' : ' | NICHT GESPIEGELT') };
   });
 
-  // ---- Die Markup-Vorgaben MUESSEN die Voreinstellung Pacejka sein ----
+  // ---- Die Markup-Vorgaben MUESSEN die Pacejka-Grundlage sein ----
   //
   // Pacejka ist die Vorgabe (BESTELLT: "pajecka als standard"). Steht ein Regler beim Laden
   // anders, zeigt die Legende "eigene Abstimmung", ohne dass jemand etwas verstellt hat - und
@@ -1354,28 +1361,39 @@
   // dem ALTEN Pro, siebzehn Abweichungen. Zwei Orte fuer eine Aussage laufen auseinander,
   // sobald einer nachgezogen wird - und ein Vorgabewert sagt beim Ansehen nicht, aus welcher
   // Voreinstellung er stammt.
-  stAdd('Markup-Vorgaben sind die Voreinstellung Pacejka', () => {
+  //
+  // Korrektur nach 1.2.66: Pacejka hat seit 1.2.48 drei EIGENE Werte (PACEJKA_EIGEN in
+  // 98-presets.js). Die stehen nur im Preset, nicht im Markup - dort steht fuer sie der
+  // Pro-Wert (Stand vor 1.2.48), und der erste Start legt das Preset ausdruecklich an
+  // (98b-sicherung.js). Alle UEBRIGEN Regler muessen weiter genau Pacejka sein.
+  stAdd('Markup-Vorgaben sind die Pacejka-Grundlage (eigene Pacejka-Werte nur im Preset)', () => {
     if (!window.__presetValues) return { skip: true, mass: 'presetValues nicht erreichbar' };
     const soll = window.__presetValues('propacejka');
-    if (!soll) return { skip: true, mass: 'Voreinstellung propacejka nicht vorhanden' };
+    const pro = window.__presetValues('pro');
+    if (!soll || !pro) return { skip: true, mass: 'Voreinstellung propacejka/pro nicht vorhanden' };
+    const eigen = window.__pacejkaEigen ? window.__pacejkaEigen() : {};
     const ab = [];
     for (const k of Object.keys(soll)) {
       const el = $(k);
       if (!el) { ab.push(k + ': nicht im Dokument'); continue; }
+      const ziel = k in eigen ? pro[k] : soll[k];
+      const wer = k in eigen ? 'Pro' : 'Pacejka';
       // Der VORGABEWERT und nicht der aktuelle: defaultValue und defaultChecked stehen fuer
       // das, was im Markup steht. el.value waere der Stand nach jedem Reglerzug dieser
       // Sitzung, und der Test wuerde dann messen, was der Nutzer gerade tut.
       if (el.type === 'checkbox') {
-        if (el.defaultChecked !== !!soll[k]) {
-          ab.push(k + ': Markup ' + el.defaultChecked + ', Pacejka ' + soll[k]);
-        }
-      } else if (Math.abs(parseFloat(el.defaultValue) - parseFloat(soll[k])) > 1e-9) {
-        ab.push(k + ': Markup ' + el.defaultValue + ', Pacejka ' + soll[k]);
+        if (el.defaultChecked !== !!ziel) ab.push(k + ': Markup ' + el.defaultChecked + ', ' + wer + ' ' + ziel);
+      } else if (Math.abs(parseFloat(el.defaultValue) - parseFloat(ziel)) > 1e-9) {
+        ab.push(k + ': Markup ' + el.defaultValue + ', ' + wer + ' ' + ziel);
       }
     }
+    // Gegenprobe: die eigenen Werte unterscheiden sich wirklich von Pro, sonst waere die
+    // Ausnahme leer und der Test pruefte nichts Neues.
+    const echt = Object.keys(eigen).filter((k) => Math.abs(parseFloat(eigen[k]) - parseFloat(pro[k])) > 1e-9);
+    if (echt.length !== Object.keys(eigen).length) ab.push('PACEJKA_EIGEN enthaelt Pro-Werte');
     return { ok: ab.length === 0,
-             mass: ab.length === 0 ? Object.keys(soll).length + ' Vorgaben stimmen mit Pacejka'
-                                   : ab.length + ' Abweichungen \u2013 ' + ab.slice(0, 3).join('; ') };
+             mass: ab.length === 0 ? Object.keys(soll).length + ' Vorgaben stimmen (' + echt.length + ' davon Pro statt Pacejka-eigen)'
+                                   : ab.length + ' Abweichungen – ' + ab.slice(0, 3).join('; ') };
   });
 
   // ---- Ziffernversatz: nur bei WECHSEL, nicht in jedem Frame ----
@@ -2988,7 +3006,7 @@
                                            cfg: { line: 1, lanes: 0.5, lateral: 0.5 } });
     if (!r) return { skip: true, mass: 'keine Strecke geladen' };
     if (r.fehler) return { ok: false, mass: 'Messung warf: ' + r.fehler };
-    const kurven = r.kacheln.filter((k) => k.typ !== 2);
+    const kurven = r.kacheln.filter((k) => tileIsCurve(k.typ))  /* v1.2.32: Start/Ziel ist keine Kurve */;
     if (!kurven.length) return { skip: true, mass: 'Strecke ohne Kurven' };
     const spanne = kurven.reduce((a, k) => a + k.spanne, 0) / kurven.length;
     const schlecht = [];
@@ -3050,7 +3068,7 @@
       setz(0);
       const r0 = OMEGA_TEST.ghostLinieTrace({ takte: 400, kurvenFaktor: 1.2,
                                               cfg: { line: 1, lanes: 0.5, lateral: 0.5 } });
-      const kurven = r0.kacheln.filter((k) => k.typ !== 2);
+      const kurven = r0.kacheln.filter((k) => tileIsCurve(k.typ));
       const sp = kurven.length ? kurven.reduce((a, k) => a + k.spanne, 0) / kurven.length : 0;
       teile.push('aus: Kurvenspanne ' + Math.round(sp));
       if (!(sp > 25)) schlecht.push('bei 0 ist die Linie weg (Spanne ' + Math.round(sp) + ')');
@@ -5280,6 +5298,472 @@
                        + ' (hinten ' + an.nutzH.toFixed(2) + ' gegen vorn ' + an.nutzV.toFixed(2) + ')' };
   });
 
+  // ---- Korrektur nach 1.2.66: Gran-Werte haengen am MODUS, nicht am Preset ----
+  // Vorher leitete setzeGran() sie aus presetAktiv() ab: direkt im Auswahlfeld "Gran" gewaehlt gab
+  // es keine Gierregelung, und ein verstellter Regler oder das Laden schaltete sie ab.
+  stAdd('Gran Hybrismo: Werte nach Moduswahl, Reglerzug und Laden (am Modus, nicht am Preset)', () => {
+    const f = [];
+    const sel = $('phys-mode');
+    if (!sel || typeof GRAN_AN === 'undefined') return { skip: true, mass: 'phys-mode/GRAN_AN fehlt' };
+    const merk = presetRead();
+    const c = physEngine.config;
+    const granAn = (wo) => {
+      if (!c.gran || !c.pacejka) f.push(wo + ': gran/pacejka aus');
+      for (const k of Object.keys(GRAN_AN)) if (c[k] !== GRAN_AN[k]) { f.push(wo + ': ' + k + ' ' + c[k]); break; }
+    };
+    try {
+      // 1) Direkt im Auswahlfeld gewaehlt (ohne Preset-Knopf).
+      presetSet('phys-mode', 'physik');
+      presetSet('phys-mode', 'gran');
+      granAn('Auswahlfeld');
+      if (!physicsEnabled) f.push('Gran ohne Physik');
+      // 2) Einen Regler verstellen (dann ist kein Preset mehr "aktiv") und die alten Aufrufer laufen lassen.
+      const sc = $('setting-steer-calib');
+      presetSet('setting-steer-calib', Math.abs(parseFloat(sc.value) - 1.35) < 1e-9 ? 1.4 : 1.35);
+      setzeBrakeStealLast(); setzeGran();
+      granAn('nach Reglerzug');
+      // 3) Laden: das Feld steht schon auf 'gran' (kein change), die Sicherung ruft setzeGran().
+      granWerteSetzen(c, false);
+      sel.value = 'gran';
+      setzeGran();
+      granAn('nach Laden');
+      // 4) Wechsel weg von Gran schaltet alles ab.
+      presetSet('phys-mode', 'pacejka');
+      if (c.gran || c.granYawFeed !== 0 || c.granAeroK !== 0) f.push('nach Wechsel auf Pacejka noch Gran-Werte');
+      if (!c.pacejka) f.push('Pacejka aus');
+    } finally {
+      for (const [id, val] of Object.entries(merk)) presetSet(id, val);
+      setzeBrakeStealLast(); setzeGran();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Auswahlfeld, Reglerzug und Laden: Gierregelung bleibt an, Wechsel schaltet sie ab' };
+  });
+
+  stAdd('Gran Hybrismo: Spieler 2 faehrt mit Physik und eigener Gierregelung', () => {
+    const f = [];
+    if (typeof spielerPhysikAn !== 'function' || !window.__presetSchnappschuss) return { skip: true, mass: 'spielerPhysikAn fehlt' };
+    if (!spielerPhysikAn({ motor: { config: { physModus: 'gran' } } })) f.push('Modus gran gilt nicht als Physik');
+    if (!spielerPhysikAn({ motor: { config: { physModus: 'pacejka' } } })) f.push('Modus pacejka gilt nicht als Physik');
+    if (spielerPhysikAn({ motor: { config: { physModus: 'aus' } } })) f.push('RC gilt als Physik');
+    const vorher = { gran: physEngine.config.gran, modus: $('phys-mode').value };
+    if (window.__presetSchnappLeeren) window.__presetSchnappLeeren();
+    const snap = window.__presetSchnappschuss('gran');
+    if (!snap) f.push('kein Schnappschuss');
+    else {
+      if (snap.modus !== 'gran') f.push('Schnappschuss-Modus ' + snap.modus);
+      if (!snap.config.gran || !snap.config.pacejka) f.push('Schnappschuss ohne gran/pacejka');
+      if (snap.config.granYawFeed !== GRAN_AN.granYawFeed || snap.config.granAeroK !== GRAN_AN.granAeroK) f.push('Schnappschuss ohne Gran-Werte');
+    }
+    if (physEngine.config.gran !== vorher.gran || $('phys-mode').value !== vorher.modus) f.push('Spieler 1 wurde vom Schnappschuss veraendert');
+    if (window.__presetSchnappLeeren) window.__presetSchnappLeeren();
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'gran rechnet mit Physik, Schnappschuss traegt die Gran-Werte, Spieler 1 unberuehrt' };
+  });
+
+  // ---- Korrektur nach 1.2.66 (BESTELLT: Latenz): NPC-Folgen reichen nur GEAENDERTE Befehle durch ----
+  // 1.2.50 liess in Einpark-/Haltefolgen jeden Takt am Verwerfen vorbei, und writeInFlight fiel,
+  // waehrend noch gesendet wurde. Gemessen an einer Senke, deren Schreibvorgaenge von Hand enden.
+  stAdd('Funk: NPC-Folge sendet ohne Befehlsaenderung nichts nach, Aenderung/Phasenwechsel schon', async () => {
+    const f = [];
+    const offen = [];
+    let gesendet = 0;
+    const rx = { properties: { writeWithoutResponse: true },
+                 writeValueWithoutResponse() { gesendet++; return new Promise((r) => offen.push(r)); } };
+    const car = { role: 'ghost', alias: 'Funkfolge', device: { name: 'Funkfolge', id: 'funkfolge' }, rx,
+                  writeInFlight: false, ghost: { running: true, randHalt: { phase: 'rand' } } };
+    const bits = trackModeBit() | LIGHT_HEAD;
+    const ticks = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+    const loesen = async () => { const r = offen.shift(); if (r) r(); await ticks(); };
+    try {
+      writeToCar(car, 0.5, 0.3, bits);
+      await ticks();
+      if (gesendet !== 1) f.push('erstes Paket: ' + gesendet);
+      // Waehrend es unterwegs ist: sechsmal derselbe Befehl.
+      for (let i = 0; i < 6; i++) writeToCar(car, 0.5, 0.3, bits);
+      await ticks();
+      if (!car.writeInFlight) f.push('writeInFlight fiel, waehrend gesendet wird');
+      await loesen();
+      if (gesendet !== 1) f.push('ohne Aenderung nachgereicht: ' + (gesendet - 1) + ' Pakete');
+      if (car.writeInFlight) f.push('writeInFlight haengt nach dem Ende');
+      // Wieder unterwegs, dann ein GEAENDERTER Lenkbefehl: er wird eingereiht und folgt sofort.
+      writeToCar(car, 0.5, 0.3, bits);
+      await ticks();
+      const n0 = gesendet;
+      writeToCar(car, -0.5, 0.3, bits);
+      writeToCar(car, -0.5, 0.3, bits);                       // derselbe noch einmal: nichts Neues
+      await ticks();
+      if (!car.writeInFlight) f.push('writeInFlight fiel nach dem Einreihen');
+      await loesen();
+      if (gesendet !== n0 + 1) f.push('geaenderter Befehl: ' + (gesendet - n0) + ' Pakete statt 1');
+      if (!car.writeInFlight) f.push('writeInFlight fiel, waehrend das eingereihte Paket unterwegs ist');
+      // Phasenwechsel bei gleichem Befehl: wird auch durchgereicht.
+      car.ghost.randHalt.phase = 'halt';
+      writeToCar(car, -0.5, 0.3, bits);
+      await loesen();
+      if (gesendet !== n0 + 2) f.push('Phasenwechsel nicht durchgereicht (' + (gesendet - n0) + ')');
+      while (offen.length) await loesen();
+      if (car.writeInFlight) f.push('writeInFlight haengt am Ende');
+    } finally {
+      while (offen.length) { const r = offen.shift(); r(); }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'gleicher Befehl verworfen, Aenderung und Phasenwechsel je 1 Paket, writeInFlight bis zum letzten Paket' };
+  });
+
+  // ---- Korrektur nach 1.2.66: Boxen-Minigame mit kurzer Luecke zwischen den Knoepfen ----
+  stAdd('Boxen-Minigame: kurze Luecke (80-100 ms), doppelter Druck zaehlt nicht fuer den naechsten Knopf', () => {
+    const merk = { modus: pitModus, an: pitLaneEnabled, trig: pitTrigger, kmh: physEngine.state.speedKmh, zwei: zweiSpieler };
+    const reifen = pitSpielReifenMerk();
+    const f = [];
+    try {
+      if (!(PIT_SPIEL_PAUSE >= 0.08 && PIT_SPIEL_PAUSE <= 0.1)) f.push('Luecke ' + PIT_SPIEL_PAUSE + ' s');
+      pitModus = 'minigame'; pitLaneEnabled = true; pitTrigger = 'anywhere';
+      zweiSpieler = false;
+      physEngine.state.speedKmh = 0; throttleY = 0;
+      setPitState('off'); pitRearmBlockedUntil = 0;
+      setPitState('limited'); pitLastTick = 0; pitLaneTick();
+      if (!pitSpielAktiv()) return { ok: false, mass: 'kein Minigame-Stopp' };
+      const sp = pitSpiel;
+      sp.fensterAb = pitStandElapsed;
+      pitSpielTaste(sp.folge[0]);
+      if (sp.i !== 1 || sp.treffer !== 1) f.push('erster Druck zaehlt nicht');
+      // Sofort noch einmal (doppelter/spaeter Druck): in der Luecke, zaehlt nicht.
+      pitSpielTaste(sp.folge[1]);
+      if (sp.i !== 1 || sp.treffer !== 1 || sp.fehler !== 0) f.push('Druck in der Luecke zaehlte (i ' + sp.i + ', Treffer ' + sp.treffer + ', Fehler ' + sp.fehler + ')');
+      if (!(pitStandElapsed < sp.fensterAb)) f.push('keine Luecke nach dem Druck');
+      pitStandElapsed = sp.fensterAb + 0.001;
+      pitSpielTaste(sp.folge[1]);
+      if (sp.i !== 2 || sp.treffer !== 2) f.push('nach der Luecke zaehlt der Druck nicht');
+      // Fuenf Fenster mit Luecken passen weiter in die Standzeit.
+      if (sp.fensterS > PIT_SPIEL_FENSTER_MIN && Math.abs(PIT_SPIEL_ANZAHL * (sp.fensterS + PIT_SPIEL_PAUSE) - sp.T) > 0.01) f.push('Fenster passen nicht in die Zeit');
+    } finally {
+      setPitState('off'); pitRearmBlockedUntil = 0;
+      pitModus = merk.modus; pitLaneEnabled = merk.an; pitTrigger = merk.trig;
+      zweiSpieler = merk.zwei;
+      physEngine.state.speedKmh = merk.kmh;
+      pitSpielReifenZurueck(reifen);
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Luecke ' + Math.round(PIT_SPIEL_PAUSE * 1000) + ' ms, Druck darin zaehlt nicht, danach schon' };
+  });
+
+  // v1.2.62 GRAN ACCELERATO: die Gier wird gefahren (baut sich dynamisch auf), das Auto
+  // dreht beim Einlenken ein, und am Limit schiebt es (vorn ueber der Grenze). Der Test
+  // misst die gran*-Werte (GRAN_AN, 50-drive.js) direkt an einem Motor.
+  stAdd('Gran Hybrismo: Gier baut sich auf, Einlenken, Limit schiebt', () => {
+    const f = [];
+    // Dieselben Werte wie im Spiel (GRAN_AN, 50-drive.js), keine Abschrift.
+    const GRAN = Object.assign({ gran: true, pacejka: true }, GRAN_AN);
+    const e = new CarreraPhysicsEngine();
+    Object.assign(e.config, GRAN);
+    const st = e.state;
+    st.driveMode = 'forward';
+    st.currentGear = 3;
+    // 1) Dynamische Gier: beim Einlenken (120 km/h, voller Einschlag) baut sie sich ueber die
+    //    Takte auf, statt zu springen.
+    st.speedKmh = 120 / REAL_SCALE;
+    e.update({ throttle: 0.6, brake: 0, steering: 1 }, 0.045);
+    const yawErster = st.granYaw;
+    let yawSpaeter = yawErster;
+    for (let i = 0; i < 60; i++) {
+      st.speedKmh = 120 / REAL_SCALE;
+      e.update({ throttle: 0.6, brake: 0, steering: 1 }, 0.045);
+      yawSpaeter = st.granYaw;
+    }
+    if (!(yawErster > 0)) f.push('Gier baut sich nicht auf (erster ' + yawErster.toFixed(3) + ')');
+    if (!(yawSpaeter > yawErster)) f.push('Gier waechst nicht (' + yawErster.toFixed(3) + ' -> ' + yawSpaeter.toFixed(3) + ')');
+    if (yawErster > yawSpaeter) f.push('Gier springt sofort (erster ' + yawErster.toFixed(3) + ')');
+    // 2) Limit: voller Einschlag bei hohem Tempo schiebt (vorn ueber der Grenze), trotz Abtrieb.
+    const e2 = new CarreraPhysicsEngine();
+    Object.assign(e2.config, GRAN);
+    const st2 = e2.state;
+    st2.driveMode = 'forward';
+    st2.currentGear = 3;
+    for (let i = 0; i < 40; i++) {
+      st2.speedKmh = 250 / REAL_SCALE;
+      e2.update({ throttle: 0.9, brake: 0, steering: 1 }, 0.045);
+    }
+    if (!(st2.pacNutzV > 1)) f.push('Vollausschlag bei 250 schiebt nicht (vorn ' + st2.pacNutzV.toFixed(2) + ')');
+    // 3) Linkskurve: die Gier und der Einlenk-Zuschlag muessen NEGATIV sein (sonst lenkt der
+    //    Zuschlag in eine Linkskurve nach rechts - der Sign-Bug).
+    const e3 = new CarreraPhysicsEngine();
+    Object.assign(e3.config, GRAN);
+    const st3 = e3.state;
+    st3.driveMode = 'forward';
+    st3.currentGear = 3;
+    for (let i = 0; i < 40; i++) {
+      st3.speedKmh = 120 / REAL_SCALE;
+      e3.update({ throttle: 0.6, brake: 0, steering: -1 }, 0.045);
+    }
+    if (!(st3.granYaw < 0)) f.push('Linkskurve: Gier nicht negativ (' + st3.granYaw.toFixed(3) + ')');
+    if (!(e3.outputs.servoAngle < 0)) f.push('Linkskurve: Einschlag nicht links (' + e3.outputs.servoAngle.toFixed(3) + ')');
+    // 4) NUR Gas, kein Lenken: der Servo darf nicht wegdrehen (der gemeldete Drift). Erst
+    //    eine Rechtskurve (Gier baut sich auf), dann geradeaus nur Gas - die Rest-Gier darf
+    //    nicht weiterlenken.
+    const e4 = new CarreraPhysicsEngine();
+    Object.assign(e4.config, GRAN);
+    const st4 = e4.state;
+    st4.driveMode = 'forward';
+    st4.currentGear = 3;
+    for (let i = 0; i < 40; i++) {
+      st4.speedKmh = 120 / REAL_SCALE;
+      e4.update({ throttle: 0.6, brake: 0, steering: 1 }, 0.045);
+    }
+    let tikAb = -1;
+    for (let i = 0; i < 60; i++) {
+      st4.speedKmh = 120 / REAL_SCALE;
+      e4.update({ throttle: 1, brake: 0, steering: 0 }, 0.045);
+      if (tikAb < 0 && Math.abs(e4.outputs.servoAngle) < 0.02) tikAb = i;
+    }
+    if (tikAb < 0 || tikAb > 8) f.push('Nur Gas lenkt nach Kurve (unter 0,02 erst nach ' + tikAb
+        + ' Takten, Ende ' + e4.outputs.servoAngle.toFixed(3) + ')');
+    return { ok: !f.length, mass: f.length ? f.join('; ')
+      : 'Gier ' + yawErster.toFixed(3) + ' -> ' + yawSpaeter.toFixed(3)
+        + ', 250 km/h schiebt (vorn ' + st2.pacNutzV.toFixed(2) + ', hinten ' + st2.pacNutzH.toFixed(2)
+        + '), Links Gier ' + st3.granYaw.toFixed(3) };
+  });
+
+  // ---- v1.3.5: GRAN HYBRISMO UND ASSETTO CARRERA ------------------------------------------------
+  // BESTELLT: "Neues Fahrgefuehl Gran Accelerato pruefen und verbessern. Soll sich anfuehlen wie eine
+  // Kombination aus Gran Turismo Sport und Assetto Corsa Competizione. Wenn noetig, mach 2 Modi draus."
+  // Der Pruefstand: ein frischer Motor mit der Konfiguration des Presets (Schnappschuss, also durch
+  // dieselben Regler-Handler wie im Spiel), festes Tempo je Takt, Reifentemperatur auf Wunsch fest.
+  function fgMotor(key, patch) {
+    if (window.__presetSchnappLeeren) window.__presetSchnappLeeren();
+    const snap = window.__presetSchnappschuss(key);
+    const e = new CarreraPhysicsEngine();
+    Object.assign(e.config, JSON.parse(JSON.stringify(snap.config)), patch || {});
+    e.config.gears = physEngine.config.gears;
+    e.state.driveMode = 'forward'; e.state.currentGear = 3;
+    return e;
+  }
+  function fgFahre(e, abschnitte, T) {
+    const st = e.state;
+    return abschnitte.map((a) => {
+      let maxS = 0, maxUeber = 0;
+      for (let i = 0; i < a.takte; i++) {
+        st.speedKmh = a.kmh / REAL_SCALE;
+        if (T !== undefined) { for (let j = 0; j < 4; j++) st.tyreTemp4[j] = T; st.tyreTempC = T; }
+        e.update({ throttle: a.gas || 0, brake: a.bremse || 0, steering: a.lenk || 0 }, 0.045);
+        maxS = Math.max(maxS, Math.abs(e.outputs.servoAngle));
+        maxUeber = Math.max(maxUeber, st.pacUeber);
+      }
+      return { servo: e.outputs.servoAngle, maxS, maxUeber, ueber: st.pacUeber, uV: st.pacNutzV, uH: st.pacNutzH,
+               leistung: st.pacLeistung };
+    });
+  }
+  // Grenztempo (km/h im echten Mass): das kleinste Tempo, bei dem die Vorderachse bei vollem Stick
+  // und Gas 0,3 ueber die Haftgrenze kommt. Hoeher = mehr Grip.
+  function fgGrenze(key, T) {
+    let lo = 20, hi = 400;
+    for (let k = 0; k < 16; k++) {
+      const mid = (lo + hi) / 2;
+      const r = fgFahre(fgMotor(key), [{ takte: 25, kmh: mid, gas: 0.3, lenk: 1 }], T)[0];
+      if (r.uV > 1) hi = mid; else lo = mid;
+    }
+    return Math.round((lo + hi) / 2);
+  }
+  // Gier beim Lupfen in der Kurve: groesster Einschlag in 0,3 s ohne Gas gegen den mit Gas 0,5 davor.
+  function fgLupfen(key) {
+    const a = fgFahre(fgMotor(key), [{ takte: 40, kmh: 190, gas: 0.5, lenk: 1 }, { takte: 7, kmh: 190, gas: 0, lenk: 1 }], 85);
+    return { gier: a[1].maxS / Math.max(1e-6, Math.abs(a[0].servo)), ueber: a[1].ueber, leistung: a[1].leistung };
+  }
+  // Trail-Braking: Einschlag mit leichter Bremse (0,3) gegen Rollen, 120 km/h, Stick 0,8.
+  function fgTrail(key) {
+    const roll = fgFahre(fgMotor(key), [{ takte: 30, kmh: 120, lenk: 0.8 }], 85)[0];
+    const brems = fgFahre(fgMotor(key), [{ takte: 30, kmh: 120, bremse: 0.3, lenk: 0.8 }], 85)[0];
+    return Math.abs(brems.servo) / Math.max(1e-6, Math.abs(roll.servo));
+  }
+
+  stAdd('Fahrgefuehl v1.3.5: Gran Hybrismo stabiler als Assetto Carrera (Grenzgrip, Gier beim Lupfen)', () => {
+    const f = [];
+    if (!window.__presetValues('gran') || !window.__presetValues('acc')) return { ok: false, mass: 'Presets gran/acc fehlen' };
+    const gH = fgGrenze('gran', 85), gA = fgGrenze('acc', 85), gP = fgGrenze('propacejka', 85);
+    if (!(gH > gA + 10)) f.push('Grenzgrip Hybrismo ' + gH + ' nicht ueber Assetto ' + gA);
+    if (!(gH > gP + 20)) f.push('Hybrismo ' + gH + ' nicht deutlich ueber Pacejka ' + gP);
+    const lH = fgLupfen('gran'), lA = fgLupfen('acc');
+    if (!(lA.gier > lH.gier + 0.2)) f.push('Lupfen: Assetto ' + lA.gier.toFixed(2) + ' nicht deutlich ueber Hybrismo ' + lH.gier.toFixed(2));
+    if (!(lH.gier < 1.15)) f.push('Hybrismo dreht beim Lupfen ein: ' + lH.gier.toFixed(2));
+    if (!(lA.ueber > 0.05)) f.push('Assetto: beim Lupfen kommt das Heck nicht (' + lA.ueber.toFixed(2) + ')');
+    if (lA.leistung) f.push('Lupfen als Leistungsuebersteuern gemeldet');
+    return { ok: !f.length, mass: f.length ? f.join(' | ')
+      : 'Grenztempo Hybrismo ' + gH + ', Assetto ' + gA + ', Pacejka ' + gP + ' km/h; Lupfen Gier x' + lH.gier.toFixed(2)
+        + ' gegen x' + lA.gier.toFixed(2) + ' (Heck ' + lA.ueber.toFixed(2) + ')' };
+  });
+
+  stAdd('Fahrgefuehl v1.3.5: Assetto Carrera mit Reifenfenster, Trail-Braking-Gier, Untersteuern beim Ueberfahren', () => {
+    const f = [];
+    const aK = fgGrenze('acc', 20), aW = fgGrenze('acc', 85), aH = fgGrenze('acc', 118);
+    const hK = fgGrenze('gran', 20), hW = fgGrenze('gran', 85), hH = fgGrenze('gran', 118);
+    if (!(aW > aK + 30)) f.push('Assetto kalt ' + aK + ' nicht deutlich unter warm ' + aW);
+    if (!(aW > aH + 30)) f.push('Assetto ueberhitzt ' + aH + ' nicht deutlich unter warm ' + aW);
+    const spA = aW - Math.min(aK, aH), spH = hW - Math.min(hK, hH);
+    if (!(spH < spA / 2)) f.push('Hybrismo-Temperatureinfluss ' + spH + ' nicht klein gegen Assetto ' + spA);
+    const tA = fgTrail('acc'), tH = fgTrail('gran');
+    if (!(tA > 1.05 && tA > tH + 0.03)) f.push('Trail-Braking: Assetto x' + tA.toFixed(3) + ', Hybrismo x' + tH.toFixed(3));
+    const uA = fgFahre(fgMotor('acc'), [{ takte: 30, kmh: 290, gas: 0.4, lenk: 1 }], 85)[0];
+    const uH = fgFahre(fgMotor('gran'), [{ takte: 30, kmh: 290, gas: 0.4, lenk: 1 }], 85)[0];
+    if (!(uA.servo < uH.servo - 0.05 && uA.uV > 1.2)) f.push('Ueberfahren: Assetto Servo ' + uA.servo.toFixed(2) + ' (vorn ' + uA.uV.toFixed(2) + '), Hybrismo ' + uH.servo.toFixed(2));
+    return { ok: !f.length, mass: f.length ? f.join(' | ')
+      : 'Grenztempo Assetto kalt/warm/heiss ' + aK + '/' + aW + '/' + aH + ', Hybrismo ' + hK + '/' + hW + '/' + hH
+        + '; Trail x' + tA.toFixed(2) + ' gegen x' + tH.toFixed(2) + '; 290 km/h Servo ' + uA.servo.toFixed(2) + ' gegen ' + uH.servo.toFixed(2) };
+  });
+
+  stAdd('Fahrgefuehl v1.3.5: granStep-Korrekturen (Tempo-Lenkung und Zentrierung am Servo, degressive Last, Schalter Uebersteuern)', () => {
+    const f = [];
+    // Tempo-Lenkung wirkt am uebertragenen Winkel.
+    const s0 = fgFahre(fgMotor('gran', { granLenkTempo: 0 }), [{ takte: 25, kmh: 200, gas: 0.2, lenk: 0.6 }], 85)[0].servo;
+    const s1 = fgFahre(fgMotor('gran', { granLenkTempo: 1 }), [{ takte: 25, kmh: 200, gas: 0.2, lenk: 0.6 }], 85)[0].servo;
+    if (!(s1 < s0 * 0.85)) f.push('Tempo-Lenkung nicht am Servo (' + s0.toFixed(3) + ' -> ' + s1.toFixed(3) + ')');
+    // Selbstzentrierung wirkt am Servo: Stick los, zwei Takte spaeter.
+    const z = (zf) => fgFahre(fgMotor('gran', { granZentrier: zf }), [{ takte: 30, kmh: 150, gas: 0.3, lenk: 0.8 }, { takte: 1, kmh: 150, gas: 0.3, lenk: 0 }], 85)[1].servo;
+    const z0 = z(0), z1 = z(0.3);
+    if (!(Math.abs(z1) < Math.abs(z0) * 0.8)) f.push('Zentrierung nicht am Servo (' + z0.toFixed(3) + ' / ' + z1.toFixed(3) + ')');
+    // Degressive Lastempfindlichkeit: unter Bremsen ist hinten entlastet; mit k behaelt es mehr Griff.
+    const hk = (k) => fgFahre(fgMotor('acc', { granLastEmpf: k }), [{ takte: 25, kmh: 150, bremse: 0.6, lenk: 1 }], 85)[0].uH;
+    const h0 = hk(0), h3 = hk(0.3);
+    if (!(h3 < h0)) f.push('Lastempfindlichkeit nicht degressiv (hinten ' + h0.toFixed(3) + ' -> ' + h3.toFixed(3) + ')');
+    // Schalter Uebersteuern: Hybrismo ohne Schalter kein Heck, mit Schalter schon.
+    const vg = [{ takte: 30, kmh: 150, gas: 1, lenk: 0.8 }];
+    const hAus = fgFahre(fgMotor('gran', { pacejkaUebersteuern: false }), vg, 85)[0];
+    const hAn = fgFahre(fgMotor('gran', { pacejkaUebersteuern: true }), vg, 85)[0];
+    if (hAus.maxUeber !== 0) f.push('Hybrismo ohne Schalter: Heck ' + hAus.maxUeber.toFixed(2));
+    if (!(hAn.maxUeber > 0)) f.push('Hybrismo mit Schalter: kein Heck');
+    // Assetto: Heck im Modus, aber ohne Schalter haelt der Rutsch nicht ohne Stick.
+    const a = fgFahre(fgMotor('acc', { pacejkaUebersteuern: false }), [vg[0], { takte: 16, kmh: 150, gas: 1, lenk: 0 }], 85);
+    if (!(a[0].maxUeber > 0.05)) f.push('Assetto: Heck kommt unter Vollgas nicht (' + a[0].maxUeber.toFixed(2) + ')');
+    if (!(a[1].ueber < 0.02 && Math.abs(a[1].servo) < 0.05)) f.push('Assetto ohne Schalter lenkt ohne Stick weiter (' + a[1].ueber.toFixed(2) + ', Servo ' + a[1].servo.toFixed(2) + ')');
+    return { ok: !f.length, mass: f.length ? f.join(' | ')
+      : 'Tempo-Lenkung ' + s0.toFixed(2) + ' -> ' + s1.toFixed(2) + ', Zentrierung ' + z0.toFixed(2) + ' -> ' + z1.toFixed(2)
+        + ', hinten unter Bremse ' + h0.toFixed(2) + ' -> ' + h3.toFixed(2) + ', Schalter wirkt, kein Halten ohne Schalter' };
+  });
+
+  stAdd('Fahrgefuehl v1.3.5: Alias "Gran Accelerato" laedt, Assetto Carrera ueberall wie Gran (WIP, Physik, Listen)', () => {
+    const f = [];
+    const sel = $('phys-mode');
+    const merk = presetRead();
+    const merkZ = presetZuletzt;
+    let merkZS = null;
+    try { merkZS = localStorage.getItem(PRESET_ZULETZT_STORE); } catch (e) { /* privat */ }
+    try {
+      applyPreset('Gran Accelerato');
+      if (presetAktiv() !== 'gran' || sel.value !== 'gran' || physEngine.config.granArt !== 'gran') f.push('Preset-Alias: ' + presetAktiv() + '/' + sel.value);
+      presetSet('phys-mode', 'physik');
+      if (presetPruefen({ 'phys-mode': 'Gran Accelerato' }).bad.length) f.push('Sicherung mit "Gran Accelerato" gilt als unbrauchbar');
+      presetSet('phys-mode', 'Gran Accelerato');
+      if (sel.value !== 'gran' || !physEngine.config.gran || physEngine.config.granArt !== 'gran') f.push('Modus-Alias: ' + sel.value);
+      presetSet('phys-mode', 'acc');
+      if (!physicsEnabled || !physEngine.config.pacejka || physEngine.config.granArt !== 'acc' || physEngine2.config.granArt !== 'acc') f.push('acc: Physik/Pacejka/Werte fehlen');
+      for (const k of Object.keys(GRAN_WERTE.acc)) if (physEngine.config[k] !== GRAN_WERTE.acc[k]) { f.push('acc-Wert ' + k); break; }
+    } finally {
+      for (const [id, val] of Object.entries(merk)) presetSet(id, val);
+      setzeBrakeStealLast(); setzeGran();
+      presetZuletzt = merkZ;
+      try { if (merkZS === null) localStorage.removeItem(PRESET_ZULETZT_STORE); else localStorage.setItem(PRESET_ZULETZT_STORE, merkZS); } catch (e) { /* privat */ }
+    }
+    if (!physModusIstPhysik('acc') || !spielerPhysikAn({ motor: { config: { physModus: 'acc' } } })) f.push('acc gilt nicht als Physik');
+    const oG = sel.querySelector('option[value="gran"]'), oA = sel.querySelector('option[value="acc"]');
+    if (!oG || oG.textContent.trim() !== 'Gran Hybrismo (WIP)') f.push('Option gran: ' + (oG && oG.textContent));
+    if (!oA || oA.textContent.trim() !== 'Assetto Carrera (WIP)') f.push('Option acc fehlt');
+    if (!PRESETS.gran.wip || !PRESETS.acc.wip || PRESETS.gran.label !== 'Gran Hybrismo' || PRESETS.acc.label !== 'Assetto Carrera') f.push('Labels/WIP');
+    const knopfAcc = document.getElementById('preset-' + 'acc');   // gebaut aus PRESETS (renderPresetButtons)
+    if (!knopfAcc || !knopfAcc.querySelector('.wip-tag')) f.push('Preset-Knopf Assetto ohne WIP');
+    if (!PRESETS_BREMSSTEAL_LAST.includes('acc')) f.push('acc fehlt im Bremssteal');
+    if (String(chAnwenden).indexOf('GRAN_MODI.includes(pm)') < 0) f.push('Challenges reichen acc nicht durch');
+    const fg = MEISTER_GLOBAL.find((g) => g.id === 'fahrgefuehl');
+    if (!fg || !fg.w.some((w) => w[0] === 'acc') || !fg.w.some((w) => w[0] === 'gran')) f.push('Meisterschaft ohne gran/acc');
+    if (!VF_HANDLING_MODI.some((m) => m.id === 'acc') || vfHandlingName('gran') !== t('Gran Hybrismo')) f.push('Virtuell: Handling-Modi');
+    if (String(startGhost).indexOf('granWerteSetzen(e.config, false)') < 0) f.push('NPCs rechnen granStep');
+    if (window.__presetSchnappLeeren) window.__presetSchnappLeeren();
+    const snap = window.__presetSchnappschuss('acc');
+    if (!snap || snap.modus !== 'acc' || snap.config.granArt !== 'acc') f.push('Schnappschuss acc');
+    if (window.__presetSchnappLeeren) window.__presetSchnappLeeren();
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Gran Accelerato laedt als Gran Hybrismo, acc in Auswahl, Presets, Spielern, Challenges, Meisterschaft, Virtuell' };
+  });
+
+  stAdd('Fahrgefuehl v1.3.5: virtuelles Fahren - Reifentemperatur im Gleichgewicht, Abtrieb, zwei Profile', () => {
+    const f = [];
+    // Zuegig fahren (40 m/s, 7 m/s^2) bringt die Reifen ins Fenster, Dauerangriff ueberhitzt, Bummeln kuehlt.
+    let T = 0;
+    for (let i = 0; i < 3600; i++) T = vfReifenTemp(T, 40, 7, 1 / 60);
+    if (!(T > 0.5 && T < 0.7)) f.push('zuegig: ' + T.toFixed(2) + ' nicht im Fenster');
+    let Th = T;
+    for (let i = 0; i < 3600; i++) Th = vfReifenTemp(Th, 60, 14, 1 / 60);
+    if (!(Th > 0.8)) f.push('Angriff ueberhitzt nicht (' + Th.toFixed(2) + ')');
+    let Tk = Th;
+    for (let i = 0; i < 3600; i++) Tk = vfReifenTemp(Tk, 10, 0, 1 / 60);
+    if (!(Tk < 0.3)) f.push('kuehlt nicht ab (' + Tk.toFixed(2) + ')');
+    const gA = [0, 0.575, Th].map((x) => vfReifenGriff(x, 'acc')), gH = [0, 0.575, Th].map((x) => vfReifenGriff(x, 'gran'));
+    if (!(gA[1] > gA[0] + 0.1 && gA[1] > gA[2] + 0.05)) f.push('Assetto-Fenster ' + gA.map((x) => x.toFixed(2)).join('/'));
+    if (!((gH[1] - Math.min(gH[0], gH[2])) < (gA[1] - Math.min(gA[0], gA[2])) / 2)) f.push('Hybrismo-Temperatur zu stark');
+    let merk = null;
+    try { merk = localStorage.getItem(VF_HANDLING_STORE); } catch (e) { /* privat */ }
+    try {
+      vfHandlingSetzen('gran'); const pH = vfHandlingProfil(VF_GT3);
+      vfHandlingSetzen('acc'); const pA = vfHandlingProfil(VF_GT3);
+      if (!(pH.kV > 0 && pH.kH > 0 && pA.kV > 0 && pA.kH > 0)) f.push('Standardauto ohne Abtrieb');
+      if (!(pH.muH > pA.muH && pH.yawDamp > pA.yawDamp && pA.h > pH.h)) f.push('Profile nicht Hybrismo griffig/gedaempft, Assetto Lastwechsel');
+    } finally { if (merk === null) { try { localStorage.removeItem(VF_HANDLING_STORE); } catch (e) { /* privat */ } vfHandlingCache = null; } else vfHandlingSetzen(merk); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ')
+      : 'zuegig ' + T.toFixed(2) + ', Angriff ' + Th.toFixed(2) + ', Bummeln ' + Tk.toFixed(2) + '; Assetto-Griff kalt/warm/heiss '
+        + gA.map((x) => x.toFixed(2)).join('/') + ', Hybrismo ' + gH.map((x) => x.toFixed(2)).join('/') };
+  });
+
+  // ---- v1.3.5 BESTELLT: "MAX-NPC: schnellere Beschleunigung und bessere Bremsen, naemlich Arcade. Ansonsten
+  // sollen NPCs mit Sim+-Beschleunigungs- und Bremsparametern fahren." ----
+  stAdd('NPC v1.3.5: MAX faehrt mit Arcade-, andere Stufen mit Sim+-Beschleunigung und -Bremse', () => {
+    const f = [];
+    const e = new CarreraPhysicsEngine();
+    Object.assign(e.config, physEngine.config);
+    e.config.accelerationFactor = 0.7; e.config.launchAnchorTimeS = 3.2;   // "Spieler 1" mit anderer Abstimmung
+    let kalib = 0;
+    const orig = e.calibrateAccel.bind(e);
+    e.calibrateAccel = () => { kalib++; orig(); };
+    const pruefe = (art, key) => {
+      const v = PRESETS[key].v;
+      const soll = { launchAnchorTimeS: v['setting-zero-to-top'], accelerationFactor: v['phys-accel'], coastDragPerS: v['setting-coast-drag'],
+                     useTauBrems: v['phys-brake-tau'], brakeDecelBase: BASE_BRAKE.base * v['setting-brakepower'],
+                     brakeDecelAero: BASE_BRAKE.aero * v['setting-brakepower'] };
+      for (const [k, w] of Object.entries(soll)) if (Math.abs(e.config[k] - w) > 1e-9) f.push(art + ': ' + k + ' ' + e.config[k] + ' statt ' + w);
+    };
+    const car = { role: 'ghost', ghostStufe: GHOST_STUFE_MAX, ghost: {} };
+    ghostMaxMotor(car, e);
+    pruefe('MAX', 'arcade');
+    if (e.config.shiftMs !== 0) f.push('MAX mit Schaltpause');
+    const k1 = kalib;
+    ghostMaxMotor(car, e); ghostMaxMotor(car, e);
+    if (kalib !== k1) f.push('Takt ohne Stufenwechsel kalibriert neu');
+    car.ghostStufe = 1;
+    ghostMaxMotor(car, e);
+    pruefe('Stufe mittel', 'simplus');
+    if (e.config.shiftMs === 0) f.push('mittel ohne Schaltpause');
+    if (kalib !== k1 + 1) f.push('Stufenwechsel kalibriert nicht (' + (kalib - k1) + ')');
+    // Gemessen: MAX zieht schneller hoch und bremst kuerzer.
+    const lauf = (stufe) => {
+      const m = new CarreraPhysicsEngine();
+      Object.assign(m.config, physEngine.config);
+      const c = { role: 'ghost', ghostStufe: stufe, ghost: {} };
+      ghostMaxMotor(c, m);
+      m.state.driveMode = 'forward'; m.state.currentGear = 0;
+      let t80 = null;
+      for (let i = 0; i < 400 && t80 === null; i++) {
+        m.update({ throttle: 1, brake: 0, steering: 0 }, 0.045);
+        if (m.state.speedKmh >= 0.8 * m.config.topSpeedKmh) t80 = i * 0.045;
+      }
+      m.state.speedKmh = 0.8 * m.config.topSpeedKmh;
+      let tB = null;
+      for (let i = 0; i < 400 && tB === null; i++) {
+        m.update({ throttle: 0, brake: 1, steering: 0 }, 0.045);
+        if (m.state.speedKmh <= 0.2 * m.config.topSpeedKmh) tB = i * 0.045;
+      }
+      return { t80, tB };
+    };
+    const lM = lauf(GHOST_STUFE_MAX), lN = lauf(1);
+    if (!(lM.t80 !== null && lN.t80 !== null && lM.t80 < lN.t80)) f.push('MAX zieht nicht schneller hoch (' + lM.t80 + ' / ' + lN.t80 + ')');
+    if (!(lM.tB !== null && lN.tB !== null && lM.tB < lN.tB)) f.push('MAX bremst nicht kuerzer (' + lM.tB + ' / ' + lN.tB + ')');
+    if (document.getElementById('ghost-max-' + 'beschl') || ghostCfg.maxBeschl !== undefined) f.push('Regler maxBeschl noch da');
+    return { ok: !f.length, mass: f.length ? f.join(' | ')
+      : 'MAX = Arcade (' + PRESETS.arcade.v['setting-zero-to-top'] + ' s, Bremse ' + PRESETS.arcade.v['setting-brakepower'] + '), sonst Sim+ ('
+        + PRESETS.simplus.v['setting-zero-to-top'] + ' s, Bremse ' + PRESETS.simplus.v['setting-brakepower'] + '); 80 % Tempo in '
+        + lM.t80.toFixed(2) + ' gegen ' + lN.t80.toFixed(2) + ' s, Bremsen auf 20 % in ' + lM.tB.toFixed(2) + ' gegen ' + lN.tB.toFixed(2) + ' s' };
+  });
+
   // BESTELLT (v0.8.24): Uebersteuern spuerbar - Vortrieb weg, Leistungsuebersteuern, der
   // Rutsch haelt bis Gegenlenken oder Pedal weg, staerkere Vibration. Alles abschaltbar.
   stAdd('Pacejka: Vollgas in der Kurve bringt das Heck, Vortrieb geht weg', () => {
@@ -5427,10 +5911,225 @@
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Gerade 100, R1 52, R2 80, Bremspunkt Schiene/Teil, Haarnadel normal' };
   });
 
+  // v1.2.32 BESTELLT: "Pruefe, ob beim NPC-Verhalten klar ist, dass Start/Ziel eine Gerade ist und dort auch z. B.
+  // die MAX-Geschwindigkeit gilt. Ich habe ausserdem das Gefuehl, dass die Autos dort tendenziell nicht ihre Querlage
+  // halten, sondern etwas weiter innen fahren." Gefunden: der Vorausblick sagte Start/Ziel auf der Schiene als
+  // Engstelle (0x0a) an, die Luuke-Linie liess Start/Ziel hinter einem Scheitel innen stehen (Mittelwert der Nachbarn),
+  // und MAX blieb ohne Schaltpause nach dem ersten Hochschalten im Schaltvorgang haengen (0,24 statt 0,5 der Spitze).
+  // Geprueft auf dem gleichseitigen Dreieck SR2GR2GR2: Start/Ziel und die zwei Geraden haben dieselbe Lage.
+  stAdd('NPC v1.2.32: Start/Ziel ist eine Gerade (MAX-Tempo, Querlage, Vorausblick)', () => {
+    const f = [], m = [];
+    if (tileTightness(TILE_TYPE.START) !== 0 || ghostMaxArt(TILE_TYPE.START) !== 'gerade' || tileIsCurve(TILE_TYPE.START)
+        || ghostTurnOf(START_CODE_RAIL) !== 0 || ghostTurnOf(START_CODE_PRINT) !== 0) f.push('Start/Ziel nicht als Gerade eingestuft');
+    const merkT = currentTrackTiles, merkMode = trackMode, merkLM = getLineModel();
+    const merkBp = ghostCfg.maxBremspunkt;
+    try {
+      // Vorausblick: auf der Schiene 0x01 (wie die Original-App), im Ausdruck 0x0a.
+      currentTrackTiles = codeToTrack('SR3G2R3G').tiles; lineCache = null;
+      trackMode = 'on';
+      const la = ghostLookahead({ ghost: { tileIndex: 9 } });
+      if (!la || la[17] !== START_CODE_RAIL) f.push('Vorausblick Schiene: Start/Ziel als 0x' + (la ? la[17].toString(16) : '?'));
+      trackMode = 'off';
+      const lb = ghostLookahead({ ghost: { tileIndex: 9 } });
+      if (!lb || lb[17] !== START_CODE_PRINT) f.push('Vorausblick Ausdruck veraendert');
+      trackMode = 'on';
+      // MAX: Start/Ziel vor einer Kurve wie jede Gerade vor einer Kurve, die Gerade vor Start/Ziel voll.
+      const mx = (i, code) => ghostMaxTempo({ role: 'ghost', ghostStufe: GHOST_STUFE_MAX, tileCode: code, ghost: { tileIndex: i } });
+      ghostCfg.maxBremspunkt = 'schiene';
+      const vS = mx(0, START_CODE_RAIL), vG5 = mx(5, TILE_TYPE.STRAIGHT), vG9 = mx(9, TILE_TYPE.STRAIGHT);
+      if (Math.abs(vS - vG5) > 1e-9) f.push('MAX auf Start/Ziel ' + vS + ' statt ' + vG5 + ' wie die Gerade vor R');
+      if (Math.abs(vG9 - Math.min(1, ghostCfg.maxGerade)) > 1e-9) f.push('Gerade vor Start/Ziel nicht MAX-Gerade: ' + vG9);
+      ghostCfg.maxBremspunkt = 'teil';
+      if (Math.abs(mx(0, START_CODE_RAIL) - Math.min(1, ghostCfg.maxGerade)) > 1e-9) f.push('MAX auf Start/Ziel nicht MAX-Gerade');
+      ghostCfg.maxBremspunkt = merkBp;
+      // Luuke-Anker: Start/Ziel wie die gleichliegenden Geraden.
+      const dreieck = codeToTrack('SR2GR2GR2').tiles;
+      const an = luukeLinieAnker(dreieck, true);
+      if (an[0] !== an[3] || an[0] !== an[6]) f.push('Luuke-Anker S/G/G ' + [an[0], an[3], an[6]].join('/'));
+      // Fahrt: ein MAX-NPC allein in der Rennsimulation, Querlage und Tempo je Teil.
+      currentTrackTiles = dreieck; lineCache = null;
+      setLineModel('luuke');
+      $('sim-ghosts').value = '2';
+      simStart();
+      const st = simState;
+      if (!st) f.push('Simulation startet nicht');
+      else {
+        while (st.autos.length > 1) { const b = st.autos.pop(); stopGhost(b.car); }
+        const a = st.autos[0];
+        a.car.ghostStufe = GHOST_STUFE_MAX;
+        const je = dreieck.map(() => ({ n: 0, q: 0, v: 0 }));
+        for (let k = 0; k < 1800 && simAn(); k++) {
+          simSchritt(45);
+          if (k < 400 || a.car.parked || !a.car.ghost) continue;
+          const t = je[a.kachel];
+          t.n++; t.q += a.car.ghost.querSoll;
+          t.v += Math.abs(a.car.ghost.engine.state.speedKmh) / a.car.ghost.engine.config.topSpeedKmh;
+        }
+        simStop('Selbsttest');
+        const mit = (i, k) => je[i][k] / Math.max(1, je[i].n);
+        const qS = mit(0, 'q'), qG = (mit(3, 'q') + mit(6, 'q')) / 2, vSim = mit(0, 'v'), vG = (mit(3, 'v') + mit(6, 'v')) / 2;
+        m.push('Querlage S ' + qS.toFixed(2) + ' / G ' + qG.toFixed(2) + ', MAX-Tempo S ' + vSim.toFixed(2) + ' / G ' + vG.toFixed(2));
+        // Gemessen v1.2.31: S +0,25 gegen G -0,55 (0,80 weiter innen), MAX 0,22 auf allen Teilen.
+        if (!(Math.abs(qS - qG) < 0.1)) f.push('Querlage auf Start/Ziel ' + qS.toFixed(2) + ' statt ' + qG.toFixed(2));
+        if (!(vSim > 0.4) || !(Math.abs(vSim - vG) < 0.05)) f.push('MAX-Tempo auf Start/Ziel ' + vSim.toFixed(2) + ' (Geraden ' + vG.toFixed(2) + ')');
+      }
+      // Physik: ohne Schaltpause ist der Schaltvorgang im naechsten Takt vorbei.
+      const e = new CarreraPhysicsEngine();
+      Object.assign(e.config, physEngine.config, { autoShift: true, shiftMs: 0 });
+      e.meldung = () => {}; e.ruck = () => {}; e.schaltTon = () => {};
+      let haengt = 0;
+      for (let k = 0; k < 120; k++) {
+        e.update({ throttle: 1, brake: 0, steering: 0, headlights: false }, 0.045);
+        if (e.state.isShifting) haengt++;
+      }
+      if (haengt > 2) f.push('Schaltpause 0: ' + haengt + ' von 120 Takten im Schaltvorgang');
+    } finally {
+      if (simAn()) simStop('Selbsttest');
+      trackMode = merkMode; currentTrackTiles = merkT; lineCache = null; setLineModel(merkLM);
+      ghostCfg.maxBremspunkt = merkBp;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') + ' || ' + m.join(', ') : 'Vorausblick 0x01, MAX wie Gerade, ' + m.join(', ') };
+  });
+
+  // v1.2.32 BESTELLT: "Pruefe, ob du die Ideallinie mit der Pacejka-Simulation noch etwas verbessern kannst. Die Autos
+  // fahren tendenziell nur auf der inneren Haelfte der Fahrbahn und nutzen die Breite nicht vollstaendig. Etwas Toleranz
+  // nach aussen in der Haarnadelkurve ist gut - hier nichts aendern." Gemessen v1.2.31 auf SR3G2R3G (SIMULATOR, 200
+  // Auswertungen): 0 % der Punkte in der aeusseren Haelfte, 0 % der Kurvenpunkte aussen, Weg 0,88 der Mittellinie (innen3
+  // gewinnt). v1.2.32: 65-68 % aussen, 42-46 % der Kurvenpunkte aussen, jeder Scheitel innen, Weg 1,00.
+  stAdd('NPC v1.2.32: Ideallinie nutzt die Breite (SIMULATOR aussen-innen-aussen, Haarnadel unberuehrt)', async () => {
+    const f = [];
+    const gz = fahrGrenzen();
+    if (!(simKurvenALat(gz) > 2 * gz.aLat)) f.push('Kurvengrenze der Suche nicht aus dem NPC-Kurventempo');
+    const tiles = codeToTrack('SR3G2R3G').tiles;
+    const pts = trackCenterline(tiles), nrm = trackNormals(pts);
+    const closed = trackSchluss(pts).closed;
+    const o = { closed, tiles, aLat: gz.aLat, aAcc: gz.aAcc, aBrk: gz.aBrk, vMax: gz.vMax, nurRechnen: true, maxAuswertungen: 80 };
+    simOhneEditor = true;   // v1.2.45: die Suche laeuft sonst nur bei offenem Editor
+    let e;
+    try { e = await simSuche({ key: 'selbsttest', abbruch: false, auswertungen: 0 }, pts, nrm, o); }
+    finally { simOhneEditor = false; }
+    if (!e || !e.alpha) return { ok: false, mass: 'Suche ohne Ergebnis' };
+    const limit = TRACK_HALF_W - 3;
+    // Das Ergebnis ist auf 0,01 Einheiten gerundet (simSuche), daher die Toleranz unten.
+    const anker = simAussenAnker(pts, tiles, closed);
+    let n = 0, aussen = 0, kN = 0, kA = 0;
+    pts.forEach((p, i) => {
+      if (p.tile < 0) return;
+      const q = -e.alpha[i] / limit;                       // + = rechts = innen auf dieser Rechtsstrecke
+      n++; if (q < -0.01) aussen++;
+      const d = ghostTurnOf(tiles[p.tile].type);
+      if (d) { kN++; if (q * d < -0.01) kA++; }
+    });
+    const anteil = aussen / n, kurve = kA / Math.max(1, kN);
+    if (!(anteil >= 0.4)) f.push('nur ' + Math.round(anteil * 100) + ' % in der aeusseren Haelfte');
+    if (!(kurve >= 0.25)) f.push('nur ' + Math.round(kurve * 100) + ' % der Kurvenpunkte aussen');
+    const unerfuellt = anker.filter((a) => e.alpha[a.i] * a.seite < SIM_AUSSEN_ANTEIL * limit - 0.011).length;
+    if (unerfuellt || !anker.length) f.push(unerfuellt + ' von ' + anker.length + ' Ein-/Ausgaengen nicht aussen');
+    const sch = anker.scheitel || [];
+    const scheitelInnen = sch.filter((sc) => sc.idx.some((k) => e.alpha[k] * sc.seite >= SIM_AUSSEN_ANTEIL * limit - 0.011)).length;
+    if (scheitelInnen !== sch.length) f.push('Scheitel innen ' + scheitelInnen + '/' + sch.length);
+    if (e.alpha.some((a) => Math.abs(a) > limit + 1e-9)) f.push('Linie ueber der Grenze (Randabstand)');
+    // Haarnadel: kein Anker an einer Haarnadel, und keine Beule reicht in sie hinein.
+    const hp = codeToTrack('SHG3R4L').tiles, hpPts = trackCenterline(hp);
+    const hpAnker = simAussenAnker(hpPts, hp, true);
+    const hpIdx = [];
+    hpPts.forEach((p, i) => { if (p.tile >= 0 && tileTightness(hp[p.tile].type) >= 2) hpIdx.push(i); });
+    if (hpAnker.some((a) => hpIdx.some((j) => Math.abs(j - a.i) <= a.b))) f.push('Beule reicht in die Haarnadel');
+    const zwei = codeToTrack('SHG4HG3').tiles;
+    if (simAussenAnker(trackCenterline(zwei), zwei, true).length) f.push('Anker an Haarnadel-Geraden');
+    return { ok: !f.length, mass: (f.length ? f.join(' | ') + ' || ' : '') + 'SR3G2R3G: ' + Math.round(anteil * 100) + ' % aussen, Kurve '
+      + Math.round(kurve * 100) + ' % aussen, Scheitel ' + scheitelInnen + '/' + sch.length + ', ' + anker.length + ' Anker, '
+      + e.zeit.toFixed(2) + ' s (' + e.herkunft.slice(0, 10) + ')' };
+  });
+
   // v1.1.45 GEMELDET: helles Licht ohne Verbindung (Kopplung), Latenz nach Neuverbinden, Abgleich verlaesst das
   // Menue, Kartenpunkte springen, Aufstellung ab Reihe 2, Regenflackern; dazu Kleinigkeiten.
   // v1.2.4 BESTELLT: Renntypen je Sensormodus, Fahrgefuehl je Spieler, Pacejka in Community-Challenges, Minigame-
   // Rueckmeldung, mechanische Boxensignale, NPC-Box wie Safety Car, Safety-Car-Parken auf kurzen Geraden.
+  // v1.2.67 BESTELLT: NPC-Tankort "Streckenrand ueber Querlage" (Standard: Einparkfolge wie Safety Car).
+  stAdd('NPC v1.2.67: Tankort Streckenrand ueber Querlage, Standard Einparkfolge', () => {
+    const f = [];
+    const sel = $('ghost-pit-ort');
+    if (!sel || sel.options[sel.selectedIndex].defaultSelected !== true || sel.value !== 'folge') f.push('Standard ist nicht die Einparkfolge');
+    const merk = { tiles: currentTrackTiles, wert: sel && sel.value, garage: garage.slice() };
+    try {
+      currentTrackTiles = codeToTrack('SG3R2G3R2').tiles;
+      if (sel) sel.value = 'rand';
+      const pk = pitKachelFuer(0);
+      const car = { role: 'ghost', device: { id: 'probe-tankort' }, ghost: { tileIndex: pk, querSoll: 1,
+        pit: { phase: 'anfahrt', platz: 0, laenge: 1000, at: rennZeitJetzt() } } };
+      garage.push(car);
+      const p = car.ghost.pit;
+      pitTick(car);
+      if (p.phase !== 'rand' || p.ort !== 'rand' || car.ghost.randHalt) f.push('faehrt nicht per Querlage an den Rand (' + p.phase + ')');
+      if (pitQuer(car) !== PIT_RAND) f.push('Querlage nicht am rechten Rand');
+      p.at = rennZeitJetzt() - PIT_RAND_MAX_MS - 1; pitTick(car);
+      if (p.phase !== 'halt') f.push('haelt nicht an (' + p.phase + ')');
+      p.at = rennZeitJetzt() - PIT_BREMS_MS - 1; pitTick(car);
+      if (p.phase !== 'stand') f.push('steht nicht (' + p.phase + ')');
+      p.at = rennZeitJetzt() - p.laenge - 1; pitTick(car);
+      if (p.phase !== 'raus' || car.ghost.randHalt) f.push('zieht nicht per Querlage heraus (' + p.phase + ')');
+      npcBoxKlang(car, false);
+    } finally {
+      currentTrackTiles = merk.tiles; if (sel) sel.value = merk.wert;
+      garage.length = 0; merk.garage.forEach((c) => garage.push(c));
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Standard Einparkfolge; Querlage: anfahrt > rand > halt > stand > raus ohne Lenkfolge' };
+  });
+
+  // v1.2.45 BESTELLT: Latenz - Funkprioritaet nur einmal je Verbindung, SIMULATOR-Linie nur im Editor.
+  stAdd('Latenz v1.2.45: Prioritaet einmal je Verbindung, SIMULATOR nur im Editor', () => {
+    const f = [];
+    const merkB = window.OMEGA_BRUECKE;
+    let aufrufe = 0;
+    const car = { rx: {}, device: { id: 'probe-prio' }, alias: 'Probe' };
+    try {
+      window.OMEGA_BRUECKE = Object.assign({}, merkB || {}, { prioritaetHoch: () => { aufrufe++; } });
+      // 20 s lang alle 150 ms gemeldet: genau eine Anforderung, erst nach > 5 s.
+      let t = 1000, ersteBei = null;
+      for (; t < 21000; t += 150) { meldetaktBeobachten(car, t); if (aufrufe && ersteBei === null) ersteBei = t; }
+      if (aufrufe !== 1) f.push(aufrufe + ' Anforderungen statt 1');
+      if (ersteBei !== null && ersteBei < 5000) f.push('zu frueh (' + ersteBei + ' ms)');
+      // Neue Verbindung (neues rx): wieder eine erlaubt.
+      car.rx = {};
+      for (let k = 0; k < 80; k++, t += 150) meldetaktBeobachten(car, t);
+      if (aufrufe !== 2) f.push('neue Verbindung fordert nicht neu an (' + aufrufe + ')');
+      // Normaler Takt (65 ms): nie.
+      const ruhig = { rx: {}, device: { id: 'probe-ruhig' } }; const vor = aufrufe;
+      for (let k = 0; k < 400; k++) meldetaktBeobachten(ruhig, 1000 + k * 65);
+      if (aufrufe !== vor) f.push('fordert bei 65 ms an');
+    } finally { window.OMEGA_BRUECKE = merkB; }
+    if (String(simulatorLinie).indexOf('if (simImEditor()) simStarten') < 0) f.push('SIMULATOR sucht ausserhalb des Editors');
+    if (String(simPause).indexOf('!simImEditor()') < 0) f.push('SIMULATOR-Suche pausiert ausserhalb des Editors nicht');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'eine Anforderung je Verbindung ab >120 ms fuer 5 s, SIMULATOR nur im Editor' };
+  });
+
+  // v1.2.30 BESTELLT: Pause als kleines Symbol links neben "Beenden"; Minigame-Reihe mit festen Plaetzen;
+  // SHG3R4L schliesst auch in der Zeichnung (Randstreifen ab dem Ursprung).
+  stAdd('Cockpit v1.2.30: Pause-Symbol neben Beenden, Minigame feste Plaetze, Randstreifen schliesst', () => {
+    const f = [];
+    const pk = $('race-act-pause'), menue = $('race-menue');
+    if (!pk || !menue || pk.parentElement !== menue.parentElement || pk.nextElementSibling !== menue) f.push('Pause nicht links neben Beenden');
+    rennPauseMalen();
+    if (!pk || !pk.querySelector('svg') || /Pause|Fortsetzen/.test(pk.textContent.replace('WIP', ''))) f.push('Pause ist kein Symbol');
+    if (pk && parseFloat(getComputedStyle(pk).marginRight) < 12) f.push('zu wenig Abstand zu Beenden');
+    const el = $('pit-spiel');
+    if (!el || el.querySelectorAll('.ps-slot').length !== PIT_SPIEL_ANZAHL) f.push('nicht ein Platz je Knopf');
+    if (String(pitSpielMalen).indexOf("k < sp.i ? 'fertig'") < 0) f.push('erledigte Knoepfe blenden nicht aus');
+    // Randstreifen: der weisse Streifen beginnt am Ursprung (pts[0]), auch mit Haarnadel.
+    const r = renderTrackPreview(codeToTrack('SHG3R4L').tiles, null, { detailed: true, echt: true, ohneLinie: true, ohneLinieRechnen: true });
+    const d = new DOMParser().parseFromString(r.html, 'image/svg+xml');
+    const p0 = r.geo.pts[0], ox = r.geo.ox, oy = r.geo.oy;
+    const nahe = [...d.querySelectorAll('path')].some((p) => {
+      const m = /^M\s*([-\d.]+)\s+([-\d.]+)/.exec((p.getAttribute('d') || '').trim());
+      return m && +p.getAttribute('stroke-width') > 1 && Math.abs(+m[2] - (p0.y + oy)) < 1.2;
+    });
+    if (!nahe) f.push('Randstreifen beginnt nicht am Ursprung');
+    const sc = trackSchluss(trackCenterline(codeToTrack('SHG3R4L').tiles));
+    if (!(sc.lueckeCm < 0.5)) f.push('SHG3R4L schliesst nicht (' + sc.lueckeCm.toFixed(2) + ' cm)');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Symbol neben Beenden, ' + PIT_SPIEL_ANZAHL + ' feste Plaetze, SHG3R4L geschlossen und durchgezeichnet' };
+  });
+
   // v1.2.24 BESTELLT (Variante C): tiefer Schaltklang statt des hellen Klacks, auch beim Runterschalten.
   stAdd('Klang v1.2.24: tiefer Schaltklang mit Knall, Metall gedaempft, alt per Schalter', () => {
     const f = [];
@@ -5464,40 +6163,13 @@
   // Wolken obenauf. Dazu: der Streckenscan uebersetzt jede Kachel (Engstelle war Start/Ziel).
   stAdd('Cockpit v1.2.12: Strecke im Regenradar, schmale Tank-/Schadenkachel, Scan uebersetzt jede Kachel', () => {
     const f = [];
-    const host = $('race-wx-karte'), sw = $('setting-wx-karte'), ot = $('setting-ontrack');
-    if (!host || !sw || !sw.defaultChecked) f.push('Kartenebene oder Schalter fehlt / ab Werk aus');
+    // v1.2.39: die Strecke im Radar ist wieder entfernt (Latenz), dafuer laesst sich das Radar abschalten.
+    if (String(wxRadarDraw).indexOf('const mitKarte = false') < 0) f.push('Strecke im Radar noch aktiv');
+    const sw = $('setting-wx-radar');
+    if (!sw || !sw.defaultChecked) f.push('Schalter Regenradar fehlt / ab Werk aus');
+    if (String(wxRadarDraw).indexOf('!wxRadarAn()') < 0) f.push('Radar zeichnet auch ausgeschaltet');
     const css = [...document.querySelectorAll('style')].map((x) => x.textContent).join('\n');
     if (css.indexOf('grid-template-columns: .6fr .6fr 1fr 1fr .8fr 2.6fr 1fr 1fr') < 0) f.push('Streifen nicht umverteilt');
-    const merk = { tiles: currentTrackTiles, sw: sw && sw.checked, ot: ot && ot.checked };
-    try {
-      currentTrackTiles = codeToTrack('SG3R2G3R2').tiles;
-      if (ot) ot.checked = true;
-      if (sw) sw.checked = true;
-      if (!wxKarteMalen() || !host.querySelector('svg.tp-karte')) f.push('Karte wird nicht gezeichnet');
-      const erst = host.firstElementChild;
-      wxKarteMalen();
-      if (host.firstElementChild !== erst) f.push('Strecke wird je Bild neu aufgebaut');
-      if (!host.querySelector('g.karte-autos')) f.push('keine Autoebene');
-      if (!(wxKarteGross > 1)) f.push('Autos nicht vergroessert (' + wxKarteGross + ')');
-      currentTrackTiles = codeToTrack('SG9RG9R').tiles;
-      wxKarteMalen();
-      if (host.firstElementChild === erst) f.push('Layoutwechsel zeichnet nicht neu');
-      // Lange Strecke: hochkant gezeichnet wird sie in einer breiten Kachel gedreht.
-      const vb = host.firstElementChild.getAttribute('viewBox').split(' ').map(Number);
-      if (!(Math.max(vb[2], vb[3]) > Math.min(vb[2], vb[3]) * 1.5)) f.push('lange Strecke nicht lang (' + vb.join(' ') + ')');
-      if (String(wxKarteMalen).indexOf("rotate(90deg)") < 0) f.push('hochkante Strecke wird nicht gedreht');
-      if (sw) sw.checked = false;
-      if (wxKarteMalen() || !host.hidden) f.push('Schalter aus laesst die Karte stehen');
-      // Ausdruck-Modus ohne eigenes Foto: kein Editor-Layout.
-      if (sw) sw.checked = true;
-      if (ot) ot.checked = false;
-      const fotoDa = typeof konsoleFoto === 'function' && konsoleFoto();
-      if (!fotoDa && wxKarteMalen()) f.push('Ausdruck-Modus zeigt das Editor-Layout');
-    } finally {
-      currentTrackTiles = merk.tiles;
-      if (sw) sw.checked = merk.sw; if (ot) ot.checked = merk.ot;
-      wxKarteSchluessel = null; wxKarteMalen();
-    }
     // Groessere Autos: der Faktor steht im transform, die Sonden lesen weiter translate/rotate.
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     const r = renderTrackPreview(codeToTrack('SG3R2G3R2').tiles, null, { detailed: true, cars: [] });
@@ -5511,7 +6183,7 @@
     }
     const tm = trackMode;
     try { trackMode = 'on'; if (codeZuTyp(0x0a) !== TILE_TYPE.ENGE) f.push('Engstelle auf der Bahn nicht erkannt'); } finally { trackMode = tm; }
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Strecke im Radar, einmal je Layout, Autos x' + wxKarteGross.toFixed(1) + ', Scan uebersetzt' };
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Radar abschaltbar, keine Strecke im Radar, Scan uebersetzt' };
   });
 
   // v1.2.9 BESTELLT: Silhouetten (Draufsicht) fuer Porsche, Ford, BMW, Ferrari und den
@@ -5544,24 +6216,20 @@
   // v1.2.5: MAX schneller auf Geraden, Scan schneller (ausser Haarnadel), Schaltklang und NPC-Klang.
   stAdd('NPC und Klang v1.2.5: MAX-Motor, Scan-Tempo je Teil, Schaltklang haelt die Mischung, NPC schaltet hoerbar', () => {
     const f = [];
+    // v1.3.5: MAX faehrt mit den Arcade-Werten statt maxBeschl x Spieler 1 (eigener Test "NPC v1.3.5").
     const e = new CarreraPhysicsEngine();
     Object.assign(e.config, physEngine.config);
-    const basis = e.config.accelerationFactor, basisShift = e.config.shiftMs;
+    const basisShift = e.config.shiftMs;
     const car = { role: 'ghost', ghostStufe: GHOST_STUFE_MAX, ghost: {} };
-    const merkB = ghostCfg.maxBeschl;
-    try {
-      ghostCfg.maxBeschl = 2;
-      ghostMaxMotor(car, e);
-      if (Math.abs(e.config.accelerationFactor - basis * 2) > 1e-9 || e.config.shiftMs !== 0) f.push('MAX-Motor nicht 2x / ohne Schaltpause');
-      if (e.config.downshiftRpm !== 5200) f.push('NPC schaltet nicht bei 5200 zurueck');
-      car.ghostStufe = 1;
-      ghostMaxMotor(car, e);
-      if (e.config.accelerationFactor !== basis || e.config.shiftMs !== basisShift) f.push('andere Stufe nicht zurueckgestellt');
-    } finally { ghostCfg.maxBeschl = merkB; }
+    ghostMaxMotor(car, e);
+    if (e.config.accelerationFactor !== PRESETS.arcade.v['phys-accel'] || e.config.shiftMs !== 0) f.push('MAX-Motor nicht Arcade / ohne Schaltpause');
+    if (e.config.downshiftRpm !== 5200) f.push('NPC schaltet nicht bei 5200 zurueck');
+    car.ghostStufe = 1;
+    ghostMaxMotor(car, e);
+    if (e.config.accelerationFactor !== PRESETS.simplus.v['phys-accel'] || e.config.shiftMs !== basisShift) f.push('andere Stufe nicht zurueckgestellt');
     const src = String(ghostTick);
     if (src.indexOf('(ghostIstMax(car) && tight === 0)) ? 1 : ghostFeldStaffel(car)') < 0) f.push('Staffel bremst MAX auf Geraden');
     if (src.indexOf('if (!ghostIstMax(car)) {') < 0) f.push('Lernfaktor/Streuung drosseln MAX');
-    if (!$('ghost-max-beschl') || Math.abs(parseFloat($('ghost-max-beschl').defaultValue) - 2) > 1e-9) f.push('Regler MAX: Beschleunigung fehlt');
     // Scan: Gerade 0,80, Kurve 0,67, Haarnadel 0,47.
     const s1 = scanTempoFaktor({ tileCode: TILE_TYPE.STRAIGHT }), s2 = scanTempoFaktor({ tileCode: TILE_TYPE.CURVE_RIGHT }),
           s3 = scanTempoFaktor({ tileCode: TILE_TYPE.HAIRPIN });
@@ -5570,7 +6238,7 @@
     if (!$('setting-schaltklang-alt') || $('setting-schaltklang-alt').defaultChecked) f.push('Schaltklang-Schalter fehlt oder ab Werk alt');
     if (String(updateSampleEngineIn).indexOf('store.schaltMix') < 0) f.push('Schaltklang haelt die Mischung nicht');
     if (!$('setting-npc-klang-alt') || $('setting-npc-klang-alt').defaultChecked) f.push('NPC-Klang-Schalter fehlt oder ab Werk alt');
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'MAX 2x ohne Schaltpause, Staffel/Lernen aus, Scan 0,80/0,67/0,47, Schaltklang neu, NPC 5200/min' };
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'MAX Arcade ohne Schaltpause, Staffel/Lernen aus, Scan 0,80/0,67/0,47, Schaltklang neu, NPC 5200/min' };
   });
 
   stAdd('Rennen und Spieler v1.2.4: Renntyp je Sensormodus, Fahrgefuehl je Spieler, Pacejka-Challenges', () => {
@@ -5608,7 +6276,8 @@
     } finally { window.__spielerPresetSetzen(2, merkP2); }
     // Community-Challenges: Pacejka waehlbar, und chAnwenden laesst Pacejka stehen.
     if (COMMUNITY_PRESETS.indexOf('propacejka') < 0) f.push('Pacejka fehlt in den Community-Presets');
-    if (String(chAnwenden).indexOf("'pacejka' ? 'pacejka' : 'physik'") < 0) f.push('Challenge erzwingt weiter Physik');
+    // Korrektur nach 1.2.66: Gran Accelerato wird genauso durchgereicht.
+    if (String(chAnwenden).indexOf("pm === 'pacejka' || GRAN_MODI.includes(pm) ? pm : 'physik'") < 0) f.push('Challenge erzwingt weiter Physik (Pacejka/Gran/Assetto)');
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Bahn ohne Derby, Ausdruck ohne Time Attack, Spieler 2 eigenes Preset, Pacejka-Challenges' };
   });
 
@@ -5616,7 +6285,7 @@
     const f = [];
     // Minigame: Zeitablauf loescht die Rueckmeldung; die Reihe zeigt die naechsten vier.
     const el = $('pit-spiel');
-    if (!el || el.querySelectorAll('.ps-slot').length !== 4) f.push('Reihe mit vier Plaetzen fehlt');
+    if (!el || el.querySelectorAll('.ps-slot').length !== PIT_SPIEL_ANZAHL) f.push('Reihe nicht mit einem Platz je Knopf (seit v1.2.30)');
     if (!el || !el.querySelector('.ps-falsch')) f.push('Kreuz fuer falsch fehlt');
     const css = [...document.querySelectorAll('style')].map((x) => x.textContent).join('\n');
     if (/\.pit-spiel\[data-symbol=""\] \.ps-fertig\s*\{\s*display:\s*block/.test(css)) f.push('Haken noch in jeder Pause');
@@ -5745,7 +6414,7 @@
     const seite = $('sub-opt-vibration');
     if (!seite) return { ok: false, mass: 'Seite sub-opt-vibration fehlt' };
     for (const id of ['setting-vibration', 'vib-test', 'vib-schalt', 'vib-abs', 'vib-crash', 'vib-abseits', 'vib-box',
-                      'vib-rutschen', 'vib-untersteuern', 'vib-quietschen', 'vib-meldung', 'vib-trigger']) {
+                      'vib-rutschen', 'vib-untersteuern', 'vib-quietschen', 'vib-kerb', 'vib-meldung', 'vib-trigger']) {
       const el = $(id);
       if (!el || !seite.contains(el)) f.push(id + ' nicht in der Kachel');
     }
@@ -7188,10 +7857,16 @@
       return { skip: true, mass: 'physLayoutDrive nicht vorhanden' };
     }
     const namen = ['neutral', 'gt3front', 'gt3mid', 'gt3rear', 'f1'];
+    // Korrektur nach 1.2.66: die Bezugsabstimmung (Pro: Bremsen nimmt Lenkung 0,95, Bremssteal
+    // aus der Gewichtsverlagerung an) steht jetzt im Patch, wie schon steerCalib und
+    // useTauBrems. Vorher kamen die beiden Werte aus dem Stand beim Pruefen - und der ist seit
+    // 1.2.48 die eigene Pacejka-Abstimmung (0,75): dann liegen alle fuenf Layouts beim
+    // Vollbremsen am 45-Grad-Anschlag, und der Test maass das Preset statt der Layouts.
     const werte = namen.map(n => {
       const r = OMEGA_TEST.physLayoutDrive(n, { kmh: 140, throttle: 0, brake: 1,
                                                 steering: 1, patch: { steerCalib: 2.0, useTauBrems: 0.45,
-                                                                       pacejka: false } });
+                                                                       pacejka: false, brakeUseGain: 0.95,
+                                                                       brakeStealLast: 1 } });
       const v = OMEGA_TEST.physLayouts()[n];
       return { n, grad: r.grad, sg: r.steerGrip, vorn: v.vorn, ms: v.daempfungMs, iz: v.iz };
     });
@@ -10698,8 +11373,9 @@
       if (!r.fertig) f.push('nicht fertig geworden (' + r.stand + ')');
       // v1.0.45: nach dem letzten Knopf 1 s Erholung (kein Fehler hier), danach erst fertig.
       if (Math.abs(r.dauer - (r.T + PIT_ERHOL_BASE)) > 0.3) f.push('Dauer ' + r.dauer.toFixed(2) + ' s statt ' + (r.T + PIT_ERHOL_BASE).toFixed(2));
-      // v1.1.11: fuenf Symbole, Fenster = T/5 minus 250 ms Pause (70-race.js, pitSpielFenster). Ohne
-      // Tasten laufen sie in die Standzeit hinein ab: Erwartung = so viele, wie bis zum Ende passen.
+      // v1.1.11: fuenf Symbole, Fenster = T/5 minus 250 ms Pause (70-race.js, pitSpielFenster); seit
+      // v1.2.4 ohne Pause. Ohne Tasten laufen sie in die Standzeit hinein ab: Erwartung = so viele, wie
+      // bis zum Ende passen.
       const fensterS = pitSpielFenster(r.T);
       const erwartet = Math.min(PIT_SPIEL_ANZAHL, Math.floor((r.T + PIT_ERHOL_BASE) / (fensterS + PIT_SPIEL_PAUSE)));
       if (r.i < erwartet) f.push('nur ' + r.i + ' Symbole abgelaufen statt ' + erwartet);
@@ -15257,7 +15933,10 @@
   stAdd('Lenkung aus Gewichtsverlagerung: leicht bremsen ueber 100 %, voll bremsen deutlich weniger, Loesen erholt sich', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.physSteerGrip) return { skip: true, mass: 'physSteerGrip nicht vorhanden' };
     const f = [];
-    const p = { brakeStealLast: 1, lenkAlt: 0, lenkKopplungAus: 0, pacejka: false, useTauBrems: 0.12 };
+    // Korrektur nach 1.2.66: Bezug Pro (brakeUseGain 0,95, steerCalib 2,5) fest im Patch, nicht
+    // der Stand beim Pruefen (seit 1.2.48 die eigene Pacejka-Abstimmung, siehe Layout-Test).
+    const p = { brakeStealLast: 1, lenkAlt: 0, lenkKopplungAus: 0, pacejka: false, useTauBrems: 0.12,
+                brakeUseGain: 0.95, steerCalib: 2.5 };
     const g = (brake, throttle) => OMEGA_TEST.physSteerGrip({ kmh: 250, throttle: throttle || 0, brake, steering: 0.3, patch: p }).steerGrip;
     // Bezug: Gas gerade so gehalten (kein Nicken, keine Laengskraft).
     const roll = g(0, 0.03), leicht = g(0.25), voll = g(1), gas = g(0, 1);
@@ -15424,7 +16103,9 @@
       if (vfNpcAnzahl() !== 2) f.push('Anzahl 2 nicht uebernommen');
     } finally { if (merk === null) localStorage.removeItem(VF_NPC_STORE); else localStorage.setItem(VF_NPC_STORE, merk); }
     // Ein NPC auf einer Teststrecke: er faehrt vorwaerts, und in der Kurve bremst er ab.
-    const tiles = codeToTrack('SG4R4G4').tiles, pts = trackCenterline(tiles), nrm = trackNormals(pts);
+    // v1.2.32: SG8R3G9R3 statt SG4R4G4 - eine Kurve ist 60 Grad, SG4R4G4 schloss sich nicht (125
+    // Einheiten Luecke), und das neue Tempoprofil bremste vor dem Sprung ueber die Luecke.
+    const tiles = codeToTrack('SG8R3G9R3').tiles, pts = trackCenterline(tiles), nrm = trackNormals(pts);
     const bogen = vfNpcBogen(pts);
     const mk = (idx, kmh) => ({ idx, s: bogen.bogen[idx], kmh, offset: 0, faktor: 1, x: 0, y: 0, h: 0, raddreh: 0, lenkWinkel: 0, ay: 0, ax: 0, vorherH: undefined, P: null });
     const npc = mk(10, 0);
@@ -15452,20 +16133,25 @@
       vfNpcSteuern(c, 0.5, pts, nrm, bogen.bogen, bogen.runde);
       if (!(c.kmh < 3.0)) f.push('Kurve: NPC bremst nicht: ' + c.kmh.toFixed(2) + ' (Kurve ' + dMaxKurve.toFixed(1) + ' Grad)');
       // Auf der Geraden mit gleichem Tempo haelt er das Ziel (kein Abbremsen unter 2).
+      // v1.2.32: 40 Punkte davor und danach gerade statt 18 danach - das Tempoprofil bremst jetzt
+      // aus Stufe-1-Tempo rechtzeitig vor der Kurve (rund 22 Punkte) und misst die Kruemmung ueber
+      // +-3 Punkte; direkt am Kurvenausgang oder am Bremspunkt waere es keine Gerade.
       let geradeIdx = 0, dMin = Infinity;
       for (let i = 0; i < pts.length; i++) {
-        let dM = 0, vorher = pts[i].heading;
-        for (let k = 1; k <= 18; k++) {
-          const j = (i + k) % pts.length;
+        let dM = 0, vorher = pts[(i - 40 + pts.length) % pts.length].heading;
+        for (let k = -39; k <= 40; k++) {
+          const j = (i + k + pts.length) % pts.length;
           let dh = pts[j].heading - vorher; dh = ((dh + 540) % 360) - 180;
           if (Math.abs(dh) > Math.abs(dM)) dM = dh;
           vorher = pts[j].heading;
         }
         if (Math.abs(dM) < dMin) { dMin = Math.abs(dM); geradeIdx = i; }
       }
-      const g2 = mk(geradeIdx, 3.0);
+      // v1.2.32: Ziel auf der Geraden ist das Tempo der Stufe 1 (vfNpcStufenTempo, 2,2 km/h), nicht mehr 3,2.
+      const vS = vfNpcStufenTempo();
+      const g2 = mk(geradeIdx, vS);
       vfNpcSteuern(g2, 0.5, pts, nrm, bogen.bogen, bogen.runde);
-      if (!(g2.kmh >= 2.5)) f.push('Gerade: NPC bricht zu stark ab: ' + g2.kmh.toFixed(2));
+      if (!(g2.kmh >= vS * 0.95)) f.push('Gerade: NPC bricht zu stark ab: ' + g2.kmh.toFixed(2) + ' (Stufe 1: ' + vS.toFixed(2) + ')');
     }
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'NPC faehrt vorwaerts, Kurve drosselt (Kurve ' + dMaxKurve.toFixed(1) + ' Grad)' };
   });
@@ -15476,12 +16162,12 @@
     const lauf = (P, v, l, sek) => { const z = { vy: 0, r: 0 }; for (let i = 0; i < sek * 60; i++) vfDynamik(z, v, 0, 0, l, 1 / 60, 1, P); return z; };
     try {
       // GT3 (Standard): kein Tempo-Faktor, das Profil bleibt dasselbe Objekt.
-      localStorage.setItem(VF_HANDLING_STORE, 'gt3');
+      vfHandlingSetzen('gt3');
       if (vfHandling() !== 'gt3') f.push('GT3 nicht uebernommen');
       if (vfTempoFaktor() !== 1.0) f.push('GT3: Tempo nicht 1.0');
       if (vfHandlingProfil(VF_GT3) !== VF_GT3) f.push('GT3: Profil wird veraendert');
       // Schnell: mehr Grip, mehr Einschlag, Tempo-Faktor und eine engere Kurve.
-      localStorage.setItem(VF_HANDLING_STORE, 'schnell');
+      vfHandlingSetzen('schnell');
       if (vfHandling() !== 'schnell') f.push('schnell nicht uebernommen');
       if (!(vfTempoFaktor() > 1.0)) f.push('Schnell: kein Tempo-Faktor');
       const schnell = vfHandlingProfil(VF_GT3);
@@ -15490,10 +16176,127 @@
       const zGT3 = lauf(VF_GT3, 30, 0.5, 2), zSchnell = lauf(schnell, 30, 0.5, 2);
       if (!(Math.abs(zSchnell.r) > Math.abs(zGT3.r))) f.push('Schnell dreht nicht enger: ' + zSchnell.r + ' / ' + zGT3.r);
       // Ungueltiger Wert faellt auf GT3 zurueck.
-      localStorage.setItem(VF_HANDLING_STORE, 'gibtsnicht');
+      vfHandlingSetzen('gibtsnicht');
       if (vfHandling() !== 'gt3') f.push('ungueltiger Modus faellt nicht auf GT3 zurueck');
-    } finally { if (merk === null) localStorage.removeItem(VF_HANDLING_STORE); else localStorage.setItem(VF_HANDLING_STORE, merk); }
+    } finally { if (merk === null) { localStorage.removeItem(VF_HANDLING_STORE); vfHandlingCache = null; } else vfHandlingSetzen(merk); }
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'GT3 unveraendert, Schnell +Grip/+Einschlag/+Tempo' };
+  });
+
+  // v1.2.32 GEMELDET: "Im virtuellen Fahren ist die Autoposition als Silhouette mit im Bild. Da ist
+  // irgendwo ein Fehler." karteAutosSetzen() setzte visibility="visible" auf jede Autogruppe, und
+  // dieser Wert schlaegt das geerbte hidden: das virtuelle Fahren verbirgt die Seite (body.vf-an
+  // main), das Auto aus dem Regenradar des Cockpits stand trotzdem ueber dem 3D-Bild.
+  stAdd('Virtuell v1.2.32: Kartenauto bleibt unter der 3D-Schicht verborgen, Silhouette an Ort, Skala und Drehung', () => {
+    const f = [];
+    const r = renderTrackPreview(codeToTrack('SG3R2G3R2').tiles, null, { detailed: true, cars: [] });
+    const main = document.querySelector('main');
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:0;top:0;width:240px;height:240px;pointer-events:none';
+    const svg = document.createElementNS(NS_SVG, 'svg');
+    host.appendChild(svg);
+    (main || document.body).appendChild(host);
+    const hatteVf = document.body.classList.contains('vf-an');
+    let mass = '';
+    try {
+      const a = { index: 4, phase: 0.5, farbe: '#ff0000', modell: 'bmw', kuerzel: 'A' };
+      karteAutosSetzen(svg, r.geo, [a], { gross: 3, ohneText: true });
+      const g = svg.querySelector('g.karte-autos > g');
+      const k = g && g.querySelector('.auto-koerper');
+      if (!g || !k) f.push('kein Auto gesetzt');
+      else {
+        if (g.getAttribute('visibility') === 'visible') f.push('visibility="visible" schlaegt das geerbte hidden');
+        // Der Fall aus der Meldung: die Seite unter der 3D-Schicht ist verborgen (body.vf-an main).
+        document.body.classList.add('vf-an');
+        if (main && getComputedStyle(k).visibility !== 'hidden') f.push('Kartenauto ueber dem 3D-Bild sichtbar');
+        const durch = [...document.querySelectorAll('main .karte-autos > g')].filter((x) => getComputedStyle(x).visibility === 'visible').length;
+        if (durch) f.push(durch + ' Kartenautos sichtbar, waehrend body.vf-an die Seite verbirgt');
+        if (!hatteVf) document.body.classList.remove('vf-an');
+        if (getComputedStyle(k).visibility !== 'visible') f.push('Kartenauto bei sichtbarer Karte verborgen');
+        // Lage: translate = Punkt der Mittellinie, rotate = Fahrtrichtung dort, scale = Silhouette mal gross.
+        const i = trackPunktIndex(r.geo.kachelTab, r.geo.pts, a.index, a.phase);
+        const p = r.geo.pts[i];
+        const m = /translate\(([-\d.]+) ([-\d.]+)\) rotate\(([-\d.]+)\) scale\(([\d.]+)\)/.exec(g.getAttribute('transform') || '');
+        if (!m) f.push('transform unvollstaendig: ' + g.getAttribute('transform'));
+        else {
+          const dOrt = Math.hypot(+m[1] - (p.x + r.geo.ox), +m[2] - (p.y + r.geo.oy));
+          let dW = +m[3] - trackWinkelBei(r.geo.pts, i);
+          dW = ((dW + 540) % 360) - 180;
+          if (dOrt > 0.1) f.push('Ort daneben: ' + dOrt.toFixed(2));
+          if (Math.abs(dW) > 0.1) f.push('Drehung daneben: ' + dW.toFixed(2) + ' Grad');
+          if (Math.abs(+m[4] - AUTO_FORM_SKALA * 3) > 1e-3) f.push('Skala ' + m[4] + ' statt ' + (AUTO_FORM_SKALA * 3).toFixed(4));
+          // Front zeigt +x: die Silhouette ist laengs der x-Achse lang (vor dem rotate).
+          const bb = k.getBBox();
+          if (!(bb.width > bb.height * 1.5)) f.push('Silhouette nicht laengs +x: ' + bb.width.toFixed(0) + ' x ' + bb.height.toFixed(0));
+          // Auf dem Bildschirm so lang wie ein Auto in Bahnmass mal gross.
+          const lang = bb.width * +m[4];
+          if (Math.abs(lang - AUTO_LANG * 3) > AUTO_LANG * 0.15) f.push('Laenge ' + lang.toFixed(1) + ' statt ' + (AUTO_LANG * 3).toFixed(1));
+          mass = 'Ort +-' + dOrt.toFixed(2) + ', Drehung +-' + Math.abs(dW).toFixed(2) + ' Grad, Laenge ' + lang.toFixed(1) + ' E';
+        }
+        // Ein Auto weniger: verborgen; wieder da: das Attribut ist weg (erbt), nicht "visible".
+        karteAutosSetzen(svg, r.geo, [], { gross: 3, ohneText: true });
+        if (g.getAttribute('visibility') !== 'hidden') f.push('fehlendes Auto nicht verborgen');
+        karteAutosSetzen(svg, r.geo, [a], { gross: 3, ohneText: true });
+        if (g.hasAttribute('visibility')) f.push('wieder gesetztes Auto traegt visibility="' + g.getAttribute('visibility') + '"');
+      }
+    } finally {
+      if (!hatteVf) document.body.classList.remove('vf-an');
+      host.remove();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'unter body.vf-an verborgen, ' + mass };
+  });
+
+  // v1.2.32 GEMELDET: "Die NPCs sind außerdem zu schnell und haben eine starke Neigung (sollte auf
+  // Stufe 1 sein)." Vorher (1.2.31, Balkonia): Gerade 3,2-3,3 km/h, Beschleunigung 2,5 km/h je s,
+  // Querbeschleunigung in Spruengen bis 225 m/s^2, Rollen bis 0,59 rad (34 Grad).
+  stAdd('Virtuell v1.2.32: NPCs fahren Stufe 1 mit dem Fahrzeugmodell, Querlage und Neigung in Grenzen', async () => {
+    const f = [];
+    const vS = vfNpcStufenTempo();
+    const soll = GHOST_TEMPO_STUFEN[1].speed / 0.55 * (ghostCfg.speed || 0.55) * (physEngine.config.topSpeedKmh || 4);
+    if (VF_NPC_STUFE !== 1) f.push('Stufe ' + VF_NPC_STUFE + ' statt 1');
+    if (Math.abs(vS - soll) > 1e-9) f.push('Stufentempo ' + vS.toFixed(3) + ' statt ' + soll.toFixed(3));
+    if (!(vfNpcStufenTempo(0) < vS && vS < vfNpcStufenTempo(2))) f.push('Stufen nicht geordnet');
+    // Fahrdaten des V5R fuer die Federung (ueber file:// nicht ladbar: dann ohne Neigungspruefung).
+    let d = null;
+    if (location.protocol !== 'file:') { try { d = (await vfModellDaten('img/autos/v5r/')).meta.physik; } catch (e) { d = null; } }
+    const lauf = (code, sek) => {
+      const tiles = codeToTrack(code).tiles, pts = trackCenterline(tiles), nrm = trackNormals(pts);
+      const npcs = [3, -3, 0].map((q, k) => ({ idx: Math.floor(pts.length * (k + 1) / 4), s: null, kmh: 0, offset: q, faktor: 0.97 + 0.03 * k,
+        x: 0, y: 0, h: 0, raddreh: 0, lenkWinkel: 0, ay: 0, ax: 0, P: null, modell: d ? { d } : null,
+        feder: { z: 0, vz: 0, th: 0, vth: 0, ph: 0, vph: 0 } }));
+      const e = { vMax: 0, ayMax: 0, phMax: 0, dhMax: 0, weg: 0, lenkMax: 0 };
+      npcs.forEach((n) => vfNpcSteuern(n, 0, pts, nrm));
+      for (let i = 0; i < sek * 60; i++) {
+        for (const n of npcs) {
+          const h0 = n.h, x0 = n.x, y0 = n.y;
+          vfNpcSteuern(n, 1 / 60, pts, nrm);
+          if (d) vfFederung(n.feder, n.ax, n.ay, 1 / 60, d, 0);
+          let dh = n.h - h0; dh = ((dh + 540) % 360) - 180;
+          e.vMax = Math.max(e.vMax, n.kmh / n.faktor);
+          e.ayMax = Math.max(e.ayMax, Math.abs(n.ay));
+          e.phMax = Math.max(e.phMax, Math.abs(n.feder.ph));
+          e.dhMax = Math.max(e.dhMax, Math.abs(dh));
+          e.lenkMax = Math.max(e.lenkMax, Math.abs(n.lenkWinkel));
+          e.weg += Math.hypot(n.x - x0, n.y - y0);
+        }
+      }
+      e.vMittel = e.weg / npcs.length / sek / (100 * TRACK_UNITS_PER_CM / 3.6);
+      return e;
+    };
+    const kurvig = lauf(CH_DAUER.find((x) => x.id === 'dauer-balkonia').code, 40);
+    const lang = lauf('SG8R3G9R3', 40);
+    for (const [name, e] of [['Balkonia', kurvig], ['SG8R3G9R3', lang]]) {
+      if (e.vMax > vS * 1.01 + 0.01) f.push(name + ': schneller als Stufe 1: ' + e.vMax.toFixed(2) + ' > ' + vS.toFixed(2));
+      if (e.ayMax > VF_NPC_QUER_MAX * 1.2) f.push(name + ': Querbeschleunigung ' + e.ayMax.toFixed(1) + ' m/s^2');
+      if (e.dhMax > 2) f.push(name + ': Richtung springt um ' + e.dhMax.toFixed(1) + ' Grad je Bild');
+      if (d && e.phMax > 0.03) f.push(name + ': Rollen ' + (e.phMax * 180 / Math.PI).toFixed(1) + ' Grad');
+      if (!(e.vMittel > 0.4)) f.push(name + ': NPC kommt nicht voran: ' + e.vMittel.toFixed(2) + ' km/h');
+    }
+    if (lang.vMax < vS * 0.95) f.push('lange Gerade: Stufe 1 nicht erreicht: ' + lang.vMax.toFixed(2));
+    // Kein Zwischenlauf ohne Fahrzeugmodell: die NPCs beschleunigen wie das eigene Auto.
+    if (String(vfNpcSteuern).indexOf('.update(') < 0) f.push('NPC ohne Fahrzeugmodell');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Stufe 1 = ' + vS.toFixed(2) + ' km/h (vorher 3,2), Spitze ' + lang.vMax.toFixed(2)
+      + ', Balkonia Mittel ' + kurvig.vMittel.toFixed(2) + ' km/h, quer bis ' + Math.max(kurvig.ayMax, lang.ayMax).toFixed(1) + ' m/s^2 (vorher 225), Rollen bis '
+      + (d ? (Math.max(kurvig.phMax, lang.phMax) * 180 / Math.PI).toFixed(2) + ' Grad (vorher 34)' : 'ohne Modelldaten') + ', Richtung je Bild bis ' + Math.max(kurvig.dhMax, lang.dhMax).toFixed(2) + ' Grad' };
   });
 
   stAdd('Aufstellung: Mittelgasse, versetzte Haltepunkte, Impuls mit Tempo und Dauer aus den Reglern', () => {
@@ -19656,10 +20459,10 @@
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Auslaufen 2 s, Bremse bis Stillstand, Rueckwaerts erst beim neuen Druck' };
   });
 
-  stAdd('Abstimmungen: FAHREN zeigt nur Arcade, Sim+, Pacejka; Lenkeinschlag erreichbar ausser Realismus GT3', () => {
+  stAdd('Abstimmungen: FAHREN zeigt Arcade, Sim+, Pacejka, Gran Hybrismo, Assetto Carrera; Lenkeinschlag erreichbar ausser Realismus GT3', () => {
     const f = [];
     const fahren = window.__presetKeysFahren ? window.__presetKeysFahren() : [];
-    if (fahren.join(',') !== 'arcade,simplus,propacejka') f.push('FAHREN: ' + fahren.join(','));
+    if (fahren.join(',') !== 'arcade,simplus,propacejka,gran,acc') f.push('FAHREN: ' + fahren.join(','));
     for (const k of ['arcade', 'simplus', 'gt3', 'f1']) {
       const v = window.__presetValues(k) || {};
       const resp = v['phys-steerresp'] === undefined ? 3 : v['phys-steerresp'];
@@ -22453,7 +23256,7 @@
       if (Math.abs(b.stufe - 0.96) > 1e-9) f.push('Takt: ohne Linie geaendert');
       // Tempo je Teil: hoch gestuft nie schneller als ein NPC in der Haarnadel, gedeckelt in Kurven.
       npc.ghost.tileIndex = 0;   // Start, dann zwei Geraden: keine Kurve in Sicht
-      if (challengerDeckeln(npc, 0.55, 1.3, false) !== Math.min(1, 0.55 * 1.3)) f.push('Gerade: Stufe 1,3 nicht frei');
+      if (challengerDeckeln(npc, 0.55, 1.3, false) !== Math.min(1, 0.55 + (1.3 - 1))) f.push('Gerade: Stufe 1,3 nicht frei');
       npc.tileCode = TILE_TYPE.HAIRPIN;
       if (challengerDeckeln(npc, 0.33, 1.3, false) > 0.33 + 1e-9) f.push('Haarnadel: schneller als ein NPC');
       if (challengerDeckeln(npc, 0.33, 0.6, false) < Math.min(0.33, GHOST_READ_MIN) - 1e-9) f.push('Haarnadel: unter der Leseschwelle');
@@ -22685,4 +23488,153 @@
     if (ap.indexOf('Math.min(formationPace(), (typeof ghostCfg') < 0) f.push('Autopilot: Formation nicht wie die NPCs');
     if (String(ghostTick).indexOf('(underYellow || raceFormationLap || (ghostIstMax(car) && tight === 0)) ? 1 : ghostFeldStaffel(car)') < 0) f.push('Staffel in der Einfuehrungsrunde');
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'mittig, links -0,9, rechts +0,9 je n Teile, dann Halt; SC = Feld; Formation = NPC-Formel' };
+  });
+
+  // v1.2.25: PR #9 (Rennpause, Playdater1974) mit den Fixes der Uebernahme. Mit einer eigenen Uhr
+  // (Date.now, setTimeout, Math.random nur fuer die Dauer des Tests ersetzt), damit Ampel und
+  // Pausendauer ohne Warten pruefbar sind. Die Renn-Timeouts der Seite liegen waehrenddessen
+  // beiseite (eigene Menge), sonst landeten sie auf der falschen Uhr.
+  stAdd('Rennpause v1.2.25: Uhr steht, Ampel, verzug-Reset, MP-Start, native Sperre beim Laden', () => {
+    const f = [];
+    if (rennPauseAktiv()) return { ok: false, mass: 'eine Pause laeuft schon, Test nicht moeglich' };
+    const echt = { now: Date.now, st: window.setTimeout, ct: window.clearTimeout, rnd: Math.random };
+    const merk = { rs: raceState, rm: raceMode, fl: flagState, rsa: raceStartedAt, rls: raceLapStart,
+                   aw: raceAwaitingMove, mp: mp.an, mpi: mpi.an, verzug: rennPause.verzug,
+                   timer: rennPause.zeitTimer, gruen: raceGreen,
+                   status: $('race-status') ? $('race-status').textContent : null,
+                   tab: document.querySelector('.tabpage.active') };
+    const direktDa = Object.prototype.hasOwnProperty.call(window, 'OmegaDirekt');
+    const direktVorher = window.OmegaDirekt;
+    let wand = echt.now.call(Date), seq = 0;
+    const uhren = new Map();
+    const weiter = (ms) => {
+      const ende = wand + ms;
+      for (let n = 0; n < 10000; n++) {
+        let naechste = null;
+        for (const [id, u] of uhren) if (u.bei <= ende && (!naechste || u.bei < naechste[1].bei)) naechste = [id, u];
+        if (!naechste) break;
+        uhren.delete(naechste[0]); wand = naechste[1].bei; naechste[1].fn();
+      }
+      wand = ende;
+    };
+    const nativ = [];
+    let hinweis = '';
+    const attrappe = { rennPause: (an) => nativ.push(an), schreibe: () => {} };
+    try {
+      Date.now = () => wand;
+      window.setTimeout = (fn, ms, ...a) => {
+        const id = 'st' + (++seq);
+        uhren.set(id, { bei: wand + Math.max(0, Number(ms) || 0), fn: () => fn(...a) });
+        return id;
+      };
+      window.clearTimeout = (id) => { if (!uhren.delete(id)) echt.ct.call(window, id); };
+      Math.random = () => 0;
+      rennPause.zeitTimer = new Set();
+      try { window.OmegaDirekt = attrappe; } catch (e) { /* in der App evtl. nicht ersetzbar */ }
+      const mitAttrappe = window.OmegaDirekt === attrappe;
+      document.querySelectorAll('.tabpage').forEach((el) => el.classList.toggle('active', el.id === 'tab-race'));
+      mp.an = false; mpi.an = false;
+      raceState = 'racing'; raceMode = 'practice'; flagState = 'green'; raceAwaitingMove = false;
+      raceStartedAt = rennZeitJetzt() - 1000; raceLapStart = rennZeitJetzt() - 500;
+      const start = raceStartedAt;
+      let gefeuert = 0;
+      rennZeitTimeout(() => gefeuert++, 100);
+      // 1. Pause haelt die Rennuhr an.
+      const vorher = rennZeitJetzt();
+      rennPauseUmschalten();
+      if (rennPause.phase !== 'pause') f.push('Pause beginnt nicht (' + rennPause.phase + ')');
+      weiter(10000);
+      if (rennZeitJetzt() !== vorher) f.push('Rennuhr laeuft in der Pause weiter');
+      if (gefeuert) f.push('Renn-Timeout feuert in der Pause');
+      // 2. Fortsetzen nur ueber die Ampel, ohne Sprung der Rennuhr.
+      rennPauseUmschalten();
+      if (rennPause.phase !== 'ampel') f.push('Fortsetzen startet keine Ampel');
+      weiter(5599);
+      if (rennPause.phase !== 'ampel' || rennZeitJetzt() !== vorher) f.push('vor Gruen schon frei');
+      weiter(1);
+      if (rennPause.phase !== 'aus') f.push('nach Gruen noch ' + rennPause.phase);
+      if (rennZeitJetzt() !== vorher || raceStartedAt !== start) f.push('Rennuhr springt beim Fortsetzen');
+      if (rennPause.verzug !== merk.verzug + 15600) f.push('verzug ' + rennPause.verzug + ' statt Pausendauer');
+      weiter(99); if (gefeuert) f.push('Timeout ohne Restzeit');
+      weiter(1); if (gefeuert !== 1) f.push('Timeout setzt nach der Pause nicht fort');
+      // 3. verzug-Reset beim Rennstart: Rennuhr = Wanduhr, wartende Timeouts behalten ihren Wandzeitpunkt.
+      rennPause.verzug = 5000;
+      const z = rennZeitTimeout(() => {}, 1000);
+      const restVor = z.bei - rennZeitJetzt();
+      rennUhrNullen();
+      if (rennPause.verzug !== 0 || rennZeitJetzt() !== Date.now()) f.push('rennUhrNullen setzt verzug nicht zurueck');
+      if (z.bei - rennZeitJetzt() !== restVor) f.push('wartender Timeout verschiebt sich beim Nullen');
+      rennZeitTimeoutStop(z);
+      const q = String(startRaceCountdown);
+      const iNull = q.indexOf('rennUhrNullen()'), iGruen = q.indexOf('const gruenBei');
+      if (iNull < 0 || iGruen < 0 || iNull > iGruen) f.push('startRaceCountdown nullt die Rennuhr nicht vor gruenBei');
+      // 4. MP-Start nicht verschoben: die Wanduhr-Zielzeit des Hosts liegt nach dem Nullen genau dort.
+      rennPause.verzug = 5000;
+      rennUhrNullen();
+      const gruenZiel = Date.now() + 8000;
+      const plan = ampelZeitplan(gruenZiel, 2000);
+      const versatz = plan[plan.length - 1][0] - rennZeitJetzt() - 8000;
+      if (versatz !== 0) f.push('MP-Gruen um ' + versatz + ' ms verschoben');
+      // Im Mehrspieler keine Pause, eine schon laufende endet, und ein Startplan beendet sie auch.
+      mp.an = true; rennPauseUmschalten();
+      if (rennPauseAktiv()) f.push('Pause im Mehrspieler moeglich');
+      mp.an = false; rennPauseUmschalten(); mp.an = true;
+      if (!rennPauseWache() || rennPauseAktiv()) f.push('laufende Pause endet nicht, wenn der Mehrspieler dazukommt');
+      mp.an = false; rennPauseUmschalten();
+      // raceState ist 'racing': startRaceCountdown() endet direkt nach der Pausenpruefung.
+      startRaceCountdown(Date.now() + 8000, { modus: 'practice' });
+      if (rennPauseAktiv()) f.push('Mehrspieler-Startplan bleibt an der lokalen Pause haengen');
+      rennPauseUmschalten(); startRaceCountdown();
+      if (!rennPauseAktiv()) f.push('lokaler Start beendet die Pause');
+      rennPauseBeenden();
+      // 5. Unterbrochener Erststart: Intro abgebrochen, Gruen genau einmal ueber die Wiederanlaufampel.
+      let gruen = 0;
+      raceGreen = () => { gruen++; raceState = 'racing'; };
+      raceState = 'countdown';
+      const gen0 = rennintroStartGeneration;
+      rennPauseUmschalten();
+      if (rennintroStartGeneration !== gen0 + 1) f.push('Pause im Countdown bricht das Rennintro nicht ab');
+      rennPauseUmschalten(); weiter(7700);
+      if (gruen !== 1) f.push('Erststart nach Pause ' + gruen + 'x freigegeben');
+      raceGreen = merk.gruen;
+      // 6. Native Sperre (Attrappe der Bruecke): Pause setzt sie, Fortsetzen loest sie, Laden loest sie.
+      if (mitAttrappe) {
+        if (nativ.indexOf(true) < 0 || nativ[nativ.length - 1] !== false) f.push('Bruecke: rennPause ' + JSON.stringify(nativ));
+        nativ.length = 0;
+        const ladenFrei = window.OMEGA_BRUECKE.rennPauseLadenFrei;
+        ladenFrei();
+        if (nativ.length !== 1 || nativ[0] !== false) f.push('Laden loest die native Sperre nicht: ' + JSON.stringify(nativ));
+      } else hinweis = ' (Bruecke hier nicht ersetzbar, Attrappen-Teil ausgelassen)';
+      // Suchtexte zusammengesetzt: woertlich stuenden sie in diesem Test selbst und faenden sich.
+      const skripte = Array.from(document.scripts).map((s) => s.textContent).join('\n');
+      const name = 'window.OMEGA_BRUECKE.' + 'rennPauseLadenFrei';
+      const iDef = skripte.indexOf(name + ' = ');
+      if (iDef < 0 || skripte.indexOf(name + '();', iDef) < 0) f.push('rennPauseLadenFrei wird beim Laden nicht gerufen');
+      // 7. Projektregeln: WIP, Uebersetzung, keine feste Version.
+      if (!document.querySelector('#renn-pause-ui .wip-tag') || !document.querySelector('#race-act-pause .wip-tag')) f.push('WIP-Kennzeichen fehlt');
+      for (const k of ['Beenden', 'Pause beendet: Mehrspieler aktiv', 'Pause / Fortsetzen']) {
+        if (!I18N_EN[k] || !I18N_ES[k]) f.push('Uebersetzung fehlt: ' + k);
+      }
+      if ('version' in window.OMEGA_PAUSE.status()) f.push('OMEGA_PAUSE meldet eine feste Version');
+    } catch (e) {
+      f.push('Ausnahme: ' + e.message);
+    } finally {
+      try { if (rennPauseAktiv()) rennPauseBeenden(); } catch (e) { f.push('Aufraeumen: ' + e.message); }
+      Date.now = echt.now; window.setTimeout = echt.st; window.clearTimeout = echt.ct; Math.random = echt.rnd;
+      for (const z of [...rennPause.zeitTimer]) rennZeitTimeoutStop(z);
+      rennPause.zeitTimer = merk.timer;
+      rennPause.verzug = merk.verzug;
+      rennPause.gasWarten = {}; rennPause.inputWarten.clear(); rennPause.steerWarten.clear();
+      try { if (direktDa) window.OmegaDirekt = direktVorher; else delete window.OmegaDirekt; } catch (e) { /* */ }
+      window.OMEGA_BRUECKE.rennPause(false);
+      raceGreen = merk.gruen;
+      raceState = merk.rs; raceMode = merk.rm; flagState = merk.fl; raceStartedAt = merk.rsa;
+      raceLapStart = merk.rls; raceAwaitingMove = merk.aw; mp.an = merk.mp; mpi.an = merk.mpi;
+      if (merk.status !== null) $('race-status').textContent = merk.status;
+      document.querySelectorAll('.tabpage').forEach((el) => el.classList.toggle('active', el === merk.tab));
+      setRaceLights(0);
+      rennPauseMalen();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ')
+      : 'Uhr steht 10 s, Ampel 5,6 s, verzug 0 bei Rennstart, MP-Gruen exakt, MP sperrt und beendet Pause, Intro ab, Bruecke frei beim Laden' + hinweis };
   });

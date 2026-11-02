@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anleitung für KIs - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Anleitung für KIs</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.5</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p>Die <b>Anleitung für KIs</b> richtet sich an KI-Assistenten (und die Menschen, die sie anleiten), die Artikel in diesem Wiki schreiben oder am Quellcode von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> arbeiten. Sie fasst die Arbeitsweise zusammen, nach der OmegaSim entwickelt wird. Für Menschen gelten dieselben Regeln, siehe auch <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Für_Wiki-Artikel"><span id="F.C3.BCr_Wiki-Artikel"></span>Für Wiki-Artikel</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Pflichtbestandteile">Pflichtbestandteile</h3></div>
+<ol><li>Erste Zeile: <code>{{Stand|app=&lt;Version&gt;|appdatum=&lt;TT.MM.JJJJ&gt;}}</code>. Die Version ist die, deren Quellcode bzw. App du beschreibst. Die Vorlage setzt den Hinweis „mithilfe von KI erstellt“ und die Kategorie <i>Mit KI erstellt</i>.</li>
+<li>Einleitung wie in einem Lexikon: Stichwort fett im ersten Satz, knappe Definition, dann Einordnung.</li>
+<li>Abschnitte <code>== … ==</code>; Bedienung vor Technik. Menüpfade fett (<b>Optionen → Ton</b>), Schalter in „Anführungszeichen“ mit ihrem Standardwert.</li>
+<li>Am Ende: <i>Siehe auch</i> (interne Links), <i>Weblinks</i> (mindestens Luuke42/omegasim) und Kategorien (<code>[[Kategorie:OmegaSim]]</code> plus passende).</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Inhalt">Inhalt</h3></div>
+<ul><li><b>Nur Belegtes.</b> Fakten aus dem Quellcode, der Doku (<code>CARRERA_HYBRID.md</code>), den Patchnotes in der App oder aus Versuchen am Tisch. Nichts erfinden, keine geschätzten Zahlen. Wenn etwas unklar ist: weglassen oder „noch nicht gesichert“ schreiben.</li>
+<li><b>In Arbeit kennzeichnen.</b> Funktionen, die in der App das Etikett <i>WIP</i> oder <i>experimentell</i> tragen, im Text als „(in Arbeit)“ bzw. „(experimentell)“ führen.</li>
+<li><b>Bestehende Seiten respektieren.</b> Seiten anderer Autoren (z. B. <a href="https://omegasim.miraheze.org/wiki/CH_ControlBox" title="CH ControlBox">CH ControlBox</a>, <a href="https://omegasim.miraheze.org/wiki/Startampel" title="Startampel">Startampel</a>) nur ergänzen oder berichtigen, nicht umschreiben, und in der Zusammenfassung sagen, was sich geändert hat.</li>
+<li><b>Stil:</b> sachlich, Präsens, keine Werbung, keine Geviertstriche (—); Halbgeviertstrich (–) ist in Ordnung.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Bilder">Bilder</h3></div>
+<ul><li>Screenshots von OmegaSim sind MIT-lizenziert und erlaubt. Beschreibung mit Version, Datum, Quelle und Lizenz; Kategorie <i>Screenshots</i>.</li>
+<li>Fotos nur mit Quelle und passender Lizenz. Im Zweifel nicht hochladen, sondern den Menschen fragen.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Grenzen">Grenzen</h3></div>
+<ul><li>Keine Passwörter oder Zugangsdaten eingeben. Der Mensch meldet sich selbst an.</li>
+<li>Keine Seiten löschen oder verschieben, ohne dass ein Mensch es ausdrücklich will.</li>
+<li>Das Wiki begrenzt Bearbeitungen und Uploads je Minute. Lieber langsam arbeiten als viele Fehlversuche erzeugen.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Für_Arbeit_am_Quellcode"><span id="F.C3.BCr_Arbeit_am_Quellcode"></span>Für Arbeit am Quellcode</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Aufbau">Aufbau</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Ort</th>
+<th>Inhalt
+</th></tr>
+<tr>
+<td><code>src/00-index.head.html</code></td>
+<td>gesamtes Markup und CSS, inklusive Optionen, Hilfetexte und Patchnotes
+</td></tr>
+<tr>
+<td><code>src/*.js</code></td>
+<td>die Logik, nummeriert in Ladereihenfolge; alle Dateien teilen sich einen Gültigkeitsbereich
+</td></tr>
+<tr>
+<td><code>index.html</code>, <code>sw.js</code>, <code>app-update.json</code></td>
+<td><b>erzeugt</b> – nie von Hand ändern
+</td></tr>
+<tr>
+<td><code>tools/build.py</code></td>
+<td>baut <code>index.html</code> aus <code>src/</code>
+</td></tr>
+<tr>
+<td><code>tools/bump_version.py</code></td>
+<td>setzt die Version und baut <code>sw.js</code> und <code>app-update.json</code> neu
+</td></tr>
+<tr>
+<td><code>android-app/</code></td>
+<td>native Android-Hülle mit dem Bluetooth-Plugin <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a>
+</td></tr>
+<tr>
+<td><code>CARRERA_HYBRID.md</code></td>
+<td>Technik-Doku: Protokoll, Messungen, Begründungen
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Ablauf_einer_Änderung"><span id="Ablauf_einer_.C3.84nderung"></span>Ablauf einer Änderung</h3></div>
+<ol><li>Änderung in <code>src/</code> machen.</li>
+<li>Neue sichtbare Texte auch übersetzen: Englisch und Spanisch stehen als Wörterbücher in <code>src/10-ble-explorer.js</code>.</li>
+<li>Neue Funktionen von Anfang an mit dem Etikett <code>&lt;span class="wip-tag"&gt;WIP&lt;/span&gt;</code> kennzeichnen.</li>
+<li>Erklärungen zu Optionen gehören in das ⓘ-Fenster (<code>&lt;small&gt;</code> im <code>.opt-label</code>), nicht als Text unter die Zeile.</li>
+<li>Selbsttest schreiben: <code>stAdd('Name vX.Y.Z: …', () =&gt; ({ ok, mass }))</code> in <code>src/95-selftest.js</code>.</li>
+<li><code>python tools/build.py</code> ausführen.</li>
+<li>Selbsttest in der App laufen lassen (Kachel <i>Selbsttest</i> im Bereich <i>Sonstiges</i>; der Adresszusatz <code>?st=Name</code> beschränkt den Lauf auf passende Tests). Rot darf nur werden, was vorher schon rot war; im Zweifel mit dem vorigen Stand vergleichen.</li>
+<li>Patchnotes ergänzen (Abschnitt je Nebenversion, mit englischer Übersetzung).</li>
+<li>Version mit <code>python tools/bump_version.py</code> setzen. Das Schema ist <i>1.&lt;Woche&gt;.&lt;Push&gt;</i>; die gültige Nummer ist die, die das Werkzeug ausgibt.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Was_man_nicht_kaputt_machen_darf">Was man nicht kaputt machen darf</h3></div>
+<ul><li><b>Den Sendeweg.</b> Die App schickt jedem Auto alle 45 ms ein Fahrpaket. Alles, was diesen Takt verzögert oder Pakete unterdrückt, macht das Fahren schlechter. Änderungen daran nur mit Messung (Funk-Rundlauf, Zähler „gesperrt“).</li>
+<li><b>Bluetooth-Verbindungen.</b> Jede fehlgeschlagene Verbindung muss sauber getrennt werden, sonst bleibt das Auto in einem Zustand wie unter <a href="./Keine_Reaktion_des_Fahrzeugs.html" title="Keine Reaktion des Fahrzeugs">Keine Reaktion des Fahrzeugs</a>.</li>
+<li><b>Gespeicherte Einstellungen.</b> Neue Speicherschlüssel statt alte umdeuten.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Testen_im_Browser">Testen im Browser</h3></div>
+<ul><li>Beim automatischen Testen den Ton stummschalten (AudioContext-Ausgänge auf Lautstärke 0, Sprachausgabe abschalten), nach jedem Neuladen erneut.</li>
+<li>In einem verborgenen Browserfenster drosselt der Browser Zeitgeber auf etwa einen Takt je Sekunde. Für Wartezeiten in Tests ist ein <code>MessageChannel</code>-Takt zuverlässiger als <code>setTimeout</code>.</li>
+<li>Nach dem Testen Testserver und Tabs schließen, damit keine Seite im Hintergrund weiterläuft und Bluetooth hält.</li>
+<li>Alles mit echten Autos (Kopplung, Latenz, Klang) lässt sich nur am Tisch prüfen. Das in der Rückmeldung ausdrücklich sagen.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Pull_Requests">Pull Requests</h3></div>
+<ul><li>Nur <code>src/</code>, <code>tools/</code>, <code>android-app/</code> und Doku ändern; erzeugte Dateien nicht mitschicken oder beim Übernehmen neu bauen lassen.</li>
+<li>Beschreiben, was getestet wurde und was nicht (insbesondere am echten Auto).</li>
+<li>Änderungen an der nativen App (<code>android-app/</code>) brauchen eine neue APK und einen Test am Auto.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a></li>
+<li><a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a></li>
+<li><a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a></li>
+<li><a href="https://omegasim.miraheze.org/wiki/Vorlage:Stand" title="Vorlage:Stand">Vorlage:Stand</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw182
+Cached time: 20261029054342
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.026 seconds
+Real time usage: 0.030 seconds
+Preprocessor visited node count: 81/1000000
+Revision size: 6205/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 136/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    4.571      1 Vorlage:Stand
+100.00%    4.571      1 -total
+-->
+
+<!-- Render ID b2c5ff38-d35b-11f1-af72-bc2411a3d3e2 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:39:|#|:idhash:canonical and timestamp 20261029054342 and revision id 61. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

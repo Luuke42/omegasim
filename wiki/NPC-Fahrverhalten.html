@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NPC-Fahrverhalten - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">NPC-Fahrverhalten</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-NPC.png" class="mw-file-description"><img src="images/250px-OmegaSim-NPC.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-NPC.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>NPC-Einstellungen in OmegaSim</figcaption></figure>
+<p>Das <b>NPC-Fahrverhalten</b> ist die Steuerlogik, mit der <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> echte <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Autos ohne menschlichen Fahrer über die Bahn bewegt. Ein solches Auto heißt in der App NPC (<i>non-player character</i>, computergesteuerter Gegner); im Quelltext und in älteren Fassungen hieß es „Ghost“. Jeder NPC ist ein per <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a> verbundenes Auto mit der Garagenrolle <b>NPC</b>. Die App rechnet für ihn im selben 45-ms-Takt wie für das Fahrerauto ein Zieltempo und eine gewünschte Querlage aus Streckenlayout, Ideallinie, Rennsituation und den anderen Autos, führt beides durch ein eigenes Fahrzeugmodell und schickt das Ergebnis als Gas- und Lenkbyte an das Auto. Weil das Auto weder seine Position auf der Kachel noch seine Querlage meldet, ist fast alles daran Schätzung und Steuerung ohne Rückmeldung; die Seite beschreibt, welche Formeln und Schwellen dabei im Code stehen.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Menüpfad</td>
+<td><b>Optionen → NPCs</b> (Regler), <b>FAHREN → Autos → Garage</b> (Rolle, Stufe, Ton und Motor je Auto), <b>Optionen → Ton</b> (NPC-Motorsound)
+</td></tr>
+<tr>
+<td>Wichtigste Regler (Standard)</td>
+<td>NPC-Tempo 55&#160;% · Kurvendrosselung 20&#160;% · Höchsttempo in der Haarnadel 35&#160;% · Ideallinie 200&#160;% · Feld zusammenhalten an, Stärke 10&#160;% · Rennhärte 50&#160;%
+</td></tr>
+<tr>
+<td>Stufen in der Garage</td>
+<td>einfach 45&#160;% · mittel 55&#160;% (Standard) · schnell 65&#160;% · MAX (in Arbeit)
+</td></tr>
+<tr>
+<td>Status</td>
+<td>Grundsteuerung stabil; Stufe MAX, Haarnadel-Höchsttempo, Linienmodell SIMULATOR, NPC-Boxenstopp und NPC-Motorklang in Arbeit; Rennwürze-Zutaten, Tempo-Streuung, Startversatz experimentell
+</td></tr>
+<tr>
+<td>Seit Version</td>
+<td>NPCs (damals „Ghosts“) seit den 0.x-Fassungen; Umbenennung in „NPC“ im Patchnotes-Abschnitt 1.0; Stufen seit 0.9.56; MAX seit 1.1.42; MAX-Motormodell seit 1.2.5
+</td></tr>
+<tr>
+<td>Beteiligte Quelldateien</td>
+<td><code>src/90-ghosts.js</code> (Steuerung), <code>src/61-simlinie.js</code> (Linie SIMULATOR), <code>src/60-track.js</code> (Linienmodelle, Kachellängen), <code>src/90b-sim.js</code> (Rennen simulieren), <code>src/80-sound.js</code> (Regler, NPC-Klang), <code>src/40-physics.js</code> (Fahrzeugmodell)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<p>Dieser Abschnitt erklärt die Begriffe, die man für die tieferen Abschnitte braucht. Ausführlicher stehen sie im <a href="./Glossar.html" title="Glossar">Glossar</a>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Was_ein_NPC_ist">Was ein NPC ist</h3></div>
+<p>Ein NPC oder Bot ist ein Fahrzeug, das ein Programm statt eines Menschen steuert. In einem Videospiel kennt der Bot seine Position exakt, weil die Spielwelt selbst im Rechner liegt. Bei OmegaSim fährt der Bot ein echtes Modellauto auf dem Teppich. Die App „sieht“ es nur über die Funkmeldungen des Autos, und die sind spärlich.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Was_das_Auto_meldet_und_was_nicht">Was das Auto meldet und was nicht</h3></div>
+<p>Das Auto schickt etwa alle 45&#160;ms eine Meldung (eine <i>Notification</i> im Sinne von <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>). Für die NPC-Steuerung zählen zwei Bytes:
+</p>
+<ul><li><b>Byte 11</b>: ein Kachelzähler, der um eins weiterspringt, wenn das Auto auf ein neues Streckenteil fährt.</li>
+<li><b>Byte 12</b>: der Code des gerade gelesenen Streckenteils, etwa <code>0x02</code> für eine Gerade oder <code>0x06</code> für die Haarnadel (zur Schreibweise siehe <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a>; <code>0x0A</code> ist dezimal 10, binär <code>00001010</code>). Liest das Auto nichts, steht dort <code>0x00</code>.</li></ul>
+<p>Was fehlt: wo genau auf dem 43&#160;cm langen Teil das Auto steht, wie schnell es wirklich ist und wie weit links oder rechts es fährt. Kein Byte meldet die Querlage.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Fahren_ohne_Ortung:_Koppelnavigation">Fahren ohne Ortung: Koppelnavigation</h3></div>
+<p>Die App schätzt deshalb den Ort wie ein Seefahrer ohne Satellitennavigation: Sie kennt den Zeitpunkt des letzten Kachelwechsels (ein echtes Ereignis) und rechnet mit dem Tempo des eigenen Fahrzeugmodells, wie weit das Auto seitdem gekommen ist. Diese Schätzung heißt <b>Koppelnavigation</b> (englisch <i>dead reckoning</i>). Beim nächsten Kachelwechsel wird sie wieder auf den gemessenen Wert gesetzt. Den Anteil des Weges über die Kachel, von 0 am Eingang bis 1 am Ausgang, nennt der Code <b>Phase</b>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Regelkreis">Regelkreis</h3></div>
+<p>Ein Regelkreis vergleicht einen <b>Sollwert</b> (wie schnell soll das Auto sein?) mit einem <b>Istwert</b> (wie schnell ist es?) und stellt aus der Abweichung ein Stellglied (hier Gas und Bremse). Der NPC-Tempo-Regler ist ein <b>PI-Regler</b>:
+</p>
+<ul><li>Der <b>P-Anteil</b> (proportional) reagiert sofort und umso stärker, je größer die Abweichung ist.</li>
+<li>Der <b>I-Anteil</b> (integrierend) sammelt die Abweichung über die Zeit auf und findet so das Gas, mit dem ein Tempo dauerhaft gehalten wird.</li>
+<li>Ein <b>Totband</b> ist ein kleiner Bereich um den Sollwert, in dem der P-Anteil nichts tut, damit der Regler nicht dauernd hin und her pendelt.</li>
+<li>Eine <b>Ratenbegrenzung</b> legt fest, wie schnell sich ein Ausgang höchstens ändern darf, zum Beispiel „Gas von 0 auf voll frühestens in 0,6&#160;s“.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Ideallinie">Ideallinie</h3></div>
+<p>Die Ideallinie ist der schnellste Weg durch eine Kurve: außen anfahren, innen den Scheitelpunkt (<i>Apex</i>) treffen, außen herausfahren. Bei einer Carrera-Bahn ist das Besondere, dass das Auto in einer Schiene geführt wird und der Lenkbefehl die Querlage nur verschiebt. Die Linie ist deshalb in OmegaSim ein <b>Querversatz</b> von −1 (ganz links) bis +1 (ganz rechts) entlang der Strecke.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Zustandsmaschine">Zustandsmaschine</h3></div>
+<p>Viele Abläufe (Überholen, Boxenstopp, Parken) sind als <b>Zustandsmaschine</b> gebaut: Das Auto ist immer in genau einem benannten Zustand, etwa „ansage“ oder „vorbei“, und eine Bedingung (Zeit abgelaufen, Abstand erreicht) schaltet in den nächsten. Solche Abläufe stehen unten als Tabellen <i>Zustand | Bedingung | nächster Zustand</i>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Anteil_des_Gasbytes">Anteil des Gasbytes</h3></div>
+<p>Alle Tempozahlen im Code (0,35, 0,55 …) sind <b>Anteile des Gasbytes</b>, nicht der Höchstgeschwindigkeit eines bestimmten Autos. Gesendet werden Δ&#160;=&#160;round(Anteil&#160;×&#160;127) Gasschritte. Gemessen entspricht ein Gasschritt rund 0,0119&#160;m/s, also 0,55 → Δ&#160;70 → etwa 0,83&#160;m/s.<sup id="cite&#95;ref-1" class="reference"><a href="#cite_note-1"><span class="cite-bracket">&#91;</span>1<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<ol><li>Alle Autos verbinden (siehe <a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a>). Das erste verbundene Auto wird Spieler&#160;1, jedes weitere bekommt automatisch die Rolle <b>NPC</b>, sofern für dieses Auto keine andere Rolle gemerkt ist.</li>
+<li>Unter <b>FAHREN → Autos → Garage</b> für jeden NPC die <b>Stufe</b> wählen (einfach, mittel, schnell, MAX). Der Knopf ↻ stellt „mittel“ wieder her. Dort lassen sich auch NPC-Ton und Motor je Auto wählen.</li>
+<li>Ein Streckenlayout bereitstellen: im <a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a> bauen, einscannen oder beim Fahren lernen lassen (<b>Strecke beim Fahren lernen</b>). Ohne Layout mit mindestens drei Teilen fallen Kurvendrosselung, Ideallinie und Vorausblick weitgehend aus.</li>
+<li>Unter <b>Optionen → NPCs</b> die gewünschten Regler setzen (siehe Tabelle unten).</li>
+<li>Ein Rennen starten (siehe <a href="./Rennarten.html" title="Rennarten">Rennarten</a>) oder in der Garage NPCs frei fahren lassen. Die Startaufstellung wird unter <b>Optionen → Renneinstellungen</b> sortiert; <b>Automatisch aufstellen</b> lässt die NPCs selbst auf ihre Plätze fahren.</li>
+<li>Zum Ausprobieren ohne Autos: <b>Optionen → NPCs → Rennen simulieren</b>, Anzahl NPCs und Runden wählen, <b>Simulation starten</b>.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<p>Die Standardwerte sind die Werte, mit denen die Regler im Markup stehen; beim Laden schickt die App jedem Regler einmal sein Eingabe-Ereignis, sodass genau diese Werte wirken (ältere Anzeigetexte wie „100&#160;%“ bei der Ideallinie waren dadurch überholt).<sup id="cite&#95;ref-2" class="reference"><a href="#cite_note-2"><span class="cite-bracket">&#91;</span>2<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Grundtempo_und_Stufen">Grundtempo und Stufen</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich</th>
+<th>Standard</th>
+<th>Wirkung laut Code</th>
+<th>Schlüssel
+</th></tr>
+<tr>
+<td>NPC-Tempo</td>
+<td>35–100&#160;%</td>
+<td>55&#160;%</td>
+<td>Grundtempo <code>ghostCfg.speed</code>; Stufe „mittel“ fährt es auf der Geraden, alle Stufen in Kurven</td>
+<td><code>ghost-speed</code>
+</td></tr>
+<tr>
+<td>Stufe (Garage, je Auto)</td>
+<td>einfach, mittel, schnell, MAX</td>
+<td>mittel</td>
+<td>Geradentempo = Stufenwert ÷ 0,55 × Grundtempo; MAX eigenes Profil</td>
+<td><code>car.ghostStufe</code>
+</td></tr>
+<tr>
+<td>NPC: Tempo-Streuung</td>
+<td>0–10&#160;%</td>
+<td>0&#160;%</td>
+<td>Faktor 1 + p/100 × z je Auto, z gleichverteilt in [−1;&#160;1], nur auf Geraden</td>
+<td><code>ghost-streuung</code>
+</td></tr>
+<tr>
+<td>NPC: Kurvendrosselung</td>
+<td>0–60&#160;%</td>
+<td>20&#160;%</td>
+<td>Abzug <code>curveSlow</code> × Enge (Kurve 1, Haarnadel/Engstelle 2), höchstens 85&#160;%</td>
+<td><code>ghost-curve</code>
+</td></tr>
+<tr>
+<td>NPC: Höchsttempo in der Haarnadel (in Arbeit)</td>
+<td>20–50&#160;%</td>
+<td>35&#160;%</td>
+<td>Obergrenze in Haarnadel, Engstelle und zwei Teilen davor, gilt zuletzt</td>
+<td><code>ghost-haarnadel-max</code>
+</td></tr>
+<tr>
+<td>MAX: Tempo auf der Geraden</td>
+<td>40–100&#160;%</td>
+<td>100&#160;%</td>
+<td>Zieltempo MAX auf Geraden</td>
+<td><code>ghost-max-gerade</code>
+</td></tr>
+<tr>
+<td>MAX: Tempo in Radius-1-Kurven</td>
+<td>30–100&#160;%</td>
+<td>52&#160;%</td>
+<td>60°-Kurve und kleine 30°-Kurve</td>
+<td><code>ghost-max-r1</code>
+</td></tr>
+<tr>
+<td>MAX: Tempo in Radius-2-Kurven</td>
+<td>30–100&#160;%</td>
+<td>80&#160;%</td>
+<td>weite 30°-Kurve</td>
+<td><code>ghost-max-r2</code>
+</td></tr>
+<tr>
+<td>MAX: Beschleunigung</td>
+<td>1–4×</td>
+<td>2×</td>
+<td><code>accelerationFactor</code> des NPC-Modells × Wert, Schaltpause 0&#160;ms</td>
+<td><code>ghost-max-beschl</code>
+</td></tr>
+<tr>
+<td>MAX: Bremspunkt</td>
+<td>eine Schiene vor der Kurve; Beginn des Kurventeils</td>
+<td>eine Schiene vor</td>
+<td>bei „Schiene“ gilt schon das Tempo des nächsten Teils</td>
+<td><code>ghost-max-bremspunkt</code>
+</td></tr>
+<tr>
+<td>NPC: Brems- und Gasverhalten</td>
+<td>0,3–4,0</td>
+<td>4,0</td>
+<td>Faktor auf Verstärkungen und Ratengrenzen des Tempo-Reglers; Anzeige nennt 1/(1,6 × Wert) s bis Vollgas</td>
+<td><code>ghost-gasdyn</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Linie_und_Querlage">Linie und Querlage</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich</th>
+<th>Standard</th>
+<th>Wirkung laut Code</th>
+<th>Schlüssel
+</th></tr>
+<tr>
+<td>NPC: Ideallinie</td>
+<td>0–200&#160;%</td>
+<td>200&#160;%</td>
+<td>Gewicht des Linienversatzes; über 100&#160;% wächst sein Anteil auf der Geraden von 35&#160;% bis 100&#160;%</td>
+<td><code>ghost-line</code>
+</td></tr>
+<tr>
+<td>NPC: Kurven öffnen</td>
+<td>0–100&#160;%</td>
+<td>0&#160;%</td>
+<td>Schranke für die Linienoptimierung: wie weit außen angefahren und verlassen wird</td>
+<td><code>ghost-exit</code>
+</td></tr>
+<tr>
+<td>NPC: Linienmodell</td>
+<td>Krümmung, Rundenzeit, Late Apex, 3-stufig, Fahrbahnmitte, Innen (gemittelt), Außen-Innen, Luuke-Linie, SIMULATOR</td>
+<td>SIMULATOR</td>
+<td>Zielfunktion der Linie; SIMULATOR sucht durch Probefahrten</td>
+<td><code>lineModel</code>
+</td></tr>
+<tr>
+<td>NPC: Querträgheit</td>
+<td>0,2–4,0</td>
+<td>4,0</td>
+<td>Höchste Änderung der Querlage in Bahnbreiten je Sekunde</td>
+<td><code>ghost-quertempo</code>
+</td></tr>
+<tr>
+<td>NPC: seitlicher Versatz</td>
+<td>0–200&#160;%</td>
+<td>200&#160;%</td>
+<td>Ausweichen nebeneinander (× 0,25) und Seite beim Überholen (× 0,8, höchstens 1)</td>
+<td><code>ghost-lateral</code>
+</td></tr>
+<tr>
+<td>NPC: eigene Spuren</td>
+<td>0–200&#160;%</td>
+<td>100&#160;%</td>
+<td>feste Spur ±0,16 je Auto ab zwei NPCs; in Kurven halbiert bis 100&#160;%</td>
+<td><code>ghost-lanes</code>
+</td></tr>
+<tr>
+<td>NPC: Zu zweit in Kurven innen/Mitte</td>
+<td>an/aus</td>
+<td>an</td>
+<td>nebeneinander: passende Seite innen (0,8), andere Mitte</td>
+<td><code>ghost-paar-kurve</code>
+</td></tr>
+<tr>
+<td>NPC: Querlage festhalten (Prüfstand)</td>
+<td>−1 bis +1</td>
+<td>aus (0)</td>
+<td>fester Wert direkt auf Byte 7, am Servoweg vorbei</td>
+<td><code>ghost-quer-test</code>
+</td></tr>
+<tr>
+<td>NPC: lernt von Runde zu Runde</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Zufallssuche auf Tempo- und Linienfaktor je Runde</td>
+<td><code>ghost-learn-pace</code>
+</td></tr>
+<tr>
+<td>Strecke beim Fahren lernen</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Layout aus den gemeldeten Codes nach der ersten geschlossenen Runde</td>
+<td><code>ghost-learn</code>
+</td></tr>
+<tr>
+<td>NPC braucht Streckencode</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>an: ohne gelesenen Code und ohne laufenden Zähler wird geparkt</td>
+<td><code>ghost-needcode</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Feld,_Rennwürze_und_Start"><span id="Feld.2C_Rennw.C3.BCrze_und_Start"></span>Feld, Rennwürze und Start</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich</th>
+<th>Standard</th>
+<th>Wirkung laut Code</th>
+<th>Schlüssel
+</th></tr>
+<tr>
+<td>NPC: Feld zusammenhalten</td>
+<td>an/aus</td>
+<td>an</td>
+<td>Feld-Staffel über alle Plätze, ab zwei NPCs</td>
+<td><code>ghost-leader</code>
+</td></tr>
+<tr>
+<td>NPC: Stärke der Staffel</td>
+<td>0–30&#160;%</td>
+<td>10&#160;%</td>
+<td>Erster × (1 − Wert), Letzter × (1 + Wert)</td>
+<td><code>ghost-leader-pct</code>
+</td></tr>
+<tr>
+<td>NPC: Rennhärte</td>
+<td>0–100&#160;%</td>
+<td>50&#160;%</td>
+<td>setzt fünf Überholgrößen gleichzeitig (Formel unten)</td>
+<td><code>ghost-hardness</code>
+</td></tr>
+<tr>
+<td>NPC: Feld auffächern</td>
+<td>0–100&#160;%</td>
+<td>0&#160;%</td>
+<td>Reichweiten für Windschatten und Angriff × (1 + Wert/100)</td>
+<td><code>ghost-feld</code>
+</td></tr>
+<tr>
+<td>NPC: Überholmanöver je Runde</td>
+<td>0–1</td>
+<td>0,1</td>
+<td>Guthaben je Runde und je vier Autos im Rennen</td>
+<td><code>ghost-ueber</code>
+</td></tr>
+<tr>
+<td>Rennwürze: Überholmanöver</td>
+<td>an/aus</td>
+<td>an</td>
+<td>Vier-Phasen-Manöver</td>
+<td><code>ghost-w-pass</code>
+</td></tr>
+<tr>
+<td>Rennwürze: Abstand halten</td>
+<td>an/aus</td>
+<td>an</td>
+<td>Zeitlücke mindestens 1,2&#160;s</td>
+<td><code>ghost-w-gap</code>
+</td></tr>
+<tr>
+<td>Rennwürze: Tagesform</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Zufallslauf ±7,5&#160;%, Schritt ±3&#160;% alle 2,6&#160;s</td>
+<td><code>ghost-w-form</code>
+</td></tr>
+<tr>
+<td>Rennwürze: Fahrfehler</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>5,5&#160;% je angebremster Kurve, 0,42–0,9&#160;s mit −45&#160;% Tempo</td>
+<td><code>ghost-w-fehler</code>
+</td></tr>
+<tr>
+<td>Rennwürze: Windschatten</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>bis +11&#160;% auf der Geraden bis 1,3 Kacheln</td>
+<td><code>ghost-w-slip</code>
+</td></tr>
+<tr>
+<td>Rennwürze: Verteidigen</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Vorausfahrender deckt mit 50&#160;%</td>
+<td><code>ghost-w-defend</code>
+</td></tr>
+<tr>
+<td>Rennwürze: Blaue Flagge</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Überrundeter lupft 12&#160;% und weicht 1,6&#160;s aus</td>
+<td><code>ghost-w-blau</code>
+</td></tr>
+<tr>
+<td>Rennwürze: Fahrercharakter</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>vier Faktoren je Auto in 1 ± 0,25, Boxenfenster ±2 Runden</td>
+<td><code>ghost-charakter</code>
+</td></tr>
+<tr>
+<td>Rennwürze: Startreaktion</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Reaktion 80–300&#160;ms, dann 2,5&#160;s mit 85&#160;%</td>
+<td><code>ghost-w-start</code>
+</td></tr>
+<tr>
+<td>NPC: Start je Startreihe versetzt</td>
+<td>an/aus</td>
+<td>an</td>
+<td>Reihe = floor(Startplatz/2), Wartezeit Reihe × Versatz</td>
+<td><code>ghost-staffel</code>
+</td></tr>
+<tr>
+<td>NPC: Versatz je Startreihe</td>
+<td>50–600&#160;ms</td>
+<td>250&#160;ms</td>
+<td>Wartezeit je Zweierreihe</td>
+<td><code>ghost-staffel-ms</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Abgang_und_Rückweg"><span id="Abgang_und_R.C3.BCckweg"></span>Abgang und Rückweg</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich</th>
+<th>Standard</th>
+<th>Wirkung laut Code</th>
+<th>Schlüssel
+</th></tr>
+<tr>
+<td>NPC: Rückweg nach einem Abgang</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>statt sofort zu parken bis 3&#160;s weiterfahren</td>
+<td><code>ghost-w-recovery</code>
+</td></tr>
+<tr>
+<td>NPC: Rückweg mit Lenkung (experimentell)</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Rangieren zur Kurveninnenseite bis 4,5&#160;s; nie beim Safety Car</td>
+<td><code>ghost-w-recovery-lenk</code>
+</td></tr>
+<tr>
+<td>NPC: Rückweg Zurücksetzen</td>
+<td>0–600&#160;ms</td>
+<td>250&#160;ms</td>
+<td>Rückwärtsschub vor jedem Versuch</td>
+<td><code>ghost-rw-zurueck-ms</code>
+</td></tr>
+<tr>
+<td>NPC: Rückweg Lenkimpuls</td>
+<td>200–1200&#160;ms</td>
+<td>600&#160;ms</td>
+<td>Räder voll innen, vorwärts</td>
+<td><code>ghost-rw-lenk-ms</code>
+</td></tr>
+<tr>
+<td>NPC: Rückweg weich</td>
+<td>0–100&#160;%</td>
+<td>0&#160;%</td>
+<td>Rampen und Pause bis 1&#160;s</td>
+<td><code>ghost-rw-weich</code>
+</td></tr>
+<tr>
+<td>NPC: Rückweg, Wartezeit vor dem 1. Versuch</td>
+<td>0–5000&#160;ms</td>
+<td>1000&#160;ms</td>
+<td>erst so lange normal weiterfahren</td>
+<td><code>ghost-rw-warte-ms</code>
+</td></tr>
+<tr>
+<td>NPC: Rückweg Tempo</td>
+<td>25–100&#160;%</td>
+<td>50&#160;%</td>
+<td>Gasgrenze mit eingeschlagenen Rädern</td>
+<td><code>ghost-rw-tempo</code>
+</td></tr>
+<tr>
+<td>NPC: Rückweg, Pause zwischen den Versuchen</td>
+<td>300–2000&#160;ms</td>
+<td>300&#160;ms</td>
+<td>normale Spurführung zwischen zwei Versuchen</td>
+<td><code>ghost-rw-pause-ms</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Boxenstopp,_Ton_und_Simulation"><span id="Boxenstopp.2C_Ton_und_Simulation"></span>Boxenstopp, Ton und Simulation</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich</th>
+<th>Standard</th>
+<th>Wirkung laut Code</th>
+<th>Schlüssel
+</th></tr>
+<tr>
+<td>NPC: Boxenstopp (experimentell)</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>NPCs fahren je nach Fälligkeit an die Box</td>
+<td><code>ghost-pit</code>
+</td></tr>
+<tr>
+<td>NPC: Boxenstopp im freien Fahren</td>
+<td>an/aus</td>
+<td>an</td>
+<td>erlaubt Stopps außerhalb von Rennen</td>
+<td><code>ghost-pit-free</code>
+</td></tr>
+<tr>
+<td>NPC: Boxenstopp-Länge</td>
+<td>3–10&#160;s</td>
+<td>5&#160;s</td>
+<td>Standzeit (plus Rammstrafe)</td>
+<td><code>ghost-pit-sec</code>
+</td></tr>
+<tr>
+<td>NPC: Boxenstopp frühestens nach</td>
+<td>2–20 Runden</td>
+<td>5</td>
+<td>untere Grenze des Fälligkeitsbandes</td>
+<td><code>ghost-pit-min</code>
+</td></tr>
+<tr>
+<td>NPC: Boxenstopp spätestens nach</td>
+<td>2–20 Runden</td>
+<td>9</td>
+<td>obere Grenze; wird nie kleiner als „frühestens“</td>
+<td><code>ghost-pit-max</code>
+</td></tr>
+<tr>
+<td>NPC-Motorsound (Optionen → Ton)</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Motorstimme je NPC, 40&#160;% leiser als das Fahrerauto</td>
+<td><code>ghost-sound</code>
+</td></tr>
+<tr>
+<td>NPC-Motorklang: alt</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>an: alte, leisere Knaller nur beim Gaswegnehmen</td>
+<td><code>setting-npc-klang-alt</code>
+</td></tr>
+<tr>
+<td>NPC-Motor (Garage)</td>
+<td>„wie Spieler 1“ oder ein Motor mit Aufnahmen</td>
+<td>wie Spieler 1</td>
+<td>Klang je Auto</td>
+<td><code>ghost-motor</code>, <code>car.ghostMotor</code>
+</td></tr>
+<tr>
+<td>Rennen simulieren: Anzahl NPCs</td>
+<td>2–6</td>
+<td>4</td>
+<td>Attrappen in der Garage</td>
+<td><code>sim-ghosts</code>
+</td></tr>
+<tr>
+<td>Rennen simulieren: Anzahl Runden</td>
+<td>1, 2, 3, 5, 10</td>
+<td>3</td>
+<td>Renndauer</td>
+<td><code>sim-laps</code>
+</td></tr>
+<tr>
+<td>Rennen simulieren: Doppelte Geschwindigkeit</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Abspielen ×2, Rundenzeiten bleiben</td>
+<td><code>sim-fast</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Ablauf_eines_Takts:_ghostTick">Ablauf eines Takts: ghostTick</h3></div>
+<p><code>ghostTick(car)</code> läuft für jeden NPC einmal je Sendetakt (45&#160;ms).<sup id="cite&#95;ref-3" class="reference"><a href="#cite_note-3"><span class="cite-bracket">&#91;</span>3<span class="cite-bracket">&#93;</span></a></sup> Der Ablauf, gekürzt auf die tragenden Schritte:
+</p>
+<ol><li><b>Zeitschritt</b> dt aus der Uhr, höchstens 0,25&#160;s. Läuft der Zieleinlauf, übernimmt <code>ghostFinishTick</code> und der Takt endet hier.</li>
+<li><b>Sonderrollen</b>: Safety Car (Neustart, Heimweg) und Reinigungswagen bekommen ihren Zusatztick (siehe <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a>).</li>
+<li><b>Weg integrieren</b>: <code>kachelWeg += |Tempo| × KMH_TO_UNITS × dt</code> aus dem Modelltempo.</li>
+<li><b>Motor einstellen</b>: <code>ghostMaxMotor</code> (Rückschaltdrehzahl, MAX-Beschleunigung) und Reifengriff je Wetter.</li>
+<li><b>Kachelwechsel?</b> Hat Byte 11 gewechselt, werden Dauer und Weg der verlassenen Kachel gelernt, <code>tileIndex</code> erhöht, bei Index 0 eine Runde gezählt (und der Lernschritt bewertet), Ort abgeglichen und die Fälligkeit des Boxenstopps geprüft.</li>
+<li><b>Boxen- und Randhalt-Zustandsmaschinen</b> weiterschalten (<code>pitTick</code>, <code>randHaltTick</code>).</li>
+<li><b>Abgang prüfen</b>: liest das Auto <code>0x00</code> länger als die Schwelle (Gerade 900&#160;ms, Kurve 1200&#160;ms, Haarnadel 1800&#160;ms, in der Aufstellung doppelt) oder zählt es unplausibel schnell weiter (Kachelmittel unter 250&#160;ms, dann schon nach 300&#160;ms), wird es geparkt oder der Rückweg versucht. Meldet ein Auto bei Zieltempo über 0,2 drei Sekunden lang gar nichts Neues, gilt es als „stumm“ und wird ebenfalls geparkt.</li>
+<li><b>Zieltempo</b> berechnen (nächster Abschnitt).</li>
+<li><b>Tempo-Regler</b> (PI) liefert Gas und Bremse, dazu Vorsteuerung aus dem Bremsprofil und, beim Boxenstopp, Vollbremsung am Regler vorbei.</li>
+<li><b>Querlage</b> berechnen und ratenbegrenzen.</li>
+<li><b>Fahrzeugmodell</b> mit Lenkung, Gas und Bremse einen Schritt rechnen; daraus kommen Servowinkel und Motor-PWM.</li>
+<li><b>Lichter</b> setzen (Lichthupe beim Überholen, Doppelblitz an der Box, Blinken unter Gelb) und das Paket mit <code>writeToCar</code> senden. Im Leitplanken-Modus kommen in Byte 16 bis 18 die Codes der nächsten drei Teile mit.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Zieltempo_je_Kachel:_die_Kette">Zieltempo je Kachel: die Kette</h3></div>
+<p>Das Zieltempo entsteht als Produkt mehrerer Faktoren, danach greifen Böden und Deckel in fester Reihenfolge:<sup id="cite&#95;ref-4" class="reference"><a href="#cite_note-4"><span class="cite-bracket">&#91;</span>4<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<pre>v0  = Stufe(Kachel)                         (ghostStufeFaktor)
+v1  = v0 × Lernfaktor.pace × Streuung       (nicht bei MAX)
+v2  = Gelb: min(v1, Gelbziel) × Abstand     (nur unter Gelb, siehe Safety-Car-Seite)
+v3  = v2 × Würze.faktor × Reihe             (Würze vor einer Haarnadel höchstens 1)
+v4  = v3 × (1 − A)                          A = max(A_Profil, A_Kachel), nicht bei MAX außerhalb der Haarnadel
+v5  = min(v4, Grundtempo × (1 − A))         nur wenn A &gt; 0
+v6  = v5 × 0,95                             nur in Kurven mit nahem Nachbarn
+v7  = v6 × Staffel × Reifen                 Staffel vor Haarnadel höchstens 1
+v8  = Einführungsrunde, Aufstellung, Startversatz, Startreaktion, Anfahrrampe
+v9  = max(v8, min(0,37, Grundtempo))        Mindesttempo (GHOST_FAHR_MIN)
+v10 = min(v9, Haarnadel-Höchsttempo)        in Haarnadel, Engstelle und 2 Teilen davor
+v11 = Boxen- und Randhalt-Ziel überschreibt alles
+</pre>
+<p>Die Größen im Einzelnen:
+</p>
+<ul><li><b>Stufe(Kachel)</b>: Auf einer Geraden ist sie Stufenwert ÷ 0,55 × Grundtempo (bei Grundtempo 0,55 also genau 0,45, 0,55 oder 0,65); steht das Auto auf einem Kurvencode, gilt für alle Stufen das Grundtempo. Für MAX liefert <code>ghostMaxTempo</code> den Reglerwert der Teilart (Gerade, Radius&#160;1, Radius&#160;2, Haarnadel) unter dem Auto; beim Bremspunkt „Schiene“ das Minimum aus diesem und dem nächsten Teil, begrenzt auf 0,05 bis 1.</li>
+<li><b>Lernfaktor</b> <code>pace</code>: 1, solange das Lernen aus ist; sonst 0,75 bis 1,30 (siehe unten).</li>
+<li><b>Streuung</b>: 1 + p/100 × z mit z zufällig in [−1;&#160;1] je Auto und Start; nur auf Geraden.</li>
+<li><b>Würze</b>: Produkt aus Tagesform, Fahrfehler, Windschatten, Angriffsschub, Blaue-Flagge-Abschlag und Abstandhalter (siehe Überholmodell).</li>
+<li><b>A_Kachel</b> = min(0,85; curveSlow × Charakter.kurvenAbzug × Enge). Die Enge ist das Maximum aus dem Teil unter dem Auto und dem engsten Teil in Reichweite: vor einer normalen Kurve ein Teil, vor Haarnadel oder Engstelle zwei Teile. Haarnadel und Engstelle zählen doppelt (Enge 2).</li>
+<li><b>A_Profil</b> = min(0,85; 2 × curveSlow × Charakter.kurvenAbzug × bd), wobei bd der Bremsbedarf der berechneten Linie an der aktuellen Stelle ist (0 bis 1). Er ist stetig und sitzt an der richtigen Stelle innerhalb der Kachel. Es gilt das <b>Maximum</b> beider Abzüge, nicht die Summe: zwei Abzüge für dieselbe Sache würden das Auto zum Stehen bringen.</li>
+<li><b>Deckel v5</b>: damit alle Stufen gleich schnell in die Kurve gehen, wird vor und in Kurven auf Grundtempo × (1 − A) begrenzt. Ohne ihn käme ein schneller NPC mit 0,65 × 0,8 = 0,52 statt 0,44 in die Kurve.</li>
+<li><b>Staffel</b> siehe nächster Abschnitt; unter Gelb, in der Einführungsrunde und für MAX auf reinen Geraden (Enge 0) gleich 1.</li>
+<li><b>Reifen</b>: basis × √(Griff ÷ Griff der passenden Mischung), basis = 1 + (0,85 − 1) × Nässe², mit der Grifftabelle trocken (Slick 1,00 / Regenreifen 0,88) und nass (Slick 0,45 / Regenreifen 0,80). Trocken mit Slicks ergibt genau 1.</li>
+<li><b>Mindesttempo</b> 0,37 (Δ&#160;47), aber nie über dem eingestellten Grundtempo; nicht bei Randhalt, Box, Anfahrrampe, Einführungsrunde und Aufstellung. Liest das Auto 250 bis 700&#160;ms lang <code>0x00</code>, hebt ein kurzer Lese-Schub auf 0,40.<sup id="cite&#95;ref-5" class="reference"><a href="#cite_note-5"><span class="cite-bracket">&#91;</span>5<span class="cite-bracket">&#93;</span></a></sup></li>
+<li><b>Haarnadel-Höchsttempo</b> gilt zuletzt und damit auch über dem Mindesttempo: in der Haarnadel endet jede Kette bei höchstens 0,35.<sup id="cite&#95;ref-6" class="reference"><a href="#cite_note-6"><span class="cite-bracket">&#91;</span>6<span class="cite-bracket">&#93;</span></a></sup></li></ul>
+<p>Die Gründe für die Reihenfolge stehen im Code: Die Staffel stand früher hinter dem Abstandhalter und multiplizierte dessen Abzug weg, sodass ein Auto, das gerade Abstand hielt, als Letzter wieder hochgezogen wurde und auffuhr. Deshalb darf sie, solange der Abstandhalter greift, nur noch bremsen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Die_Stufen_und_MAX_im_Detail">Die Stufen und MAX im Detail</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Stufe</th>
+<th>Gerade</th>
+<th>60°-Kurve (Enge 1)</th>
+<th>Haarnadel (Enge 2)
+</th></tr>
+<tr>
+<td>einfach</td>
+<td>0,45</td>
+<td>0,44</td>
+<td>0,35
+</td></tr>
+<tr>
+<td>mittel</td>
+<td>0,55</td>
+<td>0,44</td>
+<td>0,35
+</td></tr>
+<tr>
+<td>schnell</td>
+<td>0,65</td>
+<td>0,44</td>
+<td>0,35
+</td></tr>
+<tr>
+<td>MAX (Standardregler)</td>
+<td>1,00</td>
+<td>0,52</td>
+<td>0,35
+</td></tr></tbody></table>
+<p>Werte bei Grundtempo 55&#160;%, Kurvendrosselung 20&#160;%, ohne Würze, Staffel 1. In der Haarnadel wäre die Rechnung 0,55 × (1 − 0,4) = 0,33, das Mindesttempo hebt auf 0,37, das Haarnadel-Höchsttempo senkt auf 0,35.
+</p><p><b>MAX-Motormodell (seit 1.2.5).</b> Das Fahrzeugmodell eines NPCs ist eine Kopie der Abstimmung von Spieler&#160;1 (ohne Tankgewicht, Reifenverschleiß, Lenkexpo und Tempo-Lenkbegrenzung, immer Automatik). Das gesendete Gas ist der Tempoanteil dieses Modells. Auf einer 43-cm-Geraden, die bei diesen Tempi 0,3 bis 0,5&#160;s dauert, kam ein MAX-NPC damit kaum über 0,5, weil der Schub mit dem Tempo fällt und jedes Hochschalten 120&#160;ms ohne Antrieb kostet. <code>ghostMaxMotor</code> setzt deshalb für MAX:
+</p>
+<div class="mw-highlight mw-highlight-lang-javascript mw-content-ltr" dir="ltr"><pre><span></span><span class="c1">// src/90-ghosts.js, ghostMaxMotor()</span>
+<span class="nx">e</span><span class="p">.</span><span class="nx">config</span><span class="p">.</span><span class="nx">downshiftRpm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">NPC_RUECKSCHALT_RPM</span><span class="p">;</span><span class="w">          </span><span class="c1">// 5200/min, für alle NPCs</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">ghostIstMax</span><span class="p">(</span><span class="nx">car</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nx">e</span><span class="p">.</span><span class="nx">config</span><span class="p">.</span><span class="nx">accelerationFactor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">g</span><span class="p">.</span><span class="nx">basisBeschl</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="nx">ghostCfg</span><span class="p">.</span><span class="nx">maxBeschl</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="mf">1</span><span class="p">);</span>
+<span class="w">  </span><span class="nx">e</span><span class="p">.</span><span class="nx">config</span><span class="p">.</span><span class="nx">shiftMs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0</span><span class="p">;</span><span class="w">                               </span><span class="c1">// keine Schaltpause</span>
+<span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nx">e</span><span class="p">.</span><span class="nx">config</span><span class="p">.</span><span class="nx">accelerationFactor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">g</span><span class="p">.</span><span class="nx">basisBeschl</span><span class="p">;</span><span class="w">        </span><span class="c1">// zurück auf die Kopie</span>
+<span class="w">  </span><span class="nx">e</span><span class="p">.</span><span class="nx">config</span><span class="p">.</span><span class="nx">shiftMs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">g</span><span class="p">.</span><span class="nx">basisShiftMs</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+<p>Für MAX gelten außerhalb der Haarnadel weder Kurvenabzug noch der Deckel auf das Grundtempo, und Lernfaktor, Streuung und (auf Geraden) die Staffel nehmen ihm kein Tempo. Haarnadel, Engstelle und die zwei Teile davor, Mindesttempo, gelbe Flagge und Einführungsrunde gelten unverändert. Beim Bremspunkt „Beginn des Kurventeils“ wechselt das Zieltempo erst, wenn das Auto auf dem Kurvencode ist.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Feld-Staffel">Feld-Staffel</h3></div>
+<p><code>ghostFeldStaffel</code> sortiert alle laufenden NPCs nach ihrem geschätzten Gesamtfortschritt (vorn zuerst) und gibt jedem Platz einen Faktor:<sup id="cite&#95;ref-7" class="reference"><a href="#cite_note-7"><span class="cite-bracket">&#91;</span>7<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<pre>lage    = 2 × platz / (n − 1) − 1          (−1 für den Ersten, +1 für den Letzten)
+Staffel = 1 + leaderBrakePct × lage
+</pre>
+<ul><li>platz: 0 für den Führenden, n − 1 für den Letzten</li>
+<li>n: Zahl der laufenden NPCs (ab zwei; bei einem gibt es 1)</li>
+<li>leaderBrakePct: Regler „Stärke der Staffel“, Standard 0,10</li></ul>
+<p>Bei drei NPCs und 10&#160;% fährt der Erste mit 0,90, der Zweite mit 1,00, der Dritte mit 1,10. Das mittlere Tempo des Feldes bleibt gleich, deshalb ist es kein versteckter Langsamer-Schalter.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Tempo-Regler">Tempo-Regler</h3></div>
+<p><code>ghostSpeedControl(g, ziel, v, dt)</code> mit v = Modelltempo ÷ Höchsttempo:<sup id="cite&#95;ref-8" class="reference"><a href="#cite_note-8"><span class="cite-bracket">&#91;</span>8<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<pre>e      = ziel − v
+I_neu  = clamp(I + e × 1,2 × dt, 0, 1)
+wenn |e| &lt; 0,015:   Gas_roh = I_neu,                 Bremse_roh = 0
+sonst:              Gas_roh = clamp(I_neu + e × 2,2 × d),  Bremse_roh = clamp(−e × 3,0 × d)
+wenn Bremse_roh &gt; 0,02:      I_neu = I × (1 − min(1, 3,0 × dt))      (Anti-Windup 1)
+sonst wenn Gas_roh = 1 und e &gt; 0:   I_neu = I                        (Anti-Windup 2)
+Gas    = Rate(Gas_alt → Gas_roh, höchstens 1,6 × d × dt je Takt)
+Bremse = Rate(Bremse_alt → Bremse_roh, höchstens 4,0 × d × dt je Takt)
+</pre>
+<ul><li>d: Regler „Brems- und Gasverhalten“ (<code>gasDynamik</code>, Standard 4,0, mindestens 0,1)</li>
+<li>0,015: Totband (<code>GHOST_DEADBAND</code>), 2,2 und 3,0: Verstärkungen für Gas und Bremse, 1,2/s: I-Verstärkung, 3,0/s: Abbau des I-Anteils beim Bremsen, 1,6/s und 4,0/s: Ratengrenzen</li></ul>
+<p>Der I-Anteil bleibt im Totband stehen. Vorher fiel das Auto im Totband auf null Gas und erzeugte einen Sägezahn um den Sollwert. Bremsen ist absichtlich entschlossener als Gasgeben.
+</p><p>Zusätzlich gibt es eine <b>Vorsteuerung</b>: Ist das Auto schneller als ziel + 0,015 und meldet die Linie Bremsbedarf bd, gilt mindestens Bremse = min(1; bd × curveSlow × 1,5), und bei Bremse über 0,02 wird das Gas auf null gesetzt.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Ideallinie,_Phase_und_Querlage"><span id="Ideallinie.2C_Phase_und_Querlage"></span>Ideallinie, Phase und Querlage</h3></div>
+<p><b>Woher die Linie kommt.</b> Mit einem Layout ab drei Teilen rechnet <code>ghostLine()</code> aus der Mittellinie (rund 180 Abtastpunkte je Strecke) eine Linie als Querversatz α je Punkt, dazu ein Bremsprofil. Gewählt wird sie über das Linienmodell; dieselbe Linie zeichnet der <a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a>. Das Modell <b>SIMULATOR</b> (seit 1.0.14) fährt zuerst die acht anderen Linien als Saat und dann Abwandlungen davon (eine weiche „Beule“ mit Kosinusprofil über 6, 10 oder 18 Punkte, oder eine gerade „Sehne“ über 8 bis 41 Punkte), jeweils drei Runden mit einer stummen Instanz desselben Fahrzeugmodells, gewertet werden Runde&#160;2 und&#160;3. Die sechs besten bleiben im Pool; nach höchstens 200 Auswertungen gilt die schnellste. Die Suche pausiert im Rennen, wird je Strecke und Fahrgrenzen gespeichert, und bis sie fertig ist, gilt die Luuke-Linie.<sup id="cite&#95;ref-9" class="reference"><a href="#cite_note-9"><span class="cite-bracket">&#91;</span>9<span class="cite-bracket">&#93;</span></a></sup>
+</p><p><b>Phase auf der Kachel.</b> Der Linienwert wird über (Kachel, Phase) nachgeschlagen. Die Phase kommt bevorzugt aus dem <b>Weg</b>:
+</p>
+<pre>Phase_Weg  = clamp(kachelWeg / Weg_soll(Typ), 0, 1)
+Phase_Zeit = clamp((jetzt − Kachelbeginn) / Dauer(Typ), 0, 1)     (Rückfall)
+</pre>
+<p>Weg_soll und Dauer sind gleitende Mittelwerte je Kacheltyp mit Gewicht 0,3 für den neuen Wert (neu = 0,7 × alt + 0,3 × Messung). Eine Dauer zählt nur zwischen 250 und 4000&#160;ms, ein Weg nur zwischen dem 0,4- und 2,5-Fachen der geometrischen Kachellänge, und genutzt wird ein Typ erst ab zwei Messungen; vorher gilt das Gesamtmittel (Vorgabe 800&#160;ms) × Länge des Typs ÷ mittlere Kachellänge.<sup id="cite&#95;ref-10" class="reference"><a href="#cite_note-10"><span class="cite-bracket">&#91;</span>10<span class="cite-bracket">&#93;</span></a></sup> Der Weg ist selbstkalibrierend: Ein konstanter Skalenfehler im Modelltempo kürzt sich in Weg ÷ erwartetem Weg heraus. Gemessen gegen die wahre Phase der Rennsimulation sank der mittlere Fehler von 0,097 (Uhr) auf 0,073 (Weg), und der Anteil der Takte, in denen die Phase am Deckel 1 klebte, von 6,2&#160;% auf 0.<sup id="cite&#95;ref-11" class="reference"><a href="#cite_note-11"><span class="cite-bracket">&#91;</span>11<span class="cite-bracket">&#93;</span></a></sup>
+</p><p><b>Ohne Layout</b> gibt <code>ghostLineFromCode</code> eine Dreiecksform je Kurvenkachel:
+</p>
+<pre>apex = 0,62 (Haarnadel) bzw. 0,5 (sonst)
+L(ph) = −dir + 2·dir·ph/apex                     für ph &lt; apex
+L(ph) =  dir − 2·dir·(ph − apex)/(1 − apex)      sonst
+</pre>
+<p>dir ist +1 in Rechtskurven und −1 in Linkskurven, +dir ist innen. Bei ph = 0 steht das Auto außen (−dir), im Scheitel innen (+dir), am Ausgang wieder außen.
+</p><p><b>Gewünschte Querlage.</b> Im Leitplanken-Modus (Standard) gilt die erste zutreffende Quelle:
+</p>
+<ol><li>Rückweg, Box, Vorbeifahrt am Safety Car oder Aufstellung (fester Wert),</li>
+<li>unter Gelb 0 (mittig),</li>
+<li>beim Überholen oder Ausweichen die Seite × min(1; seitlicher Versatz × 0,8),</li>
+<li>zu zweit in einer Kurve die Paarvorgabe (0,8 innen, 0 Mitte),</li>
+<li>sonst die Ideallinie: L × Ideallinie × G_Linie × (0,15, wenn das Auto gerade jemandem ausweicht, sonst 1).</li></ol>
+<p>Dazu kommen Ausweichverteilung (bias × seitlicher Versatz × 0,25), eigene Spur (±1 × Spuren × 0,16 × G_Spur) und beim Fahrfehler 0,35 nach außen. Die Gewichte hängen von der „Kurvenmischung“ m ab (0 Gerade, 1 Kurve, mit 350&#160;ms Nachlauf):
+</p>
+<pre>ü(x)     = clamp(x − 1, 0, 1)
+G_Linie  = g + (1 − g)·m      mit g = 0,35 + 0,65·ü(Ideallinie)
+G_Spur   = 1 − 0,5·(1 − ü(Spuren))·m
+</pre>
+<p>Bei Ideallinie 200&#160;% ist g = 1: Die Linie wirkt auch auf der Geraden voll.
+</p><p><b>Querträgheit und querSoll.</b> Die Summe wird ratenbegrenzt, und zwar abhängig vom Tempo, weil ein stehendes Auto nicht zur Seite rückt:
+</p>
+<pre>tempoAnteil = min(1, v / 0,35)
+querMax     = Querträgheit × dt × tempoAnteil         (Bahnbreiten je Takt)
+querIst     = querIst_alt ± höchstens querMax
+querSoll    = querSoll + (querRoh − querSoll) × (1 − 0,75^(dt/0,045)) × tempoAnteil
+</pre>
+<p><code>querIst</code> geht als Lenkwunsch ins Fahrzeugmodell; <code>querSoll</code> ist die Schätzung, wo das Auto tatsächlich steht. Andere Autos lesen sie, um ihre Überholseite zu wählen. Sie ist eine Modellgröße, keine Messung.<sup id="cite&#95;ref-12" class="reference"><a href="#cite_note-12"><span class="cite-bracket">&#91;</span>12<span class="cite-bracket">&#93;</span></a></sup>
+</p><p>Messungen aus der Technik-Dokumentation: Das Auto liest die Schiene auch bei vollem Lenkanschlag (in 67&#160;830 Meldungen mit Code vier Abrisse, alle bei kleineren Lenkwerten). Für die <b>Form</b> der Linie ist 100&#160;% am besten (Spanne des Lenkbytes in Kurven 55 von 127); bei 200&#160;% wird das Auto schräger (Mittel 106 statt 89), aber die Linie flacher (Spanne 36), weil 39&#160;% der Anforderung am Anschlag abgeschnitten werden.<sup id="cite&#95;ref-13" class="reference"><a href="#cite_note-13"><span class="cite-bracket">&#91;</span>13<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Überholmodell"><span id=".C3.9Cberholmodell"></span>Überholmodell</h3></div>
+<p>Ein Angriff ist eine Zustandsmaschine in <code>ghostSpice()</code>:<sup id="cite&#95;ref-14" class="reference"><a href="#cite_note-14"><span class="cite-bracket">&#91;</span>14<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Zustand</th>
+<th>Querversatz</th>
+<th>Bedingung</th>
+<th>nächster Zustand
+</th></tr>
+<tr>
+<td>(frei)</td>
+<td>Ideallinie</td>
+<td>Vordermann ≤ Reichweite (1,3 Kacheln), seit 900&#160;ms dicht, Würfelwurf alle 1200&#160;ms mit p = 0,45 trifft, alle Sperren frei</td>
+<td>ansage
+</td></tr>
+<tr>
+<td>ansage</td>
+<td>0</td>
+<td>570&#160;ms vorbei (zwei Lichthupen: 220&#160;ms an, 130&#160;ms aus)</td>
+<td>raus
+</td></tr>
+<tr>
+<td>raus</td>
+<td>volle Seite</td>
+<td>400&#160;ms vorbei</td>
+<td>vorbei
+</td></tr>
+<tr>
+<td>vorbei</td>
+<td>volle Seite, Tempo × 1,07</td>
+<td>eigener Fortschritt &gt; Fortschritt des Ziels + 0,45 Kacheln</td>
+<td>rein
+</td></tr>
+<tr>
+<td>raus/vorbei</td>
+<td>–</td>
+<td>Ziel steht auf der Angriffsseite (Querlage ≥ 0,30): einmal Seite wechseln, falls frei, sonst Abbruch</td>
+<td>raus (neu) oder frei + 6&#160;s Sperre
+</td></tr>
+<tr>
+<td>raus/vorbei</td>
+<td>–</td>
+<td>5&#160;s ohne Erfolg</td>
+<td>frei + 6&#160;s Sperre
+</td></tr>
+<tr>
+<td>rein</td>
+<td>linear von Seite auf 0</td>
+<td>700&#160;ms vorbei</td>
+<td>frei
+</td></tr></tbody></table>
+<p><b>Sperren</b>: kein Angriff in der Einführungsrunde, unter Gelb, auf das Safety Car, mit Haarnadel oder Engstelle in den nächsten vier Teilen, ohne freie Seite (ein naher Nachbar mit Querlage ≥ 0,30 belegt seine Seite), wenn schon zu viele angreifen (höchstens max(1; ⌊Autos/4⌋) gleichzeitig) und im Rennen ohne Überholguthaben. Das Safety Car greift nie an.
+</p><p><b>Seitenwahl</b>: die Seite, auf der der Vordermann laut seiner geschätzten Querlage nicht ist; sind beide frei, die Innenseite der nächsten Kurve in vier Teilen. Der Angreifer schreibt dem Vordermann einen Ausweichauftrag (andere Seite, 2600&#160;ms). Mit „Verteidigen“ deckt dieser in 50&#160;% der Fälle (× Charakter.verteidigung) stattdessen dieselbe Seite; Überrundete verteidigen nicht. Während des Manövers <b>ersetzt</b> der Versatz die Ideallinie, statt sich zu ihr zu addieren; vorher hoben sich die Kräfte auf und die Autos schoben sich „ewig gegenseitig an“.
+</p><p><b>Überholguthaben</b>: Alle 200&#160;ms wächst ein gemeinsames Konto um Rate × (Autos/4) × d, wobei d der Zuwachs des mittleren Rundenfortschritts ist (gedeckelt 0,5); das Konto ist auf 1,5 begrenzt, jeder Angriff kostet 1. Bei Standardrate 0,1 und vier Autos gibt es so etwa alle zehn Runden einen Angriff im Feld.
+</p><p><b>Rennhärte</b> setzt fünf Größen aus einem Wert i = Regler/100:
+</p>
+<pre>zu  = i / 0,5            (0 … 2)
+von = 1,5 − i            (1,5 … 0,5)
+p_Angriff   = 0,45 × zu          Wartezeit vor Angriff = 900 ms × von
+Zeitlücke   = 1,2 s × von        Abstand (Rückfall)    = 1,2 Kacheln × von
+Reichweite  = 1,3 Kacheln × von
+</pre>
+<p><b>Abstand halten</b> rechnet mit der <b>Zeitlücke</b> zum Vordermann (Differenz der Zeitstempel, zu denen beide dieselbe Kachel erreichten, höchstens 5&#160;s):
+</p>
+<pre>nötig = 1,2 s + 0,30 × max(0, Annäherung)
+wenn Lücke &lt; nötig:  Würze × (1 − 0,26 × (1 − Lücke/nötig))
+</pre>
+<p>Die Annäherung ist die geglättete Abnahme des Kachelabstands je Sekunde (Glättung 0,3). Fehlt die Zeitlücke, gilt derselbe Ausdruck in Kacheln mit 1,2 Kacheln und 0,5 je Kachel/s. Der Wert 1,2&#160;s ist gemessen gewählt: Bei 0,35&#160;s waren die Autos 86&#160;% der Zeit in Berührung, bei 1,2&#160;s 61&#160;%, bei 13&#160;% weniger Überholmanövern.
+</p><p>Die weiteren Würz-Zutaten: <b>Windschatten</b> × (1 + 0,11 × (1 − Abstand ÷ (1,3 × Auffächern))) nur auf Geraden; <b>Fahrfehler</b> mit Wahrscheinlichkeit 0,055 × Charakter × (1 + 0,8 × Nässe) × (1,5 bei falschen Reifen) × (1,3 mit Verfolger in 1,6 Kacheln), einmal je Kurve gewürfelt; <b>Blaue Flagge</b> × 0,88 und Ausweichen nach außen für 1600&#160;ms, wenn ein Auto mit mehr Runden innerhalb 1,6 Kacheln folgt; <b>Tagesform</b> als Zufallslauf. Vor und in einer Haarnadel (vier Teile Sicht) darf die Würze nur bremsen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Ausweichen,_Paare_und_Reihen"><span id="Ausweichen.2C_Paare_und_Reihen"></span>Ausweichen, Paare und Reihen</h3></div>
+<ul><li><b>Ausweichverteilung</b> (<code>ghostAssignBias</code>, alle 200&#160;ms): Autos, deren Abstand höchstens 0,6&#160;s beträgt, bilden Gruppen; jede Gruppe wird nach aktueller Querlage sortiert und gleichmäßig über die Breite verteilt (bei zwei −1/+1, bei drei −1/0/+1). Der Zielwert wird in Schritten von 0,25 je 200&#160;ms angefahren.</li>
+<li><b>Paare</b> (seit 1.0.31): Zwei Autos in höchstens 1,0 Kachel Abstand (lösen ab 1,4) fahren links/rechts mit 0,9, in der Kurve außen nur 0,55, nicht in Haarnadelzonen und nur bei Grün.</li>
+<li><b>Reihe</b>: hinter einem fremden Paar und vor der Haarnadel fährt man hintereinander (Abstand 1,0 Kachel, Faktor bis 0,6).</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Lernen_von_Runde_zu_Runde">Lernen von Runde zu Runde</h3></div>
+<p>Mit „lernt von Runde zu Runde“ führt jedes Auto eine einfache Zufallssuche (eine (1+1)-Evolutionsstrategie):<sup id="cite&#95;ref-15" class="reference"><a href="#cite_note-15"><span class="cite-bracket">&#91;</span>15<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<pre>w       = (U1 + U2)/2,   U gleichverteilt in [−1; 1]     (Dreiecksverteilung)
+pace'   = clamp(pace + w·σ, 0,75, 1,30)
+push'   = clamp(push + w·σ, 0,40, 1,25)
+Runde schneller und ohne Abgang:  übernehmen, σ × 1,15 (höchstens 0,10)
+Runde langsamer:                  verwerfen, σ × 0,9 (mindestens 0,012)
+Abgang:                           verwerfen, pace × 0,97, push × 0,95, σ × 0,6
+</pre>
+<p>σ beginnt bei 0,055. <code>pace</code> multipliziert das Zieltempo, <code>push</code> den Linienversatz. Zusätzlich deckelt eine Lenkgrenze aus den Messungen des Querablage-Prüfstands den Linienwert (ohne Messung 1,0).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Bremspunkt,_Kurvendrosselung_und_Haarnadel"><span id="Bremspunkt.2C_Kurvendrosselung_und_Haarnadel"></span>Bremspunkt, Kurvendrosselung und Haarnadel</h3></div>
+<ul><li><b>Kurvendrosselung</b>: siehe A_Kachel; vor einer 60°-Kurve ab einem Teil, vor Haarnadel/Engstelle ab zwei Teilen.</li>
+<li><b>Bremsprofil</b>: A_Profil und Vorsteuerung aus der Linie, stetig innerhalb der Kachel.</li>
+<li><b>Kein fester Bremspunkt</b>: Ein Bremspunkt nach der Lehrbuchformel a = (v² − v_Ziel²)/(2s) wurde gebaut und verworfen. Der nötige Bremsweg liegt bei 1,4 bis 2,0&#160;cm, also rund 4&#160;% einer 43-cm-Kachel; er fällt immer in den Takt, in dem der Regler ohnehin bremst. Rundenzeit 16,227 gegen 16,240&#160;s, im Rauschen.<sup id="cite&#95;ref-16" class="reference"><a href="#cite_note-16"><span class="cite-bracket">&#91;</span>16<span class="cite-bracket">&#93;</span></a></sup></li>
+<li><b>Haarnadel-Höchsttempo</b>: 0,35 in Haarnadel, Engstelle und den zwei Teilen davor, als letzte Grenze (seit 1.1.37). Die alte Grenze (0,55 × 0,6 = 0,33) wurde vom Mindesttempo 0,37 überstimmt; „Die NPCs fliegen mir in der Haarnadel alle paar Runden raus“ war die Meldung dazu.</li>
+<li><b>MAX-Bremspunkt</b>: siehe oben.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Startaufstellung_und_Start">Startaufstellung und Start</h3></div>
+<p><b>Startplätze.</b> <code>aufstellZielOrt(platz)</code> rechnet einen Ort in Kacheln (Ganzzahl = Teil, Rest = Anteil) relativ zum ersten Start/Ziel-Teil s:
+</p>
+<pre>Ort(k) = s − 1 + Seite(k) − ⌊k/2⌋ × 0,5
+Seite(k) = 0,15 (rechts, gerade k) bzw. 0,0 (links, ungerade k)
+</pre>
+<p>Fällt ein Platz in Haarnadel oder Engstelle, rücken er und alle dahinter um ganze Teile zurück. So stehen zwei Autos je Reihe, jede Reihe eine halbe Kachel hinter der vorigen, ab Reihe&#160;2 vier Autos je Teil. Die NPCs fahren mittig im Aufstelltempo (Formationstempo 0,35, in Kurven × 0,9, in Haarnadeln × 0,8, Boden 0,28) und parken mit der aufgenommenen Einparkfolge des Safety Cars, für linke Plätze gespiegelt und mit 70&#160;% ihres Gases (Renneinstellung „Einparken: Gas der Safety-Car-Folge“). Autos innerhalb von zwei Kacheln starten im Abstand von 500&#160;ms; Zeitgrenze 60&#160;s plus 500&#160;ms je Auto.<sup id="cite&#95;ref-17" class="reference"><a href="#cite_note-17"><span class="cite-bracket">&#91;</span>17<span class="cite-bracket">&#93;</span></a></sup>
+</p><p><b>Start.</b> Mit „Start je Startreihe versetzt“ wartet Reihe r = ⌊Startplatz/2⌋ ab Grün r × 250&#160;ms. Mit „Startreaktion“ kommt je Auto eine zufällige Reaktionszeit von 80 bis 300&#160;ms dazu und für die folgenden 2,5&#160;s ein Faktor 0,85. In den ersten 600&#160;ms nach dem Scharfschalten bleibt die Lenkung gerade, und drei Sekunden lang verhindert eine „Gnade“, dass das Anrollen als Abgang zählt.
+</p><p><b>Nach dem Rennen.</b> Auf der Bahn mit Layout fahren die NPCs zurück in die Startaufstellung: Platz = Zahl der menschlichen Fahrer + Reihenfolge des Zieleinlaufs. Ohne diese Bedingungen rollen sie aus: der Erste min(5; n − 1 − Platz) Kacheln weit, mindestens 700&#160;ms, höchstens 4000&#160;ms, abwechselnd links und rechts am Rand, dann 450&#160;ms Bremse und dreimal Blinken.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="NPC-Boxenstopp_(in_Arbeit)"><span id="NPC-Boxenstopp_.28in_Arbeit.29"></span>NPC-Boxenstopp (in Arbeit)</h3></div>
+<p><b>Fälligkeit.</b> Nach jedem Stopp zieht der NPC
+</p>
+<pre>fällig = Runden + max(1, lo + Zufall(0 … hi − lo) + Charakter.pitVersatz)
+</pre>
+<p>mit lo = „frühestens“, hi = „spätestens“. Außerdem kommt er herein, wenn seine Reifen nicht zum Wetter passen. Es gibt genau einen Boxenplatz (<code>PIT_PLAETZE_MAX = 1</code>); wer gleichzeitig fällig ist, wartet.
+</p><p><b>Lage der Box.</b> Ohne verbundenes Safety Car ist es das erste Start/Ziel-Teil. Mit Safety Car ist es das erste Teil i, das mindestens drei Teile hinter dessen Parkplatz liegt und bei dem i und i + 1 Geraden sind (sonst Parkplatz + 3).<sup id="cite&#95;ref-18" class="reference"><a href="#cite_note-18"><span class="cite-bracket">&#91;</span>18<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Zustand</th>
+<th>Bedingung</th>
+<th>nächster Zustand
+</th></tr>
+<tr>
+<td>(fahren)</td>
+<td>auf dem Teil vor der Box, fällig, erlaubt (Grün, keine Einführungsrunde, Platz frei)</td>
+<td>anfahrt
+</td></tr>
+<tr>
+<td>anfahrt (Formationstempo 0,35)</td>
+<td>Teil der Box erreicht</td>
+<td>einparken
+</td></tr>
+<tr>
+<td>einparken (Safety-Car-Folge, 300&#160;ms Angleichen)</td>
+<td>Folge zu Ende</td>
+<td>stand
+</td></tr>
+<tr>
+<td>stand (Ratsche, Gas 0)</td>
+<td>Standzeit + Rammstrafe vorbei; Reifen werden gewechselt</td>
+<td>raus
+</td></tr>
+<tr>
+<td>raus (Ausparkfolge, Anfahrrampe 2,5&#160;s)</td>
+<td>Folge zu Ende</td>
+<td>(fahren), neue Fälligkeit
+</td></tr></tbody></table>
+<p>Die anderen NPCs weichen auf der Boxenkachel und dem Teil davor nach links aus (400&#160;ms, laufend erneuert), ihre Querlage ist dort nach rechts gesperrt. Während des ganzen Stopps wird die Abgang-Gnade laufend erneuert, sonst würde der stehende NPC nach etwa vier Sekunden als „Bahn verlassen“ geparkt. NPCs haben keinen Reifenverschleiß und kein Tankmodell; ihr Reifengriff hängt nur am Wetter (siehe <a href="./Verschleiß.html" title="Verschleiß">Verschleiß</a>).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Funklast">Funklast</h3></div>
+<p>Mehrere NPCs teilen sich ein Budget von 30 Paketen je Sekunde:
+</p>
+<pre>Abstand = max(45 ms, round(1000 × n / 30)) − 5 ms      (n ≥ 2 laufende NPCs)
+unveränderter Befehl: höchstens alle max(Abstand, 200 ms)
+</pre>
+<p>Ein Halt (Gas 0) und Einparkfolgen gehen sofort und im vollen Takt. Spieler-Autos sind davon nicht betroffen.<sup id="cite&#95;ref-19" class="reference"><a href="#cite_note-19"><span class="cite-bracket">&#91;</span>19<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Klang">Klang</h3></div>
+<p>Mit <b>NPC-Motorsound</b> bekommt jeder laufende NPC eine eigene Motorstimme auf einer eigenen Stereoseite, 40&#160;% leiser als das Fahrerauto (<code>GHOST_LEISE = 0.6</code>). Drehzahl und Last kommen aus seinem Fahrzeugmodell. Seit 1.2.5 schalten alle NPCs bei 5200/min zurück statt bei 4200/min, damit man Gänge hört; höher geht nicht, weil die Drehzahl nach dem Hochschalten bei 8800/min auf 5585 (1→2) bis 7170/min (5→6) fällt und der NPC sonst sofort zurückschalten und pendeln würde. Die Knaller: Faktor 0,8 (neu) statt 0,45 (alt), jeweils × 0,6; neu kommt bei jeder Bremsflanke (Bremse über 0,25 nach höchstens 0,05, Drehzahl über 35&#160;% des Bereichs) ein Schub von ein bis drei Knallern mit Stärke 0,12 × Knallerlautstärke × Faktor hinzu, zufällig bis 0,2&#160;s verzögert.<sup id="cite&#95;ref-20" class="reference"><a href="#cite_note-20"><span class="cite-bracket">&#91;</span>20<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Rennen_simulieren">Rennen simulieren</h3></div>
+<p>Die Rennsimulation legt 2 bis 6 Attrappen-Autos in die Garage und ruft für sie dieselbe <code>ghostTick</code>-Funktion auf. Statt eines Funkbefehls wird aus dem Modelltempo der Weg auf der Bahn, daraus Kachelzähler und Kachelcode, die zurück in die Attrappe gehen. Einzelheiten zu Takt und Berührungszählung stehen bei <a href="./Virtuelles_Fahren.html#Rennen_simulieren" title="Virtuelles Fahren">Virtuelles Fahren#Rennen simulieren</a>. Die Ergebnisse beschreiben das Modell, nicht den Teppich.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Ein_NPC_der_Stufe_„schnell“_durch_Gerade,_Kurve_und_Haarnadel"><span id="Ein_NPC_der_Stufe_.E2.80.9Eschnell.E2.80.9C_durch_Gerade.2C_Kurve_und_Haarnadel"></span>Ein NPC der Stufe „schnell“ durch Gerade, Kurve und Haarnadel</h3></div>
+<p>Annahmen: Standardregler (Grundtempo 0,55, Kurvendrosselung 0,20, Haarnadel-Höchsttempo 0,35, Staffel 10&#160;%), trocken, kein Lernen, keine Streuung, Würze = 1 (niemand in Reichweite), Bremsprofil kleiner als die Kachelregel. Drei NPCs, unser Auto liegt in der Mitte (Platz 1 von 3, Staffel = 1 + 0,1 × (2·1/2 − 1) = 1,00). Strecke: … Gerade · Gerade · 60°-Rechtskurve · Gerade · Gerade · Haarnadel …
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Stelle</th>
+<th>Enge</th>
+<th>v0</th>
+<th>Abzug A</th>
+<th>v4 = v0 × (1 − A)</th>
+<th>Deckel v5</th>
+<th>Boden/Höchst</th>
+<th>Ziel</th>
+<th>Δ von 127
+</th></tr>
+<tr>
+<td>Gerade, Kurve 2 Teile voraus</td>
+<td>0</td>
+<td>0,65</td>
+<td>0</td>
+<td>0,65</td>
+<td>–</td>
+<td>–</td>
+<td><b>0,65</b></td>
+<td>83
+</td></tr>
+<tr>
+<td>Gerade, Kurve 1 Teil voraus</td>
+<td>1</td>
+<td>0,65</td>
+<td>0,20</td>
+<td>0,52</td>
+<td>min(0,52; 0,55 × 0,8 = 0,44)</td>
+<td>–</td>
+<td><b>0,44</b></td>
+<td>56
+</td></tr>
+<tr>
+<td>in der 60°-Kurve</td>
+<td>1</td>
+<td>0,55</td>
+<td>0,20</td>
+<td>0,44</td>
+<td>0,44</td>
+<td>–</td>
+<td><b>0,44</b></td>
+<td>56
+</td></tr>
+<tr>
+<td>Gerade, Haarnadel 2 Teile voraus</td>
+<td>2</td>
+<td>0,65</td>
+<td>0,40</td>
+<td>0,39</td>
+<td>min(0,39; 0,33) = 0,33</td>
+<td>Boden 0,37, Deckel 0,35</td>
+<td><b>0,35</b></td>
+<td>44
+</td></tr>
+<tr>
+<td>in der Haarnadel</td>
+<td>2</td>
+<td>0,55</td>
+<td>0,40</td>
+<td>0,33</td>
+<td>0,33</td>
+<td>Boden 0,37, Deckel 0,35</td>
+<td><b>0,35</b></td>
+<td>44
+</td></tr>
+<tr>
+<td>Gerade nach der Haarnadel</td>
+<td>0</td>
+<td>0,65</td>
+<td>0</td>
+<td>0,65</td>
+<td>–</td>
+<td>–</td>
+<td><b>0,65</b></td>
+<td>83
+</td></tr></tbody></table>
+<p>Wäre unser Auto der Führende, lägen die Geraden bei 0,65 × 0,90 = 0,585; die Haarnadel bliebe bei 0,35, weil die Staffel dort nur bremsen darf und der Deckel zuletzt gilt. Mit Nachbar in 0,6&#160;s käme in der Kurve × 0,95 hinzu: 0,418, vom Mindesttempo auf 0,37 gehoben.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Derselbe_Abschnitt_mit_MAX">Derselbe Abschnitt mit MAX</h3></div>
+<p>Standardregler MAX (Gerade 1,00, Radius&#160;1 0,52, Bremspunkt eine Schiene vorher): auf der Geraden zwei Teile vor der Kurve 1,00; ein Teil vorher min(1,00; 0,52) = 0,52, Staffel greift hier wieder (Enge 1), als Mittlerer 0,52; in der 60°-Kurve 0,52; vor und in der Haarnadel normale Logik, also 0,35.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Der_Regler_beim_Anbremsen">Der Regler beim Anbremsen</h3></div>
+<p>Gas 0,65, I-Anteil 0,60, Bremse 0, Ziel springt an der Kachelgrenze von 0,65 auf 0,44, d = 4,0, dt = 0,045&#160;s:
+</p>
+<ol><li>e = 0,44 − 0,65 = −0,21; Bremse_roh = min(1; 0,21 × 3,0 × 4) = 1; Gas_roh = clamp(0,59 − 0,21 × 2,2 × 4) = 0.</li>
+<li>Bremse über 0,02: I-Anteil wird abgebaut: 0,60 × (1 − 0,135) = 0,52.</li>
+<li>Ratengrenzen: Bremse steigt höchstens um 4,0 × 4 × 0,045 = 0,72 → 0,72; Gas fällt höchstens um 1,6 × 4 × 0,045 = 0,288 → 0,362.</li>
+<li>Nächster Takt: Bremse 1,0, Gas 0,074; danach Gas 0.</li></ol>
+<p>Mit d = 1,0 dauerte derselbe Wechsel rund viermal so lange (Bremse 0,18 je Takt).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Querlage_beim_Spurwechsel">Querlage beim Spurwechsel</h3></div>
+<p>Querträgheit 4,0, Tempo 0,44 (tempoAnteil = min(1; 0,44/0,35) = 1): querMax = 4,0 × 0,045 = 0,18 je Takt. Ein Wechsel von −1 nach +1 (2 Bahnbreiten-Einheiten) braucht 2/0,18 ≈ 11 Takte ≈ 0,5&#160;s. Bei Tempo 0,20 ist tempoAnteil 0,57 und der Wechsel dauert gut 0,9&#160;s.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Überholen_mit_Rennhärte_100_%"><span id=".C3.9Cberholen_mit_Rennh.C3.A4rte_100_.25"></span>Überholen mit Rennhärte 100&#160;%</h3></div>
+<p>i = 1: p = 0,9, Wartezeit 450&#160;ms, Zeitlücke 0,6&#160;s, Reichweite 0,65 Kacheln. Ein Verfolger, der 0,5 Kacheln hinter dem Vordermann klebt, darf nach 450&#160;ms würfeln und trifft in 90&#160;% der Fälle; bei 50&#160;% (p = 0,45, alle 1,2&#160;s) vergehen im Mittel 1,2/0,45 ≈ 2,7&#160;s zwischen zwei Versuchen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Abstandhalter">Abstandhalter</h3></div>
+<p>Zeitlücke 0,8&#160;s, Annäherung 0: nötig 1,2&#160;s; Würze × (1 − 0,26 × (1 − 0,8/1,2)) = × 0,913. Bei Annäherung 1 Kachel/s steigt „nötig“ auf 1,5&#160;s und der Faktor auf × 0,879.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li><b>Keine Querlage-Messung.</b> Kein Byte meldet, wo das Auto quer steht. Randlage, Überholseite und Ideallinie sind Befehle, keine Messungen; <code>querSoll</code> ist eine Modellschätzung.</li>
+<li><b>Ort ist geschätzt.</b> Zwischen zwei Kachelwechseln kommt die Phase aus dem Modelltempo. Gegen die wahre Phase der Simulation bleibt ein systematisches Hinterherlaufen von etwa 0,07 Kachellängen.</li>
+<li><b>Leseschwelle nicht gemessen.</b> Die 0,35 („Leseschwelle“) ist die alte Untergrenze des Tempo-Reglers, keine Messgröße; Beobachtungen sprechen für eine tiefere Grenze um Δ&#160;20 bis 25. Noch nicht gesichert.</li>
+<li><b>Simulationszahlen.</b> Berührungen und Überholmanöver aus der Rennsimulation rauschen stark (Spanne 41&#160;% bzw. 17&#160;% zwischen identischen Läufen); belastbar ist dort vor allem die Rundenzeit (0,4&#160;%).</li>
+<li><b>„Eigene Spuren“ bei einem NPC</b> tut nichts: unter zwei NPCs gibt <code>ghostLane</code> 0 zurück.</li>
+<li><b>Funklast</b>: Probleme mit mehreren NPCs liegen erfahrungsgemäß eher an der Bluetooth-Last als an der Logik (siehe Abschnitt Funklast).</li>
+<li><b>In Arbeit</b>: MAX, Haarnadel-Höchsttempo, SIMULATOR, NPC-Boxenstopp und NPC-Klang sind als WIP markiert; „Rückweg mit Lenkung“ ist an einem echten Auto ungeprüft.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version</th>
+<th>Änderung
+</th></tr>
+<tr>
+<td>0.5.44</td>
+<td>Überholmanöver auch in Kurven, Erlaubnis nach freiem Platz
+</td></tr>
+<tr>
+<td>0.5.47</td>
+<td>Abstandhalter rechnet mit Zeitlücke statt Kacheln
+</td></tr>
+<tr>
+<td>0.6.37</td>
+<td>Phase auf der Kachel aus dem Weg statt aus der Uhr
+</td></tr>
+<tr>
+<td>0.9.5</td>
+<td>Tempo-Streuung, Startversatz je Reihe, Paar in der Kurve (experimentell)
+</td></tr>
+<tr>
+<td>0.9.56</td>
+<td>Stufen einfach/mittel/schnell statt Prozentregler je Auto; Stufe ändert nur das Geradentempo
+</td></tr>
+<tr>
+<td>0.9.64</td>
+<td>Stufen auf 45/55/65&#160;% gespreizt; NPC-Ton je Auto
+</td></tr>
+<tr>
+<td>1.0 (Abschnitt)</td>
+<td>Ghosts heißen NPCs; Linienmodell SIMULATOR (1.0.14); Paare und Reihen (1.0.31)
+</td></tr>
+<tr>
+<td>1.1.23</td>
+<td>Fahrmodus „Realistisch“ entfernt; Lese-Schub nur 250–700&#160;ms
+</td></tr>
+<tr>
+<td>1.1 (Abschnitt)</td>
+<td>Mindesttempo 0,37 und Lese-Schub; Funkbudget 30 Pakete/s; Haarnadel-Höchsttempo (1.1.37); Staffel unter Gelb und in der Einführungsrunde aus (1.1.39, 1.1.41); Stufe MAX (1.1.42)
+</td></tr>
+<tr>
+<td>1.2.4</td>
+<td>NPC-Boxenstopp mit Ein- und Ausparkfolge des Safety Cars, Ratsche im Stand, Box hinter dem Safety-Car-Parkplatz
+</td></tr>
+<tr>
+<td>1.2.5</td>
+<td>MAX-Motormodell (Beschleunigung × Regler, keine Schaltpause); Staffel, Lernfaktor und Streuung bremsen MAX auf Geraden nicht mehr; Rückschalten bei 5200/min; Knaller beim Anbremsen, Schalter „NPC-Motorklang: alt“
+</td></tr></tbody></table>
+<p>Die Patchnotes der App sind nach Nebenversionen (1.2, 1.1 …) gegliedert; genaue Patchnummern stammen aus Kommentaren im Code.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
+<div class="mw-references-wrap mw-references-columns"><ol class="references">
+<li id="cite&#95;note-1"><span class="mw-cite-backlink"><a href="#cite_ref-1">↑</a></span> <span class="reference-text">Tabelle „Tempo-Grenzen“ in <code>CARRERA_HYBRID.md</code>.</span>
+</li>
+<li id="cite&#95;note-2"><span class="mw-cite-backlink"><a href="#cite_ref-2">↑</a></span> <span class="reference-text"><code>src/98b-sicherung.js</code>, <code>reglerTexteAuffrischen()</code>.</span>
+</li>
+<li id="cite&#95;note-3"><span class="mw-cite-backlink"><a href="#cite_ref-3">↑</a></span> <span class="reference-text"><code>src/20-protocol.js</code>, <code>CONTROL_SEND_INTERVAL_MS = 45</code>; <code>src/90-ghosts.js</code>, <code>ghostTick()</code>.</span>
+</li>
+<li id="cite&#95;note-4"><span class="mw-cite-backlink"><a href="#cite_ref-4">↑</a></span> <span class="reference-text"><code>src/90-ghosts.js</code>, <code>ghostTick()</code>, Abschnitt „speed“.</span>
+</li>
+<li id="cite&#95;note-5"><span class="mw-cite-backlink"><a href="#cite_ref-5">↑</a></span> <span class="reference-text"><code>ghostFahrBoden()</code>, <code>GHOST_FAHR_MIN = 0.37</code>, <code>GHOST_LESE_SCHUB = 0.40</code>.</span>
+</li>
+<li id="cite&#95;note-6"><span class="mw-cite-backlink"><a href="#cite_ref-6">↑</a></span> <span class="reference-text"><code>ghostHaarnadelDeckel()</code>.</span>
+</li>
+<li id="cite&#95;note-7"><span class="mw-cite-backlink"><a href="#cite_ref-7">↑</a></span> <span class="reference-text"><code>src/90-ghosts.js</code>, <code>ghostFeldStaffel()</code>.</span>
+</li>
+<li id="cite&#95;note-8"><span class="mw-cite-backlink"><a href="#cite_ref-8">↑</a></span> <span class="reference-text"><code>src/90-ghosts.js</code>, <code>ghostSpeedControl()</code> und Konstanten davor.</span>
+</li>
+<li id="cite&#95;note-9"><span class="mw-cite-backlink"><a href="#cite_ref-9">↑</a></span> <span class="reference-text"><code>src/61-simlinie.js</code>, <code>simSuche()</code>, <code>SIM_MAX_AUSWERTUNGEN = 200</code>.</span>
+</li>
+<li id="cite&#95;note-10"><span class="mw-cite-backlink"><a href="#cite_ref-10">↑</a></span> <span class="reference-text"><code>ghostNoteTileTime()</code>, <code>ghostNoteTileWeg()</code>, <code>ghostTilePhase()</code>.</span>
+</li>
+<li id="cite&#95;note-11"><span class="mw-cite-backlink"><a href="#cite_ref-11">↑</a></span> <span class="reference-text"><code>CARRERA_HYBRID.md</code>, Abschnitt „Und ab v0.6.37 kommt die Phase aus dem Weg“.</span>
+</li>
+<li id="cite&#95;note-12"><span class="mw-cite-backlink"><a href="#cite_ref-12">↑</a></span> <span class="reference-text"><code>ghostTick()</code>, Abschnitt „steering“; <code>ghostQuerLage()</code>.</span>
+</li>
+<li id="cite&#95;note-13"><span class="mw-cite-backlink"><a href="#cite_ref-13">↑</a></span> <span class="reference-text"><code>CARRERA_HYBRID.md</code>, Abschnitte „Wieviel Querversatz verträgt die Bahn?“ und „Fährt der Ghost die Ideallinie?“.</span>
+</li>
+<li id="cite&#95;note-14"><span class="mw-cite-backlink"><a href="#cite_ref-14">↑</a></span> <span class="reference-text"><code>src/90-ghosts.js</code>, <code>ghostSpice()</code>; <code>CARRERA_HYBRID.md</code>, Abschnitt „Das Überholmodell“.</span>
+</li>
+<li id="cite&#95;note-15"><span class="mw-cite-backlink"><a href="#cite_ref-15">↑</a></span> <span class="reference-text"><code>learnPropose()</code>, <code>learnSettle()</code>.</span>
+</li>
+<li id="cite&#95;note-16"><span class="mw-cite-backlink"><a href="#cite_ref-16">↑</a></span> <span class="reference-text"><code>CARRERA_HYBRID.md</code>, „Zwei naheliegende Verbesserungen, gemessen und verworfen“.</span>
+</li>
+<li id="cite&#95;note-17"><span class="mw-cite-backlink"><a href="#cite_ref-17">↑</a></span> <span class="reference-text"><code>aufstellenStarten()</code>, <code>aufstellenPruefen()</code>, <code>aufstellTempo()</code>.</span>
+</li>
+<li id="cite&#95;note-18"><span class="mw-cite-backlink"><a href="#cite_ref-18">↑</a></span> <span class="reference-text"><code>pitKachel()</code>, <code>npcBoxNeben()</code>.</span>
+</li>
+<li id="cite&#95;note-19"><span class="mw-cite-backlink"><a href="#cite_ref-19">↑</a></span> <span class="reference-text"><code>npcSendeAbstand()</code>, <code>writeToCar()</code>.</span>
+</li>
+<li id="cite&#95;note-20"><span class="mw-cite-backlink"><a href="#cite_ref-20">↑</a></span> <span class="reference-text"><code>src/80-sound.js</code>, <code>updateGhostSound()</code>.</span>
+</li>
+</ol></div>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a></li>
+<li><a href="./Rennarten.html" title="Rennarten">Rennarten</a></li>
+<li><a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a></li>
+<li><a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a></li>
+<li><a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a></li>
+<li><a href="./Strecke.html" title="Strecke">Strecke</a></li>
+<li><a href="./Virtuelles_Fahren.html" title="Virtuelles Fahren">Virtuelles Fahren</a></li>
+<li><a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li>
+<li><a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/90-ghosts.js</code>: <code>ghostTick()</code>, <code>ghostSpeedControl()</code>, <code>ghostStufeFaktor()</code>, <code>ghostMaxMotor()</code>, <code>ghostMaxTempo()</code>, <code>ghostFeldStaffel()</code>, <code>ghostSpice()</code>, <code>ghostRennhaerteAnwenden()</code>, <code>ghostLineOffset()</code>, <code>ghostLineFromCode()</code>, <code>ghostTilePhase()</code>, <code>ghostNoteTileTime()</code>, <code>ghostNoteTileWeg()</code>, <code>ghostHaarnadelDeckel()</code>, <code>ghostFahrBoden()</code>, <code>ghostReifenTempo()</code>, <code>ghostAssignBias()</code>, <code>ghostPaare()</code>, <code>learnSettle()</code>, <code>aufstellZielOrt()</code>, <code>aufstellenStarten()</code>, <code>pitTick()</code>, <code>pitKachel()</code>, <code>pitFaelligZiehen()</code>, <code>npcSendeAbstand()</code>, <code>startGhost()</code>, <code>finishGhost()</code></li>
+<li><code>src/61-simlinie.js</code>: <code>simulatorLinie()</code>, <code>simSuche()</code>, <code>simFahren()</code></li>
+<li><code>src/80-sound.js</code>: Regler-Anbindung, <code>updateGhostSound()</code></li>
+<li><code>src/90b-sim.js</code>: <code>simStart()</code>, <code>simTeilschritt()</code></li>
+<li><code>CARRERA_HYBRID.md</code>: Abschnitte zu Tempo-Grenzen, Überholmodell, Querlage, Kacheldauer und Kennzahlensonde</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw191
+Cached time: 20261027053457
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.135 seconds
+Real time usage: 0.142 seconds
+Preprocessor visited node count: 366/1000000
+Revision size: 51777/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 1/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 13976/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    2.931      1 Vorlage:Stand
+100.00%    2.931      1 -total
+-->
+
+<!-- Render ID 2505de6a-d1c8-11f1-b9bb-bc24110d777b -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:35:|#|:idhash:canonical and timestamp 20261027053457 and revision id 94. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

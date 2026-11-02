@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strecke - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Strecke</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p>Die <b>Strecke</b> eines <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Autos besteht aus lose ausgelegten Kunststoffteilen (Gerade, Kurven, Haarnadel, Start/Ziel und weitere), die auf ihrer Oberfläche ein für Menschen kaum sichtbares Balkenmuster tragen, oder aus gedruckten Mustern auf Papier. Ein Sensor an der Unterseite des Autos liest dieses Muster; das Auto meldet über <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a> in jedem Statuspaket, welches Teil es zuletzt erkannt hat (Byte 12) und wie viele Teilwechsel es gezählt hat (Byte 11). Aus diesen beiden Zahlen zählt <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> Runden, baut eine Streckenkarte, ortet die Autos auf der Karte und steuert <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPCs</a>, <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car</a> und Startaufstellung. Dieser Artikel beschreibt die Teile, ihre Codes, wie das Auto sie liest, den Streckencode und den Streckenscan. Das Bauen und Einpassen einer Strecke in einen Raum steht unter <a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a>.
+</p>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Strecke.png" class="mw-file-description"><img src="images/250px-OmegaSim-Strecke.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Strecke.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Der Bereich Strecke in OmegaSim</figcaption></figure>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Inhalt
+</th></tr>
+<tr>
+<td>Menüpfad</td>
+<td>Reiter <b>Strecke</b> (Unterseiten Editor, Streckenscan, Strecke laden, Meine Teile, Raum, Druckvorlagen); <b>Fahren</b> → Kachel <b>Strecke</b>; <b>Optionen → Allgemein → Auf der Bahn</b>
+</td></tr>
+<tr>
+<td>Wichtigster Schalter</td>
+<td><b>Auf der Bahn</b> (Leseart), Standard: an (<code>setting-ontrack</code>)
+</td></tr>
+<tr>
+<td>Weitere Schalter</td>
+<td><b>Strecke beim Fahren lernen</b> (Standard aus), <b>NPC braucht Streckencode</b> (Standard aus), beide unter Optionen → NPC
+</td></tr>
+<tr>
+<td>Status</td>
+<td>Leseart, Rundenzählung, Streckenscan, Streckencode: stabil. Codes für Boxengasse, Engstelle und 30-Grad-Kurven: nur aus einer fremden Tabelle, am Auto nicht gemessen. Druckvorlage Start/Ziel: stabil; Bahn zum Auslegen und Trapez-Muster: experimentell
+</td></tr>
+<tr>
+<td>Seit Version</td>
+<td>Leseart-abhängige Startcodes seit 0.6.14, alle zwölf Teiltypen seit 0.6.19, Streckenscan in heutiger Form seit 0.7, Scan-Tempi von 1.2.5
+</td></tr>
+<tr>
+<td>Quelldateien</td>
+<td><code>src/60-track.js</code> (Datenmodell, Codes, Geometrie, Streckencode, Scan), <code>src/20-protocol.js</code> (Leseart-Bits), <code>src/50-drive.js</code> (Leseart-Schalter, Scan-Tempo), <code>src/90-ghosts.js</code> (Scan-Fahrer, Kachelzeiten), <code>src/70-race.js</code> (Teillängen für die Tempomessung), <code>tools/make_pattern.py</code>, <code>tools/make_track_sheets.py</code>, <code>tools/make_pattern_sheets.py</code>, <code>tools/make_patterns.py</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<p>Dieser Abschnitt erklärt die Begriffe, ohne die der Rest des Artikels schwer zu lesen ist. Ausführlicher stehen sie im <a href="./Glossar.html" title="Glossar">Glossar</a>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Bit,_Byte_und_Hexadezimalzahl"><span id="Bit.2C_Byte_und_Hexadezimalzahl"></span>Bit, Byte und Hexadezimalzahl</h3></div>
+<p>Ein <b>Bit</b> ist die kleinste Informationseinheit, 0 oder 1. Acht Bits ergeben ein <b>Byte</b>, das 2<sup>8</sup> = 256 verschiedene Werte annehmen kann, also 0 bis 255. Programmierer schreiben Bytes gern als <b>Hexadezimalzahl</b> (Basis 16, Ziffern 0–9 und a–f), gekennzeichnet durch die Vorsilbe <code>0x</code>. Zwei Hex-Ziffern beschreiben genau ein Byte, weil jede Hex-Ziffer genau vier Bits entspricht. Das <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a> erklärt die Umrechnung im Einzelnen.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Hex</th>
+<th>Dezimal</th>
+<th>Binär (8 Bit)</th>
+<th>Bedeutung in diesem Artikel
+</th></tr>
+<tr>
+<td><code>0x01</code></td>
+<td>1</td>
+<td>00000001</td>
+<td>Start/Ziel auf der Kunststoffbahn
+</td></tr>
+<tr>
+<td><code>0x0a</code></td>
+<td>10</td>
+<td>00001010</td>
+<td>Engstelle auf der Bahn, Start/Ziel auf dem Original-Druckblatt
+</td></tr>
+<tr>
+<td><code>0x20</code></td>
+<td>32</td>
+<td>00100000</td>
+<td>Bit 5: Leseart „Auf der Bahn“
+</td></tr>
+<tr>
+<td><code>0x80</code></td>
+<td>128</td>
+<td>10000000</td>
+<td>Bit 7: Leseart „Ausdruck“
+</td></tr>
+<tr>
+<td><code>0xff</code></td>
+<td>255</td>
+<td>11111111</td>
+<td>Byte 12: „noch nie ein Muster gesehen“
+</td></tr>
+<tr>
+<td><code>0x100</code></td>
+<td>256</td>
+<td>1 00000000 (9 Bit)</td>
+<td>interner Typ der Boxengasse; passt absichtlich nicht in ein Byte
+</td></tr></tbody></table>
+<p>Das letzte Beispiel ist kein Zufall: Ein Byte kann höchstens 255 sein. Ein Wert wie <code>0x100</code> kann deshalb nie vom Auto gemeldet werden, und genau das nutzt OmegaSim für zwei Teile, deren gemeldeter Code mit einem anderen Teil kollidiert (siehe <a href="#Künstliche_Typen_und_die_Übersetzung_codeZuTyp">unten</a>).
+</p><p>Mit einer <b>Bitmaske</b> prüft man einzelne Bits: <code>(Byte &amp; 0x08)&#160;!= 0</code> heißt „Bit 3 ist gesetzt“. Der Ausdruck <code>(neu − alt) &amp; 0xff</code> rechnet eine Differenz <b>modulo 256</b>: Zählt ein 8-Bit-Zähler von 255 auf 0 weiter („Überlauf“), ergibt <code>(0 − 255) &amp; 0xff</code> = 1 und nicht −255.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Das_Statuspaket_und_warum_Byte_12_ein_Teil_ist">Das Statuspaket und warum Byte 12 ein Teil ist</h3></div>
+<p>Über Bluetooth sendet das Auto regelmäßig ein <b>Statuspaket</b> („Notification“) von 19 Byte an die App. Jedes Byte hat eine feste Stelle und eine feste Bedeutung; die Stellen zählt man ab 0. Die für die Strecke wichtigen:
+</p>
+<ul><li><b>Byte 11</b> – ein Zähler, der um 1 weiterspringt, sobald das Auto ein neues Teil betritt. Er läuft von 255 auf 0 über.</li>
+<li><b>Byte 12</b> – der Code des zuletzt gelesenen Musters. Der Wert bleibt stehen, bis ein anderes Muster gelesen wird. <code>0x00</code> heißt „abseits der Bahn“, <code>0xff</code> „seit dem Einschalten noch nichts gelesen“.</li>
+<li><b>Byte 15, Bit 3</b> (<code>0x08</code>) – die <b>Start/Ziel-Sperre</b>: Sie geht an, wenn das Auto das Start/Ziel-Muster gelesen hat, und bleibt rund eine Sekunde an (gemessen 0,84 bis 1,01 s, Median 0,91 bzw. 0,94 s).</li></ul>
+<p>Byte 12 trägt also nicht „wo“ das Auto steht, sondern „was für ein Teil“ zuletzt unter ihm lag. Diese Zahl hat die Firmware des Autos aus dem Balkenmuster ausgewertet; die App bekommt nur das Ergebnis. Der Aufbau des ganzen Pakets steht unter <a href="./Firmware.html" title="Firmware">Firmware</a> und <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Wie_ein_Sensor_ein_Balkenmuster_liest">Wie ein Sensor ein Balkenmuster liest</h3></div>
+<p>Ein <b>Strichcode</b> (Barcode) besteht aus Balken und Lücken zweier Breiten, schmal und breit. Ein optischer Sensor misst beim Darüberfahren, wie lange er hell und wie lange dunkel sieht; aus dem Verhältnis der Längen ergibt sich, ob ein Element schmal (0) oder breit (1) war. Weil nur Verhältnisse zählen, ist es egal, wie schnell das Auto fährt, solange es nicht so langsam oder so schnell ist, dass der Sensor die Übergänge nicht mehr sauber trennt. Die Folge der Nullen und Einsen ist ein <b>Wort</b>, und die Firmware übersetzt jedes bekannte Wort in eine Zahl, eben den Code in Byte 12. Rückwärts gelesen ergibt dasselbe Wort eine andere Folge; deshalb tragen die Druckvorlagen einen Fahrtrichtungspfeil.
+</p><p>Welche Bauart der Sensor im Auto hat (kleine Kamera oder einfacher Infrarot-Sensor), ist <b>noch nicht gesichert</b>. Die Muster auf den Kunststoffteilen sind im sichtbaren Licht kaum zu sehen, im Infrarotlicht dagegen deutlich.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Leseart">Leseart</h3></div>
+<p>Der Sensor kennt zwei <b>Lesearten</b> mit je eigener Codetabelle: <b>Auf der Bahn</b> für die Kunststoffteile und <b>Ausdruck</b> für gedruckte Muster auf Papier. Die App wählt die Leseart mit zwei Bits in Byte 14 jedes Steuerbefehls, den sie an das Auto schickt. Die Leseart ist die wichtigste Einstellung dieses Artikels, weil dieselbe Zahl je Leseart etwas anderes bedeutet.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Kachel">Kachel</h3></div>
+<p>Im Code heißt ein Streckenteil <b>Kachel</b> (englisch <i>tile</i>). Eine Strecke ist intern eine Liste von Kacheln, z. B. <code>[Start, Rechtskurve, Rechtskurve, Gerade, …]</code>. Die erste Kachel ist immer Start/Ziel.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Leseart_wählen"><span id="Leseart_w.C3.A4hlen"></span>Leseart wählen</h3></div>
+<ol><li><b>Optionen → Allgemein → Auf der Bahn</b> einschalten, wenn das Auto auf Kunststoffteilen fährt (Standard), ausschalten für gedruckte Muster. Alternativ: auf der Kachel <b>Fahren → Strecke</b> den Titel antippen („Auf der Bahn“ / „Frei“), im Cockpit den Knopf <b>Bahn</b> bzw. <b>Ausdruck</b> drücken oder am Controller <b>L1 / LB</b>. Alle Wege schalten dieselbe Einstellung.</li>
+<li>Die App meldet „LIEST BAHN“ oder „LIEST AUSDRUCK“. Im Ausdruck-Modus ist der Cockpit-Knopf als Warnung hervorgehoben, weil sich das Auto dort nicht selbst auf der Bahn hält.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Eine_Strecke_bekannt_machen_(Bahn-Modus)"><span id="Eine_Strecke_bekannt_machen_.28Bahn-Modus.29"></span>Eine Strecke bekannt machen (Bahn-Modus)</h3></div>
+<ol><li>Strecke aufbauen. Die Start/Ziel-Kachel ist Pflicht, weil Rundenzählung und Ortung an ihr hängen.</li>
+<li>Entweder <b>Strecke → Streckenscan → Streckenscan</b> drücken (das Auto fährt selbst und hält nach einer geschlossenen Runde an), oder die Strecke im <a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Editor</a> nachbauen, oder einen <a href="#Streckencode">Streckencode</a> einfügen, oder eine gespeicherte Strecke unter <b>Strecke laden</b> antippen.</li>
+<li>Prüfen: Die Strecke steht im Editor, die Anzeige „Status“ zeigt „Geschlossen ✓“ oder „Offen (Lücke cm, Winkel °)“.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Mit_gedruckten_Mustern_fahren_(Ausdruck-Modus)"><span id="Mit_gedruckten_Mustern_fahren_.28Ausdruck-Modus.29"></span>Mit gedruckten Mustern fahren (Ausdruck-Modus)</h3></div>
+<ol><li><b>Strecke → Druckvorlagen</b> öffnen (im Ausdruck-Modus auch über <b>Fahren → Strecke → Druckvorlagen</b>).</li>
+<li>Die SVG-Datei mit Skalierung <b>100&#160;% bzw. „Tatsächliche Größe“</b> drucken, nie „an Seite anpassen“.</li>
+<li>Das <b>100-mm-Kontrollmaß</b> auf dem Blatt mit einem Lineal nachmessen.</li>
+<li>Das Blatt mit dem Pfeil in Fahrtrichtung auslegen und überfahren.</li>
+<li>Optional: unter <b>Fahren → Strecke → Foto</b> ein Foto der ausgelegten Strecke hochladen; es erscheint im Cockpit statt des Editor-Layouts.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Einen_unbekannten_Code_ablesen">Einen unbekannten Code ablesen</h3></div>
+<ol><li>Entwickler-Reiter, Bereich <b>Targets lesen</b> (Rohcode-Monitor) öffnen und <b>Zählen</b> starten.</li>
+<li>Das Auto langsam von Hand über genau ein Teil schieben.</li>
+<li>Ablesen, welcher Wert in Byte 12 auftaucht. Der Monitor zählt jeden Wert, auch unbekannte (als „UNBEKANNT“ markiert), zeigt die rohen Bytes des letzten Pakets mit hervorgehobenen Bytes 11 und 12, die Zahl der Kachelschritte (Byte 11), die Zahl der Start/Ziel-Sperren (Byte 15, Bit 3) und ob der Scheinwerfer an ist, denn ein ausgeschalteter Scheinwerfer ist laut Code die häufigste Ursache für „es kommt nichts“.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich</th>
+<th>Standard</th>
+<th>Wirkung (aus dem Code)</th>
+<th>Schlüssel / ID
+</th></tr>
+<tr>
+<td>Auf der Bahn</td>
+<td>an / aus</td>
+<td>an</td>
+<td>setzt <code>trackMode</code> auf <code>'on'</code> bzw. <code>'off'</code> und in jedem Steuerbefehl Byte 14 Bit 5 (<code>0x20</code>) bzw. Bit 7 (<code>0x80</code>); entscheidet, welche Codes als Start/Ziel gelten (<code>isStartCode()</code>), ob <code>0x0a</code> die Engstelle ist (<code>codeZuTyp()</code>), welche Rennarten wählbar sind (seit 1.2.4) und ob Safety Car und Challenger-Rolle erlaubt sind</td>
+<td><code>setting-ontrack</code>, Funktion <code>applyScanMode()</code> in <code>src/50-drive.js</code>
+</td></tr>
+<tr>
+<td>Strecke beim Fahren lernen</td>
+<td>an / aus</td>
+<td>aus</td>
+<td>setzt aus den gemeldeten Codes eines Autos eine Runde zusammen und übernimmt sie nach der zweiten Start/Ziel-Überfahrt, <b>nur wenn</b> im Editor höchstens die Start/Ziel-Kachel liegt; bricht nach 60 Teilen ohne zweite Überfahrt ab</td>
+<td><code>ghost-learn</code> → <code>ghostCfg.learn</code>, Funktion <code>learnTick()</code>
+</td></tr>
+<tr>
+<td>NPC braucht Streckencode</td>
+<td>an / aus</td>
+<td>aus</td>
+<td>an: ein NPC fährt nur mit gelesenem Muster</td>
+<td><code>ghost-needcode</code> → <code>ghostCfg.needCode</code>
+</td></tr>
+<tr>
+<td>Streckenfoto</td>
+<td>Bilddatei</td>
+<td>keins</td>
+<td>ersetzt im Ausdruck-Modus die Karte im Cockpit; empfohlen quer (4:3 oder 16:9)</td>
+<td><code>fa-foto</code>, Speicher <code>omegasim-streckenfoto</code>
+</td></tr>
+<tr>
+<td>Gespeicherte Strecken</td>
+<td>beliebig viele</td>
+<td>leer</td>
+<td>Name, Kachelliste, Drehung, Anlege- und Änderungszeit</td>
+<td>Speicher <code>carrera-hybrid-tracks</code>
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Streckenteile">Streckenteile</h2></div>
+<p>OmegaSim unterscheidet zwölf Teiltypen (<code>TILE_TYPE</code> in <code>src/60-track.js</code>). Die Tabelle nennt für jeden Typ den Buchstaben im <a href="#Streckencode">Streckencode</a> (<code>TRACK_CODE_LETTER</code>), den Code, den das Auto in Byte 12 meldet, und die Geometrie, mit der die App das Teil zeichnet. Alle Maße beziehen sich auf die Mittellinie der 25 cm breiten Fahrbahn. Grundlage sind drei gemessene Zahlen: Kachellänge 43 cm, Bahnbreite 25 cm, Kurvenradius 37 cm (aus „eine Gerade plus eine 60-Grad-Kurve belegen 37 × 86 cm“, nachgerechnet 37,2 × 85,9 cm).
+</p>
+<table class="wikitable">
+<caption>Die zwölf Teiltypen. Bilder: so zeichnet OmegaSim 1.2.9 das Teil
+</caption>
+<tbody><tr>
+<th>Bild</th>
+<th>Teil</th>
+<th>Buchstabe</th>
+<th>Code Bahn-Modus</th>
+<th>Code Ausdruck-Modus</th>
+<th>Winkel / Geometrie</th>
+<th>Anmerkung
+</th></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Start.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Start.svg" decoding="async" loading="lazy" width="80" height="90" class="mw-file-element" data-file-width="512" data-file-height="574" /></a></span></td>
+<td>Start/Ziel</td>
+<td>S</td>
+<td><code>0x01</code></td>
+<td><code>0x0a</code> (Original-Blatt), <code>0x01</code> (Blätter von OmegaSim)</td>
+<td>gerade, gezeichnet 43 cm lang wie eine Gerade; die Tempomessung rechnet mit 0,40 m</td>
+<td>Bahn-Code durch seVen bestätigt; Kartentyp intern <code>0x0a</code>; immer erste Kachel, nicht löschbar; weitere S-Kacheln gelten als Sektorgrenzen
+</td></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Gerade.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Gerade.svg" decoding="async" loading="lazy" width="80" height="90" class="mw-file-element" data-file-width="512" data-file-height="574" /></a></span></td>
+<td>Gerade</td>
+<td>G</td>
+<td><code>0x02</code></td>
+<td>nicht bekannt</td>
+<td>43 cm lang (40 Zeichnungseinheiten)</td>
+<td>in Mitschnitten belegt; seVen nennt 43,2 cm
+</td></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Kurve-rechts.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Kurve-rechts.svg" decoding="async" loading="lazy" width="80" height="82" class="mw-file-element" data-file-width="512" data-file-height="522" /></a></span></td>
+<td>Kurve rechts</td>
+<td>R</td>
+<td><code>0x04</code></td>
+<td>nicht bekannt</td>
+<td>60°, Radius 37 cm, Bogen 38,75 cm; Endpunkt 32,04 cm voraus und 18,50 cm nach rechts</td>
+<td>in Mitschnitten belegt
+</td></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Kurve-links.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Kurve-links.svg" decoding="async" loading="lazy" width="80" height="82" class="mw-file-element" data-file-width="512" data-file-height="522" /></a></span></td>
+<td>Kurve links</td>
+<td>L</td>
+<td><code>0x03</code></td>
+<td>nicht bekannt</td>
+<td>wie Kurve rechts, gespiegelt</td>
+<td>Mitschnitt vom 21.08.2026 (Strecke „az2108“, 16 Runden, je ein <code>0x03</code> genau an der Linkskurve); bis dahin geraten als <code>0x08</code>
+</td></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Haarnadel-rechts.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Haarnadel-rechts.svg" decoding="async" loading="lazy" width="80" height="64" class="mw-file-element" data-file-width="512" data-file-height="411" /></a></span></td>
+<td>Haarnadel rechts</td>
+<td>H</td>
+<td><code>0x06</code></td>
+<td>nicht bekannt</td>
+<td>21,91 cm gerade Sektion, dann 180° mit Radius 18,5 cm; Weg 80,03 cm; Endpunkt 21,91 cm voraus und 37 cm nach rechts, Fahrtrichtung umgekehrt; Außenbreite 2 × 18,5 + 25 = 62 cm</td>
+<td>am 24.08.2026 mit dem Rohcode-Monitor gemessen
+</td></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Haarnadel-links.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Haarnadel-links.svg" decoding="async" loading="lazy" width="80" height="64" class="mw-file-element" data-file-width="512" data-file-height="411" /></a></span></td>
+<td>Haarnadel links</td>
+<td>J</td>
+<td><code>0x05</code></td>
+<td>nicht bekannt</td>
+<td>wie Haarnadel rechts, gespiegelt</td>
+<td>am 24.08.2026 gemessen
+</td></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Weite-Kurve-rechts.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Weite-Kurve-rechts.svg" decoding="async" loading="lazy" width="80" height="101" class="mw-file-element" data-file-width="512" data-file-height="647" /></a></span></td>
+<td>Weite 30°-Kurve rechts</td>
+<td>W</td>
+<td><code>0x09</code></td>
+<td>nicht bekannt</td>
+<td>30°, Radius 112 cm, Bogen 58,64 cm; Endpunkt 56,00 cm voraus und 15,01 cm nach rechts</td>
+<td>Code nur aus seVens Tabelle; Radius aus einem Oval des Original-Editors (12 dieser Teile + 2 Geraden = 2,49 × 2,93 m Außenmaß, also 2R + 25 cm = 249 cm)
+</td></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Weite-Kurve-links.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Weite-Kurve-links.svg" decoding="async" loading="lazy" width="80" height="101" class="mw-file-element" data-file-width="512" data-file-height="647" /></a></span></td>
+<td>Weite 30°-Kurve links</td>
+<td>Q</td>
+<td><code>0x08</code></td>
+<td>nicht bekannt</td>
+<td>wie W, gespiegelt</td>
+<td>Code nur aus seVens Tabelle
+</td></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Kleine-Kurve-rechts.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Kleine-Kurve-rechts.svg" decoding="async" loading="lazy" width="80" height="58" class="mw-file-element" data-file-width="512" data-file-height="372" /></a></span></td>
+<td>Kleine 30°-Kurve rechts</td>
+<td>K</td>
+<td><code>0x0c</code></td>
+<td>nicht bekannt</td>
+<td>30°, Radius 37 cm, Bogen 19,37 cm; Endpunkt 18,50 cm voraus und 4,96 cm nach rechts</td>
+<td>Code nur aus seVens Tabelle; zwei kleine Kurven ergeben eine 60°-Kurve
+</td></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Kleine-Kurve-links.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Kleine-Kurve-links.svg" decoding="async" loading="lazy" width="80" height="58" class="mw-file-element" data-file-width="512" data-file-height="372" /></a></span></td>
+<td>Kleine 30°-Kurve links</td>
+<td>M</td>
+<td><code>0x0b</code></td>
+<td>nicht bekannt</td>
+<td>wie K, gespiegelt</td>
+<td>Code nur aus seVens Tabelle
+</td></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Boxengasse.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Boxengasse.svg" decoding="async" loading="lazy" width="80" height="111" class="mw-file-element" data-file-width="512" data-file-height="712" /></a></span></td>
+<td>Boxengasse</td>
+<td>B</td>
+<td><code>0x07</code></td>
+<td>nicht bekannt</td>
+<td>gerade, 86 cm (zwei Kachellängen), Ausbuchtung rechts gezeichnet</td>
+<td>Code nur aus seVens Tabelle („Boxengasse / lange Gerade“); künstlicher Kartentyp <code>0x100</code>
+</td></tr>
+<tr>
+<td><span typeof="mw:File"><a href="https://omegasim.miraheze.org/wiki/Datei:Streckenteil-Engstelle.svg" class="mw-file-description" title="so zeichnet OmegaSim 1.2.9 das Teil"><img alt="so zeichnet OmegaSim 1.2.9 das Teil" src="images/Streckenteil-Engstelle.svg" decoding="async" loading="lazy" width="80" height="90" class="mw-file-element" data-file-width="512" data-file-height="574" /></a></span></td>
+<td>Engstelle</td>
+<td>E</td>
+<td><code>0x0a</code></td>
+<td>– (<code>0x0a</code> heißt dort Start/Ziel)</td>
+<td>gerade, 43 cm; gezeichnet je Seite um bis zu 34&#160;% der halben Bahnbreite eingezogen (höchstens 4,25 cm, schmalste Stelle 16,5 cm)</td>
+<td>Code nur aus seVens Tabelle („NarrowSection“); künstlicher Kartentyp <code>0x101</code>; die Einschnürung ist eine Darstellung, keine Messung
+</td></tr></tbody></table>
+<p>Zwei weitere Werte von Byte 12 sind keine Teile:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Code</th>
+<th>Bedeutung</th>
+<th>Verwendung in OmegaSim
+</th></tr>
+<tr>
+<td><code>0x00</code></td>
+<td>abseits der Bahn, kein gültiges Muster</td>
+<td>sofortiges Signal für „Bahn verlassen“; beim Scan und beim Lernen von der Mehrheitswahl ausgeschlossen
+</td></tr>
+<tr>
+<td><code>0xff</code></td>
+<td>seit dem Einschalten noch nie ein Muster gesehen</td>
+<td>von der Mehrheitswahl ausgeschlossen
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Wie_die_Geometrie_entsteht">Wie die Geometrie entsteht</h3></div>
+<p>Die App zeichnet eine Strecke wie eine Schildkröte, die Schritt für Schritt läuft (Turtle-Grafik, Funktion <code>trackCenterline()</code>): Jede Kachel beginnt genau dort, wo die vorige endet, mit derselben Fahrtrichtung. Eine Gerade schiebt den Punkt um ihre Länge in Fahrtrichtung, eine Kurve führt ihn auf einem Kreisbogen um den Drehwinkel weiter. Für eine Kurve mit Drehwinkel Δ und Radius R, die bei Fahrtrichtung h beginnt, gilt (h im Uhrzeigersinn von „oben“, y-Achse zeigt auf dem Bildschirm nach unten, s = +1 für rechts, −1 für links):
+</p>
+<pre>Verschiebung = s · R · ( cos h − cos(h + Δ) ,  sin h − sin(h + Δ) )
+neue Richtung = h + Δ
+Haarnadel:    vorher zusätzlich L_H · ( sin h , −cos h ),  L_H = 2 · (43 − 37 · cos 30°) = 21,914 cm
+</pre>
+<ul><li>Die gerade Sektion L_H der Haarnadel ist <b>exakt aus einer Schließbedingung gelöst</b>: Die Strecke <code>SHG4R4LG</code> dreht 180° + 4 × 60° − 60° = 360° und muss sich deshalb schließen; das ergibt zwei Gleichungen (x und y) mit zwei Unbekannten (Radius 18,5 cm und gerade Sektion 21,9141 cm), Restfehler 0,000000 cm. Ein früher aus einem Bildschirmfoto abgelesener Wert von 28 cm war um 6,09 cm zu groß.</li>
+<li>Jede Kachel wird in 14 Punkten abgetastet (<code>TRACK_SAMPLES_PER_TILE</code>); Kurven mit großem Drehwinkel bekommen anteilig mehr: max(14, round(14 · |Δ| / 60°)). Eine Haarnadel hat damit 42 Bogenpunkte plus max(2, round(14 · 21,91/43)) = 7 Punkte der geraden Sektion, zusammen 49.</li>
+<li>Umrechnung: 40 Zeichnungseinheiten entsprechen 43 cm, also <code>TRACK_UNITS_PER_CM</code> = 40/43 = 0,9302.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Geschlossen_oder_offen?"><span id="Geschlossen_oder_offen.3F"></span>Geschlossen oder offen?</h3></div>
+<p>Ob eine Kachelfolge eine Runde ergibt, prüft <code>trackSchluss()</code> an der Mittellinie mit zwei Bedingungen:
+</p>
+<pre>Lücke  = |Endpunkt − Anfangspunkt| / 0,9302   ≤ 15 cm   (TRACK_SCHLUSS_CM)
+Winkel = Richtung am Ende − Richtung am Anfang  ≤ 12°   (TRACK_SCHLUSS_GRAD, auf ±180° gefaltet)
+</pre>
+<p>15 cm sind ein Drittel einer fehlenden Kachel (43 cm) und lassen den Modellfehler von rund zwanzig Teilen durch (1&#160;% Längenfehler auf 20 Kacheln sind schon 8,6 cm). Ohne die Winkelbedingung würde z. B. <code>SR2G2R2G2R2G2R2G2</code> mit kleiner Lücke als Ring gelten, obwohl es um 120° verdreht ankommt. Die Zufallsstrecke verlangt strenger höchstens 3 cm (<code>TRACK_SCHLUSS_STRENG_CM</code>).
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Die_zwei_Lesearten">Die zwei Lesearten</h3></div>
+<p>Byte 14 jedes Steuerbefehls trägt die Leseart:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Bit</th>
+<th>Wert</th>
+<th>Name im Code</th>
+<th>Wirkung
+</th></tr>
+<tr>
+<td>Bit 5</td>
+<td><code>0x20</code></td>
+<td><code>TRACK_BIT_RAIL</code></td>
+<td>liest die Kodierung der Kunststoffschiene, das Auto hält sich selbst auf der Bahn
+</td></tr>
+<tr>
+<td>Bit 7</td>
+<td><code>0x80</code></td>
+<td><code>TRACK_BIT_PRINT</code></td>
+<td>liest gedruckte Muster; das Auto hält sich nicht selbst
+</td></tr>
+<tr>
+<td>Bit 6</td>
+<td><code>0x40</code></td>
+<td>–</td>
+<td>kommt in beiden Zuständen vor, gehört zu etwas anderem und bleibt 0
+</td></tr></tbody></table>
+<p>Die beiden Bits schließen sich aus. Gemessen ist: Auf der echten Bahn brachten mit Bit 5 87&#160;% der Meldungen einen Teilwechsel, ohne dieses Bit 7&#160;%; mit Bit 7 kamen auf der Bahn null Lesungen in 551 Fahrmeldungen. Ein Papierblatt auf der Bahn liefert mit Bit 5 nur <code>0x00</code>. Am 26.08.2026 wurde mit der Original-App bestätigt, dass ein Ausdruck nur in der Stellung „Ohne Bahn“ (Bit 7) erkannt wird.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th></th>
+<th>Auf der Bahn</th>
+<th>Ausdruck (in FAHREN: „Frei“)
+</th></tr>
+<tr>
+<th>Was gelesen wird
+</th>
+<td>Kunststoffteile</td>
+<td>gedruckte Muster
+</td></tr>
+<tr>
+<th>Auto hält sich selbst auf der Bahn
+</th>
+<td>ja</td>
+<td>nein
+</td></tr>
+<tr>
+<th>Gilt als Start/Ziel
+</th>
+<td>nur <code>0x01</code></td>
+<td><code>0x0a</code> und <code>0x01</code>
+</td></tr>
+<tr>
+<th>Streckenscan, Editor, Laden, Raum in der FAHREN-Kachel
+</th>
+<td>ja</td>
+<td>nein
+</td></tr>
+<tr>
+<th>Druckvorlagen, Streckenfoto in der FAHREN-Kachel
+</th>
+<td>nein</td>
+<td>ja
+</td></tr>
+<tr>
+<th><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPCs</a>, <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car, Reinigungsfahrzeug</a>, Challenger
+</th>
+<td>ja</td>
+<td>nein (Autos mit den Rollen Safety Car, Reinigungsfahrzeug und Challenger werden beim Wechsel auf „Aus“ gestellt, <code>bahnRollenPruefen()</code>)
+</td></tr>
+<tr>
+<th>Nicht wählbare <a href="./Rennarten.html" title="Rennarten">Rennart</a> (seit 1.2.4)
+</th>
+<td>Demolition Derby</td>
+<td>Time Attack
+</td></tr></tbody></table>
+<p>Beim Wechsel auf eine Leseart, in der die gewählte Rennart nicht erlaubt ist, springt die Wahl auf <b>Training</b>, und eine Meldung nennt den Grund. Stehen im Ausdruck-Modus NPCs oder ein Safety Car in der Garage, warnen Rennstart und Meisterschaft.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Die_zwei_Codetabellen">Die zwei Codetabellen</h3></div>
+<p>Dieselbe Zahl in Byte 12 bedeutet je Leseart etwas anderes. Das ist der Punkt, an dem die Entzifferung monatelang falsch lief: Dasselbe gedruckte Blatt hatte <code>0x0a</code>, <code>0x03</code> und <code>0x01</code> gemeldet, und daraus wurde geschlossen, der Unterschied liege im Druck (Maßstab, Strichbreite, Schwärze). Er lag an der Leseart.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Code</th>
+<th>Bahn-Modus (Bit 5)</th>
+<th>Ausdruck-Modus (Bit 7)</th>
+<th>Quelle
+</th></tr>
+<tr>
+<td><code>0x00</code></td>
+<td>abseits der Bahn</td>
+<td>–</td>
+<td>Mitschnitte (Leitplanken-Mitschnitt 20.08.2026: 16 von 38 Wechseln)
+</td></tr>
+<tr>
+<td><code>0x01</code></td>
+<td>Start/Ziel</td>
+<td>Start/Ziel auf den Blättern von OmegaSim</td>
+<td>seVen, bestätigt für den Bahn-Modus; App-Blätter tragen das <code>0x01</code>-Wort
+</td></tr>
+<tr>
+<td><code>0x02</code></td>
+<td>Gerade</td>
+<td>nicht bekannt</td>
+<td>Mitschnitte
+</td></tr>
+<tr>
+<td><code>0x03</code> / <code>0x04</code></td>
+<td>Kurve links / rechts</td>
+<td>nicht bekannt</td>
+<td>Mitschnitte
+</td></tr>
+<tr>
+<td><code>0x05</code> / <code>0x06</code></td>
+<td>Haarnadel links / rechts</td>
+<td>nicht bekannt</td>
+<td>gemessen 24.08.2026
+</td></tr>
+<tr>
+<td><code>0x07</code></td>
+<td>Boxengasse bzw. lange Gerade</td>
+<td>nicht bekannt</td>
+<td>nur seVen
+</td></tr>
+<tr>
+<td><code>0x08</code> / <code>0x09</code></td>
+<td>weite 30°-Kurve links / rechts</td>
+<td>nicht bekannt</td>
+<td>nur seVen
+</td></tr>
+<tr>
+<td><code>0x0a</code></td>
+<td>Engstelle</td>
+<td>Start/Ziel auf dem Original-Blatt von Carrera</td>
+<td>Bahn: seVen; Ausdruck: gemessen 25.08.2026
+</td></tr>
+<tr>
+<td><code>0x0b</code> / <code>0x0c</code></td>
+<td>kleine 30°-Kurve links / rechts</td>
+<td>nicht bekannt</td>
+<td>nur seVen
+</td></tr>
+<tr>
+<td><code>0xff</code></td>
+<td>noch nie gelesen</td>
+<td>noch nie gelesen</td>
+<td>Mitschnitte
+</td></tr></tbody></table>
+<p>Hinweis: Ältere Texte (eine Tabelle in <code>CARRERA_HYBRID.md</code> bis 0.6.14, der Kopfkommentar von <code>tools/make_patterns.py</code>) führen <code>0x0a</code> noch als Start/Ziel im Bahn-Modus. Maßgeblich ist der Code.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Start/Ziel:_isStartCode()"><span id="Start.2FZiel:_isStartCode.28.29"></span>Start/Ziel: isStartCode()</h3></div>
+<p>Ob ein gemeldeter Code als Ziellinie zählt, entscheidet eine einzige Funktion:<sup id="cite&#95;ref-1" class="reference"><a href="#cite_note-1"><span class="cite-bracket">&#91;</span>1<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-highlight mw-highlight-lang-javascript mw-content-ltr" dir="ltr"><pre><span></span><span class="kd">function</span><span class="w"> </span><span class="nx">isStartCode</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="ow">typeof</span><span class="w"> </span><span class="nx">trackMode</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s1">&#39;string&#39;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">trackMode</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s1">&#39;on&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">c</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="nx">START_CODE_RAIL</span><span class="p">;</span><span class="w">          </span><span class="c1">// 0x01</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">c</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="nx">START_CODE_PRINT</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">c</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="nx">START_CODE_RAIL</span><span class="p">;</span><span class="w">         </span><span class="c1">// 0x0a oder 0x01</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">START_CODES</span><span class="p">.</span><span class="nx">indexOf</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0</span><span class="p">;</span><span class="w">                               </span><span class="c1">// Rückfall [0x0a, 0x01]</span>
+<span class="p">}</span>
+</pre></div>
+<p>Im Ausdruck-Modus gelten beide Werte, weil das Original-Blatt <code>0x0a</code> meldet (gemessen 25.08.2026) und die Blätter von OmegaSim das Wort tragen, das <code>0x01</code> ergibt. Auf der Bahn gilt nur <code>0x01</code>: Sonst würde jede überfahrene <b>Engstelle</b> (<code>0x0a</code>) eine Phantomrunde zählen und das Streckenlernen dort neu anfangen. Der Rückfall auf die Liste greift nur, solange die Leseart noch nicht gesetzt ist; lieber ein Code zu viel als eine verlorene Rundenzählung.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Künstliche_Typen_und_die_Übersetzung_codeZuTyp"><span id="K.C3.BCnstliche_Typen_und_die_.C3.9Cbersetzung_codeZuTyp"></span>Künstliche Typen und die Übersetzung codeZuTyp</h3></div>
+<p>Die Karte führt Start/Ziel seit jeher als <code>0x0a</code>. Auf der Schiene ist <code>0x0a</code> aber die Engstelle: dieselbe Zahl, zwei Bedeutungen. Den Kartentyp von Start/Ziel zu ändern hätte bedeutet, jede gespeicherte Strecke umzuschreiben. Deshalb bekommen Engstelle und Boxengasse Typen <b>außerhalb des Bytebereichs</b> (<code>0x101</code> und <code>0x100</code>), die das Auto nie senden kann. Die Übersetzung vom gemeldeten Code zum Kartentyp steht an genau einer Stelle:<sup id="cite&#95;ref-2" class="reference"><a href="#cite_note-2"><span class="cite-bracket">&#91;</span>2<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-highlight mw-highlight-lang-javascript mw-content-ltr" dir="ltr"><pre><span></span><span class="kd">function</span><span class="w"> </span><span class="nx">codeZuTyp</span><span class="p">(</span><span class="nx">code</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">code</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="kc">undefined</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">code</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">code</span><span class="p">;</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">isStartCode</span><span class="p">(</span><span class="nx">code</span><span class="p">))</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">TILE_TYPE</span><span class="p">.</span><span class="nx">START</span><span class="p">;</span><span class="w">                 </span><span class="c1">// 0x0a (Kartentyp)</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">code</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="nx">CODE_PIT</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">TILE_TYPE</span><span class="p">.</span><span class="nx">PIT</span><span class="p">;</span><span class="w">                   </span><span class="c1">// 0x07 -&gt; 0x100</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="ow">typeof</span><span class="w"> </span><span class="nx">trackMode</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s1">&#39;string&#39;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">trackMode</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s1">&#39;on&#39;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">code</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="nx">CODE_ENGE</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">TILE_TYPE</span><span class="p">.</span><span class="nx">ENGE</span><span class="p">;</span><span class="w">                                       </span><span class="c1">// 0x0a -&gt; 0x101, nur Bahn</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">code</span><span class="p">;</span><span class="w">                                                   </span><span class="c1">// alle anderen 1:1</span>
+<span class="p">}</span>
+</pre></div>
+<table class="wikitable">
+<caption>Zustandstabelle: gemeldeter Code und Leseart
+</caption>
+<tbody><tr>
+<th>Leseart (<code>trackMode</code>)</th>
+<th>Byte 12</th>
+<th><code>isStartCode</code></th>
+<th>Kartentyp nach <code>codeZuTyp</code></th>
+<th>Folge
+</th></tr>
+<tr>
+<td>Bahn (<code>'on'</code>)</td>
+<td><code>0x01</code></td>
+<td>ja</td>
+<td>Start/Ziel (<code>0x0a</code>)</td>
+<td>Runde zählen, Anker für Scan und Lernen
+</td></tr>
+<tr>
+<td>Bahn</td>
+<td><code>0x0a</code></td>
+<td>nein</td>
+<td>Engstelle (<code>0x101</code>)</td>
+<td>keine Runde; NPCs drosseln wie in der Haarnadel
+</td></tr>
+<tr>
+<td>Bahn</td>
+<td><code>0x07</code></td>
+<td>nein</td>
+<td>Boxengasse (<code>0x100</code>)</td>
+<td>Teil wird benannt
+</td></tr>
+<tr>
+<td>Bahn</td>
+<td><code>0x02</code> … <code>0x06</code>, <code>0x08</code>, <code>0x09</code>, <code>0x0b</code>, <code>0x0c</code></td>
+<td>nein</td>
+<td>unverändert</td>
+<td>Teil wird benannt
+</td></tr>
+<tr>
+<td>Ausdruck (<code>'off'</code>)</td>
+<td><code>0x0a</code></td>
+<td>ja</td>
+<td>Start/Ziel</td>
+<td>Runde zählen
+</td></tr>
+<tr>
+<td>Ausdruck</td>
+<td><code>0x01</code></td>
+<td>ja</td>
+<td>Start/Ziel</td>
+<td>Runde zählen
+</td></tr>
+<tr>
+<td>nicht gesetzt</td>
+<td><code>0x0a</code> oder <code>0x01</code></td>
+<td>ja (Liste)</td>
+<td>Start/Ziel</td>
+<td>Rückfall
+</td></tr></tbody></table>
+<p>Weil gespeicherte Strecken den Typ als Zahl halten, wandert <code>migrateTiles()</code> beim Laden alte Strecken, deren Start noch als <code>0x01</code> gespeichert war, auf <code>0x0a</code> um und meldet das im Protokoll.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Wie_das_Auto_die_Teile_liest">Wie das Auto die Teile liest</h3></div>
+<div class="mw-heading mw-heading4"><h4 id="Was_gemeldet_wird">Was gemeldet wird</h4></div>
+<p>Laut Code-Kommentar meldet das Auto mit etwa 14,6 Hz (Median 69 ms zwischen zwei Paketen); die Doku-Tabelle der App nennt 45 bis 60 ms. Byte 12 hält den zuletzt gelesenen Code, Byte 11 zählt die Wechsel. Weil Byte 12 stehen bleibt, sieht die App einen Teilwechsel nur am Sprung von Byte 11, und welcher Code zum verlassenen Teil gehörte, entscheidet sie per <b>Mehrheitswahl</b> über alle Pakete zwischen zwei Sprüngen (siehe <a href="#Streckenscan">Streckenscan</a>).
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Warum_das_Auto_in_der_Bahn_bleibt">Warum das Auto in der Bahn bleibt</h4></div>
+<p>Kein Byte meldet die Querlage. Aus einem Mitschnitt der Original-App im Leitplanken-Modus (20.08.2026, 552 Pakete) geht hervor: Mit Byte 14 Bit 5 schickt die App in den Bytes 16 bis 18 die <b>nächsten drei Teiltypen</b> als gleitendes Fenster über die gescannte Strecke mit (neun verschiedene Fenster, alle aufeinanderfolgende Dreiergruppen eines Rings; zufällig wäre das 1,3 · 10<sup>−6</sup>). Die Deutung im Code: Die Querlage wird im Auto selbst aus dem keilförmigen Muster unter dem Sensor gelesen, die App sagt nur an, wohin die Bahn als Nächstes biegt, und das Auto korrigiert an Bord. Das passt dazu, dass die Melderate (14,6 Hz) für eine Regelung über die App zu langsam wäre. Diese Deutung ist plausibel, aber <b>noch nicht gesichert</b>.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Das_Start/Ziel-Muster"><span id="Das_Start.2FZiel-Muster"></span>Das Start/Ziel-Muster</h4></div>
+<p>Das einzige vollständig bekannte Wort ist das von Start/Ziel, ausgelesen aus den Vektorkoordinaten der Original-Druckvorlage (<code>tools/make_pattern.py</code>), nicht nachgemessen:
+</p>
+<pre>dünner Balken   3,598 mm      dicker Balken   6,604 mm      Verhältnis 1,83
+dünne Lücke     3,514 mm      dicke Lücke     6,530 mm
+Balkenbreite quer 275,9 mm (volle A4-Breite, bei 250 mm Bahnbreite)
+Musterlänge in Fahrtrichtung 75,5 mm
+9 Balken:  000010010      8 Lücken:  00010110      (1 = dick, in Leserichtung)
+</pre>
+<p>Balken und Lücken tragen beide Information, zusammen 17 Elemente je Wort. Nachgerechnet: 7 dünne Balken (25,19 mm) + 2 dicke Balken (13,21 mm) + 5 dünne Lücken (17,57 mm) + 3 dicke Lücken (19,59 mm) = 75,55 mm.
+</p><p>Drei Messungen am Auto (gedrucktes Start/Ziel-Blatt):
+</p>
+<ol><li>Die drei führenden dünnen Striche lassen sich abschneiden; das Blatt wird weiter gelesen. Der Vorlauf ist also kein Nutzdatum, sondern die Strecke, auf der sich der Leser auf die Modulbreite einstellt.</li>
+<li>Eines der beiden wiederholten Muster genügt. Die kleinste tragende Nutzlast ist damit ein Wort ohne Vorlauf, etwa 54 mm in Fahrtrichtung.</li>
+<li>Nach einem Erkennen bleibt der Leser etwa eine Sekunde stumm. Bei 4 km/h Maßstabstempo sind das 1,1 m Fahrweg, gut zweieinhalb Kachellängen. Ein Muster öfter als etwa jeden Meter zu wiederholen bringt deshalb im Ausdruck-Modus nichts.</li></ol>
+<div class="mw-heading mw-heading4"><h4 id="Das_Muster_auf_den_Kunststoffteilen">Das Muster auf den Kunststoffteilen</h4></div>
+<p>Auf den Kunststoffteilen bedecken die Balken die <b>ganze</b> Kachel, 40 und mehr je sichtbarem Abschnitt; das Wort wiederholt sich fortlaufend, damit das Auto es liest, wo immer es auffährt. In Kurven laufen die Balken <b>radial</b> und treffen sich im Kurvenmittelpunkt. Ein Video der Grand Garage zeigt die Unterseite eines Autos über der Bahn im Infrarotlicht, auf dem die trapezförmigen Balken sichtbar sind (<a rel="nofollow" class="external text" href="https://www.youtube.com/watch?v=BwC0pFvetkM&amp;t=82s">Video der Grand Garage auf YouTube, ab 1:22</a>). Nach eigenen Infrarot-Fotos und einer Referenzzeichnung beschreibt der Nutzer die Balken als senkrechte Trapeze, oben etwa 5 mm und unten etwa 20 mm breit, mit Lücken derselben Form kopfüber; das ist eine grobe Schätzung von außen, keine Messung.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Der_gescheiterte_Entzifferungsversuch_vom_31.08.2026">Der gescheiterte Entzifferungsversuch vom 31.08.2026</h4></div>
+<p>Fünf Infrarot-Aufnahmen echter Teile (Start/Ziel, Gerade, Rechtskurve, aus einem Video) wurden ausgemessen. Der Versuch ist <b>messbar gescheitert</b>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Prüfmaß</th>
+<th>erwartet</th>
+<th>gemessen
+</th></tr>
+<tr>
+<td>Restabstand des Fluchtpunkt-Fits der Balkenlinien</td>
+<td>wenige Pixel</td>
+<td>237 bis 579 px
+</td></tr>
+<tr>
+<td>Verhältnis dicker zu dünner Balken</td>
+<td>1,83</td>
+<td>1,09 bis 1,68
+</td></tr></tbody></table>
+<p>Der erste Wert sagt, dass sich die Balkenlinien nicht in einem Punkt treffen; sie sind also nicht das Bild parallel liegender Linien, und ohne diese Annahme lässt sich das Bild nicht perspektivisch entzerren. Der zweite sagt, dass die beiden Breitenklassen im Rauschen verschwimmen (JPEG-Kompression auf 20-Pixel-Merkmale, Weitwinkelverzerrung, ein Lichtfleck in der Bildmitte, eine Hand im Bild). Drei Auswerteverfahren scheiterten aus je eigenem Grund:
+</p>
+<ol><li><b>Waagerechte Abtastlinie</b>: Ein um θ gekippter Balken erscheint um 1/cos θ zu breit; die fächerförmigen Balken lieferten Breitenverhältnisse bis 1:100, also Perspektive statt Information.</li>
+<li><b>Dicke senkrecht zum Balken</b> über eine Hauptachsenzerlegung je Gebiet: richtig gemessen, aber eine globale Fahrtrichtung projizierte Balken aus verschiedenen Radien auf dieselbe Achse; es entstanden negative Lücken.</li>
+<li><b>Kleine Felder mit lokal gemessenem Winkel</b>: sauber, aber je Feld nur 6 bis 9 Balken; daraus lässt sich keine Trennung in zwei Breitenklassen belegen.</li></ol>
+<p>Was die Bilder trotzdem belegen: die durchgehende Bedeckung und die radialen Balken in Kurven (genau deshalb schlug der Fluchtpunkt-Fit dort fehl). Was es bräuchte: einen <b>Flachbett-Scan</b> eines echten Teils mit 300 dpi; ein einziger Scan einer Geraden und einer Kurve würde beide Wörter liefern. Bis dahin sind die Wörter für Gerade (<code>0x02</code>) und Rechtskurve (<code>0x04</code>) <b>nicht entziffert</b>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Druckvorlagen">Druckvorlagen</h3></div>
+<p>Unter <b>Strecke → Druckvorlagen</b> liegen SVG-Dateien. Jedes Blatt trägt ein 100-mm-Kontrollmaß und einen Fahrtrichtungspfeil.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Vorlage</th>
+<th>Datei</th>
+<th>erzeugt von</th>
+<th>Status</th>
+<th>Inhalt
+</th></tr>
+<tr>
+<td>Start/Ziel</td>
+<td><code>startziel-a4.svg</code></td>
+<td><code>tools/make_pattern.py</code></td>
+<td>stabil</td>
+<td>A4 quer, direkt aus der Original-Vorlage; zählt Runden. Das Werkzeug liest die Rechtecke aus dem PDF-Inhaltsstrom, damit keine Zahl abgetippt wird
+</td></tr>
+<tr>
+<td>Schneidebogen</td>
+<td><code>spur-schneidebogen-a4.svg</code></td>
+<td><code>tools/make_track_sheets.py</code></td>
+<td>stabil</td>
+<td>vier gekürzte Start/Ziel-Marken (rund 51 mm, ohne die drei führenden dünnen Balken) auf A4 hochkant mit Schnittlinien
+</td></tr>
+<tr>
+<td>Bahn zum Auslegen</td>
+<td><code>spur-gerade-1/2-a4.svg</code>, <code>spur-kurve-1/2-a4.svg</code></td>
+<td><code>tools/make_track_sheets.py</code></td>
+<td>experimentell</td>
+<td>Gerade als zwei A4-Blätter quer (je 202 mm Fahrweg), 30°-Kurve als zwei Blätter mit je 15°; Kurvenbalken radial mit konstanter Bogenlänge auf der Mittellinie. Tragen das Start/Ziel-Wort, melden also überall Start/Ziel
+</td></tr>
+<tr>
+<td>Trapez-Muster</td>
+<td><code>muster-gerade-a4.svg</code>, <code>muster-kurve-60grad-a4.svg</code>, <code>muster-kurve-60grad-versionb-a4.svg</code></td>
+<td><code>tools/make_pattern_sheets.py</code></td>
+<td>experimentell</td>
+<td>rein optisch, ohne Anspruch auf Maschinenlesbarkeit, randlos: Gerade mit 12 Trapezen (oben 5 mm, unten 20 mm), Kurve A mit 8 radialen Keilen auf A4 skaliert, Kurve B in echter Größe (Radius 370 mm, Breite 250 mm), absichtlich abgeschnitten
+</td></tr>
+<tr>
+<td>Boxengasse</td>
+<td>–</td>
+<td><code>tools/make_patterns.py</code></td>
+<td>entfernt</td>
+<td>seit 0.4.49 auskommentiert, weil die Nummer des Musters geraten und nicht entziffert war
+</td></tr></tbody></table>
+<p><code>tools/make_track_sheets.py</code> tippt keine Zahl ab: Es liest die Modulmaße aus <code>startziel-a4.svg</code> zurück und die Streckenmaße (43 cm, 25 cm, 37 cm) aus <code>src/60-track.js</code>. Die Kurvenbalken laufen mit konstanter Bogenlänge auf der Mittellinie und nicht mit konstantem Winkel, sonst wäre das Modulmaß am äußeren Rand größer als am inneren und der Sensor läse je nach Linie eine andere Folge. Ob eine Papierbahn überhaupt wie die echte gelesen wird, hängt an der Infrarot-Rückstrahlung von Toner und Papier und ist <b>nicht gesichert</b>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Streckenscan">Streckenscan</h3></div>
+<p>Der Streckenscan (<code>garageScanStart()</code>, <code>garageScanTick()</code>) lässt ein Auto selbst über die Bahn fahren und schreibt die gelesenen Teile mit. Er setzt die Leseart „Auf der Bahn“ voraus.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Ablauf">Ablauf</h4></div>
+<ol><li>Der Knopf <b>Streckenscan</b> wählt das Auto: Spieler 1, sonst das erste Auto mit der Rolle Spieler, sonst das erste verbundene Auto. Ist es kein Fahrerauto, fährt es seit 1.0.37 mit einem eigenen Sendetakt (<code>scanFahrStart()</code>, Takt <code>CONTROL_SEND_INTERVAL_MS</code>).</li>
+<li>Das Auto fährt mit Querlage 0 und Spur-Bytes: Byte 10 = <code>0x20</code>, Byte 15 = <code>0x0c</code>, Byte 16 = der gerade gelesene Code, durchgelassen werden nur <code>0x0a</code> und <code>0x02</code> bis <code>0x06</code> (<code>scanLiveCode()</code>), alles andere wird als <code>0x02</code> gesendet, Bytes 17 und 18 = <code>0x02</code>. Neben der Bahn (<code>0x00</code>) gibt es kein Gas und das Bremslicht geht an.</li>
+<li>Status „Wartet auf die erste Überfahrt von Start/Ziel …“. Teile vor dem ersten <b>Anker</b> werden verworfen.</li>
+<li>Ab dem ersten Anker schreibt der Scan jede Kachel in eine Liste, die mit Start/Ziel beginnt.</li>
+<li>Beim nächsten Anker prüft er mit <code>trackSchluss(trackCenterline(Liste))</code>, ob die gemessene Runde geschlossen ist und mindestens 3 Teile hat. Wenn ja: Übernahme in den Editor, Meldung „Fertig: n Teile, Rundkurs geschlossen (Lücke … cm, Winkel …°)“, das Auto hält an (1,5 s Haltezeit).</li>
+<li>Wenn nein: noch eine Runde messen, höchstens 5 Versuche (<code>GARAGE_SCAN_VERSUCHE_MAX</code>), danach Abbruch mit Lücke in cm.</li>
+<li>Mehr als 60 Teile ohne zweite Start/Ziel-Überfahrt: Abbruch.</li></ol>
+<div class="mw-heading mw-heading4"><h4 id="Kachelgrenze,_Mehrheitswahl_und_zwei_Anker"><span id="Kachelgrenze.2C_Mehrheitswahl_und_zwei_Anker"></span>Kachelgrenze, Mehrheitswahl und zwei Anker</h4></div>
+<ul><li><b>Kachelgrenze</b>: Byte 11 hat sich gegenüber dem letzten Paket geändert. Der Scan wertet nur den Wechsel aus, nicht die Differenz.</li>
+<li><b>Mehrheitswahl</b>: Zwischen zwei Grenzen zählt der Scan jeden Wert von Byte 12. An der Grenze gewinnt der häufigste Wert, <b>ohne</b> <code>0xff</code> und <code>0x00</code>, denn <code>0xff</code> ist der häufigste Wert überhaupt. Gibt es keinen gültigen Wert, wird die Kachel übersprungen.</li>
+<li><b>Zwei Anker</b>: (a) die steigende Flanke der Start/Ziel-Sperre (Byte 15 Bit 3) irgendwo während der Kachel, oder (b) <code>isStartCode(Mehrheitswert)</code>. Die Sperre ist der zuverlässigere Anker, weil sie auch dort kommt, wo der Startcode nie erkannt wird. Die beiden meinen verschiedene Kacheln: Der Startcode sagt „die gerade beendete Kachel war Start/Ziel“, die Sperre steigt schon beim Lesen des Startmusters, also an der Grenze davor; deshalb wird bei einem Sperren-Anker die gerade beendete Kachel noch an die alte Runde angehängt. Ohne diese Unterscheidung lernte eine Runde aus sechs Teilen nur fünf.</li></ul>
+<table class="wikitable">
+<caption>Zustandstabelle des Streckenscans
+</caption>
+<tbody><tr>
+<th>Zustand</th>
+<th>Bedingung an der Kachelgrenze</th>
+<th>Aktion</th>
+<th>nächster Zustand
+</th></tr>
+<tr>
+<td>Warten</td>
+<td>kein Anker</td>
+<td>nichts</td>
+<td>Warten
+</td></tr>
+<tr>
+<td>Warten</td>
+<td>Anker</td>
+<td>Liste = [Start/Ziel]</td>
+<td>Messen
+</td></tr>
+<tr>
+<td>Messen</td>
+<td>kein Anker</td>
+<td>Mehrheitswert anhängen; bei mehr als 60 Teilen Abbruch</td>
+<td>Messen / Aus
+</td></tr>
+<tr>
+<td>Messen</td>
+<td>Anker, Runde geschlossen, mindestens 3 Teile</td>
+<td>Liste in den Editor, Auto anhalten</td>
+<td>Aus (fertig)
+</td></tr>
+<tr>
+<td>Messen</td>
+<td>Anker, nicht geschlossen, Versuch ≤ 5</td>
+<td>Liste = [Start/Ziel], Versuch + 1</td>
+<td>Messen
+</td></tr>
+<tr>
+<td>Messen</td>
+<td>Anker, nicht geschlossen, Versuch &gt; 5</td>
+<td>Abbruch mit Lücke in cm</td>
+<td>Aus
+</td></tr>
+<tr>
+<td>jeder</td>
+<td>Knopf „Scan abbrechen“</td>
+<td>Abbruch</td>
+<td>Aus
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading4"><h4 id="Tempo">Tempo</h4></div>
+<p>Das Scan-Tempo ist ein Anteil des Formationstempos. Das Formationstempo ist <code>max(PIT_SPEED_FACTOR, GHOST_READ_MIN)</code> = max(80 / 68,1 / 4,0 ≈ 0,294; 0,35) = 0,35 der Höchstgeschwindigkeit.
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>gemeldetes Teil (Schärfeklasse)</th>
+<th>Konstante</th>
+<th>Anteil am Formationstempo</th>
+<th>Anteil an der Höchstgeschwindigkeit
+</th></tr>
+<tr>
+<td>Gerade, Start/Ziel, weite 30°-Kurve, Boxengasse (0)</td>
+<td><code>SCAN_TEMPO</code></td>
+<td>0,80</td>
+<td>0,28
+</td></tr>
+<tr>
+<td>60°-Kurve, kleine 30°-Kurve (1)</td>
+<td><code>SCAN_TEMPO_KURVE</code></td>
+<td>0,67</td>
+<td>≈ 0,235
+</td></tr>
+<tr>
+<td>Haarnadel, Engstelle (2)</td>
+<td><code>SCAN_TEMPO_HAARNADEL</code></td>
+<td>0,47</td>
+<td>≈ 0,165
+</td></tr></tbody></table>
+<p>Die Klasse kommt aus <code>tileTightness(codeZuTyp(Byte 12))</code>, also aus dem Teil, auf dem das Auto gerade steht, ohne Vorausblick. Das Gas ist mindestens das 1,5-Fache von <code>minMoveThrottle</code>. Laut Kommentar in <code>src/50-drive.js</code> war die Haarnadel vor 1.1.15 mit 0,14 der Höchstgeschwindigkeit „gerade so“ schnell genug, dass das Auto noch Balken und Querlage bestimmen konnte; 1.2.5 hob die Gerade auf 0,80, weil es bei zu langsamer Fahrt Fehllesungen gab.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Der_Kachelzähler_und_die_Kacheldauer"><span id="Der_Kachelz.C3.A4hler_und_die_Kacheldauer"></span>Der Kachelzähler und die Kacheldauer</h4></div>
+<p>Die Ortung auf der Karte (nicht der Scan) zählt seit 1.2 die wirkliche Zahl der Schritte, weil unter Funklast Pakete verloren gehen und Byte 11 dann um 2 springt:<sup id="cite&#95;ref-3" class="reference"><a href="#cite_note-3"><span class="cite-bracket">&#91;</span>3<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<pre>Schritte = max(1, min(3, (neu − alt) &amp; 0xff))
+</pre>
+<p>Beispiele: alt 17, neu 18 → 1. Alt 255, neu 0 → (0 − 255) &amp; 0xff = 1 (Überlauf). Alt 254, neu 1 → 3. Alt 250, neu 0 → 6, gedeckelt auf 3.
+</p><p>Wo das Auto innerhalb einer Kachel ist, meldet es nicht. Die <b>Phase</b> (0 am Eingang, 1 am Ausgang) wird geschätzt als (jetzt − Kachelbeginn) ÷ erwartete Dauer. Die erwartete Dauer wird <b>je Teiltyp</b> als gleitender Mittelwert geführt:
+</p>
+<pre>Dauer_Typ ← 0,7 · Dauer_Typ + 0,3 · gemessen      (nur wenn 250 ms ≤ gemessen ≤ 4000 ms und genau 1 Schritt)
+</pre>
+<p>Werte außerhalb von 250 bis 4000 ms (<code>GHOST_TILE_MS_MIN</code>/<code>_MAX</code>) gelten als Ausreißer, etwa ein verlorenes Paket, das wie eine doppelt lange Kachel aussieht. Solange ein Typ noch keine Messung hat, gilt die mittlere Dauer aller Kacheln mal dem <b>geometrischen Längenverhältnis</b> <code>tileLength(Typ) / mittlere Kachellänge</code>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Teil</th>
+<th>Weglänge (<code>tileLength</code>)</th>
+<th>Verhältnis zur Geraden
+</th></tr>
+<tr>
+<td>Gerade, Start/Ziel, Engstelle</td>
+<td>43,00 cm</td>
+<td>1,00
+</td></tr>
+<tr>
+<td>60°-Kurve</td>
+<td>38,75 cm</td>
+<td>0,90
+</td></tr>
+<tr>
+<td>kleine 30°-Kurve</td>
+<td>19,37 cm</td>
+<td>0,45
+</td></tr>
+<tr>
+<td>weite 30°-Kurve</td>
+<td>58,64 cm</td>
+<td>1,36
+</td></tr>
+<tr>
+<td>Haarnadel (mit gerader Sektion)</td>
+<td>80,03 cm</td>
+<td>1,86
+</td></tr>
+<tr>
+<td>Boxengasse</td>
+<td>86,00 cm</td>
+<td>2,00
+</td></tr></tbody></table>
+<p>Gemessen an den NPCs dauert eine 60°-Kurve 1,18-mal und eine Haarnadel 1,43-mal so lang, wie das geometrische Verhältnis vorhersagt, weil dort gebremst wird. Mit der Messung je Typ fiel der Anteil der Takte, in denen die Phase in Kurven am Deckel 1 klebt, bei 1,2-facher Kurvendauer von 12&#160;% auf 3&#160;%, bei 1,4-facher von 20&#160;% auf 5&#160;%, bei 1,8-facher von 29&#160;% auf 10&#160;%. Für die Tempomessung (<code>tileLengthM()</code> in <code>src/70-race.js</code>) gelten eigene Längen: Start/Ziel 0,40 m (in gleichen Computerrunden 6&#160;% kürzer als eine Gerade), Gerade 0,43 m, 60°-Kurve 0,3875 m, Haarnadel 0,8003 m.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Weitere_Wege,_eine_Strecke_zu_lernen"><span id="Weitere_Wege.2C_eine_Strecke_zu_lernen"></span>Weitere Wege, eine Strecke zu lernen</h3></div>
+<ul><li><b>Strecke beim Fahren lernen</b> (<code>learnTick()</code>): dieselbe Mehrheitswahl und dieselben zwei Anker wie der Scan, aber ohne Schlussprüfung und nur, wenn noch keine Strecke liegt; genau ein Auto speist das Lernen. Vor dem ersten Anker zählt es mit und meldet nach 8 und 25 Teilen „Start/Ziel noch nicht gesehen“.</li>
+<li><b>Strecke aus einer Aufnahme lernen</b> (WIP, <code>src/90c-macro-track.js</code>): spielt eine aufgezeichnete Fahrt einmal ab und schaltet dafür das Lernen vorübergehend ein.</li>
+<li>Der frühere <b>Live-Scan</b> (mitlesen, während man selbst fährt) ist seit 0.9.64 aus der Oberfläche entfernt.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Streckencode">Streckencode</h2></div>
+<p>Der <b>Streckencode</b> ist eine kurze, lesbare Zeichenkette, die eine Strecke vollständig beschreibt: welche Teile in welcher Reihenfolge und wie die ganze Strecke gedreht ist. Er steht im Editor unter der Karte mit dem Knopf <b>Kopieren</b>; darunter nimmt ein Feld einen Code von einem anderen Gerät an (<b>Übernehmen</b>). Das Verfahren ist eine <b>Lauflängenkodierung</b>: Gleiche aufeinanderfolgende Teile werden zu „Buchstabe + Anzahl“ zusammengefasst.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Kodieren_(trackToCode)"><span id="Kodieren_.28trackToCode.29"></span>Kodieren (trackToCode)</h3></div>
+<ol><li>Für jeden Lauf gleicher Teile: Buchstabe aus <code>TRACK_CODE_LETTER</code>, dahinter die Anzahl, wenn sie größer als 1 ist.</li>
+<li>Teile ohne Buchstaben (etwa ein roh übernommener Code wie <code>0x07</code>) werden übersprungen.</li>
+<li>Ist die Drehung nicht 0, folgt <code>@</code> und der Winkel in Grad (0 bis 315 in 45°-Schritten).</li></ol>
+<p>Der Buchstabe <b>I</b> ist bewusst nicht vergeben, weil er von einer 1 nicht zu unterscheiden wäre.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Grammatik_(codeToTrack)"><span id="Grammatik_.28codeToTrack.29"></span>Grammatik (codeToTrack)</h3></div>
+<p>Der Leser baut seine beiden regulären Ausdrücke aus derselben Buchstabenliste wie der Kodierer, damit kein Buchstabe nur auf einer Seite bekannt ist. Das ist eine Lehre aus einem Fehler: Die Linkshaarnadel J wurde früher geschrieben, aber nicht gelesen und fiel beim Einlesen still heraus.<sup id="cite&#95;ref-4" class="reference"><a href="#cite_note-4"><span class="cite-bracket">&#91;</span>4<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<pre>Ganzer Code:   ^([GLRJHQWSMKBE0-9]*)(?:@([0-9]{1,3}))?$
+Je Teil:       ([GLRJHQWSMKBE])([0-9]*)          (global, nacheinander)
+
+Code     = Teile [ "@" Winkel ]
+Teile    = Teil { Teil }
+Teil     = Buchstabe [ Anzahl ]
+Buchstabe= "S" | "G" | "R" | "L" | "H" | "J" | "W" | "Q" | "K" | "M" | "B" | "E"
+Anzahl   = Ziffer { Ziffer }         (Wert 1 bis 99)
+Winkel   = Ziffer [ Ziffer [ Ziffer ] ]
+</pre>
+<p>Regeln beim Einlesen:
+</p>
+<ul><li>Leerzeichen am Rand werden entfernt, Kleinbuchstaben in Großbuchstaben umgewandelt. Leerzeichen <b>innerhalb</b> des Codes machen ihn ungültig.</li>
+<li>Eine Anzahl außerhalb von 1 bis 99 (also auch <code>G0</code>) macht den ganzen Code ungültig. Ziffern vor dem ersten Buchstaben passen zwar auf den ersten Ausdruck, werden vom zweiten aber ignoriert.</li>
+<li>Beginnt die Strecke nicht mit S, wird Start/Ziel vorangestellt, weil jede Strecke damit beginnen muss.</li>
+<li>Der Winkel wird auf das nächste Vielfache von 45° gerundet und modulo 360 genommen: <code>Winkel = (round(w / 45) · 45) mod 360</code>.</li>
+<li>Ungültig: Die App meldet „Code nicht lesbar. Erwartet z. B. SG3R2G2R2@90“.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Beispiele">Beispiele</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Eingabe</th>
+<th>Ergebnis</th>
+<th>Erklärung
+</th></tr>
+<tr>
+<td><code>SG3R2</code></td>
+<td>S, G, G, G, R, R (6 Teile)</td>
+<td>offen: dreht nur 120°
+</td></tr>
+<tr>
+<td><code>SR3G2R3G</code></td>
+<td>10 Teile, Lücke 0,00 cm</td>
+<td>Oval: zweimal 180° mit je 3 Rechtskurven, Mittellinie 74 × 160 cm
+</td></tr>
+<tr>
+<td><code>SR3GLR2GR2G2</code></td>
+<td>13 Teile, Lücke 0,48 cm, Winkel 0°</td>
+<td>die Vorgabestrecke (<code>TRACK_VORGABE_CODE</code>), Länge 5,25 m
+</td></tr>
+<tr>
+<td><code>SHG4R4LG</code></td>
+<td>12 Teile, Lücke 0,00 cm</td>
+<td>dreht 180° + 240° − 60° = 360°; an ihr wurde die gerade Sektion der Haarnadel gelöst
+</td></tr>
+<tr>
+<td><code>sg2hg2j@100</code></td>
+<td>S, G, G, H, G, G, J, Drehung 90°</td>
+<td>klein geschrieben ist erlaubt; round(100/45) = 2, also 90°
+</td></tr>
+<tr>
+<td><code>G4R6</code></td>
+<td>S, G4, R6</td>
+<td>S wird vorangestellt
+</td></tr>
+<tr>
+<td><code>SG0R</code></td>
+<td>ungültig</td>
+<td>Anzahl 0
+</td></tr>
+<tr>
+<td><code>SG2 R3</code></td>
+<td>ungültig</td>
+<td>Leerzeichen im Code
+</td></tr>
+<tr>
+<td><code>SGIG</code></td>
+<td>ungültig</td>
+<td>I ist kein Teil
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele_2">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Ein_Code,_zwei_Bedeutungen"><span id="Ein_Code.2C_zwei_Bedeutungen"></span>Ein Code, zwei Bedeutungen</h3></div>
+<p>Ein Auto meldet in Byte 12 den Wert <code>0x0a</code>.
+</p>
+<ol><li>Leseart „Auf der Bahn“: <code>isStartCode(0x0a)</code> prüft <code>0x0a === 0x01</code> → nein. <code>codeZuTyp(0x0a)</code>: kein Startcode, nicht <code>0x07</code>, Leseart <code>'on'</code> und Code <code>0x0a</code> → Engstelle (<code>0x101</code>). Keine Runde; NPCs drosseln wie in der Haarnadel (Schärfeklasse 2).</li>
+<li>Leseart „Ausdruck“: <code>isStartCode(0x0a)</code> → <code>0x0a === 0x0a</code> → ja. Das Original-Druckblatt hat die Ziellinie überquert, die Runde zählt.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Mehrheitswahl_an_einer_Kachelgrenze">Mehrheitswahl an einer Kachelgrenze</h3></div>
+<p>Zwischen zwei Sprüngen von Byte 11 (von 41 auf 42) kommen 9 Pakete mit Byte 12 = <code>0xff, 0xff, 0x04, 0x04, 0x04, 0xff, 0x04, 0x02, 0x04</code>.
+</p>
+<ol><li>Zählung: <code>0xff</code> 3-mal (ausgeschlossen), <code>0x04</code> 5-mal, <code>0x02</code> 1-mal.</li>
+<li>Gewinner: <code>0x04</code> → Rechtskurve.</li>
+<li>Byte 15 Bit 3 war in diesen Paketen nie gesetzt und <code>0x04</code> ist kein Startcode → kein Anker, „R“ wird an die Liste gehängt.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Scan_einer_Dreiecksstrecke">Scan einer Dreiecksstrecke</h3></div>
+<p>Aufgebaut ist <code>SR2GR2GR2</code> (9 Teile).
+</p>
+<ol><li>Das Auto steht auf der zweiten Geraden. Bis zur Start/Ziel-Kachel liest es G, R, R; Zustand bleibt „Warten“.</li>
+<li>Beim Lesen des Startmusters steigt die Sperre; an der Grenze danach liegt der erste Anker. Liste = [S].</li>
+<li>Danach kommen R, R, G, R, R, G, R, R; die Liste hat 9 Einträge.</li>
+<li>Zweiter Anker: Die Mittellinie von <code>SR2GR2GR2</code> schließt mit 0,00 cm Lücke (Winkelanzeige −2,1°, ein Abtasteffekt, weit unter 12°) → geschlossen, mindestens 3 Teile → Übernahme. Meldung „Fertig: 9 Teile, Rundkurs geschlossen“.</li>
+<li>Hätte das Auto eine Kurve als Gerade gelesen, wäre die Lücke groß gewesen; dann misst es bis zu viermal neu.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Länge_einer_Strecke"><span id="L.C3.A4nge_einer_Strecke"></span>Länge einer Strecke</h3></div>
+<p>Die Vorgabestrecke <code>SR3GLR2GR2G2</code> hat 5 gerade Kacheln (S und vier G) und 8 Kurven: 5 × 43,00 + 8 × 38,75 = 215,0 + 310,0 = 525,0 cm. Der Editor zeigt „Länge 5,25 m · 1:50 = 0,26 km“. Für die Phasenschätzung ist die mittlere Kachellänge 525,0 / 13 = 40,4 cm; eine Gerade bekommt damit den Faktor 43,0 / 40,4 = 1,06, eine Kurve 38,75 / 40,4 = 0,96.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li>Die Balkenwörter für Gerade und Kurven sind nicht entziffert. Gedruckte Bahnteile („Bahn zum Auslegen“) tragen deshalb das Start/Ziel-Wort und melden überall Start/Ziel.</li>
+<li>Die Codes für Boxengasse, weite und kleine 30°-Kurve und Engstelle stammen nur aus einer fremden Protokollbeschreibung (seVen) und sind am Auto nicht gemessen.</li>
+<li><b>Rohe Codes im Scan</b> (Befund aus dem Code, am Auto nicht geprüft): <code>garageScanTick()</code> und <code>learnTick()</code> übersetzen nur die Ankerkachel mit <code>codeZuTyp()</code>; alle anderen Kacheln werden mit dem roh gemeldeten Wert angehängt. Eine gescannte Engstelle (<code>0x0a</code> auf der Bahn) landet dadurch als Kartentyp <code>0x0a</code>, also als weitere Start/Ziel-Kachel (Sektorgrenze) in der Karte, und eine Boxengasse (<code>0x07</code>) als Typ ohne Buchstaben, der im Streckencode fehlt. Der Editor warnt selbst: „Die Hex-Codes stimmen noch nicht für alle Streckenteile. Die Schikane zum Beispiel scannt das Auto nicht richtig.“</li>
+<li>Der Scan zählt jede Änderung von Byte 11 als genau eine Kachel; springt der Zähler wegen eines verlorenen Pakets um 2, fehlt in der gescannten Liste ein Teil, und die Runde schließt nicht. Der Scan misst dann bis zu fünfmal.</li>
+<li>Die Breite der Engstelle ist nicht gemessen; die Karte zieht sie nur zur Darstellung ein. Die Geometrie rechnet sie wie eine Gerade.</li>
+<li>Die Start/Ziel-Kachel wird mit 43 cm gezeichnet; ein Abgleich mit dem Original-Editor deutet auf rund 12 cm weniger hin. Die Tempomessung rechnet deshalb mit 0,40 m. Nachgemessen ist das nicht.</li>
+<li>Die Sensorbauart (Kamera oder Infrarot) und die Deutung, dass das Auto die Querlage aus dem Keilmuster selbst liest, sind <b>noch nicht gesichert</b>.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version</th>
+<th>Änderung
+</th></tr>
+<tr>
+<td>0.4.49</td>
+<td>Boxengassen-Druckvorlage auskommentiert (geratene Musternummer)
+</td></tr>
+<tr>
+<td>0.5</td>
+<td>Probe- und Vorlaufblätter entfernt; die Messungen zum Anlauf sind abgeschlossen
+</td></tr>
+<tr>
+<td>0.6.14</td>
+<td>Start/Ziel je Leseart: auf der Bahn nur <code>0x01</code>, im Ausdruck <code>0x0a</code>; Spalten der Codetabelle in der Doku berichtigt
+</td></tr>
+<tr>
+<td>0.6.19</td>
+<td>sechs Teile aus seVens Bahn-Tabelle (<code>0x07</code> bis <code>0x0c</code>), künstliche Typen <code>0x100</code> und <code>0x101</code>
+</td></tr>
+<tr>
+<td>0.7</td>
+<td>Streckenscan überarbeitet; Strecke aus einer Aufnahme lernen
+</td></tr>
+<tr>
+<td>0.8.28</td>
+<td>Reiter Strecke aufgeräumt: Editor, Scan, Laden, Meine Teile und Ausdruck je eigene Seite
+</td></tr>
+<tr>
+<td>0.9</td>
+<td>Streckenscan langsamer, das Auto hält am Ende an; in FAHREN Druckvorlagen nur bei „Frei“, Editor nur „Auf der Bahn“
+</td></tr>
+<tr>
+<td>0.9.39</td>
+<td>Tempomessung: Start/Ziel 0,40 m, Haarnadel mit gerader Sektion
+</td></tr>
+<tr>
+<td>0.9.64</td>
+<td>Live-Scan-Knopf entfernt
+</td></tr>
+<tr>
+<td>1.0</td>
+<td>Streckenscan: Spielerauto fuhr geradeaus, wenn schon eine Strecke im Editor lag, und mit Fahrgefühl RC griff der Autopilot nicht; beides behoben
+</td></tr>
+<tr>
+<td>1.0.37</td>
+<td>ohne Spieler 1 fährt das erste verbundene Auto den Scan
+</td></tr>
+<tr>
+<td>1.1.15</td>
+<td>Scan etwas schneller: Gerade 0,235, Haarnadel 0,165 der Höchstgeschwindigkeit
+</td></tr>
+<tr>
+<td>1.2</td>
+<td>Karte: eigener Punkt misst Kachelzeiten je Typ und zählt verlorene Meldungen (Schrittformel mit <code>&amp; 0xff</code>, höchstens 3)
+</td></tr>
+<tr>
+<td>1.2.4</td>
+<td>Rennarten folgen der Leseart (Bahn: kein Demolition Derby, Ausdruck: kein Time Attack)
+</td></tr>
+<tr>
+<td>1.2.5</td>
+<td>Scan auf Geraden 0,80 statt 0,67 des Formationstempos; Kurven 0,67, Haarnadel 0,47
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
+<div class="mw-references-wrap"><ol class="references">
+<li id="cite&#95;note-1"><span class="mw-cite-backlink"><a href="#cite_ref-1">↑</a></span> <span class="reference-text">Funktion <code>isStartCode()</code>, <code>src/60-track.js</code></span>
+</li>
+<li id="cite&#95;note-2"><span class="mw-cite-backlink"><a href="#cite_ref-2">↑</a></span> <span class="reference-text">Funktion <code>codeZuTyp()</code>, <code>src/60-track.js</code></span>
+</li>
+<li id="cite&#95;note-3"><span class="mw-cite-backlink"><a href="#cite_ref-3">↑</a></span> <span class="reference-text">Funktion <code>spielerOrtTick()</code>, <code>src/90-ghosts.js</code></span>
+</li>
+<li id="cite&#95;note-4"><span class="mw-cite-backlink"><a href="#cite_ref-4">↑</a></span> <span class="reference-text">Funktion <code>codeToTrack()</code>, <code>src/60-track.js</code></span>
+</li>
+</ol></div>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a></li>
+<li><a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a></li>
+<li><a href="./Firmware.html" title="Firmware">Firmware</a></li>
+<li><a href="./Original-App.html" title="Original-App">Original-App</a></li>
+<li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
+<li><a href="./Rennarten.html" title="Rennarten">Rennarten</a></li>
+<li><a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalsystem</a></li>
+<li><a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/60-track.js</code>: <code>TILE_TYPE</code>, <code>codeZuTyp()</code>, <code>isStartCode()</code>, <code>START_CODE_RAIL</code>, <code>START_CODE_PRINT</code>, <code>migrateTiles()</code>, <code>trackCenterline()</code>, <code>tileTurnDeg()</code>, <code>tileRadius()</code>, <code>trackSchluss()</code>, <code>TRACK_CODE_LETTER</code>, <code>trackToCode()</code>, <code>codeToTrack()</code>, <code>cmTick()</code>, <code>learnTick()</code>, <code>garageScanStart()</code>, <code>garageScanTick()</code></li>
+<li><code>src/20-protocol.js</code>: <code>TRACK_BIT_RAIL</code>, <code>TRACK_BIT_PRINT</code>, <code>trackModeBit()</code></li>
+<li><code>src/50-drive.js</code>: <code>applyScanMode()</code>, <code>SCAN_TEMPO</code>, <code>SCAN_TEMPO_KURVE</code>, <code>SCAN_TEMPO_HAARNADEL</code></li>
+<li><code>src/90-ghosts.js</code>: <code>formationPace()</code>, <code>scanFahrStart()</code>, <code>scanTempoFaktor()</code>, <code>tileTightness()</code>, <code>tileLength()</code>, <code>ghostNoteTileTime()</code>, <code>spielerOrtTick()</code></li>
+<li><code>src/70-race.js</code>: <code>tileLengthM()</code></li>
+<li><code>src/90c-macro-track.js</code>: Strecke aus einer Aufnahme lernen</li>
+<li><code>CARRERA_HYBRID.md</code>: Abschnitte „Zwei getrennte Codetabellen“, „Wieviel Anlauf der Leser braucht“, „Warum die Schienenmuster (noch) nicht entziffert sind“, „Die Maße des Start/Ziel-Musters“, „Die Kacheldauer wird je Typ gemessen“</li>
+<li><code>tools/make_pattern.py</code>, <code>tools/make_track_sheets.py</code>, <code>tools/make_pattern_sheets.py</code>, <code>tools/make_patterns.py</code></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw151
+Cached time: 20261027060118
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [prevent‐selective‐update, show‐toc]
+CPU time usage: 0.130 seconds
+Real time usage: 0.139 seconds
+Preprocessor visited node count: 268/1000000
+Revision size: 52216/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 2/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 8634/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    2.115      1 Vorlage:Stand
+100.00%    2.115      1 -total
+-->
+
+<!-- Render ID d35f4ce0-d1cb-11f1-98ba-bc2411ac95a6 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:23:|#|:idhash:canonical and timestamp 20261027060118 and revision id 116. Rendering was triggered because: page-edit
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

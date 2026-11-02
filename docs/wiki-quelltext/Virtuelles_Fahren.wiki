@@ -2,6 +2,11 @@
 [[Datei:OmegaSim-Garage.png|mini|Die Garage von OmegaSim, in der die virtuelle Fahrt gestartet wird]]
 '''Virtuelles Fahren''' (in der App „Virtuell fahren“, in Arbeit) ist ein Modus von [[OmegaSim]], in dem ein simuliertes Auto ohne Bluetooth-Verbindung in einer 3D-Ansicht über die Strecke aus dem [[Strecken- und Raum-Editor]] fährt. Das virtuelle Auto ist für die App ein gewöhnliches Garagenauto, das sich seine Funkmeldungen selbst erzeugt; dadurch laufen Rundenzeit, Rennen, Telemetrie und Motorklang unverändert mit. Gefahren wird mit dem Tempo des gewählten Fahrgefühls und einem Querdynamikmodell nach dem Vorbild eines GT3-Rennwagens. Verwandt, aber getrennt davon ist '''Rennen simulieren''': Dort fahren NPC-Attrappen ohne Hardware mit der echten NPC-Steuerung (siehe [[NPC-Fahrverhalten]]); beides wird auf dieser Seite beschrieben, weil beide Autos ohne [[Carrera HYBRID]]-Hardware bewegen.
 
+[[Datei:OmegaSim-Virtuell-Fahren.png|mini|Die virtuelle Fahrt: der Vulture V5.R aus Speed Dreams in der 3D-Ansicht, mit Verfolgerkamera über die Strecke aus dem Editor.]]
+[[Datei:OmegaSim-Virtuell-Auto.png|mini|Das virtuelle Auto, der Vulture V5.R aus [https://www.speed-dreams.org/ Speed Dreams] (nahe Verfolgerkamera).]]
+
+Das '''Fahrzeugmodell''' stammt für das Standard-Auto aus '''[https://www.speed-dreams.org/ Speed Dreams]''', einem freien Rennsimulator (GPL-2+): Das Modell <code>ls1-vulture-v5r</code> (Vulture V5.R) wird mit <code>tools/sd_auto.py</code> übernommen – samt Lichtorten, Rädern und den Fahrzeugdaten (Masse, Schwerpunkt, Radstand, Einschlag, Bremsbalance, Abtrieb) aus der <code>.xml</code>-Datei des Originals. Einige weitere Modelle folgen demselben Schema ([[#Einstellungen|siehe Auto-Auswahl]]).
+
 == Auf einen Blick ==
 {| class="wikitable"
 ! Merkmal !! Wert
@@ -31,7 +36,7 @@ Die Strecke liegt in einem ebenen '''Koordinatensystem''' mit x und y in „Stre
 Das '''Einspurmodell''' (auch Fahrradmodell) fasst die beiden Räder einer Achse zu einem zusammen. Mit Radstand L, Radeinschlag δ und Tempo v dreht sich das Auto mit der Gierrate ω = v · tan(δ) / L. Mehr Querkraft, als die Reifen übertragen können, gibt es nicht: Dann rutscht das Auto.
 
 === Reifenmodell nach Pacejka ===
-Die '''Magic Formula''' von Hans Pacejka beschreibt, wie viel Seitenkraft ein Reifen bei einem bestimmten '''Schräglaufwinkel''' α (Winkel zwischen Laufrichtung und Blickrichtung des Rads) überträgt. Die vereinfachte Form lautet F = D · sin(C · arctan(B · α)): Bei kleinem α steigt die Kraft fast linear, erreicht ein Maximum D und fällt dann leicht ab. Ein '''Reibkreis''' teilt die Haftung zwischen Bremsen/Antreiben und Kurvenkraft auf: Wer voll bremst, hat weniger Seitenhalt. Mehr dazu unter [[Fahrverhalten]].
+Die '''Magic Formula''' von Hans Pacejka (von Grund auf erklärt im Artikel [[Pacejka]]) beschreibt, wie viel Seitenkraft ein Reifen bei einem bestimmten '''Schräglaufwinkel''' α (Winkel zwischen Laufrichtung und Blickrichtung des Rads) überträgt. Die vereinfachte Form lautet F = D · sin(C · arctan(B · α)): Bei kleinem α steigt die Kraft fast linear, erreicht ein Maximum D und fällt dann leicht ab. Ein '''Reibkreis''' teilt die Haftung zwischen Bremsen/Antreiben und Kurvenkraft auf: Wer voll bremst, hat weniger Seitenhalt. Mehr dazu unter [[Fahrverhalten]].
 
 === WebGL ===
 WebGL ist die Schnittstelle des Browsers, mit der Programme die Grafikkarte nutzen. OmegaSim bringt dafür einen eigenen, kleinen Zeichner mit, ohne fremde Bibliothek (zum Aufbau der App siehe [[Aufbau von OmegaSim]]).
@@ -156,14 +161,16 @@ Rückwärts gilt das Einspurmodell mit Radeinschlag 26° und Radstand 7 Einheite
 === Geist und virtuelle NPCs ===
 Der '''Geist''' schreibt in der ersten Runde je Bild Ort, Richtung und Zeit mit. Ab der ersten Start/Ziel-Überfahrt spielt er die Aufzeichnung in einer Schleife ab, zwischen zwei Punkten linear eingeblendet.
 
-Die '''virtuellen NPCs''' (seit 1.1.46) sind '''keine''' echten NPCs. Sie folgen der Mittellinie mit festem Querversatz (+3, −3 und 0 Einheiten) und eigenem Tempofaktor (0,97, 1,00, 1,03), gleichmäßig über die Runde verteilt gestartet:<ref><code>vfNpcSteuern()</code>, <code>vfNpcStarten()</code>.</ref>
+Die '''virtuellen NPCs''' (seit 1.1.46) sind '''keine''' echten NPCs. Jeder folgt seiner eigenen Spur, der Mittellinie mit festem Querversatz (+3, −3 und 0 Einheiten), mit eigenem Tempofaktor (0,97, 1,00, 1,03), gleichmäßig über die Runde verteilt gestartet. Seit 1.2.32 fahren sie mit dem Tempo der Garagenstufe 1 (mittel) und mit einem eigenen, stummen Fahrzeugmodell wie das eigene Auto:<ref><code>vfNpcStufenTempo()</code>, <code>vfNpcBahn()</code>, <code>vfNpcSteuern()</code>, <code>vfNpcStarten()</code>.</ref>
 <pre>
-Δh_max = größte Richtungsänderung zwischen zwei Nachbarpunkten in den nächsten 18 Punkten (Grad)
-κ      = |Δh_max| / 2,86
-Ziel   = 3,2 × max(0,3; 1 − κ/4,5 × 0,7) × Faktor          (Modell-km/h)
-Tempo  → Ziel mit +2,5 km/h je s (beschleunigen) bzw. −6,0 km/h je s (bremsen)
+v_Gerade = Stufenwert / 0,55 × ghostCfg.speed × topSpeedKmh   (Stufe 1, Vorgabe: 0,55 × 4 = 2,2 Modell-km/h)
+k        = Richtungsänderung zwischen den Sehnen über ±3 Punkte / halbe Sehnenlänge   (1/Einheit)
+v_Kurve  = √(13 m/s² × 100 × 0,930 / (73,75 × k)) Einheiten/s                         (höchstens 1,3 g im GT3-Maß)
+v_i      = min(v_Gerade, v_Kurve, √(v_(i+1)² + 2 × 0,8 km/h/s × ds))                  (Bremspunkte, rückwärts um die Runde)
+Ziel     = min(v hier, v 0,5 s voraus) × Faktor;  Gas = Fehl / (0,06 × top), Bremse = −Fehl / (0,05 × top)
+a_quer   = v_GT3 × k × v_E   (für die Federung, Neigung 1×)
 </pre>
-Sie haben keine Querdynamik, keine Berührungen mit dem eigenen Auto und keine Rundenwertung; es gibt in der virtuellen Fahrt überhaupt keine Kollisionsprüfung.
+Vorher (bis 1.2.31) fuhren sie mit festem Geradentempo 3,2 Modell-km/h, beschleunigten mit 2,5 und bremsten mit 6,0 km/h je s, und die Querbeschleunigung für die Federung sprang zwischen zwei Mittellinienpunkten (bis 225 m/s², Rollen bis 34 Grad). Sie haben keine Berührungen mit dem eigenen Auto und keine Rundenwertung; es gibt in der virtuellen Fahrt überhaupt keine Kollisionsprüfung.
 
 === Rennen simulieren ===
 <code>simStart()</code> nimmt die eingetragene Strecke (ohne Strecke die Vorgabe SR3GLR2GR2G2, „geliehen“), legt die echte Garage beiseite und füllt sie mit 2 bis 6 Attrappen <code>S1</code> … <code>S6</code>; nach dem Ende kommt die Garage zurück. Jede Attrappe bekommt <code>startGhost()</code> und fährt mit der vollen NPC-Logik.<ref><code>src/90b-sim.js</code>, <code>simStart()</code>, <code>simSchritt()</code>, <code>simTeilschritt()</code>.</ref>
@@ -253,9 +260,12 @@ Zwei Simulations-NPCs liegen 5&nbsp;cm hintereinander (d_längs = 4,65 Einheiten
 * <code>src/60-track.js</code>: <code>TRACK_TILE_CM</code>, <code>TRACK_UNITS_PER_CM</code>, <code>TRACK_HALF_W</code>, <code>AUTO_LANG</code>, <code>AUTO_BREIT</code>, <code>trackCenterline()</code>
 * <code>src/90-ghosts.js</code>: <code>setCarRole()</code>, <code>removeCar()</code>, <code>onCarNotify()</code>
 * <code>src/51-konsole.js</code>: Tasten Escape, C und Options in der virtuellen Fahrt
+* <code>tools/sd_auto.py</code>, <code>img/autos/v5r/</code>: das Speed-Dreams-Auto (Vulture V5.R) mit Modell, Lichtern und Fahrdaten
 
 == Weblinks ==
 * Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
+* [https://www.speed-dreams.org/ Speed Dreams] – der freie Rennsimulator, aus dem die virtuellen Autos (Vulture V5.R u.&nbsp;a.) stammen
+* [https://sourceforge.net/projects/speed-dreams/ Speed Dreams auf SourceForge]
 
 [[Kategorie:OmegaSim]]
 [[Kategorie:Spielfunktionen]]

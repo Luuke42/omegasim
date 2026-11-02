@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Original-App - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Original-App</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p>Die <b>Original-App</b> ist die Smartphone-App des Herstellers Carrera, mit der <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Autos per <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a> gesteuert werden. Zum System gehört optional ein Controller, in den das Handy eingeklemmt wird und der echte Tasten statt Bildschirmtasten bietet. Für <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> ist die Original-App vor allem eine <b>Messquelle</b>: Das Funkprotokoll, das OmegaSim spricht, wurde aus Mitschnitten des Funkverkehrs zwischen Original-App und Auto rekonstruiert, und die selbst gefahrenen Gegner der Original-App dienen als Maßstab für OmegaSims eigene NPCs. Dieser Artikel fasst zusammen, was die Dokumentation und der Quelltext von OmegaSim über die Original-App belegen. Bedienung, Menüs und Versionsstände der Original-App selbst sind dort nicht beschrieben und fehlen deshalb auch hier.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Punkt</th>
+<th>Stand</th>
+<th>Beleg
+</th></tr>
+<tr>
+<td>Hersteller</td>
+<td>Carrera</td>
+<td>–
+</td></tr>
+<tr>
+<td>Rolle für OmegaSim</td>
+<td>Vorlage des Protokolls, Referenz für NPC-Verhalten</td>
+<td>CARRERA_HYBRID.md, Doku-Reiter
+</td></tr>
+<tr>
+<td>Mitschnitte</td>
+<td>HCI-Snoop-Aufzeichnungen vom 13. bis 21.08.2026</td>
+<td>nur lokal; per <code>.gitignore</code> vom Repository ausgeschlossen, Auswertung mit <code>tools/parse_btsnoop.py</code>
+</td></tr>
+<tr>
+<td>Sendetakt der Original-App</td>
+<td>im Mitschnitt vom 13.08.2026 Median 52 ms</td>
+<td>lokale Auswertung des Mitschnitts
+</td></tr>
+<tr>
+<td>Befehlsform</td>
+<td>20 Byte, <code>0xAF</code>, CRC-8</td>
+<td>identisch mit OmegaSim
+</td></tr>
+<tr>
+<td>Betriebsarten im Mitschnitt</td>
+<td>gesteuertes Auto, selbst gefahrene Gegner, Leitplanken-Modus</td>
+<td>Bytes 10, 14, 15, 16–18
+</td></tr>
+<tr>
+<td>Verhältnis zu OmegaSim</td>
+<td>unabhängig; OmegaSim ist keine Erweiterung der Original-App</td>
+<td>–
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Was_ein_Mitschnitt_ist">Was ein Mitschnitt ist</h3></div>
+<p>Android kann den gesamten Bluetooth-Verkehr eines Handys in eine Datei schreiben („HCI-Snoop-Protokoll“, in den Entwickleroptionen). <b>HCI</b> (Host Controller Interface) ist die Stelle, an der das Betriebssystem mit dem Funkchip spricht; ein Mitschnitt enthält deshalb jedes Paket, das die App ans Auto schreibt, und jede Meldung, die zurückkommt, jeweils mit Zeitstempel. OmegaSim wertet solche Dateien mit <code>tools/parse_btsnoop.py</code> aus. Die Mitschnitte selbst werden ausdrücklich nirgends hochgeladen: Sie enthalten Geräteadressen und den vollständigen Funkverkehr des Telefons, deshalb schließt <code>.gitignore</code> sie aus. Eine Zeile der Auswertung sieht so aus:
+</p>
+<pre>[341.6ms] PHONE-&gt;CAR WriteCommand handle=0x0011 uuid=6e400002-… value=af0000000000df00800060000100820400000033 len=20
+</pre>
+<p><i>WriteCommand</i> heißt: Schreiben ohne Antwort. <i>handle</i> ist die Kurznummer, unter der das Merkmal in dieser Verbindung angesprochen wird, <i>value</i> der Inhalt als Folge von <a href="./Hexadezimalsystem.html" title="Hexadezimalsystem">Hexadezimalzahlen</a> (je zwei Zeichen ein Byte).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Reverse_Engineering">Reverse Engineering</h3></div>
+<p>Weil der Hersteller das Protokoll nicht veröffentlicht, wird es durch <b>Reverse Engineering</b> erschlossen: Man beobachtet, was die Original-App bei bekannten Handlungen sendet (Licht an, Bremse, Leitplanken-Modus), sucht das Byte, das sich dabei ändert, und prüft die Deutung am Auto. Ein starker Beleg ist, wenn eine eigene Rechnung aufgezeichnete Werte exakt trifft, etwa die Prüfsumme (siehe <a href="./Carrera_HYBRID.html#Prüfsumme_(CRC-8)" title="Carrera HYBRID">Carrera HYBRID#Prüfsumme (CRC-8)</a>).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Statistische_Begriffe">Statistische Begriffe</h3></div>
+<p>Einige Befunde unten sind statistisch. <b>Median</b>: der mittlere Wert einer sortierten Reihe. <b>Varianz</b>: mittlere quadrierte Abweichung vom Mittelwert, ein Maß für Streuung. <b>Erklärter Anteil</b>: wie viel der Streuung verschwindet, wenn man eine Größe (hier die Streckenposition) kennt. <b>Korrelation</b> r: Zusammenhang zweier Größen zwischen −1 und +1.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<p>OmegaSim und die Original-App können nicht gleichzeitig dasselbe Auto steuern: Ein verbundenes Auto wirbt nicht mehr und ist für das andere Programm unsichtbar.
+</p>
+<ol><li>Zum Wechseln von OmegaSim zur Original-App in OmegaSim <b>Garage → Alle trennen</b> wählen, dann die Original-App öffnen.</li>
+<li>Zum Wechseln zurück die Original-App schließen oder dort trennen; ein Auto, das noch hell leuchtet, ist womöglich noch verbunden (siehe <a href="./Keine_Reaktion_des_Fahrzeugs.html" title="Keine Reaktion des Fahrzeugs">Keine Reaktion des Fahrzeugs</a>).</li>
+<li>Firmware-Updates des Herstellers laufen nur über die Original-App (siehe <a href="./Firmware.html" title="Firmware">Firmware</a>). Nach einem Update in OmegaSim prüfen, ob Streckencodes noch ankommen.</li>
+<li>Wer selbst Mitschnitte beitragen möchte: HCI-Snoop in den Android-Entwickleroptionen einschalten, mit der Original-App fahren, die Datei sichern und mit Datum und Handlung (z. B. „Licht aus, an, Bremse“) melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<p>Die Original-App hat in OmegaSim keine eigenen Einstellungen. Einige Optionen von OmegaSim bilden Verhalten der Original-App nach:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in OmegaSim</th>
+<th>Bereich/Werte</th>
+<th>Standard</th>
+<th>Bezug zur Original-App</th>
+<th>Interner Schlüssel/ID
+</th></tr>
+<tr>
+<td>Leseart (FAHREN → Strecke)</td>
+<td>Auf der Bahn / Ausdruck</td>
+<td>Auf der Bahn</td>
+<td>entspricht den Stellungen „Auf der Bahn“ und „Ohne Bahn“ der Original-App</td>
+<td><code>trackMode</code>
+</td></tr>
+<tr>
+<td>Rückwärtsgang mit Gas und Bremse (Optionen → Steuerung, experimentell)</td>
+<td>an/aus, Regler für Pedalweg, Haltezeit, Tempogrenze, Ausrollzeit</td>
+<td>aus</td>
+<td>„wie am Original-Controller“</td>
+<td>Abschnitt in <code>00-index.head.html</code>, PR #5
+</td></tr>
+<tr>
+<td>NPC-Leitplanken-Modus</td>
+<td>fest an</td>
+<td>an</td>
+<td>NPC-Pakete wie die Gegner der Original-App (Byte 10 <code>0x20</code>, Byte 15 <code>0x0C</code>, Vorausblick)</td>
+<td><code>ghostCfg.railMode</code>, <code>AUTO_MODE</code>
+</td></tr>
+<tr>
+<td>NPC-Linie / Spuren / Versatz</td>
+<td>Prozentregler</td>
+<td>70 / 50 / 50&#160;%</td>
+<td>Vorgabe liegt beim ruhigeren der beiden Original-Gegner (siehe unten)</td>
+<td>NPC-Optionen
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Die_Mitschnitte">Die Mitschnitte</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Datum</th>
+<th>Inhalt</th>
+<th>Wichtigster Befund
+</th></tr>
+<tr>
+<td>13.08.2026</td>
+<td>erste Aufzeichnung, 2663 HCI-Datensätze, 670 Meldungen und 671 Befehle</td>
+<td>Rahmenform, GATT-Aufbau, Leerlaufpaket mit Prüfsumme <code>0x33</code>
+</td></tr>
+<tr>
+<td>16.–21.08.2026</td>
+<td>mehrere Fahrten auf der Bahn</td>
+<td>Tempo-Eichung: Gasbytes 43/50/56 brauchen 0,86/0,74/0,63 s je 43-cm-Gerade
+</td></tr>
+<tr>
+<td>19.08.2026</td>
+<td>Licht aus, an, Bremse</td>
+<td>Byte-14-Zustände <code>0x80</code>, <code>0x82</code>, <code>0x83</code>; Bremslicht = Bit 0
+</td></tr>
+<tr>
+<td>20.08.2026</td>
+<td>Leitplanken-Modus, handgefahren, 67 s Verkehr zum Auto</td>
+<td>Byte 14 Bit 5 und Vorausblick in Bytes 16–18
+</td></tr>
+<tr>
+<td>21.08.2026</td>
+<td>Rennen auf der Strecke „az2108“ mit drei Autos, 16 Runden</td>
+<td>Gegner-Regler der Original-App, Ziellinien-Bit, Code <code>0x03</code> = Linkskurve
+</td></tr>
+<tr>
+<td>26.08.2026</td>
+<td>Versuch mit gedrucktem Muster</td>
+<td>Muster nur in „Ohne Bahn“ erkannt
+</td></tr></tbody></table>
+<p>Die 2755 s Dateispanne des Mitschnitts vom 20.08. gehören zum gesamten Bluetooth-Verkehr des Handys; zum Auto liefen davon 67 s.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Was_die_Original-App_sendet">Was die Original-App sendet</h3></div>
+<p>Die Original-App schreibt einen Befehl von 20 Byte auf das Nordic-UART-Merkmal (im Mitschnitt Handle <code>0x11</code>) als „Write Command“, also ohne Antwort. Byte für Byte, wie in den Mitschnitten beobachtet:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Byte</th>
+<th>Gesteuertes Auto</th>
+<th>Selbst gefahrene Gegner</th>
+<th>Leitplanken-Modus (von Hand)</th>
+<th>Bedeutung
+</th></tr>
+<tr>
+<td>0</td>
+<td><code>0xAF</code></td>
+<td><code>0xAF</code></td>
+<td><code>0xAF</code></td>
+<td>Rahmenkennung
+</td></tr>
+<tr>
+<td>1–5</td>
+<td><code>0x00</code></td>
+<td><code>0x00</code></td>
+<td><code>0x00</code></td>
+<td>ungenutzt
+</td></tr>
+<tr>
+<td>6</td>
+<td><code>0xDF</code> ± Gas</td>
+<td>vom App-Regler</td>
+<td>± Gas</td>
+<td>Gas, Neutral <code>0xDF</code>
+</td></tr>
+<tr>
+<td>7</td>
+<td>Lenkung</td>
+<td>vom App-Regler</td>
+<td>Lenkung</td>
+<td>−127 … +127
+</td></tr>
+<tr>
+<td>8</td>
+<td><code>0x80</code></td>
+<td><code>0x80</code></td>
+<td><code>0x80</code></td>
+<td>nach seVen: Fahrstil
+</td></tr>
+<tr>
+<td>9</td>
+<td colspan="3">in den Mitschnitten teils unabhängig von Byte 7 (OmegaSim kopiert Byte 7 hinein)</td>
+<td>offen
+</td></tr>
+<tr>
+<td>10</td>
+<td><code>0x60</code></td>
+<td><code>0x20</code></td>
+<td><code>0x30</code></td>
+<td>Betriebsart
+</td></tr>
+<tr>
+<td>12</td>
+<td><code>0x01</code></td>
+<td><code>0x01</code></td>
+<td><code>0x01</code></td>
+<td>nach seVen: Hersteller
+</td></tr>
+<tr>
+<td>14</td>
+<td>z. B. <code>0x80</code>/<code>0x82</code>/<code>0x83</code> (Ohne Bahn) oder <code>0x02</code>/<code>0x22</code>/<code>0x42</code>/<code>0x62</code></td>
+<td>Bahn-Bit gesetzt</td>
+<td>ab 37,8 s <code>0x22</code> statt <code>0x02</code></td>
+<td>Licht (Bits 0, 1) und Leseart (Bit 5, Bit 7)
+</td></tr>
+<tr>
+<td>15</td>
+<td><code>0x04</code></td>
+<td><code>0x0C</code> oder <code>0x0E</code></td>
+<td>–</td>
+<td>Betriebsart; Bit 1 folgt dem Gas
+</td></tr>
+<tr>
+<td>16–18</td>
+<td><code>00 00 00</code> (in einem Mitschnitt <code>01 04 04</code>)</td>
+<td>Vorausblick</td>
+<td>Vorausblick, ab 37,8 s</td>
+<td>Typen der nächsten drei Teile
+</td></tr>
+<tr>
+<td>19</td>
+<td>CRC-8</td>
+<td>CRC-8</td>
+<td>CRC-8</td>
+<td>Prüfsumme
+</td></tr></tbody></table>
+<p>Die Werte <code>0x80</code>, <code>0x82</code> und <code>0x83</code> in Byte 14 stammen aus einer Sitzung in der Stellung „Ohne Bahn“: Das gesetzte Bit 7 ist dort die Leseart, nicht ein Teil des Lichts. OmegaSim hielt Bit 7 eine Zeit lang für einen „Licht-Grundwert“ und sendete es immer mit; das kostete zwölf Aufzeichnungen ohne eine einzige Streckenlesung<sup id="cite&#95;ref-1" class="reference"><a href="#cite_note-1"><span class="cite-bracket">&#91;</span>1<span class="cite-bracket">&#93;</span></a></sup>.
+</p><p>Bei Byte 15 der Gegner folgt Bit 1 dem Gas und nicht dem Modus: In Paketen mit gesetztem Bit 1 war in 100&#160;% Gas gegeben, ohne das Bit in 69,8&#160;%. OmegaSim bildet deshalb nur <code>0x0C</code> nach<sup id="cite&#95;ref-2" class="reference"><a href="#cite_note-2"><span class="cite-bracket">&#91;</span>2<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Die_Paketvarianten-Probe">Die Paketvarianten-Probe</h3></div>
+<p>Als OmegaSim in sieben Fahrten keinen einzigen Streckencode bekam, der Mitschnitt der Original-App aber voll davon war, wurde verglichen, was die Original-App sendet und OmegaSim nie: Byte 10 = <code>0x20</code>, Byte 14 mit gelöschtem Bit 7 und gesetzten oberen Bits (<code>0x02</code>, <code>0x22</code>, <code>0x42</code>, <code>0x62</code>), Bytes 16–18 = <code>01 04 04</code> und ein von Byte 7 unabhängiges Byte 9. Der Prüfstand „Mustererkennung: Paketvarianten testen“ (Entwickler) sendet jede Variante einzeln mit gültiger CRC-8 und zählt, ob Byte 12 den Wert <code>0xFF</code> verlässt<sup id="cite&#95;ref-3" class="reference"><a href="#cite_note-3"><span class="cite-bracket">&#91;</span>3<span class="cite-bracket">&#93;</span></a></sup>. Die Antwort war Byte 14: Bit 7 schaltet auf die Leseart für gedruckte Muster um.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Leitplanken-Modus">Leitplanken-Modus</h3></div>
+<p>Im Mitschnitt vom 20.08.2026 ging Byte 14 bei 37,8 s von <code>0x02</code> auf <code>0x22</code> und blieb so; im selben Paket wurden die Bytes 16–18 erstmals belegt. 552 Pakete, beide Merkmale auf die Millisekunde gleichzeitig, und in keinem anderen Mitschnitt vorhanden. Daraus folgt<sup id="cite&#95;ref-4" class="reference"><a href="#cite_note-4"><span class="cite-bracket">&#91;</span>4<span class="cite-bracket">&#93;</span></a></sup>:
+</p>
+<ul><li>Bit 5 von Byte 14 schaltet den Modus ein, in dem sich das Auto selbst auf der Bahn hält.</li>
+<li>Bytes 16–18 sind die Typen der nächsten drei Teile, ein Schiebefenster über die vorher erfasste Strecke. Es rückte bei 38,6 s, 45,0 s und 47,7 s weiter, genau bei den gemeldeten Codewechseln.</li>
+<li>Alle neun beobachteten Fenster waren aufeinanderfolgende Dreiergruppen eines einzigen Rings (Start, Kurve, Kurve, Gerade, Gerade, Kurve); zufällig wäre das mit 1,3·10<sup>−6</sup> zu erwarten.</li>
+<li>Die Querregelung geschieht im Auto. Das Protokoll enthält keine Meldung der Querlage, und bei 14,6 Meldungen je Sekunde (Median 69 ms) könnte die App gar nicht schnell genug nachregeln.</li></ul>
+<p>Dasselbe Bit 5 ist die Leseart „Auf der Bahn“, die OmegaSim ab Werk sendet.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Die_Gegner_der_Original-App">Die Gegner der Original-App</h3></div>
+<p>Im Rennen vom 21.08.2026 stand das gesteuerte Auto (ein Gamepad war nicht verbunden), und die zwei übrigen fuhr die App selbst. Deren Schreibpakete sind damit die Ausgabe des Original-Reglers, nicht die eines Daumens. Gemessen:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Kennzahl</th>
+<th>Gegner <code>0x201</code></th>
+<th>Gegner <code>0x202</code></th>
+<th>zum Vergleich: handgefahren
+</th></tr>
+<tr>
+<td>verschiedene Lenkwerte</td>
+<td>119 bis 126 (beide)</td>
+<td></td>
+<td>fast nur ±127 (196 von 235 Befehlen)
+</td></tr>
+<tr>
+<td>Anteil Vollausschlag</td>
+<td>2,7 bis 3,6&#160;% (beide)</td>
+<td></td>
+<td>83&#160;%
+</td></tr>
+<tr>
+<td>mittlerer Lenkbetrag (von 127)</td>
+<td>32,2</td>
+<td>47,3</td>
+<td>–
+</td></tr>
+<tr>
+<td>Reststreuung der Lenkung bei bekannter Position (Kachelindex, Phase)</td>
+<td>21,7</td>
+<td>39,2</td>
+<td>–
+</td></tr>
+<tr>
+<td>Streuung ohne Positionswissen</td>
+<td>56,7</td>
+<td>58,6</td>
+<td>–
+</td></tr>
+<tr>
+<td>erklärter Anteil</td>
+<td>85&#160;%</td>
+<td>55&#160;%</td>
+<td>–
+</td></tr>
+<tr>
+<td>Rundenzeit nach der Anfangsphase</td>
+<td colspan="2">7,07 bis 7,31 s, Median 0,03 s auseinander</td>
+<td>–
+</td></tr></tbody></table>
+<p>Die erklärten Anteile folgen aus der Varianz: 1 − (21,7 / 56,7)² = 1 − 0,146 = 0,85, und 1 − (39,2 / 58,6)² = 1 − 0,447 = 0,55. Die Original-App fährt ihre Gegner also weitgehend als <b>Vorsteuerung</b> aus der Streckenposition: Kachelindex (aus dem Zähler in Byte 11) und Phase innerhalb des Teils. Eine Rückmeldung zur Querlage hat sie so wenig wie OmegaSim. Der zweite Gegner war stärker in Zweikämpfe verwickelt; im Rest steckt das gegenseitige Reagieren<sup id="cite&#95;ref-5" class="reference"><a href="#cite_note-5"><span class="cite-bracket">&#91;</span>5<span class="cite-bracket">&#93;</span></a></sup>.
+</p><p>Aus Kachelzähler und Start-Kachel rekonstruiert ergab das Rennen 16 Runden je Gegner. Die Strecke „az2108“ ist 11 Teile lang (S R2 G2 R3 L R2); das einzelne <code>0x03</code> je Runde sitzt genau an der einzigen Linkskurve. So wurde <code>0x03</code> als Linkskurve bestimmt.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Ziellinien-Bit,_kein_Kantensignal"><span id="Ziellinien-Bit.2C_kein_Kantensignal"></span>Ziellinien-Bit, kein Kantensignal</h3></div>
+<p>In den Meldungen des Rennens fiel Byte 15 Bit 3 auf, weil es mit dem nächsten Lenkbefehl der App korrelierte (r = −0,40 und −0,32, der stärkste Wert aller 19 Meldebytes). Es ist aber kein Signal „Auto am Bahnrand“: Die Blöcke sind fast gleich lang (Median 0,91 und 0,94 s, 10.–90. Perzentil 0,84–1,01 s), es gibt 17 Blöcke bei 16 Runden, und jeder beginnt auf Kachelindex 0 mit Code <code>0x01</code>. Es ist das Ziellinien-Zeitglied der <a href="./Firmware.html" title="Firmware">Firmware</a>; die Korrelation war ein <b>Ortsartefakt</b>, weil die App an derselben Stelle der Strecke immer ähnlich lenkt.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Weitere_Angaben">Weitere Angaben</h3></div>
+<ul><li><b>Streckenkarten:</b> Die Breite der Randstreifen im Editor von OmegaSim, 9,5&#160;% der Fahrbahnbreite, ist aus drei Screenshots der Streckenkarten der Original-App ausgemessen (5488 Messpaare, Quartile 0,081 bis 0,112)<sup id="cite&#95;ref-6" class="reference"><a href="#cite_note-6"><span class="cite-bracket">&#91;</span>6<span class="cite-bracket">&#93;</span></a></sup>. Die Editor-Hilfe nennt dieselbe Zahl im Satz über die Boxengasse. Der Editor von OmegaSim enthält nach eigener Angabe alle Teiletypen der Original-App.</li>
+<li><b>Rückwärtsgang:</b> Am Original-Controller fährt das Auto rückwärts, wenn im Stand Gas und Bremse zugleich gedrückt sind. OmegaSim bietet das als experimentelle Option (siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>).</li>
+<li><b>Mehrspieler:</b> Laut Hersteller können mehrere Spieler gleichzeitig fahren, jedes Handy mit seinem eigenen Auto. Dass die Handys dafür untereinander WLAN nutzen, ist vermutet, nicht belegt.</li>
+<li><b>Latenz:</b> Ein Nutzer meldete, auch die Original-App habe eine kleine merkbare Verzögerung. Gemessen ist das nicht.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Abgrenzung_zu_OmegaSim">Abgrenzung zu OmegaSim</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th></th>
+<th>Original-App</th>
+<th>OmegaSim
+</th></tr>
+<tr>
+<th>Herkunft
+</th>
+<td>Hersteller</td>
+<td>unabhängiges Freizeitprojekt, MIT-Lizenz
+</td></tr>
+<tr>
+<th>Plattform
+</th>
+<td>Smartphone-App</td>
+<td>Browser (Chrome, Edge) und Android-App
+</td></tr>
+<tr>
+<th>Fahrmodell
+</th>
+<td>nicht offengelegt</td>
+<td>eigenes Modell, das Gas- und Lenkwert formt (siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>)
+</td></tr>
+<tr>
+<th>Sendetakt
+</th>
+<td>im Mitschnitt Median 52 ms</td>
+<td>fest 45 ms
+</td></tr>
+<tr>
+<th>Mehrere Spieler
+</th>
+<td>je Spieler ein Handy</td>
+<td>bis zu drei Spieler an einem Gerät oder <a href="./Mehrspieler.html" title="Mehrspieler">WLAN-Mehrspieler</a>
+</td></tr>
+<tr>
+<th>Gegner
+</th>
+<td>selbst gefahrene Gegner, Vorsteuerung aus der Position</td>
+<td><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPCs</a>, ebenfalls Vorsteuerung; <a href="./Safety_Car_und_Reinigungswagen.html" title="Safety Car und Reinigungswagen">Safety Car und Reinigungswagen</a>
+</td></tr>
+<tr>
+<th>Firmware-Updates
+</th>
+<td>ja</td>
+<td>nein
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Ein_Paket_aus_dem_Mitschnitt_lesen">Ein Paket aus dem Mitschnitt lesen</h3></div>
+<p>Aus dem Mitschnitt vom 13.08.2026: <code>af 00 00 00 00 00 df 00 80 00 60 00 01 00 82 04 00 00 00 33</code>.
+</p>
+<ol><li>Byte 0 <code>0xAF</code>: Rahmenkennung.</li>
+<li>Byte 6 <code>0xDF</code> = 223: Gas neutral (Δ = 0).</li>
+<li>Byte 7 und 9 <code>0x00</code>: Lenkung gerade.</li>
+<li>Byte 10 <code>0x60</code>, Byte 15 <code>0x04</code>: gesteuertes Auto.</li>
+<li>Byte 14 <code>0x82</code> = <code>1000 0010</code>: Bit 7 (Ohne Bahn) und Bit 1 (Scheinwerfer an).</li>
+<li>Byte 19 <code>0x33</code>: CRC-8 über Byte 0–18; OmegaSim rechnet denselben Wert nach.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Erklärter_Anteil,_nachgerechnet"><span id="Erkl.C3.A4rter_Anteil.2C_nachgerechnet"></span>Erklärter Anteil, nachgerechnet</h3></div>
+<p>Gegner <code>0x201</code>: Standardabweichung der Lenkung über das ganze Rennen 56,7 Lenkschritte. Kennt man Kachelindex und Phase, bleiben im Mittel 21,7. Varianzen sind Quadrate: 56,7² = 3215, 21,7² = 471. Erklärt: (3215 − 471) / 3215 = 0,85, also 85&#160;%.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Vergleich_mit_OmegaSims_NPCs">Vergleich mit OmegaSims NPCs</h3></div>
+<p>Gemessen über 600 Takte mit <code>OMEGA_TEST.ghostDriveProbe()</code>: OmegaSims NPC in der Vorgabe (Linie / Spuren / Versatz 70 / 50 / 50&#160;%) lenkt im Mittel 35,9 von 127, also zwischen den beiden Original-Gegnern (32,2 und 47,3) und nahe am ruhigeren. Bei 100 / 100 / 100&#160;% sind es 50,3, bei 200&#160;% 80,9 mit Spitzen am Anschlag<sup id="cite&#95;ref-7" class="reference"><a href="#cite_note-7"><span class="cite-bracket">&#91;</span>7<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Handgefahren_gegen_geregelt">Handgefahren gegen geregelt</h3></div>
+<p>Handgefahren waren 196 von 235 Lenkbefehlen genau ±127: 196 / 235 = 83&#160;%. Bei den Gegnern der App waren es 2,7 bis 3,6&#160;%. Ein Mensch am Bildschirm-Joystick lenkt also fast nur zwischen den Endanschlägen („bang-bang“), der App-Regler fein abgestuft.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li>Alle Befunde stammen aus Mitschnitten vom August 2026; eine neuere Original-App oder Firmware kann anders senden.</li>
+<li>Die Bedeutung der Bytes 8, 9, 10, 12 und 15 ist nur so weit bekannt, wie die beobachteten Werte reichen.</li>
+<li>Die Rückspiegelung von Positionsdaten in Bytes 16–18 im manuellen Profil (nach seVen) ist in OmegaSims Mitschnitten nicht belegt.</li>
+<li>Wie die Gegner der Original-App ihr Tempo regeln, lässt sich aus den Paketen nicht vollständig ablesen, weil das Auto kein Tempo meldet.</li>
+<li>Die Original-App und OmegaSim können ein Auto nicht gleichzeitig verbinden.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version (OmegaSim)</th>
+<th>Änderung mit Bezug zur Original-App
+</th></tr>
+<tr>
+<td>August 2026</td>
+<td>Protokoll aus Mitschnitten der Original-App rekonstruiert
+</td></tr>
+<tr>
+<td>0.5.54</td>
+<td>Spielerauto bekommt den Vorausblick wie die Gegner der Original-App
+</td></tr>
+<tr>
+<td>0.6.14</td>
+<td>Codetabellen je Leseart, wie die zwei Stellungen der Original-App
+</td></tr>
+<tr>
+<td>0.9.37</td>
+<td>Rundenzeit am Ziellinien-Bit, gegengeprüft an den Mitschnitten 13.–21.08.
+</td></tr>
+<tr>
+<td>0.9.39</td>
+<td>Tempo-Eichung an den Geraden der Mitschnitte neu ausgewertet
+</td></tr>
+<tr>
+<td>1.1</td>
+<td>Rückwärtsgang mit Gas und Bremse wie am Original-Controller (experimentell)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
+<div class="mw-references-wrap"><ol class="references">
+<li id="cite&#95;note-1"><span class="mw-cite-backlink"><a href="#cite_ref-1">↑</a></span> <span class="reference-text">Kommentar zu <code>TRACK_BIT_RAIL</code>, <code>src/20-protocol.js</code>.</span>
+</li>
+<li id="cite&#95;note-2"><span class="mw-cite-backlink"><a href="#cite_ref-2">↑</a></span> <span class="reference-text"><code>AUTO_MODE</code> mit Kommentar, <code>src/60-track.js</code>.</span>
+</li>
+<li id="cite&#95;note-3"><span class="mw-cite-backlink"><a href="#cite_ref-3">↑</a></span> <span class="reference-text"><code>probeOverride</code>, <code>probeStats</code>, <code>src/20-protocol.js</code>.</span>
+</li>
+<li id="cite&#95;note-4"><span class="mw-cite-backlink"><a href="#cite_ref-4">↑</a></span> <span class="reference-text">Kommentar zu <code>RAIL_MODE</code>, <code>src/60-track.js</code>.</span>
+</li>
+<li id="cite&#95;note-5"><span class="mw-cite-backlink"><a href="#cite_ref-5">↑</a></span> <span class="reference-text">Doku-Reiter „Es geht auch ohne Querlage, die App macht es vor“, <code>src/00-index.head.html</code>; Kommentar zu <code>ghostTilePhaseZeit()</code>, <code>src/90-ghosts.js</code>.</span>
+</li>
+<li id="cite&#95;note-6"><span class="mw-cite-backlink"><a href="#cite_ref-6">↑</a></span> <span class="reference-text"><code>TRACK_KERB_RATIO</code>, <code>src/60-track.js</code>.</span>
+</li>
+<li id="cite&#95;note-7"><span class="mw-cite-backlink"><a href="#cite_ref-7">↑</a></span> <span class="reference-text">CARRERA_HYBRID.md, Abschnitt „Wie stark die Ghosts wirklich lenken“.</span>
+</li>
+</ol></div>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a></li>
+<li><a href="./Firmware.html" title="Firmware">Firmware</a></li>
+<li><a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a></li>
+<li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
+<li><a href="./Strecke.html" title="Strecke">Strecke</a></li>
+<li><a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/20-protocol.js</code>: <code>TRACK_BIT_RAIL</code>, <code>TRACK_BIT_PRINT</code>, <code>probeOverride</code>, <code>buildCommandPacket()</code></li>
+<li><code>src/60-track.js</code>: <code>AUTO_MODE</code>, <code>RAIL_MODE</code>, <code>TILE_TYPE</code>, <code>TRACK_KERB_RATIO</code></li>
+<li><code>src/90-ghosts.js</code>: <code>ghostTilePhaseZeit()</code>, <code>ghostLookahead()</code></li>
+<li><code>src/70-race.js</code>: <code>ZIEL_SPERRE_BIT</code></li>
+<li><code>src/00-index.head.html</code>: Doku-Reiter „Autonome Autos: was die Original-App wirklich sendet“</li>
+<li><code>tools/parse_btsnoop.py</code>, <code>tools/querlage_messen.py</code> (die Mitschnitte selbst sind nicht im Repository)</li>
+<li><code>CARRERA_HYBRID.md</code></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw173
+Cached time: 20261027053452
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.056 seconds
+Real time usage: 0.058 seconds
+Preprocessor visited node count: 166/1000000
+Revision size: 19268/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 2846/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    2.165      1 Vorlage:Stand
+100.00%    2.165      1 -total
+-->
+
+<!-- Render ID 220af0e5-d1c8-11f1-b9da-bc2411a8f42b -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:25:|#|:idhash:canonical and timestamp 20261027053452 and revision id 84. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

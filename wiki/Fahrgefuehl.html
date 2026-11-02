@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fahrgefuehl - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Fahrgefuehl</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.50</b> vom 30.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Fahrgefuehl.png" class="mw-file-description"><img src="images/250px-OmegaSim-Fahrgefuehl.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Fahrgefuehl.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Die Einstellungsseite Fahrgefühl in OmegaSim</figcaption></figure>
+<p>Das <b>Fahrgefühl</b> ist in <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> der fertige Satz von Reglerwerten, der bestimmt, wie sich ein <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Auto fährt: wie stark es beschleunigt, bremst, lenkt und in der Kurve hält. Es gibt neun solche Sätze (Voreinstellungen oder Presets). Drei davon stehen im <b>FAHREN</b>-Menü, in der <b>Garage</b> und am <b>Cockpit-Knopf</b> – <b>Arcade</b>, <b>Sim+</b> und <b>Pacejka</b> – die übrigen sechs liegen unter <b>Optionen → Fahrgefühl → Voreinstellungen</b>.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Menüpfad</td>
+<td>Optionen → Fahrgefühl; Kurzwahl in FAHREN, in der Garage und am Cockpit-Knopf
+</td></tr>
+<tr>
+<td>Fahrgefühle in FAHREN</td>
+<td>Arcade, Sim+, Pacejka
+</td></tr>
+<tr>
+<td>Übrige Fahrgefühle</td>
+<td>Pro, GT3, F1, Realismus GT3, Omega, RC (WIP)
+</td></tr>
+<tr>
+<td>Vorgabe nach Neuinstallation</td>
+<td>die Werte im Markup entsprechen dem Fahrgefühl <b>Pacejka</b> (Steuerungsmodus Pacejka, sonst Pro-Werte)
+</td></tr>
+<tr>
+<td>Steuerungsmodus</td>
+<td>Physik, Pacejka, RC („Aus“); seit 1.0.22 ausgeblendet, hängt am Fahrgefühl
+</td></tr>
+<tr>
+<td>Quelle</td>
+<td><code>src/98-presets.js</code> (Reglerwerte), <code>src/40-physics.js</code> (Rechenweg), <code>src/50-drive.js</code> (Umschaltung)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Die_drei_Fahrgefühle_im_FAHREN-Menü"><span id="Die_drei_Fahrgef.C3.BChle_im_FAHREN-Men.C3.BC"></span>Die drei Fahrgefühle im FAHREN-Menü</h2></div>
+<p>Die drei Sätze, die man beim Fahren direkt umschalten kann, unterscheiden sich am deutlichsten im Rechenweg und in der Nachsicht:
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Arcade">Arcade</h3></div>
+<p>Das <b>Arcade</b>-Fahrgefühl ist der einfachste und nachsichtigste Satz. Es schaltet die Kopplung von Gas und Bremse an die Lenkung ab (<code>lenkKopplungAus</code>): Beim Beschleunigen oder Bremsen wird das Auto nicht nervös, und die tempoabhängige Lenkgrenze entfällt. Der Reifengrip steht auf dem vollen Wert, Reifenverschleiß und Tankgewicht sind aus, die Bremse ist die stärkste (Faktor 4,0) und das Auto beschleunigt in 1,6 s auf 100. Kurz: „zum Fahren ohne Nachdenken“. Es entspricht dem ursprünglichen Sim-Modus der frühen Fassungen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Sim+"><span id="Sim.2B"></span>Sim+</h3></div>
+<p><b>Sim+</b> („Pro mit mehr Lenkung, Beschleunigung und Bremse“) übernimmt die komplette Pro-Abstimmung, ändert aber drei Werte: eine direktere Lenkung (<code>phys-steerresp</code> 3,3 statt 2,5), einen höheren Beschleunigungsfaktor (1,15) und eine stärkere Bremse (2,2). Der Rechenweg ist identisch mit Pro – es fühlt sich nur agiler und leichter an.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Pacejka">Pacejka</h3></div>
+<p><b>Pacejka</b> ist Pro plus der Reifenkennlinie nach der <b>Magic Formula</b> (von Grund auf erklärt im Artikel <a href="./Pacejka.html" title="Pacejka">Pacejka</a>, Abrechnung siehe <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>). Der Rechenweg läuft genauso wie bei Physik, aber die Lenkung wird am Limit von der Pacejka-Kurve geformt. Unterhalb der Haftgrenze fährt sich Pacejka wie Physik; darüber reduziert es den Einschlag (Untersteuern) oder – bei eingeschaltetem Übersteuern – lenkt es von selbst weiter ein. Pacejka ist <b>experimentell</b> und die <b>Vorgabe nach Neuinstallation</b>.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Die_übrigen_sechs_Fahrgefühle"><span id="Die_.C3.BCbrigen_sechs_Fahrgef.C3.BChle"></span>Die übrigen sechs Fahrgefühle</h2></div>
+<p>Die übrigen Sätze liegen unter <b>Optionen → Fahrgefühl → Voreinstellungen</b> (Reihenfolge dort):
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Fahrgefühl</th>
+<th>Kurzcharakteristik
+</th></tr>
+<tr>
+<td><b>Pro</b></td>
+<td>die Grundabstimmung: Automatik, 2,6 s auf 100, Reifenmodell und Tankgewicht an, Lenkkalibrierung 250&#160;%, Steuerungsmodus Physik
+</td></tr>
+<tr>
+<td><b>GT3</b></td>
+<td>sportlich mit Simulationstiefe: von Hand schalten, 2,9 s auf 100, Bremsfading, Windschatten und ungleicher Verschleiß voll an
+</td></tr>
+<tr>
+<td><b>F1</b></td>
+<td>das schärfste der fahrbaren: von Hand schalten, 2,5 s, stärkster Verschleiß, kürzeste Bremse, feinste Lenkung, längstes Ausrollen, Reifenwärmer an
+</td></tr>
+<tr>
+<td><b>Realismus GT3</b></td>
+<td>gegen echte Werte kalibriert (3,2 s gemessene Reihe, RMSE 7,3&#160;%), härteste Stufe
+</td></tr>
+<tr>
+<td><b>Omega</b></td>
+<td>Pro, wie es in v0.9 war – eingefroren, bleibt bei künftigen Pro-Änderungen stehen
+</td></tr>
+<tr>
+<td><b>RC (WIP)</b></td>
+<td>wie ein Fernsteuerungsauto: Arcade mit allen Reglern am Anschlag, Steuerungsmodus „Aus“ – Gas läuft in 2 s aus, Bremse sofort, zweiter Bremsdruck im Stand = rückwärts
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Der_Steuerungsmodus">Der Steuerungsmodus</h2></div>
+<p>Hinter jedem Fahrgefühl steht ein <b>Steuerungsmodus</b> (Rechenweg der Fahrphysik). Er ist seit 1.0.22 ausgeblendet und hängt am Fahrgefühl, ist aber der eigentliche Unterschied zwischen den Sätzen:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Modus</th>
+<th>Anzeige</th>
+<th>Bedeutung
+</th></tr>
+<tr>
+<td><code>physik</code></td>
+<td>„Physik“</td>
+<td>Drehmoment, Gänge, Reibkreis, Gewichtsverlagerung, Reifen- und Bremsentemperatur, Einspurmodell. Die Vorgabe der Rechenschritte.
+</td></tr>
+<tr>
+<td><code>pacejka</code></td>
+<td>„Pacejka (experimentell)“</td>
+<td>wie Physik, zusätzlich Reifenkennlinie nach der Magic Formula. Der Standard im Markup.
+</td></tr>
+<tr>
+<td><code>aus</code></td>
+<td>„RC (experimentell)“</td>
+<td>kein Fahrzeugmodell – der Stick geht roh ans Auto. Entspricht dem Fahrgefühl RC.
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Gibt_es_„SETA“?"><span id="Gibt_es_.E2.80.9ESETA.E2.80.9C.3F"></span>Gibt es „SETA“?</h2></div>
+<p><b>Nein.</b> Ein Fahrhilfe- oder Stabilitätsmodul namens „SETA“ gibt es in OmegaSim nicht – es ist weder ein Fahrgefühl noch ein Regler. Was man darunter verstehen könnte, ist die <b>Fahrhilfe</b> (<i>driver-assist</i>, experimentell): unter <b>Optionen → Fahrgefühl → Fahrhilfe</b> mit den Stellungen <b>aus</b>, <b>Querlage</b> und <b>voll</b>. Sie lässt das Auto die Spur halten oder selbst lenken, braucht aber eine eingescannte Strecke und den Bahn-Modus. Die Fahrhilfe ist von den Fahrphysik-Modellen getrennt; die Fahrgefühle regeln nur, wie das Auto auf Gas, Bremse und Lenkung reagiert.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Diagramm:_Reibkreis_und_Reifenkennlinie">Diagramm: Reibkreis und Reifenkennlinie</h2></div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Reibkreis-MagicFormula.png" class="mw-file-description"><img src="images/250px-OmegaSim-Reibkreis-MagicFormula.png" decoding="async" loading="lazy" width="250" height="207" class="mw-file-element" srcset="images/500px-OmegaSim-Reibkreis-MagicFormula.png 2x" data-file-width="1334" data-file-height="1107" /></a><figcaption>Oben: der Reibkreis (Querausnutzung gegen Längsausnutzung). Unten: die Magic-Formula-Kennlinie (Seitenkraft über Schräglaufausnutzung) mit Untersteuern hinter dem Scheitel.</figcaption></figure>
+<p>Zwei Kurven erklären das Fahrgefühl am besten:
+</p>
+<ul><li><b>Reibkreis</b> (Kamm-Kreis): Die Querkraft für die Kurve und die Längskraft für Gas/Bremse teilen sich die maximale Kraft des Reifens. Wer in der Kurve viel Querkraft braucht, hat für Gas oder Bremse nur den Rest:</li></ul>
+<pre>Längsanteil = √(1 − Queranteil²)</pre>
+<ul><li><b>Magic Formula</b>: Die Reifenkennlinie „Seitenkraft über Schräglaufwinkel“ folgt der Pacejka-Formel <code>y(u) = sin(C·atan(B·u − E·(B·u − atan(B·u))))</code>. Bis zum Scheitel bringt mehr Einschlag mehr Kraft; dahinter schiebt das Auto (Untersteuern) oder das Heck bricht aus (Übersteuern).</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a></li>
+<li><a href="./Verschleiß.html" title="Verschleiß">Verschleiß</a></li>
+<li><a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a></li>
+<li><a href="./Virtuelles_Fahren.html" title="Virtuelles Fahren">Virtuelles Fahren</a></li>
+<li><a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/98-presets.js</code>: <code>PRESETS</code>, <code>PRESETS_FAHREN</code>, <code>applyPreset()</code>, <code>setzeBrakeStealLast()</code></li>
+<li><code>src/40-physics.js</code>: <code>pacejkaStep()</code>, <code>pacY()</code>, <code>pacB()</code>, Reibkreis</li>
+<li><code>src/50-drive.js</code>: <code>physModusAnwenden()</code></li>
+<li><code>src/00-index.head.html</code>: Regler unter <code>#sub-opt-feel</code></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+
+<!-- 
+NewPP limit report
+Parsed by mw172
+Cached time: 20261030073507
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [prevent‐selective‐update, show‐toc]
+CPU time usage: 0.028 seconds
+Real time usage: 0.032 seconds
+Preprocessor visited node count: 65/1000000
+Revision size: 7058/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 49/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.310      1 Vorlage:Stand
+100.00%    3.310      1 -total
+-->
+
+<!-- Render ID 6dc1ce8d-d434-11f1-93dc-bc2411bb8d18 -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

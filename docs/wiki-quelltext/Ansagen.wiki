@@ -1,0 +1,105 @@
+{{Stand|app=1.2.50|appdatum=30.10.2026}}
+[[Datei:OmegaSim-Rennen.png|mini|Das Cockpit; die Ansagen begleiten das Rennen]]
+Die '''Ansagen''' von [[OmegaSim]] sind gesprochene Meldungen, die während eines Rennens erscheinen: die Rundenzeit, der Zwischenstand, das Rennintro vor der Ampel, die Rennergebnis-Ansage und feste '''Funkmeldungen''' (Schaden, Tank, Reifen, Regen, Akku, Boxenstopp). Sie lassen sich unter '''Optionen → Ansagen''' einzeln ein- und ausschalten, mit eigener Stimme, Tempo, Tonhöhe und Hall.
+
+== Auf einen Blick ==
+{| class="wikitable"
+! Merkmal !! Wert
+|-
+| Menüpfad || Optionen → Ansagen (Kachel „Ansagen“)
+|-
+| Stimmen || Windows-Systemstimme für die festen Funkmeldungen; Piper-TTS-Clips für Rundenzeit, Rennstand und Rennintro
+|-
+| Sprachen || Deutsch und Englisch
+|-
+| Live-Stimme || Browser-/Gerätestimme über die Web Speech API (nur Rundenzeit und wahlweise Rennstand)
+|-
+| Auslösung || zustandsgesteuert (Rundenende, Zustandsschwellen, Rennstand-Messung); manuell nur über den Test-Knopf
+|}
+
+== Welche Ansagen es gibt ==
+{| class="wikitable"
+! Ansage !! Beispiel (DE) !! Wann
+|-
+| '''Rundenzeit''' || „58,3“ / „1 Minute 2,3, Bestzeit“ || jede vollendete Runde, auch für Spieler 2 und 3
+|-
+| '''Rennstand''' (Zwischenstand) || „Nach Runde fünf. Es führt aktuell der rote Porsche 911 …“ || alle X Runden des Führenden, nur Runden- und Endurance-Rennen
+|-
+| '''Rennergebnis''' || „Gewonnen hat der rote Porsche …“ || einmal nach der Zielflagge
+|-
+| '''Rennintro''' || „Willkommen am Start. Das Rundenrennen beginnt gleich …“ || vor der Startampel (Countdown), nur lokale Starts
+|-
+| '''Schaden''' || „Achtung, Schaden kritisch“ || Schadensbalken ≤ 10 %, nach Reparatur wieder scharf
+|-
+| '''Tank''' || „Tank fast leer“ || Tank ≤ 10 %, nach Tanken wieder scharf
+|-
+| '''Reifen''' || „Reifen abgefahren“ || schlechtester Reifen ≤ 10 %
+|-
+| '''Regen''' || „Es regnet“ / „Der Regen hört auf“ || beim Wechsel trocken ↔ Regen
+|-
+| '''Akku''' || „Akku fast leer“ || Akku ≤ 25 % je Auto, nach Laden wieder scharf
+|-
+| '''Boxenstopp''' || „Boxenstopp eingeleitet“ || beim doppelten Start-Ausdruck (Boxeneinfahrt)
+|}
+
+== Wie die Stimmen entstehen ==
+Es gibt '''zwei''' Wege, und die App wählt je Ansage:
+
+=== Vorproduzierte Clips (Piper TTS) ===
+Für Rundenzeit, Rennstand, Ergebnis und Rennintro werden die Sätze aus einzelnen '''Clips''' zusammengesetzt. Sie sind mit '''Piper TTS''' erzeugt:
+* Deutsch: '''Thorsten''' (<code>de_DE-thorsten-medium.onnx</code>)
+* Englisch: '''LJ Speech''' (<code>en_US-ljspeech-medium.onnx</code>)
+
+Die Clips liegen als <code>audio/zahl_*.ogg</code>, <code>audio/rennintro_*.ogg</code>, <code>audio/rennstand_ext_*.ogg</code>. Der Vorteil: Sie funktionieren auch in der Android-App, wo es kein <code>speechSynthesis</code> gibt.
+
+=== Feste Funkmeldungen (Windows-Systemstimme) ===
+Die fünf Funkmeldungen (Schaden, Tank, Reifen, Regen, Akku) sind vorproduzierte Aufnahmen, erzeugt über die Windows-Systemstimme:
+* Deutsch: '''Microsoft Hedda Desktop'''
+* Englisch: '''Microsoft Zira Desktop'''
+
+Sie liegen als <code>audio/voice_*.ogg</code>. Diese Aufnahmen haben immer Vorrang vor der Live-Stimme; die Live-Stimme ist nur der Fallback, wenn die Aufnahme fehlt.
+
+=== Live-Stimme (Web Speech API) ===
+Die Rundenzeit wird standardmäßig von der '''Browser- oder Gerätestimme''' gesprochen (Web Speech API, Sprechrate 1,15). Bei den festen Meldungen und im Rennstand ist die vorproduzierte Aufnahme die Regel, damit man die Stimme bandbegrenzen kann – eine Live-<code>SpeechSynthesisUtterance</code> liefert nämlich keinen Audioknoten.
+
+== Stimme einstellen ==
+Unter '''Optionen → Ansagen''' stehen folgende Schalter und Regler:
+
+* '''Rundenzeiten ansagen''' (Standard: an)
+* '''Rennintro vor der Ampel''' (Standard: aus)
+* '''Rennstand alle paar Runden ansagen''' (Standard: aus), '''alle X Runden''' (1–20, Standard 5), '''maximale Wartezeit''' (5–30 s)
+* '''Rennergebnis ansagen''' (Standard: an)
+* '''Namen in der Garage''' – Autobezeichnungen oder Fahrernamen
+* '''Ansagestimme''' – <code>auto</code> / <code>clips</code> / <code>browser</code> (Standard: auto)
+* '''Browser-/Gerätestimme''' – Auswahl aus den Stimmen des Geräts (Standard: Systemstimme)
+* '''Rennstand-Sprechgeschwindigkeit''' (100–175 %), '''Stimmhöhe''' (−6…+6 Halbtöne), '''Lautstärke''' (0–200 %), '''Stadionhall''' (0–100 %)
+* '''Schaden / Tank / Reifen / Regen ansagen''' (Standard: an), '''Boxenstopp''' (an), '''Akku''' (Standard: aus)
+
+== Eine Ansage auslösen ==
+Die Ansagen laufen rein '''zustandsgesteuert''' – sie werden beim Rundenende, bei den Zustandsschwellen oder nach der Rennstand-Messung automatisch gesprochen. Einen Befehl in der Konsole gibt es nicht.
+
+Zum '''Testen''' dient der Knopf '''Beispielansage testen''' unter Optionen → Ansagen. Er spricht eine Beispielansage mit den aktuellen Einstellungen:
+* im '''Clip-Modus''': „Nach Runde 5 – Es führt aktuell der rote Porsche 911“
+* im '''Browser-Modus''': „Wir sind in Runde fünf. Es führt der rote Porsche.“
+
+Die Statuszeile daneben meldet, ob die Ansage vorbereitet wird, spielt oder ob sie stumm bleibt (Ton aus, Lautstärke 0 oder eine laufende Ansage).
+
+== Siehe auch ==
+* [[Rennarten]]
+* [[Boxenstopp]]
+* [[OmegaSim]]
+* [[Glossar]]
+
+== Quellen im Code ==
+* <code>src/80-sound.js</code>: <code>ansage()</code>, <code>ansagenPruefen()</code>, <code>speakLap()</code>, <code>lapClipFolge()</code>, <code>playAnsageClip()</code>
+* <code>src/80c-rennstand.js</code>: <code>rennstandSpielen()</code>, <code>rennstandClipFolge()</code>, <code>rennstandTesten()</code>, <code>rennstandRennende()</code>
+* <code>src/80d-rennintro.js</code>: <code>rennintroVorAmpel()</code>, <code>rennintroFolge()</code>
+* <code>src/70-race.js</code>: <code>ansagenZustand()</code>, <code>speakLap()</code>, <code>ansage('pit', …)</code>
+* <code>tools/voice_synth.py</code>, <code>tools/voice_zahlen.py</code>, <code>tools/voice_rennintro.py</code>, <code>tools/voice_rennstand_erweitert.py</code>, <code>tools/tts_render.ps1</code>
+
+== Weblinks ==
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Spielfunktionen]]
+[[Kategorie:Software]]

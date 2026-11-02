@@ -329,12 +329,15 @@ const S2_STIL = ['sekunden', 'vollgas', 'gas', 'bremse', 'bremsungen', 'bremsKur
 // v1.1.11: die virtuelle Fahrt (dieselbe Strecke in der App) in eigenen Spalten mit v_ davor - am ENDE
 // angehaengt, damit schon vorhandene Zeilen nicht verrutschen (die Kopfzeile wird ergaenzt).
 const S2_VIRTUELL = ['v_fahrt', 'v_fahrt_gueltig', 'v_fahrt_grund', 'v_runden_ms', 'v_beste_ms', 'v_gesamt_ms'].concat(S2_STIL.map((k) => 'v_' + k));
+const S2_SPIEGEL = ['fahrt_spiegel', 'v_fahrt_spiegel'];
 const S2_KOPF = ['zeitpunkt', 'geraet', 'alter', 'geschlecht', 'narq_version', 'narq_1', 'narq_2', 'narq_3', 'narq_4', 'narq_5',
   'narq_6', 'bewunderung', 'rivalitaet', 'selbst', 'rt_ms', 'rt_median', 'fruehstarts', 'verpasst', 'quelle', 'controller',
-  'version', 'sprache', 'fahrt', 'fahrt_gueltig', 'fahrt_grund', 'preset', 'runden_ms', 'beste_ms', 'gesamt_ms'].concat(S2_STIL).concat(S2_VIRTUELL);
+  'version', 'sprache', 'fahrt', 'fahrt_gueltig', 'fahrt_grund', 'preset', 'runden_ms', 'beste_ms', 'gesamt_ms'].concat(S2_STIL).concat(S2_VIRTUELL)
+  // Korrektur nach 1.2.66: gespiegeltes Studienlayout (je Fahrt), hinten angehaengt wie S2_VIRTUELL.
+  .concat(S2_SPIEGEL);
 const S2_OEFFENTLICH = ['alter', 'geschlecht', 'narq_1', 'narq_2', 'narq_3', 'narq_4', 'narq_5', 'narq_6', 'bewunderung',
   'rivalitaet', 'selbst', 'rt_median', 'fruehstarts', 'verpasst', 'quelle', 'fahrt', 'fahrt_gueltig', 'preset', 'runden_ms',
-  'beste_ms', 'gesamt_ms'].concat(S2_STIL).concat(S2_VIRTUELL.filter((k) => k !== 'v_fahrt_grund'));
+  'beste_ms', 'gesamt_ms'].concat(S2_STIL).concat(S2_VIRTUELL.filter((k) => k !== 'v_fahrt_grund')).concat(S2_SPIEGEL);
 const S2_MIN_N = 5;
 
 function zahlIn(x, lo, hi) { const n = Number(x); return isFinite(n) && n >= lo && n <= hi ? n : ''; }
@@ -374,7 +377,8 @@ function studiePost(d) {
       .concat(S2_STIL.map((k) => (f && stil[k] !== null && stil[k] !== undefined) ? zahlIn(stil[k], grenzen[k][0], grenzen[k][1]) : ''))
       .concat([v ? 1 : 0, v && v.gueltig === true ? 1 : 0, v ? String(v.grund || '').slice(0, 60) : '', JSON.stringify(vRunden),
         v ? zahlIn(v.beste_ms, 500, 600000) : '', v ? zahlIn(v.gesamt_ms, 500, 3600000) : ''])
-      .concat(S2_STIL.map((k) => (v && vStil[k] !== null && vStil[k] !== undefined) ? zahlIn(vStil[k], grenzen[k][0], grenzen[k][1]) : ''));
+      .concat(S2_STIL.map((k) => (v && vStil[k] !== null && vStil[k] !== undefined) ? zahlIn(vStil[k], grenzen[k][0], grenzen[k][1]) : ''))
+      .concat([f ? (f.spiegel === true ? 1 : 0) : '', v ? (v.spiegel === true ? 1 : 0) : '']);
     const blatt = blattMit(S2_BLATT, S2_KOPF);
     // Aeltere Blaetter haben die v_-Spalten noch nicht in der Kopfzeile: ergaenzen.
     if (blatt.getLastColumn() < S2_KOPF.length) blatt.getRange(1, 1, 1, S2_KOPF.length).setValues([S2_KOPF]);

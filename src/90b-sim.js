@@ -156,7 +156,7 @@
     const doppelt = !!(($('sim-fast') || {}).checked);
 
     const bahn = simBahn(tiles);
-    const uhrStart = Date.now();
+    const uhrStart = rennZeitJetzt();
     simState = {
       tiles, bahn, runden, doppelt, geliehen,
       // Die eigene Uhr der Simulation. Sie laeuft mit der Wandzeit, bei doppelter
@@ -245,9 +245,10 @@
   const SIM_SPRUNG_MAX_MS = 250;
 
   function simSchritt(msFest) {
+    if (rennPauseAktiv()) return;
     const st = simState;
     if (!st) return;
-    const wand = Date.now();
+    const wand = rennZeitJetzt();
     let roh = msFest;
     if (roh === undefined || roh === null) {
       roh = st.wandZuvor ? (wand - st.wandZuvor) : SIM_TAKT_MS;
@@ -283,12 +284,12 @@
 
     // ---- Die Uhr faelschen, aber nur fuer die Dauer der Ticks ------------------------
     //
-    // ghostTick() rechnet seine Zeitschritte aus Date.now(); ohne diesen Griff waere dt in
+    // ghostTick() rechnet seine Zeitschritte aus rennZeitJetzt(); ohne diesen Griff waere dt in
     // einer Simulation mit eigener Uhr sinnlos. Der Griff ist SYNCHRON eingeklammert: die
     // echte Uhr steht wieder, bevor irgendein Zuhoerer, Zeitgeber oder Versprechen dran ist.
     // Alles andere wuerde einer ganzen Seite die Zeit verstellen.
     const echtNow = Date.now;
-    Date.now = () => st.uhr;
+    Date.now = () => st.uhr + rennPause.verzug;
     try {
       for (const a of st.autos) {
         // Das Auto hat gerade einen Code gelesen - es faehrt ja. Ohne diese Zeile schlaegt

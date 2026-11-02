@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mehrspieler - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Mehrspieler</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Mehrspieler.png" class="mw-file-description"><img src="images/250px-OmegaSim-Mehrspieler.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Mehrspieler.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Der Reiter WLAN Mehrspieler in OmegaSim</figcaption></figure>
+<p><b>Mehrspieler</b> bezeichnet in <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> zwei getrennte Funktionen, mit denen mehrere Menschen gegeneinander fahren: den <b>Mehrspieler-Modus an einem Gerät</b>, bei dem bis zu drei Spieler mit je einem Controller und einem eigenen <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Auto an einem Telefon oder PC fahren, und den <b>WLAN-Mehrspieler</b> (experimentell), bei dem mehrere Geräte mit je einem Auto über ein gemeinsames Netz eine Rangliste, einen gemeinsamen Start und gleiche Renneinstellungen teilen. Im ersten Fall rechnet ein Gerät alle Autos in einem gemeinsamen Sendetakt; im zweiten rechnet jedes Gerät nur sein eigenes Auto, und ein Host vermittelt über eine kleine HTTP-Schnittstelle. Beide lassen sich mit NPCs kombinieren (siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>).
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Merkmal</th>
+<th>An einem Gerät</th>
+<th>WLAN-Mehrspieler
+</th></tr>
+<tr>
+<td>Menüpfad</td>
+<td><b>Optionen → Mehrspieler</b>; Rollen in <b>FAHREN → Autos → Garage</b>; Belegung in <b>Optionen → Controller</b></td>
+<td>Reiter <b>WLAN Mehrspieler</b> mit den Seiten <b>Über Android-App</b> und <b>Über PC mit Python</b>
+</td></tr>
+<tr>
+<td>Wichtigste Schalter (Standard)</td>
+<td>Mehrspieler-Modus (aus; schaltet sich mit einer Rolle Spieler&#160;2/3 ein) · Fahrgefühl je Spieler („wie Spieler 1“)</td>
+<td>Host-Adresse, Mein Name · Renneinstellungen erzwingen (an)
+</td></tr>
+<tr>
+<td>Status</td>
+<td>stabil (seit dem 1.1-Abschnitt nicht mehr experimentell)</td>
+<td>experimentell
+</td></tr>
+<tr>
+<td>Seit Version</td>
+<td>zwei Spieler 0.6.44, drei Spieler 0.9.17, Übernehmen/Abbrechen beim Belegen 1.2.3, Fahrgefühl je Spieler 1.2.4</td>
+<td>gemeinsamer Start 0.8.42, Bereitschaftsschirm 0.8.126, Feinabgleich und „für alle beenden“ 0.9.32
+</td></tr>
+<tr>
+<td>Beteiligte Quelldateien</td>
+<td><code>src/49-spieler.js</code>, <code>src/20-protocol.js</code>, <code>src/90-ghosts.js</code> (Pads, Belegung, Rollen), <code>src/50-drive.js</code> (Cockpit), <code>src/98-presets.js</code></td>
+<td><code>src/97-sessions.js</code> (Client), <code>tools/omegasim_host.py</code> (PC-Host), <code>android-app/…/HostServer.java</code>, <code>OmegaHostPlugin.java</code>, <code>OmegaHostService.java</code> (Telefon-Host)
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grundlagen">Grundlagen</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Ein_Gerät,_mehrere_Autos"><span id="Ein_Ger.C3.A4t.2C_mehrere_Autos"></span>Ein Gerät, mehrere Autos</h3></div>
+<p>Ein Telefon kann sich per <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a> mit mehreren Autos zugleich verbinden. Jedes Auto bekommt etwa alle 45&#160;ms ein Steuerpaket. Für mehrere Spieler an einem Gerät heißt das: Die App liest mehrere Gamepads, rechnet für jedes Auto ein eigenes Fahrzeugmodell und schickt alle Pakete im selben Takt. Gamepads meldet der Browser über die <i>Gamepad-Schnittstelle</i>; er gibt ein Pad aber erst nach dem ersten Tastendruck heraus.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Host_und_Client">Host und Client</h3></div>
+<p>Im WLAN-Mehrspieler ist ein Gerät der <b>Host</b> (Server): Es hält die gemeinsame Rangliste und den Rennplan. Alle anderen sind <b>Clients</b>: Sie melden ihren Stand und fragen den gemeinsamen Stand ab. Die Verbindung zu den eigenen Autos bleibt dabei auf jedem Telefon; über das WLAN gehen nur Rundenzahl, Rundenzeiten, Abgänge und für Zuschauer die Positionen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="HTTP-Abfrage_statt_WebSocket">HTTP-Abfrage statt WebSocket</h3></div>
+<p>Ein <b>WebSocket</b> ist eine dauerhaft offene Verbindung, über die beide Seiten jederzeit senden können. OmegaSim nutzt bewusst keinen, sondern einfache <b>HTTP-Anfragen</b> (GET zum Abfragen, POST zum Melden, Inhalt als JSON). Der Client fragt regelmäßig nach (<i>Polling</i>). Die Begründung im Host-Programm: Eine Rangliste ändert sich nur alle paar Sekunden, eine abgerissene HTTP-Anfrage ist ein Fehler in einer Abfrage, ein abgerissener WebSocket dagegen ein Zustand, der wieder aufgebaut werden muss.<sup id="cite&#95;ref-1" class="reference"><a href="#cite_note-1"><span class="cite-bracket">&#91;</span>1<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Latenz_und_Uhrenabgleich">Latenz und Uhrenabgleich</h3></div>
+<p><b>Latenz</b> ist die Zeit, die eine Nachricht unterwegs ist. Die Hin- und Rückzeit einer Anfrage heißt <i>Round-Trip-Time</i> (RTT). Damit alle Telefone gleichzeitig starten, braucht jedes den <b>Versatz</b> seiner Uhr zur Uhr des Hosts. Das Verfahren ist das von Cristian (Grundlage auch von NTP): Man notiert die eigene Uhr beim Absenden (t0) und beim Empfang (t1), der Host schickt seine Uhrzeit mit, und man nimmt an, dass der Host in der Mitte der Laufzeit geantwortet hat. Der Fehler ist dann höchstens die halbe RTT.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Secure_Context_und_Freigaben">Secure Context und Freigaben</h3></div>
+<p>Browser erlauben Web Bluetooth nur in einem <b>secure context</b>: einer verschlüsselten Adresse (https), localhost oder einer lokalen Datei. Eine WLAN-Adresse wie 192.168.1.50:8080 über unverschlüsseltes HTTP ist keiner. Außerdem darf eine über https geladene Seite keine unverschlüsselte Adresse im WLAN abfragen, und eine Anfrage von einer fremden Herkunft braucht die Erlaubnis des Servers (<i>CORS</i>). Für JSON-POSTs schickt der Browser vorher eine Prüfanfrage (<i>Preflight</i>, Methode OPTIONS); der Host beantwortet sie mit 204 und den Kopfzeilen <code>Access-Control-Allow-*</code>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Dienstsuche_im_WLAN">Dienstsuche im WLAN</h3></div>
+<p>Damit niemand die Adresse abtippen muss, meldet der Host in der Android-App seinen Dienst per <b>mDNS/DNS-SD</b> (unter Android „NSD“) unter dem Namen <code>_omegasim._tcp</code> an. Andere Telefone suchen danach und bekommen Adresse und Port.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Mehrere_Spieler_an_einem_Gerät"><span id="Mehrere_Spieler_an_einem_Ger.C3.A4t"></span>Mehrere Spieler an einem Gerät</h3></div>
+<ol><li>Alle Autos verbinden und an jedem Controller einmal einen Knopf drücken.</li>
+<li>In der Garage einem zweiten Auto die Rolle <b>Spieler 2</b> und gegebenenfalls einem dritten <b>Spieler 3</b> geben. Die Wahl schaltet den Mehrspieler-Modus selbst ein (Meldung „MEHRSPIELER-MODUS AN“). Alternativ <b>Optionen → Mehrspieler → Mehrspieler-Modus (2–3 Spieler)</b>; dort steht auch, welche Pads und Autos erkannt sind.</li>
+<li>Für Spieler&#160;2 und&#160;3 in der Garage unter <b>Fahrgefühl</b> eine eigene Abstimmung wählen oder „wie Spieler 1“ lassen.</li>
+<li>Tastenbelegung je Spieler: <b>Optionen → Controller</b>, oben <b>Spieler 1/2/3</b> wählen, <b>Neu zuweisen</b>, dann am richtigen Pad drücken. Mit <b>Übernehmen</b> (am Pad: Options eine Sekunde halten) speichern oder mit <b>Abbrechen</b> verwerfen.</li>
+<li>Rennen starten. Das Cockpit zeigt die Vergleichsansicht „Beide“.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="WLAN-Mehrspieler_mit_Telefon_als_Host_(Android-App)"><span id="WLAN-Mehrspieler_mit_Telefon_als_Host_.28Android-App.29"></span>WLAN-Mehrspieler mit Telefon als Host (Android-App)</h3></div>
+<ol><li>Auf einem Telefon im Reiter <b>WLAN Mehrspieler → Über Android-App</b> auf <b>Dieses Telefon ist Host</b> tippen.</li>
+<li>Auf den anderen Telefonen <b>Host im WLAN suchen</b> (oder die Adresse eintragen).</li>
+<li><b>Mein Name</b> eintragen, <b>Mitmachen</b>.</li>
+<li>Ein Tablet oder Fernseher öffnet die Host-Adresse mit dem Zusatz <code>/?info</code> im Browser und wird Info-Screen; ein Telefon ohne eigenes Auto kann <b>Als Info-Screen</b> wählen.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="WLAN-Mehrspieler_mit_PC_als_Host_(Python)"><span id="WLAN-Mehrspieler_mit_PC_als_Host_.28Python.29"></span>WLAN-Mehrspieler mit PC als Host (Python)</h3></div>
+<ol><li>Auf dem PC <b>Mehrspieler-Host starten.bat</b> doppelklicken oder im Projektordner <code>python tools/omegasim_host.py --port 8080</code> ausführen. Optional <code>--laps 12</code> oder <code>--minutes 8</code> für die Anzeige der Rennlänge.</li>
+<li>Die angezeigte Adresse (Form 192.168.1.50:8080) auf den Telefonen unter <b>Host-Adresse</b> eintragen. Alle Geräte müssen im selben WLAN sein.</li>
+<li>Für Bluetooth im Browser: einmal je Telefon in Chrome unter <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code> die Host-Adresse eintragen und Chrome neu starten. Die Android-App braucht das nicht.</li>
+<li>Die Übersicht für den Fernseher liegt auf dem PC unter <code>/mp-overview.html</code> (über localhost, ohne Freigabe).</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Gemeinsames_Rennen">Gemeinsames Rennen</h3></div>
+<ol><li>Ein Teilnehmer tippt <b>Rennen für alle starten</b> (oder startet ein Rennen und wählt in der Frage „Für alle“). Auf allen Telefonen erscheint der Bereitschaftsschirm.</li>
+<li>Jeder tippt <b>Bereit</b>. Erst wenn alle anderen aktiven Teilnehmer bereit sind, wird der Knopf <b>Starten</b> beim Initiator frei.</li>
+<li>Nach dem Start läuft auf allen Telefonen dieselbe Ampel nach einem Vorlauf von 12&#160;s.</li>
+<li><b>Rennen für alle beenden</b> beendet es überall; <b>Verlassen</b> meldet das Gerät ab.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Bereich/Werte</th>
+<th>Standard</th>
+<th>Wirkung laut Code</th>
+<th>Schlüssel
+</th></tr>
+<tr>
+<td>Mehrspieler-Modus (2–3 Spieler)</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>schaltet die Zusatzplätze und die Vergleichsansicht ein; eine Rolle Spieler&#160;2/3 schaltet ihn selbst an</td>
+<td><code>opt-zwei-an</code>
+</td></tr>
+<tr>
+<td>Rolle (Garage)</td>
+<td>Spieler 1, Spieler 2, Spieler 3, Safety Car, Reinigungsfahrzeug, NPC, Aus</td>
+<td>erstes Auto Spieler 1, weitere NPC</td>
+<td>je Rolle Spieler&#160;1/2/3 höchstens ein Auto</td>
+<td><code>car.role</code> (<code>player</code>, <code>player2</code>, <code>player3</code>)
+</td></tr>
+<tr>
+<td>Fahrgefühl (Garage, Spieler 2/3)</td>
+<td>wie Spieler 1, Arcade, Sim+, Pacejka</td>
+<td>wie Spieler 1</td>
+<td>eigenes Preset über die kopierte Abstimmung von Spieler&#160;1, eigene Reifenmischung</td>
+<td><code>omegasim-preset-spieler-2</code>, <code>-3</code>
+</td></tr>
+<tr>
+<td>Selbstlenkung (Garage, je gesteuertem Auto)</td>
+<td>wie Optionen, aus, hält die Spur, lenkt selbst</td>
+<td>wie Optionen</td>
+<td>Fahrhilfe je Auto</td>
+<td><code>car.fahrhilfe</code>
+</td></tr>
+<tr>
+<td>Spieler 1/2/3 (Optionen → Controller)</td>
+<td>Auswahl</td>
+<td>Spieler 1</td>
+<td>wessen Belegung bearbeitet wird; nur im Mehrspieler-Modus sichtbar</td>
+<td><code>bindEditSpieler</code>
+</td></tr>
+<tr>
+<td>Controller tauschen</td>
+<td>–</td>
+<td>–</td>
+<td>entfernt seit 0.10.5, verborgen und immer aus</td>
+<td><code>opt-zwei-tausch</code>
+</td></tr>
+<tr>
+<td>Host-Adresse</td>
+<td>Text</td>
+<td>leer, dann gemerkt</td>
+<td>Adresse ohne Schema; die App setzt das Schema selbst davor</td>
+<td><code>mp-host</code>
+</td></tr>
+<tr>
+<td>Mein Name</td>
+<td>Text</td>
+<td>leer („ohne Namen“)</td>
+<td>Name in der Rangliste, höchstens 40 Zeichen beim Host</td>
+<td><code>mp-name</code>
+</td></tr>
+<tr>
+<td>Renneinstellungen erzwingen</td>
+<td>an/aus</td>
+<td>an</td>
+<td>das aktive Preset des Initiators geht mit dem Rennplan an alle (Tempo, Handling, Beschleunigung, Schaden, Reifenverschleiß); Controller, Tasten, Empfindlichkeit, Vibration und Ton bleiben</td>
+<td><code>mp-force-preset</code>
+</td></tr>
+<tr>
+<td>Port (PC-Host)</td>
+<td>Zahl</td>
+<td>8080</td>
+<td>Port des Host-Programms</td>
+<td><code>--port</code>
+</td></tr>
+<tr>
+<td>Rennlänge (PC-Host)</td>
+<td>Runden oder Minuten</td>
+<td>keine</td>
+<td>nur für die Übersicht</td>
+<td><code>--laps</code>, <code>--minutes</code>
+</td></tr></tbody></table>
+<p>Name, Host-Adresse und eine zufällige Kennung (<code>p</code> + acht Zeichen) bleiben im Browser gespeichert (<code>chc.mp.v1</code>).
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Funktionsweise">Funktionsweise</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Spielerplätze:_die_zusatzPlatz-Registry"><span id="Spielerpl.C3.A4tze:_die_zusatzPlatz-Registry"></span>Spielerplätze: die zusatzPlatz-Registry</h3></div>
+<p><code>src/49-spieler.js</code> verallgemeinert den früheren Zwei-Spieler-Modus auf bis zu <code>SPIELER_MAX = 3</code> Spieler.<sup id="cite&#95;ref-2" class="reference"><a href="#cite_note-2"><span class="cite-bracket">&#91;</span>2<span class="cite-bracket">&#93;</span></a></sup> Spieler&#160;1 bleibt wie er ist, weil er Wege hat, die nur er hat (Eingabe über Tastatur und Touch, Boxen-Minispiel, Windschatten, Ideallinie). Jeder weitere Spieler ist ein <b>Zusatzplatz</b> mit eigenem Satz:
+</p>
+<ul><li>Auto, Stick- und Gaswert, Ausgaben des Modells (Lenkung, Gas, Bremse),</li>
+<li>eigenes Fahrzeugmodell (<code>CarreraPhysicsEngine</code>), beim ersten Zugriff gebaut und von Spieler&#160;1 abgeglichen,</li>
+<li>Tastenbelegung, Autopilot-Regler, Abseits-Zustand, Tank, Schaden, Boxenstopp, Reifenmischung, Tankziel,</li>
+<li>Knockout-Leben, Derby-Werte, Lichtstatus und eine eigene Motorstimme.</li></ul>
+<p>Platz&#160;2 ist dabei ein Satz aus Gettern und Settern auf die alten Variablennamen (<code>playerCar2</code>, <code>p2Steer</code>, <code>tankZwei</code> …), damit rund 300 Stellen in Prüfläufen weiter gelten; Platz&#160;3 hat eigene Felder in derselben Form. Die Rolle <code>player2</code> oder <code>player3</code> ordnet ein Auto über <code>zusatzPlatzVonRolle()</code> seinem Platz zu, <code>spielerNrVon(car)</code> liefert umgekehrt 1, 2, 3 oder 0.
+</p><p>Feste Zuordnungen je Spieler:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Spieler</th>
+<th>Farbe</th>
+<th>Stereoseite (Pan)</th>
+<th>Rundengong
+</th></tr>
+<tr>
+<td>1</td>
+<td>Grün <code>#2ee06a</code></td>
+<td>0 (Mitte bzw. links)</td>
+<td>Grundton
+</td></tr>
+<tr>
+<td>2</td>
+<td>Orange <code>#ffb02e</code></td>
+<td>+0,55 (rechts)</td>
+<td>× 1,5
+</td></tr>
+<tr>
+<td>3</td>
+<td>Blau <code>#4db8ff</code></td>
+<td>−0,25 (links)</td>
+<td>× 1,25
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Ein_Sendetakt_für_alle"><span id="Ein_Sendetakt_f.C3.BCr_alle"></span>Ein Sendetakt für alle</h3></div>
+<p>Alle Zusatzplätze werden im selben 45-ms-Takt wie Spieler&#160;1 in fester Reihenfolge bedient (<code>spielerZweiSenden()</code>): Für jeden Platz mit Auto wird sein Fahrzeugmodell einen Schritt gerechnet und das Paket geschrieben. Für Spieler gilt dabei die Regel „der neueste Befehl ersetzt den wartenden“, und jedes Auto hat seine eigene Schreibsperre, sodass ein langsamer Funkweg nur beim eigenen Auto einen Takt auslässt. Getrennte Sendewege waren in früheren Fassungen die Ursache für Stottern mit echtem Controller.<sup id="cite&#95;ref-3" class="reference"><a href="#cite_note-3"><span class="cite-bracket">&#91;</span>3<span class="cite-bracket">&#93;</span></a></sup> Gemessen mit 60 Takten Vollgas: 60 Pakete, kein Ausfall.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Pad-Zuordnung">Pad-Zuordnung</h3></div>
+<p><code>padsFuerSpieler()</code> ordnet die Gamepads zu:<sup id="cite&#95;ref-4" class="reference"><a href="#cite_note-4"><span class="cite-bracket">&#91;</span>4<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<ul><li><b>Ein Spieler</b>: das zuletzt benutzte Pad (höchster Zeitstempel) unter den Pads mit Standardbelegung, sonst unter allen.</li>
+<li><b>Mehrspieler</b>: Pads mit Standardbelegung zuerst, dann die übrigen, jeweils in der Reihenfolge des Browsers; das erste fährt Auto&#160;1, das zweite Auto&#160;2, das dritte Auto&#160;3. Der frühere Tauschschalter ist entfernt (<code>padTauschenSetzen()</code> setzt immer „aus“).</li></ul>
+<p>Jede Belegung wird zusätzlich unter der Kennung des Pads gespeichert (<code>carrera-hybrid-gamepad-pad:</code> + Pad-Name, höchstens 120 Zeichen). Erscheint an einem Platz ein anderes Pad, lädt <code>padBelegungAbgleichen()</code> dessen gemerkte Belegung. Die Belegungen je Spieler liegen außerdem unter <code>carrera-hybrid-gamepad-bindings-v2</code> (Spieler&#160;1), <code>…-p2</code> und <code>…-p3</code>.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Abgleich-Sitzung:_Übernehmen_und_Abbrechen_(seit_1.2.3)"><span id="Abgleich-Sitzung:_.C3.9Cbernehmen_und_Abbrechen_.28seit_1.2.3.29"></span>Abgleich-Sitzung: Übernehmen und Abbrechen (seit 1.2.3)</h3></div>
+<p>Das Neubelegen ist eine kleine Zustandsmaschine:<sup id="cite&#95;ref-5" class="reference"><a href="#cite_note-5"><span class="cite-bracket">&#91;</span>5<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Zustand</th>
+<th>Bedingung</th>
+<th>nächster Zustand
+</th></tr>
+<tr>
+<td>frei</td>
+<td>„Neu zuweisen“ angetippt</td>
+<td>Sitzung (Entwurf = Kopie der aktuellen Belegung)
+</td></tr>
+<tr>
+<td>Sitzung</td>
+<td>Eingabe am Pad des bearbeiteten Spielers, während eine Aktion wartet</td>
+<td>Sitzung (Entwurf geändert, nichts gespeichert)
+</td></tr>
+<tr>
+<td>Sitzung</td>
+<td>Knopf „Übernehmen“ oder Options (Taste 9) 1000&#160;ms gehalten</td>
+<td>Sperre (Entwurf gespeichert)
+</td></tr>
+<tr>
+<td>Sitzung</td>
+<td>Knopf „Abbrechen“</td>
+<td>Sperre (Entwurf verworfen)
+</td></tr>
+<tr>
+<td>Sperre</td>
+<td>alle Tasten aller Pads losgelassen (kein Knopf gedrückt, kein Wert über 0,3)</td>
+<td>frei
+</td></tr></tbody></table>
+<p>In Sitzung und Sperre reagiert das Pad auf nichts anderes. Vorher konnte eine noch gehaltene Taste nach dem Zuweisen Zurück, einen Reiterwechsel oder das Cockpit auslösen, und die Ruhelage des Sticks wurde aufgenommen, während X noch gedrückt war, sodass X sich selbst erfasste.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Fahrgefühl_je_Spieler_(seit_1.2.4)"><span id="Fahrgef.C3.BChl_je_Spieler_.28seit_1.2.4.29"></span>Fahrgefühl je Spieler (seit 1.2.4)</h3></div>
+<p>Jeder Zusatzmotor bekommt zuerst eine Kopie der Abstimmung von Spieler&#160;1 (alle Werte, die Gangtabelle als eigene Objekte). Hat der Spieler in der Garage ein eigenes Fahrgefühl gewählt, legt <code>spielerGefuehlUeberlagern()</code> dessen <b>Schnappschuss</b> darüber: Die App stellt die Regler des Presets kurz ein, kopiert die entstandene Konfiguration und stellt die Regler zurück. Danach setzt sie die eigene Reifenmischung wieder ein, weil die Kopie Griff und Verschleiß von Spieler&#160;1 mitgebracht hätte.<sup id="cite&#95;ref-6" class="reference"><a href="#cite_note-6"><span class="cite-bracket">&#91;</span>6<span class="cite-bracket">&#93;</span></a></sup> Ob ein Spieler mit Physik (Physik, Pacejka) oder als RC fährt, entscheidet sein eigenes Preset, sonst das von Spieler&#160;1. Wählbar sind die Fahren-Presets Arcade, Sim+ und Pacejka. Globale Einstellungen wie Tankverbrauch, Schaden, Reifenverschleiß, Wetter, Höchstgeschwindigkeit und Akkuausgleich gelten für alle Autos gleich.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Was_Auto_2_und_3_haben">Was Auto 2 und 3 haben</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Vorhanden</th>
+<th>Nicht vorhanden oder eingeschränkt
+</th></tr>
+<tr>
+<td>eigene Fahrphysik mit Gängen, Drehzahl, Tempo und Temperaturen</td>
+<td>die drei Rundenzeiten im Cockpit (sie gehören Auto&#160;1; die anderen stehen in der Rundenübersicht)
+</td></tr>
+<tr>
+<td>eigene Ortung: NPCs weichen aus und wählen ihre Überholseite nach seiner Querlage, Punkt auf der Karte, Fahrhilfe und Leitplanken-Modus</td>
+<td>Makro-Aufnahme (zeichnet nur Auto&#160;1 auf)
+</td></tr>
+<tr>
+<td>eigener Schaden mit Lampenausfall, Tank, Notlauf</td>
+<td>Doppler-Effekt im Ton
+</td></tr>
+<tr>
+<td>eigene Motorstimme auf eigener Stereoseite, eigene Knaller</td>
+<td>Boxenstopp nur per Knopf, nicht über die Boxengasse der Strecke
+</td></tr>
+<tr>
+<td>Rundenzählung, Rangliste, Ergebnis und CSV; die Zielflagge wartet auf alle Fahrer</td>
+<td>Boxen-Minispiel (nur ohne zweiten Spieler)
+</td></tr>
+<tr>
+<td>gelbe Flagge und Einführungsrunde mit eigenem Autopilot-Regler, Frühstart- und Pflichtstopp-Strafen</td>
+<td>
+</td></tr></tbody></table>
+<p>Die Rundenzählung kostete nichts: Sie lief schon immer je verbundenem Auto, unabhängig von der Rolle.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Cockpit_und_Vergleichsschirm_„Beide“"><span id="Cockpit_und_Vergleichsschirm_.E2.80.9EBeide.E2.80.9C"></span>Cockpit und Vergleichsschirm „Beide“</h3></div>
+<p>OmegaSim teilt den Bildschirm nicht. Sobald Spieler&#160;1 und Spieler&#160;2 ein Auto in der Garage haben, zeigt der <b>Standard-Cockpitschirm</b> selbst die Vergleichsansicht „Beide“ (<code>cockpitMainMalen()</code> setzt dann <code>data-screen="auto2"</code>); man muss nicht mehr dorthin blättern. Die übrigen Schirme sind Box und Rennen.<sup id="cite&#95;ref-7" class="reference"><a href="#cite_note-7"><span class="cite-bracket">&#91;</span>7<span class="cite-bracket">&#93;</span></a></sup> Die Ansicht zeigt nebeneinander Tempo, Schaltlichter, Gang, Tank, Zustand, Reifen- und Bremsentemperatur und Akku, in jeder Spalte in derselben Reihenfolge, dazu je Auto einen Boxenknopf, die Wahl von Reifen und Tankmenge und einen eigenen Motor-Knopf. Hat Spieler&#160;3 ein Auto, kommt eine dritte Spalte dazu. Der Boxenstopp eines Zusatzspielers tankt mit derselben Rate wie bei Auto&#160;1 (22&#160;%/s), repariert und zieht die gewählte Mischung auf; der Service beginnt erst im Stillstand. Der Ⓘ-Text der Option spricht noch von einem eigenen Schirm, zu dem man blättert; maßgeblich ist der Code.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="WLAN:_Schnittstelle_des_Hosts">WLAN: Schnittstelle des Hosts</h3></div>
+<p>Python-Host und Android-Host sprechen dieselbe Schnittstelle; wer eine ändert, muss die andere mitändern.<sup id="cite&#95;ref-8" class="reference"><a href="#cite_note-8"><span class="cite-bracket">&#91;</span>8<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Anfrage</th>
+<th>Inhalt</th>
+<th>Antwort und Wirkung
+</th></tr>
+<tr>
+<td><code>GET /mp/state[?zuschauer=ID]</code></td>
+<td>–</td>
+<td>Rangliste, Rennzustand, Host-Uhr (<code>zeitMs</code>), Startkennung (<code>boot</code>), Zahl der Zuschauer (Abruf in den letzten 5&#160;s), Streckencode
+</td></tr>
+<tr>
+<td><code>POST /mp/report</code></td>
+<td><code>{id, name, laps, letzte, beste, abgaenge, summe, strafe, pos, strecke}</code>, alles außer <code>id</code> optional</td>
+<td>legt den Fahrer an oder aktualisiert ihn; eine geänderte Rundenzahl setzt den Zeitpunkt der letzten Überfahrt
+</td></tr>
+<tr>
+<td><code>POST /mp/race</code></td>
+<td><code>{plan, phase, initiator, vorlaufMs}</code></td>
+<td>phase „bereit“: Bereitschaftsschirm; phase „start“: Startzeit setzen, aber nur, wenn alle aktiven Fahrer außer dem Initiator bereit sind
+</td></tr>
+<tr>
+<td><code>POST /mp/ready</code></td>
+<td><code>{id}</code></td>
+<td>Fahrer in die Bereit-Liste
+</td></tr>
+<tr>
+<td><code>POST /mp/race/cancel</code></td>
+<td>–</td>
+<td>Bereitschaftsrunde beenden, Fahrer und Wertung bleiben
+</td></tr>
+<tr>
+<td><code>POST /mp/leave</code></td>
+<td><code>{id}</code></td>
+<td>Fahrer entfernen
+</td></tr>
+<tr>
+<td><code>GET /mp/info</code></td>
+<td>–</td>
+<td>Rennlänge und eigene Adresse
+</td></tr>
+<tr>
+<td><code>GET /mp/reset</code></td>
+<td>–</td>
+<td>neues Rennen: alle Fahrer und der Rennplan werden gelöscht
+</td></tr>
+<tr>
+<td><code>OPTIONS</code></td>
+<td>–</td>
+<td>204 mit <code>Access-Control-Allow-Origin: *</code> (Preflight)
+</td></tr>
+<tr>
+<td>alles andere</td>
+<td>–</td>
+<td>die App selbst als Dateien (Info-Screen im Browser)
+</td></tr></tbody></table>
+<p>Ein Bericht darf beim Python-Host höchstens 16&#160;KiB groß sein, beim Telefon-Host 8&#160;KiB; Namen werden auf 40, Kennungen auf 64 Zeichen gekürzt. „Aktiv“ ist ein Fahrer, der sich in den letzten 15&#160;s gemeldet hat. Der Python-Host ermittelt seine eigene Adresse über einen UDP-Socket „zu“ einer Adresse außerhalb, ohne zu senden; so wählt das Betriebssystem die Schnittstelle, die ins Netz führt.
+</p><p><b>Takte des Clients</b> (<code>src/97-sessions.js</code>):
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Vorgang</th>
+<th>außerhalb des Rennens</th>
+<th>im Rennen
+</th></tr>
+<tr>
+<td>Stand abfragen (<code>/mp/state</code>)</td>
+<td>alle 1500&#160;ms</td>
+<td>höchstens alle 3000&#160;ms
+</td></tr>
+<tr>
+<td>Lebenszeichen (<code>/mp/report</code>)</td>
+<td>spätestens alle 5000&#160;ms, zusätzlich nach jeder Runde</td>
+<td>ebenso
+</td></tr>
+<tr>
+<td>Positionen für Zuschauer</td>
+<td>alle 330&#160;ms, nur wenn mindestens ein Zuschauer da ist</td>
+<td>höchstens alle 500&#160;ms
+</td></tr>
+<tr>
+<td>Info-Screen fragt ab</td>
+<td>alle 400&#160;ms</td>
+<td>alle 400&#160;ms
+</td></tr></tbody></table>
+<p>Eine Position ist <code>{i, f, c, k, g}</code>: Teilnummer, Phase auf dem Teil (drei Nachkommastellen), Farbe, Kürzel (höchstens drei Zeichen) und ob es ein NPC ist; je Telefon höchstens acht Autos.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Rangliste">Rangliste</h3></div>
+<pre>Sortierschlüssel = (−Runden, Zeitpunkt der letzten Rundenänderung beim Host)
+</pre>
+<p>Wer mehr Runden hat, führt; bei gleicher Rundenzahl, wer zuerst dort war. Die Bestzeit steht nur als Spalte daneben, weil sie „wer ist schnell“ beantwortet und nicht „wer führt“. Gezählt werden gemessene Runden: Die erste Überfahrt startet die Uhr, erst die zweite ergibt eine Zeit. Nach drei Überfahrten stehen also zwei Runden da.<sup id="cite&#95;ref-9" class="reference"><a href="#cite_note-9"><span class="cite-bracket">&#91;</span>9<span class="cite-bracket">&#93;</span></a></sup> Während eines Rennens zeichnet der Client die Tabelle erst nach dem Rennen neu.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Zeitabgleich:_mp.offset">Zeitabgleich: mp.offset</h3></div>
+<p>Jede Abfrage misst t0 und t1 (eigene Uhr) und liest <code>zeitMs</code> (Host-Uhr):<sup id="cite&#95;ref-10" class="reference"><a href="#cite_note-10"><span class="cite-bracket">&#91;</span>10<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-highlight mw-highlight-lang-javascript mw-content-ltr" dir="ltr"><pre><span></span><span class="c1">// src/97-sessions.js, mpUhrProbe()</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">weg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">t1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">t0</span><span class="p">;</span><span class="w">                         </span><span class="c1">// Hin und zurück</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">weg</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">weg</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">300</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="p">;</span><span class="w">            </span><span class="c1">// zu langsame Proben verwerfen</span>
+<span class="nx">mp</span><span class="p">.</span><span class="nx">proben</span><span class="p">.</span><span class="nx">push</span><span class="p">({</span><span class="w"> </span><span class="nx">weg</span><span class="p">,</span><span class="w"> </span><span class="nx">off</span><span class="o">:</span><span class="w"> </span><span class="nx">zeitMs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="nx">t0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">t1</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">2</span><span class="w"> </span><span class="p">});</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">mp</span><span class="p">.</span><span class="nx">proben</span><span class="p">.</span><span class="nx">length</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">8</span><span class="p">)</span><span class="w"> </span><span class="nx">mp</span><span class="p">.</span><span class="nx">proben</span><span class="p">.</span><span class="nx">shift</span><span class="p">();</span>
+<span class="nx">mp</span><span class="p">.</span><span class="nx">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">mp</span><span class="p">.</span><span class="nx">proben</span><span class="p">.</span><span class="nx">reduce</span><span class="p">((</span><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">x</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">(</span><span class="nx">x</span><span class="p">.</span><span class="nx">weg</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nx">a</span><span class="p">.</span><span class="nx">weg</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="nx">x</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="nx">a</span><span class="p">)).</span><span class="nx">off</span><span class="p">;</span>
+</pre></div>
+<pre>offset  = Host_Uhr − (t0 + t1)/2          aus der Probe mit der kleinsten Laufzeit unter den letzten 8
+Fehler  ≤ weg/2
+lokal   = Host_Zeit − offset
+</pre>
+<p>Es zählt die schnellste Probe, weil bei ihr die Annahme „Antwort in der Mitte“ am wenigsten falsch sein kann.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Startzeit:_startAt">Startzeit: startAt</h3></div>
+<ol><li>Der Initiator schickt <code>/mp/race</code> mit phase „bereit“ und dem <b>Rennplan</b>: Renntyp, Länge, Startwetter, Wetterwechsel, fliegender Start, Pflichtstopps, Starttank, ein vorab gewürfelter <b>Wetterplan</b>, eine Windrichtung, eine gemeinsame <b>Ampelverzögerung</b> (1000 bis 3000&#160;ms) und, wenn „Renneinstellungen erzwingen“ an ist, das aktive Preset; in der Meisterschaft zusätzlich Event und deren Preset.</li>
+<li>Der Host setzt phase „bereit“; alle Clients zeigen beim nächsten Abruf den Bereitschaftsschirm.</li>
+<li>Sind alle aktiven Fahrer außer dem Initiator bereit, schickt der Initiator phase „start“ mit <code>vorlaufMs</code> = 12&#160;000. Der Host prüft das erneut und setzt</li></ol>
+<pre>startAt = Host_jetzt + vorlauf        vorlauf auf 6000 … 30000 ms begrenzt
+</pre>
+<dl><dd>erhöht die Renn-Nummer, setzt Runden und Zeiten aller Fahrer zurück und gibt <code>startAt</code> über <code>/mp/state</code> an alle.</dd></dl>
+<ol><li>Jeder Client rechnet <code>lokal = startAt − mp.offset</code>. Liegt das weniger als 500&#160;ms in der Zukunft, ignoriert er den Start. Sonst übernimmt er den Plan (Renntyp, Länge, Wetter, Preset) und startet den Countdown auf genau diese Zeit. Kennung des Rennens ist <i>Host-Startkennung:Renn-Nummer</i>, damit ein neu gestarteter Host mit wieder bei 1 beginnenden Nummern nicht für ein altes Rennen gehalten wird.</li>
+<li><b>Feinabgleich</b> im Vorlauf: achtmal im Abstand von 300&#160;ms eine weitere Uhrprobe; weicht die daraus berechnete Startzeit um 8&#160;ms oder mehr von der benutzten ab, wird die Ampel entsprechend verschoben.</li></ol>
+<p><b>Zielflagge</b>: Bei Rennen über Runden schaltet ein Client auf „letzte Runde“, sobald ein anderer aktiver Fahrer die Rundenzahl erreicht hat; die laufende Runde zählt noch. <b>Für alle beenden</b> sendet einen Plan mit <code>ende: true</code> in phase „bereit“; jeder andere Client beendet daraufhin sein Rennen, nach 4&#160;s wird die Bereitschaftsrunde aufgehoben. Frühstart- und Pflichtstopp-Strafen gehen als <code>summe</code> und <code>strafe</code> mit zum Host; dafür sind eine neue APK beziehungsweise ein neuer Host nötig.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Host_in_der_Android-App">Host in der Android-App</h3></div>
+<p>Das Telefon startet einen kleinen HTTP-Server (NanoHTTPD) auf Port 8080, meldet ihn per NSD als <code>_omegasim._tcp</code> an und hält ihn mit einem Vordergrunddienst am Leben, damit Android ihn bei dunklem Bildschirm nicht beendet. „Host im WLAN suchen“ sucht 3500&#160;ms lang und liefert, was in dieser Zeit gefunden und aufgelöst ist. Der Telefon-Host liefert auch die App selbst aus, sodass ein Browser im WLAN mit <code>/?info</code> zum Info-Screen wird. Im reinen Browser ist dieser Weg nicht möglich, weil eine Webseite keinen Server starten darf.<sup id="cite&#95;ref-11" class="reference"><a href="#cite_note-11"><span class="cite-bracket">&#91;</span>11<span class="cite-bracket">&#93;</span></a></sup>
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Beispiele">Beispiele</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Uhrenabgleich">Uhrenabgleich</h3></div>
+<p>Ein Telefon fragt um t0 = 10&#160;000&#160;ms (eigene Uhr) ab, die Antwort kommt um t1 = 10&#160;060&#160;ms, der Host meldet <code>zeitMs</code> = 5&#160;000&#160;030.
+</p>
+<ol><li>weg = 60&#160;ms (unter 300, gültig).</li>
+<li>offset = 5&#160;000&#160;030 − (10&#160;000 + 10&#160;060)/2 = 5&#160;000&#160;030 − 10&#160;030 = <b>4&#160;990&#160;000&#160;ms</b>.</li>
+<li>Eine spätere Probe mit weg = 20&#160;ms ergibt 4&#160;990&#160;012; sie ersetzt den Wert, weil sie schneller war. Der Restfehler ist höchstens 10&#160;ms.</li>
+<li>Der Host setzt startAt = 5&#160;012&#160;040. Lokal: 5&#160;012&#160;040 − 4&#160;990&#160;012 = 22&#160;028&#160;ms auf der eigenen Uhr, also gut 12&#160;s nach der letzten Probe.</li>
+<li>Ergibt eine Probe im Vorlauf 4&#160;990&#160;002, liegt die neue Startzeit 10&#160;ms später; weil 10 ≥ 8, wird die Ampel um 10&#160;ms verschoben.</li></ol>
+<div class="mw-heading mw-heading3"><h3 id="Rangliste_2">Rangliste</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Fahrer</th>
+<th>Runden</th>
+<th>letzte Rundenänderung (Host)</th>
+<th>Platz
+</th></tr>
+<tr>
+<td>Anna</td>
+<td>5</td>
+<td>100,2&#160;s</td>
+<td>2
+</td></tr>
+<tr>
+<td>Ben</td>
+<td>5</td>
+<td>99,8&#160;s</td>
+<td>1
+</td></tr>
+<tr>
+<td>Cem</td>
+<td>4</td>
+<td>98,0&#160;s</td>
+<td>3
+</td></tr></tbody></table>
+<p>Ben und Anna haben gleich viele Runden; Ben war 0,4&#160;s früher dort und führt. Cem hat eine Runde weniger, obwohl seine letzte Überfahrt am frühesten war.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Netzlast">Netzlast</h3></div>
+<p>Vier Telefone außerhalb des Rennens: 4 × (1/1,5&#160;s) ≈ 2,7 Abfragen je Sekunde, dazu alle 5&#160;s ein Lebenszeichen je Telefon. Mit einem Info-Screen kommen 2,5 Abfragen je Sekunde des Info-Screens und je Telefon rund drei Positionsmeldungen je Sekunde hinzu (im Rennen zwei).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Pad-Zuordnung_2">Pad-Zuordnung</h3></div>
+<p>Erkannt sind ein DualSense (Standardbelegung), ein Xbox-Pad (Standardbelegung) und ein USB-Pad ohne Standardbelegung, das der Browser als erstes meldet. Reihenfolge nach <code>padsSortiert()</code>: DualSense, Xbox, USB-Pad, also DualSense → Spieler&#160;1, Xbox → Spieler&#160;2, USB-Pad → Spieler&#160;3. Hatte das Xbox-Pad früher eine eigene Belegung, wird sie beim Zuordnen für Spieler&#160;2 geladen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen_und_bekannte_Probleme">Grenzen und bekannte Probleme</h2></div>
+<ul><li><b>WLAN-Mehrspieler experimentell.</b> Die App weist selbst darauf hin, dass er noch nicht fehlerfrei funktioniert.</li>
+<li><b>Secure Context.</b> Im Browser über eine WLAN-Adresse lässt sich kein Auto verbinden, solange die Adresse nicht in Chrome freigegeben ist. Eine über https geladene App erreicht keinen unverschlüsselten Host; sie muss dann vom Host selbst geladen werden. Hosts vor 0.6.19 fehlten die CORS-Kopfzeilen.</li>
+<li><b>WLAN-Abriss.</b> Jeder fährt weiter; nur die Rangliste steht still. Ein Bericht, der nicht ankommt, wird nicht wiederholt, sondern vom nächsten ersetzt.</li>
+<li><b>Start-Genauigkeit.</b> Der Fehler des gemeinsamen Starts ist höchstens die halbe Laufzeit der besten Probe, im WLAN typischerweise einige Millisekunden bis wenige Dutzend; gemessen ist das noch nicht.</li>
+<li><b>Ein Gerät:</b> Die Pad-Reihenfolge vergibt der Browser und ist nicht wählbar. Die Vergleichsansicht erscheint nur, wenn Spieler&#160;2 belegt ist.</li>
+<li><b>Nicht vorhanden für Auto 2/3</b>: siehe Tabelle oben (Rundenzeiten im Hauptbereich, Makro-Aufnahme, Doppler, Boxengasse, Minispiel).</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Versionsgeschichte">Versionsgeschichte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Version</th>
+<th>Änderung
+</th></tr>
+<tr>
+<td>0.6.44–0.6.50</td>
+<td>Zwei-Spieler-Modus an einem Gerät: eigene Physik, dann Ortung, Schaden, Tank, Motorstimme, Boxenstopp
+</td></tr>
+<tr>
+<td>0.6.19</td>
+<td>PC-Host mit CORS-Kopfzeilen: Mitmachen auch, wenn die App nicht vom Host geladen wurde
+</td></tr>
+<tr>
+<td>0.8.42</td>
+<td>gemeinsamer Start mit Startzeit in der Host-Uhr, gemeinsamer Wetterplan und Wind
+</td></tr>
+<tr>
+<td>0.8.126</td>
+<td>Bereitschaftsschirm: Start erst, wenn alle bereit sind
+</td></tr>
+<tr>
+<td>0.9.2</td>
+<td>Bereitschaftsrunde abbrechen, Verlassen, Host-Startkennung
+</td></tr>
+<tr>
+<td>0.9.17</td>
+<td>drei Spieler über Spielerplätze (<code>zusatzPlatz</code>), dritte Spalte in „Beide“
+</td></tr>
+<tr>
+<td>0.9.32</td>
+<td>Feinabgleich der Ampel im Vorlauf, Rennen für alle beenden
+</td></tr>
+<tr>
+<td>0.9.41</td>
+<td>weniger Abfragen im Rennen (3000&#160;ms), Tabelle erst nach dem Rennen
+</td></tr>
+<tr>
+<td>0.10.5</td>
+<td>„Controller tauschen“ entfernt
+</td></tr>
+<tr>
+<td>1.0.12</td>
+<td>Pflichtstopp-Strafen für alle gesteuerten Autos, Meldung von Gesamtzeit und Strafe an den Host
+</td></tr>
+<tr>
+<td>1.1 (Abschnitt)</td>
+<td>Spieler 2 und 3 nicht mehr experimentell; Selbstlenkung je gesteuertem Auto
+</td></tr>
+<tr>
+<td>1.2.3</td>
+<td>Belegen als Entwurf mit Übernehmen (Options 1&#160;s) und Abbrechen, Sperre bis alle Tasten los
+</td></tr>
+<tr>
+<td>1.2.4</td>
+<td>Fahrgefühl je Spieler (Arcade, Sim+, Pacejka oder wie Spieler 1), eigene Reifenmischung bleibt
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
+<div class="mw-references-wrap mw-references-columns"><ol class="references">
+<li id="cite&#95;note-1"><span class="mw-cite-backlink"><a href="#cite_ref-1">↑</a></span> <span class="reference-text"><code>tools/omegasim_host.py</code>, Kopfkommentar „Warum HTTP und kein WebSocket“.</span>
+</li>
+<li id="cite&#95;note-2"><span class="mw-cite-backlink"><a href="#cite_ref-2">↑</a></span> <span class="reference-text"><code>src/49-spieler.js</code>, Kopfkommentar und <code>zusatzPlatz()</code>.</span>
+</li>
+<li id="cite&#95;note-3"><span class="mw-cite-backlink"><a href="#cite_ref-3">↑</a></span> <span class="reference-text"><code>src/20-protocol.js</code>, <code>spielerZweiSenden()</code>, <code>spielerSendenVon()</code>; <code>CARRERA_HYBRID.md</code>, „Zwei Spieler auf einem Handy“.</span>
+</li>
+<li id="cite&#95;note-4"><span class="mw-cite-backlink"><a href="#cite_ref-4">↑</a></span> <span class="reference-text"><code>src/90-ghosts.js</code>, <code>padsSortiert()</code>, <code>padsFuerSpieler()</code>.</span>
+</li>
+<li id="cite&#95;note-5"><span class="mw-cite-backlink"><a href="#cite_ref-5">↑</a></span> <span class="reference-text"><code>bindSitzungStarten()</code>, <code>bindSitzungEnde()</code>, <code>bindPadSitzung()</code>, <code>padAllesLos()</code>.</span>
+</li>
+<li id="cite&#95;note-6"><span class="mw-cite-backlink"><a href="#cite_ref-6">↑</a></span> <span class="reference-text"><code>src/49-spieler.js</code>, <code>zusatzMotorAbgleichen()</code>, <code>spielerGefuehlUeberlagern()</code>; <code>src/98-presets.js</code>, <code>presetSchnappschuss()</code>.</span>
+</li>
+<li id="cite&#95;note-7"><span class="mw-cite-backlink"><a href="#cite_ref-7">↑</a></span> <span class="reference-text"><code>src/50-drive.js</code>, <code>COCKPIT_SCREENS</code>, <code>cockpitMainMalen()</code>, <code>zweiSpielerAktiv()</code>.</span>
+</li>
+<li id="cite&#95;note-8"><span class="mw-cite-backlink"><a href="#cite_ref-8">↑</a></span> <span class="reference-text"><code>android-app/android/app/src/main/java/de/lroeseler/omegasim/HostServer.java</code>, Kopfkommentar.</span>
+</li>
+<li id="cite&#95;note-9"><span class="mw-cite-backlink"><a href="#cite_ref-9">↑</a></span> <span class="reference-text"><code>tools/omegasim_host.py</code>, <code>zustand_lesen()</code>.</span>
+</li>
+<li id="cite&#95;note-10"><span class="mw-cite-backlink"><a href="#cite_ref-10">↑</a></span> <span class="reference-text"><code>src/97-sessions.js</code>, <code>mpUhrProbe()</code>, <code>mpStartFeinabgleich()</code>.</span>
+</li>
+<li id="cite&#95;note-11"><span class="mw-cite-backlink"><a href="#cite_ref-11">↑</a></span> <span class="reference-text"><code>OmegaHostPlugin.java</code>, <code>OmegaHostService.java</code>.</span>
+</li>
+</ol></div>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Rennarten.html" title="Rennarten">Rennarten</a></li>
+<li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
+<li><a href="./OmegaBle.html" title="OmegaBle">OmegaBle</a></li>
+<li><a href="./Boxenstopp.html" title="Boxenstopp">Boxenstopp</a></li>
+<li><a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a></li>
+<li><a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a></li>
+<li><a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a></li>
+<li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/49-spieler.js</code>: <code>SPIELER_MAX</code>, <code>zusatzPlatz()</code>, <code>zusatzPlatzNeu()</code>, <code>zusatzPlatzZwei()</code>, <code>zusatzAktiv()</code>, <code>spielerNrVon()</code>, <code>spielerPan()</code>, <code>zusatzMotorAbgleichen()</code>, <code>spielerGefuehlUeberlagern()</code>, <code>spielerPhysikAn()</code></li>
+<li><code>src/20-protocol.js</code>: <code>spielerZweiSenden()</code>, <code>spielerSendenVon()</code></li>
+<li><code>src/90-ghosts.js</code>: <code>padsSortiert()</code>, <code>padsFuerSpieler()</code>, <code>padBelegungAbgleichen()</code>, <code>loadBindingsZusatz()</code>, <code>bindSitzungStarten()</code>, <code>bindSitzungEnde()</code>, <code>bindPadSitzung()</code>, <code>setCarRole()</code>, <code>garRollenFrei()</code></li>
+<li><code>src/50-drive.js</code>: <code>COCKPIT_SCREENS</code>, <code>cockpitMainMalen()</code>, <code>zweiSpielerAktiv()</code></li>
+<li><code>src/98-presets.js</code>: <code>spielerPreset()</code>, <code>spielerPresetSetzen()</code>, <code>presetSchnappschuss()</code></li>
+<li><code>src/97-sessions.js</code>: <code>mpJoin()</code>, <code>mpHolen()</code>, <code>mpBerichten()</code>, <code>mpPosBerichten()</code>, <code>mpUhrProbe()</code>, <code>mpStartFeinabgleich()</code>, <code>mpPlanBauen()</code>, <code>mpRennenFuerAlle()</code>, <code>mpBereitStarten()</code>, <code>mpRennenPruefen()</code>, <code>mpRennenUebernehmen()</code>, <code>mpZielPruefen()</code>, <code>mpRennenBeendenFuerAlle()</code>, <code>mpiHolen()</code></li>
+<li><code>tools/omegasim_host.py</code>: <code>zustand_lesen()</code>, <code>rennen_starten()</code>, <code>melden()</code>, <code>bereit_maelden()</code>, <code>abmelden()</code>, <code>Handler</code>, <code>eigene_adresse()</code></li>
+<li><code>android-app/android/app/src/main/java/de/lroeseler/omegasim/</code>: <code>HostServer.java</code>, <code>OmegaHostPlugin.java</code>, <code>OmegaHostService.java</code></li>
+<li><code>docs/plan-p2p-apk.md</code></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw181
+Cached time: 20261027053458
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.101 seconds
+Real time usage: 0.108 seconds
+Preprocessor visited node count: 230/1000000
+Revision size: 31927/2097152 bytes
+Post‐expand include size: 752/2097152 bytes
+Template argument size: 15/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 1/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 8337/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    2.737      1 Vorlage:Stand
+100.00%    2.737      1 -total
+-->
+
+<!-- Render ID 259e7e23-d1c8-11f1-a459-bc2411dc6fa3 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:37:|#|:idhash:canonical and timestamp 20261027053458 and revision id 96. Rendering was triggered because: api-parse
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

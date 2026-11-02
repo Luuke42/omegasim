@@ -150,8 +150,9 @@
       try { mischungAnwenden(motor, z.reifen, wxRainLevel() * wxRainLevel()); } catch (e) { /* beim Laden */ }
     }
   }
-  // Rechnet dieser Spieler mit Physik (Physik/Pacejka) oder RC? Ohne eigenes Preset wie Spieler 1.
+  // Rechnet dieser Spieler mit Physik (Physik/Pacejka/Gran Hybrismo/Assetto Carrera) oder RC? Ohne eigenes
+  // Preset wie Spieler 1. Die Liste steht einmal in physModusIstPhysik() (50-drive.js).
   function spielerPhysikAn(z) {
     const m = z && z.motor && z.motor.config.physModus;
-    return m ? (m === 'physik' || m === 'pacejka') : physicsEnabled;
+    return m ? physModusIstPhysik(m) : physicsEnabled;
   }

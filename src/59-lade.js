@@ -13,18 +13,12 @@
   // Animiert wird nur transform und opacity: das laeuft im Compositor weiter, auch wenn der
   // Hauptfaden kurz rechnet. Zwei Ebenen, beide drehen sich in 500 ms einmal; die eine ist in
   // der ersten, die andere in der zweiten Haelfte eines 1-s-Takts sichtbar.
-  let ladeTeileCache = null;
+  // v1.3.5: aus teilBildSvg() (60-track.js) - dasselbe gemerkte Bild wie in der Teileleiste
+  // des Editors, immer nach oben gerichtet. Scheitert es (zu frueh beim Laden), wird nichts
+  // gemerkt und beim naechsten Mal neu versucht; vorher blieb dann dauerhaft ein leeres Bild.
   function ladeTeileSvg() {
-    if (ladeTeileCache) return ladeTeileCache;
-    const gerade = (() => {
-      try {
-        // Enger Rand und ohne die Kartenklasse (die bringt Grund und Rahmen mit): nur das Teil.
-        return renderTrackPreview([{ type: TILE_TYPE.STRAIGHT }], null,
-          { detailed: true, echt: true, ohneLinie: true, ohneLinieRechnen: true, rand: 3 }).html
-          .replace('class="tp-karte"', 'class="lade-teil"');
-      } catch (e) { return ''; }
-    })();
-    ladeTeileCache = [gerade];
+    let gerade = '';
+    try { gerade = teilBildSvg(TILE_TYPE.STRAIGHT, 'lade-teil'); } catch (e) { gerade = ''; }
     return [gerade];
   }
   function ladeAnimationHtml(text) {
@@ -44,6 +38,40 @@
     const weg = el.remove.bind(el);
     el.remove = () => { weg(); if (!host.querySelector('.lade-ueber')) host.classList.remove('lade-traeger'); };
     return el;
+  }
+  // ---- LADEANZEIGE AUF DEM STARTSCHIRM (v1.3.5) ----
+  // BESTELLT: "Spiele auf dem Startbildschirm eine Animation unten links ab (das sich drehende
+  // Streckenteil, aber kleiner), wenn auf Updates geprueft wird oder wenn Sounddateien geladen
+  // werden." Jeder Ladevorgang meldet sich mit einem Grund an und ab; sichtbar, solange einer
+  // laeuft. Der Platz #home-lade liegt im Startschirm, auf anderen Seiten ist er also von selbst
+  // weg. Die Drehung ist CSS (transform), kostet den Hauptfaden also nichts.
+  const ladeGruende = new Set();
+  // v1.3.31 BESTELLT: "WIP-Label bei Soundladen weg und klein daneben schreiben, was gerade
+  // geladen wird." Gezeigt wird der aelteste noch laufende Grund mit Namen; 'klang' ist die
+  // Klammer um alle Klanggruppen und steht nur, wenn keine Gruppe mehr laeuft.
+  const LADE_NAMEN = { update: 'Suche nach Updates', 'klang-motor': 'Motorklänge', 'klang-effekte': 'Effekte',
+    'klang-stimmen': 'Stimmen', 'klang-ansagen': 'Ansagen', 'klang-zahlen': 'Zahlen', 'klang-umgebung': 'Umgebung',
+    klang: 'Klänge' };
+  function ladeAnzeigeText() {
+    const namen = [...ladeGruende].filter((g) => LADE_NAMEN[g] && g !== 'klang');
+    if (!namen.length) return ladeGruende.has('klang') ? t('Lädt') + ': ' + t(LADE_NAMEN.klang) : '';
+    const erst = namen[0] === 'update' ? t(LADE_NAMEN.update) : t('Lädt') + ': ' + t(LADE_NAMEN[namen[0]]);
+    return erst + (namen.length > 1 ? ' (+' + (namen.length - 1) + ')' : '');
+  }
+  function ladeAnzeigeSetzen(grund, an) {
+    if (an) ladeGruende.add(grund); else ladeGruende.delete(grund);
+    const slot = document.getElementById('home-lade-dreh');
+    if (slot) ladeAnimationSetzen(slot, ladeGruende.size > 0);
+    const box = document.getElementById('home-lade');
+    if (box) box.hidden = ladeGruende.size === 0;
+    const txt = document.getElementById('home-lade-text');
+    if (txt) txt.textContent = ladeGruende.size ? ladeAnzeigeText() : '';
+  }
+  // Fuer ein Promise: an, bis es erfuellt oder gescheitert ist.
+  function ladeAnzeigeMit(grund, laeuft) {
+    ladeAnzeigeSetzen(grund, true);
+    Promise.resolve(laeuft).catch(() => {}).then(() => ladeAnzeigeSetzen(grund, false));
+    return laeuft;
   }
   // Fest in einem Platzhalter (Bereitschaftsschirm): an/aus, ohne bei jedem Abruf neu zu bauen.
   function ladeAnimationSetzen(slot, an) {

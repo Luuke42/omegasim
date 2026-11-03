@@ -31,7 +31,9 @@
   // fuer Challenges."
   // BESTELLT (v0.8.35): "Reihenfolge der Tabs oben: FAHREN, MEHRSPIELER, CHALLENGES, OPTIONEN".
   // BESTELLT (v0.9.20): "Tausche die Tabs WLAN MEHRSPIELER und CHALLENGES (zuerst CHALLENGES)".
-  const K_EBENE1 = ['fahren', 'challenges', 'mp', 'options', 'misc'];
+  // v1.3.5 BESTELLT: "WLAN-Mehrspieler nicht als eigenen Tab, sondern als Button in der
+  // FAHREN -> Garage-Kachel" - mp ist jetzt eine tiefe Seite unter Fahren (#fa-mp).
+  const K_EBENE1 = ['fahren', 'challenges', 'options', 'misc'];
   const K_NAME = {
     home: 'Titel', fahren: 'Fahren', garage: 'Garage', race: 'Cockpit',
     options: 'Optionen', control: 'Renneinstellungen', track: 'Strecke', mp: 'WLAN Mehrspieler',
@@ -42,7 +44,7 @@
   // Zu welchem Reiter der Ebene 1 eine tiefe Seite gehoert: der Reiter bleibt hervorgehoben,
   // und Kreis fuehrt dorthin, wenn der Stapel leer ist.
   const K_ELTERN = {
-    garage: 'fahren', info: 'options', control: 'fahren', track: 'fahren',
+    garage: 'fahren', info: 'options', control: 'fahren', track: 'fahren', mp: 'fahren',
     doc: 'misc', school: 'misc', dev: 'misc', selftest: 'misc', probe: 'misc',
     numtrain: 'misc', record: 'misc',
   };
@@ -81,6 +83,9 @@
     // dort nichts), also auch keinen Stapel. Der Titel kommt nie auf den Stapel. Jeder
     // Eintrag merkt die Unterseite, die beim Verlassen offen war - Kreis oeffnet sie wieder.
     if (K_EBENE1.includes(neu)) kStapel = [];
+    // v1.3.5: zurueck auf dem Titel ist wieder "Starten" gewaehlt (96-home.js).
+    // try: waehrend des Ladens liegen HOME_START & Co. (96-home.js) noch in der Todeszone.
+    if (neu === 'home') { try { homeFokusSetzen(HOME_START); } catch (e) { /* noch nicht geladen */ } }
     else if (!kZurueckLaeuft && alt && alt !== neu && alt !== 'home') {
       kStapel.push({ tab: alt, sub: altSub || '' });
       if (kStapel.length > 40) kStapel.shift();
@@ -173,8 +178,12 @@
     const tab = kAktiverTab();
     // Eine Community-Strecke (v0.9.49) geht zurueck in ihre Liste, nicht auf die Kacheln.
     if (typeof chCommunitySeiteOffen === 'function' && chCommunitySeiteOffen()) { showSubpage('ch-community'); return true; }
+    // v1.3.15: eine Strecke aus den Community-Strecken geht zurueck in deren Liste.
+    if ($('sub-ch-sk') && $('sub-ch-sk').classList.contains('on')) { showSubpage('ch-strecken'); return true; }
     if (tab === 'info' && document.querySelector('#tab-info .subpage.on')) { konsoleZeige('fahren'); return true; }
     if (document.querySelector('.tabpage.active .subpage.on')) { showSubpage(''); return true; }
+    // v1.3.15: das gefuehrte Tutorial wartet auf Auto und Gamepad - Kreis/Esc bricht es ab.
+    if (typeof tutLaeuft === 'function' && tutLaeuft()) { tutAbbrechen('Kreis/Esc'); return true; }
     if (tab === 'home' || tab === 'fahren') return false;
     // BESTELLT: "wenn ich aus menues mit kreistaste zurueckgehe, will ich zu fahren kommen."
     // Der Stapel fuehrte sonst in den zuletzt besuchten Menue-Reiter zurueck; Kreis soll
@@ -209,7 +218,8 @@
           // derselben Ebene wie die Wochenkategorien - BESTELLT: "wöchentliche Challenges und
           // Dauerrennen sind auf verschiedenen menü-ebenen, bitte angleichen".
           an: k.dataset.ch ? k.dataset.ch === chWahl
-              : k.dataset.sub === (offen.id === 'sub-ch-strecke' ? 'ch-community' : offen.id.replace(/^sub-/, '')),
+              : k.dataset.sub === (offen.id === 'sub-ch-strecke' ? 'ch-community'
+                : offen.id === 'sub-ch-sk' ? 'ch-strecken' : offen.id.replace(/^sub-/, '')),
           wahl: () => {
             if (k.dataset.ch && typeof challengeSeiteZeigen === 'function') challengeSeiteZeigen(k.dataset.ch);
             else showSubpage(k.dataset.sub);
@@ -391,6 +401,25 @@
     kStapel = [];
     konsoleZeige('fahren');
     return true;
+  }
+
+  // ---- Mehrspieler-Stand in der Autos-Kachel (v1.3.5) --------------------------------
+  // "Dort dann anzeigen, wenn man hostet oder wo man beigetreten ist." Aus dem vorhandenen
+  // Zustand: mpAppHost (Host-Plugin der App, 97b-app.js), mp (Fahrer) und mpi (Info-Screen),
+  // beide 97-sessions.js. Nur Text setzen - gerufen beim Zeichnen der Kachel und wenn sich der
+  // Zustand aendert, nie im Takt.
+  function konsoleMpStatus() {
+    const el = $('fa-mp-status');
+    if (!el) return;
+    let text = '';
+    try {
+      const ohne = (h) => String(h || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+      if (mpAppHost.laeuft) text = t('Host:') + ' ' + (ohne(mpAppHost.url) || t('keine WLAN-Adresse'));
+      else if (mp.an && mp.host) text = t('Verbunden mit') + ' ' + ohne(mp.host);
+      else if (mpi.an && mpi.host) text = t('Info-Screen:') + ' ' + ohne(mpi.host);
+    } catch (e) { text = ''; }
+    if (el.textContent !== text) el.textContent = text;
+    el.hidden = !text;
   }
 
   // ---- Fahren: Start und Auto --------------------------------------------------------
@@ -762,6 +791,7 @@
       }
       ab.dataset.bild = abNeu;
     }
+    konsoleMpStatus();
     kZeilen($('fa-auto-info'), autos.length
       ? autos.map((c) => [kPunkt(carColor(c).hex, garageLabel(c)), t(K_ROLLE[c.role] || c.role)])
       : [[t('Status'), t('nicht verbunden')]]);
@@ -943,12 +973,15 @@
       return false;
     }
     if (kAktiverTab() !== 'home') return false;
-    if (neu === 14 || neu === 15 || neu === 4 || neu === 5) { wechsleSprache(); return true; }
+    // v1.3.5: Steuerkreuz links/rechts waehlt den Knopf (96-home.js), L1/R1 die Sprache.
+    if (neu === 14 || neu === 15) { homeFokusSchritt(neu === 14 ? -1 : 1); return true; }
+    if (neu === 4 || neu === 5) { wechsleSprache(); return true; }
     // BESTELLT: "'Press any key' und 'press triangle for tutorial' ist auch etwas
     // verwirrend. Ich wuerde sagen: X zum Starten, Dreieck fuer Tutorial, Kreis fuer
     // Steuerung." Alle anderen Tasten tun auf dem Titel nichts mehr.
-    if (neu === 0) { konsoleTitelWeiter(); kTitelSperre = true; return true; }
-    if (neu === 3) { kTitelSperre = true; konsoleTourStart(K_TOUR); return true; }
+    // v1.3.5: Kreuz (A am Xbox-Pad) loest den GEWAEHLTEN Knopf aus - vorgewaehlt ist Starten.
+    if (neu === 0) { kTitelSperre = true; homeFokusAusloesen(); return true; }
+    if (neu === 3) { kTitelSperre = true; tutorialStarten(); return true; }
     if (neu === 1) { kTitelSperre = true; konsoleTourStart(K_STEUERUNG); return true; }
     return true;
   }
@@ -997,11 +1030,13 @@
     if (typeof studieTestAktiv === 'function' && studieTestAktiv()) return;
     if (kAktiverTab() === 'home' && !e.ctrlKey && !e.altKey && !e.metaKey && k !== 'tab' && k !== 'shift') {
       e.preventDefault(); e.stopImmediatePropagation();
-      // Tastatur wie am Pad: Enter, Leertaste oder X starten, T das Tutorial, S die Steuerung.
-      if (k === 'arrowleft' || k === 'arrowright') wechsleSprache();
-      else if (k === 't') konsoleTourStart(K_TOUR);
+      // Tastatur wie am Pad: Pfeile links/rechts waehlen den Knopf, Enter, Leertaste oder X
+      // loesen ihn aus (v1.3.5), Q/E wie L1/R1 die Sprache. T und S bleiben als Abkuerzung.
+      if (k === 'arrowleft' || k === 'arrowright') homeFokusSchritt(k === 'arrowleft' ? -1 : 1);
+      else if (k === 'q' || k === 'e') wechsleSprache();
+      else if (k === 't') tutorialStarten();
       else if (k === 's') konsoleTourStart(K_STEUERUNG);
-      else if (k === 'enter' || k === ' ' || k === 'x') konsoleTitelWeiter();
+      else if (k === 'enter' || k === ' ' || k === 'x') homeFokusAusloesen();
       return;
     }
     if (kAktiverTab() === 'race' && !kFrageOffen && k === 'escape' && !document.body.classList.contains('track-fs')) {
@@ -1051,6 +1086,7 @@
     kn('fa-auto', (e) => { if (!e.target.closest('.k-knopf')) konsoleAuto(); });
     kn('fa-verbinden', () => { konsoleVerbinden(); });
     kn('fa-garage', () => konsoleZeige('garage'));
+    kn('fa-mp', () => konsoleZeige('mp'));
     kn('fa-start', () => { konsoleLosfahren(); });
     // v1.1.3 BESTELLT: "Tippe ich bei der Kachel STRECKE auf STRECKE oder AUF DER BAHN, soll
     // umgeschaltet werden; tippe ich auf das Bild, oeffnet sich das Menue dazu." Vorher schaltete nur

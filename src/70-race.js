@@ -2170,6 +2170,9 @@
     rennZeitTimeoutStop(raceCountdownTimer); raceCountdownTimer = null;
     ampelPlan = null; ampelSchritt = null; ampelK = 0;
     setRaceLights(0);
+    // v1.3.15 (WIP, Optionen > System): Funkprioritaet je Rolle, solange alle stehen - gesteuerte
+    // Autos HIGH, NPCs & Co. BALANCED, gestaffelt (funkPrioritaetVorStart, 90-ghosts.js).
+    if (typeof funkPrioritaetVorStart === 'function') funkPrioritaetVorStart();
     let ampelGestartet = false;
     const ampelBeginnen = () => {
       if (ampelGestartet || raceState !== 'countdown') return;
@@ -2484,6 +2487,8 @@
     // Meisterschaft (73-meisterschaft.js): wertet, sobald alle im Ziel sind, und zeigt danach
     // den Zwischenstand. Das normale Ergebnis kommt trotzdem zuerst.
     if (typeof meisterRennenEnde === 'function') meisterRennenEnde(willAuslaufen);
+    // Online-Streckenzeiten (72c-strecken-online.js): nicht fuer Challenges, die haben eigene Listen.
+    if (typeof skSitzungEnde === 'function' && !(typeof challengeLaeuft === 'function' && challengeLaeuft())) skSitzungEnde();
     if (typeof challengeRennenEnde === 'function' && challengeRennenEnde(willAuslaufen)) { /* erledigt */ }
     else if (typeof konsoleRennenBeendet === 'function') konsoleRennenBeendet();
     else {
@@ -3306,6 +3311,8 @@
     if (typeof teleKachel === 'function') teleKachel(type, jetztT);
     // Challenges: jedes bestaetigte Teil fuer die Rundenpruefung (72-challenges.js).
     if (typeof challengeTeilGelesen === 'function') challengeTeilGelesen(type);
+    // Online-Streckenzeiten (72c-strecken-online.js): nur ein Eintrag in ein Feld, geprueft wird nach dem Rennen.
+    if (typeof skTeilGelesen === 'function') skTeilGelesen(type);
 
     // Guard 2 applies only to the two codes that trigger something irreversible; the
     // ordinary straight and curve codes may repeat as often as the track says.
@@ -3631,6 +3638,8 @@
       if (raceMode === 'bestzeit' && !challengeUngueltig && rundeMs >= minMs) {
         bestzeitMeldung(bestzeitRunde(rundeMs, playerCar), rundeMs, 1);
       }
+      // Online-Streckenzeiten: die Runde nur merken (Pruefen, Speichern, Senden nach dem Rennen).
+      if (typeof skRunde === 'function') skRunde(raceLapTimes.length - 1, rundeMs, challengeUngueltig || rundeMs < minMs);
       rennstandRunde();
       // v0.9.41 GEMELDET: "Das Multiplayer Renn-Ende wird nicht getriggert ... 5-Runden-Rennen."
       // Die Zielrunde schaltete nur auf 'finishing' (raceClockTick), beendet wurde erst bei der

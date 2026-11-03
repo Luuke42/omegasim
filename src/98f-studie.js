@@ -70,12 +70,83 @@
     } finally { trackRotationDeg = merk; }
   }
 
+  // ---- OMEGALAB-PORTAL (v1.3.25, MOCKUP) ------------------------------------------------
+  // BESTELLT: "Lass den Namen OmegaLab, und wenn ich draufklicke, sehe ich eine kurze
+  // Erklaerung, Einwilligung, und kann dann zwischen den Studien waehlen [...]. Mach jetzt nur
+  // ein Mock-Up und sag Coming Soon." Die Studienliste folgt dem ManyLaps-Entwurf
+  // (mockup/manylaps_opus.html): neutrale Namen, Medaillen nur nach Dauer (bis 20 Min. 3,
+  // bis 26 Min. 4, darueber 5), Voraussetzungen je Studie. Nichts davon startet etwas: jede
+  // Karte traegt "Coming Soon", und die Einwilligung hier wird nicht gespeichert.
+  // Die bisherige Studie (NARQ, Reaktionstest, Fahrt) ist die erste Karte.
+  // v1.3.25 BESTELLT: "OmegaLab einbauen ohne echte Datensammlung und sagen, dass das aktuell nur
+  // zu Testzwecken ist und ein Forschungsportal mit echten Verhaltensdaten werden soll." Im
+  // TESTBETRIEB laesst sich die erste Studie durchlaufen (Karte "Ausprobieren"), aber
+  // studieAbschliessen sendet nichts und speichert nichts, und ausstehende Daten aus frueheren
+  // Fassungen werden nicht nachgesendet. Die uebrigen Karten bleiben "Coming Soon".
+  const LAB_TESTBETRIEB = true;
+  const LAB_STUDIEN = [
+    { id: 'fahrstil', name: 'Persönlichkeit und Fahrstil', min: 12, bereit: true,
+      text: 'Sechs Aussagen zur Persönlichkeit, ein Reaktionstest mit dem Controller und fünf Runden auf Homington.',
+      req: ['Controller', 'Auto oder virtuell'] },
+    { id: 'serie', name: 'Ridge Run', min: 18,
+      text: 'Eine Serie von Runden auf der Hauptstrecke mit einem kurzen Fragebogen.', req: ['Auto', 'Controller', 'Grundpackung'] },
+    { id: 'bloecke', name: 'Lakeside Loop', min: 23,
+      text: 'Mehrere Rundenblöcke auf der Hauptstrecke. Manchmal ist ein weiteres Auto auf der Strecke.', req: ['Auto', 'Controller', 'Zweites Auto (NPC)'] },
+    { id: 'paddock', name: 'Paddock Session', min: 24, erste: true,
+      text: 'Eine gemischte Sitzung: ein kurzes Spiel, eine Entscheidungsaufgabe, danach einige Runden.', req: ['Auto', 'Controller'] },
+    { id: 'nacht', name: 'Night Circuit', min: 25,
+      text: 'Runden auf der Hauptstrecke mit unterschiedlichen Audio-Einstellungen.', req: ['Auto', 'Controller', 'Kopfhörer'] },
+    { id: 'kueste', name: 'Coastal Run', min: 27,
+      text: 'Runden mit einer zusätzlichen Aufgabe auf dem Bildschirm und über Kopfhörer.', req: ['Auto', 'Controller', 'Kopfhörer', 'Mikrofon'] },
+    { id: 'sprint', name: 'Sprint Series', min: 32,
+      text: '48 kurze Sprints aus dem Stand, mit einem kleinen Punktespiel zwischen den Läufen.', req: ['Auto', 'Controller'] },
+  ];
+  const labMedaillen = (min) => (min <= 20 ? 3 : min <= 26 ? 4 : 5);
+  let labEinwilligung = false;   // nur fuer diese Ansicht, nie gespeichert
+  function labTestHinweis() {
+    return LAB_TESTBETRIEB ? '<div class="lab-bald"><b>' + stEsc(t('Testbetrieb')) + '</b> '
+      + stEsc(t('OmegaLab ist im Moment nur zu Testzwecken eingebaut. Es werden keine Daten gesendet oder gesammelt. Später soll daraus ein Forschungsportal mit echten Verhaltensdaten werden.')) + '</div>' : '';
+  }
+  function labPortalHtml() {
+    const summe = LAB_STUDIEN.reduce((a, x) => a + labMedaillen(x.min), 0);
+    const karten = LAB_STUDIEN.map((x) => '<div class="lab-karte' + (labEinwilligung ? '' : ' gesperrt') + '" data-lab="' + x.id + '">'
+      + '<div class="lab-kopf"><b data-i18n-skip>' + stEsc(t(x.name)) + '</b><span class="lab-med" data-i18n-skip>'
+      + '\u{1F3C5} ' + labMedaillen(x.min) + '</span></div>'
+      + (x.erste ? '<div class="lab-erste">' + stEsc(t('Empfohlen als erste Studie')) + '</div>' : '')
+      + '<p>' + stEsc(t(x.text)) + '</p>'
+      + '<div class="lab-req"><span class="lab-chip" data-i18n-skip>~' + x.min + ' min</span>'
+      + x.req.map((r) => '<span class="lab-chip">' + stEsc(t(r)) + '</span>').join('') + '</div>'
+      + (labEinwilligung && x.bereit
+        ? '<button type="button" class="primary" data-lab-start="' + x.id + '">' + stEsc(t('Ausprobieren')) + '</button></div>'
+        : '<button type="button" disabled>' + stEsc(t(labEinwilligung ? 'Coming Soon' : 'Erst einwilligen')) + '</button></div>')).join('');
+    return labTestHinweis()
+      + '<div class="studie-text">'
+      + '<h3>' + stEsc(t('Was ist OmegaLab?')) + '</h3>'
+      + '<p>' + stEsc(t('OmegaLab ist das Forschungslabor in OmegaSim. In kurzen, abgeschlossenen Studien fährst du Runden, spielst kleine Spiele oder beantwortest ein paar Fragen. Du wählst selbst, welche Studien du machst und in welcher Reihenfolge.')) + '</p>'
+      + '<p>' + stEsc(t('Für jede abgeschlossene Studie gibt es Medaillen, nach Dauer und nicht nach Leistung. Nach der ersten Studie erscheinst du mit einem Pseudonym in der Rangliste.')) + '</p>'
+      + '<h3>' + stEsc(t('Einwilligung')) + '</h3><ul class="lab-liste">'
+      + ['Die Teilnahme ist freiwillig, und du musst mindestens 18 Jahre alt sein.',
+         'Du kannst jede Studie jederzeit abbrechen; vor ihrem letzten Schritt wird nichts gesendet.',
+         'Gespeichert werden deine Antworten und Fahrdaten mit einer zufälligen Gerätekennung, ohne deinen Namen. Veröffentlicht werden sie nur anonymisiert.',
+         'Aufgaben mit Mikrofon werden nur auf deinem Gerät ausgewertet und nie aufgezeichnet.',
+         'Mit deiner Gerätekennung kannst du die Löschung verlangen, solange die Daten noch nicht anonymisiert veröffentlicht sind.']
+        .map((z) => '<li>' + stEsc(t(z)) + '</li>').join('')
+      + '</ul><p><b>' + stEsc(t('Kontakt')) + ':</b> <span data-i18n-skip>' + stEsc(STUDIE_KONTAKT || t('folgt')) + '</span></p></div>'
+      + '<label class="lab-ja"><input type="checkbox" id="lab-einwilligung"' + (labEinwilligung ? ' checked' : '') + '> '
+      + stEsc(t('Ich bin mindestens 18 Jahre alt und willige ein.')) + '</label>'
+      + '<div class="lab-stand" data-i18n-skip>' + stEsc(t('Studien')) + ': 0 / ' + LAB_STUDIEN.length
+      + ' · ' + stEsc(t('Medaillen')) + ': 0 / ' + summe + '</div>'
+      + '<div class="lab-gitter">' + karten + '</div>';
+  }
+
   function studieZeichnen() {
     const host = $('studie-inhalt');
     if (!host) return;
     if (!st) st = studieNeu();
+    // v1.3.25: vor der Studie das OmegaLab-Portal (Mockup, siehe LAB_STUDIEN).
+    if (st.schritt === 'start' && !st.nochmal && !st.ausPortal) { host.innerHTML = labPortalHtml(); return; }
     const d = studieLesen();
-    if (d.ausstehend && st.schritt === 'start') studieSenden(d.ausstehend, true);
+    if (!LAB_TESTBETRIEB && d.ausstehend && st.schritt === 'start') studieSenden(d.ausstehend, true);
     let h = '';
     if (st.schritt === 'start' && d.gesendet && !st.nochmal) {
       h += '<p>' + stEsc(t('Danke, du hast teilgenommen am')) + ' ' + stEsc(new Date(d.gesendet).toLocaleDateString()) + '.</p>'
@@ -159,7 +230,7 @@
         + (st.nurUeben ? '' : studieErgebnisHtml())
         + '<div class="studie-knoepfe"><button type="button" class="primary" data-st="fertig">' + stEsc(t('Fertig')) + '</button></div>';
     }
-    host.innerHTML = h;
+    host.innerHTML = labTestHinweis() + h;
     studieFormPruefen();
     if (st.schritt === 'rt') studieRtStarten();
   }
@@ -328,6 +399,12 @@
     studieZeichnen();
   }
   function studieAbschliessen() {
+    if (LAB_TESTBETRIEB) {
+      st.fehler = t('Testbetrieb: Es wurde nichts gesendet und nichts gespeichert.');
+      st.schritt = 'danke';
+      studieZeichnen();
+      return;
+    }
     const daten = studieDaten();
     const d = studieLesen();
     d.gesendet = new Date().toISOString();
@@ -407,6 +484,18 @@
   }
 
   function studieKlick(ev) {
+    if (ev.target && ev.target.id === 'lab-einwilligung') {
+      labEinwilligung = !!ev.target.checked;
+      studieZeichnen();
+      return;
+    }
+    const lab = ev.target.closest('[data-lab-start]');
+    if (lab) {
+      if (!labEinwilligung) return;
+      st = Object.assign(studieNeu(), { ausPortal: true });
+      studieZeichnen();
+      return;
+    }
     // v1.2.62: Tap auf den Streckenplan vergroessert/verkleinert ihn (wie die Challenge-Karte).
     const karte = ev.target.closest('#studie-karte');
     if (karte) { karte.classList.toggle('ch-voll'); return; }

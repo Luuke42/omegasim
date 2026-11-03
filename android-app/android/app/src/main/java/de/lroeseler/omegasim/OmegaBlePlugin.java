@@ -398,6 +398,62 @@ public class OmegaBlePlugin extends Plugin {
         });
     }
 
+    // ---- VERBINDUNGSPRIORITAET JE AUTO (v1.3.15, WIP) ----------------------------------------
+    // GEFRAGT: "Waere es sinnvoll, vor dem Rennstart die Bluetooth-Verbindungen zu sortieren, damit die
+    // gesteuerten Autos minimale Latenz haben?" Eine Reihenfolge gibt es bei Android nicht; jede Verbindung
+    // bekommt ihr eigenes Verbindungsintervall. Die Seite setzt deshalb zu Beginn der Startampel die
+    // gesteuerten Autos auf HIGH (kurzes Intervall) und NPCs / Safety Car / Reinigungswagen auf BALANCED,
+    // damit sie dem Adapter nicht dieselben kurzen Zeitfenster abnehmen.
+    // Stufe: "hoch" | "ausgewogen" | "sparsam". Antwort: { ok, grund, stufe }; grund ist
+    // "angenommen", "abgelehnt" (Android hat die Anfrage nicht angenommen), "nicht-verbunden"
+    // (keine GATT-Verbindung im Community-Plugin), "keine-berechtigung" oder "fehler: ...".
+    // Auf dem Schreib-Thread: so laeuft die Anfrage nie gleichzeitig mit einem unserer Steuer-Writes an
+    // dieselbe Verbindung. requestConnectionPriority ist kein GATT-Vorgang mit Rueckruf (kein Busy-Schloss),
+    // die Antwort kommt sofort.
+    @PluginMethod
+    public void prioritaetSetzen(PluginCall call) {
+        final String id = call.getString("deviceId");
+        final String stufe = call.getString("stufe", "");
+        final int wert;
+        if ("hoch".equals(stufe)) wert = BluetoothGatt.CONNECTION_PRIORITY_HIGH;
+        else if ("ausgewogen".equals(stufe)) wert = BluetoothGatt.CONNECTION_PRIORITY_BALANCED;
+        else if ("sparsam".equals(stufe)) wert = BluetoothGatt.CONNECTION_PRIORITY_LOW_POWER;
+        else {
+            call.reject("Unbekannte Stufe: " + stufe, "STUFE");
+            return;
+        }
+        if (id == null || id.isEmpty()) {
+            call.reject("deviceId fehlt", "GERAET");
+            return;
+        }
+        Runnable auftrag = () -> {
+            JSObject r = new JSObject();
+            r.put("stufe", stufe);
+            BluetoothGatt gatt = findeGatt(id);
+            if (gatt == null) {
+                r.put("ok", false);
+                r.put("grund", "nicht-verbunden");
+                call.resolve(r);
+                return;
+            }
+            boolean ok = false;
+            String grund;
+            try {
+                ok = gatt.requestConnectionPriority(wert);
+                grund = ok ? "angenommen" : "abgelehnt";
+            } catch (SecurityException e) {
+                grund = "keine-berechtigung";
+            } catch (Throwable e) {
+                grund = "fehler: " + e;
+            }
+            r.put("ok", ok);
+            r.put("grund", grund);
+            call.resolve(r);
+        };
+        Handler h = writeHandler;
+        if (h == null || !h.post(auftrag)) auftrag.run();
+    }
+
     private Map<?, ?> geraeteKarte() {
         try {
             PluginHandle h = getBridge().getPlugin("BluetoothLe");

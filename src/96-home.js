@@ -46,6 +46,39 @@
     });
   }
 
+  // ---- STARTSCHIRM: KNOEPFE WAEHLEN STATT TASTEN ZEIGEN (v1.3.5) ----
+  // BESTELLT: "Auf dem Startbildschirm nicht die Tasten anzeigen, sondern die Buttons mit D-Pad
+  // oder Pfeiltasten (oder Maus) waehlbar machen. Standardmaessig ist Start ausgewaehlt und dann
+  // blau ausgefuellt so wie aktuell, sodass ich X druecken kann zum Starten (oder A auf
+  // Xbox-Controller)." Die Tasten kommen aus 51-konsole.js (konsolePadTitel und der
+  // Tastatur-Zuhoerer); hier steht nur, WELCHER Knopf gewaehlt ist und was er tut.
+  const HOME_KNOEPFE = ['k-wiki', 'k-tutorial-start', 'k-steuerung-start', 'k-starten-start'];
+  const HOME_START = HOME_KNOEPFE.indexOf('k-starten-start');
+  let homeFokus = HOME_START;
+  function homeFokusSetzen(i) {
+    homeFokus = Math.max(0, Math.min(HOME_KNOEPFE.length - 1, i));
+    HOME_KNOEPFE.forEach((id, k) => {
+      const el = $(id);
+      if (el) el.classList.toggle('k-fokus', k === homeFokus);
+    });
+  }
+  function homeFokusSchritt(d) {
+    homeFokusSetzen((homeFokus + d + HOME_KNOEPFE.length) % HOME_KNOEPFE.length);
+    if (typeof menuNavTonBewegen === 'function') menuNavTonBewegen();
+  }
+  function homeFokusAusloesen() {
+    const el = $(HOME_KNOEPFE[homeFokus]);
+    if (el) el.click();
+  }
+  HOME_KNOEPFE.forEach((id, k) => {
+    const el = $(id);
+    if (!el) return;
+    // Maus und Tab-Taste waehlen mit: der blaue Knopf ist immer der, den Kreuz/Enter ausloest.
+    el.addEventListener('pointerenter', () => homeFokusSetzen(k));
+    el.addEventListener('focus', () => homeFokusSetzen(k));
+  });
+  homeFokusSetzen(HOME_START);
+
   // ---- TITEL-GLITCH JE BUCHSTABE (v0.8.38) ----
   // BESTELLT: "je Buchstabe je Seite (oben, unten) zufaellig festlegen, ob der Glitch-Effekt
   // blau oder rot ist." Bei jedem Laden neu gewuerfelt; die Animation je Buchstabe versetzt,

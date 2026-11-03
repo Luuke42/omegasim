@@ -348,6 +348,39 @@
   window.OMEGA_BRUECKE.alleSchliessen = omegaAlleSchliessen;
   window.OMEGA_BRUECKE.prioritaetHoch = (deviceId) =>
     ruf('requestConnectionPriority', { deviceId, connectionPriority: 1 }).catch(() => {});
+  // ---- PRIORITAET JE ROLLE (v1.3.15, WIP) ------------------------------------------------
+  // Zu Beginn der Startampel: gesteuerte Autos 'hoch', NPCs & Co. 'ausgewogen' (funkPrioritaetVorStart,
+  // 90-ghosts.js). Zuerst ueber OmegaBle.prioritaetSetzen (neue APK, meldet ehrlich, warum etwas nicht
+  // ging). FEATURE-ERKENNUNG ueber die Methodenliste, die Capacitor beim Start in PluginHeaders legt:
+  // eine unbekannte Methode beantwortet Capacitor gar nicht (nur ein Log-Eintrag), das Promise bliebe
+  // ewig offen. Fehlt die Methode (aeltere APK), geht dieselbe Anfrage ueber das Community-Plugin, das
+  // requestConnectionPriority mit allen drei Android-Stufen kennt (0 BALANCED, 1 HIGH, 2 LOW_POWER).
+  // Antwortet nie mit einem Fehler: { ok, grund, weg }.
+  const PRIO_WERT = { hoch: 1, ausgewogen: 0, sparsam: 2 };
+  let omegaPrioDa = null;
+  function omegaPrioVerfuegbar() {
+    if (omegaPrioDa === null) {
+      try {
+        const h = omegaBleVerfuegbar() && (C.PluginHeaders || []).find((p) => p && p.name === 'OmegaBle');
+        omegaPrioDa = !!(h && Array.isArray(h.methods) && h.methods.some((m) => m && m.name === 'prioritaetSetzen'));
+      } catch (e) { omegaPrioDa = false; }
+    }
+    return omegaPrioDa;
+  }
+  window.OMEGA_BRUECKE.prioritaetSetzen = (deviceId, stufe) => {
+    if (!deviceId || !Object.prototype.hasOwnProperty.call(PRIO_WERT, stufe)) {
+      return Promise.resolve({ ok: false, grund: 'ungueltig', weg: '' });
+    }
+    const text = (e) => String((e && (e.message || e.code)) || e || 'Fehler');
+    if (omegaPrioVerfuegbar()) {
+      return C.nativePromise('OmegaBle', 'prioritaetSetzen', { deviceId: String(deviceId), stufe })
+        .then((r) => ({ ok: !!(r && r.ok), grund: (r && r.grund) || '', weg: 'OmegaBle' }),
+              (e) => ({ ok: false, grund: text(e), weg: 'OmegaBle' }));
+    }
+    return ruf('requestConnectionPriority', { deviceId: String(deviceId), connectionPriority: PRIO_WERT[stufe] })
+      .then(() => ({ ok: true, grund: 'angenommen', weg: 'Plugin' }),
+            (e) => ({ ok: false, grund: text(e), weg: 'Plugin' }));
+  };
   window.OMEGA_BRUECKE.schliessen = omegaSchliessen;
   // Haengende Verbindungen: vom System als verbunden gemeldete HYBRID-Autos, die nicht in der Garage stehen.
   // Erst trennen und schliessen; ist eines danach immer noch verbunden (Verbindung ohne eigenen Griff), einmal

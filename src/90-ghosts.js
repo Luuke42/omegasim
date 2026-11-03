@@ -2675,8 +2675,10 @@
       if (car.meldeAbstand > MELDE_LANGSAM_MS) {
         if (!car.langsamSeit) car.langsamSeit = jetzt;
       } else car.langsamSeit = 0;
+      // v1.3.15: mit "Funkprioritaet beim Start" nur noch fuer gesteuerte Autos - NPCs & Co. stehen
+      // absichtlich auf BALANCED, hier hochgezogen waere die Absicht umgekehrt.
       if (car.langsamSeit && jetzt - car.langsamSeit > MELDE_LANGSAM_DAUER_MS && car.prioFuerRx !== car.rx
-          && b && typeof b.prioritaetHoch === 'function') {
+          && b && typeof b.prioritaetHoch === 'function' && (!funkPrioAn() || funkPrioGesteuert(car))) {
         car.prioFuerRx = car.rx;
         car.prioAt = jetzt;
         b.prioritaetHoch(car.device.id);
@@ -2684,6 +2686,59 @@
       }
     }
     car.meldungAt = jetzt;
+  }
+
+  // ---- FUNKPRIORITAET BEIM START (v1.3.15, WIP) ----------------------------------------------
+  // GEFRAGT: "Waere es sinnvoll, vor dem Rennstart kurz die Bluetooth-Verbindungen zu sortieren, damit die
+  // gesteuerten Autos minimale Latenz haben? Klappt das waehrend der Startampel?" Eine Reihenfolge gibt es
+  // nicht - Android vergibt je Verbindung ein Verbindungsintervall. Also eine PRIORITAET: gesteuerte Autos
+  // (Spieler 1-3) HIGH, alle anderen (NPC, Safety Car, Reinigungswagen, Aus) BALANCED, damit sie dem
+  // Adapter nicht dieselben kurzen Zeitfenster abnehmen. Zu Beginn des Countdowns (startRaceCountdown,
+  // 70-race.js): dort stehen alle Autos 4-6 s, eine Neuaushandlung stoert niemanden, ein eigener
+  // Ladebildschirm ist nicht noetig. GESTAFFELT (FUNK_PRIO_ABSTAND_MS je Auto, gesteuerte zuerst), damit
+  // nicht alle Neuaushandlungen auf einmal laufen. Nichts davon im 45-ms-Takt. Im Browser fehlt
+  // OMEGA_BRUECKE.prioritaetSetzen (nur in der App), dann geschieht nichts.
+  const FUNK_PRIO_ABSTAND_MS = 150;
+  function funkPrioAn() {
+    const cb = $('setting-funk-prio');
+    return !cb || !!cb.checked;
+  }
+  function funkPrioGesteuert(car) {
+    if (!car) return false;
+    if (car === playerCar || /^player\d?$/.test(String(car.role || ''))) return true;
+    return typeof spielerNrVon === 'function' && spielerNrVon(car) > 0;
+  }
+  let funkPrioLauf = 0;
+  // opt.autos / opt.planen nur fuer den Selbsttest (Attrappen statt garage und setTimeout).
+  function funkPrioritaetVorStart(opt) {
+    opt = opt || {};
+    if (!funkPrioAn()) return 0;
+    const b = window.OMEGA_BRUECKE;
+    if (!b || typeof b.prioritaetSetzen !== 'function') return 0;
+    const planen = opt.planen || ((fn, ms) => setTimeout(fn, ms));
+    const verbunden = (c) => !!(c && !c.sim && c.device && c.device.id && c.device.gatt
+      && c.device.gatt.connected !== false && !(c.rx && c.rx.verbindungWeg));
+    const autos = (opt.autos || garage).filter(verbunden);
+    // Gesteuerte zuerst: sie sollen ihr kurzes Intervall als erste haben.
+    const liste = autos.filter(funkPrioGesteuert).concat(autos.filter((c) => !funkPrioGesteuert(c)));
+    const lauf = ++funkPrioLauf;
+    liste.forEach((car, i) => {
+      const stufe = funkPrioGesteuert(car) ? 'hoch' : 'ausgewogen';
+      const los = () => {
+        if (lauf !== funkPrioLauf || !verbunden(car)) return;
+        car.funkPrioStufe = stufe;
+        let p = null;
+        try { p = b.prioritaetSetzen(car.device.id, stufe); } catch (e) { p = Promise.resolve({ ok: false, grund: String(e) }); }
+        Promise.resolve(p).then((r) => {
+          const ok = !r || r.ok !== false;
+          log(garageLabel(car) + ': Funkprioritaet ' + (stufe === 'hoch' ? 'HOCH (gesteuert)' : 'AUSGEWOGEN')
+              + (ok ? '' : ' - nicht gesetzt (' + ((r && r.grund) || '?') + ')')
+              + (r && r.weg ? ' [' + r.weg + ']' : ''), ok ? 'info' : 'warn');
+        }, () => {});
+      };
+      if (i === 0) los(); else planen(los, i * FUNK_PRIO_ABSTAND_MS);
+    });
+    return liste.length;
   }
   function onCarNotify(car, e) {
     const b = notifyBytes(e.target.value);
@@ -12761,12 +12816,18 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       if (konsoleMenue() && !imEditorVollbild) {
         if (konsoleWdh('up', dUp)) menuNavMove('up');
         if (konsoleWdh('down', dDown)) menuNavMove('down');
-        if (menuNavIstRaum()) {
-          if (konsoleWdh('left', dLeft)) menuNavRaum('left');
-          if (konsoleWdh('right', dRight)) menuNavRaum('right');
-        } else if (dLeft) menuNavSeitwaerts('left', true);
-        else if (dRight) menuNavSeitwaerts('right', true);
-        else menuNavAdjustPad('left', false);
+        // v1.3.31 Latenz: menuNavIstRaum() liest alle Zeilen samt Layout - nur, wenn links/rechts
+        // wirklich gedrueckt ist, nicht in jedem Takt.
+        if (dLeft || dRight) {
+          if (menuNavIstRaum()) {
+            if (konsoleWdh('left', dLeft)) menuNavRaum('left');
+            if (konsoleWdh('right', dRight)) menuNavRaum('right');
+          } else if (dLeft) menuNavSeitwaerts('left', true);
+          else menuNavSeitwaerts('right', true);
+        } else {
+          konsoleWdh('left', false); konsoleWdh('right', false);
+          menuNavAdjustPad('left', false);
+        }
         prevDpad.left = dLeft; prevDpad.right = dRight;
       } else {
         if (dUp && !prevDpad.up && !trackEditorPad('up') && !pitScreenPad('up')

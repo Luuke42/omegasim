@@ -7562,8 +7562,11 @@
           gezeichnet: (() => {
             if (typeof renderTrackPreview !== 'function') return null;
             const html = renderTrackPreview(tiles, 0, { detailed: true, mitLinie: true }).html;
-            return { eng: (html.match(/>ENG</g) || []).length,
-                     sperren: (html.match(/#3a2a12/g) || []).length };
+            const echt = renderTrackPreview(tiles, 0, { detailed: true, echt: true }).html;
+            return { balken: (html.match(/data-enge="1"/g) || []).length,
+                     balkenEcht: (echt.match(/data-enge="1"/g) || []).length,
+                     karo: (echt.match(/data-ziel="karo"/g) || []).length,
+                     linien: (echt.match(/data-ziel="linie"/g) || []).length };
           })(),
         };
       } finally {

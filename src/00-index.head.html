@@ -2520,6 +2520,12 @@
   .k-w { color: #fff; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .k-punkt { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: .4em; vertical-align: 0; }
   .k-knopfreihe { display: flex; gap: 6px; padding: 0 10px 12px; flex-wrap: wrap; }
+  /* v1.3.5: Mehrspieler-Stand in der Autos-Kachel ("Host: ..." / "Verbunden mit ..."). */
+  .k-mp-status { display: block; position: relative; z-index: 1; margin: 0 10px 6px; font-size: 11.5px; font-weight: 700;
+    letter-spacing: .03em; color: var(--k-blau, #00a3e0); text-shadow: 0 1px 3px rgba(0,0,0,.95);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .k-mp-status[hidden] { display: none; }
+  #fa-mp .wip-tag { font-size: 8px; padding: 0 3px; margin-left: 4px; vertical-align: 1px; }
   .k-knopf { background: var(--k-grau); color: #fff; border: 2px solid transparent; border-radius: 0; padding: 7px 12px;
     font-family: var(--k-font); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
   .k-knopf:hover, .k-knopf.menu-nav-sel { border-color: #fff; background: var(--k-blau); color: var(--k-blau-text); outline: 0; }
@@ -2928,11 +2934,12 @@
     background: rgba(10,12,18,.7); color: #fff; border: 2px solid var(--k-blau); border-radius: 0; padding: 6px 16px; }
   .k-tutorial-knopf:hover { background: var(--k-blau); color: var(--k-blau-text); }
   /* v1.0.15 BESTELLT: "Startknopf auf Startbildschirm farblich anders hinterlegen, damit er klarer wird." */
-  .k-tutorial-knopf.k-starten-haupt { background: var(--k-blau, #00a3e0); color: var(--k-blau-text, #04070c);
-    border-color: var(--k-blau, #00a3e0); font-weight: 800; }
-  .k-tutorial-knopf.k-starten-haupt .k-tutorial-taste { color: inherit; opacity: .75; }
-  .k-tutorial-knopf.k-starten-haupt:hover { background: #fff; border-color: #fff; color: #04070c; }
-  .k-tutorial-taste { margin-left: 8px; color: var(--k-dim); font-size: 11px; letter-spacing: .04em; }
+  .k-tutorial-knopf.k-starten-haupt { font-weight: 800; }
+  /* v1.3.5: blau gefuellt ist der GEWAEHLTE Knopf (Steuerkreuz, Pfeiltasten, Maus) - beim Laden
+     "Starten", wie bisher. Kreuz / A / Enter loest ihn aus (96-home.js). */
+  .k-tutorial-knopf.k-fokus, .k-tutorial-knopf.k-wiki.k-fokus { background: var(--k-blau, #00a3e0);
+    color: var(--k-blau-text, #04070c); border-color: var(--k-blau, #00a3e0); }
+  .k-tutorial-knopf:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   .k-tour { position: fixed; inset: 0; z-index: 450; font-family: var(--k-font); }
   body.track-fs .k-tour { z-index: 900; }
   .k-tour[hidden], .k-tour-spot[hidden] { display: none; }
@@ -2968,6 +2975,33 @@
     font-size: 12px; padding: 4px 12px; border-radius: 0; }
   .k-tour-knoepfe .k-tour-leise { margin-right: auto; background: transparent; border-color: transparent; color: var(--k-dim); }
   .k-tour-knoepfe button.menu-nav-sel { outline: 0; border-color: #fff; background: var(--k-blau); color: var(--k-blau-text); }
+  /* ---- Gefuehrtes Tutorial (v1.3.15, WIP): Karte oben mittig ueber dem Cockpit; solange es auf
+     Auto und Gamepad wartet (Menue FAHREN), unten, damit die Kopfzeile sie nicht verdeckt ---- */
+  .tut-ui { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    z-index: 460; width: min(560px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; box-sizing: border-box;
+    background: rgba(12,15,22,.94); border-top: 3px solid var(--k-blau, #00a3e0); box-shadow: 0 10px 30px rgba(0,0,0,.7);
+    color: #eef0f4; font-family: var(--k-font); padding: 8px 12px;
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; align-items: center; }
+  .tut-ui.unten { top: auto; bottom: max(8px, env(safe-area-inset-bottom)); }
+  .tut-ui[hidden], .tut-taste[hidden] { display: none; }
+  .tut-kopf { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px;
+    font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--k-dim); }
+  .tut-hinweis { margin-left: auto; text-transform: none; letter-spacing: .04em; }
+  .tut-taste { grid-row: span 2; display: grid; place-items: center; min-width: clamp(56px, 14vh, 96px);
+    padding: 6px 8px; background: #161a24; border: 2px solid var(--k-blau, #00a3e0); font-size: clamp(16px, 5vh, 26px);
+    font-weight: 900; color: #fff; text-align: center; line-height: 1.1; }
+  .tut-taste.gedrueckt { border-color: var(--good); box-shadow: 0 0 0 2px var(--good); }
+  .tut-ui h2 { grid-column: 2; margin: 0; font-size: clamp(13px, 3.4vh, 17px); letter-spacing: .08em; text-transform: uppercase; }
+  .tut-ui p { grid-column: 2; margin: 0; font-size: clamp(12px, 3vh, 14px); line-height: 1.4; white-space: pre-line; }
+  .tut-ui .tut-taste[hidden] ~ h2, .tut-ui .tut-taste[hidden] ~ p { grid-column: 1 / -1; }
+  .tut-kopf button { font-family: var(--k-font); letter-spacing: .08em; text-transform: uppercase; font-size: 11px;
+    padding: 2px 8px; border-radius: 0; background: transparent; color: var(--k-dim); border: 1px solid var(--k-dim); }
+  .tut-kopf button:hover, .tut-kopf button:focus-visible { color: #fff; border-color: #fff; }
+  .tut-wahl { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 6px; }
+  .tut-wahl[hidden] { display: none; }
+  .tut-wahl button { flex: 1 1 0; font-family: var(--k-font); letter-spacing: .08em; text-transform: uppercase;
+    font-size: 13px; padding: 8px 10px; border-radius: 0; background: #161a24; color: #fff; border: 2px solid var(--k-blau, #00a3e0); }
+  .tut-wahl button.gewaehlt { background: var(--k-blau, #00a3e0); color: var(--k-blau-text, #04070c); }
   /* ---- Mehrspieler (v0.8.26) ---- */
   .mp-warnung { border-left: 3px solid var(--warn); padding: 3px 10px; margin: 6px 0 10px; font-size: 12px; color: #f3d9a0;
     background: rgba(255,180,0,.08); }
@@ -3066,6 +3100,23 @@
   .grid-timeattack .ta-stand { border-collapse: collapse; }
   .grid-timeattack .ta-stand td { padding: 1px 10px 1px 0; }
   /* ---- STUDIE (98f-studie.js) ---- */
+  /* v1.3.25: OmegaLab-Portal (Mockup) */
+  .lab-bald { background: rgba(255, 176, 46, .12); border: 1px solid var(--warn, #ffb02e); border-radius: 10px; padding: 10px 12px; margin: 6px 0 12px; line-height: 1.4; }
+  .lab-bald b { color: var(--warn, #ffb02e); margin-right: 4px; }
+  #studie-inhalt h3 { margin: 14px 0 4px; font-size: 1.05em; }
+  .lab-liste { margin: 4px 0 8px; padding-left: 20px; line-height: 1.45; }
+  .lab-ja { display: flex; align-items: center; gap: 10px; margin: 10px 0; font-weight: 600; }
+  .lab-ja input { width: 22px; height: 22px; }
+  .lab-stand { margin: 6px 0 10px; opacity: .85; }
+  .lab-gitter { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .lab-karte { border: 1px solid rgba(255, 255, 255, .14); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .lab-karte.gesperrt { opacity: .6; }
+  .lab-karte p { margin: 0; line-height: 1.4; flex: 1; }
+  .lab-kopf { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .lab-med { white-space: nowrap; }
+  .lab-erste { font-size: .82em; color: var(--warn, #ffb02e); font-weight: 600; }
+  .lab-req { display: flex; flex-wrap: wrap; gap: 4px; }
+  .lab-chip { font-size: .78em; border: 1px solid rgba(255, 255, 255, .2); border-radius: 999px; padding: 1px 8px; }
   .studie-text p { line-height: 1.45; margin: 4px 0 8px; }
   .studie-text code, #studie-inhalt code { font-size: .9em; }
   .studie-knoepfe { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
@@ -3305,6 +3356,18 @@
   .ch-tabelle tr.du td { background: rgba(0,163,224,.2); font-weight: 800; }
   .ch-sterne-hinweis { font-size: 11px; margin: 2px 0 10px; }
   .ch-sterne { letter-spacing: .06em; white-space: nowrap; }
+  /* v1.3.15: Online-Streckenzeiten (72c-strecken-online.js) */
+  .sk-block { margin-top: 16px; }
+  .sk-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+  .sk-chip { font-size: 12px; padding: 4px 10px; border-radius: 999px; }
+  .sk-chip.an { border-color: var(--info); background: rgba(0,163,224,.22); font-weight: 700; }
+  .sk-eigene { margin-left: 2px; }
+  .sk-block #sk-editor-auffrischen { margin-top: 8px; }
+  .sk-lokal { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 0 5px;
+    border: 1px solid var(--muted); border-radius: 4px; color: var(--muted); white-space: nowrap; }
+  .sk-karte { max-width: 420px; display: flex; justify-content: center; background: rgba(0,0,0,.25);
+    border-radius: 8px; overflow: hidden; margin: 6px 0; }
+  .sk-karte svg { display: block; max-width: 100%; max-height: 280px; width: auto; height: auto; }
   /* ---- Streckeneditor (v0.8.28) ---- */
   .te-warn { border-left: 3px solid var(--warn); padding: 3px 10px; font-size: 12px; color: #f3d9a0; background: rgba(255,180,0,.08); }
   .te-start-reihe { gap: 10px; align-items: center; margin: 8px 0; }
@@ -3343,6 +3406,12 @@
   .teile-zeile:nth-child(odd) { background: rgba(255,255,255,.03); }
   .teile-zeile .teile-name { color: var(--ink); flex: 1 1 auto; min-width: 0; }
   .teile-zeile .teile-ic { width: 22px; height: 22px; flex: 0 0 auto; color: var(--ink); opacity: .95; }
+  /* v1.3.5: echte Teilebilder (teilBildSvg) statt Strichsymbol - etwas groesser, damit Pfeile,
+     Kurvenrichtung und die Bucht der Boxengasse klein noch lesbar sind. */
+  .teile-zeile .teil-bild.teile-ic { width: 36px; height: 36px; opacity: 1; }
+  /* Heller Grund wie ein Fussboden: sonst verschwindet die schwarze Fahrbahn auf dem dunklen
+     Knopf, und man sieht nur noch zwei Randstreifen. */
+  .teile-zeile .teil-bild, .tp-btn .teil-bild { background: rgba(190,198,212,.38); border-radius: 4px; }
   .teile-zeile .teile-steuer { display: inline-flex; align-items: center; gap: 6px; }
   .teile-zeile .teile-zahl { font-weight: 800; color: var(--k-blau); min-width: 3ch; text-align: right;
     font-variant-numeric: tabular-nums; }
@@ -3865,6 +3934,12 @@
     border: 1px solid rgba(255,255,255,.15); border-radius: 6px; color: #eef0f4; font-size: 12.5px; font-weight: 600;
     letter-spacing: .03em; pointer-events: none; }
   .sim-lade .lade-dreh { width: 30px; height: 30px; }
+  /* v1.3.5: dieselbe drehende Gerade, klein unten links auf dem Startschirm (59-lade.js). */
+  .home-lade:not([hidden]) { position: fixed; left: calc(12px + env(safe-area-inset-left));
+    bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 30; display: flex; align-items: center; gap: 6px;
+    pointer-events: none; }
+  .home-lade .lade-dreh { width: 26px; height: 26px; }
+  .home-lade-text { font-size: 10px; opacity: .75; white-space: nowrap; }
   .lade-ebene { position: absolute; inset: 0; display: grid; place-items: center; }
   .lade-ebene svg, .lade-ebene .tp-karte { width: 100%; height: 100%; max-width: none; max-height: none; }
   .lade-a { animation: ladeDreh 1s linear infinite; }
@@ -4012,6 +4087,7 @@
   .tp-btn { width: 54px; min-height: 60px; padding: 3px 0 2px 0; display: flex; flex-direction: column;
     align-items: center; justify-content: flex-start; border-radius: 8px; }
   .tp-btn svg { width: 26px; height: 26px; }
+  .tp-btn .teil-bild { width: 32px; height: 32px; max-width: none; flex: 0 0 auto; }
   .tp-btn.sel { border-color: var(--accent); border-width: 3px; background: var(--panel-3); }
   .tp-actions .tp-btn.sel { border-color: var(--info); }
   .tp-btn .tp-cap { font-size: 8.5px; letter-spacing: .04em; text-transform: uppercase;
@@ -4075,6 +4151,13 @@
   .tp-opt input[type=checkbox] { accent-color: var(--k-blau, #00a3e0); width: 16px; height: 16px; }
   .tp-opt .tp-opt-wert { min-width: 3ch; text-align: right; font-weight: 700; color: var(--k-blau, #00a3e0); }
   .tp-opt .tp-opt-knopf { margin-left: auto; }
+  /* v1.3.5: Brueckenzahl (Minus/Zahl/Plus) und die ausgegraute Box-Option samt Hinweis. */
+  .tp-opt .tp-opt-gruppe { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tp-opt .num-steuer input[type="number"] { width: 44px; }
+  .tp-opt .num-steuer .num-minus, .tp-opt .num-steuer .num-plus { width: 26px; height: 26px; font-size: 15px; }
+  .tp-opt label.tp-opt-aus { opacity: .5; cursor: not-allowed; }
+  .tp-opt .tp-opt-hinweis { font-size: 11px; color: var(--muted); white-space: normal; }
+  .tp-opt .tp-opt-hinweis[hidden] { display: none; }
   /* Aktionen oben, Karte in der Mitte, Teile unten - so liegt das Steuerkreuz auf dem
      Bildschirm genauso wie in der Hand: hoch zu den Aktionen, runter zu den Teilen. */
   /* minmax(0, 1fr) UND NICHT 1fr. `1fr` ist `minmax(auto, 1fr)`, und dieses `auto` ist
@@ -4087,6 +4170,7 @@
      den Fall fuer das Rasterkind ab, nicht aber die Spurberechnung selbst.) */
   body.track-fs #track-fs-host { grid-template-rows: auto minmax(0, 1fr) auto; }
   body.track-fs .tp-btn { width: 46px; min-height: 52px; }
+  body.track-fs .tp-btn .teil-bild { width: 30px; height: 30px; }
   /* Space usage, subtle, in a corner as asked. */
   /* The gamepad moves the REAL focus rather than a painted marker of its own, so keyboard,
      controller and screen reader all agree on where you are. That only works if focus is
@@ -4848,7 +4932,9 @@
        Entwickler/Selbsttest/Code-Sonde ueber Entwicklertools. -->
   <button class="tab-btn" data-tab="control" data-parent="options" hidden style="display:none">Renneinstellungen</button>
   <button class="tab-btn" data-tab="challenges">Challenges</button>
-  <button class="tab-btn" data-tab="mp">WLAN Mehrspieler</button>
+  <!-- v1.3.5 BESTELLT: "WLAN-Mehrspieler nicht als eigenen Tab, sondern als Button in der
+       FAHREN -> Garage-Kachel." Der Reiter bleibt als tabpage, erreichbar ueber #fa-mp. -->
+  <button class="tab-btn" data-tab="mp" data-parent="fahren" hidden style="display:none">WLAN Mehrspieler</button>
   <button class="tab-btn" data-tab="info" data-parent="options" hidden style="display:none">Info</button>
   <button class="tab-btn" data-tab="misc">Entwicklertools</button>
   <!-- Nicht in der Leiste, aber weiter als Tab-Knopf vorhanden: showTab() sucht genau
@@ -4910,19 +4996,19 @@
       <div class="k-tutorial-reihe">
         <!-- BESTELLT: "Wiki" links neben Tutorial/Steuerung/Starten, so gross wie ein
              Tutorial-Knopf und komplett weiss; Klick oeffnet das OmegaSim-Wiki im Browser. -->
-        <a class="k-tutorial-knopf k-wiki" href="https://omegasim.miraheze.org/wiki/Hauptseite"
+        <!-- v1.3.5 BESTELLT: "Auf dem Startbildschirm nicht die Tasten anzeigen, sondern die
+             Buttons mit D-Pad oder Pfeiltasten (oder Maus) waehlbar machen. Standardmaessig ist
+             Start ausgewaehlt und blau ausgefuellt". Die Wahl fuehrt 96-home.js (homeFokus). -->
+        <a class="k-tutorial-knopf k-wiki" id="k-wiki" href="https://omegasim.miraheze.org/wiki/Hauptseite"
            target="_blank" rel="noopener noreferrer" aria-label="Wiki">Wiki</a>
-        <button type="button" id="k-tutorial-start" class="k-tutorial-knopf">Tutorial
-          <span class="k-tutorial-taste" data-i18n-skip>&#9651; / T</span></button>
+        <button type="button" id="k-tutorial-start" class="k-tutorial-knopf">Tutorial</button>
         <!-- BESTELLT: "neben dem Tutorial-Button noch einen Button zur Steuerung ... dass es nur
              mit Gamepad funktioniert, zeige die Tasten und am Ende, wo man das Bild vom
              Controller mit allen Tasten sieht und die Belegung aendern kann". -->
-        <button type="button" id="k-steuerung-start" class="k-tutorial-knopf">Steuerung
-          <span class="k-tutorial-taste" data-i18n-skip>&#9675; / S</span></button>
+        <button type="button" id="k-steuerung-start" class="k-tutorial-knopf">Steuerung</button>
         <!-- v0.10.5 BESTELLT: "Auf dem Startscreen 'Starten' als dritten Button neben Tutorial
              und Steuerung." Derselbe Weg wie X / Enter. -->
-        <button type="button" id="k-starten-start" class="k-tutorial-knopf k-starten-haupt">Starten
-          <span class="k-tutorial-taste" data-i18n-skip>&#10005; / Enter</span></button>
+        <button type="button" id="k-starten-start" class="k-tutorial-knopf k-starten-haupt k-fokus">Starten</button>
       </div>
       <!-- v0.10.6: "✕ zum Starten" entfernt - der Knopf "Starten" daneben sagt dasselbe (BESTELLT). -->
       <!-- BESTELLT: "auf der Titelseite zur .apk verlinken, falls die App nicht darueber
@@ -4947,8 +5033,13 @@
         <button type="button" id="app-update-abbrechen">Abbrechen</button>
       </div>
     </div>
+      <!-- v1.3.5: kleine Ladeanimation unten links, solange Updates gesucht oder Klaenge geladen
+           werden (ladeAnzeigeSetzen in 59-lade.js). -->
+      <div class="home-lade" id="home-lade" role="status" aria-label="Lädt …" hidden>
+        <span class="home-lade-dreh" id="home-lade-dreh"></span><span class="home-lade-text" id="home-lade-text" data-i18n-skip></span>
+      </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.3.7</span></span>
+        <span class="foot-ver">v<span id="app-version">1.3.38</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -4973,11 +5064,14 @@
         <span class="k-kt" id="fa-auto-titel"></span>
         <span class="k-kb" id="fa-auto-bild" style="background-image:url(img/garage.jpg)"></span>
         <span class="k-ki" id="fa-auto-info"></span>
+        <span class="k-mp-status" id="fa-mp-status" data-i18n-skip hidden></span>
         <!-- BESTELLT: "Autos-Menü sollte auch Option für Garage haben zum Einstellen" - auch
              ohne verbundenes Auto (gemerkte Autos, Farben, Rollen). -->
         <span class="k-knopfreihe">
           <button type="button" class="k-knopf" id="fa-verbinden">Verbinden</button>
           <button type="button" class="k-knopf" id="fa-garage">Garage</button>
+          <!-- v1.3.5: der WLAN-Mehrspieler als Knopf statt als Reiter, darueber der Stand. -->
+          <button type="button" class="k-knopf" id="fa-mp">Mehrspieler <span class="wip-tag">WIP</span></button>
         </span>
       </div>
       <div class="k-kachel " id="fa-strecke" role="button" tabindex="0" data-quad="bahn">
@@ -5786,6 +5880,12 @@
           <b>Community-Bestzeiten</b>
           <span>Eigene Strecken mit Abstimmung einreichen und Bestzeiten teilen.</span>
         </button>
+        <!-- v1.3.15: Community-Strecken (72c-strecken-online.js); seit v1.3.25 alle, nicht erst ab vier Fahrern. -->
+        <button class="misc-tile subpage-open" data-sub="ch-strecken">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 34c0-10 6-20 14-20s14 6 14 12-6 8-12 8H10z"/><path d="M14 40h6M22 40h6M30 40h6" stroke="var(--accent)"/></svg>
+          <b>Community-Strecken <span class="wip-tag">WIP</span></b>
+          <span>Alle Strecken, auf denen jemand eine Zeit gefahren ist.</span>
+        </button>
       </div>
     </div>
     <div class="card subpage" id="sub-ch-a">
@@ -5826,6 +5926,20 @@
       <button class="misc-back" id="ch-strecke-zurueck" type="button">&larr; Community-Bestzeiten</button>
       <h2><span class="ch-titel" data-i18n-skip></span> <span class="wip-tag">experimentell</span></h2>
       <div class="ch-platz"></div>
+    </div>
+    <!-- v1.3.15: Community-Strecken (Liste) und eine Strecke daraus (72c-strecken-online.js). -->
+    <div class="card subpage" id="sub-ch-strecken">
+      <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
+      <h2>Community-Strecken <span class="wip-tag">WIP</span></h2>
+      <div id="sk-liste-bereich"></div>
+    </div>
+    <div class="card subpage" id="sub-ch-sk">
+      <button class="misc-back" id="sk-zurueck" type="button">&larr; Community-Strecken</button>
+      <h2><span id="sk-titel" data-i18n-skip></span> <span class="wip-tag">WIP</span></h2>
+      <div class="sk-karte" id="sk-karte" aria-hidden="true"></div>
+      <p class="muted" id="sk-fakten" data-i18n-skip></p>
+      <div class="row"><button type="button" class="primary" id="sk-laden">In den Editor laden</button></div>
+      <div id="sk-detail-inhalt"></div>
     </div>
     <div class="card subpage" id="sub-ch-online">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
@@ -6114,6 +6228,11 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>1.3</span></b></p>
       <ul class="muted" id="patchnotes-13" style="padding-left:20px; line-height:1.7">
+        <li>Einf&#252;hrung (nicht mehr WIP): Gleich nach dem Willkommen w&#228;hlst du &#8222;Mit Bahn&#8220; oder &#8222;Auf dem Boden&#8220;. Ist dein Auto verbunden, aber nicht als Spieler 1, sagt sie dir, dass du die Rolle in der Garage umstellen musst. Neu sind Licht aus und wieder ein, nach dem ersten Boxenstopp Regen, die Wahl der Regenreifen und ein zweiter Stopp, der sie aufzieht. H&#246;chstens knapp 4 Minuten; alles Ge&#228;nderte (Fahrgef&#252;hl, Klang, Wetter, Reifen, Licht, Bahn/Boden) wird danach wiederhergestellt. Garage: Mit Steuerkreuz und Pfeiltasten kommst du jetzt zu den Autos oben, mit rechts auf einem Auto zu seiner Rolle, mit links von den Kn&#246;pfen zur&#252;ck, und jeder Knopf einer Zeile ist einzeln erreichbar. Die Ladeanzeige unten links zeigt statt &#8222;WIP&#8220; klein, was gerade l&#228;dt.</li>
+        <li>Online-Streckenzeiten: Ein Spiegelbild z&#228;hlt jetzt als dieselbe Strecke, r&#252;ckw&#228;rts gefahren als eine andere. Jede Zeit tr&#228;gt das Fahrgef&#252;hl (Arcade, Pacejka, Gran Hybrismo, Assetto Carrera usw.); Bestzeit und beste 3 Runden gelten je Fahrgef&#252;hl, w&#228;hlbar per Chips, vorgew&#228;hlt ist das eigene. Challenges &#8594; Community-Strecken zeigt jetzt alle Strecken mit Zeiten, dazu die, auf denen du selbst gefahren bist (&#8222;eigene Zeiten&#8220;). OmegaLab (WIP): kurze Erkl&#228;rung, Einwilligung und Auswahl zwischen sieben Studien. Im Moment nur zu Testzwecken: Die erste Studie l&#228;sst sich ausprobieren, es werden aber keine Daten gesendet oder gesammelt; sp&#228;ter soll daraus ein Forschungsportal mit echten Verhaltensdaten werden. Die &#252;brigen Studien kommen sp&#228;ter. Einf&#252;hrung: Die Stimme spricht Umlaute jetzt richtig, sagt &#8222;Einf&#252;hrung&#8220; statt &#8222;Tutorial&#8220; und spricht &#8222;App&#8220;, &#8222;Arcade&#8220;, &#8222;OmegaSim&#8220; und &#8222;Mustang&#8220; verst&#228;ndlich aus.</li>
+        <li>Neues Tutorial (WIP) mit Frauenstimme: Mit einem Auto und einem Gamepad f&#252;hrt es in h&#246;chstens 3 Minuten durch Gas, Bremse und Lenken (es wartet jeweils auf die Taste), erste Runden in Arcade, dann realistischeres Einlenken mit Beschleunigung und Untersteuern, einen Boxenstopp mit Minispiel und einen Wechsel des Motorklangs, mit Hinweisen auf Garage und Optionen. Danach geht es automatisch zur&#252;ck ins Men&#252;; Fahrgef&#252;hl, Motorklang und Boxeneinstellungen werden wiederhergestellt. Die deutsche Stimme ist mit Piper (Kerstin) vorab aufgenommen, auf Englisch und Spanisch spricht die Stimme des Ger&#228;ts.</li>
+        <li>Online-Streckenzeiten (WIP): F&#252;r jede Strecke gibt es Bestzeit und beste 3 Runden, im Editor unter &#8222;Zeiten auf dieser Strecke&#8220;. Eigene Zeiten stehen immer mit in der Liste, nicht geteilte als &#8222;nur lokal&#8220;. Neu unter Optionen &#8594; Online: Name und Schalter &#8222;Zeiten online synchronisieren&#8220; (Standard aus); beim ersten Speichern einer Strecke kommt einmal die Frage, mit dem Hinweis, dass Name und Strecke dann &#246;ffentlich gespeichert werden. Challenges &#8594; Community-Strecken listet alle Strecken mit mehr als 3 Fahrern. Funkpriorit&#228;t beim Start (WIP, Optionen &#8594; System, Standard an): Zu Beginn der Startampel bekommen die gesteuerten Autos die schnellste Verbindungsstufe, NPCs, Safety Car und Reinigungswagen die mittlere, damit die Spieler Vorrang im Funk haben. Engstelle und Startgerade sehen aus wie die Originalteile: wei&#223;e Querbalken statt Verengung, Karoband bei 80 % der Startgeraden.</li>
+        <li>Streckeneditor: Die Teileleiste unten und &#8222;Meine Teile&#8220; zeigen die echten Teile, wie der Editor sie zeichnet. Die Boxengasse sieht aus wie das Originalteil (Bucht mit Boxenmarkierungen). Neue Editor-Optionen (WIP): &#8222;Boxengasse erzwingen&#8220; (nur mit Boxengasse in &#8222;Meine Teile&#8220;) und &#8222;Br&#252;cken&#8220; als Anzahl (Standard 0) mit Meldung, wenn es mit den Teilen nicht geht. WLAN-Mehrspieler ist kein eigener Reiter mehr, sondern ein Knopf in der Autos-Kachel mit dem Stand (Host/verbunden). Startschirm: Kn&#246;pfe mit Steuerkreuz, Pfeiltasten oder Maus w&#228;hlen, Starten ist vorgew&#228;hlt und blau, &#10005;/A/Enter startet; unten links dreht ein kleines Streckenteil, solange Updates gepr&#252;ft oder Kl&#228;nge geladen werden.</li>
         <li>Das Fahrgef&#252;hl Gran Accelerato wird zu zwei Modi (WIP): &#8222;Gran Hybrismo&#8220; wie Gran Turismo Sport (viel Grip, weicher Reifenscheitel, kaum Lastwechsel, eine Stabilit&#228;tshilfe lenkt ein ausbrechendes Heck sanft gegen, beim Bremsen bleibt die Lenkung wie mit ABS, die Reifentemperatur wirkt wenig) und &#8222;Assetto Carrera&#8220; wie Assetto Corsa Competizione (leicht bremsen dreht ein, Lupfen l&#228;sst das Heck kommen, Gas schiebt, scharfe Haftgrenze mit Untersteuern beim &#220;berfahren, Reifenfenster: kalt und &#252;berhitzt deutlich weniger Grip, warm am meisten; keine Hilfen). Gespeicherte St&#228;nde mit Gran Accelerato laden als Gran Hybrismo. Behoben: Tempo-Lenkung und Selbstzentrierung kamen nie am Auto an, die Lastempfindlichkeit verst&#228;rkte die Lastwechsel statt sie zu d&#228;mpfen, der Schalter &#8222;&#220;bersteuern&#8220; wurde ignoriert, und beim virtuellen Fahren waren die Reifen nach wenigen Sekunden dauerhaft &#252;berhitzt (jetzt mit Abk&#252;hlung, und das Standardauto hat Abtrieb). NPCs: MAX beschleunigt und bremst wie Arcade, alle anderen Stufen wie Sim+, unabh&#228;ngig von der Abstimmung von Spieler 1; der Regler &#8222;MAX: Beschleunigung&#8220; entf&#228;llt.</li>
         <li>Neue Option &#8222;NPC: Tankort&#8220; (WIP, Optionen &#8594; NPCs): Einparkfolge wie das Safety Car (Standard, wie bisher) oder &#8222;Streckenrand &#252;ber Querlage&#8220; &#8211; der NPC zieht auf dem Boxenteil per Querlage an den rechten Rand, bremst, steht mit Ratsche und zieht per Querlage wieder heraus, ohne Lenkfolge.</li>
       </ul>
@@ -9801,11 +9920,17 @@
           <b>Telemetrie <span class="wip-tag">WIP</span></b>
           <span>Deine Runden Teil f&uuml;r Teil: wo du Zeit gewinnst und verlierst, Tempo, Gas und Bremse.</span>
         </button>
+        <button class="misc-tile subpage-open" data-sub="opt-online">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="24" cy="24" r="16"/><path d="M8 24h32M24 8c6 5 6 27 0 32M24 8c-6 5-6 27 0 32" stroke="var(--bad)"/></svg>
+          <b>Online <span class="wip-tag">WIP</span></b>
+          <span>Dein Name in den Bestenlisten und ob Zeiten auf deinen Strecken online gespeichert werden.</span>
+        </button>
         <button class="misc-tile subpage-open" data-sub="opt-studie" id="opt-studie-kachel" hidden>
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6h12M20 6v12L9 38a3 3 0 0 0 3 4h24a3 3 0 0 0 3-4L28 18V6"/><path d="M14 30h20" stroke="var(--bad)"/></svg>
           <b>OmegaLab <span class="wip-tag">WIP</span></b>
-          <span>Persönlichkeit, Reaktionszeit und Fahrverhalten. Freiwillig, ab 18, Daten anonymisiert öffentlich.</span>
+          <span>Studien zum Fahrverhalten: kurz, freiwillig, mit Medaillen. Im Moment nur zum Testen, ohne Datensammlung.</span>
         </button>
         <button class="misc-tile subpage-open" data-sub="opt-tutorials">
           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
@@ -12193,6 +12318,9 @@
       <div class="opt-row"><div class="opt-label">Bekannte Autos beim Start verbinden
           <small>Nur in der Android-App: Beim Start verbindet sie nacheinander alle Autos, die schon einmal verbunden waren (mit gemerkter Rolle oder gemerktem Namen) und gerade erreichbar sind. Ein Auto, das mit einem anderen Ger&auml;t verbunden, aus oder au&szlig;er Reichweite ist, wird ausgelassen. Im Browser verlangt Bluetooth f&uuml;r jedes Auto einen Klick.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-autoverbinden" checked><span></span></label></div>
+      <!-- v1.3.15 (WIP): Funkprioritaet je Rolle zu Beginn der Startampel (funkPrioritaetVorStart, 90-ghosts.js). -->
+      <div class="opt-row"><div class="opt-label">Funkpriorit&auml;t beim Start<span class="wip-tag">WIP</span><small>Nur in der Android-App: Zu Beginn der Startampel, solange alle Autos stehen, bekommen die gesteuerten Autos (Spieler 1&ndash;3) das schnellste Verbindungsintervall und NPCs, Safety Car und Reinigungswagen ein ausgewogenes. So nehmen die NPCs dem Funk nicht die kurzen Zeitfenster weg, und die gesteuerten Autos reagieren schneller. Die Autos werden nacheinander umgestellt, im Abstand von 0,15 s.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-funk-prio" checked><span></span></label></div>
       <div class="opt-row" id="opt-app-zeile" hidden><div class="opt-label">App &amp; Updates
           <small>Nur in der Android-App: Version, Updates ohne neue APK.</small></div>
         <button type="button" class="goto-tab" data-tab="info" data-k-sub="app">&Ouml;ffnen</button></div>
@@ -12263,6 +12391,18 @@
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
       <h2>Telemetrie <span class="wip-tag">WIP</span></h2>
       <div id="tele-inhalt" data-i18n-skip></div>
+    </div>
+    <!-- v1.3.15 BESTELLT: Online-Optionen (72c-strecken-online.js). Der Name ist derselbe Wert wie
+         der Name unter Challenges > Online (eine Quelle, omegasim-ch-online). -->
+    <div class="card subpage" id="sub-opt-online">
+      <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
+      <h2>Online <span class="wip-tag">WIP</span></h2>
+      <div class="opt-row"><div class="opt-label">Dein Name in der Liste
+          <small>H&ouml;chstens 16 Zeichen. Derselbe Name wie in den Challenges-Bestenlisten.</small></div>
+        <input type="text" id="on-fahrer" maxlength="16" data-preset-skip></div>
+      <div class="opt-row"><div class="opt-label">Zeiten online synchronisieren
+          <small>Aus (Standard): deine Zeiten bleiben auf diesem Ger&auml;t. Sie stehen trotzdem in derselben Liste wie die Online-Zeiten, markiert als &bdquo;nur lokal&ldquo;. An: gewertete Runden auf deinen Strecken gehen an die gemeinsame Liste, mit Streckencode, Streckenname, Rundenzeiten, Autoname, deinem Namen und einer zuf&auml;lligen Ger&auml;tekennung. Name und Strecke sind dann &ouml;ffentlich.</small></div>
+        <label class="tgl"><input type="checkbox" id="on-sync" data-preset-skip><span></span></label></div>
     </div>
     <div class="card subpage" id="sub-opt-stats">
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
@@ -12395,7 +12535,7 @@
     <div class="card subpage" id="sub-opt-tutorials">
       <div class="opt-head">Tutorials</div>
       <div class="opt-row"><div class="opt-label">Alle F&uuml;hrungen an einem Ort. Jede startet auf dem passenden Schirm.</div></div>
-      <div class="opt-row tut-zeile"><button class="tut-knopf" data-tour="start"><b>Tutorial</b><span>Erste Schritte &uuml;ber die echten Schirme.</span></button></div>
+      <div class="opt-row tut-zeile"><button class="tut-knopf" data-tour="start"><b>Tutorial</b><span>Erste Runden mit Ansage: Gas, Bremse, Lenken, Licht, Fahrgef&uuml;hl, Boxenstopp, Regenreifen und Motorsound, mit Bahn oder auf dem Boden.</span></button></div>
       <div class="opt-row tut-zeile"><button class="tut-knopf" data-tour="steuerung"><b>Steuerung</b><span>Gamepad beim Fahren: Tasten ansehen und dr&uuml;cken.</span></button></div>
       <div class="opt-row tut-zeile"><button class="tut-knopf" data-tour="editor"><b>Streckeneditor</b><span>Teile ausw&auml;hlen, einf&uuml;gen, drehen, r&uuml;ckg&auml;ngig.</span></button></div>
       <div class="opt-row tut-zeile"><button class="tut-knopf" data-tour="raum"><b>Raumgestalter</b><span>Boden und M&ouml;bel zeichnen, Strecke einpassen.</span></button></div>
@@ -12597,8 +12737,19 @@
             <label>Linkslastig
               <input type="checkbox" id="track-opt-links">
             </label>
-            <label>Br&uuml;cken
-              <input type="checkbox" id="track-opt-bruecken">
+            <!-- v1.3.5: Brueckenzahl statt Schalter, und "Boxengasse erzwingen" (nur mit Box im
+                 Bestand). Ein span statt label um die Zahl: ein label leitet den Klick auf den
+                 Text an den ersten Knopf darin weiter - hier das Minus. -->
+            <span class="tp-opt-gruppe">Br&uuml;cken
+              <span class="num-steuer">
+                <button type="button" class="num-minus" aria-label="Weniger Br&uuml;cken">&#8722;</button>
+                <input type="number" id="track-opt-bruecken" min="0" max="4" step="1" value="0" inputmode="numeric" aria-label="Anzahl Br&uuml;cken">
+                <button type="button" class="num-plus" aria-label="Mehr Br&uuml;cken">+</button>
+              </span>
+            </span>
+            <label>Boxengasse erzwingen
+              <input type="checkbox" id="track-opt-box">
+              <small class="tp-opt-hinweis" id="track-opt-box-hinweis" hidden>Erst unter Meine Teile eine Boxengasse eintragen</small>
             </label>
             <button class="tp-opt-knopf" id="track-spiegel" title="Strecke spiegeln: Kurven links/rechts tauschen und die Schleife r&uuml;ckw&auml;rts fahren">Strecke spiegeln</button>
           </div>
@@ -12650,7 +12801,13 @@
         Der Code beschreibt die Reihenfolge der Teile und die Ausrichtung. Damit stellst du
         auf einem anderen Ger&auml;t dieselbe Strecke ein, ohne sie neu zu klicken.
       </p>
-
+      <!-- v1.3.15 BESTELLT: Bestzeit und beste 3 Runden fuer jede Strecke, eigene und online
+           zusammen (72c-strecken-online.js). Gezeichnet beim Oeffnen der Seite. -->
+      <div class="sk-block" id="sk-editor">
+        <h3 class="ch-zweite">Zeiten auf dieser Strecke <span class="wip-tag">WIP</span></h3>
+        <div id="sk-editor-inhalt"></div>
+        <button type="button" id="sk-editor-auffrischen">Online-Zeiten neu laden</button>
+      </div>
     </div>
     <div class="card subpage" id="sub-laden">
       <button class="misc-back subpage-back" data-sub="">&larr; Strecke</button>
@@ -13041,6 +13198,20 @@
         <button type="button" id="k-tour-zurueck">&#9664; Zur&uuml;ck</button>
         <button type="button" id="k-tour-weiter" class="primary">Weiter &#9654;</button>
       </div>
+    </div>
+  </div>
+  <!-- GEFUEHRTES TUTORIAL (v1.3.15, ohne WIP seit v1.3.31, 51b-tutorial.js): eine Karte oben ueber dem Cockpit.
+       Sie nimmt keine Tasten: gefahren wird darunter ganz normal. -->
+  <div class="tut-ui" id="tut-ui" hidden role="status" aria-live="polite">
+    <div class="tut-kopf"><span>Tutorial</span><span id="tut-fortschritt" data-i18n-skip></span>
+      <span class="tut-hinweis" id="tut-hinweis" data-i18n-skip></span><button type="button" id="tut-beenden">Beenden</button></div>
+    <span class="tut-taste" id="tut-taste" hidden data-i18n-skip></span>
+    <h2 id="tut-titel" data-i18n-skip></h2>
+    <p id="tut-text" data-i18n-skip></p>
+    <!-- v1.3.31: Wahl Bahn oder Boden (Steuerkreuz + Kreuz/A, Maus, Finger, Pfeile + Enter). -->
+    <div class="tut-wahl" id="tut-wahl" hidden>
+      <button type="button" data-wahl="bahn">Mit Bahn</button>
+      <button type="button" data-wahl="boden">Auf dem Boden</button>
     </div>
   </div>
   <!-- RENNENDE AUS EINEM MENUE: eine Einblendung statt eines Sprungs ins Cockpit. -->

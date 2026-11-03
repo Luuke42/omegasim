@@ -6077,12 +6077,96 @@
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Standard Einparkfolge; Querlage: anfahrt > rand > halt > stand > raus ohne Lenkfolge' };
   });
 
+  // v1.3.15 GEFRAGT: Bluetooth-Verbindungen vor dem Start "sortieren" - als Prioritaet je Rolle zu Beginn
+  // der Startampel (funkPrioritaetVorStart, 90-ghosts.js). Mit Attrappen-Bruecke und Attrappen-Autos.
+  stAdd('Funk v1.3.15: Prioritaet je Rolle beim Start - Spieler hoch, NPC ausgewogen, gestaffelt', () => {
+    const f = [];
+    const merkB = window.OMEGA_BRUECKE;
+    const cb = $('setting-funk-prio');
+    const merkCb = cb ? cb.checked : null;
+    const auto = (id, role, extra) => Object.assign({ device: { id, name: id, gatt: { connected: true } }, role, rx: {}, alias: id }, extra || {});
+    const sp1 = auto('st-fp-sp1', 'player'), sp2 = auto('st-fp-sp2', 'player2'), npc = auto('st-fp-npc', 'ghost'),
+          sc = auto('st-fp-sc', 'safetycar'), rein = auto('st-fp-rein', 'reinig'),
+          weg = auto('st-fp-weg', 'ghost'), sim = auto('st-fp-sim', 'ghost', { sim: true });
+    weg.device.gatt.connected = false;
+    const aufrufe = [], geplant = [];
+    const planen = (fn, ms) => { geplant.push({ fn, ms }); };
+    const attrappe = (extra) => { window.OMEGA_BRUECKE = Object.assign({}, merkB || {}, extra); };
+    try {
+      if (!cb) f.push('Schalter setting-funk-prio fehlt');
+      else {
+        if (!cb.defaultChecked) f.push('Schalter nicht standardmaessig an');
+        const zeile = cb.closest('.opt-row'), lab = zeile && zeile.querySelector('.opt-label');
+        if (!lab || !lab.querySelector('.wip-tag')) f.push('ohne WIP-Kennzeichnung');
+        if (!zeile || !zeile.closest('#sub-opt-system')) f.push('nicht unter Optionen > System');
+        cb.checked = true;
+      }
+      attrappe({ prioritaetSetzen: (id, stufe) => { aufrufe.push({ id, stufe }); return Promise.resolve({ ok: true, weg: 'Test' }); } });
+      const n = funkPrioritaetVorStart({ autos: [npc, sp1, sc, weg, sp2, sim, rein], planen });
+      if (n !== 5) f.push(n + ' Autos statt 5 (getrennte/Simulation duerfen nicht mitzaehlen)');
+      if (aufrufe.length !== 1) f.push('sofort ' + aufrufe.length + ' Aufrufe statt 1 (nicht gestaffelt)');
+      const abst = geplant.map((g) => g.ms).join(',');
+      if (abst !== '150,300,450,600') f.push('Abstaende ' + abst + ' statt 150,300,450,600');
+      geplant.forEach((g) => g.fn());
+      const stufe = (id) => (aufrufe.find((a) => a.id === id) || {}).stufe;
+      if (stufe('st-fp-sp1') !== 'hoch') f.push('Spieler 1: ' + stufe('st-fp-sp1'));
+      if (stufe('st-fp-sp2') !== 'hoch') f.push('Spieler 2: ' + stufe('st-fp-sp2'));
+      if (stufe('st-fp-npc') !== 'ausgewogen') f.push('NPC: ' + stufe('st-fp-npc'));
+      if (stufe('st-fp-sc') !== 'ausgewogen') f.push('Safety Car: ' + stufe('st-fp-sc'));
+      if (stufe('st-fp-rein') !== 'ausgewogen') f.push('Reinigungswagen: ' + stufe('st-fp-rein'));
+      if (stufe('st-fp-weg') || stufe('st-fp-sim')) f.push('getrenntes Auto/Simulation angefragt');
+      if (aufrufe.slice(0, 2).some((a) => a.stufe !== 'hoch')) f.push('gesteuerte Autos nicht zuerst');
+      // Schalter aus: keine Aufrufe.
+      aufrufe.length = 0; geplant.length = 0;
+      if (cb) {
+        cb.checked = false;
+        funkPrioritaetVorStart({ autos: [npc, sp1], planen });
+        geplant.forEach((g) => g.fn());
+        if (aufrufe.length) f.push('Schalter aus: ' + aufrufe.length + ' Aufrufe');
+        cb.checked = true;
+      }
+      // Ohne die Methode (Browser): nichts, kein Fehler. Wirft sie: auch kein Fehler.
+      attrappe({}); delete window.OMEGA_BRUECKE.prioritaetSetzen;
+      try { if (funkPrioritaetVorStart({ autos: [npc, sp1], planen: (fn) => fn() }) !== 0) f.push('ohne Methode trotzdem geplant'); }
+      catch (e) { f.push('ohne Methode: ' + e.message); }
+      attrappe({ prioritaetSetzen: () => { throw new Error('Attrappe'); } });
+      try { funkPrioritaetVorStart({ autos: [npc, sp1], planen: (fn) => fn() }); }
+      catch (e) { f.push('werfende Methode: ' + e.message); }
+      // Ein neuer Start ueberholt einen noch laufenden: dessen spaete Aufrufe entfallen.
+      aufrufe.length = 0; geplant.length = 0;
+      attrappe({ prioritaetSetzen: (id, s) => { aufrufe.push({ id, stufe: s }); return null; } });
+      funkPrioritaetVorStart({ autos: [sp1, npc], planen });
+      const alt = geplant.slice(); geplant.length = 0;
+      funkPrioritaetVorStart({ autos: [sp1, npc], planen });
+      alt.forEach((g) => g.fn());
+      if (aufrufe.length !== 2) f.push('alter Lauf feuert nach Neustart (' + aufrufe.length + ' Aufrufe)');
+      // Wachfunktion: zieht mit Schalter an nur gesteuerte Autos hoch, mit Schalter aus wie bisher alle.
+      const hoch = [];
+      attrappe({ prioritaetHoch: (id) => { hoch.push(id); } });
+      const wn = auto('st-fp-wn', 'ghost'), wp = auto('st-fp-wp', 'player'), wa = auto('st-fp-wa', 'ghost');
+      for (let t = 1000; t < 21000; t += 150) { meldetaktBeobachten(wn, t); meldetaktBeobachten(wp, t); }
+      if (hoch.indexOf('st-fp-wn') >= 0) f.push('Wachfunktion zieht NPC hoch');
+      if (hoch.indexOf('st-fp-wp') < 0) f.push('Wachfunktion zieht Spieler nicht mehr hoch');
+      if (cb) {
+        cb.checked = false;
+        for (let t = 1000; t < 21000; t += 150) meldetaktBeobachten(wa, t);
+        if (hoch.indexOf('st-fp-wa') < 0) f.push('Schalter aus: Wachfunktion zieht NPC nicht mehr hoch');
+      }
+      if (String(startRaceCountdown).indexOf('funkPrioritaetVorStart()') < 0) f.push('Countdown ruft funkPrioritaetVorStart nicht');
+    } finally {
+      window.OMEGA_BRUECKE = merkB;
+      if (cb && merkCb !== null) cb.checked = merkCb;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Spieler hoch, NPC/Safety Car/Reinigung ausgewogen, 150 ms gestaffelt, Schalter/Methode/Wachfunktion wie bestellt' };
+  });
+
   // v1.2.45 BESTELLT: Latenz - Funkprioritaet nur einmal je Verbindung, SIMULATOR-Linie nur im Editor.
   stAdd('Latenz v1.2.45: Prioritaet einmal je Verbindung, SIMULATOR nur im Editor', () => {
     const f = [];
     const merkB = window.OMEGA_BRUECKE;
     let aufrufe = 0;
-    const car = { rx: {}, device: { id: 'probe-prio' }, alias: 'Probe' };
+    // v1.3.15: als gesteuertes Auto - NPCs zieht die Wachfunktion mit "Funkprioritaet beim Start" nicht mehr hoch.
+    const car = { rx: {}, device: { id: 'probe-prio' }, alias: 'Probe', role: 'player' };
     try {
       window.OMEGA_BRUECKE = Object.assign({}, merkB || {}, { prioritaetHoch: () => { aufrufe++; } });
       // 20 s lang alle 150 ms gemeldet: genau eine Anforderung, erst nach > 5 s.
@@ -10846,7 +10930,10 @@
     if (!(r.ende < -0.9)) fehler.push('endet bei ' + r.ende + ' statt ganz links');
     // 3. UND SIE STEHT IM BILD. Ohne diese Zeile waere der Test auch gruen, wenn die
     //    Engstelle nur gefahren, aber nicht gezeichnet wuerde.
-    if (r.gezeichnet && !(r.gezeichnet.eng === 1 && r.gezeichnet.sperren === 2)) {
+    // v1.3.15: wie das Originalteil - 11 Querbalken je Engstelle in beiden Stilen, und die
+    //    Startgerade im echten Stil mit Karoband (13 + 12 Quadrate, 2 Linien).
+    if (r.gezeichnet && !(r.gezeichnet.balken === 11 && r.gezeichnet.balkenEcht === 11
+                          && r.gezeichnet.karo === 25 && r.gezeichnet.linien === 2)) {
       fehler.push('gezeichnet: ' + JSON.stringify(r.gezeichnet));
     }
     // 4. DIE NEUEN 30-GRAD-KURVEN DREHEN. Sie haengen an derselben Tabelle, und beim
@@ -10862,7 +10949,7 @@
     return { ok: !fehler.length,
              mass: 'Stufe ' + r.tight.enge + ' (Haarnadel ' + r.tight.haarnadel + ')'
                  + ' | Lenkung ' + r.start + ' -> ' + r.ende
-                 + ' | ' + (r.gezeichnet ? r.gezeichnet.sperren + ' Sperren' : 'ungezeichnet')
+                 + ' | ' + (r.gezeichnet ? r.gezeichnet.balken + ' Balken, ' + r.gezeichnet.karo + ' Karos' : 'ungezeichnet')
                  + (fehler.length ? ' || ' + fehler.join('; ') : '') };
   });
 
@@ -10995,7 +11082,8 @@
     // Kanten: Kacheln mit data-tab (goto-tab), Unterseiten-Kacheln (data-sub), die Reiter der
     // Ebene 1 (oben neben dem Logo, von jeder Seite aus) und die Kacheln des Fahren-Schirms
     // (JS-Knoepfe, hier von Hand genannt). Der Titel fuehrt nach Fahren.
-    const kanten = { home: ['fahren'], fahren: ['garage', 'control', 'track', 'race'] };
+    // v1.3.5: der Mehrspieler ist kein Reiter mehr, sondern der Knopf #fa-mp in der Autos-Kachel.
+    const kanten = { home: ['fahren'], fahren: ['garage', 'control', 'track', 'race', 'mp'] };
     K_EBENE1.forEach((x) => { kanten.fahren.push(x); });
     const tabs = [...document.querySelectorAll('.tabpage')].map((t) => t.id.replace(/^tab-/, ''));
     tabs.forEach((t) => {
@@ -11016,7 +11104,8 @@
     // Unterseiten, die aus ERZEUGTEN Listenzeilen aufgehen, haben keinen festen Oeffner im
     // Dokument. Sie gelten als erreichbar, wenn ihre Liste es ist. v0.9.49: eine
     // Community-Strecke oeffnet sich aus jeder Zeile der Community-Liste (communityZeichnen).
-    const AUS_LISTE = { 'ch-strecke': 'ch-community' };
+    // v1.3.15: eine Strecke der Community-Strecken (ch-sk) oeffnet sich aus deren Liste (skListeZeichnen).
+    const AUS_LISTE = { 'ch-strecke': 'ch-community', 'ch-sk': 'ch-strecken' };
     Object.keys(AUS_LISTE).forEach((x) => { if (oeffner.has(AUS_LISTE[x])) oeffner.add(x); });
     const ohne = subs.filter((x) => !oeffner.has(x));
     return { ok: !fehlt.length && !ohne.length,
@@ -11157,9 +11246,9 @@
       konsoleFokusAuf('fa-start');
       if (schritt('right') !== 'fa-start') f.push('rechts am Rand springt weg');
       konsoleFokusAuf('fa-auto');
-      // Unter AUTO erst seine Knoepfe (Verbinden, Garage), dann FAHRGEFUEHL.
+      // Unter AUTO erst seine Knoepfe (Verbinden, Garage, seit v1.3.5 Mehrspieler), dann FAHRGEFUEHL.
       const knopf = schritt('down');
-      if (knopf !== 'fa-garage' && knopf !== 'fa-verbinden') f.push('unter AUTO liegen nicht seine Knoepfe (' + knopf + ')');
+      if (['fa-garage', 'fa-verbinden', 'fa-mp'].indexOf(knopf) < 0) f.push('unter AUTO liegen nicht seine Knoepfe (' + knopf + ')');
       if (schritt('down') !== 'fa-profil') f.push('unter den AUTO-Knoepfen ist nicht FAHRGEFUEHL');
     } finally { if (merk) showTab(merk); }
     return { ok: !f.length, mass: f.length ? f.join('; ') + ' | ' + weg.join(' ') : weg.join(' ') };
@@ -12035,44 +12124,224 @@
     return { ok: !f.length, mass: f.length ? f.join('; ') : '8 Stopps, letzter Knopf immer Kreis' };
   });
 
-  stAdd('Tutorial: startet vom Titel, führt durch alle Schritte, Kreis zurück', () => {
-    const merk = kAktiverTab();
+  // v1.3.15: das gefuehrte Tutorial (51b-tutorial.js) mit Attrappen - kein Auto, kein Pad, keine
+  // Uhr: Zeit, Tasten, Boxenzustand, Cockpit und Ton sind gestellt und der Test taktet tutTick()
+  // selbst. Echt sind Fahrgefuehl (applyPreset), Motorklang (#sound-profile), Bahn/Boden
+  // (#setting-ontrack), Licht, Wetter und Reifen, damit das Zurueckstellen wirklich geprueft wird.
+  // v1.3.31: Rollen-Hinweis, Wahl Bahn/Boden, Licht aus/ein, Regen, Regenreifen, zweiter Stopp, kein WIP.
+  stAdd('Tutorial v1.3.31: Rolle, Bahn/Boden, Tasten, Licht, Arcade→Pacejka, zwei Stopps mit Regenreifen, Motorklang, ≤ 240 s, Menü', async () => {
     const f = [];
-    const messbar = innerWidth > 0 && innerHeight > 0;
+    const dauer = {};
     try {
-      showTab('home');
-      $('k-tutorial-start').click();
-      if (!konsoleTourOffen() || $('k-tour').hidden) f.push('Knopf oeffnet nicht');
-      if (kAktiverTab() !== 'fahren') f.push('erster Schritt auf ' + kAktiverTab() + ' statt Fahren');
-      if (menuNavContainer() !== $('k-tour-karte')) f.push('Menuezeilen gelten nicht fuer die Karte');
-      const sel = document.querySelector('.menu-nav-sel');
-      if (!sel || sel.id !== 'k-tour-weiter') f.push('vorgewaehlt ist nicht Weiter');
-      const fehlt = [];
-      for (let i = 0; i < K_TOUR.length; i++) {
-        if (kTourSchritt !== i) { f.push('Schritt ' + kTourSchritt + ' statt ' + i); break; }
-        if (!$('k-tour-titel').textContent) f.push('Schritt ' + i + ' ohne Titel');
-        if (messbar && K_TOUR[i].ziel && !kTourRechteck(K_TOUR[i].ziel)) fehlt.push(i + 1);
-        if (messbar) {
-          konsoleTourSpot();
-          const kopf = $('k-kopf').getBoundingClientRect().bottom;
-          if ($('k-tour-karte').getBoundingClientRect().top < kopf - 1) f.push('Schritt ' + (i + 1) + ': Karte unter der Kopfzeile');
-        }
-        if (i < K_TOUR.length - 1) konsoleTourWeiter();
+      const m = await (await fetch('audio/tutorial.json')).json();
+      for (const k of Object.keys(TUT_SPRUCH)) {
+        const e = m.de && m.de[k];
+        if (!e) { f.push('Manifest ohne ' + k); continue; }
+        if (e.text !== TUT_SPRUCH[k]) f.push('Wortlaut weicht ab: ' + k);
+        if (!/^tutorial_\w+_de\.ogg$/.test(e.datei || '')) f.push('Datei: ' + k);
+        // Getrennter Sprechtext; "Tutorial" heisst gesprochen und auf der Karte "Einfuehrung",
+        // englische Woerter bekommt Piper in Lautschreibung (GEMELDET: deutsch ausgesprochen).
+        if (typeof e.sprech !== 'string' || !e.sprech) f.push('Sprechtext fehlt: ' + k);
+        else if (/Tutorial|\bApp\b|Gamepad|Arcade|OmegaSim|Mustang|Crew/.test(e.sprech)) f.push('Sprechtext mit englischer Schreibung: ' + k);
+        if (/Tutorial/.test(TUT_SPRUCH[k])) f.push('Ansagetext sagt Tutorial: ' + k);
+        dauer[k] = e.dauer;
       }
-      if (fehlt.length) f.push('Ziel nicht sichtbar in Schritt ' + fehlt.join(', '));
-      konsoleZurueck();
-      if (kTourSchritt !== K_TOUR.length - 2) f.push('Kreis geht nicht einen Schritt zurueck');
-      konsoleTourWeiter(); konsoleTourWeiter();
-      if (konsoleTourOffen()) f.push('nach dem letzten Schritt noch offen');
-      if (kAktiverTab() !== 'fahren') f.push('endet auf ' + kAktiverTab());
-      konsoleTourStart();
-      konsoleZurueck();
-      if (konsoleTourOffen()) f.push('Kreis im ersten Schritt schliesst nicht');
-    } finally {
-      if (konsoleTourOffen()) konsoleTourZu(false);
-      if (merk) showTab(merk);
+      if (!/Einführung/.test(TUT_SPRUCH.willkommen) || !/Äpp/.test((m.de.willkommen || {}).sprech || '')) f.push('Willkommen ohne Einführung/Äpp');
+    } catch (e) { f.push('Manifest nicht lesbar: ' + e.message); }
+    const budgetBahn = tutBudget(dauer, 'bahn'), budgetBoden = tutBudget(dauer, 'boden');
+    if (!(budgetBahn > 60 && budgetBahn <= TUT_MAX_S && budgetBoden > 60 && budgetBoden <= TUT_MAX_S) || TUT_MAX_S > 240) {
+      f.push('Clips + Wartezeiten ' + budgetBahn.toFixed(1) + ' / ' + budgetBoden.toFixed(1) + ' s');
     }
-    return { ok: !f.length, mass: f.length ? f.join('; ') : K_TOUR.length + ' Schritte, Ziele ' + (messbar ? 'sichtbar' : 'nicht messbar'), skip: false };
+    const sel = $('sound-profile'), bahnCb = $('setting-ontrack');
+    const vorher = { regler: JSON.stringify(presetRead()), motor: sel.value, zuletzt: presetZuletzt, box: tutBoxMerken(),
+      bahn: bahnCb.checked, licht: headlightsOn, wetter: weather, tyres, wunsch: mischungWunsch };
+    let uhr = 0, tab = 'fahren', box = 'off', autoDa = false, verbunden = false, padDa = false, menue = 0, angefordert = 0;
+    const ein = { gas: 0, bremse: 0, lenk: 0 };
+    const gesprochen = [];
+    const attrappe = {
+      jetzt: () => uhr, laden: () => {}, bereit: () => true,
+      autoDa: () => autoDa, autoVerbunden: () => verbunden, padDa: () => padDa, eingaben: () => ein,
+      tab: () => tab, insFahren: () => { tab = 'fahren'; }, insCockpit: () => { tab = 'race'; },
+      insMenue: () => { tab = 'fahren'; menue++; },
+      boxZustand: () => box, boxMerken: () => null, boxVorbereiten: () => {}, boxZurueck: () => {},
+      boxAnfordern: () => { angefordert++; if (box === 'off') box = 'limited'; },
+      boxAbbrechen: () => { if (box === 'limited') box = 'off'; },
+      sprechen: (k) => { gesprochen.push(k); return dauer[k] || 2; }, verstummen: () => {},
+    };
+    const takt = (ms) => { for (let x = 0; x < ms && tut.an; x += TUT_TAKT_MS) { uhr += TUT_TAKT_MS; tutTick(); } };
+    const bis = (id, ms) => {
+      for (let x = 0; x < ms && tut.an && tutSchrittId() !== id; x += TUT_TAKT_MS) { uhr += TUT_TAKT_MS; tutTick(); }
+      return tutSchrittId() === id;
+    };
+    const druck = (k, v) => { ein[k] = v; takt(300); ein[k] = 0; };
+    const zurueck = (wann) => {
+      if (sel.value !== vorher.motor) f.push(wann + ': Motorklang nicht zurück (' + sel.value + ')');
+      if (JSON.stringify(presetRead()) !== vorher.regler) f.push(wann + ': Fahrgefühl nicht zurück');
+      if (presetZuletzt !== vorher.zuletzt) f.push(wann + ': letztes Preset nicht zurück');
+      if (bahnCb.checked !== vorher.bahn) f.push(wann + ': Bahn/Boden nicht zurück');
+      if (headlightsOn !== vorher.licht) f.push(wann + ': Licht nicht zurück');
+      if (weather !== vorher.wetter) f.push(wann + ': Wetter nicht zurück (' + weather + ')');
+      if (tyres !== vorher.tyres || mischungWunsch !== vorher.wunsch) f.push(wann + ': Reifen nicht zurück (' + tyres + '/' + mischungWunsch + ')');
+    };
+    const weg = (modus) => TUT_SCHRITTE.filter((s) => !s.modus || s.modus === modus).map((s) => s.id);
+    try {
+      // 1) Ohne Auto und Gamepad: Hinweis; Auto verbunden, aber nicht Spieler 1: Rollen-Hinweis.
+      tutorialStarten({ umgebung: attrappe, ohneTimer: true });
+      takt(3000);
+      if (tut.phase !== 'warten' || tab !== 'fahren') f.push('läuft ohne Auto/Gamepad los');
+      if (gesprochen[0] !== 'voraussetzung') f.push('Hinweis nicht gesprochen');
+      if ($('tut-ui').hidden) f.push('Karte nicht sichtbar');
+      verbunden = true;
+      takt(((dauer.voraussetzung || 2) + 1) * 1000);
+      if (gesprochen.indexOf('rolle') < 0) f.push('kein Rollen-Hinweis');
+      if (!/Spieler 1/.test($('tut-text').textContent)) f.push('Rollen-Hinweis nicht auf der Karte');
+      if (tut.phase !== 'warten') f.push('läuft mit falscher Rolle los');
+      autoDa = true; takt(1000);
+      if (tut.phase !== 'warten') f.push('läuft ohne Gamepad los');
+      padDa = true; takt(TUT_TAKT_MS);
+      if (tab !== 'race') f.push('nicht ins Cockpit');
+      if (presetZuletzt !== 'arcade') f.push('beginnt nicht mit Arcade (' + presetZuletzt + ')');
+      // 2) Wahl: Boden.
+      if (!bis('modus', 15000)) f.push('keine Wahl Bahn/Boden');
+      if ($('tut-wahl').hidden) f.push('Wahlknöpfe nicht sichtbar');
+      tutWahlTaste('links'); tutWahlTaste('rechts');
+      if (!$('tut-wahl').querySelector('[data-wahl="boden"]').classList.contains('gewaehlt')) f.push('Wahl nicht markiert');
+      tutWahlTaste('ok');
+      if (tut.modus !== 'boden' || bahnCb.checked) f.push('Boden nicht gesetzt');
+      if (!$('tut-wahl').hidden) f.push('Wahlknöpfe bleiben stehen');
+      // 3) Gas, Bremse, Lenken: jeweils warten, bis gedrueckt.
+      if (!bis('gas', 15000)) f.push('kein Gas-Schritt nach ' + tutSchrittId());
+      takt(((dauer.gas || 2) + 5) * 1000);
+      if (tutSchrittId() !== 'gas') f.push('wartet nicht auf Gas');
+      if ($('tut-taste').textContent !== tutTasteName('throttle')) f.push('Gas-Taste nicht angezeigt');
+      druck('gas', 1);
+      if (!bis('bremse', 5000)) f.push('Gas führt nicht weiter');
+      if (gesprochen.indexOf('gut') < 0) f.push('kein Lob nach Gas');
+      takt(((dauer.bremse || 2) + 5) * 1000);
+      if (tutSchrittId() !== 'bremse') f.push('wartet nicht auf die Bremse');
+      druck('bremse', 1);
+      if (!bis('links', 5000)) f.push('Bremse führt nicht weiter');
+      druck('lenk', 0.9);
+      takt(2000);
+      if (tutSchrittId() !== 'links') f.push('rechts gilt als links');
+      druck('lenk', -0.9);
+      if (!bis('rechts', 3000)) f.push('links führt nicht weiter');
+      druck('lenk', 0.9);
+      // 4) Licht aus und wieder ein.
+      if (!bis('licht', 5000)) f.push('kein Licht-Schritt');
+      takt(((dauer.licht || 2) + 3) * 1000);
+      if (tutSchrittId() !== 'licht') f.push('wartet nicht aufs Licht');
+      tutLichtSetzen(!headlightsOn); takt(300);
+      if (tutSchrittId() !== 'licht') f.push('einmal Licht genügt schon');
+      tutLichtSetzen(!headlightsOn); takt(300);
+      // 5) Arcade 20 s (Boden-Fassung), dann Pacejka.
+      if (!bis('arcade_boden', 5000)) f.push('kein Arcade-Schritt für den Boden');
+      const ab = uhr;
+      if (!bis('pacejka', 30000)) f.push('kein Pacejka-Schritt');
+      if (uhr - ab < 19900) f.push('Arcade nur ' + ((uhr - ab) / 1000).toFixed(1) + ' s');
+      if (presetZuletzt !== 'propacejka') f.push('kein Wechsel auf Pacejka (' + presetZuletzt + ')');
+      if (!bis('beschleunigung', 10000) || !bis('untersteuern', 20000)) f.push('Beschleunigung/Untersteuern fehlen');
+      // 6) Erster Boxenstopp: tippen, anhalten, Minispiel, fertig.
+      if (!bis('box', 40000)) f.push('kein Boxenschritt');
+      takt(1000);
+      box = 'limited';
+      if (!bis('box_steht', 10000)) f.push('Tippen führt nicht weiter');
+      box = 'servicing';
+      if (!bis('box_spiel', 3000)) f.push('kein Minispiel-Schritt');
+      takt(2000);
+      if (tutSchrittId() !== 'box_spiel') f.push('wartet nicht aufs Minispiel');
+      box = 'off';
+      if (!bis('box_fertig', 3000)) f.push('kein Box-fertig');
+      // 7) Regen, Regenreifen waehlen, zweiter Stopp.
+      if (!bis('regen', 10000)) f.push('kein Regen-Schritt');
+      if (weather !== 'rain') f.push('Wetter nicht auf Regen');
+      if (!bis('reifen', 15000)) f.push('kein Reifen-Schritt');
+      takt(((dauer.reifen || 2) + 3) * 1000);
+      if (tutSchrittId() !== 'reifen') f.push('wartet nicht auf die Reifenwahl');
+      for (let k = 0; k < 6 && pitMischungWahl() !== 'regen'; k++) pitMischungWeiter();
+      if (!bis('box2', 5000)) f.push('Regenreifen führen nicht zum zweiten Stopp');
+      box = 'limited';
+      if (!bis('box2_steht', 10000)) f.push('zweiter Stopp: Tippen führt nicht weiter');
+      box = 'servicing';
+      if (!bis('box2_spiel', 3000)) f.push('zweiter Stopp ohne Minispiel');
+      box = 'off';
+      if (!bis('box2_fertig', 3000)) f.push('zweiter Stopp ohne Abschluss');
+      // 8) Motorklang, Abschluss, zurueck ins Menue.
+      if (!bis('motor', 10000)) f.push('kein Motorschritt');
+      if (sel.value === vorher.motor || !/^mustang/.test(sel.value)) f.push('Motorklang nicht gewechselt (' + sel.value + ')');
+      if (!bis('abschluss', 30000)) f.push('kein Abschluss');
+      takt(15000);
+      if (tut.an || tut.ende !== 'fertig') f.push('endet nicht (' + tutSchrittId() + ')');
+      if (tab !== 'fahren' || menue !== 1) f.push('nicht zurück ins Menü');
+      if (!$('tut-ui').hidden) f.push('Karte bleibt stehen');
+      if (tut.protokoll.join(' ') !== weg('boden').join(' ')) f.push('Reihenfolge Boden: ' + tut.protokoll.join(' '));
+      zurueck('Ende');
+      // 9) Niemand drueckt, Bahn eingestellt: Wahl bleibt Bahn, Zeitlimits, beide Stopps selbst
+      // ausgeloest, Regenreifen selbst gewaehlt, hoechstens TUT_MAX_S.
+      tutBahnSetzen(true);
+      box = 'off'; menue = 0; angefordert = 0;
+      tutorialStarten({ umgebung: attrappe, ohneTimer: true });
+      const start = uhr;
+      let regenGewaehlt = false;
+      for (let x = 0; x < (TUT_MAX_S + 30) * 1000 && tut.an; x += TUT_TAKT_MS) {
+        uhr += TUT_TAKT_MS; tutTick();
+        if (tutSchrittId() === 'box2' && pitMischungWahl() === 'regen') regenGewaehlt = true;
+      }
+      const lauf = (uhr - start) / 1000;
+      if (tut.an) f.push('ohne Eingaben nach ' + lauf.toFixed(0) + ' s nicht fertig');
+      else if (lauf > TUT_MAX_S) f.push('ohne Eingaben ' + lauf.toFixed(1) + ' s');
+      if (tut.modus !== 'bahn') f.push('ohne Wahl nicht Bahn (' + tut.modus + ')');
+      if (!tut.protokoll.includes('arcade') || tut.protokoll.includes('arcade_boden') || !tut.protokoll.includes('modus_bahn')) f.push('Bahn-Ansagen fehlen');
+      if (angefordert !== 2) f.push('Boxenstopps selbst ausgelöst: ' + angefordert);
+      if (!regenGewaehlt) f.push('Regenreifen nicht selbst gewählt');
+      if (box !== 'off') f.push('Boxenbegrenzer bleibt an');
+      if (tut.protokoll.includes('box_spiel') || tut.protokoll.includes('box2_fertig')) f.push('Minispiel ohne Stopp');
+      tutBahnSetzen(vorher.bahn);
+      zurueck('Zeitlimit');
+      // 10) Wahl am Pad: Steuerkreuz rechts, Kreuz; das Pad bleibt gesperrt, bis Kreuz los ist.
+      tutorialStarten({ umgebung: attrappe, ohneTimer: true });
+      bis('modus', 15000);
+      const pad = (gedr) => ({ mapping: 'standard', axes: [0, 0, 0, 0],
+        buttons: Array.from({ length: 17 }, (x, i) => ({ pressed: gedr.includes(i), touched: false, value: gedr.includes(i) ? 1 : 0 })) });
+      konsoleTourPad(pad([]));
+      konsoleTourPad(pad([15]));
+      konsoleTourPad(pad([]));
+      const genommen = konsoleTourPad(pad([0]));
+      if (!genommen || tut.modus !== 'boden') f.push('Pad-Wahl geht nicht (' + tut.modus + ')');
+      if (!konsoleTourPad(pad([0]))) f.push('gehaltenes Kreuz geht nach der Wahl ans Cockpit');
+      konsoleTourPad(pad([]));
+      if (konsoleTourPad(pad([]))) f.push('Pad bleibt nach der Wahl gesperrt');
+      // 11) Abbruch: wer das Cockpit verlaesst, beendet es; Kreis/Esc im Warten (konsoleZurueck).
+      bis('gas', 15000);
+      tab = 'fahren';
+      takt(300);
+      if (tut.an || tut.ende !== 'Cockpit verlassen') f.push('Verlassen bricht nicht ab');
+      zurueck('Abbruch');
+      if (!/tutAbbrechen/.test(String(konsoleZurueck))) f.push('Kreis/Esc bricht nicht ab');
+      // 12) Projektregeln: kein WIP mehr, EN und ES, keine Gedankenstriche.
+      if (document.querySelector('#k-tutorial-start .wip-tag, #tut-ui .wip-tag, .tut-knopf[data-tour="start"] .wip-tag')) f.push('WIP noch da');
+      const texte = [...Object.values(TUT_SPRUCH), ...TUT_SCHRITTE.map((s) => s.titel), ...TUT_SCHRITTE.map((s) => s.zeige).filter(Boolean),
+        'Bereit machen', 'Auto: unter FAHREN in der Kachel AUTOS verbinden.', 'Gamepad: einschalten und eine Taste drücken.',
+        'Auto: verbunden, aber nicht Spieler 1. Unter FAHREN, AUTOS, GARAGE die Rolle auf Spieler 1 stellen.',
+        'Abbrechen: Kreis oder Esc', 'Beenden: Options oder Esc', 'oder', 'Beenden', 'Mit Bahn', 'Auf dem Boden', 'Licht-Schalter im Cockpit'];
+      const fehltUeb = texte.filter((k) => !I18N_EN[k] || !I18N_ES[k]);
+      if (fehltUeb.length) f.push('Übersetzung fehlt: ' + fehltUeb.slice(0, 3).join(' | '));
+      if ((texte.join(' ') + $('tut-ui').textContent).indexOf(String.fromCharCode(0x2014)) >= 0) f.push('Gedankenstrich');
+    } catch (e) {
+      f.push('Ausnahme: ' + e.message);
+    } finally {
+      if (tut.an) tutAbbrechen('Test');
+      tut.umg = TUT_ECHT;
+      if (sel.value !== vorher.motor) { sel.value = vorher.motor; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+      tutBoxZurueck(vorher.box);
+      if (weather !== vorher.wetter) setWeather(vorher.wetter);
+      tutReifenZurueck({ tyres: vorher.tyres, wunsch: vorher.wunsch });
+      tutLichtSetzen(vorher.licht);
+      tutBahnSetzen(vorher.bahn);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ')
+      : Object.keys(dauer).length + ' Clips, höchstens ' + budgetBahn.toFixed(1) + ' s (Bahn) / ' + budgetBoden.toFixed(1)
+        + ' s (Boden), Fahrgefühl, Motorklang, Bahn, Licht, Wetter und Reifen zurück' };
   });
 
   stAdd('Steuerung: vom Titel durch alle Tasten bis zur Controller-Belegung', () => {
@@ -13595,6 +13864,313 @@
                  + r.messungen.map((m) => m.hoehe + ': Karte ' + m.karteH
                      + ', Teile ' + m.paletteH + ', Luft ' + m.luft).join(' | ')
                  + (fehler.length ? ' || ' + fehler.join('; ') : '') };
+  });
+
+  // ---- v1.3.5: Editor, Startschirm, Garage ----
+  // BESTELLT: echte Teilebilder in der Teileleiste und in "Meine Teile" (einmal gerechnet).
+  stAdd('Editor v1.3.5: echte Teilebilder in der Teileleiste und in Meine Teile', () => {
+    const f = [];
+    renderTrackPalette();
+    const knoepfe = [...document.querySelectorAll('#track-palette .tp-btn')];
+    if (knoepfe.length !== TRACK_PALETTE.length) f.push(knoepfe.length + ' Knoepfe statt ' + TRACK_PALETTE.length);
+    const echt = (svg) => !!svg && svg.getAttribute('viewBox') !== '0 0 24 24'
+      && !!svg.querySelector('path[fill="' + ECHT_BLAU + '"]') && !!svg.querySelector('path[fill="' + ECHT_ROT + '"]');
+    knoepfe.forEach((b, i) => { if (!echt(b.querySelector('svg.teil-bild'))) f.push('Leiste ' + TRACK_PALETTE[i].key + ' ohne echtes Bild'); });
+    // Einmal gebaut: ein weiterer Aufruf (jeder Steuerkreuz-Druck) tauscht die Bilder nicht aus.
+    const vorher = knoepfe[0] && knoepfe[0].querySelector('svg');
+    renderTrackPalette();
+    const nachher = document.querySelector('#track-palette .tp-btn svg');
+    if (vorher && nachher !== vorher) f.push('Leiste wird bei jedem Aufruf neu gebaut');
+    if (teilBildSvg(TILE_TYPE.STRAIGHT) !== teilBildSvg(TILE_TYPE.STRAIGHT)) f.push('Bild nicht gemerkt');
+    teileZeichnen();
+    const zeilen = [...document.querySelectorAll('#teile-liste .teile-zeile')];
+    if (zeilen.length !== TEILE_SORTEN.length) f.push(zeilen.length + ' Zeilen in Meine Teile');
+    zeilen.forEach((z) => { if (!echt(z.querySelector('svg.teil-bild'))) f.push('Meine Teile 0x' + (+z.dataset.teile).toString(16) + ' ohne echtes Bild'); });
+    // Nach oben gerichtet, egal wie die Strecke gedreht ist: die Gerade ist hoeher als breit.
+    const vb = (teilBildSvg(TILE_TYPE.STRAIGHT).match(/viewBox="0 0 (\d+) (\d+)"/) || []).slice(1).map(Number);
+    if (!(vb[1] > vb[0])) f.push('Gerade nicht nach oben gerichtet (' + vb.join('x') + ')');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : knoepfe.length + ' Knoepfe und ' + zeilen.length + ' Zeilen mit echtem Bild, gemerkt, Leiste nur einmal gebaut' };
+  });
+
+  // BESTELLT: Boxengasse wie photos/boxengasse.png - rote Kante weitet sich zur Bucht, darin
+  // Punkte und Querstriche, die zur Teilfuge hin kuerzer werden.
+  stAdd('Editor v1.3.5: Boxengasse mit Bucht und Boxenmarkierungen', () => {
+    const f = [];
+    const rot = trackRotationDeg;
+    let r = null, g = null;
+    try {
+      trackRotationDeg = 0;
+      const o = { detailed: true, echt: true, ohneLinie: true, ohneLinieRechnen: true, rand: 3 };
+      r = renderTrackPreview([{ type: TILE_TYPE.PIT }], null, o);
+      g = renderTrackPreview([{ type: TILE_TYPE.STRAIGHT }], null, o);
+    } finally { trackRotationDeg = rot; }
+    const d = new DOMParser().parseFromString(r.html, 'image/svg+xml');
+    if (!d.querySelector('path.box-bucht')) f.push('keine Bucht');
+    const punkte = d.querySelectorAll('rect.box-punkt').length;
+    if (punkte !== 16) f.push(punkte + ' Punkte statt 16');
+    const striche = ((d.querySelector('path.box-striche') || { getAttribute: () => '' }).getAttribute('d') || '')
+      .split('M').map((x) => x.trim()).filter(Boolean)
+      .map((x) => { const n = x.replace('L', ' ').split(/\s+/).map(Number); return Math.hypot(n[2] - n[0], n[3] - n[1]); });
+    if (striche.length !== 20) f.push(striche.length + ' Striche statt 20');
+    else if (!(striche[0] > striche[9] * 1.5 && striche[10] > striche[19] * 1.5)) f.push('Striche werden zur Fuge hin nicht kuerzer');
+    // Die rote Kante geht in der Bucht nach aussen (rechts = +x bei Fahrt nach oben).
+    const mitte = r.geo.pts[0].x + r.geo.ox, half = r.geo.half;
+    const rotX = [...d.querySelectorAll('path[fill="' + ECHT_ROT + '"]')]
+      .flatMap((p) => (p.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g) || []).map(Number).filter((v, i) => i % 2 === 0);
+    const weit = Math.max(...rotX) - mitte;
+    if (!(weit > half * 1.6)) f.push('rote Kante nur ' + (weit / half).toFixed(2) + ' halbe Bahnbreiten aussen');
+    const blauX = [...d.querySelectorAll('path[fill="' + ECHT_BLAU + '"]')]
+      .flatMap((p) => (p.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g) || []).map(Number).filter((v, i) => i % 2 === 0);
+    if (!(mitte - Math.min(...blauX) < half * 1.05)) f.push('blaue Seite weicht aus');
+    const w = (h) => +(/viewBox="0 0 (\d+)/.exec(h) || [0, 0])[1];
+    if (!(w(r.html) - mitte >= half * (1 + BOX_BUCHT)) || !(w(r.html) > w(g.html))) f.push('Bucht passt nicht in den Rahmen');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Bucht ' + (weit / half).toFixed(2) + ' halbe Breiten, ' + punkte + ' Punkte, ' + striche.length + ' Striche (lang ' + striche[0].toFixed(1) + ' / kurz ' + striche[9].toFixed(1) + ')' };
+  });
+
+  // Zufallsstrecke mit festem Bestand bauen, ohne Raum und ohne die "schon gehabt"-Liste; alles
+  // danach zurueck. Fuer die beiden Editor-Optionen unten.
+  function stZufallMit(bestand, opt, pruefen) {
+    const merk = { teile: localStorage.getItem(TEILE_KEY), tiles: currentTrackTiles, rot: trackRotationDeg,
+                   codes: trackZufallCodes.slice(), opt: Object.assign({}, trackEditorOpt), rv: raumVersatz,
+                   raum: raumEinpassen, toast: ($('hud-toast') || {}).textContent };
+    try {
+      localStorage.setItem(TEILE_KEY, JSON.stringify(bestand));
+      trackZufallCodes = [];
+      raumEinpassen = () => ({ rot: 0, versatz: null });
+      Object.assign(trackEditorOpt, opt);
+      editorOptZeigen();
+      const ok = trackZufall();
+      return pruefen(ok, currentTrackTiles.slice(), ($('hud-toast') || {}).textContent || '');
+    } finally {
+      if (merk.teile === null) localStorage.removeItem(TEILE_KEY); else localStorage.setItem(TEILE_KEY, merk.teile);
+      currentTrackTiles = merk.tiles; trackRotationDeg = merk.rot; trackZufallCodes = merk.codes;
+      Object.assign(trackEditorOpt, merk.opt); raumVersatz = merk.rv; raumEinpassen = merk.raum;
+      editorOptZeigen();
+      refreshTrackPreview();
+      if ($('hud-toast') && merk.toast !== undefined) $('hud-toast').textContent = merk.toast;
+    }
+  }
+  function stBestand(pakete, extra) {
+    const n = {};
+    TEILE_SORTEN.forEach((x) => { n[x] = 0; });
+    for (const p of pakete) for (const [typ, k] of TEILE_PAKETE[p]) n[typ] += k;
+    return Object.assign(n, extra || {});
+  }
+
+  // BESTELLT: Editor-Option "Boxengasse erzwingen" - nur waehlbar mit Box in "Meine Teile".
+  stAdd('Editor v1.3.5: Boxengasse erzwingen baut ein Boxenteil ein, ohne Box gesperrt', () => {
+    const f = [];
+    const mitBox = stBestand(['grund'], { [TILE_TYPE.PIT]: 1 });
+    stZufallMit(mitBox, { box: true, bruecken: 0 }, (ok, tiles) => {
+      if (!ok) f.push('mit Box keine Strecke');
+      else if (!tiles.some((x) => x.type === TILE_TYPE.PIT)) f.push('Strecke ohne Boxenteil');
+      if ($('track-opt-box').disabled) f.push('mit Box im Bestand gesperrt');
+    });
+    stZufallMit(stBestand(['grund']), { box: true, bruecken: 0 }, (ok, tiles) => {
+      const kb = $('track-opt-box');
+      if (!kb.disabled) f.push('ohne Box waehlbar');
+      if (kb.checked) f.push('ohne Box angehakt');
+      if ($('track-opt-box-hinweis').hidden) f.push('kein Hinweis ohne Box');
+      if (!kb.closest('label').classList.contains('tp-opt-aus')) f.push('nicht ausgegraut');
+      if (!ok) f.push('ohne Box baut der Zufall gar nicht mehr');
+    });
+    if (!document.querySelector('#track-opt-panel .wip-tag')) f.push('WIP fehlt');
+    for (const k of ['Boxengasse erzwingen', 'Erst unter Meine Teile eine Boxengasse eintragen', 'Zufall: Boxengasse mit diesen Teilen nicht möglich']) {
+      if (!I18N_EN[k] || !I18N_ES[k]) f.push('Uebersetzung fehlt: ' + k);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'mit Box: Boxenteil drin; ohne Box: gesperrt, ausgegraut, Hinweis' };
+  });
+
+  // BESTELLT: Editor-Option "Bruecken" als Anzahl (Standard 0) mit Pruefung, ob es geht.
+  stAdd('Editor v1.3.5: Brücken-Anzahl wird gezählt, unmöglich meldet es', () => {
+    const f = [];
+    const mass = [];
+    const el = $('track-opt-bruecken');
+    if (!el || el.type !== 'number' || el.defaultValue !== '0' || +el.min !== 0) f.push('kein Zahlenfeld ab 0 mit Vorgabe 0');
+    // Eine Acht (1 Bruecke) aus Grundpackung und Linkskurven-Set.
+    stZufallMit(stBestand(['grund', 'links', 'haarnadel']), { bruecken: 1, box: false }, (ok, tiles) => {
+      if (!ok) { f.push('1 Bruecke nicht gebaut'); return; }
+      const n = trackKreuzungen(trackCenterline(tiles)).length;
+      if (n !== 1) f.push('1 verlangt, ' + n + ' Kreuzungen');
+      mass.push('1 Bruecke: ' + trackToCode(tiles, 0));
+    });
+    // 0 bleibt kreuzungsfrei.
+    stZufallMit(stBestand(['grund']), { bruecken: 0, box: false }, (ok, tiles) => {
+      if (!ok || trackKreuzungen(trackCenterline(tiles)).length !== 0) f.push('0 Bruecken nicht kreuzungsfrei');
+    });
+    // Unmoeglich: 3 Bruecken aus der Grundpackung (nur 2 Linkskurven).
+    stZufallMit(stBestand(['grund']), { bruecken: 3, box: false }, (ok, tiles, toast) => {
+      if (ok) f.push('3 Bruecken aus der Grundpackung angeblich gebaut');
+      if (!/nicht möglich|not possible|no es posible/.test(toast)) f.push('keine Meldung (' + toast + ')');
+      else mass.push('3 Bruecken: ' + toast);
+    });
+    // Minus/Plus und Grenzen.
+    const merk = trackEditorOpt.bruecken;
+    try {
+      const steuer = el.closest('.num-steuer');
+      trackEditorOpt.bruecken = 0;
+      steuer.querySelector('.num-minus').click();
+      if (trackEditorOpt.bruecken !== 0) f.push('Minus unter 0');
+      steuer.querySelector('.num-plus').click(); steuer.querySelector('.num-plus').click();
+      if (trackEditorOpt.bruecken !== 2 || el.value !== '2') f.push('Plus zaehlt nicht (' + trackEditorOpt.bruecken + ')');
+      el.value = '99'; el.dispatchEvent(new Event('change'));
+      if (trackEditorOpt.bruecken !== BRUECKEN_MAX) f.push('keine Obergrenze');
+    } finally { trackEditorOpt.bruecken = merk; editorOptZeigen(); }
+    for (const k of ['Anzahl Brücken', 'Weniger Brücken', 'Mehr Brücken', 'Zufall: {n} Brücken mit diesen Teilen nicht möglich']) {
+      if (!I18N_EN[k] || !I18N_ES[k]) f.push('Uebersetzung fehlt: ' + k);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass.join(' | ') };
+  });
+
+  // BESTELLT: "WLAN-Mehrspieler nicht als eigenen Tab, sondern als Button in der FAHREN ->
+  // Garage-Kachel. Dort dann anzeigen, wenn man hostet oder wo man beigetreten ist."
+  stAdd('Garage v1.3.5: kein Mehrspieler-Reiter, Knopf und Stand in der Autos-Kachel', () => {
+    const f = [];
+    const merk = { tab: kAktiverTab(), stapel: kStapel.slice(), mpAn: mp.an, mpHost: mp.host,
+                   host: Object.assign({}, mpAppHost), mpiAn: mpi.an, mpiHost: mpi.host };
+    const st = $('fa-mp-status');
+    try {
+      kStapel = [];
+      showTab('fahren');
+      konsoleZeichnen();
+      if (K_EBENE1.indexOf('mp') >= 0) f.push('mp steht noch in Ebene 1');
+      const reiter = (konsoleReiterEbene1() || []).map((x) => x.text);
+      if (reiter.indexOf(t('WLAN Mehrspieler')) >= 0) f.push('Reiter WLAN Mehrspieler noch oben');
+      const tb = document.querySelector('.tab-btn[data-tab="mp"]');
+      if (tb && getComputedStyle(tb).display !== 'none') f.push('Tab-Knopf sichtbar');
+      const kn = $('fa-mp');
+      if (!kn || !$('fa-auto').contains(kn) || !kn.closest('.k-knopfreihe')) f.push('Knopf fehlt in der Autos-Kachel');
+      if (kn && !kn.querySelector('.wip-tag')) f.push('WIP fehlt am Knopf');
+      menuNavEnsureContext();
+      if (!menuNavRows().some((r) => r.el === kn)) f.push('Steuerkreuz erreicht den Knopf nicht');
+      if (kn) kn.click();
+      if (kAktiverTab() !== 'mp') f.push('Knopf fuehrt nach ' + kAktiverTab());
+      if (!(konsoleReiterEbene1() || []).some((x) => x.an && x.text === t('Fahren'))) f.push('im Mehrspieler ist oben nicht FAHREN hervorgehoben');
+      konsoleZurueck();
+      if (kAktiverTab() !== 'fahren') f.push('Kreis im Mehrspieler fuehrt nach ' + kAktiverTab());
+      // Stand: nichts, beigetreten, Host, Info-Screen.
+      mpAppHost.laeuft = false; mp.an = false; mpi.an = false;
+      konsoleMpStatus();
+      if (!st || !st.hidden) f.push('Stand sichtbar ohne Mehrspieler');
+      mp.an = true; mp.host = 'http://192.168.1.20:8080';
+      konsoleMpStatus();
+      if (st.hidden || st.textContent !== t('Verbunden mit') + ' 192.168.1.20:8080') f.push('beigetreten: "' + st.textContent + '"');
+      const bei = st.textContent;
+      mpAppHost.laeuft = true; mpAppHost.url = 'http://192.168.1.5:8080';
+      konsoleMpStatus();
+      if (st.hidden || st.textContent !== t('Host:') + ' 192.168.1.5:8080') f.push('Host: "' + st.textContent + '"');
+      const hst = st.textContent;
+      mpAppHost.laeuft = false; mp.an = false; mpi.an = true; mpi.host = 'http://192.168.1.5:8080';
+      konsoleMpStatus();
+      if (st.hidden || st.textContent.indexOf('192.168.1.5:8080') < 0) f.push('Info-Screen: "' + st.textContent + '"');
+      merk.text = bei + ' / ' + hst;
+    } finally {
+      mp.an = merk.mpAn; mp.host = merk.mpHost; Object.assign(mpAppHost, merk.host);
+      mpi.an = merk.mpiAn; mpi.host = merk.mpiHost;
+      konsoleMpStatus();
+      kStapel = merk.stapel;
+      if (merk.tab) showTab(merk.tab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Reiter weg, Knopf in der Kachel (Steuerkreuz, Kreis zurueck), Stand: ' + merk.text };
+  });
+
+  // BESTELLT: "Auf dem Startbildschirm nicht die Tasten anzeigen, sondern die Buttons mit D-Pad
+  // oder Pfeiltasten (oder Maus) waehlbar machen. Standardmaessig ist Start ausgewaehlt".
+  stAdd('Start v1.3.5: Startschirm-Knöpfe per Pfeil/Steuerkreuz/Maus, Start vorgewählt, keine Tastenhinweise', () => {
+    const f = [];
+    const merk = { tab: kAktiverTab(), stapel: kStapel.slice(), sperre: kTitelSperre, vorher: kPadVorher.slice() };
+    const gewaehlt = () => HOME_KNOEPFE.filter((id) => $(id) && $(id).classList.contains('k-fokus'));
+    const taste = (key) => window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    const pad = (i) => {
+      const b = Array.from({ length: 17 }, (x, k) => ({ pressed: k === i, touched: false, value: k === i ? 1 : 0 }));
+      konsolePadTitel({ buttons: b, axes: [0, 0, 0, 0] });
+      konsolePadTitel({ buttons: b.map(() => ({ pressed: false, touched: false, value: 0 })), axes: [0, 0, 0, 0] });
+    };
+    try {
+      kStapel = [];
+      showTab('fahren');
+      showTab('home');
+      if (gewaehlt().join() !== 'k-starten-start') f.push('vorgewaehlt: ' + (gewaehlt().join() || 'nichts'));
+      const zeile = document.querySelector('#tab-home .k-tutorial-reihe');
+      if (!zeile || zeile.querySelector('.k-tutorial-taste') || /[△○✕]|\/ T|\/ S|Enter/.test(zeile.textContent)) f.push('Tastenhinweise noch da');
+      const bg = (id) => getComputedStyle($(id)).backgroundColor;
+      if (bg('k-starten-start') === bg('k-tutorial-start')) f.push('gewaehlter Knopf nicht anders gefuellt');
+      const blauStart = bg('k-starten-start');
+      taste('ArrowLeft');
+      if (gewaehlt().join() !== 'k-steuerung-start') f.push('Pfeil links -> ' + gewaehlt().join());
+      if (bg('k-steuerung-start') !== blauStart || bg('k-starten-start') === blauStart) f.push('Fuellung wandert nicht mit');
+      taste('ArrowLeft'); taste('ArrowLeft');
+      if (gewaehlt().join() !== 'k-wiki') f.push('Pfeil links x3 -> ' + gewaehlt().join());
+      taste('ArrowLeft');
+      if (gewaehlt().join() !== 'k-starten-start') f.push('kein Umlauf -> ' + gewaehlt().join());
+      kTitelSperre = false;
+      pad(14);
+      if (gewaehlt().join() !== 'k-steuerung-start') f.push('Steuerkreuz links -> ' + gewaehlt().join());
+      pad(15);
+      if (gewaehlt().join() !== 'k-starten-start') f.push('Steuerkreuz rechts -> ' + gewaehlt().join());
+      $('k-tutorial-start').dispatchEvent(new PointerEvent('pointerenter'));
+      if (gewaehlt().join() !== 'k-tutorial-start') f.push('Maus waehlt nicht');
+      taste('ArrowRight'); taste('ArrowRight');
+      if (kAktiverTab() !== 'home') f.push('Pfeil verlaesst den Titel');
+      if (gewaehlt().join() !== 'k-starten-start') f.push('Pfeil rechts x2 -> ' + gewaehlt().join());
+      taste('Enter');
+      if (kAktiverTab() !== 'fahren') f.push('Enter auf Starten fuehrt nach ' + kAktiverTab());
+      showTab('home');
+      if (gewaehlt().join() !== 'k-starten-start') f.push('zurueck auf dem Titel nicht wieder Starten');
+    } catch (e) {
+      f.push('Ausnahme: ' + e.message);
+    } finally {
+      kTitelSperre = merk.sperre; kPadVorher.splice(0, kPadVorher.length, ...merk.vorher);
+      kStapel = merk.stapel;
+      if (merk.tab) showTab(merk.tab);
+      homeFokusSetzen(HOME_START);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Starten vorgewaehlt und blau, Pfeile/Steuerkreuz/Maus waehlen mit Umlauf, keine Tastenhinweise' };
+  });
+
+  // BESTELLT: "Spiele auf dem Startbildschirm eine Animation unten links ab (das sich drehende
+  // Streckenteil, aber kleiner), wenn auf Updates geprueft wird oder wenn Sounddateien geladen werden."
+  stAdd('Start v1.3.5: Ladeanimation unten links, solange Updates oder Klänge laden', async () => {
+    const f = [];
+    const merk = kAktiverTab();
+    const box = $('home-lade');
+    let mass = '';
+    try {
+      showTab('home');
+      if (!box) return { ok: false, mass: '#home-lade fehlt' };
+      const vorher = box.hidden;
+      ladeAnzeigeSetzen('selbsttest', true);
+      if (box.hidden || !box.querySelector('.lade-dreh svg')) f.push('waehrend des Ladens nicht sichtbar');
+      const r = box.getBoundingClientRect();
+      if (innerWidth && innerHeight) {
+        if (!(r.left < 60 && r.bottom > innerHeight - 70)) f.push('nicht unten links (' + Math.round(r.left) + ', ' + Math.round(r.bottom) + ')');
+        if (!(r.height <= 40)) f.push('zu gross (' + Math.round(r.height) + ' px)');
+        mass = Math.round(r.left) + '/' + Math.round(innerHeight - r.bottom) + ' px vom Rand, ' + Math.round(r.height) + ' px hoch';
+      }
+      ladeAnzeigeSetzen('selbsttest', false);
+      if (box.hidden !== vorher) f.push('bleibt nach dem Laden stehen');
+      let fertig;
+      const p = new Promise((ok) => { fertig = ok; });
+      ladeAnzeigeMit('selbsttest2', p);
+      if (box.hidden) f.push('ladeAnzeigeMit zeigt nichts');
+      fertig();
+      await p; await Promise.resolve(); await new Promise((ok) => setTimeout(ok, 0));
+      if (box.hidden !== vorher) f.push('ladeAnzeigeMit raeumt nicht ab');
+      // Angeschlossen: Update-Pruefung (97b-app.js) und Klangdateien (80-sound.js).
+      const quelle = [...document.scripts].map((s) => s.textContent).join('\n');
+      if (quelle.indexOf("ladeAnzeigeSetzen('update', true)") < 0 || quelle.indexOf("ladeAnzeigeSetzen('update', false)") < 0) f.push('Update-Pruefung nicht angeschlossen');
+      if (String(klangDateienLaden).indexOf('ladeAnzeigeMit') < 0 || String(unlockAudioOnFirstGesture).indexOf('klangDateienLaden') < 0) f.push('Klangdateien nicht angeschlossen');
+      // v1.3.31: kein WIP mehr, dafuer klein daneben, was laedt.
+      if (box.querySelector('.wip-tag')) f.push('WIP noch da');
+      ladeAnzeigeSetzen('klang-motor', true);
+      if (!/Motorkl/.test(($('home-lade-text') || {}).textContent || '')) f.push('Text: ' + (($('home-lade-text') || {}).textContent || 'leer'));
+      ladeAnzeigeSetzen('klang-motor', false);
+      if (String(klangDateienLaden).indexOf("'klang-motor'") < 0) f.push('Klanggruppen nicht einzeln gemeldet');
+    } finally {
+      ladeAnzeigeSetzen('selbsttest', false); ladeAnzeigeSetzen('selbsttest2', false); ladeAnzeigeSetzen('klang-motor', false);
+      if (merk) showTab(merk);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'sichtbar beim Laden, ' + mass + ', Update und Klaenge angeschlossen' };
   });
 
   // ---- Die Wetterkachel schaltet durch drei Lagen ----
@@ -22092,6 +22668,49 @@
     return { ok: !f.length, mass: f.length ? f.join(' | ') : '3 Bewunderung / 3 Rivalitaet, Median ok' };
   });
 
+  // v1.3.25 BESTELLT: OmegaLab mit kurzer Erklaerung, Einwilligung und Studienwahl, "nur ein
+  // Mock-Up und sag Coming Soon". Geprueft: Portal statt Fragebogen, alle Karten gesperrt,
+  // Einwilligung schaltet nur die Beschriftung um, nichts wird gesendet oder gespeichert.
+  stAdd('OmegaLab v1.3.25: Portal mit Einwilligung, Testbetrieb ohne Datensammlung', () => {
+    const f = [];
+    const host = $('studie-inhalt');
+    if (!host) return { skip: true, mass: 'kein #studie-inhalt' };
+    const merkSt = st, merkJa = labEinwilligung, merkSenden = studieSenden, vorher = localStorage.getItem(STUDIE_STORE);
+    let gesendet = 0;
+    studieSenden = () => { gesendet++; };
+    try {
+      st = studieNeu(); labEinwilligung = false;
+      studieZeichnen();
+      const karten = host.querySelectorAll('.lab-karte');
+      if (karten.length !== LAB_STUDIEN.length || karten.length < 6) f.push(karten.length + ' Karten');
+      if (host.querySelector('#st-alter')) f.push('Fragebogen statt Portal');
+      if (!host.querySelector('.lab-bald') || !/Testzwecken/.test(t('OmegaLab ist im Moment nur zu Testzwecken eingebaut. Es werden keine Daten gesendet oder gesammelt. Später soll daraus ein Forschungsportal mit echten Verhaltensdaten werden.'))) f.push('kein Testbetrieb-Hinweis');
+      if (!host.querySelector('#lab-einwilligung')) f.push('keine Einwilligung');
+      if ([...host.querySelectorAll('.lab-karte button')].some((b) => !b.disabled)) f.push('Karte startbar');
+      const cb = host.querySelector('#lab-einwilligung');
+      if (cb) cb.click();   // schaltet den Haken um und loest den Klick aus, wie ein Tippen
+      if (!labEinwilligung) f.push('Einwilligung greift nicht');
+      if (host.querySelectorAll('.lab-karte.gesperrt').length) f.push('nach Einwilligung noch ausgegraut');
+      const startbar = [...host.querySelectorAll('.lab-karte button')].filter((b) => !b.disabled);
+      if (startbar.length !== 1 || startbar[0].dataset.labStart !== 'fahrstil') f.push('startbar: ' + startbar.length);
+      if (!/Coming Soon/.test(host.textContent)) f.push('kein Coming Soon nach Einwilligung');
+      // Durchlaufen bis zum Abschluss: nichts gesendet, nichts gespeichert, Hinweis im Dank.
+      if (startbar[0]) startbar[0].click();
+      if (!host.querySelector('#st-alter')) f.push('Studie startet nicht');
+      if (!host.querySelector('.lab-bald')) f.push('Studie ohne Testbetrieb-Hinweis');
+      st.rt = [250, 260, 270]; st.narq = [1, 2, 3, 4, 5, 6]; st.selbst = 3;
+      studieAbschliessen();
+      if (st.schritt !== 'danke' || !/nichts gesendet/.test(host.textContent)) f.push('Abschluss ohne Testbetrieb-Dank');
+      if (LAB_STUDIEN.some((x) => labMedaillen(x.min) !== (x.min <= 20 ? 3 : x.min <= 26 ? 4 : 5))) f.push('Medaillen nicht nach Dauer');
+      if (gesendet) f.push(gesendet + 'x gesendet');
+      if (localStorage.getItem(STUDIE_STORE) !== vorher) f.push('Studienspeicher veraendert');
+    } finally {
+      studieSenden = merkSenden; st = merkSt; labEinwilligung = merkJa;
+      studieZeichnen();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : LAB_STUDIEN.length + ' Studien, alle Coming Soon, nichts gesendet' };
+  });
+
   // ---- v1.0: Meisterschaft (73-meisterschaft.js) ----
   stAdd('Meisterschaft: Wertung, Punkte, schnellste Runde, Gleichstand', () => {
     const f = [];
@@ -23637,4 +24256,448 @@
     }
     return { ok: !f.length, mass: f.length ? f.join(' | ')
       : 'Uhr steht 10 s, Ampel 5,6 s, verzug 0 bei Rennstart, MP-Gruen exakt, MP sperrt und beendet Pause, Intro ab, Bruecke frei beim Laden' + hinweis };
+  });
+
+  // ---- v1.3.15: Online-Streckenzeiten (72c-strecken-online.js) ----------------------------
+  // Alle Tests sichern die beruehrten Ablagen und Zustaende und stellen sie danach wieder her;
+  // fetch, konsoleFrage und chAusgangSenden sind Attrappen - kein Test geht ins Netz.
+  function stSkMerken() {
+    const keys = [SK_STORE, SK_STORE_V, SK_OPT_STORE, SK_CACHE_STORE, CH_ONLINE_STORE, CH_AUSGANG, BESTZEIT_STORE, TRACK_STORE_KEY];
+    const ls = {};
+    keys.forEach((k) => { ls[k] = localStorage.getItem(k); });
+    const m = { ls, fetch: window.fetch, frage: konsoleFrage, senden: chAusgangSenden, rs: raceState,
+      tiles: currentTrackTiles, rot: trackRotationDeg, wert: kFrageWert, lauf: skLauf, gelesen: skGelesen,
+      detail: skDetail, fgWahl: skFgWahl, on: { liste: skOnline.liste, listeAt: skOnline.listeAt, listeLaedt: skOnline.listeLaedt,
+        listeFehler: skOnline.listeFehler, zeiten: skOnline.zeiten },
+      tab: document.querySelector('.tabpage.active'), subOn: [...document.querySelectorAll('.subpage.on')],
+      home: [...document.querySelectorAll('.subpage-home')].map((h) => h.style.display),
+      name: $('track-name') ? $('track-name').value : '' };
+    skOnline.zeiten = {};
+    localStorage.setItem(SK_STORE_V, '2');
+    return m;
+  }
+  function stSkZurueck(m) {
+    window.fetch = m.fetch; konsoleFrage = m.frage; chAusgangSenden = m.senden; raceState = m.rs;
+    currentTrackTiles = m.tiles; trackRotationDeg = m.rot; kFrageWert = m.wert; skLauf = m.lauf; skGelesen = m.gelesen;
+    skDetail = m.detail; skFgWahl = m.fgWahl;
+    Object.assign(skOnline, m.on);
+    Object.keys(m.ls).forEach((k) => { if (m.ls[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, m.ls[k]); });
+    if ($('track-name')) $('track-name').value = m.name;
+    document.querySelectorAll('.tabpage').forEach((el) => el.classList.toggle('active', el === m.tab));
+    document.querySelectorAll('.subpage.on').forEach((p) => p.classList.remove('on'));
+    m.subOn.forEach((p) => p.classList.add('on'));
+    document.querySelectorAll('.subpage-home').forEach((h, i) => { h.style.display = m.home[i]; });
+    try { refreshTrackList(); refreshTrackPreview(); skOptZeichnen(); chAusgangZeichnen(); } catch (e) { /* egal */ }
+  }
+  // Eine Strecke mit Runden, wie sie die Schiene liefern wuerde.
+  function stSkStrecke() {
+    const def = CH_ALLE.find((d) => d.kat === 'C') || CH_ALLE[0];
+    const tiles = codeToTrack(def.code).tiles;
+    const code = trackToCode(tiles, 0);
+    const minMs = chMinRundeMs({ code, runden: 1 });
+    const gelesen = tiles.slice(1).map((x) => x.type);
+    return { tiles, code, minMs, gelesen, key: skSchluessel(tiles) };
+  }
+
+  stAdd('Online v1.3.15: Standard aus, Pop-up beim ersten Speichern genau einmal', () => {
+    const f = [];
+    const m = stSkMerken();
+    try {
+      localStorage.removeItem(SK_OPT_STORE);
+      skOptZeichnen();
+      if (skSyncAn()) f.push('Synchronisieren ist ohne Wahl an');
+      if ($('on-sync') && $('on-sync').checked) f.push('Schalter in den Optionen steht an');
+      const fragen = [];
+      konsoleFrage = (titel, text, knoepfe) => { fragen.push({ titel, text, knoepfe }); };
+      const s = stSkStrecke();
+      currentTrackTiles = s.tiles;
+      const store = loadTrackStore();
+      delete store['ST Probe 1']; delete store['ST Probe 2'];
+      saveTrackStore(store);
+      trackSpeichern('ST Probe 1');
+      trackSpeichern('ST Probe 2');
+      if (fragen.length !== 1) f.push('Frage ' + fragen.length + 'x statt genau einmal');
+      else {
+        const fr = fragen[0];
+        if (fr.text.indexOf(t('Zeiten zu dieser Strecke online speichern? Dann werden dein Name und die Strecke öffentlich gespeichert.')) < 0) {
+          f.push('Hinweis auf öffentlich fehlt: ' + fr.text);
+        }
+        if (skSyncAn()) f.push('schon vor der Antwort an');
+        // Nein: bleibt aus.
+        const nein = fr.knoepfe.find((k) => k[0] === t('Nein, nur lokal'));
+        if (!nein) f.push('kein Nein-Knopf'); else if (nein[1]) nein[1]();
+        if (skSyncAn()) f.push('Nein schaltet ein');
+        // Noch einmal von vorn (nicht gefragt): Ja schaltet ein und uebernimmt den Namen.
+        localStorage.removeItem(SK_OPT_STORE);
+        fragen.length = 0;
+        skErsteStreckeFrage();
+        const ja = fragen[0] && fragen[0].knoepfe.find((k) => k[0] === t('Ja, online speichern'));
+        if (!ja) f.push('kein Ja-Knopf');
+        else {
+          if ($('k-frage-eingabe-feld')) $('k-frage-eingabe-feld').value = '';
+          kFrageWert = 'STProbe';
+          ja[1]();
+          if (!skSyncAn()) f.push('Ja schaltet nicht ein');
+          if (chOnline().fahrer !== 'STProbe') f.push('Name nicht uebernommen: ' + chOnline().fahrer);
+          if ($('on-sync') && !$('on-sync').checked) f.push('Optionen-Schalter folgt nicht');
+        }
+        if (skErsteStreckeFrage()) f.push('fragt nach Ja noch einmal');
+      }
+      // Regeln: WIP, Erklaerung als small in .opt-label, Uebersetzung.
+      if (!document.querySelector('#sub-opt-online h2 .wip-tag')) f.push('WIP fehlt (Optionen)');
+      if (!document.querySelector('#sub-ch-strecken h2 .wip-tag')) f.push('WIP fehlt (Community-Strecken)');
+      if (!document.querySelector('#sub-opt-online .opt-label small')) f.push('Erklaerung nicht als small');
+      for (const k of ['Zeiten online synchronisieren', 'Community-Strecken', 'nur lokal', 'Beste 3 Runden', 'eigene Zeiten',
+                       'unbekannt', 'Dein Fahrgefühl',
+                       'Zeiten zu dieser Strecke online speichern? Dann werden dein Name und die Strecke öffentlich gespeichert.']) {
+        if (!I18N_EN[k] || !I18N_ES[k]) f.push('Uebersetzung fehlt: ' + k);
+      }
+    } finally {
+      stSkZurueck(m);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'aus ab Werk, eine Frage bei zwei Speicherungen, Nein aus, Ja an mit Name' };
+  });
+
+  stAdd('Online v1.3.15: Senden nur wenn an, Runden geprueft wie Challenges, nichts im Takt', () => {
+    const f = [];
+    const m = stSkMerken();
+    try {
+      const s = stSkStrecke();
+      let netz = 0, senden = 0, schreiben = 0;
+      window.fetch = () => { netz++; return new Promise(() => {}); };
+      chAusgangSenden = () => { senden++; };
+      localStorage.setItem(CH_AUSGANG, '[]');
+      localStorage.removeItem(SK_STORE);
+      localStorage.removeItem(SK_OPT_STORE);
+      // 1. Aufzeichnen im Rennen: nur Felder, kein Speicher, kein Netz.
+      raceState = 'racing';
+      currentTrackTiles = s.tiles;
+      skLauf = null; skGelesen = [];
+      const l1 = Math.round(s.minMs * 1.5), l2 = Math.round(s.minMs * 0.5), l3 = Math.round(s.minMs * 1.4), l4 = Math.round(s.minMs * 1.6);
+      const setItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (k, v) { schreiben++; return setItem.call(this, k, v); };
+      try {
+        s.gelesen.forEach((c) => skTeilGelesen(c)); skRunde(0, l1, false);
+        s.gelesen.forEach((c) => skTeilGelesen(c)); skRunde(1, l2, true);          // zu schnell
+        skRunde(2, l3, false);                                                     // keine Teile gelesen
+        s.gelesen.forEach((c) => skTeilGelesen(c)); skRunde(3, l4, false);
+      } finally { Storage.prototype.setItem = setItem; }
+      if (schreiben) f.push('im Rennen ' + schreiben + 'x gespeichert');
+      if (netz) f.push('im Rennen ' + netz + 'x Netz');
+      if (!skLauf || skLauf.runden.length !== 4) f.push('Runden nicht gemerkt');
+      const lauf = skLauf; skLauf = null;
+      lauf.fahrgefuehl = 'propacejka';
+      raceState = 'idle';
+      // 2. Schalter aus: lokal gespeichert, nichts gesendet.
+      const r1 = skAuswerten(lauf);
+      if (!r1) f.push('keine Wertung');
+      else {
+        if (r1.gesendet) f.push('gesendet, obwohl aus');
+        if (JSON.stringify(r1.eintrag.runden) !== JSON.stringify([l1, 0, 0, l4])) f.push('Runden ' + JSON.stringify(r1.eintrag.runden));
+        if (r1.eintrag.zeit !== l1) f.push('Bestzeit ' + r1.eintrag.zeit + ' statt ' + l1);
+        if (r1.eintrag.fahrgefuehl !== 'propacejka') f.push('Fahrgefuehl ' + r1.eintrag.fahrgefuehl);
+        if (r1.eintrag.code !== s.code) f.push('gefahrener Code fehlt');
+      }
+      if (chAusgangLesen().length || senden || netz) f.push('bei AUS in der Schlange/gesendet');
+      if ((skLokalAlle()[s.key] || []).length !== 1) f.push('nicht lokal gespeichert');
+      // 3. Schalter an: in die Warteschlange der Challenges, mit eigener Art.
+      skOptSetzen({ sync: true });
+      const r2 = skAuswerten(lauf);
+      const a = chAusgangLesen();
+      if (!r2 || !r2.gesendet) f.push('bei AN nicht gesendet');
+      if (a.length !== 1 || a[0].art !== 'strecke-zeit' || a[0].strecke !== s.key) f.push('Schlange: ' + JSON.stringify(a).slice(0, 120));
+      else {
+        if (a[0].teile !== codeToTrack(s.key).tiles.length) f.push('Teilezahl ' + a[0].teile);
+        if (!(a[0].quote >= 0.9)) f.push('Quote ' + a[0].quote);
+        if (a[0].fahrgefuehl !== 'propacejka') f.push('Fahrgefuehl in der Schlange ' + a[0].fahrgefuehl);
+        if (a[0].code !== s.code) f.push('Code in der Schlange ' + a[0].code);
+      }
+      if (senden !== 1) f.push('Schlange ' + senden + 'x angestossen');
+      // 4. Eine Runde ohne erkannte Teile allein zaehlt nirgends.
+      if (skAuswerten({ tiles: s.tiles, runden: [{ ms: l1, gelesen: [], ungueltig: false }] })) f.push('Runde ohne Teile gewertet');
+      // 5. Ohne gesetztes Fahrgefuehl gilt das aktuelle (ein bekannter Wert).
+      const r3 = skAuswerten({ tiles: s.tiles, runden: [{ ms: l1, gelesen: s.gelesen, ungueltig: false }] });
+      if (!r3 || SK_FAHRGEFUEHLE.indexOf(r3.eintrag.fahrgefuehl) < 0) f.push('aktuelles Fahrgefuehl unbekannt');
+    } finally {
+      stSkZurueck(m);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'aus: nur lokal; an: Schlange (strecke-zeit, Fahrgefuehl, Code); zu schnell und ohne Teile als 0; im Rennen 0 Speicher/Netz' };
+  });
+
+  stAdd('Online v1.3.15: lokale und Online-Zeiten in einer Liste, lokal markiert, je Fahrgefuehl', () => {
+    const f = [];
+    const m = stSkMerken();
+    try {
+      const s = stSkStrecke();
+      const ich = chGeraet();
+      const z = (k) => Math.round(s.minMs * k);
+      const PP = 'propacejka';
+      localStorage.removeItem(BESTZEIT_STORE);
+      localStorage.setItem(SK_STORE, JSON.stringify({ [s.key]: [
+        { zeit: z(1.2), runden: [z(1.2), z(1.3), z(1.25)], datum: 1, fahrer: 'Ich', auto: 'R', geraet: ich, geteilt: false, fahrgefuehl: PP },
+        { zeit: z(1.8), runden: [z(1.8)], datum: 2, fahrer: 'Ich', auto: 'R', geraet: ich, geteilt: true, fahrgefuehl: PP }] }));
+      skOnline.zeiten[s.key] = { at: Date.now(), stand: Date.now(), zeiten: [
+        { zeit_ms: z(1.5), fahrer: 'A', geraet: 'stA', runden_ms: [z(1.5), z(1.6), z(1.7)], fahrgefuehl: PP },
+        { zeit_ms: z(1.6), fahrer: 'B', geraet: 'stB', runden_ms: [z(1.6), z(1.6), z(1.6)], fahrgefuehl: PP },
+        { zeit_ms: z(1.8), fahrer: 'Ich', geraet: ich, runden_ms: [z(1.8)], fahrgefuehl: PP },
+        { zeit_ms: z(1.1), fahrer: 'Arc', geraet: 'stC', runden_ms: [z(1.1), z(1.1), z(1.1)], fahrgefuehl: 'arcade' }] };
+      skFgWahl = PP;
+      const host = document.createElement('div');
+      skZeichnen(host, s.key);
+      const tabs = host.querySelectorAll('table');
+      const zeilen = tabs[0] ? [...tabs[0].querySelectorAll('tr')] : [];
+      if (zeilen.length !== 3) f.push('Bestzeit Pacejka ' + zeilen.length + ' statt 3 Zeilen');
+      else {
+        if (!zeilen[0].querySelector('.sk-lokal')) f.push('eigene lokale Bestzeit nicht markiert');
+        if (zeilen[0].className !== 'du') f.push('eigene Zeile nicht hervorgehoben');
+        if (zeilen[1].querySelector('.sk-lokal') || zeilen[2].querySelector('.sk-lokal')) f.push('Online-Zeit als lokal markiert');
+        if (zeilen[1].textContent.indexOf('A') < 0) f.push('Reihenfolge: ' + zeilen[1].textContent);
+        if ([...tabs].some((tb) => tb.textContent.indexOf('Arc') >= 0)) f.push('Arcade-Zeit in der Pacejka-Liste');
+      }
+      if (skAlleZeiten(s.key).eintraege.length !== 5) f.push('doppelte eigene Zeit nicht zusammengelegt: ' + skAlleZeiten(s.key).eintraege.length);
+      const drei = tabs[1] ? [...tabs[1].querySelectorAll('tr')] : [];
+      if (drei.length !== 3) f.push('3er ' + drei.length + ' statt 3 Zeilen');
+      // Umschalten auf Arcade: nur die Arcade-Zeit.
+      const chip = host.querySelector('.sk-chip[data-fg="arcade"]');
+      if (!chip) f.push('kein Arcade-Chip');
+      else {
+        chip.click();
+        const za = [...host.querySelectorAll('table')[0].querySelectorAll('tr')];
+        if (za.length !== 1 || za[0].textContent.indexOf('Arc') < 0) f.push('Arcade-Liste: ' + za.length + ' Zeilen');
+        if (!host.querySelector('.sk-chip.an[data-fg="arcade"]')) f.push('Chip nicht markiert');
+      }
+      // Ohne Online-Liste (nicht erreichbar) bleiben die eigenen Zeiten da, markiert.
+      skFgWahl = PP;
+      delete skOnline.zeiten[s.key];
+      skZeichnen(host, s.key);
+      const z2 = [...host.querySelectorAll('table')[0].querySelectorAll('tr')];
+      if (z2.length !== 1 || !z2[0].querySelector('.sk-lokal')) f.push('ohne Online: ' + z2.length + ' Zeilen');
+      // Alte Eintraege ohne Fahrgefuehl und die Time-Attack-Bestzeiten (gespeicherter Code) gelten als unbekannt.
+      localStorage.setItem(SK_STORE, JSON.stringify({ [s.key]: [{ zeit: z(1.3), runden: [z(1.3)], datum: 1, geraet: ich }] }));
+      localStorage.setItem(BESTZEIT_STORE, JSON.stringify({ [bestzeitSchluessel(s.tiles)]: { code: s.code, fahrer: { x: { name: 'Auto', beste: z(1.4), medaille: 1, runden: 3 } } } }));
+      const lok = skLokal(s.key);
+      if (!lok.some((e) => e.zeit_ms === z(1.4) && e.fahrgefuehl === 'unbekannt')) f.push('Time-Attack-Bestzeit fehlt');
+      if (!lok.some((e) => e.zeit_ms === z(1.3) && e.fahrgefuehl === 'unbekannt')) f.push('alter Eintrag nicht unbekannt');
+    } finally {
+      stSkZurueck(m);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'online + lokal gemischt, nur-lokal-Marke, je Fahrgefuehl getrennt (Chips), alte als unbekannt' };
+  });
+
+  stAdd('Online v1.3.25: Community-Strecken alle (auch unter 4 Fahrern) plus eigene, Abruf gecacht', async () => {
+    const f = [];
+    const m = stSkMerken();
+    try {
+      const keys = [];
+      CH_ALLE.forEach((d) => { const k = skSchluessel(codeToTrack(d.code).tiles); if (keys.indexOf(k) < 0) keys.push(k); });
+      const codes = keys.slice(0, 5);
+      const antwort = { ok: true, strecken: [
+        { strecke: codes[0], name: 'Drei', fahrer: 3, beste_ms: 5000 },
+        { strecke: codes[1], name: 'Vier', fahrer: 4, beste_ms: 7000 },
+        { strecke: codes[2], name: 'Fuenf', fahrer: 5, beste_ms: 9000,
+          je: { propacejka: { fahrer: 3, beste_ms: 9500, beste_fahrer: 'P' }, arcade: { fahrer: 2, beste_ms: 9000, beste_fahrer: 'A' } } },
+        { strecke: codes[3], name: 'Zwei', fahrer: 2, beste_ms: 8000, eigene: true },
+        { strecke: 'S??', name: 'Kaputt', fahrer: 9, beste_ms: 1 }] };
+      localStorage.setItem(SK_STORE, JSON.stringify({ [codes[4]]: [{ zeit: 6000, runden: [6000], datum: 1, fahrer: 'Ich', geraet: chGeraet(), fahrgefuehl: 'arcade' }] }));
+      const urls = [];
+      window.fetch = (u) => { urls.push(String(u)); return Promise.resolve({ json: () => Promise.resolve(antwort) }); };
+      const o = chOnline(); o.url = 'https://example.invalid/exec'; chSchreiben(CH_ONLINE_STORE, o);
+      raceState = 'idle';
+      skOnline.liste = null; skOnline.listeAt = 0; skOnline.listeLaedt = false;
+      await skListeHolen(false);
+      if (urls.length !== 1 || urls[0].indexOf('strecken=1') < 0 || urls[0].indexOf('geraet=') < 0) f.push('Abruf: ' + JSON.stringify(urls));
+      await skListeHolen(false);
+      if (urls.length !== 1) f.push('zweiter Abruf trotz Zwischenspeicher');
+      raceState = 'racing'; skOnline.listeAt = 0;
+      await skListeHolen(true);
+      if (urls.length !== 1) f.push('Abruf im Rennen');
+      raceState = 'idle';
+      const g = skCommunityGefiltert(skOnline.liste, skEigeneStrecken());
+      if (g.map((x) => (x.nurLokal ? 'lokal' : x.name)).join(',') !== 'Fuenf,Vier,Drei,Zwei,lokal') f.push('Filter: ' + g.map((x) => (x.nurLokal ? 'lokal' : x.name)).join(','));
+      if (!g[3] || !g[3].eigene || !g[4] || !g[4].eigene || !g[4].nurLokal || g[0].eigene || g[2].eigene) f.push('eigene falsch markiert');
+      // Bestzeit je Fahrgefuehl: das aktuelle, sonst die schnellste mit ihrem Fahrgefuehl.
+      const b1 = skListenBestzeit(antwort.strecken[2], 'propacejka'), b2 = skListenBestzeit(antwort.strecken[2], 'gran');
+      if (!b1 || b1.ms !== 9500 || b1.fg !== 'propacejka') f.push('Bestzeit Pacejka ' + JSON.stringify(b1));
+      if (!b2 || b2.ms !== 9000 || b2.fg !== 'arcade') f.push('Bestzeit ohne eigenes Fahrgefuehl ' + JSON.stringify(b2));
+      skOnline.listeAt = Date.now();
+      skListeZeichnen();
+      const reihen = [...document.querySelectorAll('#sk-liste-bereich .community-zeile')];
+      if (reihen.length !== 5) f.push(reihen.length + ' Reihen statt 5');
+      if (document.querySelectorAll('#sk-liste-bereich .sk-eigene').length !== 2) f.push('Marke eigene nicht zweimal');
+      // Antippen: Strecke mit Karte und Liste, dann in den Editor laden.
+      codes.forEach((c) => { skOnline.zeiten[c] = { zeiten: [], at: Date.now(), stand: Date.now() }; });
+      if (reihen[0]) reihen[0].querySelector('.community-oeffnen').click();
+      if (!$('sub-ch-sk').classList.contains('on')) f.push('Strecke geht nicht auf');
+      if ($('sk-titel').textContent !== 'Fuenf') f.push('Titel ' + $('sk-titel').textContent);
+      if (!$('sk-karte').querySelector('svg')) f.push('keine Karte');
+      if (!$('sk-detail-inhalt').querySelector('table')) f.push('keine Zeitenliste');
+      if (!$('sk-detail-inhalt').querySelector('.sk-chip')) f.push('keine Fahrgefuehl-Auswahl');
+      if (urls.length !== 1) f.push('Strecke trotz frischem Zwischenspeicher geholt');
+      konsoleZurueck();
+      if (!$('sub-ch-strecken').classList.contains('on')) f.push('Kreis fuehrt nicht in die Liste');
+      skDetail = antwort.strecken[2];
+      currentTrackTiles = [{ type: TILE_TYPE.START }];
+      if (!skInEditorLaden()) f.push('Laden abgelehnt');
+      if (skSchluessel(currentTrackTiles) !== codes[2]) f.push('falsche Strecke im Editor');
+      if (!$('sub-edit').classList.contains('on')) f.push('Editor nicht offen');
+    } finally {
+      stSkZurueck(m);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '4 von 6 (>3 Fahrer oder eigene, online und nur lokal), Bestzeit je Fahrgefuehl, ein Abruf, keiner im Rennen' };
+  });
+
+  // v1.3.31 GEMELDET: "Im Garagenmenue komme ich nicht von der linken zur rechten Haelfte und ich kann nicht
+  // nach oben zum Auto mit der Auswahl gehen." Gedrueckt wird wie am Steuerkreuz (menuNavMove/menuNavSeitwaerts,
+  // jede Taste wieder losgelassen), gemessen wird, wo die Auswahl steht.
+  stAdd('Garage v1.3.31: Navigation links/rechts zwischen den Haelften, hoch zu den Autos, alles erreichbar', () => {
+    const f = [];
+    const merkTab = kAktiverTab();
+    const merkSub = document.querySelector('.tabpage.active .subpage.on');
+    const merk = { auf: garAufAuto, virt: garVirtuellAuf, l: garScrollStand.l, r: garScrollStand.r };
+    const probe = ['ghost', 'ghost', 'none'].map((role, i) => ({ role, device: { id: 'probe-nav-' + i, name: 'Probe' },
+      alias: 'Nav ' + i, colorId: ['rot', 'blau', 'gelb'][i], sim: false, testSenke: [], probe: true }));
+    const cur = () => menuNavRows()[menuNavIndex] || null;
+    const seite = (r) => (r && r.el.closest('.gar-a-links') ? 'L' : r && r.el.closest('.gar-a-rechts') ? 'R' : '-');
+    const name = (r) => (r ? (r.el.textContent || r.el.className || '').replace(/\s+/g, ' ').trim().slice(0, 24) : 'nichts');
+    const druecke = (dir) => {
+      if (dir === 'up' || dir === 'down') menuNavMove(dir);
+      else { menuNavSeitwaerts(dir, true); menuNavAdjustGehalten(dir, false); }
+      return cur();
+    };
+    const setze = (pruef) => {
+      const i = menuNavRows().findIndex(pruef);
+      if (i < 0) return false;
+      menuNavIndex = i; menuNavGezeigt = true; menuNavArmed = false; menuNavRender();
+      return true;
+    };
+    try {
+      probe.forEach((c) => garage.push(c));
+      carRetag();
+      showTab('garage');
+      garAufAuto = probe[0]; garVirtuellAuf = false;
+      renderGarage();
+      menuNavEnsureContext();
+      const autoZeile = (car) => (r) => r.el._car === car;
+      // 1. Die Autos links sind Stationen der Liste.
+      const autos = menuNavRows().filter((r) => r.el.classList.contains('gar-a-zeile'));
+      if (autos.length !== probe.length) f.push(autos.length + ' Autozeilen erreichbar statt ' + probe.length);
+      // 2. Nach oben zu den Autos: von "+ Auto verbinden" hoch landet man auf dem letzten Auto.
+      if (!setze((r) => r.el.querySelector && r.el.querySelector('.gar-karte-neu'))) f.push('"+ Auto verbinden" nicht in der Liste');
+      else {
+        const hoch = druecke('up');
+        if (!hoch || hoch.el._car !== probe[2]) f.push('hoch von "+ Auto verbinden" -> ' + name(hoch) + ' statt zum letzten Auto');
+      }
+      // 3. Rechts auf einem Auto: waehlt es und geht in die rechte Haelfte (Rolle zuerst).
+      setze(autoZeile(probe[1]));
+      let r = druecke('right');
+      if (seite(r) !== 'R') f.push('rechts auf einem Auto bleibt links (' + name(r) + ')');
+      if (garAufAuto !== probe[1]) f.push('rechts auf einem Auto waehlt es nicht');
+      if (r && !r.el.classList.contains('gar-a-rolle')) f.push('rechts landet nicht auf der Rolle, sondern ' + name(r));
+      // 4. Zurueck nach links: hoch/runter bleibt in der rechten Spalte, links von einem Knopf geht hinueber.
+      let n = 0;
+      while (r && seite(r) === 'R' && !['button', 'text'].includes(r.kind) && n++ < 20) r = druecke('down');
+      if (!r || seite(r) !== 'R') f.push('runter verlaesst die rechte Spalte (' + name(r) + ')');
+      r = druecke('left');
+      if (seite(r) === 'R' && r.zeile) r = druecke('left');   // Farbklecks vor dem Namen
+      if (seite(r) !== 'L') f.push('links von einem Knopf rechts bleibt rechts (' + name(r) + ')');
+      // Kreis in der rechten Spalte: zurueck zum gewaehlten Auto.
+      setze((x) => x.el.classList.contains('gar-a-rolle'));
+      if (!menuNavGarageZurueck() || !cur() || cur().el._car !== probe[1]) f.push('Kreis rechts fuehrt nicht zum gewaehlten Auto (' + name(cur()) + ')');
+      // 5. Links von einer Aktion (kein Auto) nach rechts: raeumlich in die rechte Spalte, und zurueck.
+      setze((x) => x.el.querySelector && x.el.querySelector('.gar-karte-neu'));
+      r = druecke('right');
+      if (seite(r) !== 'R') f.push('rechts von "+ Auto verbinden" bleibt ' + seite(r));
+      // 6. Alles erreichbar: jede Spalte mit hoch/runter ablaufen, geteilte Zeilen mit links/rechts.
+      const besucht = new Set();
+      const lauf = (start) => {
+        if (!setze(start)) { f.push('Startzeile fehlt'); return; }
+        const N = menuNavRows().length + 2;
+        for (let k = 0; k < N; k++) {
+          const z = cur();
+          besucht.add(z.el);
+          if (z.zeile) {
+            let s = z, m = 0;
+            while (m++ < 4) { const s2 = druecke('right'); if (!s2 || s2.zeile !== z.zeile || s2 === s) break; besucht.add(s2.el); s = s2; }
+            setze((x) => x.el === z.el);
+          }
+          druecke('down');
+        }
+      };
+      garAufAuto = probe[0]; renderGarage();
+      lauf(autoZeile(probe[0]));
+      lauf((x) => x.el.classList.contains('gar-a-rolle'));
+      const fehlt = [];
+      const fokus = [...$('gar-list').querySelectorAll('button, select, input, a[href]')]
+        .filter((c) => menuNavSichtbar(c) && !c.disabled);
+      fokus.forEach((c) => {
+        const ok = menuNavRows().some((x) => besucht.has(x.el) && (x.control === c || x.el === c
+          || (['range', 'select', 'toggle'].includes(x.kind) && x.el.contains(c))));
+        if (!ok) fehlt.push((c.textContent || c.getAttribute('aria-label') || c.className || c.tagName).trim().slice(0, 20));
+      });
+      if (fehlt.length) f.push('nicht erreichbar: ' + fehlt.join(', '));
+      // 7. Sichtbarer Fokusrahmen, und die virtuelle Fahrt springt ebenfalls nach rechts.
+      setze(autoZeile(probe[0]));
+      const sel = document.querySelector('.menu-nav-sel');
+      if (!sel || getComputedStyle(sel).outlineStyle === 'none') f.push('kein Fokusrahmen am Auto');
+      setze((x) => x.el.classList.contains('gar-a-virtuell'));
+      r = druecke('right');
+      if (!garVirtuellAuf || seite(r) !== 'R') f.push('rechts auf "Virtuell fahren" zeigt die Optionen nicht');
+    } catch (e) {
+      f.push('Fehler: ' + e.message);
+    } finally {
+      for (let i = garage.length - 1; i >= 0; i--) if (probe.includes(garage[i])) garage.splice(i, 1);
+      garAufAuto = merk.auf; garVirtuellAuf = merk.virt;
+      carRetag();
+      renderGarage();
+      garScrollStand.l = merk.l; garScrollStand.r = merk.r;
+      if (merkTab) showTab(merkTab);
+      if (merkSub) showSubpage(merkSub.id.replace(/^sub-/, ''));
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Autos erreichbar, rechts waehlt und wechselt, links/Kreis zurueck, alle Bedienelemente erreichbar' };
+  });
+
+  stAdd('Online v1.3.15: Schluessel (Spiegel gleich, rueckwaerts anders) wie im Apps Script', () => {
+    const f = [];
+    // Erwartete Werte aus stSchluessel/stMinRundeMs des Apps Scripts (tools/challenges-apps-script.gs).
+    const soll = { 'SGR2GRGRLR3G@270': ['SGL2GLGLRL3G', 2016], 'SG4R3G4R3': ['SG4L3G4L3', 2379],
+                   'SG3HG3H': ['SG3HG3H', 1771], 'SGJG3J': ['SGHG3H', 1440], 'SG2R3G2R2L': ['SG2L3G2L2R', 1718] };
+    for (const code of Object.keys(soll)) {
+      const tiles = codeToTrack(code).tiles;
+      const k = skSchluessel(tiles);
+      if (k !== soll[code][0]) f.push(code + ' -> ' + k + ' statt ' + soll[code][0]);
+      if (skSchluessel(skSpiegelLR(tiles)) !== k) f.push(code + ': Spiegelbild anderer Schluessel');
+      const p = codeToTrack(k + '@90');
+      if (!p || skSchluessel(p.tiles) !== k) f.push(code + ': mit Drehung anders');
+      // Mindestrunde der App (2,5 m/s) liegt hoechstens 5 % ueber der des Skripts, nie darunter.
+      const app = chMinRundeMs({ code: k, runden: 1 });
+      if (!(soll[code][1] <= app && soll[code][1] >= app * 0.95)) f.push(code + ': Mindestrunde App ' + app + ' / Skript ' + soll[code][1]);
+    }
+    // Rueckwaerts gefahren ist eine andere Strecke (nicht symmetrische Bahn).
+    const asym = codeToTrack('SG2R3G2R2L').tiles;
+    if (skSchluessel(chSpiegelTiles(asym)) === skSchluessel(asym)) f.push('rueckwaerts gleicher Schluessel');
+    // Die lokalen Time-Attack-Bestzeiten behalten ihren Schluessel (rueckwaerts = dieselbe).
+    if (bestzeitSchluessel(chSpiegelTiles(asym)) !== bestzeitSchluessel(asym)) f.push('bestzeitSchluessel veraendert');
+    // Laengen je Teil wie ST_LAENGE_M im Apps Script.
+    const ST = { S: 0.43, G: 0.43, E: 0.43, B: 0.86, R: 0.38746, L: 0.38746, K: 0.19373, M: 0.19373, W: 0.58643, Q: 0.58643, H: 0.80034, J: 0.80034 };
+    for (const b of Object.keys(ST)) {
+      const l = trackLaengeM([{ type: TRACK_CODE_TYPE[b] }]);
+      if (Math.abs(l - ST[b]) > 0.0005) f.push(b + ': App ' + l.toFixed(5) + ' m, Skript ' + ST[b]);
+    }
+    // Jedes Preset ist ein bekanntes Fahrgefuehl (dieselbe Liste steht im Apps Script).
+    Object.keys(PRESETS).forEach((k) => { if (SK_FAHRGEFUEHLE.indexOf(k) < 0) f.push('Preset fehlt in SK_FAHRGEFUEHLE: ' + k); });
+    // Alte lokale Ablage (1.3.20, Schluessel rueckwaerts = dieselbe) wird nach dem gefahrenen Code einsortiert.
+    const KEY = SK_STORE, KV = SK_STORE_V;
+    const merk = { a: localStorage.getItem(KEY), v: localStorage.getItem(KV) };
+    try {
+      const rueck = chSpiegelTiles(asym);
+      localStorage.setItem(KEY, JSON.stringify({ [bestzeitSchluessel(asym)]: [{ zeit: 5000, runden: [5000], code: trackToCode(rueck, 0) }] }));
+      localStorage.removeItem(KV);
+      const neu = skLokalAlle();
+      if (!neu[skSchluessel(rueck)] || neu[skSchluessel(asym)]) f.push('Wanderung: ' + Object.keys(neu).join(','));
+      if (localStorage.getItem(KV) !== '2') f.push('Wanderung nicht vermerkt');
+    } finally {
+      if (merk.a === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, merk.a);
+      if (merk.v === null) localStorage.removeItem(KV); else localStorage.setItem(KV, merk.v);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '5 Codes wie im Skript, Spiegel und Drehung gleich, rueckwaerts anders, Presets bekannt, Wanderung' };
   });

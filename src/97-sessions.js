@@ -529,6 +529,12 @@
   const MP_HEARTBEAT_MS = 5000; // Lebenszeichen, damit die eigene Zeile nicht blass wird
   const mp = { host: '', name: '', id: '', an: false, timer: null, letzterBericht: 0,
                zuschauer: 0, posTimer: null, bekannt: null };
+  // v1.3.5: laeuft dieses Telefon als Host (Plugin OmegaHost, 97b-app.js), und unter welcher
+  // Adresse? Fuer den Stand in der Autos-Kachel (konsoleMpStatus).
+  const mpAppHost = { laeuft: false, url: '' };
+  function mpStatusMelden() {
+    if (typeof konsoleMpStatus === 'function') konsoleMpStatus();
+  }
   // POSITIONEN NUR, WENN JEMAND ZUSIEHT. Der Host zaehlt die Info-Screens (zuschauer in
   // /mp/state); ist keiner da, bleibt es bei Rundenschluss und Lebenszeichen wie bisher.
   // Mit Zuschauer drei Berichte je Sekunde - der Info-Screen rechnet dazwischen weiter.
@@ -1059,6 +1065,7 @@
     mpHolen();
     log('Mehrspieler: bei ' + mp.host + ' angemeldet als "' + (mp.name || 'ohne Namen')
         + '".', 'info');
+    mpStatusMelden();
   }
 
   function mpLeave() {
@@ -1076,6 +1083,7 @@
     if (mp.timer !== null) { clearInterval(mp.timer); mp.timer = null; }
     mpSay(t('nicht verbunden'));
     log('Mehrspieler verlassen.', 'info');
+    mpStatusMelden();
   }
 
   // ============================== INFO-SCREEN ==============================
@@ -1249,6 +1257,7 @@
     mpiHolen();
     if (mpi.rahmen === null) mpi.rahmen = requestAnimationFrame(mpiMalen);
     log('Info-Screen: zeigt ' + h + '.', 'info');
+    mpStatusMelden();
     return true;
   }
 
@@ -1257,6 +1266,7 @@
     if (mpi.timer !== null) { clearInterval(mpi.timer); mpi.timer = null; }
     if (mpi.rahmen !== null) { cancelAnimationFrame(mpi.rahmen); mpi.rahmen = null; }
     if ($('mp-info')) $('mp-info').hidden = true;
+    mpStatusMelden();
   }
 
   if ($('mp-info-join')) $('mp-info-join').addEventListener('click', () => mpiStart());

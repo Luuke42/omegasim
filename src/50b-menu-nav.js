@@ -43,7 +43,8 @@
   // bei jedem keydown (auch den vom Betriebssystem wiederholten - das native Wiederholen
   // ersetzt hier nur den Zeitgeber, die Beschleunigung rechnet trotzdem diese Uhr) und
   // bei jedem keyup mit gehalten=false.
-  let menuNavHoldDir = null;         // 'left' | 'right' | null, null sofort beim Loslassen
+  let menuNavHoldDir = null;
+  let menuNavSeitSperre = null;      // v1.3.31: Richtung, die nach einem Sprung zur Seite bis zum Loslassen ruht         // 'left' | 'right' | null, null sofort beim Loslassen
   let menuNavHoldStart = 0;          // Beginn des AKTUELLEN, durchgehenden Zugs
   let menuNavLastStep = 0;
   const MENU_NAV_REPEAT_START_MS = 300;  // erstes Wiederholen nach dem ersten Schritt
@@ -176,8 +177,28 @@
     if (back && menuNavSichtbar(back)) rows.push({ el: back, kind: 'button', control: back });
     if (optRows.length) {
       optRows.forEach((row) => {
-        const control = menuNavControlFor(row);
-        if (control) rows.push({ el: row, kind: menuNavKindOf(control), control });
+        // v1.3.31 GEMELDET: "Im Garagenmenue ... kann nicht nach oben zum Auto mit der Auswahl gehen."
+        // Die Autozeilen links haben seit v1.1.25 kein Bedienelement mehr (die Rolle steht rechts) und
+        // fielen deshalb aus der Liste. Eine Zeile, die selbst etwas tut (Sprungziel oder Klick),
+        // zaehlt jetzt als Knopf.
+        const control = menuNavControlFor(row)
+          || ((row.dataset.xSprung || typeof row.onclick === 'function') ? row : null);
+        if (!control) return;
+        const kind = menuNavKindOf(control);
+        // Mehrere Knoepfe/Felder in einer Knopf- oder Textzeile (Garage: Farbklecks und Name, Foto und
+        // Foto entfernen) werden einzeln angesteuert, sonst war nur das erste erreichbar. Wertzeilen
+        // (Regler, Auswahl) bleiben eine Zeile: ihre Pfeilknoepfe ersetzt links/rechts.
+        // hoch/runter ueberspringt die Teile derselben Zeile (zeile), links/rechts geht dazwischen.
+        if (kind === 'button' || kind === 'text') {
+          const teile = control === row ? [] : [...row.querySelectorAll(
+            'button:not(.opt-info-btn), select, input[type="checkbox"], input[type="text"], input[type="number"]',
+          )].filter((el) => !el.closest('.opt-label') && !el.disabled && menuNavSichtbar(el));
+          if (teile.length > 1) {
+            teile.forEach((el) => rows.push({ el, kind: menuNavKindOf(el), control: el, zeile: row }));
+            return;
+          }
+        }
+        rows.push({ el: row, kind, control });
         // KEIN EIGENER ZEILENEINTRAG MEHR fuer den Info-Knopf (bis B2/Phase-B-Feinschliff):
         // jede erklaerte Zeile brauchte damit zwei Tastendruecke, um vorbeizukommen. Der
         // Knopf bleibt im DOM (98c-opt-info.js braucht ihn fuers Antippen), aber
@@ -279,28 +300,42 @@
   // derselben Reihe bleibt. Seitwaerts nur zu Kacheln, die sich senkrecht UEBERLAPPEN - sonst
   // spraenge rechts am Rand schraeg nach oben; bei ACC passiert dort einfach nichts. Aus dem
   // Mock-up uebernommen und dort ausprobiert.
-  function menuNavRaum(dir) {
+  // spalten (v1.3.31): auch fuer Zeilenlisten in Spalten (Garage), nicht nur Kacheln. Steht seitlich
+  // nichts auf gleicher Hoehe (die eine Spalte ist kuerzer oder anders gescrollt), gilt das naechste
+  // Element, das GANZ auf jener Seite liegt. Bei Kacheln bleibt es beim ACC-Verhalten: am Rand nichts.
+  function menuNavRaum(dir, spalten) {
     const rows = menuNavRows();
     if (!rows.length) return false;
     if (!menuNavGezeigt) { menuNavGezeigt = true; menuNavRender(); menuNavTonBewegen(); return true; }
     const cur = rows[menuNavIndex] || rows[0];
     const a = cur.el.getBoundingClientRect();
     const ax = a.left + a.width / 2, ay = a.top + a.height / 2;
-    let best = -1, bestWert = Infinity;
+    let best = -1, bestWert = Infinity, ersatz = -1, ersatzWert = Infinity;
     rows.forEach((r, i) => {
       if (r === cur) return;
       const b = r.el.getBoundingClientRect();
       const bx = b.left + b.width / 2, by = b.top + b.height / 2;
       const selbeZeile = b.bottom > a.top + 4 && b.top < a.bottom - 4;
       let haupt, quer;
-      if (dir === 'right') { if (bx <= ax + 2 || !selbeZeile) return; haupt = b.left - a.right; quer = Math.abs(by - ay); }
-      else if (dir === 'left') { if (bx >= ax - 2 || !selbeZeile) return; haupt = a.left - b.right; quer = Math.abs(by - ay); }
+      if (dir === 'right' || dir === 'left') {
+        if (dir === 'right' ? bx <= ax + 2 : bx >= ax - 2) return;
+        haupt = dir === 'right' ? b.left - a.right : a.left - b.right;
+        quer = Math.abs(by - ay);
+        if (!selbeZeile) {
+          if (spalten && haupt >= -2) {
+            const w = Math.max(0, haupt) + quer * 2.5;
+            if (w < ersatzWert) { ersatzWert = w; ersatz = i; }
+          }
+          return;
+        }
+      }
       else if (dir === 'down') { if (by <= ay + 2) return; haupt = b.top - a.bottom; quer = Math.abs(bx - ax); }
       else { if (by >= ay - 2) return; haupt = a.top - b.bottom; quer = Math.abs(bx - ax); }
       const wert = Math.max(0, haupt) + quer * 2.5
         - ((dir === 'down' || dir === 'up') && cur.el.contains(r.el) ? 1000 : 0);
       if (wert < bestWert) { bestWert = wert; best = i; }
     });
+    if (best < 0) best = ersatz;
     // Am Rand einer Kachel mit Wert (data-quad, zeigt ◀ ▶): den Wert umschalten statt nichts
     // zu tun (v0.8.41, GEMELDET: Renntyp liess sich mit dem Steuerkreuz nicht waehlen).
     if (best < 0 && (dir === 'left' || dir === 'right') && cur.el.dataset && cur.el.dataset.quad
@@ -330,7 +365,24 @@
     if (!rows.length) return false;
     if (menuNavIstRaum()) { if (gehalten !== false) return menuNavRaum(dir); return true; }
     const row = rows[menuNavIndex];
-    if (!row || !['range', 'select', 'toggle', 'teile'].includes(row.kind)) return false;
+    if (!row) return false;
+    // Nach einem Sprung zur Seite bleibt die gehaltene Taste wirkungslos, bis sie losgelassen ist -
+    // sonst verstellte das Weiterhalten gleich den Wert der Zeile, auf der man gelandet ist.
+    if (menuNavSeitSperre === dir) { if (gehalten === false) menuNavSeitSperre = null; return true; }
+    // v1.3.31 GEMELDET: "Im Garagenmenue komme ich nicht von der linken zur rechten Haelfte." Auf einem
+    // Knopf oder Textfeld hatte links/rechts keine Aufgabe. Jetzt geht es dort raeumlich zum Nachbarn
+    // (andere Spalte, anderer Knopf derselben Zeile); rechts auf einem Auto waehlt es wie X und springt
+    // zu seinen Einstellungen. Wertzeilen verstellen weiter ihren Wert.
+    if (row.kind === 'button' || row.kind === 'text') {
+      if (gehalten === false) return true;
+      if (!menuNavGezeigt) return menuNavRaum(dir, true);
+      menuNavTextfeldLoesen();
+      const vorher = menuNavIndex;
+      if (!(dir === 'right' && menuNavSprung(row, true))) menuNavRaum(dir, true);
+      if (menuNavIndex !== vorher) menuNavSeitSperre = dir;
+      return true;
+    }
+    if (!['range', 'select', 'toggle', 'teile'].includes(row.kind)) return false;
     menuNavGezeigt = true;
     menuNavAdjustGehalten(dir, gehalten !== false);
     return true;
@@ -354,14 +406,17 @@
     // sehen war.
     // v1.1.11 Garage wie die Meisterschaft: links (Autos, Aktionen) und rechts (Einstellungen) sind zwei
     // Listen; hoch/runter bleibt in der Spalte, in der der Fokus steht.
+    // v1.3.31: Teile derselben Zeile (Farbklecks und Name) sind EIN Schritt; man landet auf dem ersten.
     const spalte = (r) => (r && r.el && r.el.closest) ? r.el.closest('.gar-a-links, .gar-a-rechts') : null;
+    const zeileVon = (r) => r.zeile || r.el;
+    if (menuNavIndex >= rows.length) menuNavIndex = 0;
     const sp = spalte(rows[menuNavIndex]);
-    if (menuNavGezeigt && sp) {
-      const idx = rows.map((r, i) => i).filter((i) => spalte(rows[i]) === sp);
-      const k = idx.indexOf(menuNavIndex);
+    if (menuNavGezeigt) {
+      const idx = rows.map((r, i) => i).filter((i) => !sp || spalte(rows[i]) === sp)
+        .filter((i, k, a) => k === 0 || zeileVon(rows[a[k - 1]]) !== zeileVon(rows[i]));
+      const z = zeileVon(rows[menuNavIndex]);
+      const k = Math.max(0, idx.findIndex((i) => zeileVon(rows[i]) === z));
       menuNavIndex = idx[((k + (dir === 'up' ? -1 : 1)) % idx.length + idx.length) % idx.length];
-    } else if (menuNavGezeigt) {
-      menuNavIndex = ((menuNavIndex + (dir === 'up' ? -1 : 1)) % rows.length + rows.length) % rows.length;
     }
     menuNavGezeigt = true;
     menuNavRender();
@@ -379,6 +434,26 @@
     menuNavIndex = ziel; menuNavArmed = false; menuNavGezeigt = true;
     menuNavRender();
     menuNavTonBewegen();
+    return true;
+  }
+
+  // Sprungziel (data-x-sprung, Garage): die Zeile waehlt sich selbst (_vorSprung, z. B. das markierte
+  // Auto), dann steht die Auswahl auf der ersten passenden Zeile. nurRechts (Steuerkreuz rechts, v1.3.31):
+  // nur, wenn das Ziel auch wirklich rechts liegt (einspaltig steht es darunter). true = gesprungen.
+  function menuNavSprung(row, nurRechts) {
+    if (!row || !row.el || !row.el.dataset || !row.el.dataset.xSprung) return false;
+    const sprung = row.el.dataset.xSprung;
+    if (nurRechts) {
+      const ziel0 = document.querySelector(sprung);
+      if (!ziel0 || ziel0.getBoundingClientRect().left < row.el.getBoundingClientRect().right - 2) return false;
+    }
+    if (typeof row.el._vorSprung === 'function') row.el._vorSprung();
+    const rows = menuNavRows();
+    const ziel = rows.findIndex((r) => r.el.matches && r.el.matches(sprung));
+    if (ziel < 0) return false;
+    menuNavIndex = ziel; menuNavArmed = false; menuNavGezeigt = true;
+    menuNavRender();
+    if (nurRechts) menuNavTonBewegen(); else menuNavTonAktivieren();
     return true;
   }
 
@@ -401,12 +476,7 @@
     // Sprungziel (v0.9.12, Garage): X auf einer Zeile mit data-x-sprung springt zur ersten
     // passenden Zeile, statt das Feld zu "bewaffnen". v1.1.11: vorher waehlt die Zeile sich selbst
     // (_vorSprung, z. B. das markierte Auto), dann ist rechts schon das Richtige zu sehen.
-    if (row.el && row.el.dataset && row.el.dataset.xSprung) {
-      const sprung = row.el.dataset.xSprung;
-      if (typeof row.el._vorSprung === 'function') { row.el._vorSprung(); rows = menuNavRows(); }
-      const ziel = rows.findIndex((r) => r.el.matches && r.el.matches(sprung));
-      if (ziel >= 0) { menuNavIndex = ziel; menuNavArmed = false; menuNavRender(); menuNavTonAktivieren(); return; }
-    }
+    if (menuNavSprung(row, false)) return;
     if (row.kind === 'range' || row.kind === 'select') {
       menuNavArmed = !menuNavArmed;
       menuNavRender();
@@ -438,7 +508,8 @@
     const rows = menuNavRows();
     if (!rows.length) return false;
     const row = rows[menuNavIndex];
-    const info = row.el.querySelector ? row.el.querySelector('.opt-info-btn') : null;
+    const zeile = row.zeile || row.el;
+    const info = zeile.querySelector ? zeile.querySelector('.opt-info-btn') : null;
     if (!info) return false;
     info.click();
     return true;
@@ -515,6 +586,7 @@
   function menuNavAdjustGehalten(dir, gehalten) {
     const jetzt = Date.now();
     if (!gehalten) {
+      menuNavSeitSperre = null;
       // Sofort und ausnahmslos zuruecksetzen - BESTELLT: "wenn ich die Taste loslasse
       // und druecke, soll sofort wieder kleinschrittig adjustiert werden." Keine
       // Gnadenfrist mehr: nur ein wirklich DURCHGEHENDER Zug beschleunigt.

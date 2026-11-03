@@ -31,16 +31,23 @@
   // Browsers refuse to start audio without a user gesture, so even though sound is on by
   // default we can only actually create the AudioContext once the user interacts. This
   // one-shot listener does it on the very first click/keypress anywhere in the app.
+  // Alle Klangdateien laden (Motor, Effekte, Stimmen, Ansagen, Umgebung). v1.3.5: als EIN
+  // Vorgang fuer die Ladeanimation auf dem Startschirm (ladeAnzeigeMit, 59-lade.js) - sie
+  // laeuft, bis alles da oder gescheitert ist. Reihenfolge wie bisher.
+  function klangDateienLaden() {
+    // v1.3.31: je Gruppe ein eigener Grund, damit die Anzeige sagt, was gerade laedt.
+    const mit = (grund, p) => (typeof ladeAnzeigeMit === 'function' ? ladeAnzeigeMit(grund, p) : p);
+    const laeufe = [mit('klang-motor', loadEngineSamples()), mit('klang-effekte', loadFxSamples()),
+                    mit('klang-stimmen', loadVoiceSamples()), mit('klang-ansagen', rennstandClipsLaden(lang))];
+    if (!('speechSynthesis' in window)) laeufe.push(mit('klang-zahlen', zahlenClipsLaden(lang)));
+    laeufe.push(mit('klang-umgebung', loadAmbience()));
+    mit('klang', Promise.allSettled(laeufe));
+  }
   function unlockAudioOnFirstGesture() {
     if (soundEnabled) {
       initEngineSound();
       if (audioCtx.state === 'suspended') audioCtx.resume();
-      loadEngineSamples(); // needs the AudioContext, so it can only start from here
-      loadFxSamples();
-      loadVoiceSamples();
-      rennstandClipsLaden(lang);
-      if (!('speechSynthesis' in window)) zahlenClipsLaden(lang);
-      loadAmbience();
+      klangDateienLaden(); // needs the AudioContext, so it can only start from here
     }
     document.removeEventListener('pointerdown', unlockAudioOnFirstGesture);
     document.removeEventListener('keydown', unlockAudioOnFirstGesture);
@@ -53,12 +60,7 @@
     if (soundEnabled) {
       initEngineSound(); // lazy-start on this user gesture, per browser autoplay policy
       if (audioCtx.state === 'suspended') audioCtx.resume();
-      loadEngineSamples();
-      loadFxSamples();
-      loadVoiceSamples();
-      rennstandClipsLaden(lang);
-      if (!('speechSynthesis' in window)) zahlenClipsLaden(lang);
-      loadAmbience();
+      klangDateienLaden();
       refreshAmbienceGains();
     } else if (engineGain) {
       rennstandAbbrechen();

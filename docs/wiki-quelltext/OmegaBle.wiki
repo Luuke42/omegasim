@@ -74,6 +74,8 @@ OmegaBle hat keine eigenen Schalter. Wirksam sind diese Optionen und festen Wert
 |-
 | Bekannte Autos beim Start verbinden (Optionen → System) || an/aus || an || verbindet nacheinander gemerkte Autos über ihre MAC-Adresse, ohne Auswahlfenster; vorher <code>alleSchliessen</code>, wenn die Garage leer ist || <code>setting-autoverbinden</code>, <code>autoVerbindenStart()</code>
 |-
+| Funkpriorität beim Start (Optionen → System, WIP, seit 1.3.15) || an/aus || an || zu Beginn des Countdowns gesteuerte Autos <code>HIGH</code>, alle anderen <code>BALANCED</code>, im Abstand von 150 ms; die Meldetakt-Wache zieht dann nur noch gesteuerte Autos hoch || <code>setting-funk-prio</code>, <code>funkPrioritaetVorStart()</code>
+|-
 | Funk-Rundlauf (Optionen → System) || Anzeige || – || Messzeile, jede Sekunde neu, nur wenn sichtbar || <code>#funk-rundlauf</code>
 |-
 | Entwicklertools zeigen (Optionen → System) || an/aus || aus || BLE-Werkbank mit eigenem Verbindungsweg || <code>setting-dev</code>
@@ -98,7 +100,9 @@ OmegaBle hat keine eigenen Schalter. Wirksam sind diese Optionen und festen Wert
 |-
 | Neu verbinden nach Abriss || fest || Wartezeit 1 s × Versuch, höchstens 5 Versuche || danach Auto entfernen || <code>VERBINDE_NEU_MS</code>, <code>VERBINDE_NEU_MAX</code>
 |-
-| Meldetakt-Schwelle || fest || 75 ms, höchstens alle 20 s || fordert das schnelle Verbindungsintervall neu an || <code>MELDE_LANGSAM_MS</code>, <code>MELDE_PRIO_PAUSE_MS</code>
+| Meldetakt-Schwelle || fest || 120 ms für 5 s, einmal je Verbindung (seit 1.2.45) || fordert das schnelle Verbindungsintervall neu an || <code>MELDE_LANGSAM_MS</code>, <code>MELDE_LANGSAM_DAUER_MS</code>
+|-
+| Abstand der Prioritätsanfragen beim Start || fest || 150 ms je Auto || verteilt die Neuaushandlungen über den Countdown || <code>FUNK_PRIO_ABSTAND_MS</code>
 |-
 | NPC-Sendebudget || fest || 30 Pakete/s für alle NPCs zusammen, unveränderte Befehle höchstens alle 200 ms || entlastet den Funkadapter || <code>NPC_BUDGET_PRO_S</code>, <code>NPC_GLEICH_MS</code>
 |}
@@ -134,6 +138,8 @@ Der übrige Code von OmegaSim merkt nicht, dass er in einer App läuft: Die Brü
 | <code>schliessen</code> || <code>@PluginMethod</code> || <code>deviceId</code> || <code>geschlossen</code> (boolean) || UI-Thread || eine Verbindung hart schließen (seit 1.2.3)
 |-
 | <code>alleSchliessen</code> || <code>@PluginMethod</code> || – || <code>anzahl</code> (Zahl geschlossener Verbindungen) || UI-Thread || alle Verbindungen des Community-Plugins schließen (seit 1.2.3)
+|-
+| <code>prioritaetSetzen</code> || <code>@PluginMethod</code> || <code>deviceId</code>, <code>stufe</code> (<code>hoch</code>, <code>ausgewogen</code>, <code>sparsam</code>) || <code>ok</code>, <code>grund</code> (<code>angenommen</code>, <code>abgelehnt</code>, <code>nicht-verbunden</code>, <code>keine-berechtigung</code>, <code>fehler: …</code>), <code>stufe</code>; unbekannte Stufe oder fehlende <code>deviceId</code>: <code>reject</code> || Schreib-Thread || Verbindungspriorität je Auto (seit 1.3.15)
 |-
 | <code>direktNeu</code> || <code>@PluginMethod</code> || – || <code>direkt</code>, <code>direktFehler</code>; danach lädt die Seite nach 150 ms neu || UI-Thread || Direktwege neu anmelden (seit 1.0.40)
 |-
@@ -311,13 +317,28 @@ beim Verbinden:          requestConnectionPriority(HIGH)
 nach 5 s:                requestConnectionPriority(HIGH)      (einmal)
 bei jeder Meldung:       d = min(1000, jetzt − letzteMeldung)
                          meldeAbstand ← meldeAbstand + (d − meldeAbstand) × 0,05
-wenn meldeAbstand > 75 ms und letzte Anforderung > 20 s her:
+wenn meldeAbstand 5 s lang > 120 ms, einmal je Verbindung
+  (mit „Funkpriorität beim Start“ nur für gesteuerte Autos):
                          requestConnectionPriority(HIGH)
+beim Countdown (Schalter an, seit 1.3.15):
+  gesteuerte Autos:      prioritaetSetzen(hoch)        sofort, dann
+  alle anderen:          prioritaetSetzen(ausgewogen)  je 150 ms später
 </pre>
 * ''meldeAbstand'': gleitender Mittelwert (Glättungsfaktor 0,05) des Abstands zwischen zwei Meldungen dieses Autos.
-* ''75 ms'' (<code>MELDE_LANGSAM_MS</code>): Schwelle; normal meldet ein Auto etwa alle 45 ms.
-* ''20 s'' (<code>MELDE_PRIO_PAUSE_MS</code>): Mindestabstand zweier Anforderungen.
+* ''120 ms'' (<code>MELDE_LANGSAM_MS</code>) und ''5 s'' (<code>MELDE_LANGSAM_DAUER_MS</code>): Schwelle; normal meldet ein Auto etwa alle 45 ms. Bis 1.2.44 galten 75 ms und höchstens alle 20 s.
 Hintergrund: Android geht nach einiger Zeit oft vom schnellen Intervall zurück, und angefordert wurde vor 1.2.3 nur beim Verbinden. Jede Anforderung kann eine Neuaushandlung auslösen, während der der Funk kurz stockt; deshalb wird sie nicht dauernd wiederholt (bis 0.10.4 alle 10 s, was regelmäßige kleine Hänger erzeugte). Mit gekoppeltem Gamepad wurde die 5-s-Anforderung in 1.0.73 ausgelassen und in 1.1.3 wieder eingeführt, weil alte Handys ohne sie stockten<ref><code>meldetaktBeobachten()</code>, <code>src/90-ghosts.js</code>; <code>Gatt._verbinden()</code>, <code>src/05-app-bruecke.js</code>.</ref>.
+
+==== Priorität je Rolle beim Start ====
+Android kennt keine Reihenfolge der Verbindungen, die man „sortieren“ könnte: Jede Verbindung handelt ihr eigenes Verbindungsintervall aus, und alle teilen sich die Sendezeit eines Funkadapters. Was sich steuern lässt, ist die '''Priorität''' je Verbindung (<code>BluetoothGatt.requestConnectionPriority</code>): <code>CONNECTION_PRIORITY_HIGH</code> (kurzes Intervall, etwa 11–15 ms), <code>BALANCED</code> (etwa 30–50 ms) und <code>LOW_POWER</code>. Stehen alle Autos auf HIGH, konkurrieren NPCs, Safety Car und Reinigungswagen mit den gesteuerten Autos um dieselben kurzen Zeitfenster.
+
+Seit 1.3.15 (WIP, Schalter „Funkpriorität beim Start“ unter Optionen → System, Standard an) setzt <code>funkPrioritaetVorStart()</code> zu Beginn des Countdowns – auch vor einem Rennintro – die Priorität je Rolle:
+* gesteuerte Autos (Spieler 1–3: Rolle <code>player</code>, <code>player2</code>, <code>player3</code>) → <code>hoch</code>;
+* alle anderen verbundenen Autos (NPC, Safety Car, Reinigungswagen, „Aus“) → <code>ausgewogen</code>.
+Die gesteuerten Autos kommen zuerst an die Reihe, danach folgt je Auto eine Anfrage im Abstand von 150 ms (<code>FUNK_PRIO_ABSTAND_MS</code>), damit nicht alle Neuaushandlungen gleichzeitig laufen. Bei einem Start mit Ampel stehen die Autos dabei 4–6 s; jede Neuaushandlung kann den Funk eines Autos kurz stocken lassen, und das fällt dort nicht ins Gewicht. Ein eigener Ladebildschirm ist deshalb nicht nötig. Freies Training ohne Ampel löst nichts aus. Startet ein neuer Countdown, bevor der vorige durch ist, entfallen dessen restliche Anfragen. Je Auto erscheint eine Zeile im Protokoll („Funkpriorität HOCH (gesteuert)“ bzw. „AUSGEWOGEN“, bei Misserfolg mit Grund und Weg).
+
+Weg der Anfrage: Die Brücke (<code>OMEGA_BRUECKE.prioritaetSetzen(deviceId, stufe)</code>) ruft <code>OmegaBle.prioritaetSetzen</code>, wenn die APK die Methode kennt. Das erkennt sie an der Methodenliste in <code>Capacitor.PluginHeaders</code>; eine unbekannte Methode würde Capacitor nämlich gar nicht beantworten. Fehlt sie (ältere APK), geht dieselbe Anfrage über <code>requestConnectionPriority</code> des Community-Plugins (Werte 0 = BALANCED, 1 = HIGH, 2 = LOW_POWER). Im Browser gibt es die Methode nicht; dann geschieht nichts.
+
+Mit eingeschaltetem Schalter fordert die Meldetakt-Wache (<code>meldetaktBeobachten()</code>) HIGH nur noch für gesteuerte Autos neu an; sonst würde sie einen absichtlich ausgewogenen NPC wieder hochziehen. Nach dem Rennen wird nichts zurückgestellt. Ein Auto, das sich neu verbindet, fordert beim Verbinden wieder HIGH an und behält das bis zum nächsten Countdown<ref><code>funkPrioritaetVorStart()</code>, <code>meldetaktBeobachten()</code>, <code>src/90-ghosts.js</code>; <code>startRaceCountdown()</code>, <code>src/70-race.js</code>; <code>prioritaetSetzen</code>, <code>src/05-app-bruecke.js</code> und <code>OmegaBlePlugin.java</code>.</ref>.
 
 === Funklast mit mehreren Autos ===
 Jedes fahrende Auto schrieb bis 1.1.23 alle 45 ms: mit vier NPCs und dem Fahrer rund 110 Pakete je Sekunde über einen Adapter. Gemessen in 1.1.16: 4000 geschrieben, 2400 wiederholt, 1200 verworfen, auch Pakete des Fahrers. Seitdem teilen sich die NPCs ein Budget<ref><code>npcSendeAbstand()</code>, <code>writeToCar()</code>, <code>src/90-ghosts.js</code>.</ref>:
@@ -525,7 +546,7 @@ Anzeige „Brücke 0,8/3 ms“: Ein Befehl braucht von der Seite bis OmegaBle im
 * <code>…/OmegaPadNativ.java</code>: <code>aufnehmen()</code>, <code>Js.lesen()</code>
 * <code>src/05-app-bruecke.js</code>: <code>omegaBleBereit()</code>, <code>omegaBleSchreiben()</code>, <code>mitOmegaPause()</code>, <code>omegaInfo()</code>, <code>verwaisteTrennen()</code>, Klassen <code>Merkmal</code>, <code>Dienst</code>, <code>Gatt</code>, <code>Geraet</code>, <code>requestDevice()</code>
 * <code>src/20-protocol.js</code>: <code>funkSchreiben()</code>, <code>funkStatistik()</code>, <code>controlHeartbeat()</code>, <code>herzStatistik()</code>
-* <code>src/90-ghosts.js</code>: <code>verbindeGatt()</code>, <code>verbindeGattSicher()</code>, <code>reconnectCar()</code>, <code>garageGeraetAufnehmen()</code>, <code>autoVerbindenStart()</code>, <code>meldetaktBeobachten()</code>, <code>writeToCar()</code>, <code>npcSendeAbstand()</code>, <code>disconnectCar()</code>
+* <code>src/90-ghosts.js</code>: <code>verbindeGatt()</code>, <code>verbindeGattSicher()</code>, <code>reconnectCar()</code>, <code>garageGeraetAufnehmen()</code>, <code>autoVerbindenStart()</code>, <code>meldetaktBeobachten()</code>, <code>funkPrioritaetVorStart()</code>, <code>writeToCar()</code>, <code>npcSendeAbstand()</code>, <code>disconnectCar()</code>
 * <code>src/50-drive.js</code>: Anzeige <code>#funk-rundlauf</code>
 
 == Weblinks ==

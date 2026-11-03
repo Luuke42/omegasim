@@ -968,16 +968,21 @@
         if (!e.endgueltig && versuch < 2) return new Promise((ok) => setTimeout(ok, 1500)).then(() => senden(versuch + 1));
         throw e;
       });
+    // v1.3.15: dieselbe Schlange traegt auch Zeiten eigener Strecken (art 'strecke-zeit',
+    // 72c-strecken-online.js); die haben keine Challenge-Kennung, sondern einen Streckencode.
+    const strecke = eintrag.art === 'strecke-zeit';
     return senden(0).then(() => {
       chAusgangRaus(eintrag.nr);
       chUploadInfo = { ok: true };
-      log('Challenge: Zeit hochgeladen (' + eintrag.challenge + ').', 'info');
+      log((strecke ? 'Strecke' : 'Challenge') + ': Zeit hochgeladen (' + (strecke ? eintrag.strecke : eintrag.challenge) + ').', 'info');
       chAusgangZeichnen();
-      setTimeout(() => chAuffrischen(true), 2500);
+      if (strecke) { if (typeof skNachUpload === 'function') skNachUpload(eintrag.strecke); }
+      else setTimeout(() => chAuffrischen(true), 2500);
       return true;
     }, (e) => {
       const grund = chUploadGrund(e);
-      const name = (chDef(eintrag.challenge) || {}).name || eintrag.challenge;
+      const name = strecke ? (eintrag.streckenname || eintrag.strecke)
+        : ((chDef(eintrag.challenge) || {}).name || eintrag.challenge);
       if (e.endgueltig) {
         chAusgangRaus(eintrag.nr);
         chUploadInfo = { ok: false, endgueltig: true, grund };
@@ -1604,6 +1609,9 @@
     if (chKarteVollAn && typeof chKarteVoll === 'function') chKarteVoll();
     if (id === 'online') { chOnlineZeichnen(); return; }
     if (id === 'community') { communityZeichnen(); return; }
+    // v1.3.15: Community-Strecken (Liste) und eine Strecke daraus (72c-strecken-online.js).
+    if (id === 'strecken') { skListeZeichnen(); return; }
+    if (id === 'sk') { skDetailZeichnen(); return; }
     const k = 'abcd'.indexOf(id);
     if (k < 0) {
       const def = chDef(id);

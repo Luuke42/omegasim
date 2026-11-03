@@ -299,9 +299,32 @@
   const TRACK_HAIRPIN_LEAD = TRACK_HAIRPIN_LEAD_CM * TRACK_UNITS_PER_CM;
   const TRACK_RADIUS = TRACK_RADIUS_CM * TRACK_UNITS_PER_CM;
   // "Radius 2": die weite 30-Grad-Kurve. Herleitung bei tileRadius().
-  // Wieviel die Engstelle je Seite hereinnimmt, als Anteil der halben Bahnbreite. Eine
-  // DARSTELLUNG und keine Messung - siehe die Begruendung an der Zeichenstelle.
-  const ENGE_ANTEIL = 0.34;
+  // v1.3.15: DIE ENGSTELLE UND DIE STARTGERADE WIE DIE ORIGINALTEILE. BESTELLT: "Engstelle
+  // Bahnteil und Startgerade mit den Bildern aus dem Ordner abgleichen." Vermessen an
+  // photos/engstelle.jpg (900x1500, Fahrbahn 721 px) und photos/startgerade.jpg (800x800,
+  // Fahrbahn 384 px). Laengs: Anteil der Kachel, 0 Anfang, 1 Ende (die Pfeile zeigen auf
+  // den Bildern nach oben, also ist unten der Anfang). Quer: Anteil der halben schwarzen
+  // Fahrbahn, +1 linker (blauer) Rand, -1 rechter (roter) Rand.
+  //
+  // Die Engstelle ist auf dem Original KEINE schmalere Fahrbahn, sondern eine Folge
+  // weisser Querbalken: zuerst einer von links bis zur Mitte, dann zehn von rechts, die
+  // zur Mitte hin laenger werden. Sie sagen, wo man faehrt: erst rechts, dann links -
+  // genau die Linie, die die Engstelle den NPCs schreibt (siehe buildLine).
+  // Je Balken: [laengs, quer von, quer bis]. Dicke 22 von 1500 px.
+  const ENGE_BALKEN = [
+    [0.178, 1, 0],
+    [0.456, -1, -0.858], [0.503, -1, -0.761], [0.549, -1, -0.669], [0.596, -1, -0.575],
+    [0.642, -1, -0.478], [0.688, -1, -0.381], [0.734, -1, -0.287], [0.781, -1, -0.193],
+    [0.827, -1, -0.098], [0.874, -1, 0],
+  ];
+  const ENGE_BALKEN_DICKE = 0.0147;
+  // Die Ziellinie: zwei duenne Linien quer, ueber der oberen eine Reihe weisser Quadrate,
+  // unter der unteren eine zweite, um eine halbe Teilung versetzt - zusammen ein Karoband
+  // bei 80 % der Kachel. Quadrat 15 x 7 px, Teilung 30 px, Linien 2 px.
+  const ZIEL_LAENGS = { reiheOben: 0.8138, linieOben: 0.8081, linieUnten: 0.7956, reiheUnten: 0.79 };
+  const ZIEL_QUADRAT_H = 0.00875, ZIEL_LINIE_D = 0.0025;
+  const ZIEL_QUADRAT_B = 0.078, ZIEL_TEILUNG = 0.156;
+  const ZIEL_ERSTES = { oben: 0.958, unten: 0.875 };
   const TRACK_R2_CM = 112;
   const TRACK_R2 = TRACK_R2_CM * TRACK_UNITS_PER_CM;
   const TRACK_TURN_DEG = 60;
@@ -2862,6 +2885,98 @@
   const ECHT_STREIFEN = TRACK_KERB_W;
   const ECHT_PFEIL_H = 0.75, ECHT_PFEIL_L = 2.3, ECHT_TAKT = 3.1;   // je Streifenhoehe
   const ECHT_BLAU = '#2f9fe6', ECHT_ROT = '#ff4d22', ECHT_WEISS = '#f3f5f8';
+  // ---- DIE BOXENGASSE WIE DAS ORIGINALTEIL (v1.3.5) -----------------------------------
+  // BESTELLT: "Neues Symbol fuer die Boxengasse; Vorlage liegt im photos-Ordner mit dem Namen
+  // boxengasse". Die Vorlage zeigt zwei gerade Teile hintereinander: links der blaue Streifen
+  // durchgehend, rechts weitet sich die rote Kante nach aussen zu einer Bucht und schliesst
+  // wieder. In der Bucht eine Reihe Punkte und quer liegende Striche, die zur Teilfuge in der
+  // Mitte hin kuerzer werden. Masse aus dem Bild, je halber Bahnbreite bzw. Teillaenge:
+  // Bucht ~0,95 tief, oeffnet und schliesst ueber je ~19 % der Laenge (weiches S).
+  const BOX_BUCHT = 0.95, BOX_RAMPE = 0.19;
+  function boxBucht(u) {
+    if (!(u > 0 && u < 1)) return 0;
+    const w = (x) => x * x * (3 - 2 * x);
+    if (u < BOX_RAMPE) return w(u / BOX_RAMPE);
+    if (u > 1 - BOX_RAMPE) return w((1 - u) / BOX_RAMPE);
+    return 1;
+  }
+  // Je Boxenkachel ihr Anfangspunkt s (der letzte Punkt der Kachel davor) und ihr letzter
+  // Punkt b; null, wenn die Strecke keine Box hat.
+  function boxKacheln(pts, tiles) {
+    if (!tiles || !tiles.some((x) => x.type === TILE_TYPE.PIT)) return null;
+    const r = {};
+    for (let i = 1; i < pts.length; i++) {
+      const k = pts[i].tile;
+      if (k < 0 || !tiles[k] || tiles[k].type !== TILE_TYPE.PIT) continue;
+      if (!r[k]) r[k] = { s: i - 1, b: i };
+      else r[k].b = i;
+    }
+    return r;
+  }
+  // Eine Kante im Abstand `abstand` (mit Vorzeichen, wie offsetPath), die ueber den
+  // Boxenkacheln um `tiefe` * boxBucht() nach aussen geht. Dichter abgetastet (FEIN je
+  // Abschnitt), weil eine Boxenkachel nur 14 Punkte auf 86 cm hat - die Rampe laege sonst auf
+  // drei Punkten. map[i] ist die Stelle von Originalpunkt i in der dichten Linie.
+  function boxKante(pts, nrm, box, abstand, tiefe) {
+    const FEIN = 6, linie = [], map = [];
+    const u = (i, k) => (i - box[k].s) / Math.max(1, box[k].b - box[k].s);
+    for (let i = 0; i < pts.length; i++) {
+      const k = pts[i].tile;
+      if (i > 0 && box[k]) {
+        for (let f = 1; f < FEIN; f++) {
+          const q = f / FEIN, a = pts[i - 1], z = pts[i];
+          let nx = nrm[i - 1].x + (nrm[i].x - nrm[i - 1].x) * q, ny = nrm[i - 1].y + (nrm[i].y - nrm[i - 1].y) * q;
+          const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+          const d = abstand + tiefe * boxBucht(u(i - 1, k) + q / Math.max(1, box[k].b - box[k].s));
+          linie.push([a.x + (z.x - a.x) * q + nx * d, a.y + (z.y - a.y) * q + ny * d]);
+        }
+      }
+      map.push(linie.length);
+      const d = abstand + (box[k] ? tiefe * boxBucht(u(i, k)) : 0);
+      linie.push([pts[i].x + nrm[i].x * d, pts[i].y + nrm[i].y * d]);
+    }
+    return { linie, map };
+  }
+  // Bucht, Teilfuge und Boxenmarkierungen jeder Boxenkachel (nur im echten Stil). SIDE -1 =
+  // Fahrerrechts, die rote Seite - wie auf dem Originalteil.
+  function boxBuchtSvg(pts, nrm, box, half, P2) {
+    const SIDE = -1;
+    const kante = boxKante(pts, nrm, box, half * SIDE, BOX_BUCHT * half * SIDE);
+    let out = '';
+    for (const k of Object.keys(box)) {
+      const { s, b } = box[k];
+      const aussen = kante.linie.slice(kante.map[s], kante.map[b] + 1);
+      const innen = [];
+      for (let i = b; i >= s; i--) {
+        innen.push([pts[i].x + nrm[i].x * (half - 0.6) * SIDE, pts[i].y + nrm[i].y * (half - 0.6) * SIDE]);
+      }
+      out += `<path class="box-bucht" d="M ${aussen.concat(innen).map(P2).join(' L ')} Z" fill="#0d0f13" stroke="none"/>`;
+      // Punkt bei Anteil uu der Kachel, v halbe Bahnbreiten nach rechts.
+      const A = pts[s], Z = pts[b], n = nrm[Math.min(b, s + 1)];
+      const P = (uu, v) => [A.x + (Z.x - A.x) * uu + n.x * v * half * SIDE,
+                            A.y + (Z.y - A.y) * uu + n.y * v * half * SIDE];
+      // Die Fuge zwischen den beiden Originalteilen, quer ueber Bahn und Bucht.
+      out += `<path d="M ${P2(P(0.5, -1))} L ${P2(P(0.5, 1 + BOX_BUCHT))}" stroke="#3a404b" stroke-width="0.6"/>`;
+      let striche = '', punkte = '';
+      const pr = 0.3;
+      for (const spiegel of [false, true]) {
+        for (let j = 0; j < 10; j++) {
+          const uu0 = 0.257 + j * 0.215 / 9, uu = spiegel ? 1 - uu0 : uu0;
+          const hl = 0.33 - j * (0.33 - 0.155) / 9;          // lang aussen, kurz an der Fuge
+          striche += ` M ${P2(P(uu, 1.33 - hl))} L ${P2(P(uu, 1.33 + hl))}`;
+        }
+        for (let j = 0; j < 8; j++) {
+          const uu0 = 0.257 + j * 0.165 / 7, uu = spiegel ? 1 - uu0 : uu0;
+          const [x, y] = P2(P(uu, 0.88)).split(' ');
+          punkte += `<rect class="box-punkt" x="${(+x - pr).toFixed(1)}" y="${(+y - pr).toFixed(1)}" `
+                  + `width="${(pr * 2).toFixed(1)}" height="${(pr * 2).toFixed(1)}" fill="${ECHT_WEISS}"/>`;
+        }
+      }
+      out += `<path class="box-striche" d="${striche.trim()}" stroke="${ECHT_WEISS}" stroke-width="0.45" fill="none"/>`
+           + punkte;
+    }
+    return out;
+  }
   // ---- HAARNADEL-KERBS (v1.0.18, dritter Versuch) -------------------------------------------
   // BESTELLT: "Haarnadel-Kerbs passend zu photos/haarnadel.png" - und nach zwei Entwuerfen: "Die
   // Form der Pfeile passt nicht. Es sind keine Pfeile mehr sondern verzerrte Pfeile, der weisse
@@ -3044,9 +3159,14 @@
     // passen die Teile am Ende nicht perfekt zusammen", rund 3 cm Luecke im Randstreifen an der
     // letzten Fuge. Die Geometrie schliesst exakt (Haarnadel-Anfahrt 21,91 cm, TRACK_HAIRPIN_LEAD_CM).
     const anfang = (k) => (k === 0 ? 0 : kachelTab.start[k]);
+    // v1.3.5: rechts (rot) folgt der Streifen ueber der Boxengasse der Bucht (boxKante).
+    const box = boxKacheln(pts, tiles);
     let out = '';
     for (const [seite, farbe] of [[1, ECHT_BLAU], [-1, ECHT_ROT]]) {
-      const linie = offsetPath(pts, nrm, mitte * seite);
+      const kb = seite === -1 && box ? boxKante(pts, nrm, box, mitte * seite, BOX_BUCHT * half * seite) : null;
+      const linie = kb ? kb.linie : offsetPath(pts, nrm, mitte * seite);
+      // Originalpunkt -> Stelle in `linie` (mit Bucht dichter abgetastet, sonst gleich).
+      const M = kb ? (i) => kb.map[i] : (i) => i;
       if (!mitNadeln) {
         out += `<path d="M ${linie.map(P2).join(' L ')}" fill="none" stroke="${ECHT_WEISS}" `
              + `stroke-width="${bw.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="round"/>`;
@@ -3059,7 +3179,7 @@
           if (!ende && lauf === null) lauf = i0;
           if (ende && lauf !== null) {
             const bis = k < nTeile ? kachelTab.start[k] : pts.length - 1;
-            if (bis > lauf) stuecke += ` M ${linie.slice(lauf, bis + 1).map(P2).join(' L ')}`;
+            if (bis > lauf) stuecke += ` M ${linie.slice(M(lauf), M(bis) + 1).map(P2).join(' L ')}`;
             lauf = null;
           }
         }
@@ -3073,7 +3193,7 @@
         const i1 = k + 1 < nTeile ? kachelTab.start[k + 1] : pts.length - 1;
         if (i0 === undefined || i1 === undefined || i1 <= i0) continue;
         // Bogenlaenge entlang DIESER Seite.
-        const seg = linie.slice(i0, i1 + 1), acc = [0];
+        const seg = linie.slice(M(i0), M(i1) + 1), acc = [0];
         for (let q = 1; q < seg.length; q++) {
           acc.push(acc[q - 1] + Math.hypot(seg[q][0] - seg[q - 1][0], seg[q][1] - seg[q - 1][1]));
         }
@@ -3100,8 +3220,8 @@
           if (r) {
             weissNadel += ' ' + r.weiss; d += r.farbe;
             // Gerade Stuecke des Teils: weisser Streifen und kleine Pfeile wie sonst.
-            if (r.von > 0) streifenGerade += ` M ${linie.slice(i0, i0 + r.von + 1).map(P2).join(' L ')}`;
-            if (r.bis < i1 - i0) streifenGerade += ` M ${linie.slice(i0 + r.bis, i1 + 1).map(P2).join(' L ')}`;
+            if (r.von > 0) streifenGerade += ` M ${linie.slice(M(i0), M(i0 + r.von) + 1).map(P2).join(' L ')}`;
+            if (r.bis < i1 - i0) streifenGerade += ` M ${linie.slice(M(i0 + r.bis), M(i1) + 1).map(P2).join(' L ')}`;
             nadelBogen = [acc[r.von], acc[r.bis]];
           }
         }
@@ -3164,8 +3284,11 @@
     // o.rand: eigener Rand in Kartenpunkten (Ladeanimation: das Teil soll den Platz fuellen).
     const pad = o.rand !== undefined ? o.rand : (o.detailed ? half + 14 : 30);
     const all = [...pts.map(p => [p.x, p.y])];
+    // v1.3.5: die Bucht der Boxengasse ragt nach rechts heraus - sie gehoert mit in den Rahmen.
+    const box = o.detailed && o.echt ? boxKacheln(pts, tiles) : null;
     if (o.detailed) {
       all.push(...offsetPath(pts, nrm, half + 6), ...offsetPath(pts, nrm, -(half + 6)));
+      if (box) all.push(...boxKante(pts, nrm, box, -half, -BOX_BUCHT * half).linie);
     }
     // Raum-Rechteck (o.raum, in Metern): die Zufallsstrecke muss in dieses Rechteck passen.
     // Es wird mittig auf den Umriss der Strecke gelegt und erweitert die Ansicht, damit es
@@ -3196,6 +3319,26 @@
     const poly = (arr) => 'M ' + arr.map(P2).join(' L ');
     const centre = pts.map(p => [p.x, p.y]);
 
+    // EIN RECHTECK QUER ZUR FAHRBAHN auf einer geraden Kachel: bei `u` (Anteil der Kachel),
+    // `du` lang (ebenfalls Anteil), quer von `q1` bis `q2` (Einheiten, + = links). Gerechnet
+    // aus dem ersten Abtastschritt der Kachel - sie ist gerade, die Schritte sind gleich.
+    // Kachel 0 beginnt bei pts[0] (siehe echtRandstreifen), alle anderen bei start[k].
+    const querStueck = (k, u, du, q1, q2, farbe, merk) => {
+      if (!kachelTab) return '';
+      const a = k === 0 ? 0 : kachelTab.start[k];
+      const b = k + 1 < tiles.length ? kachelTab.start[k + 1] : kachelTab.start[k] + kachelTab.zahl[k];
+      const n = b - a;
+      if (!(n > 0) || !pts[a] || !pts[a + 1]) return '';
+      const sx = pts[a + 1].x - pts[a].x, sy = pts[a + 1].y - pts[a].y;
+      const sl = Math.hypot(sx, sy) || 1;
+      const tx = sx / sl, ty = sy / sl, nx = nrm[a].x, ny = nrm[a].y;
+      const cx = pts[a].x + sx * u * n, cy = pts[a].y + sy * u * n;
+      const h = du * sl * n / 2;
+      const ecke = (q, l) => [cx + nx * q + tx * l, cy + ny * q + ty * l];
+      return `<path ${merk || ''} d="M ${P2(ecke(q1, -h))} L ${P2(ecke(q2, -h))} L ${P2(ecke(q2, h))} `
+           + `L ${P2(ecke(q1, h))} Z" fill="${farbe}" stroke="none"/>`;
+    };
+
     let body = '';
     if (o.detailed) {
       // 1) The roadway itself: one very wide black stroke along the centreline.
@@ -3204,7 +3347,9 @@
       // 2) Pit bulge, on the driver's RIGHT — the blue side, as on the real track. It used
       //    to be drawn on the positive normal, which the sign check above shows is the LEFT.
       //    Hence the -1 factor: same shape, correct side.
-      tiles.forEach((t, idx) => {
+      // v1.3.5: im echten Stil wie das Originalteil (boxBuchtSvg), sonst die alte Beule.
+      if (box) body += boxBuchtSvg(pts, nrm, box, half, P2);
+      if (!o.echt) tiles.forEach((t, idx) => {
         if (t.type !== TILE_TYPE.PIT) return;
         const seg = pts.map((p, i) => ({ p, i })).filter(q => q.p.tile === idx);
         if (seg.length < 3) return;
@@ -3223,43 +3368,18 @@
         body += `<text x="${(mid[0] + ox).toFixed(1)}" y="${(mid[1] + oy).toFixed(1)}" fill="#ffb02e" font-size="9" font-weight="700" text-anchor="middle">BOX</text>`;
       });
 
-      // 2b) Die Engstelle: zwei Sperren, die von beiden Seiten hereinragen.
-      //
-      // BESTELLT: "grafisch hervorheben wie die Original-Engstelle."
-      //
-      // DIESELBE BAUFORM wie die Boxenausbuchtung darueber - je Kachel ueber p.tile und die
-      // Normalen -, nur nach INNEN statt nach aussen. Eine schmalere Fahrbahn zu zeichnen
-      // ginge nicht: die Strasse ist EIN breiter Strich entlang der Mittellinie, und eine
-      // Breite je Kachel hat ein Strich nicht.
-      //
-      // WIE SCHMAL SIE WIRKLICH IST, WEISS ICH NICHT. Die Breite ist nicht gemessen - aus
-      // den Bildern des Original-Editors laesst sie sich nicht ablesen. Was hier steht, ist
-      // also eine DARSTELLUNG und keine Massangabe: sie sagt "hier wird es eng", und die
-      // Zahl daneben ist ein Drittel je Seite, weil das sichtbar ist, ohne die Bahn
-      // zuzumauern. Sobald ein Mass vorliegt, gehoert es hierher.
+      // 2b) Die Engstelle wie das Originalteil: weisse Querbalken (Masse bei ENGE_BALKEN).
+      //     Bis 1.3.14 standen hier zwei braune Sperren mit "ENG" - eine Verengung, die das
+      //     echte Teil nicht hat. Die Balken liegen auf der SCHWARZEN Fahrbahn, im echten
+      //     Stil also innerhalb der weissen Randstreifen.
       tiles.forEach((tk, idx) => {
         if (tk.type !== TILE_TYPE.ENGE) return;
-        const seg = pts.map((p, i) => ({ p, i })).filter(q => q.p.tile === idx);
-        if (seg.length < 3) return;
-        for (const SIDE of [1, -1]) {
-          const aussen = seg.map(q => [q.p.x + nrm[q.i].x * half * SIDE,
-                                       q.p.y + nrm[q.i].y * half * SIDE]);
-          const innen = seg.map((q, k) => {
-            // Null an beiden Enden, am tiefsten in der Mitte - wie die Boxenausbuchtung,
-            // nur mit umgekehrtem Vorzeichen. Eine Sperre mit Kante waere ein Teil, das
-            // man nicht anfahren kann.
-            const u = k / (seg.length - 1);
-            const tief = Math.sin(u * Math.PI) * half * ENGE_ANTEIL;
-            return [q.p.x + nrm[q.i].x * (half - tief) * SIDE,
-                    q.p.y + nrm[q.i].y * (half - tief) * SIDE];
-          });
-          body += `<path d="${poly(aussen)} L ${innen.slice().reverse().map(P2).join(' L ')} Z" `
-               + `fill="#3a2a12" stroke="#ffb02e" stroke-width="0.8" stroke-linejoin="round"/>`;
+        const r = o.echt ? half - ECHT_STREIFEN : half;
+        for (const [u, von, bis] of ENGE_BALKEN) {
+          body += querStueck(idx, u, ENGE_BALKEN_DICKE, von * r, bis * r, '#ffffff', 'data-enge="1"');
         }
-        const m = seg[Math.floor(seg.length / 2)];
-        body += `<text x="${(m.p.x + ox).toFixed(1)}" y="${(m.p.y + oy + 3).toFixed(1)}" `
-             + `fill="#ffb02e" font-size="8" font-weight="700" text-anchor="middle">ENG</text>`;
       });
+
 
       // 3) Joints: a white tick across the roadway at every element boundary, so the
       //    individual pieces are visible instead of one continuous ribbon.
@@ -3359,19 +3479,38 @@
     }
 
     // Start line and the live position marker. Die ERSTE Start/Ziel-Gerade ist die
-    // Rundenlinie (gruen); jede weitere ist eine Sektorgrenze und wird gelb gezeichnet,
-    // damit man sie von der ersten unterscheidet (BESTELLT: "die zweite Start/Ziel-Gerade
-    // soll sich deutlich von der ersten unterscheiden").
+    // Rundenlinie; jede weitere ist eine Sektorgrenze und wird gelb gezeichnet, damit man
+    // sie von der ersten unterscheidet (BESTELLT: "die zweite Start/Ziel-Gerade soll sich
+    // deutlich von der ersten unterscheiden").
+    //
+    // v1.3.15: Die Linie liegt bei 80 % der Startkachel wie auf dem Originalteil (vorher
+    // 66 %, geschaetzt; BESTELLT war nur "nicht am Anfang des Teils, sondern ein Stueck
+    // spaeter"). Im echten Stil ist sie das Karoband des Originals (ZIEL_*), auf JEDER
+    // Startgeraden - jedes echte Teil traegt es. Die Sektorgrenzen bekommen zusaetzlich
+    // einen gelben Strich zwischen den beiden Reihen. Die Sektorgrenzen im Kartenstil
+    // bleiben an der Kante.
     let ersteStart = true;
     for (let ti = 0; ti < tiles.length; ti++) {
       if (tiles[ti].type !== TILE_TYPE.START) continue;
+      if (o.detailed && o.echt && kachelTab) {
+        const r = half - ECHT_STREIFEN, Z = ZIEL_LAENGS;
+        body += querStueck(ti, Z.linieOben, ZIEL_LINIE_D, r, -r, '#ffffff', 'data-ziel="linie"');
+        body += querStueck(ti, Z.linieUnten, ZIEL_LINIE_D, r, -r, '#ffffff', 'data-ziel="linie"');
+        if (!ersteStart) {
+          body += querStueck(ti, (Z.linieOben + Z.linieUnten) / 2, Z.linieOben - Z.linieUnten - ZIEL_LINIE_D,
+                             r, -r, '#ffd400', 'data-ziel="sektor"');
+        }
+        for (const [reihe, erstes] of [[Z.reiheOben, ZIEL_ERSTES.oben], [Z.reiheUnten, ZIEL_ERSTES.unten]]) {
+          for (let q = erstes; q - ZIEL_QUADRAT_B >= -1.001; q -= ZIEL_TEILUNG) {
+            body += querStueck(ti, reihe, ZIEL_QUADRAT_H, q * r, (q - ZIEL_QUADRAT_B) * r, '#ffffff', 'data-ziel="karo"');
+          }
+        }
+        ersteStart = false;
+        continue;
+      }
       let pi = kachelTab && kachelTab.start ? kachelTab.start[ti] : 0;
-      // Die gruene Start/Ziel-Linie liegt bei ~66 % der Startkachel, nicht an ihrer Kante.
-      // Eine Linie ganz am Rand eines Teils sagt nicht, wo genau sie liegt (BESTELLT: "nicht
-      // am Anfang des Teils, sondern ein Stueck spaeter, sonst weiss man nicht, ob Start
-      // oder Ziel"). Die gelben Sektorgrenzen bleiben an der Kante.
       if (ersteStart && kachelTab && kachelTab.zahl) {
-        pi = kachelTab.start[ti] + Math.round(kachelTab.zahl[ti] * 0.66);
+        pi = kachelTab.start[ti] + Math.round(kachelTab.zahl[ti] * ZIEL_LAENGS.linieOben);
         const maxP = kachelTab.start[ti] + kachelTab.zahl[ti] - 1;
         if (pi > maxP) pi = maxP;
       }
@@ -3385,6 +3524,7 @@
         : `<circle cx="${(p.x + ox).toFixed(1)}" cy="${(p.y + oy).toFixed(1)}" r="5" fill="${farbe}"/>`;
       ersteStart = false;
     }
+
     // ---- Die Autos ----------------------------------------------------------------
     //
     // `currentIndex` zeichnet EIN Auto und bleibt fuer alte Aufrufer; `o.cars` zeichnet
@@ -4206,6 +4346,8 @@
     trackZufallCodes = [];
     teileZeichnen();
     refreshTrackPreview();
+    // v1.3.5: "Boxengasse erzwingen" haengt am Bestand.
+    if (typeof editorOptZeigen === 'function') editorOptZeigen();
   }
   // Je Sorte: vorhanden (null = nicht gezaehlt), gebraucht, Rest.
   function teileBilanz(tiles) {
@@ -4244,10 +4386,45 @@
     [TILE_TYPE.ENGE]: '<path d="M7 2 L7 8 L10 12 L10 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
       + '<path d="M17 2 L17 8 L14 12 L14 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   };
+  // ---- ECHTE TEILEBILDER (v1.3.5) ------------------------------------------------------
+  // BESTELLT: "Streckenteile im Streckeneditor durch die echten Renders ersetzen bei den
+  // Teileauswahl-Buttons am unteren Bildschirmrand; die Teilebildchen auch im 'Meine Teile'-
+  // Menue anzeigen." Derselbe Zeichner wie Editor und Ladeanimation (renderTrackPreview, echt),
+  // je Sorte EINMAL gerechnet und als Text gemerkt - die Leiste wird bei jedem Druck aufs
+  // Steuerkreuz neu markiert, das darf keine Streckenberechnung ausloesen. Immer nach oben
+  // gerichtet (trackRotationDeg kurz 0), egal wie die Strecke im Editor gedreht ist. Das
+  // Strichsymbol (TILE_ICON / TRACK_PALETTE.icon) bleibt nur der Rueckfall, falls das Zeichnen
+  // scheitert.
+  const TEIL_BILD = {};
+  function teilBildSvg(typ, klasse) {
+    if (TEIL_BILD[typ] === undefined) {
+      const rot = trackRotationDeg;
+      let html = '';
+      try {
+        trackRotationDeg = 0;
+        html = renderTrackPreview([{ type: typ }], null,
+          { detailed: true, echt: true, ohneLinie: true, ohneLinieRechnen: true, rand: 3 }).html;
+      } catch (e) { html = ''; } finally { trackRotationDeg = rot; }
+      if (!/^<svg/.test(html)) return '';            // nicht merken: beim naechsten Mal neu versuchen
+      TEIL_BILD[typ] = html.replace('class="tp-karte"', 'class="teil-bild" aria-hidden="true" focusable="false"');
+    }
+    return klasse ? TEIL_BILD[typ].replace('class="teil-bild"', 'class="teil-bild ' + klasse + '"') : TEIL_BILD[typ];
+  }
   function teileZeichnen() {
     const host = $('teile-liste');
     if (!host) return;
     const b = teileBestand() || {};
+    // v1.3.5: stehen die Zeilen schon, nur die Zahlen setzen. Mit den Teilebildern waere ein
+    // Neuaufbau je Plus/Minus (beim Halten mehrmals je Sekunde) rund 100 kB SVG zum Parsen.
+    const da = host.querySelectorAll('.teile-zeile');
+    if (da.length === TEILE_SORTEN.length && [...da].every((z, i) => +z.dataset.teile === TEILE_SORTEN[i])) {
+      da.forEach((z, i) => {
+        const typ = TEILE_SORTEN[i], v = b[typ];
+        z.querySelector('.teile-zahl').textContent = v === undefined || v === null ? 0 : +v;
+        z.querySelector('.teile-name').textContent = t(TILE_LABEL[typ] || ('0x' + typ.toString(16)));
+      });
+      return;
+    }
     host.innerHTML = '';
     for (const typ of TEILE_SORTEN) {
       const z = document.createElement('div');
@@ -4260,8 +4437,8 @@
       const wert = b[typ] === undefined || b[typ] === null ? 0 : +b[typ];
       // Symbol links, Name in der Mitte, rechts Minus/Zahl/Plus - so aendert man den
       // Bestand mit der Maus oder dem Finger und nicht nur mit dem D-Pad.
-      z.innerHTML = '<svg class="teile-ic" viewBox="0 0 24 24" aria-hidden="true">'
-          + (TILE_ICON[typ] || '') + '</svg>'
+      z.innerHTML = (teilBildSvg(typ, 'teile-ic')
+          || '<svg class="teile-ic" viewBox="0 0 24 24" aria-hidden="true">' + (TILE_ICON[typ] || '') + '</svg>')
           + '<span class="teile-name"></span>'
           + '<span class="teile-steuer">'
           + '<button class="teile-minus" type="button" aria-label="' + name + ' weniger">&#8722;</button>'
@@ -4413,11 +4590,11 @@
       icon: '<path d="M15 22 L15 12 A20 20 0 0 0 9.5 3.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' },
     { key: 'straight', type: () => TILE_TYPE.STRAIGHT, cap: 'Gerade',
       icon: '<path d="M12 22 L12 2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' },
-    // Die Engstelle: eine Gerade, die in der Mitte einspringt. Das Symbol sagt genau das,
-    // was die Kachel ist - die Breite selbst ist noch nicht gemessen (siehe trackCenterline).
+    // Die Engstelle: eine Gerade mit den Querbalken des Originals (ENGE_BALKEN) - einer von
+    // links, darueber die von rechts, nach oben laenger.
     { key: 'enge', type: () => TILE_TYPE.ENGE, cap: 'Enge',
-      icon: '<path d="M7 2 L7 8 L10 12 L10 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
-          + '<path d="M17 2 L17 8 L14 12 L14 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' },
+      icon: '<path d="M6 2 L6 22 M18 2 L18 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>'
+          + '<path d="M6 18 H12 M18 13 H16 M18 10 H14.5 M18 7 H13 M18 4 H12" fill="none" stroke="currentColor" stroke-width="1.6"/>' },
     { key: 'pit', type: () => TILE_TYPE.PIT, cap: 'Box',
       icon: '<path d="M8 22 L8 2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'
           + '<path d="M16 20 L16 9 A5 5 0 0 1 21 4" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5" stroke-linecap="round"/>' },
@@ -4450,6 +4627,26 @@
   function renderTrackPalette() {
     const host = $('track-palette');
     if (!host) return;
+    const bilanz = teileBilanz(currentTrackTiles);
+    const restHtml = (p) => {
+      const bil = bilanz.find((x) => x.typ === p.type());
+      return bil && bil.hat !== null ? `<span class="tp-rest${bil.rest < 0 ? ' fehlt' : ''}">${bil.rest}</span>` : '';
+    };
+    // v1.3.5: die Knoepfe tragen die echten Teilebilder (teilBildSvg) und werden nur EINMAL
+    // gebaut. Danach setzt jeder Aufruf - bei jedem Druck aufs Steuerkreuz - nur Auswahl und
+    // Restzahl; die Bilder neu zu parsen waere je Druck rund 100 kB SVG.
+    const da = host.querySelectorAll('.tp-btn');
+    if (da.length === TRACK_PALETTE.length) {
+      da.forEach((b, i) => {
+        b.classList.toggle('sel', i === trackPaletteSel);
+        const neu = restHtml(TRACK_PALETTE[i]), alt = b.querySelector('.tp-rest');
+        if ((alt ? alt.outerHTML : '') !== neu) {
+          if (alt) alt.remove();
+          if (neu) b.insertAdjacentHTML('beforeend', neu);
+        }
+      });
+      return;
+    }
     host.innerHTML = '';
     // Gruppe je Teil: links drehend, gerade (auch Enge und Box), rechts drehend. Wechselt sie,
     // steht ein feiner Strich davor (BESTELLT: "Trenne die Streckenteile im Editor jeweils
@@ -4457,15 +4654,12 @@
     const gruppe = (p) => Math.sign(tileTurnDeg(p.type()));
     TRACK_PALETTE.forEach((p, i) => {
       const b = document.createElement('button');
-      b.className = 'tp-btn' + (i === trackPaletteSel ? ' sel' : '')
+      b.className = 'tp-btn tp-teil' + (i === trackPaletteSel ? ' sel' : '')
         + (i > 0 && gruppe(p) !== gruppe(TRACK_PALETTE[i - 1]) ? ' tp-trenn' : '');
       b.title = p.cap;
       b.setAttribute('aria-label', p.cap);
-      const bil = teileBilanz(currentTrackTiles).find((x) => x.typ === p.type());
-      const rest = bil && bil.hat !== null
-        ? `<span class="tp-rest${bil.rest < 0 ? ' fehlt' : ''}">${bil.rest}</span>` : '';
-      b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${p.icon}</svg>`
-                  + `<span class="tp-cap">${p.cap}</span>` + rest;
+      b.innerHTML = (teilBildSvg(p.type()) || `<svg viewBox="0 0 24 24" aria-hidden="true">${p.icon}</svg>`)
+                  + `<span class="tp-cap">${p.cap}</span>` + restHtml(p);
       b.onclick = () => { trackPaletteSel = i; renderTrackPalette(); addTile(p.type()); };
       host.appendChild(b);
     });
@@ -4677,15 +4871,16 @@
     const c = trackToCode(tiles, 0);
     return c === 'SR3GR3' || c === 'SL3GL3';
   }
-  function trackZufallPasst(tiles) {
+  function trackZufallPasst(tiles, bruecken) {
     if (trackLangweilig(tiles)) return false;
     if (!trackEndeNah(tiles)) return false;
     const pts = trackCenterline(tiles);
     const s = trackSchluss(pts);
-    // Bruecken (v1.2.61): erlaubt Strecken, die uebereinander gehen - die
-    // Kreuzungsfrei-Pruefung faellt dann weg.
-    return s.closed && s.lueckeCm <= TRACK_SCHLUSS_STRENG_CM &&
-      (trackEditorOpt.bruecken || trackKreuzungsfrei(pts));
+    if (!(s.closed && s.lueckeCm <= TRACK_SCHLUSS_STRENG_CM)) return false;
+    // Bruecken (v1.3.5 statt des Schalters aus 1.2.61): GENAU so viele Kreuzungen wie
+    // verlangt, 0 heisst kreuzungsfrei wie bisher.
+    const n = bruecken !== undefined ? bruecken : trackEditorOpt.bruecken;
+    return n > 0 ? trackBrueckenPasst(pts, n) : trackKreuzungsfrei(pts);
   }
   // Passt die Strecke in den angegebenen Raum? Die Strecke darf in 45°-Schritten gedreht
   // werden, deshalb wird jede der 8 Lagen geprueft. Rueckgabe: die passende Drehung in Grad
@@ -5022,7 +5217,13 @@
       .some((t) => hat(t) > 0) ? 30 : 60;
     return { b, letzte, besser, startZeit, zufallSchritt, versuch: 0,
              beste: null, besteAnders: null, besteGleich: null, raumZuKlein: false,
-             ziel: trackEditorOpt.ziel };
+             ziel: trackEditorOpt.ziel,
+             // v1.3.5: Brueckenzahl und Box; die Box nur, wenn sie im Bestand ist (sonst ist die
+             // Option ausgegraut, siehe editorOptZeigen). Mit Bruecken mehr Versuche - die Acht
+             // braucht volle Schleifen, und davon schliessen weniger.
+             bruecken: Math.max(0, Math.floor(+trackEditorOpt.bruecken || 0)),
+             box: !!trackEditorOpt.box && hat(TILE_TYPE.PIT) > 0, ohneBox: false,
+             maxVersuche: trackEditorOpt.bruecken > 0 ? 1500 : 400 };
   }
   // Ein einzelner Versuch der Suche (v0.9.42 aus der Schleife geloest, damit die Suche in
   // Haeppchen laufen und dabei eine Ladeanimation zeigen kann).
@@ -5038,6 +5239,22 @@
     const turns = trackZufallRunTurns(dir, nc, zufallSchritt);
     if (!turns) return;
     trackZufallGegenlauf(turns, dir, b);
+    // BRUECKEN (v1.3.5): eine geschlossene Bahn mit Gesamtdrehung +-360 kreuzt sich immer eine
+    // GERADE Anzahl Male (Satz von Whitney), mit 0 Grad (die Acht) eine ungerade. Fuer eine
+    // ungerade Brueckenzahl kommt deshalb eine volle Gegenschleife dazu, fuer eine gerade
+    // meist ein Paar aus Gegen- und Mitschleife. Ob es genau passt, zaehlt danach
+    // trackBrueckenPasst().
+    if (z.bruecken > 0) {
+      const extra = [];
+      const schleife = (d) => {
+        const tt = trackZufallRunTurns(d, 1 + Math.floor(Math.random() * 3), zufallSchritt);
+        if (tt) extra.push(...tt);
+        return !!tt;
+      };
+      if (z.bruecken % 2 === 1) { if (!schleife(-dir)) return; }
+      else if (Math.random() < 0.6 && !(schleife(-dir) && schleife(dir))) return;
+      for (const x of extra) turns.splice(Math.floor(Math.random() * (turns.length + 1)), 0, x);
+    }
     const runs = [];
     let gut = true;
     for (const t of turns) {
@@ -5063,11 +5280,14 @@
     if (!gaps) return;
     const tiles = trackZufallBaueTiles(runs, gaps, b);
     if (!tiles) return;
+    // Boxengasse erzwingen (v1.3.5): die Luecken fuellt trackZufallFuellGap() ohnehin zuerst mit
+    // der Box, wenn eine da ist - fehlt sie trotzdem, ist es der naechste Versuch.
+    if (z.box && !tiles.some((x) => x.type === TILE_TYPE.PIT)) { z.ohneBox = true; return; }
     // Laenge begrenzen (v1.2.61): "max" = unbegrenzt (Ziel Infinity), sonst hoechstens
     // so viele Teile wie der Schieber verlangt.
     if (z.ziel !== Infinity && tiles.length > z.ziel) return;
     trackRotationDeg = 0;
-    if (!trackZufallPasst(tiles)) return;
+    if (!trackZufallPasst(tiles, z.bruecken)) return;
     // Fussabdruck: die Strecke muss in den angegebenen Raum passen (45°-Schritte).
     const rot = trackZufallPasstRaum(tiles);
     if (rot < 0) { z.raumZuKlein = true; return; }
@@ -5082,7 +5302,7 @@
     if (z.besser(z.besteGleich, kandidat)) z.besteGleich = kandidat;
   }
   function trackZufallRunde(z, bisMs) {
-    while (z.versuch < 400) {
+    while (z.versuch < (z.maxVersuche || 400)) {
       const jetzt = performance.now();
       if (jetzt - z.startZeit > z.budgetMs) return true;
       if (jetzt >= bisMs) return false;
@@ -5118,6 +5338,15 @@
     }
     if (z.raumZuKlein) {
       showHudToast(t('Zufall: Raum zu klein für einen Rundkurs'));
+      return false;
+    }
+    // v1.3.5: Brueckenzahl oder Box liessen sich mit dem Bestand nicht bauen.
+    if (z.bruecken > 0) {
+      showHudToast(t('Zufall: {n} Brücken mit diesen Teilen nicht möglich').replace('{n}', z.bruecken));
+      return false;
+    }
+    if (z.box && z.ohneBox) {
+      showHudToast(t('Zufall: Boxengasse mit diesen Teilen nicht möglich'));
       return false;
     }
     showHudToast(t('Zufall: Nicht genug Kurventeile für einen Rundkurs'));
@@ -5245,6 +5474,47 @@
     }
     return true;
   }
+  // ---- BRUECKEN ZAEHLEN (v1.3.5) ----
+  // Jede Kreuzung der Mittellinie ist eine Bruecke. Gezaehlt wie in trackKreuzungsfrei(): zwei
+  // nicht benachbarte Abschnitte, die sich schneiden. Rueckgabe: die Kreuzungspunkte.
+  function trackKreuzungen(pts) {
+    const m = pts.length, out = [];
+    for (let i = 0; i < m; i++) {
+      const i1 = (i + 1) % m;
+      for (let j = i + 2; j < m; j++) {
+        if (i === 0 && j === m - 1) continue;
+        const j1 = (j + 1) % m;
+        if (segKreuz(pts[i], pts[i1], pts[j], pts[j1])) {
+          out.push({ x: (pts[i].x + pts[i1].x) / 2, y: (pts[i].y + pts[i1].y) / 2 });
+        }
+      }
+    }
+    return out;
+  }
+  // Genau n Kreuzungen, mindestens 60 cm auseinander (zwei Bruecken uebereinander gehen
+  // nicht), und abseits davon dieselben 30 cm Abstand wie ohne Bruecken. Nahe einer Kreuzung
+  // (45 cm) liegen die Bahnen naturgemaess dichter; ein flacher Winkel liegt laenger dicht und
+  // faellt deshalb hier heraus.
+  function trackBrueckenPasst(pts, n, minCm, gap) {
+    const kr = trackKreuzungen(pts);
+    if (kr.length !== n) return false;
+    const U = TRACK_UNITS_PER_CM;
+    for (let a = 0; a < kr.length; a++) {
+      for (let c = a + 1; c < kr.length; c++) {
+        if (Math.hypot(kr[a].x - kr[c].x, kr[a].y - kr[c].y) / U < 60) return false;
+      }
+    }
+    const min = minCm || 30, gapS = gap || 40, R = 45 * U, m = pts.length;
+    const nah = pts.map((p) => kr.some((c) => Math.hypot(p.x - c.x, p.y - c.y) < R));
+    for (let i = 0; i < m; i++) {
+      for (let j = i + 1; j < m; j++) {
+        const arc = Math.min(j - i, m - (j - i));
+        if (arc < gapS || (nah[i] && nah[j])) continue;
+        if (Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y) / U < min) return false;
+      }
+    }
+    return true;
+  }
   function segKreuz(a, b, c, d) {
     const d1x = b.x - a.x, d1y = b.y - a.y;
     const d2x = d.x - c.x, d2y = d.y - c.y;
@@ -5259,7 +5529,9 @@
   // ---- Editor-Optionen (v1.2.61) ----
   // Der "Optionen"-Knopf in der Aktionsleiste klappt ein Feld auf: Laenge/Teile-Slider,
   // Linkslastig, Bruecken und "Strecke spiegeln". Die ersten drei wirken auf den Zufallsknopf.
-  const trackEditorOpt = { ziel: Infinity, linkslastig: false, bruecken: false };
+  // v1.3.5: bruecken ist eine ANZAHL (vorher ein Schalter), box erzwingt ein Boxenteil.
+  const trackEditorOpt = { ziel: Infinity, linkslastig: false, bruecken: 0, box: false };
+  const BRUECKEN_MAX = 4;
   function editorOptGesamtTeile() {
     const b = teileBestand() || {};
     let n = 0;
@@ -5277,6 +5549,19 @@
     ziel.value = String(Math.max(4, akt));
     const wert = $('track-opt-ziel-wert');
     if (wert) wert.textContent = trackEditorOpt.ziel === Infinity ? 'max' : String(Math.max(4, akt));
+    // Boxengasse erzwingen: nur waehlbar, wenn in "Meine Teile" eine Boxengasse steht.
+    const box = $('track-opt-box');
+    if (box) {
+      const hatBox = ((teileBestand() || {})[TILE_TYPE.PIT] || 0) > 0;
+      box.disabled = !hatBox;
+      box.checked = hatBox && trackEditorOpt.box;
+      const zeile = box.closest('label');
+      if (zeile) zeile.classList.toggle('tp-opt-aus', !hatBox);
+      const hinweis = $('track-opt-box-hinweis');
+      if (hinweis) hinweis.hidden = hatBox;
+    }
+    const br = $('track-opt-bruecken');
+    if (br) br.value = String(trackEditorOpt.bruecken);
   }
   function trackOptionenToggle(an) {
     const p = $('track-opt-panel'), b = $('track-opt-toggle');
@@ -5297,8 +5582,21 @@
   if ($('track-opt-links')) {
     $('track-opt-links').onchange = () => { trackEditorOpt.linkslastig = $('track-opt-links').checked; };
   }
+  // Bruecken: Zahl 0 bis BRUECKEN_MAX, mit Minus/Plus wie die Zahlenfelder der Einstellungen.
+  function brueckenSetzen(v) {
+    const n = Math.floor(+v);
+    trackEditorOpt.bruecken = isFinite(n) ? Math.max(0, Math.min(BRUECKEN_MAX, n)) : 0;
+    editorOptZeigen();
+  }
   if ($('track-opt-bruecken')) {
-    $('track-opt-bruecken').onchange = () => { trackEditorOpt.bruecken = $('track-opt-bruecken').checked; };
+    $('track-opt-bruecken').onchange = () => brueckenSetzen($('track-opt-bruecken').value);
+    const steuer = $('track-opt-bruecken').closest('.num-steuer');
+    const mi = steuer && steuer.querySelector('.num-minus'), pl = steuer && steuer.querySelector('.num-plus');
+    if (mi) mi.onclick = () => brueckenSetzen(trackEditorOpt.bruecken - 1);
+    if (pl) pl.onclick = () => brueckenSetzen(trackEditorOpt.bruecken + 1);
+  }
+  if ($('track-opt-box')) {
+    $('track-opt-box').onchange = () => { trackEditorOpt.box = $('track-opt-box').checked; };
   }
   // "Strecke spiegeln": links/rechts tauschen und die Schleife rueckwaerts fahren (chSpiegelTiles).
   if ($('track-spiegel')) {
@@ -5510,6 +5808,9 @@
     saveTrackStore(store);
     refreshTrackList();
     log(`Strecke "${name}" gespeichert (${currentTrackTiles.length} Teile).`, 'info');
+    // v1.3.15 BESTELLT: beim ersten Speichern einer Strecke einmal fragen, ob ihre Zeiten online
+    // gespeichert werden sollen (72c-strecken-online.js, gemerkt, nur einmal).
+    if (typeof skErsteStreckeFrage === 'function') skErsteStreckeFrage();
   }
   $('track-save').onclick = () => {
     const name = $('track-name').value.trim();

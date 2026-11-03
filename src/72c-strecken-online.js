@@ -542,74 +542,58 @@
     }
     return s.beste_ms ? { ms: +s.beste_ms, wer: s.beste_fahrer || '', fg: 'unbekannt' } : null;
   }
-  // Challenges > Community-Strecken
-  function skListeZeichnen() {
-    const host = $('sk-liste-bereich');
-    if (!host) return;
+  // Challenges > Community (v1.3.62: die Strecken stehen in der gemeinsamen Liste mit den Community
+  // Challenges, communityZeichnen in 72-challenges.js). Hier Statuszeile, Leertext und eine Zeile.
+  function skListeStatus() {
     skCacheLaden();
-    if (skUrl() && !skOnline.listeLaedt && Date.now() - skOnline.listeAt > SK_LISTE_MS) {
-      skListeHolen(false).then(() => { if (skSeiteOffen('ch-strecken')) skListeZeichnen(); });
-    }
     const liste = skCommunityGefiltert(skOnline.liste, skEigeneStrecken());
-    const aktuell = skFgAktuell();
-    host.innerHTML = '';
-    const st = document.createElement('p');
-    st.className = 'muted community-stand';
-    st.setAttribute('data-i18n-skip', '');
-    st.textContent = (!skUrl() ? t('Nur auf diesem Gerät (keine Online-Adresse eingestellt).')
+    return (!skUrl() ? t('Nur auf diesem Gerät (keine Online-Adresse eingestellt).')
       : skOnline.listeLaedt && !skOnline.liste ? t('Lade die gemeinsame Liste …')
       : skOnline.listeFehler && !skOnline.liste ? t('Gemeinsame Liste nicht erreichbar.')
       : t('Strecken mit Zeiten: {n}').replace('{n}', liste.filter((s) => (+s.fahrer || 0) >= SK_MIN_FAHRER).length))
-      + ' · ' + t('Dein Fahrgefühl') + ': ' + skFgName(aktuell);
-    host.appendChild(st);
-    if (!liste.length) {
-      const p = document.createElement('p');
-      p.className = 'muted';
-      p.textContent = t('Noch keine Strecke mit Zeiten. Schalte unter Optionen > Online das Synchronisieren ein, damit deine Strecken hier erscheinen.');
-      host.appendChild(p);
-      return;
+      + ' · ' + t('Dein Fahrgefühl') + ': ' + skFgName(skFgAktuell());
+  }
+  function skListeLeerText() {
+    return t('Noch keine Strecke mit Zeiten. Schalte unter Optionen > Online das Synchronisieren ein, damit deine Strecken hier erscheinen.');
+  }
+  function skZeile(s, aktuell) {
+    const row = document.createElement('div');
+    row.className = 'community-zeile';
+    row.dataset.art = 'strecke';
+    const auf = document.createElement('button');
+    auf.type = 'button';
+    auf.className = 'community-oeffnen';
+    auf.setAttribute('aria-label', t('Strecke öffnen') + ': ' + (s.name || s.strecke));
+    auf.onclick = () => skDetailOeffnen(s);
+    const mini = document.createElement('span');
+    mini.className = 'community-mini';
+    mini.setAttribute('aria-hidden', 'true');
+    try {
+      const p = codeToTrack(s.strecke);
+      if (p) { const merk = trackRotationDeg; trackRotationDeg = 0; try { mini.innerHTML = renderTrackPreview(p.tiles, null, {}).html; } finally { trackRotationDeg = merk; } }
+    } catch (e) { /* ohne Bild */ }
+    auf.appendChild(mini);
+    const tx = document.createElement('div');
+    tx.className = 'community-text';
+    const b = document.createElement('b');
+    b.setAttribute('data-i18n-skip', '');
+    b.textContent = s.name ? s.name + ' · ' + s.strecke : s.strecke;
+    if (s.eigene) {
+      const m = document.createElement('span');
+      m.className = 'community-modus sk-eigene';
+      m.textContent = s.nurLokal ? t('eigene Zeiten') + ', ' + t('nur lokal') : t('eigene Zeiten');
+      b.appendChild(document.createTextNode(' '));
+      b.appendChild(m);
     }
-    const wrap = document.createElement('div');
-    wrap.className = 'community-liste';
-    liste.forEach((s) => {
-      const row = document.createElement('div');
-      row.className = 'community-zeile';
-      const auf = document.createElement('button');
-      auf.type = 'button';
-      auf.className = 'community-oeffnen';
-      auf.setAttribute('aria-label', t('Strecke öffnen') + ': ' + (s.name || s.strecke));
-      auf.onclick = () => skDetailOeffnen(s);
-      const mini = document.createElement('span');
-      mini.className = 'community-mini';
-      mini.setAttribute('aria-hidden', 'true');
-      try {
-        const p = codeToTrack(s.strecke);
-        if (p) { const merk = trackRotationDeg; trackRotationDeg = 0; try { mini.innerHTML = renderTrackPreview(p.tiles, null, {}).html; } finally { trackRotationDeg = merk; } }
-      } catch (e) { /* ohne Bild */ }
-      auf.appendChild(mini);
-      const tx = document.createElement('div');
-      tx.className = 'community-text';
-      const b = document.createElement('b');
-      b.setAttribute('data-i18n-skip', '');
-      b.textContent = s.name ? s.name + ' · ' + s.strecke : s.strecke;
-      if (s.eigene) {
-        const m = document.createElement('span');
-        m.className = 'community-modus sk-eigene';
-        m.textContent = s.nurLokal ? t('eigene Zeiten') + ', ' + t('nur lokal') : t('eigene Zeiten');
-        b.appendChild(document.createTextNode(' '));
-        b.appendChild(m);
-      }
-      const em = document.createElement('em');
-      em.setAttribute('data-i18n-skip', '');
-      const bz = skListenBestzeit(s, aktuell);
-      em.textContent = t('{n} Fahrer').replace('{n}', +s.fahrer || 0)
-        + (bz ? ' · ' + t('Bestzeit') + ' ' + chZeit(bz.ms) + ' (' + (bz.wer ? bz.wer + ', ' : '') + skFgName(bz.fg) + ')' : '');
-      tx.appendChild(b); tx.appendChild(em);
-      auf.appendChild(tx);
-      row.appendChild(auf);
-      wrap.appendChild(row);
-    });
-    host.appendChild(wrap);
+    const em = document.createElement('em');
+    em.setAttribute('data-i18n-skip', '');
+    const bz = skListenBestzeit(s, aktuell);
+    em.textContent = t('{n} Fahrer').replace('{n}', +s.fahrer || 0)
+      + (bz ? ' · ' + t('Bestzeit') + ' ' + chZeit(bz.ms) + ' (' + (bz.wer ? bz.wer + ', ' : '') + skFgName(bz.fg) + ')' : '');
+    tx.appendChild(b); tx.appendChild(em);
+    auf.appendChild(tx);
+    row.appendChild(auf);
+    return row;
   }
   // Eine Strecke aus der Liste: Karte, Zeiten, In den Editor laden.
   let skDetail = null;
@@ -619,7 +603,7 @@
     showSubpage('ch-sk');
   }
   function skDetailZeichnen() {
-    if (!skDetail) { showSubpage('ch-strecken'); return; }
+    if (!skDetail) { showSubpage('ch-community'); return; }
     const key = skDetail.strecke;
     const p = codeToTrack(key);
     if ($('sk-titel')) $('sk-titel').textContent = skDetail.name || key;
@@ -660,7 +644,7 @@
   // ---- Verdrahtung ----
   if ($('on-fahrer')) $('on-fahrer').addEventListener('change', () => skNameSetzen($('on-fahrer').value));
   if ($('on-sync')) $('on-sync').addEventListener('change', () => skOptSetzen({ sync: !!$('on-sync').checked, gefragt: true }));
-  if ($('sk-zurueck')) $('sk-zurueck').addEventListener('click', () => showSubpage('ch-strecken'));
+  if ($('sk-zurueck')) $('sk-zurueck').addEventListener('click', () => showSubpage('ch-community'));
   if ($('sk-laden')) $('sk-laden').addEventListener('click', skInEditorLaden);
   if ($('sk-editor-auffrischen')) {
     $('sk-editor-auffrischen').addEventListener('click', () => {

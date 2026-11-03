@@ -12586,10 +12586,15 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // with it the special case that had to exclude it from selecting reverse.
       const flashNow = readBindingValue(pad, bindings.lightflash) > BUTTON_CAPTURE_THRESHOLD;
       // v1.1.11: in der virtuellen Fahrt schaltet R3 (die Lichthupen-Belegung) die Kamera weiter.
+      // Seit der rechte Stick die Kamera dreht (60d-virtuell.js): gedreht setzt dieselbe Taste
+      // erst auf die Standardansicht zurueck, ungedreht schaltet sie wie bisher weiter.
+      const imVf = typeof vfAktiv === 'function' && vfAktiv();
       if (flashNow && !prevLightFlash) {
-        if (typeof vfAktiv === 'function' && vfAktiv()) vfKameraWechseln(); else triggerHeadlightFlash();
+        if (imVf) vfKameraTaste(); else triggerHeadlightFlash();
       }
       prevLightFlash = flashNow;
+      // Rechter Stick dreht in der virtuellen Fahrt die Kamera (nur unbelegte Achsen, siehe vfStickSetzen).
+      if (imVf) vfStickSetzen(pad, bindings);
 
       // Headlights on/off, edge-triggered. Drives the same checkbox the options menu uses
       // so the two can never disagree.
@@ -12685,7 +12690,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // seit Kurzem das Rennergebnis statt in einem eigenen Fenster, und mit vielen Autos/
       // Runden reicht die Kachel nicht mehr aus. Dort scrollt der Stick #ov-tab statt der
       // Seite.
-      const rechtsY = applyDeadzone((pad.axes || [])[3] || 0);
+      // In der virtuellen Fahrt gehoert der Stick der Kamera: kein Bildlauf unter der 3D-Schicht.
+      const rechtsY = imVf ? 0 : applyDeadzone((pad.axes || [])[3] || 0);
       const imUebersichtsVollbild = document.body.classList.contains('race-fs')
         && typeof cockpitScreenIst === 'function'
         && cockpitScreenIst() && cockpitScreenIst().id === 'uebersicht';

@@ -2889,39 +2889,28 @@
   /* Deckend und mit eigener Schriftfarbe: in der hellen Ansicht "Modern" stuende sonst
      heller Text auf hellem Grund (Kontrasttest der Cockpit-Ansichten: 1,05). */
   .ps-karte { pointer-events: auto; background: #06080c; border: 2px solid var(--k-blau);
-    padding: 8px 14px 10px; display: grid; gap: 6px; justify-items: center; min-width: 170px;
+    padding: clamp(8px, 1.6vw, 16px); display: grid; gap: 10px; justify-items: center;
     font-family: var(--k-font); color: #fff; box-shadow: 0 10px 40px rgba(0,0,0,.7); }
-  .ps-kopf, .ps-kopf span, .ps-fuss, .ps-fuss span { color: #eef0f4; }
-  .ps-kopf { display: flex; gap: 12px; align-items: baseline; font-size: 12px; letter-spacing: .1em; }
-  .ps-kopf b { color: var(--k-blau); font-size: 14px; }
-  .ps-mitte { position: relative; width: clamp(80px, 22vh, 150px); aspect-ratio: 1; display: grid; place-items: center; }
-  .ps-ring { position: absolute; inset: 0; transform: rotate(-90deg); }
-  .ps-ring circle { fill: none; stroke: var(--k-blau); stroke-width: 6; stroke-dasharray: 283;
-    stroke-dashoffset: calc(283 * (1 - var(--fenster, 0))); }
-  .ps-sym { width: 58%; height: 58%; fill: none; stroke-width: 2.4; display: none; }
+  /* v1.3.62: nur noch die Reihe der vier Knoepfe, gross. Jeder Knopf behaelt seinen Platz;
+     der aktuelle ist blau umrahmt, ein gedrueckter bleibt GRUEN (richtig) oder ROT (falsch)
+     umrahmt stehen. Kein Zeitbalken, kein Zaehler: die Wirkung auf die Standzeit rechnet
+     pitSpielTaste() im Hintergrund. */
+  .ps-reihe { display: flex; gap: clamp(8px, 1.6vw, 16px); }
+  .ps-slot { width: clamp(52px, 8.5vw, 92px); aspect-ratio: 1; flex: none; display: grid;
+    place-items: center; background: #0d1016; border: 3px solid rgba(255,255,255,.22);
+    opacity: .6; }
+  .ps-slot svg { width: 64%; height: 64%; fill: none; stroke-width: 2.4; display: none; }
+  /* Die Farben des Pads (Quadrat rosa, Kreis rot) bleiben; die Bedeutung richtig/falsch traegt
+     allein der dicke Rahmen. */
   .ps-quad { stroke: #ff8ad8; } .ps-kreis { stroke: #ff6b7a; }
-  .pit-spiel[data-symbol="quad"] .ps-quad, .pit-spiel[data-symbol="kreis"] .ps-kreis { display: block; }
-  /* v1.2.4 GEMELDET: "Der gruene Haken ist komisch, weil er auch kommt, wenn ich nichts druecke oder was Falsches."
-     Er stand in JEDER Pause. Jetzt: Haken nur nach einem richtigen Druck, Kreuz nach einem falschen, nichts nach
-     Zeitablauf. */
-  .ps-fertig, .ps-falsch { display: none; font-size: 40px; }
-  .ps-fertig { color: var(--good); } .ps-falsch { color: var(--bad); }
-  .pit-spiel[data-symbol=""][data-blitz="ok"] .ps-fertig { display: block; }
-  .pit-spiel[data-symbol=""][data-blitz="falsch"] .ps-falsch { display: block; }
-  /* Die Reihe (v1.2.30): alle Knoepfe des Durchgangs an festen Plaetzen, der aktuelle markiert, erledigte
-     blenden aus. */
-  .ps-reihe { display: flex; gap: 8px; height: 30px; overflow: hidden; }
-  .ps-reihe-innen { display: flex; gap: 8px; }
-  .ps-slot { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 4px;
-    border: 1px solid rgba(255,255,255,.25); opacity: .55; transition: opacity .25s ease-out, transform .25s ease-out; }
-  .ps-slot[data-zustand="jetzt"] { opacity: 1; border-color: var(--k-blau); box-shadow: 0 0 0 2px var(--k-blau); }
-  .ps-slot[data-zustand="fertig"] { opacity: 0; transform: scale(.6); }
-  .ps-slot svg { width: 20px; height: 20px; fill: none; stroke-width: 2.4; display: none; }
   .ps-slot[data-s="quad"] .ps-quad, .ps-slot[data-s="kreis"] .ps-kreis { display: block; }
-  .ps-slot[data-s=""] { border-color: transparent; box-shadow: none; }
-  .pit-spiel[data-blitz="ok"] .ps-karte { border-color: var(--good); box-shadow: 0 0 0 3px var(--good), 0 10px 40px rgba(0,0,0,.7); }
-  .pit-spiel[data-blitz="falsch"] .ps-karte { border-color: var(--bad); box-shadow: 0 0 0 3px var(--bad), 0 10px 40px rgba(0,0,0,.7); }
-  .ps-fuss { display: flex; gap: 14px; align-items: center; font-size: 12px; }
+  .ps-slot[data-zustand="jetzt"] { opacity: 1; border-color: var(--k-blau); box-shadow: 0 0 0 2px var(--k-blau); }
+  .ps-slot[data-zustand="ok"] { opacity: 1; border-color: var(--good); box-shadow: 0 0 0 3px var(--good); }
+  .ps-slot[data-zustand="falsch"] { opacity: 1; border-color: var(--bad); box-shadow: 0 0 0 3px var(--bad); }
+  /* Im gedrehten Vollbild ist vw die schmale Seite des Telefons. */
+  body.race-turn .ps-slot { width: clamp(52px, 8.5vh, 92px); }
+  .ps-fuss { display: none; gap: 14px; align-items: center; }
+  .pit-spiel.ps-touch .ps-fuss { display: flex; }
   .ps-fuss button { font-size: 20px; line-height: 1; padding: 4px 14px; background: var(--k-grau); color: #fff; border: 1px solid rgba(255,255,255,.3); }
   /* ---- Tutorial ---- */
   .k-apk { display: inline-flex; gap: 7px; align-items: center; margin-top: 10px; padding: 5px 14px;
@@ -3313,6 +3302,16 @@
   .ch-kachel .ch-k-rang:empty { display: none; }
   .ch-kachel .ch-k-anzahl { display: block; font-style: normal; font-size: 10.5px; color: var(--dim, #a3acbd); text-align: center; padding: 0 4px 5px; }
   .ch-kachel .ch-k-anzahl[hidden] { display: none; }
+  /* v1.3.58/v1.3.62: Community-Vorschau (72d-ch-vorschau.js): bis zu 3 Karten plus eine gleich grosse
+     feste Kachel (Alle anzeigen bzw. Strecke einreichen) im selben Raster. */
+  .ch-v-karte .ch-k-woche .ch-v-label, .ch-v-karte .ch-k-woche .ch-v-art { display: inline-block; font-weight: 800;
+    letter-spacing: .05em; padding: 1px 7px; border: 1px solid var(--k-blau); color: #eef0f4; border-radius: 3px; }
+  .ch-v-karte .ch-k-woche .ch-v-art { border-color: var(--accent); }
+  .ch-v-karte .ch-mini .lade-dreh { position: relative; width: 34px; height: 34px; }
+  .ch-v-karte.ch-v-leer .ch-mini { opacity: .55; }
+  .ch-v-fest .ch-mini svg { width: 46px; height: 46px; margin: 0; }
+  .ch-v-gitter { grid-auto-rows: 1fr; }
+  .misc-tile.ch-alle b[hidden] { display: none; }
   .ch-k-medaille-hinweis { font-size: 12px; line-height: 1.5; margin: 2px 0 8px; }
   .ch-detail { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   .ch-rechts > h3:first-child { margin-top: 0; }
@@ -3362,6 +3361,7 @@
   .sk-chip { font-size: 12px; padding: 4px 10px; border-radius: 999px; }
   .sk-chip.an { border-color: var(--info); background: rgba(0,163,224,.22); font-weight: 700; }
   .sk-eigene { margin-left: 2px; }
+  .comm-filter { margin: 8px 0 2px; }
   .sk-block #sk-editor-auffrischen { margin-top: 8px; }
   .sk-lokal { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 0 5px;
     border: 1px solid var(--muted); border-radius: 4px; color: var(--muted); white-space: nowrap; }
@@ -3787,47 +3787,81 @@
   body.vf-an #hud-toast-wrap { position: fixed; z-index: 400; top: max(52px, env(safe-area-inset-top)); left: 50%; right: auto;
     transform: translateX(-50%); pointer-events: none; }
   .vf-bild { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  .vf-hud { position: absolute; left: max(10px, env(safe-area-inset-left)); top: max(8px, env(safe-area-inset-top)); display: grid; gap: 2px;
-    background: rgba(5,7,12,.62); color: #f3f4f6; padding: 6px 10px; border-radius: 8px; font-variant-numeric: tabular-nums;
-    font-family: "Bahnschrift SemiCondensed", "Roboto Condensed", system-ui, sans-serif; font-size: clamp(12px, 1.8vw, 16px); }
-  .vf-hud b { font-size: 1.6em; line-height: 1; }
-  .vf-abseits { color: #ffb02e; font-weight: 700; }
-  .vf-modus { color: #8fd3ff; font-weight: 700; }
-  .vf-acc { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%);
-    display: grid; gap: 6px; background: rgba(5,7,12,.62); color: #f3f4f6; padding: 10px 16px; border-radius: 10px;
-    font-variant-numeric: tabular-nums; font-family: "Bahnschrift SemiCondensed", "Roboto Condensed", system-ui, sans-serif; }
-  .vf-acc .vf-tempo { font-size: clamp(30px, 6vw, 56px); line-height: 1; font-weight: 700; color: #fff; }
-  .vf-acc-zeile { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
-  .vf-lbl { color: #9aa3b2; font-size: 0.8em; text-transform: uppercase; letter-spacing: .06em; }
-  .vf-gang { font-size: 1.3em; font-weight: 700; color: #8fd3ff; }
-  .vf-rpm, .vf-reifen, .vf-tank { font-weight: 700; }
-  .vf-acc-dreh { height: 8px; background: #20303c; border-radius: 4px; overflow: hidden; }
-  .vf-dreh-stab { display: block; height: 100%; width: calc(var(--f, 0) * 100%); background: linear-gradient(90deg, #2ee06a, #ffb02e 60%, #ff5252); transition: width .08s linear; }
-  .vf-knoepfe { position: absolute; right: max(10px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); display: flex; gap: 6px; }
-  .vf-knoepfe button { background: rgba(5,7,12,.62); color: #fff; border: 1px solid rgba(255,255,255,.35); padding: 6px 12px; min-height: 2.2em; }
-  .vf-wip { position: absolute; left: 10px; bottom: 8px; color: #0b0c10; font-weight: 700; font-size: 12px; }
-  /* v1.1.55: Auf dem Handy war das HUD zu gross und verdeckte das Auto. Das HUD wird flach und in
-     zwei Ecken unten aufgeteilt: links die Fahrwerte (Tempo/Gang/Drehzahl/Reifen/Tank), rechts die
-     Renn-Infos (Runde/Zeiten/Modus). Die Mitte bleibt fuer das Auto frei. Gilt fuer alle Mobil- und
-     Touch-Geraete (auch quer gehalten und Tablets), daher max-width 1000px plus (pointer: coarse). */
-  @media (max-width: 1000px), (pointer: coarse) {
-    /* Renn-Infos unten rechts, flach und rechtsbuendig; das grosse Tempo steht im ACC-Cluster links. */
-    .vf-hud { left: auto; right: max(5px, env(safe-area-inset-right)); bottom: max(5px, env(safe-area-inset-bottom)); top: auto;
-      font-size: 8px; padding: 2px 5px; gap: 0; max-width: min(44vw, 320px); justify-items: end; line-height: 1.1; }
-    .vf-hud b { font-size: 1.1em; }
-    .vf-hud .vf-tempo { display: none; }
-    /* Fahrwerte unten links, flach. */
-    .vf-acc { left: max(5px, env(safe-area-inset-left)); bottom: max(5px, env(safe-area-inset-bottom)); transform: none;
-      padding: 2px 5px; gap: 0; max-width: min(44vw, 320px); line-height: 1.1; }
-    .vf-acc .vf-tempo { font-size: clamp(14px, 3vw, 20px); }
-    .vf-acc-zeile { gap: 4px; }
-    .vf-lbl { font-size: 0.55em; }
-    .vf-gang { font-size: 0.95em; }
-    .vf-rpm, .vf-reifen, .vf-tank { font-size: 0.76em; }
-    .vf-acc-dreh { height: 3px; }
-    .vf-knoepfe { right: max(5px, env(safe-area-inset-right)); top: max(5px, env(safe-area-inset-top)); gap: 4px; }
-    .vf-knoepfe button { padding: 3px 7px; min-height: 1.5em; font-size: 10px; }
-    .vf-wip { left: max(5px, env(safe-area-inset-left)); right: auto; bottom: auto; top: max(5px, env(safe-area-inset-top)); font-size: 10px; }
+  /* HUD im Stil von ACC (WIP, 60d-virtuell.js vfHud): kantige, fast schwarze Kacheln mit schmaler
+     Akzentlinie in --k-blau, kleine gesperrte Grossbuchstaben, grosse Zahlen in der schmalen App-Schrift.
+     Eine Groesse (--vf-s) fuer alles, aus Breite UND Hoehe: auf dem Handy quer (800x370) etwa 13 px, am
+     Desktop 17 px. Bewegt wird je Bild nur clip-path/transform (kein Layout). */
+  .vf-schicht { --vf-s: clamp(10px, calc(1.1vw + 1.2vh), 20px); --vf-bg: rgba(8,10,14,.8); --vf-linie: var(--k-blau, #00a3e0);
+    --vf-dim: var(--k-dim, #a3acbd); font-family: var(--k-font); }
+  .vf-kachel { background: var(--vf-bg); color: #f3f4f6; border-top: 2px solid var(--vf-linie); font-size: var(--vf-s);
+    font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .vf-lbl { color: var(--vf-dim); font-size: .62em; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; white-space: nowrap; }
+  /* Zeiten oben links */
+  .vf-hud { position: absolute; left: max(8px, env(safe-area-inset-left)); top: max(8px, env(safe-area-inset-top));
+    display: grid; width: 11.5em; padding: 0 0 .35em; }
+  .vf-modus { background: var(--vf-linie); color: var(--k-blau-text, #04070c); font-size: .64em; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .14em; padding: .3em .75em .25em; margin-bottom: .2em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vf-modus:empty { display: none; }
+  .vf-z { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: .5em; padding: .12em .6em; }
+  .vf-z > :nth-child(2) { text-align: right; font-weight: 700; }
+  .vf-z-akt > b { font-size: 1.5em; line-height: 1.05; }
+  .vf-z-delta { grid-template-columns: auto 1fr; row-gap: .2em; }
+  .vf-delta { color: var(--vf-dim); }
+  .vf-z-delta[data-d="schneller"] .vf-delta { color: #3ee07a; }
+  .vf-z-delta[data-d="langsamer"] .vf-delta { color: #ff5a5a; }
+  .vf-delta-bar { grid-column: 1 / -1; position: relative; display: block; height: .3em; background: rgba(255,255,255,.1); }
+  .vf-delta-bar::before { content: ""; position: absolute; left: 50%; top: -.15em; bottom: -.15em; width: 1px; background: rgba(255,255,255,.55); }
+  .vf-delta-bar > i { position: absolute; left: 50%; top: 0; bottom: 0; width: 50%; transform-origin: 0 50%; transform: scaleX(0); background: #ff5a5a; }
+  .vf-z-delta[data-d="schneller"] .vf-delta-bar > i { background: #3ee07a; }
+  .vf-abseits { margin: .3em .6em 0; background: #ffb02e; color: #0b0c10; font-size: .7em; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .12em; padding: .25em .5em; text-align: center; }
+  .vf-abseits[hidden] { display: none; }
+  /* Tacho-Block unten Mitte: Reifen | Kern | Tank */
+  .vf-acc { position: absolute; left: 50%; bottom: max(8px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    display: flex; align-items: stretch; gap: 3px; }
+  .vf-acc-kern { width: 14em; padding: .45em .6em .35em; display: grid; gap: .3em; }
+  .vf-acc-dreh { position: relative; height: .5em;
+    background: linear-gradient(90deg, rgba(255,255,255,.13) 0 calc(100% - 2px), transparent 0) 0 0 / 5% 100% repeat-x; }
+  /* 20 Segmente: Gruen, die letzten fuenf Rot, die letzten zwei Blau - die Farben der Schaltlampen im Cockpit. */
+  .vf-dreh-stab { position: absolute; inset: 0; display: block;
+    background: linear-gradient(90deg, #2ee06a 0 75%, #ff3b3b 75% 90%, var(--vf-linie) 90%);
+    -webkit-mask: linear-gradient(90deg, #000 0 calc(100% - 2px), transparent 0) 0 0 / 5% 100% repeat-x;
+    mask: linear-gradient(90deg, #000 0 calc(100% - 2px), transparent 0) 0 0 / 5% 100% repeat-x;
+    clip-path: inset(0 calc(100% - var(--f, 0) * 100%) 0 0); }
+  .vf-acc-werte { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: .5em; }
+  .vf-acc-wert { display: grid; justify-items: center; gap: .1em; }
+  .vf-acc-wert b { font-size: 1.55em; font-weight: 700; line-height: 1; }
+  .vf-gang { min-width: 1.35em; text-align: center; font-size: 2.6em; font-weight: 700; line-height: 1; padding: .02em .12em 0;
+    border-bottom: 2px solid var(--vf-linie); background: rgba(255,255,255,.05); }
+  .vf-acc.vf-schalt .vf-gang { background: var(--vf-linie); color: var(--k-blau-text, #04070c); }
+  .vf-acc-reifen, .vf-acc-tank { padding: .4em .55em; display: grid; align-content: start; gap: .3em; justify-items: center; }
+  .vf-reifen { display: grid; grid-template-columns: repeat(2, 2.3em); gap: 3px .55em; }
+  .vf-reifen > i { display: block; font-style: normal; font-weight: 700; font-size: .78em; text-align: center; padding: .28em 0;
+    color: #04070c; background: #4a5568; }
+  .vf-acc-tank { min-width: 4.6em; }
+  .vf-tank { font-size: 1.25em; font-weight: 700; line-height: 1; }
+  .vf-tank-bar { display: block; width: 100%; height: .35em; background: rgba(255,255,255,.13); }
+  .vf-tank-bar > i { display: block; height: 100%; background: var(--vf-linie); transform-origin: 0 50%; }
+  /* Knoepfe oben rechts im selben Stil */
+  .vf-knoepfe { position: absolute; right: max(8px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); display: flex; gap: 3px; }
+  .vf-knoepfe button { background: var(--vf-bg); color: #f3f4f6; border: 0; border-top: 2px solid var(--vf-linie); border-radius: 0;
+    font-family: var(--k-font); font-size: calc(var(--vf-s) * .72); font-weight: 700; text-transform: uppercase; letter-spacing: .12em;
+    padding: .55em 1em; min-height: 2.6em; min-width: 2.6em; cursor: pointer; }
+  .vf-knoepfe button:hover, .vf-knoepfe button:focus-visible { background: var(--vf-linie); color: var(--k-blau-text, #04070c); outline: 0; }
+  .vf-kamfrei { position: absolute; right: max(8px, env(safe-area-inset-right)); top: calc(max(8px, env(safe-area-inset-top)) + var(--vf-s) * 2.3);
+    background: var(--vf-bg); color: var(--vf-dim); border-left: 2px solid var(--vf-linie); font-size: calc(var(--vf-s) * .62);
+    text-transform: uppercase; letter-spacing: .12em; padding: .35em .7em; white-space: nowrap; }
+  .vf-kamfrei[hidden] { display: none; }
+  .vf-wip { position: absolute; left: max(8px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom));
+    background: var(--vf-bg); color: var(--vf-dim); font-size: calc(var(--vf-s) * .62); font-weight: 700; text-transform: uppercase;
+    letter-spacing: .12em; padding: .3em .6em; }
+  /* Hochkant und sehr schmal: Reifen und Tank ruecken naeher, damit der Block in die Breite passt. */
+  @media (max-width: 520px) {
+    .vf-acc-kern { width: 12em; }
+    .vf-reifen { grid-template-columns: repeat(2, 2em); gap: 2px .3em; }
+    .vf-acc-reifen, .vf-acc-tank { padding: .35em .4em; }
+    .vf-acc-tank { min-width: 3.8em; }
+    .vf-wip { bottom: auto; top: calc(max(8px, env(safe-area-inset-top)) + var(--vf-s) * 9.5); }
   }
   /* v1.1.3: Autobild und Versatz - rechts stehende Autos (P1, P3 ...) nach rechts, links stehende
      nach links geschoben, wie auf einem Startplan. */
@@ -4867,6 +4901,214 @@
   @media (prefers-reduced-motion: reduce) {
     #ampel-overlay { transition: none; }
   }
+  /* ======================= COCKPIT-ANSICHT "ACC" (v1.3.51, Vorgabe seit v1.3.58) =========
+     BESTELLT: "ein alternativer Haupt-Cockpit-Screen fuer das nicht-virtuelle Fahren, mit
+     allen Elementen des aktuellen ausser Regenradar, im Stil von ACC [Assetto Corsa
+     Competizione], mit der blauen Akzentfarbe der App, waehlbar im Menue der Ansichten."
+     Abgenommen in v1.3.58: "Ich liebe den Cockpit View [...] Ersetze die Wetterkachel mit
+     der Sonne wieder durch den Regenradar. Mach diese Ansicht zum Standard."
+
+     ANDERS ALS DIE UEBRIGEN ANSICHTEN aendert diese auch die ANORDNUNG und nicht nur die
+     acht Groessen aus :root - ACC erkennt man an der Form der Felder, nicht an der Farbe.
+     Trotzdem NUR CSS ueber dieselben Elemente: kein zusaetzlicher Knoten, kein zweiter
+     Malcode, der Cockpit-Takt schreibt dieselben ids wie immer.
+
+     Die Regeln stehen absichtlich HIER am Ende und mit #race-dash: sie muessen die spaeten
+     Bestellungen (Zeiten doppelt so gross, rechteckige Lichter) und die Vollbild-Regeln
+     schlagen, ohne dass dort etwas von dieser Ansicht weiss. Der Zwei-Spieler-Schirm
+     (#race-p2screen) liegt als Ueberlagerung ueber denselben Rasterbereichen; die Namen
+     der Bereiche bleiben deshalb unveraendert.
+
+     Bedeutungsfarben bleiben: Tank gruen, Schaden rot, Bestzeit gruen, Reifenfarbe ist die
+     Temperatur. Blau (--k-blau, dieselbe Farbe wie das Menue) ist nur Akzent, nie Aussage. */
+  body[data-cockpit="acc"] {
+    --gt3-ink: #e6ebf2;
+    --gt3-screen: radial-gradient(ellipse 85% 70% at 50% 35%, #12161d 0%, #0a0c10 60%, #050608 100%);
+    --gt3-radius: 0px;
+    --gt3-line: rgba(255, 255, 255, .11);
+    --gt3-line-soft: rgba(255, 255, 255, .06);
+    --gt3-glow: none;
+    --gt3-scan: linear-gradient(180deg, rgba(0,0,0,0) 62%, rgba(0,0,0,.16) 100%);
+    --gt3-vignette: inset 0 0 0 1px rgba(0, 163, 224, .18);
+    /* Keine Blende im eigentlichen Sinn: ACC ist ein Bild ueber dem Spiel und kein Geraet.
+       Ein schmaler dunkler Rahmen bleibt, damit der Schirm eine Kante hat. */
+    --gt3-blende: 4px;
+    --gt3-carbon: linear-gradient(180deg, #171a20, #0b0d11);
+    --gt3-schraube: none;
+    --gt3-tile: linear-gradient(rgba(24, 28, 36, .95), rgba(16, 19, 25, .95));
+    --gt3-tile-ink: #eef2f7;
+    --gt3-btn: #1a1e26;
+    --gt3-btn-ink: #eef2f7;
+    --gt3-btn-hover: #262c37;
+    --gt3-lbl: #8e99ab;
+    --gt3-rpm-ink: #b9c6d6;
+    --gt3-strip: #08090c;
+    --gt3-strip-ink: #8e99ab;
+    --acc-blau: var(--k-blau, #00a3e0);
+    --acc-feld: rgba(13, 16, 21, .88);
+    --acc-feld-klick: rgba(23, 27, 35, .94);
+    --acc-feld-hover: rgba(33, 39, 50, .96);
+    --acc-kante: rgba(255, 255, 255, .13);
+    /* Das Regenradar auf den Grund der Felder: fast schwarz statt blaeulich. Die Wolken
+       bleiben weiss, der Regen wird eine Spur heller, weil er sonst im Grund verschwindet
+       - dieselbe Abwaegung wie bei "GT3". */
+    --wx-grund: #07090d;
+    --wx-regen: 120, 186, 214;
+  }
+  body[data-cockpit="acc"] #race-dash.gt3 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, .92fr) minmax(0, 1.22fr); }
+
+  /* DIE FELDER: fast schwarz, halbdurchsichtig, kantig, oben eine Haarlinie. Die Linie ist
+     eine Hintergrundschicht und kein Schatten - die Boxenstopp-Kacheln zeigen ihren Zustand
+     (gruen gewaehlt, rot abgewaehlt) ueber box-shadow, und den darf die Ansicht nicht
+     ueberschreiben. */
+  body[data-cockpit="acc"] #race-dash .gt3-box,
+  body[data-cockpit="acc"] #race-dash .gt3-gear {
+    background: linear-gradient(var(--acc-kante), var(--acc-kante)) 0 0 / 100% var(--acc-kh, 1px) no-repeat,
+                var(--acc-feld); }
+  body[data-cockpit="acc"] #race-dash .gt3-box:not(.pit-tile) { box-shadow: none; }
+  body[data-cockpit="acc"] #race-dash .gt3-box.gt3-click,
+  body[data-cockpit="acc"] #race-dash .gt3-box.pit-tile {
+    background: linear-gradient(var(--acc-kante), var(--acc-kante)) 0 0 / 100% var(--acc-kh, 1px) no-repeat,
+                var(--acc-feld-klick); }
+  body[data-cockpit="acc"] #race-dash .gt3-box.gt3-click:hover {
+    background: linear-gradient(var(--acc-blau), var(--acc-blau)) 0 0 / 100% 2px no-repeat,
+                var(--acc-feld-hover); }
+  /* Die drei Hauptfelder - Runde/Position, Gang, Zeiten - tragen die blaue Kopflinie. */
+  body[data-cockpit="acc"] #race-dash .gt3-left > .gt3-box:first-child,
+  body[data-cockpit="acc"] #race-dash .gt3-right > .gt3-box:first-child,
+  body[data-cockpit="acc"] #race-dash .gt3-gear { --acc-kante: var(--acc-blau); --acc-kh: 2px; }
+  body[data-cockpit="acc"] #race-dash .gt3-lbl { letter-spacing: .2em; font-weight: 600; }
+
+  /* DREHZAHL: eine segmentierte, schraege Leiste statt runder Lampen. Die Farben setzt
+     schaltLampen() wie immer - hier aendert sich nur die Form. */
+  body[data-cockpit="acc"] #race-shift { gap: clamp(2px, .45vw, 5px); }
+  body[data-cockpit="acc"] #race-shift::after { display: none; }
+  body[data-cockpit="acc"] #race-shift > span {
+    aspect-ratio: auto; width: 100%; max-width: none; height: clamp(12px, 2.6vw, 24px);
+    border-radius: 0; transform: skewX(-20deg); }
+
+  /* LINKS: Runde und Position wie das Positionsfeld im Spiel, die Position als blaues
+     Schild. Kein display am Schild selbst - es traegt hidden, und das muss gelten. */
+  body[data-cockpit="acc"] #race-dash .gt3-left > .gt3-box:first-child > .gt3-lbl {
+    display: flex; align-items: center; justify-content: space-between; gap: .6em; }
+  body[data-cockpit="acc"] #race-dash .gt3-pos {
+    margin-left: 0; padding: .1em .45em .04em; line-height: 1.1; vertical-align: 0;
+    background: var(--acc-blau); color: var(--k-blau-text, #04070c); text-shadow: none;
+    letter-spacing: .04em; font-size: clamp(14px, 2.4vw, 24px); }
+  /* Die vier Knoepfe nehmen die Hoehe, die die Zeiten rechts ohnehin vorgeben: groessere
+     Trefferflaeche, ohne dass das Cockpit dadurch hoeher wird (1fr verteilt nur den Rest). */
+  body[data-cockpit="acc"] #race-dash .gt3-left {
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr); align-content: stretch; }
+  body[data-cockpit="acc"] #race-dash .gt3-left .gt3-half .gt3-act { align-content: center; }
+  body[data-cockpit="acc"] #race-dash .gt3-act { letter-spacing: .08em; text-transform: uppercase; }
+  body[data-cockpit="acc"] #race-dash .gt3-left .gt3-act:not(.strafe) {
+    box-shadow: inset 0 -2px 0 var(--acc-blau); }
+  body[data-cockpit="acc"] #race-dash .race-corner button { border-radius: 0; }
+
+  /* MITTE: der Gang gross, darunter eine kurze blaue Linie, das Tempo als zweite Zahl. */
+  body[data-cockpit="acc"] #race-dash .gt3-gear {
+    padding: clamp(3px, .6vw, 7px) clamp(4px, .8vw, 8px); align-content: center; }
+  body[data-cockpit="acc"] #race-dash .gt3-rpm {
+    font-size: clamp(11px, 1.7vw, 18px); letter-spacing: .12em; }
+  body[data-cockpit="acc"] #race-dash .gt3-gearnum {
+    color: #ffffff; text-shadow: none; line-height: .92;
+    font-size: clamp(54px, 12.5vw, 124px);
+    padding-bottom: clamp(3px, .6vw, 6px);
+    background: linear-gradient(var(--acc-blau), var(--acc-blau)) 50% 100% / 34% 3px no-repeat; }
+  body[data-cockpit="acc"] #race-dash .gt3-gear > .gt3-box {
+    background: none; box-shadow: none; }
+  body[data-cockpit="acc"] #race-dash .gt3-gear .gt3-val.big {
+    font-size: clamp(24px, 4.6vw, 48px); text-shadow: none; }
+
+  /* RECHTS: die Zeiten als Zeilen wie im Timing-Fenster - Beschriftung links, Zeit rechts.
+     Drei Zeilen statt drei Spalten: so passt die Zeit auch auf 800 px in EINE Zeile, wo
+     sie in den anderen Ansichten umbricht. */
+  body[data-cockpit="acc"] #race-dash .gt3-times { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  body[data-cockpit="acc"] #race-dash .gt3-times > div {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center;
+    column-gap: .8em; padding: clamp(2px, .45vw, 5px) 0; }
+  body[data-cockpit="acc"] #race-dash .gt3-times > div + div {
+    border-top: 1px solid var(--gt3-line); border-left: 0; padding-left: 0; }
+  body[data-cockpit="acc"] #race-dash .gt3-right .gt3-times .gt3-val {
+    text-align: right; white-space: nowrap; font-size: clamp(18px, 3.2vw, 36px); line-height: 1.08; }
+  body[data-cockpit="acc"] #race-dash .gt3-right .gt3-times .gt3-lbl { font-size: clamp(9px, 1.2vw, 12px); }
+  body[data-cockpit="acc"] #race-dash .gt3-times .gt3-delta {
+    grid-column: 1 / -1; text-align: right; min-height: 0; font-size: clamp(10px, 1.3vw, 14px); }
+  body[data-cockpit="acc"] #race-dash .gt3-right .gt3-laps {
+    font-size: clamp(11px, 1.55vw, 16px); max-height: 5.5em; margin-top: clamp(3px, .6vw, 6px); }
+  body[data-cockpit="acc"] #race-dash .gt3-laps li > span:first-child { color: var(--gt3-lbl); }
+
+  /* UNTEN: dieselben acht Kacheln, das Regenradar wieder breit wie in den anderen
+     Ansichten (v1.3.58 BESTELLT: "Ersetze die Wetterkachel mit der Sonne wieder durch den
+     Regenradar"). */
+  body[data-cockpit="acc"] #race-dash.gt3 > .gt3-strip {
+    grid-template-columns: .8fr .8fr 1.1fr .8fr .65fr 2.2fr .95fr .95fr;
+    gap: clamp(3px, .6vw, 6px); }
+  /* Schmal zweireihig wie die Vorgabe: oben fuenf Kacheln, unten das Radar ueber drei
+     Spalten (die span-Regel der Grundansicht gilt weiter), Boxenwahl und G-Plot. */
+  @media (max-width: 560px) {
+    body[data-cockpit="acc"]:not(.race-turn) #race-dash.gt3 > .gt3-strip {
+      grid-template-columns: .8fr .8fr 1fr .8fr .8fr; }
+  }
+  /* Das Radar zeichnet wie ueberall (der Schalter "Regenradar" gilt), auf dem dunklen Grund
+     aus --wx-grund. Die blaue Kopflinie liegt UEBER der Leinwand - als Hintergrundschicht
+     wie bei den anderen Feldern waere sie unter ihr verschwunden. Antippen schaltet weiter
+     das Wetter: die Kachel ist dieselbe. */
+  body[data-cockpit="acc"] #race-wx-box::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    background: var(--acc-blau); z-index: 3; pointer-events: none; }
+
+  /* TANK, ZUSTAND, AKKU: oben Symbol und Zahl, in der MITTE der Kachel ein dicker
+     WAAGERECHTER Balken (v1.3.58 BESTELLT: "mit groesserer Hoehe, damit sie leichter zu
+     erkennen sind. Sie sollten sich ausserdem in der Mitte der Kachel befinden.").
+
+     Der Takt setzt die Fuellung als height, weil der Balken in den anderen Ansichten
+     senkrecht steht - also wird hier der ganze Balken um 90 Grad gelegt, statt am Malcode
+     etwas zu aendern. Gefuellt wird damit von links nach rechts.
+
+     SEINE LAENGE IST DIE KACHELBREITE, und die kommt ohne Container-Einheiten aus: ein
+     Innenabstand in Prozent rechnet immer gegen die BREITE des umgebenden Blocks, auch der
+     obere. Der Balken hat also die Hoehe 0 und einen padding-top von "Kachelbreite minus
+     Raender" - und weil die Fuellung absolut darin steht, rechnet ihr height in Prozent gegen
+     genau diese Hoehe. Das laeuft auch auf alten WebViews ohne cqw (v1.3.51 brauchte sie).
+
+     Senkrecht mittig: der Drehpunkt ist die untere linke Ecke, und der gedrehte Balken liegt
+     von dort um seine Dicke NACH UNTEN. Die Unterkante steht deshalb eine halbe Dicke ueber
+     der Kachelmitte. */
+  body[data-cockpit="acc"] #race-dash > .gt3-strip > .gt3-box:has(> .gt3-bar-v) {
+    position: relative;
+    display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center;
+    align-content: start; column-gap: clamp(3px, .6vw, 6px); }
+  body[data-cockpit="acc"] #race-dash > .gt3-strip > .gt3-box > .gt3-val.sm {
+    text-align: right; white-space: nowrap; font-size: clamp(13px, 2.1vw, 22px); }
+  body[data-cockpit="acc"] #race-dash > .gt3-strip > .gt3-box > .gt3-bar-v {
+    --acc-dicke: clamp(12px, 2vw, 20px);
+    --acc-rand: clamp(4px, .8vw, 8px);
+    position: absolute; display: block; margin: 0;
+    left: var(--acc-rand); bottom: calc(50% + var(--acc-dicke) / 2);
+    width: var(--acc-dicke); height: 0; padding-top: calc(100% - 2 * var(--acc-rand));
+    transform-origin: 0 100%; transform: rotate(90deg); background: #1c212b;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
+  body[data-cockpit="acc"] #race-dash > .gt3-strip > .gt3-box > .gt3-bar-v > i {
+    position: absolute; left: 0; right: 0; bottom: 0; width: auto; }
+  /* Reifen: dieselben vier Felder, kantiger und mit etwas mehr Flaeche. */
+  body[data-cockpit="acc"] #race-tyre-box .gt3-t4 { border-radius: 2px; }
+  /* Gedeckelt: die Reifen haben ein festes Seitenverhaeltnis, und in der breiteren Spalte
+     wuerden sie sonst die ganze Kachelreihe in die Hoehe ziehen - und cockpitPassung() das
+     ganze Cockpit kleiner rechnen. */
+  body[data-cockpit="acc"] #race-tyre-box .gt3-tyres4 {
+    max-width: clamp(64px, 9.5vw, 116px); margin: 3px auto 2px; }
+  /* Im gedrehten Vollbild ist vw die SCHMALE Seite des Telefons; die Breite des Cockpits
+     ist dort die Hoehe des Schirms. */
+  body.race-turn[data-cockpit="acc"] #race-tyre-box .gt3-tyres4 { max-width: clamp(64px, 9.5vh, 116px); }
+  body.race-turn[data-cockpit="acc"] #race-dash .gt3-gearnum { font-size: clamp(54px, 12.5vh, 124px); }
+  body.race-turn[data-cockpit="acc"] #race-dash .gt3-gear .gt3-val.big { font-size: clamp(24px, 4.6vh, 48px); }
+  body.race-turn[data-cockpit="acc"] #race-shift > span { height: clamp(12px, 2.6vh, 24px); }
+  body.race-turn[data-cockpit="acc"] #race-dash > .gt3-strip > .gt3-box > .gt3-bar-v { --acc-dicke: clamp(12px, 2vh, 20px); }
+  body[data-cockpit="acc"] #race-dash > .gt3-strip > #race-tyre-box > .gt3-val.sm {
+    text-align: center; white-space: normal; font-size: clamp(10.5px, 1.3vw, 14px); }
+  body[data-cockpit="acc"] #race-dash .gt3-foot { box-shadow: inset 3px 0 0 var(--acc-blau); }
 </style>
 <style>
   .stat-clean { margin-top:20px; border:1px solid var(--line,#454b57); border-radius:8px; padding:12px; }
@@ -5039,7 +5281,7 @@
         <span class="home-lade-dreh" id="home-lade-dreh"></span><span class="home-lade-text" id="home-lade-text" data-i18n-skip></span>
       </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.3.38</span></span>
+        <span class="foot-ver">v<span id="app-version">1.3.65</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -5455,29 +5697,22 @@
            Selbsttest "Cockpit-Ansicht: sichtbar verschieden, funktional gleich" verlangt,
            dass die Zahl der Elemente mit id ueber alle Ansichten konstant ist. Gefuellt
            werden nur die Werte. -->
-      <!-- BOXEN-MINIGAME (70-race.js, pitSpielMalen): Symbol mittig, ein Ring als Zeitfenster,
-           Zaehler, Restzeit, Treffer, und zwei Tipp-Flaechen fuer Touch. Im Markup, damit
-           die Zahl der ids in allen Ansichten gleich bleibt. -->
+      <!-- BOXEN-MINIGAME (70-race.js, pitSpielMalen), seit v1.3.62: NUR die Folge der vier Knoepfe.
+           BESTELLT: "Zeige in der Kachel darueber die Folge der vier Knoepfe, und je Knopf, den ich
+           druecke, wird dann der Knopf gruen (richtig) oder rot (falsch) umrahmt [...] Ich moechte
+           nicht das Gedoens darueber und darunter und kein Zeitlimit." Zaehler, Restzeit, Ring,
+           grosses Einzelsymbol und Trefferzahl sind weg. Die zwei Tipp-Flaechen bleiben im Markup,
+           erscheinen aber nur, wenn beim Start KEIN Gamepad anliegt (.ps-touch) - ohne sie waere
+           das Spiel auf einem Telefon ohne Controller nicht zu bedienen. -->
       <div class="pit-spiel" id="pit-spiel" hidden>
         <div class="ps-karte">
-          <div class="ps-kopf"><span id="pit-spiel-zaehler" data-i18n-skip>1/8</span>
-            <b>BOX</b><span id="pit-spiel-rest" data-i18n-skip></span></div>
-          <div class="ps-mitte">
-            <svg class="ps-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="45"/></svg>
-            <svg class="ps-sym ps-quad" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg>
-            <svg class="ps-sym ps-kreis" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5"/></svg>
-            <span class="ps-fertig" data-i18n-skip>&#10003;</span>
-            <span class="ps-falsch" data-i18n-skip>&#10007;</span>
+          <div class="ps-reihe" aria-hidden="true">
+            <span class="ps-slot" data-s="" data-zustand="kommt"><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
+            <span class="ps-slot" data-s="" data-zustand="kommt"><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
+            <span class="ps-slot" data-s="" data-zustand="kommt"><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
+            <span class="ps-slot" data-s="" data-zustand="kommt"><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
           </div>
-          <div class="ps-reihe" aria-hidden="true"><div class="ps-reihe-innen">
-            <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
-            <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
-            <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
-            <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
-            <span class="ps-slot" data-s=""><svg class="ps-quad" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg><svg class="ps-kreis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></span>
-          </div></div>
           <div class="ps-fuss"><button type="button" id="pit-spiel-quad" aria-label="Quadrat">&#9633;</button>
-            <span id="pit-spiel-treffer" data-i18n-skip></span>
             <button type="button" id="pit-spiel-kreis" aria-label="Kreis">&#9675;</button></div>
         </div>
       </div>
@@ -5811,8 +6046,35 @@
        Wertung in src/72-challenges.js. Je Strecke eine Unterseite, damit L1/R1 zwischen ihnen
        blaettern; der Inhalt (#ch-detail) ist EINER und wird in die offene Seite gehaengt. -->
   <section class="tabpage" id="tab-challenges">
+    <!-- v1.3.58: dieselbe Ladeanzeige wie auf dem Startschirm, unten links (59-lade.js). -->
+    <div class="home-lade" id="ch-lade" role="status" aria-label="Lädt …" hidden>
+      <span class="home-lade-dreh" id="ch-lade-dreh"></span><span class="home-lade-text" id="ch-lade-text" data-i18n-skip></span></div>
     <div class="card subpage-home" id="sub-home-challenges">
       <h2>Challenges <span class="wip-tag">experimentell</span></h2>
+      <!-- v1.3.58 BESTELLT: "Strukturiere die Challenges um ... Der Community-Tab ganz oben (vor
+           woechentlichen Challenges) und Network ganz unten. Fuege eine Vorschau der jeweils
+           meistgefahrenen Strecke beider Typen ein und einen Button 'Alle anzeigen'." Die Karten
+           haben das Markup der Wochen-/Dauerrennen-Kacheln (ch-kachel) und werden in
+           72d-ch-vorschau.js gefuellt. "Alle anzeigen" ist eine kleine Kachel (misc-tile), damit das
+           Steuerkreuz sie erreicht; der versteckte Name ist ihr Eintrag in der Reiterleiste. -->
+      <h3 class="k-zwischen">Community</h3>
+      <!-- v1.3.62 BESTELLT: "die beiden Community-Dinger zusammenlegen ... immer die ersten 3 Strecken +
+           eine Kachel in derselben Groesse 'Alle anzeigen' bzw. wenn es nur 1 Strecke gibt, dann die."
+           Die Karten (ch-kachel, wie Wochen-/Dauerrennen) setzt 72d-ch-vorschau.js vor die beiden
+           festen Kacheln. "Alle anzeigen" nur bei mehr als 3 Eintraegen, sonst "Strecke einreichen".
+           Der versteckte Name "Community" ist der Eintrag in der Reiterleiste. -->
+      <div class="misc-grid ch-kacheln ch-v-gitter" id="ch-v-gitter">
+        <button class="misc-tile subpage-open ch-kachel ch-v-fest ch-alle" id="ch-v-alle" data-sub="ch-community" type="button"
+                title="Alle Challenges und Strecken mit Zeiten." hidden><b hidden>Community</b>
+          <b class="ch-k-name">Alle anzeigen</b>
+          <span class="ch-mini" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13"/><rect x="27" y="8" width="13" height="13"/><rect x="8" y="27" width="13" height="13"/><path d="M27 33.5h13M33.5 27v13" stroke="var(--accent)"/></svg></span>
+          <em class="ch-k-anzahl" data-i18n-skip></em></button>
+        <button class="misc-tile ch-kachel ch-v-fest" id="ch-v-einreichen" type="button"
+                title="Eigene Strecken mit Abstimmung einreichen und Bestzeiten teilen.">
+          <b class="ch-k-name">Strecke einreichen</b>
+          <span class="ch-mini" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 34c0-10 6-20 14-20s14 6 14 12-6 8-12 8H10z"/><path d="M24 4v10M19 9h10" stroke="var(--accent)"/></svg></span>
+          <em class="ch-k-woche">Aus der Strecke im Editor</em></button>
+      </div>
       <h3 class="k-zwischen">W&ouml;chentliche Challenges <span class="ch-woche-kopf" id="ch-woche-kopf" data-i18n-skip></span></h3>
       <div class="misc-grid ch-kacheln">
         <button class="misc-tile subpage-open ch-kachel" data-sub="ch-a">
@@ -5873,20 +6135,6 @@
           <span>Gemeinsame Bestenliste &uuml;ber ein Google Sheet.</span>
         </button>
       </div>
-      <h3 class="k-zwischen">Community-Bestzeiten</h3>
-      <div class="misc-grid">
-        <button class="misc-tile subpage-open" data-sub="ch-community">
-          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 34c0-4 3-8 8-8s8 3 8 8M20 14a6 6 0 1 1 0 12 6 6 0 0 1 0-12z"/><path d="M28 14c4-2 10-1 12 4M36 26c-2 4-6 6-10 6" stroke="var(--accent)"/></svg>
-          <b>Community-Bestzeiten</b>
-          <span>Eigene Strecken mit Abstimmung einreichen und Bestzeiten teilen.</span>
-        </button>
-        <!-- v1.3.15: Community-Strecken (72c-strecken-online.js); seit v1.3.25 alle, nicht erst ab vier Fahrern. -->
-        <button class="misc-tile subpage-open" data-sub="ch-strecken">
-          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 34c0-10 6-20 14-20s14 6 14 12-6 8-12 8H10z"/><path d="M14 40h6M22 40h6M30 40h6" stroke="var(--accent)"/></svg>
-          <b>Community-Strecken <span class="wip-tag">WIP</span></b>
-          <span>Alle Strecken, auf denen jemand eine Zeit gefahren ist.</span>
-        </button>
-      </div>
     </div>
     <div class="card subpage" id="sub-ch-a">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
@@ -5917,24 +6165,19 @@
     </div>
     <div class="card subpage" id="sub-ch-community">
       <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
-      <h2>Community-Bestzeiten <span class="wip-tag">experimentell</span></h2>
+      <h2>Community <span class="wip-tag">experimentell</span></h2>
       <div id="community-bereich"></div>
     </div>
     <!-- v0.9.49: EINE Community-Strecke (chCommunitySeite). Keine Kachel und kein Reiter -
          die Strecken wechseln; geoeffnet wird aus der Liste, Zurueck fuehrt dorthin. -->
     <div class="card subpage" id="sub-ch-strecke">
-      <button class="misc-back" id="ch-strecke-zurueck" type="button">&larr; Community-Bestzeiten</button>
+      <button class="misc-back" id="ch-strecke-zurueck" type="button">&larr; Community</button>
       <h2><span class="ch-titel" data-i18n-skip></span> <span class="wip-tag">experimentell</span></h2>
       <div class="ch-platz"></div>
     </div>
-    <!-- v1.3.15: Community-Strecken (Liste) und eine Strecke daraus (72c-strecken-online.js). -->
-    <div class="card subpage" id="sub-ch-strecken">
-      <button class="misc-back subpage-back" data-sub="">&larr; Challenges</button>
-      <h2>Community-Strecken <span class="wip-tag">WIP</span></h2>
-      <div id="sk-liste-bereich"></div>
-    </div>
+    <!-- v1.3.15: eine Strecke mit Zeiten (72c-strecken-online.js). Ihre Liste ist seit v1.3.62 die Community-Seite. -->
     <div class="card subpage" id="sub-ch-sk">
-      <button class="misc-back" id="sk-zurueck" type="button">&larr; Community-Strecken</button>
+      <button class="misc-back" id="sk-zurueck" type="button">&larr; Community</button>
       <h2><span id="sk-titel" data-i18n-skip></span> <span class="wip-tag">WIP</span></h2>
       <div class="sk-karte" id="sk-karte" aria-hidden="true"></div>
       <p class="muted" id="sk-fakten" data-i18n-skip></p>
@@ -6228,6 +6471,11 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>1.3</span></b></p>
       <ul class="muted" id="patchnotes-13" style="padding-left:20px; line-height:1.7">
+        <li>Boxen-Minispiel neu: Es zeigt nur noch die vier Kn&#246;pfe nebeneinander, ohne Kopfzeile, Zeitring und Z&#228;hler. Jeder Druck rahmt den Knopf gr&#252;n (richtig) oder rot (falsch) ein, mit einem Ton; es gibt kein Zeitlimit mehr. Im Hintergrund z&#228;hlen Schnelligkeit und Fehler weiter: ein sofortiger richtiger Druck spart bis zu 10 % der Standzeit, ab 2 s nichts mehr, ein falscher kostet 10 %. Die Arbeit l&#228;uft weiter, wer nichts dr&#252;ckt, steht so lange wie ohne Spiel. Ohne Gamepad erscheinen Tipp-Kn&#246;pfe. Challenges: Community ist ein Bereich mit einer gemeinsamen Rangliste aus Challenges und Strecken (nach Zahl der Fahrer); oben bis zu drei Karten, bei mehr Eintr&#228;gen eine gleich gro&#223;e Kachel &#8222;Alle anzeigen&#8220; zur gemeinsamen Liste mit Filtern Alle, Challenges und Strecken, bei weniger eine Kachel &#8222;Strecke einreichen&#8220;.</li>
+        <li>Cockpit: ACC ist jetzt die Vorgabe-Ansicht (einmalig umgestellt, wer noch Omega gespeichert hatte; wer danach Omega w&#228;hlt, beh&#228;lt es). In ACC sind die Balken f&#252;r Tank, Zustand und Akku deutlich dicker und sitzen mittig in der Kachel, und das Regenradar ist zur&#252;ck an der Stelle der Wetterkachel. Challenges neu geordnet: Community steht oben, mit je einer Vorschau der meistgefahrenen Community Challenge und Strecke (Spielerzahl und Fahrgef&#252;hl als Schwierigkeit) und &#8222;Alle anzeigen&#8220;; danach W&#246;chentliche Challenges, Dauerrennen und Network ganz unten. &#8222;Community-Bestzeiten&#8220; hei&#223;t jetzt &#8222;Community Challenges&#8220;, &#8222;Community-Strecken&#8220; hei&#223;t &#8222;Alle Strecken&#8220;. Beim &#214;ffnen des Tabs laden die Zeiten sofort, unten links dreht dabei das Streckenteil.</li>
+        <li>Virtuelles Fahren: Mit dem rechten Stick drehst du die Kamera um das Auto (bei Motorhaube und &#8222;Fahrer am Rand&#8220; schaust du dich um); der Blick bleibt stehen, R3 setzt ihn auf die Standardansicht zur&#252;ck, und ist die Kamera nicht gedreht, wechselt R3 wie bisher die Kamera (Tastatur: T/F/G/H drehen, V zur&#252;ck, C wechseln). Neues HUD im Stil von ACC mit blauer Akzentfarbe (WIP): Zeitenblock mit Delta zur besten Runde, Drehzahl als Segmentleiste, gro&#223;er Gang, Reifen als Vier-Felder-Grafik, Tank als Balken. Behoben: Beim Start wurde sofort eine Runde von 0,3 s gez&#228;hlt. Neue Cockpit-Ansicht &#8222;ACC: Rennspiel-Stil&#8220; (WIP, Optionen &#8594; Allgemein &#8594; Cockpit-Ansicht): dieselben Anzeigen im Stil von ACC mit blauer Akzentfarbe, ohne Regenradar, das in dieser Ansicht auch nicht gezeichnet wird.</li>
+        <li>Virtuelles Fahren: Die Bahnteile sehen aus wie echter matt schwarzer Kunststoff mit feiner Struktur, dezenten Kratzern, Staub und sichtbaren Steckfugen, jedes Teil etwas anders; die Randsteine sind wei&#223; mit blauen und roten Pfeilen wie das Original, die Startgerade hat die Karolinie. Neben der Bahn liegt ein Holzboden in echten Ma&#223;en (Dielen 19 &#215; 130 cm neben der 25 cm breiten Bahn), w&#228;hlbar in der Garage unter &#8222;Boden&#8220; (WIP): Eiche hell, Laminat grau oder Fischgr&#228;t, mit vielen Holzvarianten, damit nichts gekachelt wirkt. Neue Kamera &#8222;Fahrer am Rand&#8220; (WIP, mit R3/C umschalten): Du stehst neben Start/Ziel auf 1 m Augenh&#246;he, der Blick folgt dem Auto ged&#228;mpft und zoomt sanft nach, wenn es weit weg ist.</li>
+        <li>Neue Rennereignis-Ansagen (Pull Request von Playdater1974, WIP, jeweils einzeln schaltbar, ab Werk aus): schwere Besch&#228;digung mit Farbe, Modell und Spieler (Grenze einstellbar), Boxenstopp beim Beginn des Service und neue Zeitstrafen f&#252;r Fr&#252;hstart, Rammen und fehlenden Pflichtstopp, mit demselben Stadionhall wie das Rennintro. Neuer Schalter &#8222;Ansagen in Warteschlange&#8220; (WIP, Optionen &#8594; Ansagen, an): an werden laufende Ansagen zu Ende gesprochen und neue warten, wartende Rundenzeiten verfallen nach 2,5 s; aus gibt es keine Warteschlange, jede neue Ansage beendet die laufende sofort wie bisher. Ausschalten einer Ansage macht sofort still. Virtuelles Fahren: Der Randstein klingt dumpf und rumpelnd wie in ACC statt hell zu klicken, im Takt der Randsteinfelder; der alte Klang bleibt als &#8222;Randstein-Klang: alt&#8220; (WIP, Optionen &#8594; Ton).</li>
         <li>Einf&#252;hrung (nicht mehr WIP): Gleich nach dem Willkommen w&#228;hlst du &#8222;Mit Bahn&#8220; oder &#8222;Auf dem Boden&#8220;. Ist dein Auto verbunden, aber nicht als Spieler 1, sagt sie dir, dass du die Rolle in der Garage umstellen musst. Neu sind Licht aus und wieder ein, nach dem ersten Boxenstopp Regen, die Wahl der Regenreifen und ein zweiter Stopp, der sie aufzieht. H&#246;chstens knapp 4 Minuten; alles Ge&#228;nderte (Fahrgef&#252;hl, Klang, Wetter, Reifen, Licht, Bahn/Boden) wird danach wiederhergestellt. Garage: Mit Steuerkreuz und Pfeiltasten kommst du jetzt zu den Autos oben, mit rechts auf einem Auto zu seiner Rolle, mit links von den Kn&#246;pfen zur&#252;ck, und jeder Knopf einer Zeile ist einzeln erreichbar. Die Ladeanzeige unten links zeigt statt &#8222;WIP&#8220; klein, was gerade l&#228;dt.</li>
         <li>Online-Streckenzeiten: Ein Spiegelbild z&#228;hlt jetzt als dieselbe Strecke, r&#252;ckw&#228;rts gefahren als eine andere. Jede Zeit tr&#228;gt das Fahrgef&#252;hl (Arcade, Pacejka, Gran Hybrismo, Assetto Carrera usw.); Bestzeit und beste 3 Runden gelten je Fahrgef&#252;hl, w&#228;hlbar per Chips, vorgew&#228;hlt ist das eigene. Challenges &#8594; Community-Strecken zeigt jetzt alle Strecken mit Zeiten, dazu die, auf denen du selbst gefahren bist (&#8222;eigene Zeiten&#8220;). OmegaLab (WIP): kurze Erkl&#228;rung, Einwilligung und Auswahl zwischen sieben Studien. Im Moment nur zu Testzwecken: Die erste Studie l&#228;sst sich ausprobieren, es werden aber keine Daten gesendet oder gesammelt; sp&#228;ter soll daraus ein Forschungsportal mit echten Verhaltensdaten werden. Die &#252;brigen Studien kommen sp&#228;ter. Einf&#252;hrung: Die Stimme spricht Umlaute jetzt richtig, sagt &#8222;Einf&#252;hrung&#8220; statt &#8222;Tutorial&#8220; und spricht &#8222;App&#8220;, &#8222;Arcade&#8220;, &#8222;OmegaSim&#8220; und &#8222;Mustang&#8220; verst&#228;ndlich aus.</li>
         <li>Neues Tutorial (WIP) mit Frauenstimme: Mit einem Auto und einem Gamepad f&#252;hrt es in h&#246;chstens 3 Minuten durch Gas, Bremse und Lenken (es wartet jeweils auf die Taste), erste Runden in Arcade, dann realistischeres Einlenken mit Beschleunigung und Untersteuern, einen Boxenstopp mit Minispiel und einen Wechsel des Motorklangs, mit Hinweisen auf Garage und Optionen. Danach geht es automatisch zur&#252;ck ins Men&#252;; Fahrgef&#252;hl, Motorklang und Boxeneinstellungen werden wiederhergestellt. Die deutsche Stimme ist mit Piper (Kerstin) vorab aufgenommen, auf Englisch und Spanisch spricht die Stimme des Ger&#228;ts.</li>
@@ -10029,21 +10277,26 @@
         </div></div>
       <div class="opt-row"><div class="opt-label">Cockpit-Ansicht<small>Nur das Aussehen des
           Cockpit-Schirms &ndash; Anzeigen, Tasten und Physik bleiben, wie sie sind.
-          &bdquo;GT3&ldquo; ist die Vorgabe: Carbon und wei&szlig;e Schrift auf
-          Schwarz. &bdquo;Oldschool&ldquo; ist Bernstein auf Schwarz mit sichtbaren
-          Pixelzeilen, breiter Kunststoffblende und Messingschrauben, wie die
+          &bdquo;ACC&ldquo; ist die Vorgabe und an das Rennspiel Assetto Corsa Competizione
+          angelehnt: fast schwarze, kantige Felder mit schmalen blauen Akzentlinien,
+          segmentierte Drehzahlleiste, der Gang gro&szlig; in der Mitte und die Zeiten wie im
+          Timing-Fenster des Spiels. &bdquo;Omega&ldquo; ist Carbon und wei&szlig;e Schrift auf
+          Schwarz. &bdquo;GT3&ldquo; sind schwarze Kacheln mit wei&szlig;er Schrift, auf
+          gr&ouml;&szlig;ten Kontrast getrimmt. &bdquo;Oldschool&ldquo; ist Bernstein auf Schwarz
+          mit sichtbaren Pixelzeilen, breiter Kunststoffblende und Messingschrauben, wie die
           Vakuumfluoreszenz-Armaturen der 1980er. &bdquo;Modern&ldquo; ist ein wei&szlig;er
           Schirm mit schwarzen Bedienfl&auml;chen und schmaler Alublende, wie die ersten
           Farb-TFT der 2000er &ndash; Regenradar und G-Plot behalten dort ihren dunklen
           Einsatz, weil sie hell auf dunkel zeichnen und auf Wei&szlig; unsichtbar w&auml;ren.
           &bdquo;Klassiker&ldquo; ist Walnussfurnier mit Chromschrauben und cremefarbener
           Schrift auf Schwarzbraun, wie das Armaturenbrett eines Gran Turismo der Sechziger.
-          Die Bedeutungsfarben bleiben in allen vier gleich: der Tankbalken ist gr&uuml;n und
-          der Schaden rot, auch in der Retro-Ansicht &ndash; eine Ansicht darf &auml;ndern,
+          Die Bedeutungsfarben bleiben in allen Ansichten gleich: der Tankbalken ist gr&uuml;n
+          und der Schaden rot, auch in der Retro-Ansicht &ndash; eine Ansicht darf &auml;ndern,
           wie es aussieht, nicht was eine Farbe sagt. Die Voreinstellungen fassen die Ansicht
           nicht an.</small></div>
         <select id="setting-cockpit" data-preset-skip>
-          <option value="omega" selected>Omega (Vorgabe)</option>
+          <option value="acc" selected>ACC (Vorgabe)</option>
+          <option value="omega">Omega</option>
           <option value="gt3">GT3: schwarze Kacheln (WIP)</option>
           <option value="retro">Oldschool, 1980er</option>
           <option value="modern">Modern, 2000er (hell)</option>
@@ -10847,6 +11100,10 @@
           ein tiefer Schaltschlag mit Auspuffknall statt des hellen Klacks, auch beim Runterschalten. An: der
           frühere Klang (Überblenden auf das Schubband, heller Schaltklick).</small></div>
         <label class="tgl"><input type="checkbox" id="setting-schaltklang-alt"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Randstein-Klang: alt<span class="wip-tag">WIP</span><small>Aus (Standard, neu): Im
+          virtuellen Fahren rumpelt der Randstein dumpf wie in Assetto Corsa Competizione, im Takt der Rippen, schneller mit
+          dem Tempo und lauter, je weiter das Auto auf dem Stein ist. An: das frühere helle Rattern.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-randstein-alt"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">NPC-Motorklang: alt<span class="wip-tag">WIP</span><small>Aus (Standard, neu): NPCs
           knallen auch beim Anbremsen aus dem Auspuff, und ihre Knaller sind etwas lauter. An: die früheren Knaller (nur
           beim Gaswegnehmen, leiser). Dass man die Gänge der NPCs hört, gilt immer (sie schalten seit v1.2.5 früher zurück).</small></div>
@@ -11268,11 +11525,15 @@
           Gesprochen von der eingebauten Stimme des Browsers &ndash; kein Dienst, kein Netz,
           nichts verl&auml;sst das Ger&auml;t. Absichtlich kurz gehalten, damit die Ansage
           vor der n&auml;chsten Kurve fertig ist. Kommt eine zweite Runde herein, w&auml;hrend
-          noch geredet wird, bricht die alte Ansage ab: die Zeit der Gegenwart ist
-          wichtiger. Ob es &uuml;berhaupt spricht, h&auml;ngt an den Stimmen des Systems
+          noch geredet wird, entscheidet der Schalter &bdquo;Ansagen in Warteschlange&ldquo;, ob
+          sie wartet oder die alte Ansage abbricht. Ob es &uuml;berhaupt spricht, h&auml;ngt an den Stimmen des Systems
           &ndash; unter Windows sind sie lokal vorhanden, auf Android k&ouml;nnen sie fehlen.
           Fehlt eine, steht das einmal im Protokoll und nicht bei jeder Runde.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Ansagen in Warteschlange <span class="wip-tag">WIP</span>
+          <small>An: Eine laufende Ansage wird zu Ende gesprochen, neue warten, bis sie dran sind. Rennereignisse kommen vor wartenden Rundenzeiten; eine Rundenzeit, die l&auml;nger als 2,5 Sekunden warten m&uuml;sste, entf&auml;llt.
+          Aus: keine Warteschlange. Jede neue Ansage beendet die laufende sofort, und nichts wird nachgeholt.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-queue" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Rennintro vor der Ampel <span class="wip-tag">WIP</span>
           <small>Lokale Starts: Modus, Runden- oder Zeitlimit, Pflichtstopps, Startaufstellung und Startwetter als Piper-Aufnahmen.
           Die Ampel beginnt erst danach; wer w&auml;hrend des Intros losf&auml;hrt, macht einen Fr&uuml;hstart.
@@ -11350,6 +11611,21 @@
           <button type="button" id="setting-announce-stand-test" data-i18n-skip>Testen</button>
           <span class="muted" id="setting-announce-stand-test-status" aria-live="polite"></span>
         </div></div>
+      <div class="opt-head">Erweiterte Rennereignisse</div>
+      <div class="opt-row"><div class="opt-label">Schwere Besch&auml;digung ansagen <span class="wip-tag">WIP</span>
+        <small>Farbe, Modell und Spieler. Nur bei aktivem Schaden; einmal unter der Zustandsgrenze. Nach Reparatur um 8 Prozentpunkte &uuml;ber die Grenze wieder freigegeben. Ersetzt dann die allgemeine Schadenswarnung.</small>
+        <small>F&uuml;r alle drei Rennereignisse: lokale Spieler 1 bis 3, Standard aus. Die Sprachclips nutzen Stadionhall, Lautst&auml;rke und Tempo der Rennstand-Regler. Fehlen die Clips, spricht die Ger&auml;testimme ohne Hall.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-event-damage" data-preset-skip><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Zustandsgrenze f&uuml;r Schadensansage <span class="wip-tag">WIP</span>
+        <small>Verbleibender Fahrzeugzustand in Prozent, 1 bis 100; Standard 30. Strikt darunter, nicht genau am Grenzwert.</small></div>
+        <span class="num-steuer"><button class="num-minus" type="button" aria-label="Minus eins">&#8722;</button><input type="number" id="setting-announce-event-damage-limit" value="30" min="1" max="100" step="1" style="width:84px" data-preset-skip><button class="num-plus" type="button" aria-label="Plus eins">+</button></span></div>
+      <div class="opt-row"><div class="opt-label">Spieler in der Box ansagen <span class="wip-tag">WIP</span>
+        <small>&bdquo;Spieler X ist in der Box.&ldquo; Einmal beim tats&auml;chlichen Servicebeginn, nicht bei der Anforderung. Ersetzt dann die alte Boxenstopp-Anforderungsansage.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-event-pit" data-preset-skip><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Zeitstrafen ansagen <span class="wip-tag">WIP</span>
+        <small>Neu verh&auml;ngte Sekunden f&uuml;r Fr&uuml;hstart, Rammen und fehlende Pflichtstopps am regul&auml;ren Rennende. Keine Meldung f&uuml;r reine Bremsstrafen.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-event-penalty" data-preset-skip><span></span></label></div>
+      <div class="opt-head">Weitere Warnungen</div>
       <div class="opt-row"><div class="opt-label">Schaden ansagen<small>Einmal, wenn der Schadensbalken auf 10&nbsp;% gefallen ist. Erst nach einer Reparatur wieder scharf.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce-damage" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Tank ansagen<small>Einmal, wenn noch 10&nbsp;% im Tank sind. Erst nach dem Tanken wieder scharf.</small></div>

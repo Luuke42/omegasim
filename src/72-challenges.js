@@ -754,138 +754,170 @@
     if (liste.length > 50) liste.length = 50;
     communitySchreiben(data);
   }
-  function communityNeuesteZeit(data, id) {
-    let max = 0;
-    for (const e of (data.times[id] || [])) if (e.datum > max) max = e.datum;
-    return max;
-  }
   function communitySpieler(data, id) {
     const set = new Set();
     for (const e of (data.times[id] || [])) set.add(e.geraet);
     return set.size;
   }
-  // Sortierung: (1) neueste Zeit, (2) meisten verschiedenen Spieler.
-  function communitySortiert(data) {
-    return data.tracks.slice().sort((a, b) => {
-      const ta = communityNeuesteZeit(data, a.id), tb = communityNeuesteZeit(data, b.id);
-      if (ta !== tb) return tb - ta;
-      return communitySpieler(data, b.id) - communitySpieler(data, a.id);
-    });
-  }
+  // Sortiert wird seit v1.3.62 in commEintraege (72d-ch-vorschau.js): meiste Fahrer, dann meiste Laeufe.
   function communityBesteZeit(data, id) {
     const l = data.times[id] || [];
     return l.length ? l[0].zeit : 0;
   }
-  // Die Community-Seite: Liste der eingereichten Strecken (sortiert) und ein Knopf, um die
-  // eigene Strecke aus dem Editor einzureichen.
+  // Die Community-Seite (v1.3.62 zusammengelegt): EINE Liste aus Community Challenges und den
+  // Strecken mit Zeiten (72c-strecken-online.js), sortiert nach Fahrern und Laeufen
+  // (commEintraege, 72d-ch-vorschau.js), mit Filter Alle/Challenges/Strecken und dem Knopf, um die
+  // eigene Strecke aus dem Editor als Challenge einzureichen.
+  // BESTELLT (v1.3.62): "Macht es Sinn, die beiden Community-Dinger zusammenzulegen?" - ja.
+  function communityEinreichenStarten() {
+    // BESTELLT: "wenn keine Strecke im Editor ist, soll die App sagen, dass man zuerst
+    // scannen oder bauen soll." Kein stiller Abbruch - der Grund wird gesagt.
+    if (!currentTrackTiles || currentTrackTiles.length < 2) {
+      showHudToast(t('Keine Strecke im Editor. Scanne oder baue zuerst eine Strecke.'));
+      return;
+    }
+    const data = communitySicht();
+    // BESTELLT: "beim Einreichen soll das Bild gezeigt und bestaetigt werden." Die
+    // Vorschau (Streckenkarte) steht im Frage-Dialog, erst auf Einreichen wird gespeichert.
+    const vorschau = (typeof renderTrackPreview === 'function')
+      ? renderTrackPreview(currentTrackTiles, null, { detailed: true, cars: [] }).html : '';
+    const einreichen = (preset) => {
+         const name = prompt(t('Name der Strecke'), '') || 'Strecke ' + String(data.nextId || 1).padStart(4, '0');
+         // Gibt es sie online schon (auch gespiegelt)? Dann nur deren Kennung nehmen.
+         const schon = data.online ? data.tracks.find((x) => { const q = codeToTrack(x.code); return q && communityGleiche(currentTrackTiles, q.tiles); }) : null;
+         if (schon) { showHudToast(t('Diese Strecke gibt es schon: {n}').replace('{n}', schon.id + ' · ' + schon.name)); return; }
+         const lokal = communityLesen();
+         const id = communityEinreichen(lokal, currentTrackTiles, name, preset);
+         communitySchreiben(lokal);
+         communityPost({ art: 'community-strecke', code: communityCode(currentTrackTiles), name,
+                         preset: communityPresetGueltig(preset) }).then((r) => {
+           showHudToast(r && r.ok ? t('Strecke {n} für alle eingereicht.').replace('{n}', r.id) : t('Strecke {n} eingereicht (nur auf diesem Gerät).').replace('{n}', id));
+           communityHolen(true).then(() => { communityZeichnen(); if (typeof chVorschauZeichnen === 'function') chVorschauZeichnen(); });
+         });
+         communityZeichnen();
+         if (typeof chVorschauZeichnen === 'function') chVorschauZeichnen();
+    };
+    // Die Abstimmung waehlt man im selben Dialog, unter dem Bild: ein Knopf je Voreinstellung.
+    konsoleFrage(t('Strecke einreichen'),
+      t('So sieht deine Strecke aus. Wähle die Abstimmung, mit der alle sie fahren.'),
+      COMMUNITY_PRESETS.map((k) => [communityPresetName(k), () => einreichen(k)])
+        .concat([[t('Abbrechen'), null]]), true, vorschau);
+  }
+  // Eine Zeile der Liste fuer eine Community Challenge.
+  function communityZeile(tr, data) {
+    const row = document.createElement('div');
+    row.className = 'community-zeile';
+    row.dataset.art = 'challenge';
+    // v0.9.49: Bild und Name sind EIN Knopf, der die eigene Seite der Strecke oeffnet
+    // (grosse Karte, Spiegeln, Bestenliste). "Zeit fahren" daneben startet direkt.
+    const auf = document.createElement('button');
+    auf.type = 'button';
+    auf.className = 'community-oeffnen';
+    auf.setAttribute('aria-label', t('Strecke öffnen') + ': ' + tr.id + ' ' + tr.name);
+    auf.onclick = () => challengeSeiteZeigen(tr.id);
+    // BESTELLT: "community strecken: layout in der vorschau zeigen".
+    const mini = document.createElement('span');
+    mini.className = 'community-mini';
+    mini.setAttribute('aria-hidden', 'true');
+    try {
+      const p = codeToTrack(tr.code);
+      if (p) { const merk = trackRotationDeg; trackRotationDeg = 0; try { mini.innerHTML = renderTrackPreview(p.tiles, null, {}).html; } finally { trackRotationDeg = merk; } }
+    } catch (e) { /* ohne Bild */ }
+    auf.appendChild(mini);
+    const links = document.createElement('div');
+    links.className = 'community-text';
+    const b = document.createElement('b');
+    b.setAttribute('data-i18n-skip', '');
+    b.textContent = tr.id + ' · ' + tr.name + (tr.online === false && data.online ? ' (' + t('nur hier') + ')' : '');
+    // Art (Challenge) und Abstimmung neben dem Namen, als Marken wie in der Vorschau.
+    const art = document.createElement('span');
+    art.className = 'community-modus ch-v-art';
+    art.textContent = t('Challenge');
+    const modus = document.createElement('span');
+    modus.className = 'community-modus';
+    modus.textContent = communityPresetName(tr.preset);
+    b.appendChild(document.createTextNode(' '));
+    b.appendChild(art);
+    b.appendChild(document.createTextNode(' '));
+    b.appendChild(modus);
+    const best = communityBesteZeit(data, tr.id);
+    const spieler = communitySpieler(data, tr.id);
+    const em = document.createElement('em');
+    em.textContent = best ? t('Bestzeit') + ' ' + chZeit(best) + ' · ' + spieler + ' ' + t('Spieler')
+                           : t('Noch keine Zeit') + ' · ' + spieler + ' ' + t('Spieler');
+    links.appendChild(b); links.appendChild(em);
+    // BESTELLT: "eine Zeit eintragen wie eine normale Challenge: Strecke fahren, dabei
+    // prueft die App, dass man wirklich auf der Strecke faehrt (X % der Teile), misst die
+    // Zeit und traegt sie beim Zieleinlauf ein." Kein Handtippen mehr - ein Lauf.
+    const z = document.createElement('button');
+    z.textContent = t('Zeit fahren');
+    z.onclick = () => communityStarten(tr);
+    auf.appendChild(links);
+    row.appendChild(auf); row.appendChild(z);
+    return row;
+  }
+  let commFilter = 'alle';          // Filter der Community-Seite: alle | challenges | strecken
   function communityZeichnen() {
     const bereich = $('community-bereich');
     if (!bereich) return;
-    // Online-Liste im Hintergrund holen; sobald sie da ist, noch einmal zeichnen.
+    // Online-Listen im Hintergrund holen; sobald sie da sind, noch einmal zeichnen.
     if (communityUrl() && (!communityOnline || Date.now() - communityOnlineAt > 120000) && !communityHolt) {
       communityHolen(false).then((j) => { if (j) communityAbgleichen(); communityZeichnen(); });
     }
+    if (typeof skListeHolen === 'function' && skUrl() && !skOnline.listeLaedt && Date.now() - skOnline.listeAt > SK_LISTE_MS) {
+      skListeHolen(false).then(() => { const sp = $('sub-ch-community'); if (sp && sp.classList.contains('on')) communityZeichnen(); });
+    }
     const data = communitySicht();
     bereich.innerHTML = '';
+    const ein = document.createElement('button');
+    ein.className = 'primary';
+    ein.textContent = t('Eigene Strecke einreichen');
+    ein.onclick = communityEinreichenStarten;
+    bereich.appendChild(ein);
     const stand = document.createElement('p');
     stand.className = 'muted community-stand';
     stand.setAttribute('data-i18n-skip', '');
     stand.textContent = data.online ? t('Gemeinsame Liste: {n} Strecken.').replace('{n}', data.tracks.length)
       : (communityUrl() ? (communityFehler ? t('Gemeinsame Liste nicht erreichbar, hier deine eigenen Strecken.') : t('Lade die gemeinsame Liste …'))
          : t('Nur auf diesem Gerät (keine Online-Adresse eingestellt).'));
-    const ein = document.createElement('button');
-    ein.className = 'primary';
-    ein.textContent = t('Eigene Strecke einreichen');
-    ein.onclick = () => {
-      // BESTELLT: "wenn keine Strecke im Editor ist, soll die App sagen, dass man zuerst
-      // scannen oder bauen soll." Kein stiller Abbruch - der Grund wird gesagt.
-      if (!currentTrackTiles || currentTrackTiles.length < 2) {
-        showHudToast(t('Keine Strecke im Editor. Scanne oder baue zuerst eine Strecke.'));
-        return;
-      }
-      // BESTELLT: "beim Einreichen soll das Bild gezeigt und bestaetigt werden." Die
-      // Vorschau (Streckenkarte) steht im Frage-Dialog, erst auf Einreichen wird gespeichert.
-      const vorschau = (typeof renderTrackPreview === 'function')
-        ? renderTrackPreview(currentTrackTiles, null, { detailed: true, cars: [] }).html : '';
-      const einreichen = (preset) => {
-           const name = prompt(t('Name der Strecke'), '') || 'Strecke ' + String(data.nextId || 1).padStart(4, '0');
-           // Gibt es sie online schon (auch gespiegelt)? Dann nur deren Kennung nehmen.
-           const schon = data.online ? data.tracks.find((x) => { const q = codeToTrack(x.code); return q && communityGleiche(currentTrackTiles, q.tiles); }) : null;
-           if (schon) { showHudToast(t('Diese Strecke gibt es schon: {n}').replace('{n}', schon.id + ' · ' + schon.name)); return; }
-           const lokal = communityLesen();
-           const id = communityEinreichen(lokal, currentTrackTiles, name, preset);
-           communitySchreiben(lokal);
-           communityPost({ art: 'community-strecke', code: communityCode(currentTrackTiles), name,
-                           preset: communityPresetGueltig(preset) }).then((r) => {
-             showHudToast(r && r.ok ? t('Strecke {n} für alle eingereicht.').replace('{n}', r.id) : t('Strecke {n} eingereicht (nur auf diesem Gerät).').replace('{n}', id));
-             communityHolen(true).then(() => communityZeichnen());
-           });
-           communityZeichnen();
-      };
-      // Die Abstimmung waehlt man im selben Dialog, unter dem Bild: ein Knopf je Voreinstellung.
-      konsoleFrage(t('Strecke einreichen'),
-        t('So sieht deine Strecke aus. Wähle die Abstimmung, mit der alle sie fahren.'),
-        COMMUNITY_PRESETS.map((k) => [communityPresetName(k), () => einreichen(k)])
-          .concat([[t('Abbrechen'), null]]), true, vorschau);
-    };
-    bereich.appendChild(ein);
     bereich.appendChild(stand);
-    const liste = communitySortiert(data);
-    if (!liste.length) {
+    if (typeof skListeStatus === 'function') {
+      const st2 = document.createElement('p');
+      st2.className = 'muted community-stand';
+      st2.setAttribute('data-i18n-skip', '');
+      st2.textContent = skListeStatus();
+      bereich.appendChild(st2);
+    }
+    // Filter-Chips (dieselbe Gestalt wie die Fahrgefuehl-Auswahl der Streckenansicht).
+    const chips = document.createElement('div');
+    chips.className = 'sk-chips comm-filter';
+    chips.setAttribute('role', 'group');
+    chips.setAttribute('aria-label', t('Filter'));
+    [['alle', t('Alle')], ['challenges', t('Challenges')], ['strecken', t('Strecken')]].forEach(([k, txt]) => {
+      const c = document.createElement('button');
+      c.type = 'button';
+      c.className = 'sk-chip' + (commFilter === k ? ' an' : '');
+      c.dataset.filter = k;
+      c.setAttribute('aria-pressed', commFilter === k ? 'true' : 'false');
+      c.textContent = txt;
+      c.onclick = () => { commFilter = k; communityZeichnen(); };
+      chips.appendChild(c);
+    });
+    bereich.appendChild(chips);
+    const eintraege = commEintraege(data).filter((e) => commFilter === 'alle'
+      || (commFilter === 'challenges' ? e.art === 'challenge' : e.art === 'strecke'));
+    if (!eintraege.length) {
       const p = document.createElement('p');
       p.className = 'muted';
-      p.textContent = t('Noch keine Community-Strecken. Reiche deine Strecke ein.');
+      p.textContent = commFilter === 'strecken' && typeof skListeLeerText === 'function' ? skListeLeerText()
+        : t('Noch keine Community Challenges. Reiche deine Strecke ein.');
       bereich.appendChild(p);
       return;
     }
     const wrap = document.createElement('div');
     wrap.className = 'community-liste';
-    for (const tr of liste) {
-      const row = document.createElement('div');
-      row.className = 'community-zeile';
-      // v0.9.49: Bild und Name sind EIN Knopf, der die eigene Seite der Strecke oeffnet
-      // (grosse Karte, Spiegeln, Bestenliste). "Zeit fahren" daneben startet direkt.
-      const auf = document.createElement('button');
-      auf.type = 'button';
-      auf.className = 'community-oeffnen';
-      auf.setAttribute('aria-label', t('Strecke öffnen') + ': ' + tr.id + ' ' + tr.name);
-      auf.onclick = () => challengeSeiteZeigen(tr.id);
-      // BESTELLT: "community strecken: layout in der vorschau zeigen".
-      const mini = document.createElement('span');
-      mini.className = 'community-mini';
-      mini.setAttribute('aria-hidden', 'true');
-      try {
-        const p = codeToTrack(tr.code);
-        if (p) { const merk = trackRotationDeg; trackRotationDeg = 0; try { mini.innerHTML = renderTrackPreview(p.tiles, null, {}).html; } finally { trackRotationDeg = merk; } }
-      } catch (e) { /* ohne Bild */ }
-      auf.appendChild(mini);
-      const links = document.createElement('div');
-      links.className = 'community-text';
-      const b = document.createElement('b');
-      b.setAttribute('data-i18n-skip', '');
-      b.textContent = tr.id + ' \u00b7 ' + tr.name + (tr.online === false && data.online ? ' (' + t('nur hier') + ')' : '');
-      // Der Modus (Abstimmung) neben dem Namen, als Marke wie in der Vorschau.
-      const modus = document.createElement('span');
-      modus.className = 'community-modus';
-      modus.textContent = communityPresetName(tr.preset);
-      b.appendChild(document.createTextNode(' '));
-      b.appendChild(modus);
-      const best = communityBesteZeit(data, tr.id);
-      const spieler = communitySpieler(data, tr.id);
-      const em = document.createElement('em');
-      em.textContent = best ? t('Bestzeit') + ' ' + chZeit(best) + ' \u00b7 ' + spieler + ' ' + t('Spieler')
-                             : t('Noch keine Zeit') + ' \u00b7 ' + spieler + ' ' + t('Spieler');
-      links.appendChild(b); links.appendChild(em);
-      // BESTELLT: "eine Zeit eintragen wie eine normale Challenge: Strecke fahren, dabei
-      // prueft die App, dass man wirklich auf der Strecke faehrt (X % der Teile), misst die
-      // Zeit und traegt sie beim Zieleinlauf ein." Kein Handtippen mehr - ein Lauf.
-      const z = document.createElement('button');
-      z.textContent = t('Zeit fahren');
-      z.onclick = () => communityStarten(tr);
-      auf.appendChild(links);
-      row.appendChild(auf); row.appendChild(z);
-      wrap.appendChild(row);
-    }
+    const aktuell = typeof skFgAktuell === 'function' ? skFgAktuell() : 'unbekannt';
+    eintraege.forEach((e) => wrap.appendChild(e.art === 'challenge' ? communityZeile(e.tr, data) : skZeile(e.s, aktuell)));
     bereich.appendChild(wrap);
   }
 
@@ -1609,8 +1641,8 @@
     if (chKarteVollAn && typeof chKarteVoll === 'function') chKarteVoll();
     if (id === 'online') { chOnlineZeichnen(); return; }
     if (id === 'community') { communityZeichnen(); return; }
-    // v1.3.15: Community-Strecken (Liste) und eine Strecke daraus (72c-strecken-online.js).
-    if (id === 'strecken') { skListeZeichnen(); return; }
+    // v1.3.15: eine Strecke mit Zeiten (72c-strecken-online.js); die Liste ist seit v1.3.62 die
+    // gemeinsame Community-Seite.
     if (id === 'sk') { skDetailZeichnen(); return; }
     const k = 'abcd'.indexOf(id);
     if (k < 0) {

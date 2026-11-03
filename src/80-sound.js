@@ -41,6 +41,10 @@
                     mit('klang-stimmen', loadVoiceSamples()), mit('klang-ansagen', rennstandClipsLaden(lang))];
     if (!('speechSynthesis' in window)) laeufe.push(mit('klang-zahlen', zahlenClipsLaden(lang)));
     laeufe.push(mit('klang-umgebung', loadAmbience()));
+    // PR #11 (Playdater1974): die Rennereignis-Clips nur laden, wenn eine Ereignisansage an ist.
+    if (Object.values(rennEreignisAn).some(Boolean)) {
+      laeufe.push(mit('klang-ereignisse', Promise.allSettled([rennEreignisClipsLaden(lang), rennstandClipsLaden(lang, true)])));
+    }
     mit('klang', Promise.allSettled(laeufe));
   }
   function unlockAudioOnFirstGesture() {
@@ -63,6 +67,7 @@
       klangDateienLaden();
       refreshAmbienceGains();
     } else if (engineGain) {
+      ansagenReset();
       rennstandAbbrechen();
       refreshAmbienceGains();
       engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
@@ -736,15 +741,21 @@
   // sich jede Runde, eine feste Aufnahme kann sie nicht sagen) und der seltene Fall, dass
   // die Aufnahme selbst fehlt (Datei nicht geladen, Sprache ohne Aufnahme).
   function ansage(art, text, klangSchluessel) {
+    if (art === 'pit' && rennEreignisAn.pit) return false;
+    // v1.3.39: "Ansagen in Warteschlange" (80a-ansagen.js). An = Schlange aus PR #11,
+    // aus = der Weg von vorher, unten unveraendert als ansageSofort().
+    if (!ansageWarteschlange) return ansageSofort(art, text, klangSchluessel);
+    return ansagenEinreihen(art, text, klangSchluessel);
+  }
+  // Der Weg vor PR #11 (Stand 1.3.38): jede Meldung bricht die laufende ab, nichts wartet.
+  // Einzige Ergaenzung: eine laufende Rennereignis-Meldung (die es vorher nicht gab) endet
+  // genauso (ansagenAllesStill bzw. ansagenEreignisStill).
+  function ansageSofort(art, text, klangSchluessel) {
     if (!ansageAn[art]) return false;
     // Waehrend einer Rennstand-/Ergebnisansage entfaellt diese Spielerzeit.
     if (art === 'lap' && !rennstandVorRundenzeit()) return false;
-    if (art !== 'lap') {
-      rennstandAbbrechen();
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-      for (const q of zahlenQuellen) { try { q.stop(); } catch (e) {} }
-      zahlenQuellen = []; lapAnsageBeendet();
-    }
+    if (art !== 'lap') ansagenAllesStill();
+    else ansagenEreignisStill();
     if (art !== 'lap' && playAnsageClip(klangSchluessel || art)) return true;
     if (!('speechSynthesis' in window)) return false;
     try {
@@ -790,10 +801,11 @@
   // Funktion ohne laufendes Rennen pruefbar, und der Test muss nicht fuenf Variablen in
   // einer fremden Datei stellen.
   function ansagenPruefen(w) {
+    rennEreignisSchadenErholen();
     const raus = [];
     const de = lang === 'de';
     // Schaden: der Balken zeigt GESUNDHEIT, gemeldet wird also, wenn nur noch 10 % steht.
-    if (w.health !== null && w.health !== undefined) {
+    if (!rennEreignisAn.damage && w.health !== null && w.health !== undefined) {
       if (w.health <= ANSAGE_SCHWELLE && !ansageLatch.damage) {
         ansageLatch.damage = true;
         if (ansage('damage', de ? 'Achtung, Schaden kritisch' : 'Warning, damage critical')) {
@@ -882,10 +894,16 @@
   }
 
   function speakLap(ms, istBest) {
+    if (!Number.isFinite(ms) || ms < 0) return;
+    if (ansageWarteschlange) {
+      ansagenEinreihen('lap', lapSpeechText(ms, istBest), null, ms, istBest);
+      return;
+    }
+    // "Ansagen in Warteschlange" aus: der Weg vor PR #11.
     if (!ansageAn.lap || !rennstandVorRundenzeit()) return;
     // Ohne Sprachausgabe (App-WebView): die Zahlen-Clips.
     if (!('speechSynthesis' in window)) {
-      if (ansageAn.lap) lapClipsSpielen(ms, istBest);
+      if (ansageAn.lap) { ansagenEreignisStill(); lapClipsSpielen(ms, istBest); }
       return;
     }
     ansage('lap', lapSpeechText(ms, istBest));
@@ -909,11 +927,18 @@
     el.addEventListener('change', (e) => {
       ansageAn[art] = e.target.checked;
       if (art === 'lap') announceOn = e.target.checked;
-      // Beim Ausschalten sofort still sein und nicht den Satz noch beenden.
-      if (!e.target.checked && 'speechSynthesis' in window) {
+      // Wartende Meldungen entfallen beim Ausschalten (ihr erlaubt() fragt den Schalter).
+      if (e.target.checked) return;
+      // v1.3.39: Mit Warteschlange wird nur eine laufende Ansage DIESER Art sofort still,
+      // laufende Saetze anderer Arten sprechen zu Ende.
+      if (ansageWarteschlange) { ansagenArtStoppen(art); return; }
+      // Ohne Warteschlange wie vor PR #11: beim Ausschalten sofort still sein und nicht
+      // den Satz noch beenden.
+      ansagenArtStoppen(art);
+      if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel(); lapAnsageBeendet();
       }
-      if (!e.target.checked && art === 'lap') {
+      if (art === 'lap') {
         for (const q of zahlenQuellen) { try { q.stop(); } catch (e2) {} }
         zahlenQuellen = []; lapAnsageBeendet();
       }
@@ -1073,6 +1098,118 @@
       offroadNode = null; offroadGain = null;
       setTimeout(() => { try { node.stop(); } catch (e) { /* schon gestoppt */ } }, 500);
     }
+  }
+
+  // ---- RANDSTEIN-KLANG IM VIRTUELLEN FAHREN (v1.3.39, WIP) ------------------------------------
+  // BESTELLT: "Verbessere den Randstein-Sound. Aktuell ist es ein hohes Klicken. Das ist ein Problem
+  // wie mit den urspruenglichen Schaltgeraeuschen. Es soll dumpf sein, eher wie bei Assetto Corsa
+  // Competizione klingen." Bisher (vfRattern, 60d-virtuell.js) alle ~83 ms ein 60-ms-Puffer weisses
+  // Rauschen: Schwerpunkt um 12 kHz, also ein helles Klicken. Neu ein rhythmisches Rumpeln wie in ACC:
+  //   Quelle  = Rauschen tiefpass 95 Hz (Grundrumpeln) + Rauschen bandpass 190 Hz (Karosserie)
+  //             + Sinus 38 + 1,2 * Takt Hz (Grundton 48..86 Hz)
+  //   Huelle  = ((1 + cos(2 pi Takt t)) / 2)^3 je Rippe, als PeriodicWave (DC 0,3125 im Gain)
+  //   danach sanfter Waveshaper tanh(1,6 x), Tiefpass 700 Hz, Pegel 0,55 * menge * Reifenregler.
+  //   Takt = Tempo / Rippenabstand (60d-virtuell.js, vfRandsteinTakt), 8..40 Schlaege/s.
+  // Synthetisch statt einer Datei wie beim Schaltklang (tools/shift_tief.py): eine Aufnahme haette
+  // EINEN Takt; per playbackRate nachgezogen wandert die ganze Klangfarbe mit (wie beim Reifenquietschen
+  // die Schleifennaht), und eine Schleife wiederholt sich hoerbar. Hier laufen Takt und Klangfarbe
+  // getrennt, und es kostet nichts im Bildtakt.
+  // LATENZ: die Kette wird EINMAL je AudioContext angelegt (beim ersten Randstein) und laeuft weiter;
+  // je Bild nur ein Vergleich, und hoechstens alle 100 ms (oder bei merklicher Aenderung) zwei bis
+  // vier setTargetAtTime. Kein Knoten und kein Puffer je Kontakt. Ein- und Ausblenden mit 30-35 ms
+  // Zeitkonstante, also kein Knacken. Ein "Totmann" (Ziel 0 nach 250 ms) blendet aus, falls keine
+  // Aufrufe mehr kommen (Pause, Fahrt beendet). Ist die Kette 0,4 s still, wird sie vom Ausgang
+  // getrennt (dann rechnet der Audio-Thread sie nicht mehr). Hoerproben: tools/randstein_proben.py
+  // (dieselben Zahlen wie RS hier).
+  // Schalter "Randstein-Klang: alt" (Optionen -> Ton) bringt das alte Rattern zurueck.
+  let randsteinKlangAlt = false;
+  if ($('setting-randstein-alt')) {
+    const el = $('setting-randstein-alt');
+    randsteinKlangAlt = el.checked;
+    el.addEventListener('change', () => { randsteinKlangAlt = el.checked; });
+  }
+  const RS = { tiefHz: 95, tiefQdB: 0, tiefG: 6.0, koerperHz: 190, koerperQ: 2.0, koerperG: 3.5, tonG: 0.28,
+               huelle: [0.3125, 0.46875, 0.1875, 0.03125], formK: 1.6, glattHz: 700, glattQdB: -3, pegel: 0.55 };
+  function randsteinKlangBauen(ctx) {
+    const sr = ctx.sampleRate, n = Math.max(1, Math.floor(sr));
+    const buf = ctx.createBuffer(1, n, sr);           // 1 s Rauschen als Schleife, einmal
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const rausch = ctx.createBufferSource();
+    rausch.buffer = buf; rausch.loop = true;
+    const tief = ctx.createBiquadFilter();
+    tief.type = 'lowpass'; tief.frequency.value = RS.tiefHz; tief.Q.value = RS.tiefQdB;
+    const tiefG = ctx.createGain(); tiefG.gain.value = RS.tiefG;
+    const koerper = ctx.createBiquadFilter();
+    koerper.type = 'bandpass'; koerper.frequency.value = RS.koerperHz; koerper.Q.value = RS.koerperQ;
+    const koerperG = ctx.createGain(); koerperG.gain.value = RS.koerperG;
+    const ton = ctx.createOscillator();
+    ton.type = 'sine'; ton.frequency.value = 48;
+    const tonG = ctx.createGain(); tonG.gain.value = RS.tonG;
+    // Huelle je Rippe: das Gain traegt den Gleichanteil, die LFO-Welle die Obertoene.
+    const am = ctx.createGain(); am.gain.value = RS.huelle[0];
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 8;
+    let lfoZiel = am.gain;
+    try {
+      const re = new Float32Array([0, RS.huelle[1], RS.huelle[2], RS.huelle[3]]);
+      lfo.setPeriodicWave(ctx.createPeriodicWave(re, new Float32Array(4), { disableNormalization: true }));
+    } catch (e) {
+      lfo.type = 'sine'; am.gain.value = 0.5;       // ohne PeriodicWave: weiche Sinus-Huelle 0..1
+      const tiefe = ctx.createGain(); tiefe.gain.value = 0.5;
+      tiefe.connect(am.gain); lfoZiel = tiefe;
+    }
+    lfo.connect(lfoZiel);
+    const form = ctx.createWaveShaper();
+    const kurve = new Float32Array(257), th = Math.tanh(RS.formK);
+    for (let i = 0; i < 257; i++) kurve[i] = Math.tanh(RS.formK * (i / 128 - 1)) / th;
+    form.curve = kurve;
+    const glatt = ctx.createBiquadFilter();
+    glatt.type = 'lowpass'; glatt.frequency.value = RS.glattHz; glatt.Q.value = RS.glattQdB;
+    const aus = ctx.createGain(); aus.gain.value = 0;
+    rausch.connect(tief); tief.connect(tiefG); tiefG.connect(am);
+    rausch.connect(koerper); koerper.connect(koerperG); koerperG.connect(am);
+    ton.connect(tonG); tonG.connect(am);
+    am.connect(form); form.connect(glatt); glatt.connect(aus);
+    rausch.start(); ton.start(); lfo.start();
+    return { ctx, aus, lfo, ton, verbunden: false, ziel: 0, takt: 8, gesetzt: -1, stillAb: 0, setzungen: 0 };
+  }
+  // menge 0..1 (0 = kein Randstein), takt in Schlaegen je Sekunde. Billig, wenn nichts zu tun ist.
+  function randsteinKlangSetzen(g, menge, takt, jetzt) {
+    menge = menge > 0 ? Math.min(1, menge) : 0;
+    if (menge <= 0) {
+      if (g.ziel > 0) {
+        g.aus.gain.cancelScheduledValues(jetzt);
+        g.aus.gain.setTargetAtTime(0, jetzt, 0.035);
+        g.ziel = 0; g.stillAb = jetzt + 0.4; g.setzungen++;
+      } else if (g.verbunden && jetzt > g.stillAb) {
+        try { g.aus.disconnect(); } catch (e) { /* schon getrennt */ }
+        g.verbunden = false;
+      }
+      return;
+    }
+    if (Math.abs(menge - g.ziel) < 0.03 && Math.abs(takt - g.takt) < g.takt * 0.04 && jetzt - g.gesetzt < 0.1) return;
+    if (!g.verbunden) { g.aus.connect(g.ctx.destination); g.verbunden = true; }
+    const vol = typeof tyreVolume === 'number' ? tyreVolume / 0.35 : 1;
+    const p = g.aus.gain;
+    p.cancelScheduledValues(jetzt);
+    p.setTargetAtTime(menge * RS.pegel * vol, jetzt, 0.03);
+    p.setTargetAtTime(0, jetzt + 0.25, 0.05);       // Totmann, vom naechsten Aufruf wieder aufgehoben
+    if (Math.abs(takt - g.takt) > 0.01 || g.gesetzt < 0) {
+      g.lfo.frequency.setTargetAtTime(takt, jetzt, 0.05);
+      g.ton.frequency.setTargetAtTime(38 + 1.2 * takt, jetzt, 0.08);
+    }
+    g.ziel = menge; g.takt = takt; g.gesetzt = jetzt; g.setzungen++;
+  }
+  let rsKette = null;
+  function randsteinKlang(menge, takt) {
+    if (!audioCtx) return;
+    if (!soundEnabled) menge = 0;
+    if (!rsKette || rsKette.ctx !== audioCtx) {
+      if (!(menge > 0)) return;
+      try { rsKette = randsteinKlangBauen(audioCtx); } catch (e) { return; }
+    }
+    randsteinKlangSetzen(rsKette, menge, takt, audioCtx.currentTime);
   }
 
   // ---- Ambience: a quiet bed plus scattered one-off events ----

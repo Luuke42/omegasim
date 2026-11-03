@@ -51,21 +51,36 @@
   // Klammer um alle Klanggruppen und steht nur, wenn keine Gruppe mehr laeuft.
   const LADE_NAMEN = { update: 'Suche nach Updates', 'klang-motor': 'Motorklänge', 'klang-effekte': 'Effekte',
     'klang-stimmen': 'Stimmen', 'klang-ansagen': 'Ansagen', 'klang-zahlen': 'Zahlen', 'klang-umgebung': 'Umgebung',
-    klang: 'Klänge' };
-  function ladeAnzeigeText() {
-    const namen = [...ladeGruende].filter((g) => LADE_NAMEN[g] && g !== 'klang');
-    if (!namen.length) return ladeGruende.has('klang') ? t('Lädt') + ': ' + t(LADE_NAMEN.klang) : '';
+    'klang-ereignisse': 'Rennereignisse', klang: 'Klänge',
+    // v1.3.58: beim Oeffnen des Challenges-Tabs (72d-ch-vorschau.js).
+    'ch-community': 'Challenges', 'ch-strecken': 'Strecken' };
+  // v1.3.58: je Platz eine Auswahl der Gruende. Der Startschirm zeigt die Challenges-Abrufe nicht
+  // (sie gehoeren zum Challenges-Tab), der Challenges-Tab zeigt alles, seine eigenen zuerst.
+  function ladeAnzeigeText(gruende) {
+    const liste = gruende || [...ladeGruende];
+    const namen = liste.filter((g) => LADE_NAMEN[g] && g !== 'klang');
+    if (!namen.length) return liste.indexOf('klang') >= 0 ? t('Lädt') + ': ' + t(LADE_NAMEN.klang) : '';
     const erst = namen[0] === 'update' ? t(LADE_NAMEN.update) : t('Lädt') + ': ' + t(LADE_NAMEN[namen[0]]);
     return erst + (namen.length > 1 ? ' (+' + (namen.length - 1) + ')' : '');
   }
+  // v1.3.58 BESTELLT: "Wenn ich auf den Tab [Challenges] klicke, fange an, die Zeiten zu laden mit
+  // Lade-Symbol (drehendes Streckenteil) unten links (ohne WIP-Label)." Zweiter Platz #ch-lade im
+  // Challenges-Tab, gleich gebaut; jeder Platz ist nur sichtbar, solange sein Tab es ist.
+  const LADE_PLAETZE = {
+    'home-lade': (alle) => alle.filter((g) => g.indexOf('ch-') !== 0),
+    'ch-lade': (alle) => alle.filter((g) => g.indexOf('ch-') === 0).concat(alle.filter((g) => g.indexOf('ch-') !== 0)),
+  };
   function ladeAnzeigeSetzen(grund, an) {
     if (an) ladeGruende.add(grund); else ladeGruende.delete(grund);
-    const slot = document.getElementById('home-lade-dreh');
-    if (slot) ladeAnimationSetzen(slot, ladeGruende.size > 0);
-    const box = document.getElementById('home-lade');
-    if (box) box.hidden = ladeGruende.size === 0;
-    const txt = document.getElementById('home-lade-text');
-    if (txt) txt.textContent = ladeGruende.size ? ladeAnzeigeText() : '';
+    Object.keys(LADE_PLAETZE).forEach((id) => {
+      const gruende = LADE_PLAETZE[id]([...ladeGruende]);
+      const slot = document.getElementById(id + '-dreh');
+      if (slot) ladeAnimationSetzen(slot, gruende.length > 0);
+      const box = document.getElementById(id);
+      if (box) box.hidden = gruende.length === 0;
+      const txt = document.getElementById(id + '-text');
+      if (txt) txt.textContent = gruende.length ? ladeAnzeigeText(gruende) : '';
+    });
   }
   // Fuer ein Promise: an, bis es erfuellt oder gescheitert ist.
   function ladeAnzeigeMit(grund, laeuft) {

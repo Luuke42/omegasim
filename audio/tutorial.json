@@ -75,9 +75,9 @@
     },
     "box_erklaerung": {
       "datei": "tutorial_box_erklaerung_de.ogg",
-      "dauer": 6.92,
-      "text": "Zeit für einen Boxenstopp. Gleich erscheinen Tasten auf dem Schirm. Drückst du sie rechtzeitig, ist die Crew schneller.",
-      "sprech": "Zeit für einen Boxenstopp. Gleich erscheinen Tasten auf dem Schirm. Drückst du sie rechtzeitig, ist die Mannschaft schneller."
+      "dauer": 7.02,
+      "text": "Zeit für einen Boxenstopp. Gleich erscheinen Tasten auf dem Schirm. Drückst du sie schnell und richtig, ist die Crew schneller.",
+      "sprech": "Zeit für einen Boxenstopp. Gleich erscheinen Tasten auf dem Schirm. Drückst du sie schnell und richtig, ist die Mannschaft schneller."
     },
     "box": {
       "datei": "tutorial_box_de.ogg",

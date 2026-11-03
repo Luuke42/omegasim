@@ -526,6 +526,7 @@
         if (w >= 2 && !(zweiSpieler && zusatzPlatz(w) && zusatzPlatz(w).car)) return;
         if (!fruehstart[w].frueh && fruehstartTempo(w) > FRUEHSTART_KMH) {
           fruehstart[w].frueh = true;
+          if (fruehstartZeitAn()) rennEreignisStrafe(w, FRUEHSTART_ZEIT_MS / 1000);
           showHudToast(w >= 2 ? t('Frühstart Spieler {n}!').replace('{n}', w) : t('Frühstart!'));
         }
       });
@@ -2422,6 +2423,7 @@
     // Wer schon steht oder gar nicht faehrt, laeuft nicht aus - fuer den gilt die Flagge
     // sofort, sonst wartete das Rennen auf ein Auto, das sich nicht bewegt.
     const willAuslaufen = auslaufen !== false;
+    if (!willAuslaufen) ansagenReset();
     ghostAuslaufBis = willAuslaufen ? now + GHOST_AUSLAUF_MAX_MS : 0;
     nachZielBis = willAuslaufen ? now + GHOST_AUSLAUF_MAX_MS : 0;
     // ---- WIE VIELE LAUFEN AUS? Das ist der Nenner der Ausroll-Staffel -------------
@@ -2451,6 +2453,10 @@
     if (typeof ghostStimmenRennende === 'function') ghostStimmenRennende();
     if (willAuslaufen && garage.some(c => c.role === 'ghost' && c.ghost && c.ghost.auslauf)) {
       showHudToast(t('NPCs fahren die Runde zu Ende'));
+    }
+    if (willAuslaufen) {
+      rennEreignisStrafe(1, racePenaltyMs() / 1000);
+      zusatzAktiv().forEach(z => rennEreignisStrafe(z.nr, strafeMsVon(z.nr) / 1000));
     }
     const missed = Math.max(0, racePitRequired - racePitDone);
     $('race-status').textContent =
@@ -4486,17 +4492,36 @@
   // unsichtbar, und ein spaeter oder doppelter Druck zaehlte schon fuer den naechsten Knopf.
   // Jetzt 90 ms leer (kaum merklich, aber sichtbar als Neuanfang); ein Druck darin gehoert dem
   // Spiel und zaehlt nicht.
-  const PIT_SPIEL_ANZAHL = 5;
-  const PIT_SPIEL_BONUS = 0.08;
+  // v1.3.62 BESTELLT: "Zeige [...] die Folge der vier Knoepfe, und je Knopf, den ich druecke,
+  // wird dann der Knopf gruen (richtig) oder rot (falsch) umrahmt (+ Feedback-Ton). [...] kein
+  // Zeitlimit zum Druecken der Knoepfe. Im Hintergrund soll sich die Schnelligkeit des Drueckens
+  // sowie Korrektheit schon noch auf die Pit-Zeit auswirken."
+  //
+  // VIER Knoepfe statt fuenf, KEIN Fenster je Knopf mehr: der aktuelle wartet, bis gedrueckt
+  // wird. Nach einem falschen Druck geht die Folge weiter (wie bisher: jeder Druck verbraucht
+  // seinen Knopf), der Knopf bleibt rot markiert.
+  //
+  // DIE WIRKUNG, je Knopf, auf die Arbeitszeit T (die laengste Einzelarbeit):
+  //   richtig:  Gutschrift  PIT_SPIEL_BONUS * T * max(0, 1 - r / PIT_SPIEL_REAKTION)
+  //             r = Reaktionszeit, ab dem Moment, in dem der Knopf dran ist
+  //   falsch:   Aufschlag   PIT_SPIEL_STRAFE * T  (und 0,3 s mehr Erholung, wie bisher)
+  // Fertig ist die Crew, wenn Standzeit + Gutschrift - Aufschlag >= T, danach 1 s Erholung.
+  // Vier sofortige richtige Druecke sparen 40 % von T - genau so viel wie bisher fuenf
+  // Treffer zu je 8 %. Bei 0,5 s je Knopf sind es 30 %, bei 2 s und mehr nichts mehr.
+  // DECKEL GEGEN WARTEN: die Arbeit laeuft in jedem Fall weiter. Ist sie fertig, endet das
+  // Spiel, auch wenn nicht alle vier gedrueckt sind - wer nichts drueckt, steht T + 1 s, wie
+  // ohne Druck bisher auch. Laenger als T * (1 + 4 * 10 %) + 2,2 s (vier Fehler) wird es nie.
+  const PIT_SPIEL_ANZAHL = 4;
+  const PIT_SPIEL_BONUS = 0.10;
+  const PIT_SPIEL_STRAFE = 0.10;
+  const PIT_SPIEL_REAKTION = 2.0;
+  // Prellschutz: ein Druck in den ersten 90 ms nach dem letzten gehoert dem Spiel und zaehlt
+  // nicht - ein doppelter oder prellender Druck trifft so nicht den naechsten Knopf.
   const PIT_SPIEL_PAUSE = 0.09;
   // v1.0.45 BESTELLT: nach dem letzten Knopf mindestens 1 s Erholung, laenger als Strafzeit
-  // bei falschen Tasten. Erholung zusaetzlich zur Bonus-Strafe (5 % je falsche Taste).
+  // bei falschen Tasten.
   const PIT_ERHOL_BASE = 1.0;
   const PIT_ERHOL_PRO_FEHLER = 0.3;
-  // v1.0.45 BESTELLT: die Zeit zum Druecken 0,5 s laenger. Seit v1.2.47 T/Anzahl minus die kurze
-  // Luecke (PIT_SPIEL_PAUSE), mindestens PIT_SPIEL_FENSTER_MIN.
-  const PIT_SPIEL_FENSTER_MIN = 0.7;
-  function pitSpielFenster(T) { return Math.max(PIT_SPIEL_FENSTER_MIN, T / PIT_SPIEL_ANZAHL - PIT_SPIEL_PAUSE); }
   let pitServiceStart = null;
   let pitFuelGained = 0, pitDamageRepaired = 0;
   const PIT_FUEL_PER_SEC = 22;
@@ -4542,6 +4567,7 @@
     // Sicherheitsnetz.
     if (pitLimiterTimer) { rennZeitTimeoutStop(pitLimiterTimer); pitLimiterTimer = null; }
     if (next === 'servicing') {
+      rennEreignisBox(1);
       pitServiceStart = rennZeitJetzt();
       pitFuelGained = 0; pitDamageRepaired = 0;
       pitDone = { refuel: false, tyres: false, repair: false };
@@ -4844,59 +4870,62 @@
     // letzte Knopf im Spiel ist immer Kreis, damit ein danach gedruecktes Quadrat (K) nicht
     // aus Versehen in den Rueckwaertsgang schaltet.
     if (folge.length) folge[folge.length - 1] = 'kreis';
-    // Fenster 0,7 s laenger als ein Zehntel: erst 100 ms, dann 200 ms (v0.8.38), seit v1.0.45
-    // 0,5 s mehr (BESTELLT: "Mach die Zeit, die ich zum Druecken habe nochmal 0,5 s laenger").
-    pitSpiel = { T, bonus: 0, folge, i: 0, fensterAb: 0, fensterS: pitSpielFenster(T),
-                 treffer: 0, fehler: 0, blitz: '', blitzBis: 0, erholBis: 0, fuel0: fuel, dmg0: damage };
+    // ergebnis[k]: 'ok' | 'falsch' je gedruecktem Knopf; dranSeit: seit wann der aktuelle dran ist.
+    pitSpiel = { T, bonus: 0, folge, ergebnis: [], reaktion: [], i: 0, fensterAb: 0, dranSeit: 0,
+                 vorbei: false, treffer: 0, fehler: 0, erholBis: 0, fuel0: fuel, dmg0: damage };
+    // Die Tipp-Flaechen nur ohne Gamepad (einmal beim Start, nicht je Bild).
+    const el = $('pit-spiel');
+    if (el) el.classList.toggle('ps-touch', !(typeof padsSortiert === 'function' && padsSortiert().length));
     showHudToast(t('Boxen-Minigame: Quadrat und Kreis!'));
+    pitSpielMalen();
   }
   // welche: 'quad' | 'kreis'. true = die Taste gehoert dem Spiel (kein Schalten).
   function pitSpielTaste(welche) {
     if (!pitSpielAktiv()) return false;
     const sp = pitSpiel;
-    if (sp.i >= sp.folge.length) return true;
-    // In der Luecke nach einer Taste ist nichts zu druecken (die Taste gehoert trotzdem dem Spiel und
-    // zaehlt nicht - ein doppelter Druck trifft also nicht den naechsten Knopf).
-    if (pitStandElapsed < sp.fensterAb) return true;
-    // BESTELLT: "Wenn ich die falsche Taste druecke, fuege Zeit hinzu. Wenn ich richtig
-    // druecke, ziehe Zeit ab." Beides um 5 % der Grundzeit.
-    if (welche === sp.folge[sp.i]) { sp.bonus += PIT_SPIEL_BONUS * sp.T; sp.treffer++; sp.blitz = 'ok'; pitSpielTon(true, sp.i); }
-    else { sp.bonus -= PIT_SPIEL_BONUS * sp.T; sp.fehler++; sp.blitz = 'falsch'; pitSpielTon(false, sp.i); }
-    sp.blitzBis = pitStandElapsed + 0.3;
+    // Vorbei (alle gedrueckt oder die Arbeit fertig): die Taste gehoert weiter dem Spiel, damit
+    // ein spaeter Druck nicht schaltet, zaehlt aber nicht mehr.
+    if (sp.vorbei || sp.i >= sp.folge.length) return true;
+    if (pitStandElapsed < sp.fensterAb) return true;     // Prellschutz, siehe PIT_SPIEL_PAUSE
+    const r = Math.max(0, pitStandElapsed - sp.dranSeit);
+    const gut = welche === sp.folge[sp.i];
+    if (gut) {
+      sp.bonus += PIT_SPIEL_BONUS * sp.T * Math.max(0, 1 - r / PIT_SPIEL_REAKTION);
+      sp.treffer++;
+    } else {
+      sp.bonus -= PIT_SPIEL_STRAFE * sp.T;
+      sp.fehler++;
+    }
+    sp.ergebnis[sp.i] = gut ? 'ok' : 'falsch';
+    sp.reaktion.push(r);
+    pitSpielTon(gut, sp.i);
     sp.i++;
-    sp.fensterAb = pitStandElapsed + PIT_SPIEL_PAUSE;    // nach der kurzen Luecke (90 ms)
+    sp.fensterAb = pitStandElapsed + PIT_SPIEL_PAUSE;
+    sp.dranSeit = pitStandElapsed;
+    if (sp.i >= sp.folge.length) sp.vorbei = true;
     pitSpielMalen();
     return true;
   }
-  // BESTELLT: "give positive and negative feedback noises for button presses". Richtig: ein
-  // heller, aufsteigender Ton. Falsch: ein dunkler, abfallender Brummton. playTone() schaltet
-  // sich selbst aus, wenn der Ton aus oder audioCtx noch nicht da ist.
-  // v1.0.45 BESTELLT: der Erfolgston wird mit jedem Knopf HOEHER, und der letzte ganz hoch.
+  // BESTELLT: "give positive and negative feedback noises for button presses". v1.3.62
+  // ("+ Feedback-Ton", dumpf statt schrill): richtig zwei weiche Sinustoene, eine Quinte
+  // aufwaerts, mit jedem Knopf einen Ganzton hoeher (wie seit v1.0.45, nur tiefer), der letzte
+  // mit einem dritten Ton. Falsch ein tiefer, abfallender Dreieckston - ohne die scharfen
+  // Obertoene des frueheren Rechtecks. playTone() schweigt, wenn der Ton aus ist.
   function pitSpielTon(gut, i) {
     if (gut) {
-      const letzter = i === PIT_SPIEL_ANZAHL - 1;
-      if (letzter) {
-        playTone(1560, 0.08, 'sine', 0.2);
-        rennZeitTimeout(() => playTone(1960, 0.10, 'sine', 0.2), 60);
-        rennZeitTimeout(() => playTone(2400, 0.14, 'sine', 0.2), 120);
-      } else {
-        const f = 660 + i * 55;
-        playTone(f, 0.06, 'sine', 0.2);
-        rennZeitTimeout(() => playTone(f * 1.5, 0.08, 'sine', 0.2), 45);
-      }
+      const f = 392 * Math.pow(2, (2 * i) / 12);
+      playTone(f, 0.07, 'sine', 0.18);
+      rennZeitTimeout(() => playTone(f * 1.5, 0.10, 'sine', 0.16), 55);
+      if (i === PIT_SPIEL_ANZAHL - 1) rennZeitTimeout(() => playTone(f * 2, 0.16, 'sine', 0.14), 115);
     } else {
-      playTone(200, 0.12, 'square', 0.16);
-      rennZeitTimeout(() => playTone(140, 0.14, 'square', 0.14), 70);
+      playTone(165, 0.13, 'triangle', 0.24);
+      rennZeitTimeout(() => playTone(123, 0.16, 'triangle', 0.22), 80);
     }
   }
   function pitSpielTick(dt) {
     const sp = pitSpiel, pl = pitPlan || {};
     pitStandElapsed += dt;
-    if (sp.i < sp.folge.length && pitStandElapsed - sp.fensterAb >= sp.fensterS) {
-      sp.i++;
-      sp.fensterAb = pitStandElapsed + PIT_SPIEL_PAUSE;    // nach der kurzen Luecke (90 ms)
-      sp.blitz = ''; sp.blitzBis = 0;   // v1.2.4: Zeit abgelaufen - weder Haken noch Kreuz
-    }
+    // v1.3.62: kein Fenster mehr, das abliefe - der aktuelle Knopf wartet auf den Druck.
     const anteil = Math.min(1, (pitStandElapsed + sp.bonus) / sp.T);
     if (pl.refuel) {
       const neu = sp.fuel0 + (tankZielNorm(pl.refuel) - sp.fuel0) * anteil;
@@ -4915,21 +4944,28 @@
       // v1.0.45 BESTELLT: nach dem letzten Knopf mindestens 1 s Erholung, laenger je Fehler
       // (Strafzeit). Erst danach ist der Stopp vorbei und das Auto darf losfahren.
       if (!sp.erholBis) sp.erholBis = pitStandElapsed + PIT_ERHOL_BASE + sp.fehler * PIT_ERHOL_PRO_FEHLER;
+      // Die Arbeit ist fertig: das Spiel endet, auch wenn nicht alle Knoepfe gedrueckt sind
+      // (Deckel gegen Warten). Die Anzeige bleibt bis zum Losfahren stehen.
+      sp.vorbei = true;
     }
     if (anteil >= 1 && !pitReady && sp.erholBis && pitStandElapsed >= sp.erholBis) {
       pitFertig();
-      log('Boxen-Minigame: ' + sp.treffer + ' von ' + PIT_SPIEL_ANZAHL + ' getroffen, '
+      pitSpielMalen();      // blendet aus; sonst malt nur ein Druck (kein Zeitbalken mehr je Takt)
+      log('Boxen-Minigame: ' + sp.treffer + ' von ' + PIT_SPIEL_ANZAHL + ' richtig, Reaktion '
+          + sp.reaktion.map((x) => x.toFixed(2)).join('/') + ' s, '
           + pitStandElapsed.toFixed(1) + ' s statt ' + sp.T.toFixed(1) + ' s.', 'info');
     }
     refreshPitThrottleLock();
     pitBoard();
     updateDamageFuelUI();
     updatePitUI();
-    pitSpielMalen();
   }
   function pitSpielRest() {
     return pitSpiel ? Math.max(0, pitSpiel.T - pitStandElapsed - pitSpiel.bonus) : 0;
   }
+  // Gemalt wird nur beim Start, bei jedem Druck und beim Ende - nichts davon im Takt.
+  // v1.2.30: jeder Knopf hat seinen FESTEN Platz. v1.3.62: gedrueckte bleiben stehen, gruen
+  // oder rot umrahmt; der aktuelle ist blau umrahmt, die kommenden gedaempft.
   function pitSpielMalen() {
     const el = $('pit-spiel');
     if (!el) return;
@@ -4937,28 +4973,10 @@
     el.hidden = !an;
     if (!an) return;
     const sp = pitSpiel;
-    // In der kurzen Luecke (vor fensterAb, 90 ms) ist das Feld leer, danach steht das Symbol da.
-    const sym = sp.i < sp.folge.length && pitStandElapsed >= sp.fensterAb ? sp.folge[sp.i] : '';
-    el.dataset.symbol = sym;
-    // v1.2.4: Zeitablauf setzt blitz zurueck (pitSpielTick), damit dort kein Haken erscheint.
-    el.dataset.blitz = pitStandElapsed < sp.blitzBis ? sp.blitz : '';
-    // v1.2.30 BESTELLT: "von Anfang an die in einer Reihe anzeigen und wenn eins erledigt ist, dann
-    // ausblenden." Jeder Knopf des Durchgangs hat seinen FESTEN Platz; erledigte werden unsichtbar
-    // (Platz bleibt), der aktuelle ist markiert. Kein Nachruecken mehr, also auch keine leeren Plaetze,
-    // die wie weitere Knoepfe aussehen.
-    const slots = el.querySelectorAll('.ps-slot');
-    slots.forEach((s, k) => {
+    el.querySelectorAll('.ps-slot').forEach((s, k) => {
       s.dataset.s = sp.folge[k] || '';
-      s.dataset.zustand = k < sp.i ? 'fertig' : (k === sp.i ? 'jetzt' : 'kommt');
+      s.dataset.zustand = sp.ergebnis[k] || (k === sp.i && !sp.vorbei ? 'jetzt' : 'kommt');
     });
-    el.style.setProperty('--fenster', sym
-      ? String(Math.max(0, 1 - (pitStandElapsed - sp.fensterAb) / sp.fensterS)) : '0');
-    $('pit-spiel-zaehler').textContent = Math.min(sp.i + 1, PIT_SPIEL_ANZAHL) + '/' + PIT_SPIEL_ANZAHL;
-    const erholt = sp.erholBis && pitStandElapsed < sp.erholBis;
-    const rest = erholt ? sp.erholBis - pitStandElapsed : pitSpielRest();
-    el.dataset.erholt = erholt ? '1' : '';
-    $('pit-spiel-rest').textContent = rest.toFixed(1).replace('.', ',') + ' s';
-    $('pit-spiel-treffer').textContent = '✓ ' + sp.treffer;
   }
   if ($('pit-spiel-quad')) $('pit-spiel-quad').addEventListener('click', () => pitSpielTaste('quad'));
   if ($('pit-spiel-kreis')) $('pit-spiel-kreis').addEventListener('click', () => pitSpielTaste('kreis'));
@@ -5319,6 +5337,7 @@
     if (z.box.lage === 'angefordert') {
       if (steht) {
         z.box.lage = 'service';
+        rennEreignisBox(z.nr);
         z.box.strafeBis = null;
         const strafe = rammStrafeOffen(z.car);
         showHudToast('P' + z.nr + ': ' + (strafe > 0 ? t('STRAFE') + ' ' + strafe + ' s' : 'SERVICE LAEUFT'));
@@ -5670,6 +5689,7 @@
       if (zwei) zPl.schaden.wert = Math.min(100, zPl.schaden.wert + 100 / crashesToTotal);
       else damage = Math.min(100, damage + 100 / crashesToTotal);
     }
+    if (schadenAn) rennEreignisSchaden(wer >= 2 ? wer : 1);
     const stand = zwei ? zPl.schaden.wert : damage;
     const end = vonHinten ? 'rear' : crashEnd(wer);
     if (schadenAn && stand >= LIGHT_DEAD_DAMAGE && !licht[end]) {

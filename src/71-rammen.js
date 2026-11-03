@@ -103,6 +103,7 @@
     if (e.rams >= rammAb()) {
       e.rams = 0;
       e.offen += rammStrafeS();
+      rennEreignisStrafe(spielerNrVon(rammer), rammStrafeS());
       showHudToast(t('STRAFE') + ' ' + rammStrafeS() + ' s · ' + garageLabel(rammer));
       log(garageLabel(rammer) + ': ' + rammStrafeS() + ' s Strafe beim naechsten Boxenstopp.', 'err');
     }

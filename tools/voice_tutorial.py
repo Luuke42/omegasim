@@ -72,7 +72,7 @@ TEXTE = {
     'untersteuern': 'Fährst du zu schnell in eine Kurve, schiebt das Auto geradeaus. '
                     'Das ist Untersteuern. Bremse also vor der Kurve.',
     'box_erklaerung': 'Zeit für einen Boxenstopp. Gleich erscheinen Tasten auf dem Schirm. '
-                      'Drückst du sie rechtzeitig, ist die Crew schneller.',
+                      'Drückst du sie schnell und richtig, ist die Crew schneller.',
     'box': 'Tippe jetzt die Boxenstopp-Taste und halte an.',
     'box_fertig': 'Fertig! Fahr weiter.',
     'motor': 'Der Motorsound wird nun geändert zu Ford Mustang.',
@@ -105,7 +105,7 @@ SPRECH = {
     'arcade': 'Fahr jetzt ein paar Runden im Ahkehd-Modus. '
               'Das Auto lenkt direkt ein und bremst kräftig.',
     'box_erklaerung': 'Zeit für einen Boxenstopp. Gleich erscheinen Tasten auf dem Schirm. '
-                      'Drückst du sie rechtzeitig, ist die Mannschaft schneller.',
+                      'Drückst du sie schnell und richtig, ist die Mannschaft schneller.',
     'motor': 'Der Motorsound wird nun geändert zu Ford Mass-täng.',
     'garage': 'Im Garaschenmenü passt du den Motorsound für jedes Auto einzeln an.',
     'abschluss': 'Du hast die Einführung abgeschlossen. Herzlich willkommen bei Omega-ßimm!',

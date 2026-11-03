@@ -2262,9 +2262,12 @@
       if (werte.length < 3) schlecht.push('nur ' + werte.length + ' Ansichten');
       const proben = werte.map(messe);
 
-      // 1. Die Vorgabe setzt KEIN Attribut: sonst waeren ihre Werte eine zweite Abschrift
-      //    dessen, was in :root steht.
-      if (proben[0].attr !== null) schlecht.push('Vorgabe setzt ' + proben[0].attr);
+      // 1. Omega setzt KEIN Attribut: sonst waeren seine Werte eine zweite Abschrift dessen,
+      //    was in :root steht. Bis v1.3.57 war Omega die Vorgabe und stand vorn; seit ACC die
+      //    Vorgabe ist, wird es beim Namen gesucht und nicht an der ersten Stelle.
+      const omegaProbe = proben.find(p => p.v === 'omega');
+      if (!omegaProbe) schlecht.push('Ansicht omega fehlt');
+      else if (omegaProbe.attr !== null) schlecht.push('Omega setzt ' + omegaProbe.attr);
 
       // 2. Sichtbar verschieden, Paar fuer Paar.
       const paare = [];
@@ -2504,6 +2507,223 @@
     }
     return { ok: schlecht.length === 0,
              mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+
+  // ---- Cockpit v1.3.51 / v1.3.58: Ansicht ACC ----
+  //
+  // BESTELLT (v1.3.51): "ein alternativer Haupt-Cockpit-Screen im Stil von ACC". In v1.3.58
+  // abgenommen und geaendert: das Regenradar ist WIEDER da ("Ersetze die Wetterkachel mit der
+  // Sonne wieder durch den Regenradar"), und ACC ist die Vorgabe.
+  //
+  // Geprueft wird: die Option steht im Waehler, sie setzt das Attribut, das Radar ist
+  // sichtbar UND wird gezeichnet wie in der Vorgabe, jede andere Haupt-Kachel ist sichtbar und
+  // hat eine Flaeche, und das Cockpit passt in ein Handy quer (800 x 370) mindestens so gut
+  // wie Omega, ohne dass ein Wert seine Kachel verlaesst.
+  stAdd('Cockpit v1.3.51: Ansicht ACC - Regenradar sichtbar und gezeichnet, alle Kacheln sichtbar, passt auf 800x370', () => {
+    const sel = $('setting-cockpit');
+    const dash = $('race-dash');
+    if (!sel || !dash) return { ok: false, mass: 'Waehler oder Cockpit fehlt' };
+    const f = [], teile = [];
+    const opt = [...sel.options].find(o => o.value === 'acc');
+    if (!opt) return { ok: false, mass: 'Option acc fehlt' };
+    // v1.3.58: kein Sonderweg mehr - das Radar fragt nach keiner Ansicht.
+    if (typeof cockpitOhneRadar !== 'undefined') f.push('Radar-Merker cockpitOhneRadar gibt es noch');
+    // Der Schalter "Regenradar" bleibt, wie er ist.
+    if (String(wxRadarDraw).indexOf('!wxRadarAn()') < 0) f.push('Schalter Regenradar wirkt nicht mehr');
+    const merk = sel.value;
+    const warFs = document.body.classList.contains('race-fs');
+    const warTurn = document.body.classList.contains('race-turn');
+    const setze = (v) => { sel.value = v; sel.dispatchEvent(new Event('change', { bubbles: true })); };
+    try {
+      setze('acc');
+      if (document.body.getAttribute('data-cockpit') !== 'acc') f.push('Attribut nicht gesetzt');
+      // Sichtbar, solange der Schalter "Regenradar" an ist - wie in jeder Ansicht.
+      const cvSicht = $('race-wx-radar');
+      if (!cvSicht) f.push('Radar fehlt');
+      else if (wxRadarAn() && getComputedStyle(cvSicht).display === 'none') f.push('Radar in ACC ausgeblendet');
+
+      // Ab hier braucht es ein Fenster: ohne Breite rechnen die Medienabfragen falsch.
+      if (!(window.innerWidth > 0) || !(window.innerHeight > 0) || !OMEGA_TEST.cockpitPassung) {
+        teile.push('Sichtbarkeit nicht pruefbar (kein Fenster)');
+      } else {
+        const btn = document.querySelector('[data-tab="race"]');
+        if (btn) btn.click();
+        const ids = ['race-shift', 'race-lap-count', 'race-act-pit', 'race-act-flag',
+          'race-act-scan', 'race-act-mode', 'race-gear', 'race-rpm', 'race-speed', 'race-abs',
+          'race-lap-now', 'race-lap-last', 'race-lap-best', 'race-fuel', 'race-fuel-bar',
+          'race-dmg', 'race-dmg-bar', 'race-tyre-box', 'race-tyre-fl', 'race-tyre-rr',
+          'race-batt', 'race-light-box', 'race-wx-box', 'race-pit-tyre-row',
+          'race-pit-fuel-row', 'race-gplot', 'race-act-pause', 'race-menue',
+          'race-screen-next'];
+        const fehlt = ids.filter((id) => {
+          const el = $(id);
+          if (!el) return true;
+          const r = el.getBoundingClientRect();
+          // Die Balken fuellen sich mit dem Wert; gemessen wird ihr Rahmen.
+          const box = /-bar$/.test(id) ? el.parentElement.getBoundingClientRect() : r;
+          return getComputedStyle(el).visibility === 'hidden' || !(box.width > 0 && box.height > 0);
+        });
+        if (fehlt.length) f.push('nicht sichtbar: ' + fehlt.join(', '));
+
+        // GEZEICHNET, wie in der Vorgabe. Gemessen an der Puffergroesse: die passt die
+        // Routine vor dem Zeichnen an die Kachel an - bleibt sie bei 7 x 5, hat sie nichts
+        // gezeichnet.
+        const cv = $('race-wx-radar');
+        if (cv && !document.hidden && wxRadarAn()) {
+          const bw = cv.width, bh = cv.height;
+          try {
+            cv.width = 7; cv.height = 5;
+            wxRadarDraw();
+            const gemalt = cv.width !== 7 && cv.width === cv.clientWidth;
+            if (!gemalt) f.push('Radar wird in ACC nicht gezeichnet');
+            teile.push('Radar in ACC ' + (gemalt ? 'gezeichnet (' + cv.width + 'x' + cv.height + ')' : 'NICHT gezeichnet'));
+          } finally {
+            cv.width = bw; cv.height = bh;
+          }
+        } else {
+          teile.push('Zeichnen nicht pruefbar (Radar aus oder Seite verborgen)');
+        }
+        teile.push(ids.length - fehlt.length + '/' + ids.length + ' Kacheln sichtbar');
+
+        // Handy quer im Vollbild, wie im Fahrbetrieb: ACC gegen die Vorgabe.
+        document.body.classList.add('race-fs');
+        document.body.classList.remove('race-turn');
+        const faktor = (v) => { setze(v); const r = OMEGA_TEST.cockpitPassung(370, 800); return r; };
+        const vorgabe = faktor('omega');
+        const acc = faktor('acc');
+        if (!acc || !vorgabe) f.push('keine Vollbildmessung');
+        else {
+          teile.push('800x370: Faktor ACC ' + acc.faktor + ', Omega ' + vorgabe.faktor);
+          if (!acc.passt && !acc.amBoden) f.push('ACC steht ' + acc.ueberstand + ' px ueber');
+          if (acc.faktor < vorgabe.faktor - 0.03) f.push('ACC kleiner als Omega');
+          // Kein Wert verlaesst seine Kachel: die Kacheln schneiden nicht ab, ein
+          // Ueberlauf waere also sichtbar ueber der Nachbarkachel.
+          const ueber = [];
+          dash.querySelectorAll(':scope > .gt3-left > .gt3-box, :scope > .gt3-right > .gt3-box, '
+            + ':scope > .gt3-gear, :scope > .gt3-strip > .gt3-box').forEach((k) => {
+            const kr = k.getBoundingClientRect();
+            k.querySelectorAll('.gt3-val, .gt3-lbl, .gt3-gearnum, .gt3-rpm, svg, .gt3-tyres4').forEach((x) => {
+              const xr = x.getBoundingClientRect();
+              if (!(xr.width > 0)) return;
+              if (xr.left < kr.left - 1 || xr.right > kr.right + 1) {
+                ueber.push((x.id || k.id || x.className.baseVal || x.className) + ' ' + Math.round(xr.right - kr.right));
+              }
+            });
+          });
+          if (ueber.length) f.push('Ueberlauf: ' + ueber.slice(0, 4).join(', '));
+        }
+      }
+    } finally {
+      document.body.classList.toggle('race-fs', warFs);
+      document.body.classList.toggle('race-turn', warTurn);
+      setze(merk);
+      if (OMEGA_TEST.cockpitPassung) OMEGA_TEST.cockpitPassung();
+    }
+    return { ok: f.length === 0,
+             mass: 'Option "' + opt.textContent + '" | ' + teile.join(' | ')
+                   + (f.length ? ' || ' + f.join('; ') : '') };
+  });
+
+  // ---- Cockpit v1.3.58: ACC ist die Vorgabe, Balken dick und mittig ----
+  //
+  // BESTELLT: "Mache die drei Balken von unten (Tank, Schaden, Batterie) mit groesserer Hoehe,
+  // damit sie leichter zu erkennen sind. Sie sollten sich ausserdem in der Mitte der Kachel
+  // befinden. [...] Mach diese Ansicht zum Standard."
+  //
+  // Drei Aussagen:
+  //   1. ACC ist die Vorgabe im Waehler (selected, "Vorgabe" im Text, kein WIP mehr), Omega
+  //      traegt "Vorgabe" nicht mehr.
+  //   2. Die Umstellung fuer Bestandsnutzer greift GENAU EINMAL: ein gespeichertes 'omega' wird
+  //      zu 'acc', eine spaetere eigene Wahl von Omega bleibt, jede andere Ansicht bleibt.
+  //      Gefahren an einer Attrappe, nicht an der echten Ablage.
+  //   3. Tank, Zustand und Akku: der Balken ist mindestens 12 px dick (v1.3.51: 5 bis 7 px),
+  //      liegt waagerecht und mit seiner Mitte hoechstens 10 % der Kachelhoehe neben der
+  //      Kachelmitte - im Vollbild auf 800 x 370 und auf 1280 x 800.
+  stAdd('Cockpit v1.3.58: ACC ist Vorgabe (einmalige Umstellung), Tank/Zustand/Akku-Balken dick und mittig', () => {
+    const sel = $('setting-cockpit');
+    const dash = $('race-dash');
+    if (!sel || !dash) return { ok: false, mass: 'Waehler oder Cockpit fehlt' };
+    const f = [], teile = [];
+
+    // 1. Vorgabe im Waehler.
+    const acc = [...sel.options].find(o => o.value === 'acc');
+    const omega = [...sel.options].find(o => o.value === 'omega');
+    if (!acc || !acc.defaultSelected) f.push('ACC ist nicht selected');
+    if (acc && !/Vorgabe/.test(acc.textContent)) f.push('ACC ohne "Vorgabe"');
+    if (acc && /WIP/.test(acc.textContent)) f.push('ACC traegt noch WIP');
+    if (omega && /Vorgabe/.test(omega.textContent)) f.push('Omega heisst noch Vorgabe');
+    if ([...sel.options].filter(o => o.defaultSelected).length !== 1) f.push('nicht genau eine Vorgabe');
+
+    // 2. Die einmalige Umstellung, an einer Attrappe.
+    if (typeof cockpitVorgabeUmstellen !== 'function') {
+      f.push('cockpitVorgabeUmstellen fehlt');
+    } else {
+      const attrappe = (anfang) => {
+        const m = new Map(Object.entries(anfang));
+        return { m, getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)) };
+      };
+      const alt = attrappe({ [COCKPIT_STORE]: 'omega' });
+      const r1 = cockpitVorgabeUmstellen(alt);
+      if (!r1 || alt.getItem(COCKPIT_STORE) !== 'acc') f.push('gespeichertes omega nicht umgestellt');
+      alt.setItem(COCKPIT_STORE, 'omega');          // danach bewusst wieder Omega gewaehlt
+      const r2 = cockpitVorgabeUmstellen(alt);
+      if (r2 || alt.getItem(COCKPIT_STORE) !== 'omega') f.push('Umstellung greift ein zweites Mal');
+      const retro = attrappe({ [COCKPIT_STORE]: 'retro' });
+      if (cockpitVorgabeUmstellen(retro) || retro.getItem(COCKPIT_STORE) !== 'retro') f.push('eigene Wahl retro ueberschrieben');
+      const neu = attrappe({});
+      if (cockpitVorgabeUmstellen(neu) || neu.getItem(COCKPIT_STORE) !== null) f.push('neuer Nutzer: Ablage beschrieben');
+      if (!neu.getItem(COCKPIT_ACC_VORGABE)) f.push('Merker nicht gesetzt');
+      teile.push('Umstellung omega->acc einmal, danach Omega behalten, retro unberuehrt');
+      try {
+        if (localStorage.getItem(COCKPIT_ACC_VORGABE) !== '1') f.push('Merker in der echten Ablage fehlt');
+      } catch (e) { /* privater Modus */ }
+    }
+
+    // 3. Die Balken.
+    if (!(window.innerWidth > 0) || !(window.innerHeight > 0) || !OMEGA_TEST.cockpitPassung) {
+      teile.push('Balken nicht pruefbar (kein Fenster)');
+      return { ok: f.length === 0, mass: teile.join(' | ') + (f.length ? ' || ' + f.join('; ') : '') };
+    }
+    const merk = sel.value;
+    const warFs = document.body.classList.contains('race-fs');
+    const warTurn = document.body.classList.contains('race-turn');
+    const setze = (v) => { sel.value = v; sel.dispatchEvent(new Event('change', { bubbles: true })); };
+    try {
+      setze('acc');
+      const btn = document.querySelector('[data-tab="race"]');
+      if (btn) btn.click();
+      document.body.classList.add('race-fs');
+      document.body.classList.remove('race-turn');
+      for (const [b, h] of [[800, 370], [1280, 800]]) {
+        OMEGA_TEST.cockpitPassung(h, b);
+        const zeile = [];
+        for (const id of ['race-fuel-bar', 'race-dmg-bar', 'race-batt-bar']) {
+          const balken = $(id) && $(id).parentElement;
+          const kachel = balken && balken.parentElement;
+          if (!balken || !kachel) { f.push(id + ' fehlt'); continue; }
+          const dicke = balken.offsetWidth;            // vor der Drehung: die Breite ist die Dicke
+          const br = balken.getBoundingClientRect(), kr = kachel.getBoundingClientRect();
+          if (!(kr.height > 0)) { f.push(b + 'x' + h + ' ' + id + ': Kachel ohne Hoehe'); continue; }
+          const waagerecht = br.width > br.height * 2;
+          const versatz = Math.abs((br.top + br.bottom) / 2 - (kr.top + kr.bottom) / 2) / kr.height;
+          const innen = br.left >= kr.left - 1 && br.right <= kr.right + 1;
+          zeile.push(id.replace('race-', '').replace('-bar', '') + ' ' + dicke + 'px/'
+                     + Math.round(versatz * 100) + '%');
+          if (dicke < 12) f.push(b + 'x' + h + ' ' + id + ': nur ' + dicke + ' px dick');
+          if (!waagerecht) f.push(b + 'x' + h + ' ' + id + ': nicht waagerecht');
+          if (versatz >= 0.1) f.push(b + 'x' + h + ' ' + id + ': ' + Math.round(versatz * 100) + ' % neben der Mitte');
+          if (!innen) f.push(b + 'x' + h + ' ' + id + ': ragt aus der Kachel');
+        }
+        teile.push(b + 'x' + h + ': ' + zeile.join(', '));
+      }
+    } finally {
+      document.body.classList.toggle('race-fs', warFs);
+      document.body.classList.toggle('race-turn', warTurn);
+      setze(merk);
+      OMEGA_TEST.cockpitPassung();
+    }
+    return { ok: f.length === 0, mass: teile.join(' | ') + (f.length ? ' || ' + f.join('; ') : '') };
   });
 
 
@@ -5431,8 +5651,6 @@
       pitStandElapsed = sp.fensterAb + 0.001;
       pitSpielTaste(sp.folge[1]);
       if (sp.i !== 2 || sp.treffer !== 2) f.push('nach der Luecke zaehlt der Druck nicht');
-      // Fuenf Fenster mit Luecken passen weiter in die Standzeit.
-      if (sp.fensterS > PIT_SPIEL_FENSTER_MIN && Math.abs(PIT_SPIEL_ANZAHL * (sp.fensterS + PIT_SPIEL_PAUSE) - sp.T) > 0.01) f.push('Fenster passen nicht in die Zeit');
     } finally {
       setPitState('off'); pitRearmBlockedUntil = 0;
       pitModus = merk.modus; pitLaneEnabled = merk.an; pitTrigger = merk.trig;
@@ -6199,7 +6417,8 @@
     if (pk && parseFloat(getComputedStyle(pk).marginRight) < 12) f.push('zu wenig Abstand zu Beenden');
     const el = $('pit-spiel');
     if (!el || el.querySelectorAll('.ps-slot').length !== PIT_SPIEL_ANZAHL) f.push('nicht ein Platz je Knopf');
-    if (String(pitSpielMalen).indexOf("k < sp.i ? 'fertig'") < 0) f.push('erledigte Knoepfe blenden nicht aus');
+    // v1.3.62: erledigte Knoepfe blenden nicht mehr aus, sie bleiben gruen oder rot umrahmt stehen.
+    if (String(pitSpielMalen).indexOf('sp.ergebnis[k]') < 0) f.push('erledigte Knoepfe behalten ihr Ergebnis nicht');
     // Randstreifen: der weisse Streifen beginnt am Ursprung (pts[0]), auch mit Haarnadel.
     const r = renderTrackPreview(codeToTrack('SHG3R4L').tiles, null, { detailed: true, echt: true, ohneLinie: true, ohneLinieRechnen: true });
     const d = new DOMParser().parseFromString(r.html, 'image/svg+xml');
@@ -6367,13 +6586,10 @@
 
   stAdd('Boxen v1.2.4: Minigame-Haken nur bei richtig, mechanische Signale, NPC-Box wie Safety Car, SC-Parken passt', () => {
     const f = [];
-    // Minigame: Zeitablauf loescht die Rueckmeldung; die Reihe zeigt die naechsten vier.
+    // Minigame: seit v1.3.62 gibt es weder Haken noch Zeitablauf - die Rueckmeldung ist der Rahmen
+    // am gedrueckten Knopf (eigener Test "Boxen v1.3.62"). Hier bleibt: ein Platz je Knopf.
     const el = $('pit-spiel');
     if (!el || el.querySelectorAll('.ps-slot').length !== PIT_SPIEL_ANZAHL) f.push('Reihe nicht mit einem Platz je Knopf (seit v1.2.30)');
-    if (!el || !el.querySelector('.ps-falsch')) f.push('Kreuz fuer falsch fehlt');
-    const css = [...document.querySelectorAll('style')].map((x) => x.textContent).join('\n');
-    if (/\.pit-spiel\[data-symbol=""\] \.ps-fertig\s*\{\s*display:\s*block/.test(css)) f.push('Haken noch in jeder Pause');
-    if (String(pitSpielTick).indexOf("sp.blitz = ''") < 0) f.push('Zeitablauf laesst die alte Rueckmeldung stehen');
     // Signale: Schalter ab Werk aus, an = alte Toene.
     const alt = $('setting-pit-alt-toene');
     if (!alt || alt.defaultChecked) f.push('Schalter alte Signaltoene fehlt oder ab Werk an');
@@ -7774,6 +7990,8 @@
   // Geprueft wird an den Zaehlern und nicht am Lautsprecher: ob wirklich Ton kommt, haengt
   // an den Stimmen des Systems, aber DASS vor jeder Aeusserung abgebrochen wird, ist eine
   // Eigenschaft des Codes.
+  // v1.3.39: gilt mit "Ansagen in Warteschlange" AUS (das Verhalten vor PR #11). Mit
+  // Warteschlange prueft das "Ansagen v1.3.39: Warteschlange abschaltbar ...".
   stAdd('Ansage: stapelt sich nicht', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.ansage || typeof speakLap !== 'function') {
       return { skip: true, mass: 'Messaufbau nicht vorhanden' };
@@ -7781,7 +7999,10 @@
     if (!('speechSynthesis' in window)) return { skip: true, mass: 'keine Sprachausgabe' };
     const el = $('setting-announce');
     const merk = el ? el.checked : null;
+    const qEl = $('setting-announce-queue');
+    const merkQ = qEl ? qEl.checked : null;
     try {
+      if (qEl && qEl.checked) { qEl.checked = false; qEl.dispatchEvent(new Event('change', { bubbles: true })); }
       if (el && !el.checked) { el.checked = true; el.dispatchEvent(new Event('change', { bubbles: true })); }
       const vor = OMEGA_TEST.ansage();
       speakLap(58300, false);
@@ -7794,16 +8015,154 @@
       speakLap(60000, false);
       const aus = OMEGA_TEST.ansage();
       const stillRufe = aus.calls - nach.calls;
-      const ok = rufe === 2 && abbr === 2 && stillRufe === 0;
-      return { ok, mass: rufe + ' Aeusserungen, ' + abbr + ' Abbrueche, ausgeschaltet '
+      const ok = rufe === 2 && abbr === 2 && stillRufe === 0 && !ansagenWarten();
+      return { ok, mass: '(ohne Warteschlange) ' + rufe + ' Aeusserungen, ' + abbr + ' Abbrueche, ausgeschaltet '
                          + stillRufe + ' Aeusserungen' };
     } finally {
       if (el && merk !== null) {
         el.checked = merk;
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
+      if (qEl && merkQ !== null && qEl.checked !== merkQ) {
+        qEl.checked = merkQ;
+        qEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      // Eine stumm geschaltete Stimme meldet kein Ende: nicht als laufend liegen lassen.
+      lapAnsageBeendet(); lapAnsageRuheBis = 0;
     }
+  });
+
+  // Die Queue pruefen, ohne echte Stimme oder Nutzereinstellungen anzutasten.
+  stAdd('Ansage: priorisiert und unterbricht nicht', async () => {
+    const folge = [], fehler = [];
+    const q = new RennAnsagenQueue(() => false, e => fehler.push(String(e)));
+    let fertig;
+    try {
+      q.einreihen('lap', 0, () => { folge.push('lap-start'); return new Promise(r => { fertig = r; }); });
+      await new Promise(r => setTimeout(r, 30));
+      q.einreihen('lap', 0, () => folge.push('lap-2'));
+      q.einreihen('event', 20, () => folge.push('event'));
+      await new Promise(r => setTimeout(r, 30));
+      const unberuehrt = folge.join(',') === 'lap-start' && typeof fertig === 'function';
+      if (fertig) fertig();
+      await new Promise(r => setTimeout(r, 750));
+      return { ok: unberuehrt && folge.join(',') === 'lap-start,event,lap-2' && !fehler.length,
+        mass: folge.join(' -> ') + (fehler.length ? ' | ' + fehler.join(';') : '') };
+    } finally { q.reset(); if (fertig) fertig(); }
+  });
+
+  // v1.3.39 BESTELLT (zu PR #11): "Uebernimm die Sachen, aber lass mich einstellen, dass keine
+  // Warteschlangen entstehen in den Ansagen-Optionen." Geprueft: Schalter (Ort, Vorgabe an,
+  // WIP, Erklaerung als <small>, gespeichert wie die anderen Ansage-Schalter); AUS = keine
+  // Schlange, kein Nachsehen, neue Ansage beendet eine laufende Rennereignis-Meldung; AN =
+  // zu alte Rundenzeiten verfallen, Ausschalten einer Art macht eine laufende Ansage DIESER
+  // Art sofort still, andere sprechen weiter; Umschalten auf AUS leert die Wartenden.
+  stAdd('Ansagen v1.3.39: Warteschlange abschaltbar, alte Rundenzeiten verfallen, Ausschalten sofort still', async () => {
+    const f = [];
+    const qEl = $('setting-announce-queue'), seite = $('sub-opt-ansagen');
+    if (!qEl) return { ok: false, mass: 'Schalter setting-announce-queue fehlt' };
+    const zeile = qEl.closest('.opt-row'), label = zeile && zeile.querySelector('.opt-label');
+    if (!seite || !seite.contains(qEl)) f.push('nicht auf der Ansagen-Seite');
+    if (!qEl.defaultChecked) f.push('Vorgabe nicht an');
+    if (!label || !label.querySelector('.wip-tag')) f.push('WIP-Etikett fehlt');
+    if (!label || !label.querySelector('small')) f.push('Erklaerung (<small>) fehlt');
+    if (qEl.hasAttribute('data-preset-skip') !== $('setting-announce').hasAttribute('data-preset-skip')) {
+      f.push('anders gespeichert als setting-announce');
+    }
+    const merk = { q: qEl.checked, sound: soundEnabled, verfall: ansageLapVerfallMs,
+      an: Object.assign({}, ansageAn), fuelClip: voiceBuffers.fuel };
+    const echteStimme = window.speechSynthesis;
+    const gesagt = []; let abbrueche = 0, laufend = null;
+    const setzeQ = (an) => { qEl.checked = an; qEl.dispatchEvent(new Event('change', { bubbles: true })); };
+    const schalte = (id, an) => { const el = $(id); el.checked = an; el.dispatchEvent(new Event('change', { bubbles: true })); };
+    const warte = (ms) => new Promise((res) => setTimeout(res, ms));
+    const bis = async (fn, ms) => { const t0 = performance.now(); while (!fn() && performance.now() - t0 < ms) await warte(20); return fn(); };
+    try {
+      soundEnabled = true;
+      delete voiceBuffers.fuel;   // Tankmeldung als Text, damit die Attrappe sie hoert
+      ansageAn.lap = true; ansageAn.fuel = true; ansageAn.rain = true;
+      ansagenReset(); lapAnsageRuheBis = 0;
+      // Stimme, die erst beim Abbruch endet (ein "langer Satz").
+      Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
+        get speaking() { return !!laufend; }, pending: false,
+        cancel() { abbrueche++; const u = laufend; laufend = null; if (u && u.onerror) u.onerror({ error: 'interrupted' }); },
+        speak(u) { gesagt.push(u.text); laufend = u; } } });
+
+      // ---- AUS: keine Schlange, kein Nachsehen ----
+      setzeQ(false);
+      speakLap(7000, false); speakLap(7100, false);
+      if (rennAnsagen.jobs.length || rennAnsagen.timer !== null || rennAnsagen.aktiv) f.push('AUS: Schlange laeuft');
+      if (gesagt.length !== 2) f.push('AUS: ' + gesagt.length + ' statt 2 Rundenzeiten sofort');
+      ansage('fuel', 'Tank fast leer');
+      if (rennAnsagen.jobs.length || rennAnsagen.timer !== null) f.push('AUS: Meldung wartet');
+      // Eine laufende Rennereignis-Meldung endet, wenn eine neue Ansage kommt.
+      let ereignisGestoppt = false;
+      ansagenSofort('event-test', async () => {
+        ansagenAktuellStop = () => { ereignisGestoppt = true; ansagenAktuellStop = null; };
+        await warte(300);
+      }, () => true);
+      await bis(() => ansagenAktuellStop !== null, 200);
+      if (!ansagenWarten()) f.push('AUS: Ereignis zaehlt nicht als laufend');
+      speakLap(7200, false);
+      if (!ereignisGestoppt) f.push('AUS: Rundenzeit beendet laufendes Ereignis nicht');
+      if (rennAnsagen.jobs.length || rennAnsagen.timer !== null) f.push('AUS: Ereignis hat Schlange benutzt');
+      window.speechSynthesis.cancel();
+
+      // ---- AN: zu alte Rundenzeit verfaellt ----
+      setzeQ(true);
+      ansagenReset(); gesagt.length = 0;
+      ansageLapVerfallMs = 120;
+      lapAnsageRuheBis = performance.now() + 400;   // Schlange kurz blockiert
+      speakLap(7300, false);
+      if (rennAnsagen.jobs.length !== 1) f.push('AN: Rundenzeit nicht eingereiht');
+      await warte(600);
+      if (gesagt.length) f.push('AN: zu alte Rundenzeit gesprochen');
+      if (ansagenWarten()) f.push('AN: zu alte Rundenzeit wartet noch');
+      ansageLapVerfallMs = merk.verfall;
+      // Wartet sie nur kurz, kommt sie.
+      lapAnsageRuheBis = performance.now() + 150;
+      speakLap(7400, false);
+      await bis(() => gesagt.length === 1, 1500);
+      if (gesagt.length !== 1) f.push('AN: frische Rundenzeit nicht gesprochen (' + gesagt.length + ')');
+
+      // ---- AN: Ausschalten einer Art macht DIESE sofort still ----
+      // Die Rundenzeit spricht noch (laufend), eine Tankmeldung wartet.
+      ansage('fuel', 'Tank fast leer');
+      await warte(80);
+      if (gesagt.length !== 1) f.push('AN: Tankmeldung hat die laufende Rundenzeit unterbrochen');
+      const vorAbbr = abbrueche;
+      schalte('setting-announce-rain', false);   // andere Art: nichts passiert
+      if (abbrueche !== vorAbbr || !rennAnsagen.aktiv || rennAnsagen.aktiv.art !== 'lap') {
+        f.push('AN: fremde Art abgeschaltet bricht Rundenzeit ab');
+      }
+      schalte('setting-announce', false);        // eigene Art: sofort still
+      if (abbrueche === vorAbbr) f.push('AN: Rundenzeit nach Ausschalten nicht sofort still');
+      await bis(() => gesagt.length === 2, 1500);
+      if (gesagt[1] !== 'Tank fast leer') f.push('AN: wartende Tankmeldung danach nicht gesprochen');
+      schalte('setting-announce', true); schalte('setting-announce-rain', merk.an.rain);
+
+      // ---- Umschalten auf AUS leert die Wartenden ----
+      window.speechSynthesis.cancel(); ansagenReset();
+      lapAnsageRuheBis = performance.now() + 2000;
+      speakLap(7500, false);
+      const wartend = rennAnsagen.jobs.length;
+      setzeQ(false);
+      if (wartend !== 1 || rennAnsagen.jobs.length || rennAnsagen.timer !== null) f.push('AN->AUS: Wartende bleiben');
+    } finally {
+      ansageLapVerfallMs = merk.verfall; lapAnsageRuheBis = 0;
+      ansagenReset();
+      if (echteStimme) Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: echteStimme });
+      else delete window.speechSynthesis;
+      if ($('setting-announce').checked !== merk.an.lap) schalte('setting-announce', merk.an.lap);
+      if ($('setting-announce-rain').checked !== merk.an.rain) schalte('setting-announce-rain', merk.an.rain);
+      Object.assign(ansageAn, merk.an);
+      if (qEl.checked !== merk.q) setzeQ(merk.q);
+      soundEnabled = merk.sound;
+      if (merk.fuelClip) voiceBuffers.fuel = merk.fuelClip;
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ')
+      : 'AUS: sofort, keine Schlange; AN: Verfall nach ' + merk.verfall + ' ms, Ausschalten sofort still' };
   });
 
   // ---- Marke und Zaehler: die zwei aussenwirksamen Zeilen ----
@@ -11104,8 +11463,8 @@
     // Unterseiten, die aus ERZEUGTEN Listenzeilen aufgehen, haben keinen festen Oeffner im
     // Dokument. Sie gelten als erreichbar, wenn ihre Liste es ist. v0.9.49: eine
     // Community-Strecke oeffnet sich aus jeder Zeile der Community-Liste (communityZeichnen).
-    // v1.3.15: eine Strecke der Community-Strecken (ch-sk) oeffnet sich aus deren Liste (skListeZeichnen).
-    const AUS_LISTE = { 'ch-strecke': 'ch-community', 'ch-sk': 'ch-strecken' };
+    // v1.3.15: eine Strecke mit Zeiten (ch-sk) oeffnet sich aus der Community-Liste (communityZeichnen, seit v1.3.62).
+    const AUS_LISTE = { 'ch-strecke': 'ch-community', 'ch-sk': 'ch-community' };
     Object.keys(AUS_LISTE).forEach((x) => { if (oeffner.has(AUS_LISTE[x])) oeffner.add(x); });
     const ohne = subs.filter((x) => !oeffner.has(x));
     return { ok: !fehlt.length && !ohne.length,
@@ -11462,19 +11821,13 @@
       if (!r.fertig) f.push('nicht fertig geworden (' + r.stand + ')');
       // v1.0.45: nach dem letzten Knopf 1 s Erholung (kein Fehler hier), danach erst fertig.
       if (Math.abs(r.dauer - (r.T + PIT_ERHOL_BASE)) > 0.3) f.push('Dauer ' + r.dauer.toFixed(2) + ' s statt ' + (r.T + PIT_ERHOL_BASE).toFixed(2));
-      // v1.1.11: fuenf Symbole, Fenster = T/5 minus 250 ms Pause (70-race.js, pitSpielFenster); seit
-      // v1.2.4 ohne Pause. Ohne Tasten laufen sie in die Standzeit hinein ab: Erwartung = so viele, wie
-      // bis zum Ende passen.
-      const fensterS = pitSpielFenster(r.T);
-      const erwartet = Math.min(PIT_SPIEL_ANZAHL, Math.floor((r.T + PIT_ERHOL_BASE) / (fensterS + PIT_SPIEL_PAUSE)));
-      if (r.i < erwartet) f.push('nur ' + r.i + ' Symbole abgelaufen statt ' + erwartet);
-      // Wo das Fenster nicht unter seinem Minimum liegt, fuellen fuenf Fenster samt Pausen genau die Standzeit.
-      if (fensterS > PIT_SPIEL_FENSTER_MIN && Math.abs(PIT_SPIEL_ANZAHL * (fensterS + PIT_SPIEL_PAUSE) - r.T) > 0.01)
-        f.push('fuenf Fenster passen nicht in die Zeit: ' + (PIT_SPIEL_ANZAHL * (fensterS + PIT_SPIEL_PAUSE)).toFixed(2) + ' s zu ' + r.T.toFixed(2));
+      // v1.3.62: kein Zeitlimit je Knopf - ohne Druck bleibt der erste dran, und das Spiel endet
+      // mit der Arbeit (Deckel gegen Warten: T plus Erholung, wie ohne Druck bisher).
+      if (r.i !== 0) f.push(r.i + ' Knoepfe ohne Druck weitergesprungen');
       if (fuelSimOn() && r.fuel < 99.9) f.push('Tank am Ende ' + r.fuel.toFixed(1));
       if (r.plan.repair && r.damage > 0.01) f.push('Schaden am Ende ' + r.damage.toFixed(1));
     }
-    return { ok: !f.length, mass: f.length ? f.join('; ') : 'T ' + (r.T || 0).toFixed(1) + ' s, voll abgewartet, ' + r.i + ' Symbole abgelaufen, Gas und Rueckwaerts zu' };
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'T ' + (r.T || 0).toFixed(1) + ' s, voll abgewartet (' + (r.dauer || 0).toFixed(1) + ' s), kein Knopf abgelaufen, Gas und Rueckwaerts zu' };
   });
 
   // ---- Rueckwaertsgang: Gas und Bremse zusammen ----
@@ -12032,21 +12385,120 @@
     return { ok: !f.length, mass: (info.length ? info.join(' | ') + ' | ' : '') + (f.length ? 'FEHLER: ' + f.join(' | ') : 'alle Bedingungen gepr\u00fcft') };
   });
 
-  stAdd('Boxen-Minigame: fuenf richtige sparen 40 %, falsche kosten Zeit', () => {
+  stAdd('Boxen-Minigame: schnelle richtige sparen bis 40 %, falsche kosten Zeit', () => {
     const a = pitSpielLauf('richtig');
     const b = pitSpielLauf('falsch');
     const f = a.f.concat(b.f);
     if (!f.length) {
       if (a.treffer !== PIT_SPIEL_ANZAHL) f.push(a.treffer + ' Treffer statt ' + PIT_SPIEL_ANZAHL);
-      // Fuenf richtige geben je 8 % Bonus (v1.1.11; vorher acht mal 5 %): 0,6 * T plus 1 s Erholung.
-      const aSoll = 0.6 * a.T + PIT_ERHOL_BASE;
-      if (Math.abs(a.dauer - aSoll) > 0.3) f.push('mit 5 Treffern ' + a.dauer.toFixed(2) + ' s statt ' + aSoll.toFixed(2));
-      if (b.treffer !== 0 || !(b.bonus < 0)) f.push('falsche Tasten: Treffer ' + b.treffer + ', Bonus ' + b.bonus);
-      // Fuenf falsche kosten je 8 % (1,4 * T) plus Erholung mit 5 Fehlern (Strafzeit).
-      const bSoll = 1.4 * b.T + PIT_ERHOL_BASE + PIT_SPIEL_ANZAHL * PIT_ERHOL_PRO_FEHLER;
-      if (Math.abs(b.dauer - bSoll) > 0.4) f.push('mit falschen Tasten ' + b.dauer.toFixed(2) + ' s statt ' + bSoll.toFixed(2));
+      // v1.3.62: je richtigem Knopf 10 % von T mal (1 - Reaktion / 2 s). Der Prueflauf drueckt in
+      // jedem 50-ms-Takt, sobald der Prellschutz frei ist - also nach 50 bis 100 ms: fast alles.
+      if (!(a.bonus > 0.36 * a.T && a.bonus <= 0.4 * a.T + 1e-9)) f.push('Gutschrift ' + a.bonus.toFixed(2) + ' s bei T ' + a.T.toFixed(2));
+      const aSoll = a.T - a.bonus + PIT_ERHOL_BASE;
+      if (Math.abs(a.dauer - aSoll) > 0.12) f.push('mit 4 Treffern ' + a.dauer.toFixed(2) + ' s statt ' + aSoll.toFixed(2));
+      if (b.treffer !== 0 || Math.abs(b.bonus + PIT_SPIEL_ANZAHL * PIT_SPIEL_STRAFE * b.T) > 1e-6) f.push('falsche Tasten: Treffer ' + b.treffer + ', Bonus ' + b.bonus);
+      // Vier falsche kosten je 10 % (1,4 * T) plus Erholung mit 4 Fehlern (Strafzeit).
+      const bSoll = (1 + PIT_SPIEL_ANZAHL * PIT_SPIEL_STRAFE) * b.T + PIT_ERHOL_BASE + PIT_SPIEL_ANZAHL * PIT_ERHOL_PRO_FEHLER;
+      if (Math.abs(b.dauer - bSoll) > 0.12) f.push('mit falschen Tasten ' + b.dauer.toFixed(2) + ' s statt ' + bSoll.toFixed(2));
     }
-    return { ok: !f.length, mass: f.length ? f.join('; ') : '40 % schneller mit 5 Treffern (' + a.dauer.toFixed(1) + ' von ' + a.T.toFixed(1) + ' s), fuenf falsche: ' + b.dauer.toFixed(1) + ' s' };
+    return { ok: !f.length, mass: f.length ? f.join('; ') : Math.round(100 * a.bonus / a.T) + ' % schneller mit 4 schnellen Treffern (' + a.dauer.toFixed(1) + ' von ' + a.T.toFixed(1) + ' s + 1 s Erholung), vier falsche: ' + b.dauer.toFixed(1) + ' s' };
+  });
+
+  // ---- Boxen v1.3.62: vier Knoepfe, Rahmen gruen/rot, ohne Zeitlimit ----
+  //
+  // BESTELLT: "Zeige in der Kachel darueber die Folge der vier Knoepfe, und je Knopf, den ich
+  // druecke, wird dann der Knopf gruen (richtig) oder rot (falsch) umrahmt (+ Feedback-Ton). Ich
+  // moechte nicht das Gedoens darueber und darunter und kein Zeitlimit zum Druecken der Knoepfe.
+  // Im Hintergrund soll sich die Schnelligkeit des Drueckens sowie Korrektheit schon noch auf
+  // die Pit-Zeit auswirken (ausser ich stelle das Minigame ab, natuerlich)."
+  stAdd('Boxen v1.3.62: Minispiel vier Knoepfe, Rahmen gruen/rot, ohne Zeitlimit, wirkt auf Standzeit', () => {
+    const f = [], teile = [];
+    const el = $('pit-spiel');
+    if (!el) return { ok: false, mass: 'pit-spiel fehlt' };
+    // 1. Nur die Reihe: vier Plaetze, kein Zaehler, keine Restzeit, kein Ring, keine Trefferzahl.
+    if (PIT_SPIEL_ANZAHL !== 4) f.push(PIT_SPIEL_ANZAHL + ' Knoepfe statt 4');
+    if (el.querySelectorAll('.ps-slot').length !== 4) f.push(el.querySelectorAll('.ps-slot').length + ' Plaetze statt 4');
+    for (const weg of ['#pit-spiel-zaehler', '#pit-spiel-rest', '#pit-spiel-treffer', '.ps-kopf', '.ps-mitte', '.ps-ring']) {
+      if (el.querySelector(weg)) f.push(weg + ' ist noch da');
+    }
+    if (String(pitSpielMalen).indexOf('--fenster') >= 0) f.push('Zeitbalken wird noch gemalt');
+    // Die Tipp-Flaechen nur ohne Gamepad.
+    const fuss = el.querySelector('.ps-fuss');
+    const touchMerk = el.classList.contains('ps-touch');
+    el.classList.remove('ps-touch');
+    if (!fuss || getComputedStyle(fuss).display !== 'none') f.push('Tipp-Flaechen trotz Gamepad sichtbar');
+    el.classList.add('ps-touch');
+    if (!fuss || getComputedStyle(fuss).display === 'none') f.push('ohne Gamepad keine Tipp-Flaechen');
+    el.classList.toggle('ps-touch', touchMerk);
+    // Ton: dumpf, kein Rechteck mehr.
+    if (/'square'/.test(String(pitSpielTon))) f.push('Fehlerton noch Rechteck');
+
+    const merk = { modus: pitModus, an: pitLaneEnabled, trig: pitTrigger, kmh: physEngine.state.speedKmh,
+                   zwei: zweiSpieler, fuel, damage };
+    const reifen = pitSpielReifenMerk();
+    try {
+      pitModus = 'minigame'; pitLaneEnabled = true; pitTrigger = 'anywhere'; zweiSpieler = false;
+      physEngine.state.speedKmh = 0; throttleY = 0; fuel = 30; damage = 20;
+      setPitState('off'); pitRearmBlockedUntil = 0;
+      setPitState('limited'); pitLastTick = 0; pitLaneTick();
+      if (!pitSpielAktiv()) return { ok: false, mass: 'kein Minigame-Stopp' };
+      const sp = pitSpiel, T = sp.T;
+      const slots = el.querySelectorAll('.ps-slot');
+      const zustand = () => [...slots].map(x => x.dataset.zustand).join(',');
+      if (zustand() !== 'jetzt,kommt,kommt,kommt') f.push('Start: ' + zustand());
+      if ([...slots].some((x, k) => x.dataset.s !== sp.folge[k])) f.push('Plaetze zeigen nicht die Folge');
+      // 2. Kein Zeitlimit: lange warten (aber vor dem Ende der Arbeit) - der erste bleibt dran.
+      const warte = Math.min(0.7 * T, 3);
+      pitSpielTick(warte);
+      if (sp.i !== 0 || slots[0].dataset.zustand !== 'jetzt') f.push('nach ' + warte.toFixed(1) + ' s ohne Druck weitergesprungen');
+      // 3. Richtig nach langer Bedenkzeit: Rahmen gruen, aber (fast) keine Gutschrift.
+      const b0 = sp.bonus;
+      pitSpielTaste(sp.folge[0]);
+      const g1 = sp.bonus - b0;
+      const g1Soll = PIT_SPIEL_BONUS * T * Math.max(0, 1 - warte / PIT_SPIEL_REAKTION);
+      if (Math.abs(g1 - g1Soll) > 1e-6) f.push('Gutschrift nach ' + warte.toFixed(1) + ' s ' + g1.toFixed(3) + ' statt ' + g1Soll.toFixed(3));
+      if (slots[0].dataset.zustand !== 'ok' || slots[1].dataset.zustand !== 'jetzt') f.push('nach richtig: ' + zustand());
+      // 4. Schnell richtig (0,5 s): drei Viertel der vollen Gutschrift.
+      pitSpielTick(0.5);
+      const b1 = sp.bonus;
+      pitSpielTaste(sp.folge[1]);
+      const g2 = sp.bonus - b1, g2Soll = PIT_SPIEL_BONUS * T * (1 - 0.5 / PIT_SPIEL_REAKTION);
+      if (Math.abs(g2 - g2Soll) > 1e-6) f.push('Gutschrift nach 0,5 s ' + g2.toFixed(3) + ' statt ' + g2Soll.toFixed(3));
+      // 5. Falsch: roter Rahmen, Folge geht weiter, Aufschlag 10 % von T.
+      pitSpielTick(0.3);
+      const b2 = sp.bonus;
+      pitSpielTaste(sp.folge[2] === 'quad' ? 'kreis' : 'quad');
+      if (Math.abs((b2 - sp.bonus) - PIT_SPIEL_STRAFE * T) > 1e-6) f.push('Aufschlag ' + (b2 - sp.bonus).toFixed(3) + ' statt ' + (PIT_SPIEL_STRAFE * T).toFixed(3));
+      if (zustand() !== 'ok,ok,falsch,jetzt') f.push('nach falsch: ' + zustand());
+      const farbe = (x) => getComputedStyle(x).borderTopColor;
+      const gruen = getComputedStyle(document.body).getPropertyValue('--good').trim();
+      teile.push('Rahmen ' + farbe(slots[0]) + ' / ' + farbe(slots[2]));
+      if (farbe(slots[0]) === farbe(slots[2]) || farbe(slots[0]) === farbe(slots[3])) f.push('Rahmen richtig/falsch/aktuell nicht verschieden');
+      if (!gruen) f.push('--good fehlt');
+      // 6. Der letzte: das Spiel ist vorbei, alle vier bleiben markiert, weitere Druecke zaehlen nicht.
+      pitSpielTick(0.3);
+      pitSpielTaste(sp.folge[3]);
+      if (!sp.vorbei || zustand() !== 'ok,ok,falsch,ok') f.push('Ende: ' + zustand() + (sp.vorbei ? '' : ', nicht vorbei'));
+      const bEnde = sp.bonus;
+      pitSpielTick(0.3);
+      pitSpielTaste('kreis');
+      if (sp.bonus !== bEnde || sp.i !== 4) f.push('Druck nach dem Ende zaehlte');
+      teile.push('T ' + T.toFixed(2) + ' s, Gutschrift ' + (g1 + g2).toFixed(2) + ' s, Aufschlag ' + (PIT_SPIEL_STRAFE * T).toFixed(2) + ' s');
+      // 7. Minigame aus: kein Spiel, Standzeit wie ohne Spiel.
+      setPitState('off'); pitRearmBlockedUntil = 0;
+      pitModus = 'standard';
+      setPitState('limited'); pitLastTick = 0; pitLaneTick();
+      if (pitState !== 'servicing') f.push('Standard-Stopp beginnt nicht');
+      pitSpielMalen();
+      if (pitSpiel || !el.hidden) f.push('Minigame aus, trotzdem ein Spiel');
+    } finally {
+      setPitState('off'); pitRearmBlockedUntil = 0;
+      pitModus = merk.modus; pitLaneEnabled = merk.an; pitTrigger = merk.trig; zweiSpieler = merk.zwei;
+      physEngine.state.speedKmh = merk.kmh; fuel = merk.fuel; damage = merk.damage;
+      pitSpielReifenZurueck(reifen);
+      updateDamageFuelUI(); updatePitUI();
+    }
+    return { ok: !f.length, mass: teile.join(' | ') + (f.length ? ' || ' + f.join('; ') : '') };
   });
 
   stAdd('Boxen-Minigame: Quadrat und Kreis schalten waehrenddessen nicht, Kreuz bricht ab', () => {
@@ -14590,14 +15042,65 @@
   //
   // GEFAHREN WIRD UEBER playerLapCrossed(), den echten Weg. Ein Prueflauf, der speakLap()
   // direkt riefe, prueefte die Stimme und nicht die Bedingung, an der es lag.
-  stAdd('Freie Fahrt: Rundenzeiten werden angesagt', () => {
+  // v1.3.39 (PR #11): zweimal gefahren. Ohne Warteschlange wie bisher synchron; mit
+  // Warteschlange spricht die Schlange asynchron - dann wird mit einer Attrappe, die
+  // ein Ende meldet, auf die leere Schlange gewartet und dieselbe Erwartung geprueft.
+  // Absichtlich so gewaehlt, dass die MITTLERE Runde die schnellste ist: damit zeigt sich,
+  // ob die Bestzeit an der Zeit haengt und nicht an der Reihenfolge.
+  stAdd('Freie Fahrt: Rundenzeiten werden angesagt', async () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.freieRundeProbe) {
       return { skip: true, mass: 'freieRundeProbe nicht vorhanden' };
     }
-    // Absichtlich so gewaehlt, dass die MITTLERE die schnellste ist: damit zeigt sich, ob
-    // die Bestzeit an der Zeit haengt und nicht an der Reihenfolge.
-    const r = OMEGA_TEST.freieRundeProbe({ zeiten: [9000, 8000, 8500] });
-    if (!r) return { skip: true, mass: 'kein Lauf' };
+    const qEl = $('setting-announce-queue');
+    if (!qEl) return { ok: false, mass: 'Schalter setting-announce-queue fehlt' };
+    const merkQ = qEl.checked, merkSound = soundEnabled;
+    const setzeQ = (an) => { qEl.checked = an; qEl.dispatchEvent(new Event('change', { bubbles: true })); };
+    const teile = [];
+    try {
+      setzeQ(false);
+      const r1 = freieFahrtAnsageAuswerten(OMEGA_TEST.freieRundeProbe({ zeiten: [9000, 8000, 8500] }));
+      if (!r1) return { skip: true, mass: 'kein Lauf' };
+      r1.mass = '(ohne Warteschlange) ' + r1.mass;
+      teile.push(r1);
+      // Die Attrappe der Probe meldet kein Ende: den letzten Satz als beendet buchen, sonst
+      // haelt lapAnsageAktuell die Schlange (und den Rennstand) fest.
+      lapAnsageBeendet(); lapAnsageRuheBis = 0;
+      // MIT Warteschlange: eigene Stimmen-Attrappe, die bis zum Leerlaufen der Schlange bleibt.
+      setzeQ(true);
+      ansagenReset();
+      soundEnabled = true;
+      const echteStimme = window.speechSynthesis;
+      const gesagt = [];
+      Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
+        speaking: false, pending: false, cancel() {},
+        speak(u) { gesagt.push(u.text); setTimeout(() => { if (u.onend) u.onend(); }, 10); } } });
+      let r2;
+      try {
+        const roh = OMEGA_TEST.freieRundeProbe({ zeiten: [9000, 8000, 8500], eigeneStimme: true });
+        const synchron = gesagt.length;
+        const wartet = ansagenWarten();
+        const t0 = performance.now();
+        while (ansagenWarten() && performance.now() - t0 < 5000) await new Promise((res) => setTimeout(res, 25));
+        // Der Lauf hat keine Saetze geliefert (asynchron); jetzt die gesprochenen zuordnen.
+        roh.folge.forEach((x, i) => { x.gesagt = gesagt[i] || null; });
+        r2 = freieFahrtAnsageAuswerten(roh);
+        r2.ok = r2.ok && synchron === 0 && wartet && gesagt.length === 3 && !ansagenWarten();
+        r2.mass = '(Warteschlange) ' + r2.mass + ' | synchron ' + synchron + ', gewartet '
+          + Math.round(performance.now() - t0) + ' ms';
+      } finally {
+        ansagenReset();
+        if (echteStimme) Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: echteStimme });
+        else delete window.speechSynthesis;
+      }
+      teile.push(r2);
+      return { ok: teile.every((x) => x.ok), mass: teile.map((x) => x.mass).join(' || ') };
+    } finally {
+      soundEnabled = merkSound;
+      if (qEl.checked !== merkQ) setzeQ(merkQ);
+    }
+  });
+  function freieFahrtAnsageAuswerten(r) {
+    if (!r) return null;
     const fehler = [];
     // 1. JEDE RUNDE WIRD ANGESAGT. Das ist die Bestellung.
     const stumm = r.folge.filter((x) => !x.gesagt);
@@ -14621,7 +15124,7 @@
     return { ok: !fehler.length,
              mass: r.folge.map((x) => x.ms + ' ms -> ' + (x.gesagt || 'STUMM')).join(' | ')
                  + (fehler.length ? ' || ' + fehler.join('; ') : '') };
-  });
+  }
 
   // ---- Alle fuenf Ansagen stehen ab Werk an ----
   //
@@ -16762,6 +17265,232 @@
   // irgendwo ein Fehler." karteAutosSetzen() setzte visibility="visible" auf jede Autogruppe, und
   // dieser Wert schlaegt das geerbte hidden: das virtuelle Fahren verbirgt die Seite (body.vf-an
   // main), das Auto aus dem Regenradar des Cockpits stand trotzdem ueber dem 3D-Bild.
+  // v1.3.39 BESTELLT: "Verbessere die Textur der Schienen", "Textur jenseits der Schienen ... Parkett- oder
+  // Laminatboden ... Massstab korrekt (1/50)" und "eine Kamera ... wie eine Person, die das Auto vom Rand
+  // aus steuert (ca. 1 m Hoehe, Blick folgt dem Auto mit etwas Smoothing)".
+  stAdd('Virtuell v1.3.39: Dielen in echten cm, Boeden waehlbar, Texturen einmal, Kamera Fahrer am Rand', () => {
+    const f = [], cm = TRACK_UNITS_PER_CM;
+    const tiles = codeToTrack('SG4R4G4').tiles, pts = trackCenterline(tiles), nrm = trackNormals(pts);
+    // 1. Boeden: mindestens zwei (Dielen und Fischgraet), die Wahl bleibt gespeichert, Garagenzeile mit WIP.
+    if (VF_BOEDEN.length < 2 || !VF_BOEDEN.some((b) => b.art === 'diele') || !VF_BOEDEN.some((b) => b.art === 'fischgraet')) f.push('Boeden fehlen');
+    let vorher = null;
+    try { vorher = localStorage.getItem(VF_BODEN_STORE); } catch (e) { /* privat */ }
+    try {
+      for (const b of VF_BOEDEN) { vfBodenSetzen(b.id); if (vfBodenWahl() !== b.id) f.push('Wahl ' + b.id + ' nicht gespeichert'); }
+      vfBodenSetzen(VF_BOEDEN[0].id);
+      const box = document.createElement('div');
+      vfGarageOptionen(box);
+      const z = box.querySelector('[data-vf-boden]');
+      if (!z || !z.querySelector('.wip-tag')) f.push('Bodenzeile mit WIP fehlt in der Garage');
+      else if (z.querySelector('b').textContent !== t(VF_BOEDEN[0].name)) f.push('Bodenzeile zeigt ' + z.querySelector('b').textContent);
+    } finally {
+      try { if (vorher === null) localStorage.removeItem(VF_BODEN_STORE); else localStorage.setItem(VF_BODEN_STORE, vorher); } catch (e) { /* privat */ }
+    }
+    // 2. Masse in echten cm: erste Diele/erster Stab der Geometrie, Stossfugen versetzt, Verhaeltnis zur Bahn.
+    const bahnCm = TRACK_HALF_W * 2 / cm, masse = [];
+    for (const b of VF_BOEDEN) {
+      const T = vfBodenTexturDaten(b.id), g = vfBodenGeometrie(pts, T, b), d = g.daten;
+      const L = Math.hypot(d[8] - d[0], d[10] - d[2]) / cm, B = Math.hypot(d[16] - d[8], d[18] - d[10]) / cm;
+      if (Math.abs(L - b.laengeCm) > 0.05 || Math.abs(B - b.breiteCm) > 0.05) f.push(b.id + ': ' + B.toFixed(2) + ' x ' + L.toFixed(2) + ' cm statt ' + b.breiteCm + ' x ' + b.laengeCm);
+      if (g.stuecke < 100) f.push(b.id + ': nur ' + g.stuecke + ' Stuecke');
+      if (T.w > 2048 || T.h > 2048 || (T.w & (T.w - 1)) || (T.h & (T.h - 1))) f.push(b.id + ': Atlas ' + T.w + ' x ' + T.h);
+      if (b.art === 'diele') {
+        for (let i = 1; i < g.reihen.length; i++) {
+          const dd = Math.abs(g.reihen[i] - g.reihen[i - 1]) % g.laenge;
+          if (Math.min(dd, g.laenge - dd) < g.laenge * 0.25 - 1e-6) { f.push(b.id + ': Stossfugen in Reihe ' + i + ' nicht versetzt'); break; }
+        }
+      }
+      masse.push(b.id + ' ' + B.toFixed(1) + 'x' + L.toFixed(0));
+    }
+    const dieleZuBahn = VF_BOEDEN[0].breiteCm / bahnCm;
+    if (Math.abs(bahnCm - 25) > 0.01 || dieleZuBahn < 0.6 || dieleZuBahn > 0.9) f.push('Bahn ' + bahnCm.toFixed(2) + ' cm, Diele/Bahn ' + dieleZuBahn.toFixed(2));
+    // 3. Texturen nur einmal: zweiter Aufruf liefert dasselbe Objekt, der Zaehler steigt hoechstens einmal.
+    const z0 = Object.assign({}, vfTexZaehler);
+    const a1 = vfBahnTexturDaten(), a2 = vfBahnTexturDaten(), r1 = vfRandTexturDaten(), r2 = vfRandTexturDaten();
+    const b1 = vfBodenTexturDaten('grau'), b2 = vfBodenTexturDaten('grau');
+    if (a1 !== a2 || r1 !== r2 || b1 !== b2) f.push('Textur ein zweites Mal erzeugt');
+    if (vfTexZaehler.bahn - z0.bahn > 1 || vfTexZaehler.rand - z0.rand > 1 || vfTexZaehler.boden - z0.boden > 1) f.push('Zaehler: ' + JSON.stringify(vfTexZaehler));
+    // Mit WebGL: zwei Fahrten hintereinander laden nur hoch, die Pixel entstehen nicht neu.
+    const gl = document.createElement('canvas').getContext('webgl');
+    if (gl) {
+      const z1 = Object.assign({}, vfTexZaehler), bodenNeu = vfTexDaten.bodenId === vfBodenWahl() ? 0 : 1;
+      vfFlaechenBauen(gl, pts, nrm, tiles); vfFlaechenBauen(gl, pts, nrm, tiles);
+      if (vfTexZaehler.bahn !== z1.bahn || vfTexZaehler.rand !== z1.rand || vfTexZaehler.boden - z1.boden > bodenNeu) f.push('Fahrtstart erzeugt Texturen neu');
+      const ext = gl.getExtension('WEBGL_lose_context');
+      if (ext) ext.loseContext();
+    }
+    // Bahnteile nicht alle gleich: mindestens zwei Gebrauchsspalten, das Start/Ziel-Teil mit eigener.
+    const geo = vfBahnGeometrie(pts, nrm, tiles), spalten = new Set();
+    for (let i = 3; i < geo.strasse.length; i += 8) spalten.add(Math.floor(geo.strasse[i] * VF_BAHN_TEX / VF_BAHN_SPALTE));
+    if (spalten.size < 3 || !spalten.has(3)) f.push('Bahnspalten ' + [...spalten].join(','));
+    // 4. Kamera "Fahrer am Rand": vorhanden, Augenhoehe 100 cm, 50-100 cm neben dem Randstein, fest, folgt gedaempft.
+    if (!VF_KAMERAS.some((k) => k.id === 'fahrer')) f.push('Kamera fehlt in VF_KAMERAS');
+    const ort = vfFahrerOrt(pts, nrm, tiles);
+    if (Math.abs(ort.h / cm - 100) > 1e-6) f.push('Augenhoehe ' + (ort.h / cm).toFixed(1) + ' cm');
+    let dmin = Infinity;
+    for (const p of pts) dmin = Math.min(dmin, Math.hypot(p.x - ort.x, p.y - ort.y));
+    const randCm = (dmin - TRACK_HALF_W - TRACK_KERB_W) / cm;
+    if (randCm < 50 || randCm > 100) f.push('Abstand zum Rand ' + randCm.toFixed(0) + ' cm');
+    const winkel = (k, x, y) => {
+      const v = [k.ziel[0] - k.auge[0], k.ziel[1] - k.auge[1], k.ziel[2] - k.auge[2]];
+      const w = [x - k.auge[0], VF_AUTO.H * 0.5 - k.auge[1], y - k.auge[2]];
+      const c = (v[0] * w[0] + v[1] * w[1] + v[2] * w[2]) / Math.hypot(...v) / Math.hypot(...w);
+      return Math.acos(Math.max(-1, Math.min(1, c))) * 180 / Math.PI;
+    };
+    const lauf = (dt, n) => {
+      const F = { ort, z: {}, k: null }, A = pts[0], Bp = pts[Math.floor(pts.length / 3)];
+      vfFahrerKamera(F, A.x, A.y, dt);
+      const fehler = [winkel(F.k, Bp.x, Bp.y)], auge = F.k.auge.slice();
+      for (let i = 0; i < n; i++) {
+        vfFahrerKamera(F, Bp.x, Bp.y, dt);
+        fehler.push(winkel(F.k, Bp.x, Bp.y));
+        if (F.k.auge.some((q, j) => q !== auge[j])) { f.push('Kamera bewegt sich'); break; }
+      }
+      return fehler;
+    };
+    const e60 = lauf(1 / 60, 90), e30 = lauf(1 / 30, 45);
+    if (!(e60[0] > 10)) f.push('Testsprung zu klein: ' + e60[0].toFixed(1) + ' Grad');
+    if (!(e60[1] > e60[0] * 0.8)) f.push('Blick springt sofort: ' + e60[0].toFixed(1) + ' -> ' + e60[1].toFixed(1) + ' Grad');
+    if (e60.some((e, i) => i && e > e60[i - 1] + 1e-9)) f.push('Blick naehert sich nicht stetig');
+    if (!(e60[e60.length - 1] < 1)) f.push('nach 1,5 s noch ' + e60[e60.length - 1].toFixed(2) + ' Grad daneben');
+    if (Math.abs(e60[60] - e30[30]) > 0.5) f.push('haengt von der Bildrate ab: ' + e60[60].toFixed(2) + ' / ' + e30[30].toFixed(2) + ' Grad');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Bahn ' + bahnCm.toFixed(0) + ' cm, ' + masse.join(', ') + ' cm, Fahrer '
+      + randCm.toFixed(0) + ' cm neben dem Rand, Blick ' + e60[0].toFixed(0) + ' -> ' + e60[15].toFixed(1) + ' (0,25 s) -> ' + e60[90].toFixed(2) + ' Grad' };
+  });
+
+  // BESTELLT: "Erlaube mir, im virtuellen Fahren mit dem rechten Stick die Kamera um das Auto herum zu
+  // drehen ... Wenn ich den rechten Stick dann reindruecke, soll die Kamera wieder die Standardansicht
+  // haben." Wie beim Bildlauf-Test ruft der Test pollGamepad() selbst mit einem gefaelschten Pad; die
+  // virtuelle Fahrt laeuft dafuer nicht (nur VF.aktiv), die Drehung rechnet vfDrehSchritt wie vfKamera.
+  stAdd('Virtuell: rechter Stick dreht die Kamera, Blick bleibt, R3 setzt zurueck oder wechselt, bildratenunabhaengig (WIP)', () => {
+    const f = [], grad = 180 / Math.PI;
+    const echt = navigator.getGamepads;
+    const merk = { aktiv: VF.aktiv, kamera: VF.kamera, dreh: VF.dreh ? Object.assign({}, VF.dreh) : null, stick: VF.stick, kam: VF.kam, tasten: VF.tasten };
+    let gespeichert = null;
+    try { gespeichert = localStorage.getItem(VF_KAMERA_STORE); } catch (e) { /* privat */ }
+    const pad = { id: 'Selbsttest (STANDARD GAMEPAD)', index: 0, connected: true, mapping: 'standard', timestamp: performance.now(),
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })) };
+    const r3 = bindings.lightflash;
+    const r3Knopf = r3 && r3.type === 'button' && pad.buttons[r3.index];
+    const r3Setzen = (an) => { if (r3Knopf) pad.buttons[r3.index] = { pressed: an, touched: an, value: an ? 1 : 0 }; };
+    const stickFrei = ![2, 3].some((i) => Object.keys(bindings).some((k) => bindings[k] && bindings[k].type === 'axis' && bindings[k].index === i));
+    const bild = (n, dt) => { for (let i = 0; i < n; i++) { pollGamepad(); const e = vfDrehEingabe(); vfDrehSchritt(vfDreh(), e[0], e[1], dt, vfDrehGrenzen(vfDrehArt(vfKameraId()))); } };
+    let mass = '';
+    try {
+      navigator.getGamepads = () => [pad, null, null, null];
+      VF.aktiv = true; VF.kamera = 'verfolger'; VF.tasten = {}; vfDrehNull();
+      pollGamepad();
+      // 1. Stick rechts: die Kamera kreist, nach dem Loslassen bleibt der Winkel stehen.
+      let g1 = 0;
+      if (stickFrei) {
+        pad.axes[2] = 0.9;
+        bild(30, 1 / 60);
+        g1 = vfDreh().g * grad;
+        if (!(g1 > 30)) f.push('nach 0,5 s Stick rechts nur ' + g1.toFixed(1) + ' Grad');
+        pad.axes[2] = 0;
+        bild(45, 1 / 60);
+        const ga = vfDreh().g * grad;
+        bild(60, 1 / 60);
+        const gb = vfDreh().g * grad;
+        if (Math.abs(gb - ga) > 0.5 || Math.abs(vfDreh().vg) > 1e-3) f.push('Blick laeuft nach dem Loslassen weiter: ' + ga.toFixed(1) + ' -> ' + gb.toFixed(1));
+        if (!vfKameraGedreht()) f.push('Kamera gilt nach dem Drehen nicht als gedreht');
+        pad.axes[3] = 1;
+        bild(120, 1 / 60);
+        const nMax = vfDreh().n * grad;
+        if (Math.abs(nMax - 60) > 0.01) f.push('senkrecht nicht bei +60 Grad begrenzt: ' + nMax.toFixed(1));
+        pad.axes[3] = 0;
+        bild(5, 1 / 60);
+        mass = g1.toFixed(0) + ' Grad in 0,5 s, bleibt ' + gb.toFixed(1) + ', oben ' + nMax.toFixed(0);
+      } else {
+        vfDreh().g = 1; vfDreh().n = 0.3;
+        mass = 'Achse 2/3 ist belegt - Stick bleibt aus, Drehung von Hand gesetzt';
+      }
+      // 2. R3 (Lichthupen-Belegung) gedreht: Standardansicht, dieselbe Kamera.
+      if (r3Knopf) {
+        r3Setzen(true); pollGamepad(); r3Setzen(false); pollGamepad();
+        if (vfKameraGedreht() || vfDreh().g || vfDreh().n) f.push('R3 setzt die gedrehte Kamera nicht zurueck');
+        if (VF.kamera !== 'verfolger') f.push('R3 bei gedrehter Kamera wechselt zu ' + VF.kamera);
+        // 3. R3 ungedreht: naechste Kamera wie bisher.
+        r3Setzen(true); pollGamepad(); r3Setzen(false); pollGamepad();
+        if (VF.kamera !== 'nah') f.push('R3 ungedreht wechselt nicht zur naechsten Kamera (' + VF.kamera + ')');
+        mass += ', R3 zurueck/wechselt';
+      } else mass += ', R3 nicht als Knopf belegt (uebersprungen)';
+      // 4. Bildratenunabhaengig: 1 s halten und 0,5 s auslaufen, mit 60 und mit 25 Bildern/s.
+      const lauf = (fps) => { const D = { g: 0, n: 0, vg: 0, vn: 0 }; for (let i = 0; i < fps; i++) vfDrehSchritt(D, 0.6, -0.4, 1 / fps, [-1, 1]);
+        for (let i = 0; i < fps / 2; i++) vfDrehSchritt(D, 0, 0, 1 / fps, [-1, 1]); return D; };
+      const a = lauf(60), b = lauf(25);
+      if (Math.abs(a.g - b.g) * grad > 0.05 || Math.abs(a.n - b.n) * grad > 0.05) f.push('haengt von der Bildrate ab: ' + (a.g * grad).toFixed(2) + ' / ' + (b.g * grad).toFixed(2) + ' Grad');
+      // 5. Belegung respektieren: eine belegte Achse dreht nicht; ohne Standard-Belegung kein Stick.
+      vfStickSetzen({ mapping: 'standard', axes: [0, 0, 0.9, 0.9] }, { steering: { type: 'axis', index: 2 } });
+      if (!VF.stick || VF.stick.x !== 0 || !(VF.stick.y > 0)) f.push('belegte Achse 2 dreht trotzdem: ' + JSON.stringify(VF.stick));
+      vfStickSetzen({ mapping: '', axes: [0, 0, 0.9, 0.9] }, {});
+      if (VF.stick !== null) f.push('Pad ohne Standard-Belegung dreht');
+      // 6. Geometrie: 90 Grad kreisen haelt den Abstand, Standardansicht unveraendert; umsehen dreht nur das Ziel.
+      const k = { auge: [0, 13, 30], ziel: [0, 1.5, -14] };
+      if (vfDrehAnwenden(k, 'kreisen', { g: 0, n: 0 }, 0, 1.5, 0) !== k) f.push('ungedreht nicht die Standardansicht');
+      const k90 = vfDrehAnwenden(k, 'kreisen', { g: Math.PI / 2, n: 0 }, 0, 1.5, 0);
+      const r0 = Math.hypot(k.auge[0], k.auge[1] - 1.5, k.auge[2]), r1 = Math.hypot(k90.auge[0], k90.auge[1] - 1.5, k90.auge[2]);
+      if (Math.abs(r0 - r1) > 1e-6 || Math.abs(k90.auge[0] + 30) > 1e-6 || Math.abs(k90.auge[1] - 13) > 1e-6) f.push('Kreisen: ' + k90.auge.map((x) => x.toFixed(2)).join(','));
+      const ku = vfDrehAnwenden(k, 'umsehen', { g: Math.PI / 2, n: 0 }, 0, 0, 0);
+      if (ku.auge !== k.auge || !(ku.ziel[0] > 40)) f.push('Umsehen: ' + ku.ziel.map((x) => x.toFixed(1)).join(','));
+      // 7. Tastatur: H dreht nach rechts, V setzt zurueck.
+      VF.kamera = 'verfolger'; vfDrehNull();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h' }));
+      const ein = vfDrehEingabe();
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'h' }));
+      if (ein[0] !== 1 || vfDrehEingabe()[0] !== 0) f.push('Taste H: ' + ein.join(','));
+      vfDreh().g = 0.5;
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v' }));
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'v' }));
+      if (vfKameraGedreht()) f.push('Taste V setzt nicht zurueck');
+    } finally {
+      r3Setzen(false); pad.axes = [0, 0, 0, 0];
+      try { pollGamepad(); } catch (e) { /* weiter */ }
+      navigator.getGamepads = echt;
+      VF.aktiv = merk.aktiv; VF.kamera = merk.kamera; VF.stick = merk.stick; VF.kam = merk.kam; VF.tasten = merk.tasten;
+      if (merk.dreh) Object.assign(vfDreh(), merk.dreh); else vfDrehNull();
+      try { if (gespeichert === null) localStorage.removeItem(VF_KAMERA_STORE); else localStorage.setItem(VF_KAMERA_STORE, gespeichert); } catch (e) { /* privat */ }
+      try { pollGamepad(); } catch (e) { /* ohne Pad */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass + ', 60/25 fps gleich, belegte Achse frei, H/V' };
+  });
+
+  // HUD im ACC-Stil: Zeitformat abgeschnitten (nie 0:60), Delta-Text, alle Felder da, je Bild nur Aenderungen.
+  stAdd('Virtuell: HUD im ACC-Stil - Zeiten, Delta, Reifen, Tank, Drehzahl, schreibt nur Aenderungen (WIP)', () => {
+    const f = [];
+    if (vfZeitAcc(59999, 1) !== '0:59.9' || vfZeitAcc(61234, 3) !== '1:01.234' || vfZeitAcc(null, 3) !== '-:--.---') f.push('Zeitformat ' + vfZeitAcc(59999, 1) + ' / ' + vfZeitAcc(61234, 3));
+    if (vfDeltaText(-420) !== '-0.42' || vfDeltaText(1234) !== '+1.23' || vfDeltaText(null) !== '--.--') f.push('Delta ' + vfDeltaText(-420) + ' / ' + vfDeltaText(1234));
+    const merk = { ui: VF.ui, rundeAb: VF.rundeAb, letzte: VF.letzte, beste: VF.beste, splits: VF.besteSplits, idx: VF.idx, modus: VF.modus, abseits: VF.abseits, dreh: VF.dreh };
+    const box = document.createElement('div');
+    try {
+      // Dasselbe Markup wie virtuellStarten: aus der Quelle der Funktion waere es zerbrechlich, also die Felder pruefen.
+      box.innerHTML = '<div class="vf-hud"><div class="vf-modus"></div><b class="vf-runde"></b><div><span class="vf-delta"></span><i class="vf-delta-bar"><i></i></i></div>'
+        + '<span class="vf-letzte"></span><span class="vf-beste"></span><span class="vf-abseits" hidden></span></div>'
+        + '<div class="vf-acc"><div class="vf-reifen"><i></i><i></i><i></i><i></i></div><b class="vf-tempo"></b><b class="vf-gang"></b><b class="vf-rpm"></b>'
+        + '<b class="vf-tank"></b><i class="vf-tank-bar"><i></i></i><i class="vf-dreh-stab"></i></div><span class="vf-kamfrei" hidden></span>';
+      vfHudBauen(box);
+      const fehlt = Object.keys(VF.ui).filter((k) => k !== 'alt' && (!VF.ui[k] || (Array.isArray(VF.ui[k]) && VF.ui[k].length !== 4)));
+      if (fehlt.length) f.push('Felder fehlen: ' + fehlt.join(','));
+      VF.rundeAb = 0; VF.letzte = 62345; VF.beste = 61000; VF.besteSplits = null; VF.modus = 'practice'; VF.abseits = false; VF.idx = 0; vfDrehNull();
+      vfHud();
+      if (VF.ui.letzte.textContent !== '1:02.345' || VF.ui.beste.textContent !== '1:01.000') f.push('Letzte/Beste ' + VF.ui.letzte.textContent + ' / ' + VF.ui.beste.textContent);
+      if (VF.ui.reifen.some((r) => !/°$/.test(r.textContent) || !r.style.background)) f.push('Reifenfelder ohne Wert oder Farbe');
+      if (!/ L$/.test(VF.ui.tank.textContent) || !VF.ui.tankBar.style.transform) f.push('Tank ' + VF.ui.tank.textContent);
+      if (VF.ui.dreh.style.getPropertyValue('--f') === '') f.push('Drehzahlbalken ohne --f');
+      // Zweiter Aufruf ohne Aenderung: kein Textknoten wird neu geschrieben.
+      let schreib = 0;
+      const mo = new MutationObserver((l) => { schreib += l.length; });
+      mo.observe(box, { subtree: true, childList: true, characterData: true, attributes: true });
+      vfHud();
+      mo.takeRecords().forEach(() => schreib++);
+      mo.disconnect();
+      if (schreib) f.push(schreib + ' DOM-Aenderungen ohne neue Werte');
+    } finally {
+      Object.assign(VF, { ui: merk.ui, rundeAb: merk.rundeAb, letzte: merk.letzte, beste: merk.beste, besteSplits: merk.splits, idx: merk.idx, modus: merk.modus, abseits: merk.abseits });
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'm:ss.mmm abgeschnitten, Delta +/-, Reifen/Tank/Drehzahl gesetzt, zweites Bild ohne DOM-Arbeit' };
+  });
+
   stAdd('Virtuell v1.2.32: Kartenauto bleibt unter der 3D-Schicht verborgen, Silhouette an Ort, Skala und Drehung', () => {
     const f = [];
     const r = renderTrackPreview(codeToTrack('SG3R2G3R2').tiles, null, { detailed: true, cars: [] });
@@ -23347,9 +24076,12 @@
       rennstandAbbrechen = () => { abbruch++; };
       rennstandBeschaeftigt = () => true;
       const gesperrt = rennstandVorRundenzeit() === false;
+      // v1.3.39: mit Warteschlange haelt ein laufender Rennstand die Schlange an, statt
+      // abgebrochen zu werden; ohne Warteschlange gilt die Regel oben (der alte Weg).
+      const schlangeHaelt = rennAnsagen.blockiert() === true;
       rennstandBeschaeftigt = () => false;
-      return { ok: gesperrt && rennstandVorRundenzeit() === true && abbruch === 0,
-        mass: 'Kein Abbruch und kein Nachholen durch Spielerzeiten' };
+      return { ok: gesperrt && schlangeHaelt && rennstandVorRundenzeit() === true && abbruch === 0,
+        mass: 'Kein Abbruch und kein Nachholen durch Spielerzeiten; Schlange wartet auf den Rennstand' };
     } finally {
       rennstandBeschaeftigt = echt; rennstandAbbrechen = abbrechen; rennstandBis = alt;
     }
@@ -24345,9 +25077,9 @@
       }
       // Regeln: WIP, Erklaerung als small in .opt-label, Uebersetzung.
       if (!document.querySelector('#sub-opt-online h2 .wip-tag')) f.push('WIP fehlt (Optionen)');
-      if (!document.querySelector('#sub-ch-strecken h2 .wip-tag')) f.push('WIP fehlt (Community-Strecken)');
+      if (!document.querySelector('#sub-ch-community h2 .wip-tag')) f.push('WIP fehlt (Community)');
       if (!document.querySelector('#sub-opt-online .opt-label small')) f.push('Erklaerung nicht als small');
-      for (const k of ['Zeiten online synchronisieren', 'Community-Strecken', 'nur lokal', 'Beste 3 Runden', 'eigene Zeiten',
+      for (const k of ['Zeiten online synchronisieren', 'Strecken', 'nur lokal', 'Beste 3 Runden', 'eigene Zeiten',
                        'unbekannt', 'Dein Fahrgefühl',
                        'Zeiten zu dieser Strecke online speichern? Dann werden dein Name und die Strecke öffentlich gespeichert.']) {
         if (!I18N_EN[k] || !I18N_ES[k]) f.push('Uebersetzung fehlt: ' + k);
@@ -24484,9 +25216,10 @@
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'online + lokal gemischt, nur-lokal-Marke, je Fahrgefuehl getrennt (Chips), alte als unbekannt' };
   });
 
-  stAdd('Online v1.3.25: Community-Strecken alle (auch unter 4 Fahrern) plus eigene, Abruf gecacht', async () => {
+  stAdd('Online v1.3.25: Strecken mit Zeiten alle (auch unter 4 Fahrern) plus eigene, Abruf gecacht', async () => {
     const f = [];
-    const m = stSkMerken();
+    const m = stChuMerken();
+    communityOnline = { ok: true, tracks: [], zeiten: {} }; communityOnlineAt = Date.now();
     try {
       const keys = [];
       CH_ALLE.forEach((d) => { const k = skSchluessel(codeToTrack(d.code).tiles); if (keys.indexOf(k) < 0) keys.push(k); });
@@ -24520,10 +25253,11 @@
       if (!b1 || b1.ms !== 9500 || b1.fg !== 'propacejka') f.push('Bestzeit Pacejka ' + JSON.stringify(b1));
       if (!b2 || b2.ms !== 9000 || b2.fg !== 'arcade') f.push('Bestzeit ohne eigenes Fahrgefuehl ' + JSON.stringify(b2));
       skOnline.listeAt = Date.now();
-      skListeZeichnen();
-      const reihen = [...document.querySelectorAll('#sk-liste-bereich .community-zeile')];
+      commFilter = 'strecken';
+      communityZeichnen();
+      const reihen = [...document.querySelectorAll('#community-bereich .community-zeile[data-art="strecke"]')];
       if (reihen.length !== 5) f.push(reihen.length + ' Reihen statt 5');
-      if (document.querySelectorAll('#sk-liste-bereich .sk-eigene').length !== 2) f.push('Marke eigene nicht zweimal');
+      if (document.querySelectorAll('#community-bereich .sk-eigene').length !== 2) f.push('Marke eigene nicht zweimal');
       // Antippen: Strecke mit Karte und Liste, dann in den Editor laden.
       codes.forEach((c) => { skOnline.zeiten[c] = { zeiten: [], at: Date.now(), stand: Date.now() }; });
       if (reihen[0]) reihen[0].querySelector('.community-oeffnen').click();
@@ -24534,14 +25268,14 @@
       if (!$('sk-detail-inhalt').querySelector('.sk-chip')) f.push('keine Fahrgefuehl-Auswahl');
       if (urls.length !== 1) f.push('Strecke trotz frischem Zwischenspeicher geholt');
       konsoleZurueck();
-      if (!$('sub-ch-strecken').classList.contains('on')) f.push('Kreis fuehrt nicht in die Liste');
+      if (!$('sub-ch-community').classList.contains('on')) f.push('Kreis fuehrt nicht in die Liste');
       skDetail = antwort.strecken[2];
       currentTrackTiles = [{ type: TILE_TYPE.START }];
       if (!skInEditorLaden()) f.push('Laden abgelehnt');
       if (skSchluessel(currentTrackTiles) !== codes[2]) f.push('falsche Strecke im Editor');
       if (!$('sub-edit').classList.contains('on')) f.push('Editor nicht offen');
     } finally {
-      stSkZurueck(m);
+      stChuZurueck(m);
     }
     return { ok: !f.length, mass: f.length ? f.join(' | ') : '4 von 6 (>3 Fahrer oder eigene, online und nur lokal), Bestzeit je Fahrgefuehl, ein Abruf, keiner im Rennen' };
   });
@@ -24700,4 +25434,350 @@
       if (merk.v === null) localStorage.removeItem(KV); else localStorage.setItem(KV, merk.v);
     }
     return { ok: !f.length, mass: f.length ? f.join(' | ') : '5 Codes wie im Skript, Spiegel und Drehung gleich, rueckwaerts anders, Presets bekannt, Wanderung' };
+  });
+
+  // v1.3.39 BESTELLT: "Verbessere den Randstein-Sound. Aktuell ist es ein hohes Klicken ... Es soll dumpf sein,
+  // eher wie bei Assetto Corsa Competizione." Eine dauerhafte WebAudio-Kette (80-sound.js randsteinKlang),
+  // je Aufruf nur Ziele (setTargetAtTime), Takt aus Tempo / Rippenabstand, Schalter "Randstein-Klang: alt".
+  stAdd('Virtuell v1.3.39: Randstein-Klang dumpf, Takt mit Tempo, eine Kette, alt per Schalter', async () => {
+    const f = [];
+    const sw = $('setting-randstein-alt');
+    if (!sw) f.push('Schalter fehlt');
+    else {
+      if (sw.defaultChecked) f.push('Schalter ab Werk an');
+      const lab = sw.closest('.opt-row') && sw.closest('.opt-row').querySelector('.opt-label');
+      if (!lab || !lab.querySelector('.wip-tag') || !lab.querySelector('small')) f.push('Schalter ohne WIP oder ohne <small>');
+    }
+    // Takt: steigt mit dem Tempo, Grenzen 8..40.
+    const kmhVon = (anz) => anz / TACHO_SCALE;
+    const t40 = vfRandsteinTakt(kmhVon(40)), t120 = vfRandsteinTakt(kmhVon(120));
+    if (!(Math.abs(t40 - 8) < 0.5 && Math.abs(t120 - 24) < 1 && t120 > t40)) f.push('Takt 40/120 km/h: ' + t40.toFixed(1) + '/' + t120.toFixed(1));
+    if (vfRandsteinTakt(kmhVon(5)) !== 8 || vfRandsteinTakt(kmhVon(400)) !== 40) f.push('Taktgrenzen 8..40 nicht eingehalten');
+    if (!(vfRandsteinTakt(kmhVon(80)) > t40 && vfRandsteinTakt(kmhVon(160)) > t120)) f.push('Takt nicht monoton');
+    // Menge: 0 ohne Randstein und im Stand; tiefer auf dem Stein und schneller = lauter; Schalter alt = stumm.
+    const kante = TRACK_HALF_W - VF_AUTO.B * 0.5;
+    const merkAlt = randsteinKlangAlt;
+    try {
+      randsteinKlangAlt = false;
+      if (vfRandsteinMenge(false, TRACK_HALF_W, kmhVon(120)) !== 0) f.push('Menge ohne Randstein nicht 0');
+      if (vfRandsteinMenge(true, TRACK_HALF_W, 0) !== 0) f.push('Menge im Stand nicht 0');
+      const flach = vfRandsteinMenge(true, kante + 0.1, kmhVon(120)), tief = vfRandsteinMenge(true, TRACK_HALF_W, kmhVon(120));
+      if (!(flach > 0 && tief > flach && tief <= 1)) f.push('Menge nach Tiefe: ' + flach.toFixed(2) + '/' + tief.toFixed(2));
+      if (!(vfRandsteinMenge(true, TRACK_HALF_W, kmhVon(40)) < tief)) f.push('Menge steigt nicht mit dem Tempo');
+      randsteinKlangAlt = true;
+      if (vfRandsteinMenge(true, TRACK_HALF_W, kmhVon(120)) !== 0) f.push('Schalter alt: neues Rumpeln nicht stumm');
+    } finally { randsteinKlangAlt = merkAlt; }
+    // Aufruf im Bild: neues Rumpeln je Bild, altes Rattern nur mit dem Schalter, Controller-Rumpeln unveraendert.
+    const bild = String(vfBild);
+    if (bild.indexOf('vfRandsteinTon(kerb, q, kmh)') < 0) f.push('vfBild ruft vfRandsteinTon nicht');
+    if (bild.indexOf('if (randsteinKlangAlt) vfRattern(') < 0) f.push('altes Rattern nicht am Schalter');
+    if (bild.indexOf("padRumble(0.3, 0.25, 55, 'kerb', 1)") < 0) f.push('Controller-Rumpeln am Randstein fehlt');
+    // Kette: einmal anlegen, danach keine neuen Knoten je Aufruf. OfflineAudioContext, Zeitachse vorab geplant.
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OAC) return { ok: !f.length, mass: f.length ? f.join(' | ') : 'ohne OfflineAudioContext nur Takt/Menge geprueft' };
+    const SR = 8000, ctx = new OAC(1, SR, SR);
+    let neu = 0;
+    ['createGain', 'createBiquadFilter', 'createOscillator', 'createBufferSource', 'createWaveShaper', 'createBuffer', 'createPeriodicWave']
+      .forEach((n) => { const orig = ctx[n]; ctx[n] = function () { neu++; return orig.apply(ctx, arguments); }; });
+    const g = randsteinKlangBauen(ctx);
+    const gebaut = neu;
+    randsteinKlangSetzen(g, 1, 24, 0.05);               // Randstein an (verbindet einmal mit dem Ausgang)
+    const nachStart = neu;
+    const s0 = g.setzungen;
+    randsteinKlangSetzen(g, 1, 24, 0.06);
+    if (g.setzungen !== s0) f.push('setzt bei gleichem Ziel nach 10 ms erneut');
+    for (let t = 0.07; t < 0.6; t += 0.02) randsteinKlangSetzen(g, 1, 24, t);
+    if (g.ziel !== 1 || Math.abs(g.takt - 24) > 1e-9) f.push('Ziel/Takt nicht gesetzt');
+    for (let t = 0.6; t < 0.98; t += 0.02) randsteinKlangSetzen(g, 0, 24, t);   // Randstein verlassen
+    if (g.ziel !== 0) f.push('Gain-Ziel ohne Randstein nicht 0');
+    if (neu !== nachStart) f.push((neu - nachStart) + ' neue Knoten waehrend der Aufrufe');
+    if (gebaut > 16) f.push(gebaut + ' Knoten fuer die Kette');
+    const buf = await ctx.startRendering();
+    const d = buf.getChannelData(0);
+    let summe = 0;
+    for (let i = 0; i < d.length; i++) summe += d[i] * d[i];
+    let spektrum = 'Spektrum nicht gemessen (Ausgang stumm geschaltet)';
+    if (summe > 1e-9) {
+      // Grobe DFT ueber 0,20..0,456 s (2048 Werte, voll auf dem Randstein): Anteil unter 300 Hz, Schwerpunkt.
+      const N = 2048, a0 = Math.round(0.2 * SR);
+      let e = 0, eT = 0, num = 0;
+      for (let k = 1; k < N / 2; k++) {
+        let re = 0, im = 0;
+        for (let i = 0; i < N; i++) { const w = 2 * Math.PI * k * i / N; re += d[a0 + i] * Math.cos(w); im -= d[a0 + i] * Math.sin(w); }
+        const p = re * re + im * im, hz = k * SR / N;
+        e += p; num += p * hz; if (hz < 300) eT += p;
+      }
+      const schwer = num / (e || 1), unter = eT / (e || 1);
+      if (!(schwer < 300)) f.push('Schwerpunkt ' + Math.round(schwer) + ' Hz');
+      if (!(unter > 0.8)) f.push('nur ' + Math.round(unter * 100) + ' % unter 300 Hz');
+      // Weich: in den ersten 3 ms nach dem Einschalten unter 30 % der Spitze, am Ende still.
+      let spitze = 0, anlauf = 0, ende = 0;
+      for (let i = a0; i < a0 + N; i++) spitze = Math.max(spitze, Math.abs(d[i]));
+      for (let i = Math.round(0.05 * SR); i < Math.round(0.053 * SR); i++) anlauf = Math.max(anlauf, Math.abs(d[i]));
+      for (let i = Math.round(0.85 * SR); i < SR; i++) ende = Math.max(ende, Math.abs(d[i]));
+      if (!(spitze > 0.05)) f.push('zu leise (Spitze ' + spitze.toFixed(3) + ')');
+      if (!(anlauf < spitze * 0.3)) f.push('harter Einsatz (' + anlauf.toFixed(3) + ' von ' + spitze.toFixed(3) + ')');
+      if (!(ende < spitze * 0.02)) f.push('blendet nicht aus (' + ende.toFixed(3) + ')');
+      spektrum = 'Schwerpunkt ' + Math.round(schwer) + ' Hz, ' + Math.round(unter * 100) + ' % unter 300 Hz';
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Takt 40/120 km/h ' + t40.toFixed(1) + '/' + t120.toFixed(1) + '/s, ' + gebaut + ' Knoten einmal, 0 je Aufruf, ' + spektrum };
+  });
+
+  // ---- v1.3.58/v1.3.62: Challenges-Startseite (72d-ch-vorschau.js, 59-lade.js) -----------------
+  // Sichert zusaetzlich zu stSkMerken die Community-Zustaende; fetch ist immer eine Attrappe.
+  function stChuMerken() {
+    const m = stSkMerken();
+    m.comm = { on: communityOnline, at: communityOnlineAt, holt: communityHolt, fehler: communityFehler,
+               ls: localStorage.getItem(COMMUNITY_STORE), filter: commFilter };
+    m.gruende = [...ladeGruende];
+    m.ch = { wahl: chWahl, modus: chModus, spiegel: chSpiegel, eltern: $('ch-detail').parentNode, hidden: $('ch-detail').hidden };
+    m.tabName = kAktiverTab();
+    localStorage.setItem(COMMUNITY_STORE, JSON.stringify({ tracks: [], times: {}, nextId: 1 }));
+    localStorage.setItem(SK_STORE, '{}');
+    return m;
+  }
+  function stChuZurueck(m) {
+    communityOnline = m.comm.on; communityOnlineAt = m.comm.at; communityHolt = m.comm.holt; communityFehler = m.comm.fehler;
+    commFilter = m.comm.filter;
+    if (m.comm.ls === null) localStorage.removeItem(COMMUNITY_STORE); else localStorage.setItem(COMMUNITY_STORE, m.comm.ls);
+    [...ladeGruende].forEach((g) => { if (m.gruende.indexOf(g) < 0) ladeAnzeigeSetzen(g, false); });
+    stSkZurueck(m);
+    chWahl = m.ch.wahl; chModus = m.ch.modus; chSpiegel = m.ch.spiegel;
+    if (m.ch.eltern && $('ch-detail').parentNode !== m.ch.eltern) m.ch.eltern.appendChild($('ch-detail'));
+    $('ch-detail').hidden = m.ch.hidden;
+    if (m.tabName && kAktiverTab() !== m.tabName) { try { showTab(m.tabName); } catch (e) { /* egal */ } }
+    try { chZeichneDetail(); chVorschauZeichnen(); } catch (e) { /* egal */ }
+  }
+  // Attrappen-Daten: n Community Challenges und Strecken; die Strecke der Challenge "Drei" steht
+  // auch unter den Strecken (soll nur einmal erscheinen, als Challenge).
+  function stChuDaten() {
+    const codes = [];
+    CH_ALLE.forEach((d) => { const k = skSchluessel(codeToTrack(d.code).tiles); if (codes.indexOf(k) < 0) codes.push(k); });
+    const z = (g, ms) => ({ zeitpunkt: '2026-11-01', zeit_ms: ms, fahrer: g, geraet: g, runden_ms: [ms] });
+    const community = { ok: true, tracks: [
+      { id: '0901', code: codes[0], name: 'Eins', preset: 'arcade' },
+      { id: '0902', code: codes[1], name: 'Zwei', preset: 'gt3' },
+      { id: '0903', code: codes[2], name: 'Drei', preset: 'propacejka' }],
+      zeiten: { '0901': [z('a', 5000), z('a', 5100), z('a', 5200)],          // 1 Fahrer, 3 Laeufe
+                '0902': [z('a', 6000), z('b', 6100)],                       // 2 Fahrer, 2 Laeufe
+                '0903': [z('a', 7000), z('b', 7100), z('b', 7200)] } };     // 2 Fahrer, 3 Laeufe
+    const strecken = { ok: true, strecken: [
+      { strecke: codes[3], name: 'Viel', fahrer: 3, laeufe: 5, beste_ms: 4000 },
+      { strecke: codes[4], name: 'Meist', fahrer: 3, laeufe: 9, beste_ms: 4500,
+        je: { arcade: { fahrer: 2, beste_ms: 4600, beste_fahrer: 'x' }, gran: { fahrer: 1, beste_ms: 4500, beste_fahrer: 'y' } } },
+      { strecke: codes[5], name: 'Wenig', fahrer: 1, laeufe: 1, beste_ms: 3000 },
+      { strecke: codes[2], name: 'DreiAlsStrecke', fahrer: 7, laeufe: 20, beste_ms: 3500 }] };
+    return { codes, community, strecken };
+  }
+  // Erwartete Reihenfolge der 6 Eintraege: Meist (3/9), Viel (3/5), Drei (2/3), Zwei (2/2), Eins (1/3), Wenig (1/1).
+  const ST_CHU_REIHE = 'Meist,Viel,0903 · Drei,0902 · Zwei,0901 · Eins,Wenig';
+  function stChuNamen() { return [...document.querySelectorAll('#ch-v-gitter .ch-v-karte .ch-k-name')].map((b) => b.textContent); }
+
+  stAdd('Challenges v1.3.58: Community oben, Network unten, eine Listenseite Community', () => {
+    const f = [];
+    const home = $('sub-home-challenges');
+    const koepfe = [...home.querySelectorAll('h3.k-zwischen')].map((h) => h.textContent.trim());
+    if (koepfe[0] !== t('Community')) f.push('zuerst: ' + koepfe[0]);
+    if (koepfe[koepfe.length - 1] !== 'Network') f.push('zuletzt: ' + koepfe[koepfe.length - 1]);
+    const v = $('ch-v-gitter'), w = home.querySelector('.ch-mini[data-kat="a"]');
+    if (!v || !w || !(v.compareDocumentPosition(w) & Node.DOCUMENT_POSITION_FOLLOWING)) f.push('Vorschau nicht vor den Wochen-Challenges');
+    const texte = $('tab-challenges').textContent;
+    for (const alt of ['Community-Bestzeiten', 'Community-Strecken', 'Community Challenges', 'Alle Strecken']) if (texte.indexOf(alt) >= 0) f.push('alter Name steht noch: ' + alt);
+    if (document.getElementById('sub-ch-' + 'strecken')) f.push('alte Listenseite Alle Strecken steht noch');
+    if ($('sub-ch-community').querySelector('h2').textContent.indexOf(t('Community')) < 0) f.push('Ueberschrift Community');
+    for (const id of ['sk-zurueck', 'ch-strecke-zurueck']) if ($(id).textContent.indexOf(t('← Community')) < 0) f.push('Zurueck-Knopf ' + id);
+    for (const k of ['Community', 'Alle', 'Challenges', 'Strecken', 'Challenge', 'Alle anzeigen', '{n} weitere', '← Community',
+                     'Noch nichts in der Community', 'Noch keine Community Challenges. Reiche deine Strecke ein.']) {
+      if (!I18N_EN[k] || !I18N_ES[k]) f.push('Uebersetzung fehlt: ' + k);
+    }
+    for (const k of ['Community-Strecken', 'Community-Bestzeiten', 'Community Challenges', 'Alle Strecken', 'Noch keine Strecke mit Zeiten']) {
+      if (I18N_EN[k] || I18N_ES[k]) f.push('verwaister Woerterbuchschluessel: ' + k);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : koepfe.join(' > ') + '; eine Seite Community, keine alten Namen' };
+  });
+
+  stAdd('Challenges v1.3.62: Community zusammengelegt, ohne Doppelte, sortiert, Fahrgefuehl-Label', () => {
+    const f = [];
+    const m = stChuMerken();
+    try {
+      const d = stChuDaten();
+      let netz = 0;
+      // Nur die Listen zaehlen: die Challenge-Seite fragt daneben z. B. Spuren ab (72b-spuren.js).
+      window.fetch = (u) => { if (/community=1|strecken?=/.test(String(u))) netz++; return new Promise(() => {}); };
+      communityOnline = d.community; communityOnlineAt = Date.now();
+      skOnline.liste = d.strecken.strecken; skOnline.listeAt = Date.now();
+      const e = commEintraege();
+      const namen = e.map((x) => (x.art === 'challenge' ? x.tr.id + ' · ' + x.tr.name : x.s.name));
+      if (namen.join(',') !== ST_CHU_REIHE) f.push('Reihe: ' + namen.join(','));
+      const drei = e.find((x) => x.key === d.codes[2]);
+      if (!drei || drei.art !== 'challenge' || drei.spieler !== 2) f.push('Challenge-Strecke doppelt oder mit falscher Fahrerzahl');
+      if (e.filter((x) => x.key === d.codes[2]).length !== 1) f.push('Strecke doppelt');
+      if (chVorschauFahrgefuehl(d.strecken.strecken[1]) !== 'arcade') f.push('Fahrgefuehl ' + chVorschauFahrgefuehl(d.strecken.strecken[1]));
+      if (chVorschauFahrgefuehl({ je: { gran: { fahrer: 1, beste_ms: 5000 }, acc: { fahrer: 1, beste_ms: 4000 } } }) !== 'acc') f.push('Gleichstand: schnellere Bestzeit');
+      chVorschauZeichnen();
+      const karten = [...document.querySelectorAll('#ch-v-gitter .ch-v-karte')];
+      if (karten.length !== 3) f.push(karten.length + ' Karten statt 3');
+      else {
+        if (karten[0].querySelector('.ch-v-label').textContent !== skFgName('arcade')) f.push('Label Strecke: ' + karten[0].querySelector('.ch-v-label').textContent);
+        if (karten[0].querySelector('.ch-k-anzahl').textContent.indexOf(t('{n} Spieler').replace('{n}', 3)) < 0) f.push('Spieler Strecke');
+        if (karten[0].querySelector('.ch-v-art')) f.push('Strecke als Challenge markiert');
+        const k3 = karten[2];
+        if (k3.querySelector('.ch-k-name').textContent.indexOf('Drei') < 0) f.push('dritte Karte: ' + k3.querySelector('.ch-k-name').textContent);
+        if (!k3.querySelector('.ch-v-art') || k3.querySelector('.ch-v-art').textContent !== t('Challenge')) f.push('Challenge-Etikett fehlt');
+        if (k3.querySelector('.ch-v-label').textContent !== communityPresetName('propacejka')) f.push('Label Challenge: ' + k3.querySelector('.ch-v-label').textContent);
+        if (!k3.querySelector('.ch-mini svg')) f.push('ohne Streckenbild');
+        // Antippen oeffnet wie in der Liste.
+        d.codes.forEach((k) => { skOnline.zeiten[k] = { zeiten: [], at: Date.now(), stand: Date.now() }; });
+        karten[0].click();
+        if (!$('sub-ch-sk').classList.contains('on') || !skDetail || skDetail.name !== 'Meist') f.push('Strecke oeffnet nicht');
+        karten[2].click();
+        if (!$('sub-ch-strecke').classList.contains('on')) f.push('Challenge oeffnet nicht');
+        showSubpage('');
+      }
+      if (netz) f.push(netz + ' Abrufe trotz frischer Daten');
+    } finally {
+      stChuZurueck(m);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : ST_CHU_REIHE + '; Challenge-Strecke einmal (als Challenge), Etiketten, oeffnet wie die Liste' };
+  });
+
+  stAdd('Challenges v1.3.62: 0/1/3/>3 Eintraege, Alle anzeigen nur bei mehr, gleiche Groesse', () => {
+    const f = [];
+    const m = stChuMerken();
+    try {
+      window.fetch = () => new Promise(() => {});
+      const d = stChuDaten();
+      showTab('challenges');
+      showSubpage('');
+      communityHolt = false; skOnline.listeLaedt = false;
+      const fall = (tracks, strecken) => {
+        communityOnline = { ok: true, tracks: d.community.tracks.slice(0, tracks), zeiten: d.community.zeiten };
+        communityOnlineAt = Date.now();
+        skOnline.liste = d.strecken.strecken.slice(0, strecken); skOnline.listeAt = Date.now();
+        chVorschauZeichnen();
+        return { karten: [...document.querySelectorAll('#ch-v-gitter .ch-v-karte')], alle: !$('ch-v-alle').hidden, ein: !$('ch-v-einreichen').hidden };
+      };
+      let r = fall(0, 0);
+      if (r.karten.length !== 1 || !r.karten[0].classList.contains('ch-v-leer') || r.alle || !r.ein) f.push('0: ' + r.karten.length + ' Karten, alle ' + r.alle);
+      if (r.karten[0] && r.karten[0].querySelector('.ch-k-name').textContent !== t('Noch nichts in der Community')) f.push('Platzhaltertext');
+      r = fall(1, 0);
+      if (r.karten.length !== 1 || r.karten[0].classList.contains('ch-v-leer') || r.alle) f.push('1: ' + r.karten.length + ' Karten, alle ' + r.alle);
+      r = fall(3, 0);
+      if (r.karten.length !== 3 || r.alle || !r.ein) f.push('3: ' + r.karten.length + ' Karten, alle ' + r.alle);
+      r = fall(3, 4);
+      if (r.karten.length !== 3 || !r.alle || r.ein) f.push('>3: ' + r.karten.length + ' Karten, alle ' + r.alle);
+      if (stChuNamen().join(',') !== ST_CHU_REIHE.split(',').slice(0, 3).join(',')) f.push('erste drei: ' + stChuNamen().join(','));
+      if ($('ch-v-alle').querySelector('.ch-k-anzahl').textContent !== t('{n} weitere').replace('{n}', 3)) f.push('weitere: ' + $('ch-v-alle').querySelector('.ch-k-anzahl').textContent);
+      // Gleiche Groesse wie die Karten, im selben Raster.
+      const a = r.karten[0].getBoundingClientRect(), b = $('ch-v-alle').getBoundingClientRect();
+      if (!(a.width > 0) || Math.abs(a.width - b.width) > 1.5 || Math.abs(a.height - b.height) > 1.5) {
+        f.push('Groesse Karte ' + Math.round(a.width) + 'x' + Math.round(a.height) + ', Alle anzeigen ' + Math.round(b.width) + 'x' + Math.round(b.height));
+      }
+      // Laden ohne Daten: das Lade-Symbol in der Karte.
+      communityOnline = null; communityHolt = true; skOnline.liste = null; skOnline.listeLaedt = true;
+      chVorschauZeichnen();
+      const kl = document.querySelector('#ch-v-gitter .ch-v-karte');
+      if (!kl || !kl.classList.contains('ch-v-laedt') || !kl.querySelector('.lade-dreh')) f.push('kein Laden in der Karte');
+      communityHolt = false; skOnline.listeLaedt = false;
+      // Alle anzeigen oeffnet die gemeinsame Liste.
+      fall(3, 4);
+      $('ch-v-alle').click();
+      if (!$('sub-ch-community').classList.contains('on')) f.push('Alle anzeigen oeffnet die Liste nicht');
+    } finally {
+      stChuZurueck(m);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '0: Platzhalter, 1 und 3: genau die, >3: 3 Karten + Alle anzeigen gleich gross, Laden, Liste' };
+  });
+
+  stAdd('Challenges v1.3.62: Liste Community mit Filtern, Steuerkreuz und Reiterleiste', () => {
+    const f = [];
+    const m = stChuMerken();
+    try {
+      window.fetch = () => new Promise(() => {});
+      const d = stChuDaten();
+      communityOnline = d.community; communityOnlineAt = Date.now(); communityHolt = false;
+      skOnline.liste = d.strecken.strecken; skOnline.listeAt = Date.now(); skOnline.listeLaedt = false;
+      showTab('challenges');
+      chVorschauZeichnen();
+      showSubpage('');
+      // Steuerkreuz: Karten und die Alle-anzeigen-Kachel sind Zeilen der Startseite.
+      const zeilen = typeof menuNavRows === 'function' ? menuNavRows().map((r) => r.el) : [];
+      const soll = [...document.querySelectorAll('#ch-v-gitter .ch-v-karte')].concat([$('ch-v-alle')]);
+      if (soll.some((el) => zeilen.indexOf(el) < 0)) f.push('Steuerkreuz erreicht nicht alle Kacheln');
+      commFilter = 'alle';
+      showSubpage('ch-community');
+      const art = () => [...document.querySelectorAll('#community-bereich .community-zeile')].map((z) => z.dataset.art);
+      if (art().length !== 6) f.push('Alle: ' + art().length + ' Zeilen statt 6');
+      if (art().join(',') !== 'strecke,strecke,challenge,challenge,challenge,strecke') f.push('Reihe der Liste: ' + art().join(','));
+      const chip = (k) => document.querySelector('#community-bereich .comm-filter [data-filter="' + k + '"]');
+      if (!chip('alle') || !chip('alle').classList.contains('an')) f.push('Vorgabe ist nicht Alle');
+      chip('challenges').click();
+      if (art().join(',') !== 'challenge,challenge,challenge') f.push('Challenges: ' + art().join(','));
+      chip('strecken').click();
+      if (art().join(',') !== 'strecke,strecke,strecke') f.push('Strecken: ' + art().join(','));
+      if (!document.querySelector('#community-bereich .comm-filter [data-filter="strecken"].an')) f.push('Chip nicht markiert');
+      // Reiterleiste: ein Eintrag Community, aktiv auf der Seite und auf einer Strecke daraus.
+      const reiter = typeof konsoleReiterInnen === 'function' ? konsoleReiterInnen() : null;
+      const c = reiter && reiter.find((x) => x.text === t('Community'));
+      if (!c || !c.an) f.push('Reiterleiste ohne aktiven Eintrag Community');
+      d.codes.forEach((k) => { skOnline.zeiten[k] = { zeiten: [], at: Date.now(), stand: Date.now() }; });
+      document.querySelector('#community-bereich .community-zeile[data-art="strecke"] .community-oeffnen').click();
+      const r2 = typeof konsoleReiterInnen === 'function' ? konsoleReiterInnen() : null;
+      const c2 = r2 && r2.find((x) => x.text === t('Community'));
+      if (!c2 || !c2.an) f.push('Reiterleiste auf der Strecke');
+      konsoleZurueck();
+      if (!$('sub-ch-community').classList.contains('on')) f.push('Kreis fuehrt nicht in die Community-Liste');
+    } finally {
+      stChuZurueck(m);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '6 Zeilen gemischt, Filter Alle/Challenges/Strecken, Steuerkreuz, Reiterleiste, Kreis zurueck' };
+  });
+
+  stAdd('Challenges v1.3.58: Tab-Klick laedt im Hintergrund mit Ladeanzeige', async () => {
+    const f = [];
+    const m = stChuMerken();
+    const raus = [];
+    try {
+      const d = stChuDaten();
+      const urls = [];
+      window.fetch = (u) => {
+        urls.push(String(u));
+        const j = String(u).indexOf('community=1') >= 0 ? d.community : String(u).indexOf('strecken=1') >= 0 ? d.strecken : { ok: false };
+        return new Promise((ok) => raus.push(() => ok({ json: () => Promise.resolve(j) })));
+      };
+      const o = chOnline(); o.url = 'https://example.invalid/exec'; chSchreiben(CH_ONLINE_STORE, o);
+      raceState = 'idle';
+      communityOnline = null; communityOnlineAt = 0; communityHolt = false;
+      skOnline.liste = null; skOnline.listeAt = 0; skOnline.listeLaedt = false;
+      showTab('challenges');
+      showSubpage('');
+      if (!urls.some((u) => u.indexOf('community=1') >= 0) || !urls.some((u) => u.indexOf('strecken=1') >= 0)) f.push('nicht geladen: ' + JSON.stringify(urls));
+      const box = $('ch-lade');
+      if (!box || box.hidden) f.push('keine Ladeanzeige');
+      else {
+        const r = box.getBoundingClientRect();
+        if (!(r.left < 60 && r.bottom > innerHeight - 70)) f.push('nicht unten links (' + Math.round(r.left) + ', ' + Math.round(r.bottom) + ')');
+        if (!box.querySelector('.lade-dreh svg')) f.push('kein drehendes Teil');
+        if (box.querySelector('.wip-tag')) f.push('WIP-Label');
+        const tx = $('ch-lade-text').textContent;
+        if (tx.indexOf(t('Challenges')) < 0 && tx.indexOf(t('Strecken')) < 0) f.push('Text: ' + tx);
+      }
+      const k0 = document.querySelector('#ch-v-gitter .ch-v-karte');
+      if (!k0 || !k0.classList.contains('ch-v-laedt')) f.push('Karte zeigt kein Laden');
+      raus.splice(0).forEach((x) => x());
+      for (let i = 0; i < 6; i++) await new Promise((ok) => setTimeout(ok, 0));
+      if (!box.hidden) f.push('Ladeanzeige bleibt stehen');
+      if (stChuNamen().join(',') !== ST_CHU_REIHE.split(',').slice(0, 3).join(',')) f.push('Karten nach dem Laden: ' + stChuNamen().join(','));
+      const n = urls.length;
+      showTab('challenges');
+      if (urls.length !== n) f.push('zweiter Abruf trotz Zwischenspeicher');
+      communityOnlineAt = 0; skOnline.listeAt = 0; raceState = 'racing';
+      chVorschauLaden();
+      if (urls.length !== n) f.push('Abruf im Rennen');
+      raceState = 'idle';
+    } finally {
+      raus.splice(0).forEach((x) => x());
+      stChuZurueck(m);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'beide Listen beim Tab-Klick, Ladeanzeige unten links mit Text, gecacht, nicht im Rennen' };
   });

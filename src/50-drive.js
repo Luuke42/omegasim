@@ -293,13 +293,32 @@
   // EIGENE ABLAGE, wie beim Layout und beim Getriebe: der Waehler traegt data-preset-skip,
   // weil eine Voreinstellung eine Abstimmung ist und das Aussehen keine.
   const COCKPIT_STORE = 'chc.cockpit.v1';
+  // ---- Ueberleitung v1.3.58: ACC wird die Vorgabe ------------------------------------
+  //
+  // BESTELLT: "Mach diese Ansicht [ACC] zum Standard." Ein neuer Nutzer bekommt sie ueber das
+  // selected im Waehler. Ein BESTANDSNUTZER hat aber fast immer 'omega' gespeichert, auch ohne
+  // es je gewaehlt zu haben: ansichtAnwenden() schreibt den Wert bei JEDEM Start. Ein
+  // gespeichertes 'omega' heisst also nur "die alte Vorgabe" - es wird darum EINMAL auf 'acc'
+  // umgestellt. Der Merker sorgt dafuer, dass es bei einem Mal bleibt: wer danach wieder
+  // Omega waehlt, behaelt es. Jede andere gespeicherte Ansicht war eine Wahl und bleibt.
+  //
+  // Als Funktion mit uebergebener Ablage, damit der Selbsttest sie an einer Attrappe fahren
+  // kann, ohne die echte Einstellung anzufassen.
+  const COCKPIT_ACC_VORGABE = 'chc.cockpit.acc.v1';
+  function cockpitVorgabeUmstellen(ablage) {
+    if (ablage.getItem(COCKPIT_ACC_VORGABE)) return false;
+    const umgestellt = ablage.getItem(COCKPIT_STORE) === 'omega';
+    if (umgestellt) ablage.setItem(COCKPIT_STORE, 'acc');
+    ablage.setItem(COCKPIT_ACC_VORGABE, '1');
+    return umgestellt;
+  }
   if ($('setting-cockpit')) {
     const ansichtAnwenden = (melden) => {
       const v = $('setting-cockpit').value;
-      // 'omega' ist die Vorgabe und setzt KEIN Attribut: so stehen die Werte aus :root, und
-      // die Vorgabe ist damit nicht eine zweite Kopie derselben Zahlen. Sie hiess bis
-      // v0.5.16 'gt3'; unter diesem Namen steht jetzt eine ANDERE Ansicht, siehe die
-      // Ueberleitung darunter.
+      // 'omega' setzt KEIN Attribut: so stehen die Werte aus :root, und Omega ist damit nicht
+      // eine zweite Kopie derselben Zahlen. Omega war bis v1.3.57 die Vorgabe (seit v1.3.58
+      // ist es ACC, siehe cockpitVorgabeUmstellen) und hiess bis v0.5.16 'gt3'; unter diesem
+      // Namen steht jetzt eine ANDERE Ansicht, siehe die Ueberleitung darunter.
       if (v === 'omega') document.body.removeAttribute('data-cockpit');
       else document.body.setAttribute('data-cockpit', v);
       if (melden) {
@@ -326,6 +345,12 @@
               + 'steht seit v0.5.16 eine neue Ansicht mit schwarzen Kacheln.', 'info');
         }
         localStorage.setItem(COCKPIT_UMBENANNT, '1');
+      }
+    } catch (e) { /* privater Modus */ }
+    try {
+      if (cockpitVorgabeUmstellen(localStorage)) {
+        log('Cockpit-Ansicht: neue Vorgabe ist "ACC". Omega bleibt unter Optionen > '
+            + 'Allgemein > Cockpit-Ansicht waehlbar.', 'info');
       }
     } catch (e) { /* privater Modus */ }
     try {

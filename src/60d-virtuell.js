@@ -115,44 +115,607 @@
   function vfWand(a, p1, p2, y0, y1, f) {
     [p1, p2, p2, p1, p2, p1].forEach((p, i) => a.push(p[0], [y0, y0, y1, y0, y1, y1][i], p[1], f[0], f[1], f[2]));
   }
-  // Die Fahrbahn aus der Mittellinie. Koordinaten: x = Karten-x, z = Karten-y, y nach oben.
-  function vfBahnBauen(gl, pts, nrm, tiles) {
-    const a = [];
-    const half = TRACK_HALF_W, rand = TRACK_HALF_W * 2 * 0.095;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    pts.forEach((p) => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); });
-    const m = 600;
-    vfQuad(a, [minX - m, minY - m], [maxX + m, minY - m], [maxX + m, maxY + m], [minX - m, maxY + m], -0.05, [0.17, 0.19, 0.22]);
-    const off = (i, d) => [pts[i].x + nrm[i].x * d, pts[i].y + nrm[i].y * d];
-    for (let i = 0; i < pts.length - 1; i++) {
-      vfQuad(a, off(i, half), off(i + 1, half), off(i + 1, -half), off(i, -half), 0, [0.07, 0.08, 0.10]);
-      const weiss = Math.floor(i / 2) % 2 === 0;
-      // Randsteine als erhabenes 3D-Objekt (v1.2.62): Oberseite angehoben und eine senkrechte
-      // Innenseite, damit der Stein wie eine echte Curbs-Schwelle aussieht und das Rattern
-      // nachvollziehbar macht.
-      const ky = 0.09;
-      const farbL = weiss ? [0.93, 0.94, 0.96] : [0.10, 0.45, 0.95];
-      const farbR = weiss ? [0.93, 0.94, 0.96] : [0.88, 0.12, 0.14];
-      const li = off(i, half), li2 = off(i + 1, half);
-      const lo = off(i, half + rand), lo2 = off(i + 1, half + rand);
-      vfQuad(a, lo, lo2, li2, li, ky, farbL);
-      vfWand(a, li, li2, 0.02, ky, farbL);
-      const ri = off(i, -half), ri2 = off(i + 1, -half);
-      const ro = off(i, -half - rand), ro2 = off(i + 1, -half - rand);
-      vfQuad(a, ri, ri2, ro2, ro, ky, farbR);
-      vfWand(a, ri, ri2, 0.02, ky, farbR);
-      // Teilegrenze: duenner weisser Strich quer ueber die Bahn
-      if (pts[i + 1].tile !== pts[i].tile) {
-        const t0 = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y) || 1;
-        const tx = (pts[i + 1].x - pts[i].x) / t0 * 0.35, ty = (pts[i + 1].y - pts[i].y) / t0 * 0.35;
-        const p = off(i + 1, half), q = off(i + 1, -half);
-        const istStart = tiles[pts[i + 1].tile] && tiles[pts[i + 1].tile].type === TILE_TYPE.START;
-        const w = istStart ? 6 : 1;
-        vfQuad(a, [p[0] - tx * w, p[1] - ty * w], [p[0] + tx * w, p[1] + ty * w], [q[0] + tx * w, q[1] + ty * w], [q[0] - tx * w, q[1] - ty * w], 0.03,
-          istStart ? [0.95, 0.95, 0.95] : [0.55, 0.57, 0.62]);
+  // ---- BAHN UND BODEN MIT TEXTUREN (v1.3.39, WIP) ----------------------------------------------
+  // BESTELLT: "Verbessere die Textur der Schienen. Du darfst kleinere Kratzer reinmachen." und
+  // "Verbessere die Textur jenseits der Schienen. Es soll aussehen wie ein Parkett- oder Laminatboden
+  // (nicht nur eine Textur wenn moeglich). Achte darauf, dass der Massstab korrekt ist (1/50)."
+  //
+  // MASSSTAB: Die Szene rechnet in den Einheiten der Streckenkarte (x = Karten-x, z = Karten-y, y oben),
+  // TRACK_UNITS_PER_CM = 0,930 Einheiten je ECHTEM Zentimeter: eine gerade Kachel (43 cm) ist 40
+  // Einheiten lang, die Fahrbahn (25 cm) 23,3 Einheiten breit. Die echte Bahn liegt auf einem echten
+  // Fussboden, also liegen die Dielen in echten Massen im selben System: 19 x 130 cm = 17,7 x 120,9
+  // Einheiten (gut drei Viertel der Bahnbreite), Fischgraet-Staebe 7 x 35 cm = 6,5 x 32,6. Fuer das
+  // 1:50-Auto ist eine Diele 9,5 m breit - so sieht es auf dem Wohnzimmerboden auch aus.
+  //
+  // LATENZ (100-Euro-Handys): Die Pixel der Texturen entstehen EINMAL je Sitzung (vfTexDaten, der
+  // Boden nur fuer die gewaehlte Art), eine neue Fahrt laedt sie nur hoch (mit Mipmaps). Die Geometrie
+  // entsteht einmal je Fahrt. Je Bild: drei Zeichenaufrufe mit EINEM Texturzugriff je Pixel; der Glanz
+  // (Fresnel) wird je Ecke gerechnet, nicht je Pixel. Der Boden schreibt keine Tiefe (er liegt unter
+  // allem), damit flackert zwischen Boden und Fahrbahn nichts, auch nicht bei 16-Bit-Tiefenpuffern.
+  const VF_BODEN_STORE = 'omegasim-vf-boden';
+  // ton: Grundtoene der Dielen (je Diele einer, leicht gestreut), maser: Farbe der Jahresringe,
+  // ringCm: Ringabstand, poren: Anteil der Porenstriche (Eiche), ast: Wahrscheinlichkeit eines Asts.
+  const VF_BOEDEN = [
+    { id: 'eiche', name: 'Eiche hell', art: 'diele', breiteCm: 19, laengeCm: 130, spalten: 8, zeilen: 1,
+      ton: [[216, 180, 134], [205, 166, 119], [224, 192, 148], [197, 158, 111], [211, 172, 124]], maser: [158, 114, 70],
+      kontrast: 0.50, ringCm: 1.0, poren: 1.0, ast: 0.35, glanz: 0.30 },
+    { id: 'grau', name: 'Laminat grau', art: 'diele', breiteCm: 19.3, laengeCm: 128.5, spalten: 8, zeilen: 1,
+      ton: [[160, 156, 150], [146, 143, 138], [172, 168, 161], [135, 132, 128], [154, 149, 141]], maser: [108, 104, 99],
+      kontrast: 0.36, ringCm: 1.3, poren: 0.25, ast: 0.15, glanz: 0.38 },
+    { id: 'fischgraet', name: 'Fischgrät', art: 'fischgraet', breiteCm: 7, laengeCm: 35, spalten: 16, zeilen: 2,
+      ton: [[190, 143, 94], [176, 128, 82], [201, 157, 106], [163, 118, 74], [184, 136, 86]], maser: [122, 82, 48],
+      kontrast: 0.42, ringCm: 0.8, poren: 1.0, ast: 0.08, glanz: 0.28 },
+  ];
+  const VF_ATLAS_B = 2048, VF_ATLAS_H = 1024;   // Bodenatlas (8 MB, mit Mipmaps 10,7 MB)
+  const VF_BAHN_TEX = 1024, VF_BAHN_SPALTE = 256;  // Fahrbahn: 4 Teile nebeneinander (3 gebraucht, 1 Start/Ziel)
+  const VF_RAND_B = 256, VF_RAND_H = 1024;       // Randstreifen: blau | rot, 4 Pfeiltakte uebereinander
+  const VF_FUGE = 0.07;                          // halbe Steckfuge in Einheiten (zusammen ~1,5 mm)
+  const VF_FUGE_FARBE = [0.22, 0.22, 0.23];
+  // Gemerkte Pixel (einmal je Sitzung) und wie oft sie erzeugt wurden (Selbsttest).
+  const vfTexDaten = { bahn: null, rand: null, boden: null, bodenId: null };
+  const vfTexZaehler = { bahn: 0, rand: 0, boden: 0 };
+  function vfBodenWahl() {
+    try { const v = localStorage.getItem(VF_BODEN_STORE); return VF_BOEDEN.some((b) => b.id === v) ? v : 'eiche'; } catch (e) { return 'eiche'; }
+  }
+  function vfBodenSetzen(id) { try { localStorage.setItem(VF_BODEN_STORE, id); } catch (e) { /* privat */ } }
+  function vfBodenArt(id) { return VF_BOEDEN.find((b) => b.id === id) || VF_BOEDEN[0]; }
+  // Gleichverteilte Zufallszahlen mit Startwert (mulberry32): dieselbe Strecke sieht jedes Mal gleich aus.
+  function vfZufall(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = Math.imul(a ^ (a >>> 15), a | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function vfHash(x, y) {
+    let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+  // Glattes Wertrauschen in 1D (n Stuetzstellen) und 2D (nx x ny), Werte -1..1, t/u/v in 0..1.
+  function vfRauschen1(rnd, n) {
+    const k = new Float32Array(n + 1);
+    for (let i = 0; i <= n; i++) k[i] = rnd() * 2 - 1;
+    return (t) => {
+      const x = Math.max(0, Math.min(n - 1e-6, t * n)), i = x | 0, f = x - i, s = f * f * (3 - 2 * f);
+      return k[i] + (k[i + 1] - k[i]) * s;
+    };
+  }
+  // Glattes 2D-Rauschfeld (nx x ny Zellen) gleich als w x h Werte (-1..1): je Zeile die Stuetzstellen
+  // einmal mischen, je Pixel nur noch eine lineare Mischung. So kostet ein Megapixel wenige ms.
+  function vfFeld(rnd, nx, ny, w, h) {
+    const k = new Float32Array((nx + 1) * (ny + 1));
+    for (let i = 0; i < k.length; i++) k[i] = rnd() * 2 - 1;
+    const ci = new Int32Array(w), cw = new Float32Array(w), zk = new Float32Array(nx + 1), out = new Float32Array(w * h);
+    for (let x = 0; x < w; x++) { const X = Math.min(nx - 1e-6, x / w * nx), i = X | 0, f = X - i; ci[x] = i; cw[x] = f * f * (3 - 2 * f); }
+    for (let y = 0; y < h; y++) {
+      const Y = Math.min(ny - 1e-6, y / h * ny), j = Y | 0, f = Y - j, s = f * f * (3 - 2 * f);
+      for (let i = 0; i <= nx; i++) { const a = k[j * (nx + 1) + i]; zk[i] = a + (k[(j + 1) * (nx + 1) + i] - a) * s; }
+      const z = y * w;
+      for (let x = 0; x < w; x++) { const i = ci[x], a = zk[i]; out[z + x] = a + (zk[i + 1] - a) * cw[x]; }
+    }
+    return out;
+  }
+  // Ein Holzstueck (Diele oder Fischgraet-Stab) in den Atlas: x quer, y laengs. Jahresringe als
+  // "Kathedrale" (Parabelboegen um eine Mitte, die auch neben dem Brett liegen darf, dann laufen die
+  // Ringe fast gerade), Fasern je Spalte, Poren als kurze dunkle Striche, Flecken, selten ein Ast.
+  // Ringsum eine dunkle Fuge (1-2 px) mit heller Fase daneben: im Atlas, damit sie mit den Mipmaps
+  // weich wird statt in der Ferne zu flimmern. Alpha = Glanz (0 in der Fuge).
+  function vfHolzStueck(d, AW, x0, y0, w, h, P, rnd) {
+    const ton = P.ton[Math.floor(rnd() * P.ton.length)], j = 1 + (rnd() - 0.5) * 0.08;
+    const t0 = ton[0] * j, t1 = ton[1] * j, t2 = ton[2] * j, m0 = P.maser[0], m1 = P.maser[1], m2 = P.maser[2];
+    const cmB = P.breiteCm, cmL = P.laengeCm, sx = cmB / w, sy = cmL / h;
+    const ring = P.ringCm * (0.7 + 0.6 * rnd());
+    const cx = cmB * (rnd() * 1.8 - 0.4), cy = cmL * (0.15 + 0.7 * rnd());
+    const bogen = rnd() < 0.3 ? 0.0003 : 0.0015 + 0.005 * rnd();      // je cm; klein = gerade Maserung
+    const wob = vfRauschen1(rnd, 4), wob2 = vfRauschen1(rnd, 9), wa = cmB * (0.02 + rnd() * 0.06);
+    const fleck = vfFeld(rnd, 3, Math.max(3, Math.round(cmL / 10)), w, h);
+    const faser = new Float32Array(w);
+    let f = 0;
+    const breit = vfRauschen1(rnd, 7);   // breite helle/dunkle Streifen quer
+    for (let x = 0; x < w; x++) { f = f * 0.6 + (rnd() * 2 - 1) * 0.4; faser[x] = f + 1.2 * breit(x / w); }
+    const ast = rnd() < P.ast ? { x: cmB * (0.2 + 0.6 * rnd()), y: cmL * (0.1 + 0.8 * rnd()), r: 0.3 + rnd() * 0.45 } : null;
+    // Jeder Jahresring eigen: Staerke und Breite des dunklen Spaetholz-Bands je Ring zufaellig.
+    const ringStark = new Float32Array(64), ringBreit = new Float32Array(64);
+    for (let i = 0; i < 64; i++) { ringStark[i] = 0.25 + 0.75 * rnd() * rnd() + (rnd() < 0.15 ? 0.4 : 0); ringBreit[i] = 0.18 + 0.25 * rnd(); }
+    const porenGrenze = 1 - 0.012 * P.poren, porenPx = Math.max(2, Math.round(0.35 / sy)), poren = new Uint8Array(w);
+    let porenZeile = -1;
+    for (let y = 0; y < h; y++) {
+      const yc = y * sy, tv = y / h;
+      const versatz = wob(tv) * wa + wob2(tv) * 0.07 - cx, kat = bogen * (yc - cy) * (yc - cy);
+      const ende = y < 2 || y >= h - 2, aussen = y === 0 || y === h - 1, fase = y === 2 || y === h - 3;
+      const zeile = ((y0 + y) * AW + x0) * 4, zf = y * w, py = ((y0 + y) / porenPx) | 0;
+      if (py !== porenZeile) { porenZeile = py; for (let x = 0; x < w; x++) poren[x] = vfHash(x0 + x, py) > porenGrenze ? 1 : 0; }
+      for (let x = 0; x < w; x++) {
+        const xc = x * sx;
+        let r = (xc + versatz < 0 ? -(xc + versatz) : xc + versatz) + kat, astK = 0;
+        if (ast) {
+          const ax = (xc - ast.x) / ast.r, ay = (yc - ast.y) / (ast.r * 1.7), q = ax * ax + ay * ay;
+          if (q < 25) r += 1.6 / (0.3 + q);
+          if (q < 1) astK = 0.55 * (1 - q);
+        }
+        const rr = r / ring, ri = (rr | 0) & 63, fr = rr - (rr | 0), bb = ringBreit[ri];
+        const s = fr < bb ? fr / bb : 0, dunkel = 4 * s * (1 - s) * ringStark[ri];
+        const fl = fleck[zf + x], fa = faser[x];
+        let k = P.kontrast * dunkel * (0.7 + 0.3 * fa) + 0.07 * fa + 0.05 * fl + astK;
+        if (k > 1) k = 1; else if (k < -0.2) k = -0.2;
+        let hell = 1 + 0.04 * fl;
+        if (poren[x]) hell *= 0.8;
+        let g = P.glanz * (0.85 + 0.35 * fl) * (1 - 0.3 * dunkel);
+        if (ende || x < 2 || x >= w - 2) { hell *= (aussen || x === 0 || x === w - 1) ? 0.3 : 0.5; g = 0; }
+        else if (fase || x === 2 || x === w - 3) hell *= 1.05;
+        const i = zeile + x * 4;
+        d[i] = (t0 + (m0 - t0) * k) * hell;
+        d[i + 1] = (t1 + (m1 - t1) * k) * hell;
+        d[i + 2] = (t2 + (m2 - t2) * k) * hell;
+        d[i + 3] = g * 255;
       }
     }
-    return vfPuffer(gl, a);
+  }
+  // Bodenatlas fuer eine Art: spalten x zeilen Stuecke (Diele 256 x 1024 px, Stab 128 x 512 px).
+  // Gemerkt wird nur die gerade gewaehlte Art. Dazu der Mittelwert (fuer die weite Flaeche ausserhalb
+  // der Dielen) und das Texel (0,0), ueber das diese Flaeche ihre Farbe holt.
+  // ERZEUGT WIRD IN SCHRITTEN (Generator, ein Holzstueck bzw. eine Bahnspalte je Schritt): so kann es
+  // im Leerlauf der Garage laufen (vfTexturenVorbereiten), und der Start laedt nur noch hoch. Startet
+  // die Fahrt vorher, rechnet vfBodenTexturDaten/vfBahnTexturDaten den Rest sofort fertig.
+  const vfTexLauf = { boden: null, bodenId: null, bahn: null };
+  function vfBodenLauf(P) {
+    if (!vfTexLauf.boden || vfTexLauf.bodenId !== P.id) {
+      vfTexZaehler.boden++;
+      vfTexDaten.boden = null; vfTexDaten.bodenId = null;   // die vorige Art freigeben
+      vfTexLauf.boden = vfBodenBau(P); vfTexLauf.bodenId = P.id;
+    }
+    return vfTexLauf.boden;
+  }
+  function vfBodenTexturDaten(id) {
+    const P = vfBodenArt(id);
+    if (vfTexDaten.boden && vfTexDaten.bodenId === P.id) return vfTexDaten.boden;
+    const L = vfBodenLauf(P);
+    while (!L.next().done) { /* naechstes Stueck */ }
+    vfTexLauf.boden = null;
+    return vfTexDaten.boden;
+  }
+  function* vfBodenBau(P) {
+    const AW = VF_ATLAS_B, AH = VF_ATLAS_H, d = new Uint8ClampedArray(AW * AH * 4);
+    const rnd = vfZufall(P.id === 'eiche' ? 1911 : P.id === 'grau' ? 2701 : 3307);
+    const w = AW / P.spalten, h = AH / P.zeilen, stuecke = [];
+    for (let r = 0; r < P.zeilen; r++) {
+      for (let s = 0; s < P.spalten; s++) {
+        vfHolzStueck(d, AW, s * w, r * h, w, h, P, rnd);
+        stuecke.push([(s * w + 0.5) / AW, (r * h + 0.5) / AH, ((s + 1) * w - 0.5) / AW, ((r + 1) * h - 0.5) / AH]);
+        yield;
+      }
+    }
+    let sr = 0, sg = 0, sb = 0, sa = 0;
+    for (let i = 0; i < d.length; i += 64) { sr += d[i]; sg += d[i + 1]; sb += d[i + 2]; sa += d[i + 3]; }
+    const n = d.length / 64;
+    const mittel = [sr / n / 255, sg / n / 255, sb / n / 255];
+    d[3] = Math.round(sa / n);
+    const texel = [Math.max(1, d[0]) / 255, Math.max(1, d[1]) / 255, Math.max(1, d[2]) / 255];
+    vfTexDaten.boden = { d: new Uint8Array(d.buffer), w: AW, h: AH, stuecke, mittel, ferne: [mittel[0] / texel[0], mittel[1] / texel[1], mittel[2] / texel[2]], art: P };
+    vfTexDaten.bodenId = P.id;
+  }
+  // Fahrbahn: matt schwarzer Kunststoff mit feiner Koernung, leichten Glanzunterschieden (Alpha),
+  // einer etwas glatter gefahrenen Spur, Kratzern und Staub. Je Bahnteil (v = 0..1 ueber das Teil)
+  // eine Spalte: drei Gebrauchsgrade und das Start/Ziel-Teil mit der karierten Linie wie auf dem Foto.
+  // Die Steckfuge liegt an beiden Enden (je 2 px = 0,8 mm dunkel, mit heller Kante daneben).
+  function vfBahnLauf() {
+    if (!vfTexLauf.bahn) { vfTexZaehler.bahn++; vfTexLauf.bahn = vfBahnBau(); }
+    return vfTexLauf.bahn;
+  }
+  function vfBahnTexturDaten() {
+    if (vfTexDaten.bahn) return vfTexDaten.bahn;
+    const L = vfBahnLauf();
+    while (!L.next().done) { /* naechste Spalte */ }
+    vfTexLauf.bahn = null;
+    return vfTexDaten.bahn;
+  }
+  function* vfBahnBau() {
+    const W = VF_BAHN_TEX, H = VF_BAHN_TEX, SW = VF_BAHN_SPALTE;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const g = cv.getContext('2d', { willReadFrequently: true });
+    const bild = g.createImageData(W, H), d = bild.data, glanz = new Uint8ClampedArray(W * H);
+    for (let s = 0; s < 4; s++) {
+      const rnd = vfZufall(1009 + s * 7919);
+      const fleck = vfFeld(rnd, 8, 14, SW, H), glanzF = vfFeld(rnd, 3, 5, SW, H);
+      // Spur: wo die Autos fahren, ist der Kunststoff glatter und ein Hauch Gummi liegt darauf (nur quer).
+      const spur = new Float32Array(SW);
+      for (let k = 0; k < 5; k++) {
+        const m = 0.2 + 0.6 * rnd(), b = 0.015 + 0.04 * rnd(), st = 0.5 + rnd();
+        for (let x = 0; x < SW; x++) { const q = (x / SW - m) / b; if (q > -3 && q < 3) spur[x] += st * Math.exp(-q * q); }
+      }
+      for (let y = 0; y < H; y++) {
+        const fuge = y === 0 || y === H - 1, halb = y === 1 || y === H - 2, fase = y === 2 || y === H - 3;
+        for (let x = 0; x < SW; x++) {
+          const fi = y * SW + x, sp = spur[x];
+          let v = 30 + fleck[fi] * 2.6 + (vfHash(s * SW + x, y) - 0.5) * 6 - sp * 1.6;
+          let gl = 0.36 + 0.24 * glanzF[fi] + 0.12 * (sp > 1 ? 1 : sp);
+          if (fuge) { v = 12; gl = 0; } else if (halb) { v = 21; gl = 0.1; } else if (fase) { v = 40; gl = 0.2; }
+          const i = (y * W + s * SW + x) * 4;
+          d[i] = v * 0.96; d[i + 1] = v * 0.98; d[i + 2] = v * 1.05; d[i + 3] = 255;
+          glanz[y * W + s * SW + x] = gl * 255;
+        }
+      }
+      yield;
+    }
+    g.putImageData(bild, 0, 0);
+    const pxB = SW / 25, pxL = H / 43;   // px je cm quer / laengs
+    for (let s = 0; s < 4; s++) {
+      const rnd = vfZufall(5003 + s * 104729);
+      g.save();
+      g.beginPath(); g.rect(s * SW, 3, SW, H - 6); g.clip();
+      g.setTransform(pxB, 0, 0, pxL, s * SW, 0);       // ab hier in cm
+      if (s === 3) {
+        // Start/Ziel wie auf dem Foto: zwei Reihen weisser Kaestchen, versetzt, mit einer Linie dazwischen.
+        g.fillStyle = 'rgb(226,227,229)';
+        const y0 = 5.2, kb = 0.95, kl = 0.85;
+        for (let x = 0.3; x < 25; x += kb * 2) { g.fillRect(x, y0, kb, kl); g.fillRect(x + kb, y0 + kl + 0.35, kb, kl); }
+        g.fillRect(0.3, y0 + kl + 0.08, 24.4, 0.2);
+      }
+      // Kratzer: kurz, gut die Haelfte laengs (Autos und Raeder), der Rest kreuz und quer.
+      const anzahl = [16, 32, 55, 32][s];
+      for (let k = 0; k < anzahl; k++) {
+        const x = 0.5 + rnd() * 24, y = 0.4 + rnd() * 42.2;
+        const lang = 0.2 + Math.pow(rnd(), 3) * 3.2;
+        const w = rnd() < 0.55 ? (rnd() - 0.5) * 1.0 : rnd() * Math.PI;
+        const dx = Math.sin(w) * lang, dy = Math.cos(w) * lang;
+        const a = 0.05 + Math.pow(rnd(), 2) * (s === 0 ? 0.12 : 0.24);
+        g.strokeStyle = 'rgba(150,153,160,' + a.toFixed(3) + ')';
+        g.lineWidth = 0.03 + rnd() * 0.05;
+        g.beginPath(); g.moveTo(x, y);
+        g.quadraticCurveTo(x + dx * 0.5 + (rnd() - 0.5) * 0.3, y + dy * 0.5, x + dx, y + dy);
+        g.stroke();
+      }
+      // Schrammen: Buendel feiner paralleler Linien, eher an den Raendern (dort stossen die Autos an).
+      for (let k = 0; k < [1, 2, 4, 2][s]; k++) {
+        const x = rnd() < 0.6 ? (rnd() < 0.5 ? 0.6 + rnd() * 3 : 21.4 + rnd() * 3) : 3 + rnd() * 19, y = 1 + rnd() * 40;
+        const w = (rnd() - 0.5) * 0.6, lang = 0.6 + rnd() * 1.6, n = 3 + Math.floor(rnd() * 5);
+        g.strokeStyle = 'rgba(140,142,148,0.13)';
+        g.lineWidth = 0.03;
+        for (let q = 0; q < n; q++) {
+          const ox = q * 0.09 + rnd() * 0.03;
+          g.beginPath(); g.moveTo(x + ox, y); g.lineTo(x + ox + Math.sin(w) * lang, y + Math.cos(w) * lang); g.stroke();
+        }
+      }
+      // Staub und kleine Abplatzer.
+      for (let k = 0; k < [40, 70, 120, 70][s]; k++) {
+        g.fillStyle = rnd() < 0.8 ? 'rgba(190,190,195,0.18)' : 'rgba(0,0,0,0.35)';
+        g.fillRect(0.3 + rnd() * 24.4, 0.4 + rnd() * 42.2, 0.05 + rnd() * 0.07, 0.03 + rnd() * 0.04);
+      }
+      g.restore();
+    }
+    const fertig = g.getImageData(0, 0, W, H).data, out = new Uint8Array(W * H * 4);
+    for (let p = 0, i = 0; p < W * H; p++, i += 4) {
+      out[i] = fertig[i]; out[i + 1] = fertig[i + 1]; out[i + 2] = fertig[i + 2];
+      // Kratzer und Staub sind matt: wo es heller wurde, nimmt der Glanz ab.
+      out[i + 3] = fertig[i + 1] - d[i + 1] > 5 ? glanz[p] * 0.3 : glanz[p];
+    }
+    vfTexDaten.bahn = { d: out, w: W, h: H };
+  }
+  // Randstreifen: weiss mit blauen (links) bzw. roten (rechts) Pfeilen wie auf den Bahnteilen
+  // (photos/startgerade.jpg; Masse wie echtRandstreifen in 60-track.js: Pfeil 75 % der Streifenbreite,
+  // Laenge 2,3-fach, Takt 3,1-fach). Je Spalte vier Pfeiltakte (128 x 256 px) mit eigenem Schmutz.
+  // Die Pfeilspitze zeigt zu wachsendem v (= Fahrtrichtung). Gummiabrieb liegt innen (kleines u).
+  function vfRandTexturDaten() {
+    if (vfTexDaten.rand) return vfTexDaten.rand;
+    vfTexZaehler.rand++;
+    const W = VF_RAND_B, H = VF_RAND_H, SB = W / 2, TK = H / 4;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const g = cv.getContext('2d', { willReadFrequently: true });
+    const bild = g.createImageData(W, H), d = bild.data;
+    const rnd = vfZufall(7717), fleck = vfFeld(rnd, 4, 24, W, H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const p = y * W + x, v = 236 + fleck[p] * 5 + (vfHash(x, y + 9000) - 0.5) * 6, i = p * 4;
+        d[i] = v - 2; d[i + 1] = v - 1; d[i + 2] = v + 1; d[i + 3] = 255;
+      }
+    }
+    g.putImageData(bild, 0, 0);
+    const ph = SB * ECHT_PFEIL_H, pl = TK * (ECHT_PFEIL_L / ECHT_TAKT), kerbe = pl * 0.5 / ECHT_PFEIL_L;
+    [['rgb(33,158,218)', 0], ['rgb(222,38,32)', SB]].forEach(([farbe, x0]) => {
+      for (let p = 0; p < 4; p++) {
+        const cx = x0 + SB / 2, cy = p * TK + TK / 2, l = pl / 2, hh = ph / 2;
+        g.fillStyle = farbe;
+        g.beginPath();
+        [[-hh, -l], [-hh, l - kerbe], [0, l], [hh, l - kerbe], [hh, -l], [0, -l + kerbe]].forEach(([u, v], k) => {
+          if (k) g.lineTo(cx + u, cy + v); else g.moveTo(cx + u, cy + v);
+        });
+        g.closePath(); g.fill();
+      }
+      // Gummiabrieb innen, Kratzer, grauer Schmutz - je Takt anders.
+      g.save();
+      g.beginPath(); g.rect(x0, 0, SB, H); g.clip();
+      for (let k = 0; k < 9; k++) {
+        const x = x0 + Math.pow(rnd(), 2) * SB * 0.5, y = rnd() * H, lang = 20 + rnd() * 110;
+        g.strokeStyle = 'rgba(25,25,28,' + (0.04 + rnd() * 0.12).toFixed(3) + ')';
+        g.lineWidth = 1 + rnd() * 3;
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x + (rnd() - 0.5) * 6, y + lang); g.stroke();
+      }
+      for (let k = 0; k < 26; k++) {
+        const x = x0 + rnd() * SB, y = rnd() * H, w = rnd() < 0.5 ? (rnd() - 0.5) * 0.8 : rnd() * Math.PI, lang = 4 + Math.pow(rnd(), 2) * 36;
+        g.strokeStyle = 'rgba(105,108,115,' + (0.05 + rnd() * 0.16).toFixed(3) + ')';
+        g.lineWidth = 0.5 + rnd() * 0.7;
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.sin(w) * lang, y + Math.cos(w) * lang); g.stroke();
+      }
+      for (let k = 0; k < 8; k++) {
+        const r = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+        r.addColorStop(0, 'rgba(110,105,95,0.13)'); r.addColorStop(1, 'rgba(110,105,95,0)');
+        g.save(); g.translate(x0 + rnd() * SB, rnd() * H); g.scale(10 + rnd() * 30, 20 + rnd() * 70);
+        g.fillStyle = r; g.fillRect(-1, -1, 2, 2); g.restore();
+      }
+      g.restore();
+    });
+    const fertig = g.getImageData(0, 0, W, H).data, out = new Uint8Array(W * H * 4);
+    for (let i = 0; i < out.length; i += 4) {
+      out[i] = fertig[i]; out[i + 1] = fertig[i + 1]; out[i + 2] = fertig[i + 2];
+      out[i + 3] = fertig[i] + fertig[i + 1] + fertig[i + 2] > 600 ? 70 : 45;
+    }
+    vfTexDaten.rand = { d: out, w: W, h: H };
+    return vfTexDaten.rand;
+  }
+  // Im Leerlauf vorbereiten (aus der Garage gerufen, wenn die Optionen der virtuellen Fahrt offen sind):
+  // je Leerlauf-Haeppchen so viele Schritte, wie die Frist erlaubt (ein Schritt ~10-35 ms auf dem Handy).
+  // Laeuft die Fahrt schon, macht der Start den Rest selbst.
+  let vfVorbereiten = false;
+  function vfTexturenVorbereiten() {
+    if (vfVorbereiten) return;
+    vfVorbereiten = true;
+    const ric = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 3000 })
+      : (f) => setTimeout(() => f({ timeRemaining: () => 12 }), 80);
+    const schritt = (frist) => {
+      if (VF.aktiv) { vfVorbereiten = false; return; }
+      do {
+        const P = vfBodenArt(vfBodenWahl());
+        if (!vfTexDaten.bahn) { if (vfBahnLauf().next().done) vfTexLauf.bahn = null; }
+        else if (!vfTexDaten.rand) vfRandTexturDaten();
+        else if (!(vfTexDaten.boden && vfTexDaten.bodenId === P.id)) { if (vfBodenLauf(P).next().done) vfTexLauf.boden = null; }
+        else { vfVorbereiten = false; return; }
+      } while (frist.timeRemaining() > 8);
+      ric(schritt);
+    };
+    ric(schritt);
+  }
+  // Pixel als Textur hochladen: Mipmaps, trilinear oder nur bilinear je Mip-Stufe, anisotrop hoechstens
+  // aniso-fach, wenn vorhanden. Gemessen (Software-GL, 1280 x 720, Verfolger, je Bild): 4-fach auf allen
+  // drei kostete 14 ms mehr als 1-fach, trilinear auf dem Boden (der den halben Schirm fuellt) 10 ms
+  // mehr als bilinear. Also: Boden bilinear und 2-fach (Fugen in der Ferne bleiben lesbar, der
+  // Mip-Wechsel faellt auf Holz nicht auf), Randstein trilinear und 2-fach (kleine Flaeche, Pfeile),
+  // Fahrbahn bilinear und 1-fach (fast einfarbig).
+  function vfTexturHoch(gl, t, wiederholenV, aniso, trilinear) {
+    const tx = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tx);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, t.w, t.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, t.d);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, trilinear ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR_MIPMAP_NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wiederholenV ? gl.REPEAT : gl.CLAMP_TO_EDGE);
+    if (!(aniso > 1)) return tx;
+    const an = gl.getExtension('EXT_texture_filter_anisotropic') || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic')
+      || gl.getExtension('MOZ_EXT_texture_filter_anisotropic');
+    if (an) gl.texParameterf(gl.TEXTURE_2D, an.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(aniso, gl.getParameter(an.MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 1));
+    return tx;
+  }
+  // Programm fuer Boden, Fahrbahn und Randsteine: Textur mal Eckfarbe, plus Glanz (Fresnel je Ecke mal
+  // Alpha der Textur), Nebel wie im Rest der Szene. Gerechnet in mediump (auf Handys halbe Genauigkeit,
+  // schneller), nur die Texturkoordinate in highp, wo vorhanden: die Randsteine zaehlen v je Teil bis
+  // ~8 hoch, in 16 Bit waeren das 4 Texel Fehler.
+  function vfProgrammFlaeche(gl) {
+    const p = gl.createProgram();
+    gl.attachShader(p, vfShader(gl, gl.VERTEX_SHADER,
+      'attribute vec3 p; attribute vec2 uv; attribute vec3 c; uniform mat4 m; uniform vec3 auge; uniform float glanz;'
+      + 'varying vec2 vuv; varying vec3 vc; varying float vd; varying float vg;'
+      + 'void main(){ gl_Position = m * vec4(p, 1.0); vuv = uv; vc = c; vd = gl_Position.w;'
+      + ' float e = 1.0 - max(normalize(auge - p).y, 0.0); vg = glanz * e * e * e; }'));
+    gl.attachShader(p, vfShader(gl, gl.FRAGMENT_SHADER,
+      'precision mediump float;\n#ifdef GL_FRAGMENT_PRECISION_HIGH\nvarying highp vec2 vuv;\n#else\nvarying vec2 vuv;\n#endif\n'
+      + 'varying vec3 vc; varying float vd; varying float vg; uniform sampler2D tx; uniform vec3 nebel;'
+      + 'void main(){ vec4 t = texture2D(tx, vuv); vec3 c = t.rgb * vc + vec3(0.80, 0.86, 0.95) * (vg * t.a);'
+      + ' float f = clamp((vd - 250.0) / 900.0, 0.0, 1.0); gl_FragColor = vec4(mix(c, nebel, f), 1.0); }'));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const u = {};
+    ['m', 'auge', 'glanz', 'tx', 'nebel'].forEach((k) => { u[k] = gl.getUniformLocation(p, k); });
+    return { p, u, ap: gl.getAttribLocation(p, 'p'), auv: gl.getAttribLocation(p, 'uv'), ac: gl.getAttribLocation(p, 'c') };
+  }
+  // Ecke: x y z u v r g b (8 Zahlen); Viereck aus vier Ecken [x, y, z, u, v] mit einer Farbe.
+  function vfViereck(a, e0, e1, e2, e3, c) {
+    for (const e of [e0, e1, e2, e0, e2, e3]) a.push(e[0], e[1], e[2], e[3], e[4], c[0], c[1], c[2]);
+  }
+  // Fahrbahn und Randsteine aus der Mittellinie. Abschnitt i (Punkt i -> i+1) gehoert zum Teil
+  // pts[i+1].tile; Punkt i ist dann die Teilegrenze (trackCenterline legt den letzten Punkt eines Teils
+  // auf sein Ende). Fahrbahn: v = 0..1 ueber das Teil, eine zufaellige Spalte (Gebrauchsgrad), zufaellig
+  // gespiegelt, Helligkeit je Teil leicht anders. Randstein: eine ganze Zahl Pfeiltakte je Teil und
+  // Seite (wie im Editor), an beiden Enden ein dunkles Stueck als Steckfuge. Rein (ohne WebGL).
+  function vfBahnGeometrie(pts, nrm, tiles) {
+    const strasse = [], rand = [];
+    const half = TRACK_HALF_W, kw = TRACK_KERB_W, ky = 0.09, n = pts.length;
+    const rnd = vfZufall(4242 + tiles.length * 31 + Math.round(Math.abs(pts[n - 1].x) * 7));
+    const off = (i, d) => [pts[i].x + nrm[i].x * d, pts[i].y + nrm[i].y * d];
+    const lerp = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    const teile = [];
+    for (let i = 0; i < n - 1; i++) {
+      const T = pts[i + 1].tile, l = teile[teile.length - 1];
+      if (l && l.T === T) l.i1 = i; else teile.push({ T, i0: i, i1: i });
+    }
+    const takt = kw * ECHT_PFEIL_H * ECHT_TAKT;
+    teile.forEach((tl) => {
+      const start = !!(tiles[tl.T] && tiles[tl.T].type === TILE_TYPE.START);
+      const sp = start ? 3 : Math.floor(rnd() * 3), fu = !start && rnd() < 0.5, fv = !start && rnd() < 0.5;
+      const hell = 0.93 + rnd() * 0.14, ct = [hell, hell, hell * (0.98 + rnd() * 0.04)];
+      const acc = [0];
+      for (let i = tl.i0; i <= tl.i1; i++) acc.push(acc[acc.length - 1] + Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y));
+      const L = acc[acc.length - 1] || 1;
+      const uL = (sp * VF_BAHN_SPALTE + 0.5) / VF_BAHN_TEX, uR = ((sp + 1) * VF_BAHN_SPALTE - 0.5) / VF_BAHN_TEX;
+      const ua = fu ? uR : uL, ub = fu ? uL : uR;
+      for (let i = tl.i0; i <= tl.i1; i++) {
+        let v0 = acc[i - tl.i0] / L, v1 = acc[i - tl.i0 + 1] / L;
+        if (fv) { v0 = 1 - v0; v1 = 1 - v1; }
+        const a = off(i, half), b = off(i + 1, half), c = off(i + 1, -half), d = off(i, -half);
+        vfViereck(strasse, [a[0], 0, a[1], ua, v0], [b[0], 0, b[1], ua, v1], [c[0], 0, c[1], ub, v1], [d[0], 0, d[1], ub, v0], ct);
+      }
+      for (const sg of [1, -1]) {
+        const mitte = (half + kw / 2) * sg, accS = [0];
+        for (let i = tl.i0; i <= tl.i1; i++) {
+          const p = off(i, mitte), q = off(i + 1, mitte);
+          accS.push(accS[accS.length - 1] + Math.hypot(q[0] - p[0], q[1] - p[1]));
+        }
+        const Ls = accS[accS.length - 1] || 1, nP = Math.max(1, Math.round(Ls / takt)), k0 = Math.floor(rnd() * 4);
+        const u0 = (sg > 0 ? 0.5 : 128.5) / VF_RAND_B, u1 = (sg > 0 ? 127.5 : 255.5) / VF_RAND_B, uw = (sg > 0 ? 4 : 132) / VF_RAND_B;
+        const wand = [ct[0] * 0.74, ct[1] * 0.74, ct[2] * 0.76], aussen = [ct[0] * 0.6, ct[1] * 0.6, ct[2] * 0.62];
+        for (let i = tl.i0; i <= tl.i1; i++) {
+          const j = i - tl.i0, segL = (accS[j + 1] - accS[j]) || 1;
+          const va = (k0 + nP * accS[j] / Ls) / 4, vb = (k0 + nP * accS[j + 1] / Ls) / 4;
+          const f = Math.min(0.45, VF_FUGE / segL), stuecke = [];
+          let t0 = 0, t1 = 1;
+          if (j === 0) { stuecke.push([0, f, true]); t0 = f; }
+          if (i === tl.i1) t1 = 1 - f;
+          stuecke.push([t0, t1, false]);
+          if (i === tl.i1) stuecke.push([t1, 1, true]);
+          const iA = off(i, half * sg), iB = off(i + 1, half * sg), oA = off(i, (half + kw) * sg), oB = off(i + 1, (half + kw) * sg);
+          for (const [s0, s1, fuge] of stuecke) {
+            if (s1 <= s0) continue;
+            const i0 = lerp(iA, iB, s0), i1 = lerp(iA, iB, s1), o0 = lerp(oA, oB, s0), o1 = lerp(oA, oB, s1);
+            const w0 = va + (vb - va) * s0, w1 = va + (vb - va) * s1;
+            vfViereck(rand, [o0[0], ky, o0[1], u1, w0], [o1[0], ky, o1[1], u1, w1], [i1[0], ky, i1[1], u0, w1], [i0[0], ky, i0[1], u0, w0], fuge ? VF_FUGE_FARBE : ct);
+            vfViereck(rand, [i0[0], ky, i0[1], uw, w0], [i1[0], ky, i1[1], uw, w1], [i1[0], 0, i1[1], uw, w1], [i0[0], 0, i0[1], uw, w0], fuge ? VF_FUGE_FARBE : wand);
+            vfViereck(rand, [o0[0], ky, o0[1], uw, w0], [o1[0], ky, o1[1], uw, w1], [o1[0], -0.05, o1[1], uw, w1], [o0[0], -0.05, o0[1], uw, w0], fuge ? VF_FUGE_FARBE : aussen);
+          }
+        }
+      }
+    });
+    return { strasse, rand, teile: teile.length };
+  }
+  // Ein Holzstueck als Viereck: Ursprung o, Laengsrichtung e (Laenge L), Querrichtung q (Breite B).
+  // Atlas-Stueck, Spiegelung und Farbton zufaellig: kein Muster wiederholt sich sichtbar.
+  function vfBodenStueck(a, T, rnd, o, e, L, q, B, y) {
+    const st = T.stuecke[Math.floor(rnd() * T.stuecke.length)];
+    let [u0, v0, u1, v1] = st;
+    if (rnd() < 0.5) [u0, u1] = [u1, u0];
+    if (rnd() < 0.5) [v0, v1] = [v1, v0];
+    const hl = (0.92 + rnd() * 0.13) * VF_BODEN_HELL, w = (rnd() - 0.5) * 0.05, c = [hl * (1 + w), hl, hl * (1 - w)];
+    const P = (s, t) => [o[0] + e[0] * L * s + q[0] * B * t, y, o[1] + e[1] * L * s + q[1] * B * t];
+    const p0 = P(0, 0), p1 = P(1, 0), p2 = P(1, 1), p3 = P(0, 1);
+    vfViereck(a, [p0[0], y, p0[2], u0, v0], [p1[0], y, p1[2], u0, v1], [p2[0], y, p2[2], u1, v1], [p3[0], y, p3[2], u1, v0], c);
+  }
+  // Der Boden: Dielen (Reihen laengs x, Stossfugen je Reihe versetzt, mindestens ein Viertel der
+  // Dielenlaenge zur Nachbarreihe) oder Fischgraet (Staebe unter +-45 Grad, exakte Parkettierung:
+  // Stab A [0,L]x[0,B], Stab B [L,L+B]x[B-L,B], verschoben um i(B,B) + j(L,-L)). Dielen bis
+  // VF_BODEN_RAND um die Strecke, dahinter eine weite Flaeche im Mittelwert der Textur (keine Kante im
+  // Nebel). Rein (ohne WebGL); liefert die Zahlen und die Masse fuer den Selbsttest.
+  const VF_BODEN_RAND = 650, VF_BODEN_RAND_FG = 420, VF_BODEN_WEIT = 3000;
+  const VF_BODEN_HELL = 0.84;   // Zimmerlicht: der Boden etwas dunkler als die Textur
+  function vfBodenGeometrie(pts, T, art) {
+    const a = [], y = -0.05, cm = TRACK_UNITS_PER_CM;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    pts.forEach((p) => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); });
+    // Fischgraet hat 18-mal so viele Stuecke je Flaeche: dort ein schmalerer Rand (Ecken je Bild).
+    const R = art.art === 'fischgraet' ? VF_BODEN_RAND_FG : VF_BODEN_RAND;
+    const x0 = minX - R, x1 = maxX + R, z0 = minY - R, z1 = maxY + R;
+    const B = art.breiteCm * cm, L = art.laengeCm * cm, rnd = vfZufall(9001 + pts.length);
+    const reihen = [];
+    let stuecke = 0;
+    if (art.art === 'fischgraet') {
+      const r = Math.SQRT1_2, d1 = [r, r], d2 = [-r, r];
+      const W = (A, Bb) => [A * d1[0] + Bb * d2[0], A * d1[1] + Bb * d2[1]];
+      // Rahmen-Koordinaten der Bodenecken: A = (x + z) r, B = (z - x) r
+      const ecken = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z]) => [(x + z) * r, (z - x) * r]);
+      const aMin = Math.min(...ecken.map((e) => e[0])) - L, aMax = Math.max(...ecken.map((e) => e[0])) + L;
+      const bMin = Math.min(...ecken.map((e) => e[1])) - L, bMax = Math.max(...ecken.map((e) => e[1])) + L;
+      const iMin = Math.floor((aMin + bMin) / (2 * B)), iMax = Math.ceil((aMax + bMax) / (2 * B));
+      const jMin = Math.floor((aMin - bMax) / (2 * L)), jMax = Math.ceil((aMax - bMin) / (2 * L));
+      const drin = (o, e, q) => { const cx = o[0] + (e[0] * L + q[0] * B) / 2, cz = o[1] + (e[1] * L + q[1] * B) / 2; return cx > x0 - L / 2 && cx < x1 + L / 2 && cz > z0 - L / 2 && cz < z1 + L / 2; };
+      for (let j = jMin; j <= jMax; j++) {
+        for (let i = iMin; i <= iMax; i++) {
+          const oa = i * B + j * L, ob = i * B - j * L;
+          const oA = W(oa, ob), oB = W(oa + L, ob + B - L);
+          if (drin(oA, d1, d2)) { vfBodenStueck(a, T, rnd, oA, d1, L, d2, B, y); stuecke++; }
+          if (drin(oB, d2, d1)) { vfBodenStueck(a, T, rnd, oB, d2, L, d1, B, y); stuecke++; }
+        }
+      }
+    } else {
+      let vorher = null;
+      for (let z = z0; z < z1; z += B) {
+        let ver = rnd() * L;
+        for (let k = 0; k < 12 && vorher !== null; k++) {
+          const dd = Math.abs(ver - vorher) % L;
+          if (Math.min(dd, L - dd) >= L * 0.25) break;
+          ver = rnd() * L;
+        }
+        reihen.push(ver);
+        vorher = ver;
+        for (let x = x0 - ver; x < x1; x += L) { vfBodenStueck(a, T, rnd, [x, z], [1, 0], L, [0, 1], B, y); stuecke++; }
+      }
+    }
+    // Weite Flaeche ausserhalb der Dielen: vier Streifen bis VF_BODEN_WEIT, Farbe = Mittelwert ueber
+    // das Texel (0,0) (konstante Koordinate = immer genau dieses Texel, Alpha dort = mittlerer Glanz).
+    const F = VF_BODEN_WEIT, uv = [0.5 / T.w, 0.5 / T.h], c = T.ferne.map((x) => x * VF_BODEN_HELL);
+    const streifen = (xa, za, xb, zb) => vfViereck(a, [xa, y, za, uv[0], uv[1]], [xb, y, za, uv[0], uv[1]], [xb, y, zb, uv[0], uv[1]], [xa, y, zb, uv[0], uv[1]], c);
+    const xa = x0 - L, xb = x1 + L, za = z0 - L, zb = z1 + L;
+    streifen(xa - F, za - F, xb + F, za); streifen(xa - F, zb, xb + F, zb + F);
+    streifen(xa - F, za, xa, zb); streifen(xb, za, xb + F, zb);
+    return { daten: a, stuecke, reihen, breite: B, laenge: L };
+  }
+  function vfPufferF(gl, a) {
+    const b = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, b);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(a), gl.STATIC_DRAW);
+    return { b, n: a.length / 8 };
+  }
+  // Alles fuer die Flaechen einer Fahrt: Programm, drei Texturen, drei Puffer. Einmal beim Start.
+  function vfFlaechenBauen(gl, pts, nrm, tiles) {
+    const prog = vfProgrammFlaeche(gl);
+    const art = vfBodenArt(vfBodenWahl());
+    const TB = vfBodenTexturDaten(art.id);
+    const bahn = vfBahnGeometrie(pts, nrm, tiles), boden = vfBodenGeometrie(pts, TB, art);
+    return {
+      prog, art, pv: new Float32Array(16),
+      txBahn: vfTexturHoch(gl, vfBahnTexturDaten(), false, 1, false), txRand: vfTexturHoch(gl, vfRandTexturDaten(), true, 2, true),
+      txBoden: vfTexturHoch(gl, TB, false, 2, false),
+      strasse: vfPufferF(gl, bahn.strasse), rand: vfPufferF(gl, bahn.rand), boden: vfPufferF(gl, boden.daten),
+    };
+  }
+  // Je Bild: Boden (ohne Tiefe schreiben, liegt unter allem), Fahrbahn, Randsteine. Keine Allokation.
+  function vfFlaechenMalen(gl, pv, auge) {
+    const F = VF.flaeche;
+    if (!F) return;
+    const P = F.prog, u = P.u;
+    gl.useProgram(P.p);
+    for (let i = 0; i < 16; i++) F.pv[i] = pv[i];
+    gl.uniformMatrix4fv(u.m, false, F.pv);
+    gl.uniform3f(u.auge, auge[0], auge[1], auge[2]);
+    gl.uniform3f(u.nebel, 0.66, 0.78, 0.90);
+    gl.uniform1i(u.tx, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.enableVertexAttribArray(P.ap); gl.enableVertexAttribArray(P.auv); gl.enableVertexAttribArray(P.ac);
+    const zeichne = (pu, tx, glanz) => {
+      gl.uniform1f(u.glanz, glanz);
+      gl.bindTexture(gl.TEXTURE_2D, tx);
+      gl.bindBuffer(gl.ARRAY_BUFFER, pu.b);
+      gl.vertexAttribPointer(P.ap, 3, gl.FLOAT, false, 32, 0);
+      gl.vertexAttribPointer(P.auv, 2, gl.FLOAT, false, 32, 12);
+      gl.vertexAttribPointer(P.ac, 3, gl.FLOAT, false, 32, 20);
+      gl.drawArrays(gl.TRIANGLES, 0, pu.n);
+    };
+    // Erst Fahrbahn und Randsteine (schreiben Tiefe), dann der Boden: seine Pixel unter der Bahn fallen
+    // im Tiefentest weg, bevor sie gerechnet werden. Damit er nirgends durch die Bahn schimmert (auch
+    // nicht bei 16-Bit-Tiefe), liegt er 0,5 mm tiefer UND wird per polygonOffset nach hinten geschoben;
+    // er schreibt selbst keine Tiefe.
+    zeichne(F.strasse, F.txBahn, 0.16);
+    zeichne(F.rand, F.txRand, 0.10);
+    gl.depthMask(false);
+    gl.enable(gl.POLYGON_OFFSET_FILL);
+    gl.polygonOffset(2, 16);
+    zeichne(F.boden, F.txBoden, F.art.glanz);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.depthMask(true);
+    gl.disableVertexAttribArray(P.ap); gl.disableVertexAttribArray(P.auv); gl.disableVertexAttribArray(P.ac);
   }
   // Das Auto: Unterbau, Kabine, vier Raeder, um den Ursprung, vorn = +z.
   function vfAutoBauen(gl, farbe) {
@@ -802,7 +1365,11 @@
   function vfPaket() {
     if (rennPauseAktiv()) return;
     if (!VF.aktiv || !VF.car) return;
-    const tile = Math.max(0, VF.pts[VF.idx].tile);
+    // Der Vorpunkt vor Kachel 0 (tile -1) liegt auf dem letzten Punkt der Schleife. Bis 1.3.50 zaehlte er
+    // als Kachel 0 (Start): pendelte der naechste Punkt dort zwischen beiden, war das eine "Runde" von
+    // 0,3 s (Letzte/Beste im HUD). Jetzt gilt am Vorpunkt die Kachel davor weiter.
+    const roh = VF.pts[VF.idx].tile;
+    const tile = roh >= 0 ? roh : (VF.kachel >= 0 ? VF.kachel : 0);
     if (tile !== VF.kachel) {
       if (VF.kachel !== -2) VF.zaehler = (VF.zaehler + 1) & 0xff;
       const vorher = VF.kachel;
@@ -812,7 +1379,8 @@
         const jetzt = rennZeitJetzt();
         if (VF.rundeAb) {
           VF.letzte = jetzt - VF.rundeAb;
-          if (VF.beste === null || VF.letzte < VF.beste) VF.beste = VF.letzte;
+          // Delta (HUD): die Zwischenzeiten der besten Runde je Punkt der Mittellinie.
+          if (VF.beste === null || VF.letzte < VF.beste) { VF.beste = VF.letzte; VF.besteSplits = VF.splits; }
           // Nach der ersten Runde beginnt der Geist, die aufgezeichnete Linie abzufahren.
           if (VF.geist && !VF.geist.aktiv) { VF.geist.aktiv = true; VF.geist.zeit = 0; VF.geist.i = 0; }
           // Rundenrennen: nach der Ziel-Lap ist Schluss.
@@ -820,6 +1388,7 @@
           if (VF.modus === 'laps' && VF.runden >= VF.limit) vfRennenEnde();
         }
         VF.rundeAb = jetzt;
+        VF.splits = [];
       }
     }
     const b = new Uint8Array(19);
@@ -921,6 +1490,7 @@
     VF.lenkWinkel = Math.max(-1, Math.min(1, lenk)) * (VF.P ? VF.P.lenkGrad : VF_GT3.lenkGrad) * Math.PI / 180;
     const o = vfOrt(VF.pts, VF.nrm, VF.x, VF.y, VF.idx);
     VF.idx = o.idx;
+    if (VF.splits && VF.splits[VF.idx] === undefined) VF.splits[VF.idx] = rennZeitJetzt() - VF.rundeAb;
     const ab = Math.abs(o.quer) > TRACK_HALF_W * 1.19 + VF_AUTO.B * 0.3;
     if (ab && !VF.abseits) VF.abseitsSeit = rennZeitJetzt();
     VF.abseits = ab;
@@ -933,9 +1503,10 @@
       if (VF.kerbSeit === undefined || rennZeitJetzt() - VF.kerbSeit > 70) {
         VF.kerbSeit = rennZeitJetzt();
         padRumble(0.3, 0.25, 55, 'kerb', 1);
-        vfRattern(0.10 + Math.min(0.10, Math.abs(kmh) / 40));
+        if (randsteinKlangAlt) vfRattern(0.10 + Math.min(0.10, Math.abs(kmh) / 40));
       }
     }
+    vfRandsteinTon(kerb, q, kmh);   // v1.3.39: dumpfes Rumpeln, je Bild (billig), blendet selbst aus
     if (ab) {
       st.speedKmh *= Math.exp(-VF_ABSEITS_BREMSE * dt);
       if (rennZeitJetzt() - VF.abseitsSeit > VF_ABSEITS_ZURUECK_MS) vfZuruecksetzen();
@@ -988,7 +1559,9 @@
     gl.enable(gl.DEPTH_TEST);
     const k = vfKamera(VF.dtBild || 0.016);
     const blick = vfBlick(k.auge, k.ziel, k.oben || [0, 1, 0]);
-    const pv = vfMal(vfPerspektive(k.fov * Math.PI / 180, w / Math.max(1, h), k.nah, 3000), blick);
+    const pv = vfMal(vfPerspektive(k.fov * Math.PI / 180, w / Math.max(1, h), k.nah, k.fern || 3000), blick);
+    // v1.3.39: Boden, Fahrbahn und Randsteine mit Texturen (vorher Eckfarben in VF.bahn).
+    vfFlaechenMalen(gl, pv, k.auge);
     gl.useProgram(VF.prog);
     if (!VF.loc) VF.loc = { m: gl.getUniformLocation(VF.prog, 'm'), w: gl.getUniformLocation(VF.prog, 'w'), nebel: gl.getUniformLocation(VF.prog, 'nebel'), alf: gl.getUniformLocation(VF.prog, 'alf'),
                             p: gl.getAttribLocation(VF.prog, 'p'), c: gl.getAttribLocation(VF.prog, 'c') };
@@ -1004,8 +1577,6 @@
       gl.vertexAttribPointer(L.c, 3, gl.FLOAT, false, 24, 12);
       gl.drawArrays(gl.TRIANGLES, 0, pu.n);
     };
-    zeichne(VF.bahn, VF_EINS);
-    gl.disableVertexAttribArray(L.p); gl.disableVertexAttribArray(L.c);
     if (VF.geist && VF.geist.aktiv) {
       if (!VF.geistAuto) VF.geistAuto = vfAutoBauen(gl, [0.45, 0.75, 1.0]);
       gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -1037,7 +1608,8 @@
   // Verfolger -> nah -> Motorhaube -> Verfolger. Nachgefuehrt nach der ZEIT (nicht je Bild): auf einem
   // langsamen Handy lief die Kamera vorher bei weniger Bildern spuerbar hinterher.
   const VF_KAMERAS = [{ id: 'verfolger', name: 'Verfolgerkamera' }, { id: 'nah', name: 'Nahe Verfolgerkamera' }, { id: 'haube', name: 'Motorhaube' },
-                      { id: 'oben', name: 'Von oben (Start/Ziel)' }, { id: 'statisch', name: 'Statisch (Start/Ziel)' }];
+                      { id: 'oben', name: 'Von oben (Start/Ziel)' }, { id: 'statisch', name: 'Statisch (Start/Ziel)' },
+                      { id: 'fahrer', name: 'Fahrer am Rand', wip: true }];
   const VF_KAMERA_STORE = 'omegasim-vf-kamera';
   function vfKameraId() {
     if (!VF.kamera) { try { VF.kamera = localStorage.getItem(VF_KAMERA_STORE) || 'verfolger'; } catch (e) { VF.kamera = 'verfolger'; } }
@@ -1047,12 +1619,201 @@
     const i = VF_KAMERAS.findIndex((k) => k.id === vfKameraId());
     const neu = VF_KAMERAS[(i + 1) % VF_KAMERAS.length];
     VF.kamera = neu.id; VF.kam = null;
+    vfDrehNull();   // jede Kamera beginnt in ihrer Standardansicht
     try { localStorage.setItem(VF_KAMERA_STORE, neu.id); } catch (e) { /* egal */ }
-    showHudToast(t(neu.name));
+    showHudToast(t(neu.name) + (neu.wip ? ' (WIP)' : ''));
+  }
+  // ---- Kamera drehen mit dem rechten Stick (WIP) ------------------------------------------------
+  // BESTELLT: "Erlaube mir, im virtuellen Fahren mit dem rechten Stick die Kamera um das Auto herum zu
+  // drehen (bzw. in eine andere Richtung einfach). Wenn ich den rechten Stick dann reindruecke, soll die
+  // Kamera wieder die Standardansicht haben."
+  // ZWEI ARTEN: Verfolger, nah und statisch kreisen UM das Auto (waagrecht ganz herum, senkrecht
+  // -10..+60 Grad zur Standardhoehe), von oben dreht das Bild und neigt sich bis 60 Grad. Motorhaube und
+  // "Fahrer am Rand" drehen den BLICK (umsehen, senkrecht +-35 Grad). Stick rechts = Blick nach rechts,
+  // Stick hoch = Blick nach oben (die kreisenden Kameras sinken dafuer), wie in den meisten Spielen.
+  // GEFUEHL: Totzone und quadratische Kennlinie (feines Zielen), die Drehrate laeuft der Auslenkung mit
+  // einer Zeitkonstante nach (sanftes Anfahren und Auslaufen). Gerechnet nach der ZEIT und exakt
+  // integriert: 30 und 60 Bilder/s drehen gleich weit. Losgelassen BLEIBT der Blick stehen.
+  // R3 (die Lichthupen-Belegung): gedreht -> zurueck zur Standardansicht, sonst wie bisher naechste
+  // Kamera. Tastatur: T/F/G/H drehen (hoch/links/runter/rechts), V setzt zurueck, C wechselt weiter
+  // (I/J/K/L waeren naheliegend, aber I/K schalten und L ist die Lichthupe).
+  // Der Pad-Stick gilt nur fuer Achsen, die keine Belegung in Optionen -> Controller traegt, und nur
+  // bei Standard-Belegung des Pads (sonst koennten Achse 2/3 die Trigger sein und dauernd drehen).
+  const VF_DREH_GIER = 200 * Math.PI / 180, VF_DREH_NICK = 100 * Math.PI / 180, VF_DREH_TAU = 0.12;
+  const VF_DREH_TOT = 0.16, VF_DREH_SCHWELLE = 2 * Math.PI / 180, VF_DREH_PAD_MS = 250;
+  const VF_DREH_TASTEN = { t: 'hoch', f: 'links', g: 'runter', h: 'rechts' };
+  function vfDreh() {
+    if (!VF.dreh) VF.dreh = { g: 0, n: 0, vg: 0, vn: 0 };
+    return VF.dreh;
+  }
+  function vfDrehNull() { const D = vfDreh(); D.g = 0; D.n = 0; D.vg = 0; D.vn = 0; }
+  function vfDrehArt(id) { return id === 'haube' || id === 'fahrer' ? 'umsehen' : (id === 'oben' ? 'oben' : 'kreisen'); }
+  // Grenzen der Hoehe n (Bogenmass): kreisen = Erhebung gegen die Standardhoehe, oben = Neigung aus der
+  // Senkrechten, umsehen = Blick nach unten (positiv) / oben (negativ).
+  function vfDrehGrenzen(art) {
+    const r = Math.PI / 180;
+    return art === 'oben' ? [0, 60 * r] : (art === 'umsehen' ? [-35 * r, 35 * r] : [-10 * r, 60 * r]);
+  }
+  function vfKameraGedreht() { const D = vfDreh(); return Math.abs(D.g) > VF_DREH_SCHWELLE || Math.abs(D.n) > VF_DREH_SCHWELLE; }
+  function vfKameraStandard() {
+    vfDrehNull(); VF.kam = null;
+    showHudToast(t('Kamera: Standardansicht'));
+  }
+  // R3 / Lichthupen-Belegung: gedreht -> Standardansicht, sonst die naechste Kamera.
+  function vfKameraTaste() { if (vfKameraGedreht()) vfKameraStandard(); else vfKameraWechseln(); }
+  // Stick (aus pollGamepad): x/y nach Totzone und Kennlinie, mit Zeitstempel - bleibt der Takt aus
+  // (Pad weg, Menue-Abfang), zaehlt der alte Wert nach VF_DREH_PAD_MS nicht mehr.
+  function vfStickSetzen(pad, b) {
+    if (!pad || pad.mapping !== 'standard') { VF.stick = null; return; }
+    const belegt = (i) => Object.keys(b || {}).some((k) => b[k] && b[k].type === 'axis' && b[k].index === i);
+    const achse = (i) => {
+      if (belegt(i)) return 0;
+      const v = (pad.axes || [])[i] || 0, m = Math.abs(v);
+      if (m < VF_DREH_TOT) return 0;
+      const s = Math.min(1, (m - VF_DREH_TOT) / (1 - VF_DREH_TOT));
+      return Math.sign(v) * s * s;
+    };
+    VF.stick = { x: achse(2), y: achse(3), t: performance.now() };
+  }
+  function vfDrehTaste(e, an) {
+    if (!VF.aktiv || e.ctrlKey || e.altKey || e.metaKey) return;
+    const k = (e.key || '').toLowerCase();
+    if (!VF.tasten) VF.tasten = {};
+    if (VF_DREH_TASTEN[k]) { VF.tasten[VF_DREH_TASTEN[k]] = an; e.preventDefault(); }
+    else if (k === 'v' && an && !e.repeat) { e.preventDefault(); if (vfKameraGedreht()) vfKameraStandard(); }
+  }
+  window.addEventListener('keydown', (e) => vfDrehTaste(e, true));
+  window.addEventListener('keyup', (e) => vfDrehTaste(e, false));
+  window.addEventListener('blur', () => { VF.tasten = {}; });
+  function vfDrehEingabe() {
+    let x = 0, y = 0;
+    const s = VF.stick;
+    if (s && performance.now() - s.t < VF_DREH_PAD_MS) { x = s.x; y = s.y; }
+    const k = VF.tasten;
+    if (k) { x += (k.rechts ? 1 : 0) - (k.links ? 1 : 0); y += (k.runter ? 1 : 0) - (k.hoch ? 1 : 0); }
+    return [Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y))];
+  }
+  // Ein Zeitschritt (rein, fuer den Selbsttest): die Rate laeuft exponentiell zur Sollrate, der Winkel
+  // ist das exakte Integral davon. Stick nach unten = Kamera hoeher / Blick tiefer (n waechst).
+  function vfDrehSchritt(D, sx, sy, dt, grenzen) {
+    if (!(dt > 0)) return D;
+    const e = Math.exp(-dt / VF_DREH_TAU);
+    const zg = sx * VF_DREH_GIER, zn = sy * VF_DREH_NICK;
+    D.g += zg * dt + (D.vg - zg) * VF_DREH_TAU * (1 - e);
+    D.n += zn * dt + (D.vn - zn) * VF_DREH_TAU * (1 - e);
+    D.vg = zg + (D.vg - zg) * e;
+    D.vn = zn + (D.vn - zn) * e;
+    D.g = Math.atan2(Math.sin(D.g), Math.cos(D.g));
+    if (D.n < grenzen[0]) { D.n = grenzen[0]; if (D.vn < 0) D.vn = 0; }
+    if (D.n > grenzen[1]) { D.n = grenzen[1]; if (D.vn > 0) D.vn = 0; }
+    if (Math.abs(D.vg) < 1e-4 && !sx) D.vg = 0;
+    if (Math.abs(D.vn) < 1e-4 && !sy) D.vn = 0;
+    return D;
+  }
+  // Drehung anwenden (rein): k = { auge, ziel, oben? } der Standardansicht, (px, py, pz) = Drehpunkt
+  // (das Auto). Kreisen: Auge und Ziel um die Senkrechte durch das Auto, das Auge dazu auf seiner
+  // Kugel hoeher/tiefer; umsehen: Blickrichtung um das Auge; oben: Bildoben drehen und neigen.
+  function vfDrehAnwenden(k, art, D, px, py, pz) {
+    if (!D || (!D.g && !D.n)) return k;
+    const cg = Math.cos(D.g), sg = Math.sin(D.g);
+    const rot = (x, z) => [x * cg - z * sg, x * sg + z * cg];
+    if (art === 'umsehen') {
+      const dx = k.ziel[0] - k.auge[0], dy = k.ziel[1] - k.auge[1], dz = k.ziel[2] - k.auge[2];
+      const w = Math.hypot(dx, dz), L = Math.hypot(w, dy);
+      const nick = Math.max(-1.5, Math.min(1.5, Math.atan2(dy, w) - D.n));
+      const r = rot(dx / (w || 1), dz / (w || 1));
+      return Object.assign({}, k, { ziel: [k.auge[0] + r[0] * Math.cos(nick) * L, k.auge[1] + Math.sin(nick) * L, k.auge[2] + r[1] * Math.cos(nick) * L] });
+    }
+    if (art === 'oben') {
+      const o = k.oben || [0, 0, -1], ro = rot(o[0], o[2]), hoch = k.auge[1] - k.ziel[1];
+      const auge = [k.ziel[0] - ro[0] * Math.sin(D.n) * hoch, k.ziel[1] + Math.cos(D.n) * hoch, k.ziel[2] - ro[1] * Math.sin(D.n) * hoch];
+      return Object.assign({}, k, { auge, oben: [ro[0], 0, ro[1]] });
+    }
+    const ox = k.auge[0] - px, oz = k.auge[2] - pz, d0 = Math.hypot(ox, oz) || 1e-6, h0 = k.auge[1] - py;
+    const R = Math.hypot(d0, h0), e = Math.max(3 * Math.PI / 180, Math.min(85 * Math.PI / 180, Math.atan2(h0, d0) + D.n));
+    const ro = rot(ox / d0, oz / d0);
+    const auge = [px + ro[0] * Math.cos(e) * R, py + Math.sin(e) * R, pz + ro[1] * Math.cos(e) * R];
+    // Das Ziel dreht mit; je hoeher die Kamera, desto naeher rueckt es ans Auto (sonst faellt es von oben aus dem Bild).
+    const nah = 1 - 0.8 * Math.max(0, Math.min(1, D.n / (60 * Math.PI / 180)));
+    const rz = rot((k.ziel[0] - px) * nah, (k.ziel[2] - pz) * nah);
+    return Object.assign({}, k, { auge, ziel: [px + rz[0], k.ziel[1], pz + rz[1]] });
+  }
+  // ---- Kamera "Fahrer am Rand" (v1.3.39, WIP) ----------------------------------------------------
+  // BESTELLT: "Fuege eine Kamera hinzu, die so funktioniert wie eine Person, die das Auto vom Rand aus
+  // steuert (ca. 1 m Hoehe, Blick folgt dem Auto mit etwas Smoothing)."
+  // ORT: fest, einmal je Fahrt. Neben Start/Ziel (dort steht man beim Aufbauen), auf der AUSSENSEITE der
+  // Schleife, VF_FAHRER_ABSTAND_CM vom Rand des Randsteins, und nur dort, wo im Umkreis keine andere
+  // Bahn liegt (sonst ein Stueck weiter entlang der Bahn). Augenhoehe 100 cm in echten Massen.
+  // BLICK: Gier- und Nickwinkel laufen dem Auto mit einer Zeitkonstante nach (nach der Zeit, nicht je
+  // Bild: auf einem langsamen Handy folgt der Blick genauso schnell). Das Ziel ist das Auto, nicht ein
+  // geglaetteter Punkt - so dreht der Kopf auch bei einer Vorbeifahrt dicht vorm Fahrer gleichmaessig.
+  // SICHTFELD: 46 Grad senkrecht (bei 2:1 im Querformat gut 80 Grad waagrecht, etwa das, was ein Mensch
+  // ohne Kopfdrehen bequem ueberblickt). Ist das Auto weit weg, zoomt es sanft bis 28 Grad: ein 10-cm-
+  // Auto in 4 m Abstand waere sonst nur 1,5 Grad gross, ein paar Pixel; der Mensch "schaut genauer
+  // hin". Mehr als 1,7-fach nicht, sonst wirkt es wie ein Fernglas.
+  // NAH/FERN: das naechste sichtbare Ding ist mehr als 90 Einheiten entfernt (Boden unter dem Blick,
+  // Auto am Rand), also Nahebene 8 und Fernebene 3000: Verhaeltnis 375 statt 6000 bei den anderen
+  // Kameras, die Tiefe reicht auch fuer Randstein (0,09 hoch) gegen Fahrbahn.
+  const VF_FAHRER_AUGE_CM = 100, VF_FAHRER_ABSTAND_CM = 75, VF_FAHRER_TAU = 0.25, VF_FAHRER_ZOOM_TAU = 0.8;
+  const VF_FAHRER_FOV = 46, VF_FAHRER_FOV_FERN = 28;
+  function vfFahrerOrt(pts, nrm, tiles) {
+    const n = pts.length, rand = TRACK_HALF_W + TRACK_KERB_W, abst = VF_FAHRER_ABSTAND_CM * TRACK_UNITS_PER_CM;
+    const s = Math.max(0, pts.findIndex((p) => p.tile >= 0 && tiles[p.tile] && tiles[p.tile].type === TILE_TYPE.START));
+    const innen = (x, y) => {
+      let c = false;
+      for (let i = 0, j = n - 1; i < n; j = i++) {
+        const a = pts[i], b = pts[j];
+        if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) c = !c;
+      }
+      return c;
+    };
+    const frei = (x, y) => { let d = Infinity; for (const p of pts) d = Math.min(d, Math.hypot(p.x - x, p.y - y)); return d - rand; };
+    let best = null;
+    for (let k = 0; k <= TRACK_SAMPLES_PER_TILE * 3; k++) {
+      for (const dk of (k ? [k, -k] : [0])) {
+        for (const sg of [1, -1]) {
+          const i = ((s - 1 + dk) % n + n) % n;
+          const x = pts[i].x + nrm[i].x * sg * (rand + abst), y = pts[i].y + nrm[i].y * sg * (rand + abst);
+          const wert = (frei(x, y) >= abst * 0.95 ? 0 : 1000) + (innen(x, y) ? 100 : 0) + k;
+          if (!best || wert < best.wert) best = { x, y, wert, i, seite: sg };
+        }
+      }
+    }
+    return { x: best.x, y: best.y, h: VF_FAHRER_AUGE_CM * TRACK_UNITS_PER_CM, idx: best.i, seite: best.seite };
+  }
+  // Ein Schritt (rein, fuer den Selbsttest): F = { ort, z: { gier, nick, fov }, k }, Auto bei (x, y).
+  // Liefert F.k = { auge, ziel, fov, nah, fern } (dieselben Arrays jedes Mal, keine Allokation je Bild).
+  function vfFahrerKamera(F, x, y, dt) {
+    const o = F.ort, z = F.z;
+    if (!F.k) F.k = { auge: [o.x, o.h, o.y], ziel: [0, 0, 0], fov: VF_FAHRER_FOV, nah: 8, fern: 3000 };
+    const dx = x - o.x, dz = y - o.y, dy = VF_AUTO.H * 0.5 - o.h, waag = Math.hypot(dx, dz);
+    const gier = Math.atan2(dz, dx), nick = Math.atan2(dy, Math.max(1e-6, waag));
+    const dist = Math.hypot(waag, dy);
+    const fovZiel = VF_FAHRER_FOV - (VF_FAHRER_FOV - VF_FAHRER_FOV_FERN) * Math.max(0, Math.min(1, (dist - 150) / 300));
+    if (z.gier === undefined) { z.gier = gier; z.nick = nick; z.fov = fovZiel; }
+    else {
+      const a = 1 - Math.exp(-Math.max(0, dt) / VF_FAHRER_TAU), b = 1 - Math.exp(-Math.max(0, dt) / VF_FAHRER_ZOOM_TAU);
+      z.gier += Math.atan2(Math.sin(gier - z.gier), Math.cos(gier - z.gier)) * a;
+      z.nick += (nick - z.nick) * a;
+      z.fov += (fovZiel - z.fov) * b;
+    }
+    const k = F.k, cn = Math.cos(z.nick);
+    k.auge[0] = o.x; k.auge[1] = o.h; k.auge[2] = o.y;
+    k.ziel[0] = o.x + Math.cos(z.gier) * cn * 100; k.ziel[1] = o.h + Math.sin(z.nick) * 100; k.ziel[2] = o.y + Math.sin(z.gier) * cn * 100;
+    k.fov = z.fov;
+    return k;
   }
   function vfKamera(dt) {
     const r = VF.h * Math.PI / 180, fx = Math.sin(r), fz = -Math.cos(r);
     const id = vfKameraId();
+    // Rechter Stick / T-F-G-H: die Drehung laeuft nach der Zeit (in der Pause ist dt 0).
+    const art = vfDrehArt(id), D = vfDreh(), ein = vfDrehEingabe();
+    vfDrehSchritt(D, ein[0], ein[1], dt, vfDrehGrenzen(art));
+    const k = vfKameraBasis(id, fx, fz, dt, art, D);
+    return art === 'kreisen' ? k : vfDrehAnwenden(k, art, D, VF.x, 0, VF.y);
+  }
+  function vfKameraBasis(id, fx, fz, dt, art, D) {
+    if (id === 'fahrer' && VF.fahrer) { VF.kam = null; return vfFahrerKamera(VF.fahrer, VF.x, VF.y, dt); }
     if (id === 'haube') {
       // Auf der Motorhaube (Speed Dreams: Bonnet 0,75 m vor, 0,95 m hoch), fest am Auto.
       const s = VF.modell ? VF_AUTO.L / VF.modell.d.laenge : 2;
@@ -1075,14 +1836,18 @@
       const lx = -fz, lz = fx;               // senkrecht zur Fahrtrichtung ("links")
       const auge = [VF.x + lx * 9, 4.5, VF.y + lz * 9];
       VF.kam = null;
-      return { auge, ziel: [VF.x, 1.2, VF.y], fov: 62, nah: 0.3 };
+      return vfDrehAnwenden({ auge, ziel: [VF.x, 1.2, VF.y], fov: 62, nah: 0.3 }, art, D, VF.x, 1.2, VF.y);
     }
     const nah = id === 'nah';
     const hinten = nah ? 15 : 30, hoehe = nah ? 6 : 13, tau = nah ? 0.08 : 0.15;
-    const soll = [VF.x - fx * hinten, hoehe, VF.y - fz * hinten];
+    // Gedreht kreist der SOLL-Ort um das Auto; die Nachfuehrung (tau) bleibt dieselbe.
+    const zh = nah ? 2.2 : 1.5, vor = nah ? 10 : 14;
+    const k = vfDrehAnwenden({ auge: [VF.x - fx * hinten, hoehe, VF.y - fz * hinten], ziel: [VF.x + fx * vor, zh, VF.y + fz * vor] },
+      art, D, VF.x, zh, VF.y);
+    const soll = k.auge;
     const a = 1 - Math.exp(-Math.max(0, dt) / tau);
     VF.kam = VF.kam ? VF.kam.map((q, i) => q + (soll[i] - q) * a) : soll;
-    return { auge: VF.kam, ziel: [VF.x + fx * (nah ? 10 : 14), nah ? 2.2 : 1.5, VF.y + fz * (nah ? 10 : 14)], fov: nah ? 66 : 62, nah: 0.5 };
+    return { auge: VF.kam, ziel: k.ziel, fov: nah ? 66 : 62, nah: 0.5 };
   }
   function vfModellMalen(gl, pv, blick) {
     vfModellZeichnen(gl, pv, blick, VF.modell, VF.tprog, VF.x, VF.y, VF.h, VF.feder, VF.lenkWinkel, VF.raddreh, VF.radModell,
@@ -1214,17 +1979,56 @@
     [T.ap, T.an, T.auv].forEach((a) => gl.disableVertexAttribArray(a));
   }
   function vfZeit(ms) { return ms === null || ms === undefined ? '–' : (ms / 1000).toFixed(2) + ' s'; }
+  // ---- HUD im Stil von ACC (WIP) -----------------------------------------------------------------
+  // BESTELLT: "Aendere im virtuellen Fahren das UI so, dass es so aehnlich wie Assetto Corsa
+  // Competizione (ACC) aussieht, nur mit der blauen Akzentfarbe."
+  // Kantige, fast schwarze Kacheln mit schmaler Akzentlinie in --k-blau: oben links Zeiten (Modus,
+  // Runde, Delta, Letzte, Beste), unten Mitte der Tacho-Block (Drehzahl als Segmentbalken, Gang gross
+  // in der Mitte, Tempo links, Drehzahl rechts), daneben Reifen (vier Felder in Temperaturfarbe) und
+  // Tank (Wert und Balken). Nichts von vorher faellt weg.
+  // KOSTEN: das HUD laeuft je Bild. Die Elemente sind beim Start einmal gesucht (VF.ui), geschrieben
+  // wird nur, was sich gegenueber dem letzten Wert (VF.ui.alt) aendert - Texte, eine CSS-Variable
+  // (Drehzahl in 20 Stufen, nur clip-path, kein Layout), transform am Tankbalken, Farben der Reifen
+  // nur bei ganzem Grad. Keine Layout-Abfragen.
+  // DELTA: Zeit dieser Runde gegen die beste Runde am selben Punkt der Mittellinie (VF.splits je
+  // Punkt, beim ersten Erreichen), alle 0,1 s mit der Rundenzeit.
+  function vfZeitAcc(ms, stellen) {
+    if (ms === null || ms === undefined || !isFinite(ms)) return stellen === 1 ? '-:--.-' : '-:--.---';
+    // Abgeschnitten wie eine Zeitnahme (nie aufgerundet, also nie "0:60.0").
+    const teil = Math.pow(10, stellen), ein = Math.floor(Math.max(0, ms) * teil / 1000);
+    const sek = Math.floor(ein / teil), m = Math.floor(sek / 60), s = sek % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s + '.' + String(ein % teil).padStart(stellen, '0');
+  }
+  function vfDeltaText(d) { return d === null ? '--.--' : (d > 0 ? '+' : (d < 0 ? '-' : '')) + Math.abs(d / 1000).toFixed(2); }
+  function vfHudBauen(schicht) {
+    const q = (sel) => schicht.querySelector(sel);
+    VF.ui = { runde: q('.vf-runde'), letzte: q('.vf-letzte'), beste: q('.vf-beste'), delta: q('.vf-delta'), deltaBar: q('.vf-delta-bar > i'),
+              modus: q('.vf-modus'), abseits: q('.vf-abseits'), acc: q('.vf-acc'), tempo: q('.vf-acc .vf-tempo'), gang: q('.vf-gang'),
+              rpm: q('.vf-rpm'), reifen: Array.from(schicht.querySelectorAll('.vf-reifen > i')), tank: q('.vf-tank'), tankBar: q('.vf-tank-bar > i'),
+              dreh: q('.vf-dreh-stab'), kamFrei: q('.vf-kamfrei'), alt: {} };
+  }
   function vfHud() {
-    const el = VF.hud;
-    if (!el) return;
-    const st = physEngine.state;
+    const u = VF.ui;
+    if (!u) return;
+    const A = u.alt, st = physEngine.state;
+    const txt = (el, key, v) => { if (A[key] !== v) { A[key] = v; el.textContent = v; } };
     const kmh = Math.round(Math.abs(st.speedKmh || 0) * TACHO_SCALE * (VF.tempoFaktor || 1));   // wie im Cockpit (race-speed)
+    // Zeiten: Rundenzeit in 0,1 s, das Delta mit ihr.
     const lauf = VF.rundeAb ? rennZeitJetzt() - VF.rundeAb : null;
-    // Nur bei Aenderung schreiben: jedes textContent= ist Arbeit fuer die Seite, und das hier laeuft je Bild.
-    const setz = (sel, txt) => { const e = el.querySelector(sel); if (e.textContent !== txt) e.textContent = txt; };
-    setz('.vf-tempo', kmh + ' km/h');
-    setz('.vf-runde', t('Runde') + ' ' + vfZeit(lauf === null ? null : Math.floor(lauf / 100) * 100));
-    setz('.vf-zeiten', t('Letzte') + ' ' + vfZeit(VF.letzte) + ' · ' + t('Beste') + ' ' + vfZeit(VF.beste));
+    const lq = lauf === null ? null : Math.floor(lauf / 100) * 100;
+    if (A.lq !== lq) {
+      A.lq = lq;
+      u.runde.textContent = vfZeitAcc(lq, 1);
+      const ref = VF.besteSplits && lauf !== null ? VF.besteSplits[VF.idx] : undefined;
+      const d = ref === undefined ? null : lauf - ref;
+      txt(u.delta, 'd', vfDeltaText(d));
+      const kl = d === null ? '' : (d > 0 ? 'langsamer' : 'schneller');
+      if (A.dk !== kl) { A.dk = kl; u.delta.parentNode.dataset.d = kl; }
+      const f = d === null ? 0 : Math.max(-1, Math.min(1, -d / 2000));
+      if (A.df !== f) { A.df = f; u.deltaBar.style.transform = 'scaleX(' + f.toFixed(3) + ')'; }
+    }
+    txt(u.letzte, 'l', vfZeitAcc(VF.letzte, 3));
+    txt(u.beste, 'b', vfZeitAcc(VF.beste, 3));
     let modusTxt = '';
     if (VF.modus && RACE_MODES[VF.modus]) {
       if (VF.modus === 'practice') modusTxt = t('Training');
@@ -1234,22 +2038,32 @@
         else modusTxt += ' · ' + vfZeit(Math.floor(VF.modusZeit * 1000 / 100) * 100);
       }
     }
-    setz('.vf-modus', modusTxt);
-    const ab = el.querySelector('.vf-abseits');
-    if (ab.hidden === VF.abseits) ab.hidden = !VF.abseits;
-    // ACC-Cluster unten: Tempo, Gang, Drehzahl, Reifen, Tank - dieselben Werte wie das Cockpit.
-    const acc = document.querySelector('.vf-acc');
-    if (!acc) return;
-    const setzA = (sel, txt) => { const e = acc.querySelector(sel); if (e.textContent !== txt) e.textContent = txt; };
-    setzA('.vf-tempo', kmh + ' km/h');
-    setzA('.vf-rpm', Math.round(motorDrehzahl(st)) + ' 1/min');
+    txt(u.modus, 'm', modusTxt);
+    if (u.abseits.hidden === VF.abseits) u.abseits.hidden = !VF.abseits;
+    const frei = vfKameraGedreht();
+    if (u.kamFrei.hidden === frei) u.kamFrei.hidden = !frei;
+    // Tacho-Block: Tempo, Gang, Drehzahl, Reifen, Tank - dieselben Werte wie das Cockpit.
+    txt(u.tempo, 'v', String(kmh));
+    txt(u.rpm, 'r', String(Math.round(motorDrehzahl(st) / 10) * 10));
     const g = st.currentGear;
-    setzA('.vf-gang', g > 0 ? String(g) : (g < 0 ? 'R' : 'N'));
+    txt(u.gang, 'g', g > 0 ? String(g) : (g < 0 ? 'R' : 'N'));
     const t4 = st.tyreTemp4 || [st.tyreTempC];
-    setzA('.vf-reifen', t4.map((t) => Math.round(t) + '°').join(' / '));
-    setzA('.vf-tank', fuelLiters(typeof fuel !== 'undefined' ? fuel : 100) + ' l');
-    const stab = acc.querySelector('.vf-dreh-stab');
-    if (stab) stab.style.setProperty('--f', String(Math.max(0, Math.min(1, st.rpmFrac || 0))));
+    for (let i = 0; i < 4; i++) {
+      const T = Math.round(t4[i] !== undefined ? t4[i] : t4[0]);
+      if (A['t' + i] !== T) { A['t' + i] = T; u.reifen[i].textContent = T + '°'; u.reifen[i].style.background = reifenFarbe(T); }
+    }
+    const tank = typeof fuel !== 'undefined' ? fuel : 100;
+    txt(u.tank, 'f', fuelLiters(tank) + ' L');
+    const tf = Math.round(Math.max(0, Math.min(100, tank)));
+    if (A.tf !== tf) { A.tf = tf; u.tankBar.style.transform = 'scaleX(' + (tf / 100) + ')'; }
+    // Drehzahl in 20 Segmenten; in den letzten zwei blinkt der Gang blau (Schaltlicht).
+    const seg = Math.round(Math.max(0, Math.min(1, st.rpmFrac || 0)) * 20);
+    if (A.seg !== seg) {
+      A.seg = seg;
+      u.dreh.style.setProperty('--f', String(seg / 20));
+      const schalt = seg >= 19;
+      if (A.schalt !== schalt) { A.schalt = schalt; u.acc.classList.toggle('vf-schalt', schalt); }
+    }
   }
 
   // ---- Starten und Beenden ------------------------------------------------------------------
@@ -1269,17 +2083,25 @@
     VF.studie = !!opts.studie;
     const schicht = document.createElement('div');
     schicht.className = 'vf-schicht';
-    schicht.innerHTML = '<canvas class="vf-bild"></canvas><div class="vf-hud" data-i18n-skip>'
-      + '<b class="vf-tempo"></b><span class="vf-runde"></span><span class="vf-zeiten"></span>'
-      + '<span class="vf-abseits" hidden>' + t('Neben der Bahn') + '</span><span class="vf-modus"></span></div>'
-      + '<div class="vf-acc" data-i18n-skip><b class="vf-tempo"></b>'
-      + '<div class="vf-acc-zeile"><span class="vf-lbl">' + t('Gang') + '</span><span class="vf-gang"></span>'
-      + '<span class="vf-lbl">' + t('Drehzahl') + '</span><span class="vf-rpm"></span></div>'
-      + '<div class="vf-acc-dreh"><i class="vf-dreh-stab"></i></div>'
-      + '<div class="vf-acc-zeile"><span class="vf-lbl">' + t('Reifen') + '</span><span class="vf-reifen"></span>'
-      + '<span class="vf-lbl">' + t('Tank') + '</span><span class="vf-tank"></span></div></div>'
+    const lbl = (txt) => '<span class="vf-lbl">' + txt + '</span>';
+    schicht.innerHTML = '<canvas class="vf-bild"></canvas>'
+      // Zeiten oben links (ACC: Positions-/Zeitenblock).
+      + '<div class="vf-hud vf-kachel" data-i18n-skip><div class="vf-modus"></div>'
+      + '<div class="vf-z vf-z-akt">' + lbl(t('Runde')) + '<b class="vf-runde"></b></div>'
+      + '<div class="vf-z vf-z-delta">' + lbl(t('Delta')) + '<span class="vf-delta"></span><i class="vf-delta-bar"><i></i></i></div>'
+      + '<div class="vf-z">' + lbl(t('Letzte')) + '<span class="vf-letzte"></span></div>'
+      + '<div class="vf-z">' + lbl(t('Beste')) + '<span class="vf-beste"></span></div>'
+      + '<span class="vf-abseits" hidden>' + t('Neben der Bahn') + '</span></div>'
+      // Tacho-Block unten Mitte: Reifen | Drehzahl, Tempo, Gang | Tank.
+      + '<div class="vf-acc" data-i18n-skip>'
+      + '<div class="vf-kachel vf-acc-reifen">' + lbl(t('Reifen')) + '<div class="vf-reifen"><i></i><i></i><i></i><i></i></div></div>'
+      + '<div class="vf-kachel vf-acc-kern"><div class="vf-acc-dreh"><i class="vf-dreh-stab"></i></div>'
+      + '<div class="vf-acc-werte"><div class="vf-acc-wert"><b class="vf-tempo"></b>' + lbl('km/h') + '</div>'
+      + '<b class="vf-gang"></b><div class="vf-acc-wert"><b class="vf-rpm"></b>' + lbl('1/min') + '</div></div></div>'
+      + '<div class="vf-kachel vf-acc-tank">' + lbl(t('Tank')) + '<b class="vf-tank"></b><i class="vf-tank-bar"><i></i></i></div></div>'
       + '<div class="vf-knoepfe"><button type="button" data-vf="licht">' + t('Licht') + '</button><button type="button" data-vf="reset">' + t('Zurücksetzen') + '</button>'
       + '<button type="button" data-vf="zu" aria-label="' + t('Beenden') + '">&#10005;</button></div>'
+      + '<span class="vf-kamfrei" hidden data-i18n-skip>' + t('Kamera frei') + ' · R3 / V: ' + t('Standard') + ' <span class="wip-tag">WIP</span></span>'
       + '<span class="vf-wip">' + t('Virtuell') + ' <span class="wip-tag">WIP</span></span>';
     document.body.appendChild(schicht);
     const cv = schicht.querySelector('canvas');
@@ -1294,10 +2116,16 @@
     document.body.classList.add('vf-an');
     gl.enable(gl.DEPTH_TEST);
     VF.gl = gl; VF.cv = cv; VF.schicht = schicht; VF.hud = schicht.querySelector('.vf-hud');
+    vfHudBauen(schicht);
+    vfDrehNull(); VF.stick = null; VF.tasten = {};
+    VF.splits = null; VF.besteSplits = null;
     VF.tiles = tiles;
     VF.pts = trackCenterline(tiles);
     VF.nrm = trackNormals(VF.pts);
-    VF.bahn = vfBahnBauen(gl, VF.pts, VF.nrm, tiles);
+    // v1.3.39: Flaechen mit Texturen (die Pixel entstehen nur beim ersten Mal) und der feste Platz der
+    // Kamera "Fahrer am Rand".
+    try { VF.flaeche = vfFlaechenBauen(gl, VF.pts, VF.nrm, tiles); } catch (e) { schicht.remove(); document.body.classList.remove('vf-an'); showHudToast('WebGL: ' + e.message); return false; }
+    VF.fahrer = { ort: vfFahrerOrt(VF.pts, VF.nrm, tiles), z: {}, k: null };
     // Das Auto: ein Garagenauto ohne Funk. Ein gesteuertes Auto gibt seine Rolle so lange ab.
     VF.vorherSpieler = playerCar;
     VF.vorherRolle = playerCar ? playerCar.role : null;
@@ -1411,6 +2239,7 @@
   }
   function vfGarageOptionen(rechts) {
     vfTonVorbereiten();
+    vfTexturenVorbereiten();   // v1.3.39: Bahn- und Bodentexturen im Leerlauf rechnen
     const kopf = document.createElement('h3');
     kopf.className = 'gar-a-titel';
     kopf.textContent = t('Virtuelles Auto');
@@ -1436,6 +2265,13 @@
       renderGarage();
     };
     rechts.appendChild(garWertZeile(t('Auto'), autos[ja].name, () => autoWahl(-1), () => autoWahl(1)));
+    // v1.3.39 (WIP): der Fussboden unter der Bahn, Dielen in echten Massen (siehe VF_BOEDEN).
+    const jb = Math.max(0, VF_BOEDEN.findIndex((b) => b.id === vfBodenWahl()));
+    const bodenWahl = (dd) => { vfBodenSetzen(VF_BOEDEN[(jb + dd + VF_BOEDEN.length) % VF_BOEDEN.length].id); renderGarage(); };
+    const bodenZeile = garWertZeile(t('Boden'), t(VF_BOEDEN[jb].name), () => bodenWahl(-1), () => bodenWahl(1));
+    bodenZeile.dataset.vfBoden = '1';
+    bodenZeile.querySelector('.gk-l').insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span>');
+    rechts.appendChild(bodenZeile);
     // Schaltung: Automatik oder Manuell (schalten dann mit I/K).
     const autoSch = vfSchaltungAuto();
     const schaltWahl = () => {
@@ -1494,7 +2330,32 @@
     rechts.appendChild(z);
   }
 
+  // v1.3.39 BESTELLT: "Verbessere den Randstein-Sound. Aktuell ist es ein hohes Klicken ... Es soll
+  // dumpf sein, eher wie bei Assetto Corsa Competizione." Das Rumpeln selbst steht in 80-sound.js
+  // (randsteinKlang); hier nur, was die Bahn dazu weiss:
+  //   Takt  = Rippen je Sekunde = VF_KERB_RIPPEN * Weg je Sekunde / Laenge eines Farbfelds. Ein Farbfeld
+  //           (rot oder weiss) sind zwei Mittellinienpunkte (vfTilesWaehlen: Math.floor(i / 2) % 2), also
+  //           2 * TRACK_STEP / TRACK_SAMPLES_PER_TILE Einheiten auf der Geraden. Drei Rippen je Feld:
+  //           Tacho 40 km/h -> 8, 120 km/h -> 24, ab 200 km/h 40 Schlaege/s (Grenzen 8..40).
+  //   Menge = wie weit das Auto auf dem Stein ist (0 = Kante beruehrt, 1 = Mitte auf dem Rand) und Tempo.
+  // Mit "Randstein-Klang: alt" bleibt das neue Rumpeln stumm und vfRattern spielt wie bis v1.3.38.
+  const VF_KERB_STREIFEN = 2 * TRACK_STEP / TRACK_SAMPLES_PER_TILE;
+  const VF_KERB_RIPPEN = 3;
+  function vfRandsteinTakt(kmh) {
+    const vE = Math.abs(kmh) / 3.6 * 100 * TRACK_UNITS_PER_CM;
+    return Math.max(8, Math.min(40, VF_KERB_RIPPEN * vE / VF_KERB_STREIFEN));
+  }
+  function vfRandsteinMenge(kerb, q, kmh) {
+    if (!kerb || randsteinKlangAlt || !(Math.abs(kmh) > 0.05)) return 0;
+    const tiefe = Math.max(0, Math.min(1, (q - (TRACK_HALF_W - VF_AUTO.B * 0.5)) / (VF_AUTO.B * 0.5)));
+    return (0.45 + 0.55 * tiefe) * Math.min(1, 0.35 + Math.abs(kmh) * TACHO_SCALE / 160);
+  }
+  function vfRandsteinTon(kerb, q, kmh) {
+    randsteinKlang(vfRandsteinMenge(kerb, q, kmh), vfRandsteinTakt(kmh));
+  }
+
   // v1.2.62: ein kurzes "Rattern" (weisses Rauschen) fuer die Randsteine, ueber audioCtx (80-sound.js).
+  // Seit v1.3.39 nur noch mit dem Schalter "Randstein-Klang: alt".
   // BESTELLT: Latenz. Korrektur nach 1.2.66: der Rauschpuffer (60 ms, abklingend) wird EINMAL je
   // AudioContext angelegt und wiederverwendet. Vorher entstand alle 70 ms ein neuer Puffer samt
   // 2.880 Zufallszahlen - Muell fuer die Speicherbereinigung, die auf schwachen Handys als
@@ -1592,7 +2453,7 @@
     if (VF.autoShiftVorher !== undefined) physEngine.config.autoShift = VF.autoShiftVorher;
     VF.autoShiftVorher = undefined;
     if (VF.schicht) VF.schicht.remove();
-    VF.schicht = null; VF.gl = null;
+    VF.schicht = null; VF.gl = null; VF.flaeche = null; VF.fahrer = null; VF.ui = null; VF.stick = null; VF.tasten = {};
     renderGarage();
     // Zurueck in die Garage, wo die Optionen der virtuellen Fahrt stehen (dort startet die naechste).
     // Eine Studienfahrt geht zurueck in die Studie (98f-studie.js zeigt sie selbst).

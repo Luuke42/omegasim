@@ -1798,6 +1798,18 @@
     // haengt die Pruefung, dass jede nur EINMAL faellt und erst nach der Hysterese
     // wieder scharf ist.
     ansagenFolge(schritte, o) {
+      // Zustands-/Clip-Probe synchron isolieren. Die echte Queue wird separat
+      // durch "Ansage: priorisiert und unterbricht nicht" geprueft.
+      const queueEcht = ansagenEinreihen, eventDamageEcht = rennEreignisAn.damage;
+      rennEreignisAn.damage = false;
+      ansagenEinreihen = (art, text, key) => {
+        if (!ansageAn[art]) return false;
+        if (art !== 'lap' && playAnsageClip(key || art)) return true;
+        if (!('speechSynthesis' in window)) return false;
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text)); return true;
+      };
+      try {
+
       const opt = o || {};
       const merk = {};
       const kaesten = { lap: 'setting-announce', damage: 'setting-announce-damage',
@@ -1866,6 +1878,8 @@
           el.dispatchEvent(new Event('change', { bubbles: true }));
         });
       }
+      } finally { ansagenEinreihen = queueEcht; rennEreignisAn.damage = eventDamageEcht; }
+
     },
     // ---- Derselbe Ablauf, aber OHNE speechSynthesis: der Funk-Ersatz -------------
     //
@@ -1876,6 +1890,18 @@
     // selbst bekommt fuer die Dauer der Probe fuenf erfundene, eindeutig markierte
     // Eintraege, damit die Attrappe den Schluessel zurueckverfolgen kann.
     ansagenFunkProbe(schritte) {
+      // Zustands-/Clip-Probe synchron isolieren. Die echte Queue wird separat
+      // durch "Ansage: priorisiert und unterbricht nicht" geprueft.
+      const queueEcht = ansagenEinreihen, eventDamageEcht = rennEreignisAn.damage;
+      rennEreignisAn.damage = false;
+      ansagenEinreihen = (art, text, key) => {
+        if (!ansageAn[art]) return false;
+        if (art !== 'lap' && playAnsageClip(key || art)) return true;
+        if (!('speechSynthesis' in window)) return false;
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text)); return true;
+      };
+      try {
+
       const kaesten = { lap: 'setting-announce', damage: 'setting-announce-damage',
                         fuel: 'setting-announce-fuel', tyre: 'setting-announce-tyre',
                         rain: 'setting-announce-rain', battery: 'setting-announce-battery' };
@@ -1929,6 +1955,8 @@
           el.dispatchEvent(new Event('change', { bubbles: true }));
         });
       }
+      } finally { ansagenEinreihen = queueEcht; rennEreignisAn.damage = eventDamageEcht; }
+
     },
     // ---- Die Aufnahme hat Vorrang, auch WENN es speechSynthesis gibt --------------
     //
@@ -1938,6 +1966,18 @@
     // gleichzeitig verfuegbar (echte Attrappen-Buffer UND ein speechSynthesis-Double)
     // und prueft, welcher tatsaechlich gezogen wird.
     ansagenVorrangProbe() {
+      // Zustands-/Clip-Probe synchron isolieren. Die echte Queue wird separat
+      // durch "Ansage: priorisiert und unterbricht nicht" geprueft.
+      const queueEcht = ansagenEinreihen, eventDamageEcht = rennEreignisAn.damage;
+      rennEreignisAn.damage = false;
+      ansagenEinreihen = (art, text, key) => {
+        if (!ansageAn[art]) return false;
+        if (art !== 'lap' && playAnsageClip(key || art)) return true;
+        if (!('speechSynthesis' in window)) return false;
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text)); return true;
+      };
+      try {
+
       const echtHatSpeech = 'speechSynthesis' in window;
       const echtSpeech = echtHatSpeech ? window.speechSynthesis : undefined;
       const echtPlayFx = playFx;
@@ -1968,6 +2008,8 @@
         }
         Object.assign(ansageLatch, merkLatch);
       }
+      } finally { ansagenEinreihen = queueEcht; rennEreignisAn.damage = eventDamageEcht; }
+
     },
     // Die Gaskennlinie als reine Rechnung, siehe gasKennlinie() in 40-physics.js.
     gasKennlinie,
@@ -3658,6 +3700,23 @@
       return { state: pitState, plan: pitPlan, tiles: out, ready: pitReady,
                schild: brd ? { klasse: brd.className, text: brd.textContent } : null,
                beschreibung: pitPlan ? describePitPlan(pitPlan) : null };
+    },
+    // v1.3.62: ein Boxen-Minispiel fuer Bildschirmfotos und Sichtpruefungen aufstellen - ein
+    // echter Stopp (Boxengasse, anhalten, Service) und danach die gewuenschten Druecke, je
+    // nach `abstand` Sekunden Standzeit. tasten: Liste aus 'richtig' und 'falsch'.
+    pitSpielSchau(tasten, abstand) {
+      pitModus = 'minigame'; pitLaneEnabled = true; pitTrigger = 'anywhere'; zweiSpieler = false;
+      physEngine.state.speedKmh = 0; throttleY = 0; fuel = 30; damage = 20;
+      setPitState('off'); pitRearmBlockedUntil = 0; setPitState('limited');
+      pitLastTick = 0; pitLaneTick();
+      if (!pitSpiel) return null;
+      for (const w of (tasten || [])) {
+        pitStandElapsed += (abstand || 0.5);
+        const soll = pitSpiel.folge[pitSpiel.i];
+        pitSpielTaste(w === 'richtig' ? soll : (soll === 'quad' ? 'kreis' : 'quad'));
+      }
+      pitSpielMalen();
+      return { folge: pitSpiel.folge.slice(), i: pitSpiel.i, bonus: pitSpiel.bonus, T: pitSpiel.T };
     },
     // Eine Kachel antippen, als haette es ein Finger getan.
     pitTap(which) {
@@ -6922,10 +6981,14 @@
       const gesagt = [];
       let uhr = echteNow.call(Date);
       try {
-        Object.defineProperty(window, 'speechSynthesis', {
-          configurable: true,
-          value: { cancel() {}, speak(u) { gesagt.push(u.text); } },
-        });
+        // v1.3.39: eigeneStimme - der Aufrufer hat schon eine Attrappe eingesetzt (die
+        // Warteschlange spricht erst nach dieser Probe) und raeumt sie selbst ab.
+        if (!opt.eigeneStimme) {
+          Object.defineProperty(window, 'speechSynthesis', {
+            configurable: true,
+            value: { cancel() {}, speak(u) { gesagt.push(u.text); } },
+          });
+        }
         Date.now = () => uhr;
         // KEIN Rennen - genau die Lage, in der bisher nichts gesagt wurde.
         raceState = opt.raceState || 'idle';
@@ -6949,7 +7012,8 @@
         return { folge, gesagt, runden: dashLapTimes.slice() };
       } finally {
         Date.now = echteNow;
-        if (echteStimme) {
+        if (opt.eigeneStimme) { /* der Aufrufer stellt die Stimme zurueck */ }
+        else if (echteStimme) {
           Object.defineProperty(window, 'speechSynthesis',
                                 { configurable: true, value: echteStimme });
         } else { delete window.speechSynthesis; }
@@ -7428,7 +7492,7 @@
           //
           // Zwoelf davon stehen als Konstante im Quelltext, der dreizehnte
           // (Gamepad-Belegung) ist mir erst im laufenden Browser aufgefallen.
-          bekannt: ['chc.cars.v1', 'chc.cockpit.v1', 'chc.cockpit.omega.v1',
+          bekannt: ['chc.cars.v1', 'chc.cockpit.v1', 'chc.cockpit.omega.v1', 'chc.cockpit.acc.v1',
                     'chc.gearbox.v1', 'chc.layout.v1', 'chc.mp.v1',
                     'chc.motorwerkstatt.v1', 'chc.presets.v1', 'chc.sessions.v1',
                     'carrera-hybrid-macros', 'carrera-hybrid-tracks',

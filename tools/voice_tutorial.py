@@ -74,7 +74,7 @@ TEXTE = {
     'box_erklaerung': 'Zeit für einen Boxenstopp. Gleich erscheinen Tasten auf dem Schirm. '
                       'Drückst du sie schnell und richtig, ist die Crew schneller.',
     'box': 'Tippe jetzt die Boxenstopp-Taste und halte an.',
-    'box_fertig': 'Fertig! Fahr weiter.',
+    'box_fertig': 'Die Regenreifen sind drauf. Fahr weiter.',
     'motor': 'Der Motorsound wird nun geändert zu Ford Mustang.',
     'garage': 'Im Garagenmenü passt du den Motorsound für jedes Auto einzeln an.',
     'optionen': 'Ansagen, Tastenbelegung, Fahrverhalten und vieles mehr '
@@ -91,10 +91,16 @@ TEXTE = {
     'arcade_boden': 'Fahr jetzt ein wenig herum, im Arcade-Modus. '
                     'Das Auto lenkt direkt ein und bremst kräftig.',
     'regen': 'Jetzt fängt es an zu regnen. Mit Trockenreifen rutscht das Auto viel mehr.',
-    'reifen': 'Wähle für den nächsten Stopp Regenreifen. '
+    'reifen': 'Wähle für den Boxenstopp Regenreifen. '
               'Drücke dazu die Reifen-Taste, bis Regen angezeigt wird.',
-    'box2': 'Und jetzt der zweite Boxenstopp. Tippe die Boxenstopp-Taste und halte an.',
-    'box2_fertig': 'Die Regenreifen sind drauf. Fahr weiter.',
+    # Runde 4 (nach 1.3.65): nur ein Stopp (erst Regen), Rueckwaertsgang, Handschaltung.
+    'rueckwaerts': 'Jetzt fährst du rückwärts. Halte an, drücke die Runterschalt-Taste '
+                   'und gib dann Gas.',
+    'vorwaerts': 'Mit der Hochschalt-Taste geht es wieder vorwärts.',
+    'schalten': 'Jetzt schaltest du selbst, die Automatik ist aus. '
+                'Schalte mit der Hochschalt-Taste einen Gang hoch.',
+    'runter': 'Und mit der Runterschalt-Taste wieder einen Gang runter.',
+    'automatik': 'Ab jetzt schaltet wieder die Automatik.',
 }
 # Lautschreibung fuer Piper (nur die Aussprache; der Schirm zeigt TEXTE).
 SPRECH = {

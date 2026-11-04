@@ -377,7 +377,7 @@
     untersteuern: 'Fährst du zu schnell in eine Kurve, schiebt das Auto geradeaus. Das ist Untersteuern. Bremse also vor der Kurve.',
     box_erklaerung: 'Zeit für einen Boxenstopp. Gleich erscheinen Tasten auf dem Schirm. Drückst du sie schnell und richtig, ist die Crew schneller.',
     box: 'Tippe jetzt die Boxenstopp-Taste und halte an.',
-    box_fertig: 'Fertig! Fahr weiter.',
+    box_fertig: 'Die Regenreifen sind drauf. Fahr weiter.',
     motor: 'Der Motorsound wird nun geändert zu Ford Mustang.',
     garage: 'Im Garagenmenü passt du den Motorsound für jedes Auto einzeln an.',
     optionen: 'Ansagen, Tastenbelegung, Fahrverhalten und vieles mehr stellst du im Optionenmenü ein.',
@@ -394,9 +394,15 @@
     licht: 'Schalte das Licht mit der Licht-Taste aus und wieder ein.',
     arcade_boden: 'Fahr jetzt ein wenig herum, im Arcade-Modus. Das Auto lenkt direkt ein und bremst kräftig.',
     regen: 'Jetzt fängt es an zu regnen. Mit Trockenreifen rutscht das Auto viel mehr.',
-    reifen: 'Wähle für den nächsten Stopp Regenreifen. Drücke dazu die Reifen-Taste, bis Regen angezeigt wird.',
-    box2: 'Und jetzt der zweite Boxenstopp. Tippe die Boxenstopp-Taste und halte an.',
-    box2_fertig: 'Die Regenreifen sind drauf. Fahr weiter.',
+    reifen: 'Wähle für den Boxenstopp Regenreifen. Drücke dazu die Reifen-Taste, bis Regen angezeigt wird.',
+    // v1.3.66 (nach 1.3.65) BESTELLT: "nur 1x Pitstop und zwar erst Regen, dabei kurz warten, damit die
+    // Stimme sich nicht mit 'es regnet' ueberlagert. Dafuer vorher noch Rueckwaertsgang erklaeren und am
+    // Ende manuelle Gangschaltung."
+    rueckwaerts: 'Jetzt fährst du rückwärts. Halte an, drücke die Runterschalt-Taste und gib dann Gas.',
+    vorwaerts: 'Mit der Hochschalt-Taste geht es wieder vorwärts.',
+    schalten: 'Jetzt schaltest du selbst, die Automatik ist aus. Schalte mit der Hochschalt-Taste einen Gang hoch.',
+    runter: 'Und mit der Runterschalt-Taste wieder einen Gang runter.',
+    automatik: 'Ab jetzt schaltet wieder die Automatik.',
   };
   // zeige: Text auf dem Schirm, {taste} = Tastenname aus der aktuellen Belegung (Aktion `taste`).
   // Die Clips sprechen generisch ("die Gas-Taste"), denn sie koennen nicht jede Belegung abdecken.
@@ -408,45 +414,54 @@
     // bleibt es nach dem Limit bei der eingestellten Fahrweise.
     { id: 'modus', titel: 'Bahn oder Boden?', clip: 'modus_frage', taste: 'dpad',
       zeige: 'Wähle mit {taste} und bestätige mit ✕ / A. Maus, Finger und Pfeiltasten gehen auch.',
-      warte: 'wahl', s: 10 },
+      warte: 'wahl', s: 8 },
     { id: 'modus_bahn', titel: 'Mit Bahn', clip: 'modus_bahn', modus: 'bahn' },
     { id: 'modus_boden', titel: 'Auf dem Boden', clip: 'modus_boden', modus: 'boden' },
     { id: 'gas', titel: 'Gas geben', clip: 'gas', taste: 'throttle', zeige: 'Drücke {taste}, um zu beschleunigen.',
-      warte: 'gas', s: 8, lob: 'gut' },
+      warte: 'gas', s: 6, lob: 'gut' },
     { id: 'bremse', titel: 'Bremsen', clip: 'bremse', taste: 'brake', zeige: 'Drücke {taste}, um zu bremsen.',
-      warte: 'bremse', s: 8, lob: 'prima' },
+      warte: 'bremse', s: 6, lob: 'prima' },
     { id: 'links', titel: 'Lenken', clip: 'links', taste: 'steering', zeige: 'Lenke mit {taste} nach links.',
       warte: 'links', s: 6 },
     { id: 'rechts', titel: 'Lenken', clip: 'rechts', taste: 'steering', zeige: 'Und jetzt mit {taste} nach rechts.',
       warte: 'rechts', s: 6, lob: 'gut' },
     { id: 'licht', titel: 'Licht', clip: 'licht', taste: 'headlights',
-      zeige: 'Schalte das Licht mit {taste} aus und wieder ein.', warte: 'licht', s: 8, lob: 'gut' },
+      zeige: 'Schalte das Licht mit {taste} aus und wieder ein.', warte: 'licht', s: 6, lob: 'gut' },
     // "nach X Sekunden": 20 s Arcade ab Beginn des Schritts (der Clip zaehlt mit).
     { id: 'arcade', titel: 'Fahrgefühl: Arcade', clip: 'arcade', min: 20, modus: 'bahn' },
     { id: 'arcade_boden', titel: 'Fahrgefühl: Arcade', clip: 'arcade_boden', min: 20, modus: 'boden' },
     { id: 'pacejka', titel: 'Fahrgefühl: Pacejka', clip: 'pacejka', vorher: 'pacejka' },
     { id: 'beschleunigung', titel: 'Beschleunigung', clip: 'beschleunigung', min: 6 },
     { id: 'untersteuern', titel: 'Untersteuern', clip: 'untersteuern', min: 10 },
+    // Rueckwaertsgang, wie er mit den Einstellungen der Einfuehrung (Pacejka, Automatik) geht:
+    // im Stand die Runterschalt-Taste legt R ein (40-physics.js triggerShift), Gas faehrt rueckwaerts,
+    // die Hochschalt-Taste legt wieder vorwaerts ein. Ist "Rueckwaerts mit Gas und Bremse" an, nennt
+    // die Karte das zusaetzlich.
+    { id: 'rueckwaerts', titel: 'Rückwärtsgang', clip: 'rueckwaerts', taste: 'downshift',
+      zeige: 'Halte an, drücke {taste} (Rückwärtsgang) und gib dann Gas.', warte: 'rueck', s: 8, lob: 'gut' },
+    { id: 'vorwaerts', titel: 'Vorwärts', clip: 'vorwaerts', taste: 'upshift',
+      zeige: 'Mit {taste} geht es wieder vorwärts.', warte: 'vorwaerts', s: 6, nurRueck: true },
+    // EIN Boxenstopp, und zwar erst im Regen: Wetter umstellen, warten, bis die App-eigene
+    // Regen-Ansage (Ansagen-Schalter Regen) gesprochen ist (ruhe), dann Regenreifen waehlen und der
+    // Stopp, der sie aufzieht.
+    { id: 'regen', titel: 'Regen', clip: 'regen', vorher: 'regen', ruhe: true },
+    { id: 'reifen', titel: 'Regenreifen', clip: 'reifen', taste: 'tyreSelect',
+      zeige: 'Drücke {taste}, bis als Reifenwahl „Regen“ angezeigt wird.', warte: 'reifen', s: 8, lob: 'prima' },
     { id: 'box_erklaerung', titel: 'Boxenstopp', clip: 'box_erklaerung', taste: 'spiel',
       zeige: 'Zeit für einen Boxenstopp. Gleich erscheinen vier Tasten auf dem Schirm ({taste}). Drückst du sie schnell und richtig, ist die Crew schneller.' },
     { id: 'box', titel: 'Boxenstopp', clip: 'box', taste: 'yellowflag', zeige: 'Tippe {taste} (Boxenstopp) und halte an.',
       warte: 'box_an', s: 10 },
     { id: 'box_steht', titel: 'Boxenstopp', zeige: 'Halte an. Die Crew beginnt, sobald das Auto steht.',
-      warte: 'box_steht', s: 8, box: 'steht' },
+      warte: 'box_steht', s: 6, box: 'steht' },
     { id: 'box_spiel', titel: 'Boxen-Minispiel', taste: 'spiel', zeige: 'Drücke die vier Tasten der Reihe nach ({taste}).',
       warte: 'box_fertig', s: 12, box: 'spiel' },
-    { id: 'box_fertig', titel: 'Boxenstopp', clip: 'box_fertig', box: 'fertig' },
-    // Nach dem ersten Stopp: Regen, Regenreifen waehlen, zweiter Stopp.
-    { id: 'regen', titel: 'Regen', clip: 'regen', vorher: 'regen', min: 6 },
-    { id: 'reifen', titel: 'Regenreifen', clip: 'reifen', taste: 'tyreSelect',
-      zeige: 'Drücke {taste}, bis als Reifenwahl „Regen“ angezeigt wird.', warte: 'reifen', s: 10, lob: 'prima' },
-    { id: 'box2', titel: 'Zweiter Boxenstopp', clip: 'box2', taste: 'yellowflag', zeige: 'Tippe {taste} (Boxenstopp) und halte an.',
-      warte: 'box_an', s: 10 },
-    { id: 'box2_steht', titel: 'Zweiter Boxenstopp', zeige: 'Halte an. Die Crew beginnt, sobald das Auto steht.',
-      warte: 'box_steht', s: 8, box: 'steht' },
-    { id: 'box2_spiel', titel: 'Boxen-Minispiel', taste: 'spiel', zeige: 'Drücke die vier Tasten der Reihe nach ({taste}).',
-      warte: 'box_fertig', s: 12, box: 'spiel' },
-    { id: 'box2_fertig', titel: 'Regenreifen', clip: 'box2_fertig', box: 'fertig' },
+    { id: 'box_fertig', titel: 'Regenreifen', clip: 'box_fertig', box: 'fertig' },
+    // Handschaltung: Automatik aus, einmal hoch, einmal runter, Automatik wieder an.
+    { id: 'schalten', titel: 'Selbst schalten', clip: 'schalten', vorher: 'manuell', taste: 'upshift',
+      zeige: 'Die Automatik ist aus. Schalte mit {taste} einen Gang hoch.', warte: 'hoch', s: 6 },
+    { id: 'runter', titel: 'Selbst schalten', clip: 'runter', taste: 'downshift',
+      zeige: 'Und mit {taste} wieder einen Gang runter.', warte: 'runter', s: 6, lob: 'gut' },
+    { id: 'automatik', titel: 'Automatik', clip: 'automatik', vorher: 'automatik' },
     { id: 'motor', titel: 'Motorsound', clip: 'motor', vorher: 'motor', min: 4 },
     { id: 'garage', titel: 'Garage', clip: 'garage' },
     { id: 'optionen', titel: 'Optionen', clip: 'optionen' },
@@ -455,8 +470,12 @@
   const TUT_TAKT_MS = 100;
   const TUT_LUECKE_S = 0.3;      // Pause nach jedem Clip
   const TUT_LADE_MS = 4000;      // so lange wartet der Start hoechstens auf die Clips
+  // Vor dem Regen-Clip: mindestens so lange warten, dass die App-eigene Regen-Ansage (Pruefung
+  // alle 500 ms, 70-race.js) anfangen kann, und hoechstens so lange, bis sie fertig ist.
+  const TUT_RUHE_MIN_S = 1.2, TUT_RUHE_MAX_S = 4;
   // Bis 1.3.30: "insgesamt max. 3 min". Mit Licht, Wahl, Regen, Regenreifen und zweitem Stopp
-  // (v1.3.31): "halte es so knapp wie moeglich (Zielwert <= 4 min inkl. Zeitlimits)".
+  // (v1.3.31): "halte es so knapp wie moeglich (Zielwert <= 4 min inkl. Zeitlimits)". Seit v1.3.66
+  // ein Stopp statt zwei, dafuer Rueckwaertsgang und Handschaltung: weiter hoechstens 4 min.
   const TUT_MAX_S = 240;
   const TUT_SCHWELLE = 0.5;      // Gas, Bremse, Lenkausschlag
   // Ziel des Motorklang-Schritts. Die Ansage sagt "Ford Mustang"; steht schon der Mustang v2
@@ -471,7 +490,7 @@
     if (!modus) return Math.max(tutBudget(dauer, 'bahn'), tutBudget(dauer, 'boden'));
     const d = (k) => (k && dauer && dauer[k] > 0 ? dauer[k] + TUT_LUECKE_S : 0);
     return TUT_SCHRITTE.filter((s) => !s.modus || s.modus === modus)
-      .reduce((sum, s) => sum + Math.max(d(s.clip), s.min || 0) + (s.s || 0) + d(s.lob), 0);
+      .reduce((sum, s) => sum + Math.max(d(s.clip) + (s.ruhe ? TUT_RUHE_MAX_S : 0), s.min || 0) + (s.s || 0) + d(s.lob), 0);
   }
 
   // ---- Tastennamen aus der aktuellen Belegung ----
@@ -677,6 +696,21 @@
     reifenZurueck: tutReifenZurueck,
     reifenWahl: () => pitMischungWahl(),
     reifenWahlSetzen: (m) => { mischungWunsch = m; },
+    // Gang als Zahl: -1 rueckwaerts, 0 Leerlauf, 1.. vorwaerts.
+    gang: () => { const st = physEngine.state; return st.driveMode === 'reverse' ? -1 : st.driveMode === 'neutral' ? 0 : st.currentGear + 1; },
+    rueckFaehrt: () => physEngine.state.driveMode === 'reverse' && Math.abs(physEngine.state.speedKmh) > 0.3,
+    vorwaertsSetzen: () => { if (physEngine.state.driveMode === 'reverse') physEngine.triggerShift(1); },
+    gasBremseRueck: () => typeof gasBremseAn === 'function' && gasBremseAn(),
+    automatikSetzen: (an) => {
+      const cb = $('setting-autoshift');
+      if (!cb || cb.checked === !!an) return;
+      cb.checked = !!an;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+    },
+    // Spricht oder klingt gerade eine Ansage der App (Ansagen-Schlange, Rundenzeit, Rennstand)?
+    ansageBeschaeftigt: () => !!((typeof ansagenWarten === 'function' && ansagenWarten())
+      || (typeof lapAnsageBeschaeftigt === 'function' && lapAnsageBeschaeftigt())
+      || (typeof rennstandBeschaeftigt === 'function' && rennstandBeschaeftigt())),
     sprechen: tutSprechenEcht,
     verstummen: tutVerstummen,
   };
@@ -685,7 +719,7 @@
   const tut = { an: false, phase: 'aus', i: -1, schrittAb: 0, clipBis: 0, warteAb: null, erfuellt: false,
     lobDran: false, boxService: false, umg: TUT_ECHT, merk: null, timer: null, startAb: 0, geladen: false,
     hinweise: [], protokoll: [], ende: '', modus: null, wahl: 'bahn', wahlAktiv: false, wahlSperre: false,
-    wahlPadVorher: null, lichtVorher: null, lichtWechsel: 0 };
+    wahlPadVorher: null, lichtVorher: null, lichtWechsel: 0, gangVorher: null, ruheAus: true };
   function tutLaeuft() { return tut.an; }
   function tutWahlOffen() { return tut.an && (tut.wahlAktiv || tut.wahlSperre); }
   function tutSchrittId() { return tut.phase === 'lauf' && TUT_SCHRITTE[tut.i] ? TUT_SCHRITTE[tut.i].id : tut.phase; }
@@ -699,7 +733,7 @@
     Object.assign(tut, { an: true, phase: 'warten', i: -1, clipBis: 0, warteAb: null, erfuellt: false, lobDran: false,
       boxService: false, merk: null, startAb: tut.umg.jetzt(), geladen: false, hinweise: [],
       protokoll: [], ende: '', modus: null, wahl: 'bahn', wahlAktiv: false, wahlSperre: false, wahlPadVorher: null,
-      lichtVorher: null, lichtWechsel: 0 });
+      lichtVorher: null, lichtWechsel: 0, gangVorher: null, ruheAus: true });
     tut.umg.laden();
     if (tut.umg.tab() === 'home') tut.umg.insFahren();
     const ui = $('tut-ui');
@@ -761,6 +795,14 @@
       const el = $('tut-taste');
       if (el) el.classList.add('gedrueckt');
     }
+    // Erst still sein, bis die Regen-Ansage der App durch ist (hoechstens TUT_RUHE_MAX_S).
+    if (s.ruhe && !tut.ruheAus) {
+      const seit = jetzt - tut.schrittAb;
+      if (seit < TUT_RUHE_MIN_S * 1000 || (seit < TUT_RUHE_MAX_S * 1000 && u.ansageBeschaeftigt())) return;
+      tut.ruheAus = true;
+      if (s.clip) tutSprich(s.clip);
+      return;
+    }
     if (jetzt < tut.clipBis) return;
     if (jetzt < tut.schrittAb + (s.min || 0) * 1000) return;
     if (s.warte && !tut.erfuellt) {
@@ -774,6 +816,8 @@
       // Tutorial waehlt sie, damit der zweite Stopp sie aufzieht.
       if (s.warte === 'wahl') tutWahlBestaetigen();
       if (s.warte === 'reifen') u.reifenWahlSetzen('regen');
+      // Noch im Rueckwaertsgang: vorwaerts einlegen, sonst faehrt das Auto beim naechsten Gas zurueck.
+      if (s.warte === 'vorwaerts') u.vorwaertsSetzen();
     } else if (s.lob && tut.erfuellt && !tut.lobDran) {
       tut.lobDran = true;
       tutSprich(s.lob);
@@ -793,6 +837,15 @@
     if (w === 'box_fertig') return u.boxZustand() !== 'servicing';
     if (w === 'wahl') return !!tut.modus;
     if (w === 'reifen') return u.reifenWahl() === 'regen';
+    if (w === 'rueck') return u.rueckFaehrt();
+    if (w === 'vorwaerts') return u.gang() >= 0;
+    if (w === 'hoch' || w === 'runter') {
+      // Ein Schaltvorgang in die verlangte Richtung, verglichen von Takt zu Takt.
+      const g = u.gang();
+      const ok = tut.gangVorher !== null && (w === 'hoch' ? g > tut.gangVorher : g < tut.gangVorher);
+      tut.gangVorher = g;
+      return ok;
+    }
     if (w === 'licht') {
       // Aus UND wieder ein: zwei Wechsel, egal in welchem Zustand das Licht anfing.
       const l = u.lichtLesen();
@@ -816,6 +869,7 @@
     if (s.box === 'steht') return z !== 'limited';
     if (s.box === 'spiel') return z !== 'servicing';
     if (s.box === 'fertig') return !tut.boxService;
+    if (s.nurRueck) return tut.umg.gang() !== -1;
     return false;
   }
 
@@ -828,12 +882,16 @@
     // Jeder Boxenstopp zaehlt fuer sich (der zweite nicht mit dem Service des ersten).
     if (s.warte === 'box_an') tut.boxService = false;
     if (s.warte === 'licht') { tut.lichtVorher = u.lichtLesen(); tut.lichtWechsel = 0; }
+    if (s.warte === 'hoch' || s.warte === 'runter') tut.gangVorher = null;
+    if (s.vorher === 'manuell') u.automatikSetzen(false);
+    if (s.vorher === 'automatik') u.automatikSetzen(true);
     if (s.warte === 'wahl') { tut.modus = null; tut.wahl = u.bahnLesen() ? 'bahn' : 'boden'; tut.wahlAktiv = true; tut.wahlPadVorher = null; }
     if (s.vorher === 'regen') u.wetterSetzen('rain');
     if (s.vorher === 'pacejka') u.presetSetzen('propacejka');
     if (s.vorher === 'motor') u.motorSetzen(u.motorLesen() === TUT_MOTOR ? TUT_MOTOR_ERSATZ : TUT_MOTOR);
+    tut.ruheAus = !s.ruhe;
     tutSchrittZeigen(s);
-    if (s.clip) tutSprich(s.clip);
+    if (s.clip && !s.ruhe) tutSprich(s.clip);
   }
 
   // Gesichertes zurueck, genau einmal. Gerufen am Ende und beim Abbruch.
@@ -902,7 +960,9 @@
     tutText('tut-fortschritt', (liste.indexOf(s) + 1) + ' / ' + liste.length);
     tutText('tut-titel', t(s.titel));
     const taste = s.taste ? tutTasteName(s.taste) : '';
-    tutText('tut-text', t(s.zeige || TUT_SPRUCH[s.clip] || '').replace('{taste}', taste));
+    let text = t(s.zeige || TUT_SPRUCH[s.clip] || '').replace('{taste}', taste);
+    if (s.id === 'rueckwaerts' && tut.umg.gasBremseRueck()) text += ' ' + t('Oder im Stand Gas und Bremse zugleich halten.');
+    tutText('tut-text', text);
     const tk = $('tut-taste');
     if (tk) {
       tk.hidden = !s.taste || s.taste === 'spiel';

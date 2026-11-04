@@ -87,9 +87,9 @@
     },
     "box_fertig": {
       "datei": "tutorial_box_fertig_de.ogg",
-      "dauer": 1.54,
-      "text": "Fertig! Fahr weiter.",
-      "sprech": "Fertig! Fahr weiter."
+      "dauer": 2.91,
+      "text": "Die Regenreifen sind drauf. Fahr weiter.",
+      "sprech": "Die Regenreifen sind drauf. Fahr weiter."
     },
     "motor": {
       "datei": "tutorial_motor_de.ogg",
@@ -160,20 +160,38 @@
     "reifen": {
       "datei": "tutorial_reifen_de.ogg",
       "dauer": 6.02,
-      "text": "Wähle für den nächsten Stopp Regenreifen. Drücke dazu die Reifen-Taste, bis Regen angezeigt wird.",
-      "sprech": "Wähle für den nächsten Stopp Regenreifen. Drücke dazu die Reifen-Taste, bis Regen angezeigt wird."
+      "text": "Wähle für den Boxenstopp Regenreifen. Drücke dazu die Reifen-Taste, bis Regen angezeigt wird.",
+      "sprech": "Wähle für den Boxenstopp Regenreifen. Drücke dazu die Reifen-Taste, bis Regen angezeigt wird."
     },
-    "box2": {
-      "datei": "tutorial_box2_de.ogg",
-      "dauer": 4.72,
-      "text": "Und jetzt der zweite Boxenstopp. Tippe die Boxenstopp-Taste und halte an.",
-      "sprech": "Und jetzt der zweite Boxenstopp. Tippe die Boxenstopp-Taste und halte an."
+    "rueckwaerts": {
+      "datei": "tutorial_rueckwaerts_de.ogg",
+      "dauer": 5.02,
+      "text": "Jetzt fährst du rückwärts. Halte an, drücke die Runterschalt-Taste und gib dann Gas.",
+      "sprech": "Jetzt fährst du rückwärts. Halte an, drücke die Runterschalt-Taste und gib dann Gas."
     },
-    "box2_fertig": {
-      "datei": "tutorial_box2_fertig_de.ogg",
-      "dauer": 2.84,
-      "text": "Die Regenreifen sind drauf. Fahr weiter.",
-      "sprech": "Die Regenreifen sind drauf. Fahr weiter."
+    "vorwaerts": {
+      "datei": "tutorial_vorwaerts_de.ogg",
+      "dauer": 2.8,
+      "text": "Mit der Hochschalt-Taste geht es wieder vorwärts.",
+      "sprech": "Mit der Hochschalt-Taste geht es wieder vorwärts."
+    },
+    "schalten": {
+      "datei": "tutorial_schalten_de.ogg",
+      "dauer": 5.92,
+      "text": "Jetzt schaltest du selbst, die Automatik ist aus. Schalte mit der Hochschalt-Taste einen Gang hoch.",
+      "sprech": "Jetzt schaltest du selbst, die Automatik ist aus. Schalte mit der Hochschalt-Taste einen Gang hoch."
+    },
+    "runter": {
+      "datei": "tutorial_runter_de.ogg",
+      "dauer": 2.93,
+      "text": "Und mit der Runterschalt-Taste wieder einen Gang runter.",
+      "sprech": "Und mit der Runterschalt-Taste wieder einen Gang runter."
+    },
+    "automatik": {
+      "datei": "tutorial_automatik_de.ogg",
+      "dauer": 2.31,
+      "text": "Ab jetzt schaltet wieder die Automatik.",
+      "sprech": "Ab jetzt schaltet wieder die Automatik."
     }
   }
 }

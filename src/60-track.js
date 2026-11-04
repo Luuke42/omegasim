@@ -156,6 +156,10 @@
   // transitions in that session were of this kind. It is an immediate signal, which makes the
   // old 1.5 s timeout on 0xff unnecessary as the primary detector.
   const TILE_OFFTRACK = 0x00;
+  // ---- SEKTOREN DER STRECKE (v1.3.81, WIP): manuelle Wahl im Editor -----------------
+  // var und so weit oben: refreshTrackPreview() laeuft schon beim Laden (siehe
+  // EDITOR_STRECKE_STORE). null = keine Wahl offen, sonst { sel, vorher } (sekWahlStart).
+  var sekWahl = null;
   // The LEFT curve is TILE_TYPE.CURVE_LEFT = 0x03. Established from the race capture of
   // 21.08 on track "az2108": the reported code sequence per lap is S R G R ? R, identical
   // across all 16 laps, and by tile counter the lap is 11 tiles long as S R2 G2 R3 L R2 -
@@ -3525,6 +3529,26 @@
       ersteStart = false;
     }
 
+    // ---- AUTOMATISCHE SEKTORGRENZEN (v1.3.81, WIP) ------------------------------------
+    // BESTELLT: "zwischen den Teilen, wo ein Sektor wechselt, eine subtile Markierung (z. B.
+    // duenne gruene Linie)". Genau auf der Fuge, quer ueber die Fahrbahn (im echten Stil
+    // zwischen den Randstreifen), duenn und halb durchsichtig - die gelbe Linie der echten
+    // Sektor-Startgeraden bleibt die auffaellige. Nur wenn die automatischen Sektoren fuer
+    // diese Strecke gelten (autoSektorPlanFuer), und nur in der Fahrbahn-Zeichnung.
+    if (o.detailed && kachelTab && o.sektorMarken !== false) {
+      let plan = null;
+      try { plan = autoSektorPlanFuer(tiles, closed, !!o.sektorenImmer); } catch (e) { plan = null; }
+      const r = o.echt ? half - ECHT_STREIFEN : half;
+      for (const k of (plan ? plan.kacheln : [])) {
+        const i = k === 0 ? 0 : kachelTab.start[k];
+        if (!(i >= 0) || !pts[i] || !nrm[i]) continue;
+        const A = [pts[i].x + nrm[i].x * r, pts[i].y + nrm[i].y * r];
+        const B = [pts[i].x - nrm[i].x * r, pts[i].y - nrm[i].y * r];
+        body += `<path data-sektor="auto" d="M ${P2(A)} L ${P2(B)}" stroke="#3ddc84" `
+              + `stroke-width="1.3" stroke-opacity=".8" stroke-linecap="butt"/>`;
+      }
+    }
+
     // ---- Die Autos ----------------------------------------------------------------
     //
     // `currentIndex` zeichnet EIN Auto und bleibt fuer alte Aufrufer; `o.cars` zeichnet
@@ -3982,10 +4006,17 @@
     editorStreckeFaellig = setTimeout(() => {
       editorStreckeFaellig = null;
       try {
-        localStorage.setItem(EDITOR_STRECKE_STORE, JSON.stringify({ tiles: currentTrackTiles.map((x) => x.type),
-          rotation: trackRotationDeg, zoom: editorZoom }));
+        localStorage.setItem(EDITOR_STRECKE_STORE, JSON.stringify(editorStreckeDaten()));
       } catch (e) { /* voll oder privat */ }
     }, 800);
+  }
+  // v1.3.81: die Sektoren der Strecke mit (Modus und manuelle Sektoranfaenge, siehe
+  // trackSektorModus). Fehlt `sek`, ist die Strecke aelter: automatisch.
+  function editorStreckeDaten() {
+    const sek = { m: currentTrackTiles[0] && currentTrackTiles[0].sm || null, g: [] };
+    currentTrackTiles.forEach((x, i) => { if (x.sg) sek.g.push(i); });
+    return { tiles: currentTrackTiles.map((x) => x.type), rotation: trackRotationDeg, zoom: editorZoom,
+             sek: sek.m || sek.g.length ? sek : undefined };
   }
   function editorStreckeLaden() {
     let d = null;
@@ -3994,6 +4025,10 @@
     const ok = Object.values(TILE_TYPE);
     if (!d.tiles.every((x) => ok.includes(x))) return false;
     currentTrackTiles = d.tiles.map((type) => ({ type }));
+    if (d.sek && typeof d.sek === 'object') {
+      if (d.sek.m === 'manuell' || d.sek.m === 'aus') currentTrackTiles[0].sm = d.sek.m;
+      (Array.isArray(d.sek.g) ? d.sek.g : []).forEach((i) => { if (currentTrackTiles[i]) currentTrackTiles[i].sg = 1; });
+    }
     if (Number.isFinite(d.rotation)) trackRotationDeg = d.rotation;
     if (Number.isFinite(d.zoom)) editorZoom = Math.max(0.5, Math.min(3, d.zoom));
     return true;
@@ -4018,7 +4053,12 @@
     const imEditor = document.body.classList.contains('track-fs');
     const raum = editorSchalter.raum ? teileRaum() : { x: 0, y: 0 };
     const result = renderTrackPreview(currentTrackTiles, null,
-      { detailed: true, cars: trackCarMarks(), echt: true, auswahl: imEditor ? trackSelIndex() : null,
+      { detailed: true, cars: trackCarMarks(), echt: true,
+        // In der manuellen Sektorwahl ist das hervorgehobene Teil der Fokus der Wahl.
+        auswahl: imEditor ? (sekWahl ? sekWahl.sel : trackSelIndex()) : null,
+        // Der Editor zeigt die Sektoren der Strecke auch im Ausdruck-Modus: sie gehoeren zur
+        // Strecke, gemessen werden sie nur auf der Bahn.
+        sektorenImmer: true,
         ohneLinie: !editorSchalter.linie, grid: true,
         raum: (raum.x > 0 || raum.y > 0) ? raum : null, raumVersatz });
     $('track-preview-svg').innerHTML = result.html;
@@ -4117,10 +4157,108 @@
   function trackSektorAnzahl(tiles) {
     return (tiles || []).filter((t) => t.type === TILE_TYPE.START).length;
   }
+
+  // ---- SEKTOREN DER STRECKE (v1.3.81, WIP) ---------------------------------------------
+  //
+  // BESTELLT: automatische Sektoren nach der Teilezahl ("bei 8 Teilen keine Sektoren, bei
+  // 100 Teilen nicht mehr als 10"), dann: "Mach es so, dass Sektoren ueber den
+  // Streckeneditor bestimmt werden" - ein Knopf "Sektoren" im Editor mit "automatisch
+  // festlegen" oder "manuell festlegen" (Teile antippen, an denen ein Sektor beginnt).
+  //
+  // DIE SEKTOREN GEHOEREN ZUR STRECKE und stehen deshalb IN den Teilen, nicht daneben:
+  //   tiles[0].sm   undefined = automatisch (auch jede aeltere Strecke), 'manuell', 'aus'
+  //   tiles[k].sg   1 = an diesem Teil beginnt ein Sektor (nur im manuellen Modus gelesen)
+  // So wandern sie mit dem Teil, wenn davor etwas eingefuegt oder entfernt wird, gehen mit
+  // Rueckgaengig (trackMerken kopiert die Teile), werden mit "Meine Strecken" gespeichert
+  // (die Teile liegen dort als Objekte) - und der Streckencode (trackToCode) bleibt gleich,
+  // er liest nur den Typ. Weitere Start/Ziel-Teile haben Vorrang (sektorZiel, 70-race.js).
+  //
+  // Automatisch: die Strecke wird nach LAENGE (nicht nach Teilezahl) in N etwa gleich lange
+  // Abschnitte geteilt, jede Grenze liegt auf einer Teilefuge. Gemessen ab der Rundenlinie
+  // (ZIEL_LAENGS.linieOben der ersten Start/Ziel-Kachel). N = runde(Teile / 10), 1 bis 10;
+  // 1 heisst keine Sektoren (8 -> 1, 15 -> 2, 25 -> 3, 100 -> 10), und nie mehr als
+  // Teile / 2 - ein Abschnitt unter zwei Teilen misst nur noch die Meldegenauigkeit.
+  function autoSektorFormel(teile) {
+    const n = Math.max(1, Math.min(10, Math.round((teile || 0) / 10)));
+    return Math.max(1, Math.min(n, Math.floor((teile || 0) / 2)));
+  }
+  function trackSektorModus(tiles) {
+    const m = tiles && tiles[0] ? tiles[0].sm : undefined;
+    return m === 'manuell' || m === 'aus' ? m : 'auto';
+  }
+  // Lage der Fugen, von der Rundenlinie aus gemessen: pos[j] ist die Laenge bis zur Fuge vor
+  // Teil s+j (j = 1 .. nT-1).
+  function sektorGeo(tiles) {
+    const nT = tiles.length;
+    let s = tiles.findIndex((t) => t.type === TILE_TYPE.START);
+    if (s < 0) s = 0;
+    const len = (i) => {
+      try { return Math.max(1e-6, tileLength(tiles[(s + i) % nT].type)); } catch (e) { return 1; }
+    };
+    const linie = ZIEL_LAENGS.linieOben;
+    const pos = new Array(nT).fill(0);
+    let acc = len(0) * (1 - linie);
+    for (let j = 1; j < nT; j++) { pos[j] = acc; acc += len(j); }
+    return { s, nT, pos, gesamt: acc + len(0) * linie };
+  }
+  // Der Plan: `grenzen[i]` ist die Zahl der Kachelwechsel seit der Rundenlinie, nach der
+  // Sektor i+1 endet (das Auto hat Teil s+j erreicht); `kacheln[i]` dieselbe Fuge als
+  // Teilindex der Strecke (die Fuge VOR diesem Teil), fuer die Zeichnung. Einmal je Strecke
+  // gerechnet; im Fahrtakt wird nur noch verglichen.
+  function sektorPlanAus(geo, grenzen) {
+    if (!grenzen.length) return null;
+    const laengen = grenzen.map((j, i) => geo.pos[j] - (i ? geo.pos[grenzen[i - 1]] : 0));
+    laengen.push(geo.gesamt - geo.pos[grenzen[grenzen.length - 1]]);
+    return { n: grenzen.length + 1, s: geo.s, teile: geo.nT, grenzen,
+             kacheln: grenzen.map((j) => (geo.s + j) % geo.nT), laengen, gesamt: geo.gesamt };
+  }
+  function autoSektorGrenzen(tiles, n) {
+    const nT = tiles ? tiles.length : 0;
+    if (!(n > 1) || nT < 4) return null;
+    const geo = sektorGeo(tiles);
+    const grenzen = [];
+    let vor = 0;
+    for (let i = 1; i < n; i++) {
+      const ziel = geo.gesamt * i / n;
+      const lo = vor + 1, hi = nT - (n - i);   // fuer jeden folgenden Sektor bleibt ein Teil
+      let best = lo;
+      for (let j = lo; j <= hi; j++) {
+        if (Math.abs(geo.pos[j] - ziel) < Math.abs(geo.pos[best] - ziel)) best = j;
+      }
+      grenzen.push(best);
+      vor = best;
+    }
+    return sektorPlanAus(geo, grenzen);
+  }
+  // Die manuell gesetzten Sektoranfaenge als Grenzen (sortiert, ohne das Start/Ziel-Teil).
+  function manuelleSektorGrenzen(tiles) {
+    const geo = sektorGeo(tiles);
+    const out = [];
+    for (let k = 0; k < geo.nT; k++) {
+      if (!tiles[k].sg || k === geo.s) continue;
+      out.push((k - geo.s + geo.nT) % geo.nT);
+    }
+    out.sort((a, b) => a - b);
+    return sektorPlanAus(geo, out);
+  }
+  // Gelten Sektoren fuer DIESE Strecke, und welche? Nur auf einer geschlossenen Strecke,
+  // nur im Bahn-Modus (immer = true: der Editor zeigt sie trotzdem), und nur, wenn keine
+  // echten Sektoren gelten: weitere Start/Ziel-Kacheln haben Vorrang.
+  function autoSektorPlanFuer(tiles, geschlossen, immer) {
+    if (!tiles || tiles.length < 4 || !geschlossen) return null;
+    if (!immer && typeof trackMode === 'string' && trackMode !== 'on') return null;
+    if (trackSektorAnzahl(tiles) > 1) return null;
+    const m = trackSektorModus(tiles);
+    if (m === 'aus') return null;
+    if (m === 'manuell') return manuelleSektorGrenzen(tiles);
+    return autoSektorGrenzen(tiles, autoSektorFormel(tiles.length));
+  }
   function trackIstGeschlossen() {
     if (currentTrackTiles.length < 3) return false;
     if (typeof trackCenterline !== 'function' || typeof trackSchluss !== 'function') return false;
-    try { return trackSchluss(trackCenterline(currentTrackTiles)); } catch (e) { return false; }
+    // v1.3.87: .closed lesen. Hier stand das ganze Ergebnis von trackSchluss() - ein Objekt, also
+    // IMMER wahr: der "Strecke fertig"-Klang beim Schliessen spielte darum nie (warZu war stets wahr).
+    try { return !!trackSchluss(trackCenterline(currentTrackTiles)).closed; } catch (e) { return false; }
   }
   // Befriedigendes Klack (ein bisschen wie bei Legovideospielen): drei schnell ansteigende
   // Toene, der letzte laenger und heller.
@@ -4746,6 +4884,7 @@
   }
 
   async function exitTrackFullscreen() {
+    if (sekWahl) sekWahlAbbrechen();
     trackFsDrin = false;
     try {
       if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
@@ -4785,6 +4924,7 @@
     { id: 'track-rotate-left' },
     { id: 'track-rotate-right' },
     { id: 'track-clear' },
+    { id: 'track-sektoren' },
     { id: 'track-tour' },
     { id: 'track-fs-toggle' },
   ];
@@ -4801,6 +4941,9 @@
 
   function trackEditorPad(button) {
     if (!document.body.classList.contains('track-fs')) return false;
+    // Ein offener Dialog (konsoleFrage, z. B. "Sektoren") bekommt die Tasten, nicht der Editor.
+    if (typeof konsoleFrageOffen === 'function' && konsoleFrageOffen()) return false;
+    if (sekWahl) return sekWahlPad(button);
     const n = trackPadRow === 0 ? TRACK_ACTIONS.length : TRACK_PALETTE.length;
     switch (button) {
       case 'up':
@@ -5610,6 +5753,155 @@
     };
   }
 
+  // ---- SEKTOREN IM EDITOR (v1.3.81, WIP) ----------------------------------------------
+  //
+  // BESTELLT: "Dort soll ein Sektoren-Button sein. Ich klicke dann darauf und kann sagen:
+  // 'automatisch festlegen' oder 'manuell festlegen'. Bei automatisch nach dem geplanten
+  // Algorithmus machen, bei manuell die Strecke anzeigen und Nutzer muss mit D-Pad oder
+  // Touch/Maus auf die Streckenteile klicken, die jeweils einen Sektorbeginn darstellen (2x
+  // klicken deaktiviert), und da ist dann ein 'Fertig'-Knopf."
+  //
+  // Dazu als dritte Wahl "Aus" (keine Sektoren auf dieser Strecke) - im manuellen Modus
+  // alle Grenzen abzuwaehlen ginge auch, ist aber ein Umweg fuer eine klare Absicht.
+  // Die manuelle Wahl laeuft IN der Editor-Karte: die Aktionsleiste wird durch die
+  // Sektorleiste (Zaehler, Fertig, Abbrechen) ersetzt, die Teile-Leiste blendet aus.
+  function sekStreckeOk() {
+    if (currentTrackTiles.length < 4 || !sekGeschlossen()) { showHudToast(t('Erst die Strecke schließen')); return false; }
+    if (trackSektorAnzahl(currentTrackTiles) > 1) {
+      showHudToast(t('Mehrere Start/Ziel-Geraden bestimmen die Sektoren'));
+      return false;
+    }
+    return true;
+  }
+  // Seit v1.3.87 liefert trackIstGeschlossen() selbst .closed; dieselbe Pruefung.
+  function sekGeschlossen() { return trackIstGeschlossen(); }
+  function sekGeaendert() {
+    // Neue Grenzen heissen neue Spalten: die bisherigen Sektorzeiten passen nicht mehr.
+    if (typeof sektorenNeuAngesetzt === 'function') sektorenNeuAngesetzt();
+    refreshTrackPreview();
+  }
+  function sekPlanEditor() {
+    try { return autoSektorPlanFuer(currentTrackTiles, sekGeschlossen(), true); } catch (e) { return null; }
+  }
+  function sektorenDialog() {
+    if (sekWahl) return;
+    const p = sekPlanEditor();
+    const m = trackSektorModus(currentTrackTiles);
+    const jetzt = t('Jetzt: {n} Sektoren ({m}).').replace('{n}', p ? p.n : 1)
+      .replace('{m}', t(m === 'manuell' ? 'manuell' : m === 'aus' ? 'aus' : 'automatisch'));
+    konsoleFrage(t('Sektoren'), jetzt + ' ' + t('Automatisch: nach Länge in gleich lange Abschnitte, ein Sektor je etwa 10 Teile, höchstens 10. Manuell: die Teile antippen, an denen ein Sektor beginnt.'), [
+      [t('Automatisch festlegen'), () => sektorenAutomatisch()],
+      [t('Manuell festlegen'), () => sekWahlStart()],
+      [t('Aus'), () => sektorenAus()],
+      [t('Abbrechen'), null],
+    ], true);
+  }
+  function sektorenAutomatisch() {
+    trackMerken();
+    currentTrackTiles.forEach((x) => { delete x.sg; });
+    if (currentTrackTiles[0]) delete currentTrackTiles[0].sm;
+    sekGeaendert();
+    const p = sekPlanEditor();
+    showHudToast(p ? t('{n} Sektoren').replace('{n}', p.n) : t('Keine Sektoren'));
+  }
+  function sektorenAus() {
+    trackMerken();
+    currentTrackTiles.forEach((x) => { delete x.sg; });
+    if (currentTrackTiles[0]) currentTrackTiles[0].sm = 'aus';
+    sekGeaendert();
+    showHudToast(t('Keine Sektoren'));
+  }
+  // Manuell: Start mit den Grenzen, die gerade gelten (automatisch gesetzte werden zum
+  // Ausgangspunkt) - abwaehlen ist ein Tipp, alles neu setzen waeren zehn.
+  function sekWahlStart() {
+    if (sekWahl || !sekStreckeOk()) return false;
+    const tiles = currentTrackTiles;
+    const vorher = { sm: tiles[0].sm, sg: tiles.map((x) => !!x.sg) };
+    const p = sekPlanEditor();
+    tiles.forEach((x) => { delete x.sg; });
+    if (p) p.kacheln.forEach((k) => { tiles[k].sg = 1; });
+    tiles[0].sm = 'manuell';
+    const s = sektorGeo(tiles).s;
+    sekWahl = { sel: (s + 1) % tiles.length, vorher };
+    document.body.classList.add('track-sek');
+    const l = $('track-sek-leiste');
+    if (l) l.hidden = false;
+    refreshTrackPreview();
+    sekLeisteZeigen();
+    return true;
+  }
+  function sekWahlEnde() {
+    sekWahl = null;
+    document.body.classList.remove('track-sek');
+    const l = $('track-sek-leiste');
+    if (l) l.hidden = true;
+  }
+  function sekVorherZurueck(v) {
+    currentTrackTiles.forEach((x, i) => { if (v.sg[i]) x.sg = 1; else delete x.sg; });
+    if (v.sm) currentTrackTiles[0].sm = v.sm; else delete currentTrackTiles[0].sm;
+  }
+  function sekWahlFertig() {
+    if (!sekWahl) return false;
+    // Fuer Rueckgaengig: der Stand VOR der Wahl kommt in den Verlauf, dann der neue zurueck.
+    const neu = currentTrackTiles.map((x) => Object.assign({}, x));
+    sekVorherZurueck(sekWahl.vorher);
+    trackMerken();
+    currentTrackTiles.forEach((x, i) => {
+      if (neu[i].sg) x.sg = 1; else delete x.sg;
+      if (neu[i].sm) x.sm = neu[i].sm; else delete x.sm;
+    });
+    sekWahlEnde();
+    sekGeaendert();
+    const p = sekPlanEditor();
+    showHudToast(p ? t('{n} Sektoren').replace('{n}', p.n) : t('Keine Sektoren'));
+    return true;
+  }
+  function sekWahlAbbrechen() {
+    if (!sekWahl) return false;
+    sekVorherZurueck(sekWahl.vorher);
+    sekWahlEnde();
+    refreshTrackPreview();
+    return true;
+  }
+  // Ein Teil an- oder abwaehlen. Das Start/Ziel-Teil beginnt immer Sektor 1.
+  function sekWahlUmschalten(k) {
+    if (!sekWahl || !currentTrackTiles[k]) return false;
+    if (k === sektorGeo(currentTrackTiles).s) {
+      showHudToast(t('Start/Ziel beginnt immer Sektor 1'));
+      refreshTrackPreview();
+      return false;
+    }
+    if (currentTrackTiles[k].sg) delete currentTrackTiles[k].sg; else currentTrackTiles[k].sg = 1;
+    refreshTrackPreview();
+    sekLeisteZeigen();
+    return true;
+  }
+  // Steuerkreuz: links/rechts (auch hoch/runter, L1/R1) wandert entlang der Strecke, X setzt
+  // oder entfernt, Dreieck ist Fertig, Kreis verwirft.
+  function sekWahlPad(button) {
+    if (!sekWahl) return false;
+    const n = currentTrackTiles.length;
+    switch (button) {
+      case 'left': case 'up': case 'prev':
+        sekWahl.sel = (sekWahl.sel + n - 1) % n; refreshTrackPreview(); return true;
+      case 'right': case 'down': case 'next':
+        sekWahl.sel = (sekWahl.sel + 1) % n; refreshTrackPreview(); return true;
+      case 'confirm': sekWahlUmschalten(sekWahl.sel); return true;
+      case 'rotate': sekWahlFertig(); return true;
+      case 'undo': sekWahlAbbrechen(); return true;
+      default: return true;   // alles andere tut in der Wahl nichts (kein Entfernen, kein Leeren)
+    }
+  }
+  function sekLeisteZeigen() {
+    const z = $('track-sek-zahl');
+    if (!z) return;
+    const p = sekPlanEditor();
+    z.textContent = t('{n} Sektoren').replace('{n}', p ? p.n : 1);
+  }
+  if ($('track-sektoren')) $('track-sektoren').onclick = () => sektorenDialog();
+  if ($('track-sek-fertig')) $('track-sek-fertig').onclick = () => sekWahlFertig();
+  if ($('track-sek-abbrechen')) $('track-sek-abbrechen').onclick = () => sekWahlAbbrechen();
+
   // Hier standen sechs Bindungen auf Knopf-ids, die es seit dem Umbau auf die Bildleiste
   // nicht mehr gibt (track-add-start und fuenf weitere). Sie prueften auf Vorhandensein und
   // taten deshalb nie etwas - toter Code, der wie eine Funktion aussieht. Gebaut wird mit
@@ -5660,7 +5952,11 @@
       const dx = p.x + g.ox - q.x, dy = p.y + g.oy - q.y, d = dx * dx + dy * dy;
       if (d < bestD) { bestD = d; best = p.tile; }
     });
-    if (best !== null && bestD < Math.pow(g.half * 3, 2)) { trackSel = best; refreshTrackPreview(); }
+    if (best !== null && bestD < Math.pow(g.half * 3, 2)) {
+      // Manuelle Sektorwahl: das angetippte Teil beginnt einen Sektor (nochmal: nicht mehr).
+      if (sekWahl) { sekWahl.sel = best; sekWahlUmschalten(best); return; }
+      trackSel = best; refreshTrackPreview();
+    }
   });
 
   // TASTATUR IM EDITOR, im Erfassungslauf: die Pfeile sollen hier bauen und nicht fahren.
@@ -5674,6 +5970,17 @@
       if (k === 'enter' || k === 'arrowright' || k === ' ') { weg(); konsoleTourWeiter(); }
       else if (k === 'arrowleft' || k === 'backspace') { weg(); konsoleTourZurueck(); }
       else if (k === 'escape') { weg(); konsoleTourZu(false); }
+      return;
+    }
+    if (typeof konsoleFrageOffen === 'function' && konsoleFrageOffen()) return;
+    // Manuelle Sektorwahl: Pfeile/Q/E wandern, Enter/Leertaste setzt, F fertig, Esc verwirft.
+    if (sekWahl) {
+      weg();
+      if (['arrowleft', 'arrowup', 'q', ','].includes(k)) sekWahlPad('left');
+      else if (['arrowright', 'arrowdown', 'e', '.'].includes(k)) sekWahlPad('right');
+      else if ((k === 'enter' || k === ' ') && !e.repeat) sekWahlPad('confirm');
+      else if (k === 'f' && !e.repeat) sekWahlFertig();
+      else if ((k === 'escape' || k === 'backspace') && !e.repeat) sekWahlAbbrechen();
       return;
     }
     if (e.repeat && !['arrowleft', 'arrowright', 'q', 'e'].includes(k)) return;

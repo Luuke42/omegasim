@@ -2258,6 +2258,20 @@
   .ov-mix { width: 100%; height: .82em; border-radius: 2px;
     box-shadow: inset 0 0 0 1px rgba(0,0,0,.45); }
   .ov-luecke { text-align: right; }
+  /* v1.3.78: STRAFEN-SPALTE und SPALTENKOPF. Die Strafe (RAMMER, verpasste Pflichtstopps)
+     steht in jeder Ansicht, aber nur wenn eine Zeile eine hat (.ov-mit-strafe) - sonst ist
+     die Zeile genau die alte. Der Spaltenkopf gehoert zum ACC-Timing-Fenster und ist in den
+     anderen Ansichten verborgen; dort erklaert die Fusszeile die Spalten wie bisher. */
+  .ov-kopfz { display: none; }
+  .ov-strafe { display: none; text-align: right; color: var(--bad); font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ov-mit-strafe > .ov-zeile > .ov-strafe { display: block; }
+  .ov-mit-strafe > .ov-zeile {
+    grid-template-columns: 1.5em 1.1em minmax(0, 1fr) 2.2em 2.2em 1.4em 4.4em 4.4em 3.8em 5em; }
+  #race-ovscreen.ov-fertig .ov-mit-strafe > .ov-zeile {
+    grid-template-columns: 1.5em 1.1em minmax(0, 1fr) 2.2em 2.2em 1.4em 4.4em 3.8em 5em; }
+  /* Die zwei Bloecke des ACC-Boxenschirms (Entwurf B) gibt es nur in der Ansicht ACC. */
+  .pit-mitte, .pit-werte { display: none; }
   .ov-zeit { text-align: right; color: var(--gt3-strip-ink); }
   /* Die schnellste Runde des Feldes violett, wie auf einer Zeittafel. */
   .ov-feldbeste { color: #c77dff; font-weight: 700; }
@@ -4180,6 +4194,22 @@
     background: rgba(10,12,18,.72); border: 1px solid var(--border); border-radius: 6px;
     font-size: 12.5px; color: #eef0f4; margin-bottom: 6px; }
   .tp-opt[hidden] { display: none; }
+  /* v1.3.81: Sektoren-Knopf mit WIP-Schild in der Ecke, und die Leiste der manuellen Wahl. */
+  #track-sektoren { position: relative; }
+  #track-sektoren .wip-tag { position: absolute; top: -6px; right: -8px; font-size: 7px; padding: 0 2px; }
+  #track-sek-leiste[hidden] { display: none !important; }
+  .tp-sek-leiste { gap: 10px 14px; }
+  .tp-sek-leiste .tp-sek-text { display: flex; flex-direction: column; max-width: 46em; }
+  .tp-sek-leiste .tp-sek-text small { color: var(--muted); font-size: 11px; }
+  .tp-sek-leiste .tp-sek-zahl { color: #3ddc84; font-size: 15px; white-space: nowrap; }
+  body.track-sek #track-fs-host > .tp-actions { display: none; }
+  body.track-sek #track-palette { visibility: hidden; }
+  /* Mit dem Sektoren-Knopf sind es 15 Knoepfe: auf 800 px Breite rutschte "Schliessen" in eine
+     zweite Zeile. Schmaler Abstand und Knopf, nur auf schmalen Schirmen. */
+  @media (max-width: 880px) {
+    body.track-fs #track-fs-host > .tp-actions { column-gap: 3px; }
+    body.track-fs #track-fs-host > .tp-actions > .tp-btn { width: 44px; margin-left: 0; margin-right: 0; }
+  }
   .tp-opt label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .tp-opt input[type=range] { width: 150px; accent-color: var(--k-blau, #00a3e0); }
   .tp-opt input[type=checkbox] { accent-color: var(--k-blau, #00a3e0); width: 16px; height: 16px; }
@@ -5058,6 +5088,10 @@
   body[data-cockpit="acc"] #race-wx-box::before {
     content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px;
     background: var(--acc-blau); z-index: 3; pointer-events: none; }
+  /* v1.3.77 GEMELDET: "Der blaue obere Rand des Regenradars wird nicht richtig ausgeblendet auf den
+     anderen Cockpit-Seiten." Die Schirme Box, Rennen usw. liegen als Ueberlagerung OHNE eigene
+     Ebene ueber dem Raster; die Linie mit z-index 3 stach durch. Dort also aus. */
+  body[data-cockpit="acc"] #race-dash[data-screen]:not([data-screen="main"]) #race-wx-box::before { display: none; }
 
   /* TANK, ZUSTAND, AKKU: oben Symbol und Zahl, in der MITTE der Kachel ein dicker
      WAAGERECHTER Balken (v1.3.58 BESTELLT: "mit groesserer Hoehe, damit sie leichter zu
@@ -5109,6 +5143,349 @@
   body[data-cockpit="acc"] #race-dash > .gt3-strip > #race-tyre-box > .gt3-val.sm {
     text-align: center; white-space: normal; font-size: clamp(10.5px, 1.3vw, 14px); }
   body[data-cockpit="acc"] #race-dash .gt3-foot { box-shadow: inset 3px 0 0 var(--acc-blau); }
+
+  /* ======================= ACC: BOXENSCHIRM NACH ENTWURF B (v1.3.78) ====================
+     BESTELLT: "Ja zu Box B und Ergebnis A. Baue das ein." Dieselbe Dreiteilung wie das
+     ACC-Cockpit (1fr / .92fr / 1.22fr): links die fuenf Zeilen als Knoepfe mit blauer
+     Unterkante (gruen bei "ja"), in der Mitte Standzeit und Zustand - und darunter, an der
+     Stelle des Gangs, das Minispiel -, rechts die Messwerte als Timing-Zeilen.
+
+     Zwei ids im Waehler (#race-dash #race-...), weil die Rasterregeln der Grundansicht mit
+     :has() bis zu sechs Klassen Gewicht tragen; eine id mehr schlaegt sie alle.
+
+     Groessen in cqh mit vw davor: die Schirme sind absolut eingepasst und haben damit eine
+     feste Groesse, also taugen sie als Container. Alte WebViews ohne Container-Einheiten
+     verwerfen die zweite Angabe und nehmen die erste. */
+  body[data-cockpit="acc"] #race-dash #race-pitscreen {
+    container-type: size;
+    grid-template-columns: minmax(0, 1fr) minmax(0, .92fr) minmax(0, 1.22fr);
+    grid-template-rows: repeat(5, minmax(0, 1fr)) auto;
+    column-gap: clamp(3px, .55vw, 7px); row-gap: clamp(2px, .45vw, 6px);
+    font-family: var(--k-font); color: #e6ebf2; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen [hidden] { display: none !important; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-kopf { display: none; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row {
+    grid-column: 1; grid-template-columns: auto minmax(0, 1fr) auto; border-radius: 0;
+    padding: 0 clamp(5px, 1vw, 12px); color: #eef2f7;
+    background: linear-gradient(var(--acc-kante), var(--acc-kante)) 0 0 / 100% 1px no-repeat,
+                linear-gradient(var(--acc-blau), var(--acc-blau)) 0 100% / 100% 2px no-repeat,
+                var(--acc-feld-klick); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row.pr-ja {
+    background: linear-gradient(var(--acc-kante), var(--acc-kante)) 0 0 / 100% 1px no-repeat,
+                linear-gradient(var(--good), var(--good)) 0 100% / 100% 2px no-repeat,
+                var(--acc-feld-klick); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row.pr-sel {
+    outline: 2px solid var(--acc-blau); outline-offset: -2px;
+    background-color: var(--acc-feld-hover); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row > .pr-pfeil {
+    color: var(--acc-blau); font-size: clamp(10px, 1.4vw, 16px); font-size: clamp(10px, 3.4cqh, 16px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row > .pr-name {
+    font-size: clamp(9.5px, 1.35vw, 17px); font-size: clamp(9.5px, 3.5cqh, 17px);
+    letter-spacing: .09em; text-transform: uppercase; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row > .pr-bild {
+    display: flex; align-items: center; justify-content: flex-end; gap: clamp(4px, .8vw, 10px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row .pr-zahl,
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row .pit-t4-feld,
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row .pit-bar,
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row .pr-bild > span:empty:not(.pr-wert) { display: none; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row .pit-mix-feld {
+    width: clamp(40px, 6vw, 84px); gap: clamp(2px, .4vw, 5px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row .pit-mix-feld > i {
+    border-radius: 0; opacity: .45; height: clamp(8px, 2.8cqh, 15px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row .pit-mix-feld > i.an {
+    opacity: 1; outline: 2px solid #fff; outline-offset: 1px; }
+  /* Das Zustandswort als Schild: gruen bei "ja", sonst nur umrandet. */
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row .pr-wert {
+    font-family: var(--k-font); font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    font-size: clamp(8.5px, 1.1vw, 13px); font-size: clamp(8.5px, 2.8cqh, 13px);
+    line-height: 1; padding: .34em .7em .28em; min-width: 5.4em; text-align: center;
+    color: #eef2f7; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-row.pr-ja .pr-wert {
+    background: var(--good); color: #04130a; box-shadow: none; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen[data-lage="gasse"] #pit-wert-go {
+    color: #ffd83d; box-shadow: inset 0 0 0 1px #ffd83d; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen[data-lage="arbeit"] #pit-wert-go {
+    background: #ffd83d; color: #1d1600; box-shadow: none; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen[data-lage="fertig"] #pit-wert-go {
+    background: var(--good); color: #04130a; box-shadow: none; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .schirm-fuss {
+    grid-column: 1 / -1; grid-row: 6; font-family: var(--k-font); text-transform: uppercase;
+    letter-spacing: .14em; font-size: clamp(7.5px, 1vw, 11px); color: #8e99ab;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* MITTE: wie der Gang - Beschriftung, grosse Zahl mit kurzer blauer Linie, Zustand. */
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-mitte {
+    display: grid; grid-column: 2; grid-row: 1 / 6; min-height: 0; overflow: hidden;
+    grid-template-rows: auto auto auto minmax(0, 1fr); justify-items: center;
+    padding: clamp(4px, .9vw, 14px) clamp(4px, .6vw, 8px);
+    padding: clamp(4px, 2.2cqh, 14px) clamp(4px, .6vw, 8px);
+    background: linear-gradient(var(--acc-blau), var(--acc-blau)) 0 0 / 100% 2px no-repeat, var(--acc-feld); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-lbl,
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pw-lbl,
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-bil > i {
+    font-style: normal; font-weight: 600; letter-spacing: .2em; text-transform: uppercase;
+    color: #8e99ab; white-space: nowrap;
+    font-size: clamp(7.5px, 1vw, 12.5px); font-size: clamp(7.5px, 2.6cqh, 12.5px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-stand {
+    display: inline-flex; align-items: baseline; line-height: .9; color: #fff;
+    font-size: clamp(30px, 8vw, 128px); font-size: clamp(30px, 25cqh, 128px);
+    padding-bottom: clamp(3px, 2.2cqh, 12px); margin-top: clamp(1px, .6cqh, 4px);
+    background: linear-gradient(var(--acc-blau), var(--acc-blau)) 50% 100% / 46% 3px no-repeat; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-stand > b {
+    font-weight: 700; font-variant-numeric: tabular-nums; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-stand > small {
+    font-size: .36em; font-weight: 600; color: #8e99ab; margin-left: .12em; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-stand.leer > b { color: #7d8799; font-size: .5em; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-stand.leer > small { display: none; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen[data-lage="fertig"] .pm-stand > b { color: var(--good); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-lage {
+    margin-top: clamp(3px, 1.8cqh, 12px); font-weight: 700; letter-spacing: .14em;
+    text-transform: uppercase; color: #8e99ab; white-space: nowrap;
+    font-size: clamp(10px, 1.7vw, 22px); font-size: clamp(10px, 4.6cqh, 22px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen[data-lage="gasse"] .pm-lage,
+  body[data-cockpit="acc"] #race-dash #race-pitscreen[data-lage="arbeit"] .pm-lage { color: #ffd83d; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen[data-lage="fertig"] .pm-lage { color: var(--good); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-hinweis {
+    align-self: center; text-align: center; color: #8e99ab; line-height: 1.35; padding: 0 6%;
+    font-size: clamp(9px, 1.1vw, 14px); font-size: clamp(9px, 3cqh, 14px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-bilanz {
+    align-self: center; width: 94%; display: grid; grid-template-columns: 1fr 1fr;
+    gap: clamp(2px, .4vw, 5px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-bil-titel { grid-column: 1 / -1; justify-self: center; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-bil {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 4px; min-width: 0;
+    background: rgba(255, 255, 255, .04); padding: clamp(2px, 1cqh, 6px) clamp(3px, .6vw, 8px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-bil > i { letter-spacing: .12em; overflow: hidden; text-overflow: ellipsis; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pm-bil > b {
+    font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums;
+    font-size: clamp(10px, 1.6vw, 22px); font-size: clamp(10px, 4.4cqh, 22px); }
+
+  /* RECHTS: Timing-Zeilen - Beschriftung links, Zahl rechts, dazwischen das Bild. */
+  body[data-cockpit="acc"] #race-dash #race-pitscreen > .pit-werte {
+    display: grid; grid-column: 3; grid-row: 1 / 6; min-height: 0; overflow: hidden;
+    grid-template-rows: auto; grid-auto-rows: minmax(0, 1fr);
+    padding: clamp(3px, 1.6cqh, 12px) clamp(5px, 1.1vw, 14px) clamp(2px, .8cqh, 8px);
+    background: linear-gradient(var(--acc-blau), var(--acc-blau)) 0 0 / 100% 2px no-repeat, var(--acc-feld); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pw-kopf {
+    display: flex; align-items: center; gap: clamp(4px, .7vw, 9px); padding-bottom: clamp(2px, 1cqh, 8px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pw-kopf > b {
+    font-weight: 700; font-size: clamp(13px, 2.2vw, 30px); font-size: clamp(13px, 6cqh, 30px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pw-zeichen {
+    margin-left: auto; border-radius: 0;
+    width: clamp(20px, 3vw, 40px); width: clamp(20px, 8cqh, 40px);
+    font-size: clamp(13px, 2vw, 26px); font-size: clamp(13px, 5.4cqh, 26px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pw-zeile {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
+    column-gap: clamp(4px, 1vw, 12px); border-top: 1px solid rgba(255, 255, 255, .11); min-height: 0; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pw-zeile > b {
+    font-weight: 700; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+    font-size: clamp(13px, 2.3vw, 32px); font-size: clamp(13px, 6.4cqh, 32px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pw-zeile > .pit-bar {
+    justify-self: end; width: 100%; background: #1c212b;
+    height: clamp(6px, 1vw, 13px); height: clamp(6px, 2.8cqh, 13px);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pw-zeile > .pit-t4-feld {
+    justify-self: end; width: clamp(16px, 2.6vw, 36px); width: clamp(16px, 7cqh, 36px); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pw-zeile .gt3-t4 { border-radius: 1px; }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pw-zeile.pw-gut > b { color: var(--good); }
+  body[data-cockpit="acc"] #race-dash #race-pitscreen .pw-zeile.pw-strafe > b { color: var(--bad); }
+
+  /* DAS MINISPIEL IM BOXENSCHIRM: an der Stelle der Mitte, unter der Standzeit - dieselbe
+     Spaltenteilung und dieselben Abstaende wie der Schirm, also liegt die zweite Spalte
+     genau ueber der Mitte. Ohne eigene Karte: die Felder stehen in der Kachel. Im
+     Hauptschirm bleibt es, wie es war (mittig ueber dem Gang). */
+  body[data-cockpit="acc"] #race-dash[data-screen="pit"] .pit-spiel {
+    container-type: size;
+    grid-template-columns: minmax(0, 1fr) minmax(0, .92fr) minmax(0, 1.22fr);
+    column-gap: clamp(3px, .55vw, 7px); padding: clamp(4px, .8vw, 9px);
+    place-items: end center; }
+  body[data-cockpit="acc"] #race-dash[data-screen="pit"] .pit-spiel > .ps-karte {
+    grid-column: 2; background: none; border: 0; box-shadow: none; padding: 0;
+    gap: clamp(4px, 1.4cqh, 10px); margin-bottom: 13cqh; }
+  body[data-cockpit="acc"] #race-dash[data-screen="pit"] .pit-spiel .ps-reihe { gap: clamp(5px, 1.6cqh, 13px); }
+  body[data-cockpit="acc"] #race-dash[data-screen="pit"] .pit-spiel .ps-slot {
+    width: clamp(28px, 5.2vw, 80px); width: clamp(28px, 15cqh, 80px); border-width: 2px; }
+  body.race-turn[data-cockpit="acc"] #race-dash[data-screen="pit"] .pit-spiel .ps-slot {
+    width: clamp(28px, 5.2vh, 80px); width: clamp(28px, 15cqh, 80px); }
+  body[data-cockpit="acc"] #race-dash[data-screen="pit"] .pit-spiel .ps-fuss button {
+    font-size: clamp(13px, 5cqh, 20px); padding: 2px 12px; }
+
+  /* ======================= ACC: RENNEN / ERGEBNIS NACH ENTWURF A (v1.3.78) ===============
+     Nach dem Ziel: oben das Podest als Stufenreihe 2-1-3 mit der Strecke daneben, darunter
+     Rangliste | Diagramm | Sektoren. Waehrend des Rennens faellt das Podest weg, die
+     Strecke steht unter dem Diagramm. Fehlt ein Teil (keine Strecke, Sektoren aus, noch
+     keine Runde), nimmt der Nachbar die Flaeche - eine leere Kachel saehe wie ein Fehler aus. */
+  body[data-cockpit="acc"] #race-dash #race-ovscreen {
+    container-type: size; font-family: var(--k-font); color: #e6ebf2;
+    grid-template-columns: minmax(0, 1.38fr) minmax(0, 1fr) minmax(0, .74fr);
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-areas: "kopf kopf kopf" "tab dia sek" "tab karte sek" "fuss fuss nochmal";
+    column-gap: clamp(3px, .55vw, 7px); row-gap: clamp(3px, .5vw, 7px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen:has(.ov-sektoren:empty) {
+    grid-template-areas: "kopf kopf kopf" "tab dia dia" "tab karte karte" "fuss fuss nochmal"; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen:has(.ov-karte:empty) {
+    grid-template-areas: "kopf kopf kopf" "tab dia sek" "tab dia sek" "fuss fuss nochmal"; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen:has(.ov-karte:empty):has(.ov-sektoren:empty) {
+    grid-template-areas: "kopf kopf kopf" "tab dia dia" "tab dia dia" "fuss fuss nochmal"; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen:has(.ov-diagramm:empty) {
+    grid-template-areas: "kopf kopf kopf" "tab karte karte" "tab karte karte" "fuss fuss nochmal"; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen:has(.ov-diagramm:empty):has(.ov-karte:empty) {
+    grid-template-areas: "kopf kopf kopf" "tab tab tab" "tab tab tab" "fuss fuss nochmal"; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen:has(.ov-podest:not([hidden])) {
+    grid-template-rows: auto minmax(0, .62fr) minmax(0, 1fr) auto;
+    grid-template-areas: "kopf kopf kopf" "podium podium karte" "tab dia sek" "fuss fuss nochmal"; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen:has(.ov-podest:not([hidden])):has(.ov-sektoren:empty) {
+    grid-template-areas: "kopf kopf kopf" "podium podium karte" "tab dia dia" "fuss fuss nochmal"; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen:has(.ov-podest:not([hidden])):has(.ov-karte:empty) {
+    grid-template-areas: "kopf kopf kopf" "podium podium podium" "tab dia sek" "fuss fuss nochmal"; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen:has(.ov-podest:not([hidden])):has(.ov-karte:empty):has(.ov-sektoren:empty) {
+    grid-template-areas: "kopf kopf kopf" "podium podium podium" "tab dia dia" "fuss fuss nochmal"; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-nochmal { grid-area: nochmal; }
+
+  /* Kopf: RENNEN, der Zustand in Blau, rechts die Runde. */
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .schirm-kopf {
+    align-items: baseline; gap: clamp(6px, 1.2vw, 16px); letter-spacing: .2em; color: #8e99ab;
+    font-size: clamp(10px, 1.3vw, 17px); font-size: clamp(10px, 3.6cqh, 17px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .schirm-kopf > b { color: #eef2f7; letter-spacing: .2em; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen #ov-kopf-lage { color: var(--acc-blau); font-weight: 700; letter-spacing: .14em; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen #ov-kopf-runde { color: #eef2f7; font-weight: 700; letter-spacing: .1em; }
+
+  /* Die Kacheln: fast schwarz, kantig, Haarlinie oben; die Rangliste mit blauer Kopflinie. */
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-tab,
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-karte,
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-diagramm,
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-sektoren {
+    min-height: 0; border-radius: 0;
+    padding: clamp(3px, 1.4cqh, 10px) clamp(4px, .8vw, 10px);
+    background: linear-gradient(var(--acc-kante), var(--acc-kante)) 0 0 / 100% 1px no-repeat, var(--acc-feld); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-tab {
+    background: linear-gradient(var(--acc-blau), var(--acc-blau)) 0 0 / 100% 2px no-repeat, var(--acc-feld);
+    gap: 0; font-family: var(--k-font); font-variant-numeric: tabular-nums;
+    font-size: clamp(10px, 1.3vw, 18px); font-size: clamp(10px, 3.7cqh, 18px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-zeile {
+    grid-template-columns: 2.1em .8em minmax(0, 1fr) 2.1em 2.8em 1.7em 4.1em 4.1em 3.9em;
+    background: none; border-radius: 0; padding: .42em .45em .36em;
+    border-top: 1px solid rgba(255, 255, 255, .09); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen.ov-fertig .ov-zeile {
+    grid-template-columns: 2.1em .8em minmax(0, 1fr) 2.1em 2.8em 1.7em 4.1em 3.9em; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-mit-strafe > .ov-zeile {
+    grid-template-columns: 2.1em .8em minmax(0, 1fr) 2.1em 2.8em 1.7em 4.1em 4.1em 3.9em 4.6em; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen.ov-fertig .ov-mit-strafe > .ov-zeile {
+    grid-template-columns: 2.1em .8em minmax(0, 1fr) 2.1em 2.8em 1.7em 4.1em 3.9em 4.6em; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-zeile.ov-kopfz {
+    display: grid; border-top: 0; border-bottom: 1px solid rgba(255, 255, 255, .14); padding-top: 0; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-kopfz > span {
+    font-size: .6em; letter-spacing: .16em; text-transform: uppercase; color: #8e99ab; font-weight: 600;
+    overflow: hidden; white-space: nowrap; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-kopfz + .ov-zeile { border-top: 0; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-pos { text-align: center; font-weight: 700; color: #eef2f7; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-name { font-weight: 600; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-farbe { width: .62em; height: .62em; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-pit { color: #ffd83d; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-mix { height: .7em; border-radius: 0; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-mix-leer { visibility: hidden; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-zeit,
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-luecke,
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-runden { text-align: right; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-strafe { font-size: .78em; letter-spacing: .06em; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-kopfz > .ov-strafe { color: #8e99ab; font-size: .6em; }
+  /* Das eigene Auto: blaues Schild statt Platzziffer, blauer Schimmer, Leiste links. */
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-zeile.ov-ich {
+    background: linear-gradient(90deg, rgba(0, 163, 224, .16), rgba(0, 163, 224, .03) 70%); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-zeile.ov-ich::before { background: var(--acc-blau); border-radius: 0; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-zeile.ov-ich > .ov-pos {
+    background: var(--acc-blau); color: var(--k-blau-text, #04070c); font-weight: 800; margin: 0 .25em; }
+
+  /* PODEST: drei Stufen, kantig, Linie in Gold/Silber/Bronze, die Platzziffer gross rechts. */
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-podest {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr) minmax(0, 1fr);
+    align-items: end; margin: 0; height: 100%; min-height: 0;
+    gap: clamp(3px, .55vw, 7px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-podest.zwei { grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-podest.solo { grid-template-columns: minmax(0, 1fr); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .platz {
+    --m: #c9d1e0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto; align-content: center; align-items: center;
+    column-gap: clamp(4px, 1vw, 14px); row-gap: clamp(1px, .8cqh, 6px); height: 84%; min-height: 0;
+    padding: clamp(3px, 1.2cqh, 10px) clamp(5px, 1.1vw, 14px); overflow: hidden;
+    background: linear-gradient(var(--m), var(--m)) 0 0 / 100% 3px no-repeat, var(--acc-feld); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .platz-1 {
+    --m: #f5c518; height: 100%;
+    background: linear-gradient(var(--m), var(--m)) 0 0 / 100% 3px no-repeat,
+                linear-gradient(180deg, rgba(245, 197, 24, .10), rgba(245, 197, 24, 0) 70%), var(--acc-feld); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .platz-3 { --m: #cd7f32; height: 70%; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .platz-solo {
+    --m: #f5c518; height: 100%; grid-template-rows: repeat(4, auto); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .ov-auto {
+    grid-column: 1; grid-row: 1 / -1; border-radius: 0; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+    height: clamp(18px, 3.4vw, 60px); height: clamp(18px, 10cqh, 60px); font-size: clamp(10px, 4.4cqh, 26px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .platz-1 .ov-auto,
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .platz-solo .ov-auto {
+    height: clamp(20px, 4vw, 70px); height: clamp(20px, 12cqh, 70px); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .platz > :not(.ov-auto):not(.block) { grid-column: 2; min-width: 0; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .name {
+    justify-content: flex-start; font-weight: 700; color: #eef2f7;
+    font-size: clamp(10.5px, 1.6vw, 22px) !important; font-size: clamp(10.5px, 4.4cqh, 22px) !important; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .name .ov-farbe { width: .5em; height: .5em; flex: none; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .zeit {
+    font-family: var(--k-font); font-weight: 700; color: #8e99ab; font-variant-numeric: tabular-nums;
+    font-size: clamp(10px, 1.3vw, 18px); font-size: clamp(10px, 3.8cqh, 18px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .zeit.zeit-1 {
+    color: #f5c518; font-size: clamp(11px, 1.7vw, 24px); font-size: clamp(11px, 5cqh, 24px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .block {
+    grid-column: 3; grid-row: 1 / -1; width: auto; height: auto !important; background: none;
+    overflow: visible; color: var(--m); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .block::before { display: none; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .block b {
+    color: var(--m); font-weight: 800; line-height: .8;
+    font-size: clamp(22px, 5vw, 80px); font-size: clamp(22px, 15cqh, 80px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .platz-1 .block b {
+    font-size: clamp(26px, 6vw, 100px); font-size: clamp(26px, 19cqh, 100px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .platz-solo .block b {
+    font-size: clamp(12px, 2vw, 30px); font-size: clamp(12px, 6cqh, 30px); letter-spacing: .2em; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .solo-zeit {
+    font-family: var(--k-font); font-weight: 700; color: #f5c518; font-size: clamp(14px, 7cqh, 36px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .solo-werte,
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-podest .solo-vergleich {
+    font-size: clamp(9px, 3.2cqh, 15px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Strecke, Diagramm, Sektoren */
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-karte {
+    grid-template-rows: auto minmax(0, 1fr); place-items: center; overflow: hidden; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-karte::before {
+    content: attr(data-titel); justify-self: start; font-weight: 600; letter-spacing: .2em;
+    text-transform: uppercase; color: #8e99ab; font-size: clamp(7.5px, 2.4cqh, 12px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-karte:empty::before { content: none; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-karte .tp-karte { background: rgba(255, 255, 255, .05); border-radius: 0; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-diagramm { display: grid; place-items: stretch; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-diagramm:empty { display: none; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-dia-svg { width: 100%; height: 100%; max-height: none; min-height: 0; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-dia-text { font-family: var(--k-font); font-size: 10px; fill: #8e99ab; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-dia-titel { font-family: var(--k-font); font-size: 10px; letter-spacing: .08em; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-dia-gitter { stroke: rgba(255, 255, 255, .1); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-sektoren:empty { display: none; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-sek-tab {
+    font-family: var(--k-font); font-variant-numeric: tabular-nums; border-spacing: 2px;
+    font-size: clamp(8.5px, 1.1vw, 14px); font-size: clamp(8.5px, 3cqh, 14px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-sek-tab th {
+    font-size: .74em; letter-spacing: .14em; text-transform: uppercase; color: #8e99ab; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-sek-tab td { background: none; border-radius: 0; color: #eef2f7; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-sek-tab td:first-child { max-width: 5.5em; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-sek-tab td.ov-sek-best { background: #1f9d55; color: #fff; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen .ov-sek-tab td.ov-sek-schlecht { background: #b23a3a; color: #fff; }
+
+  /* Fusszeile und NOCHMAL */
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .schirm-fuss {
+    align-self: center; font-family: var(--k-font); text-transform: uppercase; letter-spacing: .12em;
+    color: #8e99ab; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+    font-size: clamp(7.5px, 1vw, 11px); font-size: clamp(7.5px, 2.4cqh, 11px); }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-nochmal {
+    justify-self: end; align-self: center; border-radius: 0; border: 0; font-family: var(--k-font);
+    font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #eef2f7;
+    background: var(--acc-feld-klick); box-shadow: inset 0 -2px 0 var(--acc-blau), inset 0 0 0 1px rgba(255, 255, 255, .12);
+    font-size: clamp(9px, 1.2vw, 15px); font-size: clamp(9px, 3cqh, 15px); padding: .5em 1.1em .45em; }
+  body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-nochmal[hidden] { display: none; }
 </style>
 <style>
   .stat-clean { margin-top:20px; border:1px solid var(--line,#454b57); border-radius:8px; padding:12px; }
@@ -5281,7 +5658,7 @@
         <span class="home-lade-dreh" id="home-lade-dreh"></span><span class="home-lade-text" id="home-lade-text" data-i18n-skip></span>
       </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.3.65</span></span>
+        <span class="foot-ver">v<span id="app-version">1.3.88</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -5774,6 +6151,37 @@
             <span class="gt3-bar pit-bar"><i id="pit-bar-repair"></i></span>
             <span class="pr-wert" id="pit-wert-repair" data-i18n-skip>&ndash;</span></span></div>
         <div class="schirm-fuss" id="pit-fuss" data-i18n-skip></div>
+        <!-- ACC-BOXENSCHIRM NACH ENTWURF B (v1.3.78). BESTELLT: "Ja zu Box B [...] Baue das
+             ein." Dieselbe Dreiteilung wie das ACC-Cockpit: links die fuenf Zeilen oben als
+             Knoepfe (der Plan), in der Mitte Standzeit und Zustand - darunter, wo im Cockpit
+             der Gang steht, das Minispiel -, rechts die Messwerte als Timing-Zeilen. Die zwei
+             Bloecke zeigt nur die Ansicht ACC (CSS); die anderen Ansichten behalten ihren
+             Boxenschirm. Gefuellt von pitScreenRender() im selben Takt wie die Zeilen. -->
+        <div class="pit-mitte" id="pit-mitte">
+          <span class="pm-lbl">Standzeit</span>
+          <span class="pm-stand" id="pit-stand-box"><b id="pit-stand" data-i18n-skip>&ndash;</b><small data-i18n-skip>s</small></span>
+          <span class="pm-lage" id="pit-mitte-lage" data-i18n-skip></span>
+          <span class="pm-hinweis" id="pit-hinweis">Vorwahl für den nächsten Stopp</span>
+          <div class="pm-bilanz" id="pit-bilanz" hidden>
+            <span class="pm-lbl pm-bil-titel" id="pit-bil-titel" data-i18n-skip></span>
+            <span class="pm-bil" id="pit-bil-sprit"><i>Sprit</i><b id="pit-bil-sprit-z" data-i18n-skip></b></span>
+            <span class="pm-bil" id="pit-bil-zustand"><i>Zustand</i><b id="pit-bil-zustand-z" data-i18n-skip></b></span>
+            <span class="pm-bil" id="pit-bil-reifen"><i>Reifen</i><b id="pit-bil-reifen-z" data-i18n-skip></b></span>
+            <span class="pm-bil" id="pit-bil-spiel"><i>Minispiel</i><b id="pit-bil-spiel-z" data-i18n-skip></b></span>
+          </div>
+        </div>
+        <div class="pit-werte" id="pit-werte">
+          <div class="pw-kopf"><span class="pw-lbl">Runde</span><b id="pit-w-runde" data-i18n-skip></b>
+            <span class="pit-zeichen pw-zeichen" id="pit-w-zeichen" aria-hidden="true">P</span></div>
+          <div class="pw-zeile"><span class="pw-lbl">Tank</span>
+            <span class="gt3-bar pit-bar"><i id="pit-w-bar-tank"></i></span><b id="pit-w-tank" data-i18n-skip></b></div>
+          <div class="pw-zeile"><span class="pw-lbl">Zustand</span>
+            <span class="gt3-bar pit-bar"><i id="pit-w-bar-rep"></i></span><b id="pit-w-rep" data-i18n-skip></b></div>
+          <div class="pw-zeile"><span class="pw-lbl">Reifen</span>
+            <span class="pit-t4-feld"><i class="gt3-t4" id="pit-w-tyre-fl"><b></b></i><i class="gt3-t4" id="pit-w-tyre-fr"><b></b></i><i class="gt3-t4" id="pit-w-tyre-rl"><b></b></i><i class="gt3-t4" id="pit-w-tyre-rr"><b></b></i></span><b id="pit-w-reifen" data-i18n-skip></b></div>
+          <div class="pw-zeile" id="pit-w-pflicht" hidden><span class="pw-lbl">Pflichtstopp</span><span></span><b id="pit-w-pflicht-z" data-i18n-skip></b></div>
+          <div class="pw-zeile pw-strafe" id="pit-w-strafe" hidden><span class="pw-lbl">Strafe</span><span></span><b id="pit-w-strafe-z" data-i18n-skip></b></div>
+        </div>
       </div>
 
       <div class="gt3-schirm" id="race-ovscreen">
@@ -6471,6 +6879,12 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>1.3</span></b></p>
       <ul class="muted" id="patchnotes-13" style="padding-left:20px; line-height:1.7">
+        <li>Streckeneditor: Die Pr&#252;fung, ob die Strecke geschlossen ist, war immer &#8222;ja&#8220;; jetzt stimmt sie, und beim Schlie&#223;en der Runde spielt wieder der &#8222;Strecke fertig&#8220;-Klang.</li>
+        <li>Sektoren &#252;ber den Streckeneditor (WIP): Der neue Knopf &#8222;Sektoren&#8220; bietet &#8222;Automatisch festlegen&#8220; (Anzahl aus der Teilezahl: 8 Teile keine Sektoren, 15 zwei, 25 drei, h&#246;chstens zehn; gleich lange Abschnitte auf Teilefugen), &#8222;Manuell festlegen&#8220; (Strecke antippen oder mit Steuerkreuz und &#10005; die Teile w&#228;hlen, an denen ein Sektor beginnt, nochmal entfernt, dann &#8222;Fertig&#8220;) und &#8222;Aus&#8220;. Die Grenzen sind d&#252;nne gr&#252;ne Linien, gespeichert mit der Strecke; der Streckencode bleibt gleich. Im Rennen misst jedes Auto die Sektoren &#252;ber seinen Kachelz&#228;hler; verz&#228;hlt es sich (etwa beim Abflug), steht der Sektor auf &#8222;&#8211;&#8220; statt einer falschen Zeit, die Runde z&#228;hlt weiter. Zus&#228;tzliche Start/Ziel-Teile haben weiter Vorrang, im Ausdruck-Modus bleibt der Regler.</li>
+        <li>Cockpit ACC: neuer Box-Schirm in derselben Dreiteilung wie das Cockpit : links die f&#252;nf Wahlen als Kn&#246;pfe (gr&#252;ne Kante bei &#8222;ja&#8220;), in der Mitte die gro&#223;e Standzeit mit Zustand und darunter das Minispiel, rechts Runde, Tank, Zustand und Reifen; dazu der Stand der Pflichtstopps, eine offene Rammstrafe und die Bilanz des letzten Stopps, wenn es sie gibt. Neuer Rennen-Schirm: nach dem Ziel oben das Podest 2-1-3 in Gold, Silber und Bronze mit der Strecke daneben, darunter Rangliste, Rundendiagramm und Sektoren; w&#228;hrend des Rennens ohne Podest. Die Rangliste hat eine Strafen-Spalte (RAMMER, verpasster Pflichtstopp), wenn es Strafen gibt. Behoben: Nach dem Ziel stand im Kopf noch &#8222;l&#228;uft&#8220;, jetzt &#8222;beendet&#8220;.</li>
+        <li>Cockpit ACC: Die blaue Kopflinie des Regenradars scheint nicht mehr durch die anderen Cockpit-Schirme (Box, Rennen usw.) hindurch, sie steht nur noch auf dem Hauptschirm.</li>
+        <li>Cockpit: Die Ansicht ACC wird jetzt einmalig f&#252;r alle eingestellt, egal welche Ansicht vorher gespeichert war (bisher nur, wenn Omega gespeichert war). Wer danach wieder eine andere Ansicht w&#228;hlt, beh&#228;lt sie (Optionen &#8594; Allgemein &#8594; Cockpit-Ansicht).</li>
+        <li>Einf&#252;hrung: Es gibt nur noch einen Boxenstopp, und zwar im Regen; nach dem Wetterwechsel wartet die Einf&#252;hrung, bis die Regen-Ansage der App fertig ist, damit sich die Stimmen nicht &#252;berlagern. Neu erkl&#228;rt sie vorher den R&#252;ckw&#228;rtsgang (im Stand die Runterschalt-Taste, dann Gas; sie wartet, bis das Auto wirklich r&#252;ckw&#228;rts f&#228;hrt) und am Ende die Handschaltung (einmal hoch, einmal runter, danach ist die Automatik wieder an). H&#246;chstens knapp 4 Minuten. Virtuelles Fahren: Beim Beenden stehen Tempo und Gang wieder auf 0, das Cockpit zeigt also nicht mehr das Tempo der virtuellen Fahrt.</li>
         <li>Boxen-Minispiel neu: Es zeigt nur noch die vier Kn&#246;pfe nebeneinander, ohne Kopfzeile, Zeitring und Z&#228;hler. Jeder Druck rahmt den Knopf gr&#252;n (richtig) oder rot (falsch) ein, mit einem Ton; es gibt kein Zeitlimit mehr. Im Hintergrund z&#228;hlen Schnelligkeit und Fehler weiter: ein sofortiger richtiger Druck spart bis zu 10 % der Standzeit, ab 2 s nichts mehr, ein falscher kostet 10 %. Die Arbeit l&#228;uft weiter, wer nichts dr&#252;ckt, steht so lange wie ohne Spiel. Ohne Gamepad erscheinen Tipp-Kn&#246;pfe. Challenges: Community ist ein Bereich mit einer gemeinsamen Rangliste aus Challenges und Strecken (nach Zahl der Fahrer); oben bis zu drei Karten, bei mehr Eintr&#228;gen eine gleich gro&#223;e Kachel &#8222;Alle anzeigen&#8220; zur gemeinsamen Liste mit Filtern Alle, Challenges und Strecken, bei weniger eine Kachel &#8222;Strecke einreichen&#8220;.</li>
         <li>Cockpit: ACC ist jetzt die Vorgabe-Ansicht (einmalig umgestellt, wer noch Omega gespeichert hatte; wer danach Omega w&#228;hlt, beh&#228;lt es). In ACC sind die Balken f&#252;r Tank, Zustand und Akku deutlich dicker und sitzen mittig in der Kachel, und das Regenradar ist zur&#252;ck an der Stelle der Wetterkachel. Challenges neu geordnet: Community steht oben, mit je einer Vorschau der meistgefahrenen Community Challenge und Strecke (Spielerzahl und Fahrgef&#252;hl als Schwierigkeit) und &#8222;Alle anzeigen&#8220;; danach W&#246;chentliche Challenges, Dauerrennen und Network ganz unten. &#8222;Community-Bestzeiten&#8220; hei&#223;t jetzt &#8222;Community Challenges&#8220;, &#8222;Community-Strecken&#8220; hei&#223;t &#8222;Alle Strecken&#8220;. Beim &#214;ffnen des Tabs laden die Zeiten sofort, unten links dreht dabei das Streckenteil.</li>
         <li>Virtuelles Fahren: Mit dem rechten Stick drehst du die Kamera um das Auto (bei Motorhaube und &#8222;Fahrer am Rand&#8220; schaust du dich um); der Blick bleibt stehen, R3 setzt ihn auf die Standardansicht zur&#252;ck, und ist die Kamera nicht gedreht, wechselt R3 wie bisher die Kamera (Tastatur: T/F/G/H drehen, V zur&#252;ck, C wechseln). Neues HUD im Stil von ACC mit blauer Akzentfarbe (WIP): Zeitenblock mit Delta zur besten Runde, Drehzahl als Segmentleiste, gro&#223;er Gang, Reifen als Vier-Felder-Grafik, Tank als Balken. Behoben: Beim Start wurde sofort eine Runde von 0,3 s gez&#228;hlt. Neue Cockpit-Ansicht &#8222;ACC: Rennspiel-Stil&#8220; (WIP, Optionen &#8594; Allgemein &#8594; Cockpit-Ansicht): dieselben Anzeigen im Stil von ACC mit blauer Akzentfarbe, ohne Regenradar, das in dieser Ansicht auch nicht gezeichnet wird.</li>
@@ -12912,6 +13326,14 @@
            Karte: gebaut wird im Vollbild (BESTELLT: "ich will nicht den Vollbild-Button,
            sondern 'Editor starten', und dann ist er im Vollbild"). -->
       <div id="track-fs-host">
+        <!-- v1.3.81: die manuelle Sektorwahl ersetzt solange die Aktionsleiste (body.track-sek). -->
+        <div class="tp-bar tp-sek-leiste" id="track-sek-leiste" hidden>
+          <span class="tp-sek-text"><b>Sektoren festlegen</b>
+            <small>Teile antippen oder mit &#10005; w&auml;hlen, an denen ein Sektor beginnt; nochmal entfernt. Start/Ziel beginnt immer Sektor 1.</small></span>
+          <b class="tp-sek-zahl" id="track-sek-zahl" data-i18n-skip></b>
+          <button type="button" class="tp-opt-knopf primary" id="track-sek-fertig">Fertig</button>
+          <button type="button" class="tp-opt-knopf" id="track-sek-abbrechen">Abbrechen</button>
+        </div>
         <div class="tp-bar tp-actions">
           <!-- Speichern (BESTELLT): oben LINKS, damit man nicht aus Versehen auf
                "Schliessen" statt "Speichern" klickt. Fragt nach einem Namen; bleibt das Feld
@@ -12973,6 +13395,13 @@
                  stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3"/>
               <path d="M7 7l1 13h8l1-13"/></svg>
             <span class="tp-cap">Leeren</span></button>
+          <!-- v1.3.81 BESTELLT: "Dort soll ein Sektoren-Button sein" - automatisch oder
+               manuell festlegen (sektorenDialog, 60-track.js). -->
+          <button class="tp-btn" id="track-sektoren" title="Sektoren der Strecke festlegen" aria-label="Sektoren festlegen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" aria-hidden="true"><path d="M3 17c4-9 14-9 18 0"/>
+              <path class="tp-akzent" d="M8.2 9.8l1.6 2.8M15.8 9.8l-1.6 2.8" stroke="#3ddc84"/></svg>
+            <span class="tp-cap">Sektoren</span><span class="wip-tag">WIP</span></button>
           <button class="tp-btn" id="track-random" title="Zuf&auml;llige Strecke aus den vorhandenen Teilen bauen" aria-label="Zufaellige Strecke bauen">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

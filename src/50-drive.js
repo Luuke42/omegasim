@@ -304,10 +304,17 @@
   //
   // Als Funktion mit uebergebener Ablage, damit der Selbsttest sie an einer Attrappe fahren
   // kann, ohne die echte Einstellung anzufassen.
-  const COCKPIT_ACC_VORGABE = 'chc.cockpit.acc.v1';
+  //
+  // v1.3.76 GEMELDET: "Wenn ich ins Cockpit gehe (1.3.75), sieht es noch wie das alte aus [...]
+  // Standardmaessig sollte das neue da sein." Die erste Ueberleitung griff nur bei 'omega'; wer
+  // irgendwann GT3, Modern o. Ae. gewaehlt hatte, blieb dort. Darum ein ZWEITER, einmaliger Merker
+  // (v2): JEDE gespeicherte Ansicht wird einmal auf ACC gestellt. Danach gilt wieder die eigene
+  // Wahl - wer erneut etwas anderes waehlt, behaelt es.
+  const COCKPIT_ACC_VORGABE = 'chc.cockpit.acc.v2';
   function cockpitVorgabeUmstellen(ablage) {
     if (ablage.getItem(COCKPIT_ACC_VORGABE)) return false;
-    const umgestellt = ablage.getItem(COCKPIT_STORE) === 'omega';
+    const vorher = ablage.getItem(COCKPIT_STORE);
+    const umgestellt = !!vorher && vorher !== 'acc';
     if (umgestellt) ablage.setItem(COCKPIT_STORE, 'acc');
     ablage.setItem(COCKPIT_ACC_VORGABE, '1');
     return umgestellt;

@@ -2669,12 +2669,17 @@
       alt.setItem(COCKPIT_STORE, 'omega');          // danach bewusst wieder Omega gewaehlt
       const r2 = cockpitVorgabeUmstellen(alt);
       if (r2 || alt.getItem(COCKPIT_STORE) !== 'omega') f.push('Umstellung greift ein zweites Mal');
+      // v1.3.76: die zweite Ueberleitung stellt JEDE gespeicherte Ansicht einmal auf ACC.
       const retro = attrappe({ [COCKPIT_STORE]: 'retro' });
-      if (cockpitVorgabeUmstellen(retro) || retro.getItem(COCKPIT_STORE) !== 'retro') f.push('eigene Wahl retro ueberschrieben');
+      if (!cockpitVorgabeUmstellen(retro) || retro.getItem(COCKPIT_STORE) !== 'acc') f.push('retro nicht einmal auf ACC gestellt');
+      retro.setItem(COCKPIT_STORE, 'gt3');
+      if (cockpitVorgabeUmstellen(retro) || retro.getItem(COCKPIT_STORE) !== 'gt3') f.push('spaetere eigene Wahl gt3 ueberschrieben');
+      const schonAcc = attrappe({ [COCKPIT_STORE]: 'acc' });
+      if (cockpitVorgabeUmstellen(schonAcc) || schonAcc.getItem(COCKPIT_STORE) !== 'acc') f.push('acc als Umstellung gemeldet');
       const neu = attrappe({});
       if (cockpitVorgabeUmstellen(neu) || neu.getItem(COCKPIT_STORE) !== null) f.push('neuer Nutzer: Ablage beschrieben');
       if (!neu.getItem(COCKPIT_ACC_VORGABE)) f.push('Merker nicht gesetzt');
-      teile.push('Umstellung omega->acc einmal, danach Omega behalten, retro unberuehrt');
+      teile.push('Umstellung jeder Ansicht auf acc genau einmal, danach eigene Wahl behalten');
       try {
         if (localStorage.getItem(COCKPIT_ACC_VORGABE) !== '1') f.push('Merker in der echten Ablage fehlt');
       } catch (e) { /* privater Modus */ }
@@ -12501,6 +12506,224 @@
     return { ok: !f.length, mass: teile.join(' | ') + (f.length ? ' || ' + f.join('; ') : '') };
   });
 
+  // ---- Box v1.3.78: ACC-Box nach Entwurf B ----
+  //
+  // BESTELLT: "Ja zu Box B und Ergebnis A. Baue das ein." Geprueft wird, was den Entwurf
+  // ausmacht: die Dreiteilung (Knoepfe links, Standzeit und Minispiel in der Mitte,
+  // Messwerte rechts), der Ort des Minispiels (Mitte im Boxenschirm, mittig im Hauptschirm
+  // wie bisher), die optionalen Felder NUR mit Daten, die Bilanz nach dem Stopp, die anderen
+  // Ansichten unveraendert - und kein Ueberlauf im Vollbild auf 800 x 370.
+  stAdd('Box v1.3.78: ACC-Box nach Entwurf B (Dreiteilung, Minispiel in der Mitte, Pflichtstopp/Strafe/Bilanz nur mit Daten, 800x370)', () => {
+    const sel = $('setting-cockpit');
+    const scr = $('race-pitscreen'), spiel = $('pit-spiel');
+    if (!sel || !scr || !spiel || !OMEGA_TEST.boxSchau) return { ok: false, mass: 'Boxenschirm oder Probe fehlt' };
+    for (const id of ['pit-mitte', 'pit-stand', 'pit-mitte-lage', 'pit-hinweis', 'pit-bilanz', 'pit-werte',
+                      'pit-w-tank', 'pit-w-rep', 'pit-w-reifen', 'pit-w-tyre-fl', 'pit-w-pflicht', 'pit-w-strafe']) {
+      if (!$(id)) return { ok: false, mass: id + ' fehlt' };
+    }
+    if (!(window.innerWidth > 0) || !(window.innerHeight > 0)) return { skip: true, mass: 'kein Fenster' };
+    const f = [], teile = [];
+    const merkView = sel.value;
+    const merkTab = document.querySelector('nav.tabs [data-tab].active');
+    const warFs = document.body.classList.contains('race-fs');
+    const warTurn = document.body.classList.contains('race-turn');
+    const reifen = pitSpielReifenMerk();
+    const merkKmh = physEngine.state.speedKmh, merkGas = throttleY;
+    const merkPC = playerCar;
+    const setze = (v) => { sel.value = v; sel.dispatchEvent(new Event('change', { bubbles: true })); };
+    const sichtbar = (el) => !!el && !el.hidden && getComputedStyle(el).display !== 'none'
+      && el.getBoundingClientRect().width > 0;
+    const R = (el) => el.getBoundingClientRect();
+    try {
+      setze('acc');
+      const btn = document.querySelector('[data-tab="race"]');
+      if (btn) btn.click();
+      // 1. Fahrt, keine Pflichtstopps, keine Strafe: Dreiteilung, Hinweis, keine Zusatzfelder.
+      OMEGA_TEST.boxSchau('fahrt', { pflicht: 0, erledigt: 0 });
+      if (!(R(scr).width > 0)) return { skip: true, mass: 'Boxenschirm nicht sichtbar' };
+      if (sichtbar(scr.querySelector('.pit-kopf'))) f.push('alter Kopf in ACC sichtbar');
+      const zeilen = [...scr.querySelectorAll('.pit-row')];
+      const mitte = $('pit-mitte'), werte = $('pit-werte');
+      if (!sichtbar(mitte) || !sichtbar(werte)) f.push('Mitte oder Werte nicht sichtbar');
+      if (zeilen.some((z) => R(z).right > R(mitte).left + 1)) f.push('Zeilen nicht links der Mitte');
+      if (R(werte).left < R(mitte).right - 1) f.push('Werte nicht rechts der Mitte');
+      if (zeilen.some((z) => getComputedStyle(z.querySelector('.pr-zahl')).display !== 'none')) f.push('Zahl noch in den Knoepfen');
+      if (!sichtbar($('pit-hinweis'))) f.push('Vorwahl-Hinweis fehlt');
+      if (sichtbar($('pit-w-pflicht'))) f.push('Pflichtstopp ohne Pflichtstopps');
+      if (sichtbar($('pit-w-strafe'))) f.push('Strafe ohne Strafe');
+      if (sichtbar($('pit-bilanz'))) f.push('Bilanz ohne Stopp');
+      if ($('pit-w-tank').textContent !== $('pit-zahl-refuel').textContent) f.push('Tank rechts weicht ab');
+      // 2. Mit Pflichtstopp und offener Rammstrafe: beide Felder da, mit den Werten.
+      if (!playerCar) playerCar = { device: { id: 'probe-box-st' }, role: 'player', alias: 'Probe' };
+      rammStand.set(playerCar, { rams: 1, offen: 3, verbuesst: 0 });
+      OMEGA_TEST.boxSchau('fahrt', { pflicht: 1, erledigt: 0 });
+      if (!sichtbar($('pit-w-pflicht')) || $('pit-w-pflicht-z').textContent !== '0/1') f.push('Pflichtstopp: ' + $('pit-w-pflicht-z').textContent);
+      if (!sichtbar($('pit-w-strafe')) || $('pit-w-strafe-z').textContent !== '+3 s') f.push('Strafe: ' + $('pit-w-strafe-z').textContent);
+      rammStand.delete(playerCar);
+      // 3. Arbeit mit Minispiel: es steht in der Mitte, unter der Standzeit.
+      OMEGA_TEST.boxSchau('arbeit', { pflicht: 1, erledigt: 0 });
+      const karte = spiel.querySelector('.ps-karte');
+      if (scr.dataset.lage !== 'arbeit' || spiel.hidden) f.push('kein Minispiel im Stopp');
+      else {
+        const k = R(karte), m = R(mitte), st = R($('pit-stand-box'));
+        const dx = Math.abs((k.left + k.right) / 2 - (m.left + m.right) / 2);
+        if (dx > m.width * 0.08) f.push('Minispiel ' + Math.round(dx) + ' px neben der Mitte');
+        if (k.left < m.left - 1 || k.right > m.right + 1) f.push('Minispiel breiter als die Mitte');
+        if (k.top < st.bottom) f.push('Minispiel deckt die Standzeit');
+        if (k.bottom > m.bottom + 1) f.push('Minispiel unter der Kachel');
+        teile.push('Minispiel ' + Math.round(k.width) + ' px in Mitte ' + Math.round(m.width) + ' px');
+      }
+      // ... und im Hauptschirm wie bisher mittig ueber dem Cockpit.
+      OMEGA_TEST.schirmZu('main');
+      if (!spiel.hidden) {
+        const k = R(karte), d = R($('race-dash'));
+        const dx = Math.abs((k.left + k.right) / 2 - (d.left + d.right) / 2);
+        if (dx > 4) f.push('Hauptschirm: Minispiel ' + Math.round(dx) + ' px aus der Mitte');
+      }
+      // 4. Fertig: die Bilanz dieses Stopps, mit dem Ergebnis des Minispiels.
+      OMEGA_TEST.boxSchau('fertig', { pflicht: 1, erledigt: 0 });
+      if (scr.dataset.lage !== 'fertig' || !sichtbar($('pit-bilanz'))) f.push('keine Bilanz im fertigen Stopp');
+      if (!sichtbar($('pit-bil-spiel')) || $('pit-bil-spiel-z').textContent !== '3/' + PIT_SPIEL_ANZAHL) f.push('Minispiel-Bilanz: ' + $('pit-bil-spiel-z').textContent);
+      if (!/^\d+\.\d$/.test($('pit-stand').textContent)) f.push('Standzeit "' + $('pit-stand').textContent + '"');
+      // 5. Nach dem Stopp: "Letzter Stopp" bleibt stehen.
+      OMEGA_TEST.boxSchau('raus', { pflicht: 1, erledigt: 0 });
+      if (!sichtbar($('pit-bilanz')) || $('pit-bil-titel').textContent.indexOf(t('Letzter Stopp')) !== 0) f.push('keine Bilanz nach dem Stopp');
+      if (!sichtbar($('pit-bil-spiel'))) f.push('Minispiel fehlt in der Bilanz nach dem Stopp');
+      // 6. Vollbild 800 x 370: nichts ragt aus seiner Kachel, kein Wert abgeschnitten.
+      document.body.classList.add('race-fs');
+      document.body.classList.remove('race-turn');
+      if (OMEGA_TEST.cockpitPassung) OMEGA_TEST.cockpitPassung(370, 800);
+      for (const art of ['fahrt', 'arbeit', 'fertig']) {
+        OMEGA_TEST.boxSchau(art, { pflicht: 1, erledigt: 0 });
+        const s = R(scr), ueber = [];
+        scr.querySelectorAll('.pit-row, .pit-mitte, .pit-werte').forEach((k) => {
+          const kr = R(k);
+          if (kr.right > s.right + 1 || kr.bottom > s.bottom + 1) ueber.push(k.id || k.className);
+          k.querySelectorAll('.pr-name, .pr-wert, .pm-stand, .pm-lage, .pm-bil, .pw-zeile > b, .pw-lbl').forEach((x) => {
+            if (!sichtbar(x)) return;
+            const xr = R(x);
+            if (xr.right > kr.right + 1 || xr.bottom > kr.bottom + 1 || xr.left < kr.left - 1) ueber.push((x.id || x.className) + ' ragt raus');
+            else if (x.scrollWidth > x.clientWidth + 1) ueber.push((x.id || x.className) + ' abgeschnitten');
+          });
+        });
+        if (ueber.length) f.push('800x370 ' + art + ': ' + ueber.slice(0, 4).join(', '));
+      }
+      teile.push('800x370 ohne Ueberlauf geprueft');
+      // 7. Andere Ansicht: der alte Boxenschirm, ohne die ACC-Bloecke.
+      setze('omega');
+      if (sichtbar(mitte) || sichtbar(werte)) f.push('ACC-Bloecke in Omega sichtbar');
+      if (!sichtbar(scr.querySelector('.pit-kopf'))) f.push('Kopf in Omega verschwunden');
+    } finally {
+      rammStand.delete(playerCar);
+      playerCar = merkPC;
+      document.body.classList.toggle('race-fs', warFs);
+      document.body.classList.toggle('race-turn', warTurn);
+      OMEGA_TEST.boxSchauZurueck();
+      physEngine.state.speedKmh = merkKmh; throttleY = merkGas;
+      pitSpielReifenZurueck(reifen);
+      updateDamageFuelUI(); updatePitUI();
+      setze(merkView);
+      if (OMEGA_TEST.cockpitPassung) OMEGA_TEST.cockpitPassung();
+      if (merkTab) merkTab.click();
+    }
+    return { ok: !f.length, mass: teile.join(' | ') + (f.length ? ' || ' + f.join('; ') : '') };
+  });
+
+  // ---- Rennen v1.3.78: Ergebnis nach Entwurf A ----
+  //
+  // Nach dem Ziel: "BEENDET" im Kopf (vorher stand dort "laeuft"), das Podest ueber der
+  // Rangliste mit der Strecke daneben, die Spaltenkoepfe, die Strafen-Spalte nur mit einer
+  // Strafe (RAMMER, verpasster Pflichtstopp). Waehrend des Rennens kein Podest, die Strecke
+  // unter dem Diagramm. Und im Vollbild auf 800 x 370 kein Ueberlauf.
+  stAdd('Rennen v1.3.78: Ergebnis nach Entwurf A (BEENDET, Podest + Strecke, Strafen nur mit Daten, live ohne Podest, 800x370)', () => {
+    const sel = $('setting-cockpit');
+    const scr = $('race-ovscreen');
+    if (!sel || !scr || !OMEGA_TEST.rennenSchau) return { ok: false, mass: 'Rennen-Schirm oder Probe fehlt' };
+    if (!(window.innerWidth > 0) || !(window.innerHeight > 0)) return { skip: true, mass: 'kein Fenster' };
+    const f = [], teile = [];
+    const merkView = sel.value;
+    const merkTab = document.querySelector('nav.tabs [data-tab].active');
+    const warFs = document.body.classList.contains('race-fs');
+    const warTurn = document.body.classList.contains('race-turn');
+    const merkReq = racePitRequired, merkDone = racePitDone;
+    const setze = (v) => { sel.value = v; sel.dispatchEvent(new Event('change', { bubbles: true })); };
+    const sichtbar = (el) => !!el && !el.hidden && getComputedStyle(el).display !== 'none'
+      && el.getBoundingClientRect().width > 0;
+    const R = (el) => el.getBoundingClientRect();
+    let probe = null;
+    try {
+      setze('acc');
+      const btn = document.querySelector('[data-tab="race"]');
+      if (btn) btn.click();
+      racePitRequired = 0; racePitDone = 0;
+      // 1. Waehrend des Rennens.
+      const live = OMEGA_TEST.rennenSchau('live', 'SG2R3G2R3');
+      if (!(R(scr).width > 0)) return { skip: true, mass: 'Rennen-Schirm nicht sichtbar' };
+      if (live.lage !== t('läuft')) f.push('live: Kopf "' + live.lage + '"');
+      if (live.podest) f.push('live: Podest sichtbar');
+      if (!sichtbar(scr.querySelector('.ov-kopfz'))) f.push('Spaltenkopf fehlt');
+      if (sichtbar(scr.querySelector('.ov-zeile .ov-strafe'))) f.push('Strafen-Spalte ohne Strafe');
+      const dia = $('ov-diagramm'), karte = $('ov-karte'), tab = $('ov-tab');
+      if (sichtbar(karte) && sichtbar(dia) && R(karte).top < R(dia).bottom - 1) f.push('live: Strecke nicht unter dem Diagramm');
+      if (sichtbar(dia) && R(dia).left < R(tab).right - 1) f.push('live: Diagramm nicht rechts der Rangliste');
+      // 2. Nach dem Ziel, ohne Strafen.
+      const ziel = OMEGA_TEST.rennenSchau('ziel', 'SG2R3G2R3');
+      if (ziel.lage !== t('beendet')) f.push('Ziel: Kopf "' + ziel.lage + '" statt beendet');
+      if (!ziel.podest) f.push('Ziel: kein Podest');
+      const podest = $('ov-podest');
+      if (sichtbar(podest) && R(podest).bottom > R(tab).top + 1) f.push('Podest nicht ueber der Rangliste');
+      if (sichtbar(karte) && sichtbar(podest) && (R(karte).left < R(podest).right - 1 || R(karte).bottom > R(tab).top + 1)) f.push('Strecke nicht neben dem Podest');
+      const p1 = podest.querySelector('.platz-1'), p2 = podest.querySelector('.platz-2');
+      if (p1 && p2 && !(R(p1).height > R(p2).height)) f.push('Platz 1 nicht die hoechste Stufe');
+      if (!sichtbar($('ov-nochmal'))) f.push('Nochmal fehlt');
+      if (sichtbar(scr.querySelector('.ov-zeile .ov-strafe'))) f.push('Ziel: Strafen-Spalte ohne Strafe');
+      // 3. Mit Strafen: RAMMER fuer ein Scheinauto, verpasster Pflichtstopp fuer das eigene.
+      probe = garage.find((c) => c.probe);
+      if (probe) rammStand.set(probe, { rams: 1, offen: 5, verbuesst: 0 });
+      racePitRequired = 1; racePitDone = 0;
+      OMEGA_TEST.rennenSchau('ziel');
+      const strafen = [...scr.querySelectorAll('.ov-zeile:not(.ov-kopfz) .ov-strafe')].map((x) => x.textContent).filter(Boolean);
+      if (!tab.classList.contains('ov-mit-strafe') || !sichtbar(scr.querySelector('.ov-kopfz .ov-strafe'))) f.push('Strafen-Spalte fehlt trotz Strafe');
+      if (!strafen.some((x) => x.indexOf(t('RAMMER')) >= 0)) f.push('kein RAMMER');
+      const soll = '+' + Math.round(racePenaltyMs() / 1000) + ' s';
+      if (!strafen.some((x) => x.indexOf(soll) >= 0)) f.push('verpasster Pflichtstopp fehlt (' + soll + '): ' + strafen.join('/'));
+      teile.push('Strafen: ' + strafen.join(', '));
+      // 4. Vollbild 800 x 370: nichts ragt aus seiner Kachel.
+      document.body.classList.add('race-fs');
+      document.body.classList.remove('race-turn');
+      if (OMEGA_TEST.cockpitPassung) OMEGA_TEST.cockpitPassung(370, 800);
+      for (const art of ['live', 'ziel']) {
+        OMEGA_TEST.rennenSchau(art, 'SG2R3G2R3');
+        const s = R(scr), ueber = [];
+        scr.querySelectorAll(':scope > *').forEach((k) => {
+          if (!sichtbar(k)) return;
+          const kr = R(k);
+          if (kr.right > s.right + 1 || kr.bottom > s.bottom + 1) ueber.push((k.id || k.className) + ' ragt aus dem Schirm');
+          k.querySelectorAll('.platz, .ov-zeit, .ov-luecke, .ov-runden, .ov-strafe, .zeit, .block b').forEach((x) => {
+            if (!sichtbar(x)) return;
+            const xr = R(x);
+            if (xr.right > kr.right + 1 || xr.bottom > kr.bottom + 1) ueber.push((x.className || x.tagName) + ' ragt raus');
+          });
+        });
+        if (ueber.length) f.push('800x370 ' + art + ': ' + ueber.slice(0, 4).join(', '));
+      }
+      teile.push('800x370 ohne Ueberlauf geprueft');
+      // 5. Andere Ansicht: kein Spaltenkopf.
+      setze('omega');
+      if (sichtbar(scr.querySelector('.ov-kopfz'))) f.push('Spaltenkopf in Omega sichtbar');
+    } finally {
+      if (probe) rammStand.delete(probe);
+      racePitRequired = merkReq; racePitDone = merkDone;
+      document.body.classList.toggle('race-fs', warFs);
+      document.body.classList.toggle('race-turn', warTurn);
+      OMEGA_TEST.rennenSchau('aus');
+      setze(merkView);
+      if (OMEGA_TEST.cockpitPassung) OMEGA_TEST.cockpitPassung();
+      if (merkTab) merkTab.click();
+    }
+    return { ok: !f.length, mass: teile.join(' | ') + (f.length ? ' || ' + f.join('; ') : '') };
+  });
+
   stAdd('Boxen-Minigame: Quadrat und Kreis schalten waehrenddessen nicht, Kreuz bricht ab', () => {
     const merk = { modus: pitModus, an: pitLaneEnabled, trig: pitTrigger,
                    kmh: physEngine.state.speedKmh, gang: physEngine.state.currentGear,
@@ -12581,7 +12804,9 @@
   // selbst. Echt sind Fahrgefuehl (applyPreset), Motorklang (#sound-profile), Bahn/Boden
   // (#setting-ontrack), Licht, Wetter und Reifen, damit das Zurueckstellen wirklich geprueft wird.
   // v1.3.31: Rollen-Hinweis, Wahl Bahn/Boden, Licht aus/ein, Regen, Regenreifen, zweiter Stopp, kein WIP.
-  stAdd('Tutorial v1.3.31: Rolle, Bahn/Boden, Tasten, Licht, Arcade→Pacejka, zwei Stopps mit Regenreifen, Motorklang, ≤ 240 s, Menü', async () => {
+  // v1.3.66: nur EIN Stopp (erst Regen, Ruhe bis die Regen-Ansage der App durch ist), Rueckwaertsgang,
+  // Handschaltung. Gang, Rueckwaertsfahrt und "Ansage laeuft" sind Attrappen, die Automatik ist echt.
+  stAdd('Tutorial v1.3.66: Rolle, Bahn/Boden, Tasten, Licht, Rückwärts, Regen erst nach der Ansage, ein Stopp, Handschaltung, ≤ 240 s', async () => {
     const f = [];
     const dauer = {};
     try {
@@ -12608,6 +12833,8 @@
     const vorher = { regler: JSON.stringify(presetRead()), motor: sel.value, zuletzt: presetZuletzt, box: tutBoxMerken(),
       bahn: bahnCb.checked, licht: headlightsOn, wetter: weather, tyres, wunsch: mischungWunsch };
     let uhr = 0, tab = 'fahren', box = 'off', autoDa = false, verbunden = false, padDa = false, menue = 0, angefordert = 0;
+    let gang = 1, rueck = false, ansage = false, vorwaertsGesetzt = 0;
+    const autoCb = $('setting-autoshift');
     const ein = { gas: 0, bremse: 0, lenk: 0 };
     const gesprochen = [];
     const attrappe = {
@@ -12619,6 +12846,8 @@
       boxAnfordern: () => { angefordert++; if (box === 'off') box = 'limited'; },
       boxAbbrechen: () => { if (box === 'limited') box = 'off'; },
       sprechen: (k) => { gesprochen.push(k); return dauer[k] || 2; }, verstummen: () => {},
+      gang: () => gang, rueckFaehrt: () => rueck, ansageBeschaeftigt: () => ansage,
+      vorwaertsSetzen: () => { vorwaertsGesetzt++; if (gang === -1) gang = 1; },
     };
     const takt = (ms) => { for (let x = 0; x < ms && tut.an; x += TUT_TAKT_MS) { uhr += TUT_TAKT_MS; tutTick(); } };
     const bis = (id, ms) => {
@@ -12693,8 +12922,33 @@
       if (uhr - ab < 19900) f.push('Arcade nur ' + ((uhr - ab) / 1000).toFixed(1) + ' s');
       if (presetZuletzt !== 'propacejka') f.push('kein Wechsel auf Pacejka (' + presetZuletzt + ')');
       if (!bis('beschleunigung', 10000) || !bis('untersteuern', 20000)) f.push('Beschleunigung/Untersteuern fehlen');
-      // 6) Erster Boxenstopp: tippen, anhalten, Minispiel, fertig.
-      if (!bis('box', 40000)) f.push('kein Boxenschritt');
+      // 6) Rueckwaerts: R einlegen allein genuegt nicht, das Auto muss rueckwaerts fahren; dann vorwaerts.
+      if (!bis('rueckwaerts', 20000)) f.push('kein Rückwärts-Schritt');
+      if ($('tut-taste').textContent !== tutTasteName('downshift')) f.push('Rückwärts-Taste nicht angezeigt');
+      takt(((dauer.rueckwaerts || 2) + 5) * 1000);
+      if (tutSchrittId() !== 'rueckwaerts') f.push('wartet nicht aufs Rückwärtsfahren');
+      gang = -1; takt(500);
+      if (tutSchrittId() !== 'rueckwaerts') f.push('R eingelegt gilt schon als gefahren');
+      rueck = true;
+      if (!bis('vorwaerts', 5000)) f.push('Rückwärtsfahren führt nicht weiter');
+      rueck = false; takt(2000);
+      if (tutSchrittId() !== 'vorwaerts') f.push('wartet nicht aufs Vorwärts');
+      gang = 1;
+      // 7) Erst Regen, dann Stille, solange die Regen-Ansage der App laeuft, dann der eigene Clip.
+      if (!bis('regen', 5000)) f.push('kein Regen-Schritt');
+      if (weather !== 'rain') f.push('Wetter nicht auf Regen');
+      const regenClips = () => gesprochen.filter((k) => k === 'regen').length;
+      ansage = true; takt(2000);
+      if (regenClips()) f.push('Regen-Clip überlagert die Regen-Ansage');
+      ansage = false; takt(300);
+      if (regenClips() !== 1) f.push('Regen-Clip kommt nach der Ansage nicht');
+      if (tut.protokoll.includes('box')) f.push('Boxenstopp vor dem Regen');
+      if (!bis('reifen', 15000)) f.push('kein Reifen-Schritt');
+      takt(((dauer.reifen || 2) + 3) * 1000);
+      if (tutSchrittId() !== 'reifen') f.push('wartet nicht auf die Reifenwahl');
+      for (let k = 0; k < 6 && pitMischungWahl() !== 'regen'; k++) pitMischungWeiter();
+      // 8) Der eine Stopp: tippen, anhalten, Minispiel, fertig.
+      if (!bis('box', 20000)) f.push('kein Boxenschritt nach den Regenreifen');
       takt(1000);
       box = 'limited';
       if (!bis('box_steht', 10000)) f.push('Tippen führt nicht weiter');
@@ -12704,21 +12958,19 @@
       if (tutSchrittId() !== 'box_spiel') f.push('wartet nicht aufs Minispiel');
       box = 'off';
       if (!bis('box_fertig', 3000)) f.push('kein Box-fertig');
-      // 7) Regen, Regenreifen waehlen, zweiter Stopp.
-      if (!bis('regen', 10000)) f.push('kein Regen-Schritt');
-      if (weather !== 'rain') f.push('Wetter nicht auf Regen');
-      if (!bis('reifen', 15000)) f.push('kein Reifen-Schritt');
-      takt(((dauer.reifen || 2) + 3) * 1000);
-      if (tutSchrittId() !== 'reifen') f.push('wartet nicht auf die Reifenwahl');
-      for (let k = 0; k < 6 && pitMischungWahl() !== 'regen'; k++) pitMischungWeiter();
-      if (!bis('box2', 5000)) f.push('Regenreifen führen nicht zum zweiten Stopp');
-      box = 'limited';
-      if (!bis('box2_steht', 10000)) f.push('zweiter Stopp: Tippen führt nicht weiter');
-      box = 'servicing';
-      if (!bis('box2_spiel', 3000)) f.push('zweiter Stopp ohne Minispiel');
-      box = 'off';
-      if (!bis('box2_fertig', 3000)) f.push('zweiter Stopp ohne Abschluss');
-      // 8) Motorklang, Abschluss, zurueck ins Menue.
+      // 9) Handschaltung: Automatik aus, einmal hoch, einmal runter, Automatik wieder an.
+      if (!bis('schalten', 10000)) f.push('kein Schalt-Schritt');
+      if (autoCb.checked) f.push('Automatik nicht aus');
+      takt(((dauer.schalten || 2) + 3) * 1000);
+      if (tutSchrittId() !== 'schalten') f.push('wartet nicht aufs Hochschalten');
+      gang = 2;
+      if (!bis('runter', 3000)) f.push('Hochschalten führt nicht weiter');
+      gang = 3; takt(((dauer.runter || 2) + 2) * 1000);
+      if (tutSchrittId() !== 'runter') f.push('Hochschalten gilt als Runterschalten');
+      gang = 2;
+      if (!bis('automatik', 3000)) f.push('Runterschalten führt nicht weiter');
+      if (!autoCb.checked) f.push('Automatik nicht wieder an');
+      // 9b) Motorklang, Abschluss, zurueck ins Menue.
       if (!bis('motor', 10000)) f.push('kein Motorschritt');
       if (sel.value === vorher.motor || !/^mustang/.test(sel.value)) f.push('Motorklang nicht gewechselt (' + sel.value + ')');
       if (!bis('abschluss', 30000)) f.push('kein Abschluss');
@@ -12728,29 +12980,36 @@
       if (!$('tut-ui').hidden) f.push('Karte bleibt stehen');
       if (tut.protokoll.join(' ') !== weg('boden').join(' ')) f.push('Reihenfolge Boden: ' + tut.protokoll.join(' '));
       zurueck('Ende');
-      // 9) Niemand drueckt, Bahn eingestellt: Wahl bleibt Bahn, Zeitlimits, beide Stopps selbst
-      // ausgeloest, Regenreifen selbst gewaehlt, hoechstens TUT_MAX_S.
+      // 10) Niemand drueckt, Bahn eingestellt, eine Ansage laeuft ohne Ende: Wahl bleibt Bahn,
+      // Zeitlimits, R eingelegt ohne Fahrt (Rueckfall vorwaerts), Regen-Clip nach hoechstens
+      // TUT_RUHE_MAX_S, der Stopp selbst ausgeloest, Regenreifen selbst gewaehlt, hoechstens TUT_MAX_S.
       tutBahnSetzen(true);
-      box = 'off'; menue = 0; angefordert = 0;
+      box = 'off'; menue = 0; angefordert = 0; gang = 1; rueck = false; ansage = true; vorwaertsGesetzt = 0;
+      gesprochen.length = 0;
       tutorialStarten({ umgebung: attrappe, ohneTimer: true });
       const start = uhr;
-      let regenGewaehlt = false;
+      let regenGewaehlt = false, rEingelegt = false;
       for (let x = 0; x < (TUT_MAX_S + 30) * 1000 && tut.an; x += TUT_TAKT_MS) {
         uhr += TUT_TAKT_MS; tutTick();
-        if (tutSchrittId() === 'box2' && pitMischungWahl() === 'regen') regenGewaehlt = true;
+        if (tutSchrittId() === 'box' && pitMischungWahl() === 'regen') regenGewaehlt = true;
+        if (tutSchrittId() === 'rueckwaerts' && !rEingelegt) { rEingelegt = true; gang = -1; }
       }
+      ansage = false;
+      if (!gesprochen.includes('regen')) f.push('Regen-Clip ohne Ende der Ansage nie gesprochen');
+      if (vorwaertsGesetzt !== 1 || gang !== 1) f.push('nach dem Zeitlimit nicht vorwärts eingelegt');
       const lauf = (uhr - start) / 1000;
       if (tut.an) f.push('ohne Eingaben nach ' + lauf.toFixed(0) + ' s nicht fertig');
       else if (lauf > TUT_MAX_S) f.push('ohne Eingaben ' + lauf.toFixed(1) + ' s');
       if (tut.modus !== 'bahn') f.push('ohne Wahl nicht Bahn (' + tut.modus + ')');
       if (!tut.protokoll.includes('arcade') || tut.protokoll.includes('arcade_boden') || !tut.protokoll.includes('modus_bahn')) f.push('Bahn-Ansagen fehlen');
-      if (angefordert !== 2) f.push('Boxenstopps selbst ausgelöst: ' + angefordert);
+      if (angefordert !== 1) f.push('Boxenstopps selbst ausgelöst: ' + angefordert);
       if (!regenGewaehlt) f.push('Regenreifen nicht selbst gewählt');
       if (box !== 'off') f.push('Boxenbegrenzer bleibt an');
-      if (tut.protokoll.includes('box_spiel') || tut.protokoll.includes('box2_fertig')) f.push('Minispiel ohne Stopp');
+      if (tut.protokoll.includes('box_spiel') || tut.protokoll.includes('box_fertig')) f.push('Minispiel ohne Stopp');
+      if (TUT_SCHRITTE.filter((x) => x.warte === 'box_an').length !== 1) f.push('mehr als ein Boxenstopp');
       tutBahnSetzen(vorher.bahn);
       zurueck('Zeitlimit');
-      // 10) Wahl am Pad: Steuerkreuz rechts, Kreuz; das Pad bleibt gesperrt, bis Kreuz los ist.
+      // 11) Wahl am Pad: Steuerkreuz rechts, Kreuz; das Pad bleibt gesperrt, bis Kreuz los ist.
       tutorialStarten({ umgebung: attrappe, ohneTimer: true });
       bis('modus', 15000);
       const pad = (gedr) => ({ mapping: 'standard', axes: [0, 0, 0, 0],
@@ -12763,19 +13022,20 @@
       if (!konsoleTourPad(pad([0]))) f.push('gehaltenes Kreuz geht nach der Wahl ans Cockpit');
       konsoleTourPad(pad([]));
       if (konsoleTourPad(pad([]))) f.push('Pad bleibt nach der Wahl gesperrt');
-      // 11) Abbruch: wer das Cockpit verlaesst, beendet es; Kreis/Esc im Warten (konsoleZurueck).
+      // 12) Abbruch: wer das Cockpit verlaesst, beendet es; Kreis/Esc im Warten (konsoleZurueck).
       bis('gas', 15000);
       tab = 'fahren';
       takt(300);
       if (tut.an || tut.ende !== 'Cockpit verlassen') f.push('Verlassen bricht nicht ab');
       zurueck('Abbruch');
       if (!/tutAbbrechen/.test(String(konsoleZurueck))) f.push('Kreis/Esc bricht nicht ab');
-      // 12) Projektregeln: kein WIP mehr, EN und ES, keine Gedankenstriche.
+      // 13) Projektregeln: kein WIP mehr, EN und ES, keine Gedankenstriche.
       if (document.querySelector('#k-tutorial-start .wip-tag, #tut-ui .wip-tag, .tut-knopf[data-tour="start"] .wip-tag')) f.push('WIP noch da');
       const texte = [...Object.values(TUT_SPRUCH), ...TUT_SCHRITTE.map((s) => s.titel), ...TUT_SCHRITTE.map((s) => s.zeige).filter(Boolean),
         'Bereit machen', 'Auto: unter FAHREN in der Kachel AUTOS verbinden.', 'Gamepad: einschalten und eine Taste drücken.',
         'Auto: verbunden, aber nicht Spieler 1. Unter FAHREN, AUTOS, GARAGE die Rolle auf Spieler 1 stellen.',
-        'Abbrechen: Kreis oder Esc', 'Beenden: Options oder Esc', 'oder', 'Beenden', 'Mit Bahn', 'Auf dem Boden', 'Licht-Schalter im Cockpit'];
+        'Abbrechen: Kreis oder Esc', 'Beenden: Options oder Esc', 'oder', 'Beenden', 'Mit Bahn', 'Auf dem Boden', 'Licht-Schalter im Cockpit',
+        'Oder im Stand Gas und Bremse zugleich halten.'];
       const fehltUeb = texte.filter((k) => !I18N_EN[k] || !I18N_ES[k]);
       if (fehltUeb.length) f.push('Übersetzung fehlt: ' + fehltUeb.slice(0, 3).join(' | '));
       if ((texte.join(' ') + $('tut-ui').textContent).indexOf(String.fromCharCode(0x2014)) >= 0) f.push('Gedankenstrich');
@@ -23440,6 +23700,76 @@
     return { ok: !f.length, mass: f.length ? f.join(' | ') : LAB_STUDIEN.length + ' Studien, alle Coming Soon, nichts gesendet' };
   });
 
+  // v1.3.66 BESTELLT: nach dem virtuellen Fahren steht das Auto-Tempo wieder auf 0 km/h.
+  stAdd('Virtuell v1.3.66: Tempo nach dem Beenden auf 0 km/h', () => {
+    if (typeof virtuellBeenden !== 'function' || typeof VF === 'undefined') return { skip: true, mass: 'kein virtuelles Fahren' };
+    if (VF.aktiv) return { skip: true, mass: 'virtuelle Fahrt laeuft gerade' };
+    const merkTab = typeof kAktiverTab === 'function' ? kAktiverTab() : null;
+    const st = physEngine.state, merkV = st.speedKmh, merkG = st.currentGear;
+    let ok = false, mass = '';
+    try {
+      VF.aktiv = true; VF.studie = true;   // studie: kein Tab-Wechsel am Ende
+      st.speedKmh = 87; st.virtualSpeed = 0.6; st.currentGear = 3;
+      virtuellBeenden();
+      ok = st.speedKmh === 0 && st.virtualSpeed === 0 && st.currentGear === 0 && !VF.aktiv;
+      mass = 'Tempo ' + st.speedKmh + ' km/h, Gang ' + st.currentGear + ', aktiv ' + VF.aktiv;
+    } finally {
+      VF.aktiv = false; VF.studie = false;
+      if (!ok) { st.speedKmh = merkV; st.currentGear = merkG; }
+      if (merkTab && typeof showTab === 'function') showTab(merkTab);
+    }
+    return { ok, mass };
+  });
+
+  // v1.3.77 GEMELDET: die blaue Radar-Kopflinie (ACC) stach durch die anderen Cockpit-Schirme.
+  stAdd('Cockpit v1.3.77: ACC-Radarlinie nur auf dem Hauptschirm', () => {
+    const dash = $('race-dash'), box = $('race-wx-box');
+    if (!dash || !box || typeof COCKPIT_SCREENS === 'undefined') return { skip: true, mass: 'kein Cockpit' };
+    const merkAttr = document.body.getAttribute('data-cockpit'), merkScreen = dash.dataset.screen;
+    const f = [];
+    try {
+      document.body.setAttribute('data-cockpit', 'acc');
+      const linie = () => getComputedStyle(box, '::before').display;
+      dash.dataset.screen = 'main';
+      if (linie() === 'none') f.push('auf dem Hauptschirm aus');
+      for (const s of COCKPIT_SCREENS) {
+        if (s.id === 'main') continue;
+        dash.dataset.screen = s.id;
+        if (linie() !== 'none') f.push('sichtbar auf ' + s.id);
+      }
+    } finally {
+      if (merkAttr === null) document.body.removeAttribute('data-cockpit'); else document.body.setAttribute('data-cockpit', merkAttr);
+      if (merkScreen === undefined) delete dash.dataset.screen; else dash.dataset.screen = merkScreen;
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Hauptschirm an, ' + (COCKPIT_SCREENS.length - 1) + ' andere Schirme aus' };
+  });
+
+  // v1.3.87: trackIstGeschlossen() gab ein Objekt zurueck (immer wahr), der Fertig-Klang spielte nie.
+  stAdd('Editor v1.3.87: Strecke geschlossen erkannt, Fertig-Klang beim Schliessen', () => {
+    if (typeof trackIstGeschlossen !== 'function' || typeof codeToTrack !== 'function') return { skip: true, mass: 'kein Editor' };
+    const merk = currentTrackTiles, merkKlang = trackFertigKlang, f = [];
+    let klang = 0;
+    try {
+      currentTrackTiles = [{ type: TILE_TYPE.START }, { type: TILE_TYPE.STRAIGHT }];
+      if (trackIstGeschlossen() !== false) f.push('offene Strecke gilt als geschlossen');
+      const oval = codeToTrack(CH_ALLE[0].code).tiles;
+      currentTrackTiles = oval.map((t) => Object.assign({}, t));
+      if (trackIstGeschlossen() !== true) f.push('Oval gilt als offen');
+      // Das letzte Teil fehlt noch, addTile schliesst die Runde: genau ein Fertig-Klang.
+      trackFertigKlang = () => { klang++; };
+      currentTrackTiles = oval.slice(0, -1).map((t) => Object.assign({}, t));
+      trackSel = currentTrackTiles.length - 1;
+      if (trackIstGeschlossen()) f.push('Oval ohne letztes Teil gilt als geschlossen');
+      addTile(oval[oval.length - 1].type);
+      if (!trackIstGeschlossen()) f.push('nach dem letzten Teil nicht geschlossen');
+      if (klang !== 1) f.push(klang + ' Fertig-Klaenge statt 1');
+    } finally {
+      trackFertigKlang = merkKlang; currentTrackTiles = merk;
+      if (typeof refreshTrackPreview === 'function') refreshTrackPreview();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'offen/geschlossen richtig, ein Klang beim Schliessen' };
+  });
+
   // ---- v1.0: Meisterschaft (73-meisterschaft.js) ----
   stAdd('Meisterschaft: Wertung, Punkte, schnellste Runde, Gleichstand', () => {
     const f = [];
@@ -25780,4 +26110,513 @@
       stChuZurueck(m);
     }
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'beide Listen beim Tab-Klick, Ladeanzeige unten links mit Text, gecacht, nicht im Rennen' };
+  });
+
+  // ---- SEKTOREN DER STRECKE (v1.3.81, WIP) ------------------------------------------------
+  //
+  // BESTELLT: Sektoren nach Teilezahl (8 Teile keine, 100 Teile hoechstens 10), duenne gruene
+  // Linie an jeder Grenze, und: "Mach es so, dass Sektoren ueber den Streckeneditor bestimmt
+  // werden" - Knopf "Sektoren" mit "automatisch festlegen" / "manuell festlegen" (Teile
+  // antippen oder mit dem Steuerkreuz waehlen, zweimal entfernt, "Fertig"). Abgestimmt:
+  // Teilung nach LAENGE, Grenzen auf Teilefugen, Sektorende am Kachelwechsel, echte
+  // Start/Ziel-Teile haben Vorrang, verzaehlte Runde -> Sektorzeit ungueltig, Runde gueltig.
+  // Gemeinsamer Rahmen: alles merken und zuruecklegen.
+  const ST_SEK_OVAL = 'SG11R3G12R3';   // 30 Teile, geschlossenes Oval
+  function stSekMerk() {
+    return { tm: trackMode, tiles: currentTrackTiles, sc: sectorCount, sh: sectorHistory,
+             ss: sectorStart, si: sectorIndex, st: sectorTimes.slice(), sp: Object.assign({}, autoSekSp),
+             sel: trackSel, verlauf: trackVerlauf.slice() };
+  }
+  function stSekZurueck(m) {
+    if (sekWahl) sekWahlEnde();
+    trackMode = m.tm; currentTrackTiles = m.tiles;
+    sectorCount = m.sc; sectorHistory = m.sh; sectorStart = m.ss; sectorIndex = m.si; sectorTimes = m.st;
+    Object.assign(autoSekSp, m.sp);
+    trackSel = m.sel;
+    trackVerlauf.length = 0; m.verlauf.forEach((x) => trackVerlauf.push(x));
+    lineCache = null;
+    renderSectors();
+  }
+  function stSekStrecke(code) {
+    const tr = codeToTrack(code);
+    const tiles = tr ? tr.tiles : [];
+    let zu = false;
+    try { zu = trackSchluss(trackCenterline(tiles)).closed; } catch (e) { zu = false; }
+    return { tiles, zu };
+  }
+
+  stAdd('Sektoren v1.3.81: Formel, die Strecke traegt die Sektoren, Code gleich, keine Renn-Option', () => {
+    const f = [];
+    const m = stSekMerk();
+    try {
+      trackMode = 'on';
+      const erw = { 3: 1, 8: 1, 14: 1, 15: 2, 25: 3, 30: 3, 100: 10, 160: 10 };
+      for (const n of Object.keys(erw)) {
+        if (autoSektorFormel(+n) !== erw[n]) f.push(n + ' Teile: ' + autoSektorFormel(+n) + ' statt ' + erw[n]);
+      }
+      const tiles = stSekStrecke(ST_SEK_OVAL).tiles;
+      const code = trackToCode(tiles);
+      if (trackSektorModus(tiles) !== 'auto') f.push('neue Strecke nicht automatisch');
+      const pa = autoSektorPlanFuer(tiles, true);
+      if (!pa || pa.n !== 3) f.push('automatisch: ' + (pa ? pa.n : 'kein Plan'));
+      tiles[0].sm = 'aus';
+      if (autoSektorPlanFuer(tiles, true)) f.push('aus und trotzdem Sektoren');
+      tiles[0].sm = 'manuell';
+      if (autoSektorPlanFuer(tiles, true)) f.push('manuell ohne Grenzen und trotzdem Sektoren');
+      tiles[5].sg = 1; tiles[20].sg = 1; tiles[0].sg = 1;   // das Start/Ziel-Teil zaehlt nicht
+      const pm = autoSektorPlanFuer(tiles, true);
+      if (!pm || pm.n !== 3 || pm.grenzen.join(',') !== '5,20' || pm.kacheln.join(',') !== '5,20') f.push('manuell: ' + JSON.stringify(pm && pm.grenzen));
+      // Ein Teil davor einfuegen: die Grenze wandert mit ihrem Teil.
+      tiles.splice(3, 0, { type: TILE_TYPE.STRAIGHT });
+      const pv = autoSektorPlanFuer(tiles, true);
+      if (!pv || pv.kacheln.join(',') !== '6,21') f.push('Grenze wandert nicht mit dem Teil: ' + JSON.stringify(pv && pv.kacheln));
+      tiles.splice(3, 1);
+      if (trackToCode(tiles) !== code) f.push('Streckencode aendert sich: ' + trackToCode(tiles) + ' statt ' + code);
+      // Keine Option mehr in den Renneinstellungen; der Ausdruck-Regler ist unveraendert da.
+      if (document.getElementById('auto-' + 'sektoren') || document.getElementById('auto-' + 'sektoren-zahl')) f.push('Renn-Option noch da');
+      const sc = $('sector-count');
+      if (!sc || [...sc.options].map((o) => o.value).join(',') !== '1,2,3,4') f.push('Ausdruck-Regler veraendert');
+      for (const k of ['Sektoren', 'Automatisch festlegen', 'Manuell festlegen', 'Aus', 'Abbrechen', 'Fertig', '{n} Sektoren',
+                       'Keine Sektoren', 'Sektoren festlegen', 'Jetzt: {n} Sektoren ({m}).', 'Start/Ziel beginnt immer Sektor 1']) {
+        if (!I18N_EN[k] || !I18N_ES[k]) f.push('Uebersetzung fehlt: ' + k);
+      }
+    } finally { stSekZurueck(m); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '8 keine, 15 zwei, 25 drei, 100 zehn; aus/manuell in den Teilen, Grenze wandert mit, Code gleich, keine Renn-Option' };
+  });
+
+  stAdd('Sektoren v1.3.81: Grenzen auf Teilefugen und etwa gleich lang, Vorrang der Start/Ziel-Teile, Ausdruck unveraendert', () => {
+    const f = [];
+    const m = stSekMerk();
+    const mass = [];
+    try {
+      trackMode = 'on'; sectorCount = 1;
+      const geschlossen = ['SG11R3G12R3', 'SG7HG8H', 'SG10HG11H', 'SG3R3G2HG3R3G4H', 'SG46R3G47R3']
+        .map((c) => Object.assign({ code: c }, stSekStrecke(c))).filter((s) => s.zu);
+      if (geschlossen.length < 3) f.push('zu wenige geschlossene Pruefstrecken: ' + geschlossen.map((s) => s.code).join(','));
+      for (const s of geschlossen) {
+        const n = s.tiles.length;
+        const p = autoSektorPlanFuer(s.tiles, true);
+        const soll = autoSektorFormel(n);
+        if (soll <= 1) { if (p) f.push(s.code + ': Sektoren trotz Formel 1'); continue; }
+        if (!p || p.n !== soll) { f.push(s.code + ': ' + (p ? p.n : 'kein Plan') + ' statt ' + soll); continue; }
+        if (p.grenzen.length !== p.n - 1) f.push(s.code + ': ' + p.grenzen.length + ' Grenzen');
+        let vor = 0;
+        p.grenzen.forEach((j, i) => {
+          if (!Number.isInteger(j) || j <= vor || j >= n) f.push(s.code + ': Grenze ' + j + ' keine Fuge');
+          if (p.kacheln[i] !== (p.s + j) % n) f.push(s.code + ': Kachel ' + p.kacheln[i]);
+          vor = j;
+        });
+        const maxTeil = Math.max.apply(null, s.tiles.map((t) => tileLength(t.type)));
+        const mittel = p.gesamt / p.n;
+        const abw = Math.max.apply(null, p.laengen.map((l) => Math.abs(l - mittel)));
+        if (abw > maxTeil + 1e-6) f.push(s.code + ': Abschnitt weicht ' + abw.toFixed(1) + ' ab (laengstes Teil ' + maxTeil.toFixed(1) + ')');
+        if (Math.abs(p.laengen.reduce((a, b) => a + b, 0) - p.gesamt) > 1e-6) f.push(s.code + ': Summe der Abschnitte');
+        // Nach Laenge und nicht nach Teilezahl: die Teilung nach Teilezahl weicht mindestens so weit ab.
+        const proTeil = p.grenzen.map((_, i) => Math.round(n * (i + 1) / p.n));
+        const lPos = (j) => {
+          let u = tileLength(s.tiles[p.s].type) * (1 - ZIEL_LAENGS.linieOben);
+          for (let q = 1; q < j; q++) u += tileLength(s.tiles[(p.s + q) % n].type);
+          return u;
+        };
+        const zPos = [0].concat(proTeil.map(lPos)).concat([p.gesamt]);
+        const abwZahl = Math.max.apply(null, zPos.slice(1).map((x, i) => Math.abs(x - zPos[i] - mittel)));
+        if (abw > abwZahl + 1e-6) f.push(s.code + ': nach Laenge schlechter als nach Teilezahl (' + abw.toFixed(1) + ' > ' + abwZahl.toFixed(1) + ')');
+        mass.push(n + ' Teile: ' + p.n + ' S, Fugen ' + p.grenzen.join('/') + ', +-' + (abw / mittel * 100).toFixed(0) + ' %');
+      }
+      if (autoSektorPlanFuer(stSekStrecke('SG20').tiles, false)) f.push('offene Strecke hat Sektoren');
+      // Vorrang: eine zweite Start/Ziel-Gerade -> heutige Sektoren, keine automatischen.
+      const zwei = stSekStrecke('SG11R3G5SG6R3');
+      if (autoSektorPlanFuer(zwei.tiles, true)) f.push('automatische Sektoren trotz zweiter Start/Ziel-Geraden');
+      currentTrackTiles = zwei.tiles;
+      if (sektorZiel() !== 2 || sektorAnzeigeZahl() !== 2 || autoSektorenAktiv()) f.push('Vorrang: Ziel ' + sektorZiel() + ', Anzeige ' + sektorAnzeigeZahl());
+      // Bahn: der Regler gilt nicht (wie seine Erklaerung sagt), die Strecke gilt.
+      currentTrackTiles = stSekStrecke(ST_SEK_OVAL).tiles;
+      sectorCount = 3;
+      if (sektorZiel() !== 1 || sektorAnzeigeZahl() !== 3 || !autoSektorenAktiv()) f.push('Bahn mit Regler 3: Ziel ' + sektorZiel() + ', Anzeige ' + sektorAnzeigeZahl());
+      // Ausdruck: unveraendert der Regler, keine Strecken-Sektoren.
+      trackMode = 'off';
+      if (sektorZiel() !== 3 || sektorAnzeigeZahl() !== 3 || autoSektorenAktiv() || autoSektorPlanAktuell()) f.push('Ausdruck: Ziel ' + sektorZiel() + ', auto ' + autoSektorenAktiv());
+      sectorCount = 1;
+      if (sektorZiel() !== 1 || sektorAnzeigeZahl() !== 1) f.push('Ausdruck ohne Regler: ' + sektorAnzeigeZahl());
+      if (autoSektorPlanFuer(currentTrackTiles, true)) f.push('Ausdruck: Plan fuer die Rennkarten');
+    } finally { stSekZurueck(m); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass.join('; ') + '; Start/Ziel-Teile vor, Ausdruck = Regler' };
+  });
+
+  stAdd('Sektoren v1.3.81: Zeitmessung an Kachelwechseln, Verzaehlen macht Sektoren ungueltig, nicht die Runde', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.feedNotify) return { skip: true, mass: 'feedNotify nicht vorhanden' };
+    const f = [];
+    const m = stSekMerk();
+    const sw = $('setting-ontrack');
+    const uhr = Date.now;
+    const g = { state: raceState, laps: raceLapTimes.slice(), start: raceLapStart, dash: dashLapStart,
+                part: racePartialMs, form: raceFormationLap, rail: sw ? sw.checked : true, sp: playerCar,
+                mp: dashMarkerPrev, ac: dashLastActedCode, aa: dashLastActedAt, pc: dashPendingCode,
+                ps: dashPendingSeen, lc: dashLastTileCounter, zg: dashZielGesehen, za: dashZielAt,
+                sa: dashStartLapAt, zauto: dashZielAuto, lz: dashLapZaehler, aw: raceAwaitingMove,
+                az: raceAnlaufZaehler, dt: dashLapTimes.slice(), ev: raceLapEvents.slice() };
+    const wirt = $('race-results-laps'), wirt2 = $('race-results-body');
+    const merkHtml = [wirt ? wirt.innerHTML : '', wirt2 ? wirt2.innerHTML : ''];
+    let jetzt = uhr.call(Date);
+    let mass = '';
+    try {
+      Date.now = () => jetzt;
+      if (sw && !sw.checked) { sw.checked = true; sw.dispatchEvent(new Event('change', { bubbles: true })); }
+      trackMode = 'on';
+      sectorCount = 1;
+      const tiles = stSekStrecke(ST_SEK_OVAL).tiles;
+      currentTrackTiles = tiles; lineCache = null;
+      const p = autoSektorPlanAktuell();
+      if (!p || p.n !== 3) return { ok: false, mass: 'kein Plan mit 3 Sektoren: ' + JSON.stringify(p) };
+      const n = tiles.length;
+      const START = [0x01, 0x0a].find((c) => isStartCode(c));
+      const codeVon = (j) => { const tl = tiles[(p.s + j) % n]; return tl.type === TILE_TYPE.START ? START : tl.type; };
+      const auto = { device: { id: 'st-autosek', name: 'Pruefwagen' }, role: 'player', rx: null, tx: null,
+                     tileCode: 0xff, tileCount: null, lastCodeAt: 0, yaw: 0, ghost: null, timer: null, race: null };
+      const npc = { device: { id: 'st-autosek-npc', name: 'Pruef-NPC' }, role: 'ghost', rx: null, tx: null,
+                    tileCode: 0xff, lastCodeAt: 0, ghost: null, timer: null, race: null };
+      const paket = (zaehler, code, ziel) => {
+        const a = new Array(19).fill(0);
+        a[11] = zaehler & 0xff; a[12] = code; a[14] = 0x82; a[15] = ziel ? 0x08 : 0;
+        return a;
+      };
+      const sende = (zz, c, ziel) => {
+        for (let i = 0; i < 2; i++) {
+          OMEGA_TEST.feedNotify(paket(zz, c, ziel), { car: auto });
+          carRaceNotify(npc, Uint8Array.from(paket(zz, c, ziel)));
+        }
+      };
+      playerCar = auto; raceState = 'racing'; raceFormationLap = false; raceLapTimes = []; raceLapEvents = [];
+      raceAwaitingMove = false; raceLapStart = jetzt; dashLapStart = jetzt; racePartialMs = null;
+      dashMarkerPrev = false; dashLastActedCode = null; dashLastActedAt = 0;
+      dashPendingCode = null; dashPendingSeen = 0; dashLastTileCounter = null;
+      dashZielAuto = auto; dashZielGesehen = true; dashZielAt = 0; dashLapZaehler = null;
+      sectorReset(); sectorHistory = []; autoSekSync(autoSekSp, null, 0);
+      let z = 100;
+      raceAnlaufZaehler = 99;                 // Anlauf: Runde 1 beginnt an der Linie
+      sende(z, START, false);
+      jetzt += 300; sende(z, START, true);
+      if (autoSekSp.z !== 100) f.push('an der Linie nicht angesetzt (' + autoSekSp.z + ')');
+      if (raceLapTimes.length) f.push('Anlauf zaehlt eine Runde');
+      // Eine Runde; o.versatz verschiebt den Zaehler ab Kachel o.ab (Abflug: +3 mit 0x00,
+      // verpasst: -1 ohne 0x00). Gibt die Sektorzeiten zurueck, die bei richtiger Zaehlung gelten.
+      const runde = (o) => {
+        const opt = o || {};
+        const t0 = jetzt, grenz = [];
+        let vers = 0;
+        for (let j = 1; j <= n; j++) {
+          jetzt += 280 + (j * 37) % 190;
+          if (opt.ab === j) {
+            if (opt.versatz > 0) {
+              for (let q = 1; q <= opt.versatz; q++) { jetzt += 40; sende(z + j - 1 + q, TILE_OFFTRACK, false); }
+              jetzt += 400;
+            }
+            vers = opt.versatz;
+          }
+          if (p.grenzen.indexOf(j) >= 0) grenz.push(jetzt);
+          if (opt.versatz < 0 && opt.ab === j) continue;   // diese Kachel liest das Auto nicht
+          sende(z + j + vers, codeVon(j % n), false);
+        }
+        jetzt += 300; sende(z + n + vers, START, true);
+        z = z + n + vers;
+        return { soll: [grenz[0] - t0, grenz[1] - grenz[0], jetzt - grenz[1]], runde: jetzt - t0 };
+      };
+      const gleich = (a, b) => a !== null && a !== undefined && Math.abs(a - b) <= 1;
+      const r1 = runde();
+      if (raceLapTimes.length !== 1) f.push('Runde 1: ' + raceLapTimes.length + ' Runden');
+      const h1 = sectorHistory[0] || [];
+      if (h1.length !== 3 || !h1.every((v, i) => gleich(v, r1.soll[i]))) f.push('Runde 1 Sektoren ' + JSON.stringify(h1) + ' statt ' + JSON.stringify(r1.soll));
+      const summe = h1.reduce((a, b) => a + (b || 0), 0);
+      if (raceLapTimes[0] && Math.abs(summe - raceLapTimes[0].ms) > 2) f.push('Summe ' + summe + ' gegen Runde ' + raceLapTimes[0].ms);
+      if (raceLapTimes[0] && !gleich(raceLapTimes[0].ms, r1.runde)) f.push('Rundenzeit ' + raceLapTimes[0].ms + ' statt ' + r1.runde);
+      const r2 = runde({ ab: p.grenzen[0] + 2, versatz: 3 });
+      const h2 = sectorHistory[1] || [];
+      if (raceLapTimes.length !== 2) f.push('Abflug-Runde nicht gezaehlt (' + raceLapTimes.length + ')');
+      else if (!gleich(raceLapTimes[1].ms, r2.runde)) f.push('Abflug-Runde ' + raceLapTimes[1].ms + ' statt ' + r2.runde);
+      if (!(gleich(h2[0], r2.soll[0]) && h2[1] === null && h2[2] === null)) f.push('Abflug: ' + JSON.stringify(h2));
+      const r3 = runde();
+      const h3 = sectorHistory[2] || [];
+      if (h3.length !== 3 || !h3.every((v, i) => gleich(v, r3.soll[i]))) f.push('nach dem Abflug nicht neu angesetzt: ' + JSON.stringify(h3));
+      runde({ ab: p.grenzen[1] + 1, versatz: -1 });
+      const h4 = sectorHistory[3] || [];
+      if (raceLapTimes.length !== 4) f.push('Runde mit verpasster Kachel nicht gezaehlt');
+      if (h4.length !== 3 || h4.some((v) => v !== null)) f.push('verpasste Kachel: ' + JSON.stringify(h4));
+      const nh = (npc.race && npc.race.sek && npc.race.sek.hist) || [];
+      const nl = (npc.race && npc.race.laps) || [];
+      if (nh.length !== nl.length || nl.length !== 4) f.push('NPC: ' + nh.length + ' Sektorreihen auf ' + nl.length + ' Runden');
+      else {
+        if (!nh[0].every((v, i) => gleich(v, r1.soll[i]))) f.push('NPC Runde 1: ' + JSON.stringify(nh[0]));
+        if (!(gleich(nh[1][0], r2.soll[0]) && nh[1][1] === null && nh[1][2] === null)) f.push('NPC Abflug: ' + JSON.stringify(nh[1]));
+        if (nh[3].some((v) => v !== null)) f.push('NPC verpasste Kachel: ' + JSON.stringify(nh[3]));
+        if (Math.abs(nh[0].reduce((a, b) => a + b, 0) - nl[0].ms) > 2) f.push('NPC Summe gegen Runde');
+      }
+      renderSectors();
+      const liste = $('sector-list') ? $('sector-list').textContent : '';
+      if (!/S1 \d+\.\ds/.test(liste) || /S1 \d+\.\d\ds/.test(liste)) f.push('Sektorentabelle nicht mit einer Nachkommastelle: ' + liste.slice(0, 80));
+      if (liste.indexOf('S2 –') < 0) f.push('ungueltig nicht als Strich: ' + liste.slice(0, 120));
+      renderRaceResults();
+      const tab = wirt ? wirt.innerHTML : '';
+      const sZeilen = (tab.match(/S1 /g) || []).length;
+      if (sZeilen !== 4 || tab.indexOf('S2 –') < 0) f.push('Zeitentabelle: ' + sZeilen + ' Sektorzeilen');
+      ovSektorenMalen();
+      const ov = $('ov-sektoren');
+      const kopf = ov ? [...ov.querySelectorAll('th')].map((x) => x.textContent).join(',') : '';
+      if (kopf.indexOf(',S1,S2,S3,') !== 0) f.push('Rennen-Schirm Kopf: ' + kopf);
+      const zellen = ov ? [...ov.querySelectorAll('td')].map((x) => x.textContent) : [];
+      if (!zellen.some((x) => /^\d+\.\d$/.test(x)) || !zellen.some((x) => /^\d+\.\d\d$/.test(x))) f.push('Rennen-Schirm: Sektor eine, Runde zwei Stellen? ' + zellen.join(' '));
+      mass = 'S ' + h1.map((v) => (v / 1000).toFixed(2)).join('/') + ' = ' + (summe / 1000).toFixed(2) + ' s (Runde '
+        + (raceLapTimes[0] ? (raceLapTimes[0].ms / 1000).toFixed(2) : '?') + '); Abflug ' + h2.map((v) => v === null ? '-' : 'ok').join('/')
+        + '; verpasst alle -; NPC gleich; Anzeige 1 Stelle';
+    } finally {
+      Date.now = uhr;
+      raceState = g.state; raceLapTimes = g.laps; raceLapStart = g.start; dashLapStart = g.dash;
+      racePartialMs = g.part; raceFormationLap = g.form; playerCar = g.sp;
+      dashMarkerPrev = g.mp; dashLastActedCode = g.ac; dashLastActedAt = g.aa; dashPendingCode = g.pc;
+      dashPendingSeen = g.ps; dashLastTileCounter = g.lc; dashZielGesehen = g.zg; dashZielAt = g.za;
+      dashStartLapAt = g.sa; dashZielAuto = g.zauto; dashLapZaehler = g.lz; raceAwaitingMove = g.aw;
+      raceAnlaufZaehler = g.az; dashLapTimes = g.dt; raceLapEvents = g.ev;
+      if (wirt) wirt.innerHTML = merkHtml[0];
+      if (wirt2) wirt2.innerHTML = merkHtml[1];
+      stSekZurueck(m);
+      if (sw && sw.checked !== g.rail) { sw.checked = g.rail; sw.dispatchEvent(new Event('change', { bubbles: true })); }
+      trackMode = m.tm;
+      ovSektorenMalen();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass };
+  });
+
+  stAdd('Sektoren v1.3.81: duenne gruene Linie an jeder Grenze, nur wo Sektoren gelten', () => {
+    const f = [];
+    const m = stSekMerk();
+    const mass = [];
+    try {
+      trackMode = 'on'; sectorCount = 1;
+      const tiles = stSekStrecke(ST_SEK_OVAL).tiles;
+      const svg = (o, ti) => { const d = document.createElement('div'); d.innerHTML = renderTrackPreview(ti || tiles, null, o).html; return d; };
+      const linien = (d) => [...d.querySelectorAll('[data-sektor="auto"]')];
+      const p = autoSektorPlanFuer(tiles, true);
+      // Echter Stil (Vorgabe) und Kartenstil: N-1 Linien (die N-te Grenze ist Start/Ziel selbst).
+      for (const [name, o] of [['echt', { detailed: true, cars: [] }], ['Karte', { detailed: true, echt: false, cars: [] }]]) {
+        const d = svg(o);
+        const l = linien(d);
+        if (l.length !== p.n - 1) f.push(name + ': ' + l.length + ' Linien statt ' + (p.n - 1));
+        for (const e of l) {
+          if (e.getAttribute('stroke') !== '#3ddc84' || !(parseFloat(e.getAttribute('stroke-width')) <= 1.5)) f.push(name + ': nicht duenn gruen');
+        }
+        if (name === 'echt') {
+          // Auf der Fuge: die Mitte der Linie ist die Mitte eines Fugenstrichs.
+          const mitte = (e) => { const zs = e.getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number); return [(zs[0] + zs[2]) / 2, (zs[1] + zs[3]) / 2]; };
+          const fugen = [...d.querySelectorAll('path[stroke="#3a404b"]')].map(mitte);
+          for (const e of l) {
+            const q = mitte(e);
+            if (!fugen.some((u) => Math.hypot(u[0] - q[0], u[1] - q[1]) < 0.3)) f.push('Linie nicht auf einer Fuge');
+          }
+        }
+        mass.push(name + ' ' + l.length);
+      }
+      // Manuell: so viele Linien wie gesetzte Sektoranfaenge.
+      tiles[0].sm = 'manuell'; tiles[4].sg = 1; tiles[9].sg = 1; tiles[17].sg = 1; tiles[25].sg = 1;
+      const man = linien(svg({ detailed: true })).length;
+      if (man !== 4) f.push('manuell: ' + man + ' statt 4');
+      tiles[0].sm = 'aus';
+      if (linien(svg({ detailed: true })).length) f.push('aus und trotzdem Linien');
+      delete tiles[0].sm; tiles.forEach((x) => { delete x.sg; });
+      trackMode = 'off';
+      if (linien(svg({ detailed: true })).length) f.push('Ausdruck-Modus mit Linien auf den Rennkarten');
+      if (linien(svg({ detailed: true, sektorenImmer: true })).length !== p.n - 1) f.push('Editor zeigt sie im Ausdruck-Modus nicht');
+      trackMode = 'on';
+      const zwei = stSekStrecke('SG11R3G5SG6R3').tiles;
+      const dz = svg({ detailed: true }, zwei);
+      if (linien(dz).length || dz.querySelectorAll('[data-ziel="sektor"]').length !== 1) f.push('zweite Start/Ziel-Gerade: ' + linien(dz).length + ' gruene, ' + dz.querySelectorAll('[data-ziel="sektor"]').length + ' gelbe');
+      if (linien(svg({ detailed: true }, stSekStrecke('SG7').tiles)).length) f.push('kurze offene Strecke mit Linien');
+      currentTrackTiles = tiles;
+      refreshTrackPreview();
+      const ed = $('track-preview-svg');
+      const edN = ed ? ed.querySelectorAll('[data-sektor="auto"]').length : -1;
+      if (edN !== p.n - 1) f.push('Editor: ' + edN + ' Linien');
+    } finally {
+      stSekZurueck(m);
+      try { refreshTrackPreview(); } catch (e) { /* egal */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass.join(', ') + ' Linien bei 30 Teilen; manuell 4 = 4; aus/Ausdruck/zweite Start/Ziel = 0; Editor ja' };
+  });
+
+  // Den Editor fuer einen Test sichtbar machen (wie editorVollbildProbe) und wieder schliessen.
+  function stSekEditorAuf() {
+    const host = $('track-fs-host');
+    const seite = host.closest('.tabpage'), unter = host.closest('.subpage');
+    const merk = { seite, unter, sa: seite ? seite.classList.contains('active') : true,
+                   ua: unter ? unter.classList.contains('on') : true, fs: document.body.classList.contains('track-fs'),
+                   aktiv: [...document.querySelectorAll('.tabpage.active')] };
+    merk.aktiv.forEach((x) => x.classList.remove('active'));
+    if (seite) seite.classList.add('active');
+    if (unter) unter.classList.add('on');
+    document.body.classList.add('track-fs');
+    return merk;
+  }
+  function stSekEditorZu(merk) {
+    if (typeof konsoleFrageOffen === 'function' && konsoleFrageOffen()) konsoleFrageZu();
+    if (sekWahl) sekWahlAbbrechen();
+    if (!merk.fs) document.body.classList.remove('track-fs');
+    if (merk.seite && !merk.sa) merk.seite.classList.remove('active');
+    if (merk.unter && !merk.ua) merk.unter.classList.remove('on');
+    merk.aktiv.forEach((x) => x.classList.add('active'));
+  }
+  const stSekKnopf = (text) => [...document.querySelectorAll('#k-frage-knoepfe button')].find((b) => b.textContent === t(text));
+  const stSekGrenzen = () => currentTrackTiles.map((x, i) => x.sg ? i : -1).filter((i) => i >= 0).join(',');
+
+  stAdd('Sektoren v1.3.81: Editor-Knopf, Dialog, manuell mit Steuerkreuz und Klick, Fertig und Abbrechen', () => {
+    const f = [];
+    const m = stSekMerk();
+    const ed = stSekEditorAuf();
+    let mass = '';
+    try {
+      trackMode = 'on';
+      currentTrackTiles = stSekStrecke(ST_SEK_OVAL).tiles;
+      trackSel = null;
+      refreshTrackPreview();
+      const knopf = $('track-sektoren');
+      if (!knopf || !knopf.closest('.tp-actions') || !knopf.querySelector('.wip-tag')) f.push('Knopf fehlt, nicht in der Leiste oder ohne WIP');
+      if (!TRACK_ACTIONS.some((a) => a.id === 'track-sektoren')) f.push('Knopf nicht mit dem Steuerkreuz erreichbar');
+      // Dialog: vier Wahlen.
+      knopf.click();
+      const texte = [...document.querySelectorAll('#k-frage-knoepfe button')].map((b) => b.textContent);
+      if (!konsoleFrageOffen() || texte.join('|') !== [t('Automatisch festlegen'), t('Manuell festlegen'), t('Aus'), t('Abbrechen')].join('|')) f.push('Dialog: ' + texte.join('|'));
+      if (trackEditorPad('confirm')) f.push('Editor nimmt die Waehltaste trotz offenem Dialog');
+      // Aus
+      stSekKnopf('Aus').click();
+      if (trackSektorModus(currentTrackTiles) !== 'aus' || $('track-preview-svg').querySelectorAll('[data-sektor="auto"]').length) f.push('Aus wirkt nicht');
+      // Automatisch: die erwarteten Grenzen nach dem Algorithmus.
+      knopf.click(); stSekKnopf('Automatisch festlegen').click();
+      const pa = autoSektorPlanFuer(currentTrackTiles, true);
+      const erwartet = autoSektorGrenzen(currentTrackTiles, autoSektorFormel(currentTrackTiles.length)).kacheln.join(',');
+      if (trackSektorModus(currentTrackTiles) !== 'auto' || !pa || pa.kacheln.join(',') !== erwartet) f.push('Automatisch: ' + (pa && pa.kacheln.join(',')) + ' statt ' + erwartet);
+      if ($('track-preview-svg').querySelectorAll('[data-sektor="auto"]').length !== pa.n - 1) f.push('Automatisch: Linien im Editor');
+      // Manuell: Start mit den automatischen Grenzen.
+      knopf.click(); stSekKnopf('Manuell festlegen').click();
+      if (!sekWahl || !document.body.classList.contains('track-sek') || $('track-sek-leiste').hidden) f.push('manuelle Wahl nicht offen');
+      if (stSekGrenzen() !== erwartet) f.push('manuell beginnt nicht mit den geltenden Grenzen: ' + stSekGrenzen());
+      // Steuerkreuz: vier nach rechts (Teil 5), X setzt, X nochmal entfernt, X wieder setzt.
+      for (let i = 0; i < 4; i++) trackEditorPad('right');
+      if (sekWahl.sel !== 5) f.push('Steuerkreuz wandert nicht (' + sekWahl.sel + ')');
+      trackEditorPad('confirm');
+      if (!currentTrackTiles[5].sg) f.push('X setzt keine Grenze');
+      trackEditorPad('confirm');
+      if (currentTrackTiles[5].sg) f.push('zweimal entfernt nicht');
+      trackEditorPad('confirm');
+      // Das gewaehlte Teil ist hervorgehoben (gelb wie die Editor-Auswahl).
+      if (!$('track-preview-svg').querySelector('path[stroke="#ffd400"][stroke-opacity=".5"]')) f.push('gewaehltes Teil nicht hervorgehoben');
+      // Start/Ziel ist fix.
+      for (let i = 0; i < 5; i++) trackEditorPad('left');
+      if (sekWahl.sel !== 0) f.push('links zurueck nicht auf Start/Ziel (' + sekWahl.sel + ')');
+      trackEditorPad('confirm');
+      if (currentTrackTiles[0].sg) f.push('Start/Ziel abwaehlbar oder setzbar');
+      // Klick auf ein Teil der Karte (Teil 11, eine automatische Grenze): entfernt sie.
+      const svgEl = $('track-preview-svg').querySelector('svg');
+      const geo = trackEditorGeo;
+      const pk = geo && geo.pts.filter((q) => q.tile === 11);
+      if (!svgEl || !pk || !pk.length) f.push('keine Kartengeometrie');
+      else {
+        const q = pk[Math.floor(pk.length / 2)];
+        const pt = svgEl.createSVGPoint(); pt.x = q.x + geo.ox; pt.y = q.y + geo.oy;
+        const sc = pt.matrixTransform(svgEl.getScreenCTM());
+        const klick = () => $('track-preview-svg').dispatchEvent(new MouseEvent('click', { clientX: sc.x, clientY: sc.y, bubbles: true }));
+        klick();
+        if (currentTrackTiles[11].sg) f.push('Klick entfernt die Grenze nicht');
+        klick();
+        if (!currentTrackTiles[11].sg) f.push('zweiter Klick setzt sie nicht wieder');
+        klick();
+      }
+      const zahl = $('track-sek-zahl').textContent;
+      const soll = t('{n} Sektoren').replace('{n}', autoSektorPlanFuer(currentTrackTiles, true, true).n);
+      if (zahl !== soll) f.push('Zaehler ' + zahl + ' statt ' + soll);
+      if ($('track-preview-svg').querySelectorAll('[data-sektor="auto"]').length !== stSekGrenzen().split(',').length) f.push('Linien in der Wahl');
+      // Fertig uebernimmt.
+      const gewaehlt = stSekGrenzen();
+      $('track-sek-fertig').click();
+      if (sekWahl || document.body.classList.contains('track-sek') || !$('track-sek-leiste').hidden) f.push('Fertig schliesst nicht');
+      if (trackSektorModus(currentTrackTiles) !== 'manuell' || stSekGrenzen() !== gewaehlt) f.push('Fertig uebernimmt nicht: ' + stSekGrenzen());
+      const pm = autoSektorPlanFuer(currentTrackTiles, true);
+      mass = 'automatisch ' + erwartet + ', manuell ' + gewaehlt + ' (' + (pm ? pm.n : 1) + ' Sektoren)';
+      // Rueckgaengig nimmt die ganze Wahl zurueck.
+      trackRueckgaengig();
+      if (trackSektorModus(currentTrackTiles) !== 'auto' || stSekGrenzen()) f.push('Rueckgaengig nach Fertig: ' + trackSektorModus(currentTrackTiles) + ' ' + stSekGrenzen());
+      // Abbrechen (Kreis) verwirft.
+      knopf.click(); stSekKnopf('Manuell festlegen').click();
+      const vorher = stSekGrenzen();
+      trackEditorPad('right'); trackEditorPad('right'); trackEditorPad('confirm');
+      trackEditorPad('undo');
+      if (sekWahl || trackSektorModus(currentTrackTiles) !== 'auto' || currentTrackTiles.some((x) => x.sg)) f.push('Kreis verwirft nicht (' + vorher + ' -> ' + stSekGrenzen() + ')');
+      // Tastatur: Pfeil, Enter, F.
+      knopf.click(); stSekKnopf('Manuell festlegen').click();
+      {
+        const taste = (k) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+        const spur = [];
+        for (const k of ['ArrowRight', 'ArrowRight', 'Enter', 'f']) { taste(k); spur.push(sekWahl ? sekWahl.sel : 'zu'); }
+        if (sekWahl || !currentTrackTiles[3].sg) f.push('Tastatur: ' + stSekGrenzen() + ' Spur ' + spur.join('/'));
+      }
+      // Dreieck ist Fertig.
+      knopf.click(); stSekKnopf('Manuell festlegen').click();
+      trackEditorPad('rotate');
+      if (sekWahl) f.push('Dreieck schliesst nicht');
+    } finally {
+      stSekEditorZu(ed);
+      stSekZurueck(m);
+      try { refreshTrackPreview(); } catch (e) { /* egal */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass + '; Steuerkreuz, Klick, zweimal entfernt, Start/Ziel fix, Fertig, Kreis, Tastatur, Rueckgaengig' };
+  });
+
+  stAdd('Sektoren v1.3.81: mit der Strecke gespeichert und geladen, aeltere Strecken automatisch', () => {
+    const f = [];
+    const m = stSekMerk();
+    let rohStore = null, rohEditor = null;
+    try { rohStore = localStorage.getItem(TRACK_STORE_KEY); rohEditor = localStorage.getItem(EDITOR_STRECKE_STORE); } catch (e) { /* privat */ }
+    const nameFeld = $('track-name'), nameMerk = nameFeld ? nameFeld.value : '';
+    const frage = skErsteStreckeFrage;
+    try {
+      skErsteStreckeFrage = () => false;   // die Online-Frage gehoert nicht in diesen Test
+      trackMode = 'on';
+      currentTrackTiles = stSekStrecke(ST_SEK_OVAL).tiles;
+      currentTrackTiles[0].sm = 'manuell'; currentTrackTiles[7].sg = 1; currentTrackTiles[19].sg = 1;
+      const code = trackToCode(currentTrackTiles);
+      trackSpeichern('ST Sektorprobe');
+      const e = loadTrackStore()['ST Sektorprobe'];
+      if (!e || e.tiles[0].sm !== 'manuell' || !e.tiles[7].sg || !e.tiles[19].sg) f.push('nicht mit gespeichert');
+      currentTrackTiles = stSekStrecke(ST_SEK_OVAL).tiles;
+      trackLaden('ST Sektorprobe');
+      if (trackSektorModus(currentTrackTiles) !== 'manuell' || stSekGrenzen() !== '7,19') f.push('nach dem Laden: ' + trackSektorModus(currentTrackTiles) + ' ' + stSekGrenzen());
+      if (trackToCode(currentTrackTiles) !== code) f.push('Code nach dem Laden anders');
+      // Aeltere Strecke ohne Angabe: automatisch.
+      const store = loadTrackStore();
+      store['ST Sektorprobe alt'] = { id: 'x', name: 'x', tiles: stSekStrecke(ST_SEK_OVAL).tiles.map((x) => ({ type: x.type })), rotation: 0 };
+      saveTrackStore(store);
+      trackLaden('ST Sektorprobe alt');
+      if (trackSektorModus(currentTrackTiles) !== 'auto' || !autoSektorPlanFuer(currentTrackTiles, true)) f.push('aeltere Strecke nicht automatisch');
+      // Die Editor-Ablage (Neustart): Modus und Grenzen mit, ohne Angabe automatisch.
+      currentTrackTiles[0].sm = 'manuell'; currentTrackTiles[12].sg = 1;
+      localStorage.setItem(EDITOR_STRECKE_STORE, JSON.stringify(editorStreckeDaten()));
+      currentTrackTiles = [];
+      editorStreckeLaden();
+      if (trackSektorModus(currentTrackTiles) !== 'manuell' || stSekGrenzen() !== '12') f.push('Editor-Ablage: ' + trackSektorModus(currentTrackTiles) + ' ' + stSekGrenzen());
+      const d = editorStreckeDaten(); delete d.sek;
+      localStorage.setItem(EDITOR_STRECKE_STORE, JSON.stringify(d));
+      editorStreckeLaden();
+      if (trackSektorModus(currentTrackTiles) !== 'auto' || stSekGrenzen()) f.push('Editor-Ablage ohne Angabe nicht automatisch');
+      const aus = Object.assign(editorStreckeDaten(), { sek: { m: 'aus', g: [] } });
+      localStorage.setItem(EDITOR_STRECKE_STORE, JSON.stringify(aus));
+      editorStreckeLaden();
+      if (trackSektorModus(currentTrackTiles) !== 'aus') f.push('Editor-Ablage aus');
+    } finally {
+      skErsteStreckeFrage = frage;
+      try {
+        if (rohStore === null) localStorage.removeItem(TRACK_STORE_KEY); else localStorage.setItem(TRACK_STORE_KEY, rohStore);
+        if (rohEditor === null) localStorage.removeItem(EDITOR_STRECKE_STORE); else localStorage.setItem(EDITOR_STRECKE_STORE, rohEditor);
+      } catch (e) { /* privat */ }
+      if (nameFeld) nameFeld.value = nameMerk;
+      stSekZurueck(m);
+      refreshTrackList();
+      try { refreshTrackPreview(); } catch (e) { /* egal */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Meine Strecken und Editor-Ablage tragen Modus und Grenzen, Code gleich, alt = automatisch' };
   });

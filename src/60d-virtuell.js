@@ -2452,6 +2452,10 @@
     trackMode = VF.trackModeVorher || trackMode;
     if (VF.autoShiftVorher !== undefined) physEngine.config.autoShift = VF.autoShiftVorher;
     VF.autoShiftVorher = undefined;
+    // v1.3.66 BESTELLT: "Wenn ich aus dem virtuellen Fahren zurueckkomme, das Auto-Tempo auf 0 km/h
+    // zuruecksetzen." Die Fahrphysik ist dieselbe wie im Cockpit; ohne Reset stand dort noch das
+    // Tempo (und der Gang) der virtuellen Fahrt, bis das echte Auto sich bewegte.
+    if (typeof physEngine !== 'undefined' && physEngine && typeof physEngine.reset === 'function') physEngine.reset();
     if (VF.schicht) VF.schicht.remove();
     VF.schicht = null; VF.gl = null; VF.flaeche = null; VF.fahrer = null; VF.ui = null; VF.stick = null; VF.tasten = {};
     renderGarage();

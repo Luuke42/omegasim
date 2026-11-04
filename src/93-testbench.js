@@ -2907,8 +2907,10 @@
     // laesst die Daten stehen (fuer einen Blick auf den Schirm), sonst wird alles zurueckgelegt.
     ovDiagrammProbe(behalten) {
       const merk = { sc: sectorCount, lt: raceLapTimes.slice(), sh: sectorHistory.slice(),
-                     art: ovDiagrammArt };
+                     art: ovDiagrammArt, tm: trackMode };
       try {
+        // v1.3.81: der Sektor-Regler gilt nur im Ausdruck-Modus (sektorZiel).
+        trackMode = 'off';
         sectorCount = 3;
         raceLapTimes.length = 0;
         sectorHistory.length = 0;
@@ -2928,6 +2930,7 @@
                  spalten: sek ? sek.querySelectorAll('th').length : -1 };
       } finally {
         if (!behalten) {
+          trackMode = merk.tm;
           sectorCount = merk.sc;
           raceLapTimes.length = 0; merk.lt.forEach((l) => raceLapTimes.push(l));
           sectorHistory.length = 0; merk.sh.forEach((l) => sectorHistory.push(l));
@@ -3717,6 +3720,97 @@
       }
       pitSpielMalen();
       return { folge: pitSpiel.folge.slice(), i: pitSpiel.i, bonus: pitSpiel.bonus, T: pitSpiel.T };
+    },
+    // v1.3.78: Boxenschirm (ACC, Entwurf B) in einen Zustand bringen - fuer Sichtpruefung
+    // und Selbsttest. art: 'fahrt' (Vorwahl, keine Box), 'arbeit' (Minispiel, zwei Knoepfe
+    // gedrueckt), 'fertig' (Stopp beendet), 'raus' (nach dem Stopp, Bilanz "Letzter Stopp").
+    // opt.pflicht/opt.erledigt setzen die Pflichtstopps; boxSchauZurueck() stellt alles zurueck.
+    boxSchau(art, opt) {
+      opt = opt || {};
+      if (!this._boxMerk) {
+        this._boxMerk = { modus: pitModus, an: pitLaneEnabled, trig: pitTrigger, zwei: zweiSpieler,
+                          fuel, damage, req: racePitRequired, done: racePitDone, bil: pitBilanz,
+                          schirm: cockpitScreenIst().id };
+      }
+      if (opt.pflicht !== undefined) racePitRequired = opt.pflicht;
+      if (opt.erledigt !== undefined) racePitDone = opt.erledigt;
+      if (art === 'fahrt' || art === 'raus') {
+        setPitState('off'); fuel = 28; damage = 48; pitBilanz = null;
+      }
+      if (art === 'arbeit' || art === 'fertig' || art === 'raus') {
+        this.pitSpielSchau(art === 'arbeit' ? ['richtig', 'falsch'] : ['richtig', 'falsch', 'richtig', 'richtig'], 0.6);
+        if (art !== 'arbeit') {
+          for (let k = 0; k < 1200 && pitState === 'servicing' && !pitReady; k++) pitSpielTick(0.05);
+        }
+        // Die Standzeit zaehlt an der Rennuhr; fuer das Bild dieselbe wie die des Spiels.
+        if (pitServiceStart !== null) pitServiceStart = rennZeitJetzt() - pitStandElapsed * 1000;
+        if (art === 'raus') setPitState('off');
+      }
+      cockpitScreenZu('pit');
+      pitScreenRender();
+      return { lage: $('race-pitscreen').dataset.lage, spiel: pitSpielAktiv(), bereit: pitReady,
+               bilanz: !!pitBilanz, stand: $('pit-stand') ? $('pit-stand').textContent : null };
+    },
+    boxSchauZurueck() {
+      const m = this._boxMerk;
+      if (!m) return false;
+      setPitState('off');
+      pitModus = m.modus; pitLaneEnabled = m.an; pitTrigger = m.trig; zweiSpieler = m.zwei;
+      fuel = m.fuel; damage = m.damage; racePitRequired = m.req; racePitDone = m.done; pitBilanz = m.bil;
+      cockpitScreenZu(m.schirm);
+      this._boxMerk = null;
+      pitScreenRender();
+      return true;
+    },
+    // v1.3.78: Rennen-Schirm (ACC, Entwurf A). art 'live' = laufendes Rennen, 'ziel' = nach
+    // der Zielflagge (Podest), 'aus' = zurueck. Mit Scheinautos (garageProbe) und gebauten
+    // Rundenzeiten; strecke: optional ein Streckencode fuer die Karte.
+    rennenSchau(art, strecke) {
+      if (art === 'aus') {
+        const m = this._rennMerk;
+        if (!m) return false;
+        raceState = m.state;
+        raceLapTimes.length = 0; m.lt.forEach((l) => raceLapTimes.push(l));
+        sectorHistory.length = 0; m.sh.forEach((l) => sectorHistory.push(l));
+        sectorCount = m.sc;
+        if (m.tiles) { currentTrackTiles = m.tiles; lineCache = null; }
+        this.garageProbeWeg();
+        cockpitScreenZu(m.schirm);
+        this._rennMerk = null;
+        ovScreenRender();
+        return true;
+      }
+      if (!this._rennMerk) {
+        this._rennMerk = { state: raceState, lt: raceLapTimes.slice(), sh: sectorHistory.slice(),
+                           sc: sectorCount, tiles: strecke ? currentTrackTiles : null,
+                           schirm: cockpitScreenIst().id };
+        if (!garage.some((c) => c.probe)) this.garageProbe(4);
+        // Das eigene Auto ist hier das Spielerauto (raceLapTimes); die Scheinautos fahren
+        // alle als NPC, sonst stuende das eigene Auto zweimal in der Liste.
+        garage.forEach((c) => { if (c.probe) c.role = 'ghost'; });
+      }
+      if (strecke) this.streckeSetzen(strecke);
+      const n = art === 'live' ? 6 : 10;
+      // Die Scheinautos: verschieden schnell, das letzte eine Runde zurueck.
+      garage.filter((c) => c.probe).forEach((c, i) => {
+        c.race = c.race || {};
+        const runden = Math.max(1, n - (i >= 2 ? 1 : 0));
+        c.race.laps = Array.from({ length: runden }, (_, k) => ({ lap: k + 1,
+          ms: 9150 + i * 160 + ((k * 37 + i * 53) % 210) + (k === 0 ? 420 : 0) }));
+      });
+      // Das eigene Auto (raceLapTimes) mit Sektoren und einer Boxenrunde.
+      sectorCount = 3; raceLapTimes.length = 0; sectorHistory.length = 0;
+      for (let k = 0; k < n; k++) {
+        const sek = [3000 + (k * 13) % 90, 3720 + (k * 29) % 110, 2400 + (k * 17) % 70];
+        if (k === 4) sek[1] += 5200;
+        sectorHistory.push(sek);
+        raceLapTimes.push({ lap: k + 1, ms: sek[0] + sek[1] + sek[2] });
+      }
+      raceState = art === 'live' ? 'racing' : 'finished';
+      cockpitScreenZu('uebersicht');
+      ovScreenRender();
+      return { lage: $('ov-kopf-lage').textContent, podest: !$('ov-podest').hidden,
+               zeilen: $('ov-tab').querySelectorAll('.ov-zeile:not(.ov-kopfz)').length };
     },
     // Eine Kachel antippen, als haette es ein Finger getan.
     pitTap(which) {
@@ -7492,7 +7586,7 @@
           //
           // Zwoelf davon stehen als Konstante im Quelltext, der dreizehnte
           // (Gamepad-Belegung) ist mir erst im laufenden Browser aufgefallen.
-          bekannt: ['chc.cars.v1', 'chc.cockpit.v1', 'chc.cockpit.omega.v1', 'chc.cockpit.acc.v1',
+          bekannt: ['chc.cars.v1', 'chc.cockpit.v1', 'chc.cockpit.omega.v1', 'chc.cockpit.acc.v1', 'chc.cockpit.acc.v2',
                     'chc.gearbox.v1', 'chc.layout.v1', 'chc.mp.v1',
                     'chc.motorwerkstatt.v1', 'chc.presets.v1', 'chc.sessions.v1',
                     'carrera-hybrid-macros', 'carrera-hybrid-tracks',
@@ -7956,11 +8050,33 @@
     // sectorHistory gefuellt, renderRaceResults() schreibt die Tabelle ins Dokument. Und
     // wie dort wird der vorige Inhalt zurueckgelegt und nicht neu gezeichnet - ein
     // Messaufruf darf nichts hinterlassen.
+    // v1.3.81, fuer eine Sichtpruefung (laesst die Daten STEHEN): automatische Sektoren auf
+    // einer Strecke aus Code, fuenf Runden mit Sektorzeiten nach Laenge, Runde 3 mit Abflug in
+    // Sektor 2 (ungueltig ab dort). Schreibt Sektorentabelle, Zeitentabelle und Rennen-Schirm.
+    autoSektorSchau(code) {
+      if (code) this.streckeSetzen(code);
+      trackMode = 'on'; sectorCount = 1;
+      const p = autoSektorPlanAktuell();
+      if (!p) return null;
+      raceLapTimes.length = 0; sectorHistory.length = 0;
+      for (let k = 0; k < 5; k++) {
+        const sek = p.laengen.map((l, i) => Math.round(l / p.gesamt * 11500 + ((k * 7 + i * 13) % 9) * 37));
+        const ms = sek.reduce((a, b) => a + b, 0) + (k === 2 ? 2600 : 0);
+        if (k === 2) for (let i = 1; i < sek.length; i++) sek[i] = null;
+        sectorHistory.push(sek);
+        raceLapTimes.push({ lap: k + 1, ms });
+      }
+      renderSectors();
+      renderRaceResults();
+      ovScreenRender();
+      return { n: p.n, kacheln: p.kacheln, teile: p.teile };
+    },
     sektorTabelleProbe(o) {
       const opt = o || {};
       const merkGarage = garage.slice();
       const merkSc = sectorCount;
       const merkSh = sectorHistory.slice();
+      const merkTm = trackMode;
       const wirt = $('race-results-laps');
       const wirt2 = $('race-results-body');
       const merkHtml = wirt ? wirt.innerHTML : null;
@@ -7976,6 +8092,9 @@
         });
         garage.push(mk('steuern', 'Fahrer', 'rot', runden.map((r) => r.reduce((a, b) => a + b, 0))));
         garage.push(mk('ghost', 'G1', 'blau', [12100, 12300]));
+        // v1.3.81: der Sektor-Regler gilt nur im Ausdruck-Modus (sektorZiel); auto=true
+        // prueft stattdessen die automatischen Sektoren auf der Bahn.
+        trackMode = opt.auto ? 'on' : 'off';
         sectorCount = opt.sektoren === undefined ? 3 : opt.sektoren;
         sectorHistory.length = 0;
         runden.forEach((r) => sectorHistory.push(r.slice()));
@@ -7990,6 +8109,7 @@
       } finally {
         garage.length = 0;
         merkGarage.forEach((c) => garage.push(c));
+        trackMode = merkTm;
         sectorCount = merkSc;
         sectorHistory.length = 0;
         merkSh.forEach((x) => sectorHistory.push(x));

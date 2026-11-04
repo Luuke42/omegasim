@@ -708,6 +708,7 @@
       if (trackMode !== 'off' && r.lapZaehler !== null && b[11] === r.lapZaehler) {
         if (r.lapStart !== null) r.lapStart = now;
         if (r.sek && r.sek.start !== null) r.sek.start = now;
+        if (r.as && r.as.z !== null && r.as.i === 0) r.as.start = now;
         return;
       }
       r.lapZaehler = b[11];
@@ -716,11 +717,16 @@
     }
 
     const code = b[12], count = b[11];
+    // Automatische Sektoren (v1.3.81): neben der Bahn merken, siehe autoSekRunde().
+    if (code === TILE_OFFTRACK && r.as && r.as.z !== null && r.as.verdacht < 0) r.as.verdacht = r.as.i;
     if (code !== r.pending) { r.pending = code; r.seen = 1; return; }
     if (++r.seen < 2) return;
     if (r.lastCount === null) { r.lastCount = count; return; }
     if (count === r.lastCount) return;
     r.lastCount = count;
+    // Automatische Sektoren: ein Vergleich je Kachelwechsel. Spieler 1 misst in
+    // handleDashboardBytes (r.as bleibt bei ihm leer).
+    if (r.as && r.as.z !== null && ((count - r.as.z) & 0xff) >= r.as.naechste) autoSekGrenze(r.as, count, now);
     // Der Rueckfall zaehlt nur, solange dieses Auto die Sperre noch nie gemeldet hat.
     // Sonst laege die Runde zweimal: einmal am Anfang des Startbereichs und einmal am
     // Streifen, und die Rundenzeiten wuerden abwechselnd zu kurz und zu lang.
@@ -752,6 +758,7 @@
     // ersten (dem Stehenbleiben mitten auf der Bahn).
     if (raceState === 'finished' && car.ghost && car.ghost.auslauf) {
       car.ghost.auslauf = false;
+      if (car !== playerCar) autoSekAutoRunde(r, now, r.lapStart !== null);
       if (r.lapStart !== null) {
         r.laps.push({ lap: r.laps.length + 1, ms: now - r.lapStart, off: r.offLap || 0, crossedAt: now });
       }
@@ -770,7 +777,11 @@
       return;
     }
     // During the formation lap this crossing is the START of the race, not a lap.
-    if (raceFormationLap) { formationUeberfahrt(String(car.device.id)); return; }
+    if (raceFormationLap) {
+      if (car !== playerCar) autoSekAutoRunde(r, now, false);
+      formationUeberfahrt(String(car.device.id));
+      return;
+    }
     // ---- SEKTOREN JE AUTO ------------------------------------------------------
     //
     // BESTELLT: "Sektorenzeiten im Cockpitscreen und im Diagramm auch mit anzeigen und als
@@ -794,6 +805,9 @@
       k.n = 0;
     }
     const warFinishing = raceState === 'finishing';
+    // Automatische Sektoren (v1.3.81): mit der Runde ablegen (gleicher Index wie r.laps),
+    // dann an der Linie neu ansetzen. Das Spielerauto misst in playerLapCrossed().
+    if (car !== playerCar) autoSekAutoRunde(r, now, r.lapStart !== null);
     if (r.lapStart !== null) {
       const nrSp = spielerNrVon(car);
       const ms = now - r.lapStart + (nrSp >= 2 ? fruehstartZuschlag(nrSp, r.laps.length) : 0), offs = r.offLap || 0;
@@ -1270,12 +1284,14 @@
       // Die beste je gefahrene Zeit JE SEKTOR wird mitgerechnet und hervorgehoben - das ist
       // die Zahl, wegen der man Sektorzeiten ueberhaupt ansieht: sie sagt, WO eine Runde
       // verloren ging, und nicht nur dass sie es tat.
-      const mehrere = typeof sectorCount === 'number' && sektorZiel() > 1
+      // v1.3.81: auch die automatischen Sektoren (sektorAnzeigeZahl), ungueltige als "–".
+      const sekAuto = sektorZiel() <= 1;
+      const mehrere = typeof sectorCount === 'number' && sektorAnzeigeZahl() > 1
                       && sectorHistory.length > 0;
       const besteS = [];
       if (mehrere) {
-        for (let i = 0; i < sektorZiel(); i++) {
-          const werte = sectorHistory.map((r) => r[i]).filter((v) => v !== undefined);
+        for (let i = 0; i < sektorAnzeigeZahl(); i++) {
+          const werte = sectorHistory.map((r) => r[i]).filter((v) => v !== undefined && v !== null);
           besteS.push(werte.length ? Math.min.apply(null, werte) : null);
         }
       }
@@ -1288,9 +1304,9 @@
         const r = sectorHistory[k];
         if (!r || !r.length) return '';
         const stuecke = r.map((ms, i) => {
-          const best = besteS[i] !== null && ms === besteS[i];
+          const best = ms !== null && besteS[i] !== null && ms === besteS[i];
           return '<span style="' + (best ? 'color:var(--good); font-weight:700' : '')
-               + '">S' + (i + 1) + ' ' + formatLapTime(ms) + '</span>';
+               + '">S' + (i + 1) + ' ' + sekZeitText(ms, sekAuto) + '</span>';
         }).join(' · ');
         return '<div class="muted" style="font-size:11px; margin-top:2px">'
              + stuecke + '</div>';
@@ -2098,6 +2114,7 @@
     raceStartZuruecksetzen(fuel);
     updateDamageFuelUI();
     racePitDone = 0;
+    pitBilanz = null;   // "Letzter Stopp" im Boxenschirm gehoert zum Rennen
     // v1.0.12 BESTELLT: "Pflichtstopps bitte fuer alle spieler gesteuerten Autos zaehlen."
     if (typeof zusatzPlaetze === 'function') zusatzPlaetze().forEach((z) => { z.pitDone = 0; });
     syncRaceGridOrder();
@@ -2110,6 +2127,12 @@
     garage.forEach(c => { c.race = { laps: [], lapStart: null, pending: null, seen: 0,
                                      lastActed: 0, lastCount: null }; });
     raceLapTimes = [];
+    // v1.3.81: die Sektorzeiten gehoeren zum Rennen wie die Rundenzeiten - die Zeitentabelle
+    // ordnet sectorHistory[k] der Runde k zu, und Runden aus dem freien Fahren davor
+    // verschoben diese Zuordnung.
+    sectorHistory = [];
+    sectorReset();
+    autoSekSync(autoSekSp, null, 0);
     rennstandReset();
     // ---- UND DIE COCKPIT-RUNDEN AUCH, und das ist ein gemeldeter Fehler ------------
     //
@@ -3230,6 +3253,8 @@
     // Dasselbe Byte, zweite Folge: Rumble und Drosselung jenseits der Bahn. Der Zustand
     // liegt in 50-drive.js, weil dort der Fahrtakt sitzt - siehe offtrackMelden().
     offtrackMelden((bytes[12] & 0xff) === TILE_OFFTRACK);
+    // Automatische Sektoren: wo das Auto neben der Bahn war, falls die Runde sich verzaehlt.
+    if (bytes[12] === TILE_OFFTRACK && autoSekSp.verdacht < 0 && autoSekSp.z !== null) autoSekSp.verdacht = autoSekSp.i;
     realSpeedTick(bytes[11], bytes[12] & 0xff);
 
     const counter = bytes[11];
@@ -3313,6 +3338,11 @@
       if (ms > 60 && ms < 20000) dashTileMs = dashTileMs ? dashTileMs * 0.7 + ms * 0.3 : ms;
     }
     dashTileAt = jetztT;
+    // Automatische Sektoren (v1.3.81): ein Vergleich je Kachelwechsel, siehe autoSekSync().
+    if (autoSekSp.z !== null && ((counter - autoSekSp.z) & 0xff) >= autoSekSp.naechste) {
+      autoSekGrenze(autoSekSp, counter, jetztT);
+      renderSectors();
+    }
     // Telemetrie (70b-telemetrie.js): jeder bestaetigte Teilwechsel mit Zeit.
     if (typeof teleKachel === 'function') teleKachel(type, jetztT);
     // Challenges: jedes bestaetigte Teil fuer die Rundenpruefung (72-challenges.js).
@@ -3370,6 +3400,9 @@
     // (dashLapTimes). Vorher brach die Ruecknahme dort ab, und die Runde blieb stehen.
     if (!raceLapTimes.length && !dashLapTimes.length) return false;
     const weg = raceLapTimes.length ? raceLapTimes.pop() : null;
+    // Die automatischen Sektorzeiten dieser Runde gehen mit (sonst verrutscht die Zuordnung
+    // Runde k <-> sectorHistory[k] in der Zeitentabelle).
+    if (autoSekSp.gepusht && sectorHistory.length) { sectorHistory.pop(); autoSekSp.gepusht = false; }
     if (weg && raceLapStart !== null) raceLapStart -= weg.ms;
     if (dashLapTimes.length) {
       const d = dashLapTimes.pop();
@@ -3433,7 +3466,147 @@
       try { n = trackSektorAnzahl(currentTrackTiles); } catch (e) { n = 1; }
     }
     if (n > 1) return n;
+    // v1.3.81: DER REGLER GILT NUR IM AUSDRUCK-MODUS. Auf der Schiene hiess sectorCount > 1
+    // "jede dritte Ueberfahrt ist eine Runde" - bei genau einem Start/Ziel also drei Runden
+    // fuer eine (der Regler warnte selbst: "Sektoren brauchen den Ausdruck-Modus"). Dort
+    // gelten jetzt die Start/Ziel-Kacheln oben und sonst die automatischen Sektoren
+    // (autoSektorPlanAktuell), und es gibt keine zwei Regler fuer dieselbe Sache.
+    if (typeof trackMode === 'string' && trackMode === 'on') return 1;
     return sectorCount > 1 ? sectorCount : 1;
+  }
+
+  // ---- AUTOMATISCHE SEKTOREN (v1.3.81, WIP) -------------------------------------------
+  //
+  // Die Geometrie (Anzahl, Grenzen als Fugen) steht in 60-track.js bei autoSektorGrenzen().
+  // Hier die Messung. Sie ist von der Rundenmessung GETRENNT, und das ist Absicht: die
+  // Rundenzeit bleibt die gemessene Start/Ziel-Zeit und ist NICHT die Summe der Sektoren -
+  // eine ungueltige Sektorzeit (Abflug, verpasste Kacheln) darf die Runde nicht verfaelschen.
+  // (Bei den Kontakt-Sektoren ist es auch schon so: rundeMs = now - raceLapStart; die Summe
+  // steht nur in der Anzeige.)
+  //
+  // WIE GEMESSEN WIRD: an der Rundenlinie merkt sich das Auto seinen Kachelzaehler (Byte 11,
+  // zaehlt im Auto, laeuft also auch ueber verlorene Meldungen richtig weiter). Bei jedem
+  // Kachelwechsel ist k = (Zaehler - Zaehler an der Linie) & 0xff die Zahl der Kacheln seit
+  // der Linie; erreicht k die naechste Grenze, endet der Sektor. Im Takt kostet das genau
+  // einen Vergleich mit `naechste` - die Grenzen sind einmal je Strecke gerechnet.
+  //
+  // WIE UNGUELTIG ERKANNT WIRD: an der naechsten Rundenlinie muss k genau die Teilezahl
+  // sein. Ist sie es nicht (Abflug - der Zaehler rast dann, siehe TILE_OFFTRACK -, oder
+  // verpasste Kacheln), sind die Grenzen ab der Stelle des Fehlers verschoben: alle Sektoren
+  // ab dem ersten, in dem das Auto 0x00 (neben der Bahn) gemeldet hat, werden null (in der
+  // Anzeige "–"); ohne solche Meldung ist der Ort unbekannt und die ganze Runde ohne
+  // Sektorzeiten. Die Runde selbst zaehlt wie bisher, und an der Linie wird neu angesetzt.
+  // Wie Kontakt-Sektoren: still, ohne Ansage.
+  // Der Plan der GELADENEN Strecke (currentTrackTiles), zwischengespeichert. Die Kennung
+  // liest Typ, Sektoranfang (sg) und Modus (sm) jedes Teils - die Sektoren stehen in den
+  // Teilen (60-track.js, trackSektorModus). Gerufen an der Rundenlinie und beim Zeichnen,
+  // nie je Meldung.
+  let autoSekCache = { tiles: null, sig: NaN, tm: null, plan: null };
+  function autoSektorPlanAktuell() {
+    const tiles = (typeof currentTrackTiles !== 'undefined' && currentTrackTiles) || [];
+    let sig = tiles.length;
+    for (let i = 0; i < tiles.length; i++) sig = (sig * 31 + (tiles[i].type | 0) * 2 + (tiles[i].sg ? 1 : 0)) | 0;
+    const m = trackSektorModus(tiles);
+    sig = (sig * 31 + (m === 'auto' ? 1 : m === 'aus' ? 2 : 3)) | 0;
+    const c = autoSekCache;
+    if (c.tiles === tiles && c.sig === sig && c.tm === trackMode) return c.plan;
+    let plan = null;
+    if (m !== 'aus' && trackMode === 'on' && tiles.length >= 4 && trackSektorAnzahl(tiles) <= 1) {
+      let zu = false;
+      try { zu = trackSchluss(trackCenterline(tiles)).closed; } catch (e) { zu = false; }
+      if (zu) plan = autoSektorPlanFuer(tiles, true);
+    }
+    autoSekCache = { tiles, sig, tm: trackMode, plan };
+    return plan;
+  }
+  // Die Zahl der Sektoren, die ANGEZEIGT wird: Kontakt-Sektoren (Start/Ziel-Kacheln oder der
+  // Regler im Ausdruck-Modus), sonst die automatischen. sektorZiel() bleibt "Kontakte je
+  // Runde" (Einfuehrungsrunde, carLapCrossed) - die automatischen aendern daran nichts.
+  function sektorAnzeigeZahl() {
+    const z = sektorZiel();
+    if (z > 1) return z;
+    const p = autoSektorPlanAktuell();
+    return p ? p.n : 1;
+  }
+  // Die Sektoren der Strecke wurden im Editor neu festgelegt (60-track.js): die bisherigen
+  // Sektorzeiten gehoeren zu anderen Grenzen.
+  function sektorenNeuAngesetzt() {
+    sectorHistory = [];
+    autoSekSync(autoSekSp, null, 0);
+    renderSectors();
+  }
+  function autoSektorenAktiv() { return sektorZiel() <= 1 && !!autoSektorPlanAktuell(); }
+  // Sektorzeit als Text. Automatische Sektoren mit EINER Nachkommastelle weniger als die
+  // Rundenzeit: die Kachelmeldung kommt nur auf etwa 50 bis 120 ms genau.
+  function sekZeitText(ms, auto) {
+    if (ms === null || ms === undefined) return '&ndash;';
+    return auto ? (ms / 1000).toFixed(1) + 's' : formatLapTime(ms);
+  }
+
+  // Der Messzustand je Auto. naechste = 999 heisst "keine Grenze mehr" (k ist hoechstens 255).
+  function autoSekNeu() {
+    return { z: null, start: 0, i: 0, naechste: 999, zeiten: null, verdacht: -1, plan: null, gepusht: false };
+  }
+  const autoSekSp = autoSekNeu();   // Spieler 1; alle anderen Autos in car.race.as
+  // An der Rundenlinie (oder beim ersten Kontakt): ab hier zaehlen.
+  function autoSekSync(a, zaehler, now) {
+    const p = autoSektorPlanAktuell();
+    a.plan = p; a.i = 0; a.verdacht = -1; a.start = now;
+    if (!p || zaehler === null || zaehler === undefined) {
+      a.z = null; a.naechste = 999; a.zeiten = null;
+      return;
+    }
+    a.z = zaehler & 0xff;
+    a.naechste = p.grenzen[0];
+    a.zeiten = new Array(p.n).fill(null);   // einmal je Runde, nicht je Meldung
+  }
+  // Nur gerufen, wenn ((zaehler - a.z) & 0xff) >= a.naechste. Wurden mit einem Wechsel zwei
+  // Grenzen zugleich erreicht, hat der zweite Sektor keine messbare Dauer: null.
+  function autoSekGrenze(a, zaehler, now) {
+    const g = a.plan.grenzen, k = (zaehler - a.z) & 0xff;
+    let erste = true;
+    while (a.i < g.length && k >= g[a.i]) {
+      a.zeiten[a.i] = erste ? now - a.start : null;
+      erste = false;
+      a.i++;
+    }
+    a.start = now;
+    a.naechste = a.i < g.length ? g[a.i] : 999;
+  }
+  // An der Rundenlinie: die Sektorzeiten der vollendeten Runde, mit null fuer ungueltig.
+  // null als Ganzes, wenn fuer diese Runde gar nicht gemessen wurde.
+  function autoSekRunde(a, zaehler, now) {
+    const p = a.plan;
+    if (!p || a.z === null || p !== autoSektorPlanAktuell()) return null;
+    const z = a.zeiten;
+    if (a.i === p.n - 1) z[a.i] = now - a.start;   // der letzte Sektor endet an der Linie
+    const k = (zaehler === null || zaehler === undefined) ? -1 : ((zaehler - a.z) & 0xff);
+    if (k !== p.teile) {
+      for (let i = a.verdacht >= 0 ? a.verdacht : 0; i < p.n; i++) z[i] = null;
+    }
+    return z;
+  }
+  // Spieler 1: an jeder Rundenlinie, die playerLapCrossed() als Runde zaehlt.
+  function autoSekSpielerRunde(now) {
+    const p = autoSektorPlanAktuell();
+    autoSekSp.gepusht = false;
+    if (p && sektorZiel() <= 1) {
+      sectorHistory.push(autoSekRunde(autoSekSp, dashLapZaehler, now) || new Array(p.n).fill(null));
+      autoSekSp.gepusht = true;
+    }
+    autoSekSync(autoSekSp, dashLapZaehler, now);
+    if (p) renderSectors();
+  }
+  // Jedes andere Auto (Spieler 2/3, NPCs): dieselbe Regel, Zeiten in car.race.sek.hist -
+  // dort liest raceAllCars() sie schon fuer die Kontakt-Sektoren.
+  function autoSekAutoRunde(r, now, gezaehlt) {
+    if (!r.as) r.as = autoSekNeu();
+    const p = autoSektorPlanAktuell();
+    if (gezaehlt && p && sektorZiel() <= 1) {
+      if (!r.sek) r.sek = { start: null, zeiten: [], hist: [], n: 0 };
+      r.sek.hist.push(autoSekRunde(r.as, r.lapZaehler, now) || new Array(p.n).fill(null));
+    }
+    autoSekSync(r.as, r.lapZaehler, now);
   }
 
   // Gibt true zurueck, wenn dieser Kontakt eine RUNDE vollendet - dann laeuft die normale
@@ -3478,12 +3651,17 @@
   function renderSectors() {
     const host = $('sector-list');
     if (!host) return;
-    const ziel = sektorZiel();
+    const ziel = sektorAnzeigeZahl();
     if (ziel <= 1) { host.innerHTML = ''; return; }
+    // v1.3.81: automatische Sektoren mit einer Nachkommastelle weniger, ungueltige als "–".
+    const auto = sektorZiel() <= 1;
+    const fmt = (ms) => sekZeitText(ms, auto);
+    const da = (v) => v !== undefined && v !== null;
     const teile = [];
-    if (sectorTimes.length) {
+    const laufend = auto ? (autoSekSp.zeiten ? autoSekSp.zeiten.slice(0, autoSekSp.i) : []) : sectorTimes;
+    if (laufend.length) {
       teile.push('<div class="sess-row"><b>jetzt</b> '
-                 + sectorTimes.map((ms, i) => 'S' + (i + 1) + ' ' + formatLapTime(ms))
+                 + laufend.map((ms, i) => 'S' + (i + 1) + ' ' + fmt(ms))
                      .join(' &middot; ') + '</div>');
     }
     // Die BESTE je Sektor, ueber alle Runden. Das ist die Zahl, aus der eine
@@ -3491,26 +3669,29 @@
     // gefahrene Runde, und die Differenz sagt, wieviel noch drin ist.
     if (sectorHistory.length) {
       const beste = [];
-      for (let i = 0; i < ziel - 1 + 1; i++) {
-        const werte = sectorHistory.map(r => r[i]).filter(v => v !== undefined);
+      for (let i = 0; i < ziel; i++) {
+        const werte = sectorHistory.map(r => r[i]).filter(da);
         if (werte.length) beste.push(Math.min.apply(null, werte));
+        else if (auto) beste.push(null);
       }
-      const summe = beste.reduce((a, b) => a + b, 0);
-      const rundenSummen = sectorHistory.map(r => r.reduce((a, b) => a + b, 0));
+      // Ideal nur, wenn jeder Sektor eine Bestzeit hat; Rundensummen nur aus vollstaendigen Runden.
+      const vollstaendig = beste.every(da);
+      const summe = vollstaendig ? beste.reduce((a, b) => a + b, 0) : null;
+      const rundenSummen = sectorHistory.filter(r => r.every(da)).map(r => r.reduce((a, b) => a + b, 0));
       const besteRunde = rundenSummen.length ? Math.min.apply(null, rundenSummen) : null;
       teile.push('<div class="sess-row"><b>beste</b> '
-                 + beste.map((ms, i) => 'S' + (i + 1) + ' ' + formatLapTime(ms))
+                 + beste.map((ms, i) => 'S' + (i + 1) + ' ' + fmt(ms))
                      .join(' &middot; ')
-                 + ' &rarr; ideal ' + formatLapTime(summe)
-                 + (besteRunde !== null && besteRunde > summe
+                 + (summe !== null ? ' &rarr; ideal ' + formatLapTime(summe) : '')
+                 + (summe !== null && besteRunde !== null && besteRunde > summe
                     ? ' (' + formatLapTime(besteRunde - summe) + ' schneller als die beste '
                       + 'gefahrene Runde)' : '')
                  + '</div>');
       sectorHistory.slice(-5).reverse().forEach((r, k) => {
         teile.push('<div class="sess-row"><b>R' + (sectorHistory.length - k) + '</b> '
-                   + r.map((ms, i) => 'S' + (i + 1) + ' ' + formatLapTime(ms))
+                   + r.map((ms, i) => 'S' + (i + 1) + ' ' + fmt(ms))
                        .join(' &middot; ')
-                   + ' = ' + formatLapTime(r.reduce((a, b) => a + b, 0)) + '</div>');
+                   + (r.every(da) ? ' = ' + formatLapTime(r.reduce((a, b) => a + b, 0)) : '') + '</div>');
       });
     }
     host.innerHTML = teile.join('');
@@ -3521,6 +3702,7 @@
   function zielUhrNachziehen(jetzt) {
     if (dashLapStart !== null) dashLapStart = jetzt;
     if (sectorStart !== null) sectorStart = jetzt;
+    if (autoSekSp.z !== null && autoSekSp.i === 0) autoSekSp.start = jetzt;
     if ((raceState === 'racing' || raceState === 'finishing') && raceLapStart !== null
         && !raceAwaitingMove) raceLapStart = jetzt;
   }
@@ -3554,6 +3736,7 @@
       raceAwaitingMove = false;
       raceLapStart = now; raceStartedAt = now;
       if (dashLapStart !== null) dashLapStart = now;
+      autoSekSync(autoSekSp, dashLapZaehler, now);
       return false;
     }
     // v0.9.51 GEMELDET: "Wenn ich vor der Startgeraden losfahre (z. B. von Platz 4), wird bei
@@ -3570,6 +3753,7 @@
         // v1.0.36: mit Kachelzaehler entscheidet die Anlauf-Regel darunter (Runde 1 ab der Linie).
         && raceAnlaufZaehler === null) {
       log('Startlinie ueberquert nach ' + (now - raceLapStart) + ' ms: das war keine Runde, die Uhr laeuft weiter.', 'info');
+      autoSekSync(autoSekSp, dashLapZaehler, now);
       return false;
     }
     // v1.0.36 BESTELLT: "Rundenzeiten erst ab Runde 2 zaehlen, damit nicht Runden mit 1 oder 2 s
@@ -3588,15 +3772,19 @@
         log('Startlinie nach ' + gefahren + ' Kacheln: Anlauf, Runde 1 beginnt jetzt.', 'info');
         raceLapStart = now;
         if (dashLapStart !== null) dashLapStart = now;
+        autoSekSync(autoSekSp, dashLapZaehler, now);
         return false;
       }
     }
     // Einfuehrungsrunde: JEDER Kontakt zaehlt, wie bei den Ghosts (formationNoetig rechnet
     // die Sektoren ein). Vor dem Sektorfilter, damit beide dieselbe Zaehlweise haben.
-    if (raceFormationLap) { formationUeberfahrt('spieler'); return true; }
+    if (raceFormationLap) { autoSekSync(autoSekSp, dashLapZaehler, now); formationUeberfahrt('spieler'); return true; }
     // Sektoren zuerst: war das nur eine Sektorgrenze, ist die Runde nicht vorbei und alles
     // Weitere darf nicht laufen - weder die Rundenzeit noch der Ton noch das Rennende.
     if (!sectorCrossed(now)) return false;
+    // Automatische Sektoren (v1.3.81): die Runde ist voll, ihre Sektorzeiten ablegen und an
+    // der Linie neu ansetzen. Die Rundenzeit unten bleibt davon unberuehrt.
+    autoSekSpielerRunde(now);
     if (dashLapStart !== null) dashLapTimes.push(now - dashLapStart);
     dashLapStart = now;
     // Mehrspieler: eine Runde ist der Moment, in dem sich die Rangliste wirklich aendert.
@@ -4524,6 +4712,9 @@
   const PIT_ERHOL_PRO_FEHLER = 0.3;
   let pitServiceStart = null;
   let pitFuelGained = 0, pitDamageRepaired = 0;
+  // Bilanz des letzten vollendeten Stopps in diesem Rennen (ACC-Boxenschirm, v1.3.78):
+  // gesetzt beim Verlassen der Box (pitBilanzMerken), geleert beim Rennstart.
+  let pitBilanz = null;
   const PIT_FUEL_PER_SEC = 22;
   // Repair speed used to be this flat 18%/s constant; replaced by repairRateAt() above,
   // which is non-linear and driven by the "Vollstaendige Reparatur dauert" setting.
@@ -4532,6 +4723,9 @@
   const PIT_STANDSTILL_KMH = 10 / REAL_SCALE;
 
   function setPitState(next) {
+    // Die Bilanz des Stopps fuer den Boxenschirm (ACC, v1.3.78), VOR dem Leeren von Spiel und
+    // Plan: sie liest beide. Einmal je Stopp, beim Verlassen der Box - nicht je Takt.
+    if (pitState === 'servicing' && next !== 'servicing' && pitServiceStart !== null) pitBilanzMerken();
     if (next !== 'servicing') {
       pitSpiel = null;
       if (typeof pitSpielMalen === 'function') rennZeitTimeout(pitSpielMalen, 0);
@@ -6774,6 +6968,9 @@
       schreibeWert(w, teil.wort);
     }
     pitScreenBilder();
+    // ACC (Entwurf B): Mitte und rechte Spalte. Nur in dieser Ansicht - in den anderen sind
+    // die Bloecke verborgen, und Arbeit fuer Unsichtbares kostet den Takt nur Zeit.
+    if (document.body.dataset.cockpit === 'acc') pitAccMalen();
     // Die Fusszeile nennt die Taste, mit der gewaehlt wird - und zwar die WIRKLICH belegte.
     // Ist die Flaggenaktion nicht belegt, steht das da, statt dass man raet.
     const fuss = $('pit-fuss');
@@ -6784,6 +6981,89 @@
     }
   }
 
+  // ---- ACC-Boxenschirm nach Entwurf B (v1.3.78) -------------------------------------
+  //
+  // BESTELLT: "Ja zu Box B [...] Baue das ein." Links bleiben die fuenf Zeilen (der Plan,
+  // dieselbe Bedienung), die Mitte traegt Standzeit, Zustand und - an der Stelle des
+  // Gangs - das Minispiel, rechts stehen die Messwerte. Pflichtstopp, Strafe und die
+  // Bilanz erscheinen nur, wenn die App sie wirklich kennt.
+  //
+  // KEINE LAYOUTABFRAGE: nur Text, Klassen und hidden, je mit Vergleich vorher. Anders als
+  // schreibeWert() ohne Tick-Animation - die erzwingt ein offsetWidth, und das hier sind
+  // zwoelf Werte mehr im selben Takt.
+  function pitTextSetzen(el, s) { if (el && el.textContent !== s) el.textContent = s; }
+  function pitVerbergen(el, weg) { if (el && el.hidden !== weg) el.hidden = weg; }
+
+  // Was der Stopp gebracht hat. Eine Zahl nur, wenn der Plan die Arbeit enthielt - ein
+  // "+0 l" fuer einen Stopp ohne Tanken waere eine Angabe ueber etwas, das nicht geschah.
+  function pitBilanzWerte() {
+    const pl = pitPlan || {};
+    return {
+      stand: pitServiceStart !== null ? (rennZeitJetzt() - pitServiceStart) / 1000 : 0,
+      sprit: pl.refuel && pitFuelGained > 0.05 ? fuelLiters(pitFuelGained) : null,
+      zustand: pl.repair && pitDamageRepaired > 0.05 ? Math.round(pitDamageRepaired) : null,
+      reifen: pl.tyres ? tyres : null,
+      spiel: pitSpiel ? pitSpiel.treffer : null,
+    };
+  }
+  function pitBilanzMerken() { pitBilanz = pitBilanzWerte(); }
+
+  function pitAccMalen() {
+    const scr = $('race-pitscreen');
+    const lage = pitState === 'off' ? 'aus' : pitState === 'limited' ? 'gasse'
+               : pitReady ? 'fertig' : 'arbeit';
+    if (scr.dataset.lage !== lage) scr.dataset.lage = lage;
+
+    // MITTE: Standzeit gross, darunter das Zustandswort.
+    const imStopp = pitState === 'servicing' && pitServiceStart !== null;
+    pitTextSetzen($('pit-stand'), imStopp
+      ? ((rennZeitJetzt() - pitServiceStart) / 1000).toFixed(1) : '–');
+    const box = $('pit-stand-box');
+    if (box) box.classList.toggle('leer', !imStopp);
+    pitTextSetzen($('pit-mitte-lage'), t(lage === 'aus' ? 'aus' : lage === 'gasse' ? 'Boxengasse'
+      : lage === 'fertig' ? 'fertig' : 'Arbeit läuft'));
+    // Bilanz: im fertigen Stopp die laufende, ausserhalb der Box die des letzten Stopps.
+    const bil = lage === 'fertig' ? pitBilanzWerte() : lage === 'aus' ? pitBilanz : null;
+    pitVerbergen($('pit-bilanz'), !bil);
+    pitVerbergen($('pit-hinweis'), !!bil || imStopp);
+    if (bil) {
+      pitTextSetzen($('pit-bil-titel'), lage === 'fertig' ? t('Dieser Stopp')
+        : t('Letzter Stopp') + ' · ' + bil.stand.toFixed(1) + ' s');
+      pitVerbergen($('pit-bil-sprit'), bil.sprit === null);
+      if (bil.sprit !== null) pitTextSetzen($('pit-bil-sprit-z'), '+' + bil.sprit + ' l');
+      pitVerbergen($('pit-bil-zustand'), bil.zustand === null);
+      if (bil.zustand !== null) pitTextSetzen($('pit-bil-zustand-z'), '+' + bil.zustand + '%');
+      pitVerbergen($('pit-bil-reifen'), bil.reifen === null);
+      if (bil.reifen !== null) pitTextSetzen($('pit-bil-reifen-z'), mischungName(bil.reifen));
+      pitVerbergen($('pit-bil-spiel'), bil.spiel === null);
+      if (bil.spiel !== null) pitTextSetzen($('pit-bil-spiel-z'), bil.spiel + '/' + PIT_SPIEL_ANZAHL);
+    }
+
+    // RECHTS: Runde und P-Zeichen, dann die Messwerte - dieselben Zahlen wie in den Zeilen.
+    pitTextSetzen($('pit-w-runde'), raceLapTimes.length ? String(raceLapTimes.length) : '–');
+    const pz = $('pit-w-zeichen');
+    if (pz) {
+      pz.classList.toggle('pz-gasse', lage === 'gasse');
+      pz.classList.toggle('pz-arbeit', lage === 'arbeit');
+      pz.classList.toggle('pz-fertig', lage === 'fertig');
+    }
+    pitTextSetzen($('pit-w-tank'), $('pit-zahl-refuel').textContent);
+    pitTextSetzen($('pit-w-rep'), $('pit-zahl-repair').textContent);
+    pitTextSetzen($('pit-w-reifen'), $('pit-zahl-tyres').textContent);
+    // Pflichtstopp nur, wenn welche verlangt sind; Strafe nur, wenn eine offen ist.
+    const pf = $('pit-w-pflicht');
+    pitVerbergen(pf, !(racePitRequired > 0));
+    if (racePitRequired > 0) {
+      const erledigt = racePitDone >= racePitRequired;
+      pitTextSetzen($('pit-w-pflicht-z'), Math.min(racePitDone, racePitRequired) + '/'
+        + racePitRequired + (erledigt ? ' ✓' : ''));
+      pf.classList.toggle('pw-gut', erledigt);
+    }
+    const offen = typeof rammStrafeOffen === 'function' ? rammStrafeOffen(playerCar) : 0;
+    pitVerbergen($('pit-w-strafe'), !(offen > 0));
+    if (offen > 0) pitTextSetzen($('pit-w-strafe-z'), '+' + offen + ' s');
+  }
+
   // ---- Die Bilder in den Zeilen ------------------------------------------------------
   //
   // DIESELBEN QUELLEN wie im Streifen, nur ein zweites Mal gezeichnet. Kein eigener
@@ -6791,20 +7071,31 @@
   // reifenFarbe() ist dieselbe Funktion. Zwei Bilder, eine Wahrheit.
   const PIT_T4 = ['pit-tyre-fl', 'pit-tyre-fr', 'pit-tyre-rl', 'pit-tyre-rr'];
 
+  // ACC (Entwurf B): dasselbe Reifenbild und dieselben Balken ein zweites Mal in der rechten
+  // Spalte. Geschrieben nur in dieser Ansicht, im selben Durchlauf und mit denselben Werten.
+  const PIT_W_T4 = ['pit-w-tyre-fl', 'pit-w-tyre-fr', 'pit-w-tyre-rl', 'pit-w-tyre-rr'];
+
   function pitScreenBilder() {
     const st = physEngine.state;
     const aus = !(physEngine.config.tyreEffect > 0);
+    const acc = document.body.dataset.cockpit === 'acc';
     const abListe = typeof pitWheelsOff === 'function' ? pitWheelsOff() : [];
     for (let i = 0; i < 4; i++) {
       const el = $(PIT_T4[i]);
       if (!el || !el.firstChild) continue;
       const ab = abListe.includes(i);
-      el.classList.toggle('t4-ab', ab);
       const w = aus ? 0 : (st.tyreWear4 ? st.tyreWear4[i] : st.tyreWear);
       const rest = ab ? 0 : Math.max(0, Math.min(100, 100 - w * 100));
+      const farbe = reifenFarbe(st.tyreTemp4 ? st.tyreTemp4[i] : st.tyreTempC);
+      el.classList.toggle('t4-ab', ab);
       el.firstChild.style.height = rest + '%';
-      el.firstChild.style.background =
-        reifenFarbe(st.tyreTemp4 ? st.tyreTemp4[i] : st.tyreTempC);
+      el.firstChild.style.background = farbe;
+      const el2 = acc ? $(PIT_W_T4[i]) : null;
+      if (el2 && el2.firstChild) {
+        el2.classList.toggle('t4-ab', ab);
+        el2.firstChild.style.height = rest + '%';
+        el2.firstChild.style.background = farbe;
+      }
     }
 
     // Die vier Mischungen: die GELTENDE ist umrahmt. Waehrend eines Stopps ist das die
@@ -6816,18 +7107,24 @@
       for (const i of feld.children) i.classList.toggle('an', i.dataset.mix === wahl);
     }
 
-    const tank = $('pit-bar-refuel');
-    if (tank) {
-      tank.style.width = Math.max(0, Math.min(100, fuel)) + '%';
-      // Dieselbe Ampel wie am Streifen: unter 20 Prozent gelb, unter 10 rot.
-      tank.style.background = fuel < 10 ? 'var(--bad)' : fuel < 20 ? 'var(--warn)' : 'var(--good)';
+    // Dieselbe Ampel wie am Streifen: unter 20 Prozent gelb, unter 10 rot.
+    const tankB = Math.max(0, Math.min(100, fuel)) + '%';
+    const tankF = fuel < 10 ? 'var(--bad)' : fuel < 20 ? 'var(--warn)' : 'var(--good)';
+    const heil = Math.max(0, Math.min(100, 100 - damage));
+    const repB = heil + '%';
+    const repF = heil < 25 ? 'var(--bad)' : heil < 60 ? 'var(--warn)' : 'var(--good)';
+    pitBalken('pit-bar-refuel', tankB, tankF);
+    pitBalken('pit-bar-repair', repB, repF);
+    if (acc) {
+      pitBalken('pit-w-bar-tank', tankB, tankF);
+      pitBalken('pit-w-bar-rep', repB, repF);
     }
-    const rep = $('pit-bar-repair');
-    if (rep) {
-      const heil = Math.max(0, Math.min(100, 100 - damage));
-      rep.style.width = heil + '%';
-      rep.style.background = heil < 25 ? 'var(--bad)' : heil < 60 ? 'var(--warn)' : 'var(--good)';
-    }
+  }
+  function pitBalken(id, breite, farbe) {
+    const el = $(id);
+    if (!el) return;
+    el.style.width = breite;
+    el.style.background = farbe;
   }
 
   // Zurueck kommen ZWEI Teile: die Zahl und das Zustandswort. Sie stehen in getrennten
@@ -7115,7 +7412,9 @@
       return;
     }
     const schluessel = tiles.length + ':' + (typeof trackToCode === 'function'
-      ? trackToCode(tiles) : String(tiles.map(t => t.type)));
+      ? trackToCode(tiles) : String(tiles.map(t => t.type)))
+      // Die automatischen Sektorgrenzen sind Teil der Zeichnung (v1.3.81).
+      + ':' + trackSektorModus(tiles) + tiles.map((x) => x.sg ? 1 : 0).join('') + trackMode;
     if (schluessel !== ovKarteSchluessel) {
       const r = renderTrackPreview(tiles, null, { detailed: true, cars: [] });
       host.innerHTML = r.html;
@@ -7238,8 +7537,15 @@
     schreibeWert($('ov-kopf-lage'), t(raceState === 'idle' ? 'kein Rennen'
       : raceState === 'countdown' ? 'Start'
       : raceFormationLap ? 'Einführungsrunde'
-      : raceState === 'finishing' ? 'letzte Runde' : 'läuft'));
-    schreibeWert($('ov-kopf-runde'), zeilen.length ? zeilen[0].runden + '' : '');
+      : raceState === 'finishing' ? 'letzte Runde'
+      // v1.3.78 BEHOBEN: nach der Zielflagge stand hier "laeuft" - 'finished' fehlte.
+      : raceState === 'finished' ? 'beendet' : 'läuft'));
+    // Die Kachel der Strecke traegt im ACC-Schirm eine Ueberschrift (CSS ::before aus
+    // data-titel), damit sie uebersetzt werden kann.
+    const karteEl = $('ov-karte');
+    if (karteEl && karteEl.dataset.titel !== t('Strecke')) karteEl.dataset.titel = t('Strecke');
+    // "Runde 10" statt einer nackten 10 rechts im Kopf (v1.3.78).
+    schreibeWert($('ov-kopf-runde'), zeilen.length ? t('Runde') + ' ' + zeilen[0].runden : '');
 
     ovDiagrammMalen();
     ovSektorenMalen();
@@ -7250,7 +7556,7 @@
           + '<span></span><span class="ov-name" data-i18n-skip>'
           + t('Noch keine Runde gefahren') + '</span>'
           + '<span></span><span></span><span></span><span></span><span></span>'
-          + '<span></span></div>';
+          + '<span></span><span class="ov-strafe"></span></div>';
       }
       return;
     }
@@ -7259,6 +7565,29 @@
     // NEU AUFGEBAUT statt eingesetzt: die Zeilen wechseln ihre Reihenfolge, und ein
     // Umsortieren vorhandener Knoten waere mehr Buchhaltung als ein neuer Aufbau von
     // hoechstens acht Zeilen. Element-ids gibt es hier keine, der Zaehltest bleibt heil.
+    // STRAFEN (v1.3.78, aus Entwurf A): RAMMER fuer eine offene Rammstrafe, beim eigenen
+    // Auto nach dem Ziel die Zeit fuer verpasste Pflichtstopps. Die Spalte erscheint nur,
+    // wenn eine Zeile eine Strafe hat (Klasse ov-mit-strafe) - sonst bleibt alles wie es war.
+    let mitStrafe = false;
+    const strafeVon = (z, eigen) => {
+      let txt = '';
+      if (typeof rammStrafeOffen === 'function' && z.id) {
+        const car = garage.find((c) => c.device && String(c.device.id) === z.id);
+        if (car && rammStrafeOffen(car) > 0) txt = t('RAMMER');
+      }
+      if (eigen && raceState === 'finished' && racePenaltyMs() > 0) {
+        txt += (txt ? ' ' : '') + '+' + Math.round(racePenaltyMs() / 1000) + ' s';
+      }
+      if (txt) mitStrafe = true;
+      return txt;
+    };
+    // DIE KOPFZEILE der Spalten. Sichtbar nur in der Ansicht ACC (Timing-Fenster); die
+    // anderen Ansichten erklaeren die Spalten wie bisher in der Fusszeile.
+    const kopfZeile = '<div class="ov-zeile ov-kopfz" aria-hidden="true"><span class="ov-pos"></span><span></span>'
+      + '<span class="ov-name">' + t('Auto') + '</span><span class="ov-runden">' + t('Rd') + '</span>'
+      + '<span class="ov-pit">' + t('Stopps') + '</span><span>' + t('Mix') + '</span>'
+      + '<span class="ov-zeit ov-letzte">' + t('Letzte') + '</span><span class="ov-zeit">' + t('Beste') + '</span>'
+      + '<span class="ov-luecke">' + t('Rückst.') + '</span><span class="ov-strafe">' + t('Strafe') + '</span></div>';
     const html = zeilen.map((z) => {
       const eigen = z.rolle === 'player';
       const stops = eigen ? racePitDone : 0;
@@ -7281,6 +7610,7 @@
         + '<span class="ov-zeit' + (z.istBeste ? ' ov-feldbeste' : '') + '">'
         + (z.beste === null ? '&ndash;' : formatLapTime(z.beste)) + '</span>'
         + '<span class="ov-luecke">' + z.luecke + '</span>'
+        + '<span class="ov-strafe">' + strafeVon(z, eigen) + '</span>'
         + '</div>';
     }).join('');
     // BESTELLT: "im Mehrspieler alle Spieler mit ihren Zeiten und Positionen zeigen". Die
@@ -7316,10 +7646,12 @@
           + '<span class="ov-zeit ov-letzte">' + (f.letzte === null || f.letzte === undefined ? '&ndash;' : formatLapTime(Math.round(f.letzte * 1000))) + '</span>'
           + '<span class="ov-zeit' + (best ? '' : ' ov-feldbeste') + '">' + (best ? '&ndash;' : formatLapTime(Math.round(f.beste * 1000))) + '</span>'
           + '<span class="ov-luecke"></span>'
+          + '<span class="ov-strafe"></span>'
           + '</div>';
       });
     }
-    const zusammen = html + mpHtml;
+    const zusammen = kopfZeile + html + mpHtml;
+    tab.classList.toggle('ov-mit-strafe', mitStrafe);
     // Die Mischungsfarbe steht als eigener Balken NEBEN der Zeile, weil sie eine Farbe und
     // keine Zahl ist. Sie wird hier eingesetzt, damit die Spaltenbreiten fest bleiben.
     if (tab.innerHTML !== zusammen) tab.innerHTML = zusammen;
@@ -7327,7 +7659,7 @@
     if (fuss) {
       fuss.textContent = 'Platz \u00b7 Runden \u00b7 Stopps \u00b7 Mischung'
         + (raceState === 'finished' ? '' : ' \u00b7 letzte')
-        + ' \u00b7 beste \u00b7 R\u00fcckstand \u2014 Reifen und Stopps nur f\u00fcr das'
+        + ' \u00b7 beste \u00b7 R\u00fcckstand \u00b7 Reifen und Stopps nur f\u00fcr das'
         + ' eigene Auto simuliert';
     }
   }
@@ -7353,7 +7685,7 @@
   function ovDiagrammMalen() {
     const host = $('ov-diagramm');
     if (!host) return;
-    if (ovDiagrammArt > 0 && sektorZiel() <= 1) ovDiagrammArt = 0;
+    if (ovDiagrammArt > 0 && sektorAnzeigeZahl() <= 1) ovDiagrammArt = 0;
     const reihen = ovDiagrammReihen();
     const alle = reihen.flatMap((r) => r.werte).sort((a, b) => a - b);
     if (!alle.length) { if (host.innerHTML) host.innerHTML = ''; return; }
@@ -7419,7 +7751,8 @@
   }
   if ($('ov-diagramm')) {
     $('ov-diagramm').addEventListener('click', () => {
-      ovDiagrammArt = sektorZiel() > 1 ? (ovDiagrammArt + 1) % (sektorZiel() + 1) : 0;
+      const sz = sektorAnzeigeZahl();
+      ovDiagrammArt = sz > 1 ? (ovDiagrammArt + 1) % (sz + 1) : 0;
       ovDiagrammMalen();
     });
   }
@@ -7433,8 +7766,11 @@
   function ovSektorenMalen() {
     const host = $('ov-sektoren');
     if (!host) return;
-    const sz = sektorZiel();
+    const sz = sektorAnzeigeZahl();
     if (sz <= 1) { if (host.innerHTML) host.innerHTML = ''; return; }
+    // v1.3.81: automatische Sektoren eine Nachkommastelle kuerzer (Meldegenauigkeit); die
+    // Rundenspalte bleibt bei zweien. Ungueltige (null) fallen schon aus dem Filter unten.
+    const sekStellen = sektorZiel() <= 1 ? 1 : 2;
     const autos = raceAllCars().map((c) => {
       const beste = [];
       for (let k = 0; k < sz; k++) {
@@ -7460,7 +7796,7 @@
         const gr = grenzen[k];
         const cls = v === null || !gr || gr[0] === gr[1] ? ''
           : v === gr[0] ? ' class="ov-sek-best"' : v === gr[1] ? ' class="ov-sek-schlecht"' : '';
-        return '<td' + cls + '>' + (v === null ? '&ndash;' : (v / 1000).toFixed(2)) + '</td>';
+        return '<td' + cls + '>' + (v === null ? '&ndash;' : (v / 1000).toFixed(k < sz ? sekStellen : 2)) + '</td>';
       }).join('') + '</tr>').join('');
     const html = '<table class="ov-sek-tab">' + kopf + zeilen + '</table>';
     if (host.innerHTML !== html) host.innerHTML = html;

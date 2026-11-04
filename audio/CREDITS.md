@@ -534,7 +534,7 @@ Aus einer eigenen Aufnahme des Autors (Video eines Ford Mustang GT3, nicht Teil 
 
 ## Tutorial-Stimme (v1.3.15, erweitert v1.3.31)
 
-29 Sprachclips (`tutorial_*_de.ogg`, nur Deutsch; seit v1.3.31 auch Rolle, Bahn/Boden, Licht, Regen, Regenreifen, zweiter Stopp), Manifest mit Datei, Dauer und Wortlaut:
+32 Sprachclips (`tutorial_*_de.ogg`, nur Deutsch; seit v1.3.31 auch Rolle, Bahn/Boden, Licht, Regen und Regenreifen; seit v1.3.66 ein Boxenstopp statt zwei, dazu Rueckwaertsgang und Handschaltung), Manifest mit Datei, Dauer und Wortlaut:
 `audio/tutorial.json`. Erzeugung: `tools/voice_tutorial.py` (Piper, danach ffmpeg: Stille
 abschneiden, Hochpass 70 Hz, Lautheit auf -16 LUFS, Ogg Vorbis). Kein Funkfilter.
 Piper bekommt je Clip einen eigenen Sprechtext mit Lautschreibung fuer englische Woerter

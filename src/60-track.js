@@ -3778,6 +3778,63 @@
     return liste.length;
   }
 
+  // ---- ZUFALLSEVENTS AUF DER KARTE (v1.3.88) ---------------------------------------------
+  //
+  // BESTELLT: "Der Sektor der Fahrbahn soll dann in der Streckenansicht im Cockpit hervorgehoben
+  // werden, farblich (verschiedene Farben je Ereignis)." Eine halbdurchsichtige Bahn entlang der
+  // Mittellinie genau ueber den Teilen des Bereichs (ev.kacheln), in der Farbe der Ereignisart
+  // (ZEV_FARBE, 74-zufallsevents.js); die Fahrbahn bleibt darunter lesbar. Bei Truemmern dazu ein
+  // Warndreieck auf der richtigen Seite: die Normalen zeigen nach LINKS (siehe querSollAlsLage),
+  // also links = +Normale, rechts = -Normale.
+  //
+  // NUR BEI EINER AENDERUNG: die Gruppe traegt eine Kennung (data-sig); stimmt sie, passiert nichts.
+  // Sie liegt VOR den Autos, damit die Autos darueber gezeichnet werden. ev = null entfernt sie.
+  function karteEreignisSetzen(svg, geo, ev) {
+    if (!svg || !geo || !geo.kachelTab) return false;
+    let g = svg.querySelector('g.karte-ereignis');
+    const sig = ev ? String(ev.sig) : '';
+    if (!ev) { if (g) g.remove(); return false; }
+    if (g && g.getAttribute('data-sig') === sig) return false;
+    if (!g) {
+      g = document.createElementNS(NS_SVG, 'g');
+      g.setAttribute('class', 'karte-ereignis');
+      svg.insertBefore(g, svg.querySelector('g.karte-autos'));
+    }
+    const tab = geo.kachelTab, pts = geo.pts, nT = tab.start.length;
+    const P = (p) => (p.x + geo.ox).toFixed(1) + ' ' + (p.y + geo.oy).toFixed(1);
+    const liste = ev.kacheln && ev.kacheln.length ? ev.kacheln : null;
+    // Die Teile eines Bereichs liegen in Fahrtrichtung hintereinander (auch ueber Start/Ziel hinweg),
+    // also ist es EIN Linienzug. Der erste Punkt des folgenden Teils schliesst die Fuge.
+    let d = '';
+    const zahl = liste ? liste.length : nT;
+    for (let j = 0; j < zahl; j++) {
+      const k = liste ? liste[j] : j;
+      if (!(k >= 0 && k < nT)) continue;
+      const von = tab.start[k], bis = von + tab.zahl[k];
+      for (let i = von; i < bis && i < pts.length; i++) d += (d ? ' L ' : 'M ') + P(pts[i]);
+      if (j === zahl - 1) d += ' L ' + P(pts[bis < pts.length ? bis : 0]);
+    }
+    const breite = (2 * geo.half * 0.85).toFixed(1);
+    let html = d ? '<path d="' + d + '" fill="none" stroke="' + ev.farbe + '" stroke-opacity=".45" stroke-width="'
+      + breite + '" stroke-linecap="round" stroke-linejoin="round"/>' : '';
+    if (ev.art === 'teile' && ev.teil >= 0 && ev.teil < nT) {
+      const i = Math.min(pts.length - 1, tab.start[ev.teil] + Math.floor(tab.zahl[ev.teil] / 2));
+      const n = geo.nrm[i] || { x: 0, y: 0 }, q = (ev.seite === 'links' ? 1 : -1) * geo.half * 0.55;
+      const x = pts[i].x + n.x * q + geo.ox, y = pts[i].y + n.y * q + geo.oy, r = Math.max(5, geo.half * 0.55);
+      html += '<g class="karte-truemmer" data-seite="' + ev.seite + '" transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')">'
+        + '<path d="M 0 ' + (-r).toFixed(1) + ' L ' + (r * 0.9).toFixed(1) + ' ' + (r * 0.7).toFixed(1) + ' L '
+        + (-r * 0.9).toFixed(1) + ' ' + (r * 0.7).toFixed(1) + ' Z" fill="' + ev.farbe + '" stroke="#111" stroke-width="1.5"/>'
+        + '<text y="' + (r * 0.55).toFixed(1) + '" text-anchor="middle" font-size="' + (r * 1.1).toFixed(1)
+        + '" font-weight="900" fill="#111">!</text></g>';
+    }
+    g.innerHTML = html;
+    g.setAttribute('data-sig', sig);
+    g.setAttribute('data-art', ev.art);
+    g.setAttribute('data-farbe', ev.farbe);
+    g.setAttribute('data-kacheln', liste ? liste.join(',') : 'alle');
+    return true;
+  }
+
   // ---- Short track code ----
   // One letter per element with a run-length count, plus the orientation. Short enough to
   // type over the phone, and readable enough to check by eye: "S G3 R2" is a start, three

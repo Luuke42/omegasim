@@ -815,6 +815,10 @@
                    fliegend: raceFlying, pit: racePitRequired, tank: raceFuelStartL,
                    wetterPlan: wetterPlanBauen(), wind: { x: Math.cos(w), y: Math.sin(w) },
                    ampelVerzog: 1000 + Math.random() * 2000 };
+    // v1.3.88 ZUFALLSEVENTS: das startende Telefon wuerfelt den Plan (Zeitpunkte, Art, Ort-Zufallszahlen,
+    // Ziel eines Tank-Lecks) und schickt ihn mit wie den Wetterplan; die anderen wuerfeln nicht selbst
+    // (startRaceCountdown -> zevRennStart(plan)). null = aus, auch wenn ein Mitspieler sie an hat.
+    plan.zev = typeof zevPlanFuerMp === 'function' ? zevPlanFuerMp() : null;
     // BESTELLT: "der Host erzwingt die Renneinstellungen auf allen." Wenn der Schalter an ist,
     // schickt der Host seine eigene aktive Abstimmung (Arcade/Pro/...) als `preset` mit; die
     // Mitglieder wenden sie beim Uebernehmen an (mpRennenUebernehmen).

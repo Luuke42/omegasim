@@ -2103,6 +2103,8 @@
     if (chWetterPlan && gruenBei) {
       mpWetter = { gruen: gruenBei, liste: chWetterPlan, i: 0 };
     }
+    // Zufallsevents (v1.3.88): der Plan dieses Rennens - im WLAN-Mehrspieler der des Hosts.
+    zevRennStart(mpPlan || null);
     fuel = Math.max(0, Math.min(100, raceFuelStartL / FUEL_TANK_LITERS * 100));
     // BEIDE Autos mit derselben Startmenge und beide schadenfrei. Ein Rennen, in dem das
     // eine Auto voll und das andere halb leer startet, waere kein Rennen - das ist die
@@ -2263,6 +2265,7 @@
     // and no laps count until the field crosses the line.
     raceFormationLap = raceFlying;
     raceGreenAt = raceFlying ? null : rennZeitJetzt();
+    zevGruen();
     fruehstartGruen();
     rammReset();
     // FRISCH ZAEHLEN. Ohne das traegt ein zweites Rennen die Ueberfahrten des ersten mit
@@ -2359,14 +2362,15 @@
   // inside one would make the fastest lap a lie.
   function racePenaltyMs() {
     const missed = Math.max(0, racePitRequired - racePitDone);
-    return missed * racePitPenaltyS * 1000;
+    // v1.3.88: dazu nicht abgeleistete Durchfahrtsstrafen der Zufallsevents (+20 s je Strafe).
+    return missed * racePitPenaltyS * 1000 + zevStrafeZeitMs(1);
   }
   // Dieselbe Strafe fuer Spieler 2/3 (v1.0.12): je verpasstem Pflichtstopp racePitPenaltyS.
   function strafeMsVon(wer) {
     if (!wer || wer === 1) return racePenaltyMs();
     const z = typeof zusatzPlatz === 'function' ? zusatzPlatz(wer) : null;
     if (!z) return 0;
-    return Math.max(0, racePitRequired - (z.pitDone || 0)) * racePitPenaltyS * 1000;
+    return Math.max(0, racePitRequired - (z.pitDone || 0)) * racePitPenaltyS * 1000 + zevStrafeZeitMs(wer);
   }
   // Welcher Spielerplatz faehrt dieses Auto (Rolle player, player2, player3)? 0 = keiner.
   function spielerPlatzVonRolle(rolle) {
@@ -2414,6 +2418,9 @@
     derbyLaeuft = false; knockoutLaeuft = false;
     if (typeof derbyCockpitMalen === 'function') derbyCockpitMalen();
     mpWetter = null;
+    // Zufallsevents: Event beenden, offene Durchfahrtsstrafen werden VOR den Strafansagen unten zu
+    // Zeitstrafen (racePenaltyMs/strafeMsVon lesen sie).
+    zevRennende();
     // Die laufende Runde festhalten und die Uhr anhalten. Ohne das Nullsetzen von
     // raceLapStart rechnet die Anzeige weiter gegen rennZeitJetzt() und die Runde waechst nach
     // dem Ende einfach weiter.
@@ -4444,11 +4451,13 @@
     // soll das Handling reagieren".
     const lvl = wxRainLevel();
     const griff = lvl * lvl;
-    mischungAnwenden(physEngine, tyres, griff);
+    // v1.3.88: ueber zevMischung(): steht das Auto in einem Zufallsevent (Verschmutzung/Oel), gilt dort
+    // die volle Naesse bzw. das Oel (74-zufallsevents.js); sonst genau mischungAnwenden() wie vorher.
+    zevMischung(physEngine, tyres, griff, 1);
     // AUTO 2 MIT SEINER EIGENEN MISCHUNG. BESTELLT: "die Reifen von Spieler 2 werden nicht
     // gewechselt, sollten sie aber." Vorher bekam physEngine2 hier gar nichts - weder
     // Mischung noch Regen.
-    if (typeof physEngine2 !== 'undefined' && physEngine2) mischungAnwenden(physEngine2, tyres2, griff);
+    if (typeof physEngine2 !== 'undefined' && physEngine2) zevMischung(physEngine2, tyres2, griff, 2);
     setAmbienceRainLevel(lvl);
     // Das Regenlicht und die Tropfen haengen an der SICHTBAREN Front und nicht am
     // quadratischen Griff: man sieht Regen, bevor man ihn faehrt.
@@ -4776,7 +4785,11 @@
       // v0.9.87: "kein zweiter Spieler aktiv" statt "Mehrspieler-Schalter aus". GEMELDET:
       // "Pit-Minigame geht nicht mehr." Der Schalter bleibt gespeichert an, sobald einmal eine
       // Spieler-2-Rolle vergeben war - danach gab es das Minispiel auch allein nicht mehr.
-      if (pitModus === 'minigame' && !(typeof zusatzAktiv === 'function' && zusatzAktiv().length)) pitSpielStart();
+      // v1.3.88 STRAFSTOPP (Durchfahrtsstrafe der Zufallsevents): es wird NICHTS am Auto gemacht -
+      // leerer Plan, kein Minispiel, nach ZEV_STRAFE_STAND_S frei (losfahren geht jederzeit).
+      pitNurStrafe = zevBoxStopp(1);
+      if (pitNurStrafe) pitPlan = { refuel: 0, tyres: false, repair: false };
+      else if (pitModus === 'minigame' && !(typeof zusatzAktiv === 'function' && zusatzAktiv().length)) pitSpielStart();
       // The plan was chosen while rolling down the pit lane; only now is it locked in.
       if (!pitPlan) pitPlan = makePitPlan();
       if (pitPlan.tyres) {
@@ -4988,7 +5001,7 @@
       if (pitPlanEmpty(p)) pitEmptyElapsed += dt;
 
       const allDone = pitPlanEmpty(p)
-        ? pitEmptyElapsed >= PIT_EMPTY_STOP_S
+        ? pitEmptyElapsed >= (pitNurStrafe ? ZEV_STRAFE_STAND_S : PIT_EMPTY_STOP_S)
         : (!p.refuel || pitDone.refuel) && (!p.tyres || pitDone.tyres) && (!p.repair || pitDone.repair);
 
       // Rammstrafe (v0.9.21): ZUSAETZLICH zur Arbeit im Stand, ab dem Moment, wo alles fertig ist.
@@ -5533,6 +5546,13 @@
         z.box.lage = 'service';
         rennEreignisBox(z.nr);
         z.box.strafeBis = null;
+        // v1.3.88 STRAFSTOPP (Zufallsevents): nichts am Auto, nach ZEV_STRAFE_STAND_S frei.
+        z.box.nurStrafe = zevBoxStopp(z.nr);
+        if (z.box.nurStrafe) {
+          z.box.tankFertig = true; z.box.reparaturFertig = true;
+          showHudToast('P' + z.nr + ': ' + t('STRAFSTOPP'));
+          return;
+        }
         const strafe = rammStrafeOffen(z.car);
         showHudToast('P' + z.nr + ': ' + (strafe > 0 ? t('STRAFE') + ' ' + strafe + ' s' : 'SERVICE LAEUFT'));
         // Reifen wie bei Auto 1: die gewaehlte Mischung, frisch und ungebraucht.
@@ -5598,11 +5618,11 @@
       }
     }
 
-    const fertig = (z.box.tankFertig || z.tank.stand >= z.tankZiel - 0.05)
-                   && schadenVon(z.nr) <= 0.05;
+    const fertig = z.box.nurStrafe || ((z.box.tankFertig || z.tank.stand >= z.tankZiel - 0.05)
+                   && schadenVon(z.nr) <= 0.05);
     // Und ein FLACHER MINDESTAUFENTHALT, wenn es nichts zu tun gab: sonst ist ein
     // Boxenstopp bei vollem Tank und heilem Auto kostenlos. Dieselbe Zahl wie bei Auto 1.
-    let genug = z.box.standS >= PIT_EMPTY_STOP_S;
+    let genug = z.box.standS >= (z.box.nurStrafe ? ZEV_STRAFE_STAND_S : PIT_EMPTY_STOP_S);
     if (fertig && genug) {
       if (z.box.strafeBis === null || z.box.strafeBis === undefined) z.box.strafeBis = z.box.standS + rammStrafeOffen(z.car);
       genug = z.box.standS >= z.box.strafeBis;
@@ -6339,7 +6359,8 @@
       // Tank, der voller wird, ist ein Fehler, den man niemandem erklaeren kann.
       const dt = Math.max(0, Math.min(0.5, (now - fuelLastTickTime) / 1000));
       const fuelBefore = fuel;
-      fuel = Math.max(0, fuel - Math.abs(throttle) * dt * fuelDrainPerSec);
+      // zevVerbrauch: 2 bei einem Tank-Leck (Zufallsevents), sonst 1 - ein Array-Zugriff je Takt.
+      fuel = Math.max(0, fuel - Math.abs(throttle) * dt * fuelDrainPerSec * zevVerbrauch[1]);
       // Edge-triggered: without this it would rumble again on every 45ms heartbeat.
       if (fuelBefore > 0 && fuel <= 0) {
         padRumble(0.2, 0.12, 160, 'meldung');
@@ -6375,7 +6396,7 @@
       // dieselbe Sache - und ungleiche Regeln waeren schlimmer als keine, das ist die
       // Zusage, unter der dieser Modus gebaut ist.
       z.tank.stand = Math.max(0, z.tank.stand
-                                   - Math.abs(throttle) * dt * fuelDrainPerSec);
+                                   - Math.abs(throttle) * dt * fuelDrainPerSec * zevVerbrauch[z.nr]);
       // Flankengetriggert, wie bei Auto 1: ohne das brummte es in jedem 45-ms-Takt neu.
       if (vorher > 0 && z.tank.stand <= 0) {
         padRumble(0.2, 0.12, 160, 'meldung', z.nr);
@@ -6554,6 +6575,7 @@
   let pitEmptyElapsed = 0;
   let pitStandElapsed = 0;                 // total standing time this stop
   let pitStrafeBis = null;                 // v0.9.21: Standzeit, ab der die Rammstrafe abgesessen ist
+  let pitNurStrafe = false;                // v1.3.88: dieser Stopp ist ein Strafstopp (Zufallsevents)
   let pitReady = false;
   // One node per looping sound. They are allowed to overlap: tyres and repair really do
   // happen at the same time, and the two were written to be separable by ear (an even
@@ -7425,6 +7447,9 @@
     if (svg && ovKarteGeo && typeof karteAutosSetzen === 'function') {
       karteAutosSetzen(svg, ovKarteGeo, trackCarMarks());
     }
+    // v1.3.88: der Bereich eines Zufallsevents (karteEreignisSetzen vergleicht eine Kennung, also
+    // ohne DOM-Arbeit, solange sich nichts aendert).
+    if (svg && ovKarteGeo && typeof karteEreignisSetzen === 'function') karteEreignisSetzen(svg, ovKarteGeo, zevKartenInfo());
   }
 
   // NOCHMAL: nach dem Rennen dasselbe Rennen mit denselben Einstellungen, per Kreuz auf dem
@@ -7578,6 +7603,12 @@
       if (eigen && raceState === 'finished' && racePenaltyMs() > 0) {
         txt += (txt ? ' ' : '') + '+' + Math.round(racePenaltyMs() / 1000) + ' s';
       }
+      // v1.3.88: Spieler 2/3 ebenso, und offene Durchfahrtsstrafen (Zufallsevents) als DT.
+      const nrS = eigen ? 1 : spielerPlatzVonRolle(z.rolle);
+      if (nrS >= 2 && raceState === 'finished' && strafeMsVon(nrS) > 0) {
+        txt += (txt ? ' ' : '') + '+' + Math.round(strafeMsVon(nrS) / 1000) + ' s';
+      }
+      if (nrS >= 1 && zevStrafeLabel(nrS)) txt += (txt ? ' ' : '') + zevStrafeLabel(nrS);
       if (txt) mitStrafe = true;
       return txt;
     };

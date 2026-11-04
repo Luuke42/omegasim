@@ -8661,7 +8661,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         // Der Druck ist der interessante: er macht aus einem Fehler eine FOLGE des
         // Hinterherfahrens, und damit entsteht das Bild, das man aus dem Rennsport kennt -
         // wer bedraengt wird, macht Fehler.
-        const nass = ghostNassAnteil();
+        const nass = ghostNassAnteil(car);
         const druck = (() => {
           const h = ghostHinterMir(car);
           return !!(h && h.gap <= SPICE_BLAU_REICHWEITE);
@@ -10846,6 +10846,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // Ausdruecklich MULTIPLIKATIV zum Kurvenabzug und nicht als zweiter Deckel: nass ist
       // eine Kurve langsamer als trocken, und beides zusammen ist mehr als jedes einzeln.
       target *= ghostReifenTempo(car);
+      // Zufallsevents (v1.3.88): Gelb im Sektor hoechstens Gelb-Tempo, Oel 60 %. Ohne Event ein Vergleich.
+      if (zevAktiv !== null && car.role !== 'safetycar') target = zevNpcTempo(car, target);
       // Einfuehrungsrunde: alle rollen im Formationstempo, was ihr eigener Regler auch
       // sagt. Das ist NICHT das Boxentempo - siehe formationPace(): darunter liest das Auto
       // die Bahn nicht mehr.
@@ -11118,7 +11120,10 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         // DER BOXENSTOPP HAT VORRANG, wie die gelbe Flagge einen Zeilenumbruch weiter. Waehrend
         // eines Stopps gibt es keine Linie, keine Wuerze und keine Spur - nur den Rand.
         // v1.0.31: im Paar ersetzt die Seite die Linie wie ein Boxenstopp (ghostPaarQuer).
-        const pqBox = pitQuer(car);
+        const pqBox0 = pitQuer(car);
+        // v1.3.88: Truemmer (Zufallsevents) auf dem naechsten Teil: auf die freie Seite, wie beim
+        // Ueberholen voll aussen, und nicht bremsen. Nach dem Boxenstopp, vor allem anderen.
+        const pqBox = pqBox0 !== null ? pqBox0 : zevAusweichQuer(car);
         const pqSc = pqBox === null ? scVorbeiQuer(car) : null;     // v1.0.32
         // v1.0.37: Anfahrt zum Startplatz mittig (Querlage 0), siehe aufstellenPruefen.
         // v1.0.37: Anfahrt zum Startplatz mittig (Querlage 0); seit v1.1.19 bis zum Platz, dann der Impuls (aufstellenPruefen).
@@ -11317,7 +11322,10 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         // Die ganze Begruendung steht dort bei SPUR_PASS_AUSSEN. Ohne diesen Zweig gaebe es
         // die Regel nur in einer von zwei Betriebsarten - und dann sucht man den Unterschied
         // im Auto statt im Code.
-        const passSeite2 = (spice.attack || 0) !== 0 ? Math.sign(spice.attack)
+        // v1.3.88: Truemmer (Zufallsevents) - ausweichen wie beim Ueberholen, auf die freie Seite.
+        const zevQ2 = zevAusweichQuer(car);
+        const passSeite2 = zevQ2 !== null ? Math.sign(zevQ2)
+                         : (spice.attack || 0) !== 0 ? Math.sign(spice.attack)
                          : (weiche2 !== 0 ? Math.sign(weiche2) : 0);
         // Auch hier hat der Boxenstopp Vorrang - siehe die Rail-Verzweigung darueber.
         const pqBox2 = pitQuer(car);
@@ -11617,10 +11625,13 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   // Zeile (70-race.js, applyGrip). Ein Ghost, der im Moment des Wetterwechsels springt,
   // waehrend der Spieler fuenf Sekunden lang nass wird, faehrt in einer anderen Welt.
   // Dieselbe Rampe und dieselbe Quadratur - Wasser braucht Zeit, sich zu sammeln.
-  function ghostNassAnteil() {
+  // v1.3.88: mit Auto auch die oertliche Naesse eines Zufallsevents (Verschmutzung/Oel im Sektor,
+  // 74-zufallsevents.js). Ohne Event ein Vergleich mehr.
+  function ghostNassAnteil(car) {
     const lvl = typeof wxRainLevel === 'function' ? wxRainLevel()
               : (weather === 'rain' ? 1 : 0);
-    return lvl * lvl;
+    const n = lvl * lvl;
+    return (zevAktiv !== null && car) ? Math.max(n, zevNassVon(car)) : n;
   }
 
   // NIMMT DAS AUTO, nicht den Ghost: der gefahrene Reifen haengt an den Schaltern und an
@@ -11628,7 +11639,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   function ghostReifenTempo(car) {
     const reifen = reifenGefahren(car);
     const z = REIFEN_GRIFF[reifen] || REIFEN_GRIFF.trocken;
-    const nass = ghostNassAnteil();
+    const nass = ghostNassAnteil(car);
     // Der Griff, den DIESER Reifen gerade hat, und der Griff, den der richtige haette.
     const griff = z.dry + (z.rain - z.dry) * nass;
     const soll = REIFEN_GRIFF[reifenPassend()] || REIFEN_GRIFF.trocken;
@@ -11660,8 +11671,10 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     if (!g || !g.engine) return;
     const reifen = reifenGefahren(car);
     const z = REIFEN_GRIFF[reifen] || REIFEN_GRIFF.trocken;
-    const nass = ghostNassAnteil();
+    const nass = ghostNassAnteil(car);
     g.engine.config.gripScale = z.dry + (z.rain - z.dry) * nass;
+    // Oel (Zufallsevents): weniger Griff als nass, wie beim Spieler.
+    if (zevAktiv !== null && zevAktiv.art === 'oel' && nass > 0 && zevImBereich(car)) g.engine.config.gripScale *= ZEV_OEL_GRIP;
     // Nur Slicks schwimmen auf; Regenreifen sind geschnitten, um Wasser wegzufuehren -
     // dieselbe Aussage wie beim Spieler (TYRE_MIX .aqua).
     g.engine.config.aquaplaning = reifen === 'regen' ? 0 : nass;

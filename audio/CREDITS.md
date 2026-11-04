@@ -561,3 +561,16 @@ wie im bestehenden Abschnitt zu den Zahlenclips. Funkfilter ohne Knacken
 aus `voice_zahlen.py`; keine Nutzerstimme und kein Onlinedienst.
 116 neue Satz-/Zahlbausteine; die bestehenden Zahlen- und Fahrzeugclips
 bleiben unveraendert. Die erzeugten Sprachdateien gehoeren in den PR.
+
+## Zufallsevent-Ansagen
+
+`zufallsevent_*.ogg` (Manifest `zufallsevents.json`) werden lokal mit
+`tools/voice_zufallsevents.py` erzeugt: Piper (MIT) mit denselben Stimmen wie die
+Zahlen- und Rennereignis-Clips, `de_DE-thorsten-medium` (Datensatz Thorsten-Voice,
+CC0) und `en_US-ljspeech-medium` (Datensatz LJ Speech, gemeinfrei). Herkunft und
+Modellkarten wie im Abschnitt zu den Zahlenclips. Dieselbe Nachbearbeitung
+(Funkfilter ohne Knacken aus `voice_zahlen.py`, Spitzenpegel 0,85) und dasselbe
+Format (22,05 kHz Mono-Vorbis) wie die Rennereignis-Clips; keine Nutzerstimme und
+kein Onlinedienst. 91 Saetze je Sprache (Verschmutzung, Oelspur, Gelbe Flagge,
+Truemmer links/rechts je Sektor 1-10 oder ganze Bahn, Durchfahrtsstrafe und
+Tank-Leck je Spieler).

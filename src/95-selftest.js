@@ -23770,6 +23770,632 @@
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'offen/geschlossen richtig, ein Klang beim Schliessen' };
   });
 
+  // ---- v1.3.88: ZUFALLSEVENTS (74-zufallsevents.js) ----------------------------------------------
+  // Eine Umgebung fuer alle Tests: Rennuhr, Pause, Tutorial, Challenge und Safety Car als Attrappen,
+  // Rennen laeuft, Ton aus (zevAnsage schreibt trotzdem ins Ansage-Protokoll), danach alles zurueck.
+  function zevTestUmgebung(fn) {
+    const z2 = zusatzPlatz(2), z3 = zusatzPlatz(3);
+    const m = { zeit: rennZeitJetzt, pause: rennPauseAktiv, tut: tutLaeuft, ch: challengeLaeuft, sc: safetyCarFaehrt,
+                raceState, raceFormationLap, flagState, playerCar, zweiSpieler, z2car: z2.car, z3car: z3.car,
+                trackMode, tiles: currentTrackTiles, damage, fuel, sound: soundEnabled, z2schaden: z2.schaden.wert,
+                kmh1: physEngine.state.speedKmh, kmh2: physEngine2.state.speedKmh, tyres, tyres2,
+                pitState, pitPlan, raceLapTimes, mpAn: mp.an, mpId: mp.id, mpStand: mpLetzterStand,
+                fuelLast: fuelLastTickTime, drain: fuelDrainPerSec };
+    const u = { T: 1000000 };
+    rennZeitJetzt = () => u.T; rennPauseAktiv = () => false; tutLaeuft = () => false;
+    challengeLaeuft = () => false; safetyCarFaehrt = () => false;
+    raceState = 'racing'; raceFormationLap = false; flagState = 'green'; soundEnabled = false;
+    zweiSpieler = false; z2.car = null; z3.car = null;
+    playerCar = { role: 'player', name: 'Test', ghost: { nurOrt: true, tileIndex: 0, querSoll: 0 } };
+    zevAllesZurueck();
+    zev.ansageLog.length = 0;
+    try { return fn(u); } finally {
+      zevAllesZurueck();
+      rennZeitJetzt = m.zeit; rennPauseAktiv = m.pause; tutLaeuft = m.tut; challengeLaeuft = m.ch; safetyCarFaehrt = m.sc;
+      raceState = m.raceState; raceFormationLap = m.raceFormationLap; flagState = m.flagState; playerCar = m.playerCar;
+      zweiSpieler = m.zweiSpieler; z2.car = m.z2car; z3.car = m.z3car; trackMode = m.trackMode;
+      currentTrackTiles = m.tiles; damage = m.damage; fuel = m.fuel; soundEnabled = m.sound;
+      schadenSetzenVon(z2, m.z2schaden);
+      physEngine.state.speedKmh = m.kmh1; physEngine2.state.speedKmh = m.kmh2; tyres = m.tyres; tyres2 = m.tyres2;
+      pitState = m.pitState; pitPlan = m.pitPlan; raceLapTimes = m.raceLapTimes;
+      mp.an = m.mpAn; mp.id = m.mpId; mpLetzterStand = m.mpStand; fuelLastTickTime = m.fuelLast; fuelDrainPerSec = m.drain;
+      applySurface();
+      zevBannerMalen(true);
+    }
+  }
+  // Eine geschlossene Strecke mit mindestens 20 Teilen (automatische Sektoren) aus den Challenges.
+  function zevTestStrecke() {
+    for (const c of CH_ALLE) {
+      let tiles = null;
+      try { tiles = codeToTrack(c.code).tiles; } catch (e) { tiles = null; }
+      if (!tiles || tiles.length < 20) continue;
+      tiles = tiles.map((x) => Object.assign({}, x));
+      try { if (!trackSchluss(trackCenterline(tiles)).closed) continue; } catch (e) { continue; }
+      return tiles;
+    }
+    return null;
+  }
+  // Ein Plan mit genau diesem einen Event, faellig 1 s nach Gruen.
+  function zevTestEvent(u, e) {
+    zev.plan = { v: 1, min: 1, dauerS: 30, liste: [Object.assign({ abMs: 1000, dauerMs: 20000, r1: 0, r2: 0, r3: 0 }, e)] };
+    zev.i = 0; zev.gruen = u.T;
+    u.T += 1000;
+    zevTick();
+    return zevAktiv;
+  }
+
+  stAdd('Zufallsevents v1.3.88: Optionen mit Etikett, Hauptschalter aus, Einzelschalter an', () => {
+    const f = [];
+    const haupt = $('race-zev');
+    if (!haupt) return { ok: false, mass: '#race-zev fehlt' };
+    if (haupt.defaultChecked) f.push('Hauptschalter ab Werk an');
+    const ids = ['race-zev', 'race-zev-min', 'race-zev-dauer'].concat(ZEV_ARTEN.map((a) => 'race-zev-' + a));
+    for (const id of ids) {
+      const el = $(id);
+      const row = el && el.closest('.opt-row');
+      if (!row || !row.closest('#tab-control')) { f.push(id + ' nicht in einer Zeile der Renneinstellungen'); continue; }
+      const lab = row.querySelector('.opt-label');
+      const tag = lab && lab.querySelector('.wip-tag');
+      if (!tag || tag.textContent.trim() !== 'experimentell') f.push(id + ' ohne Etikett experimentell');
+      if (!lab || !lab.querySelector('small') || lab.querySelector('small').textContent.trim().length < 20) f.push(id + ' ohne Erklaerung im small');
+      if (row.querySelector(':scope > small, :scope > p')) f.push(id + ' Text unter der Zeile');
+    }
+    for (const a of ZEV_ARTEN) if (!$('race-zev-' + a).defaultChecked) f.push(a + ' ab Werk aus');
+    const min = [...$('race-zev-min').options].map((o) => +o.value);
+    const dauer = [...$('race-zev-dauer').options].map((o) => +o.value);
+    if (Math.min(...min) !== 1 || Math.max(...min) !== 10) f.push('Haeufigkeit nicht 1-10 min');
+    if (Math.min(...dauer) !== 10 || Math.max(...dauer) !== 120) f.push('Dauer nicht 10-120 s');
+    const ids2 = sicherungRegler().map((el) => el.id);
+    for (const id of ids) if (ids2.indexOf(id) < 0) f.push(id + ' nicht in der Sicherung');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : ids.length + ' Zeilen, Haupt aus, 5 Einzelschalter an' };
+  });
+
+  stAdd('Zufallsevents v1.3.88: Plan - Haeufigkeit, Dauer, nur eingeschaltete Arten', () => {
+    const f = [];
+    let s = 12345;
+    const rnd = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    const merkMode = raceMode, merkLimit = raceLimit;
+    try {
+      raceMode = 'practice'; raceLimit = 0;
+      const p = zevPlanBauen({ an: true, min: 2, dauerS: 30, arten: ['gelb', 'oel'], ziele: [] }, rnd);
+      if (!p || p.liste.length < 50) return { ok: false, mass: 'Plan zu kurz: ' + (p ? p.liste.length : 'null') };
+      const l = p.liste;
+      if (l[0].abMs < 0.6 * 120000 - 1 || l[0].abMs > 1.4 * 120000 + 1) f.push('erstes Event bei ' + l[0].abMs);
+      let summe = 0;
+      for (let i = 1; i < l.length; i++) {
+        const d = l[i].abMs - l[i - 1].abMs;
+        summe += d;
+        if (d < Math.max(40000, 0.6 * 120000) - 2 || d > 1.4 * 120000 + 2) { f.push('Abstand ' + d); break; }
+      }
+      const mittel = summe / (l.length - 1);
+      if (Math.abs(mittel - 120000) > 15000) f.push('mittlerer Abstand ' + Math.round(mittel / 1000) + ' s');
+      if (l.some((e) => e.art !== 'gelb' && e.art !== 'oel')) f.push('ausgeschaltete Art geplant');
+      if (l.some((e) => e.dauerMs !== 30000)) f.push('Dauer nicht 30 s');
+      // Kurze Abstaende: nie kuerzer als Dauer + 10 s (hoechstens ein Event zugleich).
+      const p2 = zevPlanBauen({ an: true, min: 1, dauerS: 120, arten: ['dreck', 'leck'], ziele: [] }, rnd);
+      for (let i = 1; i < p2.liste.length; i++) if (p2.liste[i].abMs - p2.liste[i - 1].abMs < 130000 - 2) { f.push('Ueberlappung'); break; }
+      if (p2.liste.some((e) => e.art === 'leck' && e.dauerMs !== 0)) f.push('Leck mit Dauer');
+      if (zevPlanBauen({ an: false, min: 2, dauerS: 30, arten: ['gelb'] })) f.push('Plan trotz aus');
+      if (zevPlanBauen({ an: true, min: 2, dauerS: 30, arten: [] })) f.push('Plan ohne Arten');
+      // Die Einzelschalter: ausgeschaltet heisst nicht gewaehlt.
+      const el = $('race-zev-oel'), merk = el.checked;
+      el.checked = false;
+      try { if (zevOptionenLesen().arten.indexOf('oel') >= 0) f.push('Oel trotz Schalter aus'); } finally { el.checked = merk; }
+      // Zeitrennen: nicht ueber das Rennende hinaus.
+      raceMode = 'endurance'; raceLimit = 10;
+      {
+        const p3 = zevPlanBauen({ an: true, min: 1, dauerS: 10, arten: ['gelb'], ziele: [] }, rnd);
+        if (p3.liste.some((e) => e.abMs >= 600000)) f.push('Event nach Rennende geplant');
+      }
+    } finally { raceMode = merkMode; raceLimit = merkLimit; }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Abstaende 0,6-1,4 x Mittel, Dauer fest, nur eingeschaltete' };
+  });
+
+  stAdd('Zufallsevents v1.3.88: Zeitsteuerung an der Rennuhr, Dauer, Ende mit Ansage', () => zevTestUmgebung((u) => {
+    const f = [];
+    trackMode = 'off';
+    zev.plan = { v: 1, min: 1, dauerS: 20, liste: [{ abMs: 60000, art: 'dreck', dauerMs: 20000, r1: 0.5, r2: 0, r3: 0 },
+                                                   { abMs: 70000, art: 'gelb', dauerMs: 20000, r1: 0.5, r2: 0, r3: 0 }] };
+    zev.i = 0;
+    zevTick();
+    if (zevAktiv) f.push('Event vor Gruen');
+    zevGruen();
+    const gruen = zev.gruen;
+    u.T = gruen + 59000; zevTick();
+    if (zevAktiv) f.push('Event vor seiner Zeit');
+    u.T = gruen + 60000; zevTick();
+    if (!zevAktiv || zevAktiv.art !== 'dreck') f.push('Event nicht gestartet');
+    // Das zweite ist schon faellig, wartet aber: hoechstens eines zugleich.
+    u.T = gruen + 79800; zevTick();
+    if (!zevAktiv || zevAktiv.art !== 'dreck') f.push('vor Ablauf beendet oder ueberlagert');
+    u.T = gruen + 80000; zevTick();
+    if (zevAktiv && zevAktiv.art === 'dreck') f.push('nach 20 s nicht beendet');
+    if (!zevAktiv || zevAktiv.art !== 'gelb') f.push('wartendes Event nicht danach gestartet');
+    const log = zev.ansageLog.join(',');
+    if (log !== 'dreck_0,sauber_0,gelb_0') f.push('Ansagen ' + log);
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Start bei 60 s, Ende nach 20 s, zweites danach; ' + log };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: Ort - Sektor (Start/Ziel-Teile, Editor-Sektoren) oder ganze Bahn', () => zevTestUmgebung(() => {
+    const f = [];
+    const tiles = zevTestStrecke();
+    if (!tiles) return { skip: true, mass: 'keine lange Challenge-Strecke' };
+    trackMode = 'on';
+    // 1. Editor-Sektoren (automatisch): jede Teilmenge ein Sektor, alle zusammen die Strecke.
+    currentTrackTiles = tiles;
+    const p = autoSektorPlanAktuell();
+    if (!p || p.n < 2) f.push('keine automatischen Sektoren');
+    else {
+      const sek = zevSektorKacheln(tiles);
+      const alle = [].concat(...sek).sort((a, b) => a - b);
+      if (sek.length !== p.n) f.push('Sektorzahl ' + sek.length + ' statt ' + p.n);
+      if (alle.length !== tiles.length || alle.some((k, i) => k !== i)) f.push('Sektoren decken die Strecke nicht genau');
+      if (sek[0][0] !== p.s) f.push('Sektor 1 beginnt nicht an Start/Ziel');
+      const b = zevBereichBauen(0.999);
+      if (b.sektor !== p.n - 1 || !b.maske || b.kacheln.some((k) => b.maske[k] !== 1)) f.push('letzter Sektor falsch');
+      if (b.maske && [...b.maske].reduce((a, x) => a + x, 0) !== b.kacheln.length) f.push('Maske groesser als der Sektor');
+    }
+    // 2. Weitere Start/Ziel-Teile: Sektor j vom j-ten Start/Ziel-Teil bis vor das naechste.
+    const t2 = tiles.map((x) => Object.assign({}, x));
+    const geraden = t2.map((x, i) => (x.type === TILE_TYPE.STRAIGHT ? i : -1)).filter((i) => i >= 0);
+    if (geraden.length >= 2) {
+      const s0 = t2.findIndex((x) => x.type === TILE_TYPE.START);
+      const g1 = geraden.find((i) => i > s0 + 2), g2 = geraden.find((i) => i > (g1 || 0) + 2);
+      if (g1 !== undefined && g2 !== undefined) {
+        t2[g1].type = TILE_TYPE.START; t2[g2].type = TILE_TYPE.START;
+        currentTrackTiles = t2;
+        const sek = zevSektorKacheln(t2);
+        if (!sek || sek.length !== 3) f.push('Start/Ziel-Sektoren: ' + (sek ? sek.length : 'keine'));
+        else if (sek[1][0] !== g1 || sek[1][sek[1].length - 1] !== g2 - 1 || sek[2][0] !== g2) f.push('Start/Ziel-Grenzen falsch');
+      }
+    }
+    // 3. Ausdruck-Modus: immer die ganze Bahn.
+    currentTrackTiles = tiles; trackMode = 'off';
+    const b3 = zevBereichBauen(0.5);
+    if (b3.sektor !== -1 || b3.maske !== null) f.push('Ausdruck-Modus nicht ganze Bahn');
+    // Im Bereich: ueber den Ortungssatz des Autos (tileIndex).
+    trackMode = 'on';
+    zevAktiv = { art: 'dreck', maske: zevBereichBauen(0).maske, ab: 0, bis: 1e12 };
+    const k0 = zevAktiv.maske ? zevAktiv.maske.indexOf(1) : -1, kaus = zevAktiv.maske ? zevAktiv.maske.indexOf(0) : -1;
+    if (!zevImBereich({ ghost: { tileIndex: k0 } }) || zevImBereich({ ghost: { tileIndex: kaus } }) || zevImBereich({ ghost: { tileIndex: null } })) f.push('zevImBereich falsch');
+    zevAktiv = null;
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : (p ? p.n : '?') + ' Editor-Sektoren, 3 Start/Ziel-Sektoren, Ausdruck = ganze Bahn' };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: Grip nur im Bereich und nur waehrend der Dauer (Verschmutzung, Oel)', () => zevTestUmgebung((u) => {
+    const f = [];
+    const tiles = zevTestStrecke();
+    if (!tiles) return { skip: true, mass: 'keine Strecke' };
+    trackMode = 'on'; currentTrackTiles = tiles;
+    if (wxRainLevel() > 0.01) return { skip: true, mass: 'es regnet gerade' };
+    const ref = (g) => { const m = { config: {} }; mischungAnwenden(m, tyres, g); return m.config.gripScale; };
+    const trocken = ref(0), nass = ref(1);
+    applySurface();
+    if (Math.abs(physEngine.config.gripScale - trocken) > 1e-6) return { skip: true, mass: 'Grundgriff unklar' };
+    const a = zevTestEvent(u, { art: 'dreck', r1: 0 });
+    if (!a || !a.maske) return { ok: false, mass: 'kein Sektor-Event' };
+    const drin = a.maske.indexOf(1), draussen = a.maske.indexOf(0);
+    playerCar.ghost.tileIndex = draussen; u.T += 200; zevTick();
+    if (Math.abs(physEngine.config.gripScale - trocken) > 1e-6) f.push('ausserhalb nass');
+    playerCar.ghost.tileIndex = drin; u.T += 200; zevTick();
+    if (Math.abs(physEngine.config.gripScale - nass) > 1e-6) f.push('im Sektor nicht nass: ' + physEngine.config.gripScale.toFixed(3));
+    applySurface();   // eine Wetterrampe darf es nicht zuruecksetzen
+    if (Math.abs(physEngine.config.gripScale - nass) > 1e-6) f.push('applySurface vergisst das Event');
+    if (weather !== 'dry') f.push('Wetter umgeschaltet');
+    u.T = a.bis; zevTick();
+    if (zevAktiv) f.push('nicht beendet');
+    if (Math.abs(physEngine.config.gripScale - trocken) > 1e-6) f.push('nach dem Ende noch nass');
+    // Oel: weniger als nass, und das Heck-Merkmal.
+    const o = zevTestEvent(u, { art: 'oel', r1: 0 });
+    playerCar.ghost.tileIndex = o.maske.indexOf(1); u.T += 200; zevTick();
+    if (Math.abs(physEngine.config.gripScale - nass * ZEV_OEL_GRIP) > 1e-6 || physEngine.config.zevOel !== 1) f.push('Oel: ' + physEngine.config.gripScale.toFixed(3));
+    zevEnde('zeit');
+    if (physEngine.config.zevOel !== 0 || Math.abs(physEngine.config.gripScale - trocken) > 1e-6) f.push('Oel nicht zurueck');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'trocken ' + trocken.toFixed(2) + ', im Sektor ' + nass.toFixed(2) + ', Oel ' + (nass * ZEV_OEL_GRIP).toFixed(2) };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: NPCs - langsamer im Dreck, 60 % im Oel, Gelb-Tempo, Truemmer ausweichen', () => zevTestUmgebung((u) => {
+    const f = [];
+    const tiles = zevTestStrecke();
+    if (!tiles) return { skip: true, mass: 'keine Strecke' };
+    trackMode = 'on'; currentTrackTiles = tiles;
+    if (wxRainLevel() > 0.01) return { skip: true, mass: 'es regnet gerade' };
+    const npc = { role: 'ghost', ghost: { tileIndex: 0, reifen: 'trocken' } };
+    const a = zevTestEvent(u, { art: 'dreck', r1: 0 });
+    const drin = a.maske.indexOf(1), draussen = a.maske.indexOf(0);
+    npc.ghost.tileIndex = draussen; const vAus = ghostReifenTempo(npc);
+    npc.ghost.tileIndex = drin; const vIn = ghostReifenTempo(npc);
+    if (!(vIn < vAus - 0.05)) f.push('Dreck: ' + vIn.toFixed(2) + ' statt < ' + vAus.toFixed(2));
+    if (Math.abs(vIn - GHOST_REGEN_TEMPO) > 0.02) f.push('Dreck nicht wie Regen (' + vIn.toFixed(2) + ')');
+    zevEnde('zeit');
+    npc.ghost.tileIndex = drin;
+    if (Math.abs(ghostReifenTempo(npc) - vAus) > 1e-6) f.push('nach Ende noch langsamer');
+    zevTestEvent(u, { art: 'oel', r1: 0 });
+    if (Math.abs(zevNpcTempo(npc, 0.8) - 0.8 * ZEV_OEL_NPC_TEMPO) > 1e-9) f.push('Oel nicht 60 %');
+    npc.ghost.tileIndex = draussen;
+    if (zevNpcTempo(npc, 0.8) !== 0.8) f.push('Oel wirkt ausserhalb');
+    zevEnde('zeit');
+    zevTestEvent(u, { art: 'gelb', r1: 0 });
+    npc.ghost.tileIndex = drin;
+    if (Math.abs(zevNpcTempo(npc, 0.9) - Math.min(0.9, gelbGrenze())) > 1e-9) f.push('Gelb: nicht auf Gelb-Tempo');
+    zevEnde('zeit');
+    const t = zevTestEvent(u, { art: 'teile', r1: 0, r2: 0.5, r3: 0.9 });   // rechts
+    if (!t || t.teil < 0 || t.seite !== 'rechts') return { ok: false, mass: 'kein Truemmer-Event' };
+    const n = tiles.length;
+    npc.ghost.tileIndex = (t.teil - 1 + n) % n;
+    const q1 = zevAusweichQuer(npc);
+    npc.ghost.tileIndex = t.teil;
+    const q2 = zevAusweichQuer(npc);
+    npc.ghost.tileIndex = (t.teil + 2) % n;
+    const q3 = zevAusweichQuer(npc);
+    if (!(q1 < 0 && q2 < 0)) f.push('Truemmer rechts: nicht nach links (' + q1 + ', ' + q2 + ')');
+    if (q3 !== null) f.push('weicht auch danach aus');
+    if (zevNpcTempo(npc, 0.8) !== 0.8) f.push('bremst fuer Truemmer');
+    zevEnde('zeit');
+    const t2 = zevTestEvent(u, { art: 'teile', r1: 0, r2: 0.5, r3: 0.1 });
+    npc.ghost.tileIndex = t2.teil;
+    if (!(zevAusweichQuer(npc) > 0)) f.push('Truemmer links: nicht nach rechts');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Tempo ' + vAus.toFixed(2) + ' -> ' + vIn.toFixed(2) + ', Oel x0,6, Gelb gedeckelt, Ausweichen zur freien Seite' };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: Gelb im Sektor - 80 km/h, Strafe erst nach Reaktionszeit und 1 s ueber 85', () => zevTestUmgebung((u) => {
+    const f = [];
+    trackMode = 'off';
+    const kmh = (v) => { physEngine.state.speedKmh = v / REAL_SCALE; };
+    const a = zevTestEvent(u, { art: 'gelb', dauerMs: 60000 });
+    if (!a) return { ok: false, mass: 'kein Event' };
+    const t0 = u.T;
+    kmh(100);
+    for (const dt of [200, 600, 1000, 1400]) { u.T = t0 + dt; zevTick(); }
+    if (zevStrafeOffen(1)) f.push('Strafe vor Ablauf der Reaktionszeit');
+    u.T = t0 + 1600; zevTick(); u.T = t0 + 2400; zevTick();
+    if (zevStrafeOffen(1)) f.push('Strafe vor 1 s Ueberschreitung');
+    u.T = t0 + 2700; zevTick();
+    if (zevStrafeOffen(1) !== 1) f.push('keine Strafe nach 1,1 s mit 100 km/h');
+    u.T = t0 + 5000; zevTick();
+    if (zevStrafeOffen(1) !== 1) f.push('zweite Strafe im selben Event');
+    if (zev.ansageLog.indexOf('strafe_0') < 0) f.push('Strafe nicht angesagt');
+    zevEnde('zeit'); zev.strafe[1].offen = 0;
+    // Innerhalb der Toleranz (84 km/h) und kurz drueber (unterbrochen): keine Strafe.
+    zevTestEvent(u, { art: 'gelb', dauerMs: 60000 });
+    const t1 = u.T;
+    kmh(84);
+    for (let dt = 0; dt <= 6000; dt += 200) { u.T = t1 + dt; zevTick(); }
+    kmh(95); u.T += 200; zevTick(); u.T += 600; zevTick(); kmh(70); u.T += 200; zevTick(); kmh(95); u.T += 200; zevTick(); u.T += 600; zevTick();
+    if (zevStrafeOffen(1)) f.push('Strafe trotz Toleranz/Unterbrechung');
+    zevEnde('zeit');
+    // Ausserhalb des Sektors: keine Strafe.
+    const tiles = zevTestStrecke();
+    if (tiles) {
+      trackMode = 'on'; currentTrackTiles = tiles;
+      const b = zevTestEvent(u, { art: 'gelb', r1: 0, dauerMs: 60000 });
+      playerCar.ghost.tileIndex = b.maske.indexOf(0);
+      kmh(150);
+      for (let i = 0; i < 30; i++) { u.T += 200; zevTick(); }
+      if (zevStrafeOffen(1)) f.push('Strafe ausserhalb des Sektors');
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Reaktion 1,5 s, Toleranz 5 km/h ueber 1 s, nur im Sektor' };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: Strafstopp ohne Arbeiten (Spieler 1 und 3), Leck dicht', () => zevTestUmgebung((u) => {
+    const f = [];
+    // Spieler 1: leerer Plan, kein Minispiel, kurze Standzeit.
+    zev.strafe[1].offen = 1; zevVerbrauch[1] = 2;
+    damage = 30; fuel = 40;
+    const merkPit = pitState;
+    try {
+      pitState = 'limited';
+      setPitState('servicing');
+      if (!pitNurStrafe) f.push('P1 kein Strafstopp');
+      if (!pitPlanEmpty(pitPlan)) f.push('P1 Plan nicht leer: ' + JSON.stringify(pitPlan));
+      if (pitSpiel) f.push('P1 Minispiel laeuft');
+      if (zevStrafeOffen(1) !== 0) f.push('P1 Strafe noch offen');
+      if (zevVerbrauch[1] !== 1) f.push('P1 Leck nicht dicht');
+      if (zev.ansageLog.indexOf('strafe_ab_0') < 0) f.push('Abgeleistet nicht angesagt');
+    } finally { setPitState('off'); pitState = merkPit; }
+    if (damage !== 30 || fuel !== 40) f.push('P1 am Auto gearbeitet');
+    // Spieler 3: der schmale Boxenstopp der Zusatzplaetze.
+    const z = zusatzPlatz(3);
+    const merk = { car: z.car, box: JSON.parse(JSON.stringify(z.box)), tank: z.tank.stand, schaden: z.schaden.wert, kmh: z.motor.state.speedKmh, gas: z.throttle };
+    try {
+      zweiSpieler = true; z.car = { role: 'player3', ghost: { tileIndex: 0 } };
+      zev.strafe[3].offen = 1;
+      z.tank.stand = 30; schadenSetzenVon(z, 20); z.motor.state.speedKmh = 0; z.throttle = 0;
+      z.box.lage = 'angefordert'; z.box.standS = 0; z.box.fertig = false; z.box.letzterTick = null;
+      boxTickVon(z);
+      if (z.box.lage !== 'service' || !z.box.nurStrafe) f.push('P3 kein Strafstopp');
+      for (let i = 0; i < 9; i++) { u.T += 200; boxTickVon(z); }
+      if (z.box.fertig) f.push('P3 vor 2 s fertig');
+      for (let i = 0; i < 3; i++) { u.T += 200; boxTickVon(z); }
+      if (!z.box.fertig) f.push('P3 nach 2,4 s nicht fertig');
+      if (Math.abs(z.tank.stand - 30) > 1e-6 || Math.abs(z.schaden.wert - 20) > 1e-6) f.push('P3 am Auto gearbeitet');
+      if (zevStrafeOffen(3) !== 0) f.push('P3 Strafe offen');
+    } finally {
+      z.car = merk.car; Object.assign(z.box, merk.box); z.tank.stand = merk.tank; schadenSetzenVon(z, merk.schaden);
+      z.motor.state.speedKmh = merk.kmh; z.throttle = merk.gas; z.box.nurStrafe = false; stopPitLoopsFuer(3);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'leerer Plan, kein Minispiel, 2 s Stand, nichts getankt/repariert' };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: nicht abgeleistete Strafe = +20 s im Ergebnis (Strafen-Spalte, WLAN)', () => zevTestUmgebung(() => {
+    const f = [];
+    const vor1 = racePenaltyMs(), vor2 = strafeMsVon(2);
+    zev.strafe[1].offen = 1; zev.strafe[2].offen = 2;
+    if (zevStrafeLabel(1) !== 'DT') f.push('offene Strafe ohne DT');
+    zevRennende();
+    if (racePenaltyMs() - vor1 !== 20000) f.push('P1 ' + (racePenaltyMs() - vor1) + ' ms statt 20000');
+    if (strafeMsVon(2) - vor2 !== 40000) f.push('P2 ' + (strafeMsVon(2) - vor2) + ' ms statt 40000');
+    if (zevStrafeOffen(1) || zevStrafeLabel(1)) f.push('nach dem Ende noch offen');
+    raceState = 'finished'; raceLapTimes = [{ lap: 1, ms: 10000 }];
+    const st = mpEigenerStand();
+    if (st.strafe !== racePenaltyMs()) f.push('WLAN-Bericht ohne Strafe');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '+20 s je Strafe, im WLAN-Bericht' };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: keine Events in Pause, Countdown, Einfuehrungsrunde, Tutorial, Challenge, unter Gelb/SC', () => zevTestUmgebung((u) => {
+    const f = [];
+    trackMode = 'off';
+    const sperren = [
+      ['Pause', () => { rennPauseAktiv = () => true; }, () => { rennPauseAktiv = () => false; }],
+      ['Countdown', () => { raceState = 'countdown'; }, () => { raceState = 'racing'; }],
+      ['Einfuehrungsrunde', () => { raceFormationLap = true; }, () => { raceFormationLap = false; }],
+      ['Tutorial', () => { tutLaeuft = () => true; }, () => { tutLaeuft = () => false; }],
+      ['Challenge', () => { challengeLaeuft = () => true; }, () => { challengeLaeuft = () => false; }],
+      ['Gelb', () => { flagState = 'yellow'; }, () => { flagState = 'green'; }],
+      ['Safety Car', () => { safetyCarFaehrt = () => true; }, () => { safetyCarFaehrt = () => false; }],
+    ];
+    for (const [name, an, aus] of sperren) {
+      zev.plan = { v: 1, liste: [{ abMs: 0, art: 'dreck', dauerMs: 20000, r1: 0, r2: 0, r3: 0 }] };
+      zev.i = 0; zev.gruen = u.T - 1000;
+      an(); zevTick(); aus();
+      if (zevAktiv) { f.push('Event trotz ' + name); zevEnde('reset'); }
+      // Verschoben, nicht verloren: ohne Sperre startet es.
+      zevTick();
+      if (!zevAktiv) f.push('nach ' + name + ' nicht nachgeholt');
+      // Waehrend es laeuft: echte Gelbe/SC beendet es.
+      if (name === 'Gelb' || name === 'Safety Car') {
+        an(); zevTick(); aus();
+        if (zevAktiv) f.push(name + ' beendet das Event nicht');
+      }
+      zevEnde('reset');
+    }
+    if (zev.ansageLog.indexOf('sauber_0') >= 0) f.push('Abbruch mit Sauber-Ansage');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : sperren.length + ' Sperren, jeweils nachgeholt; Gelb/SC beenden still' };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: Ansagen mit Sektor (Attrappe), Texte und Clip-Manifest vollstaendig', async () => {
+    const f = [];
+    const r = zevTestUmgebung((u) => {
+      const tiles = zevTestStrecke();
+      if (!tiles) return 'keine Strecke';
+      trackMode = 'on'; currentTrackTiles = tiles;
+      const a = zevTestEvent(u, { art: 'dreck', r1: 0.999 });
+      const k = a.sektor + 1;
+      u.T = a.bis; zevTick();
+      zevTestEvent(u, { art: 'teile', r1: 0, r2: 0, r3: 0.1 });
+      zevEnde('zeit');
+      zevTestEvent(u, { art: 'gelb', r1: 0 });
+      zevEnde('zeit');
+      const soll = ['dreck_' + k, 'sauber_' + k, 'teile_1_links', 'teile_weg', 'gelb_1', 'gruen_1'].join(',');
+      return zev.ansageLog.join(',') === soll ? '' : 'Ansagen ' + zev.ansageLog.join(',') + ' statt ' + soll;
+    });
+    if (r) f.push(r);
+    const keys = zevAnsageSchluessel();
+    for (const k of keys) {
+      for (const spr of ['de', 'en']) {
+        const txt = zevAnsageText(k, spr);
+        if (!txt || txt === k || /undefined/.test(txt) || txt.indexOf('—') >= 0) { f.push('Text ' + k + '/' + spr); break; }
+      }
+    }
+    if (zevAnsageText('gelb_3', 'de') !== 'Gelbe Flagge in Sektor drei. Abbremsen auf achtzig.') f.push('Wortlaut gelb_3');
+    try {
+      const res = await fetch('audio/zufallsevents.json', { cache: 'no-store' });
+      if (!res.ok) f.push('Manifest fehlt');
+      else {
+        const m = await res.json();
+        for (const spr of ['de', 'en']) {
+          const fehlt = keys.filter((k) => !(m[spr] && m[spr][k]));
+          if (fehlt.length) f.push(spr + ': ' + fehlt.length + ' Clips fehlen, z. B. ' + fehlt[0]);
+          if (m[spr] && Object.keys(m[spr]).length !== keys.length) f.push(spr + ': ' + Object.keys(m[spr]).length + ' Eintraege statt ' + keys.length);
+          const anders = keys.filter((k) => !m.texte || !m.texte[spr] || m.texte[spr][k] !== zevAnsageText(k, spr));
+          if (anders.length) f.push(spr + ': Wortlaut im Generator anders, z. B. ' + anders[0]);
+        }
+      }
+    } catch (e) { f.push('Manifest: ' + e.message); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : keys.length + ' Ansagen je Sprache, Sektor in der Ansage, Manifest vollstaendig' };
+  });
+
+  stAdd('Zufallsevents v1.3.88: Karte - Bereich farbig genau ueber dem Sektor, Truemmer-Dreieck seitenrichtig, danach weg', () => zevTestUmgebung((u) => {
+    const f = [];
+    const tiles = zevTestStrecke();
+    if (!tiles) return { skip: true, mass: 'keine Strecke' };
+    trackMode = 'on'; currentTrackTiles = tiles;
+    const r = renderTrackPreview(tiles, null, { detailed: true, cars: [] });
+    const host = document.createElement('div');
+    host.innerHTML = r.html;
+    const svg = host.querySelector('svg'), geo = r.geo;
+    karteAutosSetzen(svg, geo, []);
+    const a = zevTestEvent(u, { art: 'gelb', r1: 0.5 });
+    karteEreignisSetzen(svg, geo, zevKartenInfo());
+    let g = svg.querySelector('g.karte-ereignis');
+    if (!g) return { ok: false, mass: 'keine Hervorhebung' };
+    if (g.getAttribute('data-farbe') !== ZEV_FARBE.gelb) f.push('Farbe ' + g.getAttribute('data-farbe'));
+    if (g.getAttribute('data-kacheln') !== a.kacheln.join(',')) f.push('Kacheln ' + g.getAttribute('data-kacheln'));
+    if (g.nextElementSibling !== svg.querySelector('g.karte-autos')) f.push('nicht unter den Autos');
+    const path = g.querySelector('path');
+    const d = path ? path.getAttribute('d') : '';
+    const zahlen = d.match(/-?\d+(?:\.\d+)?/g).map(Number);
+    const k0 = a.kacheln[0], p0 = geo.pts[geo.kachelTab.start[k0]];
+    if (Math.abs(zahlen[0] - (p0.x + geo.ox)) > 0.2 || Math.abs(zahlen[1] - (p0.y + geo.oy)) > 0.2) f.push('beginnt nicht am ersten Teil des Sektors');
+    const punkte = zahlen.length / 2, soll = a.kacheln.reduce((s, k) => s + geo.kachelTab.zahl[k], 0) + 1;
+    if (punkte !== soll) f.push(punkte + ' Punkte statt ' + soll);
+    if (path.getAttribute('stroke') !== ZEV_FARBE.gelb || !(+path.getAttribute('stroke-opacity') < 0.8)) f.push('nicht halbdurchsichtig gelb');
+    // Unveraendert: keine DOM-Arbeit.
+    if (karteEreignisSetzen(svg, geo, zevKartenInfo()) !== false) f.push('neu gezeichnet ohne Aenderung');
+    zevEnde('zeit');
+    karteEreignisSetzen(svg, geo, zevKartenInfo());
+    if (svg.querySelector('g.karte-ereignis')) f.push('nach dem Ende noch da');
+    // Verschmutzung: eigene Farbe.
+    zevTestEvent(u, { art: 'dreck', r1: 0 });
+    karteEreignisSetzen(svg, geo, zevKartenInfo());
+    g = svg.querySelector('g.karte-ereignis');
+    if (!g || g.getAttribute('data-farbe') !== ZEV_FARBE.dreck || ZEV_FARBE.dreck === ZEV_FARBE.gelb) f.push('Verschmutzung ohne eigene Farbe');
+    zevEnde('zeit');
+    // Truemmer links: Dreieck auf der +Normalen-Seite (links), rechts auf der anderen.
+    for (const [r3, seite, vz] of [[0.1, 'links', 1], [0.9, 'rechts', -1]]) {
+      const t = zevTestEvent(u, { art: 'teile', r1: 0, r2: 0.3, r3 });
+      karteEreignisSetzen(svg, geo, zevKartenInfo());
+      const dr = svg.querySelector('g.karte-truemmer');
+      if (!dr || dr.getAttribute('data-seite') !== seite) { f.push('kein Dreieck ' + seite); zevEnde('zeit'); continue; }
+      const m = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(dr.getAttribute('transform'));
+      const i = Math.min(geo.pts.length - 1, geo.kachelTab.start[t.teil] + Math.floor(geo.kachelTab.zahl[t.teil] / 2));
+      const dx = +m[1] - (geo.pts[i].x + geo.ox), dy = +m[2] - (geo.pts[i].y + geo.oy);
+      if (Math.sign(dx * geo.nrm[i].x + dy * geo.nrm[i].y) !== vz) f.push('Dreieck ' + seite + ' auf der falschen Seite');
+      if (svg.querySelector('g.karte-ereignis').getAttribute('data-kacheln') !== String(t.teil)) f.push('Truemmer markiert nicht genau ein Teil');
+      zevEnde('zeit');
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'gelb/braun je Ereignis, genau die Sektorteile, Dreieck seitenrichtig, nach Ende weg' };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: Truemmer - Schaden-Heuristik (Lenken zur freien Seite auf dem Teil davor/darauf)', () => zevTestUmgebung((u) => {
+    const f = [];
+    const tiles = zevTestStrecke();
+    if (!tiles) return { skip: true, mass: 'keine Strecke' };
+    if (!crashSchadenAn()) return { skip: true, mass: 'Schaden bei Crash ist aus' };
+    trackMode = 'on'; currentTrackTiles = tiles;
+    const n = tiles.length;
+    const t = zevTestEvent(u, { art: 'teile', r1: 0, r2: 0.5, r3: 0.9, dauerMs: 60000 });   // rechts
+    const fahre = (quer) => {
+      for (const k of [t.teil - 1, t.teil, t.teil + 1]) {
+        playerCar.ghost.tileIndex = (k + n) % n; playerCar.ghost.querSoll = quer;
+        u.T += 200; zevTick();
+      }
+      playerCar.ghost.tileIndex = (t.teil + 5) % n; u.T += 200; zevTick();
+    };
+    damage = 0; physEngine.state.speedKmh = 0;
+    fahre(0);
+    if (!(damage >= ZEV_TEILE_SCHADEN_MIN && damage <= ZEV_TEILE_SCHADEN_MAX)) f.push('mittig durch: Schaden ' + damage);
+    const nachEins = damage;
+    fahre(-0.6);   // nach links = freie Seite
+    if (damage !== nachEins) f.push('ausgewichen und trotzdem Schaden');
+    fahre(0.6);    // nach rechts = in die Truemmer
+    if (!(damage > nachEins)) f.push('auf die Truemmerseite ohne Schaden');
+    // Je nach Tempo: schnell mehr als langsam.
+    damage = 0; physEngine.state.speedKmh = physEngine.config.topSpeedKmh; fahre(0);
+    if (damage !== ZEV_TEILE_SCHADEN_MAX) f.push('Vollgas: ' + damage + ' statt ' + ZEV_TEILE_SCHADEN_MAX);
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'mittig ' + nachEins + ' %, ausgewichen 0, Vollgas ' + ZEV_TEILE_SCHADEN_MAX + ' %' };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: Tank-Leck nur Spielerautos, doppelter Verbrauch bis zur Box', () => zevTestUmgebung((u) => {
+    const f = [];
+    fuelDrainPerSec = 1;
+    const npc = { role: 'ghost', ghost: { tileIndex: 0 } };
+    const merkGarage = garage.slice();
+    try {
+      garage.push(npc);
+      zevTestEvent(u, { art: 'leck', r1: 0.3 });
+      if (zevAktiv) f.push('Leck belegt den Event-Platz');
+      if (zevVerbrauch[1] !== 2) f.push('Spieler 1 ohne Leck');
+      if (zevVerbrauch.slice(2).some((x) => x !== 1)) f.push('Leck bei Nicht-Spielern');
+      // Verbrauch: zwei gleiche Takte, einmal mit Leck, einmal ohne.
+      const takt = () => { fuel = 80; fuelLastTickTime = u.T; u.T += 400; fuelTankTick(1, 1); return 80 - fuel; };
+      const mit = takt();
+      zevVerbrauch[1] = 1; const ohne = takt(); zevVerbrauch[1] = 2;
+      if (!(ohne > 0) || Math.abs(mit / ohne - 2) > 1e-6) f.push('Verbrauch ' + mit.toFixed(3) + ' gegen ' + ohne.toFixed(3));
+      if (zev.ansageLog.indexOf('leck_0') < 0) f.push('Leck nicht angesagt');
+      zevBoxStopp(1);
+      if (zevVerbrauch[1] !== 1) f.push('nach der Box noch undicht');
+      // Lokaler Mehrspieler: Spieler 2 kann es treffen, dann mit Spielerbezug angesagt.
+      const z2 = zusatzPlatz(2);
+      zweiSpieler = true; z2.car = { role: 'player2', ghost: { tileIndex: 0 } };
+      zev.ansageLog.length = 0;
+      zevLeckStarten({ art: 'leck', r1: 0.99 });
+      if (zevVerbrauch[2] !== 2 || zev.ansageLog[0] !== 'leck_2') f.push('P2: ' + zevVerbrauch[2] + ' ' + zev.ansageLog[0]);
+      zevRennende();
+      if (zevVerbrauch[2] !== 1) f.push('Leck ueber das Rennende');
+    } finally { garage.splice(0, garage.length, ...merkGarage); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'nur Spieler, x2, Box/Rennende dicht' };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: lokaler Mehrspieler - Wirkung und Strafe je Spieler', () => zevTestUmgebung((u) => {
+    const f = [];
+    const tiles = zevTestStrecke();
+    if (!tiles) return { skip: true, mass: 'keine Strecke' };
+    if (wxRainLevel() > 0.01) return { skip: true, mass: 'es regnet gerade' };
+    trackMode = 'on'; currentTrackTiles = tiles;
+    const z2 = zusatzPlatz(2);
+    zweiSpieler = true; z2.car = { role: 'player2', ghost: { tileIndex: 0 } };
+    const a = zevTestEvent(u, { art: 'dreck', r1: 0 });
+    const drin = a.maske.indexOf(1), draussen = a.maske.indexOf(0);
+    playerCar.ghost.tileIndex = draussen; z2.car.ghost.tileIndex = drin;
+    u.T += 200; zevTick();
+    const ref = (mix, g) => { const m = { config: {} }; mischungAnwenden(m, mix, g); return m.config.gripScale; };
+    if (Math.abs(physEngine.config.gripScale - ref(tyres, 0)) > 1e-6) f.push('P1 ausserhalb nass');
+    if (Math.abs(physEngine2.config.gripScale - ref(tyres2, 1)) > 1e-6) f.push('P2 im Sektor nicht nass');
+    zevEnde('zeit');
+    if (Math.abs(physEngine2.config.gripScale - ref(tyres2, 0)) > 1e-6) f.push('P2 nach Ende nass');
+    const b = zevTestEvent(u, { art: 'gelb', r1: 0, dauerMs: 60000 });
+    playerCar.ghost.tileIndex = b.maske.indexOf(0); z2.car.ghost.tileIndex = b.maske.indexOf(1);
+    physEngine.state.speedKmh = 150 / REAL_SCALE; physEngine2.state.speedKmh = 150 / REAL_SCALE;
+    for (let i = 0; i < 20; i++) { u.T += 200; zevTick(); }
+    if (zevStrafeOffen(1) || zevStrafeOffen(2) !== 1) f.push('Strafen P1 ' + zevStrafeOffen(1) + ', P2 ' + zevStrafeOffen(2));
+    if (zev.ansageLog.indexOf('strafe_2') < 0) f.push('P2-Strafe nicht mit Spieler angesagt');
+    zevBannerMalen(true);
+    if ($('gt3-zev-text') && $('gt3-zev-text').textContent.indexOf('P2') < 0) f.push('Banner ohne P2');
+    zevEnde('zeit');
+    // Truemmer: P2 ueber den gesendeten Lenkbefehl.
+    const t = zevTestEvent(u, { art: 'teile', r1: 0, r2: 0.5, r3: 0.1, dauerMs: 60000 });   // links -> rechts vorbei
+    const n = tiles.length, merkS = z2.outSteer, s0 = schadenVon(2);
+    playerCar.ghost.tileIndex = (t.teil + 10) % n;
+    for (const q of [0.7, 0]) {
+      z2.outSteer = q;
+      for (const k of [t.teil - 1, t.teil, t.teil + 2]) { z2.car.ghost.tileIndex = (k + n) % n; u.T += 200; zevTick(); }
+    }
+    z2.outSteer = merkS;
+    if (crashSchadenAn() && !(schadenVon(2) - s0 >= ZEV_TEILE_SCHADEN_MIN)) f.push('P2: Schaden ' + (schadenVon(2) - s0) + ' nach einmal ausweichen, einmal mittig');
+    if (crashSchadenAn() && schadenVon(2) - s0 > ZEV_TEILE_SCHADEN_MAX) f.push('P2: Schaden auch beim Ausweichen');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Grip, Strafe, Truemmer je Spieler' };
+  }));
+
+  stAdd('Zufallsevents v1.3.88: WLAN - Host wuerfelt den Plan, Clients folgen ohne eigenen Wurf (Attrappe)', () => zevTestUmgebung((u) => {
+    const f = [];
+    const haupt = $('race-zev'), merk = haupt.checked;
+    try {
+      // Host: Schalter an -> der Plan reist im Rennplan mit, mit Leck-Zielen aus der Fahrerliste.
+      haupt.checked = true;
+      mp.an = true; mp.id = 'A';
+      mpLetzterStand = { fahrer: [{ id: 'A', name: 'Anna', alter: 1 }, { id: 'B', name: 'Ben', alter: 2 }] };
+      const plan = JSON.parse(JSON.stringify(mpPlanBauen()));   // ueber den Draht
+      if (!plan.zev || !plan.zev.liste.length) return { ok: false, mass: 'kein zev im Rennplan' };
+      if (plan.zev.liste.some((e) => e.art === 'leck' && ['A', 'B'].indexOf(e.ziel) < 0)) f.push('Leck ohne Ziel');
+      // Client mit Schalter AUS: folgt trotzdem genau diesem Plan.
+      haupt.checked = false;
+      zevRennStart(plan);
+      if (JSON.stringify(zev.plan) !== JSON.stringify(plan.zev)) f.push('Client hat eigenen Plan');
+      // Host mit Schalter aus: kein Event, auch wenn der Client sie an hat.
+      haupt.checked = true;
+      zevRennStart({ zev: null });
+      if (zev.plan) f.push('Client wuerfelt selbst');
+      // Gleicher Ort auf zwei Telefonen: dieselbe Zufallszahl, dieselbe Strecke -> derselbe Sektor/Teil.
+      const tiles = zevTestStrecke();
+      if (tiles) {
+        trackMode = 'on'; currentTrackTiles = tiles;
+        const e = { art: 'teile', r1: 0.42, r2: 0.77, r3: 0.6, dauerMs: 20000 };
+        const a1 = Object.assign({}, zevTestEvent(u, e)); zevEnde('reset');
+        currentTrackTiles = tiles.map((x) => Object.assign({}, x));
+        const a2 = Object.assign({}, zevTestEvent(u, e)); zevEnde('reset');
+        if (a1.sektor !== a2.sektor || a1.teil !== a2.teil || a1.seite !== a2.seite) f.push('Ort weicht ab');
+      }
+      // Tank-Leck mit Ziel: nur das gemeinte Telefon leckt, die anderen hoeren "ein anderes Auto".
+      zev.ansageLog.length = 0;
+      zevLeckStarten({ art: 'leck', r1: 0, ziel: 'B' });
+      if (zevVerbrauch[1] !== 1 || zev.ansageLog[0] !== 'leck_andere') f.push('fremdes Leck: ' + zevVerbrauch[1] + ' ' + zev.ansageLog[0]);
+      zevLeckStarten({ art: 'leck', r1: 0, ziel: 'A' });
+      if (zevVerbrauch[1] !== 2) f.push('eigenes Leck nicht gesetzt');
+    } finally { haupt.checked = merk; }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Plan im Rennplan, Client ohne Wurf, gleicher Ort, Leck je Telefon' };
+  }));
+
   // ---- v1.0: Meisterschaft (73-meisterschaft.js) ----
   stAdd('Meisterschaft: Wertung, Punkte, schnellste Runde, Gleichstand', () => {
     const f = [];

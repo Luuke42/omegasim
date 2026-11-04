@@ -1767,6 +1767,17 @@
     font-weight: 800; letter-spacing: .16em; text-align: center;
     padding: clamp(2px, .6vw, 6px) 0; font-size: clamp(9px, 1.5vw, 14px); }
   body.flag-yellow #gt3-flag { display: block; }
+  /* v1.3.88 Zufallsevents: dasselbe Feld und Mass wie das Flaggenband, Farbe je Ereignisart. */
+  #gt3-zev { display: none; grid-area: flag; background: #2b2f3a; color: #f4f6fb;
+    font-weight: 800; letter-spacing: .12em; text-align: center; font-family: inherit;
+    padding: clamp(2px, .6vw, 6px) 0; font-size: clamp(9px, 1.5vw, 14px); }
+  body.zev-an #gt3-zev { display: block; }
+  body.flag-yellow #gt3-zev { display: none; }
+  #gt3-zev[data-art="gelb"] { background: #4a3c00; color: #ffd83d; }
+  #gt3-zev[data-art="dreck"] { background: #3a2a14; color: #f3cf9c; }
+  #gt3-zev[data-art="oel"] { background: #2a1c40; color: #e0ccff; }
+  #gt3-zev[data-art="teile"] { background: #40220c; color: #ffcb9a; }
+  #gt3-zev[data-art="strafe"] { background: #4a1010; color: #ffc4c4; }
   /* Und ein Rahmen um den ganzen Schirm, damit es auch aus dem Augenwinkel auffaellt. */
   body.flag-yellow .gt3 { box-shadow: inset 0 0 0 3px #ffd83d55; }
 
@@ -5658,7 +5669,7 @@
         <span class="home-lade-dreh" id="home-lade-dreh"></span><span class="home-lade-text" id="home-lade-text" data-i18n-skip></span>
       </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.3.88</span></span>
+        <span class="foot-ver">v<span id="app-version">1.3.92</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -6044,6 +6055,9 @@
       </div>
 
       <div class="gt3-banner" id="gt3-flag"><span id="race-flag"></span></div>
+      <!-- v1.3.88 Zufallsevents: Ereignis, Ort, Restzeit, offene Durchfahrtsstrafe/Tank-Leck. Im
+           Flaggenfeld - unter echter Gelber gibt es keine Events, die beiden stehen nie zugleich. -->
+      <div class="gt3-banner" id="gt3-zev"><span id="gt3-zev-text" data-i18n-skip></span></div>
       <!-- Ein Auto, das von selbst langsamer wird und im Controller brummt, sieht ohne
            Anschrift nach einem Defekt aus. Eigener Streifen und nicht der Flaggenstreifen:
            beides kann gleichzeitig gelten. -->
@@ -6879,6 +6893,7 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>1.3</span></b></p>
       <ul class="muted" id="patchnotes-13" style="padding-left:20px; line-height:1.7">
+        <li>Zufallsevents (experimentell, Renneinstellungen, ab Werk aus): H&#228;ufigkeit 1 bis 10 min, Dauer 10 bis 120 s, jedes Event einzeln schaltbar. Getroffen wird ein zuf&#228;lliger Sektor, ohne Sektoren die ganze Bahn; der Bereich leuchtet auf der Karte in der Farbe des Events, ein Banner im Cockpit zeigt Event, Ort und Restzeit, und der Sprecher sagt es an. Verschmutzung: Grip wie bei Regen. &#214;lspur: noch weniger Grip, das Heck kommt beim Einlenken, NPCs fahren langsam. Gelbe Flagge im Sektor: h&#246;chstens 80 km/h; wer schneller bleibt, bekommt eine Durchfahrtsstrafe (in die Box, anhalten, nichts wird gemacht; sonst +20 s im Ergebnis). Tr&#252;mmer auf der linken oder rechten Seite eines Teils (Warndreieck auf der Karte): NPCs weichen aus, wer nicht zur freien Seite lenkt, bekommt Schaden. Tank-Leck: ein zuf&#228;lliges Spielerauto verbraucht doppelt bis zum n&#228;chsten Boxenstopp. Gilt f&#252;r alle Spieler im lokalen Mehrspieler; im WLAN w&#252;rfelt das startende Telefon, alle anderen folgen.</li>
         <li>Streckeneditor: Die Pr&#252;fung, ob die Strecke geschlossen ist, war immer &#8222;ja&#8220;; jetzt stimmt sie, und beim Schlie&#223;en der Runde spielt wieder der &#8222;Strecke fertig&#8220;-Klang.</li>
         <li>Sektoren &#252;ber den Streckeneditor (WIP): Der neue Knopf &#8222;Sektoren&#8220; bietet &#8222;Automatisch festlegen&#8220; (Anzahl aus der Teilezahl: 8 Teile keine Sektoren, 15 zwei, 25 drei, h&#246;chstens zehn; gleich lange Abschnitte auf Teilefugen), &#8222;Manuell festlegen&#8220; (Strecke antippen oder mit Steuerkreuz und &#10005; die Teile w&#228;hlen, an denen ein Sektor beginnt, nochmal entfernt, dann &#8222;Fertig&#8220;) und &#8222;Aus&#8220;. Die Grenzen sind d&#252;nne gr&#252;ne Linien, gespeichert mit der Strecke; der Streckencode bleibt gleich. Im Rennen misst jedes Auto die Sektoren &#252;ber seinen Kachelz&#228;hler; verz&#228;hlt es sich (etwa beim Abflug), steht der Sektor auf &#8222;&#8211;&#8220; statt einer falschen Zeit, die Runde z&#228;hlt weiter. Zus&#228;tzliche Start/Ziel-Teile haben weiter Vorrang, im Ausdruck-Modus bleibt der Regler.</li>
         <li>Cockpit ACC: neuer Box-Schirm in derselben Dreiteilung wie das Cockpit : links die f&#252;nf Wahlen als Kn&#246;pfe (gr&#252;ne Kante bei &#8222;ja&#8220;), in der Mitte die gro&#223;e Standzeit mit Zustand und darunter das Minispiel, rechts Runde, Tank, Zustand und Reifen; dazu der Stand der Pflichtstopps, eine offene Rammstrafe und die Bilanz des letzten Stopps, wenn es sie gibt. Neuer Rennen-Schirm: nach dem Ziel oben das Podest 2-1-3 in Gold, Silber und Bronze mit der Strecke daneben, darunter Rangliste, Rundendiagramm und Sektoren; w&#228;hrend des Rennens ohne Podest. Die Rangliste hat eine Strafen-Spalte (RAMMER, verpasster Pflichtstopp), wenn es Strafen gibt. Behoben: Nach dem Ziel stand im Kopf noch &#8222;l&#228;uft&#8220;, jetzt &#8222;beendet&#8220;.</li>
@@ -10394,6 +10409,44 @@
           <option value="15">15 s</option>
           <option value="20">20 s</option>
         </select></div>
+      <!-- v1.3.88 ZUFALLSEVENTS (74-zufallsevents.js). Hauptschalter ab Werk aus, die Einzelschalter an:
+           ausgewaehlt wird nur unter den eingeschalteten. Erklaerungen nur im <small> (i-Popup). -->
+      <div class="opt-row"><div class="opt-label">Zufallsevents<span class="wip-tag">experimentell</span><small>An: Im laufenden Rennen passiert ab und zu etwas in einem zufälligen Sektor (ohne Sektoren auf der ganzen Bahn). Der Sprecher sagt es an, im Cockpit steht ein Banner mit Ort und Restzeit, auf der Karte des Rennen-Schirms ist der Bereich farbig markiert. Nie in Countdown, Einführungsrunde, Pause, Tutorial oder Challenge und nie unter echter Gelber Flagge oder Safety Car; höchstens ein Event zugleich. Im WLAN-Mehrspieler würfelt das startende Telefon für alle.</small></div>
+        <label class="tgl"><input type="checkbox" id="race-zev"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Zufallsevents: Häufigkeit<span class="wip-tag">experimentell</span><small>Im Mittel alle so viele Minuten ein Event; jeder Abstand wird zufällig um bis zu 40 Prozent kürzer oder länger gezogen.</small></div>
+        <select id="race-zev-min">
+          <option value="1">1 min</option>
+          <option value="2">2 min</option>
+          <option value="3" selected>3 min</option>
+          <option value="4">4 min</option>
+          <option value="5">5 min</option>
+          <option value="6">6 min</option>
+          <option value="7">7 min</option>
+          <option value="8">8 min</option>
+          <option value="9">9 min</option>
+          <option value="10">10 min</option>
+        </select></div>
+      <div class="opt-row"><div class="opt-label">Zufallsevents: Dauer<span class="wip-tag">experimentell</span><small>So lange dauert ein Event. Ausnahme Tank-Leck: es bleibt bis zum nächsten Boxenstopp.</small></div>
+        <select id="race-zev-dauer">
+          <option value="10">10 s</option>
+          <option value="15">15 s</option>
+          <option value="20">20 s</option>
+          <option value="30" selected>30 s</option>
+          <option value="45">45 s</option>
+          <option value="60">60 s</option>
+          <option value="90">90 s</option>
+          <option value="120">120 s</option>
+        </select></div>
+      <div class="opt-row"><div class="opt-label">Event: Fahrbahn verschmutzt<span class="wip-tag">experimentell</span><small>Im Bereich fährt es sich wie im Regen (derselbe Griffverlust), für dich und die NPCs, die dort langsamer und vorsichtiger fahren. Das Wetter selbst ändert sich nicht.</small></div>
+        <label class="tgl"><input type="checkbox" id="race-zev-dreck" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Event: Gelbe Flagge im Sektor<span class="wip-tag">experimentell</span><small>Im Bereich gilt 80 km/h (Tacho). Die NPCs halten sich daran. Wer dort nach 1,5 Sekunden Reaktionszeit eine Sekunde lang schneller als 85 km/h fährt, bekommt eine Durchfahrtsstrafe: anhalten in der Box (Box aktivieren), dabei wird nichts am Auto gemacht, nach 2 Sekunden darf man los. Nicht abgeleistet bis zum Ziel: plus 20 Sekunden im Ergebnis.</small></div>
+        <label class="tgl"><input type="checkbox" id="race-zev-gelb" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Event: Ölspur<span class="wip-tag">experimentell</span><small>Im Bereich deutlich weniger Griff als im Regen, und beim Einlenken kommt das Heck leicht (in Pacejka und Gran Hybrismo; sonst nur der Griffverlust). NPCs fahren dort mit 60 Prozent Tempo.</small></div>
+        <label class="tgl"><input type="checkbox" id="race-zev-oel" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Event: Teile auf der Strecke<span class="wip-tag">experimentell</span><small>Auf einem Streckenteil liegen Trümmer links oder rechts; die Ansage sagt die Seite, die Karte zeigt ein Warndreieck. NPCs weichen auf die freie Seite aus. Wer auf dem Teil davor oder darauf nicht deutlich zur freien Seite lenkt, nimmt 8 bis 15 Prozent Schaden, je nach Tempo. Nur mit bekannter Strecke.</small></div>
+        <label class="tgl"><input type="checkbox" id="race-zev-teile" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Event: Tank-Leck<span class="wip-tag">experimentell</span><small>Ein zufälliges Spielerauto (keine NPCs) verbraucht doppelt so viel Benzin, bis es in die Box kommt; die Einstellung Dauer gilt hier nicht. Nur mit Tanksimulation.</small></div>
+        <label class="tgl"><input type="checkbox" id="race-zev-leck" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Tank beim Start (l)</div>
         <span class="num-steuer"><button class="num-minus" type="button" aria-label="Minus eins">&#8722;</button><input type="number" id="race-fuel-start" value="110" min="5" max="110" step="5" style="width:84px"><button class="num-plus" type="button" aria-label="Plus eins">+</button></span></div>
       <p class="muted" style="margin-top:8px; font-size:11.5px">

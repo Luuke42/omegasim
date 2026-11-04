@@ -1070,7 +1070,8 @@
     pacejkaStep(dt, inputs) {
       // (pacGasFaktor steht als freie Funktion daneben, damit ein Test sie ohne Motor rechnen kann.)
       const st = this.state, cfg = this.config;
-      const heck = !!cfg.pacejkaUebersteuern;
+      // v1.3.88: auf einer Oelspur (Zufallsevents, cfg.zevOel) kommt das Heck auch ohne den Schalter.
+      const heck = !!cfg.pacejkaUebersteuern || cfg.zevOel > 0;
       const gas = inputs ? Math.max(0, inputs.throttle || 0) : 0;
       const bremse = inputs ? Math.max(0, inputs.brake || 0) : 0;
       const kmhAnteil = Math.abs(st.speedKmh) / cfg.topSpeedKmh;
@@ -1231,7 +1232,7 @@
       let uH = quer * hinten / grip / rest
                / Math.max(0.5, cfg.granHeckReserve || cfg.pacejkaHeckReserve) * lastH;
       // Das Heck kommt nur mit dem Schalter "Uebersteuern" oder im Modus selbst (granHeck).
-      const heck = !!cfg.pacejkaUebersteuern || cfg.granHeck > 0;
+      const heck = !!cfg.pacejkaUebersteuern || cfg.granHeck > 0 || cfg.zevOel > 0;
       const leistung = heck && gas > 0.4;
       if (leistung) {
         const x = Math.min(1, (gas - 0.4) / 0.6);

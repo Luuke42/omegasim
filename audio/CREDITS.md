@@ -534,7 +534,7 @@ Aus einer eigenen Aufnahme des Autors (Video eines Ford Mustang GT3, nicht Teil 
 
 ## Tutorial-Stimme (v1.3.15, erweitert v1.3.31)
 
-32 Sprachclips (`tutorial_*_de.ogg`, nur Deutsch; seit v1.3.31 auch Rolle, Bahn/Boden, Licht, Regen und Regenreifen; seit v1.3.66 ein Boxenstopp statt zwei, dazu Rueckwaertsgang und Handschaltung), Manifest mit Datei, Dauer und Wortlaut:
+32 Sprachclips je Sprache (`tutorial_*_de.ogg`; seit 1.3.94 auch `tutorial_*_en.ogg`, siehe unten; seit v1.3.31 auch Rolle, Bahn/Boden, Licht, Regen und Regenreifen; seit v1.3.66 ein Boxenstopp statt zwei, dazu Rueckwaertsgang und Handschaltung), Manifest mit Datei, Dauer und Wortlaut:
 `audio/tutorial.json`. Erzeugung: `tools/voice_tutorial.py` (Piper, danach ffmpeg: Stille
 abschneiden, Hochpass 70 Hz, Lautheit auf -16 LUFS, Ogg Vorbis). Kein Funkfilter.
 Piper bekommt je Clip einen eigenen Sprechtext mit Lautschreibung fuer englische Woerter
@@ -547,8 +547,16 @@ UTF-8-Eingabe; vorher wurden die Umlaute unter Windows als Zeichensalat gesproch
 * **Stimme:** `de_DE-kerstin-low` von https://huggingface.co/rhasspy/piper-voices (Modell MIT),
   Datensatz "Kerstin", CC0. Das Modell ist nicht im Repository, nur die erzeugten Clips.
 
-Englisch und Spanisch haben keine eigenen Aufnahmen: dort zeigt die App den uebersetzten Text
-und spricht ihn, wenn vorhanden, mit der Sprachausgabe des Geraets (speechSynthesis).
+* **Englische Stimme (seit 1.3.94, jetzt ljspeech):** `en_US-ljspeech-medium` von https://huggingface.co/rhasspy/piper-voices,
+  32 Clips `tutorial_*_en.ogg`, Abschnitt `en` in `audio/tutorial.json` (`en_stimme`). Erzeugung:
+  `tools/voice_tutorial.py --sprache en` (dieselbe Kette wie Deutsch; die englischen Texte stehen nur
+  im Manifest). Das Modell ist nicht im Repository.
+  Datensatz LJ Speech, gemeinfrei (https://keithito.com/LJ-Speech-Dataset/), von Grund auf trainiert;
+  dieselbe Stimme wie die englischen Rennansagen (Rundenzeit, Rennstand, Rennereignisse, Zufallsevents).
+
+Spanisch hat keine eigenen Aufnahmen: dort zeigt die App den uebersetzten Text und spricht ihn,
+wenn vorhanden, mit der Sprachausgabe des Geraets (speechSynthesis). Englisch ohne Clip ebenso;
+Deutsch ohne Clip bleibt still (der Text steht da).
 Die Nennung "Ford Mustang" bezeichnet nur den gewaehlten Motorklang; keine Beteiligung oder
 Unterstuetzung des Herstellers.
 
@@ -574,3 +582,14 @@ Format (22,05 kHz Mono-Vorbis) wie die Rennereignis-Clips; keine Nutzerstimme un
 kein Onlinedienst. 91 Saetze je Sprache (Verschmutzung, Oelspur, Gelbe Flagge,
 Truemmer links/rechts je Sektor 1-10 oder ganze Bahn, Durchfahrtsstrafe und
 Tank-Leck je Spieler).
+
+## Meisterschafts-Ansagen
+
+`meister_*.ogg` (Manifest `meisterschaft.json`) werden lokal mit
+`tools/voice_meisterschaft.py` erzeugt: Piper (MIT) mit denselben Stimmen wie die
+Zahlen-, Rennereignis- und Zufallsevent-Clips, `de_DE-thorsten-medium` (Datensatz
+Thorsten-Voice, CC0) und `en_US-ljspeech-medium` (Datensatz LJ Speech, gemeinfrei).
+Dieselbe Nachbearbeitung (Funkfilter ohne Knacken aus `voice_zahlen.py`) und dasselbe
+Format wie die Rennereignis-Clips; keine Nutzerstimme und kein Onlinedienst.
+21 feste Bausteine je Sprache (Willkommen, Event-Intro, Sieger, Meister); Zahlen und
+Autonamen setzt die App aus den vorhandenen Zahlen- und Rennstand-Clips zusammen.

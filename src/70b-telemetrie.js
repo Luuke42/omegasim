@@ -153,7 +153,10 @@
     spur.runde = i + 1;
     spur.auto = typeof playerCar !== 'undefined' && playerCar ? garageLabel(playerCar) : '';
     if (i >= 0) teleRennSpuren[i] = spur;
-    if (gewertet) teleMerken(spur, typeof playerCar !== 'undefined' ? playerCar : null);
+    // Latenz (WIP): das Speichern (JSON lesen und schreiben, bis einige 100 KB) lief bisher synchron im
+    // Meldungs-Handler (playerLapCrossed aus handleDashboardBytes) - jetzt im naechsten Durchgang. Wer vorher
+    // liest (teleLesen), bekommt das Ausstehende zuerst geschrieben.
+    if (gewertet) teleMerkenSpaeter(spur, typeof playerCar !== 'undefined' ? playerCar : null);
     return spur;
   }
 
@@ -174,7 +177,19 @@
     return { v: 1, code: sp.code, n: sp.n, ms: sp.ms, teile: sp.teile.slice(), proben: pr };
   }
 
+  var teleAusstehend = [];
+  function teleMerkenSpaeter(spur, car) {
+    teleAusstehend.push([spur, car, currentTrackTiles, teleFahrtId]);
+    if (teleAusstehend.length === 1) setTimeout(teleAusstehendSchreiben, 0);
+  }
+  function teleAusstehendSchreiben() {
+    if (!teleAusstehend.length) return;
+    const liste = teleAusstehend;
+    teleAusstehend = [];
+    for (const x of liste) teleMerken(x[0], x[1], x[2], x[3]);
+  }
   function teleLesen() {
+    if (teleAusstehend.length) teleAusstehendSchreiben();
     try { return JSON.parse(localStorage.getItem(TELE_STORE) || '{}') || {}; } catch (e) { return {}; }
   }
   function teleSchreiben(d) {
@@ -195,8 +210,10 @@
   }
   function teleWer(car) { return car && car.device ? String(car.device.id) : 'spieler1'; }
   // Beste und letzte Spur je Strecke (gespiegelt = gleich, wie Time Attack) und Fahrer.
-  function teleMerken(spur, car) {
-    const tiles = currentTrackTiles;
+  // tilesArg/fahrtArg: Stand beim Rundenende (teleMerkenSpaeter); ohne Angabe der aktuelle.
+  function teleMerken(spur, car, tilesArg, fahrtArg) {
+    const tiles = tilesArg || currentTrackTiles;
+    const fahrtId = fahrtArg === undefined ? teleFahrtId : fahrtArg;
     const d = teleLesen();
     const k = bestzeitSchluessel(tiles);
     const e = d[k] || (d[k] = { fahrer: {} });
@@ -207,7 +224,7 @@
     // waren nur diese zwei. Jetzt dazu ALLE gewerteten Runden der letzten Fahrt auf dieser
     // Strecke (f.fahrt), mit ausgeduennten Proben; die Fahrten anderer Strecken werden dabei
     // geloescht - der Speicher reicht nicht fuer alle Runden aller Strecken.
-    if (!f.fahrt || f.fahrt.id !== teleFahrtId) f.fahrt = { id: teleFahrtId, runden: [] };
+    if (!f.fahrt || f.fahrt.id !== fahrtId) f.fahrt = { id: fahrtId, runden: [] };
     f.fahrt.runden.push(teleDuenn(spur, TELE_UPLOAD_PROBEN));
     if (f.fahrt.runden.length > TELE_FAHRT_MAX) f.fahrt.runden.shift();
     Object.keys(d).forEach((x) => {

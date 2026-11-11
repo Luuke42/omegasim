@@ -368,6 +368,23 @@
         } catch (e) { /* dann eben nur fuer diese Sitzung */ }
       }
     }
+    // ---- EINMALIG (v1.3.132): Hoechstgeschwindigkeit zurueck auf 4 km/h ---------------------
+    // 1.3.121 hob setting-topspeed-kmh auf die gemessenen 5,45 km/h (der Regler rastet auf 5,5);
+    // 1.3.127 hat das zurueckgenommen, die Selbstsicherung hielt den Wert aber fest. Nur wer GENAU
+    // auf 5,45 oder 5,5 steht, bekommt die alte Vorgabe 4; der Schalter verhindert ein zweites Mal.
+    {
+      let erledigt = false;
+      try { erledigt = localStorage.getItem('chc.migrate.topspeed1131.v1') === '1'; } catch (e) { /* privat */ }
+      if (!erledigt) {
+        let geaendert = false;
+        const v = Number(cfg['setting-topspeed-kmh']);
+        if (v === 5.45 || v === 5.5) { cfg['setting-topspeed-kmh'] = 4; geaendert = true; }
+        try {
+          localStorage.setItem('chc.migrate.topspeed1131.v1', '1');
+          if (geaendert) localStorage.setItem(AUTO_STORE, JSON.stringify(cfg));
+        } catch (e) { /* dann eben nur fuer diese Sitzung */ }
+      }
+    }
     // AUCH HIER GEPRUEFT. Die eigene Ablage ist nicht vertrauenswuerdiger als eine Datei:
     // sie kann aus einer aelteren Fassung stammen, in der ein Regler andere Grenzen hatte.
     const { bad } = presetPruefen(cfg);

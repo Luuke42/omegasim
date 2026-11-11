@@ -1,4 +1,4 @@
-{{Stand|app=1.2.45|appdatum=29.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 Die '''Wunschliste''' sammelt Funktionen, die für [[OmegaSim]] gewünscht, aber noch nicht gebaut sind, und dazu die Funktionen, die schon in der App stecken, aber noch als ''WIP'' (in Arbeit) oder ''experimentell'' gekennzeichnet sind. Wünsche aus der Community können hier ergänzt werden, siehe [[Mitmachen]].
 
 == Auf einen Blick ==
@@ -27,9 +27,27 @@ Die '''Wunschliste''' sammelt Funktionen, die für [[OmegaSim]] gewünscht, aber
 {| class="wikitable sortable"
 ! Wunsch !! Status !! Beschreibung
 |-
+| Zufallsevents || gebaut || Verschmutzung, gelbe Flagge im Sektor, Ölspur, Trümmer und Tank-Leck als zufällige Ereignisse im Rennen (experimentell, siehe [[Zufallsevents]]).
+|-
+| Online-Streckenzeiten || gebaut || Bestzeiten der Community für alle Strecken über die Projektseite, seit 1.3.30 je Fahrgefühl und mit allen Community-Strecken (siehe [[Challenges]]).
+|-
+| Strecken-Sektoren || gebaut || Sektoren über den Streckeneditor, automatisch oder von Hand, mit grünen Grenzlinien (siehe [[Strecken- und Raum-Editor]]).
+|-
+| ACC-Cockpit || gebaut || Cockpit- und Rennschirm im ACC-Stil mit Radar, dicken Balken, Kamera am rechten Stick und Strafen-Spalte (siehe [[OmegaSim]]).
+|-
+| Fahrgefühl Gran Hybrismo / Assetto Carrera || gebaut || zwei neue Fahrgefühle, die Gran Accelerato ersetzen (siehe [[Fahrgefühl]]).
+|-
+| OmegaLab-Studie || gebaut || Studie mit Fragebogen und Fahr-Challenge, unter Optionen → OmegaLab (WIP, siehe [[OmegaSim]]).
+|-
+| Randstein-Rumpeln || gebaut || Vibration vib-kerb beim Überfahren von Randsteinen im virtuellen Fahren (siehe [[Virtuelles Fahren]]).
+|-
+| Rennereignis-Ansagen || gebaut || Ansagen zu Rennereignissen (Pull Request von Playdater1974, siehe [[Ansagen]]).
+|-
 | Fahrermodell nach Art des Drivatars || gewünscht || Ein NPC lernt aus 30 bis 50 sauberen Runden je Strecke Tempo je Teiltyp, Bremspunkte, Querlinie und Fehlerrate eines echten Fahrers und fährt danach wie dieser.
 |-
 | Challenger mit Seitengewohnheiten || gewünscht || Der Challenger in Time Attack lernt, auf welcher Seite der Spieler über mehrere Runden fährt, und wählt daraus seine Überholstellen.
+|-
+| Fahrmodi wie in der Original-App || gewünscht || Die Fahrmodi der Original-App von Carrera (Gas- und Lenkverhalten, Tempostufen) sollen sich in OmegaSim exakt nachbilden lassen, damit man ohne Umgewöhnen zwischen beiden Apps wechseln kann (siehe [[Original-App]]).
 |-
 | Rennpause || gebaut || Rennen anhalten mit Overlay, Pausentaste am Controller und Wiederanlauf-Ampel (Pull Request von Playdater1974, übernommen seit 1.2.25; siehe [[Rennarten]]).
 |-
@@ -43,37 +61,51 @@ Die '''Wunschliste''' sammelt Funktionen, die für [[OmegaSim]] gewünscht, aber
 |-
 | Tieferes Schaltgeräusch || in Planung || Ein dumpferes Geräusch beim Runterschalten und für alle Motoren, wie beim Hochschalten des Mustang v2. Vorschläge liegen zum Anhören vor.
 |-
+| Eigene Automodelle im virtuellen Fahren || in Planung || Selbst gebaute 3D-Modelle als Autos im [[Virtuelles Fahren|virtuellen Fahren]], von Luuke42 als glTF/GLB gewünscht.
+|-
 | Live-Gegner über das Internet || zurückgestellt || Ein Gegner fährt in Echtzeit von einem anderen Ort aus mit.
 |-
 | Meisterschaft im WLAN-Mehrspieler || in Planung || Gebaut, aber auf echten Geräten noch nicht getestet.
 |-
 | Firmware-Version auslesen || gewünscht || OmegaSim liest die Firmware-Version der Autos nicht aus; damit ließe sich der Stand jedes Artikels genauer angeben, siehe [[Firmware]].
+|-
+| Reaktive Beleuchtung || gewünscht || Die Lichter der Autos reagieren auf das Geschehen: Bremslicht beim Bremsen, Scheinwerfer an bei Dunkelheit oder im Regen, Blinker beim Einfahren in die Boxengasse. Am Original zeigt die Carrera-HYBRID Licht an.
+|-
+| Physische Ampeln || gewünscht || Echte Startampeln am Tisch, die OmegaSim über Bluetooth ansteuert (Raspberry Pi / Pico), als Ergänzung zur [[Startampel]] im Bild.
+|-
+| Boxengassen-Schranken || gewünscht || Schranken an Ein- und Ausfahrt der Boxengasse, die sich öffnen und schließen – als Streckenteil oder als Zubehör, das OmegaSim steuert.
+|-
+| Einstellungs-Sync || gewünscht || Die Einstellungen (Fahrgefühl, Ansagen, Belegungen) lassen sich über die Projektseite oder eine Datei zwischen Geräten angleichen, damit alle denselben Stand nutzen.
+|-
+| Live-Timing || gewünscht || Rundenzeiten, Sektoren und Abstände mehrerer Autos live anzeigen, auch im WLAN-Mehrspieler – wie ein Timing-Tower an der Strecke.
+|-
+| API || gewünscht || Eine Schnittstelle, über die andere Programme Autos, Sensoren und das Rennen ansprechen und auslesen können – für eigene Auswertungen, Zusatzanzeigen oder Integrationen.
 |}
 
 == In Arbeit (WIP und experimentell) ==
-Stand 1.2.14, gesammelt aus allen Etiketten der App.
+Stand 1.3.93, gesammelt aus allen Etiketten der App.
 {| class="wikitable"
 ! Bereich !! Funktionen
 |-
 | Fahren und Garage || Automatisch aufstellen; Reinigungsfahrzeug; NPC-Stufe MAX; Virtuell fahren; Fahrgefühl RC; Meisterschaft „Alle: RC“; Strecke im Regenradar
 |-
-| Renneinstellungen || ganze Seite; Time Attack, Knockout, Demolition Derby; Sektoren; Fliegender Start; Weiche Reifen verboten; Einparken (Art, Gas der Safety-Car-Folge, Einlenkstärke, Impulsdauer, Tempo); Challenger und Gummiband; Strafe für Rammer
+| Renneinstellungen || Zufallsevents (experimentell); ganze Seite; Time Attack, Knockout, Demolition Derby; Sektoren; Fliegender Start; Weiche Reifen verboten; Einparken (Art, Gas der Safety-Car-Folge, Einlenkstärke, Impulsdauer, Tempo); Challenger und Gummiband; Strafe für Rammer
 |-
-| Allgemein || Cockpit „GT3: schwarze Kacheln“; Pacejka- und RC-Modus mit Übersteuern, Haftgrenze und Gegensteuern; Akku-Ausgleich; Boxen-Auslöser „Doppelter Ausdruck“; Boxen-Minigame; Nur der Rammer bremst
+| Allgemein || ACC-Cockpit und ACC-HUD; Cockpit „GT3: schwarze Kacheln“; Pacejka- und RC-Modus mit Übersteuern, Haftgrenze und Gegensteuern; Akku-Ausgleich; Boxen-Auslöser „Doppelter Ausdruck“; Boxen-Minigame; Nur der Rammer bremst
 |-
-| Fahrgefühl || Fahrhilfe; Rückwärts mit Gas und Bremse; Mischungsunterschied; Windschatten in Kurven; Lenkkennlinie, voller Einschlag, Lenkkraft unter Gas, Lenkdämpfung; Gas- und Bremskennlinie; Anfahrschub; Gewichtsverlagerung und ihre Trägheit
+| Fahrgefühl || Fahrhilfe; Rückwärts mit Gas und Bremse; Mischungsunterschied; Windschatten in Kurven; Lenkkennlinie, voller Einschlag, Lenkkraft unter Gas, Lenkdämpfung; Gas- und Bremskennlinie; Anfahrschub; Gewichtsverlagerung und ihre Trägheit; Gran Accelerato, Gran Hybrismo und Assetto Carrera
 |-
-| Ton, Vibration, Ansagen || Schaltklang alt; NPC-Motorklang alt; acht Motorgruppen mit ungeprüften Klängen; Trigger-Vibration; DualSense-Trigger; Rennstand- und Ergebnisansage; Namensart
+| Ton, Vibration, Ansagen || Schaltklang alt; NPC-Motorklang alt; acht Motorgruppen mit ungeprüften Klängen; Trigger-Vibration; DualSense-Trigger; Rennereignis-Ansagen; Rennstand- und Ergebnisansage; Namensart
 |-
 | NPCs || Feld auffächern; Überholmanöver je Runde; Tempo-Streuung; Staffelstart; zu zweit in Kurven; Höchsttempo in der Haarnadel; MAX-Profil; Rückweg mit Lenkung; NPC-Boxenstopp; Linienmodell SIMULATOR
 |-
 | Safety Car || Parkplatz; Ein- und Ausparken; Gas beim Ausparken; Einpark-Teil
 |-
-| Weitere Seiten || Telemetrie; OmegaLab; Presets je Menü; Profile; Fahrstil-Statistik
+| Weitere Seiten || Telemetrie; OmegaLab (Studie, Testbetrieb); Presets je Menü; Profile; Fahrstil-Statistik
 |-
-| Strecke || Raum; Raumgestalter; Druckvorlagen (Bahn zum Auslegen, Trapez-Muster)
+| Strecke || Raum; Raumgestalter; Druckvorlagen (Bahn zum Auslegen, Trapez-Muster); Sektoren; echte Teilebilder; Boxengasse wie das Original
 |-
-| Challenges, Mehrspieler, App || Challenges, Community-Bestzeiten und Community-Strecken; WLAN-Mehrspieler (Host, Info-Schirm, Rennen für alle, Bereit-Abfrage); App und Updates; Entwicklertools (Zahlensysteme, Aufnahme-Modus, Strecke aus der Aufnahme)
+| Challenges, Mehrspieler, App || Challenges, Community-Bestzeiten und Community-Strecken (Online-Streckenzeiten); WLAN-Mehrspieler (Host, Info-Schirm, Rennen für alle, Bereit-Abfrage); App und Updates; Entwicklertools (Zahlensysteme, Aufnahme-Modus, Strecke aus der Aufnahme)
 |}
 
 == Wunsch eintragen ==

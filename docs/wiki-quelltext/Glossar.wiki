@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 Das '''Glossar''' erklärt die Fachbegriffe, die in [[OmegaSim]], beim [[Carrera HYBRID]] und in den Artikeln dieses Wikis vorkommen, in alphabetischer Reihenfolge. Jeder Eintrag gibt eine kurze Erklärung und verweist auf den Artikel, in dem der Begriff ausführlich behandelt wird. Begriffe aus der Technik (Bluetooth, Zahlensysteme, Programmierung) sind so erklärt, dass sie ohne Vorwissen verständlich sind; Zahlen stammen aus dem Quellcode von OmegaSim 1.2.9.
 
 == Auf einen Blick ==
@@ -17,6 +17,8 @@ Das '''Glossar''' erklärt die Fachbegriffe, die in [[OmegaSim]], beim [[Carrera
 |}
 
 == A ==
+; ACC-Cockpit
+: Cockpit- und Rennschirm im Stil von Assetto Corsa Competizione, mit Radar, dicken Balken, Kamera am rechten Stick und Strafen-Spalte. Siehe [[OmegaSim]].
 ; Abseits
 : Zustand, in dem der Sensor des Autos kein gültiges Streckenteil liest; das Auto meldet dann den Code <code>0x00</code>. OmegaSim entprellt dieses Signal, weil ein einzelnes <code>0x00</code> zwischen guten Lesungen auch Rauschen sein kann. Siehe [[Strecke]].
 ; Advertising
@@ -88,7 +90,7 @@ Das '''Glossar''' erklärt die Fachbegriffe, die in [[OmegaSim]], beim [[Carrera
 
 == F ==
 ; Fahrgefühl
-: Voreinstellung, die mit einem Klick einen ganzen Satz von Reglern setzt (Getriebe, Beschleunigung, Bremse, Lenkung, Reifen, Tank, Crash-Verhalten). Es gibt neun: Arcade, Sim+, Pacejka, Pro, GT3, F1, Realismus GT3, Omega und RC. Siehe [[Fahrverhalten]].
+: Voreinstellung, die mit einem Klick einen ganzen Satz von Reglern setzt (Getriebe, Beschleunigung, Bremse, Lenkung, Reifen, Tank, Crash-Verhalten). Es gibt elf: Arcade, Sim+, Pacejka, Gran Hybrismo, Assetto Carrera, Pro, GT3, F1, Realismus GT3, Omega und RC. Siehe [[Fahrverhalten]].
 ; Fahrhilfe
 : Option (experimentell), mit der das Auto selbst die Spur hält („Querlage“) oder ganz selbst lenkt („voll“); braucht eine eingescannte Strecke und den Bahn-Modus. Siehe [[Fahrverhalten]].
 ; Firmware
@@ -101,6 +103,8 @@ Das '''Glossar''' erklärt die Fachbegriffe, die in [[OmegaSim]], beim [[Carrera
 == G ==
 ; Garage
 : Bereich unter '''FAHREN → Autos''', in dem Autos verbunden, benannt und mit einer Rolle versehen werden (Fahrer, NPC, Safety Car usw.). Siehe [[OmegaSim]].
+; Gran Hybrismo / Assetto Carrera
+: Zwei Fahrgefühle (WIP), in die das Fahrgefühl Gran Accelerato aufgeteilt wurde: Gran Hybrismo wie Gran Turismo Sport, Assetto Carrera wie Assetto Corsa Competizione. Siehe [[Fahrgefühl]].
 ; GATT
 : ''Generic Attribute Profile'': die Ordnung der Daten eines Bluetooth-Geräts in Dienste, Charakteristiken und Deskriptoren. Siehe [[Bluetooth Low Energy]].
 ; Gelbe Flagge
@@ -211,8 +215,10 @@ Das '''Glossar''' erklärt die Fachbegriffe, die in [[OmegaSim]], beim [[Carrera
 == S ==
 ; Safety Car
 : Garagenrolle, mit der ein echtes Auto bei gelber Flagge selbstständig als Sicherheitsfahrzeug vor dem Feld fährt; nur auf der Bahn. Siehe [[Safety Car und Reinigungswagen]].
+; Sektoren
+: Abschnitte der Strecke, die durch weitere Start/Ziel-Teile oder über den Streckeneditor (automatisch/manuell) entstehen, mit grünen Grenzlinien. Siehe [[Strecken- und Raum-Editor#Sektoren]].
 ; Selbsttest
-: Eingebaute Prüfung der laufenden App mit 522 Einzeltests (<code>stAdd</code>), die jeweils ihr Maß angeben; zu finden unter '''Entwickler → Selbsttest'''. Siehe [[Aufbau von OmegaSim]].
+: Eingebaute Prüfung der laufenden App mit 600 Einzeltests (<code>stAdd</code>), die jeweils ihr Maß angeben; zu finden unter '''Entwickler → Selbsttest'''. Siehe [[Aufbau von OmegaSim]].
 ; Service Worker
 : Skript, das der Browser neben einer Webseite laufen lässt und das Anfragen aus einem Zwischenspeicher beantworten kann. OmegaSim holt <code>index.html</code> damit „Netz zuerst“ und startet so auch ohne Netz. Siehe [[Aufbau von OmegaSim]].
 ; SIMULATOR-Linie
@@ -263,6 +269,8 @@ Das '''Glossar''' erklärt die Fachbegriffe, die in [[OmegaSim]], beim [[Carrera
 : Die Rolle eines Bluetooth-Geräts, das sucht und Verbindungen aufbaut (''central''), hier das Handy oder der PC. Ihr Gegenstück ist das Peripheriegerät (''peripheral''), hier das Auto. Siehe [[Bluetooth Low Energy]].
 ; Zufallsstrecke
 : Strecke, die der Editor nach Zufall aus den vorhandenen Teilen erzeugt; ist ein Raum eingetragen, muss sie hineinpassen. Siehe [[Strecken- und Raum-Editor]].
+; Zufallsevents
+: Experimentelle Renneinstellung: im laufenden Rennen passiert ab und zu etwas in einem zufälligen Sektor (Verschmutzung, Gelbe Flagge, Ölspur, Trümmer, Tank-Leck). Siehe [[Zufallsevents]].
 ; Zustandsmaschine
 : Modell eines Ablaufs aus festen Zuständen und Regeln für den Übergang zwischen ihnen, etwa „frei → unterwegs → frei“ beim Schreiben eines Befehls oder „Gas → Bremsen → Stand → Rückwärts“ im RC-Modus. Siehe [[Bluetooth Low Energy]].
 ; Zweierkomplement

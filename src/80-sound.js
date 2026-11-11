@@ -716,7 +716,7 @@
   // Akku: BESTELLT "Akku-Ansage < 25 %" - eine eigene Schwelle, nicht die 10 % oben.
   const AKKU_SCHWELLE = 0.25;
   const AKKU_HYSTERESE = 0.32;
-  const ansageAn = { lap: true, damage: false, fuel: false, tyre: false, rain: false, pit: true, battery: false };
+  const ansageAn = { lap: true, damage: false, fuel: false, tyre: false, rain: false, pit: true, battery: false, status: true, meister: true };
   const ansageLatch = { damage: false, fuel: false, tyre: false, rain: null, battery: false };
   // JE Auto ein Latch fuer die Akku-Meldung: jedes Auto meldet unter 25 % einmal, erst nach
   // der Erholung wieder scharf. Ein gemeinsames Latch wuerde nur das ERSTE Auto melden.
@@ -909,13 +909,105 @@
     ansage('lap', lapSpeechText(ms, istBest));
   }
 
+  // ---- L3-STATUSANSAGE (v1.3.119) ----------------------------------------------------
+  //
+  // BESTELLT: "L3 ansage" - ein Druck auf den linken Stick sagt den aktuellen Stand. Der
+  // Inhalt ist in den Optionen waehlbar (Bestzeit als Vorgabe, Restzeit/-runden, Tank,
+  // Schaden, Reifen). Eine Ansage ist ein Ereignis und keine Flanke: sie wird beim Druck
+  // einmal gebaut und gesprochen, nicht im Takt geprueft.
+  //
+  // Die Inhalte lesen den Stand an DER STELLE, an der der Knopf gedrueckt wird: ein
+  // Zwischenstand in der Runde ist ehrlicher als der letzte vollendete.
+  function statusAn(id) {
+    const el = document.getElementById(id);
+    return !!(el && el.checked);
+  }
+  function statusBestZeit() {
+    const zeiten = (typeof raceLapTimes !== 'undefined' && raceLapTimes.length)
+      ? raceLapTimes.map((l) => l.ms)
+      : ((typeof dashLapTimes !== 'undefined' && dashLapTimes) || []);
+    const ms = zeiten.map((z) => (typeof z === 'number' ? z : (z && z.ms)))
+      .filter((x) => Number.isFinite(x));
+    return ms.length ? Math.min.apply(null, ms) : null;
+  }
+  function statusRest() {
+    const de = lang === 'de';
+    if (typeof raceState === 'undefined' || typeof raceMode === 'undefined') return null;
+    if (raceState !== 'racing' && raceState !== 'finishing') return null;
+    if (raceMode === 'laps') {
+      const gefahren = (typeof raceLapTimes !== 'undefined' ? raceLapTimes.length : 0);
+      const rest = Math.max(0, raceLimit + (typeof fruehstartZielPlus === 'function' ? fruehstartZielPlus(1) : 0) - gefahren);
+      return de ? 'Noch ' + rest + ' Runden' : rest + ' laps to go';
+    }
+    // Zeitlimit gilt bei den timed-Modi und bei Training/Time Attack mit Limit > 0.
+    const zeitlimit = (RACE_MODES[raceMode] && RACE_MODES[raceMode].timed)
+      || (raceLimit > 0 && (raceMode === 'practice' || raceMode === 'bestzeit'));
+    if (zeitlimit && raceStartedAt !== null) {
+      const restMs = Math.max(0, raceLimit * 60000 - (rennZeitJetzt() - raceStartedAt));
+      const s = Math.floor(restMs / 1000), m = Math.floor(s / 60), sec = s % 60;
+      return de ? 'Noch ' + m + ' Minuten ' + sec + ' Sekunden'
+                : m + ' minutes ' + sec + ' seconds to go';
+    }
+    return null;
+  }
+  function statusAnsageText() {
+    const de = lang === 'de';
+    const teile = [];
+    if (statusAn('setting-status-best')) {
+      const best = statusBestZeit();
+      if (best !== null) teile.push(de ? 'Bestzeit ' + formatLapTime(best)
+                                       : 'Best lap ' + formatLapTime(best));
+    }
+    if (statusAn('setting-status-rest')) {
+      const rest = statusRest();
+      if (rest) teile.push(rest);
+    }
+    if (statusAn('setting-status-tank') && typeof fuel === 'number') {
+      teile.push(de ? 'Tank ' + fuelLiters(fuel) + ' Liter'
+                    : 'Fuel ' + fuelLiters(fuel) + ' litres');
+    }
+    if (statusAn('setting-status-schaden') && typeof damage === 'number') {
+      const p = Math.round(Math.max(0, Math.min(100, damage)));
+      teile.push(de ? 'Schaden ' + p + ' Prozent' : 'Damage ' + p + ' percent');
+    }
+    if (statusAn('setting-status-reifen')) {
+      const z = (typeof ansagenZustand === 'function') ? ansagenZustand() : null;
+      const name = (typeof mischungName === 'function' && typeof tyres === 'string')
+        ? mischungName(tyres) : '';
+      const pct = (z && z.tyre !== null && z.tyre !== undefined)
+        ? Math.round(z.tyre * 100) : null;
+      let s = de ? 'Reifen' : 'Tyres';
+      if (name) s += ' ' + name;
+      if (pct !== null) s += (de ? ', ' : ', ') + pct + (de ? ' Prozent' : ' percent');
+      teile.push(s);
+    }
+    // v1.3.129: ohne jeden Baustein blieb L3 stumm (kein Inhalt gewaehlt oder noch keine
+    // Daten, etwa vor der ersten Rundenzeit). Damit der Druck immer eine Antwort gibt,
+    // faellt er auf den Stand zurueck.
+    if (!teile.length) {
+      const rs = (typeof raceState !== 'undefined') ? raceState : null;
+      if (rs === 'racing' || rs === 'finishing') teile.push(de ? 'Rennen läuft' : 'Race running');
+      else if (rs === 'finished') teile.push(de ? 'Rennen beendet' : 'Race finished');
+      else teile.push(de ? 'Keine Daten' : 'No data');
+    }
+    return teile.join('. ') + (teile.length ? '.' : '');
+  }
+  function statusAnsageAusloesen() {
+    if (!ansageAn.status || !soundEnabled) return false;
+    const text = statusAnsageText();
+    if (!text) return false;
+    return ansage('status', text);
+  }
+
   // Die fuenf Schalter und der Funkfilter. Alle lesen ihren Anfangswert AUS DEM MARKUP -
   // dasselbe Muster wie bei setting-vibration, wo der fehlende Abgleich schon einmal einen
   // toten Schalter ergeben hat.
   const ANSAGE_KAESTCHEN = { 'setting-announce': 'lap', 'setting-announce-damage': 'damage',
                              'setting-announce-fuel': 'fuel', 'setting-announce-tyre': 'tyre',
                              'setting-announce-rain': 'rain', 'setting-announce-pit': 'pit',
-                             'setting-announce-battery': 'battery' };
+                             'setting-announce-battery': 'battery',
+                             'setting-announce-meister': 'meister',
+                             'setting-status-announce': 'status' };
   Object.keys(ANSAGE_KAESTCHEN).forEach((id) => {
     const el = $(id);
     if (!el) return;

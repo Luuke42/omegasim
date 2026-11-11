@@ -518,9 +518,10 @@
   }
   let tutVoiceGain = null, tutQuelle = null;
   const tutBuffers = new Map();
-  let tutManifest = null, tutLadenLaeuft = null;
+  let tutManifest = null, tutLadenLaeuft = null, tutSprache = null;
   // Wie die Rennintro-Clips (80d-rennintro.js): Manifest, dann hoechstens sechs Downloads
-  // gleichzeitig. Ein fehlender Clip laesst nur seinen Ton aus.
+  // gleichzeitig. Ein fehlender Clip laesst nur seinen Ton aus. Seit 1.3.94 gibt es auch
+  // englische Clips (audio/tutorial.json, Abschnitt "en"); ohne sie bleibt es bei speechSynthesis.
   function tutClipsLaden() {
     if (tutLadenLaeuft) return tutLadenLaeuft;
     tutLadenLaeuft = (async () => {
@@ -532,7 +533,11 @@
         }
         if (!audioCtx && typeof initEngineSound === 'function') initEngineSound();
         if (!audioCtx) return;
-        const katalog = tutManifest.de || {};
+        // Sprache der Clips: de (Kerstin) oder en (falls vorhanden). Wechselt die Sprache,
+        // werden die alten Puffer verworfen und die neuen geladen.
+        const sp = (lang === 'en') ? 'en' : 'de';
+        if (tutSprache !== sp) { tutBuffers.clear(); tutSprache = sp; }
+        const katalog = tutManifest[sp] || {};
         const keys = Object.keys(TUT_SPRUCH).filter((k) => !tutBuffers.has(k) && katalog[k]);
         let i = 0;
         await Promise.all(Array.from({ length: Math.min(6, keys.length) }, async () => {
@@ -564,32 +569,43 @@
   }
   // Lesedauer, wenn nichts gesprochen wird: rund 15 Zeichen je Sekunde, mindestens 2 s.
   function tutLesedauer(text) { return Math.max(2, String(text || '').length / 15); }
+  // Spielt einen fertigen Clip (de oder en) und liefert dessen Dauer in Sekunden, sonst null.
+  function tutClipAbspielen(buf) {
+    try {
+      if (audioCtx.state !== 'running') audioCtx.resume();
+      if (!tutVoiceGain || tutVoiceGain.context !== audioCtx) {
+        tutVoiceGain = audioCtx.createGain();
+        tutVoiceGain.gain.value = 1.0;
+        tutVoiceGain.connect(audioCtx.destination);
+      }
+      const q = audioCtx.createBufferSource();
+      q.buffer = buf;
+      q.connect(tutVoiceGain);
+      q.onended = () => { if (tutQuelle === q) { tutQuelle = null; tutClipFertig(); } };
+      q.start(audioCtx.currentTime + 0.02);
+      tutQuelle = q;
+      return buf.duration + 0.02;
+    } catch (e) { return null; }
+  }
   // Spricht `key` und gibt die Dauer in Sekunden zurueck (bei speechSynthesis geschaetzt; das
   // Ende kuerzt den Schritt dann ueber tutClipFertig()).
   function tutSprechenEcht(key) {
     const de = TUT_SPRUCH[key] || '';
     tutVerstummen();
     if (typeof soundEnabled !== 'undefined' && !soundEnabled) return tutLesedauer(t(de));
-    if (lang === 'de') {
-      const buf = tutBuffers.get(key);
-      if (!buf || !audioCtx) return tutLesedauer(de);
-      try {
-        if (audioCtx.state !== 'running') audioCtx.resume();
-        if (!tutVoiceGain || tutVoiceGain.context !== audioCtx) {
-          tutVoiceGain = audioCtx.createGain();
-          tutVoiceGain.gain.value = 1.0;
-          tutVoiceGain.connect(audioCtx.destination);
-        }
-        const q = audioCtx.createBufferSource();
-        q.buffer = buf;
-        q.connect(tutVoiceGain);
-        q.onended = () => { if (tutQuelle === q) { tutQuelle = null; tutClipFertig(); } };
-        q.start(audioCtx.currentTime + 0.02);
-        tutQuelle = q;
-        return buf.duration + 0.02;
-      } catch (e) { return tutLesedauer(de); }
+    // DE und EN: fertige Aufnahme, aber nur aus dem Satz der eigenen Sprache (tutSprache) - nach einem
+    // Sprachwechsel lagen bis 1.3.131 noch die Clips der anderen Sprache im Speicher.
+    if (lang === 'de' || lang === 'en') {
+      const buf = tutSprache === lang ? tutBuffers.get(key) : null;
+      if (buf && audioCtx) {
+        const d = tutClipAbspielen(buf);
+        if (d !== null) return d;
+      }
+      // Deutsch ohne Clip bleibt still wie bis 1.3.92 (der Text steht da): die Geraetestimme las den
+      // deutschen Satz sonst mit en-US-Stimme oder mit einer ganz anderen Stimme als Kerstin vor.
+      if (lang === 'de') return tutLesedauer(de);
     }
-    // EN/ES: Geraetestimme, eine weibliche, wenn sie sich am Namen erkennen laesst.
+    // EN ohne Clip / ES: Geraetestimme, eine weibliche, wenn sie sich am Namen erkennen laesst.
     const text = t(de);
     try {
       const ss = window.speechSynthesis;

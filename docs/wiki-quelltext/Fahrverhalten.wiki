@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 [[Datei:OmegaSim-Fahrgefuehl.png|mini|Die Einstellungsseite Fahrgefühl in OmegaSim]]
 Das '''Fahrverhalten''' von [[OmegaSim]] ist die Art, wie die App aus den Eingaben am Controller (Gas, Bremse, Lenkung) die zwei Steuerwerte berechnet, die per [[Bluetooth Low Energy]] an ein [[Carrera HYBRID]]-Auto gehen: einen Gaswert und einen Lenkwert. Dazwischen liegt ein vollständiges Fahrzeugmodell mit Motor, Getriebe, Reibkreis, Gewichtsverlagerung, Reifen- und Bremsentemperatur, einem Einspurmodell und, im Fahrgefühl Pacejka, einer Reifenkennlinie nach der Magic Formula. Das echte Modellauto rutscht, bremst und lenkt dabei mit seiner eigenen [[Firmware]]; was das Modell der App berechnet, wirkt am Auto ausschließlich über diese zwei Bytes. Abgestimmt wird das Fahrverhalten über neun fertige Sätze von Reglerwerten, die '''Fahrgefühle''' (in der App auch Voreinstellungen oder Presets genannt), und über rund 45 einzelne Regler.
 
@@ -64,7 +64,7 @@ Das Auto versteht kein „Tempo 2,0“, sondern nur ein Datenpaket aus 20 '''Byt
 == Bedienung ==
 === Ein Fahrgefühl wählen ===
 # '''FAHREN''' öffnen und die Kachel Fahrgefühl antippen, oder in der '''Garage''' beim gesteuerten Auto die Zeile „Fahrgefühl“ benutzen. Dort stehen Arcade, Sim+ und Pacejka.
-# Für die übrigen sechs Sätze '''Optionen → Fahrgefühl → Voreinstellungen''' öffnen. Die Reihenfolge dort ist Arcade, Sim+, Pacejka, Pro, GT3, F1, Realismus GT3, Omega, RC.
+# Für die übrigen Sätze '''Optionen → Fahrgefühl → Voreinstellungen''' öffnen. Die Reihenfolge dort ist Arcade, Sim+, Pacejka, Pro, GT3, F1, Realismus GT3, Omega, RC, Gran Hybrismo (WIP), Assetto Carrera (WIP).
 # Ein Tipp setzt alle Regler des Satzes auf einmal. Die Statuszeile meldet „Name: n Regler gesetzt“; fehlende Regler werden dort genannt.
 # Im Cockpit schaltet der Fahrmodus-Knopf zwischen Arcade, Sim+ und Pacejka weiter, und zwar ab dem gerade eingestellten Satz. Während einer [[Challenges|Challenge]] ist der Knopf gesperrt.
 # Unter den Knöpfen steht die Beschreibung des aktiven Satzes. Weicht ein einziger Regler von allen Sätzen ab, steht dort „Eigene Abstimmung“.
@@ -663,6 +663,8 @@ Weitere Werte der normierten Kurve: Wirkfaktor 0,83 bei u = 1,2; 0,66 bei 1,5; 0
 | 1.2 (1.2.4) || Fahrgefühl je Spieler in der Garage.
 |-
 | 1.2 (1.2.11) || Erklärtexte der Fahrgefühle Arcade, Pro, Pacejka und Omega an die eingestellten Werte angeglichen.
+|-
+| 1.3 (1.3.7) || Fahrgefühle Gran Hybrismo und Assetto Carrera; seit 1.3.7 fährt die NPC-Stufe MAX mit den Arcade-Werten.
 |}
 
 == Siehe auch ==

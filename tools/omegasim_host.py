@@ -151,6 +151,8 @@ def zustand_lesen(zuschauer_id=None):
                 'id': fid, 'name': f['name'], 'laps': f['laps'],
                 'letzte': f['letzte'], 'beste': f['beste'],
                 'abgaenge': f.get('abgaenge', 0),
+                # v1.4.33: automatische Gelbe Flagge dieses Telefons ('' = keine).
+                'gelb': f.get('gelb', ''),
                 'summe': f.get('summe'), 'strafe': f.get('strafe'),
                 'alter': round(_jetzt() - f['aktualisiert'], 1),
                 # Der Zeitpunkt der letzten Ueberfahrt ist das ZWEITE Sortierkriterium und
@@ -301,6 +303,9 @@ def melden(daten):
                 f['abgaenge'] = int(daten['abgaenge'])
             except (TypeError, ValueError):
                 pass
+        # v1.4.33: Abflug unter automatischer Gelber Flagge ('' = keiner), nur durchgereicht.
+        if 'gelb' in daten:
+            f['gelb'] = str(daten['gelb'] or '')[:80]
         # v1.0.12: Gesamtzeit und Strafe (ms) fuer die Meisterschaft (Pflichtstopps).
         for k in ('summe', 'strafe'):
             if k in daten and daten[k] is not None:

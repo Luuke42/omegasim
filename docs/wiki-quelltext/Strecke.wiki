@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 Die '''Strecke''' eines [[Carrera HYBRID]]-Autos besteht aus lose ausgelegten Kunststoffteilen (Gerade, Kurven, Haarnadel, Start/Ziel und weitere), die auf ihrer Oberfläche ein für Menschen kaum sichtbares Balkenmuster tragen, oder aus gedruckten Mustern auf Papier. Ein Sensor an der Unterseite des Autos liest dieses Muster; das Auto meldet über [[Bluetooth Low Energy]] in jedem Statuspaket, welches Teil es zuletzt erkannt hat (Byte 12) und wie viele Teilwechsel es gezählt hat (Byte 11). Aus diesen beiden Zahlen zählt [[OmegaSim]] Runden, baut eine Streckenkarte, ortet die Autos auf der Karte und steuert [[NPC-Fahrverhalten|NPCs]], [[Safety Car und Reinigungswagen|Safety Car]] und Startaufstellung. Dieser Artikel beschreibt die Teile, ihre Codes, wie das Auto sie liest, den Streckencode und den Streckenscan. Das Bauen und Einpassen einer Strecke in einen Raum steht unter [[Strecken- und Raum-Editor]].
 
 [[Datei:OmegaSim-Strecke.png|mini|Der Bereich Strecke in OmegaSim]]
@@ -533,6 +533,12 @@ Die Vorgabestrecke <code>SR3GLR2GR2G2</code> hat 5 gerade Kacheln (S und vier G)
 | 1.2.4 || Rennarten folgen der Leseart (Bahn: kein Demolition Derby, Ausdruck: kein Time Attack)
 |-
 | 1.2.5 || Scan auf Geraden 0,80 statt 0,67 des Formationstempos; Kurven 0,67, Haarnadel 0,47
+|-
+| 1.3.14 || echte Teilebilder, Boxengasse wie das Original.
+|-
+| 1.3.20 || Engstelle und Startgerade wie die Originalteile; Online-Streckenzeiten.
+|-
+| 1.3.86 || Sektoren über den Streckeneditor (automatisch/manuell), grüne Grenzlinien.
 |}
 
 == Einzelnachweise ==

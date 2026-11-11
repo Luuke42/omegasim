@@ -1,6 +1,6 @@
-{{Stand|app=1.2.50|appdatum=30.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 [[Datei:OmegaSim-Fahrgefuehl.png|mini|Die Einstellungsseite Fahrgefühl in OmegaSim]]
-Das '''Fahrgefühl''' ist in [[OmegaSim]] der fertige Satz von Reglerwerten, der bestimmt, wie sich ein [[Carrera HYBRID]]-Auto fährt: wie stark es beschleunigt, bremst, lenkt und in der Kurve hält. Es gibt neun solche Sätze (Voreinstellungen oder Presets). Drei davon stehen im '''FAHREN'''-Menü, in der '''Garage''' und am '''Cockpit-Knopf''' – '''Arcade''', '''Sim+''' und '''Pacejka''' – die übrigen sechs liegen unter '''Optionen → Fahrgefühl → Voreinstellungen'''.
+Das '''Fahrgefühl''' ist in [[OmegaSim]] der fertige Satz von Reglerwerten, der bestimmt, wie sich ein [[Carrera HYBRID]]-Auto fährt: wie stark es beschleunigt, bremst, lenkt und in der Kurve hält. Es gibt elf solche Sätze (Voreinstellungen oder Presets). Fünf davon stehen im '''FAHREN'''-Menü, in der '''Garage''' und am '''Cockpit-Knopf''' – '''Arcade''', '''Sim+''', '''Pacejka''', '''Gran Hybrismo''' und '''Assetto Carrera''' – die übrigen sechs liegen unter '''Optionen → Fahrgefühl → Voreinstellungen''' (dort stehen alle elf).
 
 == Auf einen Blick ==
 {| class="wikitable"
@@ -8,19 +8,19 @@ Das '''Fahrgefühl''' ist in [[OmegaSim]] der fertige Satz von Reglerwerten, der
 |-
 | Menüpfad || Optionen → Fahrgefühl; Kurzwahl in FAHREN, in der Garage und am Cockpit-Knopf
 |-
-| Fahrgefühle in FAHREN || Arcade, Sim+, Pacejka
+| Fahrgefühle in FAHREN || Arcade, Sim+, Pacejka, Gran Hybrismo (WIP), Assetto Carrera (WIP)
 |-
 | Übrige Fahrgefühle || Pro, GT3, F1, Realismus GT3, Omega, RC (WIP)
 |-
 | Vorgabe nach Neuinstallation || die Werte im Markup entsprechen dem Fahrgefühl '''Pacejka''' (Steuerungsmodus Pacejka, sonst Pro-Werte)
 |-
-| Steuerungsmodus || Physik, Pacejka, RC („Aus“); seit 1.0.22 ausgeblendet, hängt am Fahrgefühl
+| Steuerungsmodus || Physik, Pacejka, Gran Hybrismo, Assetto Carrera, RC („Aus“); seit 1.0.22 ausgeblendet, hängt am Fahrgefühl
 |-
 | Quelle || <code>src/98-presets.js</code> (Reglerwerte), <code>src/40-physics.js</code> (Rechenweg), <code>src/50-drive.js</code> (Umschaltung)
 |}
 
-== Die drei Fahrgefühle im FAHREN-Menü ==
-Die drei Sätze, die man beim Fahren direkt umschalten kann, unterscheiden sich am deutlichsten im Rechenweg und in der Nachsicht:
+== Die drei Grund-Fahrgefühle im FAHREN-Menü ==
+Im FAHREN-Menü stehen fünf Sätze; Gran Hybrismo und Assetto Carrera sind unten bei den übrigen beschrieben. Die drei Grund-Sätze unterscheiden sich am deutlichsten im Rechenweg und in der Nachsicht:
 
 === Arcade ===
 Das '''Arcade'''-Fahrgefühl ist der einfachste und nachsichtigste Satz. Es schaltet die Kopplung von Gas und Bremse an die Lenkung ab (<code>lenkKopplungAus</code>): Beim Beschleunigen oder Bremsen wird das Auto nicht nervös, und die tempoabhängige Lenkgrenze entfällt. Der Reifengrip steht auf dem vollen Wert, Reifenverschleiß und Tankgewicht sind aus, die Bremse ist die stärkste (Faktor 4,0) und das Auto beschleunigt in 1,6 s auf 100. Kurz: „zum Fahren ohne Nachdenken“. Es entspricht dem ursprünglichen Sim-Modus der frühen Fassungen.
@@ -31,8 +31,8 @@ Das '''Arcade'''-Fahrgefühl ist der einfachste und nachsichtigste Satz. Es scha
 === Pacejka ===
 '''Pacejka''' ist Pro plus der Reifenkennlinie nach der '''Magic Formula''' (von Grund auf erklärt im Artikel [[Pacejka]], Abrechnung siehe [[Fahrverhalten]]). Der Rechenweg läuft genauso wie bei Physik, aber die Lenkung wird am Limit von der Pacejka-Kurve geformt. Unterhalb der Haftgrenze fährt sich Pacejka wie Physik; darüber reduziert es den Einschlag (Untersteuern) oder – bei eingeschaltetem Übersteuern – lenkt es von selbst weiter ein. Pacejka ist '''experimentell''' und die '''Vorgabe nach Neuinstallation'''.
 
-== Die übrigen sechs Fahrgefühle ==
-Die übrigen Sätze liegen unter '''Optionen → Fahrgefühl → Voreinstellungen''' (Reihenfolge dort):
+== Die übrigen Fahrgefühle ==
+Die übrigen Sätze (dazu Gran Hybrismo und Assetto Carrera, die auch im FAHREN-Menü stehen) liegen unter '''Optionen → Fahrgefühl → Voreinstellungen''' (Reihenfolge dort):
 
 {| class="wikitable"
 ! Fahrgefühl !! Kurzcharakteristik
@@ -48,6 +48,10 @@ Die übrigen Sätze liegen unter '''Optionen → Fahrgefühl → Voreinstellunge
 | '''Omega''' || Pro, wie es in v0.9 war – eingefroren, bleibt bei künftigen Pro-Änderungen stehen
 |-
 | '''RC (WIP)''' || wie ein Fernsteuerungsauto: Arcade mit allen Reglern am Anschlag, Steuerungsmodus „Aus“ – Gas läuft in 2 s aus, Bremse sofort, zweiter Bremsdruck im Stand = rückwärts
+|-
+| '''Gran Hybrismo (WIP)''' || wie Gran Turismo Sport: viel Grip, weicher Reifenscheitel, kaum Lastwechsel; eine Stabilitätshilfe lenkt gegen einen Ausbrecher (sie nimmt 60 % des Übersteuerns weg). Eigener Steuerungsmodus „Gran Hybrismo“: der Pacejka-Schritt, verfeinert (<code>granStep()</code>).
+|-
+| '''Assetto Carrera (WIP)''' || wie Assetto Corsa Competizione: dynamische Gierregelung und GT3-Abtrieb, ein Lenk-Zuschlag nur während des Lenkens, sonst lenkt die Rest-Gier nach einer Kurve weiter; keine Hilfen. Eigener Steuerungsmodus „Assetto Carrera“, derselbe verfeinerte Pacejka-Schritt (<code>granStep()</code>) mit anderen Werten.
 |}
 
 == Der Steuerungsmodus ==
@@ -59,6 +63,10 @@ Hinter jedem Fahrgefühl steht ein '''Steuerungsmodus''' (Rechenweg der Fahrphys
 | <code>physik</code> || „Physik“ || Drehmoment, Gänge, Reibkreis, Gewichtsverlagerung, Reifen- und Bremsentemperatur, Einspurmodell. Die Vorgabe der Rechenschritte.
 |-
 | <code>pacejka</code> || „Pacejka (experimentell)“ || wie Physik, zusätzlich Reifenkennlinie nach der Magic Formula. Der Standard im Markup.
+|-
+| <code>gran</code> || „Gran Hybrismo (WIP)“ || wie Pacejka, danach ein verfeinerter Schritt (<code>granStep()</code>, Werte <code>GRAN_WERTE.gran</code>): Abtrieb, tempoabhängige Lenkung, Selbstzentrierung, Gierregelung, Stabilitätshilfe. Entspricht dem Fahrgefühl Gran Hybrismo.
+|-
+| <code>acc</code> || „Assetto Carrera (WIP)“ || derselbe Schritt mit den Werten <code>GRAN_WERTE.acc</code>: Gier aus der Lastverlagerung, scharfer Reifenscheitel, Reifenfenster, keine Hilfen. Entspricht dem Fahrgefühl Assetto Carrera.
 |-
 | <code>aus</code> || „RC (experimentell)“ || kein Fahrzeugmodell – der Stick geht roh ans Auto. Entspricht dem Fahrgefühl RC.
 |}

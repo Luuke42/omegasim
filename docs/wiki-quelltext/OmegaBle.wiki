@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 '''OmegaBle''' ist ein natives Bluetooth-Plugin der Android-App von [[OmegaSim]]. Es schreibt die Steuerbefehle an die [[Carrera HYBRID]]-Autos auf einem eigenen Java-Thread direkt an die Bluetooth-Schnittstelle von Android, ohne Umweg über den Hauptthread, ersetzt dabei wartende Befehle durch neuere („neuester gewinnt“) und räumt Verbindungen hart auf, die das allgemeine Bluetooth-Plugin der App sonst hängen lässt. OmegaBle ist ein Baustein der Latenzarbeit in der App: Es entstand, weil Nutzer in der APK eine spürbare Verzögerung meldeten, die es im Browser nicht gab. Im Browser gibt es OmegaBle nicht; dort spricht Chrome oder Edge über Web Bluetooth direkt mit dem Auto.
 
 == Auf einen Blick ==
@@ -74,7 +74,7 @@ OmegaBle hat keine eigenen Schalter. Wirksam sind diese Optionen und festen Wert
 |-
 | Bekannte Autos beim Start verbinden (Optionen → System) || an/aus || an || verbindet nacheinander gemerkte Autos über ihre MAC-Adresse, ohne Auswahlfenster; vorher <code>alleSchliessen</code>, wenn die Garage leer ist || <code>setting-autoverbinden</code>, <code>autoVerbindenStart()</code>
 |-
-| Funkpriorität beim Start (Optionen → System, WIP, seit 1.3.15) || an/aus || an || zu Beginn des Countdowns gesteuerte Autos <code>HIGH</code>, alle anderen <code>BALANCED</code>, im Abstand von 150 ms; die Meldetakt-Wache zieht dann nur noch gesteuerte Autos hoch || <code>setting-funk-prio</code>, <code>funkPrioritaetVorStart()</code>
+| Funkpriorität beim Start (Optionen → System, WIP, seit 1.3.20) || an/aus || an || zu Beginn des Countdowns gesteuerte Autos <code>HIGH</code>, alle anderen <code>BALANCED</code>, im Abstand von 150 ms; die Meldetakt-Wache zieht dann nur noch gesteuerte Autos hoch || <code>setting-funk-prio</code>, <code>funkPrioritaetVorStart()</code>
 |-
 | Funk-Rundlauf (Optionen → System) || Anzeige || – || Messzeile, jede Sekunde neu, nur wenn sichtbar || <code>#funk-rundlauf</code>
 |-
@@ -320,7 +320,7 @@ bei jeder Meldung:       d = min(1000, jetzt − letzteMeldung)
 wenn meldeAbstand 5 s lang > 120 ms, einmal je Verbindung
   (mit „Funkpriorität beim Start“ nur für gesteuerte Autos):
                          requestConnectionPriority(HIGH)
-beim Countdown (Schalter an, seit 1.3.15):
+beim Countdown (Schalter an, seit 1.3.20):
   gesteuerte Autos:      prioritaetSetzen(hoch)        sofort, dann
   alle anderen:          prioritaetSetzen(ausgewogen)  je 150 ms später
 </pre>
@@ -331,7 +331,7 @@ Hintergrund: Android geht nach einiger Zeit oft vom schnellen Intervall zurück,
 ==== Priorität je Rolle beim Start ====
 Android kennt keine Reihenfolge der Verbindungen, die man „sortieren“ könnte: Jede Verbindung handelt ihr eigenes Verbindungsintervall aus, und alle teilen sich die Sendezeit eines Funkadapters. Was sich steuern lässt, ist die '''Priorität''' je Verbindung (<code>BluetoothGatt.requestConnectionPriority</code>): <code>CONNECTION_PRIORITY_HIGH</code> (kurzes Intervall, etwa 11–15 ms), <code>BALANCED</code> (etwa 30–50 ms) und <code>LOW_POWER</code>. Stehen alle Autos auf HIGH, konkurrieren NPCs, Safety Car und Reinigungswagen mit den gesteuerten Autos um dieselben kurzen Zeitfenster.
 
-Seit 1.3.15 (WIP, Schalter „Funkpriorität beim Start“ unter Optionen → System, Standard an) setzt <code>funkPrioritaetVorStart()</code> zu Beginn des Countdowns – auch vor einem Rennintro – die Priorität je Rolle:
+Seit 1.3.20 (WIP, Schalter „Funkpriorität beim Start“ unter Optionen → System, Standard an) setzt <code>funkPrioritaetVorStart()</code> zu Beginn des Countdowns – auch vor einem Rennintro – die Priorität je Rolle:
 * gesteuerte Autos (Spieler 1–3: Rolle <code>player</code>, <code>player2</code>, <code>player3</code>) → <code>hoch</code>;
 * alle anderen verbundenen Autos (NPC, Safety Car, Reinigungswagen, „Aus“) → <code>ausgewogen</code>.
 Die gesteuerten Autos kommen zuerst an die Reihe, danach folgt je Auto eine Anfrage im Abstand von 150 ms (<code>FUNK_PRIO_ABSTAND_MS</code>), damit nicht alle Neuaushandlungen gleichzeitig laufen. Bei einem Start mit Ampel stehen die Autos dabei 4–6 s; jede Neuaushandlung kann den Funk eines Autos kurz stocken lassen, und das fällt dort nicht ins Gewicht. Ein eigener Ladebildschirm ist deshalb nicht nötig. Freies Training ohne Ampel löst nichts aus. Startet ein neuer Countdown, bevor der vorige durch ist, entfallen dessen restliche Anfragen. Je Auto erscheint eine Zeile im Protokoll („Funkpriorität HOCH (gesteuert)“ bzw. „AUSGEWOGEN“, bei Misserfolg mit Grund und Weg).
@@ -525,6 +525,8 @@ Anzeige „Brücke 0,8/3 ms“: Ein Befehl braucht von der Seite bis OmegaBle im
 | 1.1.24 || Rückfall nur, wenn gar nichts mehr geschrieben wird; NPC-Sendebudget
 |-
 | 1.2.3 || hartes Schließen (<code>schliessen</code>, <code>alleSchliessen</code>, <code>verwaisteTrennen</code>), 20-s-Grenze, ein Aufbau je Auto, Meldetakt-Überwachung, NPCs schreiben nicht während des Neuverbindens (neue APK nötig)
+|-
+| 1.3.20 || Funkpriorität beim Start (WIP, Schalter „Funkpriorität beim Start“ unter Optionen → System, Standard an): zu Beginn des Countdowns bekommen gesteuerte Autos <code>HIGH</code>, alle anderen <code>BALANCED</code>.
 |}
 
 == Einzelnachweise ==

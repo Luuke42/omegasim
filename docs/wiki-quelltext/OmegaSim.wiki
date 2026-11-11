@@ -1,6 +1,6 @@
-{{Stand|app=1.2.45|appdatum=29.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 [[Datei:OmegaSim-Startseite.png|mini|Titelbildschirm von OmegaSim]]
-'''OmegaSim''' ist eine freie, quelloffene App zur Steuerung von [[Carrera HYBRID]]-Autos per [[Bluetooth Low Energy]]. Sie läuft im Browser (Chrome, Edge) und als Android-App und ergänzt die Autos um ein eigenes Fahrmodell, simulierte Motorgeräusche, computergesteuerte Gegner (NPCs), Rennarten, einen Strecken- und Raum-Editor, Challenges mit Online-Bestenliste und Mehrspieler. OmegaSim ist unabhängig vom Hersteller Carrera; es spricht dieselbe Funkschnittstelle wie die [[Original-App]], deren Protokoll für das Projekt aus Mitschnitten rekonstruiert wurde. Technisch ist OmegaSim eine einzige HTML-Datei mit JavaScript, die ohne Server läuft; die Android-Fassung legt eine dünne Java-Hülle darum. Der Titelbildschirm nennt als Leitsatz „Vollständige Gestaltungsfreiheit für deine Carrera Hybrid Bahn“. In älteren Dateien des Repositorys heißt das Projekt noch „CH Control“.
+'''OmegaSim''' ist eine freie, quelloffene App zur Steuerung von [[Carrera HYBRID]]-Autos per [[Bluetooth Low Energy]]. Sie läuft im Browser (Chrome, Edge) und als Android-App und ergänzt die Autos um ein eigenes Fahrmodell, simulierte Motorgeräusche, computergesteuerte Gegner (NPCs), Rennarten, [[Zufallsevents]], einen Strecken- und Raum-Editor, Challenges mit Online-Bestenliste und Mehrspieler. OmegaSim ist unabhängig vom Hersteller Carrera; es spricht dieselbe Funkschnittstelle wie die [[Original-App]], deren Protokoll für das Projekt aus Mitschnitten rekonstruiert wurde. Technisch ist OmegaSim eine einzige HTML-Datei mit JavaScript, die ohne Server läuft; die Android-Fassung legt eine dünne Java-Hülle darum. Der Titelbildschirm nennt als Leitsatz „Vollständige Gestaltungsfreiheit für deine Carrera Hybrid Bahn“. In älteren Dateien des Repositorys heißt das Projekt noch „CH Control“.
 
 == Auf einen Blick ==
 {| class="wikitable"
@@ -10,7 +10,7 @@
 |-
 | Lizenz || MIT; mitgelieferte Tonaufnahmen und Druckmuster haben eigene Bedingungen (siehe <code>audio/CREDITS.md</code>)
 |-
-| Aktuelle Version || 1.2.45 vom 29.10.2026 (Schema 1.&lt;Woche&gt;.&lt;Push&gt;)
+| Aktuelle Version || 1.3.93 vom 05.11.2026 (Schema 1.&lt;Woche&gt;.&lt;Push&gt;)
 |-
 | Plattformen || Browser mit Web Bluetooth (Chrome, Edge) am PC und unter Android; Android-App (APK, ab Android 7); auf iPhone/iPad nur Streckenbau und Doku
 |-
@@ -18,11 +18,11 @@
 |-
 | Programmiersprachen || JavaScript, HTML, CSS; Java (Android-Hülle); Python (Bau, Werkzeuge, Mehrspieler-Host); Google Apps Script (Bestenliste, Studie); siehe [[Aufbau von OmegaSim]]
 |-
-| Umfang || 46 JavaScript-Dateien und 2 HTML-Teile in <code>src/</code>, rund 92&nbsp;500 Zeilen JavaScript; ausgeliefert als <code>index.html</code> mit rund 6,6 MB
+| Umfang || 56 JavaScript-Dateien und 2 HTML-Teile in <code>src/</code>, rund 100&nbsp;000 Zeilen JavaScript; ausgeliefert als <code>index.html</code> mit rund 7,7 MB
 |-
 | Android-Kennung || <code>de.lroeseler.omegasim</code>, Capacitor 8.5.2
 |-
-| Selbsttest || 522 Prüfungen in <code>src/95-selftest.js</code>
+| Selbsttest || 600 Prüfungen in <code>src/95-selftest.js</code>
 |-
 | Hauptmenü || FAHREN · Challenges · WLAN Mehrspieler · Optionen · (Entwickler)
 |-
@@ -177,6 +177,8 @@ Hier stehen nur die Einstellungen, die OmegaSim als Ganzes betreffen; die übrig
 |-
 | <code>73-meisterschaft.js</code> || Meisterschaft aus mehreren Rennen.
 |-
+| <code>74-zufallsevents.js</code> || [[Zufallsevents]]: Plan und Zeitsteuerung der zufälligen Rennereignisse (experimentell).
+|-
 | <code>80-sound.js</code> || Der Ton: Motorklang aus Aufnahmen, Effekte, Reifenquietschen.
 |-
 | <code>80b-dualsense.js</code> || Trigger-Effekt des DualSense-Controllers bei ABS (WIP, WebHID).
@@ -203,7 +205,7 @@ Hier stehen nur die Einstellungen, die OmegaSim als Ganzes betreffen; die übrig
 |-
 | <code>94-engine-workshop.js</code> || Motorwerkstatt: elf Größen des Motormodells zum Drehen.
 |-
-| <code>95-selftest.js</code> || Der Selbsttest mit 522 Prüfungen.
+| <code>95-selftest.js</code> || Der Selbsttest mit 600 Prüfungen.
 |-
 | <code>96-home.js</code> || Gezählte Angaben für die Info-Seite (Zahl der Einstellungen).
 |-
@@ -386,7 +388,7 @@ Die '''Statistikbereinigung''' (Optionen → Statistiken → „Statistiken bere
 Der Preis dieser Bauform: Zwei gleiche deutsche Sätze bekommen immer dieselbe Übersetzung; kurze mehrdeutige Wörter stehen deshalb nur mit Zusammenhang im Wörterbuch. Der Vorteil: Am Markup muss nichts ausgezeichnet werden, bei rund 1460 Textstellen.
 
 === Selbsttest ===
-'''Entwickler → Selbsttest → Selbsttest starten''' führt alle mit <code>stAdd(name, fn)</code> angemeldeten Prüfungen der Reihe nach aus (Fassung 1.2.9: 522). Drei Grundsätze stehen im Kopf der Datei<ref>Kopfkommentar, <code>src/95-selftest.js</code>.</ref>:
+'''Entwickler → Selbsttest → Selbsttest starten''' führt alle mit <code>stAdd(name, fn)</code> angemeldeten Prüfungen der Reihe nach aus (Fassung 1.3.93: 600). Drei Grundsätze stehen im Kopf der Datei<ref>Kopfkommentar, <code>src/95-selftest.js</code>.</ref>:
 # Jede Zeile nennt ihr '''Maß''', nicht nur „grün“ oder „rot“, damit man sieht, wie knapp es war.
 # „nicht prüfbar“ ist ein eigenes Ergebnis und kein Fehler (etwa Tonschleifen über <code>file://</code>).
 # Die Prüfungen benutzen dieselben Funktionen wie die App, keine nachgebauten.
@@ -419,6 +421,8 @@ Zwischen zwei Prüfungen gibt der Test dem Browser über einen <code>MessageChan
 | 1.1 (ab 19.10.2026) || [[Virtuelles Fahren]] (WIP), Studie (heute OmegaLab), NPC-Stufe MAX, automatische Aufstellung, Funklast mit mehreren NPCs verringert, stabiler Funkweg-Rückfall
 |-
 | 1.2 (ab 26.10.2026) || sauberes Trennen von Bluetooth-Verbindungen (1.2.3), Renntypen je Leseart und Fahrgefühl je Spieler (1.2.4), schnellerer Streckenscan (1.2.5), Karten-Autos als Silhouetten (1.2.9)
+|-
+| 1.3 (ab 02.11.2026) || Streckeneditor-Optionen und echte Teilebilder, Online-Streckenzeiten, Gran Accelerato/Hybrismo/Assetto Carrera, ACC-Cockpit und ACC-HUD, [[Zufallsevents]] (experimentell), Sektoren über den Editor
 |}
 
 == Beispiele ==
@@ -464,6 +468,8 @@ Ein Rennen mit Spieler 1 und vier NPCs: Spieler 1 sendet alle 45 ms, also 22,2 P
 | 1.1 || Tastatur mit WASD, Testtasten nur im Entwicklermodus; Studie für alle sichtbar
 |-
 | 1.2 || Studie heißt OmegaLab; Bluetooth sauber trennen; Renntypen je Leseart
+|-
+| 1.3 || Zufallsevents (experimentell); Online-Streckenzeiten; ACC-Cockpit; Sektoren; neue Fahrgefühle Gran Hybrismo und Assetto Carrera
 |}
 
 == Einzelnachweise ==

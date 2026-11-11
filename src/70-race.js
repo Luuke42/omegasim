@@ -177,13 +177,18 @@
   let raceStartedAt = null;
   // Zeitpunkt von Gruen (stehender Start). Die Reihenstaffel der Ghosts zaehlt davon.
   let raceGreenAt = null;
+  // v1.4.54: Zeit von Gruen bis zum Beginn der ersten gewerteten Runde von Spieler 1 (Reaktion, Anlauf bis
+  // zur Linie). Die anderen Autos tragen sie in car.race.vorlauf. Die Wertung (Ergebnis, Uebersicht,
+  // Meisterschaft) rechnet Vorlauf + Rundensumme = Zeit seit Gruen bis zur letzten Ueberfahrt, damit bei
+  // gleicher Rundenzahl gewinnt, wer zuerst ueber die Linie kam - und nicht, wer weiter hinten losfuhr.
+  let raceVorlaufMs = 0;
   let raceClockTimer = null;
 
   // Was in der Rundenkachel steht. Drei Faelle, und der dritte ist der Grund fuer diese
   // Funktion: bei einem Zeitlimit gibt es keine Zielrundenzahl, und eine hinzuschreiben
   // waere erfunden.
   function raceLapTarget(gefahren) {
-    if (raceMode === 'laps') return gefahren + ' / ' + raceLimit;
+    if (raceMode === 'laps') return gefahren + ' / ' + (raceLimit + fruehstartZielPlus(1));
     if (RACE_MODES[raceMode].timed && raceStartedAt !== null) {
       const restMs = Math.max(0, raceLimit * 60000 - (rennZeitJetzt() - raceStartedAt));
       const s = Math.floor(restMs / 1000);
@@ -201,7 +206,8 @@
     }
     if (!RACE_MODES[raceMode].timed) return false;
     if (raceMode === 'laps') {
-      return raceAllCars().some(c => c.laps.length >= raceLimit);
+      // Je Auto sein Ziel: Fruehstart-Zusatzrunde (v1.3.132) zaehlt nur fuer diesen Fahrer.
+      return raceAllCars().some(c => c.laps.length >= raceLimit + fruehstartZielPlus(spielerPlatzVonRolle(c.role)));
     }
     return raceStartedAt !== null && (rennZeitJetzt() - raceStartedAt) >= raceLimit * 60000;
   }
@@ -500,22 +506,79 @@
   }
   function fruehstartReset() {
     if (fruehstartTimer) { clearInterval(fruehstartTimer); fruehstartTimer = null; }
-    FRUEH_SPIELER.forEach((w) => Object.assign(fruehstart[w], { frueh: false, warten: false, bis: 0, zugeschlagen: false }));
+    FRUEH_SPIELER.forEach((w) => Object.assign(fruehstart[w], { frueh: false, warten: false, bis: 0,
+      zugeschlagen: false, gas: false, zeit: false, extra: false, extraGefahren: false }));
   }
-  // ---- FRUEHSTART ALS ZEITSTRAFE (v0.9.22) ---------------------------------------------
-  // BESTELLT: "Fruehstart wird mit 5 s Strafe auf die erste Runde geahndet (Toggle in den
-  // Rennoptionen, standardmaessig an; soll im Splitscreen und Multiplayer funktionieren)."
-  // An: die erste Runde jedes Fruehstarters zaehlt 5 s mehr (Spieler 1 bis 3; im WLAN-
-  // Mehrspieler geht die Runde mit der Strafe an den Host). Aus: wie bisher kurz ausbremsen.
+  // ---- FRUEHSTART ALS STRAFE (v1.3.115, ueberarbeitet 1.3.132) ----------------------
+  // BESTELLT: "Wenn die Ampel an ist, erlaube mir nicht, Gas zu geben. Wer Gas gibt
+  // (Spieler 1, 2, 3, Multiplayer), soll eine Durchfahrtsstrafe bekommen. Fuege dazu eine
+  // Rennoptionen-Option ein (Strafe fuer Fruehstart: pit (Standard), 5 s Zeitstrafe,
+  // Zusatzrunde, keine)." Waehrend Rot ist das Gas gesperrt (50-drive.js physicsStep, im
+  // RC-Modus 20-protocol.js); der Versuch wird am Gas-INPUT erkannt (fruehstartGasPruefen),
+  // nicht an der Bewegung.
+  //   pit    die Durchfahrtsstrafe der Zufallsevents (zev.strafe, 74-zufallsevents.js): beim
+  //          naechsten Boxenstopp abgeleistet (leerer Plan, 2 s), fuer Spieler 1 UND 2/3; nicht
+  //          abgeleistet bis Rennende = +20 s in racePenaltyMs/strafeMsVon (Strafen-Spalte "DT").
+  //   5s     +5 s auf die erste Runde (fruehstartZuschlag).
+  //   extra  eine Soll-Runde mehr fuer DIESEN Fahrer (fruehstartZielPlus), nur im Rundenrennen;
+  //          in allen anderen Modi gilt die Durchfahrt (Option dort ausgegraut).
+  // In Challenges gilt immer die Zeitstrafe: dort gibt es weder Strafen-Spalte noch Rundenziel
+  // je Fahrer, eine Durchfahrt liefe ins Leere.
   const FRUEHSTART_ZEIT_MS = 5000;
-  function fruehstartZeitAn() { const el = $('race-fruehstart-zeit'); return el ? !!el.checked : true; }
+  // Gas-Eingabe, ab der ein Fruehstart zaehlt. throttleY/z.throttle kommen schon NACH der Totzone
+  // der Belegung (applyDeadzone mit TRIGGER_DEADZONE, 90-ghosts.js: innerhalb exakt 0, danach von
+  // 0 an neu skaliert); die 5 % sind nur ein Rand gegen ein gestreiftes Touch-Pedal.
+  const FRUEHSTART_GAS_SCHWELLE = 0.05;
+  function fruehstartStrafe() {
+    if (typeof challengeLaeuft === 'function' && challengeLaeuft()) return '5s';
+    const el = $('race-fruehstart-strafe');
+    const v = el ? el.value : 'pit';
+    if (v === 'extra' && raceMode !== 'laps') return 'pit';
+    return ['pit', '5s', 'extra', 'keine'].indexOf(v) >= 0 ? v : 'pit';
+  }
+  function fruehstartGasSetzen(w, ja) { const f = fruehstart[w]; if (f) f.gas = !!ja; }
+  function fruehstartGas(w) { const f = fruehstart[w]; return !!(f && f.gas); }
+  // Rot = Countdown beim stehenden Start. Bei fliegendem Start rollt das Feld in Formation.
+  function fruehstartGasSperre(w) { return raceState === 'countdown' && !raceFlying; }
+  // IM SENDETAKT gerufen (physicsStep, physicsStepVon, im RC-Modus aus dem Herzschlag): true =
+  // Gas sperren. Merkt den Versuch; die Strafe vergibt der 100-ms-Zeitgeber fruehstartBeginnen.
+  // Keine Allokation, kein DOM.
+  function fruehstartGasPruefen(w, gasEingabe) {
+    if (raceState !== 'countdown' || raceFlying) return false;
+    if (gasEingabe > FRUEHSTART_GAS_SCHWELLE) { const f = fruehstart[w]; if (f) f.gas = true; }
+    return true;
+  }
+  function fruehstartAnwenden(w) {
+    const strafe = fruehstartStrafe(), f = fruehstart[w];
+    if (!f) return;
+    const wer = w >= 2 ? 'P' + w + ': ' : '';
+    if (strafe === '5s') {
+      f.zeit = true;
+      rennEreignisStrafe(w, FRUEHSTART_ZEIT_MS / 1000);
+      showHudToast(wer + t('Frühstart') + ' +' + FRUEHSTART_ZEIT_MS / 1000 + ' s');
+    } else if (strafe === 'extra') {
+      // NICHT raceLimit += 1: das verlaengerte das Rennen fuer ALLE und blieb fuer das naechste stehen.
+      f.extra = true;
+      showHudToast(wer + t('Frühstart') + ': ' + t('Zusatzrunde'));
+    } else if (strafe === 'pit') {
+      if (typeof zevStrafeDazu === 'function') zevStrafeDazu(w);
+      showHudToast(wer + t('Frühstart') + ': ' + t('Durchfahrt (Boxengasse)'));
+    }
+    log(wer + 'Fruehstart: Strafe ' + strafe + '.', 'err');
+  }
+  // +5 s auf die erste Runde, einmal. Die Meldung kam schon beim Fruehstart (fruehstartAnwenden).
   function fruehstartZuschlag(w, rundenIndex) {
     const f = fruehstart[w];
-    if (!f || !f.frueh || f.zugeschlagen || rundenIndex !== 0 || !fruehstartZeitAn()) return 0;
+    if (!f || !f.zeit || f.zugeschlagen || rundenIndex !== 0) return 0;
     f.zugeschlagen = true;
-    showHudToast((w >= 2 ? 'P' + w + ': ' : '') + t('Frühstart') + ' +' + FRUEHSTART_ZEIT_MS / 1000 + ' s');
-    log((w >= 2 ? 'P' + w + ': ' : '') + 'Fruehstart: +5 s auf die erste Runde.', 'err');
     return FRUEHSTART_ZEIT_MS;
+  }
+  // Zusatzrunde: so viele Runden mehr braucht Spieler w bis ins Ziel (0 oder 1). Gelesen von
+  // raceLimitReached (Flagge je Auto), playerLapCrossed (Ziel von Spieler 1), raceLapTarget/
+  // statusRest (Anzeige) und mpEigenerStand (WLAN: gemeldete Runden).
+  function fruehstartZielPlus(w) {
+    const f = fruehstart[w];
+    return f && f.extra && raceMode === 'laps' ? 1 : 0;
   }
   function fruehstartBeginnen() {
     fruehstartReset();
@@ -524,9 +587,9 @@
       if (raceState !== 'countdown') return;
       FRUEH_SPIELER.forEach((w) => {
         if (w >= 2 && !(zweiSpieler && zusatzPlatz(w) && zusatzPlatz(w).car)) return;
-        if (!fruehstart[w].frueh && fruehstartTempo(w) > FRUEHSTART_KMH) {
+        if (!fruehstart[w].frueh && fruehstartGas(w)) {
           fruehstart[w].frueh = true;
-          if (fruehstartZeitAn()) rennEreignisStrafe(w, FRUEHSTART_ZEIT_MS / 1000);
+          fruehstartAnwenden(w);
           showHudToast(w >= 2 ? t('Frühstart Spieler {n}!').replace('{n}', w) : t('Frühstart!'));
         }
       });
@@ -534,21 +597,14 @@
   }
   function fruehstartGruen() {
     if (fruehstartTimer) { clearInterval(fruehstartTimer); fruehstartTimer = null; }
-    FRUEH_SPIELER.forEach((w) => { if (fruehstart[w].frueh) fruehstart[w].warten = true; });
+    let jemand = false;
+    FRUEH_SPIELER.forEach((w) => { if (fruehstart[w].frueh) { fruehstart[w].warten = true; jemand = true; } });
+    // Das Banner "DURCHFAHRT: BOX" malt zevBannerMalen nur bei 'racing'; der Aufrufer setzt das
+    // gleich nach dieser Funktion.
+    if (jemand && typeof zevBannerMalen === 'function') rennZeitTimeout(() => zevBannerMalen(true), 0);
   }
-  // Aus dem Fahrtakt: gilt die Strafe fuer Auto w gerade? Startet sie, sobald das Auto nach
-  // Gruen faehrt.
-  function fruehstartStrafeAktiv(w) {
-    const f = fruehstart[w];
-    if (!f || fruehstartZeitAn()) return false;     // Zeitstrafe statt Ausbremsen
-    const jetzt = rennZeitJetzt();
-    if (f.warten && (raceState === 'racing' || raceState === 'finishing') && fruehstartTempo(w) > FRUEHSTART_KMH) {
-      f.warten = false;
-      f.bis = jetzt + FRUEHSTART_STRAFE_MS;
-      showHudToast(w >= 2 ? t('Frühstart Spieler {n}: Strafe').replace('{n}', w) : t('Frühstart: Strafe'));
-    }
-    return jetzt < f.bis;
-  }
+  // Kein Ausbremsen mehr: die Strafe ist die gewaehlte Art.
+  function fruehstartStrafeAktiv(w) { return false; }
   function fruehstartGab(w) { const f = fruehstart[w || 1]; return !!(f && f.frueh); }
 
   function raceClockTick() {
@@ -563,6 +619,7 @@
       raceAwaitingMove = false;
       raceLapStart = rennZeitJetzt();
       raceStartedAt = rennZeitJetzt();
+      raceVorlaufMs = raceGreenAt !== null ? Math.max(0, raceLapStart - raceGreenAt) : 0;
       // Die Kachel, auf der das Auto beim Start steht: eine Ziellinie darauf ist keine Runde.
       dashLapZaehler = dashLastTileCounter;
       raceAnlaufZaehler = trackMode === 'on' ? dashLastTileCounter : null;
@@ -706,6 +763,8 @@
       if (now - r.lastActed < TILE_REPEAT_BLOCK_MS) return;
       r.lastActed = now;
       if (trackMode !== 'off' && r.lapZaehler !== null && b[11] === r.lapZaehler) {
+        // v1.4.54: steht das Auto beim Start auf Start/Ziel, beginnt Runde 1 hier (Vorlauf bis hierher).
+        if (r.anlauf && r.lapStart !== null) r.vorlauf = Math.max(0, now - r.anlauf.seit);
         if (r.lapStart !== null) r.lapStart = now;
         if (r.sek && r.sek.start !== null) r.sek.start = now;
         if (r.as && r.as.z !== null && r.as.i === 0) r.as.start = now;
@@ -758,11 +817,14 @@
     // ersten (dem Stehenbleiben mitten auf der Bahn).
     if (raceState === 'finished' && car.ghost && car.ghost.auslauf) {
       car.ghost.auslauf = false;
-      if (car !== playerCar) autoSekAutoRunde(r, now, r.lapStart !== null);
-      if (r.lapStart !== null) {
+      // v1.4.54: im Rundenrennen nur, wer die Zielrunde noch nicht hat (der Sieger faehrt keine Extrarunde).
+      const zielSchon = raceMode === 'laps' && r.laps.length >= raceLimit + fruehstartZielPlus(spielerPlatzVonRolle(car.role));
+      if (car !== playerCar) autoSekAutoRunde(r, now, r.lapStart !== null && !zielSchon);
+      if (r.lapStart !== null && !zielSchon) {
         r.laps.push({ lap: r.laps.length + 1, ms: now - r.lapStart, off: r.offLap || 0, crossedAt: now });
       }
       r.lapStart = null;
+      r.anlauf = null;
       finishGhost(car);
       ghostAuslaufFertig();
       return;
@@ -781,6 +843,28 @@
       if (car !== playerCar) autoSekAutoRunde(r, now, false);
       formationUeberfahrt(String(car.device.id));
       return;
+    }
+    // v1.4.54 GEMELDET: "Meisterschaft hat einen Bug: Entweder beim NPC wird eine Runde nicht gezaehlt, oder
+    // Spieler 1 gewinnt immer, auch wenn er auf Platz 2 steht." Ursache: Spieler 1 entscheidet bei seiner
+    // ersten Ueberfahrt, ob sie Anlauf war (weniger als eine halbe Strecke seit dem Start, playerLapCrossed)
+    // oder schon eine ganze Runde. Hier stand lapStart beim Start auf null, die erste Ueberfahrt eines NPCs
+    // (und von Spieler 2/3) zaehlte deshalb NIE - wer hinter der Linie stand (Auslauf des letzten Events,
+    // Ausdruck-Modus, von Hand hingestellt), verlor eine ganze Runde und Spieler 1 gewann mit einer Runde mehr.
+    // Jetzt dieselbe Regel: lapStart ab Gruen (rennAnlaufSetzen), und die erste Ueberfahrt ist Anlauf nur
+    // bei weniger als einer halben Strecke (Kachelzaehler) bzw. ohne Zaehler unter rundeMinMs().
+    if (r.anlauf) {
+      const a = r.anlauf;
+      r.anlauf = null;
+      const nK = currentTrackTiles ? currentTrackTiles.length : 0;
+      const z = r.lapZaehler !== null && r.lapZaehler !== undefined ? r.lapZaehler : car.tileCount;
+      const mitZaehler = trackMode === 'on' && nK >= 3 && a.zaehler !== null && typeof z === 'number';
+      if (mitZaehler ? ((z - a.zaehler) & 0xff) < nK / 2 : now - a.seit < rundeMinMs()) {
+        if (car !== playerCar) autoSekAutoRunde(r, now, false);
+        // Mit Zaehler beginnt Runde 1 an der Linie (wie Spieler 1, v1.0.36), die Zeit bis hierher ist Vorlauf;
+        // ohne laeuft die Uhr weiter.
+        if (mitZaehler) { r.vorlauf = Math.max(0, now - a.seit); r.lapStart = now; }
+        return;
+      }
     }
     // ---- SEKTOREN JE AUTO ------------------------------------------------------
     //
@@ -919,6 +1003,10 @@
                                    laps: (c.role === 'player' && raceLapTimes.length)
                                      ? raceLapTimes
                                      : (c.race && c.race.laps) || [],
+                                   // v1.4.54: Gruen bis Beginn der ersten Runde (siehe raceVorlaufMs).
+                                   vorlauf: (c.role === 'player' && raceLapTimes.length)
+                                     ? raceVorlaufMs
+                                     : (c.race && c.race.vorlauf) || 0,
                                    // Sektorzeiten je vollendete Runde: Spielerauto aus
                                    // sectorHistory, alle anderen aus car.race.sek.
                                    sektoren: c.role === 'player'
@@ -928,7 +1016,7 @@
       // Ohne Garage gibt es kein Geraet und damit keine Farbe: dann bleibt das Feld leer,
       // statt eine zu erfinden.
       out.unshift({ name: 'Spielerauto', role: 'player', farbe: null, kennung: null,
-                    laps: raceLapTimes, sektoren: sectorHistory });
+                    laps: raceLapTimes, sektoren: sectorHistory, vorlauf: raceVorlaufMs });
     }
     return out;
   }
@@ -1249,9 +1337,10 @@
     // Ranking depends on the mode. Endurance and Runden: most laps, then quickest to get
     // there. Qualifying: the single fastest lap, nothing else.
     const scored = cars.map(c => ({ c, st: raceStats(c.laps) }));
+    // v1.4.54: bei gleicher Rundenzahl die Zeit seit Gruen (Vorlauf + Summe), also wer zuerst ueber die Linie kam.
     scored.sort((a, b) => raceMode === 'qualifying'
       ? a.st.best - b.st.best
-      : (b.st.n - a.st.n) || (a.st.total - b.st.total));
+      : (b.st.n - a.st.n) || ((a.st.total + (a.c.vorlauf || 0)) - (b.st.total + (b.c.vorlauf || 0))));
 
     const fastest = Math.min(...scored.map(x => x.st.best));
     $('race-results-body').innerHTML = scored.map((x, i) => {
@@ -1643,7 +1732,7 @@
       row.innerHTML = `<span class="grid-pos">${i + 1}.</span>`
         + `<span class="grid-handle" draggable="true" title="Ziehen zum Umsortieren">&#8942;&#8942;</span>`
         + gridAutoBild(car)
-        + `<span class="grid-name">${carDot(car)}${garageLabel(car)} <small class="grid-wo">${wo}</small></span>`
+        + `<span class="grid-name">${carDot(car)}${garageLabel(car)} <small class="grid-wo">${wo}${typeof meisterBallastGridText === 'function' ? meisterBallastGridText(car) : ''}</small></span>`
         + `<span class="grid-move">`
         + `<button data-mv="up" ${i === 0 ? 'disabled' : ''} aria-label="nach vorn">&#9650;</button>`
         + `<button data-mv="down" ${i === cars.length - 1 ? 'disabled' : ''} aria-label="nach hinten">&#9660;</button>`
@@ -1752,6 +1841,8 @@
     gridBildMalen();
     // v1.0.25: im Meisterschafts-Event steht oben, welches Event und nach welcher Regel aufgestellt wird.
     if ($('grid-kopf-info')) $('grid-kopf-info').textContent = typeof meisterGridInfo === 'function' ? meisterGridInfo() : '';
+    // v1.3.114 BESTELLT: "Starttyp (stehend/fliegend) auf dem Startbildschirm anzeigen."
+    if ($('grid-starttyp')) $('grid-starttyp').textContent = raceFlying ? t('Fliegender Start') : t('Stehend');
     // Time Attack: Medaillenzeiten, bisher Gewonnenes und Bestzeit dieser Strecke.
     const ta = $('grid-timeattack');
     if (ta) {
@@ -2052,6 +2143,8 @@
     // Rennuhr = Wanduhr ab hier (siehe rennUhrNullen in 15-pause.js): die Mehrspieler-Zielzeit
     // gruenZiel ist Wanduhr und wird unten direkt gegen rennZeitJetzt() gelegt.
     rennUhrNullen();
+    // v1.4.48: altes Abseits (Vorrennen, hochgehoben) zaehlt am Start nicht (abseitsStartGnade, 50-drive.js).
+    if (typeof abseitsStartGnade === 'function') abseitsStartGnade();
     rennintroAbbrechen();
     const introStartToken = ++rennintroStartGeneration;
     bestzeitVorherMerken();
@@ -2114,9 +2207,15 @@
     // "beide schadenfrei", gesetzt wurde aber nur Auto 2 - Auto 1 behielt seinen Schaden,
     // und Spieler 3 behielt Tank und Schaden. Jetzt alle Plaetze.
     raceStartZuruecksetzen(fuel);
+    // v1.4.33 (WIP): Setup je Auto (98i-setup.js) - Startmischung und Starttank je Spielerauto, bei
+    // vorgegebenem Fahrgefuehl fuer alle Standard. Einmal je Start, nicht im Sendetakt.
+    if (typeof setupRennstart === 'function') setupRennstart(mpPlan);
+    // v1.4.33: Erfolgsballast der Meisterschaft (73-meisterschaft.js) - bei jedem Start gesetzt, sonst 0.
+    if (typeof meisterBallastRennstart === 'function') meisterBallastRennstart(mpPlan);
     updateDamageFuelUI();
     racePitDone = 0;
     pitBilanz = null;   // "Letzter Stopp" im Boxenschirm gehoert zum Rennen
+    raceFuelRefuelPct = 0;   // Nachfuellen ueber das Rennen, fuer die Verbrauchs-Statistik
     // v1.0.12 BESTELLT: "Pflichtstopps bitte fuer alle spieler gesteuerten Autos zaehlen."
     if (typeof zusatzPlaetze === 'function') zusatzPlaetze().forEach((z) => { z.pitDone = 0; });
     syncRaceGridOrder();
@@ -2163,6 +2262,10 @@
     // Ein aktiviertes lokales Intro bekommt ebenfalls die Ampel nach der Ansage.
     // CHALLENGE "Beste Runde" laeuft als freies Training, aber MIT Ampel: "Auto muss stehen,
     // dann kommt eine Ampel" (72-challenges.js).
+    // v1.3.15 (WIP, Optionen > System): Funkprioritaet je Rolle, solange alle stehen - gesteuerte
+    // Autos HIGH, NPCs & Co. BALANCED, gestaffelt (funkPrioritaetVorStart, 90-ghosts.js). Latenz (WIP):
+    // VOR dem Training-Ruecksprung, damit auch das Training ohne Ampel die Stufen bekommt.
+    if (typeof funkPrioritaetVorStart === 'function') funkPrioritaetVorStart();
     if (raceMode === 'practice' && !gruenBei && !(typeof challengeLaeuft === 'function' && challengeLaeuft())
         && !rennintroErlaubt(gruenZiel, mpPlan)) {
       raceState = 'racing';
@@ -2196,9 +2299,6 @@
     rennZeitTimeoutStop(raceCountdownTimer); raceCountdownTimer = null;
     ampelPlan = null; ampelSchritt = null; ampelK = 0;
     setRaceLights(0);
-    // v1.3.15 (WIP, Optionen > System): Funkprioritaet je Rolle, solange alle stehen - gesteuerte
-    // Autos HIGH, NPCs & Co. BALANCED, gestaffelt (funkPrioritaetVorStart, 90-ghosts.js).
-    if (typeof funkPrioritaetVorStart === 'function') funkPrioritaetVorStart();
     let ampelGestartet = false;
     const ampelBeginnen = () => {
       if (ampelGestartet || raceState !== 'countdown') return;
@@ -2258,6 +2358,21 @@
     return true;
   }
 
+  // v1.4.54: beim Gruen (stehender Start) laeuft die Uhr aller anderen Autos ab jetzt, ihre erste Ueberfahrt
+  // entscheidet carLapCrossed() wie bei Spieler 1 (Anlauf oder ganze Runde). Beim fliegenden Start setzt
+  // endFormationLap() die Uhren, dort gibt es keinen Anlauf.
+  function rennAnlaufSetzen(jetzt) {
+    raceVorlaufMs = 0;
+    garage.forEach((c) => {
+      if (!c.race) return;
+      c.race.vorlauf = 0;
+      c.race.anlauf = null;
+      if (raceFlying || c === playerCar) return;
+      c.race.lapStart = jetzt;
+      c.race.anlauf = { seit: jetzt, zaehler: typeof c.tileCount === 'number' ? c.tileCount : null };
+    });
+  }
+
   // Alles, was beim Gruen passiert. Eine Funktion, zwei Aufrufer: der Countdown und das
   // freie Training, das ihn ueberspringt.
   function raceGreen() {
@@ -2268,6 +2383,8 @@
     zevGruen();
     fruehstartGruen();
     rammReset();
+    // v1.4.48: die ersten 2 s nach Gruen gilt kein Auto als neben der Bahn (abseitsStartGnade, 50-drive.js).
+    if (typeof abseitsStartGnade === 'function') abseitsStartGnade();
     // FRISCH ZAEHLEN. Ohne das traegt ein zweites Rennen die Ueberfahrten des ersten mit
     // sich, und dann ist die Einfuehrungsrunde beim naechsten Start sofort vorbei.
     formationZaehler = new Map();
@@ -2279,6 +2396,7 @@
     raceLapStart = null;
     raceAwaitingMove = true;
     raceAnlaufZaehler = null;
+    rennAnlaufSetzen(rennZeitJetzt());
     // In einer Challenge faehrt man allein: keine Ghosts.
     const imChallenge = typeof challengeLaeuft === 'function' && challengeLaeuft();
     if (!imChallenge) launchGhosts();   // green means green for everyone
@@ -2394,6 +2512,17 @@
 
   // `auslaufen` = die Ghosts duerfen ihre angefangene Runde zu Ende fahren. Vorgabe ja;
   // requestRaceStop() uebergibt ausdruecklich false.
+  // v1.4.54: die Uhren beim Rennende anhalten - ausser bei NPCs, die ihre Runde noch zu Ende fahren. Hier
+  // wurden ALLE auf null gesetzt, und carLapCrossed() wertet die Auslaufrunde nur mit laufender Uhr: die
+  // letzte Runde eines NPCs, der nach Spieler 1 ueber die Linie kam, fehlte im Ergebnis (das Ziel dort sagt
+  // ausdruecklich "Die Runde wird noch GEWERTET").
+  function rennUhrenAnhalten(willAuslaufen) {
+    garage.forEach((c) => {
+      if (!c.race) return;
+      const rollt = willAuslaufen && c.role === 'ghost' && c.ghost && !c.parked && !c.ghost.finish;
+      if (!rollt) c.race.lapStart = null;
+    });
+  }
   function finishRace(auslaufen) {
     rennPauseBeenden();
     if (raceState === 'finished') return; // Ergebnisansage nur einmal planen.
@@ -2430,7 +2559,7 @@
     raceLapStart = null;
     raceAwaitingMove = false;
     dashLapStart = null;
-    garage.forEach(c => { if (c.race) c.race.lapStart = null; });
+    rennUhrenAnhalten(auslaufen !== false);
     // Whatever happened, the formation lap is over and its speed limit goes with it.
     if (raceFormationLap) {
       raceFormationLap = false;
@@ -2616,6 +2745,9 @@
     const ohneEnde = raceMode === 'practice' || raceMode === 'bestzeit';
     $('race-limit').disabled = !m.timed && raceMode !== 'derby' && !ohneEnde;
     $('race-limit').min = ohneEnde ? '0' : '1';
+    // Fruehstart-Zusatzrunde gibt es nur im Rundenrennen (sonst gilt Durchfahrt, fruehstartStrafe).
+    const fsExtra = document.querySelector('#race-fruehstart-strafe option[value="extra"]');
+    if (fsExtra) fsExtra.disabled = raceMode !== 'laps';
     // 0.7, not 0.45. On white 0.45 was a legible grey; on black it collapsed to 2.7:1,
     // and this label still has to be readable while it says which unit is NOT in use.
     $('race-limit-label').style.opacity = (m.timed || raceMode === 'derby') ? '' : '0.7';
@@ -3017,7 +3149,7 @@
       : raceWxStart === 'wechsel' ? 'wechselhaft' : 'trocken'}`);
     lines.push(`Wetterwechsel;${raceWxStart === 'wechsel' ? 'laufend'
       : raceWxChange ? 'ja' : 'nein'}`);
-    lines.push(`Tank beim Start (l);${raceFuelStartL}`);
+    lines.push(`Tank beim Start (l);${typeof setupStartTankL === 'function' ? setupStartTankL() : raceFuelStartL}`);
     // On/off track goes into the export because it is the one figure that says whether the
     // lap times above describe driving on a track at all.
     lines.push(`Zeit auf der Strecke (s);${num(Math.round(trackTimeOn * 1000))}`);
@@ -3068,7 +3200,11 @@
     renderTileTimeline();
   }
 
-  let tileTlDirty = false;
+  let tileTlDirty = false, tileTlVeraltet = false, tileTlSeite = null;
+  {
+    const knopf = document.querySelector('.tab-btn[data-tab="probe"]');
+    if (knopf) knopf.addEventListener('click', () => { if (tileTlVeraltet) renderTileTimeline(); });
+  }
   function renderTileTimeline() {
     // Gebuendelt zeichnen: bei 20 Paketen je Sekunde waere ein Neuaufbau je Paket reine
     // Verschwendung, und die Zeitleiste soll das Fahren nicht stoeren.
@@ -3078,6 +3214,11 @@
       tileTlDirty = false;
       const host = $('tile-timeline');
       if (!host) return;
+      // Latenz (WIP): die Tabelle steht im Reiter "Probe" - unsichtbar nicht neu bauen (vorher ein innerHTML
+      // je Teilwechsel, auch beim Fahren im Cockpit). Beim Oeffnen des Reiters wird nachgeholt.
+      if (!tileTlSeite) tileTlSeite = host.closest('.tabpage');
+      if (tileTlSeite && !tileTlSeite.classList.contains('active')) { tileTlVeraltet = true; return; }
+      tileTlVeraltet = false;
       if (!tileTimeline.length) {
         host.innerHTML = '<tr><td colspan="4" class="muted">noch nichts</td></tr>';
         return;
@@ -3742,6 +3883,7 @@
     if ((raceState === 'racing' || raceState === 'finishing') && raceAwaitingMove && !raceFormationLap) {
       raceAwaitingMove = false;
       raceLapStart = now; raceStartedAt = now;
+      raceVorlaufMs = raceGreenAt !== null ? Math.max(0, now - raceGreenAt) : 0;
       if (dashLapStart !== null) dashLapStart = now;
       autoSekSync(autoSekSp, dashLapZaehler, now);
       return false;
@@ -3778,6 +3920,7 @@
       if (nK >= 3 && gefahren < nK / 2) {
         log('Startlinie nach ' + gefahren + ' Kacheln: Anlauf, Runde 1 beginnt jetzt.', 'info');
         raceLapStart = now;
+        raceVorlaufMs = raceGreenAt !== null ? Math.max(0, now - raceGreenAt) : raceVorlaufMs;
         if (dashLapStart !== null) dashLapStart = now;
         autoSekSync(autoSekSp, dashLapZaehler, now);
         return false;
@@ -3846,8 +3989,16 @@
       // Die Zielrunde schaltete nur auf 'finishing' (raceClockTick), beendet wurde erst bei der
       // NAECHSTEN Ueberfahrt - ein 5-Runden-Rennen ging also ueber 6 Runden. Wer die Zielzahl
       // selbst erreicht, ist im Ziel; die anderen fahren ihre Runde zu Ende (Auslauf/finishing).
-      const zielErreicht = !wasFinishing && raceMode === 'laps' && raceLapTimes.length >= raceLimit;
-      if (wasFinishing || zielErreicht) finishRace();
+      // v1.3.132: mit Fruehstart-Zusatzrunde liegt das eigene Ziel eine Runde weiter; faellt die
+      // Flagge durch einen anderen, faehrt dieser Fahrer noch genau eine Runde (einmal).
+      const zielPlus = fruehstartZielPlus(1);
+      const zielErreicht = !wasFinishing && raceMode === 'laps' && raceLapTimes.length >= raceLimit + zielPlus;
+      let strafRunde = false;
+      if (wasFinishing && zielPlus && !fruehstart[1].extraGefahren && raceLapTimes.length < raceLimit + zielPlus) {
+        fruehstart[1].extraGefahren = true; strafRunde = true;
+        showHudToast(t('Frühstart') + ': ' + t('Zusatzrunde'));
+      }
+      if ((wasFinishing && !strafRunde) || zielErreicht) finishRace();
       // Runde 0, nicht 1: das Feld steht auf der Startgeraden und ueberfaehrt Start/Ziel
       // erst am Ende der ersten Runde. Vor der ersten Ueberfahrt ist also noch keine Runde
       // voll, und raceLapTimes.length ist genau diese Zahl.
@@ -4673,7 +4824,7 @@
   let pitDoubleArmedUntil = 0;
   let pitMarkerCode = null;
   // 80 km/h on the racing display, the speed a real pit lane limiter holds. The display
-  // reads speedKmh * REAL_SCALE (71.25), so 80 / 71.25 / 4.0 top speed = 0.2807.
+  // reads speedKmh * TACHO_SCALE (68.1), so 80 / 68.1 / 4.0 top speed = 0.2936.
   // v0.9.39: in TACHO-km/h, damit die Box auf dem Tacho 80 zeigt (siehe TACHO_SCALE).
   const PIT_SPEED_FACTOR = 80 / TACHO_SCALE / 4.0;
   let pitState = 'off';        // off | limited | servicing
@@ -4721,6 +4872,21 @@
   const PIT_ERHOL_PRO_FEHLER = 0.3;
   let pitServiceStart = null;
   let pitFuelGained = 0, pitDamageRepaired = 0;
+  // Die Nachfuellmenge UEBER DAS GANZE RENNEN, fuer die Statistik. pitFuelGained wird je
+  // Boxenstopp zurueckgesetzt (setPitState('servicing')) und kennt am Rennende nur den
+  // letzten Stopp; der Verbrauch je Sitzung braucht aber die Summe aller Stopps.
+  let raceFuelRefuelPct = 0;
+  // Was der Tank in dieser Sitzung hergab: Startmenge plus alles, was in der Box
+  // nachgefuellt wurde, minus was am Ende noch drin ist - in Litern (FUEL_TANK_LITERS).
+  function raceFuelBilanz() {
+    // v1.4.33: mit eigenem Setup (98i-setup.js) startet Auto 1 mit seiner Fuellung.
+    const startPct = (typeof setupStartTankL === 'function' ? setupStartTankL() : raceFuelStartL) / FUEL_TANK_LITERS * 100;
+    const endPct = Math.max(0, Math.min(100, typeof fuel === 'number' ? fuel : startPct));
+    const consumedPct = Math.max(0, startPct + raceFuelRefuelPct - endPct);
+    const l = (pct) => +(pct / 100 * FUEL_TANK_LITERS).toFixed(1);
+    return { startL: l(startPct), refuelL: l(raceFuelRefuelPct), endL: l(endPct),
+             consumedL: l(consumedPct) };
+  }
   // Bilanz des letzten vollendeten Stopps in diesem Rennen (ACC-Boxenschirm, v1.3.78):
   // gesetzt beim Verlassen der Box (pitBilanzMerken), geleert beim Rennstart.
   let pitBilanz = null;
@@ -4787,6 +4953,7 @@
       // Spieler-2-Rolle vergeben war - danach gab es das Minispiel auch allein nicht mehr.
       // v1.3.88 STRAFSTOPP (Durchfahrtsstrafe der Zufallsevents): es wird NICHTS am Auto gemacht -
       // leerer Plan, kein Minispiel, nach ZEV_STRAFE_STAND_S frei (losfahren geht jederzeit).
+      // Die Fruehstart-Durchfahrt (v1.3.115) steckt seit 1.3.132 in derselben Zaehlung (zevStrafeDazu).
       pitNurStrafe = zevBoxStopp(1);
       if (pitNurStrafe) pitPlan = { refuel: 0, tyres: false, repair: false };
       else if (pitModus === 'minigame' && !(typeof zusatzAktiv === 'function' && zusatzAktiv().length)) pitSpielStart();
@@ -4968,7 +5135,7 @@
           setPitLoop('fuel', false);
         } else {
           const addFuel = Math.min(ziel - fuel, PIT_FUEL_PER_SEC * dt);
-          fuel += addFuel; pitFuelGained += addFuel;
+          fuel += addFuel; pitFuelGained += addFuel; raceFuelRefuelPct += addFuel;
           if (fuel >= ziel - 0.05) {
             fuel = ziel; pitDone.refuel = true;
             setPitLoop('fuel', false); pitChimeFuel();
@@ -5136,7 +5303,7 @@
     const anteil = Math.min(1, (pitStandElapsed + sp.bonus) / sp.T);
     if (pl.refuel) {
       const neu = sp.fuel0 + (tankZielNorm(pl.refuel) - sp.fuel0) * anteil;
-      if (neu > fuel) { pitFuelGained += neu - fuel; fuel = neu; }
+      if (neu > fuel) { pitFuelGained += neu - fuel; raceFuelRefuelPct += neu - fuel; fuel = neu; }
     }
     if (pl.repair) {
       const neu = sp.dmg0 * (1 - anteil);
@@ -6195,6 +6362,9 @@
   function tileLengthM(type) {
     if (TILE_LEN_M[type] !== undefined) return TILE_LEN_M[type];
     if (type === TILE_TYPE.CURVE_LEFT || type === TILE_TYPE.CURVE_RIGHT) return CURVE_LEN_M;
+    // v1.3.132: die 30-Grad-Teile - weit mit Radius 2 (1,12 m), klein mit dem Radius der 60-Grad-Kurve.
+    if (type === TILE_TYPE.WEIT_LEFT || type === TILE_TYPE.WEIT_RIGHT) return TRACK_R2_CM / 100 * (Math.PI / 6);
+    if (type === TILE_TYPE.KLEIN_LEFT || type === TILE_TYPE.KLEIN_RIGHT) return TRACK_RADIUS_CM / 100 * (Math.PI / 6);
     // v0.9.39: beide Haarnadeln, MIT der geraden Sektion davor (21,9 cm).
     if (type === TILE_TYPE.HAIRPIN || type === TILE_TYPE.HAIRPIN_LEFT) {
       return TRACK_HAIRPIN_RADIUS_CM / 100 * (TRACK_HAIRPIN_DEG * Math.PI / 180)
@@ -6360,7 +6530,8 @@
       const dt = Math.max(0, Math.min(0.5, (now - fuelLastTickTime) / 1000));
       const fuelBefore = fuel;
       // zevVerbrauch: 2 bei einem Tank-Leck (Zufallsevents), sonst 1 - ein Array-Zugriff je Takt.
-      fuel = Math.max(0, fuel - Math.abs(throttle) * dt * fuelDrainPerSec * zevVerbrauch[1]);
+      // v1.4.54: setupVerbrauch = Motorkennfeld aus dem Setup (98i-setup.js), sonst 1.
+      fuel = Math.max(0, fuel - Math.abs(throttle) * dt * fuelDrainPerSec * zevVerbrauch[1] * (physEngine.state.setupVerbrauch || 1));
       // Edge-triggered: without this it would rumble again on every 45ms heartbeat.
       if (fuelBefore > 0 && fuel <= 0) {
         padRumble(0.2, 0.12, 160, 'meldung');
@@ -6396,7 +6567,7 @@
       // dieselbe Sache - und ungleiche Regeln waeren schlimmer als keine, das ist die
       // Zusage, unter der dieser Modus gebaut ist.
       z.tank.stand = Math.max(0, z.tank.stand
-                                   - Math.abs(throttle) * dt * fuelDrainPerSec * zevVerbrauch[z.nr]);
+                                   - Math.abs(throttle) * dt * fuelDrainPerSec * zevVerbrauch[z.nr] * (z.motor.state.setupVerbrauch || 1));
       // Flankengetriggert, wie bei Auto 1: ohne das brummte es in jedem 45-ms-Takt neu.
       if (vorher > 0 && z.tank.stand <= 0) {
         padRumble(0.2, 0.12, 160, 'meldung', z.nr);
@@ -7357,7 +7528,8 @@
     // Rennens und das Ergebnis danach nicht verschiedene Sieger nennen.
     const mit = cars.map((c) => {
       const ms = c.laps.map((l) => l.ms);
-      return { c, n: ms.length, summe: ms.reduce((a, b) => a + b, 0),
+      // v1.4.54: summe ab Gruen (Vorlauf + Runden), damit Uebersicht, Ergebnis und Meisterschaft denselben Platz nennen.
+      return { c, n: ms.length, summe: ms.reduce((a, b) => a + b, 0) + (ms.length ? (c.vorlauf || 0) : 0),
                letzte: ms.length ? ms[ms.length - 1] : null,
                beste: ms.length ? Math.min.apply(null, ms) : null };
     });

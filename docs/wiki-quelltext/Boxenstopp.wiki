@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 [[Datei:OmegaSim-Rennen.png|mini|Das Cockpit; der Boxenschirm ist einer seiner Schirme]]
 Der '''Boxenstopp''' ist die Funktion von [[OmegaSim]], mit der ein Fahrzeug während einer Sitzung getankt, mit neuen Reifen versehen und repariert wird. Er setzt die simulierten Zustände aus dem Artikel [[Verschleiß]] zurück und kostet dafür Standzeit. Eine echte Boxengasse braucht es nicht: In der Vorgabe wird ein angeforderter Stopp dadurch bedient, dass das Auto an beliebiger Stelle anhält. Technisch ist der Boxenstopp eine '''Zustandsmaschine''' mit drei Zuständen (aus, Anfahrt mit Tempolimit, Service), die im 45-ms-Takt der Steuerung läuft. Ab Werk ist das '''Boxen-Minigame''' eingestellt, bei dem Tastendrücke den Stopp verkürzen. Auch NPCs können an die Box fahren; sie parken dafür mit derselben aufgenommenen Einparkfolge wie das [[Safety Car und Reinigungswagen|Safety Car]].
 
@@ -292,6 +292,10 @@ Band 5 bis 9 Runden, kein Versatz. Nach dem Start zieht ein NPC zum Beispiel 7; 
 | 1.2 (1.2.4) || Minigame: Haken nur bei richtig, Kreuz bei falsch, nichts bei Zeitablauf; Reihe der nächsten Tasten. Mechanische Signaltöne, Schalter für die alten. NPC-Boxenstopp wie das Safety Car, eigene Box hinter dem Safety-Car-Parkplatz.
 |-
 | 1.2 (1.2.11) || Erklärtext des Minigames berichtigt (fünf Tasten, je 8 %); NPC-Boxenstopp: eine Box, wie das Safety Car.
+|-
+| 1.3 (1.3.65) || Boxen-Minispiel: vier Knöpfe ohne Zeitlimit.
+|-
+| 1.3 (1.3.80) || Box- und Rennen-Schirm im ACC-Stil mit Strafen-Spalte.
 |}
 
 == Siehe auch ==

@@ -48,9 +48,21 @@
   // Eine Stelle fuer die Leseart, zwei Bedienelemente darauf: der Schalter in den Optionen
   // und der Knopf im Cockpit. Zwei Orte mit eigener Logik waeren zwei Orte, die
   // auseinanderlaufen - der Knopf setzt deshalb den Schalter und nichts sonst.
+  // v1.4.48: beim Wechsel Ausdruck -> Bahn bekommt jedes Fahrerauto die Marke bahnCodeFehlt; bis es
+  // danach einen gueltigen Bahncode meldet (onCarNotify loescht sie), gibt der Autopilot ihm kein Gas
+  // (apBahnCodeFehlt). Je Auto und nicht als globale Zeit: ein Auto, das erst spaeter verbunden wird,
+  // hat mit dem Wechsel nichts zu tun.
+  function bahnCodeSperre(an) {
+    try {
+      const autos = [playerCar].concat(typeof zusatzPlaetze === 'function' ? zusatzPlaetze().map((z) => z.car) : []);
+      for (const c of autos) if (c) c.bahnCodeFehlt = !!an;
+    } catch (e) { /* beim Laden: die Garage ist noch nicht da */ }
+  }
   function applyScanMode() {
     const rail = $('setting-ontrack') ? $('setting-ontrack').checked : true;
+    const vorherModus = trackMode;
     trackMode = rail ? 'on' : 'off';
+    if (vorherModus === 'off' && trackMode === 'on') bahnCodeSperre(true);
     // Sofort in lightBits eintragen. Die Fahrschleife setzt es ohnehin jeden Takt neu
     // zusammen, aber bis dahin waere der Zustand widerspruechlich: trackMode schon
     // umgeschaltet, das gesendete Byte noch alt. Nur die zwei Modusbits werden angefasst,
@@ -632,14 +644,21 @@
   // einlegt. Geschrieben wird hoechstens alle 150 ms und nur, solange die Seite sichtbar ist
   // (offsetParent), damit der Takt davon nichts merkt. HINWEIS: kein <small> - optInfoEinrichten()
   // (98c-opt-info.js) versteckt jedes <small> in einem Zeilenlabel hinter dem i-Knopf.
-  let gbAufrufe = 0, gbStatusAt = 0;
+  // Latenz (WIP): offsetParent erzwingt ein Layout, und gbStatus laeuft aus dem 30-ms-Tastaturtakt und der
+  // Pad-Abfrage - gemessen 6 % des Hauptfadens (CPU 4x) nur fuer dieses Lesen. Jetzt ZUERST die Uhr, und eine
+  // unsichtbare Anzeige wird hoechstens alle GB_SICHT_MS erneut geprueft.
+  const GB_SICHT_MS = 250;
+  let gbAufrufe = 0, gbStatusAt = 0, gbSichtAt = 0;
   function gbStatus(gasRoh, bremsRoh, kmhAnz, grund) {
-    const el = $('setting-gasbrake-reverse-status');
-    if (!el || !el.offsetParent) return;
     const jetzt = rennZeitJetzt();
     // Springt die Uhr zurueck (jetzt < gbStatusAt), wird trotzdem geschrieben - sonst bliebe die Anzeige
     // stumm, bis die Uhr den alten Zeitpunkt wieder erreicht hat.
     if (jetzt >= gbStatusAt && jetzt - gbStatusAt < 150) return;
+    if (jetzt >= gbSichtAt && jetzt - gbSichtAt < GB_SICHT_MS) return;
+    const el = $('setting-gasbrake-reverse-status');
+    if (!el) return;
+    if (!el.offsetParent) { gbSichtAt = jetzt; return; }
+    gbSichtAt = 0;
     gbStatusAt = jetzt;
     const st = physEngine.state;
     const aus = (typeof physOutThrottle === 'number') ? physOutThrottle : 0;
@@ -2000,11 +2019,13 @@
     // Die Schaltlichter aus SEINER Drehzahl. Dieselbe Funktion wie die grosse Leiste im
     // Cockpit - siehe schaltLampen(), dort steht auch die Farbregel.
     schaltLampen($(pre + '-shift'), st.rpmFrac, st.onLimiter);
-    schreibeWert($(pre + '-speed'), Math.round(Math.abs(st.speedKmh) * TACHO_SCALE));
+    // Latenz (WIP): laufend wechselnde Werte (Tempo, Tank, Temperaturen, Akku) ohne Versatz-Animation -
+    // nur Text bei Aenderung. Der Versatz bleibt bei Werten, die SPRINGEN (Gang, Name, Zustand, Runden).
+    schreibeWert($(pre + '-speed'), Math.round(Math.abs(st.speedKmh) * TACHO_SCALE), true);
     schreibeWert($(pre + '-gear'), gearLabel(st));
     schreibeWert($(pre + '-name'), car ? garageLabel(car) : 'kein Auto');
     // Tank in Litern, wie ueberall sonst in dieser App.
-    schreibeWert($(pre + '-fuel'), fuelLiters(tank) + ' l');
+    schreibeWert($(pre + '-fuel'), fuelLiters(tank) + ' l', true);
     const tb = $(pre + '-fuel-bar');
     if (tb) {
       tb.style.width = Math.max(0, Math.min(100, tank)) + '%';
@@ -2030,7 +2051,7 @@
     const reifen = mittel(st.tyreTemp4) !== null ? mittel(st.tyreTemp4) : (st.tyreTempC || 0);
     const bremse = mittel(st.brakeTemp4) !== null ? mittel(st.brakeTemp4)
       : ((st.brakeTempF || 0) + (st.brakeTempR || 0)) / 2;
-    schreibeWert($(pre + '-tyre'), Math.round(reifen) + '\u00b0');
+    schreibeWert($(pre + '-tyre'), Math.round(reifen) + '\u00b0', true);
     // BESTELLT: "Balken fuer die Reifensimulation, um zu sehen, ob die Reifen verschlissen
     // sind." Restprofil und nicht Temperatur, dieselbe Groesse wie in den vier
     // Reifenfeldern des Hauptcockpits (1 - tyreWear), 100 % heisst neu.
@@ -2040,12 +2061,12 @@
       tyb.style.width = rest + '%';
       tyb.style.background = rest < 30 ? '#ff5252' : rest < 60 ? '#ffb02e' : '#2ee06a';
     }
-    schreibeWert($(pre + '-brake'), Math.round(bremse) + '\u00b0');
+    schreibeWert($(pre + '-brake'), Math.round(bremse) + '\u00b0', true);
     // Der Akku kommt aus Byte 10 des Autos (car.battery, in 90-ghosts.js je Auto gesetzt) -
     // eine gemessene Groesse und keine gerechnete. Ohne Auto oder ohne Meldung: ein Strich,
     // und keine erfundene Zahl.
     const roh = car && car.battery !== undefined && car.battery !== null ? car.battery : null;
-    schreibeWert($(pre + '-batt'), roh === null ? '\u2013' : batteryPercent(roh) + ' %');
+    schreibeWert($(pre + '-batt'), roh === null ? '\u2013' : batteryPercent(roh) + ' %', true);
   }
 
   function p2ScreenRender() {
@@ -2264,17 +2285,26 @@
     schreibeWert($(pre + '-letzte'), ms.length ? formatLapTime(ms[ms.length - 1]) : '\u2013');
     schreibeWert($(pre + '-beste'), ms.length ? formatLapTime(Math.min.apply(null, ms)) : '\u2013');
   }
-  function schreibeWert(el, txt) {
+  // ohneVersatz = true: nur der Text (fuer laufend wechselnde Werte).
+  //
+  // Latenz (WIP): Hier stand `classList.remove; void el.offsetWidth; classList.add` - ein ERZWUNGENES
+  // LAYOUT je geaendertem Wert, und das im Herzschlag (cockpitNachSenden). Mit 2 Spielern malt der
+  // Beide-Schirm je 90 ms bis zu zwanzig Werte: gemessen (CPU 4x) 42 % des Herzschlags in schreibeWert,
+  // und 15-25 % der Sendetakte fielen aus. Jetzt die Web-Animations-API: sie startet bei jedem Aufruf
+  // neu und braucht kein Layout. Rueckfall ohne el.animate: Klasse im naechsten Bild neu setzen.
+  const WERT_VERSATZ = [{ transform: 'translateY(1px)' }, { transform: 'translateY(0)' }];
+  const WERT_VERSATZ_OPT = { duration: 80, easing: 'ease-out' };
+  function schreibeWert(el, txt, ohneVersatz) {
     if (!el) return;
     const neu = String(txt);
     if (el.textContent === neu) return;
     el.textContent = neu;
-    // Die Klasse zweimal in Folge zu setzen startet die Animation nicht neu - sie muss
-    // erst weg sein. Der Neustart des Bildaufbaus (offsetWidth) ist die uebliche und
-    // billigste Art, das zu erzwingen.
+    if (ohneVersatz) return;
+    if (typeof el.animate === 'function') {
+      try { el.animate(WERT_VERSATZ, WERT_VERSATZ_OPT); return; } catch (e) { /* Rueckfall unten */ }
+    }
     el.classList.remove('gt3-tick');
-    void el.offsetWidth;
-    el.classList.add('gt3-tick');
+    requestAnimationFrame(() => el.classList.add('gt3-tick'));
   }
 
   // ---- DIE SCHALTLICHTER, EINE WAHRHEIT FUER JEDE LEISTE ------------------------------
@@ -2563,12 +2593,10 @@
     // ALLE Treffer und nicht der erste: seit v0.5.18 tragen die Zeilen des Boxenschirms
     // dieselben data-pit-Werte, und ein einzahliges querySelector haette dort nie sim-off
     // gesetzt - die Kachel im Streifen waere grau gewesen, die Zeile daneben nicht.
-    for (const el of document.querySelectorAll('[data-pit="refuel"]')) {
-      el.classList.toggle('sim-off', tankAus);
-    }
-    for (const el of document.querySelectorAll('[data-pit="repair"]')) {
-      el.classList.toggle('sim-off', schadenAus);
-    }
+    // Latenz (WIP): die Listen einmal suchen statt bei jedem Malen das ganze Dokument (rund 11000
+    // Knoten) zu durchsuchen - neu nur, wenn ein Element nicht mehr im Dokument steht.
+    for (const el of pitKachelnVon('refuel')) el.classList.toggle('sim-off', tankAus);
+    for (const el of pitKachelnVon('repair')) el.classList.toggle('sim-off', schadenAus);
     const reifenKachel = $('race-tyre-box');
     if (reifenKachel) reifenKachel.classList.toggle('sim-off',
       physEngine.config.tyreEffect <= 0);
@@ -2656,9 +2684,25 @@
       // v1.2.12 BESTELLT: "#X/Y format" statt P3/6.
       if (p) posEl.textContent = '#' + p.pos + '/' + p.von;
     }
-    $('race-lap-list').innerHTML = laps.slice().reverse().slice(0, 10).map(l =>
-      `<li><span>${l.lap}</span><span${l.ms === best ? ' class="gt3-ok"' : ''}>${formatLapTime(l.ms)}</span></li>`
-    ).join('');
+    // Latenz (WIP): nur bei Aenderung neu bauen (vorher bei jedem Malen, alle 90 ms, ein innerHTML).
+    const lapListe = $('race-lap-list');
+    const zuletzt = laps.length ? laps[laps.length - 1] : null;
+    const lapSig = laps.length + ':' + (laps.length ? laps[0].lap + '/' + laps[0].ms : '')
+      + ':' + (zuletzt ? zuletzt.lap + '/' + zuletzt.ms : '') + ':' + best;
+    if (lapListe && lapListe.dataset.sig !== lapSig) {
+      lapListe.dataset.sig = lapSig;
+      lapListe.innerHTML = laps.slice().reverse().slice(0, 10).map(l =>
+        `<li><span>${l.lap}</span><span${l.ms === best ? ' class="gt3-ok"' : ''}>${formatLapTime(l.ms)}</span></li>`
+      ).join('');
+    }
+  }
+  const pitKachelCache = {};
+  function pitKachelnVon(art) {
+    let l = pitKachelCache[art];
+    if (!l || l.some((el) => !el.isConnected)) {
+      l = pitKachelCache[art] = Array.from(document.querySelectorAll('[data-pit="' + art + '"]'));
+    }
+    return l;
   }
 
   // Hier standen sechs setTxt/setSty auf Elemente der entfernten alten Karte
@@ -2996,12 +3040,16 @@
   // Kolonnenversatz, Abseits-Antwort. `wer` ist 1, wenn nichts dasteht.
   // v1.1.15 GEMELDET: "Die Geschwindigkeit zum Streckenscan ist am unteren Ende der Mindestgeschwindigkeit.
   // In der Haarnadel ist das Auto gerade so schnell genug, dass es noch Balken und Querlage bestimmen
-  // kann. Schiebe die Mindestgeschwindigkeit leicht ueber das (2-3 %)." Mal formationPace (0,35):
+  // kann. Schiebe die Mindestgeschwindigkeit leicht ueber das (2-3 %)." Mal formationPace (damals 0,35):
   // gerade 0,21 -> 0,235, Haarnadel 0,14 -> 0,165 der Hoechstgeschwindigkeit (je 2,5 Prozentpunkte).
   // v1.2.5 BESTELLT: "Streckenscan-Geschwindigkeit etwas erhoehen (ausser in der Haarnadel), da es sonst zu Fehllesungen
   // kommt." Gerade 0,80 statt 0,67 (Delta 36 statt 30), normale Kurven bleiben bei 0,67 (SCAN_TEMPO_KURVE), die
   // Haarnadel bei 0,47 (Delta 21).
-  const SCAN_TEMPO = 0.80, SCAN_TEMPO_KURVE = 0.67, SCAN_TEMPO_HAARNADEL = 0.47;
+  // v1.3.114 BESTELLT: "Erhoehe die Geschwindigkeit in der Scan-Runde leicht." Das Formationstempo (Basis) ist
+  // um 20 % gestiegen (formationPace, 90-ghosts.js); damit der Scan nur LEICHT schneller wird, sind die Faktoren
+  // hier gegengerechnet: 0,42 * 0,72 = 0,302 statt vorher 0,35 * 0,80 = 0,28 (gut +8 %). Kurve und Haarnadel
+  // behalten ihr Verhaeltnis zur Geraden.
+  const SCAN_TEMPO = 0.72, SCAN_TEMPO_KURVE = 0.60, SCAN_TEMPO_HAARNADEL = 0.42;
   const scanStopp = { car: null, bis: 0 };
   function scanAnhalten(car) { if (car) { scanStopp.car = car; scanStopp.bis = rennZeitJetzt() + 1500; } }
   // ---- GREIFT DER AUTOPILOT GERADE? (v1.0.25) --------------------------------------
@@ -3134,6 +3182,12 @@
         st.speedKmh = 0;
         return { grund: 'aufstellen', throttle: 0, brake: 1, steer: 0, lenkt: false, radLenk: fo ? fo.lenk : 0 };
       }
+      // v1.4.46: lange neben der Bahn (oder auf dem Ruecken) kein Gas, siehe apLangeAbseits().
+      // v1.4.48: auch nicht, solange nach einem Wechsel Ausdruck -> Bahn kein Bahncode kam (apBahnCodeFehlt).
+      if (apLangeAbseits(wer || 1) || apBahnCodeFehlt(wer || 1)) {
+        regler.at = rennZeitJetzt();
+        return { grund: 'aufstellen', throttle: 0, brake: Math.max(AP_ABSEITS_BREMSE, fahrerBremse), steer: 0, lenkt: false };
+      }
       const vA = Math.abs(st.speedKmh) / motor.config.topSpeedKmh;
       const dtS = Math.max(0.01, Math.min(0.25, (rennZeitJetzt() - (regler.at || rennZeitJetzt())) / 1000));
       regler.at = rennZeitJetzt();
@@ -3147,6 +3201,18 @@
     // AUSSETZER RAEUMEN DEN REGLER AUF. Ohne das traegt der I-Anteil ueber das Ende der
     // gelben Phase hinaus und gibt beim naechsten Mal aus dem Stand Gas.
     if (!grund) { autopilotZuruecksetzen(wer); return null; }
+    // v1.4.46 GEMELDET: "Das Auto beschleunigt im Bahn-Modus immer auf ca. 100 km/h (zumindest, wenn
+    // ich es auf den Ruecken lege)." Einfuehrungsrunde und Gelb behielten das Gas auch neben der Bahn
+    // (unten: "GAS UND BREMSE BLEIBEN BEI IHM"), und auf dem Ruecken endet die Einfuehrungsrunde nie -
+    // die Raeder drehten dauerhaft im Formationstempo. Kurzes Abkommen (Haarnadel) bleibt unberuehrt.
+    // v1.4.48 GEMELDET: "Wenn ich das Auto auf den Boden stelle und freies Training mache und dann von
+    // Ausdruck zu Bahn wechsele, faehrt es von selbst los." Und: "Bei Gelb sollen die Autos, die nicht auf
+    // der Bahn sind, natuerlich auch nicht fahren!" Unter Gelb/Anfahrt also schon nach der kurzen
+    // Entprellung apGelbAbseits(); nach einem Leseart-Wechsel erst mit einem gueltigen Bahncode.
+    if (apLangeAbseits(wer || 1) || apBahnCodeFehlt(wer || 1) || (grund === 'yellow' && apGelbAbseits(wer || 1))) {
+      regler.at = rennZeitJetzt();
+      return { grund, throttle: 0, brake: Math.max(AP_ABSEITS_BREMSE, fahrerBremse || 0), steer: 0, lenkt: false };
+    }
     // ---- WIE EIN GHOST, UND DAS IST DER BESTELLTE UNTERSCHIED ---------------------
     //
     // GEMELDET: "gelbe Flagge fuer mein Auto auf der Bahn fixen: es gibt nur Gas, sollte
@@ -3291,6 +3357,16 @@
   // 90-ghosts.js (Auto 2), also je Paket. `wer` ist 1, wenn nichts dasteht.
   function offtrackMelden(abseits, wer) {
     const jetzt = rennZeitJetzt();
+    // v1.4.48: die ersten START_ABSEITS_GNADE_MS eines Rennens zaehlt 0x00 nicht (abseitsStartGnade).
+    if (abseits && jetzt < abseitsGnadeBis) abseits = false;
+    // v1.4.52: nach dem Schuetteln (spielerGeschuettelt) dieselbe Nachsicht je Auto, damit es anfahren kann.
+    if (abseits && jetzt < (wer >= 2 ? (zusatzPlatz(wer).abseits.gnadeBis || 0) : schuettelGnadeBis1)) abseits = false;
+    // v1.4.48: und im Ausdruck-Modus nie. Dort steht Byte 12 praktisch immer auf 0x00 (Sensor fuer die
+    // Schiene aus), und die Uhr lief trotzdem: beim Wechsel auf Bahn galt das Auto damit sofort als seit
+    // Minuten neben der Bahn. GEMELDET: "freies Training, dann von Ausdruck zu Bahn wechseln, faehrt es
+    // von selbst los" - die automatische Gelbe Flagge sprang im selben Augenblick an, und ihr Autopilot
+    // gab Gas. Ausserdem zaehlte jedes Paket im Ausdruck-Modus als Abflug (offtrackZaehler, Knockout).
+    if (abseits && trackMode !== 'on') abseits = false;
     if (wer >= 2) {
       const a = zusatzPlatz(wer).abseits;
       if (abseits) {
@@ -3328,6 +3404,125 @@
   // Die zwei Fragen von oben, jetzt mit Adressat. Fuer `wer === 1` ist es Wort fuer Wort
   // dieselbe Antwort wie vorher - deshalb rufen die acht vorhandenen Stellen weiter
   // abseitsJetzt() und offtrackGilt() und muessen nicht angefasst werden.
+  // v1.4.46: meldet das Auto seit AP_ABSEITS_STOPP_MS ununterbrochen 0x00 (neben der Bahn, auf dem
+  // Ruecken), gibt der Autopilot (Einfuehrungsrunde, Gelb/Anfahrt, Aufstellung) kein Gas mehr, bis
+  // wieder ein gueltiger Code kommt. Gemessen an derselben Uhr wie das Abseits (offtrackSeit bzw.
+  // abseits.seit je Zusatzspieler), unabhaengig von der einstellbaren Einschaltverzoegerung - kurzes
+  // Abkommen in der Haarnadel (unter 1,5 s) faehrt weiter wie bisher. Nur auf der Bahn.
+  const AP_ABSEITS_STOPP_MS = 1500, AP_ABSEITS_BREMSE = 0.4;
+  function apAbseitsSeit(wer) {
+    const zPl = wer >= 2 && typeof zusatzPlatz === 'function' ? zusatzPlatz(wer) : null;
+    const seit = wer >= 2 ? (zPl && zPl.abseits ? zPl.abseits.seit : null) : offtrackSeit;
+    return seit === undefined ? null : seit;
+  }
+  function apLangeAbseits(wer) {
+    if (trackMode !== 'on') return false;
+    const seit = apAbseitsSeit(wer);
+    return seit !== null && rennZeitJetzt() - seit >= AP_ABSEITS_STOPP_MS;
+  }
+  // v1.4.48 BESTELLT: "Bei Gelb sollen die Autos, die nicht auf der Bahn sind, natuerlich auch nicht
+  // fahren!" Unter Gelb/Anfahrt reichen AP_GELB_ABSEITS_MS durchgehend 0x00, wenn der letzte gueltige
+  // Code eine Gerade war: das Gelb-Tempo liegt ueber der Leseschwelle (gelbZielFuer, mindestens
+  // GHOST_READ_MIN), auf der Geraden liest das Auto dort jede Kachel, und 0,5 s sind gut zehn Meldungen
+  // ohne Code. War der letzte Code eine Kurve oder Haarnadel, liest ein langsames Auto dort auch AUF der
+  // Bahn bis ueber eine Sekunde 0x00 (die NPCs warten deshalb 1,2 bzw. 1,8 s, GHOST_OFFTRACK_KURVE_MS/
+  // _HAARNADEL_MS) - dort gilt weiter AP_ABSEITS_STOPP_MS, damit das Gas in der Haarnadel nicht abstirbt.
+  const AP_GELB_ABSEITS_MS = 500;
+  function apGelbAbseits(wer) {
+    if (trackMode !== 'on') return false;
+    const seit = apAbseitsSeit(wer);
+    if (seit === null) return false;
+    const car = wer >= 2 ? (typeof zusatzPlatz === 'function' && zusatzPlatz(wer) ? zusatzPlatz(wer).car : null) : playerCar;
+    const kurve = car && car.lastCode !== undefined && car.lastCode !== null && typeof ghostTileInfo === 'function'
+      ? ghostTileInfo(car.lastCode).curve : 0;
+    return rennZeitJetzt() - seit >= (kurve >= 1 ? AP_ABSEITS_STOPP_MS : AP_GELB_ABSEITS_MS);
+  }
+  // v1.4.48: nach einem Wechsel Ausdruck -> Bahn (bahnCodeSperre, applyScanMode) gibt der Autopilot erst Gas,
+  // wenn das Auto seitdem einen gueltigen Bahncode gemeldet hat (onCarNotify loescht car.bahnCodeFehlt
+  // bei allem ausser 0x00/0xff). Auf dem Boden kommt keiner, also faehrt es nicht los - auch nicht die
+  // 1,5 s, die apLangeAbseits() sonst braucht, und auch nicht, wenn es dort 0xff statt 0x00 meldet.
+  // Ein Rennstart (abseitsStartGnade) und die automatische Aufstellung heben die Sperre auf: dort stehen
+  // die Autos absichtlich auf der Bahn, und ein stehendes Auto meldet oft keinen Code.
+  function apBahnCodeFehlt(wer) {
+    if (trackMode !== 'on') return false;
+    const car = wer >= 2 ? (typeof zusatzPlatz === 'function' && zusatzPlatz(wer) ? zusatzPlatz(wer).car : null) : playerCar;
+    return !!(car && car.bahnCodeFehlt);
+  }
+  // ---- RENNSTART: ALTES ABSEITS ZAEHLT NICHT (v1.4.48) ------------------------------------------
+  // GEMELDET: "Autos sollten die ersten 2 s eines Rennens toleriert werden, wenn sie noch von einem
+  // Vorrennen oder so als 'neben der Bahn' registriert sind ... mein Auto faehrt langsamer los, weil es
+  // noch 'neben der Strecke' anzeigt, obwohl ich es auf die Strecke gestellt habe." Der Abseits-Zustand
+  // ist eine Uhr je Auto, die nur Meldungen zuruecksetzen: ein Auto, das hochgehoben und hingestellt
+  // wurde und im Stand weiter 0x00 meldet (oder nichts Neues), trug das Abseits ins naechste Rennen -
+  // samt Gasdeckel (OFFTRACK_GAS), Anzeige und Auto-Gelb. Beim Countdown und beim Gruen wird es deshalb
+  // fuer alle Fahrerautos geloescht, und START_ABSEITS_GNADE_MS lang zaehlt 0x00 nicht (offtrackMelden).
+  // Danach gilt die normale Logik: wer dann noch 0x00 meldet, ist nach der Entprellung abseits.
+  const START_ABSEITS_GNADE_MS = 2000;
+  var abseitsGnadeBis = 0;   // var: offtrackMelden() steht weiter oben
+  function abseitsInStartGnade() { return rennZeitJetzt() < abseitsGnadeBis; }
+
+  // ---- SCHUETTELN STELLT EIN FAHRERAUTO WIEDER AUF DIE BAHN (v1.4.52) ----------------------------------
+  // GEMELDET (zu 1.4.51): "Bleibt ein Auto unter Gelb auf der Geraden stehen und meldet im Stand 'kein
+  // Code', gibt der Autopilot ihm erst wieder Gas, wenn es einen Code liest - nein. Es sollte wie sonst
+  // auch so funktionieren, dass es losfaehrt, sobald ich es auf die Bahn stelle und 'schuettele', weil
+  // dabei der Gyro ausschlaegt." Wie das Entparken der NPCs: shakeNotify() (90-ghosts.js) hoert bei einem
+  // Fahrerauto genau dann zu, wenn es fuer den Autopiloten als neben der Bahn gilt
+  // (spielerSchuettelBereit) - dieselbe Lernphase, derselbe Ruhewert, dieselbe Schwelle. Ein Auto, das
+  // faehrt (auch ueber Randsteine), ist nie in diesem Zustand, und ein abgeflogenes, das still liegt,
+  // erreicht die Schwelle nicht, solange es niemand anhebt.
+  // Ausgeloest: die Bahncode-Sperre faellt, die Abseits-Uhr beginnt neu, und SCHUETTEL_ANFAHR_MS lang
+  // zaehlt 0x00 nicht (das Auto steht noch und liest im Stand nichts). Danach gilt die normale Logik:
+  // 0,5 s (Gerade) bzw. 1,5 s (Kurve) 0x00, und es steht wieder.
+  const SCHUETTEL_ANFAHR_MS = 1500;
+  var schuettelGnadeBis1 = 0;   // var: offtrackMelden() steht weiter oben
+  function spielerSchuettelNr(car) {
+    if (!car) return 0;
+    if (car === playerCar) return 1;
+    return typeof zweiSpieler !== 'undefined' && zweiSpieler && typeof spielerNrVon === 'function'
+      ? Math.max(0, spielerNrVon(car) | 0) : 0;
+  }
+  // Die Spielernummer, wenn dieses Auto gerade per Schuetteln "aufgehoben" werden kann, sonst 0.
+  function spielerSchuettelBereit(car) {
+    if (trackMode !== 'on') return 0;
+    const nr = spielerSchuettelNr(car);
+    if (nr < 1) return 0;
+    if (car.bahnCodeFehlt) return nr;
+    const seit = apAbseitsSeit(nr);
+    return seit !== null && rennZeitJetzt() - seit >= AP_GELB_ABSEITS_MS ? nr : 0;
+  }
+  function spielerGeschuettelt(nr, car) {
+    const jetzt = rennZeitJetzt();
+    car.bahnCodeFehlt = false;
+    car.schuettelAt = jetzt;
+    if (nr >= 2) {
+      const a = zusatzPlatz(nr).abseits;
+      a.seit = null; a.wiederSeit = null; a.aktiv = false; a.gnadeBis = jetzt + SCHUETTEL_ANFAHR_MS;
+    } else {
+      offtrackSeit = null; offtrackWiederSeit = null; offtrackAktiv = false;
+      schuettelGnadeBis1 = jetzt + SCHUETTEL_ANFAHR_MS;
+      try { offtrackAnzeige(); } catch (e) { /* egal */ }
+    }
+    log((nr >= 2 ? 'Spieler ' + nr : 'Spieler 1') + ': geschuettelt, wieder auf der Bahn - der Autopilot faehrt an.', 'info');
+  }
+  function abseitsStartGnade() {
+    const jetzt = rennZeitJetzt();
+    abseitsGnadeBis = jetzt + START_ABSEITS_GNADE_MS;
+    bahnCodeSperre(false);
+    offtrackSeit = null; offtrackWiederSeit = null; offtrackAktiv = false;
+    if (typeof zusatzPlaetze === 'function') {
+      for (const z of zusatzPlaetze()) if (z && z.abseits) { z.abseits.seit = null; z.abseits.wiederSeit = null; z.abseits.aktiv = false; }
+    }
+    // NPCs: die laufende Abflug-Bestaetigung vergessen und dieselbe Frist; geparkte hebt startGhost() auf.
+    if (typeof garage !== 'undefined') {
+      for (const c of garage) {
+        const g = c && c.ghost;
+        if (!g || c.parked || g.nurOrt) continue;
+        g.offSince = 0;
+        g.gnadeBis = Math.max(g.gnadeBis || 0, jetzt + START_ABSEITS_GNADE_MS);
+      }
+    }
+    try { offtrackAnzeige(); } catch (e) { /* beim Laden */ }
+  }
   function abseitsJetztFuer(wer) {
     if (wer >= 2) return zusatzPlatz(wer).abseits.aktiv && trackMode === 'on';
     return abseitsJetzt();
@@ -3459,7 +3654,10 @@
       rawThrottle = ap.throttle;
       rawBrake = ap.brake;
       // Die Lenkung nur, wenn er sie fuehren DARF - siehe `lenkt` in autopilot().
-      if (ap.lenkt) steer = ap.steer;
+      // VIRTUELLE FAHRT: dort deckelt die gelbe Flagge nur das Tempo (Gas und Bremse
+      // bleiben beim Autopiloten), die LENKUNG bleibt beim Fahrer. Beim echten Auto
+      // uebernimmt der Autopilot beides - die normale Gelb-Regel bleibt unangetastet.
+      if (ap.lenkt && !(typeof vfAktiv === 'function' && vfAktiv())) steer = ap.steer;
     }
     physApLenkt = !!(ap && ap.lenkt);
     // Abseits der Bahn gedeckelt, und zwar VOR der Physik. Genau das war der Fehler beim
@@ -3473,6 +3671,8 @@
     // bevor 70-race.js seine Konstanten angelegt hat (temporale Todeszone beim Laden).
     try {
       if (fruehstartStrafeAktiv(1)) { rawThrottle = 0; rawBrake = Math.max(rawBrake, FRUEHSTART_BREMSE); }
+      // Ampel rot (v1.3.115): Gas gesperrt; wer Gas gibt, bekommt die Fruehstart-Strafe.
+      if (fruehstartGasPruefen(1, throttleY)) rawThrottle = 0;
       // Derby bei 0 % (v0.9.16): das Auto bleibt stehen - vorher wurde nur das Tempo EINMAL auf
       // null gesetzt, danach fuhr es mit dem Gas weiter.
       if (typeof derbyLaeuft !== 'undefined' && derbyLaeuft && derbyTot1) { rawThrottle = 0; rawBrake = 1; }
@@ -3623,6 +3823,8 @@
     if (offtrackGiltFuer(z.nr)) gas = Math.min(gas, OFFTRACK_GAS);
     try {
       if (fruehstartStrafeAktiv(z.nr)) { gas = 0; bremse = Math.max(bremse, FRUEHSTART_BREMSE); }
+      // Ampel rot (v1.3.115): Gas gesperrt; wer Gas gibt, bekommt die Fruehstart-Strafe.
+      if (fruehstartGasPruefen(z.nr, z.throttle)) gas = 0;
       if (typeof derbyLaeuft !== 'undefined' && derbyLaeuft && z.derbyTot) { gas = 0; bremse = 1; }
     } catch (e) { /* beim Laden */ }
     // Und das Rumpeln, an seinen eigenen Pad. Bis v0.6.45 waere es der Pad von Spieler 1

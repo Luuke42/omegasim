@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 Der '''Aufbau von OmegaSim''' beschreibt, woraus die App [[OmegaSim]] technisch besteht: in welchen Programmiersprachen sie geschrieben ist, wie aus rund 50 Quelldateien eine einzige auslieferbare HTML-Datei wird, wie dieselbe Datei als installierbare Web-App (PWA) und als Android-App läuft, wie sie sich selbst aktualisiert, wo sie Daten speichert, wie sie übersetzt und geprüft wird und wie der Motorklang entsteht. OmegaSim ist im Kern eine '''Web-Anwendung in JavaScript''', die ohne Server und ohne Installation im Browser läuft und mit dem [[Carrera HYBRID]] über [[Bluetooth Low Energy]] spricht. Die Android-Fassung legt um dieselbe Datei eine dünne Hülle aus Java. Der Quellcode steht unter der MIT-Lizenz.
 
 [[Datei:OmegaSim-Startseite.png|mini|Startseite von OmegaSim]]
@@ -11,9 +11,9 @@ Der '''Aufbau von OmegaSim''' beschreibt, woraus die App [[OmegaSim]] technisch 
 |-
 | Weitere Sprachen || HTML, CSS, Python (Werkzeuge), Java (Android-Hülle), Google Apps Script (Bestenliste), YAML (Bauaufträge), PowerShell und Batch (Hilfsskripte)
 |-
-| Auslieferung || eine Datei <code>index.html</code> (Fassung 1.2.9: rund 6,6 MB) plus Bilder, Klänge und Symbole
+| Auslieferung || eine Datei <code>index.html</code> (Fassung 1.3.93: rund 7,7 MB) plus Bilder, Klänge und Symbole
 |-
-| Quellen || 46 JavaScript-Dateien und 2 HTML-Teile in <code>src/</code>, in Ladereihenfolge nummeriert
+| Quellen || 56 JavaScript-Dateien und 2 HTML-Teile in <code>src/</code>, in Ladereihenfolge nummeriert
 |-
 | Bau || <code>python tools/build.py</code> (fügt <code>src/</code> zusammen, prüft, schreibt <code>sw.js</code> und <code>app-update.json</code>)
 |-
@@ -27,7 +27,7 @@ Der '''Aufbau von OmegaSim''' beschreibt, woraus die App [[OmegaSim]] technisch 
 |-
 | Sprachen der Oberfläche || Deutsch (Quelle), Englisch, Spanisch
 |-
-| Selbsttest || 522 Prüfungen (<code>stAdd</code>) in <code>src/95-selftest.js</code>
+| Selbsttest || 600 Prüfungen (<code>stAdd</code>) in <code>src/95-selftest.js</code>
 |-
 | Lizenz || MIT
 |}
@@ -231,6 +231,8 @@ Eine neue APK ist nur nötig, wenn sich die Android-Schicht ändert. Alles ander
 | <code>72b-spuren.js</code> || Spuren der schnellsten Runden in der Online-Bestenliste (WIP).
 |-
 | <code>73-meisterschaft.js</code> || Meisterschaft aus mehreren Rennen (experimentell).
+|-
+| <code>74-zufallsevents.js</code> || [[Zufallsevents]]: Plan und Zeitsteuerung der zufälligen Rennereignisse (experimentell).
 |-
 | <code>80-sound.js</code> || Der Ton: Motorklang, Effekte, Streckenkulisse.
 |-

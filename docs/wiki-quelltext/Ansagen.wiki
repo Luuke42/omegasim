@@ -1,4 +1,4 @@
-{{Stand|app=1.2.50|appdatum=30.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 [[Datei:OmegaSim-Rennen.png|mini|Das Cockpit; die Ansagen begleiten das Rennen]]
 Die '''Ansagen''' von [[OmegaSim]] sind gesprochene Meldungen, die während eines Rennens erscheinen: die Rundenzeit, der Zwischenstand, das Rennintro vor der Ampel, die Rennergebnis-Ansage und feste '''Funkmeldungen''' (Schaden, Tank, Reifen, Regen, Akku, Boxenstopp). Sie lassen sich unter '''Optionen → Ansagen''' einzeln ein- und ausschalten, mit eigener Stimme, Tempo, Tonhöhe und Hall.
 
@@ -28,6 +28,10 @@ Die '''Ansagen''' von [[OmegaSim]] sind gesprochene Meldungen, die während eine
 | '''Rennergebnis''' || „Gewonnen hat der rote Porsche …“ || einmal nach der Zielflagge
 |-
 | '''Rennintro''' || „Willkommen am Start. Das Rundenrennen beginnt gleich …“ || vor der Startampel (Countdown), nur lokale Starts
+|-
+| '''Rennereignis''' || Ansage zu einem Rennereignis (Pull Request von Playdater1974, seit 1.3.46) || beim Auftreten eines Rennereignisses
+|-
+| '''Zufallsevents''' || Ansage zu einem [[Zufallsevents|Zufallsevent]] || beim Auftreten eines Zufallsevents (seit 1.3.92)
 |-
 | '''Schaden''' || „Achtung, Schaden kritisch“ || Schadensbalken ≤ 10 %, nach Reparatur wieder scharf
 |-

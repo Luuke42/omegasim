@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 [[Datei:OmegaSim-Garage.png|mini|Die Garage von OmegaSim, in der die virtuelle Fahrt gestartet wird]]
 '''Virtuelles Fahren''' (in der App „Virtuell fahren“, in Arbeit) ist ein Modus von [[OmegaSim]], in dem ein simuliertes Auto ohne Bluetooth-Verbindung in einer 3D-Ansicht über die Strecke aus dem [[Strecken- und Raum-Editor]] fährt. Das virtuelle Auto ist für die App ein gewöhnliches Garagenauto, das sich seine Funkmeldungen selbst erzeugt; dadurch laufen Rundenzeit, Rennen, Telemetrie und Motorklang unverändert mit. Gefahren wird mit dem Tempo des gewählten Fahrgefühls und einem Querdynamikmodell nach dem Vorbild eines GT3-Rennwagens. Verwandt, aber getrennt davon ist '''Rennen simulieren''': Dort fahren NPC-Attrappen ohne Hardware mit der echten NPC-Steuerung (siehe [[NPC-Fahrverhalten]]); beides wird auf dieser Seite beschrieben, weil beide Autos ohne [[Carrera HYBRID]]-Hardware bewegen.
 
@@ -239,6 +239,12 @@ Zwei Simulations-NPCs liegen 5&nbsp;cm hintereinander (d_längs = 4,65 Einheiten
 | 1.1.46 || Virtuelle NPCs (0 bis 3)
 |-
 | 1.1.52 || Handling-Modus „Schnell“
+|-
+| 1.2.62 || Randstein-Rumpeln (vib-kerb) beim Überfahren von Randsteinen.
+|-
+| 1.3.50 || virtuelles Fahren mit echten Bahn- und Bodentexturen, Kamera „Fahrer am Rand“.
+|-
+| 1.3.57 || Kamera mit dem rechten Stick, HUD- und Cockpit-Ansicht im ACC-Stil.
 |}
 
 == Einzelnachweise ==

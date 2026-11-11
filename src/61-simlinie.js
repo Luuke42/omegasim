@@ -274,6 +274,8 @@
     Object.assign(e.config, cfgQ, { autoShift: true });
     e.spieler = 9;
     e.meldung = () => {}; e.ruck = () => {}; e.schaltTon = () => {};
+    // Erfolgsballast (73-meisterschaft.js): der Selbsttest misst damit die Rundenzeit-Wirkung.
+    if (o.ballastFaktor > 0) e.state.ballastFaktor = o.ballastFaktor;
     let i = 0, f = 0, t = 0, tStart = 0;
     const runden = [];
     while (runden.length < SIM_RUNDEN && t < 900) {

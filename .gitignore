@@ -46,3 +46,11 @@ target_practice.pptx
 
 # Originalfotos (bis 4080 px). Ins Repo kommen nur die verkleinerten Fassungen aus tools/bilder.py.
 photos/
+
+# Sketchfab-Rohmaterial (Porsche 911 GT3R, 1.3.103-1.3.131) - der Porsche ist aus der App
+# entfernt. Die Dateien bleiben lokal liegen, kommen aber nicht mehr ins Repo.
+sketchfab/
+
+# Entwuerfe ohne Bezug zur App (lokal behalten, nicht verteilen).
+mockup/manylaps_opus.html
+mockup/omegalab-studien.html

@@ -25,9 +25,13 @@ Stimme: Piper (piper-tts, im venv), Modell de_DE-kerstin-low von
 huggingface.co/rhasspy/piper-voices (Modell MIT, Datensatz "Kerstin" CC0). Weder das Modell
 noch Roh-WAVs kommen ins Repository, nur die fertigen Ogg-Clips.
 
-Englisch und Spanisch: es gibt keine englische oder spanische Piper-Frauenstimme ohne neuen
-Download. Die App zeigt dort die uebersetzten Texte und spricht sie ueber speechSynthesis
-(falls das Geraet eine Stimme hat), sonst nur Text.
+Englisch (seit 1.3.94, hier nachgetragen): Stimme en_US-ljspeech-medium aus derselben Sammlung, Clips
+tutorial_*_en.ogg im Abschnitt "en" von audio/tutorial.json. Die englischen Texte stehen nur dort
+(text/sprech, uebersetzt aus TUT_SPRUCH); --sprache en liest sie von dort und erzeugt die Clips mit
+derselben Kette neu. TEMPO_EN = 1,0 ist die Modellvorgabe. Das Modell (LJ Speech, gemeinfrei) ist
+dieselbe Stimme wie die englischen Rennansagen, siehe audio/CREDITS.md (Tutorial-Stimme).
+Spanisch: keine Clips. Die App spricht dort ueber speechSynthesis (falls das Geraet eine Stimme
+hat), sonst nur Text; Deutsch ohne Clip bleibt still.
 
 Kein Funkfilter: die Stimme soll freundlich und klar klingen. Nur Stille an den Enden
 abschneiden, leichtes Hochpassfilter gegen Brummen und eine Lautheitsnormalisierung
@@ -35,6 +39,7 @@ abschneiden, leichtes Hochpassfilter gegen Brummen und eine Lautheitsnormalisier
 
 Aufruf:
   python tools/voice_tutorial.py --python <venv\Scripts\python.exe> --modell <de_DE-kerstin-low.onnx>
+  python tools/voice_tutorial.py --sprache en --python <venv\Scripts\python.exe> --modell <en_US-ljspeech-medium.onnx>
   python tools/voice_tutorial.py --check
 Benoetigt ffmpeg und ffprobe im PATH.
 """
@@ -51,6 +56,7 @@ REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / 'audio'
 MANIFEST = OUT / 'tutorial.json'
 STIMME = 'de_DE-kerstin-low'
+STIMME_EN = 'en_US-ljspeech-medium'
 
 # Schluessel = Clipname in der App (TUT_SPRUCH in src/51b-tutorial.js). Keine Gedankenstriche.
 # Anzeigetext; was Piper sprechen soll, steht in SPRECH (fehlt ein Schluessel: derselbe Text).
@@ -121,6 +127,7 @@ SPRECH = {
 # Piper length_scale: 1 = Modellvorgabe, kleiner = schneller. Kerstin spricht langsam; 0,9 bleibt
 # deutlich und haelt die ganze Einfuehrung kurz (hoechstens vier Minuten mit allen Zeitlimits).
 TEMPO = 0.9
+TEMPO_EN = 1.0
 SATZPAUSE = 0.15
 
 
@@ -128,8 +135,15 @@ def sprech(key):
     return SPRECH.get(key, TEXTE[key])
 
 
-def datei(key):
-    return 'tutorial_%s_de.ogg' % key
+def datei(key, sprache='de'):
+    return 'tutorial_%s_%s.ogg' % (key, sprache)
+
+
+def manifest_lesen():
+    try:
+        return json.loads(MANIFEST.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
 
 
 def dauer_von(path):
@@ -166,42 +180,60 @@ def pruefen():
                 fehler.append('kein Ogg: ' + p.name)
         if not (0.3 < float(e.get('dauer') or 0) < 20):
             fehler.append('Dauer unplausibel: ' + key)
+    # Englisch: dieselben Schluessel, Dateien vorhanden, Stimme eingetragen.
+    en = m.get('en', {})
+    if en:
+        if set(en) != set(TEXTE):
+            fehler.append('EN-Schluessel passen nicht zu TEXTE')
+        if m.get('en_stimme') != STIMME_EN:
+            fehler.append('en_stimme ist nicht ' + STIMME_EN)
+        for key, e in en.items():
+            p = OUT / datei(key, 'en')
+            if e.get('datei') != p.name or not p.is_file() or p.stat().st_size == 0:
+                fehler.append('EN fehlt oder falsch benannt: ' + key)
     if fehler:
         print('Tutorial-Audiopruefung fehlgeschlagen:', file=sys.stderr)
         for t in fehler:
             print('  ' + t, file=sys.stderr)
         return 1
     gesamt = sum(float(e['dauer']) for e in clips.values())
-    print('OK: %d Tutorial-Clips, zusammen %.1f s.' % (len(clips), gesamt))
+    print('OK: %d Tutorial-Clips, zusammen %.1f s; englisch %d.' % (len(clips), gesamt, len(en)))
     return 0
 
 
-def erzeugen(python, modell, nur):
+def erzeugen(python, modell, nur, sprache='de'):
     for exe in ('ffmpeg', 'ffprobe'):
         if not shutil.which(exe):
             raise FileNotFoundError(exe + ' ist nicht im PATH')
     if not modell.is_file() or not Path(str(modell) + '.json').is_file():
         raise FileNotFoundError('Modell oder Modellkonfiguration fehlt: ' + str(modell))
-    try:
-        alt = json.loads(MANIFEST.read_text(encoding='utf-8')).get('de', {})
-    except (OSError, ValueError):
-        alt = {}
+    m = manifest_lesen()
+    alt = m.get(sprache, {})
+    if sprache == 'en':
+        # Die englischen Texte gibt es nur im Manifest (uebersetzt aus TUT_SPRUCH).
+        texte = {k: e['text'] for k, e in alt.items()}
+        sprechtexte = {k: e.get('sprech') or e['text'] for k, e in alt.items()}
+        if set(texte) != set(TEXTE):
+            raise ValueError('EN-Abschnitt im Manifest unvollstaendig: ' + ', '.join(sorted(set(TEXTE) - set(texte))))
+        tempo = TEMPO_EN
+    else:
+        texte, sprechtexte, tempo = TEXTE, {k: sprech(k) for k in TEXTE}, TEMPO
     neu = {}
     with tempfile.TemporaryDirectory(prefix='tutorial-') as temp:
         work = Path(temp)
-        for key, text in TEXTE.items():
-            ziel = OUT / datei(key)
+        for key, text in texte.items():
+            ziel = OUT / datei(key, sprache)
             if (nur and key not in nur and ziel.is_file() and key in alt and alt[key].get('text') == text
-                    and alt[key].get('sprech') == sprech(key)):
+                    and alt[key].get('sprech') == sprechtexte[key]):
                 neu[key] = alt[key]
                 continue
             roh = work / (key + '_raw.wav')
             subprocess.run([str(python), '-m', 'piper', '-m', str(modell), '-f', str(roh),
-                            '--length-scale', str(TEMPO), '--sentence-silence', str(SATZPAUSE)],
-                           input=sprech(key).encode('utf-8'), check=True,
+                            '--length-scale', str(tempo), '--sentence-silence', str(SATZPAUSE)],
+                           input=sprechtexte[key].encode('utf-8'), check=True,
                            env=dict(os.environ, PYTHONUTF8='1', PYTHONIOENCODING='utf-8'),
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            ogg = work / datei(key)
+            ogg = work / datei(key, sprache)
             # Stille vorn und hinten weg (dafuer zweimal umkehren), Hochpass 70 Hz, dann
             # -16 LUFS mit -1,5 dBTP Spitze; 22,05 kHz Mono-Vorbis reicht fuer Sprache.
             filt = ('silenceremove=start_periods=1:start_threshold=-50dB,areverse,'
@@ -213,9 +245,15 @@ def erzeugen(python, modell, nur):
                            check=True)
             shutil.copyfile(str(ogg), str(ziel) + '.tmp')
             os.replace(str(ziel) + '.tmp', ziel)
-            neu[key] = {'datei': datei(key), 'dauer': dauer_von(ziel), 'text': text, 'sprech': sprech(key)}
+            neu[key] = {'datei': datei(key, sprache), 'dauer': dauer_von(ziel), 'text': text, 'sprech': sprechtexte[key]}
             print('%-16s %5.2f s' % (key, neu[key]['dauer']))
-    manifest = {'stimme': STIMME, 'de': neu}
+    # Den Abschnitt der anderen Sprache behalten (bis 1.3.131 schrieb der Lauf nur 'de' und haette
+    # die englischen Clips aus dem Manifest geworfen).
+    manifest = dict(m)
+    manifest['stimme'] = STIMME
+    manifest[sprache] = neu
+    if sprache == 'en':
+        manifest['en_stimme'] = STIMME_EN
     with MANIFEST.open('w', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
     print('Zusammen %.1f s in %d Clips.' % (sum(e['dauer'] for e in neu.values()), len(neu)))
@@ -225,7 +263,8 @@ def erzeugen(python, modell, nur):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--python', help='Python mit installiertem piper-tts (z. B. venv\\Scripts\\python.exe)')
-    ap.add_argument('--modell', help='Pfad zu de_DE-kerstin-low.onnx (daneben die .onnx.json)')
+    ap.add_argument('--modell', help='Pfad zu de_DE-kerstin-low.onnx bzw. en_US-ljspeech-medium.onnx (daneben die .onnx.json)')
+    ap.add_argument('--sprache', choices=['de', 'en'], default='de', help='de (Kerstin, Texte hier) oder en (ljspeech, Texte aus dem Manifest)')
     ap.add_argument('--nur', nargs='*', default=None, help='Nur diese Clips neu erzeugen')
     ap.add_argument('--check', action='store_true', help='Manifest und Clips pruefen')
     args = ap.parse_args()
@@ -234,7 +273,7 @@ def main():
     if not args.python or not args.modell:
         ap.error('--python und --modell sind zum Erzeugen erforderlich')
     try:
-        return erzeugen(Path(args.python), Path(args.modell).expanduser().resolve(), set(args.nur or []))
+        return erzeugen(Path(args.python), Path(args.modell).expanduser().resolve(), set(args.nur or []), args.sprache)
     except (OSError, subprocess.CalledProcessError, ValueError) as exc:
         print('FEHLER: ' + str(exc), file=sys.stderr)
         return 1

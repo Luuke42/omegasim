@@ -174,6 +174,8 @@ class HostServer extends NanoHTTPD {
                 o.put("posAlter", Math.round((t - f.optDouble("posZeit", t)) * 1000) / 1000.0);
             }
             if (f.has("farbe")) o.put("farbe", f.get("farbe"));
+            // v1.4.33: automatische Gelbe Flagge dieses Telefons ("" = keine).
+            o.put("gelb", f.optString("gelb", ""));
             leute.add(o);
         }
         leute.sort((a, b) -> {
@@ -232,6 +234,7 @@ class HostServer extends NanoHTTPD {
             f.put("posZeit", t);
         }
         if (d.has("farbe")) f.put("farbe", kuerze(d.optString("farbe"), 16));
+        if (d.has("gelb")) f.put("gelb", kuerze(d.optString("gelb", ""), 80));
         String code = d.optString("strecke", "");
         if (!code.isEmpty()) strecke = kuerze(code, 400);
         f.put("aktualisiert", t);

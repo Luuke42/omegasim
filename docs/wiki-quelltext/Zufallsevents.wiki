@@ -1,0 +1,60 @@
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
+Die '''Zufallsevents''' (in der App unter Renneinstellungen, ''experimentell'', ab Werk aus) lassen im laufenden Rennen ab und zu etwas in einem zufälligen Bereich der Strecke passieren. Der Sprecher sagt es an, im Cockpit steht ein Banner mit Event, Ort und Restzeit, und der Bereich leuchtet auf der Karte des Rennen-Schirms in der Farbe des Ereignisses. Die Ereignisse wirken sich auf das Fahrverhalten und auf die [[NPC-Fahrverhalten|NPCs]] aus.
+
+== Einstellungen ==
+{| class="wikitable"
+! Name in der App !! Werte !! Standard !! Wirkung
+|-
+| Zufallsevents || an/aus || aus || Hauptschalter für die ganze Funktion
+|-
+| Häufigkeit || 1 bis 10 min || 3 min || mittlerer Abstand zwischen zwei Event-Anfängen, je Abstand zufällig ±40 %
+|-
+| Dauer || 10 bis 120 s || 30 s || wie lange ein Bereichs-Event läuft
+|-
+| je Event einzeln || an/aus || an || Verschmutzung, Gelbe Flagge, Ölspur, Trümmer, Tank-Leck getrennt schaltbar
+|}
+
+== Wie es funktioniert ==
+=== Der Plan statt eines Würfels je Takt ===
+Beim Rennstart wird '''einmal''' ein Plan gewürfelt: Zeitpunkte ab Grün, Ereignisart, Dauer und drei Zufallszahlen (Sektor, Teil, Seite bzw. Auto). Im Rennen läuft nur noch eine seltene Zeitsteuerung (<code>ZEV_TAKT_MS</code>&nbsp;=&nbsp;200&nbsp;ms) gegen die Rennuhr. Der Plan ist dieselbe Form wie der Wetterplan des WLAN-Mehrspielers: das startende Telefon schickt ihn mit (<code>mpPlanBauen</code>&nbsp;→&nbsp;<code>plan.zev</code>), alle anderen würfeln '''nicht''' selbst und folgen ihm ab derselben Grünzeit. Sektor und Teil werden auf jedem Telefon aus derselben Zufallszahl und derselben Strecke abgeleitet, also ist es überall derselbe Ort.
+
+=== Was im 45-ms-Takt passiert ===
+Absichtlich fast nichts. Bei den Spielern wird die Oberfläche (Grip) nur beim Betreten/Verlassen des Bereichs neu gesetzt, erkannt im <code>ZEV_TAKT_MS</code>-Zeitgeber. Die NPCs vergleichen je Takt <code>zevAktiv&nbsp;!==&nbsp;null</code>; nur während eines Events schauen sie in eine Kachelmaske (<code>Uint8Array</code>, beim Start gebaut).
+
+=== „Im Sektor“ ===
+Jedes Auto hat einen Ortungssatz mit <code>tileIndex</code>. Ein Auto ist im Bereich, wenn die Maske an seinem Teil 1 ist. Die Maske kommt aus den Sektoren der Strecke (weitere Start/Ziel-Teile oder die Editor-Sektoren, siehe [[Strecken- und Raum-Editor#Sektoren]]); ohne Sektoren, im Ausdruck-Modus oder ohne bekannte Strecke gilt die ganze Bahn.
+
+== Die Ereignisse ==
+{| class="wikitable"
+! Ereignis !! Farbe !! Wirkung
+|-
+| Verschmutzung || braun || Grip wie bei [[Wetter|Regen]]; das Feld wird im Bereich rutschig.
+|-
+| Ölspur || violett || noch weniger Grip (auf die volle Nässe obendrauf, Faktor 0,6), das Heck kommt beim Einlenken; NPCs fahren im Öl mit 60 % ihres Tempos.
+|-
+| Gelbe Flagge im Sektor || gelb || höchstens 80&nbsp;km/h; wer schneller bleibt, bekommt eine Durchfahrtsstrafe (in die Box, anhalten, nichts wird gemacht; sonst +20&nbsp;s im Ergebnis).
+|-
+| Trümmer || orange || auf der linken oder rechten Seite eines Teils (Warndreieck auf der Karte); NPCs weichen aus, wer nicht zur freien Seite lenkt, bekommt Schaden.
+|-
+| Tank-Leck || (kein Bereich) || ein zufälliges Spielerauto verbraucht doppelt bis zum nächsten Boxenstopp; braucht die Tanksimulation.
+|}
+
+== Grenzen ==
+* Nie im Countdown, in der Einführungsrunde, Pause, Tutorial oder Challenge und nie unter einer echten Gelben Flagge oder dem Safety Car; höchstens ein Event zugleich.
+* Trümmer brauchen eine bekannte Strecke (Ort und Seite), das Tank-Leck braucht die Tanksimulation.
+* Gilt für alle Spieler im lokalen Mehrspieler; im WLAN würfelt das startende Telefon für alle.
+* Seit 1.3.93 wird in einem '''kurzen''' Zeitrennen das erste Event nach vorn geholt (30–70 % der Renndauer, mindestens 2&nbsp;s), falls es sonst hinter dem Rennende läge; vorher konnte der Plan leer bleiben und ein eingeschaltetes Event passierte nie.
+
+* Selbsttests: „Zufallsevents v1.3.88“ und „Zufallsevents v1.3.93: kurzes Zeitrennen“ in <code>src/95-selftest.js</code>.
+
+== Quellen im Code ==
+* <code>src/74-zufallsevents.js</code>: <code>zevPlanBauen()</code>, <code>ZEV_ARTEN</code>, <code>ZEV_FARBE</code>, <code>ZEV_TAKT_MS</code>, <code>ZEV_GELB_*</code>, <code>ZEV_OEL_*</code>, <code>ZEV_TEILE_*</code>
+
+== Siehe auch ==
+* [[Rennarten]]
+* [[Wetter]]
+* [[NPC-Fahrverhalten]]
+* [[Strecken- und Raum-Editor#Sektoren]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Rennen]]

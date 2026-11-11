@@ -27,11 +27,14 @@
   // Tachoskala (mal REAL_SCALE) und rechnete selbst noch einmal mal REAL_SCALE - jede
   // gespeicherte Strecke war genau um 73,75 zu gross (seit Block H, 31.08.). Einmalig
   // zurueckgerechnet; kmV: 2 merkt, dass es geschehen ist (auch nach dem Laden einer alten
-  // Sicherung, die das Feld nicht hat, wird korrekt neu gerechnet).
+  // Sicherung, die das Feld nicht hat, wird korrekt neu gerechnet). Der Faktor ist FEST auf
+  // 73,75 und darf NICHT dem heutigen REAL_SCALE folgen: die Daten wurden unter dem alten
+  // Massstab gespeichert, und die Korrektur soll genau diesen Umrechnen.
   const SESSION_KM_V = 2;
+  const SESSION_KM_KORREKTUR = 1 / 73.75;   // der damalige REAL_SCALE, historisch fixiert
   function sessionKmKorrigieren(o) {
     if (o.kmV === SESSION_KM_V) return false;
-    const f = 1 / REAL_SCALE;
+    const f = SESSION_KM_KORREKTUR;
     for (const id of Object.keys(o.cars)) {
       const c = o.cars[id];
       if (typeof c.km === 'number') c.km = +(c.km * f).toFixed(3);
@@ -141,6 +144,13 @@
       wetter: typeof weather !== 'undefined' ? weather : null,
       simKm: weg.simKm,
       realKm: weg.realKm,
+      // v1.3.118: Verbrauch des Fahrerautos in dieser Sitzung (Liter). Nur wenn die
+      // Tanksimulation an war; sonst null, damit alte Sitzungen und Sim-aus gleichermassen
+      // nichts vortaeuschen. raceFuelBilanz() in 70-race.js kennt Start, Nachfuell- und
+      // Restmenge und rechnet daraus den Verbrauch.
+      verbrauchL: (typeof raceFuelBilanz === 'function'
+                   && typeof fuelSimOn === 'function' && fuelSimOn())
+        ? raceFuelBilanz().consumedL : null,
       autos: autos.map(c => ({
         name: c.name, kennung: c.kennung, rolle: c.role,
         // v1.1.3: Kennung und Farbe des Autos, fuer die Statistik (Foto, Farbe, km je Auto).
@@ -443,7 +453,9 @@
                    + ' &middot; ' + runden + ' Runden'
                    + (beste !== null ? ' &middot; beste ' + sessionFmt(beste) : '')
                    + (s.strecke ? ' &middot; <code>' + s.strecke + '</code>' : '')
-                   + ' &middot; ' + s.simKm.toFixed(1) + ' km</div>');
+                   + ' &middot; ' + s.simKm.toFixed(1) + ' km'
+                   + (s.verbrauchL != null ? ' &middot; ' + s.verbrauchL.toFixed(1) + ' l' : '')
+                   + '</div>');
       }
     }
     host.innerHTML = teile.join('');
@@ -459,7 +471,7 @@
     const z = (x) => String(x === null || x === undefined ? '' : x)
       .replace(/[";\n]/g, ' ');
     const komma = (x) => String(x).replace('.', ',');
-    const zeilen = ['Datum;Zeit;Modus;Strecke;Auto;Kennung;Rolle;Runde;Zeit (s);km sim;m echt'];
+    const zeilen = ['Datum;Zeit;Modus;Strecke;Auto;Kennung;Rolle;Runde;Zeit (s);km sim;m echt;Verbrauch (l)'];
     for (const s of o.sessions) {
       const tag = (s.zeit || '').slice(0, 10);
       const uhr = (s.zeit || '').slice(11, 19);
@@ -467,7 +479,8 @@
         c.laps.forEach((ms, i) => {
           zeilen.push([tag, uhr, z(s.modus), z(s.strecke), z(c.name), z(c.kennung),
                        z(c.rolle), i + 1, komma((ms / 1000).toFixed(3)),
-                       komma(s.simKm.toFixed(3)), komma((s.realKm * 1000).toFixed(1))].join(';'));
+                       komma(s.simKm.toFixed(3)), komma((s.realKm * 1000).toFixed(1)),
+                       komma(s.verbrauchL != null ? s.verbrauchL.toFixed(1) : '')].join(';'));
         });
       }
     }
@@ -603,11 +616,17 @@
     const beste = zeiten.length ? Math.min.apply(null, zeiten) / 1000 : null;
     const letzte = zeiten.length ? zeiten[zeiten.length - 1] / 1000 : null;
     // v1.0.12: Gesamtzeit und Strafe fuer verpasste Pflichtstopps (Meisterschaft des Leiters).
-    const summe = imRennen ? zeiten.reduce((a, b) => a + b, 0) : null;
+    // v1.4.54: ab Gruen (Vorlauf bis zur ersten Runde), wie die lokale Wertung.
+    const summe = imRennen ? zeiten.reduce((a, b) => a + b, 0) + (zeiten.length && typeof raceVorlaufMs === 'number' ? raceVorlaufMs : 0) : null;
     const strafe = imRennen && typeof racePenaltyMs === 'function' ? racePenaltyMs() : null;
-    return { id: mp.id, name: mp.name || 'ohne Namen', laps: zeiten.length,
+    // Fruehstart-Zusatzrunde (v1.3.132): eine Runde weniger melden, solange sie nicht gefahren ist -
+    // die anderen Telefone pruefen das Ziel gegen raceLimit (mpZielPruefen), der Host kennt kein Feld dafuer.
+    const zielPlus = imRennen && typeof fruehstartZielPlus === 'function' ? fruehstartZielPlus(1) : 0;
+    return { id: mp.id, name: mp.name || 'ohne Namen', laps: Math.max(0, zeiten.length - zielPlus),
              letzte, beste, summe, strafe,
-             abgaenge: (typeof offtrackZaehler !== 'undefined') ? offtrackZaehler : 0 };
+             abgaenge: (typeof offtrackZaehler !== 'undefined') ? offtrackZaehler : 0,
+             // v1.4.33: Abflug eines EIGENEN Autos unter automatischer Gelber Flagge ('' = keiner).
+             gelb: typeof autoGelbMpFeld === 'function' ? autoGelbMpFeld() : '' };
   }
 
   async function mpBerichten() {
@@ -787,6 +806,7 @@
     chSetzen('race-flying', !!plan.fliegend);
     chSetzen('race-pit-required', String(plan.pit || 0));
     if (plan.tank) chSetzen('race-fuel-start', plan.tank);
+    if (plan.autoGelb) chSetzen('race-auto-gelb', plan.autoGelb);
     if (plan.meister && typeof meisterMpUebernehmen === 'function') meisterMpUebernehmen(plan);
     // BESTELLT: "der Host kann die Renneinstellungen (Tempo, Handling, Beschleunigung,
     // Schaden, Reifenverschleiss) auf alle erzwingen, wie es die Arcade/Pro-Presets bei den
@@ -819,6 +839,8 @@
     // Ziel eines Tank-Lecks) und schickt ihn mit wie den Wetterplan; die anderen wuerfeln nicht selbst
     // (startRaceCountdown -> zevRennStart(plan)). null = aus, auch wenn ein Mitspieler sie an hat.
     plan.zev = typeof zevPlanFuerMp === 'function' ? zevPlanFuerMp() : null;
+    // v1.4.33: die automatische Gelbe Flagge gilt fuer alle wie beim startenden Telefon.
+    plan.autoGelb = typeof autoGelbModus === 'function' ? autoGelbModus() : 'aus';
     // BESTELLT: "der Host erzwingt die Renneinstellungen auf allen." Wenn der Schalter an ist,
     // schickt der Host seine eigene aktive Abstimmung (Arcade/Pro/...) als `preset` mit; die
     // Mitglieder wenden sie beim Uebernehmen an (mpRennenUebernehmen).
@@ -1008,6 +1030,7 @@
       mpPosTakt();
       mpZeichnen(d);
       mpEndePruefen(d);
+      if (typeof autoGelbMpPruefen === 'function') autoGelbMpPruefen(d);
       mpZielPruefen(d);
       mpBereitSchirm(d);
       mpSay(t('verbunden') + ', ' + (d.fahrer || []).length + ' '

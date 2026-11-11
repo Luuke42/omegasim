@@ -1,4 +1,4 @@
-{{Stand|app=1.2.45|appdatum=29.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 [[Datei:OmegaSim-Rennen.png|mini|Das Cockpit während eines Rennens]]
 Die '''Rennarten''' (in der App „Renntyp“) von [[OmegaSim]] legen fest, wie eine Sitzung abläuft, wann sie endet und wie gewertet wird. Es gibt sieben Renntypen: Training, Time Attack, Qualifying, Runden, Endurance, NPC Knockout und Demolition Derby. Alle benutzen dieselbe Rennmaschine in <code>src/70-race.js</code>: Startaufstellung, [[Startampel]], Rundenzählung über das Start/Ziel-Muster der [[Strecke]], Zielflagge und Ergebnis. Bis zu zehn Rennen lassen sich zu einer '''Meisterschaft''' mit Punktewertung verbinden. Welche Renntypen wählbar sind, hängt seit 1.2.4 davon ab, ob das Auto die Kunststoffschiene liest („Auf der Bahn“) oder gedruckte Muster („Ausdruck“).
 
@@ -18,7 +18,7 @@ Die '''Rennarten''' (in der App „Renntyp“) von [[OmegaSim]] legen fest, wie 
 |-
 | Meisterschaft || bis 10 Events, Punkte F1, klassisch oder linear, +1 für schnellste Runde
 |-
-| Status || Rennfunktion WIP; Time Attack, Knockout, Derby, fliegender Start, Sektoren, automatisches Aufstellen, Rennpause, Rennintro und Rennstand-Ansage experimentell
+| Status || Rennfunktion WIP; Time Attack, Knockout, Derby, fliegender Start, Sektoren, automatisches Aufstellen, Rennpause, Rennintro und Rennstand-Ansage experimentell; [[Zufallsevents]] experimentell
 |-
 | Quelldateien || <code>src/70-race.js</code>, <code>src/73-meisterschaft.js</code>, <code>src/90-ghosts.js</code>, <code>src/71-rammen.js</code>, <code>src/50-drive.js</code>
 |}
@@ -77,6 +77,8 @@ Ein '''Punkteschema''' ist eine Tabelle „Platz → Punkte“. Das bekannte F1-
 | Sektoren (experimentell) || 1 (aus) bis 4 || 1 || Überfahrten je Runde; auf der Bahn bestimmt die Strecke die Zahl || <code>sector-count</code>
 |-
 | Fliegender Start (experimentell) || an/aus || aus || Einführungsrunde im Formationstempo, Autopilot fährt || <code>race-flying</code> → <code>raceFlying</code>
+|-
+| Zufallsevents (experimentell) || an/aus; Häufigkeit 1–10 min; Dauer 10–120 s || aus || zufällige Ereignisse im Rennen, siehe [[Zufallsevents]] || <code>race-zev</code>, <code>race-zev-min</code>, <code>race-zev-dauer</code>
 |-
 | Frühstart: +5 s auf die erste Runde || an/aus || an || aus: 2 s Ausbremsen nach Grün || <code>race-fruehstart-zeit</code>
 |-

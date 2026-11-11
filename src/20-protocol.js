@@ -550,6 +550,8 @@
       // v0.10.5: der Rohmodus heisst jetzt RC und laeuft durch rcGas() (Auslaufen, Bremse,
       // Rueckwaerts nach zweitem Druck). Drift gibt es nicht mehr.
       let throttle = physJetzt ? physOutThrottle : rcGas(throttleY);
+      // v1.3.132: Ampel rot auch im RC-Modus - physicsStep() kehrt dort vor der Sperre zurueck.
+      if (!physJetzt) { try { if (fruehstartGasPruefen(1, throttleY)) throttle = 0; } catch (e) { /* beim Laden */ } }
       if (driftModus) steer = driftGegenlenken(steer);
       // v1.1.26: eine laufende Fahrtenwiedergabe sendet genau das Aufgenommene (siehe runPlayback).
       const mw = typeof macroWiedergabeWert === 'function' ? macroWiedergabeWert() : null;
@@ -605,6 +607,7 @@
     let steer = physJetzt ? z.outSteer : z.steer;
     if (!z.rcLage) z.rcLage = rcLageNeu();
     let throttle = physJetzt ? z.outThrottle : rcGas(z.throttle, undefined, z.rcLage);
+    if (!physJetzt) { try { if (fruehstartGasPruefen(z.nr, z.throttle)) throttle = 0; } catch (e) { /* beim Laden */ } }
     // ---- DIE ZWEI GLOBALEN, DIE NICHT IN config STEHEN -----------------------------
     //
     // BESTELLT: "Globale einstellungen gelten für beide autos gleichermaßen."

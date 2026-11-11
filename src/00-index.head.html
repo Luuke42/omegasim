@@ -2033,6 +2033,7 @@
     font-size: clamp(8px, 1.1vw, 11px); letter-spacing: .12em;
     color: var(--gt3-strip-ink); text-transform: uppercase; }
   .schirm-kopf b { color: var(--gt3-tile-ink); letter-spacing: .06em; }
+  .grid-starttyp { font-weight: 700; color: var(--k-blau, #3d8bff); white-space: nowrap; }
   .schirm-fuss { font-size: clamp(8.5px, 1.15vw, 12px); color: var(--gt3-strip-ink);
     letter-spacing: .06em; }
   /* Der Kopf des Boxenschirms traegt links das grosse P. Eine eigene Zeile im Raster
@@ -2645,6 +2646,28 @@
     font-family: 'Times New Roman', Times, serif; display: inline-flex; align-items: center; justify-content: center; }
   .k-tutorial-knopf.k-wiki:hover { background: var(--k-blau); color: var(--k-blau-text); border-color: var(--k-blau); }
 
+  /* Patchnotes-Knopf unten rechts auf dem Startbildschirm (Rechteck mit drei Linien) und das
+     sich oeffnende, scrollbare Fenster mit den letzten drei Versions-Abschnitten. */
+  .home-patchnotes-knopf { position: fixed; right: 14px; bottom: 14px; z-index: 300; width: 46px; height: 40px;
+    background: #14161c; color: var(--k-blau); border: 1px solid var(--k-blau); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .home-patchnotes-knopf:hover { background: var(--k-blau); color: var(--k-blau-text); }
+  .home-patchnotes-knopf svg { width: 22px; height: 22px; }
+  .home-patchnotes-ueber { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,.66);
+    display: flex; align-items: center; justify-content: center; font-family: var(--k-font); }
+  .home-patchnotes-ueber[hidden] { display: none !important; }
+  .home-patchnotes-fenster { width: min(680px, 94vw); max-height: 82vh; background: #111319;
+    border-top: 4px solid var(--k-blau); display: flex; flex-direction: column; }
+  .home-patchnotes-kopf { display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; border-bottom: 1px solid #2a2d36; }
+  .home-patchnotes-kopf b { letter-spacing: .12em; text-transform: uppercase; font-size: 15px; }
+  .home-patchnotes-kopf button { background: none; border: none; color: var(--ink); font-size: 22px;
+    line-height: 1; cursor: pointer; }
+  .home-patchnotes-inhalt { overflow-y: auto; padding: 8px 16px 18px; }
+  .home-patchnotes-inhalt h3 { color: var(--k-blau); margin: 14px 0 6px; font-size: 15px; }
+  .home-patchnotes-inhalt ul { padding-left: 20px; line-height: 1.6; margin: 0 0 10px; }
+  .home-patchnotes-inhalt li { margin-bottom: 6px; }
+
   /* Optionszeilen: die angewaehlte Zeile rot hinterlegt wie bei ACC */
   .opt-row.menu-nav-sel { outline: 2px solid #fff; background: rgba(0,163,224,.22); }
 
@@ -2839,6 +2862,9 @@
   /* v1.1.40: die eigene Position neben "Runde" (raceCockpitPosition, 50-drive.js). */
   .gt3-pos { margin-left: .6em; font-family: var(--gt3-font); font-weight: 700; letter-spacing: .02em;
              font-size: clamp(13px, 2.2vw, 22px); color: var(--gt3-ink, inherit); text-shadow: var(--gt3-glow); vertical-align: -.12em; }
+  /* v1.4.33: Erfolgsballast der Meisterschaft neben "Runde" (meisterBallastCockpit), nur Text. */
+  .gt3-ballast { margin-left: .6em; font-size: .9em; letter-spacing: .04em; color: #ffd166; white-space: nowrap; }
+  body[data-cockpit="acc"] #race-dash .gt3-ballast { margin-left: auto; }
   .gt3-left .gt3-act { min-height: 34px; padding: clamp(3px, .5vw, 5px) 2px;
     font-size: clamp(9px, 1.4vw, 12.5px); }
   .gt3-left .gt3-half .gt3-act svg { width: clamp(13px, 2.6vw, 17px); height: clamp(13px, 2.6vw, 17px); }
@@ -3147,6 +3173,26 @@
   .studie-rt[data-zustand="frueh"] { background: #b3263f; }
   .studie-rt[data-zustand="gut"] { background: #1d4f8a; }
   /* ---- MEISTERSCHAFT (73-meisterschaft.js), nach mockup/meisterschaft.html ---- */
+  /* v1.4.54 (WIP): Event-Intro, ACC-Stil - ein schraeges dunkles Band mit blauer Kante faehrt ein, steht,
+     faehrt aus. Nur transform/opacity (Compositor), keine Bedienung, darunter bleibt alles erreichbar. */
+  .meister-intro:not([hidden]) { position: fixed; inset: 0; z-index: 5100; display: flex; align-items: center;
+    justify-content: center; pointer-events: none; overflow: hidden; }
+  .meister-intro .mi-band { width: min(92vw, 760px); padding: 14px 26px 16px 30px; background: rgba(8,11,17,.94);
+    border-left: 8px solid #00a3e0; box-shadow: 0 10px 40px rgba(0,0,0,.6); transform: translateX(-120vw) skewX(-12deg);
+    opacity: 0; color: #eef0f4; text-transform: uppercase; }
+  .meister-intro.an .mi-band { animation: mi-ein 3.2s cubic-bezier(.2,.8,.2,1) forwards; }
+  .meister-intro .mi-band > div { transform: skewX(12deg); }
+  .mi-kopf { color: #00a3e0; font-weight: 900; letter-spacing: .18em; font-size: clamp(11px, 1.6vw, 15px); }
+  .mi-titel { font-weight: 900; letter-spacing: .05em; font-size: clamp(22px, 4.6vw, 46px); line-height: 1.1; margin: 2px 0 4px; }
+  .mi-zeile { color: #c9d1dc; letter-spacing: .1em; font-size: clamp(11px, 1.8vw, 17px); }
+  .mi-extra { color: #ffd166; letter-spacing: .08em; font-size: clamp(10px, 1.5vw, 14px); margin-top: 3px; }
+  .mi-extra:empty { display: none; }
+  @keyframes mi-ein {
+    0% { transform: translateX(-120vw) skewX(-12deg); opacity: 0; }
+    14% { transform: translateX(0) skewX(-12deg); opacity: 1; }
+    84% { transform: translateX(0) skewX(-12deg); opacity: 1; }
+    100% { transform: translateX(120vw) skewX(-12deg); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .meister-intro.an .mi-band { animation-duration: 3.2s; animation-timing-function: steps(1, end); } }
   .meister-schirm:not([hidden]) { position: fixed; inset: 0; z-index: 390; display: flex; flex-direction: column;
     background: #0c0e14 url(img/meisterschaft-bg.jpg) center/cover; color: #eef0f4;
     font-family: "Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
@@ -3222,6 +3268,9 @@
   .ms-stand sup { font-size: .65em; color: #c08cff; margin-left: 2px; }
   .ms-band { display: inline-block; width: 5px; height: 1em; vertical-align: middle; margin-right: 6px; }
   .ms-rl { font-size: .7em; padding: 1px 4px; background: #6b5bd6; margin-left: 6px; letter-spacing: .05em; text-transform: uppercase; }
+  /* v1.4.33: Erfolgsballast je Fahrer (Zwischenstand, Aufstellung, Bereitschaftsschirm). */
+  .ms-kg { font-size: .78em; color: #ffd166; margin-left: 6px; letter-spacing: .03em; white-space: nowrap; }
+  .ms-gz .ms-l .wip-tag { margin-left: 4px; text-transform: none; }
   .ms-titel { display: block; font-size: 1.15em; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
   .ms-meister { font-size: 1.3em; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; color: #f5c542; padding: 4px 0; }
   .ms-aufst { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; font-size: .9em; margin-top: 3px; direction: rtl; }
@@ -3812,6 +3861,9 @@
   body.vf-an #hud-toast-wrap { position: fixed; z-index: 400; top: max(52px, env(safe-area-inset-top)); left: 50%; right: auto;
     transform: translateX(-50%); pointer-events: none; }
   .vf-bild { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  /* v1.3.113 Quality: leichte Vignette (dunkle Bildraender) fuer den kinematografischen Look. */
+  .vf-vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,.38) 100%); }
   /* HUD im Stil von ACC (WIP, 60d-virtuell.js vfHud): kantige, fast schwarze Kacheln mit schmaler
      Akzentlinie in --k-blau, kleine gesperrte Grossbuchstaben, grosse Zahlen in der schmalen App-Schrift.
      Eine Groesse (--vf-s) fuer alles, aus Breite UND Hoehe: auf dem Handy quer (800x370) etwa 13 px, am
@@ -3868,7 +3920,7 @@
   .vf-tank-bar { display: block; width: 100%; height: .35em; background: rgba(255,255,255,.13); }
   .vf-tank-bar > i { display: block; height: 100%; background: var(--vf-linie); transform-origin: 0 50%; }
   /* Knoepfe oben rechts im selben Stil */
-  .vf-knoepfe { position: absolute; right: max(8px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); display: flex; gap: 3px; }
+  .vf-knoepfe { position: absolute; right: max(8px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
   .vf-knoepfe button { background: var(--vf-bg); color: #f3f4f6; border: 0; border-top: 2px solid var(--vf-linie); border-radius: 0;
     font-family: var(--k-font); font-size: calc(var(--vf-s) * .72); font-weight: 700; text-transform: uppercase; letter-spacing: .12em;
     padding: .55em 1em; min-height: 2.6em; min-width: 2.6em; cursor: pointer; }
@@ -3880,6 +3932,37 @@
   .vf-wip { position: absolute; left: max(8px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom));
     background: var(--vf-bg); color: var(--vf-dim); font-size: calc(var(--vf-s) * .62); font-weight: 700; text-transform: uppercase;
     letter-spacing: .12em; padding: .3em .6em; }
+  /* v1.3.122: Beruehrungs-Steuerung (Touch) fuer die virtuelle Fahrt. Links lenken, rechts Gas/Bremse -
+     oben Gas, unten Bremse. Beide analog wie Stick und Pedal im Cockpit. Erscheint nur auf Touch-
+     Geraeten ohne Gamepad (siehe vfTouch in 60d-virtuell.js); ueber den Knopf "Steuerung" oben rechts
+     laesst sie sich auch von Hand an-/ausschalten. */
+  .vf-touch { position: absolute; inset: 0; pointer-events: none; }
+  .vf-touch[hidden] { display: none; }
+  .vf-touch-lenk { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom));
+    width: min(34vw, 38vh, 190px); height: min(34vw, 38vh, 190px); border-radius: 50%;
+    background: rgba(8,10,14,.5); border: 2px solid var(--vf-linie); touch-action: none; pointer-events: auto;
+    display: grid; place-items: center; }
+  .vf-touch-lenk::before { content: ""; position: absolute; inset: 50% auto 0 50%; width: 1px; height: 50%;
+    background: rgba(255,255,255,.12); transform: translateX(-50%); }
+  .vf-touch-lenk::after { content: ""; position: absolute; inset: 0 50% 0 auto; width: 50%; height: 1px;
+    background: rgba(255,255,255,.12); transform: translateY(-50%); }
+  .vf-touch-gas { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom));
+    width: min(20vw, 26vh, 120px); height: min(34vw, 38vh, 190px); border-radius: 12px;
+    background: rgba(8,10,14,.5); border: 2px solid var(--vf-linie); touch-action: none; pointer-events: auto;
+    display: grid; place-items: center; }
+  .vf-touch-gas::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+    background: rgba(255,255,255,.12); transform: translateX(-50%); }
+  .vf-touch-knauf { pointer-events: none; background: var(--vf-linie); opacity: .85; }
+  .vf-touch-lenk .vf-touch-knauf { width: 42%; height: 42%; border-radius: 50%; }
+  .vf-touch-gas .vf-touch-knauf { width: 70%; height: 32%; border-radius: 8px; }
+  .vf-touch-hinweis { position: absolute; pointer-events: none; color: var(--vf-dim); font-size: calc(var(--vf-s) * .52);
+    font-weight: 700; text-transform: uppercase; letter-spacing: .12em; text-align: center; white-space: nowrap; }
+  .vf-touch-lenk .vf-touch-hinweis { left: 50%; bottom: 7%; transform: translateX(-50%); }
+  .vf-touch-gas .vf-touch-hinweis { left: 50%; transform: translateX(-50%); }
+  .vf-touch-gas .vf-touch-gas-oben { top: 4%; }
+  .vf-touch-gas .vf-touch-gas-unten { bottom: 4%; }
+  .vf-touch-gas .vf-touch-knauf { transition: transform .1s linear; }
+  .vf-knoepfe button.vf-an { background: var(--vf-linie); color: var(--k-blau-text, #04070c); }
   /* Hochkant und sehr schmal: Reifen und Tank ruecken naeher, damit der Block in die Breite passt. */
   @media (max-width: 520px) {
     .vf-acc-kern { width: 12em; }
@@ -5669,11 +5752,24 @@
         <span class="home-lade-dreh" id="home-lade-dreh"></span><span class="home-lade-text" id="home-lade-text" data-i18n-skip></span>
       </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.3.92</span></span>
+        <span class="foot-ver">v<span id="app-version">1.4.67</span></span>
         <span data-i18n-skip>OmegaSim &middot; MIT</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
         <button id="home-install" hidden>Als App installieren</button>
+      </div>
+    </div>
+    <!-- Patchnotes-Knopf unten rechts: oeffnet die letzten drei Versions-Abschnitte. -->
+    <button type="button" id="home-patchnotes" class="home-patchnotes-knopf" aria-label="Patchnotes anzeigen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div id="home-patchnotes-ueber" class="home-patchnotes-ueber" hidden>
+      <div class="home-patchnotes-fenster" role="dialog" aria-label="Patchnotes">
+        <div class="home-patchnotes-kopf">
+          <b>Patchnotes</b>
+          <button type="button" id="home-patchnotes-schliessen" aria-label="Schließen">&times;</button>
+        </div>
+        <div class="home-patchnotes-inhalt" id="home-patchnotes-inhalt"></div>
       </div>
     </div>
   </section>
@@ -5827,7 +5923,7 @@
       </div>
 
       <div class="gt3-left">
-        <div class="gt3-box"><div class="gt3-lbl">Runde<span class="gt3-pos" id="race-pos" data-i18n-skip hidden></span></div>
+        <div class="gt3-box"><div class="gt3-lbl">Runde<span class="gt3-ballast" id="race-ballast" data-i18n-skip hidden></span><span class="gt3-pos" id="race-pos" data-i18n-skip hidden></span></div>
           <div class="gt3-val" id="race-lap-count">0</div></div>
         <!-- BESTELLT: "Boxenstopp und Gelbe Flagge Knoepfe nebeneinander und so gross wie
              Bahn und Fahrmodus (Pro) und dafuer Rundenzahl und Zeit vergroessern." Dieselbe
@@ -6434,7 +6530,8 @@
            unabhaengig vom Schirmblaettern: erscheint vor dem Countdown. -->
       <div class="gt3-gridschirm" id="race-gridscreen" hidden>
         <div class="schirm-kopf"><b>Bringe die Autos in Position</b>
-          <span id="grid-kopf-info" data-i18n-skip></span></div>
+          <span id="grid-kopf-info" data-i18n-skip></span>
+          <span id="grid-starttyp" class="grid-starttyp" data-i18n-skip></span></div>
         <div class="grid-bild" id="grid-bild" data-i18n-skip></div>
         <div class="grid-timeattack" id="grid-timeattack" data-i18n-skip hidden></div>
         <p class="grid-hinweis" id="grid-hinweis">Alle Autos stehen auf den Teilen <b>vor</b> Start/Ziel. Erst wenn du Start/Ziel zum ersten Mal &uuml;berf&auml;hrst, beginnt Runde&nbsp;1.</p>
@@ -6867,6 +6964,9 @@
       <p class="muted">Das Motormodell folgt dem Ansatz von engine-sim unter der MIT-Lizenz; Zylinderzahlen, Drehzahlgrenzen und Kurbelwellenwinkel stammen aus dessen Motordefinitionen. Die vollst&auml;ndige Aufstellung mit allen Messwerten steht in der Datei CREDITS im Audio-Ordner.</p>
       <p class="dank-quelle" data-i18n-skip><a href="https://github.com/ange-yaghi/engine-sim"
          target="_blank" rel="noopener noreferrer">github.com/ange-yaghi/engine-sim</a> &middot; audio/CREDITS.md</p>
+      <h3 style="font-size:14px; margin:18px 0 6px 0">Woher die 3D-Modelle kommen</h3>
+      <p class="muted">Die Autos der virtuellen Fahrt stammen aus dem freien Rennspiel Speed Dreams: Vulture V5.R, Lynx 220, FMC GT4 und Boxer 96. Modelle, Texturen und Fahrzeugdaten stehen unter der GNU General Public License, Version 2 oder sp&auml;ter. Umgewandelt mit tools/sd_auto.py (Innenraum entfernt, Texturen verkleinert); die Lizenz- und Quellenangabe liegt im Ordner des jeweiligen Autos.</p>
+      <p class="dank-quelle" data-i18n-skip><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener noreferrer">gnu.org/licenses/old-licenses/gpl-2.0</a> &middot; img/autos/*/LIZENZ.txt</p>
       <!-- BESTELLT: "in den Credits das GitHub von engine sim verlinken und ggf. die wiss.
            Artikel zu den Funktionen - aber nichts halluzinieren!" Nur Modelle, die im Code
            wirklich stecken, und jede Quelle per Suche bestaetigt (DOI/Verlag). -->
@@ -6891,8 +6991,29 @@
     <div class="card subpage" id="sub-patchnotes">
       <button class="misc-back goto-tab" data-tab="options">&larr; Optionen</button>
       <h2>Patchnotes</h2>
+      <p class="muted"><b><span data-i18n-skip>1.4</span></b></p>
+      <ul class="muted" id="patchnotes-14" style="padding-left:20px; line-height:1.7">
+        <li>Setup je Auto (WIP): neu sind Bremsbalance, ABS, TC, Motorkennfeld, Heckfl&#252;gel und Reifendruck, jeweils mit Erkl&#228;rung im &#9432; und einer Zeile, was die Einstellung bewirkt. Was im gew&#228;hlten Fahrgef&#252;hl nicht wirkt, ist ausgegraut. Das Motorkennfeld &#228;ndert auch den Verbrauch und die Tank-Rundenangabe. W&#228;hrend die Reifenrunden berechnet werden, dreht sich das Streckenteil als Ladesymbol, und das Fenster bleibt bedienbar. Bei vorgegebenem Fahrgef&#252;hl fahren alle mit Standard.</li>
+        <li>Meisterschaft: Behoben, dass ein NPC, der hinter der Startlinie losfuhr, eine Runde zu wenig bekam und Spieler 1 deshalb gewann; auch die Auslaufrunde nach der Zielflagge z&#228;hlt jetzt. Bei gleicher Rundenzahl gewinnt, wer zuerst &#252;ber die Linie kommt (Ergebnis, &#220;bersicht und Meisterschaft gleich). Neu (WIP): kurze Einblendung je Event mit vorbeifahrenden Autos, Ansagen &#8222;Willkommen zur Meisterschaft&#8220; mit Anzahl der Events, Event-Intro, Sieger je Rennen und am Ende Fanfare mit dem Meister; einzeln schaltbar unter Optionen &gt; Ansagen.</li>
+        <li>Einparken neu abgestimmt: Safety Car und NPC-Box parken etwas weiter innen (etwa ein Viertel weniger zum Rand) und lenken am Ende l&#228;nger gegen, damit sie gerade stehen. Beim Tankort &#8222;Streckenrand &#252;ber Querlage&#8220; ebenfalls weniger weit an den Rand. NPCs fahren in Kurven innen nicht mehr ganz bis an die Kante (h&#246;chstens 95 %), damit sie dort seltener abfliegen.</li>
+        <li>Unter Gelb und nach dem Wechsel von Ausdruck auf Bahn f&#228;hrt ein stehendes Fahrerauto wieder an, sobald du es auf die Bahn stellst und kurz sch&#252;ttelst (Gyro, dieselbe Erkennung wie beim Wiedereinsetzen der NPCs), auch wenn es im Stand noch keinen Code liest. Ohne Sch&#252;tteln bleibt ein Auto neben der Bahn stehen; die automatische Gelbe Flagge z&#228;hlt das Sch&#252;tteln als Wiederaufnahme.</li>
+        <li>Behoben: Ein Auto, das auf dem Boden stand, fuhr nach dem Wechsel von Ausdruck auf Bahn von selbst los. Im Ausdruck-Modus z&#228;hlte die App die Meldungen &#8222;kein Code&#8220; als neben der Bahn; nach dem Wechsel galt das Auto sofort als lange abgeflogen, und unter dem Autopiloten (etwa nach einer automatischen Gelben Flagge oder in der Einf&#252;hrungsrunde) bekam es Gas. Jetzt z&#228;hlt &#8222;neben der Bahn&#8220; nur im Bahn-Modus, und nach dem Wechsel gibt der Autopilot einem Auto erst Gas, wenn es einen g&#252;ltigen Bahncode gelesen hat. Unter Gelb f&#228;hrt ein Auto neben der Bahn nicht mehr (nach 0,5 s, in Kurven nach 1,5 s); ein abgeflogener NPC bleibt stehen. Beim Start gelten alle Autos 2 s lang als auf der Bahn, auch wenn sie noch vom Vorrennen als neben der Bahn gemeldet sind: kein gedrosseltes Losfahren, keine automatische Gelbe Flagge direkt beim Start.</li>
+        <li>Behoben: Im Bahn-Modus beschleunigte ein Auto, das neben der Bahn oder auf dem R&#252;cken lag, unter dem Autopiloten (Einf&#252;hrungsrunde, Gelb, Aufstellung) auf rund 100 km/h. Jetzt gibt der Autopilot nach 1,5 s am St&#252;ck neben der Bahn kein Gas mehr und bremst leicht, bis das Auto wieder auf der Bahn ist; kurzes Abkommen, etwa in der Haarnadel, bleibt wie bisher. Au&#223;erdem z&#228;hlen die Gas- und Bremstrigger nicht mehr als voll gedr&#252;ckt, wenn ein Gamepad sie als gedr&#252;ckt mit Wert 0 meldet (L3 funktioniert weiter).</li>
+        <li>Erfolgsballast in der Meisterschaft (WIP, im Planer unter &#8222;F&#252;r die ganze Meisterschaft&#8220;; Aus, Leicht bis 30 kg, Mittel bis 50 kg, Stark bis 80 kg): Vor jedem Event bekommt der Punktef&#252;hrende den meisten Ballast, der Letzte keinen, im ersten Event niemand. Spielerautos werden dadurch tr&#228;ger beim Beschleunigen und Bremsen, NPCs etwas langsamer, beides im Mittel gleich stark (50 kg kosten rund 2 % Rundenzeit). Der Ballast steht als &#8222;+X kg&#8220; im Zwischenstand, in der Startaufstellung und im Cockpit; im Mehrspieler gibt ihn das leitende Telefon vor.</li>
+        <li>Setup je Auto (WIP): In der Garage hat jedes Spielerauto einen Knopf &#8222;Setup&#8220;. Im Fenster w&#228;hlst du Reifentyp (weich, mittel, hart, Regen) und Starttank (5 bis 110 l), jeweils mit &#8222;ca. N Runden&#8220; auf der Strecke im Editor; &#8222;Standard&#8220; setzt zur&#252;ck. Das Setup gilt beim n&#228;chsten Start f&#252;r dieses Auto. Im WLAN-Rennen mit vorgegebenem Fahrgef&#252;hl, in Challenges und in Meisterschaften mit festem Fahrgef&#252;hl fahren alle mit dem Standard-Setup.</li>
+        <li>Automatische Gelbe Flagge (WIP, Renneinstellungen; Aus, Nur bei NPCs, Bei allen Autos): Fliegt im Rennen ein Auto ab (NPC: erkannter Abflug, Spielerauto: mindestens 1 s neben der Bahn), kommt Gelb mit Ansage &#8222;Gelbe Flagge. &lt;Auto&gt; hat einen Unfall gebaut&#8220; (mit Sektor, wenn Sektoren aktiv sind). Alle fahren gedrosselt weiter, dein Auto im Autopiloten, sodass du aufstehen und das Auto wieder einsetzen kannst. F&#228;hrt es wieder 3 s lang, startet die Anfahrt-Ampel, danach Gr&#252;n mit Ansage, und der Controller &#252;bernimmt. Im WLAN folgen die anderen Telefone (daf&#252;r braucht es die neue APK bzw. den aktualisierten Host).</li>
+        <li>Einf&#252;hrung: Die englische Stimme ist jetzt ljspeech (gemeinfrei, dieselbe Stimme wie die englischen Rennansagen) statt einer Stimme mit ungekl&#228;rter Lizenz.</li>
+        <li>Latenz: Die Funkpriorit&#228;t (Spieler schnellstes Verbindungsintervall, NPCs, Safety Car und Reinigungswagen ausgewogen) wird jetzt auch im Training ohne Ampel, beim Losfahren, 5 s nach dem Verbinden und nach einem Rollenwechsel gesetzt; bisher bekamen dort alle Autos, auch die NPCs, das schnellste Intervall. Mit zwei Spielern zeichnet das Cockpit im Sendetakt ohne erzwungene Layout-Berechnungen (gemessen bei gedrosselter CPU: Arbeit je Takt p95 von 35 bis 85 ms auf 9 bis 15 ms, Takt stabil um 50 ms); die Rundenliste wird nur bei &#196;nderung neu gebaut, Telemetrie au&#223;erhalb der Funkverarbeitung gespeichert. Neu unter Optionen &#8594; System: &#8222;Funk je Auto&#8220; (WIP) mit Weg, Z&#228;hlern, Meldeabstand und Funkstufe f&#252;r jedes Auto.</li>
+        <li>Einparken und Ausparken verbessert: Das Safety Car (und ein NPC mit Tankort &#8222;Rand&#8220;) z&#228;hlt Radius-2-Kurven, Engstelle und Boxengasse jetzt als freien Platz, beginnt das Einparken fr&#252;her statt das Gas zu drosseln und rechnet den Rollweg mit dem echten Tempo; es soll so auf dem gew&#228;hlten Teil und am Rand stehen. Beim Ein- und Ausparken bekommt das Safety Car kurz die schnellste Funkverbindung. Die Ausparkfolge aus der Box lenkt schw&#228;cher und k&#252;rzer (70 %), das Schl&#228;ngeln in der Einf&#252;hrungsrunde ist wieder wie vorher. Die Randphasen rollen trotz schnellerem Formationstempo denselben Weg. NPC: maximale Querlage (WIP) begrenzt nur noch die Au&#223;enseite der Kurve, innen fahren die NPCs voll. Fr&#252;hstart: Zusatzrunde nur f&#252;r den Bestraften (nur im Rundenrennen), Durchfahrt auch f&#252;r Spieler 2 und 3 und ohne Ableisten +20 s, Gas bei Rot auch im RC-Modus gesperrt, in Challenges immer 5 s. Einmalig wird eine noch gespeicherte H&#246;chstgeschwindigkeit aus 1.3.121 zur&#252;ckgesetzt. Apps Script: Die L&#246;schfunktion ist entfernt und eingesandte Texte sind besser gegen Formeln gesch&#252;tzt (bitte neu bereitstellen).</li>
+        <li>Virtuelles Fahren aufger&#228;umt: Das Porsche-Modell ist wieder entfernt (die App ist dadurch rund 10 MB kleiner, eine gespeicherte Porsche-Wahl f&#228;llt auf den V5.R zur&#252;ck); die Autos stammen alle aus Speed Dreams (GPL). Schaden und eine im virtuellen Fahren gesetzte gelbe Flagge wirken nach dem Beenden nicht mehr im echten Fahren, Time Attack wertet jede Runde nur einmal. Performance-Grafik wieder wie in 1.3.92 (mit Bodenglanz), Quality mit funktionierenden Schatten; scheitert ein Shader, f&#228;hrt die App mit einfacherer Grafik weiter, und ein Grafikverlust beendet die Fahrt mit Meldung. Die DualSense-Vibration auf R2 gilt nur noch im virtuellen Fahren. Das deutsche Tutorial bleibt ohne Clip still statt mit englischer Ger&#228;testimme. Fehlende &#220;bersetzungen erg&#228;nzt.</li>
+        <li>Nachbesserungen zu 1.3.93 bis 1.3.131: Die Meisterschaftsansage (jetzt WIP) wartet, bis die Ergebnisansage gesprochen ist, statt sie abzubrechen, und sagt auf Englisch den Sieger richtig an. &#8222;Kein Tempoverlust neben der Bahn&#8220; ist als WIP gekennzeichnet. Die Patchnotes f&#252;r 1.3.93 bis 1.3.131 sind nachgetragen. Selbsttests wieder streng (Kachelphase), L3-Test in jeder Sprache, fehlende spanische Texte erg&#228;nzt; Wiki berichtigt (Zufallsevents-Tabelle, Abschnitt Sektoren, Fahrgef&#252;hl mit elf S&#228;tzen und den Modi Gran Hybrismo und Assetto Carrera, Versionsangaben).</li>
+      </ul>
       <p class="muted"><b><span data-i18n-skip>1.3</span></b></p>
       <ul class="muted" id="patchnotes-13" style="padding-left:20px; line-height:1.7">
+        <li>1.3.127–1.3.131: NPCs fahren ab Werk die Ideallinie „Innen (gemittelt)“, und die Option „NPC: maximale Querlage“ (Optionen → NPCs, neu in 1.3.123) steht ab Werk auf 90 %: Ein NPC nutzt höchstens 90 % seiner bisherigen Linie nach außen, damit er mit neuerer Firmware, die weiter außen fahren lässt, seltener abfliegt; 100 % ist die alte, volle Linie. Neu ist die Meisterschaftsansage (WIP, Optionen → Ansagen, ab Werk an): Nach jedem Event sagt sie, welches es war und was als Nächstes kommt, nach dem letzten den Gesamtsieger. Die L3-Statusansage kommt jetzt auch bei Controllern, die L3 ohne Wert melden, und sagt ohne gewählten Inhalt wenigstens den Rennstand. Die Neuvermessung der Geschwindigkeit aus 1.3.121 ist zurückgenommen, die echten Autos fahren sich wieder wie vorher. Ein Versuch, das Einparken kurvenbewusst zu machen, wurde wieder zurückgenommen, ebenso das automatische Bremsen der Fahrerautos nach dem Rennende aus 1.3.128.</li>
+        <li>1.3.108–1.3.126: Virtuelles Fahren: zwei Grafik-Modi, „Performance“ (wie bisher, für schwache Handys) und „Quality“ (WIP, Garage → Virtuelles Auto → Grafik) mit echten Sonnenschatten für das eigene Auto und die NPCs, besserem Licht und Lack, Tonemapping, Vignette und höherer Auflösung; danach feiner abgestimmt (linear gerechneter Boden, Glanz je Pixel, schärfere Schattenkarte, Schatten an den Rädern, spiegelnde Scheiben). Auf Handys ohne Gamepad gibt es eine Touch-Steuerung (links lenken, rechts Gas und Bremse), die sich von selbst einschaltet, dazu einen Kamera-Knopf; der Knopf „Steuerung“ schaltet die Touch-Steuerung von Hand. Neue Option „Kein Tempoverlust neben der Bahn“ (WIP, Garage → Virtuelles Auto, ab Werk aus): Mit „An“ fährt das Auto neben der Bahn ungebremst weiter, sonst bremst der Teppich wie bisher; das Zurücksetzen nach 2,5 s daneben bleibt. Die gelbe Flagge deckelt beim virtuellen Fahren nur noch das Tempo, die Lenkung bleibt beim Fahrer. Die Fahrer-Kamera ist stärker gezoomt, die Verfolgerkameras sind näher, die Kamera „Statisch“ ist entfernt. Das Porsche-Modell wurde feiner (geglättete Flächen, volle Auflösung, Lackierung aus der Livery-Textur). Behoben: Die NPCs waren nicht zu sehen, die Schattenkarte zeichnete ein weißes Quadrat um das Auto, und in 1.3.124 und 1.3.125 startete das virtuelle Fahren wegen eines Shader-Fehlers nicht. Für Studien gibt es Konsolen-Schalter für ein festes Sichtfeld, einen festen NPC-Seed und ein JSON-Protokoll.</li>
+        <li>1.3.114–1.3.120: Das Formationstempo (Einführungsrunde beim fliegenden Start) ist für alle NPCs 20 % höher; die Scan-Runde wird dabei nur leicht schneller. Der Aufstellungsschirm zeigt den Starttyp (fliegend oder stehend). Die Strafe für einen Frühstart ist wählbar (WIP, Renneinstellungen): Durchfahrt durch die Boxengasse (Vorgabe), 5 s Zeitstrafe, Zusatzrunde oder keine; während Rot ist das Gas gesperrt. NPCs lenken beim Abfahren vom Startplatz weniger hin und her. Die Sitzungsstatistik zeigt den Verbrauch je Sitzung in Litern, auch im CSV-Export, wenn die Tanksimulation an ist. L3-Statusansage (WIP, Optionen → Ansagen): Ein Druck auf den linken Stick sagt je nach Auswahl Bestzeit (Vorgabe), Restzeit oder Restrunden, Tank, Schaden und Reifen; L3 schaltet dafür nicht mehr den Vollbildmodus. OmegaLab-Studienaudit: Eine Studienfahrt zählt nur gewertete Runden, der Server rechnet Reaktionszeit-Median und beste Runde nach, die Selbstüberschätzung nutzt den Durchschnittsrang wie die Auswertung, Formeln in eingesandten Daten werden abgewehrt, und Studiendaten lassen sich löschen. Eine eigene Außenlage-Option für virtuelle NPCs (1.3.116) ist in 1.3.123 wieder entfallen.</li>
+        <li>1.3.93–1.3.107: Zufallsevents kommen jetzt auch in kurzen Zeitrennen (der Plan blieb leer, wenn das erste Event hinter dem Rennende lag). MAX-NPCs fahren Radius-2-Kurven ab Werk mit 90 % statt 80 %. Virtuelles Fahren: Kollision, Schaden und Windschatten (dreckige Luft) mit den NPCs; Derby, NPC-Knockout und Time Attack lassen sich virtuell fahren; die Autos stehen in einer Startaufstellung in zwei Reihen hinter der Startlinie; die virtuellen NPCs sind etwas langsamer abgestimmt (85 %); neue Knöpfe für Box und Gelbe Flagge, und gelbe Flagge und Einführungsrunde bremsen auch die virtuellen NPCs; eine gedämpfte Nickbewegung (die Nase senkt sich beim Bremsen und hebt sich beim Beschleunigen); als weiteres Automodell kam ein Porsche 911 (992) GT3 R aus Sketchfab (CC BY 4.0) hinzu. Das Tutorial spricht auch Englisch, mit eigenen Aufnahmen. OmegaLab: Die Voraussetzungen der Studien nennen jetzt auch das virtuelle Fahren. DualSense: Nahe der Drehzahlgrenze wird der rechte Trigger spürbar fester. Auf dem Startschirm öffnet ein Patchnotes-Knopf die letzten Versionen.</li>
         <li>Zufallsevents (experimentell, Renneinstellungen, ab Werk aus): H&#228;ufigkeit 1 bis 10 min, Dauer 10 bis 120 s, jedes Event einzeln schaltbar. Getroffen wird ein zuf&#228;lliger Sektor, ohne Sektoren die ganze Bahn; der Bereich leuchtet auf der Karte in der Farbe des Events, ein Banner im Cockpit zeigt Event, Ort und Restzeit, und der Sprecher sagt es an. Verschmutzung: Grip wie bei Regen. &#214;lspur: noch weniger Grip, das Heck kommt beim Einlenken, NPCs fahren langsam. Gelbe Flagge im Sektor: h&#246;chstens 80 km/h; wer schneller bleibt, bekommt eine Durchfahrtsstrafe (in die Box, anhalten, nichts wird gemacht; sonst +20 s im Ergebnis). Tr&#252;mmer auf der linken oder rechten Seite eines Teils (Warndreieck auf der Karte): NPCs weichen aus, wer nicht zur freien Seite lenkt, bekommt Schaden. Tank-Leck: ein zuf&#228;lliges Spielerauto verbraucht doppelt bis zum n&#228;chsten Boxenstopp. Gilt f&#252;r alle Spieler im lokalen Mehrspieler; im WLAN w&#252;rfelt das startende Telefon, alle anderen folgen.</li>
         <li>Streckeneditor: Die Pr&#252;fung, ob die Strecke geschlossen ist, war immer &#8222;ja&#8220;; jetzt stimmt sie, und beim Schlie&#223;en der Runde spielt wieder der &#8222;Strecke fertig&#8220;-Klang.</li>
         <li>Sektoren &#252;ber den Streckeneditor (WIP): Der neue Knopf &#8222;Sektoren&#8220; bietet &#8222;Automatisch festlegen&#8220; (Anzahl aus der Teilezahl: 8 Teile keine Sektoren, 15 zwei, 25 drei, h&#246;chstens zehn; gleich lange Abschnitte auf Teilefugen), &#8222;Manuell festlegen&#8220; (Strecke antippen oder mit Steuerkreuz und &#10005; die Teile w&#228;hlen, an denen ein Sektor beginnt, nochmal entfernt, dann &#8222;Fertig&#8220;) und &#8222;Aus&#8220;. Die Grenzen sind d&#252;nne gr&#252;ne Linien, gespeichert mit der Strecke; der Streckencode bleibt gleich. Im Rennen misst jedes Auto die Sektoren &#252;ber seinen Kachelz&#228;hler; verz&#228;hlt es sich (etwa beim Abflug), steht der Sektor auf &#8222;&#8211;&#8220; statt einer falschen Zeit, die Runde z&#228;hlt weiter. Zus&#228;tzliche Start/Ziel-Teile haben weiter Vorrang, im Ausdruck-Modus bleibt der Regler.</li>
@@ -10241,14 +10362,28 @@
           auf der Bahn, und ein Autopilot ohne Querregelung w&uuml;rde es in die
           Bande fahren.</small></div>
         <label class="tgl"><input type="checkbox" id="race-flying"><span></span></label></div>
-      <div class="opt-row"><div class="opt-label">Fr&uuml;hstart: +5&nbsp;s auf die erste Runde<small>Wer
-          vor Gr&uuml;n losf&auml;hrt, bekommt 5&nbsp;s auf seine erste Runde &ndash; auch
-          Spieler&nbsp;2 und 3 und im WLAN-Mehrspieler. Aus: das Auto wird nach Gr&uuml;n
-          stattdessen 2&nbsp;s lang ausgebremst.</small></div>
-        <label class="tgl"><input type="checkbox" id="race-fruehstart-zeit" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Strafe f&uuml;r Fr&uuml;hstart<span class="wip-tag">WIP</span><small>Wer
+          bei roter Ampel Gas gibt, bekommt die gew&auml;hlte Strafe &ndash; auch Spieler&nbsp;2
+          und 3 und im WLAN-Mehrspieler. W&auml;hrend Rot ist das Gas gesperrt. Durchfahrt: beim
+          n&auml;chsten Boxenstopp abzuleisten, sonst +20&nbsp;s im Ergebnis. Zusatzrunde: nur im
+          Rundenrennen eine Runde mehr f&uuml;r diesen Fahrer; in den anderen Rennarten gilt die
+          Durchfahrt. In Challenges immer 5&nbsp;s Zeitstrafe.</small></div>
+        <select id="race-fruehstart-strafe">
+          <option value="pit" selected>Durchfahrt (Boxengasse)</option>
+          <option value="5s">5&nbsp;s Zeitstrafe</option>
+          <option value="extra">Zusatzrunde</option>
+          <option value="keine">Keine</option>
+        </select></div>
       <div class="opt-row"><div class="opt-label">Gelbe Flagge deaktivieren<small>An: Der Knopf
           &bdquo;Gelbe Flagge&ldquo; und das Halten der Boxentaste rufen kein Gelb mehr aus.</small></div>
         <label class="tgl"><input type="checkbox" id="race-gelb-aus"><span></span></label></div>
+      <!-- v1.4.33 AUTOMATISCHE GELBE FLAGGE (74b-autogelb.js). Vorgabe aus, Erklaerung nur im <small> (i-Popup). -->
+      <div class="opt-row"><div class="opt-label">Automatische Gelbe Flagge<span class="wip-tag">WIP</span><small>Meldet ein NPC (oder bei &bdquo;Bei allen Autos&ldquo; auch ein Spielerauto) im Rennen, dass es neben der Bahn ist, ruft die App selbst Gelb aus und sagt an, welches Auto wo verunfallt ist. Alle anderen fahren gedrosselt weiter, Spielerautos im Autopiloten &ndash; du kannst also aufstehen und das Auto wieder auf die Bahn stellen (NPCs kurz sch&uuml;tteln). F&auml;hrt es danach 3&nbsp;s lang wieder, startet die Anfahrt-Ampel; sind die Lampen aus, ist Gr&uuml;n, und du f&auml;hrst wieder selbst. Mehrere Abfl&uuml;ge: erst wenn alle wieder fahren. Nicht in Countdown, Einf&uuml;hrungsrunde, Pause, Tutorial und Challenge, und nicht, wenn schon Gelb ist. Spieler gelten erst nach 1&nbsp;s neben der Bahn als abgeflogen. Im WLAN-Mehrspieler folgen die anderen Telefone.</small></div>
+        <select id="race-auto-gelb">
+          <option value="aus" selected>Aus</option>
+          <option value="npc">Nur bei NPCs</option>
+          <option value="alle">Bei allen Autos</option>
+        </select></div>
       <div class="opt-row"><div class="opt-label">Weiche Reifen verboten<span class="wip-tag">WIP</span><small>An: In diesem
           Rennen gibt es keine weichen Reifen. Die Reifenwahl im Boxenschirm &uuml;berspringt &bdquo;weich&ldquo;, und wer
           beim Start weiche Reifen drauf hat, bekommt mittlere &ndash; auch Spieler&nbsp;2 und 3. Aus (Standard): alle
@@ -12105,6 +12240,35 @@
         <label class="tgl"><input type="checkbox" id="setting-announce-pit" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Akku ansagen<small>Einmal, wenn der Akku unter 25&nbsp;% f&auml;llt. Erst nach dem Laden wieder scharf.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce-battery"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Meisterschaft ansagen <span class="wip-tag">WIP</span>
+        <small>Nach jedem Event, welches Event es war und was als N&auml;chstes kommt; nach dem letzten, dass die Meisterschaft vorbei ist und wer gesamt gewonnen hat.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-meister" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Meisterschaft: Willkommen <span class="wip-tag">WIP</span>
+        <small>Vor dem ersten Event: &bdquo;Willkommen zur Meisterschaft&ldquo; mit der Zahl der Events.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-meister-willkommen" data-preset-skip checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Meisterschaft: Event-Intro <span class="wip-tag">WIP</span>
+        <small>Beim Start jedes Events: welches Event, Format, Umfang, Wetter und ob Erfolgsballast gilt. Die kurze Einblendung mit vorbeifahrenden Autos kommt immer.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-meister-intro" data-preset-skip checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Meisterschaft: Sieger je Rennen <span class="wip-tag">WIP</span>
+        <small>Nach jedem Rennen mit Punkten: wer es gewonnen hat. Nach der Ergebnisansage, nie hinein.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-meister-sieger" data-preset-skip checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Meisterschaft: Abschluss <span class="wip-tag">WIP</span>
+        <small>Nach dem letzten Event die Fanfare und der Meister mit seinen Punkten (statt des Satzes &bdquo;Meisterschaft vorbei&ldquo;).</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-meister-abschluss" data-preset-skip checked><span></span></label></div>
+      <div class="opt-head">L3-Statusansage</div>
+      <div class="opt-row"><div class="opt-label">L3-Statusansage <span class="wip-tag">WIP</span>
+        <small>Ein Druck auf L3 (linken Stick) sagt den aktuellen Stand an. Inhalt darunter w&auml;hlbar; die Bestzeit ist die Vorgabe.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-status-announce" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Bestzeit ansagen<small>Die beste Rundenzeit des laufenden Rennens bzw. der letzten Messungen.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-status-best" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Restzeit / Restrunden ansagen<small>Noch verbleibende Runden bzw. Zeit bis zum Rennende, je nach Modus.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-status-rest"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Tank ansagen<small>F&uuml;llstand in Litern.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-status-tank"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Schaden ansagen<small>Besch&auml;digung in Prozent.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-status-schaden"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Reifen ansagen<small>Mischung und Zustand des schlechtesten Reifens.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-status-reifen"><span></span></label></div>
     </div>
     <div class="card subpage" id="sub-opt-ghosts">
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
@@ -12216,12 +12380,12 @@
           <button type="button" data-step="1" aria-label="mehr">+</button>
           <span class="opt-val" id="ghost-max-r1-val">52%</span>
         </div></div>
-      <div class="opt-row"><div class="opt-label">MAX: Tempo in Radius-2-Kurven <span class="wip-tag">WIP</span><small>Die weite 30-Grad-Kurve (dreifacher Radius). Standard 80&nbsp;%. Haarnadel und Engstelle fahren MAX-NPCs nach den normalen Regeln: H&ouml;chsttempo in der Haarnadel und Mindesttempo gelten weiter.</small></div>
+      <div class="opt-row"><div class="opt-label">MAX: Tempo in Radius-2-Kurven <span class="wip-tag">WIP</span><small>Die weite 30-Grad-Kurve (dreifacher Radius). Standard 90&nbsp;%. Haarnadel und Engstelle fahren MAX-NPCs nach den normalen Regeln: H&ouml;chsttempo in der Haarnadel und Mindesttempo gelten weiter.</small></div>
         <div class="opt-slider">
           <button type="button" data-step="-1" aria-label="weniger">&minus;</button>
-          <input type="range" id="ghost-max-r2" min="0.3" max="1" step="0.01" value="0.8">
+          <input type="range" id="ghost-max-r2" min="0.3" max="1" step="0.01" value="0.9">
           <button type="button" data-step="1" aria-label="mehr">+</button>
-          <span class="opt-val" id="ghost-max-r2-val">80%</span>
+          <span class="opt-val" id="ghost-max-r2-val">90%</span>
         </div></div>
       <div class="opt-row"><div class="opt-label">MAX: Bremspunkt <span class="wip-tag">WIP</span><small>Wo ein MAX-NPC vom Geradentempo auf das Kurventempo geht: eine Schiene vor der Kurve (Standard) oder erst am Beginn des Kurventeils. Vor der Haarnadel bremsen alle NPCs wie bisher zwei Teile vorher.</small></div>
         <select id="ghost-max-bremspunkt">
@@ -12487,6 +12651,18 @@
           <option value="folge" selected>Einparkfolge (wie Safety Car)</option>
           <option value="rand">Streckenrand &uuml;ber Querlage</option>
         </select></div>
+      <div class="opt-row"><div class="opt-label">NPC: maximale Querlage<span class="wip-tag">WIP</span>
+        <small>Wie weit ein NPC auf der Au&szlig;enseite einer Kurve fahren darf; die Innenseite bleibt
+          voll. Das Firmware-Update erlaubt den NPCs, weit au&szlig;en zu fahren, sodass sie &ouml;fter
+          abfliegen. Vorgabe 90&nbsp;% der bisherigen Linie &ndash; 10&nbsp;% Raum zum
+          Au&szlig;enkantenrand. 100&nbsp;% ist die alte, volle Linie.</small></div>
+        <select id="npc-querlage">
+          <option value="1">100&nbsp;%</option>
+          <option value="0.95">95&nbsp;%</option>
+          <option value="0.9" selected>90&nbsp;%</option>
+          <option value="0.85">85&nbsp;%</option>
+          <option value="0.8">80&nbsp;%</option>
+        </select></div>
       <div class="opt-row"><div class="opt-label">NPC: Boxenstopp im freien Fahren
           <small>Ob auch au&szlig;erhalb eines Rennens gepittet wird. Beim Losfahren aus der
           Garage stellt man meist Regler ein, und ein Auto, das dabei zehn Sekunden steht,
@@ -12559,10 +12735,10 @@
           <button type="button" class="mw-preset" data-linemodel="lateapex">Late Apex</button>
           <button type="button" class="mw-preset" data-linemodel="dreistufig">3-stufig</button>
           <button type="button" class="mw-preset" data-linemodel="mitte">Fahrbahnmitte</button>
-          <button type="button" class="mw-preset" data-linemodel="innen3">Innen (gemittelt)</button>
+          <button type="button" class="mw-preset sel" data-linemodel="innen3">Innen (gemittelt)</button>
           <button type="button" class="mw-preset" data-linemodel="aussenin">Außen-Innen</button>
           <button type="button" class="mw-preset" data-linemodel="luuke">Luuke-Linie</button>
-          <button type="button" class="mw-preset sel" data-linemodel="simulator">SIMULATOR<span class="wip-tag">WIP</span></button>
+          <button type="button" class="mw-preset" data-linemodel="simulator">SIMULATOR<span class="wip-tag">WIP</span></button>
         </div></div>
       <!-- DIE LINIE DIREKT NEBEN DER WAHL. Gemeldet: "ich habe 2 Ideallinie Modi, aber wenn
            ich dazwischen waehle, aendert sich die eingezeichnete Linie nicht." Sie aendert
@@ -13058,11 +13234,13 @@
       <div class="opt-row"><div class="opt-label">Funk-Rundlauf
           <small>Wie lange ein Steuerbefehl bis zur Best&auml;tigung durch das Bluetooth braucht: Mittelwert und 95 % der Befehle. Über 45 ms f&auml;llt jeder zweite Befehl aus dem Takt. H&auml;ngende Befehle gibt der Wachhund nach 300 ms frei. In der App auf einem &auml;lteren Handy hilft oft, &bdquo;Android System WebView&ldquo; im Play Store zu aktualisieren.</small></div>
         <span class="opt-val" id="funk-rundlauf" data-i18n-skip>&ndash;</span></div>
+      <!-- Latenz (WIP): Funk je Auto (funkJeAutoZeilen, 90-ghosts.js; OMEGA_BRUECKE.omegaInfoAuto, 05-app-bruecke.js). -->
+      <div class="opt-row"><div class="opt-label">Funk je Auto<span class="wip-tag">WIP</span><small>Je verbundenes Auto: Rolle, Schreibweg (OmegaBle direkt, OmegaBle oder Plugin, gesperrt mit Restzeit), die Z&auml;hler geschrieben/wiederholt/verworfen der App, der Abstand der Meldungen des Autos (Mittel/95 % der letzten rund 4 s) und die zuletzt gesetzte Funkpriorit&auml;t. Zum Aufzeichnen, wenn die Latenz schlecht wird: vorher und nachher ein Bildschirmfoto.</small><span id="funk-je-auto" style="display:block; margin-top:3px; font-size:12px; white-space:pre-line; color:var(--muted, #8a93a6)" data-i18n-skip>&ndash;</span></div></div>
       <div class="opt-row"><div class="opt-label">Bekannte Autos beim Start verbinden
           <small>Nur in der Android-App: Beim Start verbindet sie nacheinander alle Autos, die schon einmal verbunden waren (mit gemerkter Rolle oder gemerktem Namen) und gerade erreichbar sind. Ein Auto, das mit einem anderen Ger&auml;t verbunden, aus oder au&szlig;er Reichweite ist, wird ausgelassen. Im Browser verlangt Bluetooth f&uuml;r jedes Auto einen Klick.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-autoverbinden" checked><span></span></label></div>
       <!-- v1.3.15 (WIP): Funkprioritaet je Rolle zu Beginn der Startampel (funkPrioritaetVorStart, 90-ghosts.js). -->
-      <div class="opt-row"><div class="opt-label">Funkpriorit&auml;t beim Start<span class="wip-tag">WIP</span><small>Nur in der Android-App: Zu Beginn der Startampel, solange alle Autos stehen, bekommen die gesteuerten Autos (Spieler 1&ndash;3) das schnellste Verbindungsintervall und NPCs, Safety Car und Reinigungswagen ein ausgewogenes. So nehmen die NPCs dem Funk nicht die kurzen Zeitfenster weg, und die gesteuerten Autos reagieren schneller. Die Autos werden nacheinander umgestellt, im Abstand von 0,15 s.</small></div>
+      <div class="opt-row"><div class="opt-label">Funkpriorit&auml;t beim Start<span class="wip-tag">WIP</span><small>Nur in der Android-App: Beim Start einer Fahrt (Startampel, Training, Losfahren), nach dem Verbinden und nach einem Rollenwechsel, solange die Autos stehen, bekommen die gesteuerten Autos (Spieler 1&ndash;3) das schnellste Verbindungsintervall und NPCs, Safety Car und Reinigungswagen ein ausgewogenes. So nehmen die NPCs dem Funk nicht die kurzen Zeitfenster weg, und die gesteuerten Autos reagieren schneller. Die Autos werden nacheinander umgestellt, im Abstand von 0,15 s.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-funk-prio" checked><span></span></label></div>
       <div class="opt-row" id="opt-app-zeile" hidden><div class="opt-label">App &amp; Updates
           <small>Nur in der Android-App: Version, Updates ohne neue APK.</small></div>
@@ -14033,6 +14211,11 @@
        meldet sich bereit; der Initiator startet, sobald alle anderen bereit sind. -->
   <!-- MEISTERSCHAFT (73-meisterschaft.js): Planer und Zwischenstand, ueber allem ausser den Dialogen.
        Der Inhalt entsteht im Code und wird dort mit t() uebersetzt. -->
+  <!-- v1.4.54 (WIP): Event-Intro der Meisterschaft, 3 s im ACC-Stil, ueber allem, ohne Bedienung. -->
+  <div class="meister-intro" id="meister-intro" data-i18n-skip aria-live="polite" hidden>
+    <div class="mi-band"><div class="mi-kopf" id="mi-kopf"></div><div class="mi-titel" id="mi-titel"></div>
+      <div class="mi-zeile" id="mi-zeile"></div><div class="mi-extra" id="mi-extra"></div></div>
+  </div>
   <div class="meister-schirm" id="meister-schirm" data-i18n-skip hidden>
     <!-- v1.0.22 GEMELDET: "Aus dem Meisterschaftsmenue komme ich nicht raus, weil das Kreuz oben rechts
          hinter dem Tab ist." Das Kreuz steht jetzt links vorn, gross, und die Zurueck-Taste schliesst auch. -->

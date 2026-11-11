@@ -218,6 +218,15 @@
              direkt: !!window.OmegaDirekt, pad: !!window.OmegaPad, neuVersucht: omegaDirektVersucht,
              direktFehler: (l && l.zaehler && l.zaehler.direktFehler) || '' };
   };
+  // Latenz (WIP): dasselbe je Geraet (Optionen > System, "Funk je Auto"). Vorher sah man nur das erste Auto.
+  window.OMEGA_BRUECKE.omegaInfoAuto = (deviceId) => {
+    if (!omegaBleVerfuegbar()) return { weg: 'Plugin', gesperrtMs: 0, zaehler: null };
+    const l = omegaLage.get(deviceId) || omegaLage.get(String(deviceId));
+    if (!l) return { weg: 'Plugin', gesperrtMs: 0, zaehler: null };
+    const rest = l.sperreBis ? Math.max(0, l.sperreBis - performance.now()) : 0;
+    return { weg: !rest && l.bereit ? (omegaDirektBenutzt ? 'OmegaBle direkt' : 'OmegaBle') : 'Plugin',
+             gesperrtMs: rest, zaehler: l.zaehler || null, alt: !!l.alt };
+  };
   // GEMELDET (Xbox- und PS4-Controller): ein gekoppeltes Bluetooth-Gamepad belegt den BLE-
   // Kanal, und die 5-s-Prio-Nachverhandlung eines Autos kann die Verbindung dann abreissen.
   // Diese Pruefung sagt, ob ein Gamepad anliegt. Die Web-Gamepad-API meldet ein Pad erst
@@ -467,10 +476,15 @@
       // 30-50 ms zurueck - die 45-ms-Pakete stauten sich. Die Abrisse mit Xbox/PS4-Controller wurden
       // unter Windows gemeldet, wo diese Bruecke gar nicht laeuft. Also wieder immer nachlegen.
       clearTimeout(this._prio);
+      // Latenz (WIP): uebernimmt die App die Stufe je Rolle (Schalter "Funkprioritaet beim Start" an, Auto der
+      // Garage), fragt SIE nach 5 s an (funkPrioNachVerbinden, 90-ghosts.js): Spieler HIGH, NPCs BALANCED.
+      // Sonst wie bisher HIGH. Vorher bekam hier jedes Auto blind HIGH, auch jeder NPC.
       this._prio = setTimeout(() => {
-        if (this.connected) {
-          ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 }).catch(() => {});
-        }
+        if (!this.connected) return;
+        const b = window.OMEGA_BRUECKE;
+        try { if (b && typeof b.prioNachVerbindenSelbst === 'function' && b.prioNachVerbindenSelbst(id)) return; }
+        catch (e) { /* dann wie bisher */ }
+        ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 }).catch(() => {});
       }, 5000);
       return this;
     }

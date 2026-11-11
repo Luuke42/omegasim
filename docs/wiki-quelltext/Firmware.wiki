@@ -1,5 +1,7 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 Die '''Firmware''' eines [[Carrera HYBRID]]-Autos ist das Programm, das auf dem Funkchip im Auto selbst läuft. Sie empfängt die Befehlspakete per [[Bluetooth Low Energy]], setzt die Zielwerte für Gas und Lenkung in Motor- und Servobewegungen um, liest den Streckensensor aus, hält das Auto in einer bestimmten Betriebsart selbst auf der Bahn und meldet seinen Zustand an die App. Die Firmware stammt vom Hersteller und ist nicht offengelegt; alles in diesem Artikel ist aus Mitschnitten des Funkverkehrs der [[Original-App]], aus Fahrversuchen mit [[OmegaSim]] und aus dem Abgleich mit einer unabhängigen Protokollbeschreibung („seVen“) erschlossen. Was belegt ist und was nicht, steht jeweils dabei.
+
+'''Teststand der Firmware:''' Die Fahrversuche, Messungen und Auswertungen in diesem Wiki stammen überwiegend aus der Zeit mit Firmware '''1.9.1.61'''. Inzwischen gibt es eine neuere Firmware, mit der die NPCs weiter außen fahren können (deshalb begrenzt OmegaSim seit 1.3.127 die Querlage der NPCs ab Werk auf 90 %, Optionen → NPCs → „NPC: maximale Querlage“); ältere Messwerte gelten für sie nicht ungeprüft.
 
 == Auf einen Blick ==
 {| class="wikitable"

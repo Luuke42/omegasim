@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 [[Datei:OmegaSim-Challenges.png|mini|Die Challenges-Seite]]
 Die '''Challenges''' (experimentell) sind feste Zeitfahraufgaben in [[OmegaSim]]: vorgegebene Strecken, die man mit echten [[Carrera HYBRID]]-Teilen nachbaut und unter gleichen Bedingungen fährt. Jede Runde wird gegen die Strecke geprüft, die Zeiten landen in einer lokalen und auf Wunsch in einer gemeinsamen Online-Bestenliste, und für jede gültige Zeit gibt es eine Medaille. Es gibt vier Kategorien wöchentlicher Strecken, die jeden Mittwoch wechseln, drei feste Dauerrennen und die '''Community-Bestzeiten''', in denen Spieler eigene Strecken einreichen. Technisch benutzt eine Challenge die normale Rennmaschine (siehe [[Rennarten]]) und setzt nur deren Einstellungen fest; danach kommen die eigenen Einstellungen zurück.
 
@@ -340,6 +340,12 @@ Kategorie A, 12 Runden Soll, gefahren werden 15. Runde 4 wird nicht erkannt. Gü
 | 1.1 (1.1.22) || Challenges schalten „Wetter ändert sich“ immer aus.
 |-
 | 1.2 (1.2.4) || Community-Challenges auch mit Pacejka (Apps Script neu bereitstellen); Pacejka bleibt in einer Challenge im Modus Pacejka.
+|-
+| 1.3 (1.3.20) || Online-Streckenzeiten: Bestzeiten der Community für alle Strecken.
+|-
+| 1.3 (1.3.30) || alle Community-Strecken; Zeiten je Fahrgefühl; gespiegelte Strecke zählt als dieselbe, rückwärts als andere.
+|-
+| 1.3 (1.3.61, 1.3.65) || Challenges umgebaut mit Vorschau; Community-Bestzeiten und -Strecken zusammengelegt.
 |}
 
 == Siehe auch ==

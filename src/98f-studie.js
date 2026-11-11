@@ -89,17 +89,17 @@
       text: 'Sechs Aussagen zur Persönlichkeit, ein Reaktionstest mit dem Controller und fünf Runden auf Homington.',
       req: ['Controller', 'Auto oder virtuell'] },
     { id: 'serie', name: 'Ridge Run', min: 18,
-      text: 'Eine Serie von Runden auf der Hauptstrecke mit einem kurzen Fragebogen.', req: ['Auto', 'Controller', 'Grundpackung'] },
+      text: 'Eine Serie von Runden auf der Hauptstrecke mit einem kurzen Fragebogen.', req: ['Auto oder virtuell', 'Controller', 'Grundpackung (Bahn) oder virtuell'] },
     { id: 'bloecke', name: 'Lakeside Loop', min: 23,
-      text: 'Mehrere Rundenblöcke auf der Hauptstrecke. Manchmal ist ein weiteres Auto auf der Strecke.', req: ['Auto', 'Controller', 'Zweites Auto (NPC)'] },
+      text: 'Mehrere Rundenblöcke auf der Hauptstrecke. Manchmal ist ein weiteres Auto auf der Strecke.', req: ['Auto oder virtuell', 'Controller', 'Zweites Auto (NPC) oder virtuell'] },
     { id: 'paddock', name: 'Paddock Session', min: 24, erste: true,
-      text: 'Eine gemischte Sitzung: ein kurzes Spiel, eine Entscheidungsaufgabe, danach einige Runden.', req: ['Auto', 'Controller'] },
+      text: 'Eine gemischte Sitzung: ein kurzes Spiel, eine Entscheidungsaufgabe, danach einige Runden.', req: ['Auto oder virtuell', 'Controller'] },
     { id: 'nacht', name: 'Night Circuit', min: 25,
-      text: 'Runden auf der Hauptstrecke mit unterschiedlichen Audio-Einstellungen.', req: ['Auto', 'Controller', 'Kopfhörer'] },
+      text: 'Runden auf der Hauptstrecke mit unterschiedlichen Audio-Einstellungen.', req: ['Auto oder virtuell', 'Controller', 'Kopfhörer'] },
     { id: 'kueste', name: 'Coastal Run', min: 27,
-      text: 'Runden mit einer zusätzlichen Aufgabe auf dem Bildschirm und über Kopfhörer.', req: ['Auto', 'Controller', 'Kopfhörer', 'Mikrofon'] },
+      text: 'Runden mit einer zusätzlichen Aufgabe auf dem Bildschirm und über Kopfhörer.', req: ['Auto oder virtuell', 'Controller', 'Kopfhörer', 'Mikrofon'] },
     { id: 'sprint', name: 'Sprint Series', min: 32,
-      text: '48 kurze Sprints aus dem Stand, mit einem kleinen Punktespiel zwischen den Läufen.', req: ['Auto', 'Controller'] },
+      text: '48 kurze Sprints aus dem Stand, mit einem kleinen Punktespiel zwischen den Läufen.', req: ['Auto oder virtuell', 'Controller'] },
   ];
   const labMedaillen = (min) => (min <= 20 ? 3 : min <= 26 ? 4 : 5);
   let labEinwilligung = false;   // nur fuer diese Ansicht, nie gespeichert

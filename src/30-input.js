@@ -19,7 +19,7 @@
   //
   // Arbitrated PER AXIS because some sources own only one: the mouse stick and the phone
   // tilt steer only, the mouse slider throttles only.
-  const SRC = { KEY: 'key', PAD: 'pad', MOUSE: 'mouse', TILT: 'tilt', MACRO: 'macro' };
+  const SRC = { KEY: 'key', PAD: 'pad', MOUSE: 'mouse', TILT: 'tilt', MACRO: 'macro', TOUCH: 'touch' };
   const INPUT_NEUTRAL_EPS = 0.001;
   const steerClaim = Object.create(null);
   const throttleClaim = Object.create(null);

@@ -926,6 +926,17 @@
         aquaFactor: 1,
         fuelLoad: 0,      // 0..1, written from outside each tick; 0 keeps the car light
         massFactor: 1,    // >1 = heavier than the calibrated car
+        // Erfolgsballast der Meisterschaft (73-meisterschaft.js): beim Rennstart einmal gesetzt, im Takt nur
+        // eine Multiplikation auf massFactor. 1 = kein Ballast (ausserhalb eines Meisterschafts-Events immer).
+        ballastFaktor: 1,
+        // SETUP JE AUTO (98i-setup.js, v1.4.54): beim Start einmal gesetzt, im Takt nur Faktoren. Gelesen wird
+        // jedes Feld mit Rueckfall (|| 1 bzw. || 0): Messaufbauten tauschen Zustaende aus, und ein fehlendes Feld
+        // darf kein NaN ins Tempo tragen. Die Werte
+        // hier sind neutral (das Auto rechnet bitgleich wie ohne Setup): 0 = Bremsbalance aus der
+        // Abstimmung, -1 = ABS wie Fahrgefuehl, 0 = keine TC, Leistung/Hoechsttempo/Luftwiderstand/
+        // Bremse/Druck/Verbrauch 1, Abtrieb 0.
+        setupBias: 0, setupAbs: -1, setupTc: 0, setupLeistung: 1, setupVmax: 1, setupDrag: 1,
+        setupAero: 0, setupBremsF: 1, setupDruck: 1, setupVerbrauch: 1,
         tyreTempC: 20,
         // tyreWear bleibt der MITTELWERT aus links und rechts. Alle vorhandenen Leser -
         // der Balken im Cockpit, der Boxenstopp, die Griffrechnung - lesen weiter dieses
@@ -1078,7 +1089,8 @@
       const lenk = this.state.dampedSteering;
       const quer = Math.abs(lenk) * kmhAnteil * cfg.corneringLoad
                    / Math.max(0.1, cfg.pacejkaGrenze);
-      const grip = Math.max(0.2, (st.tyreGrip === undefined ? 1 : st.tyreGrip) * cfg.gripScale);
+      const grip = Math.max(0.2, (st.tyreGrip === undefined ? 1 : st.tyreGrip) * cfg.gripScale)
+        * (1 + (st.setupAero || 0) * kmhAnteil * kmhAnteil);   // v1.4.54 Heckfluegel
       // v1.1.3: die entlastete Vorderachse (vorn > 1, unter Gas) zaehlt hier nicht mehr - sie
       // liess uV ueber 1 springen. Die Gas-Seite kommt stetig ueber pacGasFaktor (siehe config).
       // Die belastete (Bremse, vorn < 1) bleibt.
@@ -1096,14 +1108,17 @@
       const leistung = heck && gas > 0.4;
       if (leistung) {
         const x = Math.min(1, (gas - 0.4) / 0.6);
-        uH *= 1 + cfg.pacejkaLeistung * x * x * (3 - 2 * x);
+        // v1.4.54 TC aus dem Setup: nimmt dem Leistungsuebersteuern bis 80 %.
+        uH *= 1 + cfg.pacejkaLeistung * x * x * (3 - 2 * x) * (1 - 0.8 * (st.setupTc || 0));
       }
       st.pacNutzV = uV; st.pacNutzH = uH;
       const C = cfg.pacejkaC, E = cfg.pacejkaE, B = pacB(C, E);
       const wirk = (u) => (u <= 1 ? 1 : pacY(u, B, C, E) / u);
       // Vorn: Wirkfaktor auf den Winkel, weich nachgefuehrt (80 ms), damit es kein Zucken ist.
       // v1.1.3: dazu die stetige Gas-Seite (pacGasMax/pacGasExp, Regler "Lenkentlastung unter Gas").
-      const zielU = wirk(uV) * pacGasFaktor(cfg, st.longUse);
+      let zielU = wirk(uV) * pacGasFaktor(cfg, st.longUse);
+      // v1.4.54 ABS aus dem Setup: beim Bremsen bleibt am Limit mindestens so viel Einschlag.
+      if (st.setupAbs > 0 && bremse > 0.05) zielU = Math.max(zielU, Math.min(1, st.setupAbs));
       st.pacUnter += (zielU - st.pacUnter) * (1 - Math.exp(-dt / 0.08));
       // Hinten: nur, wenn das Heck WEITER jenseits ist als die Front - sonst ist es Schieben.
       let zielO = 0;
@@ -1115,6 +1130,8 @@
         if (!gegen) zielO = Math.min(cfg.pacejkaUeberMax, 1 - wirk(uH));
         if (zielO > 0) st.pacLeistung = leistung;
       }
+      // v1.4.54 TC: unter Gas faengt die Regelung das Heck zur Haelfte ab (Stufe 5).
+      if (st.setupTc > 0 && gas > 0.4) zielO *= 1 - 0.5 * st.setupTc;
       // DER RUTSCH HAELT. Einmal gekommen, klingt das Heck nicht mehr von selbst ab - auch
       // mit losgelassenem Stick lenkt das Auto weiter ein, bis man gegenlenkt oder vom Pedal
       // geht. Deckel: pacejkaHaltMax Sekunden, und nicht bei Schritttempo.
@@ -1217,7 +1234,8 @@
         const d = (st.tyreTempC - cfg.tyreOptimalC) / 12;
         reifen *= 1 + cfg.granTempOpt * Math.min(1, cfg.tyreEffect) * Math.exp(-d * d);
       }
-      const grip = Math.max(0.2, Math.max(0.3, reifen) * cfg.gripScale) * aero * (cfg.granGripPlus || 1);
+      const grip = Math.max(0.2, Math.max(0.3, reifen) * cfg.gripScale) * aero * (cfg.granGripPlus || 1)
+        * (1 + (st.setupAero || 0) * tempo);   // v1.4.54 Heckfluegel (tempo = Anteil im Quadrat)
       const vorn = Math.max(cfg.granVornMin, Math.min(1, cfg.loadFrontStatic / Math.max(0.05, st.loadFront)));
       const hinten = Math.max(0.6, Math.min(cfg.granHintenMax, (1 - cfg.loadFrontStatic) / Math.max(0.05, 1 - st.loadFront)));
       // DEGRESSIVE Lastempfindlichkeit: der Reibwert sinkt mit der Radlast, mu = mu0*(1-k*(l-1))
@@ -1236,7 +1254,8 @@
       const leistung = heck && gas > 0.4;
       if (leistung) {
         const x = Math.min(1, (gas - 0.4) / 0.6);
-        uH *= 1 + cfg.pacejkaLeistung * x * x * (3 - 2 * x);
+        // v1.4.54 TC aus dem Setup: nimmt dem Leistungsuebersteuern bis 80 %.
+        uH *= 1 + cfg.pacejkaLeistung * x * x * (3 - 2 * x) * (1 - 0.8 * (st.setupTc || 0));
       }
       st.pacNutzV = uV; st.pacNutzH = uH;
       const C = cfg.granC || cfg.pacejkaC;
@@ -1245,7 +1264,9 @@
       const wirk = (u) => (u <= 1 ? 1 : pacY(u, B, C, E) / u);
       let zielU = wirk(uV) * pacGasFaktor(cfg, st.longUse);
       // ABS-Gefuehl: beim Bremsen bleibt am Limit mindestens granAbs vom Einschlag.
-      if (cfg.granAbs > 0 && bremse > 0.05) zielU = Math.max(zielU, Math.min(1, cfg.granAbs));
+      // v1.4.54: ein ABS aus dem Setup (setupAbs >= 0) ersetzt das des Fahrgefuehls.
+      const absW = st.setupAbs >= 0 ? st.setupAbs : cfg.granAbs;
+      if (absW > 0 && bremse > 0.05) zielU = Math.max(zielU, Math.min(1, absW));
       st.pacUnter += (zielU - st.pacUnter) * (1 - Math.exp(-dt / 0.08));
       let zielO = 0;
       const richtung = Math.sign(lenk);
@@ -1255,6 +1276,8 @@
         if (!gegen) zielO = Math.min(cfg.pacejkaUeberMax, 1 - wirk(uH));
         if (zielO > 0) st.pacLeistung = leistung;
       }
+      // v1.4.54 TC: unter Gas faengt die Regelung das Heck zur Haelfte ab (Stufe 5).
+      if (st.setupTc > 0 && gas > 0.4) zielO *= 1 - 0.5 * st.setupTc;
       // Gierdynamik-Rueckfuehrung (Einspurmodell-Instrument): der Schwimmwinkel stabilisiert
       // das Heck - zu viel Rutsch wird sanft abgefangen, statt zu kippen.
       if (cfg.granGier > 0 && Math.abs(st.slipAngle) > 0.04 && st.pacRichtung) {
@@ -1577,15 +1600,17 @@
     // Quadrat 18. Damit kommen im ersten Gang rund 13 angezeigte km/h pro Sekunde heraus,
     // was fuer einen Rennwagen ohne Gas realistisch ist; im sechsten bleibt es wie vorher,
     // dort dominiert ohnehin der Luftwiderstand.
-    resistAt(v, accelScale, onPower, gearIdx) {
+    // drag (v1.4.54, Heckfluegel aus dem Setup): Faktor auf den Luftwiderstand, fehlt er, gilt 1.
+    resistAt(v, accelScale, onPower, gearIdx, drag) {
       const cfg = this.config;
+      const dk = drag > 0 ? drag : 1;
       const u = Math.abs(v) / cfg.topSpeedKmh;
       if (onPower) {
         // Both terms scale with accelScale so the whole drivetrain scales as one system.
         // With an ABSOLUTE rolling term the constant drag swallowed the thrust as soon as
         // the calibration got small, and "half speed in 3s AND reach top speed" became
         // mathematically impossible — which is exactly what the fit ran into.
-        return accelScale * (cfg.onPowerRollK * u + cfg.aeroDragK * u * u);
+        return accelScale * (cfg.onPowerRollK * u + cfg.aeroDragK * dk * u * u);
       }
       // Coasting: rolling + engine braking + aero, see the config for why three.
       // Deliberately NOT scaled by accelScale, unlike the on-power branch: coasting is
@@ -1600,7 +1625,7 @@
       const gearAmp = (r / top) * (r / top);
       return cfg.coastDragPerS * (cfg.coastRollDecel
                                   + cfg.coastEngineDecel * gearAmp * u
-                                  + cfg.coastAeroDecel * u * u);
+                                  + cfg.coastAeroDecel * dk * u * u);
     }
 
     // Wheel thrust as an acceleration in km/h/s: torque(rpm) x gear ratio, with a soft
@@ -1670,7 +1695,7 @@
       // speed almost instantly if handed a full-throttle byte, so sending the raw pedal
       // made it slam to 100% at once. Ramping a simulated speed and sending
       // speed/topSpeed produces a real multi-second pull instead.
-      const A = this.accelScale();
+      const A = this.accelScale() * (st.setupLeistung || 1);   // v1.4.54: Motorkennfeld
       const revTopKmh = cfg.reverseTopFrac * cfg.topSpeedKmh;
       const stopped = Math.abs(st.speedKmh) < cfg.reverseStandstillKmh;
 
@@ -1724,9 +1749,12 @@
       // fraction. Longitudinal grip is the remaining leg of the circle: sqrt(1 - lat^2).
       // Straight ahead lat = 0 and nothing changes; at full lock near top speed it falls to
       // almost nothing and the car simply will not accelerate — the real behaviour.
+      // v1.4.54 Heckfluegel: Abtrieb waechst mit dem Quadrat des Tempos und senkt die Querausnutzung.
+      const aeroU = Math.abs(st.speedKmh) / cfg.topSpeedKmh;
+      const aeroF = 1 + (st.setupAero || 0) * aeroU * aeroU;
       const latUse = Math.min(1, Math.abs(st.dampedSteering)
                                  * (Math.abs(st.speedKmh) / cfg.topSpeedKmh)
-                                 * cfg.corneringLoad);
+                                 * cfg.corneringLoad / aeroF);
       st.gripLong = Math.sqrt(Math.max(0, 1 - latUse * latUse));
       // Herausgegeben, weil das Reifenquietschen sie braucht: sie ist die Querausnutzung des
       // Reibkreises, auf 1 begrenzt, und damit die einzige Groesse hier, die "am Limit"
@@ -1908,7 +1936,9 @@
       // von Math.min(1, ...) im 1. Gang und bei niedrigem Tempo vollstaendig weggeschnitten.
       // Die Balance wirkt auf die ANFORDERUNG an die Vorderachse und damit in jedem Gang
       // und bei jedem Tempo.
-      const biasK = cfg.brakeBias / Math.max(1e-6, cfg.brakeBiasRef);
+      // v1.4.54: Bremsbalance aus dem Setup, wenn gesetzt (sonst die Abstimmung).
+      const bias = st.setupBias > 0 ? st.setupBias : cfg.brakeBias;
+      const biasK = bias / Math.max(1e-6, cfg.brakeBiasRef);
       // v1.0.44: Gewichtsverlagerungs-gekoppelter Bremssteal. `wf` ist 1 (der flache alte
       // Faktor), solange brakeStealLast aus ist; bei 1 skaliert es mit loadFrontStatic/
       // loadFront. Unter Bremsen taucht die Nase (loadFront > static), also wird wf < 1 und
@@ -1921,8 +1951,10 @@
       const wf = cfg.brakeStealLast
         ? Math.max(0.4, Math.min(1, cfg.loadFrontStatic / Math.max(0.05, st.loadFront)))
         : 1;
+      // v1.4.54 ABS aus dem Setup: nimmt der Bremse den Anteil absK an der Lenkung (neutral -1 -> 1 - 0).
+      const absRest = 1 - (st.setupAbs > 0 ? st.setupAbs : 0);
       const frontUse = cfg.lenkKopplungAus ? 0
-        : Math.max(0, -st.longUse) * cfg.brakeUseGain * biasK * lastFrac * wf;
+        : Math.max(0, -st.longUse) * cfg.brakeUseGain * biasK * lastFrac * wf * absRest;
       // v1.0.45: Trail-Braking-Bonus. Nur wenn das Bremspedal wirklich gedrueckt ist (nicht
       // beim Ausrollen) und die Fahrt traegt (lastFrac), verlagert sich Last nach vorn und
       // die Vorderachse beisst kurzzeitig besser. Der Bonus ist eine Dreieckskurve: 0 ohne
@@ -1942,7 +1974,7 @@
         const uFl = uF >= 1 ? 1 + (uF - 1) * cfg.lenkTransferAnteil * lastFrac : 1;
         const capL = Math.pow(uFl, 1 - cfg.lenkLastSens);
         const useL = Math.max(0, -st.longUse) * cfg.brakeUseGain
-                     * (cfg.brakeBias / Math.max(0.05, cfg.loadFrontStatic)) * lastFrac;
+                     * (bias / Math.max(0.05, cfg.loadFrontStatic)) * lastFrac * absRest;
         const gasF = cfg.pacejka ? 1 : pacGasFaktor(cfg, Math.max(0, st.longUse) * (1 - vFrac * vFrac));
         const ziel = Math.max(0.12 * (1 - wet),
           Math.min(cfg.lenkLastMax, Math.sqrt(Math.max(0, capL * capL - useL * useL))) * gasF)
@@ -1974,7 +2006,9 @@
         (1 - st.loadFront) / (1 - loadOnPower(cfg))));
 
       // ---- Fuel mass ----
-      st.massFactor = 1 + cfg.fuelWeightEffect * cfg.fuelMassSpan * st.fuelLoad;
+      // Ballast (Meisterschaft) wirkt wie das Tankgewicht: traeger beim Beschleunigen und Bremsen, und weil
+      // der Fahrwiderstand nicht durch die Masse geteilt wird, auch ein wenig weniger Hoechsttempo.
+      st.massFactor = (1 + cfg.fuelWeightEffect * cfg.fuelMassSpan * st.fuelLoad) * st.ballastFaktor;
 
       // ---- Tyre temperature ----
       // Heat comes from the work the tyres are actually doing: cornering load plus
@@ -1991,7 +2025,8 @@
       // besserer Kaltgriff. Viel Druck umgekehrt. Kein neuer Zustand, nur drei Faktoren auf
       // vorhandene Groessen - und bei der Referenzstellung sind alle drei genau 1, der
       // Regler in der Mitte aendert also nichts.
-      const pRel = Math.max(0.5, cfg.tyrePressureBar / Math.max(1e-6, cfg.tyrePressureRef));
+      // v1.4.54: der Kaltdruck aus dem Setup als Faktor (1 = Abstimmung).
+      const pRel = Math.max(0.5, cfg.tyrePressureBar / Math.max(1e-6, cfg.tyrePressureRef) * (st.setupDruck || 1));
       const pHeat = 1 / pRel;      // weniger Druck -> waermer
       const pWear = 1 / pRel;      // weniger Druck -> mehr Verschleiss
       const pCold = pRel;          // mehr Druck -> kalt schlechter
@@ -2104,8 +2139,8 @@
       //
       // Der Faktor 2 auf den Achsanteil ist die Normierung: bei 50:50 bekommt jede Achse die
       // volle Rate. Der Seitenanteil ist bereits auf 1 im Mittel normiert (load4).
-      const heizAchse = [2 * cfg.brakeBias, 2 * cfg.brakeBias,
-                         2 * (1 - cfg.brakeBias), 2 * (1 - cfg.brakeBias)];
+      const heizAchse = [2 * bias, 2 * bias,
+                         2 * (1 - bias), 2 * (1 - bias)];
       // Die Seitenverteilung nimmt den REINEN Seitenanteil und nicht die ganze Radlast:
       // load4 enthaelt die Achsaufteilung schon, und heizAchse enthaelt sie auch - beides
       // multipliziert hat die Vorderachse zweimal bevorzugt, bis vorne-innen kaelter
@@ -2132,10 +2167,10 @@
         (T - cfg.brakeFadeStartC) / Math.max(1, cfg.brakeFadeFullC - cfg.brakeFadeStartC)))
         * cfg.brakeFadeMax;
       st.brakeFade = Math.min(1, cfg.brakeFadeEffect
-        * (cfg.brakeBias * fadeVon(st.brakeTempF)
-           + (1 - cfg.brakeBias) * fadeVon(st.brakeTempR)));
+        * (bias * fadeVon(st.brakeTempF)
+           + (1 - bias) * fadeVon(st.brakeTempR)));
 
-      const resist = this.resistAt(st.speedKmh, A, onPower, st.currentGear); // always >= 0
+      const resist = this.resistAt(st.speedKmh, A, onPower, st.currentGear, st.setupDrag); // always >= 0
       let accel = 0;
       let output = 0;
 
@@ -2184,7 +2219,7 @@
           // Luftwiderstand haben mit der Bremsscheibe nichts zu tun.
           accel = -(resist + (cfg.brakeDecelBase + cfg.brakeDecelAero * uB)
                              * inputs.brake * st.gripLong * surf * dive
-                             * st.tyreGrip * (1 - st.brakeFade) / st.massFactor);
+                             * st.tyreGrip * (1 - st.brakeFade) / st.massFactor * (st.setupBremsF || 1));
           // ABS is now only an indicator plus a haptic pulse. Modulating the byte here
           // would reintroduce precisely the stutter that took so long to remove.
           if (inputs.brake > 0.8 && st.speedKmh > cfg.topSpeedKmh * 0.15) {
@@ -2225,7 +2260,7 @@
         //     `else if (accel > 0) accel = 0` fired whenever speed was under the ceiling,
         //     which without a limiter (speedLimitFactor 1, ceiling = topSpeedKmh) is ALWAYS,
         //     so every positive acceleration was zeroed and the car never moved from 0.
-        const ceiling = cfg.topSpeedKmh * cfg.speedLimitFactor;
+        const ceiling = cfg.topSpeedKmh * cfg.speedLimitFactor * (st.setupVmax || 1);
         if (st.speedKmh > ceiling) {
           const eased = st.speedKmh + Math.min(accel, -cfg.pitLimiterDecel) * dt;
           st.speedKmh = Math.max(ceiling, eased); // never undershoot the cap on the way down

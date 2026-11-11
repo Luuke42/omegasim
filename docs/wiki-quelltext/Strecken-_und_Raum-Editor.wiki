@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 [[Datei:OmegaSim-Strecke.png|mini|Der Streckeneditor]]
 Der '''Strecken- und Raum-Editor''' ist das Werkzeug im Reiter '''Strecke''' von [[OmegaSim]], mit dem sich eine [[Carrera HYBRID]]-Bahn aus einzelnen Teilen nachbauen, als kurzer [[Strecke#Streckencode|Streckencode]] weitergeben, als Bild speichern und in einen gezeichneten Raum mit Möbeln einpassen lässt. Dazu gehören der '''Streckeneditor''' (Vollbild, Bedienung mit Finger, Maus, Tastatur und Controller), die '''Zufallsstrecke''' (der Streckenrandomisator, der aus dem eigenen Teilebestand einen geschlossenen, kreuzungsfreien Rundkurs baut, der in den Raum passt), '''Meine Teile''' (der Bestand im Karton), der '''Raumgestalter''' (Raster aus 10-cm-Feldern für Boden und Möbel) und die berechnete '''Ideallinie'''. Die gebaute Strecke ist das Streckenlayout der ganzen App: Kartendarstellung, Ortung der Autos, Kurvendrosselung der [[NPC-Fahrverhalten|NPCs]], Startaufstellung und [[Safety Car und Reinigungswagen|Safety Car]] greifen darauf zurück. Teile, Codes und das Lesen der Bahn durch das Auto beschreibt der Artikel [[Strecke]].
 
@@ -331,6 +331,13 @@ Der Raum ist das Rechteck „Breite × Tiefe“, geteilt in Zellen von 10 cm (<c
 * Die Anzeige nennt Größe und Bodenfläche: Zahl der Bodenzellen × 0,01 m².
 * Im Editor erscheinen Möbel als rote Flächen im Raumrechteck; das Raster der Karte hat 50-cm-Linien.
 
+=== Sektoren ===
+Seit 1.3.86 (WIP) lassen sich Sektoren im Streckeneditor festlegen. Der Knopf '''Sektoren''' bietet drei Wege:
+* '''Automatisch festlegen''': Die Anzahl folgt aus der Teilezahl (8 Teile keine Sektoren, 15 Teile zwei, 25 Teile drei, höchstens zehn); die Abschnitte sind etwa gleich lang und beginnen an Teilefugen.
+* '''Manuell festlegen''': Strecke antippen oder mit Steuerkreuz und ✕ die Teile wählen, an denen ein Sektor beginnt; ein zweites Antippen entfernt die Grenze wieder, dann '''Fertig'''.
+* '''Aus''': keine Editor-Sektoren.
+Die Grenzen erscheinen als dünne grüne Linien und werden mit der Strecke gespeichert; der Streckencode bleibt gleich. Im Rennen misst jedes Auto die Sektoren über seinen Kachelzähler. Verzählt es sich (etwa nach einem Abflug), steht der Sektor auf „–“ statt einer falschen Zeit, die Runde zählt weiter. Zusätzliche Start/Ziel-Teile haben Vorrang vor den Editor-Sektoren; im Ausdruck-Modus bleibt der Regler „Sektoren“ in den Renneinstellungen. Die [[Zufallsevents]] nutzen die Sektoren als Bereiche.
+
 === Ideallinie ===
 Die Ideallinie ist eine '''Rechnung, keine Messung''': Kein Byte des Autos meldet die Querlage. Sie wird als seitlicher Versatz α<sub>i</sub> je Abtastpunkt beschrieben:
 <pre>
@@ -496,6 +503,10 @@ Mit dir = +1, nc = 2 und den Drehungen 180° + 180° entstehen zwei Läufe R, R,
 | 1.1.3 || Streckenbild: Fahrbahn auf der Kartenfläche, schärfer, lange Codes passen
 |-
 | 1.1.11 || Streckenbild wird groß angezeigt, mit Teilen, Speichern, Schließen
+|-
+| 1.2.61 || Editor-Optionen: Länge/Teile-Slider, Linkslastig, Brücken, Strecke spiegeln; Teile-Liste entfernt, Vorschau halbiert.
+|-
+| 1.3.86 || Sektoren über den Streckeneditor (automatisch/manuell), grüne Grenzlinien.
 |}
 
 == Siehe auch ==

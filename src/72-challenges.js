@@ -218,7 +218,6 @@
   const CH_GERAET_STORE = 'omegasim-geraet';
   const CH_STILL_MS = 1000;        // so lange muss das Auto stehen, bevor die Ampel kommt
   const CH_STILL_KMH = 1;
-  const CH_FRUEHSTART_KMH = 3;     // dieselbe Schwelle wie raceMoveErkannt()
 
   // ---- GEGEN SCHUMMELN (v0.8.37) --------------------------------------------------------
   // BESTELLT: "pro Runde pruefen, ob 90 % der Teile korrekt sind (ab und zu gibt es
@@ -517,8 +516,8 @@
   // ---- Wertung, Rang, Verteilung: reine Rechnungen (Selbsttest) ----
   // pruefung: je Runde das Ergebnis von chRundePruefen (fehlt es ganz, gilt jede Runde als
   // geprueft - so rechnen die Tests die reine Zeitwertung). minMs: Mindestrundenzeit.
-  // fruehstart: seit v0.8.39 KEIN Abbruch mehr - das Auto wird nach dem Anfahren kurz
-  // ausgebremst (70-race.js, fruehstartStrafeAktiv), die Strafe steckt in der Zeit.
+  // fruehstart: seit v0.8.39 KEIN Abbruch mehr. Seit 1.3.132 gilt in Challenges immer die
+  // Zeitstrafe (70-race.js, fruehstartStrafe: +5 s auf die erste Runde); sie steckt in rundenMs.
   // pitDone: erledigte Stopps; bei Pflichtstopp (Kategorie D, Rennen) muss es >= 1 sein.
   function chWertung(def, modus, rundenMs, flagge, fruehstart, pruefung, minMs, geaendert, pitDone) {
     if (geaendert) return { gueltig: false, zeit: null, grund: 'Einstellungen während der Challenge geändert' };
@@ -1463,8 +1462,8 @@
         if (jetzt - chLauf.hinweisAt > 2500) { chLauf.hinweisAt = jetzt; showHudToast(t('Auto anhalten')); }
       }
     } else if (chLauf.phase === 'ampel') {
-      // Frühstart: kein Abbruch mehr, die Ampel laeuft weiter, die Strafe kommt nach Gruen
-      // (70-race.js, fruehstartStrafeAktiv).
+      // Frühstart: kein Abbruch, die Ampel laeuft weiter; Gas ist bei Rot gesperrt, und wer es
+      // versucht, bekommt +5 s auf die erste Runde (70-race.js, fruehstartStrafe/fruehstartZuschlag).
       if (raceState === 'racing') chLauf.phase = 'faehrt';
     }
   }
@@ -1507,8 +1506,13 @@
     // v1.1.3: die Studienfahrt geht nur an die Studie (kein Speichern als Challenge-Zeit, kein Upload).
     if (def.studie) {
       chSpiegelSetzen(false);
-      const stil = typeof fahrstilWerte === 'function' ? fahrstilWerte(rundenMs) : null;
-      if (typeof studieFahrtFertig === 'function') studieFahrtFertig(erg, stil);
+      // AUDIT 1.3.120: Nur gewertete Runden (Teilepruefung + Mindestzeit) in die Studienfahrt.
+      // Eine zu schnelle oder abgekuerzte Runde (Teile fehlen) stuerzt die Bestzeit und die
+      // Streuung, obwohl sie nicht zaehlt - und verfaelscht H4 und H5 der Studie.
+      const minMs = chMinRundeMs(def);
+      const valide = rundenMs.filter((ms, i) => (lauf.pruefung ? !!(lauf.pruefung[i] && lauf.pruefung[i].ok) : true) && ms >= minMs);
+      const stil = typeof fahrstilWerte === 'function' ? fahrstilWerte(valide) : null;
+      if (typeof studieFahrtFertig === 'function') studieFahrtFertig(Object.assign({}, erg, { runden: valide }), stil);
       chZeichneDetail();
       return true;
     }

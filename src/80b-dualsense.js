@@ -29,10 +29,11 @@
   }
   function dsAus() { const e = new Uint8Array(11); e[0] = 0x05; return e; }
   // Die 47 Byte, die USB und Bluetooth gemeinsam haben.
-  function dsGemeinsam(links) {
+  function dsGemeinsam(links, rechts) {
     const c = new Uint8Array(47);
-    c[0] = 0x08;                 // nur der linke Trigger
-    c.set(links, 21);
+    c[0] = 0x0C;                 // linker (0x08) + rechter (0x04) Trigger
+    if (rechts) c.set(rechts, 10);
+    if (links) c.set(links, 21);
     return c;
   }
   let dsCrcTab = null;
@@ -50,8 +51,8 @@
     return (crc ^ 0xffffffff) >>> 0;
   }
   // Rein, fuer den Selbsttest: die Bytes eines Berichts (ohne Berichtskennung) und die Kennung.
-  function dsBericht(links, bt, folge) {
-    const c = dsGemeinsam(links);
+  function dsBericht(links, rechts, bt, folge) {
+    const c = dsGemeinsam(links, rechts);
     if (!bt) return { id: 0x02, daten: c };
     const d = new Uint8Array(77);
     d[0] = (folge & 0x0f) << 4;
@@ -63,9 +64,9 @@
     d[73] = crc & 0xff; d[74] = (crc >>> 8) & 0xff; d[75] = (crc >>> 16) & 0xff; d[76] = (crc >>> 24) & 0xff;
     return { id: 0x31, daten: d };
   }
-  async function dsSenden(links) {
+  async function dsSenden(links, rechts) {
     if (!dsGeraet) return;
-    const b = dsBericht(links, dsBt, dsFolge);
+    const b = dsBericht(links, rechts, dsBt, dsFolge);
     dsFolge = (dsFolge + 1) & 0x0f;
     try { await dsGeraet.sendReport(b.id, b.daten); dsFehler = ''; }
     catch (e) { dsFehler = e.message || String(e); }
@@ -90,20 +91,40 @@
       dsBt = (g.collections || []).some((c) => (c.outputReports || []).some((r) => r.reportId === 0x31));
       dsZustand = null;
       dsLageZeigen();
-      await dsSenden(dsAus());
+      await dsSenden(dsAus(), dsAus());
     } catch (e) { dsFehler = e.message || String(e); dsLageZeigen(); }
   }
   // Der linke Trigger ist die Bremse, wenn sie auf Knopf 6 liegt (Vorgabe).
   function dsBremseLinks() {
     return !!(typeof bindings !== 'undefined' && bindings.brake && bindings.brake.type === 'button' && bindings.brake.index === 6);
   }
+  // Der rechte Trigger ist das Gas, wenn es auf Knopf 7 liegt (Vorgabe).
+  function dsGasRechts() {
+    return !!(typeof bindings !== 'undefined' && bindings.throttle && bindings.throttle.type === 'button' && bindings.throttle.index === 7);
+  }
+  // Drehzahl-Feedback auf dem Gaspedal (dezent, v1.3.107): nahe der Drehzahlgrenze VIBRIERT der
+  // rechte Trigger (dsVibration, kein fester Widerstand), mit der Drehzahl staerker - ein leiser
+  // Hinweis zum Schalten. Nur in der virtuellen Fahrt: beim echten Fahren schaltet das Auto selbst,
+  // und ein summender Gas-Trigger stoert dort die feine Dosierung (Review nach 1.3.131).
+  function dsRechtsStufe() {
+    if (typeof vfAktiv !== 'function' || !vfAktiv()) return 0;
+    if (!dsGasRechts() || !physicsEnabled || !physEngine.state) return 0;
+    const st = physEngine.state;
+    if (Math.max(0, st.longUse || 0) <= 0.02) return 0;
+    const frac = Math.max(0, Math.min(1, st.rpmFrac || 0));
+    if (frac < 0.70) return 0;
+    return Math.min(6, 2 + Math.round((frac - 0.70) / 0.30 * 4));
+  }
   function dsTick() {
     if (!dsGeraet) return;
     const absAn = !!($('vib-abs') ? $('vib-abs').checked : true);
-    const soll = absAn && dsBremseLinks() && physicsEnabled && !!(physEngine.state && physEngine.state.absActive) ? 'abs' : 'aus';
-    if (soll === dsZustand) return;
-    dsZustand = soll;
-    dsSenden(soll === 'abs' ? dsVibration(DS_ABS.position, DS_ABS.staerke, DS_ABS.frequenz) : dsAus());
+    const linksAn = absAn && dsBremseLinks() && physicsEnabled && !!(physEngine.state && physEngine.state.absActive);
+    const rechtsStufe = dsRechtsStufe();
+    const schluessel = (linksAn ? 'l' : '-') + (rechtsStufe || 0);
+    if (schluessel === dsZustand) return;
+    dsZustand = schluessel;
+    dsSenden(linksAn ? dsVibration(DS_ABS.position, DS_ABS.staerke, DS_ABS.frequenz) : dsAus(),
+             rechtsStufe ? dsVibration(0, rechtsStufe, 25) : dsAus());
   }
   setInterval(dsTick, 60);
   if ($('ds-verbinden')) $('ds-verbinden').addEventListener('click', dsVerbinden);

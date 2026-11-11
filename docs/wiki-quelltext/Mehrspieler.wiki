@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 [[Datei:OmegaSim-Mehrspieler.png|mini|Der Reiter WLAN Mehrspieler in OmegaSim]]
 '''Mehrspieler''' bezeichnet in [[OmegaSim]] zwei getrennte Funktionen, mit denen mehrere Menschen gegeneinander fahren: den '''Mehrspieler-Modus an einem Gerät''', bei dem bis zu drei Spieler mit je einem Controller und einem eigenen [[Carrera HYBRID]]-Auto an einem Telefon oder PC fahren, und den '''WLAN-Mehrspieler''' (experimentell), bei dem mehrere Geräte mit je einem Auto über ein gemeinsames Netz eine Rangliste, einen gemeinsamen Start und gleiche Renneinstellungen teilen. Im ersten Fall rechnet ein Gerät alle Autos in einem gemeinsamen Sendetakt; im zweiten rechnet jedes Gerät nur sein eigenes Auto, und ein Host vermittelt über eine kleine HTTP-Schnittstelle. Beide lassen sich mit NPCs kombinieren (siehe [[NPC-Fahrverhalten]]).
 
@@ -304,6 +304,8 @@ Erkannt sind ein DualSense (Standardbelegung), ein Xbox-Pad (Standardbelegung) u
 | 1.2.3 || Belegen als Entwurf mit Übernehmen (Options 1&nbsp;s) und Abbrechen, Sperre bis alle Tasten los
 |-
 | 1.2.4 || Fahrgefühl je Spieler (Arcade, Sim+, Pacejka oder wie Spieler 1), eigene Reifenmischung bleibt
+|-
+| 1.3.92 || [[Zufallsevents]] im WLAN: das startende Telefon würfelt den Plan, alle anderen folgen ab derselben Grünzeit.
 |}
 
 == Einzelnachweise ==

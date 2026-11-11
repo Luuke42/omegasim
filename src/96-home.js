@@ -104,3 +104,37 @@
       wort.classList.add('gl-zerlegt');
     });
   })();
+
+  // ---- PATCHNOTES-KNOPF (unten rechts auf dem Startbildschirm) ----
+  // Oeffnet ein scrollbares Fenster mit den letzten drei Versions-Abschnitten aus #sub-patchnotes.
+  (function patchnotesKnopf() {
+    const knopf = $('home-patchnotes'), ueber = $('home-patchnotes-ueber'), inhalt = $('home-patchnotes-inhalt');
+    if (!knopf || !ueber || !inhalt) return;
+    const quelle = $('sub-patchnotes');
+    const fuellen = () => {
+      if (!quelle) return;
+      inhalt.textContent = '';
+      const abschnitte = [];
+      let el = quelle.firstElementChild;
+      while (el) {
+        if (el.tagName === 'P' && el.classList.contains('muted') && el.querySelector('b')) {
+          const ul = el.nextElementSibling;
+          if (ul && ul.tagName === 'UL' && ul.classList.contains('muted')) abschnitte.push([el, ul]);
+        }
+        el = el.nextElementSibling;
+      }
+      for (const [p, ul] of abschnitte.slice(0, 3)) {
+        const h = document.createElement('h3');
+        h.textContent = t('Version') + ' ' + (p.querySelector('b').textContent || '').trim();   // im Code gesetzt: durch t()
+        inhalt.appendChild(h);
+        const kopie = ul.cloneNode(true);
+        kopie.removeAttribute('id');
+        inhalt.appendChild(kopie);
+      }
+    };
+    knopf.addEventListener('click', () => { fuellen(); ueber.hidden = false; });
+    const schliessen = $('home-patchnotes-schliessen');
+    if (schliessen) schliessen.addEventListener('click', () => { ueber.hidden = true; });
+    ueber.addEventListener('click', (e) => { if (e.target === ueber) ueber.hidden = true; });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !ueber.hidden) ueber.hidden = true; });
+  })();

@@ -136,7 +136,7 @@ Die konkreten Werte im Code (<code>src/40-physics.js</code>):
 
 == Wo man das einstellt ==
 * '''FAHREN''' → Kachel '''Fahrgefühl''' → '''Pacejka''' (ebenso in der '''Garage''' und am '''Cockpit-Knopf''').
-* Unter '''Optionen → Fahrgefühl → Voreinstellungen''' liegt Pacejka als einer der neun Sätze.
+* Unter '''Optionen → Fahrgefühl → Voreinstellungen''' liegt Pacejka als einer der elf Sätze.
 * Nach einer Neuinstallation ist '''Pacejka''' die Vorgabe.
 * Der Schalter '''Übersteuern (Pacejka)''' liegt unter '''Optionen → Allgemein''' (ab Werk aus).
 

@@ -1,4 +1,4 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+{{Stand|app=1.3.93|appdatum=05.11.2026}}
 [[Datei:OmegaSim-NPC.png|mini|NPC-Einstellungen in OmegaSim]]
 Das '''NPC-Fahrverhalten''' ist die Steuerlogik, mit der [[OmegaSim]] echte [[Carrera HYBRID]]-Autos ohne menschlichen Fahrer über die Bahn bewegt. Ein solches Auto heißt in der App NPC (''non-player character'', computergesteuerter Gegner); im Quelltext und in älteren Fassungen hieß es „Ghost“. Jeder NPC ist ein per [[Bluetooth Low Energy]] verbundenes Auto mit der Garagenrolle '''NPC'''. Die App rechnet für ihn im selben 45-ms-Takt wie für das Fahrerauto ein Zieltempo und eine gewünschte Querlage aus Streckenlayout, Ideallinie, Rennsituation und den anderen Autos, führt beides durch ein eigenes Fahrzeugmodell und schickt das Ergebnis als Gas- und Lenkbyte an das Auto. Weil das Auto weder seine Position auf der Kachel noch seine Querlage meldet, ist fast alles daran Schätzung und Steuerung ohne Rückmeldung; die Seite beschreibt, welche Formeln und Schwellen dabei im Code stehen.
 
@@ -14,7 +14,7 @@ Das '''NPC-Fahrverhalten''' ist die Steuerlogik, mit der [[OmegaSim]] echte [[Ca
 |-
 | Status || Grundsteuerung stabil; Stufe MAX, Haarnadel-Höchsttempo, Linienmodell SIMULATOR, NPC-Boxenstopp und NPC-Motorklang in Arbeit; Rennwürze-Zutaten, Tempo-Streuung, Startversatz experimentell
 |-
-| Seit Version || NPCs (damals „Ghosts“) seit den 0.x-Fassungen; Umbenennung in „NPC“ im Patchnotes-Abschnitt 1.0; Stufen seit 0.9.56; MAX seit 1.1.42; MAX-Motormodell seit 1.2.5
+| Seit Version || NPCs (damals „Ghosts“) seit den 0.x-Fassungen; Umbenennung in „NPC“ im Patchnotes-Abschnitt 1.0; Stufen seit 0.9.56; MAX seit 1.1.42; MAX-Motormodell seit 1.2.5; MAX mit Arcade-Werten seit 1.3.7; MAX-Radius-2-Kurve seit 1.3.93
 |-
 | Beteiligte Quelldateien || <code>src/90-ghosts.js</code> (Steuerung), <code>src/61-simlinie.js</code> (Linie SIMULATOR), <code>src/60-track.js</code> (Linienmodelle, Kachellängen), <code>src/90b-sim.js</code> (Rennen simulieren), <code>src/80-sound.js</code> (Regler, NPC-Klang), <code>src/40-physics.js</code> (Fahrzeugmodell)
 |}
@@ -260,6 +260,8 @@ Die Gründe für die Reihenfolge stehen im Code: Die Staffel stand früher hinte
 | MAX (Standardregler) || 1,00 || 0,52 || 0,35
 |}
 Werte bei Grundtempo 55&nbsp;%, Kurvendrosselung 20&nbsp;%, ohne Würze, Staffel 1. In der Haarnadel wäre die Rechnung 0,55 × (1 − 0,4) = 0,33, das Mindesttempo hebt auf 0,37, das Haarnadel-Höchsttempo senkt auf 0,35.
+
+'''MAX-Profil (seit 1.3.7, seit 1.3.93 mit 90 % in der Radius-2-Kurve).''' Seit 1.3.7 fahren MAX-NPCs mit den Arcade-Werten (nicht mehr mit den Sim+-Werten der anderen Stufen). Das Profil aus dem NPC-Menü: <code>maxGerade&nbsp;=&nbsp;1,0</code>, <code>maxR1&nbsp;=&nbsp;0,52</code> (60°-Kurve und kleine 30°-Kurve), <code>maxR2&nbsp;=&nbsp;0,9</code> (weite 30°-Kurve, dreifacher Radius; vor 1.3.93 0,8) und Bremspunkt <code>schiene</code> (Standard) oder <code>teil</code>. Haarnadel und Engstelle fahren MAX-NPCs nach den normalen Regeln.
 
 '''MAX-Motormodell (seit 1.2.5).''' Das Fahrzeugmodell eines NPCs ist eine Kopie der Abstimmung von Spieler&nbsp;1 (ohne Tankgewicht, Reifenverschleiß, Lenkexpo und Tempo-Lenkbegrenzung, immer Automatik). Das gesendete Gas ist der Tempoanteil dieses Modells. Auf einer 43-cm-Geraden, die bei diesen Tempi 0,3 bis 0,5&nbsp;s dauert, kam ein MAX-NPC damit kaum über 0,5, weil der Schub mit dem Tempo fällt und jedes Hochschalten 120&nbsp;ms ohne Antrieb kostet. <code>ghostMaxMotor</code> setzt deshalb für MAX:
 <syntaxhighlight lang="javascript">
@@ -537,6 +539,10 @@ Zeitlücke 0,8&nbsp;s, Annäherung 0: nötig 1,2&nbsp;s; Würze × (1 − 0,26 �
 | 1.2.4 || NPC-Boxenstopp mit Ein- und Ausparkfolge des Safety Cars, Ratsche im Stand, Box hinter dem Safety-Car-Parkplatz
 |-
 | 1.2.5 || MAX-Motormodell (Beschleunigung × Regler, keine Schaltpause); Staffel, Lernfaktor und Streuung bremsen MAX auf Geraden nicht mehr; Rückschalten bei 5200/min; Knaller beim Anbremsen, Schalter „NPC-Motorklang: alt“
+|-
+| 1.3.7 || MAX fährt mit den Arcade-Werten statt mit den Sim+-Werten der anderen Stufen
+|-
+| 1.3.93 || MAX-Tempo in der Radius-2-Kurve von 80 % auf 90 % angehoben
 |}
 Die Patchnotes der App sind nach Nebenversionen (1.2, 1.1 …) gegliedert; genaue Patchnummern stammen aus Kommentaren im Code.
 

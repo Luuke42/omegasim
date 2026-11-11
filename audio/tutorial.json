@@ -193,5 +193,200 @@
       "text": "Ab jetzt schaltet wieder die Automatik.",
       "sprech": "Ab jetzt schaltet wieder die Automatik."
     }
+  },
+  "en_stimme": "en_US-ljspeech-medium",
+  "en": {
+    "voraussetzung": {
+      "datei": "tutorial_voraussetzung_en.ogg",
+      "dauer": 5.82,
+      "text": "For this introduction you need a connected car and a gamepad. I'll wait until both are ready.",
+      "sprech": "For this introduction you need a connected car and a gamepad. I'll wait until both are ready."
+    },
+    "willkommen": {
+      "datei": "tutorial_willkommen_en.ogg",
+      "dauer": 5.92,
+      "text": "Welcome to OmegaSim! In this introduction you'll get to know the app and drive your first laps.",
+      "sprech": "Welcome to Omega Sim! In this introduction you'll get to know the app and drive your first laps."
+    },
+    "gas": {
+      "datei": "tutorial_gas_en.ogg",
+      "dauer": 2.07,
+      "text": "Press the throttle button to speed up.",
+      "sprech": "Press the throttle button to speed up."
+    },
+    "bremse": {
+      "datei": "tutorial_bremse_en.ogg",
+      "dauer": 2.62,
+      "text": "Now press the brake button to slow down.",
+      "sprech": "Now press the brake button to slow down."
+    },
+    "links": {
+      "datei": "tutorial_links_en.ogg",
+      "dauer": 1.1,
+      "text": "Steer left.",
+      "sprech": "Steer left."
+    },
+    "rechts": {
+      "datei": "tutorial_rechts_en.ogg",
+      "dauer": 1.45,
+      "text": "And now steer right.",
+      "sprech": "And now steer right."
+    },
+    "gut": {
+      "datei": "tutorial_gut_en.ogg",
+      "dauer": 0.89,
+      "text": "Very good!",
+      "sprech": "Very good!"
+    },
+    "prima": {
+      "datei": "tutorial_prima_en.ogg",
+      "dauer": 0.61,
+      "text": "Great!",
+      "sprech": "Great!"
+    },
+    "arcade": {
+      "datei": "tutorial_arcade_en.ogg",
+      "dauer": 5.52,
+      "text": "Now drive a few laps in Arcade mode. The car steers directly and brakes strongly.",
+      "sprech": "Now drive a few laps in Arcade mode. The car steers directly and brakes strongly."
+    },
+    "pacejka": {
+      "datei": "tutorial_pacejka_en.ogg",
+      "dauer": 3.52,
+      "text": "Now a more realistic steering response is simulated.",
+      "sprech": "Now a more realistic steering response is simulated."
+    },
+    "beschleunigung": {
+      "datei": "tutorial_beschleunigung_en.ogg",
+      "dauer": 4.02,
+      "text": "The car now accelerates more slowly, like a real race car.",
+      "sprech": "The car now accelerates more slowly, like a real race car."
+    },
+    "untersteuern": {
+      "datei": "tutorial_untersteuern_en.ogg",
+      "dauer": 7.12,
+      "text": "If you drive into a corner too fast, the car pushes straight ahead. That's understeer. So brake before the corner.",
+      "sprech": "If you drive into a corner too fast, the car pushes straight ahead. That's understeer. So brake before the corner."
+    },
+    "box_erklaerung": {
+      "datei": "tutorial_box_erklaerung_en.ogg",
+      "dauer": 7.82,
+      "text": "Time for a pit stop. Buttons will appear on the screen. If you press them quickly and correctly, the crew will be faster.",
+      "sprech": "Time for a pit stop. Buttons will appear on the screen. If you press them quickly and correctly, the crew will be faster."
+    },
+    "box": {
+      "datei": "tutorial_box_en.ogg",
+      "dauer": 2.57,
+      "text": "Now press the pit stop button and stop.",
+      "sprech": "Now press the pit stop button and stop."
+    },
+    "box_fertig": {
+      "datei": "tutorial_box_fertig_en.ogg",
+      "dauer": 2.65,
+      "text": "The rain tyres are on. Keep driving.",
+      "sprech": "The rain tyres are on. Keep driving."
+    },
+    "motor": {
+      "datei": "tutorial_motor_en.ogg",
+      "dauer": 3.05,
+      "text": "The engine sound will now change to Ford Mustang.",
+      "sprech": "The engine sound will now change to Ford Mustang."
+    },
+    "garage": {
+      "datei": "tutorial_garage_en.ogg",
+      "dauer": 4.32,
+      "text": "In the garage menu you can adjust the engine sound for each car individually.",
+      "sprech": "In the garage menu you can adjust the engine sound for each car individually."
+    },
+    "optionen": {
+      "datei": "tutorial_optionen_en.ogg",
+      "dauer": 5.82,
+      "text": "In the options menu you can set announcements, button mapping, driving behaviour and much more.",
+      "sprech": "In the options menu you can set announcements, button mapping, driving behaviour and much more."
+    },
+    "abschluss": {
+      "datei": "tutorial_abschluss_en.ogg",
+      "dauer": 3.77,
+      "text": "You have completed the introduction. Welcome to OmegaSim!",
+      "sprech": "You have completed the introduction. Welcome to Omega Sim!"
+    },
+    "rolle": {
+      "datei": "tutorial_rolle_en.ogg",
+      "dauer": 6.22,
+      "text": "Your car is connected, but it doesn't have the Player 1 role. Set it to Player 1 in the garage.",
+      "sprech": "Your car is connected, but it doesn't have the Player 1 role. Set it to Player 1 in the garage."
+    },
+    "modus_frage": {
+      "datei": "tutorial_modus_frage_en.ogg",
+      "dauer": 4.72,
+      "text": "Are you driving on the track or on the floor? Choose with the d-pad and confirm.",
+      "sprech": "Are you driving on the track or on the floor? Choose with the d-pad and confirm."
+    },
+    "modus_bahn": {
+      "datei": "tutorial_modus_bahn_en.ogg",
+      "dauer": 2.08,
+      "text": "Good, we'll drive on the track.",
+      "sprech": "Good, we'll drive on the track."
+    },
+    "modus_boden": {
+      "datei": "tutorial_modus_boden_en.ogg",
+      "dauer": 3.62,
+      "text": "Good, we'll drive on the floor, without track pieces.",
+      "sprech": "Good, we'll drive on the floor, without track pieces."
+    },
+    "licht": {
+      "datei": "tutorial_licht_en.ogg",
+      "dauer": 2.72,
+      "text": "Switch the lights off and on with the lights button.",
+      "sprech": "Switch the lights off and on with the lights button."
+    },
+    "arcade_boden": {
+      "datei": "tutorial_arcade_boden_en.ogg",
+      "dauer": 6.02,
+      "text": "Now drive around a bit, in Arcade mode. The car steers directly and brakes strongly.",
+      "sprech": "Now drive around a bit, in Arcade mode. The car steers directly and brakes strongly."
+    },
+    "regen": {
+      "datei": "tutorial_regen_en.ogg",
+      "dauer": 4.52,
+      "text": "Now it starts to rain. With dry tyres the car will slide much more.",
+      "sprech": "Now it starts to rain. With dry tyres the car will slide much more."
+    },
+    "reifen": {
+      "datei": "tutorial_reifen_en.ogg",
+      "dauer": 5.62,
+      "text": "For the pit stop choose rain tyres. Press the tyre button until rain is shown.",
+      "sprech": "For the pit stop choose rain tyres. Press the tyre button until rain is shown."
+    },
+    "rueckwaerts": {
+      "datei": "tutorial_rueckwaerts_en.ogg",
+      "dauer": 6.22,
+      "text": "Now you'll drive in reverse. Stop, press the down shift button and then give gas.",
+      "sprech": "Now you'll drive in reverse. Stop, press the down shift button and then give gas."
+    },
+    "vorwaerts": {
+      "datei": "tutorial_vorwaerts_en.ogg",
+      "dauer": 2.59,
+      "text": "With the up shift button you go forward again.",
+      "sprech": "With the up shift button you go forward again."
+    },
+    "schalten": {
+      "datei": "tutorial_schalten_en.ogg",
+      "dauer": 5.62,
+      "text": "Now you'll shift yourself, the automatic is off. Shift up with the up shift button.",
+      "sprech": "Now you'll shift yourself, the automatic is off. Shift up with the up shift button."
+    },
+    "runter": {
+      "datei": "tutorial_runter_en.ogg",
+      "dauer": 2.69,
+      "text": "And shift down again with the down shift button.",
+      "sprech": "And shift down again with the down shift button."
+    },
+    "automatik": {
+      "datei": "tutorial_automatik_en.ogg",
+      "dauer": 2.23,
+      "text": "From now on the automatic shifts again.",
+      "sprech": "From now on the automatic shifts again."
+    }
   }
 }

@@ -162,6 +162,8 @@
   // Unterseite), dann der Stapel, zuletzt die Eltern-Ebene.
   function konsoleZurueck() {
     if (typeof optInfoOffen === 'function' && optInfoOffen()) { optInfoSchliessen(); return true; }
+    // v1.4.33: Kreis schliesst das Setup-Fenster (98i-setup.js) und bleibt in der Garage.
+    if (typeof setupFensterOffen === 'function' && setupFensterOffen()) { setupSchliessen(); return true; }
     // Challenge-Karte im Vollbild: Kreis verkleinert sie, statt die Unterseite zu schliessen.
     if (typeof chKarteVollOffen === 'function' && chKarteVollOffen()) {
       if (typeof chKarteVoll === 'function') chKarteVoll();

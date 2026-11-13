@@ -1,0 +1,7 @@
+VW Käfer – eigene Konstruktion von Gnen54 (OmegaSim CAD).
+Modell, Farben und Fahrzeugdaten: Creative Commons Namensnennung 4.0 (CC BY 4.0),
+Namensnennung „Gnen54 (OmegaSim CAD)“, https://github.com/gnen54/omegasim-cad
+https://creativecommons.org/licenses/by/4.0/deed.de
+Umgewandelt für die virtuelle Fahrt: ×50 auf Originalgröße, Karosserie neu vernetzt (0,1 mm) und reduziert.
+Vollständiges Modell vom 13.11.2026: Scheiben, Scheinwerfer, Rückleuchten, Außenspiegel, Auspuff, eigene Felgen und Reifen.
+Fahrzeugdaten (Masse, Federn usw.) sind Schätzwerte.

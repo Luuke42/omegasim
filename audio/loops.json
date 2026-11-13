@@ -2003,5 +2003,51 @@
   },
   "idleRpm": 2000,
   "limiterRpm": 8500
+ },
+ "boxster986": {
+  "label": "Porsche Boxster 986 (2,5 l Boxer-6, Saugmotor) [WIP]",
+  "cylinders": 6,
+  "source": "vollst\u00e4ndig synthetisiert (Modell nach engine-sim, MIT)",
+  "crackle": 0.34,
+  "turbo": false,
+  "loops": {
+   "idle": {
+    "file": "boxster986_idle.ogg",
+    "baseRpm": 850,
+    "firingHz": 42.5,
+    "seconds": 1.9765,
+    "load": 1.0
+   },
+   "low": {
+    "file": "boxster986_low.ogg",
+    "baseRpm": 1844,
+    "firingHz": 92.2,
+    "seconds": 2.0174,
+    "load": 1.0
+   },
+   "mid": {
+    "file": "boxster986_mid.ogg",
+    "baseRpm": 4000,
+    "firingHz": 200.0,
+    "seconds": 2.01,
+    "load": 1.0
+   },
+   "high": {
+    "file": "boxster986_high.ogg",
+    "baseRpm": 6600,
+    "firingHz": 330.0,
+    "seconds": 2.0,
+    "load": 1.0
+   },
+   "over": {
+    "file": "boxster986_over.ogg",
+    "baseRpm": 4000,
+    "firingHz": 200.0,
+    "seconds": 2.01,
+    "load": 0.0
+   }
+  },
+  "idleRpm": 850,
+  "limiterRpm": 6900
  }
 }

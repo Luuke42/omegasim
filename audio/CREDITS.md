@@ -201,6 +201,7 @@ BESTELLT: "motorsounds: ford tudor slantback 1937 und vw käfer 1300 (herbie)."
 |---|---|---|---|
 | `fordtudor37` | Ford Tudor Slantback 1937 | 3,6-l-Flathead-V8 (221 ci), 90 Grad, Cross-Plane, ~85 PS, ~3800/min | 1-5-4-8-6-3-7-2, Haelften (dieselbe Folge wie `cross_plane_v8()`) |
 | `kaefer1300` | VW Kaefer 1300 | 1,3-l-Boxer-4, luftgekuehlt, ~40 PS, ~4200/min | 1-4-3-2, Haelften (VW-Zaehlung: 1/2 eine Bank, 3/4 die andere) |
+| `boxster986` | Porsche Boxster 986 | 2,5-l-Boxer-6, Saugmotor, ~204 PS, Begrenzer ~6900/min | 1-6-2-4-3-5, Haelften |
 
 **Beide sind als WIP gekennzeichnet, und zwar staerker als die bisherigen WIP-Eintraege
 oben.** Bei jenen war zumindest die Geometrie (Zylinderzahl, Zuendfolge, Bankaufteilung)

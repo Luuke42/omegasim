@@ -1,0 +1,244 @@
+{
+ "name": "VW Käfer 1303 RS mit Boxster-Motor (Gnen54)",
+ "kennung": "kaefer",
+ "quelle": "Eigene Konstruktion von Gnen54 (OmegaSim CAD), Karosserie für das Carrera-HYBRID-Porsche-Chassis 1:50, ×50 auf Originalgröße; getunt: 1303 RS mit Porsche-Boxster-Motor (2,5 l Boxer-6), Fahrdaten geschätzt",
+ "lizenz": "CC BY 4.0 (Gnen54, OmegaSim CAD)",
+ "koordinaten": "m; +x links, +y oben, +z vorn",
+ "ecken": 56875,
+ "indizes": 219282,
+ "indexAb": 1820000,
+ "schritt": 32,
+ "teile": [
+  {
+   "name": "Front",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_schwarz.png",
+   "ecke0": 0,
+   "ecken": 11371,
+   "index0": 0,
+   "indizes": 51000
+  },
+  {
+   "name": "Heck",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_gelb.png",
+   "ecke0": 11371,
+   "ecken": 10837,
+   "index0": 51000,
+   "indizes": 51000
+  },
+  {
+   "name": "Streifen vorn",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_gelb.png",
+   "ecke0": 22208,
+   "ecken": 3141,
+   "index0": 102000,
+   "indizes": 10500
+  },
+  {
+   "name": "Streifen hinten",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_schwarz.png",
+   "ecke0": 25349,
+   "ecken": 2970,
+   "index0": 112500,
+   "indizes": 9000
+  },
+  {
+   "name": "Unterboden",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_unterboden.png",
+   "ecke0": 28319,
+   "ecken": 4634,
+   "index0": 121500,
+   "indizes": 13338
+  },
+  {
+   "name": "Spiegel",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_gelb.png",
+   "ecke0": 32953,
+   "ecken": 1657,
+   "index0": 134838,
+   "indizes": 4800
+  },
+  {
+   "name": "Auspuff",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_chrom.png",
+   "ecke0": 34610,
+   "ecken": 1333,
+   "index0": 139638,
+   "indizes": 4500
+  },
+  {
+   "name": "Rücklichter",
+   "rolle": "ruecklicht",
+   "gruppe": "auto",
+   "tex": "kaefer_ruecklicht.png",
+   "ecke0": 35943,
+   "ecken": 874,
+   "index0": 144138,
+   "indizes": 1044
+  },
+  {
+   "name": "Scheiben",
+   "rolle": "glas",
+   "gruppe": "auto",
+   "tex": "kaefer_glas.png",
+   "ecke0": 36817,
+   "ecken": 4313,
+   "index0": 145182,
+   "indizes": 9000
+  },
+  {
+   "name": "Scheinwerferglas",
+   "rolle": "scheinwerferglas",
+   "gruppe": "auto",
+   "tex": "kaefer_scheinwerfer.png",
+   "ecke0": 41130,
+   "ecken": 2021,
+   "index0": 154182,
+   "indizes": 7200
+  },
+  {
+   "name": "Reifen",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "kaefer_rad.png",
+   "ecke0": 43151,
+   "ecken": 2024,
+   "index0": 161382,
+   "indizes": 6000
+  },
+  {
+   "name": "Felge",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "kaefer_felge.png",
+   "ecke0": 45175,
+   "ecken": 5542,
+   "index0": 167382,
+   "indizes": 15000
+  },
+  {
+   "name": "Scheinwerfer",
+   "rolle": "scheinwerfer",
+   "gruppe": "auto",
+   "tex": "kaefer_reflektor.png",
+   "ecke0": 50717,
+   "ecken": 6158,
+   "index0": 182382,
+   "indizes": 36900
+  }
+ ],
+ "schatten": "shadow.png",
+ "lichter": {
+  "brems": [
+   [
+    0.655,
+    0.495,
+    -1.8,
+    0.12
+   ],
+   [
+    -0.655,
+    0.495,
+    -1.8,
+    0.12
+   ]
+  ],
+  "rueck": [
+   [
+    0.655,
+    0.495,
+    -1.8,
+    0.12
+   ],
+   [
+    -0.655,
+    0.495,
+    -1.8,
+    0.12
+   ]
+  ],
+  "front": [
+   [
+    0.628,
+    0.537,
+    1.815,
+    0.14
+   ],
+   [
+    -0.628,
+    0.537,
+    1.815,
+    0.14
+   ]
+  ]
+ },
+ "physik": {
+  "masse": 950.0,
+  "schwerpunktHoehe": 0.44,
+  "radstand": 2.515,
+  "a": 1.5593,
+  "b": 0.9557,
+  "vorderachse": 1.3415,
+  "hinterachse": -1.1735,
+  "laenge": 4.014,
+  "breite": 1.899,
+  "hoehe": 1.482,
+  "massenVerteilung": 0.8,
+  "lenkGrad": 30.0,
+  "bremsVorn": 0.62,
+  "cx": 0.46,
+  "stirnflaeche": 1.8,
+  "auftriebVorn": 0.3,
+  "auftriebHinten": 0.3,
+  "fluegelVorn": 0.0,
+  "fluegelHinten": 0.0,
+  "leerlauf": 850.0,
+  "begrenzer": 6900.0,
+  "reifen": {
+   "vorn": {
+    "radius": 0.34,
+    "breite": 0.335,
+    "spur": 1.435,
+    "bodenfreiheit": 0.1,
+    "mu": 1.2
+   },
+   "hinten": {
+    "radius": 0.35,
+    "breite": 0.395,
+    "spur": 1.435,
+    "bodenfreiheit": 0.1,
+    "mu": 1.2
+   }
+  },
+  "feder": {
+   "vorn": {
+    "k": 42000.0,
+    "druck": 4200.0,
+    "zug": 8400.0,
+    "weg": 0.09,
+    "stab": 6000.0
+   },
+   "hinten": {
+    "k": 48000.0,
+    "druck": 4800.0,
+    "zug": 9600.0,
+    "weg": 0.09,
+    "stab": 4000.0
+   }
+  },
+  "gefedert": 860.0
+ }
+}

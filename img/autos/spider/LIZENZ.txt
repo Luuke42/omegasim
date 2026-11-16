@@ -1,0 +1,9 @@
+Spider NG1 – Aufbau von Gnen54 (OmegaSim CAD) auf Basis der Modiplay-MP1-Karosserie (Sturmkind).
+Grundform: MODIplay MP-1 Spider (Sturmkind/MODIplay Racing), 3D-Daten für HYBRID überarbeitet von
+Thomas Strobel (FREAKPALACE Customs); von Sturmkind kostenlos an die Community herausgegeben.
+Freigabe: Sturmkind (Service-Anfrage SERVICE-38534, Antwort vom 16.11.2026) erlaubt die Verwendung
+der Karosserie, solange die Karosserien nicht kommerziell verkauft werden.
+Eigene Teile (Anbauteile, Chassis, Reifen, Felgen, Farben, Fahrzeugdaten): Gnen54, CC BY 4.0.
+Umgewandelt für die virtuelle Fahrt: ×50 auf Originalgröße, reduziert. Chassis vom VW Käfer (Carrera-HYBRID-Chassis).
+Variante: ModiplayBodyMod-2, ShorttailKomplett, Frontspoiler, Seitenschweller, Lufthutzen, Diffusor (nach Bild eingepasst).
+Fahrverhalten nach Lister Storm LMP (geschätzt), Motorklang listerstorm.

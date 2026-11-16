@@ -139,6 +139,8 @@
     // sondern auch die Geometrie (Zylinderzahl, Zuendfolge, Bankaufteilung) recherchiert
     // statt einer mitgelieferten technischen Tabelle entnommen - siehe audio/CREDITS.md.
     'fordtudor37', 'kaefer1300',
+    // BESTELLT 13.11.2026: Porsche-Boxster-Klang fuer den getunten Kaefer (1303 RS mit Boxster-Motor), WIP.
+    'boxster986',
     // ---- SECHS AUFNAHMEN AUS SPEED DREAMS, v1.0.13, WIP ------------------------------
     //
     // BESTELLT: Motorklaenge aus Speed Dreams. Nur die CC0-Proben aus data/sound (siehe

@@ -1,5 +1,5 @@
 {"version":"1.4.67","apk":2,"dateien":[
-{"p":"index.html","h":"5c8e1c17eabf63f2c840135739aa9290262b921a8630c403197aa2fa6c7c8842","g":8110722},
+{"p":"index.html","h":"2797e4f195c5082820067379d55649b39190fc4a30fecea6f56875c27707fc0c","g":8111021},
 {"p":"mp-overview.html","h":"61388dad99cb805de167fe9a10b9ffdb1d4655c450f175f4eeb9ede3a24d04aa","g":9956},
 {"p":"manifest.webmanifest","h":"868416fe2c9d41ebed0b5d479f07bbd16679dd4835e9c526da9eae8046e1e36a","g":639},
 {"p":"favicon.svg","h":"bc804f771d409b0efff2f2a78238a91d843d8d02efc2c614c6bdc544763de931","g":5456},
@@ -1074,8 +1074,8 @@
 {"p":"img/autos/fmcgt4/sc-fmc-gt4.png","h":"9e00929fc3120b431eafa16aec304e47257289602ba497ebe7cf62215a3d85f3","g":310534},
 {"p":"img/autos/fmcgt4/shadow.png","h":"45c4f86d9d527a571241d8d1725ab4e4ccc9e9643cce30381c57dd5da411dc92","g":4180},
 {"p":"img/autos/kaefer/LIZENZ.txt","h":"150cb65e4fe22682d062691403377a77b1facfa8ebc013547fc46ff136b20d7b","g":570},
-{"p":"img/autos/kaefer/auto.bin","h":"6915245a6bca85fe9a849f1529399e2073655c171b04079e457c3ae826251842","g":2258844},
-{"p":"img/autos/kaefer/auto.json","h":"e41a08693b88ec70ff9735db49ea78fa2dafe7ce6a028168ee44b6a262646993","g":4517},
+{"p":"img/autos/kaefer/auto.bin","h":"9bfe0b49e663ecdeb0594db3603f5186b8c5ff485e64136400c9658f19cce207","g":3076400},
+{"p":"img/autos/kaefer/auto.json","h":"b89895d767196e854d1147a71c231b87b57edbc8348bd07f47ee240d5243aba3","g":4565},
 {"p":"img/autos/kaefer/kaefer_felge.png","h":"62b74e1abdd6d9bd7a38248196f8814416d266862441cca1109740d83d984689","g":79},
 {"p":"img/autos/kaefer/kaefer_gelb.png","h":"77bb65b8d915c42267cb54b8f6dc003c58a8e3737b42f3a3d26601bbcc64a5b3","g":78},
 {"p":"img/autos/kaefer/kaefer_glas.png","h":"d0fb55b22cf2ca0488497f2b25e99ae529aba7fa8c57b3d7615efd7b5c24746a","g":79},

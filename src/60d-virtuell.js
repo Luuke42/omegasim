@@ -2292,7 +2292,10 @@
     if (id === 'haube') {
       // Auf der Motorhaube (Speed Dreams: Bonnet 0,75 m vor, 0,95 m hoch), fest am Auto.
       const s = VF.modell ? VF_AUTO.L / VF.modell.d.laenge : 2;
-      const vor = 0.75 * s, hoch = (0.95 + (VF.modell ? 0.07 : 0.25)) * s;
+      // Ein Modell darf die Kamera selbst setzen (auto.json "haube": {vor, hoch} in m), wenn die
+      // Haube hoeher liegt als die Speed-Dreams-Werte (z. B. Kaefer: Kofferraumhaube ~1,1 m hoch).
+      const hb = VF.modell && VF.modell.meta && VF.modell.meta.haube;
+      const vor = (hb ? hb.vor : 0.75) * s, hoch = (hb ? hb.hoch : 0.95 + (VF.modell ? 0.07 : 0.25)) * s;
       const auge = [VF.x + fx * vor, hoch, VF.y + fz * vor];
       VF.kam = auge;
       return { auge, ziel: [auge[0] + fx * 30, hoch - 1.2, auge[2] + fz * 30], fov: 70, nah: 0.3 };

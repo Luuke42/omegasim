@@ -713,6 +713,23 @@
     }
     return { pts: p2, nrm: n2, bucht, marken };
   }
+  // Zusatzbreite der Boxenbucht je Punkt der (gefahrenen) Mittellinie, fuer "neben der Bahn" und den
+  // Randstein: die Bucht zaehlt als Fahrbahn (Gnen54 17.11.: "an die Box fahren, nachtanken, weiter").
+  function vfBuchtJePunkt(pts, tiles) {
+    const n = pts.length, out = new Float32Array(n);
+    if (!tiles.some((x) => x.type === TILE_TYPE.PIT) || typeof boxBucht !== 'function') return out;
+    const box = {};
+    for (let i = 1; i < n; i++) {
+      const k = pts[i].tile;
+      if (!(k >= 0 && tiles[k] && tiles[k].type === TILE_TYPE.PIT)) continue;
+      if (!box[k]) box[k] = { s: i - 1, b: i }; else box[k].b = i;
+    }
+    for (let i = 0; i < n; i++) {
+      const k = pts[i].tile, b = box[k];
+      if (b) out[i] = BOX_BUCHT * TRACK_HALF_W * boxBucht((i - b.s) / Math.max(1, b.b - b.s));
+    }
+    return out;
+  }
   function vfBahnGeometrie(pts0, nrm0, tiles, ao) {
     const strasse = [], rand = [];
     const fein = vfBoxVerfeinern(pts0, nrm0, tiles);
@@ -2028,12 +2045,14 @@
     const o = vfOrt(VF.pts, VF.nrm, VF.x, VF.y, VF.idx);
     VF.idx = o.idx;
     if (VF.splits && VF.splits[VF.idx] === undefined) VF.splits[VF.idx] = rennZeitJetzt() - VF.rundeAb;
-    const ab = Math.abs(o.quer) > TRACK_HALF_W * 1.19 + VF_AUTO.B * 0.3;
+    // Boxenbucht auf der rechten (roten) Seite: dort ist die Fahrbahn um die Bucht breiter.
+    const zus = o.quer < 0 && VF.bucht ? (VF.bucht[o.idx] || 0) : 0;
+    const ab = Math.abs(o.quer) - zus > TRACK_HALF_W * 1.19 + VF_AUTO.B * 0.3;
     if (ab && !VF.abseits) VF.abseitsSeit = rennZeitJetzt();
     VF.abseits = ab;
     // Randstein (v1.2.62): der erhabene Stein links/rechts der Fahrbahn. Faehrt das Auto mit dem
     // Rand ueber ihn, rattert es und der Controller brummt.
-    const q = Math.abs(o.quer);
+    const q = Math.abs(o.quer) - zus;
     const kerbRand = TRACK_HALF_W * 2 * 0.095;
     const kerb = !ab && q > TRACK_HALF_W - VF_AUTO.B * 0.5 && q < TRACK_HALF_W + kerbRand;
     if (kerb && Math.abs(kmh) > 0.05) {
@@ -3030,6 +3049,7 @@
     const ptsVoll = trackCenterline(tiles);
     VF.pts = vfSchliessstelle(ptsVoll);
     VF.nrm = trackNormals(VF.pts);
+    VF.bucht = vfBuchtJePunkt(VF.pts, tiles);
     // v1.3.39: Flaechen mit Texturen (die Pixel entstehen nur beim ersten Mal) und der feste Platz der
     // Kamera "Fahrer am Rand".
     try { VF.flaeche = vfFlaechenBauen(gl, ptsVoll, ptsVoll === VF.pts ? VF.nrm : trackNormals(ptsVoll), tiles, VF.grafik); } catch (e) { schicht.remove(); document.body.classList.remove('vf-an'); showHudToast('WebGL: ' + e.message); return false; }

@@ -1025,6 +1025,10 @@
   function vfSchaltungAuto() { try { return localStorage.getItem(VF_SCHALTUNG_STORE) !== 'manuell'; } catch (e) { return true; } }
   // Geist: eine Kopie des Autos, die nach der ersten Runde die aufgezeichnete Linie abfaehrt.
   const VF_GEIST_STORE = 'omegasim-vf-geist';
+  // Aussenspiegel (BESTELLT Gnen54 17.11.: links und rechts je ein Spiegelbild, nur in der Onboard-Kamera
+  // "Motorhaube", Standard aus - jeder Spiegel zeichnet die Szene ein weiteres Mal).
+  const VF_SPIEGEL_STORE = 'omegasim-vf-spiegel';
+  function vfSpiegelAn() { try { return localStorage.getItem(VF_SPIEGEL_STORE) === 'an'; } catch (e) { return false; } }
   // Standard AUS seit 17.11. (Gnen54: "Ghost entfernen" -> "Standard aus"); nur ein ausdrueckliches 'an' schaltet ihn ein.
   function vfGeistAn() { try { return localStorage.getItem(VF_GEIST_STORE) === 'an'; } catch (e) { return false; } }
   // Die echte Neigung eines GT1 ist klein (0,5 Grad Rollen bei 1,5 g) und bei Modellgroesse unsichtbar.
@@ -2175,6 +2179,75 @@
           !!(npc.motor && npc.motor.outputs && npc.motor.outputs.lights && npc.motor.outputs.lights.brake), 1, 0, k.auge);
       }
     }
+    vfSpiegelMalen(gl, w, h);
+  }
+  // ---- Aussenspiegel ------------------------------------------------------------------------------
+  // Je Seite ein Bildausschnitt (Viewport + Scissor) am Bildrand, darin die Szene von der Spiegelstelle
+  // am Auto nach hinten, waagerecht gespiegelt (Projektion mit x * -1 - ohne Face-Culling unproblematisch).
+  // Spiegelstelle: auto.json "spiegel": {vor, hoch, seite} in m, sonst aus der Haubenkamera abgeleitet
+  // (etwas hinter und unter dem Auge, aussen neben der Karosserie). Rahmen als HTML ueber der Leinwand.
+  const VF_SPIEGEL_WINKEL = 12;     // Grad nach aussen gedreht
+  const VF_SPIEGEL_FOV = 24;        // senkrechter Bildwinkel
+  function vfSpiegelRahmen(an, rechtecke) {
+    let r = VF.spiegelRahmen;
+    if (!an) { if (r) { r.forEach((e) => e.remove()); VF.spiegelRahmen = null; } return; }
+    if (!r) {
+      r = VF.spiegelRahmen = [0, 1].map(() => {
+        const e = document.createElement('div');
+        e.style.cssText = 'position:absolute;box-sizing:content-box;pointer-events:none;border:3px solid #15171b;border-radius:14px;'
+          + 'box-shadow:0 0 0 2px rgba(255,255,255,.18),0 4px 14px rgba(0,0,0,.45);z-index:2';
+        (VF.cv.parentNode || document.body).appendChild(e);
+        return e;
+      });
+    }
+    const dpr = VF.cv.width / Math.max(1, VF.cv.clientWidth);
+    rechtecke.forEach((q, i) => {
+      const e = r[i], st = e.style;
+      const l = VF.cv.offsetLeft + q[0] / dpr, o = VF.cv.offsetTop + (VF.cv.height - q[1] - q[3]) / dpr;
+      st.left = (l - 3) + 'px'; st.top = (o - 3) + 'px'; st.width = (q[2] / dpr) + 'px'; st.height = (q[3] / dpr) + 'px';
+    });
+  }
+  function vfSpiegelMalen(gl, w, h) {
+    const an = vfSpiegelAn() && vfKameraId() === 'haube' && !!(VF.modell && VF.tprog) && !vfKameraGedreht();
+    if (!an) { vfSpiegelRahmen(false); return; }
+    const d = VF.modell.d, s = VF_AUTO.L / d.laenge;
+    const hb = VF.modell.meta && VF.modell.meta.haube, sp = VF.modell.meta && VF.modell.meta.spiegel;
+    const vor = (sp && typeof sp.vor === 'number' ? sp.vor : (hb ? hb.vor : 0.75) - 0.25) * s;
+    const hoch = (sp && typeof sp.hoch === 'number' ? sp.hoch : (hb ? hb.hoch : 1.0) - 0.12) * s;
+    const seite = (sp && typeof sp.seite === 'number' ? sp.seite : d.breite / 2 + 0.06) * s;
+    const r = VF.h * Math.PI / 180, fx = Math.sin(r), fz = -Math.cos(r);
+    const lx = fz, lz = -fx;                                         // links (wie "seite" der Haubenkamera)
+    const sw = Math.round(Math.min(w * 0.2, h * 0.42)), sh = Math.round(sw * 0.5);
+    const y0 = Math.round(h * 0.42), rand = Math.round(w * 0.02);
+    const rechtecke = [[rand, y0, sw, sh], [w - rand - sw, y0, sw, sh]];   // links, rechts (x, y von unten)
+    const wi = VF_SPIEGEL_WINKEL * Math.PI / 180;
+    gl.enable(gl.SCISSOR_TEST);
+    [1, -1].forEach((sg, i) => {
+      const q = rechtecke[i];
+      gl.viewport(q[0], q[1], q[2], q[3]); gl.scissor(q[0], q[1], q[2], q[3]);
+      gl.clearColor(0.66, 0.78, 0.90, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      const auge = [VF.x + fx * vor + lx * seite * sg, hoch, VF.y + fz * vor + lz * seite * sg];
+      // nach hinten, um VF_SPIEGEL_WINKEL nach aussen gedreht
+      const bx = -fx * Math.cos(wi) + lx * sg * Math.sin(wi), bz = -fz * Math.cos(wi) + lz * sg * Math.sin(wi);
+      const ziel = [auge[0] + bx * 30, hoch - 0.6, auge[2] + bz * 30];
+      const blick = vfBlick(auge, ziel, VF_OBEN);
+      const pr = vfPerspektive(VF_SPIEGEL_FOV * Math.PI / 180, q[2] / Math.max(1, q[3]), 0.3, 900);
+      for (let k = 0; k < 4; k++) pr[k * 4] = -pr[k * 4];          // x spiegeln (Spaltenmatrix: Zeile 0)
+      const pv = vfMal(pr, blick);
+      vfFlaechenMalen(gl, pv, auge);
+      vfModellMalen(gl, pv, blick, auge);
+      if (VF.npcs) {
+        for (const npc of VF.npcs) {
+          if (!npc.modell || npc.koAus || npc.derbyAus) continue;
+          vfModellZeichnen(gl, pv, blick, npc.modell, VF.tprog, npc.x, npc.y, npc.h, npc.feder, npc.lenkWinkel, npc.raddreh, VF.radModell, true,
+            !!(npc.motor && npc.motor.outputs && npc.motor.outputs.lights && npc.motor.outputs.lights.brake), 1, 0, auge);
+        }
+      }
+    });
+    gl.disable(gl.SCISSOR_TEST);
+    gl.viewport(0, 0, w, h);
+    vfSpiegelRahmen(true, rechtecke);
   }
   // ---- Kamera (v1.1.11) --------------------------------------------------------------------
   // BESTELLT: "Wenn ich den rechten Stick reindruecke im virtuellen Fahren, aendere die Kamera zu
@@ -3100,6 +3173,13 @@
       renderGarage();
     };
     rechts.appendChild(garWertZeile(t('Geist folgt meiner Linie'), geistAn ? t('An') : t('Aus'), geistWahl, geistWahl));
+    // Aussenspiegel links/rechts, nur in der Kamera "Motorhaube" (Standard aus).
+    const spiegelAn = vfSpiegelAn();
+    const spiegelWahl = () => {
+      try { localStorage.setItem(VF_SPIEGEL_STORE, spiegelAn ? 'aus' : 'an'); } catch (e) { /* egal */ }
+      renderGarage();
+    };
+    rechts.appendChild(garWertZeile(t('Außenspiegel (Motorhaube)'), spiegelAn ? t('An') : t('Aus'), spiegelWahl, spiegelWahl));
     // Neben der Bahn: Vorgabe bremst der Teppich. Die Option schaltet den Tempoverlust ab, das Auto
     // faehrt daneben ungebremst weiter (Standard Aus = wie bisher).
     const abseitsBremse = vfAbseitsBremseAn();
@@ -3227,6 +3307,7 @@
     } catch (e) { /* ohne Ton weiterfahren */ }
   }
   function virtuellBeenden() {
+    vfSpiegelRahmen(false);
     rennPauseBeenden();
     if (!VF.aktiv) return;
     // Laeuft eine Challenge (z. B. die Studienfahrt) mit dem virtuellen Auto, endet sie mit: abgebrochen,

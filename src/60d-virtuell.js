@@ -1011,7 +1011,7 @@
   // img/autos/v5r/: Modell ohne Innenraum, Rad, Lichtorte und die Fahrzeugdaten aus der .xml. Laengen in
   // Metern, im Auto +x links, +y oben, +z vorn; gezeichnet mal VF_AUTO.L / Laenge (so lang wie der Kasten).
   const VF_AUTO_STORE = 'omegasim-vf-auto';
-  const VF_MODELL_PFADE = { v5r: 'img/autos/v5r/', lynx220: 'img/autos/lynx220/', fmcgt4: 'img/autos/fmcgt4/', boxer96: 'img/autos/boxer96/', kaefer: 'img/autos/kaefer/', spider: 'img/autos/spider/', caravelle: 'img/autos/caravelle/' };
+  const VF_MODELL_PFADE = { v5r: 'img/autos/v5r/', lynx220: 'img/autos/lynx220/', fmcgt4: 'img/autos/fmcgt4/', boxer96: 'img/autos/boxer96/', kaefer: 'img/autos/kaefer/', spider: 'img/autos/spider/', caravelle: 'img/autos/caravelle/', gt3: 'img/autos/gt3/' };
   function vfModellPfad(auto) { return VF_MODELL_PFADE[auto || vfAutoWahl()] || 'img/autos/v5r/'; }
   const VF_FEDER_STORE = 'omegasim-vf-feder';
   const VF_FEDER_WERTE = [1, 2, 3, 5, 8];
@@ -2187,7 +2187,7 @@
   // Spiegelstelle: auto.json "spiegel": {vor, hoch, seite} in m, sonst aus der Haubenkamera abgeleitet
   // (etwas hinter und unter dem Auge, aussen neben der Karosserie). Rahmen als HTML ueber der Leinwand.
   const VF_SPIEGEL_WINKEL = 12;     // Grad nach aussen gedreht
-  const VF_SPIEGEL_FOV = 24;        // senkrechter Bildwinkel
+  const VF_SPIEGEL_FOV = 36;        // senkrechter Bildwinkel (Spiegel hochkant)
   function vfSpiegelRahmen(an, rechtecke) {
     let r = VF.spiegelRahmen;
     if (!an) { if (r) { r.forEach((e) => e.remove()); VF.spiegelRahmen = null; } return; }
@@ -2217,8 +2217,9 @@
     const seite = (sp && typeof sp.seite === 'number' ? sp.seite : d.breite / 2 + 0.06) * s;
     const r = VF.h * Math.PI / 180, fx = Math.sin(r), fz = -Math.cos(r);
     const lx = fz, lz = -fx;                                         // links (wie "seite" der Haubenkamera)
-    const sw = Math.round(Math.min(w * 0.2, h * 0.42)), sh = Math.round(sw * 0.5);
-    const y0 = Math.round(h * 0.42), rand = Math.round(w * 0.02);
+    // Hochkant und ganz am Rand (Gnen54 17.11.: "querliegende Spiegel stoeren im Blickfeld").
+    const sh = Math.round(h * 0.36), sw = Math.round(Math.min(sh * 0.6, w * 0.14));
+    const y0 = Math.round(h * 0.30), rand = Math.max(4, Math.round(w * 0.004));
     const rechtecke = [[rand, y0, sw, sh], [w - rand - sw, y0, sw, sh]];   // links, rechts (x, y von unten)
     const wi = VF_SPIEGEL_WINKEL * Math.PI / 180;
     gl.enable(gl.SCISSOR_TEST);
@@ -3068,11 +3069,11 @@
   // Standard ist der Vulture V5.R (wie das Auto); "Wie in Optionen" folgt dem globalen Ton (sentinel).
   // Gnen54s eigene Autos haben einen FESTEN Motorklang (BESTELLT Gnen54: "der Motorsound soll fest dem
   // Fahrzeug zugeordnet sein, die Anwahl gesperrt") - die gespeicherte Wahl gilt dort nicht.
-  const VF_MOTOR_FEST = { kaefer: 'boxster986', spider: 'listerstorm', caravelle: 'boxster986' };
+  const VF_MOTOR_FEST = { kaefer: 'boxster986', spider: 'listerstorm', gt3: 'sd_boxer_dunkel', caravelle: 'boxster986' };
   function vfMotorFest() { return VF_MOTOR_FEST[vfAutoWahl()] || ''; }
   function vfMotorGewaehlt() {
     if (vfMotorFest()) return vfMotorFest();
-    const def = ({ v5r: 'sd_v5r', lynx220: 'sd_lynx', fmcgt4: 'sd_fmc', boxer96: 'sd_boxer', kaefer: 'boxster986', spider: 'listerstorm', caravelle: 'boxster986' })[vfAutoWahl()] || 'sd_v5r';
+    const def = ({ v5r: 'sd_v5r', lynx220: 'sd_lynx', fmcgt4: 'sd_fmc', boxer96: 'sd_boxer', kaefer: 'boxster986', spider: 'listerstorm', gt3: 'sd_boxer_dunkel', caravelle: 'boxster986' })[vfAutoWahl()] || 'sd_v5r';
     try { const v = localStorage.getItem(VF_MOTOR_STORE); return v === null ? def : v; } catch (e) { return def; }
   }
   function vfMotorZiel() { const g = vfMotorGewaehlt(); if (g && g !== VF_MOTOR_GLOBAL) return g; return $('sound-profile') ? $('sound-profile').value : ''; }
@@ -3127,6 +3128,8 @@
                    { v: 'kaefer', name: 'VW Käfer 1303 RS mit Boxster-Motor (Gnen54, WIP)' },
                    // Spider NG1 (Gnen54) auf Modiplay-MP1-Karosserie, Freigabe von Sturmkind, siehe img/autos/spider/LIZENZ.txt
                    { v: 'spider', name: 'Spider NG1 (Gnen54, WIP)' },
+                   // Porsche 911 GT3 (Gnen54) auf Vehicle-World-Karosserie (Freigabe nur muendlich) – nur Testversion
+                   { v: 'gt3', name: 'Porsche 911 GT3 (Gnen54, WIP)' },
                    // VW Caravelle (Gnen54) auf Vehicle-World-Karosserie (Freigabe erteilt), Oettinger-Boxer-6 (Werte geschaetzt),
                    // Motorhauben-Kamera = Kamera im echten Modell (Lage, Neigung, Bildwinkel aus auto.json "haube")
                    { v: 'caravelle', name: 'VW Caravelle Oettinger (Gnen54, WIP)' },

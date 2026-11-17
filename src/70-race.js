@@ -4457,6 +4457,7 @@
     } else if (typeof st.tyreWear === 'number') {
       reifen = 1 - st.tyreWear;
     }
+    const vfOhneAkku = typeof VF !== 'undefined' && !!VF.aktiv;
     return { health: Math.max(0, Math.min(100, 100 - damage)) / 100,
              fuel: Math.max(0, Math.min(100, fuel)) / 100,
              tyre: reifen,
@@ -4464,11 +4465,14 @@
              // waere ein Zustand, den niemand setzt, und beim naechsten Lesen eine Frage.
              rain: weather === 'rain',
              // Akku als Anteil (0..1); ohne Auto (dashBattery === null) keine Meldung.
-             battery: dashBattery === null ? null : batteryPercent(dashBattery) / 100,
+             // Virtuelle Fahrt: das gefahrene Auto hat keinen Akku. Ein echtes Auto (Ladestation,
+             // alter dashBattery-Wert) meldete sonst bei jedem Sessionstart "Session abbrechen,
+             // Box anfahren!" (GEMELDET Gnen54, 14.11.2026).
+             battery: vfOhneAkku || dashBattery === null ? null : batteryPercent(dashBattery) / 100,
              // JEDES Auto mit einem Akku-Wert, nicht nur der Fahrer (BESTELLT "Akku-Ansage
              // < 25 % mit Autonummer"). Das Fahrer-Auto steht auch hier drin, der eine Wert
              // `battery` oben bleibt fuer alte Aufrufer.
-             batteries: (typeof garage !== 'undefined' ? garage : []).filter((c) => c
+             batteries: vfOhneAkku ? [] : (typeof garage !== 'undefined' ? garage : []).filter((c) => c
                && c.battery !== undefined && c.battery !== null)
                .map((c) => ({ car: c,
                               label: typeof garageLabel === 'function' ? garageLabel(c) : '',

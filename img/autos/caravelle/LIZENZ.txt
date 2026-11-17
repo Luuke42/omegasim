@@ -1,0 +1,9 @@
+VW Caravelle (Bulli) – Aufbau von Gnen54 (OmegaSim CAD) auf Basis einer Karosserie von Vehicle World.
+Grundform: Caravelle-Karosserie von Vehicle World (Designerin Revantika). Vehicle World hat schriftlich
+erlaubt, die modifizierte Karosserie für das virtuelle VW-Bulli-Projekt an die Carrera-Hybrid-Community
+weiterzugeben.
+Eigene Teile (Dach mit Zwischendach, Innenraum/Bodenplatte, Armaturenbrett, Fahrer, Kamerahalter, Diffusor/Auspuff vom VW Käfer 1303 RS, Farben,
+Fahrzeugdaten): Gnen54, CC BY 4.0. Chassis: CH-Porsche-Chassis (Carrera HYBRID), Reifen und Felgen wie beim GT3 (Gnen54).
+Umgewandelt für die virtuelle Fahrt: ×50 auf Originalgröße, reduziert.
+Fahrzeugdaten angelehnt an den Oettinger-VW-Bus mit Sechszylinder-Boxer (132 kW/180 PS, 305 Nm), geschätzt;
+Motorklang boxster986. Onboard-Kamera an der Stelle der Kamera im echten Modell.

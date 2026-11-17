@@ -55,6 +55,28 @@
     }
     return null;
   }
+  // Schliessstelle der Mittellinie (GEMELDET Gnen54 17.11.: "Pendel der NPCs" an der Startlinie, dazu eine
+  // Runde von 0,267 s). Auf seiner Strecke (...QMKLGB, die Boxengasse als letztes Teil) endet die Linie
+  // 5,9 Einheiten HINTER dem Startpunkt - die Teile schliessen nicht genau. Die Spur lief dort also ein
+  // Stueck vorwaerts ueber den Start hinaus und sprang dann zurueck: ein NPC fuhr hin und her und drehte
+  // sich dabei um. Punkte am Ende, die in Startrichtung schon auf oder hinter dem Startpunkt liegen (und
+  // in dieselbe Richtung laufen), fallen weg; der Rest des Spalts wird wie bisher ueberbrueckt.
+  function vfSchliessstelle(pts) {
+    const n = pts.length;
+    if (n < 8) return pts;
+    const p0 = pts[0], l = Math.hypot(pts[1].x - p0.x, pts[1].y - p0.y) || 1;
+    const dx = (pts[1].x - p0.x) / l, dy = (pts[1].y - p0.y) / l;
+    let ende = n;
+    while (ende > n - 24) {
+      const p = pts[ende - 1], q = pts[ende - 2];
+      const vor = (p.x - p0.x) * dx + (p.y - p0.y) * dy;
+      const quer = Math.abs((p.x - p0.x) * -dy + (p.y - p0.y) * dx);
+      const sl = Math.hypot(p.x - q.x, p.y - q.y) || 1;
+      const gleich = ((p.x - q.x) * dx + (p.y - q.y) * dy) / sl > 0.7;
+      if (vor > -0.3 && quer < TRACK_HALF_W && gleich) ende--; else break;
+    }
+    return ende < n ? pts.slice(0, ende) : pts;
+  }
   // Kartentyp -> gemeldeter Code (auf der Schiene).
   function vfCode(typ) {
     if (typ === TILE_TYPE.START) return START_CODE_RAIL;
@@ -156,6 +178,11 @@
     { id: 'fischgraet', name: 'Fischgrät', art: 'fischgraet', breiteCm: 7, laengeCm: 35, spalten: 16, zeilen: 2,
       ton: [[190, 143, 94], [176, 128, 82], [201, 157, 106], [163, 118, 74], [184, 136, 86]], maser: [122, 82, 48],
       kontrast: 0.42, ringCm: 0.8, poren: 1.0, ast: 0.08, glanz: 0.28 },
+    // BESTELLT (Gnen54, 14.11.2026): ein neutraler Boden ohne Dielen, "nicht komplett eintoenig, so
+    // ein bisschen wie marmoriert", nicht schwarz (die Fahrbahn ist schwarz). Eine nahtlos kachelbare
+    // Flaeche 120 x 60 cm (Atlas 2048 x 1024), ohne Fugen und ohne Spiegeln/Toenen je Stueck.
+    { id: 'stein', name: 'Stein grau marmoriert', art: 'flaeche', breiteCm: 60, laengeCm: 120, spalten: 1, zeilen: 1,
+      ton: [[104, 104, 107]], hell: [130, 130, 133], ader: [70, 70, 75], glanz: 0.34 },
   ];
   const VF_ATLAS_B = 2048, VF_ATLAS_H = 1024;   // Bodenatlas (8 MB, mit Mipmaps 10,7 MB)
   const VF_BAHN_TEX = 1024, VF_BAHN_SPALTE = 256;  // Fahrbahn: 4 Teile nebeneinander (3 gebraucht, 1 Start/Ziel)
@@ -214,6 +241,43 @@
   // Ringe fast gerade), Fasern je Spalte, Poren als kurze dunkle Striche, Flecken, selten ein Ast.
   // Ringsum eine dunkle Fuge (1-2 px) mit heller Fase daneben: im Atlas, damit sie mit den Mipmaps
   // weich wird statt in der Ferne zu flimmern. Alpha = Glanz (0 in der Fuge).
+  // Marmorierter Stein, NAHTLOS kachelbar: periodisches Wertrauschen (Gitter modulo Zellenzahl) in
+  // mehreren Oktaven, darauf Adern als |sin| mit ganzzahliger Frequenz je Kachel (auch periodisch),
+  // verzerrt vom Rauschen. Zeilen y0..y1 (in Schritten, damit die Garage im Leerlauf rechnen kann).
+  function vfSteinRauschen(u, v, n, m, s) {
+    const x = u * n, y = v * m, i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const g = (a, b) => vfHash(((a % n) + n) % n + s, ((b % m) + m) % m + 7 * s);
+    const a0 = g(i, j), a1 = g(i + 1, j), b0 = g(i, j + 1), b1 = g(i + 1, j + 1);
+    return (a0 + (a1 - a0) * sx + (b0 - a0 + (b1 - b0 - a1 + a0) * sx) * sy) * 2 - 1;
+  }
+  function vfSteinTurb(u, v) {
+    let t = 0, a = 0.5;
+    for (let o = 0, n = 4, m = 2; o < 5; o++, n *= 2, m *= 2, a *= 0.5) t += a * vfSteinRauschen(u, v, n, m, 101 * (o + 1));
+    return t;
+  }
+  function vfSteinZeilen(d, AW, AH, y0, y1, P) {
+    const [t0, t1, t2] = P.ton[0], [h0, h1, h2] = P.hell, [a0, a1, a2] = P.ader;
+    for (let y = y0; y < y1; y++) {
+      const v = y / AH;
+      for (let x = 0; x < AW; x++) {
+        const u = x / AW, tb = vfSteinTurb(u, v);
+        // Grobe Wolken (hell/dunkel) und zwei Adernscharen (Frequenzen ganzzahlig je Kachel).
+        const wolke = 0.5 + 0.6 * vfSteinRauschen(u, v, 3, 2, 909) + 0.35 * tb;
+        const a1s = Math.abs(Math.sin(Math.PI * (3 * u + 2 * v) + 5.5 * tb));
+        const a2s = Math.abs(Math.sin(Math.PI * (5 * u - 3 * v) + 7.0 * vfSteinTurb(v, u)));
+        const ader = Math.pow(1 - a1s, 10) * 0.6 + Math.pow(1 - a2s, 14) * 0.35;
+        const hw = Math.max(0, Math.min(1, wolke));
+        let r = t0 + (h0 - t0) * hw, g = t1 + (h1 - t1) * hw, b = t2 + (h2 - t2) * hw;
+        const k = Math.min(1, ader);
+        r += (a0 - r) * k; g += (a1 - g) * k; b += (a2 - b) * k;
+        const korn = 1 + (vfHash(x, y) - 0.5) * 0.05;
+        const i = (y * AW + x) * 4;
+        d[i] = r * korn; d[i + 1] = g * korn; d[i + 2] = b * korn;
+        d[i + 3] = P.glanz * (0.85 + 0.3 * hw) * 255;
+      }
+    }
+  }
   function vfHolzStueck(d, AW, x0, y0, w, h, P, rnd) {
     const ton = P.ton[Math.floor(rnd() * P.ton.length)], j = 1 + (rnd() - 0.5) * 0.08;
     const t0 = ton[0] * j, t1 = ton[1] * j, t2 = ton[2] * j, m0 = P.maser[0], m1 = P.maser[1], m2 = P.maser[2];
@@ -290,9 +354,13 @@
   }
   function* vfBodenBau(P) {
     const AW = VF_ATLAS_B, AH = VF_ATLAS_H, d = new Uint8ClampedArray(AW * AH * 4);
-    const rnd = vfZufall(P.id === 'eiche' ? 1911 : P.id === 'grau' ? 2701 : 3307);
+    const rnd = vfZufall(P.id === 'eiche' ? 1911 : P.id === 'grau' ? 2701 : P.id === 'stein' ? 4409 : 3307);
     const w = AW / P.spalten, h = AH / P.zeilen, stuecke = [];
-    for (let r = 0; r < P.zeilen; r++) {
+    if (P.art === 'flaeche') {
+      for (let y = 0; y < AH; y += 64) { vfSteinZeilen(d, AW, AH, y, Math.min(AH, y + 64), P); yield; }
+      stuecke.push([0, 0, 1, 1]);
+    }
+    for (let r = 0; P.art !== 'flaeche' && r < P.zeilen; r++) {
       for (let s = 0; s < P.spalten; s++) {
         vfHolzStueck(d, AW, s * w, r * h, w, h, P, rnd);
         stuecke.push([(s * w + 0.5) / AW, (r * h + 0.5) / AH, ((s + 1) * w - 0.5) / AW, ((r + 1) * h - 0.5) / AH]);
@@ -680,7 +748,15 @@
     const B = art.breiteCm * cm, L = art.laengeCm * cm, rnd = vfZufall(9001 + pts.length);
     const reihen = [];
     let stuecke = 0;
-    if (art.art === 'fischgraet') {
+    if (art.art === 'flaeche') {
+      // Nahtlose Kacheln im Raster, gleiche Lage und Farbe (sonst saehe man die Kanten).
+      const c = [VF_BODEN_HELL, VF_BODEN_HELL, VF_BODEN_HELL];
+      for (let z = z0; z < z1; z += B) {
+        for (let x = x0; x < x1; x += L) {
+          vfViereck(a, [x, y, z, 0, 0], [x + L, y, z, 1, 0], [x + L, y, z + B, 1, 1], [x, y, z + B, 0, 1], c); stuecke++;
+        }
+      }
+    } else if (art.art === 'fischgraet') {
       const r = Math.SQRT1_2, d1 = [r, r], d2 = [-r, r];
       const W = (A, Bb) => [A * d1[0] + Bb * d2[0], A * d1[1] + Bb * d2[1]];
       // Rahmen-Koordinaten der Bodenecken: A = (x + z) r, B = (z - x) r
@@ -935,7 +1011,7 @@
   // img/autos/v5r/: Modell ohne Innenraum, Rad, Lichtorte und die Fahrzeugdaten aus der .xml. Laengen in
   // Metern, im Auto +x links, +y oben, +z vorn; gezeichnet mal VF_AUTO.L / Laenge (so lang wie der Kasten).
   const VF_AUTO_STORE = 'omegasim-vf-auto';
-  const VF_MODELL_PFADE = { v5r: 'img/autos/v5r/', lynx220: 'img/autos/lynx220/', fmcgt4: 'img/autos/fmcgt4/', boxer96: 'img/autos/boxer96/', kaefer: 'img/autos/kaefer/', spider: 'img/autos/spider/' };
+  const VF_MODELL_PFADE = { v5r: 'img/autos/v5r/', lynx220: 'img/autos/lynx220/', fmcgt4: 'img/autos/fmcgt4/', boxer96: 'img/autos/boxer96/', kaefer: 'img/autos/kaefer/', spider: 'img/autos/spider/', caravelle: 'img/autos/caravelle/' };
   function vfModellPfad(auto) { return VF_MODELL_PFADE[auto || vfAutoWahl()] || 'img/autos/v5r/'; }
   const VF_FEDER_STORE = 'omegasim-vf-feder';
   const VF_FEDER_WERTE = [1, 2, 3, 5, 8];
@@ -949,7 +1025,8 @@
   function vfSchaltungAuto() { try { return localStorage.getItem(VF_SCHALTUNG_STORE) !== 'manuell'; } catch (e) { return true; } }
   // Geist: eine Kopie des Autos, die nach der ersten Runde die aufgezeichnete Linie abfaehrt.
   const VF_GEIST_STORE = 'omegasim-vf-geist';
-  function vfGeistAn() { try { return localStorage.getItem(VF_GEIST_STORE) !== 'aus'; } catch (e) { return true; } }
+  // Standard AUS seit 17.11. (Gnen54: "Ghost entfernen" -> "Standard aus"); nur ein ausdrueckliches 'an' schaltet ihn ein.
+  function vfGeistAn() { try { return localStorage.getItem(VF_GEIST_STORE) === 'an'; } catch (e) { return false; } }
   // Die echte Neigung eines GT1 ist klein (0,5 Grad Rollen bei 1,5 g) und bei Modellgroesse unsichtbar.
   // Der Faktor vergroessert nur den AUSSCHLAG; Federraten, Daempfer und Zeitverhalten bleiben die echten.
   function vfFederSicht() {
@@ -1459,7 +1536,15 @@
         + ' c = pow(filmic(c * 1.05), vec3(1.0/2.2));'
         // Schattenkarte: Bias waechst mit flachem Lichteinfall (Streifen auf schraegen Blechen).
         + ' if (schatt > 0.5 && vsp.x > 0.0 && vsp.x < 1.0 && vsp.y > 0.0 && vsp.y < 1.0 && vsp.z > 0.0 && vsp.z <= 1.0) {'
-        + '   if (schTiefe(texture2D(sch, vsp.xy)) < vsp.z - bias * (1.0 + 3.0 * (1.0 - d))) c *= 0.55; }'
+        // 17.11. (Gnen54: gezackte dunkle Flaechen am Bulli-Armaturenbrett): statt eines harten Abgriffs
+        // fuenf (Mitte + vier Diagonalen, ~1,4 Texel), der Schatten blendet weich - keine Saegezaehne mehr.
+        + '   float zb = vsp.z - bias * (1.0 + 3.0 * (1.0 - d)), sl = 0.0; vec2 o = vec2(0.0007, 0.0007);'
+        + '   sl += step(zb, schTiefe(texture2D(sch, vsp.xy)));'
+        + '   sl += step(zb, schTiefe(texture2D(sch, vsp.xy + o)));'
+        + '   sl += step(zb, schTiefe(texture2D(sch, vsp.xy - o)));'
+        + '   sl += step(zb, schTiefe(texture2D(sch, vsp.xy + vec2(o.x, -o.y))));'
+        + '   sl += step(zb, schTiefe(texture2D(sch, vsp.xy + vec2(-o.x, o.y))));'
+        + '   c *= mix(0.55, 1.0, sl / 5.0); }'
         + ' float f = clamp((vd - 250.0) / 900.0, 0.0, 1.0); gl_FragColor = vec4(mix(c, nebel, f), mix(alpha, alpha * t.a, am)); }'));
     }
     gl.linkProgram(p);
@@ -2011,6 +2096,9 @@
     // Himmel: Vollbild-Quad, Farbverlauf im WELTRAUM (horizontfolgend beim Umsehen). Ganz hinten.
     if (!VF.himmelProg) { VF.himmelProg = vfProgrammHimmel(gl); VF.himmel = vfHimmel(gl); }
     const k = vfKamera(VF.dtBild || 0.016);
+    // Waagerechter Bildwinkel (auto.json "haube": {"fovH": ...}, VW Caravelle): in den senkrechten fuer
+    // das aktuelle Seitenverhaeltnis umrechnen - so bleibt die Breite des Blicks auf jedem Schirm gleich.
+    if (k.fovH) k.fov = 2 * Math.atan(Math.tan(k.fovH * Math.PI / 360) / Math.max(0.2, w / Math.max(1, h))) * 180 / Math.PI;
     // v1.3.124 Studienmodus: festes Sichtfeld aus Bildschirmgroesse und Sitzabstand.
     if (VF_STUDIE) { const sf = vfStudieFov(); if (sf) k.fov = sf; }
     gl.disable(gl.DEPTH_TEST);
@@ -2091,9 +2179,10 @@
   // ---- Kamera (v1.1.11) --------------------------------------------------------------------
   // BESTELLT: "Wenn ich den rechten Stick reindruecke im virtuellen Fahren, aendere die Kamera zu
   // Motorhaube oder nahe Verfolgerkamera." R3 (bzw. die Lichthupen-Belegung) oder C schaltet weiter:
-  // Verfolger -> nah -> Motorhaube -> Verfolger. Nachgefuehrt nach der ZEIT (nicht je Bild): auf einem
+  // Verfolger -> nah -> naeher -> Motorhaube -> ... (naeher: Zwischenstufe dicht am Auto, Fahrbahn bleibt sichtbar). Nachgefuehrt nach der ZEIT (nicht je Bild): auf einem
   // langsamen Handy lief die Kamera vorher bei weniger Bildern spuerbar hinterher.
-  const VF_KAMERAS = [{ id: 'verfolger', name: 'Verfolgerkamera' }, { id: 'nah', name: 'Nahe Verfolgerkamera' }, { id: 'haube', name: 'Motorhaube' },
+  const VF_KAMERAS = [{ id: 'verfolger', name: 'Verfolgerkamera' }, { id: 'nah', name: 'Nahe Verfolgerkamera' },
+                      { id: 'naeher', name: 'Seitennahe Kamera' }, { id: 'haube', name: 'Motorhaube' },
                       { id: 'oben', name: 'Von oben (Start/Ziel)' },
                       { id: 'fahrer', name: 'Fahrer am Rand', wip: true }];
   const VF_KAMERA_STORE = 'omegasim-vf-kamera';
@@ -2303,13 +2392,17 @@
     if (id === 'haube') {
       // Auf der Motorhaube (Speed Dreams: Bonnet 0,75 m vor, 0,95 m hoch), fest am Auto.
       const s = VF.modell ? VF_AUTO.L / VF.modell.d.laenge : 2;
-      // Ein Modell darf die Kamera selbst setzen (auto.json "haube": {vor, hoch} in m), z. B. Kaefer
-      // (Kofferraumhaube ~1,1 m hoch) oder der offene Spider NG1 (Augen ueber dem Windschutz).
+      // Ein Modell darf die Kamera selbst setzen (auto.json "haube": {vor, hoch} in m), z. B. der offene
+      // Spider NG1: Augen ueber dem Windschutz des Cockpits statt auf der Haube.
       const hb = VF.modell && VF.modell.meta && VF.modell.meta.haube;
       const vor = (hb ? hb.vor : 0.75) * s, hoch = (hb ? hb.hoch : 0.95 + (VF.modell ? 0.07 : 0.25)) * s;
-      const auge = [VF.x + fx * vor, hoch, VF.y + fz * vor];
+      // Optional (VW Caravelle: Kamera wie im echten Modell): "seite" in m (+ links), "neigung" in Grad
+      // nach unten, "fov" = senkrechter Bildwinkel in Grad, "fovH" = waagerechter (hat Vorrang).
+      const seite = (hb && hb.seite || 0) * s;
+      const auge = [VF.x + fx * vor + fz * seite, hoch, VF.y + fz * vor - fx * seite];
+      const sinkt = hb && typeof hb.neigung === 'number' ? Math.tan(hb.neigung * Math.PI / 180) * 30 : 1.2;
       VF.kam = auge;
-      return { auge, ziel: [auge[0] + fx * 30, hoch - 1.2, auge[2] + fz * 30], fov: 70, nah: 0.3 };
+      return { auge, ziel: [auge[0] + fx * 30, hoch - sinkt, auge[2] + fz * 30], fov: (hb && hb.fov) || 70, fovH: (hb && hb.fovH) || 0, nah: 0.3 };
     }
     if (id === 'oben') {
       // Von oben, parallel zur Start/Ziel-Geraden: die Kamera schwebt mit dem Auto mit (x/y) und
@@ -2319,16 +2412,25 @@
       VF.kam = null;
       return { auge, ziel: [VF.x, 0, VF.y], oben, fov: 62, nah: 0.5 };
     }
-    const nah = id === 'nah';
-    const hinten = nah ? 9 : 15, hoehe = nah ? 3.8 : 8, tau = nah ? 0.08 : 0.15;
+    const nah = id === 'nah', naeher = id === 'naeher';
+    // naeher: Zwischenstufe knapp hinter dem Heck und etwas ueber dem Dach (Auto 9,6 lang, 2,4 hoch) -
+    // man sieht die Details des Autos, beim Kreisen auch von der Seite, und noch genug Fahrbahn davor.
+    const hinten = naeher ? 6.5 : (nah ? 9 : 15), hoehe = naeher ? 2.8 : (nah ? 3.8 : 8), tau = naeher ? 0.06 : (nah ? 0.08 : 0.15);
     // Gedreht kreist der SOLL-Ort um das Auto; die Nachfuehrung (tau) bleibt dieselbe.
-    const zh = nah ? 2.0 : 1.4, vor = nah ? 8 : 12;
+    const zh = naeher ? 1.6 : (nah ? 2.0 : 1.4), vor = naeher ? 7 : (nah ? 8 : 12);
     const k = vfDrehAnwenden({ auge: [VF.x - fx * hinten, hoehe, VF.y - fz * hinten], ziel: [VF.x + fx * vor, zh, VF.y + fz * vor] },
       art, D, VF.x, zh, VF.y);
+    if (naeher && D && D.g) {
+      // Seitennah: je weiter zur Seite / nach vorn geschwenkt, desto naeher ans Auto (bis 25 % naeher
+      // ab 90 Grad) - von schraeg vorn sieht man die Details, von hinten bleibt die Fahrbahn im Blick.
+      const g = Math.abs(Math.atan2(Math.sin(D.g), Math.cos(D.g)));
+      const f = 1 - 0.25 * Math.min(1, g / (Math.PI / 2));
+      k.auge = [VF.x + (k.auge[0] - VF.x) * f, zh + (k.auge[1] - zh) * f, VF.y + (k.auge[2] - VF.y) * f];
+    }
     const soll = k.auge;
     const a = 1 - Math.exp(-Math.max(0, dt) / tau);
     VF.kam = VF.kam ? VF.kam.map((q, i) => q + (soll[i] - q) * a) : soll;
-    return { auge: VF.kam, ziel: k.ziel, fov: nah ? 58 : 54, nah: 0.5 };
+    return { auge: VF.kam, ziel: k.ziel, fov: naeher ? 62 : (nah ? 58 : 54), nah: naeher ? 0.3 : 0.5 };
   }
   function vfModellMalen(gl, pv, blick, auge) {
     vfModellZeichnen(gl, pv, blick, VF.modell, VF.tprog, VF.x, VF.y, VF.h, VF.feder, VF.lenkWinkel, VF.raddreh, VF.radModell,
@@ -2424,7 +2526,7 @@
       const dreh = vfRy(ax === 'vorn' ? -(lenkWinkel || 0) : 0);
       const w = vfKette(lage, vfT(seite * r.spur / 2, r.radius, z), dreh, vfRx(raddreh || 0),
         vfS(seite * r.breite, 2 * r.radius, 2 * r.radius));
-      // Teile mit "achse" (vorn/hinten) nur an dieser Achse - eigene Raeder je Achse (Spider NG1).
+      // Teile mit "achse" (vorn/hinten) nur an dieser Achse - eigene Raeder je Achse (GT3).
       radTeile.forEach((t) => { if (t.achse && t.achse !== ax) return; setze(w, [1, 1, 1], 0, 1, 0, 1, 0.2, 0); teil(t); });
       if (!radTeile.length) {
         // Fallback: die echten Rad-Teile der Vulture V5.R (mit Reifen-/Felgen-Textur).
@@ -2450,8 +2552,11 @@
     });
     // 4. Scheiben und Scheinwerferglas (durchscheinend, getoent)
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    // Sitzt die Kamera IM Auto (VW Caravelle: Onboard-Kamera hinter der Frontscheibe), nur ein Hauch Glas -
+    // sonst waere das Bild durch die Toenung fast schwarz.
+    const innen = auge && Math.hypot(auge[0] - x, auge[2] - y) < d.laenge * s * 0.45 && auge[1] < d.hoehe * s;
     for (const t of M.glasTeile) {
-      if (t.rolle === 'glas') { setze(aufbau, VF_GLAS_TINT, 0, 0.86, 0, 1, 0, 1); teil(t); }
+      if (t.rolle === 'glas') { setze(aufbau, VF_GLAS_TINT, 0, innen ? 0.12 : 0.86, 0, 1, 0, innen ? 0.2 : 1); teil(t); }
       else { setze(aufbau, VF_WEISS, licht ? 0.6 : 0, 0.9, 1, 1, 0, 0.5); teil(t); }
     }
     // 5. Leuchten: Lichtpunkte (zur Kamera gedreht) und vorn der Lichtkegel auf der Bahn
@@ -2675,17 +2780,31 @@
   // ---- Starten und Beenden ------------------------------------------------------------------
   // opts.tiles: diese Strecke statt der des Editors (die Studie faehrt Homington), opts.studie: die
   // Fahrt gehoert der Studie (beim Beenden nicht in die Garage). true = gestartet.
+  // Hinweis beim Start: der HUD-Toast liegt im Cockpit und ist in der Garage unsichtbar (Gnen54,
+  // 14.11.: "in der Android App ... kein Hinweis, keine Reaktion"). Dort ein eigener Hinweis unten.
+  function vfStartHinweis(msg) {
+    showHudToast(msg);
+    const el = $('hud-toast');
+    if (el && el.offsetParent) return;
+    const d = document.createElement('div');
+    d.setAttribute('role', 'status');
+    d.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;max-width:90vw;'
+      + 'background:#b8860b;color:#100c02;padding:10px 16px;border-radius:6px;font-weight:600;text-align:center';
+    d.textContent = msg;
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 4000);
+  }
   function virtuellStarten(opts) {
     opts = opts || {};
     if (VF.aktiv) return false;
     vfHandlingCache = null;   // einmal frisch lesen (z. B. in einem anderen Tab geaendert)
-    if (!physicsEnabled) { showHudToast(t('Virtuell braucht ein Fahrgefühl mit Physik (nicht RC)')); return false; }
+    if (!physicsEnabled) { vfStartHinweis(t('Virtuell braucht ein Fahrgefühl mit Physik (nicht RC)')); return false; }
     // Editor-Strecke und gemerkte Rollen gehoeren dem Fahrer: die Ersatzstrecke (Balkonia) und die Rolle
     // des virtuellen Autos werden beim Beenden wieder zurueckgenommen.
     VF.tilesVorher = currentTrackTiles;
     try { VF.editorVorher = localStorage.getItem(EDITOR_STRECKE_STORE); } catch (e) { VF.editorVorher = undefined; }
     const tiles = opts.tiles && opts.tiles.length >= 3 ? opts.tiles : vfTilesWaehlen();
-    if (!tiles) { showHudToast(t('Erst eine Strecke bauen')); return false; }
+    if (!tiles) { vfStartHinweis(t('Erst eine Strecke bauen')); return false; }
     VF.studie = !!opts.studie;
     const schicht = document.createElement('div');
     schicht.className = 'vf-schicht';
@@ -2744,7 +2863,7 @@
     vfTouchBauen();   // v1.3.122: Beruehrungs-Steuerung (Touch), falls Geraet und kein Gamepad
     VF.splits = null; VF.besteSplits = null;
     VF.tiles = tiles;
-    VF.pts = trackCenterline(tiles);
+    VF.pts = vfSchliessstelle(trackCenterline(tiles));
     VF.nrm = trackNormals(VF.pts);
     // v1.3.39: Flaechen mit Texturen (die Pixel entstehen nur beim ersten Mal) und der feste Platz der
     // Kamera "Fahrer am Rand".
@@ -2841,6 +2960,9 @@
     // heil, und virtuellBeenden stellt beides wieder her (bis 1.3.131 loeschte der Start den echten
     // Schaden, und virtuelle Zusammenstoesse blieben danach im Cockpit stehen).
     VF.schadenVorher = (typeof damage === 'number') ? damage : null;
+    // Akku: das virtuelle Auto meldet ueber seine Pakete einen Rohwert, der danach in dashBattery stehen
+    // blieb (= 0 %) - beim Beenden kam dann "Session abbrechen, Box anfahren!" (GEMELDET Gnen54 17.11.).
+    VF.akkuVorher = (typeof dashBattery === 'undefined') ? null : dashBattery;
     VF.flaggeVorher = (typeof flagState !== 'undefined') ? flagState : null;
     if (typeof damage === 'number') damage = 0;
     // Zustand der virtuellen Wertung (derby/knockout): Spieler und NPCs.
@@ -2871,8 +2993,13 @@
   // "Wie in Optionen" wird als Sentinel gespeichert, damit es sich vom Standard (Vulture V5.R) unterscheidet.
   const VF_MOTOR_GLOBAL = '~global';
   // Standard ist der Vulture V5.R (wie das Auto); "Wie in Optionen" folgt dem globalen Ton (sentinel).
+  // Gnen54s eigene Autos haben einen FESTEN Motorklang (BESTELLT Gnen54: "der Motorsound soll fest dem
+  // Fahrzeug zugeordnet sein, die Anwahl gesperrt") - die gespeicherte Wahl gilt dort nicht.
+  const VF_MOTOR_FEST = { kaefer: 'boxster986', spider: 'listerstorm', caravelle: 'boxster986' };
+  function vfMotorFest() { return VF_MOTOR_FEST[vfAutoWahl()] || ''; }
   function vfMotorGewaehlt() {
-    const def = ({ v5r: 'sd_v5r', lynx220: 'sd_lynx', fmcgt4: 'sd_fmc', boxer96: 'sd_boxer', kaefer: 'boxster986', spider: 'listerstorm' })[vfAutoWahl()] || 'sd_v5r';
+    if (vfMotorFest()) return vfMotorFest();
+    const def = ({ v5r: 'sd_v5r', lynx220: 'sd_lynx', fmcgt4: 'sd_fmc', boxer96: 'sd_boxer', kaefer: 'boxster986', spider: 'listerstorm', caravelle: 'boxster986' })[vfAutoWahl()] || 'sd_v5r';
     try { const v = localStorage.getItem(VF_MOTOR_STORE); return v === null ? def : v; } catch (e) { return def; }
   }
   function vfMotorZiel() { const g = vfMotorGewaehlt(); if (g && g !== VF_MOTOR_GLOBAL) return g; return $('sound-profile') ? $('sound-profile').value : ''; }
@@ -2915,7 +3042,11 @@
       try { localStorage.setItem(VF_MOTOR_STORE, n || VF_MOTOR_GLOBAL); } catch (e) { /* egal */ }
       renderGarage();
     };
-    rechts.appendChild(garWertZeile(t('Motorsound'), werte[j].name, () => wahl(-1), () => wahl(1)));
+    if (vfMotorFest()) {
+      const fest = garWertZeile(t('Motorsound'), werte[j].name + ' (' + t('fest zum Auto') + ')', () => {}, () => {});
+      fest.querySelectorAll('.gk-w button').forEach((k) => { k.disabled = true; k.style.visibility = 'hidden'; });
+      rechts.appendChild(fest);
+    } else rechts.appendChild(garWertZeile(t('Motorsound'), werte[j].name, () => wahl(-1), () => wahl(1)));
     // v1.1.9: welches Auto, und wie deutlich die Federung sichtbar neigt.
     const autos = [{ v: 'v5r', name: 'Vulture V5.R (Speed Dreams)' }, { v: 'lynx220', name: 'Lynx 220 (Jaguar XJ220, Speed Dreams)' },
                    { v: 'fmcgt4', name: 'FMC GT4 (Ford GT40 Mk1, Speed Dreams)' }, { v: 'boxer96', name: 'Boxer 96 (Porsche 911 GT3, Speed Dreams)' },
@@ -2923,6 +3054,9 @@
                    { v: 'kaefer', name: 'VW Käfer 1303 RS mit Boxster-Motor (Gnen54, WIP)' },
                    // Spider NG1 (Gnen54) auf Modiplay-MP1-Karosserie, Freigabe von Sturmkind, siehe img/autos/spider/LIZENZ.txt
                    { v: 'spider', name: 'Spider NG1 (Gnen54, WIP)' },
+                   // VW Caravelle (Gnen54) auf Vehicle-World-Karosserie (Freigabe erteilt), Oettinger-Boxer-6 (Werte geschaetzt),
+                   // Motorhauben-Kamera = Kamera im echten Modell (Lage, Neigung, Bildwinkel aus auto.json "haube")
+                   { v: 'caravelle', name: 'VW Caravelle Oettinger (Gnen54, WIP)' },
                    { v: 'kasten', name: t('Einfaches Modell') }];
     const ja = Math.max(0, autos.findIndex((a) => a.v === vfAutoWahl()));
     const autoWahl = (dd) => {
@@ -2959,7 +3093,7 @@
     const grafikZeile = garWertZeile(t('Grafik'), t(vfGrafik() === 'perf' ? 'Performance' : 'Quality'), gWahl, gWahl);
     grafikZeile.querySelector('.gk-l').insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span>');
     rechts.appendChild(grafikZeile);
-    // Geist: eine Kopie faehrt nach der ersten Runde die aufgezeichnete Linie ab (Standard an).
+    // Geist: eine Kopie faehrt nach der ersten Runde die aufgezeichnete Linie ab (Standard aus).
     const geistAn = vfGeistAn();
     const geistWahl = () => {
       try { localStorage.setItem(VF_GEIST_STORE, geistAn ? 'aus' : 'an'); } catch (e) { /* egal */ }
@@ -3113,6 +3247,8 @@
       if (typeof updateDamageFuelUI === 'function') { try { updateDamageFuelUI(); } catch (e) { /* egal */ } }
     }
     VF.schadenVorher = null;
+    if (typeof dashBattery !== 'undefined') dashBattery = VF.akkuVorher === undefined ? null : VF.akkuVorher;
+    VF.akkuVorher = null;
     if (VF.flaggeVorher === 'green' && typeof flagState !== 'undefined' && flagState !== 'green') {
       try {
         if (typeof gelbBeenden === 'function') gelbBeenden();
@@ -3165,3 +3301,24 @@
     VF.studie = false;
   }
   window.addEventListener('keydown', (e) => { if (VF.aktiv && e.key === 'Escape') { e.stopImmediatePropagation(); virtuellBeenden(); } }, true);
+  // F8: Pad-Diagnose (padDiagText in 90-ghosts.js) - zeigt, ob und wo das Gamepad haengen bleibt.
+  let vfPadDiagIv = 0;
+  function vfPadDiagUmschalten() {
+    let el = document.getElementById('vf-pad-diag');
+    if (el) { el.remove(); clearInterval(vfPadDiagIv); return; }
+    el = document.createElement('pre');
+    el.id = 'vf-pad-diag';
+    el.style.cssText = 'position:fixed;left:8px;top:180px;z-index:99999;margin:0;padding:8px 10px;max-width:70vw;'
+      + 'white-space:pre-wrap;font:12px/1.4 monospace;color:#fff;background:rgba(0,0,0,.78);border:1px solid #29b6f6;pointer-events:none';
+    document.body.appendChild(el);
+    const zeichne = () => {
+      if (!el.isConnected || !VF.aktiv) { el.remove(); clearInterval(vfPadDiagIv); return; }
+      let code = '-';
+      try { code = (VF.tiles || currentTrackTiles || []).length > 1 ? trackToCode(VF.tiles || currentTrackTiles) : '-'; } catch (e) { /* ohne */ }
+      el.textContent = t('Pad-Diagnose (F8 schließt)') + '\n' + (typeof padDiagText === 'function' ? padDiagText() : '-')
+        + '\n' + t('Strecke') + ': ' + code;
+    };
+    zeichne();
+    vfPadDiagIv = setInterval(zeichne, 200);
+  }
+  window.addEventListener('keydown', (e) => { if (VF.aktiv && e.key === 'F8' && !e.repeat) { e.preventDefault(); vfPadDiagUmschalten(); } });

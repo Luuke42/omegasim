@@ -3650,7 +3650,14 @@
     const ap = autopilot(rawBrake);
     if (!ap && apVorher) apUebergabe();
     apVorher = !!ap;
-    if (ap) {
+    // VIRTUELLE FAHRT (v1.4, GEMELDET Gnen54: "bei Gelb faehrt das Auto selbst los, stoppt und will
+    // zurueck auf die Bahn"): dort faehrt der Autopilot NICHT selbst, er DECKELT nur - Gas hoechstens so
+    // viel wie er geben wuerde, Bremse mindestens so viel. Ohne Gas des Fahrers bleibt das Auto stehen.
+    const apVf = ap && typeof vfAktiv === 'function' && vfAktiv();
+    if (apVf) {
+      rawThrottle = Math.min(rawThrottle, ap.throttle);
+      rawBrake = Math.max(rawBrake, ap.brake);
+    } else if (ap) {
       rawThrottle = ap.throttle;
       rawBrake = ap.brake;
       // Die Lenkung nur, wenn er sie fuehren DARF - siehe `lenkt` in autopilot().

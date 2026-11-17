@@ -657,8 +657,67 @@
   // auf sein Ende). Fahrbahn: v = 0..1 ueber das Teil, eine zufaellige Spalte (Gebrauchsgrad), zufaellig
   // gespiegelt, Helligkeit je Teil leicht anders. Randstein: eine ganze Zahl Pfeiltakte je Teil und
   // Seite (wie im Editor), an beiden Enden ein dunkles Stueck als Steckfuge. Rein (ohne WebGL).
-  function vfBahnGeometrie(pts, nrm, tiles, ao) {
+  // BOXENGASSE (GEMELDET Gnen54 17.11.: "Box erscheint nicht an der Strecke"): wie im Editor
+  // (60-track.js, boxBucht/boxBuchtSvg) weitet sich auf der Fahrerrechten (rote Seite, sg -1) die Kante
+  // ueber jede Boxenkachel zu einer Bucht (BOX_BUCHT halbe Bahnbreiten tief, weiches S an den Enden).
+  // Die Boxenkacheln werden dafuer 6-fach feiner abgetastet; bucht[i] ist die Zusatzbreite an Punkt i.
+  // Dazu die Markierungen des Originalteils: Teilfuge quer, je Haelfte 10 Querstriche und 8 Punkte.
+  function vfBoxVerfeinern(pts, nrm, tiles) {
+    const istBox = (k) => k >= 0 && tiles[k] && tiles[k].type === TILE_TYPE.PIT;
+    if (!tiles.some((x) => x.type === TILE_TYPE.PIT) || typeof boxBucht !== 'function') return { pts, nrm, bucht: null, marken: [] };
+    const half = TRACK_HALF_W, tiefe = BOX_BUCHT * half, FEIN = 6, n = pts.length;
+    const box = {};
+    for (let i = 1; i < n; i++) {
+      const k = pts[i].tile;
+      if (!istBox(k)) continue;
+      if (!box[k]) box[k] = { s: i - 1, b: i }; else box[k].b = i;
+    }
+    const u = (i, k) => (i - box[k].s) / Math.max(1, box[k].b - box[k].s);
+    const p2 = [], n2 = [], bucht = [];
+    for (let i = 0; i < n; i++) {
+      const k = pts[i].tile;
+      if (i > 0 && box[k]) {
+        for (let f = 1; f < FEIN; f++) {
+          const q = f / FEIN, a = pts[i - 1], z = pts[i];
+          let nx = nrm[i - 1].x + (nrm[i].x - nrm[i - 1].x) * q, ny = nrm[i - 1].y + (nrm[i].y - nrm[i - 1].y) * q;
+          const nl = Math.hypot(nx, ny) || 1;
+          p2.push({ x: a.x + (z.x - a.x) * q, y: a.y + (z.y - a.y) * q, tile: k });
+          n2.push({ x: nx / nl, y: ny / nl });
+          bucht.push(tiefe * boxBucht(u(i - 1, k) + q / Math.max(1, box[k].b - box[k].s)));
+        }
+      }
+      p2.push(pts[i]); n2.push(nrm[i]);
+      bucht.push(box[k] ? tiefe * boxBucht(u(i, k)) : 0);
+    }
+    // Markierungen als flache Vierecke (Mitte, Laengsrichtung, Laenge, Querrichtung, Breite).
+    const marken = [];
+    for (const k of Object.keys(box)) {
+      const { s: i0, b: i1 } = box[k];
+      const A = pts[i0], Z = pts[i1], nn = nrm[Math.min(i1, i0 + 1)];
+      const lx = Z.x - A.x, ly = Z.y - A.y, L = Math.hypot(lx, ly) || 1, ex = lx / L, ey = ly / L;
+      const P = (uu, v) => [A.x + lx * uu - nn.x * v * half, A.y + ly * uu - nn.y * v * half];
+      const quer = [-nn.x, -nn.y];
+      // Teilfuge zwischen den beiden Originalteilen, quer ueber Bahn und Bucht (dunkelgrau).
+      const f0 = P(0.5, -1), f1 = P(0.5, 1 + BOX_BUCHT);
+      marken.push({ m: [(f0[0] + f1[0]) / 2, (f0[1] + f1[1]) / 2], e: [ex, ey], l: 0.6, q: quer, b: Math.hypot(f1[0] - f0[0], f1[1] - f0[1]), c: [0.23, 0.25, 0.29] });
+      for (const spiegel of [false, true]) {
+        for (let j = 0; j < 10; j++) {
+          const uu0 = 0.257 + j * 0.215 / 9, uu = spiegel ? 1 - uu0 : uu0, hl = 0.33 - j * (0.33 - 0.155) / 9;
+          marken.push({ m: P(uu, 1.33), e: [ex, ey], l: 0.45, q: quer, b: 2 * hl * half, c: [1, 1, 1] });
+        }
+        for (let j = 0; j < 8; j++) {
+          const uu0 = 0.257 + j * 0.165 / 7, uu = spiegel ? 1 - uu0 : uu0;
+          marken.push({ m: P(uu, 0.88), e: [ex, ey], l: 0.6, q: quer, b: 0.6, c: [1, 1, 1] });
+        }
+      }
+    }
+    return { pts: p2, nrm: n2, bucht, marken };
+  }
+  function vfBahnGeometrie(pts0, nrm0, tiles, ao) {
     const strasse = [], rand = [];
+    const fein = vfBoxVerfeinern(pts0, nrm0, tiles);
+    const pts = fein.pts, nrm = fein.nrm, bucht = fein.bucht;
+    const bu = (i) => (bucht ? bucht[i] : 0);
     const half = TRACK_HALF_W, kw = TRACK_KERB_W, ky = 0.09, n = pts.length;
     const rnd = vfZufall(4242 + tiles.length * 31 + Math.round(Math.abs(pts[n - 1].x) * 7));
     const off = (i, d) => [pts[i].x + nrm[i].x * d, pts[i].y + nrm[i].y * d];
@@ -683,11 +742,17 @@
         if (fv) { v0 = 1 - v0; v1 = 1 - v1; }
         const a = off(i, half), b = off(i + 1, half), c = off(i + 1, -half), d = off(i, -half);
         vfViereck(strasse, [a[0], 0, a[1], ua, v0], [b[0], 0, b[1], ua, v1], [c[0], 0, c[1], ub, v1], [d[0], 0, d[1], ub, v0], ct);
+        if (bu(i) > 1e-3 || bu(i + 1) > 1e-3) {
+          // Boxenbucht: Asphalt vom Rand bis zur ausgestellten Kante (Randspalte der Textur, etwas dunkler).
+          const e = off(i + 1, -half - bu(i + 1)), g = off(i, -half - bu(i)), cb = [ct[0] * 0.9, ct[1] * 0.9, ct[2] * 0.9];
+          vfViereck(strasse, [d[0], 0, d[1], ub, v0], [c[0], 0, c[1], ub, v1], [e[0], 0, e[1], ub, v1], [g[0], 0, g[1], ub, v0], cb);
+        }
       }
       for (const sg of [1, -1]) {
+        const bs = (i) => (sg < 0 ? bu(i) : 0);
         const mitte = (half + kw / 2) * sg, accS = [0];
         for (let i = tl.i0; i <= tl.i1; i++) {
-          const p = off(i, mitte), q = off(i + 1, mitte);
+          const p = off(i, mitte - bs(i)), q = off(i + 1, mitte - bs(i + 1));
           accS.push(accS[accS.length - 1] + Math.hypot(q[0] - p[0], q[1] - p[1]));
         }
         const Ls = accS[accS.length - 1] || 1, nP = Math.max(1, Math.round(Ls / takt)), k0 = Math.floor(rnd() * 4);
@@ -705,7 +770,7 @@
           if (i === tl.i1) t1 = 1 - f;
           stuecke.push([t0, t1, false]);
           if (i === tl.i1) stuecke.push([t1, 1, true]);
-          const iA = off(i, half * sg), iB = off(i + 1, half * sg), oA = off(i, (half + kw) * sg), oB = off(i + 1, (half + kw) * sg);
+          const iA = off(i, half * sg - bs(i)), iB = off(i + 1, half * sg - bs(i + 1)), oA = off(i, (half + kw) * sg - bs(i)), oB = off(i + 1, (half + kw) * sg - bs(i + 1));
           for (const [s0, s1, fuge] of stuecke) {
             if (s1 <= s0) continue;
             const i0 = lerp(iA, iB, s0), i1 = lerp(iA, iB, s1), o0 = lerp(oA, oB, s0), o1 = lerp(oA, oB, s1);
@@ -717,6 +782,13 @@
         }
       }
     });
+    // Boxenmarkierungen: flach knapp ueber der Fahrbahn, Randstein-Textur an der hellen Wandspalte.
+    const um = 4 / VF_RAND_B;
+    for (const mk of fein.marken) {
+      const ex = mk.e[0] * mk.l / 2, ey = mk.e[1] * mk.l / 2, qx = mk.q[0] * mk.b / 2, qy = mk.q[1] * mk.b / 2, y = 0.012;
+      vfViereck(rand, [mk.m[0] - ex - qx, y, mk.m[1] - ey - qy, um, 0.1], [mk.m[0] + ex - qx, y, mk.m[1] + ey - qy, um, 0.1],
+        [mk.m[0] + ex + qx, y, mk.m[1] + ey + qy, um, 0.2], [mk.m[0] - ex + qx, y, mk.m[1] - ey + qy, um, 0.2], mk.c);
+    }
     return { strasse, rand, teile: teile.length };
   }
   // Ein Holzstueck als Viereck: Ursprung o, Laengsrichtung e (Laenge L), Querrichtung q (Breite B).
@@ -2953,11 +3025,14 @@
     vfTouchBauen();   // v1.3.122: Beruehrungs-Steuerung (Touch), falls Geraet und kein Gamepad
     VF.splits = null; VF.besteSplits = null;
     VF.tiles = tiles;
-    VF.pts = vfSchliessstelle(trackCenterline(tiles));
+    // Gezeichnet wird die volle Mittellinie (sonst klafft an der Schliessstelle ein Loch in der Bahn),
+    // gefahren, gezaehlt und von den NPCs befahren die an der Schliessstelle gekuerzte.
+    const ptsVoll = trackCenterline(tiles);
+    VF.pts = vfSchliessstelle(ptsVoll);
     VF.nrm = trackNormals(VF.pts);
     // v1.3.39: Flaechen mit Texturen (die Pixel entstehen nur beim ersten Mal) und der feste Platz der
     // Kamera "Fahrer am Rand".
-    try { VF.flaeche = vfFlaechenBauen(gl, VF.pts, VF.nrm, tiles, VF.grafik); } catch (e) { schicht.remove(); document.body.classList.remove('vf-an'); showHudToast('WebGL: ' + e.message); return false; }
+    try { VF.flaeche = vfFlaechenBauen(gl, ptsVoll, ptsVoll === VF.pts ? VF.nrm : trackNormals(ptsVoll), tiles, VF.grafik); } catch (e) { schicht.remove(); document.body.classList.remove('vf-an'); showHudToast('WebGL: ' + e.message); return false; }
     VF.fahrer = { ort: vfFahrerOrt(VF.pts, VF.nrm, tiles), z: {}, k: null };
     // Das Auto: ein Garagenauto ohne Funk. Ein gesteuertes Auto gibt seine Rolle so lange ab.
     VF.vorherSpieler = playerCar;

@@ -2188,6 +2188,22 @@
   // (etwas hinter und unter dem Auge, aussen neben der Karosserie). Rahmen als HTML ueber der Leinwand.
   const VF_SPIEGEL_WINKEL = 12;     // Grad nach aussen gedreht
   const VF_SPIEGEL_FOV = 36;        // senkrechter Bildwinkel (Spiegel hochkant)
+  // Gamepad -> HUD-Knoepfe der virtuellen Fahrt (aus pollGamepad, 90-ghosts.js): dieselbe Wirkung wie
+  // ein Klick, damit Pad und Maus nie auseinanderlaufen.
+  function vfKnopf(id) {
+    const k = document.querySelector('.vf-knoepfe [data-vf="' + id + '"]');
+    if (k && !k.disabled) k.click();
+  }
+  const vfFlagPad = { seit: null, gefeuert: false };
+  function vfFlagTaste(an) {
+    const jetzt = performance.now();
+    if (an && vfFlagPad.seit === null) { vfFlagPad.seit = jetzt; vfFlagPad.gefeuert = false; }
+    if (an && !vfFlagPad.gefeuert && jetzt - vfFlagPad.seit >= 1000) { vfFlagPad.gefeuert = true; vfKnopf('flag'); }
+    if (!an && vfFlagPad.seit !== null) {
+      if (!vfFlagPad.gefeuert) vfKnopf('box');
+      vfFlagPad.seit = null;
+    }
+  }
   function vfSpiegelRahmen(an, rechtecke) {
     let r = VF.spiegelRahmen;
     if (!an) { if (r) { r.forEach((e) => e.remove()); VF.spiegelRahmen = null; } return; }

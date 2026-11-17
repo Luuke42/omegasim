@@ -13051,6 +13051,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // Navigationsschritt mehr (50b-menu-nav.js) - Dreieck oeffnet ihn jetzt direkt.
       if (headNow && !prevHeadlights && trackEditorPad('rotate')) {
         // consumed by the editor
+      } else if (headNow && !prevHeadlights && imVf) {
+        // Virtuelle Fahrt (BESTELLT Gnen54 17.11.): Licht-Taste wie der Knopf "Licht" im HUD.
+        vfKnopf('licht');
       } else if (headNow && !prevHeadlights
                  && document.querySelector('.tabpage.active') === $('tab-race')) {
         headlightsOn = !headlightsOn;
@@ -13166,7 +13169,12 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         // Fassung der Logik: flagHoldPress startet den Ladebalken, flagHoldRelease(true)
         // loest aus. Zu frueh losgelassen passiert nichts - ein halber Druck darf keine
         // halbe Wirkung haben.
-        flagTasteTick(yellowflagNow);
+        if (imVf) {
+          // Virtuelle Fahrt (BESTELLT Gnen54 17.11.): getippt = Knopf "Box", 1 s gehalten = Knopf
+          // "Gelbe Flagge" im HUD - dieselbe Belegung wie im Cockpit.
+          vfFlagTaste(yellowflagNow);
+          prevYellowFlag = yellowflagNow;
+        } else flagTasteTick(yellowflagNow);
       }
 
       const resetNow = readBindingValue(pad, bindings.resetcar) > BUTTON_CAPTURE_THRESHOLD;

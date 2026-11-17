@@ -43277,6 +43277,22 @@
   // (etwas hinter und unter dem Auge, aussen neben der Karosserie). Rahmen als HTML ueber der Leinwand.
   const VF_SPIEGEL_WINKEL = 12;     // Grad nach aussen gedreht
   const VF_SPIEGEL_FOV = 36;        // senkrechter Bildwinkel (Spiegel hochkant)
+  // Gamepad -> HUD-Knoepfe der virtuellen Fahrt (aus pollGamepad, 90-ghosts.js): dieselbe Wirkung wie
+  // ein Klick, damit Pad und Maus nie auseinanderlaufen.
+  function vfKnopf(id) {
+    const k = document.querySelector('.vf-knoepfe [data-vf="' + id + '"]');
+    if (k && !k.disabled) k.click();
+  }
+  const vfFlagPad = { seit: null, gefeuert: false };
+  function vfFlagTaste(an) {
+    const jetzt = performance.now();
+    if (an && vfFlagPad.seit === null) { vfFlagPad.seit = jetzt; vfFlagPad.gefeuert = false; }
+    if (an && !vfFlagPad.gefeuert && jetzt - vfFlagPad.seit >= 1000) { vfFlagPad.gefeuert = true; vfKnopf('flag'); }
+    if (!an && vfFlagPad.seit !== null) {
+      if (!vfFlagPad.gefeuert) vfKnopf('box');
+      vfFlagPad.seit = null;
+    }
+  }
   function vfSpiegelRahmen(an, rechtecke) {
     let r = VF.spiegelRahmen;
     if (!an) { if (r) { r.forEach((e) => e.remove()); VF.spiegelRahmen = null; } return; }
@@ -77284,6 +77300,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // Navigationsschritt mehr (50b-menu-nav.js) - Dreieck oeffnet ihn jetzt direkt.
       if (headNow && !prevHeadlights && trackEditorPad('rotate')) {
         // consumed by the editor
+      } else if (headNow && !prevHeadlights && imVf) {
+        // Virtuelle Fahrt (BESTELLT Gnen54 17.11.): Licht-Taste wie der Knopf "Licht" im HUD.
+        vfKnopf('licht');
       } else if (headNow && !prevHeadlights
                  && document.querySelector('.tabpage.active') === $('tab-race')) {
         headlightsOn = !headlightsOn;
@@ -77399,7 +77418,12 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         // Fassung der Logik: flagHoldPress startet den Ladebalken, flagHoldRelease(true)
         // loest aus. Zu frueh losgelassen passiert nichts - ein halber Druck darf keine
         // halbe Wirkung haben.
-        flagTasteTick(yellowflagNow);
+        if (imVf) {
+          // Virtuelle Fahrt (BESTELLT Gnen54 17.11.): getippt = Knopf "Box", 1 s gehalten = Knopf
+          // "Gelbe Flagge" im HUD - dieselbe Belegung wie im Cockpit.
+          vfFlagTaste(yellowflagNow);
+          prevYellowFlag = yellowflagNow;
+        } else flagTasteTick(yellowflagNow);
       }
 
       const resetNow = readBindingValue(pad, bindings.resetcar) > BUTTON_CAPTURE_THRESHOLD;

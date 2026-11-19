@@ -1116,6 +1116,35 @@
   const VF_GEIST_STORE = 'omegasim-vf-geist';
   // Aussenspiegel (BESTELLT Gnen54 17.11.: links und rechts je ein Spiegelbild, nur in der Onboard-Kamera
   // "Motorhaube", Standard aus - jeder Spiegel zeichnet die Szene ein weiteres Mal).
+  // ---- GEFAHRENE ZEITEN JE STRECKE (19.11., BESTELLT Gnen54: "Gefahrene Zeiten pro Strecke speichern")
+  // Je Strecke UND Auto: Bestzeit mit Datum und Zwischenzeiten (fuer das Delta), Rundenzahl und
+  // die letzten zehn Runden. Strecke = Name der freien Strecke oder der Code der gebauten Bahn.
+  const VF_ZEITEN_STORE = 'omegasim-vf-zeiten';
+  function vfZeitenSchluessel() {
+    let s = '-';
+    try { s = VF.frei ? 'frei:' + VF.frei.name : 'bahn:' + trackToCode(VF.tiles); } catch (e) { /* ohne */ }
+    return s + '|' + vfAutoWahl();
+  }
+  function vfZeitenAlle() {
+    try { return JSON.parse(localStorage.getItem(VF_ZEITEN_STORE) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function vfZeitenLaden() {
+    const e = vfZeitenAlle()[vfZeitenSchluessel()];
+    if (e && e.beste > 0) {
+      VF.beste = e.beste; VF.besteSplits = Array.isArray(e.splits) ? e.splits : null;
+      showHudToast(t('Streckenbestzeit') + ': ' + vfZeitAcc(e.beste, 3));
+    }
+  }
+  function vfZeitMerken(ms, splits) {
+    const alle = vfZeitenAlle(), k = vfZeitenSchluessel();
+    const e = alle[k] || (alle[k] = { beste: null, datum: null, runden: 0, letzte: [] });
+    e.runden += 1;
+    e.letzte = [Math.round(ms)].concat(e.letzte || []).slice(0, 10);
+    const neu = !(e.beste > 0) || ms < e.beste;
+    if (neu) { e.beste = Math.round(ms); e.datum = Date.now(); e.splits = splits || null; }
+    try { localStorage.setItem(VF_ZEITEN_STORE, JSON.stringify(alle)); } catch (err) { /* voll */ }
+    return neu && e.runden > 1;
+  }
   const VF_SPIEGEL_STORE = 'omegasim-vf-spiegel';
   function vfSpiegelAn() { try { return localStorage.getItem(VF_SPIEGEL_STORE) === 'an'; } catch (e) { return false; } }
   // Standard AUS seit 17.11. (Gnen54: "Ghost entfernen" -> "Standard aus"); nur ein ausdrueckliches 'an' schaltet ihn ein.
@@ -1930,8 +1959,11 @@
           VF.letzte = jetzt - VF.rundeAb;
           // Delta (HUD): die Zwischenzeiten der besten Runde je Punkt der Mittellinie.
           if (VF.beste === null || VF.letzte < VF.beste) { VF.beste = VF.letzte; VF.besteSplits = VF.splits; }
+          if (vfZeitMerken(VF.letzte, VF.splits)) showHudToast(t('Neue Streckenbestzeit') + ': ' + vfZeitAcc(VF.letzte, 3));
           // Nach der ersten Runde beginnt der Geist, die aufgezeichnete Linie abzufahren.
-          if (VF.geist && !VF.geist.aktiv) { VF.geist.aktiv = true; VF.geist.zeit = 0; VF.geist.i = 0; }
+          // (nur wenn der Geist in der Garage AN ist - bis 19.11. fuhr er nach Runde 1 immer los,
+          // GEMELDET Gnen54: "Geist mitten auf der Strecke", obwohl Standard aus).
+          if (VF.geist && VF.geist.an && !VF.geist.aktiv) { VF.geist.aktiv = true; VF.geist.zeit = 0; VF.geist.i = 0; }
           // Rundenrennen: nach der Ziel-Lap ist Schluss.
           VF.runden = (VF.runden || 0) + 1;
           if (VF.modus === 'laps' && VF.runden >= VF.limit) vfRennenEnde();
@@ -1947,7 +1979,10 @@
     b[0] = 0xaf; b[2] = 0x9c; b[10] = 100;
     b[11] = VF.zaehler;
     b[12] = VF.abseits ? TILE_OFFTRACK : vfCode(VF.tiles[tile] ? VF.tiles[tile].type : TILE_TYPE.STRAIGHT);
-    b[15] = VF.abseits ? 0 : 0x08;
+    // Byte 15 Bit 3 = "ueber der Ziellinie". Die App zaehlt die STEIGENDE FLANKE als Runde.
+    // Bis 19.11. stand das Bit auf der ganzen Bahn - die Flanke kam dann nur beim Zurueckkehren
+    // von neben der Bahn, GEMELDET Gnen54: Zeitansage beim Verlassen, keine an Start/Ziel.
+    b[15] = !VF.abseits && VF.tiles[tile] && VF.tiles[tile].type === TILE_TYPE.START ? 0x08 : 0;
     try { onCarNotify(VF.car, { target: { value: new DataView(b.buffer) } }); } catch (e) { /* weiter */ }
   }
 
@@ -3097,6 +3132,7 @@
     Object.assign(VF, { x: VF.pts[start].x, y: VF.pts[start].y, h: VF.pts[start].heading, idx: start, zaehler: 0, kachel: -2,
                         abseits: false, letzt: 0, kam: null, rundeAb: 0, letzte: null, beste: null, aktiv: true,
                         startX: VF.pts[start].x, startY: VF.pts[start].y, startH: VF.pts[start].heading });
+    vfZeitenLaden();
     vfNpcStarten(gl, start);
     physEngine.state.speedKmh = 0;
     schicht.addEventListener('click', (e) => {

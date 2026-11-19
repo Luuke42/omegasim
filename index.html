@@ -15388,6 +15388,7 @@
     "Pflicht-Boxendurchfahrt": "Mandatory pit drive-through",
     "Pflicht-Boxendurchfahrt fehlt": "Mandatory pit drive-through missing",
     "Boxendurchfahrt": "Pit drive-through",
+    "In die Boxengasse fahren": "Drive into the pit lane",
     "Neue Streckenbestzeit": "New track record",
     "Zusammenstoß": "Collision",
     "Virtuell braucht ein Fahrgefühl mit Physik (nicht RC)": "Virtual needs a handling with physics (not RC)",
@@ -19345,6 +19346,7 @@
     "Pflicht-Boxendurchfahrt": "Paso obligatorio por boxes",
     "Pflicht-Boxendurchfahrt fehlt": "Falta el paso obligatorio por boxes",
     "Boxendurchfahrt": "Paso por boxes",
+    "In die Boxengasse fahren": "Entra en el pit lane",
     "Neue Streckenbestzeit": "Nuevo récord del circuito",
     "Zusammenstoß": "Colisión",
     "Zurücksetzen": "Reiniciar",
@@ -42250,10 +42252,14 @@
   // Ergebnis die Zeitstrafe aus dem Renn-Setup (racePitPenaltyS) je fehlender Durchfahrt.
   const VF_PFLICHTBOX_STORE = 'omegasim-vf-pflichtbox';
   function vfPflichtBox() { try { return Math.max(0, Math.min(3, parseInt(localStorage.getItem(VF_PFLICHTBOX_STORE), 10) || 0)); } catch (e) { return 0; } }
+  // Boxenservice (Tanken, Reparieren, Reifen) nur in der Boxengasse, wenn die Strecke eine hat
+  // (19.11., GEMELDET Gnen54: "mitten auf der Strecke ... immer noch tanken und reparieren").
+  function vfBoxOrtOk() { try { return !VF.aktiv || !VF.boxN || !!VF.inBox; } catch (e) { return true; } }
   function vfPflichtGilt() { return !!(VF.boxN && (VF.modus === 'laps' || VF.modus === 'endurance') && vfPflichtBox() > 0); }
   function vfBoxDurchfahrt(o, zus) {
     if (!VF.boxN) return;
     const drin = zus > VF.boxMax * 0.3 && Math.abs(o.quer) > TRACK_HALF_W + zus * 0.5;
+    VF.inBox = drin;
     // Von-bis statt Einzelpunkte: bei hohem Tempo springt der Index mehrere Punkte je Bild.
     if (drin) { if (!VF.boxBesucht) VF.boxBesucht = { von: o.idx, bis: o.idx }; else VF.boxBesucht.bis = o.idx; return; }
     if (!VF.boxBesucht) return;
@@ -50261,11 +50267,12 @@
     // Funktionsdeklaration im selben Skriptblock und damit hochgezogen - genau wie
     // stopGhost(), das von hier aus schon immer gerufen wird. Eine Wache, die nie greifen
     // kann, liest sich wie eine echte und verdeckt, dass die Abhaengigkeit sicher ist.
-    const amOrt = pitTrigger !== 'offtrack' || istAbseits();
+    const vfOrt = typeof vfBoxOrtOk !== 'function' || vfBoxOrtOk();
+    const amOrt = (pitTrigger !== 'offtrack' || istAbseits()) && vfOrt;
     if (pitState === 'limited' && stopped && amOrt) { setPitState('servicing'); return; }
     if (pitState === 'limited' && stopped && !amOrt && !pitOrtGemeldet) {
       pitOrtGemeldet = true;
-      showHudToast('NEBEN DIE STRECKE FAHREN');
+      showHudToast(vfOrt ? 'NEBEN DIE STRECKE FAHREN' : t('In die Boxengasse fahren'));
       log('Boxenstopp angefordert, aber das Auto steht auf der Bahn: der Service beginnt '
           + 'erst neben der Strecke.', 'info');
     }

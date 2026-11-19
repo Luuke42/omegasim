@@ -5112,11 +5112,12 @@
     // Funktionsdeklaration im selben Skriptblock und damit hochgezogen - genau wie
     // stopGhost(), das von hier aus schon immer gerufen wird. Eine Wache, die nie greifen
     // kann, liest sich wie eine echte und verdeckt, dass die Abhaengigkeit sicher ist.
-    const amOrt = pitTrigger !== 'offtrack' || istAbseits();
+    const vfOrt = typeof vfBoxOrtOk !== 'function' || vfBoxOrtOk();
+    const amOrt = (pitTrigger !== 'offtrack' || istAbseits()) && vfOrt;
     if (pitState === 'limited' && stopped && amOrt) { setPitState('servicing'); return; }
     if (pitState === 'limited' && stopped && !amOrt && !pitOrtGemeldet) {
       pitOrtGemeldet = true;
-      showHudToast('NEBEN DIE STRECKE FAHREN');
+      showHudToast(vfOrt ? 'NEBEN DIE STRECKE FAHREN' : t('In die Boxengasse fahren'));
       log('Boxenstopp angefordert, aber das Auto steht auf der Bahn: der Service beginnt '
           + 'erst neben der Strecke.', 'info');
     }

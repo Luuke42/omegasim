@@ -1151,10 +1151,14 @@
   // Ergebnis die Zeitstrafe aus dem Renn-Setup (racePitPenaltyS) je fehlender Durchfahrt.
   const VF_PFLICHTBOX_STORE = 'omegasim-vf-pflichtbox';
   function vfPflichtBox() { try { return Math.max(0, Math.min(3, parseInt(localStorage.getItem(VF_PFLICHTBOX_STORE), 10) || 0)); } catch (e) { return 0; } }
+  // Boxenservice (Tanken, Reparieren, Reifen) nur in der Boxengasse, wenn die Strecke eine hat
+  // (19.11., GEMELDET Gnen54: "mitten auf der Strecke ... immer noch tanken und reparieren").
+  function vfBoxOrtOk() { try { return !VF.aktiv || !VF.boxN || !!VF.inBox; } catch (e) { return true; } }
   function vfPflichtGilt() { return !!(VF.boxN && (VF.modus === 'laps' || VF.modus === 'endurance') && vfPflichtBox() > 0); }
   function vfBoxDurchfahrt(o, zus) {
     if (!VF.boxN) return;
     const drin = zus > VF.boxMax * 0.3 && Math.abs(o.quer) > TRACK_HALF_W + zus * 0.5;
+    VF.inBox = drin;
     // Von-bis statt Einzelpunkte: bei hohem Tempo springt der Index mehrere Punkte je Bild.
     if (drin) { if (!VF.boxBesucht) VF.boxBesucht = { von: o.idx, bis: o.idx }; else VF.boxBesucht.bis = o.idx; return; }
     if (!VF.boxBesucht) return;

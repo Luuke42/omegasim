@@ -15385,6 +15385,9 @@
     "Keine Strecke im Editor - es geht auf Balkonia": "No track in the editor – driving on Balkonia",
     "Zurück auf die Bahn gesetzt": "Put back on the track",
     "Streckenbestzeit": "Track record",
+    "Pflicht-Boxendurchfahrt": "Mandatory pit drive-through",
+    "Pflicht-Boxendurchfahrt fehlt": "Mandatory pit drive-through missing",
+    "Boxendurchfahrt": "Pit drive-through",
     "Neue Streckenbestzeit": "New track record",
     "Zusammenstoß": "Collision",
     "Virtuell braucht ein Fahrgefühl mit Physik (nicht RC)": "Virtual needs a handling with physics (not RC)",
@@ -19339,6 +19342,9 @@
     "Keine Strecke im Editor - es geht auf Balkonia": "Ninguna pista en el editor: se conduce en Balkonia",
     "Zurück auf die Bahn gesetzt": "Devuelto a la pista",
     "Streckenbestzeit": "Récord del circuito",
+    "Pflicht-Boxendurchfahrt": "Paso obligatorio por boxes",
+    "Pflicht-Boxendurchfahrt fehlt": "Falta el paso obligatorio por boxes",
+    "Boxendurchfahrt": "Paso por boxes",
     "Neue Streckenbestzeit": "Nuevo récord del circuito",
     "Zusammenstoß": "Colisión",
     "Zurücksetzen": "Reiniciar",
@@ -42238,6 +42244,26 @@
     try { localStorage.setItem(VF_ZEITEN_STORE, JSON.stringify(alle)); } catch (err) { /* voll */ }
     return neu && e.runden > 1;
   }
+  // ---- PFLICHT-BOXENDURCHFAHRT (19.11., BESTELLT Gnen54: "Zwang Boxengasse anfahren" - "Pflicht-
+  // Boxendurchfahrt, kein Tanken etc."). Im Rennen (Runden, Langstrecke) muss so oft durch die Boxengasse
+  // gefahren werden; gezaehlt wird, wer mindestens 60 % der Bucht befahren hat. Fehlt eine, gibt es im
+  // Ergebnis die Zeitstrafe aus dem Renn-Setup (racePitPenaltyS) je fehlender Durchfahrt.
+  const VF_PFLICHTBOX_STORE = 'omegasim-vf-pflichtbox';
+  function vfPflichtBox() { try { return Math.max(0, Math.min(3, parseInt(localStorage.getItem(VF_PFLICHTBOX_STORE), 10) || 0)); } catch (e) { return 0; } }
+  function vfPflichtGilt() { return !!(VF.boxN && (VF.modus === 'laps' || VF.modus === 'endurance') && vfPflichtBox() > 0); }
+  function vfBoxDurchfahrt(o, zus) {
+    if (!VF.boxN) return;
+    const drin = zus > VF.boxMax * 0.3 && Math.abs(o.quer) > TRACK_HALF_W + zus * 0.5;
+    // Von-bis statt Einzelpunkte: bei hohem Tempo springt der Index mehrere Punkte je Bild.
+    if (drin) { if (!VF.boxBesucht) VF.boxBesucht = { von: o.idx, bis: o.idx }; else VF.boxBesucht.bis = o.idx; return; }
+    if (!VF.boxBesucht) return;
+    const n = VF.pts.length, strecke = ((VF.boxBesucht.bis - VF.boxBesucht.von) % n + n) % n + 1;
+    const genug = strecke >= VF.boxN * 0.6 && strecke < n / 2;
+    VF.boxBesucht = null;
+    if (!genug) return;
+    VF.boxDurch = (VF.boxDurch || 0) + 1;
+    if (vfPflichtGilt()) showHudToast(t('Boxendurchfahrt') + ' ' + Math.min(VF.boxDurch, vfPflichtBox()) + '/' + vfPflichtBox());
+  }
   const VF_SPIEGEL_STORE = 'omegasim-vf-spiegel';
   function vfSpiegelAn() { try { return localStorage.getItem(VF_SPIEGEL_STORE) === 'an'; } catch (e) { return false; } }
   // Standard AUS seit 17.11. (Gnen54: "Ghost entfernen" -> "Standard aus"); nur ein ausdrueckliches 'an' schaltet ihn ein.
@@ -43175,6 +43201,7 @@
     if (VF.splits && VF.splits[VF.idx] === undefined) VF.splits[VF.idx] = rennZeitJetzt() - VF.rundeAb;
     // Boxenbucht auf der rechten (roten) Seite: dort ist die Fahrbahn um die Bucht breiter.
     const zus = o.quer < 0 && VF.bucht ? (VF.bucht[o.idx] || 0) : 0;
+    vfBoxDurchfahrt(o, zus);
     const ab = Math.abs(o.quer) - zus > TRACK_HALF_W * 1.19 + VF_AUTO.B * 0.3;
     if (ab && !VF.abseits) VF.abseitsSeit = rennZeitJetzt();
     VF.abseits = ab;
@@ -43302,7 +43329,9 @@
       : VF.modus === 'derby' ? VF.derbyKills + ' ' + t('Kills')
       : VF.modus === 'knockout' ? VF.koLeben + ' ' + t('Leben')
       : (VF.limit + ' min'));
-    showHudToast(ergebnis || (t('Rennen beendet') + ': ' + was));
+    const fehlt = vfPflichtGilt() ? Math.max(0, vfPflichtBox() - (VF.boxDurch || 0)) : 0;
+    const strafe = fehlt ? ' · ' + t('Pflicht-Boxendurchfahrt fehlt') + ': +' + fehlt * (typeof racePitPenaltyS === 'number' ? racePitPenaltyS : 20) + ' s' : '';
+    showHudToast((ergebnis || (t('Rennen beendet') + ': ' + was)) + strafe);
     rennZeitTimeout(() => { if (VF.aktiv) virtuellBeenden(); }, 1600);
   }
   function vfMalen() {
@@ -43951,6 +43980,7 @@
       else {
         modusTxt = RACE_MODES[VF.modus].label;
         if (VF.modus === 'laps') modusTxt += ' · ' + Math.min(VF.runden, VF.limit) + '/' + VF.limit;
+        if (vfPflichtGilt()) modusTxt += ' · ' + t('Box') + ' ' + Math.min(VF.boxDurch || 0, vfPflichtBox()) + '/' + vfPflichtBox();
         else if (VF.modus === 'derby') modusTxt += ' · ' + VF.derbyHealth + ' HP · ' + VF.derbyKills + (VF.limit > 0 ? '/' + VF.limit : '') + ' ' + t('Kills');
         else if (VF.modus === 'knockout') modusTxt += ' · ' + VF.koLeben + ' ' + t('Leben');
         else if (VF.modus === 'bestzeit') modusTxt += ' · ' + vfZeitAcc(VF.beste, 3);
@@ -44226,6 +44256,9 @@
                         abseits: false, letzt: 0, kam: null, rundeAb: 0, letzte: null, beste: null, aktiv: true,
                         startX: VF.pts[start].x, startY: VF.pts[start].y, startH: VF.pts[start].heading });
     vfZeitenLaden();
+    { const bm = VF.bucht ? Math.max(0, ...VF.bucht.map((x) => x || 0)) : 0;
+      VF.boxMax = bm; VF.boxN = bm > 0 ? VF.bucht.filter((x) => (x || 0) > bm * 0.5).length : 0;
+      VF.boxDurch = 0; VF.boxBesucht = null; }
     vfNpcStarten(gl, start);
     physEngine.state.speedKmh = 0;
     schicht.addEventListener('click', (e) => {
@@ -44421,6 +44454,10 @@
       renderGarage();
     };
     rechts.appendChild(garWertZeile(t('Außenspiegel (Motorhaube)'), spiegelAn ? t('An') : t('Aus'), spiegelWahl, spiegelWahl));
+    // Pflicht-Boxendurchfahrt im Rennen (Runden, Langstrecke): Aus, 1, 2 oder 3.
+    const pfl = vfPflichtBox();
+    const pflWahl = (d) => { try { localStorage.setItem(VF_PFLICHTBOX_STORE, String((pfl + d + 4) % 4)); } catch (e) { /* egal */ } renderGarage(); };
+    rechts.appendChild(garWertZeile(t('Pflicht-Boxendurchfahrt'), pfl ? String(pfl) : t('Aus'), () => pflWahl(-1), () => pflWahl(1)));
     // Neben der Bahn: Vorgabe bremst der Teppich. Die Option schaltet den Tempoverlust ab, das Auto
     // faehrt daneben ungebremst weiter (Standard Aus = wie bisher).
     const abseitsBremse = vfAbseitsBremseAn();

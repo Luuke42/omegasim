@@ -50246,7 +50246,10 @@
 
     // Absolute value: any NEGATIVE speed would otherwise satisfy this and start a pit
     // service while the car is reversing away.
-    const stopped = Math.abs(physEngine.state.speedKmh) < PIT_STANDSTILL_KMH && Math.abs(throttleY) < 0.1;
+    // Bremse halten gilt als Stehen (throttleY = Gas minus Bremse, also negativ). Bis 19.11. verlangte
+    // die Abfrage |throttleY| < 0.1 - wer in der Box auf der Bremse stand, bekam nie den Service,
+    // GEMELDET Gnen54 (virtuell): "Das Betanken funktioniert noch nicht".
+    const stopped = Math.abs(physEngine.state.speedKmh) < PIT_STANDSTILL_KMH && throttleY < 0.1;
     // Im Modus "Neben der Strecke" gehoert zum Anfangen mehr als Stillstand: das Auto muss
     // auch neben der Bahn stehen. Das ist die Haelfte des Modus, die geblieben ist, nachdem
     // die Selbstausloesung weg ist - der Knopf sagt DASS ein Stopp kommt, die Bahnkante WO.

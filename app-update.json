@@ -1,5 +1,5 @@
 {"version":"1.4.67","apk":2,"dateien":[
-{"p":"index.html","h":"7063008a874fb9e0bde1c8d22565e1f1168a5bb2b307bede663a65c3aff7eb3a","g":8151889},
+{"p":"index.html","h":"06134ca5129de36da1dc2e95d867044ddb76545db9e09980eaf13aa76a36d93f","g":8178007},
 {"p":"mp-overview.html","h":"61388dad99cb805de167fe9a10b9ffdb1d4655c450f175f4eeb9ede3a24d04aa","g":9956},
 {"p":"manifest.webmanifest","h":"868416fe2c9d41ebed0b5d479f07bbd16679dd4835e9c526da9eae8046e1e36a","g":639},
 {"p":"favicon.svg","h":"bc804f771d409b0efff2f2a78238a91d843d8d02efc2c614c6bdc544763de931","g":5456},
@@ -1179,6 +1179,9 @@
 {"p":"img/strecke-frei.jpg","h":"ee67d428599332c225c099e5371cbc8e76af7cc0d50de45bff46287a97168d2d","g":46689},
 {"p":"img/strecke-kachel-bg.jpg","h":"1e53777be4c21d705d719ed851d454827ee511070b709f1e2ce3efa79694c43b","g":31342},
 {"p":"img/strecke-kachel.jpg","h":"1e53777be4c21d705d719ed851d454827ee511070b709f1e2ce3efa79694c43b","g":31342},
+{"p":"img/strecken/LIZENZ.txt","h":"1c1ef094875c397ba1ebe36f07e74c89d3f4d171fdab2f6fe920dc02cfb06262","g":455},
+{"p":"img/strecken/indeq-bruecke.json","h":"ef3cd74a0e78f88f3cd464b07cc056695623adb4a7a6b47321feead8ea8534d6","g":23028},
+{"p":"img/strecken/indeq-ring.json","h":"b08df9d9778fa8659f1775cb55be33b2c31eec627e2745e9404e09fa11561101","g":19581},
 {"p":"img/titel-bg.jpg","h":"c02d07a3d67a58813608b14a32f17da24e026400db9ff966cd66729de63f42f6","g":67544},
 {"p":"img/titel.jpg","h":"d0b0567a6ca37be63fbe2040e34c43d19a6da79fd6dbb8f0404cd46d5fdc7e2b","g":39348},
 {"p":"muster-gerade-a4.svg","h":"e919c88d525372efe3b6fc53a269da7bb645122ede31b691b4b4b86cf35799f8","g":2976},

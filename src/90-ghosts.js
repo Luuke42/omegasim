@@ -106,6 +106,8 @@
     // gleichzeitig einen Klick irgendwo in der Seite aus - eine Belegung darauf kaempft mit
     // dem Cursor. Frei zuweisbar bleibt es, nur eben nicht ab Werk.
     resetcar: { type: 'none', index: -1, label: 'nicht belegt' },
+    // 20.11. (Gnen54): eigene Taste fuer die Kamera der virtuellen Fahrt - R3 ist dort jetzt Lichthupe.
+    vfkamera: { type: 'none', index: -1, label: 'nicht belegt' },
   };
   const BIND_ACTION_LABELS = {
     pause: 'Pause / Fortsetzen',
@@ -121,6 +123,7 @@
     trackview: 'Streckenansicht',
     fullscreenToggle: 'Vollbild umschalten',
     resetcar: 'Auto zurücksetzen',
+    vfkamera: 'Kamera wechseln (virtuell)',
     status: 'L3-Statusansage',
   };
 
@@ -919,7 +922,7 @@
   const DPAD = { up: 12, down: 13, left: 14, right: 15 };
   const prevDpad = { up: false, down: false, left: false, right: false };
   let prevLightFlash = false, prevPitstop = false, prevTrackReadMode = false;
-  let prevRaceStart = false, prevTrackView = false, prevResetCar = false;
+  let prevRaceStart = false, prevTrackView = false, prevResetCar = false, prevVfKamera = false;
   let prevStatus = false;
   let gridPadVorher = false;
 
@@ -13030,7 +13033,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // erst auf die Standardansicht zurueck, ungedreht schaltet sie wie bisher weiter.
       const imVf = typeof vfAktiv === 'function' && vfAktiv();
       if (flashNow && !prevLightFlash) {
-        if (imVf) vfKameraTaste(); else triggerHeadlightFlash();
+        // 20.11. (Gnen54): auch virtuell die Lichthupe - die Kamera hat bei ihm eine eigene Taste.
+        triggerHeadlightFlash();
       }
       prevLightFlash = flashNow;
       // Rechter Stick dreht in der virtuellen Fahrt die Kamera (nur unbelegte Achsen, siehe vfStickSetzen).
@@ -13180,6 +13184,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       const resetNow = readBindingValue(pad, bindings.resetcar) > BUTTON_CAPTURE_THRESHOLD;
       if (resetNow && !prevResetCar) resetCarState();
       prevResetCar = resetNow;
+      const vfKamNow = readBindingValue(pad, bindings.vfkamera) > BUTTON_CAPTURE_THRESHOLD;
+      if (vfKamNow && !prevVfKamera && imVf) vfKameraTaste();
+      prevVfKamera = vfKamNow;
 
       const downshiftNow = readBindingValue(pad, bindings.downshift) > BUTTON_CAPTURE_THRESHOLD;
       const upshiftNow = readBindingValue(pad, bindings.upshift) > BUTTON_CAPTURE_THRESHOLD;

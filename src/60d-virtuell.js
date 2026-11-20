@@ -2025,6 +2025,17 @@
       VF.modusZeit += dt;
       if (VF.modusZeit >= VF.limit * 60) vfRennenEnde();
     }
+    // Rueckwaertsgang raus wie auf der echten Bahn (20.11., Gnen54: "Sobald er dann wieder steht und ich
+    // Gas gebe, geht er aus dem Rueckwaertsgang raus"): nur Automatik. Erst rueckwaerts gefahren, dann
+    // zum Stehen gekommen mit losgelassenem Gas - der naechste Gasstoss legt den Vorwaertsgang ein.
+    if (st.driveMode === 'reverse' && physEngine.config.autoShift) {
+      const ty = typeof throttleY === 'number' ? throttleY : 0, v = Math.abs(st.speedKmh || 0);
+      if (v > 0.04) { VF.rueckLief = true; VF.rueckHalt = false; }
+      else if (v < 0.015 && ty <= 0.05) VF.rueckHalt = true;
+      if (VF.rueckLief && VF.rueckHalt && v < 0.015 && ty > 0.1) {
+        physEngine.triggerShift(1); VF.rueckLief = false; VF.rueckHalt = false;
+      }
+    } else { VF.rueckLief = false; VF.rueckHalt = false; }
     const kmh = (st.speedKmh || 0) * (VF.tempoFaktor || 1);
     const hand = vfHandling();
     const reifenModus = hand === 'gran' || hand === 'acc';

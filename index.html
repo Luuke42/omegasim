@@ -19195,6 +19195,10 @@
     "Törnerschleife 2.0 (nur virtuell): Streckenlayout von Driftstrecken.de. Schriftliche Freigabe von Driftstrecken.de am 18.11.2026 für OmegaSim, unter Nennung des Urhebers.": "Törnerschleife 2.0 (virtual only): track layout by Driftstrecken.de. Written permission from Driftstrecken.de on 18 Nov 2026 for OmegaSim, with credit to the author.",
     "nur virtuell": "virtual only",
     "Gebaute Bahn": "Built track",
+    "Bestzeiten": "Best times",
+    "aktuell": "current",
+    "Datum": "Date",
+    "Noch keine Bestzeiten": "No best times yet",
     "Strecke konnte nicht geladen werden": "Track could not be loaded",
     "Spider NG1: Karosserie MODIplay MP-1 Spider von Sturmkind, 3D-Daten für HYBRID von Thomas Strobel (FREAKPALACE Customs). Freigabe von Sturmkind am 16.11.2026: Verwendung erlaubt, solange die Karosserien nicht kommerziell verkauft werden.": "Spider NG1: MODIplay MP-1 Spider body by Sturmkind, 3D data for HYBRID by Thomas Strobel (FREAKPALACE Customs). Permission from Sturmkind on 16 Nov 2026: use is allowed as long as the bodies are not sold commercially.",
     "Woher die 3D-Modelle kommen": "Where the 3D models come from",
@@ -20807,6 +20811,10 @@
     "Törnerschleife 2.0 (nur virtuell): Streckenlayout von Driftstrecken.de. Schriftliche Freigabe von Driftstrecken.de am 18.11.2026 für OmegaSim, unter Nennung des Urhebers.": "Törnerschleife 2.0 (solo virtual): trazado de Driftstrecken.de. Permiso por escrito de Driftstrecken.de del 18.11.2026 para OmegaSim, citando al autor.",
     "nur virtuell": "solo virtual",
     "Gebaute Bahn": "Pista construida",
+    "Bestzeiten": "Mejores tiempos",
+    "aktuell": "actual",
+    "Datum": "Fecha",
+    "Noch keine Bestzeiten": "Aún no hay mejores tiempos",
     "Strecke konnte nicht geladen werden": "No se pudo cargar la pista",
     "Spider NG1: Karosserie MODIplay MP-1 Spider von Sturmkind, 3D-Daten für HYBRID von Thomas Strobel (FREAKPALACE Customs). Freigabe von Sturmkind am 16.11.2026: Verwendung erlaubt, solange die Karosserien nicht kommerziell verkauft werden.": "Spider NG1: carrocería MODIplay MP-1 Spider de Sturmkind, datos 3D para HYBRID de Thomas Strobel (FREAKPALACE Customs). Permiso de Sturmkind del 16/11/2026: se permite el uso siempre que las carrocerías no se vendan comercialmente.",
     "Woher die 3D-Modelle kommen": "De dónde vienen los modelos 3D",
@@ -44895,6 +44903,51 @@
     los.onclick = () => virtuellStarten();
     z.appendChild(los);
     rechts.appendChild(z);
+    rechts.appendChild(vfBestenliste(autos));
+  }
+  // Bestenliste in der Garage (21.11., BESTELLT Gnen54): je Strecke und Auto die gespeicherte Bestzeit
+  // (vfZeitMerken), Rundenzahl und Datum. Zugeklappt, damit die Garage kurz bleibt.
+  function vfBestenliste(autos) {
+    const box = document.createElement('details');
+    box.className = 'vf-bestenliste';
+    box.dataset.vf = 'bestenliste';
+    const sum = document.createElement('summary');
+    sum.textContent = t('Bestzeiten');
+    box.appendChild(sum);
+    const alle = vfZeitenAlle();
+    let jetztBahn = '';
+    try { const tl = vfTilesWaehlen(); if (tl) jetztBahn = trackToCode(tl); } catch (e) { /* ohne */ }
+    const zeilen = Object.keys(alle).filter((k) => alle[k] && alle[k].beste > 0).map((k) => {
+      const e = alle[k], tr = k.lastIndexOf('|'), ort = k.slice(0, tr), auto = k.slice(tr + 1);
+      let strecke = ort;
+      if (ort.indexOf('frei:') === 0) strecke = ort.slice(5);
+      else if (ort.indexOf('bahn:') === 0) strecke = t('Gebaute Bahn') + (ort.slice(5) === jetztBahn ? ' (' + t('aktuell') + ')' : ' ' + ort.slice(5, 11));
+      const a = autos.find((x) => x.v === auto);
+      return { strecke, auto: a ? a.name : auto, beste: e.beste, runden: e.runden || 0, datum: e.datum };
+    }).sort((x, y) => x.strecke.localeCompare(y.strecke) || x.beste - y.beste);
+    if (!zeilen.length) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = t('Noch keine Bestzeiten');
+      box.appendChild(p);
+      return box;
+    }
+    const tab = document.createElement('table');
+    tab.className = 'vf-besten-tab';
+    tab.style.cssText = 'width:100%;border-collapse:collapse;font-size:0.9em';
+    const kopf = tab.insertRow();
+    [t('Strecke'), t('Auto'), t('Bestzeit'), t('Runden'), t('Datum')].forEach((h) => {
+      const th = document.createElement('th'); th.textContent = h; th.style.textAlign = 'left'; kopf.appendChild(th);
+    });
+    let spr = 'de';
+    try { spr = (typeof lang === 'string' && lang) || 'de'; } catch (e) { /* de */ }
+    zeilen.forEach((z) => {
+      const r = tab.insertRow();
+      [z.strecke, z.auto, vfZeitAcc(z.beste, 3), String(z.runden), z.datum ? new Date(z.datum).toLocaleDateString(spr) : '–']
+        .forEach((w) => { const c = r.insertCell(); c.textContent = w; c.style.padding = '2px 6px 2px 0'; });
+    });
+    box.appendChild(tab);
+    return box;
   }
 
   // v1.3.39 BESTELLT: "Verbessere den Randstein-Sound. Aktuell ist es ein hohes Klicken ... Es soll

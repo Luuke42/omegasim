@@ -3783,6 +3783,51 @@
     los.onclick = () => virtuellStarten();
     z.appendChild(los);
     rechts.appendChild(z);
+    rechts.appendChild(vfBestenliste(autos));
+  }
+  // Bestenliste in der Garage (21.11., BESTELLT Gnen54): je Strecke und Auto die gespeicherte Bestzeit
+  // (vfZeitMerken), Rundenzahl und Datum. Zugeklappt, damit die Garage kurz bleibt.
+  function vfBestenliste(autos) {
+    const box = document.createElement('details');
+    box.className = 'vf-bestenliste';
+    box.dataset.vf = 'bestenliste';
+    const sum = document.createElement('summary');
+    sum.textContent = t('Bestzeiten');
+    box.appendChild(sum);
+    const alle = vfZeitenAlle();
+    let jetztBahn = '';
+    try { const tl = vfTilesWaehlen(); if (tl) jetztBahn = trackToCode(tl); } catch (e) { /* ohne */ }
+    const zeilen = Object.keys(alle).filter((k) => alle[k] && alle[k].beste > 0).map((k) => {
+      const e = alle[k], tr = k.lastIndexOf('|'), ort = k.slice(0, tr), auto = k.slice(tr + 1);
+      let strecke = ort;
+      if (ort.indexOf('frei:') === 0) strecke = ort.slice(5);
+      else if (ort.indexOf('bahn:') === 0) strecke = t('Gebaute Bahn') + (ort.slice(5) === jetztBahn ? ' (' + t('aktuell') + ')' : ' ' + ort.slice(5, 11));
+      const a = autos.find((x) => x.v === auto);
+      return { strecke, auto: a ? a.name : auto, beste: e.beste, runden: e.runden || 0, datum: e.datum };
+    }).sort((x, y) => x.strecke.localeCompare(y.strecke) || x.beste - y.beste);
+    if (!zeilen.length) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = t('Noch keine Bestzeiten');
+      box.appendChild(p);
+      return box;
+    }
+    const tab = document.createElement('table');
+    tab.className = 'vf-besten-tab';
+    tab.style.cssText = 'width:100%;border-collapse:collapse;font-size:0.9em';
+    const kopf = tab.insertRow();
+    [t('Strecke'), t('Auto'), t('Bestzeit'), t('Runden'), t('Datum')].forEach((h) => {
+      const th = document.createElement('th'); th.textContent = h; th.style.textAlign = 'left'; kopf.appendChild(th);
+    });
+    let spr = 'de';
+    try { spr = (typeof lang === 'string' && lang) || 'de'; } catch (e) { /* de */ }
+    zeilen.forEach((z) => {
+      const r = tab.insertRow();
+      [z.strecke, z.auto, vfZeitAcc(z.beste, 3), String(z.runden), z.datum ? new Date(z.datum).toLocaleDateString(spr) : '–']
+        .forEach((w) => { const c = r.insertCell(); c.textContent = w; c.style.padding = '2px 6px 2px 0'; });
+    });
+    box.appendChild(tab);
+    return box;
   }
 
   // v1.3.39 BESTELLT: "Verbessere den Randstein-Sound. Aktuell ist es ein hohes Klicken ... Es soll

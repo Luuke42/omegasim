@@ -2162,6 +2162,15 @@
     // Der Vorpunkt vor Kachel 0 (tile -1) liegt auf dem letzten Punkt der Schleife. Bis 1.3.50 zaehlte er
     // als Kachel 0 (Start): pendelte der naechste Punkt dort zwischen beiden, war das eine "Runde" von
     // 0,3 s (Letzte/Beste im HUD). Jetzt gilt am Vorpunkt die Kachel davor weiter.
+    // Fortschritt entlang der Mittellinie (Punkte, vorwaerts positiv). Rueckwaerts ueber Start/Ziel zaehlt
+    // keine Runde (21.11., BESTELLT Gnen54: "Keine Rundenzaehlung bei Rueckwaertsfahrt") - und auch nicht
+    // das Vor-und-zurueck ueber die Linie: eine Runde gilt erst nach gut drei Vierteln der Strecke.
+    {
+      const n = VF.pts.length;
+      let d = VF.idx - (VF.fortVor === undefined ? VF.idx : VF.fortVor);
+      if (d > n / 2) d -= n; else if (d < -n / 2) d += n;
+      VF.fort = (VF.fort || 0) + d; VF.fortVor = VF.idx;
+    }
     const roh = VF.pts[VF.idx].tile;
     const tile = roh >= 0 ? roh : (VF.kachel >= 0 ? VF.kachel : 0);
     if (tile !== VF.kachel) {
@@ -2169,7 +2178,12 @@
       const vorher = VF.kachel;
       VF.kachel = tile;
       // Eigene Rundenanzeige fuer die Kopfzeile (die Zeitnahme selbst laeuft in der App).
-      if (vorher !== -2 && VF.tiles[tile] && VF.tiles[tile].type === TILE_TYPE.START && !VF.abseits) {
+      const aufStart = !!(VF.tiles[tile] && VF.tiles[tile].type === TILE_TYPE.START);
+      // Erste Ueberfahrt (Uhr startet): nur vorwaerts. Danach: genug Strecke seit der letzten Runde.
+      VF.startGueltig = aufStart && vorher !== -2 && !VF.abseits &&
+        (VF.rundeAb ? VF.fort > VF.pts.length * 0.75 : VF.fort >= 0);
+      if (VF.startGueltig) VF.fort = 0;
+      if (VF.startGueltig) {
         const jetzt = rennZeitJetzt();
         if (VF.rundeAb) {
           VF.letzte = jetzt - VF.rundeAb;
@@ -2198,7 +2212,8 @@
     // Byte 15 Bit 3 = "ueber der Ziellinie". Die App zaehlt die STEIGENDE FLANKE als Runde.
     // Bis 19.11. stand das Bit auf der ganzen Bahn - die Flanke kam dann nur beim Zurueckkehren
     // von neben der Bahn, GEMELDET Gnen54: Zeitansage beim Verlassen, keine an Start/Ziel.
-    b[15] = !VF.abseits && VF.tiles[tile] && VF.tiles[tile].type === TILE_TYPE.START ? 0x08 : 0;
+    // Nur bei gueltiger Ueberfahrt (vorwaerts, ganze Runde), sonst sieht die App die Flanke als Runde.
+    b[15] = !VF.abseits && VF.startGueltig && VF.tiles[tile] && VF.tiles[tile].type === TILE_TYPE.START ? 0x08 : 0;
     try { onCarNotify(VF.car, { target: { value: new DataView(b.buffer) } }); } catch (e) { /* weiter */ }
   }
 
@@ -3509,7 +3524,7 @@
     // Start eine halbe Kachel vor Start/Ziel, in Fahrtrichtung.
     const s = Math.max(0, VF.pts.findIndex((p) => p.tile >= 0 && tiles[p.tile] && tiles[p.tile].type === TILE_TYPE.START));
     const start = ((s - Math.round(TRACK_SAMPLES_PER_TILE / 2)) % VF.pts.length + VF.pts.length) % VF.pts.length;
-    Object.assign(VF, { x: VF.pts[start].x, y: VF.pts[start].y, h: VF.pts[start].heading, idx: start, zaehler: 0, kachel: -2,
+    Object.assign(VF, { x: VF.pts[start].x, y: VF.pts[start].y, h: VF.pts[start].heading, idx: start, zaehler: 0, kachel: -2, fort: 0, fortVor: start, startGueltig: false,
                         abseits: false, letzt: 0, kam: null, rundeAb: 0, letzte: null, beste: null, aktiv: true,
                         startX: VF.pts[start].x, startY: VF.pts[start].y, startH: VF.pts[start].heading });
     vfZeitenLaden();

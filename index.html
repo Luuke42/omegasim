@@ -44143,6 +44143,10 @@
     opts = opts || {};
     if (VF.aktiv) return false;
     vfHandlingCache = null;   // einmal frisch lesen (z. B. in einem anderen Tab geaendert)
+    // Rundenuhr der vorigen Fahrt nicht mitnehmen (20.11., GEMELDET Gnen54: "Zeitansage sofort beim Start
+    // nach Ueberfahren von Start/Ziel ist wieder da") - die erste Ueberfahrt startet die Uhr, angesagt wird erst
+    // die erste ganze Runde.
+    dashLapTimes = []; dashLapStart = null;
     if (!physicsEnabled) { vfStartHinweis(t('Virtuell braucht ein Fahrgefühl mit Physik (nicht RC)')); return false; }
     // Editor-Strecke und gemerkte Rollen gehoeren dem Fahrer: die Ersatzstrecke (Balkonia) und die Rolle
     // des virtuellen Autos werden beim Beenden wieder zurueckgenommen.

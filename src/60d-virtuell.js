@@ -4003,6 +4003,18 @@
     los.textContent = t('Losfahren');
     los.onclick = () => virtuellStarten();
     z.appendChild(los);
+    // 21.11. (Gnen54): Anleitung zum virtuellen Fahren, als eigene Seite (hilfe/virtuelles-fahren.html).
+    const hilfe = document.createElement('button');
+    hilfe.type = 'button';
+    hilfe.className = 'vf-hilfe';
+    hilfe.dataset.vf = 'hilfe';
+    hilfe.textContent = '?';
+    hilfe.title = t('Anleitung virtuelles Fahren');
+    hilfe.setAttribute('aria-label', t('Anleitung virtuelles Fahren'));
+    hilfe.style.cssText = 'width:50px;min-width:50px;height:50px;min-height:50px;border-radius:50%;padding:0;margin-left:10px;font-weight:700;font-size:20px;text-align:center;flex:0 0 auto';
+    z.style.display = 'flex'; z.style.alignItems = 'center'; los.style.flex = '1 1 auto';
+    hilfe.onclick = () => { try { window.open('hilfe/virtuelles-fahren.html', '_blank', 'noopener'); } catch (e) { location.href = 'hilfe/virtuelles-fahren.html'; } };
+    z.appendChild(hilfe);
     rechts.appendChild(z);
     rechts.appendChild(vfBestenliste(autos));
   }

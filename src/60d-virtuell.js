@@ -819,7 +819,10 @@
           const lw = kw, uk = sg > 0 ? ua : ub, um = (sg > 0 ? 4 : 132) / VF_RAND_B;
           for (let i = tl.i0; i <= tl.i1; i++) {
             // Zur echten Gasse hin: Asphalt bis zur Kante, aber keine weisse Linie (dort geht es hinein).
-            const offen = !!gasse && (bs(i) > 1e-3 || bs(i + 1) > 1e-3 || [0.6, 1.6, 3].some((f) => vfInGasse(gasse, off(i, (half + kw * f) * sg)) || vfInGasse(gasse, off(i + 1, (half + kw * f) * sg))));
+            // 21.11. (GEMELDET Gnen54 "Fehlender Randstreifen"): nur wo die Gassen-Flaeche den Streifen selbst
+            // beruehrt (Ein-/Ausfahrt). Vorher fehlte er entlang der ganzen Gasse und an Stellen, an denen ein
+            // anderer Streckenteil nahe an der Gasse vorbeifuehrt.
+            const offen = !!gasse && [0.5, 1.0].some((f) => vfInGasse(gasse, off(i, (half + kw * f) * sg)) || vfInGasse(gasse, off(i + 1, (half + kw * f) * sg)));
             const bsZ = (j) => (gasse ? 0 : bs(j));
             const iA = off(i, (half + bsZ(i)) * sg), iB = off(i + 1, (half + bsZ(i + 1)) * sg);
             const oA = off(i, (half + kw + bsZ(i)) * sg), oB = off(i + 1, (half + kw + bsZ(i + 1)) * sg);
@@ -885,12 +888,28 @@
         for (const k of [0, 2, 4]) strasse.push(t[j + k], 0, t[j + k + 1], ur, 0.5, cb[0], cb[1], cb[2]);
       }
       const uk = 4 / VF_RAND_B;
-      for (const L of gasse.rand) {
+      // 21.11. (GEMELDET Gnen54 "Unschoener Bogen"): vorher ein loses Rechteck je DXF-Segment - in Boegen
+      // sah die Linie wie ein Saegezahn aus. Jetzt geglaettet (Chaikin, Enden bleiben) und als
+      // durchgehendes Band mit gemeinsamen Ecken (Gehrung).
+      for (const L0 of gasse.rand) {
+        let L = L0.map((p) => [p[0], p[1]]);
+        for (let it = 0; it < 3 && L.length > 2; it++) {
+          const M = [L[0]];
+          for (let j = 0; j + 1 < L.length; j++) {
+            const a = L[j], b = L[j + 1];
+            M.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+          }
+          M.push(L[L.length - 1]); L = M;
+        }
+        const Q = L.map((p, j) => {
+          const a = L[Math.max(0, j - 1)], b = L[Math.min(L.length - 1, j + 1)];
+          const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+          return [-(b[1] - a[1]) / l * kw / 2, (b[0] - a[0]) / l * kw / 2];
+        });
         for (let j = 0; j + 1 < L.length; j++) {
-          const a = L[j], b = L[j + 1], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-          const qx = -(b[1] - a[1]) / l * kw / 2, qy = (b[0] - a[0]) / l * kw / 2;
-          vfViereck(rand, [a[0] - qx, 0.012, a[1] - qy, uk, 0.1], [b[0] - qx, 0.012, b[1] - qy, uk, 0.1],
-            [b[0] + qx, 0.012, b[1] + qy, uk, 0.2], [a[0] + qx, 0.012, a[1] + qy, uk, 0.2], [1, 1, 1]);
+          const a = L[j], b = L[j + 1], qa = Q[j], qb = Q[j + 1];
+          vfViereck(rand, [a[0] - qa[0], 0.012, a[1] - qa[1], uk, 0.1], [b[0] - qb[0], 0.012, b[1] - qb[1], uk, 0.1],
+            [b[0] + qb[0], 0.012, b[1] + qb[1], uk, 0.2], [a[0] + qa[0], 0.012, a[1] + qa[1], uk, 0.2], [1, 1, 1]);
         }
       }
       // Anfang und Ende des Tankbereichs: fein gestrichelte Querlinie (20.11., Gnen54: "sonst stehst du zu

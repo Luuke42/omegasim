@@ -2899,7 +2899,7 @@
     const sw = Math.round(Math.min(w * 0.3, h * 0.9)), sh = Math.round(sw * 0.27);
     // unter der Knopfleiste oben rechts (BOX, GELBE FLAGGE, ...), die sonst ueber dem Spiegel laege
     const dpr = VF.cv.width / Math.max(1, VF.cv.clientWidth);
-    const q = [Math.round((w - sw) / 2), h - sh - Math.round(58 * dpr), sw, sh];
+    const q = [Math.round((w - sw) / 2), h - sh - Math.round(16 * dpr), sw, sh];   // ganz oben (Knopfleiste blendet aus)
     gl.enable(gl.SCISSOR_TEST);
     gl.viewport(q[0], q[1], q[2], q[3]); gl.scissor(q[0], q[1], q[2], q[3]);
     gl.clearColor(0.66, 0.78, 0.90, 1);
@@ -3661,6 +3661,23 @@
     document.body.classList.add('vf-an');
     gl.enable(gl.DEPTH_TEST);
     VF.gl = gl; VF.cv = cv; VF.schicht = schicht; VF.hud = schicht.querySelector('.vf-hud');
+    // 21.11. (Luke/Gnen54): die Knopfleiste oben blendet sich nach 4 s Ruhe aus und kommt bei Mausbewegung,
+    // Tippen oder Klick zurueck - der Innenspiegel kann so ganz nach oben, und wer ohne Gamepad faehrt,
+    // kommt trotzdem an alle Knoepfe.
+    { const kn = schicht.querySelector('.vf-knoepfe');
+      if (kn) {
+        kn.style.transition = 'opacity .35s';
+        let uhr = 0;
+        const zeigen = () => {
+          kn.style.opacity = '1'; kn.style.pointerEvents = '';
+          clearTimeout(uhr);
+          uhr = setTimeout(() => { if (!kn.matches(':hover')) { kn.style.opacity = '0'; kn.style.pointerEvents = 'none'; } else zeigen(); }, 4000);
+        };
+        // Lenken per Touch (vf-touch) zaehlt nicht, sonst stuende die Leiste beim Fahren dauernd im Bild.
+        const wecken = (e) => { if (!(e.target && e.target.closest && e.target.closest('.vf-touch'))) zeigen(); };
+        ['mousemove', 'pointerdown', 'touchstart'].forEach((ev) => schicht.addEventListener(ev, wecken, { passive: true }));
+        zeigen();
+      } }
     VF.grafik = vfGrafikQual();   // v1.3.113: einmal je Fahrt, damit kein localStorage je Bild
     // v1.3.113 Quality: echte Schattenkarte (Depth-Textur) aus Richtung der Sonne. Ohne die
     // Erweiterung bleibt der weiche Blob-Schatten (M.schatten).

@@ -2601,6 +2601,10 @@
   // ist ein SVG ueber dem Bildausschnitt: aussen die Schale, innen das Glas ausgespart (evenodd), so
   // decken die Rundungen die Ecken des rechteckigen Ausschnitts ab.
   function vfSpiegelForm(w, h, links, o, r1, r2, t) {
+    if (links === 'innen') {                                   // Innenspiegel: gleichmaessig gerundet
+      const k = o || 0, r = r2, P = (x, y) => (x + k).toFixed(1) + ',' + (y + k).toFixed(1);
+      return `M${P(r, 0)} L${P(w - r, 0)} Q${P(w, 0)} ${P(w, r)} L${P(w, h - r)} Q${P(w, h)} ${P(w - r, h)} L${P(r, h)} Q${P(0, h)} ${P(0, h - r)} L${P(0, r)} Q${P(0, 0)} ${P(r, 0)} Z`;
+    }
     // Rechteck mit staerker gerundeter Aussenseite (links beim linken Spiegel), oben zur Aussenseite
     // leicht abfallend. Die Radien bleiben unter 2,4 x Gehaeusedicke - sonst schauten die Ecken des
     // (rechteckigen) Bildausschnitts unter der Schale hervor.
@@ -2614,10 +2618,10 @@
     let r = VF.spiegelRahmen;
     // GEMELDET Gnen54 19.11.: nach dem ersten Start/Ziel waren die Spiegel weg, bis die Kamera neu
     // gewaehlt wurde - die Rahmen waren aus der Seite genommen worden, VF.spiegelRahmen zeigte noch drauf.
-    if (r && !r.every((e) => e.isConnected)) { r.forEach((e) => e.remove()); r = VF.spiegelRahmen = null; }
+    if (r && (!r.every((e) => e.isConnected) || (an && r.length !== rechtecke.length))) { r.forEach((e) => e.remove()); r = VF.spiegelRahmen = null; }
     if (!an) { if (r) { r.forEach((e) => e.remove()); VF.spiegelRahmen = null; } return; }
     if (!r) {
-      r = VF.spiegelRahmen = [0, 1].map(() => {
+      r = VF.spiegelRahmen = rechtecke.map(() => {
         const e = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         e.style.cssText = 'position:absolute;pointer-events:none;overflow:visible;z-index:2;filter:drop-shadow(0 3px 6px rgba(0,0,0,.45))';
         (VF.cv.parentNode || document.body).appendChild(e);
@@ -2626,11 +2630,11 @@
     }
     const dpr = VF.cv.width / Math.max(1, VF.cv.clientWidth);
     rechtecke.forEach((q, i) => {
-      const e = r[i], st = e.style, links = i === 0;
+      const e = r[i], st = e.style, links = rechtecke.length === 1 ? 'innen' : i === 0;
       const w = q[2] / dpr, h = q[3] / dpr, rand = Math.max(5, Math.min(w, h) * 0.14);
       const m = Math.min(w, h), r1 = m * 0.3, r2 = m * 0.14, t = m * 0.06;   // hochkant (Bulli): nach der Breite
       const l = VF.cv.offsetLeft + q[0] / dpr, o = VF.cv.offsetTop + (VF.cv.height - q[1] - q[3]) / dpr;
-      const schl = `${w}x${h}`;
+      const schl = `${w}x${h}x${links}`;
       if (e.dataset.mass !== schl) {
         e.dataset.mass = schl;
         const W = w + rand * 2, H = h + rand * 2;
@@ -2696,6 +2700,11 @@
     // 20.11. (Gnen54): Spider 4/5 der Groesse; Bulli stoerte quer noch - dort hochkant, schmal, ganz am Rand
     // ueber dem Armaturenbrett (wie die grossen Bus-Spiegel).
     const autoW = vfAutoWahl(), hochkant = autoW === 'caravelle';
+    // 21.11. (Idee von Luke, Gnen54: "bei allen Fahrzeugen ausser dem Spider einen Rueckspiegel oben am
+    // Bildschirmrand", im ersten Schritt OHNE Aussenspiegel): Innenspiegel oben mittig. Der offene Spider
+    // behaelt seine Aussenspiegel. Blick vom Dach am Heck nach hinten, das eigene Auto wird nicht gemalt
+    // (es saesse sonst als Dach/Heckscheibe im Bild).
+    if (autoW !== 'spider') { vfInnenspiegelMalen(gl, w, h, s, Hz, fx, fz, d); return; }
     let sw = Math.round(Math.min(w * (voll ? 0.125 : 0.17), h * 0.34) * (autoW === 'spider' ? 0.8 : 1)), sh = Math.round(sw * 0.6);
     if (hochkant) { sh = Math.round(h * 0.3); sw = Math.round(Math.min(sh * 0.6, w * 0.1)); }
     // Bulli (19.11., GEMELDET Gnen54: "auf Hoehe der Hand vom Fahrer"): hoeher, ueber dem Armaturenbrett.
@@ -2730,6 +2739,35 @@
     gl.disable(gl.SCISSOR_TEST);
     gl.viewport(0, 0, w, h);
     vfSpiegelRahmen(true, rechtecke);
+  }
+  function vfInnenspiegelMalen(gl, w, h, s, Hz, fx, fz, d) {
+    const sw = Math.round(Math.min(w * 0.3, h * 0.9)), sh = Math.round(sw * 0.27);
+    // unter der Knopfleiste oben rechts (BOX, GELBE FLAGGE, ...), die sonst ueber dem Spiegel laege
+    const dpr = VF.cv.width / Math.max(1, VF.cv.clientWidth);
+    const q = [Math.round((w - sw) / 2), h - sh - Math.round(58 * dpr), sw, sh];
+    gl.enable(gl.SCISSOR_TEST);
+    gl.viewport(q[0], q[1], q[2], q[3]); gl.scissor(q[0], q[1], q[2], q[3]);
+    gl.clearColor(0.66, 0.78, 0.90, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const hb = VF.modell.meta && VF.modell.meta.haube;
+    const hinten = (d.laenge / 2 + 0.05) * s, hoch = ((hb ? hb.hoch : 1.0) + 0.05) * s;
+    const auge = [VF.x - fx * hinten, hoch + Hz.z, VF.y - fz * hinten];
+    const ziel = [auge[0] - fx * 30, hoch + Hz.z - 0.5 - Math.tan(Hz.p) * 30, auge[2] - fz * 30];
+    const blick = vfBlick(auge, ziel, VF_OBEN);
+    const pr = vfPerspektive(15 * Math.PI / 180, q[2] / Math.max(1, q[3]), 0.3, 900);
+    for (let k = 0; k < 4; k++) pr[k * 4] = -pr[k * 4];          // gespiegelt
+    const pv = vfMal(pr, blick);
+    vfFlaechenMalen(gl, pv, auge);
+    if (VF.npcs) {
+      for (const npc of VF.npcs) {
+        if (!npc.modell || npc.koAus || npc.derbyAus) continue;
+        vfModellZeichnen(gl, pv, blick, npc.modell, VF.tprog, npc.x, npc.y, npc.h, npc.feder, npc.lenkWinkel, npc.raddreh, VF.radModell, true,
+          !!(npc.motor && npc.motor.outputs && npc.motor.outputs.lights && npc.motor.outputs.lights.brake), 1, 0, auge);
+      }
+    }
+    gl.disable(gl.SCISSOR_TEST);
+    gl.viewport(0, 0, w, h);
+    vfSpiegelRahmen(true, [q]);
   }
   // ---- Kamera (v1.1.11) --------------------------------------------------------------------
   // BESTELLT: "Wenn ich den rechten Stick reindruecke im virtuellen Fahren, aendere die Kamera zu

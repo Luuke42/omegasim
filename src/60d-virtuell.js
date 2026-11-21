@@ -1733,7 +1733,7 @@
         if (!VF.aktiv || VF.gl !== gl) return;
         npc.modell = vfModellBauen(gl, daten, VF_MODELL_PFADE[auto]);
         npc.P = vfHandlingProfil(vfPhysikAus(daten.meta.physik));
-      }).catch(() => { /* NPC ohne Modell bleibt unsichtbar */ });
+      }).catch(() => { npc.modellFehl = true; /* NPC ohne Modell bleibt unsichtbar */ });
     }
   }
   // Fahrprofil fuer vfDynamik aus den Daten der .xml. Die Reibwerte von Speed Dreams sind ohne den dortigen
@@ -2251,12 +2251,37 @@
     try { onCarNotify(VF.car, { target: { value: new DataView(b.buffer) } }); } catch (e) { /* weiter */ }
   }
 
+  function vfLadenFertig() {
+    const ich = !VF.tprog || vfAutoWahl() === 'kasten' || !!VF.modell || !!VF.modellFehl;
+    return ich && (VF.npcs || []).every((n) => n.modell || n.modellFehl);
+  }
+  // true = noch am Laden: Auto steht, NPCs und Uhren warten, Bild zeigt die Uebersicht mit Hinweis.
+  function vfLadeSchritt(now) {
+    let el = VF.cv && VF.cv.parentNode ? VF.cv.parentNode.querySelector('.vf-laden') : null;
+    if (VF.laedt && (vfLadenFertig() || now > VF.laedtBis)) { VF.laedt = false; VF.kam = null; VF.letzt = 0; }
+    if (!VF.laedt) { if (el) el.remove(); return false; }
+    if (!el && VF.cv && VF.cv.parentNode) {
+      el = document.createElement('div');
+      el.className = 'vf-laden';
+      el.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;pointer-events:none;'
+        + 'background:rgba(10,14,22,.78);color:#fff;padding:14px 22px;border-radius:10px;font-size:1.2em;font-weight:600;text-align:center';
+      VF.cv.parentNode.appendChild(el);
+    }
+    const alle = 1 + (VF.npcs || []).length;
+    const da = ((VF.modell || VF.modellFehl || vfAutoWahl() === 'kasten' || !VF.tprog) ? 1 : 0) + (VF.npcs || []).filter((n) => n.modell || n.modellFehl).length;
+    const txt = t('Fahrzeuge werden geladen …') + ' ' + da + '/' + alle;
+    if (el && el.textContent !== txt) el.textContent = txt;
+    physEngine.state.speedKmh = 0;
+    VF.x = VF.startX; VF.y = VF.startY; VF.h = VF.startH;
+    return true;
+  }
   function vfBild(now) {
     if (!VF.aktiv) return;
     VF.raf = requestAnimationFrame(vfBild);
     if (rennPauseAktiv()) {
       VF.letzt = now; VF.dtBild = 0; vfMalen(); vfHud(); return;
     }
+    if (vfLadeSchritt(now)) { VF.letzt = now; VF.dtBild = 0; vfMalen(); vfHud(); return; }
     const dt = VF.letzt ? Math.min(0.05, (now - VF.letzt) / 1000) : 0.016;
     VF.letzt = now;
     const st = physEngine.state;
@@ -2814,6 +2839,7 @@
                       { id: 'fahrer', name: 'Fahrer am Rand', wip: true }];
   const VF_KAMERA_STORE = 'omegasim-vf-kamera';
   function vfKameraId() {
+    if (VF.laedt) return 'uebersicht';   // waehrend die Fahrzeuge laden (vfLadeSchritt)
     if (!VF.kamera) { try { VF.kamera = localStorage.getItem(VF_KAMERA_STORE) || 'verfolger'; } catch (e) { VF.kamera = 'verfolger'; } }
     return VF_KAMERAS.some((k) => k.id === VF.kamera) ? VF.kamera : 'verfolger';
   }
@@ -3049,6 +3075,16 @@
       const sinkt = hb && typeof hb.neigung === 'number' ? Math.tan(hb.neigung * Math.PI / 180) * 30 : 1.2;
       VF.kam = auge;
       return { auge, ziel: [auge[0] + fx * 30, hoch - sinkt, auge[2] + fz * 30], fov: (hb && hb.fov) || 70, fovH: (hb && hb.fovH) || (vfCockpitVoll() ? VF_COCKPIT_FOVH : 0), nah: 0.3 };
+    }
+    if (id === 'uebersicht' && VF.uebersicht) {
+      // Ganze Strecke von oben, Oben = Start/Ziel-Richtung (Ladebild, siehe vfLadeSchritt).
+      const U = VF.uebersicht, fov = 55, tn = Math.tan(fov * Math.PI / 360);
+      const asp = VF.cv ? VF.cv.width / Math.max(1, VF.cv.height) : 1.6;
+      const hr = VF.startH * Math.PI / 180, ca = Math.abs(Math.cos(hr)), sa = Math.abs(Math.sin(hr));
+      const hoch = U.bx * sa + U.by * ca, breit = U.bx * ca + U.by * sa;   // Ausdehnung im gedrehten Bild
+      const h = Math.max(hoch / (2 * tn), breit / (2 * tn * asp)) * 1.18;   // Rand fuer HUD oben/unten
+      VF.kam = null;
+      return { auge: [U.mx, h, U.my], ziel: [U.mx, 0, U.my], oben: [Math.sin(hr), 0, -Math.cos(hr)], fov, nah: 1, fern: h + 50 };
     }
     if (id === 'oben') {
       // Von oben, parallel zur Start/Ziel-Geraden: die Kamera schwebt mit dem Auto mit (x/y) und
@@ -3576,7 +3612,7 @@
     VF.auto = vfAutoBauen(gl, vfHex(carColor(car).hex));
     VF.geistAuto = vfAutoBauen(gl, [0.45, 0.75, 1.0]);
     VF.geist = { an: vfGeistAn(), aufzeichnung: [], aktiv: false, zeit: 0, t: 0, i: 0, x: 0, y: 0, h: 0 };
-    VF.modell = null; VF.P = vfHandlingProfil(VF_GT3); VF.feder = null; VF.raddreh = 0;
+    VF.modell = null; VF.modellFehl = false; VF.P = vfHandlingProfil(VF_GT3); VF.feder = null; VF.raddreh = 0;
     VF.tyreTemp = 0;   // v1.3.5: jede Fahrt beginnt mit kalten Reifen (vorher blieb die alte Temperatur stehen)
     VF.tempoFaktor = vfTempoFaktor();
     // Quality-Autoshader, sonst (oder wenn er nicht kompiliert) der von Performance; ohne beide bleibt der Kasten.
@@ -3590,7 +3626,7 @@
           if (!VF.aktiv || VF.gl !== gl) return;
           VF.modell = vfModellBauen(gl, daten);
           VF.P = vfHandlingProfil(vfPhysikAus(daten.meta.physik));
-        }).catch(() => showHudToast(t('Auto-Modell nicht ladbar – es fährt der Kasten')));
+        }).catch(() => { VF.modellFehl = true; showHudToast(t('Auto-Modell nicht ladbar – es fährt der Kasten')); });
       }
     }
     // Start eine halbe Kachel vor Start/Ziel, in Fahrtrichtung.
@@ -3605,6 +3641,12 @@
       VF.boxDurch = 0; VF.boxBesucht = null; }
     vfNpcStarten(gl, start);
     physEngine.state.speedKmh = 0;
+    // 21.11. (Idee Gnen54/Luke): bis alle Fahrzeuge geladen sind, statt weisser Kaesten die ganze Strecke
+    // von oben mit "Fahrzeuge werden geladen"; erst dann geht es los. Hoechstens 60 s.
+    { let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const p of VF.pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+      VF.uebersicht = { mx: (x0 + x1) / 2, my: (y0 + y1) / 2, bx: x1 - x0 + 30, by: y1 - y0 + 30 }; }
+    VF.laedt = !vfLadenFertig(); VF.laedtBis = performance.now() + 60000;
     schicht.addEventListener('click', (e) => {
       const b = e.target.closest('[data-vf]');
       if (!b) return;

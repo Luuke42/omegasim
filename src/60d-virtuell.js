@@ -2258,8 +2258,28 @@
   // true = noch am Laden: Auto steht, NPCs und Uhren warten, Bild zeigt die Uebersicht mit Hinweis.
   function vfLadeSchritt(now) {
     let el = VF.cv && VF.cv.parentNode ? VF.cv.parentNode.querySelector('.vf-laden') : null;
-    if (VF.laedt && (vfLadenFertig() || now > VF.laedtBis)) { VF.laedt = false; VF.kam = null; VF.letzt = 0; }
-    if (!VF.laedt) { if (el) el.remove(); return false; }
+    const schicht = VF.cv && VF.cv.parentNode;
+    // HUD waehrend des Ladens weg (Luke 21.11.), nur das Bild und der Hinweis; Beenden (x) bleibt.
+    const hudZeigen = (an) => {
+      if (!schicht || VF.hudAus === !an) return;
+      VF.hudAus = !an;
+      for (const c of schicht.children) {
+        if (c === VF.cv || c.classList.contains('vf-laden') || c.classList.contains('vf-ampel')) continue;
+        if (c.classList.contains('vf-knoepfe')) { for (const b of c.children) if (b.dataset.vf !== 'zu') b.style.visibility = an ? '' : 'hidden'; continue; }
+        c.style.visibility = an ? '' : 'hidden';
+      }
+    };
+    if (VF.laedt && (vfLadenFertig() || now > VF.laedtBis)) {
+      VF.laedt = false; VF.kam = null; VF.letzt = 0;
+      // Rennen (alles ausser Training): erst die Startampel, dann los (Luke 21.11.).
+      if (VF.modus && VF.modus !== 'practice') VF.ampel = { t0: now, aus: 5000 + 300 + Math.random() * 1200 };
+    }
+    if (!VF.laedt) {
+      if (el) el.remove();
+      hudZeigen(true);
+      return vfAmpelSchritt(now, schicht);
+    }
+    hudZeigen(false);
     if (!el && VF.cv && VF.cv.parentNode) {
       el = document.createElement('div');
       el.className = 'vf-laden';
@@ -2271,6 +2291,37 @@
     const da = ((VF.modell || VF.modellFehl || vfAutoWahl() === 'kasten' || !VF.tprog) ? 1 : 0) + (VF.npcs || []).filter((n) => n.modell || n.modellFehl).length;
     const txt = t('Fahrzeuge werden geladen …') + ' ' + da + '/' + alle;
     if (el && el.textContent !== txt) el.textContent = txt;
+    physEngine.state.speedKmh = 0;
+    VF.x = VF.startX; VF.y = VF.startY; VF.h = VF.startH;
+    return true;
+  }
+  // Startampel der virtuellen Fahrt: fuenf rote Lichter, jede Sekunde eins mehr, dann nach kurzer
+  // Zufallspause alle aus = Start. Bis dahin steht alles (wie beim Laden).
+  function vfAmpelSchritt(now, schicht) {
+    const A = VF.ampel;
+    let el = schicht ? schicht.querySelector('.vf-ampel') : null;
+    if (!A) { if (el) el.remove(); return false; }
+    const dt = now - A.t0;
+    if (dt >= A.aus) {
+      VF.ampel = null; VF.letzt = 0;
+      if (el) el.remove();
+      try { showHudToast(t('Los!')); } catch (e) { /* ohne */ }
+      return false;
+    }
+    if (!el && schicht) {
+      el = document.createElement('div');
+      el.className = 'vf-ampel';
+      el.style.cssText = 'position:absolute;left:50%;top:22%;transform:translateX(-50%);z-index:3;pointer-events:none;display:flex;gap:12px;'
+        + 'background:rgba(10,12,16,.88);padding:12px 16px;border-radius:12px';
+      for (let i = 0; i < 5; i++) {
+        const l = document.createElement('span');
+        l.style.cssText = 'width:38px;height:38px;border-radius:50%;background:#3a1010;box-shadow:inset 0 0 6px #000';
+        el.appendChild(l);
+      }
+      schicht.appendChild(el);
+    }
+    const an = Math.min(5, Math.floor(dt / 1000) + 1);
+    if (el) [...el.children].forEach((l, i) => { l.style.background = i < an ? '#ff2a1a' : '#3a1010'; l.style.boxShadow = i < an ? '0 0 14px #ff3a20' : 'inset 0 0 6px #000'; });
     physEngine.state.speedKmh = 0;
     VF.x = VF.startX; VF.y = VF.startY; VF.h = VF.startH;
     return true;
@@ -3080,11 +3131,9 @@
       // Ganze Strecke von oben, Oben = Start/Ziel-Richtung (Ladebild, siehe vfLadeSchritt).
       const U = VF.uebersicht, fov = 55, tn = Math.tan(fov * Math.PI / 360);
       const asp = VF.cv ? VF.cv.width / Math.max(1, VF.cv.height) : 1.6;
-      const hr = VF.startH * Math.PI / 180, ca = Math.abs(Math.cos(hr)), sa = Math.abs(Math.sin(hr));
-      const hoch = U.bx * sa + U.by * ca, breit = U.bx * ca + U.by * sa;   // Ausdehnung im gedrehten Bild
-      const h = Math.max(hoch / (2 * tn), breit / (2 * tn * asp)) * 1.18;   // Rand fuer HUD oben/unten
+      const h = Math.max(U.hoch / (2 * tn), U.breit / (2 * tn * asp)) * 1.12;
       VF.kam = null;
-      return { auge: [U.mx, h, U.my], ziel: [U.mx, 0, U.my], oben: [Math.sin(hr), 0, -Math.cos(hr)], fov, nah: 1, fern: h + 50 };
+      return { auge: [U.mx, h, U.my], ziel: [U.mx, 0, U.my], oben: U.oben, fov, nah: 1, fern: h + 50 };
     }
     if (id === 'oben') {
       // Von oben, parallel zur Start/Ziel-Geraden: die Kamera schwebt mit dem Auto mit (x/y) und
@@ -3643,10 +3692,23 @@
     physEngine.state.speedKmh = 0;
     // 21.11. (Idee Gnen54/Luke): bis alle Fahrzeuge geladen sind, statt weisser Kaesten die ganze Strecke
     // von oben mit "Fahrzeuge werden geladen"; erst dann geht es los. Hoechstens 60 s.
-    { let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-      for (const p of VF.pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
-      VF.uebersicht = { mx: (x0 + x1) / 2, my: (y0 + y1) / 2, bx: x1 - x0 + 30, by: y1 - y0 + 30 }; }
-    VF.laedt = !vfLadenFertig(); VF.laedtBis = performance.now() + 60000;
+    // Querformat (21.11., Gnen54: "Die Strecke sollte noch im Querformat angezeigt werden"): die lange
+    // Achse der Strecke (Hauptachse der Punkte) liegt waagerecht im Bild.
+    { let mx = 0, my = 0;
+      for (const p of VF.pts) { mx += p.x; my += p.y; }
+      mx /= VF.pts.length; my /= VF.pts.length;
+      let sxx = 0, syy = 0, sxy = 0;
+      for (const p of VF.pts) { const dx = p.x - mx, dy = p.y - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+      const w = 0.5 * Math.atan2(2 * sxy, sxx - syy), ax = [Math.cos(w), Math.sin(w)], ay = [-ax[1], ax[0]];
+      let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+      for (const p of VF.pts) {
+        const a = (p.x - mx) * ax[0] + (p.y - my) * ax[1], b = (p.x - mx) * ay[0] + (p.y - my) * ay[1];
+        a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b);
+      }
+      const am = (a0 + a1) / 2, bm = (b0 + b1) / 2;
+      VF.uebersicht = { mx: mx + ax[0] * am + ay[0] * bm, my: my + ax[1] * am + ay[1] * bm, breit: a1 - a0 + 30, hoch: b1 - b0 + 30, oben: [ay[0], 0, ay[1]] }; }
+    // immer ueber vfLadeSchritt: ist schon alles da, endet das Laden im ersten Bild (und im Rennen kommt die Ampel)
+    VF.laedt = true; VF.laedtBis = performance.now() + 60000; VF.hudAus = false; VF.ampel = null;
     schicht.addEventListener('click', (e) => {
       const b = e.target.closest('[data-vf]');
       if (!b) return;

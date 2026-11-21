@@ -132,5 +132,9 @@
 </table>
 <p>Fehler bitte mit Screenshot und kurzer Beschreibung melden (Auto, Strecke, Kamera, was passiert ist).</p>
 </main>
+<script>
+  // In der App als Fenster geoeffnet: Esc schliesst es auch, wenn der Fokus hier im Text liegt.
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && window.parent !== window) window.parent.postMessage('vf-hilfe-zu', '*'); });
+</script>
 </body>
 </html>

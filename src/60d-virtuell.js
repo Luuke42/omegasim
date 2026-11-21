@@ -4013,10 +4013,39 @@
     hilfe.setAttribute('aria-label', t('Anleitung virtuelles Fahren'));
     hilfe.style.cssText = 'width:50px;min-width:50px;height:50px;min-height:50px;border-radius:50%;padding:0;margin-left:10px;font-weight:700;font-size:20px;text-align:center;flex:0 0 auto';
     z.style.display = 'flex'; z.style.alignItems = 'center'; los.style.flex = '1 1 auto';
-    hilfe.onclick = () => { try { window.open('hilfe/virtuelles-fahren.html', '_blank', 'noopener'); } catch (e) { location.href = 'hilfe/virtuelles-fahren.html'; } };
+    hilfe.onclick = () => vfHilfeZeigen();
     z.appendChild(hilfe);
     rechts.appendChild(z);
     rechts.appendChild(vfBestenliste(autos));
+  }
+  // Anleitung als Fenster ueber der Garage (21.11., Gnen54: "moechte ich eigentlich gleich wieder an den
+  // Punkt zum virtuellen Fahren zurueckkommen") statt neuem Tab: x oben rechts, Esc oder Klick daneben schliesst.
+  function vfHilfeZeigen() {
+    if (document.querySelector('.vf-hilfe-fenster')) return;
+    const hg = document.createElement('div');
+    hg.className = 'vf-hilfe-fenster';
+    hg.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
+    const box = document.createElement('div');
+    box.style.cssText = 'position:relative;width:min(900px,94vw);height:min(88vh,1000px);background:#0e131b;border:1px solid #26303f;border-radius:12px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.6)';
+    const fr = document.createElement('iframe');
+    fr.src = 'hilfe/virtuelles-fahren.html';
+    fr.title = t('Anleitung virtuelles Fahren');
+    fr.style.cssText = 'width:100%;height:100%;border:0;display:block';
+    const zu = document.createElement('button');
+    zu.type = 'button';
+    zu.textContent = '\u2715';
+    zu.setAttribute('aria-label', t('Schließen'));
+    zu.style.cssText = 'position:absolute;top:10px;right:12px;width:40px;height:40px;min-height:0;border-radius:50%;padding:0;font-size:18px;z-index:1';
+    const nachricht = (e) => { if (e.data === 'vf-hilfe-zu') schliessen(); };
+    const schliessen = () => { hg.remove(); document.removeEventListener('keydown', taste, true); window.removeEventListener('message', nachricht); };
+    window.addEventListener('message', nachricht);
+    const taste = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); schliessen(); } };
+    zu.onclick = schliessen;
+    hg.addEventListener('click', (e) => { if (e.target === hg) schliessen(); });
+    document.addEventListener('keydown', taste, true);
+    box.appendChild(fr); box.appendChild(zu); hg.appendChild(box);
+    document.body.appendChild(hg);
+    zu.focus();
   }
   // Bestenliste in der Garage (21.11., BESTELLT Gnen54): je Strecke und Auto die gespeicherte Bestzeit
   // (vfZeitMerken), Rundenzahl und Datum. Zugeklappt, damit die Garage kurz bleibt.

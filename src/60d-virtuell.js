@@ -55,6 +55,28 @@
     }
     return null;
   }
+  // Schliessstelle der Mittellinie (GEMELDET Gnen54 17.11.: "Pendel der NPCs" an der Startlinie, dazu eine
+  // Runde von 0,267 s). Auf seiner Strecke (...QMKLGB, die Boxengasse als letztes Teil) endet die Linie
+  // 5,9 Einheiten HINTER dem Startpunkt - die Teile schliessen nicht genau. Die Spur lief dort also ein
+  // Stueck vorwaerts ueber den Start hinaus und sprang dann zurueck: ein NPC fuhr hin und her und drehte
+  // sich dabei um. Punkte am Ende, die in Startrichtung schon auf oder hinter dem Startpunkt liegen (und
+  // in dieselbe Richtung laufen), fallen weg; der Rest des Spalts wird wie bisher ueberbrueckt.
+  function vfSchliessstelle(pts) {
+    const n = pts.length;
+    if (n < 8) return pts;
+    const p0 = pts[0], l = Math.hypot(pts[1].x - p0.x, pts[1].y - p0.y) || 1;
+    const dx = (pts[1].x - p0.x) / l, dy = (pts[1].y - p0.y) / l;
+    let ende = n;
+    while (ende > n - 24) {
+      const p = pts[ende - 1], q = pts[ende - 2];
+      const vor = (p.x - p0.x) * dx + (p.y - p0.y) * dy;
+      const quer = Math.abs((p.x - p0.x) * -dy + (p.y - p0.y) * dx);
+      const sl = Math.hypot(p.x - q.x, p.y - q.y) || 1;
+      const gleich = ((p.x - q.x) * dx + (p.y - q.y) * dy) / sl > 0.7;
+      if (vor > -0.3 && quer < TRACK_HALF_W && gleich) ende--; else break;
+    }
+    return ende < n ? pts.slice(0, ende) : pts;
+  }
   // Kartentyp -> gemeldeter Code (auf der Schiene).
   function vfCode(typ) {
     if (typ === TILE_TYPE.START) return START_CODE_RAIL;
@@ -156,6 +178,15 @@
     { id: 'fischgraet', name: 'Fischgrät', art: 'fischgraet', breiteCm: 7, laengeCm: 35, spalten: 16, zeilen: 2,
       ton: [[190, 143, 94], [176, 128, 82], [201, 157, 106], [163, 118, 74], [184, 136, 86]], maser: [122, 82, 48],
       kontrast: 0.42, ringCm: 0.8, poren: 1.0, ast: 0.08, glanz: 0.28 },
+    // BESTELLT (Gnen54, 14.11.2026): ein neutraler Boden ohne Dielen, "nicht komplett eintoenig, so
+    // ein bisschen wie marmoriert", nicht schwarz (die Fahrbahn ist schwarz). Eine nahtlos kachelbare
+    // Flaeche 120 x 60 cm (Atlas 2048 x 1024), ohne Fugen und ohne Spiegeln/Toenen je Stueck.
+    { id: 'stein', name: 'Stein grau marmoriert', art: 'flaeche', breiteCm: 60, laengeCm: 120, spalten: 1, zeilen: 1,
+      ton: [[104, 104, 107]], hell: [130, 130, 133], ader: [70, 70, 75], glanz: 0.34 },
+    // BESTELLT (Gnen54, 18.11.2026): Rasen als Untergrund der freien Strecken ("anstelle Parkett"),
+    // auch fuer Carrera-Bahnen waehlbar. Nahtlose Flaeche 120 x 60 cm, matt.
+    { id: 'rasen', name: 'Rasen', art: 'flaeche', rasen: true, breiteCm: 60, laengeCm: 120, spalten: 1, zeilen: 1,
+      ton: [[62, 104, 40]], hell: [104, 150, 62], ader: [40, 72, 28], glanz: 0.08 },
   ];
   const VF_ATLAS_B = 2048, VF_ATLAS_H = 1024;   // Bodenatlas (8 MB, mit Mipmaps 10,7 MB)
   const VF_BAHN_TEX = 1024, VF_BAHN_SPALTE = 256;  // Fahrbahn: 4 Teile nebeneinander (3 gebraucht, 1 Start/Ziel)
@@ -166,6 +197,8 @@
   const vfTexDaten = { bahn: null, rand: null, boden: null, bodenId: null };
   const vfTexZaehler = { bahn: 0, rand: 0, boden: 0 };
   function vfBodenWahl() {
+    // Freie Strecken (nur virtuell) liegen immer auf Rasen.
+    if (VF.frei || (!VF.aktiv && VF.frei === undefined && typeof vfFreiWahl === 'function' && vfFreiWahl())) return 'rasen';
     try { const v = localStorage.getItem(VF_BODEN_STORE); return VF_BOEDEN.some((b) => b.id === v) ? v : 'eiche'; } catch (e) { return 'eiche'; }
   }
   function vfBodenSetzen(id) { try { localStorage.setItem(VF_BODEN_STORE, id); } catch (e) { /* privat */ } }
@@ -214,6 +247,62 @@
   // Ringe fast gerade), Fasern je Spalte, Poren als kurze dunkle Striche, Flecken, selten ein Ast.
   // Ringsum eine dunkle Fuge (1-2 px) mit heller Fase daneben: im Atlas, damit sie mit den Mipmaps
   // weich wird statt in der Ferne zu flimmern. Alpha = Glanz (0 in der Fuge).
+  // Marmorierter Stein, NAHTLOS kachelbar: periodisches Wertrauschen (Gitter modulo Zellenzahl) in
+  // mehreren Oktaven, darauf Adern als |sin| mit ganzzahliger Frequenz je Kachel (auch periodisch),
+  // verzerrt vom Rauschen. Zeilen y0..y1 (in Schritten, damit die Garage im Leerlauf rechnen kann).
+  function vfSteinRauschen(u, v, n, m, s) {
+    const x = u * n, y = v * m, i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const g = (a, b) => vfHash(((a % n) + n) % n + s, ((b % m) + m) % m + 7 * s);
+    const a0 = g(i, j), a1 = g(i + 1, j), b0 = g(i, j + 1), b1 = g(i + 1, j + 1);
+    return (a0 + (a1 - a0) * sx + (b0 - a0 + (b1 - b0 - a1 + a0) * sx) * sy) * 2 - 1;
+  }
+  function vfSteinTurb(u, v) {
+    let t = 0, a = 0.5;
+    for (let o = 0, n = 4, m = 2; o < 5; o++, n *= 2, m *= 2, a *= 0.5) t += a * vfSteinRauschen(u, v, n, m, 101 * (o + 1));
+    return t;
+  }
+  function vfRasenZeilen(d, AW, AH, y0, y1, P) {
+    const [t0, t1, t2] = P.ton[0], [h0, h1, h2] = P.hell, [a0, a1, a2] = P.ader;
+    for (let y = y0; y < y1; y++) {
+      const v = y / AH;
+      for (let x = 0; x < AW; x++) {
+        const u = x / AW;
+        // grosse Flecken (gemaeht/ungemaeht, trockener), mittlere Buescheligkeit, feine Halme (kurze Striche)
+        const fleck = 0.5 + 0.45 * vfSteinRauschen(u, v, 2, 1, 311) + 0.25 * vfSteinRauschen(u, v, 7, 4, 523);
+        const halm = vfHash(x, Math.floor(y / 4) + (x % 7) * 13), fein = vfHash(x * 3 + 1, y);
+        const hw = Math.max(0, Math.min(1, fleck * 0.75 + halm * 0.35 - 0.05));
+        let r = t0 + (h0 - t0) * hw, g = t1 + (h1 - t1) * hw, b = t2 + (h2 - t2) * hw;
+        const dunkel = fein < 0.12 ? 0.55 : 0;                  // Schatten zwischen den Halmen
+        r += (a0 - r) * dunkel; g += (a1 - g) * dunkel; b += (a2 - b) * dunkel;
+        const i = (y * AW + x) * 4;
+        d[i] = r; d[i + 1] = g; d[i + 2] = b;
+        d[i + 3] = P.glanz * 255;
+      }
+    }
+  }
+  function vfSteinZeilen(d, AW, AH, y0, y1, P) {
+    const [t0, t1, t2] = P.ton[0], [h0, h1, h2] = P.hell, [a0, a1, a2] = P.ader;
+    for (let y = y0; y < y1; y++) {
+      const v = y / AH;
+      for (let x = 0; x < AW; x++) {
+        const u = x / AW, tb = vfSteinTurb(u, v);
+        // Grobe Wolken (hell/dunkel) und zwei Adernscharen (Frequenzen ganzzahlig je Kachel).
+        const wolke = 0.5 + 0.6 * vfSteinRauschen(u, v, 3, 2, 909) + 0.35 * tb;
+        const a1s = Math.abs(Math.sin(Math.PI * (3 * u + 2 * v) + 5.5 * tb));
+        const a2s = Math.abs(Math.sin(Math.PI * (5 * u - 3 * v) + 7.0 * vfSteinTurb(v, u)));
+        const ader = Math.pow(1 - a1s, 10) * 0.6 + Math.pow(1 - a2s, 14) * 0.35;
+        const hw = Math.max(0, Math.min(1, wolke));
+        let r = t0 + (h0 - t0) * hw, g = t1 + (h1 - t1) * hw, b = t2 + (h2 - t2) * hw;
+        const k = Math.min(1, ader);
+        r += (a0 - r) * k; g += (a1 - g) * k; b += (a2 - b) * k;
+        const korn = 1 + (vfHash(x, y) - 0.5) * 0.05;
+        const i = (y * AW + x) * 4;
+        d[i] = r * korn; d[i + 1] = g * korn; d[i + 2] = b * korn;
+        d[i + 3] = P.glanz * (0.85 + 0.3 * hw) * 255;
+      }
+    }
+  }
   function vfHolzStueck(d, AW, x0, y0, w, h, P, rnd) {
     const ton = P.ton[Math.floor(rnd() * P.ton.length)], j = 1 + (rnd() - 0.5) * 0.08;
     const t0 = ton[0] * j, t1 = ton[1] * j, t2 = ton[2] * j, m0 = P.maser[0], m1 = P.maser[1], m2 = P.maser[2];
@@ -290,9 +379,13 @@
   }
   function* vfBodenBau(P) {
     const AW = VF_ATLAS_B, AH = VF_ATLAS_H, d = new Uint8ClampedArray(AW * AH * 4);
-    const rnd = vfZufall(P.id === 'eiche' ? 1911 : P.id === 'grau' ? 2701 : 3307);
+    const rnd = vfZufall(P.id === 'eiche' ? 1911 : P.id === 'grau' ? 2701 : P.id === 'stein' ? 4409 : P.id === 'rasen' ? 5813 : 3307);
     const w = AW / P.spalten, h = AH / P.zeilen, stuecke = [];
-    for (let r = 0; r < P.zeilen; r++) {
+    if (P.art === 'flaeche') {
+      for (let y = 0; y < AH; y += 64) { (P.rasen ? vfRasenZeilen : vfSteinZeilen)(d, AW, AH, y, Math.min(AH, y + 64), P); yield; }
+      stuecke.push([0, 0, 1, 1]);
+    }
+    for (let r = 0; P.art !== 'flaeche' && r < P.zeilen; r++) {
       for (let s = 0; s < P.spalten; s++) {
         vfHolzStueck(d, AW, s * w, r * h, w, h, P, rnd);
         stuecke.push([(s * w + 0.5) / AW, (r * h + 0.5) / AH, ((s + 1) * w - 0.5) / AW, ((r + 1) * h - 0.5) / AH]);
@@ -589,12 +682,106 @@
   // auf sein Ende). Fahrbahn: v = 0..1 ueber das Teil, eine zufaellige Spalte (Gebrauchsgrad), zufaellig
   // gespiegelt, Helligkeit je Teil leicht anders. Randstein: eine ganze Zahl Pfeiltakte je Teil und
   // Seite (wie im Editor), an beiden Enden ein dunkles Stueck als Steckfuge. Rein (ohne WebGL).
-  function vfBahnGeometrie(pts, nrm, tiles, ao) {
+  // BOXENGASSE (GEMELDET Gnen54 17.11.: "Box erscheint nicht an der Strecke"): wie im Editor
+  // (60-track.js, boxBucht/boxBuchtSvg) weitet sich auf der Fahrerrechten (rote Seite, sg -1) die Kante
+  // ueber jede Boxenkachel zu einer Bucht (BOX_BUCHT halbe Bahnbreiten tief, weiches S an den Enden).
+  // Die Boxenkacheln werden dafuer 6-fach feiner abgetastet; bucht[i] ist die Zusatzbreite an Punkt i.
+  // Dazu die Markierungen des Originalteils: Teilfuge quer, je Haelfte 10 Querstriche und 8 Punkte.
+  function vfBoxVerfeinern(pts, nrm, tiles) {
+    const istBox = (k) => k >= 0 && tiles[k] && tiles[k].type === TILE_TYPE.PIT;
+    if (!tiles.some((x) => x.type === TILE_TYPE.PIT) || typeof boxBucht !== 'function') return { pts, nrm, bucht: null, seite: null, marken: [] };
+    // Bucht-Seite: -1 = rechts (Carrera-Boxengasse, rote Seite), +1 = links (freie Strecken, aus der Datei).
+    const seiteK = (k) => (tiles[k] && tiles[k].seite) || -1;
+    const half = TRACK_HALF_W, FEIN = 6, n = pts.length;
+    const tiefeK = (k) => (tiles[k] && tiles[k].bucht ? tiles[k].bucht : BOX_BUCHT) * half;
+    const box = {};
+    for (let i = 1; i < n; i++) {
+      const k = pts[i].tile;
+      if (!istBox(k)) continue;
+      if (!box[k]) box[k] = { s: i - 1, b: i }; else box[k].b = i;
+    }
+    const u = (i, k) => (i - box[k].s) / Math.max(1, box[k].b - box[k].s);
+    const p2 = [], n2 = [], bucht = [], seite = [];
+    for (let i = 0; i < n; i++) {
+      const k = pts[i].tile;
+      if (i > 0 && box[k]) {
+        for (let f = 1; f < FEIN; f++) {
+          const q = f / FEIN, a = pts[i - 1], z = pts[i];
+          let nx = nrm[i - 1].x + (nrm[i].x - nrm[i - 1].x) * q, ny = nrm[i - 1].y + (nrm[i].y - nrm[i - 1].y) * q;
+          const nl = Math.hypot(nx, ny) || 1;
+          p2.push({ x: a.x + (z.x - a.x) * q, y: a.y + (z.y - a.y) * q, tile: k });
+          n2.push({ x: nx / nl, y: ny / nl });
+          bucht.push(z.bucht !== undefined ? (a.bucht || 0) + ((z.bucht || 0) - (a.bucht || 0)) * q
+            : tiefeK(k) * boxBucht(u(i - 1, k) + q / Math.max(1, box[k].b - box[k].s))); seite.push(seiteK(k));
+        }
+      }
+      p2.push(pts[i]); n2.push(nrm[i]);
+      bucht.push(pts[i].bucht !== undefined ? pts[i].bucht : (box[k] ? tiefeK(k) * boxBucht(u(i, k)) : 0)); seite.push(box[k] ? seiteK(k) : -1);
+    }
+    // Markierungen als flache Vierecke (Mitte, Laengsrichtung, Laenge, Querrichtung, Breite).
+    const marken = [];
+    for (const k of Object.keys(box)) {
+      const { s: i0, b: i1 } = box[k];
+      // Freie Strecke: statt der Carrera-Markierungen der Steg zwischen Bahn und Boxengasse (aus der DXF),
+      // als helle Leiste mit der echten Breite.
+      if (tiles[k].steg) {
+        const sp = tiles[k].steg.pts, sb = tiles[k].steg.b;
+        for (let j = 0; j + 1 < sp.length; j++) {
+          const ax = sp[j][0], ay = sp[j][1], bx = sp[j + 1][0], by = sp[j + 1][1], l = Math.hypot(bx - ax, by - ay) || 1;
+          marken.push({ m: [(ax + bx) / 2, (ay + by) / 2], e: [(bx - ax) / l, (by - ay) / l], l: l + 0.05, q: [-(by - ay) / l, (bx - ax) / l], b: sb, c: [0.92, 0.92, 0.92] });
+        }
+        continue;
+      }
+      const A = pts[i0], Z = pts[i1], nn = nrm[Math.min(i1, i0 + 1)];
+      const lx = Z.x - A.x, ly = Z.y - A.y, L = Math.hypot(lx, ly) || 1, ex = lx / L, ey = ly / L;
+      const P = (uu, v) => [A.x + lx * uu - nn.x * v * half, A.y + ly * uu - nn.y * v * half];
+      const quer = [-nn.x, -nn.y];
+      // Teilfuge zwischen den beiden Originalteilen, quer ueber Bahn und Bucht (dunkelgrau).
+      const f0 = P(0.5, -1), f1 = P(0.5, 1 + BOX_BUCHT);
+      marken.push({ m: [(f0[0] + f1[0]) / 2, (f0[1] + f1[1]) / 2], e: [ex, ey], l: 0.6, q: quer, b: Math.hypot(f1[0] - f0[0], f1[1] - f0[1]), c: [0.23, 0.25, 0.29] });
+      for (const spiegel of [false, true]) {
+        for (let j = 0; j < 10; j++) {
+          const uu0 = 0.257 + j * 0.215 / 9, uu = spiegel ? 1 - uu0 : uu0, hl = 0.33 - j * (0.33 - 0.155) / 9;
+          marken.push({ m: P(uu, 1.33), e: [ex, ey], l: 0.45, q: quer, b: 2 * hl * half, c: [1, 1, 1] });
+        }
+        for (let j = 0; j < 8; j++) {
+          const uu0 = 0.257 + j * 0.165 / 7, uu = spiegel ? 1 - uu0 : uu0;
+          marken.push({ m: P(uu, 0.88), e: [ex, ey], l: 0.6, q: quer, b: 0.6, c: [1, 1, 1] });
+        }
+      }
+    }
+    return { pts: p2, nrm: n2, bucht, seite, marken };
+  }
+  // Zusatzbreite der Boxenbucht je Punkt der (gefahrenen) Mittellinie, fuer "neben der Bahn" und den
+  // Randstein: die Bucht zaehlt als Fahrbahn (Gnen54 17.11.: "an die Box fahren, nachtanken, weiter").
+  function vfBuchtJePunkt(pts, tiles) {
+    const n = pts.length, out = new Float32Array(n);
+    if (!tiles.some((x) => x.type === TILE_TYPE.PIT) || typeof boxBucht !== 'function') return out;
+    const box = {};
+    for (let i = 1; i < n; i++) {
+      const k = pts[i].tile;
+      if (!(k >= 0 && tiles[k] && tiles[k].type === TILE_TYPE.PIT)) continue;
+      if (!box[k]) box[k] = { s: i - 1, b: i }; else box[k].b = i;
+    }
+    for (let i = 0; i < n; i++) {
+      const k = pts[i].tile, b = box[k];
+      if (pts[i].bucht !== undefined) out[i] = pts[i].bucht;
+      else if (b) out[i] = (tiles[k].bucht || BOX_BUCHT) * TRACK_HALF_W * boxBucht((i - b.s) / Math.max(1, b.b - b.s));
+    }
+    return out;
+  }
+  function vfBahnGeometrie(pts0, nrm0, tiles, ao) {
     const strasse = [], rand = [];
+    const fein = vfBoxVerfeinern(pts0, nrm0, tiles);
+    const pts = fein.pts, nrm = fein.nrm, bucht = fein.bucht;
+    const bu = (i) => (bucht ? bucht[i] : 0), bse = (i) => (fein.seite ? fein.seite[i] : -1);
     const half = TRACK_HALF_W, kw = TRACK_KERB_W, ky = 0.09, n = pts.length;
     const rnd = vfZufall(4242 + tiles.length * 31 + Math.round(Math.abs(pts[n - 1].x) * 7));
     const off = (i, d) => [pts[i].x + nrm[i].x * d, pts[i].y + nrm[i].y * d];
+    const zz = (i) => pts[i].z || 0;   // Hoehe (Bruecke), sonst 0
     const lerp = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    // Echte Boxengasse als eigene Flaeche (19.11.): dann keine Bucht aus der Mittellinie zeichnen.
+    const gasse = (tiles.find((x) => x && x.gasse) || {}).gasse;
     const teile = [];
     for (let i = 0; i < n - 1; i++) {
       const T = pts[i + 1].tile, l = teile[teile.length - 1];
@@ -614,12 +801,59 @@
         let v0 = acc[i - tl.i0] / L, v1 = acc[i - tl.i0 + 1] / L;
         if (fv) { v0 = 1 - v0; v1 = 1 - v1; }
         const a = off(i, half), b = off(i + 1, half), c = off(i + 1, -half), d = off(i, -half);
-        vfViereck(strasse, [a[0], 0, a[1], ua, v0], [b[0], 0, b[1], ua, v1], [c[0], 0, c[1], ub, v1], [d[0], 0, d[1], ub, v0], ct);
+        const z0 = zz(i), z1 = zz(i + 1);
+        vfViereck(strasse, [a[0], z0, a[1], ua, v0], [b[0], z1, b[1], ua, v1], [c[0], z1, c[1], ub, v1], [d[0], z0, d[1], ub, v0], ct);
+        if (!gasse && (bu(i) > 1e-3 || bu(i + 1) > 1e-3)) {
+          // Boxenbucht: Asphalt vom Rand bis zur ausgestellten Kante (Randspalte der Textur, etwas dunkler).
+          const sb = bse(i), r0 = off(i, half * sb), r1 = off(i + 1, half * sb), ur = sb > 0 ? ua : ub;
+          const e = off(i + 1, (half + bu(i + 1)) * sb), g = off(i, (half + bu(i)) * sb), cb = [ct[0] * 0.9, ct[1] * 0.9, ct[2] * 0.9];
+          vfViereck(strasse, [r0[0], 0, r0[1], ur, v0], [r1[0], 0, r1[1], ur, v1], [e[0], 0, e[1], ur, v1], [g[0], 0, g[1], ur, v0], cb);
+        }
       }
       for (const sg of [1, -1]) {
+        const bs = (i) => (sg === bse(i) ? bu(i) : 0);
+        if (tiles[tl.T] && tiles[tl.T].frei) {
+          // Freie Strecke (nur virtuell): statt Carrera-Randstein Asphalt bis zur Kante und eine weisse
+          // Randlinie (Gnen54 18.11.: "Fahrbahnraender nur weiss markiert" - Erkennungsmerkmal). Spaeter
+          // am selben Tag: breiter, so breit wie ein Carrera-Randstein, und rumpelt beim Ueberfahren genauso.
+          // 21.11. (Gnen54, nach Lukes Fork): optisch nur ein SCHMALER Strich an der Fahrbahnkante; die
+          // Rumpelzone dahinter bleibt so breit wie der Carrera-Randstein (Erkennung unveraendert).
+          const lw = kw * 0.3, uk = sg > 0 ? ua : ub, um = (sg > 0 ? 4 : 132) / VF_RAND_B;
+          for (let i = tl.i0; i <= tl.i1; i++) {
+            // Zur echten Gasse hin: Asphalt bis zur Kante, aber keine weisse Linie (dort geht es hinein).
+            // 21.11. (GEMELDET Gnen54 "Fehlender Randstreifen"): nur wo die Gassen-Flaeche den Streifen selbst
+            // beruehrt (Ein-/Ausfahrt). Vorher fehlte er entlang der ganzen Gasse und an Stellen, an denen ein
+            // anderer Streckenteil nahe an der Gasse vorbeifuehrt.
+            const offen = !!gasse && [0.5, 1.0].some((f) => vfInGasse(gasse, off(i, (half + kw * f) * sg)) || vfInGasse(gasse, off(i + 1, (half + kw * f) * sg)));
+            const bsZ = (j) => (gasse ? 0 : bs(j));
+            const iA = off(i, (half + bsZ(i)) * sg), iB = off(i + 1, (half + bsZ(i + 1)) * sg);
+            const oA = off(i, (half + kw + bsZ(i)) * sg), oB = off(i + 1, (half + kw + bsZ(i + 1)) * sg);
+            const lA = off(i, (half + lw + bsZ(i)) * sg), lB = off(i + 1, (half + lw + bsZ(i + 1)) * sg);
+            const zA = zz(i), zB = zz(i + 1);
+            vfViereck(strasse, [iA[0], zA, iA[1], uk, 0.3], [iB[0], zB, iB[1], uk, 0.4], [oB[0], zB, oB[1], uk, 0.4], [oA[0], zA, oA[1], uk, 0.3], ct);
+            if (!offen) vfViereck(rand, [iA[0], zA + 0.012, iA[1], um, 0.1], [iB[0], zB + 0.012, iB[1], um, 0.1], [lB[0], zB + 0.012, lB[1], um, 0.2], [lA[0], zA + 0.012, lA[1], um, 0.2], [1, 1, 1]);
+            if (zA > 0 || zB > 0) {
+              // Bruecke (19.11.): Bordwand aussen (gedruckt, grau) bis 1,3 ueber die Fahrbahn, unten so
+              // tief wie die Platte (11 mm, wie im STL) - darunter bleibt die Durchfahrt offen; an den
+              // flachen Rampenenden reicht sie bis zum Boden. Dazu die Unterseite der Platte.
+              const wo = 1.3, dk = 1.0, wf = [0.58, 0.6, 0.63], wi = [0.5, 0.52, 0.55], uw2 = 4 / VF_RAND_B;
+              const bA = Math.max(0, zA - dk), bB = Math.max(0, zB - dk);
+              const aA = off(i, (half + kw + 0.25) * sg), aB = off(i + 1, (half + kw + 0.25) * sg);
+              vfViereck(rand, [oA[0], bA, oA[1], uw2, 0.1], [oB[0], bB, oB[1], uw2, 0.1], [oB[0], zB + wo, oB[1], uw2, 0.2], [oA[0], zA + wo, oA[1], uw2, 0.2], wi);
+              vfViereck(rand, [aA[0], bA, aA[1], uw2, 0.1], [aB[0], bB, aB[1], uw2, 0.1], [aB[0], zB + wo, aB[1], uw2, 0.2], [aA[0], zA + wo, aA[1], uw2, 0.2], wf);
+              vfViereck(rand, [oA[0], zA + wo, oA[1], uw2, 0.1], [oB[0], zB + wo, oB[1], uw2, 0.1], [aB[0], zB + wo, aB[1], uw2, 0.2], [aA[0], zA + wo, aA[1], uw2, 0.2], wf);
+              if (sg > 0) {
+                const uA = off(i, -(half + kw)), uB = off(i + 1, -(half + kw));
+                vfViereck(rand, [oA[0], bA, oA[1], uw2, 0.1], [oB[0], bB, oB[1], uw2, 0.1],
+                  [uB[0], bB, uB[1], uw2, 0.2], [uA[0], bA, uA[1], uw2, 0.2], [0.35, 0.36, 0.38]);
+              }
+            }
+          }
+          continue;
+        }
         const mitte = (half + kw / 2) * sg, accS = [0];
         for (let i = tl.i0; i <= tl.i1; i++) {
-          const p = off(i, mitte), q = off(i + 1, mitte);
+          const p = off(i, mitte + bs(i) * sg), q = off(i + 1, mitte + bs(i + 1) * sg);
           accS.push(accS[accS.length - 1] + Math.hypot(q[0] - p[0], q[1] - p[1]));
         }
         const Ls = accS[accS.length - 1] || 1, nP = Math.max(1, Math.round(Ls / takt)), k0 = Math.floor(rnd() * 4);
@@ -637,7 +871,7 @@
           if (i === tl.i1) t1 = 1 - f;
           stuecke.push([t0, t1, false]);
           if (i === tl.i1) stuecke.push([t1, 1, true]);
-          const iA = off(i, half * sg), iB = off(i + 1, half * sg), oA = off(i, (half + kw) * sg), oB = off(i + 1, (half + kw) * sg);
+          const iA = off(i, (half + bs(i)) * sg), iB = off(i + 1, (half + bs(i + 1)) * sg), oA = off(i, (half + kw + bs(i)) * sg), oB = off(i + 1, (half + kw + bs(i + 1)) * sg);
           for (const [s0, s1, fuge] of stuecke) {
             if (s1 <= s0) continue;
             const i0 = lerp(iA, iB, s0), i1 = lerp(iA, iB, s1), o0 = lerp(oA, oB, s0), o1 = lerp(oA, oB, s1);
@@ -649,6 +883,61 @@
         }
       }
     });
+    if (gasse) {
+      // Boxengasse aus der DXF: Dreiecke (Asphalt, etwas dunkler) und die weissen Waende.
+      const t = gasse.tri, ur = (0.5 * VF_BAHN_SPALTE) / VF_BAHN_TEX, cb = [0.88, 0.88, 0.9];
+      for (let j = 0; j + 5 < t.length; j += 6) {
+        for (const k of [0, 2, 4]) strasse.push(t[j + k], 0, t[j + k + 1], ur, 0.5, cb[0], cb[1], cb[2]);
+      }
+      const uk = 4 / VF_RAND_B;
+      // 21.11. (GEMELDET Gnen54 "Unschoener Bogen"): vorher ein loses Rechteck je DXF-Segment - in Boegen
+      // sah die Linie wie ein Saegezahn aus. Jetzt geglaettet (Chaikin, Enden bleiben) und als
+      // durchgehendes Band mit gemeinsamen Ecken (Gehrung).
+      for (const L0 of gasse.rand) {
+        let L = L0.map((p) => [p[0], p[1]]);
+        for (let it = 0; it < 3 && L.length > 2; it++) {
+          const M = [L[0]];
+          for (let j = 0; j + 1 < L.length; j++) {
+            const a = L[j], b = L[j + 1];
+            M.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+          }
+          M.push(L[L.length - 1]); L = M;
+        }
+        const Q = L.map((p, j) => {
+          const a = L[Math.max(0, j - 1)], b = L[Math.min(L.length - 1, j + 1)];
+          const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+          return [-(b[1] - a[1]) / l * kw * 0.15, (b[0] - a[0]) / l * kw * 0.15];
+        });
+        for (let j = 0; j + 1 < L.length; j++) {
+          const a = L[j], b = L[j + 1], qa = Q[j], qb = Q[j + 1];
+          vfViereck(rand, [a[0] - qa[0], 0.012, a[1] - qa[1], uk, 0.1], [b[0] - qb[0], 0.012, b[1] - qb[1], uk, 0.1],
+            [b[0] + qb[0], 0.012, b[1] + qb[1], uk, 0.2], [a[0] + qa[0], 0.012, a[1] + qa[1], uk, 0.2], [1, 1, 1]);
+        }
+      }
+      // Anfang und Ende des Tankbereichs: fein gestrichelte Querlinie (20.11., Gnen54: "sonst stehst du zu
+      // weit vorne, versuchst zu tanken und es funktioniert nicht"). Gleiche Schwelle wie vfBoxDurchfahrt.
+      let bMax = 0;
+      for (let i = 0; i < n; i++) bMax = Math.max(bMax, bu(i) || 0);
+      const drin = (i) => (bu((i + n) % n) || 0) > bMax * 0.3;
+      if (bMax > 0) for (let i = 0; i < n; i++) {
+        if (!drin(i) || (drin(i - 1) && drin(i + 1))) continue;
+        const sg = bse(i), tief = half + bMax * 1.3, sl = kw * 0.5, lw = kw * 0.12;
+        const zi = zz(i), e = [nrm[i].x * sg, nrm[i].y * sg], q = [-e[1] * lw, e[0] * lw];
+        for (let d = half + kw; d + sl <= tief; d += sl * 2) {
+          const p0 = off(i, d * sg), p1 = off(i, (d + sl) * sg);
+          if (!vfInGasse(gasse, [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2])) continue;
+          vfViereck(rand, [p0[0] - q[0], zi + 0.014, p0[1] - q[1], uk, 0.1], [p1[0] - q[0], zi + 0.014, p1[1] - q[1], uk, 0.1],
+            [p1[0] + q[0], zi + 0.014, p1[1] + q[1], uk, 0.2], [p0[0] + q[0], zi + 0.014, p0[1] + q[1], uk, 0.2], [1, 1, 1]);
+        }
+      }
+    }
+    // Boxenmarkierungen: flach knapp ueber der Fahrbahn, Randstein-Textur an der hellen Wandspalte.
+    const um = 4 / VF_RAND_B;
+    for (const mk of fein.marken) {
+      const ex = mk.e[0] * mk.l / 2, ey = mk.e[1] * mk.l / 2, qx = mk.q[0] * mk.b / 2, qy = mk.q[1] * mk.b / 2, y = 0.012;
+      vfViereck(rand, [mk.m[0] - ex - qx, y, mk.m[1] - ey - qy, um, 0.1], [mk.m[0] + ex - qx, y, mk.m[1] + ey - qy, um, 0.1],
+        [mk.m[0] + ex + qx, y, mk.m[1] + ey + qy, um, 0.2], [mk.m[0] - ex + qx, y, mk.m[1] - ey + qy, um, 0.2], mk.c);
+    }
     return { strasse, rand, teile: teile.length };
   }
   // Ein Holzstueck als Viereck: Ursprung o, Laengsrichtung e (Laenge L), Querrichtung q (Breite B).
@@ -680,7 +969,15 @@
     const B = art.breiteCm * cm, L = art.laengeCm * cm, rnd = vfZufall(9001 + pts.length);
     const reihen = [];
     let stuecke = 0;
-    if (art.art === 'fischgraet') {
+    if (art.art === 'flaeche') {
+      // Nahtlose Kacheln im Raster, gleiche Lage und Farbe (sonst saehe man die Kanten).
+      const c = [VF_BODEN_HELL, VF_BODEN_HELL, VF_BODEN_HELL];
+      for (let z = z0; z < z1; z += B) {
+        for (let x = x0; x < x1; x += L) {
+          vfViereck(a, [x, y, z, 0, 0], [x + L, y, z, 1, 0], [x + L, y, z + B, 1, 1], [x, y, z + B, 0, 1], c); stuecke++;
+        }
+      }
+    } else if (art.art === 'fischgraet') {
       const r = Math.SQRT1_2, d1 = [r, r], d2 = [-r, r];
       const W = (A, Bb) => [A * d1[0] + Bb * d2[0], A * d1[1] + Bb * d2[1]];
       // Rahmen-Koordinaten der Bodenecken: A = (x + z) r, B = (z - x) r
@@ -848,9 +1145,57 @@
     return o;
   }
   // Weltlage des Autos: Drehung um y, sodass lokal +z in Fahrtrichtung (sin h, -cos h) zeigt.
+  // ---- HOEHE (19.11., BESTELLT Gnen54: Toernerschleife 2.0 mit Bruecke) ----------------------
+  // Die Mittellinie traegt je Punkt eine Hoehe z (sonst 0). Gebraucht wird sie nur an erhoehten
+  // Stuecken; dort liegen Bruecke und Unterfuehrung am selben Kartenort. Unterschieden wird ueber
+  // die Fahrtrichtung: wer laengs der Bruecke faehrt (oder rueckwaerts), ist oben; die Strasse
+  // darunter kreuzt schraeg. Das eigene Auto nimmt seinen Bahnpunkt (VF.idx), das ist eindeutig.
+  function vfHoeheVorbereiten() {
+    const P = VF.pts, n = P.length, seg = [];
+    for (let i = 0; i + 1 < n; i++) {
+      if (!((P[i].z || 0) > 0 || (P[i + 1].z || 0) > 0)) continue;
+      const dx = P[i + 1].x - P[i].x, dy = P[i + 1].y - P[i].y, l = Math.hypot(dx, dy) || 1;
+      seg.push({ i, ax: P[i].x, ay: P[i].y, ex: dx / l, ey: dy / l, l, z0: P[i].z || 0, z1: P[i + 1].z || 0 });
+    }
+    VF.hoehe = seg.length ? seg : null;
+  }
+  const VF_HZ_NULL = { z: 0, p: 0 };
+  function vfHzSeg(sg, x, y, vor) {
+    const t = Math.max(0, Math.min(1, ((x - sg.ax) * sg.ex + (y - sg.ay) * sg.ey) / sg.l));
+    const p = Math.atan2(sg.z1 - sg.z0, sg.l);
+    return { z: sg.z0 + (sg.z1 - sg.z0) * t, p: vor ? p : -p };
+  }
+  function vfHz(x, y, h) {
+    if (!VF.hoehe) return VF_HZ_NULL;
+    const r = h * Math.PI / 180, fx = Math.sin(r), fy = -Math.cos(r);
+    let best = null, bq = TRACK_HALF_W + TRACK_KERB_W + VF_AUTO.B;
+    for (const sg of VF.hoehe) {
+      const t = ((x - sg.ax) * sg.ex + (y - sg.ay) * sg.ey) / sg.l;
+      if (t < -0.3 || t > 1.3) continue;
+      const q = Math.abs((x - sg.ax) * -sg.ey + (y - sg.ay) * sg.ex);
+      const c = fx * sg.ex + fy * sg.ey;
+      if (q < bq && Math.abs(c) > 0.6) { bq = q; best = { sg, vor: c > 0 }; }
+    }
+    return best ? vfHzSeg(best.sg, x, y, best.vor) : VF_HZ_NULL;
+  }
+  // Eigenes Auto: ueber den Bahnpunkt (auch quer stehend auf der Bruecke eindeutig).
+  function vfHzSpieler() {
+    if (!VF.hoehe) return VF_HZ_NULL;
+    const i = VF.idx || 0, P = VF.pts, n = P.length;
+    let best = null, bd = Infinity;
+    for (const sg of VF.hoehe) {
+      const d = Math.min(Math.abs(sg.i - i), n - Math.abs(sg.i - i));
+      if (d < bd) { bd = d; best = sg; }
+    }
+    if (!best || bd > 2) return VF_HZ_NULL;
+    const r = VF.h * Math.PI / 180;
+    return vfHzSeg(best, VF.x, VF.y, Math.sin(r) * best.ex - Math.cos(r) * best.ey >= 0);
+  }
   function vfLage(x, y, h) {
     const th = Math.PI - h * Math.PI / 180, c = Math.cos(th), s = Math.sin(th);
-    return [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, x, 0, y, 1];
+    const H = VF.hoehe ? (x === VF.x && y === VF.y ? vfHzSpieler() : vfHz(x, y, h)) : VF_HZ_NULL;
+    const m = [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, x, H.z, y, 1];
+    return H.p ? vfMal(m, vfRx(-H.p)) : m;
   }
   const VF_EINS = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
   const VF_OBEN = [0, 1, 0], VF_WEISS = [1, 1, 1], VF_GLAS_TINT = [0.18, 0.22, 0.27];
@@ -935,7 +1280,7 @@
   // img/autos/v5r/: Modell ohne Innenraum, Rad, Lichtorte und die Fahrzeugdaten aus der .xml. Laengen in
   // Metern, im Auto +x links, +y oben, +z vorn; gezeichnet mal VF_AUTO.L / Laenge (so lang wie der Kasten).
   const VF_AUTO_STORE = 'omegasim-vf-auto';
-  const VF_MODELL_PFADE = { v5r: 'img/autos/v5r/', lynx220: 'img/autos/lynx220/', fmcgt4: 'img/autos/fmcgt4/', boxer96: 'img/autos/boxer96/' };
+  const VF_MODELL_PFADE = { v5r: 'img/autos/v5r/', lynx220: 'img/autos/lynx220/', fmcgt4: 'img/autos/fmcgt4/', boxer96: 'img/autos/boxer96/', kaefer: 'img/autos/kaefer/', spider: 'img/autos/spider/', caravelle: 'img/autos/caravelle/' };
   function vfModellPfad(auto) { return VF_MODELL_PFADE[auto || vfAutoWahl()] || 'img/autos/v5r/'; }
   const VF_FEDER_STORE = 'omegasim-vf-feder';
   const VF_FEDER_WERTE = [1, 2, 3, 5, 8];
@@ -949,7 +1294,98 @@
   function vfSchaltungAuto() { try { return localStorage.getItem(VF_SCHALTUNG_STORE) !== 'manuell'; } catch (e) { return true; } }
   // Geist: eine Kopie des Autos, die nach der ersten Runde die aufgezeichnete Linie abfaehrt.
   const VF_GEIST_STORE = 'omegasim-vf-geist';
-  function vfGeistAn() { try { return localStorage.getItem(VF_GEIST_STORE) !== 'aus'; } catch (e) { return true; } }
+  // FREIE STRECKEN nur fuer die virtuelle Fahrt (BESTELLT Gnen54 18.11.: "eine nicht fuer Carrera gedachte
+  // Strecke, rein fuer virtuelles Fahren"). Die Datei bringt die Mittellinie (Einheiten wie der Editor,
+  // Abstand ~2,86 = ein Teil hat 14 Punkte) und Pseudo-Kacheln (START / STRAIGHT / PIT), damit Runden,
+  // Randsteine, Boxenbucht und NPCs unveraendert funktionieren. Erzeugt aus Gnen54s DXF (tools ausserhalb).
+  const VF_STRECKE_STORE = 'omegasim-vf-strecke';
+  const VF_FREIE = { indeq: { name: 'Törnerschleife 2.0', pfad: 'img/strecken/indeq-ring.json' },
+    indeqBruecke: { name: 'Törnerschleife 2.0 mit Brücke', pfad: 'img/strecken/indeq-bruecke.json' } };
+  function vfFreiWahl() { try { const v = localStorage.getItem(VF_STRECKE_STORE) || ''; return VF_FREIE[v] ? v : ''; } catch (e) { return ''; } }
+  const vfFreiCache = {};
+  function vfFreiLaden(k) {
+    if (vfFreiCache[k]) return Promise.resolve(vfFreiCache[k]);
+    return fetch(VF_FREIE[k].pfad).then((r) => r.json()).then((d) => {
+      // PIT-Kacheln bringen die Tiefe ihrer Bucht mit (halbe Bahnbreiten, echte Boxengasse).
+      const tiles = d.kacheln.map((ty) => ({ type: TILE_TYPE[ty] !== undefined ? TILE_TYPE[ty] : TILE_TYPE.STRAIGHT, frei: true,
+        bucht: ty === 'PIT' ? d.boxBucht : undefined, seite: ty === 'PIT' ? (d.boxSeite || -1) : undefined, steg: ty === 'PIT' ? d.steg : undefined,
+        gasse: ty === 'PIT' && d.boxDreiecke ? { tri: d.boxDreiecke, rand: d.boxRand || [] } : undefined }));
+      // 4. Wert (19.11., Bruecke): Hoehe der Fahrbahn in Karteneinheiten (fehlt = 0, flach).
+      // buchtPkt (19.11.): Tiefe der Boxengasse je Punkt aus der echten Gasse der DXF (Karteneinheiten
+      // jenseits der halben Bahn) - die feste Tiefe mit S-Rampe ueberschlug sich in der Kurve vor der
+      // Gasse, GEMELDET Gnen54: Boxeneinfahrt "sieht ganz merkwuerdig aus".
+      const bp = Array.isArray(d.buchtPkt) ? d.buchtPkt : null;
+      const pts = d.pts.map((q, i) => ({ x: q[0], y: q[1], tile: q[2], z: q[3] || 0, bucht: bp ? (bp[i] || 0) : undefined }));
+      // geschlossen wie trackCenterline: letzter Punkt = erster (sonst fehlt das letzte Stueck Bahn)
+      pts.push({ x: pts[0].x, y: pts[0].y, tile: pts[pts.length - 1].tile, z: pts[0].z, bucht: pts[0].bucht });
+      // Fahrtrichtung wie trackCenterline: Richtung (sin h, -cos h), h in Grad.
+      pts.forEach((p, i) => {
+        const m = pts.length - 1, a = pts[(i - 1 + m) % m], c = pts[(i + 1) % m];
+        p.heading = Math.atan2(c.x - a.x, -(c.y - a.y)) * 180 / Math.PI;
+      });
+      vfFreiCache[k] = { name: d.name, tiles, pts };
+      return vfFreiCache[k];
+    });
+  }
+  // Aussenspiegel (BESTELLT Gnen54 17.11.: links und rechts je ein Spiegelbild, nur in der Onboard-Kamera
+  // "Motorhaube", Standard aus - jeder Spiegel zeichnet die Szene ein weiteres Mal).
+  // ---- GEFAHRENE ZEITEN JE STRECKE (19.11., BESTELLT Gnen54: "Gefahrene Zeiten pro Strecke speichern")
+  // Je Strecke UND Auto: Bestzeit mit Datum und Zwischenzeiten (fuer das Delta), Rundenzahl und
+  // die letzten zehn Runden. Strecke = Name der freien Strecke oder der Code der gebauten Bahn.
+  const VF_ZEITEN_STORE = 'omegasim-vf-zeiten';
+  function vfZeitenSchluessel() {
+    let s = '-';
+    try { s = VF.frei ? 'frei:' + VF.frei.name : 'bahn:' + trackToCode(VF.tiles); } catch (e) { /* ohne */ }
+    return s + '|' + vfAutoWahl();
+  }
+  function vfZeitenAlle() {
+    try { return JSON.parse(localStorage.getItem(VF_ZEITEN_STORE) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function vfZeitenLaden() {
+    const e = vfZeitenAlle()[vfZeitenSchluessel()];
+    if (e && e.beste > 0) {
+      VF.beste = e.beste; VF.besteSplits = Array.isArray(e.splits) ? e.splits : null;
+      showHudToast(t('Streckenbestzeit') + ': ' + vfZeitAcc(e.beste, 3));
+    }
+  }
+  function vfZeitMerken(ms, splits) {
+    const alle = vfZeitenAlle(), k = vfZeitenSchluessel();
+    const e = alle[k] || (alle[k] = { beste: null, datum: null, runden: 0, letzte: [] });
+    e.runden += 1;
+    e.letzte = [Math.round(ms)].concat(e.letzte || []).slice(0, 10);
+    const neu = !(e.beste > 0) || ms < e.beste;
+    if (neu) { e.beste = Math.round(ms); e.datum = Date.now(); e.splits = splits || null; }
+    try { localStorage.setItem(VF_ZEITEN_STORE, JSON.stringify(alle)); } catch (err) { /* voll */ }
+    return neu && e.runden > 1;
+  }
+  // ---- PFLICHT-BOXENDURCHFAHRT (19.11., BESTELLT Gnen54: "Zwang Boxengasse anfahren" - "Pflicht-
+  // Boxendurchfahrt, kein Tanken etc."). Im Rennen (Runden, Langstrecke) muss so oft durch die Boxengasse
+  // gefahren werden; gezaehlt wird, wer mindestens 60 % der Bucht befahren hat. Fehlt eine, gibt es im
+  // Ergebnis die Zeitstrafe aus dem Renn-Setup (racePitPenaltyS) je fehlender Durchfahrt.
+  const VF_PFLICHTBOX_STORE = 'omegasim-vf-pflichtbox';
+  function vfPflichtBox() { try { return Math.max(0, Math.min(3, parseInt(localStorage.getItem(VF_PFLICHTBOX_STORE), 10) || 0)); } catch (e) { return 0; } }
+  // Boxenservice (Tanken, Reparieren, Reifen) nur in der Boxengasse, wenn die Strecke eine hat
+  // (19.11., GEMELDET Gnen54: "mitten auf der Strecke ... immer noch tanken und reparieren").
+  function vfBoxOrtOk() { try { return !VF.aktiv || !VF.boxN || !!VF.inBox; } catch (e) { return true; } }
+  function vfPflichtGilt() { return !!(VF.boxN && (VF.modus === 'laps' || VF.modus === 'endurance') && vfPflichtBox() > 0); }
+  function vfBoxDurchfahrt(o, zus) {
+    if (!VF.boxN) return;
+    const drin = zus > VF.boxMax * 0.3 && Math.abs(o.quer) > TRACK_HALF_W + zus * 0.5;
+    VF.inBox = drin;
+    // Von-bis statt Einzelpunkte: bei hohem Tempo springt der Index mehrere Punkte je Bild.
+    if (drin) { if (!VF.boxBesucht) VF.boxBesucht = { von: o.idx, bis: o.idx }; else VF.boxBesucht.bis = o.idx; return; }
+    if (!VF.boxBesucht) return;
+    const n = VF.pts.length, strecke = ((VF.boxBesucht.bis - VF.boxBesucht.von) % n + n) % n + 1;
+    const genug = strecke >= VF.boxN * 0.6 && strecke < n / 2;
+    VF.boxBesucht = null;
+    if (!genug) return;
+    VF.boxDurch = (VF.boxDurch || 0) + 1;
+    if (vfPflichtGilt()) showHudToast(t('Boxendurchfahrt') + ' ' + Math.min(VF.boxDurch, vfPflichtBox()) + '/' + vfPflichtBox());
+  }
+  const VF_SPIEGEL_STORE = 'omegasim-vf-spiegel';
+  function vfSpiegelAn() { try { return localStorage.getItem(VF_SPIEGEL_STORE) === 'an'; } catch (e) { return false; } }
+  // Standard AUS seit 17.11. (Gnen54: "Ghost entfernen" -> "Standard aus"); nur ein ausdrueckliches 'an' schaltet ihn ein.
+  function vfGeistAn() { try { return localStorage.getItem(VF_GEIST_STORE) === 'an'; } catch (e) { return false; } }
   // Die echte Neigung eines GT1 ist klein (0,5 Grad Rollen bei 1,5 g) und bei Modellgroesse unsichtbar.
   // Der Faktor vergroessert nur den AUSSCHLAG; Federraten, Daempfer und Zeitverhalten bleiben die echten.
   function vfFederSicht() {
@@ -1459,7 +1895,15 @@
         + ' c = pow(filmic(c * 1.05), vec3(1.0/2.2));'
         // Schattenkarte: Bias waechst mit flachem Lichteinfall (Streifen auf schraegen Blechen).
         + ' if (schatt > 0.5 && vsp.x > 0.0 && vsp.x < 1.0 && vsp.y > 0.0 && vsp.y < 1.0 && vsp.z > 0.0 && vsp.z <= 1.0) {'
-        + '   if (schTiefe(texture2D(sch, vsp.xy)) < vsp.z - bias * (1.0 + 3.0 * (1.0 - d))) c *= 0.55; }'
+        // 17.11. (Gnen54: gezackte dunkle Flaechen am Bulli-Armaturenbrett): statt eines harten Abgriffs
+        // fuenf (Mitte + vier Diagonalen, ~1,4 Texel), der Schatten blendet weich - keine Saegezaehne mehr.
+        + '   float zb = vsp.z - bias * (1.0 + 3.0 * (1.0 - d)), sl = 0.0; vec2 o = vec2(0.0007, 0.0007);'
+        + '   sl += step(zb, schTiefe(texture2D(sch, vsp.xy)));'
+        + '   sl += step(zb, schTiefe(texture2D(sch, vsp.xy + o)));'
+        + '   sl += step(zb, schTiefe(texture2D(sch, vsp.xy - o)));'
+        + '   sl += step(zb, schTiefe(texture2D(sch, vsp.xy + vec2(o.x, -o.y))));'
+        + '   sl += step(zb, schTiefe(texture2D(sch, vsp.xy + vec2(-o.x, o.y))));'
+        + '   c *= mix(0.55, 1.0, sl / 5.0); }'
         + ' float f = clamp((vd - 250.0) / 900.0, 0.0, 1.0); gl_FragColor = vec4(mix(c, nebel, f), mix(alpha, alpha * t.a, am)); }'));
     }
     gl.linkProgram(p);
@@ -1561,7 +2005,11 @@
     gl.enableVertexAttribArray(SP.ap);
     gl.vertexAttribPointer(SP.ap, 3, gl.FLOAT, false, 32, 0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, M.ibo);
-    for (const t of M.aufbauTeile) gl.drawElements(gl.TRIANGLES, t.indizes, gl.UNSIGNED_SHORT, t.index0 * 2);
+    // Die Indizes zaehlen je Teil ab dessen erster Ecke (ecke0) - wie im Farb-Durchgang versetzen.
+    for (const t of M.aufbauTeile) {
+      gl.vertexAttribPointer(SP.ap, 3, gl.FLOAT, false, 32, (t.ecke0 || 0) * 32);
+      gl.drawElements(gl.TRIANGLES, t.indizes, gl.UNSIGNED_SHORT, t.index0 * 2);
+    }
     const radTeile = M.radTeile;
     const halbW = d.breite / 2;
     for (let k = 0; k < 4; k++) {
@@ -1573,14 +2021,21 @@
         gl.bindBuffer(gl.ARRAY_BUFFER, M.vbo);
         gl.vertexAttribPointer(SP.ap, 3, gl.FLOAT, false, 32, 0);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, M.ibo);
-        for (const t of radTeile) gl.drawElements(gl.TRIANGLES, t.indizes, gl.UNSIGNED_SHORT, t.index0 * 2);
+        for (const t of radTeile) {
+          if (t.achse && t.achse !== ax) continue;
+          gl.vertexAttribPointer(SP.ap, 3, gl.FLOAT, false, 32, (t.ecke0 || 0) * 32);
+          gl.drawElements(gl.TRIANGLES, t.indizes, gl.UNSIGNED_SHORT, t.index0 * 2);
+        }
       } else if (radModell && radModell.teile.length) {
         const xW = seite * Math.max(r.spur / 2, halbW + 0.12 - 0.5 * r.breite);
         matrix(vfKette(lage, vfT(xW, r.radius, z), dreh, vfRx(raddreh || 0), vfS(seite * r.breite, 2 * r.radius, 2 * r.radius)));
         gl.bindBuffer(gl.ARRAY_BUFFER, radModell.vbo);
         gl.vertexAttribPointer(SP.ap, 3, gl.FLOAT, false, 32, 0);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, radModell.ibo);
-        for (const t of radModell.teile) gl.drawElements(gl.TRIANGLES, t.indizes, gl.UNSIGNED_SHORT, t.index0 * 2);
+        for (const t of radModell.teile) {
+          gl.vertexAttribPointer(SP.ap, 3, gl.FLOAT, false, 32, (t.ecke0 || 0) * 32);
+          gl.drawElements(gl.TRIANGLES, t.indizes, gl.UNSIGNED_SHORT, t.index0 * 2);
+        }
       }
     }
     gl.disableVertexAttribArray(SP.ap);
@@ -1728,6 +2183,15 @@
     // Der Vorpunkt vor Kachel 0 (tile -1) liegt auf dem letzten Punkt der Schleife. Bis 1.3.50 zaehlte er
     // als Kachel 0 (Start): pendelte der naechste Punkt dort zwischen beiden, war das eine "Runde" von
     // 0,3 s (Letzte/Beste im HUD). Jetzt gilt am Vorpunkt die Kachel davor weiter.
+    // Fortschritt entlang der Mittellinie (Punkte, vorwaerts positiv). Rueckwaerts ueber Start/Ziel zaehlt
+    // keine Runde (21.11., BESTELLT Gnen54: "Keine Rundenzaehlung bei Rueckwaertsfahrt") - und auch nicht
+    // das Vor-und-zurueck ueber die Linie: eine Runde gilt erst nach gut drei Vierteln der Strecke.
+    {
+      const n = VF.pts.length;
+      let d = VF.idx - (VF.fortVor === undefined ? VF.idx : VF.fortVor);
+      if (d > n / 2) d -= n; else if (d < -n / 2) d += n;
+      VF.fort = (VF.fort || 0) + d; VF.fortVor = VF.idx;
+    }
     const roh = VF.pts[VF.idx].tile;
     const tile = roh >= 0 ? roh : (VF.kachel >= 0 ? VF.kachel : 0);
     if (tile !== VF.kachel) {
@@ -1735,14 +2199,22 @@
       const vorher = VF.kachel;
       VF.kachel = tile;
       // Eigene Rundenanzeige fuer die Kopfzeile (die Zeitnahme selbst laeuft in der App).
-      if (vorher !== -2 && VF.tiles[tile] && VF.tiles[tile].type === TILE_TYPE.START && !VF.abseits) {
+      const aufStart = !!(VF.tiles[tile] && VF.tiles[tile].type === TILE_TYPE.START);
+      // Erste Ueberfahrt (Uhr startet): nur vorwaerts. Danach: genug Strecke seit der letzten Runde.
+      VF.startGueltig = aufStart && vorher !== -2 && !VF.abseits &&
+        (VF.rundeAb ? VF.fort > VF.pts.length * 0.75 : VF.fort >= 0);
+      if (VF.startGueltig) VF.fort = 0;
+      if (VF.startGueltig) {
         const jetzt = rennZeitJetzt();
         if (VF.rundeAb) {
           VF.letzte = jetzt - VF.rundeAb;
           // Delta (HUD): die Zwischenzeiten der besten Runde je Punkt der Mittellinie.
           if (VF.beste === null || VF.letzte < VF.beste) { VF.beste = VF.letzte; VF.besteSplits = VF.splits; }
+          if (vfZeitMerken(VF.letzte, VF.splits)) showHudToast(t('Neue Streckenbestzeit') + ': ' + vfZeitAcc(VF.letzte, 3));
           // Nach der ersten Runde beginnt der Geist, die aufgezeichnete Linie abzufahren.
-          if (VF.geist && !VF.geist.aktiv) { VF.geist.aktiv = true; VF.geist.zeit = 0; VF.geist.i = 0; }
+          // (nur wenn der Geist in der Garage AN ist - bis 19.11. fuhr er nach Runde 1 immer los,
+          // GEMELDET Gnen54: "Geist mitten auf der Strecke", obwohl Standard aus).
+          if (VF.geist && VF.geist.an && !VF.geist.aktiv) { VF.geist.aktiv = true; VF.geist.zeit = 0; VF.geist.i = 0; }
           // Rundenrennen: nach der Ziel-Lap ist Schluss.
           VF.runden = (VF.runden || 0) + 1;
           if (VF.modus === 'laps' && VF.runden >= VF.limit) vfRennenEnde();
@@ -1758,7 +2230,11 @@
     b[0] = 0xaf; b[2] = 0x9c; b[10] = 100;
     b[11] = VF.zaehler;
     b[12] = VF.abseits ? TILE_OFFTRACK : vfCode(VF.tiles[tile] ? VF.tiles[tile].type : TILE_TYPE.STRAIGHT);
-    b[15] = VF.abseits ? 0 : 0x08;
+    // Byte 15 Bit 3 = "ueber der Ziellinie". Die App zaehlt die STEIGENDE FLANKE als Runde.
+    // Bis 19.11. stand das Bit auf der ganzen Bahn - die Flanke kam dann nur beim Zurueckkehren
+    // von neben der Bahn, GEMELDET Gnen54: Zeitansage beim Verlassen, keine an Start/Ziel.
+    // Nur bei gueltiger Ueberfahrt (vorwaerts, ganze Runde), sonst sieht die App die Flanke als Runde.
+    b[15] = !VF.abseits && VF.startGueltig && VF.tiles[tile] && VF.tiles[tile].type === TILE_TYPE.START ? 0x08 : 0;
     try { onCarNotify(VF.car, { target: { value: new DataView(b.buffer) } }); } catch (e) { /* weiter */ }
   }
 
@@ -1777,6 +2253,20 @@
       VF.modusZeit += dt;
       if (VF.modusZeit >= VF.limit * 60) vfRennenEnde();
     }
+    // Rueckwaertsgang raus wie auf der echten Bahn (20.11., Gnen54: "Sobald er dann wieder steht und ich
+    // Gas gebe, geht er aus dem Rueckwaertsgang raus"): nur Automatik. Erst rueckwaerts gefahren, dann
+    // zum Stehen gekommen mit losgelassenem Gas - der naechste Gasstoss legt den Vorwaertsgang ein.
+    // Ausgewertet wird der ANSTIEG des Gases: die Physik rechnet vor diesem Schritt, im ersten Bild mit Gas
+    // rollt er also schon wieder etwas (sonst haengt es an der Bildrate, ob er umschaltet).
+    if (st.driveMode === 'reverse' && physEngine.config.autoShift) {
+      const ty = typeof throttleY === 'number' ? throttleY : 0, v = Math.abs(st.speedKmh || 0), gas = ty > 0.1;
+      if (gas && !VF.rueckGas && VF.rueckLief && VF.rueckHalt) {
+        physEngine.triggerShift(1); VF.rueckLief = false; VF.rueckHalt = false;
+      } else if (v > 0.04) { VF.rueckLief = true; if (!gas) VF.rueckHalt = false; }
+      if (v < 0.015 && ty <= 0.05) VF.rueckHalt = true;
+      if (gas && v > 0.04) VF.rueckHalt = false;
+      VF.rueckGas = gas;
+    } else { VF.rueckLief = false; VF.rueckHalt = false; VF.rueckGas = false; }
     const kmh = (st.speedKmh || 0) * (VF.tempoFaktor || 1);
     const hand = vfHandling();
     const reifenModus = hand === 'gran' || hand === 'acc';
@@ -1856,12 +2346,31 @@
     const o = vfOrt(VF.pts, VF.nrm, VF.x, VF.y, VF.idx);
     VF.idx = o.idx;
     if (VF.splits && VF.splits[VF.idx] === undefined) VF.splits[VF.idx] = rennZeitJetzt() - VF.rundeAb;
-    const ab = Math.abs(o.quer) > TRACK_HALF_W * 1.19 + VF_AUTO.B * 0.3;
+    // Boxenbucht auf der rechten (roten) Seite: dort ist die Fahrbahn um die Bucht breiter.
+    const zus = Math.sign(o.quer) === (VF.buchtSeite || -1) && VF.bucht ? (VF.bucht[o.idx] || 0) : 0;
+    vfBoxDurchfahrt(o, zus);
+    // Bruecke und Rampen: seitlich begrenzt (Bordwand), herunterfallen gibt es nicht.
+    const Hb = vfHzSpieler();
+    if (Hb.z > 0.3) {
+      const grenze = TRACK_HALF_W + TRACK_KERB_W - VF_AUTO.B * 0.5;
+      if (Math.abs(o.quer) > grenze) {
+        const zu = (Math.abs(o.quer) - grenze) * Math.sign(o.quer);
+        VF.x -= VF.nrm[o.idx].x * zu; VF.y -= VF.nrm[o.idx].y * zu; o.quer -= zu;
+        if (Math.abs(st.speedKmh) > 0.05 && (VF.wandSeit === undefined || rennZeitJetzt() - VF.wandSeit > 300)) {
+          VF.wandSeit = rennZeitJetzt(); padRumble(0.6, 0.4, 90, 'kerb', 1);
+        }
+        st.speedKmh *= Math.exp(-2.5 * dt);
+      }
+    }
+    // Steigung bremst bergauf, beschleunigt bergab (Hangabtrieb, g * sin).
+    // physEngine rechnet ein grosses Auto, verkleinert um REAL_SCALE - die Schwerkraft ebenso.
+    if (Hb.p) st.speedKmh -= 9.81 * Math.sin(Hb.p) * 3.6 * dt / REAL_SCALE;
+    const ab = Math.abs(o.quer) - zus > TRACK_HALF_W * 1.19 + VF_AUTO.B * 0.3;
     if (ab && !VF.abseits) VF.abseitsSeit = rennZeitJetzt();
     VF.abseits = ab;
     // Randstein (v1.2.62): der erhabene Stein links/rechts der Fahrbahn. Faehrt das Auto mit dem
     // Rand ueber ihn, rattert es und der Controller brummt.
-    const q = Math.abs(o.quer);
+    const q = Math.abs(o.quer) - zus;
     const kerbRand = TRACK_HALF_W * 2 * 0.095;
     const kerb = !ab && q > TRACK_HALF_W - VF_AUTO.B * 0.5 && q < TRACK_HALF_W + kerbRand;
     if (kerb && Math.abs(kmh) > 0.05) {
@@ -1901,6 +2410,8 @@
     const vAbs = Math.abs(physEngine.state.speedKmh || 0);
     for (const npc of (VF.npcs || [])) {
       if (npc.koAus || npc.derbyAus) continue;
+      // Bruecke: einer oben, einer unten durch - kein Kontakt, kein Windschatten.
+      if (VF.hoehe && Math.abs(vfHz(npc.x, npc.y, npc.h).z - vfHzSpieler().z) > 1.5) continue;
       const dx = npc.x - VF.x, dy = npc.y - VF.y;
       const long = dx * fwdX + dy * fwdY;
       const lat = dx * latX + dy * latY;
@@ -1983,7 +2494,9 @@
       : VF.modus === 'derby' ? VF.derbyKills + ' ' + t('Kills')
       : VF.modus === 'knockout' ? VF.koLeben + ' ' + t('Leben')
       : (VF.limit + ' min'));
-    showHudToast(ergebnis || (t('Rennen beendet') + ': ' + was));
+    const fehlt = vfPflichtGilt() ? Math.max(0, vfPflichtBox() - (VF.boxDurch || 0)) : 0;
+    const strafe = fehlt ? ' · ' + t('Pflicht-Boxendurchfahrt fehlt') + ': +' + fehlt * (typeof racePitPenaltyS === 'number' ? racePitPenaltyS : 20) + ' s' : '';
+    showHudToast((ergebnis || (t('Rennen beendet') + ': ' + was)) + strafe);
     rennZeitTimeout(() => { if (VF.aktiv) virtuellBeenden(); }, 1600);
   }
   function vfMalen() {
@@ -2000,6 +2513,9 @@
     // Himmel: Vollbild-Quad, Farbverlauf im WELTRAUM (horizontfolgend beim Umsehen). Ganz hinten.
     if (!VF.himmelProg) { VF.himmelProg = vfProgrammHimmel(gl); VF.himmel = vfHimmel(gl); }
     const k = vfKamera(VF.dtBild || 0.016);
+    // Waagerechter Bildwinkel (auto.json "haube": {"fovH": ...}, VW Caravelle): in den senkrechten fuer
+    // das aktuelle Seitenverhaeltnis umrechnen - so bleibt die Breite des Blicks auf jedem Schirm gleich.
+    if (k.fovH) k.fov = 2 * Math.atan(Math.tan(k.fovH * Math.PI / 360) / Math.max(0.2, w / Math.max(1, h))) * 180 / Math.PI;
     // v1.3.124 Studienmodus: festes Sichtfeld aus Bildschirmgroesse und Sitzabstand.
     if (VF_STUDIE) { const sf = vfStudieFov(); if (sf) k.fov = sf; }
     gl.disable(gl.DEPTH_TEST);
@@ -2076,13 +2592,211 @@
           !!(npc.motor && npc.motor.outputs && npc.motor.outputs.lights && npc.motor.outputs.lights.brake), 1, 0, k.auge);
       }
     }
+    vfSpiegelMalen(gl, w, h);
+  }
+  // ---- Aussenspiegel ------------------------------------------------------------------------------
+  // Je Seite ein Bildausschnitt (Viewport + Scissor) am Bildrand, darin die Szene von der Spiegelstelle
+  // am Auto nach hinten, waagerecht gespiegelt (Projektion mit x * -1 - ohne Face-Culling unproblematisch).
+  // Spiegelstelle: auto.json "spiegel": {vor, hoch, seite} in m, sonst aus der Haubenkamera abgeleitet
+  // (etwas hinter und unter dem Auge, aussen neben der Karosserie). Rahmen als HTML ueber der Leinwand.
+  const VF_SPIEGEL_WINKEL = 12;     // Grad nach aussen gedreht
+  const VF_SPIEGEL_FOV = 26;        // senkrechter Bildwinkel (Aussenspiegel, quer)
+  // Gamepad -> HUD-Knoepfe der virtuellen Fahrt (aus pollGamepad, 90-ghosts.js): dieselbe Wirkung wie
+  // ein Klick, damit Pad und Maus nie auseinanderlaufen.
+  function vfKnopf(id) {
+    const k = document.querySelector('.vf-knoepfe [data-vf="' + id + '"]');
+    if (k && !k.disabled) k.click();
+  }
+  const vfFlagPad = { seit: null, gefeuert: false };
+  function vfFlagTaste(an) {
+    const jetzt = performance.now();
+    if (an && vfFlagPad.seit === null) { vfFlagPad.seit = jetzt; vfFlagPad.gefeuert = false; }
+    if (an && !vfFlagPad.gefeuert && jetzt - vfFlagPad.seit >= 1000) { vfFlagPad.gefeuert = true; vfKnopf('flag'); }
+    if (!an && vfFlagPad.seit !== null) {
+      if (!vfFlagPad.gefeuert) vfKnopf('box');
+      vfFlagPad.seit = null;
+    }
+  }
+  // 19.11. (BESTELLT Gnen54): die Spiegel sollen wirken wie echte Aussenspiegel - quer, in den unteren
+  // Ecken der Frontscheibe, mit Gehaeuse (Wagenfarbe dunkel) und Glas mit runder Aussenkante. Das Gehaeuse
+  // ist ein SVG ueber dem Bildausschnitt: aussen die Schale, innen das Glas ausgespart (evenodd), so
+  // decken die Rundungen die Ecken des rechteckigen Ausschnitts ab.
+  function vfSpiegelForm(w, h, links, o, r1, r2, t) {
+    if (links === 'innen') {                                   // Innenspiegel: gleichmaessig gerundet
+      const k = o || 0, r = r2, P = (x, y) => (x + k).toFixed(1) + ',' + (y + k).toFixed(1);
+      return `M${P(r, 0)} L${P(w - r, 0)} Q${P(w, 0)} ${P(w, r)} L${P(w, h - r)} Q${P(w, h)} ${P(w - r, h)} L${P(r, h)} Q${P(0, h)} ${P(0, h - r)} L${P(0, r)} Q${P(0, 0)} ${P(r, 0)} Z`;
+    }
+    // Rechteck mit staerker gerundeter Aussenseite (links beim linken Spiegel), oben zur Aussenseite
+    // leicht abfallend. Die Radien bleiben unter 2,4 x Gehaeusedicke - sonst schauten die Ecken des
+    // (rechteckigen) Bildausschnitts unter der Schale hervor.
+    const k = o || 0;
+    const P = (x, y) => (x + k).toFixed(1) + ',' + (y + k).toFixed(1);
+    return links
+      ? `M${P(r1, t)} L${P(w - r2, 0)} Q${P(w, 0)} ${P(w, r2)} L${P(w, h - r2)} Q${P(w, h)} ${P(w - r2, h)} L${P(r1, h)} Q${P(0, h)} ${P(0, h - r1)} L${P(0, t + r1)} Q${P(0, t)} ${P(r1, t)} Z`
+      : `M${P(0, r2)} Q${P(0, 0)} ${P(r2, 0)} L${P(w - r1, t)} Q${P(w, t)} ${P(w, t + r1)} L${P(w, h - r1)} Q${P(w, h)} ${P(w - r1, h)} L${P(r2, h)} Q${P(0, h)} ${P(0, h - r2)} Z`;
+  }
+  function vfSpiegelRahmen(an, rechtecke) {
+    let r = VF.spiegelRahmen;
+    // GEMELDET Gnen54 19.11.: nach dem ersten Start/Ziel waren die Spiegel weg, bis die Kamera neu
+    // gewaehlt wurde - die Rahmen waren aus der Seite genommen worden, VF.spiegelRahmen zeigte noch drauf.
+    if (r && (!r.every((e) => e.isConnected) || (an && r.length !== rechtecke.length))) { r.forEach((e) => e.remove()); r = VF.spiegelRahmen = null; }
+    if (!an) { if (r) { r.forEach((e) => e.remove()); VF.spiegelRahmen = null; } return; }
+    if (!r) {
+      r = VF.spiegelRahmen = rechtecke.map(() => {
+        const e = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        e.style.cssText = 'position:absolute;pointer-events:none;overflow:visible;z-index:2;filter:drop-shadow(0 3px 6px rgba(0,0,0,.45))';
+        (VF.cv.parentNode || document.body).appendChild(e);
+        return e;
+      });
+    }
+    const dpr = VF.cv.width / Math.max(1, VF.cv.clientWidth);
+    rechtecke.forEach((q, i) => {
+      const e = r[i], st = e.style, links = rechtecke.length === 1 ? 'innen' : i === 0;
+      const w = q[2] / dpr, h = q[3] / dpr, rand = Math.max(5, Math.min(w, h) * 0.14);
+      const m = Math.min(w, h), r1 = m * 0.3, r2 = m * 0.14, t = m * 0.06;   // hochkant (Bulli): nach der Breite
+      const l = VF.cv.offsetLeft + q[0] / dpr, o = VF.cv.offsetTop + (VF.cv.height - q[1] - q[3]) / dpr;
+      const schl = `${w}x${h}x${links}`;
+      if (e.dataset.mass !== schl) {
+        e.dataset.mass = schl;
+        const W = w + rand * 2, H = h + rand * 2;
+        e.setAttribute('width', W); e.setAttribute('height', H); e.setAttribute('viewBox', `0 0 ${W} ${H}`);
+        const aussen = vfSpiegelForm(W, H, links, 0, r1 + rand, r2 + rand, t), innen = vfSpiegelForm(w, h, links, rand, r1, r2, t);
+        e.innerHTML = `<defs><linearGradient id="vfsg${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3e46"/><stop offset="1" stop-color="#121418"/></linearGradient></defs>`
+          + `<path fill="url(#vfsg${i})" fill-rule="evenodd" d="${aussen} ${innen}"/>`
+          + `<path fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5" d="${aussen}"/>`;
+      }
+      st.left = (l - rand) + 'px'; st.top = (o - rand) + 'px';
+    });
+  }
+  // Einheitlicher Innenraum (19.11., BESTELLT Gnen54: "Optik wie im PKW ... seitlich vom Fahrzeug und die
+  // Spiegel ausserhalb"): Dachkante, A-Saeulen, Tuerbruestung und Armaturenbrett als SVG ueber dem Bild;
+  // die Kamera bekommt dafuer einen breiteren Bildwinkel (VF_COCKPIT_FOVH), die Spiegel sitzen draussen
+  // vor den Seitenscheiben. Nicht beim Bulli (eigener Innenraum im Modell) und nicht beim offenen Spider.
+  const VF_COCKPIT_FOVH = 104;
+  function vfCockpitVoll() {
+    const a = vfAutoWahl();
+    return vfSpiegelAn() && vfKameraId() === 'haube' && !vfKameraWeitGedreht() && a !== 'caravelle' && a !== 'spider';
+  }
+  function vfCockpit(an) {
+    let e = VF.cockpit;
+    if (e && !e.isConnected) e = VF.cockpit = null;   // wie bei den Spiegeln: neu anlegen, falls entfernt
+    if (!an) { if (e) { e.remove(); VF.cockpit = null; } return; }
+    if (!e) {
+      e = VF.cockpit = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      e.setAttribute('viewBox', '0 0 1000 1000'); e.setAttribute('preserveAspectRatio', 'none');
+      e.style.cssText = 'position:absolute;pointer-events:none';
+      const kante = 'fill="none" stroke="rgba(255,255,255,.13)" stroke-width="1.2" vector-effect="non-scaling-stroke"';
+      e.innerHTML = '<defs><linearGradient id="vfcp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2e34"/>'
+        + '<stop offset="0.3" stop-color="#1b1d21"/><stop offset="1" stop-color="#0c0d0f"/></linearGradient>'
+        + '<linearGradient id="vfdach" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b3e44"/><stop offset="1" stop-color="#202226"/></linearGradient>'
+        + '<linearGradient id="vfsl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#121316"/><stop offset="1" stop-color="#2a2d33"/></linearGradient>'
+        + '<linearGradient id="vfsr" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#121316"/><stop offset="1" stop-color="#2a2d33"/></linearGradient></defs>'
+        // Dachkante und A-Saeulen gab es kurz (19.11.) - wieder raus, GEMELDET Gnen54: "absolut stoerend".
+        // Tuerbruestung unter den Seitenscheiben
+        + '<path fill="#16181b" d="M0,775 L215,758 L215,1000 L0,1000 Z M1000,775 L785,758 L785,1000 L1000,1000 Z"/><path ' + kante + ' d="M0,775 L215,758 M1000,775 L785,758"/>'
+        // Armaturenbrett mit Instrumenten-Hutze
+        + '<path fill="url(#vfcp)" d="M60,812 C220,800 330,796 390,794 C425,762 575,762 610,794 C670,796 780,800 940,812 L1000,830 L1000,1000 L0,1000 L0,830 Z"/>'
+        + '<path ' + kante + ' d="M60,812 C220,800 330,796 390,794 C425,762 575,762 610,794 C670,796 780,800 940,812"/>';
+      VF.cv.parentNode.insertBefore(e, VF.cv.nextSibling);   // ohne z-index: die Anzeigen bleiben darueber
+    }
+    e.style.left = VF.cv.offsetLeft + 'px'; e.style.top = VF.cv.offsetTop + 'px';
+    e.style.width = VF.cv.clientWidth + 'px'; e.style.height = VF.cv.clientHeight + 'px';
+  }
+  function vfSpiegelMalen(gl, w, h) {
+    const an = vfSpiegelAn() && vfKameraId() === 'haube' && !!(VF.modell && VF.tprog) && !vfKameraWeitGedreht();
+    const voll = an && vfCockpitVoll();
+    vfCockpit(voll);
+    if (!an) { vfSpiegelRahmen(false); return; }
+    const d = VF.modell.d, s = VF_AUTO.L / d.laenge;
+    const Hz = vfHzSpieler();
+    const hb = VF.modell.meta && VF.modell.meta.haube, sp = VF.modell.meta && VF.modell.meta.spiegel;
+    const vor = (sp && typeof sp.vor === 'number' ? sp.vor : (hb ? hb.vor : 0.75) - 0.25) * s;
+    const hoch = (sp && typeof sp.hoch === 'number' ? sp.hoch : (hb ? hb.hoch : 1.0) - 0.12) * s;
+    const seite = (sp && typeof sp.seite === 'number' ? sp.seite : d.breite / 2 + 0.06) * s;
+    const r = VF.h * Math.PI / 180, fx = Math.sin(r), fz = -Math.cos(r);
+    const lx = fz, lz = -fx;                                         // links (wie "seite" der Haubenkamera)
+    // Wie Aussenspiegel (19.11.): quer, klein, in den unteren Ecken knapp ueber dem Armaturenbrett, ganz
+    // am Rand - die Fahrbahn in der Mitte bleibt frei (17.11.: "Spiegel stoeren im Blickfeld").
+    // Mit Innenraum: draussen vor den Seitenscheiben, ueber der Tuerbruestung (neben den A-Saeulen).
+    // 20.11. (Gnen54): Spider 4/5 der Groesse; Bulli stoerte quer noch - dort hochkant, schmal, ganz am Rand
+    // ueber dem Armaturenbrett (wie die grossen Bus-Spiegel).
+    const autoW = vfAutoWahl(), hochkant = autoW === 'caravelle';
+    // 21.11. (Idee von Luke, Gnen54: "bei allen Fahrzeugen ausser dem Spider einen Rueckspiegel oben am
+    // Bildschirmrand", im ersten Schritt OHNE Aussenspiegel): Innenspiegel oben mittig. Der offene Spider
+    // behaelt seine Aussenspiegel. Blick vom Dach am Heck nach hinten, das eigene Auto wird nicht gemalt
+    // (es saesse sonst als Dach/Heckscheibe im Bild).
+    if (autoW !== 'spider') { vfInnenspiegelMalen(gl, w, h, s, Hz, fx, fz, d); return; }
+    let sw = Math.round(Math.min(w * (voll ? 0.125 : 0.17), h * 0.34) * (autoW === 'spider' ? 0.8 : 1)), sh = Math.round(sw * 0.6);
+    if (hochkant) { sh = Math.round(h * 0.3); sw = Math.round(Math.min(sh * 0.6, w * 0.1)); }
+    // Bulli (19.11., GEMELDET Gnen54: "auf Hoehe der Hand vom Fahrer"): hoeher, ueber dem Armaturenbrett.
+    const bulli = vfAutoWahl() === 'caravelle';
+    const y0 = Math.round(h * (voll ? 0.265 : (bulli ? 0.45 : 0.15))), rand = Math.max(bulli ? 6 : 10, Math.round(w * (voll ? 0.01 : (bulli ? 0.006 : 0.018))));
+    const rechtecke = [[rand, y0, sw, sh], [w - rand - sw, y0, sw, sh]];   // links, rechts (x, y von unten)
+    const wi = VF_SPIEGEL_WINKEL * Math.PI / 180;
+    gl.enable(gl.SCISSOR_TEST);
+    [1, -1].forEach((sg, i) => {
+      const q = rechtecke[i];
+      gl.viewport(q[0], q[1], q[2], q[3]); gl.scissor(q[0], q[1], q[2], q[3]);
+      gl.clearColor(0.66, 0.78, 0.90, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      const auge = [VF.x + fx * vor + lx * seite * sg, hoch + Hz.z, VF.y + fz * vor + lz * seite * sg];
+      // nach hinten, um VF_SPIEGEL_WINKEL nach aussen gedreht
+      const bx = -fx * Math.cos(wi) + lx * sg * Math.sin(wi), bz = -fz * Math.cos(wi) + lz * sg * Math.sin(wi);
+      const ziel = [auge[0] + bx * 30, hoch + Hz.z - 0.6 - Math.tan(Hz.p) * 30, auge[2] + bz * 30];
+      const blick = vfBlick(auge, ziel, VF_OBEN);
+      const pr = vfPerspektive((hochkant ? 36 : VF_SPIEGEL_FOV) * Math.PI / 180, q[2] / Math.max(1, q[3]), 0.3, 900);
+      for (let k = 0; k < 4; k++) pr[k * 4] = -pr[k * 4];          // x spiegeln (Spaltenmatrix: Zeile 0)
+      const pv = vfMal(pr, blick);
+      vfFlaechenMalen(gl, pv, auge);
+      vfModellMalen(gl, pv, blick, auge);
+      if (VF.npcs) {
+        for (const npc of VF.npcs) {
+          if (!npc.modell || npc.koAus || npc.derbyAus) continue;
+          vfModellZeichnen(gl, pv, blick, npc.modell, VF.tprog, npc.x, npc.y, npc.h, npc.feder, npc.lenkWinkel, npc.raddreh, VF.radModell, true,
+            !!(npc.motor && npc.motor.outputs && npc.motor.outputs.lights && npc.motor.outputs.lights.brake), 1, 0, auge);
+        }
+      }
+    });
+    gl.disable(gl.SCISSOR_TEST);
+    gl.viewport(0, 0, w, h);
+    vfSpiegelRahmen(true, rechtecke);
+  }
+  function vfInnenspiegelMalen(gl, w, h, s, Hz, fx, fz, d) {
+    const sw = Math.round(Math.min(w * 0.3, h * 0.9)), sh = Math.round(sw * 0.27);
+    // unter der Knopfleiste oben rechts (BOX, GELBE FLAGGE, ...), die sonst ueber dem Spiegel laege
+    const dpr = VF.cv.width / Math.max(1, VF.cv.clientWidth);
+    const q = [Math.round((w - sw) / 2), h - sh - Math.round(58 * dpr), sw, sh];
+    gl.enable(gl.SCISSOR_TEST);
+    gl.viewport(q[0], q[1], q[2], q[3]); gl.scissor(q[0], q[1], q[2], q[3]);
+    gl.clearColor(0.66, 0.78, 0.90, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const hb = VF.modell.meta && VF.modell.meta.haube;
+    const hinten = (d.laenge / 2 + 0.05) * s, hoch = ((hb ? hb.hoch : 1.0) + 0.05) * s;
+    const auge = [VF.x - fx * hinten, hoch + Hz.z, VF.y - fz * hinten];
+    const ziel = [auge[0] - fx * 30, hoch + Hz.z - 0.5 - Math.tan(Hz.p) * 30, auge[2] - fz * 30];
+    const blick = vfBlick(auge, ziel, VF_OBEN);
+    const pr = vfPerspektive(15 * Math.PI / 180, q[2] / Math.max(1, q[3]), 0.3, 900);
+    for (let k = 0; k < 4; k++) pr[k * 4] = -pr[k * 4];          // gespiegelt
+    const pv = vfMal(pr, blick);
+    vfFlaechenMalen(gl, pv, auge);
+    if (VF.npcs) {
+      for (const npc of VF.npcs) {
+        if (!npc.modell || npc.koAus || npc.derbyAus) continue;
+        vfModellZeichnen(gl, pv, blick, npc.modell, VF.tprog, npc.x, npc.y, npc.h, npc.feder, npc.lenkWinkel, npc.raddreh, VF.radModell, true,
+          !!(npc.motor && npc.motor.outputs && npc.motor.outputs.lights && npc.motor.outputs.lights.brake), 1, 0, auge);
+      }
+    }
+    gl.disable(gl.SCISSOR_TEST);
+    gl.viewport(0, 0, w, h);
+    vfSpiegelRahmen(true, [q]);
   }
   // ---- Kamera (v1.1.11) --------------------------------------------------------------------
   // BESTELLT: "Wenn ich den rechten Stick reindruecke im virtuellen Fahren, aendere die Kamera zu
   // Motorhaube oder nahe Verfolgerkamera." R3 (bzw. die Lichthupen-Belegung) oder C schaltet weiter:
-  // Verfolger -> nah -> Motorhaube -> Verfolger. Nachgefuehrt nach der ZEIT (nicht je Bild): auf einem
+  // Verfolger -> nah -> naeher -> Motorhaube -> ... (naeher: Zwischenstufe dicht am Auto, Fahrbahn bleibt sichtbar). Nachgefuehrt nach der ZEIT (nicht je Bild): auf einem
   // langsamen Handy lief die Kamera vorher bei weniger Bildern spuerbar hinterher.
-  const VF_KAMERAS = [{ id: 'verfolger', name: 'Verfolgerkamera' }, { id: 'nah', name: 'Nahe Verfolgerkamera' }, { id: 'haube', name: 'Motorhaube' },
+  const VF_KAMERAS = [{ id: 'verfolger', name: 'Verfolgerkamera' }, { id: 'nah', name: 'Nahe Verfolgerkamera' },
+                      { id: 'naeher', name: 'Seitennahe Kamera' }, { id: 'haube', name: 'Motorhaube' },
                       { id: 'oben', name: 'Von oben (Start/Ziel)' },
                       { id: 'fahrer', name: 'Fahrer am Rand', wip: true }];
   const VF_KAMERA_STORE = 'omegasim-vf-kamera';
@@ -2115,7 +2829,7 @@
   // Der Pad-Stick gilt nur fuer Achsen, die keine Belegung in Optionen -> Controller traegt, und nur
   // bei Standard-Belegung des Pads (sonst koennten Achse 2/3 die Trigger sein und dauernd drehen).
   const VF_DREH_GIER = 200 * Math.PI / 180, VF_DREH_NICK = 100 * Math.PI / 180, VF_DREH_TAU = 0.12;
-  const VF_DREH_TOT = 0.16, VF_DREH_SCHWELLE = 2 * Math.PI / 180, VF_DREH_PAD_MS = 250;
+  const VF_DREH_TOT = 0.25, VF_DREH_SCHWELLE = 2 * Math.PI / 180, VF_DREH_PAD_MS = 250;
   const VF_DREH_TASTEN = { t: 'hoch', f: 'links', g: 'runter', h: 'rechts' };
   function vfDreh() {
     if (!VF.dreh) VF.dreh = { g: 0, n: 0, vg: 0, vn: 0 };
@@ -2130,6 +2844,10 @@
     return art === 'oben' ? [0, 60 * r] : (art === 'umsehen' ? [-35 * r, 35 * r] : [-10 * r, 60 * r]);
   }
   function vfKameraGedreht() { const D = vfDreh(); return Math.abs(D.g) > VF_DREH_SCHWELLE || Math.abs(D.n) > VF_DREH_SCHWELLE; }
+  // Spiegel und Innenraum erst ab deutlichem Umsehen ausblenden (15 Grad): schon 2 Grad (z. B. ein
+  // Stick, der nicht ganz in die Mitte zurueckfaellt) liessen sie verschwinden, bis die Kamera neu
+  // gewaehlt wurde (GEMELDET Gnen54 19.11.).
+  function vfKameraWeitGedreht() { const D = vfDreh(), w = 15 * Math.PI / 180; return Math.abs(D.g) > w || Math.abs(D.n) > w; }
   function vfKameraStandard() {
     vfDrehNull(); VF.kam = null;
     showHudToast(t('Kamera: Standardansicht'));
@@ -2284,18 +3002,40 @@
     // Rechter Stick / T-F-G-H: die Drehung laeuft nach der Zeit (in der Pause ist dt 0).
     const art = vfDrehArt(id), D = vfDreh(), ein = vfDrehEingabe();
     vfDrehSchritt(D, ein[0], ein[1], dt, vfDrehGrenzen(art));
-    const k = vfKameraBasis(id, fx, fz, dt, art, D);
-    return art === 'kreisen' ? k : vfDrehAnwenden(k, art, D, VF.x, 0, VF.y);
+    // Im Auto (Haube, Fahrer) federt der Blick nach dem Loslassen von selbst zurueck nach vorn
+    // (GEMELDET Gnen54 19.11.: "laenger neben der Strecke ... Kameraschwenk zur Fahrerseite" - ein Stick,
+    // der beim Ruetteln des Pads knapp ausserhalb der Totzone hing, drehte den Blick langsam weg;
+    // Totzone dazu 0,16 -> 0,25).
+    if (art === 'umsehen') {
+      if (ein[0] || ein[1]) VF.drehLos = 0; else VF.drehLos = (VF.drehLos || 0) + dt;
+      if (VF.drehLos > 0.5 && !D.vg && !D.vn) { const f = Math.exp(-dt / 0.25); D.g *= f; D.n *= f; if (Math.abs(D.g) < 1e-3) D.g = 0; if (Math.abs(D.n) < 1e-3) D.n = 0; }
+    }
+    const k0 = vfKameraBasis(id, fx, fz, dt, art, D);
+    const k = art === 'kreisen' ? k0 : vfDrehAnwenden(k0, art, D, VF.x, 0, VF.y);
+    // Bruecke: Kamera mit hoch; im Auto (Haube, Fahrer) neigt sich der Blick mit der Rampe.
+    const H = vfHzSpieler();
+    if (!H.z && !H.p) return k;
+    const innen = id === 'haube' || id === 'fahrer';
+    const weit = Math.hypot(k.ziel[0] - k.auge[0], k.ziel[2] - k.auge[2]);
+    return Object.assign({}, k, { auge: [k.auge[0], k.auge[1] + H.z, k.auge[2]],
+      ziel: [k.ziel[0], k.ziel[1] + H.z + (innen ? Math.tan(H.p) * weit : 0), k.ziel[2]] });
   }
   function vfKameraBasis(id, fx, fz, dt, art, D) {
     if (id === 'fahrer' && VF.fahrer) { VF.kam = null; return vfFahrerKamera(VF.fahrer, VF.x, VF.y, dt); }
     if (id === 'haube') {
       // Auf der Motorhaube (Speed Dreams: Bonnet 0,75 m vor, 0,95 m hoch), fest am Auto.
       const s = VF.modell ? VF_AUTO.L / VF.modell.d.laenge : 2;
-      const vor = 0.75 * s, hoch = (0.95 + (VF.modell ? 0.07 : 0.25)) * s;
-      const auge = [VF.x + fx * vor, hoch, VF.y + fz * vor];
+      // Ein Modell darf die Kamera selbst setzen (auto.json "haube": {vor, hoch} in m), z. B. der offene
+      // Spider NG1: Augen ueber dem Windschutz des Cockpits statt auf der Haube.
+      const hb = VF.modell && VF.modell.meta && VF.modell.meta.haube;
+      const vor = (hb ? hb.vor : 0.75) * s, hoch = (hb ? hb.hoch : 0.95 + (VF.modell ? 0.07 : 0.25)) * s;
+      // Optional (VW Caravelle: Kamera wie im echten Modell): "seite" in m (+ links), "neigung" in Grad
+      // nach unten, "fov" = senkrechter Bildwinkel in Grad, "fovH" = waagerechter (hat Vorrang).
+      const seite = (hb && hb.seite || 0) * s;
+      const auge = [VF.x + fx * vor + fz * seite, hoch, VF.y + fz * vor - fx * seite];
+      const sinkt = hb && typeof hb.neigung === 'number' ? Math.tan(hb.neigung * Math.PI / 180) * 30 : 1.2;
       VF.kam = auge;
-      return { auge, ziel: [auge[0] + fx * 30, hoch - 1.2, auge[2] + fz * 30], fov: 70, nah: 0.3 };
+      return { auge, ziel: [auge[0] + fx * 30, hoch - sinkt, auge[2] + fz * 30], fov: (hb && hb.fov) || 70, fovH: (hb && hb.fovH) || (vfCockpitVoll() ? VF_COCKPIT_FOVH : 0), nah: 0.3 };
     }
     if (id === 'oben') {
       // Von oben, parallel zur Start/Ziel-Geraden: die Kamera schwebt mit dem Auto mit (x/y) und
@@ -2305,20 +3045,52 @@
       VF.kam = null;
       return { auge, ziel: [VF.x, 0, VF.y], oben, fov: 62, nah: 0.5 };
     }
-    const nah = id === 'nah';
-    const hinten = nah ? 9 : 15, hoehe = nah ? 3.8 : 8, tau = nah ? 0.08 : 0.15;
+    const nah = id === 'nah', naeher = id === 'naeher';
+    // naeher: Zwischenstufe knapp hinter dem Heck und etwas ueber dem Dach (Auto 9,6 lang, 2,4 hoch) -
+    // man sieht die Details des Autos, beim Kreisen auch von der Seite, und noch genug Fahrbahn davor.
+    const hinten = naeher ? 6.5 : (nah ? 9 : 15), hoehe = naeher ? 2.8 : (nah ? 3.8 : 8), tau = naeher ? 0.06 : (nah ? 0.08 : 0.15);
     // Gedreht kreist der SOLL-Ort um das Auto; die Nachfuehrung (tau) bleibt dieselbe.
-    const zh = nah ? 2.0 : 1.4, vor = nah ? 8 : 12;
+    const zh = naeher ? 1.6 : (nah ? 2.0 : 1.4), vor = naeher ? 7 : (nah ? 8 : 12);
     const k = vfDrehAnwenden({ auge: [VF.x - fx * hinten, hoehe, VF.y - fz * hinten], ziel: [VF.x + fx * vor, zh, VF.y + fz * vor] },
       art, D, VF.x, zh, VF.y);
+    if (naeher && D && D.g) {
+      // Seitennah: je weiter zur Seite / nach vorn geschwenkt, desto naeher ans Auto (bis 25 % naeher
+      // ab 90 Grad) - von schraeg vorn sieht man die Details, von hinten bleibt die Fahrbahn im Blick.
+      const g = Math.abs(Math.atan2(Math.sin(D.g), Math.cos(D.g)));
+      const f = 1 - 0.25 * Math.min(1, g / (Math.PI / 2));
+      k.auge = [VF.x + (k.auge[0] - VF.x) * f, zh + (k.auge[1] - zh) * f, VF.y + (k.auge[2] - VF.y) * f];
+    }
     const soll = k.auge;
     const a = 1 - Math.exp(-Math.max(0, dt) / tau);
     VF.kam = VF.kam ? VF.kam.map((q, i) => q + (soll[i] - q) * a) : soll;
-    return { auge: VF.kam, ziel: k.ziel, fov: nah ? 58 : 54, nah: 0.5 };
+    return { auge: VF.kam, ziel: k.ziel, fov: naeher ? 62 : (nah ? 58 : 54), nah: naeher ? 0.3 : 0.5 };
+  }
+  // Lichthupe auch am virtuellen Auto (20.11., GEMELDET Gnen54: "Lichthupe funktioniert nicht auf den
+  // virtuellen Bahnen"): dieselbe Taktung wie am echten Auto (resolveLights in 70-race.js).
+  // Liegt ein Kartenpunkt in der Boxengasse (Dreiecke aus der DXF)? Fuer Ein- und Ausfahrt: dort keine
+  // weisse Randlinie ueber die Oeffnung (20.11., Gnen54: "Boxeneingang und -ausgang frei, schwarz").
+  function vfInGasse(g, q) {
+    const t = g.tri;
+    for (let j = 0; j + 5 < t.length; j += 6) {
+      const ax = t[j], ay = t[j + 1], bx = t[j + 2], by = t[j + 3], cx = t[j + 4], cy = t[j + 5];
+      const d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+      if (!d) continue;
+      const l1 = ((by - cy) * (q[0] - cx) + (cx - bx) * (q[1] - cy)) / d, l2 = ((cy - ay) * (q[0] - cx) + (ax - cx) * (q[1] - cy)) / d;
+      if (l1 >= 0 && l2 >= 0 && l1 + l2 <= 1) return true;
+    }
+    return false;
+  }
+  function vfLichtMitHupe(an) {
+    try {
+      const jetzt = rennZeitJetzt();
+      if (jetzt >= lightFx.flashUntil) return an;
+      const el = FLASH_MS - (lightFx.flashUntil - jetzt);
+      return (el % FLASH_PERIOD_MS) < FLASH_ON_MS ? !an : an;
+    } catch (e) { return an; }
   }
   function vfModellMalen(gl, pv, blick, auge) {
     vfModellZeichnen(gl, pv, blick, VF.modell, VF.tprog, VF.x, VF.y, VF.h, VF.feder, VF.lenkWinkel, VF.raddreh, VF.radModell,
-      (typeof headlightsOn === 'undefined' ? true : !!headlightsOn),
+      vfLichtMitHupe(typeof headlightsOn === 'undefined' ? true : !!headlightsOn),
       !!(physEngine.outputs && physEngine.outputs.lights && physEngine.outputs.lights.brake), vfFederSicht(), VF.pitch || 0, auge);
   }
   // Ein Modell an einer Stelle zeichnen. Wird fuer das Spielerauto und fuer jeden NPC benutzt:
@@ -2410,7 +3182,8 @@
       const dreh = vfRy(ax === 'vorn' ? -(lenkWinkel || 0) : 0);
       const w = vfKette(lage, vfT(seite * r.spur / 2, r.radius, z), dreh, vfRx(raddreh || 0),
         vfS(seite * r.breite, 2 * r.radius, 2 * r.radius));
-      radTeile.forEach((t) => { setze(w, [1, 1, 1], 0, 1, 0, 1, 0.2, 0); teil(t); });
+      // Teile mit "achse" (vorn/hinten) nur an dieser Achse - eigene Raeder je Achse (GT3).
+      radTeile.forEach((t) => { if (t.achse && t.achse !== ax) return; setze(w, [1, 1, 1], 0, 1, 0, 1, 0.2, 0); teil(t); });
       if (!radTeile.length) {
         // Fallback: die echten Rad-Teile der Vulture V5.R (mit Reifen-/Felgen-Textur).
         const radM = radModell;
@@ -2435,8 +3208,11 @@
     });
     // 4. Scheiben und Scheinwerferglas (durchscheinend, getoent)
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    // Sitzt die Kamera IM Auto (VW Caravelle: Onboard-Kamera hinter der Frontscheibe), nur ein Hauch Glas -
+    // sonst waere das Bild durch die Toenung fast schwarz.
+    const innen = auge && Math.hypot(auge[0] - x, auge[2] - y) < d.laenge * s * 0.45 && auge[1] < d.hoehe * s;
     for (const t of M.glasTeile) {
-      if (t.rolle === 'glas') { setze(aufbau, VF_GLAS_TINT, 0, 0.86, 0, 1, 0, 1); teil(t); }
+      if (t.rolle === 'glas') { setze(aufbau, VF_GLAS_TINT, 0, innen ? 0.12 : 0.86, 0, 1, 0, innen ? 0.2 : 1); teil(t); }
       else { setze(aufbau, VF_WEISS, licht ? 0.6 : 0, 0.9, 1, 1, 0, 0.5); teil(t); }
     }
     // 5. Leuchten: Lichtpunkte (zur Kamera gedreht) und vorn der Lichtkegel auf der Bahn
@@ -2522,6 +3298,7 @@
       else {
         modusTxt = RACE_MODES[VF.modus].label;
         if (VF.modus === 'laps') modusTxt += ' · ' + Math.min(VF.runden, VF.limit) + '/' + VF.limit;
+        if (vfPflichtGilt()) modusTxt += ' · ' + t('Box') + ' ' + Math.min(VF.boxDurch || 0, vfPflichtBox()) + '/' + vfPflichtBox();
         else if (VF.modus === 'derby') modusTxt += ' · ' + VF.derbyHealth + ' HP · ' + VF.derbyKills + (VF.limit > 0 ? '/' + VF.limit : '') + ' ' + t('Kills');
         else if (VF.modus === 'knockout') modusTxt += ' · ' + VF.koLeben + ' ' + t('Leben');
         else if (VF.modus === 'bestzeit') modusTxt += ' · ' + vfZeitAcc(VF.beste, 3);
@@ -2660,17 +3437,42 @@
   // ---- Starten und Beenden ------------------------------------------------------------------
   // opts.tiles: diese Strecke statt der des Editors (die Studie faehrt Homington), opts.studie: die
   // Fahrt gehoert der Studie (beim Beenden nicht in die Garage). true = gestartet.
+  // Hinweis beim Start: der HUD-Toast liegt im Cockpit und ist in der Garage unsichtbar (Gnen54,
+  // 14.11.: "in der Android App ... kein Hinweis, keine Reaktion"). Dort ein eigener Hinweis unten.
+  function vfStartHinweis(msg) {
+    showHudToast(msg);
+    const el = $('hud-toast');
+    if (el && el.offsetParent) return;
+    const d = document.createElement('div');
+    d.setAttribute('role', 'status');
+    d.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;max-width:90vw;'
+      + 'background:#b8860b;color:#100c02;padding:10px 16px;border-radius:6px;font-weight:600;text-align:center';
+    d.textContent = msg;
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 4000);
+  }
   function virtuellStarten(opts) {
     opts = opts || {};
     if (VF.aktiv) return false;
     vfHandlingCache = null;   // einmal frisch lesen (z. B. in einem anderen Tab geaendert)
-    if (!physicsEnabled) { showHudToast(t('Virtuell braucht ein Fahrgefühl mit Physik (nicht RC)')); return false; }
+    // Rundenuhr der vorigen Fahrt nicht mitnehmen (20.11., GEMELDET Gnen54: "Zeitansage sofort beim Start
+    // nach Ueberfahren von Start/Ziel ist wieder da") - die erste Ueberfahrt startet die Uhr, angesagt wird erst
+    // die erste ganze Runde.
+    dashLapTimes = []; dashLapStart = null;
+    if (!physicsEnabled) { vfStartHinweis(t('Virtuell braucht ein Fahrgefühl mit Physik (nicht RC)')); return false; }
     // Editor-Strecke und gemerkte Rollen gehoeren dem Fahrer: die Ersatzstrecke (Balkonia) und die Rolle
     // des virtuellen Autos werden beim Beenden wieder zurueckgenommen.
     VF.tilesVorher = currentTrackTiles;
     try { VF.editorVorher = localStorage.getItem(EDITOR_STRECKE_STORE); } catch (e) { VF.editorVorher = undefined; }
-    const tiles = opts.tiles && opts.tiles.length >= 3 ? opts.tiles : vfTilesWaehlen();
-    if (!tiles) { showHudToast(t('Erst eine Strecke bauen')); return false; }
+    const freiK = !(opts.tiles && opts.tiles.length >= 3) && !opts.studie ? vfFreiWahl() : '';
+    if (freiK && !vfFreiCache[freiK]) {
+      vfFreiLaden(freiK).then(() => virtuellStarten(opts), () => vfStartHinweis(t('Strecke konnte nicht geladen werden')));
+      return true;
+    }
+    const frei = freiK ? vfFreiCache[freiK] : null;
+    VF.frei = frei;
+    const tiles = frei ? frei.tiles : (opts.tiles && opts.tiles.length >= 3 ? opts.tiles : vfTilesWaehlen());
+    if (!tiles) { vfStartHinweis(t('Erst eine Strecke bauen')); return false; }
     VF.studie = !!opts.studie;
     const schicht = document.createElement('div');
     schicht.className = 'vf-schicht';
@@ -2729,11 +3531,17 @@
     vfTouchBauen();   // v1.3.122: Beruehrungs-Steuerung (Touch), falls Geraet und kein Gamepad
     VF.splits = null; VF.besteSplits = null;
     VF.tiles = tiles;
-    VF.pts = trackCenterline(tiles);
+    // Gezeichnet wird die volle Mittellinie (sonst klafft an der Schliessstelle ein Loch in der Bahn),
+    // gefahren, gezaehlt und von den NPCs befahren die an der Schliessstelle gekuerzte.
+    const ptsVoll = frei ? frei.pts.map((q) => ({ x: q.x, y: q.y, tile: q.tile, heading: q.heading, z: q.z || 0, bucht: q.bucht })) : trackCenterline(tiles);
+    VF.pts = vfSchliessstelle(ptsVoll);
     VF.nrm = trackNormals(VF.pts);
+    vfHoeheVorbereiten();
+    VF.bucht = vfBuchtJePunkt(VF.pts, tiles);
+    VF.buchtSeite = tiles.reduce((a, x) => (x.type === TILE_TYPE.PIT && x.seite ? x.seite : a), -1);
     // v1.3.39: Flaechen mit Texturen (die Pixel entstehen nur beim ersten Mal) und der feste Platz der
     // Kamera "Fahrer am Rand".
-    try { VF.flaeche = vfFlaechenBauen(gl, VF.pts, VF.nrm, tiles, VF.grafik); } catch (e) { schicht.remove(); document.body.classList.remove('vf-an'); showHudToast('WebGL: ' + e.message); return false; }
+    try { VF.flaeche = vfFlaechenBauen(gl, ptsVoll, ptsVoll === VF.pts ? VF.nrm : trackNormals(ptsVoll), tiles, VF.grafik); } catch (e) { schicht.remove(); document.body.classList.remove('vf-an'); showHudToast('WebGL: ' + e.message); return false; }
     VF.fahrer = { ort: vfFahrerOrt(VF.pts, VF.nrm, tiles), z: {}, k: null };
     // Das Auto: ein Garagenauto ohne Funk. Ein gesteuertes Auto gibt seine Rolle so lange ab.
     VF.vorherSpieler = playerCar;
@@ -2775,9 +3583,13 @@
     // Start eine halbe Kachel vor Start/Ziel, in Fahrtrichtung.
     const s = Math.max(0, VF.pts.findIndex((p) => p.tile >= 0 && tiles[p.tile] && tiles[p.tile].type === TILE_TYPE.START));
     const start = ((s - Math.round(TRACK_SAMPLES_PER_TILE / 2)) % VF.pts.length + VF.pts.length) % VF.pts.length;
-    Object.assign(VF, { x: VF.pts[start].x, y: VF.pts[start].y, h: VF.pts[start].heading, idx: start, zaehler: 0, kachel: -2,
+    Object.assign(VF, { x: VF.pts[start].x, y: VF.pts[start].y, h: VF.pts[start].heading, idx: start, zaehler: 0, kachel: -2, fort: 0, fortVor: start, startGueltig: false,
                         abseits: false, letzt: 0, kam: null, rundeAb: 0, letzte: null, beste: null, aktiv: true,
                         startX: VF.pts[start].x, startY: VF.pts[start].y, startH: VF.pts[start].heading });
+    vfZeitenLaden();
+    { const bm = VF.bucht ? Math.max(0, ...VF.bucht.map((x) => x || 0)) : 0;
+      VF.boxMax = bm; VF.boxN = bm > 0 ? VF.bucht.filter((x) => (x || 0) > bm * 0.5).length : 0;
+      VF.boxDurch = 0; VF.boxBesucht = null; }
     vfNpcStarten(gl, start);
     physEngine.state.speedKmh = 0;
     schicht.addEventListener('click', (e) => {
@@ -2826,6 +3638,9 @@
     // heil, und virtuellBeenden stellt beides wieder her (bis 1.3.131 loeschte der Start den echten
     // Schaden, und virtuelle Zusammenstoesse blieben danach im Cockpit stehen).
     VF.schadenVorher = (typeof damage === 'number') ? damage : null;
+    // Akku: das virtuelle Auto meldet ueber seine Pakete einen Rohwert, der danach in dashBattery stehen
+    // blieb (= 0 %) - beim Beenden kam dann "Session abbrechen, Box anfahren!" (GEMELDET Gnen54 17.11.).
+    VF.akkuVorher = (typeof dashBattery === 'undefined') ? null : dashBattery;
     VF.flaggeVorher = (typeof flagState !== 'undefined') ? flagState : null;
     if (typeof damage === 'number') damage = 0;
     // Zustand der virtuellen Wertung (derby/knockout): Spieler und NPCs.
@@ -2856,8 +3671,13 @@
   // "Wie in Optionen" wird als Sentinel gespeichert, damit es sich vom Standard (Vulture V5.R) unterscheidet.
   const VF_MOTOR_GLOBAL = '~global';
   // Standard ist der Vulture V5.R (wie das Auto); "Wie in Optionen" folgt dem globalen Ton (sentinel).
+  // Gnen54s eigene Autos haben einen FESTEN Motorklang (BESTELLT Gnen54: "der Motorsound soll fest dem
+  // Fahrzeug zugeordnet sein, die Anwahl gesperrt") - die gespeicherte Wahl gilt dort nicht.
+  const VF_MOTOR_FEST = { kaefer: 'boxster986', spider: 'listerstorm', caravelle: 'boxster986' };
+  function vfMotorFest() { return VF_MOTOR_FEST[vfAutoWahl()] || ''; }
   function vfMotorGewaehlt() {
-    const def = ({ v5r: 'sd_v5r', lynx220: 'sd_lynx', fmcgt4: 'sd_fmc', boxer96: 'sd_boxer' })[vfAutoWahl()] || 'sd_v5r';
+    if (vfMotorFest()) return vfMotorFest();
+    const def = ({ v5r: 'sd_v5r', lynx220: 'sd_lynx', fmcgt4: 'sd_fmc', boxer96: 'sd_boxer', kaefer: 'boxster986', spider: 'listerstorm', caravelle: 'boxster986' })[vfAutoWahl()] || 'sd_v5r';
     try { const v = localStorage.getItem(VF_MOTOR_STORE); return v === null ? def : v; } catch (e) { return def; }
   }
   function vfMotorZiel() { const g = vfMotorGewaehlt(); if (g && g !== VF_MOTOR_GLOBAL) return g; return $('sound-profile') ? $('sound-profile').value : ''; }
@@ -2900,10 +3720,21 @@
       try { localStorage.setItem(VF_MOTOR_STORE, n || VF_MOTOR_GLOBAL); } catch (e) { /* egal */ }
       renderGarage();
     };
-    rechts.appendChild(garWertZeile(t('Motorsound'), werte[j].name, () => wahl(-1), () => wahl(1)));
+    if (vfMotorFest()) {
+      const fest = garWertZeile(t('Motorsound'), werte[j].name + ' (' + t('fest zum Auto') + ')', () => {}, () => {});
+      fest.querySelectorAll('.gk-w button').forEach((k) => { k.disabled = true; k.style.visibility = 'hidden'; });
+      rechts.appendChild(fest);
+    } else rechts.appendChild(garWertZeile(t('Motorsound'), werte[j].name, () => wahl(-1), () => wahl(1)));
     // v1.1.9: welches Auto, und wie deutlich die Federung sichtbar neigt.
     const autos = [{ v: 'v5r', name: 'Vulture V5.R (Speed Dreams)' }, { v: 'lynx220', name: 'Lynx 220 (Jaguar XJ220, Speed Dreams)' },
                    { v: 'fmcgt4', name: 'FMC GT4 (Ford GT40 Mk1, Speed Dreams)' }, { v: 'boxer96', name: 'Boxer 96 (Porsche 911 GT3, Speed Dreams)' },
+                   // Eigenbau von Gnen54 (CC BY 4.0), WIP: Fahrdaten geschaetzt, siehe img/autos/kaefer/LIZENZ.txt
+                   { v: 'kaefer', name: 'VW Käfer 1303 RS mit Boxster-Motor (Gnen54, WIP)' },
+                   // Spider NG1 (Gnen54) auf Modiplay-MP1-Karosserie, Freigabe von Sturmkind, siehe img/autos/spider/LIZENZ.txt
+                   { v: 'spider', name: 'Spider NG1 (Gnen54, WIP)' },
+                   // VW Caravelle (Gnen54) auf Vehicle-World-Karosserie (Freigabe erteilt), Oettinger-Boxer-6 (Werte geschaetzt),
+                   // Motorhauben-Kamera = Kamera im echten Modell (Lage, Neigung, Bildwinkel aus auto.json "haube")
+                   { v: 'caravelle', name: 'VW Caravelle Oettinger (Gnen54, WIP)' },
                    { v: 'kasten', name: t('Einfaches Modell') }];
     const ja = Math.max(0, autos.findIndex((a) => a.v === vfAutoWahl()));
     const autoWahl = (dd) => {
@@ -2940,13 +3771,33 @@
     const grafikZeile = garWertZeile(t('Grafik'), t(vfGrafik() === 'perf' ? 'Performance' : 'Quality'), gWahl, gWahl);
     grafikZeile.querySelector('.gk-l').insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span>');
     rechts.appendChild(grafikZeile);
-    // Geist: eine Kopie faehrt nach der ersten Runde die aufgezeichnete Linie ab (Standard an).
+    // Geist: eine Kopie faehrt nach der ersten Runde die aufgezeichnete Linie ab (Standard aus).
     const geistAn = vfGeistAn();
     const geistWahl = () => {
       try { localStorage.setItem(VF_GEIST_STORE, geistAn ? 'aus' : 'an'); } catch (e) { /* egal */ }
       renderGarage();
     };
     rechts.appendChild(garWertZeile(t('Geist folgt meiner Linie'), geistAn ? t('An') : t('Aus'), geistWahl, geistWahl));
+    // Strecke: die gebaute Bahn oder eine freie Strecke nur fuer die virtuelle Fahrt.
+    const streckeK = vfFreiWahl(), streckeListe = [''].concat(Object.keys(VF_FREIE));
+    const streckeWahl = (d) => {
+      const nk = streckeListe[(streckeListe.indexOf(streckeK) + d + streckeListe.length) % streckeListe.length];
+      try { localStorage.setItem(VF_STRECKE_STORE, nk); } catch (e) { /* egal */ }
+      if (nk) vfFreiLaden(nk).catch(() => {});
+      renderGarage();
+    };
+    rechts.appendChild(garWertZeile(t('Strecke'), streckeK ? VF_FREIE[streckeK].name + ' (' + t('nur virtuell') + ')' : t('Gebaute Bahn'), () => streckeWahl(-1), () => streckeWahl(1)));
+    // Aussenspiegel links/rechts, nur in der Kamera "Motorhaube" (Standard aus).
+    const spiegelAn = vfSpiegelAn();
+    const spiegelWahl = () => {
+      try { localStorage.setItem(VF_SPIEGEL_STORE, spiegelAn ? 'aus' : 'an'); } catch (e) { /* egal */ }
+      renderGarage();
+    };
+    rechts.appendChild(garWertZeile(t('Außenspiegel (Motorhaube)'), spiegelAn ? t('An') : t('Aus'), spiegelWahl, spiegelWahl));
+    // Pflicht-Boxendurchfahrt im Rennen (Runden, Langstrecke): Aus, 1, 2 oder 3.
+    const pfl = vfPflichtBox();
+    const pflWahl = (d) => { try { localStorage.setItem(VF_PFLICHTBOX_STORE, String((pfl + d + 4) % 4)); } catch (e) { /* egal */ } renderGarage(); };
+    rechts.appendChild(garWertZeile(t('Pflicht-Boxendurchfahrt'), pfl ? String(pfl) : t('Aus'), () => pflWahl(-1), () => pflWahl(1)));
     // Neben der Bahn: Vorgabe bremst der Teppich. Die Option schaltet den Tempoverlust ab, das Auto
     // faehrt daneben ungebremst weiter (Standard Aus = wie bisher).
     const abseitsBremse = vfAbseitsBremseAn();
@@ -2991,6 +3842,51 @@
     los.onclick = () => virtuellStarten();
     z.appendChild(los);
     rechts.appendChild(z);
+    rechts.appendChild(vfBestenliste(autos));
+  }
+  // Bestenliste in der Garage (21.11., BESTELLT Gnen54): je Strecke und Auto die gespeicherte Bestzeit
+  // (vfZeitMerken), Rundenzahl und Datum. Zugeklappt, damit die Garage kurz bleibt.
+  function vfBestenliste(autos) {
+    const box = document.createElement('details');
+    box.className = 'vf-bestenliste';
+    box.dataset.vf = 'bestenliste';
+    const sum = document.createElement('summary');
+    sum.textContent = t('Bestzeiten');
+    box.appendChild(sum);
+    const alle = vfZeitenAlle();
+    let jetztBahn = '';
+    try { const tl = vfTilesWaehlen(); if (tl) jetztBahn = trackToCode(tl); } catch (e) { /* ohne */ }
+    const zeilen = Object.keys(alle).filter((k) => alle[k] && alle[k].beste > 0).map((k) => {
+      const e = alle[k], tr = k.lastIndexOf('|'), ort = k.slice(0, tr), auto = k.slice(tr + 1);
+      let strecke = ort;
+      if (ort.indexOf('frei:') === 0) strecke = ort.slice(5);
+      else if (ort.indexOf('bahn:') === 0) strecke = t('Gebaute Bahn') + (ort.slice(5) === jetztBahn ? ' (' + t('aktuell') + ')' : ' ' + ort.slice(5, 11));
+      const a = autos.find((x) => x.v === auto);
+      return { strecke, auto: a ? a.name : auto, beste: e.beste, runden: e.runden || 0, datum: e.datum };
+    }).sort((x, y) => x.strecke.localeCompare(y.strecke) || x.beste - y.beste);
+    if (!zeilen.length) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = t('Noch keine Bestzeiten');
+      box.appendChild(p);
+      return box;
+    }
+    const tab = document.createElement('table');
+    tab.className = 'vf-besten-tab';
+    tab.style.cssText = 'width:100%;border-collapse:collapse;font-size:0.9em';
+    const kopf = tab.insertRow();
+    [t('Strecke'), t('Auto'), t('Bestzeit'), t('Runden'), t('Datum')].forEach((h) => {
+      const th = document.createElement('th'); th.textContent = h; th.style.textAlign = 'left'; kopf.appendChild(th);
+    });
+    let spr = 'de';
+    try { spr = (typeof lang === 'string' && lang) || 'de'; } catch (e) { /* de */ }
+    zeilen.forEach((z) => {
+      const r = tab.insertRow();
+      [z.strecke, z.auto, vfZeitAcc(z.beste, 3), String(z.runden), z.datum ? new Date(z.datum).toLocaleDateString(spr) : '–']
+        .forEach((w) => { const c = r.insertCell(); c.textContent = w; c.style.padding = '2px 6px 2px 0'; });
+    });
+    box.appendChild(tab);
+    return box;
   }
 
   // v1.3.39 BESTELLT: "Verbessere den Randstein-Sound. Aktuell ist es ein hohes Klicken ... Es soll
@@ -3074,6 +3970,8 @@
     } catch (e) { /* ohne Ton weiterfahren */ }
   }
   function virtuellBeenden() {
+    VF.frei = undefined;
+    vfSpiegelRahmen(false); vfCockpit(false);
     rennPauseBeenden();
     if (!VF.aktiv) return;
     // Laeuft eine Challenge (z. B. die Studienfahrt) mit dem virtuellen Auto, endet sie mit: abgebrochen,
@@ -3094,6 +3992,8 @@
       if (typeof updateDamageFuelUI === 'function') { try { updateDamageFuelUI(); } catch (e) { /* egal */ } }
     }
     VF.schadenVorher = null;
+    if (typeof dashBattery !== 'undefined') dashBattery = VF.akkuVorher === undefined ? null : VF.akkuVorher;
+    VF.akkuVorher = null;
     if (VF.flaggeVorher === 'green' && typeof flagState !== 'undefined' && flagState !== 'green') {
       try {
         if (typeof gelbBeenden === 'function') gelbBeenden();
@@ -3146,3 +4046,24 @@
     VF.studie = false;
   }
   window.addEventListener('keydown', (e) => { if (VF.aktiv && e.key === 'Escape') { e.stopImmediatePropagation(); virtuellBeenden(); } }, true);
+  // F8: Pad-Diagnose (padDiagText in 90-ghosts.js) - zeigt, ob und wo das Gamepad haengen bleibt.
+  let vfPadDiagIv = 0;
+  function vfPadDiagUmschalten() {
+    let el = document.getElementById('vf-pad-diag');
+    if (el) { el.remove(); clearInterval(vfPadDiagIv); return; }
+    el = document.createElement('pre');
+    el.id = 'vf-pad-diag';
+    el.style.cssText = 'position:fixed;left:8px;top:180px;z-index:99999;margin:0;padding:8px 10px;max-width:70vw;'
+      + 'white-space:pre-wrap;font:12px/1.4 monospace;color:#fff;background:rgba(0,0,0,.78);border:1px solid #29b6f6;pointer-events:none';
+    document.body.appendChild(el);
+    const zeichne = () => {
+      if (!el.isConnected || !VF.aktiv) { el.remove(); clearInterval(vfPadDiagIv); return; }
+      let code = '-';
+      try { code = VF.frei ? VF.frei.name : (VF.tiles || currentTrackTiles || []).length > 1 ? trackToCode(VF.tiles || currentTrackTiles) : '-'; } catch (e) { /* ohne */ }
+      el.textContent = t('Pad-Diagnose (F8 schließt)') + '\n' + (typeof padDiagText === 'function' ? padDiagText() : '-')
+        + '\n' + t('Strecke') + ': ' + code;
+    };
+    zeichne();
+    vfPadDiagIv = setInterval(zeichne, 200);
+  }
+  window.addEventListener('keydown', (e) => { if (VF.aktiv && e.key === 'F8' && !e.repeat) { e.preventDefault(); vfPadDiagUmschalten(); } });

@@ -951,6 +951,26 @@ CARS = {
         'crackle': 0.25,
         'gain_wobble': 0.05, 'clatter_variiert': True,
     },
+    'boxster986': {
+        'label': 'Porsche Boxster 986 (2,5 l Boxer-6, Saugmotor) [WIP]',
+        # BESTELLT (13.11.2026): "Der Kaefer soll den Sound einer Porsche-Maschine, Porsche
+        # Boxster bekommen" - ein getunter 1303 RS mit aelterem Boxster-Motor (~200 PS).
+        # Boxer-6 wie alle Porsche-Sechszylinder: Zuendfolge 1-6-2-4-3-5, je Bank drei
+        # Zuendungen im Abstand von 240 Grad.
+        'banks': banks_from_order([1, 6, 2, 4, 3, 5], 6, 'half'), 'cylinders': 6,
+        # 2,5 l, 150 kW (204 PS) bei 6000/min, Verdichtung 11:1, Begrenzer um 6900/min.
+        'limiter': 6900,
+        'rpms': {'idle': 850, 'mid': 4000, 'high': 6600},
+        # Serienanlage mit Kat und Daempfer: laenger und dumpfer als ein Rennkruemmer,
+        # aber kuerzer als die amerikanischen Strassenmotoren.
+        'primary_in': 22.0, 'res_q': 3.9, 'partials': 6, 'ir_ms': 40.0,
+        'pulse_ms': 2.6, 'bright': 0.38,
+        # Saugmotor: Ansaugen mit Resonanzklappe hoerbar, aber kein Lader.
+        'noise': 0.12, 'noise_hz': 2600.0,
+        'clatter': 0.14, 'clatter_hz': 2600.0, 'drive': 2.8,
+        'scatter_t': 0.015, 'scatter_g': 0.055, 'crackle': 0.34,
+        'gain_wobble': 0.05, 'clatter_variiert': True,
+    },
 }
 
 

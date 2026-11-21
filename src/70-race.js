@@ -4457,6 +4457,7 @@
     } else if (typeof st.tyreWear === 'number') {
       reifen = 1 - st.tyreWear;
     }
+    const vfOhneAkku = typeof VF !== 'undefined' && !!VF.aktiv;
     return { health: Math.max(0, Math.min(100, 100 - damage)) / 100,
              fuel: Math.max(0, Math.min(100, fuel)) / 100,
              tyre: reifen,
@@ -4464,11 +4465,14 @@
              // waere ein Zustand, den niemand setzt, und beim naechsten Lesen eine Frage.
              rain: weather === 'rain',
              // Akku als Anteil (0..1); ohne Auto (dashBattery === null) keine Meldung.
-             battery: dashBattery === null ? null : batteryPercent(dashBattery) / 100,
+             // Virtuelle Fahrt: das gefahrene Auto hat keinen Akku. Ein echtes Auto (Ladestation,
+             // alter dashBattery-Wert) meldete sonst bei jedem Sessionstart "Session abbrechen,
+             // Box anfahren!" (GEMELDET Gnen54, 14.11.2026).
+             battery: vfOhneAkku || dashBattery === null ? null : batteryPercent(dashBattery) / 100,
              // JEDES Auto mit einem Akku-Wert, nicht nur der Fahrer (BESTELLT "Akku-Ansage
              // < 25 % mit Autonummer"). Das Fahrer-Auto steht auch hier drin, der eine Wert
              // `battery` oben bleibt fuer alte Aufrufer.
-             batteries: (typeof garage !== 'undefined' ? garage : []).filter((c) => c
+             batteries: vfOhneAkku ? [] : (typeof garage !== 'undefined' ? garage : []).filter((c) => c
                && c.battery !== undefined && c.battery !== null)
                .map((c) => ({ car: c,
                               label: typeof garageLabel === 'function' ? garageLabel(c) : '',
@@ -5093,7 +5097,10 @@
 
     // Absolute value: any NEGATIVE speed would otherwise satisfy this and start a pit
     // service while the car is reversing away.
-    const stopped = Math.abs(physEngine.state.speedKmh) < PIT_STANDSTILL_KMH && Math.abs(throttleY) < 0.1;
+    // Bremse halten gilt als Stehen (throttleY = Gas minus Bremse, also negativ). Bis 19.11. verlangte
+    // die Abfrage |throttleY| < 0.1 - wer in der Box auf der Bremse stand, bekam nie den Service,
+    // GEMELDET Gnen54 (virtuell): "Das Betanken funktioniert noch nicht".
+    const stopped = Math.abs(physEngine.state.speedKmh) < PIT_STANDSTILL_KMH && throttleY < 0.1;
     // Im Modus "Neben der Strecke" gehoert zum Anfangen mehr als Stillstand: das Auto muss
     // auch neben der Bahn stehen. Das ist die Haelfte des Modus, die geblieben ist, nachdem
     // die Selbstausloesung weg ist - der Knopf sagt DASS ein Stopp kommt, die Bahnkante WO.
@@ -5105,11 +5112,12 @@
     // Funktionsdeklaration im selben Skriptblock und damit hochgezogen - genau wie
     // stopGhost(), das von hier aus schon immer gerufen wird. Eine Wache, die nie greifen
     // kann, liest sich wie eine echte und verdeckt, dass die Abhaengigkeit sicher ist.
-    const amOrt = pitTrigger !== 'offtrack' || istAbseits();
+    const vfOrt = typeof vfBoxOrtOk !== 'function' || vfBoxOrtOk();
+    const amOrt = (pitTrigger !== 'offtrack' || istAbseits()) && vfOrt;
     if (pitState === 'limited' && stopped && amOrt) { setPitState('servicing'); return; }
     if (pitState === 'limited' && stopped && !amOrt && !pitOrtGemeldet) {
       pitOrtGemeldet = true;
-      showHudToast('NEBEN DIE STRECKE FAHREN');
+      showHudToast(vfOrt ? 'NEBEN DIE STRECKE FAHREN' : t('In die Boxengasse fahren'));
       log('Boxenstopp angefordert, aber das Auto steht auf der Bahn: der Service beginnt '
           + 'erst neben der Strecke.', 'info');
     }

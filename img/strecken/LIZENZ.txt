@@ -1,0 +1,6 @@
+Toernerschleife 2.0 (img/strecken/indeq-ring.json) - Strecke nur fuer die virtuelle Fahrt in OmegaSim
+
+Streckenlayout: "Toernerschleife 2.0" von Driftstrecken.de (https://driftstrecken.de).
+Freigabe: schriftlich (E-Mail) von Driftstrecken.de am 18.11.2026, das Streckenlayout unter Nennung
+der Urheberrechte im Open-Source-Projekt OmegaSim (Steuerung - Garage - Virtuell fahren) zu verwenden.
+Umsetzung (DXF, Mittellinie, Start/Ziel, Boxengasse): Gnen54.

@@ -1,0 +1,262 @@
+{
+ "name": "Spider NG1 (Gnen54)",
+ "kennung": "spider",
+ "quelle": "Eigenbau von Gnen54 auf Basis der Modiplay-MP1-Karosserie, 1:50 für das Carrera-HYBRID-Porsche-Chassis, ×50 auf Originalgröße",
+ "lizenz": "siehe LIZENZ.txt",
+ "koordinaten": "m; +x links, +y oben, +z vorn",
+ "ecken": 204337,
+ "indizes": 591486,
+ "indexAb": 6538784,
+ "schritt": 32,
+ "teile": [
+  {
+   "name": "Karosserie",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "spider_gelb.png",
+   "ecke0": 0,
+   "ecken": 27913,
+   "index0": 0,
+   "indizes": 68832
+  },
+  {
+   "name": "Heck",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "spider_schwarz.png",
+   "ecke0": 27913,
+   "ecken": 20951,
+   "index0": 68832,
+   "indizes": 41649
+  },
+  {
+   "name": "Chassis",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "spider_schwarz.png",
+   "ecke0": 48864,
+   "ecken": 4634,
+   "index0": 110481,
+   "indizes": 13338
+  },
+  {
+   "name": "Frontspoiler",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "spider_schwarz.png",
+   "ecke0": 53498,
+   "ecken": 4368,
+   "index0": 123819,
+   "indizes": 20520
+  },
+  {
+   "name": "Anbauteile",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "spider_schwarz.png",
+   "ecke0": 57866,
+   "ecken": 14041,
+   "index0": 144339,
+   "indizes": 42663
+  },
+  {
+   "name": "Cockpit",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "spider_cockpit.png",
+   "ecke0": 71907,
+   "ecken": 13325,
+   "index0": 187002,
+   "indizes": 30000
+  },
+  {
+   "name": "Scheinwerfer",
+   "rolle": "scheinwerfer",
+   "gruppe": "auto",
+   "tex": "spider_reflektor.png",
+   "ecke0": 85232,
+   "ecken": 4718,
+   "index0": 217002,
+   "indizes": 9120
+  },
+  {
+   "name": "Scheinwerferglas",
+   "rolle": "scheinwerferglas",
+   "gruppe": "auto",
+   "tex": "spider_scheinwerfer.png",
+   "ecke0": 89950,
+   "ecken": 954,
+   "index0": 226122,
+   "indizes": 1680
+  },
+  {
+   "name": "Rücklichter",
+   "rolle": "ruecklicht",
+   "gruppe": "auto",
+   "tex": "spider_ruecklicht.png",
+   "ecke0": 90904,
+   "ecken": 1003,
+   "index0": 227802,
+   "indizes": 4776
+  },
+  {
+   "name": "Rücklichtglas",
+   "rolle": "scheinwerferglas",
+   "gruppe": "auto",
+   "tex": "spider_ruecklichtglas.png",
+   "ecke0": 91907,
+   "ecken": 1014,
+   "index0": 232578,
+   "indizes": 4776
+  },
+  {
+   "name": "Reifen vorn",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "spider_reifen.png",
+   "achse": "vorn",
+   "ecke0": 92921,
+   "ecken": 55692,
+   "index0": 237354,
+   "indizes": 162927
+  },
+  {
+   "name": "Felge vorn",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "spider_felge.png",
+   "achse": "vorn",
+   "ecke0": 148613,
+   "ecken": 27782,
+   "index0": 400281,
+   "indizes": 88998
+  },
+  {
+   "name": "Reifen hinten",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "spider_reifen.png",
+   "achse": "hinten",
+   "ecke0": 176395,
+   "ecken": 2708,
+   "index0": 489279,
+   "indizes": 13044
+  },
+  {
+   "name": "Felge hinten",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "spider_felge.png",
+   "achse": "hinten",
+   "ecke0": 179103,
+   "ecken": 25234,
+   "index0": 502323,
+   "indizes": 89163
+  }
+ ],
+ "schatten": "shadow.png",
+ "lichter": {
+  "front": [
+   [
+    0.658,
+    0.513,
+    1.73,
+    0.14
+   ],
+   [
+    -0.658,
+    0.513,
+    1.73,
+    0.14
+   ]
+  ],
+  "rueck": [
+   [
+    0.7,
+    0.588,
+    -2.33,
+    0.12
+   ],
+   [
+    -0.7,
+    0.588,
+    -2.33,
+    0.12
+   ]
+  ],
+  "brems": [
+   [
+    0.7,
+    0.588,
+    -2.33,
+    0.12
+   ],
+   [
+    -0.7,
+    0.588,
+    -2.33,
+    0.12
+   ]
+  ]
+ },
+ "haube": {
+  "vor": 0.75,
+  "hoch": 1.12
+ },
+ "physik": {
+  "masse": 900.0,
+  "schwerpunktHoehe": 0.28,
+  "radstand": 2.515,
+  "a": 1.4084,
+  "b": 1.1066,
+  "vorderachse": 1.0375,
+  "hinterachse": -1.4775,
+  "laenge": 4.694,
+  "breite": 2.239,
+  "hoehe": 1.186,
+  "massenVerteilung": 0.85,
+  "lenkGrad": 21.0,
+  "bremsVorn": 0.58,
+  "cx": 0.33,
+  "stirnflaeche": 1.85,
+  "auftriebVorn": 0.42,
+  "auftriebHinten": 0.46,
+  "fluegelVorn": 0.2,
+  "fluegelHinten": 0.45,
+  "leerlauf": 1100.0,
+  "begrenzer": 7600.0,
+  "reifen": {
+   "vorn": {
+    "radius": 0.325,
+    "breite": 0.28,
+    "spur": 1.62,
+    "bodenfreiheit": 0.1,
+    "mu": 1.25
+   },
+   "hinten": {
+    "radius": 0.35000000000000003,
+    "breite": 0.405,
+    "spur": 1.525,
+    "bodenfreiheit": 0.1,
+    "mu": 1.25
+   }
+  },
+  "feder": {
+   "vorn": {
+    "k": 140000.0,
+    "druck": 12500.0,
+    "zug": 19000.0,
+    "weg": 0.09,
+    "stab": 60000.0
+   },
+   "hinten": {
+    "k": 115000.0,
+    "druck": 9000.0,
+    "zug": 17000.0,
+    "weg": 0.09,
+    "stab": 22000.0
+   }
+  },
+  "gefedert": 800.0
+ }
+}

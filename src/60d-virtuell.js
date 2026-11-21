@@ -771,6 +771,17 @@
   function vfBahnGeometrie(pts0, nrm0, tiles, ao) {
     const strasse = [], rand = [];
     const fein = vfBoxVerfeinern(pts0, nrm0, tiles);
+    // Freie Strecken (geschlossene Punktliste ohne doppelten Endpunkt): das letzte Stueck zum ersten Punkt
+    // fehlte - eine duenne dunkle Querfuge direkt an der Startlinie (21.11., Gnen54: "als ob da die
+    // Fahrbahn nicht geschlossen ist"). Hier den Ring schliessen.
+    if (tiles[0] && tiles[0].frei && fein.pts.length > 3) {
+      const a = fein.pts[fein.pts.length - 1], z = fein.pts[0];
+      if (Math.hypot(z.x - a.x, z.y - a.y) < 8) {
+        const zu = (arr) => (arr ? arr.concat([arr[0]]) : arr);
+        fein.pts = fein.pts.concat([Object.assign({}, z, { tile: a.tile })]);
+        fein.nrm = zu(fein.nrm); fein.bucht = zu(fein.bucht); fein.seite = zu(fein.seite);
+      }
+    }
     const pts = fein.pts, nrm = fein.nrm, bucht = fein.bucht;
     const bu = (i) => (bucht ? bucht[i] : 0), bse = (i) => (fein.seite ? fein.seite[i] : -1);
     const half = TRACK_HALF_W, kw = TRACK_KERB_W, ky = 0.09, n = pts.length;
@@ -780,6 +791,33 @@
     const lerp = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
     // Echte Boxengasse als eigene Flaeche (19.11.): dann keine Bucht aus der Mittellinie zeichnen.
     const gasse = (tiles.find((x) => x && x.gasse) || {}).gasse;
+    // 21.11. (GEMELDET Gnen54, DXF-Markierung C: "kleiner Haken mit Spitze"): wo die Kurve innen enger ist
+    // als der Abstand der Kante zur Mittellinie, ueberschlaegt sich die versetzte Linie (Schwalbenschwanz).
+    // Je Seite und Abstand einmal die ganze Kante rechnen und Schlaufen herausschneiden: schneiden sich zwei
+    // nahe Abschnitte, ruecken die Punkte dazwischen auf den Schnittpunkt.
+    const kantenCache = {};
+    const kante = (sg, extra, bsZ) => {
+      const key = sg + ':' + extra;
+      if (kantenCache[key]) return kantenCache[key];
+      const E = [];
+      for (let i = 0; i < n; i++) E.push(off(i, (half + extra + bsZ(i)) * sg));
+      for (let j = 0; j + 1 < n; j++) {
+        const a = E[j], b = E[j + 1];
+        for (let k = j + 2; k + 1 < n && k < j + 60; k++) {
+          const c = E[k], d = E[k + 1];
+          const r = [b[0] - a[0], b[1] - a[1]], q = [d[0] - c[0], d[1] - c[1]];
+          const den = r[0] * q[1] - r[1] * q[0];
+          if (Math.abs(den) < 1e-9) continue;
+          const t = ((c[0] - a[0]) * q[1] - (c[1] - a[1]) * q[0]) / den, u = ((c[0] - a[0]) * r[1] - (c[1] - a[1]) * r[0]) / den;
+          if (t > 0 && t < 1 && u > 0 && u < 1) {
+            const x = [a[0] + r[0] * t, a[1] + r[1] * t];
+            for (let m = j + 1; m <= k; m++) E[m] = x;
+            j = k - 1; break;
+          }
+        }
+      }
+      return (kantenCache[key] = E);
+    };
     const teile = [];
     for (let i = 0; i < n - 1; i++) {
       const T = pts[i + 1].tile, l = teile[teile.length - 1];
@@ -798,6 +836,10 @@
       for (let i = tl.i0; i <= tl.i1; i++) {
         let v0 = acc[i - tl.i0] / L, v1 = acc[i - tl.i0 + 1] / L;
         if (fv) { v0 = 1 - v0; v1 = 1 - v1; }
+        // Freie Strecken sind EINE Fahrbahn ohne Steckverbindungen: die dunkle Steckfuge am oberen und
+        // unteren Rand jeder Texturspalte nicht mitnehmen (21.11., Gnen54: dunkle Querfuge hinter der
+        // Zielflagge, "als ob da die Fahrbahn nicht geschlossen ist").
+        if (tiles[tl.T] && tiles[tl.T].frei) { v0 = 0.012 + v0 * 0.976; v1 = 0.012 + v1 * 0.976; }
         const a = off(i, half), b = off(i + 1, half), c = off(i + 1, -half), d = off(i, -half);
         const z0 = zz(i), z1 = zz(i + 1);
         vfViereck(strasse, [a[0], z0, a[1], ua, v0], [b[0], z1, b[1], ua, v1], [c[0], z1, c[1], ub, v1], [d[0], z0, d[1], ub, v0], ct);
@@ -824,13 +866,16 @@
             // anderer Streckenteil nahe an der Gasse vorbeifuehrt.
             const offen = !!gasse && [0.5, 1.0].some((f) => vfInGasse(gasse, off(i, (half + kw * f) * sg)) || vfInGasse(gasse, off(i + 1, (half + kw * f) * sg)));
             const bsZ = (j) => (gasse ? 0 : bs(j));
-            const iA = off(i, (half + bsZ(i)) * sg), iB = off(i + 1, (half + bsZ(i + 1)) * sg);
-            const oA = off(i, (half + kw + bsZ(i)) * sg), oB = off(i + 1, (half + kw + bsZ(i + 1)) * sg);
-            const lA = off(i, (half + lw + bsZ(i)) * sg), lB = off(i + 1, (half + lw + bsZ(i + 1)) * sg);
+            // Randkanten aus entknoteten Ringen (siehe kante): in engen Kurven innen keine Schlaufe mehr.
+            const iA = kante(sg, 0, bsZ)[i], iB = kante(sg, 0, bsZ)[i + 1];
+            const oA = kante(sg, kw, bsZ)[i], oB = kante(sg, kw, bsZ)[i + 1];
+            const lA = kante(sg, lw, bsZ)[i], lB = kante(sg, lw, bsZ)[i + 1];
             const zA = zz(i), zB = zz(i + 1);
             vfViereck(strasse, [iA[0], zA, iA[1], uk, 0.3], [iB[0], zB, iB[1], uk, 0.4], [oB[0], zB, oB[1], uk, 0.4], [oA[0], zA, oA[1], uk, 0.3], ct);
             // v = -1: reines Weiss im Shader (21.11., GEMELDET Gnen54: in der Ferne hellblau/rosa statt weiss)
-            if (!offen) vfViereck(rand, [iA[0], zA + 0.012, iA[1], um, -1], [iB[0], zB + 0.012, iB[1], um, -1], [lB[0], zB + 0.012, lB[1], um, -1], [lA[0], zA + 0.012, lA[1], um, -1], [1, 1, 1]);
+            // 21.11. (Gnen54: "hinter Start/Ziel ... fehlt ein Stueck gerades"): ueber Ein- und Ausfahrt laeuft
+            // die Kante gestrichelt weiter - die Gerade bleibt als Gerade zu sehen, die Einfahrt bleibt offen.
+            if (!offen || i % 2 === 0) vfViereck(rand, [iA[0], zA + 0.012, iA[1], um, -1], [iB[0], zB + 0.012, iB[1], um, -1], [lB[0], zB + 0.012, lB[1], um, -1], [lA[0], zA + 0.012, lA[1], um, -1], [1, 1, 1]);
             if (zA > 0 || zB > 0) {
               // Bruecke (19.11.): Bordwand aussen (gedruckt, grau) bis 1,3 ueber die Fahrbahn, unten so
               // tief wie die Platte (11 mm, wie im STL) - darunter bleibt die Durchfahrt offen; an den

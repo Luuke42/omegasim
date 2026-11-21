@@ -626,7 +626,7 @@
       gl.attachShader(p, vfShader(gl, gl.FRAGMENT_SHADER,
         'precision mediump float;\n#ifdef GL_FRAGMENT_PRECISION_HIGH\nvarying highp vec2 vuv;\n#else\nvarying vec2 vuv;\n#endif\n'
         + 'varying vec3 vc; varying float vd; varying float vg; uniform sampler2D tx; uniform vec3 nebel;'
-        + 'void main(){ vec4 t = texture2D(tx, vuv); vec3 c = t.rgb * vc + vec3(0.80, 0.86, 0.95) * (vg * t.a);'
+        + 'void main(){ vec4 t = vuv.y < -0.5 ? vec4(0.93, 0.93, 0.94, 1.0) : texture2D(tx, vuv); vec3 c = t.rgb * vc + vec3(0.80, 0.86, 0.95) * (vg * t.a);'
         + ' float f = clamp((vd - 250.0) / 900.0, 0.0, 1.0); gl_FragColor = vec4(mix(c, nebel, f), 1.0); }'));
     } else {
       // Quality. Blickvektor und Schattenkoordinaten entstehen im Vertexshader (dort immer highp) und
@@ -646,10 +646,10 @@
         + 'vec3 filmic(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }'
         + 'HP float schTiefe(HP vec4 v){ return dot(v, vec4(1.0, 1.0/255.0, 1.0/65025.0, 1.0/16581375.0)); }'
         + 'void main(){'
-        + ' vec4 t = texture2D(tx, vuv);'
+        + ' vec4 t = vuv.y < -0.5 ? vec4(0.93, 0.93, 0.94, 1.0) : texture2D(tx, vuv);'
         + ' vec3 c = pow(t.rgb, vec3(2.2)) * vc * (vec3(0.32, 0.32, 0.34) + 0.85 * 0.9022);'
         + ' float e = 1.0 - max(normalize(vv).y, 0.0); c += vec3(0.80, 0.86, 0.95) * (glanz * e * e * e * t.a);'
-        + ' if (bump > 0.01) { float dU = texture2D(tx, vuv + vec2(1.0/512.0, 0.0)).r - t.r; c += vec3(dU) * bump * 0.8; }'
+        + ' if (bump > 0.01 && vuv.y > -0.5) { float dU = texture2D(tx, vuv + vec2(1.0/512.0, 0.0)).r - t.r; c += vec3(dU) * bump * 0.8; }'
         // max(0): das Relief zieht an dunklen Fugen unter 0, und filmic(x < 0) kippt einzelne Kanaele
         // auf 0 oder 1 (lila Linien am Boden in 1.3.124-1.3.131).
         + ' c = pow(filmic(max(c, vec3(0.0)) * belichtung), vec3(1.0/2.2));'
@@ -831,7 +831,8 @@
             const lA = off(i, (half + lw + bsZ(i)) * sg), lB = off(i + 1, (half + lw + bsZ(i + 1)) * sg);
             const zA = zz(i), zB = zz(i + 1);
             vfViereck(strasse, [iA[0], zA, iA[1], uk, 0.3], [iB[0], zB, iB[1], uk, 0.4], [oB[0], zB, oB[1], uk, 0.4], [oA[0], zA, oA[1], uk, 0.3], ct);
-            if (!offen) vfViereck(rand, [iA[0], zA + 0.012, iA[1], um, 0.1], [iB[0], zB + 0.012, iB[1], um, 0.1], [lB[0], zB + 0.012, lB[1], um, 0.2], [lA[0], zA + 0.012, lA[1], um, 0.2], [1, 1, 1]);
+            // v = -1: reines Weiss im Shader (21.11., GEMELDET Gnen54: in der Ferne hellblau/rosa statt weiss)
+            if (!offen) vfViereck(rand, [iA[0], zA + 0.012, iA[1], um, -1], [iB[0], zB + 0.012, iB[1], um, -1], [lB[0], zB + 0.012, lB[1], um, -1], [lA[0], zA + 0.012, lA[1], um, -1], [1, 1, 1]);
             if (zA > 0 || zB > 0) {
               // Bruecke (19.11.): Bordwand aussen (gedruckt, grau) bis 1,3 ueber die Fahrbahn, unten so
               // tief wie die Platte (11 mm, wie im STL) - darunter bleibt die Durchfahrt offen; an den
@@ -910,8 +911,8 @@
         });
         for (let j = 0; j + 1 < L.length; j++) {
           const a = L[j], b = L[j + 1], qa = Q[j], qb = Q[j + 1];
-          vfViereck(rand, [a[0] - qa[0], 0.012, a[1] - qa[1], uk, 0.1], [b[0] - qb[0], 0.012, b[1] - qb[1], uk, 0.1],
-            [b[0] + qb[0], 0.012, b[1] + qb[1], uk, 0.2], [a[0] + qa[0], 0.012, a[1] + qa[1], uk, 0.2], [1, 1, 1]);
+          vfViereck(rand, [a[0] - qa[0], 0.012, a[1] - qa[1], uk, -1], [b[0] - qb[0], 0.012, b[1] - qb[1], uk, -1],
+            [b[0] + qb[0], 0.012, b[1] + qb[1], uk, -1], [a[0] + qa[0], 0.012, a[1] + qa[1], uk, -1], [1, 1, 1]);
         }
       }
       // Anfang und Ende des Tankbereichs: fein gestrichelte Querlinie (20.11., Gnen54: "sonst stehst du zu
@@ -926,8 +927,8 @@
         for (let d = half + kw; d + sl <= tief; d += sl * 2) {
           const p0 = off(i, d * sg), p1 = off(i, (d + sl) * sg);
           if (!vfInGasse(gasse, [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2])) continue;
-          vfViereck(rand, [p0[0] - q[0], zi + 0.014, p0[1] - q[1], uk, 0.1], [p1[0] - q[0], zi + 0.014, p1[1] - q[1], uk, 0.1],
-            [p1[0] + q[0], zi + 0.014, p1[1] + q[1], uk, 0.2], [p0[0] + q[0], zi + 0.014, p0[1] + q[1], uk, 0.2], [1, 1, 1]);
+          vfViereck(rand, [p0[0] - q[0], zi + 0.014, p0[1] - q[1], uk, -1], [p1[0] - q[0], zi + 0.014, p1[1] - q[1], uk, -1],
+            [p1[0] + q[0], zi + 0.014, p1[1] + q[1], uk, -1], [p0[0] + q[0], zi + 0.014, p0[1] + q[1], uk, -1], [1, 1, 1]);
         }
       }
     }

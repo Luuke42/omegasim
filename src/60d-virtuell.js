@@ -816,7 +816,9 @@
           // Freie Strecke (nur virtuell): statt Carrera-Randstein Asphalt bis zur Kante und eine weisse
           // Randlinie (Gnen54 18.11.: "Fahrbahnraender nur weiss markiert" - Erkennungsmerkmal). Spaeter
           // am selben Tag: breiter, so breit wie ein Carrera-Randstein, und rumpelt beim Ueberfahren genauso.
-          const lw = kw, uk = sg > 0 ? ua : ub, um = (sg > 0 ? 4 : 132) / VF_RAND_B;
+          // 21.11. (Gnen54, nach Lukes Fork): optisch nur ein SCHMALER Strich an der Fahrbahnkante; die
+          // Rumpelzone dahinter bleibt so breit wie der Carrera-Randstein (Erkennung unveraendert).
+          const lw = kw * 0.3, uk = sg > 0 ? ua : ub, um = (sg > 0 ? 4 : 132) / VF_RAND_B;
           for (let i = tl.i0; i <= tl.i1; i++) {
             // Zur echten Gasse hin: Asphalt bis zur Kante, aber keine weisse Linie (dort geht es hinein).
             // 21.11. (GEMELDET Gnen54 "Fehlender Randstreifen"): nur wo die Gassen-Flaeche den Streifen selbst
@@ -826,10 +828,10 @@
             const bsZ = (j) => (gasse ? 0 : bs(j));
             const iA = off(i, (half + bsZ(i)) * sg), iB = off(i + 1, (half + bsZ(i + 1)) * sg);
             const oA = off(i, (half + kw + bsZ(i)) * sg), oB = off(i + 1, (half + kw + bsZ(i + 1)) * sg);
-            const lA = off(i, (half + kw - lw + bsZ(i)) * sg), lB = off(i + 1, (half + kw - lw + bsZ(i + 1)) * sg);
+            const lA = off(i, (half + lw + bsZ(i)) * sg), lB = off(i + 1, (half + lw + bsZ(i + 1)) * sg);
             const zA = zz(i), zB = zz(i + 1);
             vfViereck(strasse, [iA[0], zA, iA[1], uk, 0.3], [iB[0], zB, iB[1], uk, 0.4], [oB[0], zB, oB[1], uk, 0.4], [oA[0], zA, oA[1], uk, 0.3], ct);
-            if (!offen) vfViereck(rand, [lA[0], zA + 0.012, lA[1], um, 0.1], [lB[0], zB + 0.012, lB[1], um, 0.1], [oB[0], zB + 0.012, oB[1], um, 0.2], [oA[0], zA + 0.012, oA[1], um, 0.2], [1, 1, 1]);
+            if (!offen) vfViereck(rand, [iA[0], zA + 0.012, iA[1], um, 0.1], [iB[0], zB + 0.012, iB[1], um, 0.1], [lB[0], zB + 0.012, lB[1], um, 0.2], [lA[0], zA + 0.012, lA[1], um, 0.2], [1, 1, 1]);
             if (zA > 0 || zB > 0) {
               // Bruecke (19.11.): Bordwand aussen (gedruckt, grau) bis 1,3 ueber die Fahrbahn, unten so
               // tief wie die Platte (11 mm, wie im STL) - darunter bleibt die Durchfahrt offen; an den
@@ -904,7 +906,7 @@
         const Q = L.map((p, j) => {
           const a = L[Math.max(0, j - 1)], b = L[Math.min(L.length - 1, j + 1)];
           const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-          return [-(b[1] - a[1]) / l * kw / 2, (b[0] - a[0]) / l * kw / 2];
+          return [-(b[1] - a[1]) / l * kw * 0.15, (b[0] - a[0]) / l * kw * 0.15];
         });
         for (let j = 0; j + 1 < L.length; j++) {
           const a = L[j], b = L[j + 1], qa = Q[j], qb = Q[j + 1];

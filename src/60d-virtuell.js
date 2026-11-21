@@ -725,11 +725,9 @@
       // Freie Strecke: statt der Carrera-Markierungen der Steg zwischen Bahn und Boxengasse (aus der DXF),
       // als helle Leiste mit der echten Breite.
       if (tiles[k].steg) {
-        const sp = tiles[k].steg.pts, sb = tiles[k].steg.b;
-        for (let j = 0; j + 1 < sp.length; j++) {
-          const ax = sp[j][0], ay = sp[j][1], bx = sp[j + 1][0], by = sp[j + 1][1], l = Math.hypot(bx - ax, by - ay) || 1;
-          marken.push({ m: [(ax + bx) / 2, (ay + by) / 2], e: [(bx - ax) / l, (by - ay) / l], l: l + 0.05, q: [-(by - ay) / l, (bx - ax) / l], b: sb, c: [0.92, 0.92, 0.92] });
-        }
+        // 21.11. (GEMELDET Gnen54 "Unschoener Bogen"): als ein durchgehendes, geglaettetes Band (vfBand)
+        // statt loser Rechtecke je Segment - die liefen an den Knicken zickzack.
+        marken.push({ band: tiles[k].steg.pts, b: tiles[k].steg.b, c: [0.88, 0.88, 0.89] });
         continue;
       }
       const A = pts[i0], Z = pts[i1], nn = nrm[Math.min(i1, i0 + 1)];
@@ -894,27 +892,7 @@
       // 21.11. (GEMELDET Gnen54 "Unschoener Bogen"): vorher ein loses Rechteck je DXF-Segment - in Boegen
       // sah die Linie wie ein Saegezahn aus. Jetzt geglaettet (Chaikin, Enden bleiben) und als
       // durchgehendes Band mit gemeinsamen Ecken (Gehrung).
-      for (const L0 of gasse.rand) {
-        let L = L0.map((p) => [p[0], p[1]]);
-        for (let it = 0; it < 3 && L.length > 2; it++) {
-          const M = [L[0]];
-          for (let j = 0; j + 1 < L.length; j++) {
-            const a = L[j], b = L[j + 1];
-            M.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
-          }
-          M.push(L[L.length - 1]); L = M;
-        }
-        const Q = L.map((p, j) => {
-          const a = L[Math.max(0, j - 1)], b = L[Math.min(L.length - 1, j + 1)];
-          const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-          return [-(b[1] - a[1]) / l * kw * 0.15, (b[0] - a[0]) / l * kw * 0.15];
-        });
-        for (let j = 0; j + 1 < L.length; j++) {
-          const a = L[j], b = L[j + 1], qa = Q[j], qb = Q[j + 1];
-          vfViereck(rand, [a[0] - qa[0], 0.012, a[1] - qa[1], uk, -1], [b[0] - qb[0], 0.012, b[1] - qb[1], uk, -1],
-            [b[0] + qb[0], 0.012, b[1] + qb[1], uk, -1], [a[0] + qa[0], 0.012, a[1] + qa[1], uk, -1], [1, 1, 1]);
-        }
-      }
+      for (const L0 of gasse.rand) vfBand(rand, L0, kw * 0.15, 0.012, uk, [1, 1, 1]);
       // Anfang und Ende des Tankbereichs: fein gestrichelte Querlinie (20.11., Gnen54: "sonst stehst du zu
       // weit vorne, versuchst zu tanken und es funktioniert nicht"). Gleiche Schwelle wie vfBoxDurchfahrt.
       let bMax = 0;
@@ -935,11 +913,45 @@
     // Boxenmarkierungen: flach knapp ueber der Fahrbahn, Randstein-Textur an der hellen Wandspalte.
     const um = 4 / VF_RAND_B;
     for (const mk of fein.marken) {
+      if (mk.band) { vfBand(rand, mk.band, mk.b / 2, 0.012, um, mk.c); continue; }
       const ex = mk.e[0] * mk.l / 2, ey = mk.e[1] * mk.l / 2, qx = mk.q[0] * mk.b / 2, qy = mk.q[1] * mk.b / 2, y = 0.012;
       vfViereck(rand, [mk.m[0] - ex - qx, y, mk.m[1] - ey - qy, um, 0.1], [mk.m[0] + ex - qx, y, mk.m[1] + ey - qy, um, 0.1],
         [mk.m[0] + ex + qx, y, mk.m[1] + ey + qy, um, 0.2], [mk.m[0] - ex + qx, y, mk.m[1] - ey + qy, um, 0.2], mk.c);
     }
     return { strasse, rand, teile: teile.length };
+  }
+  // Linienzug als durchgehendes flaches Band: geglaettet (Chaikin, Enden bleiben), Ecken gemeinsam (Gehrung),
+  // reines Weiss/Grau ohne Textur (v = -1, siehe Bahn-Shader).
+  function vfBand(ziel, L0, hb, y, u, farbe) {
+    let L = L0.map((p) => [p[0], p[1]]);
+    // Die Linien stammen aus dem Raster (Treppchen von ~0,2 Einheiten): erst gleitend mitteln (7 Punkte,
+    // an den Enden kuerzer), dann Chaikin.
+    if (L.length > 4) {
+      const n = L.length;
+      L = L.map((p, j) => {
+        const r = Math.min(3, j, n - 1 - j); let x = 0, z = 0;
+        for (let k = -r; k <= r; k++) { x += L0[j + k][0]; z += L0[j + k][1]; }
+        return [x / (2 * r + 1), z / (2 * r + 1)];
+      });
+    }
+    for (let it = 0; it < 3 && L.length > 2; it++) {
+      const M = [L[0]];
+      for (let j = 0; j + 1 < L.length; j++) {
+        const a = L[j], b = L[j + 1];
+        M.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+      }
+      M.push(L[L.length - 1]); L = M;
+    }
+    const Q = L.map((p, j) => {
+      const a = L[Math.max(0, j - 1)], b = L[Math.min(L.length - 1, j + 1)];
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      return [-(b[1] - a[1]) / l * hb, (b[0] - a[0]) / l * hb];
+    });
+    for (let j = 0; j + 1 < L.length; j++) {
+      const a = L[j], b = L[j + 1], qa = Q[j], qb = Q[j + 1];
+      vfViereck(ziel, [a[0] - qa[0], y, a[1] - qa[1], u, -1], [b[0] - qb[0], y, b[1] - qb[1], u, -1],
+        [b[0] + qb[0], y, b[1] + qb[1], u, -1], [a[0] + qa[0], y, a[1] + qa[1], u, -1], farbe);
+    }
   }
   // Ein Holzstueck als Viereck: Ursprung o, Laengsrichtung e (Laenge L), Querrichtung q (Breite B).
   // Atlas-Stueck, Spiegelung und Farbton zufaellig: kein Muster wiederholt sich sichtbar.

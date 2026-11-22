@@ -401,7 +401,7 @@
   // Bei analogen Knoepfen zaehlt deshalb der Wert, nicht pressed - wie schon in readBindingValue().
   function padAllesLos(pad) {
     return !pad || Array.prototype.every.call(pad.buttons || [], (b, i) =>
-      ((b.value || 0) <= 0.3) && (!b.pressed || padKnopfAnalog(pad, i)));
+      (padKnopfAnalog(pad, i) ? padKnopfWert(pad, i) <= 0.3 : (!b.pressed && (b.value || 0) <= 0.3)));
   }
   // Der Takt eines Pads waehrend einer Sitzung: nur erfassen und auf "Options halten" achten. true = der Takt
   // gehoert der Sitzung (oder der Sperre danach), sonst nichts tun.
@@ -843,7 +843,7 @@
     // Vollbremsung, obwohl der Trigger in Ruhe ist - beim Trigger ist der Wert die Wahrheit.
     if (btn.value > 0) {
       if (btn.value < 1) padAnalogKnoepfe[(pad.index | 0) + ':' + binding.index] = true;
-      return btn.value;
+      return padKnopfWert(pad, binding.index);
     }
     return btn.pressed && !padKnopfAnalog(pad, binding.index) ? 1 : 0;
   }
@@ -853,6 +853,26 @@
     return (pad.mapping === 'standard' && (index === 6 || index === 7))
       || !!padAnalogKnoepfe[(pad.index | 0) + ':' + index];
   }
+  // 22.11. (GEMELDET Gnen54, Pad-Diagnose: "Knoepfe 6(0.50) 7(0.50)" ohne Beruehren): Android meldet die
+  // Trigger des EasySMX X05 in Ruhe mit 0,5 (Achse ruht bei 0 statt -1, umgerechnet auf 0..1). Gas und
+  // Bremse standen dadurch beide halb - das Auto rollte nicht. Je Trigger wird deshalb der kleinste
+  // Ruhe genommen, was der Trigger eine Sekunde lang ruhig meldet - aber nur 0 oder die 0,5 dieses
+  // Fehlers (Chrome meldet vor dem ersten Druck 0, danach 0,5; ein gehaltenes Teilgas soll keine Ruhe werden).
+  const padTriggerRuhe = Object.create(null);
+  function padKnopfWert(pad, index) {
+    const b = pad && pad.buttons ? pad.buttons[index] : null;
+    if (!b) return 0;
+    const v = +b.value || 0;
+    if (!padKnopfAnalog(pad, index) && !(v > 0 && v < 1)) return v > 0 ? v : (b.pressed ? 1 : 0);
+    const k = (pad.index | 0) + ':' + index, jetzt = performance.now();
+    const z = padTriggerRuhe[k] || (padTriggerRuhe[k] = { r: 0, v, seit: jetzt });
+    if (Math.abs(v - z.v) > 0.02) { z.v = v; z.seit = jetzt; }
+    else if (jetzt - z.seit > 1000 && (v <= 0.02 || (v >= 0.45 && v <= 0.55))) z.r = v <= 0.02 ? 0 : v;
+    const r = z.r;
+    if (r <= 0.02) return v;
+    return Math.max(0, Math.min(1, (v - r - 0.03) / (1 - r - 0.03)));
+  }
+
 
   // Gamepad sampling MUST run on requestAnimationFrame. Chrome refreshes the gamepad
   // snapshot as part of the frame lifecycle, so a decoupled setInterval reads the same

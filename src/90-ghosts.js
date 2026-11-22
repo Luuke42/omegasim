@@ -395,8 +395,13 @@
     renderBindTable();
   }
   // Alle Knoepfe losgelassen? (Achsen zaehlen nicht: eine RC-Fernbedienung ruht bei -1.)
+  // 22.11. (GEMELDET Gnen54, EasySMX X05 am Android-Tablet als "Xbox Wireless Controller"): die Trigger
+  // (Knoepfe 6/7) melden in Ruhe pressed = true mit value 0. "Alle Tasten los" wurde nie wahr: die
+  // Abgleich-Sperre blieb an (kein Gas, keine Lenkung) und beim Zuweisen kam keine zweite Taste durch.
+  // Bei analogen Knoepfen zaehlt deshalb der Wert, nicht pressed - wie schon in readBindingValue().
   function padAllesLos(pad) {
-    return !pad || Array.prototype.every.call(pad.buttons || [], (b) => !b.pressed && !((b.value || 0) > 0.3));
+    return !pad || Array.prototype.every.call(pad.buttons || [], (b, i) =>
+      ((b.value || 0) <= 0.3) && (!b.pressed || padKnopfAnalog(pad, i)));
   }
   // Der Takt eines Pads waehrend einer Sitzung: nur erfassen und auf "Options halten" achten. true = der Takt
   // gehoert der Sitzung (oder der Sperre danach), sonst nichts tun.
@@ -12886,7 +12891,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   let padDiag = { grund: 'noch kein Takt', t: 0 };
   function padDiagSetzen(grund, pad, gas, bremse, lenk) {
     padDiag = { grund, t: performance.now(), id: pad ? String(pad.id) : '', mapping: pad ? pad.mapping : '',
-      gas, bremse, lenk, knoepfe: pad ? [...(pad.buttons || [])].map((b, i) => (b && b.pressed ? i : -1)).filter((i) => i >= 0) : [],
+      gas, bremse, lenk, knoepfe: pad ? [...(pad.buttons || [])].map((b, i) => (b && (b.pressed || b.value > 0) ? i + (b.value < 1 ? '(' + (+b.value).toFixed(2) + ')' : '') : -1)).filter((i) => i !== -1) : [],
       achsen: pad ? [...(pad.axes || [])].map((v) => +v.toFixed(2)) : [] };
   }
   function padDiagText() {

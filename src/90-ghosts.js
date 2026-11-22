@@ -169,7 +169,7 @@
     // type 'none' ist KEIN Eingang. Ohne diese Zeile kollidieren zwei unbelegte Aktionen
     // miteinander, und die zweite wuerde "aufgeloest" - eine Kollision, die es nicht gibt.
     if (!x || x.type === undefined || x.type === 'none') return null;
-    return x.type + ':' + x.index;
+    return x.type + ':' + x.index + (x.unten ? ':u' : '');
   }
 
   // KOLLISIONEN AUFLOESEN, allgemein statt Fall fuer Fall.
@@ -401,7 +401,12 @@
   // Bei analogen Knoepfen zaehlt deshalb der Wert, nicht pressed - wie schon in readBindingValue().
   function padAllesLos(pad) {
     return !pad || Array.prototype.every.call(pad.buttons || [], (b, i) =>
-      (padKnopfAnalog(pad, i) ? padKnopfWert(pad, i) <= 0.3 : (!b.pressed && (b.value || 0) <= 0.3)));
+      (padKnopfAnalog(pad, i) ? padKnopfWert(pad, i) <= 0.3 && !padTriggerVorn(pad, i) : (!b.pressed && (b.value || 0) <= 0.3)));
+  }
+  // Trigger nach vorn gedrueckt (unter der gelernten Ruhe um 0,5)? Auch das ist "nicht los".
+  function padTriggerVorn(pad, i) {
+    const z = padTriggerRuhe[(pad.index | 0) + ':' + i];
+    return !!(z && z.r >= 0.3 && (+pad.buttons[i].value || 0) < z.r - 0.3);
   }
   // Der Takt eines Pads waehrend einer Sitzung: nur erfassen und auf "Options halten" achten. true = der Takt
   // gehoert der Sitzung (oder der Sperre danach), sonst nichts tun.
@@ -744,8 +749,12 @@
       const d = Math.abs(v - ruhe);
       // Ein Knopf schlaegt eine Achse bei gleichem Ausschlag: er ist eindeutiger, und ein
       // Knopfdruck bewegt an manchen Pads eine Hat-Achse mit.
-      if (d > BUTTON_CAPTURE_THRESHOLD && (!bester || d > bester.d + 0.001)) {
-        bester = { d, art: 'button', i };
+      // 22.11. (BESTELLT Gnen54): ein analoger Trigger, der in Ruhe 0,5 meldet (EasySMX X05 am Tablet),
+      // laesst sich auch nach VORN druecken - der Wert faellt dann unter die Ruhe. Das wird als eigene
+      // Richtung erfasst ("unten"), z. B. Gas durch Wegdruecken.
+      const schwelle = padKnopfAnalog(pad, i) || (ruhe > 0.3 && ruhe < 0.7) ? 0.4 : BUTTON_CAPTURE_THRESHOLD;
+      if (d > schwelle && (!bester || d > bester.d + 0.001)) {
+        bester = { d, art: 'button', i, unten: v < ruhe - 0.3 };
       }
     }
     if (!bester) return;
@@ -769,7 +778,9 @@
           + `-> Achse ${bester.i} (Ruhe ${bester.ruhe.toFixed(2)}, `
           + `Ausschlag ${bester.d.toFixed(2)})`, 'info');
     } else {
-      ziel[action] = { type: 'button', index: bester.i, label: `Knopf ${bester.i}` };
+      ziel[action] = bester.unten
+        ? { type: 'button', index: bester.i, unten: true, label: `Knopf ${bester.i} (nach vorn)` }
+        : { type: 'button', index: bester.i, label: `Knopf ${bester.i}` };
       log(`Zuordnung gesetzt (Spieler ${bindEditSpieler}): ${BIND_ACTION_LABELS[action]} `
           + `-> Knopf ${bester.i}`, 'info');
     }
@@ -834,6 +845,15 @@
     }
     const btn = pad.buttons[binding.index];
     if (!btn) return 0;
+    // Nach vorn gedrueckter Trigger: Weg von der gelernten Ruhe nach unten. Solange keine Ruhe um 0,5
+    // gelernt ist (Chrome meldet vor dem ersten Beruehren 0), zaehlt das nicht - sonst Vollgas beim Start.
+    if (binding.unten) {
+      padKnopfWert(pad, binding.index);
+      const z = padTriggerRuhe[(pad.index | 0) + ':' + binding.index];
+      if (!z || z.r < 0.3) return 0;
+      const v = +btn.value || 0;
+      return Math.max(0, Math.min(1, (z.r - v - 0.03) / (z.r - 0.03)));
+    }
     // v1.3.129: manche Controller (v.a. Android-WebView) melden L3/R3 als gedrueckt,
     // aber mit value 0. `value ?? pressed` lasse dann 0 durch und der Druck ginge
     // verloren - die L3-Statusansage kam nie. Deshalb: gedrueckt zaehlt immer,

@@ -887,7 +887,10 @@
     const k = (pad.index | 0) + ':' + index, jetzt = performance.now();
     const z = padTriggerRuhe[k] || (padTriggerRuhe[k] = { r: 0, v, seit: jetzt });
     if (Math.abs(v - z.v) > 0.02) { z.v = v; z.seit = jetzt; }
-    else if (jetzt - z.seit > 1000 && (v <= 0.02 || (v >= 0.45 && v <= 0.55))) z.r = v <= 0.02 ? 0 : v;
+    // Einmal bei 0,5 gelernt, bleibt die Ruhe dort: 0 meldet so ein Trigger nur vor dem ersten Beruehren -
+    // oder ganz nach vorn gedrueckt. GEMELDET Gnen54 22.11.: Gas nach vorn gehalten ging nach ~3 s aus,
+    // und beim Zuweisen der Bremse wurde das Loslassen des rechten Triggers als Bremse erfasst.
+    else if (jetzt - z.seit > 1000 && v >= 0.45 && v <= 0.55) z.r = v;
     const r = z.r;
     if (r <= 0.02) return v;
     return Math.max(0, Math.min(1, (v - r - 0.03) / (1 - r - 0.03)));

@@ -18,6 +18,7 @@
   const ST_TESTS = [];
 
   function stAdd(name, fn) { ST_TESTS.push({ name, fn }); }
+  var stLadeSprache = null;   // v1.5.3: Sprache vor dem Lauf (runSelfTest), siehe Test "Reglertexte"
 
   // Einmal dem Browser Luft lassen, ohne einen Zeitgeber zu benutzen. Der Kanal wird EINMAL
   // angelegt und nicht je Test: hundert MessageChannel hintereinander sind hundert Paare von
@@ -2474,7 +2475,9 @@
         return Math.abs(A[0] - B[0]) + Math.abs(A[1] - B[1]) + Math.abs(A[2] - B[2]);
       };
 
-      const werte = Array.prototype.map.call(sel.options, o => o.value);
+      // v1.5.32: 'mokamit' ist eine eigene Tafel UEBER dem Cockpit (Test "Cockpit v1.5.32"); darunter bleibt das
+      // Standard-Cockpit unveraendert, darum zaehlt sie hier nicht mit.
+      const werte = Array.prototype.map.call(sel.options, o => o.value).filter((v) => v !== 'mokamit');
       if (werte.length < 3) schlecht.push('nur ' + werte.length + ' Ansichten');
       const proben = werte.map(messe);
 
@@ -3036,6 +3039,75 @@
     }
     return { ok: schlecht.length === 0,
              mass: teile.join(' | ') + (schlecht.length ? ' || ' + schlecht.join('; ') : '') };
+  });
+
+  // ---- Onboard-Schirm nur mit Kamera ----
+  //
+  // Ohne Kamera darf "Onboard" weder blaetterbar sein noch einen Punkt bekommen: ein Punkt,
+  // den man nie erreicht, sieht aus wie ein kaputter Schirm. Mit Kamera umgekehrt.
+  // v1.5 (WIP): Onboard-Kamera in der Garage, zweite Quelle WLAN (M5Stack Timer Camera), Anzeige wie beim
+  // virtuellen Fahren. Ohne echte Kamera: Adressen, Garage-Zeile, Anzeige und ein Bild fuer die Aufnahme.
+  stAdd('Onboard-Kamera v1.5: Garage-Zeile, WLAN-Adresse, Anzeige im VF-Stil', () => {
+    const f = [];
+    if (typeof onbM5Url !== 'function') return { skip: true, mass: '75-onboard.js fehlt' };
+    // Adressen.
+    if (onbM5Url('192.168.1.50') !== 'http://192.168.1.50/stream') f.push('IP -> ' + onbM5Url('192.168.1.50'));
+    if (onbM5Url('http://cam.local:8080/mjpeg') !== 'http://cam.local:8080/mjpeg') f.push('volle Adresse veraendert');
+    if (onbM5Url('') !== '') f.push('leere Adresse');
+    const k = onbM5Kandidaten('192.168.1.50');
+    if (k.length !== 2 || k[1] !== 'http://192.168.1.50:81/stream') f.push('Kandidaten: ' + k.join(' '));
+    if (onbM5Kandidaten('192.168.1.50:80').length !== 1) f.push('mit Port trotzdem Port 81 versucht');
+    if (location.protocol === 'http:' && onbM5Gesperrt('http://192.168.1.50/stream')) f.push('ueber http gesperrt');
+    if (onbM5Gesperrt('https://cam/stream')) f.push('https-Bild gesperrt');
+    // Garage: rechts die Optionen, danach wieder im Halter.
+    const merk = { auf: garAufAuto, virt: garVirtuellAuf, kam: garKameraAuf };
+    try {
+      garVirtuellAuf = false; garKameraAuf = true; renderGarage();
+      const opt = $('onboard-optionen');
+      if (!opt || !opt.closest('.gar-a-rechts')) f.push('Optionen nicht rechts in der Garage');
+      const zeile = document.querySelector('#gar-list .gar-a-kamera button');
+      if (!zeile || zeile.getAttribute('aria-pressed') !== 'true') f.push('Garage-Zeile fehlt oder nicht gedrueckt');
+      if (!zeile || !zeile.querySelector('.wip-tag')) f.push('Garage-Zeile ohne WIP');
+      const sel = $('onboard-art');
+      if (!sel || [...sel.options].map((o) => o.value).join(',') !== 'usb,m5') f.push('Quelle-Wahl');
+      garKameraAuf = false; renderGarage();
+      if (!$('onboard-optionen') || $('onboard-optionen').parentElement !== $('onboard-halter')) f.push('Optionen nicht zurueck im Halter');
+      if ($('onboard-an') && !$('onboard-an').isConnected) f.push('Knopf verloren');
+    } finally {
+      garAufAuto = merk.auf; garVirtuellAuf = merk.virt; garKameraAuf = merk.kam; renderGarage();
+    }
+    // Anzeige: Kacheln wie beim virtuellen Fahren, gefuellt aus dem Cockpit.
+    const schirm = $('race-onboardscreen');
+    // v1.5.111: GT-Stil - Seitenleisten links/rechts, unten Tempo | Gang mit Drehzahlbalken.
+    if (!schirm || !schirm.querySelector('.onb-gt .onb-links .onb-posbox') || !schirm.querySelector('.onb-unten .onb-gang')
+        || !schirm.querySelector('.onb-rechts #onb-akku') || !schirm.querySelector('#onb-karte')) f.push('GT-Anzeige fehlt');
+    const merkG = $('race-gear-n') ? $('race-gear-n').textContent : null;
+    try {
+      if ($('race-gear-n')) $('race-gear-n').textContent = '3';
+      onbHudMalen();
+      if ($('onb-gang') && $('onb-gang').textContent !== '3') f.push('Gang nicht uebernommen: ' + $('onb-gang').textContent);
+      if (!$('onb-l-beste') || !$('onb-l-beste').textContent) f.push('Beschriftung leer');
+    } finally { if (merkG !== null) $('race-gear-n').textContent = merkG; }
+    // Ein Aufnahmebild ohne Quelle malt ohne Fehler (schwarz mit Anzeige).
+    try {
+      const c = document.createElement('canvas'); c.width = 1280; c.height = 720;
+      onbCanvasMalen({ canvas: c, ctx: c.getContext('2d') });
+      const px = c.getContext('2d').getImageData(640, 720 - 60, 1, 1).data;
+      if (px[0] + px[1] + px[2] === 0 && px[3] === 255) { /* Kachel ist dunkel, aber nicht reines Schwarz */ f.push('Tacho-Kachel fehlt im Video'); }
+    } catch (e) { f.push('Aufnahmebild: ' + e.message); }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'IP -> /stream (+ Port 81), Garage-Zeile mit Optionen rechts, Kacheln im VF-Stil, Aufnahmebild malt' };
+  });
+
+  stAdd('Onboard-Schirm: nur mit Kamera blaetterbar, ein Punkt je Schirm', () => {
+    if (!window.OMEGA_TEST || !OMEGA_TEST.onboardLage) return { skip: true, mass: 'Pruefhaken fehlt' };
+    const blaetter = OMEGA_TEST.schirmListeBlaetterbar();
+    const aktiv = OMEGA_TEST.onboardLage().aktiv;
+    const drin = blaetter.indexOf('onboard') >= 0;
+    cockpitPunkteMalen();
+    const punkte = document.querySelectorAll('#race-screen-dots i').length;
+    const ok = drin === aktiv && punkte === blaetter.length;
+    return { ok, mass: 'Kamera ' + (aktiv ? 'an' : 'aus') + ', Onboard ' + (drin ? 'blaetterbar' : 'nicht blaetterbar')
+                       + ', ' + punkte + ' Punkte fuer ' + blaetter.length + ' Schirme' };
   });
 
   // ---- Der Boxenschirm deckt die Instrumente und nicht die Lichter ----
@@ -5742,62 +5814,7 @@
   // ---- Korrektur nach 1.2.66: Gran-Werte haengen am MODUS, nicht am Preset ----
   // Vorher leitete setzeGran() sie aus presetAktiv() ab: direkt im Auswahlfeld "Gran" gewaehlt gab
   // es keine Gierregelung, und ein verstellter Regler oder das Laden schaltete sie ab.
-  stAdd('Gran Hybrismo: Werte nach Moduswahl, Reglerzug und Laden (am Modus, nicht am Preset)', () => {
-    const f = [];
-    const sel = $('phys-mode');
-    if (!sel || typeof GRAN_AN === 'undefined') return { skip: true, mass: 'phys-mode/GRAN_AN fehlt' };
-    const merk = presetRead();
-    const c = physEngine.config;
-    const granAn = (wo) => {
-      if (!c.gran || !c.pacejka) f.push(wo + ': gran/pacejka aus');
-      for (const k of Object.keys(GRAN_AN)) if (c[k] !== GRAN_AN[k]) { f.push(wo + ': ' + k + ' ' + c[k]); break; }
-    };
-    try {
-      // 1) Direkt im Auswahlfeld gewaehlt (ohne Preset-Knopf).
-      presetSet('phys-mode', 'physik');
-      presetSet('phys-mode', 'gran');
-      granAn('Auswahlfeld');
-      if (!physicsEnabled) f.push('Gran ohne Physik');
-      // 2) Einen Regler verstellen (dann ist kein Preset mehr "aktiv") und die alten Aufrufer laufen lassen.
-      const sc = $('setting-steer-calib');
-      presetSet('setting-steer-calib', Math.abs(parseFloat(sc.value) - 1.35) < 1e-9 ? 1.4 : 1.35);
-      setzeBrakeStealLast(); setzeGran();
-      granAn('nach Reglerzug');
-      // 3) Laden: das Feld steht schon auf 'gran' (kein change), die Sicherung ruft setzeGran().
-      granWerteSetzen(c, false);
-      sel.value = 'gran';
-      setzeGran();
-      granAn('nach Laden');
-      // 4) Wechsel weg von Gran schaltet alles ab.
-      presetSet('phys-mode', 'pacejka');
-      if (c.gran || c.granYawFeed !== 0 || c.granAeroK !== 0) f.push('nach Wechsel auf Pacejka noch Gran-Werte');
-      if (!c.pacejka) f.push('Pacejka aus');
-    } finally {
-      for (const [id, val] of Object.entries(merk)) presetSet(id, val);
-      setzeBrakeStealLast(); setzeGran();
-    }
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Auswahlfeld, Reglerzug und Laden: Gierregelung bleibt an, Wechsel schaltet sie ab' };
-  });
 
-  stAdd('Gran Hybrismo: Spieler 2 faehrt mit Physik und eigener Gierregelung', () => {
-    const f = [];
-    if (typeof spielerPhysikAn !== 'function' || !window.__presetSchnappschuss) return { skip: true, mass: 'spielerPhysikAn fehlt' };
-    if (!spielerPhysikAn({ motor: { config: { physModus: 'gran' } } })) f.push('Modus gran gilt nicht als Physik');
-    if (!spielerPhysikAn({ motor: { config: { physModus: 'pacejka' } } })) f.push('Modus pacejka gilt nicht als Physik');
-    if (spielerPhysikAn({ motor: { config: { physModus: 'aus' } } })) f.push('RC gilt als Physik');
-    const vorher = { gran: physEngine.config.gran, modus: $('phys-mode').value };
-    if (window.__presetSchnappLeeren) window.__presetSchnappLeeren();
-    const snap = window.__presetSchnappschuss('gran');
-    if (!snap) f.push('kein Schnappschuss');
-    else {
-      if (snap.modus !== 'gran') f.push('Schnappschuss-Modus ' + snap.modus);
-      if (!snap.config.gran || !snap.config.pacejka) f.push('Schnappschuss ohne gran/pacejka');
-      if (snap.config.granYawFeed !== GRAN_AN.granYawFeed || snap.config.granAeroK !== GRAN_AN.granAeroK) f.push('Schnappschuss ohne Gran-Werte');
-    }
-    if (physEngine.config.gran !== vorher.gran || $('phys-mode').value !== vorher.modus) f.push('Spieler 1 wurde vom Schnappschuss veraendert');
-    if (window.__presetSchnappLeeren) window.__presetSchnappLeeren();
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'gran rechnet mit Physik, Schnappschuss traegt die Gran-Werte, Spieler 1 unberuehrt' };
-  });
 
   // ---- Korrektur nach 1.2.66 (BESTELLT: Latenz): NPC-Folgen reichen nur GEAENDERTE Befehle durch ----
   // 1.2.50 liess in Einpark-/Haltefolgen jeden Takt am Verwerfen vorbei, und writeInFlight fiel,
@@ -6010,139 +6027,10 @@
     return Math.abs(brems.servo) / Math.max(1e-6, Math.abs(roll.servo));
   }
 
-  stAdd('Fahrgefuehl v1.3.5: Gran Hybrismo stabiler als Assetto Carrera (Grenzgrip, Gier beim Lupfen)', () => {
-    const f = [];
-    if (!window.__presetValues('gran') || !window.__presetValues('acc')) return { ok: false, mass: 'Presets gran/acc fehlen' };
-    const gH = fgGrenze('gran', 85), gA = fgGrenze('acc', 85), gP = fgGrenze('propacejka', 85);
-    if (!(gH > gA + 10)) f.push('Grenzgrip Hybrismo ' + gH + ' nicht ueber Assetto ' + gA);
-    if (!(gH > gP + 20)) f.push('Hybrismo ' + gH + ' nicht deutlich ueber Pacejka ' + gP);
-    const lH = fgLupfen('gran'), lA = fgLupfen('acc');
-    if (!(lA.gier > lH.gier + 0.2)) f.push('Lupfen: Assetto ' + lA.gier.toFixed(2) + ' nicht deutlich ueber Hybrismo ' + lH.gier.toFixed(2));
-    if (!(lH.gier < 1.15)) f.push('Hybrismo dreht beim Lupfen ein: ' + lH.gier.toFixed(2));
-    if (!(lA.ueber > 0.05)) f.push('Assetto: beim Lupfen kommt das Heck nicht (' + lA.ueber.toFixed(2) + ')');
-    if (lA.leistung) f.push('Lupfen als Leistungsuebersteuern gemeldet');
-    return { ok: !f.length, mass: f.length ? f.join(' | ')
-      : 'Grenztempo Hybrismo ' + gH + ', Assetto ' + gA + ', Pacejka ' + gP + ' km/h; Lupfen Gier x' + lH.gier.toFixed(2)
-        + ' gegen x' + lA.gier.toFixed(2) + ' (Heck ' + lA.ueber.toFixed(2) + ')' };
-  });
 
-  stAdd('Fahrgefuehl v1.3.5: Assetto Carrera mit Reifenfenster, Trail-Braking-Gier, Untersteuern beim Ueberfahren', () => {
-    const f = [];
-    const aK = fgGrenze('acc', 20), aW = fgGrenze('acc', 85), aH = fgGrenze('acc', 118);
-    const hK = fgGrenze('gran', 20), hW = fgGrenze('gran', 85), hH = fgGrenze('gran', 118);
-    if (!(aW > aK + 30)) f.push('Assetto kalt ' + aK + ' nicht deutlich unter warm ' + aW);
-    if (!(aW > aH + 30)) f.push('Assetto ueberhitzt ' + aH + ' nicht deutlich unter warm ' + aW);
-    const spA = aW - Math.min(aK, aH), spH = hW - Math.min(hK, hH);
-    if (!(spH < spA / 2)) f.push('Hybrismo-Temperatureinfluss ' + spH + ' nicht klein gegen Assetto ' + spA);
-    const tA = fgTrail('acc'), tH = fgTrail('gran');
-    if (!(tA > 1.05 && tA > tH + 0.03)) f.push('Trail-Braking: Assetto x' + tA.toFixed(3) + ', Hybrismo x' + tH.toFixed(3));
-    const uA = fgFahre(fgMotor('acc'), [{ takte: 30, kmh: 290, gas: 0.4, lenk: 1 }], 85)[0];
-    const uH = fgFahre(fgMotor('gran'), [{ takte: 30, kmh: 290, gas: 0.4, lenk: 1 }], 85)[0];
-    if (!(uA.servo < uH.servo - 0.05 && uA.uV > 1.2)) f.push('Ueberfahren: Assetto Servo ' + uA.servo.toFixed(2) + ' (vorn ' + uA.uV.toFixed(2) + '), Hybrismo ' + uH.servo.toFixed(2));
-    return { ok: !f.length, mass: f.length ? f.join(' | ')
-      : 'Grenztempo Assetto kalt/warm/heiss ' + aK + '/' + aW + '/' + aH + ', Hybrismo ' + hK + '/' + hW + '/' + hH
-        + '; Trail x' + tA.toFixed(2) + ' gegen x' + tH.toFixed(2) + '; 290 km/h Servo ' + uA.servo.toFixed(2) + ' gegen ' + uH.servo.toFixed(2) };
-  });
 
-  stAdd('Fahrgefuehl v1.3.5: granStep-Korrekturen (Tempo-Lenkung und Zentrierung am Servo, degressive Last, Schalter Uebersteuern)', () => {
-    const f = [];
-    // Tempo-Lenkung wirkt am uebertragenen Winkel.
-    const s0 = fgFahre(fgMotor('gran', { granLenkTempo: 0 }), [{ takte: 25, kmh: 200, gas: 0.2, lenk: 0.6 }], 85)[0].servo;
-    const s1 = fgFahre(fgMotor('gran', { granLenkTempo: 1 }), [{ takte: 25, kmh: 200, gas: 0.2, lenk: 0.6 }], 85)[0].servo;
-    if (!(s1 < s0 * 0.85)) f.push('Tempo-Lenkung nicht am Servo (' + s0.toFixed(3) + ' -> ' + s1.toFixed(3) + ')');
-    // Selbstzentrierung wirkt am Servo: Stick los, zwei Takte spaeter.
-    const z = (zf) => fgFahre(fgMotor('gran', { granZentrier: zf }), [{ takte: 30, kmh: 150, gas: 0.3, lenk: 0.8 }, { takte: 1, kmh: 150, gas: 0.3, lenk: 0 }], 85)[1].servo;
-    const z0 = z(0), z1 = z(0.3);
-    if (!(Math.abs(z1) < Math.abs(z0) * 0.8)) f.push('Zentrierung nicht am Servo (' + z0.toFixed(3) + ' / ' + z1.toFixed(3) + ')');
-    // Degressive Lastempfindlichkeit: unter Bremsen ist hinten entlastet; mit k behaelt es mehr Griff.
-    const hk = (k) => fgFahre(fgMotor('acc', { granLastEmpf: k }), [{ takte: 25, kmh: 150, bremse: 0.6, lenk: 1 }], 85)[0].uH;
-    const h0 = hk(0), h3 = hk(0.3);
-    if (!(h3 < h0)) f.push('Lastempfindlichkeit nicht degressiv (hinten ' + h0.toFixed(3) + ' -> ' + h3.toFixed(3) + ')');
-    // Schalter Uebersteuern: Hybrismo ohne Schalter kein Heck, mit Schalter schon.
-    const vg = [{ takte: 30, kmh: 150, gas: 1, lenk: 0.8 }];
-    const hAus = fgFahre(fgMotor('gran', { pacejkaUebersteuern: false }), vg, 85)[0];
-    const hAn = fgFahre(fgMotor('gran', { pacejkaUebersteuern: true }), vg, 85)[0];
-    if (hAus.maxUeber !== 0) f.push('Hybrismo ohne Schalter: Heck ' + hAus.maxUeber.toFixed(2));
-    if (!(hAn.maxUeber > 0)) f.push('Hybrismo mit Schalter: kein Heck');
-    // Assetto: Heck im Modus, aber ohne Schalter haelt der Rutsch nicht ohne Stick.
-    const a = fgFahre(fgMotor('acc', { pacejkaUebersteuern: false }), [vg[0], { takte: 16, kmh: 150, gas: 1, lenk: 0 }], 85);
-    if (!(a[0].maxUeber > 0.05)) f.push('Assetto: Heck kommt unter Vollgas nicht (' + a[0].maxUeber.toFixed(2) + ')');
-    if (!(a[1].ueber < 0.02 && Math.abs(a[1].servo) < 0.05)) f.push('Assetto ohne Schalter lenkt ohne Stick weiter (' + a[1].ueber.toFixed(2) + ', Servo ' + a[1].servo.toFixed(2) + ')');
-    return { ok: !f.length, mass: f.length ? f.join(' | ')
-      : 'Tempo-Lenkung ' + s0.toFixed(2) + ' -> ' + s1.toFixed(2) + ', Zentrierung ' + z0.toFixed(2) + ' -> ' + z1.toFixed(2)
-        + ', hinten unter Bremse ' + h0.toFixed(2) + ' -> ' + h3.toFixed(2) + ', Schalter wirkt, kein Halten ohne Schalter' };
-  });
 
-  stAdd('Fahrgefuehl v1.3.5: Alias "Gran Accelerato" laedt, Assetto Carrera ueberall wie Gran (WIP, Physik, Listen)', () => {
-    const f = [];
-    const sel = $('phys-mode');
-    const merk = presetRead();
-    const merkZ = presetZuletzt;
-    let merkZS = null;
-    try { merkZS = localStorage.getItem(PRESET_ZULETZT_STORE); } catch (e) { /* privat */ }
-    try {
-      applyPreset('Gran Accelerato');
-      if (presetAktiv() !== 'gran' || sel.value !== 'gran' || physEngine.config.granArt !== 'gran') f.push('Preset-Alias: ' + presetAktiv() + '/' + sel.value);
-      presetSet('phys-mode', 'physik');
-      if (presetPruefen({ 'phys-mode': 'Gran Accelerato' }).bad.length) f.push('Sicherung mit "Gran Accelerato" gilt als unbrauchbar');
-      presetSet('phys-mode', 'Gran Accelerato');
-      if (sel.value !== 'gran' || !physEngine.config.gran || physEngine.config.granArt !== 'gran') f.push('Modus-Alias: ' + sel.value);
-      presetSet('phys-mode', 'acc');
-      if (!physicsEnabled || !physEngine.config.pacejka || physEngine.config.granArt !== 'acc' || physEngine2.config.granArt !== 'acc') f.push('acc: Physik/Pacejka/Werte fehlen');
-      for (const k of Object.keys(GRAN_WERTE.acc)) if (physEngine.config[k] !== GRAN_WERTE.acc[k]) { f.push('acc-Wert ' + k); break; }
-    } finally {
-      for (const [id, val] of Object.entries(merk)) presetSet(id, val);
-      setzeBrakeStealLast(); setzeGran();
-      presetZuletzt = merkZ;
-      try { if (merkZS === null) localStorage.removeItem(PRESET_ZULETZT_STORE); else localStorage.setItem(PRESET_ZULETZT_STORE, merkZS); } catch (e) { /* privat */ }
-    }
-    if (!physModusIstPhysik('acc') || !spielerPhysikAn({ motor: { config: { physModus: 'acc' } } })) f.push('acc gilt nicht als Physik');
-    const oG = sel.querySelector('option[value="gran"]'), oA = sel.querySelector('option[value="acc"]');
-    if (!oG || oG.textContent.trim() !== 'Gran Hybrismo (WIP)') f.push('Option gran: ' + (oG && oG.textContent));
-    if (!oA || oA.textContent.trim() !== 'Assetto Carrera (WIP)') f.push('Option acc fehlt');
-    if (!PRESETS.gran.wip || !PRESETS.acc.wip || PRESETS.gran.label !== 'Gran Hybrismo' || PRESETS.acc.label !== 'Assetto Carrera') f.push('Labels/WIP');
-    const knopfAcc = document.getElementById('preset-' + 'acc');   // gebaut aus PRESETS (renderPresetButtons)
-    if (!knopfAcc || !knopfAcc.querySelector('.wip-tag')) f.push('Preset-Knopf Assetto ohne WIP');
-    if (!PRESETS_BREMSSTEAL_LAST.includes('acc')) f.push('acc fehlt im Bremssteal');
-    if (String(chAnwenden).indexOf('GRAN_MODI.includes(pm)') < 0) f.push('Challenges reichen acc nicht durch');
-    const fg = MEISTER_GLOBAL.find((g) => g.id === 'fahrgefuehl');
-    if (!fg || !fg.w.some((w) => w[0] === 'acc') || !fg.w.some((w) => w[0] === 'gran')) f.push('Meisterschaft ohne gran/acc');
-    if (!VF_HANDLING_MODI.some((m) => m.id === 'acc') || vfHandlingName('gran') !== t('Gran Hybrismo')) f.push('Virtuell: Handling-Modi');
-    if (String(startGhost).indexOf('granWerteSetzen(e.config, false)') < 0) f.push('NPCs rechnen granStep');
-    if (window.__presetSchnappLeeren) window.__presetSchnappLeeren();
-    const snap = window.__presetSchnappschuss('acc');
-    if (!snap || snap.modus !== 'acc' || snap.config.granArt !== 'acc') f.push('Schnappschuss acc');
-    if (window.__presetSchnappLeeren) window.__presetSchnappLeeren();
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Gran Accelerato laedt als Gran Hybrismo, acc in Auswahl, Presets, Spielern, Challenges, Meisterschaft, Virtuell' };
-  });
 
-  stAdd('Fahrgefuehl v1.3.5: virtuelles Fahren - Reifentemperatur im Gleichgewicht, Abtrieb, zwei Profile', () => {
-    const f = [];
-    // Zuegig fahren (40 m/s, 7 m/s^2) bringt die Reifen ins Fenster, Dauerangriff ueberhitzt, Bummeln kuehlt.
-    let T = 0;
-    for (let i = 0; i < 3600; i++) T = vfReifenTemp(T, 40, 7, 1 / 60);
-    if (!(T > 0.5 && T < 0.7)) f.push('zuegig: ' + T.toFixed(2) + ' nicht im Fenster');
-    let Th = T;
-    for (let i = 0; i < 3600; i++) Th = vfReifenTemp(Th, 60, 14, 1 / 60);
-    if (!(Th > 0.8)) f.push('Angriff ueberhitzt nicht (' + Th.toFixed(2) + ')');
-    let Tk = Th;
-    for (let i = 0; i < 3600; i++) Tk = vfReifenTemp(Tk, 10, 0, 1 / 60);
-    if (!(Tk < 0.3)) f.push('kuehlt nicht ab (' + Tk.toFixed(2) + ')');
-    const gA = [0, 0.575, Th].map((x) => vfReifenGriff(x, 'acc')), gH = [0, 0.575, Th].map((x) => vfReifenGriff(x, 'gran'));
-    if (!(gA[1] > gA[0] + 0.1 && gA[1] > gA[2] + 0.05)) f.push('Assetto-Fenster ' + gA.map((x) => x.toFixed(2)).join('/'));
-    if (!((gH[1] - Math.min(gH[0], gH[2])) < (gA[1] - Math.min(gA[0], gA[2])) / 2)) f.push('Hybrismo-Temperatur zu stark');
-    let merk = null;
-    try { merk = localStorage.getItem(VF_HANDLING_STORE); } catch (e) { /* privat */ }
-    try {
-      vfHandlingSetzen('gran'); const pH = vfHandlingProfil(VF_GT3);
-      vfHandlingSetzen('acc'); const pA = vfHandlingProfil(VF_GT3);
-      if (!(pH.kV > 0 && pH.kH > 0 && pA.kV > 0 && pA.kH > 0)) f.push('Standardauto ohne Abtrieb');
-      if (!(pH.muH > pA.muH && pH.yawDamp > pA.yawDamp && pA.h > pH.h)) f.push('Profile nicht Hybrismo griffig/gedaempft, Assetto Lastwechsel');
-    } finally { if (merk === null) { try { localStorage.removeItem(VF_HANDLING_STORE); } catch (e) { /* privat */ } vfHandlingCache = null; } else vfHandlingSetzen(merk); }
-    return { ok: !f.length, mass: f.length ? f.join(' | ')
-      : 'zuegig ' + T.toFixed(2) + ', Angriff ' + Th.toFixed(2) + ', Bummeln ' + Tk.toFixed(2) + '; Assetto-Griff kalt/warm/heiss '
-        + gA.map((x) => x.toFixed(2)).join('/') + ', Hybrismo ' + gH.map((x) => x.toFixed(2)).join('/') };
-  });
 
   // ---- v1.3.5 BESTELLT: "MAX-NPC: schnellere Beschleunigung und bessere Bremsen, naemlich Arcade. Ansonsten
   // sollen NPCs mit Sim+-Beschleunigungs- und Bremsparametern fahren." ----
@@ -6341,6 +6229,12 @@
         if (w.join(',') !== '1,1,1,0.52,0.9,1') f.push('Profil (am Kurventeil) ' + w.join(','));
         if (ghostStufeFaktor(auto(1)) !== 1) f.push('ghostStufeFaktor nimmt das MAX-Profil nicht');
         if (ghostStufeFaktor({ role: 'ghost', ghostStufe: 2, tileCode: TILE_TYPE.STRAIGHT, ghost: {} }) === 1) f.push('Stufe schnell faehrt MAX');
+        // v1.5.158: Bremsrampe vor der Haarnadel (S G G G H G): 3 Teile davor <= 0,65, 2 Teile davor <= 0,47.
+        ghostCfg.maxBremspunkt = 'schiene';
+        currentTrackTiles = [TILE_TYPE.START, TILE_TYPE.STRAIGHT, TILE_TYPE.STRAIGHT, TILE_TYPE.STRAIGHT,
+                             TILE_TYPE.HAIRPIN, TILE_TYPE.STRAIGHT].map((type) => ({ type }));
+        const h = [0, 1, 2, 3].map((i) => +ghostMaxTempo(auto(i)).toFixed(2));
+        if (!(h[0] === 1 && h[1] <= 0.65 + 1e-9 && h[2] <= 0.47 + 1e-9 && h[3] <= 0.35 + 1e-9)) f.push('Bremsrampe vor der Haarnadel ' + h.join(','));
       } finally { ortStimmt = merkOrt; }
       // Haarnadel: weiter Abzug, Deckel und Boden; Gelb/Formation wie alle.
       const src = String(ghostTick);
@@ -6657,6 +6551,14 @@
       sp.funkPrioNachVerbindenBis = 0; npc.funkPrioNachVerbindenBis = 0; sc.funkPrioNachVerbindenBis = 0;
       raceState = 'racing';
       if (funkPrioRolleAnwenden({ autos: [sp, npc, sc] }) !== -1 || aufrufe.length) f.push('Rollenwechsel verhandelt waehrend der Fahrt');
+      // 5b. v1.5.3: HOCHSTUFEN gilt sofort, auch waehrend der Fahrt (ein NPC wird Spieler 2 und haengt sonst
+      // ohne Ampel dauerhaft auf AUSGEWOGEN). Das Herabstufen des NPCs wartet weiter.
+      sp.funkPrioStufe = 'ausgewogen';
+      const nHoch = funkPrioRolleAnwenden({ autos: [sp, npc, sc] });
+      if (nHoch !== 1 || aufrufe.length !== 1 || aufrufe[0].id !== 'st-lp-sp' || aufrufe[0].stufe !== 'hoch') {
+        f.push('Hochstufen waehrend der Fahrt: ' + nHoch + ' Anfragen, ' + JSON.stringify(aufrufe));
+      }
+      aufrufe.length = 0;
       raceState = 'idle';
       const n = funkPrioRolleAnwenden({ autos: [sp, npc, sc] });
       if (n !== 1 || stufe('st-lp-npc') !== 'ausgewogen') f.push('Rollenwechsel: ' + n + ' Anfragen, NPC ' + stufe('st-lp-npc'));
@@ -9906,15 +9808,16 @@
   // WARUM DAS EINE PRUEFUNG WERT IST: wer den Faktor spaeter "aufraeumt" und den falschen
   // Reifen pauschal langsamer macht, loescht diese Eigenschaft, ohne es zu merken. Sie steht
   // hier als Zusicherung, nicht als Kuriositaet.
-  stAdd('NPC-Regenreifen: bei leichtem Regen sind Slicks noch vorn', () => {
+  stAdd('NPC-Regenreifen: unter der halben Front sind Slicks noch vorn, darueber im Nachteil (binaer, v1.5.9)', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.reifenTempoProbe) {
       return { skip: true, mass: 'reifenTempoProbe nicht vorhanden' };
     }
-    const leicht = OMEGA_TEST.reifenTempoProbe(-0.5, { pitAn: true });
+    // v1.5.9: der Griff ist binaer (wxGriff): trocken unter der halben Front (Staerke < 0,5), nass darueber.
+    const leicht = OMEGA_TEST.reifenTempoProbe(-0.6, { pitAn: true });
     const voll = OMEGA_TEST.reifenTempoProbe(0, { pitAn: true });
     if (!leicht || !voll) return { skip: true, mass: 'kein Faktor' };
     const fehler = [];
-    // Bei halber Front: der Slick mindestens gleichwertig.
+    // Unter der halben Front (Staerke 0,4): trocken, der Slick mindestens gleichwertig.
     if (!(leicht.faktor['rain/trocken'] >= leicht.faktor['rain/regen'] - 1e-4)) {
       fehler.push('bei halber Front ist der Slick schon im Nachteil ('
                   + leicht.faktor['rain/trocken'] + ' gegen '
@@ -9926,6 +9829,9 @@
     }
     // Und die Naesse muss sich zwischen den beiden Messungen ueberhaupt geaendert haben,
     // sonst prueft der Test zwei identische Laeufe.
+    if (!(leicht.nass === 0 && voll.nass === 1)) {
+      fehler.push('Naesse nicht binaer: ' + leicht.nass + ' / ' + voll.nass);
+    }
     if (!(voll.nass > leicht.nass + 0.5)) {
       fehler.push('die Rampe bewegt sich nicht (' + leicht.nass + ' -> ' + voll.nass + ')');
     }
@@ -11522,12 +11428,22 @@
     if (!window.OMEGA_TEST || !OMEGA_TEST.reglerTexteProbe) {
       return { skip: true, mass: 'reglerTexteProbe nicht vorhanden' };
     }
-    const r = OMEGA_TEST.reglerTexteProbe();
+    // v1.5.3: ENGLISCH IST VORGABE, der Lauf selbst ist deutsch. Hat die Seite nicht deutsch geladen, stehen
+    // sprachabhaengige Anzeigen ("voll ab 90%", "aus", Dezimalkomma) noch in der Ladesprache, bis ihr Regler
+    // einmal gemeldet hat - das waere hier ein Uebersetzungs- und kein Reglerfehler. Die Probe meldet jeden
+    // Regler einmal; bleibt eine zweite Probe ohne Abweichung, war es nur die Sprache. Mit deutscher
+    // Ladesprache (gespeicherte Wahl) gilt die strenge Pruefung "schon beim Laden" unveraendert.
+    let r = OMEGA_TEST.reglerTexteProbe();
     if (!r || !r.geprueft) return { skip: true, mass: 'keine Regler mit Zahlenanzeige' };
+    let sprachHinweis = '';
+    if (r.falsch.length && stLadeSprache && stLadeSprache !== 'de') {
+      const r2 = OMEGA_TEST.reglerTexteProbe();
+      if (r2 && !r2.falsch.length) { sprachHinweis = ' (' + r.falsch.length + ' nur in der Ladesprache ' + stLadeSprache + ')'; r = r2; }
+    }
     const fehler = r.falsch.map((x) => x.id + ' steht auf ' + x.stand
                                      + ', zeigt "' + x.vorher + '" statt "' + x.nachher + '"');
     return { ok: !fehler.length,
-             mass: r.geprueft + ' Zahlenanzeigen geprueft, ' + r.falsch.length + ' falsch'
+             mass: r.geprueft + ' Zahlenanzeigen geprueft, ' + r.falsch.length + ' falsch' + sprachHinweis
                  + (fehler.length ? ' || ' + fehler.join('; ') : '') };
   });
 
@@ -14604,13 +14520,64 @@
     return { ok: !f.length, mass: f.length ? f.join('; ') : 'Karte, 2 Zeilen, Histogramm, Warten abgebrochen' };
   });
 
-  stAdd('Fahren: Motorsound nur noch in der Garage, Fahrgefuehl und Start fuellen die Reihe', () => {
+  // v1.5: dazu "Drive Virtually" zwischen Meisterschaft und Start (ein Drittel der alten Startbreite, Start zwei Drittel).
+  stAdd('Fahren: Motorsound nur noch in der Garage, Meisterschaft, Virtuell fahren und Start fuellen die Reihe', () => {
     const f = [];
     if (document.getElementById(['fa', 'motor'].join('-'))) f.push('Motorsound-Kachel noch da');
-    if (!$('fa-profil') || !$('fa-start')) f.push('Fahrgefuehl oder Start fehlt');
+    if (!$('fa-profil') || !$('fa-start') || !$('fa-virtuell')) f.push('Meisterschaft, Virtuell oder Start fehlt');
     const unten = document.querySelector('.k-fahren-unten');
-    if (unten && getComputedStyle(unten).gridTemplateColumns.split(' ').length !== 2) f.push('Reihe hat nicht zwei Spalten');
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Fahrgefuehl 1/3, Start 2/3' };
+    const kinder = unten ? [...unten.children].map((x) => x.id) : [];
+    if (kinder.join(',') !== 'fa-profil,fa-virtuell,fa-start') f.push('Reihenfolge ' + kinder.join(','));
+    if (unten && unten.offsetWidth > 300 && getComputedStyle(unten).gridTemplateColumns.split(' ').length === 3) {
+      const v = $('fa-virtuell').offsetWidth, st = $('fa-start').offsetWidth;
+      if (Math.abs(st / v - 2) > 0.2) f.push('Start/Virtuell ' + (st / v).toFixed(2) + ' statt 2');
+    }
+    if (!$('fa-virtuell').querySelector('.wip-tag')) f.push('Virtuell ohne WIP');
+    if (!$('fa-virtuell').classList.contains('k-start') || $('fa-virtuell').querySelector('.k-kk, .k-kopf')) f.push('Virtuell nicht im Stil der Startkachel');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Meisterschaft | Virtuell (1/3 der alten Startbreite) | Start (2/3)' };
+  });
+
+  stAdd('Fahren v1.5: Symbole fuer zweiten Laptop und Onboard-Kamera auf der Garagenkachel', () => {
+    const f = [];
+    const merkOffen = zl.offen, merkZ = onbZ;
+    try {
+      zl.offen = false; onbZ = null; konsoleFahrenGeraete();
+      if (!$('fa-auto-geraete').hidden) f.push('Symbole ohne Verbindung sichtbar');
+      zl.offen = true; konsoleFahrenGeraete();
+      if ($('fa-auto-geraete').hidden || $('fa-auto-geraete').querySelectorAll('i').length !== 1) f.push('Laptop-Symbol fehlt');
+      // Kamera mit Bild: Attrappe des WLAN-Bilds.
+      onbZ = { m5: { url: 'x', bild: true } };   // seit 1.5.141: aktiv ab dem ersten Bild (m5.bild)
+      const img = $('onboard-bild');
+      const merkW = Object.getOwnPropertyDescriptor(img, 'naturalWidth');
+      Object.defineProperty(img, 'naturalWidth', { configurable: true, get: () => 640 });
+      try { konsoleFahrenGeraete(); } finally { if (merkW) Object.defineProperty(img, 'naturalWidth', merkW); else delete img.naturalWidth; }
+      if ($('fa-auto-geraete').querySelectorAll('i').length !== 2) f.push('Kamera-Symbol fehlt');
+    } finally { zl.offen = merkOffen; onbZ = merkZ; konsoleFahrenGeraete(); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'ohne Verbindung keine Symbole, Laptop und Kamera je ein Symbol' };
+  });
+
+  stAdd('Showroom v1.5: Neigen des Telefons setzt Glanz und Drehung der Karten', () => {
+    const f = [];
+    let roh = null;
+    try { roh = localStorage.getItem(SESSION_STORE); } catch (e) { roh = null; }
+    const probe = { role: 'ghost', device: { id: 'probe-neig' }, alias: 'Neig', colorId: 'rot', sim: false, testSenke: [], probe: true };
+    try {
+      garage.push(probe);
+      showOeffnen();
+      const k = $('show-dialog').querySelector('.show-karte');
+      if (!k) { f.push('keine Karte'); return { ok: false, mass: f.join(' | ') }; }
+      showNeigungAnwenden(30, 75);
+      if (!k.classList.contains('aktiv') || k.style.getPropertyValue('--mx') !== '100.0%' || k.style.getPropertyValue('--my') !== '100.0%') f.push('Neigung rechts/vorn: ' + k.style.getPropertyValue('--mx') + '/' + k.style.getPropertyValue('--my'));
+      showNeigungAnwenden(-30, 15);
+      if (k.style.getPropertyValue('--mx') !== '0.0%' || k.style.getPropertyValue('--ry') !== '-9.00deg') f.push('Neigung links: ' + k.style.getPropertyValue('--mx') + '/' + k.style.getPropertyValue('--ry'));
+    } finally {
+      showFenster.hidden = true;
+      const i = garage.indexOf(probe); if (i >= 0) garage.splice(i, 1);
+      try { if (roh === null) localStorage.removeItem(SESSION_STORE); else localStorage.setItem(SESSION_STORE, roh); } catch (e) { /* privat */ }
+      renderGarage();
+      if (typeof menuNavEnsureContext === 'function') menuNavEnsureContext();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'rechts/vorn 100 %, links 0 % mit -9 Grad, Glanz an' };
   });
 
   stAdd('ACC-Menü: Streckenfoto ersetzt im Ausdruck-Modus die Karte im Cockpit', () => {
@@ -15137,27 +15104,38 @@
   }
 
   // BESTELLT: Editor-Option "Boxengasse erzwingen" - nur waehlbar mit Box in "Meine Teile".
-  stAdd('Editor v1.3.5: Boxengasse erzwingen baut ein Boxenteil ein, ohne Box gesperrt', () => {
+  // v1.5 BESTELLT: als Anzahl, Vorgabe = so viele wie unter "Meine Teile".
+  stAdd('Editor v1.5: Boxengassen als Anzahl (Vorgabe Bestand), genau so viele eingebaut, ohne Box gesperrt', () => {
     const f = [];
-    const mitBox = stBestand(['grund'], { [TILE_TYPE.PIT]: 1 });
-    stZufallMit(mitBox, { box: true, bruecken: 0 }, (ok, tiles) => {
-      if (!ok) f.push('mit Box keine Strecke');
-      else if (!tiles.some((x) => x.type === TILE_TYPE.PIT)) f.push('Strecke ohne Boxenteil');
-      if ($('track-opt-box').disabled) f.push('mit Box im Bestand gesperrt');
-    });
-    stZufallMit(stBestand(['grund']), { box: true, bruecken: 0 }, (ok, tiles) => {
-      const kb = $('track-opt-box');
-      if (!kb.disabled) f.push('ohne Box waehlbar');
-      if (kb.checked) f.push('ohne Box angehakt');
-      if ($('track-opt-box-hinweis').hidden) f.push('kein Hinweis ohne Box');
-      if (!kb.closest('label').classList.contains('tp-opt-aus')) f.push('nicht ausgegraut');
-      if (!ok) f.push('ohne Box baut der Zufall gar nicht mehr');
-    });
+    const merkBoxen = trackEditorOpt.boxen;
+    try {
+      trackEditorOpt.boxen = null;
+      const mitBox = stBestand(['grund'], { [TILE_TYPE.PIT]: 1 });
+      stZufallMit(mitBox, { box: false, bruecken: 0, boxen: null }, (ok, tiles) => {
+        if (!ok) f.push('mit Box keine Strecke');
+        else if (tiles.filter((x) => x.type === TILE_TYPE.PIT).length !== 1) f.push('Vorgabe: nicht genau die eine Box aus dem Bestand');
+        const bx = $('track-opt-boxen');
+        if (!bx || bx.disabled || bx.value !== '1' || bx.max !== '1') f.push('Feld: ' + (bx && [bx.disabled, bx.value, bx.max].join('/')));
+      });
+      stZufallMit(mitBox, { box: false, bruecken: 0, boxen: 0 }, (ok, tiles) => {
+        if (!ok) f.push('mit 0 Boxengassen keine Strecke');
+        else if (tiles.some((x) => x.type === TILE_TYPE.PIT)) f.push('0 gewaehlt, trotzdem Box');
+      });
+      stZufallMit(stBestand(['grund']), { box: false, bruecken: 0, boxen: null }, (ok) => {
+        const bx = $('track-opt-boxen');
+        if (!bx.disabled) f.push('ohne Box waehlbar');
+        if ($('track-opt-box-hinweis').hidden) f.push('kein Hinweis ohne Box');
+        if (!$('track-opt-boxen-gruppe').classList.contains('tp-opt-aus')) f.push('nicht ausgegraut');
+        if (!ok) f.push('ohne Box baut der Zufall gar nicht mehr');
+      });
+    } finally { trackEditorOpt.boxen = merkBoxen; }
     if (!document.querySelector('#track-opt-panel .wip-tag')) f.push('WIP fehlt');
-    for (const k of ['Boxengasse erzwingen', 'Erst unter Meine Teile eine Boxengasse eintragen', 'Zufall: Boxengasse mit diesen Teilen nicht möglich']) {
+    for (const k of ['Boxengassen', 'Erst unter Meine Teile eine Boxengasse eintragen', 'Zufall: {n} Boxengassen mit diesen Teilen nicht möglich']) {
       if (!I18N_EN[k] || !I18N_ES[k]) f.push('Uebersetzung fehlt: ' + k);
     }
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'mit Box: Boxenteil drin; ohne Box: gesperrt, ausgegraut, Hinweis' };
+    // Tutorial: Schritte zu Bruecken und Boxengassen.
+    if (!K_EDITOR.some((x) => x.titel === 'Brücken') || !K_EDITOR.some((x) => x.titel === 'Boxengassen')) f.push('Editor-Tutorial ohne Bruecken/Boxengassen');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Vorgabe 1 = Bestand, 0 ohne Box, ohne Bestand gesperrt mit Hinweis, Tutorial mit Bruecken und Boxengassen' };
   });
 
   // BESTELLT: Editor-Option "Bruecken" als Anzahl (Standard 0) mit Pruefung, ob es geht.
@@ -18089,17 +18067,23 @@
   // drehen ... Wenn ich den rechten Stick dann reindruecke, soll die Kamera wieder die Standardansicht
   // haben." Wie beim Bildlauf-Test ruft der Test pollGamepad() selbst mit einem gefaelschten Pad; die
   // virtuelle Fahrt laeuft dafuer nicht (nur VF.aktiv), die Drehung rechnet vfDrehSchritt wie vfKamera.
-  stAdd('Virtuell: rechter Stick dreht die Kamera, Blick bleibt, R3 setzt zurueck oder wechselt, bildratenunabhaengig (WIP)', () => {
+  // Seit PR 4 von gnen54 ist R3 (Lichthupen-Belegung) auch virtuell die Lichthupe; die Kamera hat eine eigene Taste
+  // (bindings.vfkamera, ab Werk unbelegt). Der Test belegt sie kurz mit Knopf 17 und prueft beides.
+  stAdd('Virtuell: rechter Stick dreht die Kamera, Blick bleibt, Kamerataste setzt zurueck oder wechselt, R3 ist Lichthupe, bildratenunabhaengig (WIP)', () => {
     const f = [], grad = 180 / Math.PI;
     const echt = navigator.getGamepads;
     const merk = { aktiv: VF.aktiv, kamera: VF.kamera, dreh: VF.dreh ? Object.assign({}, VF.dreh) : null, stick: VF.stick, kam: VF.kam, tasten: VF.tasten };
     let gespeichert = null;
     try { gespeichert = localStorage.getItem(VF_KAMERA_STORE); } catch (e) { /* privat */ }
     const pad = { id: 'Selbsttest (STANDARD GAMEPAD)', index: 0, connected: true, mapping: 'standard', timestamp: performance.now(),
-      axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })) };
-    const r3 = bindings.lightflash;
+      axes: [0, 0, 0, 0], buttons: Array.from({ length: 18 }, () => ({ pressed: false, touched: false, value: 0 })) };
+    const merkKamB = bindings.vfkamera;
+    bindings.vfkamera = { type: 'button', index: 17, label: 'Selbsttest' };
+    const r3 = bindings.vfkamera;
     const r3Knopf = r3 && r3.type === 'button' && pad.buttons[r3.index];
     const r3Setzen = (an) => { if (r3Knopf) pad.buttons[r3.index] = { pressed: an, touched: an, value: an ? 1 : 0 }; };
+    const lh = bindings.lightflash, lhKnopf = lh && lh.type === 'button' && lh.index < pad.buttons.length;
+    const lhSetzen = (an) => { if (lhKnopf) pad.buttons[lh.index] = { pressed: an, touched: an, value: an ? 1 : 0 }; };
     const stickFrei = ![2, 3].some((i) => Object.keys(bindings).some((k) => bindings[k] && bindings[k].type === 'axis' && bindings[k].index === i));
     const bild = (n, dt) => { for (let i = 0; i < n; i++) { pollGamepad(); const e = vfDrehEingabe(); vfDrehSchritt(vfDreh(), e[0], e[1], dt, vfDrehGrenzen(vfDrehArt(vfKameraId()))); } };
     let mass = '';
@@ -18140,8 +18124,19 @@
         // 3. R3 ungedreht: naechste Kamera wie bisher.
         r3Setzen(true); pollGamepad(); r3Setzen(false); pollGamepad();
         if (VF.kamera !== 'nah') f.push('R3 ungedreht wechselt nicht zur naechsten Kamera (' + VF.kamera + ')');
-        mass += ', R3 zurueck/wechselt';
-      } else mass += ', R3 nicht als Knopf belegt (uebersprungen)';
+        mass += ', Kamerataste zurueck/wechselt';
+      } else mass += ', Kamerataste nicht als Knopf belegt (uebersprungen)';
+      // 3b. R3 (Lichthupe) wechselt die Kamera nicht mehr, sondern laesst das Licht blinken.
+      if (lhKnopf) {
+        const kVor = VF.kamera, merkFlash = lightFx.flashUntil;
+        lightFx.flashUntil = 0;
+        lhSetzen(true); pollGamepad(); lhSetzen(false); pollGamepad();
+        if (VF.kamera !== kVor) f.push('R3 wechselt die Kamera (' + VF.kamera + ')');
+        if (!(lightFx.flashUntil > rennZeitJetzt())) f.push('R3 laesst das virtuelle Auto nicht blinken');
+        else if (!vfLichtMitHupe(false)) f.push('virtuelles Licht blinkt zu Beginn der Lichthupe nicht auf');
+        lightFx.flashUntil = merkFlash;
+        mass += ', R3 Lichthupe';
+      }
       // 4. Bildratenunabhaengig: 1 s halten und 0,5 s auslaufen, mit 60 und mit 25 Bildern/s.
       const lauf = (fps) => { const D = { g: 0, n: 0, vg: 0, vn: 0 }; for (let i = 0; i < fps; i++) vfDrehSchritt(D, 0.6, -0.4, 1 / fps, [-1, 1]);
         for (let i = 0; i < fps / 2; i++) vfDrehSchritt(D, 0, 0, 1 / fps, [-1, 1]); return D; };
@@ -18171,8 +18166,9 @@
       window.dispatchEvent(new KeyboardEvent('keyup', { key: 'v' }));
       if (vfKameraGedreht()) f.push('Taste V setzt nicht zurueck');
     } finally {
-      r3Setzen(false); pad.axes = [0, 0, 0, 0];
+      r3Setzen(false); lhSetzen(false); pad.axes = [0, 0, 0, 0];
       try { pollGamepad(); } catch (e) { /* weiter */ }
+      bindings.vfkamera = merkKamB;
       navigator.getGamepads = echt;
       VF.aktiv = merk.aktiv; VF.kamera = merk.kamera; VF.stick = merk.stick; VF.kam = merk.kam; VF.tasten = merk.tasten;
       if (merk.dreh) Object.assign(vfDreh(), merk.dreh); else vfDrehNull();
@@ -19458,46 +19454,42 @@
   // Sekunden stehen in einer Konstanten, und ein Test, der sie abschreibt, prueft die
   // Konstante. Was er pruefen soll: dass der Ton VOR dem Griff kommt. Genau das war der
   // Wunsch - erst hoert und sieht man Regen, dann faehrt man ihn.
-  stAdd('Wetterfront: Ton vor Griff, und beides stetig', () => {
+  stAdd('Wetterfront: Ton vor Griff, Griff binaer (v1.5.9)', () => {
     if (!window.OMEGA_TEST || !OMEGA_TEST.wxSet) {
       return { skip: true, mass: 'wxSet nicht vorhanden' };
     }
     const merk = OMEGA_TEST.wxProbe();
     try {
       const reihe = [];
-      for (let f = -1; f <= 0.0001; f += 0.1) reihe.push(OMEGA_TEST.wxSet(f));
+      for (let f = -1; f <= 0.0001; f += 0.05) reihe.push(OMEGA_TEST.wxSet(f));
       const fehler = [];
       // 1. Anfang und Ende: trocken und voll nass.
       const a = reihe[0], e = reihe[reihe.length - 1];
       if (!(a.staerke === 0 && a.grip > 0.999)) fehler.push('Anfang nicht trocken');
       if (!(e.staerke > 0.999)) fehler.push('Ende nicht voll');
-      // 2. STETIG: kein Sprung groesser als ein Fuenftel im Griff. Das schliesst den
-      //    Schalter aus, der hier vorher stand - der sprang um 0,55 auf einmal.
-      let sprung = 0;
-      for (let i = 1; i < reihe.length; i++) {
-        sprung = Math.max(sprung, Math.abs(reihe[i].grip - reihe[i - 1].grip));
-      }
-      if (sprung > 0.2) fehler.push('Griffsprung ' + sprung.toFixed(3));
-      // 3. DER TON KOMMT VOR DEM GRIFF. Auf der halben Strecke muss der Ton schon halb da
-      //    sein, der Griff aber noch kaum: quadratisch heisst bei 0,5 nur ein Viertel.
-      const mitte = reihe.find(x => Math.abs(x.staerke - 0.5) < 0.02);
-      if (!mitte) fehler.push('kein Messpunkt auf halber Strecke');
+      // 2. BINAER (v1.5.9, "keine Zwischenreifen, es wird zu komplex"): der Griff hat genau zwei Werte, wechselt
+      //    genau einmal, und zwar bei der halben Front. Davor trocken, danach nass.
+      const nassGrip = e.grip;
+      const trocken = (x) => Math.abs(x.grip - a.grip) < 1e-6, nass = (x) => Math.abs(x.grip - nassGrip) < 1e-6;
+      if (!reihe.every((x) => trocken(x) || nass(x))) fehler.push('Zwischenwerte im Griff: ' + reihe.filter((x) => !trocken(x) && !nass(x)).map((x) => x.grip.toFixed(3)).join(','));
+      let wechsel = 0;
+      for (let i = 1; i < reihe.length; i++) if (trocken(reihe[i - 1]) && nass(reihe[i])) wechsel++;
+      if (wechsel !== 1) fehler.push('Griffwechsel ' + wechsel + 'x statt einmal');
+      const erstNass = reihe.find(nass);
+      if (!erstNass || !(erstNass.staerke >= WX_NASS_AB - 0.001 && erstNass.staerke <= WX_NASS_AB + 0.06)) fehler.push('nass ab Staerke ' + (erstNass ? erstNass.staerke.toFixed(2) : '?') + ' statt ' + WX_NASS_AB);
+      // 3. DER TON KOMMT VOR DEM GRIFF: wenn der Ton schon da ist (Staerke 0,3), ist der Griff noch trocken.
+      const frueh = reihe.find((x) => x.staerke >= 0.3);
+      if (!frueh) fehler.push('kein Messpunkt bei Staerke 0,3');
       else {
-        if (!(mitte.regenTon > 0.4)) fehler.push('Ton auf halber Strecke nur ' + mitte.regenTon);
-        // Griffanteil: wie weit ist der Griff auf dem Weg von trocken nach nass?
-        const weg = (a.grip - mitte.grip) / (a.grip - e.grip);
-        if (!(weg < 0.35)) fehler.push('Griff auf halber Strecke schon ' + (weg * 100).toFixed(0) + ' %');
+        if (!(frueh.regenTon > 0.15)) fehler.push('Ton bei Staerke 0,3 nur ' + frueh.regenTon);
+        if (!trocken(frueh)) fehler.push('Griff bei Staerke 0,3 schon nass');
       }
       // 4. Und hinter der Front ist es wieder trocken - sie zieht durch, nicht zurueck.
       const durch = OMEGA_TEST.wxSet(1);
       if (!(durch.staerke === 0 && durch.grip > 0.999)) fehler.push('hinter der Front nicht trocken');
-      const mitteTxt = mitte
-        ? 'auf halber Strecke Ton ' + mitte.regenTon.toFixed(2) + ', Griff '
-          + (100 * (a.grip - mitte.grip) / (a.grip - e.grip)).toFixed(0) + ' % des Wegs'
-        : '?';
       return { ok: !fehler.length,
-               mass: reihe.length + ' Messpunkte, groesster Griffsprung ' + sprung.toFixed(3)
-                   + ', ' + mitteTxt
+               mass: reihe.length + ' Messpunkte, ein Wechsel trocken -> nass bei Staerke ' + (erstNass ? erstNass.staerke.toFixed(2) : '?')
+                   + ', Ton bei 0,3: ' + (frueh ? frueh.regenTon.toFixed(2) : '?')
                    + (fehler.length ? ' || ' + fehler.join('; ') : '') };
     } finally {
       // Zuruecklegen, sonst faehrt der Nutzer nach einem Testlauf im Regen.
@@ -19530,7 +19522,8 @@
     //    Schritt, der groesser ist als plausibel fuer 250-ms-Schritte einer zehn Sekunden
     //    langen, quadratischen Rampe - probehalber bei 250 ms gemessen 0,027, reichlich
     //    Abstand zu dieser Schranke.
-    if (!(r.maxSchrittSonstwo < 0.08)) fehler.push('Schritt sonstwo: ' + r.maxSchrittSonstwo);
+    // v1.5.9: der Griff ist binaer, je Rampe gibt es genau EINEN Sprung (trocken 1,00 -> nass 0,45 = 0,55).
+    if (!(r.maxSchrittSonstwo <= 0.6)) fehler.push('Schritt sonstwo: ' + r.maxSchrittSonstwo);
     // 3. Und die Rampe erreicht wirklich beide Enden - trocken (1) und nass (deutlich
     //    darunter) -, sonst waere "kein Sprung" nur, weil sich nichts bewegt hat.
     if (!(r.endeAus > 0.999)) fehler.push('am Ende nicht trocken: ' + r.endeAus);
@@ -22572,10 +22565,10 @@
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Auslaufen 2 s, Bremse bis Stillstand, Rueckwaerts erst beim neuen Druck' };
   });
 
-  stAdd('Abstimmungen: FAHREN zeigt Arcade, Sim+, Pacejka, Gran Hybrismo, Assetto Carrera; Lenkeinschlag erreichbar ausser Realismus GT3', () => {
+  stAdd('Abstimmungen: FAHREN zeigt Arcade, Sim+, Pacejka, LibreCorsa; Lenkeinschlag erreichbar ausser Realismus GT3', () => {
     const f = [];
     const fahren = window.__presetKeysFahren ? window.__presetKeysFahren() : [];
-    if (fahren.join(',') !== 'arcade,simplus,propacejka,gran,acc') f.push('FAHREN: ' + fahren.join(','));
+    if (fahren.join(',') !== 'arcade,simplus,propacejka,librecorsa') f.push('FAHREN: ' + fahren.join(','));
     for (const k of ['arcade', 'simplus', 'gt3', 'f1']) {
       const v = window.__presetValues(k) || {};
       const resp = v['phys-steerresp'] === undefined ? 3 : v['phys-steerresp'];
@@ -23029,6 +23022,84 @@
       if ($('sc-parkplatz') && merk.park !== null) $('sc-parkplatz').value = merk.park;
     }
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'erst nach Abgleich, mittig, Rechts ' + scAusfahrtMs() + ' / Links ' + scAusfahrtLinksMs() + ' ms bei ' + Math.round(scParkTempo() * 100) + ' %, sofort stehen' };
+  });
+
+  // v1.5 (WIP): Analyse aus Hybrid-Dash 4.0 (Mo Kamit, MIT): Zeitabstand, Kurvenminima, Gas/Bremse von B, Sektor-Matrix.
+  stAdd('Telemetrie v1.5: Vorfallkarte merkt Kontakt und Abkommen mit Ort, nur im Rennen, loeschbar', () => {
+    const f = [];
+    const tiles = codeToTrack('SG4R4G4').tiles, n = tiles.length;
+    const merk = { tiles: currentTrackTiles, st: localStorage.getItem(TELE_STORE), vf: localStorage.getItem(VORFALL_STORE),
+                   fid: teleFahrtId, wahl: Object.assign({}, teleWahl), rs: raceState };
+    try {
+      localStorage.removeItem(TELE_STORE); localStorage.removeItem(VORFALL_STORE);
+      currentTrackTiles = tiles; teleFahrtId = 4714;
+      raceState = 'idle';
+      vorfallBei('crash', 'p1', 1.5);
+      if (Object.keys(vorfallLesen()).length) f.push('ausserhalb des Rennens gemerkt');
+      raceState = 'racing';
+      vorfallBei('crash', 'p1', 1.5); vorfallBei('off', 'npc', 3.25); vorfallBei('off', 'p1', NaN);
+      const key = bestzeitSchluessel(tiles);
+      const e = vorfallLesen()[key];
+      if (!e || e.liste.length !== 2 || e.liste[1].o !== 3.25) f.push('Liste ' + JSON.stringify(e && e.liste));
+      raceState = merk.rs;
+      const code = trackToCode(tiles, 0);
+      const spur = (ms, r) => ({ v: 1, code, n, ms, teile: Array.from({ length: n }, (_, k) => Math.round(k * ms / n)), proben: [], datum: 5000 + r, runde: r });
+      [9000, 8000].forEach((ms, j) => teleMerken(spur(ms, j + 1), null));
+      teleWahl = { strecke: null, a: 'letzte', b: 'beste' };
+      if ($('tele-inhalt')) {
+        teleSeiteZeichnen();
+        const box = $('tele-inhalt');
+        const punkte = box.querySelectorAll('svg.tele-vorfaelle circle').length;
+        if (punkte !== 3) f.push(punkte + ' Kreise statt 2 Vorfaelle + Start');
+        const weg = $('tele-vorfall-weg');
+        if (!weg) f.push('kein Loeschknopf');
+        else { weg.click(); if (vorfallLesen()[key]) f.push('Loeschen loescht nicht'); if (box.querySelector('svg.tele-vorfaelle')) f.push('Karte nach Loeschen noch da'); }
+      }
+    } finally {
+      currentTrackTiles = merk.tiles; teleFahrtId = merk.fid; teleWahl = merk.wahl; raceState = merk.rs;
+      if (merk.st === null) localStorage.removeItem(TELE_STORE); else localStorage.setItem(TELE_STORE, merk.st);
+      if (merk.vf === null) localStorage.removeItem(VORFALL_STORE); else localStorage.setItem(VORFALL_STORE, merk.vf);
+      if ($('tele-inhalt')) $('tele-inhalt').innerHTML = '';
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'nur im Rennen, zwei Vorfaelle mit Ort, Karte mit Kreisen, Loeschen leert' };
+  });
+
+  stAdd('Telemetrie v1.5: Zeitabstand, Kurvenminima, Sektor-Matrix mit Streuung', () => {
+    const f = [];
+    const tiles = codeToTrack('SG4R4G4').tiles, n = tiles.length;
+    const merk = { tiles: currentTrackTiles, st: localStorage.getItem(TELE_STORE), fid: teleFahrtId, wahl: Object.assign({}, teleWahl) };
+    try {
+      // Rechnungen.
+      const pk = teleDeltaPunkte([100, 200, 300], [150, 150, 300]);
+      if (pk.join(',') !== '0,-50,0,0') f.push('Zeitabstand ' + pk.join(','));
+      const tal = { ms: 3000, proben: [[0, 90], [500, 60], [1000, 30], [1500, 60], [2000, 90], [2500, 85], [2900, 88]] };
+      const mins = teleKurvenMinima(tal, [0, 1000, 2000]);
+      if (mins.length !== 1 || mins[0].v !== 30) f.push('Minima ' + JSON.stringify(mins));
+      if (Math.abs(teleStreuung([1, 2, 3]) - 1) > 1e-9) f.push('Streuung');
+      // Seite mit vier Runden.
+      localStorage.removeItem(TELE_STORE);
+      currentTrackTiles = tiles; teleFahrtId = 4713;
+      const code = trackToCode(tiles, 0);
+      const spur = (ms, r) => ({ v: 1, code, n, ms, teile: Array.from({ length: n }, (_, k) => Math.round(k * ms / n)),
+        proben: Array.from({ length: 30 }, (_, i) => [Math.round(i * ms / 30), 60 + 30 * Math.cos(i / 3), 50, i % 7 === 0 ? 80 : 0]), datum: 2000 + r, runde: r });
+      [9000, 8000, 8500, 7800].forEach((ms, j) => teleMerken(spur(ms, j + 1), null));
+      const zeilen = teleSektoren(teleLesen()[bestzeitSchluessel(tiles)].fahrer.spieler1.fahrt.runden, tiles);
+      if (zeilen.length !== 4 || zeilen.some((z) => Math.abs(z.s[0] + z.s[1] + z.s[2] - z.ms) > 1)) f.push('Sektoren ergeben nicht die Rundenzeit');
+      teleWahl = { strecke: null, a: 'letzte', b: 'beste' };
+      if ($('tele-inhalt')) {
+        teleSeiteZeichnen();
+        const box = $('tele-inhalt');
+        if (!box.querySelector('svg.tele-delta')) f.push('kein Zeitabstand');
+        if (!box.querySelector('.tele-tempo-box .tele-min')) f.push('keine Kurvenminima');
+        if (!box.querySelector('table.tele-sektoren') || box.querySelectorAll('table.tele-sektoren tbody tr').length !== 5) f.push('Sektor-Matrix fehlt oder nicht 4 Runden + Streuung');
+        if (box.querySelectorAll('.wip-tag').length < 2) f.push('neue Bloecke ohne WIP');
+      }
+    } finally {
+      currentTrackTiles = merk.tiles; teleFahrtId = merk.fid; teleWahl = merk.wahl;
+      if (merk.st === null) localStorage.removeItem(TELE_STORE); else localStorage.setItem(TELE_STORE, merk.st);
+      if ($('tele-inhalt')) $('tele-inhalt').innerHTML = '';
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Zeitabstand als Summe, ein Tal erkannt, Sektoren = Rundenzeit, Seite zeigt alle drei Bloecke' };
   });
 
   stAdd('Telemetrie v1.0.28: alle Runden der Fahrt waehlbar, A und B nicht dieselbe Runde', () => {
@@ -23977,7 +24048,8 @@
       teleSeiteZeichnen();
       const box = $('tele-inhalt');
       const svgs = box ? box.querySelectorAll('svg').length : 0;
-      if (svgs !== 3) f.push(svgs + ' Grafiken statt 3');
+      // v1.5: dazu der Zeitabstand ueber die Runde (vierte Grafik).
+      if (svgs !== 4) f.push(svgs + ' Grafiken statt 4');
       if (box && box.querySelectorAll('.tele-balken rect').length !== n) f.push('nicht ' + n + ' Balken');
       if (box && !/\+0\.72/.test(box.textContent)) f.push('Unterschied A-B fehlt: ' + box.textContent.slice(0, 120));
       const sp = mach(1);
@@ -24306,7 +24378,7 @@
       if (throttleClaim[SRC.TOUCH]) f.push('Touch-Gas haengt nach dem Beenden');
       if (physEngine.state.dirtyAir) f.push('dreckige Luft bleibt ' + physEngine.state.dirtyAir);
       // Time Attack: die Runde wertet nur 70-race.js (die virtuelle Fahrt ruft bestzeitRunde nicht selbst).
-      if (/bestzeitRunde\(/.test(String(vfPaket))) f.push('vfPaket wertet Time Attack selbst');
+      if (/bestzeitRunde\(/.test(String(vfPaket) + String(vfRundeAnLinie))) f.push('vfPaket wertet Time Attack selbst');
     } finally {
       if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
       damage = merk.damage;
@@ -24318,22 +24390,8 @@
   });
 
   // Review nach 1.3.131: die Drehzahl-Vibration auf R2 (DualSense) gilt nur in der virtuellen Fahrt.
-  stAdd('DualSense: R2-Vibration nur in der virtuellen Fahrt', () => {
-    if (typeof dsRechtsStufe !== 'function' || typeof VF === 'undefined') return { skip: true, mass: 'kein DualSense-Teil' };
-    if (VF.aktiv) return { skip: true, mass: 'virtuelle Fahrt laeuft gerade' };
-    const st = physEngine.state, merk = { rpm: st.rpmFrac, lu: st.longUse, thr: bindings.throttle, phys: physicsEnabled };
-    try {
-      bindings.throttle = { type: 'button', index: 7 };
-      physicsEnabled = true; st.rpmFrac = 0.97; st.longUse = 1;
-      const echt = dsRechtsStufe();
-      VF.aktiv = true;
-      const virtuell = dsRechtsStufe();
-      VF.aktiv = false;
-      return { ok: echt === 0 && virtuell > 0, mass: 'echt ' + echt + ', virtuell ' + virtuell };
-    } finally {
-      VF.aktiv = false; st.rpmFrac = merk.rpm; st.longUse = merk.lu; bindings.throttle = merk.thr; physicsEnabled = merk.phys;
-    }
-  });
+  // v1.5.29: der Test "R2-Vibration nur in der virtuellen Fahrt" entfaellt mit dem Drehzahl-Hinweis; die Trigger
+  // folgen jetzt LibreCorsa (Test "DualSense v1.5.29").
 
   // Review nach 1.3.131: fehlt auf Deutsch ein Tutorial-Clip, bleibt es still (Text steht da) statt der
   // Geraetestimme mit en-US; englische Clips spielen nur im englischen Modus.
@@ -26379,6 +26437,14 @@
     // der Wert des Benutzers. Programmatisches Setzen loest kein change-Ereignis aus - gespeichert wird nichts.
     const parkEl = $('sc-parkplatz');
     const parkMerk = parkEl ? parkEl.value : null;
+    // v1.5.3: ENGLISCH IST VORGABE, die Tests erwarten aber deutsche Texte. Fuer die Dauer des Laufs auf
+    // Deutsch, danach die vorige Sprache UND die gespeicherte Wahl zurueck (einzelne Tests schalten selbst
+    // um und speichern dabei).
+    const sprachMerk = lang;
+    stLadeSprache = lang;
+    let sprachGespeichert = null;
+    try { sprachGespeichert = localStorage.getItem('omegasim-lang'); } catch (e) { /* privat */ }
+    if (lang !== 'de') setLang('de', true);
     for (let i = 0; i < liste.length; i++) {
       const t = liste[i];
       let r;
@@ -26420,6 +26486,11 @@
       await stLuft();
     }
     if (parkEl && parkMerk !== null) parkEl.value = parkMerk;
+    if (lang !== sprachMerk) setLang(sprachMerk, true);
+    try {
+      if (sprachGespeichert === null) localStorage.removeItem('omegasim-lang');
+      else localStorage.setItem('omegasim-lang', sprachGespeichert);
+    } catch (e) { /* privat */ }
     $('st-run').disabled = false;
     $('st-status').textContent = gut + ' ok, ' + schlecht + ' Fehler'
                                 + (offen ? ', ' + offen + ' nicht prüfbar' : '');
@@ -26429,6 +26500,1477 @@
   }
 
   if ($('st-run')) $('st-run').addEventListener('click', runSelfTest);
+
+  stAdd('Virtuell v1.5: Rasen als Standardboden (nahtlos), Baeume im Band um die Strecke, Himmel mit Wolken kompiliert', () => {
+    const f = [];
+    let vorher = null;
+    try { vorher = localStorage.getItem(VF_BODEN_STORE); } catch (e) { /* privat */ }
+    try {
+      localStorage.removeItem(VF_BODEN_STORE);
+      if (vfBodenWahl() !== 'rasen') f.push('Standard ist ' + vfBodenWahl());
+    } finally {
+      try { if (vorher === null) localStorage.removeItem(VF_BODEN_STORE); else localStorage.setItem(VF_BODEN_STORE, vorher); } catch (e) { /* privat */ }
+    }
+    // Nahtlos: der Sprung ueber den Rand eines Stuecks ist nicht groesser als zwischen Nachbarspalten innen.
+    const T = vfBodenTexturDaten('rasen'), d = T.d, AW = T.w, w = AW / 2, h = T.h;
+    const px = (x, y) => { const i = (y * AW + x) * 4; return d[i] + d[i + 1] + d[i + 2]; };
+    let rand = 0, innen = 0;
+    for (let y = 0; y < h; y += 4) { rand += Math.abs(px(0, y) - px(w - 1, y)); innen += Math.abs(px(200, y) - px(201, y)); }
+    if (rand > innen * 1.6 + 1) f.push('Kante: ' + Math.round(rand) + ' gegen innen ' + Math.round(innen));
+    const gruen = T.mittel[1] > T.mittel[0] && T.mittel[1] > T.mittel[2];
+    if (!gruen) f.push('Rasen nicht gruen: ' + T.mittel.map((x) => x.toFixed(2)).join(','));
+    // Baeume: im Band ausserhalb der Strecke, genug davon.
+    const tiles = codeToTrack('SG4R4G4').tiles, pts = trackCenterline(tiles);
+    const B = vfBaeumeBauen(pts);
+    if (B.anzahl < 200 || B.daten.length % 6) f.push('Baeume ' + B.anzahl + ', Daten ' + B.daten.length);
+    let zuNah = 0;
+    for (const [x, z] of B.orte) { let m = Infinity; for (const p of pts) m = Math.min(m, Math.hypot(p.x - x, p.y - z)); if (m < TRACK_HALF_W + TRACK_KERB_W + 60) zuNah++; }
+    if (zuNah) f.push(zuNah + ' Baeume zu nah an der Bahn');
+    // Himmel-Shader kompiliert (mit WebGL).
+    const gl = document.createElement('canvas').getContext('webgl');
+    if (gl) {
+      try { const H = vfProgrammHimmel(gl); if (!H.wolken || !H.regen) f.push('Wolken-Uniforms fehlen'); }
+      catch (e) { f.push('Himmel: ' + e.message); }
+      const ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Rasen Standard und nahtlos, ' + B.anzahl + ' Baeume im Band, Himmel mit Wolken' };
+  });
+
+  stAdd('DualSense v1.5: Trigger beim Fahren ueber USB (Dauerverbindung), Vibration-Testknopf sendet', async () => {
+    const f = [];
+    const merk = { cap: window.Capacitor, pad: window.OmegaPad, usb: Object.assign({}, dsUsb), zust: dsZustand, stand: Object.assign({}, nativRuettlerStand), an: $('ds-usb-an') && $('ds-usb-an').checked };
+    const gesendet = [];
+    let oeffnenArg = null;
+    try {
+      // Vibration-Testknopf: erreicht die Pads (hier ueber eine Attrappe des Android-Vibrators).
+      const stoesse = [];
+      window.OmegaPad = { ruettlerDa: () => 1, ruetteln: (a, b, ms) => { stoesse.push(ms); return true; }, lesen: () => '' };
+      nativRuettlerStand = { zeit: 0, n: 0 };
+      const merkRumble = rumbleOn; rumbleOn = true;
+      try { $('vib-test').click(); } finally { rumbleOn = merkRumble; }
+      if (stoesse.length !== 1) f.push('Testknopf sendet nicht (' + stoesse.length + ')');
+      // Dauerverbindung.
+      let antwortOeffnen = { ok: true, weg: 'interrupt', protokoll: '' };
+      window.Capacitor = { isNativePlatform: () => true, isPluginAvailable: (x) => x === 'OmegaDsUsb', addListener: () => {},
+        nativePromise: async (pl, m, arg) => {
+          if (m === 'lage') return { gefunden: true, offen: dsUsb.offen };
+          if (m === 'oeffnen') { oeffnenArg = arg; return antwortOeffnen; }
+          if (m === 'senden') { gesendet.push(atob(arg.bericht)); return { ok: true }; }
+          return {};
+        } };
+      if ($('ds-usb-an')) $('ds-usb-an').checked = true;
+      Object.assign(dsUsb, { offen: false, sucht: false, gesperrt: '', meldung: '' });
+      await dsUsbSuchen();
+      if (!dsUsb.offen) f.push('Dauerverbindung nicht offen');
+      if (!oeffnenArg || atob(oeffnenArg.aus).length !== 63) f.push('oeffnen ohne Aus-Bericht');
+      dsZustand = null;
+      dsSenden(dsWiderstand(1, 2, 7), dsWiderstand(1, 2, 3));
+      if (gesendet.length !== 1 || gesendet[0].length !== 63 || gesendet[0].charCodeAt(0) !== 2) f.push('senden: ' + gesendet.length);
+      // Nur am Kabel: gesperrt bis zum Abziehen.
+      Object.assign(dsUsb, { offen: false, gesperrt: '' });
+      antwortOeffnen = { ok: false, grund: 'tasten', protokoll: '' };
+      await dsUsbSuchen();
+      if (dsUsb.offen || dsUsb.gesperrt !== 'tasten') f.push('nur Kabel nicht gesperrt');
+      const vorher = gesendet.length;
+      await dsUsbSuchen();
+      if (gesendet.length !== vorher || dsUsb.offen) f.push('versucht es trotz Sperre erneut');
+    } catch (e) { f.push('Fehler: ' + e.message); }
+    finally {
+      if (merk.cap === undefined) delete window.Capacitor; else window.Capacitor = merk.cap;
+      if (merk.pad === undefined) delete window.OmegaPad; else window.OmegaPad = merk.pad;
+      Object.assign(dsUsb, merk.usb); dsZustand = merk.zust; nativRuettlerStand = merk.stand;
+      if ($('ds-usb-an')) $('ds-usb-an').checked = merk.an;
+      if ($('ds-usb-lage')) $('ds-usb-lage').textContent = '';
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Testknopf sendet, Dauerverbindung oeffnet mit Aus-Bericht, Effekte als 63-Byte-Bericht ueber USB, nur Kabel bleibt gesperrt' };
+  });
+
+  stAdd('App v1.5: Rumble ueber den Android-Vibrator, wenn die APK ihn hat; USB-Probe zeigt ihr Protokoll', async () => {
+    const f = [];
+    const merk = { pad: window.OmegaPad, cap: window.Capacitor, stand: Object.assign({}, nativRuettlerStand) };
+    const aufrufe = [];
+    try {
+      window.OmegaPad = Object.assign({}, merk.pad || {}, { ruettlerDa: () => 1, ruetteln: (a, b, ms) => { aufrufe.push([a, b, ms]); return true; } });
+      nativRuettlerStand = { zeit: 0, n: 0 };
+      const n = ruettle({ duration: 120.4, startDelay: 0, strongMagnitude: 0.8, weakMagnitude: 0.3 }, null);
+      if (n !== 1 || aufrufe.length !== 1 || aufrufe[0].join() !== '0.8,0.3,120') f.push('nativ nicht genutzt: ' + JSON.stringify(aufrufe));
+      // Ein bestimmter Pad (mehrere Spieler): Gamepad-API, nicht nativ.
+      ruettle({ duration: 100, startDelay: 0, strongMagnitude: 1, weakMagnitude: 1 }, undefined);
+      if (aufrufe.length !== 1) f.push('nativ auch fuer einen bestimmten Pad');
+      // Ohne Motor: Gamepad-API.
+      window.OmegaPad.ruettlerDa = () => 0; nativRuettlerStand = { zeit: 0, n: 0 };
+      ruettle({ duration: 100, startDelay: 0, strongMagnitude: 1, weakMagnitude: 1 }, null);
+      if (aufrufe.length !== 1) f.push('nativ ohne Motor');
+      // Alte APK (ohne ruetteln): nichts kaputt.
+      window.OmegaPad = { lesen: () => '' }; nativRuettlerStand = { zeit: 0, n: 0 };
+      try { ruettle({ duration: 100, startDelay: 0, strongMagnitude: 1, weakMagnitude: 1 }, null); } catch (e) { f.push('alte APK: ' + e.message); }
+      // USB-Probe: das Protokoll steht unter dem Knopf.
+      window.Capacitor = { isNativePlatform: () => true, isPluginAvailable: (x) => x === 'OmegaDsUsb',
+                           nativePromise: async () => ({ ok: false, weg: '', protokoll: 'Kein DualSense am USB-Kabel gefunden.' }) };
+      await dsUsbTest();
+      if (!$('ds-usb-proto') || $('ds-usb-proto').value.indexOf('Kein DualSense') < 0 || $('ds-usb-proto-zeile').hidden) f.push('Protokoll nicht unter dem Knopf');
+    } catch (e) { f.push('Fehler: ' + e.message); }
+    finally {
+      if (merk.pad === undefined) delete window.OmegaPad; else window.OmegaPad = merk.pad;
+      if (merk.cap === undefined) delete window.Capacitor; else window.Capacitor = merk.cap;
+      nativRuettlerStand = merk.stand;
+      if ($('ds-usb-proto-zeile')) { $('ds-usb-proto-zeile').hidden = true; $('ds-usb-proto').value = ''; }
+      if ($('ds-usb-lage')) $('ds-usb-lage').textContent = '';
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'ein Spieler: Android-Vibrator (stark, schwach, ms), bestimmter Pad und ohne Motor: Gamepad-API, alte APK heil, Probe-Protokoll unter dem Knopf' };
+  });
+
+  stAdd('Virtuell v1.5: Bloom laesst nur Helles leuchten (echtes WebGL), Reifen quetschen mit der Einfederung', () => {
+    const f = [];
+    // Reifen: Ruhe 2 %, tiefer eingefedert mehr, gedeckelt, nie negativ.
+    const ruhe = vfReifenQuetsch({ z: 0, th: 0, ph: 0 }, 1, 1, 0, 1, 0);
+    if (Math.abs(ruhe - VF_REIFEN_Q.ruhe) > 1e-9) f.push('Ruhe ' + ruhe);
+    if (!(vfReifenQuetsch({ z: 0.05, th: 0, ph: 0 }, 1, 1, 0, 1, 0) > ruhe)) f.push('Einfedern quetscht nicht mehr');
+    if (vfReifenQuetsch({ z: 5, th: 0, ph: 0 }, 1, 1, 0, 1, 0) !== VF_REIFEN_Q.max) f.push('nicht gedeckelt');
+    if (vfReifenQuetsch({ z: -5, th: 0, ph: 0 }, 1, 1, 0, 1, 0) !== 0) f.push('negativ');
+    // Wanken: ph > 0 hebt +x, also quetscht -x mehr.
+    if (!(vfReifenQuetsch({ z: 0, th: 0, ph: 0.05 }, 1, -1, 0, 1, 0) > vfReifenQuetsch({ z: 0, th: 0, ph: 0.05 }, 1, 1, 0, 1, 0))) f.push('Wanken falsch herum');
+    // Bloom auf einem eigenen kleinen Bild: ein weisser Fleck auf grauem Grund leuchtet ueber, das Grau nicht.
+    const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+    const gl = cv.getContext('webgl', { antialias: false, preserveDrawingBuffer: true });
+    if (!gl) return f.length ? { ok: false, mass: f.join(' | ') } : { skip: true, mass: 'Reifen ok, kein WebGL fuer den Bloom' };
+    const merk = { bloom: VF.bloom };
+    try {
+      VF.bloom = null;
+      const pix = (x, y) => { const b = new Uint8Array(4); gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, b); return b; };
+      gl.viewport(0, 0, 64, 64);
+      gl.clearColor(0.5, 0.5, 0.5, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.enable(gl.SCISSOR_TEST); gl.scissor(28, 28, 8, 8); gl.clearColor(1, 1, 1, 1); gl.clear(gl.COLOR_BUFFER_BIT); gl.disable(gl.SCISSOR_TEST);
+      const vorNah = pix(40, 32)[0], vorFern = pix(4, 4)[0];
+      vfBloomMalen(gl, 64, 64);
+      const nachNah = pix(40, 32)[0], nachFern = pix(4, 4)[0];
+      if (!(nachNah > vorNah + 3)) f.push('kein Leuchten neben dem Weissen (' + vorNah + ' -> ' + nachNah + ')');
+      if (Math.abs(nachFern - vorFern) > 2) f.push('Grau veraendert (' + vorFern + ' -> ' + nachFern + ')');
+      if (gl.getError() !== gl.NO_ERROR) f.push('WebGL-Fehler');
+    } catch (e) { f.push('Fehler: ' + e.message); }
+    finally { VF.bloom = merk.bloom; }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Reifen 2 bis 7 % nach Einfederung und Wanken, Bloom leuchtet am Weissen, Grau bleibt' };
+  });
+
+  stAdd('Virtuell v1.5: TV-Kamera, Posten aussen neben der Bahn, naechster Posten mit Mindestdauer und Abstandsschwelle', () => {
+    const f = [];
+    const tiles = codeToTrack('SG4R4G4SLLSRR').tiles;
+    const pts = trackCenterline(tiles), nrm = trackNormals(pts);
+    const posten = vfTvPosten(pts, nrm, tiles);
+    if (posten.length < 3) f.push(posten.length + ' Posten');
+    const rand = TRACK_HALF_W + TRACK_KERB_W;
+    posten.forEach((P, i) => {
+      let d = Infinity; for (const q of pts) d = Math.min(d, Math.hypot(q.x - P.ort.x, q.y - P.ort.y));
+      if (d < rand) f.push('Posten ' + i + ' auf der Bahn');
+      if (!(P.ort.h > VF_FAHRER_AUGE_CM * TRACK_UNITS_PER_CM)) f.push('Posten ' + i + ' nicht hoeher als der Fahrer');
+    });
+    if (!VF_KAMERAS.some((k) => k.id === 'tv' && k.wip)) f.push('TV-Kamera nicht in der Liste (WIP)');
+    // Ein Auto faehrt die Mittellinie ab: Schnitte nur nach Mindestdauer, am Ende nahe am naechsten Posten.
+    const T = { posten, aktiv: -1, seit: 0 };
+    let schnitte = 0, zuFrueh = 0, letzt = 0;
+    pts.forEach((q, i) => {
+      const jetzt = i * 0.05;
+      const vor = T.aktiv;
+      if (vfTvWahl(T, q.x, q.y, jetzt) && vor >= 0) { schnitte++; if (jetzt - letzt < VF_TV_MIN_S) zuFrueh++; letzt = jetzt; }
+    });
+    if (schnitte < 2) f.push('nur ' + schnitte + ' Schnitte ueber eine Runde');
+    if (zuFrueh) f.push(zuFrueh + ' Schnitte vor der Mindestdauer');
+    // Ein Posten folgt dem Auto (Ziel in Richtung Auto).
+    const P = posten[0], q = pts[posten[0].ort.idx];
+    const k = vfFahrerKamera(P, q.x, q.y, 0.05);
+    const zx = k.ziel[0] - k.auge[0], zz = k.ziel[2] - k.auge[2], ax = q.x - P.ort.x, az = q.y - P.ort.y;
+    if ((zx * ax + zz * az) / (Math.hypot(zx, zz) * Math.hypot(ax, az)) < 0.95) f.push('Posten schaut nicht aufs Auto');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : posten.length + ' Posten neben der Bahn, ' + schnitte + ' Schnitte je Runde, keiner zu frueh, Blick aufs Auto' };
+  });
+
+  stAdd('Virtuell v1.5: Tageszeit Mittag wie bisher, Morgen und Abend waermer, Garage-Zeile mit WIP', () => {
+    const f = [];
+    let roh = null;
+    try { roh = localStorage.getItem(VF_TZ_STORE); } catch (e) { roh = null; }
+    const merk = { tz: VF.tz, auf: garAufAuto, virt: garVirtuellAuf, kam: garKameraAuf };
+    try {
+      localStorage.removeItem(VF_TZ_STORE);
+      const m = vfTageszeit();
+      if (m.id !== 'mittag' || m.horizont.join() !== '0.66,0.78,0.9' || m.zenit.join() !== '0.18,0.36,0.66' || m.sonne.join() !== '1,1,1') f.push('Mittag weicht vom bisherigen Bild ab');
+      const ab = VF_TAGESZEITEN.find((x) => x.id === 'abend');
+      if (!(ab.sonne[0] > ab.sonne[2] && ab.horizont[0] > ab.horizont[2])) f.push('Abend nicht warm');
+      VF.tz = null;
+      if (vfTz().id !== 'mittag') f.push('ohne Fahrt nicht Mittag');
+      garVirtuellAuf = true; garKameraAuf = false; renderGarage();
+      const z = $('gar-list').querySelector('.gar-a-rechts [data-feld="tageszeit"]');
+      if (!z || !z.querySelector('.wip-tag')) f.push('Garage-Zeile fehlt');
+      else { z.querySelector('[data-d="1"]').click(); if (vfTageszeit().id !== 'morgen') f.push('rechts -> ' + vfTageszeit().id); }
+    } finally {
+      try { if (roh === null) localStorage.removeItem(VF_TZ_STORE); else localStorage.setItem(VF_TZ_STORE, roh); } catch (e) { /* privat */ }
+      VF.tz = merk.tz; garAufAuto = merk.auf; garVirtuellAuf = merk.virt; garKameraAuf = merk.kam; renderGarage();
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Mittag = bisherige Farben, Abend warm, Zeile blaettert Mittag -> Morgen' };
+  });
+
+  // v1.5: Bildraten-Wache im virtuellen Fahren (Quality). Ohne echtes Zeichnen: nur die Messung.
+  stAdd('Virtuell v1.5: Bildraten-Wache schaltet bei unter 40 Bildern/s Schatten, dann Aufloesung ab', () => {
+    const f = [];
+    const merk = { grafik: VF.grafik, wache: VF.wache, schM: VF.schM, regen: VF.regen };
+    try {
+      VF.grafik = true; VF.wache = null;
+      let now = 1000;
+      const lauf = (ms, sek) => { for (let i = 0; i < sek * 1000 / ms; i++) { now += ms; vfWacheMessen(ms, now); } };
+      lauf(1000 / 60, 10);
+      if (vfWacheStufe() !== 0) f.push('bei 60 Bildern/s Stufe ' + vfWacheStufe());
+      lauf(40, 3);
+      if (vfWacheStufe() !== 0) f.push('schon nach 3 s bei 25 Bildern/s Stufe ' + vfWacheStufe());
+      lauf(40, 2);
+      if (vfWacheStufe() !== 1) f.push('nach 5 s bei 25 Bildern/s Stufe ' + vfWacheStufe() + ' statt 1');
+      lauf(40, 8);
+      if (vfWacheStufe() !== 2) f.push('Stufe 2 fehlt: ' + vfWacheStufe());
+      lauf(1000 / 60, 10);
+      if (vfWacheStufe() !== 2) f.push('geht wieder hoch');
+      // Pausen zaehlen nicht.
+      VF.wache = null; now = 1000;
+      lauf(1000 / 60, 4);
+      for (let i = 0; i < 40; i++) { now += 500; vfWacheMessen(500, now); }
+      if (vfWacheStufe() !== 0) f.push('Pausen zaehlen als langsam');
+      // Performance: keine Wache.
+      VF.grafik = false; VF.wache = null; now = 1000;
+      lauf(50, 10);
+      if (VF.wache) f.push('Wache in Performance');
+    } finally { VF.grafik = merk.grafik; VF.wache = merk.wache; VF.schM = merk.schM; VF.regen = merk.regen; }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '60 fps bleibt, 25 fps: nach gut 4 s Stufe 1, dann Stufe 2, nie zurueck, Pausen und Performance ohne Wirkung' };
+  });
+
+  // v1.5 (WIP, Paket 6): der USB-Bericht fuer die Android-App ist der WebHID-Bericht mit Kennung davor, 63 Bytes.
+  stAdd('DualSense v1.5: USB-Bericht fuer die App (0x02, 63 Bytes), Probe aus fuenf Schritten, Zeile nur in der App', () => {
+    const f = [];
+    const b = dsUsbBericht(dsWiderstand(1, 8, 8), dsAus());
+    const web = dsBericht(dsWiderstand(1, 8, 8), dsAus(), false, 0);
+    if (b.length !== 63 || b[0] !== 0x02) f.push('Laenge ' + b.length + ', Kennung ' + b[0]);
+    for (let i = 0; i < web.daten.length; i++) if (b[i + 1] !== web.daten[i]) { f.push('Byte ' + (i + 1) + ' weicht ab'); break; }
+    for (let i = 1 + web.daten.length; i < 63; i++) if (b[i] !== 0) { f.push('Rest nicht 0'); break; }
+    // v1.5.125: die Probe hat jetzt zwei Schritte Richtungshaptik dazwischen (linker, dann rechter Griffmotor).
+    const folge = dsUsbFolge();
+    if (folge.length !== 5 || folge[4].ms !== 0 || atob(folge[0].bericht).length !== 63) f.push('Folge ' + folge.length);
+    if (atob(folge[4].bericht).charCodeAt(1 + 21) !== 0x05) f.push('letzter Schritt schaltet nicht aus');
+    // Grip: linker Motor auf Byte 1+3, rechter auf Byte 1+2; Staerke 0,6 -> rund 153.
+    if (atob(folge[2].bericht).charCodeAt(1 + 3) !== 153 || atob(folge[2].bericht).charCodeAt(1 + 2) !== 0) f.push('linker Griffmotor fehlt');
+    if (atob(folge[3].bericht).charCodeAt(1 + 2) !== 153 || atob(folge[3].bericht).charCodeAt(1 + 3) !== 0) f.push('rechter Griffmotor fehlt');
+    if ($('ds-usb-zeile') && !$('ds-usb-zeile').hidden && !dsUsbApp()) f.push('Zeile im Browser sichtbar');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '63 Bytes mit 0x02, gleiche Daten wie WebHID, Probe Widerstand-Vibration-Griff links-Griff rechts-aus, Zeile nur in der App' };
+  });
+
+  // v1.5.36: Safety Car parkt bei zu wenig Platz an Start/Ziel auf dem naechsten Teil mit genug Platz.
+  stAdd('Safety Car v1.5.36: zu wenig Platz an Start/Ziel - Parkteil wandert, ausdrueckliche Wahl bleibt', () => {
+    const f = [];
+    const el = $('sc-ausfahrt-teil');
+    if (!el) return { skip: true, mass: 'Auswahl fehlt' };
+    const merk = { tiles: currentTrackTiles, wert: el.value };
+    try {
+      // Lange Gerade vor Start/Ziel: Start/Ziel reicht, kein Wandern.
+      currentTrackTiles = codeToTrack('SG4R2G3R2G3R2').tiles; lineCache = null; scParkPlatzMerk.tiles = null;
+      el.value = 'start';
+      const s0 = (ortStartIndices(currentTrackTiles)[0]) || 0;
+      if (scEinPassend(s0, scParkTempo()).faktor < 1) f.push('Testbahn 1: Start/Ziel sollte reichen');
+      else if (scParkKachel() !== s0) f.push('genug Platz, trotzdem verlegt: ' + scParkKachel());
+      // Kurve direkt vor und nach Start/Ziel.
+      currentTrackTiles = codeToTrack('SR2G3R2G4R2').tiles; lineCache = null; scParkPlatzMerk.tiles = null;
+      const s1 = (ortStartIndices(currentTrackTiles)[0]) || 0;
+      const k1 = scParkKachel();
+      if (scEinPassend(s1, scParkTempo()).faktor >= 1) f.push('Testbahn 2: Start/Ziel hat unerwartet genug Platz');
+      else {
+        if (k1 === s1) f.push('zu wenig Platz, aber nicht verlegt');
+        const pk = scEinPassend(k1, scParkTempo());
+        if (pk.faktor < 1 || pk.gerade < 1) f.push('verlegt auf Teil ' + k1 + ', dort reicht es nicht oder es ist eine Kurve');
+        if (!(((s1 - k1 + currentTrackTiles.length) % currentTrackTiles.length) <= 3)) f.push('verlegt weiter als drei Teile vor Start/Ziel: ' + k1);
+      }
+      // Ausdrueckliche Wahl bleibt (mit Hinweis).
+      const n = currentTrackTiles.length;
+      el.innerHTML += '<option value="' + s1 + '/' + n + '">x</option>';
+      el.value = s1 + '/' + n; scParkPlatzMerk.tiles = null;
+      if (scParkKachel() !== s1) f.push('ausdrueckliche Wahl verlegt');
+    } finally {
+      currentTrackTiles = merk.tiles; lineCache = null; scParkPlatzMerk.tiles = null;
+      el.value = merk.wert;
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Start/Ziel bleibt mit Platz, wandert ohne Platz auf ein Teil mit Platz, ausdrueckliche Wahl bleibt' };
+  });
+
+  // v1.5.36: die zweite Menueleiste zeigt ein Fenster von hoechstens K_FENSTER_MAX Reitern (1.5.5).
+  stAdd('ACC-Menue v1.5.36: Fenster der zweiten Leiste (hoechstens 4 Reiter, aktiver immer sichtbar, Pfeile)', () => {
+    const f = [];
+    if (K_FENSTER_MAX !== 4) f.push('Fenster ' + K_FENSTER_MAX + ' statt 4');
+    // 15 Reiter (Optionen), Fenster 4: der aktive Reiter liegt immer im Fenster, an den Enden buendig.
+    const n = 15, sicht = 4;
+    for (let aktiv = 0; aktiv < n; aktiv++) {
+      const st = kFensterStart(n, aktiv, sicht, 0);
+      if (!(aktiv >= st && aktiv < st + sicht)) f.push('Reiter ' + aktiv + ' ausserhalb [' + st + ',' + (st + sicht) + ')');
+      if (st < 0 || st > n - sicht) f.push('Start ' + st + ' fuer Reiter ' + aktiv);
+    }
+    if (kFensterStart(n, 0, sicht, 7) !== 0) f.push('Anfang nicht buendig');
+    if (kFensterStart(n, n - 1, sicht, 0) !== n - sicht) f.push('Ende nicht buendig');
+    // Weniger Reiter als das Fenster: immer ab 0.
+    if (kFensterStart(3, 2, sicht, 5) !== 0) f.push('kurze Leiste verschoben');
+    // Ohne aktiven Reiter bleibt das Fenster, wo es war (begrenzt).
+    if (kFensterStart(n, -1, sicht, 6) !== 6) f.push('ohne aktiven Reiter gesprungen');
+    if (kFensterStart(n, -1, sicht, 99) !== n - sicht) f.push('ohne aktiven Reiter nicht begrenzt');
+    // Die Pfeile gibt es im Markup.
+    if (!$('k-pfeil-l') || !$('k-pfeil-r')) f.push('Pfeile fehlen');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Fenster 4, aktiver Reiter immer sichtbar, Enden buendig, Pfeile vorhanden' };
+  });
+
+  // v1.5.32: Cockpit-Ansicht Mokamit (Digital Dash aus Hybrid-Dash, MIT).
+  stAdd('Cockpit v1.5.32: Ansicht Mokamit im Cockpit-Menue, nur auf dem Haupt-Schirm, liest das Standard-Cockpit', () => {
+    const f = [];
+    const sel = $('setting-cockpit'), dash = $('race-dash');
+    if (!sel || !dash) return { skip: true, mass: 'Cockpit fehlt' };
+    if (!Array.from(sel.options).some((o) => o.value === 'mokamit')) f.push('Option mokamit fehlt');
+    const merk = { cp: document.body.getAttribute('data-cockpit'), sc: dash.dataset.screen, kmh: $('race-speed').textContent, wahl: sel.value };
+    try {
+      document.body.setAttribute('data-cockpit', 'mokamit');
+      dash.dataset.screen = 'main';
+      if (!mokamitSichtbar()) f.push('auf dem Haupt-Schirm nicht sichtbar');
+      dash.dataset.screen = 'pit';
+      if (mokamitSichtbar()) f.push('auf dem Boxen-Schirm sichtbar');
+      dash.dataset.screen = 'main';
+      document.body.setAttribute('data-cockpit', 'acc');
+      if (mokamitSichtbar()) f.push('bei ACC sichtbar');
+      document.body.setAttribute('data-cockpit', 'mokamit');
+      const el = hdCockpitBauen();
+      if (!el || el.id !== 'hd-cockpit') f.push('Aufbau fehlt');
+      $('race-speed').textContent = '123';
+      hdCockpitMalen();
+      const k = $('hd-cp-kmh');
+      if (!k) f.push('kein Tempofeld');
+      else if (dash.offsetParent && k.textContent !== '123') f.push('Tempo nicht uebernommen: ' + k.textContent);
+      // Die Knoepfe druecken die Standardknoepfe (dieselben Regeln).
+      if (!$('hd-cp-box-knopf') || !$('hd-cp-flagge-knopf')) f.push('Knoepfe fehlen');
+    } finally {
+      if (merk.cp === null) document.body.removeAttribute('data-cockpit'); else document.body.setAttribute('data-cockpit', merk.cp);
+      dash.dataset.screen = merk.sc || 'main';
+      $('race-speed').textContent = merk.kmh;
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'waehlbar, nur Haupt-Schirm, liest race-speed, Knoepfe vorhanden' };
+  });
+
+  // v1.5.29: DualSense-Trigger wie bei LibreCorsa.
+  stAdd('DualSense v1.5.29: Bremse mit Widerstand und ABS-Vibration, Gas mit Schlupf/TC, Halten 150 ms', () => {
+    const f = [];
+    const w = dsWiderstand(1, 2, 7);
+    if (w[0] !== 0x21 || w[1] !== 0xfe || w[2] !== 0x03) f.push('Widerstand: ' + Array.from(w.slice(0, 3)).join(','));
+    // Staerke steigt ueber den Weg (Zone 1 = 2, Zone 9 = 7, als 3-Bit-Werte s-1).
+    const pack = w[3] | (w[4] << 8) | (w[5] << 16) | (w[6] << 24);
+    const z1 = (pack >>> 3) & 7, z9 = (pack >>> 27) & 7;
+    if (!(z1 === 1 && z9 === 6)) f.push('Verlauf ' + z1 + '..' + z9);
+    const e = (o) => Object.assign({ physik: true, bremse: 0, gas: 0, abs: false, absAn: true, tcAn: false, nutzV: 0, nutzH: 0, kmh: 50 }, o);
+    const fall = (o, l, r) => { const a = dsTriggerArt(e(o)); if (a.links !== l || a.rechts !== r) f.push(JSON.stringify(o) + ' -> ' + a.links + '/' + a.rechts + ' statt ' + l + '/' + r); };
+    fall({}, 'pedal', 'gas');
+    fall({ bremse: 0.9, abs: true }, 'abs', 'gas');
+    fall({ bremse: 0.6, absAn: false, nutzV: 1.2 }, 'block', 'gas');
+    fall({ bremse: 0.6, absAn: false, nutzV: 0.95 }, 'grenze', 'gas');
+    fall({ gas: 0.9, nutzH: 1.2 }, 'pedal', 'spin');
+    fall({ gas: 0.9, nutzH: 1.2, tcAn: true }, 'pedal', 'tc');
+    fall({ gas: 0.9, nutzH: 0.95 }, 'pedal', 'grenze');
+    fall({ gas: 0.2, nutzH: 1.5 }, 'pedal', 'gas');
+    if (dsTriggerArt({ physik: false }).links !== 'aus') f.push('ohne Physik nicht aus');
+    // Frequenzen der Vibrationen.
+    if (dsEffekt('abs', true)[9] !== 20 || dsEffekt('block', true)[9] !== 12 || dsEffekt('tc', false)[9] !== 18 || dsEffekt('spin', false)[9] !== 35) f.push('Frequenzen falsch');
+    // Halten: ABS flackert ein Bild weg, der Trigger bleibt 150 ms bei ABS.
+    dsHalt.links = { art: 'aus', bis: 0 };
+    if (dsHalten('links', 'abs', 1000) !== 'abs') f.push('ABS nicht sofort');
+    if (dsHalten('links', 'pedal', 1060) !== 'abs') f.push('ABS nach 60 ms schon weg');
+    if (dsHalten('links', 'pedal', 1200) !== 'pedal') f.push('nach 200 ms noch ABS');
+    dsHalt.links = { art: 'aus', bis: 0 }; dsHalt.rechts = { art: 'aus', bis: 0 };
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Widerstand 0x21 mit Verlauf, acht Lagen richtig, Frequenzen 20/12/18/35, Halten 150 ms' };
+  });
+
+  // v1.5.25: LibreCorsa fuer echte Autos; Gran Hybrismo und Assetto Carrera sind entfernt (ihre Tests mit ihnen).
+  stAdd('Fahrgefuehl v1.5.25: LibreCorsa (Preset, Modus, Uebersteuern schaltbar), Gran/Assetto laden als LibreCorsa', () => {
+    const f = [];
+    const sel = $('phys-mode');
+    if (!sel) return { skip: true, mass: 'phys-mode fehlt' };
+    const merk = presetRead();
+    const c = physEngine.config;
+    try {
+      // Preset und Modus.
+      if (!PRESETS.librecorsa || PRESETS.librecorsa.v['phys-mode'] !== 'librecorsa') f.push('Preset librecorsa fehlt');
+      if (PRESETS.gran || PRESETS.acc) f.push('Gran/Assetto noch als Preset');
+      if (!PRESETS_FAHREN.includes('librecorsa') || PRESETS_FAHREN.includes('gran') || PRESETS_FAHREN.includes('acc')) f.push('FAHREN-Liste: ' + PRESETS_FAHREN.join(','));
+      presetSet('phys-mode', 'librecorsa');
+      if (c.granArt !== 'librecorsa' || !c.gran || !c.pacejka) f.push('Modus setzt die Werte nicht: ' + c.granArt);
+      if (c.granHeck !== 0) f.push('Heck kommt von selbst (granHeck ' + c.granHeck + ')');
+      if (!(c.granAeroK > GRAN_WERTE.acc.granAeroK)) f.push('kein Abtrieb ueber Assetto');
+      if (!(c.granAbs > 0)) f.push('ohne ABS-Lenkung');
+      // Gespeicherte Staende mit den entfernten Modi fahren als LibreCorsa.
+      for (const alt of ['gran', 'acc', 'Gran Hybrismo', 'Assetto Carrera']) {
+        presetSet('phys-mode', 'physik');
+        presetSet('phys-mode', alt); physModusAnwenden(false);
+        if (sel.value !== 'librecorsa' || c.granArt !== 'librecorsa') f.push(alt + ' -> ' + sel.value + '/' + c.granArt);
+      }
+      for (const alt of ['gran', 'acc', 'Gran Hybrismo', 'Assetto Carrera', 'Gran Accelerato']) {
+        if (PRESET_ALIAS[alt] !== 'librecorsa') f.push('Preset-Alias ' + alt + ' -> ' + PRESET_ALIAS[alt]);
+      }
+      // Virtuell: die Handling-Liste ohne Gran/Assetto, eine gespeicherte Wahl faehrt als LibreCorsa GT3.
+      if (VF_HANDLING_MODI.some((m) => m.id === 'gran' || m.id === 'acc')) f.push('virtuell noch Gran/Assetto');
+      const merkH = vfHandling();
+      try {
+        vfHandlingSetzen('gran'); if (vfHandling() !== 'librecorsa') f.push('virtuell gran -> ' + vfHandling());
+      } finally { vfHandlingSetzen(merkH); }
+      // Uebersteuern ist schaltbar und ab Werk aus.
+      if (PRESETS.librecorsa.v['setting-pac-ueber'] !== false) f.push('Uebersteuern im Preset nicht aus');
+      // Online-Liste kennt den Modus.
+      if (typeof SK_FAHRGEFUEHLE !== 'undefined' && !SK_FAHRGEFUEHLE.includes('librecorsa')) f.push('Online-Liste ohne librecorsa');
+    } finally {
+      for (const id of Object.keys(merk)) presetSet(id, merk[id]);
+      physModusAnwenden(false);
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Preset und Modus LibreCorsa, Heck nur mit Schalter, Gran/Assetto laden als LibreCorsa (Feld, Alias, virtuell)' };
+  });
+
+  // v1.5.22: Fahrgefuehl LibreCorsa GT3 im virtuellen Fahren, gemessen wie das Vorbild (stationaere Kreisfahrt).
+  stAdd('Virtuell v1.5.22: LibreCorsa GT3 trifft die Quer-g des Vorbilds und den Untersteuergradienten', () => {
+    const f = [];
+    if (!VF_HANDLING_MODI.some((m) => m.id === 'librecorsa')) f.push('Modus fehlt');
+    const merk = vfHandling();
+    let P;
+    try { vfHandlingSetzen('librecorsa'); P = vfHandlingProfil(VF_GT3); } finally { vfHandlingSetzen(merk); }
+    const stationaer = (vx, lenk) => {
+      const z = { vy: 0, r: 0 };
+      for (let i = 0; i < 200; i++) vfDynamik(z, vx, 0, 0, lenk, 0.02, 1, P);
+      return { ay: vx * z.r / 9.81, z };
+    };
+    const ziel = { 81: 1.71, 99: 1.75, 117: 1.80, 153: 1.92, 171: 1.98 };
+    const mess = {};
+    for (const kmh of Object.keys(ziel)) {
+      const vx = kmh / 3.6;
+      let best = 0;
+      for (let i = 1; i <= 40; i++) best = Math.max(best, stationaer(vx, i / 40).ay);
+      mess[kmh] = best;
+      if (Math.abs(best - ziel[kmh]) / ziel[kmh] > 0.06) f.push(kmh + ' km/h: ' + best.toFixed(2) + ' g statt ' + ziel[kmh]);
+    }
+    // Abtrieb: oben mehr Quer-g als unten.
+    if (!(mess[171] > mess[81] + 0.15)) f.push('kein Abtrieb ueber dem Tempo');
+    // Untersteuergradient bei 100 km/h aus drei kleinen Lenkwinkeln.
+    const vx = 100 / 3.6, L = P.a + P.b;
+    const pk = [0.02, 0.06].map((lenk) => { const r = stationaer(vx, lenk); return { ay: r.ay, d: lenk * P.lenkGrad - (L * r.z.r / vx) * 180 / Math.PI }; });
+    const K = (pk[1].d - pk[0].d) / (pk[1].ay - pk[0].ay);
+    if (Math.abs(K - 1.42) > 0.15) f.push('Untersteuergradient ' + K.toFixed(2) + ' Grad/g statt 1,42');
+    // Reifenfenster wie Assetto Carrera: kalt weniger, im Fenster mehr Griff.
+    if (!(vfReifenGriff(0.1, 'librecorsa') < vfReifenGriff(0.575, 'librecorsa'))) f.push('kein Reifenfenster');
+    return { ok: !f.length, mass: Object.keys(mess).map((k) => k + ' km/h ' + mess[k].toFixed(2) + ' g').join(', ') + ', ' + K.toFixed(2) + ' Grad/g' + (f.length ? ' || ' + f.join('; ') : '') };
+  });
+
+  // v1.5.19: Regen im virtuellen Fahren, Raeder ohne Kartenschatten.
+  stAdd('Virtuell v1.5.19: 3D-Regen folgt dem Wetter, Raeder ohne drehenden Kartenschatten', () => {
+    const f = [];
+    if (VF_RAD_KARTENSCHATTEN !== false) f.push('Raeder werfen weiter Kartenschatten');
+    const quelle = vfModellSchatten.toString();
+    if (quelle.indexOf('vfRx(raddreh') >= 0) f.push('Schattenkarte dreht die Raeder noch');
+    if (!(VF_REGEN_N.perf > 0 && VF_REGEN_N.qual >= VF_REGEN_N.perf && VF_REGEN_N.qual <= 4000)) f.push('Tropfenzahl ' + JSON.stringify(VF_REGEN_N));
+    const merk = { front: wxFront, to: wxFrontTo, w: weather };
+    try {
+      wxFront = -1; wxFrontTo = -1;
+      if (vfRegenStaerke() !== 0) f.push('trocken, aber Regen ' + vfRegenStaerke());
+      wxFront = 0; wxFrontTo = 0;
+      if (vfRegenStaerke() !== 1) f.push('volle Front, aber Regen ' + vfRegenStaerke());
+      wxFront = -0.5;
+      if (Math.abs(vfRegenStaerke() - 0.5) > 1e-9) f.push('halbe Front, aber Regen ' + vfRegenStaerke());
+    } finally { wxFront = merk.front; wxFrontTo = merk.to; }
+    // Der Schleier und die Tropfen mischen nur die Farbe (Ziel-Alpha bleibt), sonst wuerde der Canvas durchsichtig.
+    const rq = vfRegenMalen.toString() + vfRegenSchleier.toString();
+    if (rq.indexOf('gl.blendFunc(') >= 0 || rq.indexOf('blendFuncSeparate') < 0) f.push('Regen mischt das Ziel-Alpha mit');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Regenstaerke = Wetterfront, Tropfen ' + VF_REGEN_N.perf + '/' + VF_REGEN_N.qual + ', Raeder ohne Kartenschatten' };
+  });
+
+  // v1.5.16: Renneinstellungen im virtuellen Fahren.
+  stAdd('Virtuell v1.5.16: Startwetter aus den Renneinstellungen, nicht Verfuegbares wird genannt, Schaden-Schalter', () => {
+    const f = [];
+    const el = (id) => $(id);
+    const merk = { wx: el('race-wx-start') && el('race-wx-start').value, fly: el('race-flying') && el('race-flying').checked,
+                   pit: el('race-pit-required') && el('race-pit-required').value, zev: el('race-zev') && el('race-zev').checked,
+                   wetter: weather, front: wxFront, frontTo: wxFrontTo, schaden: el('setting-crash-schaden') && el('setting-crash-schaden').checked,
+                   wxStart: raceWxStart, wxAt: wxWechselAt };
+    try {
+      // Regen als Startwetter: das Wetter wird Regen, beim Beenden wieder wie vorher.
+      setWeather('dry'); wxFront = -1; wxFrontTo = -1;
+      el('race-wx-start').value = 'rain';
+      if (el('race-flying')) el('race-flying').checked = false;
+      if (el('race-pit-required')) el('race-pit-required').value = '0';
+      if (el('race-zev')) el('race-zev').checked = false;
+      const l1 = vfRennEinstellungen();
+      if (weather !== 'rain') f.push('Startwetter Regen nicht gesetzt (' + weather + ')');
+      if (l1.length) f.push('Meldung ohne Grund: ' + l1.join(', '));
+      vfRennEinstellungenZurueck();
+      if (weather !== 'dry') f.push('Wetter nach dem Beenden nicht zurueck (' + weather + ')');
+      // Was virtuell nicht geht, wird genannt.
+      el('race-wx-start').value = 'wechsel';
+      if (el('race-flying')) el('race-flying').checked = true;
+      if (el('race-pit-required')) el('race-pit-required').value = '1';
+      const l2 = vfRennEinstellungen();
+      for (const w of ['fliegender Start', 'Pflichtboxenstopps']) if (l2.indexOf(t(w)) < 0) f.push(w + ' nicht genannt');
+      // v1.5: wechselhaft geht jetzt virtuell: beginnt trocken, der Wetter-Takt hat einen ersten Wechsel.
+      if (l2.indexOf(t('wechselhaftes Wetter')) >= 0) f.push('wechselhaft noch als nicht verfuegbar genannt');
+      if (weather !== 'dry' || raceWxStart !== 'wechsel' || !(wxWechselAt > rennZeitJetzt())) f.push('wechselhaft nicht geplant (' + weather + ', ' + wxWechselAt + ')');
+      vfRennEinstellungenZurueck();
+      if (wxWechselAt !== null) f.push('Wechsel nach dem Beenden noch geplant');
+      // v1.5: einmaliger Wechsel ("Wetter ändert sich").
+      el('race-wx-start').value = 'dry';
+      const merkW = raceWxChange; raceWxChange = true;
+      try {
+        vfRennEinstellungen();
+        if (!(VF.wxEinmalAt > rennZeitJetzt())) f.push('einmaliger Wechsel nicht geplant');
+        VF.wxEinmalAt = rennZeitJetzt() - 1; vfWetterEinmal();
+        if (weather !== 'rain' || VF.wxEinmalAt !== null) f.push('einmaliger Wechsel schaltet nicht auf Regen');
+        vfRennEinstellungenZurueck();
+      } finally { raceWxChange = merkW; }
+      // Schaden-Schalter (Optionen) gilt auch virtuell.
+      if (el('setting-crash-schaden')) {
+        el('setting-crash-schaden').checked = false;
+        if (vfSchadenAn()) f.push('Schaden aus, aber virtuell an');
+        el('setting-crash-schaden').checked = true;
+        if (!vfSchadenAn()) f.push('Schaden an, aber virtuell aus');
+      }
+    } finally {
+      if (el('race-wx-start')) el('race-wx-start').value = merk.wx;
+      if (el('race-flying')) el('race-flying').checked = merk.fly;
+      if (el('race-pit-required')) el('race-pit-required').value = merk.pit;
+      if (el('race-zev')) el('race-zev').checked = merk.zev;
+      if (el('setting-crash-schaden')) el('setting-crash-schaden').checked = merk.schaden;
+      setWeather(merk.wetter); wxFront = merk.front; wxFrontTo = merk.frontTo;
+      raceWxStart = merk.wxStart; wxWechselAt = merk.wxAt;
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Regen als Startwetter und zurueck, wechselhaft geplant und beim Beenden gestoppt, einmaliger Wechsel, fliegend/Pflichtstopps genannt, Schaden-Schalter wirkt' };
+  });
+
+  // v1.5.11: Kollision im virtuellen Fahren mit gedrehten Kaesten und Impuls.
+  stAdd('Virtuell v1.5.11: Kastenkontakt, Stoss mit Impuls und Giermoment', () => {
+    const f = [];
+    const L = VF_AUTO.L, B = VF_AUTO.B;
+    // 1. Kontakt: Kurs 0 = nach "oben" (x gleich, y kleiner). NPC genau vor dem Auto.
+    const weit = vfKontakt(0, 0, 0, 0, -L * 1.2, 0, L, B);
+    if (weit) f.push('Autos mit Luft dazwischen beruehren sich');
+    const nah = vfKontakt(0, 0, 0, 0, -L * 0.8, 0, L, B);
+    if (!nah) f.push('ueberlappende Autos beruehren sich nicht');
+    else {
+      const soll = L * VF_KASTEN - L * 0.8;
+      if (Math.abs(nah.pen - soll) > 1e-6) f.push('Eindringtiefe ' + nah.pen.toFixed(3) + ' statt ' + soll.toFixed(3));
+      if (!(nah.ny > 0.99 && Math.abs(nah.nx) < 1e-6)) f.push('Normale vorn nicht nach hinten: ' + nah.nx.toFixed(2) + ',' + nah.ny.toFixed(2));
+      // Der erste Kasten wird um pen entlang n herausgesetzt: danach beruehren sie sich nicht mehr.
+      const draussen = vfKontakt(nah.nx * (nah.pen + 1e-6), nah.ny * (nah.pen + 1e-6), 0, 0, -L * 0.8, 0, L, B);
+      if (draussen) f.push('nach dem Auseinanderschieben noch Kontakt');
+    }
+    // Seitlich versetzt, ohne Beruehrung in der Breite.
+    if (vfKontakt(0, 0, 0, B * 1.2, 0, 0, L, B)) f.push('nebeneinander mit Luft beruehren sich');
+    // Seitenkontakt: Normale zeigt zur Seite.
+    const seit = vfKontakt(0, 0, 0, B * 0.8, 0, 0, L, B);
+    if (!seit || !(Math.abs(seit.nx) > 0.99)) f.push('Seitenkontakt ohne seitliche Normale');
+    // Gedreht: ein Kasten im 45-Grad-Winkel schneidet dort, wo die achsenparallelen Kaesten sich nicht schneiden wuerden.
+    const diag = vfKontakt(0, 0, 0, L * 0.62, -L * 0.62, 45, L, B);
+    const diagAchs = vfKontakt(0, 0, 0, L * 0.62, -L * 0.62, 0, L, B);
+    if (!diag) f.push('gedrehter Kasten schneidet nicht');
+    if (diagAchs) f.push('Gegenprobe: ungedreht waere es frei');
+    // Vertauscht gibt dieselbe Tiefe mit umgekehrter Normale.
+    const a = vfKontakt(0, 0, 10, 3, -8, 30, L, B), b = vfKontakt(3, -8, 30, 0, 0, 10, L, B);
+    if (!a || !b) f.push('vertauscht: Kontakt fehlt'); else if (Math.abs(a.pen - b.pen) > 1e-9 || a.nx * b.nx + a.ny * b.ny > -0.999) f.push('vertauscht nicht symmetrisch');
+    // 2. Stoss: frontal auf einen stehenden NPC.
+    const frontal = vfStossRechnen(60, 0, 0, 0, 0, 1, true);          // n zeigt vom NPC (vorn) nach hinten
+    if (!(frontal.kmhNeu < 60 && frontal.kmhNeu >= 0)) f.push('frontal: Tempo ' + frontal.kmhNeu);
+    if (!(frontal.vnMs > 0)) f.push('frontal: keine Annaeherung');
+    if (Math.abs(frontal.dvy) > 1e-6) f.push('frontal: Seitenstoss ' + frontal.dvy);
+    // Auffahren auf einen schnelleren NPC: kein Stoss.
+    const weg = vfStossRechnen(40, 0, 80, 0, 0, 1, true);
+    if (weg.vnMs !== 0 || weg.kmhNeu !== 40) f.push('Auto entfernt sich, aber Stoss');
+    // Hart gegen weich: der Aufprall bei 120 ist deutlich haerter als bei 30.
+    const hart = vfStossRechnen(120, 0, 0, 0, 0, 1, true), weich = vfStossRechnen(30, 0, 0, 0, 0, 1, true);
+    if (!(hart.vnMs > 3 * weich.vnMs)) f.push('Aufprallstaerke waechst nicht mit dem Tempo');
+    // Seitenstoss: NPC links daneben (x = -), n zeigt vom NPC zum Auto = nach rechts (+x): das Auto wird nach rechts geschoben.
+    const seitlich = vfStossRechnen(60, 0, 60, 0.0, 1, 0, true);
+    // beide fahren gleich schnell nach oben: keine Annaeherung entlang n -> kein Stoss
+    if (seitlich.vnMs !== 0) f.push('parallel fahrend: Stoss');
+    const schraeg = vfStossRechnen(60, 0, 0, 90, 1, 0, true);         // NPC steht quer? Kurs 90, Tempo 0: Auto faehrt "nach oben", n nach rechts: keine Annaeherung
+    if (schraeg.vnMs !== 0) f.push('Stoss ohne Annaeherung entlang der Normalen');
+    // Vorn links angestossen (n zeigt nach rechts-hinten): Nase wird nach rechts gedreht (dr > 0), hinten umgekehrt.
+    const nvl = Math.SQRT1_2;
+    const vornTreffer = vfStossRechnen(60, 0, 0, 0, nvl, nvl, true), hintenTreffer = vfStossRechnen(60, 0, 0, 0, nvl, nvl, false);
+    if (!(vornTreffer.dr > 0 && vornTreffer.dvy > 0)) f.push('Treffer vorn links: dr ' + vornTreffer.dr.toFixed(3) + ', dvy ' + vornTreffer.dvy.toFixed(2));
+    if (!(hintenTreffer.dr < 0)) f.push('Treffer hinten: dr nicht umgekehrt');
+    if (!(Math.abs(vornTreffer.dr) <= 0.9 && Math.abs(vornTreffer.dvy) <= 12)) f.push('Giermoment oder Seitenstoss unbegrenzt');
+    // Der Stoss nimmt Tempo, aber das Auto bleibt nie rueckwaerts im Spiel (der Aufrufer klemmt auf 0): kmhNeu endlich.
+    if (![frontal, hart, vornTreffer].every((x) => isFinite(x.kmhNeu))) f.push('kmhNeu nicht endlich');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Kasten mit Normale und Tiefe, Stoss: frontal ' + frontal.kmhNeu.toFixed(1) + ' km/h von 60, Giermoment vorn ' + vornTreffer.dr.toFixed(2) + ' rad/s' };
+  });
+
+  // v1.5.10: Lackfarbe und Vorschaubilder des virtuellen Fahrens (WIP).
+  // v1.5.84 GEMELDET: "Startgerade hat die Ziellinie an der falschen Stelle", "Rundenzeitenmessung und Ansage ist verbuggt
+  // und startet dann mittendrin", "Räder ... entweder keine, oder die stehen zu weit nach außen ab", "Ghostcar sollte wie
+  // das ausgewählte Auto aussehen", "Fallback-Strecke soll eine Boxengasse haben".
+  stAdd('Virtuell v1.5.84: Ziellinie bei 80 %, Puls nur an der Linie, Geist faehrt die beste Runde, Raeder, Boxengasse', () => {
+    if (typeof virtuellStarten !== 'function' || typeof VF === 'undefined') return { skip: true, mass: 'kein virtuelles Fahren' };
+    if (VF.aktiv) return { skip: true, mass: 'virtuelle Fahrt laeuft gerade' };
+    const f = [];
+    // Linie: vorwaerts, nicht erreicht, rueckwaerts, ueber das Schleifenende.
+    if (vfZielUeberquert(10, 12, 11, 100) !== 1) f.push('vorwaerts ueber die Linie nicht erkannt');
+    if (vfZielUeberquert(10, 12, 13, 100) !== 0) f.push('Linie vor dem Auto gezaehlt');
+    if (vfZielUeberquert(11, 13, 11, 100) !== 0) f.push('Linie doppelt (Start auf der Linie)');
+    if (vfZielUeberquert(12, 10, 11, 100) !== -1) f.push('rueckwaerts nicht erkannt');
+    if (vfZielUeberquert(98, 2, 0, 100) !== 1) f.push('ueber das Schleifenende nicht erkannt');
+    // Raeder: die geliehenen enden innerhalb der Karosserie, nie weiter innen als die halbe Spur.
+    for (const r of [{ spur: 1.6, breite: 0.235 }, { spur: 1.71, breite: 0.255 }, { spur: 1.58, breite: 0.255 }]) {
+      const x = vfRadX(r, 0.975);
+      if (x < r.spur / 2 - 1e-9) f.push('Rad innerhalb der Spur ' + x);
+      if (x + r.breite / 2 > Math.max(0.975 - 0.03, r.spur / 2 + r.breite / 2) + 1e-9) f.push('Rad ragt raus: ' + (x + r.breite / 2).toFixed(3));
+    }
+    // Radmodell je Grafikkontext (jede Fahrt hat einen neuen).
+    const c1 = document.createElement('canvas'), c2 = document.createElement('canvas');
+    const g1 = c1.getContext('webgl'), g2 = c2.getContext('webgl');
+    const merkRad = vfRadModell;
+    if (g1 && g2) {
+      const p1 = vfRadModellBauen(g1), p1b = vfRadModellBauen(g1), p2 = vfRadModellBauen(g2);
+      if (p1 !== p1b) f.push('Radmodell im selben Kontext doppelt gebaut');
+      if (p1 === p2) f.push('Radmodell des alten Kontexts in neuem Kontext benutzt');
+      [p1, p2].forEach((pp) => pp.catch(() => {}));
+    }
+    vfRadModell = merkRad;
+    // Boxengasse: Ersatzstrecke hat ein Boxenteil direkt nach Start/Ziel, Bucht auf der Boxenseite, Striche da.
+    const ers = codeToTrack(VF_ERSATZ_CODE);
+    if (!ers || ers.tiles[1].type !== TILE_TYPE.PIT) f.push('Ersatzstrecke ohne Boxenteil nach Start/Ziel');
+    const bal = codeToTrack(CH_DAUER.find((x) => x.id === 'dauer-balkonia').code);
+    if (ers && bal && trackLaengeM(ers.tiles).toFixed(3) !== trackLaengeM(bal.tiles).toFixed(3)) f.push('Ersatzstrecke anders lang als Balkonia');
+    if (ers) {
+      const pts = trackCenterline(ers.tiles), nrm = trackNormals(pts), B = vfBoxBucht(pts, ers.tiles);
+      let maxB = 0, inPit = 0, ausser = 0;
+      pts.forEach((q, i) => { maxB = Math.max(maxB, B.b[i]); if (B.u[i] >= 0) inPit++; else if (B.b[i] > 0) ausser++; });
+      if (Math.abs(maxB - VF_BOX_TIEFE * TRACK_HALF_W) > 1e-3) f.push('Bucht ' + maxB.toFixed(2) + ' breit');
+      if (!inPit || ausser) f.push('Bucht ausserhalb des Boxenteils (' + ausser + ')');
+      const S = vfBoxStriche(pts, nrm, ers.tiles, B);
+      if (S.length !== 16 * 2 * 6 * 6) f.push('Striche: ' + S.length / 36 + ' Vierecke statt 32');
+      const geo = vfBahnGeometrie(pts, nrm, ers.tiles), geoB = vfBahnGeometrie(pts, nrm, bal.tiles);
+      if (!(geo.strasse.length > geoB.strasse.length)) f.push('keine Fahrbahn in der Bucht');
+    }
+    // Fahrt: Linie bei 80 % des Startteils, Puls nur dort, HUD-Runde an der Linie.
+    const merkTab = typeof kAktiverTab === 'function' ? kAktiverTab() : null;
+    let mass = '';
+    try {
+      if (!virtuellStarten({ tiles: codeToTrack('SG3R2G3R2').tiles, studie: true })) return { skip: true, mass: 'virtuelle Fahrt startet hier nicht (kein WebGL?)' };
+      VF.modus = 'practice'; VF.limit = 0;
+      const n = VF.pts.length, k0 = VF.pts.findIndex((q) => q.tile === 0);
+      const imStart = VF.pts.filter((q) => q.tile === 0).length;
+      const anteil = (VF.zielIdx - k0) / imStart;
+      if (!(anteil > 0.74 && anteil < 0.86)) f.push('Linie bei ' + Math.round(anteil * 100) + ' % des Startteils');
+      const geh = (bis) => { let sicher = 0; while (VF.idx !== bis && sicher++ < n + 2) { VF.idx = (VF.idx + 1) % n; const q = VF.pts[VF.idx]; VF.x = q.x; VF.y = q.y; VF.h = q.heading; vfPaket(); } };
+      VF.zielVor = null; vfPaket();
+      if (dashOnMarker) f.push('Puls schon beim Start (mitten in der Runde)');
+      geh((VF.zielIdx - 1 + n) % n);
+      if (dashOnMarker || VF.zielAt) f.push('Puls vor der Linie');
+      geh(VF.zielIdx);
+      if (!dashOnMarker || !VF.zielAt) f.push('kein Puls an der Linie');
+      if (!VF.rundeAb || VF.runden !== 0) f.push('Runde 1 beginnt nicht an der Linie (runden ' + VF.runden + ')');
+      VF.zielAt -= 2 * VF_ZIEL_PULS_MS; vfPaket();
+      if (dashOnMarker) f.push('Puls endet nicht');
+      VF.geist.aufzeichnung = [[0, 0, 0, 0], [1, 0, 0, 0.5], [2, 0, 0, 1]];
+      VF.rundeAb -= 30000;
+      geh((VF.zielIdx + n - 1) % n); geh(VF.zielIdx);
+      if (VF.runden !== 1) f.push('nach einer Runde ' + VF.runden + ' Runden');
+      if (!VF.geist.aktiv || !VF.geist.beste || VF.geist.beste.length !== 3) f.push('Geist faehrt nicht die beste Runde');
+      if (VF.geist.aufzeichnung.length) f.push('Aufzeichnung nicht neu begonnen');
+      // Langsamere Runde: der Geist bleibt bei der besten.
+      VF.geist.aufzeichnung = [[0, 0, 0, 0], [1, 0, 0, 2]];
+      VF.rundeAb -= 60000;
+      geh((VF.zielIdx + n - 1) % n); geh(VF.zielIdx);
+      if (VF.geist.beste.length !== 3) f.push('langsamere Runde ersetzt den Geist');
+      mass = 'Linie ' + Math.round(anteil * 100) + ' %, ' + VF.runden + ' Runden';
+    } finally {
+      if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
+      if (merkTab && typeof showTab === 'function') showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : mass };
+  });
+  // ---- v1.5.160: Port von PR 4 (gnen54) und die Wuensche dazu ----
+  // Beide Toernerschleifen (mit und ohne Bruecke) in der Garage waehlbar, laden, Randstreifen rein weiss, Bruecke hoch.
+  stAdd('Virtuell v1.5.160: beide freien Strecken waehlbar und ladbar, weisse Randstriche, Bruecke mit Hoehe', async () => {
+    if (typeof virtuellStarten !== 'function' || typeof VF === 'undefined') return { skip: true, mass: 'kein virtuelles Fahren' };
+    if (VF.aktiv) return { skip: true, mass: 'virtuelle Fahrt laeuft gerade' };
+    const f = [];
+    let roh = null;
+    try { roh = localStorage.getItem(VF_STRECKE_STORE); } catch (e) { roh = null; }
+    const merk = { auf: garAufAuto, virt: garVirtuellAuf, kam: garKameraAuf }, merkTab = kAktiverTab();
+    let mass = '';
+    try {
+      if (!VF_FREIE.indeq || !VF_FREIE.indeqBruecke) f.push('freie Strecken: ' + Object.keys(VF_FREIE).join(','));
+      // Garage: die Zeile "Strecke" blaettert durch gebaute Bahn und beide freien Strecken.
+      localStorage.removeItem(VF_STRECKE_STORE);
+      showTab('garage'); garVirtuellAuf = true; garKameraAuf = false; renderGarage();
+      const werte = [];
+      for (let i = 0; i < 3; i++) {
+        const z = $('gar-list').querySelector('.gar-a-rechts [data-vf-strecke]');
+        if (!z) { f.push('Zeile Strecke fehlt'); break; }
+        werte.push(z.querySelector('b').textContent);
+        z.querySelector('[data-d="1"]').click();
+      }
+      if (new Set(werte).size !== 3) f.push('Strecken in der Garage: ' + werte.join(' / '));
+      if (!werte.some((w) => w.indexOf(t('Törnerschleife 2.0 mit Brücke')) >= 0)) f.push('Bruecke nicht waehlbar: ' + werte.join(' / '));
+      // Laden und Geometrie: weisse Randstriche (v < -0,5), Bruecke hoch, Ring flach.
+      for (const k of ['indeq', 'indeqBruecke']) {
+        const d = await vfFreiLaden(k);
+        const g = vfBahnGeometrie(d.pts, trackNormals(d.pts), d.tiles, 1);
+        let weiss = 0, zMax = 0;
+        for (let i = 4; i < g.rand.length; i += 8) if (g.rand[i] < -0.5) weiss++;
+        for (let i = 1; i < g.strasse.length; i += 8) zMax = Math.max(zMax, g.strasse[i]);
+        if (weiss < 1000) f.push(k + ': nur ' + weiss + ' weisse Ecken');
+        if (k === 'indeq' && zMax > 0.01) f.push('Ring nicht flach: ' + zMax);
+        if (k === 'indeqBruecke' && !(zMax > 3)) f.push('Bruecke nicht hoch: ' + zMax);
+        if (!d.tiles.some((x) => x.gasse) || !d.tiles.some((x) => x.steg)) f.push(k + ': ohne Boxengasse/Steg');
+        mass += k + ' ' + weiss + ' weisse Ecken, z bis ' + zMax.toFixed(1) + '; ';
+      }
+      // Fahrt auf der Brueckenstrecke: Hoehe je Abschnitt, Auto auf der Bruecke oben.
+      localStorage.setItem(VF_STRECKE_STORE, 'indeqBruecke');
+      if (!virtuellStarten()) f.push('Brueckenstrecke startet nicht');
+      else {
+        if (!VF.frei || !VF.hoehe) f.push('Fahrt ohne Hoehe');
+        else {
+          const sg = VF.hoehe[Math.floor(VF.hoehe.length / 2)];
+          VF.idx = sg.i; VF.x = VF.pts[sg.i].x; VF.y = VF.pts[sg.i].y; VF.h = VF.pts[sg.i].heading;
+          if (!(vfHzSpieler().z > 3)) f.push('Auto auf der Bruecke nicht oben: ' + vfHzSpieler().z);
+          if (!(vfLage(VF.x, VF.y, VF.h)[13] > 3)) f.push('Lage ohne Hoehe');
+        }
+      }
+    } finally {
+      if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
+      try { if (roh === null) localStorage.removeItem(VF_STRECKE_STORE); else localStorage.setItem(VF_STRECKE_STORE, roh); } catch (e) { /* privat */ }
+      garAufAuto = merk.auf; garVirtuellAuf = merk.virt; garKameraAuf = merk.kam; renderGarage();
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass + 'Garage blaettert durch 3 Strecken' };
+  });
+  // Gegenrichtung: Ziellinie am selben Ort, Runde zaehlt in der neuen Richtung, Pendeln ueber die Linie nicht.
+  stAdd('Virtuell v1.5.160: Gegenrichtung zaehlt Runden, Ziellinie am selben Ort, Pendeln zaehlt nicht', () => {
+    if (typeof virtuellStarten !== 'function' || typeof VF === 'undefined') return { skip: true, mass: 'kein virtuelles Fahren' };
+    if (VF.aktiv) return { skip: true, mass: 'virtuelle Fahrt laeuft gerade' };
+    const f = [], merkTab = kAktiverTab();
+    let mass = '';
+    try {
+      const tiles = codeToTrack(VF_ERSATZ_CODE).tiles;
+      if (!virtuellStarten({ tiles, studie: true })) return { skip: true, mass: 'virtuelle Fahrt startet hier nicht (kein WebGL?)' };
+      const n0 = VF.pts.length, ort0 = [VF.pts[VF.zielIdx].x, VF.pts[VF.zielIdx].y], seite0 = VF.boxSeite;
+      const h0 = VF.pts[VF.zielIdx].heading;
+      virtuellBeenden();
+      if (!virtuellStarten({ tiles, studie: true, gegen: true })) { f.push('Gegenrichtung startet nicht'); return { ok: false, mass: f.join(' | ') }; }
+      const n = VF.pts.length;
+      if (n !== n0) f.push('Punkte ' + n0 + ' -> ' + n);
+      const ort = [VF.pts[VF.zielIdx].x, VF.pts[VF.zielIdx].y];
+      if (Math.hypot(ort[0] - ort0[0], ort[1] - ort0[1]) > 1e-6) f.push('Ziellinie verschoben');
+      const dh = Math.abs(((VF.pts[VF.zielIdx].heading - h0) % 360 + 360) % 360 - 180);
+      if (dh > 1e-6) f.push('Kurs an der Linie nicht gedreht (' + dh.toFixed(2) + ')');
+      if (VF.boxSeite !== -seite0) f.push('Boxenseite in Fahrtrichtung ' + VF.boxSeite + ' statt ' + -seite0);
+      VF.modus = 'practice'; VF.limit = 0;
+      const geh = (bis) => { let s = 0; while (VF.idx !== bis && s++ < n + 2) { VF.idx = (VF.idx + 1) % n; const q = VF.pts[VF.idx]; VF.x = q.x; VF.y = q.y; VF.h = q.heading; vfPaket(); } };
+      VF.zielVor = null; vfPaket();
+      geh(VF.zielIdx);
+      if (!VF.rundeAb || VF.runden !== 0) f.push('erste Ueberfahrt startet die Uhr nicht');
+      VF.rundeAb -= 30000;
+      geh((VF.zielIdx + n - 1) % n); geh(VF.zielIdx);
+      if (VF.runden !== 1) f.push('nach einer Runde ' + VF.runden + ' Runden');
+      const r0 = VF.runden;
+      for (let k = 0; k < 6; k++) { VF.idx = (VF.idx - 1 + n) % n; vfPaket(); }
+      for (let k = 0; k < 6; k++) { VF.idx = (VF.idx + 1) % n; vfPaket(); }
+      if (VF.runden !== r0) f.push('Pendeln ueber die Linie zaehlt eine Runde');
+      // Rueckwaerts eine ganze Runde: keine Runde.
+      for (let k = 0; k < n + 5; k++) { VF.idx = (VF.idx - 1 + n) % n; vfPaket(); }
+      if (VF.runden !== r0) f.push('rueckwaerts gefahrene Runde zaehlt');
+      mass = n + ' Punkte, Linie am selben Ort, 1 Runde, Pendeln und Rueckwaerts ohne Runde';
+    } finally {
+      if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass };
+  });
+  // Ladebild: kein HUD, Fortschrittsbalken, Strecke von oben ueber das ganze Bild, drehendes Teil, endet nach dem Laden.
+  stAdd('Virtuell v1.6.20: Ladebild ohne HUD, Strecke von oben ueber das ganze Bild, drehendes Teil, Fortschrittsbalken, endet wenn alles geladen', async () => {
+    if (typeof virtuellStarten !== 'function' || typeof VF === 'undefined') return { skip: true, mass: 'kein virtuelles Fahren' };
+    if (VF.aktiv) return { skip: true, mass: 'virtuelle Fahrt laeuft gerade' };
+    const f = [], merkTab = kAktiverTab();
+    let mass = '';
+    try {
+      if (!virtuellStarten({ tiles: codeToTrack('SG3R2G3R2').tiles, studie: true })) return { skip: true, mass: 'virtuelle Fahrt startet hier nicht (kein WebGL?)' };
+      const sch = VF.schicht, vis = (sel) => { const e = sch.querySelector(sel); return e ? getComputedStyle(e).visibility : 'fehlt'; };
+      if (!VF.laedt) f.push('kein Ladebild nach dem Start');
+      for (const sel of ['.vf-hud', '.vf-acc', '.vf-knoepfe', '.vf-wip']) if (vis(sel) !== 'hidden') f.push(sel + ' beim Laden ' + vis(sel));
+      if (vis('.vf-laden') !== 'visible') f.push('Ladebild ' + vis('.vf-laden'));
+      const bal = sch.querySelector('.vf-laden [role="progressbar"]');
+      if (!bal || bal.getAttribute('aria-valuemax') !== '100') f.push('kein Fortschrittsbalken');
+      const dreh = sch.querySelector('.vf-laden-mitte .lade-dreh .lade-a');
+      if (!dreh || getComputedStyle(dreh).animationName !== 'ladeDreh') f.push('kein drehendes Teil');
+      let flaeche = 0;
+      const karte = sch.querySelector('.vf-laden-karte svg');
+      if (!karte) f.push('kein Streckenbild');
+      else {
+        const r = karte.getBoundingClientRect(), b = sch.getBoundingClientRect();
+        flaeche = (r.width * r.height) / Math.max(1, b.width * b.height);
+        if (!(r.width >= b.width * 0.8 || r.height >= b.height * 0.8)) f.push('Strecke fuellt das Bild nicht: ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' von ' + Math.round(b.width) + 'x' + Math.round(b.height));
+        if (!karte.querySelector('path')) f.push('Streckenbild leer');
+      }
+      if (sch.querySelector('.vf-laden-anim')) f.push('alte Aufbau-Animation noch da');
+      // freie Strecke (eigene Punkte): Band mit Bruecke obenauf und Start/Ziel-Strich.
+      const fr = vfLadeKarteSvg(null, [{ x: 0, y: 0, z: 0 }, { x: 100, y: 0, z: 2 }, { x: 100, y: 100, z: 2 }, { x: 0, y: 100, z: 0 }]);
+      if (!/^<svg/.test(fr) || (fr.match(/<path/g) || []).length < 5) f.push('freie Strecke: ' + fr.slice(0, 60));
+      // hochkant auf Querformat: gedreht, viewBox getauscht; quer auf Querformat: bleibt.
+      const hoch = '<svg class="x" viewBox="0 0 100 300"><path d="M0 0"/></svg>', dr = vfLadeKarteDrehen(hoch, 800, 370);
+      if (!/data-gedreht="1" viewBox="0 0 300 100"><g transform="translate\(300 0\) rotate\(90\)"><path/.test(dr) || !/<\/g><\/svg>$/.test(dr)) f.push('Drehen: ' + dr);
+      if (vfLadeKarteDrehen('<svg viewBox="0 0 300 100"></svg>', 800, 370).indexOf('gedreht') >= 0) f.push('quer wird gedreht');
+      const t0 = performance.now();
+      while (VF.laedt && performance.now() - t0 < 30000) await new Promise((r) => setTimeout(r, 100));
+      if (VF.laedt) f.push('Ladebild nach 30 s noch da: ' + vfLadeStand(performance.now()).text);
+      else {
+        if (sch.querySelector('.vf-laden')) f.push('Ladebild bleibt im DOM');
+        if (vis('.vf-hud') !== 'visible' || vis('.vf-knoepfe') !== 'visible') f.push('HUD nach dem Laden unsichtbar');
+        if (VF.tprog && !(VF.modell || VF.modellFehl)) f.push('fertig ohne Automodell');
+        if ((VF.texOffen || 0) > 0) f.push('fertig mit ' + VF.texOffen + ' offenen Texturen');
+      }
+      mass = 'HUD verborgen, Balken und drehendes Teil da, Strecke ' + Math.round(flaeche * 100) + ' % der Flaeche, fertig nach ' + Math.round(performance.now() - t0) + ' ms';
+    } finally {
+      if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass };
+  });
+  // Knopfleiste: Piktogramme mit Namen (title/aria-label), ein Knopf blendet alle anderen aus und wieder ein.
+  stAdd('Virtuell v1.5.160: Knopfleiste als Piktogramme, ein Knopf blendet alle aus und ein', () => {
+    if (typeof virtuellStarten !== 'function' || typeof VF === 'undefined') return { skip: true, mass: 'kein virtuelles Fahren' };
+    if (VF.aktiv) return { skip: true, mass: 'virtuelle Fahrt laeuft gerade' };
+    const f = [], merkTab = kAktiverTab();
+    let roh = null;
+    try { roh = localStorage.getItem(VF_LEISTE_STORE); } catch (e) { roh = null; }
+    try {
+      localStorage.removeItem(VF_LEISTE_STORE);
+      if (!virtuellStarten({ tiles: codeToTrack('SG3R2G3R2').tiles, studie: true })) return { skip: true, mass: 'virtuelle Fahrt startet hier nicht (kein WebGL?)' };
+      vfLadenEnde();
+      const L = VF.schicht.querySelector('.vf-knoepfe');
+      const ids = ['box', 'flag', 'licht', 'wetter', 'kam', 'reset', 'zu'];
+      for (const id of ids) {
+        const b = L.querySelector('[data-vf="' + id + '"]');
+        if (!b) { f.push(id + ' fehlt'); continue; }
+        if (!b.querySelector('svg')) f.push(id + ' ohne Piktogramm');
+        if (b.textContent.trim()) f.push(id + ' mit Text "' + b.textContent.trim() + '"');
+        if (!b.getAttribute('aria-label') || b.title !== b.getAttribute('aria-label')) f.push(id + ' ohne Namen');
+      }
+      const sichtbar = () => Array.from(L.querySelectorAll('button')).filter((b) => b.offsetParent).map((b) => b.dataset.vf);
+      const knopf = L.querySelector('[data-vf="leiste"]');
+      if (!knopf) f.push('kein Knopf zum Aus- und Einblenden');
+      else {
+        if (sichtbar().filter((x) => ids.includes(x)).length !== ids.length) f.push('am Anfang sichtbar: ' + sichtbar().join(','));
+        knopf.click();
+        const zu = sichtbar();
+        if (zu.length !== 1 || zu[0] !== 'leiste') f.push('ausgeblendet sichtbar: ' + zu.join(','));
+        if (knopf.getAttribute('aria-pressed') !== 'true' || knopf.title !== t('Knöpfe einblenden')) f.push('Knopf meldet den Zustand nicht');
+        if (localStorage.getItem(VF_LEISTE_STORE) !== 'zu') f.push('Zustand nicht gemerkt');
+        knopf.click();
+        if (sichtbar().filter((x) => ids.includes(x)).length !== ids.length) f.push('wieder eingeblendet: ' + sichtbar().join(','));
+        // Der Kamera-Knopf wirkt weiter wie vorher.
+        const k0 = vfKameraId();
+        L.querySelector('[data-vf="kam"]').click();
+        if (vfKameraId() === k0) f.push('Kamera-Knopf wechselt nicht');
+      }
+    } finally {
+      if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
+      VF.kamera = null;
+      try { if (roh === null) localStorage.removeItem(VF_LEISTE_STORE); else localStorage.setItem(VF_LEISTE_STORE, roh); } catch (e) { /* privat */ }
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '7 Piktogramme mit Namen, Leiste blendet aus und ein, gemerkt' };
+  });
+  // Rueckspiegel: nur ein schmaler Streifen ganz oben am Bildrand (Spider: zwei kleine Aussenspiegel unten).
+  stAdd('Virtuell v1.5.160: Rueckspiegel nur als schmaler Streifen ganz oben, Spider mit zwei Aussenspiegeln', async () => {
+    if (typeof virtuellStarten !== 'function' || typeof VF === 'undefined') return { skip: true, mass: 'kein virtuelles Fahren' };
+    if (VF.aktiv) return { skip: true, mass: 'virtuelle Fahrt laeuft gerade' };
+    const f = [], merkTab = kAktiverTab();
+    const W = 1280, H = 720;
+    const innen = vfSpiegelRechtecke(W, H, 'v5r', 1);
+    if (innen.length !== 1 || innen[0].art !== 'innen') f.push('kein einzelner Innenspiegel');
+    else {
+      const q = innen[0].q;
+      if (q[1] + q[3] !== H) f.push('Innenspiegel nicht am oberen Rand');
+      if (q[3] > H * 0.1) f.push('Innenspiegel ' + q[3] + ' px hoch (kein schmaler Streifen)');
+      if (Math.abs(q[0] + q[2] / 2 - W / 2) > 1) f.push('Innenspiegel nicht mittig');
+    }
+    const sp = vfSpiegelRechtecke(W, H, 'spider', 1);
+    if (sp.length !== 2 || !(sp[0].q[0] < W / 4) || !(sp[1].q[0] > W / 2) || sp.some((s) => s.q[1] + s.q[3] > H / 2)) f.push('Spider-Aussenspiegel: ' + JSON.stringify(sp.map((s) => s.q)));
+    let mass = 'Innenspiegel ' + (innen[0] ? innen[0].q[2] + 'x' + innen[0].q[3] : '?') + ' oben mittig, Spider 2 Aussenspiegel';
+    const roh = {};
+    for (const k of [VF_SPIEGEL_STORE, VF_KAMERA_STORE, VF_AUTO_STORE]) { try { roh[k] = localStorage.getItem(k); } catch (e) { roh[k] = null; } }
+    try {
+      localStorage.setItem(VF_SPIEGEL_STORE, 'an'); localStorage.setItem(VF_KAMERA_STORE, 'haube'); localStorage.setItem(VF_AUTO_STORE, 'v5r');
+      VF.kamera = null;
+      if (virtuellStarten({ tiles: codeToTrack('SG3R2G3R2').tiles, studie: true })) {
+        const t0 = performance.now();
+        while (!(VF.modell || VF.modellFehl) && performance.now() - t0 < 20000) await new Promise((r) => setTimeout(r, 100));
+        vfLadenEnde();
+        if (!VF.modell) mass += ', Live-Teil uebersprungen (kein Modell)';
+        else {
+          vfMalen();
+          const e = VF.schicht.querySelector('.vf-spiegel-innen');
+          if (!e) f.push('kein Innenspiegel in der Motorhauben-Kamera');
+          else {
+            const r = e.getBoundingClientRect(), c = VF.cv.getBoundingClientRect();
+            if (Math.abs(r.top - c.top) > 2) f.push('Spiegel ' + Math.round(r.top - c.top) + ' px unter dem Rand');
+            if (!(r.height < c.height * 0.12)) f.push('Spiegel ' + Math.round(r.height) + ' px hoch');
+            if (VF.schicht.querySelectorAll('.vf-spiegel').length !== 1) f.push('mehr als ein Spiegel');
+          }
+          VF.kamera = 'verfolger'; vfMalen();
+          if (VF.schicht.querySelector('.vf-spiegel')) f.push('Spiegel bleibt in der Verfolgerkamera');
+          mass += ', live oben am Rand';
+        }
+      }
+    } finally {
+      if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
+      VF.kamera = null;
+      for (const k of Object.keys(roh)) { try { if (roh[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, roh[k]); } catch (e) { /* privat */ } }
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass };
+  });
+  // v1.5.86 BESTELLT: "Bild vom Auto kleiner machen", "Garage Buttons unten näher zusammentun", "Oben Knopf für Wetter".
+  stAdd('Garage v1.5.86: Knoepfe im Raster, kleines Vorschaubild, Wetter-Knopf im virtuellen Fahren', () => {
+    const f = [];
+    const merkTab = kAktiverTab();
+    const merk = { auf: garAufAuto, virt: garVirtuellAuf, kam: garKameraAuf, wetter: weather };
+    let mass = '';
+    try {
+      showTab('garage');
+      garVirtuellAuf = true; garKameraAuf = false;
+      renderGarage();
+      const R = $('gar-list').querySelector('.gar-a-knoepfe');
+      if (!R) f.push('kein Knopf-Raster');
+      else {
+        const cs = getComputedStyle(R);
+        if (cs.display !== 'grid' || cs.gridTemplateColumns.split(' ').length !== 2) f.push('Raster ' + cs.display + ' ' + cs.gridTemplateColumns);
+        ['.gar-a-virtuell', '.gar-a-voll', '[data-fuer="gar-to-cockpit"]'].forEach((sel) => { if (!R.querySelector(sel)) f.push(sel + ' fehlt im Raster'); });
+        const kn = Array.from(R.querySelectorAll('.opt-row:not(.gar-a-voll) > button')).filter((b) => b.offsetParent);
+        const hoehe = kn.length ? Math.max.apply(null, kn.map((b) => b.getBoundingClientRect().height)) : 0;
+        if (hoehe > 48) f.push('Knopf ' + Math.round(hoehe) + ' px hoch');
+        mass = kn.length + ' Knoepfe, hoechstens ' + Math.round(hoehe) + ' px';
+      }
+      const bild = $('gar-list').querySelector('.vf-vorschau-bild');
+      if (bild) { const mh = parseFloat(getComputedStyle(bild).maxHeight); if (!(mh <= 170)) f.push('Vorschaubild bis ' + mh + ' px hoch'); }
+      else f.push('kein Vorschaubild');
+    } finally {
+      garAufAuto = merk.auf; garVirtuellAuf = merk.virt; garKameraAuf = merk.kam;
+      renderGarage();
+    }
+    if (typeof virtuellStarten === 'function' && !VF.aktiv) {
+      try {
+        if (weather !== 'dry') setWeather('dry');
+        if (virtuellStarten({ tiles: codeToTrack('SG3R2G3R2').tiles, studie: true })) {
+          const b = VF.schicht.querySelector('[data-vf="wetter"]');
+          if (!b) f.push('kein Wetter-Knopf');
+          else {
+            VF.wxEinmalAt = rennZeitJetzt() + 5000;
+            b.click();
+            if (weather !== 'rain') f.push('Knopf: Wetter ' + weather);
+            if (VF.wxEinmalAt !== null) f.push('geplanter Wechsel bleibt');
+            vfHud();
+            if (!b.classList.contains('vf-an')) f.push('Knopf nicht hell bei Regen');
+            b.click(); vfHud();
+            if (weather !== 'dry' || b.classList.contains('vf-an')) f.push('zweiter Druck: ' + weather);
+            b.click();
+          }
+          virtuellBeenden();
+          if (weather !== 'dry') f.push('Wetter nach dem Beenden ' + weather);
+        }
+      } finally {
+        if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
+        if (weather !== merk.wetter) setWeather(merk.wetter);
+      }
+    }
+    showTab(merkTab);
+    return { ok: !f.length, mass: f.length ? f.join('; ') : mass };
+  });
+  // v1.5.90 BESTELLT: "Textur der Strecke verbessern (höhere Auflösung des Belages und der Randstreifen)" und
+  // "Virtuelles Fahren Standardeinstellungen ändern: Licht aus, qualität (nicht performance)".
+  stAdd('Virtuell v1.5.90: Belag und Randstreifen doppelt aufgeloest, Fugen gleich breit, Quality und Licht aus ab Werk', () => {
+    const f = [];
+    const B = vfBahnTexturDaten(), R = vfRandTexturDaten();
+    if (B.w !== 2048 || B.h !== 2048) f.push('Belag ' + B.w + 'x' + B.h);
+    if (R.w !== 512 || R.h !== 2048) f.push('Randstreifen ' + R.w + 'x' + R.h);
+    // Fuge oben: VF_TEX_K Zeilen dunkel (12), dann Halbschatten (21) - in cm so breit wie bei 1024 px.
+    const px = (x, y) => B.d[(y * B.w + x) * 4 + 1];
+    const x = 100;
+    for (let y = 0; y < VF_TEX_K; y++) if (Math.abs(px(x, y) - 12) > 1) f.push('Fuge Zeile ' + y + ' = ' + px(x, y));
+    if (Math.abs(px(x, VF_TEX_K) - 21) > 1) f.push('Halbschatten = ' + px(x, VF_TEX_K));
+    if (px(x, 3 * VF_TEX_K + 5) < 22) f.push('Belag unter der Fase zu dunkel');
+    // Ziellinie in der Startspalte (3) bei rund 80 % der Laenge: helle Kaestchen.
+    let hell = 0;
+    const y80 = Math.round(B.h * VF_ZIEL_ANTEIL);
+    for (let xx = 3 * VF_BAHN_SPALTE; xx < 4 * VF_BAHN_SPALTE; xx++) for (let yy = y80 - 30; yy < y80 + 30; yy++) if (px(xx, yy) > 150) hell++;
+    if (hell < 2000) f.push('keine Ziellinie bei 80 % (' + hell + ' helle Pixel)');
+    // Ab Werk Quality.
+    let merkG = null;
+    try { merkG = localStorage.getItem(VF_GRAFIK_STORE); localStorage.removeItem(VF_GRAFIK_STORE); } catch (e) { /* egal */ }
+    if (vfGrafik() !== 'qual') f.push('Grafik ab Werk ' + vfGrafik());
+    try { localStorage.setItem(VF_GRAFIK_STORE, 'perf'); } catch (e) { /* egal */ }
+    if (vfGrafik() !== 'perf') f.push('gewaehltes Performance gilt nicht');
+    try { if (merkG === null) localStorage.removeItem(VF_GRAFIK_STORE); else localStorage.setItem(VF_GRAFIK_STORE, merkG); } catch (e) { /* egal */ }
+    // Licht aus waehrend der Fahrt, danach wie vorher.
+    if (typeof virtuellStarten === 'function' && !VF.aktiv) {
+      const merkL = headlightsOn, merkTab = kAktiverTab();
+      try {
+        headlightsOn = true;
+        if (virtuellStarten({ tiles: codeToTrack('SG3R2G3R2').tiles, studie: true })) {
+          if (headlightsOn) f.push('Licht an beim Start');
+          virtuellBeenden();
+          if (!headlightsOn) f.push('Licht nach dem Beenden aus');
+        }
+      } finally {
+        if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
+        headlightsOn = merkL; const cb = $('dash-head-toggle'); if (cb) cb.checked = headlightsOn;
+        showTab(merkTab);
+      }
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Belag 2048, Randstreifen 512x2048, Fuge ' + VF_TEX_K + ' Zeilen, Quality ab Werk, Licht aus' };
+  });
+  // v1.5.94 BESTELLT: G2 (Himmel im Lack, natuerlicher Verlauf), G3 (Dunst zur Sonne), G4 (wehendes Gras und Baeume),
+  // G5 (Rasenflecken), G7 (Sichtfeld mit Tempo, Wackeln auf Randsteinen; "nur g7 muss abschaltbar sein").
+  stAdd('Virtuell v1.5.94: Umgebungskarte, Dunst zur Sonne, wehendes Gras, Rasenflecken, Sichtfeld mit Tempo (abschaltbar)', () => {
+    const f = [];
+    // G3: Abend waermer als Mittag, beide heller/waermer als der Horizont.
+    const zM = VF_TAGESZEITEN.find((z) => z.id === 'mittag'), zA = VF_TAGESZEITEN.find((z) => z.id === 'abend');
+    const dM = vfDunstFarbe(zM), dA = vfDunstFarbe(zA);
+    if (!(dA[0] - dA[2] > dM[0] - dM[2])) f.push('Dunst am Abend nicht waermer');
+    if (!(dM[0] > zM.horizont[0])) f.push('Dunst nicht heller als der Horizont');
+    // G5: Flecken aendern sich ueber die Flaeche, Ecken eines Rasenstuecks unterschiedlich.
+    const w = [vfRasenFleck(0, 0), vfRasenFleck(400, 0), vfRasenFleck(0, 400), vfRasenFleck(800, 800)].map((x) => x[0]);
+    if (Math.max(...w) - Math.min(...w) < 0.1) f.push('Rasenflecken ohne Unterschied ' + w.map((x) => x.toFixed(2)).join(','));
+    const tiles = codeToTrack('SG3R2G3R2').tiles, pts = trackCenterline(tiles), nrm = trackNormals(pts);
+    const T = vfBodenTexturDaten('rasen'), geo = vfBodenGeometrie(pts, T, vfBodenArt('rasen'));
+    let verschieden = 0;
+    for (let q = 0; q + 48 <= Math.min(geo.daten.length, 48 * 200); q += 48) if (Math.abs(geo.daten[q + 6] - geo.daten[q + 8 + 6]) > 1e-4) verschieden++;
+    if (verschieden < 50) f.push('Rasenecken gleichfarbig (' + verschieden + ')');
+    // G4: Buschel nur neben der Bahn, Fuss steht fest, Spitze weht; Baeume mit Gewicht je Ecke.
+    const G = vfGrasBueschel(pts, nrm, null), rand = TRACK_HALF_W + TRACK_KERB_W;
+    if (!(G.bueschel > 50)) f.push(G.bueschel + ' Bueschel');
+    let naeh = Infinity, fussW = 0, spitzeW = 0;
+    for (let q = 0; q < G.daten.length; q += 7) {
+      const x = G.daten[q], z = G.daten[q + 2];
+      for (let i = 0; i < pts.length; i += 3) naeh = Math.min(naeh, Math.hypot(pts[i].x - x, pts[i].y - z));
+      if (G.daten[q + 1] < 0) fussW = Math.max(fussW, G.daten[q + 6]); else spitzeW = Math.max(spitzeW, G.daten[q + 6]);
+      if (q > 7 * 600) break;
+    }
+    if (naeh < rand) f.push('Grasbueschel auf der Bahn (' + naeh.toFixed(2) + ' < ' + rand.toFixed(2) + ')');
+    if (fussW !== 0 || !(spitzeW > 0.1)) f.push('Gewichte Fuss ' + fussW + ', Spitze ' + spitzeW);
+    const B = vfBaeumeBauen(pts);
+    if (B.gewicht.length !== B.daten.length / 6) f.push('Baumgewichte ' + B.gewicht.length + ' fuer ' + B.daten.length / 6 + ' Ecken');
+    // G7: Sichtfeld waechst mit dem Tempo, aus = unveraendert, Kamera-Zustand bleibt unberuehrt.
+    const merk = { an: VF.sichtAn, plus: VF.fovPlus, kam: VF.kamera, v: physEngine.state.speedKmh, kerb: VF.kerbJetzt };
+    try {
+      VF.kamera = 'verfolger'; VF.sichtAn = true; VF.fovPlus = 0; VF.kerbJetzt = false;
+      physEngine.state.speedKmh = 250 / TACHO_SCALE;
+      const k = { auge: [1, 2, 3], ziel: [4, 5, 6], fov: 54, nah: 0.5 };
+      let e = k;
+      for (let i = 0; i < 200; i++) e = vfKameraEffekt(k, 0.05);
+      if (!(e.fov > 60 && e.fov <= 54 + VF_SICHT.plus + 1e-6)) f.push('Sichtfeld bei Tempo ' + e.fov.toFixed(1));
+      if (k.fov !== 54 || k.auge[1] !== 2) f.push('Kamera selbst veraendert');
+      VF.kerbJetzt = true;
+      let wack = 0;
+      for (let i = 0; i < 20; i++) wack = Math.max(wack, Math.abs(vfKameraEffekt(k, 0.016).auge[1] - 2));
+      if (!(wack > 0.001 && wack <= VF_SICHT.wackeln)) f.push('Wackeln ' + wack);
+      VF.sichtAn = false;
+      if (vfKameraEffekt(k, 0.016) !== k) f.push('abgeschaltet trotzdem veraendert');
+    } finally {
+      VF.sichtAn = merk.an; VF.fovPlus = merk.plus; VF.kamera = merk.kam; physEngine.state.speedKmh = merk.v; VF.kerbJetzt = merk.kerb;
+    }
+    // Garage: nur G7 als Schalter, mit WIP und (i).
+    const merkTab = kAktiverTab(), merkG = { auf: garAufAuto, virt: garVirtuellAuf, kam: garKameraAuf };
+    try {
+      showTab('garage'); garVirtuellAuf = true; garKameraAuf = false; renderGarage();
+      const z = $('gar-list').querySelector('[data-feld="sicht-tempo"]');
+      if (!z) f.push('Garage ohne Zeile Sichtfeld mit Tempo');
+      else {
+        if (!z.querySelector('.wip-tag')) f.push('Sichtfeld ohne WIP');
+        if (!z.querySelector('.opt-info-btn')) f.push('Sichtfeld ohne (i)');
+        const sm = z.querySelector('small');
+        if (sm && sm.offsetParent) f.push('Erklaerung sichtbar unter der Zeile');
+      }
+    } finally {
+      garAufAuto = merkG.auf; garVirtuellAuf = merkG.virt; garKameraAuf = merkG.kam; renderGarage(); showTab(merkTab);
+    }
+    // Mit WebGL in Quality: Umgebungskarte entsteht, Wehen-Programm kompiliert.
+    if (typeof virtuellStarten === 'function' && !VF.aktiv) {
+      let merkGr = null;
+      try { merkGr = localStorage.getItem(VF_GRAFIK_STORE); localStorage.setItem(VF_GRAFIK_STORE, 'qual'); } catch (e) { /* egal */ }
+      try {
+        if (virtuellStarten({ tiles: codeToTrack('SBRLGR3LGHLGLJR4G3R2@270').tiles, studie: true })) {
+          // v1.5.158 (Review): Quality gewaehlt und WebGL da -> der Quality-Autoshader MUSS kompilieren (bis 1.5.157 fiel
+          // er still auf Performance zurueck, weil #ifdef mitten in einer Zeile stand).
+          if (VF.grafik && VF.tprog && !VF.tprog.qual) f.push('Quality-Autoshader kompiliert nicht: ' + (VF.qualFehler || '?'));
+          if (VF.tprog && VF.tprog.qual) {
+            vfUmweltMalen(VF.gl, 10);
+            if (!(VF.umw && VF.umw.fertig) && !VF.umwKaputt) f.push('Umgebungskarte nicht fertig');
+          }
+          if (VF.flaeche && VF.flaeche.art && VF.flaeche.art.art === 'rasen' && !(VF.weh && VF.weh.prog && VF.weh.gras.n > 0)) f.push('Wehen fehlt in Quality auf Rasen');
+        }
+      } catch (e) { f.push('Start: ' + e.message); }
+      finally {
+        if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
+        try { if (merkGr === null) localStorage.removeItem(VF_GRAFIK_STORE); else localStorage.setItem(VF_GRAFIK_STORE, merkGr); } catch (e) { /* egal */ }
+        showTab(merkTab);
+      }
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : G.bueschel + ' Bueschel, Dunst Abend ' + dA.map((x) => x.toFixed(2)).join('/') };
+  });
+  // v1.5.96 BESTELLT (V1): feste Physik-Teilschritte (500 Hz) im virtuellen Fahren, unabhaengig von der Bildrate.
+  stAdd('Virtuell v1.5.96: Fahrphysik in festen Teilschritten, gleiche Fahrt bei 30 und 120 Bildern/s', () => {
+    if (typeof virtuellStarten !== 'function' || VF.aktiv) return { skip: true, mass: 'virtuelle Fahrt laeuft oder fehlt' };
+    const f = [];
+    const merkTab = kAktiverTab(), st = physEngine.state, merk = { v: st.speedKmh, lenk: steerX, g: st.gLong, lu: st.longUse };
+    let mass = '';
+    try {
+      if (!virtuellStarten({ tiles: codeToTrack('SG3R2G3R2').tiles, studie: true })) return { skip: true, mass: 'kein WebGL' };
+      const hand = vfHandling(), reifen = hand === 'gran' || hand === 'acc' || hand === 'librecorsa';
+      const start = { x: VF.x, y: VF.y, h: VF.h };
+      const fahre = (bilder) => {
+        Object.assign(VF, { x: start.x, y: start.y, h: start.h, dyn: { vy: 0, r: 0 }, lenkIst: 0, physRest: 0, tyreTemp: 0, feder: null, ax: 0, ay: 0 });
+        let schritte = 0;
+        for (let i = 0; i < bilder; i++) { VF.dtBild = 1 / bilder; schritte += vfFahrPhysik(1 / bilder, 140, st, hand, reifen); }
+        return { x: VF.x, y: VF.y, h: VF.h, r: VF.dyn.r, schritte };
+      };
+      st.speedKmh = 140; st.gLong = 0; st.longUse = 0; steerX = 0.6;
+      const a = fahre(30), b = fahre(120);
+      if (Math.abs(a.schritte - 500) > 1 || Math.abs(b.schritte - 500) > 1) f.push('Teilschritte ' + a.schritte + ' / ' + b.schritte + ' statt 500 je Sekunde');
+      const weg = Math.hypot(a.x - start.x, a.y - start.y), abw = Math.hypot(a.x - b.x, a.y - b.y);
+      if (!(weg > 1)) f.push('Auto faehrt nicht (' + weg.toFixed(2) + ')');
+      if (abw > weg * 0.01) f.push('Weg bei 30 und 120 Bildern/s um ' + abw.toFixed(3) + ' verschieden (Weg ' + weg.toFixed(1) + ')');
+      if (Math.abs(a.h - b.h) > 0.5) f.push('Kurs ' + a.h.toFixed(2) + ' / ' + b.h.toFixed(2));
+      // Ein langes Bild (Haenger) rechnet hoechstens VF_TEIL.max Schritte.
+      VF.physRest = 0;
+      if (vfFahrPhysik(0.5, 140, st, hand, reifen) !== VF_TEIL.max || VF.physRest !== 0) f.push('Haenger nicht begrenzt');
+      mass = 'Weg ' + weg.toFixed(1) + ', Abweichung ' + abw.toFixed(4) + ', Kurs ' + a.h.toFixed(2) + '/' + b.h.toFixed(2);
+    } finally {
+      if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
+      st.speedKmh = merk.v; steerX = merk.lenk; st.gLong = merk.g; st.longUse = merk.lu;
+      showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : mass };
+  });
+  // v1.5.101 BESTELLT: H1 (Lenkhilfe, nur LibreCorsa), H2 (Bremstemperatur: kalt schwaecher), H5 (dreckige Luft).
+  // v1.6.5 BESTELLT: Rumble wie LibreCorsa, Vibrationsoptionen auch virtuell, Quietschen/Neben der Bahn ab Werk aus;
+  // Speicher nach der virtuellen Fahrt freigeben (Latenz bei wenig Speicher).
+  stAdd('Vibration v1.6.5: Mischer wie LibreCorsa (Schichten, Arten, Impulse), Speicher nach virtueller Fahrt frei', () => {
+    const f = [];
+    if (Math.abs(rmSchicht(0.5, 0.5) - 0.75) > 1e-9 || rmSchicht(0.9, 1) !== 1) f.push('Schichtung');
+    if ($('vib-quietschen') && $('vib-quietschen').defaultChecked) f.push('Quietschen ab Werk an');
+    if ($('vib-abseits') && $('vib-abseits').defaultChecked) f.push('Neben der Bahn ab Werk an');
+    const merk = Object.assign({}, RUMBLE_ARTEN), merkZ = Object.assign({}, rmZ), merkAktiv = rumbleMixAktiv;
+    try {
+      rmZ.kerbPhase = 0.2; rmZ.stoss = 0; rmZ.impulsBis = 0;
+      const c = { kerb: 0.8, schieben: 0.3, heck: 0.4, abs: 0, boden: 0.2 };
+      RUMBLE_ARTEN.abseits = false; RUMBLE_ARTEN.kerb = true; RUMBLE_ARTEN.rutschen = true; RUMBLE_ARTEN.untersteuern = true;
+      const a = rmMischen(c);
+      if (!(a.schwach > 0.8 && a.stark > 0.5)) f.push('Mischung ' + a.schwach.toFixed(2) + '/' + a.stark.toFixed(2));
+      RUMBLE_ARTEN.kerb = false; RUMBLE_ARTEN.rutschen = false; RUMBLE_ARTEN.untersteuern = false;
+      const b = rmMischen(c);
+      if (b.schwach !== 0 || b.stark !== 0) f.push('abgeschaltete Arten brummen: ' + b.schwach + '/' + b.stark);
+      rumbleMixAktiv = () => true;
+      rmZ.stoss = 0; RUMBLE_ARTEN.crash = true;
+      const merkOn = rumbleOn; rumbleOn = true;
+      padRumble(0.7, 0.7, 40, 'crash', 1);
+      if (!(rmZ.stoss >= 0.69)) f.push('Stoss nicht in der Huellkurve');
+      padRumble(0.3, 0.3, 100, 'schalt', 1);
+      if (!(rmZ.impulsBis > performance.now())) f.push('Einzelereignis nicht beigemischt');
+      rumbleOn = merkOn;
+    } finally {
+      Object.assign(RUMBLE_ARTEN, merk); Object.assign(rmZ, merkZ); rumbleMixAktiv = merkAktiv;
+    }
+    if (!VF.aktiv) {
+      const merkT = Object.assign({}, vfTexDaten), merkM = vfModellLaden;
+      vfTexDaten.bahn = { d: new Uint8Array(4) }; vfModellLaden = { x: 1 };
+      vfSpeicherFreigeben();
+      if (vfTexDaten.bahn !== null || Object.keys(vfModellLaden).length) f.push('Speicher nicht freigegeben');
+      Object.assign(vfTexDaten, merkT); vfModellLaden = merkM;
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'Schichten, Arten, Stoss/Impuls im Mischer, Freigabe' };
+  });
+  stAdd('Fahrgefuehl v1.5.101: Lenkhilfe LibreCorsa (S-Kurve, Scheitel, Ausrichten), kalte Bremse, dreckige Luft virtuell', () => {
+    const f = [];
+    // H2: kalte Scheiben bremsen schwaecher, warme nicht, Schalter aus = nichts.
+    const e = new CarreraPhysicsEngine(), st = e.state, cfg = e.config;
+    Object.assign(cfg, { gran: true, pacejka: true }, GRAN_WERTE.librecorsa);
+    st.driveMode = 'forward'; st.currentGear = 3; cfg.brakeFadeEffect = 1;
+    st.speedKmh = 100 / REAL_SCALE; e.update({ throttle: 0, brake: 0.5, steering: 0 }, 0.02);
+    if (!(st.brakeKalt > 0.08 && st.brakeKalt <= cfg.brakeColdMax + 1e-9)) f.push('kalt: ' + st.brakeKalt);
+    st.brakeTemp4 = [300, 300, 300, 300]; st.speedKmh = 100 / REAL_SCALE; e.update({ throttle: 0, brake: 0.5, steering: 0 }, 0.02);
+    if (st.brakeKalt > 1e-6) f.push('warm noch kalt: ' + st.brakeKalt);
+    cfg.brakeFadeEffect = 0; st.brakeTemp4 = [25, 25, 25, 25]; st.speedKmh = 100 / REAL_SCALE; e.update({ throttle: 0, brake: 0.5, steering: 0 }, 0.02);
+    if (st.brakeKalt !== 0) f.push('Schalter aus, trotzdem kalt: ' + st.brakeKalt);
+    const eo = new CarreraPhysicsEngine(); eo.state.driveMode = 'forward'; eo.state.currentGear = 3; eo.config.brakeFadeEffect = 1;
+    eo.state.speedKmh = 100 / REAL_SCALE; eo.update({ throttle: 0, brake: 0.5, steering: 0 }, 0.02);
+    if (eo.state.brakeKalt !== 0) f.push('kalte Bremse auch in Omega/Physik');
+    // H1 echt: S-Kurve ohne Ueberschwingen, weich an, nach 0,25 s fast am Ziel.
+    const s1 = {};
+    let v10 = 0, maxV = 0;
+    for (let i = 0; i < 50; i++) { const v = lcSKurve(s1, i ? 1 : 0, i ? 0.01 : 0.01); if (i === 1) v10 = v; maxV = Math.max(maxV, v); }
+    if (!(v10 < 0.1)) f.push('S-Kurve springt (' + v10.toFixed(2) + ' nach 10 ms)');
+    if (!(s1.lcS > 0.9 && maxV <= 1.0001)) f.push('S-Kurve Ende ' + s1.lcS.toFixed(3) + ', hoechstens ' + maxV.toFixed(3));
+    // H1 echt: am Limit haelt die Hilfe die Kraft am Scheitel (mehr als ohne Hilfe), nur in LibreCorsa.
+    const lauf = (hilfe, werte) => {
+      const en = new CarreraPhysicsEngine(); Object.assign(en.config, { gran: true, pacejka: true }, werte, { lenkHilfe: hilfe });
+      en.state.driveMode = 'forward'; en.state.currentGear = 3;
+      for (let i = 0; i < 60; i++) { en.state.speedKmh = 250 / REAL_SCALE; en.update({ throttle: 0.9, brake: 0, steering: 1 }, 0.045); }
+      return en.state;
+    };
+    const mit = lauf(true, GRAN_WERTE.librecorsa), ohne = lauf(false, GRAN_WERTE.librecorsa);
+    if (!(mit.pacNutzV > 1)) f.push('Testfall nicht am Limit (vorn ' + mit.pacNutzV.toFixed(2) + ')');
+    if (!(mit.pacUnter * mit.pacNutzV >= ohne.pacUnter * ohne.pacNutzV - 1e-6)) f.push('Hilfe kostet Kraft vorn (' + (mit.pacUnter * mit.pacNutzV).toFixed(3) + ' < ' + (ohne.pacUnter * ohne.pacNutzV).toFixed(3) + ')');
+    const andere = lauf(true, Object.assign({}, GRAN_WERTE.librecorsa, { granArt: 'gran' })), andereOhne = lauf(false, Object.assign({}, GRAN_WERTE.librecorsa, { granArt: 'gran' }));
+    if (Math.abs(andere.pacUnter - andereOhne.pacUnter) > 1e-9 || andere.lcS !== undefined) f.push('Hilfe wirkt ausserhalb von LibreCorsa');
+    // H1 virtuell: Stick in der Mitte im Rutsch = Gegenlenken; voller Stick nie ueber den Scheitel vorn.
+    const merk = { P: VF.P, dyn: VF.dyn, lenk: VF.lenkIst, lhV: VF.lhV };
+    try {
+      VF.P = vfHandlingProfil(VF_GT3); VF.lenkIst = 0; VF.lhV = 0;
+      VF.dyn = { vy: 4, r: 0 };
+      for (let i = 0; i < 200; i++) VF.lenkIst = vfLenkHilfe(0, 0.002, 40);
+      if (!(VF.lenkIst > 0.02)) f.push('kein Gegenlenken im Rutsch (' + VF.lenkIst.toFixed(3) + ')');
+      VF.dyn = { vy: 0, r: 0 }; VF.lenkIst = 0; VF.lhV = 0;
+      for (let i = 0; i < 300; i++) VF.lenkIst = vfLenkHilfe(1, 0.002, 40);
+      const g = VF.P.lenkGrad * Math.PI / 180, sp = Math.tan(Math.PI / (2 * VF.P.C)) / VF.P.BV;
+      if (!(VF.lenkIst < 1 && Math.abs(VF.lenkIst * g - sp) < sp * 0.05)) f.push('Scheitel vorn: ' + (VF.lenkIst * g).toFixed(4) + ' statt ' + sp.toFixed(4));
+    } finally { VF.P = merk.P; VF.dyn = merk.dyn; VF.lenkIst = merk.lenk; VF.lhV = merk.lhV; }
+    // H5 virtuell: weniger Griff vorn = weniger Gier im Kurvenlimit (Untersteuern).
+    const P = vfHandlingProfil(VF_GT3), za = { vy: 0, r: 0 }, zb = { vy: 0, r: 0 };
+    for (let i = 0; i < 300; i++) { vfDynamik(za, 40, 0, 0, 0.6, 0.01, 1, P, 1); vfDynamik(zb, 40, 0, 0, 0.6, 0.01, 1, P, 0.82); }
+    if (!(Math.abs(zb.r) < Math.abs(za.r) * 0.97)) f.push('dreckige Luft ohne Wirkung vorn (' + za.r.toFixed(3) + ' / ' + zb.r.toFixed(3) + ')');
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'kalt ' + (cfg.brakeColdMax * 100) + ' %, Scheitel gehalten, Gier in dreckiger Luft ' + (zb.r / za.r * 100).toFixed(0) + ' %' };
+  });
+  stAdd('Virtuell v1.5.10: Lackfarbe umfaerbt nur die Karosserie, Vorschaubild je Auto', async () => {
+    const f = [];
+    // Daten: acht Farben plus Original, eindeutige Kennungen, jede Farbe wird gefunden.
+    const ids = VF_LACK_FARBEN.map((x) => x.id);
+    if (new Set(ids).size !== ids.length) f.push('Kennungen nicht eindeutig');
+    if (VF_LACK_FARBEN.length !== 9 || VF_LACK_FARBEN[0].v !== '') f.push('Farbliste: ' + VF_LACK_FARBEN.length);
+    for (const x of VF_LACK_FARBEN) if (vfLackId(x.v) !== x.id) f.push('vfLackId(' + x.v + ') = ' + vfLackId(x.v));
+    if (vfLackTint('')[0] !== 1 || vfLackTint('')[1] !== 1) f.push('ohne Farbe getoent');
+    const rot = vfLackTint('#c8102e');
+    if (!(rot[0] > 0.7 && rot[1] < 0.1 && rot[2] < 0.25)) f.push('Rot ist ' + rot.map((x) => x.toFixed(2)).join(','));
+    // Speicher: nur bekannte Farben werden gelesen.
+    const merk = (() => { try { return localStorage.getItem(VF_LACK_STORE); } catch (e) { return null; } })();
+    try {
+      vfLackSetzen('#0057b8'); if (vfLack() !== '#0057b8') f.push('Blau nicht gemerkt');
+      vfLackSetzen('#123456'); if (vfLack() !== '') f.push('unbekannte Farbe wird gelesen: ' + vfLack());
+      vfLackSetzen(''); if (vfLack() !== '') f.push('Original nicht gemerkt');
+    } finally {
+      try { if (merk === null) localStorage.removeItem(VF_LACK_STORE); else localStorage.setItem(VF_LACK_STORE, merk); } catch (e) { /* privat */ }
+    }
+    // Der Shader kennt das Umfaerben (beide Varianten) - ohne den Wert fiele die Farbe stillschweigend weg.
+    const quelle = Array.from(document.scripts).map((x) => x.text).join(' ');
+    if ((quelle.match(/uniform float lack;/g) || []).length < 2) f.push('Shader ohne uniform lack in beiden Varianten');
+    // Vorschaubilder: ein Seitenbild je Auto (img/autos/<modell>/vorschau.jpg).
+    const fehlt = [];
+    for (const m of Object.keys(VF_MODELL_PFADE)) {
+      try {
+        const r = await fetch(VF_MODELL_PFADE[m] + 'vorschau.jpg', { method: 'HEAD', cache: 'no-store' });
+        if (!r.ok) fehlt.push(m);
+      } catch (e) { fehlt.push(m); }
+    }
+    if (fehlt.length) f.push(fehlt.length + ' Vorschaubilder fehlen: ' + fehlt.slice(0, 6).join(', '));
+    return { ok: !f.length, mass: f.length ? f.join('; ') : ids.length + ' Farben, Umfaerben im Shader, ' + Object.keys(VF_MODELL_PFADE).length + ' Vorschaubilder vorhanden' };
+  });
+
+  // v1.5.3: Die Bruecke der Android-App mit einer Attrappe von Capacitor. Vorher gab es fuer diesen Weg keinen
+  // Test; er ist der einzige Weg, auf dem die App ein Auto verbindet.
+  stAdd('App-Brücke v1.5.3: verbinden, Priorität erst nach dem Abo, schonender Modus, Fehler räumt auf', async () => {
+    if (!window.OMEGA_BRUECKE || typeof window.OMEGA_BRUECKE.bauen !== 'function') return { skip: true, mass: 'Bruecke nicht baubar' };
+    const f = [];
+    const bau = (o) => {
+      const rufe = [], geplant = [], gewartet = [];
+      let aboFehler = o && o.aboFehler;
+      const C = {
+        isPluginAvailable: () => false,
+        addListener: () => ({ remove() {} }),
+        nativePromise: (plugin, methode, opt) => {
+          rufe.push(methode);
+          if (methode === 'requestDevice') return Promise.resolve({ deviceId: 'ST:BR:01', name: 'HYBRID-ST' });
+          if (methode === 'getConnectedDevices') return Promise.resolve({ devices: [] });
+          if (methode === 'getServices') {
+            return Promise.resolve({ services: [{ uuid: NUS_SERVICE, characteristics: [
+              { uuid: NUS_RX, properties: { write: true, writeWithoutResponse: true } },
+              { uuid: NUS_TX, properties: { notify: true } }] }] });
+          }
+          if (methode === 'startNotifications' && aboFehler) { aboFehler = false; return Promise.reject(new Error('Setting notification failed')); }
+          if (methode === 'isEnabled') return Promise.resolve({ value: true });
+          return Promise.resolve({});
+        },
+      };
+      const bt = window.OMEGA_BRUECKE.bauen(C, window.OMEGA_BRUECKE, {
+        planen: (fn, ms) => { geplant.push(ms); return 0; },
+        warten: (ms) => { gewartet.push(ms); return Promise.resolve(); },
+        gamepad: () => !!(o && o.pad),
+      });
+      return { bt, rufe, geplant, gewartet };
+    };
+    const verbinde = async (x, schonend) => {
+      const dev = await x.bt.requestDevice({ filters: [{ namePrefix: 'HYBRID' }], optionalServices: [NUS_SERVICE] });
+      const car = { device: dev, role: 'ghost', tag: 'ST', schonend: !!schonend };
+      let fehler = null;
+      try { await verbindeGatt(car); } catch (e) { fehler = e; }
+      try { if (car.tx && car.notifyHandler) car.tx.removeEventListener('characteristicvaluechanged', car.notifyHandler); } catch (e) { /* egal */ }
+      return { car, dev, fehler };
+    };
+    const vor = (liste, a, b) => liste.indexOf(a) >= 0 && (liste.indexOf(b) < 0 || liste.indexOf(a) < liste.indexOf(b));
+    // 1. Normaler Weg.
+    const n = bau();
+    const r1 = await verbinde(n);
+    if (r1.fehler) f.push('normal: ' + r1.fehler.message);
+    if (!r1.dev.gatt.connected) f.push('normal: nicht verbunden');
+    if (!r1.car.rx || !r1.car.tx) f.push('normal: Merkmale fehlen');
+    if (!vor(n.rufe, 'connect', 'getServices') || !vor(n.rufe, 'getServices', 'startNotifications')) f.push('normal: Reihenfolge ' + n.rufe.join('>'));
+    if (!vor(n.rufe, 'startNotifications', 'requestConnectionPriority')) f.push('normal: Prioritaet vor dem Abo (' + n.rufe.join('>') + ')');
+    if (n.gewartet.indexOf(600) >= 0) f.push('normal: schonende Pause ohne Grund');
+    // 2. Schonend (zweiter Versuch) und mit Gamepad: Pause vor der Dienstsuche, keine Prioritaet sofort.
+    for (const fall of [{ name: 'zweiter Versuch', schonend: true }, { name: 'Gamepad', pad: true }]) {
+      const s2 = bau({ pad: fall.pad });
+      const r2 = await verbinde(s2, fall.schonend);
+      if (r2.fehler) f.push(fall.name + ': ' + r2.fehler.message);
+      if (!r2.dev.gatt.schonendAktiv) f.push(fall.name + ': nicht schonend');
+      if (s2.gewartet.indexOf(600) < 0) f.push(fall.name + ': keine Pause vor der Dienstsuche');
+      if (s2.rufe.indexOf('requestConnectionPriority') >= 0) f.push(fall.name + ': Prioritaet sofort angefragt');
+    }
+    // 3. Abo scheitert: Fehler kommt an, die Verbindung wird aufgeraeumt, ein neuer Versuch gelingt.
+    const k = bau({ aboFehler: true });
+    const r3 = await verbinde(k);
+    if (!r3.fehler) f.push('Abo-Fehler nicht gemeldet');
+    if (r3.car.verbSchritt !== 'Abo') f.push('Schritt beim Fehler: ' + r3.car.verbSchritt);
+    const r4 = await verbinde(k, true);
+    if (r4.fehler) f.push('zweiter Versuch nach Abo-Fehler: ' + r4.fehler.message);
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'normal ' + n.rufe.filter((x) => x !== 'initialize' && x !== 'isEnabled').join('>') + ' | schonend mit Pause, ohne sofortige Prioritaet | Abo-Fehler, dann zweiter Versuch' };
+  });
+
+  // v1.5.6: Aufstellung, Platz 4: wurde der Haltepunkt (mitten im Teil) verpasst, faehrt die Folge kuerzer.
+  stAdd('Aufstellung v1.5.6: verpasster Haltepunkt kuerzt die Folge, Platz auf Zielteil unveraendert', () => {
+    const f = [];
+    const merk = currentTrackTiles;
+    try {
+      currentTrackTiles = codeToTrack('SG3R2G3R2G').tiles; lineCache = null;
+      const n = currentTrackTiles.length;
+      const platz4 = 3, platz1 = 0;
+      const ziel4 = aufstellZielKachel(platz4, n), bruch4 = aufstellHaltBruch(platz4);
+      // genau am Haltepunkt: kein Vorsprung, volle Folge
+      const v0 = aufstellVorsprung(ziel4 + bruch4, ziel4, platz4);
+      if (Math.abs(v0) > 1e-6) f.push('am Haltepunkt Vorsprung ' + v0);
+      if (aufstellNachholFaktor(v0, aufstellSkript(1)) !== 1) f.push('am Haltepunkt gekuerzt');
+      // im Nachholfenster (naechster Teil, Anteil 0,1): Vorsprung = 1 + 0,1 - Bruch
+      const o = ((ziel4 + 1 + 0.1) % n);
+      const v = aufstellVorsprung(o, ziel4, platz4);
+      if (Math.abs(v - (1.1 - bruch4)) > 1e-6) f.push('Vorsprung ' + v.toFixed(3) + ' statt ' + (1.1 - bruch4).toFixed(3));
+      const sk = aufstellSkript(-1);
+      const roll = scRollweg(sk, null);
+      const fk = aufstellNachholFaktor(v, sk);
+      if (!(fk < 1 && fk >= AUFSTELL_NACHHOL_MIN)) f.push('Faktor ' + fk.toFixed(3) + ' nicht in [' + AUFSTELL_NACHHOL_MIN + ', 1)');
+      // die gekuerzte Folge rollt um etwa den Vorsprung weniger (Modell, ohne Untergrenze)
+      const kurz = scRollweg(aufstellSkript(-1, fk), null);
+      if (fk > AUFSTELL_NACHHOL_MIN + 1e-9 && Math.abs((roll - kurz) - v) > 0.12) f.push('Rollweg kuerzer um ' + (roll - kurz).toFixed(2) + ', Vorsprung ' + v.toFixed(2));
+      // der Zusatzfaktor wirkt nur aufs Gas, nicht auf Lenkung und Zeiten
+      const a1 = aufstellSkript(1), a2 = aufstellSkript(1, 0.8);
+      if (a1.some((x, i) => x[0] !== a2[i][0] || x[1] !== a2[i][1])) f.push('Zusatzfaktor aendert Zeiten oder Lenkung');
+      if (Math.abs(a2[3][2] / a1[3][2] - 0.8) > 1e-9) f.push('Zusatzfaktor ' + (a2[3][2] / a1[3][2]));
+      // Platz 1 (Teilkante): ein verschluckter Zaehler (Ort schon im naechsten Teil) kuerzt NICHT unbegrenzt
+      const fk1 = aufstellNachholFaktor(aufstellVorsprung(((aufstellZielKachel(platz1, n) + 1 + 0.45) % n), aufstellZielKachel(platz1, n), platz1), aufstellSkript(1));
+      if (fk1 < AUFSTELL_NACHHOL_MIN - 1e-9) f.push('Platz 1 unter der Untergrenze: ' + fk1);
+      // aufstellAmPunkt bleibt wie vorher: am Haltepunkt ja, im Nachholfenster ja, davor nein
+      if (!aufstellAmPunkt(ziel4 + bruch4, ziel4, platz4)) f.push('am Haltepunkt nicht ausgeloest');
+      if (!aufstellAmPunkt(o, ziel4, platz4)) f.push('Nachholfenster nicht ausgeloest');
+      if (aufstellAmPunkt(ziel4 + bruch4 - 0.2, ziel4, platz4)) f.push('vor dem Haltepunkt ausgeloest');
+      return { ok: !f.length, mass: f.length ? f.join('; ') : 'Platz 4: Haltepunkt ' + bruch4.toFixed(2) + ' im Teil ' + ziel4 + ', Vorsprung ' + v.toFixed(2) + ' -> Folge x ' + fk.toFixed(2) + ' (Rollweg ' + roll.toFixed(2) + ')' };
+    } finally {
+      currentTrackTiles = merk; lineCache = null;
+    }
+  });
+
+  // v1.5.9: Wetter-Startwert und binaerer Griff.
+  stAdd('Wetter v1.5.9: Startwert macht den Plan wiederholbar, binaerer Griff', () => {
+    const f = [];
+    const merk = { wx: raceWxStart, mode: raceMode, lim: raceLimit, seed: null };
+    try { merk.seed = localStorage.getItem(WX_SEED_STORE); } catch (e) { /* privat */ }
+    const setze = (v) => { try { if (v === null) localStorage.removeItem(WX_SEED_STORE); else localStorage.setItem(WX_SEED_STORE, v); } catch (e) { /* privat */ } };
+    try {
+      raceWxStart = 'wechsel'; raceMode = 'laps'; raceLimit = 10;
+      setze('Spa');
+      const a1 = JSON.stringify(wetterPlanBauen()), a2 = JSON.stringify(wetterPlanBauen());
+      if (a1 !== a2) f.push('derselbe Startwert, verschiedener Plan');
+      setze('Monza');
+      const b1 = JSON.stringify(wetterPlanBauen());
+      if (b1 === a1) f.push('anderer Startwert, derselbe Plan');
+      // Der Zufallsstrom beginnt je Plan von vorn UND laeuft danach weiter (kein Dauerwert).
+      setze('Spa'); wxRngNeu();
+      const r1 = wxZufall(), r2 = wxZufall();
+      if (r1 === r2) f.push('Zufallsstrom steht still');
+      wxRngNeu();
+      if (wxZufall() !== r1) f.push('Neustart gibt nicht denselben Anfang');
+      setze(null); wxRngNeu();
+      if (wxRngZustand !== null) f.push('ohne Startwert nicht zufaellig');
+      // Binaerer Griff: trocken bis unter der halben Front, nass ab dort.
+      if (wxGriff(0) !== 0 || wxGriff(0.49) !== 0 || wxGriff(0.5) !== 1 || wxGriff(1) !== 1) f.push('wxGriff nicht binaer: ' + [0, 0.49, 0.5, 1].map(wxGriff).join(','));
+      return { ok: !f.length, mass: f.length ? f.join('; ') : 'Plan mit Startwert wiederholbar, anderer Wert anderer Plan, Griff 0/1 an der halben Front' };
+    } finally {
+      raceWxStart = merk.wx; raceMode = merk.mode; raceLimit = merk.lim;
+      setze(merk.seed); wxRngNeu();
+    }
+  });
+
+  // v1.5.6: Akku bei Rohwert <= 140 als "niedrig" statt Scheinprozent; Glaettung des Cockpits je Fahrerauto.
+  stAdd('Akku v1.5.6: niedrig statt Scheinzahl, Glättung je Fahrerauto', () => {
+    const f = [];
+    if (akkuAnzeige(null, true) !== '–') f.push('ohne Wert kein Strich');
+    if (akkuAnzeige(AKKU_NIEDRIG_ROH, true) !== t('niedrig')) f.push('Rohwert ' + AKKU_NIEDRIG_ROH + ' zeigt ' + akkuAnzeige(AKKU_NIEDRIG_ROH, true));
+    if (akkuAnzeige(AKKU_LEER, false) !== t('niedrig')) f.push('leer zeigt keinen Text');
+    const ueber = akkuAnzeige(AKKU_NIEDRIG_ROH + 1, false);
+    if (!/^\d+%$/.test(ueber)) f.push('knapp ueber der Grenze: ' + ueber);
+    if (!/^100/.test(akkuAnzeige(AKKU_VOLL, false))) f.push('voll zeigt ' + akkuAnzeige(AKKU_VOLL, false));
+    // Je Auto geglaettet: ein Wechsel des Fahrerautos darf den Speicher des Vorgaengers nicht erben.
+    const merk = { halter: Object.assign({}, dashAkkuHalter), pc: playerCar };
+    try {
+      const a1 = { id: 'st-akku-a' }, a2 = { id: 'st-akku-b' };
+      playerCar = a1; dashAkkuHalter.akkuHist = []; dashAkkuHalter.car = undefined;
+      const h1 = dashAkkuFuerAuto();
+      akkuGlaetten(h1, 152, 1000);
+      playerCar = a2;
+      const h2 = dashAkkuFuerAuto();
+      const m = akkuGlaetten(h2, 141, 2000);
+      if (m !== 141) f.push('Wechsel des Fahrerautos erbt den Wert des Vorgaengers: ' + m);
+      playerCar = a2;
+      akkuGlaetten(dashAkkuFuerAuto(), 150, 2500);
+      const m2 = akkuGlaetten(dashAkkuFuerAuto(), 141, 3000);
+      if (m2 !== 150) f.push('Glaettung (Maximum 5 s) im selben Auto kaputt: ' + m2);
+    } finally {
+      playerCar = merk.pc;
+      for (const k of Object.keys(dashAkkuHalter)) delete dashAkkuHalter[k];
+      Object.assign(dashAkkuHalter, merk.halter);
+    }
+    return { ok: !f.length, mass: f.length ? f.join('; ') : 'bis Rohwert ' + AKKU_NIEDRIG_ROH + ' "niedrig", darueber Prozent, Glaettung je Fahrerauto' };
+  });
+
+  // v1.5.3: Die Startrunde des Safety Cars endet schon vor dem Parkteil (derselbe Heimweg wie nach Gelb).
+  stAdd('Safety Car v1.5.3: Startrunde endet 4 Teile vor dem Parkteil, nicht erst an der Linie', () => {
+    const f = [];
+    const merk = { tiles: currentTrackTiles, park: $('sc-parkplatz') ? $('sc-parkplatz').value : null };
+    try {
+      currentTrackTiles = codeToTrack('SG3R2G3R2').tiles; lineCache = null;
+      const nk = currentTrackTiles.length, k = scParkKachel();
+      const mk = (ti, gefahren, extra) => ({ role: 'safetycar', ghost: Object.assign({ scErsteRunde: true, scHeim: false,
+        randHalt: null, tileIndex: ((ti % nk) + nk) % nk, scStartKacheln: gefahren }, extra || {}) });
+      const halb = Math.ceil(Math.max(2, nk / 2));
+      if (!scStartrundeFrueherHeim(mk(k - 4, halb), nk)) f.push('4 Teile vorher nach halber Runde: kein Heimweg');
+      if (!scStartrundeFrueherHeim(mk(k - 3, halb), nk)) f.push('3 Teile vorher (Zaehler verschluckt): kein Heimweg');
+      if (scStartrundeFrueherHeim(mk(k - 4, 1), nk)) f.push('direkt nach dem Start schon Heimweg');
+      if (scStartrundeFrueherHeim(mk(k - 6, halb), nk)) f.push('6 Teile vorher schon Heimweg');
+      if (scStartrundeFrueherHeim(mk(k - 1, halb), nk)) f.push('1 Teil vorher noch Heimweg (zu spaet fuer den Plan)');
+      if (scStartrundeFrueherHeim(mk(k - 4, halb, { scErsteRunde: false }), nk)) f.push('ohne Startrunde Heimweg');
+      if (scStartrundeFrueherHeim(mk(k - 4, halb, { randHalt: {} }), nk)) f.push('waehrend einer Parkfolge Heimweg');
+      // Der Plan des Heimwegs beginnt nie frueher als der Vorlauf: sonst waere der Ausloesepunkt schon vorbei.
+      const plan = scEinPassend(k, scParkTempo());
+      if (!(plan.ab >= -(SC_START_HEIM_VORLAUF - 1))) f.push('Plan beginnt ' + plan.ab.toFixed(2) + ' Teile vorher, Vorlauf nur ' + SC_START_HEIM_VORLAUF);
+      // Und mittig wird ab dem Heimweg gefahren, sobald das Safety Car nah genug ist.
+      const heim = mk(k - 2, halb, { scErsteRunde: false, scHeim: true });
+      if (!scVorParkMittig(heim)) f.push('2 Teile vor dem Parkteil nicht mittig');
+      return { ok: !f.length, mass: f.length ? f.join('; ') : 'Heimweg ab ' + SC_START_HEIM_VORLAUF + ' Teilen vorher (Plan ' + plan.ab.toFixed(2) + '), frueh und spaet nicht' };
+    } finally {
+      currentTrackTiles = merk.tiles; lineCache = null;
+    }
+  });
 
 
   stAdd('Rennstand: Start/Ziel ist keine Ueberrundung', () => {

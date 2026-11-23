@@ -106,6 +106,9 @@
     // gleichzeitig einen Klick irgendwo in der Seite aus - eine Belegung darauf kaempft mit
     // dem Cursor. Frei zuweisbar bleibt es, nur eben nicht ab Werk.
     resetcar: { type: 'none', index: -1, label: 'nicht belegt' },
+    // Eigene Taste fuer die Kamera der virtuellen Fahrt (aus PR 4 von gnen54): R3 ist dort jetzt die
+    // Lichthupe wie am echten Auto. Ab Werk unbelegt.
+    vfkamera: { type: 'none', index: -1, label: 'nicht belegt' },
   };
   const BIND_ACTION_LABELS = {
     pause: 'Pause / Fortsetzen',
@@ -121,6 +124,7 @@
     trackview: 'Streckenansicht',
     fullscreenToggle: 'Vollbild umschalten',
     resetcar: 'Auto zurücksetzen',
+    vfkamera: 'Kamera wechseln (virtuell)',
     status: 'L3-Statusansage',
   };
 
@@ -166,7 +170,7 @@
     // type 'none' ist KEIN Eingang. Ohne diese Zeile kollidieren zwei unbelegte Aktionen
     // miteinander, und die zweite wuerde "aufgeloest" - eine Kollision, die es nicht gibt.
     if (!x || x.type === undefined || x.type === 'none') return null;
-    return x.type + ':' + x.index;
+    return x.type + ':' + x.index + (x.unten ? ':u' : '');
   }
 
   // KOLLISIONEN AUFLOESEN, allgemein statt Fall fuer Fall.
@@ -392,8 +396,18 @@
     renderBindTable();
   }
   // Alle Knoepfe losgelassen? (Achsen zaehlen nicht: eine RC-Fernbedienung ruht bei -1.)
+  // Android (aus PR 4 von gnen54, EasySMX X05 am Tablet als "Xbox Wireless Controller"): die Trigger
+  // (Knoepfe 6/7) melden in Ruhe pressed = true mit value 0 bzw. ruhen bei 0,5. "Alle Tasten los" wurde nie
+  // wahr: die Abgleich-Sperre blieb an (kein Gas, keine Lenkung). Bei analogen Knoepfen zaehlt deshalb der
+  // (auf die gelernte Ruhe bezogene) Wert, nicht pressed - wie in readBindingValue().
   function padAllesLos(pad) {
-    return !pad || Array.prototype.every.call(pad.buttons || [], (b) => !b.pressed && !((b.value || 0) > 0.3));
+    return !pad || Array.prototype.every.call(pad.buttons || [], (b, i) =>
+      (padKnopfAnalog(pad, i) ? padKnopfWert(pad, i) <= 0.3 && !padTriggerVorn(pad, i) : (!b.pressed && (b.value || 0) <= 0.3)));
+  }
+  // Trigger nach vorn gedrueckt (unter der gelernten Ruhe um 0,5)? Auch das ist "nicht los".
+  function padTriggerVorn(pad, i) {
+    const z = padTriggerRuhe[(pad.index | 0) + ':' + i];
+    return !!(z && z.r >= 0.3 && (+pad.buttons[i].value || 0) < z.r - 0.3);
   }
   // Der Takt eines Pads waehrend einer Sitzung: nur erfassen und auf "Options halten" achten. true = der Takt
   // gehoert der Sitzung (oder der Sperre danach), sonst nichts tun.
@@ -736,8 +750,11 @@
       const d = Math.abs(v - ruhe);
       // Ein Knopf schlaegt eine Achse bei gleichem Ausschlag: er ist eindeutiger, und ein
       // Knopfdruck bewegt an manchen Pads eine Hat-Achse mit.
-      if (d > BUTTON_CAPTURE_THRESHOLD && (!bester || d > bester.d + 0.001)) {
-        bester = { d, art: 'button', i };
+      // Aus PR 4 von gnen54: ein analoger Trigger, der in Ruhe 0,5 meldet (Android), laesst sich auch nach
+      // VORN druecken - der Wert faellt dann unter die Ruhe. Das wird als eigene Richtung erfasst ("unten").
+      const schwelle = padKnopfAnalog(pad, i) || (ruhe > 0.3 && ruhe < 0.7) ? 0.4 : BUTTON_CAPTURE_THRESHOLD;
+      if (d > schwelle && (!bester || d > bester.d + 0.001)) {
+        bester = { d, art: 'button', i, unten: v < ruhe - 0.3 };
       }
     }
     if (!bester) return;
@@ -761,7 +778,9 @@
           + `-> Achse ${bester.i} (Ruhe ${bester.ruhe.toFixed(2)}, `
           + `Ausschlag ${bester.d.toFixed(2)})`, 'info');
     } else {
-      ziel[action] = { type: 'button', index: bester.i, label: `Knopf ${bester.i}` };
+      ziel[action] = bester.unten
+        ? { type: 'button', index: bester.i, unten: true, label: `Knopf ${bester.i} (nach vorn)` }
+        : { type: 'button', index: bester.i, label: `Knopf ${bester.i}` };
       log(`Zuordnung gesetzt (Spieler ${bindEditSpieler}): ${BIND_ACTION_LABELS[action]} `
           + `-> Knopf ${bester.i}`, 'info');
     }
@@ -826,6 +845,16 @@
     }
     const btn = pad.buttons[binding.index];
     if (!btn) return 0;
+    // Nach vorn gedrueckter Trigger (aus PR 4 von gnen54): Weg von der gelernten Ruhe nach unten. Solange
+    // keine Ruhe um 0,5 gelernt ist (Chrome meldet vor dem ersten Beruehren 0), zaehlt das nicht - sonst
+    // Vollgas beim Start.
+    if (binding.unten) {
+      padKnopfWert(pad, binding.index);
+      const z = padTriggerRuhe[(pad.index | 0) + ':' + binding.index];
+      if (!z || z.r < 0.3) return 0;
+      const v = +btn.value || 0;
+      return Math.max(0, Math.min(1, (z.r - v - 0.03) / (z.r - 0.03)));
+    }
     // v1.3.129: manche Controller (v.a. Android-WebView) melden L3/R3 als gedrueckt,
     // aber mit value 0. `value ?? pressed` lasse dann 0 durch und der Druck ginge
     // verloren - die L3-Statusansage kam nie. Deshalb: gedrueckt zaehlt immer,
@@ -835,7 +864,7 @@
     // Vollbremsung, obwohl der Trigger in Ruhe ist - beim Trigger ist der Wert die Wahrheit.
     if (btn.value > 0) {
       if (btn.value < 1) padAnalogKnoepfe[(pad.index | 0) + ':' + binding.index] = true;
-      return btn.value;
+      return padKnopfWert(pad, binding.index);
     }
     return btn.pressed && !padKnopfAnalog(pad, binding.index) ? 1 : 0;
   }
@@ -844,6 +873,26 @@
   function padKnopfAnalog(pad, index) {
     return (pad.mapping === 'standard' && (index === 6 || index === 7))
       || !!padAnalogKnoepfe[(pad.index | 0) + ':' + index];
+  }
+  // Aus PR 4 von gnen54 (Pad-Diagnose "Knoepfe 6(0.50) 7(0.50)" ohne Beruehren): Android meldet die Trigger
+  // mancher Pads in Ruhe mit 0,5 (Achse ruht bei 0 statt -1, umgerechnet auf 0..1). Gas und Bremse standen
+  // dadurch beide halb. Je Trigger wird deshalb die Ruhe gelernt: was er eine Sekunde lang ruhig bei 0,45
+  // bis 0,55 meldet (Chrome meldet vor dem ersten Druck 0, danach 0,5; ein gehaltenes Teilgas wird keine
+  // Ruhe). Einmal bei 0,5 gelernt, bleibt die Ruhe dort (0 meldet so ein Trigger nur nach vorn gedrueckt).
+  // Der Wert wird dann von der Ruhe bis 1 auf 0..1 gestreckt.
+  const padTriggerRuhe = Object.create(null);
+  function padKnopfWert(pad, index) {
+    const b = pad && pad.buttons ? pad.buttons[index] : null;
+    if (!b) return 0;
+    const v = +b.value || 0;
+    if (!padKnopfAnalog(pad, index) && !(v > 0 && v < 1)) return v > 0 ? v : (b.pressed ? 1 : 0);
+    const k = (pad.index | 0) + ':' + index, jetzt = performance.now();
+    const z = padTriggerRuhe[k] || (padTriggerRuhe[k] = { r: 0, v, seit: jetzt });
+    if (Math.abs(v - z.v) > 0.02) { z.v = v; z.seit = jetzt; }
+    else if (jetzt - z.seit > 1000 && v >= 0.45 && v <= 0.55) z.r = v;
+    const r = z.r;
+    if (r <= 0.02) return v;
+    return Math.max(0, Math.min(1, (v - r - 0.03) / (1 - r - 0.03)));
   }
 
   // Gamepad sampling MUST run on requestAnimationFrame. Chrome refreshes the gamepad
@@ -919,7 +968,7 @@
   const DPAD = { up: 12, down: 13, left: 14, right: 15 };
   const prevDpad = { up: false, down: false, left: false, right: false };
   let prevLightFlash = false, prevPitstop = false, prevTrackReadMode = false;
-  let prevRaceStart = false, prevTrackView = false, prevResetCar = false;
+  let prevRaceStart = false, prevTrackView = false, prevResetCar = false, prevVfKamera = false;
   let prevStatus = false;
   let gridPadVorher = false;
 
@@ -1734,6 +1783,8 @@
   // v1.1.3 BESTELLT: "Wenn ich virtuell klicke, dann sollen rechts noch Optionen kommen." true = rechts
   // stehen die Optionen der virtuellen Fahrt (60d-virtuell.js) statt eines Autos.
   let garVirtuellAuf = false;
+  // v1.5 (WIP): rechts die Optionen der Onboard-Kamera (75-onboard.js) statt eines Autos.
+  let garKameraAuf = false;
   let garFotoFuer = null;
   function garageFarbeSetzen(car, id) {
     car.colorId = id;
@@ -1748,7 +1799,7 @@
   function garAkkuText(car) {
     if (car.battery === null || car.battery === undefined || typeof batteryPercent !== 'function') return '';
     const p = batteryPercent(car.battery);
-    return ' &middot; <span class="gar-akku' + (p < 25 ? ' knapp' : '') + '">' + t('Akku') + ' ' + p + '&nbsp;%'
+    return ' &middot; <span class="gar-akku' + (p < 25 ? ' knapp' : '') + '">' + t('Akku') + ' ' + akkuAnzeige(car.battery, true).replace('\u00a0', '&nbsp;')
       + (car.akkuMinRoh !== undefined ? ' (min ' + car.akkuMinRoh + ')' : '') + '</span>';
   }
   function garWertZeile(titel, wert, zurueck, vor, extra) {
@@ -2119,6 +2170,8 @@
     // und danach wiederherstellen (bei kuerzerem Inhalt so weit unten wie moeglich).
     const scrollMerk = { l: garScrollStand.l, r: garScrollStand.r, vorfahren: [] };
     for (let p = list.parentElement; p; p = p.parentElement) if (p.scrollTop) scrollMerk.vorfahren.push([p, p.scrollTop]);
+    const onbOpt = $('onboard-optionen'), onbHalter = $('onboard-halter');
+    if (onbOpt && onbHalter && onbOpt.parentElement !== onbHalter) onbHalter.appendChild(onbOpt);
     list.innerHTML = '';
     list.classList.remove('gar-karten');
     list.classList.add('gar-a');
@@ -2139,7 +2192,7 @@
       // v1.1.11 BESTELLT: "Das rechte soll automatisch gewaehlt werden, wenn ich ein Auto markiert habe
       // und X druecke, wie bei der Meisterschaft." Vor dem Sprung wird das markierte Auto gewaehlt.
       row._vorSprung = () => {
-        if (garAufAuto !== car || garVirtuellAuf) { garAufAuto = car; garVirtuellAuf = false; renderGarage(); }
+        if (garAufAuto !== car || garVirtuellAuf || garKameraAuf) { garAufAuto = car; garVirtuellAuf = false; garKameraAuf = false; renderGarage(); }
       };
       const f = carColor(car);
       const foto = autoFoto(car);
@@ -2164,7 +2217,7 @@
       // Ein Tipp auf die Zeile waehlt das Auto fuer die rechte Seite.
       row.onclick = (e) => {
         if (e.target.closest('button, input, select')) return;
-        if (garAufAuto !== car || garVirtuellAuf) { garAufAuto = car; garVirtuellAuf = false; renderGarage(); }
+        if (garAufAuto !== car || garVirtuellAuf || garKameraAuf) { garAufAuto = car; garVirtuellAuf = false; garKameraAuf = false; renderGarage(); }
       };
       // v1.1.25 BESTELLT: "Zeige in der Garage links je Auto die Rolle an, aber mach, dass ich sie rechts
       // ganz oben einstelle." Links steht die Rolle nur noch als Etikett; eingestellt wird sie rechts in der
@@ -2180,10 +2233,15 @@
     plusKnopf.textContent = '+ ' + t('Auto verbinden');
     plusKnopf.onclick = () => { const c = $('gar-connect'); if (c) c.click(); };
     plus.appendChild(plusKnopf);
-    links.appendChild(plus);
+    // v1.5.86 BESTELLT: "Garage Buttons unten näher zusammentun, damit ich nicht so viel scrollen muss". Die Knoepfe
+    // unter "+ Auto verbinden" stehen in einem Raster mit zwei Spalten und ohne Zeilenabstand (.gar-a-knoepfe).
+    const knoepfe = document.createElement('div');
+    knoepfe.className = 'gar-a-knoepfe';
+    plus.classList.add('gar-a-voll');
+    knoepfe.appendChild(plus);
     ['gar-stop-ghosts', 'gar-go', 'gar-disconnect-all', 'gar-to-cockpit'].forEach((id) => {
       const z = garAktionsZeile(id);
-      if (z) links.appendChild(z);
+      if (z) knoepfe.appendChild(z);
     });
     // v1.1.3: virtuelle Fahrt (60d-virtuell.js) - ein Auto ohne Bluetooth auf der Editor-Strecke.
     // BESTELLT: ganz unten, unter "Zum Cockpit".
@@ -2196,13 +2254,41 @@
     virtKnopf.innerHTML = t('Virtuell fahren') + ' <span class="wip-tag">WIP</span>';
     virtKnopf.setAttribute('aria-pressed', garVirtuellAuf ? 'true' : 'false');
     if (garVirtuellAuf) virtKnopf.classList.add('primary');
-    virtKnopf.onclick = () => { garVirtuellAuf = true; renderGarage(); };
+    virtKnopf.onclick = () => { garVirtuellAuf = true; garKameraAuf = false; renderGarage(); };
     virt.appendChild(virtKnopf);
-    links.appendChild(virt);
+    knoepfe.appendChild(virt);
+    // v1.5 (WIP) BESTELLT: die Onboard-Kamera "in der Garage verbinden". Wie "Virtuell fahren": links
+    // die Zeile, rechts die Optionen (#onboard-optionen aus dem Halter in 00-index.head.html).
+    if ($('onboard-optionen')) {
+      const kam = document.createElement('div');
+      kam.className = 'opt-row opt-breit gar-a-aktion gar-a-kamera' + (garKameraAuf ? ' gk-auf' : '');
+      kam.dataset.xSprung = '.gar-a-rechts .opt-row';
+      kam._vorSprung = () => { if (!garKameraAuf) { garKameraAuf = true; garVirtuellAuf = false; renderGarage(); } };
+      const kamKnopf = document.createElement('button');
+      kamKnopf.type = 'button';
+      kamKnopf.innerHTML = t('Onboard-Kamera') + ' <span class="wip-tag">WIP</span>';
+      kamKnopf.setAttribute('aria-pressed', garKameraAuf ? 'true' : 'false');
+      if (garKameraAuf) kamKnopf.classList.add('primary');
+      kamKnopf.onclick = () => { garKameraAuf = true; garVirtuellAuf = false; renderGarage(); };
+      kam.appendChild(kamKnopf);
+      knoepfe.appendChild(kam);
+    }
+    // v1.5 (WIP): Showroom (98k-showroom.js), Sammelkarten aller bekannten Autos.
+    if (typeof showGarageZeile === 'function') knoepfe.appendChild(showGarageZeile());
+    // v1.5 (WIP): zweiter Laptop als Bluetooth-Helfer (98m-zwei-laptops.js).
+    if (typeof zlGarageZeile === 'function') knoepfe.appendChild(zlGarageZeile());
+    links.appendChild(knoepfe);
     // Rechte Seite: das gewaehlte Auto, oder die Optionen der virtuellen Fahrt.
-    const car = garVirtuellAuf ? null : garAufAuto;
+    const car = (garVirtuellAuf || garKameraAuf) ? null : garAufAuto;
     if (garVirtuellAuf && typeof vfGarageOptionen === 'function') {
       vfGarageOptionen(rechts);
+    } else if (garKameraAuf && onbOpt) {
+      const kopf = document.createElement('h3');
+      kopf.className = 'gar-a-titel';
+      kopf.textContent = t('Onboard-Kamera');
+      rechts.appendChild(kopf);
+      rechts.appendChild(onbOpt);
+      if (typeof onboardMalen === 'function') onboardMalen();
     } else if (car) {
       const kopf = document.createElement('h3');
       kopf.className = 'gar-a-titel';
@@ -2221,6 +2307,8 @@
       rechts.appendChild(zb);
       // v1.4.33 (WIP): Setup je Spielerauto (98i-setup.js) - eigenes Fenster mit Reifentyp und Starttank.
       if (typeof setupGarageZeile === 'function') { const zs = setupGarageZeile(car); if (zs) rechts.appendChild(zs); }
+      // v1.5 (WIP): KI-Persoenlichkeit je NPC (98j-ki-persoenlichkeit.js), an derselben Stelle wie das Setup.
+      if (typeof kiGarageZeile === 'function') { const zk = kiGarageZeile(car); if (zk) rechts.appendChild(zk); }
       // Name
       const zn = document.createElement('div');
       zn.className = 'opt-row gk-zeile gar-a-name';
@@ -2275,6 +2363,8 @@
     }
     list.appendChild(links);
     list.appendChild(rechts);
+    // v1.5.94: Erklaerungen (<small> in .opt-label) der Garagenzeilen hinter das (i), erst wenn sie im Dokument stehen.
+    if (rechts.querySelector('.opt-label small:not(.opt-info-versteckt)') && typeof optInfoEinrichten === 'function') optInfoEinrichten();
     refreshGarageGo();
     garAktionenAbgleichen();
     const setzen = () => {
@@ -2318,13 +2408,13 @@
         const k = fr.findIndex((r) => r.id === car.role);
         const n = fr[((k < 0 ? fr.length - 1 : k) + +b.dataset.d + fr.length) % fr.length];
         garAufAuto = car;
-        garVirtuellAuf = false;
+        garVirtuellAuf = false; garKameraAuf = false;
         setCarRole(car, n.id);
       };
     });
     z.querySelector('select.gk-rolle-wahl').addEventListener('change', (e) => {
       garAufAuto = car;
-      garVirtuellAuf = false;
+      garVirtuellAuf = false; garKameraAuf = false;
       setCarRole(car, e.target.value);
     });
     return z;
@@ -2457,11 +2547,128 @@
   // (siehe 05-app-bruecke.js).
   const VERBINDE_NEU_MS = 1000;
   const VERBINDE_NEU_MAX = 5;
+  // ---- VERBINDUNGSFEHLER SICHTBAR, ZWEITER VERSUCH SCHONEND (v1.5, WIP) --------------------
+  // GEMELDET (Pixel 9, App, PS4-Controller): Auto wird gefunden, Lichter 3 s heller, dann "nicht verbunden";
+  // im Browser geht es. Hier nicht nachstellbar, deshalb drei Dinge:
+  //   1. Jeder Schritt des Verbindens steht im Verbindungsprotokoll (OMEGA_BRUECKE.proto, 05-app-bruecke.js),
+  //      und ein Fehlschlag steht SICHTBAR in der Garage und im Fahren-Menue, mit "Protokoll kopieren".
+  //   2. In der App (nur dort, erkannt an gatt.omegaBruecke) folgt auf einen Fehlschlag bei Dienstsuche/Abo
+  //      oder einen Abriss in den ersten VERBINDE_FRUEH_MS genau EIN zweiter Versuch im schonenden Modus
+  //      (600 ms Pause vor der Dienstsuche, keine Prioritaetsanfrage in den ersten 5 s; die Bruecke).
+  //   3. Liegt in der App ein Gamepad an, verbindet die Bruecke von Anfang an schonend.
+  // Der Web-Bluetooth-Weg im Browser bleibt unveraendert (dort wird nur mitgeschrieben).
+  const VERBINDE_FRUEH_MS = 5000;         // Abriss so kurz nach dem Aufbau gilt als gescheiterter Aufbau
+  const VERBINDE_ZWEITER_PAUSE_MS = 1500; // vor dem zweiten Versuch: das Auto muss die Trennung erst bemerken
+  const VERBINDE_ERREICHBAR_MS = 10000;   // connect lief so lange: nicht erreichbar, ein zweiter Versuch hilft nicht
+  const VERB_PROTO_KOPIE_N = 40;
+  // Zeitgeber als Variable: der Selbsttest wartet nicht wirklich.
+  let verbindeWarten = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  function verbProtoName(car) {
+    const b = window.OMEGA_BRUECKE;
+    const d = (car && car.device) || {};
+    const name = (car && (car.alias || car.tag)) || d.name;
+    return b && typeof b.protoName === 'function' ? b.protoName(name, d.id) : String(name || d.id || 'Auto');
+  }
+  function verbProto(car, schritt, ergebnis) {
+    const b = window.OMEGA_BRUECKE;
+    try { if (b && typeof b.proto === 'function') b.proto(verbProtoName(car), schritt, ergebnis); } catch (e) { /* nur Protokoll */ }
+  }
+  const verbFehlerText = (e) => String((e && e.message) || e || 'Fehler');
+  // Die sichtbare Lage: art '' | 'fehler' | 'hinweis'. Gemerkt werden Grund und Umstand, nicht der fertige
+  // Satz - so folgt die Anzeige einem Sprachwechsel.
+  const verbLage = { art: '', grund: '', zweiter: false };
+  const VERB_SCHRITT_NAME = { connect: 'Verbindung', Dienste: 'Dienste', Abo: 'Abo der Meldungen' };
+  function verbGrund(schritt, err) {
+    const n = VERB_SCHRITT_NAME[schritt];
+    return (n ? t(n) + ': ' : '') + verbFehlerText(err);
+  }
+  function verbLageText() {
+    if (verbLage.art === 'fehler') {
+      return t(verbLage.zweiter ? 'Verbinden fehlgeschlagen (zweiter, schonender Versuch): {g}' : 'Verbinden fehlgeschlagen: {g}')
+        .replace('{g}', verbLage.grund);
+    }
+    if (verbLage.art === 'hinweis') return t('Verbunden im zweiten, schonenden Versuch. Erster Versuch: {g}').replace('{g}', verbLage.grund);
+    return '';
+  }
+  function verbLageZeigen() {
+    const text = verbLageText();
+    const el = $('gar-verb-lage'), tx = $('gar-verb-text');
+    if (el && tx) {
+      if (tx.textContent !== text) tx.textContent = text;
+      el.hidden = !text;
+      el.classList.toggle('hinweis', verbLage.art === 'hinweis');
+      if (!text && $('gar-verb-proto-text')) $('gar-verb-proto-text').hidden = true;
+    }
+    if (typeof konsoleVerbLage === 'function') konsoleVerbLage();
+  }
+  function verbLageSetzen(art, grund, zweiter) {
+    verbLage.art = art || ''; verbLage.grund = grund || ''; verbLage.zweiter = !!zweiter;
+    verbLageZeigen();
+  }
+  // Kopf und die letzten Zeilen des Protokolls als Text (fuer die Zwischenablage).
+  function verbProtoText() {
+    const b = window.OMEGA_BRUECKE || {};
+    const zeilen = typeof b.protoZeilen === 'function' ? b.protoZeilen(VERB_PROTO_KOPIE_N) : [];
+    let pad = 'nein';
+    try {
+      const pads = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).filter(Boolean);
+      if (pads.length) pad = 'ja (' + pads.map((x) => x.id).join('; ') + ')';
+      else if (typeof b.gamepadGekoppelt === 'function' && b.gamepadGekoppelt()) pad = 'ja (von der App gemeldet)';
+    } catch (e) { /* ohne Gamepad-API */ }
+    const app = !!(window.OMEGA_APP && window.OMEGA_APP.nativ);
+    const apk = app && $('app-stand-apk') ? String($('app-stand-apk').textContent || '').trim() : '';
+    const lage = verbLageText();
+    const kopf = [
+      'OmegaSim ' + (($('app-version') || {}).textContent || '?') + ' \u00b7 '
+        + (app ? 'Android-App' + (apk ? ' (APK ' + apk + ')' : '') : 'Browser'),
+      navigator.userAgent,
+      'Gamepad verbunden: ' + pad,
+      'Funkpriorität beim Start: ' + (funkPrioAn() ? 'an' : 'aus') + ' \u00b7 Autos in der Garage: ' + garage.filter((c) => c && !c.sim).length,
+    ];
+    if (lage) kopf.push('Anzeige: ' + lage);
+    kopf.push('--- Verbindungsprotokoll (letzte ' + zeilen.length + ' Zeilen) ---');
+    return kopf.concat(zeilen.length ? zeilen : ['(leer)']).join('\n');
+  }
+  // opt.schreiben nur fuer den Selbsttest (statt der Zwischenablage). Rueckgabe: true = kopiert.
+  async function verbProtoKopieren(opt) {
+    const text = verbProtoText();
+    let ok = false;
+    try {
+      if (opt && opt.schreiben) await opt.schreiben(text);
+      else await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch (e) { ok = false; }
+    const feld = $('gar-verb-proto-text');
+    if (ok) {
+      if (feld) feld.hidden = true;
+      showHudToast(t('Verbindungsprotokoll kopiert'));
+    } else {
+      if (feld) { feld.hidden = false; feld.value = text; try { feld.select(); } catch (e) { /* egal */ } }
+      showHudToast(t('Kopieren nicht erlaubt - Text unten markiert, bitte selbst kopieren'));
+    }
+    return ok;
+  }
+  if ($('gar-verb-proto')) $('gar-verb-proto').onclick = () => { verbProtoKopieren(); };
   async function verbindeGatt(car) {
-    const srv = await car.device.gatt.connect();
-    const nus = await srv.getPrimaryService(NUS_SERVICE);
-    const rx = await nus.getCharacteristic(NUS_RX);
-    const tx = await nus.getCharacteristic(NUS_TX);
+    const gatt = car.device.gatt;
+    const t0 = performance.now();
+    const seit = () => Math.round(performance.now() - t0) + ' ms';
+    car.verbSchritt = 'connect';
+    let srv, nus, rx, tx;
+    try {
+      // Schonend kennt nur die Bruecke der App; ein Web-Bluetooth-Geraet bekommt nichts gesetzt.
+      if (car.schonend && gatt && gatt.omegaBruecke) gatt.schonend = true;
+      srv = await gatt.connect();
+      verbProto(car, 'connect', 'ok (' + seit() + ')' + (gatt && gatt.schonendAktiv ? ', schonend' : ''));
+      car.verbSchritt = 'Dienste';
+      nus = await srv.getPrimaryService(NUS_SERVICE);
+      rx = await nus.getCharacteristic(NUS_RX);
+      tx = await nus.getCharacteristic(NUS_TX);
+      verbProto(car, 'Dienste', 'ok (' + seit() + ')');
+    } catch (e) {
+      verbProto(car, car.verbSchritt, 'Fehler nach ' + seit() + ': ' + verbFehlerText(e));
+      throw e;
+    }
     // v1.1.3: den Zuhoerer des alten Merkmals abmelden - sonst lief nach jedem Neuverbinden
     // jedes Paket einmal mehr durch onCarNotify.
     if (car.tx && car.notifyHandler) car.tx.removeEventListener('characteristicvaluechanged', car.notifyHandler);
@@ -2474,8 +2681,17 @@
     car.funkPrioStufe = null;
     car.meldeRingN = 0; car.meldungAt = 0;
     car.notifyHandler = (e) => onCarNotify(car, e);
-    await tx.startNotifications();
+    car.verbSchritt = 'Abo';
+    try {
+      await tx.startNotifications();
+    } catch (e) {
+      verbProto(car, 'Abo', 'Fehler nach ' + seit() + ': ' + verbFehlerText(e));
+      throw e;
+    }
+    verbProto(car, 'Abo', 'ok (' + seit() + ')');
     tx.addEventListener('characteristicvaluechanged', car.notifyHandler);
+    car.verbSchritt = '';
+    car.aufgebautAt = performance.now();
     return car;
   }
   // v1.1.45 GEMELDET: Auto leuchtet hell ("verbunden"), die App ist es aber nicht; nur das Ladegeraet hilft.
@@ -2488,37 +2704,52 @@
     try {
       return await Promise.race([
         verbindeGatt(car),
-        new Promise((_, nein) => { uhr = setTimeout(() => nein(new Error('Zeitueberschreitung beim Verbinden')), VERBINDE_FRIST_MS); }),
+        new Promise((_, nein) => { uhr = setTimeout(() => {
+          verbProto(car, car.verbSchritt || 'Aufbau', 'Zeitüberschreitung nach ' + Math.round(VERBINDE_FRIST_MS / 1000) + ' s');
+          nein(new Error('Zeitüberschreitung beim Verbinden'));
+        }, VERBINDE_FRIST_MS); }),
       ]);
     } catch (e) {
       try { car.device.gatt.disconnect(); } catch (e2) { /* schon weg */ }
       throw e;
     } finally { clearTimeout(uhr); }
   }
+  // Ein Auto endgueltig aufgeben: trennen, aus der Garage nehmen, und der Grund steht sichtbar da.
+  function verbindenAufgeben(car, grund, zweiter) {
+    verbProto(car, 'aufgegeben', grund);
+    car.trennend = true;
+    try { car.device.gatt.disconnect(); } catch (e) { /* schon weg */ }
+    removeCar(car);
+    verbLageSetzen('fehler', grund, zweiter);
+  }
   function reconnectCar(car) {
     if (car.trennend || car.reconnectLaeuft) return;
-    if ((car.reconnectVersuche || 0) >= VERBINDE_NEU_MAX) {
-      log(`${garageLabel(car)}: Neu verbinden nach ${VERBINDE_NEU_MAX} Versuchen fehlgeschlagen.`, 'err');
+    // v1.5: nach einem Abriss in den ersten 5 s (car.fruehAbriss) gibt es genau EINEN, schonenden Versuch.
+    const max = car.fruehAbriss ? 1 : VERBINDE_NEU_MAX;
+    if ((car.reconnectVersuche || 0) >= max) {
+      log(`${garageLabel(car)}: Neu verbinden nach ${max} Versuch${max === 1 ? '' : 'en'} fehlgeschlagen.`, 'err');
       // v1.1.45: auch beim Aufgeben trennen - sonst blieb eine halbe Verbindung stehen.
-      car.trennend = true;
-      try { car.device.gatt.disconnect(); } catch (e) { /* schon weg */ }
-      removeCar(car);
+      // v1.5: und der Grund steht sichtbar in der Garage.
+      verbindenAufgeben(car, car.verbGrundZuletzt || t('Verbindung verloren'), !!car.fruehAbriss);
       return;
     }
     car.reconnectLaeuft = true;
     const versuch = (car.reconnectVersuche || 0) + 1;
     car.reconnectVersuche = versuch;
     const warte = VERBINDE_NEU_MS * versuch;
-    log(`${garageLabel(car)}: Verbinde neu (Versuch ${versuch}/${VERBINDE_NEU_MAX}) in ${Math.round(warte / 1000)} s.`, 'info');
+    log(`${garageLabel(car)}: Verbinde neu (Versuch ${versuch}/${max}${car.schonend ? ', schonend' : ''}) in ${Math.round(warte / 1000)} s.`, 'info');
+    verbProto(car, 'neu verbinden', 'Versuch ' + versuch + '/' + max + (car.fruehAbriss ? ' (zweiter, schonender Versuch)' : car.schonend ? ' (schonend)' : ''));
     setTimeout(async () => {
       if (car.trennend) { car.reconnectLaeuft = false; return; }
       try {
         await verbindeGattSicher(car);
         car.reconnectVersuche = 0;
         log(`${garageLabel(car)} wieder verbunden.`, 'info');
+        if (car.fruehAbriss) verbLageSetzen('hinweis', car.verbGrundZuletzt || '', true);
         funkPrioNachVerbinden(car);
       } catch (e) {
         log(`${garageLabel(car)}: Neu verbinden fehlgeschlagen: ${(e && e.message) || e}`, 'err');
+        car.verbGrundZuletzt = verbGrund(car.verbSchritt, e);
         car.reconnectLaeuft = false;
         reconnectCar(car);
         return;
@@ -2545,8 +2776,14 @@
       });
       await garageGeraetAufnehmen(dev);
     } catch (err) {
-      if (err && err.name === 'NotFoundError') log('Keine Auswahl getroffen.', 'info');
-      else log('Verbinden fehlgeschlagen: ' + (err && err.message), 'err');
+      // v1.5: NotFoundError ohne verbSchritt ist die geschlossene Auswahl; mit verbSchritt kam er aus dem
+      // Aufbau (Dienst nicht gefunden) und ist ein echter Fehlschlag.
+      if (err && err.name === 'NotFoundError' && !err.verbSchritt) log('Keine Auswahl getroffen.', 'info');
+      else {
+        log('Verbinden fehlgeschlagen: ' + (err && err.message), 'err');
+        // v1.5: nicht mehr nur im Live-Log - sichtbar in der Garage und im Fahren-Menue.
+        verbLageSetzen('fehler', verbGrund(err && err.verbSchritt, err), !!(err && err.zweiterVersuch));
+      }
     }
   }
   // v1.1.3: der Teil nach der Auswahl, auch fuer das automatische Verbinden beim Start.
@@ -2573,12 +2810,55 @@
         // Auto-Reconnect (v1.0.73): siehe reconnectCar.
         trennend: false, reconnectLaeuft: false, reconnectVersuche: 0,
       };
-      await verbindeGattSicher(car);
+      // v1.5: scheitert der Aufbau in der App (nicht: Auto gar nicht erreichbar), folgt genau EIN zweiter
+      // Versuch im schonenden Modus. Im Browser (kein gatt.omegaBruecke) wie bisher ein Versuch.
+      let ersterGrund = '';
+      const t0 = performance.now();
+      try {
+        await verbindeGattSicher(car);
+      } catch (e1) {
+        const schritt = car.verbSchritt || 'connect';
+        e1.verbSchritt = schritt;
+        const dauer = performance.now() - t0;
+        const lohnt = !!(dev.gatt && dev.gatt.omegaBruecke) && !(schritt === 'connect' && dauer >= VERBINDE_ERREICHBAR_MS);
+        if (!lohnt) throw e1;
+        ersterGrund = verbGrund(schritt, e1);
+        log(`${garageLabel(car)}: Verbinden fehlgeschlagen (${ersterGrund}) - zweiter, schonender Versuch.`, 'warn');
+        verbProto(car, 'zweiter Versuch', 'schonend, nach Fehler bei ' + schritt);
+        car.schonend = true;
+        await verbindeWarten(VERBINDE_ZWEITER_PAUSE_MS);
+        try {
+          await verbindeGattSicher(car);
+        } catch (e2) {
+          e2.verbSchritt = car.verbSchritt || 'connect';
+          e2.zweiterVersuch = true;
+          verbProto(car, 'aufgegeben', 'auch der zweite, schonende Versuch scheiterte');
+          throw e2;
+        }
+      }
+      car.verbundenAt = performance.now();
       car.trennHandler = () => {
         if (car.trennend) return;
         // v1.1.3: bis zum Neuverbinden nicht mehr schreiben (siehe funkSchreiben) - vorher
         // ~22 Fehlversuche je Sekunde, jeder mit einer Logzeile.
         if (car.rx) car.rx.verbindungWeg = true;
+        // v1.5: wie lange hielt die Verbindung? In der App: ein Abriss in den ersten 5 s ist ein gescheiterter
+        // Aufbau - genau EIN zweiter Versuch, schonend; reisst auch der frueh ab, steht der Fehler sichtbar da.
+        const hielt = car.aufgebautAt ? performance.now() - car.aufgebautAt : -1;
+        verbProto(car, 'getrennt', hielt >= 0 ? 'nach ' + Math.round(hielt) + ' ms' : '');
+        if (dev.gatt && dev.gatt.omegaBruecke && hielt >= 0 && hielt < VERBINDE_FRUEH_MS) {
+          car.verbGrundZuletzt = t('Verbindung nach {n} s abgerissen').replace('{n}', (hielt / 1000).toFixed(1));
+          if (car.fruehAbriss) {
+            log(`${garageLabel(car)}: auch der zweite, schonende Versuch riss nach ${Math.round(hielt)} ms ab.`, 'err');
+            verbindenAufgeben(car, car.verbGrundZuletzt, true);
+            return;
+          }
+          car.fruehAbriss = true; car.schonend = true; car.reconnectVersuche = 0;
+          log(`${garageLabel(car)} nach ${Math.round(hielt)} ms getrennt - zweiter, schonender Versuch.`, 'warn');
+          reconnectCar(car);
+          return;
+        }
+        car.fruehAbriss = false;
         log(`${garageLabel(car)} getrennt - verbinde neu.`, 'warn');
         reconnectCar(car);
       };
@@ -2602,11 +2882,17 @@
         if (typeof gemerkt.fahrhilfe === 'string') car.fahrhilfe = gemerkt.fahrhilfe;
       }
       const frei = gemerkt && garRollenFrei(car).some((r) => r.id === gemerkt.role);
+      // v1.5: VOR der Rolle - setCarRole setzt fuer eine Spielerrolle sonst sofort HOCH, und in den ersten
+      // 5 s einer Verbindung fragt nur funkPrioNachVerbinden an (Stufe der Rolle, die das Auto dann hat).
+      funkPrioNachVerbinden(car);
       if (frei && gemerkt.role !== 'none') setCarRole(car, gemerkt.role);
       else if (!playerCar) setCarRole(car, 'player');
       else setCarRole(car, 'ghost');
-      funkPrioNachVerbinden(car);
-      log(`${garageLabel(car)} verbunden (${garage.length} insgesamt)` + (opt && opt.auto ? ' - automatisch beim Start.' : '.'), 'info');
+      // v1.5: der Fehler vom letzten Mal verschwindet; brauchte es den zweiten Versuch, steht das da.
+      if (ersterGrund) verbLageSetzen('hinweis', ersterGrund, true);
+      else verbLageSetzen('');
+      log(`${garageLabel(car)} verbunden (${garage.length} insgesamt)` + (opt && opt.auto ? ' - automatisch beim Start.' : '.')
+          + (ersterGrund ? ' Zweiter, schonender Versuch.' : ''), 'info');
       playStartFx();
     } finally {
       garVerbindetGerade.delete(String(dev.id));
@@ -2771,6 +3057,7 @@
           log(garageLabel(car) + ': Funkprioritaet ' + (stufe === 'hoch' ? 'HOCH (gesteuert)' : 'AUSGEWOGEN')
               + (ok ? '' : ' - nicht gesetzt (' + ((r && r.grund) || '?') + ')')
               + (r && r.weg ? ' [' + r.weg + ']' : ''), ok ? 'info' : 'warn');
+          verbProto(car, 'Priorität', (stufe === 'hoch' ? 'HOCH' : 'AUSGEWOGEN') + ' (Start)' + (ok ? '' : ' nicht gesetzt: ' + ((r && r.grund) || '?')));
         }, () => {});
       };
       if (i === 0) los(); else planen(los, i * FUNK_PRIO_ABSTAND_MS);
@@ -2793,6 +3080,7 @@
       const ok = !r || r.ok !== false;
       log(garageLabel(car) + ': Funkprioritaet ' + (stufe === 'hoch' ? 'HOCH' : 'AUSGEWOGEN') + ' (' + grund + ')'
           + (ok ? '' : ' - nicht gesetzt (' + ((r && r.grund) || '?') + ')'), ok ? 'info' : 'warn');
+      verbProto(car, 'Priorität', (stufe === 'hoch' ? 'HOCH' : 'AUSGEWOGEN') + ' (' + grund + ')' + (ok ? '' : ' nicht gesetzt: ' + ((r && r.grund) || '?')));
     }, () => {});
     return true;
   }
@@ -2836,16 +3124,23 @@
   // Rollenwechsel: alle verbundenen Autos auf die Stufe ihrer Rolle (nur geaenderte, siehe funkPrioEinzeln).
   // Faehrt etwas, bleibt es beim Stand - der naechste Start (Countdown, Training, Losfahren) setzt ohnehin.
   // Autos im Verbindungsaufbau ueberlaesst es funkPrioNachVerbinden. Rueckgabe: Zahl der Anfragen, -1 = faehrt.
+  // v1.5.3: HOCHSTUFEN GILT SOFORT, auch waehrend der Fahrt. GEMELDET: "bei 2 Spielern ohne Bahn am selben
+  // Handy ist die Verbindung oefter mal schlecht. Das ist neu." Das zweite Auto wird beim Verbinden NPC und
+  // bekommt nach 5 s AUSGEWOGEN; wurde es danach Spieler 2, setzte diese Funktion nichts, solange irgendein
+  // Auto rollte - ohne Ampel oder "Losfahren" blieb Spieler 2 dauerhaft auf AUSGEWOGEN. Jetzt wartet nur noch
+  // das HERABSTUFEN auf den Stillstand (Rueckgabe -1, wenn deshalb etwas offen blieb).
   function funkPrioRolleAnwenden(opt) {
     if (!funkPrioAn()) return 0;
-    if (funkPrioFahrtLaeuft()) return -1;
+    const faehrt = funkPrioFahrtLaeuft();
     const jetzt = performance.now();
-    let n = 0;
+    let n = 0, offen = false;
     for (const car of ((opt && opt.autos) || garage)) {
       if (!car || car.sim || (car.funkPrioNachVerbindenBis && jetzt < car.funkPrioNachVerbindenBis)) continue;
-      if (funkPrioEinzeln(car, funkPrioSollStufe(car), 'Rolle')) n++;
+      const soll = funkPrioSollStufe(car);
+      if (faehrt && soll !== 'hoch') { if (car.funkPrioStufe !== soll) offen = true; continue; }
+      if (funkPrioEinzeln(car, soll, 'Rolle')) n++;
     }
-    return n;
+    return faehrt && !n && offen ? -1 : n;
   }
   let funkPrioRolleUhr = null;
   function funkPrioRolleGeaendert() {
@@ -2913,11 +3208,15 @@
   function onCarNotify(car, e) {
     const b = notifyBytes(e.target.value);
     if (b.length < 16) return;
+    // DIAGNOSE (temporaer, Latenz): wie lange die Verarbeitung einer Meldung dauert.
+    const diag = window.MT_DIAG, t0 = diag ? performance.now() : 0;
+    try {
     meldetaktBeobachten(car, performance.now());
     if (rennPauseAktiv()) {
       car.tileCode = b[12]; car.tileCount = b[11];
       car.lastCodeAt = rennZeitJetzt();
       car.battery = akkuGlaetten(car, b[10], rennZeitJetzt());
+      if (typeof akkuMitschreiben === 'function') akkuMitschreiben(car, b[10], b[11], performance.now());
       if (car.race) zielSperreFlanke(car.race, b);
       if (car === playerCar) handleDashboardBytes(b);
       return;
@@ -3007,6 +3306,11 @@
     // v0.9.87: geglaettet (Maximum der letzten 5 s) - unter Gas sackt die Spannung ab, und
     // der Rohwert sprang dann um bis zu zehn Prozent.
     car.battery = akkuGlaetten(car, b[10], rennZeitJetzt());
+    // v1.5 (WIP): Akku-Aufzeichnung fuer die Kennlinie (98n-akku-aufzeichnung.js).
+    if (typeof akkuMitschreiben === 'function') akkuMitschreiben(car, b[10], b[11], performance.now());
+    } finally {
+      if (diag) { diag.notifyN++; diag.notifyMs += performance.now() - t0; }
+    }
   }
 
   function stopGhost(car) {
@@ -3427,9 +3731,14 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // ohne Spur-Bytes, damit die Spurfuehrung das Auto nicht wieder zur Mitte zieht.
     const staerke = einparkStaerke();
     if (aufstellArt() === 'aufnahme') {
-      const sk = aufstellSkript(seite);
+      const vors = aufstellVorsprung(o, g.aufstellZiel, platz);
+      const nachholF = aufstellNachholFaktor(vors, aufstellSkript(seite));
+      const sk = aufstellSkript(seite, nachholF);
       log(garageLabel(car) + ': parkt auf Teil ' + g.aufstellZiel + ' mit der Safety-Car-Folge ' + (seite > 0 ? 'rechts' : 'links (gespiegelt)')
-          + ', Gas ' + Math.round(aufstellScGas() * 100) + ' %.', 'info');
+          + ', Gas ' + Math.round(aufstellScGas() * nachholF * 100) + ' %'
+          + ' (Platz ' + (platz + 1) + ', Ort ' + (o === null ? '?' : o.toFixed(2)) + ', Haltepunkt '
+          + (g.aufstellZiel + aufstellHaltBruch(platz)).toFixed(2)
+          + (nachholF < 1 ? ', Vorsprung ' + vors.toFixed(2) + ' Teile, Folge um ' + Math.round((1 - nachholF) * 100) + ' % gekuerzt' : '') + ').', 'info');
       randHaltStarten(car, { phase: 'skript', quer: 0, skript: sk, anpassMs: MANOEVER_ANPASS_MS,
                              vonDrive: letztesGas(car, sk[0][2]), haltMs: AUFSTELL_HALT_MS, sofort: true,
                              fertig: (c) => {
@@ -4819,6 +5128,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
                                   lastActed: 0, lastCount: null };
       car.race.offLap = (car.race.offLap || 0) + 1;
       if (typeof knockoutGeistRaus === 'function') knockoutGeistRaus(car);
+      // v1.5 (WIP): Vorfallkarte (98g-telemetrie-seite.js).
+      if (typeof vorfallMerkenAuto === 'function') vorfallMerkenAuto('off', car);
     }
     log(garageLabel(car) + ': steht (' + reason + '). Auto anheben, zur\u00fcckstellen und '
         + 'kurz sch\u00fctteln, dann f\u00e4hrt es weiter.', 'err');
@@ -5808,6 +6119,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     const zeigen = () => { if ($('sc-aus-gas-val')) $('sc-aus-gas-val').textContent = scAusGas().toFixed(1).replace('.', lang === 'de' ? ',' : '.') + '\u00d7'; };
     el.addEventListener('input', zeigen);
     zeigen();
+    // v1.5.3: das Dezimalzeichen folgt der Sprache, also beim Sprachwechsel neu zeigen (Englisch ist Vorgabe).
+    if (typeof i18nNeuzeichnen !== 'undefined') i18nNeuzeichnen.push(zeigen);
   }
   // v1.3.132 BESTELLT: "NPC ausparken zu viel gelenkt, schwaecher und kuerzer" (gemeint: aus der Box; gilt
   // ebenso fuer das Safety Car, das dieselbe Folge faehrt). Lenkwerte UND Zeiten der Aufnahme mal
@@ -5864,9 +6177,33 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   const AUFSTELL_SC_GAS = 0.70, AUFSTELL_SC_GAS_STORE = 'omegasim-aufstell-sc-gas-v2';
   const AUFSTELL_BODEN = 0.28;
   function aufstellScGas() { return einparkWert('race-einpark-sc-gas', AUFSTELL_SC_GAS, 0.4, 1); }
-  function aufstellSkript(seite) {
-    const f = aufstellScGas(), s = seite > 0 ? 1 : -1;
+  function aufstellSkript(seite, extra) {
+    const f = aufstellScGas() * (extra || 1), s = seite > 0 ? 1 : -1;
     return MANOEVER.scEin.map(([ms, lenk, gas]) => [ms, s * lenk, gas * f]);
+  }
+  // v1.5.6 GEMELDET: "Aufstellen klappt nach dem Rennen bei Autos 1 bis 3 gut, Auto 4 parkt daneben." Platz 4
+  // (links, zweite Reihe) haelt im Teil s-2 bei Anteil 0,5, mitten im Teil, wo der Ort nur geschaetzt ist. Erreicht
+  // die Schaetzung 0,5 nicht, bevor der Zaehler weiterspringt, loest aufstellAmPunkt erst im NAECHSTEN Teil (bis
+  // zu einer halben Kachel danach) aus - das Auto hat dann bis zu 1 Teil Vorsprung auf seinen Haltepunkt und rollt
+  // die Folge (Rollweg rund 1,5 Teile, scRollweg) bis auf den Platz des Autos davor. Jetzt wird die Folge in diesem
+  // Fall um den Vorsprung kuerzer gefahren: das Gas (und damit der Rollweg, der etwa linear mit dem Gas waechst) mal
+  // 1 - Vorsprung / Rollweg, nie unter AUFSTELL_NACHHOL_MIN (der Querweg waechst mit dem Gas zum Quadrat, zu wenig
+  // Gas liesse das Auto zu weit in der Mitte stehen).
+  const AUFSTELL_NACHHOL_MIN = 0.7;
+  function aufstellVorsprung(o, ziel, platz) {
+    if (o === null || o === undefined) return 0;
+    const n = currentTrackTiles ? currentTrackTiles.length : 0;
+    if (!n) return 0;
+    let v = o - (ziel + aufstellHaltBruch(platz));
+    v = ((v % n) + n) % n;
+    if (v > n / 2) v -= n;
+    return v;
+  }
+  function aufstellNachholFaktor(vorsprung, skript) {
+    if (!(vorsprung > 0.05)) return 1;
+    const roll = scRollweg(skript, null);
+    if (!(roll > 0.5)) return 1;
+    return Math.max(AUFSTELL_NACHHOL_MIN, Math.min(1, 1 - vorsprung / roll));
   }
   if ($('race-einpark-sc-gas')) {
     const el = $('race-einpark-sc-gas');
@@ -7041,9 +7378,41 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   function scParkKachel() {
     const n = currentTrackTiles ? currentTrackTiles.length : 0;
     const w = n ? scTeilWahl(n) : null;
-    if (w !== null) return w;
+    if (w !== null) return scParkPlatzPruefen(w);
     const s = typeof ortStartIndices === 'function' ? ortStartIndices(currentTrackTiles || []) : [];
-    return s.length ? s[0] : 0;
+    return scParkPlatzPruefen(s.length ? s[0] : 0);
+  }
+  // v1.5.36 BESTELLT: "Safety Car einparken muss auch klappen, wenn ich vor und nach der Startgeraden Kurven habe."
+  // Reicht der freie Platz am Parkteil nicht fuer den Rollweg der Einparkfolge (scEinPassend staucht dann das Gas, das
+  // Auto bleibt schief und zu weit in der Mitte stehen), parkt das Safety Car bei der Vorgabe "Start/Ziel" auf dem
+  // naechsten Teil, wo der Platz reicht: zuerst bis drei Teile VOR Start/Ziel (dort wartet es nicht im Feld), dann die
+  // naechste Stelle ueberhaupt. Eine ausdrueckliche Wahl eines Teils bleibt, bekommt aber einen Hinweis im Live-Log.
+  // Einmal je Strecke gerechnet (Zwischenspeicher), nie im Takt.
+  let scParkPlatzMerk = { tiles: null, wahl: -1, ergebnis: -1, hinweis: '' };
+  function scParkPlatzPruefen(k) {
+    const tiles = currentTrackTiles || [], n = tiles.length;
+    if (!n || typeof scEinPassend !== 'function') return k;
+    const el = $('sc-ausfahrt-teil');
+    const vorgabe = !el || el.value === 'start' || el.value === '';
+    if (scParkPlatzMerk.tiles === tiles && scParkPlatzMerk.wahl === k && scParkPlatzMerk.vorgabe === vorgabe) return scParkPlatzMerk.ergebnis;
+    let ergebnis = k, hinweis = '';
+    // Passt: der Rollweg reicht (kein Stauchen) UND das Teil selbst ist frei (nicht in einer Kurve parken).
+    const passt = (i) => { const p = scEinPassend(i, scParkTempo()); return p.faktor >= 1 && p.gerade >= 1; };
+    if (!passt(k)) {
+      if (vorgabe) {
+        const kandidaten = [];
+        for (let d = 1; d <= 3; d++) kandidaten.push((k - d + n) % n);
+        for (let d = 1; d < n; d++) { kandidaten.push((k + d) % n); kandidaten.push((k - 3 - d + 2 * n) % n); }
+        const gut = kandidaten.find((i) => passt(i));
+        if (gut !== undefined) {
+          ergebnis = gut;
+          hinweis = 'Safety Car: an Start/Ziel ist zu wenig Platz zum Einparken, es parkt auf Teil ' + gut + '.';
+        } else hinweis = 'Safety Car: auf der ganzen Strecke reicht der Platz zum Einparken nicht ganz, es parkt gestaucht an Start/Ziel.';
+      } else hinweis = 'Safety Car: auf dem gewaehlten Teil ' + k + ' ist zu wenig Platz zum Einparken, die Folge wird gestaucht.';
+    }
+    scParkPlatzMerk = { tiles, wahl: k, vorgabe, ergebnis, hinweis };
+    if (hinweis && typeof log === 'function') log(hinweis, 'warn');
+    return ergebnis;
   }
   function scParkTempo() { return scEinfahrtTempo(); }
   function scParkTick(car) {
@@ -7165,6 +7534,18 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     if (rel >= n / 2) rel -= n;                                       // -n/2 .. n/2: davor negativ
     // Mindestens bis zum Ende von k: ein verschluckter Zaehler loest dort wie vor 1.3.132 noch aus.
     return rel >= ab - 1e-9 && rel < Math.max(ab + EINPARK_NACHHOL_KACHELN, 1);
+  }
+  // v1.5.3: die Startrunde endet schon SC_START_HEIM_VORLAUF Teile vor dem Parkteil (statt erst an der Linie),
+  // fruehestens nach einer halben Runde. Nur beim Parken auf der Fahrbahn mit bekanntem Ort; sonst bleibt der
+  // alte Weg ueber die Linie (safetyCarLinie). Aufruf nur beim Kachelwechsel, nicht im Takt.
+  const SC_START_HEIM_VORLAUF = 4;
+  function scStartrundeFrueherHeim(car, nk) {
+    const g = car && car.ghost;
+    if (!g || !g.scErsteRunde || g.scHeim || g.randHalt || scNebenModus()) return false;
+    if ((g.scStartKacheln || 0) < Math.max(2, nk / 2)) return false;
+    if (g.tileIndex === null || g.tileIndex === undefined) return false;
+    const d = ((scParkKachel() - g.tileIndex) % nk + nk) % nk;
+    return d === SC_START_HEIM_VORLAUF || d === SC_START_HEIM_VORLAUF - 1;   // -1: der Zaehler hat ein Teil verschluckt
   }
   // Ab zwei Teilen vor dem Parkteil mittig fahren (Querlage 0), solange das Safety Car heimfaehrt.
   function scVorParkMittig(car) {
@@ -7675,6 +8056,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   let yellowRestartGen = 0;
   function yellowRestart() {
     if (flagState !== 'yellow') return;
+    // Freies virtuelles Fahren (kein Rennen, aus PR 4 von gnen54): Gelb endet sofort mit Gruen, ohne
+    // Anfahrt-Ampel - die gehoert zum Rennen ("wenn ich die Gelbphase abbreche, kommt die Startampel").
+    if (typeof vfAktiv === 'function' && vfAktiv() && raceState === 'idle') { setFlag('green'); return; }
     flagState = 'restart';
     const gen = ++yellowRestartGen;
     updateFlagUi();
@@ -8132,6 +8516,8 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     an();
   }
   function ghostIstMax(car) { return !!car && car.ghostStufe === GHOST_STUFE_MAX; }
+  // Zuschlag auf haarnadelMax je Abstand (Teile) vor einer Haarnadel, fuer MAX-NPCs (ghostMaxTempo).
+  var MAX_HAARNADEL_RAMPE = { 2: 0.12, 3: 0.3 };   // var: ghostTick kann beim Laden vor dieser Zeile laufen
   function ghostMaxArt(typ) {
     if (typ === undefined || typ === null) return 'gerade';
     if (tileTightness(typ) >= 2) return 'haarnadel';
@@ -8156,6 +8542,16 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     let v = ghostMaxWert(ghostMaxArt(hierTyp));
     if (ghostCfg.maxBremspunkt !== 'teil' && ortOk) {
       v = Math.min(v, ghostMaxWert(ghostMaxArt(tiles[(g.tileIndex + 1) % n].type)));
+    }
+    // v1.5.158 GEMELDET: "MAX-NPC hat in der Haarnadel nicht ordentlich abgebremst". Von Vollgas (1,0) auf das
+    // Haarnadeltempo (0,35) in ein bis zwei Teilen schafft das echte Auto nicht. Jetzt eine Bremsrampe: drei Teile
+    // vor der Haarnadel hoechstens MAX_HAARNADEL_RAMPE[3], zwei Teile davor [2]; ab einem Teil davor gilt wie bisher
+    // die normale Haarnadel-Logik (Obergrenze haarnadelMax).
+    if (ortOk) {
+      const hm = ghostMaxWert('haarnadel');
+      for (let k = 2; k <= 3; k++) {
+        if (tileTightness(tiles[(g.tileIndex + k) % n].type) >= 2) { v = Math.min(v, hm + MAX_HAARNADEL_RAMPE[k]); break; }
+      }
     }
     return Math.max(0.05, Math.min(1, v));
   }
@@ -10670,6 +11066,16 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         if (nk && g.scStartKacheln >= nk + 2) {
           g.scErsteRunde = false; g.scHeim = true;
           log(garageLabel(car) + ': Safety Car hat seine Startrunde gefahren, parkt jetzt.', 'info');
+        } else if (nk && scStartrundeFrueherHeim(car, nk)) {
+          // v1.5.3 GEMELDET: "Safety Car einparken nach der Fahrt ist perfekt, aber nach der Einfuehrungsrunde
+          // zu weit hinter der Startgeraden und nicht nah genug am Rand." Nach Gelb steht scHeim viele Teile
+          // vorher (Tempo gedeckelt, mittig, Ausloesen am geplanten Punkt). Nach der Startrunde kam scHeim erst
+          // AN der Linie: der geplante Ausloesepunkt (bis zu zwei Teile vor dem Parkteil) war vorbei, das Tempo
+          // Renntempo, die Seitenlage nicht mittig. Jetzt derselbe Weg wie nach Gelb, sobald das Safety Car
+          // nach mindestens einer halben Runde SC_START_HEIM_VORLAUF Teile vor dem Parkteil ist.
+          g.scErsteRunde = false; g.scHeim = true;
+          log(garageLabel(car) + ': Safety Car beendet seine Startrunde, faehrt heim (noch '
+              + SC_START_HEIM_VORLAUF + ' Teile bis zum Parkteil).', 'info');
         }
       }
       let lmRundeVoll = false;
@@ -11043,6 +11449,11 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       if (!ghostIstMax(car)) {
         target = Math.max(0.05, Math.min(1, target * learnFactors(car).pace));
         target *= ghostStreuFaktor(car);
+        // v1.5 (WIP): KI-Persoenlichkeit je NPC (98j-ki-persoenlichkeit.js), ab Werk aus. Vor der
+        // gelben Flagge: unter Gelb gibt kiTempo() ohnehin 1, und das Gelb-Tempo hat das letzte Wort.
+        if (typeof kiTempo === 'function') target = Math.min(1, target * kiTempo(car));
+        // v1.5 (WIP): Karriere (98l-karriere.js), die Lizenz setzt das Feldtempo; ausserhalb einer Karriere-Sitzung 1.
+        if (typeof karriereKlasse === 'function') target = Math.min(1, target * karriereKlasse());
       }
       // Gelbe Flagge: alle auf denselben Wert, und zwar bevor irgendetwas anderes daran
       // dreht. Gleiches Tempo fuer alle heisst von selbst "kein Ueberholen".
@@ -12020,7 +12431,7 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   function ghostNassAnteil(car) {
     const lvl = typeof wxRainLevel === 'function' ? wxRainLevel()
               : (weather === 'rain' ? 1 : 0);
-    const n = lvl * lvl;
+    const n = wxGriff(lvl);
     return (zevAktiv !== null && car) ? Math.max(n, zevNassVon(car)) : n;
   }
 
@@ -12854,6 +13265,23 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
   function padNativ(pad) {
     padNativLage.an = false;
     const o = window.OmegaPad;
+    // DIAGNOSE (temporaer, Latenz): ein paar Mal ausgeben, warum der Direktweg nicht greift.
+    if (window.MT_DIAG && window.MT_DIAG.padLog < 3) {
+      let dw = null, grund;
+      if (!pad) grund = 'kein Web-Pad';
+      else if (!o || typeof o.lesen !== 'function') grund = 'kein OmegaPad/lesen';
+      else if (pad.mapping !== 'standard') grund = 'mapping=' + pad.mapping;
+      else if (typeof zweiSpieler !== 'undefined' && zweiSpieler) grund = 'zweiSpieler-Modus';
+      else {
+        try { dw = String(o.lesen()).split(',').map(Number); } catch (e) { dw = null; }
+        if (!dw || dw.length < 8) grund = 'lesen() leer';
+        else if (dw[7] !== 1) grund = 'geraete=' + dw[7];
+        else if (!(dw[6] >= 0)) grund = 'alter=' + dw[6] + ' (noch kein Ereignis)';
+        else grund = 'unbekannt';
+      }
+      window.MT_DIAG.padLog++;
+      log('[Pad-Diagnose] Direktweg aus: ' + grund + (dw ? ' · geraete=' + dw[7] + ' · ereignisse=' + dw[8] : ''), 'warn');
+    }
     if (!pad || !o || typeof o.lesen !== 'function' || pad.mapping !== 'standard') return pad;
     if (typeof zweiSpieler !== 'undefined' && zweiSpieler) return pad;
     let w;
@@ -12873,6 +13301,35 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     const w = padNativLage.letzte;
     if (!window.OmegaPad) return null;
     return { an: padNativLage.an, geraete: w ? w[7] : 0, ereignisse: w ? w[8] : 0, zustellMs: w ? w[9] : null };
+  }
+  // v1.6.20 (aus gnen54s testversion, 22.11.): PAD-DIAGNOSE. Merkt je Takt, wo pollGamepad aussteigt und was das Pad
+  // meldet; padDiagText() zeigt es (virtuell: F8 oder Knopf in der Leiste). Fuer Pads wie den EasySMX X05, deren
+  // Trigger in Ruhe 0,5 melden: zeigt bei Achsen die gelernte Ruhelage und Spanne.
+  let padDiag = { grund: 'noch kein Takt', t: 0 };
+  function padDiagSetzen(grund, pad, gas, bremse, lenk) {
+    padDiag = { grund, t: performance.now(), id: pad ? String(pad.id) : '', mapping: pad ? pad.mapping : '', gas, bremse, lenk,
+      knoepfe: pad ? [...(pad.buttons || [])].map((b, i) => (b && (b.pressed || b.value > 0) ? i + (b.value < 1 ? '(' + (+b.value).toFixed(2) + ')' : '') : -1)).filter((i) => i !== -1) : [],
+      achsen: pad ? [...(pad.axes || [])].map((v) => +v.toFixed(2)) : [] };
+  }
+  function padDiagText() {
+    const alle = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+    const d = padDiag, alt = performance.now() - d.t;
+    const f2 = (v) => (typeof v === 'number' ? v.toFixed(2) : '?');
+    const b = (x) => (x && x.type !== 'none' ? x.type + ' ' + x.index + (x.unten ? ' (nach vorn)' : '')
+      + (x.type === 'axis' ? ' (Ruhe ' + f2(x.ruhe) + ', ' + f2(x.min) + '..' + f2(x.max) + (x.invert ? ', inv' : '') + ')' : '') : '-');
+    const z = (x) => (typeof x === 'number' ? x.toFixed(2) : '-');
+    return [
+      'Pads: ' + (alle.length ? alle.map((q) => q.index + ' ' + String(q.id).slice(0, 50) + ' [' + (q.mapping || 'roh') + ']').join(' | ') : 'keins'),
+      'Takt: ' + (alt > 500 ? 'seit ' + Math.round(alt) + ' ms kein Takt!' : 'laeuft'),
+      'Ausstieg: ' + d.grund,
+      'Pad: ' + (d.id ? d.id.slice(0, 60) + ' [' + (d.mapping || 'roh') + ']' : '-'),
+      'Gas: ' + b(bindings.throttle), 'Bremse: ' + b(bindings.brake), 'Lenkung: ' + b(bindings.steering),
+      'Werte: Gas ' + z(d.gas) + ', Bremse ' + z(d.bremse) + ', Lenkung ' + z(d.lenk),
+      'Knoepfe: ' + ((d.knoepfe || []).join(' ') || '-') + '   Achsen: ' + (d.achsen || []).join(' '),
+      'Pause: ' + (typeof rennPauseAktiv === 'function' && rennPauseAktiv() ? 'AN' : 'aus')
+        + ', Abgleich-Sperre: ' + (bindSitzung || bindSperreBisLos ? 'JA' : 'nein'),
+      'Ausgang: Lenkung ' + z(steerX) + ', Gas ' + z(throttleY),
+    ].join('\n');
   }
   function pollGamepad() {
     const spieler = padsFuerSpieler();
@@ -12902,17 +13359,18 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         prevLightFlash = false;
       }
       padConnected = false;
+      padDiagSetzen('kein Pad fuer Spieler 1', null);
       return;
     }
     padConnected = true;
     padLastPollTime = performance.now();
     // v1.1.45: Abgleich-Sitzung - das Pad erfasst nur, sonst nichts (siehe bindPadSitzung).
     if ((bindSitzung || bindSperreBisLos) && bindPadSitzung(pad, 1)) {
-      releaseInput(SRC.PAD);
+      releaseInput(SRC.PAD); padDiagSetzen('Abgleich-Sitzung / warte bis alle Tasten los', pad);
       return;
     }
     if (!(listeningFor && bindEditSpieler < 2) && rennPauseTaste(pad, bindings, 1)) {
-      releaseInput(SRC.PAD); return;
+      releaseInput(SRC.PAD); padDiagSetzen('Rennpause', pad); return;
     }
     // Startaufstellung offen: das Steuerkreuz waehlt den Knopf (X bestaetigt, flagTasteTick).
     if (typeof raceGridOffen === 'function' && raceGridOffen()) {
@@ -12922,21 +13380,21 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       gridPadVorher = !!r;
     } else gridPadVorher = false;
     // Meisterschaft offen: Steuerkreuz und Tasten gehoeren ihrem Schirm (73-meisterschaft.js).
-    if (typeof meisterPad === 'function' && meisterPad(pad)) return;
+    if (typeof meisterPad === 'function' && meisterPad(pad)) { padDiagSetzen('Meisterschaft-Schirm', pad); return; }
     // Reaktionstest der Studie: das Pad gehoert dem Test (er fragt es selbst ab).
-    if (typeof studieTestAktiv === 'function' && studieTestAktiv()) return;
+    if (typeof studieTestAktiv === 'function' && studieTestAktiv()) { padDiagSetzen('Studie-Reaktionstest', pad); return; }
     // TITELBILDSCHIRM (ACC-Menue): jede Taste fuehrt ins Hauptmenue, links/rechts wechselt die
     // Sprache. Solange danach noch eine Taste gehalten wird, tut dieser Takt nichts weiter -
     // sonst oeffnete dasselbe gehaltene Kreuz im Hauptmenue gleich die naechste Kachel.
-    if (typeof konsolePadTitel === 'function' && konsolePadTitel(pad)) return;
+    if (typeof konsolePadTitel === 'function' && konsolePadTitel(pad)) { padDiagSetzen('Titelbildschirm', pad); return; }
     // Steuerungs-Fuehrung offen: jede Taste wird dort angezeigt, gefahren wird nicht.
     if (typeof konsoleTourPad === 'function' && konsoleTourPad(pad)) {
-      releaseInput(SRC.PAD);
+      releaseInput(SRC.PAD); padDiagSetzen('Steuerungs-Fuehrung / Einfuehrung', pad);
       return;
     }
     // Raumdesigner offen (60b-raum.js): Stick, Kreuz und Tasten gehoeren ihm.
     if (typeof raumPad === 'function' && raumPad(pad)) {
-      releaseInput(SRC.PAD);
+      releaseInput(SRC.PAD); padDiagSetzen('Raumdesigner', pad);
       return;
     }
 
@@ -12944,13 +13402,14 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
     // Spieler 2s Tabelle bearbeitet wird (bindEditSpieler === 2), soll Spieler 1
     // weiterfahren koennen, statt fuer eine fremde Zuordnung stillzustehen.
     if (listeningFor && bindEditSpieler < 2) {
-      releaseInput(SRC.PAD);
+      releaseInput(SRC.PAD); padDiagSetzen('Tastenzuweisung wartet (Optionen > Controller)', pad);
       tryCaptureBinding(pad);
     } else {
       let throttleRaw = applyDeadzone(Math.max(0, readBindingValue(pad, bindings.throttle)), TRIGGER_DEADZONE);
       let brakeRaw = applyDeadzone(Math.max(0, readBindingValue(pad, bindings.brake)), TRIGGER_DEADZONE);
       const steerRaw = applyDeadzone(readBindingValue(pad, bindings.steering));
       [throttleRaw, brakeRaw] = rennPauseFilterGas(1, throttleRaw, brakeRaw);
+      padDiagSetzen('keiner - Pad faehrt', pad, throttleRaw, brakeRaw, steerRaw);
 
       // v0.9.26 (Plan Schritt 2): die Live-Texte nur bei ANDERUNG schreiben - dieser Weg
       // laeuft jeden Frame und zusaetzlich im Sendetakt, und jedes textContent= ist Arbeit
@@ -12988,13 +13447,11 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // drivers signal a pass. The handbrake that used to sit on this button is gone, and
       // with it the special case that had to exclude it from selecting reverse.
       const flashNow = readBindingValue(pad, bindings.lightflash) > BUTTON_CAPTURE_THRESHOLD;
-      // v1.1.11: in der virtuellen Fahrt schaltet R3 (die Lichthupen-Belegung) die Kamera weiter.
-      // Seit der rechte Stick die Kamera dreht (60d-virtuell.js): gedreht setzt dieselbe Taste
-      // erst auf die Standardansicht zurueck, ungedreht schaltet sie wie bisher weiter.
+      // v1.1.11 schaltete R3 (die Lichthupen-Belegung) in der virtuellen Fahrt die Kamera weiter. Seit PR 4
+      // von gnen54 ist R3 auch dort die Lichthupe (das virtuelle Auto blinkt mit, vfLichtMitHupe); die
+      // Kamera hat eine eigene Taste (bindings.vfkamera, unten), dazu Knopf und Taste C.
       const imVf = typeof vfAktiv === 'function' && vfAktiv();
-      if (flashNow && !prevLightFlash) {
-        if (imVf) vfKameraTaste(); else triggerHeadlightFlash();
-      }
+      if (flashNow && !prevLightFlash) triggerHeadlightFlash();
       prevLightFlash = flashNow;
       // Rechter Stick dreht in der virtuellen Fahrt die Kamera (nur unbelegte Achsen, siehe vfStickSetzen).
       if (imVf) vfStickSetzen(pad, bindings);
@@ -13014,6 +13471,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
       // Navigationsschritt mehr (50b-menu-nav.js) - Dreieck oeffnet ihn jetzt direkt.
       if (headNow && !prevHeadlights && trackEditorPad('rotate')) {
         // consumed by the editor
+      } else if (headNow && !prevHeadlights && imVf) {
+        // Virtuelle Fahrt (aus PR 4 von gnen54): die Licht-Taste wirkt wie der Knopf "Licht" im HUD.
+        vfKnopf('licht');
       } else if (headNow && !prevHeadlights
                  && document.querySelector('.tabpage.active') === $('tab-race')) {
         headlightsOn = !headlightsOn;
@@ -13129,12 +13589,20 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
         // Fassung der Logik: flagHoldPress startet den Ladebalken, flagHoldRelease(true)
         // loest aus. Zu frueh losgelassen passiert nichts - ein halber Druck darf keine
         // halbe Wirkung haben.
-        flagTasteTick(yellowflagNow);
+        if (imVf) {
+          // Virtuelle Fahrt (aus PR 4 von gnen54): getippt = Knopf "Box", 1 s gehalten = Knopf
+          // "Gelbe Flagge" im HUD - dieselbe Belegung wie im Cockpit.
+          vfFlagTaste(yellowflagNow);
+          prevYellowFlag = yellowflagNow;
+        } else flagTasteTick(yellowflagNow);
       }
 
       const resetNow = readBindingValue(pad, bindings.resetcar) > BUTTON_CAPTURE_THRESHOLD;
       if (resetNow && !prevResetCar) resetCarState();
       prevResetCar = resetNow;
+      const vfKamNow = readBindingValue(pad, bindings.vfkamera) > BUTTON_CAPTURE_THRESHOLD;
+      if (vfKamNow && !prevVfKamera && imVf) vfKameraTaste();
+      prevVfKamera = vfKamNow;
 
       const downshiftNow = readBindingValue(pad, bindings.downshift) > BUTTON_CAPTURE_THRESHOLD;
       const upshiftNow = readBindingValue(pad, bindings.upshift) > BUTTON_CAPTURE_THRESHOLD;

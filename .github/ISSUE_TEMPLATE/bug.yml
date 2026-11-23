@@ -1,0 +1,65 @@
+name: Fehler melden / Bug report
+description: Etwas funktioniert nicht wie erwartet. / Something does not work as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke fürs Melden! Screenshots oder das Live-Log (Entwicklertools → Live-Log → Kopieren) helfen sehr.
+        Thanks for reporting! Screenshots or the live log (developer tools → live log → copy) help a lot.
+  - type: input
+    id: version
+    attributes:
+      label: OmegaSim-Version / version
+      description: Steht unten auf der Startseite (z. B. v1.6.5). / Shown at the bottom of the start page.
+    validations:
+      required: true
+  - type: dropdown
+    id: weg
+    attributes:
+      label: App oder Browser / app or browser
+      options:
+        - Android-App (APK)
+        - Browser am PC / browser on PC
+        - Browser am Handy / browser on phone
+        - Browser als installierte App (PWA) / installed web app
+    validations:
+      required: true
+  - type: input
+    id: geraet
+    attributes:
+      label: Gerät und Betriebssystem / device and OS
+      placeholder: z. B. Pixel 9, Android 15 / Windows 11 Laptop
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser und Version / browser and version
+      placeholder: z. B. Chrome 142, Opera 120, Edge 142 (bei der App leer lassen)
+  - type: input
+    id: gamepad
+    attributes:
+      label: Gamepad / Lenkrad
+      placeholder: z. B. DualSense per Bluetooth, Xbox-Controller per Kabel, Touch, Tastatur
+  - type: dropdown
+    id: fahren
+    attributes:
+      label: Echt oder virtuell / real or virtual
+      options:
+        - Echte Autos auf der Bahn / real cars on the track
+        - Echte Autos im Ausdruck-Modus / real cars on printed patterns
+        - Virtuelles Fahren / virtual driving
+        - Menü, Garage, Optionen / menus
+  - type: textarea
+    id: was
+    attributes:
+      label: Was ist passiert, was hättest du erwartet? / What happened, what did you expect?
+      description: Schritte zum Nachstellen, Anzahl Autos/NPCs, Strecke. Screenshots einfach hineinziehen.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Live-Log (optional)
+      render: text

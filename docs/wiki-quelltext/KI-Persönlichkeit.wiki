@@ -1,0 +1,16 @@
+{{Stand|app=1.5.107|appdatum=2026-11-17}}
+Die '''KI-Persönlichkeit''' (in Arbeit, WIP) ist eine Einstellung für die NPCs in [[OmegaSim]], die das Verhalten eines Gegners weniger vorhersehbar und mehr wie ein Mensch machen soll. Sie stammt aus dem Hybrid-Dash von Mo Kamit (MIT-Lizenz) und wird in der Garage am NPC-Auto eingeschaltet.
+
+== Bedienung ==
+* In der '''Garage''' hat jedes NPC-Auto einen Knopf '''KI-Persönlichkeit'''.
+* Darin gibt es den Schalter '''Menschliche KI''' (ab Werk aus) und fünf Eigenschaften: '''Mut''', '''Konstanz''', '''Nerven''', '''Lerntempo''' und '''Reifenschonung'''.
+* Die Werte kommen aus dem Namen des NPCs und lassen sich einzeln verstellen.
+
+== Was die KI ändert ==
+Ist die KI an, lernt der NPC jede Strecke Kachel für Kachel, merkt sich Abflüge und Überholstellen je Gegner und fährt mit Formwellen, Zögern unter Druck und ruhigem Rhythmus allein auf der Strecke.
+
+* Das Tempo bleibt zwischen '''85 und 104 %''' der eingestellten Stufe.
+* Die KI gilt '''nicht''' unter Gelb, in der Box und in der Startrunde.
+
+== Änderungen (diese Seite) ==
+* Neu angelegt mit Stand 1.5.107; beschreibt die Bedienung (Schalter, fünf Eigenschaften) und das Verhalten der menschlichen KI.\n\n[[Kategorie:OmegaSim]]\n[[Kategorie:Spielfunktionen]]

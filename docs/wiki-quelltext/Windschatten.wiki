@@ -1,0 +1,18 @@
+{{Stand|app=1.4.80|appdatum=15.11.2026}}
+'''Windschatten''' bezeichnet in [[OmegaSim]] zwei getrennte Effekte: den Verlust an Kurvengrip des eigenen Autos hinter einem anderen Fahrzeug und einen Tempovorteil für die NPCs auf Geraden. Beide sind standardmäßig ausgeschaltet.
+
+== Überblick ==
+Das Fahrmodell von OmegaSim bildet Aerodynamik nur vereinfacht ab. Der Windschatten des Fahrerautos ist kein Drall, sondern ein Abtriebsverlust: Wer dicht hinter einem anderen Auto in eine Kurve geht, hat weniger Grip. Für die NPCs gibt es dagegen einen Tempovorteil auf Geraden. Beide Effekte lassen sich getrennt ein- und ausschalten.
+
+== Windschatten des Fahrerautos ==
+Unter '''Optionen → Allgemein → Aerodynamik''' schaltet man ''Windschatten in Kurven'' (experimentell, Standard aus) und stellt die ''Stärke'' ein (0 bis 2, Standard 1). Bei 100 Prozent beträgt der Verlust höchstens 18 Prozent Kurvengrip. Er wirkt nur in Kurven und reicht etwa eine Kachellänge (rund 43 Zentimeter Teppich beziehungsweise 32 Meter im Maßstab), wobei die Wirkung quadratisch abfällt. Der Schalter ist gesperrt, wenn weniger als drei Streckenteile vorhanden sind oder kein Gegner fährt.
+
+== Windschatten der NPCs ==
+Unter '''Optionen → NPCs''' schaltet man ''Windschatten'' (Standard aus). Wer auf einer Geraden dicht hinter einem anderen Auto hängt, fährt bis zu 11 Prozent schneller. Der Vorteil nimmt linear bis zu einem Abstand von 1,3 Kacheln ab und wirkt nur auf Geraden.
+
+== Weblinks ==
+* [[Fahrverhalten]]
+* [[NPC-Fahrverhalten]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Fahrphysik]]

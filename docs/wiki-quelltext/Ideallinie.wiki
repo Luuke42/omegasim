@@ -1,0 +1,21 @@
+{{Stand|app=1.4.80|appdatum=15.11.2026}}
+'''Ideallinie''' (auch ''Rennlinie'') ist die berechnete Fahrlinie in [[OmegaSim]], die als dünne farbige Linie in der Streckenvorschau eingezeichnet wird. Sie zeigt, wo das Auto am schnellsten fahren würde und wo gebremst wird.
+
+== Überblick ==
+Die Ideallinie wird als Querlage relativ zur Mittellinie berechnet und in kurze Segmente zerlegt, deren Farbe die Bremsintensität angibt: grün für freie Fahrt, gelb für teilweises Bremsen und rot für volles Anbremsen. Ohne eingeschaltete Linie wird die Mittellinie grau gezeichnet.
+
+== Anzeige ==
+Im Streckeneditor schaltet der Knopf ''Linie'' oben links die Ideallinie ein (Standard aus). Sie erscheint außerdem in der Rennübersicht und im Ghost-Menü, wenn man sie anklickt. Im Editor zeigt eine Zeile, wie viel Versatz die Linie von der maximal möglichen Breite nutzt.
+
+== Linienmodelle ==
+Unter '''Optionen → NPCs → Linienmodell''' stehen neun Modelle zur Auswahl, darunter Krümmung, Rundenzeit, Außen-Innen, Fahrbahnmitte und die Linie ''SIMULATOR''. Dazu kommt der Regler ''NPC: Ideallinie'' (0 bis 2, Wert 2 entspricht 100 Prozent). Standard ist ''Innen (gemittelt)''.
+
+== SIMULATOR ==
+Das Modell SIMULATOR sucht die schnellste Linie, indem es bis zu 200 Kandidatenlinien über drei Runden mit derselben Fahrphysik wie das eigene Auto fährt und die schnellste behält. Die Suche läuft nur bei geöffnetem Streckeneditor und pausiert während eines Rennens. Das Ergebnis wird je Strecke gespeichert; fehlt es, gilt die Luuke-Linie.
+
+== Weblinks ==
+* [[Strecken- und Raum-Editor]]
+* [[NPC-Fahrverhalten]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Strecke]]

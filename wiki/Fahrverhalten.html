@@ -17,12 +17,12 @@
 </div>
 <h1 class="wiki-title">Fahrverhalten</h1>
 <div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
-<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.5.107</b> vom 2026-11-17 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
 <small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
 </p>
 </div>
 <figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Fahrgefuehl.png" class="mw-file-description"><img src="images/250px-OmegaSim-Fahrgefuehl.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Fahrgefuehl.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Die Einstellungsseite Fahrgefühl in OmegaSim</figcaption></figure>
-<p>Das <b>Fahrverhalten</b> von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> ist die Art, wie die App aus den Eingaben am Controller (Gas, Bremse, Lenkung) die zwei Steuerwerte berechnet, die per <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a> an ein <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Auto gehen: einen Gaswert und einen Lenkwert. Dazwischen liegt ein vollständiges Fahrzeugmodell mit Motor, Getriebe, Reibkreis, Gewichtsverlagerung, Reifen- und Bremsentemperatur, einem Einspurmodell und, im Fahrgefühl Pacejka, einer Reifenkennlinie nach der Magic Formula. Das echte Modellauto rutscht, bremst und lenkt dabei mit seiner eigenen <a href="./Firmware.html" title="Firmware">Firmware</a>; was das Modell der App berechnet, wirkt am Auto ausschließlich über diese zwei Bytes. Abgestimmt wird das Fahrverhalten über neun fertige Sätze von Reglerwerten, die <b>Fahrgefühle</b> (in der App auch Voreinstellungen oder Presets genannt), und über rund 45 einzelne Regler.
+<p>Das <b>Fahrverhalten</b> von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> ist die Art, wie die App aus den Eingaben am Controller (Gas, Bremse, Lenkung) die zwei Steuerwerte berechnet, die per <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a> an ein <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Auto gehen: einen Gaswert und einen Lenkwert. Dazwischen liegt ein vollständiges Fahrzeugmodell mit Motor, Getriebe, Reibkreis, Gewichtsverlagerung, Reifen- und Bremsentemperatur, einem Einspurmodell und, im Fahrgefühl Pacejka, einer Reifenkennlinie nach der Magic Formula. Das echte Modellauto rutscht, bremst und lenkt dabei mit seiner eigenen <a href="./Firmware.html" title="Firmware">Firmware</a>; was das Modell der App berechnet, wirkt am Auto ausschließlich über diese zwei Bytes. Abgestimmt wird das Fahrverhalten über zehn fertige Sätze von Reglerwerten, die <b>Fahrgefühle</b> (in der App auch Voreinstellungen oder Presets genannt), und über rund 45 einzelne Regler.
 </p>
 <meta property="mw:PageProp/toc" />
 <div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
@@ -37,7 +37,7 @@
 </td></tr>
 <tr>
 <td>Fahrgefühle</td>
-<td>Arcade, Sim+, Pacejka (in FAHREN, Garage, Cockpit); Pro, GT3, F1, Realismus GT3, Omega, RC (nur in den Optionen)
+<td>Arcade, Sim+, Pacejka, LibreCorsa (in FAHREN, Garage, Cockpit); Pro, GT3, F1, Realismus GT3, Omega, RC (nur in den Optionen)
 </td></tr>
 <tr>
 <td>Vorgabe nach Neuinstallation</td>
@@ -45,7 +45,7 @@
 </td></tr>
 <tr>
 <td>Steuerungsmodi</td>
-<td>Physik, Pacejka, RC („Aus“)
+<td>Physik, Pacejka, LibreCorsa, RC („Aus“)
 </td></tr>
 <tr>
 <td>Mechanischer Lenkanschlag</td>
@@ -61,7 +61,7 @@
 </td></tr>
 <tr>
 <td>Seit Version</td>
-<td>Physikmodell seit den 0.4-Fassungen, Pacejka seit 0.8, Omega seit 1.0.36, Sim+ seit 0.10.5, RC seit 1.0.22
+<td>Physikmodell seit den 0.4-Fassungen, Pacejka seit 0.8, Omega seit 1.0.36, Sim+ seit 0.10.5, RC seit 1.0.22, LibreCorsa seit 1.5.25
 </td></tr>
 <tr>
 <td>Quelldateien</td>
@@ -108,8 +108,8 @@ Beispiel: Queranteil 0,6 → Längsanteil √(1 − 0,36) = 0,8</pre>
 </p>
 <div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
 <div class="mw-heading mw-heading3"><h3 id="Ein_Fahrgefühl_wählen"><span id="Ein_Fahrgef.C3.BChl_w.C3.A4hlen"></span>Ein Fahrgefühl wählen</h3></div>
-<ol><li><b>FAHREN</b> öffnen und die Kachel Fahrgefühl antippen, oder in der <b>Garage</b> beim gesteuerten Auto die Zeile „Fahrgefühl“ benutzen. Dort stehen Arcade, Sim+ und Pacejka.</li>
-<li>Für die übrigen sechs Sätze <b>Optionen → Fahrgefühl → Voreinstellungen</b> öffnen. Die Reihenfolge dort ist Arcade, Sim+, Pacejka, Pro, GT3, F1, Realismus GT3, Omega, RC.</li>
+<ol><li><b>FAHREN</b> öffnen und die Kachel Fahrgefühl antippen, oder in der <b>Garage</b> beim gesteuerten Auto die Zeile „Fahrgefühl“ benutzen. Dort stehen Arcade, Sim+, Pacejka und LibreCorsa.</li>
+<li>Für die übrigen Sätze <b>Optionen → Fahrgefühl → Voreinstellungen</b> öffnen. Die Reihenfolge dort ist Arcade, Sim+, Pacejka, Pro, GT3, F1, Realismus GT3, Omega, RC, LibreCorsa (WIP).</li>
 <li>Ein Tipp setzt alle Regler des Satzes auf einmal. Die Statuszeile meldet „Name: n Regler gesetzt“; fehlende Regler werden dort genannt.</li>
 <li>Im Cockpit schaltet der Fahrmodus-Knopf zwischen Arcade, Sim+ und Pacejka weiter, und zwar ab dem gerade eingestellten Satz. Während einer <a href="./Challenges.html" title="Challenges">Challenge</a> ist der Knopf gesperrt.</li>
 <li>Unter den Knöpfen steht die Beschreibung des aktiven Satzes. Weicht ein einziger Regler von allen Sätzen ab, steht dort „Eigene Abstimmung“.</li></ol>
@@ -120,7 +120,7 @@ Beispiel: Queranteil 0,6 → Längsanteil √(1 − 0,36) = 0,8</pre>
 <li><b>Standard wiederherstellen</b> in der Garage setzt alle Regler auf die Werte zurück, mit denen sie ausgeliefert werden.</li></ol>
 <div class="mw-heading mw-heading3"><h3 id="Fahrgefühl_je_Spieler"><span id="Fahrgef.C3.BChl_je_Spieler"></span>Fahrgefühl je Spieler</h3></div>
 <ol><li>In der Garage einem Auto die Rolle Spieler 2 oder Spieler 3 geben.</li>
-<li>In dessen Zeile „Fahrgefühl“ zwischen „wie Spieler 1“ (Vorgabe), Arcade, Sim+ und Pacejka wählen.</li>
+<li>In dessen Zeile „Fahrgefühl“ zwischen „wie Spieler 1“ (Vorgabe), Arcade, Sim+, Pacejka und LibreCorsa wählen.</li>
 <li>Spieler 1 stellt weiterhin die Regler unter Optionen ein. Sie gelten für alle Spieler ohne eigenes Fahrgefühl.</li></ol>
 <div class="mw-heading mw-heading3"><h3 id="Rückwärts_fahren"><span id="R.C3.BCckw.C3.A4rts_fahren"></span>Rückwärts fahren</h3></div>
 <ol><li>Mit Automatik: Quadrat (Xbox: X) legt unterhalb von 10 km/h den Rückwärtsgang ein, Kreis (B) holt ihn heraus.</li>
@@ -139,14 +139,14 @@ Beispiel: Queranteil 0,6 → Längsanteil √(1 − 0,36) = 0,8</pre>
 </th></tr>
 <tr>
 <td>Voreinstellungen</td>
-<td>9 Knöpfe</td>
+<td>10 Knöpfe</td>
 <td>–</td>
 <td>setzt einen ganzen Satz von Reglern, siehe <a href="#Alle_Fahrgefühle_mit_ihren_Werten">Tabelle</a></td>
 <td><code>preset-buttons</code>
 </td></tr>
 <tr>
 <td>Steuerungsmodus (ausgeblendet seit 1.0.22)</td>
-<td>Physik, Pacejka, RC</td>
+<td>Physik, Pacejka, LibreCorsa, RC</td>
 <td>Pacejka</td>
 <td>wählt den Rechenweg; hängt seitdem am Fahrgefühl</td>
 <td><code>phys-mode</code> → <code>physicsEnabled</code>, <code>config.pacejka</code>
@@ -920,6 +920,7 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <th>Arcade</th>
 <th>Sim+</th>
 <th>Pacejka</th>
+<th>LibreCorsa</th>
 <th>Pro</th>
 <th>GT3</th>
 <th>F1</th>
@@ -937,7 +938,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>Physik</td>
 <td>Physik</td>
 <td>Physik</td>
-<td><b>RC</b>
+<td><b>RC</b></td>
+<td><b>LibreCorsa</b>
 </td></tr>
 <tr>
 <td>Automatik (<code>setting-autoshift</code>)</td>
@@ -948,6 +950,7 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td><b>aus</b></td>
 <td><b>aus</b></td>
 <td><b>aus</b></td>
+<td>an</td>
 <td>an</td>
 <td>an
 </td></tr>
@@ -961,7 +964,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>2,5</td>
 <td>3,2</td>
 <td>2,6</td>
-<td>1,5
+<td>1,5</td>
+<td>2,6
 </td></tr>
 <tr>
 <td>Beschleunigungsfaktor (<code>phys-accel</code>)</td>
@@ -973,7 +977,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>1,0</td>
 <td>1,0</td>
 <td>1,0</td>
-<td>1,6
+<td>1,6</td>
+<td>1,1
 </td></tr>
 <tr>
 <td>Gasfaktor (<code>setting-topspeed</code>)</td>
@@ -985,7 +990,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>1,6</td>
 <td>1,0</td>
 <td>1,8</td>
-<td>1,5
+<td>1,5</td>
+<td>1,8
 </td></tr>
 <tr>
 <td>Bremswirkung (<code>setting-brakepower</code>)</td>
@@ -997,7 +1003,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>1,45</td>
 <td>0,85</td>
 <td>1,4</td>
-<td>2,5
+<td>2,5</td>
+<td>1,7
 </td></tr>
 <tr>
 <td>Bremsaufbau, s (<code>phys-brake-tau</code>)</td>
@@ -1009,6 +1016,7 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>0,12</td>
 <td>0,12</td>
 <td><b>0,45</b></td>
+<td>0,12</td>
 <td>0,12
 </td></tr>
 <tr>
@@ -1021,7 +1029,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>63</td>
 <td>62</td>
 <td>62</td>
-<td>56
+<td>56</td>
+<td>62
 </td></tr>
 <tr>
 <td>Bremsen nimmt Lenkung (<code>setting-brake-steal</code>)</td>
@@ -1033,7 +1042,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>1,1</td>
 <td>1,0</td>
 <td>1,15</td>
-<td>0,2
+<td>0,2</td>
+<td>0,8
 </td></tr>
 <tr>
 <td>Reifengrip (<code>setting-grip</code>)</td>
@@ -1044,6 +1054,7 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>0,87</td>
 <td>0,97</td>
 <td>0,72</td>
+<td>1,0</td>
 <td>1,0</td>
 <td>1,0
 </td></tr>
@@ -1057,7 +1068,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>3,2</td>
 <td>3,0</td>
 <td>3,0</td>
-<td>4,0
+<td>4,0</td>
+<td>3,2
 </td></tr>
 <tr>
 <td>Lenkkalibrierung (<code>setting-steer-calib</code>)</td>
@@ -1069,7 +1081,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>2,0</td>
 <td>1,6</td>
 <td>2,5</td>
-<td>3,0
+<td>3,0</td>
+<td>2,6
 </td></tr>
 <tr>
 <td>Ausrollen (<code>setting-coast-drag</code>)</td>
@@ -1081,7 +1094,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>1,2</td>
 <td>1,25</td>
 <td>0,6</td>
-<td>0,3
+<td>0,3</td>
+<td>0,6
 </td></tr>
 <tr>
 <td>Tankgewicht (<code>setting-fuelweight</code>)</td>
@@ -1093,7 +1107,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>0,6</td>
 <td>1,0</td>
 <td>1</td>
-<td>0
+<td>0</td>
+<td>1
 </td></tr>
 <tr>
 <td>Reifenmodell (<code>setting-tyres</code>)</td>
@@ -1105,7 +1120,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>1,2</td>
 <td>2,0</td>
 <td>1</td>
-<td>0 (aus)
+<td>0 (aus)</td>
+<td>1
 </td></tr>
 <tr>
 <td>Reifenwärmer (<code>setting-tyre-blankets</code>)</td>
@@ -1117,7 +1133,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>an</td>
 <td>aus</td>
 <td>aus</td>
-<td>an
+<td>an</td>
+<td>aus
 </td></tr>
 <tr>
 <td>Reifendruck, bar (<code>setting-tyre-pressure</code>)</td>
@@ -1127,6 +1144,7 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>1,8</td>
 <td>1,8</td>
 <td>1,75</td>
+<td>1,8</td>
 <td>1,8</td>
 <td>1,8</td>
 <td>1,8
@@ -1141,7 +1159,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>an</td>
 <td>an</td>
 <td>an</td>
-<td>aus
+<td>aus</td>
+<td>an
 </td></tr>
 <tr>
 <td>Tankverbrauch,&#160;%/s (<code>setting-fuel-drain</code>)</td>
@@ -1153,7 +1172,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>2,7</td>
 <td>3,0</td>
 <td>1</td>
-<td>0
+<td>0</td>
+<td>1
 </td></tr>
 <tr>
 <td>Crashs bis 100&#160;% (<code>setting-crash-count</code>)</td>
@@ -1165,7 +1185,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>4</td>
 <td>10</td>
 <td>5</td>
-<td>50
+<td>50</td>
+<td>5
 </td></tr>
 <tr>
 <td>Schaden bei Crash (<code>setting-crash-schaden</code>)</td>
@@ -1177,10 +1198,12 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>an</td>
 <td>an</td>
 <td>an</td>
-<td>aus
+<td>aus</td>
+<td>an
 </td></tr>
 <tr>
 <td>Crash-Erkennung, Bremsen, Nur Rammer</td>
+<td>an</td>
 <td>an</td>
 <td>an</td>
 <td>an</td>
@@ -1201,7 +1224,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>30</td>
 <td>30</td>
 <td>40</td>
-<td>60
+<td>60</td>
+<td>40
 </td></tr>
 <tr>
 <td>Reparatur, s (<code>setting-repair-time</code>)</td>
@@ -1213,7 +1237,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>16</td>
 <td>20</td>
 <td>4</td>
-<td>2
+<td>2</td>
+<td>4
 </td></tr>
 <tr>
 <td>Bremsfading (<code>setting-brake-fade</code>)</td>
@@ -1225,7 +1250,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>an</td>
 <td>an</td>
 <td>an</td>
-<td>aus
+<td>aus</td>
+<td>an
 </td></tr>
 <tr>
 <td>Stärke des Fadings</td>
@@ -1237,7 +1263,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>1,25</td>
 <td>1,0</td>
 <td>1,5</td>
-<td>1,0
+<td>1,0</td>
+<td>1,5
 </td></tr>
 <tr>
 <td>Windschatten (<code>setting-dirtyair</code>)</td>
@@ -1249,6 +1276,7 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>an</td>
 <td>an</td>
 <td>aus</td>
+<td>aus</td>
 <td>aus
 </td></tr>
 <tr>
@@ -1259,6 +1287,7 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>1,0</td>
 <td>1,0</td>
 <td>1,35</td>
+<td>1,0</td>
 <td>1,0</td>
 <td>1,0</td>
 <td>1,0
@@ -1273,7 +1302,8 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>ja</td>
 <td>ja</td>
 <td>nein</td>
-<td>nein
+<td>nein</td>
+<td>ja
 </td></tr>
 <tr>
 <td>Sonderweg (abgeleitet)</td>
@@ -1285,6 +1315,7 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <td>–</td>
 <td>–</td>
 <td><code>lenkAlt</code></td>
+<td>–</td>
 <td>–
 </td></tr></tbody></table>
 <p>Nicht Teil der Sätze sind: Layout, Getriebe, Höchstgeschwindigkeit, Lenkkennlinie, Gas- und Bremskennlinie, „Voller Einschlag bei“, Lenkdämpfung, Lenkkraft unter Gas, Anfahrschub, Tempo rückwärts, Gewichtsverlagerung und deren Trägheit sowie alle Renneinstellungen (Renndauer, Wetter, <a href="./Strecke.html" title="Strecke">Strecke</a>).
@@ -1298,6 +1329,7 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <ul><li><b>Arcade</b>: nachsichtigste Abstimmung, stärkste Bremse (4,0), kein Reifen- und Tankmodell, Crashs bremsen ohne Schaden.</li>
 <li><b>Sim+</b>: Pro mit mehr Lenkung (3,3), mehr Beschleunigung (2,3 s, Faktor 1,15) und deutlich kräftigerer Bremse (2,2).</li>
 <li><b>Pacejka</b>: Pro mit dem Pacejka-Modus; ab Werk eingestellt.</li>
+<li><b>LibreCorsa</b>: Pro mit stärkerer Bremse (1,7), etwas mehr Lenkung (3,2) und Lenkkalibrierung (2,6), Abtrieb mit dem Tempo, Reifenfenster; das Heck nur mit „Übersteuern“ (WIP).</li>
 <li><b>Pro</b>: Grundabstimmung; wöchentliche Challenges und Dauerrennen fahren mit Pro.</li>
 <li><b>GT3</b>, <b>F1</b>: von Hand schalten, Fading und Windschatten an.</li>
 <li><b>Realismus GT3</b>: das GT3 aus 0.4 Wert für Wert, gegen eine gemessene Reihe gefittet (3,2 s), härteste Stufe.</li>
@@ -1498,6 +1530,14 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <tr>
 <td>1.2 (1.2.11)</td>
 <td>Erklärtexte der Fahrgefühle Arcade, Pro, Pacejka und Omega an die eingestellten Werte angeglichen.
+</td></tr>
+<tr>
+<td>1.3 (1.3.7)</td>
+<td>Fahrgefühle Gran Hybrismo und Assetto Carrera; seit 1.3.7 fährt die NPC-Stufe MAX mit den Arcade-Werten.
+</td>
+<td>1.5 (1.5.25)</td>
+<td>-\n| 1.5 (1.5.28)</td>
+<td>Gran Hybrismo und Assetto Carrera entfernt; wer sie gewählt hatte (auch in gespeicherten Presets und im virtuellen Fahren), fährt LibreCorsa.
 </td></tr></tbody></table>
 <div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
 <ul><li><a href="./Verschleiß.html" title="Verschleiß">Verschleiß</a></li>
@@ -1522,20 +1562,19 @@ Byte 19  = CRC-8 über Byte 0 bis 18 (Polynom 0x31, Startwert 0xFF)</pre>
 <li><code>src/00-index.head.html</code>: Regler unter <code>#sub-opt-feel</code></li></ul>
 <div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
 <ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
-
 <!-- 
 NewPP limit report
-Parsed by mw183
-Cached time: 20261030073506
+Parsed by mw192
+Cached time: 20261118152026
 Cache expiry: 1296000
 Reduced expiry: false
 Complications: [show‐toc]
-CPU time usage: 0.151 seconds
-Real time usage: 0.158 seconds
+CPU time usage: 0.154 seconds
+Real time usage: 0.189 seconds
 Preprocessor visited node count: 297/1000000
-Revision size: 56158/2097152 bytes
-Post‐expand include size: 752/2097152 bytes
-Template argument size: 15/2097152 bytes
+Revision size: 57063/2097152 bytes
+Post‐expand include size: 754/2097152 bytes
+Template argument size: 17/2097152 bytes
 Highest expansion depth: 3/100
 Expensive parser function count: 1/99
 Unstrip recursion depth: 0/20
@@ -1543,11 +1582,14 @@ Unstrip post‐expand size: 6714/5000000 bytes
 -->
 <!--
 Transclusion expansion time report (%,ms,calls,template)
-100.00%    3.909      1 Vorlage:Stand
-100.00%    3.909      1 -total
+100.00%    6.091      1 Vorlage:Stand
+100.00%    6.091      1 -total
 -->
 
-<!-- Render ID 6d29437f-d434-11f1-9d0c-bc2411058fd2 -->
+<!-- Render ID 94a05e3a-e363-11f1-9875-bc24112bc008 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:28:|#|:idhash:canonical and timestamp 20261118152026 and revision id 889. Rendering was triggered because: page-edit
+ -->
 </div>
 </main>
 <footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>

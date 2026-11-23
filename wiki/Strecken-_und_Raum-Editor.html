@@ -17,7 +17,7 @@
 </div>
 <h1 class="wiki-title">Strecken- und Raum-Editor</h1>
 <div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
-<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.3.93</b> vom 05.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
 <small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
 </p>
 </div>
@@ -402,7 +402,7 @@ y' = x · sin a + y · cos a
 </td></tr></tbody></table>
 <ul><li><b>Länge</b> (<code>trackLaengeM()</code>): Summe der Weglängen aller Kacheln (<code>tileLength()</code>), in Metern; dazu das 50-Fache in km, weil die Autos im Maßstab 1:50 gebaut sind.</li>
 <li><b>Platzbedarf</b> (<code>updateTrackSpace()</code>): Bounding Box der beiden Fahrbahnkanten (Mittellinie ± halbe Bahnbreite entlang der Normalen) in der aktuellen Drehung, Anzeige „B × T cm · n Teile“. Das Streckenbild nimmt denselben Wert ohne Drehung (<code>chFlaeche()</code>).</li>
-<li><b>Geschlossen</b>: Lücke ≤ 15 cm und Winkel ≤ 12° (<code>trackSchluss()</code>); Herleitung unter <a href="https://omegasim.miraheze.org/wiki/Strecke#Geschlossen_oder_offen?" title="Strecke">Strecke</a>.</li></ul>
+<li><b>Geschlossen</b>: Lücke ≤ 15 cm und Winkel ≤ 12° (<code>trackSchluss()</code>); Herleitung unter <a href="./Strecke.html#Geschlossen_oder_offen?" title="Strecke">Strecke</a>.</li></ul>
 <div class="mw-heading mw-heading3"><h3 id="Die_Zufallsstrecke_(Streckenrandomisator)"><span id="Die_Zufallsstrecke_.28Streckenrandomisator.29"></span>Die Zufallsstrecke (Streckenrandomisator)</h3></div>
 <p>Die Zufallsstrecke (<code>trackZufallMitAnimation()</code> und die Funktionen <code>trackZufall*</code> in <code>src/60-track.js</code>) baut aus dem Bestand unter <b>Meine Teile</b> einen Rundkurs, der sich <b>streng</b> schließt, sich nicht selbst kreuzt, nirgends zu dicht an sich selbst vorbeiführt, nicht langweilig ist und in den Raum passt. Die Idee stammt aus einem Entwurf für Wochenstrecken (<code>mockup/wochenstrecken.html</code>): Man wählt eine Folge von <b>Kurvenläufen</b> (zusammenhängende, gleichsinnige Kurven, die zusammen wie eine Ecke wirken), deren Drehungen sich zu 360° addieren, und <b>löst</b> danach die Längen der Geradenstücke dazwischen so, dass der Ring zusammenkommt.
 </p>
@@ -574,6 +574,14 @@ Lage:        t = (W/2 − m_x , H/2 − m_y)      Strecke mittig, versatz = (0, 
 <li><b>Vorlagen</b> (setzen erst alles auf Boden): <b>L</b> sperrt x 55–100&#160;%, y 0–45&#160;%; <b>U</b> sperrt x 36–64&#160;%, y 0–50&#160;%; <b>Oval</b> sperrt jede Zelle außerhalb der Ellipse u² + v² ≤ 1 (u, v = Zellmitte relativ zur Raummitte, geteilt durch die halbe Breite bzw. Tiefe); <b>Rechteck</b> ist alles Boden.</li>
 <li>Die Anzeige nennt Größe und Bodenfläche: Zahl der Bodenzellen × 0,01 m².</li>
 <li>Im Editor erscheinen Möbel als rote Flächen im Raumrechteck; das Raster der Karte hat 50-cm-Linien.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Sektoren">Sektoren</h3></div>
+<p>Seit 1.3.86 (WIP) lassen sich Sektoren im Streckeneditor festlegen. Der Knopf <b>Sektoren</b> bietet drei Wege:
+</p>
+<ul><li><b>Automatisch festlegen</b>: Die Anzahl folgt aus der Teilezahl (8 Teile keine Sektoren, 15 Teile zwei, 25 Teile drei, höchstens zehn); die Abschnitte sind etwa gleich lang und beginnen an Teilefugen.</li>
+<li><b>Manuell festlegen</b>: Strecke antippen oder mit Steuerkreuz und ✕ die Teile wählen, an denen ein Sektor beginnt; ein zweites Antippen entfernt die Grenze wieder, dann <b>Fertig</b>.</li>
+<li><b>Aus</b>: keine Editor-Sektoren.</li></ul>
+<p>Die Grenzen erscheinen als dünne grüne Linien und werden mit der Strecke gespeichert; der Streckencode bleibt gleich. Im Rennen misst jedes Auto die Sektoren über seinen Kachelzähler. Verzählt es sich (etwa nach einem Abflug), steht der Sektor auf „–“ statt einer falschen Zeit, die Runde zählt weiter. Zusätzliche Start/Ziel-Teile haben Vorrang vor den Editor-Sektoren; im Ausdruck-Modus bleibt der Regler „Sektoren“ in den Renneinstellungen. Die <a href="./Zufallsevents.html" title="Zufallsevents">Zufallsevents</a> nutzen die Sektoren als Bereiche.
+</p>
 <div class="mw-heading mw-heading3"><h3 id="Ideallinie">Ideallinie</h3></div>
 <p>Die Ideallinie ist eine <b>Rechnung, keine Messung</b>: Kein Byte des Autos meldet die Querlage. Sie wird als seitlicher Versatz α<sub>i</sub> je Abtastpunkt beschrieben:
 </p>
@@ -825,6 +833,14 @@ T = Σ ds_i / ((v_i + v_{i+1}) / 2)
 <tr>
 <td>1.1.11</td>
 <td>Streckenbild wird groß angezeigt, mit Teilen, Speichern, Schließen
+</td></tr>
+<tr>
+<td>1.2.61</td>
+<td>Editor-Optionen: Länge/Teile-Slider, Linkslastig, Brücken, Strecke spiegeln; Teile-Liste entfernt, Vorschau halbiert.
+</td></tr>
+<tr>
+<td>1.3.86</td>
+<td>Sektoren über den Streckeneditor (automatisch/manuell), grüne Grenzlinien.
 </td></tr></tbody></table>
 <div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
 <ul><li><a href="./Strecke.html" title="Strecke">Strecke</a></li>
@@ -845,17 +861,17 @@ T = Σ ds_i / ((v_i + v_{i+1}) / 2)
 <ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
 <!-- 
 NewPP limit report
-Parsed by mw213
-Cached time: 20261027053456
+Parsed by mw153
+Cached time: 20261109195704
 Cache expiry: 1296000
 Reduced expiry: false
 Complications: [prevent‐selective‐update, show‐toc]
-CPU time usage: 0.094 seconds
-Real time usage: 0.101 seconds
-Preprocessor visited node count: 219/1000000
-Revision size: 50092/2097152 bytes
-Post‐expand include size: 752/2097152 bytes
-Template argument size: 15/2097152 bytes
+CPU time usage: 0.093 seconds
+Real time usage: 0.103 seconds
+Preprocessor visited node count: 223/1000000
+Revision size: 51395/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
 Highest expansion depth: 3/100
 Expensive parser function count: 0/99
 Unstrip recursion depth: 0/20
@@ -863,13 +879,13 @@ Unstrip post‐expand size: 4665/5000000 bytes
 -->
 <!--
 Transclusion expansion time report (%,ms,calls,template)
-100.00%    2.250      1 Vorlage:Stand
-100.00%    2.250      1 -total
+100.00%    3.035      1 Vorlage:Stand
+100.00%    3.035      1 -total
 -->
 
-<!-- Render ID 246d4245-d1c8-11f1-885e-bc241137f7fa -->
+<!-- Render ID bc166eba-dc77-11f1-b019-bc2411b22d5b -->
 
-<!-- Saved in parser cache with key omegasimwiki:pcache:33:|#|:idhash:canonical and timestamp 20261027053456 and revision id 92. Rendering was triggered because: api-parse
+<!-- Saved in parser cache with key omegasimwiki:pcache:33:|#|:idhash:canonical and timestamp 20261109195704 and revision id 828. Rendering was triggered because: page-edit
  -->
 </div>
 </main>

@@ -1,0 +1,20 @@
+{{Stand|app=–|appdatum=03.11.2026}}
+'''Grobe und feine Fassung''' beschreibt eine Arbeitsweise für sehr große Netze: Konstruiert wird an einer leichten, groben Fassung, gedruckt wird die feine. So bleibt Fusion flüssig, ohne dass beim Druck Details verloren gehen.
+
+== Ablauf ==
+# Von der feinen Fassung (zum Beispiel 1,3 Millionen Dreiecke) eine '''grobe Fassung''' mit 250 000–300 000 Dreiecken erzeugen, siehe [[STL-Netze reparieren und reduzieren]]. Beide liegen exakt an derselben Stelle.
+# In Fusion mit der groben Fassung arbeiten. Änderungen nicht direkt in das Netz einarbeiten, sondern als '''eigene Körper''' anlegen und nach der Regel [[Add-, Del-, Rep- und Chk-Teile]] benennen.
+# Die Zusatzteile werden danach auf die '''feine Fassung''' übertragen (abgezogen, vereint, ersetzt). Gedruckt wird die feine Fassung.
+
+== Warum nicht einfach die grobe Fassung verfeinern? ==
+Ein grobes Netz wird durch Verfeinern nicht wieder genau: Verlorene Details wie Logos, Kanten oder Lüftungsschlitze kommen nicht zurück. Die Zusatzteile dagegen lassen sich verlustfrei auf die feine Fassung übertragen.
+
+== Hinweise ==
+* Die grobe Fassung weicht meist nur wenige Hundertstel Millimeter von der feinen ab und reicht zum Messen und Konstruieren.
+* Grobe und feine Fassung niemals gegeneinander verschieben.
+
+== Siehe auch ==
+* [[CAD und 3D-Druck]]
+* [[Add-, Del-, Rep- und Chk-Teile]]
+
+[[Kategorie:CAD]]

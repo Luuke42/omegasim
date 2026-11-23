@@ -1,0 +1,17 @@
+'''Keine Reaktion des Fahrzeugs'''
+
+* das Fahrzeug steht mit Licht sowie eingeschlagenen Vorderrädern und kann nicht mehr gekoppelt werden
+
+<u>Lösungsweg A</u>
+
+# OmegaSim schließen
+# Bluetooth am Smartphone, Tablet oder PC deaktivieren (das löscht alle Bluetooth-Verbindungen)
+# Bluetooth wieder aktivieren
+# OmegaSim neu starten und das Fahrzeug im Menü Garage neu koppeln
+
+
+Lösungsweg B
+
+# Das Fahrzeug an ein Ladekabel anschließen, bis es blinkt.
+# Fahrzeug wieder abschließen, durch Zurückziehen neu starten.
+# Fahrzeug neu verbinden.

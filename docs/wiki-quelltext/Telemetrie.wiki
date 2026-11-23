@@ -1,0 +1,26 @@
+{{Stand|app=1.4.80|appdatum=15.11.2026}}
+'''Telemetrie''' ist ein Analysewerkzeug in [[OmegaSim]], mit dem sich zwei Runden derselben Strecke vergleichen lassen. Die Seite wird über '''Optionen → Telemetrie''' geöffnet und zeigt, wo auf der Strecke Zeit gewonnen oder verloren wird.
+
+== Überblick ==
+Während einer gewerteten Fahrt zeichnet OmegaSim eine Runde als ''Spur'' auf: die Zwischenzeiten je Streckenteil, die Gesamtzeit und etwa zehn Messpunkte pro Sekunde mit Tempo, Gas, Bremse, Gang und Lenkung. Die Telemetrie-Seite lädt gespeicherte Spuren und stellt zwei Runden A und B einander gegenüber. Sie ist als WIP gekennzeichnet.
+
+== Aufzeichnung ==
+Eine Spur wird nur während eines aktiven Rennens oder einer Time-Attack-Fahrt aufgezeichnet. Bei jedem bestätigten Teilwechsel wird die Zwischenzeit festgehalten; parallel laufen Messpunkte im Abstand von 100 Millisekunden. Pro Strecke werden die beste und die letzte Runde sowie alle gewerteten Runden der letzten Fahrt gespeichert. Gespiegelt gefahrene Strecken zählen wie in der Time Attack als dieselbe Strecke.
+
+== Auswertung ==
+Auf der Seite wählt man Strecke sowie Runde A und B (letzte, beste oder eine konkrete Runde der letzten Fahrt). Das Ergebnis umfasst:
+
+* Statistik-Kacheln mit den Rundenzeiten und der Differenz A minus B (grün für schneller, rot für langsamer)
+* eine Streckenkarte, auf der jedes Teil grün oder rot gefärbt ist, je nachdem, wer dort schneller war
+* ein Balkendiagramm mit dem Gewinn oder Verlust je Teil
+* eine Tempokurve über den Rundenweg mit Gas- und Bremsspuren von A
+
+== Live-Delta ==
+In der Time Attack zeigt das Cockpit an jedem Teilwechsel einen Live-Wert, wie weit die laufende Runde von der eigenen Bestrunde entfernt ist (grün für schneller, rot für langsamer). Damit sieht man schon während der Runde, wo Zeit verloren geht.
+
+== Weblinks ==
+* [[Statistik]]
+* [[Pacejka]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Optionen]]

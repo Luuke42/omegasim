@@ -67,6 +67,11 @@
       text: 'Kreis (Z) nimmt die letzte Änderung zurück, auch mehrmals.' },
     { tab: 'track', sub: 'edit', ziel: ['#track-fs-info'], bild: 'strecke-frei', titel: 'Länge und Teile',
       text: 'Oben steht die Länge in Metern und im Maßstab 1:50. Hast du unter Meine Teile deinen Karton eingetragen, siehst du hier, was fehlt.' },
+    // v1.5 BESTELLT: "Brücken im Editor-Tutorial ergänzen". Bruecken gibt es als Option der Zufallsstrecke.
+    { tab: 'track', sub: 'edit', ziel: ['#track-opt-toggle'], bild: 'strecke-bahn', titel: 'Brücken',
+      text: 'Unter Optionen stellst du ein, wie viele Brücken eine Zufallsstrecke haben soll (0 bis 4). An jeder Brücke kreuzt die Bahn sich selbst: ein Stück läuft auf Stützen über das andere. Mit einer Brücke wird es eine Acht. Geht die Zahl mit deinen Teilen nicht, sagt die App Bescheid.' },
+    { tab: 'track', sub: 'edit', ziel: ['#track-opt-toggle'], bild: 'strecke-frei', titel: 'Boxengassen',
+      text: 'Ebenfalls unter Optionen: wie viele Boxengassen die Zufallsstrecke bekommt. Vorgabe sind so viele, wie du unter Meine Teile eingetragen hast.' },
     { tab: 'track', sub: 'edit', ziel: ['#track-fs-toggle'], taste: 'L3', titel: 'Schließen',
       text: 'L3 oder Esc schließt den Editor. Die Strecke bleibt, speichern kannst du sie unter Strecke laden.' },
   ];

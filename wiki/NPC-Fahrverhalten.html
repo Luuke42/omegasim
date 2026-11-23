@@ -16,15 +16,19 @@
 <p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
 </div>
 <h1 class="wiki-title">NPC-Fahrverhalten</h1>
-<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
-<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><p>﻿</p><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.4.80</b> vom 15.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
 <small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
 </p>
 </div>
 <figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-NPC.png" class="mw-file-description"><img src="images/250px-OmegaSim-NPC.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-NPC.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>NPC-Einstellungen in OmegaSim</figcaption></figure>
 <p>Das <b>NPC-Fahrverhalten</b> ist die Steuerlogik, mit der <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> echte <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Autos ohne menschlichen Fahrer über die Bahn bewegt. Ein solches Auto heißt in der App NPC (<i>non-player character</i>, computergesteuerter Gegner); im Quelltext und in älteren Fassungen hieß es „Ghost“. Jeder NPC ist ein per <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a> verbundenes Auto mit der Garagenrolle <b>NPC</b>. Die App rechnet für ihn im selben 45-ms-Takt wie für das Fahrerauto ein Zieltempo und eine gewünschte Querlage aus Streckenlayout, Ideallinie, Rennsituation und den anderen Autos, führt beides durch ein eigenes Fahrzeugmodell und schickt das Ergebnis als Gas- und Lenkbyte an das Auto. Weil das Auto weder seine Position auf der Kachel noch seine Querlage meldet, ist fast alles daran Schätzung und Steuerung ohne Rückmeldung; die Seite beschreibt, welche Formeln und Schwellen dabei im Code stehen.
+</p><p><br />
 </p>
 <meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Neuerungen_seit_1.3.93">Neuerungen seit 1.3.93</h2></div>
+<p>Ghosts heißen jetzt NPCs; dazu NPC-Boxenstopp, Tankort, Windschatten und ein Start je Startreihe versetzt.
+</p>
 <div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
 <table class="wikitable">
 <tbody><tr>
@@ -49,7 +53,7 @@
 </td></tr>
 <tr>
 <td>Seit Version</td>
-<td>NPCs (damals „Ghosts“) seit den 0.x-Fassungen; Umbenennung in „NPC“ im Patchnotes-Abschnitt 1.0; Stufen seit 0.9.56; MAX seit 1.1.42; MAX-Motormodell seit 1.2.5
+<td>NPCs (damals „Ghosts“) seit den 0.x-Fassungen; Umbenennung in „NPC“ im Patchnotes-Abschnitt 1.0; Stufen seit 0.9.56; MAX seit 1.1.42; MAX-Motormodell seit 1.2.5; MAX mit Arcade-Werten seit 1.3.7; MAX-Radius-2-Kurve seit 1.3.93
 </td></tr>
 <tr>
 <td>Beteiligte Quelldateien</td>
@@ -621,6 +625,7 @@ v11 = Boxen- und Randhalt-Ziel überschreibt alles
 <td>0,35
 </td></tr></tbody></table>
 <p>Werte bei Grundtempo 55&#160;%, Kurvendrosselung 20&#160;%, ohne Würze, Staffel 1. In der Haarnadel wäre die Rechnung 0,55 × (1 − 0,4) = 0,33, das Mindesttempo hebt auf 0,37, das Haarnadel-Höchsttempo senkt auf 0,35.
+</p><p><b>MAX-Profil (seit 1.3.7, seit 1.3.93 mit 90&#160;% in der Radius-2-Kurve).</b> Seit 1.3.7 fahren MAX-NPCs mit den Arcade-Werten (nicht mehr mit den Sim+-Werten der anderen Stufen). Das Profil aus dem NPC-Menü: <code>maxGerade&#160;=&#160;1,0</code>, <code>maxR1&#160;=&#160;0,52</code> (60°-Kurve und kleine 30°-Kurve), <code>maxR2&#160;=&#160;0,9</code> (weite 30°-Kurve, dreifacher Radius; vor 1.3.93 0,8) und Bremspunkt <code>schiene</code> (Standard) oder <code>teil</code>. Haarnadel und Engstelle fahren MAX-NPCs nach den normalen Regeln.
 </p><p><b>MAX-Motormodell (seit 1.2.5).</b> Das Fahrzeugmodell eines NPCs ist eine Kopie der Abstimmung von Spieler&#160;1 (ohne Tankgewicht, Reifenverschleiß, Lenkexpo und Tempo-Lenkbegrenzung, immer Automatik). Das gesendete Gas ist der Tempoanteil dieses Modells. Auf einer 43-cm-Geraden, die bei diesen Tempi 0,3 bis 0,5&#160;s dauert, kam ein MAX-NPC damit kaum über 0,5, weil der Schub mit dem Tempo fällt und jedes Hochschalten 120&#160;ms ohne Antrieb kostet. <code>ghostMaxMotor</code> setzt deshalb für MAX:
 </p>
 <div class="mw-highlight mw-highlight-lang-javascript mw-content-ltr" dir="ltr"><pre><span></span><span class="c1">// src/90-ghosts.js, ghostMaxMotor()</span>
@@ -1022,6 +1027,14 @@ unveränderter Befehl: höchstens alle max(Abstand, 200 ms)
 <tr>
 <td>1.2.5</td>
 <td>MAX-Motormodell (Beschleunigung × Regler, keine Schaltpause); Staffel, Lernfaktor und Streuung bremsen MAX auf Geraden nicht mehr; Rückschalten bei 5200/min; Knaller beim Anbremsen, Schalter „NPC-Motorklang: alt“
+</td></tr>
+<tr>
+<td>1.3.7</td>
+<td>MAX fährt mit den Arcade-Werten statt mit den Sim+-Werten der anderen Stufen
+</td></tr>
+<tr>
+<td>1.3.93</td>
+<td>MAX-Tempo in der Radius-2-Kurve von 80&#160;% auf 90&#160;% angehoben
 </td></tr></tbody></table>
 <p>Die Patchnotes der App sind nach Nebenversionen (1.2, 1.1 …) gegliedert; genaue Patchnummern stammen aus Kommentaren im Code.
 </p>
@@ -1090,16 +1103,16 @@ unveränderter Befehl: höchstens alle max(Abstand, 200 ms)
 <!-- 
 NewPP limit report
 Parsed by mw191
-Cached time: 20261027053457
+Cached time: 20261115192236
 Cache expiry: 1296000
 Reduced expiry: false
 Complications: [show‐toc]
-CPU time usage: 0.135 seconds
-Real time usage: 0.142 seconds
-Preprocessor visited node count: 366/1000000
-Revision size: 51777/2097152 bytes
-Post‐expand include size: 752/2097152 bytes
-Template argument size: 15/2097152 bytes
+CPU time usage: 0.142 seconds
+Real time usage: 0.624 seconds
+Preprocessor visited node count: 370/1000000
+Revision size: 52699/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
 Highest expansion depth: 3/100
 Expensive parser function count: 1/99
 Unstrip recursion depth: 0/20
@@ -1107,13 +1120,13 @@ Unstrip post‐expand size: 13976/5000000 bytes
 -->
 <!--
 Transclusion expansion time report (%,ms,calls,template)
-100.00%    2.931      1 Vorlage:Stand
-100.00%    2.931      1 -total
+100.00%    3.051      1 Vorlage:Stand
+100.00%    3.051      1 -total
 -->
 
-<!-- Render ID 2505de6a-d1c8-11f1-b9bb-bc24110d777b -->
+<!-- Render ID e9f12de9-e129-11f1-b9bb-bc24110d777b -->
 
-<!-- Saved in parser cache with key omegasimwiki:pcache:35:|#|:idhash:canonical and timestamp 20261027053457 and revision id 94. Rendering was triggered because: api-parse
+<!-- Saved in parser cache with key omegasimwiki:pcache:35:|#|:idhash:canonical and timestamp 20261115192235 and revision id 859. Rendering was triggered because: page-edit
  -->
 </div>
 </main>

@@ -1,0 +1,21 @@
+{{Stand|app=1.5.107|appdatum=2026-11-17}}
+Der '''DualSense''' ist der Controller von Sony, dessen '''adaptive Trigger''' und '''Vibration''' sich in [[OmegaSim]] nutzen lassen (in Arbeit, WIP). Am PC und in der Android-App verhalten sich die Trigger wie beim Rennsimulator LibreCorsa.
+
+== Am PC ==
+Der '''linke Trigger''' ist die Bremse: ein Widerstand, der nach unten fester wird; regelt das '''ABS''', vibriert er, blockiert ein Rad, vibriert er langsamer.
+Der '''rechte Trigger''' ist das Gas: leichter Widerstand, drehen die Hinterräder durch oder regelt die '''Traktionskontrolle''', vibriert er.
+Nahe der Haftgrenze summen beide leicht.
+Ein Effekt bleibt 0,15 s stehen, damit er nicht flackert.
+Der Drehzahl-Hinweis am Gas-Trigger entfällt.
+
+== In der Android-App (neue APK) ==
+Ist der Controller per '''Bluetooth''' verbunden und steckt zusätzlich das '''USB-Kabel''', kommen die Trigger-Effekte beim echten und beim virtuellen Fahren: Widerstand der Bremse, Vibration bei ABS und blockierendem Rad, beim Gas bei Schlupf und Traktionskontrolle.
+Die Verbindung kommt von selbst, sobald das Kabel steckt.
+Hängt der Controller nur am Kabel, bliebe er ohne Tasten; dann lässt die App die Trigger aus und sagt es.
+Abschaltbar unter '''Optionen → Vibration'''.
+
+== Trigger testen (Stufe 1) ==
+Unter '''Optionen → Vibration''' gibt es in der App die Zeile '''DualSense über USB-Kabel''' mit dem Knopf '''Trigger testen'''. Die App spielt über das Kabel 3 s festen Widerstand und 2 s Vibration auf beiden Triggern und gibt den Controller danach wieder frei. Das Protokoll steht im Live-Log. Erst wenn das am Gerät klappt und die Tasten danach noch gehen, kommen die Trigger-Effekte beim Fahren.
+
+== Änderungen (diese Seite) ==
+Neu angelegt mit Stand 1.5.107; beschreibt die Trigger am PC und in der Android-App sowie die Test-Funktion.\n\n[[Kategorie:OmegaSim]]\n[[Kategorie:Spielfunktionen]]

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meisterschaft - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Meisterschaft</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.4.80</b> vom 15.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p><b>Meisterschaft</b> ist ein Spielmodus in <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>, bei dem mehrere Rennen nacheinander als Saison ausgetragen werden und die Fahrer nach Punkten gewertet werden. Die Meisterschaft ist seit Version 1.0 als experimentell beziehungsweise WIP gekennzeichnet und wird über die Kachel <i>Meisterschaft</i> unten links im Fahren-Menü geöffnet.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Überblick"><span id=".C3.9Cberblick"></span>Überblick</h2></div>
+<p>Die Meisterschaft ist kein eigenes Rennen, sondern eine Abfolge von Events. Jedes Event setzt nur die vorhandenen Renneinstellungen (Modus, Länge, Wetter, fliegender Start, Pflichtstopps, Strecke, Startaufstellung) und startet den normalen Ablauf mit Startaufstellung, Ampel, Rennen und Zielflagge. Nach jedem Event öffnet sich automatisch ein Zwischenstand. Am Ende steht der Meister fest. In einem WLAN-Mehrspieler plant das Telefon die Meisterschaft und wird dabei als Meisterschaftsleiter bezeichnet; es startet jedes Event für alle und wertet die Ergebnisse aus.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Events">Events</h2></div>
+<p>Eine Meisterschaft besteht aus höchstens zehn Events. Für jedes Event lassen sich einstellen:
+</p>
+<ul><li><b>Strecke</b> (aktuell im Editor, eine gespeicherte Strecke oder freie Bahn)</li>
+<li><b>Format</b> (Training, Qualifying, Runden oder Endurance)</li>
+<li><b>Umfang</b> (bei Runden 1 bis 200 Runden, bei Zeitrennen 1 bis 240 Minuten)</li>
+<li><b>Wetter</b> (sonnig, Regen oder wechselhaft)</li>
+<li><b>Start</b> (stehend oder fliegend)</li>
+<li><b>Startaufstellung</b></li>
+<li><b>Pflichtstopps</b> (0 bis 3)</li></ul>
+<p>Das Standardformat ist ein Qualifying von 5 Minuten und ein Rundenrennen über 15 Runden. Training und Qualifying vergeben keine Punkte.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Wertung">Wertung</h2></div>
+<p>Punkte gibt es nur bei Events mit Punkten (Runden und Endurance). Zur Auswahl stehen drei Tabellen: F1 (25-18-15-12-10), klassisch (10-6-4-3-2) und linear (Platz N bis 1). Für die schnellste Runde gibt es einen Bonuspunkt. Als Teilnehmer wählt man entweder alle verbundenen Autos (Spieler 1 bis 3, NPCs und im Mehrspieler die anderen Telefone) oder nur die Spieler (NPCs fahren als Verkehr mit, erhalten aber keine Punkte). Das Safety Car wird nie gewertet.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Erfolgsballast">Erfolgsballast</h2></div>
+<p>Der Erfolgsballast (WIP) bestraft die Führenden mit Zusatzgewicht. Vor jedem Event bekommt, wer mehr Punkte hat, mehr Gewicht ins Auto; der Führende trägt das Höchstgewicht der Stufe, der Letzte nichts, dazwischen wird linear nach dem Punkteabstand verteilt. Das erste Event fährt ohne Ballast. 50 Kilogramm kosten im Mittel etwa 2 Prozent Rundenzeit. Nach dem Event und außerhalb der Meisterschaft fährt jeder ohne Ballast.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Startaufstellung">Startaufstellung</h2></div>
+<p>Für jedes Event lässt sich die Startaufstellung wählen: automatisch, nach Punkten (Führender hinten oder vorn), nach dem letzten Qualifying, wie das letzte Ergebnis oder zufällig. Die Startreihe wird je Event einmal festgelegt und bis zum Start behalten.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li><a href="./Rennarten.html" title="Rennarten">Rennarten</a></li>
+<li><a href="./Fahrgefuehl.html" title="Fahrgefuehl">Fahrgefuehl</a></li>
+<li><a href="./Mehrspieler.html" title="Mehrspieler">Mehrspieler</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw201
+Cached time: 20261115191239
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.012 seconds
+Real time usage: 0.015 seconds
+Preprocessor visited node count: 31/1000000
+Revision size: 2911/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    2.910      1 Vorlage:Stand
+100.00%    2.910      1 -total
+-->
+
+<!-- Render ID 861a3b85-e128-11f1-a4a7-bc2411441f04 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:532:|#|:idhash:canonical and timestamp 20261115191239 and revision id 843. Rendering was triggered because: page-edit
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

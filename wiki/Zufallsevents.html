@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zufallsevents - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Zufallsevents</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><p>﻿</p><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.4.80</b> vom 15.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p>Die <b>Zufallsevents</b> (in der App unter Renneinstellungen, <i>experimentell</i>, ab Werk aus) lassen im laufenden Rennen ab und zu etwas in einem zufälligen Bereich der Strecke passieren. Der Sprecher sagt es an, im Cockpit steht ein Banner mit Event, Ort und Restzeit, und der Bereich leuchtet auf der Karte des Rennen-Schirms in der Farbe des Ereignisses. Die Ereignisse wirken sich auf das Fahrverhalten und auf die <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPCs</a> aus.
+</p><p><br />
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Neuerungen_seit_1.3.93">Neuerungen seit 1.3.93</h2></div>
+<p>Die Events sind einzeln schaltbar (Häufigkeit 1 bis 10 Minuten, Dauer 10 bis 120 Sekunden); dazu Gelbe Flagge, Ölspur, Trümmer und Tank-Leck.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Name in der App</th>
+<th>Werte</th>
+<th>Standard</th>
+<th>Wirkung
+</th></tr>
+<tr>
+<td>Zufallsevents</td>
+<td>an/aus</td>
+<td>aus</td>
+<td>Hauptschalter für die ganze Funktion
+</td></tr>
+<tr>
+<td>Häufigkeit</td>
+<td>1 bis 10 min</td>
+<td>3 min</td>
+<td>mittlerer Abstand zwischen zwei Event-Anfängen, je Abstand zufällig ±40&#160;%
+</td></tr>
+<tr>
+<td>Dauer</td>
+<td>10 bis 120 s</td>
+<td>30 s</td>
+<td>wie lange ein Bereichs-Event läuft
+</td></tr>
+<tr>
+<td>je Event einzeln</td>
+<td>an/aus</td>
+<td>an</td>
+<td>Verschmutzung, Gelbe Flagge, Ölspur, Trümmer, Tank-Leck getrennt schaltbar
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Wie_es_funktioniert">Wie es funktioniert</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Der_Plan_statt_eines_Würfels_je_Takt"><span id="Der_Plan_statt_eines_W.C3.BCrfels_je_Takt"></span>Der Plan statt eines Würfels je Takt</h3></div>
+<p>Beim Rennstart wird <b>einmal</b> ein Plan gewürfelt: Zeitpunkte ab Grün, Ereignisart, Dauer und drei Zufallszahlen (Sektor, Teil, Seite bzw. Auto). Im Rennen läuft nur noch eine seltene Zeitsteuerung (<code>ZEV_TAKT_MS</code>&#160;=&#160;200&#160;ms) gegen die Rennuhr. Der Plan ist dieselbe Form wie der Wetterplan des WLAN-Mehrspielers: das startende Telefon schickt ihn mit (<code>mpPlanBauen</code>&#160;→&#160;<code>plan.zev</code>), alle anderen würfeln <b>nicht</b> selbst und folgen ihm ab derselben Grünzeit. Sektor und Teil werden auf jedem Telefon aus derselben Zufallszahl und derselben Strecke abgeleitet, also ist es überall derselbe Ort.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Was_im_45-ms-Takt_passiert">Was im 45-ms-Takt passiert</h3></div>
+<p>Absichtlich fast nichts. Bei den Spielern wird die Oberfläche (Grip) nur beim Betreten/Verlassen des Bereichs neu gesetzt, erkannt im <code>ZEV_TAKT_MS</code>-Zeitgeber. Die NPCs vergleichen je Takt <code>zevAktiv&#160;!==&#160;null</code>; nur während eines Events schauen sie in eine Kachelmaske (<code>Uint8Array</code>, beim Start gebaut).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="„Im_Sektor“"><span id=".E2.80.9EIm_Sektor.E2.80.9C"></span>„Im Sektor“</h3></div>
+<p>Jedes Auto hat einen Ortungssatz mit <code>tileIndex</code>. Ein Auto ist im Bereich, wenn die Maske an seinem Teil 1 ist. Die Maske kommt aus den Sektoren der Strecke (weitere Start/Ziel-Teile oder die Editor-Sektoren, siehe <a href="./Strecken-_und_Raum-Editor.html#Sektoren" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor#Sektoren</a>); ohne Sektoren, im Ausdruck-Modus oder ohne bekannte Strecke gilt die ganze Bahn.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Die_Ereignisse">Die Ereignisse</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Ereignis</th>
+<th>Farbe</th>
+<th>Wirkung
+</th></tr>
+<tr>
+<td>Verschmutzung</td>
+<td>braun</td>
+<td>Grip wie bei <a href="https://omegasim.miraheze.org/wiki/Wetter?action=edit&amp;redlink=1" class="new" title="Wetter (Seite nicht vorhanden)">Regen</a>; das Feld wird im Bereich rutschig.
+</td></tr>
+<tr>
+<td>Ölspur</td>
+<td>violett</td>
+<td>noch weniger Grip (auf die volle Nässe obendrauf, Faktor 0,6), das Heck kommt beim Einlenken; NPCs fahren im Öl mit 60&#160;% ihres Tempos.
+</td></tr>
+<tr>
+<td>Gelbe Flagge im Sektor</td>
+<td>gelb</td>
+<td>höchstens 80&#160;km/h; wer schneller bleibt, bekommt eine Durchfahrtsstrafe (in die Box, anhalten, nichts wird gemacht; sonst +20&#160;s im Ergebnis).
+</td></tr>
+<tr>
+<td>Trümmer</td>
+<td>orange</td>
+<td>auf der linken oder rechten Seite eines Teils (Warndreieck auf der Karte); NPCs weichen aus, wer nicht zur freien Seite lenkt, bekommt Schaden.
+</td></tr>
+<tr>
+<td>Tank-Leck</td>
+<td>(kein Bereich)</td>
+<td>ein zufälliges Spielerauto verbraucht doppelt bis zum nächsten Boxenstopp; braucht die Tanksimulation.
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Grenzen">Grenzen</h2></div>
+<ul><li>Nie im Countdown, in der Einführungsrunde, Pause, Tutorial oder Challenge und nie unter einer echten Gelben Flagge oder dem Safety Car; höchstens ein Event zugleich.</li>
+<li>Trümmer brauchen eine bekannte Strecke (Ort und Seite), das Tank-Leck braucht die Tanksimulation.</li>
+<li>Gilt für alle Spieler im lokalen Mehrspieler; im WLAN würfelt das startende Telefon für alle.</li>
+<li>Seit 1.3.93 wird in einem <b>kurzen</b> Zeitrennen das erste Event nach vorn geholt (30–70&#160;% der Renndauer, mindestens 2&#160;s), falls es sonst hinter dem Rennende läge; vorher konnte der Plan leer bleiben und ein eingeschaltetes Event passierte nie.</li></ul>
+<ul><li>Selbsttests: „Zufallsevents v1.3.88“ und „Zufallsevents v1.3.93: kurzes Zeitrennen“ in <code>src/95-selftest.js</code>.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_im_Code">Quellen im Code</h2></div>
+<ul><li><code>src/74-zufallsevents.js</code>: <code>zevPlanBauen()</code>, <code>ZEV_ARTEN</code>, <code>ZEV_FARBE</code>, <code>ZEV_TAKT_MS</code>, <code>ZEV_GELB_*</code>, <code>ZEV_OEL_*</code>, <code>ZEV_TEILE_*</code></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Rennarten.html" title="Rennarten">Rennarten</a></li>
+<li><a href="https://omegasim.miraheze.org/wiki/Wetter?action=edit&amp;redlink=1" class="new" title="Wetter (Seite nicht vorhanden)">Wetter</a></li>
+<li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
+<li><a href="./Strecken-_und_Raum-Editor.html#Sektoren" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor#Sektoren</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw171
+Cached time: 20261115192136
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.019 seconds
+Real time usage: 0.022 seconds
+Preprocessor visited node count: 46/1000000
+Revision size: 4655/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.141      1 Vorlage:Stand
+100.00%    3.141      1 -total
+-->
+
+<!-- Render ID c62de561-e129-11f1-9c18-bc241110675b -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:522:|#|:idhash:canonical and timestamp 20261115192136 and revision id 856. Rendering was triggered because: page-edit
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

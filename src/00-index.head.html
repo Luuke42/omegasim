@@ -462,6 +462,13 @@
     border: 1px solid var(--bad); background: rgba(200, 60, 60, .08);
     color: var(--text); font-size: 12.5px; line-height: 1.45;
   }
+  /* v1.5: der Verbindungsfehler der Garage, mit dem Knopf "Protokoll kopieren". Als Hinweis (zweiter,
+     schonender Versuch hat geklappt) gelb statt rot. */
+  .gar-verb-lage { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .gar-verb-lage[hidden] { display: none; }
+  .gar-verb-lage.hinweis { border-color: var(--warn, #ffb02e); background: rgba(255, 176, 46, .08); }
+  .gar-verb-lage > span { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+  .gar-verb-lage > textarea { flex: 1 1 100%; font: 11px/1.35 ui-monospace, Consolas, monospace; }
   .wip-tag { display: inline-block; font-size: 9.5px; letter-spacing: .1em;
     padding: 1px 5px; border-radius: 3px; vertical-align: 2px;
     background: #4a3c00; color: #ffd83d; font-weight: 700; }
@@ -733,6 +740,11 @@
   #log .l-write { color: var(--warn); }
   #log .l-err { color: var(--bad); }
   #log .l-info { color: var(--muted); }
+  #warn-log {
+    height: 150px; overflow-y: auto; background: var(--panel-2); color: var(--warn); border: 1px solid var(--border);
+    border-radius: 4px; padding: 10px; font-family: monospace; font-size: 12px; line-height: 1.5;
+  }
+  #warn-log .l-err { color: var(--bad); }
 
   /* Control tab */
   .control-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -1436,6 +1448,17 @@
   #fa-profil.k-meister { background: linear-gradient(90deg, rgba(8,10,14,.88) 0%, rgba(8,10,14,.45) 70%),
     url(img/meisterschaft.jpg) center 40% / cover no-repeat; }
   .k-fahren-unten #fa-profil .k-kk { font-size: clamp(11px, 2vh, 15px); }
+  /* v1.5: wie die Startkachel (abgedunkeltes Bild, grosser Titel), schmaler: ohne Zielflaggen, Titel kleiner. */
+  #fa-virtuell.k-virtuell { background: linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5)), url(img/virtuell-fahren.jpg) center 55% / cover no-repeat; }
+  #fa-virtuell.k-virtuell::before, #fa-virtuell.k-virtuell::after { display: none; }
+  #fa-virtuell .k-start-innen b { font-size: clamp(15px, 2vw, 30px); }
+  #fa-virtuell .k-start-innen .wip-tag { margin-top: 4px; font-size: 9px; text-shadow: none; }
+  /* v1.5: kleine Symbole auf der Garagenkachel (zweiter Laptop, Onboard-Kamera). */
+  .k-geraete { position: absolute; top: 6px; right: 8px; display: flex; gap: 6px; z-index: 2; pointer-events: none; }
+  .k-geraete[hidden] { display: none; }
+  .k-geraete i { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+    background: rgba(8,10,14,.78); color: #3ddc84; box-shadow: 0 0 0 1px rgba(61,220,132,.6); }
+  .k-geraete svg { width: 16px; height: 16px; }
   /* Galerie: Auto ohne Foto als Farbflaeche mit Zeichen */
   .k-auto-zelle.k-auto-ohne-foto { position: relative; }
   .k-auto-zelle.k-auto-ohne-foto::before { content: attr(data-zeichen); position: absolute; inset: 0;
@@ -1478,7 +1501,15 @@
   .tele-kopf { font-size: 14px; margin: 14px 0 6px; }
   .tele-karte { display: block; width: 100%; max-height: 300px; }
   .tele-balken, .tele-tempo { display: block; width: 100%; height: 140px; }
-  .tele-tempo { height: 180px; }
+  .tele-tempo { height: 196px; }
+  /* v1.5 (WIP): Kurvenminima, Zeitabstand, Sektor-Matrix (aus Hybrid-Dash von Mo Kamit). */
+  .tele-tempo-box { position: relative; }
+  .tele-min { position: absolute; transform: translate(-50%, -110%); font-size: 10.5px; font-weight: 700;
+    color: var(--k-blau, #3d8bff); pointer-events: none; white-space: nowrap; }
+  .tele-delta { display: block; width: 100%; height: 120px; }
+  .tele-sektoren { font-size: 13px; font-variant-numeric: tabular-nums; border-collapse: collapse; }
+  .tele-sektoren th, .tele-sektoren td { padding: 3px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+  .tele-sektoren .tele-streu td { font-weight: 700; border-bottom: 0; }
   .tele-achse { display: flex; justify-content: space-between; font-size: 11.5px; }
   .tele-gut { color: var(--good); } .tele-schlecht { color: var(--bad); }
   .tele-a { color: var(--k-blau, #3d8bff); } .tele-b { color: var(--muted); }
@@ -1901,6 +1932,71 @@
   #race-dash[data-screen="auto2"] #race-p2screen,
   #race-dash[data-screen="renneinstellungen"] #race-settingsscreen,
   #race-dash[data-screen="uebersicht"] #race-ovscreen { display: grid; }
+  /* ---- Onboard-Kamera (75-onboard.js) ----
+     Das Bild fuellt den Schirm ohne Abschneiden (contain): ein FPV-Empfaenger liefert 4:3,
+     und abgeschnittene Raender waeren genau die Kurve, die man sehen will. */
+  #race-dash[data-screen="onboard"] #race-onboardscreen { display: block; }
+  #race-onboardscreen { padding: 0; background: #000; color: #fff; }
+  #race-onboardscreen video { position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; background: #000; }
+  #race-onboardscreen img { position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; background: #000; }
+  #race-onboardscreen img[hidden], #race-onboardscreen video[hidden] { display: none; }
+  #race-onboardscreen.gedreht video, #race-onboardscreen.gedreht img { transform: rotate(180deg); }
+  /* v1.5.111 BESTELLT: Onboard wie Gran Turismo 7/Sport. Vollbild ueber dem Cockpit, Bild maximal gross (contain),
+     Seitenleisten auf den schwarzen Raendern (Breite --onb-rand aus onbRandSetzen, mindestens 150 px, dann
+     halbdurchsichtig ueber dem Bild), unten Mitte das GT-Band mit Tempo | Gang und Drehzahlbalken. */
+  #race-onboardscreen.onb-voll { display: block; position: fixed; inset: 0; z-index: 60; border-radius: 0; margin: 0; }
+  .onb-gt { position: absolute; inset: 0; pointer-events: none; color: #f2f4f7; font-family: var(--k-font);
+    --onb-s: clamp(11px, calc(.75vw + .9vh), 17px); font-size: var(--onb-s); }
+  .onb-seite { position: absolute; top: 0; bottom: 0; width: max(150px, var(--onb-rand, 160px)); box-sizing: border-box;
+    padding: max(10px, env(safe-area-inset-top)) 12px 12px; display: flex; flex-direction: column; gap: .55em;
+    background: linear-gradient(90deg, rgba(8,10,14,.86), rgba(8,10,14,.72)); }
+  .onb-links { left: 0; padding-left: max(12px, env(safe-area-inset-left)); }
+  .onb-rechts { right: 0; padding-right: max(12px, env(safe-area-inset-right)); background: linear-gradient(270deg, rgba(8,10,14,.86), rgba(8,10,14,.72)); }
+  .onb-gt small { display: block; font-size: .68em; letter-spacing: .14em; text-transform: uppercase; color: #a9b1bf; font-weight: 700; }
+  .onb-gt b { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .onb-posbox { display: grid; grid-template-columns: auto 1fr; align-items: end; column-gap: .35em; }
+  .onb-posbox b { background: #3a3f48; padding: .05em .4em; font-size: 2.4em; line-height: 1.05; }
+  .onb-posbox span { font-size: 1.5em; color: #e6e9ef; }
+  .onb-posbox small { grid-column: 1 / -1; margin-top: .2em; }
+  .onb-runde b { font-size: 1.8em; line-height: 1.05; }
+  .onb-zeiten { display: grid; gap: .3em; }
+  .onb-zeiten b { font-size: 1.15em; }
+  .onb-zeiten .gut { color: #3ddc84; } .onb-zeiten .schlecht { color: #ff5a4f; }
+  .onb-karte { margin-top: auto; width: 100%; max-height: 32%; }
+  .onb-karte path { fill: none; stroke: #f2f4f7; stroke-width: 2.4; stroke-linejoin: round; }
+  .onb-karte circle { fill: #e10600; }
+  .onb-feld b { font-size: 1.3em; }
+  .onb-klein { font-size: .9em; color: #e6e9ef; }
+  .onb-reifen { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; width: 3.4em; margin: .2em 0; }
+  .onb-reifen i { display: block; height: 1.25em; border-radius: 3px; background: #2a3f5c; }
+  .onb-balken { display: block; height: 5px; margin-top: .25em; background: rgba(255,255,255,.14); }
+  .onb-balken > i { display: block; height: 100%; width: 0; background: #3ddc84; }
+  .onb-unten { position: absolute; left: 50%; bottom: max(10px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    width: min(23em, calc(100% - 2 * max(150px, var(--onb-rand, 160px)) - 16px)); min-width: 15em; }
+  .onb-rpm { height: .42em; background: rgba(255,255,255,.18); clip-path: polygon(4% 0, 96% 0, 100% 100%, 0 100%); }
+  .onb-rpm > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #f2f4f7 0 70%, #ff9f1c 82%, #e10600); }
+  .onb-tacho { display: grid; grid-template-columns: auto 1fr auto 1fr auto; align-items: center; gap: .5em;
+    background: rgba(8,10,14,.78); padding: .25em .7em; clip-path: polygon(0 0, 100% 0, 96% 100%, 4% 100%); }
+  .onb-kmh, .onb-umin { display: grid; justify-items: center; line-height: 1; }
+  .onb-kmh b { font-size: 1.7em; } .onb-umin b { font-size: 1.1em; }
+  .onb-gang { font-size: 2.3em; line-height: 1; padding: 0 .35em; border-left: 2px solid #f2f4f7; border-right: 2px solid #f2f4f7; }
+  .onb-lampe { font-size: 1.1em; color: #4b5260; } .onb-lampe.an { color: #8fd3ff; } .onb-schalt.an { color: #e10600; }
+  .onb-weiter { position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right));
+    z-index: 2; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,.3); background: rgba(0,0,0,.55);
+    color: #fff; font-size: 18px; }
+  #race-onboardscreen .onb-rec { right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); z-index: 2; }
+  #race-onboardscreen.gelb { box-shadow: inset 0 0 0 6px #ffd400; }
+  .onb-leer { position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; text-align: center; padding: 16px; color: #a3acbd;
+    font-size: clamp(13px, 1.8vw, 18px); }
+  .onb-leer[hidden] { display: none; }
+  .onb-rec { position: absolute; right: clamp(6px, 1.2vw, 14px); bottom: clamp(6px, 1.2vw, 14px);
+    padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.35);
+    background: rgba(0,0,0,.62); color: #fff; font-weight: 700;
+    font-size: clamp(12px, 1.5vw, 16px); font-variant-numeric: tabular-nums; }
+  .onb-rec.an { background: #d81b2c; border-color: #ff6b74; }
   /* ---- DER VERGLEICHSSCHIRM ------------------------------------------------------
      ZWEI SPALTEN NEBENEINANDER, auch auf dem Telefon. Untereinander waere es kein
      Vergleich mehr, sondern zweimal dieselbe Liste - und der ganze Zweck dieses Schirms
@@ -2551,6 +2647,10 @@
     letter-spacing: .03em; color: var(--k-blau, #00a3e0); text-shadow: 0 1px 3px rgba(0,0,0,.95);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .k-mp-status[hidden] { display: none; }
+  /* v1.5: Verbindungsfehler in der Autos-Kachel, zwei Zeilen statt einer, rot (Hinweis: gelb). */
+  .k-verb-lage { color: #ff8a80; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    cursor: pointer; }
+  .k-verb-lage.hinweis { color: #ffd83d; }
   #fa-mp .wip-tag { font-size: 8px; padding: 0 3px; margin-left: 4px; vertical-align: 1px; }
   .k-knopf { background: var(--k-grau); color: #fff; border: 2px solid transparent; border-radius: 0; padding: 7px 12px;
     font-family: var(--k-font); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
@@ -2590,7 +2690,8 @@
 
   .k-fahren { grid-template-columns: repeat(3, 1fr); grid-template-rows: minmax(300px, 52vh) minmax(120px, 25vh); }
   /* v0.9.31: Motorsound steht nur noch in der Garage; Fahrgefuehl und Start teilen sich die Reihe. */
-  .k-fahren-unten { grid-column: 1 / -1; grid-template-columns: 1fr 2fr; }
+  /* v1.5: Meisterschaft | Virtuell fahren (ein Drittel der bisherigen Startbreite) | Start (zwei Drittel). */
+  .k-fahren-unten { grid-column: 1 / -1; grid-template-columns: 3fr 2fr 4fr; }
   /* BESTELLT v0.8.126: mehrere verbundene Autos mit Fotos gemeinsam zeigen (Garage auf dem
      Fahren-Schirm). Erst ab zwei Fotos; dann ist die Abdunklung aus, sonst waere das Foto zu
      dunkel. Die Kacheln stehen in der .k-kb-Flaeche (Auto-Bild). */
@@ -2630,9 +2731,20 @@
   .k-titel .home-titel { padding: 0; }
   .k-titel .home-titel-text { font-size: clamp(40px, 8.2vw, 150px); }
   .k-slogan { font-size: clamp(14px, 2vw, 28px); letter-spacing: .06em; font-weight: 400; margin: 0; max-width: 900px; }
-  #tab-home #lang-toggle { display: flex; gap: 0; padding: 0; background: transparent; border: 0; }
-  #tab-home #lang-toggle b { padding: 8px 22px; font-size: 15px; letter-spacing: .14em; color: var(--k-tinte);
-    background: #fff; border: 2px solid #fff; }
+  /* SPRACHKNOPF OBEN RECHTS (v1.5.x): fest in der Ecke wie der Patchnotes-Knopf unten rechts,
+     ausserhalb der Titelspalte, damit er dort keinen Platz kostet. */
+  #tab-home #lang-toggle { position: fixed; z-index: 300;
+    top: max(12px, calc(env(safe-area-inset-top) + 8px)); right: max(14px, calc(env(safe-area-inset-right) + 10px));
+    display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 40px; padding: 0 14px;
+    background: rgba(12,14,20,.72); border: 2px solid rgba(255,255,255,.5); border-radius: 0;
+    font-family: var(--k-font); color: #fff; }
+  #tab-home #lang-toggle:hover, #tab-home #lang-toggle:focus-visible { background: var(--k-blau); border-color: #fff; }
+  #tab-home #lang-toggle b { padding: 0; font-size: 14px; letter-spacing: .16em; color: inherit; background: none;
+    border: 0; text-shadow: none; }
+  #lang-flagge { font-size: 22px; line-height: 1; font-family: "Segoe UI Emoji", "Noto Color Emoji", "Apple Color Emoji", sans-serif; }
+  /* Ohne Flaggen in der Emoji-Schrift (Windows zeigt dort nur "DE") ein gezeichnetes Bild. */
+  #lang-flagge.lang-flagge-bild { display: inline-block; width: 30px; height: 20px; font-size: 0; color: transparent;
+    background: center / cover no-repeat; box-shadow: 0 0 0 1px rgba(255,255,255,.45); }
   .k-druecken { font-size: clamp(14px, 1.8vw, 24px); letter-spacing: .3em; text-transform: uppercase;
     animation: k-blink 1.6s ease-in-out infinite; margin-top: 3vh; }
   @keyframes k-blink { 50% { opacity: .3; } }
@@ -2760,7 +2872,10 @@
     .k-titel { gap: 1.8vh; padding: 2vh 10px; }
     .k-titel .home-titel-text { font-size: clamp(30px, min(8vw, 17vh), 150px); }
     .k-slogan { font-size: clamp(12px, 4.2vh, 22px); }
-    #tab-home #lang-toggle b { padding: 5px 14px; font-size: 12px; }
+    #tab-home #lang-toggle { top: max(6px, calc(env(safe-area-inset-top) + 4px)); min-height: 30px; padding: 0 10px; gap: 7px; }
+    #tab-home #lang-toggle b { font-size: 11px; }
+    #lang-flagge { font-size: 16px; }
+    #lang-flagge.lang-flagge-bild { width: 22px; height: 15px; }
     .k-druecken { font-size: clamp(11px, 4vh, 20px); margin-top: 1vh; }
     .k-titel-fuss { margin-top: 1.5vh; font-size: 10.5px; }
     #tab-home.active { min-height: 0; }
@@ -2921,6 +3036,39 @@
     #k-leiste .k-reiter button { min-height: 46px; padding: 0 4px; font-size: clamp(10px, 2.9vw, 13px); letter-spacing: .02em;
       white-space: normal; line-height: 1.1; text-overflow: clip; }
   }
+  /* AM PC DEUTLICH HOEHER (v1.5.x). BESTELLT: "Darstellung des Menüs auf PC verbessern: die
+     obere Zeile mit Fahren, Challenges, Optionen ist dort zu flach." Nur mit Maus und in einem
+     grossen Fenster; Handy (pointer: coarse) und kleine Fenster (800 x 370) bleiben, wie sie
+     sind. An die Fensterhoehe gebunden: 56 px bei 800, 64 px ab rund 1070 px Hoehe. Der Regler
+     unter Optionen > Allgemein (zoom, --reiter1/--reiter2) wirkt weiter obendrauf. */
+  @media (pointer: fine) and (min-width: 1000px) and (min-height: 600px) {
+    header#k-kopf { gap: 0 14px; }
+    #k-kopf .hdr-logo { padding: 0 8px; }
+    #k-kopf .hdr-logo svg { width: clamp(30px, 3.6vh, 36px); height: clamp(30px, 3.6vh, 36px); }
+    #k-leiste .k-reiter button { min-height: clamp(56px, 6vh, 64px); padding: 0 18px;
+      font-size: clamp(16px, 1.7vh, 18px); letter-spacing: .1em; }
+    .k-status { font-size: 13px; }
+    .k-leiste2 .k-reiter button { min-height: clamp(36px, 3.9vh, 42px); padding: 0 12px;
+      font-size: clamp(13.5px, 1.45vh, 15.5px); letter-spacing: .07em; border-bottom-width: 3px; }
+    .k-leiste2 .k-pfeil { flex-basis: 44px; font-size: 26px; }
+  }
+  /* ZWEITE LEISTE ALS FENSTER (v1.5.x, 51-konsole.js): hoechstens --k-sicht Reiter (4, im
+     Hochformat 3) sind zu sehen, die Reihe (.k-band) rutscht per transform darunter durch.
+     Ohne .k-fenster-an (weniger Reiter als das Fenster fasst) teilen sie sich die Breite wie
+     bisher, und die Pfeile fehlen. */
+  .k-leiste2 .k-band { flex: 1; display: flex; min-width: 0; }
+  .k-leiste2.k-fenster-an .k-band { flex: 0 0 100%; transition: transform .15s ease-out; will-change: transform; }
+  .k-leiste2.k-fenster-an .k-band > button { flex: 0 0 calc(100% / var(--k-sicht, 4)); }
+  @media (prefers-reduced-motion: reduce) { .k-leiste2.k-fenster-an .k-band { transition: none; } }
+  .k-pfeil { flex: 0 0 30px; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0;
+    padding: 0; background: transparent; border: 0; border-radius: 0; color: #fff; font-family: var(--k-font);
+    font-size: 15px; font-weight: 800; line-height: 1; cursor: pointer; }
+  .k-pfeil:hover { background: rgba(255,255,255,.12); color: var(--k-blau); }
+  /* Ein Pfeil ohne weitere Reiter dahinter behaelt seinen Platz (die Reihe springt nicht),
+     ist aber weder zu sehen noch zu treffen. */
+  .k-pfeil:disabled { visibility: hidden; }
+  .k-pfeil[hidden] { display: none; }
+  @media (pointer: coarse) { .k-pfeil { flex-basis: 40px; font-size: 18px; } }
   /* Offene Unterseite mit zweiter Leiste: die Ueberschrift steht dort schon, der
      Zurueck-Knopf wird eine knappe Zeile. */
   body.k-innen .subpage.on > h2 { display: none; }
@@ -3313,11 +3461,27 @@
   .gar-a-rolle.is-safety .gk-rolle { background: #f5c400; color: #1a1500; }
   .gar-a-rolle.is-ghost .gk-rolle button, .gar-a-rolle.is-player .gk-rolle button { color: inherit; }
   .gar-a-aktion > button { width: 100%; text-align: left; }
+  /* v1.5.86: die Knoepfe unter den Autos eng im Raster (zwei Spalten), nicht je eine Zeile mit Abstand. */
+  .gar-a-knoepfe { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; flex-shrink: 0; }
+  .gar-a-knoepfe > .opt-row { padding: 0; margin: 0; border: 0; min-height: 0; background: none; }
+  .gar-a-knoepfe > .opt-row[hidden] { display: none; }
+  .gar-a-knoepfe > .gar-a-voll { grid-column: 1 / -1; margin-bottom: 2px; }
+  .gar-a-knoepfe > .opt-row > button { min-height: 36px; padding: 6px 10px; font-size: 14px; line-height: 1.15; height: 100%; }
   /* v0.9.24: die Knoepfe ganz unten groesser (Motorsound steht jetzt nur noch hier). */
   .gar-a-rechts .gar-a-aktion > button { min-height: 50px; font-size: clamp(14px, 1.8vw, 17px);
     padding: 12px 16px; letter-spacing: .04em; }
   .gar-a-rechts .gk-foto { font-size: clamp(12px, 1.5vw, 14px); padding: 9px 16px; }
   .gar-a-rechts .gk-foto-weg { font-size: 14px; padding: 8px 12px; }
+  /* Anleitung virtuelles Fahren (aus PR 4 von gnen54): runder Knopf "?" neben Losfahren, Fenster ueber der Garage. */
+  .gar-a-aktion.vf-los-zeile { display: flex; align-items: center; gap: 10px; }
+  .gar-a-aktion.vf-los-zeile > [data-vf="los"] { flex: 1 1 auto; width: auto; }
+  .gar-a-rechts .gar-a-aktion > .vf-hilfe { flex: 0 0 auto; width: 50px; min-width: 50px; height: 50px; min-height: 50px; border-radius: 50%;
+    padding: 0; font-weight: 700; font-size: 20px; text-align: center; letter-spacing: 0; }
+  .vf-hilfe-fenster { position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; }
+  .vf-hilfe-box { position: relative; width: min(900px, 94vw); height: min(88vh, 1000px); background: #0e131b; border: 1px solid #26303f;
+    border-radius: 12px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+  .vf-hilfe-box iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .vf-hilfe-zu { position: absolute; top: 10px; right: 12px; width: 40px; height: 40px; min-height: 0; border-radius: 50%; padding: 0; font-size: 18px; z-index: 1; }
   .gar-a-aktion .gar-karte-neu { min-height: 0; font-size: 13px; letter-spacing: .06em; text-align: left; border-style: solid; }
   .gar-a-rechts .gk-aufzeile { display: flex; flex-direction: column; gap: 0; background: none; border: 0; padding: 0; }
   .gar-a-rechts .gk-foto, .gar-a-rechts .gk-foto-weg { position: static; }
@@ -3861,6 +4025,12 @@
   body.vf-an #hud-toast-wrap { position: fixed; z-index: 400; top: max(52px, env(safe-area-inset-top)); left: 50%; right: auto;
     transform: translateX(-50%); pointer-events: none; }
   .vf-bild { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  /* Rueckspiegel (aus PR 4 von gnen54): Rahmen ueber dem gespiegelten Bildausschnitt. Innenspiegel als schmaler
+     Streifen ganz oben am Bildrand, die Aussenspiegel des Spider unten links und rechts. */
+  .vf-spiegel { position: absolute; pointer-events: none; box-sizing: border-box; border: 2px solid #15181d;
+    box-shadow: 0 2px 6px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.18); }
+  .vf-spiegel-innen { border-top: 0; border-radius: 0 0 8px 8px; }
+  .vf-spiegel-links, .vf-spiegel-rechts { border-width: 4px; border-radius: 10px; }
   /* v1.3.113 Quality: leichte Vignette (dunkle Bildraender) fuer den kinematografischen Look. */
   .vf-vignette { position: absolute; inset: 0; pointer-events: none;
     background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,.38) 100%); }
@@ -3925,6 +4095,33 @@
     font-family: var(--k-font); font-size: calc(var(--vf-s) * .72); font-weight: 700; text-transform: uppercase; letter-spacing: .12em;
     padding: .55em 1em; min-height: 2.6em; min-width: 2.6em; cursor: pointer; }
   .vf-knoepfe button:hover, .vf-knoepfe button:focus-visible { background: var(--vf-linie); color: var(--k-blau-text, #04070c); outline: 0; }
+  /* Piktogramm-Knoepfe (statt der Textleiste): kleine Quadrate mit Inline-SVG; der letzte Knopf blendet die anderen aus und ein. */
+  .vf-knoepfe button.vf-ikon { font-size: var(--vf-s); padding: 0; width: max(2.3em, 36px); min-width: 0; height: max(2.3em, 36px); min-height: 0;
+    display: inline-grid; place-items: center; letter-spacing: 0; }
+  .vf-knoepfe button.vf-ikon[hidden] { display: none; }
+  .vf-ikon svg, .vf-laden-zu svg { width: 1.3em; height: 1.3em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .vf-ikon .vf-ikon-fuell { fill: currentColor; fill-opacity: .35; }
+  .vf-ikon[data-vf="flag"] .vf-ikon-fuell { fill: #f5c400; fill-opacity: 1; stroke: #f5c400; }
+  .vf-knoepfe.vf-knoepfe-zu > button:not([data-vf="leiste"]) { display: none; }
+  .vf-knoepfe.vf-knoepfe-zu > [data-vf="leiste"] { opacity: .75; }
+  /* Ladebild der virtuellen Fahrt: deckt das Bild ab, kein HUD (alles ausser Leinwand und Ladebild unsichtbar).
+     v1.6.20: die Strecke von oben fuellt das Bild, in der Mitte das drehende Teil, Titel und Fortschrittsbalken. */
+  .vf-schicht.vf-laedt > :not(.vf-bild):not(.vf-laden) { visibility: hidden !important; }
+  .vf-laden { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; color: #e8ecf2;
+    background: radial-gradient(ellipse at 50% 40%, #1b2433 0%, #0b0f16 72%); }
+  .vf-laden-karte { position: absolute; inset: 0; display: grid; place-items: center;
+    padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
+  .vf-laden-karte .tp-karte { width: 100%; height: 100%; max-width: none; max-height: none; background: none; border: 0; }
+  .vf-laden-mitte { position: relative; display: grid; gap: .7em; width: min(64vw, 420px); text-align: center;
+    padding: .9em 1.3em 1em; background: rgba(8,11,17,.6); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; }
+  .vf-laden-mitte .lade-dreh { width: calc(var(--vf-s) * 4.6); height: calc(var(--vf-s) * 4.6); margin: 0 auto; }
+  .vf-laden-titel { font-size: calc(var(--vf-s) * 1.05); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
+  .vf-laden-was { color: var(--vf-dim); font-size: calc(var(--vf-s) * .78); min-height: 1.3em; }
+  .vf-laden-balken { position: relative; display: block; height: 8px; background: rgba(255,255,255,.12); overflow: hidden; }
+  .vf-laden-balken > i { position: absolute; inset: 0; transform-origin: 0 50%; transform: scaleX(0); background: var(--vf-linie); transition: transform .2s linear; }
+  .vf-laden-zu { position: absolute; right: max(8px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top));
+    width: 40px; height: 40px; min-height: 0; padding: 0; display: grid; place-items: center; background: rgba(8,10,14,.6); color: #f3f4f6;
+    border: 0; border-radius: 50%; cursor: pointer; }
   .vf-kamfrei { position: absolute; right: max(8px, env(safe-area-inset-right)); top: calc(max(8px, env(safe-area-inset-top)) + var(--vf-s) * 2.3);
     background: var(--vf-bg); color: var(--vf-dim); border-left: 2px solid var(--vf-linie); font-size: calc(var(--vf-s) * .62);
     text-transform: uppercase; letter-spacing: .12em; padding: .35em .7em; white-space: nowrap; }
@@ -5580,6 +5777,13 @@
     background: var(--acc-feld-klick); box-shadow: inset 0 -2px 0 var(--acc-blau), inset 0 0 0 1px rgba(255, 255, 255, .12);
     font-size: clamp(9px, 1.2vw, 15px); font-size: clamp(9px, 3cqh, 15px); padding: .5em 1.1em .45em; }
   body[data-cockpit="acc"] #race-dash #race-ovscreen > .ov-nochmal[hidden] { display: none; }
+  /* v1.5.10: Vorschau und Lackfarbe im Virtuell-Fenster der Garage (WIP) */
+  .vf-vorschau { justify-content: center; padding: 6px 0; }
+  /* v1.5.86 BESTELLT: "Bild vom Auto kleiner machen". Hoehe nach dem Fenster begrenzt, Seitenverhaeltnis bleibt. */
+  .vf-vorschau-bild { width: auto; max-width: min(100%, 300px); max-height: clamp(100px, 22vh, 170px); height: auto; border-radius: 6px; display: block; background: #3a3f46; }
+  .vf-lack-palette { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle; }
+  .vf-lack { width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); cursor: pointer; }
+  .vf-lack.aktiv { border-color: #fff; box-shadow: 0 0 0 2px rgba(0,160,230,.9); }
 </style>
 <style>
   .stat-clean { margin-top:20px; border:1px solid var(--line,#454b57); border-radius:8px; padding:12px; }
@@ -5665,8 +5869,14 @@
   </div>
   <!-- Die INNEREN Reiter (Optionen-Kategorien, Mehrspieler-Modi, BLE-Werkbank, ...) in einer
        zweiten, flachen Zeile; L1/R1 wirken auf die innerste sichtbare Leiste. -->
+  <!-- v1.5.x BESTELLT: "bei den Optionen zu viele Reiter nebeneinander. Zeige immer nur 3 oder 4
+       und dann gib mit Pfeilen an, ob links und rechts auch noch Tabs sind. Und dann rutschen
+       die durch beim Durchschalten." #k-reiter2 ist das Fenster, #k-band2 die Reihe darin
+       (51-konsole.js, kFensterStart). Die Pfeile schalten wie L1/R1 einen Reiter weiter. -->
   <nav class="k-leiste k-leiste2" id="k-leiste2" hidden>
-    <div class="k-reiter" id="k-reiter2"></div>
+    <button type="button" class="k-pfeil" id="k-pfeil-l" aria-label="Vorheriger Reiter" hidden disabled>&lsaquo;</button>
+    <div class="k-reiter" id="k-reiter2"><div class="k-band" id="k-band2"></div></div>
+    <button type="button" class="k-pfeil" id="k-pfeil-r" aria-label="Nächster Reiter" hidden disabled>&rsaquo;</button>
   </nav>
 </header>
 <div id="k-bg" aria-hidden="true"></div>
@@ -5692,6 +5902,14 @@
          irgendeine Taste zum bestätigen" - Name heisst hier der Programmname (Nutzerentscheid).
          Jede Taste, jeder Klick ausserhalb von Sprache und Links fuehrt ins Hauptmenue
          (51-konsole.js). #lang-toggle, #app-version und #home-install behalten ihre ids. -->
+    <!-- v1.5.x BESTELLT: "Sprachbutton auf der Startseite nach oben rechts und LANGUAGE
+         hinschreiben und daneben die Flagge der aktuellen Sprache (Deutschland, UK, Spanien).
+         Hier sind Emojis ausnahmsweise erlaubt." Die Aufschrift bleibt in jeder Sprache
+         LANGUAGE (data-i18n-skip); Flagge und aria-label setzt sprachKnopfZeigen()
+         (10-ble-explorer.js). Ein Tipp schaltet wie bisher zyklisch weiter. -->
+    <button type="button" id="lang-toggle" data-i18n-skip aria-label="Language: Deutsch. Sprache wechseln">
+      <b id="lang-label">LANGUAGE</b><span id="lang-flagge" aria-hidden="true">&#x1F1E9;&#x1F1EA;</span>
+    </button>
     <div class="k-titel">
     <div class="home-titel" aria-label="OMEGA SIM" data-i18n-skip>
       <span class="home-omega" data-t="&Omega;" aria-hidden="true">&Omega;</span>
@@ -5702,9 +5920,6 @@
         class="home-titel-text k-glitch-rot" data-text="SIM">SIM</span>
     </div>
       <h2 class="k-slogan">Vollst&auml;ndige Gestaltungsfreiheit f&uuml;r deine Carrera Hybrid&nbsp;Bahn</h2>
-      <button type="button" id="lang-toggle" aria-label="Sprache wechseln / switch language / cambiar idioma">
-        <b id="lang-label">DEUTSCH</b>
-      </button>
       <!-- TUTORIAL (51b-tutorial.js): Klick, Dreieck oder T. -->
       <div class="k-tutorial-reihe">
         <!-- BESTELLT: "Wiki" links neben Tutorial/Steuerung/Starten, so gross wie ein
@@ -5752,10 +5967,13 @@
         <span class="home-lade-dreh" id="home-lade-dreh"></span><span class="home-lade-text" id="home-lade-text" data-i18n-skip></span>
       </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.4.67</span></span>
-        <span data-i18n-skip>OmegaSim &middot; MIT</span>
+        <span class="foot-ver">v<span id="app-version">1.6.22</span></span>
+        <span data-i18n-skip>OmegaSim &middot; AGPL-3.0</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
+        <!-- v1.6.5 BESTELLT: "Fehler melden" mit Link zum Eroeffnen eines Issues (Vorlage bug.yml auf Luuke42/omegasim). -->
+        <a class="foot-code foot-fehler" href="https://github.com/Luuke42/omegasim/issues/new?template=bug.yml"
+           target="_blank" rel="noopener noreferrer">Fehler melden</a>
         <button id="home-install" hidden>Als App installieren</button>
       </div>
     </div>
@@ -5789,8 +6007,13 @@
         <span class="k-kk">Autos</span>
         <span class="k-kt" id="fa-auto-titel"></span>
         <span class="k-kb" id="fa-auto-bild" style="background-image:url(img/garage.jpg)"></span>
+        <!-- v1.5 BESTELLT: "wenn laptop und kamera verbunden sind ... kleine Symbole dafuer anzeigen" (konsoleFahrenGeraete). -->
+        <span class="k-geraete" id="fa-auto-geraete" data-i18n-skip hidden></span>
         <span class="k-ki" id="fa-auto-info"></span>
         <span class="k-mp-status" id="fa-mp-status" data-i18n-skip hidden></span>
+        <!-- v1.5 (WIP): Verbinden fehlgeschlagen, mit Grund. Antippen oeffnet den Dialog mit
+             "Protokoll kopieren" (konsoleVerbLage, 51-konsole.js). -->
+        <span class="k-mp-status k-verb-lage" id="fa-verb-lage" data-i18n-skip hidden></span>
         <!-- BESTELLT: "Autos-Menü sollte auch Option für Garage haben zum Einstellen" - auch
              ohne verbundenes Auto (gemerkte Autos, Farben, Rollen). -->
         <span class="k-knopfreihe">
@@ -5830,6 +6053,13 @@
         <span class="k-kk">Meisterschaft</span>
         <span class="k-kopf"><span class="k-kt">Meisterschaft erstellen</span></span>
         <span class="k-ki"></span>
+      </div>
+      <!-- v1.5 BESTELLT: "den Start Race Button auf 66% der Breite reduzieren und links daneben (33% der aktuellen
+           Groesse) Button einfuegen 'Drive Virtually' (so wie button in der garage, Rennen soll dann direkt losgehen)". -->
+      <!-- v1.5 BESTELLT: "Mach das Virtual Bild vom Design so aehnlich wie das Start Practice": Bild ueber die ganze
+           Kachel, grosser Titel in der Mitte, darunter Renntyp, ohne die weissen Kopfleisten. -->
+      <div class="k-kachel k-start k-virtuell" id="fa-virtuell" role="button" tabindex="0">
+        <span class="k-start-innen"><b>Virtuell fahren</b><small id="fa-virtuell-unter" data-i18n-skip></small><span class="wip-tag">WIP</span></span>
       </div>
         <div class="k-kachel k-start" id="fa-start" role="button" tabindex="0">
           <span class="k-start-innen"><b id="fa-start-titel">Rennen starten</b><small id="fa-start-unter"></small></span>
@@ -6316,6 +6546,53 @@
         <button type="button" id="ov-nochmal" class="ov-nochmal" hidden>✕ Nochmal</button>
       </div>
 
+      <!-- ONBOARD-KAMERA (75-onboard.js): Livebild aus dem Auto, z. B. FPV-Mikrokamera mit
+           USB-Empfaenger. Darueber Runde, Zeit und km/h; der Knopf unten rechts nimmt auf. -->
+      <div class="gt3-schirm" id="race-onboardscreen">
+        <video id="onboard-video" autoplay muted playsinline></video>
+        <img id="onboard-bild" alt="" hidden>
+        <div class="onb-leer" id="onboard-leer">Keine Kamera. Garage &rarr; Onboard-Kamera.</div>
+        <!-- v1.5.111 BESTELLT: Anzeige wie Gran Turismo 7/Sport. Das Bild so gross wie moeglich (Vollbild), auf den
+             schwarzen Raendern links und rechts die Werte, unten auf dem Bild Drehzahl, Gang und Lichter. Gelesen aus den
+             Cockpit-Feldern (onbWerte). Die Seitenleisten werden so breit wie der schwarze Rand (onbRandSetzen). -->
+        <div class="onb-gt" data-i18n-skip>
+          <div class="onb-seite onb-links">
+            <div class="onb-posbox"><b id="onb-pos-n">&ndash;</b><span id="onb-pos-von"></span>
+              <small id="onb-l-pos">Position</small></div>
+            <div class="onb-feld onb-runde"><small id="onb-l-runde">Runde</small><b id="onb-runde">0</b></div>
+            <div class="onb-zeiten">
+              <div><small id="onb-l-zeit">Zeit</small><b id="onb-zeit">&ndash;</b></div>
+              <div><small id="onb-l-delta">Delta</small><b id="onb-delta">&ndash;</b></div>
+              <div><small id="onb-l-letzte">Letzte</small><b id="onb-letzte">&ndash;</b></div>
+              <div><small id="onb-l-beste">Beste</small><b id="onb-beste">&ndash;</b></div>
+            </div>
+            <svg class="onb-karte" id="onb-karte" viewBox="0 0 100 100" aria-hidden="true"></svg>
+          </div>
+          <div class="onb-seite onb-rechts">
+            <div class="onb-feld"><small id="onb-l-reifen">Reifen</small>
+              <div class="onb-reifen"><i id="onb-r0"></i><i id="onb-r1"></i><i id="onb-r2"></i><i id="onb-r3"></i></div>
+              <span class="onb-klein" id="onb-reifen-txt">&ndash;</span></div>
+            <div class="onb-feld"><small id="onb-l-zustand">Reifenzustand</small><b id="onb-zustand">&ndash;</b></div>
+            <div class="onb-feld"><small id="onb-l-box">Boxenstopp</small><span class="onb-klein" id="onb-box">&ndash;</span></div>
+            <div class="onb-feld"><small id="onb-l-akku">Batterie</small><b id="onb-akku">&ndash;</b><i class="onb-balken"><i id="onb-akku-bar"></i></i></div>
+            <div class="onb-feld" id="onb-akku-m5-feld" hidden><small id="onb-l-akku-m5">Kamera-Akku</small><b id="onb-akku-m5">&ndash;</b></div>
+            <div class="onb-feld"><small id="onb-l-tank">Tank</small><b id="onb-tank">&ndash;</b></div>
+          </div>
+          <div class="onb-unten">
+            <div class="onb-rpm"><i id="onb-rpm-bar"></i></div>
+            <div class="onb-tacho">
+              <span class="onb-lampe" id="onb-licht" title="Licht">&#9673;</span>
+              <span class="onb-kmh"><b id="onb-kmh">0</b><small>km/h</small></span>
+              <b class="onb-gang" id="onb-gang">N</b>
+              <span class="onb-umin"><b id="onb-umin">0</b><small>1/min</small></span>
+              <span class="onb-lampe onb-schalt" id="onb-schalt">&#9650;</span>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="onb-weiter" id="onboard-weiter" aria-label="Naechster Schirm" data-i18n-skip>&#8644;</button>
+        <button type="button" class="onb-rec" id="onboard-rec" data-i18n-skip>&#9679; Aufnahme</button>
+      </div>
+
       <!-- ---- RENNEINSTELLUNGEN ALS EIGENER COCKPIT-SCHIRM --------------------------
            BESTELLT: "cockpit: weiteren screen mit Renneinstellungen einfuegen (wie pit
            screen bedienbar, optionen: renntyp, dauer/runden, start/abbrechen;
@@ -6646,6 +6923,14 @@
           <em class="ch-k-woche" data-i18n-skip>Dauerrennen</em>
           <em class="ch-k-rang" data-i18n-skip></em></button>
       </div>
+      <!-- v1.5 (WIP, Plan Paket 7): Karriere im Format der GT World Challenge (98l-karriere.js), nach Hybrid-Dash von Mo Kamit. -->
+      <h3 class="k-zwischen">Karriere</h3>
+      <div class="misc-grid ch-kacheln">
+        <button class="misc-tile ch-kachel ch-karriere" id="ch-karriere" type="button">
+          <span class="ch-mini" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8h16v10a8 8 0 0 1-16 0z"/><path d="M16 12H9a6 6 0 0 0 7 8M32 12h7a6 6 0 0 1-7 8" stroke="var(--accent)"/><path d="M24 26v8M17 40h14M19 34h10"/></svg></span>
+          <b class="ch-k-name">Karriere <span class="wip-tag">WIP</span></b>
+          <em class="ch-k-woche">GT World Challenge auf deinen Strecken</em></button>
+      </div>
       <h3 class="k-zwischen">Network</h3>
       <div class="misc-grid">
         <button class="misc-tile subpage-open" data-sub="ch-online">
@@ -6883,8 +7168,9 @@
       <h2>Rechtliches</h2>
     <div class="home-legal">
       <div class="home-legal-h">Unabh&auml;ngig, offen, ohne Gew&auml;hr</div>
-      <p>Dieses Projekt ist unabh&auml;ngig von Carrera und geh&ouml;rt zu keinem Hersteller. Der vollst&auml;ndige Quellcode steht unter der MIT-Lizenz auf GitHub.</p>
-      <p>Jeder darf ihn nutzen, kopieren, ver&auml;ndern und auch in kommerzieller Software verwenden, solange der urspr&uuml;ngliche Urheberrechtsvermerk und der Lizenztext in der Kopie erhalten bleiben.</p>
+      <p>Dieses Projekt ist unabh&auml;ngig von Carrera und geh&ouml;rt zu keinem Hersteller. Der vollst&auml;ndige Quellcode steht unter der GNU AGPL (Affero General Public License, Version 3 oder neuer) auf GitHub.</p>
+      <p>Jeder darf ihn nutzen, kopieren, ver&auml;ndern und weitergeben &ndash; auch in kommerzieller Software. Wer ihn ver&auml;ndert und weitergibt, muss den Quellcode unter derselben AGPL offenlegen, auch wenn die Software &uuml;ber ein Netzwerk angeboten wird. Der urspr&uuml;ngliche Urheberrechtsvermerk bleibt erhalten.</p>
+      <p>Ausgenommen sind mitgelieferte Inhalte mit eigener Lizenz: Automodelle, Strecken, Kl&auml;nge und Wiki-Texte (siehe Credits). Einige Karosserien von Dritten d&uuml;rfen nur nicht-kommerziell genutzt werden.</p>
       <p>Dieselbe Lizenz sagt aber auch: die Software kommt ohne Garantie und ohne Gew&auml;hrleistung. Du steuerst deine Autos auf eigene Gefahr. Es ist ein Freizeitprojekt, motiviert durch die Option, eine Pups-Hupe einzubauen &ndash; und m&ouml;glicherweise funktioniert es nach einem k&uuml;nftigen Firmware-Update nicht mehr.</p>
       <p>Diese Seite z&auml;hlt Aufrufe mit GoatCounter, damit ich wei&szlig;, ob das Projekt jemand benutzt. Ohne Cookies, ohne Werbung und ohne personenbezogene Daten; wer den Z&auml;hler blockiert, verliert keine Funktion. Alles andere &ndash; Abstimmungen, Rundenzeiten, Streckenpl&auml;ne &ndash; bleibt im Browser und wird nirgends hingeschickt.</p>
       <p>F&uuml;r konstruktives Feedback oder Feature-W&uuml;nsche schreib mir gern im Thema &bdquo;Omega Sim&ldquo; im Carrera Hybrid Players Discord, unter &bdquo;weitere Themen&ldquo;.</p>
@@ -6966,6 +7252,11 @@
          target="_blank" rel="noopener noreferrer">github.com/ange-yaghi/engine-sim</a> &middot; audio/CREDITS.md</p>
       <h3 style="font-size:14px; margin:18px 0 6px 0">Woher die 3D-Modelle kommen</h3>
       <p class="muted">Die Autos der virtuellen Fahrt stammen aus dem freien Rennspiel Speed Dreams: Vulture V5.R, Lynx 220, FMC GT4 und Boxer 96. Modelle, Texturen und Fahrzeugdaten stehen unter der GNU General Public License, Version 2 oder sp&auml;ter. Umgewandelt mit tools/sd_auto.py (Innenraum entfernt, Texturen verkleinert); die Lizenz- und Quellenangabe liegt im Ordner des jeweiligen Autos.</p>
+      <p class="muted">Der VW K&auml;fer 1303 RS ist eine eigene Konstruktion von Gnen54 (OmegaSim CAD) und steht unter Creative Commons Namensnennung 4.0 (CC BY 4.0).</p>
+      <p class="muted">Spider NG1: Aufbau von Gnen54 (OmegaSim CAD) auf der Karosserie MODIplay MP-1 Spider von Sturmkind, 3D-Daten f&uuml;r HYBRID von Thomas Strobel (FREAKPALACE Customs). Freigabe von Sturmkind am 16.11.2026: Verwendung erlaubt, solange die Karosserien nicht kommerziell verkauft werden. Eigene Teile, Farben und Fahrzeugdaten: Gnen54, CC BY 4.0.</p>
+      <p class="muted">VW Caravelle (Bulli): Aufbau von Gnen54 (OmegaSim CAD) auf einer Karosserie von Vehicle World (Designerin Revantika), mit schriftlicher Erlaubnis von Vehicle World zur Weitergabe an die Carrera-Hybrid-Community. Eigene Teile, Farben und Fahrzeugdaten: Gnen54, CC BY 4.0.</p>
+      <p class="muted">Strecke T&ouml;rnerschleife 2.0: Streckenlayout von Driftstrecken.de (driftstrecken.de), schriftlich freigegeben am 18.11.2026 f&uuml;r OmegaSim unter Nennung der Urheberrechte; Umsetzung Gnen54.</p>
+      <p class="muted">Die Cockpit-Ansicht &bdquo;Mokamit&ldquo; (Digital Dash), die KI-Pers&ouml;nlichkeit der NPCs, der Showroom, die Karriere und der Modus mit zwei Laptops stammen aus Hybrid-Dash von Mo Kamit, MIT-Lizenz.</p>
       <p class="dank-quelle" data-i18n-skip><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener noreferrer">gnu.org/licenses/old-licenses/gpl-2.0</a> &middot; img/autos/*/LIZENZ.txt</p>
       <!-- BESTELLT: "in den Credits das GitHub von engine sim verlinken und ggf. die wiss.
            Artikel zu den Funktionen - aber nichts halluzinieren!" Nur Modelle, die im Code
@@ -6991,6 +7282,64 @@
     <div class="card subpage" id="sub-patchnotes">
       <button class="misc-back goto-tab" data-tab="options">&larr; Optionen</button>
       <h2>Patchnotes</h2>
+      <p class="muted"><b><span data-i18n-skip>1.6</span></b></p>
+      <ul class="muted" id="patchnotes-16" style="padding-left:20px; line-height:1.7">
+        <li>Virtuell fahren: Das Ladebild zeigt jetzt die aktuelle Strecke von oben &#252;ber das ganze Bild (wie im Editor, bei der T&#246;rnerschleife ihr Umriss mit Br&#252;cke), in der Mitte dreht sich das Streckenteil &#252;ber Titel und Fortschrittsbalken. Aus Gnen54s Testversion &#252;bernommen: Pad-Diagnose w&#228;hrend der Fahrt (Knopf in der Leiste oder F8) mit Pad-Namen, Belegung, gelernter Ruhelage der Trigger, Rohwerten und der Stelle, an der die Abfrage aussteigt, und in der Anleitung der Abschnitt &#8222;Gamepad einrichten&#8220; mit Hinweisen zum EasySMX X05 (Gas und Bremse auf dem rechten Stick).</li>
+        <li>Virtuell fahren, aus dem Pull Request von Gnen54 &#252;bernommen und auf den aktuellen Stand gebracht: T&#246;rnerschleife 2.0 mit und ohne Br&#252;cke (mit Randlinien, Boxengasse und Steigung), R&#252;ckw&#228;rtsgang, keine Runde beim R&#252;ckw&#228;rtsfahren oder Pendeln &#252;ber die Linie, Android-Trigger, die in Ruhe auf halbem Weg stehen, Gamepad-Tasten f&#252;r Licht, Box und Gelbe Flagge, Lichthupe, Pflicht-Boxendurchfahrt (WIP), Boxenservice nur in der Boxengasse, Innenspiegel als schmaler Streifen oben (WIP), fester Motorklang f&#252;r K&#228;fer, Spider und Caravelle, Hilfeseite mit &#8222;?&#8220; in der Garage. Neu: Ladebild ohne Anzeige mit Fortschrittsbalken und einer Strecke, die sich unten links Teil f&#252;r Teil zusammenbaut; Knopfleiste als Piktogramme mit einem Knopf zum Aus- und Einblenden; Fahrtrichtung &#8222;Gegenrichtung&#8220; (WIP).</li>
+        <li>Vibration wie bei LibreCorsa: Ein Mischer bedient beide Rumble-Motoren gemeinsam (hoher Motor: Randstein-Pulse und schiebende Vorderr&#228;der, tiefer Motor: St&#246;&#223;e, ausbrechendes Heck, ABS, unebener Boden), statt vieler einzelner St&#246;&#223;e; die DualSense-Griffmotoren und Trigger-Widerst&#228;nde folgen denselben Werten. Die Schalter unter Optionen &gt; Vibration gelten jetzt auch beim virtuellen Fahren; &#8222;Reifenquietschen&#8220; und &#8222;Neben der Bahn&#8220; sind ab Werk aus (einmalig umgestellt). Nach dem virtuellen Fahren gibt die App Grafik, Texturen und Automodelle wieder frei (weniger Speicher beim echten Fahren), und bei sehr wenig freiem Speicher kommt ein Hinweis. Virtuell mehr Wolken bei Sonne. Auf der Startseite gibt es &#8222;Fehler melden&#8220; (&#246;ffnet ein Formular auf GitHub).</li>
+        <li>Korrekturen: Der Quality-Modus im virtuellen Fahren lief seit 1.5.154 gar nicht (ein Shaderfehler lie&#223; alle Autos still auf Performance zur&#252;ckfallen): jetzt wieder mit Eigenschatten und Lackspiegel, dadurch ist auch der zu helle Fleck unter dem Auto weg; der Schattenkern ist kleiner (am Handy schneller). Im virtuellen Fahren zeigt der erste Gang &#8222;1&#8220; statt &#8222;N&#8220;, und die R&#228;der zeigen im Drift das Gegenlenken. MAX-NPCs bremsen vor der Haarnadel fr&#252;her (drei Teile vorher). DualSense: die Griffmotoren schalten nach einem Rutscher wieder ab. Latenz-Diagnosen laufen nur noch auf Wunsch. Lizenzhinweise zur AGPL vervollst&#228;ndigt (mitgelieferte Modelle und Strecken haben eigene Lizenzen), Credits f&#252;r VW Caravelle und T&#246;rnerschleife erg&#228;nzt.</li>
+      </ul>
+      <p class="muted"><b><span data-i18n-skip>1.5</span></b></p>
+      <ul class="muted" id="patchnotes-15" style="padding-left:20px; line-height:1.7">
+        <li>Onboard-Kamera, Quelle WLAN (M5Stack Timer Camera): Die Kamera l&#228;sst sich jetzt in der Garage ausschalten. Der Knopf hei&#223;t jetzt &#8222;Koppeln&#8220; / &#8222;Entkoppeln&#8220; (Verbindung zur Kamera herstellen bzw. trennen); daneben gibt es &#8222;Ausschalten&#8220; (neuer Endpunkt /off auf der Kamera: Batterie-Hold LOW + Deep-Sleep, wie die Stock-Firmware). Au&#223;erdem geht die Kamera von selbst aus, wenn 2 Minuten lang niemand auf den Strom schaut &#8211; praktisch im Auto, um den Akku zu schonen. Wieder einschalten geht mit frischem Strom (USB/Kabel oder PWR-Knopf).</li>
+        <li>Virtuelles Fahren, Quality-Modus: Die Schattenkarte ist kleiner (Touch 512, Desktop 1024 statt vorher 1024/2048) und wird weiterhin jedes Bild gerendert. Das senkt die GPU-Last sp&#252;rbar, ohne das Schatten-Flackern (das jede-2.-Bild-Rendern verursachte) wiederzubringen. Im Performance-Modus gibt es weiterhin keine Schatten.</li>
+        <li>Onboard-Kamera, Quelle WLAN (M5Stack Timer Camera): Die Aufnahme flackert nicht mehr schwarz. Beim Anzeigen jedes Bildes setzt die App die Bild-URL neu; dabei war das Live-Bild kurz ohne Frame (naturalWidth 0) und die Aufnahme bekam schwarze Bilder. Jetzt h&#228;lt die App einen bereits dekodierten Bild-Frame f&#252;r die Aufnahme vor.</li>
+        <li>Onboard-Kamera, Quelle WLAN (M5Stack Timer Camera): Der Batteriestand der Kamera erscheint jetzt im Onboard-Bild (Fahrtbildschirm) als „Kamera-Akku“ in der rechten Leiste und in der Statuszeile. Die Kamera-Firmware liefert ihn über den neuen Endpunkt /batt (Spannung und Prozent); OmegaSim fragt ihn alle 5 s ab, solange die Kamera läuft. Nützlich, um zu sehen, wann der Akku im Auto gewechselt werden muss.</li>
+        <li>Onboard-Kamera, Quelle WLAN (M5Stack Timer Camera): Das Bild erscheint jetzt auch in der Android-App. Vorher zeigte die WebView den MJPEG-Strom der Kamera nicht an (naturalWidth blieb 0). Jetzt liest die App den Strom selbst und zeigt die Bilder einzeln an, dadurch klappt auch die Aufnahme (die Kamera-Firmware setzt Access-Control-Allow-Origin).</li>
+        <li>Onboard-Kamera (WIP): neue Anzeige im Stil von Gran Turismo. Das Bild l&#228;uft im Vollbild und so gro&#223; wie m&#246;glich. Auf den schwarzen R&#228;ndern stehen links Position, Runde, Zeit, Delta, letzte und beste Runde und das Streckenlayout, rechts Reifen, Reifenzustand, Boxenstopp-Einstellungen, Batterie und Tank. Unten auf dem Bild Tempo, Gang, Drehzahlbalken, Licht und Schaltanzeige. Oben rechts ein Knopf zum n&#228;chsten Cockpit-Schirm.</li>
+        <li>Showroom: Die R&#252;ckseiten der Karten sind jetzt auch auf Android lesbar. Dort schien die gespiegelte Vorderseite durch den Text der R&#252;ckseite.</li>
+        <li>Virtuell fahren: neues Auto Spider NG1 von Gnen54 (WIP), aufgebaut auf der Karosserie MODIplay MP-1 Spider von Sturmkind (Freigabe von Sturmkind, nicht kommerziell), mit eigenen R&#228;dern je Achse und Motorklang Lister Storm. Schatten mehrteiliger Modelle (K&#228;fer, Spider) stimmen jetzt. Helle Autos werden beim Umlackieren nicht mehr ausgewaschen. Showroom: Die R&#252;ckseiten der Karten sind gut lesbar.</li>
+        <li>Fahrgef&#252;hl: Im Fahrmodus LibreCorsa (echt und virtuell) gibt es eine Lenkhilfe f&#252;r Gamepad und Tastatur: Der Einschlag l&#228;uft weich an und aus, geht nie &#252;ber den Punkt des besten Grips der Vorderr&#228;der hinaus, die R&#228;der stellen sich beim Loslassen in Fahrtrichtung, und ein rutschendes Heck wird teilweise abgefangen. Kalte Bremsscheiben bremsen bis zu 10 % schw&#228;cher, bis sie warm sind (in LibreCorsa und Pacejka, Schalter wie das Bremsfading). Dreckige Luft hinter einem anderen Auto kostet jetzt auch beim virtuellen Fahren Grip an der Vorderachse.</li>
+        <li>Virtuell fahren: Das Fahrzeug wird jetzt in festen Schritten von 2 ms gerechnet (500 Mal pro Sekunde), unabh&#228;ngig von der Bildrate. Lenkung, Reifen, Federung und Weg verhalten sich bei 30 Bildern pro Sekunde genauso wie bei 120.</li>
+        <li>Virtuell fahren, sch&#246;nere Grafik: Der Himmel mit Wolken und Sonne spiegelt sich jetzt im Lack (Quality), und der Himmel hat einen nat&#252;rlicheren Verlauf mit hellem Saum am Horizont. In der Ferne ist der Dunst Richtung Sonne heller und w&#228;rmer. Am Streckenrand stehen Grasb&#252;schel, die sich wie die Baumkronen im Wind wiegen (Quality, auf Rasen). Der Rasen hat gro&#223;fl&#228;chige Farbunterschiede, das Kachelmuster ist weg. Neu und in der Garage abschaltbar: &#8222;Sichtfeld mit Tempo&#8220;, das Sichtfeld wird mit dem Tempo weiter und auf Randsteinen wackelt das Bild leicht.</li>
+        <li>Virtuell fahren: Belag und Randstreifen der Strecke sind doppelt so fein aufgel&#246;st und werden unter flachem Blick sch&#228;rfer gefiltert, das sieht vor allem in der Motorhaubenkamera besser aus. Neue Standardeinstellungen: Grafik &#8222;Quality&#8220; (wer &#8222;Performance&#8220; gew&#228;hlt hat, beh&#228;lt es; auf schwachen Ger&#228;ten schaltet die Bildraten-Wache Effekte ab) und Licht aus beim Start (Knopf &#8222;Licht&#8220; schaltet es an, das Licht beim echten Fahren bleibt, wie es war).</li>
+        <li>Garage aufger&#228;umt: Die Kn&#246;pfe unter den Autos (Alle trennen, Zum Cockpit, Virtuell fahren, Onboard-Kamera, Showroom, Zweiter Laptop) stehen jetzt eng in zwei Spalten, man muss kaum noch scrollen. Das Vorschaubild des virtuellen Autos ist kleiner. Beim virtuellen Fahren gibt es oben einen Knopf &#8222;Wetter&#8220;: er schaltet sofort zwischen trocken und Regen um und leuchtet, solange es regnet.</li>
+        <li>Virtuell fahren, Fehler behoben: Die Ziellinie sitzt jetzt wie auf dem echten Teil hinten auf der Startgeraden, und genau dort wird die Runde gemessen und angesagt (bisher startete die Zeitnahme irgendwo mitten in der Runde und dann erst wieder nach einem Abflug). Die R&#228;der von FMC GT4, Boxer 96 und Lynx 220 fehlen ab der zweiten Fahrt nicht mehr und stehen nicht mehr &#252;ber die Karosserie hinaus. Der Geist ist jetzt das gew&#228;hlte Auto in seiner Lackfarbe (durchscheinend) und f&#228;hrt deine beste Runde, von Linie zu Linie. Die Ersatzstrecke Balkonia hat nach Start/Ziel eine Boxengasse mit Bucht und Parkstrichen wie das echte Teil.</li>
+        <li>Virtuell fahren: neuer Boden &#8222;Rasen&#8220;, jetzt der Standard, mit B&#228;umen rund um die Strecke, die in der Ferne im Dunst verschwimmen. Der Himmel hat ziehende Wolken (im Regen dichter und grauer) und einen Schein um die Sonne. Alles selbst gebaut, passend zur eingestellten Tageszeit. Die Kachel &#8222;Virtuell fahren&#8220; im FAHREN-Men&#252; sieht jetzt aus wie die Startkachel.</li>
+        <li>FAHREN: Neben &#8222;Rennen starten&#8220; (jetzt zwei Drittel so breit) steht die Kachel &#8222;Virtuell fahren&#8220; (WIP). Sie startet die virtuelle Fahrt sofort mit den Renneinstellungen. Auf der Garagenkachel zeigen kleine Symbole, wenn ein zweiter Laptop oder die Onboard-Kamera verbunden ist. Showroom: Auf dem Handy gl&#228;nzen die Sammelkarten beim Neigen des Telefons.</li>
+        <li>DualSense-Trigger beim Fahren in der Android-App (WIP, neue APK). Ist der Controller per Bluetooth verbunden und steckt zus&#228;tzlich das USB-Kabel, kommen die Trigger-Effekte jetzt beim echten und beim virtuellen Fahren: Widerstand der Bremse, Vibration bei ABS und blockierendem Rad, beim Gas bei Schlupf und Traktionskontrolle. Die Verbindung kommt von selbst, sobald das Kabel steckt. H&#228;ngt der Controller nur am Kabel, bliebe er ohne Tasten; dann l&#228;sst die App die Trigger aus und sagt es. Abschaltbar unter Optionen &gt; Vibration. Au&#223;erdem sendet der Knopf &#8222;Vibration testen&#8220; wieder, vorher erreichte er keinen Controller.</li>
+        <li>Streckeneditor: Unter Optionen gibt es jetzt &#8222;Boxengassen&#8220; als Anzahl statt &#8222;Boxengasse erzwingen&#8220;. Vorgabe sind so viele wie unter Meine Teile eingetragen, und die Zufallsstrecke enth&#228;lt genau so viele. Geht das mit den Teilen nicht, gibt es eine Meldung. Das Editor-Tutorial erkl&#228;rt jetzt auch Br&#252;cken und Boxengassen.</li>
+        <li>Android-App (neue APK): Das Rumble des Controllers geht jetzt direkt &#252;ber Android an den Motor des Gamepads, &#252;ber Bluetooth und Kabel, auch wenn der Controller erst nach dem Start der App verbunden wird. Vorher lief es &#252;ber die Gamepad-Schnittstelle der Webansicht, die den Motor nur kannte, wenn der Controller schon beim Start da war. DualSense &#252;ber USB: Ist die Schnittstelle belegt (Controller nur am Kabel), sendet die Probe &#252;ber den Steuerkanal. Das Protokoll steht unter dem Knopf und l&#228;sst sich kopieren.</li>
+        <li>Virtuell fahren: Wetter aus den Renneinstellungen vollst&#228;ndig. &#8222;Wechselhaft&#8220; wechselt jetzt auch virtuell zwischen trocken und Schauern (wie im Rennen, mit Meldung), und &#8222;Wetter &#228;ndert sich&#8220; bringt einen einmaligen Wechsel im mittleren Drittel der Fahrzeit. Beim Beenden gilt wieder das Wetter von vorher.</li>
+        <li>Akku-Aufzeichnung (WIP, Entwicklertools &gt; Entwickler): Jedes verbundene Auto schreibt alle 10 s den Akku-Rohwert und die Fahrzeit mit. Nach dem Laden beginnt die Aufzeichnung neu, die vorige bleibt erhalten. Aus einer ganz leer gefahrenen Ladung entsteht sp&#228;ter eine echte Akku-Kennlinie statt der linearen Sch&#228;tzung. Je Auto l&#228;sst sich die Aufzeichnung als CSV kopieren.</li>
+        <li>Virtuell fahren, Quality: Bloom und Reifenverformung. Helles wie Scheinwerfer, R&#252;cklichter und Glanzlichter strahlt leicht &#252;ber, Himmel und Boden bleiben unver&#228;ndert. Die Reifen werden unten etwas flacher und breiter, je st&#228;rker das Auto an diesem Rad einfedert (beim Bremsen vorn, in der Kurve au&#223;en). Die Bildraten-Wache schaltet den Bloom zusammen mit den Schatten ab, wenn das Ger&#228;t nicht mitkommt.</li>
+        <li>Virtuell fahren, Quality: Lackreflexe. Im Klarlack der Autos spiegelt sich der Himmel der eingestellten Tageszeit, an flachen Stellen st&#228;rker (Fresnel).</li>
+        <li>Virtuell fahren: TV-Kamera (WIP). Sie ist eine neue Kamera in der Reihe (Kamera-Knopf oder R3). Kameras stehen alle drei Teile au&#223;en neben der Strecke, folgen dem Auto und zoomen mit dem Abstand. Geschnitten wird hart auf die n&#228;chste Kamera, sobald das Auto ihr deutlich n&#228;her ist, fr&#252;hestens nach 1,5 s.</li>
+        <li>Virtuell fahren: Tageszeit (WIP). In der Garage unter Virtuell fahren gibt es die Zeile Tageszeit mit Mittag (wie bisher), Morgen und Abend. Sie f&#228;rbt Himmel, Dunst und das Licht auf Strecke und Autos, in Performance und Quality. Scheinwerfer und R&#252;cklichter bleiben hell.</li>
+        <li>Virtuell fahren, Quality: Bildraten-Wache. Kommt das Ger&#228;t nicht mit (&#252;ber 4 s unter 40 Bildern pro Sekunde), schaltet Quality erst die Schatten ab, dann Aufl&#246;sung und Regentropfen auf das Ma&#223; von Performance, mit kurzer Meldung. In derselben Fahrt geht es nicht wieder hoch, damit nichts flackert.</li>
+        <li>Zweiter Laptop (WIP, nach Hybrid-Dash von Mo Kamit, MIT-Lizenz): In der Garage verbindet &#8222;Zweiter Laptop&#8220; einen zweiten Rechner im selben WLAN als Bluetooth-Helfer. Der Helfer verbindet weitere Autos und reicht ihre Pakete &#252;ber einen direkten WebRTC-Kanal weiter, ohne Server. Auf dem Host erscheinen sie in der Garage wie jedes andere Auto. Gekoppelt wird einmal mit zwei Codes. Bricht die Verbindung ab, h&#228;lt der Helfer seine Autos sofort an. Jedes Helfer-Auto hat etwas mehr Verz&#246;gerung, am besten als NPC. Mit ?helfer in der Adresse &#246;ffnet sich eine eigene Helfer-Seite.</li>
+        <li>Karriere: Team-Upgrades (WIP). Mit dem Preisgeld lassen sich drei Upgrades in je drei Stufen kaufen. Boxencrew senkt die Standzeit um 6 % je Stufe, Spritverbrauch den Verbrauch um 4 %, Reifenprogramm den Reifenverschlei&#223; um 5 %. Sie wirken nur auf dein Auto und nur in Karriere-Sitzungen.</li>
+        <li>Karriere (WIP, nach Hybrid-Dash von Mo Kamit, MIT-Lizenz): Unter Challenges gibt es den Abschnitt &#8222;Karriere&#8220;. Gefahren wird eine Saison im Format der GT World Challenge auf deinen eigenen Strecken, kurz mit 4 oder voll mit 10 Runden. Eine Sprint-Runde hat Qualifying 1, Rennen 1, Qualifying 2 und Rennen 2, mit Pflichtstopp im Boxenfenster (sonst +30 s). Eine Endurance-Runde hat Qualifying und ein Rennen &#252;ber 3, 6 oder 24 Stunden, gestaucht auf echte Minuten. Dazu kommen fliegender Start, Punkte wie in der Serie, ein Punkt f&#252;r die Pole und drei Wertungen. Die Lizenzen Bronze bis Pro setzen das Tempo der NPCs (eng begrenzt). Es gibt au&#223;erdem XP, Fahrerstufe, Preisgeld, Sponsorziele, Troph&#228;en und den Kalender mit Strecke je Runde. Team-Upgrades folgen.</li>
+        <li>Vorfallkarte (WIP, nach Hybrid-Dash von Mo Kamit, MIT-Lizenz): W&#228;hrend eines Rennens merkt OmegaSim jeden erkannten Kontakt und jedes Abkommen mit dem Ort auf der Strecke, f&#252;r Spieler und NPCs. Unter Optionen &gt; Telemetrie zeigt eine Karte, wo es sich h&#228;uft: rot Kontakt, orange neben der Bahn, gef&#252;llt Spieler, hohl NPCs. Ein Knopf l&#246;scht die Vorf&#228;lle der Strecke.</li>
+        <li>DualSense &#252;ber USB-Kabel in der Android-App, Stufe 1 (WIP): Unter Optionen &gt; Vibration gibt es in der App die Zeile &#8222;DualSense &#252;ber USB-Kabel&#8220; mit dem Knopf &#8222;Trigger testen&#8220;. Die App spielt &#252;ber das Kabel 3 s festen Widerstand und 2 s Vibration auf beiden Triggern und gibt den Controller danach wieder frei. Das Protokoll steht im Live-Log. Erst wenn das am Ger&#228;t klappt und die Tasten danach noch gehen, kommen die Trigger-Effekte beim Fahren. Braucht die neue APK.</li>
+        <li>Showroom (WIP, nach Hybrid-Dash von Mo Kamit, MIT-Lizenz): In der Garage &#246;ffnet &#8222;Showroom&#8220; die Sammlung aller bekannten Autos als Sammelkarten mit Holo-Schimmer, der dem Zeiger folgt. Ein Tipp dreht die Karte zur Bilanz um: Starts, Siege, Podien, Poles, Runden, beste Runde, km. Die Bilanz kommt aus den gespeicherten Sitzungen, also auch aus Rennen vor dieser Version. Siege, Podien und Runden heben die Stufe: Serie, Clubfahrer, Podiumsfahrer, Legende. Bild ist das eigene Autofoto, sonst eine Silhouette in der Farbe des Autos.</li>
+        <li>Telemetrie-Analyse erweitert (WIP, nach Hybrid-Dash von Mo Kamit, MIT-Lizenz): In der Tempokurve sind die Kurvenminima von A markiert. Gas und Bremse stehen jetzt f&#252;r A und B (B als schmaler Streifen darunter). Neu ist der Zeitabstand A minus B &#252;ber die ganze Runde: steigt die Linie, verliert A dort Zeit. Dazu kommt die Sektor-Matrix der Fahrt von A mit bis zu 20 Runden in drei Sektoren, bestem Wert je Sektor und Streuung, die zeigt, wo die Runden am wenigsten gleich sind. Optionen &gt; Telemetrie.</li>
+        <li>KI-Pers&#246;nlichkeit der NPCs (WIP, aus Hybrid-Dash von Mo Kamit, MIT-Lizenz): In der Garage hat jedes NPC-Auto einen Knopf &#8222;KI-Pers&#246;nlichkeit&#8220;. Darin gibt es den Schalter &#8222;Menschliche KI&#8220; (ab Werk aus) und f&#252;nf Eigenschaften: Mut, Konstanz, Nerven, Lerntempo, Reifenschonung. Die Werte kommen aus dem Namen und lassen sich einzeln verstellen. Ist die KI an, lernt der NPC jede Strecke Kachel f&#252;r Kachel, merkt sich Abfl&#252;ge und &#220;berholstellen je Gegner und f&#228;hrt mit Formwellen, Z&#246;gern unter Druck und ruhigem Rhythmus allein auf der Strecke. Das Tempo bleibt zwischen 85 und 104 % der eingestellten Stufe und gilt nicht unter Gelb, in der Box und in der Startrunde.</li>
+        <li>Onboard-Kamera (WIP): Livebild aus dem Auto als Cockpit-Schirm &#8222;Onboard&#8220;, mit Aufnahme als Video (Grundlage: gnen54s Zweig onboard, danke). Eingeschaltet wird sie in der Garage unter &#8222;Onboard-Kamera&#8220;. Quelle ist eine USB-Kamera bzw. ein FPV-Empf&#228;nger oder neu eine M5Stack Timer Camera im WLAN (MJPEG, Adresse eintragen). Die Anzeige im Bild ist im Stil des virtuellen Fahrens: Zeiten oben links, Tempo, Gang und Tank unten in der Mitte. Auf der https-Webseite l&#228;dt das WLAN-Bild nicht, in der App und &#252;ber Start OmegaSim.bat schon. Video speichern in der App braucht die neue APK.</li>
+        <li>Safety Car: Ist an Start/Ziel zu wenig Platz zum Einparken (Kurve direkt vor und nach einer kurzen Startgeraden), parkt es auf dem n&#228;chsten Teil, wo der Platz reicht, bevorzugt bis drei Teile vor Start/Ziel und nie in einer Kurve; das Live-Log nennt das Teil. Ein ausdr&#252;cklich gew&#228;hltes Teil bleibt, mit Hinweis, wenn der Platz nicht reicht. Dazu: K&#228;fer-Name und Boxster-H&#246;rproben &#252;bersetzt.</li>
+        <li>Neue Cockpit-Ansicht &#8222;Mokamit: Digital Dash&#8220; (WIP, Optionen &gt; Allgemein &gt; Cockpit-Ansicht): die Kachel-Tafel aus Hybrid-Dash von Mo Kamit (MIT-Lizenz) mit Status, Fahrhilfe-Chips, Akku, Position, Tank, Neben der Bahn, Tempo, Gang, Reifen, Rundenzeiten, Zustand, Gas- und Bremsbalken sowie Kn&#246;pfen f&#252;r Boxenstopp, Gelbe Flagge, Licht und Wetter. Sie liegt &#252;ber dem Haupt-Schirm des Cockpits und liest dessen Werte; die Kn&#246;pfe dr&#252;cken die normalen Kn&#246;pfe, es gelten also dieselben Regeln. Texte auf Deutsch, Englisch und Spanisch.</li>
+        <li>DualSense am PC (WIP): Die adaptiven Trigger verhalten sich jetzt wie bei LibreCorsa. Der linke Trigger ist die Bremse: ein Widerstand, der nach unten fester wird; regelt das ABS, vibriert er, blockiert ein Rad, vibriert er langsamer. Der rechte ist das Gas: leichter Widerstand, drehen die Hinterr&#228;der durch oder regelt die Traktionskontrolle, vibriert er. Nahe der Haftgrenze summen beide leicht. Ein Effekt bleibt 0,15 s stehen, damit er nicht flackert. Der Drehzahl-Hinweis am Gas-Trigger entf&#228;llt.</li>
+        <li>Neues Fahrgef&#252;hl &#8222;LibreCorsa&#8220; (WIP) f&#252;r die echten Autos: abgestimmt auf den GT3 aus dem freien Rennsimulator LibreCorsa (nach dessen ver&#246;ffentlichten Messwerten, kein Code &#252;bernommen): viel Grip, der mit dem Tempo durch Abtrieb w&#228;chst, kr&#228;ftiger Antritt, eine sehr starke Bremse mit ABS (die Lenkung bleibt beim Bremsen zum gro&#223;en Teil), leichtes Untersteuern am Limit und ein Reifenfenster. Das Heck kommt nur mit dem Schalter &#8222;&#220;bersteuern&#8220;, ab Werk aus. Gran Hybrismo und Assetto Carrera sind entfernt; wer sie gew&#228;hlt hatte (auch in gespeicherten Presets, Profilen und Meisterschaften, und im virtuellen Fahren), f&#228;hrt jetzt LibreCorsa. F&#252;r Online-Bestzeiten mit LibreCorsa muss das Apps Script neu bereitgestellt werden.</li>
+        <li>Virtuelles Fahren: Neues Fahrgef&#252;hl &#8222;LibreCorsa GT3&#8220; (WIP, Garage &gt; Virtuell fahren &gt; Handling). Nachgebaut nach den ver&#246;ffentlichten Messwerten des GT3 aus dem freien Rennsimulator LibreCorsa (kein Code &#252;bernommen): dauerhafte Querbeschleunigung von 1,7 g bei 81 km/h bis 1,9 g bei 171 km/h (der Abtrieb w&#228;chst mit dem Tempo), Untersteuergradient 1,4 Grad je g und ein Reifenfenster, in dem die Reifen am besten greifen. Ein Selbsttest misst das wie das Vorbild in station&#228;rer Kreisfahrt; die Werte liegen innerhalb von 3 %.</li>
+        <li>Virtuelles Fahren: Regen ist jetzt dreidimensional (WIP): Tropfen fallen als Striche im Raum um die Kamera, werden beim Fahren schr&#228;g gezogen, und ein grauer Schleier legt sich mit der Regenst&#228;rke &#252;ber das Bild. Der Regen kommt aus dem Wetter des Rennens (Startwetter Regen). Performance zeichnet 700 Tropfen, Quality 2000. Behoben (Quality): Die R&#228;der warfen drehende, flache oder spitze Schatten; sie werfen jetzt keinen Kartenschatten mehr, unter dem Auto bleibt der weiche Kontaktschatten.</li>
+        <li>Virtuelles Fahren: Die Renneinstellungen gelten jetzt weiter: Startwetter Regen macht die Bahn nass (derselbe bin&#228;re Griff wie beim echten Fahren), nach der Fahrt ist es wieder wie vorher. Was virtuell noch nicht geht (wechselhaftes Wetter, fliegender Start, Pflichtboxenstopps, Zufallsevents, automatische Gelbe Flagge), nennt der Start einmal, statt es still zu &#252;bergehen. Der Schalter &#8222;Schaden bei Zusammenst&#246;&#223;en&#8220; gilt auch virtuell.</li>
+        <li>Virtuelles Fahren (WIP): Zusammenst&#246;&#223;e mit NPC-Autos sind jetzt wie in einem Rennspiel gerechnet: Die Autos haben gedrehte K&#228;sten mit ihren echten Ma&#223;en und stecken nicht mehr ineinander, sondern werden auseinandergeschoben. Der Sto&#223; nimmt Tempo (frontal gegen ein stehendes Auto etwa drei Viertel), schiebt das eigene Auto seitlich und dreht es je nach Trefferstelle (ein Treffer vorn dreht die Nase weg, einer hinten schiebt sie herum); der NPC verliert etwas Tempo. Der Schaden h&#228;ngt von der Aufprallst&#228;rke ab (3 % bis 30 %) statt pauschal 10 %.</li>
+        <li>Virtuelles Fahren (WIP): In der Garage zeigt das Fenster &#8222;Virtuell fahren&#8220; jetzt ein Vorschaubild des gew&#228;hlten Autos und eine Lackfarbe (Original, Rot, Blau, Wei&#223;, Schwarz, Gelb, Violett, Gr&#252;n, Orange). Die Karosserie wird in der Fahrt umgef&#228;rbt (Helligkeit des Lacks mal Farbe, die Details bleiben), Scheiben, R&#228;der und Leuchten bleiben unver&#228;ndert. Die Vorschaubilder sind Aufnahmen genau dieser Darstellung, eines je Auto und Farbe.</li>
+        <li>Regen beim echten Fahren ist jetzt bin&#228;r: Die Front mit Ton, Tropfen und Regenlicht bleibt, aber der Griff ist nur noch trocken oder nass. Nass wird er, sobald die Front die H&#228;lfte erreicht hat (rund 5 s nach dem Regenbeginn), trocken wieder darunter. Slicks im Nassen sind deutlich langsamer und rutschig, Regenreifen im Trockenen etwas langsamer; es gibt keine Zwischenstufe. Das gilt f&#252;r dein Auto, Spieler 2 und 3 und die NPCs gleich. Neu (WIP): Wetter-Startwert in den Renneinstellungen: ein Wort oder eine Zahl macht den Wetterplan wiederholbar, dieselbe Strecke und derselbe Startwert geben dieselben Wechsel zur selben Zeit.</li>
+        <li>Akku: Bei einem Rohwert von 140 oder weniger zeigen Garage und Cockpit &#8222;niedrig&#8220; statt einer Prozentzahl. Die Skala ist unten flach, &#8222;12 %&#8220; stand lange, obwohl das Auto noch fuhr; eine echte Kennlinie folgt aus einer aufgezeichneten Akkuladung. Die Gl&#228;ttung im Cockpit beginnt beim Wechsel des Fahrerautos neu, statt f&#252;nf Sekunden lang mit dem Vorg&#228;nger zu mischen. Startaufstellung: Hat ein Auto seinen Haltepunkt mitten im Teil verpasst (Platz 4 und weiter hinten), f&#228;hrt es die Einparkfolge um den Vorsprung k&#252;rzer (bis zu 30 %), damit es nicht auf dem Platz des Autos davor steht. Das Live-Log nennt je Auto Platz, Ort und Haltepunkt, damit sich jede Aufstellung nachvollziehen l&#228;sst.</li>
+        <li>Verbindung und Men&#252;: Zwei Spieler ohne Bahn am selben Handy: Wird ein Auto nach dem Verbinden zu Spieler 2 oder 3, bekommt es jetzt sofort die schnelle Funkpriorit&#228;t (bisher blieb es ohne Ampel auf der langsamen h&#228;ngen). Android-App: Scheitert das Verbinden, steht der Grund sichtbar in der Garage und im Fahren-Men&#252;, mit Knopf &#8222;Protokoll kopieren&#8220;; die App versucht es einmal selbst erneut, schonender (kurze Pause, keine Priorit&#228;tsanfrage in den ersten Sekunden), und verbindet mit angeschlossenem Gamepad von Anfang an schonend (WIP). Safety Car: Nach seiner Startrunde f&#228;hrt es schon vier Teile vor dem Parkteil heim (langsamer, mittig), statt erst an der Linie; es soll so auf dem Parkteil am Rand stehen wie nach einer Gelbphase. Men&#252;: Die obere Leiste ist am PC h&#246;her; die zweite Leiste zeigt h&#246;chstens vier Reiter und Pfeile, wenn links oder rechts weitere liegen, und rutscht beim Durchschalten mit. Der Sprachknopf sitzt auf der Startseite oben rechts mit &#8222;LANGUAGE&#8220; und Flagge; ohne eigene Wahl startet die App auf Englisch. Virtuelles Fahren: neues Auto VW K&#228;fer 1303 RS mit Boxster-Motorklang von Gnen54 (WIP).</li>
+        <li>Zur&#252;ck auf den Stand 1.4.67: Die Versionen 1.4.68 bis 1.4.80 (Quality-Grafik und Regen im virtuellen Fahren, Vorschaubilder, Zwischenreifen, Geist-Linie, fliegender Start, Omega Overdrive) sind zur&#252;ckgenommen, weil sie Fehler mitbrachten. Fliegender Start, Vorschau und Farbwahl, bessere Quality-Grafik, genauere Kollisionen und der Wetter-Startwert kommen einzeln und gepr&#252;ft zur&#252;ck; Zwischenreifen, Geist-Linie und Omega Overdrive entfallen.</li>
+      </ul>
       <p class="muted"><b><span data-i18n-skip>1.4</span></b></p>
       <ul class="muted" id="patchnotes-14" style="padding-left:20px; line-height:1.7">
         <li>Setup je Auto (WIP): neu sind Bremsbalance, ABS, TC, Motorkennfeld, Heckfl&#252;gel und Reifendruck, jeweils mit Erkl&#228;rung im &#9432; und einer Zeile, was die Einstellung bewirkt. Was im gew&#228;hlten Fahrgef&#252;hl nicht wirkt, ist ausgegraut. Das Motorkennfeld &#228;ndert auch den Verbrauch und die Tank-Rundenangabe. W&#228;hrend die Reifenrunden berechnet werden, dreht sich das Streckenteil als Ladesymbol, und das Fenster bleibt bedienbar. Bei vorgegebenem Fahrgef&#252;hl fahren alle mit Standard.</li>
@@ -9181,6 +9530,11 @@
         <div class="snd-row"><audio controls preload="none" src="audio/kaefer1300_mid.ogg"></audio><div><b>VW K&auml;fer 1300 (1.3 Boxer-4, luftgek&uuml;hlt), Mittelband (2800/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, Geometrie recherchiert statt aus einer Tabelle uebernommen, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/kaefer1300_high.ogg"></audio><div><b>VW K&auml;fer 1300 (1.3 Boxer-4, luftgek&uuml;hlt), oberes Band (4200/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, Geometrie recherchiert statt aus einer Tabelle uebernommen, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/kaefer1300_over.ogg"></audio><div><b>VW K&auml;fer 1300 (1.3 Boxer-4, luftgek&uuml;hlt), Schub (2800/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, Geometrie recherchiert statt aus einer Tabelle uebernommen, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/boxster986_idle.ogg"></audio><div><b>Porsche Boxster 986 (2.5 Boxer-6, Saugmotor), Leerlauf (850/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/boxster986_low.ogg"></audio><div><b>Porsche Boxster 986 (2.5 Boxer-6, Saugmotor), Zwischenband (1844/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/boxster986_mid.ogg"></audio><div><b>Porsche Boxster 986 (2.5 Boxer-6, Saugmotor), Mittelband (4000/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/boxster986_high.ogg"></audio><div><b>Porsche Boxster 986 (2.5 Boxer-6, Saugmotor), oberes Band (6600/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
+        <div class="snd-row"><audio controls preload="none" src="audio/boxster986_over.ogg"></audio><div><b>Porsche Boxster 986 (2.5 Boxer-6, Saugmotor), Schub (4000/min)</b><br><span class="muted" style="font-size:11px">vollst&auml;ndig synthetisiert, nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/sd_v8gt_idle.ogg"></audio><div><b>Speed Dreams: Nissan GT-R GT500 2013 (3,4 l V8, Vorbeifahrt), Leerlauf (1800/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8_formula.wav): Heigh-hoo, Freesound 128611 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/sd_v8gt_low.ogg"></audio><div><b>Speed Dreams: Nissan GT-R GT500 2013 (3,4 l V8, Vorbeifahrt), Zwischenband (3078/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8_formula.wav): Heigh-hoo, Freesound 128611 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
         <div class="snd-row"><audio controls preload="none" src="audio/sd_v8gt_mid.ogg"></audio><div><b>Speed Dreams: Nissan GT-R GT500 2013 (3,4 l V8, Vorbeifahrt), Mittelband (5263/min)</b><br><span class="muted" style="font-size:11px">Aufnahme aus Speed Dreams 2.4 (data/sound/v8_formula.wav): Heigh-hoo, Freesound 128611 (CC0), nicht nach Geh&ouml;r gepr&uuml;ft</span></div></div>
@@ -9462,6 +9816,13 @@
       <button class="subtab-btn" data-subtab="targets">Targets lesen</button>
     </nav>
 
+    <!-- v1.5 (WIP, Plan Paket 1 Punkt 6): Akku-Aufzeichnung fuer eine echte Kennlinie (98n-akku-aufzeichnung.js). -->
+    <div class="card" id="akku-aufz-karte">
+      <h2>Akku-Aufzeichnung <span class="wip-tag">WIP</span></h2>
+      <p class="muted">Jedes verbundene Auto schreibt alle 10 s den Akku-Rohwert (kleinster und größter Wert im Abschnitt) und die Fahrzeit mit. Für eine echte Kennlinie: ein Auto voll laden und fahren, bis es stehen bleibt, dann hier „CSV kopieren“ und schicken. Nach dem Laden beginnt die Aufzeichnung von vorn, die vorige bleibt erhalten.</p>
+      <div id="akku-aufz-liste"></div>
+    </div>
+
     <div class="card">
       <h2>Mustererkennung: Paketvarianten testen</h2>
       <p class="muted">
@@ -9613,7 +9974,18 @@
       <div id="log"></div>
       <div class="row" style="margin-top:8px">
         <button id="btn-clear-log">Log leeren</button>
+        <button id="btn-copy-log">Log kopieren</button>
       </div>
+      <h2 style="margin-top:18px">Warnungen</h2>
+      <p class="muted" style="font-size:11.5px;margin:2px 0 6px">
+        Warnungen und Fehler, die aus dem Roll-Log fallen w&uuml;rden, bleiben hier erhalten.
+      </p>
+      <div id="warn-log"></div>
+      <div class="row" style="margin-top:8px">
+        <button id="btn-clear-warn">Warnungen leeren</button>
+        <button id="btn-copy-warn">Warnungen kopieren</button>
+      </div>
+      <textarea id="kopie-feld" readonly data-i18n-skip style="display:none; width:100%; height:90px; margin-top:8px; background:var(--panel-2); color:var(--ink-2); border:1px solid var(--border); border-radius:4px; padding:8px; font-family:monospace; font-size:12px"></textarea>
     </div>
     </div>
 
@@ -9926,6 +10298,14 @@
            das soll er sehen, bevor er dreimal auf "Auto verbinden" drueckt. Leer und
            unsichtbar, solange alles in Ordnung ist. -->
       <p id="gar-bt-lage" class="gar-warnung" hidden data-i18n-skip></p>
+      <!-- v1.5 (WIP): ein gescheiterter Verbindungsversuch stand nur im Live-Log. Jetzt hier (und im
+           Fahren-Menue), mit dem Verbindungsprotokoll fuer die Zwischenablage. Verschwindet beim
+           naechsten erfolgreichen Verbinden (verbLageZeigen, 90-ghosts.js). -->
+      <div id="gar-verb-lage" class="gar-warnung gar-verb-lage" hidden>
+        <span id="gar-verb-text" data-i18n-skip></span>
+        <button type="button" id="gar-verb-proto">Protokoll kopieren <span class="wip-tag">WIP</span></button>
+        <textarea id="gar-verb-proto-text" readonly hidden rows="6" data-i18n-skip></textarea>
+      </div>
       <div class="row gar-alt-aktionen" style="gap:8px; margin-bottom:14px">
         <button class="primary" id="gar-connect">Auto verbinden</button>
         <button id="gar-disconnect-all">Alle trennen</button>
@@ -9945,6 +10325,34 @@
       <button class="goto-tab" id="gar-to-cockpit" data-tab="race"
               style="margin-bottom:10px">Zum Cockpit &rarr;</button>
       <div id="gar-list"></div>
+      <!-- v1.5 (WIP) ONBOARD-KAMERA (75-onboard.js): die Optionen. Sie stehen in der Garage rechts, wenn
+           links "Onboard-Kamera" offen ist (renderGarage haengt #onboard-optionen dort ein und vorher
+           wieder hierher zurueck). Grundlage: gnen54s Zweig "onboard" (USB-Empfaenger als Webcam);
+           neu die M5Stack Timer Camera als MJPEG-Strom im WLAN. -->
+      <div id="onboard-halter" hidden>
+        <div id="onboard-optionen">
+          <div class="opt-row"><div class="opt-label">Onboard-Kamera <span class="wip-tag">WIP</span>
+              <small>Livebild einer Kamera im Auto. Im Cockpit als eigener Schirm &bdquo;Onboard&ldquo; mit Zeiten oben links und Tempo, Gang und Tank unten in der Mitte, wie beim virtuellen Fahren. Aufnahme mit dem Knopf im Bild oder der W&auml;hltaste (X).</small>
+              <div id="onboard-status" class="muted" style="font-size:12px;margin-top:4px" data-i18n-skip>Aus.</div></div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap">
+              <button type="button" id="onboard-an">Koppeln</button>
+              <button type="button" id="onboard-aus" hidden>Ausschalten</button>
+            </div></div>
+          <div class="opt-row"><div class="opt-label">Quelle<small>USB: ein Empf&auml;nger oder eine Kamera, die sich wie eine Webcam meldet (z.&nbsp;B. FPV-Mikrokamera mit USB-Empf&auml;nger). WLAN: M5Stack Timer Camera oder eine andere ESP32-Kamera mit MJPEG-Strom, Anleitung im Projekt unter tools/onboard.</small></div>
+            <select id="onboard-art" data-preset-skip><option value="usb">USB-Kamera</option><option value="m5">M5Stack Timer Camera (WLAN)</option></select></div>
+          <div class="opt-row" id="onboard-zeile-usb"><div class="opt-label">Kamera<small>Die Namen stehen hier, sobald die Kamera einmal erlaubt wurde.</small></div>
+            <select id="onboard-quelle" data-preset-skip><option value="">Standard</option></select></div>
+          <div class="opt-row" id="onboard-zeile-m5" hidden><div class="opt-label">Adresse der Kamera<small>Die IP-Adresse aus dem Router oder dem seriellen Monitor, z.&nbsp;B. 192.168.1.50. Ohne Pfad wird /stream angeh&auml;ngt. Die Webseite &uuml;ber https darf kein http-Bild laden: in der Android-App und &uuml;ber &bdquo;Start OmegaSim.bat&ldquo; geht es.</small>
+              <div id="onboard-m5-hinweis" class="gar-warnung" hidden data-i18n-skip></div></div>
+            <input type="text" id="onboard-m5-adresse" inputmode="url" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" data-preset-skip style="max-width:14em"></div>
+          <div class="opt-row"><div class="opt-label">Bild um 180&deg; drehen<small>Wenn die Kamera kopf&uuml;ber im Auto sitzt.</small></div>
+            <label class="tgl"><input type="checkbox" id="onboard-drehen" data-preset-skip><span></span></label></div>
+          <div class="opt-row"><div class="opt-label">Beim Start Onboard-Bild zeigen<small>Mit dem Countdown schaltet das Cockpit auf den Schirm &bdquo;Onboard&ldquo;.</small></div>
+            <label class="tgl"><input type="checkbox" id="onboard-beim-start" checked data-preset-skip><span></span></label></div>
+          <div class="opt-row"><div class="opt-label">Rennen automatisch aufnehmen<small>Vom Countdown bis kurz nach dem Ziel, mit Zeiten, km/h und Ampel im Bild. Ein abgebrochener Start wird nicht gespeichert.</small></div>
+            <label class="tgl"><input type="checkbox" id="onboard-auto-rec" data-preset-skip><span></span></label></div>
+        </div>
+      </div>
       <!-- Abstimmung direkt hier waehlbar, sobald ein Auto gesteuert wird. Dieselbe
            Funktion wie in den Optionen, deshalb ziehen die Regler dort automatisch nach. -->
       <div id="gar-preset" style="display:none; margin-top:14px; padding-top:12px;
@@ -10514,6 +10922,11 @@
           zus&auml;tzlicher Wechsel mitten im Schauer w&uuml;rde die Phasen durcheinander
           bringen.</small></div>
         <label class="tgl"><input type="checkbox" id="race-wx-change"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Wetter-Startwert <span class="wip-tag">WIP</span>
+          <small>Ein Wort oder eine Zahl macht den Wetterplan wiederholbar: dieselbe Strecke und derselbe
+          Startwert geben jedes Mal dieselben Wechsel zur selben Zeit. Leer l&auml;sst das Wetter wie bisher
+          zuf&auml;llig.</small></div>
+        <input type="text" id="race-wx-seed" maxlength="20" autocomplete="off" spellcheck="false" style="width:9em" data-preset-skip></div>
       <div class="opt-row"><div class="opt-label">Pflichtboxenstopps</div>
         <select id="race-pit-required">
           <option value="0" selected>keine</option>
@@ -10903,6 +11316,7 @@
           <option value="retro">Oldschool, 1980er</option>
           <option value="modern">Modern, 2000er (hell)</option>
           <option value="klassiker">Klassiker: Walnuss und Chrom</option>
+          <option value="mokamit">Mokamit: Digital Dash (WIP)</option>
         </select></div>
       <div class="opt-row"><div class="opt-label">Regenradar<small>Das Regenradar im Cockpit. Aus: die Kachel
           bleibt leer und das Radar wird gar nicht gezeichnet &ndash; das spart Rechenzeit auf schwachen Handys.</small></div>
@@ -10943,15 +11357,16 @@
         <select id="phys-mode">
           <option value="physik">Physik</option>
           <option value="pacejka" selected>Pacejka (experimentell)</option>
-          <option value="gran">Gran Hybrismo (WIP)</option>
-          <option value="acc">Assetto Carrera (WIP)</option>
+          <option value="librecorsa">LibreCorsa (WIP)</option>
+          <option value="gran" hidden>Gran Hybrismo (entfernt)</option>
+          <option value="acc" hidden>Assetto Carrera (entfernt)</option>
           <option value="aus">RC (experimentell)</option>
         </select></div>
       <!-- BESTELLT: "Eventuell sage ich spaeter, dass das Uebersteuern abgeschaltet werden
            soll" - deshalb von Anfang an ein eigener Schalter. -->
-      <div class="opt-row"><div class="opt-label">&Uuml;bersteuern (Pacejka)
+      <div class="opt-row"><div class="opt-label">&Uuml;bersteuern (Pacejka, LibreCorsa)
           <span class="wip-tag">experimentell</span>
-          <small>Nur im Modus Pacejka. An: unter Vollgas in der Kurve und beim Anbremsen
+          <small>Im Modus Pacejka und LibreCorsa. An: unter Vollgas in der Kurve und beim Anbremsen
           kommt das Heck, das Auto lenkt von selbst weiter ein und verliert Vortrieb, bis du
           gegenlenkst oder vom Pedal gehst (h&ouml;chstens 2 s). Aus (Vorgabe): das Auto lenkt nie
           von selbst weiter, nur das Schieben &uuml;ber die Vorderr&auml;der bleibt.</small></div>
@@ -11819,6 +12234,7 @@
           <optgroup label="Alltagsklassiker vor 1970 (WIP)">
           <option value="fordtudor37">Ford Tudor Slantback 1937: Flathead-V8, 3,6 l</option>
           <option value="kaefer1300">VW K&auml;fer 1300: Boxer-4, luftgek&uuml;hlt</option>
+          <option value="boxster986">Porsche Boxster 986: 2,5 l Boxer-6 (WIP)</option>
           </optgroup>
           <!-- v1.0.13 BESTELLT: Klaenge aus Speed Dreams. Echte Aufnahmen (CC0), anders als alle
                Gruppen darueber - deshalb eine eigene Gruppe. tools/sd_engines.py, audio/CREDITS.md. -->
@@ -12086,7 +12502,7 @@
           <small>Ein leichtes Brummen, solange die Reifen quietschen, mit der Lautst&auml;rke des Quietschens:
           du bist an der Haftgrenze, aber noch nicht dar&uuml;ber. Kommt vor dem Untersteuern und dem
           &Uuml;bersteuern &ndash; die Warnung davor.</small></div>
-        <label class="tgl"><input type="checkbox" id="vib-quietschen" checked><span></span></label></div>
+        <label class="tgl"><input type="checkbox" id="vib-quietschen"><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Randsteine (Virtuell fahren) <span class="wip-tag">WIP</span>
           <small>Ein kurzes R&auml;tteln und Brummen, wenn das Auto mit dem Rand &uuml;ber den
           erhabenen Stein f&auml;hrt &ndash; das Rattern der Curbs-Schwelle. Nur im virtuellen
@@ -12113,10 +12529,24 @@
           ist &ndash; einmal eine Taste dr&uuml;cken.</small></div>
         <span class="muted" id="vib-trigger-lage" data-i18n-skip
               style="font-size:11px; text-align:right; max-width:34ch"></span></div>
-      <div class="opt-row"><div class="opt-label">DualSense: Trigger bei ABS <span class="wip-tag">WIP</span>
-          <small>Regelt das ABS, vibriert der linke Trigger eines DualSense &ndash; wenn die Bremse auf dem linken Trigger liegt und &bdquo;ABS&ldquo; oben an ist. Die adaptiven Trigger erreicht nur WebHID: Chrome oder Edge am Rechner, per USB oder Bluetooth, nach einmaligem Verbinden &uuml;ber diesen Knopf. In der Android-App geht das nicht.</small></div>
+      <div class="opt-row"><div class="opt-label">DualSense: Trigger wie bei LibreCorsa <span class="wip-tag">WIP</span>
+          <small>Der linke Trigger ist die Bremse: ein Widerstand, der nach unten fester wird; regelt das ABS, vibriert er, blockiert ein Rad, vibriert er langsamer. Der rechte ist das Gas: leichter Widerstand, drehen die Hinterr&auml;der durch oder regelt die Traktionskontrolle, vibriert er. Nahe der Haftgrenze summen beide leicht. Gilt, wenn Bremse und Gas auf den Triggern liegen und &bdquo;Trigger-Vibration&ldquo; an ist. Die adaptiven Trigger erreicht nur WebHID: Chrome oder Edge am Rechner, einmal &bdquo;Verbinden&ldquo;.</small></div>
         <button type="button" id="ds-verbinden">Verbinden</button>
         <span class="muted" id="ds-lage" data-i18n-skip style="font-size:11px; text-align:right; max-width:34ch"></span></div>
+      <!-- v1.5 (WIP, Plan Paket 6): DualSense-Trigger ueber das USB-Kabel in der Android-App (OmegaDsUsbPlugin.java).
+           Stufe 1 ist nur ein Pruefknopf; sichtbar nur in der App (80b-dualsense.js, dsUsbZeile). -->
+      <div class="opt-row" id="ds-usb-zeile" hidden><div class="opt-label">DualSense &uuml;ber USB-Kabel (Android-App) <span class="wip-tag">WIP</span>
+          <small>Probe, ob die App die adaptiven Trigger &uuml;ber das USB-Kabel erreicht: 3 s fester Widerstand auf beiden Triggern, dann 2 s Vibration, dann aus. Danach gibt die App den Controller wieder frei. Bitte melden: Haben die Trigger reagiert, und gehen die Tasten danach noch? Das Protokoll steht im Live-Log. Braucht die neue APK.</small></div>
+        <button type="button" id="ds-usb-test">Trigger testen</button>
+        <span class="muted" id="ds-usb-lage" data-i18n-skip style="font-size:11px; text-align:right; max-width:34ch"></span></div>
+      <!-- v1.5 (WIP, Paket 6 Stufe 2): Trigger-Effekte beim Fahren ueber das Kabel (nur in der App sichtbar). -->
+      <div class="opt-row" id="ds-usb-dauer-zeile" hidden><div class="opt-label">Trigger beim Fahren über USB <span class="wip-tag">WIP</span>
+          <small>Die Trigger-Effekte (Widerstand, ABS, Schlupf) beim echten und virtuellen Fahren über das USB-Kabel. Android gibt die Trigger nur frei, wenn der Controller zusätzlich per Bluetooth verbunden ist: zuerst Bluetooth, dann das Kabel. Hängt er nur am Kabel, würden die Tasten ausfallen; dann bleibt es aus und die App sagt es.</small></div>
+        <label class="tgl"><input type="checkbox" id="ds-usb-an" checked data-preset-skip><span></span></label></div>
+      <!-- v1.5: das Protokoll der Probe zum Kopieren (wie das Verbindungsprotokoll der Garage). -->
+      <div class="opt-row opt-breit" id="ds-usb-proto-zeile" hidden>
+        <textarea id="ds-usb-proto" readonly rows="6" data-i18n-skip style="width:100%; font:11px/1.3 monospace"></textarea>
+        <button type="button" id="ds-usb-proto-kopieren">Protokoll kopieren</button></div>
     </div>
     <div class="card subpage" id="sub-opt-ansagen">
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
@@ -13638,7 +14068,7 @@
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M4 6h3l7 12h3M4 18h3l7-12h3"/><path d="M17 4l3 2-3 2M17 16l3 2-3 2"/></svg>
             <span class="tp-cap">Zufall</span></button>
-          <button class="tp-btn tp-schalter" id="track-opt-toggle" title="Editor-Optionen: L&auml;nge, Linkslastig, Br&uuml;cken, Spiegeln" aria-label="Editor-Optionen" aria-pressed="false">
+          <button class="tp-btn tp-schalter" id="track-opt-toggle" title="Editor-Optionen: L&auml;nge, Linkslastig, Br&uuml;cken, Boxengassen, Spiegeln" aria-label="Editor-Optionen" aria-pressed="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/>
               <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
@@ -13683,10 +14113,16 @@
                 <button type="button" class="num-plus" aria-label="Mehr Br&uuml;cken">+</button>
               </span>
             </span>
-            <label>Boxengasse erzwingen
-              <input type="checkbox" id="track-opt-box">
+            <!-- v1.5 BESTELLT: "Pitstop anzahl als option im editor hinzufuegen (standard: so viele wie in meine teile
+                 angegeben)". Statt "Boxengasse erzwingen" eine Anzahl wie bei den Bruecken. -->
+            <span class="tp-opt-gruppe" id="track-opt-boxen-gruppe">Boxengassen
+              <span class="num-steuer">
+                <button type="button" class="num-minus" aria-label="Weniger Boxengassen">&#8722;</button>
+                <input type="number" id="track-opt-boxen" min="0" max="0" step="1" value="0" inputmode="numeric" aria-label="Anzahl Boxengassen">
+                <button type="button" class="num-plus" aria-label="Mehr Boxengassen">+</button>
+              </span>
               <small class="tp-opt-hinweis" id="track-opt-box-hinweis" hidden>Erst unter Meine Teile eine Boxengasse eintragen</small>
-            </label>
+            </span>
             <button class="tp-opt-knopf" id="track-spiegel" title="Strecke spiegeln: Kurven links/rechts tauschen und die Schleife r&uuml;ckw&auml;rts fahren">Strecke spiegeln</button>
           </div>
         </div>

@@ -1,153 +1,207 @@
 __NOTOC__
+<languages/>
 <div style="border:1px solid #a2a9b1; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:14px 18px; margin-bottom:14px;">
-<div style="font-size:150%; font-weight:bold; margin-bottom:4px;">Willkommen bei {{SITENAME}}</div>
-Dieses Wiki sammelt Wissen und Hilfe rund um '''[[OmegaSim]]''', eine freie App, mit der man '''[[Carrera HYBRID]]'''-Autos per Bluetooth steuert: mit eigenem [[Fahrverhalten|Fahrgefühl]], [[Rennarten|Rennen]], [[NPC-Fahrverhalten|NPC-Gegnern]], [[Safety Car und Reinigungswagen|Safety Car]], [[Boxenstopp|Boxenstopps]] und [[Mehrspieler|Mehrspieler]]. Derzeit gibt es hier '''{{NUMBEROFARTICLES}}''' Artikel.
+<div style="font-size:150%; font-weight:bold; margin-bottom:4px;"><translate><!--T:1--> Willkommen bei {{SITENAME}}</translate></div>
+<translate>
+<!--T:2-->
+Dieses Wiki sammelt Wissen und Hilfe rund um '''[[Spezial:MyLanguage/OmegaSim|OmegaSim]]''', eine freie App, mit der man '''[[Spezial:MyLanguage/Carrera HYBRID|Carrera HYBRID]]'''-Autos per Bluetooth steuert: mit eigenem [[Spezial:MyLanguage/Fahrverhalten|Fahrgefühl]], [[Spezial:MyLanguage/Rennarten|Rennen]], [[Spezial:MyLanguage/NPC-Fahrverhalten|NPC-Gegnern]], [[Spezial:MyLanguage/Safety Car und Reinigungswagen|Safety Car]], [[Spezial:MyLanguage/Boxenstopp|Boxenstopps]] und [[Spezial:MyLanguage/Mehrspieler|Mehrspieler]]. Derzeit gibt es hier '''{{NUMBEROFARTICLES}}''' Artikel.
+</translate>
 
 <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;">
-<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''▶ [https://luuke42.github.io/omegasim/ Jetzt im Browser spielen]'''<br /><small>Chrome oder Edge mit Web Bluetooth, am PC oder Android-Handy</small></div>
-<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''⬇ [https://github.com/Luuke42/omegasim/releases Android-App (APK)]'''<br /><small>nötig für WLAN-Mehrspieler und den schnellsten Funkweg</small></div>
-<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''⌨ [https://github.com/Luuke42/omegasim Quellcode auf GitHub (Luuke42/omegasim)]'''<br /><small>MIT-Lizenz, Fehler melden über „Issues“</small></div>
+<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''▶ [https://luuke42.github.io/omegasim/ <translate><!--T:3--> Jetzt im Browser spielen</translate>]'''<br /><small><translate><!--T:4--> Chrome oder Edge mit Web Bluetooth, am PC oder Android-Handy</translate></small></div>
+<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''⬇ [https://github.com/Luuke42/omegasim/releases <translate><!--T:5--> Android-App (APK)</translate>]'''<br /><small><translate><!--T:6--> nötig für WLAN-Mehrspieler und den schnellsten Funkweg</translate></small></div>
+<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''⌨ [https://github.com/Luuke42/omegasim <translate><!--T:7--> Quellcode auf GitHub (Luuke42/omegasim)</translate>]'''<br /><small><translate><!--T:8--> AGPL-3.0-or-later, Fehler melden über „Issues“</translate></small></div>
 </div>
 </div>
 
 <div style="display:flex; flex-wrap:wrap; gap:14px;">
 <div style="flex:1 1 320px; min-width:0;">
-== Erste Schritte ==
-# [[OmegaSim]] im Browser öffnen oder die Android-App installieren.
+<translate>
+== Erste Schritte == <!--T:9-->
+
+<!--T:10-->
+# [[Spezial:MyLanguage/OmegaSim|OmegaSim]] im Browser öffnen oder die Android-App installieren.
 # Auto einschalten und in der '''Garage''' mit '''+ Auto verbinden''' koppeln.
 # Unter '''Optionen → Fahrgefühl''' eine Voreinstellung wählen, für den Anfang '''Arcade'''.
-# Im '''Cockpit''' losfahren oder unter '''Rennen''' eine [[Rennarten|Rennart]] starten.
-# Hängt das Auto: [[Keine Reaktion des Fahrzeugs]].
+# Im '''Cockpit''' losfahren oder unter '''Rennen''' eine [[Spezial:MyLanguage/Rennarten|Rennart]] starten.
+# Hängt das Auto: [[Spezial:MyLanguage/Keine Reaktion des Fahrzeugs|Keine Reaktion des Fahrzeugs]].
+</translate>
 
-[[Datei:OmegaSim-Garage.png|mini|ohne|360px|Die Garage, hier werden Autos verbunden.]]
+[[Datei:OmegaSim-Garage.png|mini|ohne|360px|<translate><!--T:11--> Die Garage, hier werden Autos verbunden.</translate>]]
 
-== Hardware ==
-* [[Carrera HYBRID]] – das Auto: Aufbau, Sensor, Akku, Bluetooth
-* [[Strecke]] – Bahnteile, Ausdruck-Strecke und Streckenscan
+<translate>
+== Hardware == <!--T:12-->
 
-== Software ==
-* [[Firmware]] – was über die Software im Auto bekannt ist
-* [[Original-App]] – die Hersteller-App und was OmegaSim anders macht
-* [[OmegaSim]] – Überblick über die App
-* [[OmegaBle]] – das Bluetooth-Plugin der Android-App
+<!--T:13-->
+* [[Spezial:MyLanguage/Carrera HYBRID|Carrera HYBRID]] – das Auto: Aufbau, Sensor, Akku, Bluetooth
+* [[Spezial:MyLanguage/Strecke|Strecke]] – Bahnteile, Ausdruck-Strecke und Streckenscan
+* [[Spezial:MyLanguage/CAD und 3D-Druck|CAD und 3D-Druck]] – Karosserien konstruieren, Netze reparieren und drucken
+
+== Software == <!--T:14-->
+
+<!--T:15-->
+* [[Spezial:MyLanguage/Firmware|Firmware]] – was über die Software im Auto bekannt ist
+* [[Spezial:MyLanguage/Original-App|Original-App]] – die Hersteller-App und was OmegaSim anders macht
+* [[Spezial:MyLanguage/OmegaSim|OmegaSim]] – Überblick über die App
+* [[Spezial:MyLanguage/OmegaBle|OmegaBle]] – das Bluetooth-Plugin der Android-App
+</translate>
 </div>
 <div style="flex:1 1 320px; min-width:0;">
-== OmegaSim im Detail ==
+<translate>
+== OmegaSim im Detail == <!--T:16-->
+</translate>
 {| class="wikitable" style="width:100%;"
 |-
-! Fahren
-| [[Fahrverhalten]] · [[Verschleiß]] · [[Virtuelles Fahren]]
+! <translate><!--T:17--> Fahren</translate>
+| <translate><!--T:18--> [[Spezial:MyLanguage/Fahrverhalten|Fahrverhalten]] · [[Spezial:MyLanguage/Verschleiß|Verschleiß]] · [[Spezial:MyLanguage/Virtuelles Fahren|Virtuelles Fahren]]</translate>
 |-
-! Rennen
-| [[Rennarten]] · [[Boxenstopp]] · [[Challenges]]
+! <translate><!--T:19--> Rennen</translate>
+| <translate><!--T:20--> [[Spezial:MyLanguage/Rennarten|Rennarten]] · [[Spezial:MyLanguage/Boxenstopp|Boxenstopp]] · [[Spezial:MyLanguage/Challenges|Challenges]]</translate>
 |-
-! Gegner
-| [[NPC-Fahrverhalten]] · [[Safety Car und Reinigungswagen]]
+! <translate><!--T:21--> Gegner</translate>
+| <translate><!--T:22--> [[Spezial:MyLanguage/NPC-Fahrverhalten|NPC-Fahrverhalten]] · [[Spezial:MyLanguage/Safety Car und Reinigungswagen|Safety Car und Reinigungswagen]]</translate>
 |-
-! Strecke
-| [[Strecken- und Raum-Editor]]
+! <translate><!--T:23--> Strecke</translate>
+| <translate><!--T:24--> [[Spezial:MyLanguage/Strecken- und Raum-Editor|Strecken- und Raum-Editor]]</translate>
 |-
-! Zusammen
-| [[Mehrspieler]] (WLAN und mehrere Spieler an einem Gerät)
+! <translate><!--T:25--> Zusammen</translate>
+| <translate><!--T:26--> [[Spezial:MyLanguage/Mehrspieler|Mehrspieler]] (WLAN und mehrere Spieler an einem Gerät)</translate>
 |-
-! Grundlagen
-| [[Hexadezimalsystem]] · [[Bluetooth Low Energy]] · [[Aufbau von OmegaSim]] · [[Vibe-Coding]] · [[Glossar]]
+! <translate><!--T:27--> Grundlagen</translate>
+| <translate><!--T:28--> [[Spezial:MyLanguage/Hexadezimalsystem|Hexadezimalsystem]] · [[Spezial:MyLanguage/Bluetooth Low Energy|Bluetooth Low Energy]] · [[Spezial:MyLanguage/Aufbau von OmegaSim|Aufbau von OmegaSim]] · [[Spezial:MyLanguage/Vibe-Coding|Vibe-Coding]] · [[Spezial:MyLanguage/Glossar|Glossar]]</translate>
 |}
 
-== Rund um OmegaSim ==
-* [[Wunschliste]] – gewünschte Funktionen und alles, was noch in Arbeit ist
-* [[Andere Apps und Initiativen]] – Original-App, Community-Apps, Zubehör
+<translate>
+== Rund um OmegaSim == <!--T:29-->
 
-== Zubehör ==
-* [[CH ControlBox]] – RC-Funke als Bluetooth-Gamepad für OmegaSim
-* [[Startampel]] – echte Startampel am Tisch (Raspberry Pi / Pico)
+<!--T:30-->
+* [[Spezial:MyLanguage/Wunschliste|Wunschliste]] – gewünschte Funktionen und alles, was noch in Arbeit ist
+* [[Spezial:MyLanguage/Andere Apps und Initiativen|Andere Apps und Initiativen]] – Original-App, Community-Apps, Zubehör
 
-== Fehlerbehebung ==
-* [[Fehlerbilder und Abhilfe]] – hohe Latenz, springende Autos, Android-Einstellungen, kompatible Browser
-* [[Keine Reaktion des Fahrzeugs]] – Auto steht mit Licht und eingeschlagenen Rädern und lässt sich nicht koppeln
+== Zubehör == <!--T:31-->
 
-== Mitmachen ==
-* [[Mitmachen]] – Artikel schreiben und verbessern, mit und ohne KI
-* [[Anleitung für KIs]] – Arbeitsweise für KI-Assistenten, die am Wiki oder an OmegaSim arbeiten
+<!--T:32-->
+* [[Spezial:MyLanguage/CH ControlBox|CH ControlBox]] – RC-Funke als Bluetooth-Gamepad für OmegaSim
+* [[Spezial:MyLanguage/Startampel|Startampel]] – echte Startampel am Tisch (Raspberry Pi / Pico)
+* [[Spezial:MyLanguage/Onboard-Kamera und Karosserien|Onboard-Kamera und Karosserien]] – Livebild aus dem Auto und Karosserien mit eingebauter Kamera (in Arbeit)
+
+== Fehlerbehebung == <!--T:33-->
+
+<!--T:34-->
+* [[Spezial:MyLanguage/Fehlerbilder und Abhilfe|Fehlerbilder und Abhilfe]] – hohe Latenz, springende Autos, Android-Einstellungen, kompatible Browser
+* [[Spezial:MyLanguage/Keine Reaktion des Fahrzeugs|Keine Reaktion des Fahrzeugs]] – Auto steht mit Licht und eingeschlagenen Rädern und lässt sich nicht koppeln
+
+== Mitmachen == <!--T:35-->
+
+<!--T:36-->
+* [[Spezial:MyLanguage/Mitmachen|Mitmachen]] – Artikel schreiben und verbessern, mit und ohne KI
+* [[Spezial:MyLanguage/Anleitung für KIs|Anleitung für KIs]] – Arbeitsweise für KI-Assistenten, die am Wiki oder an OmegaSim arbeiten
 * [[Spezial:Alle Seiten|Alle Seiten]] · [[Spezial:Kategorien|Kategorien]] · [[Spezial:Gewünschte Seiten|Gewünschte Seiten]]
+</translate>
 </div>
 </div>
 
-== Zuletzt bearbeitet ==
-<templatestyles src="Hauptseite/styles.css" />
+<translate>
+== Zuletzt bearbeitet == <!--T:37-->
+
+<!--T:38-->
 Ganz oben steht die zuletzt bearbeitete Seite.
+</translate>
+<templatestyles src="Hauptseite/styles.css" />
 <div class="hauptseite-rc">
 {{Special:RecentChanges|namespace=0|limit=5|days=90|hidebots=1|enhanced=0}}
 </div>
-<small>Alle Änderungen: [[Spezial:Letzte Änderungen|Letzte Änderungen]] · Neue Artikel: [[Spezial:Neue Seiten|Neue Seiten]]</small>
+<small><translate><!--T:39--> Alle Änderungen: [[Spezial:Letzte Änderungen|Letzte Änderungen]] · Neue Artikel: [[Spezial:Neue Seiten|Neue Seiten]]</translate></small>
 
-== Seitenübersicht ==
+<translate>
+== Seitenübersicht == <!--T:40-->
+
+<!--T:41-->
 Alle Seiten des Wikis mit Bereich, Inhalt, letzter Änderung, letztem Bearbeiter und Größe in Byte. Die drei letzten Spalten liest das Wiki bei jedem Aufruf selbst aus.
+</translate>
 
 {| class="wikitable sortable" style="width:100%;"
-! Bereich !! Seite !! Inhalt !! Zuletzt geändert !! von !! Byte
+! <translate><!--T:42--> Bereich</translate> !! <translate><!--T:43--> Seite</translate> !! <translate><!--T:44--> Inhalt</translate> !! <translate><!--T:45--> Zuletzt geändert</translate> !! <translate><!--T:46--> von</translate> !! Byte
 |-
-| Grundlagen || [[Hexadezimalsystem]] || Zahlensysteme, Bits und Bytes, Hex-Codes in OmegaSim || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Hexadezimalsystem}}}} || {{REVISIONUSER:Hexadezimalsystem}} || {{formatnum:{{PAGESIZE:Hexadezimalsystem}}}}
+| <translate><!--T:47--> Grundlagen</translate> || <translate><!--T:48--> [[Spezial:MyLanguage/Hexadezimalsystem|Hexadezimalsystem]]</translate> || <translate><!--T:49--> Zahlensysteme, Bits und Bytes, Hex-Codes in OmegaSim</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Hexadezimalsystem}}}} || {{REVISIONUSER:Hexadezimalsystem}} || {{formatnum:{{PAGESIZE:Hexadezimalsystem}}}}
 |-
-| Grundlagen || [[Bluetooth Low Energy]] || Funk, GATT, Charakteristiken, Latenz – wie die Übertragung funktioniert || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Bluetooth Low Energy}}}} || {{REVISIONUSER:Bluetooth Low Energy}} || {{formatnum:{{PAGESIZE:Bluetooth Low Energy}}}}
+| <translate><!--T:50--> Grundlagen</translate> || <translate><!--T:51--> [[Spezial:MyLanguage/Bluetooth Low Energy|Bluetooth Low Energy]]</translate> || <translate><!--T:52--> Funk, GATT, Charakteristiken, Latenz – wie die Übertragung funktioniert</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Bluetooth Low Energy}}}} || {{REVISIONUSER:Bluetooth Low Energy}} || {{formatnum:{{PAGESIZE:Bluetooth Low Energy}}}}
 |-
-| Grundlagen || [[Aufbau von OmegaSim]] || Programmiersprachen, Architektur, Build, Updates || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Aufbau von OmegaSim}}}} || {{REVISIONUSER:Aufbau von OmegaSim}} || {{formatnum:{{PAGESIZE:Aufbau von OmegaSim}}}}
+| <translate><!--T:53--> Grundlagen</translate> || <translate><!--T:54--> [[Spezial:MyLanguage/Aufbau von OmegaSim|Aufbau von OmegaSim]]</translate> || <translate><!--T:55--> Programmiersprachen, Architektur, Build, Updates</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Aufbau von OmegaSim}}}} || {{REVISIONUSER:Aufbau von OmegaSim}} || {{formatnum:{{PAGESIZE:Aufbau von OmegaSim}}}}
 |-
-| Grundlagen || [[Vibe-Coding]] || Programmieren durch Beschreiben – wie OmegaSim entsteht || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Vibe-Coding}}}} || {{REVISIONUSER:Vibe-Coding}} || {{formatnum:{{PAGESIZE:Vibe-Coding}}}}
+| <translate><!--T:56--> Grundlagen</translate> || <translate><!--T:57--> [[Spezial:MyLanguage/Vibe-Coding|Vibe-Coding]]</translate> || <translate><!--T:58--> Programmieren durch Beschreiben – wie OmegaSim entsteht</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Vibe-Coding}}}} || {{REVISIONUSER:Vibe-Coding}} || {{formatnum:{{PAGESIZE:Vibe-Coding}}}}
 |-
-| Grundlagen || [[Glossar]] || Alle Fachbegriffe von A bis Z || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Glossar}}}} || {{REVISIONUSER:Glossar}} || {{formatnum:{{PAGESIZE:Glossar}}}}
+| <translate><!--T:59--> Grundlagen</translate> || <translate><!--T:60--> [[Spezial:MyLanguage/Glossar|Glossar]]</translate> || <translate><!--T:61--> Alle Fachbegriffe von A bis Z</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Glossar}}}} || {{REVISIONUSER:Glossar}} || {{formatnum:{{PAGESIZE:Glossar}}}}
 |-
-| Hardware || [[Carrera HYBRID]] || Das Auto: Aufbau, Sensor, Akku, Protokoll || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Carrera HYBRID}}}} || {{REVISIONUSER:Carrera HYBRID}} || {{formatnum:{{PAGESIZE:Carrera HYBRID}}}}
+| <translate><!--T:62--> Hardware</translate> || <translate><!--T:63--> [[Spezial:MyLanguage/Carrera HYBRID|Carrera HYBRID]]</translate> || <translate><!--T:64--> Das Auto: Aufbau, Sensor, Akku, Protokoll</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Carrera HYBRID}}}} || {{REVISIONUSER:Carrera HYBRID}} || {{formatnum:{{PAGESIZE:Carrera HYBRID}}}}
 |-
-| Hardware || [[Strecke]] || Alle Streckenteile mit Bild und Code, Bahn- und Ausdruck-Modus, Streckenscan || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Strecke}}}} || {{REVISIONUSER:Strecke}} || {{formatnum:{{PAGESIZE:Strecke}}}}
+| <translate><!--T:65--> Hardware</translate> || <translate><!--T:66--> [[Spezial:MyLanguage/Strecke|Strecke]]</translate> || <translate><!--T:67--> Alle Streckenteile mit Bild und Code, Bahn- und Ausdruck-Modus, Streckenscan</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Strecke}}}} || {{REVISIONUSER:Strecke}} || {{formatnum:{{PAGESIZE:Strecke}}}}
 |-
-| Software || [[Firmware]] || Die Software im Auto: was bekannt ist und was nicht || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Firmware}}}} || {{REVISIONUSER:Firmware}} || {{formatnum:{{PAGESIZE:Firmware}}}}
+| <translate><!--T:68--> Software</translate> || <translate><!--T:69--> [[Spezial:MyLanguage/Firmware|Firmware]]</translate> || <translate><!--T:70--> Die Software im Auto: was bekannt ist und was nicht</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Firmware}}}} || {{REVISIONUSER:Firmware}} || {{formatnum:{{PAGESIZE:Firmware}}}}
 |-
-| Software || [[Original-App]] || Die Hersteller-App und der Unterschied zu OmegaSim || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Original-App}}}} || {{REVISIONUSER:Original-App}} || {{formatnum:{{PAGESIZE:Original-App}}}}
+| <translate><!--T:71--> Software</translate> || <translate><!--T:72--> [[Spezial:MyLanguage/Original-App|Original-App]]</translate> || <translate><!--T:73--> Die Hersteller-App und der Unterschied zu OmegaSim</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Original-App}}}} || {{REVISIONUSER:Original-App}} || {{formatnum:{{PAGESIZE:Original-App}}}}
 |-
-| Software || [[OmegaSim]] || Überblick über die App || {{#time:d.m.Y|{{REVISIONTIMESTAMP:OmegaSim}}}} || {{REVISIONUSER:OmegaSim}} || {{formatnum:{{PAGESIZE:OmegaSim}}}}
+| <translate><!--T:74--> Software</translate> || <translate><!--T:75--> [[Spezial:MyLanguage/OmegaSim|OmegaSim]]</translate> || <translate><!--T:76--> Überblick über die App</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:OmegaSim}}}} || {{REVISIONUSER:OmegaSim}} || {{formatnum:{{PAGESIZE:OmegaSim}}}}
 |-
-| Software || [[OmegaBle]] || Das native Bluetooth-Plugin der Android-App || {{#time:d.m.Y|{{REVISIONTIMESTAMP:OmegaBle}}}} || {{REVISIONUSER:OmegaBle}} || {{formatnum:{{PAGESIZE:OmegaBle}}}}
+| <translate><!--T:77--> Software</translate> || <translate><!--T:78--> [[Spezial:MyLanguage/OmegaBle|OmegaBle]]</translate> || <translate><!--T:79--> Das native Bluetooth-Plugin der Android-App</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:OmegaBle}}}} || {{REVISIONUSER:OmegaBle}} || {{formatnum:{{PAGESIZE:OmegaBle}}}}
 |-
-| Fahren || [[Fahrverhalten]] || Physikmodell, Pacejka, Fahrgefühle, Getriebe || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Fahrverhalten}}}} || {{REVISIONUSER:Fahrverhalten}} || {{formatnum:{{PAGESIZE:Fahrverhalten}}}}
+| <translate><!--T:80--> Fahren</translate> || <translate><!--T:81--> [[Spezial:MyLanguage/Fahrverhalten|Fahrverhalten]]</translate> || <translate><!--T:82--> Physikmodell, Pacejka, Fahrgefühle, Getriebe</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Fahrverhalten}}}} || {{REVISIONUSER:Fahrverhalten}} || {{formatnum:{{PAGESIZE:Fahrverhalten}}}}
 |-
-| Fahren || [[Verschleiß]] || Reifen, Tank, Schaden, Wetter || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Verschleiß}}}} || {{REVISIONUSER:Verschleiß}} || {{formatnum:{{PAGESIZE:Verschleiß}}}}
+| <translate><!--T:83--> Fahren</translate> || <translate><!--T:84--> [[Spezial:MyLanguage/Verschleiß|Verschleiß]]</translate> || <translate><!--T:85--> Reifen, Tank, Schaden, Wetter</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Verschleiß}}}} || {{REVISIONUSER:Verschleiß}} || {{formatnum:{{PAGESIZE:Verschleiß}}}}
 |-
-| Fahren || [[Virtuelles Fahren]] || Fahren ohne echtes Auto || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Virtuelles Fahren}}}} || {{REVISIONUSER:Virtuelles Fahren}} || {{formatnum:{{PAGESIZE:Virtuelles Fahren}}}}
+| <translate><!--T:86--> Fahren</translate> || <translate><!--T:87--> [[Spezial:MyLanguage/Virtuelles Fahren|Virtuelles Fahren]]</translate> || <translate><!--T:88--> Fahren ohne echtes Auto</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Virtuelles Fahren}}}} || {{REVISIONUSER:Virtuelles Fahren}} || {{formatnum:{{PAGESIZE:Virtuelles Fahren}}}}
 |-
-| Rennen || [[Rennarten]] || Alle Renntypen, Start, Aufstellung, Meisterschaft || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Rennarten}}}} || {{REVISIONUSER:Rennarten}} || {{formatnum:{{PAGESIZE:Rennarten}}}}
+| <translate><!--T:89--> Rennen</translate> || <translate><!--T:90--> [[Spezial:MyLanguage/Rennarten|Rennarten]]</translate> || <translate><!--T:91--> Alle Renntypen, Start, Aufstellung, Meisterschaft</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Rennarten}}}} || {{REVISIONUSER:Rennarten}} || {{formatnum:{{PAGESIZE:Rennarten}}}}
 |-
-| Rennen || [[Boxenstopp]] || Ablauf, Minigame, NPC-Boxenstopp || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Boxenstopp}}}} || {{REVISIONUSER:Boxenstopp}} || {{formatnum:{{PAGESIZE:Boxenstopp}}}}
+| <translate><!--T:92--> Rennen</translate> || <translate><!--T:93--> [[Spezial:MyLanguage/Boxenstopp|Boxenstopp]]</translate> || <translate><!--T:94--> Ablauf, Minigame, NPC-Boxenstopp</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Boxenstopp}}}} || {{REVISIONUSER:Boxenstopp}} || {{formatnum:{{PAGESIZE:Boxenstopp}}}}
 |-
-| Rennen || [[Challenges]] || Wöchentliche Challenges und Community-Bestzeiten || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Challenges}}}} || {{REVISIONUSER:Challenges}} || {{formatnum:{{PAGESIZE:Challenges}}}}
+| <translate><!--T:95--> Rennen</translate> || <translate><!--T:96--> [[Spezial:MyLanguage/Challenges|Challenges]]</translate> || <translate><!--T:97--> Wöchentliche Challenges und Community-Bestzeiten</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Challenges}}}} || {{REVISIONUSER:Challenges}} || {{formatnum:{{PAGESIZE:Challenges}}}}
 |-
-| Gegner || [[NPC-Fahrverhalten]] || Computergegner: Tempo, Ideallinie, Überholen, MAX-Stufe || {{#time:d.m.Y|{{REVISIONTIMESTAMP:NPC-Fahrverhalten}}}} || {{REVISIONUSER:NPC-Fahrverhalten}} || {{formatnum:{{PAGESIZE:NPC-Fahrverhalten}}}}
+| <translate><!--T:98--> Gegner</translate> || <translate><!--T:99--> [[Spezial:MyLanguage/NPC-Fahrverhalten|NPC-Fahrverhalten]]</translate> || <translate><!--T:100--> Computergegner: Tempo, Ideallinie, Überholen, MAX-Stufe</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:NPC-Fahrverhalten}}}} || {{REVISIONUSER:NPC-Fahrverhalten}} || {{formatnum:{{PAGESIZE:NPC-Fahrverhalten}}}}
 |-
-| Gegner || [[Safety Car und Reinigungswagen]] || Gelbphasen, Parken, Einparkfolge || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Safety Car und Reinigungswagen}}}} || {{REVISIONUSER:Safety Car und Reinigungswagen}} || {{formatnum:{{PAGESIZE:Safety Car und Reinigungswagen}}}}
+| <translate><!--T:101--> Gegner</translate> || <translate><!--T:102--> [[Spezial:MyLanguage/Safety Car und Reinigungswagen|Safety Car und Reinigungswagen]]</translate> || <translate><!--T:103--> Gelbphasen, Parken, Einparkfolge</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Safety Car und Reinigungswagen}}}} || {{REVISIONUSER:Safety Car und Reinigungswagen}} || {{formatnum:{{PAGESIZE:Safety Car und Reinigungswagen}}}}
 |-
-| Strecke || [[Strecken- und Raum-Editor]] || Editor, Zufallsstrecke mit Formel, Raumgestalter || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Strecken- und Raum-Editor}}}} || {{REVISIONUSER:Strecken- und Raum-Editor}} || {{formatnum:{{PAGESIZE:Strecken- und Raum-Editor}}}}
+| <translate><!--T:104--> Strecke</translate> || <translate><!--T:105--> [[Spezial:MyLanguage/Strecken- und Raum-Editor|Strecken- und Raum-Editor]]</translate> || <translate><!--T:106--> Editor, Zufallsstrecke mit Formel, Raumgestalter</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Strecken- und Raum-Editor}}}} || {{REVISIONUSER:Strecken- und Raum-Editor}} || {{formatnum:{{PAGESIZE:Strecken- und Raum-Editor}}}}
 |-
-| Zusammen || [[Mehrspieler]] || WLAN-Mehrspieler und mehrere Spieler an einem Gerät || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Mehrspieler}}}} || {{REVISIONUSER:Mehrspieler}} || {{formatnum:{{PAGESIZE:Mehrspieler}}}}
+| <translate><!--T:107--> Zusammen</translate> || <translate><!--T:108--> [[Spezial:MyLanguage/Mehrspieler|Mehrspieler]]</translate> || <translate><!--T:109--> WLAN-Mehrspieler und mehrere Spieler an einem Gerät</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Mehrspieler}}}} || {{REVISIONUSER:Mehrspieler}} || {{formatnum:{{PAGESIZE:Mehrspieler}}}}
 |-
-| Zubehör || [[CH ControlBox]] || RC-Funke als Bluetooth-Gamepad || {{#time:d.m.Y|{{REVISIONTIMESTAMP:CH ControlBox}}}} || {{REVISIONUSER:CH ControlBox}} || {{formatnum:{{PAGESIZE:CH ControlBox}}}}
+| <translate><!--T:110--> Zubehör</translate> || <translate><!--T:111--> [[Spezial:MyLanguage/CH ControlBox|CH ControlBox]]</translate> || <translate><!--T:112--> RC-Funke als Bluetooth-Gamepad</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:CH ControlBox}}}} || {{REVISIONUSER:CH ControlBox}} || {{formatnum:{{PAGESIZE:CH ControlBox}}}}
 |-
-| Zubehör || [[Startampel]] || Echte Startampel am Tisch || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Startampel}}}} || {{REVISIONUSER:Startampel}} || {{formatnum:{{PAGESIZE:Startampel}}}}
+| <translate><!--T:113--> Zubehör</translate> || <translate><!--T:114--> [[Spezial:MyLanguage/Startampel|Startampel]]</translate> || <translate><!--T:115--> Echte Startampel am Tisch</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Startampel}}}} || {{REVISIONUSER:Startampel}} || {{formatnum:{{PAGESIZE:Startampel}}}}
 |-
-| Hilfe || [[Keine Reaktion des Fahrzeugs]] || Auto hängt mit Licht und eingeschlagenen Rädern || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Keine Reaktion des Fahrzeugs}}}} || {{REVISIONUSER:Keine Reaktion des Fahrzeugs}} || {{formatnum:{{PAGESIZE:Keine Reaktion des Fahrzeugs}}}}
+| <translate><!--T:116--> Zubehör</translate> || <translate><!--T:117--> [[Spezial:MyLanguage/Onboard-Kamera und Karosserien|Onboard-Kamera und Karosserien]]</translate> || <translate><!--T:118--> Onboard-Kamera, Streckenvideos und Karosserien mit Kamera (in Arbeit)</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Onboard-Kamera und Karosserien}}}} || {{REVISIONUSER:Onboard-Kamera und Karosserien}} || {{formatnum:{{PAGESIZE:Onboard-Kamera und Karosserien}}}}
 |-
-| Mitmachen || [[Mitmachen]] || Artikel schreiben und verbessern, mit und ohne KI || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Mitmachen}}}} || {{REVISIONUSER:Mitmachen}} || {{formatnum:{{PAGESIZE:Mitmachen}}}}
+| <translate>CAD</translate> || <translate>[[Spezial:MyLanguage/CAD und 3D-Druck|CAD und 3D-Druck]]</translate> || <translate>Übersicht: Tipps zu Fusion, Blender und 3D-Druck</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:CAD und 3D-Druck}}}} || {{REVISIONUSER:CAD und 3D-Druck}} || {{formatnum:{{PAGESIZE:CAD und 3D-Druck}}}}
 |-
-| Mitmachen || [[Anleitung für KIs]] || Arbeitsweise für KI-Assistenten || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Anleitung für KIs}}}} || {{REVISIONUSER:Anleitung für KIs}} || {{formatnum:{{PAGESIZE:Anleitung für KIs}}}}
+| <translate>CAD</translate> || <translate>[[Spezial:MyLanguage/STL-Netze reparieren und reduzieren|STL-Netze reparieren und reduzieren]]</translate> || <translate>Kaputte oder zu schwere Netze mit Blender reparieren und verkleinern</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:STL-Netze reparieren und reduzieren}}}} || {{REVISIONUSER:STL-Netze reparieren und reduzieren}} || {{formatnum:{{PAGESIZE:STL-Netze reparieren und reduzieren}}}}
 |-
-| Mitmachen || [[Vorlage:Stand]] || Versionskasten oben auf jeder Seite || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Vorlage:Stand}}}} || {{REVISIONUSER:Vorlage:Stand}} || {{formatnum:{{PAGESIZE:Vorlage:Stand}}}}
+| <translate>CAD</translate> || <translate>[[Spezial:MyLanguage/Netze in Fusion strecken|Netze in Fusion strecken]]</translate> || <translate>Karosserie im Netzbereich von Fusion verlängern</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Netze in Fusion strecken}}}} || {{REVISIONUSER:Netze in Fusion strecken}} || {{formatnum:{{PAGESIZE:Netze in Fusion strecken}}}}
 |-
-| Hilfe || [[Fehlerbilder und Abhilfe]] || Hohe Latenz, springende Autos, Android-Einstellungen, Browser || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Fehlerbilder und Abhilfe}}}} || {{REVISIONUSER:Fehlerbilder und Abhilfe}} || {{formatnum:{{PAGESIZE:Fehlerbilder und Abhilfe}}}}
+| <translate>CAD</translate> || <translate>[[Spezial:MyLanguage/Karosserie anpassen|Karosserie anpassen]]</translate> || <translate>Karosserie in drei Schritten auf das Chassis 1:50 bringen</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Karosserie anpassen}}}} || {{REVISIONUSER:Karosserie anpassen}} || {{formatnum:{{PAGESIZE:Karosserie anpassen}}}}
 |-
-| Mitmachen || [[Wunschliste]] || Gewünschte Funktionen und alles in Arbeit || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Wunschliste}}}} || {{REVISIONUSER:Wunschliste}} || {{formatnum:{{PAGESIZE:Wunschliste}}}}
+| <translate>CAD</translate> || <translate>[[Spezial:MyLanguage/Fenster aus Karosserie erzeugen|Fenster aus Karosserie erzeugen]]</translate> || <translate>Scheiben zu einer STL-Karosserie konstruieren</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Fenster aus Karosserie erzeugen}}}} || {{REVISIONUSER:Fenster aus Karosserie erzeugen}} || {{formatnum:{{PAGESIZE:Fenster aus Karosserie erzeugen}}}}
 |-
-| Software || [[Andere Apps und Initiativen]] || Original-App, Community-Apps, Zubehör || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Andere Apps und Initiativen}}}} || {{REVISIONUSER:Andere Apps und Initiativen}} || {{formatnum:{{PAGESIZE:Andere Apps und Initiativen}}}}
+| <translate>CAD</translate> || <translate>[[Spezial:MyLanguage/Add-, Del-, Rep- und Chk-Teile|Add-, Del-, Rep- und Chk-Teile]]</translate> || <translate>Namensregel für Zusatzteile</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Add-, Del-, Rep- und Chk-Teile}}}} || {{REVISIONUSER:Add-, Del-, Rep- und Chk-Teile}} || {{formatnum:{{PAGESIZE:Add-, Del-, Rep- und Chk-Teile}}}}
+|-
+| <translate>CAD</translate> || <translate>[[Spezial:MyLanguage/Grobe und feine Fassung|Grobe und feine Fassung]]</translate> || <translate>Mit wenigen Dreiecken konstruieren, mit vielen drucken</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Grobe und feine Fassung}}}} || {{REVISIONUSER:Grobe und feine Fassung}} || {{formatnum:{{PAGESIZE:Grobe und feine Fassung}}}}
+|-
+| <translate>CAD</translate> || <translate>[[Spezial:MyLanguage/Lenkeinschlag prüfen|Lenkeinschlag prüfen]]</translate> || <translate>Freiraum der Vorderräder mit dem Fusion-Add-In prüfen</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Lenkeinschlag prüfen}}}} || {{REVISIONUSER:Lenkeinschlag prüfen}} || {{formatnum:{{PAGESIZE:Lenkeinschlag prüfen}}}}
+|-
+| <translate><!--T:119--> Hilfe</translate> || <translate><!--T:120--> [[Spezial:MyLanguage/Keine Reaktion des Fahrzeugs|Keine Reaktion des Fahrzeugs]]</translate> || <translate><!--T:121--> Auto hängt mit Licht und eingeschlagenen Rädern</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Keine Reaktion des Fahrzeugs}}}} || {{REVISIONUSER:Keine Reaktion des Fahrzeugs}} || {{formatnum:{{PAGESIZE:Keine Reaktion des Fahrzeugs}}}}
+|-
+| <translate><!--T:122--> Mitmachen</translate> || <translate><!--T:123--> [[Spezial:MyLanguage/Mitmachen|Mitmachen]]</translate> || <translate><!--T:124--> Artikel schreiben und verbessern, mit und ohne KI</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Mitmachen}}}} || {{REVISIONUSER:Mitmachen}} || {{formatnum:{{PAGESIZE:Mitmachen}}}}
+|-
+| <translate><!--T:125--> Mitmachen</translate> || <translate><!--T:126--> [[Spezial:MyLanguage/Anleitung für KIs|Anleitung für KIs]]</translate> || <translate><!--T:127--> Arbeitsweise für KI-Assistenten</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Anleitung für KIs}}}} || {{REVISIONUSER:Anleitung für KIs}} || {{formatnum:{{PAGESIZE:Anleitung für KIs}}}}
+|-
+| <translate><!--T:128--> Mitmachen</translate> || <translate><!--T:129--> [[Spezial:MyLanguage/Vorlage:Stand|Vorlage:Stand]]</translate> || <translate><!--T:130--> Versionskasten oben auf jeder Seite</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Vorlage:Stand}}}} || {{REVISIONUSER:Vorlage:Stand}} || {{formatnum:{{PAGESIZE:Vorlage:Stand}}}}
+|-
+| <translate><!--T:131--> Hilfe</translate> || <translate><!--T:132--> [[Spezial:MyLanguage/Fehlerbilder und Abhilfe|Fehlerbilder und Abhilfe]]</translate> || <translate><!--T:133--> Hohe Latenz, springende Autos, Android-Einstellungen, Browser</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Fehlerbilder und Abhilfe}}}} || {{REVISIONUSER:Fehlerbilder und Abhilfe}} || {{formatnum:{{PAGESIZE:Fehlerbilder und Abhilfe}}}}
+|-
+| <translate><!--T:134--> Mitmachen</translate> || <translate><!--T:135--> [[Spezial:MyLanguage/Wunschliste|Wunschliste]]</translate> || <translate><!--T:136--> Gewünschte Funktionen und alles in Arbeit</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Wunschliste}}}} || {{REVISIONUSER:Wunschliste}} || {{formatnum:{{PAGESIZE:Wunschliste}}}}
+|-
+| <translate><!--T:137--> Software</translate> || <translate><!--T:138--> [[Spezial:MyLanguage/Andere Apps und Initiativen|Andere Apps und Initiativen]]</translate> || <translate><!--T:139--> Original-App, Community-Apps, Zubehör</translate> || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Andere Apps und Initiativen}}}} || {{REVISIONUSER:Andere Apps und Initiativen}} || {{formatnum:{{PAGESIZE:Andere Apps und Initiativen}}}}
 |}
 
-'''Zahlen:''' {{NUMBEROFARTICLES}} Artikel · {{NUMBEROFFILES}} Dateien · {{NUMBEROFEDITS}} Bearbeitungen · {{NUMBEROFUSERS}} angemeldete Benutzer. Weitere Listen: [[Spezial:Alle Seiten|Alle Seiten]] · [[Spezial:Dateien|Alle Dateien]] · [[Spezial:Kategorien|Kategorien]] · [[Spezial:Gewünschte Seiten|Gewünschte Seiten]].
+<translate><!--T:140--> '''Zahlen:''' {{Besucherzahl}} · {{NUMBEROFARTICLES}} Artikel · {{NUMBEROFFILES}} Dateien · {{NUMBEROFEDITS}} Bearbeitungen · {{NUMBEROFUSERS}} angemeldete Benutzer. Weitere Listen: [[Spezial:Alle Seiten|Alle Seiten]] · [[Spezial:Dateien|Alle Dateien]] · [[Spezial:Kategorien|Kategorien]] · [[Spezial:Gewünschte Seiten|Gewünschte Seiten]].</translate>
 
 [[Kategorie:OmegaSim]]

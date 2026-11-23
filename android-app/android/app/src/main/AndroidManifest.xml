@@ -58,6 +58,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Onboard-Kamera (75-onboard.js): getUserMedia in der WebView. Capacitor fragt das
+         Recht beim ersten Einschalten selbst nach (BridgeWebChromeClient). required=false:
+         die App laeuft auch auf Geraeten ohne Kamera. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- v1.5: Rumble des Gamepads ueber den Android-Vibrator des Eingabegeraets (OmegaPadNativ.ruetteln). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
     <!-- Bluetooth: das Plugin bringt die Rechte mit. Hier nur BLUETOOTH_SCAN mit
          neverForLocation, damit ab Android 12 kein Standortrecht noetig ist - ein Autospiel,
          das nach dem Standort fragt, wirkt zu Recht verdaechtig. -->

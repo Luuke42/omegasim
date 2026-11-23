@@ -16,16 +16,20 @@
 <p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
 </div>
 <h1 class="wiki-title">Pacejka</h1>
-<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
-<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.51</b> vom 30.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><p>﻿</p><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.5.107</b> vom 2026-11-17 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
 <small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
 </p>
 </div>
 <figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Reibkreis-MagicFormula.png" class="mw-file-description"><img src="images/250px-OmegaSim-Reibkreis-MagicFormula.png" decoding="async" loading="lazy" width="250" height="207" class="mw-file-element" srcset="images/500px-OmegaSim-Reibkreis-MagicFormula.png 2x" data-file-width="1334" data-file-height="1107" /></a><figcaption>Oben der Reibkreis, unten die Magic-Formula-Reifenkennlinie.</figcaption></figure>
-<p>Die <b>Magic Formula</b> („Zauberformel“) von <b>Hans B. Pacejka</b> beschreibt, wie viel Seitenkraft ein <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Reifen</a> in der Kurve überträgt. In <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> steckt sie im Fahrgefühl <b>Pacejka</b> und sorgt dafür, dass ein Auto am Haftgrenz-Limit nicht einfach weiterlenkt, sondern wirklich schiebt oder das Heck ausbrechen lässt.
+<p>Die <b>Magic Formula</b> („Zauberformel“) von <b>Hans B. Pacejka</b> (siehe <a rel="nofollow" class="external text" href="https://en.wikipedia.org/wiki/Hans_B._Pacejka">Hans B. Pacejka</a> auf Wikipedia) beschreibt, wie viel Seitenkraft ein <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Reifen</a> in der Kurve überträgt. In <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> steckt sie im Fahrgefühl <b>Pacejka</b> und sorgt dafür, dass ein Auto am Haftgrenz-Limit nicht einfach weiterlenkt, sondern wirklich schiebt oder das Heck ausbrechen lässt.
 </p><p>Dieser Artikel erklärt die Formel von Grund auf – für alle, die noch nie davon gehört haben. Die technische Abrechnung in der App steht in <a href="./Fahrverhalten.html" title="Fahrverhalten">Fahrverhalten</a>.
+</p><p><br />
 </p>
 <meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Neuerungen_seit_1.3.93">Neuerungen seit 1.3.93</h2></div>
+<p>Aktualisiert: Pacejka (Stand 1.5.107)
+</p>
 <div class="mw-heading mw-heading2"><h2 id="Das_Problem:_Was_ein_Reifen_kann">Das Problem: Was ein Reifen kann</h2></div>
 <p>Das Einzige, was das Auto mit der Straße verbindet, sind die vier Reifen. Alles Fahren – Beschleunigen, Bremsen, Kurven – läuft über ihre Kraft. Ein Reifen kann die Straße aber nur mit einer <b>begrenzten</b> Kraft packen, und er teilt diese Kraft in zwei Richtungen auf:
 </p>
@@ -83,15 +87,48 @@
 <div class="mw-heading mw-heading2"><h2 id="Untersteuern_und_Übersteuern"><span id="Untersteuern_und_.C3.9Cbersteuern"></span>Untersteuern und Übersteuern</h2></div>
 <p>Der Bereich hinter dem Scheitel ist das eigentliche „Fahrgefühl“: Was passiert, wenn man über die Haftgrenze hinauslenkt?
 </p>
-<ul><li><b>Untersteuern</b> (Vorderachse am Limit): Das Auto will nicht mehr in die Kurve, es schiebt geradeaus – die Räder zeigen in die Kurve, aber das Auto fährt außen weiter.</li>
-<li><b>Übersteuern</b> (Hinterachse am Limit): Das Heck bricht aus, das Auto dreht sich schneller, als gelenkt wurde – es „schnappt“ ein.</li></ul>
+<ul><li><b>Untersteuern</b> (Vorderachse am Limit): Das Auto will nicht mehr in die Kurve, es schiebt geradeaus – die Räder zeigen in die Kurve, aber das Auto fährt außen weiter. Die Vorderachse hat ihre Haftgrenze erreicht; mehr Lenkeinschlag bringt keine zusätzliche Kurvenkraft, die Bahn wird nur weiter außen.</li>
+<li><b>Übersteuern</b> (Hinterachse am Limit): Das Heck bricht aus, das Auto dreht sich schneller, als gelenkt wurde – es „schnappt“ ein. Die Hinterachse hat ihre Haftgrenze erreicht; der Wagen rotiert stärker als die Vorderräder zeigen.</li></ul>
 <p>Welche Achse zuerst ihre Grenze erreicht, entscheidet, ob das Auto unter- oder übersteuert. Das kann man im Fahrgefühl <b>Pacejka</b> einstellen.
 </p>
+<div class="mw-heading mw-heading3"><h3 id="Was_die_Haftgrenze_verschiebt">Was die Haftgrenze verschiebt</h3></div>
+<p>Dieselbe Reifenkennlinie, nur die <b>Achslast</b> und der <b>Reibkreis</b> verschieben, welche Achse zuerst über den Scheitel gerät:
+</p>
+<ul><li><b>Bremsen</b> entlastet die Hinterachse und belastet die Vorderachse. Die Hinterachse verliert Seitenhalt → beim Anbremsen in der Kurve kommt das Heck (Übersteuern beim Einlenken, <i>Trail-Braking</i>).</li>
+<li><b>Gas</b> entlastet die Vorderachse und belastet die Hinterachse. Die Vorderachse verliert Seitenhalt → unter Gas schiebt die Front (Untersteuern).</li>
+<li><b>Antrieb hinten</b>: Der Antrieb verbraucht Querkraft-Budget (Reibkreis). Wer mitten in der Kurve Gas gibt, hat hinten weniger Seitenhalt → <b>Leistungsübersteuern</b>.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Wie_OmegaSim_das_Übersteuern_simuliert"><span id="Wie_OmegaSim_das_.C3.9Cbersteuern_simuliert"></span>Wie OmegaSim das Übersteuern simuliert</h3></div>
+<p>Der Kern liegt in <code>pacejkaStep()</code> (<code>src/40-physics.js</code>). Er rechnet je Achse eine <b>Ausnutzung</b> <code>u</code> – die Querkraft, geteilt durch die Haftgrenze. <code>u = 1</code> ist der Scheitel; <code>u &gt; 1</code> heißt „hinter dem Scheitel“.
+</p>
+<pre>uV = quer · vorn / grip           (Vorderachse)
+uH = quer · hinten / grip / rest / HeckReserve   (Hinterachse)</pre>
+<p>Der <b>Wirkfaktor</b> <code>wirk(u)</code> sagt, wie viel Kraft ein Reifen bei dieser Ausnutzung noch bringt – unterhalb des Scheitels 1, dahinter fällt er ab:
+</p>
+<pre>wirk(u) = u ≤ 1&#160;? 1&#160;: pacY(u) / u</pre>
+<ul><li><b>Untersteuern</b> – Vorderachse über dem Scheitel (<code>uV &gt; 1</code>): Der Lenkbefehl wird mit <code>wirk(uV)</code> <b>gekürzt</b>. Mehr Einschlag bringt also keine zusätzliche Drehung, das Auto schiebt geradeaus. Zusätzlich entlastet Gas die Front (Regler „Lenkentlastung unter Gas“).</li>
+<li><b>Übersteuern</b> – Hinterachse <b>weiter</b> über dem Scheitel als die Front (<code>uH &gt; 1</code> und <code>uH &gt; uV</code>): Die App <b>gibt Einschlag in die Kurve dazu</b>. Es gilt <code>zielO = min(pacUeberMax, 1 − wirk(uH))</code>, also genau das, was die Hinterachse nicht mehr an Kraft bringt. Der Servo wird dann</li></ul>
+  <pre>servo = servo · pacUnter + pacRichtung · pacUeber</pre>
+<pre> – das Auto dreht von selbst weiter ein, das Heck kommt.
+</pre>
+<p>Drei Eigenschaften machen das Übersteuern „echt“:
+</p>
+<ol><li><b>Es hält an.</b> Einmal ausgelöst, klingt das Heck nicht von selbst ab: Solange man Gas oder Bremse hält (<code>pedalHalt</code>), bleibt <code>pacUeber</code> stehen – gedeckelt auf <code>pacejkaHaltMax</code> Sekunden und nicht bei Schritttempo.</li>
+<li><b>Gegenlenken fängt es.</b> Lenkt man gegen die Rutschrichtung (<code>gegen</code>), sinkt der Zuschlag schnell (Zeitkonstante 0,1 s statt 0,25 s) und das Auto beruhigt sich.</li>
+<li><b>Es kostet Vortrieb.</b> Solange das Heck rutscht, senkt <code>pacVortrieb</code> die Antriebskraft (bis 55&#160;%), damit das Auto nicht weiter einzieht.</li></ol>
+<p><b>Woher das Übersteuern kommt</b>, gibt der Schalter <b>Übersteuern (Pacejka)</b> vor (ab Werk aus):
+</p>
+<ul><li>Beim <b>Anbremsen</b>: Bremsen entlastet hinten → das Heck kommt beim Einlenken.</li>
+<li>Beim <b>Leistungsübersteuern</b>: Über 40&#160;% Gas wird <code>uH</code> zusätzlich erhöht (bis <code>pacejkaLeistung</code> 1,4) – Vollgas in der Kurve bringt das Heck.</li>
+<li>Ab Werk ist hinten über <code>pacejkaHeckReserve = 1,2</code> 20&#160;% mehr Seitenhalt: das Standard-Pacejka ist deshalb leicht <b>untersteuernd</b>, das Übersteuern ist eine bewusste Einstellung.</li></ul>
 <div class="mw-heading mw-heading2"><h2 id="Der_Reibkreis">Der Reibkreis</h2></div>
 <p>Die Kraft des Reifens ist begrenzt und teilt sich zwischen Längs (Gas/Bremse) und Quer (Kurve) auf. Zeichnet man beide als Achsen, liegt die Grenze ungefähr auf einem <b>Kreis</b> – dem Reibkreis (auch Kamm-Kreis):
 </p>
 <pre>Längsanteil = √(1 − Queranteil²)</pre>
 <p>Wer in der Kurve schon viel Querkraft braucht, hat für Gas oder Bremse nur noch den Rest. Deshalb kann man nicht mit Vollgas und vollem Lenkeinschlag gleichzeitig das Maximum herausholen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Animation:_So_lenkt_ein_Auto_unter_Bremsen">Animation: So lenkt ein Auto unter Bremsen</h2></div>
+<figure class="mw-default-size mw-halign-right" typeof="mw:Error mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Spezial:Hochladen?wpDestFile=OmegaSim-Bremsen-Lenken-Trajektorie.gif" class="new" title="Datei:OmegaSim-Bremsen-Lenken-Trajektorie.gif"><span class="mw-file-element mw-broken-media" data-width="180">Datei:OmegaSim-Bremsen-Lenken-Trajektorie.gif</span></a><figcaption>Ein Auto fährt geradeaus, bremst an der Kurve und lenkt ein. Links die Trajektorie, rechts der Reibkreis: Die Kraft aus Bremsen und Kurvenfahrt bleibt innerhalb der Haftgrenze.</figcaption></figure>
+<p>Beim Einlenken unter Bremsen (<i>Trail-Braking</i>) teilt sich die Reifenkraft in Längs- und Queranteil. Solange der Kraftpfeil im Reibkreis bleibt, hält das Auto die Spur. Wird zu stark gebremst, zeigt der Pfeil nach außen, und das Auto schiebt geradeaus (Untersteuern).
 </p>
 <div class="mw-heading mw-heading2"><h2 id="So_nutzt_OmegaSim_die_Pacejka">So nutzt OmegaSim die Pacejka</h2></div>
 <p>Im Fahrgefühl <b>Pacejka</b> (Steuerungsmodus „Pacejka“, seit 0.8) rechnet die App mit der Magic Formula, um die <b>Haftgrenze</b> der Achsen zu bestimmen. Unterhalb der Grenze fährt das Auto wie im normalen Physik-Modus; erst darüber greift die Formel ein:
@@ -99,7 +136,7 @@
 <ul><li>Die Formel ist <b>normiert</b>: <code>u = 1</code> ist der Scheitel und <code>y(1) = 1</code>.</li>
 <li>Die Höhe <code>D</code> ist damit fest 1; die eigentliche Grenze steckt in der <b>Haftgrenze</b> (Vorgabe 0,7).</li>
 <li><b>Untersteuern</b>: Ist die Vorderachse über der Grenze, wird der Lenkbefehl <b>reduziert</b>.</li>
-<li><b>Übersteuern</b> (eigener Schalter): Ist die Hinterachse über der Grenze, lenkt das Auto <b>von selbst weiter ein</b>.</li></ul>
+<li><b>Übersteuern</b> (eigener Schalter): Ist die Hinterachse über der Grenze, lenkt das Auto <b>von selbst weiter ein</b> – die genaue Rechnung im Abschnitt <a href="#Wie_OmegaSim_das_Übersteuern_simuliert">Wie OmegaSim das Übersteuern simuliert</a>.</li></ul>
 <p>Die konkreten Werte im Code (<code>src/40-physics.js</code>):
 </p>
 <table class="wikitable">
@@ -132,10 +169,35 @@
 <td><code>pacejkaHeckReserve</code></td>
 <td>1,2</td>
 <td>hinten 20&#160;% mehr Seitenhalt: ab Werk leicht untersteuernd
+</td></tr>
+<tr>
+<td><code>pacejkaUebersteuern</code></td>
+<td>Schalter</td>
+<td>Übersteuern an (beim Bremsen und unter Gas)
+</td></tr>
+<tr>
+<td><code>pacejkaUeberMax</code></td>
+<td>0,35</td>
+<td>größter Lenkzuschlag beim Übersteuern (Anteil des Servos)
+</td></tr>
+<tr>
+<td><code>pacejkaLeistung</code></td>
+<td>1,4</td>
+<td>wie stark Vollgas den Seitenhalt hinten senkt
+</td></tr>
+<tr>
+<td><code>pacejkaRutschVortrieb</code></td>
+<td>0,55</td>
+<td>wie viel Vortrieb beim Rutschen verloren geht
+</td></tr>
+<tr>
+<td><code>pacejkaHaltMax</code></td>
+<td>2,0</td>
+<td>wie lange ein Rutsch ohne Gegenlenken hält (Sekunden)
 </td></tr></tbody></table>
 <div class="mw-heading mw-heading2"><h2 id="Wo_man_das_einstellt">Wo man das einstellt</h2></div>
 <ul><li><b>FAHREN</b> → Kachel <b>Fahrgefühl</b> → <b>Pacejka</b> (ebenso in der <b>Garage</b> und am <b>Cockpit-Knopf</b>).</li>
-<li>Unter <b>Optionen → Fahrgefühl → Voreinstellungen</b> liegt Pacejka als einer der neun Sätze.</li>
+<li>Unter <b>Optionen → Fahrgefühl → Voreinstellungen</b> liegt Pacejka als einer der zehn Sätze.</li>
 <li>Nach einer Neuinstallation ist <b>Pacejka</b> die Vorgabe.</li>
 <li>Der Schalter <b>Übersteuern (Pacejka)</b> liegt unter <b>Optionen → Allgemein</b> (ab Werk aus).</li></ul>
 <div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
@@ -149,32 +211,34 @@
 <li><code>src/98-presets.js</code>: <code>PRESETS</code> – die Werte des Fahrgefühls Pacejka</li></ul>
 <div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
 <ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
-
 <!-- 
 NewPP limit report
 Parsed by mw202
-Cached time: 20261030073505
+Cached time: 20261118151129
 Cache expiry: 1296000
 Reduced expiry: false
 Complications: [show‐toc]
-CPU time usage: 0.031 seconds
-Real time usage: 0.036 seconds
-Preprocessor visited node count: 65/1000000
-Revision size: 6774/2097152 bytes
-Post‐expand include size: 753/2097152 bytes
-Template argument size: 16/2097152 bytes
+CPU time usage: 0.046 seconds
+Real time usage: 0.189 seconds
+Preprocessor visited node count: 95/1000000
+Revision size: 11670/2097152 bytes
+Post‐expand include size: 754/2097152 bytes
+Template argument size: 17/2097152 bytes
 Highest expansion depth: 3/100
 Expensive parser function count: 0/99
 Unstrip recursion depth: 0/20
-Unstrip post‐expand size: 120/5000000 bytes
+Unstrip post‐expand size: 351/5000000 bytes
 -->
 <!--
 Transclusion expansion time report (%,ms,calls,template)
-100.00%    4.267      1 Vorlage:Stand
-100.00%    4.267      1 -total
+100.00%    2.798      1 Vorlage:Stand
+100.00%    2.798      1 -total
 -->
 
-<!-- Render ID 6c90ac44-d434-11f1-ad68-bc24110065aa -->
+<!-- Render ID 548cb845-e362-11f1-ad68-bc24110065aa -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:83:|#|:idhash:canonical and timestamp 20261118151129 and revision id 871. Rendering was triggered because: page-edit
+ -->
 </div>
 </main>
 <footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>

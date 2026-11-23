@@ -134,6 +134,29 @@
     return Math.sin(C * Math.atan(bu - E * (bu - Math.atan(bu))));
   }
   const pacBCache = {};
+  // v1.5.101 (H1): wo die Reifenkurve pacY(u) ihren Scheitel hat (Ausnutzung u), je Form einmal gesucht.
+  const pacScheitelCache = {};
+  function pacScheitel(B, C, E) {
+    const key = B + '|' + C + '|' + E;
+    if (pacScheitelCache[key] !== undefined) return pacScheitelCache[key];
+    let bestU = 1, bestY = -1;
+    for (let u = 0.5; u <= 4; u += 0.005) { const y = pacY(u, B, C, E); if (y > bestY) { bestY = y; bestU = u; } }
+    pacScheitelCache[key] = Math.max(1, bestU);
+    return pacScheitelCache[key];
+  }
+  // v1.5.101 (H1): S-Kurve fuer den Lenkwunsch. Gedaempfte Feder zweiter Ordnung (kritisch, omega LC_S_OMEGA) in
+  // festen 2-ms-Schritten: der Einschlag laeuft weich an, schnell durch und weich aus, ohne Ueberschwingen.
+  const LC_S_OMEGA = 26;
+  function lcSKurve(st, ziel, dt) {
+    if (st.lcS === undefined) { st.lcS = ziel; st.lcV = 0; }
+    const n = Math.max(1, Math.ceil(dt / 0.002)), h = dt / n, w = LC_S_OMEGA;
+    for (let i = 0; i < n; i++) {
+      st.lcV += (w * w * (ziel - st.lcS) - 2 * w * st.lcV) * h;
+      st.lcS += st.lcV * h;
+    }
+    st.lcS = Math.max(-1, Math.min(1, st.lcS));
+    return st.lcS;
+  }
   // v1.1.3: stetige Lenkabschwaechung unter Gas fuer Pacejka (siehe config pacGasMax). g ist die
   // Laengsausnutzung (0..1); der Regler throttleSteerRelief skaliert: 75 % = Vorgabe, 0 % = vierfach,
   // 100 % = keine.
@@ -784,6 +807,11 @@
         brakeFadeStartC: 520,
         brakeFadeFullC: 780,
         brakeFadeMax: 0.35,     // hoechstens 35 % der Bremskraft
+        // v1.5.101 (H2) BESTELLT: "Bremstemperatur (kalt schwaecher, ueberhitzt Fading)". Unter brakeColdC
+        // bremst die Scheibe schwaecher, bei Umgebungstemperatur um brakeColdMax; linear bis brakeColdC. Haengt am
+        // selben Schalter wie das Fading (brakeFadeEffect, 0 = aus). Nur LibreCorsa und Pacejka.
+        brakeColdC: 110,
+        brakeColdMax: 0.10,
 
         // ---- Windschatten (Block 4.2) ----
         // Die WIRKUNG steht hier, die Messung nicht: wer vorn faehrt, weiss nur die
@@ -960,6 +988,7 @@
         brakeTempF: 25,
         brakeTempR: 25,
         brakeFade: 0,     // 0..brakeFadeMax, Anteil verlorener Bremskraft
+        brakeKalt: 0,     // v1.5.101 (H2): 0..brakeColdMax, Anteil verlorener Bremskraft wegen kalter Scheiben
         // Von aussen gesetzt, siehe dirtyAirEffect. 0 = freie Luft.
         dirtyAir: 0,
         tyrePull: 0,      // Lenk-Offset aus der Ungleichheit, in Servo-Einheiten
@@ -1262,7 +1291,11 @@
       const E = (cfg.granE === null || cfg.granE === undefined) ? cfg.pacejkaE : cfg.granE;
       const B = pacB(C, E);
       const wirk = (u) => (u <= 1 ? 1 : pacY(u, B, C, E) / u);
-      let zielU = wirk(uV) * pacGasFaktor(cfg, st.longUse);
+      // v1.5.101 (H1, nur LibreCorsa): die Lenkhilfe haelt die Vorderachse am Scheitel der Reifenkurve. Ueberlenken
+      // bringt dann keinen Kraftverlust mehr (die Kraft bleibt die des Scheitels), statt ueber den Scheitel zu rutschen.
+      const lcHilfe = cfg.granArt === 'librecorsa' && cfg.lenkHilfe !== false;
+      const uSp = lcHilfe ? pacScheitel(B, C, E) : Infinity;
+      let zielU = (uV > uSp ? pacY(uSp, B, C, E) / uV : wirk(uV)) * pacGasFaktor(cfg, st.longUse);
       // ABS-Gefuehl: beim Bremsen bleibt am Limit mindestens granAbs vom Einschlag.
       // v1.4.54: ein ABS aus dem Setup (setupAbs >= 0) ersetzt das des Fahrgefuehls.
       const absW = st.setupAbs >= 0 ? st.setupAbs : cfg.granAbs;
@@ -1270,7 +1303,10 @@
       st.pacUnter += (zielU - st.pacUnter) * (1 - Math.exp(-dt / 0.08));
       let zielO = 0;
       const richtung = Math.sign(lenk);
-      const gegen = !!(st.pacRichtung && richtung && richtung !== st.pacRichtung);
+      // H1: mit Lenkhilfe zaehlt ein losgelassener Stick wie Gegenlenken (die Raeder stellen sich in Fahrtrichtung),
+      // und ein Rutsch baut sich nur zur Haelfte auf (Rutsch einfangen).
+      const gegen = !!(st.pacRichtung && richtung && richtung !== st.pacRichtung)
+        || (lcHilfe && !!st.pacRichtung && Math.abs(roh) < 0.1);
       if (heck && uH > 1 && uH > uV) {
         if (!st.pacRichtung && richtung) st.pacRichtung = richtung;
         if (!gegen) zielO = Math.min(cfg.pacejkaUeberMax, 1 - wirk(uH));
@@ -1278,6 +1314,7 @@
       }
       // v1.4.54 TC: unter Gas faengt die Regelung das Heck zur Haelfte ab (Stufe 5).
       if (st.setupTc > 0 && gas > 0.4) zielO *= 1 - 0.5 * st.setupTc;
+      if (lcHilfe) zielO *= 0.5;   // H1: Rutsch einfangen
       // Gierdynamik-Rueckfuehrung (Einspurmodell-Instrument): der Schwimmwinkel stabilisiert
       // das Heck - zu viel Rutsch wird sanft abgefangen, statt zu kippen.
       if (cfg.granGier > 0 && Math.abs(st.slipAngle) > 0.04 && st.pacRichtung) {
@@ -2069,8 +2106,10 @@
       // Der Mischungsfaktor multipliziert HIER und nicht in tyreWearRate: weich frisst
       // sich schneller ab als hart, und das ist eine Eigenschaft des Gummis und keine
       // der Grundrate.
+      // v1.5: Karriere-Upgrade Reifenprogramm (98l-karriere.js), nur Auto 1, ausserhalb der Karriere 1.
+      const karReifen = (typeof karriereUpgrade === 'function' && typeof physEngine !== 'undefined' && st === physEngine.state) ? karriereUpgrade('reifen') : 1;
       const zuwachs = cfg.tyreWearRate * (cfg.tyreWearMix || 1) * pWear
-                      * cfg.tyreEffect * work * hotFactor * dt;
+                      * cfg.tyreEffect * work * hotFactor * dt * karReifen;
       const asym = Math.max(0, Math.min(2, cfg.tyreAsymEffect));
       for (let i = 0; i < 4; i++) {
         const last = asym > 0 ? st.load4[i] : 1;
@@ -2169,6 +2208,13 @@
       st.brakeFade = Math.min(1, cfg.brakeFadeEffect
         * (bias * fadeVon(st.brakeTempF)
            + (1 - bias) * fadeVon(st.brakeTempR)));
+      // H2: kalte Scheiben, je Achse mit ihrem Anteil an der Bremskraft (wie das Fading).
+      const kaltVon = (T) => Math.max(0, Math.min(1, (cfg.brakeColdC - T) / Math.max(1, cfg.brakeColdC - cfg.brakeAmbientC)))
+        * cfg.brakeColdMax;
+      // Nur in den Modi mit Reifenmodell (LibreCorsa, Pacejka): "Omega" und "Physik" bleiben bitgleich mit ihrem
+      // festgehaltenen Stand (Selbsttests "bitgleich").
+      st.brakeKalt = (cfg.gran || cfg.pacejka) ? Math.min(0.5, Math.min(1, cfg.brakeFadeEffect)
+        * (bias * kaltVon(st.brakeTempF) + (1 - bias) * kaltVon(st.brakeTempR))) : 0;
 
       const resist = this.resistAt(st.speedKmh, A, onPower, st.currentGear, st.setupDrag); // always >= 0
       let accel = 0;
@@ -2185,7 +2231,7 @@
           isBraking = true;
           const uR = Math.abs(st.speedKmh) / cfg.topSpeedKmh;
           accel = +((cfg.brakeDecelBase + cfg.brakeDecelAero * uR) * inputs.brake
-                    * (1 - st.brakeFade) + resist);
+                    * (1 - st.brakeFade) * (1 - (st.brakeKalt || 0)) + resist);
         } else if (inputs.throttle > 0.02 && !st.isShifting) {
           accel = -this.thrustAt(st.speedKmh, -1, inputs.throttle, A) * st.gripLong * surf + resist;
         } else {
@@ -2219,7 +2265,7 @@
           // Luftwiderstand haben mit der Bremsscheibe nichts zu tun.
           accel = -(resist + (cfg.brakeDecelBase + cfg.brakeDecelAero * uB)
                              * inputs.brake * st.gripLong * surf * dive
-                             * st.tyreGrip * (1 - st.brakeFade) / st.massFactor * (st.setupBremsF || 1));
+                             * st.tyreGrip * (1 - st.brakeFade) * (1 - (st.brakeKalt || 0)) / st.massFactor * (st.setupBremsF || 1));
           // ABS is now only an indicator plus a haptic pulse. Modulating the byte here
           // would reintroduce precisely the stutter that took so long to remove.
           if (inputs.brake > 0.8 && st.speedKmh > cfg.topSpeedKmh * 0.15) {
@@ -2393,7 +2439,10 @@
       const maxStep = cfg.steerDaempfungMs > 0
         ? dt * 1000 / cfg.steerDaempfungMs * weg
         : Infinity;
-      const dS = targetSteer - this.state.dampedSteering;
+      // v1.5.101 (H1, nur LibreCorsa): Lenkhilfe fuer Gamepad und Tastatur - der Wunsch laeuft durch eine S-Kurve
+      // (gedaempfte Feder zweiter Ordnung) statt als Sprung in den Ratenbegrenzer.
+      const lcHilfe = cfg.granArt === 'librecorsa' && cfg.lenkHilfe !== false;
+      const dS = (lcHilfe ? lcSKurve(this.state, targetSteer, dt) : targetSteer) - this.state.dampedSteering;
       this.state.dampedSteering += Math.max(-maxStep, Math.min(maxStep, dS));
       this.state.dampedSteering = Math.max(-1, Math.min(1, this.state.dampedSteering));
 
@@ -2695,7 +2744,7 @@
   // v1.1.42: 'rutschen' ist nur noch das Uebersteuern; dazu 'untersteuern' und 'quietschen' (Kachel Vibration).
   const RUMBLE_ARTEN = { schalt: true, abs: true, crash: true,
                          abseits: false, box: true, meldung: false, rutschen: true,
-                         untersteuern: true, quietschen: true, kerb: true };
+                         untersteuern: true, quietschen: false, kerb: true };   // v1.6.5: Quietschen ab Werk aus
 
   // ---- Trigger-Vibration, und WELCHER Trigger zu welcher Art gehoert -----------------
   //
@@ -2744,6 +2793,16 @@
     // Etikett vergisst, bekommt ein Brummen und merkt es; ein stilles Verschlucken waere
     // ein Feature, das niemand vermisst, bis es fehlt.
     if (art && RUMBLE_ARTEN[art] === false) return false;
+    // v1.6.5: Faehrt der Mischer (41-rumble-mix.js, wie LibreCorsa), uebernimmt er das Dauer-Rumble des Fahrers: die
+    // Dauer-Arten gehen hier nicht mehr einzeln raus, ein Stoss geht in seine Huellkurve, Einzelereignisse werden
+    // beigemischt. Spieler 2/3 (wer > 1) bleiben beim bisherigen Weg.
+    if ((wer === undefined || wer === 1) && typeof rumbleMixAktiv === 'function' && rumbleMixAktiv()) {
+      if (art === 'kerb' || art === 'untersteuern' || art === 'rutschen' || art === 'abseits' || art === 'quietschen') return true;
+      // Einzelereignisse gehen weiter sofort raus UND in die Huellkurve des Mischers (sonst schnitte sein naechster
+      // Takt sie ab).
+      if (art === 'crash' || art === 'kill' || art === 'ko') rmStoss(Math.max(strong || 0, weak || 0));
+      else rmImpuls(strong, weak, ms);
+    }
     const ziel = rumblePad(wer);
     ruettle({
       duration: ms, startDelay: 0,
@@ -2757,6 +2816,17 @@
       triggerRuettle(li, re, ms, ziel);
     }
     return true;
+  }
+
+  // Richtungs-Rumble fuer Unter-/Uebersteuern (50-drive.js): Beim Gripverlust schiebt das Auto
+  // zur AUSSENSEITE der Kurve, also vibriert genau die Seite aussen. dir > 0 = Rechtskurve ->
+  // linke Seite, dir < 0 = Linkskurve -> rechte Seite. Auf dem Standard-Pad ist der linke Griff
+  // der schwere Motor (strongMagnitude), der rechte der leichte (weakMagnitude) - dieselbe
+  // Zuordnung wie beim DualSense (80b-dualsense.js). So brummt EIN Motor statt beide, und die
+  // Staerke liegt deutlich unter der alten. `art`/'wer' reichen an padRumble durch (Schalter).
+  function padRumbleRichtung(dir, mag, ms, art, wer) {
+    const links = dir > 0;
+    return padRumble(links ? mag : 0, links ? 0 : mag, ms, art, wer);
   }
 
   // ---- Der Trigger-Effekt, und warum er still bleiben darf ---------------------------
@@ -2820,7 +2890,27 @@
   //
   // Also alle. Zwei Aufrufe auf dasselbe Geraet sind harmlos - der zweite ueberschreibt den
   // ersten -, ein stiller Fehlgriff ist es nicht.
+  // v1.5: in der App direkt an den Android-Vibrator der Gamepads (OmegaPadNativ.ruetteln), wenn die APK ihn kennt und
+  // ein Gamepad mit Motor da ist. Grund: die Gamepad-API der WebView kennt den Motor nur, wenn der Controller schon beim
+  // Start der App verbunden war (GEMELDET). Nur fuer "alle Pads" (ein Spieler); mit mehreren Spielern bleibt die
+  // Zuordnung je Pad bei der Gamepad-API.
+  let nativRuettlerStand = { zeit: 0, n: 0 };
+  function nativRuettler() {
+    const o = window.OmegaPad;
+    if (!o || typeof o.ruetteln !== 'function' || typeof o.ruettlerDa !== 'function') return false;
+    const jetzt = Date.now();
+    if (jetzt - nativRuettlerStand.zeit > 2000) {
+      nativRuettlerStand.zeit = jetzt;
+      try { nativRuettlerStand.n = +o.ruettlerDa() || 0; } catch (e) { nativRuettlerStand.n = 0; }
+    }
+    return nativRuettlerStand.n > 0;
+  }
   function ruettle(effekt, ziel) {
+    if (ziel === null && nativRuettler()) {
+      try {
+        if (window.OmegaPad.ruetteln(+effekt.strongMagnitude || 0, +effekt.weakMagnitude || 0, Math.round(+effekt.duration || 0))) return 1;
+      } catch (e) { /* dann die Gamepad-API */ }
+    }
     let erreicht = 0;
     try {
       for (const p of zielPads(ziel)) {

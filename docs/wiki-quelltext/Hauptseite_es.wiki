@@ -1,0 +1,174 @@
+__NOTOC__
+<languages/>
+<div style="border:1px solid #a2a9b1; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:14px 18px; margin-bottom:14px;">
+<div style="font-size:150%; font-weight:bold; margin-bottom:4px;">Bienvenido a {{SITENAME}}</div>
+Esta wiki reúne conocimientos y ayuda sobre '''[[Special:MyLanguage/OmegaSim|OmegaSim]]''', una app gratuita para controlar coches '''[[Special:MyLanguage/Carrera HYBRID|Carrera HYBRID]]''' por Bluetooth: con [[Special:MyLanguage/Fahrverhalten|sensación de conducción]] propia, [[Special:MyLanguage/Rennarten|carreras]], [[Special:MyLanguage/NPC-Fahrverhalten|rivales NPC]], [[Special:MyLanguage/Safety Car und Reinigungswagen|safety car]], [[Special:MyLanguage/Boxenstopp|paradas en boxes]] y [[Special:MyLanguage/Mehrspieler|multijugador]]. Actualmente hay '''{{NUMBEROFARTICLES}}''' artículos. La wiki se escribe en alemán; las traducciones se van añadiendo poco a poco.
+
+<div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;">
+<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''▶ [https://luuke42.github.io/omegasim/ Jugar ahora en el navegador]'''<br /><small>Chrome o Edge con Web Bluetooth, en PC o móvil Android</small></div>
+<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''⬇ [https://github.com/Luuke42/omegasim/releases App para Android (APK)]'''<br /><small>necesaria para el multijugador por wifi y la conexión más rápida</small></div>
+<div style="flex:1 1 220px; border:1px solid #36c; padding:8px 12px;">'''⌨ [https://github.com/Luuke42/omegasim Código fuente en GitHub (Luuke42/omegasim)]'''<br /><small>Licencia MIT, informar de errores en «Issues»</small></div>
+</div>
+</div>
+
+<div style="display:flex; flex-wrap:wrap; gap:14px;">
+<div style="flex:1 1 320px; min-width:0;">
+<span id="Erste_Schritte"></span>
+== Primeros pasos ==
+
+# Abre [[Special:MyLanguage/OmegaSim|OmegaSim]] en el navegador o instala la app para Android.
+# Enciende el coche y emparéjalo en el '''Garaje''' con '''+ Conectar un coche'''.
+# En '''Opciones → Sensación de conducción''' elige un ajuste; para empezar, '''Arcade'''.
+# Arranca en el '''Cockpit''' o inicia un [[Special:MyLanguage/Rennarten|tipo de carrera]] en '''Race''' (este menú aún aparece en inglés en la app).
+# Si el coche se cuelga: [[Special:MyLanguage/Keine Reaktion des Fahrzeugs|El coche no responde]].
+
+[[Datei:OmegaSim-Garage.png|mini|ohne|360px|El garaje, donde se conectan los coches.]]
+
+== Hardware ==
+
+* [[Special:MyLanguage/Carrera HYBRID|Carrera HYBRID]] – el coche: estructura, sensor, batería, Bluetooth
+* [[Special:MyLanguage/Strecke|Pista]] – piezas de pista, pista impresa y escaneo de pista
+
+== Software ==
+
+* [[Special:MyLanguage/Firmware|Firmware]] – lo que se sabe del software del coche
+* [[Special:MyLanguage/Original-App|App original]] – la app del fabricante y lo que OmegaSim hace distinto
+* [[Special:MyLanguage/OmegaSim|OmegaSim]] – resumen de la app
+* [[Special:MyLanguage/OmegaBle|OmegaBle]] – el plugin Bluetooth de la app para Android
+</div>
+<div style="flex:1 1 320px; min-width:0;">
+<span id="OmegaSim_im_Detail"></span>
+== OmegaSim en detalle ==
+{| class="wikitable" style="width:100%;"
+|-
+! Conducción
+| [[Special:MyLanguage/Fahrverhalten|Comportamiento de conducción]] · [[Special:MyLanguage/Verschleiß|Desgaste]] · [[Special:MyLanguage/Virtuelles Fahren|Conducción virtual]]
+|-
+! Carreras
+| [[Special:MyLanguage/Rennarten|Tipos de carrera]] · [[Special:MyLanguage/Boxenstopp|Parada en boxes]] · [[Special:MyLanguage/Challenges|Desafíos]]
+|-
+! Rivales
+| [[Special:MyLanguage/NPC-Fahrverhalten|Comportamiento de los NPC]] · [[Special:MyLanguage/Safety Car und Reinigungswagen|Safety car y coche de limpieza]]
+|-
+! Pista
+| [[Special:MyLanguage/Strecken- und Raum-Editor|Editor de pistas y salas]]
+|-
+! Juntos
+| [[Special:MyLanguage/Mehrspieler|Multijugador]] (wifi y varios jugadores en un dispositivo)
+|-
+! Fundamentos
+| [[Special:MyLanguage/Hexadezimalsystem|Sistema hexadecimal]] · [[Special:MyLanguage/Bluetooth Low Energy|Bluetooth Low Energy]] · [[Special:MyLanguage/Aufbau von OmegaSim|Estructura de OmegaSim]] · [[Special:MyLanguage/Vibe-Coding|Vibe coding]] · [[Special:MyLanguage/Glossar|Glosario]]
+|}
+
+<span id="Rund_um_OmegaSim"></span>
+== En torno a OmegaSim ==
+
+* [[Special:MyLanguage/Wunschliste|Lista de deseos]] – funciones deseadas y todo lo que aún está en desarrollo
+* [[Special:MyLanguage/Andere Apps und Initiativen|Otras apps e iniciativas]] – app original, apps de la comunidad, accesorios
+
+<span id="Zubehör"></span>
+== Accesorios ==
+
+* [[Special:MyLanguage/CH ControlBox|CH ControlBox]] – emisora RC como mando Bluetooth para OmegaSim
+* [[Special:MyLanguage/Startampel|Semáforo de salida]] – semáforo de salida real en la mesa (Raspberry Pi / Pico)
+* [[Special:MyLanguage/Onboard-Kamera und Karosserien|Cámara a bordo y carrocerías]] – imagen en directo desde el coche y carrocerías con cámara integrada (en desarrollo)
+
+<span id="Fehlerbehebung"></span>
+== Solución de problemas ==
+
+* [[Special:MyLanguage/Fehlerbilder und Abhilfe|Problemas y soluciones]] – latencia alta, coches que saltan, ajustes de Android, navegadores compatibles
+* [[Special:MyLanguage/Keine Reaktion des Fahrzeugs|El coche no responde]] – el coche está parado con luces y ruedas giradas y no se puede emparejar
+
+<span id="Mitmachen"></span>
+== Participar ==
+
+* [[Special:MyLanguage/Mitmachen|Participar]] – escribir y mejorar artículos, con y sin IA
+* [[Special:MyLanguage/Anleitung für KIs|Guía para IA]] – forma de trabajar para asistentes de IA que colaboran en la wiki o en OmegaSim
+* [[Special:AllPages|Todas las páginas]] · [[Special:Categories|Categorías]] · [[Special:WantedPages|Páginas requeridas]]
+</div>
+</div>
+
+<span id="Zuletzt_bearbeitet"></span>
+== Editado recientemente ==
+
+Arriba aparece la página editada más recientemente.
+<templatestyles src="Hauptseite/styles.css" />
+<div class="hauptseite-rc">
+{{Special:RecentChanges|namespace=0|limit=5|days=90|hidebots=1|enhanced=0}}
+</div>
+<small>Todos los cambios: [[Special:RecentChanges|Cambios recientes]] · Artículos nuevos: [[Special:NewPages|Páginas nuevas]]</small>
+
+<span id="Seitenübersicht"></span>
+== Índice de páginas ==
+
+Todas las páginas de la wiki con sección, contenido, último cambio, último editor y tamaño en bytes. La wiki lee las tres últimas columnas en cada visita. Los enlaces llevan a la traducción si existe; si no, a la página en alemán.
+
+{| class="wikitable sortable" style="width:100%;"
+! Sección !! Página !! Contenido !! Último cambio !! por !! Byte
+|-
+| Fundamentos || [[Special:MyLanguage/Hexadezimalsystem|Sistema hexadecimal]] || Sistemas numéricos, bits y bytes, códigos hex en OmegaSim || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Hexadezimalsystem}}}} || {{REVISIONUSER:Hexadezimalsystem}} || {{formatnum:{{PAGESIZE:Hexadezimalsystem}}}}
+|-
+| Fundamentos || [[Special:MyLanguage/Bluetooth Low Energy|Bluetooth Low Energy]] || Radio, GATT, características, latencia: cómo funciona la transmisión || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Bluetooth Low Energy}}}} || {{REVISIONUSER:Bluetooth Low Energy}} || {{formatnum:{{PAGESIZE:Bluetooth Low Energy}}}}
+|-
+| Fundamentos || [[Special:MyLanguage/Aufbau von OmegaSim|Estructura de OmegaSim]] || Lenguajes de programación, arquitectura, compilación, actualizaciones || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Aufbau von OmegaSim}}}} || {{REVISIONUSER:Aufbau von OmegaSim}} || {{formatnum:{{PAGESIZE:Aufbau von OmegaSim}}}}
+|-
+| Fundamentos || [[Special:MyLanguage/Vibe-Coding|Vibe coding]] || Programar describiendo: cómo se crea OmegaSim || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Vibe-Coding}}}} || {{REVISIONUSER:Vibe-Coding}} || {{formatnum:{{PAGESIZE:Vibe-Coding}}}}
+|-
+| Fundamentos || [[Special:MyLanguage/Glossar|Glosario]] || Todos los términos técnicos de la A a la Z || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Glossar}}}} || {{REVISIONUSER:Glossar}} || {{formatnum:{{PAGESIZE:Glossar}}}}
+|-
+| Hardware || [[Special:MyLanguage/Carrera HYBRID|Carrera HYBRID]] || El coche: estructura, sensor, batería, protocolo || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Carrera HYBRID}}}} || {{REVISIONUSER:Carrera HYBRID}} || {{formatnum:{{PAGESIZE:Carrera HYBRID}}}}
+|-
+| Hardware || [[Special:MyLanguage/Strecke|Pista]] || Todas las piezas de pista con imagen y código, modo pista e impreso, escaneo de pista || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Strecke}}}} || {{REVISIONUSER:Strecke}} || {{formatnum:{{PAGESIZE:Strecke}}}}
+|-
+| Software || [[Special:MyLanguage/Firmware|Firmware]] || El software del coche: lo que se sabe y lo que no || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Firmware}}}} || {{REVISIONUSER:Firmware}} || {{formatnum:{{PAGESIZE:Firmware}}}}
+|-
+| Software || [[Special:MyLanguage/Original-App|App original]] || La app del fabricante y la diferencia con OmegaSim || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Original-App}}}} || {{REVISIONUSER:Original-App}} || {{formatnum:{{PAGESIZE:Original-App}}}}
+|-
+| Software || [[Special:MyLanguage/OmegaSim|OmegaSim]] || Resumen de la app || {{#time:d.m.Y|{{REVISIONTIMESTAMP:OmegaSim}}}} || {{REVISIONUSER:OmegaSim}} || {{formatnum:{{PAGESIZE:OmegaSim}}}}
+|-
+| Software || [[Special:MyLanguage/OmegaBle|OmegaBle]] || El plugin Bluetooth nativo de la app para Android || {{#time:d.m.Y|{{REVISIONTIMESTAMP:OmegaBle}}}} || {{REVISIONUSER:OmegaBle}} || {{formatnum:{{PAGESIZE:OmegaBle}}}}
+|-
+| Conducción || [[Special:MyLanguage/Fahrverhalten|Comportamiento de conducción]] || Modelo físico, Pacejka, sensaciones de conducción, cambio || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Fahrverhalten}}}} || {{REVISIONUSER:Fahrverhalten}} || {{formatnum:{{PAGESIZE:Fahrverhalten}}}}
+|-
+| Conducción || [[Special:MyLanguage/Verschleiß|Desgaste]] || Neumáticos, depósito, daños, clima || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Verschleiß}}}} || {{REVISIONUSER:Verschleiß}} || {{formatnum:{{PAGESIZE:Verschleiß}}}}
+|-
+| Conducción || [[Special:MyLanguage/Virtuelles Fahren|Conducción virtual]] || Conducir sin coche real || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Virtuelles Fahren}}}} || {{REVISIONUSER:Virtuelles Fahren}} || {{formatnum:{{PAGESIZE:Virtuelles Fahren}}}}
+|-
+| Carreras || [[Special:MyLanguage/Rennarten|Tipos de carrera]] || Todos los tipos de carrera, salida, parrilla, campeonato || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Rennarten}}}} || {{REVISIONUSER:Rennarten}} || {{formatnum:{{PAGESIZE:Rennarten}}}}
+|-
+| Carreras || [[Special:MyLanguage/Boxenstopp|Parada en boxes]] || Desarrollo, minijuego, parada en boxes de los NPC || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Boxenstopp}}}} || {{REVISIONUSER:Boxenstopp}} || {{formatnum:{{PAGESIZE:Boxenstopp}}}}
+|-
+| Carreras || [[Special:MyLanguage/Challenges|Desafíos]] || Desafíos semanales y mejores tiempos de la comunidad || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Challenges}}}} || {{REVISIONUSER:Challenges}} || {{formatnum:{{PAGESIZE:Challenges}}}}
+|-
+| Rivales || [[Special:MyLanguage/NPC-Fahrverhalten|Comportamiento de los NPC]] || Rivales del ordenador: ritmo, trazada ideal, adelantamientos, nivel MAX || {{#time:d.m.Y|{{REVISIONTIMESTAMP:NPC-Fahrverhalten}}}} || {{REVISIONUSER:NPC-Fahrverhalten}} || {{formatnum:{{PAGESIZE:NPC-Fahrverhalten}}}}
+|-
+| Rivales || [[Special:MyLanguage/Safety Car und Reinigungswagen|Safety car y coche de limpieza]] || Fases amarillas, aparcamiento, orden de aparcamiento || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Safety Car und Reinigungswagen}}}} || {{REVISIONUSER:Safety Car und Reinigungswagen}} || {{formatnum:{{PAGESIZE:Safety Car und Reinigungswagen}}}}
+|-
+| Pista || [[Special:MyLanguage/Strecken- und Raum-Editor|Editor de pistas y salas]] || Editor, pista aleatoria por fórmula, diseñador de salas || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Strecken- und Raum-Editor}}}} || {{REVISIONUSER:Strecken- und Raum-Editor}} || {{formatnum:{{PAGESIZE:Strecken- und Raum-Editor}}}}
+|-
+| Juntos || [[Special:MyLanguage/Mehrspieler|Multijugador]] || Multijugador por wifi y varios jugadores en un dispositivo || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Mehrspieler}}}} || {{REVISIONUSER:Mehrspieler}} || {{formatnum:{{PAGESIZE:Mehrspieler}}}}
+|-
+| Accesorios || [[Special:MyLanguage/CH ControlBox|CH ControlBox]] || Emisora RC como mando Bluetooth || {{#time:d.m.Y|{{REVISIONTIMESTAMP:CH ControlBox}}}} || {{REVISIONUSER:CH ControlBox}} || {{formatnum:{{PAGESIZE:CH ControlBox}}}}
+|-
+| Accesorios || [[Special:MyLanguage/Startampel|Semáforo de salida]] || Semáforo de salida real en la mesa || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Startampel}}}} || {{REVISIONUSER:Startampel}} || {{formatnum:{{PAGESIZE:Startampel}}}}
+|-
+| Accesorios || [[Special:MyLanguage/Onboard-Kamera und Karosserien|Cámara a bordo y carrocerías]] || Cámara a bordo, vídeos de pista y carrocerías con cámara (en desarrollo) || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Onboard-Kamera und Karosserien}}}} || {{REVISIONUSER:Onboard-Kamera und Karosserien}} || {{formatnum:{{PAGESIZE:Onboard-Kamera und Karosserien}}}}
+|-
+| Ayuda || [[Special:MyLanguage/Keine Reaktion des Fahrzeugs|El coche no responde]] || El coche se cuelga con luces encendidas y ruedas giradas || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Keine Reaktion des Fahrzeugs}}}} || {{REVISIONUSER:Keine Reaktion des Fahrzeugs}} || {{formatnum:{{PAGESIZE:Keine Reaktion des Fahrzeugs}}}}
+|-
+| Participar || [[Special:MyLanguage/Mitmachen|Participar]] || Escribir y mejorar artículos, con y sin IA || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Mitmachen}}}} || {{REVISIONUSER:Mitmachen}} || {{formatnum:{{PAGESIZE:Mitmachen}}}}
+|-
+| Participar || [[Special:MyLanguage/Anleitung für KIs|Guía para IA]] || Forma de trabajar para asistentes de IA || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Anleitung für KIs}}}} || {{REVISIONUSER:Anleitung für KIs}} || {{formatnum:{{PAGESIZE:Anleitung für KIs}}}}
+|-
+| Participar || [[Special:MyLanguage/Vorlage:Stand|Plantilla:Stand]] || Cuadro de versión al inicio de cada página || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Vorlage:Stand}}}} || {{REVISIONUSER:Vorlage:Stand}} || {{formatnum:{{PAGESIZE:Vorlage:Stand}}}}
+|-
+| Ayuda || [[Special:MyLanguage/Fehlerbilder und Abhilfe|Problemas y soluciones]] || Latencia alta, coches que saltan, ajustes de Android, navegadores || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Fehlerbilder und Abhilfe}}}} || {{REVISIONUSER:Fehlerbilder und Abhilfe}} || {{formatnum:{{PAGESIZE:Fehlerbilder und Abhilfe}}}}
+|-
+| Participar || [[Special:MyLanguage/Wunschliste|Lista de deseos]] || Funciones deseadas y todo lo que está en desarrollo || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Wunschliste}}}} || {{REVISIONUSER:Wunschliste}} || {{formatnum:{{PAGESIZE:Wunschliste}}}}
+|-
+| Software || [[Special:MyLanguage/Andere Apps und Initiativen|Otras apps e iniciativas]] || App original, apps de la comunidad, accesorios || {{#time:d.m.Y|{{REVISIONTIMESTAMP:Andere Apps und Initiativen}}}} || {{REVISIONUSER:Andere Apps und Initiativen}} || {{formatnum:{{PAGESIZE:Andere Apps und Initiativen}}}}
+|}
+
+'''Cifras:''' {{Besucherzahl}} · {{NUMBEROFARTICLES}} artículos · {{NUMBEROFFILES}} archivos · {{NUMBEROFEDITS}} ediciones · {{NUMBEROFUSERS}} usuarios registrados. Más listas: [[Special:AllPages|Todas las páginas]] · [[Special:ListFiles|Todos los archivos]] · [[Special:Categories|Categorías]] · [[Special:WantedPages|Páginas requeridas]].
+
+[[Kategorie:OmegaSim]]

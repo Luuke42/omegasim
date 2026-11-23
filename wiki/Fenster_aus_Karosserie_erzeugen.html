@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fenster aus Karosserie erzeugen - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Fenster aus Karosserie erzeugen</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>–</b> vom 07.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p><b>Fenster aus Karosserie erzeugen</b> beschreibt, wie man in Fusion zu einer Karosserie aus einem Netz (STL) passende Scheiben konstruiert. Die Scheiben werden als eigene Teile gedruckt, zum Beispiel aus Klarharz, und von innen eingesetzt. Bei Karosserien mit <a href="./Onboard-Kamera_und_Karosserien.html" title="Onboard-Kamera und Karosserien">Onboard-Kamera</a> sieht man dann durch echte Scheiben in den Innenraum.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Vorbereitung">Vorbereitung</h2></div>
+<ul><li>Die Karosserie zuerst in den Endmaßstab 1:50 bringen und an ihren festen Platz setzen, siehe <a href="./Karosserie_anpassen.html" title="Karosserie anpassen">Karosserie anpassen</a>.</li>
+<li>Bei sehr großen Netzen die leichte Fassung mit 60.000 bis 300.000 Dreiecken verwenden. Die Scheiben passen trotzdem zur feinen Fassung, solange nichts verschoben wird, siehe <a href="./Grobe_und_feine_Fassung.html" title="Grobe und feine Fassung">Grobe und feine Fassung</a>.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Seitenfenster_(flach_oder_leicht_gewölbt)"><span id="Seitenfenster_.28flach_oder_leicht_gew.C3.B6lbt.29"></span>Seitenfenster (flach oder leicht gewölbt)</h2></div>
+<ol><li><b>Ebene anlegen:</b> <b>Konstruieren → Versetzte Ebene</b> parallel zum Fenster, also meist parallel zur Seitenwand. Die Ebene etwa 0,2–0,3 mm hinter die Außenhaut legen. Dort schneidet sie die Fensteröffnung sauber.</li>
+<li><b>Umriss holen:</b> Reiter <b>Netz</b> → <b>Erstellen → Netzschnittskizze</b>. Netzkörper und Ebene wählen und „Kurven an Schnitt anpassen“ anhaken. Fusion zeichnet den Umriss jeder Öffnung in dieser Ebene.</li>
+<li><b>Skizze aufräumen:</b> Türfugen und die äußere Kontur der Karosserie löschen, bis nur die geschlossenen Fensterkonturen übrig sind.</li>
+<li><b>Scheibe erzeugen:</b> Die Kontur mit <b>Skizze → Versatz</b> um 0,05 mm nach innen versetzen, damit die Scheibe etwas Luft hat. Dann mit <b>Erstellen → Extrusion</b> etwa 0,5 mm dick als „Neuer Körper“ extrudieren, bis knapp unter die Außenhaut.</li>
+<li><b>Klebe-Rand (nach Wunsch):</b> Die Kontur um 0,5–1 mm nach außen versetzen, den Ring zwischen beiden Konturen innen 0,3–0,5 mm dick extrudieren und mit <b>Ändern → Kombinieren → Verbinden</b> an die Scheibe hängen. Der Rand liegt innen an der Karosserie an, die Scheibe sitzt in der Öffnung.</li>
+<li><b>Prüfen:</b> Mit <b>Prüfen → Interferenz</b> oder <b>Prüfen → Schnittanalyse</b> kontrollieren, dass sich Scheibe und Karosserie nicht durchdringen.</li>
+<li><b>Exportieren:</b> Jede Scheibe als eigene STL speichern, nach der Namensregel aus <a href="./Add-,_Del-,_Rep-_und_Chk-Teile.html" title="Add-, Del-, Rep- und Chk-Teile">Add-, Del-, Rep- und Chk-Teile</a>, zum Beispiel <code>Add-Fenster-links-1.stl</code>.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Stark_gewölbte_Scheiben_(Front_und_Heck)"><span id="Stark_gew.C3.B6lbte_Scheiben_.28Front_und_Heck.29"></span>Stark gewölbte Scheiben (Front und Heck)</h2></div>
+<ol><li>Mehrere Netzschnittskizzen mit verschiedenen Ebenen anlegen, damit die Wölbung erfasst wird.</li>
+<li>Reiter <b>Fläche</b> → <b>Erstellen → Begrenzungsfläche</b>: die Umrisskurven als Rand wählen, Kontinuität „Tangential“.</li>
+<li><b>Erstellen → Aufdicken</b> um 0,5 mm nach innen.</li>
+<li>Klebe-Rand, Prüfen und Exportieren wie oben.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Richtwerte">Richtwerte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Maß</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Scheibenstärke</td>
+<td>0,4–0,6 mm
+</td></tr>
+<tr>
+<td>Luft zur Öffnung</td>
+<td>0,05–0,1 mm
+</td></tr>
+<tr>
+<td>Klebe-Rand Breite</td>
+<td>0,5–1 mm
+</td></tr>
+<tr>
+<td>Klebe-Rand Stärke</td>
+<td>0,3–0,5 mm
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Hinweise">Hinweise</h2></div>
+<ul><li>Klarharz wird nach dem Druck dünn mit Klarlack überzogen oder poliert, sonst bleibt es milchig.</li>
+<li>Die Netzschnittskizze funktioniert nur, wenn die Ebene das Netz wirklich schneidet. Liegt sie außerhalb der Wand, bleibt die Skizze leer.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./CAD_und_3D-Druck.html" title="CAD und 3D-Druck">CAD und 3D-Druck</a></li>
+<li><a href="./Karosserie_anpassen.html" title="Karosserie anpassen">Karosserie anpassen</a></li>
+<li><a href="./Onboard-Kamera_und_Karosserien.html" title="Onboard-Kamera und Karosserien">Onboard-Kamera und Karosserien</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw172
+Cached time: 20261107182154
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.016 seconds
+Real time usage: 0.019 seconds
+Preprocessor visited node count: 34/1000000
+Revision size: 3245/2097152 bytes
+Post‐expand include size: 750/2097152 bytes
+Template argument size: 13/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    4.325      1 Vorlage:Stand
+100.00%    4.325      1 -total
+-->
+
+<!-- Render ID 1bd61414-dad8-11f1-93dc-bc2411bb8d18 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:524:|#|:idhash:canonical and timestamp 20261107182154 and revision id 796. Rendering was triggered because: page-edit
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

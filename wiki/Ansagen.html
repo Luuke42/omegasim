@@ -16,15 +16,19 @@
 <p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
 </div>
 <h1 class="wiki-title">Ansagen</h1>
-<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
-<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.50</b> vom 30.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><p>﻿</p><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.4.80</b> vom 15.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
 <small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
 </p>
 </div>
 <figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Rennen.png" class="mw-file-description"><img src="images/250px-OmegaSim-Rennen.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Rennen.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Das Cockpit; die Ansagen begleiten das Rennen</figcaption></figure>
 <p>Die <b>Ansagen</b> von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> sind gesprochene Meldungen, die während eines Rennens erscheinen: die Rundenzeit, der Zwischenstand, das Rennintro vor der Ampel, die Rennergebnis-Ansage und feste <b>Funkmeldungen</b> (Schaden, Tank, Reifen, Regen, Akku, Boxenstopp). Sie lassen sich unter <b>Optionen → Ansagen</b> einzeln ein- und ausschalten, mit eigener Stimme, Tempo, Tonhöhe und Hall.
+</p><p><br />
 </p>
 <meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Neuerungen_seit_1.3.93">Neuerungen seit 1.3.93</h2></div>
+<p>Neue Rennereignis-Ansagen (schwere Beschädigung, Boxenstopp, Zeitstrafen) und eine Warteschlange für Ansagen.
+</p>
 <div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
 <table class="wikitable">
 <tbody><tr>
@@ -77,6 +81,16 @@
 <td><b>Rennintro</b></td>
 <td>„Willkommen am Start. Das Rundenrennen beginnt gleich …“</td>
 <td>vor der Startampel (Countdown), nur lokale Starts
+</td></tr>
+<tr>
+<td><b>Rennereignis</b></td>
+<td>Ansage zu einem Rennereignis (Pull Request von Playdater1974, seit 1.3.46)</td>
+<td>beim Auftreten eines Rennereignisses
+</td></tr>
+<tr>
+<td><b>Zufallsevents</b></td>
+<td>Ansage zu einem <a href="./Zufallsevents.html" title="Zufallsevents">Zufallsevent</a></td>
+<td>beim Auftreten eines Zufallsevents (seit 1.3.92)
 </td></tr>
 <tr>
 <td><b>Schaden</b></td>
@@ -161,18 +175,17 @@
 <li><code>tools/voice_synth.py</code>, <code>tools/voice_zahlen.py</code>, <code>tools/voice_rennintro.py</code>, <code>tools/voice_rennstand_erweitert.py</code>, <code>tools/tts_render.ps1</code></li></ul>
 <div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
 <ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
-
 <!-- 
 NewPP limit report
-Parsed by mw161
-Cached time: 20261030070857
+Parsed by mw172
+Cached time: 20261115192108
 Cache expiry: 1296000
 Reduced expiry: false
 Complications: [show‐toc]
 CPU time usage: 0.028 seconds
-Real time usage: 0.033 seconds
-Preprocessor visited node count: 51/1000000
-Revision size: 6318/2097152 bytes
+Real time usage: 0.032 seconds
+Preprocessor visited node count: 56/1000000
+Revision size: 6732/2097152 bytes
 Post‐expand include size: 753/2097152 bytes
 Template argument size: 16/2097152 bytes
 Highest expansion depth: 3/100
@@ -182,11 +195,14 @@ Unstrip post‐expand size: 0/5000000 bytes
 -->
 <!--
 Transclusion expansion time report (%,ms,calls,template)
-100.00%    3.396      1 Vorlage:Stand
-100.00%    3.396      1 -total
+100.00%    3.285      1 Vorlage:Stand
+100.00%    3.285      1 -total
 -->
 
-<!-- Render ID c5f6dcfa-d430-11f1-a3ec-bc2411247fc9 -->
+<!-- Render ID b57d710b-e129-11f1-93dc-bc2411bb8d18 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:82:|#|:idhash:canonical and timestamp 20261115192108 and revision id 854. Rendering was triggered because: page-edit
+ -->
 </div>
 </main>
 <footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>

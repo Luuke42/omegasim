@@ -1,5 +1,9 @@
-{{Stand|app=1.3.93|appdatum=05.11.2026}}
+﻿{{Stand|app=1.4.80|appdatum=15.11.2026}}
 Die '''Zufallsevents''' (in der App unter Renneinstellungen, ''experimentell'', ab Werk aus) lassen im laufenden Rennen ab und zu etwas in einem zufälligen Bereich der Strecke passieren. Der Sprecher sagt es an, im Cockpit steht ein Banner mit Event, Ort und Restzeit, und der Bereich leuchtet auf der Karte des Rennen-Schirms in der Farbe des Ereignisses. Die Ereignisse wirken sich auf das Fahrverhalten und auf die [[NPC-Fahrverhalten|NPCs]] aus.
+
+
+== Neuerungen seit 1.3.93 ==
+Die Events sind einzeln schaltbar (Häufigkeit 1 bis 10 Minuten, Dauer 10 bis 120 Sekunden); dazu Gelbe Flagge, Ölspur, Trümmer und Tank-Leck.
 
 == Einstellungen ==
 {| class="wikitable"

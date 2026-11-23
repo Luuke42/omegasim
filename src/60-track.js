@@ -5425,6 +5425,8 @@
              // braucht volle Schleifen, und davon schliessen weniger.
              bruecken: Math.max(0, Math.floor(+trackEditorOpt.bruecken || 0)),
              box: !!trackEditorOpt.box && hat(TILE_TYPE.PIT) > 0, ohneBox: false,
+             // v1.5: genau so viele Boxengassen (Vorgabe: der ganze Bestand).
+             boxen: editorBoxenSoll(),
              maxVersuche: trackEditorOpt.bruecken > 0 ? 1500 : 400 };
   }
   // Ein einzelner Versuch der Suche (v0.9.42 aus der Schleife geloest, damit die Suche in
@@ -5480,8 +5482,11 @@
     }
     const gaps = trackZufallSolveGaps(runs, 3, TRACK_SCHLUSS_STRENG_CM);
     if (!gaps) return;
-    const tiles = trackZufallBaueTiles(runs, gaps, b);
+    // v1.5: nur so viele Boxengassen wie gewuenscht in den Topf, die uebrigen zaehlen nicht als Rest.
+    const bZ = z.boxen !== undefined ? Object.assign({}, b, { [TILE_TYPE.PIT]: z.boxen }) : b;
+    const tiles = trackZufallBaueTiles(runs, gaps, bZ);
     if (!tiles) return;
+    if (z.boxen !== undefined && tiles.filter((x) => x.type === TILE_TYPE.PIT).length !== z.boxen) { z.ohneBox = true; return; }
     // Boxengasse erzwingen (v1.3.5): die Luecken fuellt trackZufallFuellGap() ohnehin zuerst mit
     // der Box, wenn eine da ist - fehlt sie trotzdem, ist es der naechste Versuch.
     if (z.box && !tiles.some((x) => x.type === TILE_TYPE.PIT)) { z.ohneBox = true; return; }
@@ -5547,8 +5552,8 @@
       showHudToast(t('Zufall: {n} Brücken mit diesen Teilen nicht möglich').replace('{n}', z.bruecken));
       return false;
     }
-    if (z.box && z.ohneBox) {
-      showHudToast(t('Zufall: Boxengasse mit diesen Teilen nicht möglich'));
+    if (z.ohneBox && z.boxen > 0) {
+      showHudToast(t('Zufall: {n} Boxengassen mit diesen Teilen nicht möglich').replace('{n}', z.boxen));
       return false;
     }
     showHudToast(t('Zufall: Nicht genug Kurventeile für einen Rundkurs'));
@@ -5732,7 +5737,15 @@
   // Der "Optionen"-Knopf in der Aktionsleiste klappt ein Feld auf: Laenge/Teile-Slider,
   // Linkslastig, Bruecken und "Strecke spiegeln". Die ersten drei wirken auf den Zufallsknopf.
   // v1.3.5: bruecken ist eine ANZAHL (vorher ein Schalter), box erzwingt ein Boxenteil.
-  const trackEditorOpt = { ziel: Infinity, linkslastig: false, bruecken: 0, box: false };
+  // v1.5: boxen = Anzahl Boxengassen der Zufallsstrecke; null = so viele wie unter "Meine Teile" (Vorgabe).
+  // box bleibt als Kurzform fuer "mindestens eine" (Selbsttests, aeltere Aufrufer).
+  const trackEditorOpt = { ziel: Infinity, linkslastig: false, bruecken: 0, box: false, boxen: null };
+  function editorBoxenBestand() { return Math.max(0, Math.floor(+((teileBestand() || {})[TILE_TYPE.PIT]) || 0)); }
+  function editorBoxenSoll() {
+    const n = editorBoxenBestand();
+    if (trackEditorOpt.boxen === null || trackEditorOpt.boxen === undefined) return n;
+    return Math.max(0, Math.min(n, Math.floor(+trackEditorOpt.boxen) || 0));
+  }
   const BRUECKEN_MAX = 4;
   function editorOptGesamtTeile() {
     const b = teileBestand() || {};
@@ -5751,16 +5764,20 @@
     ziel.value = String(Math.max(4, akt));
     const wert = $('track-opt-ziel-wert');
     if (wert) wert.textContent = trackEditorOpt.ziel === Infinity ? 'max' : String(Math.max(4, akt));
-    // Boxengasse erzwingen: nur waehlbar, wenn in "Meine Teile" eine Boxengasse steht.
-    const box = $('track-opt-box');
-    if (box) {
-      const hatBox = ((teileBestand() || {})[TILE_TYPE.PIT] || 0) > 0;
-      box.disabled = !hatBox;
-      box.checked = hatBox && trackEditorOpt.box;
-      const zeile = box.closest('label');
-      if (zeile) zeile.classList.toggle('tp-opt-aus', !hatBox);
+    // v1.5: Boxengassen als Anzahl (0 bis Bestand), Vorgabe = Bestand. Ohne Boxengasse im Bestand ausgegraut.
+    const bx = $('track-opt-boxen');
+    if (bx) {
+      const n = editorBoxenBestand();
+      bx.max = String(n);
+      bx.value = String(editorBoxenSoll());
+      bx.disabled = n === 0;
+      const gruppe = $('track-opt-boxen-gruppe');
+      if (gruppe) {
+        gruppe.classList.toggle('tp-opt-aus', n === 0);
+        gruppe.querySelectorAll('button').forEach((b) => { b.disabled = n === 0; });
+      }
       const hinweis = $('track-opt-box-hinweis');
-      if (hinweis) hinweis.hidden = hatBox;
+      if (hinweis) hinweis.hidden = n > 0;
     }
     const br = $('track-opt-bruecken');
     if (br) br.value = String(trackEditorOpt.bruecken);
@@ -5797,8 +5814,18 @@
     if (mi) mi.onclick = () => brueckenSetzen(trackEditorOpt.bruecken - 1);
     if (pl) pl.onclick = () => brueckenSetzen(trackEditorOpt.bruecken + 1);
   }
-  if ($('track-opt-box')) {
-    $('track-opt-box').onchange = () => { trackEditorOpt.box = $('track-opt-box').checked; };
+  function boxenSetzen(v) {
+    const n = Math.floor(+v);
+    trackEditorOpt.boxen = isFinite(n) ? Math.max(0, Math.min(editorBoxenBestand(), n)) : null;
+    trackEditorOpt.box = false;
+    editorOptZeigen();
+  }
+  if ($('track-opt-boxen')) {
+    $('track-opt-boxen').onchange = () => boxenSetzen($('track-opt-boxen').value);
+    const steuer = $('track-opt-boxen').closest('.num-steuer');
+    const mi = steuer && steuer.querySelector('.num-minus'), pl = steuer && steuer.querySelector('.num-plus');
+    if (mi) mi.onclick = () => boxenSetzen(editorBoxenSoll() - 1);
+    if (pl) pl.onclick = () => boxenSetzen(editorBoxenSoll() + 1);
   }
   // "Strecke spiegeln": links/rechts tauschen und die Schleife rueckwaerts fahren (chSpiegelTiles).
   if ($('track-spiegel')) {

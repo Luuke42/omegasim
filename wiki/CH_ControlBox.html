@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CH ControlBox - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">CH ControlBox</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><p>Die CH ControlBox macht aus einer RC-Funke einen Bluetooth-Gamepad für OmegaSim. Für OmegaSim gilt Firmware <b>v1.6.2</b>; ursprünglicher Autor und Urheber des Sketches ist <b>jogger86</b>.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<p>Wer neu einsteigt, braucht genau diese Kombination:
+</p>
+<table class="wikitable">
+
+<tbody><tr>
+<th>Was
+</th>
+<th>Einstellung
+</th></tr>
+<tr>
+<td>OmegaSim
+</td>
+<td>aktueller Stand von Luuke (ab 21.10.2026), Chrome/Edge oder Android-App
+</td></tr>
+<tr>
+<td>Fahrgefühl
+</td>
+<td>eines mit Automatik (Arcade, Sim+), nicht RC
+</td></tr>
+<tr>
+<td>OmegaSim-Option
+</td>
+<td>„Rückwärtsgang: Gas und Bremse zusammen“ an, Druckschwelle 10&#160;%
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Kalibrieren">Kalibrieren</h2></div>
+<p>Für OmegaSim nur Endanschläge, Mitte und eine kleine Neutral-Totzone kalibrieren, sonst nichts.
+</p>
+<ol><li><b>Start:</b> BOOT-Taste 5 s halten, bis die LED dauerhaft leuchtet.</li>
+<li><b>Schritt 1:</b> Lenkung und Gas/Bremse bis zu allen Anschlägen, <b>CH3 umlegen und CH4 mehrmals drücken</b>, alles in die Mitte. BOOT kurz.</li>
+<li><b>Schritt 2:</b> Nichts anfassen, auch nicht 4× auf CH3/CH4 klicken. BOOT kurz.</li>
+<li><b>Schritt 3:</b> Nichts anfassen (keine Endanschlag-Totzone). BOOT kurz.</li>
+<li><b>Schritt 4:</b> Gashebel ca. 5–8&#160;% aus der Mitte bewegen und loslassen (Neutral-Totzone gegen Überschwingen). BOOT kurz.</li>
+<li><b>Schritt 5:</b> Nur bei falscher Richtung: voll Gas und voll rechts, dann loslassen, <b>nicht in die Gegenrichtung</b> (sonst „Minimalausgabe“, die Lenkung springt). BOOT kurz.</li>
+<li><b>Schritt 6:</b> Optional weiches Expo für Gas/Bremse: Bremse halb ziehen, halten, BOOT kurz. Dann BOOT <b>3 s halten</b> zum Speichern.</li></ol>
+<p>Kontrolle unter OmegaSim → Optionen → Controller: In Ruhe stehen Gas, Bremse und Lenkung auf 0,00, an den Anschlägen auf 1,00 bzw. ±1,00. Leichtes Gasgeben muss den Gaswert heben, nicht den Bremswert.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="OmegaSim_einstellen">OmegaSim einstellen</h2></div>
+<p>Rückwärts läuft über „Gas und Bremse zusammen“, und das gibt es nur in Fahrgefühlen mit Automatik.
+</p>
+<table class="wikitable">
+
+<tbody><tr>
+<th>Einstellung in OmegaSim
+</th>
+<th>Wert
+</th>
+<th>Warum
+</th></tr>
+<tr>
+<td>Garage → Fahrgefühl
+</td>
+<td>Arcade oder Sim+ (nicht RC)
+</td>
+<td>RC schätzt das Tempo und bremst mit Gegenstrom: Bremse knallt, rutscht in den Rückwärtsgang
+</td></tr>
+<tr>
+<td>Garage → Auto, das Gamepad und Tastatur folgt
+</td>
+<td>dein Auto
+</td>
+<td>sonst steuert der Controller nichts
+</td></tr>
+<tr>
+<td>Rückwärtsgang: Gas und Bremse zusammen
+</td>
+<td>an
+</td>
+<td>Gegenstück zum Rückwärtsmodus der Box
+</td></tr>
+<tr>
+<td>Rückwärtsgang: Druckschwelle
+</td>
+<td>10&#160;%
+</td>
+<td>ab Werk 50&#160;%, dann erst ab halbem Gas rückwärts
+</td></tr>
+<tr>
+<td>Lenkung &amp; Feinabstimmung → Lenkdämpfung
+</td>
+<td>0 ms
+</td>
+<td>bei RC-Funken gibt die Hand das Tempo vor, ab Werk 83 ms
+</td></tr>
+<tr>
+<td>Optionen → Controller → Belegung
+</td>
+<td>Werkseinstellung
+</td>
+<td>RT = Gas, LT = Bremse, linker Stick = Lenkung
+</td></tr></tbody></table>
+<p>Die Live-Anzeige unter „Gas und Bremse zusammen“ zeigt Gas, Bremse, Gang und warum gerade nicht eingelegt wird (z. B. „zu schnell“, „Fahrgefühl RC“). Das Licht schaltet OmegaSim beim Start selbst ein.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<p>So setzt die Box die Funke in v1.6.2 um.
+</p>
+<table class="wikitable">
+
+<tbody><tr>
+<th>Bedienelement am Sender
+</th>
+<th>Box sendet
+</th>
+<th>Wirkung in OmegaSim
+</th></tr>
+<tr>
+<td>Lenkrad
+</td>
+<td>linker Stick X
+</td>
+<td>lenken
+</td></tr>
+<tr>
+<td>Gashebel ziehen
+</td>
+<td>RT
+</td>
+<td>Gas
+</td></tr>
+<tr>
+<td>Gashebel drücken
+</td>
+<td>LT
+</td>
+<td>Bremse
+</td></tr>
+<tr>
+<td>CH4 drücken
+</td>
+<td>schaltet Rückwärtsmodus um, LED blinkt kurz
+</td>
+<td>–
+</td></tr>
+<tr>
+<td>Gas bei Rückwärtsmodus an
+</td>
+<td>RT + volle LT
+</td>
+<td>im Stand: Rückwärtsgang, fährt rückwärts
+</td></tr>
+<tr>
+<td>CH4 erneut, Hebel kurz los
+</td>
+<td>nur RT
+</td>
+<td>rollt aus, 1. Gang, vorwärts
+</td></tr>
+<tr>
+<td>CH3
+</td>
+<td>nichts
+</td>
+<td>–
+</td></tr>
+<tr>
+<td>Licht-Combo
+</td>
+<td>Y
+</td>
+<td>Licht an/aus
+</td></tr>
+<tr>
+<td>Menü-Combo
+</td>
+<td>Start
+</td>
+<td>Boxenstopp; beendet „Virtuell fahren“
+</td></tr>
+<tr>
+<td>Motorstart-Combo, Turbo, Launch Control
+</td>
+<td>nichts
+</td>
+<td>–
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Fehlerbehebung">Fehlerbehebung</h2></div>
+<p>Alle Fehler, die bisher aufgetreten sind, mit ihrer Lösung.
+</p>
+<table class="wikitable">
+
+<tbody><tr>
+<th>Symptom
+</th>
+<th>Ursache
+</th>
+<th>Lösung
+</th></tr>
+<tr>
+<td>Controller konfigurierbar, aber Auto fährt nicht
+</td>
+<td>v1.6.0 sendet tausende Bluetooth-Meldungen pro Sekunde und blockiert den Funk zum Auto
+</td>
+<td>Firmware ab v1.6.1
+</td></tr>
+<tr>
+<td>Bremse knallt, rutscht in Rückwärts
+</td>
+<td>Fahrgefühl RC schätzt das Tempo
+</td>
+<td>Fahrgefühl mit Automatik + „Gas und Bremse zusammen“
+</td></tr>
+<tr>
+<td>Gas wirkt digital
+</td>
+<td>Gasweg zu kurz kalibriert
+</td>
+<td>neu kalibrieren, Schritt 1 bis Anschlag, ggf. Expo
+</td></tr>
+<tr>
+<td>Lenkung reagiert spät
+</td>
+<td>Lenkdämpfung 83 ms in OmegaSim
+</td>
+<td>auf 0 stellen
+</td></tr>
+<tr>
+<td>Rückwärtsgang kommt nicht
+</td>
+<td>Fahrgefühl RC, Druckschwelle 50&#160;% oder zu schnell
+</td>
+<td>Live-Anzeige lesen, Schwelle 10&#160;%, anhalten
+</td></tr>
+<tr>
+<td>CH4 ohne Wirkung, LED schaltet nicht um
+</td>
+<td>Box erkennt den Kanal nicht
+</td>
+<td>in Schritt 1 CH4 mehrmals drücken, Kabel des CH4-Kanals prüfen
+</td></tr>
+<tr>
+<td>Nach „Virtuell fahren“: Auto mit Licht und Lenkung rechts, nicht trennbar, nicht verbindbar
+</td>
+<td>Fehler in OmegaSim (WIP), Auto hängt an alter Verbindung
+</td>
+<td>OmegaSim beenden erzwingen, Bluetooth aus/an, Auto aus/an, neu verbinden
+</td></tr>
+<tr>
+<td>„Virtuell fahren“ lässt sich nicht verlassen
+</td>
+<td>–
+</td>
+<td>✕ oben rechts, Esc oder Menü-Combo (Start)
+</td></tr></tbody></table>
+<p>Den Fehler bei „Virtuell fahren“ als Issue an Luuke melden; bis dahin nicht mit verbundenen echten Autos nutzen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Versionen">Versionen</h2></div>
+<table class="wikitable">
+
+<tbody><tr>
+<th>Datum
+</th>
+<th>Version
+</th>
+<th>Änderung
+</th></tr>
+<tr>
+<td>22.10.2026
+</td>
+<td>v1.6.2
+</td>
+<td>CH4 = Rückwärtsmodus für OmegaSims „Gas und Bremse zusammen“ (LED zeigt ihn); CH3 sendet nichts
+</td></tr>
+<tr>
+<td>21.10.2026
+</td>
+<td>v1.6.1 (spätere Fassung)
+</td>
+<td>CH3 = Licht an/aus, CH4 = Lichthupe
+</td></tr>
+<tr>
+<td>21.10.2026
+</td>
+<td>v1.6.1
+</td>
+<td>Bluetooth nur bei Änderung (max. 125/s), entspanntes Verbindungsintervall, X/B-Rückwärts, Tippfehler in Kalibrierschritt 5 behoben
+</td></tr>
+<tr>
+<td>15.12.2025
+</td>
+<td>v1.6.0
+</td>
+<td>Original von jogger86: DR!FT-Unterstützung und Zusatzfunktionen
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_und_Credits">Quellen und Credits</h2></div>
+<p>Die CH ControlBox stammt von <b>jogger86</b> (mit mameise); v1.6.1 und v1.6.2 sind Anpassungen seiner v1.6.0 für OmegaSim. Bibliotheken von Mystfit, h2zero und Tom Stewart.
+</p>
+<ul><li><a rel="nofollow" class="external text" href="https://github.com/Luuke42/omegasim">OmegaSim von Luuke42</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw163
+Cached time: 20261112101056
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.017 seconds
+Real time usage: 0.018 seconds
+Preprocessor visited node count: 21/1000000
+Revision size: 5685/2097152 bytes
+Post‐expand include size: 0/2097152 bytes
+Template argument size: 0/2097152 bytes
+Highest expansion depth: 2/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    0.000      1 -total
+-->
+
+<!-- Render ID 5990c2d9-de81-11f1-865d-bc241192f7ce -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:3:|#|:idhash:canonical and timestamp 20261112101056 and revision id 24. Rendering was triggered because: page_view
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

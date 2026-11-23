@@ -1,0 +1,35 @@
+{{Stand|app=1.4.80|appdatum=15.11.2026}}
+'''Meisterschaft''' ist ein Spielmodus in [[OmegaSim]], bei dem mehrere Rennen nacheinander als Saison ausgetragen werden und die Fahrer nach Punkten gewertet werden. Die Meisterschaft ist seit Version 1.0 als experimentell beziehungsweise WIP gekennzeichnet und wird über die Kachel ''Meisterschaft'' unten links im Fahren-Menü geöffnet.
+
+== Überblick ==
+Die Meisterschaft ist kein eigenes Rennen, sondern eine Abfolge von Events. Jedes Event setzt nur die vorhandenen Renneinstellungen (Modus, Länge, Wetter, fliegender Start, Pflichtstopps, Strecke, Startaufstellung) und startet den normalen Ablauf mit Startaufstellung, Ampel, Rennen und Zielflagge. Nach jedem Event öffnet sich automatisch ein Zwischenstand. Am Ende steht der Meister fest. In einem WLAN-Mehrspieler plant das Telefon die Meisterschaft und wird dabei als Meisterschaftsleiter bezeichnet; es startet jedes Event für alle und wertet die Ergebnisse aus.
+
+== Events ==
+Eine Meisterschaft besteht aus höchstens zehn Events. Für jedes Event lassen sich einstellen:
+
+* '''Strecke''' (aktuell im Editor, eine gespeicherte Strecke oder freie Bahn)
+* '''Format''' (Training, Qualifying, Runden oder Endurance)
+* '''Umfang''' (bei Runden 1 bis 200 Runden, bei Zeitrennen 1 bis 240 Minuten)
+* '''Wetter''' (sonnig, Regen oder wechselhaft)
+* '''Start''' (stehend oder fliegend)
+* '''Startaufstellung'''
+* '''Pflichtstopps''' (0 bis 3)
+
+Das Standardformat ist ein Qualifying von 5 Minuten und ein Rundenrennen über 15 Runden. Training und Qualifying vergeben keine Punkte.
+
+== Wertung ==
+Punkte gibt es nur bei Events mit Punkten (Runden und Endurance). Zur Auswahl stehen drei Tabellen: F1 (25-18-15-12-10), klassisch (10-6-4-3-2) und linear (Platz N bis 1). Für die schnellste Runde gibt es einen Bonuspunkt. Als Teilnehmer wählt man entweder alle verbundenen Autos (Spieler 1 bis 3, NPCs und im Mehrspieler die anderen Telefone) oder nur die Spieler (NPCs fahren als Verkehr mit, erhalten aber keine Punkte). Das Safety Car wird nie gewertet.
+
+== Erfolgsballast ==
+Der Erfolgsballast (WIP) bestraft die Führenden mit Zusatzgewicht. Vor jedem Event bekommt, wer mehr Punkte hat, mehr Gewicht ins Auto; der Führende trägt das Höchstgewicht der Stufe, der Letzte nichts, dazwischen wird linear nach dem Punkteabstand verteilt. Das erste Event fährt ohne Ballast. 50 Kilogramm kosten im Mittel etwa 2 Prozent Rundenzeit. Nach dem Event und außerhalb der Meisterschaft fährt jeder ohne Ballast.
+
+== Startaufstellung ==
+Für jedes Event lässt sich die Startaufstellung wählen: automatisch, nach Punkten (Führender hinten oder vorn), nach dem letzten Qualifying, wie das letzte Ergebnis oder zufällig. Die Startreihe wird je Event einmal festgelegt und bis zum Start behalten.
+
+== Weblinks ==
+* [[Rennarten]]
+* [[Fahrgefuehl]]
+* [[Mehrspieler]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Spielmodi]]

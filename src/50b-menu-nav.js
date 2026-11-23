@@ -94,6 +94,11 @@
     if (typeof konsoleTourOffen === 'function' && konsoleTourOffen()) return $('k-tour-karte');
     // v1.4.33: das Setup-Fenster eines Autos (98i-setup.js) liegt ueber der Garage.
     if (typeof setupFensterOffen === 'function' && setupFensterOffen()) return $('setup-fenster');
+    // v1.5: das Fenster der KI-Persoenlichkeit eines NPCs (98j-ki-persoenlichkeit.js), ebenso.
+    if (typeof kiFensterOffen === 'function' && kiFensterOffen()) return $('ki-fenster');
+    if (typeof showFensterOffen === 'function' && showFensterOffen()) return $('show-fenster');
+    if (typeof karFensterOffen === 'function' && karFensterOffen()) return $('kar-fenster');
+    if (typeof zlFensterOffen === 'function' && zlFensterOffen()) return $('zl-fenster');
     // Die Mehrspieler-Anzeige "Info-Screen" liegt ueber allem (v0.8.41): sonst lief die Auswahl
     // unsichtbar darunter weiter.
     const mi = $('mp-info');
@@ -249,7 +254,7 @@
   // Zeile gemerkt, beim Zurueckkommen steht die Auswahl wieder dort. Nicht fuer Dialoge
   // (#k-frage, Tutorial): die fangen immer oben an.
   const menuNavMerk = {};
-  const MENU_NAV_OHNE_MERK = ['k-frage', 'k-tour-karte', 'mp-ready-screen', 'setup-fenster'];
+  const MENU_NAV_OHNE_MERK = ['k-frage', 'k-tour-karte', 'mp-ready-screen', 'setup-fenster', 'ki-fenster', 'show-fenster', 'kar-fenster', 'zl-fenster'];
   function menuNavMerkLeeren() { Object.keys(menuNavMerk).forEach((k) => { delete menuNavMerk[k]; }); }
   function menuNavEnsureContext() {
     const key = menuNavContextNow();

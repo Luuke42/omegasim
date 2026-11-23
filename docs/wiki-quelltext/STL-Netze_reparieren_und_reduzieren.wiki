@@ -1,0 +1,70 @@
+{{Stand|app=–|appdatum=03.11.2026}}
+'''STL-Netze reparieren und reduzieren''' beschreibt, wie man mit dem freien Programm [https://www.blender.org Blender] fehlerhafte STL-Dateien wasserdicht macht und die Zahl der Dreiecke so weit senkt, dass Fusion flüssig damit arbeitet. Grundlage ist Blender 4.x. Die Menünamen stehen auf Englisch, deutsche Namen in Klammern; wer einen Befehl nicht findet, sucht ihn mit '''F3'''.
+
+== Wann lohnt sich das? ==
+* Fusion wird mit Netzen ab etwa einer Million Dreiecken sehr langsam. 250 000–300 000 Dreiecke für eine Karosserie und 30 000–60 000 für ein Rad sind handlich.
+* Netze aus dem Internet oder aus mehreren zusammengesetzten Teilen haben oft Fehler: offene Kanten, doppelte Flächen, winzige Splitter. Dann scheitern Kombinieren und Abziehen in Fusion.
+
+== 1. Importieren ==
+* '''File → Import → STL (.stl)''' (Datei → Importieren), Scale „1“, Forward „Y“, Up „Z“.
+* 1 mm in der Datei wird zu 1 Einheit in Blender. Das Teil wirkt riesig, die Maße stimmen aber.
+* Das Teil nicht verschieben, drehen oder skalieren, damit es nach dem Export wieder an seiner Stelle sitzt.
+* Die Dreieckszahl zeigt '''Overlays → Statistics''' (Überlagerungen → Statistik) oben rechts im Ansichtsfenster.
+
+== 2. Kopie zum Vergleichen ==
+* Objekt markieren, '''Shift+D''', dann Rechtsklick: Die Kopie bleibt an derselben Stelle. Mit '''H''' ausblenden, mit '''Alt+H''' wieder einblenden.
+
+== 3. Netz prüfen ==
+* Unter '''Edit → Preferences → Get Extensions''' (Bearbeiten → Einstellungen → Erweiterungen) die Erweiterung „3D Print Toolbox“ installieren.
+* Seitenleiste mit '''N''' öffnen, Reiter '''3D-Print → Check All'''. Wichtig sind „Non Manifold“ (offene oder mehrfache Kanten) und „Intersect“ (Flächen, die sich durchdringen).
+* Ohne Erweiterung: im Bearbeitungsmodus ('''Tab''') '''Select → Select All by Trait → Non Manifold'''.
+
+== 4. Kleine Fehler beheben ==
+Im Bearbeitungsmodus alles markieren ('''A'''), dann nacheinander:
+* '''Mesh → Clean Up → Merge by Distance''' (Nach Abstand zusammenführen), Abstand 0,0001
+* '''Mesh → Clean Up → Delete Loose''' (Lose löschen) – entfernt Splitter
+* '''Mesh → Clean Up → Degenerate Dissolve''' (Degenerierte auflösen)
+* '''Mesh → Normals → Recalculate Outside''' ('''Shift+N''') – Normalen nach außen
+Offene Löcher lassen sich mit '''Alt+F''' oder '''F''' füllen.
+
+== 5. Stark fehlerhafte Netze neu aufbauen ==
+Der '''Voxel-Remesh''' baut die Oberfläche in einem feinen Raster neu auf. Danach ist das Netz immer geschlossen und sauber; scharfe Kanten werden dabei minimal gerundet.
+* Im Objektmodus rechts '''Object Data Properties''' (grünes Dreieck) → Bereich '''Remesh'''.
+* '''Voxel Size''' etwa ein Viertel der dünnsten Wand: Rad mit feinen Speichen 0,025, Karosserie 0,05–0,1.
+* „Adaptivity“ 0, „Fix Poles“ aus, „Preserve Volume“ an, dann '''Voxel Remesh'''.
+* Ein feines Raster braucht viel Speicher. Bei einer ganzen Karosserie zuerst 0,1 versuchen.
+* Liegen in einem Netz Flächen genau aufeinander oder fehlen größere Stücke, kann Remesh Teile verlieren. Vorher Schritt 4 ausführen und das Ergebnis mit der Kopie vergleichen.
+
+== 6. Reduzieren ==
+* Über den Schraubenschlüssel '''Add Modifier → Generate → Decimate''' (Modifikator hinzufügen → Generieren → Dezimieren), Modus „Collapse“.
+* '''Ratio''' verkleinern, bis unten bei „Face Count“ die Zielzahl steht. Beispiel: 30 000 von 2,7 Millionen ergibt eine Ratio von etwa 0,011.
+* „Triangulate“ an, „Symmetry“ aus.
+* Mit '''Ctrl+A''' über dem Modifikator anwenden.
+* Bei großen ebenen Flächen fasst der Modus „Planar“ (Winkel 1–5°) Flächen zusammen, ohne die Form zu ändern.
+
+== 7. Nachprüfen ==
+* 3D Print Toolbox → '''Check All''': „Non Manifold“ und „Intersect“ sollen 0 sein.
+* Mit der Kopie aus Schritt 2 vergleichen, etwa im Drahtgitter ('''Z → Wireframe''').
+
+== 8. Exportieren ==
+* Nur das neue Objekt markieren.
+* '''File → Export → STL (.stl)''', „Selection Only“ an, Scale „1“, Forward „Y“, Up „Z“, „ASCII“ aus.
+* In Fusion eingefügt, sitzt das Teil an derselben Stelle wie das Original.
+
+== Richtwerte ==
+{| class="wikitable"
+! Teil !! Voxel Size !! Ziel für Fusion
+|-
+| Rad mit Speichen || 0,025 || 30 000–60 000 Dreiecke
+|-
+| Karosserie || 0,05–0,1 || 250 000–300 000 Dreiecke
+|}
+
+== Siehe auch ==
+* [[CAD und 3D-Druck]]
+* [[Grobe und feine Fassung]]
+
+== Weblinks ==
+* [https://www.blender.org Blender] (frei, für Windows, macOS und Linux)
+
+[[Kategorie:CAD]]

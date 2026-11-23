@@ -270,7 +270,7 @@ const ST_KOPF = ['zeitpunkt', 'fahrer', 'strecke', 'zeit_ms', 'runden_ms', 'teil
   'streckenname', 'fahrgefuehl', 'code'];
 const ST_MIN_FAHRER = 1;   // v1.3.25: alle Strecken (vorher erst ab 4 Geraeten)
 // Dieselbe Liste wie SK_FAHRGEFUEHLE in src/72c-strecken-online.js (alle Presets plus eigen/unbekannt).
-const ST_FAHRGEFUEHLE = ['arcade', 'simplus', 'propacejka', 'gran', 'acc', 'pro', 'gt3', 'f1', 'realgt3', 'omega', 'rc', 'eigen', 'unbekannt'];
+const ST_FAHRGEFUEHLE = ['arcade', 'simplus', 'propacejka', 'librecorsa', 'gran', 'acc', 'pro', 'gt3', 'f1', 'realgt3', 'omega', 'rc', 'eigen', 'unbekannt'];
 // Laenge je Teil in m, wie trackLaengeM in der App (src/60-track.js, tileLength). Dieselben Werte
 // stehen im Selbsttest "Online v1.3.15: Schluessel ..." - beide muessen gleich sein.
 const ST_LAENGE_M = { S: 0.43, G: 0.43, E: 0.43, B: 0.86, R: 0.38746, L: 0.38746, K: 0.19373, M: 0.19373,

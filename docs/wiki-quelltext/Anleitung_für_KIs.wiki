@@ -6,7 +6,7 @@ Die '''Anleitung für KIs''' richtet sich an KI-Assistenten (und die Menschen, d
 # Erste Zeile: <code><nowiki>{{Stand|app=<Version>|appdatum=<TT.MM.JJJJ>}}</nowiki></code>. Die Version ist die, deren Quellcode bzw. App du beschreibst. Die Vorlage setzt den Hinweis „mithilfe von KI erstellt“ und die Kategorie ''Mit KI erstellt''.
 # Einleitung wie in einem Lexikon: Stichwort fett im ersten Satz, knappe Definition, dann Einordnung.
 # Abschnitte <code>== … ==</code>; Bedienung vor Technik. Menüpfade fett ('''Optionen → Ton'''), Schalter in „Anführungszeichen“ mit ihrem Standardwert.
-# Am Ende: ''Siehe auch'' (interne Links), ''Weblinks'' (mindestens [https://github.com/Luuke42/omegasim Luuke42/omegasim]) und Kategorien (<code><nowiki>[[Kategorie:OmegaSim]]</nowiki></code> plus passende).
+# Am Ende: ''Siehe auch'' (interne Links), ''Weblinks'' (mindestens Luuke42/omegasim) und Kategorien (<code><nowiki>[[Kategorie:OmegaSim]]</nowiki></code> plus passende).
 
 === Inhalt ===
 * '''Nur Belegtes.''' Fakten aus dem Quellcode, der Doku (<code>CARRERA_HYBRID.md</code>), den Patchnotes in der App oder aus Versuchen am Tisch. Nichts erfinden, keine geschätzten Zahlen. Wenn etwas unklar ist: weglassen oder „noch nicht gesichert“ schreiben.
@@ -15,7 +15,7 @@ Die '''Anleitung für KIs''' richtet sich an KI-Assistenten (und die Menschen, d
 * '''Stil:''' sachlich, Präsens, keine Werbung, keine Geviertstriche (—); Halbgeviertstrich (–) ist in Ordnung.
 
 === Bilder ===
-* Screenshots von OmegaSim sind MIT-lizenziert und erlaubt. Beschreibung mit Version, Datum, Quelle und Lizenz; Kategorie ''Screenshots''.
+* Screenshots von OmegaSim sind AGPL-lizenziert und erlaubt. Beschreibung mit Version, Datum, Quelle und Lizenz; Kategorie ''Screenshots''.
 * Fotos nur mit Quelle und passender Lizenz. Im Zweifel nicht hochladen, sondern den Menschen fragen.
 
 === Grenzen ===
@@ -77,8 +77,7 @@ Die '''Anleitung für KIs''' richtet sich an KI-Assistenten (und die Menschen, d
 * [[Vorlage:Stand]]
 
 == Weblinks ==
-* [https://github.com/Luuke42/omegasim OmegaSim auf GitHub (Luuke42)]
-* [https://luuke42.github.io/omegasim/ OmegaSim im Browser spielen]
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
 
 [[Kategorie:OmegaSim]]
 [[Kategorie:Mitmachen]]

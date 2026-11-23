@@ -1,6 +1,10 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+﻿{{Stand|app=1.4.80|appdatum=15.11.2026}}
 [[Datei:OmegaSim-Safety-Car.png|mini|Ein Auto mit der Rolle Safety Car in OmegaSim]]
 Das '''Safety Car''' ist in [[OmegaSim]] eine Garagenrolle, mit der ein echtes [[Carrera HYBRID]]-Auto selbstständig als Sicherheitsfahrzeug fährt: Es parkt am Rand der Bahn, fährt bei gelber Flagge los, das Feld schließt dahinter auf und überholt nicht, und nach Grün kehrt es auf sein Einpark-Teil zurück und parkt dort mit einer aufgenommenen Lenk- und Gasfolge. Der '''Reinigungswagen''' (in der App „Reinigungsfahrzeug“, in Arbeit) ist eine verwandte Rolle, die die Bahn in drei Runden mittig, links und rechts abfährt. Beide Rollen nutzen die Steuerung der NPCs (siehe [[NPC-Fahrverhalten]]) mit eigenen Zusatzregeln; sie gibt es nur beim Fahren auf der Bahn und jeweils nur für ein Auto.
+
+
+== Neuerungen seit 1.3.93 ==
+Die Einpark- und Ausparkfolge sowie die Regler liegen jetzt unter Optionen → Safety Car; dazu gibt es einen NPC-Boxenstopp.
 
 == Auf einen Blick ==
 {| class="wikitable"

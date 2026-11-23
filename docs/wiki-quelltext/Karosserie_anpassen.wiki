@@ -1,0 +1,54 @@
+{{Stand|app=–|appdatum=07.11.2026}}
+'''Karosserie anpassen''' beschreibt, wie man eine Karosserie aus einem anderen Maßstab auf das [[Carrera HYBRID]]-Chassis in 1:50 bringt. Ausgangspunkt sind immer Netzdateien (STL oder OBJ), zum Beispiel Modelle in 1:24 oder 1:32.
+
+== Warum drei Schritte ==
+Ein Modell nur gleichmäßig auf 1:50 zu verkleinern reicht selten. Radstand und Spur des Chassis stehen fest, und die Karosserie muss dazu passen. Darum geht man in drei Schritten vor, die nichts voneinander wissen:
+# '''Maßstab:''' gleichmäßig in alle Richtungen auf 1:50 bringen
+# '''Länge:''' gleichmäßig nachskalieren, bis die Radhäuser über den Achsen des Chassis liegen
+# '''Breite:''' nur quer skalieren, bis die Karosserie zur Spur passt
+Jeder Schritt lässt sich für sich wiederholen und korrigieren, ohne die anderen zu verändern.
+
+== Richtwerte für das Porsche-Chassis ==
+{| class="wikitable"
+! Maß !! Wert
+|-
+| Radstand || 50,3 mm
+|-
+| Breite der Karosserie || etwa 38,4 mm
+|-
+| Faktor 1:24 → 1:50 || 0,48
+|-
+| Faktor 1:32 → 1:50 || 0,64
+|-
+| Faktor 1:43 → 1:50 || 0,86
+|}
+
+== Von Hand in Fusion ==
+# Das Netz einfügen: '''Einfügen → Netz einfügen'''.
+# '''Maßstab:''' '''Ändern → Skalieren''', Typ „Gleichmäßig“, Faktor aus der Tabelle (alter Maßstab geteilt durch 50).
+# '''Länge:''' Mit '''Prüfen → Messen''' den Abstand von der Mitte des vorderen zur Mitte des hinteren Radhauses messen. Faktor = 50,3 geteilt durch den gemessenen Wert, wieder gleichmäßig skalieren.
+# '''Breite:''' Die Breite messen. '''Skalieren''' mit Typ „Ungleichmäßig“: In Querrichtung Faktor = Zielbreite geteilt durch gemessene Breite, die beiden anderen Richtungen bleiben auf 1.
+# Zum Schluss die Karosserie auf das Chassis setzen und mit [[Lenkeinschlag prüfen]] kontrollieren, ob die Vorderräder frei laufen.
+
+== Add-In „Karosserie anpassen“ (in Erprobung) ==
+Gnen54 erprobt ein Fusion-Add-In, das die drei Schritte zusammenfasst. Es ist noch nicht veröffentlicht.
+* Knopf '''Karosserie anpassen''' unter '''Volumenkörper → Ändern''' und unter '''Dienstprogramme → Add-Ins'''
+* Karosserie wählen (Netz- oder Volumenkörper), dann den Schritt:
+** '''1. Maßstab:''' Ausgangsmaßstab von 1:18 bis 1:87, Ziel 1:50
+** '''2. Länge:''' über die Gesamtlänge, über einen gemessenen Radstand oder über zwei Punkte an den Radhaus-Mitten; Ziel-Radstand 50,3 mm
+** '''3. Breite:''' Ziel-Breite, nur quer
+* Längs- und Höhenachse erkennt das Add-In selbst; man kann sie auch von Hand wählen.
+* Die '''Vorschau''' zeigt das Ergebnis sofort. '''Übernehmen''' führt den Schritt aus und öffnet das Fenster gleich wieder mit dem neuen Körper. So kann man in Ruhe nachkorrigieren.
+* Auf Wunsch bleibt das Original ausgeblendet erhalten.
+
+== Hinweise ==
+* Erst anpassen, dann weiterbearbeiten: Fenster, Ausschnitte und Zusatzteile passen nur, wenn die Karosserie danach nicht mehr verschoben oder skaliert wird.
+* Rechte beachten: Gekaufte Modelle dürfen meist nur für den eigenen Gebrauch verändert werden. Bilder oder Dateien davon nur mit Erlaubnis der Designerin oder des Designers zeigen.
+
+== Siehe auch ==
+* [[CAD und 3D-Druck]]
+* [[Netze in Fusion strecken]]
+* [[Fenster aus Karosserie erzeugen]]
+* [[Lenkeinschlag prüfen]]
+
+[[Kategorie:CAD]]

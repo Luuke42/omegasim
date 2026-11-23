@@ -140,8 +140,15 @@
         + '<h3 class="tele-kopf">' + teleEsc(t('Tempo über die Runde')) + '</h3>'
         + teleTempoSvg(A, tA, B.code === A.code ? B : null, tB)
         + '<p class="muted tele-legende"><span class="tele-a">━</span> A &nbsp; <span class="tele-b">┅</span> B &nbsp; '
-        + '<span class="tele-gas">■</span> ' + teleEsc(t('Gas')) + ' &nbsp; <span class="tele-bremse">■</span> ' + teleEsc(t('Bremse')) + ' (A)'
-        + (B.code === A.code ? '' : ' &nbsp; ' + teleEsc(t('B gespiegelt gefahren: nur Zeiten, keine Tempokurve.'))) + '</p>';
+        + '<span class="tele-gas">■</span> ' + teleEsc(t('Gas')) + ' &nbsp; <span class="tele-bremse">■</span> ' + teleEsc(t('Bremse'))
+        + ' (' + teleEsc(t('je oben A, darunter B')) + ') &nbsp; ▼ ' + teleEsc(t('Kurvenminimum von A (Tempo in %)'))
+        + (B.code === A.code ? '' : ' &nbsp; ' + teleEsc(t('B gespiegelt gefahren: nur Zeiten, keine Tempokurve.'))) + '</p>'
+        // v1.5 (WIP, aus Hybrid-Dash 4.0 von Mo Kamit, MIT): Zeitabstand ueber den Rundenweg und die Sektor-Matrix.
+        + '<h3 class="tele-kopf">' + teleEsc(t('Zeitabstand A − B über die Runde')) + ' <span class="wip-tag">WIP</span></h3>'
+        + teleDeltaSvg(dA, dB)
+        + '<p class="muted tele-legende">' + teleEsc(t('Steigt die Linie, verliert A dort Zeit; fällt sie, holt A auf.')) + '</p>'
+        + teleSektorMatrix(e, teleWahl.a, tiles)
+        + teleVorfallBlock(teleWahl.strecke);
     }
     box.innerHTML = h;
     teleWahlVerdrahten();
@@ -151,6 +158,82 @@
       const el = $(id);
       if (el) el.addEventListener('change', () => { teleWahl[k] = el.value; teleSeiteZeichnen(); });
     });
+    const weg = $('tele-vorfall-weg');
+    if (weg) weg.addEventListener('click', () => { vorfallLoeschen(teleWahl.strecke); teleSeiteZeichnen(); });
+  }
+
+  // ---- VORFALLKARTE (v1.5, WIP, nach Hybrid-Dash 4.0 von Mo Kamit, MIT) ------------------------------
+  // Jeder Kontakt (Crash-Erkennung, 70-race.js) und jedes Abkommen (Spieler: 50-drive.js, NPCs: parkCar in
+  // 90-ghosts.js) waehrend eines Rennens wird mit dem Ort gemerkt (Teil + Anteil). Die Karte zeigt, wo es
+  // sich haeuft. Je Strecke hoechstens 500 Eintraege, die 12 zuletzt gefahrenen Strecken.
+  const VORFALL_STORE = 'omegasim-vorfaelle.v1';
+  const VORFALL_ART = { crash: { name: 'Kontakt', farbe: '#ff5c5c' }, off: { name: 'Neben der Bahn', farbe: '#ffb02e' } };
+  function vorfallLesen() {
+    try { const d = JSON.parse(localStorage.getItem(VORFALL_STORE) || '{}'); return d && typeof d === 'object' ? d : {}; } catch (e) { return {}; }
+  }
+  function vorfallSchreiben(d) {
+    const keys = Object.keys(d).sort((a, b) => (d[b].datum || 0) - (d[a].datum || 0));
+    keys.slice(12).forEach((k) => delete d[k]);
+    try { localStorage.setItem(VORFALL_STORE, JSON.stringify(d)); } catch (e) { /* voll oder privat */ }
+  }
+  function vorfallOrt(wer) {
+    try {
+      if (wer >= 2) { const z = zusatzPlatz(wer); return z && z.car ? ghostOrt(z.car) : null; }
+      return dashMinimapIndex === null || dashMinimapIndex === undefined ? null : dashMinimapIndex + dashTilePhase();
+    } catch (e) { return null; }
+  }
+  function vorfallBei(art, wer, ort) {
+    if (!VORFALL_ART[art] || ort === null || ort === undefined || !Number.isFinite(ort)) return;
+    if (raceState !== 'racing' && raceState !== 'finishing') return;
+    if (!currentTrackTiles || currentTrackTiles.length < 3) return;
+    let key, code;
+    try { key = bestzeitSchluessel(currentTrackTiles); code = trackToCode(currentTrackTiles, 0); } catch (e) { return; }
+    const d = vorfallLesen();
+    let e = d[key];
+    if (!e || e.code !== code) e = d[key] = { code, liste: [] };
+    e.datum = Date.now();
+    e.liste.push({ a: art, w: wer, o: Math.round(ort * 100) / 100, t: Date.now() });
+    if (e.liste.length > 500) e.liste.splice(0, e.liste.length - 500);
+    vorfallSchreiben(d);
+  }
+  function vorfallMerken(art, wer) { vorfallBei(art, 'p' + (wer || 1), vorfallOrt(wer || 1)); }
+  function vorfallMerkenAuto(art, car) { let o = null; try { o = ghostOrt(car); } catch (e) { o = null; } vorfallBei(art, 'npc', o); }
+  function vorfallLoeschen(key) { const d = vorfallLesen(); if (d[key]) { delete d[key]; vorfallSchreiben(d); } }
+  // Punkt auf der Mittellinie zum Ort (Teil + Anteil).
+  function vorfallPunkt(pts, tab, n, ort) {
+    const k = ((Math.floor(ort) % n) + n) % n, frac = Math.max(0, Math.min(1, ort - Math.floor(ort)));
+    const a = tab.start[k], b = k + 1 < n ? tab.start[k + 1] : pts.length - 1;
+    return pts[Math.min(pts.length - 1, Math.round(a + frac * (b - a)))];
+  }
+  function teleVorfallBlock(key) {
+    const e = vorfallLesen()[key];
+    if (!e || !e.liste || !e.liste.length) return '';
+    let tiles;
+    try { tiles = codeToTrack(e.code).tiles; } catch (err) { return ''; }
+    const pts = trackCenterline(tiles), n = tiles.length, tab = trackKachelTabelle(pts, n);
+    const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
+    const pad = TRACK_HALF_W * 1.5;
+    const x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad;
+    const w = Math.max(...xs) - Math.min(...xs) + 2 * pad, hh = Math.max(...ys) - Math.min(...ys) + 2 * pad;
+    const sw = (TRACK_HALF_W * 2).toFixed(1), r = (TRACK_HALF_W * 0.38).toFixed(1);
+    let svg = '<svg class="tele-karte tele-vorfaelle" viewBox="' + [x0, y0, w, hh].map((v) => v.toFixed(1)).join(' ') + '" role="img">'
+      + '<path d="M ' + pts.map((q) => q.x.toFixed(1) + ' ' + q.y.toFixed(1)).join(' L ') + '" fill="none" stroke="var(--border)" stroke-width="' + sw + '" stroke-linejoin="round"/>';
+    const zahl = { crash: 0, off: 0 }, wer = { spieler: 0, npc: 0 };
+    e.liste.forEach((v) => {
+      const art = VORFALL_ART[v.a];
+      if (!art) return;
+      zahl[v.a]++; wer[v.w === 'npc' ? 'npc' : 'spieler']++;
+      const q = vorfallPunkt(pts, tab, n, v.o);
+      // NPCs hohl, Spieler gefuellt.
+      svg += '<circle cx="' + q.x.toFixed(1) + '" cy="' + q.y.toFixed(1) + '" r="' + r + '" fill="' + (v.w === 'npc' ? 'none' : art.farbe)
+        + '" fill-opacity=".75" stroke="' + art.farbe + '" stroke-width="' + (TRACK_HALF_W * 0.12).toFixed(1) + '"><title>' + teleEsc(t(art.name)) + ' · ' + (Math.floor(v.o) + 1) + '</title></circle>';
+    });
+    const p0 = pts[0];
+    svg += '<circle cx="' + p0.x.toFixed(1) + '" cy="' + p0.y.toFixed(1) + '" r="' + (TRACK_HALF_W * 0.5).toFixed(1) + '" fill="var(--ink, #fff)"/></svg>';
+    return '<h3 class="tele-kopf">' + teleEsc(t('Vorfälle auf dieser Strecke')) + ' <span class="wip-tag">WIP</span></h3>' + svg
+      + '<p class="muted tele-legende">' + Object.keys(VORFALL_ART).map((k) => '<span style="color:' + VORFALL_ART[k].farbe + '">●</span> ' + teleEsc(t(VORFALL_ART[k].name)) + ' ' + zahl[k]).join(' &nbsp; ')
+      + ' &nbsp; · ' + teleEsc(t('gefüllt: Spieler ({s}), hohl: NPCs ({n})').replace('{s}', wer.spieler).replace('{n}', wer.npc)) + '</p>'
+      + '<div class="opt-row opt-breit"><button type="button" id="tele-vorfall-weg">' + teleEsc(t('Vorfälle dieser Strecke löschen')) + '</button></div>';
   }
   // Farbe fuer einen Unterschied: gruen schneller, rot langsamer, Deckkraft mit der Groesse.
   function teleFarbe(dd, max) {
@@ -194,7 +277,7 @@
     return s + '</svg><div class="tele-achse muted"><span>' + teleEsc(t('Start')) + '</span><span>±' + (max / 1000).toFixed(2) + ' s</span><span>' + teleEsc(t('Ziel')) + '</span></div>';
   }
   function teleTempoSvg(A, tA, B, tB) {
-    const n = tA.length, W = 600, H = 180, oben = 130;
+    const n = tA.length, W = 600, H = 196, oben = 130;
     const xVon = (weg) => (weg / n * W).toFixed(1);
     const linie = (spur, teile) => (spur.proben || []).map((p, i) => (i ? 'L ' : 'M ') + xVon(teleWeg(teile, spur.ms, p[0]))
       + ' ' + (oben - Math.min(100, p[1]) / 100 * (oben - 6)).toFixed(1)).join(' ');
@@ -202,14 +285,98 @@
     for (let k = 1; k < n; k++) s += '<line x1="' + xVon(k) + '" y1="0" x2="' + xVon(k) + '" y2="' + oben + '" stroke="var(--border)" stroke-opacity=".5"/>';
     if (B && tB) s += '<path d="' + linie(B, tB) + '" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>';
     s += '<path d="' + linie(A, tA) + '" fill="none" stroke="var(--k-blau, #3d8bff)" stroke-width="2" vector-effect="non-scaling-stroke"/>';
-    // Gas (oben) und Bremse (unten) von A als Streifen.
-    const pr = A.proben || [];
-    pr.forEach((p, i) => {
-      const x0 = +xVon(teleWeg(tA, A.ms, p[0]));
-      const x1 = i + 1 < pr.length ? +xVon(teleWeg(tA, A.ms, pr[i + 1][0])) : x0 + 2;
-      const bw = Math.max(0.5, x1 - x0).toFixed(1);
-      if (p[2] > 2) s += '<rect x="' + x0.toFixed(1) + '" y="' + (oben + 8) + '" width="' + bw + '" height="16" fill="var(--good)" fill-opacity="' + (p[2] / 100).toFixed(2) + '"/>';
-      if (p[3] > 2) s += '<rect x="' + x0.toFixed(1) + '" y="' + (oben + 28) + '" width="' + bw + '" height="16" fill="var(--bad)" fill-opacity="' + (p[3] / 100).toFixed(2) + '"/>';
+    // Gas und Bremse als Streifen: je A (oben, 10 hoch) und B (darunter, 5 hoch). v1.5: B dazu, aus Hybrid-Dash.
+    const streifen = (spur, teile, yGas, yBremse, hoch) => {
+      const pr = spur.proben || [];
+      pr.forEach((p, i) => {
+        const x0 = +xVon(teleWeg(teile, spur.ms, p[0]));
+        const x1 = i + 1 < pr.length ? +xVon(teleWeg(teile, spur.ms, pr[i + 1][0])) : x0 + 2;
+        const bw = Math.max(0.5, x1 - x0).toFixed(1);
+        if (p[2] > 2) s += '<rect x="' + x0.toFixed(1) + '" y="' + yGas + '" width="' + bw + '" height="' + hoch + '" fill="var(--good)" fill-opacity="' + (p[2] / 100).toFixed(2) + '"/>';
+        if (p[3] > 2) s += '<rect x="' + x0.toFixed(1) + '" y="' + yBremse + '" width="' + bw + '" height="' + hoch + '" fill="var(--bad)" fill-opacity="' + (p[3] / 100).toFixed(2) + '"/>';
+      });
+    };
+    streifen(A, tA, oben + 8, oben + 34, 10);
+    if (B && tB) streifen(B, tB, oben + 19, oben + 45, 5);
+    s += '</svg>';
+    // Kurvenminima von A: als HTML ueber dem SVG, weil Text im gestreckten SVG (preserveAspectRatio none) verzerrt.
+    const marken = teleKurvenMinima(A, tA).map((m) => '<span class="tele-min" style="left:' + (m.weg / n * 100).toFixed(2)
+      + '%;top:' + ((oben - Math.min(100, m.v) / 100 * (oben - 6)) / H * 100).toFixed(2) + '%">▼' + Math.round(m.v) + '</span>').join('');
+    return '<div class="tele-tempo-box">' + s + marken + '</div>';
+  }
+  // Talsohlen der Tempokurve: ein Minimum, das auf beiden Seiten um mindestens TIEFE Prozentpunkte
+  // ueberragt wird (sonst waere jedes Rauschen eine Kurve). Hoechstens 12, die tiefsten zuerst.
+  const TELE_MIN_TIEFE = 8;
+  function teleKurvenMinima(A, tA) {
+    const pr = (A && A.proben) || [];
+    const v = pr.map((p) => p[1]);
+    const out = [];
+    for (let i = 1; i + 1 < v.length; i++) {
+      if (!(v[i] <= v[i - 1] && v[i] < v[i + 1])) continue;
+      let l = v[i], r = v[i];
+      for (let j = i - 1; j >= 0 && v[j] >= v[i]; j--) l = Math.max(l, v[j]);
+      for (let j = i + 1; j < v.length && v[j] >= v[i]; j++) r = Math.max(r, v[j]);
+      if (Math.min(l, r) - v[i] >= TELE_MIN_TIEFE) out.push({ weg: teleWeg(tA, A.ms, pr[i][0]), v: v[i] });
+    }
+    return out.sort((a, b) => a.v - b.v).slice(0, 12).sort((a, b) => a.weg - b.weg);
+  }
+  // Zeitabstand A - B an jeder Teilgrenze (Summe der Teil-Unterschiede): steigt = A verliert dort.
+  function teleDeltaPunkte(dA, dB) {
+    const out = [0];
+    let sum = 0;
+    dA.forEach((x, k) => { sum += x - dB[k]; out.push(sum); });
+    return out;
+  }
+  function teleDeltaSvg(dA, dB) {
+    const pk = teleDeltaPunkte(dA, dB), n = dA.length, W = 600, H = 120, m = H / 2;
+    const max = Math.max(50, ...pk.map(Math.abs));
+    const y = (d) => (m - d / max * (m - 6)).toFixed(1);
+    const pfad = pk.map((d, k) => (k ? 'L ' : 'M ') + (k / n * W).toFixed(1) + ' ' + y(d)).join(' ');
+    let s = '<svg class="tele-delta" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img">'
+      + '<line x1="0" y1="' + m + '" x2="' + W + '" y2="' + m + '" stroke="var(--border)"/>'
+      + '<path d="' + pfad + ' L ' + W + ' ' + m + ' L 0 ' + m + ' Z" fill="var(--bad)" fill-opacity=".12"/>'
+      + '<path d="' + pfad + '" fill="none" stroke="var(--k-blau, #3d8bff)" stroke-width="2" vector-effect="non-scaling-stroke"/>';
+    pk.forEach((d, k) => { s += '<circle cx="' + (k / n * W).toFixed(1) + '" cy="' + y(d) + '" r="2" fill="var(--k-blau, #3d8bff)"><title>' + k + ': ' + teleDeltaText(d) + ' s</title></circle>'; });
+    return s + '</svg><div class="tele-achse muted"><span>' + teleEsc(t('Start')) + '</span><span>±' + (max / 1000).toFixed(2)
+      + ' s</span><span>' + teleEsc(t('Ziel')) + ' ' + teleDeltaText(pk[pk.length - 1]) + ' s</span></div>';
+  }
+  // Sektorzeiten der Runden einer Fahrt: drei Sektoren als Drittel der Teile. [[s1, s2, s3], ...] in ms.
+  function teleSektoren(runden, tiles) {
+    const n = tiles.length;
+    const g1 = Math.round(n / 3), g2 = Math.round(2 * n / 3);
+    const out = [];
+    (runden || []).forEach((sp) => {
+      const te = teleAusrichten(sp, tiles);
+      if (!te || te.length !== n) return;
+      out.push({ runde: sp.runde, ms: sp.ms, s: [te[g1] - te[0], te[g2] - te[g1], sp.ms - te[g2]] });
     });
-    return s + '</svg>';
+    return out.slice(-20);
+  }
+  function teleStreuung(xs) {
+    if (xs.length < 2) return 0;
+    const mw = xs.reduce((a, b) => a + b, 0) / xs.length;
+    return Math.sqrt(xs.reduce((a, b) => a + (b - mw) * (b - mw), 0) / (xs.length - 1));
+  }
+  function teleSektorMatrix(e, wahlA, tiles) {
+    const w = String(wahlA).split('|')[0];
+    const fw = e && e.fahrer[w];
+    if (!fw || w.indexOf('fremd:') === 0 || !fw.fahrt) return '';
+    const zeilen = teleSektoren(fw.fahrt.runden, tiles);
+    if (zeilen.length < 2) return '';
+    const spalte = (j) => zeilen.map((z) => z.s[j]);
+    const beste = [0, 1, 2].map((j) => Math.min(...spalte(j)));
+    const sek = (ms) => (ms / 1000).toFixed(2);
+    let h = '<h3 class="tele-kopf">' + teleEsc(t('Sektoren der Fahrt von A')) + ' <span class="wip-tag">WIP</span></h3>'
+      + '<div class="doc-table-wrap"><table class="tele-sektoren"><thead><tr><th>' + teleEsc(t('Runde')) + '</th><th>S1</th><th>S2</th><th>S3</th><th>'
+      + teleEsc(t('Zeit')) + '</th></tr></thead><tbody>';
+    zeilen.forEach((z, i) => {
+      h += '<tr><td>' + (z.runde || i + 1) + '</td>' + z.s.map((x, j) => '<td' + (x === beste[j] ? ' class="tele-gut"' : '') + '>' + sek(x) + '</td>').join('')
+        + '<td>' + teleEsc(formatLapTime(z.ms)) + '</td></tr>';
+    });
+    const streu = [0, 1, 2].map((j) => teleStreuung(spalte(j)));
+    const schlecht = streu.indexOf(Math.max(...streu));
+    h += '<tr class="tele-streu"><td>±</td>' + streu.map((x, j) => '<td' + (j === schlecht ? ' class="tele-schlecht"' : '') + '>' + sek(x) + '</td>').join('')
+      + '<td>' + sek(teleStreuung(zeilen.map((z) => z.ms))) + '</td></tr></tbody></table></div>'
+      + '<p class="muted tele-legende">' + teleEsc(t('Sektoren sind Drittel der Teile. Grün: bester Wert je Sektor. ±: Streuung (Standardabweichung); rot ist der Sektor, in dem die Runden am wenigsten gleich sind.')) + '</p>';
+    return h;
   }

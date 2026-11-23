@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hybrid-Dash - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Hybrid-Dash</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>4.0</b> vom 15.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p><b>Hybrid-Dash</b> (Projektname Hybrid-Dash 4.0) ist eine Abwandlung von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> für <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Autos. Sie ergänzt OmegaSim um ein eigenes Fernseh-Design („Broadcast“) und zahlreiche zusätzliche Systeme. Entwickelt wird sie von <b>Mo Kamit</b> (GitHub: <i>mokamit</i>); sie ist MIT-lizenziert und baut auf OmegaSim 1.3.92 auf.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Überblick"><span id=".C3.9Cberblick"></span>Überblick</h2></div>
+<p>Hybrid-Dash spricht die Autos über dasselbe <a href="./Bluetooth_Low_Energy.html" title="Bluetooth Low Energy">Bluetooth Low Energy</a>-Protokoll an wie <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>. Der neue Code liegt in eigenen Dateien (src/98zb-hd4-kern.js bis src/98zj-hd4-ui.js); die OmegaSim-Dateien tragen nur kleine Hooks, sodass OmegaSim-Updates weiterhin eingepflegt werden können. Ab Werk ist die Oberfläche auf Englisch; Deutsch und Spanisch sind über den Sprachknopf erreichbar.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Funktionen">Funktionen</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="Karriere">Karriere</h3></div>
+<p>Eine Saison im Format der GT World Challenge mit Sprint- und Endurance-Läufen. Sprint besteht aus zwei Qualifyings und zwei Rennen mit einem Pflichtstopp im Boxenfenster. Endurance umfasst 3, 6 und 24 Stunden mit einer maximalen Stintlänge von 65 Minuten. Dazu kommen fliegende Starts, ein Punkt für die Poleposition, drei Titel, Erfahrungspunkte und ein Fahrerlevel, Preisgeld für Team-Upgrades, Lizenzpunkte von Bronze bis Pro (das KI-Feld wird schneller), Sponsor-Ziele und Pokale.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Showroom">Showroom</h3></div>
+<p>Jedes Auto erscheint als Sammelkarte mit Hologramm-Effekt, der dem Zeiger folgt; ein Klick dreht sie um. Die Rekorde eines Autos (Rennen, Siege, Podien, Runden, Bestzeit) heben seinen Grad.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Motor-Kennfelder">Motor-Kennfelder</h3></div>
+<p>Über die Taste E oder L3 wählt jeder Fahrer ein Kennfeld: Reich, Standard oder Mager. Die Kennfelder unterscheiden sich in Leistung und Verbrauch.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Reifen_und_Verbrauch">Reifen und Verbrauch</h3></div>
+<p>Bei Vollgas verbraucht das Auto überproportional viel Kraftstoff. Das Reifenfett und der Kraftstoff im Tank machen das Auto im Verlauf eines Stints leichter. Jede Reifenmischung hat ein Temperaturfenster; dahinter fällt der Grip stark ab (Reifen-Cliff), und ein starkes Blockieren erzeugt Platte Stellen an den Vorderreifen (Flat Spots) bis zum Reifenwechsel.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Boxen-Regeln">Boxen-Regeln</h3></div>
+<p>Zu schnelles Fahren in der Boxengasse bringt eine Zeitstrafe. Die Crew arbeitet in fester Reihenfolge: Sprit etwa 3 Sekunden, Reifen 4 Sekunden, ein kompletter Service mit Frontflügel 7 bis 8 Sekunden. Das Boxen-Minigame spart Zehntelsekunden.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Streckenentwicklung_und_leichter_Regen">Streckenentwicklung und leichter Regen</h3></div>
+<p>Mit jeder Runde lagert sich Gummi auf der Strecke ab; leichter Niesel (Drizzle) verringert den Grip und wäscht den Gummi wieder ab.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Mechanische_Defekte">Mechanische Defekte</h3></div>
+<p>Standardmäßig aus. Dazu gehören thermisches Drosseln, nachlassende Bremse (Bremsfading) und Aufprallschaden; alle erfordern einen Boxenstopp.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Analyse">Analyse</h3></div>
+<p>Eine auf der Distanz basierende Geschwindigkeitskurve mit Mindestgeschwindigkeiten in Kurven, ein Zeitdelta-Diagramm, Gas- und Bremsspuren, eine Sektor-Konsistenz-Matrix (Standardabweichung je Sektor) und eine Heatmap der Vorfälle.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Race-Engineer">Race-Engineer</h3></div>
+<p>Funksprüche zu Lücken, Reifenleben, verbleibenden Kraftstoff-Runden, zum Boxenfenster mit Reifenempfehlung und Verkehr beim Ausfahren, zu Wetter und Defekten.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="KI-Fahrer">KI-Fahrer</h3></div>
+<p>Künstliche Gegner mit dauerhaften Persönlichkeiten, die jeden Streckenteil einzeln lernen und sich merken, wo Überholmanöver gegen jeden Rivalen funktionieren.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Acht_Spieler">Acht Spieler</h3></div>
+<p>Bis zu acht lokale Spielerplätze (vorher drei), ein Auto je Controller an diesem Rechner mit Press-to-Join-Lobby; Fernspieler aus dem Mehrspieler-Tab können jeden Platz übernehmen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Weitere_Systeme_aus_Version_3.0">Weitere Systeme aus Version 3.0</h2></div>
+<p>Race-Director mit Stewards (Zeitstrafen von 5 und 10 Sekunden, schwarze Flagge, Aufgabe und Wiedereinsetzung), Safety Car auf Abruf und automatisch, Pit-Boxen im Streckeneditor und ein automatischer Boxenstopp (LB oder L1 halten), Startnummern, Fahrer-Avatare, zufällige NPC-Namen, Zwei-Laptop-Modus, PS- und Xbox-Tastenbelegung, Digital-Dash und Cockpit-Tabs.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li><a rel="nofollow" class="external text" href="https://mokamit.github.io/Hybrid-Dash-4.0/">Hybrid-Dash 4.0 im Browser</a></li>
+<li><a rel="nofollow" class="external text" href="https://github.com/mokamit/Hybrid-Dash-4.0">Quellcode auf GitHub</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw202
+Cached time: 20261115183912
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.020 seconds
+Real time usage: 0.023 seconds
+Preprocessor visited node count: 61/1000000
+Revision size: 4144/2097152 bytes
+Post‐expand include size: 750/2097152 bytes
+Template argument size: 13/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    5.565      1 Vorlage:Stand
+100.00%    5.565      1 -total
+-->
+
+<!-- Render ID d9d659c4-e123-11f1-ad68-bc24110065aa -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:531:|#|:idhash:canonical and timestamp 20261115183912 and revision id 841. Rendering was triggered because: page-edit
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

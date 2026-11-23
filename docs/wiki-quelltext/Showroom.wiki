@@ -1,0 +1,16 @@
+{{Stand|app=1.5.107|appdatum=2026-11-17}}
+Der '''Showroom''' (in Arbeit, WIP) ist eine Sammlung in [[OmegaSim]], die alle bekannten Autos als Sammelkarten zeigt. Er stammt aus dem Hybrid-Dash von Mo Kamit (MIT-Lizenz) und öffnet sich in der '''Garage'''.
+
+== Bedienung ==
+In der '''Garage''' öffnet '''Showroom''' die Sammlung aller bekannten Autos als Sammelkarten mit Holo-Schimmer, der dem Zeiger folgt.
+Ein Tipp dreht die Karte zur Bilanz um: '''Starts''', '''Siege''', '''Podien''', '''Poles''', '''Runden''', '''beste Runde''' und '''km'''.
+Die Bilanz kommt aus den gespeicherten Sitzungen, also auch aus Rennen vor dieser Version.
+Siege, Podien und Runden heben die Stufe: '''Serie''', '''Clubfahrer''', '''Podiumsfahrer''', '''Legende'''.
+Bild ist das eigene Autofoto, sonst eine Silhouette in der Farbe des Autos.
+
+== Auf dem Handy ==
+Die Rückseiten der Karten sind auch auf Android lesbar.
+Auf dem Handy glänzen die Sammelkarten beim Neigen des Telefons.
+
+== Änderungen (diese Seite) ==
+Neu angelegt mit Stand 1.5.107; beschreibt die Bedienung (Sammelkarten, Bilanz, Stufen) und die Handy-Darstellung.\n\n[[Kategorie:OmegaSim]]\n[[Kategorie:Spielfunktionen]]

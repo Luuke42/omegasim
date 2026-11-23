@@ -365,7 +365,7 @@
   }
   function zevOberflaecheSpieler(nr) {
     if (typeof wxRainLevel !== 'function') return;
-    const lvl = wxRainLevel(), griff = lvl * lvl;
+    const lvl = wxRainLevel(), griff = wxGriff(lvl);
     if (nr === 1) zevMischung(physEngine, tyres, griff, 1);
     else {
       const z = typeof zusatzPlatz === 'function' ? zusatzPlatz(nr) : null;

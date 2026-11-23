@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Netze in Fusion strecken - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Netze in Fusion strecken</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>–</b> vom 03.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p><b>Netze in Fusion strecken</b> beschreibt, wie man eine Karosserie im Netzbereich von Autodesk Fusion an einer Stelle verlängert, zum Beispiel wenn die Haube für ein Chassis zu kurz ist. Der Rest der Karosserie bleibt dabei unverändert.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Ablauf">Ablauf</h2></div>
+<p>Alle Schritte stehen im Reiter <b>Netz</b> (Mesh).
+</p>
+<ol><li>Eine Kopie der Konstruktion speichern.</li>
+<li>Eine Konstruktionsebene quer zur Fahrzeuglänge an die Stelle legen, an der die Streckung beginnen soll, zum Beispiel kurz vor dem Radlauf.</li>
+<li><b>Ändern → Ebenenschnitt</b> (Plane Cut): Karosserie und Ebene wählen, Schnitt-Art „Körper teilen“ (Split Body), Füllung „Keine Füllung“. Es entstehen ein vorderes und ein hinteres Stück.</li>
+<li><b>Ändern → Netz skalieren</b> (Scale Mesh): nur das vordere Stück wählen, Bezugspunkt auf der Schnittebene, „Nicht gleichmäßig“ (Nonuniform). Längs zur Fahrzeugachse ein Faktor größer als 1, die anderen Achsen 1. Faktor = (Länge des Stücks + Verlängerung) ÷ Länge des Stücks; Beispiel: 10 mm Stück, 2 mm länger ergibt 1,2.</li>
+<li>Weil der Bezugspunkt auf der Schnittebene liegt, passen die Schnittkanten wieder aufeinander. Beide Stücke mit <b>Ändern → Kombinieren</b> (Combine), Operation „Verbinden“, vereinen.</li>
+<li>Einen leichten Knick an der Schnittstelle mit <b>Ändern → Glätten</b> (Smooth) nur in diesem Bereich glätten.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Hinweise">Hinweise</h2></div>
+<ul><li>Alle Schritte stehen in der Zeitleiste. Mit Rechtsklick → „Element bearbeiten“ lassen sich Faktor und Schnittlage später ändern.</li>
+<li>Je weiter die Schnittebene von markanten Kanten (Radlauf, Scheinwerfer) entfernt liegt, desto weniger fällt die Streckung auf. Starke Streckungen wirken schnell unnatürlich; dann besser ein anderes Chassis oder eine andere Karosserie wählen.</li>
+<li>Fusion kommt mit sehr großen Netzen schlecht zurecht, siehe <a href="./Grobe_und_feine_Fassung.html" title="Grobe und feine Fassung">Grobe und feine Fassung</a>.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./CAD_und_3D-Druck.html" title="CAD und 3D-Druck">CAD und 3D-Druck</a></li>
+<li><a href="./STL-Netze_reparieren_und_reduzieren.html" title="STL-Netze reparieren und reduzieren">STL-Netze reparieren und reduzieren</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw203
+Cached time: 20261106095037
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: []
+CPU time usage: 0.011 seconds
+Real time usage: 0.013 seconds
+Preprocessor visited node count: 22/1000000
+Revision size: 1981/2097152 bytes
+Post‐expand include size: 750/2097152 bytes
+Template argument size: 13/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.680      1 Vorlage:Stand
+100.00%    3.680      1 -total
+-->
+
+<!-- Render ID 84819bb6-d9c7-11f1-88fd-bc241191c1f4 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:516:|#|:idhash:canonical and timestamp 20261106095037 and revision id 766. Rendering was triggered because: page_view
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

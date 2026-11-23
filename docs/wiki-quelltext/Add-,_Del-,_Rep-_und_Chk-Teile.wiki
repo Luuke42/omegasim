@@ -1,0 +1,27 @@
+{{Stand|app=–|appdatum=03.11.2026}}
+'''Add-, Del-, Rep- und Chk-Teile''' ist eine Namensregel für Zusatzteile, die zu einem Modell gehören. Am Dateinamen sieht man sofort, was mit dem Teil geschehen soll. Das hilft beim Weitergeben von Dateien und beim späteren Nachvollziehen.
+
+== Vorsilben ==
+{| class="wikitable"
+! Vorsilbe !! Bedeutung !! Beispiel
+|-
+| <code>Add-</code> || hinzufügen (mit dem Modell vereinen oder als Bauteil einplanen) || <code>Add-Kamera.stl</code>
+|-
+| <code>Del-</code> || abziehen (aus dem Modell herausschneiden) || <code>DelScheibeLinks.stl</code>
+|-
+| <code>Rep-</code> || ersetzen (an die Stelle eines vorhandenen Bereichs setzen) || <code>Rep-Scheinwerferglas.stl</code>
+|-
+| <code>Chk-</code> || prüfen (nur Passung und Kollisionen kontrollieren, nichts ändern) || <code>Chk-Wagenheber1.stl</code>
+|}
+
+== Regeln ==
+* Jedes Teil als '''eigener Körper''' und als eigene Datei.
+* Alle Teile im '''gleichen Koordinatensystem''' wie das Modell lassen, also nicht verschieben, drehen oder skalieren. Nur so passen sie wieder genau an ihre Stelle.
+* Zusatzteile sollten selbst wasserdicht sein. Das Modell darf Fehler haben; beim Neuaufbau werden sie mit behoben.
+* Teile, die abgezogen werden, dürfen ruhig etwas größer sein als nötig, damit keine hauchdünnen Reste stehen bleiben.
+
+== Siehe auch ==
+* [[CAD und 3D-Druck]]
+* [[Grobe und feine Fassung]]
+
+[[Kategorie:CAD]]

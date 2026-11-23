@@ -1,0 +1,24 @@
+{{Stand|app=1.4.80|appdatum=15.11.2026}}
+'''Motorwerkstatt''' (englisch ''Engine-Workshop'') ist ein Werkzeug in [[OmegaSim]], mit dem sich ein eigener Motorklang bauen lässt. Sie sitzt auf der Ton-Seite unter '''Optionen → Ton → Motorwerkstatt'''.
+
+== Überblick ==
+Die Motorwerkstatt stellt elf Größen als Regler bereit, die sofort hörbar sind, weil das Klangmodell im Browser läuft. Der Klang wird nicht abgespielt, sondern aus Zylinderzahl, Zündfolge und Krümmerlänge erzeugt. Ein Hubraum ist nicht modelliert; die Angaben in den Preset-Namen (zum Beispiel ''7.0 V8'') sind rein beschreibend.
+
+== Regler ==
+Die Regler umfassen: Zylinderzahl (3 bis 12), Bauart (Reihe, V oder Boxer), Kurbelwelle (gleichmäßig oder Cross-Plane), Drehzahl (700 bis 18000 pro Minute), Primärrohrlänge (6 bis 60 Zoll, das ist die Krümmerlänge), Impulslänge, Auspuffnachhall, Sättigung, Ventiltrieb, Zündstreuung, Ansauganteil und Last. Drei Live-Diagramme zeigen die Zündfolge über 720 Grad, einen Zündimpuls mit Nachhall und die Resonanz des Rohrs.
+
+== Vorgefertigte Motoren ==
+Die Werkstatt bringt sieben vorgefertigte Rennmotoren mit, darunter den Corvette C6.R (7.0 V8), den Mercedes-AMG GT3 (6.2 V8), den Ferrari 296 GT3 (3.0 V6), den BMW M4 GT3 (3.0 Reihensechser), den Huracan GT3 (5.2 V10) und den Aston Martin Vantage GT3 (4.0 V8). Die Zündfolge wird aus dem gewählten Preset übernommen oder automatisch aus Zylinderzahl, Bauart und Kurbelwelle abgeleitet.
+
+== Anhören und übernehmen ==
+Der Knopf ''Anhören'' rendert und spielt die Schleife als Endlosschleife; ''Aus'' stoppt sie. ''Als Profil übernehmen'' rendert drei Drehzahlbänder und installiert den selbstgebauten Motor als Sitzungsprofil, sodass er im Cockpit und in der Garage hörbar ist. Der Motor erscheint dann im Motorsound-Auswahlmenü.
+
+== Speichern ==
+Unter ''Speichern und austauschen'' lassen sich die aktuellen Werte im Browser unter einem eigenen Namen ablegen, wieder laden und löschen (Löschen erfordert zwei Klicks). Zusätzlich lassen sich die Werte als JSON exportieren und wieder übernehmen.
+
+== Weblinks ==
+* [[Motorsound]]
+* [[Aufbau von OmegaSim]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Optionen]]

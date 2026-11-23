@@ -1,0 +1,23 @@
+{{Stand|app=1.4.80|appdatum=15.11.2026}}
+'''Konsole''' ist in [[OmegaSim]] die Bezeichnung für zwei Dinge: das Menüsystem im ACC-Stil, das die normale Oberfläche bildet, und die Entwicklertools, die nur auf Wunsch sichtbar werden. Die Entwicklertools werden über '''Optionen → System → Entwicklertools zeigen''' oder mit ''?dev'' in der Adresszeile eingeschaltet.
+
+== Überblick ==
+Die Kachel-Konsole ist die Navigationshülle der App: Kopfzeile, Pfadanzeige, Reiterleiste, Rückweg mit Stapel und Beschreibungen. Sie steuert die Schirme Titel, Fahren, Garage, Cockpit, Optionen, Strecke, Mehrspieler, Challenges und den Entwickler-Tab. Bedient wird sie über D-Pad, X zum Bestätigen, Kreis zum Zurückgehen und die Schultertasten zum Wechseln der Reiter.
+
+== Entwicklertools ==
+Der Entwickler-Tab (früher ''misc'', heute ''Entwickler'') ist standardmäßig ausgeblendet und warnt, dass hier rohe Bytes an das Auto geschrieben und gelesen werden. Er ist eine Werkbank und für das Fahren nicht nötig. Enthalten sind:
+
+* '''Doku''': Protokoll, Physik und Töne
+* '''Programmierschule''': Kurven ziehen statt Code schreiben
+* '''BLE-Werkbank''': Explorer mit GATT-Baum und Protokoll aller Schreibvorgänge, Kalibrierung, Makros
+* '''Selbsttest''': ein Knopf, viele Messungen (rund 600 Prüfungen zu Laden, Physik, Linie, Tönen und Protokoll)
+* '''Code-Sonde''': rohe Sensor- und Telemetrieausgabe mit Zeitleiste der Codewechsel
+* '''Zahlensysteme''': Binär- und Hex-Trainer
+* '''Aufnahme-Modus''': eine Fahrt aufzeichnen und exakt nachfahren
+
+== Weblinks ==
+* [[Aufbau von OmegaSim]]
+* [[Bluetooth Low Energy]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Entwickler]]

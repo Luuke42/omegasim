@@ -82,11 +82,67 @@
   window.OMEGA_BRUECKE.rennPauseLadenFrei = () => window.OMEGA_BRUECKE.rennPause(false);
   window.OMEGA_BRUECKE.rennPauseLadenFrei();
 
-  const C = window.Capacitor;
-  if (!C || typeof C.isNativePlatform !== 'function' || !C.isNativePlatform()
-      || typeof C.nativePromise !== 'function') return;
-  window.OMEGA_APP = { nativ: true, plattform: C.getPlatform ? C.getPlatform() : 'android' };
-  if (navigator.bluetooth) return;   // sollte ein WebView es einmal koennen: dann das echte
+  // ---- VERBINDUNGSPROTOKOLL (v1.5, WIP) --------------------------------------------------
+  // GEMELDET (Pixel 9, App, PS4-Controller): Auto wird gefunden, Lichter 3 s heller, dann "nicht
+  // verbunden"; im Browser geht es. Warum, stand nur im Live-Log. Hier werden die SCHRITTE des Verbindens
+  // mitgeschrieben (connect, Dienste, Abo, Prioritaet, Trennung) - ein kleiner Ring fester Laenge, je
+  // Schritt ein Eintrag, nichts im 45-ms-Takt. Die Garage legt die letzten Zeilen samt Kopf (Version,
+  // Android/Browser, Gamepad) in die Zwischenablage ("Protokoll kopieren", 90-ghosts.js). Auch im Browser.
+  const PROTO_MAX = 80;
+  const protoRing = [];
+  function proto(geraet, schritt, ergebnis) {
+    if (protoRing.length >= PROTO_MAX) protoRing.shift();
+    protoRing.push({ t: Date.now(), g: String(geraet || ''), s: String(schritt || ''),
+                     e: ergebnis === undefined || ergebnis === null ? '' : String(ergebnis) });
+  }
+  const zwei = (n, l) => String(n).padStart(l || 2, '0');
+  function protoZeilen(n) {
+    const liste = n > 0 ? protoRing.slice(-n) : protoRing.slice();
+    return liste.map((z) => {
+      const d = new Date(z.t);
+      return zwei(d.getHours()) + ':' + zwei(d.getMinutes()) + ':' + zwei(d.getSeconds()) + '.' + zwei(d.getMilliseconds(), 3)
+        + '  ' + z.g + '  ' + z.s + (z.e ? ': ' + z.e : '');
+    });
+  }
+  // Name fuers Protokoll: Geraetename und die letzten Zeichen der Kennung (zwei Autos heissen oft gleich).
+  function protoName(name, id) { return (name || 'Auto') + ' [' + String(id === undefined ? '?' : id).slice(-5) + ']'; }
+  const fehlerText = (e) => String((e && (e.message || e.code)) || e || 'Fehler');
+  window.OMEGA_BRUECKE.proto = proto;
+  window.OMEGA_BRUECKE.protoZeilen = protoZeilen;
+  window.OMEGA_BRUECKE.protoName = protoName;
+  window.OMEGA_BRUECKE.protoLeeren = () => { protoRing.length = 0; };
+
+  // GEMELDET (Xbox- und PS4-Controller): ein gekoppeltes Bluetooth-Gamepad haengt am selben Funkchip wie
+  // die Autos, und eine Prioritaets-Verhandlung kurz nach dem Verbinden kann die Verbindung abreissen.
+  // Diese Pruefung sagt, ob ein Gamepad anliegt. Die Web-Gamepad-API meldet ein Pad erst nach der ersten
+  // Eingabe; die App kennt es ueber OmegaPad (OmegaPadNativ.java, Feld 7 = Zahl der Geraete) schon vorher.
+  // v1.5: bis hierher toter Code. Jetzt verdrahtet: liegt in der App ein Gamepad an, wird von Anfang an
+  // SCHONEND verbunden (siehe Gatt._verbinden).
+  function gamepadGekoppelt() {
+    try { if (navigator.getGamepads && Array.from(navigator.getGamepads()).some(p => p)) return true; }
+    catch (e) { /* ohne Gamepad-API */ }
+    try {
+      const o = window.OmegaPad;
+      if (o && typeof o.lesen === 'function') return +String(o.lesen()).split(',')[7] >= 1;
+    } catch (e) { /* aeltere APK */ }
+    return false;
+  }
+  window.OMEGA_BRUECKE.gamepadGekoppelt = gamepadGekoppelt;
+
+  // ---- DIE BRUECKE ALS FUNKTION (v1.5) ---------------------------------------------------
+  // Alles ab hier baute bisher direkt auf window.Capacitor und lief nur in der App - im Pruefstand war
+  // davon nichts erreichbar. Jetzt eine Funktion: C ist Capacitor (im Selbsttest eine Attrappe), B das
+  // Objekt, an das die Hilfen gehaengt werden (in der App window.OMEGA_BRUECKE), opt nur fuer den
+  // Selbsttest (planen/warten statt echter Zeitgeber, gamepad statt gamepadGekoppelt). Rueckgabe: das
+  // nachgebaute navigator.bluetooth. Der Rumpf ist absichtlich NICHT neu eingerueckt (kleiner Diff).
+  // Im Browser wird sie nie gerufen: der Web-Bluetooth-Weg bleibt, wie er ist.
+  const SCHONEND_PAUSE_MS = 600;      // schonend: Pause zwischen connect und der Dienstsuche
+  const PRIO_NACH_ABO_MS = 1000;      // erste HIGH-Anfrage erst so lange nach dem Abo der Meldungen
+  function brueckeBauen(C, B, opt) {
+  opt = opt || {};
+  const planen = opt.planen || ((fn, ms) => setTimeout(fn, ms));
+  const warten = opt.warten || ((ms) => new Promise((ok) => setTimeout(ok, ms)));
+  const padDa = opt.gamepad || gamepadGekoppelt;
 
   const PLUGIN = 'BluetoothLe';
   const ruf = (methode, optionen) => C.nativePromise(PLUGIN, methode, optionen || {});
@@ -208,7 +264,7 @@
     }
   }
   // Fuer die Anzeige "Funk-Rundlauf" (Optionen > System).
-  window.OMEGA_BRUECKE.omegaInfo = () => {
+  B.omegaInfo = () => {
     if (!omegaBleVerfuegbar()) return { weg: 'Plugin' };
     const l = [...omegaLage.values()][0];
     const gesperrt = [...omegaLage.values()].filter((x) => x.sperreBis > performance.now()).length;
@@ -219,7 +275,7 @@
              direktFehler: (l && l.zaehler && l.zaehler.direktFehler) || '' };
   };
   // Latenz (WIP): dasselbe je Geraet (Optionen > System, "Funk je Auto"). Vorher sah man nur das erste Auto.
-  window.OMEGA_BRUECKE.omegaInfoAuto = (deviceId) => {
+  B.omegaInfoAuto = (deviceId) => {
     if (!omegaBleVerfuegbar()) return { weg: 'Plugin', gesperrtMs: 0, zaehler: null };
     const l = omegaLage.get(deviceId) || omegaLage.get(String(deviceId));
     if (!l) return { weg: 'Plugin', gesperrtMs: 0, zaehler: null };
@@ -227,16 +283,6 @@
     return { weg: !rest && l.bereit ? (omegaDirektBenutzt ? 'OmegaBle direkt' : 'OmegaBle') : 'Plugin',
              gesperrtMs: rest, zaehler: l.zaehler || null, alt: !!l.alt };
   };
-  // GEMELDET (Xbox- und PS4-Controller): ein gekoppeltes Bluetooth-Gamepad belegt den BLE-
-  // Kanal, und die 5-s-Prio-Nachverhandlung eines Autos kann die Verbindung dann abreissen.
-  // Diese Pruefung sagt, ob ein Gamepad anliegt. Die Web-Gamepad-API meldet ein Pad erst
-  // nach der ersten Eingabe - fuer die Abriss-Problematik reicht das, denn ein Controller,
-  // der gerade das Spiel steuert, hat laengst Eingaben geliefert.
-  function gamepadGekoppelt() {
-    try { return !!(navigator.getGamepads && Array.from(navigator.getGamepads()).some(p => p)); }
-    catch (e) { return false; }
-  }
-
   // Ein Abo je Ereignisname (siehe Merkmal.startNotifications).
   const aboJeName = new Map();
   let bereit = null;
@@ -311,7 +357,14 @@
         });
         aboJeName.set(name, this._abo);
       }
-      await mitOmegaPause(() => ruf('startNotifications', z));
+      try {
+        await mitOmegaPause(() => ruf('startNotifications', z));
+      } catch (e) {
+        proto(protoName(this.service.device.name, z.deviceId), 'Abo (App)', 'Fehler: ' + fehlerText(e));
+        throw e;
+      }
+      // v1.5: erst JETZT, nach dem erfolgreichen Abo, darf die erste HIGH-Anfrage kommen (Gatt._nachAbo).
+      try { this.service.device.gatt._nachAbo(); } catch (e) { /* nur die Prioritaet */ }
       return this;
     }
     async stopNotifications() {
@@ -354,8 +407,8 @@
     if (!omegaBleVerfuegbar()) return Promise.resolve(null);
     return C.nativePromise('OmegaBle', 'alleSchliessen', {}).catch(() => null);
   }
-  window.OMEGA_BRUECKE.alleSchliessen = omegaAlleSchliessen;
-  window.OMEGA_BRUECKE.prioritaetHoch = (deviceId) =>
+  B.alleSchliessen = omegaAlleSchliessen;
+  B.prioritaetHoch = (deviceId) =>
     ruf('requestConnectionPriority', { deviceId, connectionPriority: 1 }).catch(() => {});
   // ---- PRIORITAET JE ROLLE (v1.3.15, WIP) ------------------------------------------------
   // Zu Beginn der Startampel: gesteuerte Autos 'hoch', NPCs & Co. 'ausgewogen' (funkPrioritaetVorStart,
@@ -376,7 +429,7 @@
     }
     return omegaPrioDa;
   }
-  window.OMEGA_BRUECKE.prioritaetSetzen = (deviceId, stufe) => {
+  B.prioritaetSetzen = (deviceId, stufe) => {
     if (!deviceId || !Object.prototype.hasOwnProperty.call(PRIO_WERT, stufe)) {
       return Promise.resolve({ ok: false, grund: 'ungueltig', weg: '' });
     }
@@ -390,11 +443,11 @@
       .then(() => ({ ok: true, grund: 'angenommen', weg: 'Plugin' }),
             (e) => ({ ok: false, grund: text(e), weg: 'Plugin' }));
   };
-  window.OMEGA_BRUECKE.schliessen = omegaSchliessen;
+  B.schliessen = omegaSchliessen;
   // Haengende Verbindungen: vom System als verbunden gemeldete HYBRID-Autos, die nicht in der Garage stehen.
   // Erst trennen und schliessen; ist eines danach immer noch verbunden (Verbindung ohne eigenen Griff), einmal
   // kurz verbinden und sauber trennen. Rueckgabe: wie viele es waren.
-  window.OMEGA_BRUECKE.verwaisteTrennen = async (behalten) => {
+  B.verwaisteTrennen = async (behalten) => {
     const keep = new Set((behalten || []).map(String));
     const liste = async () => {
       try {
@@ -419,7 +472,15 @@
   };
 
   class Gatt {
-    constructor(geraet) { this.device = geraet; this.connected = false; this._dienste = null; }
+    constructor(geraet) {
+      this.device = geraet; this.connected = false; this._dienste = null;
+      // v1.5: woran 90-ghosts.js die Bruecke erkennt (ein echtes Web-Bluetooth-Geraet hat das nicht).
+      this.omegaBruecke = true;
+      // schonend: von aussen gesetzt (zweiter Versuch nach einem Fehlschlag). schonendAktiv: gilt fuer
+      // die laufende Verbindung (auch wegen eines Gamepads).
+      this.schonend = false; this.schonendAktiv = false;
+    }
+    get _pname() { return protoName(this.device.name, this.device.id); }
     async connect() {
       const id = this.device.id;
       const laeuft = verbindetJe.get(id);
@@ -435,7 +496,7 @@
       const id = this.device.id;
       this.connected = false;
       this._dienste = null;
-      clearTimeout(this._prio);
+      clearTimeout(this._prio); clearTimeout(this._prioErst);
       await ruf('disconnect', { deviceId: id, timeout: 2000 }).catch(() => {});
       await omegaSchliessen(id);
       omegaLage.delete(id);
@@ -443,10 +504,25 @@
     async _verbinden() {
       await starten();
       const id = this.device.id;
+      // ---- SCHONEND VERBINDEN (v1.5, WIP) ----------------------------------------------
+      // GEMELDET (Pixel 9, PS4-Controller): Lichter 3 s heller, dann getrennt. Anders als Chrome fragte
+      // die App direkt nach dem Verbinden HIGH an, mitten in Dienstsuche und Abo, waehrend ein Bluetooth-
+      // Controller am selben Funkchip haengt. Schonend heisst: SCHONEND_PAUSE_MS Pause vor der
+      // Dienstsuche und KEINE Prioritaetsanfrage in den ersten 5 s. Gilt, wenn ein Gamepad anliegt, oder
+      // wenn 90-ghosts.js es nach einem Fehlschlag verlangt (gatt.schonend, der zweite Versuch).
+      let pad = false;
+      try { pad = !!padDa(); } catch (e) { pad = false; }
+      this.schonendAktiv = !!this.schonend || pad;
+      this._pauseOffen = this.schonendAktiv;
+      this._prioErstDran = false;
+      clearTimeout(this._prioErst);
+      if (this.schonendAktiv) proto(this._pname, 'schonend', pad && !this.schonend ? 'Gamepad verbunden' : 'zweiter Versuch');
       if (!this.device._trennAbo) {
         this.device._trennAbo = C.addListener(PLUGIN, 'disconnected|' + id, () => {
+          const war = this.connected;
           this.connected = false;
           this._dienste = null;
+          if (war) proto(this._pname, 'getrennt (App)', this._verbundenAt ? 'nach ' + Math.round(performance.now() - this._verbundenAt) + ' ms' : '');
           this.device.dispatchEvent(new Event('gattserverdisconnected'));
         });
       }
@@ -462,9 +538,12 @@
         throw e;
       }
       this.connected = true;
+      this._verbundenAt = performance.now();
       // SCHNELLES VERBINDUNGSINTERVALL. Android waehlt sonst 30-50 ms, und der Sendetakt ist
       // 45 ms - dann faellt jedes zweite Paket auf das naechste Intervall. 1 = HIGH.
-      ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 }).catch(() => {});
+      // v1.5: NICHT MEHR HIER. Die Anfrage kam direkt nach dem Verbinden und lief damit in Dienstsuche
+      // und Abo hinein. Jetzt erst PRIO_NACH_ABO_MS nach dem erfolgreichen Abo der Meldungen (_nachAbo),
+      // schonend gar nicht in den ersten 5 s.
       // v0.10.4: EINMAL nachlegen, nach 5 s, statt alle 10 s. Jede Anfrage kann eine neue
       // Aushandlung des Verbindungsintervalls ausloesen - und waehrend der stockt der Funk
       // kurz. Alle zehn Sekunden war das ein regelmaessiger kleiner Haenger je Auto.
@@ -481,12 +560,33 @@
       // Sonst wie bisher HIGH. Vorher bekam hier jedes Auto blind HIGH, auch jeder NPC.
       this._prio = setTimeout(() => {
         if (!this.connected) return;
-        const b = window.OMEGA_BRUECKE;
+        const b = B;
         try { if (b && typeof b.prioNachVerbindenSelbst === 'function' && b.prioNachVerbindenSelbst(id)) return; }
         catch (e) { /* dann wie bisher */ }
-        ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 }).catch(() => {});
+        ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 })
+          .then(() => proto(this._pname, 'Priorität', 'HIGH angefragt (5 s nach dem Verbinden)'),
+                (e) => proto(this._pname, 'Priorität', 'HIGH nach 5 s: ' + fehlerText(e)));
       }, 5000);
       return this;
+    }
+    // v1.5: die ERSTE HIGH-Anfrage einer Verbindung - einmal, PRIO_NACH_ABO_MS nach dem ersten
+    // erfolgreichen Abo (Merkmal.startNotifications). Schonend entfaellt sie; dann fragt erst die
+    // Nachforderung nach 5 s (oben bzw. funkPrioNachVerbinden in 90-ghosts.js).
+    _nachAbo() {
+      if (this._prioErstDran || !this.connected) return;
+      this._prioErstDran = true;
+      const id = this.device.id;
+      if (this.schonendAktiv) {
+        proto(this._pname, 'Priorität', 'keine Anfrage in den ersten 5 s (schonend)');
+        return;
+      }
+      clearTimeout(this._prioErst);
+      this._prioErst = planen(() => {
+        if (!this.connected) return;
+        ruf('requestConnectionPriority', { deviceId: id, connectionPriority: 1 })
+          .then(() => proto(this._pname, 'Priorität', 'HIGH angefragt (1 s nach dem Abo)'),
+                (e) => proto(this._pname, 'Priorität', 'HIGH nach dem Abo: ' + fehlerText(e)));
+      }, PRIO_NACH_ABO_MS);
     }
     disconnect() {
       // v1.1.45: IMMER nativ trennen - auch wenn wir uns fuer getrennt halten (gescheiterter oder
@@ -497,11 +597,17 @@
       // Web Bluetooth meldet die Trennung auch dann, wenn man selbst trennt.
       this.connected = false;
       this._dienste = null;
-      clearTimeout(this._prio);
+      clearTimeout(this._prio); clearTimeout(this._prioErst);
       if (war) setTimeout(() => this.device.dispatchEvent(new Event('gattserverdisconnected')), 0);
     }
     async _laden() {
       if (!this._dienste) {
+        // v1.5 schonend: einmal je Verbindung kurz warten, bevor die Dienste geholt werden.
+        if (this._pauseOffen) {
+          this._pauseOffen = false;
+          proto(this._pname, 'Pause', SCHONEND_PAUSE_MS + ' ms vor der Dienstsuche (schonend)');
+          await warten(SCHONEND_PAUSE_MS);
+        }
         const r = await ruf('getServices', { deviceId: this.device.id });
         const liste = ((r && r.services) || []).map((s) => new Dienst(this.device, s));
         // v1.1.45: eine leere Liste nicht merken - sie kam aus einer noch laufenden Dienstsuche, und gemerkt
@@ -611,6 +717,17 @@
     if (!g) { g = new Geraet(id, name || ''); bekannte.set(id, g); }
     return g;
   };
+  return bt;
+  }
+  // Fuer den Selbsttest (Attrappe von Capacitor): baut die Bruecke, ohne navigator.bluetooth anzufassen.
+  window.OMEGA_BRUECKE.bauen = brueckeBauen;
+
+  const C = window.Capacitor;
+  if (!C || typeof C.isNativePlatform !== 'function' || !C.isNativePlatform()
+      || typeof C.nativePromise !== 'function') return;
+  window.OMEGA_APP = { nativ: true, plattform: C.getPlatform ? C.getPlatform() : 'android' };
+  if (navigator.bluetooth) return;   // sollte ein WebView es einmal koennen: dann das echte
+  const bt = brueckeBauen(C, window.OMEGA_BRUECKE);
   try {
     Object.defineProperty(navigator, 'bluetooth', { value: bt, configurable: true });
   } catch (e) { /* ohne Bluetooth bleibt die App ein Info-Screen */ }

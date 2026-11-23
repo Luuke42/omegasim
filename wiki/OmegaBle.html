@@ -17,7 +17,7 @@
 </div>
 <h1 class="wiki-title">OmegaBle</h1>
 <div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
-<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.3.93</b> vom 05.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
 <small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
 </p>
 </div>
@@ -115,6 +115,13 @@
 <td><code>setting-autoverbinden</code>, <code>autoVerbindenStart()</code>
 </td></tr>
 <tr>
+<td>Funkpriorität beim Start (Optionen → System, WIP, seit 1.3.20)</td>
+<td>an/aus</td>
+<td>an</td>
+<td>zu Beginn des Countdowns gesteuerte Autos <code>HIGH</code>, alle anderen <code>BALANCED</code>, im Abstand von 150 ms; die Meldetakt-Wache zieht dann nur noch gesteuerte Autos hoch</td>
+<td><code>setting-funk-prio</code>, <code>funkPrioritaetVorStart()</code>
+</td></tr>
+<tr>
 <td>Funk-Rundlauf (Optionen → System)</td>
 <td>Anzeige</td>
 <td>–</td>
@@ -201,9 +208,16 @@
 <tr>
 <td>Meldetakt-Schwelle</td>
 <td>fest</td>
-<td>75 ms, höchstens alle 20 s</td>
+<td>120 ms für 5 s, einmal je Verbindung (seit 1.2.45)</td>
 <td>fordert das schnelle Verbindungsintervall neu an</td>
-<td><code>MELDE_LANGSAM_MS</code>, <code>MELDE_PRIO_PAUSE_MS</code>
+<td><code>MELDE_LANGSAM_MS</code>, <code>MELDE_LANGSAM_DAUER_MS</code>
+</td></tr>
+<tr>
+<td>Abstand der Prioritätsanfragen beim Start</td>
+<td>fest</td>
+<td>150 ms je Auto</td>
+<td>verteilt die Neuaushandlungen über den Countdown</td>
+<td><code>FUNK_PRIO_ABSTAND_MS</code>
 </td></tr>
 <tr>
 <td>NPC-Sendebudget</td>
@@ -278,6 +292,14 @@
 <td><code>anzahl</code> (Zahl geschlossener Verbindungen)</td>
 <td>UI-Thread</td>
 <td>alle Verbindungen des Community-Plugins schließen (seit 1.2.3)
+</td></tr>
+<tr>
+<td><code>prioritaetSetzen</code></td>
+<td><code>@PluginMethod</code></td>
+<td><code>deviceId</code>, <code>stufe</code> (<code>hoch</code>, <code>ausgewogen</code>, <code>sparsam</code>)</td>
+<td><code>ok</code>, <code>grund</code> (<code>angenommen</code>, <code>abgelehnt</code>, <code>nicht-verbunden</code>, <code>keine-berechtigung</code>, <code>fehler: …</code>), <code>stufe</code>; unbekannte Stufe oder fehlende <code>deviceId</code>: <code>reject</code></td>
+<td>Schreib-Thread</td>
+<td>Verbindungspriorität je Auto (seit 1.3.15)
 </td></tr>
 <tr>
 <td><code>direktNeu</code></td>
@@ -584,16 +606,29 @@ sperreMs_neu = sperreMs_alt = 0&#160;? 30 000&#160;: min(600 000, 2 × sperreMs_
 nach 5 s:                requestConnectionPriority(HIGH)      (einmal)
 bei jeder Meldung:       d = min(1000, jetzt − letzteMeldung)
                          meldeAbstand ← meldeAbstand + (d − meldeAbstand) × 0,05
-wenn meldeAbstand &gt; 75 ms und letzte Anforderung &gt; 20 s her:
+wenn meldeAbstand 5 s lang &gt; 120 ms, einmal je Verbindung
+  (mit „Funkpriorität beim Start“ nur für gesteuerte Autos):
                          requestConnectionPriority(HIGH)
+beim Countdown (Schalter an, seit 1.3.20):
+  gesteuerte Autos:      prioritaetSetzen(hoch)        sofort, dann
+  alle anderen:          prioritaetSetzen(ausgewogen)  je 150 ms später
 </pre>
 <ul><li><i>meldeAbstand</i>: gleitender Mittelwert (Glättungsfaktor 0,05) des Abstands zwischen zwei Meldungen dieses Autos.</li>
-<li><i>75 ms</i> (<code>MELDE_LANGSAM_MS</code>): Schwelle; normal meldet ein Auto etwa alle 45 ms.</li>
-<li><i>20 s</i> (<code>MELDE_PRIO_PAUSE_MS</code>): Mindestabstand zweier Anforderungen.</li></ul>
+<li><i>120 ms</i> (<code>MELDE_LANGSAM_MS</code>) und <i>5 s</i> (<code>MELDE_LANGSAM_DAUER_MS</code>): Schwelle; normal meldet ein Auto etwa alle 45 ms. Bis 1.2.44 galten 75 ms und höchstens alle 20 s.</li></ul>
 <p>Hintergrund: Android geht nach einiger Zeit oft vom schnellen Intervall zurück, und angefordert wurde vor 1.2.3 nur beim Verbinden. Jede Anforderung kann eine Neuaushandlung auslösen, während der der Funk kurz stockt; deshalb wird sie nicht dauernd wiederholt (bis 0.10.4 alle 10 s, was regelmäßige kleine Hänger erzeugte). Mit gekoppeltem Gamepad wurde die 5-s-Anforderung in 1.0.73 ausgelassen und in 1.1.3 wieder eingeführt, weil alte Handys ohne sie stockten<sup id="cite&#95;ref-6" class="reference"><a href="#cite_note-6"><span class="cite-bracket">&#91;</span>6<span class="cite-bracket">&#93;</span></a></sup>.
 </p>
+<div class="mw-heading mw-heading4"><h4 id="Priorität_je_Rolle_beim_Start"><span id="Priorit.C3.A4t_je_Rolle_beim_Start"></span>Priorität je Rolle beim Start</h4></div>
+<p>Android kennt keine Reihenfolge der Verbindungen, die man „sortieren“ könnte: Jede Verbindung handelt ihr eigenes Verbindungsintervall aus, und alle teilen sich die Sendezeit eines Funkadapters. Was sich steuern lässt, ist die <b>Priorität</b> je Verbindung (<code>BluetoothGatt.requestConnectionPriority</code>): <code>CONNECTION_PRIORITY_HIGH</code> (kurzes Intervall, etwa 11–15 ms), <code>BALANCED</code> (etwa 30–50 ms) und <code>LOW_POWER</code>. Stehen alle Autos auf HIGH, konkurrieren NPCs, Safety Car und Reinigungswagen mit den gesteuerten Autos um dieselben kurzen Zeitfenster.
+</p><p>Seit 1.3.20 (WIP, Schalter „Funkpriorität beim Start“ unter Optionen → System, Standard an) setzt <code>funkPrioritaetVorStart()</code> zu Beginn des Countdowns – auch vor einem Rennintro – die Priorität je Rolle:
+</p>
+<ul><li>gesteuerte Autos (Spieler 1–3: Rolle <code>player</code>, <code>player2</code>, <code>player3</code>) → <code>hoch</code>;</li>
+<li>alle anderen verbundenen Autos (NPC, Safety Car, Reinigungswagen, „Aus“) → <code>ausgewogen</code>.</li></ul>
+<p>Die gesteuerten Autos kommen zuerst an die Reihe, danach folgt je Auto eine Anfrage im Abstand von 150 ms (<code>FUNK_PRIO_ABSTAND_MS</code>), damit nicht alle Neuaushandlungen gleichzeitig laufen. Bei einem Start mit Ampel stehen die Autos dabei 4–6 s; jede Neuaushandlung kann den Funk eines Autos kurz stocken lassen, und das fällt dort nicht ins Gewicht. Ein eigener Ladebildschirm ist deshalb nicht nötig. Freies Training ohne Ampel löst nichts aus. Startet ein neuer Countdown, bevor der vorige durch ist, entfallen dessen restliche Anfragen. Je Auto erscheint eine Zeile im Protokoll („Funkpriorität HOCH (gesteuert)“ bzw. „AUSGEWOGEN“, bei Misserfolg mit Grund und Weg).
+</p><p>Weg der Anfrage: Die Brücke (<code>OMEGA_BRUECKE.prioritaetSetzen(deviceId, stufe)</code>) ruft <code>OmegaBle.prioritaetSetzen</code>, wenn die APK die Methode kennt. Das erkennt sie an der Methodenliste in <code>Capacitor.PluginHeaders</code>; eine unbekannte Methode würde Capacitor nämlich gar nicht beantworten. Fehlt sie (ältere APK), geht dieselbe Anfrage über <code>requestConnectionPriority</code> des Community-Plugins (Werte 0 = BALANCED, 1 = HIGH, 2 = LOW_POWER). Im Browser gibt es die Methode nicht; dann geschieht nichts.
+</p><p>Mit eingeschaltetem Schalter fordert die Meldetakt-Wache (<code>meldetaktBeobachten()</code>) HIGH nur noch für gesteuerte Autos neu an; sonst würde sie einen absichtlich ausgewogenen NPC wieder hochziehen. Nach dem Rennen wird nichts zurückgestellt. Ein Auto, das sich neu verbindet, fordert beim Verbinden wieder HIGH an und behält das bis zum nächsten Countdown<sup id="cite&#95;ref-7" class="reference"><a href="#cite_note-7"><span class="cite-bracket">&#91;</span>7<span class="cite-bracket">&#93;</span></a></sup>.
+</p>
 <div class="mw-heading mw-heading3"><h3 id="Funklast_mit_mehreren_Autos">Funklast mit mehreren Autos</h3></div>
-<p>Jedes fahrende Auto schrieb bis 1.1.23 alle 45 ms: mit vier NPCs und dem Fahrer rund 110 Pakete je Sekunde über einen Adapter. Gemessen in 1.1.16: 4000 geschrieben, 2400 wiederholt, 1200 verworfen, auch Pakete des Fahrers. Seitdem teilen sich die NPCs ein Budget<sup id="cite&#95;ref-7" class="reference"><a href="#cite_note-7"><span class="cite-bracket">&#91;</span>7<span class="cite-bracket">&#93;</span></a></sup>:
+<p>Jedes fahrende Auto schrieb bis 1.1.23 alle 45 ms: mit vier NPCs und dem Fahrer rund 110 Pakete je Sekunde über einen Adapter. Gemessen in 1.1.16: 4000 geschrieben, 2400 wiederholt, 1200 verworfen, auch Pakete des Fahrers. Seitdem teilen sich die NPCs ein Budget<sup id="cite&#95;ref-8" class="reference"><a href="#cite_note-8"><span class="cite-bracket">&#91;</span>8<span class="cite-bracket">&#93;</span></a></sup>:
 </p>
 <pre>n = Zahl fahrender NPCs (alle 500 ms neu gezählt)
 Abstand(n) = 0                                   für n ≤ 1
@@ -643,10 +678,10 @@ unveränderter Befehl:  höchstens alle max(Abstand, 200) ms
 <td>jeder Befehl steht hinter allen Meldungen aller Autos in der Schlange</td>
 <td>Befehle umgehen die Schlange
 </td></tr></tbody></table>
-<p>Gemessen ist, dass die Rechnung selbst nicht der Engpass ist: Der ganze Takt kostet im Median 0,3 ms ohne und 0,4 ms mit zwei NPCs, unter 2&#160;% des 45-ms-Budgets. Wie lange ein Schreibvorgang auf echter Hardware dauert, ist nicht gemessen. Gemessen ist, was passiert, wenn er länger als ein Takt dauert: Bei 46 ms Schreibdauer halbierte sich die Befehlsrate vor 0.5.8 auf 11,2 Hz; seit dem Prinzip „neuestes Paket merken“ bleibt sie bei 22,0 Hz<sup id="cite&#95;ref-8" class="reference"><a href="#cite_note-8"><span class="cite-bracket">&#91;</span>8<span class="cite-bracket">&#93;</span></a></sup>.
+<p>Gemessen ist, dass die Rechnung selbst nicht der Engpass ist: Der ganze Takt kostet im Median 0,3 ms ohne und 0,4 ms mit zwei NPCs, unter 2&#160;% des 45-ms-Budgets. Wie lange ein Schreibvorgang auf echter Hardware dauert, ist nicht gemessen. Gemessen ist, was passiert, wenn er länger als ein Takt dauert: Bei 46 ms Schreibdauer halbierte sich die Befehlsrate vor 0.5.8 auf 11,2 Hz; seit dem Prinzip „neuestes Paket merken“ bleibt sie bei 22,0 Hz<sup id="cite&#95;ref-9" class="reference"><a href="#cite_note-9"><span class="cite-bracket">&#91;</span>9<span class="cite-bracket">&#93;</span></a></sup>.
 </p>
 <div class="mw-heading mw-heading3"><h3 id="Diagnose:_der_Funk-Rundlauf">Diagnose: der Funk-Rundlauf</h3></div>
-<p>Die Zeile unter <b>Optionen → System → Funk-Rundlauf</b> wird jede Sekunde neu geschrieben, solange sie sichtbar ist<sup id="cite&#95;ref-9" class="reference"><a href="#cite_note-9"><span class="cite-bracket">&#91;</span>9<span class="cite-bracket">&#93;</span></a></sup>. Ihre Teile in der Reihenfolge der Anzeige (die Zahlen in der ersten Spalte sind Beispiele, keine Messwerte):
+<p>Die Zeile unter <b>Optionen → System → Funk-Rundlauf</b> wird jede Sekunde neu geschrieben, solange sie sichtbar ist<sup id="cite&#95;ref-10" class="reference"><a href="#cite_note-10"><span class="cite-bracket">&#91;</span>10<span class="cite-bracket">&#93;</span></a></sup>. Ihre Teile in der Reihenfolge der Anzeige (die Zahlen in der ersten Spalte sind Beispiele, keine Messwerte):
 </p>
 <table class="wikitable">
 <tbody><tr>
@@ -961,6 +996,10 @@ unveränderter Befehl:  höchstens alle max(Abstand, 200) ms
 <tr>
 <td>1.2.3</td>
 <td>hartes Schließen (<code>schliessen</code>, <code>alleSchliessen</code>, <code>verwaisteTrennen</code>), 20-s-Grenze, ein Aufbau je Auto, Meldetakt-Überwachung, NPCs schreiben nicht während des Neuverbindens (neue APK nötig)
+</td></tr>
+<tr>
+<td>1.3.20</td>
+<td>Funkpriorität beim Start (WIP, Schalter „Funkpriorität beim Start“ unter Optionen → System, Standard an): zu Beginn des Countdowns bekommen gesteuerte Autos <code>HIGH</code>, alle anderen <code>BALANCED</code>.
 </td></tr></tbody></table>
 <div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
 <div class="mw-references-wrap"><ol class="references">
@@ -976,11 +1015,13 @@ unveränderter Befehl:  höchstens alle max(Abstand, 200) ms
 </li>
 <li id="cite&#95;note-6"><span class="mw-cite-backlink"><a href="#cite_ref-6">↑</a></span> <span class="reference-text"><code>meldetaktBeobachten()</code>, <code>src/90-ghosts.js</code>; <code>Gatt._verbinden()</code>, <code>src/05-app-bruecke.js</code>.</span>
 </li>
-<li id="cite&#95;note-7"><span class="mw-cite-backlink"><a href="#cite_ref-7">↑</a></span> <span class="reference-text"><code>npcSendeAbstand()</code>, <code>writeToCar()</code>, <code>src/90-ghosts.js</code>.</span>
+<li id="cite&#95;note-7"><span class="mw-cite-backlink"><a href="#cite_ref-7">↑</a></span> <span class="reference-text"><code>funkPrioritaetVorStart()</code>, <code>meldetaktBeobachten()</code>, <code>src/90-ghosts.js</code>; <code>startRaceCountdown()</code>, <code>src/70-race.js</code>; <code>prioritaetSetzen</code>, <code>src/05-app-bruecke.js</code> und <code>OmegaBlePlugin.java</code>.</span>
 </li>
-<li id="cite&#95;note-8"><span class="mw-cite-backlink"><a href="#cite_ref-8">↑</a></span> <span class="reference-text">CARRERA_HYBRID.md, Abschnitt „Der Steuerweg“.</span>
+<li id="cite&#95;note-8"><span class="mw-cite-backlink"><a href="#cite_ref-8">↑</a></span> <span class="reference-text"><code>npcSendeAbstand()</code>, <code>writeToCar()</code>, <code>src/90-ghosts.js</code>.</span>
 </li>
-<li id="cite&#95;note-9"><span class="mw-cite-backlink"><a href="#cite_ref-9">↑</a></span> <span class="reference-text">Anzeige-Intervall in <code>src/50-drive.js</code>; <code>funkStatistik()</code>, <code>herzStatistik()</code>, <code>src/20-protocol.js</code>; <code>omegaInfo()</code>, <code>src/05-app-bruecke.js</code>.</span>
+<li id="cite&#95;note-9"><span class="mw-cite-backlink"><a href="#cite_ref-9">↑</a></span> <span class="reference-text">CARRERA_HYBRID.md, Abschnitt „Der Steuerweg“.</span>
+</li>
+<li id="cite&#95;note-10"><span class="mw-cite-backlink"><a href="#cite_ref-10">↑</a></span> <span class="reference-text">Anzeige-Intervall in <code>src/50-drive.js</code>; <code>funkStatistik()</code>, <code>herzStatistik()</code>, <code>src/20-protocol.js</code>; <code>omegaInfo()</code>, <code>src/05-app-bruecke.js</code>.</span>
 </li>
 </ol></div>
 <div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
@@ -998,37 +1039,37 @@ unveränderter Befehl:  höchstens alle max(Abstand, 200) ms
 <li><code>…/OmegaPadNativ.java</code>: <code>aufnehmen()</code>, <code>Js.lesen()</code></li>
 <li><code>src/05-app-bruecke.js</code>: <code>omegaBleBereit()</code>, <code>omegaBleSchreiben()</code>, <code>mitOmegaPause()</code>, <code>omegaInfo()</code>, <code>verwaisteTrennen()</code>, Klassen <code>Merkmal</code>, <code>Dienst</code>, <code>Gatt</code>, <code>Geraet</code>, <code>requestDevice()</code></li>
 <li><code>src/20-protocol.js</code>: <code>funkSchreiben()</code>, <code>funkStatistik()</code>, <code>controlHeartbeat()</code>, <code>herzStatistik()</code></li>
-<li><code>src/90-ghosts.js</code>: <code>verbindeGatt()</code>, <code>verbindeGattSicher()</code>, <code>reconnectCar()</code>, <code>garageGeraetAufnehmen()</code>, <code>autoVerbindenStart()</code>, <code>meldetaktBeobachten()</code>, <code>writeToCar()</code>, <code>npcSendeAbstand()</code>, <code>disconnectCar()</code></li>
+<li><code>src/90-ghosts.js</code>: <code>verbindeGatt()</code>, <code>verbindeGattSicher()</code>, <code>reconnectCar()</code>, <code>garageGeraetAufnehmen()</code>, <code>autoVerbindenStart()</code>, <code>meldetaktBeobachten()</code>, <code>funkPrioritaetVorStart()</code>, <code>writeToCar()</code>, <code>npcSendeAbstand()</code>, <code>disconnectCar()</code></li>
 <li><code>src/50-drive.js</code>: Anzeige <code>#funk-rundlauf</code></li></ul>
 <div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
 <ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
 <!-- 
 NewPP limit report
-Parsed by mw163
-Cached time: 20261027053453
+Parsed by mw183
+Cached time: 20261109195703
 Cache expiry: 1296000
 Reduced expiry: false
 Complications: [show‐toc]
-CPU time usage: 0.152 seconds
-Real time usage: 0.157 seconds
-Preprocessor visited node count: 215/1000000
-Revision size: 51069/2097152 bytes
-Post‐expand include size: 752/2097152 bytes
-Template argument size: 15/2097152 bytes
+CPU time usage: 0.134 seconds
+Real time usage: 0.599 seconds
+Preprocessor visited node count: 224/1000000
+Revision size: 55658/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
 Highest expansion depth: 3/100
 Expensive parser function count: 1/99
 Unstrip recursion depth: 0/20
-Unstrip post‐expand size: 8744/5000000 bytes
+Unstrip post‐expand size: 9558/5000000 bytes
 -->
 <!--
 Transclusion expansion time report (%,ms,calls,template)
-100.00%    3.724      1 Vorlage:Stand
-100.00%    3.724      1 -total
+100.00%    3.458      1 Vorlage:Stand
+100.00%    3.458      1 -total
 -->
 
-<!-- Render ID 22a3875b-d1c8-11f1-865d-bc241192f7ce -->
+<!-- Render ID bb7de3ff-dc77-11f1-9d0c-bc2411058fd2 -->
 
-<!-- Saved in parser cache with key omegasimwiki:pcache:27:|#|:idhash:canonical and timestamp 20261027053453 and revision id 86. Rendering was triggered because: api-parse
+<!-- Saved in parser cache with key omegasimwiki:pcache:27:|#|:idhash:canonical and timestamp 20261109195702 and revision id 826. Rendering was triggered because: page-edit
  -->
 </div>
 </main>

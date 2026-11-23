@@ -1,6 +1,10 @@
-{{Stand|app=1.2.9|appdatum=26.10.2026}}
+﻿{{Stand|app=1.4.80|appdatum=15.11.2026}}
 [[Datei:OmegaSim-Rennen.png|mini|Das Cockpit mit Reifen-, Tank- und Schadensanzeige]]
 Der '''Verschleiß''' in [[OmegaSim]] umfasst die simulierten Zustände eines Fahrzeugs, die sich während der Fahrt verändern: Temperatur und Abnutzung der vier Reifen, die Tankfüllung und ihr Gewicht, der Schaden durch Crashs und die Temperatur der vier Bremsscheiben. Hinzu kommt das Wetter, das über die Reifenhaftung wirkt. Das echte [[Carrera HYBRID]]-Auto nutzt sich dabei nicht ab: alle Werte entstehen im Modell der App (siehe [[Fahrverhalten]]) und wirken am Auto nur über den gesendeten Gas- und Lenkwert. Kalte, überhitzte oder abgefahrene Reifen lenken und bremsen schlechter, ein voller Tank macht das Auto träger, ein leerer Tank und Schaden drosseln das Gas. Behoben wird der Verschleiß beim [[Boxenstopp]].
+
+
+== Neuerungen seit 1.3.93 ==
+Die Reifenmischungen unterscheiden sich stärker (weich, mittel, hart, Regen), dazu ein Reifenfenster und Flat Spots.
 
 == Auf einen Blick ==
 {| class="wikitable"

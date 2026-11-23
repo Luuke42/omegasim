@@ -30,7 +30,7 @@ OUT = os.path.join(REPO, 'app-update.json')
 # Was die Web-App zur Laufzeit laedt. sw.js fehlt absichtlich: in der App meldet 91-pwa.js
 # keinen Service Worker an, er wuerde dort nur eine zweite, veraltende Ablage bilden.
 EINZELN = ['index.html', 'mp-overview.html', 'manifest.webmanifest', 'favicon.svg']
-ORDNER = ['icons', 'audio', 'img']
+ORDNER = ['icons', 'audio', 'img', 'hilfe']   # hilfe/: Anleitung virtuelles Fahren (Fenster in der Garage)
 TEXT = ('.html', '.json', '.webmanifest', '.svg', '.js', '.css', '.txt', '.md')
 
 # Die Fassung der NATIVEN Schicht (Plugins, Rechte), die diese Web-App mindestens braucht.

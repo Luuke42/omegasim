@@ -160,7 +160,7 @@ In den Meldungen des Rennens fiel Byte 15 Bit 3 auf, weil es mit dem nächsten L
 ! !! Original-App !! OmegaSim
 |-
 ! Herkunft
-| Hersteller || unabhängiges Freizeitprojekt, MIT-Lizenz
+| Hersteller || unabhängiges Freizeitprojekt, AGPL-3.0-or-later
 |-
 ! Plattform
 | Smartphone-App || Browser (Chrome, Edge) und Android-App

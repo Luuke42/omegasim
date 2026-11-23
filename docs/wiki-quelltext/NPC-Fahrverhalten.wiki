@@ -1,6 +1,10 @@
-{{Stand|app=1.3.93|appdatum=05.11.2026}}
+﻿{{Stand|app=1.4.80|appdatum=15.11.2026}}
 [[Datei:OmegaSim-NPC.png|mini|NPC-Einstellungen in OmegaSim]]
 Das '''NPC-Fahrverhalten''' ist die Steuerlogik, mit der [[OmegaSim]] echte [[Carrera HYBRID]]-Autos ohne menschlichen Fahrer über die Bahn bewegt. Ein solches Auto heißt in der App NPC (''non-player character'', computergesteuerter Gegner); im Quelltext und in älteren Fassungen hieß es „Ghost“. Jeder NPC ist ein per [[Bluetooth Low Energy]] verbundenes Auto mit der Garagenrolle '''NPC'''. Die App rechnet für ihn im selben 45-ms-Takt wie für das Fahrerauto ein Zieltempo und eine gewünschte Querlage aus Streckenlayout, Ideallinie, Rennsituation und den anderen Autos, führt beides durch ein eigenes Fahrzeugmodell und schickt das Ergebnis als Gas- und Lenkbyte an das Auto. Weil das Auto weder seine Position auf der Kachel noch seine Querlage meldet, ist fast alles daran Schätzung und Steuerung ohne Rückmeldung; die Seite beschreibt, welche Formeln und Schwellen dabei im Code stehen.
+
+
+== Neuerungen seit 1.3.93 ==
+Ghosts heißen jetzt NPCs; dazu NPC-Boxenstopp, Tankort, Windschatten und ein Start je Startreihe versetzt.
 
 == Auf einen Blick ==
 {| class="wikitable"

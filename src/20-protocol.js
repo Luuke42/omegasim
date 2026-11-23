@@ -256,6 +256,7 @@
     writeInFlight = false;
   }
 
+  let keinZielLetzte = 0;   // Rate-Limit fuer die "(kein Ziel)"-Meldung, s.u.
   async function sendControlValue(overrideSteer, overrideThrottle) {
     const steer = overrideSteer !== undefined ? overrideSteer : steerX;
     let throttle = overrideThrottle !== undefined ? overrideThrottle : throttleY;
@@ -341,7 +342,16 @@
     }
     const uuid = controlSelect.value;
     if (!uuid) {
-      log(`(kein Ziel) steer=${steer.toFixed(2)} throttle=${throttle.toFixed(2)} bytes=${bufToHex(payload)}`, 'info');
+      // Nur melden, wenn wirklich Eingaben anliegen (Lenken/Gas), und hoechstens alle 1,5 s.
+      // Vorher spammte diese Zeile bei jedem Takt - im virtuellen Fahren ohne Schreibziel
+      // waren das tausende "steer=0.00 throttle=0.00"-Zeilen pro Fahrt, die die Diagnose-Zeilen
+      // (Virtuell-Diagnose, Herzschlag-Ausreisser) im Log verschluckten.
+      const nichtIdle = Math.abs(steer) > 0.005 || Math.abs(throttle) > 0.005;
+      const jetzt = performance.now();
+      if (nichtIdle && jetzt - keinZielLetzte > 1500) {
+        keinZielLetzte = jetzt;
+        log(`(kein Ziel) steer=${steer.toFixed(2)} throttle=${throttle.toFixed(2)} bytes=${bufToHex(payload)}`, 'info');
+      }
       return;
     }
     const entry = charByUuid.get(uuid);
@@ -478,6 +488,14 @@
   // auseinander (Soll 45 ms)? Ein ueberlasteter Hauptthread (App: Bluetooth-Meldungen ueber
   // die Bruecke) zeigt sich hier als Ausreisser - eine Eingabe wartet dann bis zum naechsten.
   const herzMess = { werte: [], dauer: [] };
+  // DIAGNOSE (temporaer, Latenz): sammelt, was den Hauptthread zwischen zwei Herzschlaegen belegt -
+  // die Verarbeitung der eingehenden Meldungen in onCarNotify (90-ghosts.js). Nur fuer einen
+  // Diagnose-Build, wird nach der Messung wieder entfernt. Aendert den Sendeweg nicht.
+  // v1.5.158 (Review): nur noch eingeschaltet (localStorage 'omegasim-diag' = 'an', Entwickler). Vorher lief sie immer,
+  // loggte im Hintergrund jede Sekunde und lag VOR dem verspaeteten Paket im heissen Pfad.
+  window.MT_DIAG = (() => { try { return localStorage.getItem('omegasim-diag') === 'an'; } catch (e) { return false; } })()
+    ? { notifyN: 0, notifyMs: 0, padLog: 0 } : null;
+  let herzDiagLogAt = 0;
   function herzStatistik() {
     const w = herzMess.werte.slice().sort((a, b) => a - b);
     if (!w.length) return null;
@@ -489,10 +507,22 @@
   function controlHeartbeat() {
     const herzJetzt = performance.now();
     if (herzschlagAt) {
-      herzMess.werte.push(herzJetzt - herzschlagAt);
+      const abstand = herzJetzt - herzschlagAt;
+      herzMess.werte.push(abstand);
       if (herzMess.werte.length > 400) herzMess.werte.shift();
+      // DIAGNOSE (temporaer, Latenz): bei einem Ausreisser melden, was den Hauptthread belegt hat.
+      // Nur mit Diagnose, sichtbarer Seite, nicht nach einer Pause (> 2 s), hoechstens alle 2 s, und NACH dem Paket.
+      const m = window.MT_DIAG;
+      if (m && abstand > 60 && abstand < 2000 && !document.hidden && herzJetzt - herzDiagLogAt > 2000) {
+        herzDiagLogAt = herzJetzt;
+        const n = m.notifyN, ms = m.notifyMs;
+        setTimeout(() => log('Herzschlag-Ausreisser: ' + Math.round(abstand) + ' ms (Soll 45) · Meldungen seit letztem Takt: '
+          + n + ' (' + ms.toFixed(1) + ' ms)', 'warn'), 0);
+      }
     }
     herzschlagAt = herzJetzt;
+    // DIAGNOSE (temporaer, Latenz): Zaehler fuer das naechste Intervall zuruecksetzen.
+    if (window.MT_DIAG) { window.MT_DIAG.notifyN = 0; window.MT_DIAG.notifyMs = 0; }
     try { controlHeartbeatInnen(); } finally {
       herzMess.dauer.push(performance.now() - herzJetzt);
       if (herzMess.dauer.length > 400) herzMess.dauer.shift();

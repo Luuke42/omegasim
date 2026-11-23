@@ -1,0 +1,45 @@
+{{Stand|app=–|appdatum=07.11.2026}}
+'''Fenster aus Karosserie erzeugen''' beschreibt, wie man in Fusion zu einer Karosserie aus einem Netz (STL) passende Scheiben konstruiert. Die Scheiben werden als eigene Teile gedruckt, zum Beispiel aus Klarharz, und von innen eingesetzt. Bei Karosserien mit [[Onboard-Kamera und Karosserien|Onboard-Kamera]] sieht man dann durch echte Scheiben in den Innenraum.
+
+== Vorbereitung ==
+* Die Karosserie zuerst in den Endmaßstab 1:50 bringen und an ihren festen Platz setzen, siehe [[Karosserie anpassen]].
+* Bei sehr großen Netzen die leichte Fassung mit 60.000 bis 300.000 Dreiecken verwenden. Die Scheiben passen trotzdem zur feinen Fassung, solange nichts verschoben wird, siehe [[Grobe und feine Fassung]].
+
+== Seitenfenster (flach oder leicht gewölbt) ==
+# '''Ebene anlegen:''' '''Konstruieren → Versetzte Ebene''' parallel zum Fenster, also meist parallel zur Seitenwand. Die Ebene etwa 0,2–0,3 mm hinter die Außenhaut legen. Dort schneidet sie die Fensteröffnung sauber.
+# '''Umriss holen:''' Reiter '''Netz''' → '''Erstellen → Netzschnittskizze'''. Netzkörper und Ebene wählen und „Kurven an Schnitt anpassen“ anhaken. Fusion zeichnet den Umriss jeder Öffnung in dieser Ebene.
+# '''Skizze aufräumen:''' Türfugen und die äußere Kontur der Karosserie löschen, bis nur die geschlossenen Fensterkonturen übrig sind.
+# '''Scheibe erzeugen:''' Die Kontur mit '''Skizze → Versatz''' um 0,05 mm nach innen versetzen, damit die Scheibe etwas Luft hat. Dann mit '''Erstellen → Extrusion''' etwa 0,5 mm dick als „Neuer Körper“ extrudieren, bis knapp unter die Außenhaut.
+# '''Klebe-Rand (nach Wunsch):''' Die Kontur um 0,5–1 mm nach außen versetzen, den Ring zwischen beiden Konturen innen 0,3–0,5 mm dick extrudieren und mit '''Ändern → Kombinieren → Verbinden''' an die Scheibe hängen. Der Rand liegt innen an der Karosserie an, die Scheibe sitzt in der Öffnung.
+# '''Prüfen:''' Mit '''Prüfen → Interferenz''' oder '''Prüfen → Schnittanalyse''' kontrollieren, dass sich Scheibe und Karosserie nicht durchdringen.
+# '''Exportieren:''' Jede Scheibe als eigene STL speichern, nach der Namensregel aus [[Add-, Del-, Rep- und Chk-Teile]], zum Beispiel <code>Add-Fenster-links-1.stl</code>.
+
+== Stark gewölbte Scheiben (Front und Heck) ==
+# Mehrere Netzschnittskizzen mit verschiedenen Ebenen anlegen, damit die Wölbung erfasst wird.
+# Reiter '''Fläche''' → '''Erstellen → Begrenzungsfläche''': die Umrisskurven als Rand wählen, Kontinuität „Tangential“.
+# '''Erstellen → Aufdicken''' um 0,5 mm nach innen.
+# Klebe-Rand, Prüfen und Exportieren wie oben.
+
+== Richtwerte ==
+{| class="wikitable"
+! Maß !! Wert
+|-
+| Scheibenstärke || 0,4–0,6 mm
+|-
+| Luft zur Öffnung || 0,05–0,1 mm
+|-
+| Klebe-Rand Breite || 0,5–1 mm
+|-
+| Klebe-Rand Stärke || 0,3–0,5 mm
+|}
+
+== Hinweise ==
+* Klarharz wird nach dem Druck dünn mit Klarlack überzogen oder poliert, sonst bleibt es milchig.
+* Die Netzschnittskizze funktioniert nur, wenn die Ebene das Netz wirklich schneidet. Liegt sie außerhalb der Wand, bleibt die Skizze leer.
+
+== Siehe auch ==
+* [[CAD und 3D-Druck]]
+* [[Karosserie anpassen]]
+* [[Onboard-Kamera und Karosserien]]
+
+[[Kategorie:CAD]]

@@ -1,0 +1,49 @@
+{{Stand|app=4.0|appdatum=15.11.2026}}
+'''Hybrid-Dash''' (Projektname Hybrid-Dash 4.0) ist eine Abwandlung von [[OmegaSim]] für [[Carrera HYBRID]]-Autos. Sie ergänzt OmegaSim um ein eigenes Fernseh-Design („Broadcast“) und zahlreiche zusätzliche Systeme. Entwickelt wird sie von '''Mo Kamit''' (GitHub: ''mokamit''); sie ist MIT-lizenziert und baut auf OmegaSim 1.3.92 auf.
+
+== Überblick ==
+Hybrid-Dash spricht die Autos über dasselbe [[Bluetooth Low Energy]]-Protokoll an wie [[OmegaSim]]. Der neue Code liegt in eigenen Dateien (src/98zb-hd4-kern.js bis src/98zj-hd4-ui.js); die OmegaSim-Dateien tragen nur kleine Hooks, sodass OmegaSim-Updates weiterhin eingepflegt werden können. Ab Werk ist die Oberfläche auf Englisch; Deutsch und Spanisch sind über den Sprachknopf erreichbar.
+
+== Funktionen ==
+=== Karriere ===
+Eine Saison im Format der GT World Challenge mit Sprint- und Endurance-Läufen. Sprint besteht aus zwei Qualifyings und zwei Rennen mit einem Pflichtstopp im Boxenfenster. Endurance umfasst 3, 6 und 24 Stunden mit einer maximalen Stintlänge von 65 Minuten. Dazu kommen fliegende Starts, ein Punkt für die Poleposition, drei Titel, Erfahrungspunkte und ein Fahrerlevel, Preisgeld für Team-Upgrades, Lizenzpunkte von Bronze bis Pro (das KI-Feld wird schneller), Sponsor-Ziele und Pokale.
+
+=== Showroom ===
+Jedes Auto erscheint als Sammelkarte mit Hologramm-Effekt, der dem Zeiger folgt; ein Klick dreht sie um. Die Rekorde eines Autos (Rennen, Siege, Podien, Runden, Bestzeit) heben seinen Grad.
+
+=== Motor-Kennfelder ===
+Über die Taste E oder L3 wählt jeder Fahrer ein Kennfeld: Reich, Standard oder Mager. Die Kennfelder unterscheiden sich in Leistung und Verbrauch.
+
+=== Reifen und Verbrauch ===
+Bei Vollgas verbraucht das Auto überproportional viel Kraftstoff. Das Reifenfett und der Kraftstoff im Tank machen das Auto im Verlauf eines Stints leichter. Jede Reifenmischung hat ein Temperaturfenster; dahinter fällt der Grip stark ab (Reifen-Cliff), und ein starkes Blockieren erzeugt Platte Stellen an den Vorderreifen (Flat Spots) bis zum Reifenwechsel.
+
+=== Boxen-Regeln ===
+Zu schnelles Fahren in der Boxengasse bringt eine Zeitstrafe. Die Crew arbeitet in fester Reihenfolge: Sprit etwa 3 Sekunden, Reifen 4 Sekunden, ein kompletter Service mit Frontflügel 7 bis 8 Sekunden. Das Boxen-Minigame spart Zehntelsekunden.
+
+=== Streckenentwicklung und leichter Regen ===
+Mit jeder Runde lagert sich Gummi auf der Strecke ab; leichter Niesel (Drizzle) verringert den Grip und wäscht den Gummi wieder ab.
+
+=== Mechanische Defekte ===
+Standardmäßig aus. Dazu gehören thermisches Drosseln, nachlassende Bremse (Bremsfading) und Aufprallschaden; alle erfordern einen Boxenstopp.
+
+=== Analyse ===
+Eine auf der Distanz basierende Geschwindigkeitskurve mit Mindestgeschwindigkeiten in Kurven, ein Zeitdelta-Diagramm, Gas- und Bremsspuren, eine Sektor-Konsistenz-Matrix (Standardabweichung je Sektor) und eine Heatmap der Vorfälle.
+
+=== Race-Engineer ===
+Funksprüche zu Lücken, Reifenleben, verbleibenden Kraftstoff-Runden, zum Boxenfenster mit Reifenempfehlung und Verkehr beim Ausfahren, zu Wetter und Defekten.
+
+=== KI-Fahrer ===
+Künstliche Gegner mit dauerhaften Persönlichkeiten, die jeden Streckenteil einzeln lernen und sich merken, wo Überholmanöver gegen jeden Rivalen funktionieren.
+
+=== Acht Spieler ===
+Bis zu acht lokale Spielerplätze (vorher drei), ein Auto je Controller an diesem Rechner mit Press-to-Join-Lobby; Fernspieler aus dem Mehrspieler-Tab können jeden Platz übernehmen.
+
+== Weitere Systeme aus Version 3.0 ==
+Race-Director mit Stewards (Zeitstrafen von 5 und 10 Sekunden, schwarze Flagge, Aufgabe und Wiedereinsetzung), Safety Car auf Abruf und automatisch, Pit-Boxen im Streckeneditor und ein automatischer Boxenstopp (LB oder L1 halten), Startnummern, Fahrer-Avatare, zufällige NPC-Namen, Zwei-Laptop-Modus, PS- und Xbox-Tastenbelegung, Digital-Dash und Cockpit-Tabs.
+
+== Weblinks ==
+* [https://mokamit.github.io/Hybrid-Dash-4.0/ Hybrid-Dash 4.0 im Browser]
+* [https://github.com/mokamit/Hybrid-Dash-4.0 Quellcode auf GitHub]
+
+[[Kategorie:Software]]
+[[Kategorie:OmegaSim]]

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decals mit Fusion erstellen - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Decals mit Fusion erstellen</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><p><i>Entwurf vom 11.11.2026 – Ablauf von Gnen54, der Export mit SaveSVG ist noch nicht getestet.</i>
+</p><p>Mit dieser Methode zeichnest du Decals direkt an deinem Karosseriemodell in Fusion. Ein eigenes Grafikprogramm brauchst du dafür nicht. Fugen, Radläufe, Türgriffe und Leuchten des Modells dienen dir dabei als Anhaltspunkte, deshalb passen die Formen schon beim ersten Probedruck gut.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Was_du_brauchst">Was du brauchst</h2></div>
+<ul><li>Die Karosserie als Modell in Fusion (Netz oder Volumenkörper)</li>
+<li>Eine Designvorlage als Bild, am besten eine reine Seitenansicht</li>
+<li>Das Add-in <b>SaveSVG</b> für Fusion, um Skizzen als SVG zu exportieren</li>
+<li>Optional Inkscape zum Füllen, Einfärben und Anordnen auf dem Decalbogen</li>
+<li>Das Füllen der Konturen soll laut Anbieter auch mit <b>SaveAsSVG</b> möglich sein.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Ablauf">Ablauf</h2></div>
+<ol><li><b>Vorlage einfügen:</b> Die Designvorlage über <i>Einfügen → Arbeitsbereich</i> (Canvas) auf die Seitenebene der Karosserie legen.</li>
+<li><b>Vorlage kalibrieren:</b> Das Bild mit <i>Kalibrieren</i> auf ein bekanntes Maß bringen, z. B. den Radstand, und dann so verschieben, dass Radläufe und Fensterkanten auf dem Modell liegen.</li>
+<li><b>Skizze anlegen:</b> Auf derselben Ebene eine neue Skizze erstellen und die Konturen der Flächen nachzeichnen (Linien, Bögen, Splines).</li>
+<li><b>Kontrollmaß zeichnen:</b> Eine Linie von genau 50 mm in dieselbe Skizze legen.</li>
+<li><b>Exportieren:</b> Die Skizze mit SaveSVG als SVG speichern.</li>
+<li><b>Prüfen:</b> Das SVG in Inkscape öffnen oder ausdrucken und die Kontrolllinie nachmessen. Misst sie 50 mm, stimmt der Maßstab.</li>
+<li><b>Probedruck:</b> Auf normales Papier in tatsächlicher Größe (100&#160;%) drucken, ausschneiden, an die Karosserie halten und korrigieren.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Tipps_und_Stolpersteine">Tipps und Stolpersteine</h2></div>
+<ul><li><b>Ecken werden zu kurz:</b> Die Skizze ist eine Projektion der Seitenansicht. Auf der flachen Seitenwand ist sie maßgenau. Wo die Fläche um eine Ecke läuft (Heckecken, Stoßfänger, Front), misst die Projektion weniger als die echte Oberfläche. Diese Stellen beim Probedruck besonders prüfen oder die Maße aus einer Abwicklung der Karosserie nehmen.</li>
+<li><b>Einheiten:</b> Bei Exporten aus Fusion verrutschen gern die Einheiten, z. B. cm statt mm. Deshalb immer die 50-mm-Kontrolllinie mitexportieren.</li>
+<li><b>Geschlossene Konturen:</b> Nur geschlossene Konturen lassen sich später füllen. In Fusion erkennst du sie daran, dass die Fläche als Profil schattiert wird.</li>
+<li><b>Zweite Seite:</b> Formen darfst du spiegeln, Schrift und Startnummern nicht, sonst stehen sie spiegelverkehrt. Für die andere Seite also eine eigene Skizze anlegen oder in Inkscape nur die Flächen spiegeln.</li>
+<li><b>Radläufe und Kanten:</b> Das Decal etwa 0,3 mm vor der Kante enden lassen. Dann steht es nicht über und löst sich nicht.</li>
+<li><b>Gewölbte Flächen:</b> Stark gewölbte Bereiche wie die Front in kleinere Einzelstücke teilen. Decalfolie mit Weichmacher (z. B. Micro Set / Micro Sol) gleicht einige Prozent Verzug aus.</li>
+<li><b>Weiß:</b> Auf transparenter Folie druckt kein Weiß. Weiße Flächen brauchen weiße Decalfolie oder eine weiße Grundlackierung.</li>
+<li><b>Rechte am Design:</b> Fremde Designs und Logos nur privat verwenden. Bilder davon erst zeigen, wenn der Urheber zugestimmt hat.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Onboard-Kamera_und_Karosserien.html" title="Onboard-Kamera und Karosserien">Onboard-Kamera und Karosserien</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw161
+Cached time: 20261111105210
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.009 seconds
+Real time usage: 0.010 seconds
+Preprocessor visited node count: 12/1000000
+Revision size: 3277/2097152 bytes
+Post‐expand include size: 0/2097152 bytes
+Template argument size: 0/2097152 bytes
+Highest expansion depth: 2/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    0.000      1 -total
+-->
+
+<!-- Render ID f1c57b79-ddbd-11f1-a3ec-bc2411247fc9 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:528:|#|:idhash:canonical and timestamp 20261111105215 and revision id 834. Rendering was triggered because: page-edit
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

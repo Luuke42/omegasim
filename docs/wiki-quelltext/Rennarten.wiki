@@ -1,6 +1,10 @@
-{{Stand|app=1.3.93|appdatum=05.11.2026}}
+﻿{{Stand|app=1.4.80|appdatum=15.11.2026}}
 [[Datei:OmegaSim-Rennen.png|mini|Das Cockpit während eines Rennens]]
 Die '''Rennarten''' (in der App „Renntyp“) von [[OmegaSim]] legen fest, wie eine Sitzung abläuft, wann sie endet und wie gewertet wird. Es gibt sieben Renntypen: Training, Time Attack, Qualifying, Runden, Endurance, NPC Knockout und Demolition Derby. Alle benutzen dieselbe Rennmaschine in <code>src/70-race.js</code>: Startaufstellung, [[Startampel]], Rundenzählung über das Start/Ziel-Muster der [[Strecke]], Zielflagge und Ergebnis. Bis zu zehn Rennen lassen sich zu einer '''Meisterschaft''' mit Punktewertung verbinden. Welche Renntypen wählbar sind, hängt seit 1.2.4 davon ab, ob das Auto die Kunststoffschiene liest („Auf der Bahn“) oder gedruckte Muster („Ausdruck“).
+
+
+== Neuerungen seit 1.3.93 ==
+Aktualisiert: Rennarten (Stand 1.4.80)
 
 == Auf einen Blick ==
 {| class="wikitable"

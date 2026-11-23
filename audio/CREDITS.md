@@ -40,7 +40,7 @@ Die Dateien `audio/sd_toro_*.ogg` und `audio/sd_backfire_0.ogg` sind aus dieser 
 Drehzahlband, Schubband gedaempft, Lautstaerke angeglichen; `tools/sd_engines.py`) und
 stehen damit ebenfalls unter der Free Art License 1.3. Das Original liegt in den
 Spieldaten von Speed Dreams 2.4 (https://www.speed-dreams.net). Der Code von OmegaSim
-bleibt MIT; die Klangdateien werden nur mitgeliefert und geladen.
+steht unter der GNU AGPL (Version 3 oder neuer); die Klangdateien werden nur mitgeliefert und geladen.
 
 ### Vulture V5.R (GPL-2.0 oder spaeter) — seit v1.1.9
 
@@ -50,7 +50,7 @@ bleibt MIT; die Klangdateien werden nur mitgeliefert und geladen.
 
 Gerechnet wie die anderen mit `tools/sd_engines.py <Ordner des Autos> sd_v5r`. Das Auto selbst (Modell,
 Texturen, Fahrzeugdaten) liegt umgewandelt in `img/autos/v5r/` mit eigener `LIZENZ.txt`
-(`tools/sd_auto.py`). Der Code von OmegaSim bleibt MIT.
+(`tools/sd_auto.py`). Der Code von OmegaSim steht unter der GNU AGPL (Version 3 oder neuer).
 
 Nicht verwendet: `v6_raw.wav` und `rotary2.wav` (als "CC-BY" aus YouTube-Videos
 angegeben, Rechte unklar), `skid_metal.wav` (ohne Lizenzangabe) und die uebrigen
@@ -201,6 +201,7 @@ BESTELLT: "motorsounds: ford tudor slantback 1937 und vw käfer 1300 (herbie)."
 |---|---|---|---|
 | `fordtudor37` | Ford Tudor Slantback 1937 | 3,6-l-Flathead-V8 (221 ci), 90 Grad, Cross-Plane, ~85 PS, ~3800/min | 1-5-4-8-6-3-7-2, Haelften (dieselbe Folge wie `cross_plane_v8()`) |
 | `kaefer1300` | VW Kaefer 1300 | 1,3-l-Boxer-4, luftgekuehlt, ~40 PS, ~4200/min | 1-4-3-2, Haelften (VW-Zaehlung: 1/2 eine Bank, 3/4 die andere) |
+| `boxster986` | Porsche Boxster 986 | 2,5-l-Boxer-6, Saugmotor, ~204 PS, Begrenzer ~6900/min | 1-6-2-4-3-5, Haelften |
 
 **Beide sind als WIP gekennzeichnet, und zwar staerker als die bisherigen WIP-Eintraege
 oben.** Bei jenen war zumindest die Geometrie (Zylinderzahl, Zuendfolge, Bankaufteilung)
@@ -523,14 +524,14 @@ gewaehlten Fahrzeugkennung; keine Beteiligung oder Unterstuetzung der Hersteller
 ## Tiefer Schaltklang (v1.2.24)
 
 `shift_up_tief.ogg` und `shift_down_tief.ogg` erzeugt `tools/shift_tief.py`: der synthetische
-Schaltschlag `paddle_shift()` aus `tools/engine_fx.py` (eigene Rechnung, MIT wie OmegaSim) plus
+Schaltschlag `paddle_shift()` aus `tools/engine_fx.py` (eigene Rechnung, AGPL wie OmegaSim) plus
 12 ms später der Auspuffknall `sd_backfire_0.ogg` (Speed Dreams, **Free Art License 1.3**, siehe
 oben). Die bisherigen `shift_up.ogg` / `shift_down.ogg` bleiben für den Schalter „Schaltklang: alt“.
 
 ## Mustang v2 (`mustang2v_*.ogg`)
 
 Aus einer eigenen Aufnahme des Autors (Video eines Ford Mustang GT3, nicht Teil des Repos,
-`photos/` ist ausgeschlossen) geschnitten. Lizenz wie OmegaSim (MIT).
+`photos/` ist ausgeschlossen) geschnitten. Lizenz wie OmegaSim (AGPL-3.0-or-later).
 
 ## Tutorial-Stimme (v1.3.15, erweitert v1.3.31)
 

@@ -1,0 +1,22 @@
+{{Stand|app=1.5.143|appdatum=2026-11-19}}
+Die '''Onboard-Kamera''' (in Arbeit, WIP) ist eine Ansicht in [[OmegaSim]], die das Bild einer Kamera aus dem Auto als Cockpit-Schirm „Onboard“ zeigt, mit Aufnahme als Video. Sie wird in der '''Garage → Onboard-Kamera''' eingeschaltet.
+
+== Quellen ==
+Es gibt zwei Quellen:
+* '''USB''': alles, was sich am Tablet oder PC wie eine Webcam meldet, zum Beispiel eine analoge FPV-Mikrokamera (5,8&nbsp;GHz) im Auto und ein USB-Empfänger (UVC) am Tablet. Dafür braucht es keine eigene Firmware. Grundlage ist gnen54s Zweig <code>onboard</code>.
+* '''WLAN''': eine '''M5Stack Timer Camera''' (ESP32) oder eine andere ESP32-Kamera mit MJPEG-Strom. Die Adresse wird in der Garage eingetragen; die Vorbereitung steht auf [[Onboard-Kamera: M5Stack Timer Camera vorbereiten]].
+
+== Anzeige ==
+Die Anzeige ist im Stil des virtuellen Fahrens: Zeiten oben links, Tempo, Gang und Tank unten in der Mitte. Die Anzeige ist mit im Video.
+Bei der '''WLAN-Kamera''' (M5Stack Timer Camera) erscheint zusätzlich der '''Kamera-Akku''' in der rechten Leiste („Kamera-Akku“) und in der Statuszeile; OmegaSim fragt den Endpunkt <code>/batt</code> der Kamera alle 5&nbsp;s ab. Der Wert ist nur ohne USB aussagekräftig.
+
+== Aufnahme ==
+Video speichern in der Android-App braucht die neue APK.
+
+== Grenzen ==
+* Auf der '''https-Webseite''' lädt das WLAN-Bild nicht (gemischte Inhalte). In der Android-App und über '''Start OmegaSim.bat''' (localhost) lädt es.
+* Für Aufnahmen über WLAN braucht die Kamera-Firmware den Kopf <code>Access-Control-Allow-Origin: *</code> am Strom; sonst zeigt OmegaSim das Bild, nimmt aber nicht auf.
+
+== Änderungen (diese Seite) ==
+* Neu angelegt mit Stand 1.5.107; beschreibt die beiden Quellen (USB, WLAN mit M5Stack Timer Camera), die Anzeige und die Grenzen von https und Aufnahme.
+* Stand 1.5.143: Bei der WLAN-Kamera zeigt das Onboard-Bild den Kamera-Akku (Endpunkt <code>/batt</code>, alle 5&nbsp;s abgefragt).\n\n[[Kategorie:OmegaSim]]\n[[Kategorie:Spielfunktionen]]

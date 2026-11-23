@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STL-Netze reparieren und reduzieren - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">STL-Netze reparieren und reduzieren</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>–</b> vom 03.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p><b>STL-Netze reparieren und reduzieren</b> beschreibt, wie man mit dem freien Programm <a rel="nofollow" class="external text" href="https://www.blender.org">Blender</a> fehlerhafte STL-Dateien wasserdicht macht und die Zahl der Dreiecke so weit senkt, dass Fusion flüssig damit arbeitet. Grundlage ist Blender 4.x. Die Menünamen stehen auf Englisch, deutsche Namen in Klammern; wer einen Befehl nicht findet, sucht ihn mit <b>F3</b>.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Wann_lohnt_sich_das?"><span id="Wann_lohnt_sich_das.3F"></span>Wann lohnt sich das?</h2></div>
+<ul><li>Fusion wird mit Netzen ab etwa einer Million Dreiecken sehr langsam. 250 000–300 000 Dreiecke für eine Karosserie und 30 000–60 000 für ein Rad sind handlich.</li>
+<li>Netze aus dem Internet oder aus mehreren zusammengesetzten Teilen haben oft Fehler: offene Kanten, doppelte Flächen, winzige Splitter. Dann scheitern Kombinieren und Abziehen in Fusion.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="1._Importieren">1. Importieren</h2></div>
+<ul><li><b>File → Import → STL (.stl)</b> (Datei → Importieren), Scale „1“, Forward „Y“, Up „Z“.</li>
+<li>1 mm in der Datei wird zu 1 Einheit in Blender. Das Teil wirkt riesig, die Maße stimmen aber.</li>
+<li>Das Teil nicht verschieben, drehen oder skalieren, damit es nach dem Export wieder an seiner Stelle sitzt.</li>
+<li>Die Dreieckszahl zeigt <b>Overlays → Statistics</b> (Überlagerungen → Statistik) oben rechts im Ansichtsfenster.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="2._Kopie_zum_Vergleichen">2. Kopie zum Vergleichen</h2></div>
+<ul><li>Objekt markieren, <b>Shift+D</b>, dann Rechtsklick: Die Kopie bleibt an derselben Stelle. Mit <b>H</b> ausblenden, mit <b>Alt+H</b> wieder einblenden.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="3._Netz_prüfen"><span id="3._Netz_pr.C3.BCfen"></span>3. Netz prüfen</h2></div>
+<ul><li>Unter <b>Edit → Preferences → Get Extensions</b> (Bearbeiten → Einstellungen → Erweiterungen) die Erweiterung „3D Print Toolbox“ installieren.</li>
+<li>Seitenleiste mit <b>N</b> öffnen, Reiter <b>3D-Print → Check All</b>. Wichtig sind „Non Manifold“ (offene oder mehrfache Kanten) und „Intersect“ (Flächen, die sich durchdringen).</li>
+<li>Ohne Erweiterung: im Bearbeitungsmodus (<b>Tab</b>) <b>Select → Select All by Trait → Non Manifold</b>.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="4._Kleine_Fehler_beheben">4. Kleine Fehler beheben</h2></div>
+<p>Im Bearbeitungsmodus alles markieren (<b>A</b>), dann nacheinander:
+</p>
+<ul><li><b>Mesh → Clean Up → Merge by Distance</b> (Nach Abstand zusammenführen), Abstand 0,0001</li>
+<li><b>Mesh → Clean Up → Delete Loose</b> (Lose löschen) – entfernt Splitter</li>
+<li><b>Mesh → Clean Up → Degenerate Dissolve</b> (Degenerierte auflösen)</li>
+<li><b>Mesh → Normals → Recalculate Outside</b> (<b>Shift+N</b>) – Normalen nach außen</li></ul>
+<p>Offene Löcher lassen sich mit <b>Alt+F</b> oder <b>F</b> füllen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="5._Stark_fehlerhafte_Netze_neu_aufbauen">5. Stark fehlerhafte Netze neu aufbauen</h2></div>
+<p>Der <b>Voxel-Remesh</b> baut die Oberfläche in einem feinen Raster neu auf. Danach ist das Netz immer geschlossen und sauber; scharfe Kanten werden dabei minimal gerundet.
+</p>
+<ul><li>Im Objektmodus rechts <b>Object Data Properties</b> (grünes Dreieck) → Bereich <b>Remesh</b>.</li>
+<li><b>Voxel Size</b> etwa ein Viertel der dünnsten Wand: Rad mit feinen Speichen 0,025, Karosserie 0,05–0,1.</li>
+<li>„Adaptivity“ 0, „Fix Poles“ aus, „Preserve Volume“ an, dann <b>Voxel Remesh</b>.</li>
+<li>Ein feines Raster braucht viel Speicher. Bei einer ganzen Karosserie zuerst 0,1 versuchen.</li>
+<li>Liegen in einem Netz Flächen genau aufeinander oder fehlen größere Stücke, kann Remesh Teile verlieren. Vorher Schritt 4 ausführen und das Ergebnis mit der Kopie vergleichen.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="6._Reduzieren">6. Reduzieren</h2></div>
+<ul><li>Über den Schraubenschlüssel <b>Add Modifier → Generate → Decimate</b> (Modifikator hinzufügen → Generieren → Dezimieren), Modus „Collapse“.</li>
+<li><b>Ratio</b> verkleinern, bis unten bei „Face Count“ die Zielzahl steht. Beispiel: 30 000 von 2,7 Millionen ergibt eine Ratio von etwa 0,011.</li>
+<li>„Triangulate“ an, „Symmetry“ aus.</li>
+<li>Mit <b>Ctrl+A</b> über dem Modifikator anwenden.</li>
+<li>Bei großen ebenen Flächen fasst der Modus „Planar“ (Winkel 1–5°) Flächen zusammen, ohne die Form zu ändern.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="7._Nachprüfen"><span id="7._Nachpr.C3.BCfen"></span>7. Nachprüfen</h2></div>
+<ul><li>3D Print Toolbox → <b>Check All</b>: „Non Manifold“ und „Intersect“ sollen 0 sein.</li>
+<li>Mit der Kopie aus Schritt 2 vergleichen, etwa im Drahtgitter (<b>Z → Wireframe</b>).</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="8._Exportieren">8. Exportieren</h2></div>
+<ul><li>Nur das neue Objekt markieren.</li>
+<li><b>File → Export → STL (.stl)</b>, „Selection Only“ an, Scale „1“, Forward „Y“, Up „Z“, „ASCII“ aus.</li>
+<li>In Fusion eingefügt, sitzt das Teil an derselben Stelle wie das Original.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Richtwerte">Richtwerte</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Teil</th>
+<th>Voxel Size</th>
+<th>Ziel für Fusion
+</th></tr>
+<tr>
+<td>Rad mit Speichen</td>
+<td>0,025</td>
+<td>30 000–60 000 Dreiecke
+</td></tr>
+<tr>
+<td>Karosserie</td>
+<td>0,05–0,1</td>
+<td>250 000–300 000 Dreiecke
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./CAD_und_3D-Druck.html" title="CAD und 3D-Druck">CAD und 3D-Druck</a></li>
+<li><a href="./Grobe_und_feine_Fassung.html" title="Grobe und feine Fassung">Grobe und feine Fassung</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li><a rel="nofollow" class="external text" href="https://www.blender.org">Blender</a> (frei, für Windows, macOS und Linux)</li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw203
+Cached time: 20261108114554
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.019 seconds
+Real time usage: 0.021 seconds
+Preprocessor visited node count: 50/1000000
+Revision size: 4606/2097152 bytes
+Post‐expand include size: 750/2097152 bytes
+Template argument size: 13/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    2.917      1 Vorlage:Stand
+100.00%    2.917      1 -total
+-->
+
+<!-- Render ID f42f8c38-db69-11f1-88fd-bc241191c1f4 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:515:|#|:idhash:canonical and timestamp 20261108114554 and revision id 765. Rendering was triggered because: page_view
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

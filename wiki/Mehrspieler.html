@@ -16,15 +16,19 @@
 <p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
 </div>
 <h1 class="wiki-title">Mehrspieler</h1>
-<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
-<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><p>﻿</p><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.4.80</b> vom 15.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
 <small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
 </p>
 </div>
 <figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Mehrspieler.png" class="mw-file-description"><img src="images/250px-OmegaSim-Mehrspieler.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Mehrspieler.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Der Reiter WLAN Mehrspieler in OmegaSim</figcaption></figure>
 <p><b>Mehrspieler</b> bezeichnet in <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> zwei getrennte Funktionen, mit denen mehrere Menschen gegeneinander fahren: den <b>Mehrspieler-Modus an einem Gerät</b>, bei dem bis zu drei Spieler mit je einem Controller und einem eigenen <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Auto an einem Telefon oder PC fahren, und den <b>WLAN-Mehrspieler</b> (experimentell), bei dem mehrere Geräte mit je einem Auto über ein gemeinsames Netz eine Rangliste, einen gemeinsamen Start und gleiche Renneinstellungen teilen. Im ersten Fall rechnet ein Gerät alle Autos in einem gemeinsamen Sendetakt; im zweiten rechnet jedes Gerät nur sein eigenes Auto, und ein Host vermittelt über eine kleine HTTP-Schnittstelle. Beide lassen sich mit NPCs kombinieren (siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>).
+</p><p><br />
 </p>
 <meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Neuerungen_seit_1.3.93">Neuerungen seit 1.3.93</h2></div>
+<p>Spieler 2 und 3 wählen ein eigenes Fahrgefühl; Funkpriorität beim Start; die Meisterschaft hat einen Leiter im WLAN-Mehrspieler.
+</p>
 <div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
 <table class="wikitable">
 <tbody><tr>
@@ -538,6 +542,10 @@ lokal   = Host_Zeit − offset
 <tr>
 <td>1.2.4</td>
 <td>Fahrgefühl je Spieler (Arcade, Sim+, Pacejka oder wie Spieler 1), eigene Reifenmischung bleibt
+</td></tr>
+<tr>
+<td>1.3.92</td>
+<td><a href="./Zufallsevents.html" title="Zufallsevents">Zufallsevents</a> im WLAN: das startende Telefon würfelt den Plan, alle anderen folgen ab derselben Grünzeit.
 </td></tr></tbody></table>
 <div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
 <div class="mw-references-wrap mw-references-columns"><ol class="references">
@@ -587,17 +595,17 @@ lokal   = Host_Zeit − offset
 <ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
 <!-- 
 NewPP limit report
-Parsed by mw181
-Cached time: 20261027053458
+Parsed by mw201
+Cached time: 20261115192134
 Cache expiry: 1296000
 Reduced expiry: false
 Complications: [show‐toc]
-CPU time usage: 0.101 seconds
-Real time usage: 0.108 seconds
-Preprocessor visited node count: 230/1000000
-Revision size: 31927/2097152 bytes
-Post‐expand include size: 752/2097152 bytes
-Template argument size: 15/2097152 bytes
+CPU time usage: 0.103 seconds
+Real time usage: 0.563 seconds
+Preprocessor visited node count: 235/1000000
+Revision size: 32221/2097152 bytes
+Post‐expand include size: 753/2097152 bytes
+Template argument size: 16/2097152 bytes
 Highest expansion depth: 3/100
 Expensive parser function count: 1/99
 Unstrip recursion depth: 0/20
@@ -605,13 +613,13 @@ Unstrip post‐expand size: 8337/5000000 bytes
 -->
 <!--
 Transclusion expansion time report (%,ms,calls,template)
-100.00%    2.737      1 Vorlage:Stand
-100.00%    2.737      1 -total
+100.00%    2.756      1 Vorlage:Stand
+100.00%    2.756      1 -total
 -->
 
-<!-- Render ID 259e7e23-d1c8-11f1-a459-bc2411dc6fa3 -->
+<!-- Render ID c4fcc108-e129-11f1-a4a7-bc2411441f04 -->
 
-<!-- Saved in parser cache with key omegasimwiki:pcache:37:|#|:idhash:canonical and timestamp 20261027053458 and revision id 96. Rendering was triggered because: api-parse
+<!-- Saved in parser cache with key omegasimwiki:pcache:37:|#|:idhash:canonical and timestamp 20261115192134 and revision id 855. Rendering was triggered because: page-edit
  -->
 </div>
 </main>

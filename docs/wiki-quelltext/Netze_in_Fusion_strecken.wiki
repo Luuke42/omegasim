@@ -1,0 +1,22 @@
+{{Stand|app=–|appdatum=03.11.2026}}
+'''Netze in Fusion strecken''' beschreibt, wie man eine Karosserie im Netzbereich von Autodesk Fusion an einer Stelle verlängert, zum Beispiel wenn die Haube für ein Chassis zu kurz ist. Der Rest der Karosserie bleibt dabei unverändert.
+
+== Ablauf ==
+Alle Schritte stehen im Reiter '''Netz''' (Mesh).
+# Eine Kopie der Konstruktion speichern.
+# Eine Konstruktionsebene quer zur Fahrzeuglänge an die Stelle legen, an der die Streckung beginnen soll, zum Beispiel kurz vor dem Radlauf.
+# '''Ändern → Ebenenschnitt''' (Plane Cut): Karosserie und Ebene wählen, Schnitt-Art „Körper teilen“ (Split Body), Füllung „Keine Füllung“. Es entstehen ein vorderes und ein hinteres Stück.
+# '''Ändern → Netz skalieren''' (Scale Mesh): nur das vordere Stück wählen, Bezugspunkt auf der Schnittebene, „Nicht gleichmäßig“ (Nonuniform). Längs zur Fahrzeugachse ein Faktor größer als 1, die anderen Achsen 1. Faktor = (Länge des Stücks + Verlängerung) ÷ Länge des Stücks; Beispiel: 10 mm Stück, 2 mm länger ergibt 1,2.
+# Weil der Bezugspunkt auf der Schnittebene liegt, passen die Schnittkanten wieder aufeinander. Beide Stücke mit '''Ändern → Kombinieren''' (Combine), Operation „Verbinden“, vereinen.
+# Einen leichten Knick an der Schnittstelle mit '''Ändern → Glätten''' (Smooth) nur in diesem Bereich glätten.
+
+== Hinweise ==
+* Alle Schritte stehen in der Zeitleiste. Mit Rechtsklick → „Element bearbeiten“ lassen sich Faktor und Schnittlage später ändern.
+* Je weiter die Schnittebene von markanten Kanten (Radlauf, Scheinwerfer) entfernt liegt, desto weniger fällt die Streckung auf. Starke Streckungen wirken schnell unnatürlich; dann besser ein anderes Chassis oder eine andere Karosserie wählen.
+* Fusion kommt mit sehr großen Netzen schlecht zurecht, siehe [[Grobe und feine Fassung]].
+
+== Siehe auch ==
+* [[CAD und 3D-Druck]]
+* [[STL-Netze reparieren und reduzieren]]
+
+[[Kategorie:CAD]]

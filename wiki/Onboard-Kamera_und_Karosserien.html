@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onboard-Kamera und Karosserien - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Onboard-Kamera und Karosserien</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>Testzweig „onboard“ (Basis 1.0.36)</b> vom 21.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p>Die <b>Onboard-Kamera</b> ist eine geplante Erweiterung für <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> (in Arbeit): Eine kleine Funkkamera im Auto liefert ein Livebild aus der Fahrerperspektive, das OmegaSim als eigenen Cockpit-Schirm zeigt und als <b>Streckenvideo</b> aufnehmen kann. Dazu gehören 3D-gedruckte <b>Karosserien</b> für das <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Chassis, in denen die Kamera unsichtbar eingebaut ist, statt aufgeklebt zu werden. Diese Seite sammelt den Stand der Planung. Nichts davon ist fertig, Einzelheiten können sich noch ändern.
+</p>
+<figure typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:Onboard-Sicht-150-Grad.jpg" class="mw-file-description"><img src="images/420px-Onboard-Sicht-150-Grad.jpg" decoding="async" loading="lazy" width="420" height="315" class="mw-file-element" srcset="images/840px-Onboard-Sicht-150-Grad.jpg 2x" data-file-width="960" data-file-height="720" /></a><figcaption>Simulierte Sicht der Onboard-Kamera (150° Weitwinkel) mit eigenem Armaturenbrett, Lenkrad und Sitzen von Gnen54 (Render, in Arbeit)</figcaption></figure>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Onboard-Kamera_in_OmegaSim_(in_Arbeit)"><span id="Onboard-Kamera_in_OmegaSim_.28in_Arbeit.29"></span>Onboard-Kamera in OmegaSim (in Arbeit)</h2></div>
+<p><b>Stand:</b> Die App-Seite steckt als Versuch in einem eigenen Zweig und ist noch nicht in der Testfassung. Die Kamera ist da. Die Karosserien werden jetzt an ihre echten Maße angepasst; ein Test mit Kamera und Empfänger in OmegaSim steht noch aus.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Geplante_Funktion">Geplante Funktion</h3></div>
+<ul><li>Eigener Cockpit-Schirm <b>„Onboard“</b> mit dem Livebild aus dem Auto</li>
+<li>Im Bild eingeblendet: Runde, aktuelle Rundenzeit, km/h, die Startampel und bei Gelber Flagge ein gelber Rahmen</li>
+<li><b>Aufnahme</b> auf Knopfdruck („● Aufnahme“ im Onboard-Schirm oder Wähltaste X am Controller) oder <b>automatisch</b> für jedes Rennen</li>
+<li>Automatische Aufnahme vom Countdown bis 3 s nach dem Ziel. Ein abgebrochener Start wird verworfen, ein im Rennen abgebrochenes Rennen bleibt gespeichert.</li>
+<li>Video als MP4, wenn der Browser es kann, sonst WebM. 720 Zeilen und 30 Bilder/s, höchstens 15 Minuten am Stück.</li>
+<li>Speicherort: im Browser als Download, in der Android-App unter <i>Filme/OmegaSim</i></li>
+<li>Für OmegaSim ist der Funkempfänger eine gewöhnliche Kamera. Zum Ausprobieren reicht daher auch eine Webcam.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Geplante_Einstellungen">Geplante Einstellungen</h3></div>
+<p>Unter <b>Optionen → AddOn → Onboard-Kamera</b>:
+</p>
+<table class="wikitable">
+<tbody><tr>
+<th>Einstellung</th>
+<th>Wirkung
+</th></tr>
+<tr>
+<td>„Einschalten“</td>
+<td>Onboard-Kamera an oder aus. Beim ersten Mal fragt der Browser nach der Kamera-Erlaubnis.
+</td></tr>
+<tr>
+<td>„Kamera“</td>
+<td>Welche Kamera gezeigt wird. Fehlt sie, erscheint „Kamera nicht gefunden“ statt still die Tablet-Kamera.
+</td></tr>
+<tr>
+<td>„Bild um 180° drehen“</td>
+<td>Für eine kopfüber eingebaute Kamera. Gilt auch für die Aufnahme.
+</td></tr>
+<tr>
+<td>„Beim Start Onboard-Bild zeigen“ (an)</td>
+<td>Mit dem Countdown schaltet das Cockpit auf „Onboard“.
+</td></tr>
+<tr>
+<td>„Rennen automatisch aufnehmen“</td>
+<td>Nimmt jedes Rennen ohne Knopfdruck auf.
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Wo_es_laufen_soll">Wo es laufen soll</h3></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Gerät</th>
+<th>Erwartung
+</th></tr>
+<tr>
+<td>PC, Mac, Chromebook mit Chrome oder Edge</td>
+<td>sollte gehen
+</td></tr>
+<tr>
+<td>Android-Tablet mit Chrome</td>
+<td>hängt vom Gerät ab: nur, wenn das Tablet USB-Kameras unterstützt
+</td></tr>
+<tr>
+<td>OmegaSim-App für Android</td>
+<td>wie Chrome, braucht eine neue App-Fassung
+</td></tr>
+<tr>
+<td>iPhone / iPad</td>
+<td>nein
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Weitere_Ideen_für_die_Software"><span id="Weitere_Ideen_f.C3.BCr_die_Software"></span>Weitere Ideen für die Software</h3></div>
+<figure typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:Onboard-Sicht-entzerrt.jpg" class="mw-file-description"><img src="images/360px-Onboard-Sicht-entzerrt.jpg" decoding="async" loading="lazy" width="360" height="270" class="mw-file-element" srcset="images/720px-Onboard-Sicht-entzerrt.jpg 2x" data-file-width="960" data-file-height="720" /></a><figcaption>Dieselbe Sicht entzerrt und auf 110° beschnitten, so wie es die Option „Weitwinkel entzerren“ zeigen soll (Render)</figcaption></figure>
+<p>Nach dem Datenblatt der Kamera (Weitwinkel 150°, analoges Bild, 40 Funkkanäle) sind diese Erweiterungen sinnvoll:
+</p>
+<ul><li><b>Aufnahme in der Auflösung des Empfängers</b> statt hochgerechnet auf 720 Zeilen. Ein analoger Empfänger liefert meist 640×480 oder 720×576.</li>
+<li><b>„Weitwinkel entzerren“</b> mit Zoom-Regler: Gerade Linien sind bei 150° stark gebogen; die Entzerrung gilt für Livebild und Aufnahme.</li>
+<li><b>Kanal je Auto</b>: Jedem Auto wird ein Funkkanal zugeordnet, zum Beispiel R3 (5732 MHz). OmegaSim zeigt, welches LED-Muster an der Kamera dafür leuchten muss, und warnt, wenn zwei Autos denselben Kanal haben. Für mehrere Autos eignet sich das Raceband (R) mit bis zu 8 Autos.</li>
+<li><b>„Kein Signal“</b>: Bricht das Funkbild ab, zeigt der Empfänger Rauschen oder einen blauen Schirm. OmegaSim erkennt das, blendet einen Hinweis ein und hält die automatische Aufnahme kurz an.</li>
+<li><b>Akku-Erinnerung</b>: Der Kamera-Akku hält je nach Größe etwa 30–45 Minuten. Nach einer einstellbaren Zeit erinnert OmegaSim ans Laden.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Noch_offen">Noch offen</h3></div>
+<ul><li>Test mit der echten Kamera und dem Empfänger</li>
+<li>Prüfen, welche Android-Tablets den Empfänger erkennen</li>
+<li>Im Training prüfen, ob das Auto mit dem Zusatzgewicht sauber fährt</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Karosserien_mit_eingebauter_Kamera_(in_Arbeit)"><span id="Karosserien_mit_eingebauter_Kamera_.28in_Arbeit.29"></span>Karosserien mit eingebauter Kamera (in Arbeit)</h2></div>
+<div class="mw-heading mw-heading3"><h3 id="VW_T1_„Bulli“"><span id="VW_T1_.E2.80.9EBulli.E2.80.9C"></span>VW T1 „Bulli“</h3></div>
+<p>Der T1 war der erste Versuch ein Fahrzeug für die Onboard-Kamera zu erstellen. So war es geplant:
+</p>
+<ul><li>Karosserie mit VW-Logos vorn und hinten und vorderer Stoßstange, passend auf das <b>originale Porsche-Chassis</b></li>
+<li><b>Kamera in der Mitte</b> hinter der geteilten Frontscheibe. Der Mittelsteg bleibt bewusst im Bild, wie beim Blick aus dem echten Bulli.</li>
+<li>Ein <b>Lenkrad</b> links, damit das Video wie vom Fahrersitz aus aufgenommen wirkt (siehe Innenraum)</li>
+<li><b>Abnehmbares Dach</b>, mit Magneten gehalten. Darunter liegt die Technik; dort wird auch der Akku der Kamera über einen Stecker geladen.</li>
+<li>Optional ein <b>höheres Dach</b> als Zwischenstück, optisch wie beim Caravelle oder California, falls die Kamera mehr Höhe braucht</li>
+<li>Die Karosserie wird wie beim Original-Porsche <b>vor der Vorderachse mit einer Schraube</b> am Chassis befestigt</li>
+<li><b>LED-Scheinwerfer</b> vorn und <b>LED-Rücklichter</b> mit Aussparungen in der Karosserie</li>
+<li>Lackierung im OmegaSim-Design mit Logo auf der Seite (Entwurf, siehe Bild)</li></ul>
+<p><b>Stand:</b> Die Karosserie passt auf das Chassis. Offen sind die Magnete für das Dach, die Halter für Kamera und Sender, die LED-Beleuchtung und die Prüfung, ob die Vorderräder beim Lenken frei laufen. Die genaue Lage der Kamera wird jetzt nach den Maßen der echten Kamera festgelegt.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="VW_Caravelle_/_California_2011_(aktuelles_Kamera-Fahrzeug)"><span id="VW_Caravelle_.2F_California_2011_.28aktuelles_Kamera-Fahrzeug.29"></span>VW Caravelle / California 2011 (aktuelles Kamera-Fahrzeug)</h3></div>
+<figure typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:Caravelle-Innenraum-Schnitt.png" class="mw-file-description"><img src="images/420px-Caravelle-Innenraum-Schnitt.png" decoding="async" loading="lazy" width="420" height="236" class="mw-file-element" srcset="images/840px-Caravelle-Innenraum-Schnitt.png 2x" data-file-width="1280" data-file-height="720" /></a><figcaption>Schnittbild: VW Caravelle (2011) mit Innenraum-Modul, Fahrer, Kamera, Akku, Sender und Antenne unter dem abnehmbaren Hubdach. Karosserie: Vehicle World, bearbeitet mit Erlaubnis.</figcaption></figure>
+<p>Nach dem T1 ist jetzt ein <b>VW-Bus der neueren Generation</b> das Kamera-Fahrzeug: eine Caravelle im Stil des California 2011 im Maßstab 1:50 auf dem <b>originalen Porsche-Chassis</b>.
+</p>
+<ul><li><b>Karosserie von Vehicle World</b> (<a rel="nofollow" class="external text" href="https://cults3d.com/en/users/Vehicle_World">Cults3D</a>), von Gnen54 an das Chassis angepasst. Vehicle World hat am 11.11.2026 erlaubt, die bearbeitete Karosserie mit der Carrera-Hybrid-Community für das Projekt Onboard-Kamera zu teilen. Vielen Dank dafür!</li>
+<li><b>Abnehmbares Hubdach</b> wie beim Camper: Dach und Zwischenstück sind ein Teil und werden mit kleinen Magneten auf der Karosserie gehalten. Darunter liegt die ganze Technik.</li>
+<li><b>Innenraum-Modul</b> als eine Einheit (Druck auf einem Prusa): Bodenplatte mit Sitzen, Armaturenbrett, Lenkrad, Fahrer, Kamera, Sender und Antenne.</li>
+<li><b>Akku flach und tief</b> in einer Mulde der Bodenplatte, damit das Auto gut auf der Bahn liegt. Sender und Antenne sitzen auf einem abnehmbaren Träger darüber.</li>
+<li><b>Befestigung:</b> vorn mit einer Schraube von unten, hinten mit einer Schraube von oben (bei abgenommenem Dach).</li>
+<li>Die Vorderräder wurden beim vollen Lenkeinschlag gegen die Bodenplatte geprüft.</li></ul>
+<p><b>Stand:</b> Die Bodenplatte ist im Probedruck. Danach wird getestet, ob alles passt und wie das Auto mit dem Zusatzgewicht fährt. Der Funkempfänger für die Kamera fehlt noch.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Innenraum_und_Fenster">Innenraum und Fenster</h3></div>
+<figure typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:BulliCaravelleKomplettSchnitt.png" class="mw-file-description"><img alt="Innenraum Modul" src="images/420px-BulliCaravelleKomplettSchnitt.png" decoding="async" loading="lazy" width="420" height="236" class="mw-file-element" srcset="images/840px-BulliCaravelleKomplettSchnitt.png 2x" data-file-width="1280" data-file-height="720" /></a><figcaption>Innenraum-Modul von gnen54: Bodenplatte mit Sitzen, Armaturenbrett, Lenkrad, Kamera, Sender und Antenne als eine Einheit, passend für das VW Caravelle Modell in 1:50</figcaption></figure>
+<p>Für die aktuelle Version wurde ein Innenraum-Modul erstellt und mit der Karosserie abgestimmt.
+</p><p>Damit das Video wirklich wie aus dem Auto aussieht, bekommt das aktuelle Kamera-Fahrzeuge einen eigenen <b>Innenraum</b>:
+</p>
+<ul><li>Sitze, Armaturenbrett und Lenkrad als eigene Druckteile, von gnen54 selbst konstruiert. Das Lenkrad sitzt links vor der Kamera, sodass es im Bild zu sehen ist wie beim Blick vom Fahrersitz.</li>
+<li><b>Fenster als eingesetzte Scheiben</b> aus Klarharz statt offener Öffnungen. Wie man sie aus einer Karosserie erzeugt, steht unter <a href="./Fenster_aus_Karosserie_erzeugen.html" title="Fenster aus Karosserie erzeugen">Fenster aus Karosserie erzeugen</a>.</li>
+<li>Bilder des ganzen Aufbaus siehe Abschnitt Caravelle oben.</li></ul>
+<p><b>Stand:</b> Die Kamera ist da, Halter und Lage sind inzwischen an ihre echten Maße angepasst.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="VW_Käfer"><span id="VW_K.C3.A4fer"></span>VW Käfer</h3></div>
+<ul><li>Zweifarbige Karosserie mit Streifen und sauberen Farbkanten für die Airbrush-Lackierung</li>
+<li>Befestigung mit Magnet über der Vorderachse (der Käfer sitzt auf einem gekürzten Chassis)</li>
+<li>Das Design der Karosserie ist fertig.</li>
+<li>Der Käfer ist das erste selbst gebaute Automodell im <b><a href="./Virtuelles_Fahren.html" title="Virtuelles Fahren">virtuellen Fahren</a></b>: In einer Testfassung von Gnen54 lässt er sich schon fahren (Modell unter CC BY 4.0). Siehe <a href="./Wunschliste.html" title="Wunschliste">Wunschliste</a>.</li></ul>
+<div class="mw-heading mw-heading3"><h3 id="Verworfene_Fahrzeuge_als_Basis_für_die_Onboard-Kamera"><span id="Verworfene_Fahrzeuge_als_Basis_f.C3.BCr_die_Onboard-Kamera"></span>Verworfene Fahrzeuge als Basis für die Onboard-Kamera</h3></div>
+<ul><li>VW Caddy als Pickup: zu wenig Platz für die Kamera</li>
+<li>ID.Buzz: Machbarkeitsstudie; die Frontscheibe ist zu flach für die Kamera</li>
+<li>T1 als Fahrzeug wegen schlechter 3D Qualität verworfen</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Laden_über_Pogo-Kontakte_(in_Planung)"><span id="Laden_.C3.BCber_Pogo-Kontakte_.28in_Planung.29"></span>Laden über Pogo-Kontakte (in Planung)</h2></div>
+<p>Die Grundidee, die Autos über Federkontakte zu laden, stammt von <b>Jakob</b> (Discord), der sie auf MakerWorld als „Carrera Hybrid Pogo Charging System“ veröffentlicht hat. Geplant ist hier eine eigene Umsetzung mit einer neu gestalteten Ladestation.
+</p>
+<ul><li>Über Federkontakte (Pogo-Kontakte) wird der <b>Fahrzeugakku</b> geladen. Das Auto steht dazu auf der <b>Ladestation</b>; die Gegenkontakte sitzen im <b>Diffusor</b> am Heck.</li>
+<li>Die Ladestation passt in die <b>Boxengasse</b>. Eine USB-C-Ladebuchse am Auto ließe sich dort nicht so schön umsetzen.</li>
+<li>Die Ladestation dient zugleich als <b>Teststand</b>: Fahr- und Lenkfunktionen des Autos lassen sich dort prüfen.</li>
+<li>Ein <b>Wagenheber</b> (Hebel) an der Station hebt das Auto von den Kontakten ab. Ob das geht, wird noch geprüft.</li>
+<li><b>Steuerung mit einem Raspberry Pi Pico:</b> Ein Pico soll mehrere Ladeplätze zugleich steuern. Er schaltet den Ladestrom erst ein, wenn das Auto richtig auf der Station steht.</li>
+<li>Der Diffusor hält hinten Karosserie und Chassis zusammen. Die Lösung braucht daher ein Fahrzeug mit genügend Überhang am Heck, zum Beispiel den Porsche 911. Beim VW Bus und beim Käfer ist der Überhang zu kurz.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Hinweise">Hinweise</h2></div>
+<ul><li>Diese Seite beschreibt nur geplante Funktionen und die Bedienung. Bauanleitungen und Teilelisten stehen nicht im Wiki.</li>
+<li>In Deutschland sind für Funkkameras auf 5,8 GHz höchstens 25 mW Sendeleistung erlaubt.</li>
+<li>Fragen und Ideen bitte an Gnen54.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./Wunschliste.html" title="Wunschliste">Wunschliste</a></li>
+<li><a href="./CAD_und_3D-Druck.html" title="CAD und 3D-Druck">CAD und 3D-Druck</a></li>
+<li><a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a></li>
+<li><a href="./Startampel.html" title="Startampel">Startampel</a></li>
+<li><a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li><a rel="nofollow" class="external text" href="https://github.com/Luuke42/omegasim">Luuke42/omegasim auf GitHub</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw153
+Cached time: 20261112001759
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [prevent‐selective‐update, show‐toc]
+CPU time usage: 0.036 seconds
+Real time usage: 0.041 seconds
+Preprocessor visited node count: 74/1000000
+Revision size: 10858/2097152 bytes
+Post‐expand include size: 785/2097152 bytes
+Template argument size: 48/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.480      1 Vorlage:Stand
+100.00%    3.480      1 -total
+-->
+
+<!-- Render ID 84055c37-de2e-11f1-b019-bc2411b22d5b -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:84:|#|:idhash:canonical and timestamp 20261112001801 and revision id 840. Rendering was triggered because: page-edit
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

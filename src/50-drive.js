@@ -492,6 +492,18 @@
            granC: 1.7, granE: -1.0, granGripPlus: 1.0, granHeckReserve: 1.08, granHeck: 1,
            granStabi: 0, granLastGier: 0.5, granVornMin: 0.5, granHintenMax: 1.9, granAbs: 0,
            granTempEinfluss: 1.2, granTempOpt: 0.06 },
+    // v1.5.25 BESTELLT: "mache einen LibreCorsa-Fahrmodus, der sich mit den echten Autos moeglichst genau so anfuehlt.
+    // Uebersteuern wieder ausschaltbar. Entferne die Gran-Hybrismo- und Assetto-Carrera-Modi." Grundlage ist der
+    // Schritt von Assetto Carrera (Lastverlagerung lenkt mit, Reifenfenster), abgestimmt auf den GT3 aus LibreCorsa
+    // (nach dessen veroeffentlichten Messwerten, kein Code): mehr Abtrieb (Quer-g steigt von 1,7 auf 2,0 g mit dem
+    // Tempo), ein etwas weicherer Scheitel, ABS und Traktionskontrolle wie ab Werk im GT3 (granAbs: beim Bremsen
+    // bleibt Lenkung), etwas Stabilitaet. Das Heck kommt NICHT von selbst (granHeck 0): es folgt dem Schalter
+    // "Uebersteuern", Vorgabe aus.
+    librecorsa: { granArt: 'librecorsa', granAeroK: 0.22, granLenkTempo: 0.25, granZentrier: 0.08, granGier: 0.45,
+           granLastEmpf: 0.12, granTauUeber: 0.25, granYawTau: 0.24, granYawFeed: 0.25,
+           granC: 1.55, granE: -0.6, granGripPlus: 1.04, granHeckReserve: 1.15, granHeck: 0,
+           granStabi: 0.2, granLastGier: 0.35, granVornMin: 0.55, granHintenMax: 1.8, granAbs: 0.7,
+           granTempEinfluss: 1.0, granTempOpt: 0.05 },
   };
   // Bisheriger Name fuer die Hybrismo-Werte (Selbsttests, Schnappschuss-Pruefung).
   const GRAN_AN = GRAN_WERTE.gran;
@@ -502,9 +514,13 @@
                      granTempEinfluss: 1, granTempOpt: 0 };
   // Die Physikmodi, die mit granStep() rechnen. Alias: der alte Anzeigename "Gran Accelerato"
   // (und seine Schreibweisen) ist Gran Hybrismo.
-  const GRAN_MODI = ['gran', 'acc'];
+  const GRAN_MODI = ['gran', 'acc', 'librecorsa'];
   const PHYS_MODUS_ALIAS = { 'Gran Accelerato': 'gran', 'gran accelerato': 'gran', granaccelerato: 'gran',
-                             'Gran Hybrismo': 'gran', 'Assetto Carrera': 'acc', assettocarrera: 'acc' };
+                             'Gran Hybrismo': 'gran', 'Assetto Carrera': 'acc', assettocarrera: 'acc', LibreCorsa: 'librecorsa' };
+  // v1.5.25: Gran Hybrismo und Assetto Carrera sind entfernt. Ein gespeicherter Stand (Preset, Sicherung, Profil,
+  // Challenge) mit diesen Modi faehrt im Auswahlfeld als LibreCorsa weiter. Die Werte GRAN_WERTE.gran/acc bleiben fuer
+  // alte Aufrufer und Tests, auswaehlbar sind sie nicht mehr.
+  const PHYS_MODUS_ENTFERNT = { gran: 'librecorsa', acc: 'librecorsa' };
   function physModusNormal(v) { return PHYS_MODUS_ALIAS[v] || v; }
   // Rechnet dieser Steuerungsmodus mit der Physik-Kette (Physik, Pacejka, Gran Hybrismo, Assetto Carrera)?
   function physModusIstPhysik(v) { v = physModusNormal(v); return v === 'physik' || v === 'pacejka' || GRAN_MODI.includes(v); }
@@ -520,6 +536,7 @@
     let v = $('phys-mode') ? $('phys-mode').value : 'physik';
     // Ein alter Name im Auswahlfeld (Sicherung, Profil) wird auf den Wert umgestellt.
     if (PHYS_MODUS_ALIAS[v] && $('phys-mode')) { v = PHYS_MODUS_ALIAS[v]; $('phys-mode').value = v; }
+    if (PHYS_MODUS_ENTFERNT[v] && $('phys-mode')) { v = PHYS_MODUS_ENTFERNT[v]; $('phys-mode').value = v; }
     driftModus = (v === 'drift');
     physicsEnabled = physModusIstPhysik(v);
     physEngine.config.pacejka = physEngine2.config.pacejka = (v === 'pacejka' || GRAN_MODI.includes(v));
@@ -531,6 +548,7 @@
                              : v === 'pacejka' ? 'Pacejka (experimentell)'
                              : v === 'gran' ? 'Gran Hybrismo'
                              : v === 'acc' ? 'Assetto Carrera'
+                             : v === 'librecorsa' ? 'LibreCorsa'
                              : 'RC (Auslaufen, Bremse zweimal = rueckwaerts)'), 'info');
     }
   }
@@ -772,26 +790,34 @@
   // ---- Rueckmeldung aus dem Pacejka-Modus: Vibration ------------------------------------
   //
   // BESTELLT: "Beim Unter- und Uebersteuern soll Controllervibration getriggert werden."
-  // Untersteuern ist ein ZUSTAND (die Front schiebt) - ein leises Brummen im weichen Motor,
-  // solange es anhaelt. Uebersteuern ist ein EREIGNIS (das Heck kommt) - ein kraeftiger
-  // Stoss im starken Motor. Hoechstens alle 250 ms ein Aufruf je Spieler, sonst stapeln
-  // sich die Effekte im Pad. `wer` sorgt dafuer, dass nur der eigene Pad ruettelt.
-  // STAERKER SEIT v0.8.24 (BESTELLT: "Vibration staerker machen"): Uebersteuern alle
-  // 150 ms, 0,65 bis 1,0 im starken Motor, dazu der schwache; kam das Heck unter Gas, ein
-  // zusaetzlicher kurzer Stoss hinterher - das "Hinterrad".
+  // Untersteuern ist ein ZUSTAND (die Front schiebt) - ein leises Brummen im leichten Motor,
+  // solange es anhaelt. Uebersteuern ist ein EREIGNIS (das Heck kommt) - ein Stoss im starken
+  // Motor. Hoechstens alle 250 ms ein Aufruf je Spieler, sonst stapeln sich die Effekte im Pad.
+  // `wer` sorgt dafuer, dass nur der eigene Pad ruettelt.
+  // v1.5.150: RICHTUNG und SCHWAECHER (wie LibreCorsa). Beim Gripverlust schiebt das Auto zur
+  // AUSSENSEITE der Kurve, also vibriert genau die Seite aussen: Rechtskurve -> linke Seite,
+  // Linkskurve -> rechte Seite. padRumbleRichtung (40-physics.js) verteilt das auf die Motoren.
   const pacRumbleZuletzt = { 1: 0, 2: 0, 3: 0 };
   function pacejkaRueckmeldung(motor, wer) {
     if (!motor.config.pacejka) return false;
     const st = motor.state;
     if (!st.pacZustand) return false;
+    // v1.5.125: mit angeschlossenem DualSense uebernimmt die Richtungshaptik auf den Griffmotoren
+    // das Unter-/Uebersteuern (Spieler 1); der allgemeine Pad-Rumble wuerde sonst doppelt kommen.
+    if (wer === 1 && typeof dsGripAktiv === 'function' && dsGripAktiv()) return false;
     const jetzt = performance.now();
     const takt = st.pacZustand === 'ueber' ? 150 : 250;
     if (jetzt - pacRumbleZuletzt[wer] < takt) return false;
     pacRumbleZuletzt[wer] = jetzt;
     if (st.pacZustand === 'ueber') {
+      // v1.5.150: Richtungs-Rumble und deutlich schwaechere Staerke (wie LibreCorsa). Beim
+      // Uebersteuern schiebt das Heck zur AUSSENSEITE der Kurve: Rechtskurve -> linke Seite,
+      // Linkskurve -> rechte Seite (padRumbleRichtung in 40-physics.js).
       const k = Math.min(1, st.pacUeber / motor.config.pacejkaUeberMax);
-      const ok = padRumble(0.65 + 0.35 * k, 0.35, 170, 'rutschen', wer);
-      if (ok && st.pacLeistung) setTimeout(() => padRumble(0.2, 0.9, 60, 'rutschen', wer), 90);
+      const dir = st.pacRichtung || Math.sign(st.dampedSteering);
+      const mag = 0.3 + 0.2 * k;   // vorher 0,65..1,0 im starken Motor
+      const ok = padRumbleRichtung(dir, mag, 170, 'rutschen', wer);
+      if (ok && st.pacLeistung) setTimeout(() => padRumbleRichtung(dir, 0.12, 60, 'rutschen', wer), 90);
       return ok;
     }
     // v1.1.42 GEMELDET: "Mein Gamepad rumbled dauerhaft beim Gas geben." pacUnter enthaelt auch die
@@ -799,7 +825,9 @@
     // wird jetzt nur, wenn die Front wirklich ueber der Haftgrenze ist (pacNutzV > 1), eigene Art 'untersteuern'.
     if (!(st.pacNutzV > 1)) return false;
     const k = Math.min(1, (1 - st.pacUnter) * 4);
-    return padRumble(0, 0.18 + 0.4 * k, 260, 'untersteuern', wer);
+    // v1.5.150: auch beim Untersteuern die AUSSENSEITE (Rechtskurve -> links) und schwaechere Staerke.
+    const dir = Math.sign(st.dampedSteering);
+    return padRumbleRichtung(dir, 0.12 + 0.18 * k, 260, 'untersteuern', wer);
   }
 
   if ($('setting-countersteer')) {
@@ -893,8 +921,12 @@
       // AUSDRUECKLICH AN padRumble VORBEI, mit einer Art, die es nicht gibt: der Test soll
       // den WEG pruefen und nicht die Schalter. Wer den Hauptschalter aus hat, soll das als
       // Satz lesen und nicht als Schweigen.
+      // v1.5 GEMELDET: "the rumble does not do anything when I click the test rumble". ruettle() ohne Ziel hiess
+      // "undefined = keiner" (zielPads) - der Knopf hat nie etwas gesendet. null = alle Pads, in der App der
+      // Android-Vibrator (nativRuettler).
+      const nativ = typeof nativRuettler === 'function' && nativRuettler();
       const stoss = rumbleOn ? ruettle({ duration: 260, startDelay: 0,
-                                         strongMagnitude: 0.6, weakMagnitude: 0.4 }) : 0;
+                                         strongMagnitude: 0.6, weakMagnitude: 0.4 }, null) : 0;
       const teile = [];
       if (!lage.pads.length) {
         teile.push('Kein Controller gemeldet. Eine Taste dr\u00fccken \u2013 der Browser '
@@ -908,6 +940,7 @@
         }
       }
       if (!lage.hauptschalter) teile.push('Hauptschalter steht AUS \u2013 nichts gesendet.');
+      else if (nativ && stoss) teile.push('Stoss \u00fcber Android an den Controller gesendet.');
       else teile.push('Stoss an ' + stoss + ' von ' + lage.pads.length + ' gesendet.');
       out.textContent = teile.join(' | ');
       log('R\u00fcttelprobe: ' + teile.join(' | '), 'info');
@@ -929,6 +962,18 @@
     RUMBLE_ARTEN[art] = el.checked;
     el.addEventListener('change', (e) => { RUMBLE_ARTEN[art] = e.target.checked; });
   });
+  // v1.6.5 BESTELLT: "Der Default sollte sein, dass es nicht neben der Strecke vibriert und nicht, wenn der Reifen
+  // quietscht." Einmalig umstellen (nach dem Laden der gespeicherten Einstellungen); danach gilt die eigene Wahl.
+  setTimeout(() => {
+    try {
+      if (localStorage.getItem('omegasim-vib-165')) return;
+      localStorage.setItem('omegasim-vib-165', '1');
+      ['vib-quietschen', 'vib-abseits'].forEach((id) => {
+        const el = $(id);
+        if (el && el.checked) { el.checked = false; el.dispatchEvent(new Event('change', { bubbles: true })); }
+      });
+    } catch (e) { /* privat */ }
+  }, 2500);
 
   // Die Trigger-Vibration, dieselbe Bauform: AUS DEM MARKUP lesen, dann auf 'change'.
   if ($('vib-trigger')) {
@@ -1205,6 +1250,11 @@
     { id: 'uebersicht', name: 'Rennen',
       waehlen: () => ovNochmal(),
       malen: () => ovScreenRender() },
+    // Onboard-Kamera (75-onboard.js): Livebild aus dem Auto. Blaetterbar nur, solange die
+    // Kamera an ist (cockpitScreenGilt); die Waehltaste startet und stoppt die Aufnahme.
+    { id: 'onboard', name: 'Onboard',
+      waehlen: () => onboardWaehlen(),
+      malen: () => onboardMalen() },
   ];
   let cockpitScreen = 0;
 
@@ -1266,6 +1316,8 @@
   // Zahlen stehen bleiben - schlimmer als ein Schirm, den es nicht gibt.
   function cockpitScreenGilt(s) {
     if (!s) return false;
+    // Den Onboard-Schirm gibt es nur mit Kamera. typeof, weil 75-onboard.js spaeter steht.
+    if (s.id === 'onboard') return typeof onboardAktiv === 'function' && onboardAktiv();
     // Seit dem Cockpit-Umbau ist die Beide-Ansicht der morph(t)e Standardschirm (main)
     // selbst und kein eigener Schirm mehr - es gibt keinen Schirm mehr mit einer Sperre.
     return true;
@@ -1300,11 +1352,15 @@
   function cockpitPunkteMalen() {
     const host = $('race-screen-dots');
     if (!host) return;
-    if (host.children.length !== COCKPIT_SCREENS.length) {
-      host.innerHTML = COCKPIT_SCREENS.map(() => '<i></i>').join('');
+    // Nur die BLAETTERBAREN Schirme bekommen einen Punkt: der Onboard-Schirm ohne Kamera
+    // waere sonst ein Punkt, den man nie erreicht.
+    const sichtbar = [];
+    COCKPIT_SCREENS.forEach((s, i) => { if (cockpitScreenGilt(s) || i === cockpitScreen) sichtbar.push(i); });
+    if (host.children.length !== sichtbar.length) {
+      host.innerHTML = sichtbar.map(() => '<i></i>').join('');
     }
-    for (let i = 0; i < host.children.length; i++) {
-      host.children[i].classList.toggle('an', i === cockpitScreen);
+    for (let k = 0; k < host.children.length; k++) {
+      host.children[k].classList.toggle('an', sichtbar[k] === cockpitScreen);
     }
   }
 
@@ -1985,6 +2041,23 @@
   // One place decides what the gear reads, so the racing screen and the driving tab can
   // never disagree. No "M" suffix: the mode is visible in the options, and a letter glued
   // to the gear number was noise on a display meant to be read at a glance.
+  // v1.5.159 GEMELDET: hohe Latenz mit NPCs oder 2 Spielern lag an zu wenig freiem Speicher auf dem Handy. Beim Start
+  // einmal nachsehen: die Speicherquote des Browsers richtet sich nach dem freien Platz (Chrome/WebView: ein Teil davon).
+  // Liegt sie unter SPEICHER_WARN_MB, ein Hinweis (einmal je Sitzung) und eine Zeile im Live-Log.
+  const SPEICHER_WARN_MB = 800;
+  function speicherPruefen() {
+    try {
+      if (!navigator.storage || !navigator.storage.estimate) return;
+      navigator.storage.estimate().then((e) => {
+        const frei = ((e && e.quota) || 0) - ((e && e.usage) || 0);
+        if (!(frei > 0)) return;
+        const mb = Math.round(frei / 1048576);
+        log('Speicher: etwa ' + mb + ' MB fuer die App verfuegbar (Quote des Browsers).', 'info');
+        if (mb < SPEICHER_WARN_MB) showHudToast(t('Wenig freier Speicher auf dem Gerät: das kann beim Fahren mit mehreren Autos zu Verzögerungen führen.'));
+      }).catch(() => {});
+    } catch (e) { /* egal */ }
+  }
+  setTimeout(speicherPruefen, 4000);
   function gearLabel(st) {
     if (st.driveMode === 'reverse') return 'R';
     if (st.driveMode === 'neutral') return 'N';
@@ -2066,7 +2139,7 @@
     // eine gemessene Groesse und keine gerechnete. Ohne Auto oder ohne Meldung: ein Strich,
     // und keine erfundene Zahl.
     const roh = car && car.battery !== undefined && car.battery !== null ? car.battery : null;
-    schreibeWert($(pre + '-batt'), roh === null ? '\u2013' : batteryPercent(roh) + ' %', true);
+    schreibeWert($(pre + '-batt'), akkuAnzeige(roh, true), true);
   }
 
   function p2ScreenRender() {
@@ -2414,7 +2487,7 @@
     // Prozentzahl. null heisst "noch kein Dashboard-Byte gelesen" (siehe dashBattery in
     // 60-track.js), der Balken bleibt dann leer statt eine falsche Zahl zu zeigen.
     const battPct = dashBattery === null ? null : batteryPercent(dashBattery);
-    $('race-batt').textContent = battPct === null ? '\u2013' : battPct + '%';
+    $('race-batt').textContent = akkuAnzeige(dashBattery, false);
     $('race-batt-bar').style.height = (battPct === null ? 0 : battPct) + '%';
     $('race-batt-bar').style.background = battPct !== null && battPct < 20 ? '#ffb02e' : '#2ee06a';
 
@@ -3374,6 +3447,7 @@
         if (a.seit === null) a.seit = jetzt;
         if (!a.aktiv && jetzt - a.seit >= offtrackEinMs) {
           a.aktiv = true; a.zaehler++;
+          if (typeof vorfallMerken === 'function') vorfallMerken('off', wer);
           if (typeof knockoutLebenVerlieren === 'function') knockoutLebenVerlieren(wer);
         }
       } else {
@@ -3391,6 +3465,8 @@
       if (!offtrackAktiv && jetzt - offtrackSeit >= offtrackEinMs) {
         offtrackAktiv = true;
         offtrackZaehler++;
+        // v1.5 (WIP): Vorfallkarte (98g-telemetrie-seite.js).
+        if (typeof vorfallMerken === 'function') vorfallMerken('off', 1);
         if (typeof knockoutLebenVerlieren === 'function') knockoutLebenVerlieren(1);
       }
     } else {
@@ -3650,14 +3726,20 @@
     const ap = autopilot(rawBrake);
     if (!ap && apVorher) apUebergabe();
     apVorher = !!ap;
-    if (ap) {
+    // VIRTUELLE FAHRT (aus PR 4 von gnen54, GEMELDET: "bei Gelb faehrt das Auto selbst los, stoppt und
+    // will zurueck auf die Bahn"): dort faehrt der Autopilot NICHT selbst, er DECKELT nur - Gas hoechstens
+    // so viel, wie er geben wuerde, Bremse mindestens so viel. Ohne Gas des Fahrers bleibt das Auto stehen,
+    // und die LENKUNG bleibt beim Fahrer. Beim echten Auto uebernimmt der Autopilot beides - die normale
+    // Gelb-Regel bleibt unangetastet.
+    const apVf = !!ap && typeof vfAktiv === 'function' && vfAktiv();
+    if (apVf) {
+      rawThrottle = Math.min(rawThrottle, ap.throttle);
+      rawBrake = Math.max(rawBrake, ap.brake);
+    } else if (ap) {
       rawThrottle = ap.throttle;
       rawBrake = ap.brake;
       // Die Lenkung nur, wenn er sie fuehren DARF - siehe `lenkt` in autopilot().
-      // VIRTUELLE FAHRT: dort deckelt die gelbe Flagge nur das Tempo (Gas und Bremse
-      // bleiben beim Autopiloten), die LENKUNG bleibt beim Fahrer. Beim echten Auto
-      // uebernimmt der Autopilot beides - die normale Gelb-Regel bleibt unangetastet.
-      if (ap.lenkt && !(typeof vfAktiv === 'function' && vfAktiv())) steer = ap.steer;
+      if (ap.lenkt) steer = ap.steer;
     }
     physApLenkt = !!(ap && ap.lenkt);
     // Abseits der Bahn gedeckelt, und zwar VOR der Physik. Genau das war der Fehler beim

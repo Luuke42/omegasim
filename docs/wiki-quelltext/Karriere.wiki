@@ -1,0 +1,21 @@
+{{Stand|app=1.5.107|appdatum=2026-11-17}}
+Die '''Karriere''' (in Arbeit, WIP) ist ein Abschnitt in [[OmegaSim]], in dem man eine Saison im Format der GT World Challenge auf den eigenen Strecken fährt. Sie stammt aus dem Hybrid-Dash von Mo Kamit (MIT-Lizenz) und liegt in den '''Challenges'''.
+
+== Aufbau ==
+Unter '''Challenges''' gibt es den Abschnitt '''Karriere'''. Gefahren wird eine Saison auf deinen eigenen Strecken, kurz mit 4 oder voll mit 10 Runden.
+* Eine '''Sprint-Runde''' hat Qualifying 1, Rennen 1, Qualifying 2 und Rennen 2, mit Pflichtstopp im Boxenfenster (sonst +30 s).
+* Eine '''Endurance-Runde''' hat Qualifying und ein Rennen über 3, 6 oder 24 Stunden, gestaucht auf echte Minuten.
+
+== Regeln und Fortschritt ==
+* Fliegender Start, Punkte wie in der Serie, ein Punkt für die Pole und drei Wertungen.
+* Die Lizenzen '''Bronze''' bis '''Pro''' setzen das Tempo der NPCs (eng begrenzt).
+* Es gibt außerdem XP, Fahrerstufe, Preisgeld, Sponsorziele, Trophäen und den Kalender mit Strecke je Runde.
+
+== Team-Upgrades ==
+Mit dem Preisgeld lassen sich drei Upgrades in je drei Stufen kaufen. Sie wirken nur auf dein Auto und nur in Karriere-Sitzungen:
+* '''Boxencrew''' senkt die Standzeit um 6 % je Stufe.
+* '''Spritverbrauch''' senkt den Verbrauch um 4 % je Stufe.
+* '''Reifenprogramm''' senkt den Reifenverschleiß um 5 % je Stufe.
+
+== Änderungen (diese Seite) ==
+Neu angelegt mit Stand 1.5.107; beschreibt Aufbau (Sprint/Endurance), Regeln und Fortschritt sowie die Team-Upgrades.\n\n[[Kategorie:OmegaSim]]\n[[Kategorie:Spielfunktionen]]

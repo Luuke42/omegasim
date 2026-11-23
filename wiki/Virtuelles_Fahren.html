@@ -17,12 +17,16 @@
 </div>
 <h1 class="wiki-title">Virtuelles Fahren</h1>
 <div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
-<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.2.9</b> vom 26.10.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.5.107</b> vom 2026-11-17 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
 <small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
 </p>
 </div>
 <figure class="mw-default-size" typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:OmegaSim-Garage.png" class="mw-file-description"><img src="images/250px-OmegaSim-Garage.png" decoding="async" loading="lazy" width="250" height="168" class="mw-file-element" srcset="images/500px-OmegaSim-Garage.png 2x" data-file-width="1280" data-file-height="860" /></a><figcaption>Die Garage von OmegaSim, in der die virtuelle Fahrt gestartet wird</figcaption></figure>
 <p><b>Virtuelles Fahren</b> (in der App „Virtuell fahren“, in Arbeit) ist ein Modus von <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a>, in dem ein simuliertes Auto ohne Bluetooth-Verbindung in einer 3D-Ansicht über die Strecke aus dem <a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a> fährt. Das virtuelle Auto ist für die App ein gewöhnliches Garagenauto, das sich seine Funkmeldungen selbst erzeugt; dadurch laufen Rundenzeit, Rennen, Telemetrie und Motorklang unverändert mit. Gefahren wird mit dem Tempo des gewählten Fahrgefühls und einem Querdynamikmodell nach dem Vorbild eines GT3-Rennwagens. Verwandt, aber getrennt davon ist <b>Rennen simulieren</b>: Dort fahren NPC-Attrappen ohne Hardware mit der echten NPC-Steuerung (siehe <a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a>); beides wird auf dieser Seite beschrieben, weil beide Autos ohne <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Hardware bewegen.
+</p>
+<figure class="mw-default-size" typeof="mw:Error mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Spezial:Hochladen?wpDestFile=OmegaSim-Virtuell-Fahren.png" class="new" title="Datei:OmegaSim-Virtuell-Fahren.png"><span class="mw-file-element mw-broken-media" data-width="180">Datei:OmegaSim-Virtuell-Fahren.png</span></a><figcaption>Die virtuelle Fahrt: der Vulture V5.R aus Speed Dreams in der 3D-Ansicht, mit Verfolgerkamera über die Strecke aus dem Editor.</figcaption></figure>
+<figure class="mw-default-size" typeof="mw:Error mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Spezial:Hochladen?wpDestFile=OmegaSim-Virtuell-Auto.png" class="new" title="Datei:OmegaSim-Virtuell-Auto.png"><span class="mw-file-element mw-broken-media" data-width="180">Datei:OmegaSim-Virtuell-Auto.png</span></a><figcaption>Das virtuelle Auto, der Vulture V5.R aus <a rel="nofollow" class="external text" href="https://www.speed-dreams.org/">Speed Dreams</a> (nahe Verfolgerkamera).</figcaption></figure>
+<p>Das <b>Fahrzeugmodell</b> stammt für das Standard-Auto aus <b><a rel="nofollow" class="external text" href="https://www.speed-dreams.org/">Speed Dreams</a></b>, einem freien Rennsimulator (GPL-2+): Das Modell <code>ls1-vulture-v5r</code> (Vulture V5.R) wird mit <code>tools/sd_auto.py</code> übernommen – samt Lichtorten, Rädern und den Fahrzeugdaten (Masse, Schwerpunkt, Radstand, Einschlag, Bremsbalance, Abtrieb) aus der <code>.xml</code>-Datei des Originals. Einige weitere Modelle folgen demselben Schema (<a href="#Einstellungen">siehe Auto-Auswahl</a>).
 </p>
 <meta property="mw:PageProp/toc" />
 <div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
@@ -37,7 +41,7 @@
 </td></tr>
 <tr>
 <td>Wichtigste Optionen (Standard)</td>
-<td>Auto: Vulture V5.R · Schaltung: Automatik · Handling: GT3 · Geist folgt meiner Linie: an · NPCs: 3 · Neigung sichtbar: 1× · Motorsound: Motor des gewählten Autos
+<td>Auto: Vulture V5.R · Schaltung: Automatik · Handling: GT3 · Boden: Rasen · Grafik: Quality · Licht: aus · Geist folgt meiner Linie: an · NPCs: 3 · Neigung sichtbar: 1× · Motorsound: Motor des gewählten Autos
 </td></tr>
 <tr>
 <td>Status</td>
@@ -45,7 +49,7 @@
 </td></tr>
 <tr>
 <td>Seit Version</td>
-<td>1.1.3 (Grundmodus), 1.1.9 (Speed-Dreams-Auto), 1.1.11 (direkte Lenkung, Kameras), 1.1.46 (virtuelle NPCs), 1.1.52 (Handling „Schnell“)
+<td>1.1.3 (Grundmodus), 1.1.9 (Speed-Dreams-Auto), 1.1.11 (direkte Lenkung, Kameras), 1.1.46 (virtuelle NPCs), 1.1.52 (Handling „Schnell“), 1.5.22 (Handling „LibreCorsa GT3“), 1.5.101 (Lenkhilfe)
 </td></tr>
 <tr>
 <td>Beteiligte Quelldateien</td>
@@ -128,7 +132,7 @@
 </td></tr>
 <tr>
 <td>Auto</td>
-<td>Vulture V5.R, Lynx 220, FMC GT4, Boxer 96, Einfaches Modell</td>
+<td>Vulture V5.R, Lynx 220, FMC GT4, Boxer 96, VW Käfer 1303 RS, Spider NG1, Einfaches Modell</td>
 <td>Vulture V5.R</td>
 <td>3D-Modell und Fahrdaten (Masse, Schwerpunkt, Radstand, Einschlag, Bremsbalance, Abtrieb) aus Speed Dreams; „Einfaches Modell“ ist ein Kasten mit GT3-Grundwerten</td>
 <td><code>omegasim-vf-auto</code>
@@ -142,9 +146,9 @@
 </td></tr>
 <tr>
 <td>Handling</td>
-<td>GT3, Schnell</td>
+<td>GT3, Schnell, LibreCorsa GT3 (WIP)</td>
 <td>GT3</td>
-<td>Schnell: Griff vorn und hinten × 1,35, Lenkeinschlag × 1,5 (höchstens 45°), Gierdämpfung × 0,6, Tempo × 1,15</td>
+<td>Schnell: Griff vorn und hinten × 1,35, Lenkeinschlag × 1,5 (höchstens 45°), Gierdämpfung × 0,6, Tempo × 1,15; LibreCorsa GT3: nach den veröffentlichten Messwerten des GT3 aus LibreCorsa (kein Code übernommen), siehe unten</td>
 <td><code>omegasim-vf-handling</code>
 </td></tr>
 <tr>
@@ -235,6 +239,9 @@ dv_y/dt   = (F_y,vorn·cos δ + F_y,hinten)/m − v_x·r
 dr/dt     = (a·F_y,vorn·cos δ − b·F_y,hinten)/I_z − 1,5·r
 </pre>
 <p>Gerechnet in Teilschritten von höchstens 2&#160;ms; danach werden v_y auf ±v_x und r auf ±5&#160;rad/s begrenzt. Die Längsbeschleunigung a_x ist die Längs-G der App × 15 (also bis 1,5&#160;g), nicht die Ableitung des Modelltempos, weil dieses umgerechnet weit stärker beschleunigt als jedes echte Auto. Das Ergebnis: am Limit leichtes Untersteuern, Anbremsen dreht das Auto ein, Vollgas in engen Kurven lässt das Heck kommen.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="LibreCorsa_GT3">LibreCorsa GT3</h4></div>
+<p>Seit 1.5.22 gibt es zusätzlich das Handling <b>LibreCorsa GT3</b> (WIP): nachgebaut nach den veröffentlichten Messwerten des GT3 aus dem freien Rennsimulator LibreCorsa (kein Code übernommen). Es erreicht eine dauerhafte Querbeschleunigung von 1,7 g bei 81 km/h bis 1,9 g bei 171 km/h (der Abtrieb wächst mit dem Tempo), einen Untersteuergradienten von 1,4 Grad je g und ein Reifenfenster, in dem die Reifen am besten greifen. Ein Selbsttest misst das wie das Vorbild in stationärer Kreisfahrt; die Werte liegen innerhalb von 3&#160;%. Seit 1.5.101 gibt es im Handling LibreCorsa eine <b>Lenkhilfe</b> für Gamepad und Tastatur: Der Einschlag läuft weich an und aus, geht nie über den Punkt des besten Grips der Vorderräder hinaus, die Räder stellen sich beim Loslassen in Fahrtrichtung, und ein rutschendes Heck wird teilweise abgefangen.
 </p><p>Rückwärts gilt das Einspurmodell mit Radeinschlag 26° und Radstand 7 Einheiten (etwa 7,5&#160;cm), begrenzt durch die Haftgrenze ω ≤ μ·g/v.
 </p>
 <div class="mw-heading mw-heading3"><h3 id="Geist_und_virtuelle_NPCs">Geist und virtuelle NPCs</h3></div>
@@ -293,7 +300,7 @@ Berührung, wenn d_längs &lt; AUTO_LANG und d_quer &lt; AUTO_BREIT
 <li><b>Keine Kollisionen in der virtuellen Fahrt.</b> Weder mit den virtuellen NPCs noch mit dem Geist; die virtuellen NPCs folgen nur der Mittellinie.</li>
 <li><b>Motoraufnahmen bei Dateiaufruf.</b> Wird OmegaSim direkt als Datei geöffnet, lassen sich die Aufnahmen nicht laden, es spielt ein Ersatzton; Abhilfe ist der Start über „Start OmegaSim.bat“.</li>
 <li><b>Rennsimulation ist ein Modell.</b> Reibung, Staub, abfliegende Autos und eine Schiene, die ein Auto nicht mehr hält, fehlen. Wer dort vorn liegt, ist es im Modell. Die Berührungszählung schwankt zwischen identischen Läufen stark (siehe <a href="./NPC-Fahrverhalten.html#Grenzen_und_bekannte_Probleme" title="NPC-Fahrverhalten">NPC-Fahrverhalten#Grenzen und bekannte Probleme</a>).</li>
-<li><b>Echtes Auto nach der virtuellen Fahrt.</b> Die Seite <a href="https://omegasim.miraheze.org/wiki/CH_ControlBox" title="CH ControlBox">CH ControlBox</a> beschreibt, dass ein echtes Auto nach einer virtuellen Fahrt hängen bleiben konnte. Weder Code noch Patchnotes bis 1.2.9 nennen dazu eine ausdrückliche Korrektur. Der aktuelle Code zeigt drei Stellen, an denen ein solches Verhalten entstehen kann; ob eine davon die beobachtete Ursache ist, ist noch nicht gesichert:
+<li><b>Echtes Auto nach der virtuellen Fahrt.</b> Die Seite <a href="./CH_ControlBox.html" title="CH ControlBox">CH ControlBox</a> beschreibt, dass ein echtes Auto nach einer virtuellen Fahrt hängen bleiben konnte. Weder Code noch Patchnotes bis 1.2.9 nennen dazu eine ausdrückliche Korrektur. Der aktuelle Code zeigt drei Stellen, an denen ein solches Verhalten entstehen kann; ob eine davon die beobachtete Ursache ist, ist noch nicht gesichert:
 <ul><li>Beim Start bekommt das echte Fahrerauto die Rolle „Aus“ (<code>setCarRole(playerCar, 'none')</code>). Dabei wird kein Halt-Befehl geschickt, und während der ganzen virtuellen Fahrt erhält das echte Auto überhaupt keine Pakete, weil die App nur an Spieler, NPCs und Sonderrollen sendet. Was die <a href="./Firmware.html" title="Firmware">Firmware</a> ohne Befehle tut, ist im Code nicht beschrieben.</li>
 <li>Beim Beenden bekommt das echte Auto seine Rolle nur zurück, wenn es noch in der Garage steht. Reißt seine Verbindung während der Fahrt endgültig ab (fünf vergebliche Wiederverbindungen) und wird es neu verbunden, ist zu diesem Zeitpunkt das virtuelle Auto Spieler&#160;1; das echte Auto wird deshalb als NPC aufgenommen und bleibt es auch nach dem Beenden.</li>
 <li>Die Rolle „Aus“ wird für das Auto gespeichert; beim nächsten Verbinden wird eine gespeicherte Rolle „Aus“ aber ignoriert, das Auto wird dann Spieler&#160;1 oder NPC.</li></ul></li></ul>
@@ -327,6 +334,30 @@ Berührung, wenn d_längs &lt; AUTO_LANG und d_quer &lt; AUTO_BREIT
 <tr>
 <td>1.1.52</td>
 <td>Handling-Modus „Schnell“
+</td></tr>
+<tr>
+<td>1.2.62</td>
+<td>Randstein-Rumpeln (vib-kerb) beim Überfahren von Randsteinen.
+</td></tr>
+<tr>
+<td>1.3.50</td>
+<td>virtuelles Fahren mit echten Bahn- und Bodentexturen, Kamera „Fahrer am Rand“.
+</td></tr>
+<tr>
+<td>1.3.57</td>
+<td>Kamera mit dem rechten Stick, HUD- und Cockpit-Ansicht im ACC-Stil.
+</td></tr>
+<tr>
+<td>1.5.22</td>
+<td>Handling „LibreCorsa GT3“ (WIP): nach den veröffentlichten Messwerten des GT3 aus LibreCorsa, kein Code übernommen.
+</td></tr>
+<tr>
+<td>1.5.101</td>
+<td>Lenkhilfe im Handling LibreCorsa; kalte Bremsscheiben bremsen bis zu 10&#160;% schwächer; dreckige Luft kostet Grip an der Vorderachse.
+</td></tr>
+<tr>
+<td>1.5.107</td>
+<td>Rasen als Standardboden, Grafik „Quality“ ab Werk, Licht aus beim Start, Tageszeit, TV-Kamera, Bloom und Lackreflexe, Dunst zur Sonne, wehendes Gras, Sichtfeld mit Tempo, 3D-Regen mit Wetter-Knopf, Boxengasse auf Balkonia, Ziellinie bei 80&#160;%, Geist = gewähltes Auto, feste 500-Hz-Schritte; neue Autos VW Käfer 1303 RS und Spider NG1 (Gnen54).
 </td></tr></tbody></table>
 <div class="mw-heading mw-heading2"><h2 id="Einzelnachweise">Einzelnachweise</h2></div>
 <div class="mw-references-wrap"><ol class="references">
@@ -348,7 +379,7 @@ Berührung, wenn d_längs &lt; AUTO_LANG und d_quer &lt; AUTO_BREIT
 <li><a href="./NPC-Fahrverhalten.html" title="NPC-Fahrverhalten">NPC-Fahrverhalten</a></li>
 <li><a href="./Strecken-_und_Raum-Editor.html" title="Strecken- und Raum-Editor">Strecken- und Raum-Editor</a></li>
 <li><a href="./Rennarten.html" title="Rennarten">Rennarten</a></li>
-<li><a href="https://omegasim.miraheze.org/wiki/CH_ControlBox" title="CH ControlBox">CH ControlBox</a></li>
+<li><a href="./CH_ControlBox.html" title="CH ControlBox">CH ControlBox</a></li>
 <li><a href="./Keine_Reaktion_des_Fahrzeugs.html" title="Keine Reaktion des Fahrzeugs">Keine Reaktion des Fahrzeugs</a></li>
 <li><a href="./Aufbau_von_OmegaSim.html" title="Aufbau von OmegaSim">Aufbau von OmegaSim</a></li>
 <li><a href="./Glossar.html" title="Glossar">Glossar</a></li></ul>
@@ -357,23 +388,25 @@ Berührung, wenn d_längs &lt; AUTO_LANG und d_quer &lt; AUTO_BREIT
 <li><code>src/90b-sim.js</code>: <code>simStart()</code>, <code>simSchritt()</code>, <code>simTeilschritt()</code>, <code>simKontakteTick()</code>, <code>simUeberholTick()</code>, <code>simStop()</code></li>
 <li><code>src/60-track.js</code>: <code>TRACK_TILE_CM</code>, <code>TRACK_UNITS_PER_CM</code>, <code>TRACK_HALF_W</code>, <code>AUTO_LANG</code>, <code>AUTO_BREIT</code>, <code>trackCenterline()</code></li>
 <li><code>src/90-ghosts.js</code>: <code>setCarRole()</code>, <code>removeCar()</code>, <code>onCarNotify()</code></li>
-<li><code>src/51-konsole.js</code>: Tasten Escape, C und Options in der virtuellen Fahrt</li></ul>
+<li><code>src/51-konsole.js</code>: Tasten Escape, C und Options in der virtuellen Fahrt</li>
+<li><code>tools/sd_auto.py</code>, <code>img/autos/v5r/</code>: das Speed-Dreams-Auto (Vulture V5.R) mit Modell, Lichtern und Fahrdaten</li></ul>
 <div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
-<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li></ul>
-
+<ul><li>Browserfassung, Android-App und Quellcode: Links auf der <a href="./Hauptseite.html" title="Hauptseite">Hauptseite</a></li>
+<li><a rel="nofollow" class="external text" href="https://www.speed-dreams.org/">Speed Dreams</a> – der freie Rennsimulator, aus dem die virtuellen Autos (Vulture V5.R u.&#160;a.) stammen</li>
+<li><a rel="nofollow" class="external text" href="https://sourceforge.net/projects/speed-dreams/">Speed Dreams auf SourceForge</a></li></ul>
 <!-- 
 NewPP limit report
-Parsed by mw201
-Cached time: 20261030073508
+Parsed by mw183
+Cached time: 20261118151314
 Cache expiry: 1296000
 Reduced expiry: false
 Complications: [show‐toc]
-CPU time usage: 0.070 seconds
-Real time usage: 0.075 seconds
-Preprocessor visited node count: 187/1000000
-Revision size: 26132/2097152 bytes
-Post‐expand include size: 752/2097152 bytes
-Template argument size: 15/2097152 bytes
+CPU time usage: 0.093 seconds
+Real time usage: 0.881 seconds
+Preprocessor visited node count: 193/1000000
+Revision size: 29372/2097152 bytes
+Post‐expand include size: 754/2097152 bytes
+Template argument size: 17/2097152 bytes
 Highest expansion depth: 3/100
 Expensive parser function count: 1/99
 Unstrip recursion depth: 0/20
@@ -381,11 +414,14 @@ Unstrip post‐expand size: 8161/5000000 bytes
 -->
 <!--
 Transclusion expansion time report (%,ms,calls,template)
-100.00%    3.648      1 Vorlage:Stand
-100.00%    3.648      1 -total
+100.00%    3.544      1 Vorlage:Stand
+100.00%    3.544      1 -total
 -->
 
-<!-- Render ID 6e5a6c06-d434-11f1-a4a7-bc2411441f04 -->
+<!-- Render ID 93227381-e362-11f1-9d0c-bc2411058fd2 -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:36:|#|:idhash:canonical and timestamp 20261118151313 and revision id 872. Rendering was triggered because: page-edit
+ -->
 </div>
 </main>
 <footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>

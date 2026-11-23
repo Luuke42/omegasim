@@ -303,36 +303,26 @@
   // sich jeweils staerker wie die Benchmarks anfuehlen." Der Schluessel 'gran' bleibt (gespeicherte
   // Spieler-Presets, Sicherungen, Profile), der alte Name laedt ueber PRESET_ALIAS. Die gran*-Werte
   // haengen am Modus (GRAN_WERTE, 50-drive.js), hier stehen nur die Regler.
-  PRESETS.gran = {
-    label: 'Gran Hybrismo',
+  // v1.5.25: Gran Hybrismo und Assetto Carrera sind ENTFERNT (BESTELLT: "Entferne die Gran-Hybrismo- und
+  // Assetto-Carrera-Modi"). Ihre Schluessel laden ueber PRESET_ALIAS als LibreCorsa.
+  // ---- LIBRECORSA (v1.5.25, WIP) ----------------------------------------------------------------
+  // BESTELLT: "Schaue aufs normale Fahren mit echten Autos und mache einen LibreCorsa-Fahrmodus, der sich mit den echten
+  // Autos moeglichst genau so anfuehlt. Uebersteuern wieder ausschaltbar." Physikmodus 'librecorsa' (GRAN_WERTE,
+  // 50-drive.js). Laengs wie der GT3 dort: kraeftiger Antritt (0,85 g aus Kurven), sehr starke Bremse (bis 2 g mit
+  // ABS, die Lenkung bleibt beim Bremsen zum grossen Teil), Reifenmodell mit Fenster, keine Reifenwaermer.
+  // Uebersteuern aus (Schalter bleibt bedienbar).
+  PRESETS.librecorsa = {
+    label: 'LibreCorsa',
     wip: true,
-    kurz: 'Pacejka wie Gran Turismo Sport: viel Grip, verzeihend',
-    text: 'Automatik, 2,6 s auf 100, Reifenmodell und Tankgewicht an, Reifenwärmer an. Das '
-        + 'Pacejka-Lenkmodell im Stil von Gran Turismo Sport: viel Grip und Abtrieb, ein weicher '
-        + 'Reifenscheitel, kaum Lastwechsel und eine Stabilitätshilfe, die ein ausbrechendes '
-        + 'Heck sanft gegenlenkt. Beim Bremsen bleibt die Lenkung wie mit kräftigem ABS, '
-        + 'die Reifentemperatur wirkt nur wenig. Bis 1.3.4 hieß der Modus Gran Accelerato.',
-    // Bremse 1,8 und Bremsen nimmt Lenkung 0,6: das ABS-Gefuehl von GT Sport (kurzer Weg, die
-    // Lenkung bleibt). Reifenwaermer an: in GT Sport spielt die Temperatur kaum eine Rolle.
-    v: Object.assign({}, PRESETS.pro.v, { 'phys-mode': 'gran',
-      'phys-steerresp': 3.2, 'setting-steer-calib': 2.6, 'setting-brake-steal': 0.6,
-      'phys-accel': 1.05, 'setting-brakepower': 1.8, 'setting-tyre-blankets': true }),
-  };
-  PRESETS.acc = {
-    label: 'Assetto Carrera',
-    wip: true,
-    kurz: 'Pacejka wie Assetto Corsa Competizione: Gewicht und Reifen zählen',
-    text: 'Automatik, 2,6 s auf 100, Reifenmodell und Tankgewicht an, ohne Reifenwärmer. Das '
-        + 'Pacejka-Lenkmodell im Stil von Assetto Corsa Competizione: die Gewichtsverlagerung '
-        + 'lenkt mit (leicht bremsen dreht das Auto ein, Lupfen lässt das Heck kommen, Gas '
-        + 'schiebt), die Haftgrenze ist scharf, und wer sie überfährt, schiebt über die '
-        + 'Vorderräder. Die Reifen haben ein Fenster: kalt rutschen sie, warm greifen sie am '
-        + 'besten, überhitzt lässt der Grip spürbar nach. Keine Hilfen.',
-    // Bremsen nimmt Lenkung 0,95 wie Pro: Trail-Braking soll sich lohnen, eine Vollbremsung in
-    // der Kurve nicht. Reifenwaermer aus: das Fenster muss man sich erfahren.
-    v: Object.assign({}, PRESETS.pro.v, { 'phys-mode': 'acc',
-      'phys-steerresp': 3.2, 'setting-steer-calib': 2.5, 'setting-brake-steal': 0.95,
-      'phys-accel': 1.0, 'setting-tyre-blankets': false }),
+    kurz: 'GT3 wie im Rennsimulator LibreCorsa: Abtrieb, starke Bremse, Reifenfenster',
+    text: 'Automatik, Reifenmodell und Tankgewicht an, ohne Reifenwärmer. Abgestimmt auf den GT3 aus dem freien '
+        + 'Rennsimulator LibreCorsa (nach dessen veröffentlichten Messwerten): viel Grip, der mit dem Tempo durch '
+        + 'Abtrieb weiter wächst, kräftiger Antritt, eine sehr starke Bremse mit ABS (die Lenkung bleibt beim Bremsen '
+        + 'zum großen Teil), leichtes Untersteuern am Limit und ein Reifenfenster: kalt rutschen die Reifen, warm '
+        + 'greifen sie am besten. Das Heck kommt nur mit dem Schalter „Übersteuern“ (Vorgabe aus).',
+    v: Object.assign({}, PRESETS.pro.v, { 'phys-mode': 'librecorsa',
+      'phys-steerresp': 3.2, 'setting-steer-calib': 2.6, 'setting-brake-steal': 0.8,
+      'phys-accel': 1.1, 'setting-brakepower': 1.7, 'setting-tyre-blankets': false, 'setting-pac-ueber': false }),
   };
   // ---- OMEGA (v1.0.36): Pro, EINGEFROREN -------------------------------------------------
   // BESTELLT: "'Omega'-Fahrgefuehlmodus ergaenzen: so wie das Pro, was so lange bitgleich
@@ -407,18 +397,19 @@
   // Reduzierung (BESTELLT: "Behalte dabei: arcade, sim+, pacejka; pacejka als standard")
   // sind es nur noch die drei - sie erscheinen auch in der Garage, die uebrigen bleiben in
   // den Optionen.
-  const PRESETS_FAHREN = ['arcade', 'simplus', 'propacejka', 'gran', 'acc'];
+  const PRESETS_FAHREN = ['arcade', 'simplus', 'propacejka', 'librecorsa'];
   // Reihenfolge im Optionen-Menue (preset-buttons und die Preset-Liste je Menue): die drei
   // gebraeuchlichen zuerst, der Rest darunter (BESTELLT: "schiebe ein paar nach unten").
-  const PRESETS_REIHENFOLGE = ['arcade', 'simplus', 'propacejka', 'gran', 'acc',
+  const PRESETS_REIHENFOLGE = ['arcade', 'simplus', 'propacejka', 'librecorsa',
                                'pro', 'gt3', 'f1', 'realgt3', 'omega', 'rc'];
   // Bis v0.4 hiess GT3 "real". Aeltere exportierte Abstimmungen und der Knopf im
   // Garagenschirm duerfen den alten Namen weiter benutzen.
   // v1.3.5: "Gran Accelerato" heisst jetzt Gran Hybrismo (Schluessel 'gran' unveraendert); der alte
   // Name und die Schreibweisen ohne Leerzeichen laden weiter.
-  const PRESET_ALIAS = { real: 'gt3', realismus: 'gt3', 'Gran Accelerato': 'gran', granaccelerato: 'gran',
-                         'gran accelerato': 'gran', granhybrismo: 'gran', 'Gran Hybrismo': 'gran',
-                         assettocarrera: 'acc', 'Assetto Carrera': 'acc' };
+  // v1.5.25: die entfernten Modi Gran Hybrismo ('gran') und Assetto Carrera ('acc') laden als LibreCorsa.
+  const PRESET_ALIAS = { real: 'gt3', realismus: 'gt3', 'Gran Accelerato': 'librecorsa', granaccelerato: 'librecorsa',
+                         'gran accelerato': 'librecorsa', granhybrismo: 'librecorsa', 'Gran Hybrismo': 'librecorsa',
+                         assettocarrera: 'librecorsa', 'Assetto Carrera': 'librecorsa', gran: 'librecorsa', acc: 'librecorsa' };
 
   // Every control in an option row, found by walking the DOM rather than from a list. A
   // hand-kept list would silently omit whatever gets added next, and the omission would only

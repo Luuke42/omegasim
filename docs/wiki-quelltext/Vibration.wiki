@@ -1,0 +1,31 @@
+{{Stand|app=1.4.80|appdatum=15.11.2026}}
+'''Vibration''' ist die haptische Rückmeldung in [[OmegaSim]], die über den Controller verschiedene Ereignisse spürbar macht. Sie wird unter '''Optionen → Vibration''' eingestellt.
+
+== Überblick ==
+Vibration ist standardmäßig eingeschaltet. Ein Hauptschalter ''Vibration überhaupt'' bestimmt, ob überhaupt etwas brummt. Darunter lässt sich jeder Auslöser einzeln an- oder ausschalten. Ein Knopf ''Rütteln testen'' löst einen Stoß aus und zeigt, was der Controller tatsächlich annimmt.
+
+== Auslöser ==
+Je Auslöser gibt es einen eigenen Schalter:
+
+* '''Gangwechsel''' (kurz und leicht)
+* '''ABS''' (Puls im Takt)
+* '''Aufprall''' (stärkster Stoß, abhängig von der Wucht)
+* '''Neben der Bahn''' (schwaches Dauerbrummen, Standard aus)
+* '''Boxenstopp''' (Einfahrt, Arbeit, fertig und Puls in der Boxengasse)
+* '''Übersteuern''' und '''Untersteuern''' (nur im Pacejka-Modus)
+* '''Reifenquietschen''' (leicht, mit der Lautstärke des Quietschens)
+* '''Randsteine''' (beim virtuellen Fahren)
+* '''Meldungen''' (Wetterwechsel, leerer Tank, Standard aus)
+* '''Trigger-Vibration''' (experimentell)
+
+Die Stärke ist in der Oberfläche nicht einstellbar; die Werte sind im Code festgelegt.
+
+== DualSense ==
+Die adaptiven Trigger eines DualSense sind über die Gamepad-API nicht erreichbar. OmegaSim nutzt dafür WebHID (Chrome oder Edge am Rechner, per USB oder Bluetooth) und schreibt direkt den Ausgabebericht des Controllers. Der linke Trigger vibriert bei aktivem ABS, der rechte nahe der Drehzahlgrenze (nur beim virtuellen Fahren). Es gibt keinen festen Widerstand, nur Vibration.
+
+== Weblinks ==
+* [[Fahrgefuehl]]
+* [[Pacejka]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Controller]]

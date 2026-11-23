@@ -147,7 +147,7 @@
     }
     const z = typeof zusatzPlatz === 'function' ? zusatzPlatz(nr) : null;
     if (z && z.reifen && typeof mischungAnwenden === 'function' && typeof wxRainLevel === 'function') {
-      try { mischungAnwenden(motor, z.reifen, wxRainLevel() * wxRainLevel()); } catch (e) { /* beim Laden */ }
+      try { mischungAnwenden(motor, z.reifen, wxGriff(wxRainLevel())); } catch (e) { /* beim Laden */ }
     }
   }
   // Rechnet dieser Spieler mit Physik (Physik/Pacejka/Gran Hybrismo/Assetto Carrera) oder RC? Ohne eigenes

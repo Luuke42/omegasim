@@ -1,0 +1,21 @@
+{{Stand|app=1.4.80|appdatum=15.11.2026}}
+'''Online-Streckenzeiten''' ist ein Bereich in [[OmegaSim]], über den sich Bestzeiten und die besten drei Runden einer Strecke mit anderen Fahrern teilen lassen. Er wird unter '''Optionen → Online''' eingerichtet und über '''Strecken-Editor → Zeiten auf dieser Strecke''' sowie unter '''Challenges → Community''' angezeigt.
+
+== Überblick ==
+Beim ersten Speichern einer Strecke fragt OmegaSim, ob die Zeiten online geteilt werden sollen. Wenn ja, werden Name und Strecke öffentlich gespeichert; die Einstellung lässt sich jederzeit unter '''Optionen → Online''' ändern. Lesen funktioniert auch, wenn das Teilen ausgeschaltet ist. Eigene Zeiten stehen immer mit in der Liste, nicht geteilte als ''nur lokal''.
+
+== Synchronisation ==
+Bei aktiver Synchronisation gehen gewertete Runden auf eigenen Strecken an die gemeinsame Liste, mit Streckencode, Streckenname, Rundenzeiten, Autoname, Fahrername und einer zufälligen Gerätekennung. Die Abrufe werden zwischengespeichert (Community-Strecken alle 5 Minuten, Zeiten einer Strecke alle 2 Minuten). Geprüft, gespeichert und gesendet wird erst nach dem Rennen.
+
+== Wertung ==
+Je Strecke zählen die Bestzeit und die Summe der besten drei aufeinanderfolgenden gültigen Runden (angezeigt als Durchschnitt). Eine Runde ist gültig, wenn die Mindestrundenzeit erreicht und mindestens 90 Prozent der Streckenteile erkannt wurden. Bestzeit und beste drei Runden werden je Fahrgefühl getrennt verglichen.
+
+== Community-Strecken ==
+Unter '''Challenges → Community''' lassen sich eigene Strecken einreichen. Voraussetzung ist eine Strecke im Editor mit mindestens zwei Teilen. Nach Vorschau, Wahl einer Abstimmung und Eingabe eines Namens wird die Strecke hochgeladen; sie erscheint mit einer vierstelligen ID in der Liste. Fehlende eigene Strecken werden beim nächsten Abgleich automatisch nachgereicht.
+
+== Weblinks ==
+* [[Challenges]]
+* [[Strecken- und Raum-Editor]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Online]]

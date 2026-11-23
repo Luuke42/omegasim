@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Startampel - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Startampel</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><p>Eine echte Startampel am Tisch, die OmegaSim per Bluetooth steuert: <b>Rot</b> oben, <b>Gelb</b> in der Mitte, <b>Grün</b> unten mit fünf Spalten. Die grünen Spalten folgen den fünf Lampen der OmegaSim-Startampel. Es gibt sie als Variante mit Raspberry Pi 3 und mit Raspberry Pi Pico W.
+</p><p>Stand: <b>experimentell</b>. Die Startampel steckt in der Testfassung von gnen54 (<a rel="nofollow" class="external text" href="https://gnen54.github.io/omegasim">gnen54.github.io/omegasim</a>, aufgebaut auf OmegaSim 1.1.41) und ist als Vorschlag an Luuke eingereicht. Am Tisch getestet mit Raspberry Pi 3 und Pico W.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Auf_einen_Blick">Auf einen Blick</h2></div>
+<table class="wikitable">
+
+<tbody><tr>
+<th>Was
+</th>
+<th>Einstellung
+</th></tr>
+<tr>
+<td>OmegaSim
+</td>
+<td>Testfassung gnen54.github.io/omegasim, Chrome/Edge oder Android-App (nicht Firefox/Safari)
+</td></tr>
+<tr>
+<td>Verbinden
+</td>
+<td>Optionen → AddOn → Startampel (Raspberry Pi / Pico) → Verbinden → „Ampel“
+</td></tr>
+<tr>
+<td>Wartezeit
+</td>
+<td>Optionen → AddOn → Wartezeit nach dem Start, ab Werk 4 s
+</td></tr>
+<tr>
+<td>Startansage
+</td>
+<td>Optionen → Ton → Startansage
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Was_die_Ampel_zeigt">Was die Ampel zeigt</h2></div>
+<table class="wikitable">
+
+<tbody><tr>
+<th>Situation
+</th>
+<th>Ampel
+</th></tr>
+<tr>
+<td>Nichts freigegeben, Rennen vorbei oder abgebrochen
+</td>
+<td><b>Rot</b>
+</td></tr>
+<tr>
+<td>Start-Knopf im Fenster „Bringe die Autos in Position“
+</td>
+<td>Rot aus, <b>Gelb</b> an, OmegaSim sagt „Gentlemen, start your engines“
+</td></tr>
+<tr>
+<td>Nach der Wartezeit: Countdown
+</td>
+<td><b>Grün</b>, jede Sekunde eine Spalte mehr (1 … 5)
+</td></tr>
+<tr>
+<td>Start (nach einer zufälligen Pause von 1–3 s, wie in der Formel 1)
+</td>
+<td><b>alles aus</b>
+</td></tr>
+<tr>
+<td>Frühstart im Countdown
+</td>
+<td>Grün aus, <b>Gelb blinkt</b>, bis neu gestartet wird
+</td></tr>
+<tr>
+<td>Gelbe Flagge im Rennen
+</td>
+<td><b>Gelb</b>, bis die Flagge aufgehoben ist
+</td></tr>
+<tr>
+<td>Verbindung zu OmegaSim verloren
+</td>
+<td><b>Rot</b> (Sicherheit)
+</td></tr></tbody></table>
+<p>Die Ansage spricht <b>OmegaSim</b> selbst, nicht die Ampel. Sie kommt nur beim Start-Knopf im Fenster „Bringe die Autos in Position“ und nur, wenn gerade nichts läuft.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="In_welchen_Modi_läuft_die_Startsequenz?"><span id="In_welchen_Modi_l.C3.A4uft_die_Startsequenz.3F"></span>In welchen Modi läuft die Startsequenz?</h2></div>
+<table class="wikitable">
+
+<tbody><tr>
+<th>Modus
+</th>
+<th>Startampel
+</th></tr>
+<tr>
+<td>Qualifying, Runden, Endurance, Demolition Derby
+</td>
+<td>volle Sequenz: Gelb, Ansage, Wartezeit, 5 × Grün, Pause, aus
+</td></tr>
+<tr>
+<td>Time Attack
+</td>
+<td>volle Sequenz; braucht „Auf der Bahn“ und eine eingescannte Strecke
+</td></tr>
+<tr>
+<td>NPC Knockout
+</td>
+<td>volle Sequenz; braucht mindestens ein NPC-Auto
+</td></tr>
+<tr>
+<td>Training
+</td>
+<td>Gelb und Ansage, dann sofort los, <b>ohne grüne Lichter</b> (Training hat keinen Countdown)
+</td></tr>
+<tr>
+<td>WLAN-Mehrspieler
+</td>
+<td>Gelb ohne Ansage, Grün auf allen Geräten gleichzeitig
+</td></tr>
+<tr>
+<td>Challenges
+</td>
+<td>läuft mit, wenn die Challenge einen Countdown hat
+</td></tr></tbody></table>
+<p>Fehlt bei Time Attack oder Knockout die Voraussetzung, zeigt OmegaSim einen Hinweis, und die Ampel geht zurück auf Rot.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Verbinden">Verbinden</h2></div>
+<ol><li>Ampel einschalten. Beim Pico <b>blinkt</b> die Onboard-LED, solange er auf OmegaSim wartet, und <b>leuchtet</b>, sobald die App verbunden ist.</li>
+<li>In OmegaSim: <b>Optionen → AddOn → Startampel (Raspberry Pi / Pico) → Verbinden</b>.</li>
+<li>Im Auswahlfenster <b>„Ampel“</b> wählen. Fragt das Tablet nach einer Kopplung: bestätigen.</li></ol>
+<p>Direkt unter „Startampel (Raspberry Pi / Pico)“ steht der Zustand, z. B. <code>Verbunden: Ampel · zuletzt: GRUEN 3 · (23.10.-a)</code>:
+</p>
+<ul><li><b>zuletzt:</b> der letzte Befehl, der an die Ampel ging</li>
+<li><b>⚠ …</b> ein Befehl kam nicht durch, mit Grund</li>
+<li><b>(23.10.-a)</b> Kennung der OmegaSim-Fassung – daran sieht man, ob die neue Fassung geladen ist</li></ul>
+<p>Bricht die Verbindung ab, verbindet OmegaSim von selbst neu (bis zu fünf Versuche).
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Einstellungen">Einstellungen</h2></div>
+<table class="wikitable">
+
+<tbody><tr>
+<th>Einstellung in OmegaSim
+</th>
+<th>Wert
+</th>
+<th>Wirkung
+</th></tr>
+<tr>
+<td>AddOn → Startampel: Frühstart bricht den Start ab
+</td>
+<td>an (ab Werk)
+</td>
+<td>Frühstart hält den Countdown an, Gelb blinkt, „Rennen starten“ beginnt neu. Aus: Countdown läuft weiter, Strafe nach den Renneinstellungen. Nicht im Mehrspieler und in Challenges.
+</td></tr>
+<tr>
+<td>AddOn → Wartezeit nach dem Start
+</td>
+<td>0–10 s, ab Werk 4 s
+</td>
+<td>So lange steht Gelb nach dem Start-Knopf, bevor Grün beginnt. Gilt für jeden Start, auch ohne Ampel. 0 = sofort.
+</td></tr>
+<tr>
+<td>Ton → Startansage
+</td>
+<td>an (ab Werk)
+</td>
+<td>„Gentlemen, start your engines“ beim Start
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Betrieb_ohne_OmegaSim">Betrieb ohne OmegaSim</h2></div>
+<p>Die Ampel kann ihre <b>eigene Startsequenz</b> fahren: Gelb, Wartezeit, fünf grüne Spalten im Sekundentakt, dann aus. Auslösen lässt sie sich über die Steuerseite im Browser oder über externe Signale (Start, Gelb, Rot / Stopp, Frühstart).
+</p><p><b>Vorrang:</b> Ist OmegaSim verbunden, steuert die App. Steuerseite und externe Signale können dann nur noch <b>Rot / Stopp</b> auslösen.
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Steuerseite_im_Browser">Steuerseite im Browser</h3></div>
+<p>Die Steuerseite zeigt die Ampel live und hat Knöpfe für Startsequenz, Gelbphase, Frühstart, Lampentest (alles 2 s an), Alles aus und Rot / Stopp, dazu die Wartezeit. Erreichbar ist sie im WLAN über die Adresse der Ampel, beim Pico wahlweise im eigenen WLAN „Startampel“ unter <code><a rel="nofollow" class="external free" href="http://192.168.4.1">http://192.168.4.1</a></code> oder im Heim-WLAN (auch mit fester IP-Adresse).
+</p>
+<div class="mw-heading mw-heading3"><h3 id="Akku-Wächter_(Pico_an_einer_Powerbank)"><span id="Akku-W.C3.A4chter_.28Pico_an_einer_Powerbank.29"></span>Akku-Wächter (Pico an einer Powerbank)</h3></div>
+<p>Eine Powerbank verrät nicht, wie voll sie ist. Der Pico zählt darum die Betriebsstunden seit dem letzten Laden und schickt rechtzeitig eine Push-Nachricht „Akku laden“ aufs Handy (App <b>ntfy</b>, kostenlos für Android und iPhone; der Pico braucht dafür das Heim-WLAN mit Internet). Auf der Akkuseite <code>http://&lt;Adresse der Ampel&gt;/akku</code>: Restlaufzeit, „Akku geladen“ (Zähler auf null), „Testnachricht senden“, Laufzeit und Warnschwelle.
+</p>
+<div class="mw-heading mw-heading4"><h4 id="Push-Nachricht_einrichten_(ntfy)"><span id="Push-Nachricht_einrichten_.28ntfy.29"></span>Push-Nachricht einrichten (ntfy)</h4></div>
+<p>Die Nachricht „Akku laden“ kommt über die kostenlose App <b>ntfy</b> (Android und iPhone, ohne Anmeldung). Der Pico braucht dafür das Heim-WLAN mit Internet – im eigenen WLAN „Startampel“ wird nur gezählt.
+</p>
+<ol><li><b>App installieren:</b> „ntfy“ aus dem Play Store bzw. App Store.</li>
+<li><b>Thema ausdenken:</b> einen Namen, den sonst niemand errät, z. B. <code>startampel-gnen-7k3q</code>. Nur Buchstaben, Ziffern, <code>-</code> und <code>_</code>. Themen auf ntfy.sh sind öffentlich – wer den Namen kennt, kann mitlesen.</li>
+<li><b>In der App abonnieren:</b> auf <b>+</b> tippen („Thema abonnieren“), den Namen eintragen, Server <code>ntfy.sh</code> lassen, abonnieren.</li>
+<li><b>In der Ampel eintragen:</b> Akkuseite <code>http://&lt;Adresse der Ampel&gt;/akku</code> öffnen, bei <b>ntfy-Thema</b> genau denselben Namen eintragen, <b>Speichern</b>.</li>
+<li><b>Testen:</b> auf der Akkuseite <b>Testnachricht senden</b> – nach wenigen Sekunden meldet sich das Handy. Oben auf der Seite steht jetzt „Push an“.</li></ol>
+<p>Ausschalten: das Feld ntfy-Thema leeren und speichern.
+</p><p><b>Testlauf (Laufzeit messen):</b> Auf der Akkuseite „Testlauf starten“. Die Ampel simuliert dann Rennbetrieb (90 s Rot, Startsequenz, 60 s Rennen mit 30 s Gelbphase, von vorn – mit viel Licht, also eher ungünstiger als ein echtes Rennen), und eine Uhr zeigt die Laufzeit des Tests live an – zum Vergleich mit den LEDs der Powerbank. Die Dauer wird jede Minute gespeichert: Geht die Powerbank aus, steht nach dem nächsten Einschalten „Letzter Testlauf: … (bis die Powerbank leer war)“ auf der Seite. „Als Laufzeit übernehmen“ macht daraus die Laufzeit für die Warnung. Ist OmegaSim verbunden, pausiert die Simulation (die Uhr läuft weiter).
+</p><p>Während Vorstart und Countdown wird nie gesendet; eine fällige Nachricht geht danach raus. Viele Powerbanks schalten bei kleinem Strom ab – eine mit „Always-on“-/„Low-Current“-Modus nehmen.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Fehlersuche">Fehlersuche</h2></div>
+<table class="wikitable">
+
+<tbody><tr>
+<th>Problem
+</th>
+<th>Ursache / Lösung
+</th></tr>
+<tr>
+<td>Gelb und Ansage kommen, aber keine grünen Lichter
+</td>
+<td>Modus <b>Training</b>? Dort gibt es keinen Countdown – einen Rennmodus wählen, z. B. „Runden“. Time Attack/Knockout: Strecke bzw. NPC fehlt (Hinweis auf dem Schirm). Steht unter AddOn ein ⚠, kam ein Befehl nicht an.
+</td></tr>
+<tr>
+<td>Eine Änderung ist „nicht drin“
+</td>
+<td>Chrome hält die Seite einige Minuten im Zwischenspeicher. Kennung unter AddOn vergleichen; notfalls <code>gnen54.github.io/omegasim/?neu=1</code> öffnen.
+</td></tr>
+<tr>
+<td>Ampel nicht im Auswahlfenster
+</td>
+<td>Ist die Ampel eingeschaltet und bereit (Pico: Onboard-LED blinkt)? Ist sie schon mit einem anderen Gerät verbunden? Dort erst trennen.
+</td></tr>
+<tr>
+<td>Tablet koppelt, Ampel trennt sofort wieder
+</td>
+<td>Am Tablet unter Einstellungen → Bluetooth einen alten Eintrag „Ampel“ oder „raspberrypi“ entkoppeln, Ampel neu starten, in OmegaSim neu verbinden.
+</td></tr>
+<tr>
+<td>Steuerseite zeigt eine GitHub-Seite statt der Ampel
+</td>
+<td>Die Dateien auf dem Pico wurden als Webseite statt als Programm gespeichert. Neu übertragen, auch die HTML-Dateien.
+</td></tr>
+<tr>
+<td>Powerbank geht nach kurzer Zeit aus, obwohl sie noch voll ist
+</td>
+<td>Die Powerbank schaltet bei zu kleinem Strom ab. Eine mit „Always-on“-/„Low-Current“-Modus nehmen.
+</td></tr>
+<tr>
+<td>„Senden fehlgeschlagen: -2“ bei der Testnachricht
+</td>
+<td>Die Ampel findet ntfy.sh nicht (Namensauflösung/DNS), obwohl das WLAN steht. Tritt mit neuerem MicroPython auf dem Pico 2 W bei fester IP-Adresse auf – aktuelle Programmversion der Ampel aufspielen (seit 24.10.2026 behoben).
+</td></tr>
+<tr>
+<td>Keine Push-Nachricht
+</td>
+<td>Auf der Akkuseite steht „Push aus (kein ntfy-Thema)“: Thema fehlt noch (siehe <a href="#Push-Nachricht_einrichten_(ntfy)">Push-Nachricht einrichten</a>). Steht es drin: Schreibweise in App und Akkuseite vergleichen, „Testnachricht senden“ probieren; ohne Internet (eigenes WLAN „Startampel“) wird nur gezählt.
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Quellen_und_Credits">Quellen und Credits</h2></div>
+<p>Die Startampel entstand für OmegaSim von <b>Gnen54</b>. Der Countdown mit fünf Lampen und der Start nach Formel-1-Art stammen aus OmegaSim von Luuke42.
+</p>
+<ul><li><a rel="nofollow" class="external text" href="https://github.com/Luuke42/omegasim">OmegaSim von Luuke42</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw163
+Cached time: 20261111135252
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.020 seconds
+Real time usage: 0.021 seconds
+Preprocessor visited node count: 34/1000000
+Revision size: 9484/2097152 bytes
+Post‐expand include size: 0/2097152 bytes
+Template argument size: 0/2097152 bytes
+Highest expansion depth: 2/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    0.000      1 -total
+-->
+
+<!-- Render ID 301b5cda-ddd7-11f1-865d-bc241192f7ce -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:5:|#|:idhash:canonical and timestamp 20261111135252 and revision id 28. Rendering was triggered because: page_view
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

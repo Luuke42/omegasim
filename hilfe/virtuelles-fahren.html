@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OmegaSim: Virtuelles Fahren, Anleitung</title>
+<!-- Anleitung zum virtuellen Fahren, aus PR 4 von gnen54 uebernommen und auf den Stand der App gebracht.
+     In der App als Fenster ueber der Garage geoeffnet (Knopf "?" neben "Losfahren"). -->
+<style>
+  :root { --bg: #0e131b; --karte: #161d28; --linie: #26303f; --text: #e8ecf2; --leise: #9aa6b6; --akzent: #19a7e0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px; }
+  h1 { font-size: 1.7em; margin: 0 0 4px; }
+  .stand { color: var(--leise); font-size: .9em; margin-bottom: 22px; }
+  nav { background: var(--karte); border: 1px solid var(--linie); border-radius: 10px; padding: 12px 16px; margin-bottom: 26px; }
+  nav a { color: var(--akzent); text-decoration: none; margin-right: 14px; white-space: nowrap; line-height: 2; }
+  h2 { font-size: 1.25em; margin: 34px 0 10px; padding-top: 6px; border-top: 1px solid var(--linie); }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: .95em; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--linie); }
+  th { color: var(--leise); font-weight: 600; background: var(--karte); }
+  code { background: var(--karte); border: 1px solid var(--linie); border-radius: 4px; padding: 0 4px; }
+  li { margin: 4px 0; }
+  a { color: var(--akzent); }
+</style>
+</head>
+<body>
+<main>
+<h1>Virtuelles Fahren: Anleitung</h1>
+<div class="stand">Stand: 23.11.2026</div>
+
+<nav>
+  <a href="#worum">Worum es geht</a><a href="#garage">Garage</a><a href="#gamepad">Gamepad einrichten</a><a href="#steuerung">Steuerung</a>
+  <a href="#kameras">Kameras und Spiegel</a><a href="#strecke">Auf der Strecke</a><a href="#box">Box und Tanken</a>
+  <a href="#frei">Freie Strecken</a><a href="#tipps">Tipps</a>
+</nav>
+
+<h2 id="worum">Worum es geht</h2>
+<p>Mit dem virtuellen Fahren fährst Du Deine gebaute Carrera-Bahn oder eine freie Strecke am Bildschirm, mit Gamepad, Tastatur oder Touch, ganz ohne echtes Auto. Zeiten, Box und Tanken funktionieren wie auf der echten Bahn.</p>
+<ul>
+  <li><b>Was Du brauchst:</b> einen aktuellen Browser (Chrome, Firefox, Safari, auch iOS) und am besten ein Gamepad.</li>
+  <li><b>Wo es läuft:</b> in OmegaSim über die Garage (Virtuell).</li>
+  <li><b>Tipp:</b> Nach einem Update die Seite mit <code>?neu=1</code> laden, dann ist die neue Version sicher drin.</li>
+</ul>
+
+<h2 id="garage">Die Garage</h2>
+<p>In der Garage stellst Du alles ein, dann startet <b>Losfahren</b> die Fahrt. Mit den Pfeilen links und rechts schaltest Du jede Zeile durch. Was mit <b>WIP</b> markiert ist, ist noch in Arbeit.</p>
+<table>
+  <tr><th>Einstellung</th><th>Was sie bewirkt</th></tr>
+  <tr><td>Motorsound</td><td>Der Klang des Motors. Bei Käfer, Spider und VW Caravelle gehört er fest zum Auto.</td></tr>
+  <tr><td>Auto</td><td>Vulture V5.R, Lynx 220, FMC GT4, Boxer 96, Käfer 1303 RS, Spider NG1 und VW Caravelle (Bulli).</td></tr>
+  <tr><td>Lackfarbe</td><td>Farbe der Karosserie oder die Originalfarbe des Modells.</td></tr>
+  <tr><td>Boden</td><td>Untergrund rund um die Bahn, z. B. Eiche, Laminat, Fischgrät oder Rasen. Freie Strecken liegen immer auf Rasen.</td></tr>
+  <tr><td>Strecke</td><td>Deine gebaute Bahn oder eine freie Strecke (nur virtuell): Törnerschleife 2.0 mit oder ohne Brücke.</td></tr>
+  <tr><td>Fahrtrichtung</td><td>Normal oder Gegenrichtung: dieselbe Strecke andersherum, mit Ziellinie, Sektoren und Boxengasse.</td></tr>
+  <tr><td>Schaltung</td><td>Automatik oder Manuell.</td></tr>
+  <tr><td>Handling</td><td>Fahrgefühl: GT3, Schnell oder LibreCorsa GT3.</td></tr>
+  <tr><td>Grafik</td><td>Performance (flüssiger) oder Quality (schöner, mit echten Schatten). Auf schwachen Geräten schaltet eine Bildraten-Wache Effekte von selbst ab.</td></tr>
+  <tr><td>Tageszeit</td><td>Mittag, Morgen oder Abend.</td></tr>
+  <tr><td>Geist folgt meiner Linie</td><td>Eine durchsichtige Kopie fährt Deine beste Runde mit.</td></tr>
+  <tr><td>Rückspiegel (Motorhaube)</td><td>In der Kamera Motorhaube ein schmaler Rückspiegel ganz oben am Bildrand (Spider: zwei kleine Außenspiegel).</td></tr>
+  <tr><td>Kein Tempoverlust neben der Bahn</td><td>An heißt: neben der Strecke wirst Du nicht gebremst (zum Üben).</td></tr>
+  <tr><td>NPCs</td><td>Anzahl computergesteuerter Gegner (Aus bis 3).</td></tr>
+  <tr><td>Pflicht-Boxendurchfahrt</td><td>Wie oft Du im Rennen durch die Boxengasse musst (Aus, 1, 2 oder 3).</td></tr>
+  <tr><td>Neigung sichtbar</td><td>Wie stark sich das Auto in Kurven sichtbar neigt.</td></tr>
+</table>
+<p>Der Rennmodus (Training, Runden, Endurance, Qualifying, Time Attack, Knockout, Derby) kommt aus den normalen Renneinstellungen von OmegaSim.</p>
+
+<h2 id="gamepad">Gamepad einrichten</h2>
+<!-- aus gnen54s testversion (22.11.2026: c31e556, 37c84fd, 1e17a54) -->
+<p>Getestet mit Windows 11 und Chrome; Android (Browser und App) geht genauso. Unter Linux wird das Pad oft zwar erkannt, liefert aber keine richtigen Eingaben – dort lieber Windows oder Android nehmen.</p>
+<p><b>Vorher:</b> Das Gamepad muss im Betriebssystem gekoppelt sein – per Bluetooth oder USB-Kabel, wie bei jedem anderen Gerät (z. B. Windows: <i>Einstellungen → Bluetooth und Geräte</i>, Android: <i>Einstellungen → Verbundene Geräte</i>). Hat das Pad mehrere Modi, den <b>Xbox- bzw. X-Input-Modus</b> wählen. Ohne Kopplung meldet OmegaSim das Pad gar nicht erst.</p>
+<ol>
+  <li><b>Optionen → Controller öffnen</b> (in der App oder im Browser) und einen Knopf am Pad drücken. Der Browser meldet das Pad erst nach der ersten Eingabe. Oben muss dann „Verbunden: …“ mit dem Namen des Pads stehen.</li>
+  <li><b>Jede Taste zuordnen.</b> In der Tabelle bei jeder Aktion auf <b>Neu zuweisen</b> tippen und den Knopf, Trigger oder Stick am Pad betätigen, mit dem Du diese Aktion nutzen willst. Für das virtuelle Fahren auch „Kamera wechseln (virtuell)“ und „Auto zurücksetzen“ belegen – ab Werk sind sie frei.</li>
+  <li><b>Übernehmen</b> unten drücken. Erst dann gilt die neue Belegung. Bis dahin reagiert das Pad auf nichts anderes.</li>
+  <li><b>Preset speichern:</b> oben auf der Seite <b>Speichern unter …</b> und als Namen die Bezeichnung des Gamepads eingeben (z. B. „EasySMX X15“). So lässt sich die Belegung später mit ◀ ▶ wieder holen, auch wenn mehrere Pads im Einsatz sind. Das Preset steckt auch in der Datensicherung (<i>Optionen → Daten sichern</i>) – nach einem Gerätewechsel ist die Belegung damit sofort wieder da.</li>
+  <li><b>Achsen prüfen.</b> Auf derselben Seite zeigen <i>Gas</i>, <i>Bremse</i> und <i>Lenkung</i> live die Werte: Gas und Bremse gehen bis 1, die Lenkung von −1 bis +1.</li>
+  <li><b>Probefahrt:</b> Garage → Losfahren. Reagiert das Auto nicht aufs Pad, während der Fahrt die <b>Pad-Diagnose</b> öffnen (siehe unten).</li>
+</ol>
+<p><b>Pad-Diagnose</b>: während der Fahrt oben in der Knopfleiste auf <b>Pad-Diagnose</b> tippen (am PC geht auch <b>F8</b>); nochmal tippen schließt sie. Die Anzeige zeigt, welche Pads der Browser sieht, ob die Abfrage läuft, wo sie gegebenenfalls aussteigt, die Belegung von Gas, Bremse und Lenkung, die Rohwerte von Knöpfen und Achsen und was am Ende beim Auto ankommt. Kommt das Pad nicht zum Laufen: die Anzeige als Screenshot schicken, einmal ohne das Pad zu berühren und einmal mit gedrücktem Gas, dazu Pad-Name, Betriebssystem und Browser.</p>
+<p><b>Hinweis EasySMX X05:</b> LT und RT werden nicht erkannt. Gas und Bremse deshalb auf den rechten Stick legen, wie im nächsten Absatz beschrieben.</p>
+<p><b>Gas und Bremse auf einem Stick (wie bei der RC-Fernbedienung):</b> Kommen die Trigger LT/RT nicht an – so beim EasySMX X05 am Android-Tablet – oder fährst Du lieber wie mit einer RC-Fernbedienung, leg beides auf den rechten Stick: bei <i>Gas</i> auf <b>Neu zuweisen</b> tippen und den rechten Stick <b>nach vorn</b> drücken, loslassen; bei <i>Bremse</i> auf <b>Neu zuweisen</b> tippen und den Stick <b>zu Dir</b> ziehen, loslassen; dann <b>Übernehmen</b>. OmegaSim merkt sich die Belegung je Pad – jedes Pad also nur einmal einstellen.</p>
+<table>
+  <tr><th>Problem</th><th>Was hilft</th></tr>
+  <tr><td>„kein Controller erkannt“</td><td>Einen Knopf am Pad drücken. Hilft das nicht: Pad aus- und wieder einschalten, Seite neu laden, OmegaSim nur in einem Browserfenster offen haben.</td></tr>
+  <tr><td>„ohne Standardbelegung“</td><td>Pad in den Xbox-/X-Input-Modus schalten oder per USB statt Bluetooth versuchen. Sonst Gas, Bremse und Lenkung unter <i>Neu zuweisen</i> selbst belegen. Das Umsehen mit dem rechten Stick geht nur mit Standardbelegung.</td></tr>
+  <tr><td>Pad steht doppelt in der Liste (Windows)</td><td>Normal: Windows meldet manches Pad zweimal. OmegaSim nimmt automatisch das richtige.</td></tr>
+  <tr><td>Werte bewegen sich, aber Auto fährt nicht</td><td>Pad-Diagnose öffnen und die Zeilen <i>Ausstieg</i> und <i>Ausgang</i> ansehen; Screenshot schicken.</td></tr>
+  <tr><td>Beim Zuweisen wird nur eine Taste angenommen</td><td>Seite neu laden, Trigger und Sticks einmal bewegen und kurz loslassen, dann neu zuweisen. Ab Werk zurück geht es mit <b>Standard</b>.</td></tr>
+  <tr><td>LT/RT tun nichts (Android)</td><td>Manche Pads melden die Trigger unter Android nicht. <b>Bekannt: EasySMX X05 – LT und RT werden nicht erkannt.</b> Gas und Bremse auf den rechten Stick legen (siehe oben).</td></tr>
+  <tr><td>Pad fällt zwischendurch aus</td><td>Bluetooth-Pads schlafen bei Pause ein. Einen Knopf drücken, Akku prüfen.</td></tr>
+  <tr><td>Unter Linux keine Reaktion</td><td>Bekanntes Problem mit der Einbindung unter Linux. Auf Windows oder Android ausweichen.</td></tr>
+</table>
+
+<h2 id="steuerung">Steuerung</h2>
+<p>Am bequemsten fährst Du mit Gamepad; die Belegung stellst Du in OmegaSim unter der Controller-Belegung ein.</p>
+<table>
+  <tr><th>Aktion</th><th>Gamepad (ab Werk)</th><th>Tastatur</th></tr>
+  <tr><td>Gas / Bremse</td><td>Trigger rechts / links</td><td>Pfeil hoch / runter</td></tr>
+  <tr><td>Lenken</td><td>linker Stick</td><td>Pfeil links / rechts</td></tr>
+  <tr><td>Hoch- / Runterschalten</td><td>Kreis / Viereck</td><td>I / K</td></tr>
+  <tr><td>Licht an/aus</td><td>Dreieck (Licht-Taste)</td><td>Knopf Licht</td></tr>
+  <tr><td>Lichthupe</td><td>R3 (rechten Stick drücken)</td><td>L</td></tr>
+  <tr><td>Box</td><td>Kreuz kurz tippen</td><td>Knopf Box</td></tr>
+  <tr><td>Gelbe Flagge</td><td>Kreuz 1 s halten</td><td>Knopf Gelbe Flagge</td></tr>
+  <tr><td>Kamera wechseln</td><td>eigene Taste „Kamera wechseln (virtuell)“, ab Werk unbelegt</td><td>C oder Knopf Kamera</td></tr>
+  <tr><td>Umsehen</td><td>rechter Stick</td><td>T / F / G / H, V = zurück</td></tr>
+  <tr><td>Auto zurücksetzen</td><td>„Auto zurücksetzen“, ab Werk unbelegt</td><td>Knopf Zurücksetzen</td></tr>
+  <tr><td>Fahrt beenden</td><td></td><td>Esc oder ×</td></tr>
+</table>
+<ul>
+  <li><b>Knöpfe oben rechts:</b> Box, Gelbe Flagge, Licht, Wetter, Kamera, Zurücksetzen und Beenden sind kleine Symbole. Der Knopf ganz rechts blendet alle ein und aus.</li>
+  <li><b>Rückwärtsgang (Automatik):</b> Im Stand runterschalten, dann fährt Gas rückwärts. Anhalten, Gas loslassen, wieder Gas geben: schon fährst Du vorwärts.</li>
+  <li><b>Android-Gamepads:</b> Manche Pads melden die Trigger in Ruhe halb gedrückt. OmegaSim lernt diese Ruhe von selbst; ein Trigger lässt sich auch nach vorn gedrückt belegen.</li>
+  <li><b>Festgefahren?</b> Kurz rückwärts fahren oder Zurücksetzen.</li>
+</ul>
+
+<h2 id="kameras">Kameras und Spiegel</h2>
+<p>Die Kamerataste schaltet der Reihe nach durch diese Ansichten:</p>
+<ol>
+  <li>Verfolgerkamera</li><li>Nahe Verfolgerkamera</li><li>Motorhaube (Onboard)</li><li>Von oben (Start/Ziel)</li><li>Fahrer am Rand (WIP)</li><li>TV-Kamera (WIP)</li>
+</ol>
+<ul>
+  <li><b>Rückspiegel:</b> In der Kamera Motorhaube zeigt ein schmaler Streifen ganz oben am Bildrand, was hinter Dir passiert, sobald in der Garage „Rückspiegel (Motorhaube)“ an ist.</li>
+  <li><b>Spider:</b> Der offene Spider hat statt dessen zwei kleine Außenspiegel links und rechts.</li>
+  <li><b>Umsehen:</b> Mit dem rechten Stick drehst Du den Blick. Beim deutlichen Umsehen verschwinden die Spiegel, damit nichts die Sicht verdeckt.</li>
+</ul>
+
+<h2 id="strecke">Auf der Strecke</h2>
+<ol>
+  <li><b>Laden:</b> Solange Klänge, Texturen und Autos laden, siehst Du ein Ladebild mit Fortschrittsbalken. Bei einer Carrera-Bahn baut sich unten links die Strecke Stück für Stück auf. Große Autos brauchen ein paar Sekunden.</li>
+  <li><b>Erste Überfahrt:</b> Das erste Mal über Start/Ziel startet nur die Uhr, ohne Ansage.</li>
+  <li><b>Runden:</b> Ab dann zählt jede Runde mit Zeit und Ansage an der Ziellinie. Rückwärts oder vor und zurück über die Linie zählt nicht.</li>
+</ol>
+<p><b>Strecke und Rand:</b> Auf den freien Strecken markiert eine schmale weiße Linie die Fahrbahnkante. Dahinter liegt ein Streifen Asphalt, der rumpelt wie der Carrera-Randstein. Erst dahinter bist Du neben der Strecke: Das Auto wird gebremst, das Pad vibriert, und eine Runde über die Linie zählt dann nicht.</p>
+
+<h2 id="box">Box und Tanken</h2>
+<p>Hat die Strecke eine Boxengasse, wird nur dort getankt und repariert.</p>
+<ol>
+  <li>In die Boxengasse einbiegen (Ein- und Ausfahrt sind mit einer gestrichelten Kante markiert).</li>
+  <li>In der Gasse anhalten (auf den freien Strecken zwischen den beiden fein gestrichelten Querlinien) und die Bremse halten.</li>
+  <li>Die Box-Taste drücken (oder den Knopf Box): der Tank füllt sich.</li>
+  <li>Bremse los, Gas, durch die Ausfahrt zurück auf die Strecke.</li>
+</ol>
+<p><b>Pflicht-Boxendurchfahrt:</b> Ist sie in der Garage eingestellt, zeigt die Zeitentafel z. B. „Box 1/2“. Im Rennen nach Runden oder auf Zeit (Endurance) kostet jede fehlende Durchfahrt die Strafzeit aus den Renneinstellungen.</p>
+<p><b>Hinweis:</b> Wer auf der Strecke statt in der Gasse anhält, bekommt den Hinweis „In die Boxengasse fahren“.</p>
+
+<h2 id="frei">Die freien Strecken</h2>
+<p>Neben Deiner gebauten Bahn gibt es zwei Strecken nur für das virtuelle Fahren, beide nach dem Layout von <a href="https://driftstrecken.de" target="_blank" rel="noopener">Driftstrecken.de</a> (3,60 × 1,80 m, mit Freigabe), aufgebaut von Gnen54.</p>
+<table>
+  <tr><th>Strecke</th><th>Besonderheit</th></tr>
+  <tr><td>Törnerschleife 2.0</td><td>flach, Boxengasse an der Start/Ziel-Geraden</td></tr>
+  <tr><td>Törnerschleife 2.0 mit Brücke</td><td>die Strecke kreuzt sich über eine Brücke</td></tr>
+</table>
+<p>Beide haben eine echte Boxengasse mit Steg zur Strecke, Ein- und Ausfahrt sowie den markierten Tankbereich.</p>
+
+<h2 id="tipps">Tipps und Fehlersuche</h2>
+<table>
+  <tr><th>Problem</th><th>Was hilft</th></tr>
+  <tr><td>Bild ruckelt</td><td>Garage: Grafik auf Performance, weniger NPCs, Rückspiegel aus.</td></tr>
+  <tr><td>Ladebild dauert lange</td><td>Normal bei großen Autos wie dem Bulli und langsamer Leitung. Einmal geladen, geht es beim nächsten Mal schneller.</td></tr>
+  <tr><td>Neue Funktion fehlt</td><td>Seite mit <code>?neu=1</code> neu laden.</td></tr>
+  <tr><td>Pad reagiert falsch</td><td>Controller-Belegung in OmegaSim prüfen und die Taste neu zuweisen.</td></tr>
+  <tr><td>Auto hängt fest</td><td>Rückwärts fahren oder Zurücksetzen.</td></tr>
+</table>
+<p>Fehler bitte mit Screenshot und kurzer Beschreibung melden (Auto, Strecke, Kamera, was passiert ist).</p>
+</main>
+<script>
+  // In der App als Fenster geoeffnet: Esc schliesst es auch, wenn der Fokus hier im Text liegt.
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && window.parent !== window) window.parent.postMessage('vf-hilfe-zu', '*'); });
+</script>
+</body>
+</html>

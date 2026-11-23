@@ -1,0 +1,29 @@
+{{Stand|app=1.4.80|appdatum=15.11.2026}}
+'''Statistik''' ist ein Bereich in [[OmegaSim]], der die Fahrleistungen und Sitzungen übersichtlich zusammenfasst. Er wird über '''Optionen → Statistiken''' geöffnet und zeigt sowohl Gesamtzahlen als auch Diagramme und ein Ranking.
+
+== Überblick ==
+OmegaSim zeichnet jede Sitzung auf und speichert sie im Browser. Die Statistik liest diese Daten und stellt sie als Kacheln, Balkendiagramme und Tabellen dar. Gespeichert werden die letzten 200 Sitzungen; die Kilometer und Runden je Auto zählen ohne Grenze. Die Höchstgeschwindigkeit zeichnet die App nicht auf. NPCs wird die Strecke des Fahrerautos gutgeschrieben.
+
+== Was gespeichert wird ==
+Je Sitzung werden Modus, Zeitlimit, Strecke (als Streckencode), Wetter, simulierter und real gefahrener Kilometer, Verbrauch (nur bei aktiver Tanksimulation), Strafen, Einstellungen, Fahrstil und die Autos mit ihren Rundenzeiten und Ereignissen (Boxenstopps, Crashs) gespeichert. Je Auto kommen Summen hinzu: Name, Kennung, Kilometer, Runden, beste Runde und die Anzahl der Sitzungen.
+
+== Anzeige ==
+Die Übersicht zeigt unter anderem:
+
+* Gefahrene Kilometer (simuliert) und auf der Bahn
+* Anzahl der Sitzungen und die Fahrzeit samt Runden
+* Rennen (mit mehreren Autos) und Siege (nur für Spieler 1)
+* Boxenstopps, Crashs und Medaillen
+* Gefahrene und gespeicherte Strecken
+
+Dazu kommen ein gestapeltes Balkendiagramm der Kilometer je Auto und Tag sowie ein Ranking der Autos nach Kilometer mit Runden und Sitzungen. Über den Knopf ''Telemetrie ansehen'' springt man zur [[Telemetrie]] der letzten Runde.
+
+== Bereinigen ==
+Unter ''Statistiken bereinigen'' (WIP) lassen sich Daten löschen. Jede Aktion zeigt vorher eine Vorschau und legt eine Sicherung an, sodass sich die Löschung rückgängig machen lässt; zusätzlich gibt es einen Export als JSON. Zur Auswahl stehen: die Statistik eines Fahrzeugs entfernen, eine einzelne Sitzung löschen und zu kurze Zeiten je Strecke löschen (Standardgrenze 5 Sekunden). Beim Löschen werden die Lebenszeit-Summen entsprechend abgezogen.
+
+== Weblinks ==
+* [[Telemetrie]]
+* [[Aufbau von OmegaSim]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Optionen]]

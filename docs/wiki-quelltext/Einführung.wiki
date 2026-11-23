@@ -1,0 +1,21 @@
+{{Stand|app=1.4.80|appdatum=15.11.2026}}
+'''Einführung''' (früher ''Tutorial'') ist eine geführte Fahrt in [[OmegaSim]], die neue Fahrer Schritt für Schritt mit der Bedienung vertraut macht. Sie wird über den Knopf ''Tutorial'' auf dem Titel oder unter '''Optionen → Tutorials''' gestartet.
+
+== Überblick ==
+Die Einführung benötigt ein verbundenes Auto mit der Rolle Spieler 1 und ein Gamepad. Sie ist eine Zustandsmaschine im Cockpit und dauert höchstens vier Minuten. Die Stimme ist auf Deutsch mit der Stimme ''Kerstin'' vorab aufgenommen; auf Englisch und Spanisch spricht die Stimme des Geräts. Während der Fahrt gesetzte Einstellungen werden am Ende wiederhergestellt, und die Einführung rollt automatisch ins Menü zurück.
+
+== Ablauf ==
+Die geführte Fahrt erklärt nacheinander: die Wahl zwischen Bahn und Boden, Gas, Bremse, Lenken, Licht, die Fahrgefühle Arcade und Pacejka, Beschleunigung und Untersteuern, den Rückwärtsgang, Wetterwechsel und Regenreifen, den Boxenstopp mit Minispiel, das manuelle Schalten und wieder die Automatik sowie den Wechsel des Motorklangs. Zum Abschluss gibt es Hinweise auf Garage und Optionen.
+
+== Beenden ==
+Die Einführung lässt sich über den Knopf ''Beenden'', mit Options oder Esc beenden. Wer das Cockpit verlässt oder zum Titel geht, bricht sie ebenfalls ab. Abbrechen geht vor dem Cockpit mit Kreis oder Esc.
+
+== Weitere Führungen ==
+Unter '''Optionen → Tutorials''' gibt es zusätzlich geführte Bildfolgen (keine Fahr-Fahrten) zu Steuerung, Streckeneditor, Raumgestalter, Safety Car, Meisterschaft, Time Attack und Telemetrie sowie Challenges.
+
+== Weblinks ==
+* [[Fahrgefuehl]]
+* [[Boxenstopp]]
+
+[[Kategorie:OmegaSim]]
+[[Kategorie:Hilfe]]

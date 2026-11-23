@@ -1,6 +1,6 @@
-{{Stand|app=1.3.93|appdatum=05.11.2026}}
+{{Stand|app=1.5.107|appdatum=2026-11-17}}
 [[Datei:OmegaSim-Fahrgefuehl.png|mini|Die Einstellungsseite Fahrgefühl in OmegaSim]]
-Das '''Fahrverhalten''' von [[OmegaSim]] ist die Art, wie die App aus den Eingaben am Controller (Gas, Bremse, Lenkung) die zwei Steuerwerte berechnet, die per [[Bluetooth Low Energy]] an ein [[Carrera HYBRID]]-Auto gehen: einen Gaswert und einen Lenkwert. Dazwischen liegt ein vollständiges Fahrzeugmodell mit Motor, Getriebe, Reibkreis, Gewichtsverlagerung, Reifen- und Bremsentemperatur, einem Einspurmodell und, im Fahrgefühl Pacejka, einer Reifenkennlinie nach der Magic Formula. Das echte Modellauto rutscht, bremst und lenkt dabei mit seiner eigenen [[Firmware]]; was das Modell der App berechnet, wirkt am Auto ausschließlich über diese zwei Bytes. Abgestimmt wird das Fahrverhalten über neun fertige Sätze von Reglerwerten, die '''Fahrgefühle''' (in der App auch Voreinstellungen oder Presets genannt), und über rund 45 einzelne Regler.
+Das '''Fahrverhalten''' von [[OmegaSim]] ist die Art, wie die App aus den Eingaben am Controller (Gas, Bremse, Lenkung) die zwei Steuerwerte berechnet, die per [[Bluetooth Low Energy]] an ein [[Carrera HYBRID]]-Auto gehen: einen Gaswert und einen Lenkwert. Dazwischen liegt ein vollständiges Fahrzeugmodell mit Motor, Getriebe, Reibkreis, Gewichtsverlagerung, Reifen- und Bremsentemperatur, einem Einspurmodell und, im Fahrgefühl Pacejka, einer Reifenkennlinie nach der Magic Formula. Das echte Modellauto rutscht, bremst und lenkt dabei mit seiner eigenen [[Firmware]]; was das Modell der App berechnet, wirkt am Auto ausschließlich über diese zwei Bytes. Abgestimmt wird das Fahrverhalten über zehn fertige Sätze von Reglerwerten, die '''Fahrgefühle''' (in der App auch Voreinstellungen oder Presets genannt), und über rund 45 einzelne Regler.
 
 == Auf einen Blick ==
 {| class="wikitable"
@@ -8,11 +8,11 @@ Das '''Fahrverhalten''' von [[OmegaSim]] ist die Art, wie die App aus den Eingab
 |-
 | Menüpfad || Optionen → Fahrgefühl; Kurzwahl in FAHREN, in der Garage und am Cockpit-Knopf
 |-
-| Fahrgefühle || Arcade, Sim+, Pacejka (in FAHREN, Garage, Cockpit); Pro, GT3, F1, Realismus GT3, Omega, RC (nur in den Optionen)
+| Fahrgefühle || Arcade, Sim+, Pacejka, LibreCorsa (in FAHREN, Garage, Cockpit); Pro, GT3, F1, Realismus GT3, Omega, RC (nur in den Optionen)
 |-
 | Vorgabe nach Neuinstallation || die Werte im Markup entsprechen dem Fahrgefühl '''Pacejka''' (Steuerungsmodus Pacejka, sonst Pro-Werte)
 |-
-| Steuerungsmodi || Physik, Pacejka, RC („Aus“)
+| Steuerungsmodi || Physik, Pacejka, LibreCorsa, RC („Aus“)
 |-
 | Mechanischer Lenkanschlag || 45 Grad, Konstante <code>STEER_MAX_DEG</code>
 |-
@@ -20,7 +20,7 @@ Das '''Fahrverhalten''' von [[OmegaSim]] ist die Art, wie die App aus den Eingab
 |-
 | Status || Physik stabil; Pacejka experimentell; RC in Arbeit (WIP); Fahrgefühl je Spieler seit 1.2.4
 |-
-| Seit Version || Physikmodell seit den 0.4-Fassungen, Pacejka seit 0.8, Omega seit 1.0.36, Sim+ seit 0.10.5, RC seit 1.0.22
+| Seit Version || Physikmodell seit den 0.4-Fassungen, Pacejka seit 0.8, Omega seit 1.0.36, Sim+ seit 0.10.5, RC seit 1.0.22, LibreCorsa seit 1.5.25
 |-
 | Quelldateien || <code>src/40-physics.js</code>, <code>src/50-drive.js</code>, <code>src/98-presets.js</code>, <code>src/49-spieler.js</code>, <code>src/30-input.js</code>, <code>src/20-protocol.js</code>
 |}
@@ -63,8 +63,8 @@ Das Auto versteht kein „Tempo 2,0“, sondern nur ein Datenpaket aus 20 '''Byt
 
 == Bedienung ==
 === Ein Fahrgefühl wählen ===
-# '''FAHREN''' öffnen und die Kachel Fahrgefühl antippen, oder in der '''Garage''' beim gesteuerten Auto die Zeile „Fahrgefühl“ benutzen. Dort stehen Arcade, Sim+ und Pacejka.
-# Für die übrigen Sätze '''Optionen → Fahrgefühl → Voreinstellungen''' öffnen. Die Reihenfolge dort ist Arcade, Sim+, Pacejka, Pro, GT3, F1, Realismus GT3, Omega, RC, Gran Hybrismo (WIP), Assetto Carrera (WIP).
+# '''FAHREN''' öffnen und die Kachel Fahrgefühl antippen, oder in der '''Garage''' beim gesteuerten Auto die Zeile „Fahrgefühl“ benutzen. Dort stehen Arcade, Sim+, Pacejka und LibreCorsa.
+# Für die übrigen Sätze '''Optionen → Fahrgefühl → Voreinstellungen''' öffnen. Die Reihenfolge dort ist Arcade, Sim+, Pacejka, Pro, GT3, F1, Realismus GT3, Omega, RC, LibreCorsa (WIP).
 # Ein Tipp setzt alle Regler des Satzes auf einmal. Die Statuszeile meldet „Name: n Regler gesetzt“; fehlende Regler werden dort genannt.
 # Im Cockpit schaltet der Fahrmodus-Knopf zwischen Arcade, Sim+ und Pacejka weiter, und zwar ab dem gerade eingestellten Satz. Während einer [[Challenges|Challenge]] ist der Knopf gesperrt.
 # Unter den Knöpfen steht die Beschreibung des aktiven Satzes. Weicht ein einziger Regler von allen Sätzen ab, steht dort „Eigene Abstimmung“.
@@ -77,7 +77,7 @@ Das Auto versteht kein „Tempo 2,0“, sondern nur ein Datenpaket aus 20 '''Byt
 
 === Fahrgefühl je Spieler ===
 # In der Garage einem Auto die Rolle Spieler 2 oder Spieler 3 geben.
-# In dessen Zeile „Fahrgefühl“ zwischen „wie Spieler 1“ (Vorgabe), Arcade, Sim+ und Pacejka wählen.
+# In dessen Zeile „Fahrgefühl“ zwischen „wie Spieler 1“ (Vorgabe), Arcade, Sim+, Pacejka und LibreCorsa wählen.
 # Spieler 1 stellt weiterhin die Regler unter Optionen ein. Sie gelten für alle Spieler ohne eigenes Fahrgefühl.
 
 === Rückwärts fahren ===
@@ -91,9 +91,9 @@ Alle Regler liegen unter '''Optionen → Fahrgefühl''', wenn nicht anders angeg
 {| class="wikitable sortable"
 ! Name in der App !! Bereich !! Standard !! Wirkung (aus dem Code) !! Interne ID → Modellgröße
 |-
-| Voreinstellungen || 9 Knöpfe || – || setzt einen ganzen Satz von Reglern, siehe [[#Alle Fahrgefühle mit ihren Werten|Tabelle]] || <code>preset-buttons</code>
+| Voreinstellungen || 10 Knöpfe || – || setzt einen ganzen Satz von Reglern, siehe [[#Alle Fahrgefühle mit ihren Werten|Tabelle]] || <code>preset-buttons</code>
 |-
-| Steuerungsmodus (ausgeblendet seit 1.0.22) || Physik, Pacejka, RC || Pacejka || wählt den Rechenweg; hängt seitdem am Fahrgefühl || <code>phys-mode</code> → <code>physicsEnabled</code>, <code>config.pacejka</code>
+| Steuerungsmodus (ausgeblendet seit 1.0.22) || Physik, Pacejka, LibreCorsa, RC || Pacejka || wählt den Rechenweg; hängt seitdem am Fahrgefühl || <code>phys-mode</code> → <code>physicsEnabled</code>, <code>config.pacejka</code>
 |-
 | Übersteuern (Pacejka), unter Optionen → Allgemein || an/aus || aus || erlaubt dem Pacejka-Modus, von sich aus in die Kurve einzulenken || <code>setting-pac-ueber</code> → <code>pacejkaUebersteuern</code>
 |-
@@ -464,67 +464,67 @@ Die übrigen Bytes (Kopf <code>0xAF</code>, Lichtbits in Byte 14, Modus-Bytes) b
 === Alle Fahrgefühle mit ihren Werten ===
 Die Werte stammen aus <code>PRESETS</code> in <code>src/98-presets.js</code> (nicht aus den Beschreibungstexten). „Pro“ in der Spalte Sim+ und Pacejka heißt: gleicher Wert wie Pro. Der Crash-Regler ist ein Index in die Liste 1, 2, 3, 4, 5, 10, 20, 50.
 {| class="wikitable"
-! Regler (ID) !! Arcade !! Sim+ !! Pacejka !! Pro !! GT3 !! F1 !! Realismus GT3 !! Omega !! RC (WIP)
+! Regler (ID) !! Arcade !! Sim+ !! Pacejka !! LibreCorsa !! Pro !! GT3 !! F1 !! Realismus GT3 !! Omega !! RC (WIP)
 |-
-| Steuerungsmodus (<code>phys-mode</code>) || Physik || Physik || '''Pacejka''' || Physik || Physik || Physik || Physik || Physik || '''RC'''
+| Steuerungsmodus (<code>phys-mode</code>) || Physik || Physik || '''Pacejka''' || Physik || Physik || Physik || Physik || Physik || '''RC''' || '''LibreCorsa'''
 |-
-| Automatik (<code>setting-autoshift</code>) || an || an || an || an || '''aus''' || '''aus''' || '''aus''' || an || an
+| Automatik (<code>setting-autoshift</code>) || an || an || an || an || '''aus''' || '''aus''' || '''aus''' || an || an || an
 |-
-| 0 → 100 km/h, s (<code>setting-zero-to-top</code>) || 1,6 || 2,3 || 2,6 || 2,6 || 2,9 || 2,5 || 3,2 || 2,6 || 1,5
+| 0 → 100 km/h, s (<code>setting-zero-to-top</code>) || 1,6 || 2,3 || 2,6 || 2,6 || 2,9 || 2,5 || 3,2 || 2,6 || 1,5 || 2,6
 |-
-| Beschleunigungsfaktor (<code>phys-accel</code>) || 1,5 || 1,15 || 1,0 || 1,0 || 1,0 || 1,0 || 1,0 || 1,0 || 1,6
+| Beschleunigungsfaktor (<code>phys-accel</code>) || 1,5 || 1,15 || 1,0 || 1,0 || 1,0 || 1,0 || 1,0 || 1,0 || 1,6 || 1,1
 |-
-| Gasfaktor (<code>setting-topspeed</code>) || 1,1 || 1,8 || 1,8 || 1,8 || 1,45 || 1,6 || 1,0 || 1,8 || 1,5
+| Gasfaktor (<code>setting-topspeed</code>) || 1,1 || 1,8 || 1,8 || 1,8 || 1,45 || 1,6 || 1,0 || 1,8 || 1,5 || 1,8
 |-
-| Bremswirkung (<code>setting-brakepower</code>) || 4,0 || 2,2 || 1,4 || 1,4 || 1,15 || 1,45 || 0,85 || 1,4 || 2,5
+| Bremswirkung (<code>setting-brakepower</code>) || 4,0 || 2,2 || 1,4 || 1,4 || 1,15 || 1,45 || 0,85 || 1,4 || 2,5 || 1,7
 |-
-| Bremsaufbau, s (<code>phys-brake-tau</code>) || 0,12 || 0,12 || 0,12 || 0,12 || 0,12 || 0,12 || 0,12 || '''0,45''' || 0,12
+| Bremsaufbau, s (<code>phys-brake-tau</code>) || 0,12 || 0,12 || 0,12 || 0,12 || 0,12 || 0,12 || 0,12 || '''0,45''' || 0,12 || 0,12
 |-
-| Bremsbalance, % vorn (<code>setting-brakebias</code>) || 56 || 62 || 62 || 62 || 60 || 63 || 62 || 62 || 56
+| Bremsbalance, % vorn (<code>setting-brakebias</code>) || 56 || 62 || 62 || 62 || 60 || 63 || 62 || 62 || 56 || 62
 |-
-| Bremsen nimmt Lenkung (<code>setting-brake-steal</code>) || 0,4 || 0,95 || 0,95 || 0,95 || 1,1 || 1,1 || 1,0 || 1,15 || 0,2
+| Bremsen nimmt Lenkung (<code>setting-brake-steal</code>) || 0,4 || 0,95 || 0,95 || 0,95 || 1,1 || 1,1 || 1,0 || 1,15 || 0,2 || 0,8
 |-
-| Reifengrip (<code>setting-grip</code>) || 1,0 || 1,0 || 1,0 || 1,0 || 0,87 || 0,97 || 0,72 || 1,0 || 1,0
+| Reifengrip (<code>setting-grip</code>) || 1,0 || 1,0 || 1,0 || 1,0 || 0,87 || 0,97 || 0,72 || 1,0 || 1,0 || 1,0
 |-
-| Lenkansprechen (<code>phys-steerresp</code>) || 3,4 || 3,3 || 3,0 || 3,0 || 3,2 || 3,2 || 3,0 || 3,0 || 4,0
+| Lenkansprechen (<code>phys-steerresp</code>) || 3,4 || 3,3 || 3,0 || 3,0 || 3,2 || 3,2 || 3,0 || 3,0 || 4,0 || 3,2
 |-
-| Lenkkalibrierung (<code>setting-steer-calib</code>) || 3,0 || 2,5 || 2,5 || 2,5 || 2,0 || 2,0 || 1,6 || 2,5 || 3,0
+| Lenkkalibrierung (<code>setting-steer-calib</code>) || 3,0 || 2,5 || 2,5 || 2,5 || 2,0 || 2,0 || 1,6 || 2,5 || 3,0 || 2,6
 |-
-| Ausrollen (<code>setting-coast-drag</code>) || 0,4 || 0,6 || 0,6 || 0,6 || 0,9 || 1,2 || 1,25 || 0,6 || 0,3
+| Ausrollen (<code>setting-coast-drag</code>) || 0,4 || 0,6 || 0,6 || 0,6 || 0,9 || 1,2 || 1,25 || 0,6 || 0,3 || 0,6
 |-
-| Tankgewicht (<code>setting-fuelweight</code>) || 0 || 1 || 1 || 1 || 0,45 || 0,6 || 1,0 || 1 || 0
+| Tankgewicht (<code>setting-fuelweight</code>) || 0 || 1 || 1 || 1 || 0,45 || 0,6 || 1,0 || 1 || 0 || 1
 |-
-| Reifenmodell (<code>setting-tyres</code>) || 0 (aus) || 1 || 1 || 1 || 0,9 || 1,2 || 2,0 || 1 || 0 (aus)
+| Reifenmodell (<code>setting-tyres</code>) || 0 (aus) || 1 || 1 || 1 || 0,9 || 1,2 || 2,0 || 1 || 0 (aus) || 1
 |-
-| Reifenwärmer (<code>setting-tyre-blankets</code>) || an || aus || aus || aus || aus || an || aus || aus || an
+| Reifenwärmer (<code>setting-tyre-blankets</code>) || an || aus || aus || aus || aus || an || aus || aus || an || aus
 |-
-| Reifendruck, bar (<code>setting-tyre-pressure</code>) || 1,8 || 1,8 || 1,8 || 1,8 || 1,8 || 1,75 || 1,8 || 1,8 || 1,8
+| Reifendruck, bar (<code>setting-tyre-pressure</code>) || 1,8 || 1,8 || 1,8 || 1,8 || 1,8 || 1,75 || 1,8 || 1,8 || 1,8 || 1,8
 |-
-| Jedes Rad einzeln (<code>setting-tyre-asym</code>) || aus || an || an || an || an || an || an || an || aus
+| Jedes Rad einzeln (<code>setting-tyre-asym</code>) || aus || an || an || an || an || an || an || an || aus || an
 |-
-| Tankverbrauch, %/s (<code>setting-fuel-drain</code>) || 0 || 1 || 1 || 1 || 1,3 || 2,7 || 3,0 || 1 || 0
+| Tankverbrauch, %/s (<code>setting-fuel-drain</code>) || 0 || 1 || 1 || 1 || 1,3 || 2,7 || 3,0 || 1 || 0 || 1
 |-
-| Crashs bis 100 % (<code>setting-crash-count</code>) || 50 || 5 || 5 || 5 || 5 || 4 || 10 || 5 || 50
+| Crashs bis 100 % (<code>setting-crash-count</code>) || 50 || 5 || 5 || 5 || 5 || 4 || 10 || 5 || 50 || 5
 |-
-| Schaden bei Crash (<code>setting-crash-schaden</code>) || aus || an || an || an || an || an || an || an || aus
+| Schaden bei Crash (<code>setting-crash-schaden</code>) || aus || an || an || an || an || an || an || an || aus || an
 |-
-| Crash-Erkennung, Bremsen, Nur Rammer || an || an || an || an || an || an || an || an || an
+| Crash-Erkennung, Bremsen, Nur Rammer || an || an || an || an || an || an || an || an || an || an
 |-
-| Crash-Schwelle (<code>setting-crash-threshold</code>) || 60 || 40 || 40 || 40 || 35 || 30 || 30 || 40 || 60
+| Crash-Schwelle (<code>setting-crash-threshold</code>) || 60 || 40 || 40 || 40 || 35 || 30 || 30 || 40 || 60 || 40
 |-
-| Reparatur, s (<code>setting-repair-time</code>) || 2 || 4 || 4 || 4 || 11 || 16 || 20 || 4 || 2
+| Reparatur, s (<code>setting-repair-time</code>) || 2 || 4 || 4 || 4 || 11 || 16 || 20 || 4 || 2 || 4
 |-
-| Bremsfading (<code>setting-brake-fade</code>) || aus || an || an || an || an || an || an || an || aus
+| Bremsfading (<code>setting-brake-fade</code>) || aus || an || an || an || an || an || an || an || aus || an
 |-
-| Stärke des Fadings || 1,0 || 1,5 || 1,5 || 1,5 || 1,0 || 1,25 || 1,0 || 1,5 || 1,0
+| Stärke des Fadings || 1,0 || 1,5 || 1,5 || 1,5 || 1,0 || 1,25 || 1,0 || 1,5 || 1,0 || 1,5
 |-
-| Windschatten (<code>setting-dirtyair</code>) || aus || aus || aus || aus || an || an || an || aus || aus
+| Windschatten (<code>setting-dirtyair</code>) || aus || aus || aus || aus || an || an || an || aus || aus || aus
 |-
-| Stärke des Windschattens || 1,0 || 1,0 || 1,0 || 1,0 || 1,0 || 1,35 || 1,0 || 1,0 || 1,0
+| Stärke des Windschattens || 1,0 || 1,0 || 1,0 || 1,0 || 1,0 || 1,35 || 1,0 || 1,0 || 1,0 || 1,0
 |-
-| Lenkung aus Gewichtsverlagerung (abgeleitet) || nein || ja || ja || ja || ja || ja || ja || nein || nein
+| Lenkung aus Gewichtsverlagerung (abgeleitet) || nein || ja || ja || ja || ja || ja || ja || nein || nein || ja
 |-
-| Sonderweg (abgeleitet) || <code>lenkKopplungAus</code> || – || – || – || – || – || – || <code>lenkAlt</code> || –
+| Sonderweg (abgeleitet) || <code>lenkKopplungAus</code> || – || – || – || – || – || – || <code>lenkAlt</code> || – || –
 |}
 Nicht Teil der Sätze sind: Layout, Getriebe, Höchstgeschwindigkeit, Lenkkennlinie, Gas- und Bremskennlinie, „Voller Einschlag bei“, Lenkdämpfung, Lenkkraft unter Gas, Anfahrschub, Tempo rückwärts, Gewichtsverlagerung und deren Trägheit sowie alle Renneinstellungen (Renndauer, Wetter, [[Strecke]]).
 
@@ -537,6 +537,7 @@ Kurzcharakter:
 * '''Arcade''': nachsichtigste Abstimmung, stärkste Bremse (4,0), kein Reifen- und Tankmodell, Crashs bremsen ohne Schaden.
 * '''Sim+''': Pro mit mehr Lenkung (3,3), mehr Beschleunigung (2,3 s, Faktor 1,15) und deutlich kräftigerer Bremse (2,2).
 * '''Pacejka''': Pro mit dem Pacejka-Modus; ab Werk eingestellt.
+* '''LibreCorsa''': Pro mit stärkerer Bremse (1,7), etwas mehr Lenkung (3,2) und Lenkkalibrierung (2,6), Abtrieb mit dem Tempo, Reifenfenster; das Heck nur mit „Übersteuern“ (WIP).
 * '''Pro''': Grundabstimmung; wöchentliche Challenges und Dauerrennen fahren mit Pro.
 * '''GT3''', '''F1''': von Hand schalten, Fading und Windschatten an.
 * '''Realismus GT3''': das GT3 aus 0.4 Wert für Wert, gegen eine gemessene Reihe gefittet (3,2 s), härteste Stufe.
@@ -665,6 +666,7 @@ Weitere Werte der normierten Kurve: Wirkfaktor 0,83 bei u = 1,2; 0,66 bei 1,5; 0
 | 1.2 (1.2.11) || Erklärtexte der Fahrgefühle Arcade, Pro, Pacejka und Omega an die eingestellten Werte angeglichen.
 |-
 | 1.3 (1.3.7) || Fahrgefühle Gran Hybrismo und Assetto Carrera; seit 1.3.7 fährt die NPC-Stufe MAX mit den Arcade-Werten.
+| 1.5 (1.5.25) || Fahrgefühl LibreCorsa für die echten Autos (Steuerungsmodus <code>librecorsa</code>).\n|-\n| 1.5 (1.5.28) || Gran Hybrismo und Assetto Carrera entfernt; wer sie gewählt hatte (auch in gespeicherten Presets und im virtuellen Fahren), fährt LibreCorsa.
 |}
 
 == Siehe auch ==

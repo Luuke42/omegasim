@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karosserie anpassen - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Karosserie anpassen</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>–</b> vom 07.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p><b>Karosserie anpassen</b> beschreibt, wie man eine Karosserie aus einem anderen Maßstab auf das <a href="./Carrera_HYBRID.html" title="Carrera HYBRID">Carrera HYBRID</a>-Chassis in 1:50 bringt. Ausgangspunkt sind immer Netzdateien (STL oder OBJ), zum Beispiel Modelle in 1:24 oder 1:32.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Warum_drei_Schritte">Warum drei Schritte</h2></div>
+<p>Ein Modell nur gleichmäßig auf 1:50 zu verkleinern reicht selten. Radstand und Spur des Chassis stehen fest, und die Karosserie muss dazu passen. Darum geht man in drei Schritten vor, die nichts voneinander wissen:
+</p>
+<ol><li><b>Maßstab:</b> gleichmäßig in alle Richtungen auf 1:50 bringen</li>
+<li><b>Länge:</b> gleichmäßig nachskalieren, bis die Radhäuser über den Achsen des Chassis liegen</li>
+<li><b>Breite:</b> nur quer skalieren, bis die Karosserie zur Spur passt</li></ol>
+<p>Jeder Schritt lässt sich für sich wiederholen und korrigieren, ohne die anderen zu verändern.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Richtwerte_für_das_Porsche-Chassis"><span id="Richtwerte_f.C3.BCr_das_Porsche-Chassis"></span>Richtwerte für das Porsche-Chassis</h2></div>
+<table class="wikitable">
+<tbody><tr>
+<th>Maß</th>
+<th>Wert
+</th></tr>
+<tr>
+<td>Radstand</td>
+<td>50,3 mm
+</td></tr>
+<tr>
+<td>Breite der Karosserie</td>
+<td>etwa 38,4 mm
+</td></tr>
+<tr>
+<td>Faktor 1:24 → 1:50</td>
+<td>0,48
+</td></tr>
+<tr>
+<td>Faktor 1:32 → 1:50</td>
+<td>0,64
+</td></tr>
+<tr>
+<td>Faktor 1:43 → 1:50</td>
+<td>0,86
+</td></tr></tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Von_Hand_in_Fusion">Von Hand in Fusion</h2></div>
+<ol><li>Das Netz einfügen: <b>Einfügen → Netz einfügen</b>.</li>
+<li><b>Maßstab:</b> <b>Ändern → Skalieren</b>, Typ „Gleichmäßig“, Faktor aus der Tabelle (alter Maßstab geteilt durch 50).</li>
+<li><b>Länge:</b> Mit <b>Prüfen → Messen</b> den Abstand von der Mitte des vorderen zur Mitte des hinteren Radhauses messen. Faktor = 50,3 geteilt durch den gemessenen Wert, wieder gleichmäßig skalieren.</li>
+<li><b>Breite:</b> Die Breite messen. <b>Skalieren</b> mit Typ „Ungleichmäßig“: In Querrichtung Faktor = Zielbreite geteilt durch gemessene Breite, die beiden anderen Richtungen bleiben auf 1.</li>
+<li>Zum Schluss die Karosserie auf das Chassis setzen und mit <a href="./Lenkeinschlag_prüfen.html" title="Lenkeinschlag prüfen">Lenkeinschlag prüfen</a> kontrollieren, ob die Vorderräder frei laufen.</li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Add-In_„Karosserie_anpassen“_(in_Erprobung)"><span id="Add-In_.E2.80.9EKarosserie_anpassen.E2.80.9C_.28in_Erprobung.29"></span>Add-In „Karosserie anpassen“ (in Erprobung)</h2></div>
+<p>Gnen54 erprobt ein Fusion-Add-In, das die drei Schritte zusammenfasst. Es ist noch nicht veröffentlicht.
+</p>
+<ul><li>Knopf <b>Karosserie anpassen</b> unter <b>Volumenkörper → Ändern</b> und unter <b>Dienstprogramme → Add-Ins</b></li>
+<li>Karosserie wählen (Netz- oder Volumenkörper), dann den Schritt:
+<ul><li><b>1. Maßstab:</b> Ausgangsmaßstab von 1:18 bis 1:87, Ziel 1:50</li>
+<li><b>2. Länge:</b> über die Gesamtlänge, über einen gemessenen Radstand oder über zwei Punkte an den Radhaus-Mitten; Ziel-Radstand 50,3 mm</li>
+<li><b>3. Breite:</b> Ziel-Breite, nur quer</li></ul></li>
+<li>Längs- und Höhenachse erkennt das Add-In selbst; man kann sie auch von Hand wählen.</li>
+<li>Die <b>Vorschau</b> zeigt das Ergebnis sofort. <b>Übernehmen</b> führt den Schritt aus und öffnet das Fenster gleich wieder mit dem neuen Körper. So kann man in Ruhe nachkorrigieren.</li>
+<li>Auf Wunsch bleibt das Original ausgeblendet erhalten.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Hinweise">Hinweise</h2></div>
+<ul><li>Erst anpassen, dann weiterbearbeiten: Fenster, Ausschnitte und Zusatzteile passen nur, wenn die Karosserie danach nicht mehr verschoben oder skaliert wird.</li>
+<li>Rechte beachten: Gekaufte Modelle dürfen meist nur für den eigenen Gebrauch verändert werden. Bilder oder Dateien davon nur mit Erlaubnis der Designerin oder des Designers zeigen.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./CAD_und_3D-Druck.html" title="CAD und 3D-Druck">CAD und 3D-Druck</a></li>
+<li><a href="./Netze_in_Fusion_strecken.html" title="Netze in Fusion strecken">Netze in Fusion strecken</a></li>
+<li><a href="https://omegasim.miraheze.org/wiki/Fenster_aus_Karosserie_erzeugen?action=edit&amp;redlink=1" class="new" title="Fenster aus Karosserie erzeugen (Seite nicht vorhanden)">Fenster aus Karosserie erzeugen</a></li>
+<li><a href="./Lenkeinschlag_prüfen.html" title="Lenkeinschlag prüfen">Lenkeinschlag prüfen</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw202
+Cached time: 20261107182154
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.018 seconds
+Real time usage: 0.022 seconds
+Preprocessor visited node count: 32/1000000
+Revision size: 3298/2097152 bytes
+Post‐expand include size: 750/2097152 bytes
+Template argument size: 13/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    6.082      1 Vorlage:Stand
+100.00%    6.082      1 -total
+-->
+
+<!-- Render ID 1bd61ec3-dad8-11f1-ad68-bc24110065aa -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:523:|#|:idhash:canonical and timestamp 20261107182154 and revision id 795. Rendering was triggered because: page-edit
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

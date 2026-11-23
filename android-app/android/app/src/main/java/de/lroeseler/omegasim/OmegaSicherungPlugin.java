@@ -200,6 +200,107 @@ public class OmegaSicherungPlugin extends Plugin {
         }, "OmegaBild").start();
     }
 
+    // ONBOARD-VIDEO (75-onboard.js): die Aufnahme kommt in Stuecken (je ~3 MB Base64), damit
+    // kein riesiger Text auf einmal ueber die Bruecke muss. Erst in den Cache der App, am
+    // Ende nach Filme/OmegaSim (in der Galerie sichtbar).
+    //   videoTeil({name, base64, erster})   erster=true beginnt die Datei neu
+    //   videoFertig({name, mime})            legt sie ab, liefert {ok, ort}
+    @PluginMethod
+    public void videoTeil(PluginCall call) {
+        String b64 = call.getString("base64");
+        String name = sauber(call.getString("name", "OmegaSim-Onboard.mp4"));
+        boolean erster = Boolean.TRUE.equals(call.getBoolean("erster", false));
+        if (b64 == null) { call.reject("base64 fehlt"); return; }
+        new Thread(() -> {
+            try {
+                byte[] daten = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                File f = new File(getContext().getCacheDir(), "onboard-" + name);
+                try (FileOutputStream o = new FileOutputStream(f, !erster)) { o.write(daten); }
+                JSObject r = new JSObject();
+                r.put("ok", true);
+                r.put("groesse", f.length());
+                call.resolve(r);
+            } catch (Exception e) {
+                call.reject("Videoteil nicht geschrieben: " + e.getMessage());
+            }
+        }, "OmegaVideoTeil").start();
+    }
+
+    @PluginMethod
+    public void videoFertig(PluginCall call) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                && getPermissionState("speicher") != PermissionState.GRANTED) {
+            requestPermissionForAlias("speicher", call, "nachRechtVideo");
+            return;
+        }
+        videoAblegen(call);
+    }
+
+    @PermissionCallback
+    private void nachRechtVideo(PluginCall call) {
+        if (getPermissionState("speicher") != PermissionState.GRANTED) {
+            call.reject("Keine Erlaubnis, in Filme zu schreiben.");
+            return;
+        }
+        videoAblegen(call);
+    }
+
+    private static String sauber(String name) {
+        return name.replaceAll("[^A-Za-z0-9._-]", "_");
+    }
+
+    private void videoAblegen(PluginCall call) {
+        String name = sauber(call.getString("name", "OmegaSim-Onboard.mp4"));
+        String mime = call.getString("mime", "video/mp4");
+        new Thread(() -> {
+            File quelle = new File(getContext().getCacheDir(), "onboard-" + name);
+            try {
+                if (!quelle.exists()) throw new IllegalStateException("keine Videodaten");
+                String ort;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentValues v = new ContentValues();
+                    v.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+                    v.put(MediaStore.MediaColumns.MIME_TYPE, mime);
+                    v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/" + ORDNER);
+                    ContentResolver cr = getContext().getContentResolver();
+                    Uri uri = cr.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, v);
+                    if (uri == null) throw new IllegalStateException("MediaStore lehnt ab");
+                    try (OutputStream o = cr.openOutputStream(uri, "w");
+                         InputStream in = new java.io.FileInputStream(quelle)) {
+                        if (o == null) throw new IllegalStateException("nicht beschreibbar");
+                        kopieren(in, o);
+                    }
+                    ort = Environment.DIRECTORY_MOVIES + "/" + ORDNER + "/" + name;
+                } else {
+                    @SuppressWarnings("deprecation")
+                    File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), ORDNER);
+                    if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("Ordner nicht anlegbar");
+                    File f = new File(dir, name);
+                    try (OutputStream o = new FileOutputStream(f, false);
+                         InputStream in = new java.io.FileInputStream(quelle)) {
+                        kopieren(in, o);
+                    }
+                    ort = f.getAbsolutePath();
+                }
+                JSObject r = new JSObject();
+                r.put("ok", true);
+                r.put("ort", ort);
+                call.resolve(r);
+            } catch (Exception e) {
+                call.reject("Video nicht gespeichert: " + e.getMessage());
+            } finally {
+                //noinspection ResultOfMethodCallIgnored
+                quelle.delete();
+            }
+        }, "OmegaVideo").start();
+    }
+
+    private static void kopieren(InputStream in, OutputStream o) throws java.io.IOException {
+        byte[] puf = new byte[1 << 16];
+        int n;
+        while ((n = in.read(puf)) > 0) o.write(puf, 0, n);
+    }
+
     @PluginMethod
     public void oeffnen(PluginCall call) {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);

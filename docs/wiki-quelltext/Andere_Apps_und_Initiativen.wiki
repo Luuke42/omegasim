@@ -1,4 +1,4 @@
-{{Stand|app=1.2.14|appdatum=27.10.2026}}
+{{Stand|app=1.4.80|appdatum=15.11.2026}}
 '''Andere Apps und Initiativen''' listet Software, Zubehör und Gemeinschaftsprojekte rund um [[Carrera HYBRID]] neben [[OmegaSim]]: die Hersteller-App, weitere Apps aus der Community und Bastelprojekte. Die Liste ist bewusst offen; wer ein Projekt kennt, ergänzt es, siehe [[Mitmachen]].
 
 == Auf einen Blick ==
@@ -8,6 +8,8 @@
 | [[Original-App]] (Carrera HYBRID) || offizielle App || Carrera (Kooperation von Carrera und Sturmkind) || Steuerung der Autos per Smartphone, Streckenscan, Planer, Mehrspieler
 |-
 | [[OmegaSim]] || Community-App (Browser und Android) || Luuke42 || eigenes Fahrmodell, NPC-Gegner, Rennarten, Safety Car, Boxenstopps, Mehrspieler
+|-
+| [[Hybrid-Dash]] || Abwandlung von OmegaSim || Mo Kamit (mokamit) || OmegaSim-Fork mit Broadcast-Look, Karriere, Showroom, Analyse, Race-Engineer, KI-Fahrern und bis zu 8 Spielern
 |-
 | TimTime || Community-App || Angaben folgen || Angaben folgen
 |-
@@ -41,6 +43,9 @@ Angaben folgen.
 
 === Modded App ===
 Angaben folgen. Gemeint ist eine abgewandelte Fassung einer bestehenden App.
+
+=== Hybrid-Dash ===
+[[Hybrid-Dash]] (auch ''Hybrid Dash 4.0'') ist ein auf OmegaSim 1.3.92 aufbauender Fork von Mo Kamit mit eigenem „Broadcast“-Look und vielen Zusatzsystemen (Karriere, Showroom, Motor-Kennfelder, Analyse, Race-Engineer, KI-Fahrer, Race-Director, bis zu acht Spieler). Details unter [[Hybrid-Dash]].
 
 == Zubehör und Bastelprojekte ==
 * [[CH ControlBox]] – macht aus einer RC-Fernsteuerung ein Bluetooth-Gamepad; ursprünglich von jogger86, mit Anpassungen für OmegaSim.

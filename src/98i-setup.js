@@ -492,7 +492,8 @@
   // Ein Tipp neben das Fenster schliesst es (wie Kreis/Esc).
   setupFenster.addEventListener('click', (e) => { if (e.target === setupFenster) setupSchliessen(); });
 
-  function setupFensterOffen() { return !setupFenster.hidden; }
+  // Ueber das Element: das Steuerkreuz (50b-menu-nav.js) fragt schon beim Laden, vor der Konstante.
+  function setupFensterOffen() { const f = document.getElementById('setup-fenster'); return !!(f && !f.hidden); }
   function setupOeffnen(car) {
     if (!car || !setupSpielerNr(car)) return false;
     setupFensterAuto = car;

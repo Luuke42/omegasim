@@ -44,7 +44,7 @@
   const SK_ZEITEN_MS = 2 * 60000;          // Zeiten einer Strecke hoechstens alle 2 min
   // Alle Presets aus 98-presets.js plus 'eigen' und 'unbekannt'. Dieselbe Liste steht im Apps
   // Script (ST_FAHRGEFUEHLE); der Selbsttest prueft, dass jedes Preset darin steht.
-  const SK_FAHRGEFUEHLE = ['arcade', 'simplus', 'propacejka', 'gran', 'acc', 'pro', 'gt3', 'f1', 'realgt3',
+  const SK_FAHRGEFUEHLE = ['arcade', 'simplus', 'propacejka', 'librecorsa', 'gran', 'acc', 'pro', 'gt3', 'f1', 'realgt3',
                            'omega', 'rc', 'eigen', 'unbekannt'];
 
   // ---- Einstellungen: Schalter (Standard AUS) und die einmalige Frage ----

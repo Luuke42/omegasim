@@ -1,0 +1,17 @@
+{{Stand|app=1.5.107|appdatum=2026-11-17}}
+'''Zwei Laptops''' (in Arbeit, WIP) ist eine Funktion in [[OmegaSim]], die einen zweiten Rechner im selben WLAN als Bluetooth-Helfer nutzt. Sie stammt aus dem Hybrid-Dash von Mo Kamit (MIT-Lizenz) und wird in der '''Garage''' verbunden.
+
+== Wie es funktioniert ==
+* In der '''Garage''' verbindet '''Zweiter Laptop''' einen zweiten Rechner im selben WLAN als Bluetooth-Helfer.
+* Der Helfer verbindet weitere Autos und reicht ihre Pakete über einen direkten WebRTC-Kanal weiter, ohne Server.
+* Auf dem Host erscheinen sie in der Garage wie jedes andere Auto.
+* Gekoppelt wird einmal mit zwei Codes.
+
+== Verhalten ==
+* Bricht die Verbindung ab, hält der Helfer seine Autos sofort an.
+* Jedes Helfer-Auto hat etwas mehr Verzögerung, am besten als NPC.
+* Mit '''?helfer''' in der Adresse öffnet sich eine eigene Helfer-Seite.
+* Auf der Garagenkachel zeigen kleine Symbole, wenn ein zweiter Laptop (oder die Onboard-Kamera) verbunden ist.
+
+== Änderungen (diese Seite) ==
+Neu angelegt mit Stand 1.5.107; beschreibt das Prinzip (Helfer, WebRTC, Kopplung) und das Verhalten.\n\n[[Kategorie:OmegaSim]]\n[[Kategorie:Spielfunktionen]]

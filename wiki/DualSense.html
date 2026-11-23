@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DualSense - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">DualSense</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>1.5.107</b> vom 2026-11-17 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p>Der <b>DualSense</b> ist der Controller von Sony, dessen <b>adaptive Trigger</b> und <b>Vibration</b> sich in <a href="./OmegaSim.html" title="OmegaSim">OmegaSim</a> nutzen lassen (in Arbeit, WIP). Am PC und in der Android-App verhalten sich die Trigger wie beim Rennsimulator LibreCorsa.
+</p>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Am_PC">Am PC</h2></div>
+<p>Der <b>linke Trigger</b> ist die Bremse: ein Widerstand, der nach unten fester wird; regelt das <b>ABS</b>, vibriert er, blockiert ein Rad, vibriert er langsamer.
+Der <b>rechte Trigger</b> ist das Gas: leichter Widerstand, drehen die Hinterräder durch oder regelt die <b>Traktionskontrolle</b>, vibriert er.
+Nahe der Haftgrenze summen beide leicht.
+Ein Effekt bleibt 0,15 s stehen, damit er nicht flackert.
+Der Drehzahl-Hinweis am Gas-Trigger entfällt.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="In_der_Android-App_(neue_APK)"><span id="In_der_Android-App_.28neue_APK.29"></span>In der Android-App (neue APK)</h2></div>
+<p>Ist der Controller per <b>Bluetooth</b> verbunden und steckt zusätzlich das <b>USB-Kabel</b>, kommen die Trigger-Effekte beim echten und beim virtuellen Fahren: Widerstand der Bremse, Vibration bei ABS und blockierendem Rad, beim Gas bei Schlupf und Traktionskontrolle.
+Die Verbindung kommt von selbst, sobald das Kabel steckt.
+Hängt der Controller nur am Kabel, bliebe er ohne Tasten; dann lässt die App die Trigger aus und sagt es.
+Abschaltbar unter <b>Optionen → Vibration</b>.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Trigger_testen_(Stufe_1)"><span id="Trigger_testen_.28Stufe_1.29"></span>Trigger testen (Stufe 1)</h2></div>
+<p>Unter <b>Optionen → Vibration</b> gibt es in der App die Zeile <b>DualSense über USB-Kabel</b> mit dem Knopf <b>Trigger testen</b>. Die App spielt über das Kabel 3 s festen Widerstand und 2 s Vibration auf beiden Triggern und gibt den Controller danach wieder frei. Das Protokoll steht im Live-Log. Erst wenn das am Gerät klappt und die Tasten danach noch gehen, kommen die Trigger-Effekte beim Fahren.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Änderungen_(diese_Seite)"><span id=".C3.84nderungen_.28diese_Seite.29"></span>Änderungen (diese Seite)</h2></div>
+<p>Neu angelegt mit Stand 1.5.107; beschreibt die Trigger am PC und in der Android-App sowie die Test-Funktion.\n\n\n
+</p>
+<!-- 
+NewPP limit report
+Parsed by mw173
+Cached time: 20261118151917
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.011 seconds
+Real time usage: 0.036 seconds
+Preprocessor visited node count: 25/1000000
+Revision size: 1904/2097152 bytes
+Post‐expand include size: 754/2097152 bytes
+Template argument size: 17/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    7.952      1 Vorlage:Stand
+100.00%    7.952      1 -total
+-->
+
+<!-- Render ID 6b7fd364-e363-11f1-b9da-bc2411a8f42b -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:547:|#|:idhash:canonical and timestamp 20261118151917 and revision id 887. Rendering was triggered because: page-edit
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

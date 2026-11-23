@@ -1,4 +1,4 @@
-{{Stand|app=1.3.93|appdatum=05.11.2026}}
+{{Stand|app=1.5.107|appdatum=2026-11-17}}
 [[Datei:OmegaSim-Garage.png|mini|Die Garage von OmegaSim, in der die virtuelle Fahrt gestartet wird]]
 '''Virtuelles Fahren''' (in der App „Virtuell fahren“, in Arbeit) ist ein Modus von [[OmegaSim]], in dem ein simuliertes Auto ohne Bluetooth-Verbindung in einer 3D-Ansicht über die Strecke aus dem [[Strecken- und Raum-Editor]] fährt. Das virtuelle Auto ist für die App ein gewöhnliches Garagenauto, das sich seine Funkmeldungen selbst erzeugt; dadurch laufen Rundenzeit, Rennen, Telemetrie und Motorklang unverändert mit. Gefahren wird mit dem Tempo des gewählten Fahrgefühls und einem Querdynamikmodell nach dem Vorbild eines GT3-Rennwagens. Verwandt, aber getrennt davon ist '''Rennen simulieren''': Dort fahren NPC-Attrappen ohne Hardware mit der echten NPC-Steuerung (siehe [[NPC-Fahrverhalten]]); beides wird auf dieser Seite beschrieben, weil beide Autos ohne [[Carrera HYBRID]]-Hardware bewegen.
 
@@ -13,11 +13,11 @@ Das '''Fahrzeugmodell''' stammt für das Standard-Auto aus '''[https://www.speed
 |-
 | Menüpfad || '''FAHREN → Autos → Garage''', ganz unten '''Virtuell fahren''' (Optionen rechts, dann '''Losfahren'''); Rennsimulation: '''Optionen → NPCs → Rennen simulieren'''
 |-
-| Wichtigste Optionen (Standard) || Auto: Vulture V5.R · Schaltung: Automatik · Handling: GT3 · Geist folgt meiner Linie: an · NPCs: 3 · Neigung sichtbar: 1× · Motorsound: Motor des gewählten Autos
+| Wichtigste Optionen (Standard) || Auto: Vulture V5.R · Schaltung: Automatik · Handling: GT3 · Boden: Rasen · Grafik: Quality · Licht: aus · Geist folgt meiner Linie: an · NPCs: 3 · Neigung sichtbar: 1× · Motorsound: Motor des gewählten Autos
 |-
 | Status || in Arbeit (WIP-Zeichen im Bild); Rennsimulation experimentell
 |-
-| Seit Version || 1.1.3 (Grundmodus), 1.1.9 (Speed-Dreams-Auto), 1.1.11 (direkte Lenkung, Kameras), 1.1.46 (virtuelle NPCs), 1.1.52 (Handling „Schnell“)
+| Seit Version || 1.1.3 (Grundmodus), 1.1.9 (Speed-Dreams-Auto), 1.1.11 (direkte Lenkung, Kameras), 1.1.46 (virtuelle NPCs), 1.1.52 (Handling „Schnell“), 1.5.22 (Handling „LibreCorsa GT3“), 1.5.101 (Lenkhilfe)
 |-
 | Beteiligte Quelldateien || <code>src/60d-virtuell.js</code> (virtuelle Fahrt), <code>src/90b-sim.js</code> (Rennen simulieren), <code>src/60-track.js</code> (Mittellinie, Maße, Fahrzeugmaße), <code>src/40-physics.js</code> (Fahrzeugmodell), <code>src/51-konsole.js</code> (Tasten), <code>src/90-ghosts.js</code> (Rollen, <code>onCarNotify</code>)
 |}
@@ -77,11 +77,11 @@ Die Optionen der virtuellen Fahrt werden je Gerät im Browser gespeichert.
 |-
 | Motorsound || „Wie in Optionen“ oder jeder Motor aus Optionen → Ton || Motor des gewählten Autos (V5.R → <code>sd_v5r</code>, Lynx → <code>sd_lynx</code> …) || startet die Aufnahme beim Losfahren, beim Beenden kommt der vorherige Motor zurück || <code>omegasim-vf-motor</code>
 |-
-| Auto || Vulture V5.R, Lynx 220, FMC GT4, Boxer 96, Einfaches Modell || Vulture V5.R || 3D-Modell und Fahrdaten (Masse, Schwerpunkt, Radstand, Einschlag, Bremsbalance, Abtrieb) aus Speed Dreams; „Einfaches Modell“ ist ein Kasten mit GT3-Grundwerten || <code>omegasim-vf-auto</code>
+| Auto || Vulture V5.R, Lynx 220, FMC GT4, Boxer 96, VW Käfer 1303 RS, Spider NG1, Einfaches Modell || Vulture V5.R || 3D-Modell und Fahrdaten (Masse, Schwerpunkt, Radstand, Einschlag, Bremsbalance, Abtrieb) aus Speed Dreams; „Einfaches Modell“ ist ein Kasten mit GT3-Grundwerten || <code>omegasim-vf-auto</code>
 |-
 | Schaltung || Automatik, Manuell || Automatik || setzt <code>autoShift</code> des Fahrzeugmodells für die Dauer der Fahrt || <code>omegasim-vf-schaltung</code>
 |-
-| Handling || GT3, Schnell || GT3 || Schnell: Griff vorn und hinten × 1,35, Lenkeinschlag × 1,5 (höchstens 45°), Gierdämpfung × 0,6, Tempo × 1,15 || <code>omegasim-vf-handling</code>
+| Handling || GT3, Schnell, LibreCorsa GT3 (WIP) || GT3 || Schnell: Griff vorn und hinten × 1,35, Lenkeinschlag × 1,5 (höchstens 45°), Gierdämpfung × 0,6, Tempo × 1,15; LibreCorsa GT3: nach den veröffentlichten Messwerten des GT3 aus LibreCorsa (kein Code übernommen), siehe unten || <code>omegasim-vf-handling</code>
 |-
 | Geist folgt meiner Linie || an, aus || an || zeichnet die erste Runde auf und spielt sie ab der zweiten als hellblaues Auto ab || <code>omegasim-vf-geist</code>
 |-
@@ -155,6 +155,9 @@ dv_y/dt   = (F_y,vorn·cos δ + F_y,hinten)/m − v_x·r
 dr/dt     = (a·F_y,vorn·cos δ − b·F_y,hinten)/I_z − 1,5·r
 </pre>
 Gerechnet in Teilschritten von höchstens 2&nbsp;ms; danach werden v_y auf ±v_x und r auf ±5&nbsp;rad/s begrenzt. Die Längsbeschleunigung a_x ist die Längs-G der App × 15 (also bis 1,5&nbsp;g), nicht die Ableitung des Modelltempos, weil dieses umgerechnet weit stärker beschleunigt als jedes echte Auto. Das Ergebnis: am Limit leichtes Untersteuern, Anbremsen dreht das Auto ein, Vollgas in engen Kurven lässt das Heck kommen.
+
+==== LibreCorsa GT3 ====
+Seit 1.5.22 gibt es zusätzlich das Handling '''LibreCorsa GT3''' (WIP): nachgebaut nach den veröffentlichten Messwerten des GT3 aus dem freien Rennsimulator LibreCorsa (kein Code übernommen). Es erreicht eine dauerhafte Querbeschleunigung von 1,7 g bei 81 km/h bis 1,9 g bei 171 km/h (der Abtrieb wächst mit dem Tempo), einen Untersteuergradienten von 1,4 Grad je g und ein Reifenfenster, in dem die Reifen am besten greifen. Ein Selbsttest misst das wie das Vorbild in stationärer Kreisfahrt; die Werte liegen innerhalb von 3 %. Seit 1.5.101 gibt es im Handling LibreCorsa eine '''Lenkhilfe''' für Gamepad und Tastatur: Der Einschlag läuft weich an und aus, geht nie über den Punkt des besten Grips der Vorderräder hinaus, die Räder stellen sich beim Loslassen in Fahrtrichtung, und ein rutschendes Heck wird teilweise abgefangen.
 
 Rückwärts gilt das Einspurmodell mit Radeinschlag 26° und Radstand 7 Einheiten (etwa 7,5&nbsp;cm), begrenzt durch die Haftgrenze ω ≤ μ·g/v.
 
@@ -245,6 +248,12 @@ Zwei Simulations-NPCs liegen 5&nbsp;cm hintereinander (d_längs = 4,65 Einheiten
 | 1.3.50 || virtuelles Fahren mit echten Bahn- und Bodentexturen, Kamera „Fahrer am Rand“.
 |-
 | 1.3.57 || Kamera mit dem rechten Stick, HUD- und Cockpit-Ansicht im ACC-Stil.
+|-
+| 1.5.22 || Handling „LibreCorsa GT3“ (WIP): nach den veröffentlichten Messwerten des GT3 aus LibreCorsa, kein Code übernommen.
+|-
+| 1.5.101 || Lenkhilfe im Handling LibreCorsa; kalte Bremsscheiben bremsen bis zu 10 % schwächer; dreckige Luft kostet Grip an der Vorderachse.
+|-
+| 1.5.107 || Rasen als Standardboden, Grafik „Quality“ ab Werk, Licht aus beim Start, Tageszeit, TV-Kamera, Bloom und Lackreflexe, Dunst zur Sonne, wehendes Gras, Sichtfeld mit Tempo, 3D-Regen mit Wetter-Knopf, Boxengasse auf Balkonia, Ziellinie bei 80 %, Geist = gewähltes Auto, feste 500-Hz-Schritte; neue Autos VW Käfer 1303 RS und Spider NG1 (Gnen54).
 |}
 
 == Einzelnachweise ==

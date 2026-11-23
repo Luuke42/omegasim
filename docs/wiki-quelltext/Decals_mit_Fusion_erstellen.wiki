@@ -1,0 +1,35 @@
+''Entwurf vom 11.11.2026 – Ablauf von Gnen54, der Export mit SaveSVG ist noch nicht getestet.''
+
+Mit dieser Methode zeichnest du Decals direkt an deinem Karosseriemodell in Fusion. Ein eigenes Grafikprogramm brauchst du dafür nicht. Fugen, Radläufe, Türgriffe und Leuchten des Modells dienen dir dabei als Anhaltspunkte, deshalb passen die Formen schon beim ersten Probedruck gut.
+
+== Was du brauchst ==
+* Die Karosserie als Modell in Fusion (Netz oder Volumenkörper)
+* Eine Designvorlage als Bild, am besten eine reine Seitenansicht
+* Das Add-in '''SaveSVG''' für Fusion, um Skizzen als SVG zu exportieren
+* Optional Inkscape zum Füllen, Einfärben und Anordnen auf dem Decalbogen
+* Das Füllen der Konturen soll laut Anbieter auch mit '''SaveAsSVG''' möglich sein.
+
+== Ablauf ==
+# '''Vorlage einfügen:''' Die Designvorlage über ''Einfügen → Arbeitsbereich'' (Canvas) auf die Seitenebene der Karosserie legen.
+# '''Vorlage kalibrieren:''' Das Bild mit ''Kalibrieren'' auf ein bekanntes Maß bringen, z. B. den Radstand, und dann so verschieben, dass Radläufe und Fensterkanten auf dem Modell liegen.
+# '''Skizze anlegen:''' Auf derselben Ebene eine neue Skizze erstellen und die Konturen der Flächen nachzeichnen (Linien, Bögen, Splines).
+# '''Kontrollmaß zeichnen:''' Eine Linie von genau 50 mm in dieselbe Skizze legen.
+# '''Exportieren:''' Die Skizze mit SaveSVG als SVG speichern.
+# '''Prüfen:''' Das SVG in Inkscape öffnen oder ausdrucken und die Kontrolllinie nachmessen. Misst sie 50 mm, stimmt der Maßstab.
+# '''Probedruck:''' Auf normales Papier in tatsächlicher Größe (100 %) drucken, ausschneiden, an die Karosserie halten und korrigieren.
+
+== Tipps und Stolpersteine ==
+* '''Ecken werden zu kurz:''' Die Skizze ist eine Projektion der Seitenansicht. Auf der flachen Seitenwand ist sie maßgenau. Wo die Fläche um eine Ecke läuft (Heckecken, Stoßfänger, Front), misst die Projektion weniger als die echte Oberfläche. Diese Stellen beim Probedruck besonders prüfen oder die Maße aus einer Abwicklung der Karosserie nehmen.
+* '''Einheiten:''' Bei Exporten aus Fusion verrutschen gern die Einheiten, z. B. cm statt mm. Deshalb immer die 50-mm-Kontrolllinie mitexportieren.
+* '''Geschlossene Konturen:''' Nur geschlossene Konturen lassen sich später füllen. In Fusion erkennst du sie daran, dass die Fläche als Profil schattiert wird.
+* '''Zweite Seite:''' Formen darfst du spiegeln, Schrift und Startnummern nicht, sonst stehen sie spiegelverkehrt. Für die andere Seite also eine eigene Skizze anlegen oder in Inkscape nur die Flächen spiegeln.
+* '''Radläufe und Kanten:''' Das Decal etwa 0,3 mm vor der Kante enden lassen. Dann steht es nicht über und löst sich nicht.
+* '''Gewölbte Flächen:''' Stark gewölbte Bereiche wie die Front in kleinere Einzelstücke teilen. Decalfolie mit Weichmacher (z. B. Micro Set / Micro Sol) gleicht einige Prozent Verzug aus.
+* '''Weiß:''' Auf transparenter Folie druckt kein Weiß. Weiße Flächen brauchen weiße Decalfolie oder eine weiße Grundlackierung.
+* '''Rechte am Design:''' Fremde Designs und Logos nur privat verwenden. Bilder davon erst zeigen, wenn der Urheber zugestimmt hat.
+
+== Siehe auch ==
+* [[Onboard-Kamera und Karosserien]]
+
+[[Kategorie:CAD]]
+[[Kategorie:Anleitungen]]

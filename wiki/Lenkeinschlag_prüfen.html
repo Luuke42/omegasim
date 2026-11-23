@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lenkeinschlag prüfen - OmegaSim Wiki</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="wiki-top">
+<a class="wiki-brand" href="./index.html">OmegaSim Wiki</a>
+<nav class="wiki-nav"><a href="./index.html">Startseite</a></nav>
+</header>
+<main class="wiki-main">
+<div class="wiki-disclaimer">
+<p><b>OmegaSim Wiki</b> &ndash; die Idee dazu stammt von <b>Gnen54</b>. Hier stehen die offenen Artikel von Nutzer <b>Luuke42</b> unter der Lizenz <b>CC BY-SA 4.0</b>.</p>
+</div>
+<h1 class="wiki-title">Lenkeinschlag prüfen</h1>
+<div class="mw-content-ltr mw-parser-output" lang="de" dir="ltr"><div class="omegasim-stand" style="border:1px solid #a2a9b1; border-left:4px solid #36c; background-color:var(--background-color-neutral-subtle, #f8f9fa); color:inherit; padding:6px 12px; margin:0 0 1em 0; font-size:90%; line-height:1.5;">
+<p><b>Stand dieses Artikels:</b> OmegaSim <b>–</b> vom 04.11.2026 · Firmware des Autos: nicht bekannt (OmegaSim liest die Firmware-Version nicht aus)<br />
+<small>Dieser Text wurde <b>mithilfe von KI erstellt</b> (Claude) und ist nicht in jedem Punkt von Menschen geprüft. Fehler bitte direkt verbessern oder auf der Diskussionsseite melden, siehe <a href="./Mitmachen.html" title="Mitmachen">Mitmachen</a>. Die öffentliche Fassung auf luuke42.github.io/omegasim kann älter sein als der hier beschriebene Stand.</small>
+</p>
+</div>
+<p><b>Lenkeinschlag prüfen</b> beschreibt, wie man beim Konstruieren einer Karosserie in Fusion kontrolliert, ob die Vorderräder bei vollem Lenkeinschlag frei in den Radhäusern laufen. Dazu gibt es ein Fusion-Archiv des Porsche-Kurzchassis mit lenkbarer Vorderachse und das Fusion-Add-In <b>Lenkeinschlag</b>, beide von Gnen54 auf GitHub.
+</p>
+<figure typeof="mw:File/Thumb"><a href="https://omegasim.miraheze.org/wiki/Datei:Lenkeinschlag_Links-Unteransicht.png" class="mw-file-description"><img src="images/420px-Lenkeinschlag_Links-Unteransicht.png" decoding="async" loading="lazy" width="420" height="236" class="mw-file-element" srcset="images/840px-Lenkeinschlag_Links-Unteransicht.png 2x" data-file-width="1280" data-file-height="720" /></a><figcaption>Porsche-Kurzchassis mit eingeschlagenen Vorderrädern unter einer durchsichtigen Karosserie (Ansicht von unten)</figcaption></figure>
+<meta property="mw:PageProp/toc" />
+<div class="mw-heading mw-heading2"><h2 id="Was_man_braucht">Was man braucht</h2></div>
+<ul><li>Autodesk Fusion</li>
+<li>Das Fusion-Archiv <b>CH-PorscheKurzChassisKomplett.f3z</b>: eigene Nachkonstruktion des Porsche-Kurzchassis mit Drehgelenken an den Vorderrädern (0° = geradeaus, Grenzen ±30°)</li>
+<li>Das Add-In <b>Lenkeinschlag</b></li></ul>
+<p>Beides liegt im Repository <a rel="nofollow" class="external text" href="https://github.com/gnen54/omegasim-cad">gnen54/omegasim-cad</a>.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Einrichten">Einrichten</h2></div>
+<ol><li>Das Archiv in Fusion öffnen: <b>Datei → Öffnen → Von meinem Computer öffnen</b>. Fusion legt alle Komponenten im aktiven Projekt an.</li>
+<li>Den Ordner <code>fusion-addins/LenkeinschlagAddIn</code> herunterladen.</li>
+<li>In Fusion <b>Shift+S</b> (Skripte und Zusatzmodule) → Reiter <b>Add-Ins</b> → grünes <b>+</b> → Ordner wählen.</li>
+<li>Das Add-In markieren, <b>Ausführen</b> klicken und „Beim Start ausführen“ anhaken.</li></ol>
+<p>Danach gibt es einen Knopf <b>Lenkeinschlag</b> unter <b>Volumenkörper → Prüfen</b> und unter <b>Dienstprogramme → Add-Ins</b>.
+</p>
+<div class="mw-heading mw-heading2"><h2 id="Bedienung">Bedienung</h2></div>
+<ol><li>Die eigene Karosserie in die Chassis-Konstruktion einfügen, ohne das Chassis zu verschieben.</li>
+<li>Auf <b>Lenkeinschlag</b> klicken. Das Fenster findet die Drehgelenke selbst; „Gelenk Rad links“ und „Gelenk Rad rechts“ prüfen. Sind die Räder über eine Bewegungsverknüpfung gekoppelt, reicht ein Gelenk.</li>
+<li>Den maximalen Einschlag je Rad eintragen, getrennt für Lenken nach links und nach rechts (Standard 30°). Dreht ein Rad falsch herum: „Drehrichtung umkehren“.</li>
+<li>Eine Aktion wählen:
+<ul><li><b>Lenkwinkel einstellen</b>: Regler von −100&#160;% (voll rechts) bis +100&#160;% (voll links), die Räder folgen live. Mit OK bleiben sie stehen, etwa für die Schnittansicht.</li>
+<li><b>Pendeln (links ↔ rechts)</b>: Die Räder schwenken einmal voll nach links und rechts.</li>
+<li><b>Lenkfreiraum als Körper erzeugen</b>: Die Rad-Bauteile auswählen. Das Add-In vereinigt die Räder in allen Stellungen (Schritt 2°) zu einem Körper „Lenkfreiraum“. Mit <b>Ändern → Fläche versetzen</b> etwas Luft zugeben (etwa 0,3–0,5 mm) und ihn beim Kombinieren von der Karosserie abziehen, siehe <a href="./Add-,_Del-,_Rep-_und_Chk-Teile.html" title="Add-, Del-, Rep- und Chk-Teile">Add-, Del-, Rep- und Chk-Teile</a>.</li>
+<li><b>Geradeaus stellen</b></li></ul></li></ol>
+<div class="mw-heading mw-heading2"><h2 id="Hinweise">Hinweise</h2></div>
+<ul><li>Die Erzeugung des Lenkfreiraums ist neu und noch wenig erprobt.</li>
+<li>Netzkörper (Mesh) werden für den Lenkfreiraum nicht berücksichtigt, nur Volumenkörper.</li>
+<li>Die Hinterrad-Felge im Archiv ist an die Sturmkind-Originalfelge angelehnt; es ist eine eigene Nachkonstruktion.</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Lizenz">Lizenz</h2></div>
+<ul><li>CAD-Dateien: <a rel="nofollow" class="external text" href="https://creativecommons.org/licenses/by/4.0/deed.de">CC BY 4.0</a>, Namensnennung „Gnen54 (OmegaSim CAD)“</li>
+<li>Add-In: MIT-Lizenz</li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Siehe_auch">Siehe auch</h2></div>
+<ul><li><a href="./CAD_und_3D-Druck.html" title="CAD und 3D-Druck">CAD und 3D-Druck</a></li>
+<li><a href="./Onboard-Kamera_und_Karosserien.html" title="Onboard-Kamera und Karosserien">Onboard-Kamera und Karosserien</a></li></ul>
+<div class="mw-heading mw-heading2"><h2 id="Weblinks">Weblinks</h2></div>
+<ul><li><a rel="nofollow" class="external text" href="https://github.com/gnen54/omegasim-cad">gnen54/omegasim-cad auf GitHub</a></li></ul>
+<!-- 
+NewPP limit report
+Parsed by mw152
+Cached time: 20261108173904
+Cache expiry: 1296000
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.018 seconds
+Real time usage: 0.022 seconds
+Preprocessor visited node count: 37/1000000
+Revision size: 3257/2097152 bytes
+Post‐expand include size: 750/2097152 bytes
+Template argument size: 13/2097152 bytes
+Highest expansion depth: 3/100
+Expensive parser function count: 0/99
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 0/5000000 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%    3.147      1 Vorlage:Stand
+100.00%    3.147      1 -total
+-->
+
+<!-- Render ID 4a68fd9a-db9b-11f1-898e-bc2411edb98b -->
+
+<!-- Saved in parser cache with key omegasimwiki:pcache:520:|#|:idhash:canonical and timestamp 20261108173904 and revision id 808. Rendering was triggered because: page-edit
+ -->
+</div>
+</main>
+<footer class="wiki-foot">Snapshot aus dem OmegaSim Wiki (CC BY-SA 4.0)</footer>
+</body>
+</html>

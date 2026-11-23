@@ -15,7 +15,7 @@
 # Bei größeren Umbauten zuerst auf der '''Diskussionsseite''' des Artikels fragen.
 
 === Bilder ===
-* '''Screenshots''' von OmegaSim stehen wie die App unter der MIT-Lizenz und dürfen hochgeladen werden ([[Spezial:Hochladen]]). In der Beschreibung angeben: App-Version, Datum, was zu sehen ist.
+* '''Screenshots''' von OmegaSim stehen wie die App unter der AGPL-3.0-or-later und dürfen hochgeladen werden ([[Spezial:Hochladen]]). In der Beschreibung angeben: App-Version, Datum, was zu sehen ist.
 * '''Eigene Fotos''' (Auto, Bahn, Zubehör): in der Beschreibung Urheber und Lizenz nennen, z. B. „eigenes Foto, CC BY 4.0“.
 * '''Fremde Fotos''' nur mit Quelle und einer Lizenz, die die Weitergabe erlaubt. Produktfotos von Herstellern gehören nicht dazu.
 * Auf Fotos keine Personen ohne deren Einverständnis, keine Kennzeichen, keine privaten Daten.
@@ -23,14 +23,14 @@
 
 == Mit KI ==
 KI-Assistenten (Claude, ChatGPT, Gemini …) können Entwürfe schreiben, Quellcode durchsuchen und Texte vereinheitlichen. Damit das Wiki verlässlich bleibt:
-# '''Die KI aus Quellen arbeiten lassen.''' Am besten gibt man ihr den Quellcode ([https://github.com/Luuke42/omegasim Luuke42/omegasim]) oder die Patchnotes in der App (unter '''Optionen''') und lässt sie nur beschreiben, was dort steht.
+# '''Die KI aus Quellen arbeiten lassen.''' Am besten gibt man ihr den Quellcode (Luuke42/omegasim) oder die Patchnotes in der App (unter '''Optionen''') und lässt sie nur beschreiben, was dort steht.
 # '''Ihr diese Seite und die [[Anleitung für KIs]] geben.''' Dort stehen Stil, Pflichtbestandteile und Grenzen.
 # '''Selbst prüfen.''' Mindestens Menüpfade, Namen von Schaltern und Standardwerte in der App nachsehen. Zahlen, die die KI nennt, im Code oder in der App wiederfinden.
 # '''Hinweis stehen lassen.''' Die Vorlage <code>Stand</code> kennzeichnet den Artikel als mit KI erstellt.
 # '''Keine Zugangsdaten an die KI geben.''' Anmelden und Speichern macht man selbst.
 
 == Zur App beitragen ==
-* '''Fehler melden:''' [https://github.com/Luuke42/omegasim/issues Issues auf GitHub] oder in der Community. Hilfreich sind App-Version, Gerät, Browser bzw. Android-App, Fahrgefühl und die genauen Schritte.
+* '''Fehler melden:''' Issues auf GitHub oder in der Community. Hilfreich sind App-Version, Gerät, Browser bzw. Android-App, Fahrgefühl und die genauen Schritte.
 * '''Code beitragen:''' Pull Request auf GitHub. Wie das Projekt aufgebaut ist (Quellen in <code>src/</code>, Bauen mit <code>tools/build.py</code>, Selbsttest), steht in der [[Anleitung für KIs]] und gilt genauso für Menschen.
 * '''Zubehör:''' Eigene Hardware wie [[CH ControlBox]] oder [[Startampel]] bekommt eine eigene Seite mit Funktion, Bedienung, Fehlersuche und Credits.
 
@@ -40,9 +40,7 @@ KI-Assistenten (Claude, ChatGPT, Gemini …) können Entwürfe schreiben, Quellc
 * [[Vorlage:Stand]]
 
 == Weblinks ==
-* [https://github.com/Luuke42/omegasim OmegaSim auf GitHub (Luuke42)]
-* [https://luuke42.github.io/omegasim/ OmegaSim im Browser spielen]
-* [https://www.mediawiki.org/wiki/Help:Formatting/de Hilfe zur Textgestaltung (MediaWiki)]
+* Browserfassung, Android-App und Quellcode: Links auf der [[Hauptseite]]
 
 [[Kategorie:OmegaSim]]
 [[Kategorie:Mitmachen]]

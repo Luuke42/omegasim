@@ -3550,6 +3550,17 @@
       }
     }
 
+    // ---- SEKTOREN AUF DER KARTE (v1.6.27, Issue #12, WIP) ----------------------------
+    // BESTELLT: "Karte: Nummer im farbigen Kreis, duenner Farbsaum je Sektor; bei einer Sektor-Ansage wird der Saum
+    // dicker und pulsiert." Je Sektor ein duenner Saum in seiner Farbe aussen am linken Rand (jenseits des Randsteins)
+    // und am Sektoranfang die Nummer im Kreis. data-sektor-saum / data-sektor-nr tragen die Nummer (1 ..), damit
+    // sektorKartePuls() (70-race.js) den Saum in allen offenen Karten pulsieren lassen kann.
+    if (o.detailed && kachelTab && o.sektorMarken !== false && closed) {
+      let anf = null;
+      try { anf = sektorAnfaenge(tiles, closed, !!o.sektorenImmer); } catch (e) { anf = null; }
+      if (anf && anf.length > 1) body += sektorSaeumeSvg(anf, pts, nrm, kachelTab, half, P2, ox, oy);
+    }
+
     // ---- Die Autos ----------------------------------------------------------------
     //
     // `currentIndex` zeichnet EIN Auto und bleibt fuer alte Aufrufer; `o.cars` zeichnet
@@ -4237,8 +4248,12 @@
   // (ZIEL_LAENGS.linieOben der ersten Start/Ziel-Kachel). N = runde(Teile / 10), 1 bis 10;
   // 1 heisst keine Sektoren (8 -> 1, 15 -> 2, 25 -> 3, 100 -> 10), und nie mehr als
   // Teile / 2 - ein Abschnitt unter zwei Teilen misst nur noch die Meldegenauigkeit.
+  // v1.6.56 BESTELLT: "Automatische Sektoren: Die duerfen weniger Teile haben, z.B. bei Balkonia 50 Kilometers sind es
+  // 3 Sektoren, dort duerfen es 6 oder 7 sein; insgesamt anpassen, auch die kuerzesten Strecken duerfen 2-3 Sektoren
+  // haben wie Homington". Jetzt etwa ein Sektor je 4 Teile, mindestens 2, hoechstens 10 (und weiter nie mehr als
+  // Teile / 2): Homington (13 Teile) 3, Balkonia (25) 6, 30 Teile 8, ab 38 Teilen 10.
   function autoSektorFormel(teile) {
-    const n = Math.max(1, Math.min(10, Math.round((teile || 0) / 10)));
+    const n = Math.max(2, Math.min(10, Math.round((teile || 0) / 4)));
     return Math.max(1, Math.min(n, Math.floor((teile || 0) / 2)));
   }
   function trackSektorModus(tiles) {
@@ -4311,6 +4326,37 @@
     if (m === 'aus') return null;
     if (m === 'manuell') return manuelleSektorGrenzen(tiles);
     return autoSektorGrenzen(tiles, autoSektorFormel(tiles.length));
+  }
+  // v1.6.27 (Issue #12): die Teile, an denen die Sektoren beginnen, in Fahrtreihenfolge ab der Rundenlinie. Weitere
+  // Start/Ziel-Teile (Kontakt-Sektoren) haben Vorrang, sonst die automatischen bzw. manuellen (autoSektorPlanFuer).
+  const SEKTOR_FARBEN = ['#e53935', '#fb8c00', '#fdd835', '#43a047', '#00acc1', '#1e88e5', '#8e24aa', '#d81b60', '#8d6e63', '#78909c'];
+  function sektorAnfaenge(tiles, geschlossen, immer) {
+    if (!tiles || tiles.length < 4) return null;
+    const starts = [];
+    tiles.forEach((t, i) => { if (t.type === TILE_TYPE.START) starts.push(i); });
+    if (starts.length > 1) return starts;
+    const plan = autoSektorPlanFuer(tiles, geschlossen, immer);
+    return plan ? [plan.s].concat(plan.kacheln) : null;
+  }
+  function sektorSaeumeSvg(anf, pts, nrm, kachelTab, half, P2, ox, oy) {
+    const n = pts.length, pIdx = (k) => (k === 0 ? 0 : kachelTab.start[k]);
+    const abst = half + TRACK_KERB_W + 1.6, saum = offsetPath(pts, nrm, abst);
+    let out = '';
+    anf.forEach((k, i) => {
+      const a = pIdx(k), b = pIdx(anf[(i + 1) % anf.length]);
+      if (!(a >= 0) || !(b >= 0)) return;
+      const idx = [];
+      for (let j = a, z = 0; z <= n; z++) { idx.push(j); if (j === b && z > 0) break; j = (j + 1) % n; }
+      const farbe = SEKTOR_FARBEN[i % SEKTOR_FARBEN.length];
+      out += '<path class="sektor-saum" data-sektor-saum="' + (i + 1) + '" d="M ' + idx.map((j) => P2(saum[j])).join(' L ')
+           + '" fill="none" stroke="' + farbe + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>';
+      const q = pts[a], m = nrm[a] || { x: 0, y: 0 }, r = half + TRACK_KERB_W + 7.5;
+      const cx = (q.x + m.x * r + ox).toFixed(1), cy = (q.y + m.y * r + oy).toFixed(1);
+      out += '<g class="sektor-nr" data-sektor-nr="' + (i + 1) + '"><circle cx="' + cx + '" cy="' + cy + '" r="5.2" fill="' + farbe
+           + '" stroke="#0b0c0f" stroke-width="1"/><text x="' + cx + '" y="' + cy + '" dy="2.6" text-anchor="middle" font-size="7.5" '
+           + 'font-weight="800" fill="#fff" stroke="#0b0c0f" stroke-width="1.6" paint-order="stroke">' + (i + 1) + '</text></g>';
+    });
+    return out;
   }
   function trackIstGeschlossen() {
     if (currentTrackTiles.length < 3) return false;

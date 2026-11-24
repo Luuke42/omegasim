@@ -1,0 +1,6 @@
+RC Stunt Copter (img/vf/hub.bin, img/vf/hub.json) - Modell fuer die virtuelle Fahrt in OmegaSim
+
+Modell: "RcHeli" (TREX 700) von Belzar Sirus, Sketchfab: https://skfb.ly/6BDFN
+Lizenz: Creative Commons Namensnennung 4.0 International (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/
+Aenderungen: aus der .blend umgewandelt mit tools/blend_to_vf.py (Koordinaten gedreht, Materialfarben als Eckenfarben,
+Massstab angepasst, Rumpf und Hauptrotor getrennt). Eingebaut von DeepSeek (Issue #15), geprueft 23.11.2026.

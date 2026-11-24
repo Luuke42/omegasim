@@ -718,8 +718,29 @@
   // Akku: BESTELLT "Akku-Ansage < 25 %" - eine eigene Schwelle, nicht die 10 % oben.
   const AKKU_SCHWELLE = 0.25;
   const AKKU_HYSTERESE = 0.32;
-  const ansageAn = { lap: true, damage: false, fuel: false, tyre: false, rain: false, pit: true, battery: false, status: true, meister: true };
-  const ansageLatch = { damage: false, fuel: false, tyre: false, rain: null, battery: false };
+  const ansageAn = { lap: true, damage: false, fuel: false, tyre: false, rain: false, pit: true, battery: false, status: true, meister: true, sektor: true, start: true,
+                     batterycrit: true };
+  const ansageLatch = { damage: false, fuel: false, tyre: false, rain: null, battery: false, batterycrit: false };
+  // v1.6.60 (aus Gnen54s Fork, Zweig akku-kritisch) BESTELLT: "Bei Unterschreiten der 5 % Schwelle eine Ansage: Session
+  // abbrechen, Box anfahren!" Eine ZWEITE Stufe unter der 25-%-Meldung, mit eigenem Schalter und ab Werk an: darunter
+  // bleibt das Auto bald stehen. AUFLOESUNG: batteryPercent() hat nur 17 Stufen (rund 6 % je Stufe) - mit 5 % fiel die
+  // Meldung erst bei 0 %, und "bei 0 % stehen die Fahrzeuge schon". Deshalb 6 %: die letzte Stufe, auf der das Auto
+  // noch faehrt. Erst nach dem Laden (ueber 15 %) wieder scharf.
+  const AKKU_KRITISCH = 0.06;
+  const AKKU_KRITISCH_HYSTERESE = 0.15;
+  // Je Auto ein Latch fuer die kritische Stufe (wie batteryLatchSet fuer 25 %).
+  const batteryKritLatchSet = new Set();
+  // Hinweis im Cockpit immer; dann die eigene Aufnahme ('batterycrit', sobald tools/voice_synth.py sie gerendert hat),
+  // sonst die Live-Stimme, und ohne beides (App-WebView) wenigstens die Aufnahme "Akku fast leer".
+  function akkuKritischMelden(name) {
+    if (!ansageAn.batterycrit) return false;
+    const de = lang === 'de';
+    const satz = de ? 'Session abbrechen, Box anfahren!' : 'Abort session, box now!';
+    const text = name ? name + ': ' + satz : satz;
+    if (typeof showHudToast === 'function') showHudToast(text);
+    if (ansage('batterycrit', text)) return true;
+    return playAnsageClip('battery');
+  }
   // JE Auto ein Latch fuer die Akku-Meldung: jedes Auto meldet unter 25 % einmal, erst nach
   // der Erholung wieder scharf. Ein gemeinsames Latch wuerde nur das ERSTE Auto melden.
   const batteryLatchSet = new Set();
@@ -858,6 +879,17 @@
     const bts = w.batteries;
     if (Array.isArray(bts) && bts.length) {
       for (const b of bts) {
+        // v1.6.60 KRITISCH (6 %) zuerst. Faellt der Akku in einem Schritt von ueber 25 % auf unter 6 %, wird nur die
+        // kritische Meldung gesagt - die 25-%-Sperre wird dabei still mitgesetzt, sonst kaemen zwei Saetze uebereinander.
+        if (b.value <= AKKU_KRITISCH && !batteryKritLatchSet.has(b.car)) {
+          batteryKritLatchSet.add(b.car);
+          batteryLatchSet.add(b.car);
+          // Den Namen nur, wenn mehrere Autos einen Akku melden - allein ist klar, wer gemeint ist.
+          if (akkuKritischMelden(bts.length > 1 ? (b.label || '') : '')) raus.push('batterycrit');
+          continue;
+        } else if (b.value > AKKU_KRITISCH_HYSTERESE) {
+          batteryKritLatchSet.delete(b.car);
+        }
         if (b.value <= AKKU_SCHWELLE && !batteryLatchSet.has(b.car)) {
           batteryLatchSet.add(b.car);
           // Ansage UND Blinken haengen an demselben Kaestchen: ausgeschaltet heisst keine
@@ -885,6 +917,13 @@
         }
       }
     } else if (w.battery !== null && w.battery !== undefined) {
+      if (w.battery <= AKKU_KRITISCH && !ansageLatch.batterycrit) {
+        ansageLatch.batterycrit = true;
+        ansageLatch.battery = true;
+        if (akkuKritischMelden('')) raus.push('batterycrit');
+      } else if (w.battery > AKKU_KRITISCH_HYSTERESE) {
+        ansageLatch.batterycrit = false;
+      }
       if (w.battery <= AKKU_SCHWELLE && !ansageLatch.battery) {
         ansageLatch.battery = true;
         if (ansage('battery', de ? 'Akku fast leer' : 'Battery low')) raus.push('battery');
@@ -1008,7 +1047,10 @@
                              'setting-announce-fuel': 'fuel', 'setting-announce-tyre': 'tyre',
                              'setting-announce-rain': 'rain', 'setting-announce-pit': 'pit',
                              'setting-announce-battery': 'battery',
+                             'setting-announce-battery-crit': 'batterycrit',
                              'setting-announce-meister': 'meister',
+                             'setting-announce-sektor': 'sektor',
+                             'setting-announce-start': 'start',
                              'setting-status-announce': 'status' };
   Object.keys(ANSAGE_KAESTCHEN).forEach((id) => {
     const el = $(id);
@@ -1122,25 +1164,47 @@
   // schnelle Kurve nicht. Ein Selbsttest haelt fest, dass die Schwelle ERREICHBAR bleibt -
   // das Fehlen genau dieser Pruefung war der eigentliche Fehler.
   const TYRE_SQUEAL_START = 0.6;
+  const TYRE_SQUEAL_DECKEL = 0.225;   // v1.6.83: Lautstaerke-Deckel, vorher 0,45
   // v1.1.42 BESTELLT: "leichtes Rumbling beim Reifenquietschen". Dieselbe Menge wie der Ton, aber auch ohne
   // Ton (Vibrationsart 'quietschen', Kachel Vibration): leicht und im schwachen Motor, alle 250 ms erneuert.
+  // v1.6.83 GEMELDET: "Im virtuellen Fahren quietschen die Reifen die ganze Zeit bei Pacejka und GT3 (und anderen evtl.
+  // auch). Mach insgesamt die Quietschlautstaerke niedriger (auf 50% des aktuellen Levels), nimm das hohe Quietschen
+  // raus, und mach, dass es nicht bei jedem Lenkvorgang quietscht." Gemessen (Bot, 90 s, Vulture V5.R): die
+  // Reifenausnutzung der virtuellen Fahrt (Schraeglauf / Scheitel-Schraeglauf) liegt schon bei ruhigem Fahren oft ueber
+  // 0,6 - jeder Lenkeinschlag gab ein kurzes Quietschen (GT3: 23 in 90 s). Jetzt in der virtuellen Fahrt:
+  //   - Schwelle 0,95 bis voll bei 1,25 (erst am Scheitel der Reifenkurve, also wenn die Achse wirklich rutscht),
+  //   - die Ausnutzung steigt mit 0,3 s Zeitkonstante (faellt schnell): ein kurzer Lenkstoss quietscht nicht, eine
+  //     gehaltene Rutschphase schon. Ruhig gefahren: 0 Quietscher in 90 s; am Limit 2- bis 5-mal seltener.
+  // Ueberall: Lautstaerke halbiert (Deckel 0,45 -> 0,225), Tonhoehe steigt nicht mehr mit (war bis +18 %), das
+  // Bremsenquietschen (hoher Ton, 2,8 bis 5,6 kHz) ist in der virtuellen Fahrt aus.
+  const TYRE_SQUEAL_VF = { start: 0.95, voll: 1.25, aufS: 0.3, abS: 0.08 };
+  let tyreVfGlatt = 0, tyreVfAt = 0;
+  function tyreVfNutzung(roh, jetzt) {
+    const dt = tyreVfAt ? Math.max(0, Math.min(0.25, (jetzt - tyreVfAt) / 1000)) : 0;
+    tyreVfAt = jetzt;
+    const tau = roh > tyreVfGlatt ? TYRE_SQUEAL_VF.aufS : TYRE_SQUEAL_VF.abS;
+    tyreVfGlatt += (roh - tyreVfGlatt) * (1 - Math.exp(-dt / tau));
+    return tyreVfGlatt;
+  }
+  function tyreSquealMenge(nutzung, start, voll) {
+    const s = start === undefined ? TYRE_SQUEAL_START : start, v = voll === undefined ? 1 : voll;
+    return Math.max(0, Math.min(1, (Math.max(0, Math.min(1.5, nutzung)) - s) / (v - s)));
+  }
   let quietschRuettelnAt = 0;
-  function quietschRuetteln(nutzung) {
-    const menge = Math.max(0, Math.min(1, (Math.max(0, Math.min(1.2, nutzung)) - TYRE_SQUEAL_START) / (1 - TYRE_SQUEAL_START)));
+  function quietschRuetteln(nutzung, start, voll) {
+    const menge = tyreSquealMenge(nutzung, start, voll);
     if (menge <= 0.05 || typeof padRumble !== 'function') return false;
     const jetzt = performance.now();
     if (jetzt - quietschRuettelnAt < 250) return false;
     quietschRuettelnAt = jetzt;
     return padRumble(0, 0.12 + 0.28 * menge, 280, 'quietschen', 1);
   }
-  function setTyreSqueal(nutzung) {
-    quietschRuetteln(nutzung);
+  function setTyreSqueal(nutzung, start, voll) {
+    quietschRuetteln(nutzung, start, voll);
     if (!fxBuffers.tyre || !audioCtx || !soundEnabled) return;
     // Unterhalb der Schwelle auf null abbilden, statt die Schwelle im Nenner zu vergessen:
     // sonst faengt es bei 0 an und ist bei 0,85 schon laut.
-    const roh = (Math.max(0, Math.min(1.2, nutzung)) - TYRE_SQUEAL_START)
-                / (1 - TYRE_SQUEAL_START);
-    const menge = Math.max(0, Math.min(1, roh));
+    const menge = tyreSquealMenge(nutzung, start, voll);
     if (menge > 0.01 && !tyreNode) {
       tyreNode = audioCtx.createBufferSource();
       tyreNode.buffer = fxBuffers.tyre;
@@ -1153,13 +1217,11 @@
     if (!tyreGain) return;
     // LAUTER: Deckel 0,3 -> 0,45. BESTELLT: "nimm die aktuellen, aber mach sie noch etwas
     // hoerbarer; evtl. einfach Lautstaerke etwas hoeher". Gilt in allen Modi.
-    tyreGain.gain.setTargetAtTime(Math.min(0.45, menge * 0.45) * tyreVolume,
+    // v1.6.83: halbiert (0,45 -> 0,225), BESTELLT "Quietschlautstaerke ... auf 50% des aktuellen Levels".
+    tyreGain.gain.setTargetAtTime(Math.min(TYRE_SQUEAL_DECKEL, menge * TYRE_SQUEAL_DECKEL) * tyreVolume,
                                   audioCtx.currentTime, 0.05);
-    // 1,0 bis 1,18: hoerbar, aber ohne dass der Ton nach Bandgeschwindigkeit klingt. Mehr
-    // verschiebt auch die Schleifenlaenge und macht die Naht hoerbar.
-    if (tyreNode) {
-      tyreNode.playbackRate.setTargetAtTime(1 + 0.18 * menge, audioCtx.currentTime, 0.08);
-    }
+    // v1.6.83: keine mitlaufende Tonhoehe mehr (war 1,0 bis 1,18) - BESTELLT "nimm das hohe Quietschen raus".
+    if (tyreNode) tyreNode.playbackRate.setTargetAtTime(1, audioCtx.currentTime, 0.08);
     if (menge <= 0.01 && tyreNode) {
       const node = tyreNode;
       tyreNode = null; tyreGain = null;
@@ -1380,8 +1442,13 @@
     ambience.bedGain = ambience.rainGain = null;
   }
 
+  // v1.6.46: waehrend einer virtuellen Fahrt gilt deren eigener Schalter (vfAmbienceAn, Optionen > Virtuell).
+  function ambienceAktiv() {
+    try { if (typeof VF !== 'undefined' && VF.aktiv && typeof vfAmbienceAn === 'function') return vfAmbienceAn(); } catch (e) { /* weiter */ }
+    return ambienceEnabled;
+  }
   function startAmbienceBeds() {
-    if (!ambience.ready || !ambienceEnabled || ambience.bedNode) return;
+    if (!ambience.ready || !ambienceAktiv() || ambience.bedNode) return;
     const a = loopBed(ambience.bed, 0);
     ambience.bedNode = a.src; ambience.bedGain = a.g;
     if (ambience.rainBed) {
@@ -1394,7 +1461,7 @@
   function refreshAmbienceGains() {
     if (!audioCtx) return;
     const t = audioCtx.currentTime;
-    const live = soundEnabled && ambienceEnabled;
+    const live = soundEnabled && ambienceAktiv();
     const on = live ? ambienceVolume : 0;
     const wet = live ? rainVolume : 0;
     if (ambience.bedGain) ambience.bedGain.gain.setTargetAtTime(on * 0.7, t, 0.4);
@@ -1410,7 +1477,7 @@
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stopAmbienceBeds();
-    else if (ambienceEnabled) startAmbienceBeds();
+    else if (ambienceAktiv()) startAmbienceBeds();
     refreshAmbienceGains();
   });
 
@@ -2940,8 +3007,54 @@
     if (knallVal) knallVal.textContent = Math.round(knallVolume * 100) + '%';
   }
 
+  // ---- STARTANSAGE: "Gentlemen, start your engines" (v1.6.46, aus gnen54s Startampel-Zweig, 67061f7) ----
+  // Beim Start-Knopf im Fenster "Bringe die Autos in Position" (raceGridStart, 70-race.js) und an der Startampel der
+  // virtuellen Fahrt. IMMER ENGLISCH: ein feststehender Ruf (Indianapolis), eine deutsche Stimme spricht ihn falsch aus.
+  // `beginn` wird gerufen, sobald die Ansage wirklich zu hoeren ist (Chrome/Android meldet onstart nicht immer, deshalb
+  // zusaetzlich speechSynthesis.speaking). Die Stimme wird beim Oeffnen des Fensters vorgewaermt (sonst kaeme der Satz
+  // beim ersten Start erst nach der Ampel).
+  const START_ANSAGE = 'Gentlemen, start your engines';
+  let startAnsageAktuell = null, startAnsageWarm = false;
+  function startAnsageEnglisch() {
+    const st = window.speechSynthesis && window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
+    return st.find((v) => /^en[-_]US/i.test(v.lang)) || st.find((v) => /^en/i.test(v.lang)) || null;
+  }
+  function startAnsageVorwaermen() {
+    if (startAnsageWarm || !ansageAn.start || !soundEnabled || !('speechSynthesis' in window)) return;
+    startAnsageWarm = true;
+    try { window.speechSynthesis.getVoices(); const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.lang = 'en-US'; window.speechSynthesis.speak(u); } catch (e) { /* egal */ }
+  }
+  function startAnsageSprechen(beginn) {
+    if (!ansageAn.start || !soundEnabled || !('speechSynthesis' in window)) return false;
+    try {
+      const u = new SpeechSynthesisUtterance(START_ANSAGE);
+      startAnsageAktuell = u;
+      u.lang = 'en-US'; u.rate = 0.95;
+      const en = startAnsageEnglisch();
+      if (en) u.voice = en;
+      if (beginn) {
+        let einmal = false, abfrage = null;
+        const los = () => { if (abfrage) { clearInterval(abfrage); abfrage = null; } if (!einmal) { einmal = true; beginn(); } };
+        u.onstart = los; u.onerror = los;
+        abfrage = setInterval(() => { try { if (window.speechSynthesis.speaking) los(); } catch (e) { los(); } }, 100);
+        setTimeout(() => { if (abfrage) { clearInterval(abfrage); abfrage = null; } }, 15000);
+      }
+      u.onend = () => { if (startAnsageAktuell === u) startAnsageAktuell = null; };
+      window.speechSynthesis.speak(u);
+      return true;
+    } catch (e) { return false; }
+  }
   function updateEngineSound(throttleMagnitude) {
     if (!soundEnabled || !engineOsc) return;
+    // v1.6.27 (Issue #15): Der RC Stunt Copter hat keinen Motor, nur den Rotor-Ton (vfHubTon). Der
+    // Motor-Ton darf dann weder laufen noch weiterspielen, auch wenn dieser Takt ihn treibt (W drueckt
+    // im Helikopter das Gas, und ohne den Ausstieg hoerte man den Motor-Ton mitlaufen).
+    if (typeof VF !== 'undefined' && VF && VF.hubschrauber && audioCtx) {
+      const t = audioCtx.currentTime;
+      engineGain.gain.setTargetAtTime(0, t, 0.05);
+      if (sampleEngine && sampleEngine.master) sampleEngine.master.gain.setTargetAtTime(0, t, 0.05);
+      return;
+    }
     const st = physEngine.state, p = soundProfile;
     let pitchNorm, load;
     if (physicsEnabled) {
@@ -2961,7 +3074,9 @@
     // stays intact as the fallback for the synthetic profiles and for missing audio/.
     // Squeal only under real braking above walking pace, so it does not chirp on every
     // light touch of the trigger.
-    const brakeAmt = (physicsEnabled && st.speedKmh > physEngine.config.topSpeedKmh * 0.12)
+    // v1.6.83: in der virtuellen Fahrt kein Bremsenquietschen (hoher Ton, BESTELLT "nimm das hohe Quietschen raus").
+    const vfFuerBremse = typeof vfAktiv === 'function' && vfAktiv();
+    const brakeAmt = (physicsEnabled && !vfFuerBremse && st.speedKmh > physEngine.config.topSpeedKmh * 0.12)
       ? Math.max(0, Math.min(1, (Math.max(0, -throttleY) - 0.25) / 0.55)) : 0;
     setBrakeSqueal(brakeAmt);
     // Der Reibkreis-Querbedarf treibt es. Er steht im Zustand, weil er hier gebraucht wird.
@@ -2978,7 +3093,8 @@
     // faden quietschen. Ausserhalb der virtuellen Fahrt bleibt alles wie bisher.
     const vfAktivJetzt = typeof vfAktiv === 'function' && vfAktiv();
     const vfNutzung = vfAktivJetzt && pst ? (pst.vfNutzung || 0) : -1;
-    setTyreSqueal(vfNutzung >= 0 ? vfNutzung : Math.max(pst.latUse || 0, pacQuietsch));
+    if (vfNutzung >= 0) setTyreSqueal(tyreVfNutzung(vfNutzung, now), TYRE_SQUEAL_VF.start, TYRE_SQUEAL_VF.voll);
+    else { tyreVfGlatt = 0; tyreVfAt = 0; setTyreSqueal(Math.max(pst.latUse || 0, pacQuietsch)); }
     // Neben der Bahn: nur auf der Bahn messbar (Schiene meldet 0xff), lauter mit dem Tempo.
     const neben = typeof trackMode !== 'undefined' && trackMode === 'on'
       && typeof abseitsJetzt === 'function' && abseitsJetzt();

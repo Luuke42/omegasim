@@ -1,0 +1,10 @@
+Audi RS5 DTM 2019 (img/autos/audirs5/) - Modell fuer die virtuelle Fahrt in OmegaSim
+
+"2019 Audi RS5 DTM" (https://skfb.ly/pMuFP) by Dave Love, Sketchfab, is licensed under Creative Commons Attribution 4.0
+International (CC BY 4.0), http://creativecommons.org/licenses/by/4.0/
+
+Aenderungen (OmegaSim, 23.11.2026): aus der .glb umgewandelt mit tools/glb_auto.py - Format der App (auto.json, auto.bin),
+Texturen verkleinert (hoechstens 1024 px), die beiliegende Lackierung (Skin) als Lacktextur, grosser Innenraumteil,
+Anzeigen, unscharfe Felge, Bremsen und Bremsscheiben weggelassen, je Achse ein Rad als Einheitsrad, Lichter vorn/hinten
+getrennt, Schattenfleck (shadow.png) und Vorschaubild (vorschau.jpg) neu gezeichnet. Die Fahrdaten in auto.json (physik)
+sind geschaetzt (WIP) und nicht Teil des Modells. Marken und Logos auf der Lackierung gehoeren ihren Inhabern.

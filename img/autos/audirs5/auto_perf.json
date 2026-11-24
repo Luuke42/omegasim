@@ -1,0 +1,248 @@
+{
+ "lod": "Performance-Fassung: 55752 statt 107213 Dreiecke (tools/modell_perf.py, Quadrik)",
+ "ecken": 45653,
+ "indizes": 167256,
+ "indexAb": 1460896,
+ "teile": [
+  {
+   "name": "EXT_CarPaint",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "audirs5_ext_carpaint.jpg",
+   "ecke0": 0,
+   "ecken": 9690,
+   "index0": 0,
+   "indizes": 43533
+  },
+  {
+   "name": "EXT_Misc",
+   "rolle": "anbau",
+   "gruppe": "auto",
+   "tex": "audirs5_ext_misc.jpg",
+   "ecke0": 9690,
+   "ecken": 11297,
+   "index0": 43533,
+   "indizes": 33204
+  },
+  {
+   "name": "AUDI_RS5_GRILL",
+   "rolle": "anbau",
+   "gruppe": "auto",
+   "tex": "audirs5_audi_rs5_grill.jpg",
+   "ecke0": 20987,
+   "ecken": 346,
+   "index0": 76737,
+   "indizes": 354
+  },
+  {
+   "name": "MIRROR",
+   "rolle": "anbau",
+   "gruppe": "auto",
+   "tex": "audirs5_mirror.jpg",
+   "ecke0": 21333,
+   "ecken": 98,
+   "index0": 77091,
+   "indizes": 276
+  },
+  {
+   "name": "EXT_Rims vorn",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "audirs5_ext_rims.jpg",
+   "ecke0": 21431,
+   "ecken": 1058,
+   "index0": 77367,
+   "indizes": 4500,
+   "achse": "vorn"
+  },
+  {
+   "name": "EXT_Rims hinten",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "audirs5_ext_rims.jpg",
+   "ecke0": 22489,
+   "ecken": 1065,
+   "index0": 81867,
+   "indizes": 4500,
+   "achse": "hinten"
+  },
+  {
+   "name": "EXT_Rim_Hub vorn",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "audirs5_ext_rim_hub.jpg",
+   "ecke0": 23554,
+   "ecken": 958,
+   "index0": 86367,
+   "indizes": 3261,
+   "achse": "vorn"
+  },
+  {
+   "name": "EXT_Rim_Hub hinten",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "audirs5_ext_rim_hub.jpg",
+   "ecke0": 24512,
+   "ecken": 957,
+   "index0": 89628,
+   "indizes": 3258,
+   "achse": "hinten"
+  },
+  {
+   "name": "EXT_Tire vorn",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "audirs5_ext_tire.jpg",
+   "ecke0": 25469,
+   "ecken": 542,
+   "index0": 92886,
+   "indizes": 2160,
+   "achse": "vorn"
+  },
+  {
+   "name": "EXT_Tire hinten",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "audirs5_ext_tire.jpg",
+   "ecke0": 26011,
+   "ecken": 542,
+   "index0": 95046,
+   "indizes": 2160,
+   "achse": "hinten"
+  },
+  {
+   "name": "EXT_Tire_Tread vorn",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "audirs5_ext_tire_tread.jpg",
+   "ecke0": 26553,
+   "ecken": 549,
+   "index0": 97206,
+   "indizes": 2880,
+   "achse": "vorn"
+  },
+  {
+   "name": "EXT_Tire_Tread hinten",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "audirs5_ext_tire_tread.jpg",
+   "ecke0": 27102,
+   "ecken": 549,
+   "index0": 100086,
+   "indizes": 2880,
+   "achse": "hinten"
+  },
+  {
+   "name": "EXT_Tire_Inside vorn",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "audirs5_ext_tire_inside.jpg",
+   "ecke0": 27651,
+   "ecken": 240,
+   "index0": 102966,
+   "indizes": 1080,
+   "achse": "vorn"
+  },
+  {
+   "name": "EXT_Tire_Inside hinten",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "audirs5_ext_tire_inside.jpg",
+   "ecke0": 27891,
+   "ecken": 240,
+   "index0": 104046,
+   "indizes": 1080,
+   "achse": "hinten"
+  },
+  {
+   "name": "INT_Carbon",
+   "rolle": "anbau",
+   "gruppe": "auto",
+   "tex": "audirs5_int_carbon.jpg",
+   "ecke0": 28131,
+   "ecken": 4431,
+   "index0": 105126,
+   "indizes": 12627
+  },
+  {
+   "name": "INT_Cage",
+   "rolle": "anbau",
+   "gruppe": "auto",
+   "tex": "audirs5_int_cage.jpg",
+   "ecke0": 32562,
+   "ecken": 2827,
+   "index0": 117753,
+   "indizes": 10401
+  },
+  {
+   "name": "INT_Dash",
+   "rolle": "anbau",
+   "gruppe": "auto",
+   "tex": "audirs5_int_dash.jpg",
+   "ecke0": 35389,
+   "ecken": 1337,
+   "index0": 128154,
+   "indizes": 4410
+  },
+  {
+   "name": "INT_Steer_Carbon",
+   "rolle": "anbau",
+   "gruppe": "auto",
+   "tex": "audirs5_int_steer_carbon.jpg",
+   "ecke0": 36726,
+   "ecken": 492,
+   "index0": 132564,
+   "indizes": 2133
+  },
+  {
+   "name": "Scheinwerfer",
+   "rolle": "scheinwerfer",
+   "gruppe": "auto",
+   "tex": "audirs5_ext_lights.jpg",
+   "ecke0": 37218,
+   "ecken": 3078,
+   "index0": 134697,
+   "indizes": 10836
+  },
+  {
+   "name": "Ruecklichter",
+   "rolle": "ruecklicht",
+   "gruppe": "auto",
+   "tex": "audirs5_ext_lights.jpg",
+   "ecke0": 40296,
+   "ecken": 2731,
+   "index0": 145533,
+   "indizes": 9000
+  },
+  {
+   "name": "EXT_Windows",
+   "rolle": "glas",
+   "gruppe": "auto",
+   "tex": "audirs5_ext_windows.jpg",
+   "ecke0": 43027,
+   "ecken": 1739,
+   "index0": 154533,
+   "indizes": 8829
+  },
+  {
+   "name": "EXT_Windows_Frame",
+   "rolle": "anbau",
+   "gruppe": "auto",
+   "tex": "audirs5_ext_windows_frame.jpg",
+   "ecke0": 44766,
+   "ecken": 879,
+   "index0": 163362,
+   "indizes": 3882
+  },
+  {
+   "name": "EXT_Number",
+   "rolle": "anbau",
+   "gruppe": "auto",
+   "tex": "audirs5_ext_number.jpg",
+   "ecke0": 45645,
+   "ecken": 8,
+   "index0": 167244,
+   "indizes": 12
+  }
+ ]
+}

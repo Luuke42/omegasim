@@ -336,6 +336,13 @@
                                                characteristic: z.characteristic, value: zuHex(daten), timeout: 300 }));
     }
     writeValue(daten) { return this.writeValueWithResponse(daten); }
+    // v1.6.60 (aus Gnen54s Fork): FUER EINZELNE BEFEHLE (Startampel, 74c-startampel.js): ohne Antwort, aber NICHT ueber
+    // OmegaBle - dort gilt "neuester gewinnt", und von "START", "GRUEN 1" kurz hintereinander kaeme nur der letzte an.
+    _befehlSchreiben(daten) {
+      const z = this._ziel;
+      return ruf('writeWithoutResponse', { deviceId: z.deviceId, service: z.service,
+                                           characteristic: z.characteristic, value: zuHex(daten), timeout: 1000 });
+    }
     async readValue() {
       const r = await mitOmegaPause(() => ruf('read', this._ziel));
       this.value = ausHex(r && r.value);

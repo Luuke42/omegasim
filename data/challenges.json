@@ -40,6 +40,25 @@
    "anzahl": 0,
    "zeiten": []
   },
+  "dauer-homington|hotlap|pro|v": {
+   "anzahl": 1,
+   "zeiten": [
+    {
+     "auto": "Audi RS5 DTM 2019 (Dave Love, WIP)",
+     "fahrer": "Luuke_virtual",
+     "geraet": "gjgvjre6nv8t5",
+     "runden": 4,
+     "runden_ms": [
+      18811,
+      13854,
+      13549,
+      13498
+     ],
+     "zeit_ms": 13498,
+     "zeitpunkt": "2026-11-24T09:32:41.540Z"
+    }
+   ]
+  },
   "dauer-homington|rennen|arcade": {
    "anzahl": 0,
    "zeiten": []
@@ -1410,5 +1429,5 @@
    "zeiten": []
   }
  },
- "stand": "2026-11-22T21:50:54Z"
+ "stand": "2026-11-24T10:59:48Z"
 }

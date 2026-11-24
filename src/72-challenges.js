@@ -315,7 +315,15 @@
                      preset: communityPresetGueltig(tr.preset) };
     return CHALLENGES[0];
   }
-  function chSchluessel(id, modus, preset) { return id + '|' + modus + '|' + preset; }
+  // v1.6.56 BESTELLT: "Rundenzeiten fuer virtuell aufzeichnen ueber dasselbe Backend aber mit klarer Angabe. In den
+  // Challenges dann, wenn auf Virtuell getoggelt ist, ... Zeiten fuer die virtuellen Fahrten anzeigen. Alles soll analog
+  // gehandhabt sein". Virtuelle Zeiten haben eigene Listen: derselbe Schluessel mit '|v' dahinter (lokal, im
+  // Zwischenspeicher, im Schnappschuss und im Sheet, Spalte "fahrt"). Ohne Angabe gilt der Fahrmodus (FAHREN-Kachel).
+  function chVirtuell() { return typeof fahrModusVirtuell === 'function' && fahrModusVirtuell(); }
+  function chSchluessel(id, modus, preset, virtuell) {
+    const v = virtuell === undefined ? chVirtuell() : !!virtuell;
+    return id + '|' + modus + '|' + preset + (v ? '|v' : '');
+  }
   // PFLICHTSTOPP (v0.8.39). BESTELLT: "bei Rundenrennen in Challenge 4 immer einen Pitstop
   // verpflichtend (egal wo und mit Pit-Minigame)". Kategorie D, nur im Modus Rennen.
   // BESTELLT (Balkonia): eine Strecke kann eine eigene Pflichtzahl angeben (def.pit).
@@ -367,14 +375,19 @@
     chKalibFaktor = logs.length ? Math.exp(logs.reduce((a, b) => a + b, 0) / logs.length) : 1;
     return chKalibFaktor;
   }
-  function chSterneSchwellen(def) {
+  // v1.6.56: virtuell sind die Runden langsamer als mit dem Modellauto (Referenz des Nutzers: Pacejka auf Balkonia 28 s,
+  // Gold echt 16 s). Die Medaillenzeiten virtuell sind deshalb die echten mal CH_VIRTUELL_FAKTOR (vorlaeufig, bis die
+  // Pacejka-Kalibrierung steht, omegasim-werkzeug/pacejka-kalibrierung).
+  const CH_VIRTUELL_FAKTOR = 1.75;
+  function chSterneSchwellen(def, virtuell) {
+    const f = (virtuell === undefined ? chVirtuell() : virtuell) ? CH_VIRTUELL_FAKTOR : 1;
     // Eine Strecke kann ihre Gold-Zeit weiter selbst vorgeben (sternGold, Sekunden je Runde).
     const fest = def.sternGold !== undefined ? def.sternGold : CH_GOLD_REFERENZ[def.id];
     if (fest !== undefined) {
-      const gold = Math.round(fest * 1000);
+      const gold = Math.round(fest * 1000 * f);
       return { silber: Math.round(gold * CH_STERNE_SILBER_FAKTOR), gold };
     }
-    const gold = chGoldFormel(chGeoGold(def));
+    const gold = chGoldFormel(chGeoGold(def)) * f;
     return { silber: Math.round(gold * CH_STERNE_SILBER_FAKTOR), gold: Math.round(gold) };
   }
   // ---- GOLD = FESTER ANTEIL + FAKTOR x GEOMETRIE (v0.10.6) ---------------------------
@@ -417,9 +430,9 @@
   // 1 = Bronze (Challenge gefahren), 2 = Silber, 3 = Gold; 0 = keine Wertung.
   // Im Rennen (rennen) ist die Zeit die Summe ueber def.runden Runden, die Schwellen
   // werden entsprechend skaliert; Beste-Runde (hotlap) vergleicht eine einzelne Runde.
-  function chSterne(def, modus, zeitMs) {
+  function chSterne(def, modus, zeitMs, virtuell) {
     if (!(zeitMs > 0)) return 0;
-    const s = chSterneSchwellen(def);
+    const s = chSterneSchwellen(def, virtuell);
     const runden = modus === 'rennen' ? (def.runden || 1) : 1;
     if (zeitMs <= s.gold * runden) return 3;
     if (zeitMs <= s.silber * runden) return 2;
@@ -586,9 +599,9 @@
   function chLokal(schl) { return (chLesen(CH_STORE, {})[schl] || []); }
   function chLokalSpeichern(erg) {
     const alle = chLesen(CH_STORE, {});
-    const schl = chSchluessel(erg.id, erg.modus, erg.preset);
+    const schl = chSchluessel(erg.id, erg.modus, erg.preset, !!erg.virtuell);
     const liste = (alle[schl] || []).concat([{ zeit: erg.zeit, runden: erg.runden, auto: erg.auto,
-      fahrer: erg.fahrer, geraet: erg.geraet, datum: Date.now() }]);
+      fahrer: erg.fahrer, geraet: erg.geraet, datum: Date.now(), fahrgefuehl: erg.fahrgefuehl || undefined }]);
     liste.sort((a, b) => a.zeit - b.zeit);
     alle[schl] = liste.slice(0, 30);
     chSchreiben(CH_STORE, alle);
@@ -659,13 +672,19 @@
   function communitySicht() {
     const lokal = communityLesen();
     const on = communityOnline;
-    if (!on) return lokal;
+    if (!on) {
+      if (!chVirtuell()) return lokal;
+      // v1.6.56: virtuell die Zeiten unter <id>|v
+      const v = Object.assign({}, lokal, { times: {} });
+      lokal.tracks.forEach((tr) => { v.times[tr.id] = lokal.times[tr.id + '|v'] || []; });
+      return v;
+    }
     const sicht = { tracks: [], times: {}, nextId: lokal.nextId, online: true };
     for (const tr of on.tracks) {
       const lokalGleich = lokal.tracks.find((x) => x.code === tr.code);
       sicht.tracks.push({ id: tr.id, code: tr.code, name: tr.name, online: true,
                           preset: communityPresetGueltig(tr.preset || (lokalGleich && lokalGleich.preset)) });
-      sicht.times[tr.id] = (on.zeiten[tr.id] || []).map((z) => ({ zeit: z.zeit_ms, fahrer: z.fahrer || '', geraet: z.geraet,
+      sicht.times[tr.id] = (on.zeiten[tr.id + (chVirtuell() ? '|v' : '')] || []).map((z) => ({ zeit: z.zeit_ms, fahrer: z.fahrer || '', geraet: z.geraet,
         datum: Date.parse(z.zeitpunkt) || 0, runden_ms: Array.isArray(z.runden_ms) ? z.runden_ms.map(Number) : undefined }));
     }
     for (const tr of lokal.tracks) {
@@ -675,7 +694,7 @@
       if (!gleich) sicht.tracks.push({ id: tr.id, code: tr.code, name: tr.name, online: false,
                                        preset: communityPresetGueltig(tr.preset) });
       const liste = sicht.times[ziel] = sicht.times[ziel] || [];
-      for (const z of (lokal.times[tr.id] || [])) {
+      for (const z of (lokal.times[tr.id + (chVirtuell() ? '|v' : '')] || [])) {
         if (!liste.some((x) => x.geraet === z.geraet && Math.abs(x.zeit - z.zeit) < 2)) liste.push(z);
       }
       liste.sort((a, b) => a.zeit - b.zeit);
@@ -948,6 +967,8 @@
       zeit_ms: Math.round(erg.zeit), runden_ms: erg.runden.map(Math.round), auto: erg.auto,
       fahrer: o.fahrer || '', geraet: chGeraet(), version: ($('app-version') || {}).textContent || '',
     };
+    // v1.6.56: virtuelle Zeit mit klarer Angabe (Spalten "fahrt" und "fahrgefuehl" im Sheet).
+    if (erg.virtuell) { eintrag.fahrt = 'virtuell'; eintrag.fahrgefuehl = String(erg.fahrgefuehl || '').slice(0, 20); }
     // v1.0.21: die Spur der schnellsten Runde geht immer mit (Telemetrie, Challenger).
     const spur = typeof teleSpurFuerUpload === 'function' ? teleSpurFuerUpload(erg.runden) : null;
     if (spur) eintrag.spur = spur;
@@ -985,8 +1006,32 @@
   function chAusgangLesen() { const a = chLesen(CH_AUSGANG, []); return Array.isArray(a) ? a : []; }
   function chAusgangSchreiben(a) { try { localStorage.setItem(CH_AUSGANG, JSON.stringify(a.slice(-50))); } catch (e) { /* voll */ } }
   function chAusgangRaus(nr) { chAusgangSchreiben(chAusgangLesen().filter((x) => x.nr !== nr)); }
+  // v1.6.56: Kennt das Apps Script virtuelle Zeiten schon (?faehig=1 -> virtuell: true)? Ein altes Skript wuerde die
+  // Angabe "fahrt" verwerfen und die Zeit in die echte Bestenliste schreiben - bis es neu bereitgestellt ist, bleiben
+  // virtuelle Zeiten in der Warteschlange (Grund in der Meldung) und gehen danach von selbst hinaus.
+  const chFaehig = {};
+  function chServerVirtuell(url) {
+    const c = chFaehig[url];
+    if (c && (c.ja || Date.now() - c.at < 10 * 60000)) return c.p;
+    const p = fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'faehig=1', { cache: 'no-store' })
+      .then((r) => r.json()).then((j) => !!(j && j.ok && j.virtuell)).catch(() => false)
+      .then((ja) => { chFaehig[url] = { p: Promise.resolve(ja), ja, at: Date.now() }; return ja; });
+    chFaehig[url] = { p, ja: false, at: Date.now() };
+    return p;
+  }
   function chEintragSenden(eintrag) {
-    const daten = Object.assign({}, eintrag); delete daten.nr; delete daten.url;
+    if (eintrag.fahrt === 'virtuell' && !eintrag.virtuellGeprueft) {
+      return chServerVirtuell(eintrag.url).then((ja) => {
+        if (ja) return chEintragSenden(Object.assign({}, eintrag, { virtuellGeprueft: true }));
+        const grund = t('die Online-Bestenliste kennt virtuelle Zeiten noch nicht (Apps Script neu bereitstellen)');
+        const a = chAusgangLesen(), x = a.find((y) => y.nr === eintrag.nr);
+        if (x) { x.fehler = grund; chAusgangSchreiben(a); }
+        chUploadInfo = { ok: false, spaeter: true, grund };
+        chAusgangZeichnen();
+        return false;
+      });
+    }
+    const daten = Object.assign({}, eintrag); delete daten.nr; delete daten.url; delete daten.virtuellGeprueft;
     const senden = (versuch) => fetch(eintrag.url, { method: 'POST', body: JSON.stringify(daten) })
       .then((r) => r.json())
       .then((j) => {
@@ -1007,7 +1052,7 @@
       chUploadInfo = { ok: true };
       log((strecke ? 'Strecke' : 'Challenge') + ': Zeit hochgeladen (' + (strecke ? eintrag.strecke : eintrag.challenge) + ').', 'info');
       chAusgangZeichnen();
-      if (strecke) { if (typeof skNachUpload === 'function') skNachUpload(eintrag.strecke); }
+      if (strecke) { if (typeof skNachUpload === 'function') skNachUpload(eintrag.strecke + (eintrag.fahrt === 'virtuell' ? '|v' : '')); }
       else setTimeout(() => chAuffrischen(true), 2500);
       return true;
     }, (e) => {
@@ -1206,9 +1251,9 @@
     });
   }
   function chListeLive(schl, o) {
-    const [id, modus, preset] = schl.split('|');
+    const [id, modus, preset, v] = schl.split('|');
     const url = o.url + (o.url.indexOf('?') >= 0 ? '&' : '?') + 'challenge=' + encodeURIComponent(id)
-      + '&modus=' + encodeURIComponent(modus) + '&preset=' + encodeURIComponent(preset);
+      + '&modus=' + encodeURIComponent(modus) + '&preset=' + encodeURIComponent(preset) + (v === 'v' ? '&fahrt=virtuell' : '');
     // Einmal wiederholen: dieselbe sporadische 404 der Echo-Seite wie beim Hochladen.
     const holen = () => fetch(url).then((r) => r.json());
     return holen().catch(() => new Promise((ok) => setTimeout(ok, 1200)).then(holen)).then((j) => {
@@ -1299,6 +1344,16 @@
   function challengeStarten(ohneAuto) {
     if (chLauf) return;
     if (kRennenLaeuft()) { showHudToast(t('Erst das laufende Rennen beenden')); return; }
+    // v1.6.56: im Fahrmodus Virtuell faehrt die Challenge das virtuelle Auto (wie die Studienfahrt): erst die virtuelle
+    // Fahrt auf der Challenge-Strecke starten (sie fuehrt kein eigenes Rennen, extern), dann dieselbe Challenge mit
+    // Ampel, Teilepruefung und Wertung. Die Zeit geht in die virtuellen Listen.
+    const defV = chDef(chWahl);
+    let vfHier = false;
+    if (chVirtuell() && defV && !defV.studie && !(typeof vfAktiv === 'function' && vfAktiv())) {
+      const tiles = chSpiegel ? chSpiegelTiles(chTiles(defV)) : chTiles(defV);
+      if (typeof virtuellStarten !== 'function' || !virtuellStarten({ tiles, extern: 'challenge' })) return;
+      vfHier = true;
+    }
     if (!playerCar && !ohneAuto) {
       konsoleFrage(t('Kein Auto verbunden'),
         t('Für eine Challenge muss dein Auto verbunden sein. Ein Probelauf ohne Auto zeigt den Ablauf, wird aber nicht gewertet.'),
@@ -1311,10 +1366,13 @@
     // v0.9.45: eine Community-Strecke faehrt mit der Abstimmung, die beim Einreichen gewaehlt
     // wurde; alle anderen Challenges wie bisher mit Pro.
     const preset = (def.community || def.studie) ? def.preset : chPreset;
+    const virt = typeof vfAktiv === 'function' && vfAktiv() && !def.studie;
     chLauf = { id: def.id, modus: chModus, preset, phase: 'stehen', stillSeit: 0,
                hinweisAt: 0, fruehstart: false, probe: !playerCar, merk: chMerken(),
                gelesen: [], pruefung: [], geaendert: false, pruefAt: 0,
-               community: !!def.community };
+               community: !!def.community, virtuell: virt,
+               fahrgefuehl: virt && typeof vfHandling === 'function' ? vfHandling() : '' };
+    void vfHier;
     chAnwenden(def, chModus, preset);
     chLauf.soll = chWachWerte(preset);
     chSperre(true);
@@ -1478,7 +1536,9 @@
     if (!chLauf) return;
     const m = chLauf.merk;
     const warStudie = !!(chDef(chLauf.id) || {}).studie;
+    const warVirtuell = !!chLauf.virtuell;
     chLauf = null;
+    if (warVirtuell && typeof vfAktiv === 'function' && vfAktiv()) setTimeout(() => { if (vfAktiv()) virtuellBeenden(); }, 0);
     if (warStudie) chSpiegelSetzen(false);
     clearInterval(chWaechter); chWaechter = null;
     chSperre(false);
@@ -1499,7 +1559,10 @@
                         lauf.probe ? null : lauf.pruefung, chMinRundeMs(def), lauf.geaendert, racePitDone);
     if (lauf.probe && w.gueltig) { w.gueltig = false; w.grund = 'Probelauf ohne Auto'; }
     const erg = Object.assign({ id: lauf.id, modus: lauf.modus, preset: lauf.preset, runden: rundenMs,
-      auto: playerCar ? garageLabel(playerCar) : '', fahrer: chOnline().fahrer, geraet: chGeraet() }, w);
+      auto: lauf.virtuell && typeof vfAutoName === 'function' ? vfAutoName(vfAutoWahl()) : (playerCar ? garageLabel(playerCar) : ''),
+      fahrer: chOnline().fahrer, geraet: chGeraet(), virtuell: !!lauf.virtuell, fahrgefuehl: lauf.fahrgefuehl || '' }, w);
+    // v1.6.56: die virtuelle Fahrt endet mit der Challenge (einen Takt spaeter, das Ergebnis kommt danach).
+    if (lauf.virtuell && typeof vfAktiv === 'function' && vfAktiv()) setTimeout(() => { if (vfAktiv()) virtuellBeenden(); }, 0);
     chSperre(false);
     chZuruecksetzen(lauf.merk);
     chLetzt = erg;
@@ -1516,7 +1579,7 @@
       chZeichneDetail();
       return true;
     }
-    const schl = chSchluessel(erg.id, erg.modus, erg.preset);
+    const schl = chSchluessel(erg.id, erg.modus, erg.preset, erg.virtuell);
     // BESTELLT: "Nach einem Rennen auch sagen, ob mein Ergebnis hochgeladen wurde."
     // chHochladen liefert true/false; ein Fehler beim Hochladen soll NICHT den ganzen
     // Lauf entwerten, nur die Meldung im Ergebnis-Dialog sagt es.
@@ -1526,10 +1589,11 @@
       // woechentliche Challenge-Bestenliste. Alles andere (Ampel, Teilepruefung, Zeitmessung)
       // ist dieselbe Challenge-Maschinerie.
       if (lauf.community) {
-        communityZeit(communityLesen(), erg.id, erg.zeit, erg.fahrer, erg.runden);
-        hochgeladen = communityPost({ art: 'community-zeit', id: erg.id, zeit_ms: Math.round(erg.zeit), fahrer: erg.fahrer || '',
+        communityZeit(communityLesen(), erg.id + (erg.virtuell ? '|v' : ''), erg.zeit, erg.fahrer, erg.runden);
+        hochgeladen = (erg.virtuell ? chServerVirtuell(communityUrl()) : Promise.resolve(true)).then((darf) => (!darf ? { ok: false } : communityPost({ art: 'community-zeit', id: erg.id, zeit_ms: Math.round(erg.zeit), fahrer: erg.fahrer || '',
+          fahrt: erg.virtuell ? 'virtuell' : undefined, fahrgefuehl: erg.virtuell ? erg.fahrgefuehl : undefined,
           runden_ms: Array.isArray(erg.runden) ? erg.runden.map(Math.round) : undefined,
-          spur: typeof teleSpurFuerUpload === 'function' ? (teleSpurFuerUpload(erg.runden) || undefined) : undefined })
+          spur: typeof teleSpurFuerUpload === 'function' ? (teleSpurFuerUpload(erg.runden) || undefined) : undefined })))
           .then((r) => {
             hochgeladen = !!(r && r.ok);
             communityHolen(true).then(() => { communityZeichnen(); if (chSeiteOffen()) chZeichneListe(); });
@@ -1557,7 +1621,7 @@
       } else {
         text = erg.gueltig ? chRangText(schl, erg.zeit) : chGrundText(erg);
         if (erg.gueltig) {
-          const sterne = chSterne(def, erg.modus, erg.zeit);
+          const sterne = chSterne(def, erg.modus, erg.zeit, erg.virtuell);
           text += '\n\n' + chSterneName(sterne) + ' ' + chSterneZeichen(sterne);
           const o = chOnline();
           if (o.url && o.hochladen) {
@@ -1754,7 +1818,7 @@
     const e = $('ch-ergebnis');
     if (chLetzt && chLetzt.id === chWahl) {
       e.hidden = false;
-      const schl = chSchluessel(chLetzt.id, chLetzt.modus, chLetzt.preset);
+      const schl = chSchluessel(chLetzt.id, chLetzt.modus, chLetzt.preset, !!chLetzt.virtuell);
       $('ch-erg-titel').textContent = t(CH_MODUS_NAME[chLetzt.modus]) + ' · '
         + (def.community ? communityPresetName(chLetzt.preset) : 'Pro');
       $('ch-erg-zeit').textContent = chLetzt.gueltig ? chZeit(chLetzt.zeit) : t('Nicht gewertet');
@@ -1827,7 +1891,7 @@
     }
     // Eigene Bestzeit: aus dem letzten Lauf oder aus den lokalen Zeiten.
     const lok = chLokal(schl);
-    const eigene = chLetzt && chLetzt.gueltig && schl === chSchluessel(chLetzt.id, chLetzt.modus, chLetzt.preset)
+    const eigene = chLetzt && chLetzt.gueltig && schl === chSchluessel(chLetzt.id, chLetzt.modus, chLetzt.preset, !!chLetzt.virtuell)
       ? chLetzt.zeit : (lok.length ? lok[0].zeit : null);
     const eintr = a.eintraege.slice().sort((x, y) => x.zeit_ms - y.zeit_ms);
     // BESTELLT: "nur den besten Lauf je Geraet zeigen" und "eine Zeit meines langsameren
@@ -2167,3 +2231,25 @@
     });
   });
   setTimeout(chKachelnZeichnen, 0);
+  // v1.6.56: Umschalter Echt | Virtuell oben auf der Challenge-Seite (derselbe Fahrmodus wie auf FAHREN).
+  function chFahrtZeichnen() {
+    const k = $('ch-fahrt');
+    if (!k) return;
+    const v = chVirtuell();
+    k.querySelectorAll('[data-fahrt]').forEach((b) => b.classList.toggle('an', (b.dataset.fahrt === 'virtuell') === v));
+    k.setAttribute('aria-pressed', v ? 'true' : 'false');
+  }
+  function chFahrtGewechselt() {
+    chFahrtZeichnen();
+    try { chKachelnZeichnen(); } catch (e) { /* noch nicht da */ }
+    try { if (typeof chDauerKachelnZeichnen === 'function') chDauerKachelnZeichnen(); } catch (e) { /* egal */ }
+    try { if (typeof chVorschauZeichnen === 'function') chVorschauZeichnen(); } catch (e) { /* egal */ }
+    try { if (typeof skListeHolen === 'function') skListeHolen(false).then(() => { if (typeof chVorschauZeichnen === 'function') chVorschauZeichnen(); }); } catch (e) { /* egal */ }
+    if (chSeiteOffen()) { chZeichneDetail(); chListeLaden(chSchluessel(chWahl, chModus, chPreset)); }
+    if (chCommunitySeiteOffen()) chZeichneListe();
+  }
+  if ($('ch-fahrt')) $('ch-fahrt').addEventListener('click', () => {
+    if (typeof fahrModusSetzen === 'function') fahrModusSetzen(chVirtuell() ? 'echt' : 'virtuell');
+    if (typeof menuNavTonVerstellen === 'function') menuNavTonVerstellen();
+  });
+  setTimeout(chFahrtZeichnen, 0);

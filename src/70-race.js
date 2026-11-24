@@ -607,6 +607,7 @@
           fruehstart[w].frueh = true;
           fruehstartAnwenden(w);
           showHudToast(w >= 2 ? t('Frühstart Spieler {n}!').replace('{n}', w) : t('Frühstart!'));
+          if (typeof ampelFruehstartMelden === 'function') ampelFruehstartMelden();   // v1.6.60: Startampel blinkt gelb
         }
       });
     }, 100);
@@ -1875,6 +1876,7 @@
   }
   function raceGridAnzeigen(weiter) {
     raceGridWeiter = typeof weiter === 'function' ? weiter : null;
+    if (typeof startAnsageVorwaermen === 'function') startAnsageVorwaermen();
     const gs = $('race-gridscreen');
     if (!gs) { if (raceGridWeiter) raceGridWeiter(); return; }
     // v1.0.29: die angezeigte Reihenfolge IST die Startreihenfolge - auch fuer Autos, die seit
@@ -1936,7 +1938,14 @@
     if (typeof aufstellenStoppen === 'function') aufstellenStoppen(false);
     syncRaceGridOrder();
     const w = raceGridWeiter; raceGridWeiter = null;
-    if (w) w();
+    if (typeof ampelStartKnopf === 'function') ampelStartKnopf();   // v1.6.60: echte Startampel auf Gelb
+    // v1.6.46 (gnen54): "Gentlemen, start your engines" sofort, der Countdown erst, wenn der Satz gesprochen ist
+    // (ab Beginn der Ansage 2,4 s, spaetestens 4,5 s nach dem Knopf - eine haengende Stimme blockiert den Start nicht).
+    if (!w) return;
+    let fertig = false;
+    const los = () => { if (fertig) return; fertig = true; w(); };
+    if (typeof startAnsageSprechen === 'function' && startAnsageSprechen(() => setTimeout(los, 2400))) setTimeout(los, 4500);
+    else los();
   }
   // BESTELLT: "X auf dem Controller soll auf dem Autos-in-Position-Schirm funktionieren".
   // flagTasteTick() fragt das ab, bevor es den normalen Cockpit-Weg (Boxenstopp/Gelb) nimmt.
@@ -1947,6 +1956,7 @@
   function raceGridAbbrechen() {
     const gs = $('race-gridscreen');
     if (gs) gs.hidden = true;
+    if (typeof ampelStartAbgebrochen === 'function') ampelStartAbgebrochen();   // v1.6.60: Startampel Rot
     if (typeof aufstellenStoppen === 'function') aufstellenStoppen(false);
     // v1.1.23 GEMELDET: "Genauso, wenn ich abbreche, nachdem ich auf automatische Aufstellung gedrueckt
     // habe - es klappt einfach gar nicht." Abbrechen haelt jetzt ALLE fahrenden NPCs und das Safety Car an,
@@ -2329,6 +2339,7 @@
       finishSeitenZaehlerZuruecksetzen();
     }
     raceState = 'countdown';
+    if (typeof ampelCountdown === 'function') ampelCountdown();   // v1.6.60: Startampel Gelb, falls noch nicht
     // Fruehstart-Erkennung ab HIER, auch waehrend eines Rennintros: raceState ist schon
     // 'countdown', und wer waehrend der Ansage losfaehrt, faehrt genauso zu frueh wie
     // waehrend der Ampel (PR #8 startete die Erkennung erst mit der Ampel, man konnte das
@@ -2365,6 +2376,7 @@
         if (stufe > 0 && warte < -400 && k + 1 < plan.length) { schritt(k + 1); return; }
         if (stufe > 0) {
           setRaceLights(stufe);
+          if (typeof startampelLicht === 'function') startampelLicht(stufe);   // v1.6.60: je Ton eine gruene Spalte mehr
           ampelTon(440 + (stufe - 1) * 60, 0.18, 'square', 0.18);
           schritt(k + 1);
           return;
@@ -2423,6 +2435,7 @@
     // and no laps count until the field crosses the line.
     raceFormationLap = raceFlying;
     raceGreenAt = raceFlying ? null : rennZeitJetzt();
+    if (typeof ampelLos === 'function') ampelLos();   // v1.6.60: Startampel aus
     zevGruen();
     fruehstartGruen();
     rammReset();
@@ -2577,6 +2590,7 @@
     // setFlag('green') - das zeigt "GRUEN" und schickt das Safety Car heim; es steht hier
     // ohnehin gleich. Ein laufender Neustart-Countdown prueft flagState und verfaellt.
     gelbBeenden();
+    if (typeof ampelRennende === 'function') ampelRennende();   // v1.6.60: Startampel wieder Rot
     // Das Safety Car steht beim Rennende - es hat in keinem Ergebnis etwas zu suchen.
     garage.forEach((c) => {
       if ((c.role === 'safetycar' || c.role === 'reinig') && c.ghost && c.ghost.running) {
@@ -2699,6 +2713,8 @@
     if (typeof karriereRennenEnde === 'function') karriereRennenEnde(willAuslaufen);
     // Online-Streckenzeiten (72c-strecken-online.js): nicht fuer Challenges, die haben eigene Listen.
     if (typeof skSitzungEnde === 'function' && !(typeof challengeLaeuft === 'function' && challengeLaeuft())) skSitzungEnde();
+    // v1.6.56: ein Rennen mit dem virtuellen Auto (konsoleLosfahren im Modus Virtuell) beendet die virtuelle Fahrt mit.
+    if (typeof VF !== 'undefined' && VF.aktiv && VF.extern === 'rennen') setTimeout(() => { if (VF.aktiv && VF.extern === 'rennen') virtuellBeenden(); }, 1200);
     if (typeof challengeRennenEnde === 'function' && challengeRennenEnde(willAuslaufen)) { /* erledigt */ }
     else if (typeof konsoleRennenBeendet === 'function') konsoleRennenBeendet();
     else {
@@ -3765,6 +3781,7 @@
   function autoSekGrenze(a, zaehler, now) {
     const g = a.plan.grenzen, k = (zaehler - a.z) & 0xff;
     let erste = true;
+    const vor = a.i;
     while (a.i < g.length && k >= g[a.i]) {
       a.zeiten[a.i] = erste ? now - a.start : null;
       erste = false;
@@ -3772,6 +3789,38 @@
     }
     a.start = now;
     a.naechste = a.i < g.length ? g[a.i] : 999;
+    // v1.6.27 (Issue #12): Spieler 1 - der eben beendete Sektor pulsiert auf der Karte, eine Bestzeit wird angesagt.
+    if (a === autoSekSp && a.i > vor) sektorEnde(vor + 1, a.zeiten[vor]);
+  }
+  // ---- SEKTOR-ENDE: Karte und Ansage (v1.6.27, Issue #12, WIP) ----
+  // BESTELLT: "Sektoren automatisch fuer Rennen und Ansagen, echt und virtuell; bei einer Sektor-Ansage wird der Saum
+  // dicker und pulsiert." Jeder beendete Sektor laesst seinen Saum kurz pulsieren (1,6 s, in jeder offenen Karte);
+  // angesagt wird nur eine persoenliche Sektor-Bestzeit (sonst jede Runde mehrere Saetze), Schalter "Sektor-Bestzeiten
+  // ansagen" unter Optionen > Ansagen. Gilt fuer alles, was die Kachelmeldungen schickt - echte Autos wie die virtuelle Fahrt.
+  function sektorKartePuls(nr) {
+    document.querySelectorAll('[data-sektor-saum="' + nr + '"]').forEach((el) => {
+      el.classList.remove('sektor-puls');
+      el.getBoundingClientRect();   // die Animation neu beginnen
+      el.classList.add('sektor-puls');
+      clearTimeout(el._sekPuls);
+      el._sekPuls = setTimeout(() => el.classList.remove('sektor-puls'), 1600);
+    });
+  }
+  function sektorBestzeitVorher(i) {
+    let b = null;
+    for (const r of sectorHistory) { const v = r && r[i]; if (typeof v === 'number' && v > 0 && (b === null || v < b)) b = v; }
+    return b;
+  }
+  function sektorAnsageText(nr, ms) {
+    const z = (ms / 1000).toFixed(1);
+    return t('Sektor') + ' ' + nr + ', ' + t('Bestzeit') + ', ' + (lang === 'en' ? z : z.replace('.', ',')) + ' ' + t('Sekunden');
+  }
+  function sektorEnde(nr, ms) {
+    sektorKartePuls(nr);
+    if (typeof ms !== 'number' || !(ms > 0)) return false;
+    const b = sektorBestzeitVorher(nr - 1);
+    if (b === null || ms >= b) return false;
+    return typeof ansagenEinreihen === 'function' ? ansagenEinreihen('sektor', sektorAnsageText(nr, ms)) : false;
   }
   // An der Rundenlinie: die Sektorzeiten der vollendeten Runde, mit null fuer ungueltig.
   // null als Ganzes, wenn fuer diese Runde gar nicht gemessen wurde.
@@ -3791,7 +3840,10 @@
     const p = autoSektorPlanAktuell();
     autoSekSp.gepusht = false;
     if (p && sektorZiel() <= 1) {
-      sectorHistory.push(autoSekRunde(autoSekSp, dashLapZaehler, now) || new Array(p.n).fill(null));
+      const rz = autoSekRunde(autoSekSp, dashLapZaehler, now);
+      // v1.6.27: der letzte Sektor endet an der Linie (vor dem Eintrag, damit er gegen die fruehere Bestzeit zaehlt).
+      if (rz) sektorEnde(p.n, rz[p.n - 1]);
+      sectorHistory.push(rz || new Array(p.n).fill(null));
       autoSekSp.gepusht = true;
     }
     autoSekSync(autoSekSp, dashLapZaehler, now);
@@ -4374,6 +4426,7 @@
   function wxRadarDraw() {
     const cv = $('race-wx-radar');
     if (!cv || document.hidden || !cv.clientWidth || !wxRadarAn()) return;
+    if (typeof vfAktiv === 'function' && vfAktiv()) return;   // v1.6.48: unter der virtuellen Fahrt unsichtbar
     const mitKarte = false;   // v1.2.39: Strecke im Radar entfernt (Latenz), siehe wxRadarAn()
     // Auf die tatsaechliche Anzeigegroesse ziehen: ein Canvas mit falscher Pufferbreite wird
     // von der Grafikkarte skaliert und sieht unscharf aus.
@@ -6605,7 +6658,9 @@
       // v1.4.54: setupVerbrauch = Motorkennfeld aus dem Setup (98i-setup.js), sonst 1.
       // v1.5: Karriere-Upgrade Spritverbrauch (98l-karriere.js), ausserhalb der Karriere 1.
       fuel = Math.max(0, fuel - Math.abs(throttle) * dt * fuelDrainPerSec * zevVerbrauch[1] * (physEngine.state.setupVerbrauch || 1)
-        * (typeof karriereUpgrade === 'function' ? karriereUpgrade('sprit') : 1));
+        * (typeof karriereUpgrade === 'function' ? karriereUpgrade('sprit') : 1)
+        // v1.6.58 BESTELLT: im virtuellen Drift (X ist die Handbremse, kein Boxenstopp) kein Spritverbrauch.
+        * (typeof vfDriftOhneSprit === 'function' && vfDriftOhneSprit() ? 0 : 1));
       // Edge-triggered: without this it would rumble again on every 45ms heartbeat.
       if (fuelBefore > 0 && fuel <= 0) {
         padRumble(0.2, 0.12, 160, 'meldung');

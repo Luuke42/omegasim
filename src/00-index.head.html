@@ -1449,10 +1449,32 @@
     url(img/meisterschaft.jpg) center 40% / cover no-repeat; }
   .k-fahren-unten #fa-profil .k-kk { font-size: clamp(11px, 2vh, 15px); }
   /* v1.5: wie die Startkachel (abgedunkeltes Bild, grosser Titel), schmaler: ohne Zielflaggen, Titel kleiner. */
-  #fa-virtuell.k-virtuell { background: linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5)), url(img/virtuell-fahren.jpg) center 55% / cover no-repeat; }
-  #fa-virtuell.k-virtuell::before, #fa-virtuell.k-virtuell::after { display: none; }
-  #fa-virtuell .k-start-innen b { font-size: clamp(15px, 2vw, 30px); }
-  #fa-virtuell .k-start-innen .wip-tag { margin-top: 4px; font-size: 9px; text-shadow: none; }
+  /* v1.6.23: Umschalter Echt | Virtuell an der Stelle der frueheren Kachel "Virtuell fahren". */
+  /* v1.6.37 BESTELLT: Hintergrund des Umschalters "an image (take from photos/ this: 4201b527...)", und der Umschalter ist
+     die ganze Kachel: links ECHT, rechts VIRTUELL, je die halbe Flaeche, ein Tipp irgendwo schaltet um. */
+  #fa-modus.k-modus { position: relative; overflow: hidden; background: url(img/fahrmodus-rad.jpg) center 45% / cover no-repeat; }
+  #fa-modus .k-start-innen { position: absolute; inset: 0; width: auto; max-width: none; z-index: 1; }
+  #fa-modus .k-start-innen > small { position: absolute; top: 6px; left: 0; right: 0; z-index: 2; pointer-events: none; }
+  #fa-modus.k-modus::before, #fa-modus.k-modus::after { display: none; }
+  .k-modus-wahl { position: absolute; inset: 0; display: flex; margin: 0; border: 0; border-radius: 0; overflow: hidden; }
+  #fa-modus .k-modus-wahl b { flex: 1 1 0; display: grid; place-items: center; padding: .3em; font-size: clamp(14px, 2.4vw, 30px); font-weight: 900;
+    letter-spacing: .08em; color: rgba(255,255,255,.6); cursor: pointer; text-align: center; white-space: nowrap; background: rgba(0,0,0,.62);
+    text-shadow: 0 2px 10px #000; transition: background .15s, color .15s; }
+  #fa-modus .k-modus-wahl b + b { border-left: 1px solid rgba(255,255,255,.25); }
+  #fa-modus .k-modus-wahl b.an { background: rgba(0,163,224,.42); color: #fff; box-shadow: inset 0 -4px 0 #00a3e0; }
+  /* v1.6.46 BESTELLT: "wenn virtuell = an, dann hellblaue Akzentfarbe durch rote ersetzen ueberall in den Menues auf der FAHREN
+     Seite". Die Akzentfarbe ist --k-blau; im Modus Virtuell auf FAHREN und in der virtuellen Garage rot. */
+  body.fm-virtuell #tab-fahren, body.fm-virtuell #tab-vgarage, body.fm-virtuell #tab-challenges { --k-blau: #e53935; --k-blau-text: #fff; }
+  /* v1.6.56: Umschalter Echt | Virtuell oben auf der Challenge-Seite. */
+  .ch-fahrt { display: inline-flex; margin-left: .6em; vertical-align: middle; border: 1px solid var(--k-blau); border-radius: 999px; overflow: hidden;
+    padding: 0; background: rgba(0,0,0,.35); cursor: pointer; font: inherit; }
+  .ch-fahrt b { padding: .2em .8em; font-size: .55em; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.6); }
+  .ch-fahrt b.an { background: var(--k-blau); color: var(--k-blau-text); }
+  body.fm-virtuell #fa-modus .k-modus-wahl b.an { background: rgba(229,57,53,.45); box-shadow: inset 0 -4px 0 #e53935; }
+  .k-modus-wahl .wip-tag { margin-left: 3px; font-size: 8px; vertical-align: super; text-shadow: none; }
+  /* v1.6.37 BESTELLT: "background of the drive virtually box should be this image: drive_virtually". */
+  body.fm-virtuell #fa-start { background-image: linear-gradient(rgba(0,0,0,.3), rgba(0,0,0,.3)), url(img/virtuell-fahren-start.jpg); background-size: cover; background-position: center 50%; }
+  body.fm-virtuell #fa-auto-bild { background-size: cover; background-repeat: no-repeat; background-position: center 70%; background-color: #a9adb3; }
   /* v1.5: kleine Symbole auf der Garagenkachel (zweiter Laptop, Onboard-Kamera). */
   .k-geraete { position: absolute; top: 6px; right: 8px; display: flex; gap: 6px; z-index: 2; pointer-events: none; }
   .k-geraete[hidden] { display: none; }
@@ -4006,6 +4028,29 @@
   .grid-row.dragging { opacity: .45; }
   /* v1.1.3: virtuelle Fahrt (60d-virtuell.js), ueber allem ausser der Pause. */
   .vf-schicht { position: fixed; inset: 0; z-index: 300; background: #8ca8c6; }
+  /* v1.6.60: Augmented Reality - die Schicht ist durchsichtig, das Kamerabild kommt von der AR-Sitzung. */
+  .vf-schicht.vf-ar { background: transparent; }
+  .vf-ar-wurzel { position: fixed; inset: 0; z-index: 300; background: transparent; pointer-events: none; }
+  /* v1.6.67 Marker-AR: Kamerabild unten, die durchsichtige Leinwand darueber. */
+  .vf-schicht.vf-mk { background: #000; }
+  /* v1.6.71: das Video ist nur noch Quelle (Textur im 3D-Bild, vfMkHintergrund); es bleibt gross im DOM, damit die WebView
+     es weiter dekodiert, liegt aber unter der undurchsichtigen Leinwand und unter dem HUD. */
+  .vf-mk-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+  .vf-mk-diag { position: absolute; left: max(8px, env(safe-area-inset-left)); bottom: calc(max(8px, env(safe-area-inset-bottom)) + 3.2em); z-index: 6;
+    max-width: 70vw; padding: .25em .5em; border-radius: 6px; background: rgba(0,0,0,.6); color: #9f9; font: 11px/1.3 monospace; pointer-events: none; }
+  .vf-mk-punkt { position: absolute; z-index: 6; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: #2f2; box-shadow: 0 0 0 2px #000; pointer-events: none; }
+  .vf-mk-leiste { position: absolute; right: max(12px, env(safe-area-inset-right)); top: 22%; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+  .vf-mk-leiste > * { padding: .45em .8em; border-radius: 8px; background: rgba(8,10,14,.72); color: #fff; border: 1px solid var(--vf-linie);
+    font: inherit; font-size: calc(var(--vf-s) * .7); text-decoration: none; text-align: center; cursor: pointer; }
+  .vf-ar-wurzel > * { pointer-events: auto; }
+  .vf-ar-hinweis { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); max-width: min(86vw, 520px); padding: .6em 1em;
+    border-radius: 10px; background: rgba(8,10,14,.72); color: #fff; text-align: center; font-weight: 700; pointer-events: none; z-index: 5; }
+  .vf-ar-neu { position: absolute; right: max(12px, env(safe-area-inset-right)); top: 22%; z-index: 5; }
+  /* v1.6.63 GEMELDET: "links neben dem AR-Knopf ein Knopf, dessen Inhalt ich nicht lesen kann, und das Fragezeichen liegt auf
+     den Optionen". Losfahren und ? in der ersten Zeile, AR darunter ueber die ganze Breite. */
+  .vg-vorschau .vf-los-zeile { flex-wrap: wrap; }
+  .vg-vorschau .vf-los-zeile .primary { flex: 1 1 0; min-width: 0; }
+  .vf-ar-knopf { order: 3; flex: 1 1 100%; min-height: 40px; padding: 0 12px; }
   /* v1.1.11: Streckenbild gross zeigen (Screenshot oder lange druecken), statt nur herunterzuladen. */
   .sb-schau { position: fixed; inset: 0; z-index: 500; background: rgba(5,7,12,.95); display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 12px 12px; }
@@ -4089,6 +4134,12 @@
   .vf-tank { font-size: 1.25em; font-weight: 700; line-height: 1; }
   .vf-tank-bar { display: block; width: 100%; height: .35em; background: rgba(255,255,255,.13); }
   .vf-tank-bar > i { display: block; height: 100%; background: var(--vf-linie); transform-origin: 0 50%; }
+  /* v1.6.27 (Issue #15): Der Tacho-Block (.vf-acc) wird im Hubschrauber-Modus ausgeblendet und die
+     Hubschrauber-Anzeige (.vf-hub) dafuer gezeigt. [hidden] muss gegen das display:flex von .vf-acc gewinnen. */
+  .vf-acc[hidden], .vf-hub[hidden] { display: none !important; }
+  .vf-hub-k { padding: .4em .6em; display: grid; gap: .25em; justify-items: center; min-width: 5em; }
+  .vf-hub-lbl { font-size: .78em; opacity: .7; text-transform: uppercase; letter-spacing: .12em; }
+  .vf-hub-k b { font-size: 1.5em; font-weight: 700; line-height: 1; }
   /* Knoepfe oben rechts im selben Stil */
   .vf-knoepfe { position: absolute; right: max(8px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
   .vf-knoepfe button { background: var(--vf-bg); color: #f3f4f6; border: 0; border-top: 2px solid var(--vf-linie); border-radius: 0;
@@ -4103,6 +4154,16 @@
   .vf-ikon .vf-ikon-fuell { fill: currentColor; fill-opacity: .35; }
   .vf-ikon[data-vf="flag"] .vf-ikon-fuell { fill: #f5c400; fill-opacity: 1; stroke: #f5c400; }
   .vf-knoepfe.vf-knoepfe-zu > button:not([data-vf="leiste"]) { display: none; }
+  /* v1.6.44 (gnen54): nach 4 s Ruhe ausgeblendet, bei Bewegung/Tippen wieder da. */
+  .vf-knoepfe { transition: opacity .35s; }
+  .vf-knoepfe.vf-knoepfe-ruht { opacity: 0; pointer-events: none; }
+  /* v1.6.44 (gnen54): Startampel im virtuellen Rennen und Start-Hinweis ausserhalb der Fahrt. */
+  .vf-ampel { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); z-index: 3; pointer-events: none; display: flex; gap: 12px;
+    background: rgba(10,12,16,.88); padding: 12px 16px; border-radius: 12px; }
+  .vf-ampel > span { width: 38px; height: 38px; border-radius: 50%; background: #3a1010; box-shadow: inset 0 0 6px #000; }
+  .vf-ampel > span.an { background: #ff2a1a; box-shadow: 0 0 14px #ff3a20; }
+  .vf-start-hinweis { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 99999; max-width: 90vw;
+    background: #b8860b; color: #100c02; padding: 10px 16px; border-radius: 6px; font-weight: 600; text-align: center; }
   .vf-knoepfe.vf-knoepfe-zu > [data-vf="leiste"] { opacity: .75; }
   /* Ladebild der virtuellen Fahrt: deckt das Bild ab, kein HUD (alles ausser Leinwand und Ladebild unsichtbar).
      v1.6.20: die Strecke von oben fuellt das Bild, in der Mitte das drehende Teil, Titel und Fortschrittsbalken. */
@@ -4112,9 +4173,11 @@
   .vf-laden-karte { position: absolute; inset: 0; display: grid; place-items: center;
     padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
   .vf-laden-karte .tp-karte { width: 100%; height: 100%; max-width: none; max-height: none; background: none; border: 0; }
-  .vf-laden-mitte { position: relative; display: grid; gap: .7em; width: min(64vw, 420px); text-align: center;
+  /* v1.6.52 BESTELLT: "Ladebalken auf dem Ladebildschirm fuer virtuelles Fahren sollte unten links sein, nicht mitten ueber der Strecke". */
+  .vf-laden-mitte { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); display: grid; gap: .5em;
+    width: min(42vw, 320px); text-align: left; font-size: .9em;
     padding: .9em 1.3em 1em; background: rgba(8,11,17,.6); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; }
-  .vf-laden-mitte .lade-dreh { width: calc(var(--vf-s) * 4.6); height: calc(var(--vf-s) * 4.6); margin: 0 auto; }
+  .vf-laden-mitte .lade-dreh { width: calc(var(--vf-s) * 2.8); height: calc(var(--vf-s) * 2.8); margin: 0; }
   .vf-laden-titel { font-size: calc(var(--vf-s) * 1.05); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
   .vf-laden-was { color: var(--vf-dim); font-size: calc(var(--vf-s) * .78); min-height: 1.3em; }
   .vf-laden-balken { position: relative; display: block; height: 8px; background: rgba(255,255,255,.12); overflow: hidden; }
@@ -4135,6 +4198,25 @@
      laesst sie sich auch von Hand an-/ausschalten. */
   .vf-touch { position: absolute; inset: 0; pointer-events: none; }
   .vf-touch[hidden] { display: none; }
+  /* v1.6.23: Neigen - gelenkt wird mit dem Handy, der Stick links entfaellt, das Pedal rechts bleibt. */
+  .vf-touch.vf-touch-neigen .vf-touch-lenk { display: none; }
+  /* v1.6.37: Hubschrauber - zwei Kreis-Sticks statt Lenkung und Pedal. */
+  .vf-touch-heli { display: none; position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); width: min(36vw, 36vh, 200px); aspect-ratio: 1;
+    border-radius: 50%; background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.28); touch-action: none; pointer-events: auto; }
+  .vf-touch-heli-l { left: max(14px, env(safe-area-inset-left)); }
+  .vf-touch-heli-r { right: max(14px, env(safe-area-inset-right)); }
+  .vf-touch-heli .vf-touch-knauf { position: absolute; left: 30%; top: 30%; width: 40%; height: 40%; border-radius: 50%; background: rgba(255,255,255,.35); }
+  .vf-touch-heli .vf-touch-hinweis { position: absolute; left: 0; right: 0; top: -1.6em; text-align: center; }
+  .vf-touch.vf-touch-heli-an .vf-touch-lenk, .vf-touch.vf-touch-heli-an .vf-touch-gas { display: none; }
+  .vf-touch.vf-touch-heli-an .vf-touch-heli { display: block; }
+  /* v1.6.54: Handbremse im Drift, links neben dem Gaspedal. */
+  .vf-touch-hb { display: none; position: absolute; bottom: max(12px, env(safe-area-inset-bottom));
+    right: calc(max(12px, env(safe-area-inset-right)) + min(20vw, 26vh, 120px) + 12px);
+    width: min(18vw, 22vh, 96px); height: min(18vw, 22vh, 96px); border-radius: 50%; pointer-events: auto; touch-action: none;
+    background: rgba(8,10,14,.5); border: 2px solid var(--vf-linie); color: var(--vf-dim); font-weight: 700;
+    font-size: calc(var(--vf-s) * .48); text-transform: uppercase; letter-spacing: .06em; }
+  .vf-touch.vf-touch-drift .vf-touch-hb { display: block; }
+  .vf-touch-hb.vf-an { background: var(--vf-linie); color: var(--k-blau-text, #04070c); }
   .vf-touch-lenk { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom));
     width: min(34vw, 38vh, 190px); height: min(34vw, 38vh, 190px); border-radius: 50%;
     background: rgba(8,10,14,.5); border: 2px solid var(--vf-linie); touch-action: none; pointer-events: auto;
@@ -4262,6 +4344,47 @@
   }
   #track-preview-svg.track-baut { animation: trackBaut .5s ease-out; }
   /* LADEANIMATION (v0.9.42, 59-lade.js): drei Streckenteile leuchten nacheinander auf. */
+  /* v1.6.27 (Issue #12): Sektor-Saum auf der Karte; beim Ende eines Sektors dicker und pulsierend (sektorKartePuls). */
+  .tp-karte .sektor-saum.sektor-puls { stroke-width: 4.5; animation: sektorPuls .53s ease-in-out 3; }
+  @keyframes sektorPuls { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: .3; } }
+  @media (prefers-reduced-motion: reduce) { .tp-karte .sektor-saum.sektor-puls { animation: none; } }
+  /* v1.6.32: virtuelle Garage. Quer (Handy quer, Tablet, PC): Vorschau links fest, Optionen rechts scrollen.
+     Hochformat: Vorschau oben (hoechstens 30 % der Hoehe), Optionen darunter. */
+  #tab-vgarage { background: #0d1118; padding: 6px max(10px, env(safe-area-inset-right)) 12px max(10px, env(safe-area-inset-left)); }
+  .vg-kopf { display: flex; align-items: center; gap: 12px; }
+  .vg-kopf h2 { margin: 0; font-size: clamp(15px, 2.2vw, 22px); }
+  .vg-zurueck { min-height: 32px; padding: 4px 10px; }
+  .vg-einstellungen { margin-left: auto; }
+  .vf-opt-seite .gk-zeile { display: grid; grid-template-columns: minmax(110px, 40%) minmax(0, 1fr); align-items: center; gap: 4px 8px; }
+  .vf-opt-seite .gk-w { justify-content: center; }
+  .vg-raster { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr); gap: 12px; margin-top: 6px; align-items: start; }
+  .vg-vorschau { position: sticky; top: 6px; display: flex; flex-direction: column; gap: 8px; }
+  .vg-vorschau .vf-vorschau { position: relative; display: grid; place-items: center; padding: 0; border: 0; overflow: hidden; aspect-ratio: 16 / 9;
+    max-height: 58vh; background: transparent; box-shadow: none; border-radius: 8px; }
+  /* v1.6.56: Hintergrund durchsichtig, nur das transparente Auto (bzw. der Hubschrauber) auf der Menue-Farbe.
+     v1.6.81: das Bild bringt seinen grauen Verlauf selbst mit (tools/vorschau_bilder.py), abgerundet. */
+  .vg-vorschau .vf-vorschau-bild { position: relative; z-index: 1; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; object-position: center; border-radius: 8px; }
+  .vg-name { font-weight: 700; font-size: clamp(13px, 1.8vw, 18px); text-align: center; }
+  .vg-vorschau .vf-los-zeile { display: flex; gap: 8px; justify-content: center; border: 0; padding: 0; }
+  .vg-vorschau .vf-los-zeile .primary { flex: 1 1 auto; min-height: 44px; font-size: 1.05em; }
+  .vg-optionen { min-width: 0; }
+  .vg-optionen .gar-a-titel { margin-top: 0; }
+  .vg-optionen .gk-zeile { display: grid; grid-template-columns: minmax(84px, 36%) minmax(0, 1fr); align-items: center; gap: 4px 8px; }
+  .vg-optionen .gk-w { flex-wrap: wrap; justify-content: center; }
+  .vg-optionen .gk-w > b { width: auto; flex: 1 1 6em; min-width: 0; }
+  .vg-optionen .vf-lack-palette { display: flex; flex-wrap: wrap; justify-content: center; flex: 1 1 100%; margin: 4px 0 0; }
+  .vg-vorschau .vf-los-zeile .vf-hilfe { flex: 0 0 44px; min-height: 44px; }
+  @media (orientation: portrait) {
+    .vg-raster { grid-template-columns: minmax(0, 1fr); }
+    .vg-vorschau { position: static; }
+    .vg-vorschau .vf-vorschau { max-height: 28vh; }
+  }
+  /* v1.6.50: Wisch-Animationen beim Wechsel der Seiten und Unterseiten (kWischen, 10-ble-explorer.js). */
+  @keyframes kWischVor { from { transform: translateX(7%); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes kWischZurueck { from { transform: translateX(-7%); opacity: 0; } to { transform: none; opacity: 1; } }
+  .k-wisch-vor { animation: kWischVor .3s cubic-bezier(.2,.7,.2,1); }
+  .k-wisch-zurueck { animation: kWischZurueck .3s cubic-bezier(.2,.7,.2,1); }
+  @media (prefers-reduced-motion: reduce) { .k-wisch-vor, .k-wisch-zurueck { animation: none; } }
   .lade-traeger { position: relative; }
   .lade-ueber { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 12px; background: rgba(0,0,0,.78); }
@@ -5780,9 +5903,11 @@
   /* v1.5.10: Vorschau und Lackfarbe im Virtuell-Fenster der Garage (WIP) */
   .vf-vorschau { justify-content: center; padding: 6px 0; }
   /* v1.5.86 BESTELLT: "Bild vom Auto kleiner machen". Hoehe nach dem Fenster begrenzt, Seitenverhaeltnis bleibt. */
-  .vf-vorschau-bild { width: auto; max-width: min(100%, 300px); max-height: clamp(100px, 22vh, 170px); height: auto; border-radius: 6px; display: block; background: #3a3f46; }
+  .vf-vorschau-bild { width: auto; max-width: min(100%, 300px); max-height: clamp(100px, 22vh, 170px); height: auto; border-radius: 6px; display: block; }
   .vf-lack-palette { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle; }
-  .vf-lack { width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); cursor: pointer; }
+  .vf-lack { width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); cursor: pointer;
+    /* v1.6.46 GEMELDET: auf dem Handy oval - Knoepfe haben dort eine Mindesthoehe/-breite. */
+    min-width: 0; min-height: 0; flex: 0 0 18px; aspect-ratio: 1; box-sizing: border-box; }
   .vf-lack.aktiv { border-color: #fff; box-shadow: 0 0 0 2px rgba(0,160,230,.9); }
 </style>
 <style>
@@ -5839,6 +5964,7 @@
   <button class="tab-btn active" data-tab="home" hidden style="display:none">Home</button>
   <button class="tab-btn" data-tab="fahren" hidden style="display:none">Fahren</button>
   <button class="tab-btn" data-tab="garage">Garage</button>
+  <button class="tab-btn" data-tab="vgarage" data-parent="fahren" hidden style="display:none">Virtuelle Garage</button>
   <button class="tab-btn" data-tab="race">Cockpit</button>
   <button class="tab-btn" data-tab="options">Optionen</button>
   <button class="tab-btn" data-tab="track">Strecke</button>
@@ -5967,7 +6093,7 @@
         <span class="home-lade-dreh" id="home-lade-dreh"></span><span class="home-lade-text" id="home-lade-text" data-i18n-skip></span>
       </div>
       <div class="k-titel-fuss">
-        <span class="foot-ver">v<span id="app-version">1.6.22</span></span>
+        <span class="foot-ver">v<span id="app-version">1.6.84</span></span>
         <span data-i18n-skip>OmegaSim &middot; AGPL-3.0</span>
         <a class="foot-code" href="https://github.com/Luuke42/omegasim"
            target="_blank" rel="noopener noreferrer">Code auf GitHub</a>
@@ -6037,6 +6163,8 @@
           <button type="button" class="k-knopf" id="fa-druck" hidden>Druckvorlagen</button>
           <button type="button" class="k-knopf" id="fa-foto" hidden title="Optimal: quer, z. B. 4:3 oder 16:9">Foto</button>
           <button type="button" class="k-knopf" id="fa-foto-weg" hidden>Foto löschen</button>
+          <!-- v1.6.23: Fahrtrichtung der virtuellen Fahrt (nur im Modus Virtuell, Text setzt konsoleFahrenZeichnen). -->
+          <button type="button" class="k-knopf" id="fa-richtung" hidden data-i18n-skip>Normal</button>
         </span>
       </div>
       <div class="k-kachel " id="fa-renn" role="button" tabindex="0" data-quad="renntyp">
@@ -6058,8 +6186,10 @@
            Groesse) Button einfuegen 'Drive Virtually' (so wie button in der garage, Rennen soll dann direkt losgehen)". -->
       <!-- v1.5 BESTELLT: "Mach das Virtual Bild vom Design so aehnlich wie das Start Practice": Bild ueber die ganze
            Kachel, grosser Titel in der Mitte, darunter Renntyp, ohne die weissen Kopfleisten. -->
-      <div class="k-kachel k-start k-virtuell" id="fa-virtuell" role="button" tabindex="0">
-        <span class="k-start-innen"><b>Virtuell fahren</b><small id="fa-virtuell-unter" data-i18n-skip></small><span class="wip-tag">WIP</span></span>
+      <!-- v1.6.23 (Issue #7) BESTELLT: "Umschalter zwischen echtem und virtuellem Fahren statt der Kachel 'Virtuell fahren'"
+           (51-konsole.js, fahrModusSetzen). Quadrat am Pad schaltet um wie bei den anderen Kacheln. -->
+      <div class="k-kachel k-start k-modus" id="fa-modus" role="button" tabindex="0" data-quad="fahrmodus">
+        <span class="k-start-innen"><small>Fahren</small><span class="k-modus-wahl"><b data-fm="echt" aria-pressed="true">Echt</b><b data-fm="virtuell" aria-pressed="false">Virtuell <span class="wip-tag">WIP</span></b></span></span>
       </div>
         <div class="k-kachel k-start" id="fa-start" role="button" tabindex="0">
           <span class="k-start-innen"><b id="fa-start-titel">Rennen starten</b><small id="fa-start-unter"></small></span>
@@ -6846,7 +6976,8 @@
     <div class="home-lade" id="ch-lade" role="status" aria-label="Lädt …" hidden>
       <span class="home-lade-dreh" id="ch-lade-dreh"></span><span class="home-lade-text" id="ch-lade-text" data-i18n-skip></span></div>
     <div class="card subpage-home" id="sub-home-challenges">
-      <h2>Challenges <span class="wip-tag">experimentell</span></h2>
+      <h2>Challenges <span class="wip-tag">experimentell</span>
+        <button type="button" class="ch-fahrt" id="ch-fahrt" aria-label="Echt oder virtuell" title="Echte oder virtuelle Zeiten und Fahrten (wie der Fahrmodus auf FAHREN)."><b data-fahrt="echt">Echt</b><b data-fahrt="virtuell">Virtuell</b></button></h2>
       <!-- v1.3.58 BESTELLT: "Strukturiere die Challenges um ... Der Community-Tab ganz oben (vor
            woechentlichen Challenges) und Network ganz unten. Fuege eine Vorschau der jeweils
            meistgefahrenen Strecke beider Typen ein und einen Button 'Alle anzeigen'." Die Karten
@@ -7255,7 +7386,11 @@
       <p class="muted">Der VW K&auml;fer 1303 RS ist eine eigene Konstruktion von Gnen54 (OmegaSim CAD) und steht unter Creative Commons Namensnennung 4.0 (CC BY 4.0).</p>
       <p class="muted">Spider NG1: Aufbau von Gnen54 (OmegaSim CAD) auf der Karosserie MODIplay MP-1 Spider von Sturmkind, 3D-Daten f&uuml;r HYBRID von Thomas Strobel (FREAKPALACE Customs). Freigabe von Sturmkind am 16.11.2026: Verwendung erlaubt, solange die Karosserien nicht kommerziell verkauft werden. Eigene Teile, Farben und Fahrzeugdaten: Gnen54, CC BY 4.0.</p>
       <p class="muted">VW Caravelle (Bulli): Aufbau von Gnen54 (OmegaSim CAD) auf einer Karosserie von Vehicle World (Designerin Revantika), mit schriftlicher Erlaubnis von Vehicle World zur Weitergabe an die Carrera-Hybrid-Community. Eigene Teile, Farben und Fahrzeugdaten: Gnen54, CC BY 4.0.</p>
+      <p class="muted">Audi RS5 DTM 2019: Modell „2019 Audi RS5 DTM“ von Dave Love (Sketchfab), Creative Commons Namensnennung 4.0 (CC BY 4.0). F&uuml;r OmegaSim umgewandelt und verkleinert, Fahrdaten gesch&auml;tzt. Marken und Logos auf der Lackierung geh&ouml;ren ihren Inhabern.</p>
+      <p class="dank-quelle" data-i18n-skip><a href="https://skfb.ly/pMuFP" target="_blank" rel="noopener noreferrer">skfb.ly/pMuFP</a> &middot; img/autos/audirs5/LIZENZ.txt</p>
       <p class="muted">Strecke T&ouml;rnerschleife 2.0: Streckenlayout von Driftstrecken.de (driftstrecken.de), schriftlich freigegeben am 18.11.2026 f&uuml;r OmegaSim unter Nennung der Urheberrechte; Umsetzung Gnen54.</p>
+      <p class="muted">Der RC Stunt Copter in der virtuellen Fahrt: Modell &bdquo;RcHeli&ldquo; (TREX&nbsp;700) von Belzar Sirus (Sketchfab), Creative Commons Namensnennung 4.0 (CC BY 4.0). Umgewandelt mit tools/blend_to_vf.py (Koordinaten gedreht, Materialfarben als Eckenfarben, Massstab 1:50).</p>
+      <p class="dank-quelle" data-i18n-skip><a href="https://skfb.ly/6BDFN" target="_blank" rel="noopener noreferrer">skfb.ly/6BDFN</a> &middot; img/vf/LIZENZ.txt</p>
       <p class="muted">Die Cockpit-Ansicht &bdquo;Mokamit&ldquo; (Digital Dash), die KI-Pers&ouml;nlichkeit der NPCs, der Showroom, die Karriere und der Modus mit zwei Laptops stammen aus Hybrid-Dash von Mo Kamit, MIT-Lizenz.</p>
       <p class="dank-quelle" data-i18n-skip><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener noreferrer">gnu.org/licenses/old-licenses/gpl-2.0</a> &middot; img/autos/*/LIZENZ.txt</p>
       <!-- BESTELLT: "in den Credits das GitHub von engine sim verlinken und ggf. die wiss.
@@ -7284,6 +7419,34 @@
       <h2>Patchnotes</h2>
       <p class="muted"><b><span data-i18n-skip>1.6</span></b></p>
       <ul class="muted" id="patchnotes-16" style="padding-left:20px; line-height:1.7">
+        <li>Reifenquietschen in der virtuellen Fahrt: quietscht erst, wenn die Reifen wirklich rutschen (am Scheitel der Reifenkurve und etwas gehalten), nicht mehr bei jedem Lenkeinschlag. &#220;berall halb so laut und ohne mitsteigende Tonh&#246;he; das hohe Bremsenquietschen ist virtuell aus. Neu in Optionen &gt; Virtuell: Totzone f&#252;r die Steuerung &#8222;Neigen&#8220; (0 bis 15 Grad, Vorgabe 2,5).</li>
+        <li>Vorschaubilder neu: grauer Hintergrund mit leichtem Verlauf f&#252;r alle Autos und den Hubschrauber (ein Skript f&#252;r alles: tools/vorschau_bilder.py). Bei Boxer 96, FMC GT4 und Lynx 220 sitzen die R&#228;der jetzt in den Radk&#228;sten (die Karosserie steht wie im Spiel um die Bodenfreiheit h&#246;her). Marker-AR: Kamerabild und Strecke geh&#246;ren jetzt immer zum selben Moment (das Bild wird erst mit der erkannten Lage gezeigt), die Lage folgt Bewegungen schneller, ohne im Stand mehr zu zittern. Brems-, R&#252;ck- und Scheinwerferlicht leuchten in AR schw&#228;cher.</li>
+        <li>Freie virtuelle Strecken: Zur Auswahl stehen die T&#246;rnerschleife 2.0 mit und ohne Br&#252;cke. Bestenlisten zeigen nur noch Zeiten von Strecken, die es in der App gibt.</li>
+        <li>Marker-AR: Die Strecke kippt nicht mehr &#8222;wie ein Necker-W&#252;rfel&#8220; in die andere Neigung. Ein flacher Marker l&#228;sst zwei fast gleich gute Neigungen zu; gew&#228;hlt wird jetzt die, bei der das Papier im Bild nach oben zeigt (der Marker liegt am Boden), die zur bisherigen passt (auch &#252;ber kurze Aussetzer) und den kleineren Fehler hat, mit Hysterese gegen st&#228;ndiges Wechseln.</li>
+        <li>Marker-AR ruhiger: Die Ecken des Markers werden jetzt auf Bruchteile eines Pixels genau vermessen (Kanten im Graubild, angepasste Geraden) und mit einem One-Euro-Filter gegl&#228;ttet; die Erkennung l&#228;uft mit einer festen Breite von 960 Pixeln statt abwechselnd 640/400. Neigung und Abstand werden bei ruhiger Kamera st&#228;rker gegl&#228;ttet, bei Bewegung folgt das Bild sofort. Gemessen bei 1,3 m Abstand: Zittern 2- bis 5-mal kleiner, Erkennung in 98 % statt 38 % der Bilder.</li>
+        <li>Marker-AR: Die Lage aus der Markererkennung war manchmal gespiegelt. Dann war die Welt &#8222;von innen&#8220; gezeichnet: Auto kaum sichtbar, Licht verkehrt, und der Wechsel lie&#223; die Strecke zittern. Jetzt ist die Lage immer eine echte Drehung. In AR gibt es keinen Dunst mehr (er begann schon 67 cm vor der Kamera und machte alles zu hell). Falscherkennungen werden verworfen (h&#246;chstens 2 falsche Bits, unplausible Lagen), die Erkennung l&#228;uft abwechselnd mit 640 und 400 Pixeln, die Gl&#228;ttung ist ruhiger. Neu: eine Diagnosezeile und gr&#252;ne Punkte an den erkannten Ecken.</li>
+        <li>Marker-AR &#252;berarbeitet: Der Marker ist jetzt Start/Ziel, das Auto steht beim Start auf dem Marker und f&#228;hrt Richtung Blatt-Oberkante los (vorher lag die Streckenmitte auf dem Marker, das Auto oft au&#223;erhalb des Bildes). Die Erkennung l&#228;uft in einem eigenen Thread mit h&#246;herer Aufl&#246;sung, das Bild ruckelt nicht mehr, wenn sie rechnet. Das Kamerabild ist jetzt Teil des 3D-Bilds, die Strecke wird nicht mehr wei&#223;lich. Die Lage springt nicht mehr zwischen zwei Neigungen, die Gl&#228;ttung passt sich der Bewegung an, kurze Aussetzer (bis 1,5 s) werden &#252;berbr&#252;ckt.</li>
+        <li>Virtuell: Neue Option &#8222;Zur&#252;cksetzen neben der Bahn&#8220; unter Optionen &gt; Virtuell (ab Werk an). Aus: Das Auto wird nach 2,5 s neben der Bahn nicht mehr zur&#252;ck auf die Strecke gesetzt, du f&#228;hrst weiter; zur&#252;ck nur mit dem Knopf &#8222;Zur&#252;cksetzen&#8220;.</li>
+        <li>Neu, Prototyp: Marker-AR ohne ARCore, f&#252;r Handys, die kein Google-AR k&#246;nnen (z. B. Galaxy A16/A41), in der App und im Browser. Den Marker (Optionen in der AR-Ansicht: &#8222;Marker drucken&#8220;, Datei ar-marker-a4.svg) in Originalgr&#246;&#223;e auf A4 drucken und auf den Boden legen, dann in der virtuellen Garage &#8222;AR&#8220; tippen: Das Kamerabild ist der Hintergrund, die Strecke liegt mittig auf dem Marker, und du kannst um sie herumgehen, solange der Marker im Bild ist. Ma&#223;stab 1:1, 1:2 oder 1:4 umschaltbar. Erkennung mit js-aruco2 (Open Source, MIT/BSD/LGPL-3, liegt unter lib/js-aruco2).</li>
+        <li>AR: Ein Tipp auf AR gibt jetzt immer eine R&#252;ckmeldung. Der Knopf zeigt &#8222;AR startet &#8230;&#8220;; lehnt Chrome die Sitzung ab oder antwortet 12 s lang nicht, erscheint ein Fenster mit dem Grund, Hinweisen (Chrome aktualisieren, &#8222;Google Play-Dienste f&#252;r AR&#8220; installieren, Kamera erlauben) und dem Protokoll. Vorher stand der Fehler nur als unsichtbarer Hinweis da, und eine h&#228;ngende Anfrage blockierte weitere Tipps.</li>
+        <li>AR (Chrome auf Android): Die Sitzung beendete sich nach dem Erlauben der Kamera wieder (kurzes eingefrorenes Kamerabild), weil die Seite erst die ganze virtuelle Fahrt aufbaute, bevor sie das erste AR-Bild lieferte. Jetzt laufen AR-Ebene und Bodensuche ab dem ersten Bild, die Fahrt wird danach in dieselbe Leinwand aufgebaut; kein doppelter Start; endet die Sitzung trotzdem fr&#252;h, zeigt ein Fenster das Protokoll und &#8222;Nochmal&#8220;. Ohne Bodensuche setzt ein Tipp die Strecke 1,2 m vor dich. Virtuelle Garage: Losfahren und ? in einer Zeile, AR darunter &#252;ber die ganze Breite (vorher war Losfahren unlesbar und ? lag auf den Optionen).</li>
+        <li>Virtuell: Rundenzeiten auf eigenen und freien Strecken (T&#246;rnerschleife, auch Gegenrichtung und RC Heli) werden je Fahrgef&#252;hl gespeichert und mit &#8222;Zeiten online synchronisieren&#8220; in eigene virtuelle Online-Listen geschickt; in den Challenges zeigt der Modus Virtuell diese Strecken. Aus Gnen54s Fork: gefahrene Zeiten je Strecke und Auto (Bestzeit und Zwischenzeiten gelten beim Start, Bestenliste in der virtuellen Garage), die Ansage &#8222;Akku kritisch&#8220; bei 6 % (Optionen &gt; Ton, ab Werk an), die echte Startampel am Tisch (Optionen &gt; Startampel, Bluetooth, Raspberry Pi / Pico) und seine Werkzeuge f&#252;r die freien Strecken (tools/strecken). Neu, Prototyp: AR in Chrome auf Android (Knopf &#8222;AR&#8220; in der virtuellen Garage): Strecke in Originalgr&#246;&#223;e auf dem Fu&#223;boden platzieren, dann f&#228;hrt das Auto bzw. fliegt der Heli im Zimmer.</li>
+        <li>Virtuell: Drift rutscht nach der Handbremse weiter, statt pl&#246;tzlich zu stehen, und rollt nach einer Drehung &#252;ber 90 Grad r&#252;ckw&#228;rts weiter; im Drift kein Spritverbrauch. Boxenstopp: es gen&#252;gt jetzt, mit dem Auto in die Boxenbucht zu ragen (vorher musste es tief darin stehen), der Hinweis sagt &#8222;in der Boxenbucht anhalten&#8220;. RC Heli: der Heckrotor dreht sich, am Boden l&#228;sst er sich nicht mehr neigen, die Tore sind deutlich h&#246;her, jedes Tor macht &#8222;bling&#8220;, und die Runde z&#228;hlt direkt beim Flug durch das Start/Ziel-Tor nach allen Toren. Audi RS5 DTM: der K&#252;hlergrill unter dem Logo ist wieder schwarz statt wei&#223;.</li>
+        <li>Challenges virtuell (WIP): Oben auf der Challenge-Seite schaltet Echt | Virtuell um (derselbe Fahrmodus wie auf FAHREN, im Modus Virtuell rote Akzente). Virtuell f&#228;hrst du w&#246;chentliche Challenges, Dauerrennen und Community Challenges mit dem virtuellen Auto, mit Ampel, Teilepr&#252;fung und Wertung wie echt; die Zeiten stehen in eigenen virtuellen Bestenlisten (selbes Backend, klar als virtuell markiert, mit Fahrgef&#252;hl), Medaillenzeiten virtuell vorl&#228;ufig &#215;1,75. Auch Karriere und andere Rennen, die von FAHREN aus starten, fahren im Modus Virtuell das virtuelle Auto. Automatische Sektoren: etwa ein Sektor je 4 Teile (Balkonia 6, Homington 3, mindestens 2). Virtuelle Garage: Vorschau mit durchsichtigem Hintergrund und Bild f&#252;r den RC Heli, Motorsound- und Fahrtrichtungs-Zeile entfernt (Richtung steht in der Streckenkachel), Strecke und Boden ohne WIP, Handling hei&#223;t jetzt &#8222;Pacejka (wie echte CH Autos, WIP)&#8220;.</li>
+        <li>Virtuelles Fahren, Prototyp zum Testen: Das Fahrgef&#252;hl Drift ist neu und physikbasiert (WIP). Eigenes Fahrzeugmodell (Hecktriebler): durchdrehende Hinterr&#228;der mit kombiniertem Schlupf, Gewichtsverlagerung, Luft- und Rollwiderstand; mehr Gas = mehr Driftwinkel. X ist im Drift die Handbremse (Tastatur, Gamepad, am Handy ein Knopf links neben dem Gaspedal). Optionen &gt; Virtuell &gt; Drift-Gyro stellt die Gegenlenk-Hilfe ein (wie der Gyro eines RC-Driftautos), Aus = reine Physik.</li>
+        <li>Virtuelles Fahren: Reifenwahl in der virtuellen Garage (weich, mittel, hart, Regen), dieselben Mischungen wie beim echten Fahren, damit du im Regen auf Regenreifen fahren kannst. Neue Option &#8222;Rauch-Aufl&#246;sung&#8220; unter Optionen &gt; Virtuell (Automatisch: wie bisher in Performance, etwas feiner in Quality; von Hand bis 8&#215;). Der Ladebalken sitzt jetzt unten links statt mitten &#252;ber der Strecke. Die Motorhaubenkamera des Audi RS5 DTM sitzt weiter vorn, der Scheibenwischer ist nicht mehr im Bild.</li>
+        <li>Men&#252;s: Wisch-Animationen beim Wechsel der Seiten (vom Startbildschirm zu FAHREN, zwischen den Reitern je nach Richtung) und beim &#214;ffnen und Schlie&#223;en der Unterseiten; nicht ins Cockpit, und aus, wenn das Ger&#228;t reduzierte Bewegung w&#252;nscht.</li>
+        <li>Virtuell fahren, Grafikmodus Performance fl&#252;ssiger: leichte Modellfassungen f&#252;r den Audi RS5 DTM und den K&#228;fer (gut halb so viele Dreiecke, Werkzeug tools/modell_perf.py nach Gnen54), der Geist ist in Performance eine einfache Kiste statt eines zweiten vollen Modells, das verdeckte Cockpit unter der virtuellen Fahrt zeichnet seltener und das Regenradar gar nicht.</li>
+        <li>Optionen: &#8222;Virtuell&#8220; und &#8222;RC Heli&#8220; stehen in einem eigenen Abschnitt unter den Einstellungen. Neu unter Virtuell: Gyro-St&#228;rke f&#252;r das Fahrgef&#252;hl Drift und ein eigener Schalter f&#252;r die Strecken-Ambience (ab Werk aus). Neue Startansage &#8222;Gentlemen, start your engines&#8220; (aus Gnen54s Startampel) beim Start aus dem Fenster &#8222;Autos in Position&#8220; und an der virtuellen Startampel. Im Modus Virtuell sind die Akzente auf FAHREN rot. Der Heli ohne Gyro stabilisiert sich nach einem &#220;berschlag, statt zur&#252;ckzudrehen. Der Schatten unter den Autos ist im Performance-Modus jetzt dunkel (das Bild war an halbdurchsichtigen Stellen durchscheinend), die Farbkreise in der Garage sind auch am Handy rund.</li>
+        <li>Virtuell fahren, aus Gnen54s Pull Requests nachgeholt: Startampel im Rennen (f&#252;nf rote Lichter, dann los), Onboard-Kamera des VW Caravelle wie im echten Modell (seitlich auf dem Fahrersitz, 100 Grad Blickwinkel, Scheibe nur als Hauch), neue Kamera &#8222;Seitennah&#8220; zwischen naher Verfolgerkamera und Motorhaube, im Auto federt der Blick nach dem Umsehen zur&#252;ck nach vorn, Knopfleiste blendet nach 4 Sekunden Ruhe aus, neuer Boden &#8222;Stein grau marmoriert&#8220;, leichte Modelle f&#252;r Spider und Caravelle im Grafikmodus Performance (fl&#252;ssiger auf Tablets), Startfehler auch in der Garage sichtbar und der Streckencode in der Pad-Diagnose.</li>
+        <li>Optionen: neue Kacheln &#8222;Virtuell&#8220; (Schaltung, Grafik, Tageszeit, Sichtfeld, Geist, R&#252;ckspiegel, Tempoverlust neben der Bahn, Pflicht-Boxendurchfahrt, sichtbare Neigung) und &#8222;RC Heli&#8220; (Gyro-Stabilisierung, Rollen und Nicken umkehren). Die virtuelle Garage beh&#228;lt die Auswahl von Auto, Lack, Boden, Strecke, Fahrtrichtung, Handling und NPCs und hat einen Knopf zu den Optionen.</li>
+        <li>Virtuell fahren: Der RC Stunt Copter driftet nicht mehr zur Seite. Ein Vorzeichenfehler im Schubvektor lie&#223; ihn beim Rollen in die falsche Richtung und beim Neigen je nach Kurs schr&#228;g fliegen; jetzt fliegt er dorthin, wohin er geneigt ist. Jedes virtuelle Auto hat seinen festen, passenden Motorklang: Vulture V5.R Corvette C5-R, FMC GT4 Ford GT40, Boxer 96 Porsche 911 GT3, Lynx 220 V6 (Ferrari 296 GT3), Audi RS5 DTM sein Reihen-4-Turbo; K&#228;fer, Spider und Caravelle wie bisher.</li>
+        <li>Virtuell fahren: Der RC Stunt Copter hat am Handy ohne Gamepad zwei eigene Touch-Sticks (links Steigen und Drehen, rechts Neigen und Rollen) und reagiert beim Neigen so kr&#228;ftig wie im Vorbild (Schub und Schwerkraft auf seine Gr&#246;&#223;e umgerechnet). Drift: nimmt man das Gas weg, gleitet das Heck weiter und f&#228;ngt sich erst nach und nach. Vorschaubilder neu (transparent, gegl&#228;ttet, mit Bodenschatten, auch die Caravelle ohne Flecken); in der virtuellen Garage steht das Auto auf dem gew&#228;hlten Boden (Rasen mit Himmel, Holz vor einer Wand). FAHREN: der Umschalter Echt | Virtuell ist die ganze Kachel (ein Tipp schaltet um) mit Radbild; im Modus Virtuell neue Bilder f&#252;r Garage und Start.</li>
+        <li>Neues virtuelles Auto: Audi RS5 DTM 2019 (WIP), Modell von Dave Love (Sketchfab, CC BY 4.0) mit seiner Lackierung; Fahrdaten gesch&#228;tzt.</li>
+        <li>Virtuelle Garage (WIP) als eigene Seite, auch f&#252;rs Handy gebaut: quer links das gro&#223;e Vorschaubild mit Name, Losfahren und Anleitung, rechts alle Optionen der virtuellen Fahrt; hochkant steht die Vorschau oben. Sie &#246;ffnet sich &#252;ber FAHREN im Modus Virtuell (Garage oder Autos-Kachel) und nach jeder virtuellen Fahrt. Die echte Garage zeigt keine virtuellen Optionen mehr, ihr Knopf &#8222;Virtuell fahren&#8220; f&#252;hrt in die virtuelle Garage. Die Steuer-Optionen des RC Stunt Copters (Gyro, Rollen und Nicken umkehren) stehen jetzt dort statt unter Optionen.</li>
+        <li>Virtuell fahren: RC Stunt Copter (WIP, von DeepSeek gebaut, gepr&#252;ft) im freien Training: fliegt mit zwei Sticks (Mode 2, Tastatur W/S, A/D, Pfeile), Modell TREX 700 von Belzar Sirus (CC BY 4.0), Rotor-Ton, H&#246;he und Tempo im HUD, Steuer-Optionen in der virtuellen Garage. An den Sektoren und an Start/Ziel stehen leuchtende Tore aus zwei Lichtstangen; eine Runde z&#228;hlt nur, wenn alle Tore der Reihe nach und dann das Start/Ziel-Tor durchflogen wurden. Drift: mit Lenken und Vollgas kommt das Heck jetzt sofort, dazu Low-Poly-Rauch an den Hinterr&#228;dern, erst leicht und mit hei&#223;en Reifen immer dichter. Sektoren (WIP): auf der Streckenkarte je Sektor ein farbiger Saum und die Nummer im Kreis; am Ende eines Sektors pulsiert sein Saum, eine Sektor-Bestzeit wird angesagt (Schalter unter Optionen &gt; Ansagen).</li>
+        <li>Virtuell fahren: neues Fahrgef&#252;hl &#8222;Drift&#8220; (WIP) wie ein RC-Driftauto mit Gyro: rutschige Reifen, unter Vollgas bricht das Heck aus, der Gyro lenkt gegen und h&#228;lt den Drift bei etwa 25 Grad, mit halbem Gas greift das Auto wieder. &#8222;Schnell&#8220; hei&#223;t jetzt &#8222;Pacejka&#8220; (WIP) und nutzt die Reifenkurve des echten Fahrens; der Abgleich mit echten Rundenzeiten folgt. Neue Steuerung &#8222;Neigen&#8220; (WIP) auf Handy und Tablet: der Knopf &#8222;Steuerung&#8220; schaltet reihum Touch, Neigen und aus; bei Neigen das Handy quer halten und wie ein Lenkrad drehen, rechts bleibt das Pedal.</li>
+        <li>FAHREN: Umschalter Echt | Virtuell (WIP) statt der Kachel &#8222;Virtuell fahren&#8220;. Im Modus Virtuell zeigt die Autos-Kachel das virtuelle Auto, Garage &#246;ffnet die Optionen der virtuellen Fahrt, die Startkachel startet sie, und die Strecken-Kachel bl&#228;ttert durch die gebaute Bahn und die Rollrennstrecken T&#246;rnerschleife 2.0 und T&#246;rnerschleife 2.0 mit Br&#252;cke, mit Vorschau von oben und einem Knopf f&#252;r die Fahrtrichtung.</li>
         <li>Virtuell fahren: Das Ladebild zeigt jetzt die aktuelle Strecke von oben &#252;ber das ganze Bild (wie im Editor, bei der T&#246;rnerschleife ihr Umriss mit Br&#252;cke), in der Mitte dreht sich das Streckenteil &#252;ber Titel und Fortschrittsbalken. Aus Gnen54s Testversion &#252;bernommen: Pad-Diagnose w&#228;hrend der Fahrt (Knopf in der Leiste oder F8) mit Pad-Namen, Belegung, gelernter Ruhelage der Trigger, Rohwerten und der Stelle, an der die Abfrage aussteigt, und in der Anleitung der Abschnitt &#8222;Gamepad einrichten&#8220; mit Hinweisen zum EasySMX X05 (Gas und Bremse auf dem rechten Stick).</li>
         <li>Virtuell fahren, aus dem Pull Request von Gnen54 &#252;bernommen und auf den aktuellen Stand gebracht: T&#246;rnerschleife 2.0 mit und ohne Br&#252;cke (mit Randlinien, Boxengasse und Steigung), R&#252;ckw&#228;rtsgang, keine Runde beim R&#252;ckw&#228;rtsfahren oder Pendeln &#252;ber die Linie, Android-Trigger, die in Ruhe auf halbem Weg stehen, Gamepad-Tasten f&#252;r Licht, Box und Gelbe Flagge, Lichthupe, Pflicht-Boxendurchfahrt (WIP), Boxenservice nur in der Boxengasse, Innenspiegel als schmaler Streifen oben (WIP), fester Motorklang f&#252;r K&#228;fer, Spider und Caravelle, Hilfeseite mit &#8222;?&#8220; in der Garage. Neu: Ladebild ohne Anzeige mit Fortschrittsbalken und einer Strecke, die sich unten links Teil f&#252;r Teil zusammenbaut; Knopfleiste als Piktogramme mit einem Knopf zum Aus- und Einblenden; Fahrtrichtung &#8222;Gegenrichtung&#8220; (WIP).</li>
         <li>Vibration wie bei LibreCorsa: Ein Mischer bedient beide Rumble-Motoren gemeinsam (hoher Motor: Randstein-Pulse und schiebende Vorderr&#228;der, tiefer Motor: St&#246;&#223;e, ausbrechendes Heck, ABS, unebener Boden), statt vieler einzelner St&#246;&#223;e; die DualSense-Griffmotoren und Trigger-Widerst&#228;nde folgen denselben Werten. Die Schalter unter Optionen &gt; Vibration gelten jetzt auch beim virtuellen Fahren; &#8222;Reifenquietschen&#8220; und &#8222;Neben der Bahn&#8220; sind ab Werk aus (einmalig umgestellt). Nach dem virtuellen Fahren gibt die App Grafik, Texturen und Automodelle wieder frei (weniger Speicher beim echten Fahren), und bei sehr wenig freiem Speicher kommt ein Hinweis. Virtuell mehr Wolken bei Sonne. Auf der Startseite gibt es &#8222;Fehler melden&#8220; (&#246;ffnet ein Formular auf GitHub).</li>
@@ -10283,6 +10446,19 @@
   </section>
 
   <!-- FAHREN TAB: redesigned as a racing-HUD style drive screen instead of a form/dashboard -->
+  <!-- v1.6.32 BESTELLT: "Die virtuelle Garage sollte komplett eigenstaendig sein und mit der Vorschau fuer Handy optimiert."
+       Gefuellt von vfGarageSeite (60d-virtuell.js): links/oben Vorschau, Name, Losfahren; rechts/unten die Optionen. -->
+  <section class="tabpage" id="tab-vgarage">
+    <div class="vg-kopf">
+      <button type="button" class="vg-zurueck" id="vg-zurueck">&larr; Fahren</button>
+      <h2>Virtuelle Garage <span class="wip-tag">WIP</span></h2>
+      <button type="button" class="vg-zurueck vg-einstellungen" id="vg-einstellungen">Optionen Virtuell</button>
+    </div>
+    <div class="vg-raster">
+      <div class="vg-vorschau" id="vg-vorschau"></div>
+      <div class="vg-optionen" id="vg-optionen"></div>
+    </div>
+  </section>
   <section class="tabpage" id="tab-garage">
     <div class="card">
       <h2>Garage</h2>
@@ -11205,6 +11381,31 @@
       <!-- INFO OHNE EIGENE EBENE (v0.8.35). BESTELLT: "Die Kacheln aus INFO alles einzeln
            auflisten, aber extra gruppiert mit Zwischenueberschrift, um klar zu unterscheiden
            und eine Menue-Ebene zu sparen." Die Unterseiten bleiben im Reiter Info. -->
+      <!-- v1.6.46 BESTELLT: "virtuelle Optionen fuer Fahren und Heli sollten unter den anderen Einstellungen mit eigener Ueberschrift sein". -->
+      <div class="k-zwischen">Virtuell</div>
+      <div class="misc-grid">
+        <!-- v1.6.41 BESTELLT: "Menues fuer virtuelle Dinge in einer extra Kachel in den Optionen (zB VIRTUELL Kachel und RC Heli
+             Kachel)". Inhalt baut vfOptionenSeite (60d-virtuell.js) beim Oeffnen. -->
+        <button class="misc-tile subpage-open" data-sub="opt-virtuell">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="10" width="36" height="24" rx="3"/><path d="M16 40h16M24 34v6"/><path d="M13 28l7-9 5 6 4-4 6 7" stroke="var(--bad)"/></svg>
+          <b>Virtuell</b>
+          <span>Grafik, Tageszeit, Sicht, Geist, Spiegel, Schaltung, Boxendurchfahrt.</span>
+        </button>
+        <button class="misc-tile subpage-open" data-sub="opt-heli">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 12h36M24 12v5"/><path d="M14 24a10 7 0 0 1 10-7h4a8 8 0 0 1 8 8v2a3 3 0 0 1-3 3H19a5 5 0 0 1-5-6z"/><path d="M36 25h8M44 21v8" stroke="var(--bad)"/><path d="M18 30l-2 6M30 30l2 6M12 36h24"/></svg>
+          <b>RC Heli</b>
+          <span>Gyro-Stabilisierung, Rollen und Nicken umkehren.</span>
+        </button>
+      </div>
+      <div class="k-zwischen">Zusatz-Hardware</div>
+      <div class="misc-grid">
+        <!-- v1.6.60 (aus Gnen54s Fork): echte Startampel am Tisch (Raspberry Pi / Pico, Bluetooth LE), 74c-startampel.js. -->
+        <button class="misc-tile subpage-open" data-sub="opt-addon">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="16" y="5" width="16" height="38" rx="4"/><circle cx="24" cy="14" r="3.5" fill="var(--bad)" stroke="var(--bad)"/><circle cx="24" cy="24" r="3.5"/><circle cx="24" cy="34" r="3.5" fill="var(--good)" stroke="var(--good)"/></svg>
+          <b>Startampel</b>
+          <span>Echte Startampel am Tisch (Raspberry Pi / Pico).</span>
+        </button>
+      </div>
       <div class="k-zwischen">Info</div>
       <div class="misc-grid">
         <button class="misc-tile info-open" data-sub="wozu">
@@ -11556,6 +11757,24 @@
           <span class="opt-val" id="setting-repair-time-val">10 s</span>
         </div></div>
     </div>
+    </div>
+    <div class="card subpage" id="sub-opt-virtuell">
+      <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
+      <h2>Virtuell <span class="wip-tag">WIP</span></h2>
+      <div class="vf-opt-seite" id="opt-virtuell-inhalt"></div>
+    </div>
+    <div class="card subpage" id="sub-opt-addon">
+      <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
+      <h2>Startampel <span class="wip-tag">WIP</span></h2>
+      <p class="muted">Diese Einstellung braucht eigene Hardware am Tisch (Startampel mit Raspberry Pi oder Pico, Bluetooth LE).</p>
+      <div class="opt-row"><div class="opt-label">Startampel (Raspberry Pi / Pico)<small>Echte Startampel am Tisch: Rot, solange nichts freigegeben ist; Gelb beim Start im Fenster &bdquo;Bringe die Autos in Position&ldquo;; Gr&uuml;n Spalte f&uuml;r Spalte im Takt der Startt&ouml;ne; bei Gr&uuml;n alles aus; Gelb blinkt bei einem Fr&uuml;hstart; Gelb bei Gelber Flagge; nach dem Rennen wieder Rot.</small>
+          <div id="ampel-status" class="muted" style="font-size:12px;margin-top:4px">Nicht verbunden.</div></div>
+        <button type="button" id="ampel-verbinden">Verbinden</button></div>
+    </div>
+    <div class="card subpage" id="sub-opt-heli">
+      <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
+      <h2>RC Heli <span class="wip-tag">WIP</span></h2>
+      <div class="vf-opt-seite" id="opt-heli-inhalt"></div>
     </div>
     <div class="card subpage" id="sub-opt-feel">
       <button class="misc-back subpage-back" data-sub="">&larr; Optionen</button>
@@ -12668,8 +12887,16 @@
         <label class="tgl"><input type="checkbox" id="setting-announce-rain" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Boxenstopp ansagen<small>Wenn der Stopp &uuml;ber den doppelten Start-Ausdruck ausgel&ouml;st wird: &bdquo;Boxenstopp eingeleitet&ldquo;. Nicht beim Knopf.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce-pit" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Sektor-Bestzeiten ansagen <span class="wip-tag">WIP</span>
+        <small>Wenn ein Sektor schneller war als jeder fr&uuml;here dieser Sitzung: &bdquo;Sektor 2, Bestzeit, 4,3 Sekunden&ldquo;. Der Sektor pulsiert dabei auf der Streckenkarte.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-sektor" checked><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Startansage <span class="wip-tag">WIP</span>
+        <small>Beim Start im Fenster &bdquo;Bringe die Autos in Position&ldquo; und an der Startampel der virtuellen Fahrt: &bdquo;Gentlemen, start your engines&ldquo; (immer englisch). Der Countdown beginnt, wenn der Satz gesprochen ist. Aus der Startampel von Gnen54.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-start" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Akku ansagen<small>Einmal, wenn der Akku unter 25&nbsp;% f&auml;llt. Erst nach dem Laden wieder scharf.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce-battery"><span></span></label></div>
+      <div class="opt-row"><div class="opt-label">Akku kritisch ansagen<small>Einmal je Auto, wenn der Akku auf 6&nbsp;% f&auml;llt, die letzte Stufe vor dem Stehenbleiben: &bdquo;Session abbrechen, Box anfahren!&ldquo; Erst nach dem Laden wieder scharf.</small></div>
+        <label class="tgl"><input type="checkbox" id="setting-announce-battery-crit" checked><span></span></label></div>
       <div class="opt-row"><div class="opt-label">Meisterschaft ansagen <span class="wip-tag">WIP</span>
         <small>Nach jedem Event, welches Event es war und was als N&auml;chstes kommt; nach dem letzten, dass die Meisterschaft vorbei ist und wer gesamt gewonnen hat.</small></div>
         <label class="tgl"><input type="checkbox" id="setting-announce-meister" checked><span></span></label></div>

@@ -35,9 +35,29 @@
     return 0;
   }
   // data: communitySicht(), strecken: Eintraege wie aus ?strecken=1 (Vorgabe: aktuelle Liste + eigene).
+  // v1.6.60: virtuelle Strecken fuer die Community-Liste: online (skOnline.listeV) plus die eigenen lokalen virtuellen
+  // Zeiten, die online noch fehlen (gleicher Aufbau wie ?strecken=1).
+  function skVirtuelleStrecken() {
+    const on = (skOnline.listeV || []).slice();
+    const lokal = skVLokalAlle();
+    Object.keys(lokal).forEach((k) => {
+      if (on.some((s) => s.strecke === k + '|v')) return;
+      // v1.6.79: nur freie Strecken, die es (noch) gibt.
+      if (k.indexOf('frei:') === 0 && typeof VF_FREIE !== 'undefined' && !VF_FREIE[k.slice(5).split('|')[0]]) return;
+      const l = lokal[k] || [];
+      if (!l.length) return;
+      const je = {};
+      l.forEach((z) => { const f = je[z.fahrgefuehl] || (je[z.fahrgefuehl] = { fahrer: 1, beste_ms: 0, beste_fahrer: z.fahrer || '' }); if (!f.beste_ms || z.zeit < f.beste_ms) f.beste_ms = z.zeit; });
+      on.push({ strecke: k + '|v', name: (l.find((z) => z.name) || {}).name || k, fahrer: 1, beste_ms: Math.min(...l.map((z) => z.zeit)),
+        beste_fahrer: l[0].fahrer || '', laeufe: l.length, eigene: true, je });
+    });
+    return on;
+  }
   function commEintraege(data, strecken) {
     const d = data || communitySicht();
-    const liste = strecken || skCommunityGefiltert(skOnline.liste, skEigeneStrecken());
+    // v1.6.56/1.6.60: im Modus Virtuell die virtuellen Strecken (online ?vstrecken=1 plus eigene lokale), sonst die echten.
+    const liste = (typeof chVirtuell === 'function' && chVirtuell()) ? (strecken || skVirtuelleStrecken())
+      : (strecken || skCommunityGefiltert(skOnline.liste, skEigeneStrecken()));
     const raus = [];
     const schluessel = new Set();
     for (const tr of d.tracks || []) {
@@ -145,7 +165,7 @@
         info: best ? t('Bestzeit') + ' ' + chZeit(best) : t('Noch keine Zeit'), label: communityPresetName(tr.preset),
         spieler: e.spieler, laeufe: e.laeufe, oeffnen: () => challengeSeiteZeigen(tr.id) };
     }
-    const s = e.s, p = codeToTrack(s.strecke), fg = chVorschauFahrgefuehl(s), bz = skListenBestzeit(s, fg);
+    const s = e.s, p = codeToTrack(skCodeTeil(s.strecke)), fg = chVorschauFahrgefuehl(s), bz = skListenBestzeit(s, fg);
     return { art: 'strecke', tiles: p ? p.tiles : null, code: s.strecke, name: s.name || s.strecke,
       info: bz ? t('Bestzeit') + ' ' + chZeit(bz.ms) : t('Noch keine Zeit'), label: skFgName(fg),
       spieler: e.spieler, laeufe: e.laeufe, oeffnen: () => skDetailOeffnen(s) };

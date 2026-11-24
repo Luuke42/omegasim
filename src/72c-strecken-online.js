@@ -79,15 +79,22 @@
   }
 
   // ---- Fahrgefuehl ----
-  function skFgGueltig(fg) { return SK_FAHRGEFUEHLE.indexOf(fg) >= 0 ? fg : 'unbekannt'; }
+  // v1.6.60: virtuelle Fahrgefuehle 'vf-<handling>' (vf-gt3, vf-schnell, vf-librecorsa, vf-drift, vf-heli).
+  function skFgGueltig(fg) { return SK_FAHRGEFUEHLE.indexOf(fg) >= 0 || /^vf-[a-z0-9]{2,16}$/.test(String(fg)) ? fg : 'unbekannt'; }
+  function skVirtuellAn() { return typeof chVirtuell === 'function' && chVirtuell(); }
+  // Virtuelle Listen tragen in der App '|v' hinter dem Schluessel (wie die Challenges); der Code-Teil davor.
+  function skIstV(key) { return /\|v$/.test(String(key || '')); }
+  function skCodeTeil(key) { return String(key || '').split('|')[0]; }
   // Das aktuelle Fahrgefuehl des Spielers. presetRead() liest alle Regler - nur nach dem Rennen
   // und beim Zeichnen einer Ansicht rufen, nie im Fahrtakt.
   function skFgAktuell() {
+    if (skVirtuellAn() && typeof vfFahrgefuehlId === 'function') return vfFahrgefuehlId();
     let k = null;
     try { k = typeof presetAktiv === 'function' ? presetAktiv() : null; } catch (e) { k = null; }
     return k && SK_FAHRGEFUEHLE.indexOf(k) >= 0 ? k : 'eigen';
   }
   function skFgName(fg) {
+    if (/^vf-/.test(String(fg))) return typeof vfFahrgefuehlName === 'function' ? vfFahrgefuehlName(fg) : fg;
     if (fg === 'eigen') return t('Eigene Abstimmung');
     if (fg === 'unbekannt') return t('unbekannt');
     return typeof window.__presetLabel === 'function' ? t(window.__presetLabel(fg)) : fg;
@@ -222,7 +229,23 @@
   }
   // Eigene Zeiten dieser Strecke: die neue Ablage plus die Time-Attack-Bestzeiten
   // (omegasim-bestzeiten), deren gespeicherter Code auf denselben Schluessel fuehrt.
+  // v1.6.60: virtuelle Zeiten liegen getrennt (SK_V_STORE), Schluessel ohne '|v'.
+  const SK_V_STORE = 'omegasim-vf-strecken-zeiten';
+  function skVLokalAlle() { const d = chLesen(SK_V_STORE, {}); return d && typeof d === 'object' && !Array.isArray(d) ? d : {}; }
+  function skVLokalSpeichern(key, e) {
+    const alle = skVLokalAlle();
+    alle[key] = (Array.isArray(alle[key]) ? alle[key] : []).concat([e]).sort((a, b) => a.zeit - b.zeit).slice(0, 30);
+    const keys = Object.keys(alle);
+    if (keys.length > 100) keys.sort((a, b) => Math.max(0, ...alle[b].map((x) => x.datum || 0)) - Math.max(0, ...alle[a].map((x) => x.datum || 0)))
+      .slice(100).forEach((k) => { delete alle[k]; });
+    chSchreiben(SK_V_STORE, alle);
+  }
   function skLokal(key) {
+    if (skIstV(key)) {
+      return (skVLokalAlle()[key.slice(0, -2)] || []).map((z) => ({ zeit_ms: +z.zeit, fahrer: z.fahrer || '', auto: z.auto || '',
+        geraet: z.geraet || chGeraet(), runden_ms: Array.isArray(z.runden) ? z.runden.map(Number) : [], quelle: 'lokal',
+        fahrgefuehl: skFgGueltig(z.fahrgefuehl) }));
+    }
     const eig = (skLokalAlle()[key] || []).map((z) => ({ zeit_ms: +z.zeit, fahrer: z.fahrer || '', auto: z.auto || '',
       geraet: z.geraet || chGeraet(), runden_ms: Array.isArray(z.runden) ? z.runden.map(Number) : [], quelle: 'lokal',
       fahrgefuehl: skFgGueltig(z.fahrgefuehl) }));
@@ -263,6 +286,33 @@
     chAusgangSenden();
   }
   // Aus chEintragSenden, wenn das Sheet eine Streckenzeit bestaetigt hat.
+  // ---- v1.6.60: VIRTUELLE ZEITEN EINER FAHRT -------------------------------------------------------
+  // Aus virtuellBeenden (60d-virtuell.js): alle vollen Runden der virtuellen Fahrt (nicht Challenge/Studie, die haben
+  // eigene Listen). Lokal immer; online nur mit "Zeiten online synchronisieren" (wie echte Streckenzeiten) und nur, wenn
+  // das Apps Script virtuelle Zeiten kennt (chEintragSenden prueft das an fahrt 'virtuell').
+  // lauf: { key (ohne '|v'), name, runden: [ms], fahrgefuehl, auto, minMs }
+  function skVirtuellFahrtEnde(lauf) {
+    if (!lauf || !Array.isArray(lauf.runden)) return null;
+    const runden = lauf.runden.map((ms) => (ms >= (lauf.minMs || 1000) ? Math.round(ms) : 0));
+    const gueltig = runden.filter((x) => x > 0);
+    if (!gueltig.length) return null;
+    const o = chOnline();
+    const teilen = skSyncAn() && !!o.url;
+    const e = { zeit: Math.min(...gueltig), runden, datum: Date.now(), fahrer: o.fahrer || '', auto: String(lauf.auto || '').slice(0, 40),
+      geraet: chGeraet(), geteilt: teilen, fahrgefuehl: skFgGueltig(lauf.fahrgefuehl), name: lauf.name || '' };
+    skVLokalSpeichern(lauf.key, e);
+    if (teilen) {
+      const eintrag = { art: 'strecke-zeit', fahrt: 'virtuell', strecke: lauf.key, zeit_ms: e.zeit, runden_ms: runden, fahrer: e.fahrer,
+        auto: e.auto, geraet: e.geraet, fahrgefuehl: e.fahrgefuehl, streckenname: String(lauf.name || '').slice(0, 32),
+        version: ($('app-version') || {}).textContent || '' };
+      eintrag.nr = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+      eintrag.url = o.url;
+      chAusgangSchreiben(chAusgangLesen().concat([eintrag]));
+      chAusgangZeichnen();
+      if (chNetzErlaubt()) chAusgangSenden(); else chSpaeter();
+    }
+    return { key: lauf.key, eintrag: e, gesendet: teilen };
+  }
   function skNachUpload(key) {
     const z = skOnline.zeiten[key];
     if (z) z.at = 0;
@@ -308,8 +358,18 @@
   function skListeHolen(frisch) {
     skCacheLaden();
     if (!skUrl() || skOnline.listeLaedt || !chNetzErlaubt()) return Promise.resolve(skOnline.liste);
-    if (!frisch && skOnline.liste && Date.now() - skOnline.listeAt < SK_LISTE_MS) return Promise.resolve(skOnline.liste);
+    if (skVirtuellAn() ? (!frisch && skOnline.listeV && Date.now() - (skOnline.listeVAt || 0) < SK_LISTE_MS)
+      : (!frisch && skOnline.liste && Date.now() - skOnline.listeAt < SK_LISTE_MS)) return Promise.resolve(skVirtuellAn() ? skOnline.listeV : skOnline.liste);
     skOnline.listeLaedt = true;
+    // v1.6.60: im Modus Virtuell die virtuellen Strecken (?vstrecken=1); deren Schluessel bekommen '|v'.
+    const virt = skVirtuellAn();
+    if (virt) {
+      return skGet('vstrecken=1&geraet=' + encodeURIComponent(chGeraet())).then((j) => {
+        if (!j || !j.ok || !Array.isArray(j.strecken)) throw new Error((j && j.fehler) || 'keine Antwort');
+        skOnline.listeV = j.strecken.map((s) => Object.assign({}, s, { strecke: s.strecke + '|v' }));
+      }).catch(() => { skOnline.listeVFehler = true; })
+        .then(() => { skOnline.listeLaedt = false; skOnline.listeVAt = Date.now(); return skOnline.listeV; });
+    }
     return skGet('strecken=1&geraet=' + encodeURIComponent(chGeraet())).then((j) => {
       if (!j || !j.ok || !Array.isArray(j.strecken)) throw new Error((j && j.fehler) || 'keine Antwort');
       skOnline.liste = j.strecken; skOnline.listeFehler = false;
@@ -324,7 +384,7 @@
     if (!skUrl() || z.laedt || !chNetzErlaubt()) return Promise.resolve(z);
     if (!frisch && z.zeiten && Date.now() - z.at < SK_ZEITEN_MS) return Promise.resolve(z);
     z.laedt = true;
-    return skGet('strecke=' + encodeURIComponent(key)).then((j) => {
+    return skGet(skIstV(key) ? 'vstrecke=' + encodeURIComponent(key.slice(0, -2)) : 'strecke=' + encodeURIComponent(key)).then((j) => {
       if (!j || !j.ok || !Array.isArray(j.zeiten)) throw new Error((j && j.fehler) || 'keine Antwort');
       z.zeiten = j.zeiten; z.fehler = false; z.stand = Date.now(); z.anzahl = j.anzahl || j.zeiten.length;
       skCacheSchreiben();
@@ -605,7 +665,7 @@
   function skDetailZeichnen() {
     if (!skDetail) { showSubpage('ch-community'); return; }
     const key = skDetail.strecke;
-    const p = codeToTrack(key);
+    const p = codeToTrack(skCodeTeil(key));   // v1.6.60: virtuell '|v', freie Strecken ohne Code (frei:...)
     if ($('sk-titel')) $('sk-titel').textContent = skDetail.name || key;
     const karte = $('sk-karte');
     if (karte) {
@@ -615,7 +675,7 @@
       } catch (e) { /* ohne Bild */ }
     }
     if ($('sk-fakten')) {
-      $('sk-fakten').textContent = (skDetail.name ? skDetail.name + ' · ' : '') + t('Code') + ' ' + key + (p ? ' · ' + t('Länge') + ' ' + chZahl(trackLaengeM(p.tiles), 2) + ' m · '
+      $('sk-fakten').textContent = (skDetail.name ? skDetail.name + ' · ' : '') + (p ? t('Code') + ' ' + skCodeTeil(key) : '') + (p ? ' · ' + t('Länge') + ' ' + chZahl(trackLaengeM(p.tiles), 2) + ' m · '
         + p.tiles.length + ' ' + t('Teile') : '') + ' · ' + t('{n} Fahrer').replace('{n}', +skDetail.fahrer || 0);
     }
     skZeichnen($('sk-detail-inhalt'), key);
@@ -627,7 +687,7 @@
   function skInEditorLaden() {
     if (!skDetail) return false;
     if (kRennenLaeuft()) { showHudToast(t('Erst das laufende Rennen beenden')); return false; }
-    const p = codeToTrack(skDetail.strecke);
+    const p = codeToTrack(skCodeTeil(skDetail.strecke));
     if (!p) return false;
     currentTrackTiles = p.tiles;
     trackRotationDeg = 0;

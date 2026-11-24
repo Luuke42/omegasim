@@ -264,5 +264,6 @@
  "haube": {
   "vor": 0.75,
   "hoch": 1.23
- }
+ },
+ "perf": "auto_perf"
 }

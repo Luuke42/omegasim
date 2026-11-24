@@ -1,0 +1,158 @@
+{
+ "lod": "Performance-Fassung: 64017 statt 144070 Dreiecke (tools/modell_perf.py, Quadrik)",
+ "ecken": 45947,
+ "indizes": 192051,
+ "indexAb": 1470304,
+ "teile": [
+  {
+   "name": "Front",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_schwarz.png",
+   "ecke0": 0,
+   "ecken": 3598,
+   "index0": 0,
+   "indizes": 17847
+  },
+  {
+   "name": "Heck",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_gelb.png",
+   "ecke0": 3598,
+   "ecken": 3489,
+   "index0": 17847,
+   "indizes": 17847
+  },
+  {
+   "name": "Streifen vorn",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_gelb.png",
+   "ecke0": 7087,
+   "ecken": 1025,
+   "index0": 35694,
+   "indizes": 3669
+  },
+  {
+   "name": "Streifen hinten",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_schwarz.png",
+   "ecke0": 8112,
+   "ecken": 895,
+   "index0": 39363,
+   "indizes": 3147
+  },
+  {
+   "name": "Unterboden",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_unterboden.png",
+   "ecke0": 9007,
+   "ecken": 1412,
+   "index0": 42510,
+   "indizes": 6873
+  },
+  {
+   "name": "Spiegel",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_gelb.png",
+   "ecke0": 10419,
+   "ecken": 491,
+   "index0": 49383,
+   "indizes": 1674
+  },
+  {
+   "name": "Auspuff",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_schwarz.png",
+   "ecke0": 10910,
+   "ecken": 1333,
+   "index0": 51057,
+   "indizes": 4500
+  },
+  {
+   "name": "Rücklichter",
+   "rolle": "ruecklicht",
+   "gruppe": "auto",
+   "tex": "kaefer_ruecklicht.png",
+   "ecke0": 12243,
+   "ecken": 874,
+   "index0": 55557,
+   "indizes": 1044
+  },
+  {
+   "name": "Scheiben",
+   "rolle": "glas",
+   "gruppe": "auto",
+   "tex": "kaefer_glas.png",
+   "ecke0": 13117,
+   "ecken": 4313,
+   "index0": 56601,
+   "indizes": 9000
+  },
+  {
+   "name": "Scheinwerferglas",
+   "rolle": "scheinwerferglas",
+   "gruppe": "auto",
+   "tex": "kaefer_scheinwerfer.png",
+   "ecke0": 17430,
+   "ecken": 2021,
+   "index0": 65601,
+   "indizes": 7200
+  },
+  {
+   "name": "Reifen",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "kaefer_rad.png",
+   "ecke0": 19451,
+   "ecken": 940,
+   "index0": 72801,
+   "indizes": 4560
+  },
+  {
+   "name": "Felge",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "kaefer_felge.png",
+   "ecke0": 20391,
+   "ecken": 8108,
+   "index0": 77361,
+   "indizes": 31152
+  },
+  {
+   "name": "Fuchs-Einsatz",
+   "rolle": "rad",
+   "gruppe": "rad",
+   "tex": "kaefer_schwarz.png",
+   "ecke0": 28499,
+   "ecken": 11282,
+   "index0": 108513,
+   "indizes": 46626
+  },
+  {
+   "name": "Scheinwerfer",
+   "rolle": "scheinwerfer",
+   "gruppe": "auto",
+   "tex": "kaefer_reflektor.png",
+   "ecke0": 39781,
+   "ecken": 6158,
+   "index0": 155139,
+   "indizes": 36900
+  },
+  {
+   "name": "Kennzeichen",
+   "rolle": "karosserie",
+   "gruppe": "auto",
+   "tex": "kaefer_kennzeichen.png",
+   "ecke0": 45939,
+   "ecken": 8,
+   "index0": 192039,
+   "indizes": 12
+  }
+ ]
+}

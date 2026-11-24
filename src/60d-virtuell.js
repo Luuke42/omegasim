@@ -23,6 +23,10 @@
   const VF_MU = 1.0;                // Haftbeiwert auf trockener Bahn (mal gripScale fuer Regen)
   const VF_ABSEITS_BREMSE = 3.0;    // Tempoverlust neben der Bahn je Sekunde (exponentiell)
   const VF_ABSEITS_ZURUECK_MS = 2500;
+  // v1.6.69 BESTELLT: "Mach eine Option, die mir erlaubt, im virtuellen Fahren abzuschalten, dass das Auto zurueck auf die
+  // Strecke gesetzt wird." Ab Werk an (wie bisher); aus = neben der Bahn weiterfahren, zurueck nur ueber den Knopf.
+  const VF_ZURUECK_STORE = 'omegasim-vf-zuruecksetzen';
+  function vfZuruecksetzenAn() { try { return localStorage.getItem(VF_ZURUECK_STORE) !== 'aus'; } catch (e) { return true; } }
   // v1.3.125: Option "Kein Tempoverlust neben der Bahn" (Vorgabe Aus = das Auto bremst wie bisher).
   // 'aus' schaltet den Tempoverlust ab, das Auto faehrt neben der Bahn ungebremst weiter.
   const VF_ABSEITS_BREMSE_STORE = 'omegasim-vf-abseits-bremse';
@@ -188,6 +192,10 @@
     // v1.5 BESTELLT: "als weitere Bodenart (Standard) den Rasen ... mit Baeumen in der Ferne, damit der Horizont nicht so
     // kahl aussieht". Eigener Rasen (kein Code aus uno-com-escada, das ist PolyForm Noncommercial): nahtlose Fliesen aus
     // Rauschen in drei Lagen und kurzen Halmen, im Dielenraster ohne Fugen gelegt. Baeume: vfBaeumeBauen.
+    // v1.6.44 aus gnen54s PR 4 (ee49684, 0796adc): "ein neutraler Boden ohne Dielen, nicht komplett eintoenig, so ein bisschen
+    // wie marmoriert, nicht schwarz". Nahtlos kachelbare Flaeche 120 x 60 cm, ohne Fugen.
+    { id: 'stein', name: 'Stein grau marmoriert', art: 'flaeche', breiteCm: 60, laengeCm: 120, spalten: 1, zeilen: 1,
+      ton: [[104, 104, 107]], hell: [130, 130, 133], ader: [70, 70, 75], glanz: 0.34 },
     { id: 'rasen', name: 'Rasen', art: 'rasen', breiteCm: 120, laengeCm: 120, spalten: 2, zeilen: 1,
       ton: [[46, 78, 32], [72, 106, 44], [104, 116, 58]], maser: [0, 0, 0], kontrast: 0, ringCm: 1, poren: 0, ast: 0, glanz: 0.0 },
   ];
@@ -373,11 +381,50 @@
     vfTexLauf.boden = null;
     return vfTexDaten.boden;
   }
+  // Marmorierter Stein (gnen54), NAHTLOS kachelbar: periodisches Wertrauschen in mehreren Oktaven, Adern als |sin| mit
+  // ganzzahliger Frequenz je Kachel, verzerrt vom Rauschen. Zeilen y0..y1 (in Schritten fuer die Garage im Leerlauf).
+  function vfSteinRauschen(u, v, n, m, s) {
+    const x = u * n, y = v * m, i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const g = (a, b) => vfHash(((a % n) + n) % n + s, ((b % m) + m) % m + 7 * s);
+    const a0 = g(i, j), a1 = g(i + 1, j), b0 = g(i, j + 1), b1 = g(i + 1, j + 1);
+    return (a0 + (a1 - a0) * sx + (b0 - a0 + (b1 - b0 - a1 + a0) * sx) * sy) * 2 - 1;
+  }
+  function vfSteinTurb(u, v) {
+    let t = 0, a = 0.5;
+    for (let o = 0, n = 4, m = 2; o < 5; o++, n *= 2, m *= 2, a *= 0.5) t += a * vfSteinRauschen(u, v, n, m, 101 * (o + 1));
+    return t;
+  }
+  function vfSteinZeilen(d, AW, AH, y0, y1, P) {
+    const [t0, t1, t2] = P.ton[0], [h0, h1, h2] = P.hell, [a0, a1, a2] = P.ader;
+    for (let y = y0; y < y1; y++) {
+      const v = y / AH;
+      for (let x = 0; x < AW; x++) {
+        const u = x / AW, tb = vfSteinTurb(u, v);
+        const wolke = 0.5 + 0.6 * vfSteinRauschen(u, v, 3, 2, 909) + 0.35 * tb;
+        const a1s = Math.abs(Math.sin(Math.PI * (3 * u + 2 * v) + 5.5 * tb));
+        const a2s = Math.abs(Math.sin(Math.PI * (5 * u - 3 * v) + 7.0 * vfSteinTurb(v, u)));
+        const ader = Math.pow(1 - a1s, 10) * 0.6 + Math.pow(1 - a2s, 14) * 0.35;
+        const hw = Math.max(0, Math.min(1, wolke));
+        let r = t0 + (h0 - t0) * hw, g = t1 + (h1 - t1) * hw, b = t2 + (h2 - t2) * hw;
+        const k = Math.min(1, ader);
+        r += (a0 - r) * k; g += (a1 - g) * k; b += (a2 - b) * k;
+        const korn = 1 + (vfHash(x, y) - 0.5) * 0.05;
+        const i = (y * AW + x) * 4;
+        d[i] = r * korn; d[i + 1] = g * korn; d[i + 2] = b * korn;
+        d[i + 3] = P.glanz * (0.85 + 0.3 * hw) * 255;
+      }
+    }
+  }
   function* vfBodenBau(P) {
     const AW = VF_ATLAS_B, AH = VF_ATLAS_H, d = new Uint8ClampedArray(AW * AH * 4);
-    const rnd = vfZufall(P.id === 'eiche' ? 1911 : P.id === 'grau' ? 2701 : P.id === 'rasen' ? 5150 : 3307);
+    const rnd = vfZufall(P.id === 'eiche' ? 1911 : P.id === 'grau' ? 2701 : P.id === 'rasen' ? 5150 : P.id === 'stein' ? 4409 : 3307);
     const w = AW / P.spalten, h = AH / P.zeilen, stuecke = [];
-    for (let r = 0; r < P.zeilen; r++) {
+    if (P.art === 'flaeche') {
+      for (let y = 0; y < AH; y += 64) { vfSteinZeilen(d, AW, AH, y, Math.min(AH, y + 64), P); yield; }
+      stuecke.push([0, 0, 1, 1]);
+    }
+    for (let r = 0; P.art !== 'flaeche' && r < P.zeilen; r++) {
       for (let s = 0; s < P.spalten; s++) {
         if (P.art === 'rasen') yield* vfGrasStueck(d, AW, s * w, r * h, w, h, P, rnd);
         else vfHolzStueck(d, AW, s * w, r * h, w, h, P, rnd);
@@ -1030,7 +1077,15 @@
     const B = art.breiteCm * cm, L = art.laengeCm * cm, rnd = vfZufall(9001 + pts.length);
     const reihen = [];
     let stuecke = 0;
-    if (art.art === 'fischgraet') {
+    if (art.art === 'flaeche') {
+      // Nahtlose Kacheln im Raster, gleiche Lage und Farbe (sonst saehe man die Kanten).
+      const c = [VF_BODEN_HELL, VF_BODEN_HELL, VF_BODEN_HELL];
+      for (let z = z0; z < z1; z += B) {
+        for (let x = x0; x < x1; x += L) {
+          vfViereck(a, [x, y, z, 0, 0], [x + L, y, z, 1, 0], [x + L, y, z + B, 1, 1], [x, y, z + B, 0, 1], c); stuecke++;
+        }
+      }
+    } else if (art.art === 'fischgraet') {
       const r = Math.SQRT1_2, d1 = [r, r], d2 = [-r, r];
       const W = (A, Bb) => [A * d1[0] + Bb * d2[0], A * d1[1] + Bb * d2[1]];
       // Rahmen-Koordinaten der Bodenecken: A = (x + z) r, B = (z - x) r
@@ -1387,12 +1442,15 @@
     // er schreibt selbst keine Tiefe. Glanz je Flaeche wie 1.3.92, der Boden nach seiner Art.
     zeichne(F.strasse, F.txBahn, 0.16, VF_BUMP_BAHN);
     zeichne(F.rand, F.txRand, 0.10, 0);
-    gl.depthMask(false);
-    gl.enable(gl.POLYGON_OFFSET_FILL);
-    gl.polygonOffset(2, 16);
-    zeichne(F.boden, F.txBoden, F.art.glanz, F.art.art === 'rasen' ? 0 : VF_BUMP_BODEN);   // v1.5: Rasen ohne Relief (Halme waeren helle Striche)
-    gl.disable(gl.POLYGON_OFFSET_FILL);
-    gl.depthMask(true);
+    // v1.6.60: in AR kein Boden - dort ist der echte Fussboden zu sehen (v1.6.67: auch in der Marker-AR).
+    if (!VF.ar && !VF.marker) {
+      gl.depthMask(false);
+      gl.enable(gl.POLYGON_OFFSET_FILL);
+      gl.polygonOffset(2, 16);
+      zeichne(F.boden, F.txBoden, F.art.glanz, F.art.art === 'rasen' ? 0 : VF_BUMP_BODEN);   // v1.5: Rasen ohne Relief (Halme waeren helle Striche)
+      gl.disable(gl.POLYGON_OFFSET_FILL);
+      gl.depthMask(true);
+    }
     gl.disableVertexAttribArray(P.ap); gl.disableVertexAttribArray(P.ac);
     if (P.auv >= 0) gl.disableVertexAttribArray(P.auv);
   }
@@ -1411,6 +1469,96 @@
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) =>
       box(sx * B / 2 - 0.5, sx * B / 2 + 0.5, 0, 1.6, sz * L * 0.32 - 1.0, sz * L * 0.32 + 1.0, [0.05, 0.05, 0.06]));
     return vfPuffer(gl, a);
+  }
+  // ---- RC STUNT COPTER (v1.6.27, Issue #15) ---------------------------------------------------
+  // Der Hubschrauber hat kein auto.json/auto.bin; sein Modell wird hier aus farbigen Kasten gebaut
+  // (wie der weisse Kasten, aber als Hubschrauber). Er liegt in der gleichen Pufferform wie vfAutoBauen
+  // (6 Zahlen je Ecke: Lage + Farbe) und wird in vfMalen ueber die eigene Weltmatrix vfHubLage gezeichnet.
+  // Forward = +z (wie das Auto), oben = +y. Massstaebe in Modell-Einheiten, der Rumpf ist ~2,3 lang.
+  function vfHubschrauberBauen(gl, farbe) {
+    const a = [];
+    const box = (x0, x1, y0, y1, z0, z1, f) => {
+      const s = (k) => [f[0] * k, f[1] * k, f[2] * k];
+      const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+      const fl = [[4, 5, 6, 7, 1.0], [1, 0, 3, 2, 0.55], [0, 4, 7, 3, 0.75], [5, 1, 2, 6, 0.75], [3, 7, 6, 2, 1.15], [0, 1, 5, 4, 0.4]];
+      fl.forEach(([p, q, r, u, k]) => [p, q, r, p, r, u].forEach((i) => a.push(v[i][0], v[i][1], v[i][2], ...s(k))));
+    };
+    const dunkel = [0.10, 0.12, 0.16], glas = [0.18, 0.22, 0.27], rotor = [0.05, 0.05, 0.06];
+    const metall = [0.42, 0.44, 0.48], kufe = [0.20, 0.20, 0.22];
+    // Rumpf: Kabine, Nase, Cockpit-Fenster.
+    box(-0.60, 0.60, 0.70, 1.70, -1.10, 1.10, farbe);
+    box(-0.50, 0.50, 0.90, 1.55, 1.10, 1.75, farbe);
+    box(-0.42, 0.42, 1.22, 1.58, 0.30, 1.55, glas);
+    // Heckausleger (Boom) und Seitenleitwerk.
+    box(-0.16, 0.16, 1.02, 1.34, -4.30, -1.05, farbe);
+    box(-0.05, 0.05, 1.02, 2.05, -4.62, -4.10, metall);
+    box(-0.05, 0.05, 1.38, 1.72, -4.46, -4.30, dunkel);
+    // Hauptrotor-Mast.
+    box(-0.08, 0.08, 1.70, 2.02, -0.08, 0.08, metall);
+    // Heckrotor (stehend, seitlich am Leitwerk) - bleibt stehen (Nur der Hauptrotor dreht sich).
+    box(-0.05, 0.05, 1.40, 1.68, -4.44, -4.28, metall);
+    // Kufen: zwei Schienen + Streben.
+    box(-0.85, -0.74, 0.10, 0.18, -1.00, 0.90, kufe);
+    box(0.74, 0.85, 0.10, 0.18, -1.00, 0.90, kufe);
+    box(-0.72, -0.66, 0.18, 0.72, -0.78, -0.70, kufe);
+    box(-0.72, -0.66, 0.18, 0.72, 0.62, 0.70, kufe);
+    box(0.66, 0.72, 0.18, 0.72, -0.78, -0.70, kufe);
+    box(0.66, 0.72, 0.18, 0.72, 0.62, 0.70, kufe);
+    return vfPuffer(gl, a);
+  }
+  // Die drehenden Hauptrotorblätter (flaches Kreuz) als eigener Puffer, damit sie sich drehen können.
+  function vfHubRotorBauen(gl) {
+    const a = [];
+    const box = (x0, x1, y0, y1, z0, z1, f) => {
+      const s = (k) => [f[0] * k, f[1] * k, f[2] * k];
+      const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+      const fl = [[4, 5, 6, 7, 1.0], [1, 0, 3, 2, 0.55], [0, 4, 7, 3, 0.75], [5, 1, 2, 6, 0.75], [3, 7, 6, 2, 1.15], [0, 1, 5, 4, 0.4]];
+      fl.forEach(([p, q, r, u, k]) => [p, q, r, p, r, u].forEach((i) => a.push(v[i][0], v[i][1], v[i][2], ...s(k))));
+    };
+    const rotor = [0.05, 0.05, 0.06];
+    box(-2.30, 2.30, 2.00, 2.09, -0.09, 0.09, rotor);   // Blatt laengs (x)
+    box(-0.09, 0.09, 2.00, 2.09, -2.30, 2.30, rotor);   // Blatt quer (z)
+    return vfPuffer(gl, a);
+  }
+  // v1.6.27 (Issue #15): Das TREX-700-Modell (img/vf/hub.bin, aus tools/blend_to_vf.py) nachladen.
+  // Der Kasten (vfHubschrauberBauen) ist der sofortige Fallback; sobald die Daten da sind, werden Rumpf
+  // und Rotor ersetzt. Die Daten sind schon in App-Koordinaten und -Einheiten (siehe hub.json): je Ecke
+  // x y z r g b (Float32), Body und Rotor getrennt, damit der Rotor weiter um die Hochachse dreht.
+  let vfHubModell = null;
+  function vfHubModellLaden(gl) {
+    if (vfHubModell && vfHubModell.gl === gl) return;   // schon fuer diesen Grafikkontext
+    vfHubModell = { gl };
+    fetch('img/vf/hub.bin').then((r) => { if (!r.ok) throw new Error('hub.bin ' + r.status); return r.arrayBuffer(); })
+      .then((bin) => {
+        if (bin.byteLength < 8) throw new Error('hub.bin zu kurz');
+        const dv = new DataView(bin);
+        const bodyEcken = dv.getUint32(0, true), rotorEcken = dv.getUint32(4, true);
+        if (bin.byteLength < 8 + (bodyEcken + rotorEcken) * 24) throw new Error('hub.bin unvollstaendig');
+        const bodyF = new Float32Array(bin, 8, bodyEcken * 6);
+        const rotorF = new Float32Array(bin, 8 + bodyEcken * 24, rotorEcken * 6);
+        if (!VF.aktiv || VF.gl !== gl) return;
+        // v1.6.58 GEMELDET: "Beim RC Heli dreht sich der Heckrotor nicht." Er steckt im Rumpf (hub.bin hat nur Rumpf und
+        // Hauptrotor). Seine Blaetter liegen seitlich am Heckende (Dreiecksmitte x > 0,17, z < -3,25, Modelleinheiten):
+        // die kommen in einen eigenen Puffer und drehen um die Querachse durch die Nabe (VF_HUB_HECK_NABE).
+        const rumpf = [], heck = [];
+        for (let i = 0; i < bodyF.length; i += 18) {
+          const cx = (bodyF[i] + bodyF[i + 6] + bodyF[i + 12]) / 3, cz = (bodyF[i + 2] + bodyF[i + 8] + bodyF[i + 14]) / 3;
+          const ziel = cx > 0.17 && cz < -3.25 ? heck : rumpf;
+          for (let k = 0; k < 18; k++) ziel.push(bodyF[i + k]);
+        }
+        VF.auto = vfPuffer(gl, heck.length ? rumpf : bodyF);
+        VF.hubHeck = heck.length ? vfPuffer(gl, heck) : null;
+        VF.hubRotor = vfPuffer(gl, rotorF);
+        VF.hubTrex = true;
+      }).catch(() => { /* Kasten bleibt */ });
+  }
+  // Weltmatrix des Hubschraubers: x/y in der Bahnebene, z = Hoehe (Welt +y), dazu Gier (h),
+  // Nicken (um die Querachse) und Rollen (um die Laengsachse) - wie das Auto, nur mit Hoehe.
+  function vfHubLage(x, y, h, z, roll, pitch) {
+    // Vorzeichen: +pitch (Eingabe vor) neigt die Nase nach vorn (vfRx senkt +z), +roll (Eingabe rechts)
+    // rollt nach rechts, also rechts tiefer. Im Modell ist +x die LINKe Seite (Modell +z = vorn, +y = oben,
+    // rechtshaendig), vfRz(+roll) hebt deshalb die linke Seite - das ist genau das "rechts tiefer".
+    return vfKette(vfT(x, z, y), vfRy(Math.PI - h * Math.PI / 180), vfRx(pitch), vfRz(roll));
   }
   // Matrizen (spaltenweise, wie WebGL sie will).
   function vfPerspektive(fovy, asp, n, f) {
@@ -1554,18 +1702,38 @@
     const brems = ax < 0 ? P.m * -ax : 0;
     // ABS und Traktionskontrolle wie im GT3: beide lassen dem Reifen einen Rest Seitenkraft.
     const fxV = Math.min(P.abs * maxV, P.bremsVorn * brems);
-    const fxH = Math.min((ax < 0 ? P.abs : P.tc) * maxH,
+    // v1.6.25 Drift: Driftwinkel-Grenze - ab P.driftGrenze Grad Schwimmwinkel (letzter Takt) nimmt die Traktionsgrenze
+    // ab (bis 30 %), die Hinterachse bekommt wieder Seitenfuehrung. So dreht sich das Auto unter Vollgas nicht ein.
+    let tcE = P.tc;
+    if (P.driftGrenze) { const be = Math.abs(Math.atan2(z.vy, vx)) * 180 / Math.PI; tcE = P.tc * Math.max(0.3, Math.min(1, 1 - (be - P.driftGrenze) / 15)); }
+    const fxH = Math.min((ax < 0 ? P.abs : tcE) * maxH,
       ax < 0 ? (1 - P.bremsVorn) * brems : Math.max(0, antrieb) * P.m * P.antriebMax);
-    const dV = Math.sqrt(maxV * maxV - fxV * fxV), dH = Math.sqrt(maxH * maxH - fxH * fxH);
+    const dV = Math.sqrt(maxV * maxV - fxV * fxV);
+    let dH = Math.sqrt(maxH * maxH - fxH * fxH);
+    // v1.6.37 Drift GEMELDET: "it shouldn't automatically revert back if I don't accelerate". Ohne Gas bekam die
+    // Hinterachse sofort ihren vollen Seitengriff zurueck und schnappte gerade. Jetzt (P.griffTau): ist der Wagen quer
+    // (Schwimmwinkel > 8 Grad) und das Gas weg, bleibt der Hintergriff bei P.gleitOhneGas und kehrt nur mit der
+    // Zeitkonstante P.griffTau zurueck; weniger Griff (Gas, Grenze) gilt sofort.
+    if (P.griffTau) {
+      let soll = maxH > 0 ? dH / maxH : 1;
+      if (P.gleitOhneGas && antrieb <= 0.15 && Math.abs(Math.atan2(z.vy, vx)) > 0.14) soll *= P.gleitOhneGas;
+      const ist = z.griffH === undefined ? soll : z.griffH;
+      z.griffH = (soll < ist || antrieb > 0.15) ? soll : ist + (soll - ist) * Math.min(1, dt / P.griffTau);
+      dH = maxH * z.griffH;
+    }
     const schritte = Math.max(1, Math.ceil(dt / 0.002));
     const h = dt / schritte;
+    const lmax = P.lenkGrad * Math.PI / 180;
     for (let i = 0; i < schritte; i++) {
-      const aV = Math.atan2(z.vy + P.a * z.r, vx) - delta;
+      // v1.6.25 Drift: RC-Gyro im Ratenmodus - lenkt gegen die Gierrate, Verstaerkung waechst ab P.gyroV m/s mit dem Tempo.
+      const dl = P.gyro ? Math.max(-lmax, Math.min(lmax, delta - P.gyro * Math.max(1, vx / (P.gyroV || 10)) * z.r)) : delta;
+      const aV = Math.atan2(z.vy + P.a * z.r, vx) - dl;
       const aH = Math.atan2(z.vy - P.b * z.r, vx);
       const fyV = -dV * Math.sin(P.C * Math.atan(P.BV * aV));
       const fyH = -dH * Math.sin(P.C * Math.atan(P.BH * aH));
-      z.vy += h * ((fyV * Math.cos(delta) + fyH) / P.m - vx * z.r);
-      z.r += h * ((P.a * fyV * Math.cos(delta) - P.b * fyH) / P.Iz - (P.yawDamp || 0) * z.r);
+      z.vy += h * ((fyV * Math.cos(dl) + fyH) / P.m - vx * z.r);
+      z.r += h * ((P.a * fyV * Math.cos(dl) - P.b * fyH) / P.Iz - (P.yawDamp || 0) * z.r);
+      z.lenkGyro = dl;
       z.aV = aV; z.aH = aH;
     }
     z.vy = Math.max(-vx, Math.min(vx, z.vy));
@@ -1580,8 +1748,18 @@
   // img/autos/v5r/: Modell ohne Innenraum, Rad, Lichtorte und die Fahrzeugdaten aus der .xml. Laengen in
   // Metern, im Auto +x links, +y oben, +z vorn; gezeichnet mal VF_AUTO.L / Laenge (so lang wie der Kasten).
   const VF_AUTO_STORE = 'omegasim-vf-auto';
-  const VF_MODELL_PFADE = { v5r: 'img/autos/v5r/', lynx220: 'img/autos/lynx220/', fmcgt4: 'img/autos/fmcgt4/', boxer96: 'img/autos/boxer96/', kaefer: 'img/autos/kaefer/', spider: 'img/autos/spider/', caravelle: 'img/autos/caravelle/' };
-  function vfModellPfad(auto) { return VF_MODELL_PFADE[auto || vfAutoWahl()] || 'img/autos/v5r/'; }
+  const VF_MODELL_PFADE = { v5r: 'img/autos/v5r/', lynx220: 'img/autos/lynx220/', fmcgt4: 'img/autos/fmcgt4/', boxer96: 'img/autos/boxer96/', kaefer: 'img/autos/kaefer/', spider: 'img/autos/spider/', caravelle: 'img/autos/caravelle/', audirs5: 'img/autos/audirs5/' };
+  // v1.6.27 (Issue #15): der RC Stunt Copter in der Garage. Er ist KEIN Auto: er hat kein
+  // auto.json/auto.bin (VF_MODELL_PFADE), sondern wird als eigener Hubschrauber gebaut und
+  // mit zwei Sticks geflogen. Ueberall, wo ein Auto-Modell oder ein Fahrprofil gebraucht wird,
+  // weicht der Code auf den Helikopter-Zweig aus (vfHubschrauber()).
+  const VF_HELIKOPTER = 'hubschrauber';
+  function vfHubschrauber() { return vfAutoWahl() === VF_HELIKOPTER; }
+  function vfModellPfad(auto) {
+    auto = auto || vfAutoWahl();
+    if (auto === VF_HELIKOPTER) return '';
+    return VF_MODELL_PFADE[auto] || 'img/autos/v5r/';
+  }
   // v1.5.150: FREIE STRECKEN nur fuer die virtuelle Fahrt (BESTELLT Gnen54: "eine nicht fuer Carrera gedachte
   // Strecke, rein fuer virtuelles Fahren", aus gnen54/omegasim). Die Datei bringt die Mittellinie (Einheiten
   // wie der Editor, Abstand ~2,86) und Pseudo-Kacheln (START / STRAIGHT / PIT), damit Runden, Randsteine,
@@ -1590,6 +1768,17 @@
   // Aus PR 4 von gnen54: dieselbe Strecke auch mit Bruecke (die Bahn kreuzt sich, Hoehe z je Punkt).
   const VF_FREIE = { indeq: { name: 'Törnerschleife 2.0', pfad: 'img/strecken/indeq-ring.json' },
     indeqBruecke: { name: 'Törnerschleife 2.0 mit Brücke', pfad: 'img/strecken/indeq-bruecke.json' } };
+  // v1.6.23 BESTELLT: "Wenn ich auf virtuell geschaltet habe, moechte ich bei der Streckenwahl auch die Rollrennstrecken
+  // auswaehlen koennen (Toernerring, Toernerring mit Bruecke; jeweils mit Fahrtrichtungsoption)."
+  // Die Strecken-Kachel auf FAHREN blaettert im Modus Virtuell durch: gebaute Bahn, dann die freien Strecken.
+  function vfStreckenListe() { return ['', ...Object.keys(VF_FREIE)]; }
+  function vfStreckeWechseln(dir) {
+    const l = vfStreckenListe(), j = Math.max(0, l.indexOf(vfFreiWahl()));
+    const n = l[(j + (dir || 1) + l.length) % l.length];
+    try { localStorage.setItem(VF_STRECKE_STORE, n); } catch (e) { /* egal */ }
+    if (n) vfFreiLaden(n).catch(() => {});
+    return n;
+  }
   function vfFreiWahl() { try { const v = localStorage.getItem(VF_STRECKE_STORE) || ''; return VF_FREIE[v] ? v : ''; } catch (e) { return ''; } }
   const vfFreiCache = {};
   function vfFreiLaden(k) {
@@ -1651,7 +1840,11 @@
   // Einzelpunkte: bei hohem Tempo springt der Index mehrere Punkte je Bild.
   function vfBoxDurchfahrt(o, zus) {
     if (!VF.boxN) return;
-    const drin = zus > VF.boxMax * 0.3 && Math.abs(o.quer) > TRACK_HALF_W + zus * 0.5;
+    // v1.6.58 GEMELDET: "Der Pit Button funktioniert nicht ... sodass ich irgendwann einen leeren Tank habe". Der Service
+    // beginnt nur in der Bucht, und "in der Bucht" hiess: mehr als halb so tief drin wie die Bucht breit ist. Wer neben der
+    // Bucht am Fahrbahnrand hielt, bekam nur "In die Boxengasse fahren". Jetzt genuegt es, mit dem Auto in die Bucht zu
+    // ragen (ueber den Fahrbahnrand hinaus, auf Hoehe der Bucht).
+    const drin = zus > VF.boxMax * 0.3 && Math.abs(o.quer) > TRACK_HALF_W * 0.85;
     VF.inBox = drin;
     if (drin) { if (!VF.boxBesucht) VF.boxBesucht = { von: o.idx, bis: o.idx }; else VF.boxBesucht.bis = o.idx; return; }
     if (!VF.boxBesucht) return;
@@ -1688,8 +1881,36 @@
   function vfLackTint(hex) { return hex ? vfHex(hex) : VF_WEISS; }
   // Eine gespeicherte Wahl, die es nicht mehr gibt (z. B. 'porsche', 1.3.94-1.3.131, entfernt), faellt
   // still auf den Vulture V5.R zurueck - kein 404 beim Laden und kein Absturz.
+  // v1.6.23: die Liste der virtuellen Autos (Garage und Autos-Kachel auf FAHREN im Modus Virtuell).
+  // v1.6.27 BESTELLT: "Der Helikopter sollte nur im freien Training waehlbar sein." Ausserhalb des Trainings steht er
+  // nicht in der Liste, und eine gespeicherte Wahl faehrt dort als Vulture (vfAutoWahl) - gespeichert bleibt sie.
+  function vfHeliErlaubt() { const rm = typeof $ === 'function' ? $('race-mode') : null; return !!(rm && rm.value === 'practice'); }
+  function vfAutoListe() {
+    // v1.6.27 (Issue #15): der RC Stunt Copter zuoberst - er wird nicht gefahren, sondern geflogen.
+    return (vfHeliErlaubt() ? [{ v: 'hubschrauber', name: t('RC Stunt Copter') + ' (' + t('nur Training') + ', WIP)' }] : []).concat([
+            { v: 'v5r', name: 'Vulture V5.R (Speed Dreams)' }, { v: 'lynx220', name: 'Lynx 220 (Jaguar XJ220, Speed Dreams)' },
+            { v: 'fmcgt4', name: 'FMC GT4 (Ford GT40 Mk1, Speed Dreams)' }, { v: 'boxer96', name: 'Boxer 96 (Porsche 911 GT3, Speed Dreams)' },
+            // Eigenbau von Gnen54 (CC BY 4.0), WIP: Fahrdaten geschaetzt, siehe img/autos/kaefer/LIZENZ.txt
+            { v: 'kaefer', name: t('VW Käfer 1303 RS mit Boxster-Motor (Gnen54, WIP)') },
+            // v1.5.104: Eigenbau von Gnen54 auf der Modiplay-MP1-Karosserie (Freigabe Sturmkind, nicht kommerziell),
+            // PR 3 auf Luuke42/omegasim. WIP: Fahrdaten geschaetzt (Lister Storm LMP), siehe img/autos/spider/LIZENZ.txt
+            { v: 'spider', name: t('Spider NG1 (Gnen54, WIP)') },
+            // v1.5.150: Eigenbau von Gnen54 auf der Vehicle-World-Karosserie (schriftliche Freigabe),
+            // siehe img/autos/caravelle/LIZENZ.txt. WIP: Fahrdaten geschaetzt.
+            { v: 'caravelle', name: t('VW Caravelle Oettinger (Gnen54, WIP)') },
+            // v1.6.27: "2019 Audi RS5 DTM" von Dave Love (Sketchfab, CC BY 4.0), umgewandelt mit tools/glb_auto.py, siehe
+            // img/autos/audirs5/LIZENZ.txt. WIP: Fahrdaten geschaetzt.
+            { v: 'audirs5', name: t('Audi RS5 DTM 2019 (Dave Love, WIP)') }]);
+  }
+  function vfAutoName(id) { const a = vfAutoListe().find((x) => x.v === id); return a ? a.name : id; }
+  // Name der gewaehlten Strecke der virtuellen Fahrt (freie Strecke oder die gebaute Bahn).
+  function vfStreckeName() { const k = vfFreiWahl(); return k ? t(VF_FREIE[k].name) : t('Gebaute Bahn'); }
   function vfAutoWahl() {
-    try { const v = localStorage.getItem(VF_AUTO_STORE); return (v && Object.prototype.hasOwnProperty.call(VF_MODELL_PFADE, v)) ? v : 'v5r'; } catch (e) { return 'v5r'; }
+    try {
+      const v = localStorage.getItem(VF_AUTO_STORE);
+      if (v === VF_HELIKOPTER) return vfHeliErlaubt() ? v : 'v5r';
+      return (v && Object.prototype.hasOwnProperty.call(VF_MODELL_PFADE, v)) ? v : 'v5r';
+    } catch (e) { return 'v5r'; }
   }
   // Schaltung (Automatik/Manuell) fuer die virtuelle Fahrt. Manuell schaltet der Fahrer mit I/K.
   const VF_SCHALTUNG_STORE = 'omegasim-vf-schaltung';
@@ -1699,7 +1920,11 @@
   function vfGeistAn() { try { return localStorage.getItem(VF_GEIST_STORE) !== 'aus'; } catch (e) { return true; } }
   // Fester Motorklang fuer die Eigenbauten von Gnen54 (aus PR 4 von gnen54: "der Motorsound soll fest dem Fahrzeug
   // zugeordnet sein, die Anwahl gesperrt"). Die gespeicherte Wahl gilt dort nicht.
-  const VF_MOTOR_FEST = { kaefer: 'boxster986', spider: 'listerstorm', caravelle: 'boxster986' };
+  // v1.6.39 BESTELLT: "Bitte virtuelle Autos mit den Motorsounds fest verknuepfen mit passenden Sounds." Jetzt jedes Auto:
+  // Vulture V5.R = Corvette C5-R (das Vorbild), FMC GT4 = Ford GT40, Boxer 96 = Porsche 911 GT3 (Boxer-6), Lynx 220 =
+  // Jaguar XJ220 mit V6-Biturbo (naechster Klang: Ferrari 296 GT3, V6), Audi RS5 DTM = sein eigener Reihen-4-Turbo.
+  const VF_MOTOR_FEST = { kaefer: 'boxster986', spider: 'listerstorm', caravelle: 'boxster986',
+    v5r: 'c5r', fmcgt4: 'gt40', boxer96: 'p992gt3r', lynx220: 'f296gt3', audirs5: 'rs5dtm' };
   function vfMotorFest() { return VF_MOTOR_FEST[vfAutoWahl()] || ''; }
   // Die echte Neigung eines GT1 ist klein (0,5 Grad Rollen bei 1,5 g) und bei Modellgroesse unsichtbar.
   // Der Faktor vergroessert nur den AUSSCHLAG; Federraten, Daempfer und Zeitverhalten bleiben die echten.
@@ -1755,8 +1980,9 @@
   const VF_HANDLING_STORE = 'omegasim-vf-handling';
   // v1.3.5: 'gran' heisst Gran Hybrismo (wie Gran Turismo Sport), neu 'acc' Assetto Carrera (wie
   // ACC). Die Kennung 'gran' bleibt, damit eine gespeicherte Wahl weiter gilt.
-  const VF_HANDLING_MODI = [{ id: 'gt3', name: 'GT3' }, { id: 'schnell', name: 'Schnell' },
-                            { id: 'librecorsa', name: 'LibreCorsa GT3 (WIP)' }];
+  // v1.6.25 (Issue #9) BESTELLT: "Schnell" heisst "Pacejka" - die Kennung 'schnell' bleibt (gespeicherte Wahl).
+  const VF_HANDLING_MODI = [{ id: 'gt3', name: 'GT3' }, { id: 'schnell', name: 'Pacejka (wie echte CH Autos, WIP)' },
+                            { id: 'librecorsa', name: 'LibreCorsa GT3 (WIP)' }, { id: 'drift', name: 'Drift (WIP)' }];
   // v1.5.25: Gran Hybrismo und Assetto Carrera sind entfernt; eine gespeicherte Wahl faehrt als LibreCorsa GT3.
   const VF_HANDLING_ENTFERNT = { gran: 'librecorsa', acc: 'librecorsa' };
   // Abtrieb fuer Profile ohne eigene Werte (VF_GT3 hat kein kV/kH): N je (m/s)^2 je Achse, etwa
@@ -1782,7 +2008,11 @@
     vfHandlingCache = null;
   }
   function vfHandlingName(id) { const m = VF_HANDLING_MODI.find((x) => x.id === id); return m ? t(m.name) : t('GT3'); }
-  function vfTempoFaktor() { return vfHandling() === 'schnell' ? 1.15 : 1.0; }
+  // v1.6.25 (Issue #9): Pacejka soll Rundenzeiten wie mit dem echten Auto ergeben. Der Tempofaktor ist die eine
+  // Abgleichzahl dafuer (bis 1.6.24 fest 1,15 fuer "Schnell"); abgeglichen wird sie mit Rundenzeiten je Strecke, echt
+  // und virtuell, sobald der Nutzer sie liefert (offen in Issue #9).
+  const VF_PACEJKA_TEMPO = 1.15;
+  function vfTempoFaktor() { return vfHandling() === 'schnell' ? VF_PACEJKA_TEMPO : 1.0; }
   // Grafik der virtuellen Fahrt: Performance (wie bisher, fuer schwache Handys) oder Quality (besseres
   // Licht, Tonemapping, Schatten, Vignette). v1.5.90 BESTELLT: "Virtuelles Fahren Standardeinstellungen ändern: Licht
   // aus, qualität (nicht performance)". Ohne eigene Wahl gilt Quality; die Bildraten-Wache (vfWacheMessen) schaltet auf
@@ -1796,6 +2026,16 @@
   function vfGrafikSetzen(id) {
     try { localStorage.setItem(VF_GRAFIK_STORE, id); } catch (e) { /* egal */ }
   }
+  // ---- RC STUNT COPTER: STEUER-OPTIONEN (v1.6.27, Issue #15) ---------------------------------
+  // Aus dem RC-Spiel (invertRoll, gyroAssist): Rollen/Nicken umkehrbar und eine Gyro-Stabilisierung,
+  // die den Helikopter ohne Eingang von selbst aufrichtet. Gespeichert unter eigenen Schluesseln.
+  const VF_HUB_INVERT_ROLL_STORE = 'omegasim-vf-hub-invert-roll';
+  const VF_HUB_INVERT_PITCH_STORE = 'omegasim-vf-hub-invert-pitch';
+  const VF_HUB_GYRO_STORE = 'omegasim-vf-hub-gyro';
+  function vfHubInvertRoll() { try { return localStorage.getItem(VF_HUB_INVERT_ROLL_STORE) === 'an'; } catch (e) { return false; } }
+  function vfHubInvertPitch() { try { return localStorage.getItem(VF_HUB_INVERT_PITCH_STORE) === 'an'; } catch (e) { return false; } }
+  function vfHubGyro() { try { return localStorage.getItem(VF_HUB_GYRO_STORE) !== 'aus'; } catch (e) { return true; } }
+  function vfHubSetzen(key, an) { try { localStorage.setItem(key, an ? 'an' : 'aus'); } catch (e) { /* egal */ } }
   // v1.5 (WIP, Plan Paket 4 "Tageszeit"): Farbstimmung der virtuellen Fahrt. Himmel (Horizont, Zenit), Nebel
   // und die Farbe des Lichts auf allem Beleuchteten; selbstleuchtende Teile (Lichter) bleiben, wie sie sind.
   // Die Sonnenrichtung bleibt fest (die Schattenkarte haengt an ihr). Keine Nacht: es gibt keine Lichtkegel.
@@ -2107,12 +2347,243 @@
   // wie bei allen Modi aus dem Fahrgefuehl des echten Autos; der Modus fuer echte Autos folgt (Paket 5).
   // Unabhaengig vom gewaehlten Modell: Geometrie und Masse des GT3 (VF_GT3), nur die abgestimmten Werte darueber.
   const VF_LC_GT3 = { muV: 1.81, muH: 2.32, BV: 8.55, BH: 11.0, kV: 0.5, kH: 0.625 };
+  // ---- DRIFT (v1.6.25, Issue #10, WIP) --------------------------------------------------------------------------------
+  // BESTELLT: "Fuehlt sich an wie ein 1/18-RC-Driftauto mit Gyro und rutschigen Reifen: niedriges mu hinten, flache
+  // Reifenkurve, Gyro-Gierregelung, die gegenlenkt." Rutschige Hartplastik-Reifen (Griff vorn x0,55, hinten x0,6 - hinten
+  // also kaum noch mehr als vorn), flacher Scheitel (C 1,15, B vorn x0,7, hinten x0,5), kein Abtrieb, kaum
+  // Lastempfindlichkeit, 35 Grad Einschlag, wenig Gierdaempfung. Die Traktion darf 90 % des Hinterachsgriffs nehmen, dann
+  // bricht das Heck unter Gas aus; der Gyro (P.gyro, Ratenmodus) lenkt gegen, die Driftwinkel-Grenze (P.driftGrenze)
+  // haelt den Winkel bei etwa 25 Grad. Abgestimmt am Pruefstand (Node-Nachbau von vfDynamik, je 6 s Kreisfahrt):
+  //   Vollgas ab 10 m/s: Schwimmwinkel 24-27 Grad, stabil (Streuung < 1,3 Grad bei halbem Einschlag), kein Dreher bis 45 m/s;
+  //   halbes Gas: 0,4-10 Grad (Griff), Rollen: < 7 Grad. Ohne Grenze und Gyro drehte sich das Auto bei Vollgas ein.
+  // v1.6.27 GEMELDET: "Wenn ich lenke und Vollgas gebe, sollte das Heck direkt kommen." Bis 1.6.26 brauchte der Drift
+  // 0,6-1,2 s (tc 0,9, Gierträgheit des GT3). Jetzt: die Traktion darf den ganzen Hinterachsgriff nehmen (tc 1), das
+  // Traegheitsmoment ist das eines leichten Autos (x0,25) und der Gyro etwas weicher (0,15). Pruefstand: Lenken + Vollgas
+  // bringt das Heck in 0,25-0,43 s auf 15 Grad, der Drift steht dann bei 28-33 Grad; halbes Gas greift weiter (< 12 Grad).
+  // v1.6.46 BESTELLT: "drift modus: gib mir eine option, die Gyro-Staerke anzupassen" (Optionen > Virtuell). Faktor auf
+  // den abgestimmten Gyro (0,15): 0 = aus (dreht sich unter Vollgas ein), 1 = Vorgabe, 2 = doppelt (haelt den Winkel kleiner).
+  const VF_DRIFT_GYRO_STORE = 'omegasim-vf-drift-gyro';
+  const VF_DRIFT_GYRO_WERTE = [0, 0.5, 0.75, 1, 1.25, 1.5, 2];
+  function vfDriftGyro() { try { const v = +localStorage.getItem(VF_DRIFT_GYRO_STORE); return VF_DRIFT_GYRO_WERTE.indexOf(v) >= 0 && localStorage.getItem(VF_DRIFT_GYRO_STORE) !== null ? v : 1; } catch (e) { return 1; } }
+  // ---- v1.6.54 DRIFT MIT PHYSIK -------------------------------------------------------------------------
+  // BESTELLT: "Virtueller Drift Modus: der aktuelle Modus ist schrott. Baue einen neuen Modus ein, er soll moeglichst
+  // physik-basiert sein, oder sich so anfuehlen. Im Physik-Modus gibt es keinen Boxenstopp, darum darf X die Handbremse
+  // sein. Referenzgefuehl: BeamNG mit Drift-Autos, DR!FT Sturmkind, Dirt Rally 1.0".
+  // Bis 1.6.53 war Drift das GT3-Einspurmodell mit gestutztem Hinterachsgriff, einer Winkelgrenze und Zeitkonstanten:
+  // der Drift kam aus Regeln, nicht aus der Physik. Jetzt ein eigenes Fahrzeugmodell (Hecktriebler, 1250 kg) mit
+  // eigenem Laengstempo:
+  //   - Zustand vx, vy, r (Aufbau) und w (Umfangsgeschwindigkeit der Hinterraeder samt Motortraegheit, mRad).
+  //   - Hinterachse mit kombiniertem Schlupf (Pacejka ueber Laengs- und Schraeglauf zusammen): dreht das Rad durch,
+  //     bleibt weniger Seitenfuehrung, das Heck kommt. Mehr Gas = mehr Schlupf = mehr Winkel.
+  //   - Antrieb: Leistung/Tempo, gedeckelt (fMax); Radlast mit Laengsverlagerung (Gas belastet hinten).
+  //   - Bremse vorn/hinten am Reibkreis; die Handbremse (X) blockiert die Hinterraeder.
+  //   - Luftwiderstand und Rollwiderstand; das Tempo der App (HUD, Motorklang) folgt dem Hinterrad.
+  // Ein Drift ist ein instabiles Gleichgewicht: ohne staendiges Gegenlenken dreht das Auto ein oder faengt sich. Mit
+  // dem Gamepad ist das kaum zu halten; echte RC-Driftautos (auch DR!FT) haben deshalb einen Gyro. Die Hilfe (Optionen >
+  // Virtuell > Drift-Gyro, Faktor f) lenkt um f*1,6 mal den Schraeglaufwinkel der Vorderachse mit (der Stick lenkt dann
+  // relativ zur Fahrtrichtung, Mitte = Raeder in Fahrtrichtung) und um f*0,6 gegen die Gierrate. Bei f = 0 ist es reine
+  // Physik (fuer Lenkraeder). Waehrend die Handbremse zieht, wirkt die Hilfe nur zu 30 %, damit das Auto eindreht.
+  // Pruefstand (Node, je 1/60 s): voller Einschlag + Vollgas ab 8-25 m/s: 15 Grad nach 0,6 s; danach Stick 0,3 / 0,6 / 1
+  // bei Vollgas: Drift bei 5 / 30 / 54 Grad, kein Dreher in 8 s; Handbremse 0,4 s bei 20 m/s: 36 Grad; halbes Gas greift;
+  // Vollbremsung 30 -> 0 m/s in 3,3 s; 5 -> 30 m/s in 5,2 s. Ohne Hilfe dreht Vollgas mit Einschlag das Auto ein.
+  const VF_DRIFT_AUTO = { m: 1250, Iz: 1500, a: 1.2, b: 1.35, h: 0.5, mu: 1.05, B: 9.5, C: 1.5, lastEmpf: 0.1,
+    lenkGrad: 50, leistung: 220000, fMax: 8200, mRad: 110, bremsG: 1.0, bremsVorn: 0.65, hand: 9000, luft: 0.55, roll: 0.012 };
+  const VF_DRIFT_HILFE = 1.6, VF_DRIFT_GYRO_R = 0.6;
+  function vfDriftHilfe() { const f = vfDriftGyro(); return { hilfe: VF_DRIFT_HILFE * f, gyro: VF_DRIFT_GYRO_R * f }; }
+  // Fuer alles, was VF.P liest (Raddarstellung, Quietschen, Kamera): Geometrie und Reifen des Driftautos.
+  const VF_DRIFT_PROFIL = (P) => ({ m: VF_DRIFT_AUTO.m, Iz: VF_DRIFT_AUTO.Iz, a: VF_DRIFT_AUTO.a, b: VF_DRIFT_AUTO.b, h: VF_DRIFT_AUTO.h,
+    muV: VF_DRIFT_AUTO.mu, muH: VF_DRIFT_AUTO.mu, BV: VF_DRIFT_AUTO.B, BH: VF_DRIFT_AUTO.B, C: VF_DRIFT_AUTO.C, lenkGrad: VF_DRIFT_AUTO.lenkGrad,
+    kV: 0, kH: 0, lastEmpf: VF_DRIFT_AUTO.lastEmpf, yawDamp: 0, tc: 1, abs: 1, bremsVorn: VF_DRIFT_AUTO.bremsVorn, antriebMax: (P && P.antriebMax) || 7 });
+  // Ein Schritt (dt in s, intern 2 ms). z: { vx, vy, r, w, ax } in echten m/s, rad/s. e: { lenk -1..1, gas 0..1,
+  // bremse 0..1, hand (bool), hilfe, gyro, mu (Griff-Faktor) }. Schreibt z.d (Einschlag rad), z.aH, z.aV, z.kap, z.nutzung.
+  function vfDriftSchritt(z, e, dt, P) {
+    P = P || VF_DRIFT_AUTO;
+    const g = 9.81, L = P.a + P.b, n = Math.max(1, Math.ceil(dt / 0.002)), h = dt / n, lmax = P.lenkGrad * Math.PI / 180;
+    const spitze = Math.tan(Math.PI / (2 * P.C)) / P.B;
+    for (let i = 0; i < n; i++) {
+      const vxs = Math.max(Math.abs(z.vx), 2);
+      const betaV = Math.atan((z.vy + P.a * z.r) / vxs);
+      const hk = e.hand ? 0.3 : 1;
+      const d = Math.max(-lmax, Math.min(lmax, (e.lenk || 0) * lmax + hk * ((e.hilfe || 0) * betaV - (e.gyro || 0) * z.r)));
+      const dFz = P.m * Math.max(-12, Math.min(8, z.ax || 0)) * P.h / L;
+      const fz0V = P.m * g * P.b / L, fz0H = P.m * g * P.a / L;
+      const fzV = Math.max(300, fz0V - dFz), fzH = Math.max(300, fz0H + dFz);
+      const mu = (e.mu === undefined ? 1 : e.mu) * P.mu;
+      const DV = mu * fzV * (1 - P.lastEmpf * (fzV / fz0V - 1)), DH = mu * fzH * (1 - P.lastEmpf * (fzH / fz0H - 1));
+      // Vorn: rollt frei, bremst (am Reibkreis). v1.6.58: Schraeglauf im Radsystem (vorwaerts wie rueckwaerts richtig):
+      // Laengs u und quer q der Radmitte im gelenkten Rad, Winkel atan(q / |u|).
+      const vyV = z.vy + P.a * z.r, uV = z.vx * Math.cos(d) + vyV * Math.sin(d), qV = -z.vx * Math.sin(d) + vyV * Math.cos(d);
+      const aV = Math.atan(qV / Math.max(Math.abs(uV), 2));
+      let fyV = -DV * Math.sin(P.C * Math.atan(P.B * aV)), fxV = 0;
+      if (e.bremse > 0 && Math.abs(uV) > 0.05) {
+        fxV = -Math.sign(uV) * Math.min(0.95 * DV, e.bremse * P.bremsG * P.m * g * P.bremsVorn);
+        fyV *= Math.sqrt(Math.max(0, 1 - (fxV / DV) * (fxV / DV)));
+      }
+      // Hinten: kombinierter Schlupf.
+      const kap = (z.w - z.vx) / vxs, tA = (z.vy - P.b * z.r) / vxs, sl = Math.hypot(kap, tA);
+      const F = DH * Math.sin(P.C * Math.atan(P.B * sl));
+      const fxH = sl > 1e-9 ? F * kap / sl : 0, fyH = sl > 1e-9 ? -F * tA / sl : 0;
+      // Hinterrad samt Motor: Antrieb gegen Reifenkraft; Bremse und Handbremse halten es hoechstens an (blockieren).
+      let antrieb = (e.gas || 0) * Math.min(P.fMax, P.leistung / Math.max(z.w, 4));
+      // Anfahrhilfe: unter 6 m/s nimmt sie bei viel Schlupf Gas weg (wie ein Fahrer, der beim Anfahren dosiert),
+      // sonst stuende das Auto mit Vollgas zwei Sekunden lang qualmend auf der Stelle. 0 -> 10 m/s in 1,9 s.
+      if (z.vx < 6 && kap > 0.25) antrieb *= Math.max(0.35, 1 - (kap - 0.25) * 2);
+      z.w += h * (antrieb - fxH) / P.mRad;
+      const bw = ((e.bremse || 0) * P.bremsG * P.m * g * (1 - P.bremsVorn) + (e.hand ? P.hand : 0)) * h / P.mRad;
+      z.w = Math.abs(z.w) > bw ? z.w - Math.sign(z.w) * bw : 0;   // haelt das Rad an, in beide Richtungen
+      // Aufbau.
+      const cd = Math.cos(d), sd = Math.sin(d);
+      const fx = fxH + fxV * cd - fyV * sd - P.luft * z.vx * Math.abs(z.vx) - (Math.abs(z.vx) > 0.05 ? Math.sign(z.vx) * P.roll * P.m * g : 0);
+      const fy = fyH + fyV * cd + fxV * sd;
+      z.vx += h * (fx / P.m + z.vy * z.r);
+      z.vy += h * (fy / P.m - z.vx * z.r);
+      z.r += h * ((P.a * (fyV * cd + fxV * sd) - P.b * fyH) / P.Iz);
+      z.ax = fx / P.m;
+      // v1.6.58 GEMELDET: "Wenn ich ca. 0,5 s die Handbremse druecke, stoppt das Auto ploetzlich, sollte aber weitersliden.
+      // Ebenso, wenn ich ohne Gyro eine ~120-Grad-Drehung mache - das Auto sollte dann rueckwaerts weiterrollen/rutschen."
+      // Hier stand "vx < 0 -> 0" und "vx < 0,3 m/s -> quer und Gieren daempfen": quer zur Fahrt (vx ~ 0) hielt das
+      // das rutschende Auto an, und rueckwaerts gab es nicht. Jetzt rollt es in jede Richtung; zur Ruhe kommt es erst,
+      // wenn das ganze Tempo klein ist.
+      if (Math.hypot(z.vx, z.vy) < 0.3 && !(e.gas > 0)) { z.vx *= 0.9; z.vy *= 0.9; z.r *= 0.9; }
+      z.r = Math.max(-6, Math.min(6, z.r));
+      z.d = d; z.aV = aV; z.kap = kap;
+      z.aH = (tA < 0 ? -1 : 1) * sl;
+      z.nutzung = Math.max(Math.abs(aV) / spitze, sl / spitze);
+    }
+    return z;
+  }
+  // v1.6.58: im Drift braucht das virtuelle Auto keinen Sprit (kein Boxenstopp, X ist die Handbremse).
+  function vfDriftOhneSprit() { try { return !!(VF.aktiv && !VF.hubschrauber && vfHandling() === 'drift'); } catch (e) { return false; } }
+  // v1.6.54: X (Tastatur, Gamepad-Taste fuer Box/Gelb) ist im Drift die Handbremse. true = verbraucht.
+  function vfHandbremse(an) {
+    if (!VF.aktiv || VF.hubschrauber || vfHandling() !== 'drift') { VF.handbremse = false; return false; }
+    VF.handbremse = !!an;
+    return true;
+  }
+  window.addEventListener('blur', () => { try { VF.handbremse = false; } catch (e) { /* egal */ } });
+  // Ein Teilschritt der virtuellen Fahrt im Drift: Eingaben lesen, Modell rechnen, Lage und Anzeige fortschreiben.
+  function vfDriftTeil(sdt, st, lenk) {
+    const tf = VF.tempoFaktor || 1, zuReal = REAL_SCALE / 3.6;
+    // Von aussen auf 0 gesetzt (Zuruecksetzen, Box, Unfall): das Modell beginnt neu.
+    // v1.6.58: kein Neustart mehr, wenn der Tacho 0 zeigt (das blockierte Hinterrad zeigte 0 und hielt das Auto an);
+    // wer das Auto anhaelt (Zuruecksetzen, Derby), setzt VF.dp selbst zurueck.
+    if (!VF.dp) { const v0 = Math.max(0, (st.speedKmh || 0) * tf * zuReal); VF.dp = { vx: v0, vy: 0, r: 0, w: v0, ax: 0, d: 0 }; }
+    const z = VF.dp;
+    const ty = typeof throttleY === 'number' ? throttleY : 0;
+    let gas = Math.max(0, ty), bremse = Math.max(0, -ty);
+    try { gas = gasKennlinie(gas, physEngine.config.throttleGamma); bremse = gasKennlinie(bremse, physEngine.config.brakeGamma); } catch (e) { /* roh */ }
+    try { if (typeof fuelDamageDerate === 'function' && typeof fuelCut !== 'undefined') gas = fuelDamageDerate(gas, fuelCut); } catch (e) { /* egal */ }
+    if (VF.abseits && typeof OFFTRACK_GAS === 'number') gas = Math.min(gas, OFFTRACK_GAS);
+    const hh = vfDriftHilfe();
+    const mu = (physEngine.config.gripScale || 1) * (VF.abseits ? 0.55 : 1);
+    vfDriftSchritt(z, { lenk, gas, bremse, hand: !!VF.handbremse, hilfe: hh.hilfe, gyro: hh.gyro, mu }, sdt, VF_DRIFT_AUTO);
+    VF.ax = z.ax; VF.ay = z.vx * z.r;
+    VF.pitch = Math.max(-0.03, Math.min(0.03, -(VF.ax || 0) * 0.0018));
+    VF.h += z.r * sdt * 180 / Math.PI;
+    const sp = Math.hypot(z.vx, z.vy), rich = VF.h * Math.PI / 180 + (sp > 0.05 ? Math.atan2(z.vy, z.vx) : 0);   // v1.6.58: auch rueckwaerts
+    const vE = sp / REAL_SCALE * 100 * TRACK_UNITS_PER_CM;
+    VF.x += Math.sin(rich) * vE * sdt;
+    VF.y -= Math.cos(rich) * vE * sdt;
+    // Tacho und Motorklang folgen dem Hinterrad (dreht es durch, steigt die Drehzahl); mit gezogener Handbremse
+    // (Kupplung getreten) das Auto selbst.
+    // v1.6.58: Tacho und Drehzahl = das Groessere aus Hinterrad und Tempo ueber Grund (rutscht das Auto quer oder rueckwaerts
+    // bei stehendem Rad, zeigt er trotzdem die Fahrt; dreht das Rad durch, steigt die Drehzahl).
+    st.speedKmh = Math.max(Math.abs(z.w), sp) / zuReal / tf;
+    VF.dpKmh = st.speedKmh;
+    if (!VF.dyn) VF.dyn = { vy: 0, r: 0 };
+    VF.dyn.vy = z.vy; VF.dyn.r = z.r; VF.dyn.aH = z.aH; VF.dyn.aV = z.aV; VF.dyn.nutzung = z.nutzung;
+    vfRauchSchritt(sdt, sp, true);
+  }
+  // Stoesse von aussen (Wand, Auto) wirken auch auf das Drift-Modell: Faktor aufs Tempo, Zusatz auf vy und r.
+  function vfDriftExtern(faktor, dvy, dr) {
+    const z = VF.dp;
+    if (!z) return;
+    const k = Math.max(0, faktor);
+    z.vx *= k; z.vy = z.vy * k + (dvy || 0); z.w *= k; z.r += dr || 0;
+  }
+  // ---- DRIFT-RAUCH (v1.6.27, WIP) ----
+  // BESTELLT: "low-poly smoke einfuegen, der ganz am Anfang nur leicht ist und dann mehr wird, wenn die Reifen heisser
+  // werden." Rutscht die Hinterachse (Schraeglauf hinten > 0,12 rad, ab 3 m/s), steigen an beiden Hinterraedern Wolken
+  // auf: ein Ikosaeder (20 Flaechen, grau schattiert), das waechst, steigt und verblasst. Die Driftwaerme VF.driftHitze
+  // (0..1) heizt mit Schlupf mal Tempo (Zeitkonstante 3 s) und kuehlt ohne Rutschen (6 s); von ihr haengen Menge
+  // (4 bis 34 Wolken/s), Deckkraft (0,10 bis 0,55) und Groesse ab. Hoechstens VF_RAUCH_MAX Wolken, je eine Zeichnung.
+  const VF_RAUCH_MAX = 70;
+  // v1.6.52: Aufloesung des Rauchs - Faktor auf Menge und Hoechstzahl der Wolken, ab 2x ein feineres Ikosaeder (80 Flaechen),
+  // ab 4x ein noch feineres (320). 'auto' = 1x in Performance, 1,5x in Quality.
+  const VF_RAUCH_STORE = 'omegasim-vf-rauch', VF_RAUCH_STUFEN = ['auto', 1, 1.5, 2, 4, 8];
+  function vfRauchStufeWahl() { try { const v = localStorage.getItem(VF_RAUCH_STORE); if (v === null || v === 'auto') return 'auto'; const n = +v; return VF_RAUCH_STUFEN.indexOf(n) >= 0 ? n : 'auto'; } catch (e) { return 'auto'; } }
+  function vfRauchStufe() { const w = vfRauchStufeWahl(); return w === 'auto' ? (VF.grafik ? 1.5 : 1) : w; }
+  function vfRauchHitze(H, schlupf, vMs, dt) {
+    const arbeit = Math.min(1.2, Math.max(0, (Math.abs(schlupf) - 0.08) / 0.35) * Math.min(1, vMs / 15));
+    const tau = arbeit > H ? 3 : 6;
+    return Math.max(0, Math.min(1, H + (arbeit - H) * dt / tau));
+  }
+  function vfRauchSchritt(dt, vMs, drift) {
+    const R = VF.rauch || (VF.rauch = []);
+    for (let i = R.length - 1; i >= 0; i--) {
+      const p = R[i];
+      p.t += dt;
+      if (p.t >= p.leben) { R.splice(i, 1); continue; }
+      p.y += p.steig * dt; p.x += p.vx * dt; p.z += p.vz * dt;
+    }
+    const aH = VF.dyn && VF.dyn.aH ? VF.dyn.aH : 0;
+    VF.driftHitze = drift ? vfRauchHitze(VF.driftHitze || 0, aH, vMs, dt) : Math.max(0, (VF.driftHitze || 0) - dt / 6);
+    if (!drift || Math.abs(aH) < 0.12 || vMs < 3) return;
+    const H = VF.driftHitze || 0;
+    const L = vfRauchStufe();
+    VF.rauchSoll = (VF.rauchSoll || 0) + (4 + 30 * H) * dt * L;
+    const h = VF.h * Math.PI / 180, fx = Math.sin(h), fz = -Math.cos(h), rx = Math.cos(h), rz = Math.sin(h);
+    while (VF.rauchSoll >= 1) {
+      VF.rauchSoll -= 1;
+      if (R.length >= VF_RAUCH_MAX * L) R.shift();
+      const seite = Math.random() < 0.5 ? -1 : 1, hinten = VF_AUTO.L * 0.32, quer = VF_AUTO.B * 0.42 * seite;
+      R.push({ x: VF.x - fx * hinten + rx * quer, y: 0.6, z: VF.y - fz * hinten + rz * quer, t: 0,
+        leben: 1.2 + 0.9 * H + Math.random() * 0.4, steig: 1.2 + Math.random() * 0.8,
+        vx: -fx * 1.5 + (Math.random() - 0.5) * 1.2, vz: -fz * 1.5 + (Math.random() - 0.5) * 1.2,
+        s0: (0.7 + Math.random() * 0.3) / Math.sqrt(L), s1: (2.6 + 3.2 * H) / Math.pow(L, 0.25), a0: Math.min(0.6, (0.10 + 0.45 * H) * Math.pow(L, 0.15)), dreh: Math.random() * 6.3 });
+    }
+  }
+  // Ein Ikosaeder mit Radius 1, Flaechen grau abgestuft (oben heller), 6 Zahlen je Ecke wie die Farbmodelle.
+  function vfRauchPufferBauen(gl) {
+    const g = (1 + Math.sqrt(5)) / 2, e = [[-1, g, 0], [1, g, 0], [-1, -g, 0], [1, -g, 0], [0, -1, g], [0, 1, g], [0, -1, -g], [0, 1, -g],
+      [g, 0, -1], [g, 0, 1], [-g, 0, -1], [-g, 0, 1]].map((v) => { const l = Math.hypot(v[0], v[1], v[2]); return v.map((c) => c / l); });
+    const f = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+      [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+    const a = [];
+    f.forEach((tr) => {
+      const ny = (e[tr[0]][1] + e[tr[1]][1] + e[tr[2]][1]) / 3, k = 0.62 + 0.3 * (ny + 1) / 2;
+      tr.forEach((i) => a.push(e[i][0], e[i][1], e[i][2], k, k, k * 1.02));
+    });
+    // v1.6.52: feinere Kugel bei hoeherer Aufloesung - jedes Dreieck in vier, die neuen Ecken auf die Kugel geschoben.
+    const stufen = vfRauchStufe() >= 4 ? 2 : vfRauchStufe() >= 2 ? 1 : 0;
+    let D = a;
+    for (let st = 0; st < stufen; st++) {
+      const n = [];
+      const auf = (p) => { const l = Math.hypot(p[0], p[1], p[2]); return [p[0] / l, p[1] / l, p[2] / l]; };
+      for (let i = 0; i < D.length; i += 18) {
+        const p = [0, 1, 2].map((j) => [D[i + j * 6], D[i + j * 6 + 1], D[i + j * 6 + 2]]), c = [D[i + 3], D[i + 4], D[i + 5]];
+        const m = [auf([(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2, (p[0][2] + p[1][2]) / 2]), auf([(p[1][0] + p[2][0]) / 2, (p[1][1] + p[2][1]) / 2, (p[1][2] + p[2][2]) / 2]),
+          auf([(p[2][0] + p[0][0]) / 2, (p[2][1] + p[0][1]) / 2, (p[2][2] + p[0][2]) / 2])];
+        [[p[0], m[0], m[2]], [m[0], p[1], m[1]], [m[2], m[1], p[2]], [m[0], m[1], m[2]]].forEach((tr) => {
+          const ny = (tr[0][1] + tr[1][1] + tr[2][1]) / 3, k = 0.62 + 0.3 * (ny + 1) / 2;
+          tr.forEach((q) => n.push(q[0], q[1], q[2], k, k, k * 1.02));
+        });
+        void c;
+      }
+      D = n;
+    }
+    return vfPuffer(gl, D);
+  }
   function vfHandlingProfil(P) {
     if (!P) return P;
     const h = vfHandling();
     if (h === 'librecorsa') return Object.assign({}, VF_GT3, VF_LC_GT3);
+    if (h === 'drift') return Object.assign({}, P, VF_DRIFT_PROFIL(P));
     if (h === 'schnell') {
+      // v1.6.25 Pacejka: der Formfaktor der Reifenkurve wie beim echten Fahren (physEngine.config.pacejkaC).
+      const pc = typeof physEngine !== 'undefined' && physEngine && physEngine.config ? +physEngine.config.pacejkaC : NaN;
       return Object.assign({}, P, {
+        C: pc > 1 && pc < 2 ? pc : (P.C || 1.35),
         muV: P.muV * 1.35,
         muH: P.muH * 1.35,
         lenkGrad: Math.min(45, P.lenkGrad * 1.5),
@@ -2480,18 +2951,29 @@
   }
   // Daten einmal je Sitzung und Auto holen (fetch: ueber file:// nicht ladbar, dann bleibt der Kasten).
   let vfModellLaden = {};
+  // v1.6.44 aus gnen54s testversion (296240d, GEMELDET am Android-Tablet: Spider und Bulli "furchtbar zu fahren"): im
+  // Grafikmodus Performance die leichte Fassung, die auto.json unter "perf" nennt (auto_perf.json/.bin, Quadrik-Vereinfachung,
+  // 0,1-0,2 Mio. statt bis 1,7 Mio. Dreiecke). Sie bringt NUR die Geometrie; alles andere bleibt aus auto.json. Fehlt sie,
+  // faehrt das Auto mit der vollen.
   function vfModellDaten(pfad) {
     pfad = pfad || vfModellPfad();
-    if (!vfModellLaden[pfad]) {
-      vfModellLaden[pfad] = Promise.all([
-        fetch(pfad + 'auto.json').then((r) => { if (!r.ok) throw new Error('auto.json ' + r.status); return r.json(); }),
-        fetch(pfad + 'auto.bin').then((r) => { if (!r.ok) throw new Error('auto.bin ' + r.status); return r.arrayBuffer(); }),
-      ]).then(([meta, bin]) => {
-        if (bin.byteLength < meta.indexAb + meta.indizes * 2) throw new Error('auto.bin zu kurz');
-        return { meta, ecken: new Float32Array(bin, 0, meta.ecken * 8), indizes: new Uint16Array(bin, meta.indexAb, meta.indizes) };
-      }).catch((e) => { vfModellLaden[pfad] = null; throw e; });
+    const perf = vfGrafik() === 'perf', schl = pfad + (perf ? '|perf' : '');
+    if (!vfModellLaden[schl]) {
+      vfModellLaden[schl] = fetch(pfad + 'auto.json').then((r) => { if (!r.ok) throw new Error('auto.json ' + r.status); return r.json(); })
+        .then((meta) => {
+          if (!perf || !meta.perf) return [meta, 'auto'];
+          return fetch(pfad + meta.perf + '.json').then((r) => (r.ok ? r.json() : null))
+            .then((g) => (g && g.teile ? [Object.assign({}, meta, { teile: g.teile, ecken: g.ecken, indizes: g.indizes, indexAb: g.indexAb, lod: g.lod }), meta.perf] : [meta, 'auto']))
+            .catch(() => [meta, 'auto']);
+        })
+        .then(([meta, datei]) => fetch(pfad + datei + '.bin').then((r) => { if (!r.ok) throw new Error(datei + '.bin ' + r.status); return r.arrayBuffer(); })
+          .then((bin) => {
+            if (bin.byteLength < meta.indexAb + meta.indizes * 2) throw new Error(datei + '.bin zu kurz');
+            return { meta, ecken: new Float32Array(bin, 0, meta.ecken * 8), indizes: new Uint16Array(bin, meta.indexAb, meta.indizes) };
+          }))
+        .catch((e) => { vfModellLaden[schl] = null; throw e; });
     }
-    return vfModellLaden[pfad];
+    return vfModellLaden[schl];
   }
   // Gemeinsamer Rad-Modell-Fallback: die echten Rad-Teile der Vulture V5.R (mit Texturen),
   // damit auch Modelle ohne eigene Rad-Geometrie die gleichen Raeder zeigen.
@@ -2631,7 +3113,7 @@
     const genugWeg = VF.rundeAb ? VF.fort > VF.pts.length * 0.75 : VF.fort >= 0;
     if (ueber < 0) VF.zielRueck = (VF.zielRueck || 0) + 1;          // rueckwaerts ueber die Linie: die naechste zaehlt nicht
     else if (ueber > 0 && VF.zielRueck) VF.zielRueck--;
-    else if (ueber > 0 && !VF.abseits && genugWeg) {
+    else if (ueber > 0 && !VF.abseits && genugWeg && !VF.hubschrauber) {   // der Heli zaehlt an den Toren (vfHubToreSchritt)
       VF.zielAt = jetzt;
       VF.fort = 0;
       vfRundeAnLinie(jetzt);
@@ -2668,13 +3150,100 @@
     return bisZ < zur ? -1 : 0;
   }
   // Was an der Linie fuer die Kopfzeile passiert (die Zeitnahme selbst laeuft in der App, ueber den Puls).
+  // ---- GEFAHRENE ZEITEN JE STRECKE (v1.6.60, aus Gnen54s Fork: "Gefahrene Zeiten pro Strecke speichern") ----
+  // Je Strecke UND Auto: Bestzeit mit Datum und Zwischenzeiten (fuer das Delta), Rundenzahl und die letzten zehn Runden.
+  // Beim Start werden Bestzeit und Zwischenzeiten geladen (Beste/Delta im HUD gelten sofort). Schluessel wie bei Gnen54
+  // ("frei:<Name>" bzw. "bahn:<Code>", dazu "|<Auto>"), hier zusaetzlich "|gegen" fuer die Gegenrichtung (die
+  // Zwischenzeiten haengen an der Fahrtrichtung); der Hubschrauber ist ein eigenes "Auto".
+  const VF_ZEITEN_STORE = 'omegasim-vf-zeiten';
+  function vfZeitenSchluessel() {
+    let s = '-';
+    try { s = VF.frei ? 'frei:' + VF.frei.name : 'bahn:' + trackToCode(VF.tiles); } catch (e) { /* ohne */ }
+    return s + (VF.gegen ? '|gegen' : '') + '|' + vfAutoWahl();
+  }
+  function vfZeitenAlle() {
+    try { return JSON.parse(localStorage.getItem(VF_ZEITEN_STORE) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function vfZeitenLaden() {
+    const e = vfZeitenAlle()[vfZeitenSchluessel()];
+    if (e && e.beste > 0) {
+      VF.beste = e.beste; VF.besteSplits = Array.isArray(e.splits) ? e.splits : null;
+      VF.besteGeladen = true;
+      showHudToast(t('Streckenbestzeit') + ': ' + vfZeitAcc(e.beste, 3));
+    }
+  }
+  function vfZeitMerken(ms, splits) {
+    const alle = vfZeitenAlle(), k = vfZeitenSchluessel();
+    const e = alle[k] || (alle[k] = { beste: null, datum: null, runden: 0, letzte: [] });
+    e.runden += 1;
+    e.letzte = [Math.round(ms)].concat(e.letzte || []).slice(0, 10);
+    const neu = !(e.beste > 0) || ms < e.beste;
+    if (neu) { e.beste = Math.round(ms); e.datum = Date.now(); e.splits = splits || null; }
+    try { localStorage.setItem(VF_ZEITEN_STORE, JSON.stringify(alle)); } catch (err) { /* voll */ }
+    return neu && e.runden > 1;
+  }
+  // Bestenliste in der Garage (aus Gnen54s Fork): je Strecke und Auto die gespeicherte Bestzeit, Rundenzahl und Datum.
+  // Zugeklappt, damit die Garage kurz bleibt.
+  function vfBestenliste(autos) {
+    const box = document.createElement('details');
+    box.className = 'opt-row opt-breit vf-bestenliste';
+    box.dataset.vf = 'bestenliste';
+    const sum = document.createElement('summary');
+    sum.textContent = t('Bestzeiten');
+    box.appendChild(sum);
+    const alle = vfZeitenAlle();
+    let jetztBahn = '';
+    try { if (currentTrackTiles && currentTrackTiles.length >= 3) jetztBahn = trackToCode(currentTrackTiles); } catch (e) { /* ohne */ }
+    // v1.6.79: nur freie Strecken, die es (noch) gibt - Zeiten entfernter Strecken bleiben unsichtbar.
+    const freiNamen = Object.keys(VF_FREIE).map((id) => VF_FREIE[id].name);
+    const zeilen = Object.keys(alle).filter((k) => alle[k] && alle[k].beste > 0)
+      .filter((k) => k.indexOf('frei:') !== 0 || freiNamen.indexOf(k.slice(5).split('|')[0]) >= 0).map((k) => {
+      const e = alle[k], tr = k.lastIndexOf('|'), auto = k.slice(tr + 1);
+      let ort = k.slice(0, tr);
+      const gegen = /\|gegen$/.test(ort);
+      if (gegen) ort = ort.slice(0, -6);
+      let strecke = ort;
+      if (ort.indexOf('frei:') === 0) strecke = ort.slice(5);
+      else if (ort.indexOf('bahn:') === 0) strecke = t('Gebaute Bahn') + (ort.slice(5) === jetztBahn ? ' (' + t('aktuell') + ')' : ' ' + ort.slice(5, 11));
+      if (gegen) strecke += ' (' + t('Gegenrichtung') + ')';
+      const a = autos.find((x) => x.v === auto);
+      return { strecke, auto: a ? a.name : auto, beste: e.beste, runden: e.runden || 0, datum: e.datum };
+    }).sort((x, y) => x.strecke.localeCompare(y.strecke) || x.beste - y.beste);
+    if (!zeilen.length) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = t('Noch keine Bestzeiten');
+      box.appendChild(p);
+      return box;
+    }
+    const tab = document.createElement('table');
+    tab.className = 'vf-besten-tab';
+    tab.style.cssText = 'width:100%;border-collapse:collapse;font-size:0.9em';
+    const kopf = tab.insertRow();
+    [t('Strecke'), t('Auto'), t('Bestzeit'), t('Runden'), t('Datum')].forEach((h) => {
+      const th = document.createElement('th'); th.textContent = h; th.style.textAlign = 'left'; kopf.appendChild(th);
+    });
+    const spr = (typeof lang === 'string' && lang) || 'de';
+    zeilen.forEach((z) => {
+      const r2 = tab.insertRow();
+      [z.strecke, z.auto, vfZeitAcc(z.beste, 3), String(z.runden), z.datum ? new Date(z.datum).toLocaleDateString(spr) : '–']
+        .forEach((w) => { const c = r2.insertCell(); c.textContent = w; c.style.padding = '2px 6px 2px 0'; });
+    });
+    box.appendChild(tab);
+    return box;
+  }
   function vfRundeAnLinie(jetzt) {
     if (VF.rundeAb) {
       VF.letzte = jetzt - VF.rundeAb;
+      // v1.6.60: jede volle Runde fuer die virtuellen Streckenzeiten (nicht in einer Challenge/Studie/Rennen der App).
+      if (VF.zeitLauf && !VF.extern && !VF.studie && VF.zeitLauf.runden.length < 200) VF.zeitLauf.runden.push(Math.round(VF.letzte));
       // Delta (HUD): die Zwischenzeiten der besten Runde je Punkt der Mittellinie.
       const best = VF.beste === null || VF.letzte < VF.beste;
       if (best) { VF.beste = VF.letzte; VF.besteSplits = VF.splits; }
-      vfGeistRunde(best);
+      // v1.6.60: gespeicherte Zeit (Gnen54). Die Geisterlinie wird nicht gespeichert - nach einer geladenen Bestzeit
+      // nimmt der Geist deshalb die erste Runde dieser Fahrt, bis die Bestzeit faellt.
+      if (!VF.extern && !VF.studie && vfZeitMerken(VF.letzte, VF.splits)) showHudToast(t('Neue Streckenbestzeit') + ': ' + vfZeitAcc(VF.letzte, 3));
+      vfGeistRunde(best || !(VF.geist && VF.geist.beste));
       // Rundenrennen: nach der Ziel-Lap ist Schluss.
       VF.runden = (VF.runden || 0) + 1;
       if (VF.modus === 'laps' && VF.runden >= VF.limit) vfRennenEnde();
@@ -2779,16 +3348,20 @@
     // (= traege). Jetzt direkt der Stick (steerX), voller Einschlag in 0,12 s, bei hohem Tempo etwas
     // weniger Einschlag wie ein Spiel-Lenkfilter; den Rest erledigt das Reifenmodell.
     const vVollL = Math.abs(kmh) * REAL_SCALE / 3.6;
-    const lenkZiel = Math.max(-1, Math.min(1, typeof steerX === 'number' ? steerX : 0)) / (1 + (vVollL / 55) * (vVollL / 55));
+    // v1.6.54: im Drift voller Einschlag bei jedem Tempo (Gegenlenken braucht ihn) und etwas schneller.
+    const lenkZiel = Math.max(-1, Math.min(1, typeof steerX === 'number' ? steerX : 0)) / (hand === 'drift' ? 1 : (1 + (vVollL / 55) * (vVollL / 55)));
     // v1.5.101 (H1, nur LibreCorsa): Lenkhilfe fuer Gamepad und Tastatur, siehe vfLenkHilfe.
     const hilfe = hand === 'librecorsa' && Math.abs(kmh) > 0;
     if (hilfe) VF.lenkIst = vfLenkHilfe(lenkZiel, sdt, Math.max(0, kmh * REAL_SCALE / 3.6));
     else {
-      const schritt = sdt / 0.09;
+      const schritt = sdt / (hand === 'drift' ? 0.07 : 0.09);
       VF.lenkIst = (VF.lenkIst || 0) + Math.max(-schritt, Math.min(schritt, lenkZiel - (VF.lenkIst || 0)));
     }
     const lenk = VF.lenkIst;
-    if (kmh < 0) {
+    const driftPhysik = hand === 'drift' && kmh >= 0 && st.driveMode !== 'reverse';
+    if (!driftPhysik) VF.dp = null;
+    if (driftPhysik) vfDriftTeil(sdt, st, lenk);
+    else if (kmh < 0) {
       // Rueckwaerts (Rangieren): rein kinematisch wie bisher.
       const neu = vfSchritt(VF, kmh, lenk, sdt, physEngine.config.gripScale);
       VF.x = neu.x; VF.y = neu.y; VF.h = neu.h;
@@ -2824,9 +3397,11 @@
       const rich = VF.h * Math.PI / 180 + beta;
       VF.x += Math.sin(rich) * vE * sdt;
       VF.y -= Math.cos(rich) * vE * sdt;
+      vfRauchSchritt(sdt, vVoll, false);
     }
     // Raeder drehen mit dem Weg, Federung folgt Laengs- und Querbeschleunigung (neben der Bahn ruettelt es).
-    const wegE = kmh / 3.6 * 100 * TRACK_UNITS_PER_CM * sdt;
+    // v1.6.54: im Drift mit dem Hinterrad (dreht es durch, drehen die Raeder sichtbar schneller).
+    const wegE = (VF.dp ? VF.dp.w / REAL_SCALE * 3.6 : kmh) / 3.6 * 100 * TRACK_UNITS_PER_CM * sdt;
     VF.raddreh = ((VF.raddreh || 0) + wegE / (VF_AUTO.L / 4.64 * 0.335)) % (Math.PI * 2);
     if (VF.modell) {
       if (!VF.feder) VF.feder = { z: 0, vz: 0, th: 0, vth: 0, ph: 0, vph: 0 };
@@ -2835,13 +3410,484 @@
       vfFederung(VF.feder, VF.ax || 0, VF.ay || 0, sdt, VF.modell.d, stoss);
     }
   }
+  // ---- RC STUNT COPTER: EINGABE UND FLUG (v1.6.27, Issue #15) ----------------------------------
+  // Zwei Sticks, Mode 2 (Standard-Hubschrauber): linker Stick hoch/tief = Gas/Steigen (collective),
+  // links/rechts = Drehen (yaw); rechter Stick hoch/tief = Neigen (pitch), links/rechts = Rollen (roll).
+  // Die rechte Achse der Kamera wird im Helikopter-Modus nicht mehr als Kamera gelesen (vfDrehEingabe).
+  // Flugmodell wie im Vorbild (v1.6.27, Issue #15): Der Hubschrauber schwebt auf seinem Schubvektor.
+  // Nicken/Rollen kippt den Schub aus der Senkrechten - so verliert er beim Vorwaertsfliegen an Hoehe
+  // (der Schub hebt ihn nicht mehr voll), und der Luftwiderstand begrenzt das Tempo statt eines Deckels.
+  // Ein Regler (Gyro, Vorgabe) haelt die Lage am Stick und richtet ihn ohne Eingang von selbst auf.
+  // v1.6.37 GEMELDET: "the tilting of the rc helicopter has a too low effect. It should feel like in the gemini created
+  // html script". Die Werte stammen aus dem Vorbild, dort ist der Hubschrauber aber 1,75 Einheiten lang, hier 6,4 (Skala
+  // 3,64 in hub.json). Beschleunigungen und Tempi muessen mit der Groesse wachsen, sonst kippt er im Verhaeltnis 3,6-mal
+  // zu schwach und schwebt traege. Drehraten, Daempfung und das Schub/Gewicht-Verhaeltnis bleiben (dimensionslos).
+  const VF_HUB_SKALA = 3.64;
+  const VF_HUB_GRAV = 15.8 * VF_HUB_SKALA;     // Einheiten/s^2 Schwerkraft (Vorbild 15,8 je Vorbild-Einheit)
+  const VF_HUB_THRUST = 28.5 * VF_HUB_SKALA;   // Einheiten/s^2 max. Schub (Verhaeltnis 1,8 wie im Vorbild)
+  const VF_HUB_DRAG = 0.58;     // 1/s Luftwiderstand (Endtempo = Schubanteil / Drag)
+  const VF_HUB_BANK = 0.80;     // rad max. Schraeglage (~46 Grad), wie im Vorbild
+  const VF_HUB_ANG_GAIN = 7.8;  // 1/s Gyro: die Lage folgt dem Stick (proportional, wie im Vorbild)
+  const VF_HUB_ANG_RATE = 3.6;  // rad/s max. Drehgeschwindigkeit ohne Gyro (Stick = Drehrate, wie im Vorbild)
+  const VF_HUB_YAW = 166;       // Grad/s max. Drehgeschwindigkeit (~2,9 rad/s, wie im Vorbild)
+  const VF_HUB_MAXH = 260;      // Einheiten Decke (Flughoehe, gut 2,5 m)
+  const VF_HUB_CRASH_VZ = 7 * VF_HUB_SKALA;    // Einheiten/s Abwaerts-Tempo beim Aufprall, das kracht
+  const VF_HUB_CRASH_VH = 11 * VF_HUB_SKALA;   // Einheiten/s Horizontaltempo beim Aufprall, das kracht
+  const VF_HUB_MAXV = 60 * VF_HUB_SKALA;       // Einheiten/s Spitzentempo (nur fuer die Ton-Normalisierung)
+  const VF_HUB_ROTOR_DREH = 48; // rad/s Hauptrotor bei voller Drehzahl (Drehzahl F.rpm 0..1,15, wie im Vorbild)
+  // Der collective-Wert in der Stick-Mitte, wie im Vorbild: GRAV/THRUST. (Nicht der exakte
+  // Schwebe-Punkt, sondern die Mitte des Gaswegs: ohne Eingang sinkt er leicht, ein kleiner
+  // Gas-Stoss haelt die Hoehe - genau wie im Vorbild.) Voller Ausschlag nach oben = 1,0.
+  const VF_HUB_HOVER = VF_HUB_GRAV / VF_HUB_THRUST;
+  // Tasten fuer den Helikopter (eigener Satz, damit die Pfeiltasten nicht die Kamera bedienen).
+  const VF_HUB_TASTEN = { w: 'collHoch', s: 'collTief', arrowup: 'pitchVorn', arrowdown: 'pitchHinten',
+                          arrowleft: 'rollLinks', arrowright: 'rollRechts', a: 'yawLinks', d: 'yawRechts' };
+  function vfHubTaste(e, an) {
+    if (!VF.aktiv || !VF.hubschrauber || e.ctrlKey || e.altKey || e.metaKey) return;
+    const k = (e.key || '').toLowerCase();
+    const t = VF_HUB_TASTEN[k];
+    if (!t) return;
+    if (!VF.hubTasten) VF.hubTasten = {};
+    VF.hubTasten[t] = an;
+    e.preventDefault();
+  }
+  window.addEventListener('keydown', (e) => vfHubTaste(e, true));
+  window.addEventListener('keyup', (e) => vfHubTaste(e, false));
+  window.addEventListener('blur', () => { VF.hubTasten = {}; });
+  // Eingabe: [collective(-1..1), yaw, pitch, roll] - positive Werte = steigen / Nase rechts / vorwaerts / rechts.
+  function vfHubEingabe() {
+    let coll = 0, yaw = 0, pitch = 0, roll = 0;
+    const sL = VF.stickL, sR = VF.stick;
+    const frisch = (s) => s && performance.now() - s.t < VF_DREH_PAD_MS;
+    if (frisch(sL)) { coll += -sL.y; yaw += sL.x; }        // linker Stick: hoch = steigen, rechts = rechts drehen
+    if (frisch(sR)) { pitch += -sR.y; roll += sR.x; }      // rechter Stick: hoch = vorwaerts, rechts = rechts rollen
+    // v1.6.37: Touch-Sticks am Handy (vfTouchBauen): links Gas/Drehen, rechts Neigen/Rollen.
+    const tH = VF.touchHeli;
+    if (tH) { coll += -tH.l.y; yaw += tH.l.x; pitch += -tH.r.y; roll += tH.r.x; }
+    const k = VF.hubTasten || {};
+    if (k.collHoch) coll += 1; if (k.collTief) coll -= 1;
+    if (k.yawLinks) yaw -= 1; if (k.yawRechts) yaw += 1;
+    if (k.pitchVorn) pitch += 1; if (k.pitchHinten) pitch -= 1;
+    if (k.rollLinks) roll -= 1; if (k.rollRechts) roll += 1;
+    return [Math.max(-1, Math.min(1, coll)), Math.max(-1, Math.min(1, yaw)),
+            Math.max(-1, Math.min(1, pitch)), Math.max(-1, Math.min(1, roll))];
+  }
+  // Ein Bildschritt des Flugmodells. Ersetzt im Helikopter-Modus vfFahrPhysik + die Auto-Logik.
+  // Wie im Vorbild: Der Schub wirkt laengs des "oben"-Vektors des Modells. Nicken/Rollen kippt den
+  // Schub aus der Senkrechten, deshalb verliert der Copter beim Vorwaertsfliegen an Hoehe, und der
+  // Luftwiderstand begrenzt das Tempo. Ohne Gyro richtet er sich nicht selbst auf (Lage bleibt).
+  function vfHubPhysik(dt) {
+    const e = vfHubEingabe();
+    let coll = e[0], yaw = e[1], pitch = e[2], roll = e[3];
+    // Steuer-Optionen (Optionen > VIRTUAL): Rollen/Nicken umkehrbar, Gyro richtet ohne Eingang auf.
+    if (vfHubInvertRoll()) roll = -roll;
+    if (vfHubInvertPitch()) pitch = -pitch;
+    const gyro = vfHubGyro();
+    const F = VF.flug || (VF.flug = { vz: 0, vx: 0, vy: 0, rpm: 0, collective: 0, yawRate: 0, angPitch: 0, angRoll: 0 });
+    const inLuft = (VF.z || 0) > 0.0001;
+
+    // --- Collective & Drehzahl (wie im Vorbild): Mitte = leichtes Schweben, hoch = steigen, runter = sinken.
+    // Am Boden ohne Eingang bleibt der Rotor aus, so startet der Copter aus dem Stand.
+    let zielColl = VF_HUB_HOVER + coll * (coll >= 0 ? (1 - VF_HUB_HOVER) : VF_HUB_HOVER);
+    if (!inLuft && coll <= 0.05) zielColl = 0;
+    zielColl = Math.max(0, Math.min(1, zielColl));
+    F.collective = (F.collective || 0) + (zielColl - (F.collective || 0)) * Math.min(1, dt * 9);
+    const zielRpm = F.collective > 0.04 ? Math.max(0.48, Math.min(1.15, 0.55 + F.collective * 0.55)) : 0;
+    const spool = zielRpm > (F.rpm || 0) ? 2.8 : 1.4;
+    F.rpm = (F.rpm || 0) + (zielRpm - (F.rpm || 0)) * Math.min(1, dt * spool);
+
+    // --- Lage: Gyro haelt die Schraeglage am Stick (begrenzt); ohne Gyro ist der Stick eine Drehrate.
+    const zielPitch = Math.max(-VF_HUB_BANK, Math.min(VF_HUB_BANK, pitch * VF_HUB_BANK));
+    const zielRoll = Math.max(-VF_HUB_BANK, Math.min(VF_HUB_BANK, roll * VF_HUB_BANK));
+    if (gyro) {
+      // Proportional: der Winkel folgt dem Befehl, losgelassen richtet er sich von selbst auf.
+      VF.pitch = (VF.pitch || 0) + (zielPitch - (VF.pitch || 0)) * Math.min(1, dt * VF_HUB_ANG_GAIN);
+      VF.roll = (VF.roll || 0) + (zielRoll - (VF.roll || 0)) * Math.min(1, dt * VF_HUB_ANG_GAIN);
+    } else {
+      // Ohne Gyro: der Stick ist eine Drehrate. Laesst man ihn los, richtet ein Pendel den Copter
+      // langsam wieder auf (wie das Vorbild ohne GyroAssist): je schraeger er steht, desto staerker.
+      // v1.6.46 GEMELDET: "nach einer 360-Grad-Neigungsdrehung sollte er sich korrekt stabilisieren und nicht komplett
+      // zurueckdrehen". Die Winkel liefen ueber 2 pi hinaus, und das Pendel zog sie die ganze Umdrehung zurueck. Jetzt
+      // gewickelt auf -pi..pi, und wie im Vorbild (localUp.y < -0,15: targetSign -1): kopfueber haelt er die Rueckenlage.
+      const wick = (w) => Math.atan2(Math.sin(w), Math.cos(w));
+      VF.pitch = wick(VF.pitch || 0); VF.roll = wick(VF.roll || 0);
+      const upY = Math.cos(VF.pitch) * Math.cos(VF.roll), kopf = upY < -0.15;
+      const ziel = (w) => (kopf && Math.abs(w) > Math.PI / 2 ? Math.PI : 0);
+      const stickAus = Math.max(0, 1 - Math.hypot(pitch, roll) * 1.6), staerke = 2.4 * stickAus * (0.35 + 0.65 * Math.abs(upY));
+      const pendPitch = -wick(VF.pitch - ziel(VF.pitch)) * staerke;
+      const pendRoll = -wick(VF.roll - ziel(VF.roll)) * staerke;
+      F.angPitch = (F.angPitch || 0) + (pitch * VF_HUB_ANG_RATE + pendPitch - (F.angPitch || 0)) * Math.min(1, dt * 7.5);
+      F.angRoll = (F.angRoll || 0) + (roll * VF_HUB_ANG_RATE + pendRoll - (F.angRoll || 0)) * Math.min(1, dt * 7.5);
+      VF.pitch = (VF.pitch || 0) + F.angPitch * dt;
+      VF.roll = (VF.roll || 0) + F.angRoll * dt;
+    }
+    // Am Boden steht er flach auf den Kufen. v1.6.58 GEMELDET: "ich kann ihn neigen, waehrend er auf dem Boden steht" -
+    // bisher nur gedaempft (der Gyro zog ihn schneller zum Stick, als der Boden ihn aufrichtete). Jetzt: am Boden keine
+    // Schraeglage und keine Drehrate; geneigt wird erst in der Luft.
+    if (!inLuft) {
+      VF.pitch = 0; VF.roll = 0; F.angPitch = 0; F.angRoll = 0;
+    }
+
+    // --- Drehen (yaw): die Nase dreht weich zur Eingabe (Grad/s).
+    const zielYaw = yaw * VF_HUB_YAW;
+    F.yawRate = (F.yawRate || 0) + (zielYaw - (F.yawRate || 0)) * Math.min(1, dt * 9.5);
+    VF.h += F.yawRate * dt;
+
+    // --- Schubvektor: der "oben"-Vektor des Modells in Weltkoordinaten (Welt +y = Hoehe).
+    // Lage = vfRy(H) * vfRx(pitch) * vfRz(roll) mit H = PI - h*PI/180 (siehe vfHubLage). Der Schub
+    // wirkt laengs dieses Vektors, die Schwerkraft senkrecht nach unten, der Luftwiderstand gegen die Bewegung.
+    const H = Math.PI - VF.h * Math.PI / 180;
+    const cP = Math.cos(VF.pitch || 0), sP = Math.sin(VF.pitch || 0);
+    const cR = Math.cos(VF.roll || 0), sR = Math.sin(VF.roll || 0);
+    const cH = Math.cos(H), sH = Math.sin(H);
+    // v1.6.39 GEMELDET: "Helikopter driftet aus irgendeinem Grund nach links". Das Vorzeichen der x-Komponente war
+    // falsch (bis 1.6.38: cH*sR - sH*sP*cR): Rollen rechts schob ihn bei Kurs 0 nach links, Neigen vorn flog je nach Kurs
+    // schraeg (bei 90 Grad rueckwaerts). Richtig ist Ry(H)*Rx(p)*Rz(r) angewandt auf (0,1,0), wie vfHubLage zeichnet.
+    const ux = -cH * sR + sH * sP * cR;   // Welt X (VF.x)
+    const uy = cP * cR;                  // Welt Y = Hoehe (VF.z)
+    const uz = sH * sR + cH * sP * cR;   // Welt Z (VF.y)
+    const lift = (F.rpm || 0) * (F.collective || 0) * VF_HUB_THRUST;
+
+    // --- Kraefte & Geschwindigkeit.
+    F.vx = (F.vx || 0) + (ux * lift) * dt;
+    F.vz = (F.vz || 0) + (uy * lift - VF_HUB_GRAV) * dt;
+    F.vy = (F.vy || 0) + (uz * lift) * dt;
+    const d = Math.exp(-VF_HUB_DRAG * dt);
+    F.vx *= d; F.vz *= d; F.vy *= d;
+
+    // --- Ort.
+    VF.x += F.vx * dt;
+    VF.z += F.vz * dt;
+    VF.y += F.vy * dt;
+
+    // --- Boden/Decke/Crash (wie im Vorbild: eine harte Landung kracht, eine sanfte setzt ihn ab).
+    if (VF.z <= 0) {
+      const warLuft = VF.hubLuft;
+      VF.hubLuft = false;
+      const hart = warLuft && ((F.vz || 0) <= -VF_HUB_CRASH_VZ || Math.hypot(F.vx || 0, F.vy || 0) > VF_HUB_CRASH_VH || uy < 0.45);
+      if (hart) { vfHubCrash(); return; }
+      VF.z = 0; if ((F.vz || 0) < 0) F.vz = 0;
+      F.vx = (F.vx || 0) * 0.88; F.vy = (F.vy || 0) * 0.88;
+    } else VF.hubLuft = true;
+    if (VF.z > VF_HUB_MAXH) { VF.z = VF_HUB_MAXH; if ((F.vz || 0) > 0) F.vz = 0; }
+
+    // --- Rotor-Optik & Werte fuer den Ton.
+    VF.rotor = ((VF.rotor || 0) + (F.rpm || 0) * VF_HUB_ROTOR_DREH * dt) % (Math.PI * 2);
+    VF.heckRotor = ((VF.heckRotor || 0) + (F.rpm || 0) * VF_HUB_ROTOR_DREH * 4.6 * dt) % (Math.PI * 2);   // Heckrotor ~4,6-mal schneller
+    VF.hubLast = Math.abs(coll) + Math.hypot(pitch, roll) * 0.45;
+    VF.hubSpeed = Math.hypot(F.vx || 0, F.vy || 0);
+  }
+  // ---- ROTOR-TON DES RC STUNT COPTERS (v1.6.27, Issue #15) -----------------------------
+  // Synthetisch wie im Vorbild (Web Audio, keine Dateien): ein tiefer, pulsierender Blatt-Schlag
+  // (BVI) aus rosa Rauschen durch einen Bandpass, dazu das mechanische Getriebe-Wimmern (zwei
+  // Oszillatoren), der Heckrotor-Schlag und das Luftrauschen. Alles laeuft ueber die Drehzahl
+  // F.rpm (0..1,15) wie im Vorbild: hohes Gas dreht den Rotor hoch, der Ton wird schneller/heller.
+  // Der Klang haengt am gleichen audioCtx wie der Motorsound (80-sound.js), also an der Sound-Einstellung.
+  const vfHubTon = {
+    ctx: null, master: null, bvi: null, bviFilter: null, bviGain: null,
+    tail: null, tailFilter: null, tailGain: null,
+    gear1: null, gear2: null, gearFilter: null, gearGain: null,
+    air: null, airFilter: null, airGain: null,
+    phase: 0, tailPhase: 0, letzt: 0,
+    // Einen rosa (oder weissen) Rausch-Puffer bauen, wie im Vorbild.
+    rausch(sek, rosa) {
+      const n = Math.floor(this.ctx.sampleRate * sek);
+      const buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+      for (let i = 0; i < n; i++) {
+        const w = Math.random() * 2 - 1;
+        if (rosa) {
+          b0 = 0.99886 * b0 + w * 0.0555179;
+          b1 = 0.99332 * b1 + w * 0.0750759;
+          b2 = 0.96900 * b2 + w * 0.1538520;
+          b3 = 0.86650 * b3 + w * 0.3104856;
+          b4 = 0.55000 * b4 + w * 0.5329522;
+          b5 = -0.7616 * b5 - w * 0.0168980;
+          d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.06;
+          b6 = w * 0.115926;
+        } else d[i] = w * 0.5;
+      }
+      return buf;
+    },
+    init() {
+      if (this.ctx || !audioCtx) return;
+      try {
+        this.ctx = audioCtx;
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.8;
+        this.master.connect(this.ctx.destination);
+        const pink = this.rausch(3.0, true);
+        // 1. Hauptrotor (BVI): rosa Rauschen durch einen Bandpass, pulsierend (Blatt-Schlag).
+        const bviNoise = this.ctx.createBufferSource();
+        bviNoise.buffer = pink; bviNoise.loop = true;
+        this.bviFilter = this.ctx.createBiquadFilter();
+        this.bviFilter.type = 'bandpass'; this.bviFilter.frequency.value = 115; this.bviFilter.Q.value = 1.65;
+        this.bviGain = this.ctx.createGain(); this.bviGain.gain.value = 0.0001;
+        bviNoise.connect(this.bviFilter).connect(this.bviGain).connect(this.master);
+        bviNoise.start();
+        // 2. Heckrotor-Schlag (~4,5x schneller als der Hauptrotor).
+        const tailNoise = this.ctx.createBufferSource();
+        tailNoise.buffer = pink; tailNoise.loop = true;
+        this.tailFilter = this.ctx.createBiquadFilter();
+        this.tailFilter.type = 'bandpass'; this.tailFilter.frequency.value = 900; this.tailFilter.Q.value = 2.2;
+        this.tailGain = this.ctx.createGain(); this.tailGain.gain.value = 0.0001;
+        tailNoise.connect(this.tailFilter).connect(this.tailGain).connect(this.master);
+        tailNoise.start();
+        // 3. Getriebe (Hauptzahnrad + Ritzel): zwei Oszillatoren durch einen Bandpass.
+        this.gear1 = this.ctx.createOscillator(); this.gear1.type = 'sawtooth'; this.gear1.frequency.value = 380;
+        this.gear2 = this.ctx.createOscillator(); this.gear2.type = 'triangle'; this.gear2.frequency.value = 763;
+        this.gearFilter = this.ctx.createBiquadFilter();
+        this.gearFilter.type = 'bandpass'; this.gearFilter.frequency.value = 620; this.gearFilter.Q.value = 3.2;
+        this.gearGain = this.ctx.createGain(); this.gearGain.gain.value = 0.0001;
+        this.gear1.connect(this.gearFilter); this.gear2.connect(this.gearFilter);
+        this.gearFilter.connect(this.gearGain).connect(this.master);
+        this.gear1.start(); this.gear2.start();
+        // 4. Luftrauschen (Abwind + Fahrtwind).
+        const airNoise = this.ctx.createBufferSource();
+        airNoise.buffer = pink; airNoise.loop = true;
+        this.airFilter = this.ctx.createBiquadFilter();
+        this.airFilter.type = 'bandpass'; this.airFilter.frequency.value = 820; this.airFilter.Q.value = 0.85;
+        this.airGain = this.ctx.createGain(); this.airGain.gain.value = 0.0001;
+        airNoise.connect(this.airFilter).connect(this.airGain).connect(this.master);
+        airNoise.start();
+        this.letzt = this.ctx.currentTime;
+      } catch (e) { this.ctx = null; }
+    },
+    update(rpm, load, airspeed, dist, aus) {
+      if (!this.ctx || !audioCtx || this.ctx.state !== 'running') return;
+      const now = this.ctx.currentTime;
+      const dt = Math.min(0.05, Math.max(0.001, now - this.letzt));
+      this.letzt = now;
+      const r = Math.max(0.04, Math.min(1.3, rpm));
+      const last = Math.max(0, Math.min(1.5, load));
+      const speed = Math.min(1.0, airspeed);
+      const atten = 1 / (1 + (dist || 0) * 0.032);
+      if (aus || rpm <= 0.025) {
+        const g = 0.0001;
+        this.bviGain.gain.setTargetAtTime(g, now, 0.07);
+        this.tailGain.gain.setTargetAtTime(g, now, 0.07);
+        this.gearGain.gain.setTargetAtTime(g, now, 0.07);
+        this.airGain.gain.setTargetAtTime(g, now, 0.07);
+        return;
+      }
+      // Hauptrotor: Blatt-Passfrequenz (22 Hz Leerlauf -> 46 Hz voll) und Pulsform (scharfer Angriff, Abfall).
+      const bp = 18 + r * 28 + last * 3.5;
+      this.phase = (this.phase + bp * dt) % 1.0;
+      const pulse = Math.pow(1 - this.phase, 2.6);
+      const slap = 0.32 + 0.68 * pulse;
+      this.bviFilter.frequency.setTargetAtTime(95 + r * 75 + last * 65 + pulse * 45, now, 0.015);
+      this.bviGain.gain.setTargetAtTime(Math.min(0.68, (0.14 + r * 0.34 + last * 0.22) * slap * atten), now, 0.012);
+      // Heckrotor.
+      const tp = bp * 4.5;
+      this.tailPhase = (this.tailPhase + tp * dt) % 1.0;
+      const tPulse = 0.45 + 0.55 * Math.pow(1 - this.tailPhase, 2.0);
+      this.tailFilter.frequency.setTargetAtTime(460 + r * 260, now, 0.02);
+      this.tailGain.gain.setTargetAtTime(Math.min(0.24, (0.04 + r * 0.11 + last * 0.05) * tPulse * atten), now, 0.015);
+      // Getriebe.
+      const pin = 260 + r * 540 + last * 95;
+      this.gear1.frequency.setTargetAtTime(pin, now, 0.03);
+      this.gear2.frequency.setTargetAtTime(pin * 2.01, now, 0.03);
+      this.gearFilter.frequency.setTargetAtTime(pin * 1.4, now, 0.03);
+      this.gearGain.gain.setTargetAtTime(Math.min(0.11, (0.018 + r * 0.042 + last * 0.025) * atten), now, 0.03);
+      // Luftrauschen.
+      this.airFilter.frequency.setTargetAtTime(520 + speed * 780 + last * 260, now, 0.04);
+      this.airGain.gain.setTargetAtTime(Math.min(0.36, (0.03 + r * 0.12 + speed * 0.24 + last * 0.08) * atten), now, 0.04);
+    },
+    // Ein kurzer Ton (fuer den Crash): Oszillator mit Frequenz- und Lautstaerke-Abfall.
+    ton(freq, endFreq, dur, typ, gain) {
+      if (!this.ctx || this.ctx.state !== 'running') return;
+      try {
+        const now = this.ctx.currentTime, osc = this.ctx.createOscillator(), g = this.ctx.createGain();
+        osc.type = typ;
+        osc.frequency.setValueAtTime(freq, now);
+        if (endFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), now + dur);
+        g.gain.setValueAtTime(gain, now);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+        osc.connect(g).connect(this.ctx.destination);
+        osc.start(); osc.stop(now + dur + 0.02);
+      } catch (e) { /* egal */ }
+    },
+    // Crash: ein Rausch-Knall plus tiefer Stoß und metallische Klaenge (wie im Vorbild).
+    crash(intensitaet) {
+      if (!this.ctx || this.ctx.state !== 'running') return;
+      try {
+        const now = this.ctx.currentTime;
+        const amp = Math.min(1.4, Math.max(0.4, intensitaet || 1));
+        const buf = this.rausch(0.5, true);
+        const src = this.ctx.createBufferSource(); src.buffer = buf;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.55 * amp, now);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+        src.connect(g).connect(this.ctx.destination); src.start();
+        this.ton(125, 30, 0.30, 'sine', 0.52 * amp);
+        setTimeout(() => this.ton(420, 180, 0.12, 'triangle', 0.22 * amp), 65);
+        setTimeout(() => this.ton(310, 140, 0.10, 'triangle', 0.15 * amp), 140);
+      } catch (e) { /* egal */ }
+    },
+    ausblenden() {
+      if (!this.ctx || this.ctx.state !== 'running') return;
+      const now = this.ctx.currentTime;
+      this.bviGain.gain.setTargetAtTime(0.0001, now, 0.07);
+      this.tailGain.gain.setTargetAtTime(0.0001, now, 0.07);
+      this.gearGain.gain.setTargetAtTime(0.0001, now, 0.07);
+      this.airGain.gain.setTargetAtTime(0.0001, now, 0.07);
+    }
+  };
+  // Crash: Ton, und der Copter wird auf die Bahn zurueckgesetzt (wie das Auto).
+  function vfHubCrash() {
+    if (soundEnabled) vfHubTon.crash(1);
+    VF.hubLuft = false;
+    vfZuruecksetzen();
+    showHudToast('Crash!');   // ueberschreibt den Standard-Text von vfZuruecksetzen
+  }
+  // Je Bild: den Rotor-Ton mit der aktuellen Drehzahl, Last und Entfernung fahren (nach vfMalen,
+  // dann ist VF.augeJetzt frisch fuer die Entfernungsdaempfung).
+  function vfHubTonSchritt(dt) {
+    if (!VF.hubschrauber) return;
+    if (!soundEnabled) { vfHubTon.ausblenden(); return; }
+    vfHubTon.init();
+    if (!vfHubTon.ctx) return;
+    const F = VF.flug;
+    const rpm = F ? (F.rpm || 0) : 0;
+    const last = VF.hubLast || 0;
+    const speed = Math.min(1, (VF.hubSpeed || 0) / VF_HUB_MAXV);
+    const auge = VF.augeJetzt;
+    const dist = auge ? Math.hypot(auge[0] - VF.x, auge[1] - (VF.z || 0), auge[2] - VF.y) : 0;
+    vfHubTon.update(rpm, last, speed, dist, false);
+  }
+  // ---- LEUCHTENDE TORE FUER DEN HELI (v1.6.27, WIP) ----
+  // BESTELLT: "Dort wo Sektoren sind, bitte - wenn der Heli ausgewaehlt ist - leuchtende Tore an der Strecke senkrecht
+  // hochziehen. Wenn sie durchflogen werden und dann das Start/Ziel-Tor, dann soll eine Runde gezaehlt werden. Mit Tore
+  // meine ich links und rechts am Streckenrand Lichtstangen, die in die Hoehe gehen."
+  // Tore an den Sektoranfaengen der gebauten Bahn (sektorAnfaenge, 60-track.js), sonst (freie Strecke, kurze Bahn ohne
+  // Sektoren) bei einem und zwei Dritteln der Strecke; das letzte Tor ist Start/Ziel (VF.zielIdx). Je Tor zwei Stangen
+  // jenseits des Randsteins, VF_HUB_TOR_H hoch. Durchflogen = die Strecke vom letzten zum jetzigen Flugort schneidet die
+  // Linie zwischen den Stangen, unterhalb der Spitze. Die Runde (vfPaket) zaehlt beim Heli nur, wenn er eben durch das
+  // Start/Ziel-Tor geflogen ist und vorher alle anderen Tore der Reihe nach (die erste Ueberfahrt startet nur die Uhr).
+  // v1.6.58 BESTELLT: "mach sie hoeher und spiele ein 'bling' ab, wenn ich durch eins geflogen bin" - 100 statt 40.
+  const VF_HUB_TOR_H = 100, VF_HUB_TOR_B = 0.9;
+  const VF_HUB_HECK_NABE = [0.815, -3.36];   // Heckrotor-Nabe: Hoehe y und Laenge z im Modell (hub.bin)
+  function vfHubBling(hoch) {
+    if (typeof playTone !== 'function') return;
+    playTone(hoch ? 1760 : 1320, 0.07, 'sine', 0.16);
+    setTimeout(() => playTone(hoch ? 2637 : 1976, 0.12, 'sine', 0.13), 70);
+  }
+  // In Fahrtrichtung durch das Tor? (Flugrichtung gegen die Richtung der Mittellinie an diesem Punkt)
+  function vfHubVorwaerts(g, a, b) {
+    const n = VF.pts.length, p = VF.pts[g.i], q = VF.pts[(g.i + 1) % n];
+    return (b[0] - a[0]) * (q.x - p.x) + (b[1] - a[1]) * (q.y - p.y) > 0;
+  }
+  function vfHubToreBauen() {
+    const pts = VF.pts, nrm = VF.nrm, n = pts.length;
+    let idx = [];
+    try {
+      const anf = !VF.frei && typeof sektorAnfaenge === 'function' ? sektorAnfaenge(VF.tiles, true, true) : null;
+      if (anf && anf.length > 1) {
+        anf.slice(1).forEach((k) => { const i = pts.findIndex((p) => p.tile === k); if (i >= 0) idx.push(i); });
+      }
+    } catch (e) { idx = []; }
+    const z = VF.zielIdx || 0;
+    if (!idx.length) idx = [Math.round(n / 3), Math.round(2 * n / 3)].map((d) => (z + d) % n);
+    idx.sort((a, b) => ((a - z + n) % n) - ((b - z + n) % n));
+    idx.push(z);
+    const r = TRACK_HALF_W + TRACK_KERB_W + 1.5;
+    return { naechstes: 0, sfAt: 0, liste: idx.map((i, j) => ({ i, sf: j === idx.length - 1,
+      l: [pts[i].x + nrm[i].x * r, pts[i].y + nrm[i].y * r], r: [pts[i].x - nrm[i].x * r, pts[i].y - nrm[i].y * r] })) };
+  }
+  // Schneiden sich die Strecken a-b (Flug) und c-d (Tor) in der Ebene?
+  function vfStreckenSchnitt(a, b, c, d) {
+    const k = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+    const d1 = k(c, d, a), d2 = k(c, d, b), d3 = k(a, b, c), d4 = k(a, b, d);
+    return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0)) && d1 !== 0 && d2 !== 0;
+  }
+  // Je Flugschritt: geht der Flug durch das naechste Tor (oder durch Start/Ziel)?
+  function vfHubToreSchritt(vorX, vorY) {
+    const T = VF.hubTore;
+    if (!T) return;
+    const a = [vorX, vorY], b = [VF.x, VF.y], hoch = (VF.z || 0) <= VF_HUB_TOR_H;
+    const sf = T.liste[T.liste.length - 1];
+    const g = T.liste[T.naechstes];
+    if (g && !g.sf && hoch && vfStreckenSchnitt(a, b, g.l, g.r)) {
+      T.naechstes++;
+      VF.hubTorPuffer = null;   // neu zeichnen: durchflogene Tore werden gruen
+      showHudToast(t('Tor') + ' ' + T.naechstes + '/' + (T.liste.length - 1));
+      vfHubBling(false);
+    }
+    // v1.6.58 GEMELDET: "die Rundenzaehlung funktioniert nicht so gut, wenn ich durch die Tore geflogen bin". Die Runde
+    // kam bisher aus der Linie der Mittellinie (vfPaket, Punkt-Index) und zaehlte nur, wenn das Start/Ziel-Tor in den
+    // 1,5 s davor durchflogen war; ueber dem Innenfeld springt der naechste Mittellinienpunkt, und eine scheinbar
+    // rueckwaerts ueberflogene Linie sperrte die naechste Runde. Jetzt zaehlt die Runde genau beim Flug durch das
+    // Start/Ziel-Tor (vorwaerts), wenn vorher alle Tore der Reihe nach durchflogen sind; der erste Durchflug startet die Uhr.
+    if (hoch && vfStreckenSchnitt(a, b, sf.l, sf.r) && vfHubVorwaerts(sf, a, b)) {
+      const jetzt = rennZeitJetzt();
+      T.sfAt = jetzt;
+      if (vfHubRundeErlaubt(jetzt)) {
+        VF.zielAt = jetzt;
+        vfHubRundeGezaehlt();
+        vfRundeAnLinie(jetzt);
+        vfHubBling(true);
+      } else if (VF.rundeAb) showHudToast(t('Tor') + ' ' + (T.naechstes + 1) + ' ' + t('fehlt'));
+    }
+  }
+  // Fuer vfPaket: darf diese Ueberfahrt der Linie eine Runde sein?
+  function vfHubRundeErlaubt(jetzt) {
+    const T = VF.hubTore;
+    if (!T) return true;
+    const durchSf = T.sfAt && jetzt - T.sfAt < 1500;
+    return !!durchSf && (!VF.rundeAb || T.naechstes >= T.liste.length - 1);
+  }
+  function vfHubRundeGezaehlt() { if (VF.hubTore) { VF.hubTore.naechstes = 0; VF.hubTore.sfAt = 0; VF.hubTorPuffer = null; } }
+  // Die Stangen als Farbkasten (6 Zahlen je Ecke), in Weltkoordinaten (x, Hoehe, y). Offene Tore leuchten cyan,
+  // durchflogene gruen, Start/Ziel gelb.
+  function vfHubTorPufferBauen(gl) {
+    const T = VF.hubTore, a = [];
+    const kasten = (x, y, f) => {
+      const b = VF_HUB_TOR_B / 2, x0 = x - b, x1 = x + b, z0 = y - b, z1 = y + b, y0 = 0, y1 = VF_HUB_TOR_H;
+      const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+      [[4, 5, 6, 7], [1, 0, 3, 2], [0, 4, 7, 3], [5, 1, 2, 6], [3, 7, 6, 2]].forEach(([p, q, r, u]) =>
+        [p, q, r, p, r, u].forEach((i) => a.push(v[i][0], v[i][1], v[i][2], f[0], f[1], f[2])));
+    };
+    T.liste.forEach((g, j) => {
+      const f = g.sf ? [1.6, 1.4, 0.3] : j < T.naechstes ? [0.3, 1.5, 0.45] : [0.35, 1.4, 1.7];
+      kasten(g.l[0], g.l[1], f); kasten(g.r[0], g.r[1], f);
+    });
+    return vfPuffer(gl, a);
+  }
+  // Ein Bildschritt des Helikopters (ersetzt den ganzen Auto-Zweig von vfBild).
+  function vfHubSchritt(dt) {
+    const st = physEngine.state;
+    if (st) st.speedKmh = 0;
+    VF.dtBild = dt;
+    const vorX = VF.x, vorY = VF.y;
+    vfHubPhysik(dt);
+    vfHubToreSchritt(vorX, vorY);
+    // Streckenort fuer die Rundenzaehlung (Start/Ziel, vfPaket) und die Hoehe ueber der Bahn.
+    const o = vfOrt(VF.pts, VF.nrm, VF.x, VF.y, VF.idx);
+    VF.idx = o.idx;
+    if (VF.splits && VF.splits[VF.idx] === undefined) VF.splits[VF.idx] = rennZeitJetzt() - VF.rundeAb;
+    VF.abseits = false;   // fliegt, "neben der Bahn" gibt es nicht
+    // VF.zielVor wird hier NICHT gesetzt: vfPaket (Takt) vergleicht es mit VF.idx, um die Start/Ziel-Linie zu zaehlen.
+    vfMalen();
+    vfHud();
+    // Rotor-Ton nach dem Malen (dann ist VF.augeJetzt frisch fuer die Entfernungsdaempfung).
+    vfHubTonSchritt(dt);
+  }
   function vfBild(now) {
     if (!VF.aktiv) return;
-    VF.raf = requestAnimationFrame(vfBild);
+    // v1.6.60: in AR treibt die AR-Sitzung die Bilder (vfArBild setzt VF.ar.frame); der Takt des Fensters steht dann.
+    if (VF.ar) {
+      if (!VF.ar.frame) return;
+      VF.raf = VF.ar.session.requestAnimationFrame(vfArBild);
+    } else VF.raf = requestAnimationFrame(vfBild);
     // Ladebild: bis Klaenge, Texturen und Autos da sind, steht alles (kein HUD, keine Physik, keine Uhren).
     if (VF.laedt && vfLadeSchritt(now)) {
       VF.letzt = now; VF.letztRoh = now; VF.dtBild = 0;
       if (physEngine && physEngine.state) physEngine.state.speedKmh = 0;
+      return;
+    }
+    if (VF.ampel && vfAmpelSchritt(now)) {
+      VF.letzt = now; VF.letztRoh = now; VF.dtBild = 0; vfMalen(); vfHud();
       return;
     }
     vfWacheMessen(VF.letztRoh ? now - VF.letztRoh : 0, now);
@@ -2849,6 +3895,7 @@
     if (rennPauseAktiv()) {
       VF.letzt = now; VF.dtBild = 0; vfMalen(); vfHud();
       if (physEngine && physEngine.state) physEngine.state.vfNutzung = 0;
+      if (VF.hubschrauber) vfHubTon.ausblenden();
       return;
     }
     const dt = VF.letzt ? Math.min(0.05, (now - VF.letzt) / 1000) : 0.016;
@@ -2856,6 +3903,15 @@
     if (VF.wxEinmalAt && rennZeitJetzt() >= VF.wxEinmalAt) vfWetterEinmal();
     const st = physEngine.state;
     VF.dtBild = dt;
+    // RC Stunt Copter: der ganze Auto-Zweig entfaellt - Flug, Zeiten und Anzeige laufen ueber vfHubSchritt.
+    if (VF.hubschrauber) {
+      if (VF.modus && (VF.modus === 'endurance' || VF.modus === 'qualifying') && VF.limit) {
+        VF.modusZeit += dt;
+        if (VF.modusZeit >= VF.limit * 60) vfRennenEnde();
+      }
+      vfHubSchritt(dt);
+      return;
+    }
     // Zeitmodi (Endurance, Qualifying): laufen gegen die Rennzeit.
     if (VF.modus && (VF.modus === 'endurance' || VF.modus === 'qualifying') && VF.limit) {
       VF.modusZeit += dt;
@@ -2921,6 +3977,8 @@
       const spHw = Math.tan(Math.PI / (2 * (Pw.C || 1.5))) / (Pw.BH || 10);
       if (VF.dyn && Math.abs(VF.dyn.aH || 0) > spHw) VF.lenkWinkel = Math.max(-1, Math.min(1, lenk)) * lenkGradW;
     }
+    // v1.6.54: im Drift zeigen die Vorderraeder den gerechneten Einschlag (Stick plus Gegenlenk-Hilfe).
+    if (VF.dp && kmh > 0) VF.lenkWinkel = VF.dp.d || 0;
     // v1.5.155: Reifenausnutzung fuer das Quietschen (siehe vfDynamik). In der virtuellen Fahrt
     // treibt der echte Schraeglauf das Quietschen ueber physEngine.state.vfNutzung; der
     // Eingabe-basierte latUse des Einspurmodells faengt Unter-/Uebersteuern nicht.
@@ -2945,9 +4003,11 @@
           VF.wandSeit = rennZeitJetzt(); padRumble(0.6, 0.4, 90, 'kerb', 1);
         }
         st.speedKmh *= Math.exp(-2.5 * dt);
+        vfDriftExtern(Math.exp(-2.5 * dt), 0, 0);
       }
     }
     if (Hb.p) st.speedKmh -= 9.81 * Math.sin(Hb.p) * 3.6 * dt / REAL_SCALE;
+    if (Hb.p && VF.dp) VF.dp.vx = Math.max(0, VF.dp.vx - 9.81 * Math.sin(Hb.p) * dt);
     // v1.5.84: in der Boxenbucht ist die Fahrbahn auf der Boxenseite breiter. VF.boxSeite ist die Boxenseite in
     // Fahrtrichtung (in der Gegenrichtung die andere Seite der Mittellinie).
     const bucht = (VF.boxBucht && o.quer * (VF.boxSeite || VF_BOX_SEITE) > 0) ? VF.boxBucht.b[o.idx] : 0;
@@ -2971,7 +4031,7 @@
     vfRandsteinTon(kerb, q, kmh);   // v1.3.39: dumpfes Rumpeln, je Bild (billig), blendet selbst aus
     if (ab) {
       if (vfAbseitsBremseAn()) st.speedKmh *= Math.exp(-VF_ABSEITS_BREMSE * dt);
-      if (rennZeitJetzt() - VF.abseitsSeit > VF_ABSEITS_ZURUECK_MS) vfZuruecksetzen();
+      if (vfZuruecksetzenAn() && rennZeitJetzt() - VF.abseitsSeit > VF_ABSEITS_ZURUECK_MS) vfZuruecksetzen();
     }
     // NPCs: folgen ihrer Spur mit Stufe-1-Tempo und bremsen vor Kurven (vfNpcSteuern).
     // DIAGNOSE (temporaer, Latenz): Zeit fuer NPC-Steuerung + Kollision (vfVerkehr).
@@ -3170,9 +4230,12 @@
       if (neuerKontakt && physEngine.state.speedKmh > 0) {
         const st = vfStossRechnen(physEngine.state.speedKmh, VF.h, npc.kmh || 0, npc.h, k.nx, k.ny, long > 0);
         if (st.vnMs > 0) {
+          const kmhAlt = physEngine.state.speedKmh;
           physEngine.state.speedKmh = Math.max(0, st.kmhNeu);
           if (!VF.dyn) VF.dyn = { vy: 0, r: 0 };
           VF.dyn.vy += st.dvy; VF.dyn.r += st.dr;
+          vfDriftExtern(kmhAlt > 0 ? Math.max(0, st.kmhNeu) / kmhAlt : 1, st.dvy, st.dr);
+          if (VF.dp) VF.dpKmh = physEngine.state.speedKmh;
           if (npc.motor && npc.motor.state) npc.motor.state.speedKmh = Math.max(0, (npc.motor.state.speedKmh || 0) * (1 - Math.min(0.3, st.vnMs * 0.012)));
           padRumble(Math.min(1, 0.2 + st.vnMs * 0.03), Math.min(1, 0.2 + st.vnMs * 0.03), 40, 'crash', 1);
           npc.stossMs = st.vnMs;
@@ -3205,7 +4268,7 @@
       padRumble(0.6, 0.6, 60, 'kill', 1);
     } else if (VF.derbyHealth <= 0 && !VF.derbyTot) {
       VF.derbyTot = true;
-      physEngine.state.speedKmh = 0;
+      physEngine.state.speedKmh = 0; VF.dp = null;
       showHudToast(t('Dein Auto ist aus'));
     }
     vfDerbyPruefen();
@@ -3237,9 +4300,12 @@
   function vfZuruecksetzen() {
     const p = VF.pts[VF.idx];
     VF.x = p.x; VF.y = p.y; VF.h = p.heading;
+    // v1.6.27 (Issue #15): beim Hubschrauber setzt das Zuruecksetzen auch die Flughoehe zurueck.
+    if (VF.hubschrauber) { VF.z = 0; VF.flug = null; VF.roll = 0; VF.pitch = 0; VF.hubLuft = false; }
     physEngine.state.speedKmh = 0;
     VF.abseits = false;
     VF.dyn = { vy: 0, r: 0 };
+    VF.dp = null; VF.handbremse = false;   // v1.6.54 Drift
     VF.feder = null;
     if (VF.modus === 'knockout') {
       VF.koLeben = Math.max(0, VF.koLeben - 1);
@@ -3271,9 +4337,103 @@
     fn();
     P[key] += performance.now() - t0;
   }
+  // v1.6.60: die Szene (Flaechen, Autos, Hubschrauber, Rauch, NPCs, Geist) mit gegebener Projektion und Blick - fuer das
+  // normale Bild (vfMalen) und fuer Augmented Reality (vfArMalen, 60e-ar.js, je Auge die Matrizen der Kamera).
+  function vfSzeneMalen(gl, pv, blick, auge) {
+    // v1.3.39: Boden, Fahrbahn und Randsteine mit Texturen (vorher Eckfarben in VF.bahn).
+    vfFlaechenMalen(gl, pv, auge);
+    gl.useProgram(VF.prog);
+    if (!VF.loc) VF.loc = { m: gl.getUniformLocation(VF.prog, 'm'), w: gl.getUniformLocation(VF.prog, 'w'), nebel: gl.getUniformLocation(VF.prog, 'nebel'), alf: gl.getUniformLocation(VF.prog, 'alf'), sonne: gl.getUniformLocation(VF.prog, 'sonne'),
+                            dunst: gl.getUniformLocation(VF.prog, 'dunst'), aug: gl.getUniformLocation(VF.prog, 'aug'),
+                            p: gl.getAttribLocation(VF.prog, 'p'), c: gl.getAttribLocation(VF.prog, 'c'), pv: new Float32Array(16), w16: new Float32Array(16) };
+    const L = VF.loc;
+    for (let i = 0; i < 16; i++) L.pv[i] = pv[i];
+    gl.uniformMatrix4fv(L.m, false, L.pv);
+    vfTzSetzen(gl, L);
+    gl.uniform1f(L.alf, 1.0);
+    const zeichne = (pu, welt) => {
+      for (let i = 0; i < 16; i++) L.w16[i] = welt[i];
+      gl.uniformMatrix4fv(L.w, false, L.w16);
+      gl.bindBuffer(gl.ARRAY_BUFFER, pu.b);
+      gl.enableVertexAttribArray(L.p); gl.enableVertexAttribArray(L.c);
+      gl.vertexAttribPointer(L.p, 3, gl.FLOAT, false, 24, 0);
+      gl.vertexAttribPointer(L.c, 3, gl.FLOAT, false, 24, 12);
+      gl.drawArrays(gl.TRIANGLES, 0, pu.n);
+    };
+    if (VF.boxStriche) {
+      zeichne(VF.boxStriche, VF_EINS);
+      gl.disableVertexAttribArray(L.p); gl.disableVertexAttribArray(L.c);
+    }
+    // v1.5: Baeume (nur auf Rasen), vor den Autos. v1.6.60: in AR keine (die echte Umgebung ist zu sehen).
+    if (VF.ar || VF.marker) { /* ohne Baeume */ }
+    else if (VF.weh && VF.weh.prog) vfWehenMalen(gl, pv);
+    else if (VF.baeume) {
+      zeichne(VF.baeume, VF_EINS);
+      gl.disableVertexAttribArray(L.p); gl.disableVertexAttribArray(L.c);
+    }
+    const geistDa = !!(VF.geist && VF.geist.aktiv && VF.geist.an);
+    // Ohne Modell (Kasten gewaehlt oder Modell noch nicht geladen) bleibt der blaue Kasten als Geist.
+    // v1.6.48 (GEMELDET: Ruckeln im Performance-Modus nach ein paar Runden - ab Runde 2 faehrt der Geist): in Performance ist der
+    // Geist die leichte blaue Kiste statt eines zweiten vollen Modells in zwei Durchgaengen.
+    const geistModell = geistDa && VF.modell && VF.tprog && VF.grafik;
+    if (geistDa && !geistModell) {
+      if (!VF.geistAuto) VF.geistAuto = vfAutoBauen(gl, [0.45, 0.75, 1.0]);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.uniform1f(L.alf, 0.45);
+      zeichne(VF.geistAuto, vfLage(VF.geist.x, VF.geist.y, VF.geist.h));
+      gl.uniform1f(L.alf, 1.0);
+      gl.disable(gl.BLEND);
+      gl.disableVertexAttribArray(L.p); gl.disableVertexAttribArray(L.c);
+    }
+    if (VF.hubschrauber) {
+      // RC Stunt Copter: Rumpf mit der Fluglage (Hoehe, Schraeglage, Nicken), darueber der drehende Hauptrotor.
+      gl.uniform1f(L.alf, 1.0);
+      const welt = vfHubLage(VF.x, VF.y, VF.h, VF.z || 0, VF.roll || 0, VF.pitch || 0);
+      zeichne(VF.auto, welt);
+      if (VF.hubRotor) zeichne(VF.hubRotor, vfMal(welt, vfRy(VF.rotor || 0)));
+      if (VF.hubHeck) zeichne(VF.hubHeck, vfKette(welt, vfT(0, VF_HUB_HECK_NABE[0], VF_HUB_HECK_NABE[1]), vfRx(VF.heckRotor || 0),
+        vfT(0, -VF_HUB_HECK_NABE[0], -VF_HUB_HECK_NABE[1])));
+      if (VF.hubTore) { if (!VF.hubTorPuffer) VF.hubTorPuffer = vfHubTorPufferBauen(gl); zeichne(VF.hubTorPuffer, vfT(0, 0, 0)); }
+      gl.disableVertexAttribArray(L.p); gl.disableVertexAttribArray(L.c);
+    } else if (VF.modell && VF.tprog) vfModellMalen(gl, pv, blick, auge);
+    else {
+      zeichne(VF.auto, vfLage(VF.x, VF.y, VF.h));
+      gl.disableVertexAttribArray(L.p); gl.disableVertexAttribArray(L.c);
+    }
+    // v1.6.27: Drift-Rauch (halbdurchsichtig, schreibt keine Tiefe), mit dem Farbprogramm.
+    if (VF.rauch && VF.rauch.length) {
+      gl.useProgram(VF.prog);
+      if (!VF.rauchPuffer) VF.rauchPuffer = vfRauchPufferBauen(gl);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+      for (const p of VF.rauch) {
+        const u = p.t / p.leben, s = p.s0 + (p.s1 - p.s0) * Math.sqrt(u);
+        gl.uniform1f(L.alf, p.a0 * (1 - u) * Math.min(1, u * 8));
+        zeichne(VF.rauchPuffer, vfKette(vfT(p.x, p.y, p.z), vfRy(p.dreh + u), vfS(s, s * 0.8, s)));
+      }
+      gl.uniform1f(L.alf, 1.0);
+      gl.depthMask(true); gl.disable(gl.BLEND);
+      gl.disableVertexAttribArray(L.p); gl.disableVertexAttribArray(L.c);
+    }
+    // NPCs: ihre eigenen Modelle an ihren Stellen.
+    if (VF.npcs && VF.tprog) {
+      for (const npc of VF.npcs) {
+        if (!npc.modell) continue;
+        // Neigung 1x: "Neigung sichtbar" gilt nur fuer das eigene Auto (v1.2.32 GEMELDET: "sollte auf
+        // Stufe 1 sein"). Bremslicht, wenn das Fahrzeugmodell des NPC bremst.
+        vfModellZeichnen(gl, pv, blick, npc.modell, VF.tprog, npc.x, npc.y, npc.h, npc.feder, npc.lenkWinkel, npc.raddreh, VF.radModell, true,
+          !!(npc.motor && npc.motor.outputs && npc.motor.outputs.lights && npc.motor.outputs.lights.brake), 1, 0, auge);
+      }
+    }
+    // v1.5.84: der Geist als durchscheinende Kopie des gewaehlten Autos, nach allen undurchsichtigen Autos.
+    if (geistModell) vfGeistMalen(gl, pv, blick, auge);
+  }
   function vfMalen() {
     const gl = VF.gl, cv = VF.cv;
     if (gl.isContextLost()) return;   // webglcontextlost beendet die Fahrt (virtuellStarten)
+    // v1.6.67: Marker-AR (60f-ar-marker.js): Kamerabild dahinter, Pose aus dem Marker.
+    if (VF.marker) { if (typeof vfMkMalen === 'function') vfMkMalen(); return; }
+    // v1.6.60: Augmented Reality zeichnet in die Ebene der AR-Sitzung (60e-ar.js), nicht in die Leinwand.
+    if (VF.ar) { if (VF.ar.frame && typeof vfArMalen === 'function') vfArMalen(VF.ar.frame); return; }
     // Handy (Touch): hoechstens 1,25-fache Aufloesung - die Pixelzahl ist auf dem Handy der teuerste Teil.
     // Quality (v1.3.113) darf mehr Pixel: bis 1,5 auf Touch, bis 2 auf Desktop.
     const qPix = VF.grafik && vfWacheStufe() < 2;   // v1.5: die Bildraten-Wache nimmt ab Stufe 2 die Quality-Aufloesung
@@ -3287,6 +4447,9 @@
     // Himmel: Vollbild-Quad, Farbverlauf im WELTRAUM (horizontfolgend beim Umsehen). Ganz hinten.
     if (!VF.himmelProg) { VF.himmelProg = vfProgrammHimmel(gl); VF.himmel = vfHimmel(gl); }
     let k = vfKamera(VF.dtBild || 0.016);
+    // v1.6.44 (gnen54, bb07959): waagerechter Bildwinkel (auto.json "haube": fovH) in den senkrechten fuer das aktuelle
+    // Seitenverhaeltnis - so bleibt die Breite des Blicks auf jedem Schirm gleich.
+    if (k.fovH && VF.cv) k.fov = 2 * Math.atan(Math.tan(k.fovH * Math.PI / 360) / Math.max(0.2, VF.cv.width / Math.max(1, VF.cv.height))) * 180 / Math.PI;
     // v1.3.124 Studienmodus: festes Sichtfeld aus Bildschirmgroesse und Sitzabstand.
     if (VF_STUDIE) { const sf = vfStudieFov(); if (sf) k.fov = sf; }
     else k = vfKameraEffekt(k, VF.dtBild || 0.016);
@@ -3342,64 +4505,7 @@
         gl.viewport(0, 0, w, h);
       });
     }
-    // v1.3.39: Boden, Fahrbahn und Randsteine mit Texturen (vorher Eckfarben in VF.bahn).
-    vfFlaechenMalen(gl, pv, k.auge);
-    gl.useProgram(VF.prog);
-    if (!VF.loc) VF.loc = { m: gl.getUniformLocation(VF.prog, 'm'), w: gl.getUniformLocation(VF.prog, 'w'), nebel: gl.getUniformLocation(VF.prog, 'nebel'), alf: gl.getUniformLocation(VF.prog, 'alf'), sonne: gl.getUniformLocation(VF.prog, 'sonne'),
-                            dunst: gl.getUniformLocation(VF.prog, 'dunst'), aug: gl.getUniformLocation(VF.prog, 'aug'),
-                            p: gl.getAttribLocation(VF.prog, 'p'), c: gl.getAttribLocation(VF.prog, 'c'), pv: new Float32Array(16), w16: new Float32Array(16) };
-    const L = VF.loc;
-    for (let i = 0; i < 16; i++) L.pv[i] = pv[i];
-    gl.uniformMatrix4fv(L.m, false, L.pv);
-    vfTzSetzen(gl, L);
-    gl.uniform1f(L.alf, 1.0);
-    const zeichne = (pu, welt) => {
-      for (let i = 0; i < 16; i++) L.w16[i] = welt[i];
-      gl.uniformMatrix4fv(L.w, false, L.w16);
-      gl.bindBuffer(gl.ARRAY_BUFFER, pu.b);
-      gl.enableVertexAttribArray(L.p); gl.enableVertexAttribArray(L.c);
-      gl.vertexAttribPointer(L.p, 3, gl.FLOAT, false, 24, 0);
-      gl.vertexAttribPointer(L.c, 3, gl.FLOAT, false, 24, 12);
-      gl.drawArrays(gl.TRIANGLES, 0, pu.n);
-    };
-    if (VF.boxStriche) {
-      zeichne(VF.boxStriche, VF_EINS);
-      gl.disableVertexAttribArray(L.p); gl.disableVertexAttribArray(L.c);
-    }
-    // v1.5: Baeume (nur auf Rasen), vor den Autos.
-    if (VF.weh && VF.weh.prog) vfWehenMalen(gl, pv);
-    else if (VF.baeume) {
-      zeichne(VF.baeume, VF_EINS);
-      gl.disableVertexAttribArray(L.p); gl.disableVertexAttribArray(L.c);
-    }
-    const geistDa = !!(VF.geist && VF.geist.aktiv && VF.geist.an);
-    // Ohne Modell (Kasten gewaehlt oder Modell noch nicht geladen) bleibt der blaue Kasten als Geist.
-    if (geistDa && !(VF.modell && VF.tprog)) {
-      if (!VF.geistAuto) VF.geistAuto = vfAutoBauen(gl, [0.45, 0.75, 1.0]);
-      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      gl.uniform1f(L.alf, 0.45);
-      zeichne(VF.geistAuto, vfLage(VF.geist.x, VF.geist.y, VF.geist.h));
-      gl.uniform1f(L.alf, 1.0);
-      gl.disable(gl.BLEND);
-      gl.disableVertexAttribArray(L.p); gl.disableVertexAttribArray(L.c);
-    }
-    if (VF.modell && VF.tprog) vfModellMalen(gl, pv, blick, k.auge);
-    else {
-      zeichne(VF.auto, vfLage(VF.x, VF.y, VF.h));
-      gl.disableVertexAttribArray(L.p); gl.disableVertexAttribArray(L.c);
-    }
-    // NPCs: ihre eigenen Modelle an ihren Stellen.
-    if (VF.npcs && VF.tprog) {
-      for (const npc of VF.npcs) {
-        if (!npc.modell) continue;
-        // Neigung 1x: "Neigung sichtbar" gilt nur fuer das eigene Auto (v1.2.32 GEMELDET: "sollte auf
-        // Stufe 1 sein"). Bremslicht, wenn das Fahrzeugmodell des NPC bremst.
-        vfModellZeichnen(gl, pv, blick, npc.modell, VF.tprog, npc.x, npc.y, npc.h, npc.feder, npc.lenkWinkel, npc.raddreh, VF.radModell, true,
-          !!(npc.motor && npc.motor.outputs && npc.motor.outputs.lights && npc.motor.outputs.lights.brake), 1, 0, k.auge);
-      }
-    }
-    // v1.5.84: der Geist als durchscheinende Kopie des gewaehlten Autos, nach allen undurchsichtigen Autos.
-    if (geistDa && VF.modell && VF.tprog) vfGeistMalen(gl, pv, blick, k.auge);
+    vfSzeneMalen(gl, pv, blick, k.auge);
     // v1.5 (Quality): Bloom auf das fertige Bild, vor dem Regen. Scheitert er einmal, bleibt er fuer die Fahrt aus.
     if (vfBloomAn()) vfPassZeit('bloom', () => { try { vfBloomMalen(gl, w, h); } catch (e) { VF.bloomKaputt = true; VF.bloom = null; gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h); log('Virtuell: Bloom aus (' + e.message + ').', 'info'); } });
     // v1.5.19: Regen zuletzt (durchsichtig, ohne Tiefe zu schreiben).
@@ -3719,7 +4825,9 @@
   // Motorhaube oder nahe Verfolgerkamera." R3 (bzw. die Lichthupen-Belegung) oder C schaltet weiter:
   // Verfolger -> nah -> Motorhaube -> Verfolger. Nachgefuehrt nach der ZEIT (nicht je Bild): auf einem
   // langsamen Handy lief die Kamera vorher bei weniger Bildern spuerbar hinterher.
-  const VF_KAMERAS = [{ id: 'verfolger', name: 'Verfolgerkamera' }, { id: 'nah', name: 'Nahe Verfolgerkamera' }, { id: 'haube', name: 'Motorhaube' },
+  // v1.6.44 aus gnen54s PR 4 (b9d8853, 42ab1c6): "Seitennahe Kamera" zwischen naher Verfolgerkamera und Motorhaube.
+  const VF_KAMERAS = [{ id: 'verfolger', name: 'Verfolgerkamera' }, { id: 'nah', name: 'Nahe Verfolgerkamera' },
+                      { id: 'naeher', name: 'Seitennahe Kamera' }, { id: 'haube', name: 'Motorhaube' },
                       { id: 'oben', name: 'Von oben (Start/Ziel)' },
                       { id: 'fahrer', name: 'Fahrer am Rand', wip: true },
                       { id: 'tv', name: 'TV-Kamera', wip: true }];
@@ -3753,7 +4861,7 @@
   // Der Pad-Stick gilt nur fuer Achsen, die keine Belegung in Optionen -> Controller traegt, und nur
   // bei Standard-Belegung des Pads (sonst koennten Achse 2/3 die Trigger sein und dauernd drehen).
   const VF_DREH_GIER = 200 * Math.PI / 180, VF_DREH_NICK = 100 * Math.PI / 180, VF_DREH_TAU = 0.12;
-  const VF_DREH_TOT = 0.16, VF_DREH_SCHWELLE = 2 * Math.PI / 180, VF_DREH_PAD_MS = 250;
+  const VF_DREH_TOT = 0.25, VF_DREH_SCHWELLE = 2 * Math.PI / 180, VF_DREH_PAD_MS = 250;
   const VF_DREH_TASTEN = { t: 'hoch', f: 'links', g: 'runter', h: 'rechts' };
   function vfDreh() {
     if (!VF.dreh) VF.dreh = { g: 0, n: 0, vg: 0, vn: 0 };
@@ -3777,16 +4885,18 @@
   // Stick (aus pollGamepad): x/y nach Totzone und Kennlinie, mit Zeitstempel - bleibt der Takt aus
   // (Pad weg, Menue-Abfang), zaehlt der alte Wert nach VF_DREH_PAD_MS nicht mehr.
   function vfStickSetzen(pad, b) {
-    if (!pad || pad.mapping !== 'standard') { VF.stick = null; return; }
+    if (!pad || pad.mapping !== 'standard') { VF.stick = null; VF.stickL = null; return; }
     const belegt = (i) => Object.keys(b || {}).some((k) => b[k] && b[k].type === 'axis' && b[k].index === i);
-    const achse = (i) => {
-      if (belegt(i)) return 0;
+    const achse = (i, roh) => {
+      if (!roh && belegt(i)) return 0;
       const v = (pad.axes || [])[i] || 0, m = Math.abs(v);
       if (m < VF_DREH_TOT) return 0;
       const s = Math.min(1, (m - VF_DREH_TOT) / (1 - VF_DREH_TOT));
       return Math.sign(v) * s * s;
     };
     VF.stick = { x: achse(2), y: achse(3), t: performance.now() };
+    // Linker Stick (Achsen 0/1) fuer den Hubschrauber: roh, unabhaengig von der Auto-Belegung.
+    VF.stickL = { x: achse(0, true), y: achse(1, true), t: performance.now() };
   }
   function vfDrehTaste(e, an) {
     if (!VF.aktiv || e.ctrlKey || e.altKey || e.metaKey) return;
@@ -3800,7 +4910,8 @@
   window.addEventListener('blur', () => { VF.tasten = {}; });
   function vfDrehEingabe() {
     let x = 0, y = 0;
-    const s = VF.stick;
+    // Im Helikopter-Modus gehoert der rechte Stick dem Flug (pitch/roll), nicht der Kamera.
+    const s = VF.hubschrauber ? null : VF.stick;
     if (s && performance.now() - s.t < VF_DREH_PAD_MS) { x = s.x; y = s.y; }
     const k = VF.tasten;
     if (k) { x += (k.rechts ? 1 : 0) - (k.links ? 1 : 0); y += (k.runter ? 1 : 0) - (k.hoch ? 1 : 0); }
@@ -3971,8 +5082,17 @@
     // Rechter Stick / T-F-G-H: die Drehung laeuft nach der Zeit (in der Pause ist dt 0).
     const art = vfDrehArt(id), D = vfDreh(), ein = vfDrehEingabe();
     vfDrehSchritt(D, ein[0], ein[1], dt, vfDrehGrenzen(art));
+    // v1.6.44 aus gnen54s testversion (03c2823): im Auto (Haube, Fahrer, TV) federt der Blick 0,5 s nach dem Loslassen
+    // zurueck nach vorn (Zeitkonstante 0,25 s); Totzone des Kamera-Sticks 0,25 (VF_DREH_TOT).
+    if (art === 'umsehen') {
+      if (ein[0] || ein[1]) VF.drehLos = 0; else VF.drehLos = (VF.drehLos || 0) + dt;
+      if (VF.drehLos > 0.5 && !D.vg && !D.vn) { const f = Math.exp(-dt / 0.25); D.g *= f; D.n *= f; if (Math.abs(D.g) < 1e-3) D.g = 0; if (Math.abs(D.n) < 1e-3) D.n = 0; }
+    }
     const k0 = vfKameraBasis(id, fx, fz, dt, art, D);
-    const k = art === 'kreisen' ? k0 : vfDrehAnwenden(k0, art, D, VF.x, 0, VF.y);
+    // Der Hubschrauber fliegt in der Hoehe: auch der Dreh-Mittelpunkt liegt dann auf der Flughoehe,
+    // sonst schwenkt die Kamera beim Umsehen/Oben um den Boden (nur sichtbar, wenn VF.z > 0).
+    const drehH = VF.hubschrauber ? (VF.z || 0) : 0;
+    const k = art === 'kreisen' ? k0 : vfDrehAnwenden(k0, art, D, VF.x, drehH, VF.y);
     // Bruecke (aus PR 4 von gnen54): die Kamera faehrt mit hoch; im Auto (Haube, Fahrer) neigt sich der Blick mit
     // der Rampe.
     const H = vfHzSpieler();
@@ -3992,28 +5112,41 @@
       // Haube hoeher liegt als die Speed-Dreams-Werte (z. B. Kaefer: Kofferraumhaube ~1,1 m hoch).
       const hb = VF.modell && VF.modell.meta && VF.modell.meta.haube;
       const vor = (hb ? hb.vor : 0.75) * s, hoch = (hb ? hb.hoch : 0.95 + (VF.modell ? 0.07 : 0.25)) * s;
-      const auge = [VF.x + fx * vor, hoch, VF.y + fz * vor];
+      const hubH = VF.hubschrauber ? (VF.z || 0) : 0;
+      // v1.6.44 aus gnen54s PR 4 (bb07959): ein Modell darf die Kamera ganz setzen - "seite" in m (+ links), "neigung" in
+      // Grad nach unten, "fov" senkrecht, "fovH" waagerecht (hat Vorrang; VW Caravelle: Onboard-Kamera mit 100 Grad).
+      const seite = (hb && hb.seite || 0) * s;
+      const auge = [VF.x + fx * vor + fz * seite, hoch + hubH, VF.y + fz * vor - fx * seite];
+      const sinkt = hb && typeof hb.neigung === 'number' ? Math.tan(hb.neigung * Math.PI / 180) * 30 : 1.2;
       VF.kam = auge;
-      return { auge, ziel: [auge[0] + fx * 30, hoch - 1.2, auge[2] + fz * 30], fov: 70, nah: 0.3 };
+      return { auge, ziel: [auge[0] + fx * 30, hoch + hubH - sinkt, auge[2] + fz * 30], fov: (hb && hb.fov) || 70, fovH: (hb && hb.fovH) || 0, nah: 0.3 };
     }
     if (id === 'oben') {
       // Von oben, parallel zur Start/Ziel-Geraden: die Kamera schwebt mit dem Auto mit (x/y) und
       // dreht sich NICHT mit - das "Oben" der Ansicht zeigt immer entlang der Geraden.
       const oben = [Math.sin(VF.startH * Math.PI / 180), 0, -Math.cos(VF.startH * Math.PI / 180)];
-      const auge = [VF.x, 85, VF.y];
+      const hubH = VF.hubschrauber ? (VF.z || 0) : 0;
+      const auge = [VF.x, 85 + hubH, VF.y];
       VF.kam = null;
-      return { auge, ziel: [VF.x, 0, VF.y], oben, fov: 62, nah: 0.5 };
+      return { auge, ziel: [VF.x, hubH, VF.y], oben, fov: 62, nah: 0.5 };
     }
-    const nah = id === 'nah';
-    const hinten = nah ? 9 : 15, hoehe = nah ? 3.8 : 8, tau = nah ? 0.08 : 0.15;
+    const nah = id === 'nah', naeher = id === 'naeher';
+    const hinten = naeher ? 6.5 : (nah ? 9 : 15), hoehe = naeher ? 2.8 : (nah ? 3.8 : 8), tau = naeher ? 0.06 : (nah ? 0.08 : 0.15);
     // Gedreht kreist der SOLL-Ort um das Auto; die Nachfuehrung (tau) bleibt dieselbe.
-    const zh = nah ? 2.0 : 1.4, vor = nah ? 8 : 12;
-    const k = vfDrehAnwenden({ auge: [VF.x - fx * hinten, hoehe, VF.y - fz * hinten], ziel: [VF.x + fx * vor, zh, VF.y + fz * vor] },
-      art, D, VF.x, zh, VF.y);
+    const zh = naeher ? 1.6 : (nah ? 2.0 : 1.4), vor = naeher ? 7 : (nah ? 8 : 12);
+    // Der Hubschrauber fliegt in der Hoehe (VF.z): Kamera und Ziel folgen mit, der Kreis dreht um den Flugort.
+    const hubH = VF.hubschrauber ? (VF.z || 0) : 0;
+    const k = vfDrehAnwenden({ auge: [VF.x - fx * hinten, hoehe + hubH, VF.y - fz * hinten], ziel: [VF.x + fx * vor, zh + hubH, VF.y + fz * vor] },
+      art, D, VF.x, zh + hubH, VF.y);
+    // Seitennah: zur Seite oder nach vorn geschwenkt bis zu 25 % naeher am Auto (gnen54, 42ab1c6).
+    if (naeher && D && D.g) {
+      const g = Math.abs(Math.atan2(Math.sin(D.g), Math.cos(D.g))), f = 1 - 0.25 * Math.min(1, g / (Math.PI / 2));
+      k.auge = [VF.x + (k.auge[0] - VF.x) * f, zh + hubH + (k.auge[1] - zh - hubH) * f, VF.y + (k.auge[2] - VF.y) * f];
+    }
     const soll = k.auge;
     const a = 1 - Math.exp(-Math.max(0, dt) / tau);
     VF.kam = VF.kam ? VF.kam.map((q, i) => q + (soll[i] - q) * a) : soll;
-    return { auge: VF.kam, ziel: k.ziel, fov: nah ? 58 : 54, nah: 0.5 };
+    return { auge: VF.kam, ziel: k.ziel, fov: naeher ? 62 : (nah ? 58 : 54), nah: naeher ? 0.3 : 0.5 };
   }
   // v1.5.84 BESTELLT: "Ghostcar sollte wie das ausgewählte Auto aussehen". Dasselbe Modell mit derselben Lackfarbe,
   // durchscheinend (VF_GEIST_ALPHA), ohne Licht, Bodenschatten und Federung. Zwei Durchgaenge: erst nur die Tiefe, dann
@@ -4056,6 +5189,8 @@
   }
   const vfFlagPad = { seit: null, gefeuert: false };
   function vfFlagTaste(an) {
+    // v1.6.54: im Drift ist die Taste die Handbremse (kein Boxenstopp, keine Gelbe Flagge).
+    if (vfHandbremse(an)) { vfFlagPad.seit = null; return; }
     const jetzt = performance.now();
     if (an && vfFlagPad.seit === null) { vfFlagPad.seit = jetzt; vfFlagPad.gefeuert = false; }
     if (an && !vfFlagPad.gefeuert && jetzt - vfFlagPad.seit >= 1000) { vfFlagPad.gefeuert = true; vfKnopf('flag'); }
@@ -4135,10 +5270,11 @@
       gl.drawElements(gl.TRIANGLES, t.indizes, gl.UNSIGNED_SHORT, t.index0 * 2);
     };
     const flaeche = (ecken, tx) => {      // ecken: je Ecke x y z u v (Welt)
-      const a = [];
-      ecken.forEach((e) => a.push(e[0], e[1], e[2], 0, 1, 0, e[3], e[4]));
+      // v1.6.48: ein fester Puffer je Modell statt eines neuen Arrays je Bild (weniger Muellsammlung auf dem Handy).
+      const a = M.quadF || (M.quadF = new Float32Array(6 * 8));
+      ecken.forEach((e, i) => a.set([e[0], e[1], e[2], 0, 1, 0, e[3], e[4]], i * 8));
       gl.bindBuffer(gl.ARRAY_BUFFER, M.quad);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(a), gl.DYNAMIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER, ecken.length === 6 ? a : a.subarray(0, ecken.length * 8), gl.DYNAMIC_DRAW);
       gl.vertexAttribPointer(T.ap, 3, gl.FLOAT, false, 32, 0);
       gl.vertexAttribPointer(T.an, 3, gl.FLOAT, false, 32, 12);
       gl.vertexAttribPointer(T.auv, 2, gl.FLOAT, false, 32, 24);
@@ -4163,10 +5299,13 @@
       gl.depthMask(true); gl.disable(gl.BLEND);
     }
     // 2. Aufbau, undurchsichtige Teile; Scheinwerfer und Ruecklicht leuchten selbst
-    const ruecklichtEmis = bremst ? 1.7 : (licht ? 0.55 : 0);
+    // v1.6.81 GEMELDET: "Bremslicht in AR ist zu hell (und die anderen Lichter evtl. auch)". Vor dem Kamerabild
+    // (AR, Marker-AR) leuchten Lichter schwaecher und die Lichtpunkte sind kleiner (VF_AR_LICHT).
+    const arL = (VF.ar || VF.marker) ? VF_AR_LICHT : null;
+    const ruecklichtEmis = (bremst ? 1.7 : (licht ? 0.55 : 0)) * (arL ? arL.emis : 1);
     const lackTint = vfLackTint(lackHex);
     for (const t of M.aufbauTeile) {
-      const emis = t.rolle === 'scheinwerfer' ? (licht ? 1.3 : 0) : t.rolle === 'ruecklicht' ? ruecklichtEmis : 0;
+      const emis = t.rolle === 'scheinwerfer' ? (licht ? 1.3 * (arL ? arL.emis : 1) : 0) : t.rolle === 'ruecklicht' ? ruecklichtEmis : 0;
       // Karosserie mit leichtem Clear-Coat-Glanz (klar, nur Quality), Scheiben/Glas dagegen nicht.
       // Der Lack betrifft nur Karosserieteile: Scheinwerfer, Ruecklichter und Scheiben bleiben unveraendert.
       const lackTeil = !t.rolle || t.rolle === 'karosserie' || t.rolle === 'lack';
@@ -4214,14 +5353,18 @@
     });
     // 4. Scheiben und Scheinwerferglas (durchscheinend, getoent)
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    // v1.6.44 (gnen54, 59a9f1a): sitzt die Kamera IM Auto (Caravelle: hinter der Frontscheibe), nur ein Hauch Glas -
+    // sonst waere das Bild durch die Toenung fast schwarz.
+    const innen = auge && Math.hypot(auge[0] - x, auge[2] - y) < d.laenge * s * 0.45 && auge[1] < (d.hoehe || 1.4) * s;
     for (const t of M.glasTeile) {
-      if (t.rolle === 'glas') { setze(aufbau, VF_GLAS_TINT, 0, 0.86, 0, 1, 0, 1); teil(t); }
-      else { setze(aufbau, VF_WEISS, licht ? 0.6 : 0, 0.9, 1, 1, 0, 0.5); teil(t); }
+      if (t.rolle === 'glas') { setze(aufbau, VF_GLAS_TINT, 0, innen ? 0.12 : 0.86, 0, 1, 0, innen ? 0.2 : 1); teil(t); }
+      else { setze(aufbau, VF_WEISS, licht ? 0.6 * (arL ? arL.emis : 1) : 0, 0.9, 1, 1, 0, 0.5); teil(t); }
     }
     // 5. Leuchten: Lichtpunkte (zur Kamera gedreht) und vorn der Lichtkegel auf der Bahn
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     const rechts = [blick[0], blick[4], blick[8]], oben = [blick[1], blick[5], blick[9]];
     const punkt = (p, gr, farbe, staerke) => {
+      if (arL) { gr *= arL.gross; staerke *= arL.staerke; }
       const c = ort(aufbau, p), k = gr * s;
       const e = (a, b) => [c[0] + (rechts[0] * a + oben[0] * b) * k, c[1] + (rechts[1] * a + oben[1] * b) * k, c[2] + (rechts[2] * a + oben[2] * b) * k];
       const q = [e(-1, -1).concat([0, 0]), e(1, -1).concat([1, 0]), e(1, 1).concat([1, 1]), e(-1, 1).concat([0, 1])];
@@ -4232,7 +5375,7 @@
       const vorn = d.laenge / 2 + zSp;
       const kegel = [[0.9, 0.02, vorn, 0.25, 0.5], [-0.9, 0.02, vorn, 0.75, 0.5], [-3.2, 0.02, vorn + 13, 1, 1], [3.2, 0.02, vorn + 13, 0, 1]]
         .map((p) => ort(lage, p).concat(p.slice(3)));
-      setze(VF_EINS, [1, 0.95, 0.82], 0, 0.30, 1, 0, 0, 0);
+      setze(VF_EINS, [1, 0.95, 0.82], 0, 0.30 * (arL ? arL.kegel : 1), 1, 0, 0, 0);
       flaeche([kegel[0], kegel[1], kegel[2], kegel[0], kegel[2], kegel[3]], M.glanz);
       (M.meta.lichter.front && M.meta.lichter.front.length ? M.meta.lichter.front : [[d.breite * 0.35, d.hoehe * 0.5, d.laenge / 2 - 0.15, 0.2], [-d.breite * 0.35, d.hoehe * 0.5, d.laenge / 2 - 0.15, 0.2]])
         .forEach((l) => punkt(l, l[3] * 2.6, [1, 0.96, 0.85], 0.95));
@@ -4244,6 +5387,8 @@
     gl.depthMask(true); gl.disable(gl.BLEND);
     [T.ap, T.an, T.auv].forEach((a) => gl.disableVertexAttribArray(a));
   }
+  // v1.6.81: Lichter vor dem Kamerabild (AR): Selbstleuchten, Groesse und Staerke der Lichtpunkte, Lichtkegel.
+  const VF_AR_LICHT = { emis: 0.5, gross: 0.45, staerke: 0.4, kegel: 0.35 };
   function vfZeit(ms) { return ms === null || ms === undefined ? '–' : (ms / 1000).toFixed(2) + ' s'; }
   // ---- HUD im Stil von ACC (WIP) -----------------------------------------------------------------
   // BESTELLT: "Aendere im virtuellen Fahren das UI so, dass es so aehnlich wie Assetto Corsa
@@ -4271,7 +5416,8 @@
     VF.ui = { runde: q('.vf-runde'), letzte: q('.vf-letzte'), beste: q('.vf-beste'), delta: q('.vf-delta'), deltaBar: q('.vf-delta-bar > i'),
               modus: q('.vf-modus'), abseits: q('.vf-abseits'), acc: q('.vf-acc'), tempo: q('.vf-acc .vf-tempo'), gang: q('.vf-gang'),
               rpm: q('.vf-rpm'), reifen: Array.from(schicht.querySelectorAll('.vf-reifen > i')), tank: q('.vf-tank'), tankBar: q('.vf-tank-bar > i'),
-              dreh: q('.vf-dreh-stab'), kamFrei: q('.vf-kamfrei'), alt: {} };
+              dreh: q('.vf-dreh-stab'), kamFrei: q('.vf-kamfrei'),
+              hub: { box: q('.vf-hub'), z: q('.vf-hub-z'), v: q('.vf-hub-v') }, alt: {} };
     VF.wetterKnopf = q('[data-vf="wetter"]'); VF.wetterNass = null;
   }
   function vfHud() {
@@ -4319,6 +5465,20 @@
     if (u.abseits.hidden === VF.abseits) u.abseits.hidden = !VF.abseits;
     const frei = vfKameraGedreht();
     if (u.kamFrei.hidden === frei) u.kamFrei.hidden = !frei;
+    // v1.6.27 (Issue #15): Helikopter - statt Tacho-Block die Anzeige von Hoehe und Tempo.
+    if (u.hub && u.hub.box) {
+      const an = !!VF.hubschrauber;
+      if (A.hub !== an) { A.hub = an; u.hub.box.hidden = !an; u.acc.hidden = an; }
+      if (an) {
+        const F = VF.flug || { vx: 0, vy: 0 };
+        const hz = Math.max(0, Math.round((VF.z || 0) / TRACK_UNITS_PER_CM));   // Modell-cm ueber der Bahn
+        txt(u.hub.z, 'hz', hz + ' cm');
+        // Tempo in echten km/h (kein TACHO_SCALE: der Hubschrauber fliegt in echten Streckeneinheiten).
+        const hv = Math.round(Math.hypot(F.vx, F.vy) * 3.6 / (100 * TRACK_UNITS_PER_CM));
+        txt(u.hub.v, 'hv', String(hv));
+        return;   // der Tacho-Block entfaellt
+      }
+    }
     // Tacho-Block: Tempo, Gang, Drehzahl, Reifen, Tank - dieselben Werte wie das Cockpit.
     txt(u.tempo, 'v', String(kmh));
     txt(u.rpm, 'r', String(Math.round(motorDrehzahl(st) / 10) * 10));
@@ -4361,20 +5521,73 @@
   }
   // Soll die Beruehrungs-Steuerung sichtbar sein? Automatisch auf Touch-Geraeten ohne Gamepad; ein
   // manueller Schalter (Knopf "Steuerung") kann das ueberschreiben.
-  function vfTouchSollAn() {
-    if (!vfTouchGeraet()) return false;
+  // v1.6.23 (Issue #11): drei Stellungen - 'touch' (Stick links, Pedal rechts), 'neigen' (Lenken durch Drehen des
+  // Handys, rechts das Pedal) und 'aus'. Gespeichert unter VF_TOUCH_STORE als 'an' / 'neigen' / 'aus'.
+  function vfTouchModus() {
+    if (!vfTouchGeraet()) return 'aus';
     let manuell = null;
     try { manuell = localStorage.getItem(VF_TOUCH_STORE); } catch (e) { /* privat */ }
-    if (manuell === 'an') return true;
-    if (manuell === 'aus') return false;
-    return !vfTouchPadAn();
+    if (manuell === 'neigen') return 'neigen';
+    if (manuell === 'an') return 'touch';
+    if (manuell === 'aus') return 'aus';
+    return vfTouchPadAn() ? 'aus' : 'touch';
   }
+  function vfTouchSollAn() { return vfTouchModus() !== 'aus'; }
+
+  // ---- NEIGEN (v1.6.23, Issue #11, WIP) ----
+  // BESTELLT: "Lenken durch Neigen des Handys (DeviceOrientation/Gyro, wie die Showroom-Neigung), waehlbar ueber den
+  // Knopf Steuerung im virtuellen Fahren. iOS: Bewegungs-Erlaubnis einholen."
+  // Das Handy wird quer gehalten und wie ein Lenkrad gedreht. Gerechnet aus der Schwerkraft (devicemotion,
+  // accelerationIncludingGravity), gedreht in Bildschirmkoordinaten (screen.orientation.angle): Winkel = atan2(-sx, sy),
+  // 0 = aufrecht, positiv = im Uhrzeigersinn (rechts). Die Mitte wird beim Einschalten und beim Start der Fahrt mit der
+  // ersten Messung geeicht. Voller Einschlag bei VF_NEIGEN_VOLL Grad, darunter VF_NEIGEN_TOT Grad Totzone. Flach
+  // gehalten (Schwerkraft fast nur senkrecht zum Bild) gibt es keinen Wert. iOS meldet die Beschleunigung mit
+  // umgekehrtem Vorzeichen.
+  const VF_NEIGEN_VOLL = 35, VF_NEIGEN_TOT = 2.5;
+  // v1.6.85 BESTELLT: "Introduce a dead-zone setting for the #11 tilting ... Setting should live in the virtual driving
+  // options." Totzone in Grad (Vorgabe 2,5 wie bisher), gespeichert unter VF_NEIGEN_TOT_STORE.
+  const VF_NEIGEN_TOT_STORE = 'omegasim-vf-neigen-totzone';
+  const VF_NEIGEN_TOT_WERTE = [0, 2.5, 5, 7.5, 10, 15];
+  function vfNeigenTot() {
+    try { const v = parseFloat(localStorage.getItem(VF_NEIGEN_TOT_STORE)); return VF_NEIGEN_TOT_WERTE.indexOf(v) >= 0 ? v : VF_NEIGEN_TOT; } catch (e) { return VF_NEIGEN_TOT; }
+  }
+  function vfNeigungWinkel(x, y, winkelGrad, ios) {
+    const a = (winkelGrad || 0) * Math.PI / 180, s = ios ? -1 : 1;
+    const sx = s * (x * Math.cos(a) - y * Math.sin(a)), sy = s * (x * Math.sin(a) + y * Math.cos(a));
+    if (!(Math.hypot(sx, sy) >= 2)) return null;
+    return Math.atan2(-sx, sy) * 180 / Math.PI;
+  }
+  function vfNeigungLenkwert(grad, mitte, tot) {
+    const tz = tot === undefined ? vfNeigenTot() : tot;
+    const d = ((grad - (mitte || 0) + 540) % 360) - 180, b = Math.abs(d);
+    if (b < tz) return 0;
+    return Math.sign(d) * Math.min(1, (b - tz) / (VF_NEIGEN_VOLL - tz));
+  }
+  let vfNeigMitte = null;
+  const vfIstIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  function vfNeigenEreignis(e) {
+    if (!VF.aktiv || VF.laedt || VF.hubschrauber || vfTouchModus() !== 'neigen') return;
+    const g = e.accelerationIncludingGravity;
+    if (!g || typeof g.x !== 'number' || typeof g.y !== 'number') return;
+    const ang = screen.orientation && typeof screen.orientation.angle === 'number' ? screen.orientation.angle : (+window.orientation || 0);
+    const w = vfNeigungWinkel(g.x, g.y, ang, vfIstIos);
+    if (w === null) return;
+    if (vfNeigMitte === null) vfNeigMitte = w;
+    applySteerInput(SRC.TOUCH, vfNeigungLenkwert(w, vfNeigMitte));
+  }
+  window.addEventListener('devicemotion', vfNeigenEreignis);
   function vfTouchElement() { return VF.schicht ? VF.schicht.querySelector('.vf-touch') : null; }
   function vfTouchAnzeigen(an) {
-    const el = vfTouchElement();
-    if (el) el.hidden = !an;
+    const el = vfTouchElement(), m = vfTouchModus(), heli = !!VF.hubschrauber;
+    // v1.6.37 BESTELLT: "The rc helicopter must get its own dual stick virtual control on mobile (if no gamepad is
+    // connected)". Im Hubschrauber zwei Sticks statt Lenkung und Pedal; Neigen gilt dort nicht (zaehlt als Touch).
+    if (el) { el.hidden = !an; el.classList.toggle('vf-touch-neigen', m === 'neigen' && !heli); el.classList.toggle('vf-touch-heli-an', heli); el.classList.toggle('vf-touch-drift', !heli && vfHandling() === 'drift'); }
     const kn = VF.schicht ? VF.schicht.querySelector('[data-vf="touch"]') : null;
-    if (kn) kn.classList.toggle('vf-an', an);
+    if (kn) {
+      kn.classList.toggle('vf-an', an);
+      const ti = t('Steuerung') + ': ' + (m === 'neigen' ? t('Neigen') + ' (WIP)' : m === 'touch' ? t('Touch') : t('Aus'));
+      kn.title = ti; kn.setAttribute('aria-label', ti);
+    }
   }
   function vfTouchAktualisieren() {
     const kn = VF.schicht ? VF.schicht.querySelector('[data-vf="touch"]') : null;
@@ -4382,14 +5595,56 @@
     vfTouchAnzeigen(vfTouchSollAn());
   }
   function vfTouchUmschalten() {
-    const an = vfTouchSollAn();
-    try { localStorage.setItem(VF_TOUCH_STORE, an ? 'aus' : 'an'); } catch (e) { /* privat */ }
+    // v1.6.23: reihum Touch -> Neigen -> Aus -> Touch.
+    const m = vfTouchModus(), neu = m === 'touch' ? 'neigen' : m === 'neigen' ? 'aus' : 'an';
+    try { localStorage.setItem(VF_TOUCH_STORE, neu); } catch (e) { /* privat */ }
+    try { releaseSteerInput(SRC.TOUCH); } catch (e) { /* egal */ }
+    vfNeigMitte = null;
+    if (neu === 'neigen') {
+      // iOS 13+: Bewegungsdaten nur nach Erlaubnis, und die Frage nur aus einem Tipp heraus (das ist dieser).
+      try { if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') DeviceMotionEvent.requestPermission().catch(() => {}); } catch (e) { /* egal */ }
+      showHudToast(t('Steuerung') + ': ' + t('Neigen') + ' (WIP) - ' + t('Handy quer halten und wie ein Lenkrad drehen'));
+    }
     vfTouchAktualisieren();
   }
   // Zeigerzustand je Steuerelement (je ein Zeiger, damit zwei Finger sich nicht stoeren).
   function vfTouchBauen() {
+    vfNeigMitte = null;   // Neigen: die Mitte mit der ersten Messung dieser Fahrt eichen
     const el = vfTouchElement();
     if (!el) return;
+    // v1.6.37: die zwei Hubschrauber-Sticks (je ein Zeiger, Kreis, Wert -1..1 je Achse, Loslassen = Mitte).
+    VF.touchHeli = { l: { x: 0, y: 0 }, r: { x: 0, y: 0 } };
+    el.querySelectorAll('.vf-touch-heli').forEach((st) => {
+      const seite = st.classList.contains('vf-touch-heli-l') ? 'l' : 'r';
+      let zeiger = null;
+      const kn = st.querySelector('.vf-touch-knauf');
+      const setzen = (x, y) => {
+        if (VF.touchHeli) VF.touchHeli[seite] = { x, y };
+        if (kn) kn.style.transform = 'translate(' + (x * 38) + '%,' + (y * 38) + '%)';
+      };
+      const bewegen = (e) => {
+        const r = st.getBoundingClientRect(), R = r.width / 2;
+        if (!(R > 0)) return;
+        let x = (e.clientX - r.left - R) / R, y = (e.clientY - r.top - R) / R;
+        const l = Math.hypot(x, y);
+        if (l > 1) { x /= l; y /= l; }
+        setzen(x, y);
+      };
+      const los = (e) => { if (zeiger === null || (e.pointerId !== undefined && e.pointerId !== zeiger)) return; zeiger = null; setzen(0, 0); };
+      st.addEventListener('pointerdown', (e) => { zeiger = e.pointerId; try { st.setPointerCapture(e.pointerId); } catch (err) { /* egal */ } bewegen(e); e.preventDefault(); });
+      st.addEventListener('pointermove', (e) => { if (zeiger !== null && e.pointerId === zeiger) bewegen(e); });
+      st.addEventListener('pointerup', los);
+      st.addEventListener('pointercancel', los);
+    });
+    // v1.6.54: Handbremse im Drift (gedrueckt halten).
+    const hb = el.querySelector('.vf-touch-hb');
+    if (hb) {
+      const an = (e) => { vfHandbremse(true); hb.classList.add('vf-an'); try { hb.setPointerCapture(e.pointerId); } catch (err) { /* egal */ } e.preventDefault(); };
+      const aus = () => { vfHandbremse(false); hb.classList.remove('vf-an'); };
+      hb.addEventListener('pointerdown', an);
+      hb.addEventListener('pointerup', aus);
+      hb.addEventListener('pointercancel', aus);
+    }
     const lenk = el.querySelector('.vf-touch-lenk');
     const gas = el.querySelector('.vf-touch-gas');
     if (lenk) {
@@ -4479,7 +5734,8 @@
     document.body.appendChild(el);
     const zeichne = () => {
       if (!el.isConnected || !VF.aktiv) { el.remove(); clearInterval(vfPadDiagIv); return; }
-      el.textContent = t('Pad-Diagnose (F8 oder Knopf schließt)') + '\n' + (typeof padDiagText === 'function' ? padDiagText() : '-');
+      el.textContent = t('Pad-Diagnose (F8 oder Knopf schließt)') + '\n' + (typeof padDiagText === 'function' ? padDiagText() : '-')
+        + '\n' + t('Strecke') + ': ' + (() => { try { return VF.frei ? vfFreiWahl() : trackToCode(VF.tiles || currentTrackTiles); } catch (e) { return '-'; } })();   // v1.6.44 (gnen54, 899d27a)
     };
     zeichne();
     vfPadDiagIv = setInterval(zeichne, 200);
@@ -4522,6 +5778,8 @@
   function vfLadeTonFertig(jetzt) {
     try {
       if (!soundEnabled || location.protocol === 'file:') return true;
+      // v1.6.27 (Issue #15): der Hubschrauber hat keinen Motorsound - der Ladebildschirm soll nicht auf ihn warten.
+      if (VF.hubschrauber) return true;
       if (jetzt - (VF.ladeAb || 0) > VF_LADE_TON_MAX_MS) return true;
       if (vfTonGeladen(vfMotorZiel())) return true;
       return !sampleEngine.loading;
@@ -4611,8 +5869,38 @@
     }
     return true;
   }
+  // v1.6.44 aus gnen54s PR 4 (cc0dae3): im Rennen (alles ausser Training) nach dem Laden die Startampel - fuenf rote
+  // Lichter, jede Sekunde eins mehr, nach 5 s plus 0,3 bis 1,5 s alle aus = Start. Bis dahin steht das Auto am Start.
+  function vfAmpelSchritt(now) {
+    const A = VF.ampel, schicht = VF.schicht;
+    let el = schicht ? schicht.querySelector('.vf-ampel') : null;
+    if (!A) { if (el) el.remove(); return false; }
+    const dt = now - A.t0;
+    if (dt >= A.aus) {
+      VF.ampel = null; VF.letzt = 0;
+      if (el) el.remove();
+      try { showHudToast(t('Los!')); } catch (e) { /* ohne */ }
+      return false;
+    }
+    if (!el && schicht) {
+      el = document.createElement('div');
+      el.className = 'vf-ampel';
+      el.setAttribute('aria-hidden', 'true');
+      for (let i = 0; i < 5; i++) el.appendChild(document.createElement('span'));
+      schicht.appendChild(el);
+    }
+    const an = Math.min(5, Math.floor(dt / 1000) + 1);
+    if (el) [...el.children].forEach((l, i) => l.classList.toggle('an', i < an));
+    if (physEngine && physEngine.state) physEngine.state.speedKmh = 0;
+    VF.x = VF.startX; VF.y = VF.startY; VF.h = VF.startH;
+    return true;
+  }
   function vfLadenEnde() {
     VF.laedt = false;
+    if (VF.modus && VF.modus !== 'practice' && !VF.studie && !VF.hubschrauber) {
+      VF.ampel = { t0: performance.now(), aus: 5300 + Math.random() * 1200 };
+      if (typeof startAnsageSprechen === 'function') startAnsageSprechen();   // v1.6.46 (gnen54): "Gentlemen, start your engines"
+    }
     if (VF.schicht) {
       VF.schicht.classList.remove('vf-laedt');
       const el = VF.schicht.querySelector('.vf-laden');
@@ -4630,6 +5918,7 @@
   // und die Boxenseite in Fahrtrichtung ist die andere (VF.boxSeite).
   const VF_RICHTUNG_STORE = 'omegasim-vf-richtung';
   function vfGegenAn() { try { return localStorage.getItem(VF_RICHTUNG_STORE) === 'gegen'; } catch (e) { return false; } }
+  function vfRichtungWechseln() { const g = !vfGegenAn(); try { localStorage.setItem(VF_RICHTUNG_STORE, g ? 'gegen' : 'normal'); } catch (e) { /* egal */ } return g; }
   function vfGegenrichtung(pts, B) {
     const n = pts.length, idx = (i) => ((n - i) % n + n) % n;
     const R = [];
@@ -4658,12 +5947,24 @@
     vfModellLaden = {}; vfRadModell = null;
     log('Virtuell: Texturen und Automodelle aus dem Speicher freigegeben.', 'info');
   }
+  // v1.6.44 aus gnen54s PR 4 (2c46531): Hinweise beim Start auch dort sichtbar, wo der HUD-Toast nicht steht (Garage).
+  function vfStartHinweis(msg) {
+    showHudToast(msg);
+    const el = $('hud-toast');
+    if (el && el.offsetParent) return;
+    const d = document.createElement('div');
+    d.setAttribute('role', 'status');
+    d.className = 'vf-start-hinweis';
+    d.textContent = msg;
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 4000);
+  }
   function virtuellStarten(opts) {
     clearTimeout(vfFreigabeTimer);
     opts = opts || {};
     if (VF.aktiv) return false;
     vfHandlingCache = null;   // einmal frisch lesen (z. B. in einem anderen Tab geaendert)
-    if (!physicsEnabled) { showHudToast(t('Virtuell braucht ein Fahrgefühl mit Physik (nicht RC)')); return false; }
+    if (!physicsEnabled) { vfStartHinweis(t('Virtuell braucht ein Fahrgefühl mit Physik (nicht RC)')); return false; }
     // Rundenuhr der vorigen Fahrt nicht mitnehmen (aus PR 4 von gnen54: "Zeitansage sofort beim Start nach
     // Ueberfahren von Start/Ziel"): die erste Ueberfahrt startet die Uhr, angesagt wird erst die erste ganze Runde.
     try { dashLapTimes = []; dashLapStart = null; } catch (e) { /* ohne */ }
@@ -4672,17 +5973,22 @@
     VF.tilesVorher = currentTrackTiles;
     try { VF.editorVorher = localStorage.getItem(EDITOR_STRECKE_STORE); } catch (e) { VF.editorVorher = undefined; }
     // v1.5.150: freie Strecke (nur virtuell) statt der gebauten Bahn - erst laden, dann neu starten.
-    const freiK = !(opts.tiles && opts.tiles.length >= 3) && !opts.studie ? vfFreiWahl() : '';
+    const freiK = !(opts.tiles && opts.tiles.length >= 3) && !opts.studie && !opts.extern ? vfFreiWahl() : '';
     if (freiK && !vfFreiCache[freiK]) {
-      vfFreiLaden(freiK).then(() => virtuellStarten(opts), () => showHudToast(t('Strecke konnte nicht geladen werden')));
+      vfFreiLaden(freiK).then(() => virtuellStarten(opts), () => vfStartHinweis(t('Strecke konnte nicht geladen werden')));
       return true;
     }
     const frei = freiK ? vfFreiCache[freiK] : null;
     VF.frei = frei;
+    VF.freiId = freiK || '';   // v1.6.60: Schluessel der virtuellen Streckenzeiten (frei:<id>)
+    VF.zeitLauf = { runden: [] };
     VF_BOX_SEITE = frei ? frei.seite : -1;   // freie Strecken: Box auf der Seite der DXF (boxSeite)
     const tiles = frei ? frei.tiles : (opts.tiles && opts.tiles.length >= 3 ? opts.tiles : vfTilesWaehlen());
-    if (!tiles) { showHudToast(t('Erst eine Strecke bauen')); return false; }
+    if (!tiles) { vfStartHinweis(t('Erst eine Strecke bauen')); return false; }
     VF.studie = !!opts.studie;
+    // v1.6.56: extern = ein Rennen der App (Challenge, Karriere, Meisterschaft) nutzt das virtuelle Auto; die virtuelle
+    // Fahrt fuehrt dann kein eigenes Rennen (Training, keine eigene Ampel) und endet mit dem Rennen.
+    VF.extern = opts.extern || null;
     const schicht = document.createElement('div');
     schicht.className = 'vf-schicht';
     const lbl = (txt) => '<span class="vf-lbl">' + txt + '</span>';
@@ -4701,17 +6007,58 @@
       + '<div class="vf-acc-werte"><div class="vf-acc-wert"><b class="vf-tempo"></b>' + lbl('km/h') + '</div>'
       + '<b class="vf-gang"></b><div class="vf-acc-wert"><b class="vf-rpm"></b>' + lbl('1/min') + '</div></div></div>'
       + '<div class="vf-kachel vf-acc-tank">' + lbl(t('Tank')) + '<b class="vf-tank"></b><i class="vf-tank-bar"><i></i></i></div></div>'
+      // v1.6.27 (Issue #15): Helikopter-Anzeige (Hoehe + Tempo) statt des Tacho-Blocks.
+      + '<div class="vf-acc vf-hub" hidden data-i18n-skip>'
+      + '<div class="vf-kachel vf-hub-k"><div class="vf-hub-lbl">' + lbl(t('Höhe')) + '</div><b class="vf-hub-z"></b></div>'
+      + '<div class="vf-kachel vf-hub-k"><div class="vf-hub-lbl">' + lbl(t('Tempo')) + '</div><b class="vf-hub-v"></b></div></div>'
       + vfKnopfLeisteHtml()
       + '<span class="vf-kamfrei" hidden data-i18n-skip>' + t('Kamera frei') + ' · R3 / V: ' + t('Standard') + ' <span class="wip-tag">WIP</span></span>'
       + '<span class="vf-wip">' + t('Virtuell') + ' <span class="wip-tag">WIP</span></span>'
       + '<div class="vf-touch" hidden><div class="vf-touch-lenk"><div class="vf-touch-knauf"></div><span class="vf-touch-hinweis">' + t('Lenken') + '</span></div>'
-      + '<div class="vf-touch-gas"><div class="vf-touch-knauf"></div><span class="vf-touch-hinweis vf-touch-gas-oben">' + t('Gas') + '</span><span class="vf-touch-hinweis vf-touch-gas-unten">' + t('Bremse') + '</span></div></div>'
+      + '<div class="vf-touch-gas"><div class="vf-touch-knauf"></div><span class="vf-touch-hinweis vf-touch-gas-oben">' + t('Gas') + '</span><span class="vf-touch-hinweis vf-touch-gas-unten">' + t('Bremse') + '</span></div>'
+      + '<button type="button" class="vf-touch-hb" aria-label="' + t('Handbremse') + '">' + t('Handbremse') + '</button>'
+      + '<div class="vf-touch-heli vf-touch-heli-l"><div class="vf-touch-knauf"></div><span class="vf-touch-hinweis">' + t('Steigen / Drehen') + '</span></div>'
+      + '<div class="vf-touch-heli vf-touch-heli-r"><div class="vf-touch-knauf"></div><span class="vf-touch-hinweis">' + t('Neigen / Rollen') + '</span></div></div>'
       + vfLadebildHtml((() => { try { return vfLadeKarteDrehen(vfLadeKarteSvg(tiles, frei ? frei.pts : null), window.innerWidth, window.innerHeight); } catch (e) { return ''; } })());
     schicht.classList.add('vf-laedt');
-    document.body.appendChild(schicht);
-    const cv = schicht.querySelector('canvas');
-    const gl = cv.getContext('webgl', { antialias: true }) || cv.getContext('experimental-webgl');
+    // v1.6.60: in AR liegt die Schicht im Wurzelelement der AR-Ueberlagerung (dom-overlay), durchsichtig.
+    VF.ar = opts.ar || null;
+    VF.marker = opts.marker || null;   // v1.6.67: Marker-AR (60f-ar-marker.js) - Kamerabild hinter durchsichtiger Leinwand
+    if (VF.ar) { schicht.classList.add('vf-ar'); (VF.ar.wurzel || document.body).appendChild(schicht); }
+    else document.body.appendChild(schicht);
+    if (VF.marker) schicht.classList.add('vf-ar', 'vf-mk');
+    // v1.6.44 aus gnen54s testversion (aba1968): die Knopfleiste blendet sich nach 4 s Ruhe aus und kommt bei Mausbewegung,
+    // Tippen oder Klick zurueck (Lenken auf den Touch-Flaechen zaehlt nicht). Der Knopf zum dauerhaften Ausblenden bleibt.
+    { const kn = schicht.querySelector('.vf-knoepfe');
+      if (kn) {
+        let uhr = 0;
+        const zeigen = () => {
+          kn.classList.remove('vf-knoepfe-ruht');
+          clearTimeout(uhr);
+          uhr = setTimeout(() => { if (!kn.matches(':hover') && !kn.contains(document.activeElement)) kn.classList.add('vf-knoepfe-ruht'); else zeigen(); }, 4000);
+        };
+        const wecken = (e) => { if (!(e.target && e.target.closest && e.target.closest('.vf-touch'))) zeigen(); };
+        ['mousemove', 'pointerdown', 'touchstart'].forEach((ev) => schicht.addEventListener(ev, wecken, { passive: true }));
+        zeigen();
+      } }
+    let cv = schicht.querySelector('canvas');
+    // v1.6.63: in AR die Leinwand der Sitzung (60e-ar.js) - ihr Kontext ist schon XR-faehig und die AR-Ebene laeuft seit
+    // dem ersten Bild der Sitzung (sonst lieferte die Seite waehrend des Aufbaus der Fahrt kein Bild, und Chrome beendete
+    // die Sitzung nach einem kurzen eingefrorenen Kamerabild).
+    if (VF.ar && VF.ar.cv) { cv.replaceWith(VF.ar.cv); cv = VF.ar.cv; }
+    // v1.6.46 GEMELDET: "der Schatten unter den virtuellen Autos im Performance-Modus ist heller als die Strasse". Mit dem
+    // Alphakanal der Leinwand (Vorgabe) senkte jede halbdurchsichtige Flaeche (Schatten, Geist, Rauch) die Deckkraft des
+    // Bildes, und der helle Seitenhintergrund schien durch. alpha: false = undurchsichtige Leinwand.
+    const gl = cv.getContext('webgl', { antialias: true, alpha: false, xrCompatible: !!opts.ar }) || cv.getContext('experimental-webgl', { alpha: false });
     if (!gl) { schicht.remove(); showHudToast(t('Dieses Gerät kann kein WebGL')); return false; }
+    if (VF.ar) cv.style.visibility = 'hidden';
+    // v1.6.73: in AR (WebXR und Marker) kein Dunst/Nebel - er beginnt 250 Einheiten vor dem Auge, in AR (1:2) also schon
+    // ~67 cm vor der Kamera, und alles wurde zur hellen Dunstfarbe hin verwaschen ("alles ist viel zu hell"). Jede Fahrt
+    // hat einen eigenen Grafikkontext; nur dessen Shader werden ohne den Nebelterm uebersetzt.
+    if (opts.ar || opts.marker) {
+      const quelle = gl.shaderSource.bind(gl);
+      gl.shaderSource = (sh, src) => quelle(sh, String(src).replace(/clamp\(\(vd - 250\.0\) \/ 900\.0, 0\.0, 1\.0\)/g, '0.0'));
+    }   // v1.6.60: in AR zeichnet die Sitzung, die Leinwand bleibt unsichtbar
     // v1.5.154: OES_standard_derivatives (fwidth) fuer den bildschirm-adaptiven Schatten-PCF des Autos.
     // Ohne die Erweiterung bleibt der feste Kern; der Shader prueft das selbst ueber GL_OES_standard_derivatives.
     gl.getExtension('OES_standard_derivatives');
@@ -4792,7 +6139,7 @@
     const s = Math.max(0, VF.pts.findIndex((p) => p.tile >= 0 && tiles[p.tile] && tiles[p.tile].type === TILE_TYPE.START));
     let start = ((s - Math.round(TRACK_SAMPLES_PER_TILE / 2)) % VF.pts.length + VF.pts.length) % VF.pts.length;
     VF.zielIdx = vfZielIdx(VF.pts, tiles);
-    VF.gegen = opts.gegen !== undefined ? !!opts.gegen : (vfGegenAn() && !opts.studie);
+    VF.gegen = opts.gegen !== undefined ? !!opts.gegen : (vfGegenAn() && !opts.studie && !opts.extern);
     if (VF.gegen) {
       const n = VF.pts.length, G = vfGegenrichtung(VF.pts, VF.boxBucht);
       const vorLinie = ((VF.zielIdx - start) % n + n) % n;   // so weit vor der Linie steht das Auto
@@ -4821,24 +6168,38 @@
     if (playerCar) setCarRole(playerCar, 'none');
     setCarRole(car, 'player');
     VF.car = car;
-    VF.auto = vfAutoBauen(gl, vfHex(carColor(car).hex));
+    // v1.6.27 (Issue #15): RC Stunt Copter - fliegt statt zu fahren. Kein auto.json/auto.bin, keine
+    // Fahrphysik, kein Motorsound, kein Geist und keine NPC-Autos; der Hubschrauber wird aus Kasten gebaut.
+    VF.hubschrauber = vfHubschrauber();
+    // Lackfarbe (Garage) gilt auch fuer den Hubschrauber: gesetzt -> die gewaehlte Farbe, sonst Autofarbe.
+    const hubFarbe = VF.hubschrauber ? (vfLack() ? vfHex(vfLack()) : vfHex(carColor(car).hex)) : vfHex(carColor(car).hex);
+    VF.auto = VF.hubschrauber ? vfHubschrauberBauen(gl, hubFarbe) : vfAutoBauen(gl, hubFarbe);
+    VF.hubRotor = VF.hubschrauber ? vfHubRotorBauen(gl) : null;
+    if (VF.hubschrauber) vfHubModellLaden(gl);   // TREX 700 nachladen (Kasten bleibt bis dahin)
     VF.geistAuto = vfAutoBauen(gl, [0.45, 0.75, 1.0]);
-    VF.geist = { an: vfGeistAn(), aufzeichnung: [], beste: null, aktiv: false, zeit: 0, t: 0, i: 0, x: 0, y: 0, h: 0 };
+    VF.geist = { an: vfGeistAn() && !VF.hubschrauber, aufzeichnung: [], beste: null, aktiv: false, zeit: 0, t: 0, i: 0, x: 0, y: 0, h: 0 };
     VF.modell = null; VF.modellFehl = false; VF.radModell = null; VF.radFehl = false; VF.P = vfHandlingProfil(VF_GT3); VF.feder = null; VF.raddreh = 0;
     VF.texOffen = 0; VF.texGesamt = 0;   // Ladebild: Bilder der Modelle dieser Fahrt
     VF.tyreTemp = 0;   // v1.3.5: jede Fahrt beginnt mit kalten Reifen (vorher blieb die alte Temperatur stehen)
+    VF.rauch = []; VF.rauchPuffer = null; VF.driftHitze = 0; VF.rauchSoll = 0;   // v1.6.27 Drift-Rauch
+    VF.dp = null; VF.dpKmh = 0; VF.handbremse = false;   // v1.6.54 Drift mit Physik
     VF.tempoFaktor = vfTempoFaktor();
+    VF.z = 0; VF.roll = 0; VF.pitch = 0; VF.rotor = 0; VF.flug = null; VF.hubTasten = {};   // Flugzustand
+    VF.hubLuft = false; VF.hubLast = 0; VF.hubSpeed = 0;   // Copter: Bodenflag + Werte fuer den Rotor-Ton
     // Quality-Autoshader, sonst (oder wenn er nicht kompiliert) der von Performance; ohne beide bleibt der Kasten.
+    // Der Hubschrauber hat kein Auto-Modell, braucht also keinen Textur-Shader.
     VF.tprog = null;
-    if (VF.grafik) { try { VF.tprog = vfProgrammTex(gl, true); } catch (e) { VF.tprog = null; VF.qualFehler = String(e && e.message || e).slice(0, 300); log('Virtuell: Quality-Autoshader kompiliert nicht, Performance statt dessen: ' + VF.qualFehler, 'warn'); } }
-    if (!VF.tprog) { try { VF.tprog = vfProgrammTex(gl, false); } catch (e) { VF.tprog = null; } }
-    if (VF.tprog) {
-      vfRadModellBauen(gl).then((rad) => { if (VF.aktiv && VF.gl === gl) VF.radModell = rad; }, () => { if (VF.gl === gl) VF.radFehl = true; });
-      vfModellDaten().then((daten) => {
-        if (!VF.aktiv || VF.gl !== gl) return;
-        VF.modell = vfModellBauen(gl, daten);
-        VF.P = vfHandlingProfil(vfPhysikAus(daten.meta.physik));
-      }).catch(() => { if (VF.gl === gl) VF.modellFehl = true; showHudToast(t('Auto-Modell nicht ladbar – es fährt der Kasten')); });
+    if (!VF.hubschrauber) {
+      if (VF.grafik) { try { VF.tprog = vfProgrammTex(gl, true); } catch (e) { VF.tprog = null; VF.qualFehler = String(e && e.message || e).slice(0, 300); log('Virtuell: Quality-Autoshader kompiliert nicht, Performance statt dessen: ' + VF.qualFehler, 'warn'); } }
+      if (!VF.tprog) { try { VF.tprog = vfProgrammTex(gl, false); } catch (e) { VF.tprog = null; } }
+      if (VF.tprog) {
+        vfRadModellBauen(gl).then((rad) => { if (VF.aktiv && VF.gl === gl) VF.radModell = rad; }, () => { if (VF.gl === gl) VF.radFehl = true; });
+        vfModellDaten().then((daten) => {
+          if (!VF.aktiv || VF.gl !== gl) return;
+          VF.modell = vfModellBauen(gl, daten);
+          VF.P = vfHandlingProfil(vfPhysikAus(daten.meta.physik));
+        }).catch(() => { if (VF.gl === gl) VF.modellFehl = true; showHudToast(t('Auto-Modell nicht ladbar – es fährt der Kasten')); });
+      }
     }
     // Start eine halbe Kachel vor Start/Ziel, in Fahrtrichtung (oben berechnet, auch fuer die Gegenrichtung).
     VF.zielVor = null; VF.zielRueck = 0; VF.zielAt = 0;
@@ -4851,10 +6212,16 @@
     Object.assign(VF, { x: VF.pts[start].x, y: VF.pts[start].y, h: VF.pts[start].heading, idx: start, zaehler: 0, kachel: -2,
                         abseits: false, letzt: 0, kam: null, rundeAb: 0, letzte: null, beste: null, aktiv: true,
                         startX: VF.pts[start].x, startY: VF.pts[start].y, startH: VF.pts[start].heading });
-    vfNpcStarten(gl, start);
+    VF.besteGeladen = false;
+    if (!VF.extern && !VF.studie) vfZeitenLaden();   // v1.6.60 (Gnen54): Bestzeit und Zwischenzeiten dieser Strecke
+    if (!VF.hubschrauber) vfNpcStarten(gl, start);
+    VF.hubTorPuffer = null;
+    VF.hubTore = null;
+    if (VF.hubschrauber) { try { VF.hubTore = vfHubToreBauen(); } catch (e) { VF.hubTore = null; } }
+    try { vfTouchAktualisieren(); } catch (e) { /* egal */ }   // v1.6.37: Heli-Sticks erst jetzt bekannt (VF.hubschrauber)
     physEngine.state.speedKmh = 0;
     // Ladebild (siehe vfLadeSchritt): ab hier zaehlt die Ladezeit.
-    VF.laedt = true; VF.ladeAb = performance.now();
+    VF.laedt = true; VF.ladeAb = performance.now(); VF.ampel = null;
     schicht.addEventListener('click', (e) => {
       const b = e.target.closest('[data-vf]');
       if (!b) return;
@@ -4866,7 +6233,10 @@
       else if (b.dataset.vf === 'touch') vfTouchUmschalten();
       else if (b.dataset.vf === 'box') {
         if (VF.modus === 'derby') showHudToast(t('Derby: kein Boxenstopp'));
-        else if (typeof requestPitStop === 'function') { requestPitStop(); if (typeof pitState !== 'undefined' && pitState === 'limited') showHudToast(t('Boxenstopp: anhalten')); }
+        else if (typeof requestPitStop === 'function') {
+          requestPitStop();
+          if (typeof pitState !== 'undefined' && pitState === 'limited') showHudToast(VF.boxN ? t('Boxenstopp: in der Boxenbucht anhalten') : t('Boxenstopp: anhalten'));
+        }
       }
       else if (b.dataset.vf === 'flag') {
         if (typeof flagState !== 'undefined' && flagState === 'green') { if (typeof setFlag === 'function') setFlag('yellow'); }
@@ -4885,7 +6255,7 @@
     // Rennmodus: Runden, Endurance, Qualifying und Training werden uebernommen; seit v1.3.95 auch
     // Time Attack (bestzeit), NPC-Knockout und Derby - mit eigener Wertung fuer die virtuellen NPCs
     // (die Geister-Wertung aus 90-ghosts/90d-challenger greift hier nicht).
-    VF.modus = raceMode;
+    VF.modus = VF.extern ? 'practice' : raceMode;
     if (VF.modus !== 'laps' && VF.modus !== 'endurance' && VF.modus !== 'qualifying' && VF.modus !== 'practice'
         && VF.modus !== 'bestzeit' && VF.modus !== 'knockout' && VF.modus !== 'derby') {
       showHudToast(t('Rennmodus im virtuellen Fahren nicht verfügbar') + ' – ' + t('Training'));
@@ -4925,10 +6295,11 @@
     }
     if (VF.modus === 'knockout') showHudToast(t('NPC-Knockout') + ': ' + (VF.npcs ? VF.npcs.length : 0) + ' ' + t('Gegner') + ' · 3 ' + t('Leben'));
     else if (VF.modus === 'derby') showHudToast(t('Derby') + ': ' + (VF.npcs ? VF.npcs.length : 0) + ' ' + t('Gegner') + ' · ' + t('Health') + ' 100');
-    vfMotorsound();
+    if (!VF.hubschrauber) vfMotorsound();
+    vfAmbienceAnwenden();   // v1.6.46: Ambience-Schalter der virtuellen Fahrt
     if (typeof showTab === 'function') showTab('race');
     VF.takt = setInterval(vfPaket, VF_TAKT_MS);
-    VF.raf = requestAnimationFrame(vfBild);
+    VF.raf = VF.ar ? 0 : requestAnimationFrame(vfBild);   // v1.6.63: in AR laeuft der Takt der Sitzung schon (vfArBild)
     showHudToast(t('Virtuelle Fahrt: frei fahren, ✕ beendet'));
     return true;
   }
@@ -4960,63 +6331,123 @@
       if (!sampleEngine.ready && !sampleEngine.loading) loadEngineSamples();
     } catch (e) { /* ohne Ton weiter */ }
   }
-  function vfTonStatus() {
-    if (!soundEnabled) return t('Ton ist aus (Optionen > Ton).');
-    if (location.protocol === 'file:') return t('Direkt von der Festplatte geöffnet: hier lassen sich die Aufnahmen nicht laden, es spielt der Ersatzton. Mit „Start OmegaSim.bat“ starten.');
-    if (audioCtx && audioCtx.state !== 'running') return t('Ton wartet auf einen Tipp.');
-    const k = vfMotorZiel();
-    if (VF.aktiv && sampleEngine.nodes && sampleEngine.car === k) return t('Aufnahme spielt.');
-    if (vfTonGeladen(k)) return t('Aufnahme geladen und bereit.');
-    if (sampleEngine.loading) return t('Aufnahmen werden geladen …');
-    return t('Keine Aufnahmen gefunden – es spielt der Ersatzton.');
+
+  // ---- VIRTUELLE GARAGE (v1.6.32, WIP) ----
+  // BESTELLT: "Zur virtuellen Garage: Diese sollte komplett eigenstaendig sein und mit der Vorschau fuer Handy optimiert."
+  // Eine eigene Seite (#tab-vgarage) statt der rechten Spalte der echten Garage: links (Hochformat: oben) das Vorschaubild
+  // des gewaehlten Autos mit Name, Losfahren und "?", rechts die Optionen der virtuellen Fahrt (vfGarageOptionen). Jede
+  // Aenderung zeichnet die Seite neu, auf der sie gemacht wurde (vfGarageNeu).
+  function vfGarageSeiteOffen() { const el = $('tab-vgarage'); return !!(el && el.classList.contains('active')); }
+  // v1.6.41 BESTELLT: "Es braucht dann noch Menues fuer virtuelle Dinge in einer extra Kachel in den Optionen (zB VIRTUELL
+  // Kachel und RC Heli Kachel)." Die Zeilen entstehen weiter in vfGarageOptionen; je Seite werden die passenden genommen:
+  // Optionen > Virtuell die Einstellungen der Fahrt (VF_OPT_FAHRT), Optionen > RC Heli die des Hubschraubers (VF_OPT_HELI),
+  // die virtuelle Garage den Rest (Auto, Lack, Boden, Strecke, Richtung, Handling, NPCs, Losfahren).
+  const VF_OPT_FAHRT = ['Schaltung', 'Grafik', 'Tageszeit', 'Sichtfeld mit Tempo', 'Geist folgt meiner Linie', 'Rückspiegel (Motorhaube)',
+    'Kein Tempoverlust neben der Bahn', 'Zurücksetzen neben der Bahn', 'Pflicht-Boxendurchfahrt', 'Neigung sichtbar', 'Drift-Gyro', 'Rauch-Auflösung', 'Strecken-Ambience', 'Totzone Neigen'];
+  // v1.6.46 BESTELLT: "fuer Strecken Ambience extra Option im virtuellen Fahren" (aus gnen54s 817c361: ab Werk aus).
+  // Waehrend einer virtuellen Fahrt gilt dieser Schalter statt Optionen > Ton (ambienceAktiv, 80-sound.js).
+  const VF_AMBIENCE_STORE = 'omegasim-vf-ambience';
+  function vfAmbienceAn() { try { return localStorage.getItem(VF_AMBIENCE_STORE) === 'an'; } catch (e) { return false; } }
+  function vfAmbienceAnwenden() {
+    try {
+      if (typeof ambienceAktiv !== 'function') return;
+      if (ambienceAktiv()) startAmbienceBeds();
+      refreshAmbienceGains();
+    } catch (e) { /* ohne Ton */ }
   }
-  function vfGarageOptionen(rechts) {
+  const VF_OPT_HELI = ['Gyro-Stabilisierung', 'Rollen umkehren', 'Nicken umkehren'];
+  function vfZeileTitel(z) {
+    const l = z.querySelector(':scope > .gk-l');
+    if (!l) return '';
+    const n = l.firstChild;
+    return (n && n.nodeType === 3 ? n.nodeValue : l.textContent).trim();
+  }
+  function vfZeilenWahl(host, liste) { const titel = liste.map((x) => t(x)); return [...host.children].filter((z) => titel.indexOf(vfZeileTitel(z)) >= 0); }
+  function vfOptionenSeiteOffen(key) { const p = $('sub-' + key); return !!(p && p.classList.contains('on') && p.closest('.tabpage.active')); }
+  function vfOptionenSeite(key) {
+    const host = $(key + '-inhalt');
+    if (!host) return;
+    const tmp = document.createElement('div');
+    vfGarageOptionen(tmp, { heliImmer: true });
+    host.innerHTML = '';
+    vfZeilenWahl(tmp, key === 'opt-heli' ? VF_OPT_HELI : VF_OPT_FAHRT).forEach((z) => host.appendChild(z));
+    if (host.querySelector('.opt-label small:not(.opt-info-versteckt)') && typeof optInfoEinrichten === 'function') optInfoEinrichten();
+  }
+  function vfGarageNeu() {
+    if (vfOptionenSeiteOffen('opt-virtuell')) vfOptionenSeite('opt-virtuell');
+    else if (vfOptionenSeiteOffen('opt-heli')) vfOptionenSeite('opt-heli');
+    else if (vfGarageSeiteOffen()) vfGarageSeite();
+    else renderGarage();
+  }
+  // v1.6.56 BESTELLT: "In der Vorschau in der Garage bei virtuell fehlt das Helikopter Modell": eigenes Bild
+  // (tools/heli_vorschau.py), die Autos wie bisher aus tools/vorschau_bilder.py.
+  function vfVorschauUrl(id) { return id === VF_HELIKOPTER ? 'img/vf/vorschau.png' : vfModellPfad(id) + 'vorschau.png'; }
+  function vfGarageSeite() {
+    const host = $('vg-optionen'), vor = $('vg-vorschau');
+    if (!host || !vor) return;
+    const y = host.scrollTop;
+    host.innerHTML = '';
+    vfGarageOptionen(host);
+    // v1.6.41: Einstellungen der Fahrt und des Hubschraubers stehen in den Optionen (Kacheln Virtuell und RC Heli).
+    vfZeilenWahl(host, VF_OPT_FAHRT.concat(VF_OPT_HELI)).forEach((z) => z.remove());
+    vor.innerHTML = '';
+    // v1.6.56 BESTELLT: "Mach einfach den ganzen Hintergrund durchsichtig und die Menue-Hintergrundfarbe ist dann da" -
+    // kein Boden mehr hinter dem Bild, nur das transparente Auto bzw. der Hubschrauber.
+    const bild = host.querySelector('.vf-vorschau');
+    if (bild) vor.appendChild(bild);
+    const name = document.createElement('div');
+    name.className = 'vg-name';
+    name.setAttribute('data-i18n-skip', '');
+    name.textContent = vfAutoName(vfAutoWahl()) + ' · ' + vfStreckeName();
+    vor.appendChild(name);
+    const los = host.querySelector('.vf-los-zeile');
+    if (los) vor.appendChild(los);
+    host.scrollTop = y;
+    if (host.querySelector('.opt-label small:not(.opt-info-versteckt)') && typeof optInfoEinrichten === 'function') optInfoEinrichten();
+  }
+  function vfGarageZeigen() {
+    if (typeof fahrModusSetzen === 'function' && !fahrModusVirtuell()) fahrModusSetzen('virtuell');
+    if (typeof showTab === 'function') showTab('vgarage');
+    vfGarageSeite();
+  }
+  function vfGarageOptionen(rechts, opts) {
     vfTonVorbereiten();
     vfTexturenVorbereiten();   // v1.3.39: Bahn- und Bodentexturen im Leerlauf rechnen
     const kopf = document.createElement('h3');
     kopf.className = 'gar-a-titel';
     kopf.textContent = t('Virtuelles Auto');
     rechts.appendChild(kopf);
-    const sel = $('sound-profile');
-    const global = sel && sel.selectedIndex >= 0 ? motorNamen(sel.options[sel.selectedIndex]) : '';
-    const werte = [{ v: '', name: t('Wie in Optionen') + (global ? ' (' + global + ')' : '') }]
-      .concat(sel ? [...sel.options].filter((o) => o.value).map((o) => ({ v: o.value, name: motorNamen(o) })) : []);
-    const j = Math.max(0, werte.findIndex((w) => w.v === vfMotorGewaehlt()));
-    const wahl = (d) => {
-      const n = werte[(j + d + werte.length) % werte.length].v;
-      try { localStorage.setItem(VF_MOTOR_STORE, n || VF_MOTOR_GLOBAL); } catch (e) { /* egal */ }
-      renderGarage();
-    };
-    if (vfMotorFest()) {
-      // Eigenbau von Gnen54: Motorklang fest zum Auto, die Pfeile sind gesperrt.
-      const fest = garWertZeile(t('Motorsound'), werte[j].name + ' (' + t('fest zum Auto') + ')', () => {}, () => {});
-      fest.dataset.vfMotorFest = '1';
-      fest.querySelectorAll('button').forEach((k) => { k.disabled = true; k.style.visibility = 'hidden'; });
-      rechts.appendChild(fest);
-    } else rechts.appendChild(garWertZeile(t('Motorsound'), werte[j].name, () => wahl(-1), () => wahl(1)));
+    // v1.6.56 BESTELLT: "Engine Sound Option entfernen fuer virtuelle Garage" - jedes Auto hat seinen festen Motorklang
+    // (VF_MOTOR_FEST), die Zeile zeigte nur noch den gesperrten Wert.
     // v1.1.9: welches Auto, und wie deutlich die Federung sichtbar neigt.
-    const autos = [{ v: 'v5r', name: 'Vulture V5.R (Speed Dreams)' }, { v: 'lynx220', name: 'Lynx 220 (Jaguar XJ220, Speed Dreams)' },
-                   { v: 'fmcgt4', name: 'FMC GT4 (Ford GT40 Mk1, Speed Dreams)' }, { v: 'boxer96', name: 'Boxer 96 (Porsche 911 GT3, Speed Dreams)' },
-                   // Eigenbau von Gnen54 (CC BY 4.0), WIP: Fahrdaten geschaetzt, siehe img/autos/kaefer/LIZENZ.txt
-                   { v: 'kaefer', name: t('VW Käfer 1303 RS mit Boxster-Motor (Gnen54, WIP)') },
-                   // v1.5.104: Eigenbau von Gnen54 auf der Modiplay-MP1-Karosserie (Freigabe Sturmkind, nicht kommerziell),
-                   // PR 3 auf Luuke42/omegasim. WIP: Fahrdaten geschaetzt (Lister Storm LMP), siehe img/autos/spider/LIZENZ.txt
-                   { v: 'spider', name: t('Spider NG1 (Gnen54, WIP)') },
-                   // v1.5.150: Eigenbau von Gnen54 auf der Vehicle-World-Karosserie (schriftliche Freigabe),
-                   // siehe img/autos/caravelle/LIZENZ.txt. WIP: Fahrdaten geschaetzt.
-                   { v: 'caravelle', name: t('VW Caravelle Oettinger (Gnen54, WIP)') }];
+    const autos = vfAutoListe();
     const ja = Math.max(0, autos.findIndex((a) => a.v === vfAutoWahl()));
     const autoWahl = (dd) => {
       try { localStorage.setItem(VF_AUTO_STORE, autos[(ja + dd + autos.length) % autos.length].v); } catch (e) { /* egal */ }
-      renderGarage();
+      vfGarageNeu();
     };
     rechts.appendChild(garWertZeile(t('Auto'), autos[ja].name, () => autoWahl(-1), () => autoWahl(1)));
+    // v1.6.32: die Steuer-Optionen des RC Stunt Copters stehen in der virtuellen Garage (vorher Optionen > Virtuell).
+    if (vfHubschrauber() || (opts && opts.heliImmer)) {
+      const umsch = (lbl, an, key, info) => {
+        const w = () => { vfHubSetzen(key, !an); vfGarageNeu(); };
+        const z = garWertZeile(t(lbl), an ? t('An') : t('Aus'), w, w);
+        const l = z.querySelector('.gk-l');
+        l.classList.add('opt-label');
+        l.insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span><small>' + t(info) + '</small>');
+        z.dataset.vfHub = key;
+        rechts.appendChild(z);
+      };
+      umsch('Gyro-Stabilisierung', vfHubGyro(), VF_HUB_GYRO_STORE, 'An (Vorgabe): ohne Eingang richtet sich der Hubschrauber von selbst wieder auf. Aus: die Schräglage bleibt stehen.');
+      umsch('Rollen umkehren', vfHubInvertRoll(), VF_HUB_INVERT_ROLL_STORE, 'Rechter Stick nach links kippt den Hubschrauber nach rechts statt nach links.');
+      umsch('Nicken umkehren', vfHubInvertPitch(), VF_HUB_INVERT_PITCH_STORE, 'Rechter Stick nach vorn kippt die Nase nach hinten statt nach vorn.');
+    }
     // v1.5.10 (WIP): Vorschau des gewaehlten Autos (Seitenansicht in der Originalfarbe) und die Lackfarbe.
     // Die Vorschau ist ein Bild je Auto (img/autos/<modell>/vorschau.jpg, tools/vorschau_bilder.py);
     // fehlt ein Bild, verschwindet die Zeile still.
     {
       const jl = Math.max(0, VF_LACK_FARBEN.findIndex((f) => f.v === vfLack()));
-      const lackWahl = (dd) => { vfLackSetzen(VF_LACK_FARBEN[(jl + dd + VF_LACK_FARBEN.length) % VF_LACK_FARBEN.length].v); renderGarage(); };
+      const lackWahl = (dd) => { vfLackSetzen(VF_LACK_FARBEN[(jl + dd + VF_LACK_FARBEN.length) % VF_LACK_FARBEN.length].v); vfGarageNeu(); };
       const zeile = garWertZeile(t('Lackfarbe'), t(VF_LACK_FARBEN[jl].n), () => lackWahl(-1), () => lackWahl(1));
       zeile.querySelector('.gk-l').insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span>');
       const palette = document.createElement('span');
@@ -5027,7 +6458,7 @@
         b.className = 'vf-lack' + (i === jl ? ' aktiv' : '');
         b.style.background = f.v || 'linear-gradient(135deg,#c8102e 0%,#0057b8 50%,#e8e8e8 100%)';
         b.title = t(f.n); b.setAttribute('aria-label', t(f.n));
-        b.onclick = (e) => { e.stopPropagation(); vfLackSetzen(f.v); renderGarage(); };
+        b.onclick = (e) => { e.stopPropagation(); vfLackSetzen(f.v); vfGarageNeu(); };
         palette.appendChild(b);
       });
       zeile.querySelector('.gk-w').appendChild(palette);
@@ -5036,7 +6467,7 @@
       const img = document.createElement('img');
       img.className = 'vf-vorschau-bild';
       img.alt = autos[ja].name;
-      img.src = vfModellPfad(autos[ja].v) + 'vorschau.jpg';
+      img.src = vfVorschauUrl(autos[ja].v);   // grauer Verlauf seit v1.6.81 (alles: python tools/vorschau_bilder.py)
       img.onerror = () => { vor.remove(); };
       vor.appendChild(img);
       rechts.appendChild(vor);
@@ -5044,41 +6475,29 @@
     }
     // v1.3.39 (WIP): der Fussboden unter der Bahn, Dielen in echten Massen (siehe VF_BOEDEN).
     const jb = Math.max(0, VF_BOEDEN.findIndex((b) => b.id === vfBodenWahl()));
-    const bodenWahl = (dd) => { vfBodenSetzen(VF_BOEDEN[(jb + dd + VF_BOEDEN.length) % VF_BOEDEN.length].id); renderGarage(); };
+    const bodenWahl = (dd) => { vfBodenSetzen(VF_BOEDEN[(jb + dd + VF_BOEDEN.length) % VF_BOEDEN.length].id); vfGarageNeu(); };
     const bodenZeile = garWertZeile(t('Boden'), t(VF_BOEDEN[jb].name), () => bodenWahl(-1), () => bodenWahl(1));
     bodenZeile.dataset.vfBoden = '1';
-    bodenZeile.querySelector('.gk-l').insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span>');
     rechts.appendChild(bodenZeile);
     // v1.5.150: freie Strecke (Törnerschleife, nur virtuell) oder die gebaute Bahn des Editors.
-    const freiListe = ['', ...Object.keys(VF_FREIE)];
+    const freiListe = vfStreckenListe();
     const jf = Math.max(0, freiListe.indexOf(vfFreiWahl()));
     const freiWahl = (dd) => {
       const ni = (jf + dd + freiListe.length) % freiListe.length;
       try { localStorage.setItem(VF_STRECKE_STORE, freiListe[ni]); } catch (e) { /* egal */ }
       if (freiListe[ni]) vfFreiLaden(freiListe[ni]).catch(() => {});   // schon vorladen (aus PR 4 von gnen54)
-      renderGarage();
+      vfGarageNeu();
     };
     // Aus PR 4 von gnen54: beide Toernerschleifen (mit und ohne Bruecke) sind waehlbar.
     const freiZeile = garWertZeile(t('Strecke'), freiListe[jf] ? t(VF_FREIE[freiListe[jf]].name) + ' (' + t('nur virtuell') + ')' : t('Gebaute Bahn'), () => freiWahl(-1), () => freiWahl(1));
     freiZeile.dataset.vfStrecke = '1';
-    freiZeile.querySelector('.gk-l').insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span>');
     rechts.appendChild(freiZeile);
-    // Fahrtrichtung (BESTELLT, WIP): die Strecke andersherum fahren, siehe vfGegenrichtung.
-    {
-      const gegen = vfGegenAn();
-      const rWahl = () => { try { localStorage.setItem(VF_RICHTUNG_STORE, gegen ? 'normal' : 'gegen'); } catch (e) { /* egal */ } renderGarage(); };
-      const rZeile = garWertZeile(t('Fahrtrichtung'), gegen ? t('Gegenrichtung') : t('Normal'), rWahl, rWahl);
-      const rL = rZeile.querySelector('.gk-l');
-      rL.classList.add('opt-label');
-      rL.insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span><small>' + t('Die Strecke andersherum fahren. Ziellinie, Sektoren und Boxengasse bleiben an ihrem Platz.') + '</small>');
-      rZeile.dataset.feld = 'richtung';
-      rechts.appendChild(rZeile);
-    }
+    // v1.6.56 BESTELLT: "Direction entfernen aus virtual garage, das ist ja in der Streckenkachel schon" (Knopf fa-richtung).
     // Schaltung: Automatik oder Manuell (schalten dann mit I/K).
     const autoSch = vfSchaltungAuto();
     const schaltWahl = () => {
       try { localStorage.setItem(VF_SCHALTUNG_STORE, autoSch ? 'manuell' : 'auto'); } catch (e) { /* egal */ }
-      renderGarage();
+      vfGarageNeu();
     };
     rechts.appendChild(garWertZeile(t('Schaltung'), autoSch ? t('Automatik') : t('Manuell'), schaltWahl, schaltWahl));
     // Handling: GT3 (praezise wie in ACC) oder Schnell (mehr Grip, mehr Einschlag, hoeheres Tempo).
@@ -5086,26 +6505,64 @@
     const hWahl = (dd) => {
       const i = Math.max(0, VF_HANDLING_MODI.findIndex((m) => m.id === hId));
       vfHandlingSetzen(VF_HANDLING_MODI[(i + dd + VF_HANDLING_MODI.length) % VF_HANDLING_MODI.length].id);
-      renderGarage();
+      vfGarageNeu();
     };
     rechts.appendChild(garWertZeile(t('Handling'), vfHandlingName(hId), () => hWahl(-1), () => hWahl(1)));
     // Grafik: Performance (wie bisher, fuer schwache Handys) oder Quality (Schatten, Tonemapping,
     // besseres Licht, Vignette).
     const gId = vfGrafik();
-    const gWahl = () => { vfGrafikSetzen(gId === 'perf' ? 'qual' : 'perf'); renderGarage(); };
+    const gWahl = () => { vfGrafikSetzen(gId === 'perf' ? 'qual' : 'perf'); vfGarageNeu(); };
     const grafikZeile = garWertZeile(t('Grafik'), t(vfGrafik() === 'perf' ? 'Performance' : 'Quality'), gWahl, gWahl);
     grafikZeile.querySelector('.gk-l').insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span>');
     rechts.appendChild(grafikZeile);
+    // v1.6.52 BESTELLT: "Reifenwahl einbauen, damit ich bei Regen fahren kann". Dieselbe Mischung wie beim echten Fahren (tyres,
+    // TYRE_MIX in 70-race.js): applySurface() rechnet daraus mit dem Wetter den Griff (gripScale), den die virtuelle Fahrt nutzt -
+    // Slicks im Nassen langsam und rutschig, Regenreifen im Trockenen etwas langsamer.
+    if (typeof tyres !== 'undefined' && typeof TYRE_MIX !== 'undefined') {
+      const mixe = Object.keys(TYRE_MIX), jm = Math.max(0, mixe.indexOf(tyres));
+      const mw = (dd) => { tyres = mixe[(jm + dd + mixe.length) % mixe.length]; try { applySurface(); } catch (e) { /* egal */ } vfGarageNeu(); };
+      const z = garWertZeile(t('Reifen'), mischungName(mixe[jm]), () => mw(-1), () => mw(1));
+      const l = z.querySelector('.gk-l'); l.classList.add('opt-label');
+      l.insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span><small>' + t('Mischung wie beim echten Fahren: Slicks (weich, mittel, hart) greifen im Trockenen, im Regen rutschen sie; Regenreifen greifen im Nassen und sind im Trockenen etwas langsamer. Regen schaltest du mit dem Wetter-Knopf in der Fahrt.') + '</small>');
+      z.dataset.vfReifen = '1';
+      rechts.appendChild(z);
+    }
+    // v1.6.52 BESTELLT: "Slider fuer die Rauch-Aufloesung (Performance: so wie jetzt, Quality: etwas hoeher; noch viel hoeher moeglich)".
+    {
+      const ws = VF_RAUCH_STUFEN, js = Math.max(0, ws.indexOf(vfRauchStufeWahl()));
+      const rw = (dd) => { try { localStorage.setItem(VF_RAUCH_STORE, String(ws[(js + dd + ws.length) % ws.length])); } catch (e) { /* egal */ } VF.rauchPuffer = null; vfGarageNeu(); };
+      const v = ws[js];
+      const z = garWertZeile(t('Rauch-Auflösung'), v === 'auto' ? t('Automatisch') + ' (' + vfRauchStufe() + '×)' : v + '×', () => rw(-1), () => rw(1));
+      const l = z.querySelector('.gk-l'); l.classList.add('opt-label');
+      l.insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span><small>' + t('Drift-Rauch: Automatisch = 1× in Performance, 1,5× in Quality. Höher: mehr, feinere und rundere Wolken, kostet Bildrate.') + '</small>');
+      rechts.appendChild(z);
+    }
+    // v1.6.46: Gyro-Staerke des Drift-Fahrgefuehls und die Strecken-Ambience der virtuellen Fahrt (stehen unter Optionen > Virtuell).
+    {
+      const jg = Math.max(0, VF_DRIFT_GYRO_WERTE.indexOf(vfDriftGyro()));
+      const gw = (dd) => { try { localStorage.setItem(VF_DRIFT_GYRO_STORE, String(VF_DRIFT_GYRO_WERTE[(jg + dd + VF_DRIFT_GYRO_WERTE.length) % VF_DRIFT_GYRO_WERTE.length])); } catch (e) { /* egal */ } vfGarageNeu(); };
+      const v = VF_DRIFT_GYRO_WERTE[jg];
+      const z = garWertZeile(t('Drift-Gyro'), v === 0 ? t('Aus') : Math.round(v * 100) + ' %' + (v === 1 ? ' (' + t('Vorgabe') + ')' : ''), () => gw(-1), () => gw(1));
+      const l = z.querySelector('.gk-l'); l.classList.add('opt-label');
+      l.insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span><small>' + t('Nur im Fahrgefühl Drift: Gegenlenk-Hilfe wie der Gyro eines RC-Driftautos. Mit Hilfe lenkt der Stick relativ zur Fahrtrichtung (Mitte = Räder in Fahrtrichtung) und der Gyro fängt das Eindrehen ab. Aus = reine Physik, für Lenkräder. X ist im Drift die Handbremse.') + '</small>');
+      rechts.appendChild(z);
+      const amb = vfAmbienceAn();
+      const aw = () => { try { localStorage.setItem(VF_AMBIENCE_STORE, amb ? 'aus' : 'an'); } catch (e) { /* egal */ } if (VF.aktiv) vfAmbienceAnwenden(); vfGarageNeu(); };
+      const za = garWertZeile(t('Strecken-Ambience'), amb ? t('An') : t('Aus'), aw, aw);
+      const la = za.querySelector('.gk-l'); la.classList.add('opt-label');
+      la.insertAdjacentHTML('beforeend', '<small>' + t('Teppich und Vorbeifahrten der Strecke während der virtuellen Fahrt (ab Werk aus). Beim echten Fahren gilt der Schalter unter Optionen > Ton.') + '</small>');
+      rechts.appendChild(za);
+    }
     // v1.5 (WIP): Tageszeit (Farbstimmung), in Performance und Quality.
     const tzA = VF_TAGESZEITEN.indexOf(vfTageszeit());
-    const tzWahl = (d) => { vfTageszeitSetzen(VF_TAGESZEITEN[(tzA + d + VF_TAGESZEITEN.length) % VF_TAGESZEITEN.length].id); renderGarage(); };
+    const tzWahl = (d) => { vfTageszeitSetzen(VF_TAGESZEITEN[(tzA + d + VF_TAGESZEITEN.length) % VF_TAGESZEITEN.length].id); vfGarageNeu(); };
     const tzZeile = garWertZeile(t('Tageszeit'), t(VF_TAGESZEITEN[tzA].name), () => tzWahl(-1), () => tzWahl(1));
     tzZeile.querySelector('.gk-l').insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span>');
     tzZeile.dataset.feld = 'tageszeit';
     rechts.appendChild(tzZeile);
     // v1.5.94 (G7) BESTELLT: abschaltbar. Erklaerung im (i).
     const sichtAn = vfSichtTempoAn();
-    const sichtWahl = () => { try { localStorage.setItem(VF_SICHT_STORE, sichtAn ? 'aus' : 'an'); } catch (e) { /* egal */ } renderGarage(); };
+    const sichtWahl = () => { try { localStorage.setItem(VF_SICHT_STORE, sichtAn ? 'aus' : 'an'); } catch (e) { /* egal */ } vfGarageNeu(); };
     const sichtZeile = garWertZeile(t('Sichtfeld mit Tempo'), sichtAn ? t('An') : t('Aus'), sichtWahl, sichtWahl);
     const sichtL = sichtZeile.querySelector('.gk-l');
     sichtL.classList.add('opt-label');
@@ -5116,13 +6573,13 @@
     const geistAn = vfGeistAn();
     const geistWahl = () => {
       try { localStorage.setItem(VF_GEIST_STORE, geistAn ? 'aus' : 'an'); } catch (e) { /* egal */ }
-      renderGarage();
+      vfGarageNeu();
     };
     rechts.appendChild(garWertZeile(t('Geist folgt meiner Linie'), geistAn ? t('An') : t('Aus'), geistWahl, geistWahl));
     // Rueckspiegel in der Motorhauben-Kamera (aus PR 4 von gnen54, Standard aus).
     {
       const spAn = vfSpiegelAn();
-      const spWahl = () => { try { localStorage.setItem(VF_SPIEGEL_STORE, spAn ? 'aus' : 'an'); } catch (e) { /* egal */ } renderGarage(); };
+      const spWahl = () => { try { localStorage.setItem(VF_SPIEGEL_STORE, spAn ? 'aus' : 'an'); } catch (e) { /* egal */ } vfGarageNeu(); };
       const spZeile = garWertZeile(t('Rückspiegel (Motorhaube)'), spAn ? t('An') : t('Aus'), spWahl, spWahl);
       const spL = spZeile.querySelector('.gk-l');
       spL.classList.add('opt-label');
@@ -5135,22 +6592,47 @@
     const abseitsBremse = vfAbseitsBremseAn();
     const abseitsWahl = () => {
       try { localStorage.setItem(VF_ABSEITS_BREMSE_STORE, abseitsBremse ? 'aus' : 'an'); } catch (e) { /* egal */ }
-      renderGarage();
+      vfGarageNeu();
     };
     const abseitsZeile = garWertZeile(t('Kein Tempoverlust neben der Bahn'), abseitsBremse ? t('Aus') : t('An'), abseitsWahl, abseitsWahl);
     abseitsZeile.querySelector('.gk-l').insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span>');
     rechts.appendChild(abseitsZeile);
+    // v1.6.69: automatisches Zuruecksetzen neben der Bahn abschaltbar.
+    {
+      const an = vfZuruecksetzenAn();
+      const w = () => { try { localStorage.setItem(VF_ZURUECK_STORE, an ? 'aus' : 'an'); } catch (e) { /* egal */ } vfGarageNeu(); };
+      const z = garWertZeile(t('Zurücksetzen neben der Bahn'), an ? t('An') : t('Aus'), w, w);
+      const l = z.querySelector('.gk-l'); l.classList.add('opt-label');
+      l.insertAdjacentHTML('beforeend', '<small>' + t('An (Vorgabe): steht das Auto 2,5 s neben der Bahn, kommt es zurück auf die Strecke. Aus: du fährst neben der Bahn weiter, zurück nur mit dem Knopf „Zurücksetzen“.') + '</small>');
+      z.dataset.vfZurueck = '1';
+      rechts.appendChild(z);
+    }
+    // v1.6.85: Totzone der Steuerung Neigen (Issue #11), WIP.
+    {
+      const tz = vfNeigenTot(), i = Math.max(0, VF_NEIGEN_TOT_WERTE.indexOf(tz));
+      const w = (dd) => {
+        const n = VF_NEIGEN_TOT_WERTE[(i + dd + VF_NEIGEN_TOT_WERTE.length) % VF_NEIGEN_TOT_WERTE.length];
+        try { localStorage.setItem(VF_NEIGEN_TOT_STORE, String(n)); } catch (e) { /* egal */ }
+        vfGarageNeu();
+      };
+      const fmt = (g) => String(g).replace('.', lang === 'en' ? '.' : ',') + '°';
+      const z = garWertZeile(t('Totzone Neigen'), fmt(tz), () => w(-1), () => w(1));
+      const l = z.querySelector('.gk-l'); l.classList.add('opt-label');
+      l.insertAdjacentHTML('beforeend', ' <span class="wip-tag">WIP</span><small>' + t('Steuerung „Neigen“: so viele Grad um die Mitte lenkt das Auto noch nicht. Größer = ruhiger geradeaus, kleiner = feiner. Voller Einschlag bleibt bei 35°.') + '</small>');
+      z.dataset.vfNeigenTot = '1';
+      rechts.appendChild(z);
+    }
     // NPCs: wie viele andere Autos mitfahren (0-3), zufaellige Skins aus den echten Modellen.
     const nNpc = vfNpcAnzahl();
     const npcWahl = (dd) => {
       try { localStorage.setItem(VF_NPC_STORE, String(Math.max(0, Math.min(3, nNpc + dd)))); } catch (e) { /* egal */ }
-      renderGarage();
+      vfGarageNeu();
     };
     rechts.appendChild(garWertZeile(t('NPCs'), nNpc === 0 ? t('Aus') : String(nNpc), () => npcWahl(-1), () => npcWahl(1)));
     // Pflicht-Boxendurchfahrt im Rennen (Runden, Langstrecke): Aus, 1, 2 oder 3 (aus PR 4 von gnen54).
     {
       const pfl = vfPflichtBox();
-      const pflWahl = (d) => { try { localStorage.setItem(VF_PFLICHTBOX_STORE, String((pfl + d + 4) % 4)); } catch (e) { /* egal */ } renderGarage(); };
+      const pflWahl = (d) => { try { localStorage.setItem(VF_PFLICHTBOX_STORE, String((pfl + d + 4) % 4)); } catch (e) { /* egal */ } vfGarageNeu(); };
       const pflZeile = garWertZeile(t('Pflicht-Boxendurchfahrt'), pfl ? String(pfl) : t('Aus'), () => pflWahl(-1), () => pflWahl(1));
       const pflL = pflZeile.querySelector('.gk-l');
       pflL.classList.add('opt-label');
@@ -5162,19 +6644,11 @@
       const jf = VF_FEDER_WERTE.indexOf(vfFederSicht());
       const federWahl = (dd) => {
         try { localStorage.setItem(VF_FEDER_STORE, String(VF_FEDER_WERTE[Math.max(0, Math.min(VF_FEDER_WERTE.length - 1, jf + dd))])); } catch (e) { /* egal */ }
-        renderGarage();
+        vfGarageNeu();
       };
       rechts.appendChild(garWertZeile(t('Neigung sichtbar'), VF_FEDER_WERTE[jf] + '×', () => federWahl(-1), () => federWahl(1)));
     }
-    const status = document.createElement('p');
-    status.className = 'muted vf-ton-status';
-    status.textContent = vfTonStatus();
-    rechts.appendChild(status);
-    const iv = setInterval(() => {
-      if (!status.isConnected) { clearInterval(iv); return; }
-      const s = vfTonStatus();
-      if (status.textContent !== s) status.textContent = s;
-    }, 500);
+    // v1.6.56: die Zeile zum Ladezustand des Motorklangs entfaellt mit der Motorsound-Zeile.
     const z = document.createElement('div');
     z.className = 'opt-row opt-breit gar-a-aktion';
     const los = document.createElement('button');
@@ -5184,6 +6658,21 @@
     los.textContent = t('Losfahren');
     los.onclick = () => virtuellStarten();
     z.appendChild(los);
+    // v1.6.60 (WIP): Augmented Reality (Chrome auf Android mit ARCore): Strecke und Auto bzw. Hubschrauber im Zimmer.
+    {
+      const ar = document.createElement('button');
+      ar.type = 'button';
+      ar.className = 'vf-ar-knopf';
+      ar.dataset.vf = 'ar';
+      ar.innerHTML = 'AR <span class="wip-tag">WIP</span>';
+      ar.title = t('Augmented Reality: die Strecke im Zimmer (Chrome auf Android mit ARCore)');
+      ar.onclick = (e) => { e.stopPropagation(); if (typeof vfArStarten === 'function') vfArStarten(); };
+      // v1.6.67: auch ohne WebXR-AR (Marker-AR mit der Kamera, 60f-ar-marker.js) - also ueberall, wo es eine Kamera gibt.
+      ar.hidden = !((typeof vfArMoeglich === 'function' && vfArMoeglich()) || !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
+      z.appendChild(ar);
+    }
+    // v1.6.60 (aus Gnen54s Fork): Bestzeiten je Strecke und Auto, zugeklappt unter den Optionen der Garage.
+    try { rechts.appendChild(vfBestenliste(vfAutoListe())); } catch (e) { /* ohne */ }
     // Anleitung zum virtuellen Fahren (aus PR 4 von gnen54): Knopf "?" neben Losfahren, oeffnet
     // hilfe/virtuelles-fahren.html als Fenster ueber der Garage.
     const hilfe = document.createElement('button');
@@ -5311,12 +6800,49 @@
       }
     } catch (e) { /* ohne Ton weiterfahren */ }
   }
+  // v1.6.60: Schluessel und Name der Strecke fuer die virtuellen Zeiten, und das Fahrgefuehl als 'vf-<handling>'.
+  function vfFahrgefuehlId() { return VF.hubschrauber || vfHubschrauber() ? 'vf-heli' : 'vf-' + vfHandling(); }
+  function vfFahrgefuehlName(fg) {
+    const id = String(fg || '').replace(/^vf-/, '');
+    if (id === 'heli') return t('RC Heli');
+    return t('Virtuell') + ' · ' + vfHandlingName(id);
+  }
+  function vfZeitSchluessel() {
+    let key = '';
+    if (VF.freiId) key = 'frei:' + VF.freiId;
+    else if (VF.tiles && VF.tiles.length >= 3 && typeof skSchluessel === 'function') key = skSchluessel(VF.tiles);
+    return key ? key + (VF.gegen ? '|gegen' : '') : '';
+  }
+  function vfZeitName() {
+    if (VF.freiId && VF_FREIE[VF.freiId]) return t(VF_FREIE[VF.freiId].name) + (VF.gegen ? ' (' + t('Gegenrichtung') + ')' : '');
+    const k = VF.tiles && typeof skSchluessel === 'function' ? skSchluessel(VF.tiles) : '';
+    return (k && typeof skStreckenName === 'function' ? skStreckenName(k) : '') + (VF.gegen ? ' (' + t('Gegenrichtung') + ')' : '');
+  }
+  function vfZeitenAbschluss() {
+    const lauf = VF.zeitLauf;
+    VF.zeitLauf = null;
+    if (!lauf || !lauf.runden.length || VF.extern || VF.studie || typeof skVirtuellFahrtEnde !== 'function') return;
+    const key = vfZeitSchluessel();
+    if (!key) return;
+    let minMs = 1000;
+    try { if (!VF.freiId) minMs = chMinRundeMs({ code: key.split('|')[0], runden: 1 }); } catch (e) { /* 1 s */ }
+    try {
+      skVirtuellFahrtEnde({ key, name: vfZeitName(), runden: lauf.runden, fahrgefuehl: vfFahrgefuehlId(),
+        auto: VF.hubschrauber ? t('RC Stunt Copter') : vfAutoName(vfAutoWahl()), minMs });
+    } catch (e) { if (typeof log === 'function') log('Virtuelle Streckenzeiten: ' + e.message, 'warn'); }
+  }
   function virtuellBeenden() {
+    if (VF.aktiv) vfZeitenAbschluss();
+    if (VF.ar) { const ar = VF.ar; VF.ar = null; try { if (typeof vfArAufraeumen === 'function') vfArAufraeumen(ar); } catch (e) { /* egal */ } }
+    if (VF.marker) { const mk = VF.marker; VF.marker = null; try { if (typeof vfMkAufraeumen === 'function') vfMkAufraeumen(mk); } catch (e) { /* egal */ } }
     VF.frei = undefined;
+    VF.freiId = '';
     VF_BOX_SEITE = -1;   // zurueck auf die Editor-Boxenseite (rechts)
     VF.hoehe = null;
     rennPauseBeenden();
+    if (VF.hubschrauber) vfHubTon.ausblenden();
     if (!VF.aktiv) return;
+    setTimeout(vfAmbienceAnwenden, 0);   // v1.6.46: nach dem Ende wieder der Schalter unter Optionen > Ton
     // Laeuft eine Challenge (z. B. die Studienfahrt) mit dem virtuellen Auto, endet sie mit: abgebrochen,
     // nicht gewertet (VF.abbruch sagt das der Studie, 98f-studie.js).
     if (typeof chLauf !== 'undefined' && chLauf) {
@@ -5399,7 +6925,9 @@
     renderGarage();
     // Zurueck in die Garage, wo die Optionen der virtuellen Fahrt stehen (dort startet die naechste).
     // Eine Studienfahrt geht zurueck in die Studie (98f-studie.js zeigt sie selbst).
-    if (!VF.studie && typeof showTab === 'function') showTab('garage');
-    VF.studie = false;
+    if (VF.extern === 'challenge' && typeof showTab === 'function') showTab('challenges');
+    else if (VF.extern && typeof showTab === 'function') showTab('fahren');
+    else if (!VF.studie && typeof showTab === 'function') { showTab('vgarage'); vfGarageSeite(); }   // v1.6.32: zurueck in die virtuelle Garage
+    VF.studie = false; VF.extern = null;
   }
   window.addEventListener('keydown', (e) => { if (VF.aktiv && e.key === 'Escape') { e.stopImmediatePropagation(); virtuellBeenden(); } }, true);

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297">
+<!-- OmegaSim Marker-AR (v1.6.67): ArUco-Marker ARUCO_MIP_36h12, Nummer 0. Schwarzes Quadrat 160 mm. In Originalgroesse
+     (100 %, nicht "an Seite anpassen") auf A4 drucken und flach auf den Boden legen. -->
+<rect width="210" height="297" fill="#fff"/>
+<text x="105" y="18" font-family="Arial, sans-serif" font-size="7" text-anchor="middle">OmegaSim AR-Marker</text>
+<text x="105" y="28" font-family="Arial, sans-serif" font-size="4.2" text-anchor="middle">In Originalgr&#246;&#223;e drucken (100 %), flach auf den Boden legen. Schwarzes Quadrat: 16 cm.</text>
+<rect x="25" y="60" width="160" height="160" fill="#000"/>
+<rect x="45" y="80" width="20.05" height="20.05" fill="#fff"/>
+<rect x="65" y="80" width="20.05" height="20.05" fill="#fff"/>
+<rect x="105" y="80" width="20.05" height="20.05" fill="#fff"/>
+<rect x="45" y="100" width="20.05" height="20.05" fill="#fff"/>
+<rect x="85" y="100" width="20.05" height="20.05" fill="#fff"/>
+<rect x="125" y="100" width="20.05" height="20.05" fill="#fff"/>
+<rect x="145" y="100" width="20.05" height="20.05" fill="#fff"/>
+<rect x="65" y="120" width="20.05" height="20.05" fill="#fff"/>
+<rect x="85" y="120" width="20.05" height="20.05" fill="#fff"/>
+<rect x="45" y="140" width="20.05" height="20.05" fill="#fff"/>
+<rect x="65" y="140" width="20.05" height="20.05" fill="#fff"/>
+<rect x="85" y="140" width="20.05" height="20.05" fill="#fff"/>
+<rect x="125" y="140" width="20.05" height="20.05" fill="#fff"/>
+<rect x="125" y="160" width="20.05" height="20.05" fill="#fff"/>
+<rect x="65" y="180" width="20.05" height="20.05" fill="#fff"/>
+<rect x="85" y="180" width="20.05" height="20.05" fill="#fff"/>
+<rect x="105" y="180" width="20.05" height="20.05" fill="#fff"/>
+<rect x="145" y="180" width="20.05" height="20.05" fill="#fff"/>
+<text x="105" y="262" font-family="Arial, sans-serif" font-size="4.2" text-anchor="middle">Die Strecke liegt mittig auf dem Marker. Den Marker immer im Bild behalten.</text>
+<text x="105" y="270" font-family="Arial, sans-serif" font-size="4.2" text-anchor="middle">Print at 100 % (not "fit to page"), lay flat on the floor. Black square: 16 cm.</text>
+<text x="105" y="285" font-family="Arial, sans-serif" font-size="3.2" text-anchor="middle" fill="#666">ArUco ARUCO_MIP_36h12 #0 &#183; js-aruco2 (MIT)</text>
+</svg>

@@ -80,7 +80,8 @@ def main():
     j = holen({'alle': 1})
     if isinstance(j.get('listen'), dict):
         for schl, l in j['listen'].items():
-            if schl in listen:
+            # v1.6.56: virtuelle Listen (Schluessel mit '|v') nur, wenn es Zeiten gibt
+            if schl in listen or (schl.endswith('|v') and schl[:-2] in listen):
                 listen[schl] = eintrag(l)
     else:
         print('Apps Script kennt alle=1 noch nicht - vier alte Strecken einzeln')

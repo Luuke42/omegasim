@@ -400,6 +400,7 @@
       else if (trackEditorPad('confirm')) { /* vom Editor verbraucht */ }
       else if (menuNavActive()) menuNavActivate();
       else if (cockpitScreenIst().id !== 'main') cockpitScreenWaehlen();
+      else if (typeof vfHandbremse === 'function' && vfHandbremse(true)) { /* v1.6.54: Handbremse im virtuellen Drift */ }
       else flagHoldPress();
     }
     // Q ist in den Menues L1 (51-konsole.js); die Test-Runde gibt es nur noch im Cockpit.
@@ -461,7 +462,7 @@
     // Loslassen der Halten-Geste. Zu frueh losgelassen heisst ausdruecklich: nichts
     // passiert - ein halber Druck darf keine halbe Wirkung haben.
     const kUp = (e.key || '').toLowerCase();
-    if (kUp === 'x' || kUp === 'enter') flagHoldRelease(false);
+    if (kUp === 'x' || kUp === 'enter') { if (typeof vfHandbremse === 'function') vfHandbremse(false); flagHoldRelease(false); }
     if (e.key === 'ArrowLeft') menuNavAdjustGehalten('left', false);
     else if (e.key === 'ArrowRight') menuNavAdjustGehalten('right', false);
   });

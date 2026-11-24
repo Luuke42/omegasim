@@ -7052,6 +7052,28 @@
     return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Blitz als Schicht, Regen nahtlos, Aufstellen nur auf der Bahn, OmegaLab, trocken beim Start, Verschleiss 2,6/0,4' };
   });
 
+  stAdd('Sound v1.6.83: Reifenquietschen virtuell erst am Scheitel und gehalten, halb so laut, ohne hohen Ton', () => {
+    const f = [];
+    if (TYRE_SQUEAL_DECKEL !== 0.225) f.push('Deckel ' + TYRE_SQUEAL_DECKEL);
+    // Kurzer Lenkstoss (0,2 s auf 1,3) quietscht nicht, gehaltenes Rutschen (1 s auf 1,3) schon.
+    const merk = { g: tyreVfGlatt, at: tyreVfAt };
+    try {
+      tyreVfGlatt = 0; tyreVfAt = 0;
+      let t = 1000, mx = 0;
+      tyreVfNutzung(0, t);
+      for (let i = 0; i < 12; i++) { t += 1000 / 60; mx = Math.max(mx, tyreSquealMenge(tyreVfNutzung(1.3, t), TYRE_SQUEAL_VF.start, TYRE_SQUEAL_VF.voll)); }
+      if (mx > 0.05) f.push('Lenkstoss quietscht (' + mx.toFixed(2) + ')');
+      for (let i = 0; i < 30; i++) { t += 1000 / 60; tyreVfNutzung(0, t); }
+      for (let i = 0; i < 60; i++) { t += 1000 / 60; mx = tyreSquealMenge(tyreVfNutzung(1.3, t), TYRE_SQUEAL_VF.start, TYRE_SQUEAL_VF.voll); }
+      if (!(mx > 0.5)) f.push('gehaltenes Rutschen leise (' + mx.toFixed(2) + ')');
+      // Normale Kurve (Ausnutzung 0,8, wie ruhig gefahren) quietscht nie.
+      for (let i = 0; i < 120; i++) { t += 1000 / 60; mx = tyreSquealMenge(tyreVfNutzung(0.8, t), TYRE_SQUEAL_VF.start, TYRE_SQUEAL_VF.voll); }
+      if (mx > 0) f.push('normale Kurve quietscht');
+    } finally { tyreVfGlatt = merk.g; tyreVfAt = merk.at; }
+    // Echt bleibt die Schwelle 0,6.
+    if (tyreSquealMenge(0.8) <= 0) f.push('echt: Schwelle verschoben');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Lenkstoss still, Rutschen hoerbar, Deckel 0,225, echt unveraendert' };
+  });
   stAdd('Vibration v1.1.42: eigene Kachel, Quietschen leicht, kein Dauerbrummen vom Gas', () => {
     const f = [];
     const seite = $('sub-opt-vibration');
@@ -11813,7 +11835,8 @@
     // Ebene 1 (oben neben dem Logo, von jeder Seite aus) und die Kacheln des Fahren-Schirms
     // (JS-Knoepfe, hier von Hand genannt). Der Titel fuehrt nach Fahren.
     // v1.3.5: der Mehrspieler ist kein Reiter mehr, sondern der Knopf #fa-mp in der Autos-Kachel.
-    const kanten = { home: ['fahren'], fahren: ['garage', 'control', 'track', 'race', 'mp'] };
+    // v1.6.32: die virtuelle Garage (vgarage) ueber Garage/Autos-Kachel im Modus Virtuell und aus der echten Garage.
+    const kanten = { home: ['fahren'], fahren: ['garage', 'vgarage', 'control', 'track', 'race', 'mp'] };
     K_EBENE1.forEach((x) => { kanten.fahren.push(x); });
     const tabs = [...document.querySelectorAll('.tabpage')].map((t) => t.id.replace(/^tab-/, ''));
     tabs.forEach((t) => {
@@ -14521,20 +14544,991 @@
   });
 
   // v1.5: dazu "Drive Virtually" zwischen Meisterschaft und Start (ein Drittel der alten Startbreite, Start zwei Drittel).
-  stAdd('Fahren: Motorsound nur noch in der Garage, Meisterschaft, Virtuell fahren und Start fuellen die Reihe', () => {
+  // v1.6.23: an seiner Stelle der Umschalter Echt | Virtuell (fa-modus).
+  stAdd('Fahren: Motorsound nur noch in der Garage, Meisterschaft, Umschalter Echt/Virtuell und Start fuellen die Reihe', () => {
     const f = [];
     if (document.getElementById(['fa', 'motor'].join('-'))) f.push('Motorsound-Kachel noch da');
-    if (!$('fa-profil') || !$('fa-start') || !$('fa-virtuell')) f.push('Meisterschaft, Virtuell oder Start fehlt');
+    if (!$('fa-profil') || !$('fa-start') || !$('fa-modus')) f.push('Meisterschaft, Umschalter oder Start fehlt');
+    if (document.getElementById(['fa', 'virtuell'].join('-'))) f.push('Kachel Virtuell fahren noch da');
     const unten = document.querySelector('.k-fahren-unten');
     const kinder = unten ? [...unten.children].map((x) => x.id) : [];
-    if (kinder.join(',') !== 'fa-profil,fa-virtuell,fa-start') f.push('Reihenfolge ' + kinder.join(','));
+    if (kinder.join(',') !== 'fa-profil,fa-modus,fa-start') f.push('Reihenfolge ' + kinder.join(','));
     if (unten && unten.offsetWidth > 300 && getComputedStyle(unten).gridTemplateColumns.split(' ').length === 3) {
-      const v = $('fa-virtuell').offsetWidth, st = $('fa-start').offsetWidth;
-      if (Math.abs(st / v - 2) > 0.2) f.push('Start/Virtuell ' + (st / v).toFixed(2) + ' statt 2');
+      const v = $('fa-modus').offsetWidth, st = $('fa-start').offsetWidth;
+      if (Math.abs(st / v - 2) > 0.2) f.push('Start/Umschalter ' + (st / v).toFixed(2) + ' statt 2');
     }
-    if (!$('fa-virtuell').querySelector('.wip-tag')) f.push('Virtuell ohne WIP');
-    if (!$('fa-virtuell').classList.contains('k-start') || $('fa-virtuell').querySelector('.k-kk, .k-kopf')) f.push('Virtuell nicht im Stil der Startkachel');
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Meisterschaft | Virtuell (1/3 der alten Startbreite) | Start (2/3)' };
+    if (!$('fa-modus').querySelector('.wip-tag')) f.push('Virtuell ohne WIP');
+    if (!$('fa-modus').classList.contains('k-start') || $('fa-modus').querySelector('.k-kk, .k-kopf')) f.push('Umschalter nicht im Stil der Startkachel');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Meisterschaft | Echt/Virtuell (1/3 der alten Startbreite) | Start (2/3)' };
+  });
+  stAdd('Fahren v1.6.23: virtuell waehlt die Strecken-Kachel gebaute Bahn und Rollrennstrecken (Toernerschleife, Bruecke) mit Fahrtrichtung', async () => {
+    const f = [], lies = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const merk = { m: lies(FAHR_MODUS_STORE), s: lies(VF_STRECKE_STORE), r: lies(VF_RICHTUNG_STORE) };
+    const merkTab = typeof kAktiverTab === 'function' ? kAktiverTab() : '';
+    const namen = [];
+    try {
+      showTab('fahren');
+      fahrModusSetzen('virtuell');
+      try { localStorage.setItem(VF_STRECKE_STORE, ''); localStorage.setItem(VF_RICHTUNG_STORE, 'normal'); } catch (e) { /* egal */ }
+      konsoleFahrenZeichnen();
+      const l = vfStreckenListe();
+      if (l.join(',') !== ',indeq,indeqBruecke') f.push('Liste ' + l.join(','));
+      if (kQuadPunkte('bahn').anzahl !== 3) f.push('Punkte ' + kQuadPunkte('bahn').anzahl);
+      if ($('fa-strecke-titel').textContent !== t('Gebaute Bahn')) f.push('Titel ' + $('fa-strecke-titel').textContent);
+      if ($('fa-scan').hidden !== true || $('fa-richtung').hidden) f.push('Knoepfe: Scan ' + !$('fa-scan').hidden + ', Richtung ' + !$('fa-richtung').hidden);
+      for (let i = 0; i < 2; i++) {
+        konsoleQuadWechsel('bahn', 1);
+        const k = vfFreiWahl();
+        await vfFreiLaden(k);
+        konsoleFahrenZeichnen();
+        namen.push($('fa-strecke-titel').textContent);
+        if ($('fa-strecke-titel').textContent !== t(VF_FREIE[k].name)) f.push(k + ': Titel ' + $('fa-strecke-titel').textContent);
+        if (!$('fa-strecke-bild').querySelector('svg path')) f.push(k + ': keine Karte');
+        if (!$('fa-editor').hidden) f.push(k + ': Editor sichtbar');
+        if (kQuadPunkte('bahn').index !== i + 1) f.push(k + ': Punkt ' + kQuadPunkte('bahn').index);
+      }
+      // Fahrtrichtung per Knopf, sichtbar in der Info und auf dem Knopf.
+      $('fa-richtung').click();
+      if (!vfGegenAn() || $('fa-richtung').textContent.indexOf(t('Gegenrichtung')) < 0 || $('fa-strecke-info').textContent.indexOf(t('Gegenrichtung')) < 0) f.push('Richtung: Knopf wirkt nicht');
+      konsoleQuadWechsel('bahn', 1);
+      if (vfFreiWahl() !== '') f.push('nach der letzten Rollrennstrecke nicht zurueck zur gebauten Bahn');
+      // Echt: wie bisher (Auf der Bahn / Frei), Richtung versteckt.
+      fahrModusSetzen('echt');
+      if (!$('fa-richtung').hidden) f.push('echt: Richtung sichtbar');
+      if ([t('Auf der Bahn'), t('Frei')].indexOf($('fa-strecke-titel').textContent) < 0) f.push('echt: Titel ' + $('fa-strecke-titel').textContent);
+    } finally {
+      const setz = (k, v) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* egal */ } };
+      setz(FAHR_MODUS_STORE, merk.m); setz(VF_STRECKE_STORE, merk.s); setz(VF_RICHTUNG_STORE, merk.r);
+      konsoleFahrenZeichnen();
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Gebaute Bahn → ' + namen.join(' → ') + ' → zurueck, Richtung per Knopf' };
+  });
+  stAdd('Sektoren v1.6.27: Karte mit Farbsaum und Nummer je Sektor, Puls am Sektorende, Ansage nur bei Bestzeit (Issue #12)', () => {
+    const f = [];
+    // Strecke mit automatischen Sektoren suchen (geschlossen, genug Teile).
+    let tiles = null;
+    for (const c of [ST_SEK_OVAL]) {
+      try { const tl = codeToTrack(c).tiles; if (autoSektorPlanFuer(tl, trackSchluss(trackCenterline(tl)).closed, true)) { tiles = tl; break; } } catch (e) { /* weiter */ }
+    }
+    if (!tiles) return { ok: false, mass: 'keine Teststrecke mit Sektoren' };
+    const plan = autoSektorPlanFuer(tiles, true, true);
+    const html = renderTrackPreview(tiles, null, { detailed: true, echt: true, sektorenImmer: true }).html;
+    const saeume = (html.match(/data-sektor-saum="/g) || []).length, nr = (html.match(/data-sektor-nr="/g) || []).length;
+    if (saeume !== plan.n || nr !== plan.n) f.push('Saeume ' + saeume + ', Nummern ' + nr + ' statt ' + plan.n);
+    if (html.indexOf(SEKTOR_FARBEN[0]) < 0 || html.indexOf(SEKTOR_FARBEN[1]) < 0) f.push('Farben fehlen');
+    const aus = tiles.map((x, i) => (i ? Object.assign({}, x) : Object.assign({}, x, { sm: 'aus' })));
+    if (renderTrackPreview(aus, null, { detailed: true, echt: true, sektorenImmer: true }).html.indexOf('data-sektor-saum') >= 0) f.push('Sektoren aus, Saum trotzdem');
+    // Puls: Klasse an allen Saeumen dieser Nummer.
+    const box = document.createElement('div');
+    box.innerHTML = html; document.body.appendChild(box);
+    try {
+      sektorKartePuls(2);
+      const s2 = box.querySelector('[data-sektor-saum="2"]'), s1 = box.querySelector('[data-sektor-saum="1"]');
+      if (!s2 || !s2.classList.contains('sektor-puls')) f.push('Puls fehlt');
+      if (s1 && s1.classList.contains('sektor-puls')) f.push('falscher Sektor pulsiert');
+      if (s2 && parseFloat(getComputedStyle(s2).strokeWidth) < 4) f.push('Saum beim Puls nicht dicker: ' + getComputedStyle(s2).strokeWidth);
+    } finally { box.remove(); }
+    // Ansage nur, wenn schneller als jede fruehere Zeit dieses Sektors.
+    const merkH = sectorHistory, merkE = ansagenEinreihen, gesagt = [];
+    try {
+      ansagenEinreihen = (art, text) => { gesagt.push(art + ':' + text); return true; };
+      sectorHistory = [[5000, 6000], [4800, null]];
+      sektorEnde(1, 4900); sektorEnde(1, 4700); sektorEnde(2, 6100); sektorEnde(2, 5900);
+      sectorHistory = [];
+      sektorEnde(1, 1000);
+      if (gesagt.length !== 2 || gesagt[0].indexOf('sektor:') !== 0 || gesagt[0].indexOf('1') < 0 || gesagt[1].indexOf('2') < 0) f.push('Ansagen ' + JSON.stringify(gesagt));
+    } finally { sectorHistory = merkH; ansagenEinreihen = merkE; }
+    if (!$('setting-announce-sektor') || !$('setting-announce-sektor').closest('.opt-row').querySelector('.opt-label small')) f.push('Schalter mit Erklaerung fehlt');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : plan.n + ' Sektoren mit Saum und Nummer, Puls dicker, Ansage nur bei Bestzeit (' + gesagt.length + ' von 5)' };
+  });
+  stAdd('Virtuell v1.6.60: gespeicherte Zeiten je Strecke/Richtung/Auto (Gnen54), Bestenliste in der Garage, AR-Knopf nur mit WebXR-AR', () => {
+    const f = [];
+    const lies = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const merk = lies(VF_ZEITEN_STORE), merkVF = { frei: VF.frei, tiles: VF.tiles, gegen: VF.gegen, beste: VF.beste, besteSplits: VF.besteSplits };
+    try {
+      localStorage.removeItem(VF_ZEITEN_STORE);
+      Object.assign(VF, { frei: { name: 'Törnerschleife 2.0' }, gegen: false });
+      if (vfZeitMerken(30000, [0, 100]) !== false) f.push('erste Runde als neue Bestzeit gemeldet');
+      if (vfZeitMerken(29000, [0, 90]) !== true) f.push('schnellere Runde nicht gemeldet');
+      vfZeitMerken(31000, null);
+      const e = vfZeitenAlle()[vfZeitenSchluessel()];
+      if (!e || e.beste !== 29000 || e.runden !== 3 || e.letzte[0] !== 31000 || (e.splits || [])[1] !== 90) f.push('Eintrag ' + JSON.stringify(e));
+      VF.gegen = true;
+      if (vfZeitenAlle()[vfZeitenSchluessel()]) f.push('Gegenrichtung teilt sich die Zeiten');
+      VF.gegen = false; VF.beste = null; VF.besteSplits = null;
+      vfZeitenLaden();
+      if (VF.beste !== 29000 || !VF.besteSplits) f.push('Laden: ' + VF.beste);
+      const box = vfBestenliste(vfAutoListe());
+      if (!box.querySelector('table') || box.textContent.indexOf('Törnerschleife 2.0') < 0) f.push('Bestenliste ohne Eintrag');
+      const kn = document.createElement('div'); vfGarageOptionen(kn);
+      const ar = kn.querySelector('[data-vf="ar"]');
+      if (!ar) f.push('kein AR-Knopf');
+      // v1.6.67: Sichtbarkeit des AR-Knopfs (auch Marker-AR) prueft der Test 'Virtuell v1.6.67'.
+      if (!kn.querySelector('[data-vf="bestenliste"]')) f.push('Bestenliste fehlt in der Garage');
+    } finally {
+      Object.assign(VF, merkVF);
+      try { if (merk === null) localStorage.removeItem(VF_ZEITEN_STORE); else localStorage.setItem(VF_ZEITEN_STORE, merk); } catch (e) { /* egal */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Bestzeit 29,000 s mit Zwischenzeiten, Gegenrichtung getrennt, Bestenliste, AR-Knopf ' + (vfArMoeglich() ? 'sichtbar' : 'verborgen (kein WebXR-AR)') };
+  });
+  stAdd('Virtuell v1.6.81: Marker-AR - Kamerabild gehoert zur erkannten Lage, Filter folgt Bewegung schnell, Lichter in AR gedaempft', () => {
+    const f = [];
+    // 1. One-Euro: still ruhig, Bewegung (300 px/s) nach drei Bildern hoechstens 3 px hinterher.
+    let st = {}, seed = 7, t = 0;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 - 0.5; };
+    const aus = [];
+    const ecken = [400, 200, 460, 200, 460, 260, 400, 260];
+    for (let k = 0; k < 60; k++) { t += 33; aus.push(vfMkEinEuro(st, ecken.map((e) => e + rnd() * 1.2), t)[0]); }
+    const o = aus.slice(20), mw = o.reduce((a, b) => a + b, 0) / o.length;
+    const sd = Math.sqrt(o.reduce((a, b) => a + (b - mw) * (b - mw), 0) / o.length);
+    if (sd > 0.15) f.push('still zittrig: sd ' + sd.toFixed(3));
+    // Kamerabewegung: alle Ecken 8 px je Bild nach rechts (240 px/s).
+    let x = 0, lag = 0;
+    for (let k = 0; k < 3; k++) { t += 33; x += 8; lag = 400 + x - vfMkEinEuro(st, ecken.map((e, i) => e + (i % 2 ? 0 : x)), t)[0]; }
+    if (lag > 3) f.push('Bewegung: ' + lag.toFixed(1) + ' px hinterher');
+    // 2. Kamerabild: das Bild, das zur Erkennung geht, wird erst mit der Antwort gezeigt.
+    const glAlt = VF.gl;
+    try {
+      const gc = document.createElement('canvas');
+      VF.gl = gc.getContext('webgl');
+      const v = document.createElement('canvas'); v.width = 16; v.height = 9;
+      Object.defineProperty(v, 'readyState', { value: 2 }); Object.defineProperty(v, 'videoWidth', { value: 16 }); Object.defineProperty(v, 'videoHeight', { value: 9 });
+      let gesendet = 0;
+      const mk = { video: v, worker: { postMessage: () => { gesendet++; } }, cnv: document.createElement('canvas'), wartet: false, n: 0, bilder: 0 };
+      mk.ctx = mk.cnv.getContext('2d');
+      if (VF.gl) {
+        vfMkErkennen(mk);
+        if (gesendet !== 1 || mk.hgWartend !== 1 || (mk.hgZeig || 0) !== 0) f.push('Senden: ' + gesendet + ', wartend ' + mk.hgWartend + ', gezeigt ' + mk.hgZeig);
+        vfMkErkennen(mk);
+        if (gesendet !== 1) f.push('sendet, obwohl der Worker noch rechnet');
+        mk.wartet = false; vfMkHgUmschalten(mk);
+        if (mk.hgZeig !== 1 || !mk.hgSync || mk.hgWartend !== undefined) f.push('Antwort schaltet das Bild nicht um');
+        vfMkErkennen(mk);
+        if (gesendet !== 2 || mk.hgWartend !== 0 || mk.hgZeig !== 1) f.push('zweites Bild: wartend ' + mk.hgWartend + ', gezeigt ' + mk.hgZeig);
+        if (!mk.hg || mk.hg.tx.length !== 2) f.push('keine zwei Texturen');
+      } else f.push('kein WebGL im Test');
+    } finally { VF.gl = glAlt; }
+    // 3. Lichter vor dem Kamerabild schwaecher und kleiner.
+    if (!(VF_AR_LICHT.emis < 1 && VF_AR_LICHT.gross < 1 && VF_AR_LICHT.staerke < 1 && VF_AR_LICHT.kegel < 1)) f.push('AR-Licht nicht gedaempft');
+    if (vfModellZeichnen.toString().indexOf('VF_AR_LICHT') < 0) f.push('vfModellZeichnen ohne AR-Licht');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'still sd ' + sd.toFixed(3) + ' px, Bewegung ' + lag.toFixed(1) + ' px hinterher, Bild wartet auf die Antwort, Lichter gedaempft' };
+  });
+  stAdd('Virtuell v1.6.77: Marker-AR waehlt die Neigung mit Normale nach oben, haelt sie ueber Aussetzer, kommt aus einer falschen Wahl heraus', () => {
+    const f = [];
+    // POSIT-Zeilen: richtig = Blatt-oben (0, 0,643, -0,766) in GL, Normale (0, 0,766, 0,643); gekippt = Normale (0, -0,766, 0,643).
+    const richtig = [[1, 0, 0], [0, 0.643, 0.766], [0, 0.766, -0.643]], gekippt = [[1, 0, 0], [0, 0.643, -0.766], [0, -0.766, -0.643]];
+    const T = [0, -100, 1200];
+    const ny = (M) => M && M[9];
+    let mk = {};
+    // 1. Nach einem Aussetzer (keine vorige Wahl): die Bibliothek bevorzugt die gekippte (kleinerer Fehler) - gewaehlt wird die richtige.
+    let M = vfMkWaehlen(mk, { r1: gekippt, t1: T, e1: 0.5, r2: richtig, t2: T, e2: 0.6 }, 0);
+    if (!(ny(M) > 0.5)) f.push('ohne Vorgeschichte gekippt gewaehlt: ' + ny(M));
+    // 2. Bisherige Wahl richtig, Bibliothek liefert gekippt zuerst: bleibt richtig.
+    M = vfMkWaehlen(mk, { r1: gekippt, t1: T, e1: 0.4, r2: richtig, t2: T, e2: 0.5 }, 30);
+    if (!(ny(M) > 0.5)) f.push('springt auf gekippt: ' + ny(M));
+    // 3. Falsch eingerastet (vorige Wahl gekippt): kommt zur richtigen zurueck.
+    mk = { wahlN: [0, -0.766, 0.643] };
+    M = vfMkWaehlen(mk, { r1: gekippt, t1: T, e1: 0.5, r2: richtig, t2: T, e2: 0.5 }, 60);
+    if (!(ny(M) > 0.5)) f.push('bleibt falsch eingerastet: ' + ny(M));
+    // 4. Viel groesserer Fehler der Alternative (deutlich falsche Loesung): die bessere bleibt.
+    mk = {};
+    M = vfMkWaehlen(mk, { r1: richtig, t1: T, e1: 0.5, r2: gekippt, t2: T, e2: 9 }, 0);
+    if (!(ny(M) > 0.5)) f.push('Fehler nicht beachtet');
+    // Die gewaehlte Lage ist eine Drehung (keine Spiegelung).
+    const d = M[0] * (M[5] * M[10] - M[6] * M[9]) - M[4] * (M[1] * M[10] - M[2] * M[9]) + M[8] * (M[1] * M[6] - M[2] * M[5]);
+    if (Math.abs(d - 1) > 0.01) f.push('Determinante ' + d.toFixed(3));
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'richtige Neigung nach Aussetzer, kein Springen, aus falscher Wahl zurueck, Drehung' };
+  });
+  stAdd('Virtuell v1.6.69: Zuruecksetzen neben der Bahn abschaltbar (Optionen > Virtuell, ab Werk an)', () => {
+    const f = [];
+    const merk = (() => { try { return localStorage.getItem(VF_ZURUECK_STORE); } catch (e) { return null; } })();
+    try {
+      localStorage.removeItem(VF_ZURUECK_STORE);
+      if (!vfZuruecksetzenAn()) f.push('ab Werk aus');
+      const box = document.createElement('div'); vfGarageOptionen(box);
+      const z = box.querySelector('[data-vf-zurueck]');
+      if (!z) f.push('keine Zeile');
+      else { z.querySelector('[data-d="1"]').click(); if (vfZuruecksetzenAn()) f.push('Knopf schaltet nicht aus'); }
+      if (VF_OPT_FAHRT.indexOf('Zurücksetzen neben der Bahn') < 0) f.push('nicht unter Optionen > Virtuell');
+      const quelle = String(vfBild);
+      if (quelle.indexOf('vfZuruecksetzenAn()') < 0) f.push('vfBild fragt die Option nicht');
+    } finally { try { if (merk === null) localStorage.removeItem(VF_ZURUECK_STORE); else localStorage.setItem(VF_ZURUECK_STORE, merk); } catch (e) { /* egal */ } }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'ab Werk an, Zeile schaltet aus, unter Optionen > Virtuell' };
+  });
+  stAdd('Virtuell v1.6.67: Marker-AR - Weltabbildung (Hoehe = aus dem Papier), Kameraort, Glaettung orthonormal, AR-Knopf mit Kamera, Marker-Blatt', async () => {
+    const f = [];
+    // Welt -> Marker: Welt-Hoehe (y) wird Marker-z (aus dem Papier), Welt-x bleibt x, Welt-z wird -Marker-y; Massstab mm.
+    const merkPts = VF.pts, merkS = [VF.startX, VF.startY, VF.startH];
+    try {
+      VF.pts = [{ x: 0, y: 0 }]; VF.startX = 0; VF.startY = 0; VF.startH = 0;   // v1.6.71: Start/Ziel auf dem Marker
+      const W = vfMkWelt(), s = 10 / TRACK_UNITS_PER_CM * vfMkMassstab();
+      const ab = (v) => [W[0] * v[0] + W[4] * v[1] + W[8] * v[2] + W[12], W[1] * v[0] + W[5] * v[1] + W[9] * v[2] + W[13], W[2] * v[0] + W[6] * v[1] + W[10] * v[2] + W[14]];
+      const oben = ab([0, 1, 0]), vorn = ab([0, 0, 1]);
+      if (Math.abs(oben[2] - s) > 1e-6 || Math.abs(oben[0]) > 1e-6 || Math.abs(oben[1]) > 1e-6) f.push('Hoehe nicht aus dem Papier: ' + oben);
+      if (Math.abs(vorn[1] + s) > 1e-6) f.push('Welt-z nicht -Marker-y: ' + vorn);
+      // Startrichtung (Kurs 90 Grad = nach +x) zeigt zur Oberkante des Blatts (Marker +y).
+      VF.startH = 90; const W2 = vfMkWelt();
+      const r2 = [W2[0] + W2[12], W2[1] + W2[13]], r0 = [W2[12], W2[13]];
+      if (!(r2[1] - r0[1] > 0.9 * s && Math.abs(r2[0] - r0[0]) < 0.1 * s)) f.push('Startrichtung nicht Blatt-oben: ' + [r2[0] - r0[0], r2[1] - r0[1]]);
+    } finally { VF.pts = merkPts; VF.startX = merkS[0]; VF.startY = merkS[1]; VF.startH = merkS[2]; }
+    // Kameraort: Blick = Verschiebung (0,0,-500) -> Auge bei (0,0,500).
+    const auge = vfMkAuge([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -500, 1]);
+    if (Math.abs(auge[2] - 500) > 1e-6) f.push('Auge ' + auge);
+    // Glaettung: nach Mischen wieder orthonormal.
+    const M = [0.9, 0.1, 0, 0, -0.2, 1.1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    vfMkOrtho(M);
+    const d = M[0] * M[4] + M[1] * M[5] + M[2] * M[6], l = Math.hypot(M[4], M[5], M[6]);
+    if (Math.abs(d) > 1e-6 || Math.abs(l - 1) > 1e-6) f.push('nicht orthonormal');
+    // AR-Knopf auch ohne WebXR-AR, sobald es eine Kamera gibt.
+    const box = document.createElement('div'); vfGarageOptionen(box);
+    const k = box.querySelector('[data-vf="ar"]');
+    const kamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    if (!k || k.hidden !== !(vfArMoeglich() || kamera)) f.push('AR-Knopf ' + (k ? (k.hidden ? 'verborgen' : 'sichtbar') : 'fehlt'));
+    // Marker-Blatt und Bibliothek liegen bei.
+    for (const u of ['ar-marker-a4.svg', 'lib/js-aruco2/aruco.js', 'lib/js-aruco2/posit1.js', 'lib/js-aruco2/LICENSE.txt']) {
+      try { const r = await fetch(u, { method: 'HEAD', cache: 'no-store' }); if (!r.ok) f.push(u + ' ' + r.status); } catch (e) { f.push(u + ' nicht erreichbar'); }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Hoehe aus dem Papier, Kameraort, orthonormal, AR-Knopf ' + (k && !k.hidden ? 'sichtbar' : 'verborgen') + ', Marker-Blatt und js-aruco2 da' };
+  });
+  stAdd('Startampel v1.6.60: Befehle fuer Start, Toene, Gruen, Gelb, Fruehstart und Ende (Attrappe)', async () => {
+    const f = [], gesendet = [];
+    const merk = { g: ampelGeraet, k: ampelKanal, rs: raceState };
+    try {
+      ampelKanal = { properties: { writeWithoutResponse: true }, writeValueWithoutResponse: (d) => { gesendet.push(new TextDecoder().decode(d).trim()); return Promise.resolve(); } };
+      ampelGeraet = { name: 'Ampel', gatt: { connected: true } };
+      raceState = 'idle';
+      ampelStartKnopf(); raceState = 'countdown'; ampelCountdown();
+      [1, 2, 3, 4, 5].forEach((n) => startampelLicht(n));
+      ampelFruehstartMelden(); raceState = 'racing'; ampelLos(); ampelGelb(true); ampelGelb(false); ampelRennende();
+      await ampelSchlange; await new Promise((ok) => setTimeout(ok, 20));
+      const soll = 'START|GRUEN 1|GRUEN 2|GRUEN 3|GRUEN 4|GRUEN 5|FRUEHSTART|LOS|GELB|GELB_AUS|ROT';
+      if (gesendet.join('|') !== soll) f.push(gesendet.join('|') + ' statt ' + soll);
+      if (!$('ampel-verbinden') || !$('sub-opt-addon')) f.push('Seite/Knopf fehlt');
+    } finally { ampelGeraet = merk.g; ampelKanal = merk.k; raceState = merk.rs; ampelSchlange = Promise.resolve(); ampelStatusZeigen(); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'START, GRUEN 1-5, FRUEHSTART, LOS, GELB, GELB_AUS, ROT in Reihenfolge' };
+  });
+  stAdd('Ansagen v1.6.60: Akku kritisch bei 6 % (Session abbrechen, Box anfahren), je Auto, erst nach dem Laden wieder', () => {
+    const f = [];
+    const merkAn = Object.assign({}, ansageAn), merkLatch = Object.assign({}, ansageLatch);
+    const merkB = new Set(batteryLatchSet), merkK = new Set(batteryKritLatchSet);
+    try {
+      Object.assign(ansageAn, { battery: true, batterycrit: true });
+      batteryLatchSet.clear(); batteryKritLatchSet.clear();
+      const auto = { id: 'st-akku' };
+      const folge = [0.30, 0.12, 0.06, 0.00, 0.12, 0.06, 0.50, 0.06].map((v) => {
+        const r = ansagenPruefen({ batteries: [{ car: auto, value: v, label: 'A' }] }) || [];
+        return r.filter((x) => x === 'battery' || x === 'batterycrit').join(',');
+      });
+      const soll = ['', 'battery', 'batterycrit', '', '', '', '', 'batterycrit'];
+      if (folge.join('|') !== soll.join('|')) f.push('Folge ' + folge.join('|') + ' statt ' + soll.join('|'));
+      if (!$('setting-announce-battery-crit') || !$('setting-announce-battery-crit').checked) f.push('Schalter fehlt oder ab Werk aus');
+    } finally {
+      Object.assign(ansageAn, merkAn); Object.assign(ansageLatch, merkLatch);
+      batteryLatchSet.clear(); merkB.forEach((c) => batteryLatchSet.add(c));
+      batteryKritLatchSet.clear(); merkK.forEach((c) => batteryKritLatchSet.add(c));
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '30/12/6/0/12/6/50/6 %: -, Akku, kritisch, -, -, -, -, kritisch' };
+  });
+  stAdd('Strecken v1.6.60: virtuelle Streckenzeiten (frei:<id>, gebaute Bahn, Gegenrichtung) lokal, Upload nur mit Sync und faehigem Skript, virtuelle Liste', () => {
+    const f = [];
+    const lies = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const merkV = lies(SK_V_STORE), merkOpt = lies(SK_OPT_STORE), merkAus = chAusgangLesen(), merkModus = lies(FAHR_MODUS_STORE);
+    const merkVF = { zeitLauf: VF.zeitLauf, freiId: VF.freiId, gegen: VF.gegen, tiles: VF.tiles, extern: VF.extern, studie: VF.studie, hubschrauber: VF.hubschrauber };
+    try {
+      localStorage.removeItem(SK_V_STORE);
+      skOptSetzen({ sync: false });
+      Object.assign(VF, { zeitLauf: { runden: [30000, 500, 28000] }, freiId: 'indeq', gegen: false, extern: null, studie: false, hubschrauber: false });
+      vfZeitenAbschluss();
+      const l = skVLokalAlle()['frei:indeq'];
+      if (!l || l.length !== 1 || l[0].zeit !== 28000 || !/^vf-/.test(l[0].fahrgefuehl)) f.push('lokal frei: ' + JSON.stringify(l));
+      if (chAusgangLesen().some((x) => x.fahrt === 'virtuell')) f.push('ohne Sync hochgeladen');
+      // Gebaute Bahn in Gegenrichtung, mit Sync: in die Warteschlange (Skript hier "nicht faehig": nichts gesendet).
+      const tiles = codeToTrack('SG11R3G12R3').tiles;
+      skOptSetzen({ sync: true });
+      chFaehig[chOnline().url] = { p: Promise.resolve(false), ja: false, at: Date.now() };
+      Object.assign(VF, { zeitLauf: { runden: [40000] }, freiId: '', gegen: true, tiles });
+      vfZeitenAbschluss();
+      const key = skSchluessel(tiles) + '|gegen';
+      if (!(skVLokalAlle()[key] || []).length) f.push('lokal Bahn Gegenrichtung fehlt: ' + key);
+      const q = chAusgangLesen().find((x) => x.fahrt === 'virtuell' && x.strecke === key);
+      if (!q || q.art !== 'strecke-zeit' || !/^vf-/.test(q.fahrgefuehl)) f.push('nicht in der Warteschlange: ' + JSON.stringify(q));
+      // Challenge/Studie zaehlen nicht.
+      Object.assign(VF, { zeitLauf: { runden: [41000] }, extern: 'challenge' });
+      const vorher = (skVLokalAlle()[key] || []).length;
+      vfZeitenAbschluss();
+      if ((skVLokalAlle()[key] || []).length !== vorher) f.push('Challenge-Fahrt in den Streckenzeiten');
+      // Virtuelle Liste enthaelt die lokalen Strecken mit '|v'.
+      const vl = skVirtuelleStrecken();
+      if (!vl.some((s) => s.strecke === 'frei:indeq|v') || !vl.some((s) => s.strecke === key + '|v')) f.push('virtuelle Liste: ' + vl.map((s) => s.strecke).join(','));
+      if (skLokal('frei:indeq|v').length !== 1) f.push('skLokal virtuell');
+    } finally {
+      Object.assign(VF, merkVF);
+      try { if (merkV === null) localStorage.removeItem(SK_V_STORE); else localStorage.setItem(SK_V_STORE, merkV); } catch (e) { /* egal */ }
+      try { if (merkOpt === null) localStorage.removeItem(SK_OPT_STORE); else localStorage.setItem(SK_OPT_STORE, merkOpt); } catch (e) { /* egal */ }
+      chAusgangSchreiben(merkAus);
+      try { if (merkModus === null) localStorage.removeItem(FAHR_MODUS_STORE); else localStorage.setItem(FAHR_MODUS_STORE, merkModus); } catch (e) { /* egal */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'frei:indeq und Bahn|gegen lokal, Upload nur mit Sync, Challenge zaehlt nicht, virtuelle Liste' };
+  });
+  stAdd('Challenges v1.6.56: virtuell eigene Listen (|v), Medaillen x1,75, Upload erst mit faehigem Skript, Start mit dem virtuellen Auto, rote Akzente', async () => {
+    const f = [];
+    const lies = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const merkModus = lies(FAHR_MODUS_STORE), merkTab = kAktiverTab(), merkWahl = chWahl, merkMod = chModus, merkFetch = window.fetch;
+    const setzModus = (m) => { try { localStorage.setItem(FAHR_MODUS_STORE, m); } catch (e) { /* egal */ } konsoleFahrenZeichnen(); };
+    let mass = '';
+    try {
+      setzModus('echt');
+      if (chSchluessel('x', 'hotlap', 'pro') !== 'x|hotlap|pro') f.push('echt: ' + chSchluessel('x', 'hotlap', 'pro'));
+      const def = CHALLENGES[0], g0 = chSterneSchwellen(def).gold;
+      setzModus('virtuell');
+      if (chSchluessel('x', 'hotlap', 'pro') !== 'x|hotlap|pro|v') f.push('virtuell: ' + chSchluessel('x', 'hotlap', 'pro'));
+      if (chSchluessel('x', 'hotlap', 'pro', false) !== 'x|hotlap|pro') f.push('Angabe echt wirkt nicht');
+      if (Math.abs(chSterneSchwellen(def).gold / g0 - CH_VIRTUELL_FAKTOR) > 0.01) f.push('Medaillen virtuell nicht x' + CH_VIRTUELL_FAKTOR);
+      // Rote Akzente und Umschalter.
+      const kb = getComputedStyle($('tab-challenges')).getPropertyValue('--k-blau').trim().toLowerCase();
+      if (kb !== '#e53935') f.push('Akzent virtuell ' + kb);
+      if (!$('ch-fahrt') || !$('ch-fahrt').querySelector('[data-fahrt="virtuell"].an')) f.push('Umschalter zeigt nicht Virtuell');
+      // Upload: altes Skript (nicht faehig) -> nichts senden, Zeit bleibt in der Schlange.
+      let posts = 0;
+      window.fetch = (u, o) => { if (o && o.method === 'POST') posts++; return merkFetch(u, o); };
+      const url = 'https://example.invalid/st-faehig';
+      chFaehig[url] = { p: Promise.resolve(false), ja: false, at: Date.now() };
+      const r = await chEintragSenden({ fahrt: 'virtuell', url, nr: 'st-virt-1', challenge: 'x' });
+      if (r !== false || posts) f.push('virtuelle Zeit an ein altes Skript gesendet');
+      window.fetch = merkFetch;
+      // Start: die Challenge faehrt das virtuelle Auto, ohne eigenes Rennen der virtuellen Fahrt.
+      if (typeof virtuellStarten === 'function' && physicsEnabled && !VF.aktiv) {
+        chWahl = def.id; chModus = 'hotlap';
+        challengeStarten();
+        if (!VF.aktiv) mass = 'virtuelle Fahrt startet hier nicht (kein WebGL?)';
+        else {
+          if (VF.extern !== 'challenge' || VF.modus !== 'practice') f.push('extern ' + VF.extern + ' / ' + VF.modus);
+          if (!chLauf || !chLauf.virtuell || chLauf.probe) f.push('Lauf nicht virtuell: ' + JSON.stringify(chLauf && { v: chLauf.virtuell, p: chLauf.probe }));
+          challengeAbbrechen();
+          await new Promise((ok) => setTimeout(ok, 30));
+          if (VF.aktiv) f.push('virtuelle Fahrt endet nicht mit dem Abbruch');
+        }
+      }
+    } finally {
+      window.fetch = merkFetch;
+      if (chLauf) challengeAbbrechen();
+      if (VF.aktiv) { try { virtuellBeenden(); } catch (e) { /* weiter */ } }
+      chAusgangRaus('st-virt-1');
+      chWahl = merkWahl; chModus = merkMod;
+      try { if (merkModus === null) localStorage.removeItem(FAHR_MODUS_STORE); else localStorage.setItem(FAHR_MODUS_STORE, merkModus); } catch (e) { /* egal */ }
+      konsoleFahrenZeichnen();
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Listen |v, Medaillen x' + CH_VIRTUELL_FAKTOR + ', kein Upload an altes Skript, Start/Abbruch mit dem virtuellen Auto, rot' + (mass ? ' (' + mass + ')' : '') };
+  });
+  stAdd('Virtuell v1.6.52: Reifenwahl in der Garage (Griff im Regen), Rauch-Aufloesung, Ladebalken unten links, Audi-Kamera vor dem Wischer', () => {
+    const f = [];
+    const merkTab = kAktiverTab(), merkT = tyres, merkModus = (() => { try { return localStorage.getItem(FAHR_MODUS_STORE); } catch (e) { return null; } })();
+    try {
+      vfGarageZeigen();
+      const z = $('vg-optionen').querySelector('[data-vf-reifen]');
+      if (!z) f.push('keine Reifenzeile');
+      else {
+        // trocken: die Zeile stellt die Mischung um, der Griff folgt (weich > hart)
+        tyres = 'weich'; applySurface(); const gW = physEngine.config.gripScale;
+        tyres = 'hart'; applySurface(); const gH = physEngine.config.gripScale;
+        if (!(gW > gH)) f.push('Mischung wirkt nicht auf den Griff: ' + gW + ' / ' + gH);
+        // nass (voller Regen): Regenreifen greifen besser als Slicks
+        const m1 = { config: {} }, m2 = { config: {} };
+        mischungAnwenden(m1, 'mittel', 1); mischungAnwenden(m2, 'regen', 1);
+        if (!(m2.config.gripScale > m1.config.gripScale + 0.2)) f.push('Regenreifen im Nassen nicht besser: ' + m2.config.gripScale + ' / ' + m1.config.gripScale);
+        tyres = 'hart'; vfGarageSeite(); $('vg-optionen').querySelector('[data-vf-reifen] [data-d="1"]').click();
+        if (tyres !== 'regen') f.push('Zeile schaltet nicht auf Regen: ' + tyres);
+        if ($('vg-optionen').querySelector('[data-vf-reifen]').textContent.indexOf(mischungName('regen')) < 0) f.push('Zeile zeigt nicht Regen');
+      }
+    } finally {
+      tyres = merkT; try { applySurface(); } catch (e) { /* egal */ }
+      try { if (merkModus === null) localStorage.removeItem(FAHR_MODUS_STORE); else localStorage.setItem(FAHR_MODUS_STORE, merkModus); } catch (e) { /* egal */ }
+      if (typeof konsoleFahrenZeichnen === 'function') konsoleFahrenZeichnen();
+      if (merkTab) showTab(merkTab);
+    }
+    const merkR = (() => { try { return localStorage.getItem(VF_RAUCH_STORE); } catch (e) { return null; } })(), merkG = VF.grafik;
+    try {
+      localStorage.removeItem(VF_RAUCH_STORE); VF.grafik = false;
+      if (vfRauchStufe() !== 1) f.push('Auto Performance nicht 1');
+      VF.grafik = true;
+      if (vfRauchStufe() !== 1.5) f.push('Auto Quality nicht 1,5');
+      localStorage.setItem(VF_RAUCH_STORE, '8');
+      if (vfRauchStufe() !== 8) f.push('8x nicht gesetzt');
+    } finally { VF.grafik = merkG; try { if (merkR === null) localStorage.removeItem(VF_RAUCH_STORE); else localStorage.setItem(VF_RAUCH_STORE, merkR); } catch (e) { /* egal */ } }
+    const lb = document.createElement('div'); lb.className = 'vf-laden'; lb.innerHTML = '<div class="vf-laden-mitte"></div>'; document.body.appendChild(lb);
+    try {
+      const r = lb.querySelector('.vf-laden-mitte').getBoundingClientRect();
+      if (!(r.left < innerWidth * 0.2 && r.bottom > innerHeight * 0.8)) f.push('Ladebalken nicht unten links: ' + Math.round(r.left) + ',' + Math.round(r.bottom));
+    } finally { lb.remove(); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Reifen nass besser, Rauchstufen, Ladebalken unten links' };
+  });
+  stAdd('Menue v1.6.50: Wisch-Animation beim Wechsel der Seiten (Richtung nach Reiterfolge) und Unterseiten, nicht ins Cockpit', () => {
+    const f = [], merkTab = typeof kAktiverTab === 'function' ? kAktiverTab() : '', merkAus = window.kWischAus;
+    window.kWischAus = false;
+    try {
+      showTab('home'); showTab('fahren');
+      if (!$('tab-fahren').classList.contains('k-wisch-vor')) f.push('Start -> Fahren ohne Wischen nach vorn');
+      showTab('options'); showTab('fahren');
+      if (!$('tab-fahren').classList.contains('k-wisch-zurueck')) f.push('Optionen -> Fahren nicht zurueck');
+      showTab('options'); showSubpage('opt-general');
+      if (!$('sub-opt-general').classList.contains('k-wisch-vor')) f.push('Unterseite ohne Wischen');
+      showSubpage('');
+      const h = document.querySelector('#tab-options .subpage-home');
+      if (h && !h.classList.contains('k-wisch-zurueck')) f.push('zurueck zur Kachelseite ohne Wischen');
+      kWischen($('tab-race'), 1);
+      if ($('tab-race').classList.contains('k-wisch-vor')) f.push('Cockpit wischt');
+      const an = getComputedStyle($('tab-fahren')).animationName;
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches ? an !== 'none' : false) f.push('reduzierte Bewegung nicht beachtet');
+    } finally {
+      window.kWischAus = merkAus;
+      document.querySelectorAll('.k-wisch-vor, .k-wisch-zurueck').forEach((el) => el.classList.remove('k-wisch-vor', 'k-wisch-zurueck'));
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'vor/zurueck nach Reiterfolge, Unterseiten, Cockpit ausgenommen' };
+  });
+  stAdd('Virtuell v1.6.48: Performance - leichte Modelle fuer Audi und Kaefer, Geist ohne zweites Modell, Cockpit darunter gedrosselt', async () => {
+    const f = [], mass = [];
+    for (const m of ['audirs5', 'kaefer']) {
+      try {
+        const meta = await (await fetch(VF_MODELL_PFADE[m] + 'auto.json', { cache: 'no-store' })).json();
+        const g = await (await fetch(VF_MODELL_PFADE[m] + 'auto_perf.json', { cache: 'no-store' })).json();
+        if (meta.perf !== 'auto_perf') f.push(m + ' ohne perf');
+        if (!(g.indizes <= meta.indizes * 0.6)) f.push(m + ' kaum leichter: ' + g.indizes / 3 + ' von ' + meta.indizes / 3);
+        if (g.teile.length !== meta.teile.length) f.push(m + ': Teile ' + g.teile.length + '/' + meta.teile.length);
+        if (g.teile.some((t) => t.ecken > 65535)) f.push(m + ': Teil ueber 65535 Ecken');
+        const bin = await (await fetch(VF_MODELL_PFADE[m] + 'auto_perf.bin', { cache: 'no-store' })).arrayBuffer();
+        if (bin.byteLength !== g.indexAb + g.indizes * 2) f.push(m + ': auto_perf.bin Laenge ' + bin.byteLength);
+        mass.push(m + ' ' + Math.round(g.indizes / 3 / 1000) + 'k');
+      } catch (e) { f.push(m + ': ' + e.message); }
+    }
+    const quelle = String(vfSzeneMalen);   // v1.6.60: die Szene steht in vfSzeneMalen (auch fuer AR)
+    if (quelle.indexOf('geistModell') < 0 || quelle.indexOf('VF.grafik') < 0) f.push('Geist-Weiche fehlt');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'leicht: ' + mass.join(', ') + '; Geist in Performance als Kiste' };
+  });
+  stAdd('Virtuell v1.6.46: Heli ohne Gyro bleibt nach Ueberschlag stabil, Drift-Gyro einstellbar, Ambience-Schalter, undurchsichtige Leinwand, runde Farbkreise, rote Akzente, Startansage', () => {
+    const f = [];
+    // Heli: 1,2 s Stick vorn ohne Gyro (Ueberschlag), dann loslassen: Winkel bleibt in -pi..pi und dreht nicht zurueck.
+    const merk = { hubschrauber: VF.hubschrauber, x: VF.x, y: VF.y, z: VF.z, h: VF.h, flug: VF.flug, pitch: VF.pitch, roll: VF.roll, hubTasten: VF.hubTasten,
+      hubLuft: VF.hubLuft, touchHeli: VF.touchHeli, stick: VF.stick, stickL: VF.stickL, rotor: VF.rotor };
+    const merkG = vfHubGyro;
+    let weg = 0;
+    try {
+      vfHubGyro = () => false;
+      Object.assign(VF, { hubschrauber: true, x: 0, y: 0, z: 200, h: 0, pitch: 0, roll: 0, hubLuft: true, stick: null, stickL: null, touchHeli: null,
+        flug: { vz: 0, vx: 0, vy: 0, rpm: 0.9, collective: VF_HUB_HOVER, yawRate: 0, angPitch: 0, angRoll: 0 }, hubTasten: { pitchVorn: true } });
+      let summe = 0, vor = 0;
+      for (let i = 0; i < 120; i++) { vfHubPhysik(1 / 60); const d = Math.atan2(Math.sin(VF.pitch - vor), Math.cos(VF.pitch - vor)); summe += d; vor = VF.pitch; }
+      if (!(summe > 2 * Math.PI)) f.push('kein Ueberschlag (' + (summe * 180 / Math.PI).toFixed(0) + ' Grad)');
+      VF.hubTasten = {};
+      let rueck = 0;
+      for (let i = 0; i < 180; i++) { vfHubPhysik(1 / 60); const d = Math.atan2(Math.sin(VF.pitch - vor), Math.cos(VF.pitch - vor)); rueck += d; vor = VF.pitch; }
+      if (Math.abs(VF.pitch) > Math.PI + 1e-9) f.push('Winkel nicht gewickelt ' + VF.pitch.toFixed(2));
+      if (rueck < -Math.PI) f.push('dreht nach dem Loslassen zurueck: ' + (rueck * 180 / Math.PI).toFixed(0) + ' Grad');
+      weg = rueck * 180 / Math.PI;
+    } finally { vfHubGyro = merkG; Object.assign(VF, merk); }
+    const lies = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    // Drift-Gyro: seit v1.6.54 im Test 'Drift mit Physik' geprueft.
+    // Ambience: virtuell eigener Schalter (ab Werk aus).
+    const merkA = lies(VF_AMBIENCE_STORE), merkAkt = VF.aktiv;
+    try {
+      localStorage.removeItem(VF_AMBIENCE_STORE); VF.aktiv = true;
+      if (ambienceAktiv()) f.push('virtuell Ambience ab Werk an');
+      localStorage.setItem(VF_AMBIENCE_STORE, 'an');
+      if (!ambienceAktiv()) f.push('virtuell Ambience-Schalter wirkt nicht');
+      VF.aktiv = false;
+      if (ambienceAktiv() !== ambienceEnabled) f.push('echt nicht der Ton-Schalter');
+    } finally { VF.aktiv = merkAkt; try { if (merkA === null) localStorage.removeItem(VF_AMBIENCE_STORE); else localStorage.setItem(VF_AMBIENCE_STORE, merkA); } catch (e) { /* egal */ } }
+    // Optionen: eigener Abschnitt "Virtuell" unter den Einstellungen.
+    const opt = document.querySelector('#sub-home-options');
+    const kv = opt && opt.querySelector('[data-sub="opt-virtuell"]'), kh = opt && opt.querySelector('[data-sub="opt-heli"]');
+    if (!kv || !kh || kv.parentElement !== kh.parentElement) f.push('Kacheln Virtuell/RC Heli fehlen');
+    else {
+      const vorher = kv.parentElement.previousElementSibling;
+      if (!vorher || !vorher.classList.contains('k-zwischen') || vorher.textContent.trim() !== t('Virtuell')) f.push('keine eigene Ueberschrift');
+      if (kv.parentElement.querySelector('[data-sub="opt-general"]')) f.push('noch bei den allgemeinen Einstellungen');
+    }
+    // Farbkreis rund, auch mit Mindesthoehe fuer Knoepfe.
+    const b = document.createElement('button'); b.className = 'vf-lack'; document.body.appendChild(b);
+    try { const r = b.getBoundingClientRect(); if (Math.abs(r.width - r.height) > 0.5) f.push('Farbkreis ' + r.width + 'x' + r.height); } finally { b.remove(); }
+    // Rote Akzente im Modus Virtuell auf FAHREN.
+    const merkFm = document.body.classList.contains('fm-virtuell');
+    try {
+      document.body.classList.add('fm-virtuell');
+      const c = getComputedStyle($('tab-fahren')).getPropertyValue('--k-blau').trim().toLowerCase();
+      if (c !== '#e53935') f.push('Akzent virtuell ' + c);
+      document.body.classList.remove('fm-virtuell');
+      if (getComputedStyle($('tab-fahren')).getPropertyValue('--k-blau').trim().toLowerCase() !== '#00a3e0') f.push('Akzent echt nicht blau');
+    } finally { document.body.classList.toggle('fm-virtuell', merkFm); }
+    if (!$('setting-announce-start') || typeof startAnsageSprechen !== 'function') f.push('Startansage fehlt');
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Heli nach Ueberschlag ' + weg.toFixed(0) + ' Grad Nachlauf; Drift-Gyro, Ambience, Optionen-Abschnitt, Farbkreis, Akzente, Startansage' };
+  });
+  stAdd('Virtuell v1.6.44: aus gnen54s PRs - Startampel im Rennen, Bulli-Kamera (seitlich, 100 Grad, durchsichtige Scheibe), seitennahe Kamera, Blick federt zurueck, Steinboden, leichte Modelle', async () => {
+    const f = [];
+    // Startampel: Rennen ja, Training nein; Lichter je Sekunde; danach frei.
+    const merk = { modus: VF.modus, studie: VF.studie, hub: VF.hubschrauber, schicht: VF.schicht, ampel: VF.ampel, laedt: VF.laedt, x: VF.x, y: VF.y, h: VF.h,
+      startX: VF.startX, startY: VF.startY, startH: VF.startH, letzt: VF.letzt, kam: VF.kam };
+    const sch = document.createElement('div');
+    try {
+      Object.assign(VF, { schicht: sch, studie: false, hubschrauber: false, modus: 'practice', startX: 1, startY: 2, startH: 3 });
+      vfLadenEnde();
+      if (VF.ampel) f.push('Ampel im Training');
+      VF.modus = 'laps'; vfLadenEnde();
+      const A = VF.ampel;
+      if (!A || !(A.aus >= 5300 && A.aus <= 6500)) f.push('keine Ampel im Rennen');
+      else {
+        VF.x = 50;
+        if (!vfAmpelSchritt(A.t0 + 2500) || sch.querySelectorAll('.vf-ampel > span.an').length !== 3) f.push('nach 2,5 s nicht 3 Lichter');
+        if (VF.x !== 1) f.push('Auto nicht am Start gehalten');
+        if (vfAmpelSchritt(A.t0 + A.aus + 1) || VF.ampel || sch.querySelector('.vf-ampel')) f.push('Ampel geht nicht aus');
+      }
+    } finally { Object.assign(VF, merk); }
+    // Kameras
+    if (!VF_KAMERAS.some((k) => k.id === 'naeher')) f.push('keine seitennahe Kamera');
+    if (VF_DREH_TOT !== 0.25) f.push('Totzone ' + VF_DREH_TOT);
+    // Steinboden: kachelbar (linker = rechter Rand, oben = unten).
+    const P = VF_BOEDEN.find((b) => b.id === 'stein');
+    if (!P || P.art !== 'flaeche') f.push('kein Steinboden');
+    else {
+      const AW = 64, AH = 32, d = new Uint8ClampedArray(AW * AH * 4);
+      vfSteinZeilen(d, AW, AH, 0, AH, P);
+      const n = (x, y) => vfSteinTurb(x, y);
+      if (Math.abs(n(0, 0.3) - n(1, 0.3)) > 1e-9 || Math.abs(n(0.4, 0) - n(0.4, 1)) > 1e-9) f.push('Stein nicht nahtlos');
+      const g = [...Array(AW * AH).keys()].map((i) => d[i * 4]);
+      if (!(Math.max(...g) - Math.min(...g) > 10)) f.push('Stein eintoenig');
+    }
+    // Leichte Modelle: Caravelle und Spider nennen ihre Performance-Fassung, und sie laedt.
+    for (const m of ['caravelle', 'spider']) {
+      try {
+        const meta = await (await fetch(VF_MODELL_PFADE[m] + 'auto.json', { cache: 'no-store' })).json();
+        if (meta.perf !== 'auto_perf') { f.push(m + ' ohne perf'); continue; }
+        const g = await (await fetch(VF_MODELL_PFADE[m] + 'auto_perf.json', { cache: 'no-store' })).json();
+        if (!(g.indizes < meta.indizes / 1.8)) f.push(m + ': leicht nicht leichter');
+        const r = await fetch(VF_MODELL_PFADE[m] + 'auto_perf.bin', { method: 'HEAD', cache: 'no-store' });
+        if (!r.ok) f.push(m + ': auto_perf.bin fehlt');
+        if (m === 'caravelle' && !(meta.haube && meta.haube.fovH === 100 && meta.haube.seite > 0)) f.push('Bulli-Kamera ohne fovH/seite');
+      } catch (e) { f.push(m + ': ' + e.message); }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Ampel nur im Rennen, 3 Lichter nach 2,5 s, dann frei; Kameras, Stein nahtlos, leichte Modelle fuer Caravelle/Spider' };
+  });
+  stAdd('Optionen v1.6.41: Kacheln Virtuell und RC Heli mit den Einstellungen der virtuellen Fahrt, die Garage behaelt die Auswahl', () => {
+    const f = [], merkTab = typeof kAktiverTab === 'function' ? kAktiverTab() : '';
+    const lies = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const merkGeist = lies(VF_GEIST_STORE), merkModus = lies(FAHR_MODUS_STORE);
+    try {
+      if (!document.querySelector('#tab-options [data-sub="opt-virtuell"]') || !document.querySelector('#tab-options [data-sub="opt-heli"]')) f.push('Kacheln fehlen');
+      showTab('options'); showSubpage('opt-virtuell');
+      const titel = (host) => [...host.children].map((z) => vfZeileTitel(z));
+      const tv = titel($('opt-virtuell-inhalt'));
+      VF_OPT_FAHRT.forEach((x) => { if (tv.indexOf(t(x)) < 0) f.push('Virtuell ohne ' + x); });
+      if (tv.length !== VF_OPT_FAHRT.length) f.push('Virtuell: ' + tv.length + ' Zeilen');
+      // Umschalten bleibt auf der Seite und wirkt.
+      const gz = [...$('opt-virtuell-inhalt').children].find((z) => vfZeileTitel(z) === t('Geist folgt meiner Linie'));
+      const vorher = vfGeistAn();
+      gz.querySelector('button').click();
+      if (vfGeistAn() === vorher) f.push('Geist-Schalter wirkt nicht');
+      if (!vfOptionenSeiteOffen('opt-virtuell') || !$('opt-virtuell-inhalt').children.length) f.push('Seite nach dem Umschalten weg');
+      showSubpage('opt-heli');
+      const th = titel($('opt-heli-inhalt'));
+      VF_OPT_HELI.forEach((x) => { if (th.indexOf(t(x)) < 0) f.push('RC Heli ohne ' + x); });
+      // Die virtuelle Garage zeigt diese Zeilen nicht mehr.
+      vfGarageZeigen();
+      const tg = titel($('vg-optionen'));
+      VF_OPT_FAHRT.concat(VF_OPT_HELI).forEach((x) => { if (tg.indexOf(t(x)) >= 0) f.push('Garage zeigt noch ' + x); });
+      ['Auto', 'Strecke', 'Handling', 'NPCs'].forEach((x) => { if (tg.indexOf(t(x)) < 0) f.push('Garage ohne ' + x); });
+      if (!$('vg-einstellungen')) f.push('kein Knopf zu den Optionen');
+    } finally {
+      try { if (merkGeist === null) localStorage.removeItem(VF_GEIST_STORE); else localStorage.setItem(VF_GEIST_STORE, merkGeist); } catch (e) { /* egal */ }
+      try { if (merkModus === null) localStorage.removeItem(FAHR_MODUS_STORE); else localStorage.setItem(FAHR_MODUS_STORE, merkModus); } catch (e) { /* egal */ }
+      if (typeof konsoleFahrenZeichnen === 'function') konsoleFahrenZeichnen();
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : VF_OPT_FAHRT.length + ' Zeilen unter Virtuell, ' + VF_OPT_HELI.length + ' unter RC Heli, Garage behaelt die Auswahl' };
+  });
+  stAdd('Virtuell v1.6.39: Heli fliegt in Richtung der Neigung (vorn = Nase, rechts = rechts) bei jedem Kurs, schwebt ohne Eingabe auf der Stelle; jedes Auto hat seinen festen Motorklang', () => {
+    const f = [];
+    const merk = { hubschrauber: VF.hubschrauber, x: VF.x, y: VF.y, z: VF.z, h: VF.h, flug: VF.flug, pitch: VF.pitch, roll: VF.roll, hubTasten: VF.hubTasten,
+      hubLuft: VF.hubLuft, touchHeli: VF.touchHeli, stick: VF.stick, stickL: VF.stickL, rotor: VF.rotor };
+    const merkG = vfHubGyro, schlecht = [];
+    try {
+      vfHubGyro = () => true;
+      const flieg = (h, tasten, sek) => {
+        Object.assign(VF, { hubschrauber: true, x: 0, y: 0, z: 80, h, pitch: 0, roll: 0, hubLuft: true, stick: null, stickL: null, touchHeli: null,
+          flug: { vz: 0, vx: 0, vy: 0, rpm: 0.9, collective: VF_HUB_HOVER, yawRate: 0 }, hubTasten: tasten });
+        for (let i = 0; i < sek * 60; i++) vfHubPhysik(1 / 60);
+        return [VF.x, VF.y];
+      };
+      for (const h of [0, 90, 200, 334]) {
+        const r = h * Math.PI / 180, vor = [Math.sin(r), -Math.cos(r)], rechts = [Math.cos(r), Math.sin(r)];
+        const cos = (a, b) => (a[0] * b[0] + a[1] * b[1]) / (Math.hypot(a[0], a[1]) * Math.hypot(b[0], b[1]) || 1);
+        const v = flieg(h, { pitchVorn: true }, 1), q = flieg(h, { rollRechts: true }, 1), n = flieg(h, {}, 2);
+        if (!(cos(v, vor) > 0.98)) schlecht.push('Kurs ' + h + ' vorn: ' + cos(v, vor).toFixed(2));
+        if (!(cos(q, rechts) > 0.98)) schlecht.push('Kurs ' + h + ' rechts: ' + cos(q, rechts).toFixed(2));
+        if (Math.hypot(n[0], n[1]) > 0.01) schlecht.push('Kurs ' + h + ' ohne Eingabe ' + Math.hypot(n[0], n[1]).toFixed(3));
+      }
+      if (schlecht.length) f.push(schlecht.join(', '));
+    } finally { vfHubGyro = merkG; Object.assign(VF, merk); }
+    const merkA = (() => { try { return localStorage.getItem(VF_AUTO_STORE); } catch (e) { return null; } })();
+    const opt = $('sound-profile') ? [...$('sound-profile').options].map((o) => o.value) : [];
+    try {
+      for (const id of Object.keys(VF_MODELL_PFADE)) {
+        try { localStorage.setItem(VF_AUTO_STORE, id); } catch (e) { /* egal */ }
+        const m = vfMotorFest();
+        if (!m) f.push(id + ' ohne festen Motor');
+        else if (opt.indexOf(m) < 0) f.push(id + ': Motor ' + m + ' gibt es nicht');
+        else if (vfMotorGewaehlt() !== m) f.push(id + ': Wahl ' + vfMotorGewaehlt());
+      }
+    } finally { try { if (merkA === null) localStorage.removeItem(VF_AUTO_STORE); else localStorage.setItem(VF_AUTO_STORE, merkA); } catch (e) { /* egal */ } }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Kurs 0/90/200/334: vorn und rechts in Fahrtrichtung, ohne Eingabe auf der Stelle; ' + Object.keys(VF_MODELL_PFADE).length + ' Autos mit festem Motor' };
+  });
+  stAdd('Virtuell v1.6.37: Heli - Kippen wie im Vorbild (auf die Modellgroesse skaliert), zwei Touch-Sticks am Handy', () => {
+    const f = [];
+    const merk = { hubschrauber: VF.hubschrauber, x: VF.x, y: VF.y, z: VF.z, h: VF.h, flug: VF.flug, pitch: VF.pitch, roll: VF.roll, hubTasten: VF.hubTasten,
+      hubLuft: VF.hubLuft, touchHeli: VF.touchHeli, stick: VF.stick, stickL: VF.stickL, rotor: VF.rotor, aktiv: VF.aktiv };
+    const merkG = vfHubGyro;
+    let weg = 0;
+    try {
+      vfHubGyro = () => true;
+      // Schweben in 60 Einheiten Hoehe, dann 1,5 s Stick voll vorn: der Hubschrauber muss mindestens 3,5 eigene Laengen (22) fliegen (im Vorbild 4,3).
+      Object.assign(VF, { hubschrauber: true, x: 0, y: 0, z: 60, h: 0, pitch: 0, roll: 0, hubLuft: true, stick: null, stickL: null,
+        touchHeli: null, flug: { vz: 0, vx: 0, vy: 0, rpm: 0.9, collective: VF_HUB_HOVER, yawRate: 0 }, hubTasten: { pitchVorn: true } });
+      for (let i = 0; i < 90; i++) vfHubPhysik(1 / 60);
+      weg = Math.hypot(VF.x, VF.y);
+      if (!(weg > 22)) f.push('nach 1,5 s Neigen nur ' + weg.toFixed(1) + ' Einheiten');
+      if (!(VF_HUB_GRAV > 50 && VF_HUB_THRUST / VF_HUB_GRAV > 1.7 && VF_HUB_THRUST / VF_HUB_GRAV < 1.9)) f.push('Schub/Schwerkraft nicht skaliert');
+      // Touch-Sticks: links hoch = steigen, rechts vor = Nase vor.
+      VF.hubTasten = {}; VF.touchHeli = { l: { x: 0.5, y: -1 }, r: { x: -0.3, y: -0.8 } };
+      const e = vfHubEingabe();
+      if (!(e[0] > 0.9 && Math.abs(e[1] - 0.5) < 1e-9 && Math.abs(e[2] - 0.8) < 1e-9 && Math.abs(e[3] + 0.3) < 1e-9)) f.push('Touch-Eingabe ' + e.join(','));
+      // Anzeige: im Heli die zwei Sticks (Klasse), sonst Lenkung/Pedal.
+      const el = document.createElement('div');
+      el.className = 'vf-touch';
+      const merkTE = vfTouchElement;
+      vfTouchElement = () => el;
+      try {
+        vfTouchAnzeigen(true);
+        if (!el.classList.contains('vf-touch-heli-an')) f.push('Heli-Sticks nicht eingeschaltet');
+        VF.hubschrauber = false; vfTouchAnzeigen(true);
+        if (el.classList.contains('vf-touch-heli-an')) f.push('Heli-Sticks im Auto');
+      } finally { vfTouchElement = merkTE; }
+    } finally { vfHubGyro = merkG; Object.assign(VF, merk); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '1,5 s vorn geneigt: ' + weg.toFixed(0) + ' Einheiten (' + (weg / 6.4).toFixed(1) + ' Heli-Laengen); Touch-Sticks links/rechts' };
+  });
+  stAdd('Virtuell v1.6.27: RC Stunt Copter nur im Training, Tore an den Sektoren, Runde nur nach allen Toren und Start/Ziel-Tor (Issue #15)', () => {
+    const f = [];
+    const rm = $('race-mode'), merkRm = rm ? rm.value : null;
+    const merkA = (() => { try { return localStorage.getItem(VF_AUTO_STORE); } catch (e) { return null; } })();
+    try {
+      try { localStorage.setItem(VF_AUTO_STORE, 'hubschrauber'); } catch (e) { /* egal */ }
+      const setzeModus = (v) => { if (rm && [...rm.options].some((o) => o.value === v)) rm.value = v; };
+      setzeModus('laps');
+      if (rm && rm.value !== 'practice') {
+        if (vfAutoListe().some((a) => a.v === 'hubschrauber')) f.push('Heli ausserhalb des Trainings waehlbar');
+        if (vfAutoWahl() !== 'v5r' || vfModellPfad() === '') f.push('gespeicherter Heli faehrt ausserhalb des Trainings: ' + vfAutoWahl());
+      }
+      setzeModus('practice');
+      if (!vfAutoListe().some((a) => a.v === 'hubschrauber')) f.push('Heli im Training nicht waehlbar');
+      if (vfAutoWahl() !== 'hubschrauber') f.push('Heli im Training nicht gewaehlt');
+    } finally {
+      try { if (merkA === null) localStorage.removeItem(VF_AUTO_STORE); else localStorage.setItem(VF_AUTO_STORE, merkA); } catch (e) { /* egal */ }
+      if (rm && merkRm !== null) rm.value = merkRm;
+    }
+    // Tore: Oval mit n Sektoren (seit v1.6.56: 8) -> n-1 Sektortore + Start/Ziel.
+    const merkVF = { pts: VF.pts, nrm: VF.nrm, tiles: VF.tiles, frei: VF.frei, zielIdx: VF.zielIdx, x: VF.x, y: VF.y, z: VF.z, rundeAb: VF.rundeAb, hubTore: VF.hubTore,
+      zielAt: VF.zielAt, letzte: VF.letzte, beste: VF.beste, runden: VF.runden, splits: VF.splits, geist: VF.geist, modus: VF.modus };
+    let mass = '';
+    try {
+      const tiles = codeToTrack(ST_SEK_OVAL).tiles;
+      VF.tiles = tiles; VF.frei = null; VF.pts = trackCenterline(tiles); VF.nrm = trackNormals(VF.pts); VF.zielIdx = vfZielIdx(VF.pts, tiles);
+      const T = vfHubToreBauen();
+      VF.hubTore = T;
+      const plan = autoSektorPlanFuer(tiles, true, true);
+      if (T.liste.length !== plan.n || !T.liste[T.liste.length - 1].sf) f.push('Tore ' + T.liste.length + ' statt ' + plan.n);
+      // Mitten durch Tor 1 fliegen (tief), dann oben drueber ueber Tor 2: nur eines zaehlt.
+      const durch = (g, hoehe) => {
+        const p = VF.pts[g.i], q = VF.pts[(g.i + 3) % VF.pts.length], o = VF.pts[(g.i - 3 + VF.pts.length) % VF.pts.length];
+        VF.x = o.x; VF.y = o.y; VF.z = hoehe; const vx = VF.x, vy = VF.y; VF.x = q.x; VF.y = q.y; vfHubToreSchritt(vx, vy); return p;
+      };
+      durch(T.liste[0], 10);
+      if (T.naechstes !== 1) f.push('Tor 1 nicht gezaehlt');
+      durch(T.liste[1], VF_HUB_TOR_H + 20);
+      if (T.naechstes !== 1) f.push('ueber Tor 2 hinweg gezaehlt');
+      // v1.6.58: die Runde zaehlt beim Flug durch das Start/Ziel-Tor selbst (nicht mehr an der Mittellinie).
+      VF.geist = null; VF.modus = 'practice'; VF.rundeAb = 1000; VF.beste = null;
+      durch(T.liste[T.liste.length - 1], 10);
+      if (VF.rundeAb !== 1000) f.push('Runde ohne alle Tore gezaehlt');
+      for (let k = 1; k < T.liste.length - 1; k++) durch(T.liste[k], 10);
+      if (T.naechstes !== T.liste.length - 1) f.push('nicht alle Tore gezaehlt: ' + T.naechstes);
+      durch(T.liste[T.liste.length - 1], 10);
+      if (VF.rundeAb === 1000 || !VF.zielAt) f.push('Runde nach allen Toren nicht gezaehlt');
+      if (T.naechstes !== 0) f.push('nach der Runde nicht zurueckgesetzt');
+      if (VF_HUB_TOR_H < 100) f.push('Tore zu niedrig: ' + VF_HUB_TOR_H);
+      mass = T.liste.length + ' Tore (' + (T.liste.length - 1) + ' Sektoren + Start/Ziel)';
+    } finally { Object.assign(VF, merkVF); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'nur im Training waehlbar; ' + mass + '; drueber fliegen zaehlt nicht; Runde erst nach allen Toren' };
+  });
+  stAdd('Virtuell v1.6.27: Audi RS5 DTM (Dave Love, CC BY 4.0) waehlbar, Modell laedt mit Teilen, Raedern und Lichtern', async () => {
+    const f = [];
+    if (!vfAutoListe().some((a) => a.v === 'audirs5')) f.push('nicht in der Liste');
+    if (VF_MODELL_PFADE.audirs5 !== 'img/autos/audirs5/') f.push('Pfad fehlt');
+    let mass = '';
+    try {
+      const d = await vfModellDaten('img/autos/audirs5/');
+      const m = d.meta, P = m.physik;
+      const rollen = new Set(m.teile.map((t) => t.rolle));
+      ['karosserie', 'glas', 'scheinwerfer', 'ruecklicht', 'rad'].forEach((r) => { if (!rollen.has(r)) f.push('keine Rolle ' + r); });
+      const rad = m.teile.filter((t) => t.gruppe === 'rad');
+      if (!rad.some((t) => t.achse === 'vorn') || !rad.some((t) => t.achse === 'hinten')) f.push('Raeder je Achse fehlen');
+      if (m.teile.some((t) => t.ecken > 65535 || t.ecke0 + t.ecken > m.ecken || t.index0 + t.indizes > m.indizes)) f.push('Teilbereiche ausserhalb');
+      if (!(P.laenge > 4.5 && P.laenge < 5.3 && P.radstand > 2.5 && P.radstand < 3)) f.push('Masse ' + P.laenge + ' / ' + P.radstand);
+      if (!(P.reifen.vorn.radius > 0.3 && P.reifen.vorn.radius < 0.4 && P.reifen.vorn.breite > 0.25)) f.push('Rad ' + JSON.stringify(P.reifen.vorn));
+      if (!(m.lichter.front.length >= 2 && m.lichter.rueck.length >= 2)) f.push('Lichter fehlen');
+      const prof = vfPhysikAus(P);
+      if (!(prof.m > 900 && prof.Iz > 0 && prof.muV > 1)) f.push('Fahrprofil ' + JSON.stringify(prof).slice(0, 80));
+      mass = m.ecken + ' Ecken, ' + m.teile.length + ' Teile, ' + P.laenge + ' m lang, Radstand ' + P.radstand + ' m';
+    } catch (e) { f.push('laedt nicht: ' + e.message); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass };
+  });
+  stAdd('Virtuell v1.6.54: Drift mit Physik - Pruefstand: Heck kommt mit Gas, Stick haelt den Winkel ohne Dreher, Handbremse dreht ein, halbes Gas greift, ohne Hilfe reine Physik', () => {
+    const f = [], mass = [];
+    if (!VF_HANDLING_MODI.some((m) => m.id === 'drift')) f.push('Drift nicht waehlbar');
+    const beta = (z) => Math.atan2(z.vy, Math.max(0.1, z.vx)) * 180 / Math.PI;
+    const H = { hilfe: VF_DRIFT_HILFE, gyro: VF_DRIFT_GYRO_R };
+    const lauf = (v0, plan, T, hilfe) => {
+      const z = { vx: v0, vy: 0, r: 0, w: v0, ax: 0 }, b = [];
+      for (let t = 0; t < T; t += 1 / 60) { vfDriftSchritt(z, Object.assign({ mu: 1 }, hilfe || H, plan(t)), 1 / 60); b.push([t, beta(z), z.vx]); }
+      return b;
+    };
+    // Einleiten: voller Einschlag und Vollgas, 15 Grad in hoechstens 0,8 s.
+    for (const v of [8, 15, 25]) {
+      const b = lauf(v, () => ({ lenk: 1, gas: 1 }), 2), x = b.find((q) => Math.abs(q[1]) >= 15);
+      if (!x || x[0] > 0.8) f.push('Heck kommt bei ' + v + ' m/s erst nach ' + (x ? x[0].toFixed(2) : '> 2') + ' s');
+    }
+    // Halten: nach dem Einleiten Stick 0,6 / 1 bei Vollgas, 8 s - Drift, kein Dreher.
+    for (const st of [0.6, 1]) {
+      const b = lauf(15, (t) => ({ lenk: t < 0.5 ? 1 : st, gas: 1 }), 8), end = b[b.length - 1], maxB = Math.max(...b.map((q) => Math.abs(q[1])));
+      mass.push('Stick ' + st + ': ' + Math.abs(end[1]).toFixed(0) + ' Grad');
+      if (!(Math.abs(end[1]) >= 20 && maxB < 70 && end[2] > 5)) f.push('Stick ' + st + ': ' + end[1].toFixed(0) + ' Grad, max ' + maxB.toFixed(0) + ', ' + end[2].toFixed(1) + ' m/s');
+    }
+    // Stick in die Mitte: das Auto faengt sich.
+    { const b = lauf(15, (t) => ({ lenk: t < 0.6 ? 1 : 0, gas: t < 0.6 ? 1 : 0.6 }), 4); if (!(Math.abs(b[b.length - 1][1]) < 5)) f.push('faengt sich nicht: ' + b[b.length - 1][1].toFixed(0)); }
+    // Handbremse: 0,4 s bei 20 m/s mit halbem Einschlag dreht das Auto auf mindestens 25 Grad.
+    { const b = lauf(20, (t) => ({ lenk: 0.5, gas: t > 0.4 ? 0.7 : 0, hand: t < 0.4 }), 1), x = b.find((q) => q[0] >= 0.6);
+      mass.push('Handbremse ' + Math.abs(x[1]).toFixed(0) + ' Grad'); if (!(Math.abs(x[1]) >= 25)) f.push('Handbremse nur ' + x[1].toFixed(0) + ' Grad'); }
+    // v1.6.58 GEMELDET: nach 0,5 s Handbremse stoppte das Auto ploetzlich; nach einer Drehung ueber 90 Grad rollte es nicht
+    // rueckwaerts weiter. Jetzt: 1 s nach dem Loslassen rutscht es noch (> 5 m/s), rueckwaerts rollt es weiter.
+    { const z = { vx: 20, vy: 0, r: 0, w: 20, ax: 0 };
+      for (let t = 0; t < 1.5; t += 1 / 60) vfDriftSchritt(z, Object.assign({ mu: 1 }, H, { lenk: t < 0.5 ? 0.6 : 0, hand: t < 0.5 }), 1 / 60);
+      const sp = Math.hypot(z.vx, z.vy);
+      mass.push('nach Handbremse ' + sp.toFixed(1) + ' m/s');
+      if (!(sp > 5)) f.push('Handbremse haelt das Auto an: ' + sp.toFixed(1) + ' m/s'); }
+    { const z = { vx: -8, vy: 3, r: 0.5, w: 0, ax: 0 };
+      for (let t = 0; t < 0.6; t += 1 / 60) vfDriftSchritt(z, Object.assign({ mu: 1 }, { hilfe: 0, gyro: 0 }, { lenk: 0 }), 1 / 60);
+      if (!(z.vx < -2 && Math.hypot(z.vx, z.vy) > 3)) f.push('rollt nicht rueckwaerts weiter: vx ' + z.vx.toFixed(1)); }
+    // Halbes Gas greift.
+    { const b = lauf(20, () => ({ lenk: 0.3, gas: 0.4 }), 4); if (!(Math.abs(b[b.length - 1][1]) < 10)) f.push('halbes Gas driftet: ' + b[b.length - 1][1].toFixed(0)); }
+    // Ohne Hilfe (Drift-Gyro Aus): reine Physik - Vollgas mit vollem Einschlag dreht ein.
+    { const b = lauf(15, () => ({ lenk: 0.4, gas: 1 }), 3, { hilfe: 0, gyro: 0 }); if (!(Math.max(...b.map((q) => Math.abs(q[1]))) > 70)) f.push('ohne Hilfe kein Dreher'); }
+    // Bremsen und Antritt.
+    { const b = lauf(30, () => ({ lenk: 0, bremse: 1 }), 6), x = b.find((q) => q[2] <= 0.01); if (!x || x[0] > 4.5) f.push('Bremsweg zu lang'); }
+    { const b = lauf(5, () => ({ lenk: 0, gas: 1 }), 10), x = b.find((q) => q[2] >= 30); if (!x || x[0] > 7) f.push('Antritt 5-30 m/s ' + (x ? x[0].toFixed(1) : '> 10') + ' s'); }
+    { const b = lauf(0, () => ({ lenk: 0, gas: 1 }), 5), x = b.find((q) => q[2] >= 10); if (!x || x[0] > 2.5) f.push('Anfahren 0-10 m/s ' + (x ? x[0].toFixed(1) : '> 5') + ' s'); }
+    // Drift-Gyro skaliert die Hilfe; X ist nur im Drift die Handbremse.
+    const lies = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const merkDg = lies(VF_DRIFT_GYRO_STORE), merkH = vfHandling(), merkA = VF.aktiv, merkHb = VF.handbremse, merkHeli = VF.hubschrauber;
+    try {
+      localStorage.setItem(VF_DRIFT_GYRO_STORE, '2');
+      if (Math.abs(vfDriftHilfe().hilfe - 2 * VF_DRIFT_HILFE) > 1e-9) f.push('Drift-Gyro 200 % wirkt nicht');
+      localStorage.setItem(VF_DRIFT_GYRO_STORE, '0');
+      if (vfDriftHilfe().gyro !== 0) f.push('Drift-Gyro Aus wirkt nicht');
+      VF.aktiv = true; VF.hubschrauber = false;
+      vfHandlingSetzen('drift');
+      if (!vfHandbremse(true) || !VF.handbremse) f.push('X ist im Drift keine Handbremse');
+      vfHandbremse(false);
+      vfHandlingSetzen('gt3');
+      if (vfHandbremse(true) || VF.handbremse) f.push('X ist ausserhalb des Drifts Handbremse');
+    } finally {
+      VF.aktiv = merkA; VF.handbremse = merkHb; VF.hubschrauber = merkHeli; vfHandlingSetzen(merkH);
+      try { if (merkDg === null) localStorage.removeItem(VF_DRIFT_GYRO_STORE); else localStorage.setItem(VF_DRIFT_GYRO_STORE, merkDg); } catch (e) { /* egal */ }
+    }
+    // Rauch: leicht am Anfang, mehr mit heissen Reifen.
+    const merkV = { rauch: VF.rauch, driftHitze: VF.driftHitze, rauchSoll: VF.rauchSoll, dyn: VF.dyn, x: VF.x, y: VF.y, h: VF.h };
+    try {
+      Object.assign(VF, { rauch: [], driftHitze: 0, rauchSoll: 0, dyn: { vy: 0, r: 0, aH: 0.4 }, x: 0, y: 0, h: 0 });
+      vfRauchSchritt(0.5, 20, true);
+      const n1 = VF.rauch.length, a1 = VF.rauch.length ? VF.rauch[VF.rauch.length - 1].a0 : 0, h1 = VF.driftHitze;
+      for (let i = 0; i < 20; i++) vfRauchSchritt(0.5, 20, true);
+      const h2 = VF.driftHitze, a2 = VF.rauch[VF.rauch.length - 1].a0, n2 = VF.rauch.length;
+      if (!(h1 < 0.2 && h2 > 0.8)) f.push('Hitze ' + h1.toFixed(2) + ' -> ' + h2.toFixed(2));
+      if (!(n1 >= 1 && a1 < 0.25 && a2 > 0.45)) f.push('Rauch nicht erst leicht, dann dicht: ' + n1 + ' / ' + a1.toFixed(2) + ' -> ' + a2.toFixed(2));
+      if (n2 > VF_RAUCH_MAX) f.push('zu viele Wolken ' + n2);
+      Object.assign(VF, { rauch: [], driftHitze: 0, dyn: { vy: 0, r: 0, aH: 0.4 } });
+      vfRauchSchritt(0.5, 20, false);
+      if (VF.rauch.length) f.push('Rauch ohne Drift');
+    } finally { Object.assign(VF, merkV); }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : mass.join(', ') };
+  });
+  stAdd('Virtuell v1.6.85: Totzone Neigen einstellbar (Optionen Virtuell), wirkt auf den Lenkwert', async () => {
+    const f = [];
+    const merk = (() => { try { return localStorage.getItem(VF_NEIGEN_TOT_STORE); } catch (e) { return null; } })();
+    try {
+      localStorage.removeItem(VF_NEIGEN_TOT_STORE);
+      if (vfNeigenTot() !== 2.5) f.push('Vorgabe ' + vfNeigenTot());
+      localStorage.setItem(VF_NEIGEN_TOT_STORE, '10');
+      if (vfNeigungLenkwert(8, 0) !== 0) f.push('8 Grad lenkt trotz 10 Grad Totzone');
+      if (!(vfNeigungLenkwert(20, 0) > 0.35 && vfNeigungLenkwert(20, 0) < 0.45)) f.push('20 Grad: ' + vfNeigungLenkwert(20, 0).toFixed(2));
+      if (vfNeigungLenkwert(-35, 0) !== -1) f.push('voller Einschlag fehlt');
+      localStorage.setItem(VF_NEIGEN_TOT_STORE, '0');
+      if (!(vfNeigungLenkwert(1, 0) > 0)) f.push('Totzone 0 lenkt bei 1 Grad nicht');
+      localStorage.setItem(VF_NEIGEN_TOT_STORE, '3.3');
+      if (vfNeigenTot() !== 2.5) f.push('ungueltiger Wert nicht auf Vorgabe');
+      // Zeile in den Optionen Virtuell, mit WIP und Info.
+      localStorage.setItem(VF_NEIGEN_TOT_STORE, '5');
+      vfOptionenSeite('opt-virtuell');
+      const z = document.querySelector('#opt-virtuell-inhalt [data-vf-neigen-tot]');
+      if (!z) f.push('keine Zeile in Optionen Virtuell');
+      else {
+        if (z.textContent.indexOf('5°') < 0) f.push('Wert ' + z.textContent.slice(0, 60));
+        if (!z.querySelector('.wip-tag') || !z.querySelector('.opt-label small')) f.push('ohne WIP oder Info');
+        const vor = z.querySelectorAll('button'); if (vor.length) vor[vor.length - 1].click();
+        if (vfNeigenTot() !== 7.5) f.push('Weiter-Knopf: ' + vfNeigenTot());
+      }
+    } finally { try { if (merk === null) localStorage.removeItem(VF_NEIGEN_TOT_STORE); else localStorage.setItem(VF_NEIGEN_TOT_STORE, merk); } catch (e) { /* egal */ } }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'Vorgabe 2,5 Grad, 0 bis 15 waehlbar, wirkt auf den Lenkwert, Zeile in Optionen Virtuell' };
+  });
+  stAdd('Virtuell v1.6.23: Steuerung Neigen - Winkel aus der Schwerkraft je Bildschirmlage, Lenkwert, Knopf schaltet reihum (Issue #11)', () => {
+    const f = [], nah = (a, b, e) => a !== null && Math.abs(a - b) <= (e || 0.5);
+    const g = 9.81, r = (d) => d * Math.PI / 180;
+    // aufrecht hochkant (0) und quer (90): 0 Grad; quer 20 Grad im Uhrzeigersinn gedreht: +20, gegen: -20.
+    if (!nah(vfNeigungWinkel(0, g, 0, false), 0)) f.push('hochkant aufrecht ' + vfNeigungWinkel(0, g, 0, false));
+    if (!nah(vfNeigungWinkel(g, 0, 90, false), 0)) f.push('quer aufrecht ' + vfNeigungWinkel(g, 0, 90, false));
+    if (!nah(vfNeigungWinkel(g * Math.cos(r(20)), g * Math.sin(r(20)), 90, false), 20)) f.push('quer rechts ' + vfNeigungWinkel(g * Math.cos(r(20)), g * Math.sin(r(20)), 90, false));
+    if (!nah(vfNeigungWinkel(g * Math.cos(r(20)), -g * Math.sin(r(20)), 90, false), -20)) f.push('quer links');
+    if (!nah(vfNeigungWinkel(-g * Math.cos(r(20)), g * Math.sin(r(20)), 270, false), -20)) f.push('quer andersrum (270) ' + vfNeigungWinkel(-g * Math.cos(r(20)), g * Math.sin(r(20)), 270, false));
+    if (!nah(vfNeigungWinkel(-g, 0, 90, true), 0)) f.push('iOS-Vorzeichen');
+    if (vfNeigungWinkel(0.3, 0.4, 90, false) !== null) f.push('flach gibt einen Wert');
+    // Lenkwert: Totzone, linear, voll bei 35 Grad, ueber die 180-Grad-Grenze gerechnet.
+    if (vfNeigungLenkwert(2, 0) !== 0) f.push('Totzone');
+    if (!nah(vfNeigungLenkwert(20, 0), (20 - 2.5) / 32.5, 0.001)) f.push('20 Grad ' + vfNeigungLenkwert(20, 0));
+    if (vfNeigungLenkwert(50, 0) !== 1 || vfNeigungLenkwert(-50, 0) !== -1) f.push('voller Einschlag');
+    if (!nah(vfNeigungLenkwert(-175, 175), vfNeigungLenkwert(10, 0), 0.001)) f.push('ueber 180 Grad');
+    if (!nah(vfNeigungLenkwert(30, 10), vfNeigungLenkwert(20, 0), 0.001)) f.push('Mitte geeicht');
+    // Knopf: Touch -> Neigen -> Aus -> Touch (Geraet als Touch vorgetaeuscht).
+    const merkG = vfTouchGeraet, merkS = (() => { try { return localStorage.getItem(VF_TOUCH_STORE); } catch (e) { return null; } })();
+    const folge = [];
+    try {
+      vfTouchGeraet = () => true;
+      try { localStorage.setItem(VF_TOUCH_STORE, 'an'); } catch (e) { /* egal */ }
+      folge.push(vfTouchModus());
+      for (let i = 0; i < 3; i++) { vfTouchUmschalten(); folge.push(vfTouchModus()); }
+      if (folge.join(',') !== 'touch,neigen,aus,touch') f.push('Folge ' + folge.join(','));
+      vfTouchGeraet = () => false;
+      if (vfTouchModus() !== 'aus') f.push('ohne Touch nicht aus');
+    } finally {
+      vfTouchGeraet = merkG;
+      try { if (merkS === null) localStorage.removeItem(VF_TOUCH_STORE); else localStorage.setItem(VF_TOUCH_STORE, merkS); } catch (e) { /* egal */ }
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'quer +-20 Grad richtig, iOS gedreht, Totzone 2,5, voll 35 Grad, Knopf ' + folge.join(' -> ') };
+  });
+  stAdd('Virtuell v1.6.32: eigenstaendige virtuelle Garage - Vorschau links/oben, Optionen scrollen, Heli-Optionen dort, echte Garage ohne virtuelle Spalte', () => {
+    const f = [], merkTab = typeof kAktiverTab === 'function' ? kAktiverTab() : '';
+    const lies = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const merk = { m: lies(FAHR_MODUS_STORE), a: lies(VF_AUTO_STORE), s: lies(VF_STRECKE_STORE) };
+    const rm = $('race-mode'), merkRm = rm ? rm.value : null;
+    let mass = '';
+    try {
+      vfGarageZeigen();
+      if (!vfGarageSeiteOffen()) f.push('Seite nicht offen');
+      if (!fahrModusVirtuell()) f.push('Modus nicht virtuell');
+      const vor = $('vg-vorschau'), opt = $('vg-optionen');
+      if (!vor.querySelector('.vf-los-zeile [data-vf="los"]')) f.push('Losfahren nicht bei der Vorschau');
+      if (!vor.querySelector('.vg-name') || vor.querySelector('.vg-name').textContent.indexOf(vfAutoName(vfAutoWahl())) < 0) f.push('Name fehlt');
+      if (!opt.querySelector('[data-vf-strecke]')) f.push('Optionen fehlen');
+      if (vor.getBoundingClientRect().width > 0 && opt.getBoundingClientRect().width > 0) {
+        const r1 = vor.getBoundingClientRect(), r2 = opt.getBoundingClientRect();
+        const quer = innerWidth > innerHeight;
+        if (quer && !(r1.right <= r2.left + 1)) f.push('quer: Vorschau nicht links');
+        if (!quer && !(r1.bottom <= r2.top + 1)) f.push('hoch: Vorschau nicht oben');
+        if (quer && getComputedStyle(vor).position !== 'sticky') f.push('quer: Vorschau bleibt beim Scrollen nicht stehen');
+        mass = (quer ? 'quer' : 'hoch') + ' ' + Math.round(r1.width) + '+' + Math.round(r2.width) + ' px';
+      }
+      // Eine Aenderung zeichnet die virtuelle Garage neu, nicht die echte.
+      const stZeile = opt.querySelector('[data-vf-strecke]');
+      const vorher = stZeile.textContent;
+      stZeile.querySelector('button').click();
+      if (!vfGarageSeiteOffen() || $('vg-optionen').querySelector('[data-vf-strecke]').textContent === vorher) f.push('Streckenwahl zeichnet nicht neu');
+      // Heli (Training): seine Optionen stehen hier.
+      if (rm && [...rm.options].some((o) => o.value === 'practice')) {
+        rm.value = 'practice';
+        try { localStorage.setItem(VF_AUTO_STORE, 'hubschrauber'); } catch (e) { /* egal */ }
+        vfGarageSeite();
+        if ($('vg-optionen').querySelectorAll('[data-vf-hub]').length !== 0) f.push('Heli-Optionen noch in der Garage (gehoeren nach Optionen > RC Heli)');
+        const hb = $('vg-vorschau').querySelector('.vf-vorschau-bild');
+        if (!hb || hb.getAttribute('src') !== 'img/vf/vorschau.png') f.push('Heli ohne Bild');
+        // v1.6.56: kein Motorsound und keine Fahrtrichtung mehr in der Garage, Hintergrund durchsichtig, Boden/Strecke ohne WIP.
+        vfGarageSeite();
+        const tg = [...$('vg-optionen').querySelectorAll('.gk-l')].map((x) => x.textContent).join('|');
+        if (tg.indexOf(t('Motorsound')) >= 0 || tg.indexOf(t('Fahrtrichtung')) >= 0) f.push('Motorsound/Fahrtrichtung noch in der Garage');
+        const bz = $('vg-optionen').querySelector('[data-vf-boden]'), sz = $('vg-optionen').querySelector('[data-vf-strecke]');
+        if ((bz && bz.querySelector('.wip-tag')) || (sz && sz.querySelector('.wip-tag'))) f.push('Boden/Strecke noch WIP');
+        const vv = $('vg-vorschau').querySelector('.vf-vorschau');
+        if (vv && getComputedStyle(vv).backgroundImage !== 'none') f.push('Vorschau mit Hintergrund');
+      }
+      // v1.6.41: Optionen > Virtuell gibt es wieder, jetzt mit den Einstellungen der Fahrt (Test 'Optionen v1.6.41').
+      // Echte Garage: der Knopf fuehrt in die virtuelle Garage.
+      showTab('garage'); renderGarage();
+      showTab('fahren');
+    } finally {
+      try {
+        if (merk.m === null) localStorage.removeItem(FAHR_MODUS_STORE); else localStorage.setItem(FAHR_MODUS_STORE, merk.m);
+        if (merk.a === null) localStorage.removeItem(VF_AUTO_STORE); else localStorage.setItem(VF_AUTO_STORE, merk.a);
+        if (merk.s === null) localStorage.removeItem(VF_STRECKE_STORE); else localStorage.setItem(VF_STRECKE_STORE, merk.s);
+      } catch (e) { /* egal */ }
+      if (rm && merkRm !== null) rm.value = merkRm;
+      konsoleFahrenZeichnen();
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'eigene Seite, ' + mass + ', Heli-Bild im Training' };
+  });
+  stAdd('Fahren v1.6.23: Umschalter Echt | Virtuell - Autos-Kachel, Garage und Start folgen dem Modus (Issue #7)', () => {
+    const f = [], merk = (() => { try { return localStorage.getItem(FAHR_MODUS_STORE); } catch (e) { return null; } })();
+    const merkTab = (typeof kAktiverTab === 'function' ? kAktiverTab() : ''), merkVA = garVirtuellAuf, merkKA = garKameraAuf;
+    const merkStart = virtuellStarten;
+    let gestartet = 0;
+    try {
+      fahrModusSetzen('echt');
+      const an = (m) => { const b = document.querySelector('#fa-modus [data-fm="' + m + '"]'); return b && b.classList.contains('an'); };
+      if (!an('echt') || an('virtuell')) f.push('echt nicht markiert');
+      if ($('fa-verbinden').hidden) f.push('echt: Verbinden versteckt');
+      if ($('fa-start-titel').textContent === t('Virtuell fahren')) f.push('echt: Start sagt virtuell');
+      // Ein Tipp auf "Virtuell" schaltet um.
+      document.querySelector('#fa-modus [data-fm="virtuell"]').click();
+      if (!fahrModusVirtuell() || !an('virtuell')) f.push('Tipp auf Virtuell schaltet nicht');
+      if (!document.body.classList.contains('fm-virtuell')) f.push('Klasse fm-virtuell fehlt');
+      if (!$('fa-verbinden').hidden || !$('fa-mp').hidden) f.push('virtuell: Verbinden/Mehrspieler sichtbar');
+      if ($('fa-auto-titel').textContent !== t('Virtuelles Auto')) f.push('Titel ' + $('fa-auto-titel').textContent);
+      if ($('fa-auto-bild').style.backgroundImage.indexOf('vorschau.png') < 0) f.push('kein Vorschaubild');
+      if ($('fa-auto-info').textContent.indexOf(vfAutoName(vfAutoWahl())) < 0) f.push('Autoname fehlt: ' + $('fa-auto-info').textContent);
+      if ($('fa-start-titel').textContent !== t('Virtuell fahren')) f.push('Start: ' + $('fa-start-titel').textContent);
+      // Garage oeffnet die eigenstaendige virtuelle Garage (v1.6.32).
+      $('fa-garage').click();
+      if (!vfGarageSeiteOffen() || !$('vg-optionen').querySelector('[data-vf-strecke]')) f.push('Garage oeffnet nicht die virtuelle Garage');
+      // Start startet die virtuelle Fahrt (abgefangen).
+      virtuellStarten = () => { gestartet++; return false; };
+      if (!kRennenLaeuft()) { $('fa-start').click(); if (gestartet !== 1) f.push('Start startet nicht virtuell'); }
+      // Quadrat am Pad schaltet zurueck.
+      konsoleQuadWechsel('fahrmodus', 1);
+      if (fahrModusVirtuell() || !an('echt')) f.push('Quadrat schaltet nicht zurueck');
+      if ($('fa-verbinden').hidden) f.push('zurueck: Verbinden versteckt');
+    } finally {
+      virtuellStarten = merkStart;
+      try { if (merk === null) localStorage.removeItem(FAHR_MODUS_STORE); else localStorage.setItem(FAHR_MODUS_STORE, merk); } catch (e) { /* egal */ }
+      garVirtuellAuf = merkVA; garKameraAuf = merkKA;
+      konsoleFahrenZeichnen();
+      if (merkTab) showTab(merkTab);
+    }
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : 'echt/virtuell umschaltbar (Tipp, Quadrat), Kachel, Garage und Start folgen' };
   });
 
   stAdd('Fahren v1.5: Symbole fuer zweiten Laptop und Onboard-Kamera auf der Garagenkachel', () => {
@@ -17830,7 +18824,7 @@
     // Optionen rechts in der Garage: Motorsound-Zeile, Tonstatus, Losfahren.
     const vfBox = document.createElement('div');
     vfGarageOptionen(vfBox);
-    if (!vfBox.querySelector('[data-vf="los"]') || !vfBox.querySelector('.gk-zeile') || !vfBox.querySelector('.vf-ton-status')) f.push('Garagen-Optionen unvollstaendig');
+    if (!vfBox.querySelector('[data-vf="los"]') || !vfBox.querySelector('.gk-zeile')) f.push('Garagen-Optionen unvollstaendig');
     if (vfTonGeladen('') || vfTonGeladen('gibtsnicht')) f.push('vfTonGeladen meldet Leeres als geladen');
     if (!(Math.abs(gefangen.r) < 0.05 && Math.abs(gefangen.vy) < 0.3)) f.push('faengt sich nicht: r ' + gefangen.r + ' vy ' + gefangen.vy);
     // V5R (Werte wie img/autos/v5r/auto.json): Federung - Bremsen nickt die Nase, Rechtskurve legt nach links,
@@ -17959,6 +18953,9 @@
       if (!(schnell.lenkGrad > VF_GT3.lenkGrad)) f.push('Schnell: kein Einschlag-Gewinn');
       const zGT3 = lauf(VF_GT3, 30, 0.5, 2), zSchnell = lauf(schnell, 30, 0.5, 2);
       if (!(Math.abs(zSchnell.r) > Math.abs(zGT3.r))) f.push('Schnell dreht nicht enger: ' + zSchnell.r + ' / ' + zGT3.r);
+      // v1.6.25 (Issue #9): heisst Pacejka, Reifenkurve mit dem Formfaktor des echten Fahrens.
+      if (vfHandlingName('schnell') !== t('Pacejka (wie echte CH Autos, WIP)')) f.push('Name ' + vfHandlingName('schnell'));
+      if (physEngine && physEngine.config && Math.abs(schnell.C - physEngine.config.pacejkaC) > 1e-9) f.push('C ' + schnell.C + ' statt ' + physEngine.config.pacejkaC);
       // Ungueltiger Wert faellt auf GT3 zurueck.
       vfHandlingSetzen('gibtsnicht');
       if (vfHandling() !== 'gt3') f.push('ungueltiger Modus faellt nicht auf GT3 zurueck');
@@ -17986,7 +18983,7 @@
       const box = document.createElement('div');
       vfGarageOptionen(box);
       const z = box.querySelector('[data-vf-boden]');
-      if (!z || !z.querySelector('.wip-tag')) f.push('Bodenzeile mit WIP fehlt in der Garage');
+      if (!z || z.querySelector('.wip-tag')) f.push('Bodenzeile fehlt in der Garage oder traegt noch WIP (seit v1.6.56 ohne)');
       else if (z.querySelector('b').textContent !== t(VF_BOEDEN[0].name)) f.push('Bodenzeile zeigt ' + z.querySelector('b').textContent);
     } finally {
       try { if (vorher === null) localStorage.removeItem(VF_BODEN_STORE); else localStorage.setItem(VF_BODEN_STORE, vorher); } catch (e) { /* privat */ }
@@ -26422,6 +27419,8 @@
   async function runSelfTest() {
     const rows = $('st-rows');
     $('st-run').disabled = true;
+    // v1.6.50: waehrend des Selbsttests kein Wischen - viele Tests messen Lagen direkt nach dem Seitenwechsel.
+    window.kWischAus = true;
     $('st-status').textContent = 'laeuft …';
     // ?st=Teilstring laesst nur passende Tests laufen (v0.9.43, zum gezielten Nachpruefen).
     let nur = null;
@@ -26492,6 +27491,7 @@
       else localStorage.setItem('omegasim-lang', sprachGespeichert);
     } catch (e) { /* privat */ }
     $('st-run').disabled = false;
+    window.kWischAus = false;
     $('st-status').textContent = gut + ' ok, ' + schlecht + ' Fehler'
                                 + (offen ? ', ' + offen + ' nicht prüfbar' : '');
     log('Selbsttest: ' + gut + ' ok, ' + schlecht + ' Fehler'
@@ -27758,11 +28758,11 @@
     // Der Shader kennt das Umfaerben (beide Varianten) - ohne den Wert fiele die Farbe stillschweigend weg.
     const quelle = Array.from(document.scripts).map((x) => x.text).join(' ');
     if ((quelle.match(/uniform float lack;/g) || []).length < 2) f.push('Shader ohne uniform lack in beiden Varianten');
-    // Vorschaubilder: ein Seitenbild je Auto (img/autos/<modell>/vorschau.jpg).
+    // Vorschaubilder: ein Seitenbild je Auto (img/autos/<modell>/vorschau.png, transparent seit v1.6.37).
     const fehlt = [];
     for (const m of Object.keys(VF_MODELL_PFADE)) {
       try {
-        const r = await fetch(VF_MODELL_PFADE[m] + 'vorschau.jpg', { method: 'HEAD', cache: 'no-store' });
+        const r = await fetch(VF_MODELL_PFADE[m] + 'vorschau.png', { method: 'HEAD', cache: 'no-store' });
         if (!r.ok) fehlt.push(m);
       } catch (e) { fehlt.push(m); }
     }
@@ -29504,7 +30504,7 @@
     const m = stSekMerk();
     try {
       trackMode = 'on';
-      const erw = { 3: 1, 8: 1, 14: 1, 15: 2, 25: 3, 30: 3, 100: 10, 160: 10 };
+      const erw = { 3: 1, 4: 2, 8: 2, 13: 3, 25: 6, 30: 8, 38: 10, 100: 10, 160: 10 };
       for (const n of Object.keys(erw)) {
         if (autoSektorFormel(+n) !== erw[n]) f.push(n + ' Teile: ' + autoSektorFormel(+n) + ' statt ' + erw[n]);
       }
@@ -29512,7 +30512,7 @@
       const code = trackToCode(tiles);
       if (trackSektorModus(tiles) !== 'auto') f.push('neue Strecke nicht automatisch');
       const pa = autoSektorPlanFuer(tiles, true);
-      if (!pa || pa.n !== 3) f.push('automatisch: ' + (pa ? pa.n : 'kein Plan'));
+      if (!pa || pa.n !== 8) f.push('automatisch: ' + (pa ? pa.n : 'kein Plan'));
       tiles[0].sm = 'aus';
       if (autoSektorPlanFuer(tiles, true)) f.push('aus und trotzdem Sektoren');
       tiles[0].sm = 'manuell';
@@ -29535,7 +30535,7 @@
         if (!I18N_EN[k] || !I18N_ES[k]) f.push('Uebersetzung fehlt: ' + k);
       }
     } finally { stSekZurueck(m); }
-    return { ok: !f.length, mass: f.length ? f.join(' | ') : '8 keine, 15 zwei, 25 drei, 100 zehn; aus/manuell in den Teilen, Grenze wandert mit, Code gleich, keine Renn-Option' };
+    return { ok: !f.length, mass: f.length ? f.join(' | ') : '8 zwei, 13 drei, 25 sechs, 100 zehn; aus/manuell in den Teilen, Grenze wandert mit, Code gleich, keine Renn-Option' };
   });
 
   stAdd('Sektoren v1.3.81: Grenzen auf Teilefugen und etwa gleich lang, Vorrang der Start/Ziel-Teile, Ausdruck unveraendert', () => {
@@ -29586,7 +30586,7 @@
       // Bahn: der Regler gilt nicht (wie seine Erklaerung sagt), die Strecke gilt.
       currentTrackTiles = stSekStrecke(ST_SEK_OVAL).tiles;
       sectorCount = 3;
-      if (sektorZiel() !== 1 || sektorAnzeigeZahl() !== 3 || !autoSektorenAktiv()) f.push('Bahn mit Regler 3: Ziel ' + sektorZiel() + ', Anzeige ' + sektorAnzeigeZahl());
+      if (sektorZiel() !== 1 || sektorAnzeigeZahl() !== autoSektorFormel(currentTrackTiles.length) || !autoSektorenAktiv()) f.push('Bahn mit Regler 3: Ziel ' + sektorZiel() + ', Anzeige ' + sektorAnzeigeZahl());
       // Ausdruck: unveraendert der Regler, keine Strecken-Sektoren.
       trackMode = 'off';
       if (sektorZiel() !== 3 || sektorAnzeigeZahl() !== 3 || autoSektorenAktiv() || autoSektorPlanAktuell()) f.push('Ausdruck: Ziel ' + sektorZiel() + ', auto ' + autoSektorenAktiv());
@@ -29619,6 +30619,9 @@
       trackMode = 'on';
       sectorCount = 1;
       const tiles = stSekStrecke(ST_SEK_OVAL).tiles;
+      // v1.6.56: die Formel gibt dem Oval jetzt 8 Sektoren; die Zeitmessung wird weiter mit 3 geprueft (manuell gesetzt,
+      // an den Fugen der Dreiteilung).
+      tiles[0].sm = 'manuell'; autoSektorGrenzen(tiles, 3).kacheln.forEach((k) => { tiles[k].sg = 1; });
       currentTrackTiles = tiles; lineCache = null;
       const p = autoSektorPlanAktuell();
       if (!p || p.n !== 3) return { ok: false, mass: 'kein Plan mit 3 Sektoren: ' + JSON.stringify(p) };
@@ -29865,10 +30868,11 @@
       if (sekWahl.sel !== 0) f.push('links zurueck nicht auf Start/Ziel (' + sekWahl.sel + ')');
       trackEditorPad('confirm');
       if (currentTrackTiles[0].sg) f.push('Start/Ziel abwaehlbar oder setzbar');
-      // Klick auf ein Teil der Karte (Teil 11, eine automatische Grenze): entfernt sie.
+      // Klick auf ein Teil der Karte (eine automatische Grenze, die dritte): entfernt sie.
       const svgEl = $('track-preview-svg').querySelector('svg');
       const geo = trackEditorGeo;
-      const pk = geo && geo.pts.filter((q) => q.tile === 11);
+      const kk = pa.kacheln[2];
+      const pk = geo && geo.pts.filter((q) => q.tile === kk);
       if (!svgEl || !pk || !pk.length) f.push('keine Kartengeometrie');
       else {
         const q = pk[Math.floor(pk.length / 2)];
@@ -29876,9 +30880,9 @@
         const sc = pt.matrixTransform(svgEl.getScreenCTM());
         const klick = () => $('track-preview-svg').dispatchEvent(new MouseEvent('click', { clientX: sc.x, clientY: sc.y, bubbles: true }));
         klick();
-        if (currentTrackTiles[11].sg) f.push('Klick entfernt die Grenze nicht');
+        if (currentTrackTiles[kk].sg) f.push('Klick entfernt die Grenze nicht');
         klick();
-        if (!currentTrackTiles[11].sg) f.push('zweiter Klick setzt sie nicht wieder');
+        if (!currentTrackTiles[kk].sg) f.push('zweiter Klick setzt sie nicht wieder');
         klick();
       }
       const zahl = $('track-sek-zahl').textContent;

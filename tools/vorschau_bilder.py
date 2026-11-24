@@ -16,6 +16,24 @@ Sehr dichte Modelle (z. B. die Caravelle mit ~1,7 Mio. Dreiecken) werden fuer
 die Vorschau per Vertex-Clustering reduziert, damit das Skript schnell bleibt.
 Das Skript ueberschreibt vorschau.jpg; die alten Einzelbilder vorschau_<farbe>.jpg
 bleiben liegen (werden nicht mehr angezeigt).
+
+v1.6.37 BESTELLT: "Vorschau mit dem gewaehlten Untergrund und darauf das Auto ohne grauen Hintergrund
+(transparent); das Skript so ueberarbeiten, dass alle Vorschauen so gut werden wie die vom Audi." Jetzt:
+  - vorschau.png mit Alphakanal (transparent), weicher Bodenschatten unter den Raedern,
+  - 3-fach ueberabgetastet und mit Lanczos verkleinert (glatte Kanten, keine Treppen),
+  - das Auto steht unten im Bild (Raeder bei 88 % der Hoehe), damit es in der Garage auf dem Boden steht,
+  - dichte Modelle werden nicht mehr reduziert (erst ab 3 Mio. Dreiecken; die Caravelle mit 1,7 Mio. dauert ~5 min,
+    reduziert hatte sie Loecher und Flecken).
+
+v1.6.81 BESTELLT: "Vorschaubilder nochmal aufhuebschen mit grauem Hintergrund (leichter Farbverlauf) und bei den Speed
+Dreams Autos schauen, dass die Raeder korrekt platziert sind. Am besten alles wieder mit einem Skript." Jetzt:
+  - grauer Studio-Hintergrund (senkrechter Verlauf, heller Lichtfleck hinter dem Auto), Bild deckend (kein Alpha mehr),
+  - die Karosserie steht wie im Spiel (vfModellZeichnen) um die Bodenfreiheit ueber dem Boden; bisher stand sie auf
+    y = 0, dadurch ragten bei den Speed-Dreams-Autos (Boxer 96, FMC GT4, Lynx 220) die Raeder durch die Kotfluegel,
+  - der Bildausschnitt umfasst Karosserie UND Raeder (Raeder stehen auf der Bodenlinie),
+  - dasselbe Skript zeichnet auch den Hubschrauber (tools/heli_vorschau.py) auf denselben Hintergrund:
+        python tools/vorschau_bilder.py            # alle Autos und der Hubschrauber
+        python tools/vorschau_bilder.py heli       # nur der Hubschrauber
 """
 
 import json
@@ -27,8 +45,11 @@ from PIL import Image
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AUTOS = os.path.join(REPO, "img", "autos")
 
-BREITE = 640
-HOEHE = 360
+AUS_BREITE, AUS_HOEHE = 640, 360
+SS = 3                 # Ueberabtastung
+BREITE = AUS_BREITE * SS
+HOEHE = AUS_HOEHE * SS
+BODEN = 0.88           # Unterkante der Raeder in Anteilen der Bildhoehe
 RAND = 0.09            # Anteil Rand um das Auto (Laenge/Hoehe)
 GLAS_ROLLEN = ("glas", "scheinwerferglas")
 
@@ -38,12 +59,34 @@ LICHT = LICHT / np.linalg.norm(LICHT)
 FUELL = np.array([0.55, 0.25, -0.3])       # Aufhellung von der Gegen-/Frontseite
 FUELL = FUELL / np.linalg.norm(FUELL)
 AMBIENT = 0.42
-HINTERGRUND_OBEN = (86, 92, 100)
-HINTERGRUND_UNTEN = (44, 48, 54)
+HINTERGRUND_OBEN = (214, 217, 221)    # v1.6.81: grauer Studio-Hintergrund, oben hell ...
+HINTERGRUND_UNTEN = (150, 154, 160)   # ... unten dunkler (leichter Verlauf)
+
+
+def hintergrund(breite, hoehe):
+    """Grauer Studio-Hintergrund (RGB, float32): senkrechter Verlauf, dazu ein weicher heller Fleck hinter dem Auto
+    und eine leichte Abdunklung zu den Ecken."""
+    y = np.linspace(0.0, 1.0, hoehe, dtype=np.float32)[:, None]
+    x = np.linspace(-1.0, 1.0, breite, dtype=np.float32)[None, :]
+    o = np.array(HINTERGRUND_OBEN, dtype=np.float32)
+    u = np.array(HINTERGRUND_UNTEN, dtype=np.float32)
+    t = (y ** 1.3)[..., None]
+    bg = o * (1 - t) + u * t
+    fleck = np.exp(-((x / 0.75) ** 2 + ((y - 0.55) / 0.45) ** 2))[..., None]
+    ecke = np.clip(1.0 - 0.10 * (x ** 2)[..., None] - 0.06 * (y ** 2)[..., None], 0, 1)
+    return np.clip(bg * ecke + 14.0 * fleck, 0, 255).astype(np.float32)
+
+
+def auf_hintergrund(rgba):
+    """PIL-RGBA (Auto/Hubschrauber mit Schatten, transparent) auf den grauen Hintergrund, deckendes RGB-Bild."""
+    w, h = rgba.size
+    bg = Image.fromarray(hintergrund(w, h).astype(np.uint8), "RGB").convert("RGBA")
+    bg.alpha_composite(rgba)
+    return bg.convert("RGB")
 
 # Ab wie vielen Dreiecken wird fuer die Vorschau reduziert, auf wie viele?
-REDUZIERE_AB = 150000
-REDUZIERE_ZIEL = 15000
+REDUZIERE_AB = 3000000
+REDUZIERE_ZIEL = 120000
 
 # Bis zu dieser Flaechenzahl (in Pixeln) wird ein Dreieck mit der Meshgrid-Methode
 # gefuellt (schnell fuer kleine Dreiecke), darueber per Scanline (schnell fuer grosse).
@@ -87,7 +130,7 @@ def seiten_projektion(verts):
     dy = max(ymax - ymin, 1e-6)
     skala = min((BREITE * (1 - 2 * RAND)) / dx, (HOEHE * (1 - 2 * RAND)) / dy)
     off_x = (BREITE - skala * dx) * 0.5 - skala * zmin
-    off_y = (HOEHE - skala * dy) * 0.5 + skala * ymax
+    off_y = HOEHE * BODEN + skala * ymin
 
     def bild(x, y, z):
         return off_x + skala * z, off_y - skala * y, x
@@ -301,13 +344,9 @@ def _lade_fallback_rad():
 
 def zeichne(meta, verts, daten, textur):
     """Rendert das Modell als Seitenansicht, gibt das PIL-Bild zurueck."""
-    bild = np.zeros((HOEHE, BREITE, 3), dtype=np.float32)
     tiefe = np.full((HOEHE, BREITE), np.inf, dtype=np.float32)
-    for yy in range(HOEHE):
-        k = yy / (HOEHE - 1)
-        bild[yy, :, 0] = HINTERGRUND_OBEN[0] * (1 - k) + HINTERGRUND_UNTEN[0] * k
-        bild[yy, :, 1] = HINTERGRUND_OBEN[1] * (1 - k) + HINTERGRUND_UNTEN[1] * k
-        bild[yy, :, 2] = HINTERGRUND_OBEN[2] * (1 - k) + HINTERGRUND_UNTEN[2] * k
+    # v1.6.81: Glas mischt gegen den echten Hintergrund (grauer Verlauf).
+    bild = hintergrund(BREITE, HOEHE)
 
     ab = meta["indexAb"]
     gesamt = sum(t["indizes"] for t in meta["teile"]) // 3
@@ -326,11 +365,20 @@ def zeichne(meta, verts, daten, textur):
     # Rahmenbox falsch (Auto viel zu klein). reshape(-1) macht aus beiden Formen 1D.
     koerper_idx = np.concatenate([t["idx"].reshape(-1) for t in teile if t.get("gruppe") != "rad"]) \
         if any(t.get("gruppe") != "rad" for t in teile) else np.arange(verts.shape[0])
-    proj = seiten_projektion(verts[koerper_idx])
-    sx_all, sy_all, tf_all = proj(verts[:, 0], verts[:, 1], verts[:, 2])
-
     ph = meta["physik"]
     achs = {"vorn": ph["vorderachse"], "hinten": ph["hinterachse"]}
+    # v1.6.81: Aufbau wie im Spiel um die Bodenfreiheit angehoben (vfModellZeichnen: vfT(0, boden, ...)); die Raeder
+    # stehen auf y = 0. Der Ausschnitt umfasst Karosserie und Raeder.
+    boden = (ph["reifen"]["vorn"].get("bodenfreiheit", 0) + ph["reifen"]["hinten"].get("bodenfreiheit", 0)) / 2
+    kverts = verts.copy()
+    kverts[:, 1] += boden
+    rahmen = [kverts[koerper_idx, :3]]
+    for ax in ("vorn", "hinten"):
+        r = ph["reifen"][ax]
+        for dz, y in ((-r["radius"], 0.0), (r["radius"], 0.0), (0.0, 2 * r["radius"])):
+            rahmen.append(np.array([[0.0, y, achs[ax] + dz]], dtype=np.float32))
+    proj = seiten_projektion(np.concatenate(rahmen))
+    sx_all, sy_all, tf_all = proj(kverts[:, 0], kverts[:, 1], kverts[:, 2])
 
     # Eigene Raeder des Modells, sonst der gemeinsame Rad-Fallback (Vulture V5.R) wie im Spiel,
     # damit auch Modelle ohne eigene Rad-Geometrie (FMC GT4, Boxer 96, Lynx 220) Raeder zeigen.
@@ -401,21 +449,57 @@ def zeichne(meta, verts, daten, textur):
     for seite in (-1, 1):
         for ax in ("vorn", "hinten"):
             rad_zeichne(rad_quelle, seite, ax)
-    return Image.fromarray(np.clip(bild, 0, 255).astype(np.uint8))
+    return mit_alpha_und_schatten(bild, tiefe)
+
+
+def mit_alpha_und_schatten(bild, tiefe):
+    """Auto mit Alphakanal (Deckung aus der Tiefe) ueber einem weichen Bodenschatten, verkleinert auf
+    AUS_BREITE x AUS_HOEHE. Der Schatten ist eine verwischte Ellipse unter dem Auto, 55 % dunkel."""
+    from PIL import ImageDraw, ImageFilter
+    deck = np.isfinite(tiefe)
+    ys, xs = np.nonzero(deck)
+    rgba = np.zeros((HOEHE, BREITE, 4), dtype=np.uint8)
+    rgba[:, :, :3] = np.clip(bild, 0, 255).astype(np.uint8)
+    rgba[:, :, 3] = np.where(deck, 255, 0).astype(np.uint8)
+    auto = Image.fromarray(rgba, "RGBA")
+    schatten = Image.new("RGBA", (BREITE, HOEHE), (0, 0, 0, 0))
+    if len(xs):
+        x0, x1, yb = xs.min(), xs.max(), ys.max()
+        b = (x1 - x0) * 0.52
+        cx = (x0 + x1) / 2
+        h = max(4, (x1 - x0) * 0.045)
+        m = Image.new("L", (BREITE, HOEHE), 0)
+        ImageDraw.Draw(m).ellipse([cx - b, yb - h, cx + b, yb + h * 0.8], fill=140)
+        m = m.filter(ImageFilter.GaussianBlur(radius=h * 1.1))
+        schatten.putalpha(m)
+    schatten.alpha_composite(auto)
+    return schatten.resize((AUS_BREITE, AUS_HOEHE), Image.LANCZOS)
+
+
+def heli():
+    """Hubschrauber (tools/heli_vorschau.py) auf denselben Hintergrund -> img/vf/vorschau.png."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import heli_vorschau
+    ziel = os.path.join(REPO, "img", "vf", "vorschau.png")
+    auf_hintergrund(heli_vorschau.rendern()).save(ziel, "PNG", optimize=True)
+    print("heli ->", ziel)
 
 
 def main():
-    pfade = modell_pfade()
-    if not pfade:
+    nur_heli = sys.argv[1:] == ["heli"]
+    pfade = [] if nur_heli else modell_pfade()
+    if not pfade and not nur_heli:
         print("Keine Modelle gefunden (img/autos/*/auto.json).")
         return 1
     for p in pfade:
         name = os.path.basename(p)
         meta, verts, daten, textur = lade(p)
-        img = zeichne(meta, verts, daten, textur)
-        ziel = os.path.join(p, "vorschau.jpg")
-        img.save(ziel, "JPEG", quality=88)
+        img = auf_hintergrund(zeichne(meta, verts, daten, textur))
+        ziel = os.path.join(p, "vorschau.png")
+        img.save(ziel, "PNG", optimize=True)
         print("%s: %d Dreiecke -> %s" % (name, sum(t["indizes"] for t in meta["teile"]) // 3, ziel))
+    if nur_heli or len(sys.argv) == 1:
+        heli()
     return 0
 
 

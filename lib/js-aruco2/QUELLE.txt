@@ -1,0 +1,2 @@
+js-aruco2 2.0.0 (MIT), https://github.com/damianofalcioni/js-aruco2 - unveraendert: cv.js, aruco.js, svd.js, posit1.js.
+Geladen erst beim Start der Marker-AR (src/60f-ar-marker.js). Lizenz: LICENSE.txt.

@@ -2007,7 +2007,10 @@
     document.body.classList.remove('race-fs', 'race-turn');
     $('race-fs').hidden = false; $('race-fs-exit').hidden = true;
     try {
-      if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+      // v1.6.63: die AR-Ueberlagerung (60e-ar.js) ist das Vollbild-Element der AR-Sitzung - verlassen hiesse AR beenden.
+      const arFs = document.fullscreenElement && document.fullscreenElement.classList && document.fullscreenElement.classList.contains('vf-ar-wurzel');
+      if (arFs) { /* AR laeuft */ }
+      else if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
       else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
     } catch (e) { /* already out */ }
     try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); }
@@ -2845,7 +2848,8 @@
   function cockpitNachSenden() {
     if (!cockpitMalFaellig) return;
     const jetzt = performance.now();
-    if (jetzt - cockpitGemaltAt < COCKPIT_MAL_MS) return;
+    // v1.6.48: waehrend der virtuellen Fahrt liegt das Cockpit verdeckt unter dem 3D-Bild - nur alle 500 ms (Performance).
+    if (jetzt - cockpitGemaltAt < (typeof vfAktiv === 'function' && vfAktiv() ? 500 : COCKPIT_MAL_MS)) return;
     cockpitGemaltAt = jetzt;
     cockpitMalFaellig = false;
     updateRaceScreen(physEngine.state);

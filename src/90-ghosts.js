@@ -2254,7 +2254,9 @@
     virtKnopf.innerHTML = t('Virtuell fahren') + ' <span class="wip-tag">WIP</span>';
     virtKnopf.setAttribute('aria-pressed', garVirtuellAuf ? 'true' : 'false');
     if (garVirtuellAuf) virtKnopf.classList.add('primary');
-    virtKnopf.onclick = () => { garVirtuellAuf = true; garKameraAuf = false; renderGarage(); };
+    // v1.6.23: der Knopf schaltet auch den Fahrmodus auf FAHREN auf Virtuell (Issue #7).
+    // v1.6.32: die virtuelle Garage ist eine eigene Seite (vfGarageZeigen, 60d-virtuell.js).
+    virtKnopf.onclick = () => { if (typeof vfGarageZeigen === 'function') vfGarageZeigen(); };
     virt.appendChild(virtKnopf);
     knoepfe.appendChild(virt);
     // v1.5 (WIP) BESTELLT: die Onboard-Kamera "in der Garage verbinden". Wie "Virtuell fahren": links
@@ -7990,7 +7992,9 @@ const GHOST_GRID_MAX = 0.9;   // maximale Querlage beim Selbst-Einparken (experi
           + 'die Ampel.', 'err');
       showHudToast('GELBE FLAGGE');
       setRaceLights(0);
+      if (typeof ampelGelb === 'function') ampelGelb(true);   // v1.6.60: Startampel Gelb
     } else if (next === 'green') {
+      if (typeof ampelGelb === 'function') ampelGelb(false);
       limitYellow = 1;
       safetyCarHeim();
       applySpeedLimit();

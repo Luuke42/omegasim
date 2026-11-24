@@ -330,8 +330,35 @@
   })();
 
   // ---- Quadrat: schneller Wechsel auf Kacheln mit data-quad --------------------------
+  // ---- FAHRMODUS ECHT | VIRTUELL (v1.6.23, Issue #7, WIP) ----
+  // BESTELLT: "Auf der FAHREN-Seite ein Umschalter zwischen echtem und virtuellem Fahren statt der Kachel 'Virtuell
+  // fahren'. Im Modus Virtuell zeigt die Garage das gewaehlte virtuelle Auto und die Optionen der virtuellen Fahrt;
+  // im Modus Echt wie bisher. Spaeter dritter Modus Augmented Reality." Gemerkt unter FAHR_MODUS_STORE. Im Modus
+  // Virtuell zeigt die Autos-Kachel das virtuelle Auto (Vorschaubild, Name, Strecke), Verbinden und Mehrspieler sind
+  // ausgeblendet, "Garage" oeffnet die Optionen der virtuellen Fahrt und die Startkachel startet sie.
+  var FAHR_MODUS_STORE = 'omegasim-fahrmodus';
+  function fahrModusVirtuell() { try { return localStorage.getItem(FAHR_MODUS_STORE) === 'virtuell'; } catch (e) { return false; } }
+  function fahrModusSetzen(m) {
+    const v = m === 'virtuell';
+    try { localStorage.setItem(FAHR_MODUS_STORE, v ? 'virtuell' : 'echt'); } catch (e) { /* egal */ }
+    konsoleFahrenZeichnen();
+    if (typeof chFahrtGewechselt === 'function') chFahrtGewechselt();   // v1.6.56: Challenges zeigen die Zeiten des Modus
+  }
+  // Garage im passenden Modus oeffnen: virtuell mit den Optionen der virtuellen Fahrt rechts.
+  // v1.6.32: im Modus Virtuell die eigenstaendige virtuelle Garage (#tab-vgarage, 60d-virtuell.js).
+  function konsoleGarageOeffnen() {
+    if (fahrModusVirtuell() && typeof vfGarageZeigen === 'function') { vfGarageZeigen(); window.scrollTo(0, 0); return; }
+    try { garVirtuellAuf = false; } catch (e) { /* egal */ }
+    konsoleZeige('garage');
+  }
+  function konsoleVirtuellStarten() {
+    if (kRennenLaeuft()) { showHudToast(t('Erst das laufende Rennen beenden')); return; }
+    if (typeof virtuellStarten === 'function') virtuellStarten();
+  }
   function konsoleQuadWechsel(q, dir) {
-    if (q === 'renntyp') {
+    if (q === 'fahrmodus') {
+      fahrModusSetzen(fahrModusVirtuell() ? 'echt' : 'virtuell');
+    } else if (q === 'renntyp') {
       const s = $('race-mode');
       // v1.2.4: nur erlaubte Renntypen (renntypenFiltern sperrt die anderen je Sensormodus).
       const n = s.options.length;
@@ -342,6 +369,8 @@
       }
       s.selectedIndex = i;
       s.dispatchEvent(new Event('change', { bubbles: true }));
+    } else if (q === 'bahn' && fahrModusVirtuell() && typeof vfStreckeWechseln === 'function') {
+      vfStreckeWechseln(dir);   // v1.6.23: virtuell blaettert die Kachel durch gebaute Bahn und Rollrennstrecken
     } else if (q === 'bahn') {
       const cb = $('setting-ontrack');
       cb.checked = !cb.checked;
@@ -376,6 +405,10 @@
   // Bedienelementen, die konsoleQuadWechsel() weiterdreht - damit Zahl und Punkt nicht
   // auseinanderlaufen koennen.
   function kQuadPunkte(quad) {
+    if (quad === 'bahn' && fahrModusVirtuell() && typeof vfStreckenListe === 'function') {
+      const l = vfStreckenListe();
+      return { anzahl: l.length, index: l.indexOf(vfFreiWahl()) };
+    }
     if (quad === 'bahn') {
       const cb = $('setting-ontrack');
       return { anzahl: 2, index: cb && cb.checked ? 1 : 0 };
@@ -497,6 +530,15 @@
   async function konsoleLosfahren(ohneAuto) {
     // Laeuft schon ein Rennen (Options fuehrt mitten im Rennen hierher), geht es nur zurueck.
     if (kRennenLaeuft()) { konsoleInsCockpit(); return; }
+    // v1.6.56 BESTELLT: "Alles soll analog gehandhabt sein, also auch woechentliche und Dauerrennen, Karriere usw."
+    // Im Modus Virtuell faehrt das virtuelle Auto auf der Strecke des Editors; das Rennen selbst (Ampel, Wertung,
+    // Karriere, Meisterschaft) laeuft wie mit dem echten Auto, die virtuelle Fahrt fuehrt kein eigenes (extern).
+    if (fahrModusVirtuell() && typeof virtuellStarten === 'function' && !(typeof vfAktiv === 'function' && vfAktiv())) {
+      if (!currentTrackTiles || currentTrackTiles.length < 4) { showHudToast(t('Diese Runde braucht eine Strecke: erst scannen, laden oder bauen.')); return; }
+      if (!virtuellStarten({ tiles: currentTrackTiles, extern: 'rennen' })) return;
+      if (raceState === 'idle' || raceState === 'finished') toggleRace();
+      return;
+    }
     if (!playerCar && !ohneAuto) {
       const lage = await garageConnect({ stumm: true });
       if (!playerCar) {
@@ -856,14 +898,24 @@
     if (!$('fa-auto')) return;
     konsoleFahrenGeraete();
     const autos = kAutos();
-    $('fa-auto-titel').textContent = autos.length ? autos.length + ' ' + t('verbunden') : t('Autos verbinden');
+    // v1.6.23 (Issue #7): Modus Virtuell - die Autos-Kachel zeigt das virtuelle Auto.
+    const vfM = fahrModusVirtuell(), vfId = vfM && typeof vfAutoWahl === 'function' ? vfAutoWahl() : '';
+    document.body.classList.toggle('fm-virtuell', vfM);
+    if (typeof chFahrtZeichnen === 'function') chFahrtZeichnen();   // v1.6.56: Umschalter auf der Challenge-Seite
+    document.querySelectorAll('#fa-modus [data-fm]').forEach((b) => {
+      const an = (b.dataset.fm === 'virtuell') === vfM;
+      b.classList.toggle('an', an); b.setAttribute('aria-pressed', an ? 'true' : 'false');
+    });
+    if ($('fa-verbinden')) $('fa-verbinden').hidden = vfM;
+    if ($('fa-mp')) $('fa-mp').hidden = vfM;
+    $('fa-auto-titel').textContent = vfM ? t('Virtuelles Auto') : autos.length ? autos.length + ' ' + t('verbunden') : t('Autos verbinden');
     // BESTELLT v0.8.126: mehrere verbundene Autos mit Fotos gemeinsam zeigen (die Garage auf dem
     // Fahren-Schirm). Erst ab zwei Fotos, sonst bleibt es beim einen Bild des Fahrer-Autos.
     // v0.9.31, GEMELDET: "mit 2 Autos 'Steuern' und 'Spieler 2' wurde nur eins angezeigt" -
     // die Galerie kam erst ab ZWEI FOTOS. Jetzt ab zwei verbundenen Autos; eines ohne Foto
     // steht als Farbflaeche mit seinem Zeichen darin.
     const mitFotos = autos.filter((c) => c.role !== 'none').slice(0, 4);
-    const galerieAn = mitFotos.length >= 2;
+    const galerieAn = !vfM && mitFotos.length >= 2;
     const faAuto = $('fa-auto');
     if (faAuto) faAuto.classList.toggle('k-auto-mehr', galerieAn);
     // Das eigene Foto des Fahrer-Autos (Garage) statt des Beispielbilds.
@@ -876,6 +928,7 @@
     } else {
       abNeu = afoto ? 'foto:' + afoto.length : 'auto';
     }
+    if (vfM) abNeu = 'vf:' + vfId;
     if (ab && ab.dataset.bild !== abNeu) {
       if (galerieAn) {
         ab.style.backgroundImage = 'none';
@@ -902,6 +955,13 @@
           gal.appendChild(zelle);
         });
         ab.appendChild(gal);
+      } else if (vfM) {
+        // Vorschaubild des virtuellen Autos (Seitenansicht), dahinter das Bild der virtuellen Fahrt.
+        // v1.6.37: transparentes Vorschaubild auf dem Garagenbild der virtuellen Fahrt (BESTELLT: garage_virtual).
+        // v1.6.81: die Vorschaubilder haben jetzt einen eigenen grauen Hintergrund (BESTELLT: "Vorschaubilder nochmal
+        // aufhuebschen mit grauem Hintergrund (leichter Farbverlauf)") - sie fuellen die Kachel allein.
+        ab.style.backgroundImage = 'url("' + vfVorschauUrl(vfId) + '")';
+        ab.innerHTML = '';
       } else {
         ab.style.backgroundImage = afoto ? 'url("' + afoto + '")' : 'url(img/garage.jpg)';   // v1.0.15: Garagenfoto (BESTELLT)
         ab.innerHTML = '';
@@ -910,7 +970,7 @@
     }
     konsoleMpStatus();
     konsoleVerbLage();
-    kZeilen($('fa-auto-info'), autos.length
+    kZeilen($('fa-auto-info'), vfM ? [[t('Auto'), vfAutoName(vfId)], [t('Strecke'), vfStreckeName()]] : autos.length
       ? autos.map((c) => [kPunkt(carColor(c).hex, garageLabel(c)), t(K_ROLLE[c.role] || c.role)])
       : [[t('Status'), t('nicht verbunden')]]);
     const rm = $('race-mode');
@@ -939,15 +999,19 @@
     ]);
     const bahn = ($('setting-ontrack') || {}).checked;
     const foto = konsoleFoto();
-    $('fa-strecke-titel').textContent = bahn ? t('Auf der Bahn') : t('Frei');
+    // v1.6.23: im Modus Virtuell die gewaehlte Strecke der virtuellen Fahrt (gebaute Bahn oder Rollrennstrecke).
+    const vfK = vfM && typeof vfFreiWahl === 'function' ? vfFreiWahl() : '';
+    const vfFreiKarte = vfK && typeof vfFreiCache !== 'undefined' ? vfFreiCache[vfK] || null : null;
+    if (vfK && !vfFreiKarte && typeof vfFreiLaden === 'function') vfFreiLaden(vfK).then(() => konsoleFahrenZeichnen(), () => {});
+    $('fa-strecke-titel').textContent = vfM ? vfStreckeName() : bahn ? t('Auf der Bahn') : t('Frei');
     const bild = $('fa-strecke-bild');
     // BESTELLT v0.8.126: ist eine Strecke eingegeben und der Modus steht auf "auf der Bahn",
     // zeigt das Band die Streckenvorschau aus dem Editor statt des Beispielbilds.
     let teileAn = 0;
     try { teileAn = currentTrackTiles.length; } catch (e) { teileAn = 0; }
-    const vorschauAn = bahn && teileAn >= 3 && typeof renderTrackPreview === 'function';
+    const vorschauAn = (vfM ? !vfK : bahn) && teileAn >= 3 && typeof renderTrackPreview === 'function';
     const faStrecke = $('fa-strecke');
-    if (faStrecke) faStrecke.classList.toggle('k-vorschau', vorschauAn);
+    if (faStrecke) faStrecke.classList.toggle('k-vorschau', vorschauAn || !!vfFreiKarte);
     // Im Ausdruck-Modus zeigt das Band das eigene Streckenfoto, sobald es eines gibt. Nur neu
     // setzen, wenn es sich geaendert hat: die Daten-URL ist einige hundert KB lang.
     let bildNeu;
@@ -957,6 +1021,7 @@
     } else {
       bildNeu = !bahn && foto ? 'foto:' + foto.length : (bahn ? 'strecke-bahn' : 'strecke-frei');
     }
+    if (vfK) bildNeu = 'vffrei:' + vfK + (vfFreiKarte ? ':da' : '');
     if (bild && bild.dataset.bild !== bildNeu) {
       let gezeichnet = false;
       if (vorschauAn) {
@@ -967,13 +1032,20 @@
           gezeichnet = true;
         } catch (e) { /* Fall: Foto */ }
       }
+      // v1.6.23: Rollrennstrecke von oben (derselbe Zeichner wie das Ladebild der virtuellen Fahrt).
+      if (!gezeichnet && vfFreiKarte && typeof vfLadeKarteSvg === 'function') {
+        try { bild.style.backgroundImage = 'none'; bild.innerHTML = vfLadeKarteSvg(null, vfFreiKarte.pts); gezeichnet = true; } catch (e) { /* Fall: Bild */ }
+      }
       if (!gezeichnet) {
         bild.style.backgroundImage = !bahn && foto ? 'url("' + foto + '")' : 'url(img/' + (bahn ? 'strecke-bahn' : 'strecke-frei') + '.jpg)';
         bild.innerHTML = '';
       }
       bild.dataset.bild = bildNeu;
     }
-    kZeilen($('fa-strecke-info'), bahn
+    kZeilen($('fa-strecke-info'), vfM
+      ? [[t('Fahrtrichtung'), typeof vfGegenAn === 'function' && vfGegenAn() ? t('Gegenrichtung') : t('Normal')],
+         vfK ? [t('Strecke'), t('nur virtuell')] : [t('Teile'), String(kTeile())]]
+      : bahn
       ? [[t('Teile'), String(kTeile())], ['Code', kCode() || '–']]
       : [[t('Modus'), t('Ausdruck, ohne Bahn')], [t('Streckenfoto'), foto ? t('hochgeladen') : t('keins')]]);
     // v0.9.45 BESTELLT: "zeige im FAHREN-Menue in der Streckenkachel (wenn sie auf Bahn
@@ -991,11 +1063,23 @@
     if ($('fa-reinig-stre')) $('fa-reinig-stre').hidden = !reinigAn;
     // (fa-profil ist seit v0.10.5 die Meisterschaft-Kachel, ohne Abstimmungsanzeige.)
 
+    // v1.6.23: virtuell zaehlen nur Editor und Laden (gebaute Bahn) und die Fahrtrichtung.
+    if (vfM) {
+      ['fa-scan', 'fa-raum', 'fa-druck', 'fa-foto', 'fa-foto-weg', 'fa-reinig-stre'].forEach((id) => { if ($(id)) $(id).hidden = true; });
+      ['fa-editor', 'fa-laden'].forEach((id) => { if ($(id)) $(id).hidden = !!vfK; });
+    }
+    const faR = $('fa-richtung');
+    if (faR) {
+      faR.hidden = !vfM;
+      const gg = typeof vfGegenAn === 'function' && vfGegenAn();
+      faR.textContent = '⇄ ' + (gg ? t('Gegenrichtung') : t('Normal'));
+      faR.setAttribute('aria-pressed', gg ? 'true' : 'false');
+      faR.title = t('Fahrtrichtung');
+    }
     const training = rm.value === 'practice';
     $('fa-start-titel').textContent = kRennenLaeuft() ? t('Zurück ins Rennen')
-      : (training ? t('Training starten') : t('Rennen starten'));
-    $('fa-start-unter').textContent = modus + ' · ' + (bahn ? t('auf der Bahn') : t('frei'));
-    if ($('fa-virtuell-unter')) $('fa-virtuell-unter').textContent = modus + ' · ' + t('virtuell');
+      : vfM ? t('Virtuell fahren') : (training ? t('Training starten') : t('Rennen starten'));
+    $('fa-start-unter').textContent = modus + ' · ' + (vfM ? t('virtuell') : bahn ? t('auf der Bahn') : t('frei'));
     // Punkte rechts neben dem Wert (in derselben .k-kopf-Zeile): so viele, wie es
     // Schaltstellungen gibt, die gewaehlte gefuellt. Bei zu vielen (z. B. Motorsound mit
     // 27 Motoren) wuerden die Punkte nicht mehr passen - dort stehen Pfeile im Markup.
@@ -1204,19 +1288,21 @@
     const kn = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
     kn('fa-auto', (e) => {
       if (e.target.closest('.k-knopf')) return;
+      if (fahrModusVirtuell()) { konsoleGarageOeffnen(); return; }
       // v1.5: ein Tipp auf die Fehlerzeile oeffnet den Dialog dazu statt der Kachel.
       if (e.target.closest('#fa-verb-lage') && konsoleVerbFrage()) return;
       konsoleAuto();
     });
     kn('fa-verbinden', () => { konsoleVerbinden(); });
-    kn('fa-garage', () => konsoleZeige('garage'));
+    kn('fa-garage', () => konsoleGarageOeffnen());
     kn('fa-mp', () => konsoleZeige('mp'));
-    kn('fa-start', () => { konsoleLosfahren(); });
-    // v1.5: "Drive Virtually" - wie "Virtuell fahren" in der Garage, das Rennen (Renneinstellungen) beginnt sofort.
-    kn('fa-virtuell', () => {
-      if (kRennenLaeuft()) { showHudToast(t('Erst das laufende Rennen beenden')); return; }
-      if (typeof virtuellStarten === 'function') virtuellStarten();
-    });
+    kn('vg-zurueck', () => konsoleZeige('fahren'));
+    kn('vg-einstellungen', () => konsoleZeige('options', 'opt-virtuell'));
+    // v1.6.23: im Modus Virtuell startet die Startkachel die virtuelle Fahrt (die Kachel "Virtuell fahren" ist dem
+    // Umschalter Echt | Virtuell gewichen). Ein Tipp auf eine Seite des Umschalters waehlt sie, sonst wechselt er.
+    kn('fa-start', () => { if (fahrModusVirtuell() && !kRennenLaeuft()) konsoleVirtuellStarten(); else konsoleLosfahren(); });
+    // v1.6.37 BESTELLT: "the real/virtual button should be as big as the box ... I click the box and it switches".
+    kn('fa-modus', () => fahrModusSetzen(fahrModusVirtuell() ? 'echt' : 'virtuell'));
     // v1.1.3 BESTELLT: "Tippe ich bei der Kachel STRECKE auf STRECKE oder AUF DER BAHN, soll
     // umgeschaltet werden; tippe ich auf das Bild, oeffnet sich das Menue dazu." Vorher schaltete nur
     // der Text selbst um, ein Tipp daneben in der Kopfzeile oeffnete das Menue. Jetzt oeffnet nur das
@@ -1232,7 +1318,9 @@
       oeffnen();
     };
     kn('fa-renn', kachelKlick('renntyp', () => konsoleZeige('control')));
-    kn('fa-strecke', kachelKlick('bahn', () => konsoleZeige('track')));
+    // v1.6.23: im Modus Virtuell oeffnet das Bild die Optionen der virtuellen Fahrt (dort auch Strecke und Richtung).
+    kn('fa-strecke', kachelKlick('bahn', () => { if (fahrModusVirtuell()) konsoleGarageOeffnen(); else konsoleZeige('track'); }));
+    kn('fa-richtung', () => { if (typeof vfRichtungWechseln === 'function') vfRichtungWechseln(); menuNavTonVerstellen(); konsoleFahrenZeichnen(); });
     kn('fa-scan', () => konsoleZeige('track', 'scan'));
     kn('fa-editor', () => konsoleZeige('track', 'edit'));
     kn('fa-laden', () => konsoleZeige('track', 'laden'));

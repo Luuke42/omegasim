@@ -28067,7 +28067,9 @@
     if (!diag) f.push('gedrehter Kasten schneidet nicht');
     if (diagAchs) f.push('Gegenprobe: ungedreht waere es frei');
     // Vertauscht gibt dieselbe Tiefe mit umgekehrter Normale.
-    const a = vfKontakt(0, 0, 10, 3, -8, 30, L, B), b = vfKontakt(3, -8, 30, 0, 0, 10, L, B);
+    // Abstaende relativ zur Autolaenge (seit der echten 1:50-Groesse ist VF_AUTO.L nicht mehr fest 9,6).
+    const kL = L / 9.6;
+    const a = vfKontakt(0, 0, 10, 3 * kL, -8 * kL, 30, L, B), b = vfKontakt(3 * kL, -8 * kL, 30, 0, 0, 10, L, B);
     if (!a || !b) f.push('vertauscht: Kontakt fehlt'); else if (Math.abs(a.pen - b.pen) > 1e-9 || a.nx * b.nx + a.ny * b.ny > -0.999) f.push('vertauscht nicht symmetrisch');
     // 2. Stoss: frontal auf einen stehenden NPC.
     const frontal = vfStossRechnen(60, 0, 0, 0, 0, 1, true);          // n zeigt vom NPC (vorn) nach hinten

@@ -34,7 +34,17 @@
     try { return localStorage.getItem(VF_ABSEITS_BREMSE_STORE) !== 'aus'; } catch (e) { return true; }
   }
   const VF_TAKT_MS = 45;            // Paketfolge wie ein echtes Auto
-  const VF_AUTO = { L: 9.6, B: 4.4, H: 2.4 };
+  // Autos in echter 1:50-Groesse (aus dem Fork gnen54, Vergleich mit Fusion: Autos waren zu gross). Bisher war jedes
+  // Auto pauschal 9,6 Einheiten lang (gut 10 cm echt). 1 m am Vorbild = 20 mm = 1,86 Einheiten (TRACK_UNITS_PER_CM 0,930).
+  // VF_AUTO (Kasten, Kollision, Rand) wird beim Laden des Modells auf dessen Masse gesetzt; Startwert 4,4 x 2,0 x 1,3 m.
+  const VF_EINHEITEN_JE_M = 1000 / 50 * 0.093023;
+  const VF_AUTO = { L: 4.4 * VF_EINHEITEN_JE_M, B: 2.0 * VF_EINHEITEN_JE_M, H: 1.3 * VF_EINHEITEN_JE_M };
+  function vfAutoMasseSetzen(d) {
+    if (!d || !(d.laenge > 0)) return;
+    VF_AUTO.L = d.laenge * VF_EINHEITEN_JE_M;
+    if (d.breite > 0) VF_AUTO.B = d.breite * VF_EINHEITEN_JE_M;
+    if (d.hoehe > 0) VF_AUTO.H = d.hoehe * VF_EINHEITEN_JE_M;
+  }
   const VF = { aktiv: false, car: null, vorherRolle: null, vorherSpieler: null, schicht: null, cv: null, hud: null,
                gl: null, prog: null, bahn: null, auto: null, pts: null, nrm: null, tiles: null, zu: false,
                x: 0, y: 0, h: 0, idx: 0, zaehler: 0, kachel: -2, abseits: false, abseitsSeit: 0, raf: 0, takt: 0,
@@ -734,6 +744,9 @@
   // siehe 60-track.js "Pit bulge").
   let VF_BOX_SEITE = -1;   // Boxenseite: -1 = rechts (Editor), freie Strecken setzen sie um (boxSeite)
   const VF_BOX_TIEFE = 1.1, VF_BOX_RAMPE = 0.2;
+  // Halbe Fahrbahnbreite: Carrera-Kacheln TRACK_HALF_W (25 cm), freie Strecke aus ihrer JSON ("halb", aus dem Fork
+  // gnen54: Toernerschleife in echter Bahnbreite 280/268 mm statt Carrera-25 cm). Ohne Angabe wie bisher.
+  function vfHalbW() { return (VF.frei && VF.frei.halb > 0) ? VF.frei.halb : TRACK_HALF_W; }
   function vfBoxForm(u) {
     const sm = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
     return u < VF_BOX_RAMPE ? sm(u / VF_BOX_RAMPE) : u > 1 - VF_BOX_RAMPE ? sm((1 - u) / VF_BOX_RAMPE) : 1;
@@ -754,7 +767,7 @@
         for (let k = i; k <= j + 1; k++) {
           const uu = acc[k - i] / L; u[k] = uu;
           // v1.5.150: freie Strecken bringen die Bucht-Tiefe je Punkt mit (echte Boxengasse der DXF).
-          const tiefe = pts[k].bucht !== undefined ? pts[k].bucht : VF_BOX_TIEFE * TRACK_HALF_W * vfBoxForm(uu);
+          const tiefe = pts[k].bucht !== undefined ? pts[k].bucht : VF_BOX_TIEFE * vfHalbW() * vfBoxForm(uu);
           b[k] = Math.max(b[k], tiefe);
         }
       }
@@ -770,7 +783,7 @@
   // Parkstriche und Punktreihe als Farb-Dreiecke (6 Zahlen je Ecke, wie die Baeume), knapp ueber der Fahrbahn.
   // Je Haelfte 8 Striche quer: in der ersten Haelfte von u 0,26 bis 0,47 kuerzer werdend, in der zweiten gespiegelt.
   function vfBoxStriche(pts, nrm, tiles, bucht) {
-    const a = [], y = 0.02, half = TRACK_HALF_W, w = [0.93, 0.93, 0.93];
+    const a = [], y = 0.02, half = vfHalbW(), w = [0.93, 0.93, 0.93];
     const B = bucht || vfBoxBucht(pts, tiles), n = pts.length;
     const quad = (p0, p1, p2, p3) => { for (const e of [p0, p1, p2, p0, p2, p3]) a.push(e[0], y, e[1], w[0], w[1], w[2]); };
     // Punkt bei Anteil uu in einem Boxenteil (Index-Bereich i0..i1): Ort und Laengsrichtung.
@@ -809,9 +822,44 @@
   // auf sein Ende). Fahrbahn: v = 0..1 ueber das Teil, eine zufaellige Spalte (Gebrauchsgrad), zufaellig
   // gespiegelt, Helligkeit je Teil leicht anders. Randstein: eine ganze Zahl Pfeiltakte je Teil und
   // Seite (wie im Editor), an beiden Enden ein dunkles Stueck als Steckfuge. Rein (ohne WebGL).
+  // Striche der Buchstaben P, I, T in einem Feld 0..1 (u quer nach rechts, v in Fahrtrichtung, v = 0 zum Fahrer).
+  const VF_PIT_GLYPHEN = {
+    P: [[0, 0, 0, 1], [0, 1, 1, 1], [1, 1, 1, 0.5], [1, 0.5, 0, 0.5]],
+    I: [[0.5, 0, 0.5, 1]],
+    T: [[0, 1, 1, 1], [0.5, 1, 0.5, 0]],
+  };
+  function vfPitSchrift(rand, pts, nrm, bucht, seite0, half, um) {
+    const n = pts.length; if (n < 10) return;
+    // Einfahrt: erster Punkt mit Bucht nach einem ohne
+    let e = -1;
+    for (let i = 0; i < n; i++) { const a = bucht[(i - 1 + n) % n] || 0, b = bucht[i] || 0; if (b > 0.5 && a <= 0.5) { e = i; break; } }
+    if (e < 0) return;
+    // 18 Einheiten davor
+    let j = e, weg = 0;
+    while (weg < 18 && j > e - n) { const p = pts[((j % n) + n) % n], q = pts[(((j - 1) % n) + n) % n]; weg += Math.hypot(p.x - q.x, p.y - q.y); j--; }
+    j = ((j % n) + n) % n;
+    const p = pts[j], q = pts[(j + 1) % n];
+    let tx = q.x - p.x, ty = q.y - p.y; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+    const nm = nrm[j], seite = seite0;
+    // Mitte der Schrift: auf der Haelfte zur Gasse
+    const cx = p.x + nm.x * seite * half * 0.5, cy = p.y + nm.y * seite * half * 0.5;
+    const rx = -ty, ry = tx;                            // quer zur Fahrt (Richtung fuer "links nach rechts")
+    const W = 2.6, H = 6.5, LUECKE = 1.2, STRICH = 0.55, text = 'PIT';
+    const breit = text.length * W + (text.length - 1) * LUECKE;
+    for (let k = 0; k < text.length; k++) {
+      const u0 = -breit / 2 + k * (W + LUECKE);
+      for (const s of VF_PIT_GLYPHEN[text[k]]) {
+        const pt = (u, v) => [cx + rx * (u0 + u * W) + tx * (v - 0.5) * H, cy + ry * (u0 + u * W) + ty * (v - 0.5) * H];
+        // Enden um den halben Strich verlaengert, damit die Ecken geschlossen sind
+        const a = pt(s[0], s[1]), b = pt(s[2], s[3]); let dx = b[0] - a[0], dy = b[1] - a[1]; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+        const h = STRICH / 2;
+        vfBand(rand, [[a[0] - dx * h, a[1] - dy * h], [b[0] + dx * h, b[1] + dy * h]], h, 0.013, um, [1, 1, 1]);
+      }
+    }
+  }
   function vfBahnGeometrie(pts, nrm, tiles, ao) {
     const strasse = [], rand = [];
-    const half = TRACK_HALF_W, kw = TRACK_KERB_W, ky = 0.09, n = pts.length;
+    const half = vfHalbW(), kw = TRACK_KERB_W, ky = 0.09, n = pts.length;
     const rnd = vfZufall(4242 + tiles.length * 31 + Math.round(Math.abs(pts[n - 1].x) * 7));
     const off = (i, d) => [pts[i].x + nrm[i].x * d, pts[i].y + nrm[i].y * d];
     const lerp = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
@@ -979,6 +1027,9 @@
     // (aus PR 4 von gnen54, "Unschoener Bogen": lose Rechtecke je Segment liefen an den Knicken zickzack).
     const steg = (tiles.find((x) => x && x.steg) || {}).steg;
     if (steg && steg.pts && steg.pts.length > 1) vfBand(rand, steg.pts, (steg.b || 2) / 2, 0.012, 4 / VF_RAND_B, [0.88, 0.88, 0.89]);
+    // "PIT" als Schrift auf der Fahrbahn vor der Boxeneinfahrt freier Strecken (aus dem Fork gnen54, wie auf der
+    // Original-Rennrollstrecke - nach einer engen Kurve verpasst man die Einfahrt sonst leicht).
+    if (tiles[0] && tiles[0].frei) vfPitSchrift(rand, pts, nrm, bucht, (tiles.find((x) => x && x.seite) || {}).seite || -1, half, 4 / VF_RAND_B);
     return { strasse, rand, teile: teile.length };
   }
   // Liegt ein Kartenpunkt q in der Boxengasse (Dreiecke aus der DXF)? Aus PR 4 von gnen54: fuer Ein- und Ausfahrt,
@@ -1134,7 +1185,7 @@
   function vfBaeumeBauen(pts) {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     pts.forEach((p) => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); });
-    const R0 = TRACK_HALF_W + TRACK_KERB_W;
+    const R0 = vfHalbW() + TRACK_KERB_W;
     minX -= R0; maxX += R0; minY -= R0; maxY += R0;
     const rnd = vfZufall(4242 + pts.length), a = [], orte = [], gewicht = [];
     let hochAkt = 1;   // v1.5.94 (G4): Hoehe des gerade gebauten Baums, fuer das Gewicht je Ecke
@@ -1212,7 +1263,7 @@
   const VF_GRAS = { je: 3, halme: 4, hoch: [0.5, 1.15], ab: [0.4, 7] };
   function vfGrasBueschel(pts, nrm, bucht) {
     const a = [], n = pts.length, rnd = vfZufall(5557 + n);
-    const rand = TRACK_HALF_W + TRACK_KERB_W, frei = rand + 0.25, frei2 = frei * frei;
+    const rand = vfHalbW() + TRACK_KERB_W, frei = rand + 0.25, frei2 = frei * frei;
     const S = [0.35, 0.9, 0.25], sl = Math.hypot(S[0], S[1], S[2]);
     const zuNah = (x, z) => {
       for (let i = 0; i < n; i += 2) { const dx = pts[i].x - x, dz = pts[i].y - z; if (dx * dx + dz * dz < frei2) return true; }
@@ -1608,7 +1659,7 @@
   function vfHz(x, y, h) {
     if (!VF.hoehe) return VF_HZ_NULL;
     const r = h * Math.PI / 180, fx = Math.sin(r), fy = -Math.cos(r);
-    let best = null, bq = TRACK_HALF_W + TRACK_KERB_W + VF_AUTO.B;
+    let best = null, bq = vfHalbW() + TRACK_KERB_W + VF_AUTO.B;
     for (const sg of VF.hoehe) {
       const t = ((x - sg.ax) * sg.ex + (y - sg.ay) * sg.ey) / sg.l;
       if (t < -0.3 || t > 1.3) continue;
@@ -1802,7 +1853,7 @@
         const m = pts.length - 1, a = pts[(i - 1 + m) % m], c = pts[(i + 1) % m];
         p.heading = Math.atan2(c.x - a.x, -(c.y - a.y)) * 180 / Math.PI;
       });
-      vfFreiCache[k] = { name: d.name, tiles, pts, seite: d.boxSeite || -1 };
+      vfFreiCache[k] = { name: d.name, tiles, pts, seite: d.boxSeite || -1, halb: d.halb > 0 ? d.halb : 0 };
       return vfFreiCache[k];
     });
   }
@@ -1822,7 +1873,7 @@
       const quer = Math.abs((p.x - p0.x) * -dy + (p.y - p0.y) * dx);
       const sl = Math.hypot(p.x - q.x, p.y - q.y) || 1;
       const gleich = ((p.x - q.x) * dx + (p.y - q.y) * dy) / sl > 0.7;
-      if (vor > -0.3 && quer < TRACK_HALF_W && gleich) ende--; else break;
+      if (vor > -0.3 && quer < vfHalbW() && gleich) ende--; else break;
     }
     return ende < n ? pts.slice(0, ende) : pts;
   }
@@ -1844,7 +1895,7 @@
     // beginnt nur in der Bucht, und "in der Bucht" hiess: mehr als halb so tief drin wie die Bucht breit ist. Wer neben der
     // Bucht am Fahrbahnrand hielt, bekam nur "In die Boxengasse fahren". Jetzt genuegt es, mit dem Auto in die Bucht zu
     // ragen (ueber den Fahrbahnrand hinaus, auf Hoehe der Bucht).
-    const drin = zus > VF.boxMax * 0.3 && Math.abs(o.quer) > TRACK_HALF_W * 0.85;
+    const drin = zus > VF.boxMax * 0.3 && Math.abs(o.quer) > vfHalbW() * 0.85;
     VF.inBox = drin;
     if (drin) { if (!VF.boxBesucht) VF.boxBesucht = { von: o.idx, bis: o.idx }; else VF.boxBesucht.bis = o.idx; return; }
     if (!VF.boxBesucht) return;
@@ -2277,14 +2328,14 @@
     // um bis zu 6 Grad zu springen.
     const a = vfNpcPunkt(B, npc.s - 1.5, hier.j), b = vfNpcPunkt(B, npc.s + 1.5, hier.j);
     npc.h = Math.atan2(b.x - a.x, -(b.y - a.y)) * 180 / Math.PI;
-    npc.raddreh = ((npc.raddreh || 0) + weg / (VF_AUTO.L / 4.64 * 0.335)) % (Math.PI * 2);
+    npc.raddreh = ((npc.raddreh || 0) + weg / (0.335 * VF_EINHEITEN_JE_M)) % (Math.PI * 2);
     // Querbeschleunigung aus der Kruemmung, zwischen zwei Punkten eingeblendet: Gierrate = k * v_E.
     const k = B.kr[hier.j] + (B.kr[(hier.j + 1) % n] - B.kr[hier.j]) * hier.f;
     npc.ay = npc.kmh * REAL_SCALE / 3.6 * k * vE;
     // Vorderraeder: Einschlag des Einspurmodells, delta = atan(Radstand * k), Radstand des Modells
     // in Streckeneinheiten (Laenge wie gezeichnet, VF_AUTO.L).
     const d = npc.modell && npc.modell.d;
-    const achse = d ? (d.a + d.b) * VF_AUTO.L / d.laenge : VF_ACHSE;
+    const achse = d ? (d.a + d.b) * VF_EINHEITEN_JE_M : VF_ACHSE;
     const grenze = (npc.P ? npc.P.lenkGrad : 21) * Math.PI / 180;
     npc.lenkWinkel = Math.max(-grenze, Math.min(grenze, Math.atan(achse * k)));
     return npc;
@@ -2861,7 +2912,7 @@
   const VF_RAD_KARTENSCHATTEN = false;   // v1.5.19: Raeder ohne Schatten in der Schattenkarte (siehe unten)
   function vfModellSchatten(gl, SP, M, x, y, h, fe, lenkWinkel, raddreh, radModell, fs, nick, schM) {
     const d = M.d;
-    const s = VF_AUTO.L / d.laenge;
+    const s = VF_EINHEITEN_JE_M;
     const lage = vfMal(vfLage(x, y, h), vfS(s, s, s));
     const g = fs || 1, fez = fe || { z: 0, th: 0, ph: 0 };
     const zSp = d.vorderachse - d.a, boden = (d.reifen.vorn.bodenfreiheit + d.reifen.hinten.bodenfreiheit) / 2;
@@ -3402,7 +3453,7 @@
     // Raeder drehen mit dem Weg, Federung folgt Laengs- und Querbeschleunigung (neben der Bahn ruettelt es).
     // v1.6.54: im Drift mit dem Hinterrad (dreht es durch, drehen die Raeder sichtbar schneller).
     const wegE = (VF.dp ? VF.dp.w / REAL_SCALE * 3.6 : kmh) / 3.6 * 100 * TRACK_UNITS_PER_CM * sdt;
-    VF.raddreh = ((VF.raddreh || 0) + wegE / (VF_AUTO.L / 4.64 * 0.335)) % (Math.PI * 2);
+    VF.raddreh = ((VF.raddreh || 0) + wegE / (0.335 * VF_EINHEITEN_JE_M)) % (Math.PI * 2);
     if (VF.modell) {
       if (!VF.feder) VF.feder = { z: 0, vz: 0, th: 0, vth: 0, ph: 0, vph: 0 };
       // Zufallsstoesse neben der Bahn: je Teilschritt einer; mit sqrt(Bild/Teilschritt) so stark wie vorher einer je Bild.
@@ -3791,7 +3842,7 @@
     if (!idx.length) idx = [Math.round(n / 3), Math.round(2 * n / 3)].map((d) => (z + d) % n);
     idx.sort((a, b) => ((a - z + n) % n) - ((b - z + n) % n));
     idx.push(z);
-    const r = TRACK_HALF_W + TRACK_KERB_W + 1.5;
+    const r = vfHalbW() + TRACK_KERB_W + 1.5;
     return { naechstes: 0, sfAt: 0, liste: idx.map((i, j) => ({ i, sf: j === idx.length - 1,
       l: [pts[i].x + nrm[i].x * r, pts[i].y + nrm[i].y * r], r: [pts[i].x - nrm[i].x * r, pts[i].y - nrm[i].y * r] })) };
   }
@@ -3995,7 +4046,7 @@
     // Steigung bremst bergauf und beschleunigt bergab (g mal sin, verkleinert um REAL_SCALE wie die Physik).
     const Hb = vfHzSpieler();
     if (Hb.z > 0.3) {
-      const grenze = TRACK_HALF_W + TRACK_KERB_W - VF_AUTO.B * 0.5;
+      const grenze = vfHalbW() + TRACK_KERB_W - VF_AUTO.B * 0.5;
       if (Math.abs(o.quer) > grenze) {
         const zu = (Math.abs(o.quer) - grenze) * Math.sign(o.quer);
         VF.x -= VF.nrm[o.idx].x * zu; VF.y -= VF.nrm[o.idx].y * zu; o.quer -= zu;
@@ -4012,14 +4063,14 @@
     // Fahrtrichtung (in der Gegenrichtung die andere Seite der Mittellinie).
     const bucht = (VF.boxBucht && o.quer * (VF.boxSeite || VF_BOX_SEITE) > 0) ? VF.boxBucht.b[o.idx] : 0;
     vfBoxDurchfahrt(o, bucht);
-    const ab = Math.abs(o.quer) > TRACK_HALF_W * 1.19 + bucht + VF_AUTO.B * 0.3;
+    const ab = Math.abs(o.quer) > vfHalbW() * 1.19 + bucht + VF_AUTO.B * 0.3;
     if (ab && !VF.abseits) VF.abseitsSeit = rennZeitJetzt();
     VF.abseits = ab;
     // Randstein (v1.2.62): der erhabene Stein links/rechts der Fahrbahn. Faehrt das Auto mit dem
     // Rand ueber ihn, rattert es und der Controller brummt.
     const q = Math.abs(o.quer);
-    const kerbRand = TRACK_HALF_W * 2 * 0.095;
-    const kerb = !ab && q > TRACK_HALF_W + bucht - VF_AUTO.B * 0.5 && q < TRACK_HALF_W + bucht + kerbRand;
+    const kerbRand = vfHalbW() * 2 * 0.095;
+    const kerb = !ab && q > vfHalbW() + bucht - VF_AUTO.B * 0.5 && q < vfHalbW() + bucht + kerbRand;
     VF.kerbJetzt = kerb;
     if (kerb && Math.abs(kmh) > 0.05) {
       if (VF.kerbSeit === undefined || rennZeitJetzt() - VF.kerbSeit > 70) {
@@ -4569,7 +4620,7 @@
   }
   function vfSpiegelMalen(gl, w, h) {
     if (!vfSpiegelSichtbar()) { if (VF.spiegelRahmen) vfSpiegelRahmen(null); return; }
-    const d = VF.modell.d, s = VF_AUTO.L / d.laenge, Hz = vfHzSpieler();
+    const d = VF.modell.d, s = VF_EINHEITEN_JE_M, Hz = vfHzSpieler();
     const r = VF.h * Math.PI / 180, fx = Math.sin(r), fz = -Math.cos(r), lx = fz, lz = -fx;
     const dpr = VF.cv.width / Math.max(1, VF.cv.clientWidth);
     const auto = vfAutoWahl(), liste = vfSpiegelRechtecke(w, h, auto, dpr);
@@ -4980,7 +5031,7 @@
   const VF_FAHRER_AUGE_CM = 100, VF_FAHRER_ABSTAND_CM = 75, VF_FAHRER_TAU = 0.25, VF_FAHRER_ZOOM_TAU = 0.8;
   const VF_FAHRER_FOV = 34, VF_FAHRER_FOV_FERN = 21;
   function vfFahrerOrt(pts, nrm, tiles) {
-    const n = pts.length, rand = TRACK_HALF_W + TRACK_KERB_W, abst = VF_FAHRER_ABSTAND_CM * TRACK_UNITS_PER_CM;
+    const n = pts.length, rand = vfHalbW() + TRACK_KERB_W, abst = VF_FAHRER_ABSTAND_CM * TRACK_UNITS_PER_CM;
     const s = Math.max(0, pts.findIndex((p) => p.tile >= 0 && tiles[p.tile] && tiles[p.tile].type === TILE_TYPE.START));
     const innen = (x, y) => {
       let c = false;
@@ -5034,7 +5085,7 @@
   // Auto wie die Fahrer-Kamera (vfFahrerKamera: weich schwenken, mit dem Abstand zoomen).
   const VF_TV_ABSTAND = 3, VF_TV_HYST = 0.8, VF_TV_MIN_S = 1.5, VF_TV_HOEHE = 1.8;
   function vfTvPosten(pts, nrm, tiles) {
-    const n = pts.length, rand = TRACK_HALF_W + TRACK_KERB_W, abst = VF_FAHRER_ABSTAND_CM * TRACK_UNITS_PER_CM * 1.5;
+    const n = pts.length, rand = vfHalbW() + TRACK_KERB_W, abst = VF_FAHRER_ABSTAND_CM * TRACK_UNITS_PER_CM * 1.5;
     const innen = (x, y) => {
       let c = false;
       for (let i = 0, j = n - 1; i < n; j = i++) {
@@ -5107,7 +5158,7 @@
     if (id === 'tv' && VF.tv && VF.tv.posten.length) { VF.kam = null; return vfTvKamera(VF.tv, VF.x, VF.y, dt); }
     if (id === 'haube') {
       // Auf der Motorhaube (Speed Dreams: Bonnet 0,75 m vor, 0,95 m hoch), fest am Auto.
-      const s = VF.modell ? VF_AUTO.L / VF.modell.d.laenge : 2;
+      const s = VF.modell ? VF_EINHEITEN_JE_M : 2;
       // Ein Modell darf die Kamera selbst setzen (auto.json "haube": {vor, hoch} in m), wenn die
       // Haube hoeher liegt als die Speed-Dreams-Werte (z. B. Kaefer: Kofferraumhaube ~1,1 m hoch).
       const hb = VF.modell && VF.modell.meta && VF.modell.meta.haube;
@@ -5217,7 +5268,7 @@
   // M ist das gebaute Modell (vfModellBauen), T das Texturprogramm, fe der Federungszustand.
   function vfModellZeichnen(gl, pv, blick, M, T, x, y, h, fe, lenkWinkel, raddreh, radModell, licht, bremst, fs, nick, auge, lackHex) {
     const d = M.d, u = T.u;
-    const s = VF_AUTO.L / d.laenge;
+    const s = VF_EINHEITEN_JE_M;
     const lage = vfMal(vfLage(x, y, h), vfS(s, s, s));
     const g = fs || 1, fez = fe || { z: 0, th: 0, ph: 0 };
     const zSp = d.vorderachse - d.a, boden = (d.reifen.vorn.bodenfreiheit + d.reifen.hinten.bodenfreiheit) / 2;
@@ -6197,6 +6248,7 @@
         vfModellDaten().then((daten) => {
           if (!VF.aktiv || VF.gl !== gl) return;
           VF.modell = vfModellBauen(gl, daten);
+          vfAutoMasseSetzen(daten.meta.physik);
           VF.P = vfHandlingProfil(vfPhysikAus(daten.meta.physik));
         }).catch(() => { if (VF.gl === gl) VF.modellFehl = true; showHudToast(t('Auto-Modell nicht ladbar – es fährt der Kasten')); });
       }
@@ -6737,7 +6789,7 @@
   }
   function vfRandsteinMenge(kerb, q, kmh) {
     if (!kerb || randsteinKlangAlt || !(Math.abs(kmh) > 0.05)) return 0;
-    const tiefe = Math.max(0, Math.min(1, (q - (TRACK_HALF_W - VF_AUTO.B * 0.5)) / (VF_AUTO.B * 0.5)));
+    const tiefe = Math.max(0, Math.min(1, (q - (vfHalbW() - VF_AUTO.B * 0.5)) / (VF_AUTO.B * 0.5)));
     return (0.45 + 0.55 * tiefe) * Math.min(1, 0.35 + Math.abs(kmh) * TACHO_SCALE / 160);
   }
   function vfRandsteinTon(kerb, q, kmh) {
